@@ -102,24 +102,23 @@ const (
 	STXDW   = OpCode(0x7b) // stxdw [dst+off], src   |  *(uint64_t *) (dst + off) = src
 
 	// Branch Instructions
-	JA       = OpCode(0x05) // ja +off             |  PC += off
-	JEQIMM   = OpCode(0x15) // jeq dst, imm, +off  |  PC += off if dst == imm
-	JEQSRC   = OpCode(0x1d) // jeq dst, src, +off  |  PC += off if dst == src
-	JGTIMM   = OpCode(0x25) // jgt dst, imm, +off  |  PC += off if dst > imm
-	JGTSRC   = OpCode(0x2d) // jgt dst, src, +off  |  PC += off if dst > src
-	JGEIMM   = OpCode(0x35) // jge dst, imm, +off  |  PC += off if dst >= imm
-	JGESRC   = OpCode(0x3d) // jge dst, src, +off  |  PC += off if dst >= src
-	JSETIMM  = OpCode(0x45) // jset dst, imm, +off |  PC += off if dst & imm
-	JSETSRC  = OpCode(0x4d) // jset dst, src, +off |  PC += off if dst & src
-	JNEIMM   = OpCode(0x55) // jne dst, imm, +off  |  PC += off if dst != imm
-	JNESRC   = OpCode(0x5d) // jne dst, src, +off  |  PC += off if dst != src
-	JSGTIMM  = OpCode(0x65) // jsgt dst, imm, +off |  PC += off if dst > imm (signed)
-	JSGTSRC  = OpCode(0x6d) // jsgt dst, src, +off |  PC += off if dst > src (signed)
-	JSGEIMM  = OpCode(0x75) // jsge dst, imm, +off |  PC += off if dst >= imm (signed)
-	JSGESRC  = OpCode(0x7d) // jsge dst, src, +off |  PC += off if dst >= src (signed)
-	CALL     = OpCode(0x85) // call imm            |  Function call
-	TAILCALL = OpCode(0x9d) // tail call           |  Function call
-	EXIT     = OpCode(0x95) // exit                |  return r0
+	JA      = OpCode(0x05) // ja +off             |  PC += off
+	JEQIMM  = OpCode(0x15) // jeq dst, imm, +off  |  PC += off if dst == imm
+	JEQSRC  = OpCode(0x1d) // jeq dst, src, +off  |  PC += off if dst == src
+	JGTIMM  = OpCode(0x25) // jgt dst, imm, +off  |  PC += off if dst > imm
+	JGTSRC  = OpCode(0x2d) // jgt dst, src, +off  |  PC += off if dst > src
+	JGEIMM  = OpCode(0x35) // jge dst, imm, +off  |  PC += off if dst >= imm
+	JGESRC  = OpCode(0x3d) // jge dst, src, +off  |  PC += off if dst >= src
+	JSETIMM = OpCode(0x45) // jset dst, imm, +off |  PC += off if dst & imm
+	JSETSRC = OpCode(0x4d) // jset dst, src, +off |  PC += off if dst & src
+	JNEIMM  = OpCode(0x55) // jne dst, imm, +off  |  PC += off if dst != imm
+	JNESRC  = OpCode(0x5d) // jne dst, src, +off  |  PC += off if dst != src
+	JSGTIMM = OpCode(0x65) // jsgt dst, imm, +off |  PC += off if dst > imm (signed)
+	JSGTSRC = OpCode(0x6d) // jsgt dst, src, +off |  PC += off if dst > src (signed)
+	JSGEIMM = OpCode(0x75) // jsge dst, imm, +off |  PC += off if dst >= imm (signed)
+	JSGESRC = OpCode(0x7d) // jsge dst, src, +off |  PC += off if dst >= src (signed)
+	CALL    = OpCode(0x85) // call imm            |  Function call
+	EXIT    = OpCode(0x95) // exit                |  return r0
 )
 
 type Register uint8
@@ -317,7 +316,7 @@ type BPFInstruction struct {
 	DstRegister Register
 	SrcRegister Register
 	Offset      int16
-	Constant    int32
+	Constant    IMM
 }
 
 func (bpi *BPFInstruction) getPointer() unsafe.Pointer {

@@ -5,8 +5,8 @@ package ebpf
 
 import (
 	"encoding"
+	"encoding/base64"
 	"fmt"
-	"io"
 	"sync"
 	"syscall"
 	"unsafe"
@@ -72,13 +72,13 @@ type eMap struct {
 	valueSize  uint32
 	maxEntries uint32
 
-	keys     map[[]byte]struct{}
+	keys     map[string]struct{}
 	keysLock sync.RWMutex
 }
 
-func NewEBPFMap(mapType MapType, keySize, valueSize, maxEntries uint32) (EBPFMap, err) {
+func NewEBPFMap(mapType MapType, keySize, valueSize, maxEntries uint32) (EBPFMap, error) {
 	fd, e := bpfCall(_BPF_MAP_CREATE, unsafe.Pointer(&mapCreateAttr{mapType, keySize, valueSize, maxEntries}), 16)
-	err := errnoErr(err)
+	err := errnoErr(e)
 	if err != nil {
 		return nil, fmt.Errorf("map create: %s", err.Error())
 	}
@@ -88,21 +88,21 @@ func NewEBPFMap(mapType MapType, keySize, valueSize, maxEntries uint32) (EBPFMap
 		keySize:    keySize,
 		valueSize:  valueSize,
 		maxEntries: maxEntries,
-		keys:       make(map[[]byte]struct{}),
+		keys:       make(map[string]struct{}),
 	}, nil
 }
 
 func (m *eMap) Get(key encoding.BinaryMarshaler, value encoding.BinaryUnmarshaler) (bool, error) {
-	keyValue, err := m.getKeyOrValue(key, m.keySize, _key)
+	keyValue, err := m.getKeyOrValue(key, int(m.keySize), _key)
 	if err != nil {
 		return false, err
 	}
 	returnValue := make([]byte, m.valueSize)
 	_, e := bpfCall(_BPF_MAP_LOOKUP_ELEM,
 		unsafe.Pointer(&mapOpAttr{
-			mapFd: m.fd,
-			key:   uint64(unsafe.Pointer(&keyValue[0])),
-			value: uint64(unsafe.Pointer(&returnValue[0])),
+			mapFd: uint32(m.fd),
+			key:   uint64(uintptr(unsafe.Pointer(&keyValue[0]))),
+			value: uint64(uintptr(unsafe.Pointer(&returnValue[0]))),
 		}), 32)
 	if e != 0 {
 		if e == syscall.ENOENT {
@@ -126,19 +126,19 @@ func (m *eMap) Replace(key encoding.BinaryMarshaler, value encoding.BinaryMarsha
 }
 
 func (m *eMap) Delete(key encoding.BinaryMarshaler) (bool, error) {
-	keyValue, err := m.getKeyOrValue(key, m.keySize, _key)
+	keyValue, err := m.getKeyOrValue(key, int(m.keySize), _key)
 	if err != nil {
 		return false, err
 	}
 	_, e := bpfCall(_BPF_MAP_DELETE_ELEM,
 		unsafe.Pointer(&mapOpAttr{
-			mapFd: m.fd,
-			key:   uint64(unsafe.Pointer(&keyValue[0])),
+			mapFd: uint32(m.fd),
+			key:   uint64(uintptr(unsafe.Pointer(&keyValue[0]))),
 		}), 32)
 	if e == 0 {
 		m.keysLock.Lock()
 		defer m.keysLock.Unlock()
-		delete(m.keys, keyValue)
+		delete(m.keys, base64.StdEncoding.EncodeToString(keyValue))
 		return true, nil
 	}
 	if e == syscall.ENOENT {
@@ -148,16 +148,16 @@ func (m *eMap) Delete(key encoding.BinaryMarshaler) (bool, error) {
 }
 
 func (m *eMap) GetNextKey(key encoding.BinaryMarshaler, nextKey encoding.BinaryUnmarshaler) (bool, error) {
-	keyValue, err := m.getKeyOrValue(key, m.keySize, _key)
+	keyValue, err := m.getKeyOrValue(key, int(m.keySize), _key)
 	if err != nil {
 		return false, err
 	}
 	returnValue := make([]byte, m.keySize)
 	_, e := bpfCall(_BPF_MAP_LOOKUP_ELEM,
 		unsafe.Pointer(&mapOpAttr{
-			mapFd: m.fd,
-			key:   uint64(unsafe.Pointer(&buf[0])),
-			value: uint64(unsafe.Pointer(&returnValue[0])),
+			mapFd: uint32(m.fd),
+			key:   uint64(uintptr(unsafe.Pointer(&keyValue[0]))),
+			value: uint64(uintptr(unsafe.Pointer(&returnValue[0]))),
 		}), 32)
 	if e != 0 {
 		if e == syscall.ENOENT {
@@ -165,33 +165,39 @@ func (m *eMap) GetNextKey(key encoding.BinaryMarshaler, nextKey encoding.BinaryU
 		}
 		return false, errnoErr(e)
 	}
-	return true, value.UnmarshalBinary(returnValue)
+	return true, nextKey.UnmarshalBinary(returnValue)
 }
 
 func (m *eMap) GetKeys() []*[]byte {
+	m.keysLock.RLock()
+	defer m.keysLock.RUnlock()
 	keys := make([]*[]byte, len(m.keys))
 	i := 0
 	for k, _ := range m.keys {
-		keys[i] = &k
+		v, err := base64.StdEncoding.DecodeString(k)
+		if err != nil {
+			panic(err)
+		}
+		keys[i] = &v
 		i++
 	}
 	return keys
 }
 
 func (m *eMap) put(key encoding.BinaryMarshaler, value encoding.BinaryMarshaler, putType uint64) (bool, error) {
-	keyValue, err := m.getKeyOrValue(key, m.keySize, _key)
+	keyValue, err := m.getKeyOrValue(key, int(m.keySize), _key)
 	if err != nil {
 		return false, err
 	}
-	v, err := m.getKeyOrValue(value, m.valueSize, _value)
+	v, err := m.getKeyOrValue(value, int(m.valueSize), _value)
 	if err != nil {
 		return false, err
 	}
 	_, e := bpfCall(_BPF_MAP_UPDATE_ELEM,
 		unsafe.Pointer(&mapOpAttr{
-			mapFd: m.fd,
-			key:   uint64(unsafe.Pointer(&keyValue[0])),
-			value: uint64(unsafe.Pointer(&v[0])),
+			mapFd: uint32(m.fd),
+			key:   uint64(uintptr(unsafe.Pointer(&keyValue[0]))),
+			value: uint64(uintptr(unsafe.Pointer(&v[0]))),
 			flags: putType,
 		}), 32)
 	if e != 0 {
@@ -209,7 +215,7 @@ func (m *eMap) put(key encoding.BinaryMarshaler, value encoding.BinaryMarshaler,
 	}
 	m.keysLock.Lock()
 	defer m.keysLock.Unlock()
-	m.keys[v] = struct{}{}
+	m.keys[base64.StdEncoding.EncodeToString(v)] = struct{}{}
 	return true, nil
 }
 
@@ -218,13 +224,13 @@ func (m *eMap) getKeyOrValue(kv encoding.BinaryMarshaler, size int, typ string) 
 	if err != nil {
 		return nil, err
 	}
-	buf := bs
+	buf := v
 	lenV := len(v)
 	if lenV > size {
 		return nil, fmt.Errorf("%s size is %s, it should be %s", typ, lenV, size)
-	} else if lenV < m.keySize {
+	} else if lenV < size {
 		buf = make([]byte, size)
-		copy(buf, bs)
+		copy(buf, v)
 	}
 	return buf, nil
 }
@@ -247,6 +253,8 @@ func errnoErr(e syscall.Errno) error {
 		return fmt.Errorf("not an open file descriptor")
 	case syscall.EACCES:
 		return fmt.Errorf("bpf program rejected as unsafe")
+	case syscall.ENOSPC:
+		return fmt.Errorf("bpf logging buffer not large enough")
 	}
 	return e
 }

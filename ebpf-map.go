@@ -56,21 +56,9 @@ const (
 	_value = "value"
 )
 
-type EBPFMap interface {
-	Get(encoding.BinaryMarshaler, encoding.BinaryUnmarshaler) (bool, error)
-	Create(encoding.BinaryMarshaler, encoding.BinaryMarshaler) (bool, error)
-	Put(encoding.BinaryMarshaler, encoding.BinaryMarshaler) (bool, error)
-	Replace(encoding.BinaryMarshaler, encoding.BinaryMarshaler) (bool, error)
-	Delete(encoding.BinaryMarshaler) (bool, error)
-	GetNextKey(encoding.BinaryMarshaler, encoding.BinaryUnmarshaler) (bool, error)
-	GetKeys() []*[]byte
-	Close() error
-	GetFd() uint32
-}
-
-type eMap struct {
+type BPFMap struct {
 	mapType    MapType
-	fd         uintptr
+	fd         int
 	keySize    uint32
 	valueSize  uint32
 	maxEntries uint32
@@ -79,15 +67,15 @@ type eMap struct {
 	keysLock sync.RWMutex
 }
 
-func NewEBPFMap(mapType MapType, keySize, valueSize, maxEntries uint32) (EBPFMap, error) {
+func NewEBPFMap(mapType MapType, keySize, valueSize, maxEntries uint32) (*BPFMap, error) {
 	fd, e := bpfCall(_BPF_MAP_CREATE, unsafe.Pointer(&mapCreateAttr{mapType, keySize, valueSize, maxEntries}), 16)
 	err := errnoErr(e)
 	if err != nil {
 		return nil, fmt.Errorf("map create: %s", err.Error())
 	}
-	return &eMap{
+	return &BPFMap{
 		mapType:    mapType,
-		fd:         fd,
+		fd:         int(fd),
 		keySize:    keySize,
 		valueSize:  valueSize,
 		maxEntries: maxEntries,
@@ -95,7 +83,7 @@ func NewEBPFMap(mapType MapType, keySize, valueSize, maxEntries uint32) (EBPFMap
 	}, nil
 }
 
-func (m *eMap) Get(key encoding.BinaryMarshaler, value encoding.BinaryUnmarshaler) (bool, error) {
+func (m *BPFMap) Get(key encoding.BinaryMarshaler, value encoding.BinaryUnmarshaler) (bool, error) {
 	keyValue, err := m.getKeyOrValue(key, int(m.keySize), _key)
 	if err != nil {
 		return false, err
@@ -116,19 +104,19 @@ func (m *eMap) Get(key encoding.BinaryMarshaler, value encoding.BinaryUnmarshale
 	return true, value.UnmarshalBinary(returnValue)
 }
 
-func (m *eMap) Create(key encoding.BinaryMarshaler, value encoding.BinaryMarshaler) (bool, error) {
+func (m *BPFMap) Create(key encoding.BinaryMarshaler, value encoding.BinaryMarshaler) (bool, error) {
 	return m.put(key, value, _BPF_NOEXIST)
 }
 
-func (m *eMap) Put(key encoding.BinaryMarshaler, value encoding.BinaryMarshaler) (bool, error) {
+func (m *BPFMap) Put(key encoding.BinaryMarshaler, value encoding.BinaryMarshaler) (bool, error) {
 	return m.put(key, value, _BPF_ANY)
 }
 
-func (m *eMap) Replace(key encoding.BinaryMarshaler, value encoding.BinaryMarshaler) (bool, error) {
+func (m *BPFMap) Replace(key encoding.BinaryMarshaler, value encoding.BinaryMarshaler) (bool, error) {
 	return m.put(key, value, _BPF_EXIST)
 }
 
-func (m *eMap) Delete(key encoding.BinaryMarshaler) (bool, error) {
+func (m *BPFMap) Delete(key encoding.BinaryMarshaler) (bool, error) {
 	keyValue, err := m.getKeyOrValue(key, int(m.keySize), _key)
 	if err != nil {
 		return false, err
@@ -150,7 +138,7 @@ func (m *eMap) Delete(key encoding.BinaryMarshaler) (bool, error) {
 	return false, errnoErr(e)
 }
 
-func (m *eMap) GetNextKey(key encoding.BinaryMarshaler, nextKey encoding.BinaryUnmarshaler) (bool, error) {
+func (m *BPFMap) GetNextKey(key encoding.BinaryMarshaler, nextKey encoding.BinaryUnmarshaler) (bool, error) {
 	keyValue, err := m.getKeyOrValue(key, int(m.keySize), _key)
 	if err != nil {
 		return false, err
@@ -171,7 +159,7 @@ func (m *eMap) GetNextKey(key encoding.BinaryMarshaler, nextKey encoding.BinaryU
 	return true, nextKey.UnmarshalBinary(returnValue)
 }
 
-func (m *eMap) GetKeys() []*[]byte {
+func (m *BPFMap) GetKeys() []*[]byte {
 	m.keysLock.RLock()
 	defer m.keysLock.RUnlock()
 	keys := make([]*[]byte, len(m.keys))
@@ -187,15 +175,15 @@ func (m *eMap) GetKeys() []*[]byte {
 	return keys
 }
 
-func (m *eMap) Close() error {
+func (m *BPFMap) Close() error {
 	return syscall.Close(int(m.fd))
 }
 
-func (m *eMap) GetFd() uint32 {
-	return uint32(m.fd)
+func (m *BPFMap) GetFd() int {
+	return m.fd
 }
 
-func (m *eMap) put(key encoding.BinaryMarshaler, value encoding.BinaryMarshaler, putType uint64) (bool, error) {
+func (m *BPFMap) put(key encoding.BinaryMarshaler, value encoding.BinaryMarshaler, putType uint64) (bool, error) {
 	keyValue, err := m.getKeyOrValue(key, int(m.keySize), _key)
 	if err != nil {
 		return false, err
@@ -230,7 +218,7 @@ func (m *eMap) put(key encoding.BinaryMarshaler, value encoding.BinaryMarshaler,
 	return true, nil
 }
 
-func (m *eMap) getKeyOrValue(kv encoding.BinaryMarshaler, size int, typ string) ([]byte, error) {
+func (m *BPFMap) getKeyOrValue(kv encoding.BinaryMarshaler, size int, typ string) ([]byte, error) {
 	v, err := kv.MarshalBinary()
 	if err != nil {
 		return nil, err

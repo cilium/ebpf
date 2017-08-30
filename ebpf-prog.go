@@ -18,32 +18,79 @@ const (
 type OpCode uint8
 
 const (
+	// Instruction classes
+	Ld = OpCode(iota)
+	LdX
+	St
+	StX
+	ALU
+	Jmp
+	Ret
+	Misc
+
+	// ld/ldx fields
+	// #define BPF_SIZE(code)  ((code) & 0x18)
+	// #define		BPF_W		0x00
+	// #define		BPF_H		0x08
+	// #define		BPF_B		0x10
+	// #define BPF_MODE(code)  ((code) & 0xe0)
+	// #define		BPF_IMM		0x00
+	// #define		BPF_ABS		0x20
+	// #define		BPF_IND		0x40
+	// #define		BPF_MEM		0x60
+	// #define		BPF_LEN		0x80
+	// #define		BPF_MSH		0xa0
+
+	// /* alu/jmp fields */
+	// #define BPF_OP(code)    ((code) & 0xf0)
+	// #define		BPF_ADD		0x00
+	// #define		BPF_SUB		0x10
+	// #define		BPF_MUL		0x20
+	// #define		BPF_DIV		0x30
+	// #define		BPF_OR		0x40
+	// #define		BPF_AND		0x50
+	// #define		BPF_LSH		0x60
+	// #define		BPF_RSH		0x70
+	// #define		BPF_NEG		0x80
+	// #define		BPF_MOD		0x90
+	// #define		BPF_XOR		0xa0
+
+	// #define		BPF_JA		0x00
+	// #define		BPF_JEQ		0x10
+	// #define		BPF_JGT		0x20
+	// #define		BPF_JGE		0x30
+	// #define		BPF_JSET        0x40
+	// #define BPF_SRC(code)   ((code) & 0x08)
+	// #define		BPF_K		0x00
+	// #define		BPF_X		0x08
 	// ALU Instructions 64 bit
-	AddImm  = OpCode(0x07) // add dst, imm   |  dst += imm
-	AddSrc  = OpCode(0x0f) // add dst, src   |  dst += src
-	SubImm  = OpCode(0x17) // sub dst, imm   |  dst -= imm
-	SubSrc  = OpCode(0x1f) // sub dst, src   |  dst -= src
-	MulImm  = OpCode(0x27) // mul dst, imm   |  dst *= imm
-	MulSrc  = OpCode(0x2f) // mul dst, src   |  dst *= src
-	DivImm  = OpCode(0x37) // div dst, imm   |  dst /= imm
-	DivSrc  = OpCode(0x3f) // div dst, src   |  dst /= src
-	OrImm   = OpCode(0x47) // or dst, imm    |  dst  |= imm
-	OrSrc   = OpCode(0x4f) // or dst, src    |  dst  |= src
-	AndImm  = OpCode(0x57) // and dst, imm   |  dst &= imm
-	AndSrc  = OpCode(0x5f) // and dst, src   |  dst &= src
-	LShImm  = OpCode(0x67) // lsh dst, imm   |  dst <<= imm
-	LShSrc  = OpCode(0x6f) // lsh dst, src   |  dst <<= src
-	RShImm  = OpCode(0x77) // rsh dst, imm   |  dst >>= imm (logical)
-	RShSrc  = OpCode(0x7f) // rsh dst, src   |  dst >>= src (logical)
-	Neg     = OpCode(0x87) // neg dst        |  dst = -dst
-	ModImm  = OpCode(0x97) // mod dst, imm   |  dst %= imm
-	ModSrc  = OpCode(0x9f) // mod dst, src   |  dst %= src
-	XorImm  = OpCode(0xa7) // xor dst, imm   |  dst ^= imm
-	XorSrc  = OpCode(0xaf) // xor dst, src   |  dst ^= src
-	MovImm  = OpCode(0xb7) // mov dst, imm   |  dst = imm
-	MovSrc  = OpCode(0xbf) // mov dst, src   |  dst = src
-	ArShImm = OpCode(0xc7) // arsh dst, imm  |  dst >>= imm (arithmetic)
-	ArShSrc = OpCode(0xcf) // arsh dst, src  |  dst >>= src (arithmetic)
+	AddImm    = OpCode(0x07) // add dst, imm   |  dst += imm
+	AddSrc    = OpCode(0x0f) // add dst, src   |  dst += src
+	XAddStImm = OpCode(0xda) // xadd dst, imm  |  *dst += imm
+	XAddStSrc = OpCode(0xdb) // xadd dst, src  |  *dst += src
+	SubImm    = OpCode(0x17) // sub dst, imm   |  dst -= imm
+	SubSrc    = OpCode(0x1f) // sub dst, src   |  dst -= src
+	MulImm    = OpCode(0x27) // mul dst, imm   |  dst *= imm
+	MulSrc    = OpCode(0x2f) // mul dst, src   |  dst *= src
+	DivImm    = OpCode(0x37) // div dst, imm   |  dst /= imm
+	DivSrc    = OpCode(0x3f) // div dst, src   |  dst /= src
+	OrImm     = OpCode(0x47) // or dst, imm    |  dst  |= imm
+	OrSrc     = OpCode(0x4f) // or dst, src    |  dst  |= src
+	AndImm    = OpCode(0x57) // and dst, imm   |  dst &= imm
+	AndSrc    = OpCode(0x5f) // and dst, src   |  dst &= src
+	LShImm    = OpCode(0x67) // lsh dst, imm   |  dst <<= imm
+	LShSrc    = OpCode(0x6f) // lsh dst, src   |  dst <<= src
+	RShImm    = OpCode(0x77) // rsh dst, imm   |  dst >>= imm (logical)
+	RShSrc    = OpCode(0x7f) // rsh dst, src   |  dst >>= src (logical)
+	Neg       = OpCode(0x87) // neg dst        |  dst = -dst
+	ModImm    = OpCode(0x97) // mod dst, imm   |  dst %= imm
+	ModSrc    = OpCode(0x9f) // mod dst, src   |  dst %= src
+	XorImm    = OpCode(0xa7) // xor dst, imm   |  dst ^= imm
+	XorSrc    = OpCode(0xaf) // xor dst, src   |  dst ^= src
+	MovImm    = OpCode(0xb7) // mov dst, imm   |  dst = imm
+	MovSrc    = OpCode(0xbf) // mov dst, src   |  dst = src
+	ArShImm   = OpCode(0xc7) // arsh dst, imm  |  dst >>= imm (arithmetic)
+	ArShSrc   = OpCode(0xcf) // arsh dst, src  |  dst >>= src (arithmetic)
 
 	// ALU Instructions 32 bit
 	// These instructions use only the lower 32 bits of their
@@ -83,11 +130,11 @@ const (
 	// Memory Instructions
 	// the variable "mem", means skb->data in the context of
 	// a socket prog, but in other context means other things.
-	LdDW    = OpCode(0x18) // lddw dst, imm          |  dst = imm
-	LdAbsDW = OpCode(0x38) // ldabsdw imm            |  r0 = *(uint64_t *) (mem + imm)
-	LdAbsW  = OpCode(0x20) // ldabsw imm             |  r0 = *(uint32_t *) (mem + imm)
-	LdAbsH  = OpCode(0x28) // ldabsh imm             |  r0 = *(uint16_t *) (mem + imm)
+	LdDW    = OpCode(0x18) // lddw (src), dst, imm   |  dst = *imm
 	LdAbsB  = OpCode(0x30) // ldabsb imm             |  r0 = *(uint8_t *) (mem + imm)
+	LdAbsH  = OpCode(0x28) // ldabsh imm             |  r0 = *(uint16_t *) (mem + imm)
+	LdAbsW  = OpCode(0x20) // ldabsw imm             |  r0 = *(uint32_t *) (mem + imm)
+	LdAbsDW = OpCode(0x38) // ldabsdw imm            |  r0 = *(uint64_t *) (mem + imm)
 	LdIndW  = OpCode(0x40) // ldindw src, dst, imm   |  ...
 	LdIndH  = OpCode(0x48) // ldindh src, dst, imm   |  ...
 	LdIndB  = OpCode(0x50) // ldindb src, dst, imm   |  ...
@@ -96,13 +143,13 @@ const (
 	LdXH    = OpCode(0x69) // ldxh dst, [src+off]    |  dst = *(uint16_t *) (src + off)
 	LdXB    = OpCode(0x71) // ldxb dst, [src+off]    |  dst = *(uint8_t *) (src + off)
 	LdXDW   = OpCode(0x79) // ldxdw dst, [src+off]   |  dst = *(uint64_t *) (src + off)
-	StW     = OpCode(0x62) // stw [dst+off], imm     |  *(uint32_t *) (dst + off) = imm
-	StH     = OpCode(0x6a) // sth [dst+off], imm     |  *(uint16_t *) (dst + off) = imm
 	StB     = OpCode(0x72) // stb [dst+off], imm     |  *(uint8_t *) (dst + off) = imm
+	StH     = OpCode(0x6a) // sth [dst+off], imm     |  *(uint16_t *) (dst + off) = imm
+	StW     = OpCode(0x62) // stw [dst+off], imm     |  *(uint32_t *) (dst + off) = imm
 	StDW    = OpCode(0x7a) // stdw [dst+off], imm    |  *(uint64_t *) (dst + off) = imm
-	StXW    = OpCode(0x63) // stxw [dst+off], src    |  *(uint32_t *) (dst + off) = src
-	StXH    = OpCode(0x6b) // stxh [dst+off], src    |  *(uint16_t *) (dst + off) = src
 	StXB    = OpCode(0x73) // stxb [dst+off], src    |  *(uint8_t *) (dst + off) = src
+	StXH    = OpCode(0x6b) // stxh [dst+off], src    |  *(uint16_t *) (dst + off) = src
+	StXW    = OpCode(0x63) // stxw [dst+off], src    |  *(uint32_t *) (dst + off) = src
 	StXDW   = OpCode(0x7b) // stxdw [dst+off], src   |  *(uint64_t *) (dst + off) = src
 
 	// Branch Instructions
@@ -610,7 +657,7 @@ func BPFIDstSrc(opCode OpCode, dst, src Register) *BPFInstruction {
 	}
 }
 
-func BPFIDstOffMMI(opCode OpCode, dst Register, off int16, imm int32) *BPFInstruction {
+func BPFIDstOffImm(opCode OpCode, dst Register, off int16, imm int32) *BPFInstruction {
 	return &BPFInstruction{
 		OpCode:      opCode,
 		DstRegister: dst,
@@ -628,7 +675,7 @@ func BPFIDstOffSrc(opCode OpCode, dst, src Register, off int16) *BPFInstruction 
 	}
 }
 
-func BPFIDstOffMMISrc(opCode OpCode, dst, src Register, off int16, imm int32) *BPFInstruction {
+func BPFIDstOffImmSrc(opCode OpCode, dst, src Register, off int16, imm int32) *BPFInstruction {
 	return &BPFInstruction{
 		OpCode:      opCode,
 		DstRegister: dst,
@@ -651,11 +698,11 @@ func (bpi *BPFInstruction) getCStruct() bpfInstruction {
 }
 
 type BPFProgram struct {
-	fd   uintptr
+	fd   int
 	logs []byte
 }
 
-func NewBPFProgram(progType ProgType, instructions []*BPFInstruction, logging bool, license string) (*BPFProgram, error) {
+func NewBPFProgram(progType ProgType, instructions []*BPFInstruction, license string) (*BPFProgram, error) {
 	insCount := uint32(len(instructions))
 	if insCount > MaxBPFInstructions {
 		return nil, fmt.Errorf("max instructions, %s, exceeded", MaxBPFInstructions)
@@ -666,16 +713,8 @@ func NewBPFProgram(progType ProgType, instructions []*BPFInstruction, logging bo
 	}
 	bpfP := new(BPFProgram)
 	lic := []byte(license)
-	var logLevel uint32
-	var logBuf uint64
-	var logSize uint32
-	if logging {
-		logLevel = 1
-		bpfP.logs = make([]byte, LogBufSize)
-		logBuf = uint64(uintptr(unsafe.Pointer(&bpfP.logs[0])))
-		logSize = LogBufSize
-	}
-	fd, e := bpfCall(_BPF_PROG_LOAD, unsafe.Pointer(&(struct {
+	bpfP.logs = make([]byte, LogBufSize)
+	fd, e := bpfCall(_BPF_PROG_LOAD, unsafe.Pointer((&struct {
 		progType     uint32
 		insCount     uint32
 		instructions uint64
@@ -690,14 +729,18 @@ func NewBPFProgram(progType ProgType, instructions []*BPFInstruction, logging bo
 		insCount:     insCount,
 		instructions: uint64(uintptr(unsafe.Pointer(&cInstructions[0]))),
 		license:      uint64(uintptr(unsafe.Pointer(&lic[0]))),
-		logLevel:     logLevel,
-		logSize:      logSize,
-		logBuf:       logBuf,
+		logLevel:     1,
+		logSize:      LogBufSize,
+		logBuf:       uint64(uintptr(unsafe.Pointer(&bpfP.logs[0]))),
 	})), 48)
 	if e != 0 {
-		return nil, errnoErr(e)
+		logs := bpfP.GetLogs()
+		if len(logs) > 0 {
+			return nil, fmt.Errorf("%s: %s", errnoErr(e), logs)
+		}
+		return bpfP, errnoErr(e)
 	}
-	bpfP.fd = fd
+	bpfP.fd = int(fd)
 	return bpfP, nil
 }
 
@@ -706,4 +749,8 @@ func (bpf *BPFProgram) GetLogs() string {
 		return ""
 	}
 	return string(bpf.logs)
+}
+
+func (bfp *BPFProgram) GetFd() int {
+	return bfp.fd
 }

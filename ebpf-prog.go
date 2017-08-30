@@ -19,58 +19,58 @@ type OpCode uint8
 
 const (
 	// ALU Instructions 64 bit
-	ADDIMM  = OpCode(0x07) // add dst, imm   |  dst += imm
-	ADDSRC  = OpCode(0x0f) // add dst, src   |  dst += src
-	SUBIMM  = OpCode(0x17) // sub dst, imm   |  dst -= imm
-	SUBSRC  = OpCode(0x1f) // sub dst, src   |  dst -= src
-	MULIMM  = OpCode(0x27) // mul dst, imm   |  dst *= imm
-	MULSRC  = OpCode(0x2f) // mul dst, src   |  dst *= src
-	DIVIMM  = OpCode(0x37) // div dst, imm   |  dst /= imm
-	DIVSRC  = OpCode(0x3f) // div dst, src   |  dst /= src
-	ORIMM   = OpCode(0x47) // or dst, imm    |  dst  |= imm
-	ORSRC   = OpCode(0x4f) // or dst, src    |  dst  |= src
-	ANDIMM  = OpCode(0x57) // and dst, imm   |  dst &= imm
-	ANDSRC  = OpCode(0x5f) // and dst, src   |  dst &= src
-	LSHIMM  = OpCode(0x67) // lsh dst, imm   |  dst <<= imm
-	LSHSRC  = OpCode(0x6f) // lsh dst, src   |  dst <<= src
-	RSHIMM  = OpCode(0x77) // rsh dst, imm   |  dst >>= imm (logical)
-	RSHSRC  = OpCode(0x7f) // rsh dst, src   |  dst >>= src (logical)
-	NEG     = OpCode(0x87) // neg dst        |  dst = -dst
-	MODIMM  = OpCode(0x97) // mod dst, imm   |  dst %= imm
-	MODSRC  = OpCode(0x9f) // mod dst, src   |  dst %= src
-	XORIMM  = OpCode(0xa7) // xor dst, imm   |  dst ^= imm
-	XORSRC  = OpCode(0xaf) // xor dst, src   |  dst ^= src
-	MOVIMM  = OpCode(0xb7) // mov dst, imm   |  dst = imm
-	MOVSRC  = OpCode(0xbf) // mov dst, src   |  dst = src
-	ARSHIMM = OpCode(0xc7) // arsh dst, imm  |  dst >>= imm (arithmetic)
-	ARSHSRC = OpCode(0xcf) // arsh dst, src  |  dst >>= src (arithmetic)
+	AddImm  = OpCode(0x07) // add dst, imm   |  dst += imm
+	AddSrc  = OpCode(0x0f) // add dst, src   |  dst += src
+	SubImm  = OpCode(0x17) // sub dst, imm   |  dst -= imm
+	SubSrc  = OpCode(0x1f) // sub dst, src   |  dst -= src
+	MulImm  = OpCode(0x27) // mul dst, imm   |  dst *= imm
+	MulSrc  = OpCode(0x2f) // mul dst, src   |  dst *= src
+	DivImm  = OpCode(0x37) // div dst, imm   |  dst /= imm
+	DivSrc  = OpCode(0x3f) // div dst, src   |  dst /= src
+	OrImm   = OpCode(0x47) // or dst, imm    |  dst  |= imm
+	OrSrc   = OpCode(0x4f) // or dst, src    |  dst  |= src
+	AndImm  = OpCode(0x57) // and dst, imm   |  dst &= imm
+	AndSrc  = OpCode(0x5f) // and dst, src   |  dst &= src
+	LShImm  = OpCode(0x67) // lsh dst, imm   |  dst <<= imm
+	LShSrc  = OpCode(0x6f) // lsh dst, src   |  dst <<= src
+	RShImm  = OpCode(0x77) // rsh dst, imm   |  dst >>= imm (logical)
+	RShSrc  = OpCode(0x7f) // rsh dst, src   |  dst >>= src (logical)
+	Neg     = OpCode(0x87) // neg dst        |  dst = -dst
+	ModImm  = OpCode(0x97) // mod dst, imm   |  dst %= imm
+	ModSrc  = OpCode(0x9f) // mod dst, src   |  dst %= src
+	XorImm  = OpCode(0xa7) // xor dst, imm   |  dst ^= imm
+	XorSrc  = OpCode(0xaf) // xor dst, src   |  dst ^= src
+	MovImm  = OpCode(0xb7) // mov dst, imm   |  dst = imm
+	MovSrc  = OpCode(0xbf) // mov dst, src   |  dst = src
+	ArShImm = OpCode(0xc7) // arsh dst, imm  |  dst >>= imm (arithmetic)
+	ArShSrc = OpCode(0xcf) // arsh dst, src  |  dst >>= src (arithmetic)
 
 	// ALU Instructions 32 bit
 	// These instructions use only the lower 32 bits of their
 	// operands and zero the upper 32 bits of the destination register.
-	ADD32IMM = OpCode(0x04) // add32 dst, imm  |  dst += imm
-	ADD32SRC = OpCode(0x0c) // add32 dst, src  |  dst += src
-	SUB32IMM = OpCode(0x14) // sub32 dst, imm  |  dst -= imm
-	SUB32SRC = OpCode(0x1c) // sub32 dst, src  |  dst -= src
-	MUL32IMM = OpCode(0x24) // mul32 dst, imm  |  dst *= imm
-	MUL32SRC = OpCode(0x2c) // mul32 dst, src  |  dst *= src
-	DIV32IMM = OpCode(0x34) // div32 dst, imm  |  dst /= imm
-	DIV32SRC = OpCode(0x3c) // div32 dst, src  |  dst /= src
-	OR32IMM  = OpCode(0x44) // or32 dst, imm   |  dst |= imm
-	OR32SRC  = OpCode(0x4c) // or32 dst, src   |  dst |= src
-	AND32IMM = OpCode(0x54) // and32 dst, imm  |  dst &= imm
-	AND32SRC = OpCode(0x5c) // and32 dst, src  |  dst &= src
-	LSH32IMM = OpCode(0x64) // lsh32 dst, imm  |  dst <<= imm
-	LSH32SRC = OpCode(0x6c) // lsh32 dst, src  |  dst <<= src
-	RSH32IMM = OpCode(0x74) // rsh32 dst, imm  |  dst >>= imm (logical)
-	RSH32SRC = OpCode(0x7c) // rsh32 dst, src  |  dst >>= src (logical)
-	NEG32    = OpCode(0x84) // neg32 dst       |  dst = -dst
-	MOD32IMM = OpCode(0x94) // mod32 dst, imm  |  dst %= imm
-	MOD32SRC = OpCode(0x9c) // mod32 dst, src  |  dst %= src
-	XOR32IMM = OpCode(0xa4) // xor32 dst, imm  |  dst ^= imm
-	XOR32SRC = OpCode(0xac) // xor32 dst, src  |  dst ^= src
-	MOV32IMM = OpCode(0xb4) // mov32 dst, imm  |  dst = imm
-	MOV32SRC = OpCode(0xbc) // mov32 dst, src  |  dst = src
+	Add32Imm = OpCode(0x04) // add32 dst, imm  |  dst += imm
+	Add32Src = OpCode(0x0c) // add32 dst, src  |  dst += src
+	Sub32Imm = OpCode(0x14) // sub32 dst, imm  |  dst -= imm
+	Sub32Src = OpCode(0x1c) // sub32 dst, src  |  dst -= src
+	Mul32Imm = OpCode(0x24) // mul32 dst, imm  |  dst *= imm
+	Mul32Src = OpCode(0x2c) // mul32 dst, src  |  dst *= src
+	Div32Imm = OpCode(0x34) // div32 dst, imm  |  dst /= imm
+	Div32Src = OpCode(0x3c) // div32 dst, src  |  dst /= src
+	Or32Imm  = OpCode(0x44) // or32 dst, imm   |  dst |= imm
+	Or32Src  = OpCode(0x4c) // or32 dst, src   |  dst |= src
+	And32Imm = OpCode(0x54) // and32 dst, imm  |  dst &= imm
+	And32Src = OpCode(0x5c) // and32 dst, src  |  dst &= src
+	LSh32Imm = OpCode(0x64) // lsh32 dst, imm  |  dst <<= imm
+	LSh32Src = OpCode(0x6c) // lsh32 dst, src  |  dst <<= src
+	RSh32Imm = OpCode(0x74) // rsh32 dst, imm  |  dst >>= imm (logical)
+	RSh32Src = OpCode(0x7c) // rsh32 dst, src  |  dst >>= src (logical)
+	Neg32    = OpCode(0x84) // neg32 dst       |  dst = -dst
+	Mod32Imm = OpCode(0x94) // mod32 dst, imm  |  dst %= imm
+	Mod32Src = OpCode(0x9c) // mod32 dst, src  |  dst %= src
+	Xor32Imm = OpCode(0xa4) // xor32 dst, imm  |  dst ^= imm
+	Xor32Src = OpCode(0xac) // xor32 dst, src  |  dst ^= src
+	Mov32Imm = OpCode(0xb4) // mov32 dst, imm  |  dst = imm
+	Mov32Src = OpCode(0xbc) // mov32 dst, src  |  dst = src
 
 	// Byteswap Instructions
 	LE16 = OpCode(0xd4) // le16 dst, imm == 16  |  dst = htole16(dst)
@@ -81,46 +81,48 @@ const (
 	BE64 = OpCode(0xdc) // be64 dst, imm == 64  |  dst = htobe64(dst)
 
 	// Memory Instructions
-	LDDW    = OpCode(0x18) // lddw dst, imm          |  dst = imm
-	LDABSW  = OpCode(0x20) // ldabsw src, dst, imm   |  See kernel documentation
-	LDABSH  = OpCode(0x28) // ldabsh src, dst, imm   |  ...
-	LDABSB  = OpCode(0x30) // ldabsb src, dst, imm   |  ...
-	LDABSDW = OpCode(0x38) // ldabsdw src, dst, imm  |  ...
-	LDINDW  = OpCode(0x40) // ldindw src, dst, imm   |  ...
-	LDINDH  = OpCode(0x48) // ldindh src, dst, imm   |  ...
-	LDINDB  = OpCode(0x50) // ldindb src, dst, imm   |  ...
-	LDINDDW = OpCode(0x58) // ldinddw src, dst, imm  |  ...
-	LDXW    = OpCode(0x61) // ldxw dst, [src+off]    |  dst = *(uint32_t *) (src + off)
-	LDXH    = OpCode(0x69) // ldxh dst, [src+off]    |  dst = *(uint16_t *) (src + off)
-	LDXB    = OpCode(0x71) // ldxb dst, [src+off]    |  dst = *(uint8_t *) (src + off)
-	LDXDW   = OpCode(0x79) // ldxdw dst, [src+off]   |  dst = *(uint64_t *) (src + off)
-	STW     = OpCode(0x62) // stw [dst+off], imm     |  *(uint32_t *) (dst + off) = imm
-	STH     = OpCode(0x6a) // sth [dst+off], imm     |  *(uint16_t *) (dst + off) = imm
-	STB     = OpCode(0x72) // stb [dst+off], imm     |  *(uint8_t *) (dst + off) = imm
-	STDW    = OpCode(0x7a) // stdw [dst+off], imm    |  *(uint64_t *) (dst + off) = imm
-	STXW    = OpCode(0x63) // stxw [dst+off], src    |  *(uint32_t *) (dst + off) = src
-	STXH    = OpCode(0x6b) // stxh [dst+off], src    |  *(uint16_t *) (dst + off) = src
-	STXB    = OpCode(0x73) // stxb [dst+off], src    |  *(uint8_t *) (dst + off) = src
-	STXDW   = OpCode(0x7b) // stxdw [dst+off], src   |  *(uint64_t *) (dst + off) = src
+	// the variable "mem", means skb->data in the context of
+	// a socket prog, but in other context means other things.
+	LdDW    = OpCode(0x18) // lddw dst, imm          |  dst = imm
+	LdAbsDW = OpCode(0x38) // ldabsdw imm            |  r0 = *(uint64_t *) (mem + imm)
+	LdAbsW  = OpCode(0x20) // ldabsw imm             |  r0 = *(uint32_t *) (mem + imm)
+	LdAbsH  = OpCode(0x28) // ldabsh imm             |  r0 = *(uint16_t *) (mem + imm)
+	LdAbsB  = OpCode(0x30) // ldabsb imm             |  r0 = *(uint8_t *) (mem + imm)
+	LdIndW  = OpCode(0x40) // ldindw src, dst, imm   |  ...
+	LdIndH  = OpCode(0x48) // ldindh src, dst, imm   |  ...
+	LdIndB  = OpCode(0x50) // ldindb src, dst, imm   |  ...
+	LdIndDW = OpCode(0x58) // ldinddw src, dst, imm  |  ...
+	LdXW    = OpCode(0x61) // ldxw dst, [src+off]    |  dst = *(uint32_t *) (src + off)
+	LdXH    = OpCode(0x69) // ldxh dst, [src+off]    |  dst = *(uint16_t *) (src + off)
+	LdXB    = OpCode(0x71) // ldxb dst, [src+off]    |  dst = *(uint8_t *) (src + off)
+	LdXDW   = OpCode(0x79) // ldxdw dst, [src+off]   |  dst = *(uint64_t *) (src + off)
+	StW     = OpCode(0x62) // stw [dst+off], imm     |  *(uint32_t *) (dst + off) = imm
+	StH     = OpCode(0x6a) // sth [dst+off], imm     |  *(uint16_t *) (dst + off) = imm
+	StB     = OpCode(0x72) // stb [dst+off], imm     |  *(uint8_t *) (dst + off) = imm
+	StDW    = OpCode(0x7a) // stdw [dst+off], imm    |  *(uint64_t *) (dst + off) = imm
+	StXW    = OpCode(0x63) // stxw [dst+off], src    |  *(uint32_t *) (dst + off) = src
+	StXH    = OpCode(0x6b) // stxh [dst+off], src    |  *(uint16_t *) (dst + off) = src
+	StXB    = OpCode(0x73) // stxb [dst+off], src    |  *(uint8_t *) (dst + off) = src
+	StXDW   = OpCode(0x7b) // stxdw [dst+off], src   |  *(uint64_t *) (dst + off) = src
 
 	// Branch Instructions
 	JA      = OpCode(0x05) // ja +off             |  PC += off
-	JEQIMM  = OpCode(0x15) // jeq dst, imm, +off  |  PC += off if dst == imm
-	JEQSRC  = OpCode(0x1d) // jeq dst, src, +off  |  PC += off if dst == src
-	JGTIMM  = OpCode(0x25) // jgt dst, imm, +off  |  PC += off if dst > imm
-	JGTSRC  = OpCode(0x2d) // jgt dst, src, +off  |  PC += off if dst > src
-	JGEIMM  = OpCode(0x35) // jge dst, imm, +off  |  PC += off if dst >= imm
-	JGESRC  = OpCode(0x3d) // jge dst, src, +off  |  PC += off if dst >= src
-	JSETIMM = OpCode(0x45) // jset dst, imm, +off |  PC += off if dst & imm
-	JSETSRC = OpCode(0x4d) // jset dst, src, +off |  PC += off if dst & src
-	JNEIMM  = OpCode(0x55) // jne dst, imm, +off  |  PC += off if dst != imm
-	JNESRC  = OpCode(0x5d) // jne dst, src, +off  |  PC += off if dst != src
-	JSGTIMM = OpCode(0x65) // jsgt dst, imm, +off |  PC += off if dst > imm (signed)
-	JSGTSRC = OpCode(0x6d) // jsgt dst, src, +off |  PC += off if dst > src (signed)
-	JSGEIMM = OpCode(0x75) // jsge dst, imm, +off |  PC += off if dst >= imm (signed)
-	JSGESRC = OpCode(0x7d) // jsge dst, src, +off |  PC += off if dst >= src (signed)
-	CALL    = OpCode(0x85) // call imm            |  Function call
-	EXIT    = OpCode(0x95) // exit                |  return r0
+	JEqImm  = OpCode(0x15) // jeq dst, imm, +off  |  PC += off if dst == imm
+	JEqSrc  = OpCode(0x1d) // jeq dst, src, +off  |  PC += off if dst == src
+	JGtImm  = OpCode(0x25) // jgt dst, imm, +off  |  PC += off if dst > imm
+	JGtSrc  = OpCode(0x2d) // jgt dst, src, +off  |  PC += off if dst > src
+	JGeImm  = OpCode(0x35) // jge dst, imm, +off  |  PC += off if dst >= imm
+	JGeSrc  = OpCode(0x3d) // jge dst, src, +off  |  PC += off if dst >= src
+	JSETImm = OpCode(0x45) // jset dst, imm, +off |  PC += off if dst & imm
+	JSETSrc = OpCode(0x4d) // jset dst, src, +off |  PC += off if dst & src
+	JNEImm  = OpCode(0x55) // jne dst, imm, +off  |  PC += off if dst != imm
+	JNESrc  = OpCode(0x5d) // jne dst, src, +off  |  PC += off if dst != src
+	JSGtImm = OpCode(0x65) // jsgt dst, imm, +off |  PC += off if dst > imm (signed)
+	JSGtSrc = OpCode(0x6d) // jsgt dst, src, +off |  PC += off if dst > src (signed)
+	JSGeImm = OpCode(0x75) // jsge dst, imm, +off |  PC += off if dst >= imm (signed)
+	JSGeSrc = OpCode(0x7d) // jsge dst, src, +off |  PC += off if dst >= src (signed)
+	Call    = OpCode(0x85) // call imm            |  Function call
+	Exit    = OpCode(0x95) // exit                |  return r0
 )
 
 type Register uint8
@@ -130,25 +132,23 @@ const (
 	// R1>= - arguments from eBPF program to in-kernel function
 	// R6>= - callee saved registers that in-kernel function will preserve
 	// R10  - read-only frame pointer to access stack
-	REG0 = Register(iota)
-	REG1
-	REG2
-	REG3
-	REG4
-	REG5
-	REG6
-	REG7
-	REG8
-	REG9
-	REG10
+	Reg0 = Register(iota)
+	Reg1
+	Reg2
+	Reg3
+	Reg4
+	Reg5
+	Reg6
+	Reg7
+	Reg8
+	Reg9
+	Reg10
 )
-
-type IMM int32
 
 const (
 	// void *map_lookup_elem(&map, &key)
 	// Return: Map value or NULL
-	MapLookupElement = IMM(iota + 1)
+	MapLookupElement = int32(iota + 1)
 	// int map_update_elem(&map, &key, &value, flags)
 	// Return: 0 on success or negative error
 	MapUpdateElement
@@ -564,7 +564,7 @@ type BPFInstruction struct {
 	DstRegister Register
 	SrcRegister Register
 	Offset      int16
-	Constant    IMM
+	Constant    int32
 }
 
 type bpfInstruction struct {
@@ -572,6 +572,70 @@ type bpfInstruction struct {
 	registers uint8
 	offset    int16
 	constant  int32
+}
+
+func BPFIOp(opCode OpCode) *BPFInstruction {
+	return &BPFInstruction{
+		OpCode: opCode,
+	}
+}
+
+func BPFIDst(opCode OpCode, dst Register) *BPFInstruction {
+	return &BPFInstruction{
+		OpCode:      opCode,
+		DstRegister: dst,
+	}
+}
+
+func BPFIImm(opCode OpCode, imm int32) *BPFInstruction {
+	return &BPFInstruction{
+		OpCode:   opCode,
+		Constant: imm,
+	}
+}
+
+func BPFIDstImm(opCode OpCode, dst Register, imm int32) *BPFInstruction {
+	return &BPFInstruction{
+		OpCode:      opCode,
+		DstRegister: dst,
+		Constant:    imm,
+	}
+}
+
+func BPFIDstSrc(opCode OpCode, dst, src Register) *BPFInstruction {
+	return &BPFInstruction{
+		OpCode:      opCode,
+		DstRegister: dst,
+		SrcRegister: src,
+	}
+}
+
+func BPFIDstOffMMI(opCode OpCode, dst Register, off int16, imm int32) *BPFInstruction {
+	return &BPFInstruction{
+		OpCode:      opCode,
+		DstRegister: dst,
+		Offset:      off,
+		Constant:    imm,
+	}
+}
+
+func BPFIDstOffSrc(opCode OpCode, dst, src Register, off int16) *BPFInstruction {
+	return &BPFInstruction{
+		OpCode:      opCode,
+		DstRegister: dst,
+		SrcRegister: src,
+		Offset:      off,
+	}
+}
+
+func BPFIDstOffMMISrc(opCode OpCode, dst, src Register, off int16, imm int32) *BPFInstruction {
+	return &BPFInstruction{
+		OpCode:      opCode,
+		DstRegister: dst,
+		SrcRegister: src,
+		Offset:      off,
+		Constant:    imm,
+	}
 }
 
 func (bpi *BPFInstruction) getCStruct() bpfInstruction {
@@ -582,7 +646,7 @@ func (bpi *BPFInstruction) getCStruct() bpfInstruction {
 		opcode:    uint8(bpi.OpCode),
 		registers: uint8(bf),
 		offset:    bpi.Offset,
-		constant:  int32(bpi.Constant),
+		constant:  bpi.Constant,
 	}
 }
 
@@ -591,7 +655,7 @@ type BPFProgram struct {
 	logs []byte
 }
 
-func NewBPFProgram(progType ProgType, instructions []BPFInstruction, logging bool, license string) (*BPFProgram, error) {
+func NewBPFProgram(progType ProgType, instructions []*BPFInstruction, logging bool, license string) (*BPFProgram, error) {
 	insCount := uint32(len(instructions))
 	if insCount > MaxBPFInstructions {
 		return nil, fmt.Errorf("max instructions, %s, exceeded", MaxBPFInstructions)

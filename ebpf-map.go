@@ -1,6 +1,7 @@
 // Copyright 2017 Nathan Sweet. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
+//./ebpf-map.go:189: cannot use syscall.Close(int(m.fd)) (type error) as type syscall.Errno in argument to errnoErr: need type assertion
 package ebpf
 
 import (
@@ -63,6 +64,8 @@ type EBPFMap interface {
 	Delete(encoding.BinaryMarshaler) (bool, error)
 	GetNextKey(encoding.BinaryMarshaler, encoding.BinaryUnmarshaler) (bool, error)
 	GetKeys() []*[]byte
+	Close() error
+	GetFd() uint32
 }
 
 type eMap struct {
@@ -182,6 +185,14 @@ func (m *eMap) GetKeys() []*[]byte {
 		i++
 	}
 	return keys
+}
+
+func (m *eMap) Close() error {
+	return syscall.Close(int(m.fd))
+}
+
+func (m *eMap) GetFd() uint32 {
+	return uint32(m.fd)
 }
 
 func (m *eMap) put(key encoding.BinaryMarshaler, value encoding.BinaryMarshaler, putType uint64) (bool, error) {

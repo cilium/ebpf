@@ -3,4 +3,4 @@
 
 package ebpf
 
-const _BPF_CALL = 386
+const _BPF_CALL = 280

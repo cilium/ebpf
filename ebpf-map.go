@@ -1,7 +1,6 @@
 // Copyright 2017 Nathan Sweet. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
-//./ebpf-map.go:189: cannot use syscall.Close(int(m.fd)) (type error) as type syscall.Errno in argument to errnoErr: need type assertion
 package ebpf
 
 import (

@@ -5,6 +5,7 @@ package ebpf
 
 import (
 	"fmt"
+	"strings"
 	"unsafe"
 )
 
@@ -66,7 +67,6 @@ const (
 	// ALU Instructions 64 bit
 	AddImm    = OpCode(0x07) // add dst, imm   |  dst += imm
 	AddSrc    = OpCode(0x0f) // add dst, src   |  dst += src
-	XAddStImm = OpCode(0xda) // xadd dst, imm  |  *dst += imm
 	XAddStSrc = OpCode(0xdb) // xadd dst, src  |  *dst += src
 	SubImm    = OpCode(0x17) // sub dst, imm   |  dst -= imm
 	SubSrc    = OpCode(0x1f) // sub dst, src   |  dst -= src
@@ -190,6 +190,8 @@ const (
 	Reg8
 	Reg9
 	Reg10
+
+	RegFP = Reg10
 )
 
 const (
@@ -736,7 +738,7 @@ func NewBPFProgram(progType ProgType, instructions []*BPFInstruction, license st
 	if e != 0 {
 		logs := bpfP.GetLogs()
 		if len(logs) > 0 {
-			return nil, fmt.Errorf("%s: %s", errnoErr(e), logs)
+			return nil, fmt.Errorf("%s:\n\t%s", errnoErr(e), strings.Replace(logs, "\n", "\n\t", -1))
 		}
 		return bpfP, errnoErr(e)
 	}

@@ -1,0 +1,11 @@
+0: (bf) r6 = r1
+1: (30) r0 = *(u8 *)skb[25]
+2: (63) *(u32 *)(r10 -4) = r0
+3: (bf) r2 = r10
+4: (07) r2 += -4
+5: (18) r1 = 0xffffa0c3fb098000
+7: (85) call bpf_map_lookup_elem#1
+8: (15) if r0 == 0x1 goto pc+0
+ R0=map_value_or_null(ks=4,vs=8,id=1),min_value=0,max_value=0 R6=ctx R10=fp
+9: BUG_st_da
+BPF_ST uses reserved fields

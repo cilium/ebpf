@@ -108,8 +108,9 @@ func (m *BPFMap) Create(key encoding.BinaryMarshaler, value encoding.BinaryMarsh
 	return m.put(key, value, _BPF_NOEXIST)
 }
 
-func (m *BPFMap) Put(key encoding.BinaryMarshaler, value encoding.BinaryMarshaler) (bool, error) {
-	return m.put(key, value, _BPF_ANY)
+func (m *BPFMap) Put(key encoding.BinaryMarshaler, value encoding.BinaryMarshaler) error {
+	_, err := m.put(key, value, _BPF_ANY)
+	return err
 }
 
 func (m *BPFMap) Replace(key encoding.BinaryMarshaler, value encoding.BinaryMarshaler) (bool, error) {

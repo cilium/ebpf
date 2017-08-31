@@ -4,6 +4,7 @@
 package ebpf
 
 import (
+	"bytes"
 	"fmt"
 	"strings"
 	"unsafe"
@@ -16,160 +17,202 @@ const (
 	LogBufSize         = 65536
 )
 
-type OpCode uint8
-
 const (
-	// Instruction classes
-	Ld = OpCode(iota)
-	LdX
-	St
-	StX
-	ALU
-	Jmp
-	Ret
-	Misc
+	// instruction classes
+	ClassCode  = 0x07
+	LdClass    = 0x00
+	LdXClass   = 0x01
+	StClass    = 0x02
+	StXClass   = 0x03
+	ALUClass   = 0x04
+	JmpClass   = 0x05
+	RetClass   = 0x06
+	MiscClass  = 0x07
+	ALU64Class = 0x07 // eBPF only
+
+	// size fields
+	SizeCode = 0x18
+	DWSize   = 0x18 // eBPF only
+	WSize    = 0x00
+	HSize    = 0x08
+	BSize    = 0x10
 
 	// ld/ldx fields
-	// #define BPF_SIZE(code)  ((code) & 0x18)
-	// #define		BPF_W		0x00
-	// #define		BPF_H		0x08
-	// #define		BPF_B		0x10
-	// #define BPF_MODE(code)  ((code) & 0xe0)
-	// #define		BPF_IMM		0x00
-	// #define		BPF_ABS		0x20
-	// #define		BPF_IND		0x40
-	// #define		BPF_MEM		0x60
-	// #define		BPF_LEN		0x80
-	// #define		BPF_MSH		0xa0
+	// ld/ldx/st/stx opcode structure:
+	// msb      lsb
+	// +---+--+---+
+	// |mde|sz|cls|
+	// +---+--+---+
+	ModeCode = 0xe0
+	ImmMode  = 0x00
+	AbsMode  = 0x20
+	IndMode  = 0x40
+	MemMode  = 0x60
+	LenMode  = 0x80
+	MshMode  = 0xa0
+	XAddMode = 0xc0 // eBPF only, atomic add
 
-	// /* alu/jmp fields */
-	// #define BPF_OP(code)    ((code) & 0xf0)
-	// #define		BPF_ADD		0x00
-	// #define		BPF_SUB		0x10
-	// #define		BPF_MUL		0x20
-	// #define		BPF_DIV		0x30
-	// #define		BPF_OR		0x40
-	// #define		BPF_AND		0x50
-	// #define		BPF_LSH		0x60
-	// #define		BPF_RSH		0x70
-	// #define		BPF_NEG		0x80
-	// #define		BPF_MOD		0x90
-	// #define		BPF_XOR		0xa0
+	// alu fields
+	// alu/alu64/jmp opcode structure:
+	// msb      lsb
+	// +----+-+---+
+	// |op  |s|cls|
+	// +----+-+---+
+	// If the s bit is zero, then the source operand is imm,
+	// If s is one, then the source operand is src.
+	OpCode = 0xf0
+	AddOp  = 0x00
+	SubOp  = 0x10
+	MulOp  = 0x20
+	DivOp  = 0x30
+	OrOp   = 0x40
+	AndOp  = 0x50
+	LShOp  = 0x60
+	RShOp  = 0x70
+	NegOp  = 0x80
+	ModOp  = 0x90
+	XOrOp  = 0xa0
+	MovOp  = 0xb0 // eBPF only
+	ArShOp = 0xc0 // eBPF only
 
-	// #define		BPF_JA		0x00
-	// #define		BPF_JEQ		0x10
-	// #define		BPF_JGT		0x20
-	// #define		BPF_JGE		0x30
-	// #define		BPF_JSET        0x40
-	// #define BPF_SRC(code)   ((code) & 0x08)
-	// #define		BPF_K		0x00
-	// #define		BPF_X		0x08
-	// ALU Instructions 64 bit
-	AddImm    = OpCode(0x07) // add dst, imm   |  dst += imm
-	AddSrc    = OpCode(0x0f) // add dst, src   |  dst += src
-	XAddStSrc = OpCode(0xdb) // xadd dst, src  |  *dst += src
-	SubImm    = OpCode(0x17) // sub dst, imm   |  dst -= imm
-	SubSrc    = OpCode(0x1f) // sub dst, src   |  dst -= src
-	MulImm    = OpCode(0x27) // mul dst, imm   |  dst *= imm
-	MulSrc    = OpCode(0x2f) // mul dst, src   |  dst *= src
-	DivImm    = OpCode(0x37) // div dst, imm   |  dst /= imm
-	DivSrc    = OpCode(0x3f) // div dst, src   |  dst /= src
-	OrImm     = OpCode(0x47) // or dst, imm    |  dst  |= imm
-	OrSrc     = OpCode(0x4f) // or dst, src    |  dst  |= src
-	AndImm    = OpCode(0x57) // and dst, imm   |  dst &= imm
-	AndSrc    = OpCode(0x5f) // and dst, src   |  dst &= src
-	LShImm    = OpCode(0x67) // lsh dst, imm   |  dst <<= imm
-	LShSrc    = OpCode(0x6f) // lsh dst, src   |  dst <<= src
-	RShImm    = OpCode(0x77) // rsh dst, imm   |  dst >>= imm (logical)
-	RShSrc    = OpCode(0x7f) // rsh dst, src   |  dst >>= src (logical)
-	Neg       = OpCode(0x87) // neg dst        |  dst = -dst
-	ModImm    = OpCode(0x97) // mod dst, imm   |  dst %= imm
-	ModSrc    = OpCode(0x9f) // mod dst, src   |  dst %= src
-	XorImm    = OpCode(0xa7) // xor dst, imm   |  dst ^= imm
-	XorSrc    = OpCode(0xaf) // xor dst, src   |  dst ^= src
-	MovImm    = OpCode(0xb7) // mov dst, imm   |  dst = imm
-	MovSrc    = OpCode(0xbf) // mov dst, src   |  dst = src
-	ArShImm   = OpCode(0xc7) // arsh dst, imm  |  dst >>= imm (arithmetic)
-	ArShSrc   = OpCode(0xcf) // arsh dst, src  |  dst >>= src (arithmetic)
+	// endian fields
+	EndFlag    = 0xd0 // eBPF only
+	ToLeFlag   = 0x00 // eBPF only
+	ToBeFlag   = 0x08 // eBPF only
+	FromLeFlag = 0x00 // eBPF only
+	FromBeFlag = 0x08 // eBPF only
+
+	// jmp fields
+	JaOp   = 0x00
+	JEqOp  = 0x10
+	JGTOp  = 0x20
+	JGEOp  = 0x30
+	JSETOp = 0x40
+	JNEOp  = 0x50 // eBPF only, jump !=
+	JSGTOp = 0x60 // eBPF only, SGT is signed '>', GT in x86
+	JSGEOp = 0x70 // eBPF only, SGE is signed '>=', GE in x86
+	CallOp = 0x80 // eBPF only, call function
+	ExitOp = 0x90 // eBPF only, function return
+
+	// src fields
+	SrcCode = 0x08
+	ImmSrc  = 0x00
+	RegSrc  = 0x08
+	// alu fields
+	// alu/alu64/jmp opcode structure:
+	// msb      lsb
+	// +----+-+---+
+	// |op  |s|cls|
+	// +----+-+---+
+	// If the s bit is zero, then the source operand is imm,
+	// If s is one, then the source operand is src.
+	// ALU Instructions 64 bit, eBPF only
+	AddImm  = 0x07 // add dst, imm   |  dst += imm
+	AddSrc  = 0x0f // add dst, src   |  dst += src
+	SubImm  = 0x17 // sub dst, imm   |  dst -= imm
+	SubSrc  = 0x1f // sub dst, src   |  dst -= src
+	MulImm  = 0x27 // mul dst, imm   |  dst *= imm
+	MulSrc  = 0x2f // mul dst, src   |  dst *= src
+	DivImm  = 0x37 // div dst, imm   |  dst /= imm
+	DivSrc  = 0x3f // div dst, src   |  dst /= src
+	OrImm   = 0x47 // or dst, imm    |  dst  |= imm
+	OrSrc   = 0x4f // or dst, src    |  dst  |= src
+	AndImm  = 0x57 // and dst, imm   |  dst &= imm
+	AndSrc  = 0x5f // and dst, src   |  dst &= src
+	LShImm  = 0x67 // lsh dst, imm   |  dst <<= imm
+	LShSrc  = 0x6f // lsh dst, src   |  dst <<= src
+	RShImm  = 0x77 // rsh dst, imm   |  dst >>= imm (logical)
+	RShSrc  = 0x7f // rsh dst, src   |  dst >>= src (logical)
+	Neg     = 0x87 // neg dst        |  dst = -dst
+	ModImm  = 0x97 // mod dst, imm   |  dst %= imm
+	ModSrc  = 0x9f // mod dst, src   |  dst %= src
+	XorImm  = 0xa7 // xor dst, imm   |  dst ^= imm
+	XorSrc  = 0xaf // xor dst, src   |  dst ^= src
+	MovImm  = 0xb7 // mov dst, imm   |  dst = imm
+	MovSrc  = 0xbf // mov dst, src   |  dst = src
+	ArShImm = 0xc7 // arsh dst, imm  |  dst >>= imm (arithmetic)
+	ArShSrc = 0xcf // arsh dst, src  |  dst >>= src (arithmetic)
 
 	// ALU Instructions 32 bit
 	// These instructions use only the lower 32 bits of their
 	// operands and zero the upper 32 bits of the destination register.
-	Add32Imm = OpCode(0x04) // add32 dst, imm  |  dst += imm
-	Add32Src = OpCode(0x0c) // add32 dst, src  |  dst += src
-	Sub32Imm = OpCode(0x14) // sub32 dst, imm  |  dst -= imm
-	Sub32Src = OpCode(0x1c) // sub32 dst, src  |  dst -= src
-	Mul32Imm = OpCode(0x24) // mul32 dst, imm  |  dst *= imm
-	Mul32Src = OpCode(0x2c) // mul32 dst, src  |  dst *= src
-	Div32Imm = OpCode(0x34) // div32 dst, imm  |  dst /= imm
-	Div32Src = OpCode(0x3c) // div32 dst, src  |  dst /= src
-	Or32Imm  = OpCode(0x44) // or32 dst, imm   |  dst |= imm
-	Or32Src  = OpCode(0x4c) // or32 dst, src   |  dst |= src
-	And32Imm = OpCode(0x54) // and32 dst, imm  |  dst &= imm
-	And32Src = OpCode(0x5c) // and32 dst, src  |  dst &= src
-	LSh32Imm = OpCode(0x64) // lsh32 dst, imm  |  dst <<= imm
-	LSh32Src = OpCode(0x6c) // lsh32 dst, src  |  dst <<= src
-	RSh32Imm = OpCode(0x74) // rsh32 dst, imm  |  dst >>= imm (logical)
-	RSh32Src = OpCode(0x7c) // rsh32 dst, src  |  dst >>= src (logical)
-	Neg32    = OpCode(0x84) // neg32 dst       |  dst = -dst
-	Mod32Imm = OpCode(0x94) // mod32 dst, imm  |  dst %= imm
-	Mod32Src = OpCode(0x9c) // mod32 dst, src  |  dst %= src
-	Xor32Imm = OpCode(0xa4) // xor32 dst, imm  |  dst ^= imm
-	Xor32Src = OpCode(0xac) // xor32 dst, src  |  dst ^= src
-	Mov32Imm = OpCode(0xb4) // mov32 dst, imm  |  dst = imm
-	Mov32Src = OpCode(0xbc) // mov32 dst, src  |  dst = src
+	Add32Imm = 0x04 // add32 dst, imm  |  dst += imm
+	Add32Src = 0x0c // add32 dst, src  |  dst += src
+	Sub32Imm = 0x14 // sub32 dst, imm  |  dst -= imm
+	Sub32Src = 0x1c // sub32 dst, src  |  dst -= src
+	Mul32Imm = 0x24 // mul32 dst, imm  |  dst *= imm
+	Mul32Src = 0x2c // mul32 dst, src  |  dst *= src
+	Div32Imm = 0x34 // div32 dst, imm  |  dst /= imm
+	Div32Src = 0x3c // div32 dst, src  |  dst /= src
+	Or32Imm  = 0x44 // or32 dst, imm   |  dst |= imm
+	Or32Src  = 0x4c // or32 dst, src   |  dst |= src
+	And32Imm = 0x54 // and32 dst, imm  |  dst &= imm
+	And32Src = 0x5c // and32 dst, src  |  dst &= src
+	LSh32Imm = 0x64 // lsh32 dst, imm  |  dst <<= imm
+	LSh32Src = 0x6c // lsh32 dst, src  |  dst <<= src
+	RSh32Imm = 0x74 // rsh32 dst, imm  |  dst >>= imm (logical)
+	RSh32Src = 0x7c // rsh32 dst, src  |  dst >>= src (logical)
+	Neg32    = 0x84 // neg32 dst       |  dst = -dst
+	Mod32Imm = 0x94 // mod32 dst, imm  |  dst %= imm
+	Mod32Src = 0x9c // mod32 dst, src  |  dst %= src
+	Xor32Imm = 0xa4 // xor32 dst, imm  |  dst ^= imm
+	Xor32Src = 0xac // xor32 dst, src  |  dst ^= src
+	Mov32Imm = 0xb4 // mov32 dst, imm  |  dst = imm // eBPF only
+	Mov32Src = 0xbc // mov32 dst, src  |  dst = src // eBPF only
 
 	// Byteswap Instructions
-	LE16 = OpCode(0xd4) // le16 dst, imm == 16  |  dst = htole16(dst)
-	LE32 = OpCode(0xd4) // le32 dst, imm == 32  |  dst = htole32(dst)
-	LE64 = OpCode(0xd4) // le64 dst, imm == 64  |  dst = htole64(dst)
-	BE16 = OpCode(0xdc) // be16 dst, imm == 16  |  dst = htobe16(dst)
-	BE32 = OpCode(0xdc) // be32 dst, imm == 32  |  dst = htobe32(dst)
-	BE64 = OpCode(0xdc) // be64 dst, imm == 64  |  dst = htobe64(dst)
+	LE16 = 0xd4 // le16 dst, imm == 16  |  dst = htole16(dst)
+	LE32 = 0xd4 // le32 dst, imm == 32  |  dst = htole32(dst)
+	LE64 = 0xd4 // le64 dst, imm == 64  |  dst = htole64(dst)
+	BE16 = 0xdc // be16 dst, imm == 16  |  dst = htobe16(dst)
+	BE32 = 0xdc // be32 dst, imm == 32  |  dst = htobe32(dst)
+	BE64 = 0xdc // be64 dst, imm == 64  |  dst = htobe64(dst)
 
 	// Memory Instructions
 	// the variable "mem", means skb->data in the context of
 	// a socket prog, but in other context means other things.
-	LdDW    = OpCode(0x18) // lddw (src), dst, imm   |  dst = *imm
-	LdAbsB  = OpCode(0x30) // ldabsb imm             |  r0 = *(uint8_t *) (mem + imm)
-	LdAbsH  = OpCode(0x28) // ldabsh imm             |  r0 = *(uint16_t *) (mem + imm)
-	LdAbsW  = OpCode(0x20) // ldabsw imm             |  r0 = *(uint32_t *) (mem + imm)
-	LdAbsDW = OpCode(0x38) // ldabsdw imm            |  r0 = *(uint64_t *) (mem + imm)
-	LdIndW  = OpCode(0x40) // ldindw src, dst, imm   |  ...
-	LdIndH  = OpCode(0x48) // ldindh src, dst, imm   |  ...
-	LdIndB  = OpCode(0x50) // ldindb src, dst, imm   |  ...
-	LdIndDW = OpCode(0x58) // ldinddw src, dst, imm  |  ...
-	LdXW    = OpCode(0x61) // ldxw dst, [src+off]    |  dst = *(uint32_t *) (src + off)
-	LdXH    = OpCode(0x69) // ldxh dst, [src+off]    |  dst = *(uint16_t *) (src + off)
-	LdXB    = OpCode(0x71) // ldxb dst, [src+off]    |  dst = *(uint8_t *) (src + off)
-	LdXDW   = OpCode(0x79) // ldxdw dst, [src+off]   |  dst = *(uint64_t *) (src + off)
-	StB     = OpCode(0x72) // stb [dst+off], imm     |  *(uint8_t *) (dst + off) = imm
-	StH     = OpCode(0x6a) // sth [dst+off], imm     |  *(uint16_t *) (dst + off) = imm
-	StW     = OpCode(0x62) // stw [dst+off], imm     |  *(uint32_t *) (dst + off) = imm
-	StDW    = OpCode(0x7a) // stdw [dst+off], imm    |  *(uint64_t *) (dst + off) = imm
-	StXB    = OpCode(0x73) // stxb [dst+off], src    |  *(uint8_t *) (dst + off) = src
-	StXH    = OpCode(0x6b) // stxh [dst+off], src    |  *(uint16_t *) (dst + off) = src
-	StXW    = OpCode(0x63) // stxw [dst+off], src    |  *(uint32_t *) (dst + off) = src
-	StXDW   = OpCode(0x7b) // stxdw [dst+off], src   |  *(uint64_t *) (dst + off) = src
+	LdDW      = 0x18 // lddw (src), dst, imm   |  dst = *imm
+	XAddStSrc = 0xdb // xadd dst, src          |  *dst += src
+	LdAbsB    = 0x30 // ldabsb imm             |  r0 = *(uint8_t *) (mem + imm)
+	LdAbsH    = 0x28 // ldabsh imm             |  r0 = *(uint16_t *) (mem + imm)
+	LdAbsW    = 0x20 // ldabsw imm             |  r0 = *(uint32_t *) (mem + imm)
+	LdAbsDW   = 0x38 // ldabsdw imm            |  r0 = *(uint64_t *) (mem + imm)
+	LdIndW    = 0x40 // ldindw src, dst, imm   |  ...
+	LdIndH    = 0x48 // ldindh src, dst, imm   |  ...
+	LdIndB    = 0x50 // ldindb src, dst, imm   |  ...
+	LdIndDW   = 0x58 // ldinddw src, dst, imm  |  ...
+	LdXW      = 0x61 // ldxw dst, [src+off]    |  dst = *(uint32_t *) (src + off)
+	LdXH      = 0x69 // ldxh dst, [src+off]    |  dst = *(uint16_t *) (src + off)
+	LdXB      = 0x71 // ldxb dst, [src+off]    |  dst = *(uint8_t *) (src + off)
+	LdXDW     = 0x79 // ldxdw dst, [src+off]   |  dst = *(uint64_t *) (src + off)
+	StB       = 0x72 // stb [dst+off], imm     |  *(uint8_t *) (dst + off) = imm
+	StH       = 0x6a // sth [dst+off], imm     |  *(uint16_t *) (dst + off) = imm
+	StW       = 0x62 // stw [dst+off], imm     |  *(uint32_t *) (dst + off) = imm
+	StDW      = 0x7a // stdw [dst+off], imm    |  *(uint64_t *) (dst + off) = imm
+	StXB      = 0x73 // stxb [dst+off], src    |  *(uint8_t *) (dst + off) = src
+	StXH      = 0x6b // stxh [dst+off], src    |  *(uint16_t *) (dst + off) = src
+	StXW      = 0x63 // stxw [dst+off], src    |  *(uint32_t *) (dst + off) = src
+	StXDW     = 0x7b // stxdw [dst+off], src   |  *(uint64_t *) (dst + off) = src
 
 	// Branch Instructions
-	JA      = OpCode(0x05) // ja +off             |  PC += off
-	JEqImm  = OpCode(0x15) // jeq dst, imm, +off  |  PC += off if dst == imm
-	JEqSrc  = OpCode(0x1d) // jeq dst, src, +off  |  PC += off if dst == src
-	JGtImm  = OpCode(0x25) // jgt dst, imm, +off  |  PC += off if dst > imm
-	JGtSrc  = OpCode(0x2d) // jgt dst, src, +off  |  PC += off if dst > src
-	JGeImm  = OpCode(0x35) // jge dst, imm, +off  |  PC += off if dst >= imm
-	JGeSrc  = OpCode(0x3d) // jge dst, src, +off  |  PC += off if dst >= src
-	JSETImm = OpCode(0x45) // jset dst, imm, +off |  PC += off if dst & imm
-	JSETSrc = OpCode(0x4d) // jset dst, src, +off |  PC += off if dst & src
-	JNEImm  = OpCode(0x55) // jne dst, imm, +off  |  PC += off if dst != imm
-	JNESrc  = OpCode(0x5d) // jne dst, src, +off  |  PC += off if dst != src
-	JSGtImm = OpCode(0x65) // jsgt dst, imm, +off |  PC += off if dst > imm (signed)
-	JSGtSrc = OpCode(0x6d) // jsgt dst, src, +off |  PC += off if dst > src (signed)
-	JSGeImm = OpCode(0x75) // jsge dst, imm, +off |  PC += off if dst >= imm (signed)
-	JSGeSrc = OpCode(0x7d) // jsge dst, src, +off |  PC += off if dst >= src (signed)
-	Call    = OpCode(0x85) // call imm            |  Function call
-	Exit    = OpCode(0x95) // exit                |  return r0
+	Ja      = 0x05 // ja +off             |  PC += off
+	JEqImm  = 0x15 // jeq dst, imm, +off  |  PC += off if dst == imm
+	JEqSrc  = 0x1d // jeq dst, src, +off  |  PC += off if dst == src
+	JGTImm  = 0x25 // jgt dst, imm, +off  |  PC += off if dst > imm
+	JGTSrc  = 0x2d // jgt dst, src, +off  |  PC += off if dst > src
+	JGEImm  = 0x35 // jge dst, imm, +off  |  PC += off if dst >= imm
+	JGESrc  = 0x3d // jge dst, src, +off  |  PC += off if dst >= src
+	JSETImm = 0x45 // jset dst, imm, +off |  PC += off if dst & imm
+	JSETSrc = 0x4d // jset dst, src, +off |  PC += off if dst & src
+	// eBPF only
+	JNEImm  = 0x55 // jne dst, imm, +off  |  PC += off if dst != imm
+	JNESrc  = 0x5d // jne dst, src, +off  |  PC += off if dst != src
+	JSGTImm = 0x65 // jsgt dst, imm, +off |  PC += off if dst > imm (signed)
+	JSGTSrc = 0x6d // jsgt dst, src, +off |  PC += off if dst > src (signed)
+	JSGEImm = 0x75 // jsge dst, imm, +off |  PC += off if dst >= imm (signed)
+	JSGESrc = 0x7d // jsge dst, src, +off |  PC += off if dst >= src (signed)
+	Call    = 0x85 // call imm            |  Function call
+	Exit    = 0x95 // exit                |  return r0
 )
 
 type Register uint8
@@ -193,6 +236,14 @@ const (
 
 	RegFP = Reg10
 )
+
+func (r Register) String() string {
+	v := uint8(r)
+	if v == 10 {
+		return "rfp"
+	}
+	return fmt.Sprintf("r%d", v)
+}
 
 const (
 	// void *map_lookup_elem(&map, &key)
@@ -508,6 +559,113 @@ const (
 	SKBAdjustRoom
 )
 
+func getFuncStr(callNo int32) string {
+	var s string
+	switch callNo {
+	case MapLookupElement:
+		s = "MapLookupElement"
+	case MapUpdateElement:
+		s = "MapUpdateElement"
+	case MapDeleteElement:
+		s = "MapDeleteElement"
+	case ProbeRead:
+		s = "ProbeRead"
+	case KtimeGetNS:
+		s = "KtimeGetNS"
+	case TracePrintk:
+		s = "TracePrintk"
+	case GetPRandomu32:
+		s = "GetPRandomu32"
+	case GetSMPProcessorID:
+		s = "GetSMPProcessorID"
+	case SKBStoreBytes:
+		s = "SKBStoreBytes"
+	case CSUMReplaceL3:
+		s = "CSUMReplaceL3"
+	case CSUMReplaceL4:
+		s = "CSUMReplaceL4"
+	case TailCall:
+		s = "TailCall"
+	case CloneRedirect:
+		s = "CloneRedirect"
+	case GetCurrentPidTGid:
+		s = "GetCurrentPidTGid"
+	case GetCurrentUidGid:
+		s = "GetCurrentUidGid"
+	case GetCurrentComm:
+		s = "GetCurrentComm"
+	case GetCGroupClassId:
+		s = "GetCGroupClassId"
+	case SKBVlanPush:
+		s = "SKBVlanPush"
+	case SKBVlanPop:
+		s = "SKBVlanPop"
+	case SKBGetTunnelKey:
+		s = "SKBGetTunnelKey"
+	case SKBSetTunnelKey:
+		s = "SKBSetTunnelKey"
+	case PerfEventRead:
+		s = "PerfEventRead"
+	case Redirect:
+		s = "Redirect"
+	case GetRouteRealm:
+		s = "GetRouteRealm"
+	case PerfEventOutput:
+		s = "PerfEventOutput"
+	case GetStackID:
+		s = "GetStackID"
+	case CsumDiff:
+		s = "CsumDiff"
+	case SKBGetTunnelOpt:
+		s = "SKBGetTunnelOpt"
+	case SKBSetTunnelOpt:
+		s = "SKBSetTunnelOpt"
+	case SKBchangeProto:
+		s = "SKBchangeProto"
+	case SKBChangeType:
+		s = "SKBChangeType"
+	case SKBUnderCGroup:
+		s = "SKBUnderCGroup"
+	case GetHashRecalc:
+		s = "GetHashRecalc"
+	case GetCurrentTask:
+		s = "GetCurrentTask"
+	case ProbeWriteUser:
+		s = "ProbeWriteUser"
+	case CurrentTaskUnderCGroup:
+		s = "CurrentTaskUnderCGroup"
+	case SKBChangeTail:
+		s = "SKBChangeTail"
+	case SKBPullData:
+		s = "SKBPullData"
+	case CSUMUpdate:
+		s = "CSUMUpdate"
+	case SetHashInvalid:
+		s = "SetHashInvalid"
+	case GetNUMANodeID:
+		s = "GetNUMANodeID"
+	case SKBChangeHead:
+		s = "SKBChangeHead"
+	case XDPAdjustHead:
+		s = "XDPAdjustHead"
+	case ProbeReadStr:
+		s = "ProbeReadStr"
+	case GetSocketCookie:
+		s = "GetSocketCookie"
+	case GetSocketUID:
+		s = "GetSocketUID"
+	case SetHash:
+		s = "SetHash"
+	case SetSockOpt:
+		s = "SetSockOpt"
+	case SKBAdjustRoom:
+		s = "SKBAdjustRoom"
+	default:
+		return fmt.Sprintf("uknown function call: %d", callNo)
+	}
+	return s
+}
+
 // All flags used by eBPF helper functions
 const (
 	// BPF_FUNC_skb_store_bytes flags.
@@ -608,12 +766,30 @@ func (r bitField) GetPart2() Register {
 	return Register(uint8(r) >> 4)
 }
 
+type Instructions []*BPFInstruction
+
+func (inss Instructions) String() string {
+	var buf bytes.Buffer
+	for i, ins := range inss {
+		buf.WriteString(fmt.Sprintf("%d: %s\n", i, ins))
+		extra := ins.extra
+		i2 := 1
+		for extra != nil {
+			buf.WriteString(fmt.Sprintf("\tex-%d-%d: %s\n", i, i2, ins))
+			extra = extra.extra
+		}
+	}
+	return buf.String()
+}
+
 type BPFInstruction struct {
-	OpCode      OpCode
+	OpCode      uint8
 	DstRegister Register
 	SrcRegister Register
 	Offset      int16
 	Constant    int32
+
+	extra *BPFInstruction
 }
 
 type bpfInstruction struct {
@@ -623,27 +799,208 @@ type bpfInstruction struct {
 	constant  int32
 }
 
-func BPFIOp(opCode OpCode) *BPFInstruction {
+func (bpfi *BPFInstruction) String() string {
+	var opStr string
+	op := uint8(bpfi.OpCode)
+	class := ""
+	dst := ""
+	src := ""
+	off := ""
+	imm := ""
+	var sBit uint8
+	alu32 := ""
+	switch op & ClassCode {
+	case RetClass:
+		class = "Rt"
+		fallthrough
+	case LdClass:
+		class = "Ld"
+		fallthrough
+	case LdXClass:
+		class = "LdX"
+		fallthrough
+	case StClass:
+		class = "St"
+		fallthrough
+	case StXClass:
+		if len(class) == 0 {
+			class = "StX"
+		}
+		mode := ""
+		xAdd := false
+		dst = fmt.Sprintf(" dst: %s", bpfi.DstRegister)
+		switch op & ModeCode {
+		case ImmMode:
+			mode = "Imm"
+		case AbsMode:
+			mode = "Abs"
+			dst = ""
+			imm = fmt.Sprintf(" imm: %d", bpfi.Constant)
+			off = ""
+		case IndMode:
+			mode = "Ind"
+			src = fmt.Sprintf(" src: %s", bpfi.SrcRegister)
+			imm = fmt.Sprintf(" imm: %d", bpfi.Constant)
+			off = ""
+		case MemMode:
+			src = fmt.Sprintf(" src: %s", bpfi.SrcRegister)
+			off = fmt.Sprintf(" off: %d", bpfi.Offset)
+			imm = fmt.Sprintf(" imm: %d", bpfi.Constant)
+		case LenMode:
+			mode = "Len"
+		case MshMode:
+			mode = "Msh"
+		case XAddMode:
+			mode = "XAdd"
+			src = fmt.Sprintf(" src: %s", bpfi.SrcRegister)
+			xAdd = true
+		}
+		size := ""
+		switch op & SizeCode {
+		case DWSize:
+			size = "DW"
+		case WSize:
+			size = "W"
+		case HSize:
+			size = "H"
+		case BSize:
+			size = "B"
+		}
+		if xAdd {
+			opStr = fmt.Sprintf("%s%s", mode, class)
+		}
+		opStr = fmt.Sprintf("%s%s%s", class, mode, size)
+	case ALUClass:
+		alu32 = "32"
+		fallthrough
+	case ALU64Class:
+		dst = fmt.Sprintf(" dst: %s", bpfi.DstRegister)
+		sBit = op & SrcCode
+		opSuffix := ""
+		if sBit == ImmSrc {
+			imm = fmt.Sprintf(" imm: %d", bpfi.Constant)
+			opSuffix = "Imm"
+		} else {
+			src = fmt.Sprintf(" src: %s", bpfi.SrcRegister)
+			opSuffix = "Src"
+		}
+		opPrefix := ""
+		switch op & OpCode {
+		case AddOp:
+			opPrefix = "Add"
+		case SubOp:
+			opPrefix = "Sub"
+		case MulOp:
+			opPrefix = "Mul"
+		case DivOp:
+			opPrefix = "Div"
+		case OrOp:
+			opPrefix = "Or"
+		case AndOp:
+			opPrefix = "And"
+		case LShOp:
+			opPrefix = "LSh"
+		case RShOp:
+			opPrefix = "RSh"
+		case NegOp:
+			opPrefix = "Neg"
+		case ModOp:
+			opPrefix = "Mod"
+		case XOrOp:
+			opPrefix = "XOr"
+		case MovOp:
+			opPrefix = "Mov"
+		case ArShOp:
+			opPrefix = "ArSh"
+		case EndFlag:
+			alu32 = ""
+			src = ""
+			imm = fmt.Sprintf(" imm: %d", bpfi.Constant)
+			opPrefix = "ToFromLe"
+			if sBit == 1 {
+				opPrefix = "ToFromBe"
+			}
+			opPrefix = ""
+		}
+		opStr = fmt.Sprintf("%s%s%s", opPrefix, alu32, opSuffix)
+	case JmpClass:
+		dst = fmt.Sprintf(" dst: %s", bpfi.DstRegister)
+		off = fmt.Sprintf(" off: %d", bpfi.Offset)
+		sBit = op & SrcCode
+		opSuffix := ""
+		if sBit == ImmSrc {
+			imm = fmt.Sprintf(" imm: %d", bpfi.Constant)
+			opSuffix = "Imm"
+		} else {
+			src = fmt.Sprintf(" src: %s", bpfi.SrcRegister)
+			opSuffix = "Src"
+		}
+		opPrefix := ""
+		switch op & ModOp {
+		case JaOp:
+			opPrefix = "Ja"
+		case JEqOp:
+			opPrefix = "JEq"
+		case JGTOp:
+			opPrefix = "JGT"
+		case JGEOp:
+			opPrefix = "JGE"
+		case JSETOp:
+			opPrefix = "JSET"
+		case JNEOp:
+			opPrefix = "JNE"
+		case JSGTOp:
+			opPrefix = "JSGT"
+		case JSGEOp:
+			opPrefix = "JSGE"
+		case CallOp:
+			imm = ""
+			src = ""
+			off = ""
+			dst = ""
+			opPrefix = "Call"
+			opSuffix = fmt.Sprintf(" %s", getFuncStr(bpfi.Constant))
+		case ExitOp:
+			imm = ""
+			src = ""
+			off = ""
+			dst = ""
+			opSuffix = ""
+			opPrefix = "Exit"
+		}
+		opStr = fmt.Sprintf("%s%s", opPrefix, opSuffix)
+	}
+	return fmt.Sprintf("op: %s%s%s%s%s", opStr, dst, src, off, imm)
+}
+
+func BPFIOp(opCode uint8) *BPFInstruction {
 	return &BPFInstruction{
 		OpCode: opCode,
 	}
 }
 
-func BPFIDst(opCode OpCode, dst Register) *BPFInstruction {
+func BPFIDst(opCode uint8, dst Register) *BPFInstruction {
 	return &BPFInstruction{
 		OpCode:      opCode,
 		DstRegister: dst,
 	}
 }
 
-func BPFIImm(opCode OpCode, imm int32) *BPFInstruction {
+func BPFIImm(opCode uint8, imm int32) *BPFInstruction {
 	return &BPFInstruction{
 		OpCode:   opCode,
 		Constant: imm,
 	}
 }
 
-func BPFIDstImm(opCode OpCode, dst Register, imm int32) *BPFInstruction {
+func BPFIDstOff(opCode uint8, dst Register, off int16) *BPFInstruction {
+	return &BPFInstruction{
+		OpCode: opCode,
+		Offset: off,
+	}
+}
+
+func BPFIDstImm(opCode uint8, dst Register, imm int32) *BPFInstruction {
 	return &BPFInstruction{
 		OpCode:      opCode,
 		DstRegister: dst,
@@ -651,7 +1008,7 @@ func BPFIDstImm(opCode OpCode, dst Register, imm int32) *BPFInstruction {
 	}
 }
 
-func BPFIDstSrc(opCode OpCode, dst, src Register) *BPFInstruction {
+func BPFIDstSrc(opCode uint8, dst, src Register) *BPFInstruction {
 	return &BPFInstruction{
 		OpCode:      opCode,
 		DstRegister: dst,
@@ -659,7 +1016,7 @@ func BPFIDstSrc(opCode OpCode, dst, src Register) *BPFInstruction {
 	}
 }
 
-func BPFIDstOffImm(opCode OpCode, dst Register, off int16, imm int32) *BPFInstruction {
+func BPFIDstOffImm(opCode uint8, dst Register, off int16, imm int32) *BPFInstruction {
 	return &BPFInstruction{
 		OpCode:      opCode,
 		DstRegister: dst,
@@ -668,7 +1025,7 @@ func BPFIDstOffImm(opCode OpCode, dst Register, off int16, imm int32) *BPFInstru
 	}
 }
 
-func BPFIDstOffSrc(opCode OpCode, dst, src Register, off int16) *BPFInstruction {
+func BPFIDstOffSrc(opCode uint8, dst, src Register, off int16) *BPFInstruction {
 	return &BPFInstruction{
 		OpCode:      opCode,
 		DstRegister: dst,
@@ -677,7 +1034,16 @@ func BPFIDstOffSrc(opCode OpCode, dst, src Register, off int16) *BPFInstruction 
 	}
 }
 
-func BPFIDstOffImmSrc(opCode OpCode, dst, src Register, off int16, imm int32) *BPFInstruction {
+func BPFIDstSrcImm(opCode uint8, dst, src Register, imm int32) *BPFInstruction {
+	return &BPFInstruction{
+		OpCode:      opCode,
+		DstRegister: dst,
+		SrcRegister: src,
+		Constant:    imm,
+	}
+}
+
+func BPFIDstOffImmSrc(opCode uint8, dst, src Register, off int16, imm int32) *BPFInstruction {
 	return &BPFInstruction{
 		OpCode:      opCode,
 		DstRegister: dst,
@@ -687,16 +1053,45 @@ func BPFIDstOffImmSrc(opCode OpCode, dst, src Register, off int16, imm int32) *B
 	}
 }
 
-func (bpi *BPFInstruction) getCStruct() bpfInstruction {
+func BPFILdMapFd(dst Register, imm int) *BPFInstruction {
+	return BPFILdImm64Raw(dst, 1, uint64(imm))
+}
+
+func BPFILdImm64(dst Register, imm uint64) *BPFInstruction {
+	return BPFILdImm64Raw(dst, 0, imm)
+}
+
+func BPFILdImm64Raw(dst, src Register, imm uint64) *BPFInstruction {
+	bpfi := BPFIDstSrcImm(LdDW, dst, src, int32(uint32(imm)))
+	bpfi.extra = BPFIImm(0, int32(imm>>32))
+	return bpfi
+}
+
+func (bpi *BPFInstruction) getCStructs() []bpfInstruction {
 	var bf bitField
 	bf.SetPart1(bpi.DstRegister)
 	bf.SetPart2(bpi.SrcRegister)
-	return bpfInstruction{
-		opcode:    uint8(bpi.OpCode),
-		registers: uint8(bf),
-		offset:    bpi.Offset,
-		constant:  bpi.Constant,
+	inss := []bpfInstruction{
+		bpfInstruction{
+			opcode:    uint8(bpi.OpCode),
+			registers: uint8(bf),
+			offset:    bpi.Offset,
+			constant:  bpi.Constant,
+		},
 	}
+	extra := bpi.extra
+	for extra != nil {
+		bf.SetPart1(extra.DstRegister)
+		bf.SetPart2(extra.SrcRegister)
+		inss = append(inss, bpfInstruction{
+			opcode:    uint8(extra.OpCode),
+			registers: uint8(bf),
+			offset:    extra.Offset,
+			constant:  extra.Constant,
+		})
+		extra = extra.extra
+	}
+	return inss
 }
 
 type BPFProgram struct {
@@ -705,13 +1100,16 @@ type BPFProgram struct {
 }
 
 func NewBPFProgram(progType ProgType, instructions []*BPFInstruction, license string) (*BPFProgram, error) {
-	insCount := uint32(len(instructions))
+	var cInstructions []bpfInstruction
+	for _, ins := range instructions {
+		inss := ins.getCStructs()
+		for _, ins2 := range inss {
+			cInstructions = append(cInstructions, ins2)
+		}
+	}
+	insCount := uint32(len(cInstructions))
 	if insCount > MaxBPFInstructions {
 		return nil, fmt.Errorf("max instructions, %s, exceeded", MaxBPFInstructions)
-	}
-	cInstructions := make([]bpfInstruction, insCount)
-	for i, ins := range instructions {
-		cInstructions[i] = ins.getCStruct()
 	}
 	bpfP := new(BPFProgram)
 	lic := []byte(license)

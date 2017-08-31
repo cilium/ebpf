@@ -72,7 +72,7 @@ func main() {
 	// exit:
 	//   return 0
 	mapFd := bpfMap.GetFd()
-	ebpfProg := []*ebpf.BPFInstruction{
+	ebpfInss := ebpf.Instructions{
 		// template: ins dst, src
 		// save context for previous caller
 		// mov r1, r6
@@ -91,14 +91,13 @@ func main() {
 		ebpf.BPFIDstImm(ebpf.AddImm, ebpf.Reg2, -4),
 		// load the map fd into memory, in argument 1 position
 		// lddw reg1, (*:from_user_space)(imm)
-		ebpf.BPFIDstOffImmSrc(ebpf.LdDW, ebpf.Reg1, 1, 0, int32(uint32(mapFd))),
-		ebpf.BPFIImm(0, int32(uint64(mapFd>>32))),
+		ebpf.BPFILdMapFd(ebpf.Reg1, mapFd),
 		// call map lookup -> map_lookup_elem(r1, r2)
 		// call imm
 		ebpf.BPFIImm(ebpf.Call, ebpf.MapLookupElement),
 		// exit if reg0 is 0
-		// jeq r0, 0, imm
-		ebpf.BPFIDstOffImm(ebpf.JEqImm, ebpf.Reg0, 2, 0),
+		// jeq r0, 2, 0
+		ebpf.BPFIDstOff(ebpf.JEqImm, ebpf.Reg0, 2),
 		// load int 1 into r1 register
 		// mov r1, 1
 		ebpf.BPFIDstImm(ebpf.MovImm, ebpf.Reg1, 1),
@@ -111,8 +110,9 @@ func main() {
 		// exit
 		ebpf.BPFIOp(ebpf.Exit),
 	}
-	bpfProgram, err := ebpf.NewBPFProgram(ebpf.ProgTypeSocketFilter, ebpfProg, "GPL")
+	bpfProgram, err := ebpf.NewBPFProgram(ebpf.ProgTypeSocketFilter, ebpfInss, "GPL")
 	if err != nil {
+		fmt.Printf("%s\n", ebpfInss)
 		panic(err)
 	}
 	sock, err := openRawSock(*index)

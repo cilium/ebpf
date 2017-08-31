@@ -169,18 +169,9 @@ const (
 	BE64 = 0xdc // be64 dst, imm == 64  |  dst = htobe64(dst)
 
 	// Memory Instructions
-	// the variable "mem", means skb->data in the context of
-	// a socket prog, but in other context means other things.
 	LdDW      = 0x18 // lddw (src), dst, imm   |  dst = *imm
 	XAddStSrc = 0xdb // xadd dst, src          |  *dst += src
-	LdAbsB    = 0x30 // ldabsb imm             |  r0 = *(uint8_t *) (mem + imm)
-	LdAbsH    = 0x28 // ldabsh imm             |  r0 = *(uint16_t *) (mem + imm)
-	LdAbsW    = 0x20 // ldabsw imm             |  r0 = *(uint32_t *) (mem + imm)
-	LdAbsDW   = 0x38 // ldabsdw imm            |  r0 = *(uint64_t *) (mem + imm)
-	LdIndW    = 0x40 // ldindw src, dst, imm   |  ...
-	LdIndH    = 0x48 // ldindh src, dst, imm   |  ...
-	LdIndB    = 0x50 // ldindb src, dst, imm   |  ...
-	LdIndDW   = 0x58 // ldinddw src, dst, imm  |  ...
+	LdAbsB    = 0x30 // ldabsb imm             |  r0 = (uint8_t *) (mem + imm)
 	LdXW      = 0x61 // ldxw dst, [src+off]    |  dst = *(uint32_t *) (src + off)
 	LdXH      = 0x69 // ldxh dst, [src+off]    |  dst = *(uint16_t *) (src + off)
 	LdXB      = 0x71 // ldxb dst, [src+off]    |  dst = *(uint8_t *) (src + off)
@@ -193,6 +184,16 @@ const (
 	StXH      = 0x6b // stxh [dst+off], src    |  *(uint16_t *) (dst + off) = src
 	StXW      = 0x63 // stxw [dst+off], src    |  *(uint32_t *) (dst + off) = src
 	StXDW     = 0x7b // stxdw [dst+off], src   |  *(uint64_t *) (dst + off) = src
+	// Abs and Ind reference memory directly. This is always the context,
+	// of whatever the eBPF program is. For example in a sock filter program
+	// the memory context is the sk_buff struct.
+	LdAbsH  = 0x28 // ldabsh imm             |  r0 = (uint16_t *) (imm)
+	LdAbsW  = 0x20 // ldabsw imm             |  r0 = (uint32_t *) (imm)
+	LdAbsDW = 0x38 // ldabsdw imm            |  r0 = (uint64_t *) (imm)
+	LdIndB  = 0x50 // ldindb src, dst, imm   |  dst = (uint64_t *) (src + imm)
+	LdIndH  = 0x48 // ldindh src, dst, imm   |  dst = (uint16_t *) (src + imm)
+	LdIndW  = 0x40 // ldindw src, dst, imm   |  dst = (uint32_t *) (src + imm)
+	LdIndDW = 0x58 // ldinddw src, dst, imm  |  dst = (uint64_t *) (src + imm)
 
 	// Branch Instructions
 	Ja      = 0x05 // ja +off             |  PC += off

@@ -25,6 +25,7 @@ const (
 	CGroupArray
 	LRUHash
 	LRUCPUHash
+	LPMTrie
 )
 
 const (

@@ -1070,6 +1070,7 @@ func BPFILdImm64Raw(dst, src Register, imm uint64) *BPFInstruction {
 
 func (bpi *BPFInstruction) getCStructs() []bpfInstruction {
 	var bf bitField
+	var inss []bpfInstruction
 	extra := bpi
 	for extra != nil {
 		bf.SetPart1(extra.DstRegister)

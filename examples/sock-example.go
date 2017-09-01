@@ -58,6 +58,7 @@ func (k *bValue) UnmarshalBinary(data []byte) error {
 
 func main() {
 	index := flag.Int("index", 0, "specify ethernet index")
+	cgroup := flag.Int("pid", 0, "specify cgroup context")
 	flag.Parse()
 	bpfMap, err := ebpf.NewEBPFMap(ebpf.Array, 4, 8, 256)
 	if err != nil {
@@ -73,7 +74,6 @@ func main() {
 	//   return 0
 	mapFd := bpfMap.GetFd()
 	ebpfInss := ebpf.Instructions{
-		// template: ins dst, src
 		// save context for previous caller
 		// mov r1, r6
 		ebpf.BPFIDstSrc(ebpf.MovSrc, ebpf.Reg6, ebpf.Reg1),
@@ -122,6 +122,7 @@ func main() {
 	if err := syscall.SetsockoptInt(sock, syscall.SOL_SOCKET, SO_ATTACH_BPF, bpfProgram.GetFd()); err != nil {
 		panic(err)
 	}
+	fmt.Printf("Filtering on eth index: %d for cgroup %d\n", *index, *cgroup)
 	fmt.Println("Packet stats:")
 	for {
 		time.Sleep(time.Second)

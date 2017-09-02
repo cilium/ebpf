@@ -12,45 +12,6 @@ import (
 	"unsafe"
 )
 
-type MapType uint32
-
-const (
-	Hash MapType = 1 + iota
-	Array
-	ProgramArray
-	PerfEventArray
-	PerCPUHash
-	PerCPUArray
-	StackTrace
-	CGroupArray
-	LRUHash
-	LRUCPUHash
-	LPMTrie
-)
-
-const (
-	_BPF_MAP_CREATE = iota
-	_BPF_MAP_LOOKUP_ELEM
-	_BPF_MAP_UPDATE_ELEM
-	_BPF_MAP_DELETE_ELEM
-	_BPF_MAP_GET_NEXT_KEY
-	_BPF_PROG_LOAD
-	_BPF_OBJ_PIN
-	_BPF_OBJ_GET
-	_BPF_PROG_ATTACH
-	_BPF_PROG_DETACH
-	_BPF_PROG_TEST_RUN
-	_BPF_PROG_GET_NEXT_ID
-	_BPF_MAP_GET_NEXT_ID
-	_BPF_PROG_GET_FD_BY_ID
-	_BPF_MAP_GET_FD_BY_ID
-	_BPF_OBJ_GET_INFO_BY_FD
-
-	_BPF_ANY = iota
-	_BPF_NOEXIST
-	_BPF_EXIST
-)
-
 const (
 	_key   = "key"
 	_value = "value"
@@ -62,13 +23,14 @@ type BPFMap struct {
 	keySize    uint32
 	valueSize  uint32
 	maxEntries uint32
+	flags      uint32
 
 	keys     map[string]struct{}
 	keysLock sync.RWMutex
 }
 
-func NewEBPFMap(mapType MapType, keySize, valueSize, maxEntries uint32) (*BPFMap, error) {
-	fd, e := bpfCall(_BPF_MAP_CREATE, unsafe.Pointer(&mapCreateAttr{mapType, keySize, valueSize, maxEntries}), 16)
+func NewEBPFMap(mapType MapType, keySize, valueSize, maxEntries, flags uint32) (*BPFMap, error) {
+	fd, e := bpfCall(_BPF_MAP_CREATE, unsafe.Pointer(&mapCreateAttr{mapType, keySize, valueSize, maxEntries, flags}), 24)
 	err := errnoErr(e)
 	if err != nil {
 		return nil, fmt.Errorf("map create: %s", err.Error())
@@ -79,6 +41,7 @@ func NewEBPFMap(mapType MapType, keySize, valueSize, maxEntries uint32) (*BPFMap
 		keySize:    keySize,
 		valueSize:  valueSize,
 		maxEntries: maxEntries,
+		flags:      flags,
 		keys:       make(map[string]struct{}),
 	}, nil
 }
@@ -180,8 +143,24 @@ func (m *BPFMap) Close() error {
 	return syscall.Close(int(m.fd))
 }
 
+func (m *BPFMap) GetMapType() MapType {
+	return m.mapType
+}
+
 func (m *BPFMap) GetFd() int {
 	return m.fd
+}
+
+func (m *BPFMap) GetKeySize() uint32 {
+	return m.keySize
+}
+
+func (m *BPFMap) GetValueSize() uint32 {
+	return m.valueSize
+}
+
+func (m *BPFMap) GetMaxEntries() uint32 {
+	return m.maxEntries
 }
 
 func (m *BPFMap) put(key encoding.BinaryMarshaler, value encoding.BinaryMarshaler, putType uint64) (bool, error) {
@@ -265,8 +244,8 @@ func bpfCall(cmd int, attr unsafe.Pointer, size int) (uintptr, syscall.Errno) {
 }
 
 type mapCreateAttr struct {
-	mapType                        MapType
-	keySize, valueSize, maxEntries uint32
+	mapType                               MapType
+	keySize, valueSize, maxEntries, flags uint32
 }
 
 type mapOpAttr struct {

@@ -65,15 +65,15 @@ func main() {
 		var icmp bValue
 		var tcp bValue
 		var udp bValue
-		ok, err := bpfMap.Get(bKey(nettypes.ICMP), &icmp)
+		_, err := bpfMap.Get(bKey(nettypes.ICMP), &icmp)
 		if err != nil {
 			panic(err)
 		}
-		ok, err = bpfMap.Get(bKey(nettypes.TCP), &tcp)
+		_, err = bpfMap.Get(bKey(nettypes.TCP), &tcp)
 		if err != nil {
 			panic(err)
 		}
-		ok, err = bpfMap.Get(bKey(nettypes.UDP), &udp)
+		_, err = bpfMap.Get(bKey(nettypes.UDP), &udp)
 		if err != nil {
 			panic(err)
 		}

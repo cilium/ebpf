@@ -45,7 +45,7 @@ func NewBPFProgram(progType ProgType, instructions *Instructions, license string
 	}
 	insCount := uint32(len(cInstructions))
 	if insCount > MaxBPFInstructions {
-		return nil, fmt.Errorf("max instructions, %s, exceeded", MaxBPFInstructions)
+		return bpf, fmt.Errorf("max instructions, %s, exceeded", MaxBPFInstructions)
 	}
 	lic := []byte(bpf.license)
 	logs := make([]byte, LogBufSize)
@@ -70,9 +70,9 @@ func NewBPFProgram(progType ProgType, instructions *Instructions, license string
 	})), 48)
 	if e != 0 {
 		if len(logs) > 0 {
-			return nil, fmt.Errorf("%s:\n\t%s", errnoErr(e), strings.Replace(string(logs), "\n", "\n\t", -1))
+			return bpf, fmt.Errorf("%s:\n\t%s", errnoErr(e), strings.Replace(string(logs), "\n", "\n\t", -1))
 		}
-		return nil, errnoErr(e)
+		return bpf, errnoErr(e)
 	}
 	bpf.fd = int(fd)
 	bpf.logs = logs
@@ -95,6 +95,10 @@ func (bpf *BPFProgram) GetKernelVersion() uint32 {
 	return bpf.kernelVersion
 }
 
+func (bpf *BPFProgram) GetSectionName() string {
+	return bpf.sectionName
+}
+
 type BPFCollection struct {
 	programs *[]*BPFProgram
 	maps     *[]*BPFMap
@@ -106,6 +110,22 @@ func (coll *BPFCollection) GetMaps() *[]*BPFMap {
 
 func (coll *BPFCollection) GetPrograms() *[]*BPFProgram {
 	return coll.programs
+}
+
+func (coll *BPFCollection) String() string {
+	buf := bytes.NewBuffer(nil)
+	if coll.programs == nil {
+		return ""
+	}
+	for _, prog := range *coll.programs {
+		insns := prog.GetInstructions()
+		if insns != nil {
+			buf.WriteString(prog.GetSectionName())
+			buf.WriteString("\n")
+			buf.WriteString((*insns).String())
+		}
+	}
+	return buf.String()
 }
 
 func NewBPFCollectionFromFile(file string) (*BPFCollection, error) {
@@ -126,93 +146,91 @@ func NewBPFCollectionFromObjectCode(code io.ReaderAt) (*BPFCollection, error) {
 	byteOrder := f.ByteOrder
 	var license string
 	var version uint32
-	var maps *[]*BPFMap
 	var symbols []elf.Symbol
+	bpfColl := new(BPFCollection)
 	sectionsLen := len(f.Sections)
 	processedSections := make([]bool, sectionsLen)
+	var programs []*BPFProgram
+	bpfColl.programs = &programs
 	for i, sec := range f.Sections {
 		data, err := sec.Data()
 		if err != nil {
-			return nil, err
+			return bpfColl, err
 		}
-		switch sec.Name {
-		case "license":
+		switch {
+		case strings.Index(sec.Name, "license") == 0:
 			license = string(data)
 			processedSections[i] = true
-		case "version":
+		case strings.Index(sec.Name, "version") == 0:
 			version = byteOrder.Uint32(data)
 			processedSections[i] = true
-		case "maps":
-			maps, err = loadMaps(byteOrder, data)
+		case strings.Index(sec.Name, "maps") == 0:
+			bpfColl.maps, err = loadMaps(byteOrder, data)
 			if err != nil {
-				return nil, err
+				return bpfColl, err
 			}
 			processedSections[i] = true
 		}
 	}
 	symbols, err = f.Symbols()
 	if err != nil {
-		return nil, err
+		return bpfColl, err
 	}
-	var programs []*BPFProgram
 	for i, sec := range f.Sections {
 		if !processedSections[i] && sec.Type == elf.SHT_REL {
-			if int(sec.Info) < sectionsLen {
-				return nil, fmt.Errorf("relocation section info greater than sections set, this program is missing sections")
+			if int(sec.Info) >= sectionsLen {
+				return bpfColl, fmt.Errorf("relocation section info, %d, larger than sections set size, %d, this program is missing sections", int(sec.Info), sectionsLen)
 			}
 			data, err := sec.Data()
 			if err != nil {
-				return nil, err
+				return bpfColl, err
 			}
 			sec2 := f.Sections[sec.Info]
 			if sec2.Type == elf.SHT_PROGBITS &&
 				sec2.Flags&elf.SHF_EXECINSTR > 0 {
 				data2, err := sec2.Data()
 				if err != nil {
-					return nil, err
+					return bpfColl, err
 				}
 				insns := loadInstructions(byteOrder, data2, sec2.Name)
-				err = parseRelocateApply(byteOrder, data, symbols, sec, insns, maps)
+				err = parseRelocateApply(byteOrder, data, symbols, sec, insns, bpfColl.maps)
 				if err != nil {
-					return nil, err
+					return bpfColl, err
 				}
-				progType, err := getSectionType(sec2.Name)
-				if err != nil {
-					return nil, err
-				}
-				prog, err := NewBPFProgram(progType, insns, license, version)
-				if err != nil {
-					return nil, err
-				}
-				programs = append(programs, prog)
+				processedSections[i] = true
 				processedSections[sec.Info] = true
+				progType := getProgType(sec2.Name)
+				if progType != ProgTypeUnrecognized {
+					prog, err := NewBPFProgram(progType, insns, license, version)
+					programs = append(programs, prog)
+					if err != nil {
+						return bpfColl, err
+					}
 
+				}
 			}
-			processedSections[i] = true
 		}
 	}
 	for i, sec := range f.Sections {
-		if !processedSections[i] {
+		if !processedSections[i] && sec.Type != elf.SHT_SYMTAB &&
+			len(sec.Name) > 0 && sec.Size > 0 {
 			data, err := sec.Data()
 			if err != nil {
-				return nil, err
+				return bpfColl, err
 			}
-			insns := loadInstructions(byteOrder, data, sec.Name)
-			progType, err := getSectionType(sec.Name)
-			if err != nil {
-				return nil, err
+			progType := getProgType(sec.Name)
+			if progType != ProgTypeUnrecognized && len(data) > 0 {
+				insns := loadInstructions(byteOrder, data, sec.Name)
+				prog, err := NewBPFProgram(progType, insns, license, version)
+				programs = append(programs, prog)
+				if err != nil {
+					return bpfColl, err
+				}
+				processedSections[sec.Info] = true
 			}
-			prog, err := NewBPFProgram(progType, insns, license, version)
-			if err != nil {
-				return nil, err
-			}
-			programs = append(programs, prog)
 		}
 	}
-	return &BPFCollection{
-		programs: &programs,
-		maps:     maps,
-	}, nil
+	return bpfColl, nil
 }
 
 func dataToString(data []byte) string {
@@ -244,7 +262,7 @@ func loadMaps(byteOrder binary.ByteOrder, data []byte) (*[]*BPFMap, error) {
 	return &maps, nil
 }
 
-func getSectionType(v string) (ProgType, error) {
+func getProgType(v string) ProgType {
 	types := map[string]ProgType{
 		"socket":      ProgTypeSocketFilter,
 		"kprobe/":     ProgTypeKprobe,
@@ -257,10 +275,10 @@ func getSectionType(v string) (ProgType, error) {
 	}
 	for k, t := range types {
 		if strings.Index(v, k) == 0 {
-			return t, nil
+			return t
 		}
 	}
-	return ProgType(0), fmt.Errorf("unrecognized type %s", v)
+	return ProgTypeUnrecognized
 }
 
 func loadInstructions(byteOrder binary.ByteOrder, data []byte, sectionName string) *Instructions {
@@ -272,26 +290,19 @@ func loadInstructions(byteOrder binary.ByteOrder, data []byte, sectionName strin
 			sn = sectionName
 		}
 		regs := bitField(data[i+1])
-		uOff := byteOrder.Uint16(data[i+2 : i+4])
-		s := uOff & 0x8000
-		off := int16(uOff & 0x7FFF)
-		if s > 0 {
-			off = -off
-		}
-		uImm := byteOrder.Uint32(data[i+4 : i+8])
-		s2 := uImm & 0x80000000
-		imm := int32(uImm & 0x7FFFFFFF)
-		if s2 > 0 {
-			imm = -imm
-		}
-		insns = append(insns, &BPFInstruction{
+		var off int16
+		binary.Read(bytes.NewBuffer(data[i+2:i+4]), byteOrder, &off)
+		var imm int32
+		binary.Read(bytes.NewBuffer(data[i+4:i+8]), byteOrder, &imm)
+		ins := &BPFInstruction{
 			OpCode:      data[i],
 			DstRegister: regs.GetPart1(),
 			SrcRegister: regs.GetPart2(),
 			Offset:      off,
 			Constant:    imm,
 			sectionName: sn,
-		})
+		}
+		insns = append(insns, ins)
 	}
 	return &insns
 }
@@ -304,11 +315,12 @@ func parseRelocateApply(byteOrder binary.ByteOrder, data []byte, symbols []elf.S
 			Info: byteOrder.Uint64(data[t+8 : t+16]),
 		}
 		t += 24
-		if int(rel.Info) >= len(symbols) {
-			return fmt.Errorf("index calculated from rel index is greater than the symbol set; the source was probably compiled for another architecture")
+		symNo := int(rel.Info>>32) - 1
+		if symNo == 0 || symNo >= len(symbols) {
+			return fmt.Errorf("index calculated from rel index, %d, is greater than the symbol set, %d or is 0; the source was probably compiled for another architecture", symNo, len(symbols))
 		}
 		// value / sizeof(bpf_map_def)
-		mapIdx := int(symbols[rel.Info].Value / 24)
+		mapIdx := int(symbols[symNo].Value / 24)
 		if maps == nil || mapIdx >= len(*maps) {
 			return fmt.Errorf("index calculated from symbol value is greater than the map set; the source was probably compiled with bad symbols")
 		}
@@ -323,7 +335,8 @@ func parseRelocateApply(byteOrder binary.ByteOrder, data []byte, symbols []elf.S
 			return fmt.Errorf("the only valid relocation command is for loading a map file descriptor")
 		}
 		ins.SrcRegister = 1
-		ins.Constant = int32(mapFd)
+		uFd := uint32(mapFd)
+		ins.Constant = int32(uFd)
 	}
 	return nil
 }

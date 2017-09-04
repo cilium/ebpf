@@ -30,7 +30,7 @@ type BPFMap struct {
 }
 
 func NewBPFMap(mapType MapType, keySize, valueSize, maxEntries, flags uint32) (*BPFMap, error) {
-	fd, e := bpfCall(_BPF_MAP_CREATE, unsafe.Pointer(&mapCreateAttr{mapType, keySize, valueSize, maxEntries, flags}), 24)
+	fd, e := bpfCall(_BPF_MAP_CREATE, unsafe.Pointer(&mapCreateAttr{mapType, keySize, valueSize, maxEntries, flags}), 20)
 	err := errnoErr(e)
 	if err != nil {
 		return nil, fmt.Errorf("map create: %s", err.Error())

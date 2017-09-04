@@ -750,7 +750,8 @@ const (
 type ProgType uint32
 
 const (
-	ProgTypeSocketFilter = ProgType(iota + 1)
+	ProgTypeUnrecognized = ProgType(iota)
+	ProgTypeSocketFilter
 	ProgTypeKprobe
 	ProgTypeSchedCLS
 	ProgTypeSchedACT
@@ -813,7 +814,7 @@ func (inss Instructions) String() string {
 		extra := ins.extra
 		i2 := 1
 		for extra != nil {
-			buf.WriteString(fmt.Sprintf("\tex-%d-%d: %s\n", i, i2, ins))
+			buf.WriteString(fmt.Sprintf("\tex-%d-%d: %s\n", i, i2, extra))
 			extra = extra.extra
 		}
 	}
@@ -838,39 +839,34 @@ type bpfInstruction struct {
 	constant  int32
 }
 
+var classMap map[int]string = map[int]string{
+	LdClass:    "Ld",
+	LdXClass:   "LdX",
+	StClass:    "St",
+	StXClass:   "StX",
+	ALUClass:   "ALU32",
+	JmpClass:   "Jmp",
+	RetClass:   "Rt",
+	ALU64Class: "ALU64",
+}
+
 func (bpfi *BPFInstruction) String() string {
 	var opStr string
 	op := uint8(bpfi.OpCode)
-	class := ""
-	dst := ""
-	src := ""
-	off := ""
-	imm := ""
+	var class, dst, src, off, imm string
 	var sBit uint8
-	alu32 := ""
-	switch op & ClassCode {
-	case RetClass:
-		class = "Rt"
-		fallthrough
-	case LdClass:
-		class = "Ld"
-		fallthrough
-	case LdXClass:
-		class = "LdX"
-		fallthrough
-	case StClass:
-		class = "St"
-		fallthrough
-	case StXClass:
-		if len(class) == 0 {
-			class = "StX"
-		}
+	var alu32 string
+	classCode := op & ClassCode
+	switch classCode {
+	case RetClass, LdClass, LdXClass, StClass, StXClass:
+		class = classMap[int(classCode)]
 		mode := ""
 		xAdd := false
 		dst = fmt.Sprintf(" dst: %s", bpfi.DstRegister)
 		switch op & ModeCode {
 		case ImmMode:
 			mode = "Imm"
+			imm = fmt.Sprintf(" imm: %d", bpfi.Constant)
 		case AbsMode:
 			mode = "Abs"
 			dst = ""
@@ -909,10 +905,10 @@ func (bpfi *BPFInstruction) String() string {
 			opStr = fmt.Sprintf("%s%s", mode, class)
 		}
 		opStr = fmt.Sprintf("%s%s%s", class, mode, size)
-	case ALUClass:
-		alu32 = "32"
-		fallthrough
-	case ALU64Class:
+	case ALU64Class, ALUClass:
+		if classCode == ALUClass {
+			alu32 = "32"
+		}
 		dst = fmt.Sprintf(" dst: %s", bpfi.DstRegister)
 		sBit = op & SrcCode
 		opSuffix := ""
@@ -1009,11 +1005,7 @@ func (bpfi *BPFInstruction) String() string {
 		}
 		opStr = fmt.Sprintf("%s%s", opPrefix, opSuffix)
 	}
-	var section string
-	if len(bpfi.sectionName) > 0 {
-		section = fmt.Sprintf("%s\n", bpfi.sectionName)
-	}
-	return fmt.Sprintf("%sop: %s%s%s%s%s", section, opStr, dst, src, off, imm)
+	return fmt.Sprintf("op: %s%s%s%s%s", opStr, dst, src, off, imm)
 }
 
 func BPFIOp(opCode uint8) *BPFInstruction {

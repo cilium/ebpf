@@ -29,7 +29,7 @@ type BPFMap struct {
 	keysLock sync.RWMutex
 }
 
-func NewEBPFMap(mapType MapType, keySize, valueSize, maxEntries, flags uint32) (*BPFMap, error) {
+func NewBPFMap(mapType MapType, keySize, valueSize, maxEntries, flags uint32) (*BPFMap, error) {
 	fd, e := bpfCall(_BPF_MAP_CREATE, unsafe.Pointer(&mapCreateAttr{mapType, keySize, valueSize, maxEntries, flags}), 24)
 	err := errnoErr(e)
 	if err != nil {

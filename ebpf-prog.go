@@ -21,34 +21,20 @@ type BPFProgram struct {
 	kernelVersion uint32
 	license       string
 	progType      ProgType
-	maps          *[]*BPFMap
-	loaded        bool
+	sectionName   string
 }
 
-func NewBPFProgram(progType ProgType, instructions *Instructions, license string) (*BPFProgram, error) {
-	return newBPFProgram(progType, instructions, license, 0, nil, true)
-}
-
-func newBPFProgram(progType ProgType, instructions *Instructions, license string, kernelVersion uint32, maps *[]*BPFMap, load bool) (*BPFProgram, error) {
+func NewBPFProgram(progType ProgType, instructions *Instructions, license string, kernelVersion uint32) (*BPFProgram, error) {
+	var sn string
+	if instructions != nil && len(*instructions) > 0 && len((*instructions)[0].sectionName) > 0 {
+		sn = (*instructions)[0].sectionName
+	}
 	bpf := &BPFProgram{
 		instructions:  instructions,
 		kernelVersion: kernelVersion,
 		license:       license,
 		progType:      progType,
-		maps:          maps,
-	}
-	if load {
-		err := bpf.Load()
-		if err != nil {
-			return nil, err
-		}
-	}
-	return bpf, nil
-}
-
-func (bpf *BPFProgram) Load() error {
-	if bpf.loaded {
-		return fmt.Errorf("bpf program already loaded")
+		sectionName:   sn,
 	}
 	var cInstructions []bpfInstruction
 	for _, ins := range *bpf.instructions {
@@ -59,7 +45,7 @@ func (bpf *BPFProgram) Load() error {
 	}
 	insCount := uint32(len(cInstructions))
 	if insCount > MaxBPFInstructions {
-		return fmt.Errorf("max instructions, %s, exceeded", MaxBPFInstructions)
+		return nil, fmt.Errorf("max instructions, %s, exceeded", MaxBPFInstructions)
 	}
 	lic := []byte(bpf.license)
 	logs := make([]byte, LogBufSize)
@@ -84,13 +70,13 @@ func (bpf *BPFProgram) Load() error {
 	})), 48)
 	if e != 0 {
 		if len(logs) > 0 {
-			return fmt.Errorf("%s:\n\t%s", errnoErr(e), strings.Replace(string(logs), "\n", "\n\t", -1))
+			return nil, fmt.Errorf("%s:\n\t%s", errnoErr(e), strings.Replace(string(logs), "\n", "\n\t", -1))
 		}
-		return errnoErr(e)
+		return nil, errnoErr(e)
 	}
-	bpf.logs = true
-	bpf.loaded = true
-	return nil
+	bpf.fd = int(fd)
+	bpf.logs = logs
+	return bpf, nil
 }
 
 func (bpf *BPFProgram) GetLogs() string {
@@ -101,7 +87,7 @@ func (bpf *BPFProgram) GetFd() int {
 	return bpf.fd
 }
 
-func (bfp *BPFProgram) GetInstructions() *Instructions {
+func (bpf *BPFProgram) GetInstructions() *Instructions {
 	return bpf.instructions
 }
 
@@ -109,28 +95,37 @@ func (bpf *BPFProgram) GetKernelVersion() uint32 {
 	return bpf.kernelVersion
 }
 
-func GetMaps() *[]*BPFMap {
-	return bpf.maps
+type BPFCollection struct {
+	programs *[]*BPFProgram
+	maps     *[]*BPFMap
 }
 
-func NewBPFProgFromFile(file string) (*BPFProgram, error) {
+func (coll *BPFCollection) GetMaps() *[]*BPFMap {
+	return coll.maps
+}
+
+func (coll *BPFCollection) GetPrograms() *[]*BPFProgram {
+	return coll.programs
+}
+
+func NewBPFCollectionFromFile(file string) (*BPFCollection, error) {
 	f, err := os.Open(file)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
-	return NewBPFProgFromObjectCode(f)
+	defer f.Close()
+	return NewBPFCollectionFromObjectCode(f)
 }
 
-func NewBPFProgFromObjectCode(code io.ReaderAt) (*BPFProgram, error) {
+func NewBPFCollectionFromObjectCode(code io.ReaderAt) (*BPFCollection, error) {
 	f, err := elf.NewFile(code)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	defer f.Close()
 	byteOrder := f.ByteOrder
-	var unProcessedSections []*elf.Section
 	var license string
-	var version int
+	var version uint32
 	var maps *[]*BPFMap
 	var symbols []elf.Symbol
 	sectionsLen := len(f.Sections)
@@ -148,7 +143,10 @@ func NewBPFProgFromObjectCode(code io.ReaderAt) (*BPFProgram, error) {
 			version = byteOrder.Uint32(data)
 			processedSections[i] = true
 		case "maps":
-			maps = loadMaps(byteOrder, data)
+			maps, err = loadMaps(byteOrder, data)
+			if err != nil {
+				return nil, err
+			}
 			processedSections[i] = true
 		}
 	}
@@ -156,21 +154,65 @@ func NewBPFProgFromObjectCode(code io.ReaderAt) (*BPFProgram, error) {
 	if err != nil {
 		return nil, err
 	}
+	var programs []*BPFProgram
 	for i, sec := range f.Sections {
-		if !processedSections[i] && sec.Type == elf.SHT_REL && sec.Info < sectionsLen {
+		if !processedSections[i] && sec.Type == elf.SHT_REL {
+			if int(sec.Info) < sectionsLen {
+				return nil, fmt.Errorf("relocation section info greater than sections set, this program is missing sections")
+			}
+			data, err := sec.Data()
+			if err != nil {
+				return nil, err
+			}
 			sec2 := f.Sections[sec.Info]
-			if sec2.Type == elf.SHT_PROGBITS ||
+			if sec2.Type == elf.SHT_PROGBITS &&
 				sec2.Flags&elf.SHF_EXECINSTR > 0 {
 				data2, err := sec2.Data()
 				if err != nil {
 					return nil, err
 				}
-				insns := loadInstructions(data)
-				parseRelocateApply(data, symbols, sec, insns)
+				insns := loadInstructions(byteOrder, data2, sec2.Name)
+				err = parseRelocateApply(byteOrder, data, symbols, sec, insns, maps)
+				if err != nil {
+					return nil, err
+				}
+				progType, err := getSectionType(sec2.Name)
+				if err != nil {
+					return nil, err
+				}
+				prog, err := NewBPFProgram(progType, insns, license, version)
+				if err != nil {
+					return nil, err
+				}
+				programs = append(programs, prog)
+				processedSections[sec.Info] = true
+
 			}
+			processedSections[i] = true
 		}
 	}
-	return nil, nil
+	for i, sec := range f.Sections {
+		if !processedSections[i] {
+			data, err := sec.Data()
+			if err != nil {
+				return nil, err
+			}
+			insns := loadInstructions(byteOrder, data, sec.Name)
+			progType, err := getSectionType(sec.Name)
+			if err != nil {
+				return nil, err
+			}
+			prog, err := NewBPFProgram(progType, insns, license, version)
+			if err != nil {
+				return nil, err
+			}
+			programs = append(programs, prog)
+		}
+	}
+	return &BPFCollection{
+		programs: &programs,
+		maps:     maps,
+	}, nil
 }
 
 func dataToString(data []byte) string {
@@ -183,7 +225,7 @@ func dataToString(data []byte) string {
 
 func loadMaps(byteOrder binary.ByteOrder, data []byte) (*[]*BPFMap, error) {
 	var maps []*BPFMap
-	for i, l := 0, len(data); i < data; i += 4 {
+	for i := 0; i < len(data); i += 4 {
 		mT := MapType(byteOrder.Uint32(data[i : i+4]))
 		i += 4
 		kS := byteOrder.Uint32(data[i : i+4])
@@ -199,11 +241,30 @@ func loadMaps(byteOrder binary.ByteOrder, data []byte) (*[]*BPFMap, error) {
 		}
 		maps = append(maps, bMap)
 	}
-	return &maps
+	return &maps, nil
+}
+
+func getSectionType(v string) (ProgType, error) {
+	types := map[string]ProgType{
+		"socket":      ProgTypeSocketFilter,
+		"kprobe/":     ProgTypeKprobe,
+		"kretprobe/":  ProgTypeKprobe,
+		"tracepoint/": ProgTypeTracePoint,
+		"xdp":         ProgTypeXDP,
+		"perf_event":  ProgTypePerfEvent,
+		"cgroup/skb":  ProgTypeCGroupSKB,
+		"cgroup/sock": ProgTypeCGroupSock,
+	}
+	for k, t := range types {
+		if strings.Index(v, k) == 0 {
+			return t, nil
+		}
+	}
+	return ProgType(0), fmt.Errorf("unrecognized type %s", v)
 }
 
 func loadInstructions(byteOrder binary.ByteOrder, data []byte, sectionName string) *Instructions {
-	var inss Instructions
+	var insns Instructions
 	dataLen := len(data)
 	for i := 0; i < dataLen; i += 8 {
 		var sn string
@@ -218,12 +279,12 @@ func loadInstructions(byteOrder binary.ByteOrder, data []byte, sectionName strin
 			off = -off
 		}
 		uImm := byteOrder.Uint32(data[i+4 : i+8])
-		s := uImm & 0x80000000
+		s2 := uImm & 0x80000000
 		imm := int32(uImm & 0x7FFFFFFF)
-		if s > 0 {
+		if s2 > 0 {
 			imm = -imm
 		}
-		inss := append(inss, *BPFInstruction{
+		insns = append(insns, &BPFInstruction{
 			OpCode:      data[i],
 			DstRegister: regs.GetPart1(),
 			SrcRegister: regs.GetPart2(),
@@ -232,29 +293,29 @@ func loadInstructions(byteOrder binary.ByteOrder, data []byte, sectionName strin
 			sectionName: sn,
 		})
 	}
-	return inss
+	return &insns
 }
 
-func parseRelocateApply(byteOrder binary.ByteOrder, data []byte, symbols []elf.Symbol, sec *elf.Section, insns *Instructions, maps []*BPFMap) error {
-	nRels := sec.Size / sec.Entsize
+func parseRelocateApply(byteOrder binary.ByteOrder, data []byte, symbols []elf.Symbol, sec *elf.Section, insns *Instructions, maps *[]*BPFMap) error {
+	nRels := int(sec.Size / sec.Entsize)
 	for i, t := 0, 0; i < nRels; i++ {
 		rel := elf.Rela64{
 			Off:  byteOrder.Uint64(data[t : t+8]),
 			Info: byteOrder.Uint64(data[t+8 : t+16]),
 		}
 		t += 24
-		if rel.Info >= len(symbols) {
+		if int(rel.Info) >= len(symbols) {
 			return fmt.Errorf("index calculated from rel index is greater than the symbol set; the source was probably compiled for another architecture")
 		}
 		// value / sizeof(bpf_map_def)
-		mapIdx := symbols[rel.Info].Value / 24
-		if mapIdx >= len(maps) {
+		mapIdx := int(symbols[rel.Info].Value / 24)
+		if maps == nil || mapIdx >= len(*maps) {
 			return fmt.Errorf("index calculated from symbol value is greater than the map set; the source was probably compiled with bad symbols")
 		}
-		mapFd := maps[mapIdx].GetFd()
+		mapFd := (*maps)[mapIdx].GetFd()
 		// offset / sizeof(bpfInstruction)
-		idx := rel.Off / 8
-		if idx >= insns {
+		idx := int(rel.Off / 8)
+		if insns == nil || idx >= len(*insns) {
 			return fmt.Errorf("index calculated from rel offset is greater than the instruction set; the source was probably compiled for another architecture")
 		}
 		ins := (*insns)[idx]
@@ -262,7 +323,7 @@ func parseRelocateApply(byteOrder binary.ByteOrder, data []byte, symbols []elf.S
 			return fmt.Errorf("the only valid relocation command is for loading a map file descriptor")
 		}
 		ins.SrcRegister = 1
-		ins.Constant = mapFd
+		ins.Constant = int32(mapFd)
 	}
 	return nil
 }

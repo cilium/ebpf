@@ -3,6 +3,11 @@
 // license that can be found in the LICENSE file.
 package ebpf
 
+import (
+	"bytes"
+	"fmt"
+)
+
 type MapType uint32
 
 const (

@@ -60,7 +60,7 @@ func main() {
 	index := flag.Int("index", 0, "specify ethernet index")
 	cgroup := flag.Int("pid", 0, "specify cgroup context")
 	flag.Parse()
-	bpfMap, err := ebpf.NewEBPFMap(ebpf.Array, 4, 8, 256)
+	bpfMap, err := ebpf.NewBPFMap(ebpf.Array, 4, 8, 256, 0)
 	if err != nil {
 		panic(err)
 	}
@@ -110,7 +110,7 @@ func main() {
 		// exit
 		ebpf.BPFIOp(ebpf.Exit),
 	}
-	bpfProgram, err := ebpf.NewBPFProgram(ebpf.ProgTypeSocketFilter, ebpfInss, "GPL")
+	bpfProgram, err := ebpf.NewBPFProgram(ebpf.ProgTypeSocketFilter, &ebpfInss, "GPL", 0)
 	if err != nil {
 		fmt.Printf("%s\n", ebpfInss)
 		panic(err)

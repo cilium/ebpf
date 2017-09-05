@@ -28,7 +28,7 @@ important part (the eBPF opcode) anyways.
 If you do not want to package the object file with your distribution, you can always hex dump the object file:
 
 ```sh
-hexdump -e '16/1 "0x%02x, " "\n"' ./example.o > generated_code.go
+hexdump -vb ~/Development/linux-stable/samples/bpf/sockex1_kern.o | cut -f1 -d" " --complement
 ```
 
 With a small amount of editing you can wrap the byte code in a bytes.Reader variable and pass it to the

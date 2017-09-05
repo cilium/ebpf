@@ -144,10 +144,14 @@ const (
 	// If the s bit is zero, then the source operand is imm,
 	// If s is one, then the source operand is src.
 	// ALU Instructions 64 bit, eBPF only
-	AddImm  = 0x07 // add dst, imm   |  dst += imm
-	AddSrc  = 0x0f // add dst, src   |  dst += src
-	SubImm  = 0x17 // sub dst, imm   |  dst -= imm
-	SubSrc  = 0x1f // sub dst, src   |  dst -= src
+	//AddImm  = 0x07 // add dst, imm   |  dst += imm
+	AddImm = ALU64Class | ImmSrc | AddOp
+	//AddSrc  = 0x0f // add dst, src   |  dst += src
+	AddSrc = ALU64Class | RegSrc | AddOp
+	//SubImm  = 0x17 // sub dst, imm   |  dst -= imm
+	SubImm = ALU64Class | ImmSrc | SubOp
+	//SubSrc  = 0x1f // sub dst, src   |  dst -= src
+	SubSrc  = ALU64Class | RegSrc | SubOp
 	MulImm  = 0x27 // mul dst, imm   |  dst *= imm
 	MulSrc  = 0x2f // mul dst, src   |  dst *= src
 	DivImm  = 0x37 // div dst, imm   |  dst /= imm

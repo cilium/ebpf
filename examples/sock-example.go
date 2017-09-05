@@ -64,13 +64,6 @@ func main() {
 		panic(err)
 	}
 	ip := IPHdr{}
-	// synopsis:
-	//
-	//   r0 = map_lookup_elem(map_fd, iphdr->protocol)
-	//   if(!r0) goto exit;
-	//   atomic_add(*r0, 1)
-	// exit:
-	//   return 0
 	mapFd := bpfMap.GetFd()
 	ebpfInss := ebpf.Instructions{
 		// save context for previous caller
@@ -109,7 +102,6 @@ func main() {
 		// exit
 		ebpf.BPFIOp(ebpf.Exit),
 	}
-	fmt.Printf("%s\n", ebpfInss)
 	bpfProgram, err := ebpf.NewBPFProgram(ebpf.ProgTypeSocketFilter, &ebpfInss, "GPL", 0)
 	if err != nil {
 		fmt.Printf("%s\n", ebpfInss)

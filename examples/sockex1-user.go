@@ -48,19 +48,23 @@ func main() {
 		fmt.Printf("%s\n", coll.String())
 		panic(err)
 	}
-	fmt.Printf("%s\n", coll.String())
 	sock, err := openRawSock(*index)
 	if err != nil {
 		panic(err)
 	}
-	for _, prog := range *coll.GetPrograms() {
-		if err := syscall.SetsockoptInt(sock, syscall.SOL_SOCKET, SO_ATTACH_BPF, prog.GetFd()); err != nil {
-			panic(err)
-		}
+	prog := coll.GetProgramByName("bpf_prog1")
+	if prog == nil {
+		panic(fmt.Errorf("no program named \"bpf_prog1\" found"))
+	}
+	if err := syscall.SetsockoptInt(sock, syscall.SOL_SOCKET, SO_ATTACH_BPF, prog.GetFd()); err != nil {
+		panic(err)
 	}
 	fmt.Printf("Filtering on eth index: %d\n", *index)
 	fmt.Println("Packet stats:")
-	bpfMap := (*coll.GetMaps())[0]
+	bpfMap := coll.GetMapByName("my_map")
+	if bpfMap == nil {
+		panic(fmt.Errorf("no map named \"my_map\" found"))
+	}
 	for {
 		time.Sleep(time.Second)
 		var icmp bValue

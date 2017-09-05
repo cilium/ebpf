@@ -100,8 +100,10 @@ func (bpf *BPFProgram) GetSectionName() string {
 }
 
 type BPFCollection struct {
-	programs *[]*BPFProgram
-	maps     *[]*BPFMap
+	programs   *[]*BPFProgram
+	maps       *[]*BPFMap
+	programMap map[string]int
+	mapMap     map[string]int
 }
 
 func (coll *BPFCollection) GetMaps() *[]*BPFMap {
@@ -110,6 +112,20 @@ func (coll *BPFCollection) GetMaps() *[]*BPFMap {
 
 func (coll *BPFCollection) GetPrograms() *[]*BPFProgram {
 	return coll.programs
+}
+
+func (coll *BPFCollection) GetMapByName(key string) *BPFMap {
+	if i, ok := coll.mapMap[key]; ok && coll.maps != nil && i < len(*coll.maps) {
+		return (*coll.maps)[i]
+	}
+	return nil
+}
+
+func (coll *BPFCollection) GetProgramByName(key string) *BPFProgram {
+	if i, ok := coll.programMap[key]; ok && coll.programs != nil && i < len(*coll.programs) {
+		return (*coll.programs)[i]
+	}
+	return nil
 }
 
 func (coll *BPFCollection) String() string {
@@ -152,6 +168,16 @@ func NewBPFCollectionFromObjectCode(code io.ReaderAt) (*BPFCollection, error) {
 	processedSections := make([]bool, sectionsLen)
 	var programs []*BPFProgram
 	bpfColl.programs = &programs
+	bpfColl.programMap = make(map[string]int)
+	bpfColl.mapMap = make(map[string]int)
+	symbols, err = f.Symbols()
+	if err != nil {
+		return bpfColl, err
+	}
+	symbolMap := make(map[string]string)
+	for _, sym := range symbols {
+		symbolMap[fmt.Sprintf("%d-%d", int(sym.Section), int(sym.Value))] = sym.Name
+	}
 	for i, sec := range f.Sections {
 		data, err := sec.Data()
 		if err != nil {
@@ -165,16 +191,12 @@ func NewBPFCollectionFromObjectCode(code io.ReaderAt) (*BPFCollection, error) {
 			version = byteOrder.Uint32(data)
 			processedSections[i] = true
 		case strings.Index(sec.Name, "maps") == 0:
-			bpfColl.maps, err = loadMaps(byteOrder, data)
+			bpfColl.maps, bpfColl.mapMap, err = loadMaps(byteOrder, data, i, symbolMap)
 			if err != nil {
 				return bpfColl, err
 			}
 			processedSections[i] = true
 		}
-	}
-	symbols, err = f.Symbols()
-	if err != nil {
-		return bpfColl, err
 	}
 	for i, sec := range f.Sections {
 		if !processedSections[i] && sec.Type == elf.SHT_REL {
@@ -206,7 +228,9 @@ func NewBPFCollectionFromObjectCode(code io.ReaderAt) (*BPFCollection, error) {
 					if err != nil {
 						return bpfColl, err
 					}
-
+					if name, ok := symbolMap[fmt.Sprintf("%d-0", int(sec.Info))]; ok && len(name) > 0 {
+						bpfColl.programMap[name] = len(programs) - 1
+					}
 				}
 			}
 		}
@@ -241,9 +265,11 @@ func dataToString(data []byte) string {
 	return buf.String()
 }
 
-func loadMaps(byteOrder binary.ByteOrder, data []byte) (*[]*BPFMap, error) {
+func loadMaps(byteOrder binary.ByteOrder, data []byte, section int, symbolMap map[string]string) (*[]*BPFMap, map[string]int, error) {
 	var maps []*BPFMap
+	mapMap := make(map[string]int)
 	for i := 0; i < len(data); i += 4 {
+		t := i
 		mT := MapType(byteOrder.Uint32(data[i : i+4]))
 		i += 4
 		kS := byteOrder.Uint32(data[i : i+4])
@@ -255,11 +281,14 @@ func loadMaps(byteOrder binary.ByteOrder, data []byte) (*[]*BPFMap, error) {
 		fl := byteOrder.Uint32(data[i : i+4])
 		bMap, err := NewBPFMap(mT, kS, vS, mE, fl)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		maps = append(maps, bMap)
+		if name, ok := symbolMap[fmt.Sprintf("%d-%d", section, t)]; ok && len(name) > 0 {
+			mapMap[name] = len(maps) - 1
+		}
 	}
-	return &maps, nil
+	return &maps, mapMap, nil
 }
 
 func getProgType(v string) ProgType {

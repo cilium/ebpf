@@ -155,7 +155,7 @@ func main() {
 }
 
 func openRawSock(index int) (int, error) {
-	eT := inet.HToNS(nettypes.IPv4[:])
+	eT := inet.HToNS(nettypes.All[:])
 	sock, err := syscall.Socket(syscall.AF_PACKET, syscall.SOCK_RAW|syscall.SOCK_NONBLOCK|syscall.SOCK_CLOEXEC, int(eT))
 	if err != nil {
 		return 0, err

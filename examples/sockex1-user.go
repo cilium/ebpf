@@ -48,6 +48,7 @@ func main() {
 		fmt.Printf("%s\n", coll.String())
 		panic(err)
 	}
+	fmt.Printf("%s\n", coll.String())
 	sock, err := openRawSock(*index)
 	if err != nil {
 		panic(err)
@@ -65,24 +66,27 @@ func main() {
 		var icmp bValue
 		var tcp bValue
 		var udp bValue
-		_, err := bpfMap.Get(bKey(nettypes.ICMP), &icmp)
+		ok, err := bpfMap.Get(bKey(nettypes.ICMP), &icmp)
 		if err != nil {
 			panic(err)
 		}
-		_, err = bpfMap.Get(bKey(nettypes.TCP), &tcp)
+		assertTrue(ok, "icmp key not found")
+		ok, err = bpfMap.Get(bKey(nettypes.TCP), &tcp)
 		if err != nil {
 			panic(err)
 		}
-		_, err = bpfMap.Get(bKey(nettypes.UDP), &udp)
+		assertTrue(ok, "tcp key not found")
+		ok, err = bpfMap.Get(bKey(nettypes.UDP), &udp)
 		if err != nil {
 			panic(err)
 		}
+		assertTrue(ok, "udp key not found")
 		fmt.Printf("\r\033[m\tICMP: %d TCP: %d UDP: %d", icmp, tcp, udp)
 	}
 }
 
 func openRawSock(index int) (int, error) {
-	eT := inet.HToNS(nettypes.IPv4[:])
+	eT := inet.HToNS(nettypes.All[:])
 	sock, err := syscall.Socket(syscall.AF_PACKET, syscall.SOCK_RAW|syscall.SOCK_NONBLOCK|syscall.SOCK_CLOEXEC, int(eT))
 	if err != nil {
 		return 0, err
@@ -94,4 +98,10 @@ func openRawSock(index int) (int, error) {
 		return 0, err
 	}
 	return sock, nil
+}
+
+func assertTrue(b bool, msg string) {
+	if !b {
+		panic(fmt.Errorf("%s", msg))
+	}
 }

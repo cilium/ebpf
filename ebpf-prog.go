@@ -130,7 +130,7 @@ func (coll *BPFCollection) GetProgramByName(key string) *BPFProgram {
 
 func (coll *BPFCollection) String() string {
 	buf := bytes.NewBuffer(nil)
-	if coll.programs == nil {
+	if coll == nil || coll.programs == nil {
 		return ""
 	}
 	for _, prog := range *coll.programs {

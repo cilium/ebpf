@@ -11,7 +11,7 @@ generally better left to C/C++. However,  providing them in Go can make it easy 
 dynamically load and unload filters from different stores, place a REST service (quite easily) on top of an
 eBPF program, and make sure sound security practices are happening around the base eBPF program.
 
-# An Important Note About Licenses:
+## An Important Note About Licenses:
 If you are using this project for your own internal monitoring or using it to provide a service,
 then you (probably) do not need to read the rest of this note. However, if you are planning to
 use this project to distribute software you should read on.
@@ -22,3 +22,14 @@ which makes that code governed by GPLv2, so be careful if you copy from it heavi
 pinning yourself to GPLv2. However, eBPF opcode programs themselves must be governed by the GPLv2 anyways,
 so if you are distributing any software relying on this project you will probably be open-sourcing the most
 important part (the eBPF opcode) anyways.
+
+
+## Packaging
+If you do not want to package the object file with your distribution, you can always hex dump the object file:
+
+```sh
+hexdump -e '16/1 "0x%02x, " "\n"' ./example.o > generated_code.go
+```
+
+With a small amount of editing you can wrap the byte code in a bytes.Reader variable and pass it to the
+`ebpf.NewBPFCollectionFromObjectCode` method.

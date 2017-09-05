@@ -12,7 +12,7 @@ import (
 	"github.com/nathanjsweet/zsocket/nettypes"
 )
 
-var program []byte = []byte{0177, 0105, 0114, 0106, 0002, 0001, 0001, 0000, 0000, 0000, 0000, 0000, 0000, 0000, 0000, 0000,
+var program = [...]byte{0177, 0105, 0114, 0106, 0002, 0001, 0001, 0000, 0000, 0000, 0000, 0000, 0000, 0000, 0000, 0000,
 	0001, 0000, 0367, 0000, 0001, 0000, 0000, 0000, 0000, 0000, 0000, 0000, 0000, 0000, 0000, 0000,
 	0000, 0000, 0000, 0000, 0000, 0000, 0000, 0000, 0340, 0001, 0000, 0000, 0000, 0000, 0000, 0000,
 	0000, 0000, 0000, 0000, 0100, 0000, 0000, 0000, 0000, 0000, 0100, 0000, 0010, 0000, 0001, 0000,
@@ -106,7 +106,7 @@ func (k *bValue) UnmarshalBinary(data []byte) error {
 func main() {
 	index := flag.Int("index", 0, "specify ethernet index")
 	flag.Parse()
-	coll, err := ebpf.NewBPFCollectionFromObjectCode(bytes.NewReader(program))
+	coll, err := ebpf.NewBPFCollectionFromObjectCode(bytes.NewReader(program[:]))
 	if err != nil {
 		fmt.Printf("%s\n", coll.String())
 		panic(err)

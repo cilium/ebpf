@@ -25,11 +25,5 @@ important part (the eBPF opcode) anyways.
 
 
 ## Packaging
-If you do not want to package the object file with your distribution, you can always hex dump the object file:
-
-```sh
-hexdump -vb ~/Development/linux-stable/samples/bpf/sockex1_kern.o | cut -f1 -d" " --complement
-```
-
-With a small amount of editing you can wrap the byte code in a bytes.Reader variable and pass it to the
-`ebpf.NewBPFCollectionFromObjectCode` method.
+If you do not want to package the object file with your distribution, you can use the generate
+program in the util folder, and it will convert the object file into a go file that you can use.

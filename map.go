@@ -5,9 +5,7 @@ package ebpf
 
 import (
 	"encoding"
-	"encoding/base64"
 	"fmt"
-	"sync"
 	"syscall"
 	"unsafe"
 )
@@ -24,9 +22,6 @@ type BPFMap struct {
 	valueSize  uint32
 	maxEntries uint32
 	flags      uint32
-
-	keys     map[string]struct{}
-	keysLock sync.RWMutex
 }
 
 func NewBPFMap(mapType MapType, keySize, valueSize, maxEntries, flags uint32) (*BPFMap, error) {
@@ -42,7 +37,6 @@ func NewBPFMap(mapType MapType, keySize, valueSize, maxEntries, flags uint32) (*
 		valueSize:  valueSize,
 		maxEntries: maxEntries,
 		flags:      flags,
-		keys:       make(map[string]struct{}),
 	}, nil
 }
 
@@ -91,9 +85,6 @@ func (m *BPFMap) Delete(key encoding.BinaryMarshaler) (bool, error) {
 			key:   uint64(uintptr(unsafe.Pointer(&keyValue[0]))),
 		}), 32)
 	if e == 0 {
-		m.keysLock.Lock()
-		defer m.keysLock.Unlock()
-		delete(m.keys, base64.StdEncoding.EncodeToString(keyValue))
 		return true, nil
 	}
 	if e == syscall.ENOENT {
@@ -121,22 +112,6 @@ func (m *BPFMap) GetNextKey(key encoding.BinaryMarshaler, nextKey encoding.Binar
 		return false, errnoErr(e)
 	}
 	return true, nextKey.UnmarshalBinary(returnValue)
-}
-
-func (m *BPFMap) GetKeys() []*[]byte {
-	m.keysLock.RLock()
-	defer m.keysLock.RUnlock()
-	keys := make([]*[]byte, len(m.keys))
-	i := 0
-	for k, _ := range m.keys {
-		v, err := base64.StdEncoding.DecodeString(k)
-		if err != nil {
-			panic(err)
-		}
-		keys[i] = &v
-		i++
-	}
-	return keys
 }
 
 func (m *BPFMap) Close() error {
@@ -192,9 +167,6 @@ func (m *BPFMap) put(key encoding.BinaryMarshaler, value encoding.BinaryMarshale
 		}
 		return false, errnoErr(e)
 	}
-	m.keysLock.Lock()
-	defer m.keysLock.Unlock()
-	m.keys[base64.StdEncoding.EncodeToString(v)] = struct{}{}
 	return true, nil
 }
 

@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path"
 	"strings"
 	"unsafe"
 )
@@ -99,6 +100,10 @@ func (bpf *BPFProgram) GetSectionName() string {
 	return bpf.sectionName
 }
 
+func (bpf *BPFProgram) Pin(fileName string) error {
+	return pinObject(fileName, uint32(bpf.fd))
+}
+
 type BPFCollection struct {
 	programs   *[]*BPFProgram
 	maps       *[]*BPFMap
@@ -142,6 +147,53 @@ func (coll *BPFCollection) String() string {
 		}
 	}
 	return buf.String()
+}
+
+func (coll *BPFCollection) Pin(dirName string, fileMode os.FileMode) error {
+	err := mkdirIfNotExists(dirName, fileMode)
+	if err != nil {
+		return err
+	}
+	if coll.maps != nil && len(*coll.maps) > 0 {
+		mapPath := path.Join(dirName, "maps")
+		err = mkdirIfNotExists(mapPath, fileMode)
+		if err != nil {
+			return err
+		}
+		maps := *coll.maps
+		for k, i := range coll.mapMap {
+			err := maps[i].Pin(path.Join(mapPath, k))
+			if err != nil {
+				return err
+			}
+		}
+	}
+	if coll.programs != nil && len(*coll.programs) > 0 {
+		progPath := path.Join(dirName, "programs")
+		err = mkdirIfNotExists(progPath, fileMode)
+		if err != nil {
+			return err
+		}
+		programs := *coll.programs
+		for k, i := range coll.programMap {
+			err := programs[i].Pin(path.Join(progPath, k))
+			if err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func mkdirIfNotExists(dirName string, fileMode os.FileMode) error {
+	_, err := os.Stat(dirName)
+	if err != nil && os.IsNotExist(err) {
+		err = os.Mkdir(dirName, fileMode)
+	}
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 func NewBPFCollectionFromFile(file string) (*BPFCollection, error) {

@@ -111,6 +111,10 @@ func main() {
 		fmt.Printf("%s\n", coll.String())
 		panic(err)
 	}
+	err = coll.Pin("/sys/fs/bpf/sockex1", 0644)
+	if err != nil {
+		panic(err)
+	}
 	sock, err := openRawSock(*index)
 	if err != nil {
 		panic(err)

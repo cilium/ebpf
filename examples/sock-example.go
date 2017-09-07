@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"os"
 	"syscall"
 	"time"
 	"unsafe"
@@ -57,6 +58,8 @@ func (k *bValue) UnmarshalBinary(data []byte) error {
 }
 
 func main() {
+	fmt.Println(os.Getpid())
+	time.Sleep(time.Second * 10)
 	index := flag.Int("index", 0, "specify ethernet index")
 	flag.Parse()
 	bpfMap, err := ebpf.NewBPFMap(ebpf.Array, 4, 8, 256, 0)

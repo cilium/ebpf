@@ -138,6 +138,10 @@ func (m *BPFMap) GetMaxEntries() uint32 {
 	return m.maxEntries
 }
 
+func (m *BPFMap) Pin(fileName string) error {
+	return pinObject(fileName, uint32(m.fd))
+}
+
 func (m *BPFMap) put(key encoding.BinaryMarshaler, value encoding.BinaryMarshaler, putType uint64) (bool, error) {
 	keyValue, err := m.getKeyOrValue(key, int(m.keySize), _key)
 	if err != nil {
@@ -210,6 +214,21 @@ func errnoErr(e syscall.Errno) error {
 	return e
 }
 
+func pinObject(fileName string, fd uint32) error {
+	_, errNo := bpfCall(_BPF_OBJ_PIN, unsafe.Pointer(&pinObjAttr{
+		fileName: uint64(uintptr(unsafe.Pointer(&[]byte(fileName)[0]))),
+		fd:       fd,
+	}), 16)
+	return errnoErr(errNo)
+}
+
+func getObject(fileName string) (uintptr, error) {
+	ptr, errNo := bpfCall(_BPF_OBJ_GET, unsafe.Pointer(&pinObjAttr{
+		fileName: uint64(uintptr(unsafe.Pointer(&[]byte(fileName)[0]))),
+	}), 16)
+	return ptr, errnoErr(errNo)
+}
+
 func bpfCall(cmd int, attr unsafe.Pointer, size int) (uintptr, syscall.Errno) {
 	r1, _, errNo := syscall.Syscall(uintptr(_BPF_CALL), uintptr(cmd), uintptr(attr), uintptr(size))
 	return r1, errNo
@@ -226,4 +245,10 @@ type mapOpAttr struct {
 	key     uint64
 	value   uint64
 	flags   uint64
+}
+
+type pinObjAttr struct {
+	fileName uint64
+	fd       uint32
+	padding  uint32
 }

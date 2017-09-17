@@ -3,7 +3,6 @@ package main
 import (
 	"flag"
 	"fmt"
-	"os"
 	"syscall"
 	"time"
 	"unsafe"
@@ -58,8 +57,6 @@ func (k *bValue) UnmarshalBinary(data []byte) error {
 }
 
 func main() {
-	fmt.Println(os.Getpid())
-	time.Sleep(time.Second * 10)
 	index := flag.Int("index", 0, "specify ethernet index")
 	flag.Parse()
 	bpfMap, err := ebpf.NewBPFMap(ebpf.Array, 4, 8, 256, 0)
@@ -124,21 +121,21 @@ func main() {
 		var icmp bValue
 		var tcp bValue
 		var udp bValue
-		ok, err := bpfMap.Get(bKey(nettypes.ICMP), &icmp)
+		ok, err := bpfMap.Get(bKey(nettypes.ICMP), &icmp, 8)
 		if err != nil {
 			panic(err)
 		}
 		if !ok {
 			icmp = bValue(0)
 		}
-		ok, err = bpfMap.Get(bKey(nettypes.TCP), &tcp)
+		ok, err = bpfMap.Get(bKey(nettypes.TCP), &tcp, 8)
 		if err != nil {
 			panic(err)
 		}
 		if !ok {
 			tcp = bValue(0)
 		}
-		ok, err = bpfMap.Get(bKey(nettypes.UDP), &udp)
+		ok, err = bpfMap.Get(bKey(nettypes.UDP), &udp, 8)
 		if err != nil {
 			panic(err)
 		}

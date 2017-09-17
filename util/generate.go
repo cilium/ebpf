@@ -27,7 +27,7 @@ const comment = `// import (
 func main() {
 	fileName := flag.String("file", "", "specific file to dump")
 	packageName := flag.String("package", "main", "what to call the package")
-	variableName := flag.String("variable", "program", "what to call the package")
+	variableName := flag.String("variable", "program", "what to call the program")
 	name := flag.String("name", "", "what to name the file")
 	stdOut := flag.Bool("stdout", false, "just output to stdout")
 	flag.Parse()

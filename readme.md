@@ -24,9 +24,9 @@ so if you are distributing any software relying on this project you will probabl
 important part (the eBPF opcode) anyways.
 
 
-## Packaging
+## Packaging and Generating Code
 If you do not want to package the object file with your distribution, you can use the generate
-program in the util folder, and it will convert the object file into a go file that you can use.
+program in the util folder (see readme.md in that folder for details), and it will convert the object file into a go file that you can use.
 
 ## Pinning
 If you want to pin your ebpf objects (this means make them persist, beyond the life of your program) then you will need to mount

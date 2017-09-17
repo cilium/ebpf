@@ -15,30 +15,14 @@ import (
 	"unsafe"
 )
 
-type BPFProgram struct {
-	fd            int
-	logs          []byte
-	instructions  *Instructions
-	kernelVersion uint32
-	license       string
-	progType      ProgType
-	sectionName   string
-}
+type BPFProgram int
 
-func NewBPFProgram(progType ProgType, instructions *Instructions, license string, kernelVersion uint32) (*BPFProgram, error) {
-	var sn string
-	if instructions != nil && len(*instructions) > 0 && len((*instructions)[0].sectionName) > 0 {
-		sn = (*instructions)[0].sectionName
-	}
-	bpf := &BPFProgram{
-		instructions:  instructions,
-		kernelVersion: kernelVersion,
-		license:       license,
-		progType:      progType,
-		sectionName:   sn,
+func NewBPFProgram(progType ProgType, instructions *Instructions, license string, kernelVersion uint32) (BPFProgram, error) {
+	if instructions == nil {
+		return -1, fmt.Errorf("instructions can be nil")
 	}
 	var cInstructions []bpfInstruction
-	for _, ins := range *bpf.instructions {
+	for _, ins := range *instructions {
 		inss := ins.getCStructs()
 		for _, ins2 := range inss {
 			cInstructions = append(cInstructions, ins2)
@@ -46,9 +30,9 @@ func NewBPFProgram(progType ProgType, instructions *Instructions, license string
 	}
 	insCount := uint32(len(cInstructions))
 	if insCount > MaxBPFInstructions {
-		return bpf, fmt.Errorf("max instructions, %s, exceeded", MaxBPFInstructions)
+		return -1, fmt.Errorf("max instructions, %s, exceeded", MaxBPFInstructions)
 	}
-	lic := []byte(bpf.license)
+	lic := []byte(license)
 	logs := make([]byte, LogBufSize)
 	fd, e := bpfCall(_BPF_PROG_LOAD, unsafe.Pointer((&struct {
 		progType      uint32
@@ -61,7 +45,7 @@ func NewBPFProgram(progType ProgType, instructions *Instructions, license string
 		kernelVersion uint32
 		padding       uint32
 	}{
-		progType:     uint32(bpf.progType),
+		progType:     uint32(progType),
 		insCount:     insCount,
 		instructions: uint64(uintptr(unsafe.Pointer(&cInstructions[0]))),
 		license:      uint64(uintptr(unsafe.Pointer(&lic[0]))),
@@ -71,82 +55,44 @@ func NewBPFProgram(progType ProgType, instructions *Instructions, license string
 	})), 48)
 	if e != 0 {
 		if len(logs) > 0 {
-			return bpf, fmt.Errorf("%s:\n\t%s", errnoErr(e), strings.Replace(string(logs), "\n", "\n\t", -1))
+			return -1, fmt.Errorf("%s:\n\t%s", errnoErr(e), strings.Replace(string(logs), "\n", "\n\t", -1))
 		}
-		return bpf, errnoErr(e)
+		return -1, errnoErr(e)
 	}
-	bpf.fd = int(fd)
-	bpf.logs = logs
-	return bpf, nil
+	return BPFProgram(fd), nil
 }
 
-func (bpf *BPFProgram) GetLogs() string {
-	return string(bpf.logs)
+func (bpf BPFProgram) GetFd() int {
+	return int(bpf)
 }
 
-func (bpf *BPFProgram) GetFd() int {
-	return bpf.fd
-}
-
-func (bpf *BPFProgram) GetInstructions() *Instructions {
-	return bpf.instructions
-}
-
-func (bpf *BPFProgram) GetKernelVersion() uint32 {
-	return bpf.kernelVersion
-}
-
-func (bpf *BPFProgram) GetSectionName() string {
-	return bpf.sectionName
-}
-
-func (bpf *BPFProgram) Pin(fileName string) error {
-	return pinObject(fileName, uint32(bpf.fd))
+func (bpf BPFProgram) Pin(fileName string) error {
+	return pinObject(fileName, uint32(bpf))
 }
 
 type BPFCollection struct {
-	programs   *[]*BPFProgram
-	maps       *[]*BPFMap
-	programMap map[string]int
-	mapMap     map[string]int
+	programs   *[]BPFProgram
+	maps       *[]BPFMap
+	programMap map[string]BPFProgram
+	mapMap     map[string]BPFMap
 }
 
-func (coll *BPFCollection) GetMaps() *[]*BPFMap {
+func (coll *BPFCollection) GetMaps() *[]BPFMap {
 	return coll.maps
 }
 
-func (coll *BPFCollection) GetPrograms() *[]*BPFProgram {
+func (coll *BPFCollection) GetPrograms() *[]BPFProgram {
 	return coll.programs
 }
 
-func (coll *BPFCollection) GetMapByName(key string) *BPFMap {
-	if i, ok := coll.mapMap[key]; ok && coll.maps != nil && i < len(*coll.maps) {
-		return (*coll.maps)[i]
-	}
-	return nil
+func (coll *BPFCollection) GetMapByName(key string) (BPFMap, bool) {
+	v, ok := coll.mapMap[key]
+	return v, ok
 }
 
-func (coll *BPFCollection) GetProgramByName(key string) *BPFProgram {
-	if i, ok := coll.programMap[key]; ok && coll.programs != nil && i < len(*coll.programs) {
-		return (*coll.programs)[i]
-	}
-	return nil
-}
-
-func (coll *BPFCollection) String() string {
-	buf := bytes.NewBuffer(nil)
-	if coll == nil || coll.programs == nil {
-		return ""
-	}
-	for _, prog := range *coll.programs {
-		insns := prog.GetInstructions()
-		if insns != nil {
-			buf.WriteString(prog.GetSectionName())
-			buf.WriteString("\n")
-			buf.WriteString((*insns).String())
-		}
-	}
-	return buf.String()
+func (coll *BPFCollection) GetProgramByName(key string) (BPFProgram, bool) {
+	v, ok := coll.programMap[key]
+	return v, ok
 }
 
 func (coll *BPFCollection) Pin(dirName string, fileMode os.FileMode) error {
@@ -218,10 +164,10 @@ func NewBPFCollectionFromObjectCode(code io.ReaderAt) (*BPFCollection, error) {
 	bpfColl := new(BPFCollection)
 	sectionsLen := len(f.Sections)
 	processedSections := make([]bool, sectionsLen)
-	var programs []*BPFProgram
+	var programs []BPFProgram
 	bpfColl.programs = &programs
-	bpfColl.programMap = make(map[string]int)
-	bpfColl.mapMap = make(map[string]int)
+	bpfColl.programMap = make(map[string]BPFProgram)
+	bpfColl.mapMap = make(map[string]BPFMap)
 	symbols, err = f.Symbols()
 	if err != nil {
 		return bpfColl, err
@@ -281,7 +227,7 @@ func NewBPFCollectionFromObjectCode(code io.ReaderAt) (*BPFCollection, error) {
 						return bpfColl, err
 					}
 					if name, ok := symbolMap[fmt.Sprintf("%d-0", int(sec.Info))]; ok && len(name) > 0 {
-						bpfColl.programMap[name] = len(programs) - 1
+						bpfColl.programMap[name] = programs[len(programs)-1]
 					}
 				}
 			}
@@ -317,9 +263,9 @@ func dataToString(data []byte) string {
 	return buf.String()
 }
 
-func loadMaps(byteOrder binary.ByteOrder, data []byte, section int, symbolMap map[string]string) (*[]*BPFMap, map[string]int, error) {
-	var maps []*BPFMap
-	mapMap := make(map[string]int)
+func loadMaps(byteOrder binary.ByteOrder, data []byte, section int, symbolMap map[string]string) (*[]BPFMap, map[string]BPFMap, error) {
+	var maps []BPFMap
+	mapMap := make(map[string]BPFMap)
 	for i := 0; i < len(data); i += 4 {
 		t := i
 		mT := MapType(byteOrder.Uint32(data[i : i+4]))
@@ -337,7 +283,7 @@ func loadMaps(byteOrder binary.ByteOrder, data []byte, section int, symbolMap ma
 		}
 		maps = append(maps, bMap)
 		if name, ok := symbolMap[fmt.Sprintf("%d-%d", section, t)]; ok && len(name) > 0 {
-			mapMap[name] = len(maps) - 1
+			mapMap[name] = maps[len(maps)-1]
 		}
 	}
 	return &maps, mapMap, nil
@@ -388,7 +334,7 @@ func loadInstructions(byteOrder binary.ByteOrder, data []byte, sectionName strin
 	return &insns
 }
 
-func parseRelocateApply(byteOrder binary.ByteOrder, data []byte, symbols []elf.Symbol, sec *elf.Section, insns *Instructions, maps *[]*BPFMap) error {
+func parseRelocateApply(byteOrder binary.ByteOrder, data []byte, symbols []elf.Symbol, sec *elf.Section, insns *Instructions, maps *[]BPFMap) error {
 	nRels := int(sec.Size / sec.Entsize)
 	for i, t := 0, 0; i < nRels; i++ {
 		rel := elf.Rela64{

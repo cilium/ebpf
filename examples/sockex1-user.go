@@ -45,15 +45,14 @@ func main() {
 	flag.Parse()
 	coll, err := ebpf.NewBPFCollectionFromFile(*fileName)
 	if err != nil {
-		fmt.Printf("%s\n", coll.String())
 		panic(err)
 	}
 	sock, err := openRawSock(*index)
 	if err != nil {
 		panic(err)
 	}
-	prog := coll.GetProgramByName("bpf_prog1")
-	if prog == nil {
+	prog, ok := coll.GetProgramByName("bpf_prog1")
+	if !ok {
 		panic(fmt.Errorf("no program named \"bpf_prog1\" found"))
 	}
 	if err := syscall.SetsockoptInt(sock, syscall.SOL_SOCKET, SO_ATTACH_BPF, prog.GetFd()); err != nil {
@@ -61,8 +60,8 @@ func main() {
 	}
 	fmt.Printf("Filtering on eth index: %d\n", *index)
 	fmt.Println("Packet stats:")
-	bpfMap := coll.GetMapByName("my_map")
-	if bpfMap == nil {
+	bpfMap, ok := coll.GetMapByName("my_map")
+	if !ok {
 		panic(fmt.Errorf("no map named \"my_map\" found"))
 	}
 	for {
@@ -70,17 +69,17 @@ func main() {
 		var icmp bValue
 		var tcp bValue
 		var udp bValue
-		ok, err := bpfMap.Get(bKey(nettypes.ICMP), &icmp)
+		ok, err := bpfMap.Get(bKey(nettypes.ICMP), &icmp, 8)
 		if err != nil {
 			panic(err)
 		}
 		assertTrue(ok, "icmp key not found")
-		ok, err = bpfMap.Get(bKey(nettypes.TCP), &tcp)
+		ok, err = bpfMap.Get(bKey(nettypes.TCP), &tcp, 8)
 		if err != nil {
 			panic(err)
 		}
 		assertTrue(ok, "tcp key not found")
-		ok, err = bpfMap.Get(bKey(nettypes.UDP), &udp)
+		ok, err = bpfMap.Get(bKey(nettypes.UDP), &udp, 8)
 		if err != nil {
 			panic(err)
 		}

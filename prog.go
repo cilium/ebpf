@@ -9,6 +9,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"os"
 	"path"
 	"strings"
@@ -70,19 +71,26 @@ func (bpf BPFProgram) Pin(fileName string) error {
 	return pinObject(fileName, uint32(bpf))
 }
 
+func LoadBPFProgram(fileName string) (BPFProgram, error) {
+	ptr, err := getObject(fileName)
+	return BPFProgram(ptr), err
+}
+
 type BPFCollection struct {
-	programs   *[]BPFProgram
-	maps       *[]BPFMap
 	programMap map[string]BPFProgram
 	mapMap     map[string]BPFMap
 }
 
-func (coll *BPFCollection) GetMaps() *[]BPFMap {
-	return coll.maps
+func (coll *BPFCollection) ForEachMap(fx func(string, BPFMap)) {
+	for k, v := range coll.mapMap {
+		fx(k, v)
+	}
 }
 
-func (coll *BPFCollection) GetPrograms() *[]BPFProgram {
-	return coll.programs
+func (coll *BPFCollection) ForEachProgram(fx func(string, BPFProgram)) {
+	for k, v := range coll.programMap {
+		fx(k, v)
+	}
 }
 
 func (coll *BPFCollection) GetMapByName(key string) (BPFMap, bool) {
@@ -100,29 +108,27 @@ func (coll *BPFCollection) Pin(dirName string, fileMode os.FileMode) error {
 	if err != nil {
 		return err
 	}
-	if coll.maps != nil && len(*coll.maps) > 0 {
+	if len(coll.mapMap) > 0 {
 		mapPath := path.Join(dirName, "maps")
 		err = mkdirIfNotExists(mapPath, fileMode)
 		if err != nil {
 			return err
 		}
-		maps := *coll.maps
-		for k, i := range coll.mapMap {
-			err := maps[i].Pin(path.Join(mapPath, k))
+		for k, v := range coll.mapMap {
+			err := v.Pin(path.Join(mapPath, k))
 			if err != nil {
 				return err
 			}
 		}
 	}
-	if coll.programs != nil && len(*coll.programs) > 0 {
+	if len(coll.programMap) > 0 {
 		progPath := path.Join(dirName, "programs")
 		err = mkdirIfNotExists(progPath, fileMode)
 		if err != nil {
 			return err
 		}
-		programs := *coll.programs
-		for k, i := range coll.programMap {
-			err := programs[i].Pin(path.Join(progPath, k))
+		for k, v := range coll.programMap {
+			err = v.Pin(path.Join(progPath, k))
 			if err != nil {
 				return err
 			}
@@ -140,6 +146,42 @@ func mkdirIfNotExists(dirName string, fileMode os.FileMode) error {
 		return err
 	}
 	return nil
+}
+
+func LoadBPFCollection(dirName string) (*BPFCollection, error) {
+	bpfColl := &BPFCollection{
+		mapMap:     make(map[string]BPFMap),
+		programMap: make(map[string]BPFProgram),
+	}
+	mapsDir := path.Join(dirName, "maps")
+	files, err := ioutil.ReadDir(mapsDir)
+	if err != nil && err != os.ErrNotExist {
+		return nil, err
+	}
+	if len(files) > 0 {
+		for _, fi := range files {
+			m, err := LoadBPFMap(path.Join(mapsDir, fi.Name()))
+			if err != nil {
+				return nil, err
+			}
+			bpfColl.mapMap[fi.Name()] = m
+		}
+	}
+	programDir := path.Join(dirName, "programs")
+	files, err = ioutil.ReadDir(programDir)
+	if err != nil && err != os.ErrNotExist {
+		return nil, err
+	}
+	if len(files) > 0 {
+		for _, fi := range files {
+			p, err := LoadBPFProgram(path.Join(programDir, fi.Name()))
+			if err != nil {
+				return nil, err
+			}
+			bpfColl.programMap[fi.Name()] = p
+		}
+	}
+	return bpfColl, nil
 }
 
 func NewBPFCollectionFromFile(file string) (*BPFCollection, error) {
@@ -164,8 +206,7 @@ func NewBPFCollectionFromObjectCode(code io.ReaderAt) (*BPFCollection, error) {
 	bpfColl := new(BPFCollection)
 	sectionsLen := len(f.Sections)
 	processedSections := make([]bool, sectionsLen)
-	var programs []BPFProgram
-	bpfColl.programs = &programs
+	var maps *[]BPFMap
 	bpfColl.programMap = make(map[string]BPFProgram)
 	bpfColl.mapMap = make(map[string]BPFMap)
 	symbols, err = f.Symbols()
@@ -189,7 +230,7 @@ func NewBPFCollectionFromObjectCode(code io.ReaderAt) (*BPFCollection, error) {
 			version = byteOrder.Uint32(data)
 			processedSections[i] = true
 		case strings.Index(sec.Name, "maps") == 0:
-			bpfColl.maps, bpfColl.mapMap, err = loadMaps(byteOrder, data, i, symbolMap)
+			maps, bpfColl.mapMap, err = loadMaps(byteOrder, data, i, symbolMap)
 			if err != nil {
 				return bpfColl, err
 			}
@@ -213,7 +254,7 @@ func NewBPFCollectionFromObjectCode(code io.ReaderAt) (*BPFCollection, error) {
 					return bpfColl, err
 				}
 				insns := loadInstructions(byteOrder, data2, sec2.Name)
-				err = parseRelocateApply(byteOrder, data, symbols, sec, insns, bpfColl.maps)
+				err = parseRelocateApply(byteOrder, data, symbols, sec, insns, maps)
 				if err != nil {
 					return bpfColl, err
 				}
@@ -222,12 +263,13 @@ func NewBPFCollectionFromObjectCode(code io.ReaderAt) (*BPFCollection, error) {
 				progType := getProgType(sec2.Name)
 				if progType != ProgTypeUnrecognized {
 					prog, err := NewBPFProgram(progType, insns, license, version)
-					programs = append(programs, prog)
 					if err != nil {
 						return bpfColl, err
 					}
 					if name, ok := symbolMap[fmt.Sprintf("%d-0", int(sec.Info))]; ok && len(name) > 0 {
-						bpfColl.programMap[name] = programs[len(programs)-1]
+						bpfColl.programMap[name] = prog
+					} else {
+						return nil, fmt.Errorf("program section had no symbol; invalid bpf binary")
 					}
 				}
 			}
@@ -244,11 +286,14 @@ func NewBPFCollectionFromObjectCode(code io.ReaderAt) (*BPFCollection, error) {
 			if progType != ProgTypeUnrecognized && len(data) > 0 {
 				insns := loadInstructions(byteOrder, data, sec.Name)
 				prog, err := NewBPFProgram(progType, insns, license, version)
-				programs = append(programs, prog)
 				if err != nil {
 					return bpfColl, err
 				}
-				processedSections[sec.Info] = true
+				if name, ok := symbolMap[fmt.Sprintf("%d-0", int(sec.Info))]; ok && len(name) > 0 {
+					bpfColl.programMap[name] = prog
+				} else {
+					return nil, fmt.Errorf("program section had no symbol; invalid bpf binary")
+				}
 			}
 		}
 	}
@@ -283,7 +328,7 @@ func loadMaps(byteOrder binary.ByteOrder, data []byte, section int, symbolMap ma
 		}
 		maps = append(maps, bMap)
 		if name, ok := symbolMap[fmt.Sprintf("%d-%d", section, t)]; ok && len(name) > 0 {
-			mapMap[name] = maps[len(maps)-1]
+			mapMap[name] = bMap
 		}
 	}
 	return &maps, mapMap, nil

@@ -131,6 +131,11 @@ func (m BPFMap) Pin(fileName string) error {
 	return pinObject(fileName, uint32(m))
 }
 
+func LoadBPFMap(fileName string) (BPFMap, error) {
+	ptr, err := getObject(fileName)
+	return BPFMap(ptr), err
+}
+
 func (m BPFMap) put(key encoding.BinaryMarshaler, value encoding.BinaryMarshaler, putType uint64) (bool, error) {
 	keyValue, err := key.MarshalBinary()
 	if err != nil {

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"flag"
 	"fmt"
+	"os"
 	"syscall"
 	"time"
 
@@ -103,33 +104,47 @@ func (k *bValue) UnmarshalBinary(data []byte) error {
 	return nil
 }
 
+const sockexPin = "/sys/fs/bpf/sockex1"
+
 func main() {
 	index := flag.Int("index", 0, "specify ethernet index")
 	flag.Parse()
-	coll, err := ebpf.NewBPFCollectionFromObjectCode(bytes.NewReader(program[:]))
-	if err != nil {
-		fmt.Printf("%s\n", coll.String())
+	fi, err := os.Lstat(sockexPin)
+	if err != nil && !os.IsNotExist(err) {
 		panic(err)
 	}
-	err = coll.Pin("/sys/fs/bpf/sockex1", 0644)
-	if err != nil {
-		panic(err)
+	var coll *ebpf.BPFCollection
+	if fi != nil {
+		coll, err = ebpf.LoadBPFCollection(sockexPin)
+		if err != nil {
+			panic(err)
+		}
+	} else {
+		coll, err = ebpf.NewBPFCollectionFromObjectCode(bytes.NewReader(program[:]))
+		if err != nil {
+			panic(err)
+		}
+		err = coll.Pin(sockexPin, 0600)
+		if err != nil {
+			panic(err)
+		}
 	}
 	sock, err := openRawSock(*index)
 	if err != nil {
 		panic(err)
 	}
-	prog := coll.GetProgramByName("bpf_prog1")
-	if prog == nil {
+	prog, ok := coll.GetProgramByName("bpf_prog1")
+	if !ok {
 		panic(fmt.Errorf("no program named \"bpf_prog1\" found"))
 	}
 	if err := syscall.SetsockoptInt(sock, syscall.SOL_SOCKET, SO_ATTACH_BPF, prog.GetFd()); err != nil {
 		panic(err)
 	}
+
 	fmt.Printf("Filtering on eth index: %d\n", *index)
 	fmt.Println("Packet stats:")
-	bpfMap := coll.GetMapByName("my_map")
-	if bpfMap == nil {
+	bpfMap, ok := coll.GetMapByName("my_map")
+	if !ok {
 		panic(fmt.Errorf("no map named \"my_map\" found"))
 	}
 	for {
@@ -137,17 +152,17 @@ func main() {
 		var icmp bValue
 		var tcp bValue
 		var udp bValue
-		ok, err := bpfMap.Get(bKey(nettypes.ICMP), &icmp)
+		ok, err := bpfMap.Get(bKey(nettypes.ICMP), &icmp, 8)
 		if err != nil {
 			panic(err)
 		}
 		assertTrue(ok, "icmp key not found")
-		ok, err = bpfMap.Get(bKey(nettypes.TCP), &tcp)
+		ok, err = bpfMap.Get(bKey(nettypes.TCP), &tcp, 8)
 		if err != nil {
 			panic(err)
 		}
 		assertTrue(ok, "tcp key not found")
-		ok, err = bpfMap.Get(bKey(nettypes.UDP), &udp)
+		ok, err = bpfMap.Get(bKey(nettypes.UDP), &udp, 8)
 		if err != nil {
 			panic(err)
 		}

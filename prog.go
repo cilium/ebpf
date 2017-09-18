@@ -83,23 +83,23 @@ type BPFCollection struct {
 
 func (coll *BPFCollection) ForEachMap(fx func(string, BPFMap)) {
 	for k, v := range coll.mapMap {
-		fx(k, v)
+		fx(unReplaceForwardSlash(k), v)
 	}
 }
 
 func (coll *BPFCollection) ForEachProgram(fx func(string, BPFProgram)) {
 	for k, v := range coll.programMap {
-		fx(k, v)
+		fx(unReplaceForwardSlash(k), v)
 	}
 }
 
 func (coll *BPFCollection) GetMapByName(key string) (BPFMap, bool) {
-	v, ok := coll.mapMap[key]
+	v, ok := coll.mapMap[replaceForwardSlash(key)]
 	return v, ok
 }
 
 func (coll *BPFCollection) GetProgramByName(key string) (BPFProgram, bool) {
-	v, ok := coll.programMap[key]
+	v, ok := coll.programMap[replaceForwardSlash(key)]
 	return v, ok
 }
 
@@ -115,7 +115,7 @@ func (coll *BPFCollection) Pin(dirName string, fileMode os.FileMode) error {
 			return err
 		}
 		for k, v := range coll.mapMap {
-			err := v.Pin(path.Join(mapPath, k))
+			err := v.Pin(path.Join(mapPath, replaceForwardSlash(k)))
 			if err != nil {
 				return err
 			}
@@ -128,7 +128,7 @@ func (coll *BPFCollection) Pin(dirName string, fileMode os.FileMode) error {
 			return err
 		}
 		for k, v := range coll.programMap {
-			err = v.Pin(path.Join(progPath, k))
+			err = v.Pin(path.Join(progPath, replaceForwardSlash(k)))
 			if err != nil {
 				return err
 			}
@@ -267,7 +267,7 @@ func NewBPFCollectionFromObjectCode(code io.ReaderAt) (*BPFCollection, error) {
 						return bpfColl, err
 					}
 					if name, ok := symbolMap[fmt.Sprintf("%d-0", int(sec.Info))]; ok && len(name) > 0 {
-						bpfColl.programMap[name] = prog
+						bpfColl.programMap[replaceForwardSlash(name)] = prog
 					} else {
 						return nil, fmt.Errorf("program section had no symbol; invalid bpf binary")
 					}
@@ -290,7 +290,7 @@ func NewBPFCollectionFromObjectCode(code io.ReaderAt) (*BPFCollection, error) {
 					return bpfColl, err
 				}
 				if name, ok := symbolMap[fmt.Sprintf("%d-0", int(sec.Info))]; ok && len(name) > 0 {
-					bpfColl.programMap[name] = prog
+					bpfColl.programMap[replaceForwardSlash(name)] = prog
 				} else {
 					return nil, fmt.Errorf("program section had no symbol; invalid bpf binary")
 				}
@@ -328,10 +328,10 @@ func loadMaps(byteOrder binary.ByteOrder, data []byte, section int, symbolMap ma
 		}
 		maps = append(maps, bMap)
 		if name, ok := symbolMap[fmt.Sprintf("%d-%d", section, t)]; ok && len(name) > 0 {
-			mapMap[name] = bMap
+			mapMap[replaceForwardSlash(name)] = bMap
 		}
 	}
-	return &maps, mapMap, nil
+	return &maps, mapMap, progMap, nil
 }
 
 func getProgType(v string) ProgType {
@@ -411,4 +411,12 @@ func parseRelocateApply(byteOrder binary.ByteOrder, data []byte, symbols []elf.S
 		ins.Constant = int32(uFd)
 	}
 	return nil
+}
+
+func replaceForwardSlash(s string) string {
+	return strings.Replace(s, "/", "_slash_", -1)
+}
+
+func unReplaceForwardSlash(s string) string {
+	return strings.Replace(s, "_slash_", "/", -1)
 }

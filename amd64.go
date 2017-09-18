@@ -7,3 +7,4 @@
 package ebpf
 
 const _BPF_CALL = 321
+const _PERF_EVENT = 298

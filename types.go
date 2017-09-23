@@ -6,6 +6,7 @@ package ebpf
 import (
 	"bytes"
 	"fmt"
+	"strings"
 )
 
 type MapType uint32
@@ -23,6 +24,35 @@ const (
 	LRUCPUHash
 	LPMTrie
 )
+
+func (mt MapType) String() string {
+	switch mt {
+	case Hash:
+		return "Hash"
+	case Array:
+		return "Array"
+	case ProgramArray:
+		return "ProgramArray"
+	case PerfEventArray:
+		return "PerfEventArray"
+	case PerCPUHash:
+		return "PerCPUHash"
+	case PerCPUArray:
+		return "PerCPUArray"
+	case StackTrace:
+		return "StackTrace"
+	case CGroupArray:
+		return "CGroupArray"
+	case LRUHash:
+		return "LRUHash"
+	case LRUCPUHash:
+		return "LRUCPUHash"
+	case LPMTrie:
+		return "LPMTrie"
+	default:
+		return "unknown map type"
+	}
+}
 
 const (
 	_BPF_MAP_CREATE = iota
@@ -770,25 +800,39 @@ const (
 	ProgTypeSockOps
 )
 
-type SKBuff struct {
-	Len            uint32
-	PktType        uint32
-	Mark           uint32
-	QueueMapping   uint32
-	Protocol       uint32
-	VLANPresent    uint32
-	VLANTCI        uint32
-	VLANProto      uint32
-	Priority       uint32
-	IngressIfindex uint32
-	Ifindex        uint32
-	TCIndex        uint32
-	CB             [5]uint32
-	Hash           uint32
-	TCClassID      uint32
-	Data           uint32
-	DataEnd        uint32
-	NAPIID         uint32
+func (pt ProgType) String() string {
+	switch pt {
+	case ProgTypeUnrecognized:
+		return "ProgTypeUnrecognized"
+	case ProgTypeSocketFilter:
+		return "ProgTypeSocketFilter"
+	case ProgTypeKprobe:
+		return "ProgTypeKprobe"
+	case ProgTypeSchedCLS:
+		return "ProgTypeSchedCLS"
+	case ProgTypeSchedACT:
+		return "ProgTypeSchedACT"
+	case ProgTypeTracePoint:
+		return "ProgTypeTracePoint"
+	case ProgTypeXDP:
+		return "ProgTypeXDP"
+	case ProgTypePerfEvent:
+		return "ProgTypePerfEvent"
+	case ProgTypeCGroupSKB:
+		return "ProgTypeCGroupSKB"
+	case ProgTypeCGroupSock:
+		return "ProgTypeCGroupSock"
+	case ProgTypeLWTIn:
+		return "ProgTypeLWTIn"
+	case ProgTypeLWTOut:
+		return "ProgTypeLWTOut"
+	case ProgTypeLWTXmit:
+		return "ProgTypeLWTXmit"
+	case ProgTypeSockOps:
+		return "ProgTypeSockOps"
+	default:
+		return "unknown prog type"
+	}
 }
 
 type bitField uint8
@@ -812,13 +856,18 @@ func (r bitField) GetPart2() Register {
 type Instructions []*BPFInstruction
 
 func (inss Instructions) String() string {
+	return inss.StringIndent(0)
+}
+
+func (inss Instructions) StringIndent(r int) string {
 	var buf bytes.Buffer
+	indent := strings.Repeat("\t", r)
 	for i, ins := range inss {
-		buf.WriteString(fmt.Sprintf("%d: %s\n", i, ins))
+		buf.WriteString(fmt.Sprintf("%s%d: %s\n", indent, i, ins))
 		extra := ins.extra
 		i2 := 1
 		for extra != nil {
-			buf.WriteString(fmt.Sprintf("\tex-%d-%d: %s\n", i, i2, extra))
+			buf.WriteString(fmt.Sprintf("\t%sex-%d-%d: %s\n", indent, i, i2, extra))
 			extra = extra.extra
 		}
 	}

@@ -22,7 +22,7 @@ type BPFMap int
 
 func NewBPFMap(mapType MapType, keySize, valueSize, maxEntries, flags uint32) (BPFMap, error) {
 	fd, e := bpfCall(_BPF_MAP_CREATE, unsafe.Pointer(&mapCreateAttr{mapType, keySize, valueSize, maxEntries, flags}), 20)
-	err := errnoErr(e)
+	err := bpfErrNo(e)
 	if err != nil {
 		return BPFMap(-1), fmt.Errorf("map create: %s", err.Error())
 	}
@@ -61,7 +61,7 @@ func (m BPFMap) GetRaw(key encoding.BinaryMarshaler, value *[]byte) (bool, error
 		if e == syscall.ENOENT {
 			return false, nil
 		}
-		return false, errnoErr(e)
+		return false, bpfErrNo(e)
 	}
 	return true, nil
 }
@@ -95,7 +95,7 @@ func (m BPFMap) Delete(key encoding.BinaryMarshaler) (bool, error) {
 	if e == syscall.ENOENT {
 		return false, nil
 	}
-	return false, errnoErr(e)
+	return false, bpfErrNo(e)
 }
 
 func (m BPFMap) GetNextKey(key encoding.BinaryMarshaler, nextKey encoding.BinaryUnmarshaler, keySize int) (bool, error) {
@@ -126,7 +126,7 @@ func (m BPFMap) GetNextKeyRaw(key encoding.BinaryMarshaler, nextKey *[]byte) (bo
 		if e == syscall.ENOENT {
 			return false, nil
 		}
-		return false, errnoErr(e)
+		return false, bpfErrNo(e)
 	}
 	return true, nil
 }
@@ -175,7 +175,7 @@ func (m BPFMap) put(key encoding.BinaryMarshaler, value encoding.BinaryMarshaler
 				return false, nil
 			}
 		}
-		return false, errnoErr(e)
+		return false, bpfErrNo(e)
 	}
 	return true, nil
 }

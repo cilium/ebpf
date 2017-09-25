@@ -46,9 +46,9 @@ func NewBPFProgram(progType ProgType, instructions *Instructions, license string
 	}), 48)
 	if e != 0 {
 		if len(logs) > 0 {
-			return -1, fmt.Errorf("%s:\n\t%s", errnoErr(e), strings.Replace(string(logs), "\n", "\n\t", -1))
+			return -1, fmt.Errorf("%s:\n\t%s", bpfErrNo(e), strings.Replace(string(logs), "\n", "\n\t", -1))
 		}
-		return -1, errnoErr(e)
+		return -1, bpfErrNo(e)
 	}
 	return BPFProgram(fd), nil
 }

@@ -147,7 +147,7 @@ func getSpecsFromELF(code io.ReaderAt) (programMap map[string]*progSpec, mapMap 
 				processedSections[i] = true
 				processedSections[sec.Info] = true
 				progType := getProgType(sec2.Name)
-				if progType != ProgTypeUnrecognized {
+				if progType != Unrecognized {
 					progSpec := &progSpec{
 						progCreateAttr: &progCreateAttr{
 							progType:      progType,
@@ -176,7 +176,7 @@ func getSpecsFromELF(code io.ReaderAt) (programMap map[string]*progSpec, mapMap 
 				return
 			}
 			progType := getProgType(sec.Name)
-			if progType != ProgTypeUnrecognized && len(data) > 0 {
+			if progType != Unrecognized && len(data) > 0 {
 				insns := loadInstructions(byteOrder, data, sec.Name)
 				progSpec := &progSpec{
 					progCreateAttr: &progCreateAttr{
@@ -239,21 +239,21 @@ func loadMaps(byteOrder binary.ByteOrder, data []byte, section int, symbolMap ma
 
 func getProgType(v string) ProgType {
 	types := map[string]ProgType{
-		"socket":      ProgTypeSocketFilter,
-		"kprobe/":     ProgTypeKprobe,
-		"kretprobe/":  ProgTypeKprobe,
-		"tracepoint/": ProgTypeTracePoint,
-		"xdp":         ProgTypeXDP,
-		"perf_event":  ProgTypePerfEvent,
-		"cgroup/skb":  ProgTypeCGroupSKB,
-		"cgroup/sock": ProgTypeCGroupSock,
+		"socket":      SocketFilter,
+		"kprobe/":     Kprobe,
+		"kretprobe/":  Kprobe,
+		"tracepoint/": TracePoint,
+		"xdp":         XDP,
+		"perf_event":  PerfEvent,
+		"cgroup/skb":  CGroupSKB,
+		"cgroup/sock": CGroupSock,
 	}
 	for k, t := range types {
 		if strings.Index(v, k) == 0 {
 			return t
 		}
 	}
-	return ProgTypeUnrecognized
+	return Unrecognized
 }
 
 func loadInstructions(byteOrder binary.ByteOrder, data []byte, sectionName string) *Instructions {

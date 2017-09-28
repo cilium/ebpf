@@ -784,52 +784,52 @@ const (
 type ProgType uint32
 
 const (
-	ProgTypeUnrecognized = ProgType(iota)
-	ProgTypeSocketFilter
-	ProgTypeKprobe
-	ProgTypeSchedCLS
-	ProgTypeSchedACT
-	ProgTypeTracePoint
-	ProgTypeXDP
-	ProgTypePerfEvent
-	ProgTypeCGroupSKB
-	ProgTypeCGroupSock
-	ProgTypeLWTIn
-	ProgTypeLWTOut
-	ProgTypeLWTXmit
-	ProgTypeSockOps
+	Unrecognized = ProgType(iota)
+	SocketFilter
+	Kprobe
+	SchedCLS
+	SchedACT
+	TracePoint
+	XDP
+	PerfEvent
+	CGroupSKB
+	CGroupSock
+	LWTIn
+	LWTOut
+	LWTXmit
+	SockOps
 )
 
 func (pt ProgType) String() string {
 	switch pt {
-	case ProgTypeUnrecognized:
-		return "ProgTypeUnrecognized"
-	case ProgTypeSocketFilter:
-		return "ProgTypeSocketFilter"
-	case ProgTypeKprobe:
-		return "ProgTypeKprobe"
-	case ProgTypeSchedCLS:
-		return "ProgTypeSchedCLS"
-	case ProgTypeSchedACT:
-		return "ProgTypeSchedACT"
-	case ProgTypeTracePoint:
-		return "ProgTypeTracePoint"
-	case ProgTypeXDP:
-		return "ProgTypeXDP"
-	case ProgTypePerfEvent:
-		return "ProgTypePerfEvent"
-	case ProgTypeCGroupSKB:
-		return "ProgTypeCGroupSKB"
-	case ProgTypeCGroupSock:
-		return "ProgTypeCGroupSock"
-	case ProgTypeLWTIn:
-		return "ProgTypeLWTIn"
-	case ProgTypeLWTOut:
-		return "ProgTypeLWTOut"
-	case ProgTypeLWTXmit:
-		return "ProgTypeLWTXmit"
-	case ProgTypeSockOps:
-		return "ProgTypeSockOps"
+	case Unrecognized:
+		return "Unrecognized"
+	case SocketFilter:
+		return "SocketFilter"
+	case Kprobe:
+		return "Kprobe"
+	case SchedCLS:
+		return "SchedCLS"
+	case SchedACT:
+		return "SchedACT"
+	case TracePoint:
+		return "TracePoint"
+	case XDP:
+		return "XDP"
+	case PerfEvent:
+		return "PerfEvent"
+	case CGroupSKB:
+		return "CGroupSKB"
+	case CGroupSock:
+		return "CGroupSock"
+	case LWTIn:
+		return "LWTIn"
+	case LWTOut:
+		return "LWTOut"
+	case LWTXmit:
+		return "LWTXmit"
+	case SockOps:
+		return "SockOps"
 	default:
 		return "unknown prog type"
 	}

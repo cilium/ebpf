@@ -5,7 +5,7 @@ To the build the examples folder you'll need to pull the linux repository. Once 
 you can build this folder:
 
 ```sh
-make kernel_src=$(/path/to/kernel/src)
+make kernel_src=/path/to/kernel/src
 ```
 
 It is possible to build bpf programs without downloading the entire kernel, but you'll have to go

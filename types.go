@@ -1,6 +1,3 @@
-// Copyright 2017 Nathan Sweet. All rights reserved.
-// Use of this source code is governed by an MIT
-// license that can be found in the LICENSE file.
 package ebpf
 
 import (
@@ -1155,10 +1152,10 @@ func BPFILdImm64Raw(dst, src Register, imm uint64) *BPFInstruction {
 	return bpfi
 }
 
-func (bpi *BPFInstruction) getCStructs() []bpfInstruction {
+func (bpfi *BPFInstruction) getCStructs() []bpfInstruction {
 	var bf bitField
 	var inss []bpfInstruction
-	extra := bpi
+	extra := bpfi
 	for extra != nil {
 		bf.SetPart1(extra.DstRegister)
 		bf.SetPart2(extra.SrcRegister)

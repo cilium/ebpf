@@ -1,6 +1,3 @@
-// Copyright 2017 Nathan Sweet. All rights reserved.
-// Use of this source code is governed by an MIT
-// license that can be found in the LICENSE file.
 package ebpf
 
 import (
@@ -60,7 +57,7 @@ type perfEventAttr struct {
 
 	sampleRegsUser  uint64
 	sampleStackUser uint32
-	clockId         int32
+	clockID         int32
 
 	sampleRegsIntr uint64
 
@@ -110,14 +107,14 @@ func getObject(fileName string) (uintptr, error) {
 }
 
 func bpfCall(cmd int, attr unsafe.Pointer, size int) (uintptr, syscall.Errno) {
-	r1, _, errNo := syscall.Syscall(uintptr(_BPF_CALL), uintptr(cmd), uintptr(attr), uintptr(size))
+	r1, _, errNo := syscall.Syscall(uintptr(_BPFCall), uintptr(cmd), uintptr(attr), uintptr(size))
 	return r1, errNo
 }
 
 func createPerfEvent(perfEvent *perfEventAttr, pid, cpu, groupFd int, flags uint) (uintptr, error) {
 
 	ptr := unsafe.Pointer(perfEvent)
-	efd, _, errNo := syscall.Syscall6(_PERF_EVENT, uintptr(ptr),
+	efd, _, errNo := syscall.Syscall6(_PerfEvent, uintptr(ptr),
 		uintptr(pid), uintptr(cpu), uintptr(groupFd), uintptr(flags), 0)
 	err := eventErrNo(errNo)
 	if err != nil {

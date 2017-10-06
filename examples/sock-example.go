@@ -59,7 +59,7 @@ func (k *bValue) UnmarshalBinary(data []byte) error {
 func main() {
 	index := flag.Int("index", 0, "specify ethernet index")
 	flag.Parse()
-	bpfMap, err := ebpf.NewBPFMap(ebpf.Array, 4, 8, 256, 0)
+	bpfMap, err := ebpf.NewMap(ebpf.Array, 4, 8, 256, 0)
 	if err != nil {
 		panic(err)
 	}
@@ -102,7 +102,7 @@ func main() {
 		// exit
 		ebpf.BPFIOp(ebpf.Exit),
 	}
-	bpfProgram, err := ebpf.NewBPFProgram(ebpf.SocketFilter, &ebpfInss, "GPL", 0)
+	bpfProgram, err := ebpf.NewProgram(ebpf.SocketFilter, &ebpfInss, "GPL", 0)
 	if err != nil {
 		fmt.Printf("%s\n", ebpfInss)
 		panic(err)

@@ -113,14 +113,14 @@ func main() {
 	if err != nil && !os.IsNotExist(err) {
 		panic(err)
 	}
-	var coll *ebpf.BPFCollection
+	var coll *ebpf.Collection
 	if fi != nil {
-		coll, err = ebpf.LoadBPFCollection(sockexPin)
+		coll, err = ebpf.LoadCollection(sockexPin)
 		if err != nil {
 			panic(err)
 		}
 	} else {
-		coll, err = ebpf.NewBPFCollectionFromObjectCode(bytes.NewReader(program[:]))
+		coll, err = ebpf.NewCollectionFromObjectCode(bytes.NewReader(program[:]))
 		if err != nil {
 			panic(err)
 		}

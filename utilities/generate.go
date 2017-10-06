@@ -16,7 +16,7 @@ const comment = `// import (
 // )
 // ...
 // func main() {
-// 	coll, err := NewBPFCollectionFromObjectCode(bytes.NewReader(program[:]))
+// 	coll, err := NewCollectionFromObjectCode(bytes.NewReader(program[:]))
 // 	if err != nil {
 // 		panic(err)
 // 	}

@@ -43,7 +43,7 @@ func main() {
 	fileName := flag.String("file", "", "specific file to debug")
 	index := flag.Int("index", 0, "specify ethernet index")
 	flag.Parse()
-	coll, err := ebpf.NewBPFCollectionFromFile(*fileName)
+	coll, err := ebpf.NewCollectionFromFile(*fileName)
 	if err != nil {
 		panic(err)
 	}

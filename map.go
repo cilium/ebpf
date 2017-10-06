@@ -7,7 +7,8 @@ import (
 	"unsafe"
 )
 
-type BPFMapSpec interface {
+// MapSpec is an interface type that cna initialize a new Map
+type MapSpec interface {
 	MapType() MapType
 	KeySize() uint32
 	ValueSize() uint32
@@ -15,22 +16,26 @@ type BPFMapSpec interface {
 	Flags() uint32
 }
 
-type BPFMap int
+// Map represents a Map file descriptor
+type Map int
 
-func NewBPFMap(mapType MapType, keySize, valueSize, maxEntries, flags uint32) (BPFMap, error) {
+// NewMap creates a new Map
+func NewMap(mapType MapType, keySize, valueSize, maxEntries, flags uint32) (Map, error) {
 	fd, e := bpfCall(_BPF_MAP_CREATE, unsafe.Pointer(&mapCreateAttr{mapType, keySize, valueSize, maxEntries, flags}), 20)
 	err := bpfErrNo(e)
 	if err != nil {
-		return BPFMap(-1), fmt.Errorf("map create: %s", err.Error())
+		return Map(-1), fmt.Errorf("map create: %s", err.Error())
 	}
-	return BPFMap(fd), nil
+	return Map(fd), nil
 }
 
-func NewBPFMapFromSpec(spec BPFMapSpec) (BPFMap, error) {
-	return NewBPFMap(spec.MapType(), spec.KeySize(), spec.ValueSize(), spec.MaxEntries(), spec.Flags())
+// NewMapFromSpec creates a new Map from a MapSpec
+func NewMapFromSpec(spec MapSpec) (Map, error) {
+	return NewMap(spec.MapType(), spec.KeySize(), spec.ValueSize(), spec.MaxEntries(), spec.Flags())
 }
 
-func (m BPFMap) Get(key encoding.BinaryMarshaler, value encoding.BinaryUnmarshaler, valueSize int) (bool, error) {
+// Get gets a value from a Map
+func (m Map) Get(key encoding.BinaryMarshaler, value encoding.BinaryUnmarshaler, valueSize int) (bool, error) {
 	v := make([]byte, valueSize)
 	ok, err := m.GetRaw(key, &v)
 	if err != nil || !ok {
@@ -43,7 +48,8 @@ func (m BPFMap) Get(key encoding.BinaryMarshaler, value encoding.BinaryUnmarshal
 	return true, nil
 }
 
-func (m BPFMap) GetRaw(key encoding.BinaryMarshaler, value *[]byte) (bool, error) {
+// GetRaw gets a value from Map populating a raw byte array
+func (m Map) GetRaw(key encoding.BinaryMarshaler, value *[]byte) (bool, error) {
 	keyValue, err := key.MarshalBinary()
 	if err != nil {
 		return false, err
@@ -63,20 +69,24 @@ func (m BPFMap) GetRaw(key encoding.BinaryMarshaler, value *[]byte) (bool, error
 	return true, nil
 }
 
-func (m BPFMap) Create(key encoding.BinaryMarshaler, value encoding.BinaryMarshaler) (bool, error) {
+// Create creates a new value in a map, failing if the key exists already
+func (m Map) Create(key encoding.BinaryMarshaler, value encoding.BinaryMarshaler) (bool, error) {
 	return m.put(key, value, _BPF_NOEXIST)
 }
 
-func (m BPFMap) Put(key encoding.BinaryMarshaler, value encoding.BinaryMarshaler) error {
+// Put replaces or creates a value in map
+func (m Map) Put(key encoding.BinaryMarshaler, value encoding.BinaryMarshaler) error {
 	_, err := m.put(key, value, _BPF_ANY)
 	return err
 }
 
-func (m BPFMap) Replace(key encoding.BinaryMarshaler, value encoding.BinaryMarshaler) (bool, error) {
+// Replace replaces a value in a map, failing if the value did not exist
+func (m Map) Replace(key encoding.BinaryMarshaler, value encoding.BinaryMarshaler) (bool, error) {
 	return m.put(key, value, _BPF_EXIST)
 }
 
-func (m BPFMap) Delete(key encoding.BinaryMarshaler) (bool, error) {
+// Delete removes a value, failing if the value does not exist
+func (m Map) Delete(key encoding.BinaryMarshaler) (bool, error) {
 	keyValue, err := key.MarshalBinary()
 	if err != nil {
 		return false, err
@@ -95,7 +105,8 @@ func (m BPFMap) Delete(key encoding.BinaryMarshaler) (bool, error) {
 	return false, bpfErrNo(e)
 }
 
-func (m BPFMap) GetNextKey(key encoding.BinaryMarshaler, nextKey encoding.BinaryUnmarshaler, keySize int) (bool, error) {
+// GetNextKey helps to iterate over a map getting the next key after a known key
+func (m Map) GetNextKey(key encoding.BinaryMarshaler, nextKey encoding.BinaryUnmarshaler, keySize int) (bool, error) {
 	v := make([]byte, keySize)
 	ok, err := m.GetRaw(key, &v)
 	if err != nil || !ok {
@@ -108,7 +119,8 @@ func (m BPFMap) GetNextKey(key encoding.BinaryMarshaler, nextKey encoding.Binary
 	return true, nil
 }
 
-func (m BPFMap) GetNextKeyRaw(key encoding.BinaryMarshaler, nextKey *[]byte) (bool, error) {
+// GetNextKeyRaw helps to iterate over a map getting the next key after a known key by a raw byte array
+func (m Map) GetNextKeyRaw(key encoding.BinaryMarshaler, nextKey *[]byte) (bool, error) {
 	keyValue, err := key.MarshalBinary()
 	if err != nil {
 		return false, err
@@ -128,24 +140,28 @@ func (m BPFMap) GetNextKeyRaw(key encoding.BinaryMarshaler, nextKey *[]byte) (bo
 	return true, nil
 }
 
-func (m BPFMap) Close() error {
+// Close removes a Map
+func (m Map) Close() error {
 	return syscall.Close(m.GetFd())
 }
 
-func (m BPFMap) GetFd() int {
+// GetFd gets the raw fd value of Map
+func (m Map) GetFd() int {
 	return int(m)
 }
 
-func (m BPFMap) Pin(fileName string) error {
+// Pin persists the map past the lifetime of the process that created it
+func (m Map) Pin(fileName string) error {
 	return pinObject(fileName, uint32(m))
 }
 
-func LoadBPFMap(fileName string) (BPFMap, error) {
+// LoadMap load a Map from
+func LoadMap(fileName string) (Map, error) {
 	ptr, err := getObject(fileName)
-	return BPFMap(ptr), err
+	return Map(ptr), err
 }
 
-func (m BPFMap) put(key encoding.BinaryMarshaler, value encoding.BinaryMarshaler, putType uint64) (bool, error) {
+func (m Map) put(key encoding.BinaryMarshaler, value encoding.BinaryMarshaler, putType uint64) (bool, error) {
 	keyValue, err := key.MarshalBinary()
 	if err != nil {
 		return false, err

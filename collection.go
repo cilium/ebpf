@@ -7,34 +7,41 @@ import (
 	"path"
 )
 
-type BPFCollection struct {
-	programMap map[string]BPFProgram
-	mapMap     map[string]BPFMap
+// Collection is a collection of Programs and Maps associated
+// with their symbols
+type Collection struct {
+	programMap map[string]Program
+	mapMap     map[string]Map
 }
 
-func (coll *BPFCollection) ForEachMap(fx func(string, BPFMap)) {
+// ForEachMap iterates over all the Maps in a Collection
+func (coll *Collection) ForEachMap(fx func(string, Map)) {
 	for k, v := range coll.mapMap {
 		fx(unReplaceForwardSlash(k), v)
 	}
 }
 
-func (coll *BPFCollection) ForEachProgram(fx func(string, BPFProgram)) {
+// ForEachProgram iterates over all the Programs in a Collection
+func (coll *Collection) ForEachProgram(fx func(string, Program)) {
 	for k, v := range coll.programMap {
 		fx(unReplaceForwardSlash(k), v)
 	}
 }
 
-func (coll *BPFCollection) GetMapByName(key string) (BPFMap, bool) {
+// GetMapByName get a Map by its symbolic name
+func (coll *Collection) GetMapByName(key string) (Map, bool) {
 	v, ok := coll.mapMap[replaceForwardSlash(key)]
 	return v, ok
 }
 
-func (coll *BPFCollection) GetProgramByName(key string) (BPFProgram, bool) {
+// GetProgramByName get a Program by its symbolic name
+func (coll *Collection) GetProgramByName(key string) (Program, bool) {
 	v, ok := coll.programMap[replaceForwardSlash(key)]
 	return v, ok
 }
 
-func (coll *BPFCollection) Pin(dirName string, fileMode os.FileMode) error {
+// Pin persits a Collection beyond the lifetime of the process that created it
+func (coll *Collection) Pin(dirName string, fileMode os.FileMode) error {
 	err := mkdirIfNotExists(dirName, fileMode)
 	if err != nil {
 		return err
@@ -79,10 +86,11 @@ func mkdirIfNotExists(dirName string, fileMode os.FileMode) error {
 	return nil
 }
 
-func LoadBPFCollection(dirName string) (*BPFCollection, error) {
-	bpfColl := &BPFCollection{
-		mapMap:     make(map[string]BPFMap),
-		programMap: make(map[string]BPFProgram),
+// LoadCollection loads a Collection from the pinned directory
+func LoadCollection(dirName string) (*Collection, error) {
+	bpfColl := &Collection{
+		mapMap:     make(map[string]Map),
+		programMap: make(map[string]Program),
 	}
 	mapsDir := path.Join(dirName, "maps")
 	files, err := ioutil.ReadDir(mapsDir)
@@ -91,7 +99,7 @@ func LoadBPFCollection(dirName string) (*BPFCollection, error) {
 	}
 	if len(files) > 0 {
 		for _, fi := range files {
-			m, err := LoadBPFMap(path.Join(mapsDir, fi.Name()))
+			m, err := LoadMap(path.Join(mapsDir, fi.Name()))
 			if err != nil {
 				return nil, err
 			}
@@ -105,7 +113,7 @@ func LoadBPFCollection(dirName string) (*BPFCollection, error) {
 	}
 	if len(files) > 0 {
 		for _, fi := range files {
-			p, err := LoadBPFProgram(path.Join(programDir, fi.Name()))
+			p, err := LoadProgram(path.Join(programDir, fi.Name()))
 			if err != nil {
 				return nil, err
 			}
@@ -115,26 +123,28 @@ func LoadBPFCollection(dirName string) (*BPFCollection, error) {
 	return bpfColl, nil
 }
 
-func NewBPFCollectionFromFile(file string) (*BPFCollection, error) {
+// NewCollectionFromFile parse an object file and convert it to a collection
+func NewCollectionFromFile(file string) (*Collection, error) {
 	f, err := os.Open(file)
 	if err != nil {
 		return nil, err
 	}
 	defer f.Close()
-	return NewBPFCollectionFromObjectCode(f)
+	return NewCollectionFromObjectCode(f)
 }
 
-func NewBPFCollectionFromObjectCode(code io.ReaderAt) (*BPFCollection, error) {
+// NewCollectionFromObjectCode parses a raw object file buffer
+func NewCollectionFromObjectCode(code io.ReaderAt) (*Collection, error) {
 	programMap, mapMap, err := getSpecsFromELF(code)
 	if err != nil {
 		return nil, err
 	}
-	bpfColl := &BPFCollection{
-		mapMap:     make(map[string]BPFMap),
-		programMap: make(map[string]BPFProgram),
+	bpfColl := &Collection{
+		mapMap:     make(map[string]Map),
+		programMap: make(map[string]Program),
 	}
 	for k, v := range mapMap {
-		bpfMap, err := NewBPFMapFromSpec(v)
+		bpfMap, err := NewMapFromSpec(v)
 		if err != nil {
 			return nil, err
 		}
@@ -149,7 +159,7 @@ func NewBPFCollectionFromObjectCode(code io.ReaderAt) (*BPFCollection, error) {
 
 	}
 	for k, v := range programMap {
-		bpfProg, err := NewBPFProgramFromSpec(v)
+		bpfProg, err := NewProgramFromSpec(v)
 		if err != nil {
 			return nil, err
 		}

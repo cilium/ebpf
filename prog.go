@@ -6,16 +6,19 @@ import (
 	"unsafe"
 )
 
-type BPFProgramSpec interface {
+// ProgramSpec is an interface that can initialize a new Program
+type ProgramSpec interface {
 	ProgType() ProgType
 	Instructions() *Instructions
 	License() string
 	KernelVersion() uint32
 }
 
-type BPFProgram int
+// Program represents a Program file descriptor
+type Program int
 
-func NewBPFProgram(progType ProgType, instructions *Instructions, license string, kernelVersion uint32) (BPFProgram, error) {
+// NewProgram creates a new Program
+func NewProgram(progType ProgType, instructions *Instructions, license string, kernelVersion uint32) (Program, error) {
 	if instructions == nil {
 		return -1, fmt.Errorf("instructions can be nil")
 	}
@@ -47,22 +50,26 @@ func NewBPFProgram(progType ProgType, instructions *Instructions, license string
 		}
 		return -1, bpfErrNo(e)
 	}
-	return BPFProgram(fd), nil
+	return Program(fd), nil
 }
 
-func NewBPFProgramFromSpec(spec BPFProgramSpec) (BPFProgram, error) {
-	return NewBPFProgram(spec.ProgType(), spec.Instructions(), spec.License(), spec.KernelVersion())
+// NewProgramFromSpec creates a new Program from the ProgramSpec interface
+func NewProgramFromSpec(spec ProgramSpec) (Program, error) {
+	return NewProgram(spec.ProgType(), spec.Instructions(), spec.License(), spec.KernelVersion())
 }
 
-func (bpf BPFProgram) GetFd() int {
+// GetFd gets the file descriptor value of the Program
+func (bpf Program) GetFd() int {
 	return int(bpf)
 }
 
-func (bpf BPFProgram) Pin(fileName string) error {
+// Pin perists the Program past the lifetime of the process that created it
+func (bpf Program) Pin(fileName string) error {
 	return pinObject(fileName, uint32(bpf))
 }
 
-func LoadBPFProgram(fileName string) (BPFProgram, error) {
+// LoadProgram loads a Program from a BPF file
+func LoadProgram(fileName string) (Program, error) {
 	ptr, err := getObject(fileName)
-	return BPFProgram(ptr), err
+	return Program(ptr), err
 }

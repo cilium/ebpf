@@ -56,13 +56,15 @@ func (p *progSpec) KernelVersion() uint32 {
 	return p.kernelVersion
 }
 
-func GetSpecsFromELF(code io.ReaderAt) (map[string]BPFProgramSpec, map[string]BPFMapSpec, error) {
+// GetSpecsFromELF parses an io.ReaderAt that represents and ELF layout, and categorizes the code
+// and maps by symbol
+func GetSpecsFromELF(code io.ReaderAt) (map[string]ProgramSpec, map[string]MapSpec, error) {
 	progMap, mapMap, err := getSpecsFromELF(code)
 	if err != nil {
 		return nil, nil, err
 	}
-	pM := make(map[string]BPFProgramSpec)
-	mM := make(map[string]BPFMapSpec)
+	pM := make(map[string]ProgramSpec)
+	mM := make(map[string]MapSpec)
 	for k, v := range progMap {
 		pM[k] = v
 	}
@@ -237,6 +239,7 @@ func loadMaps(byteOrder binary.ByteOrder, data []byte, section int, symbolMap ma
 func getProgType(v string) ProgType {
 	types := map[string]ProgType{
 		"socket":      SocketFilter,
+		"seccomp":     SocketFilter,
 		"kprobe/":     Kprobe,
 		"kretprobe/":  Kprobe,
 		"tracepoint/": TracePoint,

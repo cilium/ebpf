@@ -889,7 +889,7 @@ type bpfInstruction struct {
 	constant  int32
 }
 
-var classMap map[int]string = map[int]string{
+var classMap = map[int]string{
 	LdClass:    "Ld",
 	LdXClass:   "LdX",
 	StClass:    "St",

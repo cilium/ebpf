@@ -6,19 +6,52 @@ import (
 	"strings"
 )
 
+// MapType indicates the type map structure
+// that will be initialized in the kernel.
 type MapType uint32
 
 const (
+	// Hash is a hash map
 	Hash MapType = 1 + iota
+	// Array is an array map
 	Array
+	// ProgramArray - A program array map is a special kind of array map whose map
+	// values contain only file descriptors referring to other eBPF
+	// programs.  Thus, both the key_size and value_size must be
+	// exactly four bytes.  This map is used in conjunction with the
+	// TailCall helper.
 	ProgramArray
+	// PerfEventArray - A perf event array is used in conjunction with PerfEventRead
+	// and PerfEventOutput calls, to read the raw bpf_perf_data from the registers.
 	PerfEventArray
+	// PerCPUHash - This data structure is useful for people who have high performance
+	// network needs and can reconcile adds at the end of some cycle, so that
+	// hashes can be lock free without the use of XAdd, which can be costly.
 	PerCPUHash
+	// PerCPUArray - This data structure is useful for people who have high performance
+	// network needs and can reconcile adds at the end of some cycle, so that
+	// hashes can be lock free without the use of XAdd, which can be costly.
+	// Each CPU gets a copy of this hash, the contents of all of which can be reconciled
+	// later.
 	PerCPUArray
+	// StackTrace - This holds whole user and kernel stack traces, it can be retrieved with
+	// GetStackID
 	StackTrace
+	// CGroupArray - This is a very niche structure used to help SKBInCGroup determine
+	// if an skb is from a socket belonging to a specific cgroup
 	CGroupArray
+	// LRUHash - This allows you to create a small hash structure that will purge the
+	// least recently used items rather than thow an error when you run out of memory
 	LRUHash
+	// LRUCPUHash - This is NOT like PerCPUHash, this structure is shared among the CPUs,
+	// it has more to do with including the CPU id with the LRU calculation so that if a
+	// particular CPU is using a value over-and-over again, then it will be saved, but if
+	// a value is being retrieved a lot but sparsely across CPUs it is not as important, basically
+	// giving weight to CPU locality over overall usage.
 	LRUCPUHash
+	// LPMTrie - This is an implementation of Longest-Prefix-Match Trie structure. It is useful,
+	// for storing things like IP addresses which can be bit masked allowing for keys of differing
+	// values to refer to the same reference based on their masks. See wikipedia for more details.
 	LPMTrie
 )
 
@@ -52,26 +85,26 @@ func (mt MapType) String() string {
 }
 
 const (
-	_BPF_MAP_CREATE = iota
-	_BPF_MAP_LOOKUP_ELEM
-	_BPF_MAP_UPDATE_ELEM
-	_BPF_MAP_DELETE_ELEM
-	_BPF_MAP_GET_NEXT_KEY
-	_BPF_PROG_LOAD
-	_BPF_OBJ_PIN
-	_BPF_OBJ_GET
-	_BPF_PROG_ATTACH
-	_BPF_PROG_DETACH
-	_BPF_PROG_TEST_RUN
-	_BPF_PROG_GET_NEXT_ID
-	_BPF_MAP_GET_NEXT_ID
-	_BPF_PROG_GET_FD_BY_ID
-	_BPF_MAP_GET_FD_BY_ID
-	_BPF_OBJ_GET_INFO_BY_FD
+	_MapCreate = iota
+	_MapLookupElem
+	_MapUpdateElem
+	_MapDeleteElem
+	_MapGetNextKey
+	_ProgLoad
+	_ObjPin
+	_ObjGet
+	// _BPF_PROG_ATTACH
+	// _BPF_PROG_DETACH
+	// _BPF_PROG_TEST_RUN
+	// _BPF_PROG_GET_NEXT_ID
+	// _BPF_MAP_GET_NEXT_ID
+	// _BPF_PROG_GET_FD_BY_ID
+	// _BPF_MAP_GET_FD_BY_ID
+	// _BPF_OBJ_GET_INFO_BY_FD
 
-	_BPF_ANY = iota
-	_BPF_NOEXIST
-	_BPF_EXIST
+	_Any = iota
+	_NoExist
+	_Exist
 )
 
 const (
@@ -313,6 +346,49 @@ func (r Register) String() string {
 	}
 	return fmt.Sprintf("r%d", v)
 }
+
+// All flags used by eBPF helper functions
+const (
+	// BPF_FUNC_skb_store_bytes flags.
+	RecomputeCSUM   = uint64(1)
+	FInvalidateHash = uint64(1 << 1)
+
+	// BPF_FUNC_l3_csum_replace and BPF_FUNC_l4_csum_replace flags.
+	// First 4 bits are for passing the header field size.
+	FHdrFieldMask = uint64(0xF)
+
+	// BPF_FUNC_l4_csum_replace flags.
+	FPseudoHdr    = uint64(1 << 4)
+	FMarkMangled0 = uint64(1 << 5)
+	FMakrEnforce  = uint64(1 << 6)
+
+	// BPF_FUNC_clone_redirect and BPF_FUNC_redirect flags.
+	FIngress = uint64(1)
+
+	// BPF_FUNC_skb_set_tunnel_key and BPF_FUNC_skb_get_tunnel_key flags.
+	FTunInfoIPV6 = uint(1)
+
+	// BPF_FUNC_get_stackid flags
+	FSkipFieldMask = uint64(0xff)
+
+	FUserStack    = uint64(1 << 8)
+	FFastStackCMP = uint64(1 << 9)
+	FReuseStackID = uint64(1 << 10)
+
+	// BPF_FUNC_skb_set_tunnel_key flags.
+	FZeroCSUMTX   = uint64(1 << 1)
+	FDontFragment = uint64(1 << 2)
+
+	// BPF_FUNC_perf_event_output and BPF_FUNC_perf_event_read flags.
+	FIndexMask  = uint64(0xffffffff)
+	FCurrentCPU = FIndexMask
+
+	// BPF_FUNC_perf_event_output for sk_buff input context.
+	FCtxLenMask = uint64(0xfffff << 32)
+
+	// Mode for BPF_FUNC_skb_adjust_room helper.
+	AdjRoomNet = 0
+)
 
 const (
 	// void *map_lookup_elem(&map, &key)
@@ -734,49 +810,6 @@ func getFuncStr(callNo int32) string {
 	}
 	return s
 }
-
-// All flags used by eBPF helper functions
-const (
-	// BPF_FUNC_skb_store_bytes flags.
-	RecomputeCSUM   = uint64(1)
-	FInvalidateHash = uint64(1 << 1)
-
-	// BPF_FUNC_l3_csum_replace and BPF_FUNC_l4_csum_replace flags.
-	// First 4 bits are for passing the header field size.
-	FHdrFieldMask = uint64(0xF)
-
-	// BPF_FUNC_l4_csum_replace flags.
-	FPseudoHdr    = uint64(1 << 4)
-	FMarkMangled0 = uint64(1 << 5)
-	FMakrEnforce  = uint64(1 << 6)
-
-	// BPF_FUNC_clone_redirect and BPF_FUNC_redirect flags.
-	FIngress = uint64(1)
-
-	// BPF_FUNC_skb_set_tunnel_key and BPF_FUNC_skb_get_tunnel_key flags.
-	FTunInfoIPV6 = uint(1)
-
-	// BPF_FUNC_get_stackid flags
-	FSkipFieldMask = uint64(0xff)
-
-	FUserStack    = uint64(1 << 8)
-	FFastStackCMP = uint64(1 << 9)
-	FReuseStackID = uint64(1 << 10)
-
-	// BPF_FUNC_skb_set_tunnel_key flags.
-	FZeroCSUMTX   = uint64(1 << 1)
-	FDontFragment = uint64(1 << 2)
-
-	// BPF_FUNC_perf_event_output and BPF_FUNC_perf_event_read flags.
-	FIndexMask  = uint64(0xffffffff)
-	FCurrentCPU = FIndexMask
-
-	// BPF_FUNC_perf_event_output for sk_buff input context.
-	FCtxLenMask = uint64(0xfffff << 32)
-
-	// Mode for BPF_FUNC_skb_adjust_room helper.
-	AdjRoomNet = 0
-)
 
 type ProgType uint32
 

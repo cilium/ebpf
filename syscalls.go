@@ -92,7 +92,7 @@ func bpfErrNo(e syscall.Errno) error {
 }
 
 func pinObject(fileName string, fd uint32) error {
-	_, errNo := bpfCall(_BPF_OBJ_PIN, unsafe.Pointer(&pinObjAttr{
+	_, errNo := bpfCall(_ObjPin, unsafe.Pointer(&pinObjAttr{
 		fileName: uint64(uintptr(unsafe.Pointer(&[]byte(fileName)[0]))),
 		fd:       fd,
 	}), 16)
@@ -100,7 +100,7 @@ func pinObject(fileName string, fd uint32) error {
 }
 
 func getObject(fileName string) (uintptr, error) {
-	ptr, errNo := bpfCall(_BPF_OBJ_GET, unsafe.Pointer(&pinObjAttr{
+	ptr, errNo := bpfCall(_ObjGet, unsafe.Pointer(&pinObjAttr{
 		fileName: uint64(uintptr(unsafe.Pointer(&[]byte(fileName)[0]))),
 	}), 16)
 	return ptr, bpfErrNo(errNo)

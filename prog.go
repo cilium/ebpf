@@ -35,7 +35,7 @@ func NewProgram(progType ProgType, instructions *Instructions, license string, k
 	}
 	lic := []byte(license)
 	logs := make([]byte, LogBufSize)
-	fd, e := bpfCall(_BPF_PROG_LOAD, unsafe.Pointer(&progCreateAttr{
+	fd, e := bpfCall(_ProgLoad, unsafe.Pointer(&progCreateAttr{
 		progType:     progType,
 		insCount:     insCount,
 		instructions: uint64(uintptr(unsafe.Pointer(&cInstructions[0]))),

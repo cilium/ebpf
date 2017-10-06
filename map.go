@@ -21,7 +21,7 @@ type Map int
 
 // NewMap creates a new Map
 func NewMap(mapType MapType, keySize, valueSize, maxEntries, flags uint32) (Map, error) {
-	fd, e := bpfCall(_BPF_MAP_CREATE, unsafe.Pointer(&mapCreateAttr{mapType, keySize, valueSize, maxEntries, flags}), 20)
+	fd, e := bpfCall(_MapCreate, unsafe.Pointer(&mapCreateAttr{mapType, keySize, valueSize, maxEntries, flags}), 20)
 	err := bpfErrNo(e)
 	if err != nil {
 		return Map(-1), fmt.Errorf("map create: %s", err.Error())
@@ -54,7 +54,7 @@ func (m Map) GetRaw(key encoding.BinaryMarshaler, value *[]byte) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	_, e := bpfCall(_BPF_MAP_LOOKUP_ELEM,
+	_, e := bpfCall(_MapLookupElem,
 		unsafe.Pointer(&mapOpAttr{
 			mapFd: uint32(m),
 			key:   uint64(uintptr(unsafe.Pointer(&keyValue[0]))),
@@ -71,18 +71,18 @@ func (m Map) GetRaw(key encoding.BinaryMarshaler, value *[]byte) (bool, error) {
 
 // Create creates a new value in a map, failing if the key exists already
 func (m Map) Create(key encoding.BinaryMarshaler, value encoding.BinaryMarshaler) (bool, error) {
-	return m.put(key, value, _BPF_NOEXIST)
+	return m.put(key, value, _NoExist)
 }
 
 // Put replaces or creates a value in map
 func (m Map) Put(key encoding.BinaryMarshaler, value encoding.BinaryMarshaler) error {
-	_, err := m.put(key, value, _BPF_ANY)
+	_, err := m.put(key, value, _Any)
 	return err
 }
 
 // Replace replaces a value in a map, failing if the value did not exist
 func (m Map) Replace(key encoding.BinaryMarshaler, value encoding.BinaryMarshaler) (bool, error) {
-	return m.put(key, value, _BPF_EXIST)
+	return m.put(key, value, _Exist)
 }
 
 // Delete removes a value, failing if the value does not exist
@@ -91,7 +91,7 @@ func (m Map) Delete(key encoding.BinaryMarshaler) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	_, e := bpfCall(_BPF_MAP_DELETE_ELEM,
+	_, e := bpfCall(_MapDeleteElem,
 		unsafe.Pointer(&mapOpAttr{
 			mapFd: uint32(m),
 			key:   uint64(uintptr(unsafe.Pointer(&keyValue[0]))),
@@ -108,7 +108,7 @@ func (m Map) Delete(key encoding.BinaryMarshaler) (bool, error) {
 // GetNextKey helps to iterate over a map getting the next key after a known key
 func (m Map) GetNextKey(key encoding.BinaryMarshaler, nextKey encoding.BinaryUnmarshaler, keySize int) (bool, error) {
 	v := make([]byte, keySize)
-	ok, err := m.GetRaw(key, &v)
+	ok, err := m.GetNextKeyRaw(key, &v)
 	if err != nil || !ok {
 		return ok, err
 	}
@@ -125,7 +125,7 @@ func (m Map) GetNextKeyRaw(key encoding.BinaryMarshaler, nextKey *[]byte) (bool,
 	if err != nil {
 		return false, err
 	}
-	_, e := bpfCall(_BPF_MAP_LOOKUP_ELEM,
+	_, e := bpfCall(_MapGetNextKey,
 		unsafe.Pointer(&mapOpAttr{
 			mapFd: uint32(m),
 			key:   uint64(uintptr(unsafe.Pointer(&keyValue[0]))),
@@ -170,7 +170,7 @@ func (m Map) put(key encoding.BinaryMarshaler, value encoding.BinaryMarshaler, p
 	if err != nil {
 		return false, err
 	}
-	_, e := bpfCall(_BPF_MAP_UPDATE_ELEM,
+	_, e := bpfCall(_MapUpdateElem,
 		unsafe.Pointer(&mapOpAttr{
 			mapFd: uint32(m),
 			key:   uint64(uintptr(unsafe.Pointer(&keyValue[0]))),
@@ -179,11 +179,11 @@ func (m Map) put(key encoding.BinaryMarshaler, value encoding.BinaryMarshaler, p
 		}), 32)
 	if e != 0 {
 		switch putType {
-		case _BPF_NOEXIST:
+		case _NoExist:
 			if e == syscall.EEXIST {
 				return false, nil
 			}
-		case _BPF_EXIST:
+		case _Exist:
 			if e == syscall.ENOENT {
 				return false, nil
 			}

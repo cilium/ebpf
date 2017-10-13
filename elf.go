@@ -156,7 +156,7 @@ func getSpecsFromELF(code io.ReaderAt) (programMap map[string]*progSpec, mapMap 
 						instrs:     insns,
 					}
 					if name, ok := symbolMap[fmt.Sprintf("%d-0", int(sec.Info))]; ok && len(name) > 0 {
-						programMap[replaceForwardSlash(name)] = progSpec
+						programMap[name] = progSpec
 					} else {
 						err = fmt.Errorf("program section had no symbol; invalid bpf binary")
 						return
@@ -186,7 +186,7 @@ func getSpecsFromELF(code io.ReaderAt) (programMap map[string]*progSpec, mapMap 
 					instrs:     insns,
 				}
 				if name, ok := symbolMap[fmt.Sprintf("%d-0", int(sec.Info))]; ok && len(name) > 0 {
-					programMap[replaceForwardSlash(name)] = progSpec
+					programMap[name] = progSpec
 				} else {
 					err = fmt.Errorf("program section had no symbol; invalid bpf binary")
 					return
@@ -230,7 +230,7 @@ func loadMaps(byteOrder binary.ByteOrder, data []byte, section int, symbolMap ma
 		}
 		maps = append(maps, bMap)
 		if name, ok := symbolMap[fmt.Sprintf("%d-%d", section, t)]; ok && len(name) > 0 {
-			mapMap[replaceForwardSlash(name)] = bMap
+			mapMap[name] = bMap
 		}
 	}
 	return &maps, mapMap, nil
@@ -312,12 +312,4 @@ func parseRelocateApply(byteOrder binary.ByteOrder, data []byte, symbols []elf.S
 		mapSpec.instructionReplacements = append(mapSpec.instructionReplacements, ins)
 	}
 	return nil
-}
-
-func replaceForwardSlash(s string) string {
-	return strings.Replace(s, "/", "_slash_", -1)
-}
-
-func unReplaceForwardSlash(s string) string {
-	return strings.Replace(s, "_slash_", "/", -1)
 }

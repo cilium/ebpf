@@ -17,26 +17,26 @@ type Collection struct {
 // ForEachMap iterates over all the Maps in a Collection
 func (coll *Collection) ForEachMap(fx func(string, Map)) {
 	for k, v := range coll.mapMap {
-		fx(unReplaceForwardSlash(k), v)
+		fx(k, v)
 	}
 }
 
 // ForEachProgram iterates over all the Programs in a Collection
 func (coll *Collection) ForEachProgram(fx func(string, Program)) {
 	for k, v := range coll.programMap {
-		fx(unReplaceForwardSlash(k), v)
+		fx(k, v)
 	}
 }
 
 // GetMapByName get a Map by its symbolic name
 func (coll *Collection) GetMapByName(key string) (Map, bool) {
-	v, ok := coll.mapMap[replaceForwardSlash(key)]
+	v, ok := coll.mapMap[key]
 	return v, ok
 }
 
 // GetProgramByName get a Program by its symbolic name
 func (coll *Collection) GetProgramByName(key string) (Program, bool) {
-	v, ok := coll.programMap[replaceForwardSlash(key)]
+	v, ok := coll.programMap[key]
 	return v, ok
 }
 
@@ -53,7 +53,7 @@ func (coll *Collection) Pin(dirName string, fileMode os.FileMode) error {
 			return err
 		}
 		for k, v := range coll.mapMap {
-			err := v.Pin(path.Join(mapPath, replaceForwardSlash(k)))
+			err := v.Pin(path.Join(mapPath, k))
 			if err != nil {
 				return err
 			}
@@ -66,7 +66,7 @@ func (coll *Collection) Pin(dirName string, fileMode os.FileMode) error {
 			return err
 		}
 		for k, v := range coll.programMap {
-			err = v.Pin(path.Join(progPath, replaceForwardSlash(k)))
+			err = v.Pin(path.Join(progPath, k))
 			if err != nil {
 				return err
 			}

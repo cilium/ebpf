@@ -31,7 +31,7 @@ func NewProgram(progType ProgType, instructions *Instructions, license string, k
 	}
 	insCount := uint32(len(cInstructions))
 	if insCount > MaxBPFInstructions {
-		return -1, fmt.Errorf("max instructions, %s, exceeded", MaxBPFInstructions)
+		return -1, fmt.Errorf("max instructions, %d, exceeded", MaxBPFInstructions)
 	}
 	lic := []byte(license)
 	logs := make([]byte, LogBufSize)

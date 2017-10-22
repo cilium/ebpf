@@ -114,8 +114,9 @@ func getSpecsFromELF(code io.ReaderAt) (programs []*progSpec, maps []*mapSpec, e
 		ec.symbolMap[fmt.Sprintf("%d-%d", int(sym.Section), int(sym.Value))] = sym.Name
 	}
 	sectionsLen := len(ec.Sections)
+	var leftOverProgs []*elf.Section
+	processed := make(map[int]struct{})
 	for i, sec := range ec.Sections {
-		fmt.Println(i, sec.Info)
 		var data []byte
 		data, err = sec.Data()
 		if err != nil {
@@ -127,7 +128,7 @@ func getSpecsFromELF(code io.ReaderAt) (programs []*progSpec, maps []*mapSpec, e
 		case strings.Index(sec.Name, "version") == 0:
 			*ec.version = ec.ByteOrder.Uint32(data)
 		case strings.Index(sec.Name, "maps") == 0:
-			maps, err = ec.loadMaps(data, uint32(i))
+			maps, err = ec.loadMaps(data, i)
 			if err != nil {
 				return
 			}
@@ -139,14 +140,15 @@ func getSpecsFromELF(code io.ReaderAt) (programs []*progSpec, maps []*mapSpec, e
 			sec2 := f.Sections[sec.Info]
 			if sec2.Type == elf.SHT_PROGBITS &&
 				sec2.Flags&elf.SHF_EXECINSTR > 0 {
+				processed[int(sec2.Info)] = struct{}{}
 				var prog *progSpec
-				prog, err = ec.loadProg(sec2, nil)
+				prog, err = ec.loadProg(sec2)
 				if err != nil {
 					return
 				}
 				if prog != nil {
 					var name string
-					name, err = ec.getSecSymbolName(sec.Info, 0)
+					name, err = ec.getSecSymbolName(int(sec.Info), 0)
 					if err != nil {
 						return
 					}
@@ -158,15 +160,20 @@ func getSpecsFromELF(code io.ReaderAt) (programs []*progSpec, maps []*mapSpec, e
 					programs = append(programs, prog)
 				}
 			}
-		case sec.Type != elf.SHT_SYMTAB && len(sec.Name) > 0 && sec.Size > 0:
+		case sec.Type != elf.SHT_SYMTAB && sec.Type != elf.SHT_NULL && len(sec.Name) > 0 && sec.Size > 0:
+			leftOverProgs = append(leftOverProgs, sec)
+		}
+	}
+	for _, sec := range leftOverProgs {
+		if _, ok := processed[int(sec.Info)]; !ok {
 			var prog *progSpec
-			prog, err = ec.loadProg(sec, data)
+			prog, err = ec.loadProg(sec)
 			if err != nil {
 				return
 			}
 			if prog != nil {
 				var name string
-				name, err = ec.getSecSymbolName(sec.Info, 0)
+				name, err = ec.getSecSymbolName(int(sec.Info), 0)
 				if err != nil {
 					return
 				}
@@ -187,13 +194,10 @@ func getSpecsFromELF(code io.ReaderAt) (programs []*progSpec, maps []*mapSpec, e
 	return
 }
 
-func (ec *elfCode) loadProg(sec *elf.Section, data []byte) (*progSpec, error) {
-	if len(data) == 0 {
-		var err error
-		data, err = sec.Data()
-		if err != nil {
-			return nil, err
-		}
+func (ec *elfCode) loadProg(sec *elf.Section) (*progSpec, error) {
+	data, err := sec.Data()
+	if err != nil {
+		return nil, err
 	}
 	progType := getProgType(sec.Name)
 	if progType != Unrecognized && len(data) > 0 {
@@ -209,7 +213,7 @@ func (ec *elfCode) loadProg(sec *elf.Section, data []byte) (*progSpec, error) {
 	return nil, nil
 }
 
-func (ec *elfCode) getSecSymbolName(sec uint32, off int) (string, error) {
+func (ec *elfCode) getSecSymbolName(sec int, off int) (string, error) {
 	if name, ok := ec.symbolMap[fmt.Sprintf("%d-%d", sec, off)]; ok && len(name) > 0 {
 		return name, nil
 	}
@@ -224,7 +228,7 @@ func dataToString(data []byte) string {
 	return buf.String()
 }
 
-func (ec *elfCode) loadMaps(data []byte, section uint32) ([]*mapSpec, error) {
+func (ec *elfCode) loadMaps(data []byte, section int) ([]*mapSpec, error) {
 	var maps []*mapSpec
 	for i := 0; i < len(data); i += 4 {
 		t := i

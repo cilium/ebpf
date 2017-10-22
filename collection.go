@@ -143,12 +143,12 @@ func NewCollectionFromObjectCode(code io.ReaderAt) (*Collection, error) {
 		mapMap:     make(map[string]Map),
 		programMap: make(map[string]Program),
 	}
-	for k, v := range mapMap {
+	for _, v := range mapMap {
 		bpfMap, err := NewMapFromSpec(v)
 		if err != nil {
 			return nil, err
 		}
-		bpfColl.mapMap[k] = bpfMap
+		bpfColl.mapMap[v.key] = bpfMap
 		if v.instructionReplacements != nil {
 			fd := int32(uint32(bpfMap))
 			for _, ins := range v.instructionReplacements {
@@ -158,12 +158,12 @@ func NewCollectionFromObjectCode(code io.ReaderAt) (*Collection, error) {
 		}
 
 	}
-	for k, v := range programMap {
+	for _, v := range programMap {
 		bpfProg, err := NewProgramFromSpec(v)
 		if err != nil {
 			return nil, err
 		}
-		bpfColl.programMap[k] = bpfProg
+		bpfColl.programMap[v.key] = bpfProg
 	}
 	return bpfColl, nil
 }

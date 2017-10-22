@@ -16,11 +16,11 @@ type mapSpec struct {
 }
 
 type progSpec struct {
-	progType   ProgType
-	licenseStr *string
-	instrs     *Instructions
-	key        string
-	kVersion   *uint32
+	progType ProgType
+	license  *string
+	instrs   *Instructions
+	key      string
+	version  *uint32
 }
 
 type elfCode struct {
@@ -62,11 +62,11 @@ func (p *progSpec) Instructions() *Instructions {
 }
 
 func (p *progSpec) License() string {
-	return *p.licenseStr
+	return *p.license
 }
 
 func (p *progSpec) KernelVersion() uint32 {
-	return *p.kVersion
+	return *p.version
 }
 
 // GetSpecsFromELF parses an io.ReaderAt that represents and ELF layout, and categorizes the code
@@ -203,10 +203,10 @@ func (ec *elfCode) loadProg(sec *elf.Section) (*progSpec, error) {
 	if progType != Unrecognized && len(data) > 0 {
 		insns := ec.loadInstructions(data, sec.Name)
 		progSpec := &progSpec{
-			progType:   progType,
-			licenseStr: ec.license,
-			kVersion:   ec.version,
-			instrs:     insns,
+			progType: progType,
+			license:  ec.license,
+			version:  ec.version,
+			instrs:   insns,
 		}
 		return progSpec, nil
 	}

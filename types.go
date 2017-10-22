@@ -115,62 +115,109 @@ const (
 )
 
 const (
-	// instruction classes
-	ClassCode  = 0x07
-	LdClass    = 0x00
-	LdXClass   = 0x01
-	StClass    = 0x02
-	StXClass   = 0x03
-	ALUClass   = 0x04
-	JmpClass   = 0x05
-	RetClass   = 0x06
-	MiscClass  = 0x07
-	ALU64Class = 0x07 // eBPF only
 
-	// size fields
-	SizeCode = 0x18
-	DWSize   = 0x18 // eBPF only
-	WSize    = 0x00
-	HSize    = 0x08
-	BSize    = 0x10
-
-	// ld/ldx fields
-	// ld/ldx/st/stx opcode structure:
+	// ClassCode is the bitmask for the class bitfield
+	// in the operator.
+	// opcode structure:
 	// msb      lsb
 	// +---+--+---+
-	// |mde|sz|cls|
+	// |mde|sz|CLS|
+	// +---+--+---+
+	ClassCode = 0x07
+	// LdClass load memory
+	LdClass = 0x00
+	// LdXClass load memory from constant
+	LdXClass = 0x01
+	// StClass load registry from memory
+	StClass = 0x02
+	// StXClass load registry from constan
+	StXClass = 0x03
+	// ALUClass arithmetic operators
+	ALUClass = 0x04
+	// JmpClass jump operators
+	JmpClass = 0x05
+	// RetClass return operator
+	RetClass = 0x06
+	// MiscClass exit, et al operators
+	MiscClass = 0x07
+	// ALU64Class arithmetic in 64 bit mode; eBPF only
+	ALU64Class = 0x07
+
+	// SizeCode is the bitmask for the size bitfield
+	// in the operator.
+	// opcode structure:
+	// msb      lsb
+	// +---+--+---+
+	// |mde|SZ|cls|
+	// +---+--+---+
+	SizeCode = 0x18
+	// DWSize - double word; 64 bits; eBPF only
+	DWSize = 0x18
+	// WSize - word; 32 bits
+	WSize = 0x00
+	// HSize - half-word; 16 bits
+	HSize = 0x08
+	// BSize - byte; 8 bits
+	BSize = 0x10
+
+	// ModeCode is the bitmask for the mode bitfield
+	// in the operator.
+	// opcode structure:
+	// msb      lsb
+	// +---+--+---+
+	// |MDE|sz|cls|
 	// +---+--+---+
 	ModeCode = 0xe0
-	ImmMode  = 0x00
-	AbsMode  = 0x20
-	IndMode  = 0x40
-	MemMode  = 0x60
-	LenMode  = 0x80
-	MshMode  = 0xa0
-	XAddMode = 0xc0 // eBPF only, atomic add
+	// ImmMode - immediate value
+	ImmMode = 0x00
+	// AbsMode - immediate value + offset
+	AbsMode = 0x20
+	// InMode - indirect (imm+src)
+	IndMode = 0x40
+	// MemMode - load from memory
+	MemMode = 0x60
+	// LenMode - ??
+	LenMode = 0x80
+	// MshMode - ??
+	MshMode = 0xa0
+	// XAddMode - add atomically across processors; eBPF only.
+	XAddMode = 0xc0
 
-	// alu fields
+	// OpCode is the bitmask for ALU operator bitfield
 	// alu/alu64/jmp opcode structure:
 	// msb      lsb
 	// +----+-+---+
-	// |op  |s|cls|
+	// |OP  |s|cls|
 	// +----+-+---+
 	// If the s bit is zero, then the source operand is imm,
 	// If s is one, then the source operand is src.
 	OpCode = 0xf0
-	AddOp  = 0x00
-	SubOp  = 0x10
-	MulOp  = 0x20
-	DivOp  = 0x30
-	OrOp   = 0x40
-	AndOp  = 0x50
-	LShOp  = 0x60
-	RShOp  = 0x70
-	NegOp  = 0x80
-	ModOp  = 0x90
-	XOrOp  = 0xa0
-	MovOp  = 0xb0 // eBPF only
-	ArShOp = 0xc0 // eBPF only
+	// AddOp - addition
+	AddOp = 0x00
+	// SubOp - subtraction
+	SubOp = 0x10
+	// MulOp - multiplication
+	MulOp = 0x20
+	// DivOp - division
+	DivOp = 0x30
+	// OrOp - bitwise or
+	OrOp = 0x40
+	// AndOp - bitwise and
+	AndOp = 0x50
+	// LShOp - bitwise shift left
+	LShOp = 0x60
+	// RShOp - bitwise shift right
+	RShOp = 0x70
+	// NegOp - sign/unsign signing bit
+	NegOp = 0x80
+	// ModOp - modulo
+	ModOp = 0x90
+	// XOrOp - bitwise xor
+	XOrOp = 0xa0
+	// MovOp - move value from one place to another; eBPF only.
+	MovOp = 0xb0
+	// ArShOp - arithmatic shift; eBPF only.
+	ArShOp = 0xc0
 
 	// endian fields
 	EndFlag    = 0xd0 // eBPF only

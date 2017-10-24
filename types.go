@@ -10,6 +10,7 @@ import (
 // that will be initialized in the kernel.
 type MapType uint32
 
+// All the various map types that can be created
 const (
 	// Hash is a hash map
 	Hash MapType = 1 + iota
@@ -107,6 +108,7 @@ const (
 	_Exist
 )
 
+// Limits and constants for the the eBPF runtime
 const (
 	// MaxBPFInstructions is the maximum number of BPF instructions
 	// allowed by the BPF JIT
@@ -119,15 +121,14 @@ const (
 	LogBufSize = 65536
 )
 
+// Class masks for eBPF operators
+// opcode structure:
+// msb      lsb
+// +---+--+---+
+// |mde|sz|CLS|
+// +---+--+---+
 const (
-
 	// ClassCode is the bitmask for the class bitfield
-	// in the operator.
-	// opcode structure:
-	// msb      lsb
-	// +---+--+---+
-	// |mde|sz|CLS|
-	// +---+--+---+
 	ClassCode = 0x07
 	// LdClass load memory
 	LdClass = 0x00
@@ -147,14 +148,16 @@ const (
 	MiscClass = 0x07
 	// ALU64Class arithmetic in 64 bit mode; eBPF only
 	ALU64Class = 0x07
+)
 
+// Size masks for eBPF operators
+// opcode structure:
+// msb      lsb
+// +---+--+---+
+// |mde|SZ|cls|
+// +---+--+---+
+const (
 	// SizeCode is the bitmask for the size bitfield
-	// in the operator.
-	// opcode structure:
-	// msb      lsb
-	// +---+--+---+
-	// |mde|SZ|cls|
-	// +---+--+---+
 	SizeCode = 0x18
 	// DWSize - double word; 64 bits; eBPF only
 	DWSize = 0x18
@@ -164,14 +167,16 @@ const (
 	HSize = 0x08
 	// BSize - byte; 8 bits
 	BSize = 0x10
+)
 
+// Mode masks for eBPF operators
+// opcode structure:
+// msb      lsb
+// +---+--+---+
+// |MDE|sz|cls|
+// +---+--+---+
+const (
 	// ModeCode is the bitmask for the mode bitfield
-	// in the operator.
-	// opcode structure:
-	// msb      lsb
-	// +---+--+---+
-	// |MDE|sz|cls|
-	// +---+--+---+
 	ModeCode = 0xe0
 	// ImmMode - immediate value
 	ImmMode = 0x00
@@ -187,15 +192,17 @@ const (
 	MshMode = 0xa0
 	// XAddMode - add atomically across processors; eBPF only.
 	XAddMode = 0xc0
+)
 
+// alu/alu64/jmp opcode structure:
+// msb      lsb
+// +----+-+---+
+// |OP  |s|cls|
+// +----+-+---+
+// If the s bit is zero, then the source operand is imm,
+// If s is one, then the source operand is src.
+const (
 	// OpCode is the bitmask for ALU operator bitfield
-	// alu/alu64/jmp opcode structure:
-	// msb      lsb
-	// +----+-+---+
-	// |OP  |s|cls|
-	// +----+-+---+
-	// If the s bit is zero, then the source operand is imm,
-	// If s is one, then the source operand is src.
 	OpCode = 0xf0
 	// AddOp - addition
 	AddOp = 0x00
@@ -234,7 +241,10 @@ const (
 	FromLeFlag = 0x00
 	// FromBeFlag fromBE instruction, eBPF only
 	FromBeFlag = 0x08
+)
 
+// Branch instruction opcode masks
+const (
 	// JaOp to address
 	JaOp = 0x00
 	// JEqOp to address if r == imm
@@ -255,24 +265,28 @@ const (
 	CallOp = 0x80
 	// ExitOp exit program
 	ExitOp = 0x90
+)
 
+// Source bitmask
+const (
 	// SrcCode from what address is the value coming
 	SrcCode = 0x08
 	// ImmSrc src is from constant
 	ImmSrc = 0x00
 	// RegSrc src is from register
 	RegSrc = 0x08
+)
 
-	// alu fields
-	// alu/alu64/jmp opcode structure:
-	// msb      lsb
-	// +----+-+---+
-	// |op  |s|cls|
-	// +----+-+---+
-	// If the s bit is zero, then the source operand is imm,
-	// If s is one, then the source operand is src.
-	// ALU Instructions 64 bit, eBPF only
-
+// ALU64 instructions
+// alu/alu64/jmp opcode structure:
+// msb      lsb
+// +----+-+---+
+// |op  |s|cls|
+// +----+-+---+
+// If the s bit is zero, then the source operand is imm,
+// If s is one, then the source operand is src.
+// ALU Instructions 64 bit, eBPF only
+const (
 	// AddImm  add dst, imm   |  dst += imm
 	AddImm = 0x07
 	// AddSrc  add dst, src   |  dst += src
@@ -323,11 +337,12 @@ const (
 	ArShImm = 0xc7
 	// ArShSrc arsh dst, src  |  dst >>= src (arithmetic)
 	ArShSrc = 0xcf
+)
 
-	// ALU Instructions 32 bit
-	// These instructions use only the lower 32 bits of their
-	// operands and zero the upper 32 bits of the destination register.
-
+// ALU Instructions 32 bit
+// These instructions use only the lower 32 bits of their
+// operands and zero the upper 32 bits of the destination register.
+const (
 	// Add32Imm add32 dst, imm  |  dst += imm
 	Add32Imm = 0x04
 	// Add32Src add32 dst, src  |  dst += src
@@ -374,9 +389,10 @@ const (
 	Mov32Imm = 0xb4
 	// Mov32Src mov32 dst, src  |  dst eBPF only
 	Mov32Src = 0xbc
+)
 
-	// Byteswap Instructions
-
+// Byteswap Instructions
+const (
 	// LE16 le16 dst, imm == 16  |  dst = htole16(dst)
 	LE16 = 0xd4
 	// LE32 le32 dst, imm == 32  |  dst = htole32(dst)
@@ -389,9 +405,10 @@ const (
 	BE32 = 0xdc
 	// BE64 be64 dst, imm == 64  |  dst = htobe64(dst)
 	BE64 = 0xdc
+)
 
-	// Memory Instructions
-
+// Memory Instructions
+const (
 	// LdDW      lddw (src), dst, imm   |  dst = *imm
 	LdDW = 0x18
 	// XAddStSrc xadd dst, src          |  *dst += src
@@ -422,12 +439,10 @@ const (
 	StXW = 0x63
 	// StXDW     stxdw [dst+off], src   |  *(uint64_t *) (dst + off) = src
 	StXDW = 0x7b
-
+	// LdAbsH  ldabsh imm             |  r0 = (uint16_t *) (imm)
 	// Abs and Ind reference memory directly. This is always the context,
 	// of whatever the eBPF program is. For example in a sock filter program
 	// the memory context is the sk_buff struct.
-
-	// LdAbsH  ldabsh imm             |  r0 = (uint16_t *) (imm)
 	LdAbsH = 0x28
 	// LdAbsW  ldabsw imm             |  r0 = (uint32_t *) (imm)
 	LdAbsW = 0x20
@@ -441,9 +456,10 @@ const (
 	LdIndW = 0x40
 	// LdIndDW ldinddw src, dst, imm  |  dst = (uint64_t *) (src + imm)
 	LdIndDW = 0x58
+)
 
-	// Branch Instructions
-
+// Branch Instructions
+const (
 	// Ja      ja +off             |  PC += off
 	Ja = 0x05
 	// JEqImm  jeq dst, imm, +off  |  PC += off if dst == imm
@@ -569,6 +585,7 @@ const (
 	AdjRoomNet = 0
 )
 
+// eBPF build-in functions
 const (
 	// MapLookupElement - void *map_lookup_elem(&map, &key)
 	// Return: Map value or NULL
@@ -993,6 +1010,7 @@ func getFuncStr(callNo int32) string {
 // ProgType of the eBPF program
 type ProgType uint32
 
+// eBPF program types
 const (
 	// Unrecognized program type
 	Unrecognized = ProgType(iota)

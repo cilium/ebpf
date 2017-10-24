@@ -108,10 +108,15 @@ const (
 )
 
 const (
+	// MaxBPFInstructions is the maximum number of BPF instructions
+	// allowed by the BPF JIT
 	MaxBPFInstructions = 4096
-	StackSize          = 512
-	InstructionSize    = 8
-	LogBufSize         = 65536
+	// StackSize is the total size of the stack allocated for BPF programs
+	StackSize = 512
+	// InstructionSize is the size of the BPF instructions
+	InstructionSize = 8
+	// LogBufSize is the size of the log buffer for debugging issues
+	LogBufSize = 65536
 )
 
 const (
@@ -172,7 +177,7 @@ const (
 	ImmMode = 0x00
 	// AbsMode - immediate value + offset
 	AbsMode = 0x20
-	// InMode - indirect (imm+src)
+	// IndMode - indirect (imm+src)
 	IndMode = 0x40
 	// MemMode - load from memory
 	MemMode = 0x60
@@ -861,9 +866,13 @@ func getFuncStr(callNo int32) string {
 type ProgType uint32
 
 const (
+	// Unrecognized program type
 	Unrecognized = ProgType(iota)
+	// SocketFilter socket or seccomp filter
 	SocketFilter
+	// Kprobe program
 	Kprobe
+	//
 	SchedCLS
 	SchedACT
 	TracePoint
@@ -930,12 +939,15 @@ func (r bitField) GetPart2() Register {
 	return Register(uint8(r) >> 4)
 }
 
+// Instructions is the lowest level construct for a BPF snippet in array.
 type Instructions []*BPFInstruction
 
 func (inss Instructions) String() string {
 	return inss.StringIndent(0)
 }
 
+// StringIndent prints out BPF instructions in a human readable format
+// with a specific indentation indentation level.
 func (inss Instructions) StringIndent(r int) string {
 	var buf bytes.Buffer
 	indent := strings.Repeat("\t", r)
@@ -951,6 +963,9 @@ func (inss Instructions) StringIndent(r int) string {
 	return buf.String()
 }
 
+// BPFInstruction represents the data
+// of a specific eBPF instruction and how
+// it will execute (opcode, registers, constant, offset, etc).
 type BPFInstruction struct {
 	OpCode      uint8
 	DstRegister Register
@@ -1138,12 +1153,14 @@ func (bpfi *BPFInstruction) String() string {
 	return fmt.Sprintf("op: %s%s%s%s%s", opStr, dst, src, off, imm)
 }
 
+// BPFIOp BPF instruction that stands alone (i.e. exit)
 func BPFIOp(opCode uint8) *BPFInstruction {
 	return &BPFInstruction{
 		OpCode: opCode,
 	}
 }
 
+// BPFIDst BPF instruction with a dst
 func BPFIDst(opCode uint8, dst Register) *BPFInstruction {
 	return &BPFInstruction{
 		OpCode:      opCode,
@@ -1151,6 +1168,7 @@ func BPFIDst(opCode uint8, dst Register) *BPFInstruction {
 	}
 }
 
+// BPFIImm BPF Instruction with a constant
 func BPFIImm(opCode uint8, imm int32) *BPFInstruction {
 	return &BPFInstruction{
 		OpCode:   opCode,
@@ -1158,6 +1176,7 @@ func BPFIImm(opCode uint8, imm int32) *BPFInstruction {
 	}
 }
 
+// BPFIDstImm BPF instruction with a dst, and offset
 func BPFIDstOff(opCode uint8, dst Register, off int16) *BPFInstruction {
 	return &BPFInstruction{
 		OpCode: opCode,
@@ -1165,6 +1184,7 @@ func BPFIDstOff(opCode uint8, dst Register, off int16) *BPFInstruction {
 	}
 }
 
+// BPFIDstImm BPF instruction with a dst, and constant
 func BPFIDstImm(opCode uint8, dst Register, imm int32) *BPFInstruction {
 	return &BPFInstruction{
 		OpCode:      opCode,
@@ -1173,6 +1193,7 @@ func BPFIDstImm(opCode uint8, dst Register, imm int32) *BPFInstruction {
 	}
 }
 
+// BPFIDstSrc BPF instruction with a dst, and src
 func BPFIDstSrc(opCode uint8, dst, src Register) *BPFInstruction {
 	return &BPFInstruction{
 		OpCode:      opCode,
@@ -1181,6 +1202,7 @@ func BPFIDstSrc(opCode uint8, dst, src Register) *BPFInstruction {
 	}
 }
 
+// BPFIDstOffImm BPF instruction with a dst, offset, and constant
 func BPFIDstOffImm(opCode uint8, dst Register, off int16, imm int32) *BPFInstruction {
 	return &BPFInstruction{
 		OpCode:      opCode,
@@ -1190,6 +1212,7 @@ func BPFIDstOffImm(opCode uint8, dst Register, off int16, imm int32) *BPFInstruc
 	}
 }
 
+// BPFIDstOffSrc BPF instruction with a dst, offset, and src.
 func BPFIDstOffSrc(opCode uint8, dst, src Register, off int16) *BPFInstruction {
 	return &BPFInstruction{
 		OpCode:      opCode,
@@ -1199,6 +1222,7 @@ func BPFIDstOffSrc(opCode uint8, dst, src Register, off int16) *BPFInstruction {
 	}
 }
 
+// BPFIDstSrcImm BPF instruction with a dst, src, and constant
 func BPFIDstSrcImm(opCode uint8, dst, src Register, imm int32) *BPFInstruction {
 	return &BPFInstruction{
 		OpCode:      opCode,
@@ -1208,6 +1232,7 @@ func BPFIDstSrcImm(opCode uint8, dst, src Register, imm int32) *BPFInstruction {
 	}
 }
 
+// BPFIDstOffImmSrc BPF instruction with a dst, src, offset, and constant
 func BPFIDstOffImmSrc(opCode uint8, dst, src Register, off int16, imm int32) *BPFInstruction {
 	return &BPFInstruction{
 		OpCode:      opCode,
@@ -1218,15 +1243,17 @@ func BPFIDstOffImmSrc(opCode uint8, dst, src Register, off int16, imm int32) *BP
 	}
 }
 
+// BPFILdMapFd loads a user space fd into a BPF program as a reference to a
+// specific eBPF map.
 func BPFILdMapFd(dst Register, imm int) *BPFInstruction {
 	return BPFILdImm64Raw(dst, 1, uint64(imm))
 }
 
-func BPFILdImm64(dst Register, imm uint64) *BPFInstruction {
-	return BPFILdImm64Raw(dst, 0, imm)
+func eBPFILdImm64(dst Register, imm uint64) *BPFInstruction {
+	return eBPFILdImm64Raw(dst, 0, imm)
 }
 
-func BPFILdImm64Raw(dst, src Register, imm uint64) *BPFInstruction {
+func eBPFILdImm64Raw(dst, src Register, imm uint64) *BPFInstruction {
 	bpfi := BPFIDstSrcImm(LdDW, dst, src, int32(uint32(imm)))
 	bpfi.extra = BPFIImm(0, int32(imm>>32))
 	return bpfi

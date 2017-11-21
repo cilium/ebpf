@@ -37,7 +37,6 @@ type progCreateAttr struct {
 	padding       uint32
 }
 
-// size 104
 type perfEventAttr struct {
 	perfType     uint32
 	size         uint32
@@ -112,7 +111,6 @@ func bpfCall(cmd int, attr unsafe.Pointer, size int) (uintptr, syscall.Errno) {
 }
 
 func createPerfEvent(perfEvent *perfEventAttr, pid, cpu, groupFd int, flags uint) (uintptr, error) {
-
 	ptr := unsafe.Pointer(perfEvent)
 	efd, _, errNo := syscall.Syscall6(_PerfEvent, uintptr(ptr),
 		uintptr(pid), uintptr(cpu), uintptr(groupFd), uintptr(flags), 0)

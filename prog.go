@@ -20,7 +20,7 @@ type Program int
 // NewProgram creates a new Program
 func NewProgram(progType ProgType, instructions *Instructions, license string, kernelVersion uint32) (Program, error) {
 	if instructions == nil {
-		return -1, fmt.Errorf("instructions can be nil")
+		return -1, fmt.Errorf("instructions cannot be nil")
 	}
 	var cInstructions []bpfInstruction
 	for _, ins := range *instructions {

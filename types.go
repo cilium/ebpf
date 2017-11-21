@@ -929,14 +929,14 @@ func getFuncStr(callNo int32) string {
 		s = "TailCall"
 	case CloneRedirect:
 		s = "CloneRedirect"
-	case GetCurrentPidTGid:
-		s = "GetCurrentPidTGid"
-	case GetCurrentUidGid:
-		s = "GetCurrentUidGid"
+	case GetCurrentPIDTGID:
+		s = "GetCurrentPIDTGID"
+	case GetCurrentUIDGID:
+		s = "GetCurrentUIDGID"
 	case GetCurrentComm:
 		s = "GetCurrentComm"
-	case GetCGroupClassId:
-		s = "GetCGroupClassId"
+	case GetCGroupClassID:
+		s = "GetCGroupClassID"
 	case SKBVlanPush:
 		s = "SKBVlanPush"
 	case SKBVlanPop:
@@ -961,8 +961,8 @@ func getFuncStr(callNo int32) string {
 		s = "SKBGetTunnelOpt"
 	case SKBSetTunnelOpt:
 		s = "SKBSetTunnelOpt"
-	case SKBchangeProto:
-		s = "SKBchangeProto"
+	case SKBChangeProto:
+		s = "SKBChangeProto"
 	case SKBChangeType:
 		s = "SKBChangeType"
 	case SKBUnderCGroup:
@@ -1405,11 +1405,11 @@ func BPFILdMapFd(dst Register, imm int) *BPFInstruction {
 	return BPFILdImm64Raw(dst, 1, uint64(imm))
 }
 
-func eBPFILdImm64(dst Register, imm uint64) *BPFInstruction {
-	return eBPFILdImm64Raw(dst, 0, imm)
+func BPFILdImm64(dst Register, imm uint64) *BPFInstruction {
+	return BPFILdImm64Raw(dst, 0, imm)
 }
 
-func eBPFILdImm64Raw(dst, src Register, imm uint64) *BPFInstruction {
+func BPFILdImm64Raw(dst, src Register, imm uint64) *BPFInstruction {
 	bpfi := BPFIDstSrcImm(LdDW, dst, src, int32(uint32(imm)))
 	bpfi.extra = BPFIImm(0, int32(imm>>32))
 	return bpfi

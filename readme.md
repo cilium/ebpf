@@ -12,7 +12,7 @@ dynamically load and unload filters from different stores, place a REST service 
 eBPF program, and make sure sound security practices are happening around the base eBPF program.
 
 ## Compiling
-[The Makefile](./examples/Makefile) in the examples folder has an example of how to use the llvm bpf compiler to compile your eBPF C program. 
+[The Makefile](./examples/Makefile#L30) in the examples folder has an example of how to use the llvm bpf compiler to compile your eBPF C program. 
 
 ## An Important Note About Licenses:
 If you are using this project for your own internal monitoring or using it to provide a service,

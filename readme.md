@@ -11,6 +11,9 @@ generally better left to C/C++. However,  providing them in Go can make it easy 
 dynamically load and unload filters from different stores, place a REST service (quite easily) on top of an
 eBPF program, and make sure sound security practices are happening around the base eBPF program.
 
+## Compiling
+[The Makefile](./examples/Makefile) in the examples folder has an example of how to use the llvm bpf compiler to compile your eBPF C program. 
+
 ## An Important Note About Licenses:
 If you are using this project for your own internal monitoring or using it to provide a service,
 then you (probably) do not need to read the rest of this note. However, if you are planning to

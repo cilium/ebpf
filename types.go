@@ -102,7 +102,9 @@ const (
 	// _BPF_PROG_GET_FD_BY_ID
 	// _BPF_MAP_GET_FD_BY_ID
 	// _BPF_OBJ_GET_INFO_BY_FD
+)
 
+const (
 	_Any = iota
 	_NoExist
 	_Exist

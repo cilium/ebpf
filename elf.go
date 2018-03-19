@@ -307,13 +307,17 @@ func (ec *elfCode) loadInstructions(data []byte, sectionName string) *Instructio
 }
 
 func (ec *elfCode) parseRelocateApply(data []byte, sec *elf.Section, insns *Instructions) error {
+	if sec.Entsize < 16 {
+		return fmt.Errorf("expect relocations to be at least 16bytes")
+	}
+
 	nRels := int(sec.Size / sec.Entsize)
 	for i, t := 0, 0; i < nRels; i++ {
 		rel := elf.Rela64{
 			Off:  ec.ByteOrder.Uint64(data[t : t+8]),
 			Info: ec.ByteOrder.Uint64(data[t+8 : t+16]),
 		}
-		t += 24
+		t += int(sec.Entsize)
 		symNo := int(rel.Info>>32) - 1
 		if symNo == 0 || symNo >= ec.symbolsLen {
 			return fmt.Errorf("index calculated from rel index, %d, is greater than the symbol set, %d or is 0; the source was probably compiled for another architecture", symNo, ec.symbolsLen)

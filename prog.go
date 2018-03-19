@@ -45,7 +45,7 @@ func NewProgram(progType ProgType, instructions *Instructions, license string, k
 		logBuf:       uint64(uintptr(unsafe.Pointer(&logs[0]))),
 	}), 48)
 	if e != 0 {
-		if len(logs) > 0 {
+		if logs[0] != 0 {
 			return -1, fmt.Errorf("%s:\n\t%s", bpfErrNo(e), strings.Replace(string(logs), "\n", "\n\t", -1))
 		}
 		return -1, bpfErrNo(e)

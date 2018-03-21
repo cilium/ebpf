@@ -114,7 +114,7 @@ func getSpecsFromELF(code io.ReaderAt) (programs []*progSpec, maps []*mapSpec, e
 		ec.symbolMap[fmt.Sprintf("%d-%d", int(sym.Section), int(sym.Value))] = sym.Name
 	}
 	sectionsLen := len(ec.Sections)
-	var leftOverProgs []*elf.Section
+	leftOverProgs := make(map[int]*elf.Section)
 	processed := make(map[int]struct{})
 	for i, sec := range ec.Sections {
 		var data []byte
@@ -124,7 +124,7 @@ func getSpecsFromELF(code io.ReaderAt) (programs []*progSpec, maps []*mapSpec, e
 		}
 		switch {
 		case strings.Index(sec.Name, "license") == 0:
-			*ec.license = string(data)
+			*ec.license = string(bytes.TrimRight(data, "\000"))
 		case strings.Index(sec.Name, "version") == 0:
 			*ec.version = ec.ByteOrder.Uint32(data)
 		case strings.Index(sec.Name, "maps") == 0:
@@ -161,25 +161,27 @@ func getSpecsFromELF(code io.ReaderAt) (programs []*progSpec, maps []*mapSpec, e
 				}
 			}
 		case sec.Type != elf.SHT_SYMTAB && sec.Type != elf.SHT_NULL && len(sec.Name) > 0 && sec.Size > 0:
-			leftOverProgs = append(leftOverProgs, sec)
+			leftOverProgs[i] = sec
 		}
 	}
-	for _, sec := range leftOverProgs {
-		if _, ok := processed[int(sec.Info)]; !ok {
-			var prog *progSpec
-			prog, err = ec.loadProg(sec)
+	for i, sec := range leftOverProgs {
+		if _, ok := processed[i]; ok {
+			continue
+		}
+
+		var prog *progSpec
+		prog, err = ec.loadProg(sec)
+		if err != nil {
+			return
+		}
+		if prog != nil {
+			var name string
+			name, err = ec.getSecSymbolName(i, 0)
 			if err != nil {
 				return
 			}
-			if prog != nil {
-				var name string
-				name, err = ec.getSecSymbolName(int(sec.Info), 0)
-				if err != nil {
-					return
-				}
-				prog.key = name
-				programs = append(programs, prog)
-			}
+			prog.key = name
+			programs = append(programs, prog)
 		}
 	}
 	mapLen := len(maps)
@@ -217,7 +219,7 @@ func (ec *elfCode) getSecSymbolName(sec int, off int) (string, error) {
 	if name, ok := ec.symbolMap[fmt.Sprintf("%d-%d", sec, off)]; ok && len(name) > 0 {
 		return name, nil
 	}
-	return "", fmt.Errorf("section had no symbol; invalid bpf binary")
+	return "", fmt.Errorf("section %v: no symbol for offset %v", sec, off)
 }
 
 func dataToString(data []byte) string {

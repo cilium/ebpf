@@ -27,3 +27,8 @@ __section("xdp") int xdp_prog() {
 	map_lookup_elem(&hash_map);
 	return 0;
 }
+
+// This function has no relocations, and is thus parsed differently.
+__section("socket") int no_relocation() {
+	return 0;
+}

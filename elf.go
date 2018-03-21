@@ -124,7 +124,7 @@ func getSpecsFromELF(code io.ReaderAt) (programs []*progSpec, maps []*mapSpec, e
 		}
 		switch {
 		case strings.Index(sec.Name, "license") == 0:
-			*ec.license = string(data)
+			*ec.license = string(bytes.TrimRight(data, "\000"))
 		case strings.Index(sec.Name, "version") == 0:
 			*ec.version = ec.ByteOrder.Uint32(data)
 		case strings.Index(sec.Name, "maps") == 0:

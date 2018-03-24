@@ -2,6 +2,7 @@ package ebpf
 
 import (
 	"fmt"
+	"runtime"
 	"syscall"
 	"unsafe"
 )
@@ -14,13 +15,13 @@ type mapCreateAttr struct {
 type mapOpAttr struct {
 	mapFd   uint32
 	padding uint32
-	key     uint64
-	value   uint64
+	key     syscallPtr
+	value   syscallPtr
 	flags   uint64
 }
 
 type pinObjAttr struct {
-	fileName uint64
+	fileName syscallPtr
 	fd       uint32
 	padding  uint32
 }
@@ -28,11 +29,11 @@ type pinObjAttr struct {
 type progCreateAttr struct {
 	progType      ProgType
 	insCount      uint32
-	instructions  uint64
-	license       uint64
+	instructions  syscallPtr
+	license       syscallPtr
 	logLevel      uint32
 	logSize       uint32
-	logBuf        uint64
+	logBuf        syscallPtr
 	kernelVersion uint32
 	padding       uint32
 }
@@ -66,6 +67,10 @@ type perfEventAttr struct {
 	padding uint16
 }
 
+func newPtr(ptr unsafe.Pointer) syscallPtr {
+	return syscallPtr{ptr: ptr}
+}
+
 func bpfErrNo(e syscall.Errno) error {
 	switch e {
 	case 0:
@@ -92,7 +97,7 @@ func bpfErrNo(e syscall.Errno) error {
 
 func pinObject(fileName string, fd uint32) error {
 	_, errNo := bpfCall(_ObjPin, unsafe.Pointer(&pinObjAttr{
-		fileName: uint64(uintptr(unsafe.Pointer(&[]byte(fileName)[0]))),
+		fileName: newPtr(unsafe.Pointer(&[]byte(fileName)[0])),
 		fd:       fd,
 	}), 16)
 	return bpfErrNo(errNo)
@@ -100,19 +105,19 @@ func pinObject(fileName string, fd uint32) error {
 
 func getObject(fileName string) (uintptr, error) {
 	ptr, errNo := bpfCall(_ObjGet, unsafe.Pointer(&pinObjAttr{
-		fileName: uint64(uintptr(unsafe.Pointer(&[]byte(fileName)[0]))),
+		fileName: newPtr(unsafe.Pointer(&[]byte(fileName)[0])),
 	}), 16)
 	return ptr, bpfErrNo(errNo)
 }
 
 func bpfCall(cmd int, attr unsafe.Pointer, size int) (uintptr, syscall.Errno) {
 	r1, _, errNo := syscall.Syscall(uintptr(_BPFCall), uintptr(cmd), uintptr(attr), uintptr(size))
+	runtime.KeepAlive(attr)
 	return r1, errNo
 }
 
 func createPerfEvent(perfEvent *perfEventAttr, pid, cpu, groupFd int, flags uint) (uintptr, error) {
-	ptr := unsafe.Pointer(perfEvent)
-	efd, _, errNo := syscall.Syscall6(_PerfEvent, uintptr(ptr),
+	efd, _, errNo := syscall.Syscall6(_PerfEvent, uintptr(unsafe.Pointer(perfEvent)),
 		uintptr(pid), uintptr(cpu), uintptr(groupFd), uintptr(flags), 0)
 	err := eventErrNo(errNo)
 	if err != nil {

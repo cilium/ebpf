@@ -67,6 +67,17 @@ type perfEventAttr struct {
 	padding uint16
 }
 
+type progTestRunAttr struct {
+	fd          uint32
+	retval      uint32
+	dataSizeIn  uint32
+	dataSizeOut uint32
+	dataIn      syscallPtr
+	dataOut     syscallPtr
+	repeat      uint32
+	duration    uint32
+}
+
 func newPtr(ptr unsafe.Pointer) syscallPtr {
 	return syscallPtr{ptr: ptr}
 }

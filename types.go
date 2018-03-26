@@ -96,7 +96,7 @@ const (
 	_ObjGet
 	// _BPF_PROG_ATTACH
 	// _BPF_PROG_DETACH
-	// _BPF_PROG_TEST_RUN
+	_ProgTestRun = 10
 	// _BPF_PROG_GET_NEXT_ID
 	// _BPF_MAP_GET_NEXT_ID
 	// _BPF_PROG_GET_FD_BY_ID

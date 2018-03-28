@@ -1136,10 +1136,10 @@ type BPFInstruction struct {
 }
 
 type bpfInstruction struct {
-	opcode    uint8
-	registers uint8
-	offset    int16
-	constant  int32
+	OpCode    uint8
+	Registers bitField
+	Offset    int16
+	Constant  int32
 }
 
 var classMap = map[int]string{
@@ -1420,17 +1420,15 @@ func BPFILdImm64Raw(dst, src Register, imm uint64) *BPFInstruction {
 func (bpfi *BPFInstruction) getCStructs() []bpfInstruction {
 	var bf bitField
 	var inss []bpfInstruction
-	extra := bpfi
-	for extra != nil {
+	for extra := bpfi; extra != nil; extra = extra.extra {
 		bf.SetPart1(extra.DstRegister)
 		bf.SetPart2(extra.SrcRegister)
 		inss = append(inss, bpfInstruction{
-			opcode:    uint8(extra.OpCode),
-			registers: uint8(bf),
-			offset:    extra.Offset,
-			constant:  extra.Constant,
+			OpCode:    extra.OpCode,
+			Registers: bf,
+			Offset:    extra.Offset,
+			Constant:  extra.Constant,
 		})
-		extra = extra.extra
 	}
 	return inss
 }

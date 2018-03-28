@@ -18,6 +18,7 @@ func TestGetSpecsFromELF(t *testing.T) {
 	}
 
 	checkMapSpec(t, maps, "hash_map", Hash, 4, 2, 42, 4242)
+	checkMapSpec(t, maps, "hash_map2", Hash, 2, 1, 21, 2121)
 
 	checkProgramSpec(t, progs, "xdp_prog", XDP)
 	checkProgramSpec(t, progs, "no_relocation", SocketFilter)

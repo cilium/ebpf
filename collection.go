@@ -1,6 +1,7 @@
 package ebpf
 
 import (
+	"fmt"
 	"io"
 	"io/ioutil"
 	"os"
@@ -143,27 +144,29 @@ func NewCollectionFromObjectCode(code io.ReaderAt) (*Collection, error) {
 		mapMap:     make(map[string]Map),
 		programMap: make(map[string]Program),
 	}
-	for _, v := range mapMap {
-		bpfMap, err := NewMapFromSpec(v)
+	for k, spec := range mapMap {
+		bpfMap, err := NewMapFromSpec(spec)
 		if err != nil {
 			return nil, err
 		}
-		bpfColl.mapMap[v.key] = bpfMap
-		if v.instructionReplacements != nil {
-			fd := int32(uint32(bpfMap))
-			for _, ins := range v.instructionReplacements {
+		bpfColl.mapMap[k] = bpfMap
+	}
+	for k, spec := range programMap {
+		bpfProg, err := NewProgramFromSpec(spec)
+		if err != nil {
+			return nil, err
+		}
+		for name, insns := range spec.replacements {
+			bpfMap, ok := bpfColl.mapMap[name]
+			if !ok {
+				return nil, fmt.Errorf("program %v: unknown map %v", k, name)
+			}
+			for _, ins := range insns {
 				ins.SrcRegister = 1
-				ins.Constant = fd
+				ins.Constant = int32(bpfMap)
 			}
 		}
-
-	}
-	for _, v := range programMap {
-		bpfProg, err := NewProgramFromSpec(v)
-		if err != nil {
-			return nil, err
-		}
-		bpfColl.programMap[v.key] = bpfProg
+		bpfColl.programMap[k] = bpfProg
 	}
 	return bpfColl, nil
 }

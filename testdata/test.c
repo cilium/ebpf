@@ -21,10 +21,19 @@ struct map hash_map __section("maps") = {
 	.flags = 4242,
 };
 
+struct map hash_map2 __section("maps") = {
+	.type = 1,
+	.key_size = 2,
+	.value_size = 1,
+	.max_entries = 21,
+	.flags = 2121,
+};
+
 static void (*map_lookup_elem)(void *) = (void*)1;
 
 __section("xdp") int xdp_prog() {
 	map_lookup_elem(&hash_map);
+	map_lookup_elem(&hash_map2);
 	return 0;
 }
 

@@ -128,7 +128,7 @@ func bpfCall(cmd int, attr unsafe.Pointer, size int) (uintptr, syscall.Errno) {
 }
 
 func createPerfEvent(perfEvent *perfEventAttr, pid, cpu, groupFd int, flags uint) (uintptr, error) {
-	efd, _, errNo := syscall.Syscall6(_PerfEvent, uintptr(unsafe.Pointer(perfEvent)),
+	efd, _, errNo := syscall.Syscall6(syscall.SYS_PERF_EVENT_OPEN, uintptr(unsafe.Pointer(perfEvent)),
 		uintptr(pid), uintptr(cpu), uintptr(groupFd), uintptr(flags), 0)
 	err := eventErrNo(errNo)
 	if err != nil {

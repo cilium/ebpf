@@ -115,7 +115,7 @@ var noProgTestRun bool
 var detectProgTestRun sync.Once
 
 func (bpf Program) testRun(in []byte, repeat int) (uint32, []byte, time.Duration, error) {
-	if repeat > math.MaxUint32 {
+	if uint(repeat) > math.MaxUint32 {
 		return 0, nil, 0, fmt.Errorf("repeat is too high")
 	}
 
@@ -123,7 +123,7 @@ func (bpf Program) testRun(in []byte, repeat int) (uint32, []byte, time.Duration
 		return 0, nil, 0, fmt.Errorf("missing input")
 	}
 
-	if len(in) > math.MaxUint32 {
+	if uint(len(in)) > math.MaxUint32 {
 		return 0, nil, 0, fmt.Errorf("input is too long")
 	}
 

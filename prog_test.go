@@ -32,7 +32,7 @@ func TestProgramRun(t *testing.T) {
 		BPFIOp(Exit),
 	)
 
-	prog, err := NewProgram(XDP, &ins, "MIT", 0)
+	prog, err := NewProgram(XDP, ins, "MIT", 0)
 	if err != nil {
 		t.Fatal(err)
 	}

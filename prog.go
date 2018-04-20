@@ -26,7 +26,7 @@ const (
 // ProgramSpec is an interface that can initialize a new Program
 type ProgramSpec interface {
 	ProgType() ProgType
-	Instructions() *Instructions
+	Instructions() Instructions
 	License() string
 	KernelVersion() uint32
 }
@@ -35,12 +35,12 @@ type ProgramSpec interface {
 type Program int
 
 // NewProgram creates a new Program
-func NewProgram(progType ProgType, instructions *Instructions, license string, kernelVersion uint32) (Program, error) {
+func NewProgram(progType ProgType, instructions Instructions, license string, kernelVersion uint32) (Program, error) {
 	if instructions == nil {
 		return -1, fmt.Errorf("instructions cannot be nil")
 	}
 	var cInstructions []bpfInstruction
-	for _, ins := range *instructions {
+	for _, ins := range instructions {
 		inss := ins.getCStructs()
 		for _, ins2 := range inss {
 			cInstructions = append(cInstructions, ins2)
@@ -128,7 +128,7 @@ func (bpf Program) testRun(in []byte, repeat int) (uint32, []byte, time.Duration
 	}
 
 	detectProgTestRun.Do(func() {
-		prog, err := NewProgram(XDP, &Instructions{
+		prog, err := NewProgram(XDP, Instructions{
 			BPFILdImm64(Reg0, 0),
 			BPFIOp(Exit),
 		}, "MIT", 0)

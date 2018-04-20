@@ -53,8 +53,8 @@ func (p *progSpec) ProgType() ProgType {
 	return p.progType
 }
 
-func (p *progSpec) Instructions() *Instructions {
-	return &p.instrs
+func (p *progSpec) Instructions() Instructions {
+	return p.instrs
 }
 
 func (p *progSpec) License() string {

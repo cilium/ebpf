@@ -102,7 +102,7 @@ func main() {
 		// exit
 		ebpf.BPFIOp(ebpf.Exit),
 	}
-	bpfProgram, err := ebpf.NewProgram(ebpf.SocketFilter, &ebpfInss, "GPL", 0)
+	bpfProgram, err := ebpf.NewProgram(ebpf.SocketFilter, ebpfInss, "GPL", 0)
 	if err != nil {
 		fmt.Printf("%s\n", ebpfInss)
 		panic(err)

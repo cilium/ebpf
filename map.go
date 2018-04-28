@@ -8,30 +8,32 @@ import (
 )
 
 // MapSpec is an interface type that cna initialize a new Map
-type MapSpec interface {
-	MapType() MapType
-	KeySize() uint32
-	ValueSize() uint32
-	MaxEntries() uint32
-	Flags() uint32
+type MapSpec struct {
+	Type       MapType
+	KeySize    uint32
+	ValueSize  uint32
+	MaxEntries uint32
+	Flags      uint32
 }
 
 // Map represents a Map file descriptor
 type Map int
 
 // NewMap creates a new Map
-func NewMap(mapType MapType, keySize, valueSize, maxEntries, flags uint32) (Map, error) {
-	fd, e := bpfCall(_MapCreate, unsafe.Pointer(&mapCreateAttr{mapType, keySize, valueSize, maxEntries, flags}), 20)
+func NewMap(spec *MapSpec) (Map, error) {
+	attr := mapCreateAttr{
+		spec.Type,
+		spec.KeySize,
+		spec.ValueSize,
+		spec.MaxEntries,
+		spec.Flags,
+	}
+	fd, e := bpfCall(_MapCreate, unsafe.Pointer(&attr), int(unsafe.Sizeof(attr)))
 	err := bpfErrNo(e)
 	if err != nil {
 		return Map(-1), fmt.Errorf("map create: %s", err.Error())
 	}
 	return Map(fd), nil
-}
-
-// NewMapFromSpec creates a new Map from a MapSpec
-func NewMapFromSpec(spec MapSpec) (Map, error) {
-	return NewMap(spec.MapType(), spec.KeySize(), spec.ValueSize(), spec.MaxEntries(), spec.Flags())
 }
 
 // Get gets a value from a Map

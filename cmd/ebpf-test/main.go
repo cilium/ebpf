@@ -6,10 +6,8 @@ import (
 	"io/ioutil"
 	"os"
 
-	"github.com/nathanjsweet/ebpf"
+	"github.com/newtools/ebpf"
 )
-
-var bufSize = flag.Int("out", 65536, "Size of output buffer in `bytes`")
 
 func main() {
 	flag.Usage = func() {
@@ -58,7 +56,7 @@ func main() {
 		os.Exit(42)
 	}
 
-	ret, out, err := prog.Test(in, *bufSize)
+	ret, out, err := prog.Test(in)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Can't run %v: %v\n", progName, err)
 		os.Exit(42)

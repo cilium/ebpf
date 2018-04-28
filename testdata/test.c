@@ -1,3 +1,6 @@
+/* This file excercises the ELF loader. It is not a valid BPF program.
+ */
+
 typedef unsigned int uint32_t;
 typedef unsigned long uint64_t;
 
@@ -29,12 +32,20 @@ struct map hash_map2 __section("maps") = {
 	.flags = 2121,
 };
 
+unsigned long non_map;
+
 static void (*map_lookup_elem)(void *) = (void*)1;
+static void (*other_fn)(unsigned long) = (void*)2;
+
+int __attribute__((noinline)) helper_func(int arg) {
+	return arg > 5;
+}
 
 __section("xdp") int xdp_prog() {
 	map_lookup_elem(&hash_map);
 	map_lookup_elem(&hash_map2);
-	return 0;
+	other_fn(non_map);
+	return helper_func(2);
 }
 
 // This function has no relocations, and is thus parsed differently.

@@ -1,3 +1,6 @@
+# Build BPF programs by using the kernel build system.
+#    make kernel_src=/path/to/kernel/src
+
 # kbuild trick to avoid linker error. Can be omitted if a module is built.
 obj- := dummy.o
 
@@ -13,8 +16,9 @@ HOSTLOADLIBES_sockex1 += -lelf
 
 # Allows pointing LLC/CLANG to a LLVM backend with bpf support, redefine on cmdline:
 #  make samples/bpf/ LLC=~/git/llvm/build/bin/llc CLANG=~/git/llvm/build/bin/clang
-LLC ?= llc
-CLANG ?= clang
+LLVM_PREFIX ?= /usr/bin
+CLANG ?= $(LLVM_PREFIX)/clang
+LLC ?= $(LLVM_PREFIX)/llc
 
 # Trick to allow make to be run from this directory
 all:

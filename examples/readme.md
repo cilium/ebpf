@@ -1,7 +1,7 @@
 Examples
 --------
 
-To the build the examples folder you'll need to pull the linux repository. Once it's on your host
+To build the examples folder you'll need to pull the linux repository. Once it's on your host
 you can build this folder:
 
 ```sh

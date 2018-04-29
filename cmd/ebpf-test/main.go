@@ -11,13 +11,13 @@ import (
 
 func main() {
 	flag.Usage = func() {
-		fmt.Fprintf(os.Stderr, "%s: <elf-file> [prog-name]\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "%s: <elf-file> <prog-name>\n", os.Args[0])
 		flag.PrintDefaults()
 	}
 
 	flag.Parse()
 
-	if flag.NArg() < 1 {
+	if flag.NArg() < 2 {
 		flag.Usage()
 		os.Exit(42)
 	}
@@ -27,20 +27,6 @@ func main() {
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Can't load %s: %v\n", path, err)
 		os.Exit(42)
-	}
-
-	if flag.NArg() == 1 {
-		fmt.Println("Maps:")
-		coll.ForEachMap(func(name string, m ebpf.Map) {
-			fmt.Printf("\t%v\n", name)
-		})
-
-		fmt.Println("Programs:")
-		coll.ForEachProgram(func(name string, _ ebpf.Program) {
-			fmt.Printf("\t%v\n", name)
-		})
-
-		return
 	}
 
 	progName := flag.Args()[1]

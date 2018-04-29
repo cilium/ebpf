@@ -11,11 +11,3 @@ To get the full sweep of the options for the generate program, run:
 ```sh
 ./generate --help
 ```
-
-# Print Out BPF Object File
-
-To dump out an object file to see the names, symbols, instructions, etc, simply run:
-
-```sh
-./dump-object -file object_file.o
-```

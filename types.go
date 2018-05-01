@@ -112,9 +112,6 @@ const (
 
 // Limits and constants for the the eBPF runtime
 const (
-	// MaxBPFInstructions is the maximum number of BPF instructions
-	// allowed by the BPF JIT
-	MaxBPFInstructions = 4096
 	// StackSize is the total size of the stack allocated for BPF programs
 	StackSize = 512
 	// InstructionSize is the size of the BPF instructions

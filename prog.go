@@ -79,15 +79,14 @@ func NewProgram(spec *ProgramSpec) (Program, error) {
 			cInstructions = append(cInstructions, ins2)
 		}
 	}
+
 	insCount := uint32(len(cInstructions))
-	if insCount > MaxBPFInstructions {
-		return -1, fmt.Errorf("max instructions, %d, exceeded", MaxBPFInstructions)
-	}
-	lic := []byte(spec.License)
+	lic := []byte(license)
 	logs := make([]byte, LogBufSize)
-	attr := progCreateAttr{
-		progType:     spec.Type,
-		insCount:     insCount,
+	fd, e := bpfCall(_ProgLoad, unsafe.Pointer(&progCreateAttr{
+		progType:     progType,
+		insCount:     uint32(len(cInstructions)),
+
 		instructions: newPtr(unsafe.Pointer(&cInstructions[0])),
 		license:      newPtr(unsafe.Pointer(&lic[0])),
 		logLevel:     1,

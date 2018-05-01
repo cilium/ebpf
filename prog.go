@@ -79,14 +79,12 @@ func NewProgram(spec *ProgramSpec) (Program, error) {
 			cInstructions = append(cInstructions, ins2)
 		}
 	}
-
 	insCount := uint32(len(cInstructions))
-	lic := []byte(license)
+	lic := []byte(spec.License)
 	logs := make([]byte, LogBufSize)
-	fd, e := bpfCall(_ProgLoad, unsafe.Pointer(&progCreateAttr{
-		progType:     progType,
-		insCount:     uint32(len(cInstructions)),
-
+	attr := progCreateAttr{
+		progType:     spec.Type,
+		insCount:     insCount,
 		instructions: newPtr(unsafe.Pointer(&cInstructions[0])),
 		license:      newPtr(unsafe.Pointer(&lic[0])),
 		logLevel:     1,

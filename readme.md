@@ -12,7 +12,7 @@ dynamically load and unload filters from different stores, place a REST service 
 eBPF program, and make sure sound security practices are happening around the base eBPF program.
 
 ## Compiling
-[The Makefile](./examples/Makefile#L30) in the examples folder has an example of how to use the llvm bpf compiler to compile your eBPF C program. 
+[The Makefile](./examples/Makefile#L30) in the examples folder has an example of how to use the llvm bpf compiler to compile your eBPF C program.
 
 ## An Important Note About Licenses:
 If you are using this project for your own internal monitoring or using it to provide a service,
@@ -25,11 +25,6 @@ which makes that code governed by GPLv2, so be careful if you copy from it heavi
 pinning yourself to GPLv2. However, eBPF opcode programs themselves must be governed by the GPLv2 anyways,
 so if you are distributing any software relying on this project you will probably be open-sourcing the most
 important part (the eBPF opcode) anyways.
-
-
-## Packaging and Generating Code
-If you do not want to package the object file with your distribution, you can use the generate
-program in the util folder (see readme.md in that folder for details), and it will convert the object file into a go file that you can use.
 
 ## Pinning
 If you want to pin your ebpf objects (this means make them persist, beyond the life of your program) then you will need to mount

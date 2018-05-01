@@ -1,4 +1,6 @@
-package main
+// +build linux
+
+package ebpf_test
 
 import (
 	"flag"
@@ -7,9 +9,9 @@ import (
 	"time"
 	"unsafe"
 
-	"github.com/nathanjsweet/ebpf"
-	"github.com/nathanjsweet/zsocket/inet"
-	"github.com/nathanjsweet/zsocket/nettypes"
+	"github.com/newtools/ebpf"
+	"github.com/newtools/zsocket/inet"
+	"github.com/newtools/zsocket/nettypes"
 )
 
 type IPHdr struct {
@@ -28,38 +30,46 @@ type IPHdr struct {
 }
 
 const EthHLen = 14
-const SO_ATTACH_BPF = 50
 
-type bKey uint32
+type protoType uint32
 
-func (k bKey) MarshalBinary() ([]byte, error) {
+func (k protoType) MarshalBinary() ([]byte, error) {
 	ret := make([]byte, 4)
 	inet.HostByteOrder.PutUint32(ret, uint32(k))
 	return ret, nil
 }
 
-func (k *bKey) UnmarshalBinary(data []byte) error {
-	*k = bKey(inet.HostByteOrder.Uint32(data))
+func (k *protoType) UnmarshalBinary(data []byte) error {
+	*k = protoType(inet.HostByteOrder.Uint32(data))
 	return nil
 }
 
-type bValue uint64
+type protoCounter uint64
 
-func (k bValue) MarshalBinary() ([]byte, error) {
+func (k protoCounter) MarshalBinary() ([]byte, error) {
 	ret := make([]byte, 8)
 	inet.HostByteOrder.PutUint64(ret, uint64(k))
 	return ret, nil
 }
 
-func (k *bValue) UnmarshalBinary(data []byte) error {
-	*k = bValue(inet.HostByteOrder.Uint64(data))
+func (k *protoCounter) UnmarshalBinary(data []byte) error {
+	*k = protoCounter(inet.HostByteOrder.Uint64(data))
 	return nil
 }
 
-func main() {
+// ExampleSocket demonstrates how to attach an EBPF program
+// to a socket.
+func Example_socket() {
+	const SO_ATTACH_BPF = 50
+
 	index := flag.Int("index", 0, "specify ethernet index")
 	flag.Parse()
-	bpfMap, err := ebpf.NewMap(ebpf.Array, 4, 8, 256, 0)
+	bpfMap, err := ebpf.NewMap(&ebpf.MapSpec{
+		Type:       ebpf.Array,
+		KeySize:    4,
+		ValueSize:  8,
+		MaxEntries: 256,
+	})
 	if err != nil {
 		panic(err)
 	}
@@ -102,7 +112,12 @@ func main() {
 		// exit
 		ebpf.BPFIOp(ebpf.Exit),
 	}
-	bpfProgram, err := ebpf.NewProgram(ebpf.SocketFilter, ebpfInss, "GPL", 0)
+	bpfProgram, err := ebpf.NewProgram(&ebpf.ProgramSpec{
+		Type:         ebpf.SocketFilter,
+		License:      "GPL",
+		Instructions: ebpfInss,
+	})
+
 	if err != nil {
 		fmt.Printf("%s\n", ebpfInss)
 		panic(err)
@@ -118,29 +133,29 @@ func main() {
 	fmt.Println("Packet stats:")
 	for {
 		time.Sleep(time.Second)
-		var icmp bValue
-		var tcp bValue
-		var udp bValue
-		ok, err := bpfMap.Get(bKey(nettypes.ICMP), &icmp, 8)
+		var icmp protoCounter
+		var tcp protoCounter
+		var udp protoCounter
+		ok, err := bpfMap.Get(protoType(nettypes.ICMP), &icmp, 8)
 		if err != nil {
 			panic(err)
 		}
 		if !ok {
-			icmp = bValue(0)
+			icmp = protoCounter(0)
 		}
-		ok, err = bpfMap.Get(bKey(nettypes.TCP), &tcp, 8)
+		ok, err = bpfMap.Get(protoType(nettypes.TCP), &tcp, 8)
 		if err != nil {
 			panic(err)
 		}
 		if !ok {
-			tcp = bValue(0)
+			tcp = protoCounter(0)
 		}
-		ok, err = bpfMap.Get(bKey(nettypes.UDP), &udp, 8)
+		ok, err = bpfMap.Get(protoType(nettypes.UDP), &udp, 8)
 		if err != nil {
 			panic(err)
 		}
 		if !ok {
-			udp = bValue(0)
+			udp = protoCounter(0)
 		}
 		fmt.Printf("\r\033[m\tICMP: %d TCP: %d UDP: %d", icmp, tcp, udp)
 	}

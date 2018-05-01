@@ -1,4 +1,6 @@
-package main
+// +build linux
+
+package ebpf_test
 
 import (
 	"bytes"
@@ -8,12 +10,12 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/nathanjsweet/ebpf"
-	"github.com/nathanjsweet/zsocket/inet"
-	"github.com/nathanjsweet/zsocket/nettypes"
+	"github.com/newtools/ebpf"
+	"github.com/newtools/zsocket/nettypes"
 )
 
-var program = [...]byte{0177, 0105, 0114, 0106, 0002, 0001, 0001, 0000, 0000, 0000, 0000, 0000, 0000, 0000, 0000, 0000,
+var program = [...]byte{
+	0177, 0105, 0114, 0106, 0002, 0001, 0001, 0000, 0000, 0000, 0000, 0000, 0000, 0000, 0000, 0000,
 	0001, 0000, 0367, 0000, 0001, 0000, 0000, 0000, 0000, 0000, 0000, 0000, 0000, 0000, 0000, 0000,
 	0000, 0000, 0000, 0000, 0000, 0000, 0000, 0000, 0340, 0001, 0000, 0000, 0000, 0000, 0000, 0000,
 	0000, 0000, 0000, 0000, 0100, 0000, 0000, 0000, 0000, 0000, 0100, 0000, 0010, 0000, 0001, 0000,
@@ -74,39 +76,16 @@ var program = [...]byte{0177, 0105, 0114, 0106, 0002, 0001, 0001, 0000, 0000, 00
 	0055, 0000, 0000, 0000, 0002, 0000, 0000, 0000, 0000, 0000, 0000, 0000, 0000, 0000, 0000, 0000,
 	0000, 0000, 0000, 0000, 0000, 0000, 0000, 0000, 0350, 0000, 0000, 0000, 0000, 0000, 0000, 0000,
 	0220, 0000, 0000, 0000, 0000, 0000, 0000, 0000, 0001, 0000, 0000, 0000, 0002, 0000, 0000, 0000,
-	0010, 0000, 0000, 0000, 0000, 0000, 0000, 0000, 0030, 0000, 0000, 0000, 0000, 0000, 0000, 0000}
-
-const SO_ATTACH_BPF = 50
-
-type bKey uint32
-
-func (k bKey) MarshalBinary() ([]byte, error) {
-	ret := make([]byte, 4)
-	inet.HostByteOrder.PutUint32(ret, uint32(k))
-	return ret, nil
-}
-
-func (k *bKey) UnmarshalBinary(data []byte) error {
-	*k = bKey(inet.HostByteOrder.Uint32(data))
-	return nil
-}
-
-type bValue uint64
-
-func (k bValue) MarshalBinary() ([]byte, error) {
-	ret := make([]byte, 8)
-	inet.HostByteOrder.PutUint64(ret, uint64(k))
-	return ret, nil
-}
-
-func (k *bValue) UnmarshalBinary(data []byte) error {
-	*k = bValue(inet.HostByteOrder.Uint64(data))
-	return nil
+	0010, 0000, 0000, 0000, 0000, 0000, 0000, 0000, 0030, 0000, 0000, 0000, 0000, 0000, 0000, 0000,
 }
 
 const sockexPin = "/sys/fs/bpf/sockex1"
 
-func main() {
+// ExampleSocketELF demonstrates how to load and attach an ELF binary
+// to a socket.
+func Example_socketELF() {
+	const SO_ATTACH_BPF = 50
+
 	index := flag.Int("index", 0, "specify ethernet index")
 	flag.Parse()
 	fi, err := os.Lstat(sockexPin)
@@ -120,7 +99,11 @@ func main() {
 			panic(err)
 		}
 	} else {
-		coll, err = ebpf.NewCollectionFromObjectCode(bytes.NewReader(program[:]))
+		spec, err := ebpf.NewCollectionSpecFromELF(bytes.NewReader(program[:]))
+		if err != nil {
+			panic(err)
+		}
+		coll, err = ebpf.NewCollection(spec)
 		if err != nil {
 			panic(err)
 		}
@@ -149,41 +132,26 @@ func main() {
 	}
 	for {
 		time.Sleep(time.Second)
-		var icmp bValue
-		var tcp bValue
-		var udp bValue
-		ok, err := bpfMap.Get(bKey(nettypes.ICMP), &icmp, 8)
+		var icmp protoCounter
+		var tcp protoCounter
+		var udp protoCounter
+		ok, err := bpfMap.Get(protoType(nettypes.ICMP), &icmp, 8)
 		if err != nil {
 			panic(err)
 		}
 		assertTrue(ok, "icmp key not found")
-		ok, err = bpfMap.Get(bKey(nettypes.TCP), &tcp, 8)
+		ok, err = bpfMap.Get(protoType(nettypes.TCP), &tcp, 8)
 		if err != nil {
 			panic(err)
 		}
 		assertTrue(ok, "tcp key not found")
-		ok, err = bpfMap.Get(bKey(nettypes.UDP), &udp, 8)
+		ok, err = bpfMap.Get(protoType(nettypes.UDP), &udp, 8)
 		if err != nil {
 			panic(err)
 		}
 		assertTrue(ok, "udp key not found")
 		fmt.Printf("\r\033[m\tICMP: %d TCP: %d UDP: %d", icmp, tcp, udp)
 	}
-}
-
-func openRawSock(index int) (int, error) {
-	eT := inet.HToNS(nettypes.All[:])
-	sock, err := syscall.Socket(syscall.AF_PACKET, syscall.SOCK_RAW|syscall.SOCK_NONBLOCK|syscall.SOCK_CLOEXEC, int(eT))
-	if err != nil {
-		return 0, err
-	}
-	sll := syscall.SockaddrLinklayer{}
-	sll.Protocol = eT
-	sll.Ifindex = index
-	if err := syscall.Bind(sock, &sll); err != nil {
-		return 0, err
-	}
-	return sock, nil
 }
 
 func assertTrue(b bool, msg string) {

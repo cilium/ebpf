@@ -32,7 +32,7 @@ func TestProgramRun(t *testing.T) {
 		BPFIOp(Exit),
 	)
 
-	prog, err := NewProgram(XDP, ins, "MIT", 0)
+	prog, err := NewProgram(&ProgramSpec{XDP, ins, "MIT", 0, nil})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -49,5 +49,39 @@ func TestProgramRun(t *testing.T) {
 
 	if !bytes.Equal(out[:len(pat)], pat) {
 		t.Errorf("Expected %v, got %v", pat, out)
+	}
+}
+
+func TestRewriteUint64(t *testing.T) {
+	ins := Instructions{
+		BPFILdImm64(Reg0, 0),
+		BPFIOp(Exit),
+	}
+
+	spec := &ProgramSpec{
+		XDP,
+		ins,
+		"MIT",
+		0,
+		map[string][]*BPFInstruction{
+			"ret": []*BPFInstruction{ins[0]},
+		},
+	}
+
+	spec.RewriteUint64("ret", 42)
+
+	prog, err := NewProgram(spec)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer prog.Close()
+
+	ret, _, err := prog.Test(make([]byte, 14))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if ret != 42 {
+		t.Error("Expected return value to be 42, got", ret)
 	}
 }

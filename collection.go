@@ -1,43 +1,81 @@
 package ebpf
 
 import (
-	"fmt"
-	"io"
 	"io/ioutil"
 	"os"
 	"path"
 )
 
+// CollectionSpec describes a collection.
+type CollectionSpec struct {
+	Maps     map[string]*MapSpec
+	Programs map[string]*ProgramSpec
+}
+
 // Collection is a collection of Programs and Maps associated
 // with their symbols
 type Collection struct {
-	programMap map[string]Program
-	mapMap     map[string]Map
+	programs map[string]Program
+	maps     map[string]Map
+}
+
+// NewCollection creates a Collection from a specification
+func NewCollection(spec *CollectionSpec) (*Collection, error) {
+	maps := make(map[string]Map)
+	for k, spec := range spec.Maps {
+		m, err := NewMap(spec)
+		if err != nil {
+			return nil, err
+		}
+		maps[k] = m
+	}
+	progs := make(map[string]Program)
+	for k, spec := range spec.Programs {
+		// Rewrite any Symbol which is a valid Map.
+		for name := range spec.Refs {
+			m, ok := maps[name]
+			if !ok {
+				continue
+			}
+			if err := spec.RewriteMap(name, m); err != nil {
+				return nil, err
+			}
+		}
+		prog, err := NewProgram(spec)
+		if err != nil {
+			return nil, err
+		}
+		progs[k] = prog
+	}
+	return &Collection{
+		progs,
+		maps,
+	}, nil
 }
 
 // ForEachMap iterates over all the Maps in a Collection
 func (coll *Collection) ForEachMap(fx func(string, Map)) {
-	for k, v := range coll.mapMap {
+	for k, v := range coll.maps {
 		fx(k, v)
 	}
 }
 
 // ForEachProgram iterates over all the Programs in a Collection
 func (coll *Collection) ForEachProgram(fx func(string, Program)) {
-	for k, v := range coll.programMap {
+	for k, v := range coll.programs {
 		fx(k, v)
 	}
 }
 
 // GetMapByName get a Map by its symbolic name
 func (coll *Collection) GetMapByName(key string) (Map, bool) {
-	v, ok := coll.mapMap[key]
+	v, ok := coll.maps[key]
 	return v, ok
 }
 
 // GetProgramByName get a Program by its symbolic name
 func (coll *Collection) GetProgramByName(key string) (Program, bool) {
-	v, ok := coll.programMap[key]
+	v, ok := coll.programs[key]
 	return v, ok
 }
 
@@ -47,26 +85,26 @@ func (coll *Collection) Pin(dirName string, fileMode os.FileMode) error {
 	if err != nil {
 		return err
 	}
-	if len(coll.mapMap) > 0 {
+	if len(coll.maps) > 0 {
 		mapPath := path.Join(dirName, "maps")
 		err = mkdirIfNotExists(mapPath, fileMode)
 		if err != nil {
 			return err
 		}
-		for k, v := range coll.mapMap {
+		for k, v := range coll.maps {
 			err := v.Pin(path.Join(mapPath, k))
 			if err != nil {
 				return err
 			}
 		}
 	}
-	if len(coll.programMap) > 0 {
+	if len(coll.programs) > 0 {
 		progPath := path.Join(dirName, "programs")
 		err = mkdirIfNotExists(progPath, fileMode)
 		if err != nil {
 			return err
 		}
-		for k, v := range coll.programMap {
+		for k, v := range coll.programs {
 			err = v.Pin(path.Join(progPath, k))
 			if err != nil {
 				return err
@@ -90,8 +128,8 @@ func mkdirIfNotExists(dirName string, fileMode os.FileMode) error {
 // LoadCollection loads a Collection from the pinned directory
 func LoadCollection(dirName string) (*Collection, error) {
 	bpfColl := &Collection{
-		mapMap:     make(map[string]Map),
-		programMap: make(map[string]Program),
+		maps:     make(map[string]Map),
+		programs: make(map[string]Program),
 	}
 	mapsDir := path.Join(dirName, "maps")
 	files, err := ioutil.ReadDir(mapsDir)
@@ -104,7 +142,7 @@ func LoadCollection(dirName string) (*Collection, error) {
 			if err != nil {
 				return nil, err
 			}
-			bpfColl.mapMap[fi.Name()] = m
+			bpfColl.maps[fi.Name()] = m
 		}
 	}
 	programDir := path.Join(dirName, "programs")
@@ -118,7 +156,7 @@ func LoadCollection(dirName string) (*Collection, error) {
 			if err != nil {
 				return nil, err
 			}
-			bpfColl.programMap[fi.Name()] = p
+			bpfColl.programs[fi.Name()] = p
 		}
 	}
 	return bpfColl, nil
@@ -131,42 +169,9 @@ func NewCollectionFromFile(file string) (*Collection, error) {
 		return nil, err
 	}
 	defer f.Close()
-	return NewCollectionFromObjectCode(f)
-}
-
-// NewCollectionFromObjectCode parses a raw object file buffer
-func NewCollectionFromObjectCode(code io.ReaderAt) (*Collection, error) {
-	programMap, mapMap, err := getSpecsFromELF(code)
+	spec, err := NewCollectionSpecFromELF(f)
 	if err != nil {
 		return nil, err
 	}
-	bpfColl := &Collection{
-		mapMap:     make(map[string]Map),
-		programMap: make(map[string]Program),
-	}
-	for k, spec := range mapMap {
-		bpfMap, err := NewMapFromSpec(spec)
-		if err != nil {
-			return nil, err
-		}
-		bpfColl.mapMap[k] = bpfMap
-	}
-	for k, spec := range programMap {
-		bpfProg, err := NewProgramFromSpec(spec)
-		if err != nil {
-			return nil, err
-		}
-		for name, insns := range spec.replacements {
-			bpfMap, ok := bpfColl.mapMap[name]
-			if !ok {
-				return nil, fmt.Errorf("program %v: unknown map %v", k, name)
-			}
-			for _, ins := range insns {
-				ins.SrcRegister = 1
-				ins.Constant = int32(bpfMap)
-			}
-		}
-		bpfColl.programMap[k] = bpfProg
-	}
-	return bpfColl, nil
+	return NewCollection(spec)
 }

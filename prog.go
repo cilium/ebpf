@@ -23,40 +23,75 @@ const (
 	outputPad = 256 + 2
 )
 
-// ProgramSpec is an interface that can initialize a new Program
-type ProgramSpec interface {
-	ProgType() ProgType
-	Instructions() Instructions
-	License() string
-	KernelVersion() uint32
+// ProgramSpec defines a Program
+type ProgramSpec struct {
+	Type          ProgType
+	Instructions  Instructions
+	License       string
+	KernelVersion uint32
+	Refs          map[string][]*BPFInstruction
+}
+
+// RewriteMap rewrites a symbol to point at a Map.
+func (ps *ProgramSpec) RewriteMap(symbol string, m Map) error {
+	insns := ps.Refs[symbol]
+	if len(insns) == 0 {
+		return fmt.Errorf("unknown symbol %v", symbol)
+	}
+	for _, ins := range insns {
+		if ins.OpCode != LdDW {
+			return fmt.Errorf("symbol %v: not a valid map symbol, expected LdDW instruction", symbol)
+		}
+		ins.SrcRegister = 1
+		ins.Constant = int32(m)
+	}
+	return nil
+}
+
+// RewriteUint64 rewrites a symbol to a 64bit constant.
+func (ps *ProgramSpec) RewriteUint64(symbol string, value uint64) error {
+	insns := ps.Refs[symbol]
+	if len(insns) == 0 {
+		return fmt.Errorf("unknown symbol %v", symbol)
+	}
+	for _, ins := range insns {
+		if ins.OpCode != LdDW {
+			return fmt.Errorf("symbol %v: expected LdDw instruction", symbol)
+		}
+		ins.Constant = int32(value & 0xffffffff)
+		ins.extra.Constant = int32(value >> 32)
+	}
+	return nil
 }
 
 // Program represents a Program file descriptor
 type Program int
 
 // NewProgram creates a new Program
-func NewProgram(progType ProgType, instructions Instructions, license string, kernelVersion uint32) (Program, error) {
-	if instructions == nil {
-		return -1, fmt.Errorf("instructions cannot be nil")
+func NewProgram(spec *ProgramSpec) (Program, error) {
+	if len(spec.Instructions) == 0 {
+		return -1, fmt.Errorf("instructions cannot be empty")
 	}
 	var cInstructions []bpfInstruction
-	for _, ins := range instructions {
+	for _, ins := range spec.Instructions {
 		inss := ins.getCStructs()
 		for _, ins2 := range inss {
 			cInstructions = append(cInstructions, ins2)
 		}
 	}
-	lic := []byte(license)
+	insCount := uint32(len(cInstructions))
+	lic := []byte(spec.License)
 	logs := make([]byte, LogBufSize)
-	fd, e := bpfCall(_ProgLoad, unsafe.Pointer(&progCreateAttr{
-		progType:     progType,
-		insCount:     uint32(len(cInstructions)),
+	attr := progCreateAttr{
+		progType:     spec.Type,
+		insCount:     insCount,
 		instructions: newPtr(unsafe.Pointer(&cInstructions[0])),
 		license:      newPtr(unsafe.Pointer(&lic[0])),
 		logLevel:     1,
 		logSize:      LogBufSize,
 		logBuf:       newPtr(unsafe.Pointer(&logs[0])),
-	}), 48)
+	}
+	fd, e := bpfCall(_ProgLoad, unsafe.Pointer(&attr), int(unsafe.Sizeof(attr)))
 	if e != 0 {
 		if logs[0] != 0 {
 			return -1, fmt.Errorf("%s:\n\t%s", bpfErrNo(e), strings.Replace(string(logs), "\n", "\n\t", -1))
@@ -64,11 +99,6 @@ func NewProgram(progType ProgType, instructions Instructions, license string, ke
 		return -1, bpfErrNo(e)
 	}
 	return Program(fd), nil
-}
-
-// NewProgramFromSpec creates a new Program from the ProgramSpec interface
-func NewProgramFromSpec(spec ProgramSpec) (Program, error) {
-	return NewProgram(spec.ProgType(), spec.Instructions(), spec.License(), spec.KernelVersion())
 }
 
 // GetFd gets the file descriptor value of the Program
@@ -124,10 +154,14 @@ func (bpf Program) testRun(in []byte, repeat int) (uint32, []byte, time.Duration
 	}
 
 	detectProgTestRun.Do(func() {
-		prog, err := NewProgram(XDP, Instructions{
-			BPFILdImm64(Reg0, 0),
-			BPFIOp(Exit),
-		}, "MIT", 0)
+		prog, err := NewProgram(&ProgramSpec{
+			Type: XDP,
+			Instructions: Instructions{
+				BPFILdImm64(Reg0, 0),
+				BPFIOp(Exit),
+			},
+			License: "MIT",
+		})
 		if err != nil {
 			// This may be because we lack sufficient permissions, etc.
 			return

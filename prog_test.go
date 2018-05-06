@@ -2,6 +2,9 @@ package ebpf
 
 import (
 	"bytes"
+	"io/ioutil"
+	"os"
+	"path/filepath"
 	"testing"
 )
 
@@ -49,6 +52,43 @@ func TestProgramRun(t *testing.T) {
 
 	if !bytes.Equal(out[:len(pat)], pat) {
 		t.Errorf("Expected %v, got %v", pat, out)
+	}
+}
+
+func TestProgramPin(t *testing.T) {
+	prog, err := NewProgram(&ProgramSpec{
+		Type: XDP,
+		Instructions: Instructions{
+			BPFILdImm64(Reg0, 0),
+			BPFIOp(Exit),
+		},
+		License: "MIT",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer prog.Close()
+
+	tmp, err := ioutil.TempDir("/sys/fs/bpf", "ebpf-test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tmp)
+
+	path := filepath.Join(tmp, "program")
+	if err := prog.Pin(path); err != nil {
+		t.Fatal(err)
+	}
+	prog.Close()
+
+	prog, err = LoadProgram(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer prog.Close()
+
+	if prog.progType != XDP {
+		t.Error("Expected pinned program to have type XDP, but got", prog.progType)
 	}
 }
 

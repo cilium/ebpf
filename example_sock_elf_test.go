@@ -120,7 +120,7 @@ func Example_socketELF() {
 	if !ok {
 		panic(fmt.Errorf("no program named \"bpf_prog1\" found"))
 	}
-	if err := syscall.SetsockoptInt(sock, syscall.SOL_SOCKET, SO_ATTACH_BPF, prog.GetFd()); err != nil {
+	if err := syscall.SetsockoptInt(sock, syscall.SOL_SOCKET, SO_ATTACH_BPF, prog.FD()); err != nil {
 		panic(err)
 	}
 
@@ -135,17 +135,17 @@ func Example_socketELF() {
 		var icmp protoCounter
 		var tcp protoCounter
 		var udp protoCounter
-		ok, err := bpfMap.Get(protoType(nettypes.ICMP), &icmp, 8)
+		ok, err := bpfMap.Get(protoType(nettypes.ICMP), &icmp)
 		if err != nil {
 			panic(err)
 		}
 		assertTrue(ok, "icmp key not found")
-		ok, err = bpfMap.Get(protoType(nettypes.TCP), &tcp, 8)
+		ok, err = bpfMap.Get(protoType(nettypes.TCP), &tcp)
 		if err != nil {
 			panic(err)
 		}
 		assertTrue(ok, "tcp key not found")
-		ok, err = bpfMap.Get(protoType(nettypes.UDP), &udp, 8)
+		ok, err = bpfMap.Get(protoType(nettypes.UDP), &udp)
 		if err != nil {
 			panic(err)
 		}

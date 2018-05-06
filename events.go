@@ -97,16 +97,16 @@ const (
 )
 
 // CreateKprobe creates a kprobe in the linux kernel
-func CreateKprobe(event string, fd Program) error {
-	return createKprobe('p', "kprobe", event, fd)
+func CreateKprobe(event string, prog *Program) error {
+	return createKprobe('p', "kprobe", event, prog)
 }
 
 // CreateKretprobe creates a kretprobe in the linux kernel
-func CreateKretprobe(event string, fd Program) error {
-	return createKprobe('r', "kretprobe", event, fd)
+func CreateKretprobe(event string, prog *Program) error {
+	return createKprobe('r', "kretprobe", event, prog)
 }
 
-func createKprobe(typ rune, base, event string, fd Program) error {
+func createKprobe(typ rune, base, event string, prog *Program) error {
 	f, err := os.OpenFile(_KprobeEvents, os.O_APPEND|os.O_WRONLY, 0)
 	if err != nil {
 		return err
@@ -116,11 +116,11 @@ func createKprobe(typ rune, base, event string, fd Program) error {
 	if err != nil {
 		return err
 	}
-	return CreateTracepoint(event, fd)
+	return CreateTracepoint(event, prog)
 }
 
 // CreateTracepoint creates a tracepoint in the linux kernel
-func CreateTracepoint(event string, fd Program) error {
+func CreateTracepoint(event string, prog *Program) error {
 	attr := new(perfEventAttr)
 	attr.perfType = 2
 	attr.sampleType = 1 << 10
@@ -146,6 +146,6 @@ func CreateTracepoint(event string, fd Program) error {
 	if err != nil {
 		return err
 	}
-	err = IOCtl(int(eFd), uint64(IOCSetBPF), uint64(fd.GetFd()))
+	err = IOCtl(int(eFd), uint64(IOCSetBPF), uint64(prog.FD()))
 	return err
 }

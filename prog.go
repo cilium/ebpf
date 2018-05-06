@@ -33,7 +33,7 @@ type ProgramSpec struct {
 }
 
 // RewriteMap rewrites a symbol to point at a Map.
-func (ps *ProgramSpec) RewriteMap(symbol string, m Map) error {
+func (ps *ProgramSpec) RewriteMap(symbol string, m *Map) error {
 	insns := ps.Refs[symbol]
 	if len(insns) == 0 {
 		return fmt.Errorf("unknown symbol %v", symbol)
@@ -43,7 +43,7 @@ func (ps *ProgramSpec) RewriteMap(symbol string, m Map) error {
 			return fmt.Errorf("symbol %v: not a valid map symbol, expected LdDW instruction", symbol)
 		}
 		ins.SrcRegister = 1
-		ins.Constant = int32(m)
+		ins.Constant = int32(m.fd)
 	}
 	return nil
 }
@@ -65,12 +65,15 @@ func (ps *ProgramSpec) RewriteUint64(symbol string, value uint64) error {
 }
 
 // Program represents a Program file descriptor
-type Program int
+type Program struct {
+	fd       uint32
+	progType ProgType
+}
 
 // NewProgram creates a new Program
-func NewProgram(spec *ProgramSpec) (Program, error) {
+func NewProgram(spec *ProgramSpec) (*Program, error) {
 	if len(spec.Instructions) == 0 {
-		return -1, fmt.Errorf("instructions cannot be empty")
+		return nil, fmt.Errorf("instructions cannot be empty")
 	}
 	var cInstructions []bpfInstruction
 	for _, ins := range spec.Instructions {
@@ -94,26 +97,33 @@ func NewProgram(spec *ProgramSpec) (Program, error) {
 	fd, e := bpfCall(_ProgLoad, unsafe.Pointer(&attr), int(unsafe.Sizeof(attr)))
 	if e != 0 {
 		if logs[0] != 0 {
-			return -1, fmt.Errorf("%s:\n\t%s", bpfErrNo(e), strings.Replace(string(logs), "\n", "\n\t", -1))
+			return nil, fmt.Errorf("%s:\n\t%s", bpfErrNo(e), strings.Replace(string(logs), "\n", "\n\t", -1))
 		}
-		return -1, bpfErrNo(e)
+		return nil, bpfErrNo(e)
 	}
-	return Program(fd), nil
+	return &Program{
+		uint32(fd),
+		spec.Type,
+	}, nil
 }
 
-// GetFd gets the file descriptor value of the Program
-func (bpf Program) GetFd() int {
-	return int(bpf)
+func (bpf *Program) String() string {
+	return fmt.Sprintf("%s(%d)", bpf.progType, bpf.fd)
+}
+
+// FD gets the file descriptor value of the Program
+func (bpf *Program) FD() int {
+	return int(bpf.fd)
 }
 
 // Pin persists the Program past the lifetime of the process that created it
-func (bpf Program) Pin(fileName string) error {
-	return pinObject(fileName, uint32(bpf))
+func (bpf *Program) Pin(fileName string) error {
+	return pinObject(fileName, bpf.fd)
 }
 
 // Close unloads the program from the kernel.
-func (bpf Program) Close() error {
-	return syscall.Close(int(bpf))
+func (bpf *Program) Close() error {
+	return syscall.Close(int(bpf.fd))
 }
 
 // Test runs the Program in the kernel with the given input and returns the
@@ -123,7 +133,7 @@ func (bpf Program) Close() error {
 // XDP and SKB programs.
 //
 // This function requires at least Linux 4.12.
-func (bpf Program) Test(in []byte) (uint32, []byte, error) {
+func (bpf *Program) Test(in []byte) (uint32, []byte, error) {
 	ret, out, _, err := bpf.testRun(in, 1)
 	return ret, out, err
 }
@@ -132,7 +142,7 @@ func (bpf Program) Test(in []byte) (uint32, []byte, error) {
 // and returns the total time taken.
 //
 // This function requires at least Linux 4.12.
-func (bpf Program) Benchmark(in []byte, repeat int) (time.Duration, error) {
+func (bpf *Program) Benchmark(in []byte, repeat int) (time.Duration, error) {
 	_, _, total, err := bpf.testRun(in, repeat)
 	return total, err
 }
@@ -140,7 +150,7 @@ func (bpf Program) Benchmark(in []byte, repeat int) (time.Duration, error) {
 var noProgTestRun bool
 var detectProgTestRun sync.Once
 
-func (bpf Program) testRun(in []byte, repeat int) (uint32, []byte, time.Duration, error) {
+func (bpf *Program) testRun(in []byte, repeat int) (uint32, []byte, time.Duration, error) {
 	if uint(repeat) > math.MaxUint32 {
 		return 0, nil, 0, fmt.Errorf("repeat is too high")
 	}
@@ -171,7 +181,7 @@ func (bpf Program) testRun(in []byte, repeat int) (uint32, []byte, time.Duration
 		// XDP progs require at least 14 bytes input
 		in := make([]byte, 14)
 		attr := progTestRunAttr{
-			fd:         uint32(prog),
+			fd:         prog.fd,
 			dataSizeIn: uint32(len(in)),
 			dataIn:     newPtr(unsafe.Pointer(&in[0])),
 		}
@@ -191,7 +201,7 @@ func (bpf Program) testRun(in []byte, repeat int) (uint32, []byte, time.Duration
 	out := make([]byte, len(in)+outputPad)
 
 	attr := progTestRunAttr{
-		fd:         uint32(bpf),
+		fd:         bpf.fd,
 		dataSizeIn: uint32(len(in)),
 		// NB: dataSizeOut is not read by the kernel
 		dataIn:  newPtr(unsafe.Pointer(&in[0])),
@@ -215,8 +225,34 @@ func (bpf Program) testRun(in []byte, repeat int) (uint32, []byte, time.Duration
 	return attr.retval, out, total, nil
 }
 
-// LoadProgram loads a Program from a BPF file
-func LoadProgram(fileName string) (Program, error) {
-	ptr, err := getObject(fileName)
-	return Program(ptr), err
+// LoadProgram loads a Program from a BPF file.
+//
+// Requires at least Linux 4.13, use LoadProgramExplicit on
+// earlier versions.
+func LoadProgram(fileName string) (*Program, error) {
+	fd, err := getObject(fileName)
+	if err != nil {
+		return nil, err
+	}
+	var info progInfo
+	err = getObjectInfoByFD(uint32(fd), unsafe.Pointer(&info), unsafe.Sizeof(info))
+	if err != nil {
+		return nil, fmt.Errorf("ebpf: can't retrieve program info: %s", err.Error())
+	}
+	return &Program{
+		uint32(fd),
+		ProgType(info.progType),
+	}, nil
+}
+
+// LoadProgramExplicit loads a program with explicit parameters.
+func LoadProgramExplicit(fileName string, typ ProgType) (*Program, error) {
+	fd, err := getObject(fileName)
+	if err != nil {
+		return nil, err
+	}
+	return &Program{
+		uint32(fd),
+		typ,
+	}, nil
 }

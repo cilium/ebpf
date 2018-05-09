@@ -74,7 +74,7 @@ func Example_socket() {
 		panic(err)
 	}
 	ip := IPHdr{}
-	mapFd := bpfMap.GetFd()
+	mapFd := bpfMap.FD()
 	ebpfInss := ebpf.Instructions{
 		// save context for previous caller
 		// mov r1, r6
@@ -126,7 +126,7 @@ func Example_socket() {
 	if err != nil {
 		panic(err)
 	}
-	if err := syscall.SetsockoptInt(sock, syscall.SOL_SOCKET, SO_ATTACH_BPF, bpfProgram.GetFd()); err != nil {
+	if err := syscall.SetsockoptInt(sock, syscall.SOL_SOCKET, SO_ATTACH_BPF, bpfProgram.FD()); err != nil {
 		panic(err)
 	}
 	fmt.Printf("Filtering on eth index: %d\n", *index)
@@ -136,21 +136,21 @@ func Example_socket() {
 		var icmp protoCounter
 		var tcp protoCounter
 		var udp protoCounter
-		ok, err := bpfMap.Get(protoType(nettypes.ICMP), &icmp, 8)
+		ok, err := bpfMap.Get(protoType(nettypes.ICMP), &icmp)
 		if err != nil {
 			panic(err)
 		}
 		if !ok {
 			icmp = protoCounter(0)
 		}
-		ok, err = bpfMap.Get(protoType(nettypes.TCP), &tcp, 8)
+		ok, err = bpfMap.Get(protoType(nettypes.TCP), &tcp)
 		if err != nil {
 			panic(err)
 		}
 		if !ok {
 			tcp = protoCounter(0)
 		}
-		ok, err = bpfMap.Get(protoType(nettypes.UDP), &udp, 8)
+		ok, err = bpfMap.Get(protoType(nettypes.UDP), &udp)
 		if err != nil {
 			panic(err)
 		}

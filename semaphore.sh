@@ -79,6 +79,7 @@ for kernel_version in "${kernel_versions[@]}"; do
     --environment=GOPATH=/go \
     --exec=/bin/sh -- -c \
     "mount -t tmpfs tmpfs /tmp &&
+      mount -t bpf bpf /sys/fs/bpf &&
       mount -t debugfs debugfs /sys/kernel/debug/ &&
       cd /go/src/${pkg_name} &&
       go test -v ./..."

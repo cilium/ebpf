@@ -2,6 +2,7 @@ package ebpf
 
 import (
 	"fmt"
+	"path/filepath"
 	"runtime"
 	"syscall"
 	"unsafe"
@@ -20,6 +21,15 @@ type mapOpAttr struct {
 	flags   uint64
 }
 
+type mapInfo struct {
+	mapType    uint32
+	id         uint32
+	keySize    uint32
+	valueSize  uint32
+	maxEntries uint32
+	flags      uint32
+}
+
 type pinObjAttr struct {
 	fileName syscallPtr
 	fd       uint32
@@ -36,6 +46,18 @@ type progCreateAttr struct {
 	logBuf        syscallPtr
 	kernelVersion uint32
 	padding       uint32
+}
+
+const _BPF_TAG_SIZE = 8
+
+type progInfo struct {
+	progType  uint32
+	id        uint32
+	tag       [_BPF_TAG_SIZE]byte
+	jitedLen  uint32
+	xlatedLen uint32
+	jited     syscallPtr
+	xlated    syscallPtr
 }
 
 type perfEventAttr struct {
@@ -78,6 +100,12 @@ type progTestRunAttr struct {
 	duration    uint32
 }
 
+type objGetInfoByFDAttr struct {
+	fd      uint32
+	infoLen uint32
+	info    syscallPtr // May be either mapInfo or progInfo
+}
+
 func newPtr(ptr unsafe.Pointer) syscallPtr {
 	return syscallPtr{ptr: ptr}
 }
@@ -106,7 +134,17 @@ func bpfErrNo(e syscall.Errno) error {
 	return e
 }
 
+const bpfFSType = 0xcafe4a11
+
 func pinObject(fileName string, fd uint32) error {
+	dirName := filepath.Dir(fileName)
+	var statfs syscall.Statfs_t
+	if err := syscall.Statfs(dirName, &statfs); err != nil {
+		return err
+	}
+	if statfs.Type != bpfFSType {
+		return fmt.Errorf("%s is not on a bpf filesystem", fileName)
+	}
 	_, errNo := bpfCall(_ObjPin, unsafe.Pointer(&pinObjAttr{
 		fileName: newPtr(unsafe.Pointer(&[]byte(fileName)[0])),
 		fd:       fd,
@@ -119,6 +157,16 @@ func getObject(fileName string) (uintptr, error) {
 		fileName: newPtr(unsafe.Pointer(&[]byte(fileName)[0])),
 	}), 16)
 	return ptr, bpfErrNo(errNo)
+}
+
+func getObjectInfoByFD(fd uint32, info unsafe.Pointer, size uintptr) error {
+	attr := objGetInfoByFDAttr{
+		fd:      fd,
+		infoLen: uint32(size),
+		info:    newPtr(info),
+	}
+	_, errNo := bpfCall(_ObjGetInfoByFD, unsafe.Pointer(&attr), int(unsafe.Sizeof(attr)))
+	return bpfErrNo(errNo)
 }
 
 func bpfCall(cmd int, attr unsafe.Pointer, size int) (uintptr, syscall.Errno) {

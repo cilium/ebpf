@@ -6,6 +6,8 @@ import (
 	"strings"
 )
 
+//go:generate stringer -output types_string.go -type=MapType,ProgType
+
 // MapType indicates the type map structure
 // that will be initialized in the kernel.
 type MapType uint32
@@ -56,35 +58,6 @@ const (
 	LPMTrie
 )
 
-func (mt MapType) String() string {
-	switch mt {
-	case Hash:
-		return "Hash"
-	case Array:
-		return "Array"
-	case ProgramArray:
-		return "ProgramArray"
-	case PerfEventArray:
-		return "PerfEventArray"
-	case PerCPUHash:
-		return "PerCPUHash"
-	case PerCPUArray:
-		return "PerCPUArray"
-	case StackTrace:
-		return "StackTrace"
-	case CGroupArray:
-		return "CGroupArray"
-	case LRUHash:
-		return "LRUHash"
-	case LRUCPUHash:
-		return "LRUCPUHash"
-	case LPMTrie:
-		return "LPMTrie"
-	default:
-		return "unknown map type"
-	}
-}
-
 const (
 	_MapCreate = iota
 	_MapLookupElem
@@ -94,14 +67,14 @@ const (
 	_ProgLoad
 	_ObjPin
 	_ObjGet
-	// _BPF_PROG_ATTACH
-	// _BPF_PROG_DETACH
-	_ProgTestRun = 10
-	// _BPF_PROG_GET_NEXT_ID
-	// _BPF_MAP_GET_NEXT_ID
-	// _BPF_PROG_GET_FD_BY_ID
-	// _BPF_MAP_GET_FD_BY_ID
-	// _BPF_OBJ_GET_INFO_BY_FD
+	_ProgAttach
+	_ProgDetach
+	_ProgTestRun
+	_ProgGetNextID
+	_MapGetNextID
+	_ProgGetFDByID
+	_MapGetFDByID
+	_ObjGetInfoByFD
 )
 
 const (
@@ -1012,7 +985,7 @@ type ProgType uint32
 // eBPF program types
 const (
 	// Unrecognized program type
-	Unrecognized = ProgType(iota)
+	Unrecognized ProgType = iota
 	// SocketFilter socket or seccomp filter
 	SocketFilter
 	// Kprobe program
@@ -1040,41 +1013,6 @@ const (
 	// SockOps program
 	SockOps
 )
-
-func (pt ProgType) String() string {
-	switch pt {
-	case Unrecognized:
-		return "Unrecognized"
-	case SocketFilter:
-		return "SocketFilter"
-	case Kprobe:
-		return "Kprobe"
-	case SchedCLS:
-		return "SchedCLS"
-	case SchedACT:
-		return "SchedACT"
-	case TracePoint:
-		return "TracePoint"
-	case XDP:
-		return "XDP"
-	case PerfEvent:
-		return "PerfEvent"
-	case CGroupSKB:
-		return "CGroupSKB"
-	case CGroupSock:
-		return "CGroupSock"
-	case LWTIn:
-		return "LWTIn"
-	case LWTOut:
-		return "LWTOut"
-	case LWTXmit:
-		return "LWTXmit"
-	case SockOps:
-		return "SockOps"
-	default:
-		return "unknown prog type"
-	}
-}
 
 type bitField uint8
 

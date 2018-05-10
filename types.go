@@ -8,7 +8,7 @@ import (
 	"strings"
 )
 
-//go:generate stringer -output types_string.go -type=MapType,ProgType
+//go:generate stringer -output types_string.go -type=MapType,ProgType,Func
 
 // MapType indicates the type map structure
 // that will be initialized in the kernel.
@@ -565,11 +565,14 @@ const (
 	AdjRoomNet = 0
 )
 
+// Func is a built-in eBPF function.
+type Func int32
+
 // eBPF build-in functions
 const (
 	// MapLookupElement - void *map_lookup_elem(&map, &key)
 	// Return: Map value or NULL
-	MapLookupElement = int32(iota + 1)
+	MapLookupElement Func = iota + 1
 	// MapUpdateElement - int map_update_elem(&map, &key, &value, flags)
 	// Return: 0 on success or negative error
 	MapUpdateElement
@@ -879,113 +882,6 @@ const (
 	// Return: 0 on success or negative error code
 	SKBAdjustRoom
 )
-
-func getFuncStr(callNo int32) string {
-	var s string
-	switch callNo {
-	case MapLookupElement:
-		s = "MapLookupElement"
-	case MapUpdateElement:
-		s = "MapUpdateElement"
-	case MapDeleteElement:
-		s = "MapDeleteElement"
-	case ProbeRead:
-		s = "ProbeRead"
-	case KtimeGetNS:
-		s = "KtimeGetNS"
-	case TracePrintk:
-		s = "TracePrintk"
-	case GetPRandomu32:
-		s = "GetPRandomu32"
-	case GetSMPProcessorID:
-		s = "GetSMPProcessorID"
-	case SKBStoreBytes:
-		s = "SKBStoreBytes"
-	case CSUMReplaceL3:
-		s = "CSUMReplaceL3"
-	case CSUMReplaceL4:
-		s = "CSUMReplaceL4"
-	case TailCall:
-		s = "TailCall"
-	case CloneRedirect:
-		s = "CloneRedirect"
-	case GetCurrentPIDTGID:
-		s = "GetCurrentPIDTGID"
-	case GetCurrentUIDGID:
-		s = "GetCurrentUIDGID"
-	case GetCurrentComm:
-		s = "GetCurrentComm"
-	case GetCGroupClassID:
-		s = "GetCGroupClassID"
-	case SKBVlanPush:
-		s = "SKBVlanPush"
-	case SKBVlanPop:
-		s = "SKBVlanPop"
-	case SKBGetTunnelKey:
-		s = "SKBGetTunnelKey"
-	case SKBSetTunnelKey:
-		s = "SKBSetTunnelKey"
-	case PerfEventRead:
-		s = "PerfEventRead"
-	case Redirect:
-		s = "Redirect"
-	case GetRouteRealm:
-		s = "GetRouteRealm"
-	case PerfEventOutput:
-		s = "PerfEventOutput"
-	case GetStackID:
-		s = "GetStackID"
-	case CsumDiff:
-		s = "CsumDiff"
-	case SKBGetTunnelOpt:
-		s = "SKBGetTunnelOpt"
-	case SKBSetTunnelOpt:
-		s = "SKBSetTunnelOpt"
-	case SKBChangeProto:
-		s = "SKBChangeProto"
-	case SKBChangeType:
-		s = "SKBChangeType"
-	case SKBUnderCGroup:
-		s = "SKBUnderCGroup"
-	case GetHashRecalc:
-		s = "GetHashRecalc"
-	case GetCurrentTask:
-		s = "GetCurrentTask"
-	case ProbeWriteUser:
-		s = "ProbeWriteUser"
-	case CurrentTaskUnderCGroup:
-		s = "CurrentTaskUnderCGroup"
-	case SKBChangeTail:
-		s = "SKBChangeTail"
-	case SKBPullData:
-		s = "SKBPullData"
-	case CSUMUpdate:
-		s = "CSUMUpdate"
-	case SetHashInvalid:
-		s = "SetHashInvalid"
-	case GetNUMANodeID:
-		s = "GetNUMANodeID"
-	case SKBChangeHead:
-		s = "SKBChangeHead"
-	case XDPAdjustHead:
-		s = "XDPAdjustHead"
-	case ProbeReadStr:
-		s = "ProbeReadStr"
-	case GetSocketCookie:
-		s = "GetSocketCookie"
-	case GetSocketUID:
-		s = "GetSocketUID"
-	case SetHash:
-		s = "SetHash"
-	case SetSockOpt:
-		s = "SetSockOpt"
-	case SKBAdjustRoom:
-		s = "SKBAdjustRoom"
-	default:
-		return fmt.Sprintf("uknown function call: %d", callNo)
-	}
-	return s
-}
 
 // ProgType of the eBPF program
 type ProgType uint32
@@ -1303,7 +1199,7 @@ func (ins Instruction) String() string {
 			off = ""
 			dst = ""
 			opPrefix = "Call"
-			opSuffix = fmt.Sprintf(" %s", getFuncStr(int32(ins.Constant)))
+			opSuffix = fmt.Sprintf(" %v", Func(ins.Constant))
 		case ExitOp:
 			imm = ""
 			src = ""
@@ -1423,5 +1319,12 @@ func BPFILdImm64Raw(dst, src Register, imm int64) Instruction {
 		DstRegister: dst,
 		SrcRegister: src,
 		Constant:    imm,
+	}
+}
+
+func BPFCall(fn Func) Instruction {
+	return Instruction{
+		OpCode:   Call,
+		Constant: int64(fn),
 	}
 }

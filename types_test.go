@@ -8,6 +8,7 @@ import (
 // to format an instruction stream.
 func ExampleInstructions_Format() {
 	insns := Instructions{
+		BPFCall(MapLookupElement),
 		BPFILdImm64(Reg0, 42),
 		BPFIOp(Exit),
 	}
@@ -22,14 +23,17 @@ func ExampleInstructions_Format() {
 	fmt.Printf("% 3s\n", insns)
 
 	// Output: Default format:
-	// 0: LdImmDW dst: r0 imm: 42
-	// 2: Exit
+	// 0: Call MapLookupElement
+	// 1: LdImmDW dst: r0 imm: 42
+	// 3: Exit
 	//
 	// Custom indendation:
-	// 	0: LdImmDW dst: r0 imm: 42
-	// 	2: Exit
+	// 	0: Call MapLookupElement
+	// 	1: LdImmDW dst: r0 imm: 42
+	// 	3: Exit
 	//
 	// Indent using spaces:
-	//    0: LdImmDW dst: r0 imm: 42
-	//    2: Exit
+	//    0: Call MapLookupElement
+	//    1: LdImmDW dst: r0 imm: 42
+	//    3: Exit
 }

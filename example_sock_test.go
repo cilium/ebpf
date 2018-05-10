@@ -96,7 +96,7 @@ func Example_socket() {
 		ebpf.BPFILdMapFd(ebpf.Reg1, mapFd),
 		// call map lookup -> map_lookup_elem(r1, r2)
 		// call imm
-		ebpf.BPFIImm(ebpf.Call, ebpf.MapLookupElement),
+		ebpf.BPFCall(ebpf.MapLookupElement),
 		// exit if reg0 is 0
 		// jeq r0, 2, 0
 		ebpf.BPFIDstOff(ebpf.JEqImm, ebpf.Reg0, 2),

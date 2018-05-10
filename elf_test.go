@@ -17,8 +17,17 @@ func TestNewCollectionSpecFromELF(t *testing.T) {
 		t.Fatal("Can't parse ELF:", err)
 	}
 
-	checkMapSpec(t, spec.Maps, "hash_map", &MapSpec{Hash, 4, 2, 42, 4242})
-	checkMapSpec(t, spec.Maps, "hash_map2", &MapSpec{Hash, 2, 1, 21, 2121})
+	hashMapSpec := &MapSpec{Hash, 4, 2, 42, 4242, nil}
+	checkMapSpec(t, spec.Maps, "hash_map", hashMapSpec)
+	checkMapSpec(t, spec.Maps, "array_of_hash_map", &MapSpec{
+		ArrayOfMaps, 4, 0, 2, 0, hashMapSpec,
+	})
+
+	hashMap2Spec := &MapSpec{Hash, 2, 1, 21, 2121, nil}
+	checkMapSpec(t, spec.Maps, "hash_map2", hashMap2Spec)
+	checkMapSpec(t, spec.Maps, "hash_of_hash_map", &MapSpec{
+		HashOfMaps, 4, 0, 2, 0, hashMap2Spec,
+	})
 
 	checkProgramSpec(t, spec.Programs, "xdp_prog", &ProgramSpec{
 		Type:    XDP,
@@ -49,6 +58,12 @@ func checkMapSpec(t *testing.T, maps map[string]*MapSpec, name string, want *Map
 		return
 	}
 
+	mapSpecEqual(t, name, have, want)
+}
+
+func mapSpecEqual(t *testing.T, name string, have, want *MapSpec) {
+	t.Helper()
+
 	if have.Type != want.Type {
 		t.Errorf("%s: expected type %v, got %v", name, want.Type, have.Type)
 	}
@@ -67,6 +82,15 @@ func checkMapSpec(t *testing.T, maps map[string]*MapSpec, name string, want *Map
 
 	if have.Flags != want.Flags {
 		t.Errorf("%s: expected flags %v, got %v", name, want.Flags, have.Flags)
+	}
+
+	switch {
+	case have.InnerMap != nil && want.InnerMap == nil:
+		t.Errorf("%s: extraneous InnerMap", name)
+	case have.InnerMap == nil && want.InnerMap != nil:
+		t.Errorf("%s: missing InnerMap", name)
+	case have.InnerMap != nil && want.InnerMap != nil:
+		mapSpecEqual(t, name+".InnerMap", have.InnerMap, want.InnerMap)
 	}
 }
 

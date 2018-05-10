@@ -4,9 +4,9 @@ package ebpf
 
 import "strconv"
 
-const _MapType_name = "HashArrayProgramArrayPerfEventArrayPerCPUHashPerCPUArrayStackTraceCGroupArrayLRUHashLRUCPUHashLPMTrie"
+const _MapType_name = "HashArrayProgramArrayPerfEventArrayPerCPUHashPerCPUArrayStackTraceCGroupArrayLRUHashLRUCPUHashLPMTrieArrayOfMapsHashOfMaps"
 
-var _MapType_index = [...]uint8{0, 4, 9, 21, 35, 45, 56, 66, 77, 84, 94, 101}
+var _MapType_index = [...]uint8{0, 4, 9, 21, 35, 45, 56, 66, 77, 84, 94, 101, 112, 122}
 
 func (i MapType) String() string {
 	i -= 1

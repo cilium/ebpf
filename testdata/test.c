@@ -6,6 +6,9 @@ typedef unsigned long uint64_t;
 
 #define __section(NAME) __attribute__((section(NAME), used))
 
+#define BPF_MAP_TYPE_ARRAY_OF_MAPS (12)
+#define BPF_MAP_TYPE_HASH_OF_MAPS (13)
+
 char __license[] __section("license") = "MIT";
 
 struct map {
@@ -14,6 +17,7 @@ struct map {
 	uint32_t value_size;
 	uint32_t max_entries;
 	uint32_t flags;
+	uint32_t inner_map_idx;
 };
 
 struct map hash_map __section("maps") = {
@@ -30,6 +34,20 @@ struct map hash_map2 __section("maps") = {
 	.value_size = 1,
 	.max_entries = 21,
 	.flags = 2121,
+};
+
+struct map array_of_hash_map __section("maps") = {
+	.type = BPF_MAP_TYPE_ARRAY_OF_MAPS,
+	.key_size = sizeof(uint32_t),
+	.max_entries = 2,
+	.inner_map_idx = 0, // points to "hash_map"
+};
+
+struct map hash_of_hash_map __section("maps") = {
+	.type = BPF_MAP_TYPE_HASH_OF_MAPS,
+	.key_size = sizeof(uint32_t),
+	.max_entries = 2,
+	.inner_map_idx = 1, // points to "hash_map2"
 };
 
 unsigned long non_map;

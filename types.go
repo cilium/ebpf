@@ -56,6 +56,12 @@ const (
 	// for storing things like IP addresses which can be bit masked allowing for keys of differing
 	// values to refer to the same reference based on their masks. See wikipedia for more details.
 	LPMTrie
+	// ArrayOfMaps - Each item in the array is another map. The inner map mustn't be a map of maps
+	// itself.
+	ArrayOfMaps
+	// HashOfMaps - Each item in the hash map is another map. The inner map mustn't be a map of maps
+	// itself.
+	HashOfMaps
 )
 
 const (

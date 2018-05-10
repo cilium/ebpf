@@ -11,6 +11,7 @@ import (
 type mapCreateAttr struct {
 	mapType                               MapType
 	keySize, valueSize, maxEntries, flags uint32
+	innerMapFd                            uint32
 }
 
 type mapOpAttr struct {
@@ -106,6 +107,11 @@ type objGetInfoByFDAttr struct {
 	info    syscallPtr // May be either mapInfo or progInfo
 }
 
+type getFDByIDAttr struct {
+	id   uint32
+	next uint32
+}
+
 func newPtr(ptr unsafe.Pointer) syscallPtr {
 	return syscallPtr{ptr: ptr}
 }
@@ -160,6 +166,7 @@ func getObject(fileName string) (uintptr, error) {
 }
 
 func getObjectInfoByFD(fd uint32, info unsafe.Pointer, size uintptr) error {
+	// available from 4.13
 	attr := objGetInfoByFDAttr{
 		fd:      fd,
 		infoLen: uint32(size),
@@ -167,6 +174,31 @@ func getObjectInfoByFD(fd uint32, info unsafe.Pointer, size uintptr) error {
 	}
 	_, errNo := bpfCall(_ObjGetInfoByFD, unsafe.Pointer(&attr), int(unsafe.Sizeof(attr)))
 	return bpfErrNo(errNo)
+}
+
+func getMapSpecByFD(fd uint32) (*MapSpec, error) {
+	var info mapInfo
+	err := getObjectInfoByFD(uint32(fd), unsafe.Pointer(&info), unsafe.Sizeof(info))
+	if err != nil {
+		return nil, fmt.Errorf("ebpf: can't retrieve map info: %s", err.Error())
+	}
+	return &MapSpec{
+		MapType(info.mapType),
+		info.keySize,
+		info.valueSize,
+		info.maxEntries,
+		info.flags,
+		nil,
+	}, nil
+}
+
+func getMapFDByID(id uint32) (uint32, error) {
+	// available from 4.13
+	attr := getFDByIDAttr{
+		id: id,
+	}
+	ptr, errNo := bpfCall(_MapGetFDByID, unsafe.Pointer(&attr), int(unsafe.Sizeof(attr)))
+	return uint32(ptr), bpfErrNo(errNo)
 }
 
 func bpfCall(cmd int, attr unsafe.Pointer, size int) (uintptr, syscall.Errno) {

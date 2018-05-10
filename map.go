@@ -7,13 +7,15 @@ import (
 	"unsafe"
 )
 
-// MapSpec is an interface type that cna initialize a new Map
+// MapSpec is an interface type that can initialize a new Map
 type MapSpec struct {
 	Type       MapType
 	KeySize    uint32
 	ValueSize  uint32
 	MaxEntries uint32
 	Flags      uint32
+	// InnerMap is used as a template for ArrayOfMaps and HashOfMaps
+	InnerMap *MapSpec
 }
 
 func (ms *MapSpec) String() string {
@@ -28,12 +30,40 @@ type Map struct {
 
 // NewMap creates a new Map
 func NewMap(spec *MapSpec) (*Map, error) {
+	if spec.Type != ArrayOfMaps && spec.Type != HashOfMaps {
+		return newMap(spec, 0)
+	}
+
+	if spec.ValueSize != 0 {
+		return nil, fmt.Errorf("ebpf: ValueSize must be zero for map of map")
+	}
+	if spec.InnerMap == nil {
+		return nil, fmt.Errorf("ebpf: map of map requires InnerMap")
+	}
+
+	inner, err := newMap(spec.InnerMap, 0)
+	if err != nil {
+		return nil, err
+	}
+	defer inner.Close()
+
+	outerSpec := *spec
+	outerSpec.InnerMap = nil
+	outerSpec.ValueSize = 4
+	return newMap(&outerSpec, inner.fd)
+}
+
+func newMap(spec *MapSpec, inner uint32) (*Map, error) {
+	if spec.InnerMap != nil {
+		return nil, fmt.Errorf("ebpf: inner map not allowed for this type")
+	}
 	attr := mapCreateAttr{
 		spec.Type,
 		spec.KeySize,
 		spec.ValueSize,
 		spec.MaxEntries,
 		spec.Flags,
+		inner,
 	}
 	fd, e := bpfCall(_MapCreate, unsafe.Pointer(&attr), int(unsafe.Sizeof(attr)))
 	err := bpfErrNo(e)
@@ -74,7 +104,7 @@ func (m *Map) GetRaw(key encoding.BinaryMarshaler) ([]byte, error) {
 	}
 	valueBytes := make([]byte, int(m.meta.ValueSize))
 	attr := mapOpAttr{
-		mapFd: uint32(m.fd),
+		mapFd: m.fd,
 		key:   newPtr(unsafe.Pointer(&keyBytes[0])),
 		value: newPtr(unsafe.Pointer(&valueBytes[0])),
 	}
@@ -162,7 +192,10 @@ func (m *Map) GetNextKeyRaw(key encoding.BinaryMarshaler) ([]byte, error) {
 }
 
 // Close removes a Map
-func (m *Map) Close() error {
+func (m Map) Close() error {
+	// This function has a value receiver to make sure that we close the
+	// correct fd if the function call is deferred. Otherwise unmarshaling
+	// into an existing value of type *Map can exhibit surprising behaviour.
 	return syscall.Close(int(m.fd))
 }
 
@@ -185,20 +218,13 @@ func LoadMap(fileName string) (*Map, error) {
 	if err != nil {
 		return nil, err
 	}
-	var info mapInfo
-	err = getObjectInfoByFD(uint32(fd), unsafe.Pointer(&info), unsafe.Sizeof(info))
+	spec, err := getMapSpecByFD(uint32(fd))
 	if err != nil {
-		return nil, fmt.Errorf("ebpf: can't retrieve map info: %s", err.Error())
+		return nil, err
 	}
 	return &Map{
 		uint32(fd),
-		MapSpec{
-			MapType(info.mapType),
-			info.keySize,
-			info.valueSize,
-			info.maxEntries,
-			info.flags,
-		},
+		*spec,
 	}, nil
 }
 
@@ -255,4 +281,32 @@ func (m *Map) marshal(value encoding.BinaryMarshaler, length uint32) ([]byte, er
 		return nil, fmt.Errorf("%T must marshal to %d bytes, not %d", value, length, l)
 	}
 	return bytes, nil
+}
+
+// UnmarshalBinary implements BinaryUnmarshaler.
+func (m *Map) UnmarshalBinary(buf []byte) error {
+	if len(buf) != 4 {
+		return fmt.Errorf("ebpf: map id requires uint32")
+	}
+	// Looking up an entry in a nested map or prog array returns an id,
+	// not an fd.
+	id := nativeEndian.Uint32(buf)
+	fd, err := getMapFDByID(id)
+	if err != nil {
+		return err
+	}
+	meta, err := getMapSpecByFD(fd)
+	if err != nil {
+		return err
+	}
+	m.fd = fd
+	m.meta = *meta
+	return nil
+}
+
+// MarshalBinary implements BinaryMarshaler.
+func (m *Map) MarshalBinary() ([]byte, error) {
+	buf := make([]byte, 4)
+	nativeEndian.PutUint32(buf, m.fd)
+	return buf, nil
 }

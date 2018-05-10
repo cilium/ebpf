@@ -205,6 +205,7 @@ func (ec *elfCode) loadMaps(mapSections map[int]*elf.Section) (map[string]*MapSp
 		}
 
 		size := len(data) / n
+		var ordered []*MapSpec
 		for i := 0; i < n; i++ {
 			rd := bytes.NewReader(data[i*size : i*size+size])
 			name, err := ec.getSecSymbolName(idx, uint64(i*size))
@@ -217,6 +218,7 @@ func (ec *elfCode) loadMaps(mapSections map[int]*elf.Section) (map[string]*MapSp
 			}
 
 			var spec MapSpec
+			var inner uint32
 			switch {
 			case binary.Read(rd, ec.ByteOrder, &spec.Type) != nil:
 				return nil, fmt.Errorf("map %v: missing type", name)
@@ -228,11 +230,28 @@ func (ec *elfCode) loadMaps(mapSections map[int]*elf.Section) (map[string]*MapSp
 				return nil, fmt.Errorf("map %v: missing max entries", name)
 			case binary.Read(rd, ec.ByteOrder, &spec.Flags) != nil:
 				return nil, fmt.Errorf("map %v: missing flags", name)
+			case rd.Len() > 0 && binary.Read(rd, ec.ByteOrder, &inner) != nil:
+				return nil, fmt.Errorf("map %v: can't read inner map index", name)
 			}
+
 			if rd.Len() != 0 {
 				return nil, fmt.Errorf("map %v: unknown fields in definition", name)
 			}
+
+			if spec.Type == ArrayOfMaps || spec.Type == HashOfMaps {
+				if int(inner) > len(ordered) {
+					return nil, fmt.Errorf("map %v: invalid inner map index %d", name, inner)
+				}
+
+				innerSpec := ordered[int(inner)]
+				if innerSpec.InnerMap != nil {
+					return nil, fmt.Errorf("map %v: can't nest map of map", name)
+				}
+				spec.InnerMap = innerSpec
+			}
+
 			maps[name] = &spec
+			ordered = append(ordered, &spec)
 		}
 	}
 	return maps, nil

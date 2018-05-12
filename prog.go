@@ -29,38 +29,6 @@ type ProgramSpec struct {
 	Instructions  Instructions
 	License       string
 	KernelVersion uint32
-	Refs          map[string][]*Instruction
-}
-
-// RewriteMap rewrites a symbol to point at a Map.
-func (ps *ProgramSpec) RewriteMap(symbol string, m *Map) error {
-	insns := ps.Refs[symbol]
-	if len(insns) == 0 {
-		return fmt.Errorf("unknown symbol %v", symbol)
-	}
-	for _, ins := range insns {
-		if ins.OpCode != LdDW {
-			return fmt.Errorf("symbol %v: not a valid map symbol, expected LdDW instruction", symbol)
-		}
-		ins.SrcRegister = 1
-		ins.Constant = int64(m.fd)
-	}
-	return nil
-}
-
-// RewriteUint64 rewrites a symbol to a 64bit constant.
-func (ps *ProgramSpec) RewriteUint64(symbol string, value uint64) error {
-	insns := ps.Refs[symbol]
-	if len(insns) == 0 {
-		return fmt.Errorf("unknown symbol %v", symbol)
-	}
-	for _, ins := range insns {
-		if ins.OpCode != LdDW {
-			return fmt.Errorf("symbol %v: expected LdDw instruction", symbol)
-		}
-		ins.Constant = int64(value)
-	}
-	return nil
 }
 
 // Program represents a Program file descriptor

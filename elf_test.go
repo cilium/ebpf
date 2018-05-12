@@ -34,21 +34,11 @@ func TestNewCollectionSpecFromELF(t *testing.T) {
 	checkProgramSpec(t, spec.Programs, "xdp_prog", &ProgramSpec{
 		Type:    XDP,
 		License: "MIT",
-		Refs: map[string][]*Instruction{
-			"hash_map":    nil,
-			"hash_map2":   nil,
-			"non_map":     nil,
-			"helper_func": nil,
-		},
 	})
 	checkProgramSpec(t, spec.Programs, "no_relocation", &ProgramSpec{
 		Type:    SocketFilter,
 		License: "MIT",
 	})
-
-	if _, ok := spec.Programs["xdp_prog"].Refs["non_map"]; !ok {
-		t.Error("Missing references for 'non_map'")
-	}
 }
 
 func Test64bitImmediate(t *testing.T) {
@@ -134,22 +124,11 @@ func checkProgramSpec(t *testing.T, progs map[string]*ProgramSpec, name string, 
 		t.Errorf("%s: expected %v program, got %v", name, want.Type, have.Type)
 	}
 
-	for sym, wantOps := range want.Refs {
-		if wantOps != nil {
-			// It's currently not possbile to compare instructions due to
-			// the presence of the extra field.
-			t.Fatalf("Checking instructions is not supported")
-		}
-
-		if _, ok := have.Refs[sym]; !ok {
-			t.Errorf("Missing reference for %v", sym)
-			continue
-		}
-	}
-
-	for sym := range have.Refs {
-		if _, ok := want.Refs[sym]; !ok {
-			t.Errorf("extranenous symbol %v", sym)
-		}
+	if want.Instructions != nil && !reflect.DeepEqual(have.Instructions, want.Instructions) {
+		t.Log("Expected program")
+		t.Log(want.Instructions)
+		t.Log("Actual program")
+		t.Log(want.Instructions)
+		t.Error("Instructions do not match")
 	}
 }

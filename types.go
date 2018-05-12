@@ -1034,6 +1034,13 @@ type Instruction struct {
 	SrcRegister Register
 	Offset      int16
 	Constant    int64
+	Reference   string
+}
+
+// Ref creates a reference to a symbol.
+func (ins Instruction) Ref(symbol string) Instruction {
+	ins.Reference = symbol
+	return ins
 }
 
 // EncodedLength returns the encoded length in number of instructions.

@@ -157,7 +157,6 @@ func (ec *elfCode) loadProg(idx int, prog, rels *elf.Section, license string, ve
 	if rels == nil {
 		return funcName, spec, nil
 	}
-	spec.Refs = make(map[string][]*Instruction)
 	err = ec.parseRelocateApply(spec, rels, offsets)
 	if err != nil {
 		return "", nil, err
@@ -350,8 +349,7 @@ func (ec *elfCode) parseRelocateApply(spec *ProgramSpec, sec *elf.Section, offse
 		if !ok {
 			return fmt.Errorf("section %v: symbol %v: invalid instruction offset %x", sec.Name, sym, rel.Offset)
 		}
-		ins := &spec.Instructions[idx]
-		spec.Refs[sym] = append(spec.Refs[sym], ins)
+		spec.Instructions[idx].Reference = sym
 	}
 	return nil
 }

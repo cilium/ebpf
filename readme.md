@@ -3,7 +3,7 @@ eBPF
 eBPF is go library that provides utilities for loading, compiling, and debugging eBPF programs.
 In also has extensive inline commenting that documents the internals of eBPF quite well.
 For more information on eBPF [see the kernel documentation](http://elixir.free-electrons.com/linux/latest/source/Documentation/networking/filter.txt),
-for a really deep dive explanation, the [python cilium docs](http://cilium.readthedocs.io/en/v0.10/bpf/) are a fantastic resource.
+for a really deep dive explanation, the [python cilium docs](http://cilium.readthedocs.io/en/doc-1.0/bpf/) are a fantastic resource.
 
 Is there any advantage to doing this in go? Good question, the answer is yes. Go is a powerful
 general purpose programming language. Traditionally, low-level things like eBPF are,

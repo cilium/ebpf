@@ -29,7 +29,7 @@ type ProgramSpec struct {
 	Instructions  Instructions
 	License       string
 	KernelVersion uint32
-	Refs          map[string][]*BPFInstruction
+	Refs          map[string][]*Instruction
 }
 
 // RewriteMap rewrites a symbol to point at a Map.
@@ -43,7 +43,7 @@ func (ps *ProgramSpec) RewriteMap(symbol string, m *Map) error {
 			return fmt.Errorf("symbol %v: not a valid map symbol, expected LdDW instruction", symbol)
 		}
 		ins.SrcRegister = 1
-		ins.Constant = int32(m.fd)
+		ins.Constant = int64(m.fd)
 	}
 	return nil
 }
@@ -58,8 +58,7 @@ func (ps *ProgramSpec) RewriteUint64(symbol string, value uint64) error {
 		if ins.OpCode != LdDW {
 			return fmt.Errorf("symbol %v: expected LdDw instruction", symbol)
 		}
-		ins.Constant = int32(value & 0xffffffff)
-		ins.extra.Constant = int32(value >> 32)
+		ins.Constant = int64(value)
 	}
 	return nil
 }
@@ -75,20 +74,17 @@ func NewProgram(spec *ProgramSpec) (*Program, error) {
 	if len(spec.Instructions) == 0 {
 		return nil, fmt.Errorf("instructions cannot be empty")
 	}
-	var cInstructions []bpfInstruction
-	for _, ins := range spec.Instructions {
-		inss := ins.getCStructs()
-		for _, ins2 := range inss {
-			cInstructions = append(cInstructions, ins2)
-		}
+	bytecode, err := spec.Instructions.MarshalBinary()
+	if err != nil {
+		return nil, err
 	}
-	insCount := uint32(len(cInstructions))
+	insCount := uint32(len(bytecode) / InstructionSize)
 	lic := []byte(spec.License)
 	logs := make([]byte, LogBufSize)
 	attr := progCreateAttr{
 		progType:     spec.Type,
 		insCount:     insCount,
-		instructions: newPtr(unsafe.Pointer(&cInstructions[0])),
+		instructions: newPtr(unsafe.Pointer(&bytecode[0])),
 		license:      newPtr(unsafe.Pointer(&lic[0])),
 		logLevel:     1,
 		logSize:      LogBufSize,

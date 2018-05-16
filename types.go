@@ -2,7 +2,9 @@ package ebpf
 
 import (
 	"bytes"
+	"encoding/binary"
 	"fmt"
+	"math"
 	"strings"
 )
 
@@ -1020,67 +1022,130 @@ const (
 	SockOps
 )
 
-type bitField uint8
-
-func (r *bitField) SetPart1(v Register) {
-	*r = bitField((uint8(*r) & 0xF0) | uint8(v))
+type bpfInstruction struct {
+	OpCode    uint8
+	Registers bpfRegisters
+	Offset    int16
+	Constant  int32
 }
 
-func (r *bitField) SetPart2(v Register) {
-	*r = bitField((uint8(*r) & 0xF) | (uint8(v) << 4))
+type bpfRegisters uint8
+
+func newBPFRegisters(dst, src Register) bpfRegisters {
+	return bpfRegisters((src << 4) | (dst & 0xF))
 }
 
-func (r bitField) GetPart1() Register {
-	return Register(uint8(r) & 0xF)
+func (r bpfRegisters) Dst() Register {
+	return Register(r & 0xF)
 }
 
-func (r bitField) GetPart2() Register {
-	return Register(uint8(r) >> 4)
+func (r bpfRegisters) Src() Register {
+	return Register(r >> 4)
 }
 
 // Instructions is the lowest level construct for a BPF snippet in array.
-type Instructions []*BPFInstruction
+type Instructions []Instruction
 
 func (inss Instructions) String() string {
-	return inss.StringIndent(0)
+	return fmt.Sprint(inss)
 }
 
-// StringIndent prints out BPF instructions in a human readable format
-// with a specific indentation indentation level.
-func (inss Instructions) StringIndent(r int) string {
-	var buf bytes.Buffer
-	indent := strings.Repeat("\t", r)
-	for i, ins := range inss {
-		buf.WriteString(fmt.Sprintf("%s%d: %s\n", indent, i, ins))
-		extra := ins.extra
-		i2 := 1
-		for extra != nil {
-			buf.WriteString(fmt.Sprintf("\t%sex-%d-%d: %s\n", indent, i, i2, extra))
-			extra = extra.extra
+// Format implements fmt.Formatter.
+//
+// The function only accepts 's' and 'v' formats, which are currently
+// output identically. You can control indentation by specifying a
+// width. The default indentation is a tab, which can be overriden
+// by specifying the ' ' space flag.
+func (inss Instructions) Format(f fmt.State, c rune) {
+	if c != 's' && c != 'v' {
+		fmt.Fprintf(f, "{UNKNOWN FORMAT '%c'}", c)
+		return
+	}
+
+	padding, ok := f.Width()
+	if !ok {
+		padding = 0
+	}
+
+	indent := strings.Repeat("\t", padding)
+	if f.Flag(' ') {
+		indent = strings.Repeat(" ", padding)
+	}
+
+	// Figure out how many digits we need to represent the highest
+	// offset.
+	highestOffset := 0
+	for _, ins := range inss {
+		highestOffset += ins.EncodedLength()
+	}
+	offsetWidth := int(math.Ceil(math.Log10(float64(highestOffset))))
+
+	offset := 0
+	for _, ins := range inss {
+		fmt.Fprintf(f, "%s%*d: %s\n", indent, offsetWidth, offset, ins)
+		offset += ins.EncodedLength()
+	}
+
+	return
+}
+
+// MarshalBinary marshals a list of instructions into the format
+// expected by the kernel.
+func (inss Instructions) MarshalBinary() ([]byte, error) {
+	wr := bytes.NewBuffer(make([]byte, 0, len(inss)*InstructionSize))
+	for _, ins := range inss {
+		cons := int32(ins.Constant)
+
+		// LdDW has a 64bit immediate. The least significant 32bit
+		// are written first.
+		if ins.OpCode == LdDW {
+			cons = int32(uint32(ins.Constant))
+		}
+
+		bpfi := bpfInstruction{
+			ins.OpCode,
+			newBPFRegisters(ins.DstRegister, ins.SrcRegister),
+			ins.Offset,
+			cons,
+		}
+
+		if err := binary.Write(wr, nativeEndian, &bpfi); err != nil {
+			return nil, err
+		}
+
+		// LdDW is the only operation with a 64bit immediate
+		if ins.OpCode != LdDW {
+			continue
+		}
+
+		bpfi = bpfInstruction{
+			Constant: int32(ins.Constant >> 32),
+		}
+
+		if err := binary.Write(wr, nativeEndian, &bpfi); err != nil {
+			return nil, err
 		}
 	}
-	return buf.String()
+	return wr.Bytes(), nil
 }
 
-// BPFInstruction represents the data
+// Instruction represents the data
 // of a specific eBPF instruction and how
 // it will execute (opcode, registers, constant, offset, etc).
-type BPFInstruction struct {
+type Instruction struct {
 	OpCode      uint8
 	DstRegister Register
 	SrcRegister Register
 	Offset      int16
-	Constant    int32
-
-	sectionName string
-	extra       *BPFInstruction
+	Constant    int64
 }
 
-type bpfInstruction struct {
-	OpCode    uint8
-	Registers bitField
-	Offset    int16
-	Constant  int32
+// EncodedLength returns the encoded length in number of instructions.
+func (ins Instruction) EncodedLength() int {
+	if ins.OpCode == LdDW {
+		return 2
+	}
+	return 1
 }
 
 var classMap = map[int]string{
@@ -1094,9 +1159,9 @@ var classMap = map[int]string{
 	ALU64Class: "ALU64",
 }
 
-func (bpfi *BPFInstruction) String() string {
+func (ins Instruction) String() string {
 	var opStr string
-	op := uint8(bpfi.OpCode)
+	op := uint8(ins.OpCode)
 	var class, dst, src, off, imm string
 	var sBit uint8
 	var alu32 string
@@ -1106,32 +1171,32 @@ func (bpfi *BPFInstruction) String() string {
 		class = classMap[int(classCode)]
 		mode := ""
 		xAdd := false
-		dst = fmt.Sprintf(" dst: %s", bpfi.DstRegister)
+		dst = fmt.Sprintf(" dst: %s", ins.DstRegister)
 		switch op & ModeCode {
 		case ImmMode:
 			mode = "Imm"
-			imm = fmt.Sprintf(" imm: %d", bpfi.Constant)
+			imm = fmt.Sprintf(" imm: %d", ins.Constant)
 		case AbsMode:
 			mode = "Abs"
 			dst = ""
-			imm = fmt.Sprintf(" imm: %d", bpfi.Constant)
+			imm = fmt.Sprintf(" imm: %d", ins.Constant)
 			off = ""
 		case IndMode:
 			mode = "Ind"
-			src = fmt.Sprintf(" src: %s", bpfi.SrcRegister)
-			imm = fmt.Sprintf(" imm: %d", bpfi.Constant)
+			src = fmt.Sprintf(" src: %s", ins.SrcRegister)
+			imm = fmt.Sprintf(" imm: %d", ins.Constant)
 			off = ""
 		case MemMode:
-			src = fmt.Sprintf(" src: %s", bpfi.SrcRegister)
-			off = fmt.Sprintf(" off: %d", bpfi.Offset)
-			imm = fmt.Sprintf(" imm: %d", bpfi.Constant)
+			src = fmt.Sprintf(" src: %s", ins.SrcRegister)
+			off = fmt.Sprintf(" off: %d", ins.Offset)
+			imm = fmt.Sprintf(" imm: %d", ins.Constant)
 		case LenMode:
 			mode = "Len"
 		case MshMode:
 			mode = "Msh"
 		case XAddMode:
 			mode = "XAdd"
-			src = fmt.Sprintf(" src: %s", bpfi.SrcRegister)
+			src = fmt.Sprintf(" src: %s", ins.SrcRegister)
 			xAdd = true
 		}
 		size := ""
@@ -1153,14 +1218,14 @@ func (bpfi *BPFInstruction) String() string {
 		if classCode == ALUClass {
 			alu32 = "32"
 		}
-		dst = fmt.Sprintf(" dst: %s", bpfi.DstRegister)
+		dst = fmt.Sprintf(" dst: %s", ins.DstRegister)
 		sBit = op & SrcCode
 		opSuffix := ""
 		if sBit == ImmSrc {
-			imm = fmt.Sprintf(" imm: %d", bpfi.Constant)
+			imm = fmt.Sprintf(" imm: %d", ins.Constant)
 			opSuffix = "Imm"
 		} else {
-			src = fmt.Sprintf(" src: %s", bpfi.SrcRegister)
+			src = fmt.Sprintf(" src: %s", ins.SrcRegister)
 			opSuffix = "Src"
 		}
 		opPrefix := ""
@@ -1194,7 +1259,7 @@ func (bpfi *BPFInstruction) String() string {
 		case EndFlag:
 			alu32 = ""
 			src = ""
-			imm = fmt.Sprintf(" imm: %d", bpfi.Constant)
+			imm = fmt.Sprintf(" imm: %d", ins.Constant)
 			opPrefix = "ToFromLe"
 			if sBit == 1 {
 				opPrefix = "ToFromBe"
@@ -1203,15 +1268,15 @@ func (bpfi *BPFInstruction) String() string {
 		}
 		opStr = fmt.Sprintf("%s%s%s", opPrefix, alu32, opSuffix)
 	case JmpClass:
-		dst = fmt.Sprintf(" dst: %s", bpfi.DstRegister)
-		off = fmt.Sprintf(" off: %d", bpfi.Offset)
+		dst = fmt.Sprintf(" dst: %s", ins.DstRegister)
+		off = fmt.Sprintf(" off: %d", ins.Offset)
 		sBit = op & SrcCode
 		opSuffix := ""
 		if sBit == ImmSrc {
-			imm = fmt.Sprintf(" imm: %d", bpfi.Constant)
+			imm = fmt.Sprintf(" imm: %d", ins.Constant)
 			opSuffix = "Imm"
 		} else {
-			src = fmt.Sprintf(" src: %s", bpfi.SrcRegister)
+			src = fmt.Sprintf(" src: %s", ins.SrcRegister)
 			opSuffix = "Src"
 		}
 		opPrefix := ""
@@ -1238,7 +1303,7 @@ func (bpfi *BPFInstruction) String() string {
 			off = ""
 			dst = ""
 			opPrefix = "Call"
-			opSuffix = fmt.Sprintf(" %s", getFuncStr(bpfi.Constant))
+			opSuffix = fmt.Sprintf(" %s", getFuncStr(int32(ins.Constant)))
 		case ExitOp:
 			imm = ""
 			src = ""
@@ -1249,52 +1314,52 @@ func (bpfi *BPFInstruction) String() string {
 		}
 		opStr = fmt.Sprintf("%s%s", opPrefix, opSuffix)
 	}
-	return fmt.Sprintf("op: %s%s%s%s%s", opStr, dst, src, off, imm)
+	return fmt.Sprintf("%s%s%s%s%s", opStr, dst, src, off, imm)
 }
 
 // BPFIOp BPF instruction that stands alone (i.e. exit)
-func BPFIOp(opCode uint8) *BPFInstruction {
-	return &BPFInstruction{
+func BPFIOp(opCode uint8) Instruction {
+	return Instruction{
 		OpCode: opCode,
 	}
 }
 
 // BPFIDst BPF instruction with a dst
-func BPFIDst(opCode uint8, dst Register) *BPFInstruction {
-	return &BPFInstruction{
+func BPFIDst(opCode uint8, dst Register) Instruction {
+	return Instruction{
 		OpCode:      opCode,
 		DstRegister: dst,
 	}
 }
 
 // BPFIImm BPF Instruction with a constant
-func BPFIImm(opCode uint8, imm int32) *BPFInstruction {
-	return &BPFInstruction{
+func BPFIImm(opCode uint8, imm int32) Instruction {
+	return Instruction{
 		OpCode:   opCode,
-		Constant: imm,
+		Constant: int64(imm),
 	}
 }
 
 // BPFIDstOff BPF instruction with a dst, and offset
-func BPFIDstOff(opCode uint8, dst Register, off int16) *BPFInstruction {
-	return &BPFInstruction{
+func BPFIDstOff(opCode uint8, dst Register, off int16) Instruction {
+	return Instruction{
 		OpCode: opCode,
 		Offset: off,
 	}
 }
 
 // BPFIDstImm BPF instruction with a dst, and constant
-func BPFIDstImm(opCode uint8, dst Register, imm int32) *BPFInstruction {
-	return &BPFInstruction{
+func BPFIDstImm(opCode uint8, dst Register, imm int32) Instruction {
+	return Instruction{
 		OpCode:      opCode,
 		DstRegister: dst,
-		Constant:    imm,
+		Constant:    int64(imm),
 	}
 }
 
 // BPFIDstSrc BPF instruction with a dst, and src
-func BPFIDstSrc(opCode uint8, dst, src Register) *BPFInstruction {
-	return &BPFInstruction{
+func BPFIDstSrc(opCode uint8, dst, src Register) Instruction {
+	return Instruction{
 		OpCode:      opCode,
 		DstRegister: dst,
 		SrcRegister: src,
@@ -1302,18 +1367,18 @@ func BPFIDstSrc(opCode uint8, dst, src Register) *BPFInstruction {
 }
 
 // BPFIDstOffImm BPF instruction with a dst, offset, and constant
-func BPFIDstOffImm(opCode uint8, dst Register, off int16, imm int32) *BPFInstruction {
-	return &BPFInstruction{
+func BPFIDstOffImm(opCode uint8, dst Register, off int16, imm int32) Instruction {
+	return Instruction{
 		OpCode:      opCode,
 		DstRegister: dst,
 		Offset:      off,
-		Constant:    imm,
+		Constant:    int64(imm),
 	}
 }
 
 // BPFIDstOffSrc BPF instruction with a dst, offset, and src.
-func BPFIDstOffSrc(opCode uint8, dst, src Register, off int16) *BPFInstruction {
-	return &BPFInstruction{
+func BPFIDstOffSrc(opCode uint8, dst, src Register, off int16) Instruction {
+	return Instruction{
 		OpCode:      opCode,
 		DstRegister: dst,
 		SrcRegister: src,
@@ -1322,54 +1387,41 @@ func BPFIDstOffSrc(opCode uint8, dst, src Register, off int16) *BPFInstruction {
 }
 
 // BPFIDstSrcImm BPF instruction with a dst, src, and constant
-func BPFIDstSrcImm(opCode uint8, dst, src Register, imm int32) *BPFInstruction {
-	return &BPFInstruction{
+func BPFIDstSrcImm(opCode uint8, dst, src Register, imm int32) Instruction {
+	return Instruction{
 		OpCode:      opCode,
 		DstRegister: dst,
 		SrcRegister: src,
-		Constant:    imm,
+		Constant:    int64(imm),
 	}
 }
 
 // BPFIDstOffImmSrc BPF instruction with a dst, src, offset, and constant
-func BPFIDstOffImmSrc(opCode uint8, dst, src Register, off int16, imm int32) *BPFInstruction {
-	return &BPFInstruction{
+func BPFIDstOffImmSrc(opCode uint8, dst, src Register, off int16, imm int32) Instruction {
+	return Instruction{
 		OpCode:      opCode,
 		DstRegister: dst,
 		SrcRegister: src,
 		Offset:      off,
-		Constant:    imm,
+		Constant:    int64(imm),
 	}
 }
 
 // BPFILdMapFd loads a user space fd into a BPF program as a reference to a
 // specific eBPF map.
-func BPFILdMapFd(dst Register, imm int) *BPFInstruction {
-	return BPFILdImm64Raw(dst, 1, uint64(imm))
+func BPFILdMapFd(dst Register, imm int) Instruction {
+	return BPFILdImm64Raw(dst, 1, int64(imm))
 }
 
-func BPFILdImm64(dst Register, imm uint64) *BPFInstruction {
+func BPFILdImm64(dst Register, imm int64) Instruction {
 	return BPFILdImm64Raw(dst, 0, imm)
 }
 
-func BPFILdImm64Raw(dst, src Register, imm uint64) *BPFInstruction {
-	bpfi := BPFIDstSrcImm(LdDW, dst, src, int32(uint32(imm)))
-	bpfi.extra = BPFIImm(0, int32(imm>>32))
-	return bpfi
-}
-
-func (bpfi *BPFInstruction) getCStructs() []bpfInstruction {
-	var bf bitField
-	var inss []bpfInstruction
-	for extra := bpfi; extra != nil; extra = extra.extra {
-		bf.SetPart1(extra.DstRegister)
-		bf.SetPart2(extra.SrcRegister)
-		inss = append(inss, bpfInstruction{
-			OpCode:    extra.OpCode,
-			Registers: bf,
-			Offset:    extra.Offset,
-			Constant:  extra.Constant,
-		})
+func BPFILdImm64Raw(dst, src Register, imm int64) Instruction {
+	return Instruction{
+		OpCode:      LdDW,
+		DstRegister: dst,
+		SrcRegister: src,
+		Constant:    imm,
 	}
-	return inss
 }

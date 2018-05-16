@@ -140,11 +140,11 @@ func (ec *elfCode) loadProg(idx int, prog, rels *elf.Section, license string, ve
 	if progType == Unrecognized {
 		return "", nil, nil
 	}
-	insns, err := ec.loadInstructions(data, prog.Name)
+	funcName, err := ec.getSecSymbolName(idx, 0)
 	if err != nil {
 		return "", nil, err
 	}
-	key, err := ec.getSecSymbolName(idx, 0)
+	insns, offsets, err := loadInstructions(funcName, ec.ByteOrder, data)
 	if err != nil {
 		return "", nil, err
 	}
@@ -155,14 +155,14 @@ func (ec *elfCode) loadProg(idx int, prog, rels *elf.Section, license string, ve
 		Instructions:  insns,
 	}
 	if rels == nil {
-		return key, spec, nil
+		return funcName, spec, nil
 	}
-	spec.Refs = make(map[string][]*BPFInstruction)
-	err = ec.parseRelocateApply(spec, rels)
+	spec.Refs = make(map[string][]*Instruction)
+	err = ec.parseRelocateApply(spec, rels, offsets)
 	if err != nil {
 		return "", nil, err
 	}
-	return key, spec, nil
+	return funcName, spec, nil
 }
 
 func (ec *elfCode) getSecSymbolName(idx int, off uint64) (string, error) {
@@ -270,37 +270,52 @@ func getProgType(v string) ProgType {
 		"cgroup/sock": CGroupSock,
 	}
 	for k, t := range types {
-		if strings.Index(v, k) == 0 {
+		if strings.HasPrefix(v, k) {
 			return t
 		}
 	}
 	return Unrecognized
 }
 
-func (ec *elfCode) loadInstructions(data []byte, sectionName string) (Instructions, error) {
+func loadInstructions(programName string, bo binary.ByteOrder, data []byte) (Instructions, map[uint64]int, error) {
 	rd := bytes.NewReader(data)
-	firstInsnSection := sectionName
 	var insns Instructions
+	// Since relocations point at an offset, we need to keep track which
+	// offset maps to which instruction.
+	offsets := make(map[uint64]int)
 	for rd.Len() > 0 {
+		offset := uint64(rd.Size()) - uint64(rd.Len())
+		offsets[offset] = len(insns)
+
 		var ins bpfInstruction
-		if err := binary.Read(rd, ec.ByteOrder, &ins); err != nil {
-			return nil, fmt.Errorf("program %v: invalid instruction at offset %x", sectionName, rd.Size()-int64(rd.Len()))
+		if err := binary.Read(rd, bo, &ins); err != nil {
+			return nil, nil, fmt.Errorf("program %v: invalid instruction at offset %x", programName, offset)
 		}
-		insns = append(insns, &BPFInstruction{
+
+		cons := int64(ins.Constant)
+		if ins.OpCode == LdDW {
+			var ins2 bpfInstruction
+			if err := binary.Read(rd, bo, &ins2); err != nil {
+				return nil, nil, fmt.Errorf("program %v: invalid instruction at offset %x", programName, offset)
+			}
+			if ins2.OpCode != 0 || ins2.Offset != 0 || ins2.Registers != 0 {
+				return nil, nil, fmt.Errorf("program %v: instruction at offset %x: 64bit immediate has non-zero fields", programName, offset)
+			}
+			cons = int64(uint64(uint32(ins2.Constant))<<32 | uint64(uint32(ins.Constant)))
+		}
+
+		insns = append(insns, Instruction{
 			OpCode:      ins.OpCode,
-			DstRegister: ins.Registers.GetPart1(),
-			SrcRegister: ins.Registers.GetPart2(),
+			DstRegister: ins.Registers.Dst(),
+			SrcRegister: ins.Registers.Src(),
 			Offset:      ins.Offset,
-			Constant:    ins.Constant,
-			sectionName: firstInsnSection,
+			Constant:    cons,
 		})
-		// Only set section name on the first entry
-		firstInsnSection = ""
 	}
-	return insns, nil
+	return insns, offsets, nil
 }
 
-func (ec *elfCode) parseRelocateApply(spec *ProgramSpec, sec *elf.Section) error {
+func (ec *elfCode) parseRelocateApply(spec *ProgramSpec, sec *elf.Section, offsets map[uint64]int) error {
 	if sec.Entsize < 16 {
 		return fmt.Errorf("section %v: rls are less than 16 bytes", sec.Name)
 	}
@@ -331,12 +346,11 @@ func (ec *elfCode) parseRelocateApply(spec *ProgramSpec, sec *elf.Section) error
 		}
 		sym := ec.symbols[symNo].Name
 
-		idx := int(rel.Offset / InstructionSize)
-		if idx >= len(spec.Instructions) {
-			return fmt.Errorf("section %v: symbol %v: invalid instruction offset", sec.Name, sym)
+		idx, ok := offsets[rel.Offset]
+		if !ok {
+			return fmt.Errorf("section %v: symbol %v: invalid instruction offset %x", sec.Name, sym, rel.Offset)
 		}
-		ins := spec.Instructions[idx]
-
+		ins := &spec.Instructions[idx]
 		spec.Refs[sym] = append(spec.Refs[sym], ins)
 	}
 	return nil

@@ -1,6 +1,8 @@
 package ebpf
 
 import (
+	"encoding/binary"
+	"math"
 	"os"
 	"testing"
 )
@@ -32,7 +34,7 @@ func TestNewCollectionSpecFromELF(t *testing.T) {
 	checkProgramSpec(t, spec.Programs, "xdp_prog", &ProgramSpec{
 		Type:    XDP,
 		License: "MIT",
-		Refs: map[string][]*BPFInstruction{
+		Refs: map[string][]*Instruction{
 			"hash_map":    nil,
 			"hash_map2":   nil,
 			"non_map":     nil,
@@ -46,6 +48,27 @@ func TestNewCollectionSpecFromELF(t *testing.T) {
 
 	if _, ok := spec.Programs["xdp_prog"].Refs["non_map"]; !ok {
 		t.Error("Missing references for 'non_map'")
+	}
+}
+
+func Test64bitImmediate(t *testing.T) {
+	// r1 = math.MinInt32 - 1
+	prog := []byte{
+		0x18, 0x01, 0x00, 0x00, 0xff, 0xff, 0xff, 0x7f,
+		0x00, 0x00, 0x00, 0x00, 0xff, 0xff, 0xff, 0xff,
+	}
+
+	insns, _, err := loadInstructions("test", binary.LittleEndian, prog)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(insns) != 1 {
+		t.Fatal("Expected one instruction, got", len(insns))
+	}
+
+	if c := insns[0].Constant; c != math.MinInt32-1 {
+		t.Errorf("Expected immediate to be %v, got %v", math.MinInt32-1, c)
 	}
 }
 
@@ -99,7 +122,7 @@ func checkProgramSpec(t *testing.T, progs map[string]*ProgramSpec, name string, 
 
 	have, ok := progs[name]
 	if !ok {
-		t.Errorf("Missing program %s", name)
+		t.Fatalf("Missing program %s", name)
 		return
 	}
 

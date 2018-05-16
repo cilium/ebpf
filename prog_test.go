@@ -103,8 +103,8 @@ func TestRewriteUint64(t *testing.T) {
 		ins,
 		"MIT",
 		0,
-		map[string][]*BPFInstruction{
-			"ret": []*BPFInstruction{ins[0]},
+		map[string][]*Instruction{
+			"ret": []*Instruction{&ins[0]},
 		},
 	}
 

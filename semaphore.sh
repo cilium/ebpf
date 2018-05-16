@@ -22,11 +22,11 @@ set -eu
 set -o pipefail
 
 # The kernel versions we want to run the tests on
-readonly kernel_versions=("4.15")
+readonly kernel_versions=("4.16.9")
 
 # The rkt version which is set as a dependency for
 # the custom stage1-kvm images
-readonly rkt_version="1.29.0"
+readonly rkt_version="1.30.0"
 
 readonly pkg_name="github.com/newtools/ebpf"
 
@@ -48,7 +48,7 @@ sudo ./rkt/rkt image fetch --insecure-options=image "coreos.com/rkt/stage1-kvm:$
 
 for kernel_version in "${kernel_versions[@]}"; do
   # The stage1-kvm image to use for the tests
-  stage1_name="kinvolk.io/aci/rkt/stage1-kvm:${rkt_version},kernelversion=${kernel_version}"
+  stage1_name="https://github.com/newtools/ci-kernels/blob/master/stage1-kvm-${rkt_version}-linux-${kernel_version}.aci?raw=true"
 
   # Make sure there's no stale rkt-uuid file
   rm -f ./rkt-uuid

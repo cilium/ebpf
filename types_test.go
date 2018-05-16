@@ -8,32 +8,41 @@ import (
 // to format an instruction stream.
 func ExampleInstructions_Format() {
 	insns := Instructions{
-		BPFCall(MapLookupElement),
+		BPFCall(MapLookupElement).Sym("my_func"),
 		BPFILdImm64(Reg0, 42),
 		BPFIOp(Exit),
 	}
 
 	fmt.Println("Default format:")
-	fmt.Printf("%s\n", insns)
+	fmt.Printf("%s", insns)
 
-	fmt.Println("Custom indendation:")
-	fmt.Printf("%1s\n", insns)
+	fmt.Println("Don't indent instructions:")
+	fmt.Printf("%.0s", insns)
 
 	fmt.Println("Indent using spaces:")
-	fmt.Printf("% 3s\n", insns)
+	fmt.Printf("% s", insns)
+
+	fmt.Println("Control symbol indentation:")
+	fmt.Printf("%2s", insns)
 
 	// Output: Default format:
-	// 0: Call MapLookupElement
-	// 1: LdImmDW dst: r0 imm: 42
-	// 3: Exit
-	//
-	// Custom indendation:
+	// my_func:
 	// 	0: Call MapLookupElement
 	// 	1: LdImmDW dst: r0 imm: 42
 	// 	3: Exit
-	//
+	// Don't indent instructions:
+	// my_func:
+	// 0: Call MapLookupElement
+	// 1: LdImmDW dst: r0 imm: 42
+	// 3: Exit
 	// Indent using spaces:
-	//    0: Call MapLookupElement
-	//    1: LdImmDW dst: r0 imm: 42
-	//    3: Exit
+	// my_func:
+	//  0: Call MapLookupElement
+	//  1: LdImmDW dst: r0 imm: 42
+	//  3: Exit
+	// Control symbol indentation:
+	// 		my_func:
+	// 	0: Call MapLookupElement
+	// 	1: LdImmDW dst: r0 imm: 42
+	// 	3: Exit
 }

@@ -55,8 +55,13 @@ unsigned long non_map;
 static void (*map_lookup_elem)(void *) = (void*)1;
 static void (*other_fn)(unsigned long) = (void*)2;
 
-int __attribute__((noinline)) helper_func(int arg) {
+int __attribute__((noinline)) helper_func2(int arg) {
 	return arg > 5;
+}
+
+int __attribute__((noinline)) helper_func(int arg) {
+	// Enforce bpf-to-bpf call in .text section
+	return helper_func2(arg);
 }
 
 __section("xdp") int xdp_prog() {

@@ -4,15 +4,15 @@ import (
 	"bytes"
 	"debug/elf"
 	"encoding/binary"
-	"fmt"
 	"io"
 	"strings"
+
+	"github.com/pkg/errors"
 )
 
 type elfCode struct {
 	*elf.File
-	symbols     []elf.Symbol
-	symbolNames map[int]map[uint64]string
+	symtab *symtab
 }
 
 // NewCollectionSpecFromELF parses an io.ReaderAt that represents an ELF layout
@@ -24,29 +24,12 @@ func NewCollectionSpecFromELF(code io.ReaderAt) (*CollectionSpec, error) {
 	}
 	defer f.Close()
 
-	ec := &elfCode{
-		f,
-		nil,
-		make(map[int]map[uint64]string),
-	}
-
-	ec.symbols, err = f.Symbols()
+	symbols, err := f.Symbols()
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "ebpf")
 	}
 
-	for _, sym := range ec.symbols {
-		idx := int(sym.Section)
-		// SHN_COMMON are symbols which are declared, but not allocated.
-		// They are valid targets for rewriting, so make an exception for them.
-		if idx > len(ec.Sections) && sym.Section != elf.SHN_COMMON {
-			return nil, fmt.Errorf("symbol %v: unknown section %v", sym.Name, sym.Section)
-		}
-		if _, ok := ec.symbolNames[idx]; !ok {
-			ec.symbolNames[idx] = make(map[uint64]string)
-		}
-		ec.symbolNames[idx][sym.Value] = sym.Name
-	}
+	ec := &elfCode{f, newSymtab(symbols)}
 
 	var licenseSection, versionSection *elf.Section
 	progSections := make(map[int]*elf.Section)
@@ -62,47 +45,47 @@ func NewCollectionSpecFromELF(code io.ReaderAt) (*CollectionSpec, error) {
 			mapSections[i] = sec
 		case sec.Type == elf.SHT_REL:
 			if int(sec.Info) >= len(ec.Sections) {
-				return nil, fmt.Errorf("found relocation section %v for missing section %v", i, sec.Info)
+				return nil, errors.Errorf("found relocation section %v for missing section %v", i, sec.Info)
 			}
 
 			// Store relocations under the section index of the target
 			idx := int(sec.Info)
 			if relSections[idx] != nil {
-				return nil, fmt.Errorf("section %d has multiple relocation sections", idx)
+				return nil, errors.Errorf("section %d has multiple relocation sections", idx)
 			}
 			relSections[idx] = sec
-		case sec.Type != elf.SHT_SYMTAB && sec.Type != elf.SHT_NULL && len(sec.Name) > 0 && sec.Size > 0:
+		case sec.Type == elf.SHT_PROGBITS:
 			progSections[i] = sec
 		}
 	}
 
 	license, err := loadLicense(licenseSection)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "ebpf")
 	}
 
 	version, err := loadVersion(versionSection, ec.ByteOrder)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "ebpf")
 	}
 
 	maps, err := ec.loadMaps(mapSections)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "ebpf")
 	}
 
-	progs := make(map[string]*ProgramSpec)
-	for i, prog := range progSections {
-		name, spec, err := ec.loadProg(i, prog, relSections[i], license, version)
-		if err != nil {
-			return nil, err
-		}
+	progs, libs, err := ec.loadPrograms(progSections, relSections, license, version)
+	if err != nil {
+		return nil, errors.Wrap(err, "ebpf")
+	}
 
-		if spec == nil {
-			continue
+	if len(libs) > 0 {
+		for name, prog := range progs {
+			editor := Edit(&prog.Instructions)
+			if err := editor.Link(libs...); err != nil {
+				return nil, errors.Wrapf(err, "ebpf: program %s", name)
+			}
 		}
-
-		progs[name] = spec
 	}
 
 	return &CollectionSpec{maps, progs}, nil
@@ -110,11 +93,11 @@ func NewCollectionSpecFromELF(code io.ReaderAt) (*CollectionSpec, error) {
 
 func loadLicense(sec *elf.Section) (string, error) {
 	if sec == nil {
-		return "", fmt.Errorf("missing license section")
+		return "", errors.Errorf("missing license section")
 	}
 	data, err := sec.Data()
 	if err != nil {
-		return "", err
+		return "", errors.Wrapf(err, "section %s", sec.Name)
 	}
 	return string(bytes.TrimRight(data, "\000")), nil
 }
@@ -125,73 +108,67 @@ func loadVersion(sec *elf.Section, bo binary.ByteOrder) (uint32, error) {
 	}
 	data, err := sec.Data()
 	if err != nil {
-		return 0, err
+		return 0, errors.Wrapf(err, "section %s", sec.Name)
 	}
 	var version uint32
 	return version, binary.Read(bytes.NewReader(data), bo, &version)
 }
 
-func (ec *elfCode) loadProg(idx int, prog, rels *elf.Section, license string, version uint32) (string, *ProgramSpec, error) {
-	data, err := prog.Data()
-	if err != nil {
-		return "", nil, err
-	}
-	progType := getProgType(prog.Name)
-	if progType == Unrecognized {
-		return "", nil, nil
-	}
-	funcName, err := ec.getSecSymbolName(idx, 0)
-	if err != nil {
-		return "", nil, err
-	}
-	insns, offsets, err := loadInstructions(funcName, ec.ByteOrder, data)
-	if err != nil {
-		return "", nil, err
-	}
-	spec := &ProgramSpec{
-		Type:          progType,
-		License:       license,
-		KernelVersion: version,
-		Instructions:  insns,
-	}
-	if rels == nil {
-		return funcName, spec, nil
-	}
-	err = ec.parseRelocateApply(spec, rels, offsets)
-	if err != nil {
-		return "", nil, err
-	}
-	return funcName, spec, nil
-}
+func (ec *elfCode) loadPrograms(progSections, relSections map[int]*elf.Section, license string, version uint32) (map[string]*ProgramSpec, []Instructions, error) {
+	progs := make(map[string]*ProgramSpec)
+	var libs []Instructions
+	for idx, prog := range progSections {
+		data, err := prog.Data()
+		if err != nil {
+			return nil, nil, err
+		}
 
-func (ec *elfCode) getSecSymbolName(idx int, off uint64) (string, error) {
-	sec, ok := ec.symbolNames[idx]
-	if !ok {
-		return "", fmt.Errorf("unknown section %v", idx)
-	}
+		funcSym := ec.symtab.forSectionOffset(idx, 0)
+		if funcSym == nil {
+			return nil, nil, errors.Errorf("section %v: no label at start", prog.Name)
+		}
 
-	name, ok := sec[off]
-	if !ok {
-		return "", fmt.Errorf("section %v: no symbol at offset %v", idx, off)
-	}
+		insns, offsets, err := loadInstructions(ec.ByteOrder, data)
+		if err != nil {
+			return nil, nil, errors.Wrapf(err, "program %s", funcSym.Name)
+		}
 
-	return name, nil
-}
+		err = assignSymbols(ec.symtab.forSection(idx), offsets, insns)
+		if err != nil {
+			return nil, nil, errors.Wrapf(err, "program %s", funcSym.Name)
+		}
 
-func dataToString(data []byte) string {
-	buf := bytes.NewBuffer(nil)
-	for _, byt := range data {
-		buf.WriteString(fmt.Sprintf("0x%x ", byt))
+		if rels := relSections[idx]; rels != nil {
+			err = ec.applyRelocations(insns, rels, offsets)
+			if err != nil {
+				return nil, nil, errors.Wrapf(err, "program %s", funcSym.Name)
+			}
+		}
+
+		if progType := getProgType(prog.Name); progType == Unrecognized {
+			// There is no single name we can use for "library" sections,
+			// since they may contain multiple functions. We'll decode the
+			// labels they contain later on, and then link sections that way.
+			libs = append(libs, insns)
+		} else {
+			progs[funcSym.Name] = &ProgramSpec{
+				Type:          progType,
+				License:       license,
+				KernelVersion: version,
+				Instructions:  insns,
+			}
+		}
 	}
-	return buf.String()
+	return progs, libs, nil
 }
 
 func (ec *elfCode) loadMaps(mapSections map[int]*elf.Section) (map[string]*MapSpec, error) {
 	maps := make(map[string]*MapSpec)
 	for idx, sec := range mapSections {
-		n := len(ec.symbolNames[idx])
+		// TODO: Iterate symbols
+		n := len(ec.symtab.forSection(idx))
 		if n == 0 {
-			return nil, fmt.Errorf("section %v: no symbols", sec.Name)
+			return nil, errors.Errorf("section %v: no symbols", sec.Name)
 		}
 
 		data, err := sec.Data()
@@ -200,51 +177,52 @@ func (ec *elfCode) loadMaps(mapSections map[int]*elf.Section) (map[string]*MapSp
 		}
 
 		if len(data)%n != 0 {
-			return nil, fmt.Errorf("map descriptors are not of equal size")
+			return nil, errors.Errorf("map descriptors are not of equal size")
 		}
 
 		size := len(data) / n
 		var ordered []*MapSpec
 		for i := 0; i < n; i++ {
 			rd := bytes.NewReader(data[i*size : i*size+size])
-			name, err := ec.getSecSymbolName(idx, uint64(i*size))
-			if err != nil {
-				return nil, err
+			mapSym := ec.symtab.forSectionOffset(idx, uint64(i*size))
+			if mapSym == nil {
+				return nil, errors.Errorf("section %s: missing symbol for map #%d", sec.Name, i)
 			}
 
+			name := mapSym.Name
 			if maps[name] != nil {
-				return nil, fmt.Errorf("section %v: map %v already exists", sec.Name, name)
+				return nil, errors.Errorf("section %v: map %v already exists", sec.Name, name)
 			}
 
 			var spec MapSpec
 			var inner uint32
 			switch {
 			case binary.Read(rd, ec.ByteOrder, &spec.Type) != nil:
-				return nil, fmt.Errorf("map %v: missing type", name)
+				return nil, errors.Errorf("map %v: missing type", name)
 			case binary.Read(rd, ec.ByteOrder, &spec.KeySize) != nil:
-				return nil, fmt.Errorf("map %v: missing key size", name)
+				return nil, errors.Errorf("map %v: missing key size", name)
 			case binary.Read(rd, ec.ByteOrder, &spec.ValueSize) != nil:
-				return nil, fmt.Errorf("map %v: missing value size", name)
+				return nil, errors.Errorf("map %v: missing value size", name)
 			case binary.Read(rd, ec.ByteOrder, &spec.MaxEntries) != nil:
-				return nil, fmt.Errorf("map %v: missing max entries", name)
+				return nil, errors.Errorf("map %v: missing max entries", name)
 			case binary.Read(rd, ec.ByteOrder, &spec.Flags) != nil:
-				return nil, fmt.Errorf("map %v: missing flags", name)
+				return nil, errors.Errorf("map %v: missing flags", name)
 			case rd.Len() > 0 && binary.Read(rd, ec.ByteOrder, &inner) != nil:
-				return nil, fmt.Errorf("map %v: can't read inner map index", name)
+				return nil, errors.Errorf("map %v: can't read inner map index", name)
 			}
 
 			if rd.Len() != 0 {
-				return nil, fmt.Errorf("map %v: unknown fields in definition", name)
+				return nil, errors.Errorf("map %v: unknown fields in definition", name)
 			}
 
 			if spec.Type == ArrayOfMaps || spec.Type == HashOfMaps {
 				if int(inner) > len(ordered) {
-					return nil, fmt.Errorf("map %v: invalid inner map index %d", name, inner)
+					return nil, errors.Errorf("map %v: invalid inner map index %d", name, inner)
 				}
 
 				innerSpec := ordered[int(inner)]
 				if innerSpec.InnerMap != nil {
-					return nil, fmt.Errorf("map %v: can't nest map of map", name)
+					return nil, errors.Errorf("map %v: can't nest map of map", name)
 				}
 				spec.InnerMap = innerSpec
 			}
@@ -276,7 +254,7 @@ func getProgType(v string) ProgType {
 	return Unrecognized
 }
 
-func loadInstructions(programName string, bo binary.ByteOrder, data []byte) (Instructions, map[uint64]int, error) {
+func loadInstructions(bo binary.ByteOrder, data []byte) (Instructions, map[uint64]int, error) {
 	rd := bytes.NewReader(data)
 	var insns Instructions
 	// Since relocations point at an offset, we need to keep track which
@@ -288,17 +266,17 @@ func loadInstructions(programName string, bo binary.ByteOrder, data []byte) (Ins
 
 		var ins bpfInstruction
 		if err := binary.Read(rd, bo, &ins); err != nil {
-			return nil, nil, fmt.Errorf("program %v: invalid instruction at offset %x", programName, offset)
+			return nil, nil, errors.Errorf("invalid instruction at offset %x", offset)
 		}
 
 		cons := int64(ins.Constant)
 		if ins.OpCode == LdDW {
 			var ins2 bpfInstruction
 			if err := binary.Read(rd, bo, &ins2); err != nil {
-				return nil, nil, fmt.Errorf("program %v: invalid instruction at offset %x", programName, offset)
+				return nil, nil, errors.Errorf("invalid instruction at offset %x", offset)
 			}
 			if ins2.OpCode != 0 || ins2.Offset != 0 || ins2.Registers != 0 {
-				return nil, nil, fmt.Errorf("program %v: instruction at offset %x: 64bit immediate has non-zero fields", programName, offset)
+				return nil, nil, errors.Errorf("instruction at offset %x: 64bit immediate has non-zero fields", offset)
 			}
 			cons = int64(uint64(uint32(ins2.Constant))<<32 | uint64(uint32(ins.Constant)))
 		}
@@ -314,9 +292,20 @@ func loadInstructions(programName string, bo binary.ByteOrder, data []byte) (Ins
 	return insns, offsets, nil
 }
 
-func (ec *elfCode) parseRelocateApply(spec *ProgramSpec, sec *elf.Section, offsets map[uint64]int) error {
+func assignSymbols(symbolOffsets map[uint64]*elf.Symbol, insOffsets map[uint64]int, insns Instructions) error {
+	for offset, sym := range symbolOffsets {
+		i, ok := insOffsets[offset]
+		if !ok {
+			return errors.Errorf("symbol %s: no instruction at offset %d", sym.Name, offset)
+		}
+		insns[i].Symbol = sym.Name
+	}
+	return nil
+}
+
+func (ec *elfCode) applyRelocations(insns Instructions, sec *elf.Section, offsets map[uint64]int) error {
 	if sec.Entsize < 16 {
-		return fmt.Errorf("section %v: rls are less than 16 bytes", sec.Name)
+		return errors.Errorf("section %v: rls are less than 16 bytes", sec.Name)
 	}
 
 	data, err := sec.Data()
@@ -329,27 +318,61 @@ func (ec *elfCode) parseRelocateApply(spec *ProgramSpec, sec *elf.Section, offse
 		off := i * int(sec.Entsize)
 		rd := bytes.NewReader(data[off : off+int(sec.Entsize)])
 
-		var rel struct {
-			// Offset of the relocation in the targeted section
-			Offset uint64
-			// symbol number
-			Info uint64
-		}
+		var rel elf.Rel64
 		if binary.Read(rd, ec.ByteOrder, &rel) != nil {
-			return fmt.Errorf("section %v: cannot parse relocation %v", sec.Name, i)
+			return errors.Errorf("section %v: cannot parse relocation %v", sec.Name, i)
 		}
 
-		symNo := int(rel.Info>>32) - 1
-		if symNo == 0 || symNo >= len(ec.symbols) {
-			return fmt.Errorf("section %v: relocation %v: symbol %v doesnt exist", sec.Name, i, symNo)
+		sym, err := ec.symtab.forRelocation(rel)
+		if err != nil {
+			return errors.Errorf("section %v: relocation %v: %v", sec.Name, i, err.Error())
 		}
-		sym := ec.symbols[symNo].Name
 
-		idx, ok := offsets[rel.Offset]
+		idx, ok := offsets[rel.Off]
 		if !ok {
-			return fmt.Errorf("section %v: symbol %v: invalid instruction offset %x", sec.Name, sym, rel.Offset)
+			return errors.Errorf("section %v: symbol %v: invalid instruction offset %x", sec.Name, sym, rel.Off)
 		}
-		spec.Instructions[idx].Reference = sym
+		insns[idx].Reference = sym.Name
 	}
 	return nil
+}
+
+type symtab struct {
+	Symbols []elf.Symbol
+	index   map[int]map[uint64]*elf.Symbol
+}
+
+func newSymtab(symbols []elf.Symbol) *symtab {
+	index := make(map[int]map[uint64]*elf.Symbol)
+	for i, sym := range symbols {
+		idx := int(sym.Section)
+		if _, ok := index[idx]; !ok {
+			index[idx] = make(map[uint64]*elf.Symbol)
+		}
+		index[idx][sym.Value] = &symbols[i]
+	}
+	return &symtab{
+		symbols,
+		index,
+	}
+}
+
+func (st *symtab) forSection(sec int) map[uint64]*elf.Symbol {
+	return st.index[sec]
+}
+
+func (st *symtab) forSectionOffset(sec int, offset uint64) *elf.Symbol {
+	offsets := st.index[sec]
+	if offsets == nil {
+		return nil
+	}
+	return offsets[offset]
+}
+
+func (st *symtab) forRelocation(rel elf.Rel64) (*elf.Symbol, error) {
+	symNo := int(rel.Info>>32) - 1
+	if symNo >= len(st.Symbols) {
+		return nil, errors.Errorf("symbol %v doesnt exist", symNo)
+	}
+	return &st.Symbols[symNo], nil
 }

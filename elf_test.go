@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"math"
 	"os"
+	"reflect"
 	"testing"
 )
 
@@ -48,7 +49,7 @@ func Test64bitImmediate(t *testing.T) {
 		0x00, 0x00, 0x00, 0x00, 0xff, 0xff, 0xff, 0xff,
 	}
 
-	insns, _, err := loadInstructions("test", binary.LittleEndian, prog)
+	insns, _, err := loadInstructions(binary.LittleEndian, prog)
 	if err != nil {
 		t.Fatal(err)
 	}

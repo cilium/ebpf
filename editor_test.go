@@ -54,6 +54,40 @@ func ExampleEditor_RewriteUint64() {
 
 	fmt.Println(insns)
 
-	// Output: 0: op: LdImmDW dst: r0 imm: 42
-	// 1: op: Exit
+	// Output: 	0: LdImmDW dst: r0 imm: 42
+	// 	2: Exit
+}
+
+func TestEditorLink(t *testing.T) {
+	insns := Instructions{
+		BPFIDstSrcImm(Call, Reg0, Reg1, -1).Ref("my_func"),
+		BPFIOp(Exit),
+	}
+
+	editor := Edit(&insns)
+	err := editor.Link(Instructions{
+		BPFILdImm64(Reg0, 1337).Sym("my_func"),
+		BPFIOp(Exit),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	prog, err := NewProgram(&ProgramSpec{
+		Type:         XDP,
+		Instructions: insns,
+		License:      "MIT",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ret, _, err := prog.Test(make([]byte, 14))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if ret != 1337 {
+		t.Errorf("Expected return code 1337, got %d", ret)
+	}
 }

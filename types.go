@@ -949,23 +949,40 @@ func (inss Instructions) String() string {
 // Format implements fmt.Formatter.
 //
 // The function only accepts 's' and 'v' formats, which are currently
-// output identically. You can control indentation by specifying a
-// width. The default indentation is a tab, which can be overriden
-// by specifying the ' ' space flag.
+// output identically. You can control indentation of symbols by
+// specifying a width. Setting a precision controls the indentation of
+// instructions.
+// The default character is a tab, which can be overriden by specifying
+// the ' ' space flag.
 func (inss Instructions) Format(f fmt.State, c rune) {
 	if c != 's' && c != 'v' {
 		fmt.Fprintf(f, "{UNKNOWN FORMAT '%c'}", c)
 		return
 	}
 
-	padding, ok := f.Width()
+	// Precision is better in this case, because it allows
+	// specifying 0 padding easily.
+	padding, ok := f.Precision()
 	if !ok {
-		padding = 0
+		padding = 1
 	}
 
 	indent := strings.Repeat("\t", padding)
 	if f.Flag(' ') {
 		indent = strings.Repeat(" ", padding)
+	}
+
+	symPadding, ok := f.Width()
+	if !ok {
+		symPadding = padding - 1
+	}
+	if symPadding < 0 {
+		symPadding = 0
+	}
+
+	symIndent := strings.Repeat("\t", symPadding)
+	if f.Flag(' ') {
+		symIndent = strings.Repeat(" ", symPadding)
 	}
 
 	// Figure out how many digits we need to represent the highest
@@ -978,6 +995,9 @@ func (inss Instructions) Format(f fmt.State, c rune) {
 
 	offset := 0
 	for _, ins := range inss {
+		if ins.Symbol != "" {
+			fmt.Fprintf(f, "%s%s:\n", symIndent, ins.Symbol)
+		}
 		fmt.Fprintf(f, "%s%*d: %s\n", indent, offsetWidth, offset, ins)
 		offset += ins.EncodedLength()
 	}
@@ -1035,11 +1055,18 @@ type Instruction struct {
 	Offset      int16
 	Constant    int64
 	Reference   string
+	Symbol      string
 }
 
 // Ref creates a reference to a symbol.
 func (ins Instruction) Ref(symbol string) Instruction {
 	ins.Reference = symbol
+	return ins
+}
+
+// Sym creates a symbol.
+func (ins Instruction) Sym(name string) Instruction {
+	ins.Symbol = name
 	return ins
 }
 
@@ -1206,7 +1233,13 @@ func (ins Instruction) String() string {
 			off = ""
 			dst = ""
 			opPrefix = "Call"
-			opSuffix = fmt.Sprintf(" %v", Func(ins.Constant))
+			if ins.SrcRegister == Reg1 {
+				// bpf-to-bpf call
+				opSuffix = fmt.Sprintf(" %v", ins.Constant)
+			} else {
+				opSuffix = fmt.Sprintf(" %v", Func(ins.Constant))
+			}
+
 		case ExitOp:
 			imm = ""
 			src = ""

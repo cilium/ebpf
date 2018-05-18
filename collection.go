@@ -53,6 +53,18 @@ func NewCollection(spec *CollectionSpec) (*Collection, error) {
 	}, nil
 }
 
+// Close frees all maps and programs associated with the collection.
+//
+// The collection mustn't be used afterwards.
+func (coll *Collection) Close() {
+	for _, prog := range coll.programs {
+		prog.Close()
+	}
+	for _, m := range coll.maps {
+		m.Close()
+	}
+}
+
 // ForEachMap iterates over all the Maps in a Collection
 func (coll *Collection) ForEachMap(fx func(string, *Map)) {
 	for k, v := range coll.maps {
@@ -141,7 +153,7 @@ func LoadCollection(dirName string) (*Collection, error) {
 	)
 }
 
-// LoadCollection loads a Collection from the pinned directory with explicit parameters.
+// LoadCollectionExplicit loads a Collection from the pinned directory with explicit parameters.
 func LoadCollectionExplicit(dirName string, maps map[string]*MapSpec, progs map[string]ProgType) (*Collection, error) {
 	return loadCollection(
 		dirName,

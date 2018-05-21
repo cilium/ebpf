@@ -46,7 +46,7 @@ func main() {
 		fmt.Printf("\t\tLicense:       %s\n", v.License)
 		fmt.Printf("\t\tKernelVersion: %d\n", v.KernelVersion)
 		fmt.Printf("\t\tInstructions:\n")
-		fmt.Printf("%s", v.Instructions.StringIndent(3))
+		fmt.Printf("%.3s", v.Instructions)
 	}
 	fmt.Println("")
 }

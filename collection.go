@@ -31,13 +31,15 @@ func NewCollection(spec *CollectionSpec) (*Collection, error) {
 	}
 	progs := make(map[string]*Program)
 	for k, spec := range spec.Programs {
+		ed := Edit(&spec.Instructions)
+
 		// Rewrite any Symbol which is a valid Map.
-		for name := range spec.Refs {
-			m, ok := maps[name]
+		for _, sym := range ed.ReferencedSymbols() {
+			m, ok := maps[sym]
 			if !ok {
 				continue
 			}
-			if err := spec.RewriteMap(name, m); err != nil {
+			if err := ed.RewriteMap(sym, m); err != nil {
 				return nil, err
 			}
 		}

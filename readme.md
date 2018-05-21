@@ -1,7 +1,12 @@
 eBPF
 -------
 eBPF is go library that provides utilities for loading, compiling, and debugging eBPF programs.
-In also has extensive inline commenting that documents the internals of eBPF quite well.
+
+It supports pinning objects, bpf to bpf calls and map of maps, amongst others. Manipulating an eBPF program
+before executing it is also possible.
+
+See the [documentation on godoc.org](https://godoc.org/github.com/newtools/ebpf).
+
 For more information on eBPF [see the kernel documentation](http://elixir.free-electrons.com/linux/latest/source/Documentation/networking/filter.txt),
 for a really deep dive explanation, the [python cilium docs](http://cilium.readthedocs.io/en/doc-1.0/bpf/) are a fantastic resource.
 

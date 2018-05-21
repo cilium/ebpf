@@ -7,7 +7,7 @@ import (
 // Editor modifies eBPF instructions.
 type Editor struct {
 	instructions  *Instructions
-	refs          map[string][]*Instruction
+	refs          map[string][]int
 	encodedLength int
 }
 
@@ -16,12 +16,12 @@ type Editor struct {
 // The editor retains a reference to insns and modifies its
 // contents.
 func Edit(insns *Instructions) *Editor {
-	refs := make(map[string][]*Instruction)
+	refs := make(map[string][]int)
 	encodedLength := 0
 	for i, ins := range *insns {
 		encodedLength += ins.EncodedLength()
 		if ins.Reference != "" {
-			refs[ins.Reference] = append(refs[ins.Reference], &(*insns)[i])
+			refs[ins.Reference] = append(refs[ins.Reference], i)
 		}
 	}
 	return &Editor{insns, refs, encodedLength}
@@ -40,31 +40,66 @@ func (ed *Editor) ReferencedSymbols() []string {
 
 // RewriteMap rewrites a symbol to point at a Map.
 func (ed *Editor) RewriteMap(symbol string, m *Map) error {
-	insns := ed.refs[symbol]
-	if len(insns) == 0 {
-		return errors.Errorf("unknown symbol %v", symbol)
-	}
-	for _, ins := range insns {
-		if ins.OpCode != LdDW {
-			return errors.Errorf("symbol %v: not a valid map symbol, expected LdDW instruction", symbol)
-		}
-		ins.SrcRegister = 1
-		ins.Constant = int64(m.fd)
-	}
-	return nil
+	return ed.rewriteSymbol(symbol, []uint8{LdDW}, func(insns []*Instruction) {
+		insns[0].SrcRegister = 1
+		insns[0].Constant = int64(m.fd)
+	})
 }
 
-// RewriteUint64 rewrites a symbol to a 64bit constant.
+// RewriteUint64 rewrites a reference to a 64bit global variable to a constant.
+//
+// This is meant to be used with code emitted by LLVM, not hand written assembly.
 func (ed *Editor) RewriteUint64(symbol string, value uint64) error {
-	insns := ed.refs[symbol]
-	if len(insns) == 0 {
+	return ed.rewriteRelocation(symbol, LdXDW, int64(value))
+}
+
+// RewriteUint32 rewrites all references to a 32bit global variable to a constant.
+//
+// This is meant to be used with code emitted by LLVM, not hand written assembly.
+func (ed *Editor) RewriteUint32(symbol string, value uint32) error {
+	return ed.rewriteRelocation(symbol, LdXW, int64(value))
+}
+
+// rewriteRelocation deals with references to global variables as emitted by LLVM.
+// When compiled they are represented by a dummy load instruction (which has a zero immediate)
+// and a derefencing operation for the correct size.
+func (ed *Editor) rewriteRelocation(symbol string, opCode uint8, value int64) error {
+	return ed.rewriteSymbol(symbol, []uint8{LdDW, opCode}, func(insns []*Instruction) {
+		load := insns[0]
+		deref := insns[1]
+
+		// Rewrite original load to new value
+		load.Constant = value
+
+		// Replace the deref with a mov
+		*deref = Instruction{
+			OpCode:      MovSrc,
+			DstRegister: deref.DstRegister,
+			SrcRegister: load.DstRegister,
+		}
+	})
+}
+
+func (ed *Editor) rewriteSymbol(symbol string, opCodes []uint8, fn func([]*Instruction)) error {
+	indices := ed.refs[symbol]
+	if len(indices) == 0 {
 		return errors.Errorf("unknown symbol %v", symbol)
 	}
-	for _, ins := range insns {
-		if ins.OpCode != LdDW {
-			return errors.Errorf("symbol %v: expected LdDW instruction", symbol)
+	for _, index := range indices {
+		if index+len(opCodes) > len(*ed.instructions) {
+			return errors.Errorf("symbol %v: expected at least %d instructions", len(opCodes))
 		}
-		ins.Constant = int64(value)
+
+		insns := make([]*Instruction, 0, len(opCodes))
+		for j, opCode := range opCodes {
+			ins := &(*ed.instructions)[index+j]
+			if ins.OpCode != opCode {
+				return errors.Errorf("symbol %v: expected instruction %#x at offset+%d", symbol, opCode, j)
+			}
+			insns = append(insns, ins)
+		}
+
+		fn(insns)
 	}
 	return nil
 }
@@ -100,8 +135,10 @@ func (ed *Editor) Link(sections ...Instructions) error {
 	linkedSections := make(map[*linkEditor]int)
 	linkedLength := 0
 
-	for symbol, insns := range ed.refs {
-		for _, ins := range insns {
+	for symbol, indices := range ed.refs {
+		for _, index := range indices {
+			ins := &(*ed.instructions)[index]
+
 			if ins.OpCode != Call || ins.SrcRegister != Reg1 {
 				continue
 			}

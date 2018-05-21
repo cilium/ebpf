@@ -5,22 +5,54 @@ import (
 	"testing"
 )
 
-func TestRewriteUint64(t *testing.T) {
+func ExampleEditor_RewriteUint64() {
+	// The assembly below is roughly equivalent to what LLVM emits
+	// for the following C:
+	//
+	//    const unsigned long my_ret;
+	//    unsigned long func() {
+	//        return my_ret;
+	//    }
+	//
 	insns := Instructions{
-		BPFILdImm64(Reg0, 0).Ref("ret"),
+		BPFILdImm64(Reg0, 0).Ref("my_ret"),
+		BPFIDstSrc(LdXDW, Reg0, Reg0),
 		BPFIOp(Exit),
 	}
 
-	ed := Edit(&insns)
-	ed.RewriteUint64("ret", 42)
-
-	spec := &ProgramSpec{
-		Type:         XDP,
-		Instructions: insns,
-		License:      "MIT",
+	editor := Edit(&insns)
+	if err := editor.RewriteUint64("my_ret", 42); err != nil {
+		panic(err)
 	}
 
-	prog, err := NewProgram(spec)
+	fmt.Printf("%0.0s", insns)
+
+	// Output: 0: LdImmDW dst: r0 imm: 42
+	// 2: MovSrc dst: r0 src: r0
+	// 3: Exit
+}
+
+func TestEditorRewriteGlobalVariables(t *testing.T) {
+	spec, err := NewCollectionSpecFromFile("testdata/rewrite.elf")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	progSpec := spec.Programs["xdp_prog"]
+	editor := Edit(&progSpec.Instructions)
+	if err := editor.RewriteUint64("int_val", 4242); err == nil {
+		t.Error("RewriteUint64 did not reject writing to int value")
+	}
+	if err := editor.RewriteUint64("long_val", 4242); err != nil {
+		t.Fatal(err)
+	}
+	if err := editor.RewriteUint32("int_val", 1234); err != nil {
+		t.Fatal(err)
+	}
+
+	t.Log(progSpec.Instructions)
+
+	prog, err := NewProgram(progSpec)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -31,31 +63,9 @@ func TestRewriteUint64(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if ret != 42 {
-		t.Error("Expected return value to be 42, got", ret)
+	if ret != 1234 {
+		t.Errorf("Expected return value 1234, got %d", ret)
 	}
-}
-
-func ExampleEditor_RewriteUint64() {
-	// The assembly is equivalent to this C:
-	//
-	//    unsigned long my_ret;
-	//    unsigned long func() {
-	//        return (int)my_ret;
-	//    }
-	//
-	insns := Instructions{
-		BPFILdImm64(Reg0, 0).Ref("my_ret"),
-		BPFIOp(Exit),
-	}
-
-	editor := Edit(&insns)
-	editor.RewriteUint64("my_ret", 42)
-
-	fmt.Println(insns)
-
-	// Output: 	0: LdImmDW dst: r0 imm: 42
-	// 	2: Exit
 }
 
 func TestEditorLink(t *testing.T) {

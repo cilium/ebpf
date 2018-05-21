@@ -389,7 +389,7 @@ const (
 
 // Memory Instructions
 const (
-	// LdDW      lddw (src), dst, imm   |  dst = *imm
+	// LdDW      lddw (src), dst, imm   |  dst = imm
 	LdDW = 0x18
 	// XAddStSrc xadd dst, src          |  *dst += src
 	XAddStSrc = 0xdb

@@ -12,6 +12,17 @@ type CollectionSpec struct {
 	Programs map[string]*ProgramSpec
 }
 
+// NewCollectionSpecFromFile parse an object file and convert it to a collection
+func NewCollectionSpecFromFile(file string) (*CollectionSpec, error) {
+	f, err := os.Open(file)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+
+	return NewCollectionSpecFromELF(f)
+}
+
 // Collection is a collection of Programs and Maps associated
 // with their symbols
 type Collection struct {
@@ -53,6 +64,15 @@ func NewCollection(spec *CollectionSpec) (*Collection, error) {
 		progs,
 		maps,
 	}, nil
+}
+
+// NewCollectionFromFile parses an object file and converts it to a collection.
+func NewCollectionFromFile(file string) (*Collection, error) {
+	spec, err := NewCollectionSpecFromFile(file)
+	if err != nil {
+		return nil, err
+	}
+	return NewCollection(spec)
 }
 
 // Close frees all maps and programs associated with the collection.
@@ -210,18 +230,4 @@ func readFileNames(dirName string) ([]string, error) {
 		fileNames = append(fileNames, fi.Name())
 	}
 	return fileNames, nil
-}
-
-// NewCollectionFromFile parse an object file and convert it to a collection
-func NewCollectionFromFile(file string) (*Collection, error) {
-	f, err := os.Open(file)
-	if err != nil {
-		return nil, err
-	}
-	defer f.Close()
-	spec, err := NewCollectionSpecFromELF(f)
-	if err != nil {
-		return nil, err
-	}
-	return NewCollection(spec)
 }

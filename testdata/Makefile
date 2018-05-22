@@ -2,7 +2,10 @@ LLVM_PREFIX ?= /usr/bin
 CLANG ?= $(LLVM_PREFIX)/clang
 LLC ?= $(LLVM_PREFIX)/llc
 
-all: test.elf
+all: loader.elf rewrite.elf
+
+clean:
+	-$(RM) *.elf
 
 %.elf : %.o
 	$(LLC) -march=bpf -filetype=obj -o $@ $<

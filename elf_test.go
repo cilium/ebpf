@@ -9,7 +9,7 @@ import (
 )
 
 func TestNewCollectionSpecFromELF(t *testing.T) {
-	fh, err := os.Open("testdata/test.elf")
+	fh, err := os.Open("testdata/loader.elf")
 	if err != nil {
 		t.Fatal("Can't open test ELF:", err)
 	}

@@ -55,6 +55,8 @@ unsigned long non_map;
 static void (*map_lookup_elem)(void *) = (void*)1;
 static void (*other_fn)(unsigned long) = (void*)2;
 
+static int (*stringfn)(const char *fmt) = (void*)3;
+
 int __attribute__((noinline)) helper_func2(int arg) {
 	return arg > 5;
 }
@@ -68,6 +70,10 @@ __section("xdp") int xdp_prog() {
 	map_lookup_elem(&hash_map);
 	map_lookup_elem(&hash_map2);
 	other_fn(non_map);
+
+	const char str[] = "za warudo";
+	stringfn(str);
+
 	return helper_func(2);
 }
 

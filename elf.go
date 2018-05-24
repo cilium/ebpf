@@ -54,7 +54,7 @@ func NewCollectionSpecFromELF(code io.ReaderAt) (*CollectionSpec, error) {
 				return nil, errors.Errorf("section %d has multiple relocation sections", idx)
 			}
 			relSections[idx] = sec
-		case sec.Type == elf.SHT_PROGBITS && sec.Size > 0:
+		case sec.Type == elf.SHT_PROGBITS && (sec.Flags&elf.SHF_EXECINSTR) != 0 && sec.Size > 0:
 			progSections[i] = sec
 		}
 	}

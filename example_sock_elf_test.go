@@ -132,20 +132,20 @@ func Example_socketELF() {
 	}
 	for {
 		time.Sleep(time.Second)
-		var icmp protoCounter
-		var tcp protoCounter
-		var udp protoCounter
-		ok, err := bpfMap.Get(protoType(nettypes.ICMP), &icmp)
+		var icmp uint64
+		var tcp uint64
+		var udp uint64
+		ok, err := bpfMap.Get(uint32(nettypes.ICMP), &icmp)
 		if err != nil {
 			panic(err)
 		}
 		assertTrue(ok, "icmp key not found")
-		ok, err = bpfMap.Get(protoType(nettypes.TCP), &tcp)
+		ok, err = bpfMap.Get(uint32(nettypes.TCP), &tcp)
 		if err != nil {
 			panic(err)
 		}
 		assertTrue(ok, "tcp key not found")
-		ok, err = bpfMap.Get(protoType(nettypes.UDP), &udp)
+		ok, err = bpfMap.Get(uint32(nettypes.UDP), &udp)
 		if err != nil {
 			panic(err)
 		}

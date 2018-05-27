@@ -1,10 +1,11 @@
 package ebpf
 
 import (
-	"encoding"
 	"fmt"
 	"syscall"
 	"unsafe"
+
+	"github.com/pkg/errors"
 )
 
 // MapSpec is an interface type that can initialize a new Map
@@ -22,7 +23,12 @@ func (ms *MapSpec) String() string {
 	return fmt.Sprintf("%s(keySize=%d, valueSize=%d, maxEntries=%d, flags=%d)", ms.Type, ms.KeySize, ms.ValueSize, ms.MaxEntries, ms.Flags)
 }
 
-// Map represents a Map file descriptor
+// Map represents a Map file descriptor.
+//
+// Methods which take interface{} arguments by default encode
+// them using binary.Read/Write in the machine's native endianness.
+//
+// Implement Marshaler on the arguments if you need custom encoding.
 type Map struct {
 	fd   uint32
 	meta MapSpec
@@ -81,24 +87,24 @@ func (m *Map) String() string {
 }
 
 // Get gets a value from a Map
-func (m *Map) Get(key encoding.BinaryMarshaler, value encoding.BinaryUnmarshaler) (bool, error) {
-	valueBytes, err := m.GetRaw(key)
+func (m *Map) Get(key, valueOut interface{}) (bool, error) {
+	valueBytes, err := m.GetBytes(key)
 	if err != nil {
 		return false, err
 	}
 	if valueBytes == nil {
 		return false, nil
 	}
-	err = value.UnmarshalBinary(valueBytes)
+	err = unmarshalBytes(valueOut, valueBytes)
 	if err != nil {
 		return false, err
 	}
 	return true, nil
 }
 
-// GetRaw gets a value from Map
-func (m *Map) GetRaw(key encoding.BinaryMarshaler) ([]byte, error) {
-	keyBytes, err := m.marshal(key, m.meta.KeySize)
+// GetBytes gets a value from Map
+func (m *Map) GetBytes(key interface{}) ([]byte, error) {
+	keyBytes, err := marshalBytes(key, int(m.meta.KeySize))
 	if err != nil {
 		return nil, err
 	}
@@ -118,77 +124,107 @@ func (m *Map) GetRaw(key encoding.BinaryMarshaler) ([]byte, error) {
 }
 
 // Create creates a new value in a map, failing if the key exists already
-func (m *Map) Create(key encoding.BinaryMarshaler, value encoding.BinaryMarshaler) (bool, error) {
+func (m *Map) Create(key, value interface{}) error {
 	return m.put(key, value, _NoExist)
 }
 
 // Put replaces or creates a value in map
-func (m *Map) Put(key encoding.BinaryMarshaler, value encoding.BinaryMarshaler) error {
-	_, err := m.put(key, value, _Any)
-	return err
+func (m *Map) Put(key, value interface{}) error {
+	return m.put(key, value, _Any)
 }
 
 // Replace replaces a value in a map, failing if the value did not exist
-func (m *Map) Replace(key encoding.BinaryMarshaler, value encoding.BinaryMarshaler) (bool, error) {
+func (m *Map) Replace(key, value interface{}) error {
 	return m.put(key, value, _Exist)
 }
 
-// Delete removes a value, failing if the value does not exist
-func (m *Map) Delete(key encoding.BinaryMarshaler) (bool, error) {
-	keyBytes, err := m.marshal(key, m.meta.KeySize)
+// Delete removes a value.
+//
+// Use DeleteStrict if you desire an error if key does not exist.
+func (m *Map) Delete(key interface{}) error {
+	err := m.DeleteStrict(key)
+	if err == syscall.ENOENT {
+		return nil
+	}
+	return err
+}
+
+// DeleteStrict removes a key and returns an error if the
+// key doesn't exist.
+func (m *Map) DeleteStrict(key interface{}) error {
+	keyBytes, err := marshalBytes(key, int(m.meta.KeySize))
 	if err != nil {
-		return false, err
+		return err
 	}
 	attr := mapOpAttr{
 		mapFd: m.fd,
 		key:   newPtr(unsafe.Pointer(&keyBytes[0])),
 	}
 	_, e := bpfCall(_MapDeleteElem, unsafe.Pointer(&attr), int(unsafe.Sizeof(attr)))
-	if e == 0 {
-		return true, nil
-	}
 	if e == syscall.ENOENT {
-		return false, nil
+		return e
 	}
-	return false, bpfErrNo(e)
+	return bpfErrNo(e)
 }
 
-// GetNextKey helps to iterate over a map getting the next key after a known key
-func (m *Map) GetNextKey(key encoding.BinaryMarshaler, nextKey encoding.BinaryUnmarshaler) (bool, error) {
-	nextKeyBytes, err := m.GetNextKeyRaw(key)
+// NextKey finds the key following an initial key.
+//
+// See NextKeyBytes for details.
+func (m *Map) NextKey(key, nextKeyOut interface{}) (bool, error) {
+	nextKeyBytes, err := m.NextKeyBytes(key)
 	if err != nil {
 		return false, err
 	}
 	if nextKeyBytes == nil {
 		return false, nil
 	}
-	err = nextKey.UnmarshalBinary(nextKeyBytes)
+	err = unmarshalBytes(nextKeyOut, nextKeyBytes)
 	if err != nil {
 		return false, err
 	}
 	return true, nil
 }
 
-// GetNextKeyRaw helps to iterate over a map getting the next key after a known key by a raw byte array
-func (m *Map) GetNextKeyRaw(key encoding.BinaryMarshaler) ([]byte, error) {
-	keyBytes, err := m.marshal(key, m.meta.KeySize)
-	if err != nil {
-		return nil, err
+// NextKeyBytes returns the key following an initial key as a byte slice.
+//
+// Passing nil will return the first key.
+//
+// Use Iterate if you want to traverse all entries in the map.
+func (m *Map) NextKeyBytes(key interface{}) ([]byte, error) {
+	var keyPtr syscallPtr
+	if key != nil {
+		keyBytes, err := marshalBytes(key, int(m.meta.KeySize))
+		if err != nil {
+			return nil, err
+		}
+		keyPtr = newPtr(unsafe.Pointer(&keyBytes[0]))
 	}
-	nextKeyBytes := make([]byte, m.meta.KeySize)
+
+	nextKey := make([]byte, m.meta.KeySize)
 	attr := mapOpAttr{
 		mapFd: m.fd,
-		key:   newPtr(unsafe.Pointer(&keyBytes[0])),
-		value: newPtr(unsafe.Pointer(&nextKeyBytes[0])),
+		key:   keyPtr,
+		value: newPtr(unsafe.Pointer(&nextKey[0])),
 	}
 	_, e := bpfCall(_MapGetNextKey, unsafe.Pointer(&attr), int(unsafe.Sizeof(attr)))
+	if e == syscall.ENOENT {
+		return nil, nil
+	}
 	if e != 0 {
-		if e == syscall.ENOENT {
-			return nil, nil
-		}
 		return nil, bpfErrNo(e)
 	}
-	return nextKeyBytes, nil
+	return nextKey, nil
+}
+
+// Iterate traverses a map.
+//
+// It's not possible to guarantee that all keys in a map will be
+// returned if there are concurrent modifications to the map. If a
+// map is modified too heavily iteration may abort.
+func (m *Map) Iterate() *MapIterator {
+	return &MapIterator{
+		target: m,
+	}
 }
 
 // Close removes a Map
@@ -240,47 +276,23 @@ func LoadMapExplicit(fileName string, spec *MapSpec) (*Map, error) {
 	}, nil
 }
 
-func (m *Map) put(key encoding.BinaryMarshaler, value encoding.BinaryMarshaler, putType uint64) (bool, error) {
-	keyBytes, err := m.marshal(key, m.meta.KeySize)
+func (m *Map) put(key, value interface{}, putType uint64) error {
+	keyBytes, err := marshalBytes(key, int(m.meta.KeySize))
 	if err != nil {
-		return false, err
+		return err
 	}
-	valueBytes, err := m.marshal(value, m.meta.ValueSize)
+	valueBytes, err := marshalBytes(value, int(m.meta.ValueSize))
 	if err != nil {
-		return false, err
+		return err
 	}
-	_, e := bpfCall(_MapUpdateElem,
-		unsafe.Pointer(&mapOpAttr{
-			mapFd: m.fd,
-			key:   newPtr(unsafe.Pointer(&keyBytes[0])),
-			value: newPtr(unsafe.Pointer(&valueBytes[0])),
-			flags: putType,
-		}), 32)
-	if e != 0 {
-		switch putType {
-		case _NoExist:
-			if e == syscall.EEXIST {
-				return false, nil
-			}
-		case _Exist:
-			if e == syscall.ENOENT {
-				return false, nil
-			}
-		}
-		return false, bpfErrNo(e)
+	attr := mapOpAttr{
+		mapFd: m.fd,
+		key:   newPtr(unsafe.Pointer(&keyBytes[0])),
+		value: newPtr(unsafe.Pointer(&valueBytes[0])),
+		flags: putType,
 	}
-	return true, nil
-}
-
-func (m *Map) marshal(value encoding.BinaryMarshaler, length uint32) ([]byte, error) {
-	bytes, err := value.MarshalBinary()
-	if err != nil {
-		return nil, err
-	}
-	if l := int(length); len(bytes) != l {
-		return nil, fmt.Errorf("%T must marshal to %d bytes, not %d", value, length, l)
-	}
-	return bytes, nil
+	_, e := bpfCall(_MapUpdateElem, unsafe.Pointer(&attr), int(unsafe.Sizeof(attr)))
+	return bpfErrNo(e)
 }
 
 // UnmarshalBinary implements BinaryUnmarshaler.
@@ -309,4 +321,78 @@ func (m *Map) MarshalBinary() ([]byte, error) {
 	buf := make([]byte, 4)
 	nativeEndian.PutUint32(buf, m.fd)
 	return buf, nil
+}
+
+// MapIterator iterates a Map.
+//
+// See Map.Iterate.
+type MapIterator struct {
+	target *Map
+	prev   interface{}
+	done   bool
+	err    error
+}
+
+// Next decodes the next key and value.
+//
+// Returns false if there are no more entries.
+func (mi *MapIterator) Next(keyOut, valueOut interface{}) bool {
+	if mi.err != nil || mi.done {
+		return false
+	}
+
+	var nextBytes []byte
+	for i := 0; i < 3; i++ {
+		nextBytes, mi.err = mi.target.NextKeyBytes(mi.prev)
+		if mi.err != nil {
+			return false
+		}
+
+		if nextBytes == nil {
+			mi.done = true
+			return false
+		}
+
+		var ok bool
+		ok, mi.err = mi.target.Get(nextBytes, valueOut)
+		if mi.err != nil {
+			return false
+		}
+
+		if ok {
+			break
+		}
+
+		// The next key was deleted before we could retrieve
+		// it's value. As of Linux 4.16 there is no safe API which
+		// prevents this race.
+		nextBytes = nil
+	}
+
+	if nextBytes == nil {
+		// We still hit the race condition even though we retried.
+		mi.err = errors.New("ebpf: can't retrieve next entry, map mutated too quickly")
+		return false
+	}
+
+	mi.err = unmarshalBytes(keyOut, nextBytes)
+	if mi.err != nil {
+		return false
+	}
+
+	// The user can get access to nextBytes since marshalBytes
+	// does not copy when unmarshaling into a []byte.
+	// Make a copy to prevent accidental corruption of
+	// iterator state.
+	prevBytes := make([]byte, len(nextBytes))
+	copy(prevBytes, nextBytes)
+	mi.prev = prevBytes
+	return true
+}
+
+// Err returns any encountered error.
+//
+// The method must be called after Next returns nil.
+func (mi *MapIterator) Err() error {
+	return mi.err
 }

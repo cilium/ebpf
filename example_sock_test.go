@@ -31,32 +31,6 @@ type IPHdr struct {
 
 const EthHLen = 14
 
-type protoType uint32
-
-func (k protoType) MarshalBinary() ([]byte, error) {
-	ret := make([]byte, 4)
-	inet.HostByteOrder.PutUint32(ret, uint32(k))
-	return ret, nil
-}
-
-func (k *protoType) UnmarshalBinary(data []byte) error {
-	*k = protoType(inet.HostByteOrder.Uint32(data))
-	return nil
-}
-
-type protoCounter uint64
-
-func (k protoCounter) MarshalBinary() ([]byte, error) {
-	ret := make([]byte, 8)
-	inet.HostByteOrder.PutUint64(ret, uint64(k))
-	return ret, nil
-}
-
-func (k *protoCounter) UnmarshalBinary(data []byte) error {
-	*k = protoCounter(inet.HostByteOrder.Uint64(data))
-	return nil
-}
-
 // ExampleSocket demonstrates how to attach an EBPF program
 // to a socket.
 func Example_socket() {
@@ -133,29 +107,29 @@ func Example_socket() {
 	fmt.Println("Packet stats:")
 	for {
 		time.Sleep(time.Second)
-		var icmp protoCounter
-		var tcp protoCounter
-		var udp protoCounter
-		ok, err := bpfMap.Get(protoType(nettypes.ICMP), &icmp)
+		var icmp uint64
+		var tcp uint64
+		var udp uint64
+		ok, err := bpfMap.Get(uint32(nettypes.ICMP), &icmp)
 		if err != nil {
 			panic(err)
 		}
 		if !ok {
-			icmp = protoCounter(0)
+			icmp = 0
 		}
-		ok, err = bpfMap.Get(protoType(nettypes.TCP), &tcp)
+		ok, err = bpfMap.Get(uint32(nettypes.TCP), &tcp)
 		if err != nil {
 			panic(err)
 		}
 		if !ok {
-			tcp = protoCounter(0)
+			tcp = 0
 		}
-		ok, err = bpfMap.Get(protoType(nettypes.UDP), &udp)
+		ok, err = bpfMap.Get(uint32(nettypes.UDP), &udp)
 		if err != nil {
 			panic(err)
 		}
 		if !ok {
-			udp = protoCounter(0)
+			udp = 0
 		}
 		fmt.Printf("\r\033[m\tICMP: %d TCP: %d UDP: %d", icmp, tcp, udp)
 	}

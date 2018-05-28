@@ -158,11 +158,11 @@ func pinObject(fileName string, fd uint32) error {
 	return bpfErrNo(errNo)
 }
 
-func getObject(fileName string) (uintptr, error) {
+func getObject(fileName string) (uint32, error) {
 	ptr, errNo := bpfCall(_ObjGet, unsafe.Pointer(&pinObjAttr{
 		fileName: newPtr(unsafe.Pointer(&[]byte(fileName)[0])),
 	}), 16)
-	return ptr, bpfErrNo(errNo)
+	return uint32(ptr), bpfErrNo(errNo)
 }
 
 func getObjectInfoByFD(fd uint32, info unsafe.Pointer, size uintptr) error {

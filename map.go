@@ -32,6 +32,8 @@ func (ms *MapSpec) String() string {
 type Map struct {
 	fd   uint32
 	meta MapSpec
+	// Per CPU maps return values larger than the size in the spec
+	fullValueSize int
 }
 
 // NewMap creates a new Map
@@ -76,9 +78,29 @@ func newMap(spec *MapSpec, inner uint32) (*Map, error) {
 	if err != nil {
 		return nil, fmt.Errorf("map create: %s", err.Error())
 	}
+
+	return alignMap(uint32(fd), spec)
+}
+
+func alignMap(fd uint32, spec *MapSpec) (*Map, error) {
+	if !spec.Type.hasPerCPUValue() {
+		return &Map{
+			uint32(fd),
+			*spec,
+			int(spec.ValueSize),
+		}, nil
+	}
+
+	possibleCPUs, err := possibleCPUs()
+	if err != nil {
+		return nil, err
+	}
+
+	fullValueSize := align(int(spec.ValueSize), 8) * possibleCPUs
 	return &Map{
 		uint32(fd),
 		*spec,
+		fullValueSize,
 	}, nil
 }
 
@@ -95,11 +117,12 @@ func (m *Map) Get(key, valueOut interface{}) (bool, error) {
 	if valueBytes == nil {
 		return false, nil
 	}
-	err = unmarshalBytes(valueOut, valueBytes)
-	if err != nil {
-		return false, err
+
+	if m.meta.Type.hasPerCPUValue() {
+		return true, unmarshalPerCPUValue(valueOut, int(m.meta.ValueSize), valueBytes)
 	}
-	return true, nil
+
+	return true, unmarshalBytes(valueOut, valueBytes)
 }
 
 // GetBytes gets a value from Map
@@ -108,7 +131,7 @@ func (m *Map) GetBytes(key interface{}) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	valueBytes := make([]byte, int(m.meta.ValueSize))
+	valueBytes := make([]byte, m.fullValueSize)
 	attr := mapOpAttr{
 		mapFd: m.fd,
 		key:   newPtr(unsafe.Pointer(&keyBytes[0])),
@@ -254,14 +277,11 @@ func LoadMap(fileName string) (*Map, error) {
 	if err != nil {
 		return nil, err
 	}
-	spec, err := getMapSpecByFD(uint32(fd))
+	spec, err := getMapSpecByFD(fd)
 	if err != nil {
 		return nil, err
 	}
-	return &Map{
-		uint32(fd),
-		*spec,
-	}, nil
+	return alignMap(fd, spec)
 }
 
 // LoadMapExplicit loads a map with explicit parameters.
@@ -270,10 +290,7 @@ func LoadMapExplicit(fileName string, spec *MapSpec) (*Map, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Map{
-		uint32(fd),
-		*spec,
-	}, nil
+	return alignMap(fd, spec)
 }
 
 func (m *Map) put(key, value interface{}, putType uint64) error {
@@ -281,10 +298,17 @@ func (m *Map) put(key, value interface{}, putType uint64) error {
 	if err != nil {
 		return err
 	}
-	valueBytes, err := marshalBytes(value, int(m.meta.ValueSize))
+
+	var valueBytes []byte
+	if m.meta.Type.hasPerCPUValue() {
+		valueBytes, err = marshalPerCPUValue(value, int(m.meta.ValueSize))
+	} else {
+		valueBytes, err = marshalBytes(value, int(m.meta.ValueSize))
+	}
 	if err != nil {
 		return err
 	}
+
 	attr := mapOpAttr{
 		mapFd: m.fd,
 		key:   newPtr(unsafe.Pointer(&keyBytes[0])),

@@ -162,6 +162,92 @@ func TestIterateEmptyMap(t *testing.T) {
 	}
 }
 
+func TestPerCPUMarshaling(t *testing.T) {
+	arr, err := NewMap(&MapSpec{
+		Type:       PerCPUArray,
+		KeySize:    4,
+		ValueSize:  5,
+		MaxEntries: 1,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer arr.Close()
+
+	values := []*customEncoding{
+		&customEncoding{"hello"},
+		&customEncoding{"world"},
+	}
+	if err := arr.Put(uint32(0), values); err != nil {
+		t.Fatal(err)
+	}
+
+	// Make sure unmarshaling works on slices containing pointers
+	var retrieved []*customEncoding
+	if ok, err := arr.Get(uint32(0), &retrieved); err != nil {
+		t.Fatal(err)
+	} else if !ok {
+		t.Fatal("Can't retrieve key 0")
+	}
+
+	for i, want := range []string{"HELLO", "WORLD"} {
+		if retrieved[i] == nil {
+			t.Error("First item is nil")
+		} else if have := retrieved[i].data; have != want {
+			t.Errorf("Put doesn't use BinaryMarshaler, expected %s but got %s", want, have)
+		}
+	}
+}
+
+func ExampleMap_PerCPU() {
+	arr, err := NewMap(&MapSpec{
+		Type:       PerCPUArray,
+		KeySize:    4,
+		ValueSize:  4,
+		MaxEntries: 2,
+	})
+	if err != nil {
+		panic(err)
+	}
+
+	first := []uint32{4, 5}
+	if err := arr.Put(uint32(0), first); err != nil {
+		panic(err)
+	}
+
+	second := []uint32{2, 8}
+	if err := arr.Put(uint32(1), second); err != nil {
+		panic(err)
+	}
+
+	var values []uint32
+	if ok, err := arr.Get(uint32(0), &values); err != nil {
+		panic(err)
+	} else if !ok {
+		panic("item 0 not found")
+	}
+
+	fmt.Println("First two values:", values[:2])
+
+	var key uint32
+	entries := arr.Iterate()
+	for entries.Next(&key, &values) {
+		// NB: sum can overflow, real code should check for this
+		var sum uint32
+		for _, n := range values {
+			sum += n
+		}
+		fmt.Printf("Sum of %d: %d\n", key, sum)
+	}
+	if err := entries.Err(); err != nil {
+		panic(err)
+	}
+
+	// Output: First two values: [4 5]
+	// Sum of 0: 9
+	// Sum of 1: 10
+}
+
 func createHash() *Map {
 	hash, err := NewMap(&MapSpec{
 		Type:       Hash,

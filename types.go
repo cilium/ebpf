@@ -66,6 +66,14 @@ const (
 	HashOfMaps
 )
 
+// hasPerCPUValue returns true if the Map stores a value per CPU.
+func (mt MapType) hasPerCPUValue() bool {
+	if mt == PerCPUHash || mt == PerCPUArray {
+		return true
+	}
+	return false
+}
+
 const (
 	_MapCreate = iota
 	_MapLookupElem

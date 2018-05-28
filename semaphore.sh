@@ -42,6 +42,8 @@ if [[ ! -f "./rkt/rkt" ]] \
   tar -xf rkt.tgz -C rkt --strip-components=1
 fi
 
+curl -s https://codecov.io/bash > codecov.sh
+chmod +x codecov.sh
 # Pre-fetch stage1 dependency due to rkt#2241
 # https://github.com/coreos/rkt/issues/2241
 sudo ./rkt/rkt image fetch --insecure-options=image "coreos.com/rkt/stage1-kvm:${rkt_version}" >/dev/null
@@ -82,7 +84,7 @@ for kernel_version in "${kernel_versions[@]}"; do
       mount -t bpf bpf /sys/fs/bpf &&
       mount -t debugfs debugfs /sys/kernel/debug/ &&
       cd /go/src/${pkg_name} &&
-      go test -v ./..."
+      go test -coverprofile=coverage.txt -covermode=atomic -v ./..."
 
   # Determine exit code from pod status due to rkt#2777
   # https://github.com/coreos/rkt/issues/2777
@@ -92,3 +94,5 @@ for kernel_version in "${kernel_versions[@]}"; do
   fi
   echo "Test successful on ${kernel_version}"
 done
+
+./codecov.sh

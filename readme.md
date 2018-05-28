@@ -1,23 +1,14 @@
 eBPF
 -------
+[![](https://godoc.org/github.com/newtools/ebpf?status.svg)](http://godoc.org/github.com/newtools/ebpf)
+
 eBPF is go library that provides utilities for loading, compiling, and debugging eBPF programs.
 
-It supports pinning objects, bpf to bpf calls and map of maps, amongst others. Manipulating an eBPF program
-before executing it is also possible.
-
-See the [documentation on godoc.org](https://godoc.org/github.com/newtools/ebpf).
-
-For more information on eBPF [see the kernel documentation](http://elixir.free-electrons.com/linux/latest/source/Documentation/networking/filter.txt),
-for a really deep dive explanation, the [python cilium docs](http://cilium.readthedocs.io/en/doc-1.0/bpf/) are a fantastic resource.
-
-Is there any advantage to doing this in go? Good question, the answer is yes. Go is a powerful
-general purpose programming language. Traditionally, low-level things like eBPF are,
-generally better left to C/C++. However,  providing them in Go can make it easy to do things like,
-dynamically load and unload filters from different stores, place a REST service (quite easily) on top of an
-eBPF program, and make sure sound security practices are happening around the base eBPF program.
-
-## Compiling
-[The Makefile](./examples/Makefile#L30) in the examples folder has an example of how to use the llvm bpf compiler to compile your eBPF C program.
+* Object pinning and loading
+* bpf-to-bpf calls
+* Map of maps
+* Per CPU maps
+* Rewriting of constants
 
 ## An Important Note About Licenses:
 If you are using this project for your own internal monitoring or using it to provide a service,
@@ -31,10 +22,8 @@ pinning yourself to GPLv2. However, eBPF opcode programs themselves must be gove
 so if you are distributing any software relying on this project you will probably be open-sourcing the most
 important part (the eBPF opcode) anyways.
 
-## Pinning
-If you want to pin your ebpf objects (this means make them persist, beyond the life of your program) then you will need to mount
-a bpffs file system (`/sys/fs/bpf/` is recommended). You can do this by running:
+## Further reading
 
-```sh
-mount bpffs /sys/fs/bpf -t bpf
-```
+* [Linux documentation on BPF](http://elixir.free-electrons.com/linux/latest/source/Documentation/networking/filter.txt)
+* [Cilium eBPF documentation](http://cilium.readthedocs.io/en/doc-1.0/bpf/) (recommended)
+* [eBPF features by Linux version](https://github.com/iovisor/bcc/blob/master/docs/kernel-versions.md)

@@ -81,6 +81,8 @@ func (bpf *Program) FD() int {
 }
 
 // Pin persists the Program past the lifetime of the process that created it
+//
+// This requires bpffs to be mounted above fileName. See http://cilium.readthedocs.io/en/doc-1.0/kubernetes/install/#mounting-the-bpf-fs-optional
 func (bpf *Program) Pin(fileName string) error {
 	return pinObject(fileName, bpf.fd)
 }

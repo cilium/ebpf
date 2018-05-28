@@ -114,6 +114,8 @@ func (coll *Collection) GetProgramByName(key string) (*Program, bool) {
 }
 
 // Pin persits a Collection beyond the lifetime of the process that created it
+//
+// This requires bpffs to be mounted above fileName. See http://cilium.readthedocs.io/en/doc-1.0/kubernetes/install/#mounting-the-bpf-fs-optional
 func (coll *Collection) Pin(dirName string, fileMode os.FileMode) error {
 	err := mkdirIfNotExists(dirName, fileMode)
 	if err != nil {

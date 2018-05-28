@@ -263,7 +263,9 @@ func (m *Map) FD() int {
 	return int(m.fd)
 }
 
-// Pin persists the map past the lifetime of the process that created it
+// Pin persists the map past the lifetime of the process that created it.
+//
+// This requires bpffs to be mounted above fileName. See http://cilium.readthedocs.io/en/doc-1.0/kubernetes/install/#mounting-the-bpf-fs-optional
 func (m *Map) Pin(fileName string) error {
 	return pinObject(fileName, m.fd)
 }

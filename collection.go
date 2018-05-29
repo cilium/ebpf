@@ -4,6 +4,8 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+
+	"github.com/pkg/errors"
 )
 
 // CollectionSpec describes a collection.
@@ -36,7 +38,7 @@ func NewCollection(spec *CollectionSpec) (*Collection, error) {
 	for k, spec := range spec.Maps {
 		m, err := NewMap(spec)
 		if err != nil {
-			return nil, err
+			return nil, errors.Wrapf(err, "map %s", k)
 		}
 		maps[k] = m
 	}
@@ -51,12 +53,12 @@ func NewCollection(spec *CollectionSpec) (*Collection, error) {
 				continue
 			}
 			if err := ed.RewriteMap(sym, m); err != nil {
-				return nil, err
+				return nil, errors.Wrapf(err, "program %s", k)
 			}
 		}
 		prog, err := NewProgram(spec)
 		if err != nil {
-			return nil, err
+			return nil, errors.Wrapf(err, "program %s", k)
 		}
 		progs[k] = prog
 	}
@@ -130,7 +132,7 @@ func (coll *Collection) Pin(dirName string, fileMode os.FileMode) error {
 		for k, v := range coll.maps {
 			err := v.Pin(filepath.Join(mapPath, k))
 			if err != nil {
-				return err
+				return errors.Wrapf(err, "map %s", k)
 			}
 		}
 	}
@@ -143,7 +145,7 @@ func (coll *Collection) Pin(dirName string, fileMode os.FileMode) error {
 		for k, v := range coll.programs {
 			err = v.Pin(filepath.Join(progPath, k))
 			if err != nil {
-				return err
+				return errors.Wrapf(err, "program %s", k)
 			}
 		}
 	}
@@ -207,7 +209,7 @@ func loadCollection(dirName string, loadMap func(string, string) (*Map, error), 
 		name := filepath.Base(mf)
 		m, err := loadMap(name, mf)
 		if err != nil {
-			return nil, err
+			return nil, errors.Wrapf(err, "map %s", name)
 		}
 		bpfColl.maps[name] = m
 	}
@@ -215,7 +217,7 @@ func loadCollection(dirName string, loadMap func(string, string) (*Map, error), 
 		name := filepath.Base(pf)
 		prog, err := loadProgram(name, pf)
 		if err != nil {
-			return nil, err
+			return nil, errors.Wrapf(err, "program %s", name)
 		}
 		bpfColl.programs[name] = prog
 	}

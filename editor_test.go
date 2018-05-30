@@ -40,13 +40,13 @@ func TestEditorRewriteGlobalVariables(t *testing.T) {
 
 	progSpec := spec.Programs["xdp_prog"]
 	editor := Edit(&progSpec.Instructions)
-	if err := editor.RewriteUint64("int_val", 4242); err == nil {
-		t.Error("RewriteUint64 did not reject writing to int value")
-	}
 	if err := editor.RewriteUint64("long_val", 4242); err != nil {
 		t.Fatal(err)
 	}
 	if err := editor.RewriteUint32("int_val", 1234); err != nil {
+		t.Fatal(err)
+	}
+	if err := editor.RewriteUint16("short_val", 2323); err != nil {
 		t.Fatal(err)
 	}
 
@@ -65,6 +65,22 @@ func TestEditorRewriteGlobalVariables(t *testing.T) {
 
 	if ret != 1234 {
 		t.Errorf("Expected return value 1234, got %d", ret)
+	}
+}
+
+func TestEditorRejectInvalidRewrites(t *testing.T) {
+	spec, err := NewCollectionSpecFromFile("testdata/rewrite.elf")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	progSpec := spec.Programs["invalid_xdp_prog"]
+	editor := Edit(&progSpec.Instructions)
+	if err := editor.RewriteUint64("int_val", 4242); err == nil {
+		t.Error("RewriteUint64 did not reject writing to int value")
+	}
+	if err := editor.RewriteUint64("long_array", 4242); err == nil {
+		t.Error("RewriteUint64 did not reject rewriting an array")
 	}
 }
 

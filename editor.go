@@ -40,9 +40,10 @@ func (ed *Editor) ReferencedSymbols() []string {
 
 // RewriteMap rewrites a symbol to point at a Map.
 func (ed *Editor) RewriteMap(symbol string, m *Map) error {
-	return ed.rewriteSymbol(symbol, []uint8{LdDW}, func(insns []*Instruction) {
+	return ed.rewriteSymbol(symbol, []uint8{LdDW}, func(insns []*Instruction) error {
 		insns[0].SrcRegister = 1
 		insns[0].Constant = int64(m.fd)
+		return nil
 	})
 }
 
@@ -60,13 +61,24 @@ func (ed *Editor) RewriteUint32(symbol string, value uint32) error {
 	return ed.rewriteRelocation(symbol, LdXW, int64(value))
 }
 
+// RewriteUint16 rewrites all references to a 32bit global variable to a constant.
+//
+// This is meant to be used with code emitted by LLVM, not hand written assembly.
+func (ed *Editor) RewriteUint16(symbol string, value uint16) error {
+	return ed.rewriteRelocation(symbol, LdXH, int64(value))
+}
+
 // rewriteRelocation deals with references to global variables as emitted by LLVM.
 // When compiled they are represented by a dummy load instruction (which has a zero immediate)
 // and a derefencing operation for the correct size.
 func (ed *Editor) rewriteRelocation(symbol string, opCode uint8, value int64) error {
-	return ed.rewriteSymbol(symbol, []uint8{LdDW, opCode}, func(insns []*Instruction) {
+	return ed.rewriteSymbol(symbol, []uint8{LdDW, opCode}, func(insns []*Instruction) error {
 		load := insns[0]
 		deref := insns[1]
+
+		if deref.Offset != 0 {
+			return errors.Errorf("symbol %v: scalar accessed as an array")
+		}
 
 		// Rewrite original load to new value
 		load.Constant = value
@@ -77,10 +89,12 @@ func (ed *Editor) rewriteRelocation(symbol string, opCode uint8, value int64) er
 			DstRegister: deref.DstRegister,
 			SrcRegister: load.DstRegister,
 		}
+
+		return nil
 	})
 }
 
-func (ed *Editor) rewriteSymbol(symbol string, opCodes []uint8, fn func([]*Instruction)) error {
+func (ed *Editor) rewriteSymbol(symbol string, opCodes []uint8, fn func([]*Instruction) error) error {
 	indices := ed.refs[symbol]
 	if len(indices) == 0 {
 		return errors.Errorf("unknown symbol %v", symbol)
@@ -99,7 +113,9 @@ func (ed *Editor) rewriteSymbol(symbol string, opCodes []uint8, fn func([]*Instr
 			insns = append(insns, ins)
 		}
 
-		fn(insns)
+		if err := fn(insns); err != nil {
+			return err
+		}
 	}
 	return nil
 }

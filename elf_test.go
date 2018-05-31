@@ -8,14 +8,14 @@ import (
 	"testing"
 )
 
-func TestNewCollectionSpecFromELF(t *testing.T) {
+func TestLoadCollectionSpec(t *testing.T) {
 	fh, err := os.Open("testdata/loader.elf")
 	if err != nil {
 		t.Fatal("Can't open test ELF:", err)
 	}
 	defer fh.Close()
 
-	spec, err := NewCollectionSpecFromELF(fh)
+	spec, err := LoadCollectionSpecFromReader(fh)
 	if err != nil {
 		t.Fatal("Can't parse ELF:", err)
 	}

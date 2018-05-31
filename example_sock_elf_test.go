@@ -94,12 +94,12 @@ func Example_socketELF() {
 	}
 	var coll *ebpf.Collection
 	if fi != nil {
-		coll, err = ebpf.LoadCollection(sockexPin)
+		coll, err = ebpf.LoadPinnedCollection(sockexPin)
 		if err != nil {
 			panic(err)
 		}
 	} else {
-		spec, err := ebpf.NewCollectionSpecFromELF(bytes.NewReader(program[:]))
+		spec, err := ebpf.LoadCollectionSpecFromReader(bytes.NewReader(program[:]))
 		if err != nil {
 			panic(err)
 		}
@@ -116,7 +116,7 @@ func Example_socketELF() {
 	if err != nil {
 		panic(err)
 	}
-	prog, ok := coll.GetProgramByName("bpf_prog1")
+	prog, ok := coll.Programs["bpf_prog1"]
 	if !ok {
 		panic(fmt.Errorf("no program named \"bpf_prog1\" found"))
 	}
@@ -126,7 +126,7 @@ func Example_socketELF() {
 
 	fmt.Printf("Filtering on eth index: %d\n", *index)
 	fmt.Println("Packet stats:")
-	bpfMap, ok := coll.GetMapByName("my_map")
+	bpfMap, ok := coll.Maps["my_map"]
 	if !ok {
 		panic(fmt.Errorf("no map named \"my_map\" found"))
 	}

@@ -22,15 +22,15 @@ func main() {
 		os.Exit(42)
 	}
 
-	path := flag.Args()[0]
-	coll, err := ebpf.NewCollectionFromFile(path)
+	path := flag.Arg(0)
+	coll, err := ebpf.LoadCollection(path)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Can't load %s: %v\n", path, err)
 		os.Exit(42)
 	}
 
-	progName := flag.Args()[1]
-	prog, ok := coll.GetProgramByName(progName)
+	progName := flag.Arg(1)
+	prog, ok := coll.Programs[progName]
 	if !ok {
 		fmt.Fprintf(os.Stderr, "%v does not contain program %v\n", path, progName)
 		os.Exit(42)

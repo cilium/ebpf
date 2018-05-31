@@ -81,7 +81,7 @@ func TestProgramPin(t *testing.T) {
 	}
 	prog.Close()
 
-	prog, err = LoadProgram(path)
+	prog, err = LoadPinnedProgram(path)
 	if err != nil {
 		t.Fatal(err)
 	}

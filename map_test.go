@@ -78,7 +78,7 @@ func TestMapPin(t *testing.T) {
 	}
 	m.Close()
 
-	m, err = LoadMap(path)
+	m, err = LoadPinnedMap(path)
 	if err != nil {
 		t.Fatal(err)
 	}

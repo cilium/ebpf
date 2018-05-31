@@ -21,12 +21,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	oF, err := os.Open(flag.Args()[0])
-	if err != nil {
-		panic(err)
-	}
-	defer oF.Close()
-	spec, err := ebpf.NewCollectionSpecFromELF(oF)
+	spec, err := ebpf.LoadCollectionSpec(flag.Arg(0))
 	if err != nil {
 		panic(err)
 	}

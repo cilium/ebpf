@@ -8,7 +8,7 @@ import (
 	"github.com/pkg/errors"
 )
 
-// MapSpec is an interface type that can initialize a new Map
+// MapSpec defines a Map.
 type MapSpec struct {
 	Type       MapType
 	KeySize    uint32
@@ -270,11 +270,11 @@ func (m *Map) Pin(fileName string) error {
 	return pinObject(fileName, m.fd)
 }
 
-// LoadMap load a Map from a BPF file.
+// LoadPinnedMap load a Map from a BPF file.
 //
-// Requires at least Linux 4.13, use LoadMapExplicit on
+// Requires at least Linux 4.13, use LoadPinnedMapExplicit on
 // earlier versions.
-func LoadMap(fileName string) (*Map, error) {
+func LoadPinnedMap(fileName string) (*Map, error) {
 	fd, err := getObject(fileName)
 	if err != nil {
 		return nil, err
@@ -286,8 +286,8 @@ func LoadMap(fileName string) (*Map, error) {
 	return alignMap(fd, spec)
 }
 
-// LoadMapExplicit loads a map with explicit parameters.
-func LoadMapExplicit(fileName string, spec *MapSpec) (*Map, error) {
+// LoadPinnedMapExplicit loads a map with explicit parameters.
+func LoadPinnedMapExplicit(fileName string, spec *MapSpec) (*Map, error) {
 	fd, err := getObject(fileName)
 	if err != nil {
 		return nil, err

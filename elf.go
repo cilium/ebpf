@@ -15,9 +15,9 @@ type elfCode struct {
 	symtab *symtab
 }
 
-// NewCollectionSpecFromELF parses an io.ReaderAt that represents an ELF layout
+// LoadCollectionSpecFromReader parses an io.ReaderAt that represents an ELF layout
 // into a CollectionSpec.
-func NewCollectionSpecFromELF(code io.ReaderAt) (*CollectionSpec, error) {
+func LoadCollectionSpecFromReader(code io.ReaderAt) (*CollectionSpec, error) {
 	f, err := elf.NewFile(code)
 	if err != nil {
 		return nil, err

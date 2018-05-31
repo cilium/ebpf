@@ -20,7 +20,7 @@ func Example_socketELFFile() {
 	fileName := flag.String("file", "", "path to sockex1")
 	index := flag.Int("index", 0, "specify ethernet index")
 	flag.Parse()
-	coll, err := ebpf.NewCollectionFromFile(*fileName)
+	coll, err := ebpf.LoadCollection(*fileName)
 	if err != nil {
 		panic(err)
 	}
@@ -28,7 +28,7 @@ func Example_socketELFFile() {
 	if err != nil {
 		panic(err)
 	}
-	prog, ok := coll.GetProgramByName("bpf_prog1")
+	prog, ok := coll.Programs["bpf_prog1"]
 	if !ok {
 		panic(fmt.Errorf("no program named \"bpf_prog1\" found"))
 	}
@@ -37,7 +37,7 @@ func Example_socketELFFile() {
 	}
 	fmt.Printf("Filtering on eth index: %d\n", *index)
 	fmt.Println("Packet stats:")
-	bpfMap, ok := coll.GetMapByName("my_map")
+	bpfMap, ok := coll.Maps["my_map"]
 	if !ok {
 		panic(fmt.Errorf("no map named \"my_map\" found"))
 	}

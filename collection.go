@@ -14,22 +14,22 @@ type CollectionSpec struct {
 	Programs map[string]*ProgramSpec
 }
 
-// NewCollectionSpecFromFile parse an object file and convert it to a collection
-func NewCollectionSpecFromFile(file string) (*CollectionSpec, error) {
+// LoadCollectionSpec parse an object file and convert it to a collection
+func LoadCollectionSpec(file string) (*CollectionSpec, error) {
 	f, err := os.Open(file)
 	if err != nil {
 		return nil, err
 	}
 	defer f.Close()
 
-	return NewCollectionSpecFromELF(f)
+	return LoadCollectionSpecFromReader(f)
 }
 
 // Collection is a collection of Programs and Maps associated
 // with their symbols
 type Collection struct {
-	programs map[string]*Program
-	maps     map[string]*Map
+	Programs map[string]*Program
+	Maps     map[string]*Map
 }
 
 // NewCollection creates a Collection from a specification
@@ -68,9 +68,9 @@ func NewCollection(spec *CollectionSpec) (*Collection, error) {
 	}, nil
 }
 
-// NewCollectionFromFile parses an object file and converts it to a collection.
-func NewCollectionFromFile(file string) (*Collection, error) {
-	spec, err := NewCollectionSpecFromFile(file)
+// LoadCollection parses an object file and converts it to a collection.
+func LoadCollection(file string) (*Collection, error) {
+	spec, err := LoadCollectionSpec(file)
 	if err != nil {
 		return nil, err
 	}
@@ -81,38 +81,12 @@ func NewCollectionFromFile(file string) (*Collection, error) {
 //
 // The collection mustn't be used afterwards.
 func (coll *Collection) Close() {
-	for _, prog := range coll.programs {
+	for _, prog := range coll.Programs {
 		prog.Close()
 	}
-	for _, m := range coll.maps {
+	for _, m := range coll.Maps {
 		m.Close()
 	}
-}
-
-// ForEachMap iterates over all the Maps in a Collection
-func (coll *Collection) ForEachMap(fx func(string, *Map)) {
-	for k, v := range coll.maps {
-		fx(k, v)
-	}
-}
-
-// ForEachProgram iterates over all the Programs in a Collection
-func (coll *Collection) ForEachProgram(fx func(string, *Program)) {
-	for k, v := range coll.programs {
-		fx(k, v)
-	}
-}
-
-// GetMapByName get a Map by its symbolic name
-func (coll *Collection) GetMapByName(key string) (*Map, bool) {
-	v, ok := coll.maps[key]
-	return v, ok
-}
-
-// GetProgramByName get a Program by its symbolic name
-func (coll *Collection) GetProgramByName(key string) (*Program, bool) {
-	v, ok := coll.programs[key]
-	return v, ok
 }
 
 // Pin persits a Collection beyond the lifetime of the process that created it
@@ -123,26 +97,26 @@ func (coll *Collection) Pin(dirName string, fileMode os.FileMode) error {
 	if err != nil {
 		return err
 	}
-	if len(coll.maps) > 0 {
+	if len(coll.Maps) > 0 {
 		mapPath := filepath.Join(dirName, "maps")
 		err = mkdirIfNotExists(mapPath, fileMode)
 		if err != nil {
 			return err
 		}
-		for k, v := range coll.maps {
+		for k, v := range coll.Maps {
 			err := v.Pin(filepath.Join(mapPath, k))
 			if err != nil {
 				return errors.Wrapf(err, "map %s", k)
 			}
 		}
 	}
-	if len(coll.programs) > 0 {
+	if len(coll.Programs) > 0 {
 		progPath := filepath.Join(dirName, "programs")
 		err = mkdirIfNotExists(progPath, fileMode)
 		if err != nil {
 			return err
 		}
-		for k, v := range coll.programs {
+		for k, v := range coll.Programs {
 			err = v.Pin(filepath.Join(progPath, k))
 			if err != nil {
 				return errors.Wrapf(err, "program %s", k)
@@ -163,31 +137,31 @@ func mkdirIfNotExists(dirName string, fileMode os.FileMode) error {
 	return nil
 }
 
-// LoadCollection loads a Collection from the pinned directory.
+// LoadPinnedCollection loads a Collection from the pinned directory.
 //
-// Requires at least Linux 4.13, use LoadCollectionExplicit on
+// Requires at least Linux 4.13, use LoadPinnedCollectionExplicit on
 // earlier versions.
-func LoadCollection(dirName string) (*Collection, error) {
+func LoadPinnedCollection(dirName string) (*Collection, error) {
 	return loadCollection(
 		dirName,
 		func(_ string, path string) (*Map, error) {
-			return LoadMap(path)
+			return LoadPinnedMap(path)
 		},
 		func(_ string, path string) (*Program, error) {
-			return LoadProgram(path)
+			return LoadPinnedProgram(path)
 		},
 	)
 }
 
-// LoadCollectionExplicit loads a Collection from the pinned directory with explicit parameters.
-func LoadCollectionExplicit(dirName string, maps map[string]*MapSpec, progs map[string]ProgType) (*Collection, error) {
+// LoadPinnedCollectionExplicit loads a Collection from the pinned directory with explicit parameters.
+func LoadPinnedCollectionExplicit(dirName string, maps map[string]*MapSpec, progs map[string]ProgType) (*Collection, error) {
 	return loadCollection(
 		dirName,
 		func(name string, path string) (*Map, error) {
-			return LoadMapExplicit(path, maps[name])
+			return LoadPinnedMapExplicit(path, maps[name])
 		},
 		func(name string, path string) (*Program, error) {
-			return LoadProgramExplicit(path, progs[name])
+			return LoadPinnedProgramExplicit(path, progs[name])
 		},
 	)
 }
@@ -202,8 +176,8 @@ func loadCollection(dirName string, loadMap func(string, string) (*Map, error), 
 		return nil, err
 	}
 	bpfColl := &Collection{
-		maps:     make(map[string]*Map),
-		programs: make(map[string]*Program),
+		Maps:     make(map[string]*Map),
+		Programs: make(map[string]*Program),
 	}
 	for _, mf := range maps {
 		name := filepath.Base(mf)
@@ -211,7 +185,7 @@ func loadCollection(dirName string, loadMap func(string, string) (*Map, error), 
 		if err != nil {
 			return nil, errors.Wrapf(err, "map %s", name)
 		}
-		bpfColl.maps[name] = m
+		bpfColl.Maps[name] = m
 	}
 	for _, pf := range progs {
 		name := filepath.Base(pf)
@@ -219,7 +193,7 @@ func loadCollection(dirName string, loadMap func(string, string) (*Map, error), 
 		if err != nil {
 			return nil, errors.Wrapf(err, "program %s", name)
 		}
-		bpfColl.programs[name] = prog
+		bpfColl.Programs[name] = prog
 	}
 	return bpfColl, nil
 }

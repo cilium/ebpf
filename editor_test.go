@@ -33,7 +33,7 @@ func ExampleEditor_RewriteUint64() {
 }
 
 func TestEditorRewriteGlobalVariables(t *testing.T) {
-	spec, err := NewCollectionSpecFromFile("testdata/rewrite.elf")
+	spec, err := LoadCollectionSpec("testdata/rewrite.elf")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -69,7 +69,7 @@ func TestEditorRewriteGlobalVariables(t *testing.T) {
 }
 
 func TestEditorRejectInvalidRewrites(t *testing.T) {
-	spec, err := NewCollectionSpecFromFile("testdata/rewrite.elf")
+	spec, err := LoadCollectionSpec("testdata/rewrite.elf")
 	if err != nil {
 		t.Fatal(err)
 	}

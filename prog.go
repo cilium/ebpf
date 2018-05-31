@@ -194,11 +194,11 @@ func (bpf *Program) testRun(in []byte, repeat int) (uint32, []byte, time.Duratio
 	return attr.retval, out, total, nil
 }
 
-// LoadProgram loads a Program from a BPF file.
+// LoadPinnedProgram loads a Program from a BPF file.
 //
-// Requires at least Linux 4.13, use LoadProgramExplicit on
+// Requires at least Linux 4.13, use LoadPinnedProgramExplicit on
 // earlier versions.
-func LoadProgram(fileName string) (*Program, error) {
+func LoadPinnedProgram(fileName string) (*Program, error) {
 	fd, err := getObject(fileName)
 	if err != nil {
 		return nil, err
@@ -214,8 +214,8 @@ func LoadProgram(fileName string) (*Program, error) {
 	}, nil
 }
 
-// LoadProgramExplicit loads a program with explicit parameters.
-func LoadProgramExplicit(fileName string, typ ProgType) (*Program, error) {
+// LoadPinnedProgramExplicit loads a program with explicit parameters.
+func LoadPinnedProgramExplicit(fileName string, typ ProgType) (*Program, error) {
 	fd, err := getObject(fileName)
 	if err != nil {
 		return nil, err

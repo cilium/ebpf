@@ -105,12 +105,15 @@ func (bpf *Program) Test(in []byte) (uint32, []byte, error) {
 }
 
 // Benchmark runs the Program with the given input for a number of times
-// and returns the total time taken.
+// and returns the time taken per iteration.
+//
+// The returned value is the return value of the last execution of
+// the program.
 //
 // This function requires at least Linux 4.12.
-func (bpf *Program) Benchmark(in []byte, repeat int) (time.Duration, error) {
-	_, _, total, err := bpf.testRun(in, repeat)
-	return total, err
+func (bpf *Program) Benchmark(in []byte, repeat int) (uint32, time.Duration, error) {
+	ret, _, total, err := bpf.testRun(in, repeat)
+	return ret, total, err
 }
 
 var noProgTestRun bool

@@ -208,51 +208,44 @@ func bpfCall(cmd int, attr unsafe.Pointer, size int) (uintptr, syscall.Errno) {
 }
 
 func createPerfEvent(perfEvent *perfEventAttr, pid, cpu, groupFd int, flags uint) (uintptr, error) {
-	efd, _, errNo := syscall.Syscall6(syscall.SYS_PERF_EVENT_OPEN, uintptr(unsafe.Pointer(perfEvent)),
+	efd, _, errNo := syscall.Syscall6(_SYS_PERF_EVENT_OPEN, uintptr(unsafe.Pointer(perfEvent)),
 		uintptr(pid), uintptr(cpu), uintptr(groupFd), uintptr(flags), 0)
-	err := eventErrNo(errNo)
-	if err != nil {
-		return 0, err
-	}
-	return efd, nil
-}
 
-func eventErrNo(errNo syscall.Errno) error {
 	switch errNo {
 	case 0:
-		return nil
+		return efd, nil
 	case syscall.E2BIG:
-		return fmt.Errorf("perf_event_attr size is incorrect, check size field for what the correct size should be")
+		return 0, fmt.Errorf("perf_event_attr size is incorrect, check size field for what the correct size should be")
 	case syscall.EACCES:
-		return fmt.Errorf("insufficient capabilities to create this event")
-	case syscall.EBADFD:
-		return fmt.Errorf("group_fd is invalid")
+		return 0, fmt.Errorf("insufficient capabilities to create this event")
+	case _EBADFD:
+		return 0, fmt.Errorf("group_fd is invalid")
 	case syscall.EBUSY:
-		return fmt.Errorf("another event already has exclusive access to the PMU")
+		return 0, fmt.Errorf("another event already has exclusive access to the PMU")
 	case syscall.EFAULT:
-		return fmt.Errorf("attr points to an invalid address")
+		return 0, fmt.Errorf("attr points to an invalid address")
 	case syscall.EINVAL:
-		return fmt.Errorf("the specified event is invalid, most likely because a configuration parameter is invalid (i.e. too high, too low, etc)")
+		return 0, fmt.Errorf("the specified event is invalid, most likely because a configuration parameter is invalid (i.e. too high, too low, etc)")
 	case syscall.EMFILE:
-		return fmt.Errorf("this process has reached its limits for number of open events that it may have")
+		return 0, fmt.Errorf("this process has reached its limits for number of open events that it may have")
 	case syscall.ENODEV:
-		return fmt.Errorf("this processor architecture does not support this event type")
+		return 0, fmt.Errorf("this processor architecture does not support this event type")
 	case syscall.ENOENT:
-		return fmt.Errorf("the type setting is not valid")
+		return 0, fmt.Errorf("the type setting is not valid")
 	case syscall.ENOSPC:
-		return fmt.Errorf("the hardware limit for breakpoints capacity has been reached")
+		return 0, fmt.Errorf("the hardware limit for breakpoints capacity has been reached")
 	case syscall.ENOSYS:
-		return fmt.Errorf("sample type not supported by the hardware")
+		return 0, fmt.Errorf("sample type not supported by the hardware")
 	case syscall.EOPNOTSUPP:
-		return fmt.Errorf("this event is not supported by the hardware or requires a feature not supported by the hardware")
+		return 0, fmt.Errorf("this event is not supported by the hardware or requires a feature not supported by the hardware")
 	case syscall.EOVERFLOW:
-		return fmt.Errorf("sample_max_stack is larger than the kernel support; check \"/proc/sys/kernel/perf_event_max_stack\" for maximum supported size")
+		return 0, fmt.Errorf("sample_max_stack is larger than the kernel support; check \"/proc/sys/kernel/perf_event_max_stack\" for maximum supported size")
 	case syscall.EPERM:
-		return fmt.Errorf("insufficient capability to request exclusive access")
+		return 0, fmt.Errorf("insufficient capability to request exclusive access")
 	case syscall.ESRCH:
-		return fmt.Errorf("pid does not exist")
+		return 0, fmt.Errorf("pid does not exist")
 	}
-	return errNo
+	return 0, errNo
 }
 
 // IOCtl The ioctl() function manipulates the underlying device parameters of
@@ -274,22 +267,16 @@ func IOCtl(fd int, args ...uint64) error {
 		tmp[i] = uintptr(a)
 	}
 	_, _, errNo := syscall.Syscall(syscall.SYS_IOCTL, uintptr(fd), tmp[0], tmp[1])
-	return ioctlErrNo(errNo)
-}
 
-func ioctlErrNo(errNo syscall.Errno) error {
 	switch errNo {
 	case 0:
 		return nil
-	case syscall.EBADFD:
-		return fmt.Errorf("not a valid file descriptor")
 	case syscall.EFAULT:
 		return fmt.Errorf("argp references an inaccessible memory area")
 	case syscall.EINVAL:
 		return fmt.Errorf("request or argp is not valid")
 	case syscall.ENOTTY:
 		return fmt.Errorf("the specified request does not apply to the kind of object that the file descriptor references")
-
 	}
 	return errNo
 }

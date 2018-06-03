@@ -32,35 +32,42 @@ type Collection struct {
 	Maps     map[string]*Map
 }
 
-// NewCollection creates a Collection from a specification
+// NewCollection creates a Collection from a specification.
+//
+// Only maps referenced by at least one of the programs are initialized.
 func NewCollection(spec *CollectionSpec) (*Collection, error) {
 	maps := make(map[string]*Map)
-	for k, spec := range spec.Maps {
-		m, err := NewMap(spec)
-		if err != nil {
-			return nil, errors.Wrapf(err, "map %s", k)
-		}
-		maps[k] = m
-	}
 	progs := make(map[string]*Program)
-	for k, spec := range spec.Programs {
-		ed := Edit(&spec.Instructions)
+	for progName, progSpec := range spec.Programs {
+		editor := Edit(&progSpec.Instructions)
 
 		// Rewrite any Symbol which is a valid Map.
-		for _, sym := range ed.ReferencedSymbols() {
-			m, ok := maps[sym]
+		for _, sym := range editor.ReferencedSymbols() {
+			mapSpec, ok := spec.Maps[sym]
 			if !ok {
 				continue
 			}
-			if err := ed.RewriteMap(sym, m); err != nil {
-				return nil, errors.Wrapf(err, "program %s", k)
+
+			m := maps[sym]
+			if m == nil {
+				var err error
+				m, err = NewMap(mapSpec)
+				if err != nil {
+					return nil, err
+				}
+				maps[sym] = m
+			}
+
+			if err := editor.RewriteMap(sym, m); err != nil {
+				return nil, errors.Wrapf(err, "program %s", progName)
 			}
 		}
-		prog, err := NewProgram(spec)
+
+		prog, err := NewProgram(progSpec)
 		if err != nil {
-			return nil, errors.Wrapf(err, "program %s", k)
+			return nil, errors.Wrapf(err, "program %s", progName)
 		}
-		progs[k] = prog
+		progs[progName] = prog
 	}
 	return &Collection{
 		progs,

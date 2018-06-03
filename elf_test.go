@@ -3,19 +3,12 @@ package ebpf
 import (
 	"encoding/binary"
 	"math"
-	"os"
 	"reflect"
 	"testing"
 )
 
 func TestLoadCollectionSpec(t *testing.T) {
-	fh, err := os.Open("testdata/loader.elf")
-	if err != nil {
-		t.Fatal("Can't open test ELF:", err)
-	}
-	defer fh.Close()
-
-	spec, err := LoadCollectionSpecFromReader(fh)
+	spec, err := LoadCollectionSpec("testdata/loader.elf")
 	if err != nil {
 		t.Fatal("Can't parse ELF:", err)
 	}

@@ -40,81 +40,166 @@ func (ed *Editor) ReferencedSymbols() []string {
 
 // RewriteMap rewrites a symbol to point at a Map.
 func (ed *Editor) RewriteMap(symbol string, m *Map) error {
-	return ed.rewriteSymbol(symbol, []uint8{LdDW}, func(insns []*Instruction) error {
-		insns[0].SrcRegister = 1
-		insns[0].Constant = int64(m.fd)
-		return nil
-	})
+	indices := ed.refs[symbol]
+	if len(indices) == 0 {
+		return errors.Errorf("unknown symbol %v", symbol)
+	}
+
+	for _, index := range indices {
+		load := &(*ed.instructions)[index]
+		if load.OpCode != LdDW {
+			return errors.Errorf("symbol %v: missing load instruction", symbol)
+		}
+
+		load.SrcRegister = 1
+		load.Constant = int64(m.fd)
+	}
+
+	return nil
 }
 
 // RewriteUint64 rewrites a reference to a 64bit global variable to a constant.
 //
 // This is meant to be used with code emitted by LLVM, not hand written assembly.
 func (ed *Editor) RewriteUint64(symbol string, value uint64) error {
-	return ed.rewriteRelocation(symbol, LdXDW, int64(value))
+	return ed.rewriteLoadAndDeref(symbol, LdXDW, 8, []int64{int64(value)})
+}
+
+// RewriteUint64Array rewrites a reference to a 64bit global array variable to a constant.
+//
+// This is meant to be used with code emitted by LLVM, not hand written assembly.
+func (ed *Editor) RewriteUint64Array(symbol string, values []uint64) error {
+	intValues := make([]int64, len(values))
+	for i, v := range values {
+		intValues[i] = int64(v)
+	}
+
+	return ed.rewriteLoadAndDeref(symbol, LdXDW, 8, intValues)
 }
 
 // RewriteUint32 rewrites all references to a 32bit global variable to a constant.
 //
 // This is meant to be used with code emitted by LLVM, not hand written assembly.
 func (ed *Editor) RewriteUint32(symbol string, value uint32) error {
-	return ed.rewriteRelocation(symbol, LdXW, int64(value))
+	return ed.rewriteLoadAndDeref(symbol, LdXW, 4, []int64{int64(value)})
+}
+
+// RewriteUint32Array rewrites all references to a 32bit global array variable to a constant.
+//
+// This is meant to be used with code emitted by LLVM, not hand written assembly.
+func (ed *Editor) RewriteUint32Array(symbol string, values []uint32) error {
+	intValues := make([]int64, len(values))
+	for i, v := range values {
+		intValues[i] = int64(v)
+	}
+
+	return ed.rewriteLoadAndDeref(symbol, LdXW, 4, intValues)
 }
 
 // RewriteUint16 rewrites all references to a 32bit global variable to a constant.
 //
 // This is meant to be used with code emitted by LLVM, not hand written assembly.
 func (ed *Editor) RewriteUint16(symbol string, value uint16) error {
-	return ed.rewriteRelocation(symbol, LdXH, int64(value))
+	return ed.rewriteLoadAndDeref(symbol, LdXH, 2, []int64{int64(value)})
 }
 
-// rewriteRelocation deals with references to global variables as emitted by LLVM.
+// RewriteUint16Array rewrites all references to a 16bit global array variable to a constant.
+//
+// This is meant to be used with code emitted by LLVM, not hand written assembly.
+func (ed *Editor) RewriteUint16Array(symbol string, values []uint16) error {
+	intValues := make([]int64, len(values))
+	for i, v := range values {
+		intValues[i] = int64(v)
+	}
+
+	return ed.rewriteLoadAndDeref(symbol, LdXH, 2, intValues)
+}
+
+// RewriteUint8 rewrites all references to an 8bit global variable to a constant.
+//
+// This is meant to be used with code emitted by LLVM, not hand written assembly.
+func (ed *Editor) RewriteUint8(symbol string, value uint8) error {
+	return ed.rewriteLoadAndDeref(symbol, LdXB, 1, []int64{int64(value)})
+}
+
+// RewriteUint8Array rewrites all references to an 8bit global array variable to a constant.
+//
+// This is meant to be used with code emitted by LLVM, not hand written assembly.
+func (ed *Editor) RewriteUint8Array(symbol string, values []uint8) error {
+	intValues := make([]int64, len(values))
+	for i, v := range values {
+		intValues[i] = int64(v)
+	}
+
+	return ed.rewriteLoadAndDeref(symbol, LdXB, 1, intValues)
+}
+
+// RewriteBool rewrites all references to an boolean global variable to a constant.
+//
+// This is meant to be used with code emitted by LLVM, not hand written assembly.
+func (ed *Editor) RewriteBool(symbol string, value bool) error {
+	intValue := int64(0)
+	if value {
+		intValue = 1
+	}
+	return ed.rewriteLoadAndDeref(symbol, LdXB, 1, []int64{intValue})
+}
+
+// RewriteBoolArray rewrites all references to an boolean global array variable to a constant.
+//
+// This is meant to be used with code emitted by LLVM, not hand written assembly.
+func (ed *Editor) RewriteBoolArray(symbol string, values []bool) error {
+	intValues := make([]int64, len(values))
+	for i, v := range values {
+		intValues[i] = 0
+		if v {
+			intValues[i] = 1
+		}
+	}
+
+	return ed.rewriteLoadAndDeref(symbol, LdXB, 1, intValues)
+}
+
+// rewriteLoadAndDeref deals with references to global variables as emitted by LLVM.
 // When compiled they are represented by a dummy load instruction (which has a zero immediate)
 // and a derefencing operation for the correct size.
-func (ed *Editor) rewriteRelocation(symbol string, opCode uint8, value int64) error {
-	return ed.rewriteSymbol(symbol, []uint8{LdDW, opCode}, func(insns []*Instruction) error {
-		load := insns[0]
-		deref := insns[1]
+func (ed *Editor) rewriteLoadAndDeref(symbol string, derefOp uint8, length int, values []int64) error {
+	indices := ed.refs[symbol]
+	if len(indices) == 0 {
+		return errors.Errorf("unknown symbol %v", symbol)
+	}
+	for _, index := range indices {
+		if index+1 >= len(*ed.instructions) {
+			return errors.Errorf("symbol %v: expected at least two instructions")
+		}
 
-		if deref.Offset != 0 {
-			return errors.Errorf("symbol %v: scalar accessed as an array")
+		load := &(*ed.instructions)[index]
+		if load.OpCode != LdDW {
+			return errors.Errorf("symbol %v: missing load instruction", symbol)
+		}
+
+		deref := &(*ed.instructions)[index+1]
+		if deref.OpCode != derefOp {
+			return errors.Errorf("symbol %v: incompatible value type", symbol, derefOp, deref.OpCode)
+		}
+
+		if int(deref.Offset)%length != 0 {
+			return errors.Errorf("symbol %v: unaligned access")
+		}
+
+		index := int(deref.Offset) / length
+		if index >= len(values) {
+			return errors.Errorf("symbol %v: out of bounds dereference")
 		}
 
 		// Rewrite original load to new value
-		load.Constant = value
+		load.Constant = values[index]
 
 		// Replace the deref with a mov
 		*deref = Instruction{
 			OpCode:      MovSrc,
 			DstRegister: deref.DstRegister,
 			SrcRegister: load.DstRegister,
-		}
-
-		return nil
-	})
-}
-
-func (ed *Editor) rewriteSymbol(symbol string, opCodes []uint8, fn func([]*Instruction) error) error {
-	indices := ed.refs[symbol]
-	if len(indices) == 0 {
-		return errors.Errorf("unknown symbol %v", symbol)
-	}
-	for _, index := range indices {
-		if index+len(opCodes) > len(*ed.instructions) {
-			return errors.Errorf("symbol %v: expected at least %d instructions", len(opCodes))
-		}
-
-		insns := make([]*Instruction, 0, len(opCodes))
-		for j, opCode := range opCodes {
-			ins := &(*ed.instructions)[index+j]
-			if ins.OpCode != opCode {
-				return errors.Errorf("symbol %v: expected instruction %#x at offset+%d", symbol, opCode, j)
-			}
-			insns = append(insns, ins)
-		}
-
-		if err := fn(insns); err != nil {
-			return err
 		}
 	}
 	return nil

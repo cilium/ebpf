@@ -1,32 +1,56 @@
 /* This file tests rewriting constants from C compiled code.
  */
 
-#define __section(NAME) __attribute__((section(NAME), used))
+#include "common.h"
 
-char __license[] __section("license") = "MIT";
+struct map map_val __section("maps") = {
+	.type        = 1,
+	.key_size    = sizeof(unsigned int),
+	.value_size  = sizeof(unsigned int),
+	.max_entries = 1,
+};
 
 const unsigned long long_val;
 const unsigned int int_val;
 const unsigned short short_val;
+const unsigned char char_val;
+const unsigned char bool_val;
 
 const unsigned long long_array[0];
+const unsigned int int_array[0];
+const unsigned short short_array[0];
+const unsigned char char_array[0];
+const unsigned char bool_array[0];
 
-__section("xdp") int xdp_prog() {
-	if (long_val < 5) {
-		return 1;
-	}
-
-	if (short_val < 5) {
-		return 2;
-	}
-
-	return int_val;
+__section("xdp") int rewrite() {
+	unsigned long acc = 0;
+	acc |= long_val;
+	acc |= int_val;
+	acc |= short_val;
+	acc |= char_val;
+	acc |= bool_val;
+	acc |= long_array[1] << 5;
+	acc |= int_array[1] << 5;
+	acc |= short_array[1] << 5;
+	acc |= char_array[1] << 5;
+	acc |= bool_array[1] << 5;
+	return acc;
 }
 
-__section("xdp/invalid") int invalid_xdp_prog() {
-	if (int_val < 5) {
-		return 1;
+__section("xdp/map") int rewrite_map() {
+	unsigned int key = 0;
+	unsigned int *value = map_lookup_elem(&map_val, &key);
+	if (!value) {
+		return 0;
 	}
+	return *value;
+}
 
-	return long_array[2];
+__section("xdp/invalid") int invalid_rewrite() {
+	unsigned long acc = 0;
+	acc |= int_val;
+	const char *arr = (const char*)short_array;
+	acc |= arr[1];
+	acc |= long_array[2];
+	return acc;
 }

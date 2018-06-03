@@ -38,15 +38,40 @@ func TestEditorRewriteGlobalVariables(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	progSpec := spec.Programs["xdp_prog"]
+	progSpec := spec.Programs["rewrite"]
 	editor := Edit(&progSpec.Instructions)
-	if err := editor.RewriteUint64("long_val", 4242); err != nil {
+
+	// Rewrite scalars
+	if err := editor.RewriteBool("bool_val", true); err != nil {
 		t.Fatal(err)
 	}
-	if err := editor.RewriteUint32("int_val", 1234); err != nil {
+	if err := editor.RewriteUint8("char_val", 0x02); err != nil {
 		t.Fatal(err)
 	}
-	if err := editor.RewriteUint16("short_val", 2323); err != nil {
+	if err := editor.RewriteUint16("short_val", 0x04); err != nil {
+		t.Fatal(err)
+	}
+	if err := editor.RewriteUint32("int_val", 0x08); err != nil {
+		t.Fatal(err)
+	}
+	if err := editor.RewriteUint64("long_val", 0x10); err != nil {
+		t.Fatal(err)
+	}
+
+	// Rewrite arrays
+	if err := editor.RewriteBoolArray("bool_array", []bool{false, true}); err != nil {
+		t.Fatal(err)
+	}
+	if err := editor.RewriteUint8Array("char_array", []uint8{0, 0x02}); err != nil {
+		t.Fatal(err)
+	}
+	if err := editor.RewriteUint16Array("short_array", []uint16{0, 0x04}); err != nil {
+		t.Fatal(err)
+	}
+	if err := editor.RewriteUint32Array("int_array", []uint32{0, 0x08}); err != nil {
+		t.Fatal(err)
+	}
+	if err := editor.RewriteUint64Array("long_array", []uint64{0, 0x10}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -63,8 +88,47 @@ func TestEditorRewriteGlobalVariables(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if ret != 1234 {
-		t.Errorf("Expected return value 1234, got %d", ret)
+	const N = 10 // number of rewrites
+	if expected := uint32(1<<N) - 1; ret != expected {
+		t.Errorf("Expected return value %d, got %d", expected, ret)
+	}
+}
+
+func TestEditorRewriteMap(t *testing.T) {
+	spec, err := LoadCollectionSpec("testdata/rewrite.elf")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	array, err := NewMap(spec.Maps["map_val"])
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer array.Close()
+
+	if err := array.Put(uint32(0), uint32(42)); err != nil {
+		t.Fatal(err)
+	}
+
+	progSpec := spec.Programs["rewrite_map"]
+	editor := Edit(&progSpec.Instructions)
+
+	if err := editor.RewriteMap("map_val", array); err != nil {
+		t.Fatal(err)
+	}
+
+	prog, err := NewProgram(progSpec)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ret, _, err := prog.Test(make([]byte, 14))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if ret != 42 {
+		t.Errorf("Expected return value 42, got %d", ret)
 	}
 }
 
@@ -74,13 +138,16 @@ func TestEditorRejectInvalidRewrites(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	progSpec := spec.Programs["invalid_xdp_prog"]
+	progSpec := spec.Programs["invalid_rewrite"]
 	editor := Edit(&progSpec.Instructions)
 	if err := editor.RewriteUint64("int_val", 4242); err == nil {
 		t.Error("RewriteUint64 did not reject writing to int value")
 	}
-	if err := editor.RewriteUint64("long_array", 4242); err == nil {
-		t.Error("RewriteUint64 did not reject rewriting an array")
+	if err := editor.RewriteUint64Array("long_array", []uint64{0}); err == nil {
+		t.Error("RewriteUint64Array did not check bounds")
+	}
+	if err := editor.RewriteUint64Array("short_array", []uint64{0, 0}); err == nil {
+		t.Error("RewriteUint64Array did not alignment")
 	}
 }
 

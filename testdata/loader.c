@@ -1,24 +1,7 @@
 /* This file excercises the ELF loader. It is not a valid BPF program.
  */
 
-typedef unsigned int uint32_t;
-typedef unsigned long uint64_t;
-
-#define __section(NAME) __attribute__((section(NAME), used))
-
-#define BPF_MAP_TYPE_ARRAY_OF_MAPS (12)
-#define BPF_MAP_TYPE_HASH_OF_MAPS (13)
-
-char __license[] __section("license") = "MIT";
-
-struct map {
-	uint32_t type;
-	uint32_t key_size;
-	uint32_t value_size;
-	uint32_t max_entries;
-	uint32_t flags;
-	uint32_t inner_map_idx;
-};
+#include "common.h"
 
 struct map hash_map __section("maps") = {
 	.type = 1,
@@ -52,7 +35,6 @@ struct map hash_of_hash_map __section("maps") = {
 
 unsigned long non_map;
 
-static void (*map_lookup_elem)(void *) = (void*)1;
 static void (*other_fn)(unsigned long) = (void*)2;
 
 static int (*stringfn)(const char *fmt) = (void*)3;
@@ -67,8 +49,8 @@ int __attribute__((noinline)) helper_func(int arg) {
 }
 
 __section("xdp") int xdp_prog() {
-	map_lookup_elem(&hash_map);
-	map_lookup_elem(&hash_map2);
+	map_lookup_elem(&hash_map, 0);
+	map_lookup_elem(&hash_map2, 0);
 	other_fn(non_map);
 
 	const char str[] = "za warudo";

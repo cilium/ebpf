@@ -8,6 +8,7 @@ import (
 type Editor struct {
 	instructions  *Instructions
 	refs          map[string][]int
+	offsets       map[*Instruction]int
 	encodedLength int
 }
 
@@ -17,14 +18,18 @@ type Editor struct {
 // contents.
 func Edit(insns *Instructions) *Editor {
 	refs := make(map[string][]int)
+	offsets := make(map[*Instruction]int, len(*insns))
 	encodedLength := 0
 	for i, ins := range *insns {
+		insPtr := &(*insns)[i]
+		offsets[insPtr] = encodedLength
 		encodedLength += ins.EncodedLength()
+
 		if ins.Reference != "" {
 			refs[ins.Reference] = append(refs[ins.Reference], i)
 		}
 	}
-	return &Editor{insns, refs, encodedLength}
+	return &Editor{insns, refs, offsets, encodedLength}
 }
 
 // ReferencedSymbols returns all referenced symbols.
@@ -262,9 +267,12 @@ func (ed *Editor) Link(sections ...Instructions) error {
 				linkedSections[section] = sectionOffset
 			}
 
-			// The program counter is already pointing at the instruction after Call
-			// when the call occurs, so adjust the offset by one.
-			ins.Constant = int64(sectionOffset + section.offsets[section.symbols[symbol]] - 1)
+			insOffset := ed.offsets[ins]
+			funcOffset := section.offsets[section.symbols[symbol]]
+
+			// Calls are relative from the PC after the call instruction.
+			// Calculate offset and adjust by one.
+			ins.Constant = int64(sectionOffset + funcOffset - insOffset - 1)
 		}
 	}
 
@@ -278,18 +286,13 @@ func (ed *Editor) Link(sections ...Instructions) error {
 type linkEditor struct {
 	*Editor
 	symbols map[string]*Instruction
-	offsets map[*Instruction]int
 }
 
 func newLinkEditor(insns Instructions) (*linkEditor, error) {
 	symbols := make(map[string]*Instruction)
-	offsets := make(map[*Instruction]int)
-	length := 0
 
 	for i, ins := range insns {
 		insPtr := &insns[i]
-		offsets[insPtr] = length
-		length += ins.EncodedLength()
 
 		if ins.Symbol == "" {
 			continue
@@ -305,6 +308,5 @@ func newLinkEditor(insns Instructions) (*linkEditor, error) {
 	return &linkEditor{
 		Edit(&insns),
 		symbols,
-		offsets,
 	}, nil
 }

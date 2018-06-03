@@ -13,13 +13,27 @@ func TestLoadCollectionSpec(t *testing.T) {
 		t.Fatal("Can't parse ELF:", err)
 	}
 
-	hashMapSpec := &MapSpec{Hash, 4, 2, 42, 4242, nil}
+	hashMapSpec := &MapSpec{
+		Hash,
+		4,
+		2,
+		1,
+		0,
+		nil,
+	}
 	checkMapSpec(t, spec.Maps, "hash_map", hashMapSpec)
 	checkMapSpec(t, spec.Maps, "array_of_hash_map", &MapSpec{
 		ArrayOfMaps, 4, 0, 2, 0, hashMapSpec,
 	})
 
-	hashMap2Spec := &MapSpec{Hash, 2, 1, 21, 2121, nil}
+	hashMap2Spec := &MapSpec{
+		Hash,
+		4,
+		1,
+		2,
+		1,
+		nil,
+	}
 	checkMapSpec(t, spec.Maps, "hash_map2", hashMap2Spec)
 	checkMapSpec(t, spec.Maps, "hash_of_hash_map", &MapSpec{
 		HashOfMaps, 4, 0, 2, 0, hashMap2Spec,
@@ -33,6 +47,14 @@ func TestLoadCollectionSpec(t *testing.T) {
 		Type:    SocketFilter,
 		License: "MIT",
 	})
+
+	t.Log(spec.Programs["xdp_prog"].Instructions)
+
+	coll, err := NewCollection(spec)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer coll.Close()
 }
 
 func Test64bitImmediate(t *testing.T) {

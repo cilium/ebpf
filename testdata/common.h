@@ -9,6 +9,8 @@ typedef unsigned long uint64_t;
 #define BPF_MAP_TYPE_ARRAY_OF_MAPS (12)
 #define BPF_MAP_TYPE_HASH_OF_MAPS (13)
 
+#define BPF_F_NO_PREALLOC (1U << 0)
+
 char __license[] __section("license") = "MIT";
 
 struct map {

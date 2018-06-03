@@ -153,6 +153,9 @@ func TestEditorRejectInvalidRewrites(t *testing.T) {
 
 func TestEditorLink(t *testing.T) {
 	insns := Instructions{
+		// Make sure the call doesn't happen at instruction 0
+		// to exercise the relative offset calculation.
+		BPFIDstSrc(MovSrc, Reg0, Reg1),
 		BPFIDstSrcImm(Call, Reg0, Reg1, -1).Ref("my_func"),
 		BPFIOp(Exit),
 	}

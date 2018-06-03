@@ -3,10 +3,23 @@ package ebpf
 import (
 	"fmt"
 	"io/ioutil"
+	"math"
 	"os"
 	"path/filepath"
+	"syscall"
 	"testing"
 )
+
+func TestMain(m *testing.M) {
+	err := syscall.Setrlimit(8, &syscall.Rlimit{
+		Cur: math.MaxUint64,
+		Max: math.MaxUint64,
+	})
+	if err != nil {
+		fmt.Println("WARNING: Failed to adjust rlimit, tests may fail")
+	}
+	os.Exit(m.Run())
+}
 
 func TestMap(t *testing.T) {
 	m, err := NewMap(&MapSpec{

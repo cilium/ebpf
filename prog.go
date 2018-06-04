@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"math"
-	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -58,13 +57,14 @@ func NewProgram(spec *ProgramSpec) (*Program, error) {
 		logSize:      LogBufSize,
 		logBuf:       newPtr(unsafe.Pointer(&logs[0])),
 	}
-	fd, e := bpfCall(_ProgLoad, unsafe.Pointer(&attr), int(unsafe.Sizeof(attr)))
-	if e != 0 {
+	fd, err := bpfCall(_ProgLoad, unsafe.Pointer(&attr), unsafe.Sizeof(attr))
+	if err != nil {
 		if logs[0] != 0 {
-			return nil, fmt.Errorf("%s:\n\t%s", bpfErrNo(e), strings.Replace(string(logs), "\n", "\n\t", -1))
+			return nil, &loadError{err, string(logs)}
 		}
-		return nil, bpfErrNo(e)
+		return nil, err
 	}
+
 	return &Program{
 		uint32(fd),
 		spec.Type,
@@ -154,8 +154,8 @@ func (bpf *Program) testRun(in []byte, repeat int) (uint32, []byte, time.Duratio
 			dataSizeIn: uint32(len(in)),
 			dataIn:     newPtr(unsafe.Pointer(&in[0])),
 		}
-		_, errno := bpfCall(_ProgTestRun, unsafe.Pointer(&attr), int(unsafe.Sizeof(attr)))
-		noProgTestRun = errno != 0
+		_, err = bpfCall(_ProgTestRun, unsafe.Pointer(&attr), unsafe.Sizeof(attr))
+		noProgTestRun = err != nil
 	})
 
 	if noProgTestRun {
@@ -178,9 +178,9 @@ func (bpf *Program) testRun(in []byte, repeat int) (uint32, []byte, time.Duratio
 		repeat:  uint32(repeat),
 	}
 
-	_, errno := bpfCall(_ProgTestRun, unsafe.Pointer(&attr), int(unsafe.Sizeof(attr)))
-	if errno != 0 {
-		return 0, nil, 0, bpfErrNo(errno)
+	_, err := bpfCall(_ProgTestRun, unsafe.Pointer(&attr), unsafe.Sizeof(attr))
+	if err != nil {
+		return 0, nil, 0, err
 	}
 
 	if int(attr.dataSizeOut) > cap(out) {
@@ -224,4 +224,17 @@ func LoadPinnedProgramExplicit(fileName string, typ ProgType) (*Program, error) 
 		uint32(fd),
 		typ,
 	}, nil
+}
+
+type loadError struct {
+	cause       error
+	verifierLog string
+}
+
+func (le *loadError) Error() string {
+	return fmt.Sprintf("%s: %s", le.cause, le.verifierLog)
+}
+
+func (le *loadError) Cause() error {
+	return le.cause
 }

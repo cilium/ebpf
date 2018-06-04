@@ -73,10 +73,9 @@ func newMap(spec *MapSpec, inner uint32) (*Map, error) {
 		spec.Flags,
 		inner,
 	}
-	fd, e := bpfCall(_MapCreate, unsafe.Pointer(&attr), int(unsafe.Sizeof(attr)))
-	err := bpfErrNo(e)
+	fd, err := bpfCall(_MapCreate, unsafe.Pointer(&attr), unsafe.Sizeof(attr))
 	if err != nil {
-		return nil, fmt.Errorf("map create: %s", err.Error())
+		return nil, errors.Wrap(err, "map create")
 	}
 
 	return alignMap(uint32(fd), spec)
@@ -137,13 +136,11 @@ func (m *Map) GetBytes(key interface{}) ([]byte, error) {
 		key:   newPtr(unsafe.Pointer(&keyBytes[0])),
 		value: newPtr(unsafe.Pointer(&valueBytes[0])),
 	}
-	_, errNo := bpfCall(_MapLookupElem, unsafe.Pointer(&attr), int(unsafe.Sizeof(attr)))
-	if errNo == syscall.ENOENT {
+	_, err = bpfCall(_MapLookupElem, unsafe.Pointer(&attr), unsafe.Sizeof(attr))
+	if errors.Cause(err) == syscall.ENOENT {
 		return nil, nil
-	} else if errNo != 0 {
-		return nil, bpfErrNo(errNo)
 	}
-	return valueBytes, nil
+	return valueBytes, err
 }
 
 // Create creates a new value in a map, failing if the key exists already
@@ -183,11 +180,8 @@ func (m *Map) DeleteStrict(key interface{}) error {
 		mapFd: m.fd,
 		key:   newPtr(unsafe.Pointer(&keyBytes[0])),
 	}
-	_, e := bpfCall(_MapDeleteElem, unsafe.Pointer(&attr), int(unsafe.Sizeof(attr)))
-	if e == syscall.ENOENT {
-		return e
-	}
-	return bpfErrNo(e)
+	_, err = bpfCall(_MapDeleteElem, unsafe.Pointer(&attr), unsafe.Sizeof(attr))
+	return err
 }
 
 // NextKey finds the key following an initial key.
@@ -229,14 +223,11 @@ func (m *Map) NextKeyBytes(key interface{}) ([]byte, error) {
 		key:   keyPtr,
 		value: newPtr(unsafe.Pointer(&nextKey[0])),
 	}
-	_, e := bpfCall(_MapGetNextKey, unsafe.Pointer(&attr), int(unsafe.Sizeof(attr)))
-	if e == syscall.ENOENT {
+	_, err := bpfCall(_MapGetNextKey, unsafe.Pointer(&attr), unsafe.Sizeof(attr))
+	if errors.Cause(err) == syscall.ENOENT {
 		return nil, nil
 	}
-	if e != 0 {
-		return nil, bpfErrNo(e)
-	}
-	return nextKey, nil
+	return nextKey, err
 }
 
 // Iterate traverses a map.
@@ -317,8 +308,8 @@ func (m *Map) put(key, value interface{}, putType uint64) error {
 		value: newPtr(unsafe.Pointer(&valueBytes[0])),
 		flags: putType,
 	}
-	_, e := bpfCall(_MapUpdateElem, unsafe.Pointer(&attr), int(unsafe.Sizeof(attr)))
-	return bpfErrNo(e)
+	_, err = bpfCall(_MapUpdateElem, unsafe.Pointer(&attr), unsafe.Sizeof(attr))
+	return err
 }
 
 // UnmarshalBinary implements BinaryUnmarshaler.

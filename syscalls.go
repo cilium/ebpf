@@ -116,30 +116,6 @@ func newPtr(ptr unsafe.Pointer) syscallPtr {
 	return syscallPtr{ptr: ptr}
 }
 
-func bpfErrNo(e syscall.Errno) error {
-	switch e {
-	case 0:
-		return nil
-	case syscall.EPERM:
-		return fmt.Errorf("operation not permitted")
-	case syscall.EINVAL:
-		return fmt.Errorf("invalid argument")
-	case syscall.ENOMEM:
-		return fmt.Errorf("out of memory")
-	case syscall.E2BIG:
-		return fmt.Errorf("max entries exceeded")
-	case syscall.EFAULT:
-		return fmt.Errorf("bad address")
-	case syscall.EBADF:
-		return fmt.Errorf("not an open file descriptor")
-	case syscall.EACCES:
-		return fmt.Errorf("bpf program rejected as unsafe")
-	case syscall.ENOSPC:
-		return fmt.Errorf("bpf logging buffer not large enough")
-	}
-	return e
-}
-
 const bpfFSType = 0xcafe4a11
 
 func pinObject(fileName string, fd uint32) error {
@@ -151,18 +127,18 @@ func pinObject(fileName string, fd uint32) error {
 	if statfs.Type != bpfFSType {
 		return fmt.Errorf("%s is not on a bpf filesystem", fileName)
 	}
-	_, errNo := bpfCall(_ObjPin, unsafe.Pointer(&pinObjAttr{
+	_, err := bpfCall(_ObjPin, unsafe.Pointer(&pinObjAttr{
 		fileName: newPtr(unsafe.Pointer(&[]byte(fileName)[0])),
 		fd:       fd,
 	}), 16)
-	return bpfErrNo(errNo)
+	return err
 }
 
 func getObject(fileName string) (uint32, error) {
-	ptr, errNo := bpfCall(_ObjGet, unsafe.Pointer(&pinObjAttr{
+	ptr, err := bpfCall(_ObjGet, unsafe.Pointer(&pinObjAttr{
 		fileName: newPtr(unsafe.Pointer(&[]byte(fileName)[0])),
 	}), 16)
-	return uint32(ptr), bpfErrNo(errNo)
+	return uint32(ptr), err
 }
 
 func getObjectInfoByFD(fd uint32, info unsafe.Pointer, size uintptr) error {
@@ -172,8 +148,8 @@ func getObjectInfoByFD(fd uint32, info unsafe.Pointer, size uintptr) error {
 		infoLen: uint32(size),
 		info:    newPtr(info),
 	}
-	_, errNo := bpfCall(_ObjGetInfoByFD, unsafe.Pointer(&attr), int(unsafe.Sizeof(attr)))
-	return bpfErrNo(errNo)
+	_, err := bpfCall(_ObjGetInfoByFD, unsafe.Pointer(&attr), unsafe.Sizeof(attr))
+	return err
 }
 
 func getMapSpecByFD(fd uint32) (*MapSpec, error) {
@@ -197,55 +173,97 @@ func getMapFDByID(id uint32) (uint32, error) {
 	attr := getFDByIDAttr{
 		id: id,
 	}
-	ptr, errNo := bpfCall(_MapGetFDByID, unsafe.Pointer(&attr), int(unsafe.Sizeof(attr)))
-	return uint32(ptr), bpfErrNo(errNo)
+	ptr, err := bpfCall(_MapGetFDByID, unsafe.Pointer(&attr), unsafe.Sizeof(attr))
+	return uint32(ptr), err
 }
 
-func bpfCall(cmd int, attr unsafe.Pointer, size int) (uintptr, syscall.Errno) {
-	r1, _, errNo := syscall.Syscall(uintptr(_BPFCall), uintptr(cmd), uintptr(attr), uintptr(size))
+type wrappedErrno struct {
+	errNo   syscall.Errno
+	message string
+}
+
+func (werr *wrappedErrno) Error() string {
+	return werr.message
+}
+
+func (werr *wrappedErrno) Cause() error {
+	return werr.errNo
+}
+
+func bpfCall(cmd int, attr unsafe.Pointer, size uintptr) (uintptr, error) {
+	r1, _, errNo := syscall.Syscall(uintptr(_BPFCall), uintptr(cmd), uintptr(attr), size)
 	runtime.KeepAlive(attr)
-	return r1, errNo
+
+	var err error
+	switch errNo {
+	case 0:
+		err = nil
+	case syscall.EPERM:
+		err = &wrappedErrno{syscall.EPERM, "operation not permitted"}
+	case syscall.EINVAL:
+		err = &wrappedErrno{syscall.EINVAL, "invalid argument"}
+	case syscall.ENOMEM:
+		err = &wrappedErrno{syscall.ENOMEM, "out of memory"}
+	case syscall.E2BIG:
+		err = &wrappedErrno{syscall.E2BIG, "max entries exceeded"}
+	case syscall.EFAULT:
+		err = &wrappedErrno{syscall.EFAULT, "bad address"}
+	case syscall.EBADF:
+		err = &wrappedErrno{syscall.EBADF, "not an open file descriptor"}
+	case syscall.EACCES:
+		err = &wrappedErrno{syscall.EACCES, "bpf program rejected as unsafe"}
+	case syscall.ENOSPC:
+		err = &wrappedErrno{syscall.ENOSPC, "bpf logging buffer not large enough"}
+	default:
+		err = errNo
+	}
+
+	return r1, err
 }
 
 func createPerfEvent(perfEvent *perfEventAttr, pid, cpu, groupFd int, flags uint) (uintptr, error) {
 	efd, _, errNo := syscall.Syscall6(_SYS_PERF_EVENT_OPEN, uintptr(unsafe.Pointer(perfEvent)),
 		uintptr(pid), uintptr(cpu), uintptr(groupFd), uintptr(flags), 0)
 
+	var err error
 	switch errNo {
 	case 0:
-		return efd, nil
+		err = nil
 	case syscall.E2BIG:
-		return 0, fmt.Errorf("perf_event_attr size is incorrect, check size field for what the correct size should be")
+		err = &wrappedErrno{syscall.E2BIG, "perf_event_attr size is incorrect, check size field for what the correct size should be"}
 	case syscall.EACCES:
-		return 0, fmt.Errorf("insufficient capabilities to create this event")
+		err = &wrappedErrno{syscall.EACCES, "insufficient capabilities to create this event"}
 	case _EBADFD:
-		return 0, fmt.Errorf("group_fd is invalid")
+		err = &wrappedErrno{_EBADFD, "group_fd is invalid"}
 	case syscall.EBUSY:
-		return 0, fmt.Errorf("another event already has exclusive access to the PMU")
+		err = &wrappedErrno{syscall.EBUSY, "another event already has exclusive access to the PMU"}
 	case syscall.EFAULT:
-		return 0, fmt.Errorf("attr points to an invalid address")
+		err = &wrappedErrno{syscall.EFAULT, "attr points to an invalid address"}
 	case syscall.EINVAL:
-		return 0, fmt.Errorf("the specified event is invalid, most likely because a configuration parameter is invalid (i.e. too high, too low, etc)")
+		err = &wrappedErrno{syscall.EINVAL, "the specified event is invalid, most likely because a configuration parameter is invalid (i.e. too high, too low, etc)"}
 	case syscall.EMFILE:
-		return 0, fmt.Errorf("this process has reached its limits for number of open events that it may have")
+		err = &wrappedErrno{syscall.EMFILE, "this process has reached its limits for number of open events that it may have"}
 	case syscall.ENODEV:
-		return 0, fmt.Errorf("this processor architecture does not support this event type")
+		err = &wrappedErrno{syscall.ENODEV, "this processor architecture does not support this event type"}
 	case syscall.ENOENT:
-		return 0, fmt.Errorf("the type setting is not valid")
+		err = &wrappedErrno{syscall.ENOENT, "the type setting is not valid"}
 	case syscall.ENOSPC:
-		return 0, fmt.Errorf("the hardware limit for breakpoints capacity has been reached")
+		err = &wrappedErrno{syscall.ENOSPC, "the hardware limit for breakpoints capacity has been reached"}
 	case syscall.ENOSYS:
-		return 0, fmt.Errorf("sample type not supported by the hardware")
+		err = &wrappedErrno{syscall.ENOSYS, "sample type not supported by the hardware"}
 	case syscall.EOPNOTSUPP:
-		return 0, fmt.Errorf("this event is not supported by the hardware or requires a feature not supported by the hardware")
+		err = &wrappedErrno{syscall.EOPNOTSUPP, "this event is not supported by the hardware or requires a feature not supported by the hardware"}
 	case syscall.EOVERFLOW:
-		return 0, fmt.Errorf("sample_max_stack is larger than the kernel support; check \"/proc/sys/kernel/perf_event_max_stack\" for maximum supported size")
+		err = &wrappedErrno{syscall.EOVERFLOW, "sample_max_stack is larger than the kernel support; check \"/proc/sys/kernel/perf_event_max_stack\" for maximum supported size"}
 	case syscall.EPERM:
-		return 0, fmt.Errorf("insufficient capability to request exclusive access")
+		err = &wrappedErrno{syscall.EPERM, "insufficient capability to request exclusive access"}
 	case syscall.ESRCH:
-		return 0, fmt.Errorf("pid does not exist")
+		err = &wrappedErrno{syscall.ESRCH, "pid does not exist"}
+	default:
+		err = errNo
 	}
-	return 0, errNo
+
+	return efd, err
 }
 
 // IOCtl The ioctl() function manipulates the underlying device parameters of

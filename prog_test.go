@@ -5,6 +5,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -89,5 +90,22 @@ func TestProgramPin(t *testing.T) {
 
 	if prog.progType != XDP {
 		t.Error("Expected pinned program to have type XDP, but got", prog.progType)
+	}
+}
+
+func TestProgramVerifierOutput(t *testing.T) {
+	_, err := NewProgram(&ProgramSpec{
+		Type: XDP,
+		Instructions: Instructions{
+			BPFIOp(Exit),
+		},
+		License: "MIT",
+	})
+	if err == nil {
+		t.Fatal("Expected program to be invalid")
+	}
+
+	if strings.Index(err.Error(), "exit") == -1 {
+		t.Error("No verifier output in error message")
 	}
 }

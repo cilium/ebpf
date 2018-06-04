@@ -1,13 +1,14 @@
 package ebpf
 
 import (
-	"errors"
 	"fmt"
 	"math"
 	"sync"
 	"syscall"
 	"time"
 	"unsafe"
+
+	"github.com/pkg/errors"
 )
 
 // Errors returned by the implementation
@@ -21,6 +22,10 @@ const (
 	// and XDP programs, and equal to XDP_PACKET_HEADROOM + NET_IP_ALIGN.
 	outputPad = 256 + 2
 )
+
+// DefaultVerifierLogSize is the default number of bytes allocated for the
+// verifier log.
+const DefaultVerifierLogSize = 64 * 1024
 
 // ProgramSpec defines a Program
 type ProgramSpec struct {
@@ -36,7 +41,7 @@ type Program struct {
 	progType ProgType
 }
 
-// NewProgram creates a new Program
+// NewProgram creates a new Program.
 func NewProgram(spec *ProgramSpec) (*Program, error) {
 	if len(spec.Instructions) == 0 {
 		return nil, fmt.Errorf("instructions cannot be empty")
@@ -45,30 +50,36 @@ func NewProgram(spec *ProgramSpec) (*Program, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	insCount := uint32(len(bytecode) / InstructionSize)
 	lic := []byte(spec.License)
-	logs := make([]byte, LogBufSize)
 	attr := progCreateAttr{
 		progType:     spec.Type,
 		insCount:     insCount,
 		instructions: newPtr(unsafe.Pointer(&bytecode[0])),
 		license:      newPtr(unsafe.Pointer(&lic[0])),
-		logLevel:     1,
-		logSize:      LogBufSize,
-		logBuf:       newPtr(unsafe.Pointer(&logs[0])),
-	}
-	fd, err := bpfCall(_ProgLoad, unsafe.Pointer(&attr), unsafe.Sizeof(attr))
-	if err != nil {
-		if logs[0] != 0 {
-			return nil, &loadError{err, string(logs)}
-		}
-		return nil, err
 	}
 
-	return &Program{
-		uint32(fd),
-		spec.Type,
-	}, nil
+	fd, err := bpfCall(_ProgLoad, unsafe.Pointer(&attr), unsafe.Sizeof(attr))
+	if err == nil {
+		prog := &Program{
+			uint32(fd),
+			spec.Type,
+		}
+		return prog, nil
+	}
+
+	// Something went wrong, re-run with the verifier enabled.
+	logs := make([]byte, DefaultVerifierLogSize)
+	attr.logLevel = 1
+	attr.logSize = uint32(len(logs))
+	attr.logBuf = newPtr(unsafe.Pointer(&logs[0]))
+
+	_, nerr := bpfCall(_ProgLoad, unsafe.Pointer(&attr), unsafe.Sizeof(attr))
+	if errors.Cause(nerr) == syscall.ENOSPC {
+		return nil, errors.Wrap(err, "no debug since LogSize too small")
+	}
+	return nil, &loadError{nerr, string(logs)}
 }
 
 func (bpf *Program) String() string {

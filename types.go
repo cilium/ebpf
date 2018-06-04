@@ -105,8 +105,6 @@ const (
 	StackSize = 512
 	// InstructionSize is the size of the BPF instructions
 	InstructionSize = 8
-	// LogBufSize is the size of the log buffer for debugging issues
-	LogBufSize = 65536
 )
 
 // Class masks for eBPF operators

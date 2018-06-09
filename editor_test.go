@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"math"
 	"testing"
+
+	"github.com/newtools/ebpf/asm"
 )
 
 // ExampleEditor_rewriteConstant shows how to change constants in
@@ -19,10 +21,12 @@ import (
 func ExampleEditor_rewriteConstant() {
 	// This assembly is roughly equivalent to what clang
 	// would emit for the C above.
-	insns := Instructions{
-		BPFILdImm64(Reg0, 0).Ref("my_ret"),
-		BPFIOp(Exit),
+	insns := asm.Instructions{
+		asm.LoadImm(asm.R0, 0, asm.DWord),
+		asm.Return(),
 	}
+
+	insns[0].Reference = "my_ret"
 
 	editor := Edit(&insns)
 	if err := editor.RewriteConstant("my_ret", 42); err != nil {
@@ -31,7 +35,7 @@ func ExampleEditor_rewriteConstant() {
 
 	fmt.Printf("%0.0s", insns)
 
-	// Output: 0: LdImmDW dst: r0 imm: 42
+	// Output: 0: LdImmDW dst: r0 imm: 42 <my_ret>
 	// 2: Exit
 }
 
@@ -74,14 +78,16 @@ func TestEditorRewriteConstant(t *testing.T) {
 func TestEditorIssue59(t *testing.T) {
 	max := uint64(math.MaxUint64)
 
-	insns := Instructions{
-		BPFILdImm64(Reg1, 0).Ref("my_ret"),
-		BPFIDstImm(RShImm, Reg1, 63),
-		BPFIDstImm(MovImm, Reg0, 1),
-		BPFIDstOffImm(JGTImm, Reg1, 1, 0),
-		BPFIDstImm(MovImm, Reg0, 0),
-		BPFIOp(Exit),
+	insns := asm.Instructions{
+		asm.LoadImm(asm.R1, 0, asm.DWord),
+		asm.RSh.Imm(asm.R1, 63),
+		asm.Mov.Imm(asm.R0, 1),
+		asm.JGT.Imm(asm.R1, 0, "exit"),
+		asm.Mov.Imm(asm.R0, 0),
+		asm.Return().Sym("exit"),
 	}
+
+	insns[0].Reference = "my_ret"
 
 	editor := Edit(&insns)
 	if err := editor.RewriteConstant("my_ret", max); err != nil {
@@ -150,22 +156,24 @@ func TestEditorRewriteMap(t *testing.T) {
 }
 
 func TestEditorLink(t *testing.T) {
-	insns := Instructions{
+	insns := asm.Instructions{
 		// Make sure the call doesn't happen at instruction 0
 		// to exercise the relative offset calculation.
-		BPFIDstSrc(MovSrc, Reg0, Reg1),
-		BPFIDstSrcImm(Call, Reg0, Reg1, -1).Ref("my_func"),
-		BPFIOp(Exit),
+		asm.Mov.Reg(asm.R0, asm.R1),
+		asm.Call.Label("my_func"),
+		asm.Return(),
 	}
 
 	editor := Edit(&insns)
-	err := editor.Link(Instructions{
-		BPFILdImm64(Reg0, 1337).Sym("my_func"),
-		BPFIOp(Exit),
+	err := editor.Link(asm.Instructions{
+		asm.LoadImm(asm.R0, 1337, asm.DWord).Sym("my_func"),
+		asm.Return(),
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
+
+	t.Log(insns)
 
 	prog, err := NewProgram(&ProgramSpec{
 		Type:         XDP,

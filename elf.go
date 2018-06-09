@@ -7,6 +7,8 @@ import (
 	"io"
 	"strings"
 
+	"github.com/newtools/ebpf/asm"
+
 	"github.com/pkg/errors"
 )
 
@@ -114,9 +116,9 @@ func loadVersion(sec *elf.Section, bo binary.ByteOrder) (uint32, error) {
 	return version, binary.Read(bytes.NewReader(data), bo, &version)
 }
 
-func (ec *elfCode) loadPrograms(progSections, relSections map[int]*elf.Section, license string, version uint32) (map[string]*ProgramSpec, []Instructions, error) {
+func (ec *elfCode) loadPrograms(progSections, relSections map[int]*elf.Section, license string, version uint32) (map[string]*ProgramSpec, []asm.Instructions, error) {
 	progs := make(map[string]*ProgramSpec)
-	var libs []Instructions
+	var libs []asm.Instructions
 	for idx, prog := range progSections {
 		data, err := prog.Data()
 		if err != nil {
@@ -128,7 +130,8 @@ func (ec *elfCode) loadPrograms(progSections, relSections map[int]*elf.Section, 
 			return nil, nil, errors.Errorf("section %v: no label at start", prog.Name)
 		}
 
-		insns, offsets, err := loadInstructions(ec.ByteOrder, data)
+		var insns asm.Instructions
+		offsets, err := insns.Unmarshal(bytes.NewReader(data), ec.ByteOrder)
 		if err != nil {
 			return nil, nil, errors.Wrapf(err, "program %s", funcSym.Name)
 		}
@@ -258,45 +261,7 @@ func getProgType(v string) ProgType {
 	return Unrecognized
 }
 
-func loadInstructions(bo binary.ByteOrder, data []byte) (Instructions, map[uint64]int, error) {
-	rd := bytes.NewReader(data)
-	var insns Instructions
-	// Since relocations point at an offset, we need to keep track which
-	// offset maps to which instruction.
-	offsets := make(map[uint64]int)
-	for rd.Len() > 0 {
-		offset := uint64(rd.Size()) - uint64(rd.Len())
-		offsets[offset] = len(insns)
-
-		var ins bpfInstruction
-		if err := binary.Read(rd, bo, &ins); err != nil {
-			return nil, nil, errors.Errorf("invalid instruction at offset %x", offset)
-		}
-
-		cons := int64(ins.Constant)
-		if ins.OpCode == LdDW {
-			var ins2 bpfInstruction
-			if err := binary.Read(rd, bo, &ins2); err != nil {
-				return nil, nil, errors.Errorf("invalid instruction at offset %x", offset)
-			}
-			if ins2.OpCode != 0 || ins2.Offset != 0 || ins2.Registers != 0 {
-				return nil, nil, errors.Errorf("instruction at offset %x: 64bit immediate has non-zero fields", offset)
-			}
-			cons = int64(uint64(uint32(ins2.Constant))<<32 | uint64(uint32(ins.Constant)))
-		}
-
-		insns = append(insns, Instruction{
-			OpCode:      ins.OpCode,
-			DstRegister: ins.Registers.Dst(),
-			SrcRegister: ins.Registers.Src(),
-			Offset:      ins.Offset,
-			Constant:    cons,
-		})
-	}
-	return insns, offsets, nil
-}
-
-func assignSymbols(symbolOffsets map[uint64]*elf.Symbol, insOffsets map[uint64]int, insns Instructions) error {
+func assignSymbols(symbolOffsets map[uint64]*elf.Symbol, insOffsets map[uint64]int, insns asm.Instructions) error {
 	for offset, sym := range symbolOffsets {
 		i, ok := insOffsets[offset]
 		if !ok {
@@ -307,7 +272,7 @@ func assignSymbols(symbolOffsets map[uint64]*elf.Symbol, insOffsets map[uint64]i
 	return nil
 }
 
-func (ec *elfCode) applyRelocations(insns Instructions, sec *elf.Section, offsets map[uint64]int) error {
+func (ec *elfCode) applyRelocations(insns asm.Instructions, sec *elf.Section, offsets map[uint64]int) error {
 	if sec.Entsize < 16 {
 		return errors.Errorf("section %v: rls are less than 16 bytes", sec.Name)
 	}

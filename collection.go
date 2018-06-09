@@ -42,7 +42,7 @@ func NewCollection(spec *CollectionSpec) (*Collection, error) {
 		editor := Edit(&progSpec.Instructions)
 
 		// Rewrite any Symbol which is a valid Map.
-		for _, sym := range editor.ReferencedSymbols() {
+		for sym := range editor.ReferenceOffsets {
 			mapSpec, ok := spec.Maps[sym]
 			if !ok {
 				continue

@@ -1,8 +1,6 @@
 package ebpf
 
 import (
-	"encoding/binary"
-	"math"
 	"reflect"
 	"testing"
 )
@@ -74,27 +72,6 @@ func TestLoadCollectionSpec(t *testing.T) {
 
 	if _, ok := coll.Programs["xdp_prog"]; ok {
 		t.Error("DetachProgram doesn't remove program from Programs")
-	}
-}
-
-func Test64bitImmediate(t *testing.T) {
-	// r1 = math.MinInt32 - 1
-	prog := []byte{
-		0x18, 0x01, 0x00, 0x00, 0xff, 0xff, 0xff, 0x7f,
-		0x00, 0x00, 0x00, 0x00, 0xff, 0xff, 0xff, 0xff,
-	}
-
-	insns, _, err := loadInstructions(binary.LittleEndian, prog)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if len(insns) != 1 {
-		t.Fatal("Expected one instruction, got", len(insns))
-	}
-
-	if c := insns[0].Constant; c != math.MinInt32-1 {
-		t.Errorf("Expected immediate to be %v, got %v", math.MinInt32-1, c)
 	}
 }
 

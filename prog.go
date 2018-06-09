@@ -1,6 +1,7 @@
 package ebpf
 
 import (
+	"bytes"
 	"fmt"
 	"math"
 	"runtime"
@@ -8,6 +9,8 @@ import (
 	"syscall"
 	"time"
 	"unsafe"
+
+	"github.com/newtools/ebpf/asm"
 
 	"github.com/pkg/errors"
 )
@@ -31,7 +34,7 @@ const DefaultVerifierLogSize = 64 * 1024
 // ProgramSpec defines a Program
 type ProgramSpec struct {
 	Type          ProgType
-	Instructions  Instructions
+	Instructions  asm.Instructions
 	License       string
 	KernelVersion uint32
 }
@@ -47,12 +50,14 @@ func NewProgram(spec *ProgramSpec) (*Program, error) {
 	if len(spec.Instructions) == 0 {
 		return nil, fmt.Errorf("instructions cannot be empty")
 	}
-	bytecode, err := spec.Instructions.MarshalBinary()
+	buf := bytes.NewBuffer(make([]byte, 0, len(spec.Instructions)*asm.InstructionSize))
+	err := spec.Instructions.Marshal(buf, nativeEndian)
 	if err != nil {
 		return nil, err
 	}
 
-	insCount := uint32(len(bytecode) / InstructionSize)
+	bytecode := buf.Bytes()
+	insCount := uint32(len(bytecode) / asm.InstructionSize)
 	lic := []byte(spec.License)
 	attr := progCreateAttr{
 		progType:     spec.Type,
@@ -149,9 +154,9 @@ func (bpf *Program) testRun(in []byte, repeat int) (uint32, []byte, time.Duratio
 	detectProgTestRun.Do(func() {
 		prog, err := NewProgram(&ProgramSpec{
 			Type: XDP,
-			Instructions: Instructions{
-				BPFILdImm64(Reg0, 0),
-				BPFIOp(Exit),
+			Instructions: asm.Instructions{
+				asm.LoadImm(asm.R0, 0, asm.DWord),
+				asm.Return(),
 			},
 			License: "MIT",
 		})

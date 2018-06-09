@@ -10,6 +10,7 @@ import (
 	"unsafe"
 
 	"github.com/newtools/ebpf"
+	"github.com/newtools/ebpf/asm"
 	"github.com/newtools/zsocket/inet"
 	"github.com/newtools/zsocket/nettypes"
 )
@@ -49,42 +50,38 @@ func Example_socket() {
 	}
 	ip := IPHdr{}
 	mapFd := bpfMap.FD()
-	ebpfInss := ebpf.Instructions{
-		// save context for previous caller
-		// mov r1, r6
-		ebpf.BPFIDstSrc(ebpf.MovSrc, ebpf.Reg6, ebpf.Reg1),
+	ebpfInss := asm.Instructions{
+		// move context to R6 for LoadAbs
+		asm.Mov.Reg(asm.R6, asm.R1),
 		// get ip protocol
-		// ldb r0, *(mem + off)
-		ebpf.BPFIImm(ebpf.LdAbsB, int32(EthHLen+unsafe.Offsetof(ip.Protocol))),
+		asm.LoadAbs(int32(EthHLen+unsafe.Offsetof(ip.Protocol)), asm.Byte),
 		// set 4 bytes off the frame pointer to be equal to r0
-		// stxw [rfp+off], src
-		ebpf.BPFIDstOffSrc(ebpf.StXW, ebpf.RegFP, ebpf.Reg0, -4),
-		// set 2nd arg (to be givent to map fx below) to current FP
-		// mov r2, rfp
-		ebpf.BPFIDstSrc(ebpf.MovSrc, ebpf.Reg2, ebpf.RegFP),
+		asm.StoreMem(asm.RFP, -4, asm.R0, asm.Word),
+		// set 2nd arg (to be given to map fx below) to current FP
+		asm.Mov.Reg(asm.R2, asm.RFP),
 		// subtract 4 from reg2
 		// sub r2, 4
-		ebpf.BPFIDstImm(ebpf.AddImm, ebpf.Reg2, -4),
+		asm.Sub.Imm(asm.R2, 4),
 		// load the map fd into memory, in argument 1 position
 		// lddw reg1, (*:from_user_space)(imm)
-		ebpf.BPFILdMapFd(ebpf.Reg1, mapFd),
+		asm.LoadImm(asm.R1, int64(mapFd), asm.DWord),
 		// call map lookup -> map_lookup_elem(r1, r2)
 		// call imm
-		ebpf.BPFCall(ebpf.MapLookupElement),
+		asm.MapLookupElement.Call(),
 		// exit if reg0 is 0
 		// jeq r0, 2, 0
-		ebpf.BPFIDstOff(ebpf.JEqImm, ebpf.Reg0, 2),
+		asm.JEq.Imm(asm.R0, 0, "out"),
 		// load int 1 into r1 register
 		// mov r1, 1
-		ebpf.BPFIDstImm(ebpf.MovImm, ebpf.Reg1, 1),
-		// atomically increment regsiter
-		// xaddst r0, imm
-		ebpf.BPFIDstSrc(ebpf.XAddStSrc, ebpf.Reg0, ebpf.Reg1),
+		asm.Mov.Imm(asm.R1, 1),
+		// atomically increment register
+		// xaddst r0, r1
+		asm.XAdd(asm.R0, asm.R1),
 		// set exit code to 0
 		// mov r0, imm
-		ebpf.BPFIDstImm(ebpf.MovImm, ebpf.Reg0, 0),
+		asm.Mov.Imm(asm.R0, 0).Sym("out"),
 		// exit
-		ebpf.BPFIOp(ebpf.Exit),
+		asm.Return(),
 	}
 	bpfProgram, err := ebpf.NewProgram(&ebpf.ProgramSpec{
 		Type:         ebpf.SocketFilter,

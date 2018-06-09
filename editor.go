@@ -2,46 +2,24 @@ package ebpf
 
 import (
 	"fmt"
+
+	"github.com/newtools/ebpf/asm"
 	"github.com/pkg/errors"
 )
 
 // Editor modifies eBPF instructions.
 type Editor struct {
-	instructions  *Instructions
-	refs          map[string][]int
-	offsets       map[*Instruction]int
-	encodedLength int
+	instructions     *asm.Instructions
+	ReferenceOffsets map[string][]int
 }
 
 // Edit creates a new Editor.
 //
 // The editor retains a reference to insns and modifies its
 // contents.
-func Edit(insns *Instructions) *Editor {
-	refs := make(map[string][]int)
-	offsets := make(map[*Instruction]int, len(*insns))
-	encodedLength := 0
-	for i, ins := range *insns {
-		insPtr := &(*insns)[i]
-		offsets[insPtr] = encodedLength
-		encodedLength += ins.EncodedLength()
-
-		if ins.Reference != "" {
-			refs[ins.Reference] = append(refs[ins.Reference], i)
-		}
-	}
-	return &Editor{insns, refs, offsets, encodedLength}
-}
-
-// ReferencedSymbols returns all referenced symbols.
-//
-// Each name appears only once, but the order is not guaranteed.
-func (ed *Editor) ReferencedSymbols() []string {
-	var out []string
-	for ref := range ed.refs {
-		out = append(out, ref)
-	}
-	return out
+func Edit(insns *asm.Instructions) *Editor {
+	refs := insns.ReferenceOffsets()
+	return &Editor{insns, refs}
 }
 
 // RewriteMap rewrites a symbol to point at a Map.
@@ -49,18 +27,20 @@ func (ed *Editor) ReferencedSymbols() []string {
 // Use IsUnreferencedSymbol if you want to rewrite potentially
 // unused maps.
 func (ed *Editor) RewriteMap(symbol string, m *Map) error {
-	indices := ed.refs[symbol]
+	indices := ed.ReferenceOffsets[symbol]
 	if len(indices) == 0 {
 		return &unreferencedSymbolError{symbol}
 	}
 
+	loadOp := asm.LoadImmOp(asm.DWord)
+
 	for _, index := range indices {
 		load := &(*ed.instructions)[index]
-		if load.OpCode != LdDW {
+		if load.OpCode != loadOp {
 			return errors.Errorf("symbol %v: missing load instruction", symbol)
 		}
 
-		load.SrcRegister = 1
+		load.Src = 1
 		load.Constant = int64(m.fd)
 	}
 
@@ -94,14 +74,16 @@ func (ed *Editor) RewriteMap(symbol string, m *Map) error {
 // Use IsUnreferencedSymbol if you want to rewrite potentially
 // unused symbols.
 func (ed *Editor) RewriteConstant(symbol string, value uint64) error {
-	indices := ed.refs[symbol]
+	indices := ed.ReferenceOffsets[symbol]
 	if len(indices) == 0 {
 		return &unreferencedSymbolError{symbol}
 	}
+
+	ldDWImm := asm.LoadImmOp(asm.DWord)
 	for _, index := range indices {
 		load := &(*ed.instructions)[index]
-		if load.OpCode != LdDW {
-			return errors.Errorf("symbol %v: missing load instruction", symbol)
+		if load.OpCode != ldDWImm {
+			return errors.Errorf("symbol %v: load: found %v instead of %v", symbol, load.OpCode, ldDWImm)
 		}
 
 		load.Constant = int64(value)
@@ -115,41 +97,43 @@ func (ed *Editor) RewriteConstant(symbol string, value uint64) error {
 // if the program being edited references one of these functions.
 //
 // Sections must not require linking themselves.
-func (ed *Editor) Link(sections ...Instructions) error {
+func (ed *Editor) Link(sections ...asm.Instructions) error {
+	sections = append(sections, *ed.instructions)
+
 	// A map of symbols to the libraries which contain them.
-	symbols := make(map[string]*linkEditor)
+	symbols := make(map[string]*asm.Instructions)
 	for i, section := range sections {
-		editor, err := newLinkEditor(section)
+		offsets, err := section.SymbolOffsets()
 		if err != nil {
-			return errors.Wrapf(err, "section %d", i)
+			return err
 		}
-		for symbol := range editor.symbols {
+		for symbol := range offsets {
 			if symbols[symbol] != nil {
 				return errors.Errorf("symbol %s is present in multiple sections", symbol)
 			}
-			symbols[symbol] = editor
+			symbols[symbol] = &sections[i]
 		}
 	}
 
 	// Appending to ed.instructions would invalidate the pointers in
 	// ed, so instead we append to a new slice and join them at the end.
-	var linkedInsns Instructions
+	var linkedInsns asm.Instructions
 
-	// A list of already linked sections and the offset at which they were
-	// linked, to avoid linking multiple times.
-	linkedSections := make(map[*linkEditor]int)
-	linkedLength := 0
+	// A list of already linked sections to avoid linking multiple times.
+	linkedSections := map[*asm.Instructions]struct{}{
+		ed.instructions: struct{}{},
+	}
 
-	for symbol, indices := range ed.refs {
+	for symbol, indices := range ed.ReferenceOffsets {
 		for _, index := range indices {
 			ins := &(*ed.instructions)[index]
 
-			if ins.OpCode != Call || ins.SrcRegister != Reg1 {
+			if ins.OpCode.JumpOp() != asm.Call || ins.Src != asm.R1 {
 				continue
 			}
 
 			if ins.Constant != -1 {
-				// This is already a valid call, do not rewrite it.
+				// This is already a valid call, no need to link again.
 				continue
 			}
 
@@ -158,20 +142,10 @@ func (ed *Editor) Link(sections ...Instructions) error {
 				return errors.Errorf("symbol %s missing from libaries", symbol)
 			}
 
-			sectionOffset, ok := linkedSections[section]
-			if !ok {
-				sectionOffset = ed.encodedLength + linkedLength
-				linkedLength += section.encodedLength
-				linkedInsns = append(linkedInsns, *section.instructions...)
-				linkedSections[section] = sectionOffset
+			if _, ok := linkedSections[section]; !ok {
+				linkedInsns = append(linkedInsns, *section...)
+				linkedSections[section] = struct{}{}
 			}
-
-			insOffset := ed.offsets[ins]
-			funcOffset := section.offsets[section.symbols[symbol]]
-
-			// Calls are relative from the PC after the call instruction.
-			// Calculate offset and adjust by one.
-			ins.Constant = int64(sectionOffset + funcOffset - insOffset - 1)
 		}
 	}
 
@@ -195,32 +169,4 @@ func (use *unreferencedSymbolError) Error() string {
 func IsUnreferencedSymbol(err error) bool {
 	_, ok := err.(*unreferencedSymbolError)
 	return ok
-}
-
-type linkEditor struct {
-	*Editor
-	symbols map[string]*Instruction
-}
-
-func newLinkEditor(insns Instructions) (*linkEditor, error) {
-	symbols := make(map[string]*Instruction)
-
-	for i, ins := range insns {
-		insPtr := &insns[i]
-
-		if ins.Symbol == "" {
-			continue
-		}
-
-		if symbols[ins.Symbol] != nil {
-			return nil, errors.Errorf("duplicate label %s", ins.Symbol)
-		}
-
-		symbols[ins.Symbol] = insPtr
-	}
-
-	return &linkEditor{
-		Edit(&insns),
-		symbols,
-	}, nil
 }

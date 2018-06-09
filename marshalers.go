@@ -190,14 +190,13 @@ func possibleCPUs() (int, error) {
 		}
 
 		var low, high int
-		n, err := fmt.Fscanf(bytes.NewReader(buf), "%d-%d", &low, &high)
-		if err != nil {
-			sysCPU.err = err
-			return
-		}
-		if n != 2 || low != 0 {
+		n, _ := fmt.Fscanf(bytes.NewReader(buf), "%d-%d", &low, &high)
+		if n < 1 || low != 0 {
 			sysCPU.err = errors.New("/sys/devices/system/cpu/possible has unknown format")
 			return
+		}
+		if n == 1 {
+			high = low
 		}
 
 		sysCPU.num = high + 1

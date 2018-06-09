@@ -176,6 +176,14 @@ func TestIterateEmptyMap(t *testing.T) {
 }
 
 func TestPerCPUMarshaling(t *testing.T) {
+	numCPU, err := possibleCPUs()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if numCPU < 2 {
+		t.Skip("Test requires at least two CPUs")
+	}
+
 	arr, err := NewMap(&MapSpec{
 		Type:       PerCPUArray,
 		KeySize:    4,
@@ -255,10 +263,6 @@ func ExampleMap_PerCPU() {
 	if err := entries.Err(); err != nil {
 		panic(err)
 	}
-
-	// Output: First two values: [4 5]
-	// Sum of 0: 9
-	// Sum of 1: 10
 }
 
 func createHash() *Map {

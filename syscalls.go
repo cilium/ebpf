@@ -212,8 +212,6 @@ func bpfCall(cmd int, attr unsafe.Pointer, size uintptr) (uintptr, error) {
 		err = &wrappedErrno{syscall.EBADF, "not an open file descriptor"}
 	case syscall.EACCES:
 		err = &wrappedErrno{syscall.EACCES, "bpf program rejected as unsafe"}
-	case syscall.ENOSPC:
-		err = &wrappedErrno{syscall.ENOSPC, "bpf logging buffer not large enough"}
 	default:
 		err = errNo
 	}

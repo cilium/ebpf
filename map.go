@@ -40,7 +40,7 @@ type Map struct {
 // NewMap creates a new Map
 func NewMap(spec *MapSpec) (*Map, error) {
 	if spec.Type != ArrayOfMaps && spec.Type != HashOfMaps {
-		return newMap(spec, 0)
+		return createMap(spec, 0)
 	}
 
 	if spec.ValueSize != 0 {
@@ -50,7 +50,7 @@ func NewMap(spec *MapSpec) (*Map, error) {
 		return nil, fmt.Errorf("ebpf: map of map requires InnerMap")
 	}
 
-	inner, err := newMap(spec.InnerMap, 0)
+	inner, err := createMap(spec.InnerMap, 0)
 	if err != nil {
 		return nil, err
 	}
@@ -59,10 +59,10 @@ func NewMap(spec *MapSpec) (*Map, error) {
 	outerSpec := *spec
 	outerSpec.InnerMap = nil
 	outerSpec.ValueSize = 4
-	return newMap(&outerSpec, inner.fd)
+	return createMap(&outerSpec, inner.fd)
 }
 
-func newMap(spec *MapSpec, inner uint32) (*Map, error) {
+func createMap(spec *MapSpec, inner uint32) (*Map, error) {
 	if spec.InnerMap != nil {
 		return nil, fmt.Errorf("ebpf: inner map not allowed for this type")
 	}
@@ -79,16 +79,19 @@ func newMap(spec *MapSpec, inner uint32) (*Map, error) {
 		return nil, errors.Wrap(err, "map create")
 	}
 
-	return alignMap(uint32(fd), spec)
+	return newMap(uint32(fd), spec)
 }
 
-func alignMap(fd uint32, spec *MapSpec) (*Map, error) {
+func newMap(fd uint32, spec *MapSpec) (*Map, error) {
+	m := &Map{
+		uint32(fd),
+		*spec,
+		int(spec.ValueSize),
+	}
+	runtime.SetFinalizer(m, (*Map).Close)
+
 	if !spec.Type.hasPerCPUValue() {
-		return &Map{
-			uint32(fd),
-			*spec,
-			int(spec.ValueSize),
-		}, nil
+		return m, nil
 	}
 
 	possibleCPUs, err := possibleCPUs()
@@ -96,13 +99,7 @@ func alignMap(fd uint32, spec *MapSpec) (*Map, error) {
 		return nil, err
 	}
 
-	fullValueSize := align(int(spec.ValueSize), 8) * possibleCPUs
-	m := &Map{
-		uint32(fd),
-		*spec,
-		fullValueSize,
-	}
-	runtime.SetFinalizer(m, (*Map).Close)
+	m.fullValueSize = align(int(spec.ValueSize), 8) * possibleCPUs
 	return m, nil
 }
 
@@ -275,7 +272,7 @@ func LoadPinnedMap(fileName string) (*Map, error) {
 	if err != nil {
 		return nil, err
 	}
-	return alignMap(fd, spec)
+	return newMap(fd, spec)
 }
 
 // LoadPinnedMapExplicit loads a map with explicit parameters.
@@ -284,7 +281,7 @@ func LoadPinnedMapExplicit(fileName string, spec *MapSpec) (*Map, error) {
 	if err != nil {
 		return nil, err
 	}
-	return alignMap(fd, spec)
+	return newMap(fd, spec)
 }
 
 func (m *Map) put(key, value interface{}, putType uint64) error {
@@ -328,12 +325,17 @@ func (m *Map) UnmarshalBinary(buf []byte) error {
 	if err != nil {
 		return err
 	}
-	meta, err := getMapSpecByFD(fd)
+	spec, err := getMapSpecByFD(fd)
 	if err != nil {
 		return err
 	}
-	m.fd = fd
-	m.meta = *meta
+
+	nm, err := newMap(fd, spec)
+	if err != nil {
+		return err
+	}
+
+	*m = *nm
 	return nil
 }
 

@@ -3,6 +3,7 @@ package ebpf
 import (
 	"fmt"
 	"math"
+	"runtime"
 	"sync"
 	"syscall"
 	"time"
@@ -66,6 +67,7 @@ func NewProgram(spec *ProgramSpec) (*Program, error) {
 			uint32(fd),
 			spec.Type,
 		}
+		runtime.SetFinalizer(prog, (*Program).Close)
 		return prog, nil
 	}
 
@@ -100,6 +102,7 @@ func (bpf *Program) Pin(fileName string) error {
 
 // Close unloads the program from the kernel.
 func (bpf *Program) Close() error {
+	runtime.SetFinalizer(bpf, nil)
 	return syscall.Close(int(bpf.fd))
 }
 

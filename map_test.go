@@ -142,17 +142,32 @@ func TestMapInMap(t *testing.T) {
 				t.Fatal("Can't put inner map:", err)
 			}
 
-			if ok, err := outer.Get(uint32(0), inner); err != nil {
+			var inner2 Map
+			if ok, err := outer.Get(uint32(0), &inner2); err != nil {
 				t.Fatal(err)
 			} else if !ok {
 				t.Fatal("Missing key 0")
 			}
+			defer inner2.Close()
 
 			var v uint32
-			if ok, err := inner.Get(uint32(1), &v); err != nil {
+			if ok, err := inner2.Get(uint32(1), &v); err != nil {
 				t.Fatal(err, inner)
 			} else if !ok {
 				t.Fatal("Missing key 0")
+			}
+
+			if v != 4242 {
+				t.Error("Expected value 4242, got", v)
+			}
+
+			inner2.Close()
+
+			// Make sure we can still access the original map
+			if ok, err := inner.Get(uint32(1), &v); err != nil {
+				t.Fatal(err, inner)
+			} else if !ok {
+				t.Fatal("Missing key 0 from inner")
 			}
 
 			if v != 4242 {

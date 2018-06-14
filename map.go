@@ -2,6 +2,7 @@ package ebpf
 
 import (
 	"fmt"
+	"runtime"
 	"syscall"
 	"unsafe"
 
@@ -96,11 +97,13 @@ func alignMap(fd uint32, spec *MapSpec) (*Map, error) {
 	}
 
 	fullValueSize := align(int(spec.ValueSize), 8) * possibleCPUs
-	return &Map{
+	m := &Map{
 		uint32(fd),
 		*spec,
 		fullValueSize,
-	}, nil
+	}
+	runtime.SetFinalizer(m, (*Map).Close)
+	return m, nil
 }
 
 func (m *Map) String() string {
@@ -242,10 +245,8 @@ func (m *Map) Iterate() *MapIterator {
 }
 
 // Close removes a Map
-func (m Map) Close() error {
-	// This function has a value receiver to make sure that we close the
-	// correct fd if the function call is deferred. Otherwise unmarshaling
-	// into an existing value of type *Map can exhibit surprising behaviour.
+func (m *Map) Close() error {
+	runtime.SetFinalizer(m, nil)
 	return syscall.Close(int(m.fd))
 }
 
@@ -314,8 +315,11 @@ func (m *Map) put(key, value interface{}, putType uint64) error {
 
 // UnmarshalBinary implements BinaryUnmarshaler.
 func (m *Map) UnmarshalBinary(buf []byte) error {
+	if m.fd != 0 {
+		return errors.New("ebpf: can't unmarshal into existing map")
+	}
 	if len(buf) != 4 {
-		return fmt.Errorf("ebpf: map id requires uint32")
+		return errors.New("ebpf: map id requires uint32")
 	}
 	// Looking up an entry in a nested map or prog array returns an id,
 	// not an fd.

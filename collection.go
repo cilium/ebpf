@@ -53,7 +53,7 @@ func NewCollection(spec *CollectionSpec) (*Collection, error) {
 				var err error
 				m, err = NewMap(mapSpec)
 				if err != nil {
-					return nil, err
+					return nil, errors.Wrapf(err, "map %s", sym)
 				}
 				maps[sym] = m
 			}

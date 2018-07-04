@@ -26,7 +26,7 @@ func LoadCollectionSpecFromReader(code io.ReaderAt) (*CollectionSpec, error) {
 
 	symbols, err := f.Symbols()
 	if err != nil {
-		return nil, errors.Wrap(err, "ebpf")
+		return nil, errors.Wrap(err, "load symbols")
 	}
 
 	ec := &elfCode{f, newSymtab(symbols)}
@@ -61,29 +61,29 @@ func LoadCollectionSpecFromReader(code io.ReaderAt) (*CollectionSpec, error) {
 
 	license, err := loadLicense(licenseSection)
 	if err != nil {
-		return nil, errors.Wrap(err, "ebpf")
+		return nil, errors.Wrap(err, "load license")
 	}
 
 	version, err := loadVersion(versionSection, ec.ByteOrder)
 	if err != nil {
-		return nil, errors.Wrap(err, "ebpf")
+		return nil, errors.Wrap(err, "load version")
 	}
 
 	maps, err := ec.loadMaps(mapSections)
 	if err != nil {
-		return nil, errors.Wrap(err, "ebpf")
+		return nil, errors.Wrap(err, "load maps")
 	}
 
 	progs, libs, err := ec.loadPrograms(progSections, relSections, license, version)
 	if err != nil {
-		return nil, errors.Wrap(err, "ebpf")
+		return nil, errors.Wrap(err, "load programs")
 	}
 
 	if len(libs) > 0 {
 		for name, prog := range progs {
 			editor := Edit(&prog.Instructions)
 			if err := editor.Link(libs...); err != nil {
-				return nil, errors.Wrapf(err, "ebpf: program %s", name)
+				return nil, errors.Wrapf(err, "program %s", name)
 			}
 		}
 	}

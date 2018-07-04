@@ -6,6 +6,8 @@ import (
 	"runtime"
 	"syscall"
 	"unsafe"
+
+	"github.com/pkg/errors"
 )
 
 type mapCreateAttr struct {
@@ -125,7 +127,7 @@ func pinObject(fileName string, fd uint32) error {
 		return err
 	}
 	if statfs.Type != bpfFSType {
-		return fmt.Errorf("%s is not on a bpf filesystem", fileName)
+		return errors.Errorf("%s is not on a bpf filesystem", fileName)
 	}
 	_, err := bpfCall(_ObjPin, unsafe.Pointer(&pinObjAttr{
 		fileName: newPtr(unsafe.Pointer(&[]byte(fileName)[0])),
@@ -138,7 +140,7 @@ func getObject(fileName string) (uint32, error) {
 	ptr, err := bpfCall(_ObjGet, unsafe.Pointer(&pinObjAttr{
 		fileName: newPtr(unsafe.Pointer(&[]byte(fileName)[0])),
 	}), 16)
-	return uint32(ptr), err
+	return uint32(ptr), errors.Wrapf(err, "object %s", fileName)
 }
 
 func getObjectInfoByFD(fd uint32, info unsafe.Pointer, size uintptr) error {
@@ -149,14 +151,14 @@ func getObjectInfoByFD(fd uint32, info unsafe.Pointer, size uintptr) error {
 		info:    newPtr(info),
 	}
 	_, err := bpfCall(_ObjGetInfoByFD, unsafe.Pointer(&attr), unsafe.Sizeof(attr))
-	return err
+	return errors.Wrapf(err, "can't get info for object fd %d", fd)
 }
 
 func getMapSpecByFD(fd uint32) (*MapSpec, error) {
 	var info mapInfo
 	err := getObjectInfoByFD(uint32(fd), unsafe.Pointer(&info), unsafe.Sizeof(info))
 	if err != nil {
-		return nil, fmt.Errorf("ebpf: can't retrieve map info: %s", err.Error())
+		return nil, err
 	}
 	return &MapSpec{
 		MapType(info.mapType),
@@ -174,7 +176,7 @@ func getMapFDByID(id uint32) (uint32, error) {
 		id: id,
 	}
 	ptr, err := bpfCall(_MapGetFDByID, unsafe.Pointer(&attr), unsafe.Sizeof(attr))
-	return uint32(ptr), err
+	return uint32(ptr), errors.Wrapf(err, "can't get fd for map id %d", id)
 }
 
 type wrappedErrno struct {

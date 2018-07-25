@@ -27,8 +27,8 @@ func ExampleEditor_RewriteUint64() {
 
 	fmt.Printf("%0.0s", insns)
 
-	// Output: 0: LdImmDW dst: r0 imm: 42
-	// 2: MovSrc dst: r0 src: r0
+	// Output: 0: LdImmDW dst: r0 imm: 0
+	// 2: MovImm dst: r0 imm: 42
 	// 3: Exit
 }
 

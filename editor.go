@@ -174,8 +174,9 @@ func (ed *Editor) rewriteLoadAndDeref(symbol string, derefOp uint8, length int, 
 		return errors.Errorf("unknown symbol %v", symbol)
 	}
 	for _, index := range indices {
+
 		if index+1 >= len(*ed.instructions) {
-			return errors.Errorf("symbol %v: expected at least two instructions")
+			return errors.Errorf("symbol %v: expected at least two instructions", symbol)
 		}
 
 		load := &(*ed.instructions)[index]
@@ -189,22 +190,19 @@ func (ed *Editor) rewriteLoadAndDeref(symbol string, derefOp uint8, length int, 
 		}
 
 		if int(deref.Offset)%length != 0 {
-			return errors.Errorf("symbol %v: unaligned access")
+			return errors.Errorf("symbol %v: unaligned access", symbol)
 		}
 
-		index := int(deref.Offset) / length
-		if index >= len(values) {
-			return errors.Errorf("symbol %v: out of bounds dereference")
+		derefIndex := int(deref.Offset) / length
+		if derefIndex >= len(values) {
+			return errors.Errorf("symbol %v: out of bounds dereference", symbol)
 		}
 
-		// Rewrite original load to new value
-		load.Constant = values[index]
-
-		// Replace the deref with a mov
+		// Replace the deref with a mov with new value
 		*deref = Instruction{
-			OpCode:      MovSrc,
+			OpCode:      MovImm,
 			DstRegister: deref.DstRegister,
-			SrcRegister: load.DstRegister,
+			Constant:    values[derefIndex],
 		}
 	}
 	return nil

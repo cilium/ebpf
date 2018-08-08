@@ -236,6 +236,7 @@ func (ec *elfCode) loadMaps(mapSections map[int]*elf.Section) (map[string]*MapSp
 
 func getProgType(v string) ProgType {
 	types := map[string]ProgType{
+		// From https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/samples/bpf/bpf_load.c?id=fb40c9ddd66b9c9bb811bbee125b3cb3ba1faee7#n60
 		"socket":      SocketFilter,
 		"seccomp":     SocketFilter,
 		"kprobe/":     Kprobe,
@@ -245,6 +246,9 @@ func getProgType(v string) ProgType {
 		"perf_event":  PerfEvent,
 		"cgroup/skb":  CGroupSKB,
 		"cgroup/sock": CGroupSock,
+		// From https://github.com/CumulusNetworks/iproute2/blob/6335c5ff67202cf5b39eb929e2a0a5bb133627ba/include/bpf_elf.h#L19
+		"classifier": SchedCLS,
+		"action":     SchedACT,
 	}
 	for k, t := range types {
 		if strings.HasPrefix(v, k) {

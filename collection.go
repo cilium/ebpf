@@ -96,6 +96,28 @@ func (coll *Collection) Close() {
 	}
 }
 
+// DetachMap removes the named map from the Collection.
+//
+// This means that a later call to Close() will not affect this map.
+//
+// Returns nil if no map of that name exists.
+func (coll *Collection) DetachMap(name string) *Map {
+	m := coll.Maps[name]
+	delete(coll.Maps, name)
+	return m
+}
+
+// DetachProgram removes the named program from the Collection.
+//
+// This means that a later call to Close() will not affect this program.
+//
+// Returns nil if no program of that name exists.
+func (coll *Collection) DetachProgram(name string) *Program {
+	p := coll.Programs[name]
+	delete(coll.Programs, name)
+	return p
+}
+
 // Pin persits a Collection beyond the lifetime of the process that created it
 //
 // This requires bpffs to be mounted above fileName. See http://cilium.readthedocs.io/en/doc-1.0/kubernetes/install/#mounting-the-bpf-fs-optional

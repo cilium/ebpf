@@ -55,6 +55,26 @@ func TestLoadCollectionSpec(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer coll.Close()
+
+	hash := coll.DetachMap("hash_map")
+	if hash == nil {
+		t.Fatal("Program not returned from DetachMap")
+	}
+	defer hash.Close()
+
+	if _, ok := coll.Programs["hash_map"]; ok {
+		t.Error("DetachMap doesn't remove map from Maps")
+	}
+
+	prog := coll.DetachProgram("xdp_prog")
+	if prog == nil {
+		t.Fatal("Program not returned from DetachProgram")
+	}
+	defer prog.Close()
+
+	if _, ok := coll.Programs["xdp_prog"]; ok {
+		t.Error("DetachProgram doesn't remove program from Programs")
+	}
 }
 
 func Test64bitImmediate(t *testing.T) {

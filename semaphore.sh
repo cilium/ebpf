@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/bash -x
 # Taken from https://github.com/kinvolk/stage1-builder/blob/master/examples/semaphore.sh
 #
 # Licensed to the Apache Software Foundation (ASF) under one
@@ -77,7 +77,7 @@ for kernel_version in "${kernel_versions[@]}"; do
     --volume=go,kind=host,source="/home/runner/workspace" \
     --mount=volume=src,target="${SEMAPHORE_PROJECT_DIR}" \
     --mount=volume=go,target="/go" \
-    docker://golang:alpine \
+    docker://golang:1.10-alpine \
     --environment=GOPATH=/go \
     --exec=/bin/sh -- -c \
     "mount -t tmpfs tmpfs /tmp &&

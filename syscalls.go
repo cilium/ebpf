@@ -265,36 +265,3 @@ func createPerfEvent(perfEvent *perfEventAttr, pid, cpu, groupFd int, flags uint
 
 	return efd, err
 }
-
-// IOCtl The ioctl() function manipulates the underlying device parameters of
-// special files.  In particular, many operating characteristics of
-// character special files (e.g., terminals) may be controlled with
-// ioctl() requests.  The argument fd must be an open file descriptor.
-// The second argument is a device-dependent request code.  The third
-// argument is an untyped pointer to memory.  It's traditionally char
-// *argp (from the days before void * was valid C).
-// An ioctl() request has encoded in it whether the argument is an in
-// parameter or out parameter, and the size of the argument argp in
-// bytes.
-func IOCtl(fd int, args ...uint64) error {
-	if len(args) > 2 {
-		return fmt.Errorf("too many arguments to IOCtl, 3 is the maximum")
-	}
-	var tmp [2]uintptr
-	for i, a := range args {
-		tmp[i] = uintptr(a)
-	}
-	_, _, errNo := syscall.Syscall(syscall.SYS_IOCTL, uintptr(fd), tmp[0], tmp[1])
-
-	switch errNo {
-	case 0:
-		return nil
-	case syscall.EFAULT:
-		return fmt.Errorf("argp references an inaccessible memory area")
-	case syscall.EINVAL:
-		return fmt.Errorf("request or argp is not valid")
-	case syscall.ENOTTY:
-		return fmt.Errorf("the specified request does not apply to the kind of object that the file descriptor references")
-	}
-	return errNo
-}

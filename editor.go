@@ -186,7 +186,7 @@ func (ed *Editor) rewriteLoadAndDeref(symbol string, derefOp uint8, length int, 
 
 		deref := &(*ed.instructions)[index+1]
 		if deref.OpCode != derefOp {
-			return errors.Errorf("symbol %v: incompatible value type", symbol, derefOp, deref.OpCode)
+			return errors.Errorf("symbol %v: incompatible value type", symbol)
 		}
 
 		if int(deref.Offset)%length != 0 {
@@ -224,7 +224,7 @@ func (ed *Editor) Link(sections ...Instructions) error {
 		}
 		for symbol := range editor.symbols {
 			if symbols[symbol] != nil {
-				return errors.Errorf("symbol %s is present in multiple sections")
+				return errors.Errorf("symbol %s is present in multiple sections", symbol)
 			}
 			symbols[symbol] = editor
 		}
@@ -254,7 +254,7 @@ func (ed *Editor) Link(sections ...Instructions) error {
 
 			section := symbols[symbol]
 			if section == nil {
-				return errors.Errorf("symbol %s missing from libaries")
+				return errors.Errorf("symbol %s missing from libaries", symbol)
 			}
 
 			sectionOffset, ok := linkedSections[section]

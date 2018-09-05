@@ -3,6 +3,8 @@
 
 #include "common.h"
 
+char __license[] __section("license") = "MIT";
+
 struct map hash_map __section("maps") = {
 	.type        = BPF_MAP_TYPE_ARRAY,
 	.key_size    = 4,

@@ -1,7 +1,6 @@
 package ebpf
 
 import (
-	"fmt"
 	"path/filepath"
 	"runtime"
 	"syscall"
@@ -51,12 +50,12 @@ type progCreateAttr struct {
 	padding       uint32
 }
 
-const _BPF_TAG_SIZE = 8
+const bpfTagSize = 8
 
 type progInfo struct {
 	progType  uint32
 	id        uint32
-	tag       [_BPF_TAG_SIZE]byte
+	tag       [bpfTagSize]byte
 	jitedLen  uint32
 	xlatedLen uint32
 	jited     syscallPtr
@@ -75,10 +74,10 @@ type perfEventAttr struct {
 	// for details
 	flags uint64
 
-	wakeupEvents uint32
-	bpType       uint32
-	bpAddr       uint64
-	bpLen        uint64
+	wakeupEventsOrWatermark uint32
+	bpType                  uint32
+	bpAddr                  uint64
+	bpLen                   uint64
 
 	sampleRegsUser  uint64
 	sampleStackUser uint32
@@ -221,8 +220,16 @@ func bpfCall(cmd int, attr unsafe.Pointer, size uintptr) (uintptr, error) {
 	return r1, err
 }
 
-func createPerfEvent(perfEvent *perfEventAttr, pid, cpu, groupFd int, flags uint) (uintptr, error) {
-	efd, _, errNo := syscall.Syscall6(_SYS_PERF_EVENT_OPEN, uintptr(unsafe.Pointer(perfEvent)),
+func perfEventOpen(attr *perfEventAttr, pid, cpu, groupFd int, flags uint) (int, error) {
+	const flagCloexec = 1 << 3
+
+	// Always overwrite size
+	attr.size = uint32(unsafe.Sizeof(*attr))
+
+	// Force CLOEXEC
+	flags |= flagCloexec
+
+	efd, _, errNo := syscall.Syscall6(_SYS_PERF_EVENT_OPEN, uintptr(unsafe.Pointer(attr)),
 		uintptr(pid), uintptr(cpu), uintptr(groupFd), uintptr(flags), 0)
 
 	var err error
@@ -263,5 +270,36 @@ func createPerfEvent(perfEvent *perfEventAttr, pid, cpu, groupFd int, flags uint
 		err = errNo
 	}
 
-	return efd, err
+	return int(efd), err
+}
+
+func newEventFd() (int, error) {
+	flags := syscall.O_CLOEXEC | syscall.O_NONBLOCK
+	ret, _, errno := syscall.Syscall(syscall.SYS_EVENTFD2, uintptr(0), uintptr(flags), 0)
+	if errno == 0 {
+		return int(ret), nil
+	}
+	return -1, errors.Wrapf(errno, "can't create event fd")
+}
+
+func newEpollFd(fds ...int) (int, error) {
+	epollfd, err := syscall.EpollCreate1(syscall.EPOLL_CLOEXEC)
+	if err != nil {
+		return -1, errors.Wrap(err, "can't create epoll fd")
+	}
+
+	for _, fd := range fds {
+		event := syscall.EpollEvent{
+			Events: syscall.EPOLLIN,
+			Fd:     int32(fd),
+		}
+
+		err := syscall.EpollCtl(epollfd, syscall.EPOLL_CTL_ADD, fd, &event)
+		if err != nil {
+			syscall.Close(epollfd)
+			return -1, errors.Wrap(err, "can't add fd to epoll")
+		}
+	}
+
+	return epollfd, nil
 }

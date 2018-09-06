@@ -235,7 +235,7 @@ func TestPerCPUMarshaling(t *testing.T) {
 	}
 }
 
-func ExampleMap_PerCPU() {
+func ExampleMap_perCPU() {
 	arr, err := NewMap(&MapSpec{
 		Type:       PerCPUArray,
 		KeySize:    4,

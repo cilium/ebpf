@@ -43,43 +43,71 @@ func NewMap(spec *MapSpec) (*Map, error) {
 		return createMap(spec, 0)
 	}
 
-	if spec.ValueSize != 0 {
-		return nil, fmt.Errorf("ebpf: ValueSize must be zero for map of map")
-	}
 	if spec.InnerMap == nil {
-		return nil, fmt.Errorf("ebpf: map of map requires InnerMap")
+		return nil, errors.Errorf("map of map requires InnerMap")
 	}
 
-	inner, err := createMap(spec.InnerMap, 0)
+	template, err := createMap(spec.InnerMap, 0)
 	if err != nil {
 		return nil, err
 	}
-	defer inner.Close()
+	defer template.Close()
 
 	outerSpec := *spec
 	outerSpec.InnerMap = nil
-	outerSpec.ValueSize = 4
-	return createMap(&outerSpec, inner.fd)
+	return createMap(&outerSpec, template.fd)
 }
 
 func createMap(spec *MapSpec, inner uint32) (*Map, error) {
 	if spec.InnerMap != nil {
-		return nil, fmt.Errorf("ebpf: inner map not allowed for this type")
+		return nil, errors.Errorf("inner map not allowed for %s", spec.Type)
 	}
+
+	cpy := *spec
+	switch spec.Type {
+	case ArrayOfMaps:
+		fallthrough
+	case HashOfMaps:
+		if spec.ValueSize != 0 {
+			return nil, errors.Errorf("ValueSize must be zero for map of map")
+		}
+		cpy.ValueSize = 4
+
+	case PerfEventArray:
+		if spec.KeySize != 0 {
+			return nil, errors.Errorf("KeySize must be zero for perf event array")
+		}
+		if spec.ValueSize != 0 {
+			return nil, errors.Errorf("ValueSize must be zero for perf event array")
+		}
+		if spec.MaxEntries != 0 {
+			return nil, errors.Errorf("MaxEntries must be zero for perf event array")
+		}
+
+		n, err := possibleCPUs()
+		if err != nil {
+			return nil, errors.Wrap(err, "perf event array")
+		}
+		cpy.KeySize = 4
+		cpy.ValueSize = 4
+		cpy.MaxEntries = uint32(n)
+	}
+
 	attr := mapCreateAttr{
-		spec.Type,
-		spec.KeySize,
-		spec.ValueSize,
-		spec.MaxEntries,
-		spec.Flags,
+		cpy.Type,
+		cpy.KeySize,
+		cpy.ValueSize,
+		cpy.MaxEntries,
+		cpy.Flags,
 		inner,
 	}
+
 	fd, err := bpfCall(_MapCreate, unsafe.Pointer(&attr), unsafe.Sizeof(attr))
 	if err != nil {
 		return nil, errors.Wrap(err, "map create")
 	}
 
-	return newMap(uint32(fd), spec)
+	return newMap(uint32(fd), &cpy)
 }
 
 func newMap(fd uint32, spec *MapSpec) (*Map, error) {

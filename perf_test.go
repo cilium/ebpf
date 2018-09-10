@@ -16,7 +16,7 @@ func TestPerfReader(t *testing.T) {
 	defer coll.Close()
 
 	rd, err := NewPerfReader(PerfReaderOptions{
-		Map:          coll.Maps["events"],
+		Map:          coll.DetachMap("events"),
 		SamplePeriod: 1,
 		PerCPUBuffer: 4096,
 		Watermark:    1,
@@ -54,7 +54,7 @@ func TestPerfReaderLostSample(t *testing.T) {
 	defer coll.Close()
 
 	rd, err := NewPerfReader(PerfReaderOptions{
-		Map:          coll.Maps["events"],
+		Map:          coll.DetachMap("events"),
 		SamplePeriod: 1,
 		PerCPUBuffer: 4096,
 		// This is chosen to notify _after_ the lost sample record
@@ -158,10 +158,13 @@ func makeRing(size, offset int) *ringBuffer {
 //    __section("xdp") int output_single(void *ctx) {
 //      unsigned char buf[] = {
 //        1, 2, 3, 4, 5
-//       };
+//      };
 //
 //       return perf_event_output(ctx, &events, BPF_F_CURRENT_CPU, &buf[0], 5);
 //     }
+//
+// Also see BPF_F_CTXLEN_MASK if you want to sample packet data
+// from SKB or XDP programs.
 func ExamplePerfReader() {
 	coll, err := LoadCollection("testdata/perf_output.elf")
 	if err != nil {
@@ -170,7 +173,7 @@ func ExamplePerfReader() {
 	defer coll.Close()
 
 	rd, err := NewPerfReader(PerfReaderOptions{
-		Map: coll.Maps["events"],
+		Map: coll.DetachMap("events"),
 		// Sample each call to bpf_perf_event_output
 		SamplePeriod: 1,
 		PerCPUBuffer: 4096,

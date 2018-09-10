@@ -186,6 +186,9 @@ type PerfSample struct {
 // from user space.
 type PerfReader struct {
 	lostSamples uint64
+	// Closing a PERF_EVENT_ARRAY removes all event fds
+	// stored in it, so we keep a reference alive.
+	array *Map
 
 	closeOnce sync.Once
 	closeFile *os.File
@@ -202,7 +205,8 @@ type PerfReader struct {
 // PerfReaderOptions control the behaviour of the user
 // space reader.
 type PerfReaderOptions struct {
-	// A map of type PerfEventArray.
+	// A map of type PerfEventArray. The reader takes ownership of the
+	// map and takes care of closing it.
 	Map *Map
 	// Controls how many calls to bpf_perf_event_output are sampled.
 	// A value of 1 includes every call.
@@ -226,11 +230,13 @@ func NewPerfReader(opts PerfReaderOptions) (out *PerfReader, err error) {
 
 	nCPU, err := possibleCPUs()
 	if err != nil {
+		opts.Map.Close()
 		return nil, errors.Wrap(err, "sampled perf event")
 	}
 
 	closeFd, err := newEventFd()
 	if err != nil {
+		opts.Map.Close()
 		return nil, err
 	}
 
@@ -238,6 +244,7 @@ func NewPerfReader(opts PerfReaderOptions) (out *PerfReader, err error) {
 	errs := make(chan error, 1)
 
 	out = &PerfReader{
+		array:     opts.Map,
 		closeFile: os.NewFile(uintptr(closeFd), "event fd"),
 		close:     make(chan struct{}),
 		Error:     errs,
@@ -292,12 +299,16 @@ func (pr *PerfReader) LostSamples() uint64 {
 }
 
 // Close stops the reader.
+//
+// Calls to perf_event_output from eBPF programs will return
+// ENOENT after calling this method.
 func (pr *PerfReader) Close() (err error) {
 	pr.closeOnce.Do(func() {
 		runtime.SetFinalizer(pr, nil)
 
 		// Indicate that we want to shut down
 		close(pr.close)
+		pr.array.Close()
 
 		// Signal via the event fd
 		var value [8]byte

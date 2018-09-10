@@ -84,6 +84,7 @@ for kernel_version in "${kernel_versions[@]}"; do
       mount -t bpf bpf /sys/fs/bpf &&
       mount -t debugfs debugfs /sys/kernel/debug/ &&
       cd /go/src/${pkg_name} &&
+      go build -v ./... &&
       go test -coverprofile=coverage.txt -covermode=atomic -v ./..."
 
   # Determine exit code from pod status due to rkt#2777

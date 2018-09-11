@@ -2,37 +2,40 @@ package ebpf
 
 import (
 	"fmt"
+	"math"
 	"testing"
 )
 
-func ExampleEditor_RewriteUint64() {
-	// The assembly below is roughly equivalent to what LLVM emits
-	// for the following C:
-	//
-	//    const unsigned long my_ret;
-	//    unsigned long func() {
-	//        return my_ret;
-	//    }
-	//
+// ExampleEditor_rewriteConstant shows how to change constants in
+// compiled eBPF byte code.
+//
+// The C should look something like this:
+//
+//    const unsigned long my_ret;
+//    #define VALUE_OF(x) ((typeof(x))(&x))
+//    unsigned long func() {
+//        return VALUE_OF(my_ret);
+//    }
+func ExampleEditor_rewriteConstant() {
+	// This assembly is roughly equivalent to what clang
+	// would emit for the C above.
 	insns := Instructions{
 		BPFILdImm64(Reg0, 0).Ref("my_ret"),
-		BPFIDstSrc(LdXDW, Reg0, Reg0),
 		BPFIOp(Exit),
 	}
 
 	editor := Edit(&insns)
-	if err := editor.RewriteUint64("my_ret", 42); err != nil {
+	if err := editor.RewriteAddress("my_ret", 42); err != nil {
 		panic(err)
 	}
 
 	fmt.Printf("%0.0s", insns)
 
-	// Output: 0: LdImmDW dst: r0 imm: 0
-	// 2: MovImm dst: r0 imm: 42
-	// 3: Exit
+	// Output: 0: LdImmDW dst: r0 imm: 42
+	// 2: Exit
 }
 
-func TestEditorRewriteGlobalVariables(t *testing.T) {
+func TestEditorRewriteConstant(t *testing.T) {
 	spec, err := LoadCollectionSpec("testdata/rewrite.elf")
 	if err != nil {
 		t.Fatal(err)
@@ -42,36 +45,7 @@ func TestEditorRewriteGlobalVariables(t *testing.T) {
 	editor := Edit(&progSpec.Instructions)
 
 	// Rewrite scalars
-	if err := editor.RewriteBool("bool_val", true); err != nil {
-		t.Fatal(err)
-	}
-	if err := editor.RewriteUint8("char_val", 0x02); err != nil {
-		t.Fatal(err)
-	}
-	if err := editor.RewriteUint16("short_val", 0x04); err != nil {
-		t.Fatal(err)
-	}
-	if err := editor.RewriteUint32("int_val", 0x08); err != nil {
-		t.Fatal(err)
-	}
-	if err := editor.RewriteUint64("long_val", 0x10); err != nil {
-		t.Fatal(err)
-	}
-
-	// Rewrite arrays
-	if err := editor.RewriteBoolArray("bool_array", []bool{false, true}); err != nil {
-		t.Fatal(err)
-	}
-	if err := editor.RewriteUint8Array("char_array", []uint8{0, 0x02}); err != nil {
-		t.Fatal(err)
-	}
-	if err := editor.RewriteUint16Array("short_array", []uint16{0, 0x04}); err != nil {
-		t.Fatal(err)
-	}
-	if err := editor.RewriteUint32Array("int_array", []uint32{0, 0x08}); err != nil {
-		t.Fatal(err)
-	}
-	if err := editor.RewriteUint64Array("long_array", []uint64{0, 0x10}); err != nil {
+	if err := editor.RewriteAddress("constant", 0x01); err != nil {
 		t.Fatal(err)
 	}
 
@@ -88,9 +62,45 @@ func TestEditorRewriteGlobalVariables(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	const N = 10 // number of rewrites
+	const N = 1 // number of rewrites
 	if expected := uint32(1<<N) - 1; ret != expected {
 		t.Errorf("Expected return value %d, got %d", expected, ret)
+	}
+}
+
+func TestEditorIssue59(t *testing.T) {
+	max := uint64(math.MaxUint64)
+
+	insns := Instructions{
+		BPFILdImm64(Reg1, 0).Ref("my_ret"),
+		BPFIDstImm(RShImm, Reg1, 63),
+		BPFIDstImm(MovImm, Reg0, 1),
+		BPFIDstOffImm(JGTImm, Reg1, 1, 0),
+		BPFIDstImm(MovImm, Reg0, 0),
+		BPFIOp(Exit),
+	}
+
+	editor := Edit(&insns)
+	if err := editor.RewriteAddress("my_ret", int64(max)); err != nil {
+		t.Fatal(err)
+	}
+
+	prog, err := NewProgram(&ProgramSpec{
+		Type:         XDP,
+		License:      "MIT",
+		Instructions: insns,
+	})
+	if err != nil {
+		panic(err)
+	}
+
+	ret, _, err := prog.Test(make([]byte, 14))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if ret != 1 {
+		t.Errorf("Expected return of 1, got %d", ret)
 	}
 }
 
@@ -129,25 +139,6 @@ func TestEditorRewriteMap(t *testing.T) {
 
 	if ret != 42 {
 		t.Errorf("Expected return value 42, got %d", ret)
-	}
-}
-
-func TestEditorRejectInvalidRewrites(t *testing.T) {
-	spec, err := LoadCollectionSpec("testdata/rewrite.elf")
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	progSpec := spec.Programs["invalid_rewrite"]
-	editor := Edit(&progSpec.Instructions)
-	if err := editor.RewriteUint64("int_val", 4242); err == nil {
-		t.Error("RewriteUint64 did not reject writing to int value")
-	}
-	if err := editor.RewriteUint64Array("long_array", []uint64{0}); err == nil {
-		t.Error("RewriteUint64Array did not check bounds")
-	}
-	if err := editor.RewriteUint64Array("short_array", []uint64{0, 0}); err == nil {
-		t.Error("RewriteUint64Array did not alignment")
 	}
 }
 

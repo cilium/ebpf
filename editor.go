@@ -70,35 +70,11 @@ func (ed *Editor) RewriteUint64(symbol string, value uint64) error {
 	return ed.rewriteLoadAndDeref(symbol, LdXDW, 8, []int64{int64(value)})
 }
 
-// RewriteUint64Array rewrites a reference to a 64bit global array variable to a constant.
-//
-// This is meant to be used with code emitted by LLVM, not hand written assembly.
-func (ed *Editor) RewriteUint64Array(symbol string, values []uint64) error {
-	intValues := make([]int64, len(values))
-	for i, v := range values {
-		intValues[i] = int64(v)
-	}
-
-	return ed.rewriteLoadAndDeref(symbol, LdXDW, 8, intValues)
-}
-
 // RewriteUint32 rewrites all references to a 32bit global variable to a constant.
 //
 // This is meant to be used with code emitted by LLVM, not hand written assembly.
 func (ed *Editor) RewriteUint32(symbol string, value uint32) error {
 	return ed.rewriteLoadAndDeref(symbol, LdXW, 4, []int64{int64(value)})
-}
-
-// RewriteUint32Array rewrites all references to a 32bit global array variable to a constant.
-//
-// This is meant to be used with code emitted by LLVM, not hand written assembly.
-func (ed *Editor) RewriteUint32Array(symbol string, values []uint32) error {
-	intValues := make([]int64, len(values))
-	for i, v := range values {
-		intValues[i] = int64(v)
-	}
-
-	return ed.rewriteLoadAndDeref(symbol, LdXW, 4, intValues)
 }
 
 // RewriteUint16 rewrites all references to a 32bit global variable to a constant.
@@ -108,35 +84,11 @@ func (ed *Editor) RewriteUint16(symbol string, value uint16) error {
 	return ed.rewriteLoadAndDeref(symbol, LdXH, 2, []int64{int64(value)})
 }
 
-// RewriteUint16Array rewrites all references to a 16bit global array variable to a constant.
-//
-// This is meant to be used with code emitted by LLVM, not hand written assembly.
-func (ed *Editor) RewriteUint16Array(symbol string, values []uint16) error {
-	intValues := make([]int64, len(values))
-	for i, v := range values {
-		intValues[i] = int64(v)
-	}
-
-	return ed.rewriteLoadAndDeref(symbol, LdXH, 2, intValues)
-}
-
 // RewriteUint8 rewrites all references to an 8bit global variable to a constant.
 //
 // This is meant to be used with code emitted by LLVM, not hand written assembly.
 func (ed *Editor) RewriteUint8(symbol string, value uint8) error {
 	return ed.rewriteLoadAndDeref(symbol, LdXB, 1, []int64{int64(value)})
-}
-
-// RewriteUint8Array rewrites all references to an 8bit global array variable to a constant.
-//
-// This is meant to be used with code emitted by LLVM, not hand written assembly.
-func (ed *Editor) RewriteUint8Array(symbol string, values []uint8) error {
-	intValues := make([]int64, len(values))
-	for i, v := range values {
-		intValues[i] = int64(v)
-	}
-
-	return ed.rewriteLoadAndDeref(symbol, LdXB, 1, intValues)
 }
 
 // RewriteBool rewrites all references to an boolean global variable to a constant.
@@ -148,21 +100,6 @@ func (ed *Editor) RewriteBool(symbol string, value bool) error {
 		intValue = 1
 	}
 	return ed.rewriteLoadAndDeref(symbol, LdXB, 1, []int64{intValue})
-}
-
-// RewriteBoolArray rewrites all references to an boolean global array variable to a constant.
-//
-// This is meant to be used with code emitted by LLVM, not hand written assembly.
-func (ed *Editor) RewriteBoolArray(symbol string, values []bool) error {
-	intValues := make([]int64, len(values))
-	for i, v := range values {
-		intValues[i] = 0
-		if v {
-			intValues[i] = 1
-		}
-	}
-
-	return ed.rewriteLoadAndDeref(symbol, LdXB, 1, intValues)
 }
 
 // rewriteLoadAndDeref deals with references to global variables as emitted by LLVM.

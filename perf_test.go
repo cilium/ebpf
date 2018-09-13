@@ -17,7 +17,6 @@ func TestPerfReader(t *testing.T) {
 
 	rd, err := NewPerfReader(PerfReaderOptions{
 		Map:          coll.DetachMap("events"),
-		SamplePeriod: 1,
 		PerCPUBuffer: 4096,
 		Watermark:    1,
 	})
@@ -55,7 +54,6 @@ func TestPerfReaderLostSample(t *testing.T) {
 
 	rd, err := NewPerfReader(PerfReaderOptions{
 		Map:          coll.DetachMap("events"),
-		SamplePeriod: 1,
 		PerCPUBuffer: 4096,
 		// This is chosen to notify _after_ the lost sample record
 		// has been created.
@@ -173,9 +171,7 @@ func ExamplePerfReader() {
 	defer coll.Close()
 
 	rd, err := NewPerfReader(PerfReaderOptions{
-		Map: coll.DetachMap("events"),
-		// Sample each call to bpf_perf_event_output
-		SamplePeriod: 1,
+		Map:          coll.DetachMap("events"),
 		PerCPUBuffer: 4096,
 		// Notify immediately
 		Watermark: 1,

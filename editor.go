@@ -63,15 +63,30 @@ func (ed *Editor) RewriteMap(symbol string, m *Map) error {
 	return nil
 }
 
-// RewriteAddress rewrites all references of a symbol to a constant value.
+// RewriteConstant rewrites all loads of a symbol to a constant value.
 //
-// You can then use the following macro in you eBPF code to access the constant
+// This is a hacky way to change constants in your clang-compiled eBPF
+// byte code at load time. Use the following macro in your eBPF to
+// access the constant:
 //
 //    const uint64_t MY_CONSTANT;
 //    #define VALUE_OF(x) ((typeof(x))(&x))
-//    ...
-//    if (VALUE_OF(MY_CONSTANT)) ...
-func (ed *Editor) RewriteAddress(symbol string, value int64) error {
+//
+//    int xdp() {
+//        if (VALUE_OF(MY_CONSTANT)) ...
+//    }
+//
+// Normally, using a global const doesn't work since clang expects
+// that global to be set up by the loader. For this is emits a load
+// and a dereference for each use of MY_CONSTANT, which on a normal
+// platform would be rewritten to an address somewhere in memory.
+// Since the eBPF VM doesn't have shared memory we can't really allocate
+// the global anywhere, and the deref points at invalid memory.
+//
+// Using this function with the macro works around this by only ever
+// looking at the address of the constant. In this case clang doesn't
+// emit a deref, and we can use the address as a 64bit constant.
+func (ed *Editor) RewriteConstant(symbol string, value uint64) error {
 	indices := ed.refs[symbol]
 	if len(indices) == 0 {
 		return errors.Errorf("unknown symbol %v", symbol)
@@ -82,7 +97,7 @@ func (ed *Editor) RewriteAddress(symbol string, value int64) error {
 			return errors.Errorf("symbol %v: missing load instruction", symbol)
 		}
 
-		load.Constant = value
+		load.Constant = int64(value)
 	}
 	return nil
 }

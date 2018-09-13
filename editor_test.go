@@ -25,7 +25,7 @@ func ExampleEditor_rewriteConstant() {
 	}
 
 	editor := Edit(&insns)
-	if err := editor.RewriteAddress("my_ret", 42); err != nil {
+	if err := editor.RewriteConstant("my_ret", 42); err != nil {
 		panic(err)
 	}
 
@@ -44,8 +44,7 @@ func TestEditorRewriteConstant(t *testing.T) {
 	progSpec := spec.Programs["rewrite"]
 	editor := Edit(&progSpec.Instructions)
 
-	// Rewrite scalars
-	if err := editor.RewriteAddress("constant", 0x01); err != nil {
+	if err := editor.RewriteConstant("constant", 0x01); err != nil {
 		t.Fatal(err)
 	}
 
@@ -81,7 +80,7 @@ func TestEditorIssue59(t *testing.T) {
 	}
 
 	editor := Edit(&insns)
-	if err := editor.RewriteAddress("my_ret", int64(max)); err != nil {
+	if err := editor.RewriteConstant("my_ret", max); err != nil {
 		t.Fatal(err)
 	}
 

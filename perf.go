@@ -98,54 +98,42 @@ func (ring *perfEventRing) Close() {
 	syscall.Munmap(ring.mmap)
 }
 
-func (ring *perfEventRing) ReadSamples(samples chan<- *PerfSample, done <-chan struct{}) (uint64, error) {
+func readRecord(rd io.Reader) (*PerfSample, uint64, error) {
 	const (
 		perfRecordLost   = 2
 		perfRecordSample = 9
 	)
 
-	var totalLost uint64
-
-	rd := newRingBuffer(ring.meta, ring.ring)
-	defer rd.Close()
-
-	for {
-		var header perfEventHeader
-		err := binary.Read(rd, nativeEndian, &header)
-		if err == io.EOF {
-			break
-		}
-
-		if err != nil {
-			return 0, errors.Wrap(err, "can't read event header")
-		}
-
-		switch header.Type {
-		case perfRecordLost:
-			lost, err := readLostRecords(rd)
-			if err != nil {
-				return 0, err
-			}
-			totalLost += lost
-
-		case perfRecordSample:
-			sample, err := readSample(rd)
-			if err != nil {
-				return 0, err
-			}
-
-			select {
-			case samples <- sample:
-			case <-done:
-				break
-			}
-
-		default:
-			return 0, errors.Errorf("unknown event type %d", header.Type)
-		}
+	var header perfEventHeader
+	err := binary.Read(rd, nativeEndian, &header)
+	if err == io.EOF {
+		return nil, 0, nil
 	}
 
-	return totalLost, nil
+	if err != nil {
+		return nil, 0, errors.Wrap(err, "can't read event header")
+	}
+
+	switch header.Type {
+	case perfRecordLost:
+		lost, err := readLostRecords(rd)
+		if err != nil {
+			return nil, 0, err
+		}
+
+		return nil, lost, nil
+
+	case perfRecordSample:
+		sample, err := readSample(rd)
+		if err != nil {
+			return nil, 0, err
+		}
+
+		return sample, 0, nil
+
+	default:
+		return nil, 0, errors.Errorf("unknown event type %d", header.Type)
+	}
 }
 
 func readLostRecords(rd io.Reader) (uint64, error) {
@@ -306,7 +294,7 @@ func (pr *PerfReader) Close() (err error) {
 		close(pr.close)
 		pr.array.Close()
 
-		// Signal via the event fd
+		// Signal poll() via the event fd
 		var value [8]byte
 		nativeEndian.PutUint64(value[:], 1)
 		_, err = pr.closeFile.Write(value[:])
@@ -347,27 +335,58 @@ func (pr *PerfReader) poll(epollFd int, rings map[int]*perfEventRing, samples ch
 
 		for _, event := range epollEvents[:nEvents] {
 			ring := rings[int(event.Fd)]
-			lost, err := ring.ReadSamples(samples, pr.close)
+			err := pr.flushRing(ring, samples)
 			if err != nil {
 				errs <- err
 				return
-			}
-			if lost > 0 {
-				atomic.AddUint64(&pr.lostSamples, lost)
 			}
 		}
 	}
 }
 
-type ringBuffer struct {
+func (pr *PerfReader) flushRing(ring *perfEventRing, samples chan<- *PerfSample) error {
+	rd := newRingReader(ring.meta, ring.ring)
+	defer rd.Close()
+
+	var totalLost uint64
+
+	for {
+		sample, lost, err := readRecord(rd)
+		if err != nil {
+			return err
+		}
+
+		if lost > 0 {
+			totalLost += lost
+			continue
+		}
+
+		if sample == nil {
+			break
+		}
+
+		select {
+		case samples <- sample:
+		case <-pr.close:
+			break
+		}
+	}
+
+	if totalLost > 0 {
+		atomic.AddUint64(&pr.lostSamples, totalLost)
+	}
+	return nil
+}
+
+type ringReader struct {
 	meta       *perfEventMeta
 	head, tail uint64
 	mask       uint64
 	ring       []byte
 }
 
-func newRingBuffer(meta *perfEventMeta, ring []byte) *ringBuffer {
-	return &ringBuffer{
+func newRingReader(meta *perfEventMeta, ring []byte) *ringReader {
+	return &ringReader{
 		meta: meta,
 		head: atomic.LoadUint64(&meta.dataHead),
 		tail: atomic.LoadUint64(&meta.dataTail),
@@ -377,14 +396,14 @@ func newRingBuffer(meta *perfEventMeta, ring []byte) *ringBuffer {
 	}
 }
 
-func (rb *ringBuffer) Close() error {
+func (rb *ringReader) Close() error {
 	// Commit the new tail. This lets the kernel know that
 	// the ring buffer has been consumed.
 	atomic.StoreUint64(&rb.meta.dataTail, rb.tail)
 	return nil
 }
 
-func (rb *ringBuffer) Read(p []byte) (int, error) {
+func (rb *ringReader) Read(p []byte) (int, error) {
 	start := int(rb.tail & rb.mask)
 
 	n := len(p)

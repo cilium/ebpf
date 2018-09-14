@@ -125,7 +125,7 @@ func TestRingBuffer(t *testing.T) {
 	}
 }
 
-func makeRing(size, offset int) *ringBuffer {
+func makeRing(size, offset int) *ringReader {
 	if size%2 != 0 {
 		panic("size must be power of two")
 	}
@@ -141,7 +141,7 @@ func makeRing(size, offset int) *ringBuffer {
 		dataSize: uint64(len(ring)),
 	}
 
-	return newRingBuffer(&meta, ring)
+	return newRingReader(&meta, ring)
 }
 
 // ExamplePerfReader submits a perf event using BPF,

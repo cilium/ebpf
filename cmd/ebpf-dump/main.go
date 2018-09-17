@@ -1,3 +1,4 @@
+// Program ebpf-dump writes the contents of an ELF file to stdout.
 package main
 
 import (

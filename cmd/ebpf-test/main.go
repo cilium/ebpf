@@ -1,3 +1,7 @@
+// Program ebpf-test allows testing eBPF from an ELF file.
+//
+// The input to the program is read from stdin and the output is written
+// to stdout. The binary uses the exit code of the BPF.
 package main
 
 import (

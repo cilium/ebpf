@@ -59,7 +59,6 @@ func newPerfEventRing(cpu int, opts PerfReaderOptions) (*perfEventRing, error) {
 		perfType:                perfTypeSoftware,
 		config:                  perfCountSWBPFOutput,
 		flags:                   flagWakeupWatermark,
-		samplePeriod:            opts.SamplePeriod,
 		sampleType:              perfSampleRaw,
 		wakeupEventsOrWatermark: uint32(opts.Watermark),
 	}
@@ -208,9 +207,6 @@ type PerfReaderOptions struct {
 	// A map of type PerfEventArray. The reader takes ownership of the
 	// map and takes care of closing it.
 	Map *Map
-	// Controls how many calls to bpf_perf_event_output are sampled.
-	// A value of 1 includes every call.
-	SamplePeriod uint64
 	// Controls the size of the per CPU buffer in bytes. LostSamples() will
 	// increase if the buffer is too small.
 	PerCPUBuffer int

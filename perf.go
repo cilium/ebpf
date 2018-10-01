@@ -178,7 +178,7 @@ type PerfReader struct {
 	array *Map
 
 	closeOnce sync.Once
-	closeFile *os.File
+	closeFd   int
 	close     chan struct{}
 
 	// Error receives a write if the reader exits
@@ -214,37 +214,18 @@ func NewPerfReader(opts PerfReaderOptions) (out *PerfReader, err error) {
 
 	nCPU, err := possibleCPUs()
 	if err != nil {
-		opts.Map.Close()
 		return nil, errors.Wrap(err, "sampled perf event")
 	}
 
-	closeFd, err := newEventFd()
-	if err != nil {
-		opts.Map.Close()
-		return nil, err
-	}
-
-	samples := make(chan *PerfSample, nCPU)
-	errs := make(chan error, 1)
-
-	out = &PerfReader{
-		array:     opts.Map,
-		closeFile: os.NewFile(uintptr(closeFd), "event fd"),
-		close:     make(chan struct{}),
-		Error:     errs,
-		Samples:   samples,
-	}
-	runtime.SetFinalizer(out, (*PerfReader).Close)
-
 	var (
-		fds   = []int{closeFd}
+		fds   []int
 		rings = make(map[int]*perfEventRing)
 	)
 
 	defer func() {
 		if err != nil {
-			for _, mmap := range rings {
-				mmap.Close()
+			for _, ring := range rings {
+				ring.Close()
 			}
 		}
 	}()
@@ -267,12 +248,31 @@ func NewPerfReader(opts PerfReaderOptions) (out *PerfReader, err error) {
 		rings[ring.fd] = ring
 	}
 
-	epollfd, err := newEpollFd(fds...)
+	closeFd, err := newEventFd()
 	if err != nil {
 		return nil, err
 	}
+	fds = append(fds, closeFd)
 
-	go out.poll(epollfd, rings, samples, errs)
+	epollFd, err := newEpollFd(fds...)
+	if err != nil {
+		syscall.Close(closeFd)
+		return nil, err
+	}
+
+	samples := make(chan *PerfSample, nCPU)
+	errs := make(chan error, 1)
+
+	out = &PerfReader{
+		array:   opts.Map,
+		closeFd: closeFd,
+		close:   make(chan struct{}),
+		Error:   errs,
+		Samples: samples,
+	}
+	runtime.SetFinalizer(out, (*PerfReader).Close)
+
+	go out.poll(epollFd, rings, samples, errs)
 	return out, nil
 }
 
@@ -294,25 +294,28 @@ func (pr *PerfReader) Close() (err error) {
 		close(pr.close)
 		pr.array.Close()
 
-		// Signal poll() via the event fd
+		// Signal poll() via the event fd. Ignore the
+		// write error since poll() may have exited
+		// and closed the fd already
 		var value [8]byte
 		nativeEndian.PutUint64(value[:], 1)
-		_, err = pr.closeFile.Write(value[:])
+		_, _ = syscall.Write(pr.closeFd, value[:])
 	})
 
-	return errors.Wrap(err, "can't write to event fd")
+	return nil
 }
 
 func (pr *PerfReader) poll(epollFd int, rings map[int]*perfEventRing, samples chan<- *PerfSample, errs chan<- error) {
 	defer close(samples)
 	defer syscall.Close(epollFd)
+	defer syscall.Close(pr.closeFd)
 	defer func() {
 		for _, ring := range rings {
 			ring.Close()
 		}
 	}()
 
-	epollEvents := make([]syscall.EpollEvent, len(rings))
+	epollEvents := make([]syscall.EpollEvent, len(rings)+1)
 
 	for {
 		nEvents, err := syscall.EpollWait(epollFd, epollEvents, -1)
@@ -326,16 +329,14 @@ func (pr *PerfReader) poll(epollFd int, rings map[int]*perfEventRing, samples ch
 			return
 		}
 
-		select {
-		case <-pr.close:
-			// We were woken by Close via the event fd
-			return
-		default:
-		}
-
 		for _, event := range epollEvents[:nEvents] {
-			ring := rings[int(event.Fd)]
-			err := pr.flushRing(ring, samples)
+			fd := int(event.Fd)
+			if fd == pr.closeFd {
+				// We were woken by Close via the close fd
+				return
+			}
+
+			err := pr.flushRing(rings[fd], samples)
 			if err != nil {
 				errs <- err
 				return

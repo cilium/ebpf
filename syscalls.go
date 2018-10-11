@@ -7,6 +7,7 @@ import (
 	"unsafe"
 
 	"github.com/pkg/errors"
+	"golang.org/x/sys/unix"
 )
 
 type mapCreateAttr struct {
@@ -283,18 +284,18 @@ func newEventFd() (int, error) {
 }
 
 func newEpollFd(fds ...int) (int, error) {
-	epollfd, err := syscall.EpollCreate1(syscall.EPOLL_CLOEXEC)
+	epollfd, err := unix.EpollCreate1(unix.EPOLL_CLOEXEC)
 	if err != nil {
 		return -1, errors.Wrap(err, "can't create epoll fd")
 	}
 
 	for _, fd := range fds {
-		event := syscall.EpollEvent{
-			Events: syscall.EPOLLIN,
+		event := unix.EpollEvent{
+			Events: unix.EPOLLIN,
 			Fd:     int32(fd),
 		}
 
-		err := syscall.EpollCtl(epollfd, syscall.EPOLL_CTL_ADD, fd, &event)
+		err := unix.EpollCtl(epollfd, unix.EPOLL_CTL_ADD, fd, &event)
 		if err != nil {
 			syscall.Close(epollfd)
 			return -1, errors.Wrap(err, "can't add fd to epoll")

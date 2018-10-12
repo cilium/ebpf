@@ -11,6 +11,7 @@ import (
 	"unsafe"
 
 	"github.com/pkg/errors"
+	"golang.org/x/sys/unix"
 )
 
 const (
@@ -315,10 +316,10 @@ func (pr *PerfReader) poll(epollFd int, rings map[int]*perfEventRing, samples ch
 		}
 	}()
 
-	epollEvents := make([]syscall.EpollEvent, len(rings)+1)
+	epollEvents := make([]unix.EpollEvent, len(rings)+1)
 
 	for {
-		nEvents, err := syscall.EpollWait(epollFd, epollEvents, -1)
+		nEvents, err := unix.EpollWait(epollFd, epollEvents, -1)
 		if err != nil {
 			// Handle EINTR
 			if temp, ok := err.(temporaryError); ok && temp.Temporary() {

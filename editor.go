@@ -1,6 +1,7 @@
 package ebpf
 
 import (
+	"fmt"
 	"github.com/pkg/errors"
 )
 
@@ -44,10 +45,13 @@ func (ed *Editor) ReferencedSymbols() []string {
 }
 
 // RewriteMap rewrites a symbol to point at a Map.
+//
+// Use IsUnreferencedSymbol if you want to rewrite potentially
+// unused maps.
 func (ed *Editor) RewriteMap(symbol string, m *Map) error {
 	indices := ed.refs[symbol]
 	if len(indices) == 0 {
-		return errors.Errorf("unknown symbol %v", symbol)
+		return &unreferencedSymbolError{symbol}
 	}
 
 	for _, index := range indices {
@@ -86,10 +90,13 @@ func (ed *Editor) RewriteMap(symbol string, m *Map) error {
 // Using this function with the macro works around this by only ever
 // looking at the address of the constant. In this case clang doesn't
 // emit a deref, and we can use the address as a 64bit constant.
+//
+// Use IsUnreferencedSymbol if you want to rewrite potentially
+// unused symbols.
 func (ed *Editor) RewriteConstant(symbol string, value uint64) error {
 	indices := ed.refs[symbol]
 	if len(indices) == 0 {
-		return errors.Errorf("unknown symbol %v", symbol)
+		return &unreferencedSymbolError{symbol}
 	}
 	for _, index := range indices {
 		load := &(*ed.instructions)[index]
@@ -173,6 +180,21 @@ func (ed *Editor) Link(sections ...Instructions) error {
 	*ed.instructions = append(*ed.instructions, linkedInsns...)
 	*ed = *Edit(ed.instructions)
 	return nil
+}
+
+type unreferencedSymbolError struct {
+	symbol string
+}
+
+func (use *unreferencedSymbolError) Error() string {
+	return fmt.Sprintf("unreferenced symbol %s", use.symbol)
+}
+
+// IsUnreferencedSymbol returns true if err was caused by
+// an unreferenced symbol.
+func IsUnreferencedSymbol(err error) bool {
+	_, ok := err.(*unreferencedSymbolError)
+	return ok
 }
 
 type linkEditor struct {

@@ -48,6 +48,10 @@ func TestEditorRewriteConstant(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	if err := editor.RewriteConstant("bogus", 0x01); !IsUnreferencedSymbol(err) {
+		t.Error("Rewriting unreferenced symbol doesn't return appropriate error")
+	}
+
 	t.Log(progSpec.Instructions)
 
 	prog, err := NewProgram(progSpec)
@@ -124,6 +128,10 @@ func TestEditorRewriteMap(t *testing.T) {
 
 	if err := editor.RewriteMap("map_val", array); err != nil {
 		t.Fatal(err)
+	}
+
+	if err := editor.RewriteMap("bogus_map", array); !IsUnreferencedSymbol(err) {
+		t.Error("Rewriting unreferenced map doesn't return appropriate error")
 	}
 
 	prog, err := NewProgram(progSpec)

@@ -12,12 +12,13 @@ struct map map_val __section("maps") = {
 	.max_entries = 1,
 };
 
-const unsigned int constant;
-#define VALUE_OF(x) ((typeof(x))(&x))
+#define CONSTANT "constant"
+
+#define LOAD_CONSTANT(param, var) asm("%0 = " param " ll" : "=r"(var))
 
 __section("xdp") int rewrite() {
 	unsigned long acc = 0;
-	acc |= VALUE_OF(constant);
+	LOAD_CONSTANT(CONSTANT, acc);
 	return acc;
 }
 

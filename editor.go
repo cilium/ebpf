@@ -49,27 +49,24 @@ func (ed *Editor) RewriteMap(symbol string, m *Map) error {
 
 // RewriteConstant rewrites all loads of a symbol to a constant value.
 //
-// This is a hacky way to change constants in your clang-compiled eBPF
-// byte code at load time. Use the following macro in your eBPF to
-// access the constant:
+// This is a way to parameterize clang-compiled eBPF byte code at load
+// time.
 //
-//    const uint64_t MY_CONSTANT;
-//    #define VALUE_OF(x) ((typeof(x))(&x))
+// The following macro should be used to access the constant:
+//
+//    #define LOAD_CONSTANT(param, var) asm("%0 = " param " ll" : "=r"(var))
 //
 //    int xdp() {
-//        if (VALUE_OF(MY_CONSTANT)) ...
-//    }
+//        bool my_constant;
+//        LOAD_CONSTANT("SYMBOL_NAME", my_constant);
 //
-// Normally, using a global const doesn't work since clang expects
-// that global to be set up by the loader. For this is emits a load
-// and a dereference for each use of MY_CONSTANT, which on a normal
-// platform would be rewritten to an address somewhere in memory.
-// Since the eBPF VM doesn't have shared memory we can't really allocate
-// the global anywhere, and the deref points at invalid memory.
+//        if (my_constant) ...
 //
-// Using this function with the macro works around this by only ever
-// looking at the address of the constant. In this case clang doesn't
-// emit a deref, and we can use the address as a 64bit constant.
+// Caveats:
+//   - The symbol name you pick must be unique
+//
+//   - Failing to rewrite a symbol will not result in an error,
+//     0 will be loaded instead (subject to change)
 //
 // Use IsUnreferencedSymbol if you want to rewrite potentially
 // unused symbols.

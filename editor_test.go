@@ -13,11 +13,13 @@ import (
 //
 // The C should look something like this:
 //
-//    const unsigned long my_ret;
-//    #define VALUE_OF(x) ((typeof(x))(&x))
-//    unsigned long func() {
-//        return VALUE_OF(my_ret);
-//    }
+//    #define LOAD_CONSTANT(param, var) asm("%0 = " param " ll" : "=r"(var))
+//
+//    int xdp() {
+//        bool my_constant;
+//        LOAD_CONSTANT("SYMBOL_NAME", my_constant);
+//
+//        if (my_constant) ...
 func ExampleEditor_rewriteConstant() {
 	// This assembly is roughly equivalent to what clang
 	// would emit for the C above.

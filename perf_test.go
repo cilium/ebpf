@@ -89,6 +89,98 @@ func TestPerfReaderLostSample(t *testing.T) {
 	}
 }
 
+func TestPerfReaderClose(t *testing.T) {
+	coll, err := LoadCollection("testdata/perf_output.elf")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer coll.Close()
+
+	rd, err := NewPerfReader(PerfReaderOptions{
+		Map:          coll.DetachMap("events"),
+		PerCPUBuffer: 4096,
+		Watermark:    1,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rd.Close()
+
+	prog := coll.DetachProgram("output_single")
+	defer prog.Close()
+
+	// more samples than the channel capacity
+	for i := 0; i < cap(rd.Samples)*2; i++ {
+		ret, _, err := prog.Test(make([]byte, 14))
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if errno := syscall.Errno(-int32(ret)); errno != 0 {
+			t.Fatal("Expected 0 as return value, got", errno)
+		}
+	}
+
+	// Close shouldn't block on us not reading
+	rd.Close()
+
+	// And we should be able to call it multiple times
+	rd.Close()
+}
+
+func TestPerfReaderFlushAndClose(t *testing.T) {
+	coll, err := LoadCollection("testdata/perf_output.elf")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer coll.Close()
+
+	rd, err := NewPerfReader(PerfReaderOptions{
+		Map:          coll.DetachMap("events"),
+		PerCPUBuffer: 4096,
+		Watermark:    1,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rd.Close()
+
+	prog := coll.DetachProgram("output_single")
+	defer prog.Close()
+
+	// more samples than the channel capacity
+	numSamples := cap(rd.Samples)*2
+	for i := 0; i < numSamples; i++ {
+		ret, _, err := prog.Test(make([]byte, 14))
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if errno := syscall.Errno(-int32(ret)); errno != 0 {
+			t.Fatal("Expected 0 as return value, got", errno)
+		}
+	}
+
+	done := make(chan struct{})
+	go func(){
+		rd.FlushAndClose()
+		// Should be able to call this multiple times
+		rd.FlushAndClose()
+		close(done)
+	}()
+
+	received := 0
+	for _ = range rd.Samples {
+		received++
+	}
+
+	if received != numSamples {
+		t.Fatalf("Expected %d samples got %d", numSamples, received)
+	}
+
+	<-done
+}
+
 func TestRingBuffer(t *testing.T) {
 	buf := make([]byte, 2)
 

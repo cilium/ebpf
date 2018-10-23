@@ -178,9 +178,15 @@ type PerfReader struct {
 	// stored in it, so we keep a reference alive.
 	array *Map
 
+	// Eventfds for closing
+	closeFd      int
+	flushCloseFd int
+	// Ensure we only close once
 	closeOnce sync.Once
-	closeFd   int
-	close     chan struct{}
+	// Channel to interrupt polling blocked on writing to consumer
+	stopWriter chan struct{}
+	// Channel closed when poll() is done
+	closed chan struct{}
 
 	// Error receives a write if the reader exits
 	// due to an error.
@@ -253,11 +259,26 @@ func NewPerfReader(opts PerfReaderOptions) (out *PerfReader, err error) {
 	if err != nil {
 		return nil, err
 	}
+	defer func() {
+		if err != nil {
+			syscall.Close(closeFd)
+		}
+	}()
 	fds = append(fds, closeFd)
+
+	flushCloseFd, err := newEventFd()
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		if err != nil {
+			syscall.Close(flushCloseFd)
+		}
+	}()
+	fds = append(fds, flushCloseFd)
 
 	epollFd, err := newEpollFd(fds...)
 	if err != nil {
-		syscall.Close(closeFd)
 		return nil, err
 	}
 
@@ -265,15 +286,18 @@ func NewPerfReader(opts PerfReaderOptions) (out *PerfReader, err error) {
 	errs := make(chan error, 1)
 
 	out = &PerfReader{
-		array:   opts.Map,
-		closeFd: closeFd,
-		close:   make(chan struct{}),
-		Error:   errs,
-		Samples: samples,
+		array:        opts.Map,
+		closeFd:      closeFd,
+		flushCloseFd: flushCloseFd,
+		stopWriter:   make(chan struct{}),
+		closed:       make(chan struct{}),
+		Error:        errs,
+		Samples:      samples,
 	}
 	runtime.SetFinalizer(out, (*PerfReader).Close)
 
 	go out.poll(epollFd, rings, samples, errs)
+
 	return out, nil
 }
 
@@ -283,33 +307,58 @@ func (pr *PerfReader) LostSamples() uint64 {
 	return atomic.LoadUint64(&pr.lostSamples)
 }
 
-// Close stops the reader.
+// Close stops the reader, discarding any samples not yet written to 'Samples'.
 //
 // Calls to perf_event_output from eBPF programs will return
 // ENOENT after calling this method.
 func (pr *PerfReader) Close() (err error) {
+	return pr.close(false)
+}
+
+// FlushAndClose stops the reader, flushing any samples to 'Samples'.
+// Will block if no consumer reads from 'Samples'.
+//
+// Calls to perf_event_output from eBPF programs will return
+// ENOENT after calling this method.
+func (pr *PerfReader) FlushAndClose() error {
+	return pr.close(true)
+}
+
+func (pr *PerfReader) close(flush bool) error {
 	pr.closeOnce.Do(func() {
 		runtime.SetFinalizer(pr, nil)
 
-		// Indicate that we want to shut down
-		close(pr.close)
-		pr.array.Close()
+		// Interrupt polling so we don't deadlock if the consumer is dead
+		if !flush {
+			close(pr.stopWriter)
+		}
 
 		// Signal poll() via the event fd. Ignore the
 		// write error since poll() may have exited
 		// and closed the fd already
 		var value [8]byte
 		nativeEndian.PutUint64(value[:], 1)
-		_, _ = syscall.Write(pr.closeFd, value[:])
+		if flush {
+			_, _ = syscall.Write(pr.flushCloseFd, value[:])
+		} else {
+			_, _ = syscall.Write(pr.closeFd, value[:])
+		}
 	})
+
+	// Wait until poll is done
+	<-pr.closed
 
 	return nil
 }
 
 func (pr *PerfReader) poll(epollFd int, rings map[int]*perfEventRing, samples chan<- *PerfSample, errs chan<- error) {
+	// last as it means we're done
+	defer close(pr.closed)
 	defer close(samples)
+	defer pr.array.Close()
 	defer syscall.Close(epollFd)
 	defer syscall.Close(pr.closeFd)
+	defer syscall.Close(pr.flushCloseFd)
 	defer func() {
 		for _, ring := range rings {
 			ring.Close()
@@ -334,6 +383,18 @@ func (pr *PerfReader) poll(epollFd int, rings map[int]*perfEventRing, samples ch
 			fd := int(event.Fd)
 			if fd == pr.closeFd {
 				// We were woken by Close via the close fd
+				return
+			}
+
+			if fd == pr.flushCloseFd {
+				for _, ring := range rings {
+					err := pr.flushRing(ring, samples)
+					if err != nil {
+						errs <- err
+						return
+					}
+				}
+
 				return
 			}
 
@@ -369,7 +430,7 @@ func (pr *PerfReader) flushRing(ring *perfEventRing, samples chan<- *PerfSample)
 
 		select {
 		case samples <- sample:
-		case <-pr.close:
+		case <-pr.stopWriter:
 			break
 		}
 	}

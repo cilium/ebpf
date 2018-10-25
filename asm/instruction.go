@@ -244,17 +244,24 @@ func (insns Instructions) Marshal(w io.Writer, bo binary.ByteOrder) error {
 		case isLoadImmDW:
 			// Encode least significant 32bit first for 64bit operations.
 			cons = int32(uint32(ins.Constant))
-		case ins.OpCode.Class() == JumpClass && (ins.Constant == -1 || ins.Offset == -1):
+
+		case ins.OpCode.JumpOp() == Call && ins.Constant == -1:
+			// Rewrite bpf to bpf call
 			offset, ok := absoluteOffsets[ins.Reference]
 			if !ok {
 				return errors.Errorf("instruction %d: reference to missing symbol %s", i, ins.Reference)
 			}
 
-			if ins.OpCode.JumpOp() == Call {
-				cons = int32(offset - num - 1)
-			} else {
-				ins.Offset = int16(offset - num - 1)
+			cons = int32(offset - num - 1)
+
+		case ins.OpCode.Class() == JumpClass && ins.Offset == -1:
+			// Rewrite jump to label
+			offset, ok := absoluteOffsets[ins.Reference]
+			if !ok {
+				return errors.Errorf("instruction %d: reference to missing symbol %s", i, ins.Reference)
 			}
+
+			ins.Offset = int16(offset - num - 1)
 		}
 
 		bpfi := bpfInstruction{

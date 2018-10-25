@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
+	"io/ioutil"
 	"math"
 	"testing"
 )
@@ -43,6 +44,19 @@ func TestWrite64bitImmediate(t *testing.T) {
 
 	if prog := buf.Bytes(); !bytes.Equal(prog, test64bitImmProg) {
 		t.Errorf("Marshalled program does not match:\n%s", hex.Dump(prog))
+	}
+}
+
+func TestSignedJump(t *testing.T) {
+	insns := Instructions{
+		JSGT.Imm(R0, -1, "foo"),
+	}
+
+	insns[0].Offset = 1
+
+	err := insns.Marshal(ioutil.Discard, binary.LittleEndian)
+	if err != nil {
+		t.Error("Can't marshal signed jump:", err)
 	}
 }
 

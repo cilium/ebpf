@@ -314,6 +314,14 @@ type symtab struct {
 func newSymtab(symbols []elf.Symbol) *symtab {
 	index := make(map[int]map[uint64]*elf.Symbol)
 	for i, sym := range symbols {
+		if elf.ST_TYPE(sym.Info) != elf.STT_NOTYPE {
+			continue
+		}
+
+		if sym.Name == "" {
+			continue
+		}
+
 		idx := int(sym.Section)
 		if _, ok := index[idx]; !ok {
 			index[idx] = make(map[uint64]*elf.Symbol)

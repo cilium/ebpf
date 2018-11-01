@@ -11,6 +11,6 @@ clean:
 	$(LLC) -march=bpf -filetype=obj -o $@ $<
 
 %.o : %.c
-	$(CLANG) -target bpf -O2 -emit-llvm \
+	$(CLANG) -target bpf -O2 -emit-llvm -g \
 		-Wall -Werror \
 		-c $< -o $@

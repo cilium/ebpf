@@ -10,6 +10,11 @@ import (
 	"golang.org/x/sys/unix"
 )
 
+const (
+	bpfObjNameLen = 16
+	bpfTagSize    = 8
+)
+
 type mapCreateAttr struct {
 	mapType                               MapType
 	keySize, valueSize, maxEntries, flags uint32
@@ -39,28 +44,34 @@ type pinObjAttr struct {
 	padding  uint32
 }
 
-type progCreateAttr struct {
-	progType      ProgType
-	insCount      uint32
-	instructions  syscallPtr
-	license       syscallPtr
-	logLevel      uint32
-	logSize       uint32
-	logBuf        syscallPtr
-	kernelVersion uint32
-	padding       uint32
+type progLoadAttr struct {
+	progType           ProgType
+	insCount           uint32
+	instructions       syscallPtr
+	license            syscallPtr
+	logLevel           uint32
+	logSize            uint32
+	logBuf             syscallPtr
+	kernelVersion      uint32              // since 4.1  2541517c32be
+	progFlags          uint32              // since 4.11 e07b98d9bffe
+	progName           [bpfObjNameLen]byte // since 4.15 067cae47771c
+	progIfIndex        uint32              // since 4.15 1f6f4cb7ba21
+	expectedAttachType uint32              // since 4.17 5e43f899b03a
 }
 
-const bpfTagSize = 8
-
 type progInfo struct {
-	progType  uint32
-	id        uint32
-	tag       [bpfTagSize]byte
-	jitedLen  uint32
-	xlatedLen uint32
-	jited     syscallPtr
-	xlated    syscallPtr
+	progType     uint32
+	id           uint32
+	tag          [bpfTagSize]byte
+	jitedLen     uint32
+	xlatedLen    uint32
+	jited        syscallPtr
+	xlated       syscallPtr
+	loadTime     uint64 // since 4.15 cb4d2b3f03d8
+	createdByUID uint32
+	nrMapIDs     uint32
+	mapIds       syscallPtr
+	name         [bpfObjNameLen]byte
 }
 
 type perfEventAttr struct {
@@ -118,6 +129,10 @@ func newPtr(ptr unsafe.Pointer) syscallPtr {
 	return syscallPtr{ptr: ptr}
 }
 
+func progLoad(attr *progLoadAttr) (uintptr, error) {
+	return bpfCall(_ProgLoad, unsafe.Pointer(attr), unsafe.Sizeof(*attr))
+}
+
 const bpfFSType = 0xcafe4a11
 
 func pinObject(fileName string, fd uint32) error {
@@ -151,14 +166,14 @@ func getObjectInfoByFD(fd uint32, info unsafe.Pointer, size uintptr) error {
 		info:    newPtr(info),
 	}
 	_, err := bpfCall(_ObjGetInfoByFD, unsafe.Pointer(&attr), unsafe.Sizeof(attr))
-	return errors.Wrapf(err, "can't get info for object fd %d", fd)
+	return errors.Wrapf(err, "fd %d", fd)
 }
 
 func getMapSpecByFD(fd uint32) (*MapSpec, error) {
 	var info mapInfo
-	err := getObjectInfoByFD(uint32(fd), unsafe.Pointer(&info), unsafe.Sizeof(info))
+	err := getObjectInfoByFD(fd, unsafe.Pointer(&info), unsafe.Sizeof(info))
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "can't get info for map")
 	}
 	return &MapSpec{
 		MapType(info.mapType),
@@ -168,6 +183,12 @@ func getMapSpecByFD(fd uint32) (*MapSpec, error) {
 		info.flags,
 		nil,
 	}, nil
+}
+
+func getProgInfoByFD(fd uint32) (*progInfo, error) {
+	var info progInfo
+	err := getObjectInfoByFD(fd, unsafe.Pointer(&info), unsafe.Sizeof(info))
+	return &info, errors.Wrap(err, "can't get info for program")
 }
 
 func getMapFDByID(id uint32) (uint32, error) {
@@ -197,24 +218,7 @@ func bpfCall(cmd int, attr unsafe.Pointer, size uintptr) (uintptr, error) {
 	runtime.KeepAlive(attr)
 
 	var err error
-	switch errNo {
-	case 0:
-		err = nil
-	case syscall.EPERM:
-		err = &wrappedErrno{syscall.EPERM, "operation not permitted"}
-	case syscall.EINVAL:
-		err = &wrappedErrno{syscall.EINVAL, "invalid argument"}
-	case syscall.ENOMEM:
-		err = &wrappedErrno{syscall.ENOMEM, "out of memory"}
-	case syscall.E2BIG:
-		err = &wrappedErrno{syscall.E2BIG, "max entries exceeded"}
-	case syscall.EFAULT:
-		err = &wrappedErrno{syscall.EFAULT, "bad address"}
-	case syscall.EBADF:
-		err = &wrappedErrno{syscall.EBADF, "not an open file descriptor"}
-	case syscall.EACCES:
-		err = &wrappedErrno{syscall.EACCES, "bpf program rejected as unsafe"}
-	default:
+	if errNo != 0 {
 		err = errNo
 	}
 

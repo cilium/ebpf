@@ -154,7 +154,13 @@ func (ec *elfCode) loadPrograms(progSections, relSections map[int]*elf.Section, 
 			// labels they contain later on, and then link sections that way.
 			libs = append(libs, insns)
 		} else {
+			name := funcSym.Name
+			if len(name) > bpfObjNameLen-1 {
+				name = name[:bpfObjNameLen-1]
+			}
+
 			progs[funcSym.Name] = &ProgramSpec{
+				Name:          name,
 				Type:          progType,
 				License:       license,
 				KernelVersion: version,

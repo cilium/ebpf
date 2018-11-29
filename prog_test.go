@@ -40,7 +40,7 @@ func TestProgramRun(t *testing.T) {
 
 	t.Log(ins)
 
-	prog, err := NewProgram(&ProgramSpec{XDP, ins, "MIT", 0})
+	prog, err := NewProgram(&ProgramSpec{"test", XDP, ins, "MIT", 0})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -111,5 +111,43 @@ func TestProgramVerifierOutput(t *testing.T) {
 
 	if strings.Index(err.Error(), "exit") == -1 {
 		t.Error("No verifier output in error message")
+	}
+}
+
+func TestProgramName(t *testing.T) {
+	prog, err := NewProgram(&ProgramSpec{
+		Name: "test",
+		Type: SocketFilter,
+		Instructions: asm.Instructions{
+			asm.LoadImm(asm.R0, 0, asm.DWord),
+			asm.Return(),
+		},
+		License: "MIT",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer prog.Close()
+
+	info, err := getProgInfoByFD(prog.fd)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if name := convertCString(info.name[:]); name != "test" {
+		t.Errorf("Name is not test, got '%s'", name)
+	}
+
+	for name, valid := range map[string]bool{
+		"test":                         true,
+		"":                             true,
+		"a-b":                          false,
+		"yeah so":                      false,
+		"more_than_16_characters_long": false,
+	} {
+		err := checkName(name)
+		if result := err == nil; result != valid {
+			t.Errorf("Name '%s' classified incorrectly", name)
+		}
 	}
 }

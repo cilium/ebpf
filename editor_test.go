@@ -102,7 +102,7 @@ func TestEditorIssue59(t *testing.T) {
 		Instructions: insns,
 	})
 	if err != nil {
-		panic(err)
+		t.Fatal(err)
 	}
 
 	ret, _, err := prog.Test(make([]byte, 14))

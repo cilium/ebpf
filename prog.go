@@ -4,7 +4,9 @@ import (
 	"bytes"
 	"fmt"
 	"math"
+	"path/filepath"
 	"runtime"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -33,6 +35,9 @@ const DefaultVerifierLogSize = 64 * 1024
 
 // ProgramSpec defines a Program
 type ProgramSpec struct {
+	// Name is passed to the kernel as a debug aid. Must only contain
+	// alpha numeric and '_' characters and be less than 16 characters.
+	Name          string
 	Type          ProgType
 	Instructions  asm.Instructions
 	License       string
@@ -42,34 +47,58 @@ type ProgramSpec struct {
 // Program represents a Program file descriptor
 type Program struct {
 	fd       uint32
+	name     string
 	progType ProgType
 }
 
+var (
+	detectHaveProgName sync.Once
+	haveProgName       bool
+)
+
 // NewProgram creates a new Program.
+//
+// Loading a program for the first time will perform
+// feature detection by loading small, temporary programs.
 func NewProgram(spec *ProgramSpec) (*Program, error) {
 	if len(spec.Instructions) == 0 {
-		return nil, fmt.Errorf("instructions cannot be empty")
+		return nil, errors.Errorf("instructions cannot be empty")
 	}
-	buf := bytes.NewBuffer(make([]byte, 0, len(spec.Instructions)*asm.InstructionSize))
-	err := spec.Instructions.Marshal(buf, nativeEndian)
+
+	detectHaveProgName.Do(func() {
+		attr, err := convertProgramSpec(&ProgramSpec{
+			Name: "feature_test",
+			Type: SocketFilter,
+			Instructions: asm.Instructions{
+				asm.LoadImm(asm.R0, 0, asm.DWord),
+				asm.Return(),
+			},
+			License: "MIT",
+		}, true)
+		if err != nil {
+			return
+		}
+
+		fd, err := progLoad(attr)
+		if err != nil {
+			// This may be because we lack sufficient permissions, etc.
+			return
+		}
+
+		syscall.Close(int(fd))
+		haveProgName = true
+	})
+
+	attr, err := convertProgramSpec(spec, haveProgName)
 	if err != nil {
 		return nil, err
 	}
 
-	bytecode := buf.Bytes()
-	insCount := uint32(len(bytecode) / asm.InstructionSize)
-	lic := []byte(spec.License)
-	attr := progCreateAttr{
-		progType:     spec.Type,
-		insCount:     insCount,
-		instructions: newPtr(unsafe.Pointer(&bytecode[0])),
-		license:      newPtr(unsafe.Pointer(&lic[0])),
-	}
-
-	fd, err := bpfCall(_ProgLoad, unsafe.Pointer(&attr), unsafe.Sizeof(attr))
+	fd, err := progLoad(attr)
 	if err == nil {
 		prog := &Program{
 			uint32(fd),
+			spec.Name,
 			spec.Type,
 		}
 		runtime.SetFinalizer(prog, (*Program).Close)
@@ -82,15 +111,46 @@ func NewProgram(spec *ProgramSpec) (*Program, error) {
 	attr.logSize = uint32(len(logs))
 	attr.logBuf = newPtr(unsafe.Pointer(&logs[0]))
 
-	_, nerr := bpfCall(_ProgLoad, unsafe.Pointer(&attr), unsafe.Sizeof(attr))
+	_, nerr := progLoad(attr)
 	if errors.Cause(nerr) == syscall.ENOSPC {
 		return nil, errors.Wrap(err, "no debug since LogSize too small")
 	}
-	return nil, &loadError{nerr, string(logs)}
+	return nil, &loadError{nerr, convertCString(logs)}
+}
+
+func convertProgramSpec(spec *ProgramSpec, includeName bool) (*progLoadAttr, error) {
+	buf := bytes.NewBuffer(make([]byte, 0, len(spec.Instructions)*asm.InstructionSize))
+	err := spec.Instructions.Marshal(buf, nativeEndian)
+	if err != nil {
+		return nil, err
+	}
+
+	bytecode := buf.Bytes()
+	insCount := uint32(len(bytecode) / asm.InstructionSize)
+	lic := []byte(spec.License)
+	attr := &progLoadAttr{
+		progType:     spec.Type,
+		insCount:     insCount,
+		instructions: newPtr(unsafe.Pointer(&bytecode[0])),
+		license:      newPtr(unsafe.Pointer(&lic[0])),
+	}
+
+	if err := checkName(spec.Name); err != nil {
+		return nil, err
+	}
+
+	if includeName {
+		copy(attr.progName[:bpfObjNameLen-1], spec.Name)
+	}
+
+	return attr, nil
 }
 
 func (bpf *Program) String() string {
-	return fmt.Sprintf("%s(%d)", bpf.progType, bpf.fd)
+	if bpf.name != "" {
+		return fmt.Sprintf("%s(%s)#%d", bpf.progType, bpf.name, bpf.fd)
+	}
+	return fmt.Sprintf("%s#%d", bpf.progType, bpf.fd)
 }
 
 // FD gets the file descriptor value of the Program
@@ -222,13 +282,13 @@ func LoadPinnedProgram(fileName string) (*Program, error) {
 	if err != nil {
 		return nil, err
 	}
-	var info progInfo
-	err = getObjectInfoByFD(uint32(fd), unsafe.Pointer(&info), unsafe.Sizeof(info))
+	info, err := getProgInfoByFD(fd)
 	if err != nil {
 		return nil, fmt.Errorf("ebpf: can't retrieve program info: %s", err.Error())
 	}
 	return &Program{
 		uint32(fd),
+		filepath.Base(fileName),
 		ProgType(info.progType),
 	}, nil
 }
@@ -241,6 +301,7 @@ func LoadPinnedProgramExplicit(fileName string, typ ProgType) (*Program, error) 
 	}
 	return &Program{
 		uint32(fd),
+		filepath.Base(fileName),
 		typ,
 	}, nil
 }
@@ -251,9 +312,44 @@ type loadError struct {
 }
 
 func (le *loadError) Error() string {
-	return fmt.Sprintf("%s: %s", le.cause, le.verifierLog)
+	if le.verifierLog == "" {
+		return fmt.Sprintf("failed to load program: %s", le.cause)
+	}
+	return fmt.Sprintf("failed to load program: %s: %s", le.cause, le.verifierLog)
 }
 
 func (le *loadError) Cause() error {
 	return le.cause
+}
+
+func convertCString(in []byte) string {
+	inLen := bytes.IndexByte(in, 0)
+	return string(in[:inLen])
+}
+
+func checkName(name string) error {
+	if len(name) > bpfObjNameLen-1 {
+		return errors.Errorf("name '%s' is too long", name)
+	}
+
+	idx := strings.IndexFunc(name, func(char rune) bool {
+		switch {
+		case char >= 'A' && char <= 'Z':
+			fallthrough
+		case char >= 'a' && char <= 'z':
+			fallthrough
+		case char >= '0' && char <= '9':
+			fallthrough
+		case char == '_':
+			return false
+		default:
+			return true
+		}
+	})
+
+	if idx != -1 {
+		return errors.Errorf("invalid character '%c' in name '%s'", name[idx], name)
+	}
+
+	return nil
 }

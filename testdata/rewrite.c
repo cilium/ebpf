@@ -16,13 +16,13 @@ struct map map_val __section("maps") = {
 
 #define LOAD_CONSTANT(param, var) asm("%0 = " param " ll" : "=r"(var))
 
-__section("xdp") int rewrite() {
+__section("socket") int rewrite() {
 	unsigned long acc = 0;
 	LOAD_CONSTANT(CONSTANT, acc);
 	return acc;
 }
 
-__section("xdp/map") int rewrite_map() {
+__section("socket/map") int rewrite_map() {
 	unsigned int key = 0;
 	unsigned int *value = map_lookup_elem(&map_val, &key);
 	if (!value) {

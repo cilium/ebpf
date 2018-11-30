@@ -62,7 +62,7 @@ func TestProgramRun(t *testing.T) {
 
 func TestProgramPin(t *testing.T) {
 	prog, err := NewProgram(&ProgramSpec{
-		Type: XDP,
+		Type: SocketFilter,
 		Instructions: asm.Instructions{
 			asm.LoadImm(asm.R0, 0, asm.DWord),
 			asm.Return(),
@@ -92,14 +92,14 @@ func TestProgramPin(t *testing.T) {
 	}
 	defer prog.Close()
 
-	if prog.progType != XDP {
+	if prog.progType != SocketFilter {
 		t.Error("Expected pinned program to have type XDP, but got", prog.progType)
 	}
 }
 
 func TestProgramVerifierOutput(t *testing.T) {
 	_, err := NewProgram(&ProgramSpec{
-		Type: XDP,
+		Type: SocketFilter,
 		Instructions: asm.Instructions{
 			asm.Return(),
 		},

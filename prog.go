@@ -213,7 +213,7 @@ func (bpf *Program) testRun(in []byte, repeat int) (uint32, []byte, time.Duratio
 
 	detectProgTestRun.Do(func() {
 		prog, err := NewProgram(&ProgramSpec{
-			Type: XDP,
+			Type: SocketFilter,
 			Instructions: asm.Instructions{
 				asm.LoadImm(asm.R0, 0, asm.DWord),
 				asm.Return(),
@@ -234,7 +234,7 @@ func (bpf *Program) testRun(in []byte, repeat int) (uint32, []byte, time.Duratio
 			dataIn:     newPtr(unsafe.Pointer(&in[0])),
 		}
 		_, err = bpfCall(_ProgTestRun, unsafe.Pointer(&attr), unsafe.Sizeof(attr))
-		noProgTestRun = err != nil
+		noProgTestRun = errors.Cause(err) == syscall.EINVAL
 	})
 
 	if noProgTestRun {
@@ -259,7 +259,7 @@ func (bpf *Program) testRun(in []byte, repeat int) (uint32, []byte, time.Duratio
 
 	_, err := bpfCall(_ProgTestRun, unsafe.Pointer(&attr), unsafe.Sizeof(attr))
 	if err != nil {
-		return 0, nil, 0, err
+		return 0, nil, 0, errors.Wrap(err, "can't run test")
 	}
 
 	if int(attr.dataSizeOut) > cap(out) {

@@ -46,9 +46,9 @@ type ProgramSpec struct {
 
 // Program represents a Program file descriptor
 type Program struct {
-	fd       uint32
-	name     string
-	progType ProgType
+	fd   uint32
+	name string
+	abi  ProgramABI
 }
 
 var (
@@ -99,7 +99,7 @@ func NewProgram(spec *ProgramSpec) (*Program, error) {
 		prog := &Program{
 			uint32(fd),
 			spec.Name,
-			spec.Type,
+			ProgramABI{spec.Type},
 		}
 		runtime.SetFinalizer(prog, (*Program).Close)
 		return prog, nil
@@ -148,9 +148,9 @@ func convertProgramSpec(spec *ProgramSpec, includeName bool) (*progLoadAttr, err
 
 func (bpf *Program) String() string {
 	if bpf.name != "" {
-		return fmt.Sprintf("%s(%s)#%d", bpf.progType, bpf.name, bpf.fd)
+		return fmt.Sprintf("%s(%s)#%d", bpf.abi.Type, bpf.name, bpf.fd)
 	}
-	return fmt.Sprintf("%s#%d", bpf.progType, bpf.fd)
+	return fmt.Sprintf("%s#%d", bpf.abi.Type, bpf.fd)
 }
 
 // FD gets the file descriptor value of the Program
@@ -282,19 +282,19 @@ func LoadPinnedProgram(fileName string) (*Program, error) {
 	if err != nil {
 		return nil, err
 	}
-	info, err := getProgInfoByFD(fd)
+	abi, err := newProgramABIFromFd(fd)
 	if err != nil {
-		return nil, fmt.Errorf("ebpf: can't retrieve program info: %s", err.Error())
+		return nil, err
 	}
 	return &Program{
 		uint32(fd),
 		filepath.Base(fileName),
-		ProgType(info.progType),
+		*abi,
 	}, nil
 }
 
 // LoadPinnedProgramExplicit loads a program with explicit parameters.
-func LoadPinnedProgramExplicit(fileName string, typ ProgType) (*Program, error) {
+func LoadPinnedProgramExplicit(fileName string, abi *ProgramABI) (*Program, error) {
 	fd, err := getObject(fileName)
 	if err != nil {
 		return nil, err
@@ -302,7 +302,7 @@ func LoadPinnedProgramExplicit(fileName string, typ ProgType) (*Program, error) 
 	return &Program{
 		uint32(fd),
 		filepath.Base(fileName),
-		typ,
+		*abi,
 	}, nil
 }
 

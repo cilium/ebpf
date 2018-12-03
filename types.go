@@ -8,8 +8,9 @@ type MapType uint32
 
 // All the various map types that can be created
 const (
+	UnspecifiedMap MapType = iota
 	// Hash is a hash map
-	Hash MapType = 1 + iota
+	Hash
 	// Array is an array map
 	Array
 	// ProgramArray - A program array map is a special kind of array map whose map

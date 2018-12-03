@@ -92,8 +92,8 @@ func TestProgramPin(t *testing.T) {
 	}
 	defer prog.Close()
 
-	if prog.progType != SocketFilter {
-		t.Error("Expected pinned program to have type XDP, but got", prog.progType)
+	if prog.abi.Type != SocketFilter {
+		t.Error("Expected pinned program to have type SocketFilter, but got", prog.abi.Type)
 	}
 }
 

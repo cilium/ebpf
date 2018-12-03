@@ -4,14 +4,13 @@ package ebpf
 
 import "strconv"
 
-const _MapType_name = "HashArrayProgramArrayPerfEventArrayPerCPUHashPerCPUArrayStackTraceCGroupArrayLRUHashLRUCPUHashLPMTrieArrayOfMapsHashOfMaps"
+const _MapType_name = "UnspecifiedMapHashArrayProgramArrayPerfEventArrayPerCPUHashPerCPUArrayStackTraceCGroupArrayLRUHashLRUCPUHashLPMTrieArrayOfMapsHashOfMaps"
 
-var _MapType_index = [...]uint8{0, 4, 9, 21, 35, 45, 56, 66, 77, 84, 94, 101, 112, 122}
+var _MapType_index = [...]uint8{0, 14, 18, 23, 35, 49, 59, 70, 80, 91, 98, 108, 115, 126, 136}
 
 func (i MapType) String() string {
-	i -= 1
 	if i >= MapType(len(_MapType_index)-1) {
-		return "MapType(" + strconv.FormatInt(int64(i+1), 10) + ")"
+		return "MapType(" + strconv.FormatInt(int64(i), 10) + ")"
 	}
 	return _MapType_name[_MapType_index[i]:_MapType_index[i+1]]
 }

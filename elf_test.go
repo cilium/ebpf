@@ -38,12 +38,14 @@ func TestLoadCollectionSpec(t *testing.T) {
 	})
 
 	checkProgramSpec(t, spec.Programs, "xdp_prog", &ProgramSpec{
-		Type:    XDP,
-		License: "MIT",
+		Type:          XDP,
+		License:       "MIT",
+		KernelVersion: 0,
 	})
 	checkProgramSpec(t, spec.Programs, "no_relocation", &ProgramSpec{
-		Type:    SocketFilter,
-		License: "MIT",
+		Type:          SocketFilter,
+		License:       "MIT",
+		KernelVersion: 0,
 	})
 
 	t.Log(spec.Programs["xdp_prog"].Instructions)

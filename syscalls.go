@@ -169,26 +169,16 @@ func getObjectInfoByFD(fd uint32, info unsafe.Pointer, size uintptr) error {
 	return errors.Wrapf(err, "fd %d", fd)
 }
 
-func getMapSpecByFD(fd uint32) (*MapSpec, error) {
-	var info mapInfo
-	err := getObjectInfoByFD(fd, unsafe.Pointer(&info), unsafe.Sizeof(info))
-	if err != nil {
-		return nil, errors.Wrap(err, "can't get info for map")
-	}
-	return &MapSpec{
-		MapType(info.mapType),
-		info.keySize,
-		info.valueSize,
-		info.maxEntries,
-		info.flags,
-		nil,
-	}, nil
-}
-
 func getProgInfoByFD(fd uint32) (*progInfo, error) {
 	var info progInfo
-	err := getObjectInfoByFD(fd, unsafe.Pointer(&info), unsafe.Sizeof(info))
-	return &info, errors.Wrap(err, "can't get info for program")
+	err := getObjectInfoByFD(uint32(fd), unsafe.Pointer(&info), unsafe.Sizeof(info))
+	return &info, errors.Wrap(err, "can't get program info")
+}
+
+func getMapInfoByFD(fd uint32) (*mapInfo, error) {
+	var info mapInfo
+	err := getObjectInfoByFD(uint32(fd), unsafe.Pointer(&info), unsafe.Sizeof(info))
+	return &info, errors.Wrap(err, "can't get map info:")
 }
 
 func getMapFDByID(id uint32) (uint32, error) {

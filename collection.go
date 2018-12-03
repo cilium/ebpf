@@ -37,25 +37,23 @@ type Collection struct {
 // Only maps referenced by at least one of the programs are initialized.
 func NewCollection(spec *CollectionSpec) (*Collection, error) {
 	maps := make(map[string]*Map)
+	for mapName, mapSpec := range spec.Maps {
+		m, err := NewMap(mapSpec)
+		if err != nil {
+			return nil, errors.Wrapf(err, "map %s", mapName)
+		}
+		maps[mapName] = m
+	}
+
 	progs := make(map[string]*Program)
 	for progName, progSpec := range spec.Programs {
 		editor := Edit(&progSpec.Instructions)
 
 		// Rewrite any Symbol which is a valid Map.
 		for sym := range editor.ReferenceOffsets {
-			mapSpec, ok := spec.Maps[sym]
+			m, ok := maps[sym]
 			if !ok {
 				continue
-			}
-
-			m := maps[sym]
-			if m == nil {
-				var err error
-				m, err = NewMap(mapSpec)
-				if err != nil {
-					return nil, errors.Wrapf(err, "map %s", sym)
-				}
-				maps[sym] = m
 			}
 
 			if err := editor.RewriteMap(sym, m); err != nil {
@@ -69,6 +67,7 @@ func NewCollection(spec *CollectionSpec) (*Collection, error) {
 		}
 		progs[progName] = prog
 	}
+
 	return &Collection{
 		progs,
 		maps,
@@ -183,7 +182,7 @@ func LoadPinnedCollection(dirName string) (*Collection, error) {
 }
 
 // LoadPinnedCollectionExplicit loads a Collection from the pinned directory with explicit parameters.
-func LoadPinnedCollectionExplicit(dirName string, maps map[string]*MapSpec, progs map[string]ProgType) (*Collection, error) {
+func LoadPinnedCollectionExplicit(dirName string, maps map[string]*MapABI, progs map[string]*ProgramABI) (*Collection, error) {
 	return loadCollection(
 		dirName,
 		func(name string, path string) (*Map, error) {

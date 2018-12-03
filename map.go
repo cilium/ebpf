@@ -31,8 +31,8 @@ func (ms *MapSpec) String() string {
 //
 // Implement Marshaler on the arguments if you need custom encoding.
 type Map struct {
-	fd   uint32
-	meta MapSpec
+	fd  uint32
+	abi MapABI
 	// Per CPU maps return values larger than the size in the spec
 	fullValueSize int
 }
@@ -107,18 +107,18 @@ func createMap(spec *MapSpec, inner uint32) (*Map, error) {
 		return nil, errors.Wrap(err, "map create")
 	}
 
-	return newMap(uint32(fd), &cpy)
+	return newMap(uint32(fd), newMapABIFromSpec(&cpy))
 }
 
-func newMap(fd uint32, spec *MapSpec) (*Map, error) {
+func newMap(fd uint32, abi *MapABI) (*Map, error) {
 	m := &Map{
 		uint32(fd),
-		*spec,
-		int(spec.ValueSize),
+		*abi,
+		int(abi.ValueSize),
 	}
 	runtime.SetFinalizer(m, (*Map).Close)
 
-	if !spec.Type.hasPerCPUValue() {
+	if !abi.Type.hasPerCPUValue() {
 		return m, nil
 	}
 
@@ -127,12 +127,12 @@ func newMap(fd uint32, spec *MapSpec) (*Map, error) {
 		return nil, err
 	}
 
-	m.fullValueSize = align(int(spec.ValueSize), 8) * possibleCPUs
+	m.fullValueSize = align(int(abi.ValueSize), 8) * possibleCPUs
 	return m, nil
 }
 
 func (m *Map) String() string {
-	return fmt.Sprintf("%s#%d", m.meta.Type, m.fd)
+	return fmt.Sprintf("%s#%d", m.abi.Type, m.fd)
 }
 
 // Get gets a value from a Map
@@ -145,8 +145,8 @@ func (m *Map) Get(key, valueOut interface{}) (bool, error) {
 		return false, nil
 	}
 
-	if m.meta.Type.hasPerCPUValue() {
-		return true, unmarshalPerCPUValue(valueOut, int(m.meta.ValueSize), valueBytes)
+	if m.abi.Type.hasPerCPUValue() {
+		return true, unmarshalPerCPUValue(valueOut, int(m.abi.ValueSize), valueBytes)
 	}
 
 	return true, unmarshalBytes(valueOut, valueBytes)
@@ -154,7 +154,7 @@ func (m *Map) Get(key, valueOut interface{}) (bool, error) {
 
 // GetBytes gets a value from Map
 func (m *Map) GetBytes(key interface{}) ([]byte, error) {
-	keyBytes, err := marshalBytes(key, int(m.meta.KeySize))
+	keyBytes, err := marshalBytes(key, int(m.abi.KeySize))
 	if err != nil {
 		return nil, err
 	}
@@ -200,7 +200,7 @@ func (m *Map) Delete(key interface{}) error {
 // DeleteStrict removes a key and returns an error if the
 // key doesn't exist.
 func (m *Map) DeleteStrict(key interface{}) error {
-	keyBytes, err := marshalBytes(key, int(m.meta.KeySize))
+	keyBytes, err := marshalBytes(key, int(m.abi.KeySize))
 	if err != nil {
 		return err
 	}
@@ -238,14 +238,14 @@ func (m *Map) NextKey(key, nextKeyOut interface{}) (bool, error) {
 func (m *Map) NextKeyBytes(key interface{}) ([]byte, error) {
 	var keyPtr syscallPtr
 	if key != nil {
-		keyBytes, err := marshalBytes(key, int(m.meta.KeySize))
+		keyBytes, err := marshalBytes(key, int(m.abi.KeySize))
 		if err != nil {
 			return nil, err
 		}
 		keyPtr = newPtr(unsafe.Pointer(&keyBytes[0]))
 	}
 
-	nextKey := make([]byte, m.meta.KeySize)
+	nextKey := make([]byte, m.abi.KeySize)
 	attr := mapOpAttr{
 		mapFd: m.fd,
 		key:   keyPtr,
@@ -289,40 +289,40 @@ func (m *Map) Pin(fileName string) error {
 
 // LoadPinnedMap load a Map from a BPF file.
 //
-// Requires at least Linux 4.13, use LoadPinnedMapExplicit on
-// earlier versions.
+// Requires at least Linux 4.13, and is not compatible with
+// nested maps. Use LoadPinnedMapExplicit in these situations.
 func LoadPinnedMap(fileName string) (*Map, error) {
 	fd, err := getObject(fileName)
 	if err != nil {
 		return nil, err
 	}
-	spec, err := getMapSpecByFD(fd)
+	abi, err := newMapABIFromFd(fd)
 	if err != nil {
 		return nil, err
 	}
-	return newMap(fd, spec)
+	return newMap(fd, abi)
 }
 
 // LoadPinnedMapExplicit loads a map with explicit parameters.
-func LoadPinnedMapExplicit(fileName string, spec *MapSpec) (*Map, error) {
+func LoadPinnedMapExplicit(fileName string, abi *MapABI) (*Map, error) {
 	fd, err := getObject(fileName)
 	if err != nil {
 		return nil, err
 	}
-	return newMap(fd, spec)
+	return newMap(fd, abi)
 }
 
 func (m *Map) put(key, value interface{}, putType uint64) error {
-	keyBytes, err := marshalBytes(key, int(m.meta.KeySize))
+	keyBytes, err := marshalBytes(key, int(m.abi.KeySize))
 	if err != nil {
 		return err
 	}
 
 	var valueBytes []byte
-	if m.meta.Type.hasPerCPUValue() {
-		valueBytes, err = marshalPerCPUValue(value, int(m.meta.ValueSize))
+	if m.abi.Type.hasPerCPUValue() {
+		valueBytes, err = marshalPerCPUValue(value, int(m.abi.ValueSize))
 	} else {
-		valueBytes, err = marshalBytes(value, int(m.meta.ValueSize))
+		valueBytes, err = marshalBytes(value, int(m.abi.ValueSize))
 	}
 	if err != nil {
 		return err
@@ -353,12 +353,12 @@ func (m *Map) UnmarshalBinary(buf []byte) error {
 	if err != nil {
 		return err
 	}
-	spec, err := getMapSpecByFD(fd)
+	abi, err := newMapABIFromFd(fd)
 	if err != nil {
 		return err
 	}
 
-	nm, err := newMap(fd, spec)
+	nm, err := newMap(fd, abi)
 	if err != nil {
 		return err
 	}

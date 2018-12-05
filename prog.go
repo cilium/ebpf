@@ -241,20 +241,20 @@ func (bpf *Program) testRun(in []byte, repeat int) (uint32, []byte, time.Duratio
 		return 0, nil, 0, ErrNotSupported
 	}
 
-	// There is currently no way to tell the kernel about the size of the output buffer.
+	// Older kernels ignore the dataSizeOut argument when copying to user space.
 	// Combined with things like bpf_xdp_adjust_head() we don't really know what the final
 	// size will be. Hence we allocate an output buffer which we hope will always be large
 	// enough, and panic if the kernel wrote past the end of the allocation.
-	// See https://marc.info/?l=linux-netdev&m=152283265832434&w=2
+	// See https://patchwork.ozlabs.org/cover/1006822/
 	out := make([]byte, len(in)+outputPad)
 
 	attr := progTestRunAttr{
-		fd:         bpf.fd,
-		dataSizeIn: uint32(len(in)),
-		// NB: dataSizeOut is not read by the kernel
-		dataIn:  newPtr(unsafe.Pointer(&in[0])),
-		dataOut: newPtr(unsafe.Pointer(&out[0])),
-		repeat:  uint32(repeat),
+		fd:          bpf.fd,
+		dataSizeIn:  uint32(len(in)),
+		dataSizeOut: uint32(len(out)),
+		dataIn:      newPtr(unsafe.Pointer(&in[0])),
+		dataOut:     newPtr(unsafe.Pointer(&out[0])),
+		repeat:      uint32(repeat),
 	}
 
 	_, err := bpfCall(_ProgTestRun, unsafe.Pointer(&attr), unsafe.Sizeof(attr))

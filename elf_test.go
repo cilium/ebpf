@@ -149,3 +149,11 @@ func checkProgramSpec(t *testing.T, progs map[string]*ProgramSpec, name string, 
 		t.Error("Instructions do not match")
 	}
 }
+
+func TestLoadInvalidMap(t *testing.T) {
+	_, err := LoadCollectionSpec("testdata/invalid_map.elf")
+	t.Log(err)
+	if err == nil {
+		t.Fatal("should be fail")
+	}
+}

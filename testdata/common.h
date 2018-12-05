@@ -20,6 +20,7 @@ struct map {
 	uint32_t max_entries;
 	uint32_t flags;
 	uint32_t inner_map_idx;
+	uint32_t dummy;
 };
 
 static void* (*map_lookup_elem)(const void *map, const void *key) = (void*)1;

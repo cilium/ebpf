@@ -2,7 +2,7 @@ LLVM_PREFIX ?= /usr/bin
 CLANG ?= $(LLVM_PREFIX)/clang
 LLC ?= $(LLVM_PREFIX)/llc
 
-all: loader.elf rewrite.elf perf_output.elf
+all: loader.elf rewrite.elf perf_output.elf invalid_map.elf
 
 clean:
 	-$(RM) *.elf

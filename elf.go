@@ -215,8 +215,14 @@ func (ec *elfCode) loadMaps(mapSections map[int]*elf.Section) (map[string]*MapSp
 				return nil, errors.Errorf("map %v: can't read inner map index", name)
 			}
 
-			if rd.Len() != 0 {
-				return nil, errors.Errorf("map %v: unknown fields in definition", name)
+			for rd.Len() > 0 {
+				b, err := rd.ReadByte()
+				if err != nil {
+					return nil, err
+				}
+				if b != 0 {
+					return nil, errors.Errorf("map %v: unknown and non-zero fields in definition", name)
+				}
 			}
 
 			if spec.Type == ArrayOfMaps || spec.Type == HashOfMaps {

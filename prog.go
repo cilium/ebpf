@@ -7,7 +7,6 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
-	"sync"
 	"syscall"
 	"time"
 	"unsafe"
@@ -51,21 +50,8 @@ type Program struct {
 	abi  ProgramABI
 }
 
-var (
-	detectHaveProgName sync.Once
-	haveProgName       bool
-)
-
-// NewProgram creates a new Program.
-//
-// Loading a program for the first time will perform
-// feature detection by loading small, temporary programs.
-func NewProgram(spec *ProgramSpec) (*Program, error) {
-	if len(spec.Instructions) == 0 {
-		return nil, errors.Errorf("instructions cannot be empty")
-	}
-
-	detectHaveProgName.Do(func() {
+var progName = featureTest{
+	Fn: func() bool {
 		attr, err := convertProgramSpec(&ProgramSpec{
 			Name: "feature_test",
 			Type: SocketFilter,
@@ -76,20 +62,30 @@ func NewProgram(spec *ProgramSpec) (*Program, error) {
 			License: "MIT",
 		}, true)
 		if err != nil {
-			return
+			return false
 		}
 
 		fd, err := progLoad(attr)
 		if err != nil {
 			// This may be because we lack sufficient permissions, etc.
-			return
+			return false
 		}
 
 		syscall.Close(int(fd))
-		haveProgName = true
-	})
+		return true
+	},
+}
 
-	attr, err := convertProgramSpec(spec, haveProgName)
+// NewProgram creates a new Program.
+//
+// Loading a program for the first time will perform
+// feature detection by loading small, temporary programs.
+func NewProgram(spec *ProgramSpec) (*Program, error) {
+	if len(spec.Instructions) == 0 {
+		return nil, errors.Errorf("instructions cannot be empty")
+	}
+
+	attr, err := convertProgramSpec(spec, progName.Result())
 	if err != nil {
 		return nil, err
 	}
@@ -195,8 +191,33 @@ func (bpf *Program) Benchmark(in []byte, repeat int) (uint32, time.Duration, err
 	return ret, total, err
 }
 
-var noProgTestRun bool
-var detectProgTestRun sync.Once
+var noProgTestRun = featureTest{
+	Fn: func() bool {
+		prog, err := NewProgram(&ProgramSpec{
+			Type: SocketFilter,
+			Instructions: asm.Instructions{
+				asm.LoadImm(asm.R0, 0, asm.DWord),
+				asm.Return(),
+			},
+			License: "MIT",
+		})
+		if err != nil {
+			// This may be because we lack sufficient permissions, etc.
+			return false
+		}
+		defer prog.Close()
+
+		// Programs require at least 14 bytes input
+		in := make([]byte, 14)
+		attr := progTestRunAttr{
+			fd:         prog.fd,
+			dataSizeIn: uint32(len(in)),
+			dataIn:     newPtr(unsafe.Pointer(&in[0])),
+		}
+		_, err = bpfCall(_ProgTestRun, unsafe.Pointer(&attr), unsafe.Sizeof(attr))
+		return errors.Cause(err) == syscall.EINVAL
+	},
+}
 
 func (bpf *Program) testRun(in []byte, repeat int) (uint32, []byte, time.Duration, error) {
 	if uint(repeat) > math.MaxUint32 {
@@ -211,33 +232,7 @@ func (bpf *Program) testRun(in []byte, repeat int) (uint32, []byte, time.Duratio
 		return 0, nil, 0, fmt.Errorf("input is too long")
 	}
 
-	detectProgTestRun.Do(func() {
-		prog, err := NewProgram(&ProgramSpec{
-			Type: SocketFilter,
-			Instructions: asm.Instructions{
-				asm.LoadImm(asm.R0, 0, asm.DWord),
-				asm.Return(),
-			},
-			License: "MIT",
-		})
-		if err != nil {
-			// This may be because we lack sufficient permissions, etc.
-			return
-		}
-		defer prog.Close()
-
-		// XDP progs require at least 14 bytes input
-		in := make([]byte, 14)
-		attr := progTestRunAttr{
-			fd:         prog.fd,
-			dataSizeIn: uint32(len(in)),
-			dataIn:     newPtr(unsafe.Pointer(&in[0])),
-		}
-		_, err = bpfCall(_ProgTestRun, unsafe.Pointer(&attr), unsafe.Sizeof(attr))
-		noProgTestRun = errors.Cause(err) == syscall.EINVAL
-	})
-
-	if noProgTestRun {
+	if noProgTestRun.Result() {
 		return 0, nil, 0, ErrNotSupported
 	}
 

@@ -93,7 +93,7 @@ func createMap(spec *MapSpec, inner uint32) (*Map, error) {
 		cpy.MaxEntries = uint32(n)
 	}
 
-	attr := mapCreateAttr{
+	attr := bpfMapCreateAttr{
 		cpy.Type,
 		cpy.KeySize,
 		cpy.ValueSize,
@@ -159,7 +159,7 @@ func (m *Map) GetBytes(key interface{}) ([]byte, error) {
 		return nil, err
 	}
 	valueBytes := make([]byte, m.fullValueSize)
-	attr := mapOpAttr{
+	attr := bpfMapOpAttr{
 		mapFd: m.fd,
 		key:   newPtr(unsafe.Pointer(&keyBytes[0])),
 		value: newPtr(unsafe.Pointer(&valueBytes[0])),
@@ -204,7 +204,7 @@ func (m *Map) DeleteStrict(key interface{}) error {
 	if err != nil {
 		return err
 	}
-	attr := mapOpAttr{
+	attr := bpfMapOpAttr{
 		mapFd: m.fd,
 		key:   newPtr(unsafe.Pointer(&keyBytes[0])),
 	}
@@ -246,7 +246,7 @@ func (m *Map) NextKeyBytes(key interface{}) ([]byte, error) {
 	}
 
 	nextKey := make([]byte, m.abi.KeySize)
-	attr := mapOpAttr{
+	attr := bpfMapOpAttr{
 		mapFd: m.fd,
 		key:   keyPtr,
 		value: newPtr(unsafe.Pointer(&nextKey[0])),
@@ -284,7 +284,7 @@ func (m *Map) FD() int {
 //
 // This requires bpffs to be mounted above fileName. See http://cilium.readthedocs.io/en/doc-1.0/kubernetes/install/#mounting-the-bpf-fs-optional
 func (m *Map) Pin(fileName string) error {
-	return pinObject(fileName, m.fd)
+	return bpfPinObject(fileName, m.fd)
 }
 
 // LoadPinnedMap load a Map from a BPF file.
@@ -292,7 +292,7 @@ func (m *Map) Pin(fileName string) error {
 // Requires at least Linux 4.13, and is not compatible with
 // nested maps. Use LoadPinnedMapExplicit in these situations.
 func LoadPinnedMap(fileName string) (*Map, error) {
-	fd, err := getObject(fileName)
+	fd, err := bpfGetObject(fileName)
 	if err != nil {
 		return nil, err
 	}
@@ -305,7 +305,7 @@ func LoadPinnedMap(fileName string) (*Map, error) {
 
 // LoadPinnedMapExplicit loads a map with explicit parameters.
 func LoadPinnedMapExplicit(fileName string, abi *MapABI) (*Map, error) {
-	fd, err := getObject(fileName)
+	fd, err := bpfGetObject(fileName)
 	if err != nil {
 		return nil, err
 	}
@@ -328,7 +328,7 @@ func (m *Map) put(key, value interface{}, putType uint64) error {
 		return err
 	}
 
-	attr := mapOpAttr{
+	attr := bpfMapOpAttr{
 		mapFd: m.fd,
 		key:   newPtr(unsafe.Pointer(&keyBytes[0])),
 		value: newPtr(unsafe.Pointer(&valueBytes[0])),
@@ -349,7 +349,7 @@ func (m *Map) UnmarshalBinary(buf []byte) error {
 	// Looking up an entry in a nested map or prog array returns an id,
 	// not an fd.
 	id := nativeEndian.Uint32(buf)
-	fd, err := getMapFDByID(id)
+	fd, err := bpfGetMapFDByID(id)
 	if err != nil {
 		return err
 	}

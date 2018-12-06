@@ -15,13 +15,13 @@ const (
 	bpfTagSize    = 8
 )
 
-type mapCreateAttr struct {
+type bpfMapCreateAttr struct {
 	mapType                               MapType
 	keySize, valueSize, maxEntries, flags uint32
 	innerMapFd                            uint32
 }
 
-type mapOpAttr struct {
+type bpfMapOpAttr struct {
 	mapFd   uint32
 	padding uint32
 	key     syscallPtr
@@ -29,7 +29,7 @@ type mapOpAttr struct {
 	flags   uint64
 }
 
-type mapInfo struct {
+type bpfMapInfo struct {
 	mapType    uint32
 	id         uint32
 	keySize    uint32
@@ -38,13 +38,13 @@ type mapInfo struct {
 	flags      uint32
 }
 
-type pinObjAttr struct {
+type bpfPinObjAttr struct {
 	fileName syscallPtr
 	fd       uint32
 	padding  uint32
 }
 
-type progLoadAttr struct {
+type bpfProgLoadAttr struct {
 	progType           ProgType
 	insCount           uint32
 	instructions       syscallPtr
@@ -59,7 +59,7 @@ type progLoadAttr struct {
 	expectedAttachType uint32              // since 4.17 5e43f899b03a
 }
 
-type progInfo struct {
+type bpfProgInfo struct {
 	progType     uint32
 	id           uint32
 	tag          [bpfTagSize]byte
@@ -103,7 +103,7 @@ type perfEventAttr struct {
 	padding uint16
 }
 
-type progTestRunAttr struct {
+type bpfProgTestRunAttr struct {
 	fd          uint32
 	retval      uint32
 	dataSizeIn  uint32
@@ -114,13 +114,13 @@ type progTestRunAttr struct {
 	duration    uint32
 }
 
-type objGetInfoByFDAttr struct {
+type bpfObjGetInfoByFDAttr struct {
 	fd      uint32
 	infoLen uint32
-	info    syscallPtr // May be either mapInfo or progInfo
+	info    syscallPtr // May be either bpfMapInfo or bpfProgInfo
 }
 
-type getFDByIDAttr struct {
+type bpfGetFDByIDAttr struct {
 	id   uint32
 	next uint32
 }
@@ -129,13 +129,13 @@ func newPtr(ptr unsafe.Pointer) syscallPtr {
 	return syscallPtr{ptr: ptr}
 }
 
-func progLoad(attr *progLoadAttr) (uintptr, error) {
+func bpfProgLoad(attr *bpfProgLoadAttr) (uintptr, error) {
 	return bpfCall(_ProgLoad, unsafe.Pointer(attr), unsafe.Sizeof(*attr))
 }
 
 const bpfFSType = 0xcafe4a11
 
-func pinObject(fileName string, fd uint32) error {
+func bpfPinObject(fileName string, fd uint32) error {
 	dirName := filepath.Dir(fileName)
 	var statfs syscall.Statfs_t
 	if err := syscall.Statfs(dirName, &statfs); err != nil {
@@ -144,23 +144,23 @@ func pinObject(fileName string, fd uint32) error {
 	if statfs.Type != bpfFSType {
 		return errors.Errorf("%s is not on a bpf filesystem", fileName)
 	}
-	_, err := bpfCall(_ObjPin, unsafe.Pointer(&pinObjAttr{
+	_, err := bpfCall(_ObjPin, unsafe.Pointer(&bpfPinObjAttr{
 		fileName: newPtr(unsafe.Pointer(&[]byte(fileName)[0])),
 		fd:       fd,
 	}), 16)
 	return err
 }
 
-func getObject(fileName string) (uint32, error) {
-	ptr, err := bpfCall(_ObjGet, unsafe.Pointer(&pinObjAttr{
+func bpfGetObject(fileName string) (uint32, error) {
+	ptr, err := bpfCall(_ObjGet, unsafe.Pointer(&bpfPinObjAttr{
 		fileName: newPtr(unsafe.Pointer(&[]byte(fileName)[0])),
 	}), 16)
 	return uint32(ptr), errors.Wrapf(err, "object %s", fileName)
 }
 
-func getObjectInfoByFD(fd uint32, info unsafe.Pointer, size uintptr) error {
+func bpfGetObjectInfoByFD(fd uint32, info unsafe.Pointer, size uintptr) error {
 	// available from 4.13
-	attr := objGetInfoByFDAttr{
+	attr := bpfObjGetInfoByFDAttr{
 		fd:      fd,
 		infoLen: uint32(size),
 		info:    newPtr(info),
@@ -169,21 +169,21 @@ func getObjectInfoByFD(fd uint32, info unsafe.Pointer, size uintptr) error {
 	return errors.Wrapf(err, "fd %d", fd)
 }
 
-func getProgInfoByFD(fd uint32) (*progInfo, error) {
-	var info progInfo
-	err := getObjectInfoByFD(uint32(fd), unsafe.Pointer(&info), unsafe.Sizeof(info))
+func bpfGetProgInfoByFD(fd uint32) (*bpfProgInfo, error) {
+	var info bpfProgInfo
+	err := bpfGetObjectInfoByFD(uint32(fd), unsafe.Pointer(&info), unsafe.Sizeof(info))
 	return &info, errors.Wrap(err, "can't get program info")
 }
 
-func getMapInfoByFD(fd uint32) (*mapInfo, error) {
-	var info mapInfo
-	err := getObjectInfoByFD(uint32(fd), unsafe.Pointer(&info), unsafe.Sizeof(info))
+func bpfGetMapInfoByFD(fd uint32) (*bpfMapInfo, error) {
+	var info bpfMapInfo
+	err := bpfGetObjectInfoByFD(uint32(fd), unsafe.Pointer(&info), unsafe.Sizeof(info))
 	return &info, errors.Wrap(err, "can't get map info:")
 }
 
-func getMapFDByID(id uint32) (uint32, error) {
+func bpfGetMapFDByID(id uint32) (uint32, error) {
 	// available from 4.13
-	attr := getFDByIDAttr{
+	attr := bpfGetFDByIDAttr{
 		id: id,
 	}
 	ptr, err := bpfCall(_MapGetFDByID, unsafe.Pointer(&attr), unsafe.Sizeof(attr))

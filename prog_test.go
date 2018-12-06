@@ -129,7 +129,7 @@ func TestProgramName(t *testing.T) {
 	}
 	defer prog.Close()
 
-	info, err := getProgInfoByFD(prog.fd)
+	info, err := bpfGetProgInfoByFD(prog.fd)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -65,7 +65,7 @@ var progName = featureTest{
 			return false
 		}
 
-		fd, err := progLoad(attr)
+		fd, err := bpfProgLoad(attr)
 		if err != nil {
 			// This may be because we lack sufficient permissions, etc.
 			return false
@@ -90,7 +90,7 @@ func NewProgram(spec *ProgramSpec) (*Program, error) {
 		return nil, err
 	}
 
-	fd, err := progLoad(attr)
+	fd, err := bpfProgLoad(attr)
 	if err == nil {
 		prog := &Program{
 			uint32(fd),
@@ -107,14 +107,14 @@ func NewProgram(spec *ProgramSpec) (*Program, error) {
 	attr.logSize = uint32(len(logs))
 	attr.logBuf = newPtr(unsafe.Pointer(&logs[0]))
 
-	_, nerr := progLoad(attr)
+	_, nerr := bpfProgLoad(attr)
 	if errors.Cause(nerr) == syscall.ENOSPC {
 		return nil, errors.Wrap(err, "no debug since LogSize too small")
 	}
 	return nil, &loadError{nerr, convertCString(logs)}
 }
 
-func convertProgramSpec(spec *ProgramSpec, includeName bool) (*progLoadAttr, error) {
+func convertProgramSpec(spec *ProgramSpec, includeName bool) (*bpfProgLoadAttr, error) {
 	buf := bytes.NewBuffer(make([]byte, 0, len(spec.Instructions)*asm.InstructionSize))
 	err := spec.Instructions.Marshal(buf, nativeEndian)
 	if err != nil {
@@ -124,7 +124,7 @@ func convertProgramSpec(spec *ProgramSpec, includeName bool) (*progLoadAttr, err
 	bytecode := buf.Bytes()
 	insCount := uint32(len(bytecode) / asm.InstructionSize)
 	lic := []byte(spec.License)
-	attr := &progLoadAttr{
+	attr := &bpfProgLoadAttr{
 		progType:     spec.Type,
 		insCount:     insCount,
 		instructions: newPtr(unsafe.Pointer(&bytecode[0])),
@@ -158,7 +158,7 @@ func (bpf *Program) FD() int {
 //
 // This requires bpffs to be mounted above fileName. See http://cilium.readthedocs.io/en/doc-1.0/kubernetes/install/#mounting-the-bpf-fs-optional
 func (bpf *Program) Pin(fileName string) error {
-	return pinObject(fileName, bpf.fd)
+	return bpfPinObject(fileName, bpf.fd)
 }
 
 // Close unloads the program from the kernel.
@@ -209,7 +209,7 @@ var noProgTestRun = featureTest{
 
 		// Programs require at least 14 bytes input
 		in := make([]byte, 14)
-		attr := progTestRunAttr{
+		attr := bpfProgTestRunAttr{
 			fd:         prog.fd,
 			dataSizeIn: uint32(len(in)),
 			dataIn:     newPtr(unsafe.Pointer(&in[0])),
@@ -243,7 +243,7 @@ func (bpf *Program) testRun(in []byte, repeat int) (uint32, []byte, time.Duratio
 	// See https://patchwork.ozlabs.org/cover/1006822/
 	out := make([]byte, len(in)+outputPad)
 
-	attr := progTestRunAttr{
+	attr := bpfProgTestRunAttr{
 		fd:          bpf.fd,
 		dataSizeIn:  uint32(len(in)),
 		dataSizeOut: uint32(len(out)),
@@ -273,7 +273,7 @@ func (bpf *Program) testRun(in []byte, repeat int) (uint32, []byte, time.Duratio
 // Requires at least Linux 4.13, use LoadPinnedProgramExplicit on
 // earlier versions.
 func LoadPinnedProgram(fileName string) (*Program, error) {
-	fd, err := getObject(fileName)
+	fd, err := bpfGetObject(fileName)
 	if err != nil {
 		return nil, err
 	}
@@ -290,7 +290,7 @@ func LoadPinnedProgram(fileName string) (*Program, error) {
 
 // LoadPinnedProgramExplicit loads a program with explicit parameters.
 func LoadPinnedProgramExplicit(fileName string, abi *ProgramABI) (*Program, error) {
-	fd, err := getObject(fileName)
+	fd, err := bpfGetObject(fileName)
 	if err != nil {
 		return nil, err
 	}

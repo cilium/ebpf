@@ -12,6 +12,7 @@ func TestLoadCollectionSpec(t *testing.T) {
 	}
 
 	hashMapSpec := &MapSpec{
+		"hash_map",
 		Hash,
 		4,
 		2,
@@ -21,10 +22,11 @@ func TestLoadCollectionSpec(t *testing.T) {
 	}
 	checkMapSpec(t, spec.Maps, "hash_map", hashMapSpec)
 	checkMapSpec(t, spec.Maps, "array_of_hash_map", &MapSpec{
-		ArrayOfMaps, 4, 0, 2, 0, hashMapSpec,
+		"hash_map", ArrayOfMaps, 4, 0, 2, 0, hashMapSpec,
 	})
 
 	hashMap2Spec := &MapSpec{
+		"",
 		Hash,
 		4,
 		1,
@@ -34,7 +36,7 @@ func TestLoadCollectionSpec(t *testing.T) {
 	}
 	checkMapSpec(t, spec.Maps, "hash_map2", hashMap2Spec)
 	checkMapSpec(t, spec.Maps, "hash_of_hash_map", &MapSpec{
-		HashOfMaps, 4, 0, 2, 0, hashMap2Spec,
+		"", HashOfMaps, 4, 0, 2, 0, hashMap2Spec,
 	})
 
 	checkProgramSpec(t, spec.Programs, "xdp_prog", &ProgramSpec{

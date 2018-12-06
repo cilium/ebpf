@@ -11,6 +11,9 @@ import (
 
 // MapSpec defines a Map.
 type MapSpec struct {
+	// Name is passed to the kernel as a debug aid. Must only contain
+	// alpha numeric and '_' characters.
+	Name       string
 	Type       MapType
 	KeySize    uint32
 	ValueSize  uint32
@@ -37,7 +40,10 @@ type Map struct {
 	fullValueSize int
 }
 
-// NewMap creates a new Map
+// NewMap creates a new Map.
+//
+// Creating a map for the first time will perform feature detection
+// by creating small, temporary maps.
 func NewMap(spec *MapSpec) (*Map, error) {
 	if spec.Type != ArrayOfMaps && spec.Type != HashOfMaps {
 		return createMap(spec, 0)
@@ -94,15 +100,24 @@ func createMap(spec *MapSpec, inner uint32) (*Map, error) {
 	}
 
 	attr := bpfMapCreateAttr{
-		cpy.Type,
-		cpy.KeySize,
-		cpy.ValueSize,
-		cpy.MaxEntries,
-		cpy.Flags,
-		inner,
+		mapType:    cpy.Type,
+		keySize:    cpy.KeySize,
+		valueSize:  cpy.ValueSize,
+		maxEntries: cpy.MaxEntries,
+		flags:      cpy.Flags,
+		innerMapFd: inner,
 	}
 
-	fd, err := bpfCall(_MapCreate, unsafe.Pointer(&attr), unsafe.Sizeof(attr))
+	name, err := newBPFObjName(spec.Name)
+	if err != nil {
+		return nil, errors.Wrap(err, "map create")
+	}
+
+	if haveObjName.Result() {
+		attr.mapName = name
+	}
+
+	fd, err := bpfMapCreate(&attr)
 	if err != nil {
 		return nil, errors.Wrap(err, "map create")
 	}

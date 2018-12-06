@@ -6,7 +6,6 @@ import (
 	"math"
 	"path/filepath"
 	"runtime"
-	"strings"
 	"syscall"
 	"time"
 	"unsafe"
@@ -35,7 +34,7 @@ const DefaultVerifierLogSize = 64 * 1024
 // ProgramSpec defines a Program
 type ProgramSpec struct {
 	// Name is passed to the kernel as a debug aid. Must only contain
-	// alpha numeric and '_' characters and be less than 16 characters.
+	// alpha numeric and '_' characters.
 	Name          string
 	Type          ProgType
 	Instructions  asm.Instructions
@@ -50,32 +49,6 @@ type Program struct {
 	abi  ProgramABI
 }
 
-var progName = featureTest{
-	Fn: func() bool {
-		attr, err := convertProgramSpec(&ProgramSpec{
-			Name: "feature_test",
-			Type: SocketFilter,
-			Instructions: asm.Instructions{
-				asm.LoadImm(asm.R0, 0, asm.DWord),
-				asm.Return(),
-			},
-			License: "MIT",
-		}, true)
-		if err != nil {
-			return false
-		}
-
-		fd, err := bpfProgLoad(attr)
-		if err != nil {
-			// This may be because we lack sufficient permissions, etc.
-			return false
-		}
-
-		syscall.Close(int(fd))
-		return true
-	},
-}
-
 // NewProgram creates a new Program.
 //
 // Loading a program for the first time will perform
@@ -85,7 +58,7 @@ func NewProgram(spec *ProgramSpec) (*Program, error) {
 		return nil, errors.Errorf("instructions cannot be empty")
 	}
 
-	attr, err := convertProgramSpec(spec, progName.Result())
+	attr, err := convertProgramSpec(spec, haveObjName.Result())
 	if err != nil {
 		return nil, err
 	}
@@ -131,12 +104,13 @@ func convertProgramSpec(spec *ProgramSpec, includeName bool) (*bpfProgLoadAttr, 
 		license:      newPtr(unsafe.Pointer(&lic[0])),
 	}
 
-	if err := checkName(spec.Name); err != nil {
+	name, err := newBPFObjName(spec.Name)
+	if err != nil {
 		return nil, err
 	}
 
 	if includeName {
-		copy(attr.progName[:bpfObjNameLen-1], spec.Name)
+		attr.progName = name
 	}
 
 	return attr, nil
@@ -315,36 +289,4 @@ func (le *loadError) Error() string {
 
 func (le *loadError) Cause() error {
 	return le.cause
-}
-
-func convertCString(in []byte) string {
-	inLen := bytes.IndexByte(in, 0)
-	return string(in[:inLen])
-}
-
-func checkName(name string) error {
-	if len(name) > bpfObjNameLen-1 {
-		return errors.Errorf("name '%s' is too long", name)
-	}
-
-	idx := strings.IndexFunc(name, func(char rune) bool {
-		switch {
-		case char >= 'A' && char <= 'Z':
-			fallthrough
-		case char >= 'a' && char <= 'z':
-			fallthrough
-		case char >= '0' && char <= '9':
-			fallthrough
-		case char == '_':
-			return false
-		default:
-			return true
-		}
-	})
-
-	if idx != -1 {
-		return errors.Errorf("invalid character '%c' in name '%s'", name[idx], name)
-	}
-
-	return nil
 }

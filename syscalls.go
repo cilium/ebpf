@@ -1,8 +1,10 @@
 package ebpf
 
 import (
+	"bytes"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"syscall"
 	"unsafe"
 
@@ -15,10 +17,45 @@ const (
 	bpfTagSize    = 8
 )
 
+// bpfObjName is a null-terminated string made up of
+// 'A-Za-z0-9_' characters.
+type bpfObjName [bpfObjNameLen]byte
+
+// newBPFObjName truncates the result if it is too long.
+func newBPFObjName(name string) (bpfObjName, error) {
+	idx := strings.IndexFunc(name, func(char rune) bool {
+		switch {
+		case char >= 'A' && char <= 'Z':
+			fallthrough
+		case char >= 'a' && char <= 'z':
+			fallthrough
+		case char >= '0' && char <= '9':
+			fallthrough
+		case char == '_':
+			return false
+		default:
+			return true
+		}
+	})
+
+	if idx != -1 {
+		return bpfObjName{}, errors.Errorf("invalid character '%c' in name '%s'", name[idx], name)
+	}
+
+	var result bpfObjName
+	copy(result[:bpfObjNameLen-1], name)
+	return result, nil
+}
+
 type bpfMapCreateAttr struct {
-	mapType                               MapType
-	keySize, valueSize, maxEntries, flags uint32
-	innerMapFd                            uint32
+	mapType    MapType
+	keySize    uint32
+	valueSize  uint32
+	maxEntries uint32
+	flags      uint32
+	innerMapFd uint32     // since 4.12 56f668dfe00d
+	numaNode   uint32     // since 4.14 96eabe7a40aa
+	mapName    bpfObjName // since 4.15 ad5b177bd73f
 }
 
 type bpfMapOpAttr struct {
@@ -36,6 +73,7 @@ type bpfMapInfo struct {
 	valueSize  uint32
 	maxEntries uint32
 	flags      uint32
+	mapName    bpfObjName // since 4.15 ad5b177bd73f
 }
 
 type bpfPinObjAttr struct {
@@ -52,11 +90,11 @@ type bpfProgLoadAttr struct {
 	logLevel           uint32
 	logSize            uint32
 	logBuf             syscallPtr
-	kernelVersion      uint32              // since 4.1  2541517c32be
-	progFlags          uint32              // since 4.11 e07b98d9bffe
-	progName           [bpfObjNameLen]byte // since 4.15 067cae47771c
-	progIfIndex        uint32              // since 4.15 1f6f4cb7ba21
-	expectedAttachType uint32              // since 4.17 5e43f899b03a
+	kernelVersion      uint32     // since 4.1  2541517c32be
+	progFlags          uint32     // since 4.11 e07b98d9bffe
+	progName           bpfObjName // since 4.15 067cae47771c
+	progIfIndex        uint32     // since 4.15 1f6f4cb7ba21
+	expectedAttachType uint32     // since 4.17 5e43f899b03a
 }
 
 type bpfProgInfo struct {
@@ -71,7 +109,7 @@ type bpfProgInfo struct {
 	createdByUID uint32
 	nrMapIDs     uint32
 	mapIds       syscallPtr
-	name         [bpfObjNameLen]byte
+	name         bpfObjName
 }
 
 type perfEventAttr struct {
@@ -133,6 +171,10 @@ func bpfProgLoad(attr *bpfProgLoadAttr) (uintptr, error) {
 	return bpfCall(_ProgLoad, unsafe.Pointer(attr), unsafe.Sizeof(*attr))
 }
 
+func bpfMapCreate(attr *bpfMapCreateAttr) (uintptr, error) {
+	return bpfCall(_MapCreate, unsafe.Pointer(attr), unsafe.Sizeof(*attr))
+}
+
 const bpfFSType = 0xcafe4a11
 
 func bpfPinObject(fileName string, fd uint32) error {
@@ -179,6 +221,33 @@ func bpfGetMapInfoByFD(fd uint32) (*bpfMapInfo, error) {
 	var info bpfMapInfo
 	err := bpfGetObjectInfoByFD(uint32(fd), unsafe.Pointer(&info), unsafe.Sizeof(info))
 	return &info, errors.Wrap(err, "can't get map info:")
+}
+
+var haveObjName = featureTest{
+	Fn: func() bool {
+		name, err := newBPFObjName("feature_test")
+		if err != nil {
+			// This really is a fatal error, but it should be caught
+			// by the unit tests not working.
+			return false
+		}
+
+		attr := bpfMapCreateAttr{
+			mapType:    Array,
+			keySize:    4,
+			valueSize:  4,
+			maxEntries: 1,
+			mapName:    name,
+		}
+
+		fd, err := bpfMapCreate(&attr)
+		if err != nil {
+			return false
+		}
+
+		syscall.Close(int(fd))
+		return true
+	},
 }
 
 func bpfGetMapFDByID(id uint32) (uint32, error) {
@@ -297,4 +366,9 @@ func newEpollFd(fds ...int) (int, error) {
 	}
 
 	return epollfd, nil
+}
+
+func convertCString(in []byte) string {
+	inLen := bytes.IndexByte(in, 0)
+	return string(in[:inLen])
 }

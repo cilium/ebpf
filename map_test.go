@@ -235,6 +235,29 @@ func TestPerCPUMarshaling(t *testing.T) {
 	}
 }
 
+func TestMapName(t *testing.T) {
+	m, err := NewMap(&MapSpec{
+		Name:       "test",
+		Type:       Array,
+		KeySize:    4,
+		ValueSize:  4,
+		MaxEntries: 1,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer m.Close()
+
+	info, err := bpfGetMapInfoByFD(m.fd)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if name := convertCString(info.mapName[:]); name != "test" {
+		t.Error("Expected name to be test, got", name)
+	}
+}
+
 func ExampleMap_perCPU() {
 	arr, err := NewMap(&MapSpec{
 		Type:       PerCPUArray,

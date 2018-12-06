@@ -137,17 +137,4 @@ func TestProgramName(t *testing.T) {
 	if name := convertCString(info.name[:]); name != "test" {
 		t.Errorf("Name is not test, got '%s'", name)
 	}
-
-	for name, valid := range map[string]bool{
-		"test":                         true,
-		"":                             true,
-		"a-b":                          false,
-		"yeah so":                      false,
-		"more_than_16_characters_long": false,
-	} {
-		err := checkName(name)
-		if result := err == nil; result != valid {
-			t.Errorf("Name '%s' classified incorrectly", name)
-		}
-	}
 }

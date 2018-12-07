@@ -50,7 +50,7 @@ func NewMap(spec *MapSpec) (*Map, error) {
 	}
 
 	if spec.InnerMap == nil {
-		return nil, errors.Errorf("map of map requires InnerMap")
+		return nil, errors.Errorf("%s requires InnerMap", spec.Type)
 	}
 
 	template, err := createMap(spec.InnerMap, 0)
@@ -59,16 +59,10 @@ func NewMap(spec *MapSpec) (*Map, error) {
 	}
 	defer template.Close()
 
-	outerSpec := *spec
-	outerSpec.InnerMap = nil
-	return createMap(&outerSpec, template.fd)
+	return createMap(spec, template.fd)
 }
 
 func createMap(spec *MapSpec, inner uint32) (*Map, error) {
-	if spec.InnerMap != nil {
-		return nil, errors.Errorf("inner map not allowed for %s", spec.Type)
-	}
-
 	cpy := *spec
 	switch spec.Type {
 	case ArrayOfMaps:

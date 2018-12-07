@@ -177,6 +177,30 @@ func TestMapInMap(t *testing.T) {
 	}
 }
 
+func TestMapInMapABI(t *testing.T) {
+	spec := &MapSpec{
+		Type:       ArrayOfMaps,
+		KeySize:    4,
+		MaxEntries: 2,
+		InnerMap: &MapSpec{
+			Type:       Array,
+			KeySize:    4,
+			ValueSize:  4,
+			MaxEntries: 2,
+		},
+	}
+
+	m, err := NewMap(spec)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer m.Close()
+
+	if m.abi.InnerMap == nil {
+		t.Error("ABI is missing InnerMap")
+	}
+}
+
 func TestIterateEmptyMap(t *testing.T) {
 	hash := createHash()
 	defer hash.Close()

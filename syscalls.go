@@ -23,21 +23,7 @@ type bpfObjName [bpfObjNameLen]byte
 
 // newBPFObjName truncates the result if it is too long.
 func newBPFObjName(name string) (bpfObjName, error) {
-	idx := strings.IndexFunc(name, func(char rune) bool {
-		switch {
-		case char >= 'A' && char <= 'Z':
-			fallthrough
-		case char >= 'a' && char <= 'z':
-			fallthrough
-		case char >= '0' && char <= '9':
-			fallthrough
-		case char == '_':
-			return false
-		default:
-			return true
-		}
-	})
-
+	idx := strings.IndexFunc(name, invalidBPFObjNameChar)
 	if idx != -1 {
 		return bpfObjName{}, errors.Errorf("invalid character '%c' in name '%s'", name[idx], name)
 	}
@@ -45,6 +31,21 @@ func newBPFObjName(name string) (bpfObjName, error) {
 	var result bpfObjName
 	copy(result[:bpfObjNameLen-1], name)
 	return result, nil
+}
+
+func invalidBPFObjNameChar(char rune) bool {
+	switch {
+	case char >= 'A' && char <= 'Z':
+		fallthrough
+	case char >= 'a' && char <= 'z':
+		fallthrough
+	case char >= '0' && char <= '9':
+		fallthrough
+	case char == '_':
+		return false
+	default:
+		return true
+	}
 }
 
 type bpfMapCreateAttr struct {

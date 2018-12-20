@@ -181,28 +181,49 @@ var sysCPU struct {
 	num  int
 }
 
+// possibleCPUs returns the max number of CPUs a system may possibly have
+// Logical CPU numbers must be of the form 0-n
 func possibleCPUs() (int, error) {
 	sysCPU.once.Do(func() {
-		buf, err := ioutil.ReadFile("/sys/devices/system/cpu/possible")
-		if err != nil {
-			sysCPU.err = err
-			return
-		}
-
-		var low, high int
-		n, _ := fmt.Fscanf(bytes.NewReader(buf), "%d-%d", &low, &high)
-		if n < 1 || low != 0 {
-			sysCPU.err = errors.New("/sys/devices/system/cpu/possible has unknown format")
-			return
-		}
-		if n == 1 {
-			high = low
-		}
-
-		sysCPU.num = high + 1
+		sysCPU.num, sysCPU.err = parseCPUs("/sys/devices/system/cpu/possible")
 	})
 
 	return sysCPU.num, sysCPU.err
+}
+
+var onlineCPU struct {
+	once sync.Once
+	err  error
+	num  int
+}
+
+// onlineCPUs returns the number of currently online CPUs
+// Logical CPU numbers must be of the form 0-n
+func onlineCPUs() (int, error) {
+	onlineCPU.once.Do(func() {
+		onlineCPU.num, onlineCPU.err = parseCPUs("/sys/devices/system/cpu/online")
+	})
+
+	return onlineCPU.num, onlineCPU.err
+}
+
+// parseCPUs parses the number of cpus from sysfs,
+// in the format of "/sys/devices/system/cpu/{possible,online,..}.
+// Logical CPU numbers must be of the form 0-n
+func parseCPUs(path string) (int, error) {
+	buf, err := ioutil.ReadFile(path)
+	if err != nil {
+		return 0, errors.Wrapf(err, "reading %s", path)
+	}
+
+	var cpus int
+	_, err = fmt.Fscanf(bytes.NewReader(buf), "0-%d\n", &cpus)
+	if err != nil {
+		return 0, errors.Wrapf(err, "%s has unknown format", path)
+	}
+
+	// cpus is 0 indexed
+	return cpus + 1, nil
 }
 
 func align(n, alignment int) int {

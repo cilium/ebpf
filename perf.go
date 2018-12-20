@@ -219,7 +219,8 @@ func NewPerfReader(opts PerfReaderOptions) (out *PerfReader, err error) {
 		return nil, errors.New("PerCPUBuffer must be larger than 0")
 	}
 
-	nCPU, err := possibleCPUs()
+	// We can't create a ring for CPUs that aren't online, so use only the online (of possible) CPUs
+	nCPU, err := onlineCPUs()
 	if err != nil {
 		return nil, errors.Wrap(err, "sampled perf event")
 	}

@@ -8,6 +8,11 @@ import (
 	"github.com/pkg/errors"
 )
 
+// CollectionOptions control loading a collection into the kernel.
+type CollectionOptions struct {
+	Programs ProgramOptions
+}
+
 // CollectionSpec describes a collection.
 type CollectionSpec struct {
 	Maps     map[string]*MapSpec
@@ -36,6 +41,13 @@ type Collection struct {
 //
 // Only maps referenced by at least one of the programs are initialized.
 func NewCollection(spec *CollectionSpec) (*Collection, error) {
+	return NewCollectionWithOptions(spec, CollectionOptions{})
+}
+
+// NewCollectionWithOptions creates a Collection from a specification.
+//
+// Only maps referenced by at least one of the programs are initialized.
+func NewCollectionWithOptions(spec *CollectionSpec, opts CollectionOptions) (*Collection, error) {
 	maps := make(map[string]*Map)
 	for mapName, mapSpec := range spec.Maps {
 		m, err := NewMap(mapSpec)
@@ -61,7 +73,7 @@ func NewCollection(spec *CollectionSpec) (*Collection, error) {
 			}
 		}
 
-		prog, err := NewProgram(progSpec)
+		prog, err := NewProgramWithOptions(progSpec, opts.Programs)
 		if err != nil {
 			return nil, errors.Wrapf(err, "program %s", progName)
 		}

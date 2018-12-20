@@ -32,6 +32,16 @@ const (
 // verifier log.
 const DefaultVerifierLogSize = 64 * 1024
 
+// ProgramOptions control loading a program into the kernel.
+type ProgramOptions struct {
+	// Controls the detail emitted by the kernel verifier. Set to non-zero
+	// to enable logging.
+	LogLevel uint32
+	// Controls the output buffer size for the verifier. Defaults to
+	// DefaultVerifierLogSize.
+	LogSize int
+}
+
 // ProgramSpec defines a Program
 type ProgramSpec struct {
 	// Name is passed to the kernel as a debug aid. Must only contain
@@ -45,6 +55,10 @@ type ProgramSpec struct {
 
 // Program represents a Program file descriptor
 type Program struct {
+	// Contains the output of the kernel verifier if enabled,
+	// otherwise it is empty.
+	VerifierLog string
+
 	fd   uint32
 	name string
 	abi  ProgramABI
@@ -55,6 +69,14 @@ type Program struct {
 // Loading a program for the first time will perform
 // feature detection by loading small, temporary programs.
 func NewProgram(spec *ProgramSpec) (*Program, error) {
+	return NewProgramWithOptions(spec, ProgramOptions{})
+}
+
+// NewProgramWithOptions creates a new Program.
+//
+// Loading a program for the first time will perform
+// feature detection by loading small, temporary programs.
+func NewProgramWithOptions(spec *ProgramSpec, opts ProgramOptions) (*Program, error) {
 	if len(spec.Instructions) == 0 {
 		return nil, errors.Errorf("instructions cannot be empty")
 	}
@@ -64,9 +86,23 @@ func NewProgram(spec *ProgramSpec) (*Program, error) {
 		return nil, err
 	}
 
+	logSize := DefaultVerifierLogSize
+	if opts.LogSize > 0 {
+		logSize = opts.LogSize
+	}
+
+	var logBuf []byte
+	if opts.LogLevel > 0 {
+		logBuf = make([]byte, logSize)
+		attr.logLevel = opts.LogLevel
+		attr.logSize = uint32(len(logBuf))
+		attr.logBuf = newPtr(unsafe.Pointer(&logBuf[0]))
+	}
+
 	fd, err := bpfProgLoad(attr)
 	if err == nil {
 		prog := &Program{
+			convertCString(logBuf),
 			uint32(fd),
 			spec.Name,
 			ProgramABI{spec.Type},
@@ -75,17 +111,24 @@ func NewProgram(spec *ProgramSpec) (*Program, error) {
 		return prog, nil
 	}
 
-	// Something went wrong, re-run with the verifier enabled.
-	logs := make([]byte, DefaultVerifierLogSize)
-	attr.logLevel = 1
-	attr.logSize = uint32(len(logs))
-	attr.logBuf = newPtr(unsafe.Pointer(&logs[0]))
+	truncated := errors.Cause(err) == syscall.ENOSPC
+	if opts.LogLevel == 0 {
+		// Re-run with the verifier enabled to get better error messages.
+		logBuf = make([]byte, logSize)
+		attr.logLevel = 1
+		attr.logSize = uint32(len(logBuf))
+		attr.logBuf = newPtr(unsafe.Pointer(&logBuf[0]))
 
-	_, nerr := bpfProgLoad(attr)
-	if errors.Cause(nerr) == syscall.ENOSPC {
-		return nil, errors.Wrap(err, "no debug since LogSize too small")
+		_, nerr := bpfProgLoad(attr)
+		truncated = errors.Cause(nerr) == syscall.ENOSPC
 	}
-	return nil, &loadError{nerr, convertCString(logs)}
+
+	logs := convertCString(logBuf)
+	if truncated {
+		logs += "\n(truncated...)"
+	}
+
+	return nil, &loadError{err, logs}
 }
 
 func convertProgramSpec(spec *ProgramSpec, includeName bool) (*bpfProgLoadAttr, error) {
@@ -257,6 +300,7 @@ func LoadPinnedProgram(fileName string) (*Program, error) {
 		return nil, err
 	}
 	return &Program{
+		"",
 		uint32(fd),
 		filepath.Base(fileName),
 		*abi,
@@ -270,6 +314,7 @@ func LoadPinnedProgramExplicit(fileName string, abi *ProgramABI) (*Program, erro
 		return nil, err
 	}
 	return &Program{
+		"",
 		uint32(fd),
 		filepath.Base(fileName),
 		*abi,

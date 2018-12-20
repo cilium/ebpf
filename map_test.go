@@ -359,8 +359,6 @@ func ExampleMap_NextKey() {
 		panic("map is empty")
 	}
 
-	fmt.Println("First key is", firstKey)
-
 	var nextKey string
 	if ok, err := hash.NextKey(firstKey, &nextKey); err != nil {
 		panic(err)
@@ -368,10 +366,7 @@ func ExampleMap_NextKey() {
 		panic("no keys after " + firstKey)
 	}
 
-	fmt.Println("Next key is", nextKey)
-
-	// Output: First key is world
-	// Next key is hello
+	// Order of keys is non-deterministic due to randomized map seed
 }
 
 // ExampleMap_Iterate demonstrates how to iterate over all entries
@@ -402,9 +397,8 @@ func ExampleMap_Iterate() {
 	}
 
 	if err := entries.Err(); err != nil {
-		fmt.Println("Iterator encountered an error:", err)
+		panic(fmt.Sprint("Iterator encountered an error:", err))
 	}
 
-	// Output: key: world, value: 42
-	// key: hello, value: 21
+	// Order of keys is non-deterministic due to randomized map seed
 }

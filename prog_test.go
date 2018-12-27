@@ -2,6 +2,7 @@ package ebpf
 
 import (
 	"bytes"
+	"fmt"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -97,7 +98,7 @@ func TestProgramPin(t *testing.T) {
 	}
 }
 
-func TestProgramVerifierOutput(t *testing.T) {
+func TestProgramVerifierOutputOnError(t *testing.T) {
 	_, err := NewProgram(&ProgramSpec{
 		Type: SocketFilter,
 		Instructions: asm.Instructions{
@@ -111,6 +112,30 @@ func TestProgramVerifierOutput(t *testing.T) {
 
 	if strings.Index(err.Error(), "exit") == -1 {
 		t.Error("No verifier output in error message")
+	}
+}
+
+func TestProgramVerifierOutput(t *testing.T) {
+	spec := &ProgramSpec{
+		Type: SocketFilter,
+		Instructions: asm.Instructions{
+			asm.LoadImm(asm.R0, 0, asm.DWord),
+			asm.Return(),
+		},
+		License: "MIT",
+	}
+
+	prog, err := NewProgramWithOptions(spec, ProgramOptions{
+		LogLevel: 2,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer prog.Close()
+
+	t.Log(prog.VerifierLog)
+	if prog.VerifierLog == "" {
+		t.Error("Expected VerifierLog to not be empty")
 	}
 }
 
@@ -150,4 +175,30 @@ func TestSanitizeName(t *testing.T) {
 			t.Errorf("Wanted '%s' got '%s'", want, have)
 		}
 	}
+}
+
+// Use NewProgramWithOptions if you'd like to get the verifier output
+// for a program, or if you want to change the buffer size used when
+// generating error messages.
+func ExampleNewProgramWithOptions() {
+	spec := &ProgramSpec{
+		Type: SocketFilter,
+		Instructions: asm.Instructions{
+			asm.LoadImm(asm.R0, 0, asm.DWord),
+			asm.Return(),
+		},
+		License: "MIT",
+	}
+
+	prog, err := NewProgramWithOptions(spec, ProgramOptions{
+		LogLevel: 2,
+		LogSize:  1024,
+	})
+	if err != nil {
+		panic(err)
+	}
+	defer prog.Close()
+
+	fmt.Println("The verifier output is:")
+	fmt.Println(prog.VerifierLog)
 }

@@ -371,5 +371,8 @@ func newEpollFd(fds ...int) (int, error) {
 
 func convertCString(in []byte) string {
 	inLen := bytes.IndexByte(in, 0)
+	if inLen == -1 {
+		return ""
+	}
 	return string(in[:inLen])
 }

@@ -157,14 +157,14 @@ func StoreImm(dst Register, offset int16, value int64, size Size) Instruction {
 }
 
 // XAddOp returns the OpCode to atomically add a register to a value in memory.
-func XAddOp() OpCode {
-	return OpCode(StClass).SetMode(XAddMode).SetSource(RegSource)
+func XAddOp(size Size) OpCode {
+	return OpCode(StXClass).SetMode(XAddMode).SetSize(size)
 }
 
 // XAdd atomically adds src to *dst.
-func XAdd(dst, src Register) Instruction {
+func XAdd(dst, src Register, size Size) Instruction {
 	return Instruction{
-		OpCode: XAddOp(),
+		OpCode: XAddOp(size),
 		Dst:    dst,
 		Src:    src,
 	}

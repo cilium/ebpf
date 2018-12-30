@@ -128,7 +128,7 @@ func attachBPF(fd int) (*ebpf.Map, error) {
 		// load ok? inc. Otherwise? jmp to mapupdate
 		asm.JEq.Imm(asm.R0, 0, "update-map"),
 		asm.Mov.Imm(asm.R1, 1),
-		asm.XAdd(asm.R0, asm.R1),
+		asm.XAdd(asm.R0, asm.R1, asm.DWord),
 		asm.Ja.Label("exit"),
 
 		// MapUpdate

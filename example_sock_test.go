@@ -76,7 +76,7 @@ func Example_socket() {
 		asm.Mov.Imm(asm.R1, 1),
 		// atomically increment register
 		// xaddst r0, r1
-		asm.XAdd(asm.R0, asm.R1),
+		asm.XAdd(asm.R0, asm.R1, asm.DWord),
 		// set exit code to 0
 		// mov r0, imm
 		asm.Mov.Imm(asm.R0, 0).Sym("out"),

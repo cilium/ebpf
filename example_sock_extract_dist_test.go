@@ -99,7 +99,7 @@ func attachBPF(fd int) (*ebpf.Map, error) {
 		asm.LoadMem(asm.R0, asm.R1, 16, asm.Word),
 
 		// Perhaps ipv6
-		asm.LoadImm(asm.R2, int64(ETH_P_IPV6), asm.Half),
+		asm.LoadImm(asm.R2, int64(ETH_P_IPV6), asm.DWord),
 		asm.HostTo(asm.BE, asm.R2, asm.Half),
 		asm.JEq.Reg(asm.R0, asm.R2, "ipv6"),
 
@@ -133,7 +133,7 @@ func attachBPF(fd int) (*ebpf.Map, error) {
 
 		// MapUpdate
 		// r1 has map ptr
-		asm.LoadImm(asm.R1, int64(ttls.FD()), asm.DWord),
+		asm.LoadImm(asm.R1, int64(ttls.FD()), asm.DWord).Sym("update-map"),
 		// r2 has key -> &FP[-4]
 		asm.Mov.Reg(asm.R2, asm.RFP),
 		asm.Add.Imm(asm.R2, -4),
@@ -177,9 +177,10 @@ func detachBPF(fd int) error {
 
 func minDistance(ttls *ebpf.Map) (int, error) {
 	var (
-		entries      = ttls.Iterate()
-		ttl, minDist uint32
-		count        uint64
+		entries = ttls.Iterate()
+		ttl     uint32
+		minDist uint32 = 255
+		count   uint64
 	)
 	for entries.Next(&ttl, &count) {
 		var dist uint32

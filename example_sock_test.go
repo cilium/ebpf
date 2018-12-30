@@ -20,7 +20,6 @@ type IPHdr struct {
 	Tos            uint8
 	Length         uint16
 	ID             uint16
-	Flags          uint8
 	FragmentOffset uint16
 	TTL            uint8
 	Protocol       uint8
@@ -61,7 +60,7 @@ func Example_socket() {
 		asm.Mov.Reg(asm.R2, asm.RFP),
 		// subtract 4 from reg2
 		// sub r2, 4
-		asm.Sub.Imm(asm.R2, 4),
+		asm.Add.Imm(asm.R2, -4),
 		// load the map fd into memory, in argument 1 position
 		// lddw reg1, (*:from_user_space)(imm)
 		asm.LoadImm(asm.R1, int64(mapFd), asm.DWord),

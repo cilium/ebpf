@@ -84,11 +84,15 @@ func LoadMem(dst, src Register, offset int16, size Size) Instruction {
 }
 
 // LoadImmOp returns the OpCode to load an immediate of given size.
+//
+// As of kernel 4.20, only DWord size is accepted.
 func LoadImmOp(size Size) OpCode {
 	return OpCode(LdClass).SetMode(ImmMode).SetSize(size)
 }
 
 // LoadImm emits `dst = (size)value`.
+//
+// As of kernel 4.20, only DWord size is accepted.
 func LoadImm(dst Register, value int64, size Size) Instruction {
 	return Instruction{
 		OpCode:   LoadImmOp(size),

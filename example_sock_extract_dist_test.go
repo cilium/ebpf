@@ -122,7 +122,7 @@ func attachBPF(fd int) (*ebpf.Map, error) {
 		asm.Add.Imm(asm.R2, -4),
 
 		// r1 must point to map
-		asm.LoadImm(asm.R1, int64(ttls.FD()), asm.DWord),
+		asm.LoadMapPtr(asm.R1, ttls.FD()),
 		asm.MapLookupElement.Call(),
 
 		// load ok? inc. Otherwise? jmp to mapupdate
@@ -133,7 +133,7 @@ func attachBPF(fd int) (*ebpf.Map, error) {
 
 		// MapUpdate
 		// r1 has map ptr
-		asm.LoadImm(asm.R1, int64(ttls.FD()), asm.DWord).Sym("update-map"),
+		asm.LoadMapPtr(asm.R1, ttls.FD()).Sym("update-map"),
 		// r2 has key -> &FP[-4]
 		asm.Mov.Reg(asm.R2, asm.RFP),
 		asm.Add.Imm(asm.R2, -4),

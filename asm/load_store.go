@@ -97,6 +97,16 @@ func LoadImm(dst Register, value int64, size Size) Instruction {
 	}
 }
 
+// LoadMapPtr stores a pointer to a map in dst.
+func LoadMapPtr(dst Register, fd int) Instruction {
+	return Instruction{
+		OpCode:   LoadImmOp(DWord),
+		Dst:      dst,
+		Src:      R1,
+		Constant: int64(fd),
+	}
+}
+
 // LoadIndOp returns the OpCode for loading a value of given size from an sk_buff.
 func LoadIndOp(size Size) OpCode {
 	return OpCode(LdClass).SetMode(IndMode).SetSize(size)

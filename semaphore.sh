@@ -77,8 +77,9 @@ for kernel_version in "${kernel_versions[@]}"; do
     --volume=go,kind=host,source="/home/runner/workspace" \
     --mount=volume=src,target="${SEMAPHORE_PROJECT_DIR}" \
     --mount=volume=go,target="/go" \
-    docker://golang:1.10-alpine \
+    docker://golang:1.11-alpine \
     --environment=GOPATH=/go \
+    --environment=CGO_ENABLED=0 \
     --exec=/bin/sh -- -c \
     "mount -t tmpfs tmpfs /tmp &&
       mount -t bpf bpf /sys/fs/bpf &&

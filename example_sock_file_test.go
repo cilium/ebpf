@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/newtools/ebpf"
-	"github.com/newtools/zsocket/nettypes"
 )
 
 // ExampleSocketELFFile demonstrates how to load an ELF
@@ -24,39 +23,55 @@ func Example_socketELFFile() {
 	if err != nil {
 		panic(err)
 	}
+	defer coll.Close()
+
 	sock, err := openRawSock(*index)
 	if err != nil {
 		panic(err)
 	}
-	prog, ok := coll.Programs["bpf_prog1"]
-	if !ok {
-		panic(fmt.Errorf("no program named \"bpf_prog1\" found"))
+	defer syscall.Close(sock)
+
+	prog := coll.DetachProgram("bpf_prog1")
+	if prog == nil {
+		panic("no program named bpf_prog1 found")
 	}
+	defer prog.Close()
+
 	if err := syscall.SetsockoptInt(sock, syscall.SOL_SOCKET, SO_ATTACH_BPF, prog.FD()); err != nil {
 		panic(err)
 	}
+
 	fmt.Printf("Filtering on eth index: %d\n", *index)
 	fmt.Println("Packet stats:")
-	bpfMap, ok := coll.Maps["my_map"]
-	if !ok {
-		panic(fmt.Errorf("no map named \"my_map\" found"))
+
+	protoStats := coll.DetachMap("my_map")
+	if protoStats == nil {
+		panic("no map named my_map found")
 	}
+	defer protoStats.Close()
+
 	for {
+		const (
+			ICMP = 0x01
+			TCP  = 0x06
+			UDP  = 0x11
+		)
+
 		time.Sleep(time.Second)
 		var icmp uint64
 		var tcp uint64
 		var udp uint64
-		ok, err := bpfMap.Get(uint32(nettypes.ICMP), &icmp)
+		ok, err := protoStats.Get(uint32(ICMP), &icmp)
 		if err != nil {
 			panic(err)
 		}
 		assertTrue(ok, "icmp key not found")
-		ok, err = bpfMap.Get(uint32(nettypes.TCP), &tcp)
+		ok, err = protoStats.Get(uint32(TCP), &tcp)
 		if err != nil {
 			panic(err)
 		}
 		assertTrue(ok, "tcp key not found")
-		ok, err = bpfMap.Get(uint32(nettypes.UDP), &udp)
+		ok, err = protoStats.Get(uint32(UDP), &udp)
 		if err != nil {
 			panic(err)
 		}

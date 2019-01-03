@@ -80,8 +80,8 @@ var program = [...]byte{
 
 const sockexPin = "/sys/fs/bpf/sockex1"
 
-// ExampleSocketELF demonstrates how to load and attach an ELF binary
-// to a socket.
+// ExampleSocketELF demonstrates how to load an eBPF program from an ELF,
+// pin it into the filesystem and attach it to a raw socket.
 func Example_socketELF() {
 	const SO_ATTACH_BPF = 50
 
@@ -172,4 +172,19 @@ func assertTrue(b bool, msg string) {
 	if !b {
 		panic(fmt.Errorf("%s", msg))
 	}
+}
+
+func openRawSock(index int) (int, error) {
+	const ETH_P_ALL uint16 = 0x00<<8 | 0x03
+	sock, err := syscall.Socket(syscall.AF_PACKET, syscall.SOCK_RAW|syscall.SOCK_NONBLOCK|syscall.SOCK_CLOEXEC, int(ETH_P_ALL))
+	if err != nil {
+		return 0, err
+	}
+	sll := syscall.SockaddrLinklayer{}
+	sll.Protocol = ETH_P_ALL
+	sll.Ifindex = index
+	if err := syscall.Bind(sock, &sll); err != nil {
+		return 0, err
+	}
+	return sock, nil
 }

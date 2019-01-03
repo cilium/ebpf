@@ -1,9 +1,10 @@
 eBPF
 -------
-[![](https://godoc.org/github.com/newtools/ebpf?status.svg)](http://godoc.org/github.com/newtools/ebpf)
+[![](https://godoc.org/github.com/newtools/ebpf?status.svg)](https://godoc.org/github.com/newtools/ebpf)
 
-eBPF is a Go library that provides utilities for loading, compiling, and debugging eBPF programs. It has minimal external dependencies and is intended to be used in long
-running processes.
+eBPF is a pure Go library that provides utilities for loading, compiling, and debugging eBPF programs. It has minimal external dependencies and is intended to be used in long running processes.
+
+[ebpf/asm](https://godoc.org/github.com/newtools/ebpf/asm) contains a basic assembler.
 
 ## An Important Note About Licenses:
 

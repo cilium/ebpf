@@ -34,54 +34,49 @@ import (
 	"fmt"
 	"net"
 	"syscall"
-	"time"
 
 	"github.com/newtools/ebpf"
 	"github.com/newtools/ebpf/asm"
 )
 
-// ExampleExtractDistance shows how to extract the network distance of
-// an IP host.
+// ExampleExtractDistance shows how to attach an eBPF socket filter to
+// extract the network distance of an IP host.
 func Example_extractDistance() {
-	var addr = &net.TCPAddr{
-		IP:   net.ParseIP("1.1.1.1"),
-		Port: 53,
-	}
-
-	// Call our own socket functions, so that we can attach
-	// the eBPF before calling connect. On Go 1.11 you can use
-	// Dialer.Control to achieve the same thing.
-	fd, err := socket(addr)
+	filter, TTLs, err := newDistanceFilter()
 	if err != nil {
 		panic(err)
 	}
-	defer syscall.Close(fd)
+	defer filter.Close()
+	defer TTLs.Close()
 
-	ttls, err := attachBPF(fd)
+	// Attach filter before the call to connect()
+	dialer := net.Dialer{
+		Control: func(network, address string, c syscall.RawConn) (err error) {
+			const SO_ATTACH_BPF = 50
+
+			err = c.Control(func(fd uintptr) {
+				err = syscall.SetsockoptInt(int(fd), syscall.SOL_SOCKET, SO_ATTACH_BPF, filter.FD())
+			})
+			return err
+		},
+	}
+
+	conn, err := dialer.Dial("tcp", "1.1.1.1:53")
 	if err != nil {
 		panic(err)
 	}
-	defer ttls.Close()
+	conn.Close()
 
-	if err := connect(fd, addr, time.Second); err != nil {
-		panic(err)
-	}
-
-	minDist, err := minDistance(ttls)
+	minDist, err := minDistance(TTLs)
 	if err != nil {
 		panic(err)
 	}
 
-	fmt.Println(addr, "is", minDist, "hops away")
-
-	if err := detachBPF(fd); err != nil {
-		panic(err)
-	}
+	fmt.Println("1.1.1.1:53 is", minDist, "hops away")
 }
 
-func attachBPF(fd int) (*ebpf.Map, error) {
+func newDistanceFilter() (*ebpf.Program, *ebpf.Map, error) {
 	const ETH_P_IPV6 uint16 = 0x86DD
-	const SO_ATTACH_BPF = 50
 
 	ttls, err := ebpf.NewMap(&ebpf.MapSpec{
 		Type:       ebpf.Hash,
@@ -90,7 +85,7 @@ func attachBPF(fd int) (*ebpf.Map, error) {
 		MaxEntries: 4,
 	})
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	insns := asm.Instructions{
@@ -151,33 +146,22 @@ func attachBPF(fd int) (*ebpf.Map, error) {
 	}
 
 	prog, err := ebpf.NewProgram(&ebpf.ProgramSpec{
+		Name:         "distance_filter",
 		Type:         ebpf.SocketFilter,
 		License:      "GPL",
 		Instructions: insns,
 	})
 	if err != nil {
 		ttls.Close()
-		return nil, err
-	}
-	defer prog.Close()
-
-	err = syscall.SetsockoptInt(int(fd), syscall.SOL_SOCKET, SO_ATTACH_BPF, prog.FD())
-	if err != nil {
-		ttls.Close()
-		return nil, err
+		return nil, nil, err
 	}
 
-	return ttls, nil
+	return prog, ttls, nil
 }
 
-func detachBPF(fd int) error {
-	const SO_DETACH_BPF = 27
-	return syscall.SetsockoptInt(int(fd), syscall.SOL_SOCKET, SO_DETACH_BPF, 0)
-}
-
-func minDistance(ttls *ebpf.Map) (int, error) {
+func minDistance(TTLs *ebpf.Map) (int, error) {
 	var (
-		entries = ttls.Iterate()
+		entries = TTLs.Iterate()
 		ttl     uint32
 		minDist uint32 = 255
 		count   uint64
@@ -199,49 +183,4 @@ func minDistance(ttls *ebpf.Map) (int, error) {
 		}
 	}
 	return int(minDist), entries.Err()
-}
-
-func socket(dst *net.TCPAddr) (int, error) {
-	var domain int
-	if dst.IP.To4() != nil {
-		domain = syscall.AF_INET
-	} else {
-		domain = syscall.AF_INET6
-	}
-
-	return syscall.Socket(domain, syscall.SOCK_STREAM, 0)
-}
-
-func connect(fd int, dst *net.TCPAddr, timeout time.Duration) error {
-	var domain int
-	if dst.IP.To4() != nil {
-		domain = syscall.AF_INET
-	} else {
-		domain = syscall.AF_INET6
-	}
-
-	var sa syscall.Sockaddr
-	if domain == syscall.AF_INET {
-		var x [4]byte
-		copy(x[:], dst.IP.To4())
-		sa = &syscall.SockaddrInet4{Port: dst.Port, Addr: x}
-	} else {
-		var x [16]byte
-		copy(x[:], dst.IP.To16())
-		sa = &syscall.SockaddrInet6{Port: dst.Port, Addr: x}
-	}
-
-	if ns := timeout.Nanoseconds(); ns > 0 {
-		// Set SO_SNDTIMEO
-		var tv syscall.Timeval
-		tv.Sec = ns / 1000000000
-		tv.Usec = (ns - tv.Sec*1000000000) / 1000
-
-		if err := syscall.SetsockoptTimeval(fd, syscall.SOL_SOCKET, syscall.SO_SNDTIMEO, &tv); err != nil {
-			return err
-		}
-	}
-
-	// This is blocking.
-	return syscall.Connect(fd, sa)
 }

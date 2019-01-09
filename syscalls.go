@@ -169,7 +169,14 @@ func newPtr(ptr unsafe.Pointer) syscallPtr {
 }
 
 func bpfProgLoad(attr *bpfProgLoadAttr) (uintptr, error) {
-	return bpfCall(_ProgLoad, unsafe.Pointer(attr), unsafe.Sizeof(*attr))
+	for {
+		fd, err := bpfCall(_ProgLoad, unsafe.Pointer(attr), unsafe.Sizeof(*attr))
+		// As of ~4.20 the verifier can be interrupted by a signal,
+		// and returns EAGAIN in that case.
+		if err != syscall.EAGAIN {
+			return fd, err
+		}
+	}
 }
 
 func bpfMapCreate(attr *bpfMapCreateAttr) (uintptr, error) {

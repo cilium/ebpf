@@ -24,18 +24,26 @@ const (
 	JGT JumpOp = 0x20
 	// JGE jumps by offset if r >= imm
 	JGE JumpOp = 0x30
-	// JSE jumps by offset if signed r == signed imm
-	JSE JumpOp = 0x40
-	// JNE jumps by offset if r != imm, eBPF only
+	// JSet jumps by offset if r & imm
+	JSet JumpOp = 0x40
+	// JNE jumps by offset if r != imm
 	JNE JumpOp = 0x50
-	// JSGT jumps by offset if signed r > signed imm, eBPF only
+	// JSGT jumps by offset if signed r > signed imm
 	JSGT JumpOp = 0x60
-	// JSGE jumps by offset if signed r >= signed imm, eBPF only
+	// JSGE jumps by offset if signed r >= signed imm
 	JSGE JumpOp = 0x70
-	// Call builtin or user defined function from imm, eBPF only
+	// Call builtin or user defined function from imm
 	Call JumpOp = 0x80
 	// Exit ends execution, with value in r0
 	Exit JumpOp = 0x90
+	// JLT jumps by offset if r < imm
+	JLT JumpOp = 0xa0
+	// JLE jumps by offset if r <= imm
+	JLE JumpOp = 0xb0
+	// JSLT jumps by offset if signed r < signed imm
+	JSLT JumpOp = 0xc0
+	// JSLE jumps by offset if signed r <= signed imm
+	JSLE JumpOp = 0xd0
 )
 
 // Return emits an exit instruction.

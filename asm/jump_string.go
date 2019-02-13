@@ -4,20 +4,24 @@ package asm
 
 import "strconv"
 
-const _JumpOp_name = "JaJEqJGTJGEJSEJNEJSGTJSGECallExitInvalidJumpOp"
+const _JumpOp_name = "JaJEqJGTJGEJSetJNEJSGTJSGECallExitJLTJLEJSLTJSLEInvalidJumpOp"
 
 var _JumpOp_map = map[JumpOp]string{
 	0:   _JumpOp_name[0:2],
 	16:  _JumpOp_name[2:5],
 	32:  _JumpOp_name[5:8],
 	48:  _JumpOp_name[8:11],
-	64:  _JumpOp_name[11:14],
-	80:  _JumpOp_name[14:17],
-	96:  _JumpOp_name[17:21],
-	112: _JumpOp_name[21:25],
-	128: _JumpOp_name[25:29],
-	144: _JumpOp_name[29:33],
-	255: _JumpOp_name[33:46],
+	64:  _JumpOp_name[11:15],
+	80:  _JumpOp_name[15:18],
+	96:  _JumpOp_name[18:22],
+	112: _JumpOp_name[22:26],
+	128: _JumpOp_name[26:30],
+	144: _JumpOp_name[30:34],
+	160: _JumpOp_name[34:37],
+	176: _JumpOp_name[37:40],
+	192: _JumpOp_name[40:44],
+	208: _JumpOp_name[44:48],
+	255: _JumpOp_name[48:61],
 }
 
 func (i JumpOp) String() string {

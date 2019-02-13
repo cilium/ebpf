@@ -167,6 +167,11 @@ func (bpf *Program) String() string {
 	return fmt.Sprintf("%s#%d", bpf.abi.Type, bpf.fd)
 }
 
+// ABI gets the ABI of the Program
+func (bpf *Program) ABI() ProgramABI {
+	return bpf.abi
+}
+
 // FD gets the file descriptor value of the Program
 func (bpf *Program) FD() int {
 	return int(bpf.fd)

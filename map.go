@@ -144,6 +144,11 @@ func (m *Map) String() string {
 	return fmt.Sprintf("%s#%d", m.abi.Type, m.fd)
 }
 
+// ABI gets the ABI of the Map
+func (m *Map) ABI() MapABI {
+	return m.abi
+}
+
 // Get gets a value from a Map
 func (m *Map) Get(key, valueOut interface{}) (bool, error) {
 	valueBytes, err := m.GetBytes(key)

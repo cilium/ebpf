@@ -149,7 +149,7 @@ func TestPerfReaderFlushAndClose(t *testing.T) {
 	defer prog.Close()
 
 	// more samples than the channel capacity
-	numSamples := cap(rd.Samples)*2
+	numSamples := cap(rd.Samples) * 2
 	for i := 0; i < numSamples; i++ {
 		ret, _, err := prog.Test(make([]byte, 14))
 		if err != nil {
@@ -162,7 +162,7 @@ func TestPerfReaderFlushAndClose(t *testing.T) {
 	}
 
 	done := make(chan struct{})
-	go func(){
+	go func() {
 		rd.FlushAndClose()
 		// Should be able to call this multiple times
 		rd.FlushAndClose()

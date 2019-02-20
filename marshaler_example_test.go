@@ -30,10 +30,12 @@ func ExampleMarshaler() {
 		panic(err)
 	}
 
-	var key customEncoding
-	var value uint32
+	var (
+		key     customEncoding
+		value   uint32
+		entries = hash.Iterate()
+	)
 
-	entries := hash.Iterate()
 	for entries.Next(&key, &value) {
 		fmt.Printf("key: %s, value: %d\n", key.data, value)
 	}

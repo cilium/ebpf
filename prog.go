@@ -101,13 +101,8 @@ func NewProgramWithOptions(spec *ProgramSpec, opts ProgramOptions) (*Program, er
 
 	fd, err := bpfProgLoad(attr)
 	if err == nil {
-		prog := &Program{
-			convertCString(logBuf),
-			uint32(fd),
-			spec.Name,
-			ProgramABI{spec.Type},
-		}
-		runtime.SetFinalizer(prog, (*Program).Close)
+		prog := newProgram(uint32(fd), spec.Name, &ProgramABI{spec.Type})
+		prog.VerifierLog = convertCString(logBuf)
 		return prog, nil
 	}
 
@@ -129,6 +124,16 @@ func NewProgramWithOptions(spec *ProgramSpec, opts ProgramOptions) (*Program, er
 	}
 
 	return nil, &loadError{err, logs}
+}
+
+func newProgram(fd uint32, name string, abi *ProgramABI) *Program {
+	prog := &Program{
+		name: name,
+		fd:   fd,
+		abi:  *abi,
+	}
+	runtime.SetFinalizer(prog, (*Program).Close)
+	return prog
 }
 
 func convertProgramSpec(spec *ProgramSpec, includeName bool) (*bpfProgLoadAttr, error) {
@@ -186,6 +191,9 @@ func (bpf *Program) Pin(fileName string) error {
 
 // Close unloads the program from the kernel.
 func (bpf *Program) Close() error {
+	if bpf == nil {
+		return nil
+	}
 	runtime.SetFinalizer(bpf, nil)
 	return syscall.Close(int(bpf.fd))
 }
@@ -291,6 +299,35 @@ func (bpf *Program) testRun(in []byte, repeat int) (uint32, []byte, time.Duratio
 	return attr.retval, out, total, nil
 }
 
+func unmarshalProgram(buf []byte) (*Program, error) {
+	if len(buf) != 4 {
+		return nil, errors.New("program id requires 4 byte value")
+	}
+
+	// Looking up an entry in a nested map or prog array returns an id,
+	// not an fd.
+	id := nativeEndian.Uint32(buf)
+	fd, err := bpfGetProgramFDByID(id)
+	if err != nil {
+		return nil, err
+	}
+
+	abi, err := newProgramABIFromFd(fd)
+	if err != nil {
+		_ = syscall.Close(int(fd))
+		return nil, err
+	}
+
+	return newProgram(fd, "", abi), nil
+}
+
+// MarshalBinary implements BinaryMarshaler.
+func (bpf *Program) MarshalBinary() ([]byte, error) {
+	buf := make([]byte, 4)
+	nativeEndian.PutUint32(buf, bpf.fd)
+	return buf, nil
+}
+
 // LoadPinnedProgram loads a Program from a BPF file.
 //
 // Requires at least Linux 4.13, use LoadPinnedProgramExplicit on
@@ -300,16 +337,14 @@ func LoadPinnedProgram(fileName string) (*Program, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	abi, err := newProgramABIFromFd(fd)
 	if err != nil {
+		_ = syscall.Close(int(fd))
 		return nil, err
 	}
-	return &Program{
-		"",
-		uint32(fd),
-		filepath.Base(fileName),
-		*abi,
-	}, nil
+
+	return newProgram(fd, filepath.Base(fileName), abi), nil
 }
 
 // LoadPinnedProgramExplicit loads a program with explicit parameters.
@@ -318,12 +353,8 @@ func LoadPinnedProgramExplicit(fileName string, abi *ProgramABI) (*Program, erro
 	if err != nil {
 		return nil, err
 	}
-	return &Program{
-		"",
-		uint32(fd),
-		filepath.Base(fileName),
-		*abi,
-	}, nil
+
+	return newProgram(fd, filepath.Base(fileName), abi), nil
 }
 
 // SanitizeName replaces all invalid characters in name.

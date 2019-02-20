@@ -181,6 +181,20 @@ func (m *Map) Get(key, valueOut interface{}) (bool, error) {
 	case Map:
 		return true, errors.Errorf("can't unmarshal into %T, need %T", value, (**Map)(nil))
 
+	case **Program:
+		p, err := unmarshalProgram(valueBytes)
+		if err != nil {
+			return true, err
+		}
+
+		(*value).Close()
+		*value = p
+		return true, nil
+	case *Program:
+		return true, errors.Errorf("can't unmarshal into %T, need %T", value, (**Program)(nil))
+	case Program:
+		return true, errors.Errorf("can't unmarshal into %T, need %T", value, (**Program)(nil))
+
 	default:
 		return true, unmarshalBytes(valueOut, valueBytes)
 	}

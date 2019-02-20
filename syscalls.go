@@ -267,6 +267,15 @@ func bpfGetMapFDByID(id uint32) (uint32, error) {
 	return uint32(ptr), errors.Wrapf(err, "can't get fd for map id %d", id)
 }
 
+func bpfGetProgramFDByID(id uint32) (uint32, error) {
+	// available from 4.13
+	attr := bpfGetFDByIDAttr{
+		id: id,
+	}
+	ptr, err := bpfCall(_ProgGetFDByID, unsafe.Pointer(&attr), unsafe.Sizeof(attr))
+	return uint32(ptr), errors.Wrapf(err, "can't get fd for program id %d", id)
+}
+
 type wrappedErrno struct {
 	errNo   syscall.Errno
 	message string

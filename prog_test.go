@@ -177,6 +177,64 @@ func TestSanitizeName(t *testing.T) {
 	}
 }
 
+func TestProgramMarshaling(t *testing.T) {
+	const idx = uint32(0)
+
+	arr := createProgramArray(t)
+	defer arr.Close()
+
+	prog, err := NewProgram(&ProgramSpec{
+		Type: SocketFilter,
+		Instructions: asm.Instructions{
+			asm.LoadImm(asm.R0, 0, asm.DWord),
+			asm.Return(),
+		},
+		License: "MIT",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer prog.Close()
+
+	if err := arr.Put(idx, prog); err != nil {
+		t.Fatal("Can't put program:", err)
+	}
+
+	if _, err := arr.Get(idx, Program{}); err == nil {
+		t.Fatal("Get accepts Program")
+	}
+
+	var prog2 *Program
+	defer prog2.Close()
+
+	if _, err := arr.Get(idx, prog2); err == nil {
+		t.Fatal("Get accepts *Program")
+	}
+
+	if _, err := arr.Get(idx, &prog2); err != nil {
+		t.Fatal("Can't unmarshal program:", err)
+	}
+
+	if prog2 == nil {
+		t.Fatal("Unmarshalling set program to nil")
+	}
+}
+
+func createProgramArray(t *testing.T) *Map {
+	t.Helper()
+
+	arr, err := NewMap(&MapSpec{
+		Type:       ProgramArray,
+		KeySize:    4,
+		ValueSize:  4,
+		MaxEntries: 1,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return arr
+}
+
 // Use NewProgramWithOptions if you'd like to get the verifier output
 // for a program, or if you want to change the buffer size used when
 // generating error messages.
@@ -201,4 +259,38 @@ func ExampleNewProgramWithOptions() {
 
 	fmt.Println("The verifier output is:")
 	fmt.Println(prog.VerifierLog)
+}
+
+// It's possible to read a program directly from a ProgramArray.
+func ExampleProgram_unmarshalFromMap() {
+	progArray, err := LoadPinnedMap("/path/to/map")
+	if err != nil {
+		panic(err)
+	}
+	defer progArray.Close()
+
+	// Load a single program
+	var prog *Program
+	if ok, err := progArray.Get(uint32(0), &prog); !ok {
+		panic("key not found")
+	} else if err != nil {
+		panic(err)
+	}
+	defer prog.Close()
+
+	fmt.Println("first prog:", prog)
+
+	// Iterate all programs
+	var (
+		key     uint32
+		entries = progArray.Iterate()
+	)
+
+	for entries.Next(&key, &prog) {
+		fmt.Println(key, "is", prog)
+	}
+
+	if err := entries.Err(); err != nil {
+		panic(err)
+	}
 }

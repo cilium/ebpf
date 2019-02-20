@@ -149,7 +149,10 @@ func (m *Map) ABI() MapABI {
 	return m.abi
 }
 
-// Get gets a value from a Map
+// Get retrieves a value from a Map.
+//
+// Calls Close() on valueOut if it is of type **Map or **Program,
+// and *valueOut is not nil.
 func (m *Map) Get(key, valueOut interface{}) (bool, error) {
 	valueBytes, err := m.GetBytes(key)
 	if err != nil {
@@ -163,7 +166,24 @@ func (m *Map) Get(key, valueOut interface{}) (bool, error) {
 		return true, unmarshalPerCPUValue(valueOut, int(m.abi.ValueSize), valueBytes)
 	}
 
-	return true, unmarshalBytes(valueOut, valueBytes)
+	switch value := valueOut.(type) {
+	case **Map:
+		m, err := unmarshalMap(valueBytes)
+		if err != nil {
+			return true, err
+		}
+
+		(*value).Close()
+		*value = m
+		return true, nil
+	case *Map:
+		return true, errors.Errorf("can't unmarshal into %T, need %T", value, (**Map)(nil))
+	case Map:
+		return true, errors.Errorf("can't unmarshal into %T, need %T", value, (**Map)(nil))
+
+	default:
+		return true, unmarshalBytes(valueOut, valueBytes)
+	}
 }
 
 // GetBytes gets a value from Map
@@ -274,6 +294,8 @@ func (m *Map) NextKeyBytes(key interface{}) ([]byte, error) {
 
 // Iterate traverses a map.
 //
+// It's safe to create multiple iterators at the same time.
+//
 // It's not possible to guarantee that all keys in a map will be
 // returned if there are concurrent modifications to the map. If a
 // map is modified too heavily iteration may abort.
@@ -285,6 +307,12 @@ func (m *Map) Iterate() *MapIterator {
 
 // Close removes a Map
 func (m *Map) Close() error {
+	if m == nil {
+		// This makes it easier to clean up when iterating maps
+		// of maps / programs.
+		return nil
+	}
+
 	runtime.SetFinalizer(m, nil)
 	return syscall.Close(int(m.fd))
 }
@@ -352,33 +380,26 @@ func (m *Map) put(key, value interface{}, putType uint64) error {
 	return err
 }
 
-// UnmarshalBinary implements BinaryUnmarshaler.
-func (m *Map) UnmarshalBinary(buf []byte) error {
-	if m.fd != 0 {
-		return errors.New("ebpf: can't unmarshal into existing map")
-	}
+func unmarshalMap(buf []byte) (*Map, error) {
 	if len(buf) != 4 {
-		return errors.New("ebpf: map id requires uint32")
+		return nil, errors.New("map id requires 4 byte value")
 	}
+
 	// Looking up an entry in a nested map or prog array returns an id,
 	// not an fd.
 	id := nativeEndian.Uint32(buf)
 	fd, err := bpfGetMapFDByID(id)
 	if err != nil {
-		return err
+		return nil, err
 	}
+
 	abi, err := newMapABIFromFd(fd)
 	if err != nil {
-		return err
+		_ = syscall.Close(int(fd))
+		return nil, err
 	}
 
-	nm, err := newMap(fd, abi)
-	if err != nil {
-		return err
-	}
-
-	*m = *nm
-	return nil
+	return newMap(fd, abi)
 }
 
 // MarshalBinary implements BinaryMarshaler.
@@ -401,6 +422,8 @@ type MapIterator struct {
 // Next decodes the next key and value.
 //
 // Returns false if there are no more entries.
+//
+// See Map.Get for further caveats.
 func (mi *MapIterator) Next(keyOut, valueOut interface{}) bool {
 	if mi.err != nil || mi.done {
 		return false

@@ -6,6 +6,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"sort"
 	"syscall"
 	"testing"
 )
@@ -22,15 +23,7 @@ func TestMain(m *testing.M) {
 }
 
 func TestMap(t *testing.T) {
-	m, err := NewMap(&MapSpec{
-		Type:       Array,
-		KeySize:    4,
-		ValueSize:  4,
-		MaxEntries: 2,
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
+	m := createArray(t)
 	defer m.Close()
 
 	t.Log(m)
@@ -64,15 +57,7 @@ func TestMap(t *testing.T) {
 }
 
 func TestMapPin(t *testing.T) {
-	m, err := NewMap(&MapSpec{
-		Type:       Array,
-		KeySize:    4,
-		ValueSize:  4,
-		MaxEntries: 2,
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
+	m := createArray(t)
 	defer m.Close()
 
 	if err := m.Put(uint32(0), uint32(42)); err != nil {
@@ -106,6 +91,21 @@ func TestMapPin(t *testing.T) {
 	if v != 42 {
 		t.Error("Want value 42, got", v)
 	}
+}
+
+func createArray(t *testing.T) *Map {
+	t.Helper()
+
+	m, err := NewMap(&MapSpec{
+		Type:       Array,
+		KeySize:    4,
+		ValueSize:  4,
+		MaxEntries: 2,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return m
 }
 
 func TestMapInMap(t *testing.T) {
@@ -142,7 +142,7 @@ func TestMapInMap(t *testing.T) {
 				t.Fatal("Can't put inner map:", err)
 			}
 
-			var inner2 Map
+			var inner2 *Map
 			if ok, err := outer.Get(uint32(0), &inner2); err != nil {
 				t.Fatal(err)
 			} else if !ok {
@@ -178,8 +178,19 @@ func TestMapInMap(t *testing.T) {
 }
 
 func TestMapInMapABI(t *testing.T) {
+	m := createMapInMap(t, ArrayOfMaps)
+	defer m.Close()
+
+	if m.abi.InnerMap == nil {
+		t.Error("ABI is missing InnerMap")
+	}
+}
+
+func createMapInMap(t *testing.T, typ MapType) *Map {
+	t.Helper()
+
 	spec := &MapSpec{
-		Type:       ArrayOfMaps,
+		Type:       typ,
 		KeySize:    4,
 		MaxEntries: 2,
 		InnerMap: &MapSpec{
@@ -194,11 +205,7 @@ func TestMapInMapABI(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer m.Close()
-
-	if m.abi.InnerMap == nil {
-		t.Error("ABI is missing InnerMap")
-	}
+	return m
 }
 
 func TestIterateEmptyMap(t *testing.T) {
@@ -212,6 +219,75 @@ func TestIterateEmptyMap(t *testing.T) {
 	if entries.Next(&key, &value) != false {
 		t.Error("Empty map should not be iterable")
 	}
+}
+
+func TestMapIterate(t *testing.T) {
+	hash := createHash()
+	defer hash.Close()
+
+	if err := hash.Put("hello", uint32(21)); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := hash.Put("world", uint32(42)); err != nil {
+		t.Fatal(err)
+	}
+
+	var key string
+	var value uint32
+	var keys []string
+
+	entries := hash.Iterate()
+	for entries.Next(&key, &value) {
+		keys = append(keys, key)
+	}
+
+	if err := entries.Err(); err != nil {
+		t.Fatal(err)
+	}
+
+	sort.Strings(keys)
+
+	if keys[0] != "hello" {
+		t.Error("Expected index 0 to be hello, got", keys[0])
+	}
+	if keys[1] != "world" {
+		t.Error("Expected index 1 to be hello, got", keys[1])
+	}
+}
+
+func TestMapIterateMap(t *testing.T) {
+	parent := createMapInMap(t, ArrayOfMaps)
+	defer parent.Close()
+
+	a := createArray(t)
+	defer a.Close()
+
+	if err := parent.Put(uint32(0), a); err != nil {
+		t.Fatal(err)
+	}
+
+	var key uint32
+	var m *Map
+	defer m.Close()
+
+	entries := parent.Iterate()
+	if !entries.Next(&key, &m) {
+		t.Fatal("Iterator encountered error:", entries.Err())
+	}
+
+	if m == nil {
+		t.Fatal("Map is nil")
+	}
+
+	entries = parent.Iterate()
+	if entries.Next(&key, m) {
+		t.Fatal("Iterator should return false if used with incorrect map type")
+	}
+	if entries.Err() == nil {
+		t.Fatal("Iterator should return an error if used with incorrect map type")
+	}
+
 }
 
 func TestPerCPUMarshaling(t *testing.T) {
@@ -282,6 +358,8 @@ func TestMapName(t *testing.T) {
 	}
 }
 
+// Per CPU maps store a distinct value for each CPU. They are useful
+// to collect metrics.
 func ExampleMap_perCPU() {
 	arr, err := NewMap(&MapSpec{
 		Type:       PerCPUArray,
@@ -312,8 +390,11 @@ func ExampleMap_perCPU() {
 
 	fmt.Println("First two values:", values[:2])
 
-	var key uint32
-	entries := arr.Iterate()
+	var (
+		key     uint32
+		entries = arr.Iterate()
+	)
+
 	for entries.Next(&key, &values) {
 		// NB: sum can overflow, real code should check for this
 		var sum uint32
@@ -322,6 +403,7 @@ func ExampleMap_perCPU() {
 		}
 		fmt.Printf("Sum of %d: %d\n", key, sum)
 	}
+
 	if err := entries.Err(); err != nil {
 		panic(err)
 	}
@@ -383,22 +465,43 @@ func ExampleMap_Iterate() {
 		panic(err)
 	}
 
-	// Create a new iterator. You can create multiple iterators
-	// without them affecting each other.
-	entries := hash.Iterate()
+	var (
+		key     string
+		value   uint32
+		entries = hash.Iterate()
+	)
 
-	var key string
-	var value uint32
-
-	// Important: you must use pointers here if you do not
-	// have a custom marshaler implementation.
 	for entries.Next(&key, &value) {
+		// Order of keys is non-deterministic due to randomized map seed
 		fmt.Printf("key: %s, value: %d\n", key, value)
 	}
 
 	if err := entries.Err(); err != nil {
 		panic(fmt.Sprint("Iterator encountered an error:", err))
 	}
+}
 
-	// Order of keys is non-deterministic due to randomized map seed
+// It is possible to iterate nested maps and program arrays by
+// unmarshaling into a *Map or *Program.
+func ExampleMap_Iterate_nestedMapsAndProgramArrays() {
+	var arrayOfMaps *Map // Set this up somehow
+
+	var (
+		key     uint32
+		m       *Map
+		entries = arrayOfMaps.Iterate()
+	)
+
+	// Make sure that the iterated map is closed after
+	// we are done.
+	defer m.Close()
+
+	for entries.Next(&key, &m) {
+		// Order of keys is non-deterministic due to randomized map seed
+		fmt.Printf("key: %v, map: %v\n", key, m)
+	}
+
+	if err := entries.Err(); err != nil {
+		panic(fmt.Sprint("Iterator encountered an error:", err))
+	}
 }

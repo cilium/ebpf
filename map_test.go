@@ -256,38 +256,37 @@ func TestMapIterate(t *testing.T) {
 	}
 }
 
-func TestMapIterateMap(t *testing.T) {
+func TestIterateMapInMap(t *testing.T) {
+	const idx = uint32(1)
+
 	parent := createMapInMap(t, ArrayOfMaps)
 	defer parent.Close()
 
 	a := createArray(t)
 	defer a.Close()
 
-	if err := parent.Put(uint32(0), a); err != nil {
+	if err := parent.Put(idx, a); err != nil {
 		t.Fatal(err)
 	}
 
-	var key uint32
-	var m *Map
+	var (
+		key     uint32
+		m       *Map
+		entries = parent.Iterate()
+	)
 	defer m.Close()
 
-	entries := parent.Iterate()
 	if !entries.Next(&key, &m) {
 		t.Fatal("Iterator encountered error:", entries.Err())
+	}
+
+	if key != 1 {
+		t.Error("Iterator didn't skip first entry")
 	}
 
 	if m == nil {
 		t.Fatal("Map is nil")
 	}
-
-	entries = parent.Iterate()
-	if entries.Next(&key, m) {
-		t.Fatal("Iterator should return false if used with incorrect map type")
-	}
-	if entries.Err() == nil {
-		t.Fatal("Iterator should return an error if used with incorrect map type")
-	}
-
 }
 
 func TestPerCPUMarshaling(t *testing.T) {

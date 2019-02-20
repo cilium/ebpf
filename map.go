@@ -311,12 +311,9 @@ func (m *Map) NextKeyBytes(key interface{}) ([]byte, error) {
 // It's safe to create multiple iterators at the same time.
 //
 // It's not possible to guarantee that all keys in a map will be
-// returned if there are concurrent modifications to the map. If a
-// map is modified too heavily iteration may abort.
+// returned if there are concurrent modifications to the map.
 func (m *Map) Iterate() *MapIterator {
-	return &MapIterator{
-		target: m,
-	}
+	return newMapIterator(m)
 }
 
 // Close removes a Map
@@ -427,25 +424,33 @@ func (m *Map) MarshalBinary() ([]byte, error) {
 //
 // See Map.Iterate.
 type MapIterator struct {
-	target *Map
-	prev   interface{}
-	done   bool
-	err    error
+	target    *Map
+	prevKey   interface{}
+	prevBytes []byte
+	done      bool
+	err       error
+}
+
+func newMapIterator(target *Map) *MapIterator {
+	return &MapIterator{
+		target:    target,
+		prevBytes: make([]byte, int(target.abi.KeySize)),
+	}
 }
 
 // Next decodes the next key and value.
 //
 // Returns false if there are no more entries.
 //
-// See Map.Get for further caveats.
+// See Map.Get for further caveats around valueOut.
 func (mi *MapIterator) Next(keyOut, valueOut interface{}) bool {
 	if mi.err != nil || mi.done {
 		return false
 	}
 
-	var nextBytes []byte
-	for i := 0; i < 3; i++ {
-		nextBytes, mi.err = mi.target.NextKeyBytes(mi.prev)
+	for {
+		var nextBytes []byte
+		nextBytes, mi.err = mi.target.NextKeyBytes(mi.prevKey)
 		if mi.err != nil {
 			return false
 		}
@@ -455,41 +460,34 @@ func (mi *MapIterator) Next(keyOut, valueOut interface{}) bool {
 			return false
 		}
 
+		// The user can get access to nextBytes since unmarshalBytes
+		// does not copy when unmarshaling into a []byte.
+		// Make a copy to prevent accidental corruption of
+		// iterator state.
+		copy(mi.prevBytes, nextBytes)
+		mi.prevKey = mi.prevBytes
+
 		var ok bool
 		ok, mi.err = mi.target.Get(nextBytes, valueOut)
 		if mi.err != nil {
 			return false
 		}
 
-		if ok {
-			break
+		if !ok {
+			// Even though the key should be valid, we couldn't look up
+			// its value. If we're iterating a hash map this is probably
+			// because a concurrent delete removed the value before we
+			// could get it. If we're iterating one of the fd maps like
+			// ProgramArray it means that a given slot doesn't have
+			// a valid fd associated.
+			// In either case there isn't much we can do, so just
+			// continue to the next key.
+			continue
 		}
 
-		// The next key was deleted before we could retrieve
-		// it's value. As of Linux 4.16 there is no safe API which
-		// prevents this race.
-		nextBytes = nil
+		mi.err = unmarshalBytes(keyOut, nextBytes)
+		return mi.err == nil
 	}
-
-	if nextBytes == nil {
-		// We still hit the race condition even though we retried.
-		mi.err = errors.New("ebpf: can't retrieve next entry, map mutated too quickly")
-		return false
-	}
-
-	mi.err = unmarshalBytes(keyOut, nextBytes)
-	if mi.err != nil {
-		return false
-	}
-
-	// The user can get access to nextBytes since marshalBytes
-	// does not copy when unmarshaling into a []byte.
-	// Make a copy to prevent accidental corruption of
-	// iterator state.
-	prevBytes := make([]byte, len(nextBytes))
-	copy(prevBytes, nextBytes)
-	mi.prev = prevBytes
-	return true
 }
 
 // Err returns any encountered error.

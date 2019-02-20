@@ -55,7 +55,7 @@ func marshalBytes(data interface{}, length int) (buf []byte, err error) {
 	}
 
 	if len(buf) != length {
-		return nil, errors.Errorf("%T must marshal to %d bytes", data, length)
+		return nil, errors.Errorf("%T doesn't marshal to %d bytes", data, length)
 	}
 	return buf, nil
 }

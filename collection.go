@@ -19,6 +19,28 @@ type CollectionSpec struct {
 	Programs map[string]*ProgramSpec
 }
 
+// Copy returns a recursive copy of the spec.
+func (cs *CollectionSpec) Copy() *CollectionSpec {
+	if cs == nil {
+		return nil
+	}
+
+	cpy := CollectionSpec{
+		Maps:     make(map[string]*MapSpec, len(cs.Maps)),
+		Programs: make(map[string]*ProgramSpec, len(cs.Programs)),
+	}
+
+	for name, spec := range cs.Maps {
+		cpy.Maps[name] = spec.Copy()
+	}
+
+	for name, spec := range cs.Programs {
+		cpy.Programs[name] = spec.Copy()
+	}
+
+	return &cpy
+}
+
 // LoadCollectionSpec parse an object file and convert it to a collection
 func LoadCollectionSpec(file string) (*CollectionSpec, error) {
 	f, err := os.Open(file)
@@ -59,7 +81,7 @@ func NewCollectionWithOptions(spec *CollectionSpec, opts CollectionOptions) (*Co
 
 	progs := make(map[string]*Program)
 	for progName, origProgSpec := range spec.Programs {
-		progSpec := origProgSpec.copy()
+		progSpec := origProgSpec.Copy()
 		editor := Edit(&progSpec.Instructions)
 
 		// Rewrite any Symbol which is a valid Map.

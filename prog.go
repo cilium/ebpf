@@ -53,7 +53,12 @@ type ProgramSpec struct {
 	KernelVersion uint32
 }
 
-func (ps *ProgramSpec) copy() *ProgramSpec {
+// Copy returns a copy of the spec.
+func (ps *ProgramSpec) Copy() *ProgramSpec {
+	if ps == nil {
+		return nil
+	}
+
 	cpy := *ps
 	cpy.Instructions = make(asm.Instructions, len(ps.Instructions))
 	copy(cpy.Instructions, ps.Instructions)

@@ -27,6 +27,17 @@ func (ms *MapSpec) String() string {
 	return fmt.Sprintf("%s(keySize=%d, valueSize=%d, maxEntries=%d, flags=%d)", ms.Type, ms.KeySize, ms.ValueSize, ms.MaxEntries, ms.Flags)
 }
 
+// Copy returns a copy of the spec.
+func (ms *MapSpec) Copy() *MapSpec {
+	if ms == nil {
+		return nil
+	}
+
+	cpy := *ms
+	cpy.InnerMap = ms.InnerMap.Copy()
+	return &cpy
+}
+
 // Map represents a Map file descriptor.
 //
 // Methods which take interface{} arguments by default encode

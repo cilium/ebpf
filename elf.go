@@ -234,7 +234,7 @@ func (ec *elfCode) loadMaps(mapSections map[int]*elf.Section) (map[string]*MapSp
 				if innerSpec.InnerMap != nil {
 					return nil, errors.Errorf("map %v: can't nest map of map", name)
 				}
-				spec.InnerMap = innerSpec
+				spec.InnerMap = innerSpec.Copy()
 			}
 
 			maps[name] = &spec

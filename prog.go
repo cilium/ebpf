@@ -53,6 +53,13 @@ type ProgramSpec struct {
 	KernelVersion uint32
 }
 
+func (ps *ProgramSpec) copy() *ProgramSpec {
+	cpy := *ps
+	cpy.Instructions = make(asm.Instructions, len(ps.Instructions))
+	copy(cpy.Instructions, ps.Instructions)
+	return &cpy
+}
+
 // Program represents a Program file descriptor
 type Program struct {
 	// Contains the output of the kernel verifier if enabled,

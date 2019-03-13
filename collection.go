@@ -58,7 +58,8 @@ func NewCollectionWithOptions(spec *CollectionSpec, opts CollectionOptions) (*Co
 	}
 
 	progs := make(map[string]*Program)
-	for progName, progSpec := range spec.Programs {
+	for progName, origProgSpec := range spec.Programs {
+		progSpec := origProgSpec.copy()
 		editor := Edit(&progSpec.Instructions)
 
 		// Rewrite any Symbol which is a valid Map.

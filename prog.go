@@ -84,10 +84,6 @@ func NewProgram(spec *ProgramSpec) (*Program, error) {
 // Loading a program for the first time will perform
 // feature detection by loading small, temporary programs.
 func NewProgramWithOptions(spec *ProgramSpec, opts ProgramOptions) (*Program, error) {
-	if len(spec.Instructions) == 0 {
-		return nil, errors.Errorf("instructions cannot be empty")
-	}
-
 	attr, err := convertProgramSpec(spec, haveObjName.Result())
 	if err != nil {
 		return nil, err
@@ -144,6 +140,14 @@ func newProgram(fd uint32, name string, abi *ProgramABI) *Program {
 }
 
 func convertProgramSpec(spec *ProgramSpec, includeName bool) (*bpfProgLoadAttr, error) {
+	if len(spec.Instructions) == 0 {
+		return nil, errors.New("Instructions cannot be empty")
+	}
+
+	if len(spec.License) == 0 {
+		return nil, errors.New("License cannot be empty")
+	}
+
 	buf := bytes.NewBuffer(make([]byte, 0, len(spec.Instructions)*asm.InstructionSize))
 	err := spec.Instructions.Marshal(buf, nativeEndian)
 	if err != nil {

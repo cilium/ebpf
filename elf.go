@@ -321,7 +321,16 @@ type symtab struct {
 func newSymtab(symbols []elf.Symbol) *symtab {
 	index := make(map[int]map[uint64]*elf.Symbol)
 	for i, sym := range symbols {
-		if elf.ST_TYPE(sym.Info) != elf.STT_NOTYPE {
+		switch elf.ST_TYPE(sym.Info) {
+		case elf.STT_NOTYPE:
+			// Older versions of LLVM doesn't tag
+			// symbols correctly.
+			break
+		case elf.STT_OBJECT:
+			break
+		case elf.STT_FUNC:
+			break
+		default:
 			continue
 		}
 
@@ -354,7 +363,7 @@ func (st *symtab) forSectionOffset(sec int, offset uint64) *elf.Symbol {
 }
 
 func (st *symtab) forRelocation(rel elf.Rel64) (*elf.Symbol, error) {
-	symNo := int(rel.Info>>32) - 1
+	symNo := int(elf.R_SYM64(rel.Info) - 1)
 	if symNo >= len(st.Symbols) {
 		return nil, errors.Errorf("symbol %v doesnt exist", symNo)
 	}

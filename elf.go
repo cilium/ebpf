@@ -108,30 +108,23 @@ func loadVersion(sec *elf.Section, bo binary.ByteOrder) (uint32, error) {
 	if sec == nil {
 		return 0, nil
 	}
-	data, err := sec.Data()
-	if err != nil {
-		return 0, errors.Wrapf(err, "section %s", sec.Name)
-	}
+
 	var version uint32
-	return version, binary.Read(bytes.NewReader(data), bo, &version)
+	err := binary.Read(sec.Open(), bo, &version)
+	return version, errors.Wrapf(err, "section %s", sec.Name)
 }
 
 func (ec *elfCode) loadPrograms(progSections, relSections map[int]*elf.Section, license string, version uint32) (map[string]*ProgramSpec, []asm.Instructions, error) {
 	progs := make(map[string]*ProgramSpec)
 	var libs []asm.Instructions
 	for idx, prog := range progSections {
-		data, err := prog.Data()
-		if err != nil {
-			return nil, nil, err
-		}
-
 		funcSym := ec.symtab.forSectionOffset(idx, 0)
 		if funcSym == nil {
 			return nil, nil, errors.Errorf("section %v: no label at start", prog.Name)
 		}
 
 		var insns asm.Instructions
-		offsets, err := insns.Unmarshal(bytes.NewReader(data), ec.ByteOrder)
+		offsets, err := insns.Unmarshal(prog.Open(), ec.ByteOrder)
 		if err != nil {
 			return nil, nil, errors.Wrapf(err, "program %s", funcSym.Name)
 		}
@@ -144,7 +137,7 @@ func (ec *elfCode) loadPrograms(progSections, relSections map[int]*elf.Section, 
 		if rels := relSections[idx]; rels != nil {
 			err = ec.applyRelocations(insns, rels, offsets)
 			if err != nil {
-				return nil, nil, errors.Wrapf(err, "program %s", funcSym.Name)
+				return nil, nil, errors.Wrapf(err, "program %s: section %s", funcSym.Name, rels.Name)
 			}
 		}
 
@@ -281,32 +274,26 @@ func assignSymbols(symbolOffsets map[uint64]*elf.Symbol, insOffsets map[uint64]i
 
 func (ec *elfCode) applyRelocations(insns asm.Instructions, sec *elf.Section, offsets map[uint64]int) error {
 	if sec.Entsize < 16 {
-		return errors.Errorf("section %v: rls are less than 16 bytes", sec.Name)
+		return errors.New("rls are less than 16 bytes")
 	}
 
-	data, err := sec.Data()
-	if err != nil {
-		return err
-	}
-
-	nRels := int(sec.Size / sec.Entsize)
-	for i := 0; i < nRels; i++ {
-		off := i * int(sec.Entsize)
-		rd := bytes.NewReader(data[off : off+int(sec.Entsize)])
+	r := sec.Open()
+	for off := uint64(0); off < sec.Size; off += sec.Entsize {
+		ent := io.LimitReader(r, int64(sec.Entsize))
 
 		var rel elf.Rel64
-		if binary.Read(rd, ec.ByteOrder, &rel) != nil {
-			return errors.Errorf("section %v: cannot parse relocation %v", sec.Name, i)
+		if binary.Read(ent, ec.ByteOrder, &rel) != nil {
+			return errors.Errorf("can't parse relocation at offset %v", off)
 		}
 
 		sym, err := ec.symtab.forRelocation(rel)
 		if err != nil {
-			return errors.Errorf("section %v: relocation %v: %v", sec.Name, i, err.Error())
+			return errors.Wrapf(err, "relocation at offset %v", off)
 		}
 
 		idx, ok := offsets[rel.Off]
 		if !ok {
-			return errors.Errorf("section %v: symbol %v: invalid instruction offset %x", sec.Name, sym, rel.Off)
+			return errors.Errorf("symbol %v: invalid instruction offset %x", sym, rel.Off)
 		}
 		insns[idx].Reference = sym.Name
 	}

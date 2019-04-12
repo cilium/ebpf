@@ -35,6 +35,15 @@ func TestMap(t *testing.T) {
 		t.Fatal("Can't put:", err)
 	}
 
+	m2, err := m.Clone()
+	if err != nil {
+		t.Fatal("Can't clone map:", err)
+	}
+	defer m2.Close()
+
+	m.Close()
+	m = m2
+
 	var v uint32
 	if ok, err := m.Get(uint32(0), &v); err != nil {
 		t.Fatal("Can't get:", err)

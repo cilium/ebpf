@@ -198,6 +198,17 @@ func (bpf *Program) FD() int {
 	return int(bpf.fd)
 }
 
+// Clone creates a duplicate of the Program.
+//
+// Closing the duplicate does not affect the original, and vice versa.
+func (bpf *Program) Clone() (*Program, error) {
+	dupfd, _, errno := syscall.Syscall(syscall.SYS_FCNTL, uintptr(bpf.fd), syscall.F_DUPFD_CLOEXEC, 0)
+	if errno != 0 {
+		return nil, errors.Wrap(errno, "can't dup fd")
+	}
+	return newProgram(uint32(dupfd), bpf.name, &bpf.abi), nil
+}
+
 // Pin persists the Program past the lifetime of the process that created it
 //
 // This requires bpffs to be mounted above fileName. See http://cilium.readthedocs.io/en/doc-1.0/kubernetes/install/#mounting-the-bpf-fs-optional

@@ -47,6 +47,15 @@ func TestProgramRun(t *testing.T) {
 	}
 	defer prog.Close()
 
+	p2, err := prog.Clone()
+	if err != nil {
+		t.Fatal("Can't clone program")
+	}
+	defer p2.Close()
+
+	prog.Close()
+	prog = p2
+
 	ret, out, err := prog.Test(buf)
 	if err != nil {
 		t.Fatal(err)

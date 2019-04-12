@@ -344,6 +344,18 @@ func (m *Map) FD() int {
 	return int(m.fd)
 }
 
+// Clone creates a duplicate of the Map.
+//
+// Closing the duplicate does not affect the original, and vice versa.
+// Changes made to the map are reflected by both instances however.
+func (m *Map) Clone() (*Map, error) {
+	dupfd, _, errno := syscall.Syscall(syscall.SYS_FCNTL, uintptr(m.fd), syscall.F_DUPFD_CLOEXEC, 0)
+	if errno != 0 {
+		return nil, errors.Wrap(errno, "can't dup fd")
+	}
+	return newMap(uint32(dupfd), &m.abi)
+}
+
 // Pin persists the map past the lifetime of the process that created it.
 //
 // This requires bpffs to be mounted above fileName. See http://cilium.readthedocs.io/en/doc-1.0/kubernetes/install/#mounting-the-bpf-fs-optional

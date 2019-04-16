@@ -65,6 +65,17 @@ func TestMap(t *testing.T) {
 	}
 }
 
+func TestMapCloneNil(t *testing.T) {
+	m, err := (*Map)(nil).Clone()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if m != nil {
+		t.Fatal("Cloning a nil map doesn't return nil")
+	}
+}
+
 func TestMapPin(t *testing.T) {
 	m := createArray(t)
 	defer m.Close()

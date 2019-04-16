@@ -201,7 +201,13 @@ func (bpf *Program) FD() int {
 // Clone creates a duplicate of the Program.
 //
 // Closing the duplicate does not affect the original, and vice versa.
+//
+// Cloning a nil Program returns nil.
 func (bpf *Program) Clone() (*Program, error) {
+	if bpf == nil {
+		return nil, nil
+	}
+
 	dupfd, _, errno := syscall.Syscall(syscall.SYS_FCNTL, uintptr(bpf.fd), syscall.F_DUPFD_CLOEXEC, 0)
 	if errno != 0 {
 		return nil, errors.Wrap(errno, "can't dup fd")

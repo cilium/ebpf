@@ -348,7 +348,13 @@ func (m *Map) FD() int {
 //
 // Closing the duplicate does not affect the original, and vice versa.
 // Changes made to the map are reflected by both instances however.
+//
+// Cloning a nil Map returns nil.
 func (m *Map) Clone() (*Map, error) {
+	if m == nil {
+		return nil, nil
+	}
+
 	dupfd, _, errno := syscall.Syscall(syscall.SYS_FCNTL, uintptr(m.fd), syscall.F_DUPFD_CLOEXEC, 0)
 	if errno != 0 {
 		return nil, errors.Wrap(errno, "can't dup fd")

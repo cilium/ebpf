@@ -186,6 +186,17 @@ func TestSanitizeName(t *testing.T) {
 	}
 }
 
+func TestProgramCloneNil(t *testing.T) {
+	p, err := (*Program)(nil).Clone()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if p != nil {
+		t.Fatal("Cloning a nil Program doesn't return nil")
+	}
+}
+
 func TestProgramMarshaling(t *testing.T) {
 	const idx = uint32(0)
 

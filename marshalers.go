@@ -5,7 +5,7 @@ import (
 	"encoding"
 	"encoding/binary"
 	"fmt"
-	"io/ioutil"
+	"os"
 	"reflect"
 	"sync"
 	"unsafe"
@@ -211,19 +211,23 @@ func onlineCPUs() (int, error) {
 // in the format of "/sys/devices/system/cpu/{possible,online,..}.
 // Logical CPU numbers must be of the form 0-n
 func parseCPUs(path string) (int, error) {
-	buf, err := ioutil.ReadFile(path)
+	file, err := os.Open(path)
 	if err != nil {
-		return 0, errors.Wrapf(err, "reading %s", path)
+		return 0, err
 	}
+	defer file.Close()
 
-	var cpus int
-	_, err = fmt.Fscanf(bytes.NewReader(buf), "0-%d\n", &cpus)
-	if err != nil {
+	var low, high int
+	n, _ := fmt.Fscanf(file, "%d-%d", &low, &high)
+	if n < 1 || low != 0 {
 		return 0, errors.Wrapf(err, "%s has unknown format", path)
+	}
+	if n == 1 {
+		high = low
 	}
 
 	// cpus is 0 indexed
-	return cpus + 1, nil
+	return high + 1, nil
 }
 
 func align(n, alignment int) int {

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"os"
 	"syscall"
 	"testing"
 )
@@ -46,6 +47,65 @@ func TestPerfReader(t *testing.T) {
 }
 
 func TestPerfReaderLostSample(t *testing.T) {
+	// To generate a lost sample perf record:
+	//
+	// 1. Fill the perf ring buffer almost completely, with the output_large program.
+	//    The buffer is sized in number of pages, which are architecture dependant.
+	//
+	// 2. Write an extra event that doesn't fit in the space remaining.
+	//
+	// 3. Write a smaller event that does fit, with output_single program.
+	//    Lost sample records are generated opportunistically, when the kernel
+	//    is writing an event and realizes that there were events lost previously.
+	//
+	// The event size is hardcoded in the test BPF programs, there's no way
+	// to parametrize it without rebuilding the programs.
+	//
+	// The event size needs to be selected so that, for any page size, there are at least
+	// 48 bytes left in the perf ring page after filling it with a whole number of events:
+	//
+	//  - PERF_RECORD_LOST: 8 (perf_event_header) + 16 (PERF_RECORD_LOST)
+	//
+	//  - output_single: 8 (perf_event_header) + 4 (size) + 5 (payload) + 7 (padding to 64bits)
+	//
+	// By selecting an event size of the form 2^n + 2^(n+1), for any page size 2^(n+m), m >= 0,
+	// the number of bytes left, x, after filling a page with a whole number of events is:
+	//
+	//                     2^(n+m)                            2^n * 2^m
+	//  x = 2^n * frac(---------------) <=> x = 2^n * frac(---------------)
+	//                  2^n + 2^(n+1)                       2^n + 2^n * 2
+	//
+	//                                                        2^n * 2^m
+	//                                  <=> x = 2^n * frac(---------------)
+	//                                                      2^n * (1 + 2)
+	//
+	//                                                      2^m
+	//                                  <=> x = 2^n * frac(-----)
+	//                                                       3
+	//
+	//                                                1                2
+	//                                  <=> x = 2^n * -  or  x = 2^n * -
+	//                                                3                3
+	//
+	// Selecting n = 6, we have:
+	//
+	//  x = 64  or  x = 128, no matter the page size 2^(6+m)
+	//
+	//  event size = 2^6 + 2^7 = 192
+	//
+	// Accounting for perf headers, output_large uses a 180 byte payload:
+	//
+	//  8 (perf_event_header) + 4 (size) + 180 (payload)
+	const eventSize = 192
+
+	pageSize := os.Getpagesize()
+
+	remainder := pageSize % eventSize
+	if !(remainder == 64 || remainder == 128) {
+		// Page size isn't 2^(6+m), m >= 0
+		t.Fatal("unsupported page size:", pageSize)
+	}
+
 	coll, err := LoadCollection("testdata/perf_output.elf")
 	if err != nil {
 		t.Fatal(err)
@@ -54,20 +114,22 @@ func TestPerfReaderLostSample(t *testing.T) {
 
 	rd, err := NewPerfReader(PerfReaderOptions{
 		Map:          coll.DetachMap("events"),
-		PerCPUBuffer: 4096,
-		// This is chosen to notify _after_ the lost sample record
-		// has been created.
-		Watermark: 4032,
+		PerCPUBuffer: pageSize,
+		// Notify 30 bytes _after_ the last output_large event that can fit in one page,
+		// ie after the lost record is written, and when the output_small event is written.
+		Watermark: pageSize - (remainder - 30),
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer rd.Close()
 
-	prog := coll.DetachProgram("create_lost_sample")
+	prog := coll.DetachProgram("output_large")
 	defer prog.Close()
 
-	ret, _, err := prog.Test(make([]byte, 14))
+	// Fill the ring with the maximum number of output_large events that will fit,
+	// and generate a lost event by writing an additional event.
+	ret, _, err := prog.Benchmark(make([]byte, 14), (pageSize/eventSize)+1)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -76,10 +138,24 @@ func TestPerfReaderLostSample(t *testing.T) {
 		t.Fatal("Expected 0 as return value, got", errno)
 	}
 
+	// Generate a small event to trigger the lost record
+	prog = coll.DetachProgram("output_single")
+	defer prog.Close()
+
+	ret, _, err = prog.Test(make([]byte, 14))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if errno := syscall.Errno(-int32(ret)); errno != 0 {
+		t.Fatal("Expected 0 as return value, got", errno)
+	}
+
+	// Check we received all the samples
 	for sample := range rd.Samples {
-		// Wait for small sample, as an indicator that the reader has processed
+		// Wait for the small sample, as an indicator that the reader has processed
 		// the lost event.
-		if len(sample.Data) == 4 {
+		if len(sample.Data) == 12 {
 			break
 		}
 	}

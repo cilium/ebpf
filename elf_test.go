@@ -1,81 +1,91 @@
 package ebpf
 
 import (
+	"path/filepath"
 	"reflect"
 	"testing"
 )
 
 func TestLoadCollectionSpec(t *testing.T) {
-	spec, err := LoadCollectionSpec("testdata/loader.elf")
-	if err != nil {
-		t.Fatal("Can't parse ELF:", err)
-	}
-
-	hashMapSpec := &MapSpec{
-		"hash_map",
-		Hash,
-		4,
-		2,
-		1,
-		0,
-		nil,
-	}
-	checkMapSpec(t, spec.Maps, "hash_map", hashMapSpec)
-	checkMapSpec(t, spec.Maps, "array_of_hash_map", &MapSpec{
-		"hash_map", ArrayOfMaps, 4, 0, 2, 0, hashMapSpec,
-	})
-
-	hashMap2Spec := &MapSpec{
-		"",
-		Hash,
-		4,
-		1,
-		2,
-		1,
-		nil,
-	}
-	checkMapSpec(t, spec.Maps, "hash_map2", hashMap2Spec)
-	checkMapSpec(t, spec.Maps, "hash_of_hash_map", &MapSpec{
-		"", HashOfMaps, 4, 0, 2, 0, hashMap2Spec,
-	})
-
-	checkProgramSpec(t, spec.Programs, "xdp_prog", &ProgramSpec{
-		Type:          XDP,
-		License:       "MIT",
-		KernelVersion: 0,
-	})
-	checkProgramSpec(t, spec.Programs, "no_relocation", &ProgramSpec{
-		Type:          SocketFilter,
-		License:       "MIT",
-		KernelVersion: 0,
-	})
-
-	t.Log(spec.Programs["xdp_prog"].Instructions)
-
-	coll, err := NewCollection(spec)
+	files, err := filepath.Glob("testdata/loader-*.elf")
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer coll.Close()
 
-	hash := coll.DetachMap("hash_map")
-	if hash == nil {
-		t.Fatal("Program not returned from DetachMap")
-	}
-	defer hash.Close()
+	for _, file := range files {
+		t.Run(file, func(t *testing.T) {
+			spec, err := LoadCollectionSpec(file)
+			if err != nil {
+				t.Fatal("Can't parse ELF:", err)
+			}
 
-	if _, ok := coll.Programs["hash_map"]; ok {
-		t.Error("DetachMap doesn't remove map from Maps")
-	}
+			hashMapSpec := &MapSpec{
+				"hash_map",
+				Hash,
+				4,
+				2,
+				1,
+				0,
+				nil,
+			}
+			checkMapSpec(t, spec.Maps, "hash_map", hashMapSpec)
+			checkMapSpec(t, spec.Maps, "array_of_hash_map", &MapSpec{
+				"hash_map", ArrayOfMaps, 4, 0, 2, 0, hashMapSpec,
+			})
 
-	prog := coll.DetachProgram("xdp_prog")
-	if prog == nil {
-		t.Fatal("Program not returned from DetachProgram")
-	}
-	defer prog.Close()
+			hashMap2Spec := &MapSpec{
+				"",
+				Hash,
+				4,
+				1,
+				2,
+				1,
+				nil,
+			}
+			checkMapSpec(t, spec.Maps, "hash_map2", hashMap2Spec)
+			checkMapSpec(t, spec.Maps, "hash_of_hash_map", &MapSpec{
+				"", HashOfMaps, 4, 0, 2, 0, hashMap2Spec,
+			})
 
-	if _, ok := coll.Programs["xdp_prog"]; ok {
-		t.Error("DetachProgram doesn't remove program from Programs")
+			checkProgramSpec(t, spec.Programs, "xdp_prog", &ProgramSpec{
+				Type:          XDP,
+				License:       "MIT",
+				KernelVersion: 0,
+			})
+			checkProgramSpec(t, spec.Programs, "no_relocation", &ProgramSpec{
+				Type:          SocketFilter,
+				License:       "MIT",
+				KernelVersion: 0,
+			})
+
+			t.Log(spec.Programs["xdp_prog"].Instructions)
+
+			coll, err := NewCollection(spec)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer coll.Close()
+
+			hash := coll.DetachMap("hash_map")
+			if hash == nil {
+				t.Fatal("Program not returned from DetachMap")
+			}
+			defer hash.Close()
+
+			if _, ok := coll.Programs["hash_map"]; ok {
+				t.Error("DetachMap doesn't remove map from Maps")
+			}
+
+			prog := coll.DetachProgram("xdp_prog")
+			if prog == nil {
+				t.Fatal("Program not returned from DetachProgram")
+			}
+			defer prog.Close()
+
+			if _, ok := coll.Programs["xdp_prog"]; ok {
+				t.Error("DetachProgram doesn't remove program from Programs")
+			}
+		})
 	}
 }
 

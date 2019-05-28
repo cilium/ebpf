@@ -1,0 +1,26 @@
+version: v1.0
+name: CI Build
+
+agent:
+  machine:
+    type: e1-standard-2
+    os_image: ubuntu1804
+
+blocks:
+  - name: Run tests
+    task:
+      prologue:
+        commands:
+          - checkout
+          - sem-version go 1.12
+          - go get -d ./...
+          - go build ./...
+          - sudo pip3 install https://github.com/lmb/virtme/archive/852c5b73fdde374623605e355c4907c82f250983.zip
+          - sudo apt-get install -y python3-pip qemu-system-x86
+      jobs:
+      - name: Test on 5.0.13
+        commands:
+          - ./run-tests.sh 5.0.13
+      - name: Test on 4.19.40
+        commands:
+          - ./run-tests.sh 4.19.40

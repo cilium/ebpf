@@ -5,7 +5,6 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
-	"syscall"
 	"unsafe"
 
 	"github.com/pkg/errors"
@@ -173,7 +172,7 @@ func bpfProgLoad(attr *bpfProgLoadAttr) (uintptr, error) {
 		fd, err := bpfCall(_ProgLoad, unsafe.Pointer(attr), unsafe.Sizeof(*attr))
 		// As of ~4.20 the verifier can be interrupted by a signal,
 		// and returns EAGAIN in that case.
-		if err != syscall.EAGAIN {
+		if err != unix.EAGAIN {
 			return fd, err
 		}
 	}
@@ -187,8 +186,8 @@ const bpfFSType = 0xcafe4a11
 
 func bpfPinObject(fileName string, fd uint32) error {
 	dirName := filepath.Dir(fileName)
-	var statfs syscall.Statfs_t
-	if err := syscall.Statfs(dirName, &statfs); err != nil {
+	var statfs unix.Statfs_t
+	if err := unix.Statfs(dirName, &statfs); err != nil {
 		return err
 	}
 	if statfs.Type != bpfFSType {
@@ -253,7 +252,7 @@ var haveObjName = featureTest{
 			return false
 		}
 
-		syscall.Close(int(fd))
+		unix.Close(int(fd))
 		return true
 	},
 }
@@ -277,7 +276,7 @@ func bpfGetProgramFDByID(id uint32) (uint32, error) {
 }
 
 type wrappedErrno struct {
-	errNo   syscall.Errno
+	errNo   unix.Errno
 	message string
 }
 
@@ -290,7 +289,7 @@ func (werr *wrappedErrno) Cause() error {
 }
 
 func bpfCall(cmd int, attr unsafe.Pointer, size uintptr) (uintptr, error) {
-	r1, _, errNo := syscall.Syscall(uintptr(_BPFCall), uintptr(cmd), uintptr(attr), size)
+	r1, _, errNo := unix.Syscall(unix.SYS_BPF, uintptr(cmd), uintptr(attr), size)
 	runtime.KeepAlive(attr)
 
 	var err error
@@ -310,43 +309,43 @@ func perfEventOpen(attr *perfEventAttr, pid, cpu, groupFd int, flags uint) (int,
 	// Force CLOEXEC
 	flags |= flagCloexec
 
-	efd, _, errNo := syscall.Syscall6(_SYS_PERF_EVENT_OPEN, uintptr(unsafe.Pointer(attr)),
+	efd, _, errNo := unix.Syscall6(unix.SYS_PERF_EVENT_OPEN, uintptr(unsafe.Pointer(attr)),
 		uintptr(pid), uintptr(cpu), uintptr(groupFd), uintptr(flags), 0)
 
 	var err error
 	switch errNo {
 	case 0:
 		err = nil
-	case syscall.E2BIG:
-		err = &wrappedErrno{syscall.E2BIG, "perf_event_attr size is incorrect, check size field for what the correct size should be"}
-	case syscall.EACCES:
-		err = &wrappedErrno{syscall.EACCES, "insufficient capabilities to create this event"}
-	case _EBADFD:
-		err = &wrappedErrno{_EBADFD, "group_fd is invalid"}
-	case syscall.EBUSY:
-		err = &wrappedErrno{syscall.EBUSY, "another event already has exclusive access to the PMU"}
-	case syscall.EFAULT:
-		err = &wrappedErrno{syscall.EFAULT, "attr points to an invalid address"}
-	case syscall.EINVAL:
-		err = &wrappedErrno{syscall.EINVAL, "the specified event is invalid, most likely because a configuration parameter is invalid (i.e. too high, too low, etc)"}
-	case syscall.EMFILE:
-		err = &wrappedErrno{syscall.EMFILE, "this process has reached its limits for number of open events that it may have"}
-	case syscall.ENODEV:
-		err = &wrappedErrno{syscall.ENODEV, "this processor architecture does not support this event type"}
-	case syscall.ENOENT:
-		err = &wrappedErrno{syscall.ENOENT, "the type setting is not valid"}
-	case syscall.ENOSPC:
-		err = &wrappedErrno{syscall.ENOSPC, "the hardware limit for breakpoints capacity has been reached"}
-	case syscall.ENOSYS:
-		err = &wrappedErrno{syscall.ENOSYS, "sample type not supported by the hardware"}
-	case syscall.EOPNOTSUPP:
-		err = &wrappedErrno{syscall.EOPNOTSUPP, "this event is not supported by the hardware or requires a feature not supported by the hardware"}
-	case syscall.EOVERFLOW:
-		err = &wrappedErrno{syscall.EOVERFLOW, "sample_max_stack is larger than the kernel support; check \"/proc/sys/kernel/perf_event_max_stack\" for maximum supported size"}
-	case syscall.EPERM:
-		err = &wrappedErrno{syscall.EPERM, "insufficient capability to request exclusive access"}
-	case syscall.ESRCH:
-		err = &wrappedErrno{syscall.ESRCH, "pid does not exist"}
+	case unix.E2BIG:
+		err = &wrappedErrno{unix.E2BIG, "perf_event_attr size is incorrect, check size field for what the correct size should be"}
+	case unix.EACCES:
+		err = &wrappedErrno{unix.EACCES, "insufficient capabilities to create this event"}
+	case unix.EBADFD:
+		err = &wrappedErrno{unix.EBADFD, "group_fd is invalid"}
+	case unix.EBUSY:
+		err = &wrappedErrno{unix.EBUSY, "another event already has exclusive access to the PMU"}
+	case unix.EFAULT:
+		err = &wrappedErrno{unix.EFAULT, "attr points to an invalid address"}
+	case unix.EINVAL:
+		err = &wrappedErrno{unix.EINVAL, "the specified event is invalid, most likely because a configuration parameter is invalid (i.e. too high, too low, etc)"}
+	case unix.EMFILE:
+		err = &wrappedErrno{unix.EMFILE, "this process has reached its limits for number of open events that it may have"}
+	case unix.ENODEV:
+		err = &wrappedErrno{unix.ENODEV, "this processor architecture does not support this event type"}
+	case unix.ENOENT:
+		err = &wrappedErrno{unix.ENOENT, "the type setting is not valid"}
+	case unix.ENOSPC:
+		err = &wrappedErrno{unix.ENOSPC, "the hardware limit for breakpoints capacity has been reached"}
+	case unix.ENOSYS:
+		err = &wrappedErrno{unix.ENOSYS, "sample type not supported by the hardware"}
+	case unix.EOPNOTSUPP:
+		err = &wrappedErrno{unix.EOPNOTSUPP, "this event is not supported by the hardware or requires a feature not supported by the hardware"}
+	case unix.EOVERFLOW:
+		err = &wrappedErrno{unix.EOVERFLOW, "sample_max_stack is larger than the kernel support; check \"/proc/sys/kernel/perf_event_max_stack\" for maximum supported size"}
+	case unix.EPERM:
+		err = &wrappedErrno{unix.EPERM, "insufficient capability to request exclusive access"}
+	case unix.ESRCH:
+		err = &wrappedErrno{unix.ESRCH, "pid does not exist"}
 	default:
 		err = errNo
 	}
@@ -355,8 +354,8 @@ func perfEventOpen(attr *perfEventAttr, pid, cpu, groupFd int, flags uint) (int,
 }
 
 func newEventFd() (int, error) {
-	flags := syscall.O_CLOEXEC | syscall.O_NONBLOCK
-	ret, _, errno := syscall.Syscall(syscall.SYS_EVENTFD2, uintptr(0), uintptr(flags), 0)
+	flags := unix.O_CLOEXEC | unix.O_NONBLOCK
+	ret, _, errno := unix.Syscall(unix.SYS_EVENTFD2, uintptr(0), uintptr(flags), 0)
 	if errno == 0 {
 		return int(ret), nil
 	}
@@ -377,7 +376,7 @@ func newEpollFd(fds ...int) (int, error) {
 
 		err := unix.EpollCtl(epollfd, unix.EPOLL_CTL_ADD, fd, &event)
 		if err != nil {
-			syscall.Close(epollfd)
+			unix.Close(epollfd)
 			return -1, errors.Wrap(err, "can't add fd to epoll")
 		}
 	}

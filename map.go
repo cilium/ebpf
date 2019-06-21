@@ -3,10 +3,10 @@ package ebpf
 import (
 	"fmt"
 	"runtime"
-	"syscall"
 	"unsafe"
 
 	"github.com/pkg/errors"
+	"golang.org/x/sys/unix"
 )
 
 // MapSpec defines a Map.
@@ -224,7 +224,7 @@ func (m *Map) GetBytes(key interface{}) ([]byte, error) {
 		value: newPtr(unsafe.Pointer(&valueBytes[0])),
 	}
 	_, err = bpfCall(_MapLookupElem, unsafe.Pointer(&attr), unsafe.Sizeof(attr))
-	if errors.Cause(err) == syscall.ENOENT {
+	if errors.Cause(err) == unix.ENOENT {
 		return nil, nil
 	}
 	return valueBytes, err
@@ -250,7 +250,7 @@ func (m *Map) Replace(key, value interface{}) error {
 // Use DeleteStrict if you desire an error if key does not exist.
 func (m *Map) Delete(key interface{}) error {
 	err := m.DeleteStrict(key)
-	if err == syscall.ENOENT {
+	if err == unix.ENOENT {
 		return nil
 	}
 	return err
@@ -311,7 +311,7 @@ func (m *Map) NextKeyBytes(key interface{}) ([]byte, error) {
 		value: newPtr(unsafe.Pointer(&nextKey[0])),
 	}
 	_, err := bpfCall(_MapGetNextKey, unsafe.Pointer(&attr), unsafe.Sizeof(attr))
-	if errors.Cause(err) == syscall.ENOENT {
+	if errors.Cause(err) == unix.ENOENT {
 		return nil, nil
 	}
 	return nextKey, err
@@ -336,7 +336,7 @@ func (m *Map) Close() error {
 	}
 
 	runtime.SetFinalizer(m, nil)
-	return syscall.Close(int(m.fd))
+	return unix.Close(int(m.fd))
 }
 
 // FD gets the raw fd value of Map
@@ -355,9 +355,9 @@ func (m *Map) Clone() (*Map, error) {
 		return nil, nil
 	}
 
-	dupfd, _, errno := syscall.Syscall(syscall.SYS_FCNTL, uintptr(m.fd), syscall.F_DUPFD_CLOEXEC, 0)
-	if errno != 0 {
-		return nil, errors.Wrap(errno, "can't dup fd")
+	dupfd, err := unix.FcntlInt(uintptr(m.fd), unix.F_DUPFD_CLOEXEC, 0)
+	if err != nil {
+		return nil, errors.Wrap(err, "can't dup fd")
 	}
 	return newMap(uint32(dupfd), &m.abi)
 }
@@ -435,7 +435,7 @@ func unmarshalMap(buf []byte) (*Map, error) {
 
 	abi, err := newMapABIFromFd(fd)
 	if err != nil {
-		_ = syscall.Close(int(fd))
+		_ = unix.Close(int(fd))
 		return nil, err
 	}
 

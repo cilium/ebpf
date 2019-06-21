@@ -7,12 +7,13 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
-	"syscall"
 	"testing"
+
+	"golang.org/x/sys/unix"
 )
 
 func TestMain(m *testing.M) {
-	err := syscall.Setrlimit(8, &syscall.Rlimit{
+	err := unix.Setrlimit(8, &unix.Rlimit{
 		Cur: math.MaxUint64,
 		Max: math.MaxUint64,
 	})

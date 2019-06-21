@@ -7,11 +7,11 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
-	"syscall"
 	"time"
 	"unsafe"
 
 	"github.com/newtools/ebpf/asm"
+	"golang.org/x/sys/unix"
 
 	"github.com/pkg/errors"
 )
@@ -114,7 +114,7 @@ func NewProgramWithOptions(spec *ProgramSpec, opts ProgramOptions) (*Program, er
 		return prog, nil
 	}
 
-	truncated := errors.Cause(err) == syscall.ENOSPC
+	truncated := errors.Cause(err) == unix.ENOSPC
 	if opts.LogLevel == 0 {
 		// Re-run with the verifier enabled to get better error messages.
 		logBuf = make([]byte, logSize)
@@ -123,7 +123,7 @@ func NewProgramWithOptions(spec *ProgramSpec, opts ProgramOptions) (*Program, er
 		attr.logBuf = newPtr(unsafe.Pointer(&logBuf[0]))
 
 		_, nerr := bpfProgLoad(attr)
-		truncated = errors.Cause(nerr) == syscall.ENOSPC
+		truncated = errors.Cause(nerr) == unix.ENOSPC
 	}
 
 	logs := convertCString(logBuf)
@@ -208,9 +208,9 @@ func (bpf *Program) Clone() (*Program, error) {
 		return nil, nil
 	}
 
-	dupfd, _, errno := syscall.Syscall(syscall.SYS_FCNTL, uintptr(bpf.fd), syscall.F_DUPFD_CLOEXEC, 0)
-	if errno != 0 {
-		return nil, errors.Wrap(errno, "can't dup fd")
+	dupfd, err := unix.FcntlInt(uintptr(bpf.fd), unix.F_DUPFD_CLOEXEC, 0)
+	if err != nil {
+		return nil, errors.Wrap(err, "can't dup fd")
 	}
 	return newProgram(uint32(dupfd), bpf.name, &bpf.abi), nil
 }
@@ -228,7 +228,7 @@ func (bpf *Program) Close() error {
 		return nil
 	}
 	runtime.SetFinalizer(bpf, nil)
-	return syscall.Close(int(bpf.fd))
+	return unix.Close(int(bpf.fd))
 }
 
 // Test runs the Program in the kernel with the given input and returns the
@@ -279,7 +279,7 @@ var noProgTestRun = featureTest{
 			dataIn:     newPtr(unsafe.Pointer(&in[0])),
 		}
 		_, err = bpfCall(_ProgTestRun, unsafe.Pointer(&attr), unsafe.Sizeof(attr))
-		return errors.Cause(err) == syscall.EINVAL
+		return errors.Cause(err) == unix.EINVAL
 	},
 }
 
@@ -347,7 +347,7 @@ func unmarshalProgram(buf []byte) (*Program, error) {
 
 	abi, err := newProgramABIFromFd(fd)
 	if err != nil {
-		_ = syscall.Close(int(fd))
+		_ = unix.Close(int(fd))
 		return nil, err
 	}
 
@@ -373,7 +373,7 @@ func LoadPinnedProgram(fileName string) (*Program, error) {
 
 	abi, err := newProgramABIFromFd(fd)
 	if err != nil {
-		_ = syscall.Close(int(fd))
+		_ = unix.Close(int(fd))
 		return nil, err
 	}
 

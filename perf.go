@@ -7,7 +7,6 @@ import (
 	"runtime"
 	"sync"
 	"sync/atomic"
-	"syscall"
 	"unsafe"
 
 	"github.com/pkg/errors"
@@ -69,14 +68,14 @@ func newPerfEventRing(cpu int, opts PerfReaderOptions) (*perfEventRing, error) {
 		return nil, err
 	}
 
-	if err := syscall.SetNonblock(fd, true); err != nil {
-		syscall.Close(fd)
+	if err := unix.SetNonblock(fd, true); err != nil {
+		unix.Close(fd)
 		return nil, err
 	}
 
-	mmap, err := syscall.Mmap(fd, 0, size, syscall.PROT_READ|syscall.PROT_WRITE, syscall.MAP_SHARED)
+	mmap, err := unix.Mmap(fd, 0, size, unix.PROT_READ|unix.PROT_WRITE, unix.MAP_SHARED)
 	if err != nil {
-		syscall.Close(fd)
+		unix.Close(fd)
 		return nil, err
 	}
 
@@ -95,8 +94,8 @@ func newPerfEventRing(cpu int, opts PerfReaderOptions) (*perfEventRing, error) {
 }
 
 func (ring *perfEventRing) Close() {
-	syscall.Close(ring.fd)
-	syscall.Munmap(ring.mmap)
+	unix.Close(ring.fd)
+	unix.Munmap(ring.mmap)
 }
 
 func readRecord(rd io.Reader) (*PerfSample, uint64, error) {
@@ -262,7 +261,7 @@ func NewPerfReader(opts PerfReaderOptions) (out *PerfReader, err error) {
 	}
 	defer func() {
 		if err != nil {
-			syscall.Close(closeFd)
+			unix.Close(closeFd)
 		}
 	}()
 	fds = append(fds, closeFd)
@@ -273,7 +272,7 @@ func NewPerfReader(opts PerfReaderOptions) (out *PerfReader, err error) {
 	}
 	defer func() {
 		if err != nil {
-			syscall.Close(flushCloseFd)
+			unix.Close(flushCloseFd)
 		}
 	}()
 	fds = append(fds, flushCloseFd)
@@ -340,9 +339,9 @@ func (pr *PerfReader) close(flush bool) error {
 		var value [8]byte
 		nativeEndian.PutUint64(value[:], 1)
 		if flush {
-			_, _ = syscall.Write(pr.flushCloseFd, value[:])
+			_, _ = unix.Write(pr.flushCloseFd, value[:])
 		} else {
-			_, _ = syscall.Write(pr.closeFd, value[:])
+			_, _ = unix.Write(pr.closeFd, value[:])
 		}
 	})
 
@@ -357,9 +356,9 @@ func (pr *PerfReader) poll(epollFd int, rings map[int]*perfEventRing, samples ch
 	defer close(pr.closed)
 	defer close(samples)
 	defer pr.array.Close()
-	defer syscall.Close(epollFd)
-	defer syscall.Close(pr.closeFd)
-	defer syscall.Close(pr.flushCloseFd)
+	defer unix.Close(epollFd)
+	defer unix.Close(pr.closeFd)
+	defer unix.Close(pr.flushCloseFd)
 	defer func() {
 		for _, ring := range rings {
 			ring.Close()

@@ -246,7 +246,7 @@ func TestPerfReaderFlushAndClose(t *testing.T) {
 	}()
 
 	received := 0
-	for _ = range rd.Samples {
+	for range rd.Samples {
 		received++
 	}
 

@@ -8,9 +8,12 @@ set -o pipefail
 if [[ "${1:-}" = "--in-vm" ]]; then
   shift
 
+  readonly home="$(mktemp --directory)"
+
   mount -t bpf bpf /sys/fs/bpf
   export CGO_ENABLED=0
-  export HOME="$(mktemp --directory)"
+  export HOME="$home"
+
   echo Running tests...
   /usr/local/bin/go test -mod=vendor -coverprofile="$1/coverage.txt" -covermode=atomic -v ./...
   touch "$1/success"

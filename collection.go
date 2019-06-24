@@ -91,7 +91,8 @@ func NewCollectionWithOptions(spec *CollectionSpec, opts CollectionOptions) (*Co
 				continue
 			}
 
-			if err := editor.RewriteMap(sym, m); err != nil {
+			// don't overwrite maps already rewritten, users can rewrite programs in the spec themselves
+			if err := editor.rewriteMap(sym, m, false); err != nil {
 				return nil, errors.Wrapf(err, "program %s", progName)
 			}
 		}

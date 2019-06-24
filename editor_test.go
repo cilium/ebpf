@@ -157,6 +157,59 @@ func TestEditorRewriteMap(t *testing.T) {
 	}
 }
 
+func TestEditorRewriteMapOverwrite(t *testing.T) {
+	spec, err := LoadCollectionSpec("testdata/rewrite.elf")
+	if err != nil {
+		t.Fatal(err)
+	}
+	progSpec := spec.Programs["rewrite_map"]
+
+	// Rewrite once
+	array1, err := NewMap(spec.Maps["map_val"])
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer array1.Close()
+
+	if err := array1.Put(uint32(0), uint32(42)); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := Edit(&progSpec.Instructions).RewriteMap("map_val", array1); err != nil {
+		t.Fatal(err)
+	}
+
+	// Rewrite again
+	array2, err := NewMap(spec.Maps["map_val"])
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer array2.Close()
+
+	if err := array2.Put(uint32(0), uint32(22)); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := Edit(&progSpec.Instructions).RewriteMap("map_val", array2); err != nil {
+		t.Fatal(err)
+	}
+
+	prog, err := NewProgram(progSpec)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ret, _, err := prog.Test(make([]byte, 14))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Last rewrite should win
+	if ret != 22 {
+		t.Errorf("Expected return value 22, got %d", ret)
+	}
+}
+
 func TestEditorLink(t *testing.T) {
 	insns := asm.Instructions{
 		// Make sure the call doesn't happen at instruction 0

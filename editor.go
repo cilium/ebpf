@@ -27,6 +27,10 @@ func Edit(insns *asm.Instructions) *Editor {
 // Use IsUnreferencedSymbol if you want to rewrite potentially
 // unused maps.
 func (ed *Editor) RewriteMap(symbol string, m *Map) error {
+	return ed.rewriteMap(symbol, m, true)
+}
+
+func (ed *Editor) rewriteMap(symbol string, m *Map, overwrite bool) error {
 	indices := ed.ReferenceOffsets[symbol]
 	if len(indices) == 0 {
 		return &unreferencedSymbolError{symbol}
@@ -38,6 +42,10 @@ func (ed *Editor) RewriteMap(symbol string, m *Map) error {
 		load := &(*ed.instructions)[index]
 		if load.OpCode != loadOp {
 			return errors.Errorf("symbol %v: missing load instruction", symbol)
+		}
+
+		if !overwrite && load.Constant != 0 {
+			return nil
 		}
 
 		load.Src = 1

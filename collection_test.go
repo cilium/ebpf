@@ -78,3 +78,78 @@ func TestCollectionSpecCopy(t *testing.T) {
 		t.Error("Copy returned same Programs")
 	}
 }
+
+func TestCollectionSpecOverwriteMaps(t *testing.T) {
+	insns := asm.Instructions{
+		// R1 map
+		asm.LoadMapPtr(asm.R1, 0),
+		// R2 key
+		asm.Mov.Reg(asm.R2, asm.R10),
+		asm.Add.Imm(asm.R2, -4),
+		asm.StoreImm(asm.R2, 0, 0, asm.Word),
+		// Lookup map[0]
+		asm.MapLookupElement.Call(),
+		asm.JEq.Imm(asm.R0, 0, "ret"),
+		asm.LoadMem(asm.R0, asm.R0, 0, asm.Word),
+		asm.Return().Sym("ret"),
+	}
+	insns[0].Reference = "test-map"
+
+	cs := &CollectionSpec{
+		Maps: map[string]*MapSpec{
+			"test-map": {
+				Type:       Array,
+				KeySize:    4,
+				ValueSize:  4,
+				MaxEntries: 1,
+			},
+		},
+		Programs: map[string]*ProgramSpec{
+			"test-prog": {
+				Type:         SocketFilter,
+				Instructions: insns,
+				License:      "MIT",
+			},
+		},
+	}
+
+	// Override the map with another one
+	newMap, err := NewMap(cs.Maps["test-map"])
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer newMap.Close()
+
+	err = newMap.Put(uint32(0), uint32(2))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = Edit(&cs.Programs["test-prog"].Instructions).RewriteMap("test-map", newMap)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	coll, err := NewCollection(cs)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer coll.Close()
+
+	oldMap := coll.Maps["test-map"]
+	err = oldMap.Put(uint32(0), uint32(5))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ret, _, err := coll.Programs["test-prog"].Test(make([]byte, 14))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	t.Log(ret)
+
+	if ret != 2 {
+		t.Fatal("new / override map not used")
+	}
+}

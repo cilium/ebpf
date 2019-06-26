@@ -85,15 +85,19 @@ func newPerfEventRing(cpu int, opts PerfReaderOptions) (*perfEventRing, error) {
 	// documentation, since a byte is smaller than sampledPerfEvent.
 	meta := (*perfEventMeta)(unsafe.Pointer(&mmap[0]))
 
-	return &perfEventRing{
+	ring := &perfEventRing{
 		fd:   fd,
 		meta: meta,
 		mmap: mmap,
 		ring: mmap[meta.dataOffset : meta.dataOffset+meta.dataSize],
-	}, nil
+	}
+	runtime.SetFinalizer(ring, (*perfEventRing).Close)
+
+	return ring, nil
 }
 
 func (ring *perfEventRing) Close() {
+	runtime.SetFinalizer(ring, nil)
 	unix.Close(ring.fd)
 	unix.Munmap(ring.mmap)
 }

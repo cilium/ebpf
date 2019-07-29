@@ -141,7 +141,7 @@ func (ec *elfCode) loadPrograms(progSections, relSections map[int]*elf.Section, 
 			}
 		}
 
-		if progType := getProgType(prog.Name); progType == Unrecognized {
+		if progType, attachType := getProgType(prog.Name); progType == Unrecognized {
 			// There is no single name we can use for "library" sections,
 			// since they may contain multiple functions. We'll decode the
 			// labels they contain later on, and then link sections that way.
@@ -150,6 +150,7 @@ func (ec *elfCode) loadPrograms(progSections, relSections map[int]*elf.Section, 
 			progs[funcSym.Name] = &ProgramSpec{
 				Name:          funcSym.Name,
 				Type:          progType,
+				AttachType:    attachType,
 				License:       license,
 				KernelVersion: version,
 				Instructions:  insns,
@@ -237,28 +238,75 @@ func (ec *elfCode) loadMaps(mapSections map[int]*elf.Section) (map[string]*MapSp
 	return maps, nil
 }
 
-func getProgType(v string) ProgType {
+func getProgType(v string) (ProgType, AttachType) {
 	types := map[string]ProgType{
-		// From https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/samples/bpf/bpf_load.c?id=fb40c9ddd66b9c9bb811bbee125b3cb3ba1faee7#n60
-		"socket":      SocketFilter,
-		"seccomp":     SocketFilter,
-		"kprobe/":     Kprobe,
-		"kretprobe/":  Kprobe,
-		"tracepoint/": TracePoint,
-		"xdp":         XDP,
-		"perf_event":  PerfEvent,
-		"cgroup/skb":  CGroupSKB,
-		"cgroup/sock": CGroupSock,
-		// From https://github.com/CumulusNetworks/iproute2/blob/6335c5ff67202cf5b39eb929e2a0a5bb133627ba/include/bpf_elf.h#L19
-		"classifier": SchedCLS,
-		"action":     SchedACT,
+		// From https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/tools/lib/bpf/libbpf.c#n3568
+		"socket":         SocketFilter,
+		"seccomp":        SocketFilter,
+		"kprobe/":        Kprobe,
+		"kretprobe/":     Kprobe,
+		"tracepoint/":    TracePoint,
+		"xdp":            XDP,
+		"perf_event":     PerfEvent,
+		"sockops":        SockOps,
+		"sk_skb":         SkSKB,
+		"sk_msg":         SkMsg,
+		"lirc_mode2":     LircMode2,
+		"flow_dissector": FlowDissector,
+
+		"cgroup_skb/":       CGroupSKB,
+		"cgroup/dev":        CGroupDevice,
+		"cgroup/skb":        CGroupSKB,
+		"cgroup/sock":       CGroupSock,
+		"cgroup/post_bind":  CGroupSock,
+		"cgroup/bind":       CGroupSockAddr,
+		"cgroup/connect":    CGroupSockAddr,
+		"cgroup/sendmsg":    CGroupSockAddr,
+		"cgroup/recvmsg":    CGroupSockAddr,
+		"cgroup/sysctl":     CGroupSysctl,
+		"cgroup/getsockopt": CGroupSockopt,
+		"cgroup/setsockopt": CGroupSockopt,
+		"classifier":        SchedCLS,
+		"action":            SchedACT,
 	}
-	for k, t := range types {
+	attachTypes := map[string]AttachType{
+		"cgroup_skb/ingress":    AttachCGroupInetIngress,
+		"cgroup_skb/egress":     AttachCGroupInetEgress,
+		"cgroup/sock":           AttachCGroupInetSockCreate,
+		"cgroup/post_bind4":     AttachCGroupInet4PostBind,
+		"cgroup/post_bind6":     AttachCGroupInet6PostBind,
+		"cgroup/dev":            AttachCGroupDevice,
+		"sockops":               AttachCGroupSockOps,
+		"sk_skb/stream_parser":  AttachSkSKBStreamParser,
+		"sk_skb/stream_verdict": AttachSkSKBStreamVerdict,
+		"sk_msg":                AttachSkSKBStreamVerdict,
+		"lirc_mode2":            AttachLircMode2,
+		"flow_dissector":        AttachFlowDissector,
+		"cgroup/bind4":          AttachCGroupInet4Bind,
+		"cgroup/bind6":          AttachCGroupInet6Bind,
+		"cgroup/connect4":       AttachCGroupInet4Connect,
+		"cgroup/connect6":       AttachCGroupInet6Connect,
+		"cgroup/sendmsg4":       AttachCGroupUDP4Sendmsg,
+		"cgroup/sendmsg6":       AttachCGroupUDP6Sendmsg,
+		"cgroup/recvmsg4":       AttachCGroupUDP4Recvmsg,
+		"cgroup/recvmsg6":       AttachCGroupUDP6Recvmsg,
+		"cgroup/sysctl":         AttachCGroupSysctl,
+		"cgroup/getsockopt":     AttachCGroupGetsockopt,
+		"cgroup/setsockopt":     AttachCGroupSetsockopt,
+	}
+	attachType := AttachNone
+	for k, t := range attachTypes {
 		if strings.HasPrefix(v, k) {
-			return t
+			attachType = t
 		}
 	}
-	return Unrecognized
+
+	for k, t := range types {
+		if strings.HasPrefix(v, k) {
+			return t, attachType
+		}
+	}
+	return Unrecognized, AttachNone
 }
 
 func assignSymbols(symbolOffsets map[uint64]*elf.Symbol, insOffsets map[uint64]int, insns asm.Instructions) error {

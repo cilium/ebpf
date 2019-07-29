@@ -94,7 +94,7 @@ type bpfProgLoadAttr struct {
 	progFlags          uint32     // since 4.11 e07b98d9bffe
 	progName           bpfObjName // since 4.15 067cae47771c
 	progIfIndex        uint32     // since 4.15 1f6f4cb7ba21
-	expectedAttachType uint32     // since 4.17 5e43f899b03a
+	expectedAttachType AttachType // since 4.17 5e43f899b03a
 }
 
 type bpfProgInfo struct {

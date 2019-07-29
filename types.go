@@ -175,4 +175,62 @@ const (
 	LWTXmit
 	// SockOps program
 	SockOps
+	// SkSKB program
+	SkSKB
+	// CGroupDevice program
+	CGroupDevice
+	// SkMsg program
+	SkMsg
+	// RawTracepoint program
+	RawTracepoint
+	// CGroupSockAddr program
+	CGroupSockAddr
+	// LWTSeg6Local program
+	LWTSeg6Local
+	// LircMode2 program
+	LircMode2
+	// SkReuseport program
+	SkReuseport
+	// FlowDissector program
+	FlowDissector
+	// CGroupSysctl program
+	CGroupSysctl
+	// RawTracepointWritable program
+	RawTracepointWritable
+	// CGroupSockopt program
+	CGroupSockopt
+)
+
+// AttachType of the eBPF program, needed to differentiate allowed context accesses in
+// some newer program types like CGroupSockAddr. Should be set to AttachNone if not required.
+// Will cause invalid argument (EINVAL) at program load time if set incorrectly.
+type AttachType uint32
+
+// AttachNone is an alias for AttachCGroupInetIngress for readability reasons
+const AttachNone AttachType = 0
+
+const (
+	AttachCGroupInetIngress AttachType = iota
+	AttachCGroupInetEgress
+	AttachCGroupInetSockCreate
+	AttachCGroupSockOps
+	AttachSkSKBStreamParser
+	AttachSkSKBStreamVerdict
+	AttachCGroupDevice
+	AttachSkMsgVerdict
+	AttachCGroupInet4Bind
+	AttachCGroupInet6Bind
+	AttachCGroupInet4Connect
+	AttachCGroupInet6Connect
+	AttachCGroupInet4PostBind
+	AttachCGroupInet6PostBind
+	AttachCGroupUDP4Sendmsg
+	AttachCGroupUDP6Sendmsg
+	AttachLircMode2
+	AttachFlowDissector
+	AttachCGroupSysctl
+	AttachCGroupUDP4Recvmsg
+	AttachCGroupUDP6Recvmsg
+	AttachCGroupGetsockopt
+	AttachCGroupSetsockopt
 )

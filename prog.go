@@ -48,6 +48,7 @@ type ProgramSpec struct {
 	// alpha numeric and '_' characters.
 	Name          string
 	Type          ProgType
+	AttachType    AttachType
 	Instructions  asm.Instructions
 	License       string
 	KernelVersion uint32
@@ -164,6 +165,7 @@ func convertProgramSpec(spec *ProgramSpec, includeName bool) (*bpfProgLoadAttr, 
 	lic := []byte(spec.License)
 	attr := &bpfProgLoadAttr{
 		progType:     spec.Type,
+		expectedAttachType: spec.AttachType,
 		insCount:     insCount,
 		instructions: newPtr(unsafe.Pointer(&bytecode[0])),
 		license:      newPtr(unsafe.Pointer(&lic[0])),

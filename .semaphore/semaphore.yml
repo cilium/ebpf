@@ -21,7 +21,7 @@ blocks:
       jobs:
       - name: Test on 5.0.13
         commands:
-          - timeout -s KILL 30s ./run-tests.sh 5.0.13
+          - timeout -s KILL 60s ./run-tests.sh 5.0.13
       - name: Test on 4.19.40
         commands:
-          - timeout -s KILL 30s ./run-tests.sh 4.19.40
+          - timeout -s KILL 60s ./run-tests.sh 4.19.40

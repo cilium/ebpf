@@ -80,7 +80,7 @@ func newMapABIFromSpec(spec *MapSpec) *MapABI {
 	}
 }
 
-func newMapABIFromFd(fd uint32) (*MapABI, error) {
+func newMapABIFromFd(fd *bpfFD) (*MapABI, error) {
 	info, err := bpfGetMapInfoByFD(fd)
 	if err != nil {
 		return nil, err
@@ -148,7 +148,7 @@ func newProgramABIFromSpec(spec *ProgramSpec) *ProgramABI {
 	}
 }
 
-func newProgramABIFromFd(fd uint32) (*ProgramABI, error) {
+func newProgramABIFromFd(fd *bpfFD) (*ProgramABI, error) {
 	info, err := bpfGetProgInfoByFD(fd)
 	if err != nil {
 		return nil, err

@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"math"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"time"
 	"unsafe"
@@ -66,13 +65,15 @@ func (ps *ProgramSpec) Copy() *ProgramSpec {
 	return &cpy
 }
 
-// Program represents a Program file descriptor
+// Program represents BPF program loaded into the kernel.
+//
+// It is not safe to close a Program which is used by other goroutines.
 type Program struct {
 	// Contains the output of the kernel verifier if enabled,
 	// otherwise it is empty.
 	VerifierLog string
 
-	fd   uint32
+	fd   *bpfFD
 	name string
 	abi  ProgramABI
 }
@@ -110,7 +111,7 @@ func NewProgramWithOptions(spec *ProgramSpec, opts ProgramOptions) (*Program, er
 
 	fd, err := bpfProgLoad(attr)
 	if err == nil {
-		prog := newProgram(uint32(fd), spec.Name, &ProgramABI{spec.Type})
+		prog := newProgram(fd, spec.Name, &ProgramABI{spec.Type})
 		prog.VerifierLog = convertCString(logBuf)
 		return prog, nil
 	}
@@ -135,14 +136,12 @@ func NewProgramWithOptions(spec *ProgramSpec, opts ProgramOptions) (*Program, er
 	return nil, &loadError{err, logs}
 }
 
-func newProgram(fd uint32, name string, abi *ProgramABI) *Program {
-	prog := &Program{
+func newProgram(fd *bpfFD, name string, abi *ProgramABI) *Program {
+	return &Program{
 		name: name,
 		fd:   fd,
 		abi:  *abi,
 	}
-	runtime.SetFinalizer(prog, (*Program).Close)
-	return prog
 }
 
 func convertProgramSpec(spec *ProgramSpec, includeName bool) (*bpfProgLoadAttr, error) {
@@ -164,11 +163,11 @@ func convertProgramSpec(spec *ProgramSpec, includeName bool) (*bpfProgLoadAttr, 
 	insCount := uint32(len(bytecode) / asm.InstructionSize)
 	lic := []byte(spec.License)
 	attr := &bpfProgLoadAttr{
-		progType:     spec.Type,
+		progType:           spec.Type,
 		expectedAttachType: spec.AttachType,
-		insCount:     insCount,
-		instructions: newPtr(unsafe.Pointer(&bytecode[0])),
-		license:      newPtr(unsafe.Pointer(&lic[0])),
+		insCount:           insCount,
+		instructions:       newPtr(unsafe.Pointer(&bytecode[0])),
+		license:            newPtr(unsafe.Pointer(&lic[0])),
 	}
 
 	name, err := newBPFObjName(spec.Name)
@@ -185,9 +184,9 @@ func convertProgramSpec(spec *ProgramSpec, includeName bool) (*bpfProgLoadAttr, 
 
 func (bpf *Program) String() string {
 	if bpf.name != "" {
-		return fmt.Sprintf("%s(%s)#%d", bpf.abi.Type, bpf.name, bpf.fd)
+		return fmt.Sprintf("%s(%s)#%s", bpf.abi.Type, bpf.name, bpf.fd)
 	}
-	return fmt.Sprintf("%s#%d", bpf.abi.Type, bpf.fd)
+	return fmt.Sprintf("%s#%s", bpf.abi.Type, bpf.fd)
 }
 
 // ABI gets the ABI of the Program
@@ -195,9 +194,18 @@ func (bpf *Program) ABI() ProgramABI {
 	return bpf.abi
 }
 
-// FD gets the file descriptor value of the Program
+// FD gets the file descriptor of the Program.
+//
+// It is invalid to call this function after Close has been called.
 func (bpf *Program) FD() int {
-	return int(bpf.fd)
+	fd, err := bpf.fd.value()
+	if err != nil {
+		// Best effort: -1 is the number most likely to be an
+		// invalid file descriptor.
+		return -1
+	}
+
+	return int(fd)
 }
 
 // Clone creates a duplicate of the Program.
@@ -210,18 +218,19 @@ func (bpf *Program) Clone() (*Program, error) {
 		return nil, nil
 	}
 
-	dupfd, err := unix.FcntlInt(uintptr(bpf.fd), unix.F_DUPFD_CLOEXEC, 0)
+	dup, err := bpf.fd.dup()
 	if err != nil {
-		return nil, errors.Wrap(err, "can't dup fd")
+		return nil, errors.Wrap(err, "can't clone program")
 	}
-	return newProgram(uint32(dupfd), bpf.name, &bpf.abi), nil
+
+	return newProgram(dup, bpf.name, &bpf.abi), nil
 }
 
 // Pin persists the Program past the lifetime of the process that created it
 //
 // This requires bpffs to be mounted above fileName. See http://cilium.readthedocs.io/en/doc-1.0/kubernetes/install/#mounting-the-bpf-fs-optional
 func (bpf *Program) Pin(fileName string) error {
-	return bpfPinObject(fileName, bpf.fd)
+	return errors.Wrap(bpfPinObject(fileName, bpf.fd), "can't pin program")
 }
 
 // Close unloads the program from the kernel.
@@ -229,8 +238,8 @@ func (bpf *Program) Close() error {
 	if bpf == nil {
 		return nil
 	}
-	runtime.SetFinalizer(bpf, nil)
-	return unix.Close(int(bpf.fd))
+
+	return bpf.fd.close()
 }
 
 // Test runs the Program in the kernel with the given input and returns the
@@ -273,13 +282,19 @@ var noProgTestRun = featureTest{
 		}
 		defer prog.Close()
 
+		fd, err := prog.fd.value()
+		if err != nil {
+			return false
+		}
+
 		// Programs require at least 14 bytes input
 		in := make([]byte, 14)
 		attr := bpfProgTestRunAttr{
-			fd:         prog.fd,
+			fd:         fd,
 			dataSizeIn: uint32(len(in)),
 			dataIn:     newPtr(unsafe.Pointer(&in[0])),
 		}
+
 		_, err = bpfCall(_ProgTestRun, unsafe.Pointer(&attr), unsafe.Sizeof(attr))
 		return errors.Cause(err) == unix.EINVAL
 	},
@@ -309,8 +324,13 @@ func (bpf *Program) testRun(in []byte, repeat int) (uint32, []byte, time.Duratio
 	// See https://patchwork.ozlabs.org/cover/1006822/
 	out := make([]byte, len(in)+outputPad)
 
+	fd, err := bpf.fd.value()
+	if err != nil {
+		return 0, nil, 0, err
+	}
+
 	attr := bpfProgTestRunAttr{
-		fd:          bpf.fd,
+		fd:          fd,
 		dataSizeIn:  uint32(len(in)),
 		dataSizeOut: uint32(len(out)),
 		dataIn:      newPtr(unsafe.Pointer(&in[0])),
@@ -318,7 +338,7 @@ func (bpf *Program) testRun(in []byte, repeat int) (uint32, []byte, time.Duratio
 		repeat:      uint32(repeat),
 	}
 
-	_, err := bpfCall(_ProgTestRun, unsafe.Pointer(&attr), unsafe.Sizeof(attr))
+	_, err = bpfCall(_ProgTestRun, unsafe.Pointer(&attr), unsafe.Sizeof(attr))
 	if err != nil {
 		return 0, nil, 0, errors.Wrap(err, "can't run test")
 	}
@@ -349,7 +369,7 @@ func unmarshalProgram(buf []byte) (*Program, error) {
 
 	abi, err := newProgramABIFromFd(fd)
 	if err != nil {
-		_ = unix.Close(int(fd))
+		_ = fd.close()
 		return nil, err
 	}
 
@@ -358,8 +378,13 @@ func unmarshalProgram(buf []byte) (*Program, error) {
 
 // MarshalBinary implements BinaryMarshaler.
 func (bpf *Program) MarshalBinary() ([]byte, error) {
+	value, err := bpf.fd.value()
+	if err != nil {
+		return nil, err
+	}
+
 	buf := make([]byte, 4)
-	nativeEndian.PutUint32(buf, bpf.fd)
+	nativeEndian.PutUint32(buf, value)
 	return buf, nil
 }
 
@@ -375,7 +400,7 @@ func LoadPinnedProgram(fileName string) (*Program, error) {
 
 	abi, err := newProgramABIFromFd(fd)
 	if err != nil {
-		_ = unix.Close(int(fd))
+		_ = fd.close()
 		return nil, err
 	}
 

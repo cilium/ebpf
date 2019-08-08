@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"unsafe"
 
@@ -15,6 +16,55 @@ const (
 	bpfObjNameLen = 16
 	bpfTagSize    = 8
 )
+
+var errClosedFd = errors.New("use of closed file descriptor")
+
+type bpfFD struct {
+	raw int64
+}
+
+func newBPFFD(value uint32) *bpfFD {
+	fd := &bpfFD{int64(value)}
+	runtime.SetFinalizer(fd, (*bpfFD).close)
+	return fd
+}
+
+func (fd *bpfFD) String() string {
+	return strconv.FormatInt(fd.raw, 10)
+}
+
+func (fd *bpfFD) value() (uint32, error) {
+	if fd.raw < 0 {
+		return 0, errClosedFd
+	}
+
+	return uint32(fd.raw), nil
+}
+
+func (fd *bpfFD) close() error {
+	if fd.raw < 0 {
+		return nil
+	}
+
+	value := int(fd.raw)
+	fd.raw = -1
+
+	runtime.SetFinalizer(fd, nil)
+	return unix.Close(value)
+}
+
+func (fd *bpfFD) dup() (*bpfFD, error) {
+	if fd.raw < 0 {
+		return nil, errClosedFd
+	}
+
+	dup, err := unix.FcntlInt(uintptr(fd.raw), unix.F_DUPFD_CLOEXEC, 0)
+	if err != nil {
+		return nil, errors.Wrap(err, "can't dup fd")
+	}
+
+	return newBPFFD(uint32(dup)), nil
+}
 
 // bpfObjName is a null-terminated string made up of
 // 'A-Za-z0-9_' characters.
@@ -167,24 +217,35 @@ func newPtr(ptr unsafe.Pointer) syscallPtr {
 	return syscallPtr{ptr: ptr}
 }
 
-func bpfProgLoad(attr *bpfProgLoadAttr) (uintptr, error) {
+func bpfProgLoad(attr *bpfProgLoadAttr) (*bpfFD, error) {
 	for {
 		fd, err := bpfCall(_ProgLoad, unsafe.Pointer(attr), unsafe.Sizeof(*attr))
 		// As of ~4.20 the verifier can be interrupted by a signal,
 		// and returns EAGAIN in that case.
-		if err != unix.EAGAIN {
-			return fd, err
+		if err == unix.EAGAIN {
+			continue
 		}
+
+		if err != nil {
+			return nil, err
+		}
+
+		return newBPFFD(uint32(fd)), nil
 	}
 }
 
-func bpfMapCreate(attr *bpfMapCreateAttr) (uintptr, error) {
-	return bpfCall(_MapCreate, unsafe.Pointer(attr), unsafe.Sizeof(*attr))
+func bpfMapCreate(attr *bpfMapCreateAttr) (*bpfFD, error) {
+	fd, err := bpfCall(_MapCreate, unsafe.Pointer(attr), unsafe.Sizeof(*attr))
+	if err != nil {
+		return nil, err
+	}
+
+	return newBPFFD(uint32(fd)), nil
 }
 
 const bpfFSType = 0xcafe4a11
 
-func bpfPinObject(fileName string, fd uint32) error {
+func bpfPinObject(fileName string, fd *bpfFD) error {
 	dirName := filepath.Dir(fileName)
 	var statfs unix.Statfs_t
 	if err := unix.Statfs(dirName, &statfs); err != nil {
@@ -193,40 +254,54 @@ func bpfPinObject(fileName string, fd uint32) error {
 	if statfs.Type != bpfFSType {
 		return errors.Errorf("%s is not on a bpf filesystem", fileName)
 	}
-	_, err := bpfCall(_ObjPin, unsafe.Pointer(&bpfPinObjAttr{
+
+	value, err := fd.value()
+	if err != nil {
+		return err
+	}
+
+	_, err = bpfCall(_ObjPin, unsafe.Pointer(&bpfPinObjAttr{
 		fileName: newPtr(unsafe.Pointer(&[]byte(fileName)[0])),
-		fd:       fd,
+		fd:       value,
 	}), 16)
-	return err
+	return errors.Wrapf(err, "pin object %s", fileName)
 }
 
-func bpfGetObject(fileName string) (uint32, error) {
+func bpfGetObject(fileName string) (*bpfFD, error) {
 	ptr, err := bpfCall(_ObjGet, unsafe.Pointer(&bpfPinObjAttr{
 		fileName: newPtr(unsafe.Pointer(&[]byte(fileName)[0])),
 	}), 16)
-	return uint32(ptr), errors.Wrapf(err, "object %s", fileName)
+	if err != nil {
+		return nil, errors.Wrapf(err, "get object %s", fileName)
+	}
+	return newBPFFD(uint32(ptr)), nil
 }
 
-func bpfGetObjectInfoByFD(fd uint32, info unsafe.Pointer, size uintptr) error {
+func bpfGetObjectInfoByFD(fd *bpfFD, info unsafe.Pointer, size uintptr) error {
+	value, err := fd.value()
+	if err != nil {
+		return err
+	}
+
 	// available from 4.13
 	attr := bpfObjGetInfoByFDAttr{
-		fd:      fd,
+		fd:      value,
 		infoLen: uint32(size),
 		info:    newPtr(info),
 	}
-	_, err := bpfCall(_ObjGetInfoByFD, unsafe.Pointer(&attr), unsafe.Sizeof(attr))
-	return errors.Wrapf(err, "fd %d", fd)
+	_, err = bpfCall(_ObjGetInfoByFD, unsafe.Pointer(&attr), unsafe.Sizeof(attr))
+	return errors.Wrapf(err, "fd %d", value)
 }
 
-func bpfGetProgInfoByFD(fd uint32) (*bpfProgInfo, error) {
+func bpfGetProgInfoByFD(fd *bpfFD) (*bpfProgInfo, error) {
 	var info bpfProgInfo
-	err := bpfGetObjectInfoByFD(uint32(fd), unsafe.Pointer(&info), unsafe.Sizeof(info))
+	err := bpfGetObjectInfoByFD(fd, unsafe.Pointer(&info), unsafe.Sizeof(info))
 	return &info, errors.Wrap(err, "can't get program info")
 }
 
-func bpfGetMapInfoByFD(fd uint32) (*bpfMapInfo, error) {
+func bpfGetMapInfoByFD(fd *bpfFD) (*bpfMapInfo, error) {
 	var info bpfMapInfo
-	err := bpfGetObjectInfoByFD(uint32(fd), unsafe.Pointer(&info), unsafe.Sizeof(info))
+	err := bpfGetObjectInfoByFD(fd, unsafe.Pointer(&info), unsafe.Sizeof(info))
 	return &info, errors.Wrap(err, "can't get map info:")
 }
 
@@ -252,27 +327,33 @@ var haveObjName = featureTest{
 			return false
 		}
 
-		unix.Close(int(fd))
+		_ = fd.close()
 		return true
 	},
 }
 
-func bpfGetMapFDByID(id uint32) (uint32, error) {
+func bpfGetMapFDByID(id uint32) (*bpfFD, error) {
 	// available from 4.13
 	attr := bpfGetFDByIDAttr{
 		id: id,
 	}
 	ptr, err := bpfCall(_MapGetFDByID, unsafe.Pointer(&attr), unsafe.Sizeof(attr))
-	return uint32(ptr), errors.Wrapf(err, "can't get fd for map id %d", id)
+	if err != nil {
+		return nil, errors.Wrapf(err, "can't get fd for map id %d", id)
+	}
+	return newBPFFD(uint32(ptr)), nil
 }
 
-func bpfGetProgramFDByID(id uint32) (uint32, error) {
+func bpfGetProgramFDByID(id uint32) (*bpfFD, error) {
 	// available from 4.13
 	attr := bpfGetFDByIDAttr{
 		id: id,
 	}
 	ptr, err := bpfCall(_ProgGetFDByID, unsafe.Pointer(&attr), unsafe.Sizeof(attr))
-	return uint32(ptr), errors.Wrapf(err, "can't get fd for program id %d", id)
+	if err != nil {
+		return nil, errors.Wrapf(err, "can't get fd for program id %d", id)
+	}
+	return newBPFFD(uint32(ptr)), nil
 }
 
 type wrappedErrno struct {

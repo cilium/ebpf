@@ -70,6 +70,24 @@ func TestProgramRun(t *testing.T) {
 	}
 }
 
+func TestProgramClose(t *testing.T) {
+	prog, err := NewProgram(&ProgramSpec{
+		Type: SocketFilter,
+		Instructions: asm.Instructions{
+			asm.LoadImm(asm.R0, 0, asm.DWord),
+			asm.Return(),
+		},
+		License: "MIT",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := prog.Close(); err != nil {
+		t.Fatal("Can't close program:", err)
+	}
+}
+
 func TestProgramPin(t *testing.T) {
 	prog, err := NewProgram(&ProgramSpec{
 		Type: SocketFilter,

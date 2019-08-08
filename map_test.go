@@ -9,6 +9,7 @@ import (
 	"sort"
 	"testing"
 
+	"github.com/pkg/errors"
 	"golang.org/x/sys/unix"
 )
 
@@ -63,6 +64,22 @@ func TestMap(t *testing.T) {
 	}
 	if k != 1 {
 		t.Error("Want key 1, got", k)
+	}
+}
+
+func TestMapClose(t *testing.T) {
+	m := createArray(t)
+
+	if err := m.Close(); err != nil {
+		t.Fatal("Can't close map:", err)
+	}
+
+	if err := m.Put(uint32(0), uint32(42)); errors.Cause(err) != errClosedFd {
+		t.Fatal("Put doesn't check for closed fd", err)
+	}
+
+	if _, err := m.GetBytes(uint32(0)); errors.Cause(err) != errClosedFd {
+		t.Fatal("Get doesn't check for closed fd", err)
 	}
 }
 

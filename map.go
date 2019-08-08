@@ -2,7 +2,6 @@ package ebpf
 
 import (
 	"fmt"
-	"runtime"
 	"unsafe"
 
 	"github.com/pkg/errors"
@@ -40,12 +39,14 @@ func (ms *MapSpec) Copy() *MapSpec {
 
 // Map represents a Map file descriptor.
 //
+// It is not safe to close a map which is used by other goroutines.
+//
 // Methods which take interface{} arguments by default encode
 // them using binary.Read/Write in the machine's native endianness.
 //
 // Implement Marshaler on the arguments if you need custom encoding.
 type Map struct {
-	fd  uint32
+	fd  *bpfFD
 	abi MapABI
 	// Per CPU maps return values larger than the size in the spec
 	fullValueSize int
@@ -57,14 +58,14 @@ type Map struct {
 // by creating small, temporary maps.
 func NewMap(spec *MapSpec) (*Map, error) {
 	if spec.Type != ArrayOfMaps && spec.Type != HashOfMaps {
-		return createMap(spec, 0)
+		return createMap(spec, nil)
 	}
 
 	if spec.InnerMap == nil {
 		return nil, errors.Errorf("%s requires InnerMap", spec.Type)
 	}
 
-	template, err := createMap(spec.InnerMap, 0)
+	template, err := createMap(spec.InnerMap, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -73,7 +74,7 @@ func NewMap(spec *MapSpec) (*Map, error) {
 	return createMap(spec, template.fd)
 }
 
-func createMap(spec *MapSpec, inner uint32) (*Map, error) {
+func createMap(spec *MapSpec, inner *bpfFD) (*Map, error) {
 	cpy := *spec
 	switch spec.Type {
 	case ArrayOfMaps:
@@ -110,7 +111,14 @@ func createMap(spec *MapSpec, inner uint32) (*Map, error) {
 		valueSize:  cpy.ValueSize,
 		maxEntries: cpy.MaxEntries,
 		flags:      cpy.Flags,
-		innerMapFd: inner,
+	}
+
+	if inner != nil {
+		var err error
+		attr.innerMapFd, err = inner.value()
+		if err != nil {
+			return nil, errors.Wrap(err, "map create")
+		}
 	}
 
 	name, err := newBPFObjName(spec.Name)
@@ -127,16 +135,15 @@ func createMap(spec *MapSpec, inner uint32) (*Map, error) {
 		return nil, errors.Wrap(err, "map create")
 	}
 
-	return newMap(uint32(fd), newMapABIFromSpec(&cpy))
+	return newMap(fd, newMapABIFromSpec(&cpy))
 }
 
-func newMap(fd uint32, abi *MapABI) (*Map, error) {
+func newMap(fd *bpfFD, abi *MapABI) (*Map, error) {
 	m := &Map{
-		uint32(fd),
+		fd,
 		*abi,
 		int(abi.ValueSize),
 	}
-	runtime.SetFinalizer(m, (*Map).Close)
 
 	if !abi.Type.hasPerCPUValue() {
 		return m, nil
@@ -218,8 +225,14 @@ func (m *Map) GetBytes(key interface{}) ([]byte, error) {
 		return nil, err
 	}
 	valueBytes := make([]byte, m.fullValueSize)
+
+	fd, err := m.fd.value()
+	if err != nil {
+		return nil, err
+	}
+
 	attr := bpfMapOpAttr{
-		mapFd: m.fd,
+		mapFd: fd,
 		key:   newPtr(unsafe.Pointer(&keyBytes[0])),
 		value: newPtr(unsafe.Pointer(&valueBytes[0])),
 	}
@@ -263,8 +276,14 @@ func (m *Map) DeleteStrict(key interface{}) error {
 	if err != nil {
 		return err
 	}
+
+	fd, err := m.fd.value()
+	if err != nil {
+		return err
+	}
+
 	attr := bpfMapOpAttr{
-		mapFd: m.fd,
+		mapFd: fd,
 		key:   newPtr(unsafe.Pointer(&keyBytes[0])),
 	}
 	_, err = bpfCall(_MapDeleteElem, unsafe.Pointer(&attr), unsafe.Sizeof(attr))
@@ -304,13 +323,18 @@ func (m *Map) NextKeyBytes(key interface{}) ([]byte, error) {
 		keyPtr = newPtr(unsafe.Pointer(&keyBytes[0]))
 	}
 
+	fd, err := m.fd.value()
+	if err != nil {
+		return nil, err
+	}
+
 	nextKey := make([]byte, m.abi.KeySize)
 	attr := bpfMapOpAttr{
-		mapFd: m.fd,
+		mapFd: fd,
 		key:   keyPtr,
 		value: newPtr(unsafe.Pointer(&nextKey[0])),
 	}
-	_, err := bpfCall(_MapGetNextKey, unsafe.Pointer(&attr), unsafe.Sizeof(attr))
+	_, err = bpfCall(_MapGetNextKey, unsafe.Pointer(&attr), unsafe.Sizeof(attr))
 	if errors.Cause(err) == unix.ENOENT {
 		return nil, nil
 	}
@@ -335,13 +359,21 @@ func (m *Map) Close() error {
 		return nil
 	}
 
-	runtime.SetFinalizer(m, nil)
-	return unix.Close(int(m.fd))
+	return m.fd.close()
 }
 
-// FD gets the raw fd value of Map
+// FD gets the file descriptor of the Map.
+//
+// Calling this function is invalid after Close has been called.
 func (m *Map) FD() int {
-	return int(m.fd)
+	fd, err := m.fd.value()
+	if err != nil {
+		// Best effort: -1 is the number most likely to be an
+		// invalid file descriptor.
+		return -1
+	}
+
+	return int(fd)
 }
 
 // Clone creates a duplicate of the Map.
@@ -355,11 +387,12 @@ func (m *Map) Clone() (*Map, error) {
 		return nil, nil
 	}
 
-	dupfd, err := unix.FcntlInt(uintptr(m.fd), unix.F_DUPFD_CLOEXEC, 0)
+	dup, err := m.fd.dup()
 	if err != nil {
-		return nil, errors.Wrap(err, "can't dup fd")
+		return nil, errors.Wrap(err, "can't clone map")
 	}
-	return newMap(uint32(dupfd), &m.abi)
+
+	return newMap(dup, &m.abi)
 }
 
 // Pin persists the map past the lifetime of the process that created it.
@@ -380,6 +413,7 @@ func LoadPinnedMap(fileName string) (*Map, error) {
 	}
 	abi, err := newMapABIFromFd(fd)
 	if err != nil {
+		_ = fd.close()
 		return nil, err
 	}
 	return newMap(fd, abi)
@@ -410,8 +444,13 @@ func (m *Map) put(key, value interface{}, putType uint64) error {
 		return err
 	}
 
+	fd, err := m.fd.value()
+	if err != nil {
+		return err
+	}
+
 	attr := bpfMapOpAttr{
-		mapFd: m.fd,
+		mapFd: fd,
 		key:   newPtr(unsafe.Pointer(&keyBytes[0])),
 		value: newPtr(unsafe.Pointer(&valueBytes[0])),
 		flags: putType,
@@ -435,7 +474,7 @@ func unmarshalMap(buf []byte) (*Map, error) {
 
 	abi, err := newMapABIFromFd(fd)
 	if err != nil {
-		_ = unix.Close(int(fd))
+		_ = fd.close()
 		return nil, err
 	}
 
@@ -444,8 +483,13 @@ func unmarshalMap(buf []byte) (*Map, error) {
 
 // MarshalBinary implements BinaryMarshaler.
 func (m *Map) MarshalBinary() ([]byte, error) {
+	fd, err := m.fd.value()
+	if err != nil {
+		return nil, err
+	}
+
 	buf := make([]byte, 4)
-	nativeEndian.PutUint32(buf, m.fd)
+	nativeEndian.PutUint32(buf, fd)
 	return buf, nil
 }
 

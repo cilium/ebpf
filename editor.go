@@ -36,6 +36,11 @@ func (ed *Editor) rewriteMap(symbol string, m *Map, overwrite bool) error {
 		return &unreferencedSymbolError{symbol}
 	}
 
+	fd, err := m.fd.value()
+	if err != nil {
+		return err
+	}
+
 	loadOp := asm.LoadImmOp(asm.DWord)
 
 	for _, index := range indices {
@@ -49,7 +54,7 @@ func (ed *Editor) rewriteMap(symbol string, m *Map, overwrite bool) error {
 		}
 
 		load.Src = 1
-		load.Constant = int64(m.fd)
+		load.Constant = int64(fd)
 	}
 
 	return nil

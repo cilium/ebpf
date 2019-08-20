@@ -172,12 +172,18 @@ func (m *Map) ABI() MapABI {
 // Calls Close() on valueOut if it is of type **Map or **Program,
 // and *valueOut is not nil.
 func (m *Map) Get(key, valueOut interface{}) (bool, error) {
-	valueBytes, err := m.GetBytes(key)
+	valuePtr, valueBytes := makeBuffer(valueOut, m.fullValueSize)
+
+	err := m.lookup(key, valuePtr)
+	if errors.Cause(err) == unix.ENOENT {
+		return false, nil
+	}
 	if err != nil {
 		return false, err
 	}
+
 	if valueBytes == nil {
-		return false, nil
+		return true, nil
 	}
 
 	if m.abi.Type.hasPerCPUValue() {
@@ -220,42 +226,39 @@ func (m *Map) Get(key, valueOut interface{}) (bool, error) {
 
 // GetBytes gets a value from Map
 func (m *Map) GetBytes(key interface{}) ([]byte, error) {
-	keyBytes, err := marshalBytes(key, int(m.abi.KeySize))
-	if err != nil {
-		return nil, err
-	}
 	valueBytes := make([]byte, m.fullValueSize)
+	valuePtr := newPtr(unsafe.Pointer(&valueBytes[0]))
 
-	fd, err := m.fd.value()
-	if err != nil {
-		return nil, err
-	}
-
-	attr := bpfMapOpAttr{
-		mapFd: fd,
-		key:   newPtr(unsafe.Pointer(&keyBytes[0])),
-		value: newPtr(unsafe.Pointer(&valueBytes[0])),
-	}
-	_, err = bpfCall(_MapLookupElem, unsafe.Pointer(&attr), unsafe.Sizeof(attr))
+	err := m.lookup(key, valuePtr)
 	if errors.Cause(err) == unix.ENOENT {
 		return nil, nil
 	}
+
 	return valueBytes, err
+}
+
+func (m *Map) lookup(key interface{}, valueOut syscallPtr) error {
+	keyPtr, err := marshalPtr(key, int(m.abi.KeySize))
+	if err != nil {
+		return errors.Wrap(err, "key")
+	}
+
+	return bpfMapLookupElem(m.fd, keyPtr, valueOut)
 }
 
 // Create creates a new value in a map, failing if the key exists already
 func (m *Map) Create(key, value interface{}) error {
-	return m.put(key, value, _NoExist)
+	return m.update(key, value, _NoExist)
 }
 
 // Put replaces or creates a value in map
 func (m *Map) Put(key, value interface{}) error {
-	return m.put(key, value, _Any)
+	return m.update(key, value, _Any)
 }
 
 // Replace replaces a value in a map, failing if the value did not exist
 func (m *Map) Replace(key, value interface{}) error {
-	return m.put(key, value, _Exist)
+	return m.update(key, value, _Exist)
 }
 
 // Delete removes a value.
@@ -272,35 +275,32 @@ func (m *Map) Delete(key interface{}) error {
 // DeleteStrict removes a key and returns an error if the
 // key doesn't exist.
 func (m *Map) DeleteStrict(key interface{}) error {
-	keyBytes, err := marshalBytes(key, int(m.abi.KeySize))
+	keyPtr, err := marshalPtr(key, int(m.abi.KeySize))
 	if err != nil {
 		return err
 	}
 
-	fd, err := m.fd.value()
-	if err != nil {
-		return err
-	}
-
-	attr := bpfMapOpAttr{
-		mapFd: fd,
-		key:   newPtr(unsafe.Pointer(&keyBytes[0])),
-	}
-	_, err = bpfCall(_MapDeleteElem, unsafe.Pointer(&attr), unsafe.Sizeof(attr))
-	return err
+	return bpfMapDeleteElem(m.fd, keyPtr)
 }
 
 // NextKey finds the key following an initial key.
 //
 // See NextKeyBytes for details.
 func (m *Map) NextKey(key, nextKeyOut interface{}) (bool, error) {
-	nextKeyBytes, err := m.NextKeyBytes(key)
+	nextKeyPtr, nextKeyBytes := makeBuffer(nextKeyOut, int(m.abi.KeySize))
+
+	err := m.nextKey(key, nextKeyPtr)
+	if errors.Cause(err) == unix.ENOENT {
+		return false, nil
+	}
 	if err != nil {
 		return false, err
 	}
+
 	if nextKeyBytes == nil {
-		return false, nil
+		return true, nil
 	}
+
 	err = unmarshalBytes(nextKeyOut, nextKeyBytes)
 	if err != nil {
 		return false, err
@@ -314,31 +314,31 @@ func (m *Map) NextKey(key, nextKeyOut interface{}) (bool, error) {
 //
 // Use Iterate if you want to traverse all entries in the map.
 func (m *Map) NextKeyBytes(key interface{}) ([]byte, error) {
-	var keyPtr syscallPtr
-	if key != nil {
-		keyBytes, err := marshalBytes(key, int(m.abi.KeySize))
-		if err != nil {
-			return nil, err
-		}
-		keyPtr = newPtr(unsafe.Pointer(&keyBytes[0]))
-	}
-
-	fd, err := m.fd.value()
-	if err != nil {
-		return nil, err
-	}
-
 	nextKey := make([]byte, m.abi.KeySize)
-	attr := bpfMapOpAttr{
-		mapFd: fd,
-		key:   keyPtr,
-		value: newPtr(unsafe.Pointer(&nextKey[0])),
-	}
-	_, err = bpfCall(_MapGetNextKey, unsafe.Pointer(&attr), unsafe.Sizeof(attr))
+	nextKeyPtr := newPtr(unsafe.Pointer(&nextKey[0]))
+
+	err := m.nextKey(key, nextKeyPtr)
 	if errors.Cause(err) == unix.ENOENT {
 		return nil, nil
 	}
+
 	return nextKey, err
+}
+
+func (m *Map) nextKey(key interface{}, nextKeyOut syscallPtr) error {
+	var (
+		keyPtr syscallPtr
+		err    error
+	)
+
+	if key != nil {
+		keyPtr, err = marshalPtr(key, int(m.abi.KeySize))
+		if err != nil {
+			return err
+		}
+	}
+
+	return bpfMapGetNextKey(m.fd, keyPtr, nextKeyOut)
 }
 
 // Iterate traverses a map.
@@ -428,35 +428,23 @@ func LoadPinnedMapExplicit(fileName string, abi *MapABI) (*Map, error) {
 	return newMap(fd, abi)
 }
 
-func (m *Map) put(key, value interface{}, putType uint64) error {
-	keyBytes, err := marshalBytes(key, int(m.abi.KeySize))
+func (m *Map) update(key, value interface{}, putType uint64) error {
+	keyPtr, err := marshalPtr(key, int(m.abi.KeySize))
 	if err != nil {
 		return err
 	}
 
-	var valueBytes []byte
+	var valuePtr syscallPtr
 	if m.abi.Type.hasPerCPUValue() {
-		valueBytes, err = marshalPerCPUValue(value, int(m.abi.ValueSize))
+		valuePtr, err = marshalPerCPUValue(value, int(m.abi.ValueSize))
 	} else {
-		valueBytes, err = marshalBytes(value, int(m.abi.ValueSize))
+		valuePtr, err = marshalPtr(value, int(m.abi.ValueSize))
 	}
 	if err != nil {
 		return err
 	}
 
-	fd, err := m.fd.value()
-	if err != nil {
-		return err
-	}
-
-	attr := bpfMapOpAttr{
-		mapFd: fd,
-		key:   newPtr(unsafe.Pointer(&keyBytes[0])),
-		value: newPtr(unsafe.Pointer(&valueBytes[0])),
-		flags: putType,
-	}
-	_, err = bpfCall(_MapUpdateElem, unsafe.Pointer(&attr), unsafe.Sizeof(attr))
-	return err
+	return bpfMapUpdateElem(m.fd, keyPtr, valuePtr, putType)
 }
 
 func unmarshalMap(buf []byte) (*Map, error) {

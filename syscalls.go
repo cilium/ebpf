@@ -243,6 +243,66 @@ func bpfMapCreate(attr *bpfMapCreateAttr) (*bpfFD, error) {
 	return newBPFFD(uint32(fd)), nil
 }
 
+func bpfMapLookupElem(m *bpfFD, key, valueOut syscallPtr) error {
+	fd, err := m.value()
+	if err != nil {
+		return err
+	}
+
+	attr := bpfMapOpAttr{
+		mapFd: fd,
+		key:   key,
+		value: valueOut,
+	}
+	_, err = bpfCall(_MapLookupElem, unsafe.Pointer(&attr), unsafe.Sizeof(attr))
+	return err
+}
+
+func bpfMapUpdateElem(m *bpfFD, key, valueOut syscallPtr, flags uint64) error {
+	fd, err := m.value()
+	if err != nil {
+		return err
+	}
+
+	attr := bpfMapOpAttr{
+		mapFd: fd,
+		key:   key,
+		value: valueOut,
+		flags: flags,
+	}
+	_, err = bpfCall(_MapUpdateElem, unsafe.Pointer(&attr), unsafe.Sizeof(attr))
+	return err
+}
+
+func bpfMapDeleteElem(m *bpfFD, key syscallPtr) error {
+	fd, err := m.value()
+	if err != nil {
+		return err
+	}
+
+	attr := bpfMapOpAttr{
+		mapFd: fd,
+		key:   key,
+	}
+	_, err = bpfCall(_MapDeleteElem, unsafe.Pointer(&attr), unsafe.Sizeof(attr))
+	return err
+}
+
+func bpfMapGetNextKey(m *bpfFD, key, nextKeyOut syscallPtr) error {
+	fd, err := m.value()
+	if err != nil {
+		return err
+	}
+
+	attr := bpfMapOpAttr{
+		mapFd: fd,
+		key:   key,
+		value: nextKeyOut,
+	}
+	_, err = bpfCall(_MapGetNextKey, unsafe.Pointer(&attr), unsafe.Sizeof(attr))
+	return err
+}
+
 const bpfFSType = 0xcafe4a11
 
 func bpfPinObject(fileName string, fd *bpfFD) error {

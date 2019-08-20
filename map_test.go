@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"sort"
 	"testing"
+	"unsafe"
 
 	"github.com/pkg/errors"
 	"golang.org/x/sys/unix"
@@ -372,6 +373,57 @@ func TestPerCPUMarshaling(t *testing.T) {
 	}
 }
 
+func TestMapMarshalUnsafe(t *testing.T) {
+	m, err := NewMap(&MapSpec{
+		Type:       Hash,
+		KeySize:    4,
+		ValueSize:  4,
+		MaxEntries: 1,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer m.Close()
+
+	key := uint32(1)
+	value := uint32(42)
+
+	if err := m.Put(unsafe.Pointer(&key), unsafe.Pointer(&value)); err != nil {
+		t.Fatal(err)
+	}
+
+	var res uint32
+	if ok, err := m.Get(unsafe.Pointer(&key), unsafe.Pointer(&res)); !ok || err != nil {
+		t.Fatal("Can't get item:", ok, err)
+	}
+
+	var sum uint32
+	iter := m.Iterate()
+	for iter.Next(&key, unsafe.Pointer(&res)) {
+		sum += res
+	}
+	if err := iter.Err(); err != nil {
+		t.Fatal(err)
+	}
+
+	if res != 42 {
+		t.Fatalf("Expected 42, got %d", res)
+	}
+
+	iter = m.Iterate()
+	iter.Next(unsafe.Pointer(&key), &res)
+	if err := iter.Err(); err != nil {
+		t.Error(err)
+	}
+	if key != 1 {
+		t.Errorf("Expected key 1, got %d", key)
+	}
+
+	if err := m.DeleteStrict(unsafe.Pointer(&key)); err != nil {
+		t.Fatal("Can't delete:", err)
+	}
+}
+
 func TestMapName(t *testing.T) {
 	m, err := NewMap(&MapSpec{
 		Name:       "test",
@@ -393,6 +445,99 @@ func TestMapName(t *testing.T) {
 	if name := convertCString(info.mapName[:]); name != "test" {
 		t.Error("Expected name to be test, got", name)
 	}
+}
+
+type benchValue struct {
+	ID      uint32
+	Val16   uint16
+	Val16_2 uint16
+	Name    [8]byte
+	LID     uint64
+}
+
+type customBenchValue benchValue
+
+func (cbv *customBenchValue) UnmarshalBinary(buf []byte) error {
+	cbv.ID = nativeEndian.Uint32(buf)
+	cbv.Val16 = nativeEndian.Uint16(buf[4:])
+	cbv.Val16_2 = nativeEndian.Uint16(buf[6:])
+	copy(cbv.Name[:], buf[8:])
+	cbv.LID = nativeEndian.Uint64(buf[16:])
+	return nil
+}
+
+func (cbv *customBenchValue) MarshalBinary() ([]byte, error) {
+	buf := make([]byte, 24)
+	nativeEndian.PutUint32(buf, cbv.ID)
+	nativeEndian.PutUint16(buf[4:], cbv.Val16)
+	nativeEndian.PutUint16(buf[6:], cbv.Val16_2)
+	copy(buf[8:], cbv.Name[:])
+	nativeEndian.PutUint64(buf[16:], cbv.LID)
+	return buf, nil
+}
+
+func BenchmarkMarshalling(b *testing.B) {
+	newMap := func(valueSize uint32) *Map {
+		m, err := NewMap(&MapSpec{
+			Type:       Hash,
+			KeySize:    8,
+			ValueSize:  valueSize,
+			MaxEntries: 1,
+		})
+		if err != nil {
+			b.Fatal(err)
+		}
+		return m
+	}
+
+	key := uint64(0)
+
+	m := newMap(24)
+	if err := m.Put(key, benchValue{}); err != nil {
+		b.Fatal(err)
+	}
+
+	b.Run("reflection", func(b *testing.B) {
+		b.ReportAllocs()
+		b.ResetTimer()
+
+		var value benchValue
+
+		for i := 0; i < b.N; i++ {
+			ok, err := m.Get(unsafe.Pointer(&key), &value)
+			if !ok || err != nil {
+				b.Fatal("Can't get key:", ok, err)
+			}
+		}
+	})
+
+	b.Run("custom", func(b *testing.B) {
+		b.ReportAllocs()
+		b.ResetTimer()
+
+		var value customBenchValue
+
+		for i := 0; i < b.N; i++ {
+			ok, err := m.Get(unsafe.Pointer(&key), &value)
+			if !ok || err != nil {
+				b.Fatal("Can't get key:", ok, err)
+			}
+		}
+	})
+
+	b.Run("unsafe", func(b *testing.B) {
+		b.ReportAllocs()
+		b.ResetTimer()
+
+		var value benchValue
+
+		for i := 0; i < b.N; i++ {
+			ok, err := m.Get(unsafe.Pointer(&key), unsafe.Pointer(&value))
+			if !ok || err != nil {
+				b.Fatal("Can't get key:", ok, err)
+			}
+		}
+	})
 }
 
 // Per CPU maps store a distinct value for each CPU. They are useful
@@ -444,6 +589,32 @@ func ExampleMap_perCPU() {
 	if err := entries.Err(); err != nil {
 		panic(err)
 	}
+}
+
+// It is possible to use unsafe.Pointer to avoid marshalling
+// and copy overhead. It is the resposibility of the caller to ensure
+// the correct size of unsafe.Pointers.
+//
+// Note that using unsafe.Pointer is only marginally faster than
+// implementing Marshaler on the type.
+func ExampleMap_zeroCopy() {
+	hash := createHash()
+	defer hash.Close()
+
+	key := [5]byte{'h', 'e', 'l', 'l', 'o'}
+	value := uint32(23)
+
+	if err := hash.Put(unsafe.Pointer(&key), unsafe.Pointer(&value)); err != nil {
+		panic(err)
+	}
+
+	value = 0
+	if ok, err := hash.Get(unsafe.Pointer(&key), unsafe.Pointer(&value)); !ok || err != nil {
+		panic("can't get value:" + err.Error())
+	}
+
+	fmt.Printf("The value is: %d\n", value)
+	// Output: The value is: 23
 }
 
 func createHash() *Map {

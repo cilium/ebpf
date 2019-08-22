@@ -181,23 +181,23 @@ func convertProgramSpec(spec *ProgramSpec, includeName bool) (*bpfProgLoadAttr, 
 	return attr, nil
 }
 
-func (bpf *Program) String() string {
-	if bpf.name != "" {
-		return fmt.Sprintf("%s(%s)#%s", bpf.abi.Type, bpf.name, bpf.fd)
+func (p *Program) String() string {
+	if p.name != "" {
+		return fmt.Sprintf("%s(%s)#%s", p.abi.Type, p.name, p.fd)
 	}
-	return fmt.Sprintf("%s#%s", bpf.abi.Type, bpf.fd)
+	return fmt.Sprintf("%s#%s", p.abi.Type, p.fd)
 }
 
 // ABI gets the ABI of the Program
-func (bpf *Program) ABI() ProgramABI {
-	return bpf.abi
+func (p *Program) ABI() ProgramABI {
+	return p.abi
 }
 
 // FD gets the file descriptor of the Program.
 //
 // It is invalid to call this function after Close has been called.
-func (bpf *Program) FD() int {
-	fd, err := bpf.fd.value()
+func (p *Program) FD() int {
+	fd, err := p.fd.value()
 	if err != nil {
 		// Best effort: -1 is the number most likely to be an
 		// invalid file descriptor.
@@ -212,33 +212,33 @@ func (bpf *Program) FD() int {
 // Closing the duplicate does not affect the original, and vice versa.
 //
 // Cloning a nil Program returns nil.
-func (bpf *Program) Clone() (*Program, error) {
-	if bpf == nil {
+func (p *Program) Clone() (*Program, error) {
+	if p == nil {
 		return nil, nil
 	}
 
-	dup, err := bpf.fd.dup()
+	dup, err := p.fd.dup()
 	if err != nil {
 		return nil, errors.Wrap(err, "can't clone program")
 	}
 
-	return newProgram(dup, bpf.name, &bpf.abi), nil
+	return newProgram(dup, p.name, &p.abi), nil
 }
 
 // Pin persists the Program past the lifetime of the process that created it
 //
 // This requires bpffs to be mounted above fileName. See http://cilium.readthedocs.io/en/doc-1.0/kubernetes/install/#mounting-the-bpf-fs-optional
-func (bpf *Program) Pin(fileName string) error {
-	return errors.Wrap(bpfPinObject(fileName, bpf.fd), "can't pin program")
+func (p *Program) Pin(fileName string) error {
+	return errors.Wrap(bpfPinObject(fileName, p.fd), "can't pin program")
 }
 
 // Close unloads the program from the kernel.
-func (bpf *Program) Close() error {
-	if bpf == nil {
+func (p *Program) Close() error {
+	if p == nil {
 		return nil
 	}
 
-	return bpf.fd.close()
+	return p.fd.close()
 }
 
 // Test runs the Program in the kernel with the given input and returns the
@@ -248,8 +248,8 @@ func (bpf *Program) Close() error {
 // XDP and SKB programs.
 //
 // This function requires at least Linux 4.12.
-func (bpf *Program) Test(in []byte) (uint32, []byte, error) {
-	ret, out, _, err := bpf.testRun(in, 1)
+func (p *Program) Test(in []byte) (uint32, []byte, error) {
+	ret, out, _, err := p.testRun(in, 1)
 	return ret, out, err
 }
 
@@ -260,8 +260,8 @@ func (bpf *Program) Test(in []byte) (uint32, []byte, error) {
 // the program.
 //
 // This function requires at least Linux 4.12.
-func (bpf *Program) Benchmark(in []byte, repeat int) (uint32, time.Duration, error) {
-	ret, _, total, err := bpf.testRun(in, repeat)
+func (p *Program) Benchmark(in []byte, repeat int) (uint32, time.Duration, error) {
+	ret, _, total, err := p.testRun(in, repeat)
 	return ret, total, err
 }
 
@@ -299,7 +299,7 @@ var noProgTestRun = featureTest{
 	},
 }
 
-func (bpf *Program) testRun(in []byte, repeat int) (uint32, []byte, time.Duration, error) {
+func (p *Program) testRun(in []byte, repeat int) (uint32, []byte, time.Duration, error) {
 	if uint(repeat) > math.MaxUint32 {
 		return 0, nil, 0, fmt.Errorf("repeat is too high")
 	}
@@ -323,7 +323,7 @@ func (bpf *Program) testRun(in []byte, repeat int) (uint32, []byte, time.Duratio
 	// See https://patchwork.ozlabs.org/cover/1006822/
 	out := make([]byte, len(in)+outputPad)
 
-	fd, err := bpf.fd.value()
+	fd, err := p.fd.value()
 	if err != nil {
 		return 0, nil, 0, err
 	}
@@ -376,8 +376,8 @@ func unmarshalProgram(buf []byte) (*Program, error) {
 }
 
 // MarshalBinary implements BinaryMarshaler.
-func (bpf *Program) MarshalBinary() ([]byte, error) {
-	value, err := bpf.fd.value()
+func (p *Program) MarshalBinary() ([]byte, error) {
+	value, err := p.fd.value()
 	if err != nil {
 		return nil, err
 	}

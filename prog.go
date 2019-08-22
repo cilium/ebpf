@@ -15,9 +15,8 @@ import (
 	"github.com/pkg/errors"
 )
 
-// Errors returned by the implementation
 var (
-	ErrNotSupported = errors.New("ebpf: not supported by kernel")
+	errNotSupported = errors.New("ebpf: not supported by kernel")
 )
 
 const (
@@ -314,7 +313,7 @@ func (bpf *Program) testRun(in []byte, repeat int) (uint32, []byte, time.Duratio
 	}
 
 	if noProgTestRun.Result() {
-		return 0, nil, 0, ErrNotSupported
+		return 0, nil, 0, errNotSupported
 	}
 
 	// Older kernels ignore the dataSizeOut argument when copying to user space.
@@ -447,4 +446,10 @@ func (le *loadError) Error() string {
 
 func (le *loadError) Cause() error {
 	return le.cause
+}
+
+// IsNotSupported returns true if an error occurred because
+// the kernel does not have support for a specific feature.
+func IsNotSupported(err error) bool {
+	return errors.Cause(err) == errNotSupported
 }

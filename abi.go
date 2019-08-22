@@ -6,8 +6,7 @@ import (
 
 // MapABI describes a Map.
 //
-// Members which have the zero value of their type
-// are not checked.
+// Use it to assert that a Map matches what your code expects.
 type MapABI struct {
 	Type       MapType
 	KeySize    uint32
@@ -52,6 +51,8 @@ func newMapABIFromFd(fd *bpfFD) (*MapABI, error) {
 }
 
 // Check verifies that a Map conforms to the ABI.
+//
+// Members of ABI which have the zero value of their type are not checked.
 func (abi *MapABI) Check(m *Map) error {
 	return abi.check(&m.abi)
 }
@@ -87,8 +88,7 @@ func (abi *MapABI) check(other *MapABI) error {
 
 // ProgramABI describes a Program.
 //
-// Members which have the zero value of their type
-// are not checked.
+// Use it to assert that a Program matches what your code expects.
 type ProgramABI struct {
 	Type ProgramType
 }
@@ -111,6 +111,9 @@ func newProgramABIFromFd(fd *bpfFD) (*ProgramABI, error) {
 }
 
 // Check verifies that a Program conforms to the ABI.
+//
+// Members which have the zero value of their type
+// are not checked.
 func (abi *ProgramABI) Check(prog *Program) error {
 	if abi.Type != UnspecifiedProgram && prog.abi.Type != abi.Type {
 		return errors.Errorf("expected program type %s, have %s", abi.Type, prog.abi.Type)

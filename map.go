@@ -247,19 +247,45 @@ func (m *Map) lookup(key interface{}, valueOut syscallPtr) error {
 	return errors.WithMessage(err, "lookup failed")
 }
 
-// Create creates a new value in a map, failing if the key exists already
-func (m *Map) Create(key, value interface{}) error {
-	return m.update(key, value, _NoExist)
-}
+// MapUpdateFlags controls the behaviour of the Map.Update call.
+//
+// The exact semantics depend on the specific MapType.
+type MapUpdateFlags uint64
 
-// Put replaces or creates a value in map
+const (
+	// UpdateAny creates a new element or update an existing one.
+	UpdateAny MapUpdateFlags = iota
+	// UpdateNoExist creates a new element.
+	UpdateNoExist MapUpdateFlags = 1 << (iota - 1)
+	// UpdateExist updates an existing element.
+	UpdateExist
+)
+
+// Put replaces or creates a value in map.
+//
+// It is equivalent to calling Update with UpdateAny.
 func (m *Map) Put(key, value interface{}) error {
-	return m.update(key, value, _Any)
+	return m.Update(key, value, UpdateAny)
 }
 
-// Replace replaces a value in a map, failing if the value did not exist
-func (m *Map) Replace(key, value interface{}) error {
-	return m.update(key, value, _Exist)
+// Update changes the value of a key.
+func (m *Map) Update(key, value interface{}, flags MapUpdateFlags) error {
+	keyPtr, err := marshalPtr(key, int(m.abi.KeySize))
+	if err != nil {
+		return errors.WithMessage(err, "can't marshal key")
+	}
+
+	var valuePtr syscallPtr
+	if m.abi.Type.hasPerCPUValue() {
+		valuePtr, err = marshalPerCPUValue(value, int(m.abi.ValueSize))
+	} else {
+		valuePtr, err = marshalPtr(value, int(m.abi.ValueSize))
+	}
+	if err != nil {
+		return errors.WithMessage(err, "can't marshal value")
+	}
+
+	return bpfMapUpdateElem(m.fd, keyPtr, valuePtr, uint64(flags))
 }
 
 // Delete removes a value.
@@ -412,25 +438,6 @@ func LoadPinnedMapExplicit(fileName string, abi *MapABI) (*Map, error) {
 		return nil, err
 	}
 	return newMap(fd, abi)
-}
-
-func (m *Map) update(key, value interface{}, putType uint64) error {
-	keyPtr, err := marshalPtr(key, int(m.abi.KeySize))
-	if err != nil {
-		return err
-	}
-
-	var valuePtr syscallPtr
-	if m.abi.Type.hasPerCPUValue() {
-		valuePtr, err = marshalPerCPUValue(value, int(m.abi.ValueSize))
-	} else {
-		valuePtr, err = marshalPtr(value, int(m.abi.ValueSize))
-	}
-	if err != nil {
-		return err
-	}
-
-	return bpfMapUpdateElem(m.fd, keyPtr, valuePtr, putType)
 }
 
 func unmarshalMap(buf []byte) (*Map, error) {

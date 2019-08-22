@@ -1,6 +1,6 @@
 package ebpf
 
-//go:generate stringer -output types_string.go -type=MapType,ProgType
+//go:generate stringer -output types_string.go -type=MapType,ProgramType
 
 // MapType indicates the type map structure
 // that will be initialized in the kernel.
@@ -92,13 +92,13 @@ const (
 	_Exist
 )
 
-// ProgType of the eBPF program
-type ProgType uint32
+// ProgramType of the eBPF program
+type ProgramType uint32
 
 // eBPF program types
 const (
 	// Unrecognized program type
-	Unrecognized ProgType = iota
+	UnspecifiedProgram ProgramType = iota
 	// SocketFilter socket or seccomp filter
 	SocketFilter
 	// Kprobe program

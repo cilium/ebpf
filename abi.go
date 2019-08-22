@@ -90,7 +90,7 @@ func (abi *MapABI) check(other *MapABI) error {
 // Members which have the zero value of their type
 // are not checked.
 type ProgramABI struct {
-	Type ProgType
+	Type ProgramType
 }
 
 func newProgramABIFromSpec(spec *ProgramSpec) *ProgramABI {
@@ -106,13 +106,13 @@ func newProgramABIFromFd(fd *bpfFD) (*ProgramABI, error) {
 	}
 
 	return &ProgramABI{
-		Type: ProgType(info.progType),
+		Type: ProgramType(info.progType),
 	}, nil
 }
 
 // Check verifies that a Program conforms to the ABI.
 func (abi *ProgramABI) Check(prog *Program) error {
-	if abi.Type != Unrecognized && prog.abi.Type != abi.Type {
+	if abi.Type != UnspecifiedProgram && prog.abi.Type != abi.Type {
 		return errors.Errorf("expected program type %s, have %s", abi.Type, prog.abi.Type)
 	}
 

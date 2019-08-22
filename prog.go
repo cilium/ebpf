@@ -46,7 +46,7 @@ type ProgramSpec struct {
 	// Name is passed to the kernel as a debug aid. Must only contain
 	// alpha numeric and '_' characters.
 	Name          string
-	Type          ProgType
+	Type          ProgramType
 	AttachType    AttachType
 	Instructions  asm.Instructions
 	License       string

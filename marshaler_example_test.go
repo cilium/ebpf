@@ -1,12 +1,16 @@
 package ebpf
 
 import (
+	"encoding"
 	"fmt"
 	"strings"
 )
 
 // Assert that customEncoding implements the correct interfaces.
-var _ Marshaler = (*customEncoding)(nil)
+var (
+	_ encoding.BinaryMarshaler   = (*customEncoding)(nil)
+	_ encoding.BinaryUnmarshaler = (*customEncoding)(nil)
+)
 
 type customEncoding struct {
 	data string
@@ -22,7 +26,7 @@ func (ce *customEncoding) UnmarshalBinary(buf []byte) error {
 }
 
 // ExampleMarshaler shows how to use custom encoding with map methods.
-func ExampleMarshaler() {
+func Example_customMarshaler() {
 	hash := createHash()
 	defer hash.Close()
 

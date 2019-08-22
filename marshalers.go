@@ -30,13 +30,6 @@ func isBigEndian() (ret bool) {
 	return bs[0] == 0
 }
 
-// Marshaler allows controlling the binary representation used for getting
-// and setting keys on a map.
-type Marshaler interface {
-	encoding.BinaryMarshaler
-	encoding.BinaryUnmarshaler
-}
-
 func marshalPtr(data interface{}, length int) (syscallPtr, error) {
 	if ptr, ok := data.(unsafe.Pointer); ok {
 		return newPtr(ptr), nil

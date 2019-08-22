@@ -44,7 +44,8 @@ func (ms *MapSpec) Copy() *MapSpec {
 // Methods which take interface{} arguments by default encode
 // them using binary.Read/Write in the machine's native endianness.
 //
-// Implement Marshaler on the arguments if you need custom encoding.
+// Implement encoding.BinaryMarshaler or encoding.BinaryUnmarshaler
+// if you require custom encoding.
 type Map struct {
 	fd  *bpfFD
 	abi MapABI

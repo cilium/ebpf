@@ -48,10 +48,8 @@ func TestMap(t *testing.T) {
 	m = m2
 
 	var v uint32
-	if ok, err := m.Get(uint32(0), &v); err != nil {
-		t.Fatal("Can't get:", err)
-	} else if !ok {
-		t.Fatal("Key doesn't exist")
+	if err := m.Lookup(uint32(0), &v); err != nil {
+		t.Fatal("Can't lookup 0:", err)
 	}
 	if v != 42 {
 		t.Error("Want value 42, got", v)
@@ -79,7 +77,7 @@ func TestMapClose(t *testing.T) {
 		t.Fatal("Put doesn't check for closed fd", err)
 	}
 
-	if _, err := m.GetBytes(uint32(0)); errors.Cause(err) != errClosedFd {
+	if _, err := m.LookupBytes(uint32(0)); errors.Cause(err) != errClosedFd {
 		t.Fatal("Get doesn't check for closed fd", err)
 	}
 }
@@ -122,10 +120,8 @@ func TestMapPin(t *testing.T) {
 	defer m.Close()
 
 	var v uint32
-	if ok, err := m.Get(uint32(0), &v); err != nil {
-		t.Fatal("Can't get:", err)
-	} else if !ok {
-		t.Fatal("Key doesn't exist")
+	if err := m.Lookup(uint32(0), &v); err != nil {
+		t.Fatal("Can't lookup 0:", err)
 	}
 	if v != 42 {
 		t.Error("Want value 42, got", v)
@@ -182,18 +178,14 @@ func TestMapInMap(t *testing.T) {
 			}
 
 			var inner2 *Map
-			if ok, err := outer.Get(uint32(0), &inner2); err != nil {
-				t.Fatal(err)
-			} else if !ok {
-				t.Fatal("Missing key 0")
+			if err := outer.Lookup(uint32(0), &inner2); err != nil {
+				t.Fatal("Can't lookup 0:", err)
 			}
 			defer inner2.Close()
 
 			var v uint32
-			if ok, err := inner2.Get(uint32(1), &v); err != nil {
-				t.Fatal(err, inner)
-			} else if !ok {
-				t.Fatal("Missing key 0")
+			if err := inner2.Lookup(uint32(1), &v); err != nil {
+				t.Fatal("Can't lookup 1 in inner2:", err)
 			}
 
 			if v != 4242 {
@@ -203,10 +195,8 @@ func TestMapInMap(t *testing.T) {
 			inner2.Close()
 
 			// Make sure we can still access the original map
-			if ok, err := inner.Get(uint32(1), &v); err != nil {
-				t.Fatal(err, inner)
-			} else if !ok {
-				t.Fatal("Missing key 0 from inner")
+			if err := inner.Lookup(uint32(1), &v); err != nil {
+				t.Fatal("Can't lookup 1 in inner:", err)
 			}
 
 			if v != 4242 {
@@ -324,6 +314,25 @@ func TestMapIterate(t *testing.T) {
 	}
 }
 
+func TestNotExist(t *testing.T) {
+	hash := createHash()
+	defer hash.Close()
+
+	var tmp uint32
+	err := hash.Lookup("hello", &tmp)
+	if !IsNotExist(err) {
+		t.Error("IsNotExist returns false for missing key")
+	}
+
+	buf, err := hash.LookupBytes("hello")
+	if err != nil {
+		t.Error("Looking up non-existent key return an error:", err)
+	}
+	if buf != nil {
+		t.Error("LookupBytes returns non-nil buffer for non-existent key")
+	}
+}
+
 func TestIterateMapInMap(t *testing.T) {
 	const idx = uint32(1)
 
@@ -387,10 +396,8 @@ func TestPerCPUMarshaling(t *testing.T) {
 
 	// Make sure unmarshaling works on slices containing pointers
 	var retrieved []*customEncoding
-	if ok, err := arr.Get(uint32(0), &retrieved); err != nil {
-		t.Fatal(err)
-	} else if !ok {
-		t.Fatal("Can't retrieve key 0")
+	if err := arr.Lookup(uint32(0), &retrieved); err != nil {
+		t.Fatal("Can't retrieve key 0:", err)
 	}
 
 	for i, want := range []string{"HELLO", "WORLD"} {
@@ -422,8 +429,8 @@ func TestMapMarshalUnsafe(t *testing.T) {
 	}
 
 	var res uint32
-	if ok, err := m.Get(unsafe.Pointer(&key), unsafe.Pointer(&res)); !ok || err != nil {
-		t.Fatal("Can't get item:", ok, err)
+	if err := m.Lookup(unsafe.Pointer(&key), unsafe.Pointer(&res)); err != nil {
+		t.Fatal("Can't get item:", err)
 	}
 
 	var sum uint32
@@ -533,9 +540,9 @@ func BenchmarkMarshalling(b *testing.B) {
 		var value benchValue
 
 		for i := 0; i < b.N; i++ {
-			ok, err := m.Get(unsafe.Pointer(&key), &value)
-			if !ok || err != nil {
-				b.Fatal("Can't get key:", ok, err)
+			err := m.Lookup(unsafe.Pointer(&key), &value)
+			if err != nil {
+				b.Fatal("Can't get key:", err)
 			}
 		}
 	})
@@ -547,9 +554,9 @@ func BenchmarkMarshalling(b *testing.B) {
 		var value customBenchValue
 
 		for i := 0; i < b.N; i++ {
-			ok, err := m.Get(unsafe.Pointer(&key), &value)
-			if !ok || err != nil {
-				b.Fatal("Can't get key:", ok, err)
+			err := m.Lookup(unsafe.Pointer(&key), &value)
+			if err != nil {
+				b.Fatal("Can't get key:", err)
 			}
 		}
 	})
@@ -561,9 +568,9 @@ func BenchmarkMarshalling(b *testing.B) {
 		var value benchValue
 
 		for i := 0; i < b.N; i++ {
-			ok, err := m.Get(unsafe.Pointer(&key), unsafe.Pointer(&value))
-			if !ok || err != nil {
-				b.Fatal("Can't get key:", ok, err)
+			err := m.Lookup(unsafe.Pointer(&key), unsafe.Pointer(&value))
+			if err != nil {
+				b.Fatal("Can't get key:", err)
 			}
 		}
 	})
@@ -593,12 +600,9 @@ func ExampleMap_perCPU() {
 	}
 
 	var values []uint32
-	if ok, err := arr.Get(uint32(0), &values); err != nil {
+	if err := arr.Lookup(uint32(0), &values); err != nil {
 		panic(err)
-	} else if !ok {
-		panic("item 0 not found")
 	}
-
 	fmt.Println("First two values:", values[:2])
 
 	var (
@@ -638,7 +642,7 @@ func ExampleMap_zeroCopy() {
 	}
 
 	value = 0
-	if ok, err := hash.Get(unsafe.Pointer(&key), unsafe.Pointer(&value)); !ok || err != nil {
+	if err := hash.Lookup(unsafe.Pointer(&key), unsafe.Pointer(&value)); err != nil {
 		panic("can't get value:" + err.Error())
 	}
 

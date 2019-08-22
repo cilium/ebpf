@@ -167,70 +167,70 @@ func (m *Map) ABI() MapABI {
 	return m.abi
 }
 
-// Get retrieves a value from a Map.
+// Lookup retrieves a value from a Map.
 //
 // Calls Close() on valueOut if it is of type **Map or **Program,
 // and *valueOut is not nil.
-func (m *Map) Get(key, valueOut interface{}) (bool, error) {
+//
+// Returns an error if the key doesn't exist, see IsNotExist.
+func (m *Map) Lookup(key, valueOut interface{}) error {
 	valuePtr, valueBytes := makeBuffer(valueOut, m.fullValueSize)
 
-	err := m.lookup(key, valuePtr)
-	if errors.Cause(err) == unix.ENOENT {
-		return false, nil
-	}
-	if err != nil {
-		return false, err
+	if err := m.lookup(key, valuePtr); err != nil {
+		return err
 	}
 
 	if valueBytes == nil {
-		return true, nil
+		return nil
 	}
 
 	if m.abi.Type.hasPerCPUValue() {
-		return true, unmarshalPerCPUValue(valueOut, int(m.abi.ValueSize), valueBytes)
+		return unmarshalPerCPUValue(valueOut, int(m.abi.ValueSize), valueBytes)
 	}
 
 	switch value := valueOut.(type) {
 	case **Map:
 		m, err := unmarshalMap(valueBytes)
 		if err != nil {
-			return true, err
+			return err
 		}
 
 		(*value).Close()
 		*value = m
-		return true, nil
+		return nil
 	case *Map:
-		return true, errors.Errorf("can't unmarshal into %T, need %T", value, (**Map)(nil))
+		return errors.Errorf("can't unmarshal into %T, need %T", value, (**Map)(nil))
 	case Map:
-		return true, errors.Errorf("can't unmarshal into %T, need %T", value, (**Map)(nil))
+		return errors.Errorf("can't unmarshal into %T, need %T", value, (**Map)(nil))
 
 	case **Program:
 		p, err := unmarshalProgram(valueBytes)
 		if err != nil {
-			return true, err
+			return err
 		}
 
 		(*value).Close()
 		*value = p
-		return true, nil
+		return nil
 	case *Program:
-		return true, errors.Errorf("can't unmarshal into %T, need %T", value, (**Program)(nil))
+		return errors.Errorf("can't unmarshal into %T, need %T", value, (**Program)(nil))
 	case Program:
-		return true, errors.Errorf("can't unmarshal into %T, need %T", value, (**Program)(nil))
+		return errors.Errorf("can't unmarshal into %T, need %T", value, (**Program)(nil))
 
 	default:
-		return true, unmarshalBytes(valueOut, valueBytes)
+		return unmarshalBytes(valueOut, valueBytes)
 	}
 }
 
-// GetBytes gets a value from Map
-func (m *Map) GetBytes(key interface{}) ([]byte, error) {
+// LookupBytes gets a value from Map.
+//
+// Returns a nil value if a key doesn't exist.
+func (m *Map) LookupBytes(key interface{}) ([]byte, error) {
 	valueBytes := make([]byte, m.fullValueSize)
 	valuePtr := newPtr(unsafe.Pointer(&valueBytes[0]))
 
 	err := m.lookup(key, valuePtr)
-	if errors.Cause(err) == unix.ENOENT {
+	if IsNotExist(err) {
 		return nil, nil
 	}
 
@@ -240,10 +240,11 @@ func (m *Map) GetBytes(key interface{}) ([]byte, error) {
 func (m *Map) lookup(key interface{}, valueOut syscallPtr) error {
 	keyPtr, err := marshalPtr(key, int(m.abi.KeySize))
 	if err != nil {
-		return errors.Wrap(err, "key")
+		return errors.WithMessage(err, "can't marshal key")
 	}
 
-	return bpfMapLookupElem(m.fd, keyPtr, valueOut)
+	err = bpfMapLookupElem(m.fd, keyPtr, valueOut)
+	return errors.WithMessage(err, "lookup failed")
 }
 
 // Create creates a new value in a map, failing if the key exists already
@@ -318,7 +319,7 @@ func (m *Map) NextKeyBytes(key interface{}) ([]byte, error) {
 	nextKeyPtr := newPtr(unsafe.Pointer(&nextKey[0]))
 
 	err := m.nextKey(key, nextKeyPtr)
-	if errors.Cause(err) == unix.ENOENT {
+	if IsNotExist(err) {
 		return nil, nil
 	}
 
@@ -528,13 +529,8 @@ func (mi *MapIterator) Next(keyOut, valueOut interface{}) bool {
 		copy(mi.prevBytes, nextBytes)
 		mi.prevKey = mi.prevBytes
 
-		var ok bool
-		ok, mi.err = mi.target.Get(nextBytes, valueOut)
-		if mi.err != nil {
-			return false
-		}
-
-		if !ok {
+		mi.err = mi.target.Lookup(nextBytes, valueOut)
+		if IsNotExist(mi.err) {
 			// Even though the key should be valid, we couldn't look up
 			// its value. If we're iterating a hash map this is probably
 			// because a concurrent delete removed the value before we
@@ -544,6 +540,9 @@ func (mi *MapIterator) Next(keyOut, valueOut interface{}) bool {
 			// In either case there isn't much we can do, so just
 			// continue to the next key.
 			continue
+		}
+		if mi.err != nil {
+			return false
 		}
 
 		mi.err = unmarshalBytes(keyOut, nextBytes)
@@ -556,4 +555,10 @@ func (mi *MapIterator) Next(keyOut, valueOut interface{}) bool {
 // The method must be called after Next returns nil.
 func (mi *MapIterator) Err() error {
 	return mi.err
+}
+
+// IsNotExist returns true if the error indicates that a
+// key doesn't exist.
+func IsNotExist(err error) bool {
+	return errors.Cause(err) == unix.ENOENT
 }

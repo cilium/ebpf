@@ -238,18 +238,18 @@ func TestProgramMarshaling(t *testing.T) {
 		t.Fatal("Can't put program:", err)
 	}
 
-	if _, err := arr.Get(idx, Program{}); err == nil {
+	if err := arr.Lookup(idx, Program{}); err == nil {
 		t.Fatal("Get accepts Program")
 	}
 
 	var prog2 *Program
 	defer prog2.Close()
 
-	if _, err := arr.Get(idx, prog2); err == nil {
+	if err := arr.Lookup(idx, prog2); err == nil {
 		t.Fatal("Get accepts *Program")
 	}
 
-	if _, err := arr.Get(idx, &prog2); err != nil {
+	if err := arr.Lookup(idx, &prog2); err != nil {
 		t.Fatal("Can't unmarshal program:", err)
 	}
 
@@ -309,9 +309,7 @@ func ExampleProgram_unmarshalFromMap() {
 
 	// Load a single program
 	var prog *Program
-	if ok, err := progArray.Get(uint32(0), &prog); !ok {
-		panic("key not found")
-	} else if err != nil {
+	if err := progArray.Lookup(uint32(0), &prog); err != nil {
 		panic(err)
 	}
 	defer prog.Close()

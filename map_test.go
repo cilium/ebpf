@@ -56,10 +56,8 @@ func TestMap(t *testing.T) {
 	}
 
 	var k uint32
-	if ok, err := m.NextKey(uint32(0), &k); err != nil {
+	if err := m.NextKey(uint32(0), &k); err != nil {
 		t.Fatal("Can't get:", err)
-	} else if !ok {
-		t.Fatal("Key doesn't exist")
 	}
 	if k != 1 {
 		t.Error("Want key 1, got", k)
@@ -334,6 +332,10 @@ func TestNotExist(t *testing.T) {
 
 	if err := hash.Delete("hello"); !IsNotExist(err) {
 		t.Error("Deleting unknown key doesn't return a non-existing error")
+	}
+
+	if err := hash.NextKey(nil, &tmp); !IsNotExist(err) {
+		t.Error("Looking up next key in empty map doesn't return a non-existing error")
 	}
 }
 
@@ -680,17 +682,13 @@ func ExampleMap_NextKey() {
 	}
 
 	var firstKey string
-	if ok, err := hash.NextKey(nil, &firstKey); err != nil {
+	if err := hash.NextKey(nil, &firstKey); err != nil {
 		panic(err)
-	} else if !ok {
-		panic("map is empty")
 	}
 
 	var nextKey string
-	if ok, err := hash.NextKey(firstKey, &nextKey); err != nil {
+	if err := hash.NextKey(firstKey, &nextKey); err != nil {
 		panic(err)
-	} else if !ok {
-		panic("no keys after " + firstKey)
 	}
 
 	// Order of keys is non-deterministic due to randomized map seed

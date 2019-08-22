@@ -278,26 +278,19 @@ func (m *Map) Delete(key interface{}) error {
 // NextKey finds the key following an initial key.
 //
 // See NextKeyBytes for details.
-func (m *Map) NextKey(key, nextKeyOut interface{}) (bool, error) {
+func (m *Map) NextKey(key, nextKeyOut interface{}) error {
 	nextKeyPtr, nextKeyBytes := makeBuffer(nextKeyOut, int(m.abi.KeySize))
 
-	err := m.nextKey(key, nextKeyPtr)
-	if errors.Cause(err) == unix.ENOENT {
-		return false, nil
-	}
-	if err != nil {
-		return false, err
+	if err := m.nextKey(key, nextKeyPtr); err != nil {
+		return err
 	}
 
 	if nextKeyBytes == nil {
-		return true, nil
+		return nil
 	}
 
-	err = unmarshalBytes(nextKeyOut, nextKeyBytes)
-	if err != nil {
-		return false, err
-	}
-	return true, nil
+	err := unmarshalBytes(nextKeyOut, nextKeyBytes)
+	return errors.WithMessage(err, "can't unmarshal next key")
 }
 
 // NextKeyBytes returns the key following an initial key as a byte slice.
@@ -326,11 +319,12 @@ func (m *Map) nextKey(key interface{}, nextKeyOut syscallPtr) error {
 	if key != nil {
 		keyPtr, err = marshalPtr(key, int(m.abi.KeySize))
 		if err != nil {
-			return err
+			return errors.WithMessage(err, "can't marshal key")
 		}
 	}
 
-	return bpfMapGetNextKey(m.fd, keyPtr, nextKeyOut)
+	err = bpfMapGetNextKey(m.fd, keyPtr, nextKeyOut)
+	return errors.WithMessage(err, "can't get next key")
 }
 
 // Iterate traverses a map.

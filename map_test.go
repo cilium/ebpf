@@ -331,6 +331,10 @@ func TestNotExist(t *testing.T) {
 	if buf != nil {
 		t.Error("LookupBytes returns non-nil buffer for non-existent key")
 	}
+
+	if err := hash.Delete("hello"); !IsNotExist(err) {
+		t.Error("Deleting unknown key doesn't return a non-existing error")
+	}
 }
 
 func TestIterateMapInMap(t *testing.T) {
@@ -455,7 +459,7 @@ func TestMapMarshalUnsafe(t *testing.T) {
 		t.Errorf("Expected key 1, got %d", key)
 	}
 
-	if err := m.DeleteStrict(unsafe.Pointer(&key)); err != nil {
+	if err := m.Delete(unsafe.Pointer(&key)); err != nil {
 		t.Fatal("Can't delete:", err)
 	}
 }

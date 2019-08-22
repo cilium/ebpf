@@ -264,24 +264,15 @@ func (m *Map) Replace(key, value interface{}) error {
 
 // Delete removes a value.
 //
-// Use DeleteStrict if you desire an error if key does not exist.
+// Returns an error if the key does not exist, see IsNotExist.
 func (m *Map) Delete(key interface{}) error {
-	err := m.DeleteStrict(key)
-	if err == unix.ENOENT {
-		return nil
-	}
-	return err
-}
-
-// DeleteStrict removes a key and returns an error if the
-// key doesn't exist.
-func (m *Map) DeleteStrict(key interface{}) error {
 	keyPtr, err := marshalPtr(key, int(m.abi.KeySize))
 	if err != nil {
-		return err
+		return errors.WithMessage(err, "can't marshal key")
 	}
 
-	return bpfMapDeleteElem(m.fd, keyPtr)
+	err = bpfMapDeleteElem(m.fd, keyPtr)
+	return errors.WithMessage(err, "can't delete key")
 }
 
 // NextKey finds the key following an initial key.

@@ -1,4 +1,4 @@
-package ebpf
+package perf
 
 import (
 	"bytes"
@@ -7,19 +7,21 @@ import (
 	"os"
 	"syscall"
 	"testing"
+	"time"
+
+	"github.com/cilium/ebpf"
+	"github.com/cilium/ebpf/asm"
 
 	"golang.org/x/sys/unix"
 )
 
 func TestPerfReader(t *testing.T) {
-	coll, err := LoadCollection("testdata/perf_output.elf")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer coll.Close()
+	prog, events := mustOutputSamplesProg(t, 5)
+	defer prog.Close()
+	defer events.Close()
 
-	rd, err := NewPerfReader(PerfReaderOptions{
-		Map:          coll.DetachMap("events"),
+	rd, err := NewReader(ReaderOptions{
+		Map:          events,
 		PerCPUBuffer: 4096,
 		Watermark:    1,
 	})
@@ -27,9 +29,6 @@ func TestPerfReader(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer rd.Close()
-
-	prog := coll.DetachProgram("output_single")
-	defer prog.Close()
 
 	ret, _, err := prog.Test(make([]byte, 14))
 	if err != nil {
@@ -40,12 +39,88 @@ func TestPerfReader(t *testing.T) {
 		t.Fatal("Expected 0 as return value, got", errno)
 	}
 
-	sample := <-rd.Samples
-	want := []byte{1, 2, 3, 4, 5, 0, 0, 0, 0, 0, 0, 0}
-	if !bytes.Equal(sample.Data, want) {
-		t.Log(sample.Data)
+	record, err := rd.Read()
+	if err != nil {
+		t.Fatal("Can't read samples:", err)
+	}
+
+	want := []byte{1, 2, 3, 4, 4, 0, 0, 0, 0, 0, 0, 0}
+	if !bytes.Equal(record.RawSample, want) {
+		t.Log(record.RawSample)
 		t.Error("Sample doesn't match expected output")
 	}
+
+	if record.CPU < 0 {
+		t.Error("Record has invalid CPU number")
+	}
+}
+
+func outputSamplesProg(sampleSizes ...int) (*ebpf.Program, *ebpf.Map, error) {
+	const bpfFCurrentCPU = 0xffffffff
+
+	events, err := ebpf.NewMap(&ebpf.MapSpec{
+		Type: ebpf.PerfEventArray,
+	})
+	if err != nil {
+		return nil, nil, err
+	}
+
+	var maxSampleSize int
+	for _, sampleSize := range sampleSizes {
+		if sampleSize > maxSampleSize {
+			maxSampleSize = sampleSize
+		}
+	}
+
+	// Fill a buffer on the stack, and stash context somewhere
+	insns := asm.Instructions{
+		asm.LoadImm(asm.R0, 0x0102030404030201, asm.DWord),
+		asm.Mov.Reg(asm.R9, asm.R1),
+	}
+
+	bufDwords := (maxSampleSize / 8) + 1
+	for i := 0; i < bufDwords; i++ {
+		insns = append(insns,
+			asm.StoreMem(asm.RFP, int16(i+1)*-8, asm.R0, asm.DWord),
+		)
+	}
+
+	for _, sampleSize := range sampleSizes {
+		insns = append(insns,
+			asm.Mov.Reg(asm.R1, asm.R9),
+			asm.LoadMapPtr(asm.R2, events.FD()),
+			asm.LoadImm(asm.R3, bpfFCurrentCPU, asm.DWord),
+			asm.Mov.Reg(asm.R4, asm.RFP),
+			asm.Add.Imm(asm.R4, int32(bufDwords*-8)),
+			asm.Mov.Imm(asm.R5, int32(sampleSize)),
+			asm.FnPerfEventOutput.Call(),
+		)
+	}
+
+	insns = append(insns, asm.Return())
+
+	prog, err := ebpf.NewProgram(&ebpf.ProgramSpec{
+		License:      "GPL",
+		Type:         ebpf.XDP,
+		Instructions: insns,
+	})
+	if err != nil {
+		events.Close()
+		return nil, nil, err
+	}
+
+	return prog, events, nil
+}
+
+func mustOutputSamplesProg(t *testing.T, sampleSizes ...int) (*ebpf.Program, *ebpf.Map) {
+	t.Helper()
+
+	prog, events, err := outputSamplesProg(sampleSizes...)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	return prog, events
 }
 
 func TestPerfReaderLostSample(t *testing.T) {
@@ -98,40 +173,44 @@ func TestPerfReaderLostSample(t *testing.T) {
 	// Accounting for perf headers, output_large uses a 180 byte payload:
 	//
 	//  8 (perf_event_header) + 4 (size) + 180 (payload)
-	const eventSize = 192
+	const (
+		eventSize = 192
+	)
 
-	pageSize := os.Getpagesize()
-
-	remainder := pageSize % eventSize
-	if !(remainder == 64 || remainder == 128) {
+	var (
+		pageSize  = os.Getpagesize()
+		maxEvents = (pageSize / eventSize)
+	)
+	if remainder := pageSize % eventSize; remainder != 64 && remainder != 128 {
 		// Page size isn't 2^(6+m), m >= 0
 		t.Fatal("unsupported page size:", pageSize)
 	}
 
-	coll, err := LoadCollection("testdata/perf_output.elf")
-	if err != nil {
-		t.Fatal(err)
+	var sampleSizes []int
+	// Fill the ring with the maximum number of output_large events that will fit,
+	// and generate a lost event by writing an additional event.
+	for i := 0; i < maxEvents+1; i++ {
+		sampleSizes = append(sampleSizes, 180)
 	}
-	defer coll.Close()
 
-	rd, err := NewPerfReader(PerfReaderOptions{
-		Map:          coll.DetachMap("events"),
+	// Generate a small event to trigger the lost record
+	sampleSizes = append(sampleSizes, 5)
+
+	prog, events := mustOutputSamplesProg(t, sampleSizes...)
+	defer prog.Close()
+	defer events.Close()
+
+	rd, err := NewReader(ReaderOptions{
+		Map:          events,
 		PerCPUBuffer: pageSize,
-		// Notify 30 bytes _after_ the last output_large event that can fit in one page,
-		// ie after the lost record is written, and when the output_small event is written.
-		Watermark: pageSize - (remainder - 30),
+		Watermark:    1,
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer rd.Close()
 
-	prog := coll.DetachProgram("output_large")
-	defer prog.Close()
-
-	// Fill the ring with the maximum number of output_large events that will fit,
-	// and generate a lost event by writing an additional event.
-	ret, _, err := prog.Benchmark(make([]byte, 14), (pageSize/eventSize)+1)
+	ret, _, err := prog.Test(make([]byte, 14))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -140,42 +219,25 @@ func TestPerfReaderLostSample(t *testing.T) {
 		t.Fatal("Expected 0 as return value, got", errno)
 	}
 
-	// Generate a small event to trigger the lost record
-	prog = coll.DetachProgram("output_single")
-	defer prog.Close()
-
-	ret, _, err = prog.Test(make([]byte, 14))
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if errno := syscall.Errno(-int32(ret)); errno != 0 {
-		t.Fatal("Expected 0 as return value, got", errno)
-	}
-
-	// Check we received all the samples
-	for sample := range rd.Samples {
-		// Wait for the small sample, as an indicator that the reader has processed
-		// the lost event.
-		if len(sample.Data) == 12 {
-			break
+	for range sampleSizes {
+		record, err := rd.Read()
+		if err != nil {
+			t.Fatal(err)
 		}
-	}
 
-	if lost := rd.LostSamples(); lost != 1 {
-		t.Error("Expected 1 lost sample, got", lost)
+		if record.RawSample == nil && record.LostSamples != 1 {
+			t.Fatal("Expected a record with LostSamples 1, got", record.LostSamples)
+		}
 	}
 }
 
 func TestPerfReaderClose(t *testing.T) {
-	coll, err := LoadCollection("testdata/perf_output.elf")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer coll.Close()
+	prog, events := mustOutputSamplesProg(t, 5)
+	defer prog.Close()
+	defer events.Close()
 
-	rd, err := NewPerfReader(PerfReaderOptions{
-		Map:          coll.DetachMap("events"),
+	rd, err := NewReader(ReaderOptions{
+		Map:          events,
 		PerCPUBuffer: 4096,
 		Watermark:    1,
 	})
@@ -184,82 +246,46 @@ func TestPerfReaderClose(t *testing.T) {
 	}
 	defer rd.Close()
 
-	prog := coll.DetachProgram("output_single")
-	defer prog.Close()
-
-	// more samples than the channel capacity
-	for i := 0; i < cap(rd.Samples)*2; i++ {
-		ret, _, err := prog.Test(make([]byte, 14))
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		if errno := syscall.Errno(-int32(ret)); errno != 0 {
-			t.Fatal("Expected 0 as return value, got", errno)
-		}
-	}
-
-	// Close shouldn't block on us not reading
-	rd.Close()
-
-	// And we should be able to call it multiple times
-	rd.Close()
-}
-
-func TestPerfReaderFlushAndClose(t *testing.T) {
-	coll, err := LoadCollection("testdata/perf_output.elf")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer coll.Close()
-
-	rd, err := NewPerfReader(PerfReaderOptions{
-		Map:          coll.DetachMap("events"),
-		PerCPUBuffer: 4096,
-		Watermark:    1,
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer rd.Close()
-
-	prog := coll.DetachProgram("output_single")
-	defer prog.Close()
-
-	// more samples than the channel capacity
-	numSamples := cap(rd.Samples) * 2
-	for i := 0; i < numSamples; i++ {
-		ret, _, err := prog.Test(make([]byte, 14))
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		if errno := syscall.Errno(-int32(ret)); errno != 0 {
-			t.Fatal("Expected 0 as return value, got", errno)
-		}
-	}
-
-	done := make(chan struct{})
+	errs := make(chan error, 1)
+	waiting := make(chan struct{})
 	go func() {
-		rd.FlushAndClose()
-		// Should be able to call this multiple times
-		rd.FlushAndClose()
-		close(done)
+		close(waiting)
+		_, err := rd.Read()
+		errs <- err
 	}()
 
-	received := 0
-	for range rd.Samples {
-		received++
+	<-waiting
+
+	// Close should interrupt Read
+	if err := rd.Close(); err != nil {
+		t.Fatal(err)
 	}
 
-	if received != numSamples {
-		t.Fatalf("Expected %d samples got %d", numSamples, received)
+	select {
+	case <-errs:
+	case <-time.After(time.Second):
+		t.Fatal("Close doesn't interrupt Read")
 	}
 
-	<-done
+	// And we should be able to call it multiple times
+	if err := rd.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := rd.Read(); err == nil {
+		t.Fatal("Read on a closed PerfReader doesn't return an error")
+	}
 }
 
-func TestRingBuffer(t *testing.T) {
+func TestCreatePerfEvent(t *testing.T) {
+	fd, err := createPerfEvent(0, 1)
+	if err != nil {
+		t.Fatal("Can't create perf event:", err)
+	}
+	unix.Close(fd)
+}
+
+func TestRingBufferReader(t *testing.T) {
 	buf := make([]byte, 2)
 
 	ring := makeRing(2, 0)
@@ -314,6 +340,15 @@ func makeRing(size, offset int) *ringReader {
 	return newRingReader(&meta, ring)
 }
 
+// This exists just to make the example below nicer.
+func bpfPerfEventOutputProgram() (*ebpf.Program, *ebpf.Map) {
+	prog, events, err := outputSamplesProg(5)
+	if err != nil {
+		panic(err)
+	}
+	return prog, events
+}
+
 // ExamplePerfReader submits a perf event using BPF,
 // and then reads it in user space.
 //
@@ -333,15 +368,13 @@ func makeRing(size, offset int) *ringReader {
 //
 // Also see BPF_F_CTXLEN_MASK if you want to sample packet data
 // from SKB or XDP programs.
-func ExamplePerfReader() {
-	coll, err := LoadCollection("testdata/perf_output.elf")
-	if err != nil {
-		panic(err)
-	}
-	defer coll.Close()
+func ExampleReader() {
+	prog, events := bpfPerfEventOutputProgram()
+	defer prog.Close()
+	defer events.Close()
 
-	rd, err := NewPerfReader(PerfReaderOptions{
-		Map:          coll.DetachMap("events"),
+	rd, err := NewReader(ReaderOptions{
+		Map:          events,
 		PerCPUBuffer: 4096,
 		// Notify immediately
 		Watermark: 1,
@@ -351,25 +384,19 @@ func ExamplePerfReader() {
 	}
 	defer rd.Close()
 
-	prog := coll.DetachProgram("output_single")
-	defer prog.Close()
-
+	// Writes out a sample with content 1,2,3,4,4
 	ret, _, err := prog.Test(make([]byte, 14))
+	if err != nil || ret != 0 {
+		panic("Can't write sample")
+	}
+
+	record, err := rd.Read()
 	if err != nil {
 		panic(err)
 	}
 
-	if ret != 0 {
-		panic("expected 0 return value")
-	}
+	// Data is padded with 0 for alignment
+	fmt.Println("Sample:", record.RawSample)
 
-	select {
-	case sample := <-rd.Samples:
-		// Data is padded with 0 for alignment
-		fmt.Println("Sample:", sample.Data)
-	case err := <-rd.Error:
-		panic(err)
-	}
-
-	// Output: Sample: [1 2 3 4 5 0 0 0 0 0 0 0]
+	// Output: Sample: [1 2 3 4 4 0 0 0 0 0 0 0]
 }

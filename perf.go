@@ -13,20 +13,6 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-const (
-	perfTypeSoftware     = 1
-	perfCountSWBPFOutput = 10
-	perfSampleRaw        = 1 << 10
-)
-
-type perfEventMeta struct {
-	_          [128]uint64 /* Pad to 1 k, ignore fields */
-	dataHead   uint64      /* head in the data section */
-	dataTail   uint64      /* user-space written tail */
-	dataOffset uint64      /* where the buffer starts */
-	dataSize   uint64      /* data buffer size */
-}
-
 type perfEventHeader struct {
 	Type uint32
 	Misc uint16
@@ -37,13 +23,12 @@ type perfEventHeader struct {
 // a variable number of pages which form a ring buffer.
 type perfEventRing struct {
 	fd   int
-	meta *perfEventMeta
+	meta *unix.PerfEventMmapPage
 	mmap []byte
 	ring []byte
 }
 
 func newPerfEventRing(cpu int, opts PerfReaderOptions) (*perfEventRing, error) {
-	const flagWakeupWatermark = 1 << 14
 
 	if opts.Watermark >= opts.PerCPUBuffer {
 		return nil, errors.Errorf("Watermark must be smaller than PerCPUBuffer")
@@ -55,17 +40,9 @@ func newPerfEventRing(cpu int, opts PerfReaderOptions) (*perfEventRing, error) {
 	nPages := (opts.PerCPUBuffer + pageSize - 1) / pageSize
 	size := (1 + nPages) * pageSize
 
-	attr := perfEventAttr{
-		perfType:                perfTypeSoftware,
-		config:                  perfCountSWBPFOutput,
-		flags:                   flagWakeupWatermark,
-		sampleType:              perfSampleRaw,
-		wakeupEventsOrWatermark: uint32(opts.Watermark),
-	}
-
-	fd, err := perfEventOpen(&attr, -1, cpu, -1, 0)
+	fd, err := createPerfEvent(cpu, opts.Watermark)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "can't create perf event")
 	}
 
 	if err := unix.SetNonblock(fd, true); err != nil {
@@ -83,17 +60,91 @@ func newPerfEventRing(cpu int, opts PerfReaderOptions) (*perfEventRing, error) {
 	// and that the struct is smaller than an OS page.
 	// This use of unsafe.Pointer isn't explicitly sanctioned by the
 	// documentation, since a byte is smaller than sampledPerfEvent.
-	meta := (*perfEventMeta)(unsafe.Pointer(&mmap[0]))
+	meta := (*unix.PerfEventMmapPage)(unsafe.Pointer(&mmap[0]))
 
 	ring := &perfEventRing{
 		fd:   fd,
 		meta: meta,
 		mmap: mmap,
-		ring: mmap[meta.dataOffset : meta.dataOffset+meta.dataSize],
+		ring: mmap[meta.Data_offset : meta.Data_offset+meta.Data_size],
 	}
 	runtime.SetFinalizer(ring, (*perfEventRing).Close)
 
 	return ring, nil
+}
+
+func createPerfEvent(cpu, watermark int) (int, error) {
+	attr := unix.PerfEventAttr{
+		Type:        unix.PERF_TYPE_SOFTWARE,
+		Config:      unix.PERF_COUNT_SW_BPF_OUTPUT,
+		Bits:        unix.PerfBitWatermark | unix.PerfBitExclusive,
+		Sample_type: unix.PERF_SAMPLE_RAW,
+		Wakeup:      uint32(watermark),
+	}
+
+	attr.Size = uint32(unsafe.Sizeof(attr))
+
+	fd, err := unix.PerfEventOpen(&attr, -1, cpu, -1, 0)
+	if err == nil {
+		return fd, nil
+	}
+
+	switch err {
+	case unix.E2BIG:
+		return -1, errors.WithMessage(unix.E2BIG, "perf_event_attr size is incorrect,check size field for what the correct size should be")
+	case unix.EACCES:
+		return -1, errors.WithMessage(unix.EACCES, "insufficient capabilities to create this event")
+	case unix.EBADFD:
+		return -1, errors.WithMessage(unix.EBADFD, "group_fd is invalid")
+	case unix.EBUSY:
+		return -1, errors.WithMessage(unix.EBUSY, "another event already has exclusive access to the PMU")
+	case unix.EFAULT:
+		return -1, errors.WithMessage(unix.EFAULT, "attr points to an invalid address")
+	case unix.EINVAL:
+		return -1, errors.WithMessage(unix.EINVAL, "the specified event is invalid, most likely because a configuration parameter is invalid (i.e. too high, too low, etc)")
+	case unix.EMFILE:
+		return -1, errors.WithMessage(unix.EMFILE, "this process has reached its limits for number of open events that it may have")
+	case unix.ENODEV:
+		return -1, errors.WithMessage(unix.ENODEV, "this processor architecture does not support this event type")
+	case unix.ENOENT:
+		return -1, errors.WithMessage(unix.ENOENT, "the type setting is not valid")
+	case unix.ENOSPC:
+		return -1, errors.WithMessage(unix.ENOSPC, "the hardware limit for breakpoints)capacity has been reached")
+	case unix.ENOSYS:
+		return -1, errors.WithMessage(unix.ENOSYS, "sample type not supported by the hardware")
+	case unix.EOPNOTSUPP:
+		return -1, errors.WithMessage(unix.EOPNOTSUPP, "this event is not supported by the hardware or requires a feature not supported by the hardware")
+	case unix.EOVERFLOW:
+		return -1, errors.WithMessage(unix.EOVERFLOW, "sample_max_stack is larger than the kernel support; check \"/proc/sys/kernel/perf_event_max_stack\" for maximum supported size")
+	case unix.EPERM:
+		return -1, errors.WithMessage(unix.EPERM, "insufficient capability to request exclusive access")
+	case unix.ESRCH:
+		return -1, errors.WithMessage(unix.ESRCH, "pid does not exist")
+	default:
+		return -1, err
+	}
+}
+
+func createEpollFd(fds ...int) (int, error) {
+	epollfd, err := unix.EpollCreate1(unix.EPOLL_CLOEXEC)
+	if err != nil {
+		return -1, errors.Wrap(err, "can't create epoll fd")
+	}
+
+	for _, fd := range fds {
+		event := unix.EpollEvent{
+			Events: unix.EPOLLIN,
+			Fd:     int32(fd),
+		}
+
+		err := unix.EpollCtl(epollfd, unix.EPOLL_CTL_ADD, fd, &event)
+		if err != nil {
+			unix.Close(epollfd)
+			return -1, errors.Wrap(err, "can't add fd to epoll")
+		}
+	}
+
+	return epollfd, nil
 }
 
 func (ring *perfEventRing) Close() {
@@ -259,7 +310,7 @@ func NewPerfReader(opts PerfReaderOptions) (out *PerfReader, err error) {
 		rings[ring.fd] = ring
 	}
 
-	closeFd, err := newEventFd()
+	closeFd, err := unix.Eventfd(0, unix.O_CLOEXEC|unix.O_NONBLOCK)
 	if err != nil {
 		return nil, err
 	}
@@ -270,7 +321,7 @@ func NewPerfReader(opts PerfReaderOptions) (out *PerfReader, err error) {
 	}()
 	fds = append(fds, closeFd)
 
-	flushCloseFd, err := newEventFd()
+	flushCloseFd, err := unix.Eventfd(0, unix.O_CLOEXEC|unix.O_NONBLOCK)
 	if err != nil {
 		return nil, err
 	}
@@ -281,7 +332,7 @@ func NewPerfReader(opts PerfReaderOptions) (out *PerfReader, err error) {
 	}()
 	fds = append(fds, flushCloseFd)
 
-	epollFd, err := newEpollFd(fds...)
+	epollFd, err := createEpollFd(fds...)
 	if err != nil {
 		return nil, err
 	}
@@ -446,17 +497,17 @@ func (pr *PerfReader) flushRing(ring *perfEventRing, samples chan<- *PerfSample)
 }
 
 type ringReader struct {
-	meta       *perfEventMeta
+	meta       *unix.PerfEventMmapPage
 	head, tail uint64
 	mask       uint64
 	ring       []byte
 }
 
-func newRingReader(meta *perfEventMeta, ring []byte) *ringReader {
+func newRingReader(meta *unix.PerfEventMmapPage, ring []byte) *ringReader {
 	return &ringReader{
 		meta: meta,
-		head: atomic.LoadUint64(&meta.dataHead),
-		tail: atomic.LoadUint64(&meta.dataTail),
+		head: atomic.LoadUint64(&meta.Data_head),
+		tail: atomic.LoadUint64(&meta.Data_tail),
 		// cap is always a power of two
 		mask: uint64(cap(ring) - 1),
 		ring: ring,
@@ -466,7 +517,7 @@ func newRingReader(meta *perfEventMeta, ring []byte) *ringReader {
 func (rb *ringReader) Close() error {
 	// Commit the new tail. This lets the kernel know that
 	// the ring buffer has been consumed.
-	atomic.StoreUint64(&rb.meta.dataTail, rb.tail)
+	atomic.StoreUint64(&rb.meta.Data_tail, rb.tail)
 	return nil
 }
 

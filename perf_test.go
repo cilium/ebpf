@@ -7,6 +7,8 @@ import (
 	"os"
 	"syscall"
 	"testing"
+
+	"golang.org/x/sys/unix"
 )
 
 func TestPerfReader(t *testing.T) {
@@ -303,10 +305,10 @@ func makeRing(size, offset int) *ringReader {
 		ring[i] = byte(i)
 	}
 
-	meta := perfEventMeta{
-		dataHead: uint64(len(ring) + offset),
-		dataTail: uint64(offset),
-		dataSize: uint64(len(ring)),
+	meta := unix.PerfEventMmapPage{
+		Data_head: uint64(len(ring) + offset),
+		Data_tail: uint64(offset),
+		Data_size: uint64(len(ring)),
 	}
 
 	return newRingReader(&meta, ring)

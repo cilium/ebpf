@@ -582,6 +582,74 @@ func BenchmarkMarshalling(b *testing.B) {
 	})
 }
 
+func BenchmarkMap(b *testing.B) {
+	m, err := NewMap(&MapSpec{
+		Type:       Hash,
+		KeySize:    4,
+		ValueSize:  4,
+		MaxEntries: 1,
+	})
+	if err != nil {
+		b.Fatal(err)
+	}
+
+	if err := m.Put(uint32(0), uint32(42)); err != nil {
+		b.Fatal(err)
+	}
+
+	b.Run("Lookup", func(b *testing.B) {
+		var key, value uint32
+
+		b.ReportAllocs()
+
+		for i := 0; i < b.N; i++ {
+			err := m.Lookup(unsafe.Pointer(&key), unsafe.Pointer(&value))
+			if err != nil {
+				b.Fatal(err)
+			}
+		}
+	})
+
+	b.Run("Update", func(b *testing.B) {
+		var key, value uint32
+
+		b.ReportAllocs()
+
+		for i := 0; i < b.N; i++ {
+			err := m.Update(unsafe.Pointer(&key), unsafe.Pointer(&value), UpdateAny)
+			if err != nil {
+				b.Fatal(err)
+			}
+		}
+	})
+
+	b.Run("NextKey", func(b *testing.B) {
+		var key uint32
+
+		b.ReportAllocs()
+
+		for i := 0; i < b.N; i++ {
+			err := m.NextKey(nil, unsafe.Pointer(&key))
+			if err != nil {
+				b.Fatal(err)
+			}
+		}
+	})
+
+	b.Run("Delete", func(b *testing.B) {
+		var key uint32
+
+		b.ReportAllocs()
+
+		for i := 0; i < b.N; i++ {
+			err := m.Delete(unsafe.Pointer(&key))
+			if err != nil && !IsNotExist(err) {
+				b.Fatal(err)
+			}
+		}
+	})
+}
+
 // Per CPU maps store a distinct value for each CPU. They are useful
 // to collect metrics.
 func ExampleMap_perCPU() {

@@ -118,7 +118,7 @@ func newDistanceFilter() (*ebpf.Program, *ebpf.Map, error) {
 
 		// r1 must point to map
 		asm.LoadMapPtr(asm.R1, ttls.FD()),
-		asm.MapLookupElement.Call(),
+		asm.FnMapLookupElem.Call(),
 
 		// load ok? inc. Otherwise? jmp to mapupdate
 		asm.JEq.Imm(asm.R0, 0, "update-map"),
@@ -138,7 +138,7 @@ func newDistanceFilter() (*ebpf.Program, *ebpf.Map, error) {
 		asm.Add.Imm(asm.R3, -16),
 		// r4 has flags, 0
 		asm.Mov.Imm(asm.R4, 0),
-		asm.MapUpdateElement.Call(),
+		asm.FnMapUpdateElem.Call(),
 
 		// set exit code to -1, don't trunc packet
 		asm.Mov.Imm(asm.R0, -1).Sym("exit"),

@@ -4,6 +4,19 @@ package asm
 
 import "strconv"
 
+func _() {
+	// An "invalid array index" compiler error signifies that the constant values have changed.
+	// Re-run the stringer command to generate them again.
+	var x [1]struct{}
+	_ = x[LdClass-0]
+	_ = x[LdXClass-1]
+	_ = x[StClass-2]
+	_ = x[StXClass-3]
+	_ = x[ALUClass-4]
+	_ = x[JumpClass-5]
+	_ = x[ALU64Class-7]
+}
+
 const (
 	_Class_name_0 = "LdClassLdXClassStClassStXClassALUClassJumpClass"
 	_Class_name_1 = "ALU64Class"

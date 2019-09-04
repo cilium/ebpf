@@ -4,6 +4,18 @@ package asm
 
 import "strconv"
 
+func _() {
+	// An "invalid array index" compiler error signifies that the constant values have changed.
+	// Re-run the stringer command to generate them again.
+	var x [1]struct{}
+	_ = x[InvalidMode-255]
+	_ = x[ImmMode-0]
+	_ = x[AbsMode-32]
+	_ = x[IndMode-64]
+	_ = x[MemMode-96]
+	_ = x[XAddMode-192]
+}
+
 const (
 	_Mode_name_0 = "ImmMode"
 	_Mode_name_1 = "AbsMode"
@@ -30,6 +42,16 @@ func (i Mode) String() string {
 	default:
 		return "Mode(" + strconv.FormatInt(int64(i), 10) + ")"
 	}
+}
+func _() {
+	// An "invalid array index" compiler error signifies that the constant values have changed.
+	// Re-run the stringer command to generate them again.
+	var x [1]struct{}
+	_ = x[InvalidSize-255]
+	_ = x[DWord-24]
+	_ = x[Word-0]
+	_ = x[Half-8]
+	_ = x[Byte-16]
 }
 
 const (

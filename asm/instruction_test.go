@@ -60,45 +60,48 @@ func TestSignedJump(t *testing.T) {
 	}
 }
 
-// ExampleInstructions_Format shows the different options available
-// to format an instruction stream.
+// You can use format flags to change the way an eBPF
+// program is stringified.
 func ExampleInstructions_Format() {
 	insns := Instructions{
-		MapLookupElement.Call().Sym("my_func"),
+		FnMapLookupElem.Call().Sym("my_func"),
 		LoadImm(R0, 42, DWord),
 		Return(),
 	}
 
 	fmt.Println("Default format:")
-	fmt.Printf("%v", insns)
+	fmt.Printf("%v\n", insns)
 
 	fmt.Println("Don't indent instructions:")
-	fmt.Printf("%.0v", insns)
+	fmt.Printf("%.0v\n", insns)
 
 	fmt.Println("Indent using spaces:")
-	fmt.Printf("% v", insns)
+	fmt.Printf("% v\n", insns)
 
 	fmt.Println("Control symbol indentation:")
-	fmt.Printf("%2v", insns)
+	fmt.Printf("%2v\n", insns)
 
 	// Output: Default format:
 	// my_func:
-	// 	0: Call MapLookupElement
+	// 	0: Call FnMapLookupElem
 	// 	1: LdImmDW dst: r0 imm: 42
 	// 	3: Exit
+	//
 	// Don't indent instructions:
 	// my_func:
-	// 0: Call MapLookupElement
+	// 0: Call FnMapLookupElem
 	// 1: LdImmDW dst: r0 imm: 42
 	// 3: Exit
+	//
 	// Indent using spaces:
 	// my_func:
-	//  0: Call MapLookupElement
+	//  0: Call FnMapLookupElem
 	//  1: LdImmDW dst: r0 imm: 42
 	//  3: Exit
+	//
 	// Control symbol indentation:
 	// 		my_func:
-	// 	0: Call MapLookupElement
+	// 	0: Call FnMapLookupElem
 	// 	1: LdImmDW dst: r0 imm: 42
 	// 	3: Exit
 }

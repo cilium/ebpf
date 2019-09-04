@@ -4,6 +4,15 @@ package asm
 
 import "strconv"
 
+func _() {
+	// An "invalid array index" compiler error signifies that the constant values have changed.
+	// Re-run the stringer command to generate them again.
+	var x [1]struct{}
+	_ = x[InvalidSource-255]
+	_ = x[ImmSource-0]
+	_ = x[RegSource-8]
+}
+
 const (
 	_Source_name_0 = "ImmSource"
 	_Source_name_1 = "RegSource"
@@ -21,6 +30,14 @@ func (i Source) String() string {
 	default:
 		return "Source(" + strconv.FormatInt(int64(i), 10) + ")"
 	}
+}
+func _() {
+	// An "invalid array index" compiler error signifies that the constant values have changed.
+	// Re-run the stringer command to generate them again.
+	var x [1]struct{}
+	_ = x[InvalidEndian-255]
+	_ = x[LE-0]
+	_ = x[BE-8]
 }
 
 const (
@@ -40,6 +57,26 @@ func (i Endianness) String() string {
 	default:
 		return "Endianness(" + strconv.FormatInt(int64(i), 10) + ")"
 	}
+}
+func _() {
+	// An "invalid array index" compiler error signifies that the constant values have changed.
+	// Re-run the stringer command to generate them again.
+	var x [1]struct{}
+	_ = x[InvalidALUOp-255]
+	_ = x[Add-0]
+	_ = x[Sub-16]
+	_ = x[Mul-32]
+	_ = x[Div-48]
+	_ = x[Or-64]
+	_ = x[And-80]
+	_ = x[LSh-96]
+	_ = x[RSh-112]
+	_ = x[Neg-128]
+	_ = x[Mod-144]
+	_ = x[Xor-160]
+	_ = x[Mov-176]
+	_ = x[ArSh-192]
+	_ = x[Swap-208]
 }
 
 const _ALUOp_name = "AddSubMulDivOrAndLShRShNegModXorMovArShSwapInvalidALUOp"

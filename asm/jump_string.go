@@ -4,6 +4,27 @@ package asm
 
 import "strconv"
 
+func _() {
+	// An "invalid array index" compiler error signifies that the constant values have changed.
+	// Re-run the stringer command to generate them again.
+	var x [1]struct{}
+	_ = x[InvalidJumpOp-255]
+	_ = x[Ja-0]
+	_ = x[JEq-16]
+	_ = x[JGT-32]
+	_ = x[JGE-48]
+	_ = x[JSet-64]
+	_ = x[JNE-80]
+	_ = x[JSGT-96]
+	_ = x[JSGE-112]
+	_ = x[Call-128]
+	_ = x[Exit-144]
+	_ = x[JLT-160]
+	_ = x[JLE-176]
+	_ = x[JSLT-192]
+	_ = x[JSLE-208]
+}
+
 const _JumpOp_name = "JaJEqJGTJGEJSetJNEJSGTJSGECallExitJLTJLEJSLTJSLEInvalidJumpOp"
 
 var _JumpOp_map = map[JumpOp]string{

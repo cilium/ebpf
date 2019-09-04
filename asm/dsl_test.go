@@ -10,7 +10,7 @@ func TestDSL(t *testing.T) {
 		have Instruction
 		want Instruction
 	}{
-		{"Call", MapLookupElement.Call(), Instruction{OpCode: 0x85, Constant: 1}},
+		{"Call", FnMapLookupElem.Call(), Instruction{OpCode: 0x85, Constant: 1}},
 		{"Exit", Return(), Instruction{OpCode: 0x95}},
 		{"LoadAbs", LoadAbs(2, Byte), Instruction{OpCode: 0x30, Constant: 2}},
 		{"Store", StoreMem(RFP, -4, R0, Word), Instruction{

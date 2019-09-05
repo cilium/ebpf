@@ -77,14 +77,14 @@ func createPerfEvent(cpu, watermark int) (int, error) {
 	attr := unix.PerfEventAttr{
 		Type:        unix.PERF_TYPE_SOFTWARE,
 		Config:      unix.PERF_COUNT_SW_BPF_OUTPUT,
-		Bits:        unix.PerfBitWatermark | unix.PerfBitExclusive,
+		Bits:        unix.PerfBitWatermark,
 		Sample_type: unix.PERF_SAMPLE_RAW,
 		Wakeup:      uint32(watermark),
 	}
 
 	attr.Size = uint32(unsafe.Sizeof(attr))
 
-	fd, err := unix.PerfEventOpen(&attr, -1, cpu, -1, 0)
+	fd, err := unix.PerfEventOpen(&attr, -1, cpu, -1, unix.PERF_FLAG_FD_CLOEXEC)
 	if err == nil {
 		return fd, nil
 	}

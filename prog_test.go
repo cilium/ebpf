@@ -70,18 +70,26 @@ func TestProgramRun(t *testing.T) {
 	}
 }
 
-func TestProgramClose(t *testing.T) {
-	prog, err := NewProgram(&ProgramSpec{
-		Type: SocketFilter,
-		Instructions: asm.Instructions{
-			asm.LoadImm(asm.R0, 0, asm.DWord),
-			asm.Return(),
-		},
-		License: "MIT",
-	})
+func TestProgramBenchmark(t *testing.T) {
+	prog := createSocketFilter(t)
+	defer prog.Close()
+
+	ret, duration, err := prog.Benchmark(make([]byte, 14), 1)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatal("Error from Benchmark:", err)
 	}
+
+	if ret != 2 {
+		t.Error("Expected return value 2, got", ret)
+	}
+
+	if duration == 0 {
+		t.Error("Expected non-zero duration")
+	}
+}
+
+func TestProgramClose(t *testing.T) {
+	prog := createSocketFilter(t)
 
 	if err := prog.Close(); err != nil {
 		t.Fatal("Can't close program:", err)
@@ -89,17 +97,7 @@ func TestProgramClose(t *testing.T) {
 }
 
 func TestProgramPin(t *testing.T) {
-	prog, err := NewProgram(&ProgramSpec{
-		Type: SocketFilter,
-		Instructions: asm.Instructions{
-			asm.LoadImm(asm.R0, 0, asm.DWord),
-			asm.Return(),
-		},
-		License: "MIT",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
+	prog := createSocketFilter(t)
 	defer prog.Close()
 
 	tmp, err := ioutil.TempDir("/sys/fs/bpf", "ebpf-test")
@@ -143,16 +141,7 @@ func TestProgramVerifierOutputOnError(t *testing.T) {
 }
 
 func TestProgramVerifierOutput(t *testing.T) {
-	spec := &ProgramSpec{
-		Type: SocketFilter,
-		Instructions: asm.Instructions{
-			asm.LoadImm(asm.R0, 0, asm.DWord),
-			asm.Return(),
-		},
-		License: "MIT",
-	}
-
-	prog, err := NewProgramWithOptions(spec, ProgramOptions{
+	prog, err := NewProgramWithOptions(socketFilterSpec, ProgramOptions{
 		LogLevel: 2,
 	})
 	if err != nil {
@@ -167,18 +156,7 @@ func TestProgramVerifierOutput(t *testing.T) {
 }
 
 func TestProgramName(t *testing.T) {
-	prog, err := NewProgram(&ProgramSpec{
-		Name: "test",
-		Type: SocketFilter,
-		Instructions: asm.Instructions{
-			asm.LoadImm(asm.R0, 0, asm.DWord),
-			asm.Return(),
-		},
-		License: "MIT",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
+	prog := createSocketFilter(t)
 	defer prog.Close()
 
 	info, err := bpfGetProgInfoByFD(prog.fd)
@@ -271,6 +249,27 @@ func createProgramArray(t *testing.T) *Map {
 		t.Fatal(err)
 	}
 	return arr
+}
+
+var socketFilterSpec = &ProgramSpec{
+	Name: "test",
+	Type: SocketFilter,
+	Instructions: asm.Instructions{
+		asm.LoadImm(asm.R0, 2, asm.DWord),
+		asm.Return(),
+	},
+	License: "MIT",
+}
+
+func createSocketFilter(t *testing.T) *Program {
+	t.Helper()
+
+	prog, err := NewProgram(socketFilterSpec)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	return prog
 }
 
 // Use NewProgramWithOptions if you'd like to get the verifier output

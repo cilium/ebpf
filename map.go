@@ -80,8 +80,8 @@ func createMap(spec *MapSpec, inner *bpfFD) (*Map, error) {
 	case ArrayOfMaps:
 		fallthrough
 	case HashOfMaps:
-		if spec.ValueSize != 0 {
-			return nil, errors.Errorf("ValueSize must be zero for map of map")
+		if spec.ValueSize != 0 && spec.ValueSize != 4 {
+			return nil, errors.Errorf("ValueSize must be zero or four for map of map")
 		}
 		cpy.ValueSize = 4
 

@@ -247,6 +247,35 @@ func createMapInMap(t *testing.T, typ MapType) *Map {
 	return m
 }
 
+func TestMapInMapValueSize(t *testing.T) {
+	spec := &MapSpec{
+		Type:       ArrayOfMaps,
+		KeySize:    4,
+		ValueSize:  0,
+		MaxEntries: 2,
+		InnerMap: &MapSpec{
+			Type:       Array,
+			KeySize:    4,
+			ValueSize:  4,
+			MaxEntries: 2,
+		},
+	}
+
+	if _, err := NewMap(spec); err != nil {
+		t.Fatal(err)
+	}
+
+	spec.ValueSize = 4
+	if _, err := NewMap(spec); err != nil {
+		t.Fatal(err)
+	}
+
+	spec.ValueSize = 1
+	if _, err := NewMap(spec); err == nil {
+		t.Fatal("Expected an error")
+	}
+}
+
 func TestIterateEmptyMap(t *testing.T) {
 	hash := createHash()
 	defer hash.Close()

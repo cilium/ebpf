@@ -204,6 +204,16 @@ func TestMapInMap(t *testing.T) {
 	}
 }
 
+func TestPerfEventArray(t *testing.T) {
+	m, err := NewMap(&MapSpec{
+		Type: PerfEventArray,
+	})
+	if err != nil {
+		t.Fatal("Can't create perf event array:", err)
+	}
+	m.Close()
+}
+
 func TestMapInMapABI(t *testing.T) {
 	m := createMapInMap(t, ArrayOfMaps)
 	defer m.Close()

@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/newtools/ebpf/asm"
+	"github.com/cilium/ebpf/asm"
 )
 
 func TestProgramRun(t *testing.T) {

@@ -4,12 +4,11 @@ import (
 	"bytes"
 	"encoding"
 	"encoding/binary"
-	"fmt"
-	"os"
 	"reflect"
 	"runtime"
-	"sync"
 	"unsafe"
+
+	"github.com/cilium/ebpf/internal"
 
 	"github.com/pkg/errors"
 )
@@ -122,7 +121,7 @@ func marshalPerCPUValue(slice interface{}, elemLength int) (syscallPtr, error) {
 		return syscallPtr{}, errors.New("per-CPU value requires slice")
 	}
 
-	possibleCPUs, err := possibleCPUs()
+	possibleCPUs, err := internal.PossibleCPUs()
 	if err != nil {
 		return syscallPtr{}, err
 	}
@@ -160,7 +159,7 @@ func unmarshalPerCPUValue(slicePtr interface{}, elemLength int, buf []byte) erro
 		return errors.Errorf("per-cpu value requires pointer to slice")
 	}
 
-	possibleCPUs, err := possibleCPUs()
+	possibleCPUs, err := internal.PossibleCPUs()
 	if err != nil {
 		return err
 	}
@@ -202,61 +201,6 @@ func unmarshalPerCPUValue(slicePtr interface{}, elemLength int, buf []byte) erro
 
 	reflect.ValueOf(slicePtr).Elem().Set(slice)
 	return nil
-}
-
-var sysCPU struct {
-	once sync.Once
-	err  error
-	num  int
-}
-
-// possibleCPUs returns the max number of CPUs a system may possibly have
-// Logical CPU numbers must be of the form 0-n
-func possibleCPUs() (int, error) {
-	sysCPU.once.Do(func() {
-		sysCPU.num, sysCPU.err = parseCPUs("/sys/devices/system/cpu/possible")
-	})
-
-	return sysCPU.num, sysCPU.err
-}
-
-var onlineCPU struct {
-	once sync.Once
-	err  error
-	num  int
-}
-
-// onlineCPUs returns the number of currently online CPUs
-// Logical CPU numbers must be of the form 0-n
-func onlineCPUs() (int, error) {
-	onlineCPU.once.Do(func() {
-		onlineCPU.num, onlineCPU.err = parseCPUs("/sys/devices/system/cpu/online")
-	})
-
-	return onlineCPU.num, onlineCPU.err
-}
-
-// parseCPUs parses the number of cpus from sysfs,
-// in the format of "/sys/devices/system/cpu/{possible,online,..}.
-// Logical CPU numbers must be of the form 0-n
-func parseCPUs(path string) (int, error) {
-	file, err := os.Open(path)
-	if err != nil {
-		return 0, err
-	}
-	defer file.Close()
-
-	var low, high int
-	n, _ := fmt.Fscanf(file, "%d-%d", &low, &high)
-	if n < 1 || low != 0 {
-		return 0, errors.Wrapf(err, "%s has unknown format", path)
-	}
-	if n == 1 {
-		high = low
-	}
-
-	// cpus is 0 indexed
-	return high + 1, nil
 }
 
 func align(n, alignment int) int {

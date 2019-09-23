@@ -10,6 +10,7 @@ import (
 	"unsafe"
 
 	"github.com/cilium/ebpf/asm"
+	"github.com/cilium/ebpf/internal"
 	"golang.org/x/sys/unix"
 
 	"github.com/pkg/errors"
@@ -153,7 +154,7 @@ func convertProgramSpec(spec *ProgramSpec, includeName bool) (*bpfProgLoadAttr, 
 	}
 
 	buf := bytes.NewBuffer(make([]byte, 0, len(spec.Instructions)*asm.InstructionSize))
-	err := spec.Instructions.Marshal(buf, nativeEndian)
+	err := spec.Instructions.Marshal(buf, internal.NativeEndian)
 	if err != nil {
 		return nil, err
 	}
@@ -360,7 +361,7 @@ func unmarshalProgram(buf []byte) (*Program, error) {
 
 	// Looking up an entry in a nested map or prog array returns an id,
 	// not an fd.
-	id := nativeEndian.Uint32(buf)
+	id := internal.NativeEndian.Uint32(buf)
 	fd, err := bpfGetProgramFDByID(id)
 	if err != nil {
 		return nil, err
@@ -383,7 +384,7 @@ func (p *Program) MarshalBinary() ([]byte, error) {
 	}
 
 	buf := make([]byte, 4)
-	nativeEndian.PutUint32(buf, value)
+	internal.NativeEndian.PutUint32(buf, value)
 	return buf, nil
 }
 

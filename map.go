@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"unsafe"
 
+	"github.com/cilium/ebpf/internal"
+
 	"github.com/pkg/errors"
 	"golang.org/x/sys/unix"
 )
@@ -97,7 +99,7 @@ func createMap(spec *MapSpec, inner *bpfFD) (*Map, error) {
 			return nil, errors.Errorf("MaxEntries must be zero for perf event array")
 		}
 
-		n, err := possibleCPUs()
+		n, err := internal.PossibleCPUs()
 		if err != nil {
 			return nil, errors.Wrap(err, "perf event array")
 		}
@@ -150,7 +152,7 @@ func newMap(fd *bpfFD, abi *MapABI) (*Map, error) {
 		return m, nil
 	}
 
-	possibleCPUs, err := possibleCPUs()
+	possibleCPUs, err := internal.PossibleCPUs()
 	if err != nil {
 		return nil, err
 	}

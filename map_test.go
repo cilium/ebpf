@@ -10,6 +10,8 @@ import (
 	"testing"
 	"unsafe"
 
+	"github.com/cilium/ebpf/internal"
+
 	"github.com/pkg/errors"
 	"golang.org/x/sys/unix"
 )
@@ -383,7 +385,7 @@ func TestIterateMapInMap(t *testing.T) {
 }
 
 func TestPerCPUMarshaling(t *testing.T) {
-	numCPU, err := possibleCPUs()
+	numCPU, err := internal.PossibleCPUs()
 	if err != nil {
 		t.Fatal(err)
 	}

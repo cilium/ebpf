@@ -512,21 +512,21 @@ type benchValue struct {
 type customBenchValue benchValue
 
 func (cbv *customBenchValue) UnmarshalBinary(buf []byte) error {
-	cbv.ID = nativeEndian.Uint32(buf)
-	cbv.Val16 = nativeEndian.Uint16(buf[4:])
-	cbv.Val16_2 = nativeEndian.Uint16(buf[6:])
+	cbv.ID = internal.NativeEndian.Uint32(buf)
+	cbv.Val16 = internal.NativeEndian.Uint16(buf[4:])
+	cbv.Val16_2 = internal.NativeEndian.Uint16(buf[6:])
 	copy(cbv.Name[:], buf[8:])
-	cbv.LID = nativeEndian.Uint64(buf[16:])
+	cbv.LID = internal.NativeEndian.Uint64(buf[16:])
 	return nil
 }
 
 func (cbv *customBenchValue) MarshalBinary() ([]byte, error) {
 	buf := make([]byte, 24)
-	nativeEndian.PutUint32(buf, cbv.ID)
-	nativeEndian.PutUint16(buf[4:], cbv.Val16)
-	nativeEndian.PutUint16(buf[6:], cbv.Val16_2)
+	internal.NativeEndian.PutUint32(buf, cbv.ID)
+	internal.NativeEndian.PutUint16(buf[4:], cbv.Val16)
+	internal.NativeEndian.PutUint16(buf[6:], cbv.Val16_2)
 	copy(buf[8:], cbv.Name[:])
-	nativeEndian.PutUint64(buf[16:], cbv.LID)
+	internal.NativeEndian.PutUint64(buf[16:], cbv.LID)
 	return buf, nil
 }
 

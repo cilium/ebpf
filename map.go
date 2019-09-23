@@ -450,7 +450,7 @@ func unmarshalMap(buf []byte) (*Map, error) {
 
 	// Looking up an entry in a nested map or prog array returns an id,
 	// not an fd.
-	id := nativeEndian.Uint32(buf)
+	id := internal.NativeEndian.Uint32(buf)
 	fd, err := bpfGetMapFDByID(id)
 	if err != nil {
 		return nil, err
@@ -473,7 +473,7 @@ func (m *Map) MarshalBinary() ([]byte, error) {
 	}
 
 	buf := make([]byte, 4)
-	nativeEndian.PutUint32(buf, fd)
+	internal.NativeEndian.PutUint32(buf, fd)
 	return buf, nil
 }
 

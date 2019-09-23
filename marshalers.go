@@ -13,22 +13,6 @@ import (
 	"github.com/pkg/errors"
 )
 
-var nativeEndian binary.ByteOrder
-
-func init() {
-	if isBigEndian() {
-		nativeEndian = binary.BigEndian
-	} else {
-		nativeEndian = binary.LittleEndian
-	}
-}
-
-func isBigEndian() (ret bool) {
-	i := int(0x1)
-	bs := (*[int(unsafe.Sizeof(i))]byte)(unsafe.Pointer(&i))
-	return bs[0] == 0
-}
-
 func marshalPtr(data interface{}, length int) (syscallPtr, error) {
 	if ptr, ok := data.(unsafe.Pointer); ok {
 		return newPtr(ptr), nil
@@ -54,7 +38,7 @@ func marshalBytes(data interface{}, length int) (buf []byte, err error) {
 		err = errors.New("can't marshal from unsafe.Pointer")
 	default:
 		var wr bytes.Buffer
-		err = binary.Write(&wr, nativeEndian, value)
+		err = binary.Write(&wr, internal.NativeEndian, value)
 		err = errors.Wrapf(err, "encoding %T", value)
 		buf = wr.Bytes()
 	}
@@ -104,7 +88,7 @@ func unmarshalBytes(data interface{}, buf []byte) error {
 		return errors.New("require pointer to []byte")
 	default:
 		rd := bytes.NewReader(buf)
-		err := binary.Read(rd, nativeEndian, value)
+		err := binary.Read(rd, internal.NativeEndian, value)
 		return errors.Wrapf(err, "decoding %T", value)
 	}
 }

@@ -6,6 +6,11 @@ eBPF is a pure Go library that provides utilities for loading, compiling, and de
 
 [ebpf/asm](https://godoc.org/github.com/cilium/ebpf/asm) contains a basic assembler.
 
+## Current status
+
+The package is production ready, but **the API is explicitly unstable
+right now**. Expect to update your code if you want to follow along.
+
 ## Useful resources
 
 * [Cilium eBPF documentation](https://cilium.readthedocs.io/en/latest/bpf/#bpf-guide) (recommended)

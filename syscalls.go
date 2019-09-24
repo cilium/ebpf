@@ -12,11 +12,6 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-const (
-	bpfObjNameLen = 16
-	bpfTagSize    = 8
-)
-
 var errClosedFd = errors.New("use of closed file descriptor")
 
 type bpfFD struct {
@@ -68,7 +63,7 @@ func (fd *bpfFD) dup() (*bpfFD, error) {
 
 // bpfObjName is a null-terminated string made up of
 // 'A-Za-z0-9_' characters.
-type bpfObjName [bpfObjNameLen]byte
+type bpfObjName [unix.BPF_OBJ_NAME_LEN]byte
 
 // newBPFObjName truncates the result if it is too long.
 func newBPFObjName(name string) (bpfObjName, error) {
@@ -78,7 +73,7 @@ func newBPFObjName(name string) (bpfObjName, error) {
 	}
 
 	var result bpfObjName
-	copy(result[:bpfObjNameLen-1], name)
+	copy(result[:unix.BPF_OBJ_NAME_LEN-1], name)
 	return result, nil
 }
 
@@ -150,7 +145,7 @@ type bpfProgLoadAttr struct {
 type bpfProgInfo struct {
 	progType     uint32
 	id           uint32
-	tag          [bpfTagSize]byte
+	tag          [unix.BPF_TAG_SIZE]byte
 	jitedLen     uint32
 	xlatedLen    uint32
 	jited        syscallPtr

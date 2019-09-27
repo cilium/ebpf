@@ -14,10 +14,10 @@ import (
 // perfEventRing is a page of metadata followed by
 // a variable number of pages which form a ring buffer.
 type perfEventRing struct {
-	fd     int
-	cpu    int
-	mmap   []byte
-	reader *ringReader
+	fd   int
+	cpu  int
+	mmap []byte
+	*ringReader
 }
 
 func newPerfEventRing(cpu int, opts ReaderOptions) (*perfEventRing, error) {
@@ -54,10 +54,10 @@ func newPerfEventRing(cpu int, opts ReaderOptions) (*perfEventRing, error) {
 	meta := (*unix.PerfEventMmapPage)(unsafe.Pointer(&mmap[0]))
 
 	ring := &perfEventRing{
-		fd:     fd,
-		cpu:    cpu,
-		mmap:   mmap,
-		reader: newRingReader(meta, mmap[meta.Data_offset:meta.Data_offset+meta.Data_size]),
+		fd:         fd,
+		cpu:        cpu,
+		mmap:       mmap,
+		ringReader: newRingReader(meta, mmap[meta.Data_offset:meta.Data_offset+meta.Data_size]),
 	}
 	runtime.SetFinalizer(ring, (*perfEventRing).Close)
 
@@ -71,20 +71,6 @@ func (ring *perfEventRing) Close() {
 
 	ring.fd = -1
 	ring.mmap = nil
-}
-
-func (ring *perfEventRing) LoadHead() {
-	ring.reader.loadHead()
-}
-
-// NB: Has to be preceded by a call to LoadHead.
-func (ring *perfEventRing) ReadRecord() (*Record, error) {
-	if ring.fd == -1 {
-		return nil, errClosed
-	}
-
-	defer ring.reader.writeTail()
-	return readRecord(ring.reader, ring.cpu)
 }
 
 func createPerfEvent(cpu, watermark int) (int, error) {

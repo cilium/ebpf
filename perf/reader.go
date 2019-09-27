@@ -63,6 +63,12 @@ type Record struct {
 	LostSamples uint64
 }
 
+// NB: Has to be preceded by a call to ring.loadHead.
+func readRecordFromRing(ring *perfEventRing) (*Record, error) {
+	defer ring.writeTail()
+	return readRecord(ring, ring.cpu)
+}
+
 func readRecord(rd io.Reader, cpu int) (*Record, error) {
 	const (
 		perfRecordLost   = 2
@@ -313,14 +319,14 @@ func (pr *Reader) Read() (*Record, error) {
 				// Read the current head pointer now, not every time
 				// we read a record. This prevents a single fast producer
 				// from keeping the reader busy.
-				ring.LoadHead()
+				ring.loadHead()
 			}
 		}
 
 		// Start at the last available event. The order in which we
 		// process them doesn't matter, and starting at the back allows
 		// resizing epollRings to keep track of processed rings.
-		record, err := pr.epollRings[len(pr.epollRings)-1].ReadRecord()
+		record, err := readRecordFromRing(pr.epollRings[len(pr.epollRings)-1])
 		if err != nil {
 			return nil, err
 		}

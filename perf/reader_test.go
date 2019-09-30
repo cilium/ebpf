@@ -107,12 +107,12 @@ func outputSamplesProg(sampleSizes ...int) (*ebpf.Program, *ebpf.Map, error) {
 	return prog, events, nil
 }
 
-func mustOutputSamplesProg(t *testing.T, sampleSizes ...int) (*ebpf.Program, *ebpf.Map) {
-	t.Helper()
+func mustOutputSamplesProg(tb testing.TB, sampleSizes ...int) (*ebpf.Program, *ebpf.Map) {
+	tb.Helper()
 
 	prog, events, err := outputSamplesProg(sampleSizes...)
 	if err != nil {
-		t.Fatal(err)
+		tb.Fatal(err)
 	}
 
 	return prog, events
@@ -270,6 +270,35 @@ func TestCreatePerfEvent(t *testing.T) {
 		t.Fatal("Can't create perf event:", err)
 	}
 	unix.Close(fd)
+}
+
+func BenchmarkReader(b *testing.B) {
+	prog, events := mustOutputSamplesProg(b, 80)
+	defer prog.Close()
+	defer events.Close()
+
+	rd, err := NewReader(events, 4096)
+	if err != nil {
+		b.Fatal(err)
+	}
+	defer rd.Close()
+
+	buf := make([]byte, 14)
+
+	b.ResetTimer()
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		ret, _, err := prog.Test(buf)
+		if err != nil {
+			b.Fatal(err)
+		} else if errno := syscall.Errno(-int32(ret)); errno != 0 {
+			b.Fatal("Expected 0 as return value, got", errno)
+		}
+
+		if _, err = rd.Read(); err != nil {
+			b.Fatal(err)
+		}
+	}
 }
 
 // This exists just to make the example below nicer.

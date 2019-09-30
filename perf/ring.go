@@ -20,18 +20,18 @@ type perfEventRing struct {
 	*ringReader
 }
 
-func newPerfEventRing(cpu int, opts ReaderOptions) (*perfEventRing, error) {
-	if opts.Watermark >= opts.PerCPUBuffer {
-		return nil, errors.Errorf("Watermark must be smaller than PerCPUBuffer")
+func newPerfEventRing(cpu, perCPUBuffer, watermark int) (*perfEventRing, error) {
+	if watermark >= perCPUBuffer {
+		return nil, errors.Errorf("watermark must be smaller than perCPUBuffer")
 	}
 
 	// Round to nearest page boundary and allocate
 	// an extra page for meta data
 	pageSize := os.Getpagesize()
-	nPages := (opts.PerCPUBuffer + pageSize - 1) / pageSize
+	nPages := (perCPUBuffer + pageSize - 1) / pageSize
 	size := (1 + nPages) * pageSize
 
-	fd, err := createPerfEvent(cpu, opts.Watermark)
+	fd, err := createPerfEvent(cpu, watermark)
 	if err != nil {
 		return nil, errors.Wrap(err, "can't create perf event")
 	}

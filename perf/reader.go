@@ -148,21 +148,25 @@ type Reader struct {
 // ReaderOptions control the behaviour of the user
 // space reader.
 type ReaderOptions struct {
-	// A map of type PerfEventArray.
-	Map *ebpf.Map
-	// Controls the size of the per CPU buffer in bytes. It is rounded up
-	// to the nearest multiple of the current page size.
-	PerCPUBuffer int
 	// The number of written bytes required in any per CPU buffer before
 	// Read will process data. Must be smaller than PerCPUBuffer.
 	// The default is to start processing as soon as data is available.
 	Watermark int
 }
 
-// NewReader creates a new reader with the given options.
-func NewReader(opts ReaderOptions) (pr *Reader, err error) {
-	if opts.PerCPUBuffer < 1 {
-		return nil, errors.New("PerCPUBuffer must be larger than 0")
+// NewReader creates a new reader with default options.
+//
+// array must be a PerfEventArray. perCPUBuffer gives the size of the
+// per CPU buffer in bytes. It is rounded up to the nearest multiple
+// of the current page size.
+func NewReader(array *ebpf.Map, perCPUBuffer int) (*Reader, error) {
+	return NewReaderWithOptions(array, perCPUBuffer, ReaderOptions{})
+}
+
+// NewReaderWithOptions creates a new reader with the given options.
+func NewReaderWithOptions(array *ebpf.Map, perCPUBuffer int, opts ReaderOptions) (pr *Reader, err error) {
+	if perCPUBuffer < 1 {
+		return nil, errors.New("perCPUBuffer must be larger than 0")
 	}
 
 	// We can't create a ring for CPUs that aren't online, so use only the online (of possible) CPUs
@@ -196,13 +200,13 @@ func NewReader(opts ReaderOptions) (pr *Reader, err error) {
 	// but doesn't allow using a wildcard like -1 to specify "all CPUs".
 	// Hence we have to create a ring for each CPU.
 	for i := 0; i < nCPU; i++ {
-		ring, err := newPerfEventRing(i, opts)
+		ring, err := newPerfEventRing(i, perCPUBuffer, opts.Watermark)
 		if err != nil {
 			return nil, errors.Wrapf(err, "failed to create perf ring for CPU %d", i)
 		}
 		rings = append(rings, ring)
 
-		if err := opts.Map.Put(uint32(i), uint32(ring.fd)); err != nil {
+		if err := array.Put(uint32(i), uint32(ring.fd)); err != nil {
 			return nil, errors.Wrapf(err, "could't put event fd for CPU %d", i)
 		}
 
@@ -221,7 +225,7 @@ func NewReader(opts ReaderOptions) (pr *Reader, err error) {
 		return nil, err
 	}
 
-	array, err := opts.Map.Clone()
+	array, err = array.Clone()
 	if err != nil {
 		return nil, err
 	}

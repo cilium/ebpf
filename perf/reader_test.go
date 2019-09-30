@@ -2,6 +2,7 @@ package perf
 
 import (
 	"bytes"
+	"encoding/binary"
 	"fmt"
 	"os"
 	"syscall"
@@ -10,6 +11,7 @@ import (
 
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/asm"
+	"github.com/cilium/ebpf/internal"
 
 	"golang.org/x/sys/unix"
 )
@@ -270,6 +272,20 @@ func TestCreatePerfEvent(t *testing.T) {
 		t.Fatal("Can't create perf event:", err)
 	}
 	unix.Close(fd)
+}
+
+func TestReadRecord(t *testing.T) {
+	var buf bytes.Buffer
+
+	err := binary.Write(&buf, internal.NativeEndian, &perfEventHeader{})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = readRecord(&buf, 0)
+	if !IsUnknownEvent(err) {
+		t.Error("readRecord should return unknown event error, got", err)
+	}
 }
 
 func BenchmarkReader(b *testing.B) {

@@ -19,11 +19,7 @@ func TestPerfReader(t *testing.T) {
 	defer prog.Close()
 	defer events.Close()
 
-	rd, err := NewReader(ReaderOptions{
-		Map:          events,
-		PerCPUBuffer: 4096,
-		Watermark:    1,
-	})
+	rd, err := NewReader(events, 4096)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -199,11 +195,7 @@ func TestPerfReaderLostSample(t *testing.T) {
 	defer prog.Close()
 	defer events.Close()
 
-	rd, err := NewReader(ReaderOptions{
-		Map:          events,
-		PerCPUBuffer: pageSize,
-		Watermark:    1,
-	})
+	rd, err := NewReader(events, pageSize)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -235,11 +227,7 @@ func TestPerfReaderClose(t *testing.T) {
 	defer prog.Close()
 	defer events.Close()
 
-	rd, err := NewReader(ReaderOptions{
-		Map:          events,
-		PerCPUBuffer: 4096,
-		Watermark:    1,
-	})
+	rd, err := NewReader(events, 4096)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -317,12 +305,7 @@ func ExampleReader() {
 	defer prog.Close()
 	defer events.Close()
 
-	rd, err := NewReader(ReaderOptions{
-		Map:          events,
-		PerCPUBuffer: 4096,
-		// Notify immediately
-		Watermark: 1,
-	})
+	rd, err := NewReader(events, 4096)
 	if err != nil {
 		panic(err)
 	}

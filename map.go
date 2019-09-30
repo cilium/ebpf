@@ -78,7 +78,8 @@ func NewMap(spec *MapSpec) (*Map, error) {
 }
 
 func createMap(spec *MapSpec, inner *bpfFD) (*Map, error) {
-	cpy := *spec
+	spec = spec.Copy()
+
 	switch spec.Type {
 	case ArrayOfMaps:
 		fallthrough
@@ -86,7 +87,7 @@ func createMap(spec *MapSpec, inner *bpfFD) (*Map, error) {
 		if spec.ValueSize != 0 && spec.ValueSize != 4 {
 			return nil, errors.Errorf("ValueSize must be zero or four for map of map")
 		}
-		cpy.ValueSize = 4
+		spec.ValueSize = 4
 
 	case PerfEventArray:
 		if spec.KeySize != 0 {
@@ -95,25 +96,24 @@ func createMap(spec *MapSpec, inner *bpfFD) (*Map, error) {
 		if spec.ValueSize != 0 {
 			return nil, errors.Errorf("ValueSize must be zero for perf event array")
 		}
-		if spec.MaxEntries != 0 {
-			return nil, errors.Errorf("MaxEntries must be zero for perf event array")
+		if spec.MaxEntries == 0 {
+			n, err := internal.OnlineCPUs()
+			if err != nil {
+				return nil, errors.Wrap(err, "perf event array")
+			}
+			spec.MaxEntries = uint32(n)
 		}
 
-		n, err := internal.PossibleCPUs()
-		if err != nil {
-			return nil, errors.Wrap(err, "perf event array")
-		}
-		cpy.KeySize = 4
-		cpy.ValueSize = 4
-		cpy.MaxEntries = uint32(n)
+		spec.KeySize = 4
+		spec.ValueSize = 4
 	}
 
 	attr := bpfMapCreateAttr{
-		mapType:    cpy.Type,
-		keySize:    cpy.KeySize,
-		valueSize:  cpy.ValueSize,
-		maxEntries: cpy.MaxEntries,
-		flags:      cpy.Flags,
+		mapType:    spec.Type,
+		keySize:    spec.KeySize,
+		valueSize:  spec.ValueSize,
+		maxEntries: spec.MaxEntries,
+		flags:      spec.Flags,
 	}
 
 	if inner != nil {
@@ -138,7 +138,7 @@ func createMap(spec *MapSpec, inner *bpfFD) (*Map, error) {
 		return nil, errors.Wrap(err, "map create")
 	}
 
-	return newMap(fd, newMapABIFromSpec(&cpy))
+	return newMap(fd, newMapABIFromSpec(spec))
 }
 
 func newMap(fd *bpfFD, abi *MapABI) (*Map, error) {

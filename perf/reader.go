@@ -2,6 +2,7 @@ package perf
 
 import (
 	"encoding/binary"
+	"fmt"
 	"io"
 	"math"
 	"runtime"
@@ -98,7 +99,7 @@ func readRecord(rd io.Reader, cpu int) (Record, error) {
 		return Record{CPU: cpu, RawSample: sample}, err
 
 	default:
-		return Record{}, errors.Errorf("unknown event type %d", header.Type)
+		return Record{}, &unknownEventError{header.Type}
 	}
 }
 
@@ -348,4 +349,19 @@ type temporaryError interface {
 // a Reader was closed.
 func IsClosed(err error) bool {
 	return errors.Cause(err) == errClosed
+}
+
+type unknownEventError struct {
+	eventType uint32
+}
+
+func (uev *unknownEventError) Error() string {
+	return fmt.Sprintf("unknown event type: %d", uev.eventType)
+}
+
+// IsUnknownEvent returns true if the error occured
+// because an unknown event was submitted to the perf event ring.
+func IsUnknownEvent(err error) bool {
+	_, ok := errors.Cause(err).(*unknownEventError)
+	return ok
 }

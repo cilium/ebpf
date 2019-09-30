@@ -169,12 +169,6 @@ func NewReaderWithOptions(array *ebpf.Map, perCPUBuffer int, opts ReaderOptions)
 		return nil, errors.New("perCPUBuffer must be larger than 0")
 	}
 
-	// We can't create a ring for CPUs that aren't online, so use only the online (of possible) CPUs
-	nCPU, err := internal.OnlineCPUs()
-	if err != nil {
-		return nil, err
-	}
-
 	epollFd, err := unix.EpollCreate1(unix.EPOLL_CLOEXEC)
 	if err != nil {
 		return nil, errors.Wrap(err, "can't create epoll fd")
@@ -182,6 +176,7 @@ func NewReaderWithOptions(array *ebpf.Map, perCPUBuffer int, opts ReaderOptions)
 
 	var (
 		fds   = []int{epollFd}
+		nCPU  = int(array.ABI().MaxEntries)
 		rings = make([]*perfEventRing, 0, nCPU)
 	)
 

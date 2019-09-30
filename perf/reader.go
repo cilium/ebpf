@@ -14,7 +14,10 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-var errClosed = errors.New("perf reader was closed")
+var (
+	errClosed = errors.New("perf reader was closed")
+	errEOR    = errors.New("end of ring")
+)
 
 // perfEventHeader must match 'struct perf_event_header` in <linux/perf_event.h>.
 type perfEventHeader struct {
@@ -64,12 +67,12 @@ type Record struct {
 }
 
 // NB: Has to be preceded by a call to ring.loadHead.
-func readRecordFromRing(ring *perfEventRing) (*Record, error) {
+func readRecordFromRing(ring *perfEventRing) (Record, error) {
 	defer ring.writeTail()
 	return readRecord(ring, ring.cpu)
 }
 
-func readRecord(rd io.Reader, cpu int) (*Record, error) {
+func readRecord(rd io.Reader, cpu int) (Record, error) {
 	const (
 		perfRecordLost   = 2
 		perfRecordSample = 9
@@ -78,24 +81,24 @@ func readRecord(rd io.Reader, cpu int) (*Record, error) {
 	var header perfEventHeader
 	err := binary.Read(rd, internal.NativeEndian, &header)
 	if err == io.EOF {
-		return nil, nil
+		return Record{}, errEOR
 	}
 
 	if err != nil {
-		return nil, errors.Wrap(err, "can't read event header")
+		return Record{}, errors.Wrap(err, "can't read event header")
 	}
 
 	switch header.Type {
 	case perfRecordLost:
 		lost, err := readLostRecords(rd)
-		return &Record{CPU: cpu, LostSamples: lost}, err
+		return Record{CPU: cpu, LostSamples: lost}, err
 
 	case perfRecordSample:
 		sample, err := readRawSample(rd)
-		return &Record{CPU: cpu, RawSample: sample}, err
+		return Record{CPU: cpu, RawSample: sample}, err
 
 	default:
-		return nil, errors.Errorf("unknown event type %d", header.Type)
+		return Record{}, errors.Errorf("unknown event type %d", header.Type)
 	}
 }
 
@@ -287,12 +290,12 @@ func (pr *Reader) Close() error {
 // Records from buffers below the Watermark are not returned.
 //
 // Calling Close interrupts the function.
-func (pr *Reader) Read() (*Record, error) {
+func (pr *Reader) Read() (Record, error) {
 	pr.mu.Lock()
 	defer pr.mu.Unlock()
 
 	if pr.epollFd == -1 {
-		return nil, errClosed
+		return Record{}, errClosed
 	}
 
 	for {
@@ -304,12 +307,12 @@ func (pr *Reader) Read() (*Record, error) {
 			}
 
 			if err != nil {
-				return nil, err
+				return Record{}, err
 			}
 
 			for _, event := range pr.epollEvents[:nEvents] {
 				if int(event.Fd) == pr.closeFd {
-					return nil, errClosed
+					return Record{}, errClosed
 				}
 
 				ring := pr.rings[cpuForEvent(&event)]
@@ -326,18 +329,14 @@ func (pr *Reader) Read() (*Record, error) {
 		// process them doesn't matter, and starting at the back allows
 		// resizing epollRings to keep track of processed rings.
 		record, err := readRecordFromRing(pr.epollRings[len(pr.epollRings)-1])
-		if err != nil {
-			return nil, err
-		}
-
-		if record == nil {
+		if err == errEOR {
 			// We've emptied the current ring buffer, process
 			// the next one.
 			pr.epollRings = pr.epollRings[:len(pr.epollRings)-1]
 			continue
 		}
 
-		return record, nil
+		return record, err
 	}
 }
 

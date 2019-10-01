@@ -87,46 +87,8 @@ func createPerfEvent(cpu, watermark int) (int, error) {
 	}
 
 	attr.Size = uint32(unsafe.Sizeof(attr))
-
 	fd, err := unix.PerfEventOpen(&attr, -1, cpu, -1, unix.PERF_FLAG_FD_CLOEXEC)
-	if err == nil {
-		return fd, nil
-	}
-
-	switch err {
-	case unix.E2BIG:
-		return -1, errors.WithMessage(unix.E2BIG, "perf_event_attr size is incorrect,check size field for what the correct size should be")
-	case unix.EACCES:
-		return -1, errors.WithMessage(unix.EACCES, "insufficient capabilities to create this event")
-	case unix.EBADFD:
-		return -1, errors.WithMessage(unix.EBADFD, "group_fd is invalid")
-	case unix.EBUSY:
-		return -1, errors.WithMessage(unix.EBUSY, "another event already has exclusive access to the PMU")
-	case unix.EFAULT:
-		return -1, errors.WithMessage(unix.EFAULT, "attr points to an invalid address")
-	case unix.EINVAL:
-		return -1, errors.WithMessage(unix.EINVAL, "the specified event is invalid, most likely because a configuration parameter is invalid (i.e. too high, too low, etc)")
-	case unix.EMFILE:
-		return -1, errors.WithMessage(unix.EMFILE, "this process has reached its limits for number of open events that it may have")
-	case unix.ENODEV:
-		return -1, errors.WithMessage(unix.ENODEV, "this processor architecture does not support this event type")
-	case unix.ENOENT:
-		return -1, errors.WithMessage(unix.ENOENT, "the type setting is not valid")
-	case unix.ENOSPC:
-		return -1, errors.WithMessage(unix.ENOSPC, "the hardware limit for breakpoints)capacity has been reached")
-	case unix.ENOSYS:
-		return -1, errors.WithMessage(unix.ENOSYS, "sample type not supported by the hardware")
-	case unix.EOPNOTSUPP:
-		return -1, errors.WithMessage(unix.EOPNOTSUPP, "this event is not supported by the hardware or requires a feature not supported by the hardware")
-	case unix.EOVERFLOW:
-		return -1, errors.WithMessage(unix.EOVERFLOW, "sample_max_stack is larger than the kernel support; check \"/proc/sys/kernel/perf_event_max_stack\" for maximum supported size")
-	case unix.EPERM:
-		return -1, errors.WithMessage(unix.EPERM, "insufficient capability to request exclusive access")
-	case unix.ESRCH:
-		return -1, errors.WithMessage(unix.ESRCH, "pid does not exist")
-	default:
-		return -1, err
-	}
+	return fd, errors.Wrap(err, "can't create perf event")
 }
 
 type ringReader struct {

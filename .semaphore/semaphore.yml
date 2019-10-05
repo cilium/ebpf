@@ -19,6 +19,9 @@ blocks:
           - sudo apt-get -y update
           - sudo apt-get install -y qemu-system-x86
       jobs:
+      - name: Test build on non-Linux
+        commands:
+          - GOOS=darwin go build ./...
       - name: Test on 5.0.13
         commands:
           - timeout -s KILL 60s ./run-tests.sh 5.0.13

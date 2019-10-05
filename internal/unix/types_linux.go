@@ -33,15 +33,14 @@ const (
 )
 
 // Statfs_t is a wrapper
-type Statfs_t linux.Statfs_t
+type Statfs_t = linux.Statfs_t
 
 // Rlimit is a wrapper
-type Rlimit linux.Rlimit
+type Rlimit = linux.Rlimit
 
 // Setrlimit is a wrapper
 func Setrlimit(resource int, rlim *Rlimit) (err error) {
-	rl := (*linux.Rlimit)(rlim)
-	return linux.Setrlimit(resource, rl)
+	return linux.Setrlimit(resource, rlim)
 }
 
 // Syscall is a wrapper
@@ -56,8 +55,7 @@ func FcntlInt(fd uintptr, cmd, arg int) (int, error) {
 
 // Statfs is a wrapper
 func Statfs(path string, buf *Statfs_t) (err error) {
-	buffer := (*linux.Statfs_t)(buf)
-	return linux.Statfs(path, buffer)
+	return linux.Statfs(path, buf)
 }
 
 // Close is a wrapper
@@ -66,21 +64,16 @@ func Close(fd int) (err error) {
 }
 
 // EpollEvent is a wrapper
-type EpollEvent linux.EpollEvent
+type EpollEvent = linux.EpollEvent
 
 // EpollWait is a wrapper
 func EpollWait(epfd int, events []EpollEvent, msec int) (n int, err error) {
-	evs := []linux.EpollEvent{}
-	for _, v := range events {
-		evs = append(evs, linux.EpollEvent(v))
-	}
-	return linux.EpollWait(epfd, evs, msec)
+	return linux.EpollWait(epfd, events, msec)
 }
 
 // EpollCtl is a wrapper
 func EpollCtl(epfd int, op int, fd int, event *EpollEvent) (err error) {
-	ev := (*linux.EpollEvent)(event)
-	return linux.EpollCtl(epfd, op, fd, ev)
+	return linux.EpollCtl(epfd, op, fd, event)
 }
 
 // Eventfd is a wrapper
@@ -117,10 +110,9 @@ func Munmap(b []byte) (err error) {
 }
 
 // PerfEventAttr is a wrapper
-type PerfEventAttr linux.PerfEventAttr
+type PerfEventAttr = linux.PerfEventAttr
 
 // PerfEventOpen is a wrapper
 func PerfEventOpen(attr *PerfEventAttr, pid int, cpu int, groupFd int, flags int) (fd int, err error) {
-	a := (*linux.PerfEventAttr)(attr)
-	return linux.PerfEventOpen(a, pid, cpu, groupFd, flags)
+	return linux.PerfEventOpen(attr, pid, cpu, groupFd, flags)
 }

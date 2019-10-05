@@ -10,9 +10,9 @@ import (
 
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/internal"
+	"github.com/cilium/ebpf/internal/unix"
 
 	"github.com/pkg/errors"
-	"golang.org/x/sys/unix"
 )
 
 var (

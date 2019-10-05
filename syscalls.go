@@ -8,8 +8,9 @@ import (
 	"strings"
 	"unsafe"
 
+	"github.com/cilium/ebpf/internal/unix"
+
 	"github.com/pkg/errors"
-	"golang.org/x/sys/unix"
 )
 
 var errClosedFd = errors.New("use of closed file descriptor")

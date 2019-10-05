@@ -12,8 +12,7 @@ import (
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/asm"
 	"github.com/cilium/ebpf/internal"
-
-	"golang.org/x/sys/unix"
+	"github.com/cilium/ebpf/internal/unix"
 )
 
 func TestPerfReader(t *testing.T) {

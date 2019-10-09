@@ -1,6 +1,7 @@
 package ebpf
 
 import (
+	"flag"
 	"path/filepath"
 	"reflect"
 	"testing"
@@ -165,5 +166,39 @@ func TestLoadInvalidMap(t *testing.T) {
 	t.Log(err)
 	if err == nil {
 		t.Fatal("should be fail")
+	}
+}
+
+var elfPattern = flag.String("elfs", "", "`PATTERN` for a path containing libbpf-compatible ELFs")
+
+func TestLibBPFCompat(t *testing.T) {
+	if *elfPattern == "" {
+		// Specify the path to the directory containing the eBPF for
+		// the kernel's selftests.
+		// As of 5.2 that is tools/testing/selftests/bpf/.
+		t.Skip("No path specified")
+	}
+
+	files, err := filepath.Glob(*elfPattern)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, file := range files {
+		name := filepath.Base(file)
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			spec, err := LoadCollectionSpec(file)
+			if err != nil {
+				t.Fatalf("Can't read %s: %s", name, err)
+			}
+
+			coll, err := NewCollection(spec)
+			if err != nil {
+				t.Fatal(err)
+			}
+			coll.Close()
+		})
 	}
 }

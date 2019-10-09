@@ -5,7 +5,7 @@
 
 char __license[] __section("license") = "MIT";
 
-struct map map_val __section("maps") = {
+struct bpf_map_def map_val __section("maps") = {
 	.type        = 1,
 	.key_size    = sizeof(unsigned int),
 	.value_size  = sizeof(unsigned int),

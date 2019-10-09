@@ -31,8 +31,9 @@ func TestLoadCollectionSpec(t *testing.T) {
 			}
 			checkMapSpec(t, spec.Maps, "hash_map", hashMapSpec)
 			checkMapSpec(t, spec.Maps, "array_of_hash_map", &MapSpec{
-				"hash_map", ArrayOfMaps, 4, 0, 2, 0, hashMapSpec,
+				"hash_map", ArrayOfMaps, 4, 0, 2, 0, nil,
 			})
+			spec.Maps["array_of_hash_map"].InnerMap = spec.Maps["hash_map"]
 
 			hashMap2Spec := &MapSpec{
 				"",
@@ -45,8 +46,9 @@ func TestLoadCollectionSpec(t *testing.T) {
 			}
 			checkMapSpec(t, spec.Maps, "hash_map2", hashMap2Spec)
 			checkMapSpec(t, spec.Maps, "hash_of_hash_map", &MapSpec{
-				"", HashOfMaps, 4, 0, 2, 0, hashMap2Spec,
+				"", HashOfMaps, 4, 0, 2, 0, nil,
 			})
+			spec.Maps["hash_of_hash_map"].InnerMap = spec.Maps["hash_map2"]
 
 			checkProgramSpec(t, spec.Programs, "xdp_prog", &ProgramSpec{
 				Type:          XDP,

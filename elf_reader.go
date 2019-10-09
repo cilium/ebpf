@@ -5,6 +5,7 @@ import (
 	"debug/elf"
 	"encoding/binary"
 	"io"
+	"os"
 	"strings"
 
 	"github.com/cilium/ebpf/asm"
@@ -17,8 +18,19 @@ type elfCode struct {
 	symtab *symtab
 }
 
-// LoadCollectionSpecFromReader parses an io.ReaderAt that represents an ELF layout
-// into a CollectionSpec.
+// LoadCollectionSpec parses an ELF file into a CollectionSpec.
+func LoadCollectionSpec(file string) (*CollectionSpec, error) {
+	f, err := os.Open(file)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+
+	spec, err := LoadCollectionSpecFromReader(f)
+	return spec, errors.Wrapf(err, "file %s", file)
+}
+
+// LoadCollectionSpecFromReader parses an ELF file into a CollectionSpec.
 func LoadCollectionSpecFromReader(code io.ReaderAt) (*CollectionSpec, error) {
 	f, err := elf.NewFile(code)
 	if err != nil {

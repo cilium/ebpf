@@ -41,17 +41,6 @@ func (cs *CollectionSpec) Copy() *CollectionSpec {
 	return &cpy
 }
 
-// LoadCollectionSpec parse an object file and convert it to a collection
-func LoadCollectionSpec(file string) (*CollectionSpec, error) {
-	f, err := os.Open(file)
-	if err != nil {
-		return nil, err
-	}
-	defer f.Close()
-
-	return LoadCollectionSpecFromReader(f)
-}
-
 // Collection is a collection of Programs and Maps associated
 // with their symbols
 type Collection struct {

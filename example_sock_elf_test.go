@@ -6,7 +6,6 @@ import (
 	"bytes"
 	"flag"
 	"fmt"
-	"os"
 	"syscall"
 	"time"
 
@@ -81,35 +80,21 @@ var program = [...]byte{
 const sockexPin = "/sys/fs/bpf/sockex1"
 
 // ExampleSocketELF demonstrates how to load an eBPF program from an ELF,
-// pin it into the filesystem and attach it to a raw socket.
+// and attach it to a raw socket.
 func Example_socketELF() {
 	const SO_ATTACH_BPF = 50
 
 	index := flag.Int("index", 0, "specify ethernet index")
 	flag.Parse()
-	fi, err := os.Lstat(sockexPin)
-	if err != nil && !os.IsNotExist(err) {
+
+	spec, err := ebpf.LoadCollectionSpecFromReader(bytes.NewReader(program[:]))
+	if err != nil {
 		panic(err)
 	}
-	var coll *ebpf.Collection
-	if fi != nil {
-		coll, err = ebpf.LoadPinnedCollection(sockexPin)
-		if err != nil {
-			panic(err)
-		}
-	} else {
-		spec, err := ebpf.LoadCollectionSpecFromReader(bytes.NewReader(program[:]))
-		if err != nil {
-			panic(err)
-		}
-		coll, err = ebpf.NewCollection(spec)
-		if err != nil {
-			panic(err)
-		}
-		err = coll.Pin(sockexPin, 0600)
-		if err != nil {
-			panic(err)
-		}
+
+	coll, err := ebpf.NewCollection(spec)
+	if err != nil {
+		panic(err)
 	}
 	defer coll.Close()
 
@@ -162,12 +147,6 @@ func Example_socketELF() {
 			panic(err)
 		}
 		fmt.Printf("\r\033[m\tICMP: %d TCP: %d UDP: %d", icmp, tcp, udp)
-	}
-}
-
-func assertTrue(b bool, msg string) {
-	if !b {
-		panic(fmt.Errorf("%s", msg))
 	}
 }
 

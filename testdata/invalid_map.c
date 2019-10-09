@@ -5,11 +5,15 @@
 
 char __license[] __section("license") = "MIT";
 
-struct map invalid_map __section("maps") = {
-	.type        = BPF_MAP_TYPE_ARRAY,
-	.key_size    = 4,
-	.value_size  = 2,
-	.max_entries = 1,
-	.flags       = 0,
+struct {
+	struct bpf_map_def def;
+	uint32_t dummy;
+} invalid_map __section("maps") = {
+	.def = {
+		.type        = BPF_MAP_TYPE_ARRAY,
+		.key_size    = 4,
+		.value_size  = 2,
+		.max_entries = 1,
+	},
 	.dummy       = 1,
 };

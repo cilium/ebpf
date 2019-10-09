@@ -1,7 +1,7 @@
 LLVM_PREFIX ?= /usr/bin
 CLANG ?= $(LLVM_PREFIX)/clang
 
-all: loader-clang-6.0.elf loader-clang-7.elf loader-clang-8.elf rewrite.elf perf_output.elf invalid_map.elf
+all: loader-clang-6.0.elf loader-clang-7.elf loader-clang-8.elf rewrite.elf invalid_map.elf
 
 clean:
 	-$(RM) *.elf

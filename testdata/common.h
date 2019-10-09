@@ -13,14 +13,13 @@ typedef unsigned long uint64_t;
 #define BPF_F_NO_PREALLOC (1U << 0)
 #define BPF_F_CURRENT_CPU (0xffffffffULL)
 
-struct map {
-	uint32_t type;
-	uint32_t key_size;
-	uint32_t value_size;
-	uint32_t max_entries;
-	uint32_t flags;
-	uint32_t inner_map_idx;
-	uint32_t dummy;
+/* From tools/lib/bpf/libbpf.h */
+struct bpf_map_def {
+	unsigned int type;
+	unsigned int key_size;
+	unsigned int value_size;
+	unsigned int max_entries;
+	unsigned int map_flags;
 };
 
 static void* (*map_lookup_elem)(const void *map, const void *key) = (void*)1;

@@ -236,6 +236,30 @@ func TestProgramMarshaling(t *testing.T) {
 	}
 }
 
+func TestProgramFromFD(t *testing.T) {
+	prog, err := NewProgram(&ProgramSpec{
+		Type: SocketFilter,
+		Instructions: asm.Instructions{
+			asm.LoadImm(asm.R0, 0, asm.DWord),
+			asm.Return(),
+		},
+		License: "MIT",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer prog.Close()
+
+	// If you're thinking about copying this, don't. Use
+	// Clone() instead.
+	prog2, err := NewProgramFromFD(prog.FD())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	prog2.Close()
+}
+
 func createProgramArray(t *testing.T) *Map {
 	t.Helper()
 

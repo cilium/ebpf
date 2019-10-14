@@ -45,8 +45,12 @@ func (fd *bpfFD) close() error {
 	value := int(fd.raw)
 	fd.raw = -1
 
-	runtime.SetFinalizer(fd, nil)
+	fd.forget()
 	return unix.Close(value)
+}
+
+func (fd *bpfFD) forget() {
+	runtime.SetFinalizer(fd, nil)
 }
 
 func (fd *bpfFD) dup() (*bpfFD, error) {

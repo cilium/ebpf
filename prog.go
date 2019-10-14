@@ -136,6 +136,31 @@ func NewProgramWithOptions(spec *ProgramSpec, opts ProgramOptions) (*Program, er
 	return nil, &loadError{err, logs}
 }
 
+// NewProgramFromFD creates a program from a raw fd.
+//
+// You should not use fd after calling this function.
+func NewProgramFromFD(fd int) (*Program, error) {
+	if fd < 0 {
+		return nil, errors.New("invalid fd")
+	}
+	bpfFd := newBPFFD(uint32(fd))
+
+	info, err := bpfGetProgInfoByFD(bpfFd)
+	if err != nil {
+		bpfFd.forget()
+		return nil, err
+	}
+
+	var name string
+	if bpfName := convertCString(info.name[:]); bpfName != "" {
+		name = bpfName
+	} else {
+		name = convertCString(info.tag[:])
+	}
+
+	return newProgram(bpfFd, name, newProgramABIFromInfo(info)), nil
+}
+
 func newProgram(fd *bpfFD, name string, abi *ProgramABI) *Program {
 	return &Program{
 		name: name,

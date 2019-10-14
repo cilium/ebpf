@@ -55,6 +55,23 @@ type Map struct {
 	fullValueSize int
 }
 
+// NewMapFromFD creates a map from a raw fd.
+//
+// You should not use fd after calling this function.
+func NewMapFromFD(fd int) (*Map, error) {
+	if fd < 0 {
+		return nil, errors.New("invalid fd")
+	}
+	bpfFd := newBPFFD(uint32(fd))
+
+	abi, err := newMapABIFromFd(bpfFd)
+	if err != nil {
+		bpfFd.forget()
+		return nil, err
+	}
+	return newMap(bpfFd, abi)
+}
+
 // NewMap creates a new Map.
 //
 // Creating a map for the first time will perform feature detection

@@ -501,6 +501,29 @@ func TestMapName(t *testing.T) {
 	}
 }
 
+func TestMapFromFD(t *testing.T) {
+	m := createArray(t)
+	if err := m.Put(uint32(0), uint32(123)); err != nil {
+		t.Fatal(err)
+	}
+
+	// If you're thinking about copying this, don't. Use
+	// Clone() instead.
+	m2, err := NewMapFromFD(m.FD())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var val uint32
+	if err := m2.Lookup(uint32(0), &val); err != nil {
+		t.Fatal("Can't look up key:", err)
+	}
+
+	if val != 123 {
+		t.Error("Wrong value")
+	}
+}
+
 type benchValue struct {
 	ID      uint32
 	Val16   uint16

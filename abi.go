@@ -105,9 +105,13 @@ func newProgramABIFromFd(fd *bpfFD) (*ProgramABI, error) {
 		return nil, err
 	}
 
+	return newProgramABIFromInfo(info), nil
+}
+
+func newProgramABIFromInfo(info *bpfProgInfo) *ProgramABI {
 	return &ProgramABI{
 		Type: ProgramType(info.progType),
-	}, nil
+	}
 }
 
 // Check verifies that a Program conforms to the ABI.

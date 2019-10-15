@@ -90,7 +90,7 @@ func NewProgram(spec *ProgramSpec) (*Program, error) {
 // Loading a program for the first time will perform
 // feature detection by loading small, temporary programs.
 func NewProgramWithOptions(spec *ProgramSpec, opts ProgramOptions) (*Program, error) {
-	attr, err := convertProgramSpec(spec, haveObjName.Result())
+	attr, err := convertProgramSpec(spec)
 	if err != nil {
 		return nil, err
 	}
@@ -161,7 +161,7 @@ func newProgram(fd *bpfFD, name string, abi *ProgramABI) *Program {
 	}
 }
 
-func convertProgramSpec(spec *ProgramSpec, includeName bool) (*bpfProgLoadAttr, error) {
+func convertProgramSpec(spec *ProgramSpec) (*bpfProgLoadAttr, error) {
 	if len(spec.Instructions) == 0 {
 		return nil, errors.New("Instructions cannot be empty")
 	}
@@ -191,7 +191,7 @@ func convertProgramSpec(spec *ProgramSpec, includeName bool) (*bpfProgLoadAttr, 
 		return nil, err
 	}
 
-	if includeName {
+	if haveObjName() {
 		attr.progName = name
 	}
 
@@ -282,38 +282,36 @@ func (p *Program) Benchmark(in []byte, repeat int) (uint32, time.Duration, error
 	return ret, total, err
 }
 
-var noProgTestRun = featureTest{
-	Fn: func() bool {
-		prog, err := NewProgram(&ProgramSpec{
-			Type: SocketFilter,
-			Instructions: asm.Instructions{
-				asm.LoadImm(asm.R0, 0, asm.DWord),
-				asm.Return(),
-			},
-			License: "MIT",
-		})
-		if err != nil {
-			// This may be because we lack sufficient permissions, etc.
-			return false
-		}
-		defer prog.Close()
+var haveProgTestRun = internal.FeatureTest(func() bool {
+	prog, err := NewProgram(&ProgramSpec{
+		Type: SocketFilter,
+		Instructions: asm.Instructions{
+			asm.LoadImm(asm.R0, 0, asm.DWord),
+			asm.Return(),
+		},
+		License: "MIT",
+	})
+	if err != nil {
+		// This may be because we lack sufficient permissions, etc.
+		return false
+	}
+	defer prog.Close()
 
-		fd, err := prog.fd.value()
-		if err != nil {
-			return false
-		}
+	fd, err := prog.fd.value()
+	if err != nil {
+		return false
+	}
 
-		// Programs require at least 14 bytes input
-		in := make([]byte, 14)
-		attr := bpfProgTestRunAttr{
-			fd:         fd,
-			dataSizeIn: uint32(len(in)),
-			dataIn:     internal.NewSlicePointer(in),
-		}
-		_, err = internal.BPF(_ProgTestRun, unsafe.Pointer(&attr), unsafe.Sizeof(attr))
-		return errors.Cause(err) == unix.EINVAL
-	},
-}
+	// Programs require at least 14 bytes input
+	in := make([]byte, 14)
+	attr := bpfProgTestRunAttr{
+		fd:         fd,
+		dataSizeIn: uint32(len(in)),
+		dataIn:     internal.NewSlicePointer(in),
+	}
+	_, err = internal.BPF(_ProgTestRun, unsafe.Pointer(&attr), unsafe.Sizeof(attr))
+	return err == nil
+})
 
 func (p *Program) testRun(in []byte, repeat int) (uint32, []byte, time.Duration, error) {
 	if uint(repeat) > math.MaxUint32 {
@@ -328,7 +326,7 @@ func (p *Program) testRun(in []byte, repeat int) (uint32, []byte, time.Duration,
 		return 0, nil, 0, fmt.Errorf("input is too long")
 	}
 
-	if noProgTestRun.Result() {
+	if !haveProgTestRun() {
 		return 0, nil, 0, errNotSupported
 	}
 

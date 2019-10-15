@@ -2,7 +2,6 @@ package ebpf
 
 import (
 	"fmt"
-	"unsafe"
 
 	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/unix"
@@ -256,7 +255,7 @@ func (m *Map) Lookup(key, valueOut interface{}) error {
 // Returns a nil value if a key doesn't exist.
 func (m *Map) LookupBytes(key interface{}) ([]byte, error) {
 	valueBytes := make([]byte, m.fullValueSize)
-	valuePtr := newPtr(unsafe.Pointer(&valueBytes[0]))
+	valuePtr := internal.NewSlicePointer(valueBytes)
 
 	err := m.lookup(key, valuePtr)
 	if IsNotExist(err) {
@@ -266,7 +265,7 @@ func (m *Map) LookupBytes(key interface{}) ([]byte, error) {
 	return valueBytes, err
 }
 
-func (m *Map) lookup(key interface{}, valueOut syscallPtr) error {
+func (m *Map) lookup(key interface{}, valueOut internal.Pointer) error {
 	keyPtr, err := marshalPtr(key, int(m.abi.KeySize))
 	if err != nil {
 		return errors.WithMessage(err, "can't marshal key")
@@ -304,7 +303,7 @@ func (m *Map) Update(key, value interface{}, flags MapUpdateFlags) error {
 		return errors.WithMessage(err, "can't marshal key")
 	}
 
-	var valuePtr syscallPtr
+	var valuePtr internal.Pointer
 	if m.abi.Type.hasPerCPUValue() {
 		valuePtr, err = marshalPerCPUValue(value, int(m.abi.ValueSize))
 	} else {
@@ -355,7 +354,7 @@ func (m *Map) NextKey(key, nextKeyOut interface{}) error {
 // Use Iterate if you want to traverse all entries in the map.
 func (m *Map) NextKeyBytes(key interface{}) ([]byte, error) {
 	nextKey := make([]byte, m.abi.KeySize)
-	nextKeyPtr := newPtr(unsafe.Pointer(&nextKey[0]))
+	nextKeyPtr := internal.NewSlicePointer(nextKey)
 
 	err := m.nextKey(key, nextKeyPtr)
 	if IsNotExist(err) {
@@ -365,9 +364,9 @@ func (m *Map) NextKeyBytes(key interface{}) ([]byte, error) {
 	return nextKey, err
 }
 
-func (m *Map) nextKey(key interface{}, nextKeyOut syscallPtr) error {
+func (m *Map) nextKey(key interface{}, nextKeyOut internal.Pointer) error {
 	var (
-		keyPtr syscallPtr
+		keyPtr internal.Pointer
 		err    error
 	)
 

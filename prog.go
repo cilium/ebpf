@@ -105,7 +105,7 @@ func NewProgramWithOptions(spec *ProgramSpec, opts ProgramOptions) (*Program, er
 		logBuf = make([]byte, logSize)
 		attr.logLevel = opts.LogLevel
 		attr.logSize = uint32(len(logBuf))
-		attr.logBuf = newPtr(unsafe.Pointer(&logBuf[0]))
+		attr.logBuf = internal.NewSlicePointer(logBuf)
 	}
 
 	fd, err := bpfProgLoad(attr)
@@ -121,7 +121,7 @@ func NewProgramWithOptions(spec *ProgramSpec, opts ProgramOptions) (*Program, er
 		logBuf = make([]byte, logSize)
 		attr.logLevel = 1
 		attr.logSize = uint32(len(logBuf))
-		attr.logBuf = newPtr(unsafe.Pointer(&logBuf[0]))
+		attr.logBuf = internal.NewSlicePointer(logBuf)
 
 		_, nerr := bpfProgLoad(attr)
 		truncated = errors.Cause(nerr) == unix.ENOSPC
@@ -178,13 +178,12 @@ func convertProgramSpec(spec *ProgramSpec, includeName bool) (*bpfProgLoadAttr, 
 
 	bytecode := buf.Bytes()
 	insCount := uint32(len(bytecode) / asm.InstructionSize)
-	lic := []byte(spec.License)
 	attr := &bpfProgLoadAttr{
 		progType:           spec.Type,
 		expectedAttachType: spec.AttachType,
 		insCount:           insCount,
-		instructions:       newPtr(unsafe.Pointer(&bytecode[0])),
-		license:            newPtr(unsafe.Pointer(&lic[0])),
+		instructions:       internal.NewSlicePointer(bytecode),
+		license:            internal.NewSlicePointer([]byte(spec.License)),
 	}
 
 	name, err := newBPFObjName(spec.Name)
@@ -309,10 +308,9 @@ var noProgTestRun = featureTest{
 		attr := bpfProgTestRunAttr{
 			fd:         fd,
 			dataSizeIn: uint32(len(in)),
-			dataIn:     newPtr(unsafe.Pointer(&in[0])),
+			dataIn:     internal.NewSlicePointer(in),
 		}
-
-		_, err = bpfCall(_ProgTestRun, unsafe.Pointer(&attr), unsafe.Sizeof(attr))
+		_, err = internal.BPF(_ProgTestRun, unsafe.Pointer(&attr), unsafe.Sizeof(attr))
 		return errors.Cause(err) == unix.EINVAL
 	},
 }
@@ -350,12 +348,12 @@ func (p *Program) testRun(in []byte, repeat int) (uint32, []byte, time.Duration,
 		fd:          fd,
 		dataSizeIn:  uint32(len(in)),
 		dataSizeOut: uint32(len(out)),
-		dataIn:      newPtr(unsafe.Pointer(&in[0])),
-		dataOut:     newPtr(unsafe.Pointer(&out[0])),
+		dataIn:      internal.NewSlicePointer(in),
+		dataOut:     internal.NewSlicePointer(out),
 		repeat:      uint32(repeat),
 	}
 
-	_, err = bpfCall(_ProgTestRun, unsafe.Pointer(&attr), unsafe.Sizeof(attr))
+	_, err = internal.BPF(_ProgTestRun, unsafe.Pointer(&attr), unsafe.Sizeof(attr))
 	if err != nil {
 		return 0, nil, 0, errors.Wrap(err, "can't run test")
 	}

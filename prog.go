@@ -15,10 +15,6 @@ import (
 	"github.com/pkg/errors"
 )
 
-var (
-	errNotSupported = errors.New("ebpf: not supported by kernel")
-)
-
 const (
 	// Number of bytes to pad the output buffer for BPF_PROG_TEST_RUN.
 	// This is currently the maximum of spare space allocated for SKB
@@ -90,7 +86,7 @@ func NewProgram(spec *ProgramSpec) (*Program, error) {
 // Loading a program for the first time will perform
 // feature detection by loading small, temporary programs.
 func NewProgramWithOptions(spec *ProgramSpec, opts ProgramOptions) (*Program, error) {
-	attr, err := convertProgramSpec(spec, haveObjName.Result())
+	attr, err := convertProgramSpec(spec)
 	if err != nil {
 		return nil, err
 	}
@@ -161,7 +157,7 @@ func newProgram(fd *bpfFD, name string, abi *ProgramABI) *Program {
 	}
 }
 
-func convertProgramSpec(spec *ProgramSpec, includeName bool) (*bpfProgLoadAttr, error) {
+func convertProgramSpec(spec *ProgramSpec) (*bpfProgLoadAttr, error) {
 	if len(spec.Instructions) == 0 {
 		return nil, errors.New("Instructions cannot be empty")
 	}
@@ -192,7 +188,7 @@ func convertProgramSpec(spec *ProgramSpec, includeName bool) (*bpfProgLoadAttr, 
 		return nil, err
 	}
 
-	if includeName {
+	if haveObjName() == nil {
 		attr.progName = name
 	}
 
@@ -268,7 +264,7 @@ func (p *Program) Close() error {
 // This function requires at least Linux 4.12.
 func (p *Program) Test(in []byte) (uint32, []byte, error) {
 	ret, out, _, err := p.testRun(in, 1)
-	return ret, out, err
+	return ret, out, errors.Wrap(err, "can't test program")
 }
 
 // Benchmark runs the Program with the given input for a number of times
@@ -280,42 +276,43 @@ func (p *Program) Test(in []byte) (uint32, []byte, error) {
 // This function requires at least Linux 4.12.
 func (p *Program) Benchmark(in []byte, repeat int) (uint32, time.Duration, error) {
 	ret, _, total, err := p.testRun(in, repeat)
-	return ret, total, err
+	return ret, total, errors.Wrap(err, "can't benchmark program")
 }
 
-var noProgTestRun = featureTest{
-	Fn: func() bool {
-		prog, err := NewProgram(&ProgramSpec{
-			Type: SocketFilter,
-			Instructions: asm.Instructions{
-				asm.LoadImm(asm.R0, 0, asm.DWord),
-				asm.Return(),
-			},
-			License: "MIT",
-		})
-		if err != nil {
-			// This may be because we lack sufficient permissions, etc.
-			return false
-		}
-		defer prog.Close()
+var haveProgTestRun = internal.FeatureTest("BPF_PROG_TEST_RUN", "4.12", func() bool {
+	prog, err := NewProgram(&ProgramSpec{
+		Type: SocketFilter,
+		Instructions: asm.Instructions{
+			asm.LoadImm(asm.R0, 0, asm.DWord),
+			asm.Return(),
+		},
+		License: "MIT",
+	})
+	if err != nil {
+		// This may be because we lack sufficient permissions, etc.
+		return false
+	}
+	defer prog.Close()
 
-		fd, err := prog.fd.value()
-		if err != nil {
-			return false
-		}
+	fd, err := prog.fd.value()
+	if err != nil {
+		return false
+	}
 
-		// Programs require at least 14 bytes input
-		in := make([]byte, 14)
-		attr := bpfProgTestRunAttr{
-			fd:         fd,
-			dataSizeIn: uint32(len(in)),
-			dataIn:     newPtr(unsafe.Pointer(&in[0])),
-		}
+	// Programs require at least 14 bytes input
+	in := make([]byte, 14)
+	attr := bpfProgTestRunAttr{
+		fd:         fd,
+		dataSizeIn: uint32(len(in)),
+		dataIn:     newPtr(unsafe.Pointer(&in[0])),
+	}
 
-		_, err = bpfCall(_ProgTestRun, unsafe.Pointer(&attr), unsafe.Sizeof(attr))
-		return errors.Cause(err) == unix.EINVAL
-	},
-}
+	_, err = bpfCall(_ProgTestRun, unsafe.Pointer(&attr), unsafe.Sizeof(attr))
+
+	// Check for EINVAL specifically, rather than err != nil since we
+	// otherwise misdetect due to insufficient permissions.
+	return errors.Cause(err) != unix.EINVAL
+})
 
 func (p *Program) testRun(in []byte, repeat int) (uint32, []byte, time.Duration, error) {
 	if uint(repeat) > math.MaxUint32 {
@@ -330,8 +327,8 @@ func (p *Program) testRun(in []byte, repeat int) (uint32, []byte, time.Duration,
 		return 0, nil, 0, fmt.Errorf("input is too long")
 	}
 
-	if noProgTestRun.Result() {
-		return 0, nil, 0, errNotSupported
+	if err := haveProgTestRun(); err != nil {
+		return 0, nil, 0, err
 	}
 
 	// Older kernels ignore the dataSizeOut argument when copying to user space.
@@ -498,5 +495,6 @@ func (le *loadError) Cause() error {
 // IsNotSupported returns true if an error occurred because
 // the kernel does not have support for a specific feature.
 func IsNotSupported(err error) bool {
-	return errors.Cause(err) == errNotSupported
+	_, notSupported := errors.Cause(err).(*internal.UnsupportedFeatureError)
+	return notSupported
 }

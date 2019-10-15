@@ -147,7 +147,7 @@ func createMap(spec *MapSpec, inner *bpfFD) (*Map, error) {
 		return nil, errors.Wrap(err, "map create")
 	}
 
-	if haveObjName.Result() {
+	if haveObjName() == nil {
 		attr.mapName = name
 	}
 

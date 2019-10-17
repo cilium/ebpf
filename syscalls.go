@@ -282,7 +282,7 @@ func bpfPinObject(fileName string, fd *bpfFD) error {
 	if err := unix.Statfs(dirName, &statfs); err != nil {
 		return err
 	}
-	if statfs.Type != bpfFSType {
+	if uint64(statfs.Type) != bpfFSType {
 		return errors.Errorf("%s is not on a bpf filesystem", fileName)
 	}
 

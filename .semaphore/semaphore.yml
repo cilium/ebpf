@@ -19,9 +19,11 @@ blocks:
           - sudo apt-get -y update
           - sudo apt-get install -y qemu-system-x86
       jobs:
-      - name: Test build on non-Linux
+      - name: Test building on other OS and arch
         commands:
           - GOOS=darwin go build ./...
+          - GOARCH=arm GOARM=6 go build ./...
+          - GOARCH=arm64 go build ./...
       - name: Test on 5.0.13
         commands:
           - timeout -s KILL 60s ./run-tests.sh 5.0.13

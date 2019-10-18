@@ -290,7 +290,15 @@ func TestIterateEmptyMap(t *testing.T) {
 }
 
 func TestMapIterate(t *testing.T) {
-	hash := createHash()
+	hash, err := NewMap(&MapSpec{
+		Type:       Hash,
+		KeySize:    5,
+		ValueSize:  4,
+		MaxEntries: 2,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
 	defer hash.Close()
 
 	if err := hash.Put("hello", uint32(21)); err != nil {
@@ -316,6 +324,9 @@ func TestMapIterate(t *testing.T) {
 
 	sort.Strings(keys)
 
+	if n := len(keys); n != 2 {
+		t.Fatal("Expected to get 2 keys, have", n)
+	}
 	if keys[0] != "hello" {
 		t.Error("Expected index 0 to be hello, got", keys[0])
 	}

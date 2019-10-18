@@ -498,23 +498,32 @@ func (m *Map) MarshalBinary() ([]byte, error) {
 //
 // See Map.Iterate.
 type MapIterator struct {
-	target    *Map
-	prevKey   interface{}
-	prevBytes []byte
-	done      bool
-	err       error
+	target            *Map
+	prevKey           interface{}
+	prevBytes         []byte
+	count, maxEntries uint32
+	done              bool
+	err               error
 }
 
 func newMapIterator(target *Map) *MapIterator {
 	return &MapIterator{
-		target:    target,
-		prevBytes: make([]byte, int(target.abi.KeySize)),
+		target:     target,
+		maxEntries: target.abi.MaxEntries,
+		prevBytes:  make([]byte, int(target.abi.KeySize)),
 	}
 }
 
+var errIterationAborted = errors.New("iteration aborted")
+
 // Next decodes the next key and value.
 //
-// Returns false if there are no more entries.
+// Iterating a hash map from which keys are being deleted is not
+// safe. You may see the same key multiple times. Iteration may
+// also abort with an error, see IsIterationAborted.
+//
+// Returns false if there are no more entries. You must check
+// the result of Err afterwards.
 //
 // See Map.Get for further caveats around valueOut.
 func (mi *MapIterator) Next(keyOut, valueOut interface{}) bool {
@@ -522,7 +531,7 @@ func (mi *MapIterator) Next(keyOut, valueOut interface{}) bool {
 		return false
 	}
 
-	for {
+	for ; mi.count < mi.maxEntries; mi.count++ {
 		var nextBytes []byte
 		nextBytes, mi.err = mi.target.NextKeyBytes(mi.prevKey)
 		if mi.err != nil {
@@ -546,11 +555,11 @@ func (mi *MapIterator) Next(keyOut, valueOut interface{}) bool {
 			// Even though the key should be valid, we couldn't look up
 			// its value. If we're iterating a hash map this is probably
 			// because a concurrent delete removed the value before we
-			// could get it. If we're iterating one of the fd maps like
+			// could get it. This means that the next call to NextKeyBytes
+			// is very likely to restart iteration.
+			// If we're iterating one of the fd maps like
 			// ProgramArray it means that a given slot doesn't have
-			// a valid fd associated.
-			// In either case there isn't much we can do, so just
-			// continue to the next key.
+			// a valid fd associated. It's OK to continue to the next slot.
 			continue
 		}
 		if mi.err != nil {
@@ -560,6 +569,9 @@ func (mi *MapIterator) Next(keyOut, valueOut interface{}) bool {
 		mi.err = unmarshalBytes(keyOut, nextBytes)
 		return mi.err == nil
 	}
+
+	mi.err = errIterationAborted
+	return false
 }
 
 // Err returns any encountered error.
@@ -573,4 +585,11 @@ func (mi *MapIterator) Err() error {
 // key doesn't exist.
 func IsNotExist(err error) bool {
 	return errors.Cause(err) == unix.ENOENT
+}
+
+// IsIterationAborted returns true if the iteration was aborted.
+//
+// This occurs when keys are deleted from a hash map during iteration.
+func IsIterationAborted(err error) bool {
+	return errors.Cause(err) == errIterationAborted
 }

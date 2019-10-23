@@ -30,6 +30,77 @@ func (ins Instruction) Sym(name string) Instruction {
 	return ins
 }
 
+// Unmarshal decodes a BPF instruction.
+func (ins *Instruction) Unmarshal(r io.Reader, bo binary.ByteOrder) (uint64, error) {
+	var bi bpfInstruction
+	err := binary.Read(r, bo, &bi)
+	if err != nil {
+		return 0, err
+	}
+
+	ins.OpCode = bi.OpCode
+	ins.Dst = bi.Registers.Dst()
+	ins.Src = bi.Registers.Src()
+	ins.Offset = bi.Offset
+	ins.Constant = int64(bi.Constant)
+
+	if !bi.OpCode.isDWordLoad() {
+		return InstructionSize, nil
+	}
+
+	var bi2 bpfInstruction
+	if err := binary.Read(r, bo, &bi2); err != nil {
+		// No Wrap, to avoid io.EOF clash
+		return 0, errors.New("64bit immediate is missing second half")
+	}
+	if bi2.OpCode != 0 || bi2.Offset != 0 || bi2.Registers != 0 {
+		return 0, errors.New("64bit immediate has non-zero fields")
+	}
+	ins.Constant = int64(uint64(uint32(bi2.Constant))<<32 | uint64(uint32(bi.Constant)))
+
+	return 2 * InstructionSize, nil
+}
+
+// Marshal encodes a BPF instruction.
+func (ins Instruction) Marshal(w io.Writer, bo binary.ByteOrder) (uint64, error) {
+	if ins.OpCode == InvalidOpCode {
+		return 0, errors.New("invalid opcode")
+	}
+
+	isDWordLoad := ins.OpCode.isDWordLoad()
+
+	cons := int32(ins.Constant)
+	if isDWordLoad {
+		// Encode least significant 32bit first for 64bit operations.
+		cons = int32(uint32(ins.Constant))
+	}
+
+	bpfi := bpfInstruction{
+		ins.OpCode,
+		newBPFRegisters(ins.Dst, ins.Src),
+		ins.Offset,
+		cons,
+	}
+
+	if err := binary.Write(w, bo, &bpfi); err != nil {
+		return 0, err
+	}
+
+	if !isDWordLoad {
+		return InstructionSize, nil
+	}
+
+	bpfi = bpfInstruction{
+		Constant: int32(ins.Constant >> 32),
+	}
+
+	if err := binary.Write(w, bo, &bpfi); err != nil {
+		return 0, err
+	}
+
+	return 2 * InstructionSize, nil
+}
+
 // Format implements fmt.Formatter.
 func (ins Instruction) Format(f fmt.State, c rune) {
 	if c != 'v' {
@@ -224,8 +295,6 @@ func (insns Instructions) Format(f fmt.State, c rune) {
 
 // Marshal encodes a BPF program into the kernel format.
 func (insns Instructions) Marshal(w io.Writer, bo binary.ByteOrder) error {
-	loadImmDW := LoadImmOp(DWord)
-
 	absoluteOffsets, err := insns.marshalledOffsets()
 	if err != nil {
 		return err
@@ -233,18 +302,7 @@ func (insns Instructions) Marshal(w io.Writer, bo binary.ByteOrder) error {
 
 	num := 0
 	for i, ins := range insns {
-		if ins.OpCode == InvalidOpCode {
-			return errors.Errorf("invalid operation at position %d", i)
-		}
-
-		isLoadImmDW := ins.OpCode == loadImmDW
-
-		cons := int32(ins.Constant)
 		switch {
-		case isLoadImmDW:
-			// Encode least significant 32bit first for 64bit operations.
-			cons = int32(uint32(ins.Constant))
-
 		case ins.OpCode.JumpOp() == Call && ins.Constant == -1:
 			// Rewrite bpf to bpf call
 			offset, ok := absoluteOffsets[ins.Reference]
@@ -252,7 +310,7 @@ func (insns Instructions) Marshal(w io.Writer, bo binary.ByteOrder) error {
 				return errors.Errorf("instruction %d: reference to missing symbol %s", i, ins.Reference)
 			}
 
-			cons = int32(offset - num - 1)
+			ins.Constant = int64(offset - num - 1)
 
 		case ins.OpCode.Class() == JumpClass && ins.Offset == -1:
 			// Rewrite jump to label
@@ -264,81 +322,14 @@ func (insns Instructions) Marshal(w io.Writer, bo binary.ByteOrder) error {
 			ins.Offset = int16(offset - num - 1)
 		}
 
-		bpfi := bpfInstruction{
-			ins.OpCode,
-			newBPFRegisters(ins.Dst, ins.Src),
-			ins.Offset,
-			cons,
+		n, err := ins.Marshal(w, bo)
+		if err != nil {
+			return errors.Wrapf(err, "instruction %d", i)
 		}
 
-		if err := binary.Write(w, bo, &bpfi); err != nil {
-			return err
-		}
-		num++
-
-		if !isLoadImmDW {
-			continue
-		}
-
-		bpfi = bpfInstruction{
-			Constant: int32(ins.Constant >> 32),
-		}
-
-		if err := binary.Write(w, bo, &bpfi); err != nil {
-			return err
-		}
-		num++
+		num += int(n / InstructionSize)
 	}
 	return nil
-}
-
-// Unmarshal decodes a BPF program from the kernel format.
-func (insns *Instructions) Unmarshal(r io.Reader, bo binary.ByteOrder) (map[uint64]int, error) {
-	*insns = nil
-
-	// Since relocations point at an offset, we need to keep track which
-	// offset maps to which instruction.
-	var (
-		offsets = make(map[uint64]int)
-		offset  uint64
-	)
-	for {
-		offsets[offset] = len(*insns)
-
-		var ins bpfInstruction
-		err := binary.Read(r, bo, &ins)
-
-		if err == io.EOF {
-			return offsets, nil
-		}
-
-		if err != nil {
-			return nil, errors.Errorf("invalid instruction at offset %x", offset)
-		}
-
-		requiredInsns := ins.OpCode.marshalledInstructions()
-		offset += uint64(requiredInsns) * InstructionSize
-
-		cons := int64(ins.Constant)
-		if requiredInsns == 2 {
-			var ins2 bpfInstruction
-			if err := binary.Read(r, bo, &ins2); err != nil {
-				return nil, errors.Errorf("invalid instruction at offset %x", offset)
-			}
-			if ins2.OpCode != 0 || ins2.Offset != 0 || ins2.Registers != 0 {
-				return nil, errors.Errorf("instruction at offset %x: 64bit immediate has non-zero fields", offset)
-			}
-			cons = int64(uint64(uint32(ins2.Constant))<<32 | uint64(uint32(ins.Constant)))
-		}
-
-		*insns = append(*insns, Instruction{
-			OpCode:   ins.OpCode,
-			Dst:      ins.Registers.Dst(),
-			Src:      ins.Registers.Src(),
-			Offset:   ins.Offset,
-			Constant: cons,
-		})
-	}
 }
 
 type bpfInstruction struct {

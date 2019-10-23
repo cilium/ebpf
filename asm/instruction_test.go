@@ -17,17 +17,16 @@ var test64bitImmProg = []byte{
 }
 
 func TestRead64bitImmediate(t *testing.T) {
-	var insns Instructions
-	_, err := insns.Unmarshal(bytes.NewReader(test64bitImmProg), binary.LittleEndian)
+	var ins Instruction
+	n, err := ins.Unmarshal(bytes.NewReader(test64bitImmProg), binary.LittleEndian)
 	if err != nil {
 		t.Fatal(err)
 	}
-
-	if len(insns) != 1 {
-		t.Fatal("Expected one instruction, got", len(insns))
+	if want := uint64(InstructionSize * 2); n != want {
+		t.Errorf("Expected %d bytes to be read, got %d", want, n)
 	}
 
-	if c := insns[0].Constant; c != math.MinInt32-1 {
+	if c := ins.Constant; c != math.MinInt32-1 {
 		t.Errorf("Expected immediate to be %v, got %v", math.MinInt32-1, c)
 	}
 }

@@ -1,6 +1,7 @@
 package ebpf
 
 import (
+	"github.com/cilium/ebpf/asm"
 	"github.com/pkg/errors"
 )
 
@@ -67,18 +68,26 @@ func NewCollectionWithOptions(spec *CollectionSpec, opts CollectionOptions) (*Co
 	progs := make(map[string]*Program)
 	for progName, origProgSpec := range spec.Programs {
 		progSpec := origProgSpec.Copy()
-		editor := Edit(&progSpec.Instructions)
 
-		// Rewrite any Symbol which is a valid Map.
-		for sym := range editor.ReferenceOffsets {
-			m, ok := maps[sym]
-			if !ok {
+		// Rewrite any reference to a valid map.
+		for i := range progSpec.Instructions {
+			var (
+				ins = &progSpec.Instructions[i]
+				m   = maps[ins.Reference]
+			)
+
+			if ins.Reference == "" || m == nil {
 				continue
 			}
 
-			// don't overwrite maps already rewritten, users can rewrite programs in the spec themselves
-			if err := editor.rewriteMap(sym, m, false); err != nil {
-				return nil, errors.Wrapf(err, "program %s", progName)
+			if ins.Src == asm.R1 {
+				// Don't overwrite maps already rewritten, users can
+				// rewrite programs in the spec themselves
+				continue
+			}
+
+			if err := ins.RewriteMapPtr(m.FD()); err != nil {
+				return nil, errors.Wrapf(err, "progam %s: map %s", progName, ins.Reference)
 			}
 		}
 

@@ -103,6 +103,10 @@ func LoadImm(dst Register, value int64, size Size) Instruction {
 
 // LoadMapPtr stores a pointer to a map in dst.
 func LoadMapPtr(dst Register, fd int) Instruction {
+	if fd < 0 {
+		return Instruction{OpCode: InvalidOpCode}
+	}
+
 	return Instruction{
 		OpCode:   LoadImmOp(DWord),
 		Dst:      dst,

@@ -59,6 +59,49 @@ func TestSignedJump(t *testing.T) {
 	}
 }
 
+func TestInstructionRewriteMapPtr(t *testing.T) {
+	ins := LoadMapPtr(R2, 0)
+	if err := ins.RewriteMapPtr(1); err != nil {
+		t.Fatal("Can't rewrite map pointer")
+	}
+	if ins.Constant != 1 {
+		t.Error("Expected Constant to be 1, got", ins.Constant)
+	}
+
+	ins = Mov.Imm(R1, 32)
+	if err := ins.RewriteMapPtr(1); err == nil {
+		t.Error("Allows rewriting bogus instruction")
+	}
+}
+
+func TestInstructionsRewriteMapPtr(t *testing.T) {
+	insns := Instructions{
+		LoadMapPtr(R1, 0),
+		Return(),
+	}
+	insns[0].Reference = "good"
+
+	if err := insns.RewriteMapPtr("good", 1); err != nil {
+		t.Fatal(err)
+	}
+
+	if insns[0].Constant != 1 {
+		t.Error("Constant should be 1, have", insns[0].Constant)
+	}
+
+	if err := insns.RewriteMapPtr("good", 2); err != nil {
+		t.Fatal(err)
+	}
+
+	if insns[0].Constant != 2 {
+		t.Error("Constant should be 2, have", insns[0].Constant)
+	}
+
+	if err := insns.RewriteMapPtr("bad", 1); !IsUnreferencedSymbol(err) {
+		t.Error("Rewriting unreferenced map doesn't return appropriate error")
+	}
+}
+
 // You can use format flags to change the way an eBPF
 // program is stringified.
 func ExampleInstructions_Format() {

@@ -101,6 +101,24 @@ func (ins Instruction) Marshal(w io.Writer, bo binary.ByteOrder) (uint64, error)
 	return 2 * InstructionSize, nil
 }
 
+// RewriteMapPtr changes an instruction to use a new map fd.
+//
+// Returns an error if the fd is invalid, or the instruction
+// is incorrect.
+func (ins *Instruction) RewriteMapPtr(fd int) error {
+	if !ins.OpCode.isDWordLoad() {
+		return errors.Errorf("%s is not a 64 bit load", ins.OpCode)
+	}
+
+	if fd < 0 {
+		return errors.New("invalid fd")
+	}
+
+	ins.Src = R1
+	ins.Constant = int64(fd)
+	return nil
+}
+
 // Format implements fmt.Formatter.
 func (ins Instruction) Format(f fmt.State, c rune) {
 	if c != 'v' {
@@ -175,6 +193,35 @@ type Instructions []Instruction
 
 func (insns Instructions) String() string {
 	return fmt.Sprint(insns)
+}
+
+// RewriteMapPtr rewrites all loads of a specific map pointer to a new fd.
+//
+// Returns an error if the symbol isn't used, see IsUnreferencedSymbol.
+func (insns Instructions) RewriteMapPtr(symbol string, fd int) error {
+	if symbol == "" {
+		return errors.New("empty symbol")
+	}
+
+	found := false
+	for i := range insns {
+		ins := &insns[i]
+		if ins.Reference != symbol {
+			continue
+		}
+
+		if err := ins.RewriteMapPtr(fd); err != nil {
+			return err
+		}
+
+		found = true
+	}
+
+	if !found {
+		return &unreferencedSymbolError{symbol}
+	}
+
+	return nil
 }
 
 // SymbolOffsets returns the set of symbols and their offset in
@@ -351,4 +398,19 @@ func (r bpfRegisters) Dst() Register {
 
 func (r bpfRegisters) Src() Register {
 	return Register(r >> 4)
+}
+
+type unreferencedSymbolError struct {
+	symbol string
+}
+
+func (use *unreferencedSymbolError) Error() string {
+	return fmt.Sprintf("unreferenced symbol %s", use.symbol)
+}
+
+// IsUnreferencedSymbol returns true if err was caused by
+// an unreferenced symbol.
+func IsUnreferencedSymbol(err error) bool {
+	_, ok := err.(*unreferencedSymbolError)
+	return ok
 }

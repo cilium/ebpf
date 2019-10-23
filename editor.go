@@ -1,8 +1,6 @@
 package ebpf
 
 import (
-	"fmt"
-
 	"github.com/cilium/ebpf/asm"
 	"github.com/pkg/errors"
 )
@@ -20,44 +18,6 @@ type Editor struct {
 func Edit(insns *asm.Instructions) *Editor {
 	refs := insns.ReferenceOffsets()
 	return &Editor{insns, refs}
-}
-
-// RewriteMap rewrites a symbol to point at a Map.
-//
-// Use IsUnreferencedSymbol if you want to rewrite potentially
-// unused maps.
-func (ed *Editor) RewriteMap(symbol string, m *Map) error {
-	return ed.rewriteMap(symbol, m, true)
-}
-
-func (ed *Editor) rewriteMap(symbol string, m *Map, overwrite bool) error {
-	indices := ed.ReferenceOffsets[symbol]
-	if len(indices) == 0 {
-		return &unreferencedSymbolError{symbol}
-	}
-
-	fd, err := m.fd.value()
-	if err != nil {
-		return err
-	}
-
-	loadOp := asm.LoadImmOp(asm.DWord)
-
-	for _, index := range indices {
-		load := &(*ed.instructions)[index]
-		if load.OpCode != loadOp {
-			return errors.Errorf("symbol %v: missing load instruction", symbol)
-		}
-
-		if !overwrite && load.Constant != 0 {
-			return nil
-		}
-
-		load.Src = 1
-		load.Constant = int64(fd)
-	}
-
-	return nil
 }
 
 // Link resolves bpf-to-bpf calls.
@@ -123,19 +83,4 @@ func (ed *Editor) Link(sections ...asm.Instructions) error {
 	*ed.instructions = append(*ed.instructions, linkedInsns...)
 	*ed = *Edit(ed.instructions)
 	return nil
-}
-
-type unreferencedSymbolError struct {
-	symbol string
-}
-
-func (use *unreferencedSymbolError) Error() string {
-	return fmt.Sprintf("unreferenced symbol %s", use.symbol)
-}
-
-// IsUnreferencedSymbol returns true if err was caused by
-// an unreferenced symbol.
-func IsUnreferencedSymbol(err error) bool {
-	_, ok := err.(*unreferencedSymbolError)
-	return ok
 }

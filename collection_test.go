@@ -20,7 +20,7 @@ func TestCollectionSpecNotModified(t *testing.T) {
 			"test": {
 				Type: SocketFilter,
 				Instructions: asm.Instructions{
-					asm.LoadMapPtr(asm.R1, 0),
+					asm.LoadImm(asm.R1, 0, asm.DWord),
 					asm.LoadImm(asm.R0, 0, asm.DWord),
 					asm.Return(),
 				},
@@ -125,7 +125,7 @@ func TestCollectionSpecOverwriteMaps(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	err = Edit(&cs.Programs["test-prog"].Instructions).RewriteMap("test-map", newMap)
+	err = cs.Programs["test-prog"].Instructions.RewriteMapPtr("test-map", newMap.FD())
 	if err != nil {
 		t.Fatal(err)
 	}

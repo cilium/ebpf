@@ -75,6 +75,10 @@ func (op OpCode) marshalledInstructions() int {
 	return 1
 }
 
+func (op OpCode) isDWordLoad() bool {
+	return op == LoadImmOp(DWord)
+}
+
 // Class returns the class of operation.
 func (op OpCode) Class() Class {
 	return Class(op & classMask)

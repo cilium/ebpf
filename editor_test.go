@@ -6,7 +6,7 @@ import (
 	"github.com/cilium/ebpf/asm"
 )
 
-func TestEditorLink(t *testing.T) {
+func TestLink(t *testing.T) {
 	insns := asm.Instructions{
 		// Make sure the call doesn't happen at instruction 0
 		// to exercise the relative offset calculation.
@@ -15,8 +15,7 @@ func TestEditorLink(t *testing.T) {
 		asm.Return(),
 	}
 
-	editor := Edit(&insns)
-	err := editor.Link(asm.Instructions{
+	insns, err := link(insns, asm.Instructions{
 		asm.LoadImm(asm.R0, 1337, asm.DWord).Sym("my_func"),
 		asm.Return(),
 	})

@@ -97,8 +97,8 @@ func LoadCollectionSpecFromReader(code io.ReaderAt) (*CollectionSpec, error) {
 
 	if len(libs) > 0 {
 		for name, prog := range progs {
-			editor := Edit(&prog.Instructions)
-			if err := editor.Link(libs...); err != nil {
+			prog.Instructions, err = link(prog.Instructions, libs...)
+			if err != nil {
 				return nil, errors.Wrapf(err, "program %s", name)
 			}
 		}

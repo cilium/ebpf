@@ -184,3 +184,6 @@ const (
 	AttachCGroupGetsockopt
 	AttachCGroupSetsockopt
 )
+
+// AttachFlags of the eBPF program used in BPF_PROG_ATTACH command
+type AttachFlags uint32

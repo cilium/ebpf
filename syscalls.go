@@ -212,48 +212,9 @@ func bpfProgLoad(attr *bpfProgLoadAttr) (*bpfFD, error) {
 	}
 }
 
-func bpfProgAttach(m *bpfFD, targetFd, alterType, alterFlags uint32) error {
-	fd, err := m.value()
-	if err != nil {
-		return err
-	}
-
-	attr := bpfProgAlterAttr{
-		targetFd:   targetFd,
-		alterBpfFd: fd,
-		alterType:  alterType,
-		alterFlags: alterFlags,
-	}
-
-	for {
-		_, err := bpfCall(_ProgAttach, unsafe.Pointer(&attr), unsafe.Sizeof(attr))
-		if err == unix.EAGAIN {
-			continue
-		}
-		return err
-	}
-}
-
-func bpfProgDetach(m *bpfFD, targetFd, alterType, alterFlags uint32) error {
-	fd, err := m.value()
-	if err != nil {
-		return err
-	}
-
-	attr := bpfProgAlterAttr{
-		targetFd:   targetFd,
-		alterBpfFd: fd,
-		alterType:  alterType,
-		alterFlags: alterFlags,
-	}
-
-	for {
-		_, err := bpfCall(_ProgDetach, unsafe.Pointer(&attr), unsafe.Sizeof(attr))
-		if err == unix.EAGAIN {
-			continue
-		}
-		return err
-	}
+func bpfProgAlter(cmd int, attr *bpfProgAlterAttr) error {
+	_, err := bpfCall(cmd, unsafe.Pointer(attr), unsafe.Sizeof(*attr))
+	return err
 }
 
 func bpfMapCreate(attr *bpfMapCreateAttr) (*bpfFD, error) {

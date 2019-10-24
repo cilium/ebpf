@@ -173,6 +173,13 @@ type bpfProgTestRunAttr struct {
 	duration    uint32
 }
 
+type bpfProgAlterAttr struct {
+	targetFd   uint32
+	alterBpfFd uint32
+	alterType  uint32
+	alterFlags uint32
+}
+
 type bpfObjGetInfoByFDAttr struct {
 	fd      uint32
 	infoLen uint32
@@ -202,6 +209,50 @@ func bpfProgLoad(attr *bpfProgLoadAttr) (*bpfFD, error) {
 		}
 
 		return newBPFFD(uint32(fd)), nil
+	}
+}
+
+func bpfProgAttach(m *bpfFD, targetFd, alterType, alterFlags uint32) error {
+	fd, err := m.value()
+	if err != nil {
+		return err
+	}
+
+	attr := bpfProgAlterAttr{
+		targetFd:   targetFd,
+		alterBpfFd: fd,
+		alterType:  alterType,
+		alterFlags: alterFlags,
+	}
+
+	for {
+		_, err := bpfCall(_ProgAttach, unsafe.Pointer(&attr), unsafe.Sizeof(attr))
+		if err == unix.EAGAIN {
+			continue
+		}
+		return err
+	}
+}
+
+func bpfProgDetach(m *bpfFD, targetFd, alterType, alterFlags uint32) error {
+	fd, err := m.value()
+	if err != nil {
+		return err
+	}
+
+	attr := bpfProgAlterAttr{
+		targetFd:   targetFd,
+		alterBpfFd: fd,
+		alterType:  alterType,
+		alterFlags: alterFlags,
+	}
+
+	for {
+		_, err := bpfCall(_ProgDetach, unsafe.Pointer(&attr), unsafe.Sizeof(attr))
+		if err == unix.EAGAIN {
+			continue
+		}
+		return err
 	}
 }
 

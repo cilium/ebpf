@@ -413,6 +413,16 @@ func (p *Program) MarshalBinary() ([]byte, error) {
 	return buf, nil
 }
 
+// Attach a Program to a container object fd
+func (p *Program) Attach(fd uint32, bfpProgType ProgramType, flags uint32) error {
+	return bpfProgAttach(p.fd, fd, uint32(bfpProgType), flags)
+}
+
+// Detach a Program from a container object fd
+func (p *Program) Detach(fd uint32, bfpProgType ProgramType, flags uint32) error {
+	return bpfProgDetach(p.fd, fd, uint32(bfpProgType), flags)
+}
+
 // LoadPinnedProgram loads a Program from a BPF file.
 //
 // Requires at least Linux 4.13, use LoadPinnedProgramExplicit on

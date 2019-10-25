@@ -413,6 +413,48 @@ func (p *Program) MarshalBinary() ([]byte, error) {
 	return buf, nil
 }
 
+// Attach a Program to a container object fd
+func (p *Program) Attach(fd int, typ AttachType, flags AttachFlags) error {
+	if fd < 0 {
+		return errors.New("invalid fd")
+	}
+
+	pfd, err := p.fd.value()
+	if err != nil {
+		return err
+	}
+
+	attr := bpfProgAlterAttr{
+		targetFd:    uint32(fd),
+		attachBpfFd: pfd,
+		attachType:  uint32(typ),
+		attachFlags: uint32(flags),
+	}
+
+	return bpfProgAlter(_ProgAttach, &attr)
+}
+
+// Detach a Program from a container object fd
+func (p *Program) Detach(fd int, typ AttachType, flags AttachFlags) error {
+	if fd < 0 {
+		return errors.New("invalid fd")
+	}
+
+	pfd, err := p.fd.value()
+	if err != nil {
+		return err
+	}
+
+	attr := bpfProgAlterAttr{
+		targetFd:    uint32(fd),
+		attachBpfFd: pfd,
+		attachType:  uint32(typ),
+		attachFlags: uint32(flags),
+	}
+
+	return bpfProgAlter(_ProgDetach, &attr)
+}
+
 // LoadPinnedProgram loads a Program from a BPF file.
 //
 // Requires at least Linux 4.13, use LoadPinnedProgramExplicit on

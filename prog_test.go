@@ -260,6 +260,42 @@ func TestProgramFromFD(t *testing.T) {
 	prog2.Close()
 }
 
+func TestProgramAlter(t *testing.T) {
+	var err error
+	var prog *Program
+	prog, err = NewProgram(&ProgramSpec{
+		Type: SkSKB,
+		Instructions: asm.Instructions{
+			asm.LoadImm(asm.R0, 0, asm.DWord),
+			asm.Return(),
+		},
+		License: "MIT",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer prog.Close()
+
+	var sockMap *Map
+	sockMap, err = NewMap(&MapSpec{
+		Type:       MapType(15), // BPF_MAP_TYPE_SOCKMAP
+		KeySize:    4,
+		ValueSize:  4,
+		MaxEntries: 2,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer sockMap.Close()
+
+	if err := prog.Attach(sockMap.FD(), AttachSkSKBStreamParser, AttachFlags(0)); err != nil {
+		t.Fatal(err)
+	}
+	if err := prog.Detach(sockMap.FD(), AttachSkSKBStreamParser, AttachFlags(0)); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func createProgramArray(t *testing.T) *Map {
 	t.Helper()
 

@@ -173,6 +173,13 @@ type bpfProgTestRunAttr struct {
 	duration    uint32
 }
 
+type bpfProgAlterAttr struct {
+	targetFd    uint32
+	attachBpfFd uint32
+	attachType  uint32
+	attachFlags uint32
+}
+
 type bpfObjGetInfoByFDAttr struct {
 	fd      uint32
 	infoLen uint32
@@ -203,6 +210,11 @@ func bpfProgLoad(attr *bpfProgLoadAttr) (*bpfFD, error) {
 
 		return newBPFFD(uint32(fd)), nil
 	}
+}
+
+func bpfProgAlter(cmd int, attr *bpfProgAlterAttr) error {
+	_, err := bpfCall(cmd, unsafe.Pointer(attr), unsafe.Sizeof(*attr))
+	return err
 }
 
 func bpfMapCreate(attr *bpfMapCreateAttr) (*bpfFD, error) {

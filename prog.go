@@ -414,7 +414,7 @@ func (p *Program) MarshalBinary() ([]byte, error) {
 }
 
 // Attach a Program to a container object fd
-func (p *Program) Attach(fd int, attachType AttachType, attachFlags AttachFlags) error {
+func (p *Program) Attach(fd int, typ AttachType, flags AttachFlags) error {
 	if fd < 0 {
 		return errors.New("invalid fd")
 	}
@@ -427,15 +427,15 @@ func (p *Program) Attach(fd int, attachType AttachType, attachFlags AttachFlags)
 	attr := bpfProgAlterAttr{
 		targetFd:    uint32(fd),
 		attachBpfFd: pfd,
-		attachType:  uint32(attachType),
-		attachFlags: uint32(attachFlags),
+		attachType:  uint32(typ),
+		attachFlags: uint32(flags),
 	}
 
 	return bpfProgAlter(_ProgAttach, &attr)
 }
 
 // Detach a Program from a container object fd
-func (p *Program) Detach(fd int, detachType AttachType, detachFlags AttachFlags) error {
+func (p *Program) Detach(fd int, typ AttachType, flags AttachFlags) error {
 	if fd < 0 {
 		return errors.New("invalid fd")
 	}
@@ -448,8 +448,8 @@ func (p *Program) Detach(fd int, detachType AttachType, detachFlags AttachFlags)
 	attr := bpfProgAlterAttr{
 		targetFd:    uint32(fd),
 		attachBpfFd: pfd,
-		attachType:  uint32(detachType),
-		attachFlags: uint32(detachFlags),
+		attachType:  uint32(typ),
+		attachFlags: uint32(flags),
 	}
 
 	return bpfProgAlter(_ProgDetach, &attr)

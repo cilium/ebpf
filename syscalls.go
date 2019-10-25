@@ -174,10 +174,10 @@ type bpfProgTestRunAttr struct {
 }
 
 type bpfProgAlterAttr struct {
-	targetFd   uint32
-	alterBpfFd uint32
-	alterType  uint32
-	alterFlags uint32
+	targetFd    uint32
+	attachBpfFd uint32
+	attachType  uint32
+	attachFlags uint32
 }
 
 type bpfObjGetInfoByFDAttr struct {

@@ -425,10 +425,10 @@ func (p *Program) Attach(fd int, attachType AttachType, attachFlags AttachFlags)
 	}
 
 	attr := bpfProgAlterAttr{
-		targetFd:   uint32(fd),
-		alterBpfFd: pfd,
-		alterType:  uint32(attachType),
-		alterFlags: uint32(attachFlags),
+		targetFd:    uint32(fd),
+		attachBpfFd: pfd,
+		attachType:  uint32(attachType),
+		attachFlags: uint32(attachFlags),
 	}
 
 	return bpfProgAlter(_ProgAttach, &attr)
@@ -446,10 +446,10 @@ func (p *Program) Detach(fd int, detachType AttachType, detachFlags AttachFlags)
 	}
 
 	attr := bpfProgAlterAttr{
-		targetFd:   uint32(fd),
-		alterBpfFd: pfd,
-		alterType:  uint32(detachType),
-		alterFlags: uint32(detachFlags),
+		targetFd:    uint32(fd),
+		attachBpfFd: pfd,
+		attachType:  uint32(detachType),
+		attachFlags: uint32(detachFlags),
 	}
 
 	return bpfProgAlter(_ProgDetach, &attr)

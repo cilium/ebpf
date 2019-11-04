@@ -24,9 +24,9 @@ blocks:
           - GOOS=darwin go build ./...
           - GOARCH=arm GOARM=6 go build ./...
           - GOARCH=arm64 go build ./...
-      - name: Test on 5.0.13
+      - name: Test on 5.3.8
         commands:
-          - timeout -s KILL 60s ./run-tests.sh 5.0.13
-      - name: Test on 4.19.40
+          - timeout -s KILL 60s ./run-tests.sh 5.3.8
+      - name: Test on 4.19.81
         commands:
-          - timeout -s KILL 60s ./run-tests.sh 4.19.40
+          - timeout -s KILL 60s ./run-tests.sh 4.19.81

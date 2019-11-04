@@ -1,6 +1,13 @@
 package ebpf
 
 import (
+	"bufio"
+	"bytes"
+	"fmt"
+	"io"
+	"os"
+	"syscall"
+
 	"github.com/pkg/errors"
 )
 
@@ -79,24 +86,49 @@ func newMapABIFromSpec(spec *MapSpec) *MapABI {
 	}
 }
 
-func newMapABIFromFd(fd *bpfFD) (*MapABI, error) {
+func newMapABIFromFd(fd *bpfFD) (string, *MapABI, error) {
 	info, err := bpfGetMapInfoByFD(fd)
 	if err != nil {
-		return nil, err
+		if errors.Cause(err) == syscall.EINVAL {
+			abi, err := newMapABIFromProc(fd)
+			return "", abi, err
+		}
+		return "", nil, err
 	}
 
 	mapType := MapType(info.mapType)
 	if mapType == ArrayOfMaps || mapType == HashOfMaps {
-		return nil, errors.New("can't get map info for nested maps")
+		return "", nil, errors.New("can't get map info for nested maps")
 	}
 
-	return &MapABI{
+	name := convertCString(info.mapName[:])
+
+	return name, &MapABI{
 		mapType,
 		info.keySize,
 		info.valueSize,
 		info.maxEntries,
 		nil,
 	}, nil
+}
+
+func newMapABIFromProc(fd *bpfFD) (*MapABI, error) {
+	var abi MapABI
+	err := scanFdInfo(fd, map[string]interface{}{
+		"map_type":    &abi.Type,
+		"key_size":    &abi.KeySize,
+		"value_size":  &abi.ValueSize,
+		"max_entries": &abi.MaxEntries,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	if abi.Type == ArrayOfMaps || abi.Type == HashOfMaps {
+		return nil, errors.New("can't get map info for nested maps")
+	}
+
+	return &abi, nil
 }
 
 // Check verifies that a Map conforms to the ABI.
@@ -148,19 +180,94 @@ func newProgramABIFromSpec(spec *ProgramSpec) *ProgramABI {
 	}
 }
 
-func newProgramABIFromFd(fd *bpfFD) (*ProgramABI, error) {
+func newProgramABIFromFd(fd *bpfFD) (string, *ProgramABI, error) {
 	info, err := bpfGetProgInfoByFD(fd)
 	if err != nil {
-		return nil, err
+		if errors.Cause(err) == syscall.EINVAL {
+			return newProgramABIFromProc(fd)
+		}
+
+		return "", nil, err
 	}
 
-	return newProgramABIFromInfo(info), nil
+	var name string
+	if bpfName := convertCString(info.name[:]); bpfName != "" {
+		name = bpfName
+	} else {
+		name = convertCString(info.tag[:])
+	}
+
+	return name, &ProgramABI{
+		Type: ProgramType(info.progType),
+	}, nil
 }
 
-func newProgramABIFromInfo(info *bpfProgInfo) *ProgramABI {
-	return &ProgramABI{
-		Type: ProgramType(info.progType),
+func newProgramABIFromProc(fd *bpfFD) (string, *ProgramABI, error) {
+	var (
+		abi  ProgramABI
+		name string
+	)
+
+	err := scanFdInfo(fd, map[string]interface{}{
+		"prog_type": &abi.Type,
+		"prog_tag":  &name,
+	})
+	if err != nil {
+		return "", nil, err
 	}
+
+	return name, &abi, nil
+}
+
+func scanFdInfo(fd *bpfFD, fields map[string]interface{}) error {
+	raw, err := fd.value()
+	if err != nil {
+		return err
+	}
+
+	fh, err := os.Open(fmt.Sprintf("/proc/self/fdinfo/%d", raw))
+	if err != nil {
+		return err
+	}
+	defer fh.Close()
+
+	return errors.Wrap(scanFdInfoReader(fh, fields), fh.Name())
+}
+
+func scanFdInfoReader(r io.Reader, fields map[string]interface{}) error {
+	var (
+		scanner = bufio.NewScanner(r)
+		scanned int
+	)
+
+	for scanner.Scan() {
+		parts := bytes.SplitN(scanner.Bytes(), []byte("\t"), 2)
+		if len(parts) != 2 {
+			continue
+		}
+
+		name := bytes.TrimSuffix(parts[0], []byte(":"))
+		field, ok := fields[string(name)]
+		if !ok {
+			continue
+		}
+
+		if n, err := fmt.Fscanln(bytes.NewReader(parts[1]), field); err != nil || n != 1 {
+			return errors.Wrapf(err, "can't parse field %s", name)
+		}
+
+		scanned++
+	}
+
+	if err := scanner.Err(); err != nil {
+		return err
+	}
+
+	if scanned != len(fields) {
+		return errors.Errorf("parsed %d instead of %d fields", scanned, len(fields))
+	}
+
+	return nil
 }
 
 // Check verifies that a Program conforms to the ABI.

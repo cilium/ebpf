@@ -133,6 +133,9 @@ func readRawSample(rd io.Reader) ([]byte, error) {
 // Reader allows reading bpf_perf_event_output
 // from user space.
 type Reader struct {
+	// mu protects read/write access to the Reader structure with the
+	// exception of 'pauseFds', which is protected by 'pauseMu'.
+	// If locking both 'mu' and 'pauseMu', 'mu' must be locked first.
 	mu sync.Mutex
 
 	// Closing a PERF_EVENT_ARRAY removes all event fds
@@ -147,6 +150,12 @@ type Reader struct {
 	closeFd int
 	// Ensure we only close once
 	closeOnce sync.Once
+
+	// pauseFds are a copy of the fds in 'rings', protected by 'pauseMu'.
+	// These allow Pause/Resume to be executed independently of any ongoing
+	// Read calls, which would otherwise need to be interrupted.
+	pauseMu  sync.Mutex
+	pauseFds []int
 }
 
 // ReaderOptions control the behaviour of the user
@@ -179,9 +188,10 @@ func NewReaderWithOptions(array *ebpf.Map, perCPUBuffer int, opts ReaderOptions)
 	}
 
 	var (
-		fds   = []int{epollFd}
-		nCPU  = int(array.ABI().MaxEntries)
-		rings = make([]*perfEventRing, 0, nCPU)
+		fds      = []int{epollFd}
+		nCPU     = int(array.ABI().MaxEntries)
+		rings    = make([]*perfEventRing, 0, nCPU)
+		pauseFds = make([]int, 0, nCPU)
 	)
 
 	defer func() {
@@ -204,6 +214,7 @@ func NewReaderWithOptions(array *ebpf.Map, perCPUBuffer int, opts ReaderOptions)
 			return nil, errors.Wrapf(err, "failed to create perf ring for CPU %d", i)
 		}
 		rings = append(rings, ring)
+		pauseFds = append(pauseFds, ring.fd)
 
 		if err := addToEpoll(epollFd, ring.fd, len(rings)-1); err != nil {
 			return nil, err
@@ -233,6 +244,10 @@ func NewReaderWithOptions(array *ebpf.Map, perCPUBuffer int, opts ReaderOptions)
 		epollEvents: make([]unix.EpollEvent, len(rings)+1),
 		epollRings:  make([]*perfEventRing, 0, len(rings)),
 		closeFd:     closeFd,
+		pauseFds:    pauseFds,
+	}
+	if err = pr.Resume(); err != nil {
+		return nil, err
 	}
 	if err = pr.Resume(); err != nil {
 		return nil, err
@@ -261,10 +276,12 @@ func (pr *Reader) Close() error {
 			return
 		}
 
-		// Acquire the lock. This ensures that Read
-		// isn't running.
+		// Acquire the locks. This ensures that Read, Pause and Resume
+		// aren't running.
 		pr.mu.Lock()
+		pr.pauseMu.Lock()
 		defer pr.mu.Unlock()
+		defer pr.pauseMu.Unlock()
 
 		unix.Close(pr.epollFd)
 		unix.Close(pr.closeFd)
@@ -275,6 +292,7 @@ func (pr *Reader) Close() error {
 			ring.Close()
 		}
 		pr.rings = nil
+		pr.pauseFds = nil
 
 		pr.array.Close()
 	})
@@ -340,14 +358,17 @@ func (pr *Reader) Read() (Record, error) {
 	}
 }
 
-// Pause stops all notifications from this perf reader.
+// Pause stops all notifications from this Reader.
+//
+// While the Reader is paused, any attempts to write to the event buffer from
+// BPF programs will return -ENOENT.
 //
 // Subsequent calls to Read will block until a call to Resume.
 func (pr *Reader) Pause() error {
-	pr.mu.Lock()
-	defer pr.mu.Unlock()
+	pr.pauseMu.Lock()
+	defer pr.pauseMu.Unlock()
 
-	for i := 0; i < len(pr.rings); i++ {
+	for i := 0; i < len(pr.pauseFds); i++ {
 		if err := pr.array.Delete(uint32(i)); err != nil && !ebpf.IsNotExist(err) {
 			return errors.Wrapf(err, "could't delete event fd for CPU %d", i)
 		}
@@ -360,12 +381,13 @@ func (pr *Reader) Pause() error {
 //
 // Subsequent calls to Read will block until the next event notification.
 func (pr *Reader) Resume() error {
-	pr.mu.Lock()
-	defer pr.mu.Unlock()
+	pr.pauseMu.Lock()
+	defer pr.pauseMu.Unlock()
 
-	for i := 0; i < len(pr.rings); i++ {
-		if err := pr.array.Put(uint32(i), uint32(pr.rings[i].fd)); err != nil {
-			return errors.Wrapf(err, "could't put event fd for CPU %d", i)
+	for i := 0; i < len(pr.pauseFds); i++ {
+		fd := uint32(pr.pauseFds[i])
+		if err := pr.array.Put(uint32(i), fd); err != nil {
+			return errors.Wrapf(err, "could't put event fd %d for CPU %d", fd, i)
 		}
 	}
 

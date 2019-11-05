@@ -15,6 +15,17 @@ import (
 	"github.com/cilium/ebpf/internal/unix"
 )
 
+func TestMain(m *testing.M) {
+	err := unix.Setrlimit(8, &unix.Rlimit{
+		Cur: unix.RLIM_INFINITY,
+		Max: unix.RLIM_INFINITY,
+	})
+	if err != nil {
+		fmt.Println("WARNING: Failed to adjust rlimit, tests may fail")
+	}
+	os.Exit(m.Run())
+}
+
 func TestPerfReader(t *testing.T) {
 	prog, events := mustOutputSamplesProg(t, 5)
 	defer prog.Close()

@@ -378,11 +378,11 @@ func TestPause(t *testing.T) {
 	}
 
 	// Pause/Resume after close should be no-op.
-	if err = rd.Pause(); err != nil {
-		t.Fatal(err)
+	if err = rd.Pause(); err != errClosed {
+		t.Fatalf("Unexpected error: %s", err)
 	}
-	if err = rd.Resume(); err != nil {
-		t.Fatal(err)
+	if err = rd.Resume(); err != errClosed {
+		t.Fatalf("Unexpected error: %s", err)
 	}
 }
 

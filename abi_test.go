@@ -1,6 +1,7 @@
 package ebpf
 
 import (
+	"strings"
 	"testing"
 )
 
@@ -118,6 +119,32 @@ func TestMapABI(t *testing.T) {
 	}
 }
 
+func TestMapABIFromProc(t *testing.T) {
+	array := createArray(t)
+	defer array.Close()
+
+	abi, err := newMapABIFromProc(array.fd)
+	if err != nil {
+		t.Fatal("Can't get map ABI:", err)
+	}
+
+	if abi.Type != Array {
+		t.Error("Expected Array, got", abi.Type)
+	}
+
+	if abi.KeySize != 4 {
+		t.Error("Expected KeySize of 4, got", abi.KeySize)
+	}
+
+	if abi.ValueSize != 4 {
+		t.Error("Expected ValueSize of 4, got", abi.ValueSize)
+	}
+
+	if abi.MaxEntries != 2 {
+		t.Error("Expected MaxEntries of 2, got", abi.MaxEntries)
+	}
+}
+
 func TestProgramABI(t *testing.T) {
 	fabi := &ProgramABI{Type: SocketFilter}
 
@@ -129,6 +156,51 @@ func TestProgramABI(t *testing.T) {
 	fp.abi.Type = TracePoint
 	if err := fabi.Check(fp); err == nil {
 		t.Error("Did not detect incorrect type")
+	}
+}
+
+func TestNewProgramABIFromProc(t *testing.T) {
+	prog := createSocketFilter(t)
+	defer prog.Close()
+
+	name, abi, err := newProgramABIFromProc(prog.fd)
+	if err != nil {
+		t.Fatal("Can't read ABI:", err)
+	}
+
+	if name == "" {
+		t.Error("Expected a name")
+	}
+
+	if abi.Type != SocketFilter {
+		t.Error("Expected Type to be SocketFilter, got", abi.Type)
+	}
+}
+
+func TestScanFdInfo(t *testing.T) {
+	var (
+		bar    int
+		fields = map[string]interface{}{
+			"bar": &bar,
+		}
+	)
+
+	r := strings.NewReader("foo:\tbar\ngarbage\nbar:\t2\n")
+	if err := scanFdInfoReader(r, fields); err != nil {
+		t.Error("Shouldn't error on unknown fields:", err)
+	}
+	if bar != 2 {
+		t.Error("bar should be 2, got", bar)
+	}
+
+	r = strings.NewReader("bar:\tfoo\n")
+	if err := scanFdInfoReader(r, fields); err == nil {
+		t.Error("No error on incompatible field")
+	}
+
+	r = strings.NewReader("")
+	if err := scanFdInfoReader(r, fields); err == nil {
+		t.Error("No error on missing field")
 	}
 }
 

@@ -15,6 +15,10 @@ import (
 	"github.com/cilium/ebpf/internal/unix"
 )
 
+var (
+	readTimeout = 250 * time.Millisecond
+)
+
 func TestMain(m *testing.M) {
 	err := unix.Setrlimit(8, &unix.Rlimit{
 		Cur: unix.RLIM_INFINITY,
@@ -295,6 +299,78 @@ func TestReadRecord(t *testing.T) {
 	_, err = readRecord(&buf, 0)
 	if !IsUnknownEvent(err) {
 		t.Error("readRecord should return unknown event error, got", err)
+	}
+}
+
+func TestPause(t *testing.T) {
+	t.Parallel()
+
+	prog, events := mustOutputSamplesProg(t, 5)
+	defer prog.Close()
+	defer events.Close()
+
+	rd, err := NewReader(events, 4096)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rd.Close()
+
+	// Reader is already unpaused by default. It should be idempotent.
+	if err = rd.Resume(); err != nil {
+		t.Fatal(err)
+	}
+
+	// Write a sample. The reader should read it.
+	ret, _, err := prog.Test(make([]byte, 14))
+	if err != nil || ret != 0 {
+		t.Fatal("Can't write sample")
+	}
+	if _, err := rd.Read(); err != nil {
+		t.Fatal(err)
+	}
+
+	// Pause. No notification should trigger.
+	if err = rd.Pause(); err != nil {
+		t.Fatal(err)
+	}
+	errChan := make(chan error, 1)
+	go func() {
+		// Read one notification then send any errors and exit.
+		_, err := rd.Read()
+		errChan <- err
+	}()
+	ret, _, err = prog.Test(make([]byte, 14))
+	if err == nil && ret == 0 {
+		t.Fatal("Unexpectedly wrote sample while paused")
+	} // else Success
+	select {
+	case err := <-errChan:
+		// Failure: Pause was unsuccessful.
+		t.Fatalf("received notification on paused reader: %s", err)
+	case <-time.After(readTimeout):
+		// Success
+	}
+
+	// Pause should be idempotent.
+	if err = rd.Pause(); err != nil {
+		t.Fatal(err)
+	}
+
+	// Resume. Now notifications should continue.
+	if err = rd.Resume(); err != nil {
+		t.Fatal(err)
+	}
+	ret, _, err = prog.Test(make([]byte, 14))
+	if err != nil || ret != 0 {
+		t.Fatal("Can't write sample")
+	}
+	select {
+	case err := <-errChan:
+		if err != nil {
+			t.Fatal(err)
+		} // else Success
+	case <-time.After(readTimeout):
+		t.Fatal("timed out waiting for notification after resume")
 	}
 }
 

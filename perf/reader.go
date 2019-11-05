@@ -205,10 +205,6 @@ func NewReaderWithOptions(array *ebpf.Map, perCPUBuffer int, opts ReaderOptions)
 		}
 		rings = append(rings, ring)
 
-		if err := array.Put(uint32(i), uint32(ring.fd)); err != nil {
-			return nil, errors.Wrapf(err, "could't put event fd for CPU %d", i)
-		}
-
 		if err := addToEpoll(epollFd, ring.fd, len(rings)-1); err != nil {
 			return nil, err
 		}
@@ -237,6 +233,9 @@ func NewReaderWithOptions(array *ebpf.Map, perCPUBuffer int, opts ReaderOptions)
 		epollEvents: make([]unix.EpollEvent, len(rings)+1),
 		epollRings:  make([]*perfEventRing, 0, len(rings)),
 		closeFd:     closeFd,
+	}
+	if err = pr.Resume(); err != nil {
+		return nil, err
 	}
 	runtime.SetFinalizer(pr, (*Reader).Close)
 	return pr, nil
@@ -339,6 +338,38 @@ func (pr *Reader) Read() (Record, error) {
 
 		return record, err
 	}
+}
+
+// Pause stops all notifications from this perf reader.
+//
+// Subsequent calls to Read will block until a call to Resume.
+func (pr *Reader) Pause() error {
+	pr.mu.Lock()
+	defer pr.mu.Unlock()
+
+	for i := 0; i < len(pr.rings); i++ {
+		if err := pr.array.Delete(uint32(i)); err != nil && !ebpf.IsNotExist(err) {
+			return errors.Wrapf(err, "could't delete event fd for CPU %d", i)
+		}
+	}
+
+	return nil
+}
+
+// Resume allows this perf reader to emit notifications.
+//
+// Subsequent calls to Read will block until the next event notification.
+func (pr *Reader) Resume() error {
+	pr.mu.Lock()
+	defer pr.mu.Unlock()
+
+	for i := 0; i < len(pr.rings); i++ {
+		if err := pr.array.Put(uint32(i), uint32(pr.rings[i].fd)); err != nil {
+			return errors.Wrapf(err, "could't put event fd for CPU %d", i)
+		}
+	}
+
+	return nil
 }
 
 type temporaryError interface {

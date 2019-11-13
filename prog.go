@@ -68,7 +68,7 @@ type Program struct {
 	// otherwise it is empty.
 	VerifierLog string
 
-	fd   *bpfFD
+	fd   *internal.FD
 	name string
 	abi  ProgramABI
 }
@@ -140,18 +140,18 @@ func NewProgramFromFD(fd int) (*Program, error) {
 	if fd < 0 {
 		return nil, errors.New("invalid fd")
 	}
-	bpfFd := newBPFFD(uint32(fd))
+	bpfFd := internal.NewFD(uint32(fd))
 
 	name, abi, err := newProgramABIFromFd(bpfFd)
 	if err != nil {
-		bpfFd.forget()
+		bpfFd.Forget()
 		return nil, err
 	}
 
 	return newProgram(bpfFd, name, abi), nil
 }
 
-func newProgram(fd *bpfFD, name string, abi *ProgramABI) *Program {
+func newProgram(fd *internal.FD, name string, abi *ProgramABI) *Program {
 	return &Program{
 		name: name,
 		fd:   fd,
@@ -212,7 +212,7 @@ func (p *Program) ABI() ProgramABI {
 //
 // It is invalid to call this function after Close has been called.
 func (p *Program) FD() int {
-	fd, err := p.fd.value()
+	fd, err := p.fd.Value()
 	if err != nil {
 		// Best effort: -1 is the number most likely to be an
 		// invalid file descriptor.
@@ -232,7 +232,7 @@ func (p *Program) Clone() (*Program, error) {
 		return nil, nil
 	}
 
-	dup, err := p.fd.dup()
+	dup, err := p.fd.Dup()
 	if err != nil {
 		return nil, errors.Wrap(err, "can't clone program")
 	}
@@ -253,7 +253,7 @@ func (p *Program) Close() error {
 		return nil
 	}
 
-	return p.fd.close()
+	return p.fd.Close()
 }
 
 // Test runs the Program in the kernel with the given input and returns the
@@ -295,7 +295,7 @@ var haveProgTestRun = internal.FeatureTest("BPF_PROG_TEST_RUN", "4.12", func() b
 	}
 	defer prog.Close()
 
-	fd, err := prog.fd.value()
+	fd, err := prog.fd.Value()
 	if err != nil {
 		return false
 	}
@@ -339,7 +339,7 @@ func (p *Program) testRun(in []byte, repeat int) (uint32, []byte, time.Duration,
 	// See https://patchwork.ozlabs.org/cover/1006822/
 	out := make([]byte, len(in)+outputPad)
 
-	fd, err := p.fd.value()
+	fd, err := p.fd.Value()
 	if err != nil {
 		return 0, nil, 0, err
 	}
@@ -384,7 +384,7 @@ func unmarshalProgram(buf []byte) (*Program, error) {
 
 	name, abi, err := newProgramABIFromFd(fd)
 	if err != nil {
-		_ = fd.close()
+		_ = fd.Close()
 		return nil, err
 	}
 
@@ -393,7 +393,7 @@ func unmarshalProgram(buf []byte) (*Program, error) {
 
 // MarshalBinary implements BinaryMarshaler.
 func (p *Program) MarshalBinary() ([]byte, error) {
-	value, err := p.fd.value()
+	value, err := p.fd.Value()
 	if err != nil {
 		return nil, err
 	}
@@ -409,7 +409,7 @@ func (p *Program) Attach(fd int, typ AttachType, flags AttachFlags) error {
 		return errors.New("invalid fd")
 	}
 
-	pfd, err := p.fd.value()
+	pfd, err := p.fd.Value()
 	if err != nil {
 		return err
 	}
@@ -430,7 +430,7 @@ func (p *Program) Detach(fd int, typ AttachType, flags AttachFlags) error {
 		return errors.New("invalid fd")
 	}
 
-	pfd, err := p.fd.value()
+	pfd, err := p.fd.Value()
 	if err != nil {
 		return err
 	}
@@ -456,7 +456,7 @@ func LoadPinnedProgram(fileName string) (*Program, error) {
 
 	name, abi, err := newProgramABIFromFd(fd)
 	if err != nil {
-		_ = fd.close()
+		_ = fd.Close()
 		return nil, errors.Wrapf(err, "can't get ABI for %s", fileName)
 	}
 

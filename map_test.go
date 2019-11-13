@@ -74,11 +74,11 @@ func TestMapClose(t *testing.T) {
 		t.Fatal("Can't close map:", err)
 	}
 
-	if err := m.Put(uint32(0), uint32(42)); errors.Cause(err) != errClosedFd {
+	if err := m.Put(uint32(0), uint32(42)); errors.Cause(err) != internal.ErrClosedFd {
 		t.Fatal("Put doesn't check for closed fd", err)
 	}
 
-	if _, err := m.LookupBytes(uint32(0)); errors.Cause(err) != errClosedFd {
+	if _, err := m.LookupBytes(uint32(0)); errors.Cause(err) != internal.ErrClosedFd {
 		t.Fatal("Get doesn't check for closed fd", err)
 	}
 }

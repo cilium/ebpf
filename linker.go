@@ -2,23 +2,34 @@ package ebpf
 
 import (
 	"github.com/cilium/ebpf/asm"
+	"github.com/pkg/errors"
 )
 
 // link resolves bpf-to-bpf calls.
 //
-// Each section may contain multiple functions / labels, and is only linked
+// Each library may contain multiple functions / labels, and is only linked
 // if the program being edited references one of these functions.
 //
-// Sections must not require linking themselves.
-func link(insns asm.Instructions, sections ...asm.Instructions) (asm.Instructions, error) {
-	for _, section := range sections {
-		var err error
-		insns, err = linkSection(insns, section)
+// Libraries must not require linking themselves.
+func link(prog *ProgramSpec, libs []*ProgramSpec) error {
+	for _, lib := range libs {
+		insns, err := linkSection(prog.Instructions, lib.Instructions)
 		if err != nil {
-			return nil, err
+			return errors.Wrapf(err, "linking %s", lib.Name)
+		}
+
+		if len(insns) == len(prog.Instructions) {
+			continue
+		}
+
+		prog.Instructions = insns
+		if prog.BTF != nil && lib.BTF != nil {
+			if err := prog.BTF.Append(lib.BTF); err != nil {
+				return errors.Wrapf(err, "linking BTF of %s", lib.Name)
+			}
 		}
 	}
-	return insns, nil
+	return nil
 }
 
 func linkSection(insns, section asm.Instructions) (asm.Instructions, error) {

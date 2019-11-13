@@ -2,6 +2,7 @@ package ebpf
 
 import (
 	"github.com/cilium/ebpf/asm"
+	"github.com/cilium/ebpf/btf"
 	"github.com/pkg/errors"
 )
 
@@ -55,8 +56,49 @@ func NewCollection(spec *CollectionSpec) (*Collection, error) {
 // NewCollectionWithOptions creates a Collection from a specification.
 //
 // Only maps referenced by at least one of the programs are initialized.
-func NewCollectionWithOptions(spec *CollectionSpec, opts CollectionOptions) (*Collection, error) {
-	maps := make(map[string]*Map)
+func NewCollectionWithOptions(spec *CollectionSpec, opts CollectionOptions) (coll *Collection, err error) {
+	var (
+		maps  = make(map[string]*Map)
+		progs = make(map[string]*Program)
+		btfs  = make(map[*btf.Spec]*btf.BTF)
+	)
+
+	defer func() {
+		for _, btf := range btfs {
+			btf.Close()
+		}
+
+		if err == nil {
+			return
+		}
+
+		for _, m := range maps {
+			m.Close()
+		}
+
+		for _, p := range progs {
+			p.Close()
+		}
+	}()
+
+	loadBTF := func(sec *btf.Section) (*btf.BTF, error) {
+		if sec == nil || !btf.Supported() {
+			return nil, nil
+		}
+
+		spec := sec.Spec()
+		if btfs[spec] != nil {
+			return btfs[spec], nil
+		}
+
+		b, err := btf.New(spec)
+		if err != nil {
+			return nil, err
+		}
+		btfs[spec] = b
+		return b, nil
+	}
+
 	for mapName, mapSpec := range spec.Maps {
 		m, err := NewMap(mapSpec)
 		if err != nil {
@@ -65,7 +107,6 @@ func NewCollectionWithOptions(spec *CollectionSpec, opts CollectionOptions) (*Co
 		maps[mapName] = m
 	}
 
-	progs := make(map[string]*Program)
 	for progName, origProgSpec := range spec.Programs {
 		progSpec := origProgSpec.Copy()
 
@@ -91,7 +132,12 @@ func NewCollectionWithOptions(spec *CollectionSpec, opts CollectionOptions) (*Co
 			}
 		}
 
-		prog, err := NewProgramWithOptions(progSpec, opts.Programs)
+		btf, err := loadBTF(progSpec.BTF)
+		if err != nil {
+			return nil, err
+		}
+
+		prog, err := newProgramWithBTF(progSpec, btf, opts.Programs)
 		if err != nil {
 			return nil, errors.Wrapf(err, "program %s", progName)
 		}

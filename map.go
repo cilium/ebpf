@@ -49,7 +49,7 @@ func (ms *MapSpec) Copy() *MapSpec {
 // if you require custom encoding.
 type Map struct {
 	name string
-	fd   *bpfFD
+	fd   *internal.FD
 	abi  MapABI
 	// Per CPU maps return values larger than the size in the spec
 	fullValueSize int
@@ -62,11 +62,11 @@ func NewMapFromFD(fd int) (*Map, error) {
 	if fd < 0 {
 		return nil, errors.New("invalid fd")
 	}
-	bpfFd := newBPFFD(uint32(fd))
+	bpfFd := internal.NewFD(uint32(fd))
 
 	name, abi, err := newMapABIFromFd(bpfFd)
 	if err != nil {
-		bpfFd.forget()
+		bpfFd.Forget()
 		return nil, err
 	}
 	return newMap(bpfFd, name, abi)
@@ -94,7 +94,7 @@ func NewMap(spec *MapSpec) (*Map, error) {
 	return createMap(spec, template.fd)
 }
 
-func createMap(spec *MapSpec, inner *bpfFD) (*Map, error) {
+func createMap(spec *MapSpec, inner *internal.FD) (*Map, error) {
 	spec = spec.Copy()
 
 	switch spec.Type {
@@ -139,7 +139,7 @@ func createMap(spec *MapSpec, inner *bpfFD) (*Map, error) {
 
 	if inner != nil {
 		var err error
-		attr.innerMapFd, err = inner.value()
+		attr.innerMapFd, err = inner.Value()
 		if err != nil {
 			return nil, errors.Wrap(err, "map create")
 		}
@@ -162,7 +162,7 @@ func createMap(spec *MapSpec, inner *bpfFD) (*Map, error) {
 	return newMap(fd, spec.Name, newMapABIFromSpec(spec))
 }
 
-func newMap(fd *bpfFD, name string, abi *MapABI) (*Map, error) {
+func newMap(fd *internal.FD, name string, abi *MapABI) (*Map, error) {
 	m := &Map{
 		name,
 		fd,
@@ -399,14 +399,14 @@ func (m *Map) Close() error {
 		return nil
 	}
 
-	return m.fd.close()
+	return m.fd.Close()
 }
 
 // FD gets the file descriptor of the Map.
 //
 // Calling this function is invalid after Close has been called.
 func (m *Map) FD() int {
-	fd, err := m.fd.value()
+	fd, err := m.fd.Value()
 	if err != nil {
 		// Best effort: -1 is the number most likely to be an
 		// invalid file descriptor.
@@ -427,7 +427,7 @@ func (m *Map) Clone() (*Map, error) {
 		return nil, nil
 	}
 
-	dup, err := m.fd.dup()
+	dup, err := m.fd.Dup()
 	if err != nil {
 		return nil, errors.Wrap(err, "can't clone map")
 	}
@@ -453,7 +453,7 @@ func LoadPinnedMap(fileName string) (*Map, error) {
 	}
 	name, abi, err := newMapABIFromFd(fd)
 	if err != nil {
-		_ = fd.close()
+		_ = fd.Close()
 		return nil, err
 	}
 	return newMap(fd, name, abi)
@@ -483,7 +483,7 @@ func unmarshalMap(buf []byte) (*Map, error) {
 
 	name, abi, err := newMapABIFromFd(fd)
 	if err != nil {
-		_ = fd.close()
+		_ = fd.Close()
 		return nil, err
 	}
 
@@ -492,7 +492,7 @@ func unmarshalMap(buf []byte) (*Map, error) {
 
 // MarshalBinary implements BinaryMarshaler.
 func (m *Map) MarshalBinary() ([]byte, error) {
-	fd, err := m.fd.value()
+	fd, err := m.fd.Value()
 	if err != nil {
 		return nil, err
 	}

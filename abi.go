@@ -9,6 +9,7 @@ import (
 	"syscall"
 
 	"github.com/cilium/ebpf/internal"
+
 	"github.com/pkg/errors"
 )
 
@@ -31,7 +32,7 @@ func newMapABIFromSpec(spec *MapSpec) *MapABI {
 	}
 }
 
-func newMapABIFromFd(fd *bpfFD) (string, *MapABI, error) {
+func newMapABIFromFd(fd *internal.FD) (string, *MapABI, error) {
 	info, err := bpfGetMapInfoByFD(fd)
 	if err != nil {
 		if errors.Cause(err) == syscall.EINVAL {
@@ -50,7 +51,7 @@ func newMapABIFromFd(fd *bpfFD) (string, *MapABI, error) {
 	}, nil
 }
 
-func newMapABIFromProc(fd *bpfFD) (*MapABI, error) {
+func newMapABIFromProc(fd *internal.FD) (*MapABI, error) {
 	var abi MapABI
 	err := scanFdInfo(fd, map[string]interface{}{
 		"map_type":    &abi.Type,
@@ -94,7 +95,7 @@ func newProgramABIFromSpec(spec *ProgramSpec) *ProgramABI {
 	}
 }
 
-func newProgramABIFromFd(fd *bpfFD) (string, *ProgramABI, error) {
+func newProgramABIFromFd(fd *internal.FD) (string, *ProgramABI, error) {
 	info, err := bpfGetProgInfoByFD(fd)
 	if err != nil {
 		if errors.Cause(err) == syscall.EINVAL {
@@ -116,7 +117,7 @@ func newProgramABIFromFd(fd *bpfFD) (string, *ProgramABI, error) {
 	}, nil
 }
 
-func newProgramABIFromProc(fd *bpfFD) (string, *ProgramABI, error) {
+func newProgramABIFromProc(fd *internal.FD) (string, *ProgramABI, error) {
 	var (
 		abi  ProgramABI
 		name string
@@ -139,8 +140,8 @@ func newProgramABIFromProc(fd *bpfFD) (string, *ProgramABI, error) {
 	return name, &abi, nil
 }
 
-func scanFdInfo(fd *bpfFD, fields map[string]interface{}) error {
-	raw, err := fd.value()
+func scanFdInfo(fd *internal.FD, fields map[string]interface{}) error {
+	raw, err := fd.Value()
 	if err != nil {
 		return err
 	}

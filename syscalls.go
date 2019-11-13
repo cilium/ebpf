@@ -44,14 +44,18 @@ func invalidBPFObjNameChar(char rune) bool {
 }
 
 type bpfMapCreateAttr struct {
-	mapType    MapType
-	keySize    uint32
-	valueSize  uint32
-	maxEntries uint32
-	flags      uint32
-	innerMapFd uint32     // since 4.12 56f668dfe00d
-	numaNode   uint32     // since 4.14 96eabe7a40aa
-	mapName    bpfObjName // since 4.15 ad5b177bd73f
+	mapType        MapType
+	keySize        uint32
+	valueSize      uint32
+	maxEntries     uint32
+	flags          uint32
+	innerMapFd     uint32     // since 4.12 56f668dfe00d
+	numaNode       uint32     // since 4.14 96eabe7a40aa
+	mapName        bpfObjName // since 4.15 ad5b177bd73f
+	mapIfIndex     uint32
+	btfFd          uint32
+	btfKeyTypeID   uint32
+	btfValueTypeID uint32
 }
 
 type bpfMapOpAttr struct {
@@ -91,6 +95,13 @@ type bpfProgLoadAttr struct {
 	progName           bpfObjName // since 4.15 067cae47771c
 	progIfIndex        uint32     // since 4.15 1f6f4cb7ba21
 	expectedAttachType AttachType // since 4.17 5e43f899b03a
+	progBTFFd          uint32
+	funcInfoRecSize    uint32
+	funcInfo           internal.Pointer
+	funcInfoCnt        uint32
+	lineInfoRecSize    uint32
+	lineInfo           internal.Pointer
+	lineInfoCnt        uint32
 }
 
 type bpfProgInfo struct {

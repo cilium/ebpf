@@ -206,6 +206,31 @@ func TestMapInMap(t *testing.T) {
 	}
 }
 
+func TestNewMapInMapFromFD(t *testing.T) {
+	nested, err := NewMap(&MapSpec{
+		Type:       ArrayOfMaps,
+		KeySize:    4,
+		MaxEntries: 2,
+		InnerMap: &MapSpec{
+			Type:       Array,
+			KeySize:    4,
+			ValueSize:  4,
+			MaxEntries: 2,
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer nested.Close()
+
+	// Do not copy this, use Clone instead.
+	another, err := NewMapFromFD(nested.FD())
+	if err != nil {
+		t.Fatal("Can't create a new nested map from an FD")
+	}
+	another.Close()
+}
+
 func TestPerfEventArray(t *testing.T) {
 	m, err := NewMap(&MapSpec{
 		Type: PerfEventArray,
@@ -214,15 +239,6 @@ func TestPerfEventArray(t *testing.T) {
 		t.Fatal("Can't create perf event array:", err)
 	}
 	m.Close()
-}
-
-func TestMapInMapABI(t *testing.T) {
-	m := createMapInMap(t, ArrayOfMaps)
-	defer m.Close()
-
-	if m.abi.InnerMap == nil {
-		t.Error("ABI is missing InnerMap")
-	}
 }
 
 func createMapInMap(t *testing.T, typ MapType) *Map {

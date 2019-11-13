@@ -9,6 +9,7 @@ import (
 	"unsafe"
 
 	"github.com/cilium/ebpf/asm"
+	"github.com/cilium/ebpf/btf"
 	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/unix"
 
@@ -50,6 +51,11 @@ type ProgramSpec struct {
 	Instructions  asm.Instructions
 	License       string
 	KernelVersion uint32
+
+	// The BTF associated with this program. Changing Instructions
+	// will most likely invalidate the contained data, and may
+	// result in errors when attempting to load it into the kernel.
+	BTF *btf.Section
 }
 
 // Copy returns a copy of the spec.
@@ -72,7 +78,7 @@ type Program struct {
 	// otherwise it is empty.
 	VerifierLog string
 
-	fd   *bpfFD
+	fd   *internal.FD
 	name string
 	abi  ProgramABI
 }
@@ -90,7 +96,24 @@ func NewProgram(spec *ProgramSpec) (*Program, error) {
 // Loading a program for the first time will perform
 // feature detection by loading small, temporary programs.
 func NewProgramWithOptions(spec *ProgramSpec, opts ProgramOptions) (*Program, error) {
-	attr, err := convertProgramSpec(spec, haveObjName.Result())
+	var (
+		loaded *btf.BTF
+		err    error
+	)
+
+	if btf.Supported() && spec.BTF != nil {
+		loaded, err = btf.New(spec.BTF.Spec())
+		if err != nil {
+			return nil, errors.Wrap(err, "can't load BTF")
+		}
+		defer loaded.Close()
+	}
+
+	return newProgramWithBTF(spec, loaded, opts)
+}
+
+func newProgramWithBTF(spec *ProgramSpec, btf *btf.BTF, opts ProgramOptions) (*Program, error) {
+	attr, err := convertProgramSpec(spec, btf)
 	if err != nil {
 		return nil, err
 	}
@@ -105,7 +128,7 @@ func NewProgramWithOptions(spec *ProgramSpec, opts ProgramOptions) (*Program, er
 		logBuf = make([]byte, logSize)
 		attr.logLevel = opts.LogLevel
 		attr.logSize = uint32(len(logBuf))
-		attr.logBuf = newPtr(unsafe.Pointer(&logBuf[0]))
+		attr.logBuf = internal.NewSlicePointer(logBuf)
 	}
 
 	fd, err := bpfProgLoad(attr)
@@ -121,7 +144,7 @@ func NewProgramWithOptions(spec *ProgramSpec, opts ProgramOptions) (*Program, er
 		logBuf = make([]byte, logSize)
 		attr.logLevel = 1
 		attr.logSize = uint32(len(logBuf))
-		attr.logBuf = newPtr(unsafe.Pointer(&logBuf[0]))
+		attr.logBuf = internal.NewSlicePointer(logBuf)
 
 		_, nerr := bpfProgLoad(attr)
 		truncated = errors.Cause(nerr) == unix.ENOSPC
@@ -142,18 +165,18 @@ func NewProgramFromFD(fd int) (*Program, error) {
 	if fd < 0 {
 		return nil, errors.New("invalid fd")
 	}
-	bpfFd := newBPFFD(uint32(fd))
+	bpfFd := internal.NewFD(uint32(fd))
 
 	name, abi, err := newProgramABIFromFd(bpfFd)
 	if err != nil {
-		bpfFd.forget()
+		bpfFd.Forget()
 		return nil, err
 	}
 
 	return newProgram(bpfFd, name, abi), nil
 }
 
-func newProgram(fd *bpfFD, name string, abi *ProgramABI) *Program {
+func newProgram(fd *internal.FD, name string, abi *ProgramABI) *Program {
 	return &Program{
 		name: name,
 		fd:   fd,
@@ -161,7 +184,7 @@ func newProgram(fd *bpfFD, name string, abi *ProgramABI) *Program {
 	}
 }
 
-func convertProgramSpec(spec *ProgramSpec, includeName bool) (*bpfProgLoadAttr, error) {
+func convertProgramSpec(spec *ProgramSpec, loadedBTF *btf.BTF) (*bpfProgLoadAttr, error) {
 	if len(spec.Instructions) == 0 {
 		return nil, errors.New("Instructions cannot be empty")
 	}
@@ -178,13 +201,12 @@ func convertProgramSpec(spec *ProgramSpec, includeName bool) (*bpfProgLoadAttr, 
 
 	bytecode := buf.Bytes()
 	insCount := uint32(len(bytecode) / asm.InstructionSize)
-	lic := []byte(spec.License)
 	attr := &bpfProgLoadAttr{
 		progType:           spec.Type,
 		expectedAttachType: spec.AttachType,
 		insCount:           insCount,
-		instructions:       newPtr(unsafe.Pointer(&bytecode[0])),
-		license:            newPtr(unsafe.Pointer(&lic[0])),
+		instructions:       internal.NewSlicePointer(bytecode),
+		license:            internal.NewStringPointer(spec.License),
 	}
 
 	name, err := newBPFObjName(spec.Name)
@@ -192,8 +214,28 @@ func convertProgramSpec(spec *ProgramSpec, includeName bool) (*bpfProgLoadAttr, 
 		return nil, err
 	}
 
-	if includeName {
+	if haveObjName() {
 		attr.progName = name
+	}
+
+	if loadedBTF != nil && spec.BTF != nil {
+		attr.progBTFFd = uint32(loadedBTF.FD())
+
+		recSize, bytes, err := spec.BTF.LineInfos()
+		if err != nil {
+			return nil, errors.Wrap(err, "can't get BTF line infos")
+		}
+		attr.lineInfoRecSize = recSize
+		attr.lineInfoCnt = uint32(uint64(len(bytes)) / uint64(recSize))
+		attr.lineInfo = internal.NewSlicePointer(bytes)
+
+		recSize, bytes, err = spec.BTF.FuncInfos()
+		if err != nil {
+			return nil, errors.Wrap(err, "can't get BTF function infos")
+		}
+		attr.funcInfoRecSize = recSize
+		attr.funcInfoCnt = uint32(uint64(len(bytes)) / uint64(recSize))
+		attr.funcInfo = internal.NewSlicePointer(bytes)
 	}
 
 	return attr, nil
@@ -215,7 +257,7 @@ func (p *Program) ABI() ProgramABI {
 //
 // It is invalid to call this function after Close has been called.
 func (p *Program) FD() int {
-	fd, err := p.fd.value()
+	fd, err := p.fd.Value()
 	if err != nil {
 		// Best effort: -1 is the number most likely to be an
 		// invalid file descriptor.
@@ -235,7 +277,7 @@ func (p *Program) Clone() (*Program, error) {
 		return nil, nil
 	}
 
-	dup, err := p.fd.dup()
+	dup, err := p.fd.Dup()
 	if err != nil {
 		return nil, errors.Wrap(err, "can't clone program")
 	}
@@ -256,7 +298,7 @@ func (p *Program) Close() error {
 		return nil
 	}
 
-	return p.fd.close()
+	return p.fd.Close()
 }
 
 // Test runs the Program in the kernel with the given input and returns the
@@ -283,39 +325,36 @@ func (p *Program) Benchmark(in []byte, repeat int) (uint32, time.Duration, error
 	return ret, total, err
 }
 
-var noProgTestRun = featureTest{
-	Fn: func() bool {
-		prog, err := NewProgram(&ProgramSpec{
-			Type: SocketFilter,
-			Instructions: asm.Instructions{
-				asm.LoadImm(asm.R0, 0, asm.DWord),
-				asm.Return(),
-			},
-			License: "MIT",
-		})
-		if err != nil {
-			// This may be because we lack sufficient permissions, etc.
-			return false
-		}
-		defer prog.Close()
+var haveProgTestRun = internal.FeatureTest(func() bool {
+	prog, err := NewProgram(&ProgramSpec{
+		Type: SocketFilter,
+		Instructions: asm.Instructions{
+			asm.LoadImm(asm.R0, 0, asm.DWord),
+			asm.Return(),
+		},
+		License: "MIT",
+	})
+	if err != nil {
+		// This may be because we lack sufficient permissions, etc.
+		return false
+	}
+	defer prog.Close()
 
-		fd, err := prog.fd.value()
-		if err != nil {
-			return false
-		}
+	fd, err := prog.fd.Value()
+	if err != nil {
+		return false
+	}
 
-		// Programs require at least 14 bytes input
-		in := make([]byte, 14)
-		attr := bpfProgTestRunAttr{
-			fd:         fd,
-			dataSizeIn: uint32(len(in)),
-			dataIn:     newPtr(unsafe.Pointer(&in[0])),
-		}
-
-		_, err = bpfCall(_ProgTestRun, unsafe.Pointer(&attr), unsafe.Sizeof(attr))
-		return errors.Cause(err) == unix.EINVAL
-	},
-}
+	// Programs require at least 14 bytes input
+	in := make([]byte, 14)
+	attr := bpfProgTestRunAttr{
+		fd:         fd,
+		dataSizeIn: uint32(len(in)),
+		dataIn:     internal.NewSlicePointer(in),
+	}
+	_, err = internal.BPF(_ProgTestRun, unsafe.Pointer(&attr), unsafe.Sizeof(attr))
+	return err == nil
+})
 
 func (p *Program) testRun(in []byte, repeat int) (uint32, []byte, time.Duration, error) {
 	if uint(repeat) > math.MaxUint32 {
@@ -330,7 +369,7 @@ func (p *Program) testRun(in []byte, repeat int) (uint32, []byte, time.Duration,
 		return 0, nil, 0, fmt.Errorf("input is too long")
 	}
 
-	if noProgTestRun.Result() {
+	if !haveProgTestRun() {
 		return 0, nil, 0, errNotSupported
 	}
 
@@ -341,7 +380,7 @@ func (p *Program) testRun(in []byte, repeat int) (uint32, []byte, time.Duration,
 	// See https://patchwork.ozlabs.org/cover/1006822/
 	out := make([]byte, len(in)+outputPad)
 
-	fd, err := p.fd.value()
+	fd, err := p.fd.Value()
 	if err != nil {
 		return 0, nil, 0, err
 	}
@@ -350,12 +389,12 @@ func (p *Program) testRun(in []byte, repeat int) (uint32, []byte, time.Duration,
 		fd:          fd,
 		dataSizeIn:  uint32(len(in)),
 		dataSizeOut: uint32(len(out)),
-		dataIn:      newPtr(unsafe.Pointer(&in[0])),
-		dataOut:     newPtr(unsafe.Pointer(&out[0])),
+		dataIn:      internal.NewSlicePointer(in),
+		dataOut:     internal.NewSlicePointer(out),
 		repeat:      uint32(repeat),
 	}
 
-	_, err = bpfCall(_ProgTestRun, unsafe.Pointer(&attr), unsafe.Sizeof(attr))
+	_, err = internal.BPF(_ProgTestRun, unsafe.Pointer(&attr), unsafe.Sizeof(attr))
 	if err != nil {
 		return 0, nil, 0, errors.Wrap(err, "can't run test")
 	}
@@ -386,7 +425,7 @@ func unmarshalProgram(buf []byte) (*Program, error) {
 
 	name, abi, err := newProgramABIFromFd(fd)
 	if err != nil {
-		_ = fd.close()
+		_ = fd.Close()
 		return nil, err
 	}
 
@@ -395,7 +434,7 @@ func unmarshalProgram(buf []byte) (*Program, error) {
 
 // MarshalBinary implements BinaryMarshaler.
 func (p *Program) MarshalBinary() ([]byte, error) {
-	value, err := p.fd.value()
+	value, err := p.fd.Value()
 	if err != nil {
 		return nil, err
 	}
@@ -411,7 +450,7 @@ func (p *Program) Attach(fd int, typ AttachType, flags AttachFlags) error {
 		return errors.New("invalid fd")
 	}
 
-	pfd, err := p.fd.value()
+	pfd, err := p.fd.Value()
 	if err != nil {
 		return err
 	}
@@ -432,7 +471,7 @@ func (p *Program) Detach(fd int, typ AttachType, flags AttachFlags) error {
 		return errors.New("invalid fd")
 	}
 
-	pfd, err := p.fd.value()
+	pfd, err := p.fd.Value()
 	if err != nil {
 		return err
 	}
@@ -456,7 +495,7 @@ func LoadPinnedProgram(fileName string) (*Program, error) {
 
 	name, abi, err := newProgramABIFromFd(fd)
 	if err != nil {
-		_ = fd.close()
+		_ = fd.Close()
 		return nil, err
 	}
 

@@ -2,7 +2,6 @@ package ebpf
 
 import (
 	"fmt"
-	"unsafe"
 
 	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/unix"
@@ -20,6 +19,7 @@ type MapSpec struct {
 	ValueSize  uint32
 	MaxEntries uint32
 	Flags      uint32
+
 	// InnerMap is used as a template for ArrayOfMaps and HashOfMaps
 	InnerMap *MapSpec
 }
@@ -50,7 +50,7 @@ func (ms *MapSpec) Copy() *MapSpec {
 // if you require custom encoding.
 type Map struct {
 	name string
-	fd   *bpfFD
+	fd   *internal.FD
 	abi  MapABI
 	// Per CPU maps return values larger than the size in the spec
 	fullValueSize int
@@ -63,11 +63,11 @@ func NewMapFromFD(fd int) (*Map, error) {
 	if fd < 0 {
 		return nil, errors.New("invalid fd")
 	}
-	bpfFd := newBPFFD(uint32(fd))
+	bpfFd := internal.NewFD(uint32(fd))
 
 	name, abi, err := newMapABIFromFd(bpfFd)
 	if err != nil {
-		bpfFd.forget()
+		bpfFd.Forget()
 		return nil, err
 	}
 	return newMap(bpfFd, name, abi)
@@ -95,7 +95,7 @@ func NewMap(spec *MapSpec) (*Map, error) {
 	return createMap(spec, template.fd)
 }
 
-func createMap(spec *MapSpec, inner *bpfFD) (*Map, error) {
+func createMap(spec *MapSpec, inner *internal.FD) (*Map, error) {
 	spec = spec.Copy()
 
 	switch spec.Type {
@@ -136,7 +136,7 @@ func createMap(spec *MapSpec, inner *bpfFD) (*Map, error) {
 
 	if inner != nil {
 		var err error
-		attr.innerMapFd, err = inner.value()
+		attr.innerMapFd, err = inner.Value()
 		if err != nil {
 			return nil, errors.Wrap(err, "map create")
 		}
@@ -147,7 +147,7 @@ func createMap(spec *MapSpec, inner *bpfFD) (*Map, error) {
 		return nil, errors.Wrap(err, "map create")
 	}
 
-	if haveObjName.Result() {
+	if haveObjName() {
 		attr.mapName = name
 	}
 
@@ -159,7 +159,7 @@ func createMap(spec *MapSpec, inner *bpfFD) (*Map, error) {
 	return newMap(fd, spec.Name, newMapABIFromSpec(spec))
 }
 
-func newMap(fd *bpfFD, name string, abi *MapABI) (*Map, error) {
+func newMap(fd *internal.FD, name string, abi *MapABI) (*Map, error) {
 	m := &Map{
 		name,
 		fd,
@@ -252,7 +252,7 @@ func (m *Map) Lookup(key, valueOut interface{}) error {
 // Returns a nil value if a key doesn't exist.
 func (m *Map) LookupBytes(key interface{}) ([]byte, error) {
 	valueBytes := make([]byte, m.fullValueSize)
-	valuePtr := newPtr(unsafe.Pointer(&valueBytes[0]))
+	valuePtr := internal.NewSlicePointer(valueBytes)
 
 	err := m.lookup(key, valuePtr)
 	if IsNotExist(err) {
@@ -262,7 +262,7 @@ func (m *Map) LookupBytes(key interface{}) ([]byte, error) {
 	return valueBytes, err
 }
 
-func (m *Map) lookup(key interface{}, valueOut syscallPtr) error {
+func (m *Map) lookup(key interface{}, valueOut internal.Pointer) error {
 	keyPtr, err := marshalPtr(key, int(m.abi.KeySize))
 	if err != nil {
 		return errors.WithMessage(err, "can't marshal key")
@@ -300,7 +300,7 @@ func (m *Map) Update(key, value interface{}, flags MapUpdateFlags) error {
 		return errors.WithMessage(err, "can't marshal key")
 	}
 
-	var valuePtr syscallPtr
+	var valuePtr internal.Pointer
 	if m.abi.Type.hasPerCPUValue() {
 		valuePtr, err = marshalPerCPUValue(value, int(m.abi.ValueSize))
 	} else {
@@ -351,7 +351,7 @@ func (m *Map) NextKey(key, nextKeyOut interface{}) error {
 // Use Iterate if you want to traverse all entries in the map.
 func (m *Map) NextKeyBytes(key interface{}) ([]byte, error) {
 	nextKey := make([]byte, m.abi.KeySize)
-	nextKeyPtr := newPtr(unsafe.Pointer(&nextKey[0]))
+	nextKeyPtr := internal.NewSlicePointer(nextKey)
 
 	err := m.nextKey(key, nextKeyPtr)
 	if IsNotExist(err) {
@@ -361,9 +361,9 @@ func (m *Map) NextKeyBytes(key interface{}) ([]byte, error) {
 	return nextKey, err
 }
 
-func (m *Map) nextKey(key interface{}, nextKeyOut syscallPtr) error {
+func (m *Map) nextKey(key interface{}, nextKeyOut internal.Pointer) error {
 	var (
-		keyPtr syscallPtr
+		keyPtr internal.Pointer
 		err    error
 	)
 
@@ -396,14 +396,14 @@ func (m *Map) Close() error {
 		return nil
 	}
 
-	return m.fd.close()
+	return m.fd.Close()
 }
 
 // FD gets the file descriptor of the Map.
 //
 // Calling this function is invalid after Close has been called.
 func (m *Map) FD() int {
-	fd, err := m.fd.value()
+	fd, err := m.fd.Value()
 	if err != nil {
 		// Best effort: -1 is the number most likely to be an
 		// invalid file descriptor.
@@ -424,7 +424,7 @@ func (m *Map) Clone() (*Map, error) {
 		return nil, nil
 	}
 
-	dup, err := m.fd.dup()
+	dup, err := m.fd.Dup()
 	if err != nil {
 		return nil, errors.Wrap(err, "can't clone map")
 	}
@@ -450,7 +450,7 @@ func LoadPinnedMap(fileName string) (*Map, error) {
 	}
 	name, abi, err := newMapABIFromFd(fd)
 	if err != nil {
-		_ = fd.close()
+		_ = fd.Close()
 		return nil, err
 	}
 	return newMap(fd, name, abi)
@@ -480,7 +480,7 @@ func unmarshalMap(buf []byte) (*Map, error) {
 
 	name, abi, err := newMapABIFromFd(fd)
 	if err != nil {
-		_ = fd.close()
+		_ = fd.Close()
 		return nil, err
 	}
 
@@ -489,7 +489,7 @@ func unmarshalMap(buf []byte) (*Map, error) {
 
 // MarshalBinary implements BinaryMarshaler.
 func (m *Map) MarshalBinary() ([]byte, error) {
-	fd, err := m.fd.value()
+	fd, err := m.fd.Value()
 	if err != nil {
 		return nil, err
 	}

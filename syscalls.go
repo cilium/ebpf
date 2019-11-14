@@ -1,7 +1,6 @@
 package ebpf
 
 import (
-	"bytes"
 	"path/filepath"
 	"strings"
 	"unsafe"
@@ -365,12 +364,4 @@ func bpfGetProgramFDByID(id uint32) (*internal.FD, error) {
 		return nil, errors.Wrapf(err, "can't get fd for program id %d", id)
 	}
 	return internal.NewFD(uint32(ptr)), nil
-}
-
-func convertCString(in []byte) string {
-	inLen := bytes.IndexByte(in, 0)
-	if inLen == -1 {
-		return ""
-	}
-	return string(in[:inLen])
 }

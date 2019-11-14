@@ -106,10 +106,10 @@ func newProgramABIFromFd(fd *internal.FD) (string, *ProgramABI, error) {
 	}
 
 	var name string
-	if bpfName := convertCString(info.name[:]); bpfName != "" {
+	if bpfName := internal.CString(info.name[:]); bpfName != "" {
 		name = bpfName
 	} else {
-		name = convertCString(info.tag[:])
+		name = internal.CString(info.tag[:])
 	}
 
 	return name, &ProgramABI{

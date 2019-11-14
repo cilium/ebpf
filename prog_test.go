@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/cilium/ebpf/asm"
+	"github.com/cilium/ebpf/internal"
 )
 
 func TestProgramRun(t *testing.T) {
@@ -41,7 +42,12 @@ func TestProgramRun(t *testing.T) {
 
 	t.Log(ins)
 
-	prog, err := NewProgram(&ProgramSpec{"test", XDP, AttachNone, ins, "MIT", 0})
+	prog, err := NewProgram(&ProgramSpec{
+		Name:         "test",
+		Type:         XDP,
+		Instructions: ins,
+		License:      "MIT",
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -164,7 +170,7 @@ func TestProgramName(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if name := convertCString(info.name[:]); name != "test" {
+	if name := internal.CString(info.name[:]); name != "test" {
 		t.Errorf("Name is not test, got '%s'", name)
 	}
 }

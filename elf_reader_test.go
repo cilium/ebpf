@@ -14,7 +14,8 @@ func TestLoadCollectionSpec(t *testing.T) {
 	}
 
 	for _, file := range files {
-		t.Run(file, func(t *testing.T) {
+		name := filepath.Base(file)
+		t.Run(name, func(t *testing.T) {
 			spec, err := LoadCollectionSpec(file)
 			if err != nil {
 				t.Fatal("Can't parse ELF:", err)
@@ -61,9 +62,11 @@ func TestLoadCollectionSpec(t *testing.T) {
 				KernelVersion: 0,
 			})
 
-			t.Log(spec.Programs["xdp_prog"].Instructions)
-
-			coll, err := NewCollection(spec)
+			coll, err := NewCollectionWithOptions(spec, CollectionOptions{
+				Programs: ProgramOptions{
+					LogLevel: 1,
+				},
+			})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -84,6 +87,8 @@ func TestLoadCollectionSpec(t *testing.T) {
 				t.Fatal("Program not returned from DetachProgram")
 			}
 			defer prog.Close()
+
+			t.Log(prog.VerifierLog)
 
 			if _, ok := coll.Programs["xdp_prog"]; ok {
 				t.Error("DetachProgram doesn't remove program from Programs")

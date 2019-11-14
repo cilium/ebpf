@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/cilium/ebpf/asm"
+	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/testutils"
 )
 
@@ -172,7 +173,7 @@ func TestProgramName(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if name := convertCString(info.name[:]); name != "test" {
+	if name := internal.CString(info.name[:]); name != "test" {
 		t.Errorf("Name is not test, got '%s'", name)
 	}
 }

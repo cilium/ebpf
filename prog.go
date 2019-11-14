@@ -10,7 +10,6 @@ import (
 
 	"github.com/cilium/ebpf/asm"
 	"github.com/cilium/ebpf/internal"
-	"github.com/cilium/ebpf/internal/unix"
 
 	"github.com/pkg/errors"
 )
@@ -111,11 +110,10 @@ func NewProgramWithOptions(spec *ProgramSpec, opts ProgramOptions) (*Program, er
 	fd, err := bpfProgLoad(attr)
 	if err == nil {
 		prog := newProgram(fd, spec.Name, &ProgramABI{spec.Type})
-		prog.VerifierLog = convertCString(logBuf)
+		prog.VerifierLog = internal.CString(logBuf)
 		return prog, nil
 	}
 
-	truncated := errors.Cause(err) == unix.ENOSPC
 	if opts.LogLevel == 0 {
 		// Re-run with the verifier enabled to get better error messages.
 		logBuf = make([]byte, logSize)
@@ -123,16 +121,11 @@ func NewProgramWithOptions(spec *ProgramSpec, opts ProgramOptions) (*Program, er
 		attr.logSize = uint32(len(logBuf))
 		attr.logBuf = internal.NewSlicePointer(logBuf)
 
-		_, nerr := bpfProgLoad(attr)
-		truncated = errors.Cause(nerr) == unix.ENOSPC
+		_, logErr := bpfProgLoad(attr)
+		err = internal.ErrorWithLog(err, logBuf, logErr)
 	}
 
-	logs := convertCString(logBuf)
-	if truncated {
-		logs += "\n(truncated...)"
-	}
-
-	return nil, &loadError{err, logs}
+	return nil, errors.Wrap(err, "can't load program")
 }
 
 // NewProgramFromFD creates a program from a raw fd.
@@ -473,22 +466,6 @@ func SanitizeName(name string, replacement rune) string {
 		}
 		return char
 	}, name)
-}
-
-type loadError struct {
-	cause       error
-	verifierLog string
-}
-
-func (le *loadError) Error() string {
-	if le.verifierLog == "" {
-		return fmt.Sprintf("failed to load program: %s", le.cause)
-	}
-	return fmt.Sprintf("failed to load program: %s: %s", le.cause, le.verifierLog)
-}
-
-func (le *loadError) Cause() error {
-	return le.cause
 }
 
 // IsNotSupported returns true if an error occurred because

@@ -523,7 +523,7 @@ func TestMapName(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if name := convertCString(info.mapName[:]); name != "test" {
+	if name := internal.CString(info.mapName[:]); name != "test" {
 		t.Error("Expected name to be test, got", name)
 	}
 }

@@ -53,6 +53,7 @@ func LoadCollectionSpecFromReader(code io.ReaderAt) (*CollectionSpec, error) {
 	var (
 		licenseSection *elf.Section
 		versionSection *elf.Section
+		btfMaps        = make(map[elf.SectionIndex]*elf.Section)
 		progSections   = make(map[elf.SectionIndex]*elf.Section)
 		relSections    = make(map[elf.SectionIndex]*elf.Section)
 		mapSections    = make(map[elf.SectionIndex]*elf.Section)
@@ -66,6 +67,8 @@ func LoadCollectionSpecFromReader(code io.ReaderAt) (*CollectionSpec, error) {
 			versionSection = sec
 		case strings.HasPrefix(sec.Name, "maps"):
 			mapSections[elf.SectionIndex(i)] = sec
+		case sec.Name == ".maps":
+			btfMaps[elf.SectionIndex(i)] = sec
 		case sec.Type == elf.SHT_REL:
 			if int(sec.Info) >= len(ec.Sections) {
 				return nil, errors.Errorf("found relocation section %v for missing section %v", i, sec.Info)
@@ -92,14 +95,14 @@ func LoadCollectionSpecFromReader(code io.ReaderAt) (*CollectionSpec, error) {
 		return nil, errors.Wrap(err, "load version")
 	}
 
-	maps, err := ec.loadMaps(mapSections)
-	if err != nil {
-		return nil, errors.Wrap(err, "load maps")
-	}
-
 	btf, err := btf.LoadSpecFromELF(ec.File)
 	if err != nil {
 		return nil, errors.Wrap(err, "load BTF")
+	}
+
+	maps, err := ec.loadMaps(mapSections, btfMaps, btf)
+	if err != nil {
+		return nil, errors.Wrap(err, "load maps")
 	}
 
 	progs, err := ec.loadPrograms(progSections, relSections, btf)
@@ -170,7 +173,7 @@ func (ec *elfCode) loadPrograms(progSections, relSections map[elf.SectionIndex]*
 		}
 
 		if btf != nil {
-			spec.BTF, err = btf.Section(prog.Name, length)
+			spec.BTF, err = btf.Program(prog.Name, length)
 			if err != nil {
 				return nil, errors.Wrapf(err, "BTF for section %s (program %s)", prog.Name, funcSym)
 			}
@@ -222,11 +225,14 @@ func (ec *elfCode) loadInstructions(section *elf.Section, symbols, relocations m
 	}
 }
 
-func (ec *elfCode) loadMaps(mapSections map[elf.SectionIndex]*elf.Section) (map[string]*MapSpec, error) {
+func (ec *elfCode) loadMaps(mapSections, btfMaps map[elf.SectionIndex]*elf.Section, btfSpec *btf.Spec) (map[string]*MapSpec, error) {
 	var (
 		maps = make(map[string]*MapSpec)
 		b    = make([]byte, 1)
 	)
+
+	// Read old-style maps, where the definition is encoded in a section according
+	// to a well known format.
 	for idx, sec := range mapSections {
 		syms := ec.symbolsPerSection[idx]
 		if len(syms) == 0 {
@@ -284,7 +290,96 @@ func (ec *elfCode) loadMaps(mapSections map[elf.SectionIndex]*elf.Section) (map[
 			maps[mapSym] = &spec
 		}
 	}
+
+	if len(btfMaps) == 0 {
+		return maps, nil
+	}
+
+	if btfSpec == nil {
+		return nil, errors.Errorf("can't parse maps due to missing BTF")
+	}
+
+	// Read BTF maps, where the definition is encoded in the type of the map variable.
+	for idx, sec := range btfMaps {
+		syms := ec.symbolsPerSection[idx]
+		if len(syms) == 0 {
+			return nil, errors.Errorf("section %v: no symbols", sec.Name)
+		}
+
+		for _, sym := range syms {
+			if maps[sym] != nil {
+				return nil, errors.Errorf("section %v: map %v already exists", sec.Name, sym)
+			}
+
+			mapVar, err := btfSpec.FindType(sym, (*btf.Var)(nil))
+			if err != nil {
+				return nil, errors.Wrapf(err, "map %s: can't get BTF", sym)
+			}
+
+			mapStruct, ok := mapVar.(*btf.Var).Type.(*btf.Struct)
+			if !ok {
+				return nil, errors.Errorf("map %s: not a struct", sym)
+			}
+
+			var spec MapSpec
+			for _, member := range mapStruct.Members {
+				switch member.Name {
+				case "type":
+					v, err := uintFromBTF(member.Type)
+					if err != nil {
+						return nil, errors.Wrap(err, "can't get BTF map type")
+					}
+					spec.Type = MapType(v)
+				case "map_flags":
+					v, err := uintFromBTF(member.Type)
+					if err != nil {
+						return nil, errors.Wrap(err, "can't get BTF map flags")
+					}
+					spec.Flags = v
+				case "max_entries":
+					v, err := uintFromBTF(member.Type)
+					if err != nil {
+						return nil, errors.Wrap(err, "can't get BTF map max entries")
+					}
+					spec.MaxEntries = v
+				case "key":
+					size := btf.Sizeof(member.Type)
+					if size < 0 {
+						return nil, errors.Errorf("can't get size of BTF map key")
+					}
+					spec.KeySize = uint32(size)
+				case "value":
+					size := btf.Sizeof(member.Type)
+					if size < 0 {
+						return nil, errors.Errorf("can't get size of BTF map value")
+					}
+					spec.ValueSize = uint32(size)
+				default:
+					return nil, errors.Errorf("unrecognized field %s in BTF map definition", member.Name)
+				}
+			}
+
+			maps[sym] = &spec
+		}
+	}
+
 	return maps, nil
+}
+
+// uintFromBTF resolves the __uint macro, which is a pointer to a sized
+// array, e.g. for int (*foo)[10], this function will return 10.
+func uintFromBTF(typ btf.Type) (uint32, error) {
+	ptr, ok := typ.(*btf.Pointer)
+	if !ok {
+		return 0, errors.Errorf("not a pointer: %v", typ)
+	}
+
+	arr, ok := ptr.Target.(*btf.Array)
+	if !ok {
+		return 0, errors.Errorf("not a pointer to array: %v", typ)
+	}
+
+	return arr.Nelems, nil
 }
 
 func getProgType(v string) (ProgramType, AttachType) {

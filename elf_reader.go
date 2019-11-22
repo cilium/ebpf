@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/cilium/ebpf/asm"
+	"github.com/cilium/ebpf/btf"
 
 	"github.com/pkg/errors"
 )
@@ -18,6 +19,8 @@ type elfCode struct {
 	*elf.File
 	symbols           []elf.Symbol
 	symbolsPerSection map[elf.SectionIndex]map[uint64]string
+	license           string
+	version           uint32
 }
 
 // LoadCollectionSpec parses an ELF file into a CollectionSpec.
@@ -45,12 +48,17 @@ func LoadCollectionSpecFromReader(code io.ReaderAt) (*CollectionSpec, error) {
 		return nil, errors.Wrap(err, "load symbols")
 	}
 
-	ec := &elfCode{f, symbols, symbolsPerSection(symbols)}
+	ec := &elfCode{f, symbols, symbolsPerSection(symbols), "", 0}
 
-	var licenseSection, versionSection *elf.Section
-	progSections := make(map[elf.SectionIndex]*elf.Section)
-	relSections := make(map[elf.SectionIndex]*elf.Section)
-	mapSections := make(map[elf.SectionIndex]*elf.Section)
+	var (
+		licenseSection *elf.Section
+		versionSection *elf.Section
+		btfMaps        = make(map[elf.SectionIndex]*elf.Section)
+		progSections   = make(map[elf.SectionIndex]*elf.Section)
+		relSections    = make(map[elf.SectionIndex]*elf.Section)
+		mapSections    = make(map[elf.SectionIndex]*elf.Section)
+	)
+
 	for i, sec := range ec.Sections {
 		switch {
 		case strings.HasPrefix(sec.Name, "license"):
@@ -59,6 +67,8 @@ func LoadCollectionSpecFromReader(code io.ReaderAt) (*CollectionSpec, error) {
 			versionSection = sec
 		case strings.HasPrefix(sec.Name, "maps"):
 			mapSections[elf.SectionIndex(i)] = sec
+		case sec.Name == ".maps":
+			btfMaps[elf.SectionIndex(i)] = sec
 		case sec.Type == elf.SHT_REL:
 			if int(sec.Info) >= len(ec.Sections) {
 				return nil, errors.Errorf("found relocation section %v for missing section %v", i, sec.Info)
@@ -67,7 +77,7 @@ func LoadCollectionSpecFromReader(code io.ReaderAt) (*CollectionSpec, error) {
 			// Store relocations under the section index of the target
 			idx := elf.SectionIndex(sec.Info)
 			if relSections[idx] != nil {
-				return nil, errors.Errorf("section %d has multiple relocation sections", idx)
+				return nil, errors.Errorf("section %d has multiple relocation sections", sec.Info)
 			}
 			relSections[idx] = sec
 		case sec.Type == elf.SHT_PROGBITS && (sec.Flags&elf.SHF_EXECINSTR) != 0 && sec.Size > 0:
@@ -75,33 +85,29 @@ func LoadCollectionSpecFromReader(code io.ReaderAt) (*CollectionSpec, error) {
 		}
 	}
 
-	license, err := loadLicense(licenseSection)
+	ec.license, err = loadLicense(licenseSection)
 	if err != nil {
 		return nil, errors.Wrap(err, "load license")
 	}
 
-	version, err := loadVersion(versionSection, ec.ByteOrder)
+	ec.version, err = loadVersion(versionSection, ec.ByteOrder)
 	if err != nil {
 		return nil, errors.Wrap(err, "load version")
 	}
 
-	maps, err := ec.loadMaps(mapSections)
+	btf, err := btf.LoadSpecFromELF(ec.File)
+	if err != nil {
+		return nil, errors.Wrap(err, "load BTF")
+	}
+
+	maps, err := ec.loadMaps(mapSections, btfMaps, btf)
 	if err != nil {
 		return nil, errors.Wrap(err, "load maps")
 	}
 
-	progs, libs, err := ec.loadPrograms(progSections, relSections, license, version)
+	progs, err := ec.loadPrograms(progSections, relSections, btf)
 	if err != nil {
 		return nil, errors.Wrap(err, "load programs")
-	}
-
-	if len(libs) > 0 {
-		for name, prog := range progs {
-			prog.Instructions, err = link(prog.Instructions, libs...)
-			if err != nil {
-				return nil, errors.Wrapf(err, "program %s", name)
-			}
-		}
 	}
 
 	return &CollectionSpec{maps, progs}, nil
@@ -128,52 +134,74 @@ func loadVersion(sec *elf.Section, bo binary.ByteOrder) (uint32, error) {
 	return version, errors.Wrapf(err, "section %s", sec.Name)
 }
 
-func (ec *elfCode) loadPrograms(progSections, relSections map[elf.SectionIndex]*elf.Section, license string, version uint32) (map[string]*ProgramSpec, []asm.Instructions, error) {
+func (ec *elfCode) loadPrograms(progSections, relSections map[elf.SectionIndex]*elf.Section, btf *btf.Spec) (map[string]*ProgramSpec, error) {
 	var (
-		progs = make(map[string]*ProgramSpec)
-		libs  []asm.Instructions
+		progs []*ProgramSpec
+		libs  []*ProgramSpec
 	)
+
 	for idx, prog := range progSections {
 		syms := ec.symbolsPerSection[idx]
 		if len(syms) == 0 {
-			return nil, nil, errors.Errorf("section %v: missing symbols", prog.Name)
+			return nil, errors.Errorf("section %v: missing symbols", prog.Name)
 		}
 
 		funcSym := syms[0]
 		if funcSym == "" {
-			return nil, nil, errors.Errorf("section %v: no label at start", prog.Name)
+			return nil, errors.Errorf("section %v: no label at start", prog.Name)
 		}
 
 		rels, err := ec.loadRelocations(relSections[idx])
 		if err != nil {
-			return nil, nil, errors.Wrapf(err, "program %s: can't load relocations", funcSym)
+			return nil, errors.Wrapf(err, "program %s: can't load relocations", funcSym)
 		}
 
-		insns, err := ec.loadInstructions(prog, syms, rels)
+		insns, length, err := ec.loadInstructions(prog, syms, rels)
 		if err != nil {
-			return nil, nil, errors.Wrapf(err, "program %s: can't unmarshal instructions", funcSym)
+			return nil, errors.Wrapf(err, "program %s: can't unmarshal instructions", funcSym)
 		}
 
-		if progType, attachType := getProgType(prog.Name); progType == UnspecifiedProgram {
+		progType, attachType := getProgType(prog.Name)
+
+		spec := &ProgramSpec{
+			Name:          funcSym,
+			Type:          progType,
+			AttachType:    attachType,
+			License:       ec.license,
+			KernelVersion: ec.version,
+			Instructions:  insns,
+		}
+
+		if btf != nil {
+			spec.BTF, err = btf.Program(prog.Name, length)
+			if err != nil {
+				return nil, errors.Wrapf(err, "BTF for section %s (program %s)", prog.Name, funcSym)
+			}
+		}
+
+		if spec.Type == UnspecifiedProgram {
 			// There is no single name we can use for "library" sections,
 			// since they may contain multiple functions. We'll decode the
 			// labels they contain later on, and then link sections that way.
-			libs = append(libs, insns)
+			libs = append(libs, spec)
 		} else {
-			progs[funcSym] = &ProgramSpec{
-				Name:          funcSym,
-				Type:          progType,
-				AttachType:    attachType,
-				License:       license,
-				KernelVersion: version,
-				Instructions:  insns,
-			}
+			progs = append(progs, spec)
 		}
 	}
-	return progs, libs, nil
+
+	res := make(map[string]*ProgramSpec, len(progs))
+	for _, prog := range progs {
+		err := link(prog, libs)
+		if err != nil {
+			return nil, errors.Wrapf(err, "program %s", prog.Name)
+		}
+		res[prog.Name] = prog
+	}
+
+	return res, nil
 }
 
-func (ec *elfCode) loadInstructions(section *elf.Section, symbols, relocations map[uint64]string) (asm.Instructions, error) {
+func (ec *elfCode) loadInstructions(section *elf.Section, symbols, relocations map[uint64]string) (asm.Instructions, uint64, error) {
 	var (
 		r      = section.Open()
 		insns  asm.Instructions
@@ -183,10 +211,10 @@ func (ec *elfCode) loadInstructions(section *elf.Section, symbols, relocations m
 	for {
 		n, err := ins.Unmarshal(r, ec.ByteOrder)
 		if err == io.EOF {
-			return insns, nil
+			return insns, offset, nil
 		}
 		if err != nil {
-			return nil, errors.Wrapf(err, "offset %d", offset)
+			return nil, 0, errors.Wrapf(err, "offset %d", offset)
 		}
 
 		ins.Symbol = symbols[offset]
@@ -197,11 +225,14 @@ func (ec *elfCode) loadInstructions(section *elf.Section, symbols, relocations m
 	}
 }
 
-func (ec *elfCode) loadMaps(mapSections map[elf.SectionIndex]*elf.Section) (map[string]*MapSpec, error) {
+func (ec *elfCode) loadMaps(mapSections, btfMaps map[elf.SectionIndex]*elf.Section, btfSpec *btf.Spec) (map[string]*MapSpec, error) {
 	var (
 		maps = make(map[string]*MapSpec)
 		b    = make([]byte, 1)
 	)
+
+	// Read old-style maps, where the definition is encoded in a section according
+	// to a well known format.
 	for idx, sec := range mapSections {
 		syms := ec.symbolsPerSection[idx]
 		if len(syms) == 0 {
@@ -259,7 +290,96 @@ func (ec *elfCode) loadMaps(mapSections map[elf.SectionIndex]*elf.Section) (map[
 			maps[mapSym] = &spec
 		}
 	}
+
+	if len(btfMaps) == 0 {
+		return maps, nil
+	}
+
+	if btfSpec == nil {
+		return nil, errors.Errorf("can't parse maps due to missing BTF")
+	}
+
+	// Read BTF maps, where the definition is encoded in the type of the map variable.
+	for idx, sec := range btfMaps {
+		syms := ec.symbolsPerSection[idx]
+		if len(syms) == 0 {
+			return nil, errors.Errorf("section %v: no symbols", sec.Name)
+		}
+
+		for _, sym := range syms {
+			if maps[sym] != nil {
+				return nil, errors.Errorf("section %v: map %v already exists", sec.Name, sym)
+			}
+
+			mapVar, err := btfSpec.FindType(sym, (*btf.Var)(nil))
+			if err != nil {
+				return nil, errors.Wrapf(err, "map %s: can't get BTF", sym)
+			}
+
+			mapStruct, ok := mapVar.(*btf.Var).Type.(*btf.Struct)
+			if !ok {
+				return nil, errors.Errorf("map %s: not a struct", sym)
+			}
+
+			var spec MapSpec
+			for _, member := range mapStruct.Members {
+				switch member.Name {
+				case "type":
+					v, err := uintFromBTF(member.Type)
+					if err != nil {
+						return nil, errors.Wrap(err, "can't get BTF map type")
+					}
+					spec.Type = MapType(v)
+				case "map_flags":
+					v, err := uintFromBTF(member.Type)
+					if err != nil {
+						return nil, errors.Wrap(err, "can't get BTF map flags")
+					}
+					spec.Flags = v
+				case "max_entries":
+					v, err := uintFromBTF(member.Type)
+					if err != nil {
+						return nil, errors.Wrap(err, "can't get BTF map max entries")
+					}
+					spec.MaxEntries = v
+				case "key":
+					size := btf.Sizeof(member.Type)
+					if size < 0 {
+						return nil, errors.Errorf("can't get size of BTF map key")
+					}
+					spec.KeySize = uint32(size)
+				case "value":
+					size := btf.Sizeof(member.Type)
+					if size < 0 {
+						return nil, errors.Errorf("can't get size of BTF map value")
+					}
+					spec.ValueSize = uint32(size)
+				default:
+					return nil, errors.Errorf("unrecognized field %s in BTF map definition", member.Name)
+				}
+			}
+
+			maps[sym] = &spec
+		}
+	}
+
 	return maps, nil
+}
+
+// uintFromBTF resolves the __uint macro, which is a pointer to a sized
+// array, e.g. for int (*foo)[10], this function will return 10.
+func uintFromBTF(typ btf.Type) (uint32, error) {
+	ptr, ok := typ.(*btf.Pointer)
+	if !ok {
+		return 0, errors.Errorf("not a pointer: %v", typ)
+	}
+
+	arr, ok := ptr.Target.(*btf.Array)
+	if !ok {
+		return 0, errors.Errorf("not a pointer to array: %v", typ)
+	}
+
+	return arr.Nelems, nil
 }
 
 func getProgType(v string) (ProgramType, AttachType) {

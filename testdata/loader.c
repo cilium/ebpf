@@ -18,7 +18,7 @@ struct bpf_map_def hash_map2 __section("maps") = {
 	.key_size    = 4,
 	.value_size  = 1,
 	.max_entries = 2,
-	.map_flags       = BPF_F_NO_PREALLOC,
+	.map_flags   = BPF_F_NO_PREALLOC,
 };
 
 struct bpf_map_def array_of_hash_map __section("maps") = {
@@ -32,6 +32,17 @@ struct bpf_map_def hash_of_hash_map __section("maps") = {
 	.key_size = sizeof(uint32_t),
 	.max_entries = 2,
 };
+
+#if __clang_major__ >= 9
+// Clang < 9 doesn't emit the necessary BTF for this to work.
+struct {
+	__uint(type, BPF_MAP_TYPE_ARRAY);
+	__type(key, uint32_t);
+	__type(value, uint32_t);
+	__uint(max_entries, 1);
+	__uint(map_flags, BPF_F_NO_PREALLOC);
+} btf_map __section(".maps");
+#endif
 
 int __attribute__((noinline)) helper_func2(int arg) {
 	return arg > 5;

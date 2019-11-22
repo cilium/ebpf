@@ -7,6 +7,7 @@ import (
 	"io"
 	"io/ioutil"
 	"math"
+	"reflect"
 	"unsafe"
 
 	"github.com/cilium/ebpf/internal"
@@ -19,6 +20,7 @@ const btfMagic = 0xeB9F
 // Spec represents decoded BTF.
 type Spec struct {
 	rawBTF    []byte
+	types     map[string][]Type
 	funcInfos map[string]extInfo
 	lineInfos map[string]extInfo
 }
@@ -116,10 +118,14 @@ func LoadSpecFromReader(btf, btfExt io.ReadSeeker, bo binary.ByteOrder) (*Spec, 
 		return nil, errors.Wrap(err, "can't seek to start of type section")
 	}
 
-	// TODO: Make the types available in the Spec
-	_, err = readTypes(io.LimitReader(rd, int64(header.TypeLen)), bo)
+	rawTypes, err := readTypes(io.LimitReader(rd, int64(header.TypeLen)), bo)
 	if err != nil {
 		return nil, errors.Wrap(err, "can't read types")
+	}
+
+	types, err := inflateRawTypes(rawTypes, strings)
+	if err != nil {
+		return nil, err
 	}
 
 	var (
@@ -135,6 +141,7 @@ func LoadSpecFromReader(btf, btfExt io.ReadSeeker, bo binary.ByteOrder) (*Spec, 
 
 	return &Spec{
 		rawBTF:    rawBTF,
+		types:     types,
 		funcInfos: funcInfos,
 		lineInfos: lineInfos,
 	}, nil
@@ -158,6 +165,36 @@ func (s *Spec) Program(name string, length uint64) (*Program, error) {
 	}
 
 	return &Program{s, length, funcInfos, lineInfos}, nil
+}
+
+func (s *Spec) FindType(name string, typ Type) (Type, error) {
+	types := s.types[name]
+	if len(types) == 0 {
+		return nil, errors.New("not found")
+	}
+
+	var (
+		wanted    = reflect.TypeOf(typ)
+		candidate Type
+	)
+
+	for _, typ := range types {
+		if reflect.TypeOf(typ) != wanted {
+			continue
+		}
+
+		if candidate != nil {
+			return nil, errors.Errorf("multiple candidates for %T %s", typ, name)
+		}
+
+		candidate = typ
+	}
+
+	if candidate == nil {
+		return nil, errors.New("not found")
+	}
+
+	return candidate, nil
 }
 
 type BTF struct {

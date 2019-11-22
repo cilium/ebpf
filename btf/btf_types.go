@@ -98,6 +98,11 @@ func (bt *btfType) Type() btfTypeID {
 	return btfTypeID(bt.SizeType)
 }
 
+func (bt *btfType) Size() uint32 {
+	// TODO: Panic here if wrong kind?
+	return bt.SizeType
+}
+
 type rawType struct {
 	btfType
 	data interface{}

@@ -27,9 +27,18 @@ func TestParseVmlinux(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	_, err = LoadSpecFromReader(bytes.NewReader(buf), nil, binary.LittleEndian)
+	s, err := LoadSpecFromReader(bytes.NewReader(buf), nil, binary.LittleEndian)
 	if err != nil {
 		t.Error("Can't load BTF:", err)
+	}
+
+	attr, err := s.FindType("bpf_attr", (*Union)(nil))
+	if err != nil {
+		t.Fatal("Can't find btf_attr:", err)
+	}
+
+	if name := attr.(*Union).Name; name != "bpf_attr" {
+		t.Error("struct bpf_attr has incorrect name:", name)
 	}
 }
 

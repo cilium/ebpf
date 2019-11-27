@@ -9,6 +9,7 @@ import (
 	"unsafe"
 
 	"github.com/cilium/ebpf/asm"
+	"github.com/cilium/ebpf/btf"
 	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/unix"
 
@@ -46,6 +47,11 @@ type ProgramSpec struct {
 	Instructions  asm.Instructions
 	License       string
 	KernelVersion uint32
+
+	// The BTF associated with this program. Changing Instructions
+	// will most likely invalidate the contained data, and may
+	// result in errors when attempting to load it into the kernel.
+	BTF *btf.Program
 }
 
 // Copy returns a copy of the spec.
@@ -86,7 +92,20 @@ func NewProgram(spec *ProgramSpec) (*Program, error) {
 // Loading a program for the first time will perform
 // feature detection by loading small, temporary programs.
 func NewProgramWithOptions(spec *ProgramSpec, opts ProgramOptions) (*Program, error) {
-	attr, err := convertProgramSpec(spec)
+	if spec.BTF == nil {
+		return newProgramWithBTF(spec, nil, opts)
+	}
+
+	handle, err := btf.NewHandle(spec.BTF.Spec())
+	if err != nil && !btf.IsNotSupported(err) {
+		return nil, errors.Wrap(err, "can't load BTF")
+	}
+
+	return newProgramWithBTF(spec, handle, opts)
+}
+
+func newProgramWithBTF(spec *ProgramSpec, btf *btf.Handle, opts ProgramOptions) (*Program, error) {
+	attr, err := convertProgramSpec(spec, btf)
 	if err != nil {
 		return nil, err
 	}
@@ -153,7 +172,7 @@ func newProgram(fd *internal.FD, name string, abi *ProgramABI) *Program {
 	}
 }
 
-func convertProgramSpec(spec *ProgramSpec) (*bpfProgLoadAttr, error) {
+func convertProgramSpec(spec *ProgramSpec, btf *btf.Handle) (*bpfProgLoadAttr, error) {
 	if len(spec.Instructions) == 0 {
 		return nil, errors.New("Instructions cannot be empty")
 	}
@@ -175,7 +194,7 @@ func convertProgramSpec(spec *ProgramSpec) (*bpfProgLoadAttr, error) {
 		expectedAttachType: spec.AttachType,
 		insCount:           insCount,
 		instructions:       internal.NewSlicePointer(bytecode),
-		license:            internal.NewSlicePointer([]byte(spec.License)),
+		license:            internal.NewStringPointer(spec.License),
 	}
 
 	name, err := newBPFObjName(spec.Name)
@@ -185,6 +204,26 @@ func convertProgramSpec(spec *ProgramSpec) (*bpfProgLoadAttr, error) {
 
 	if haveObjName() == nil {
 		attr.progName = name
+	}
+
+	if btf != nil && spec.BTF != nil {
+		attr.progBTFFd = uint32(btf.FD())
+
+		recSize, bytes, err := spec.BTF.LineInfos()
+		if err != nil {
+			return nil, errors.Wrap(err, "can't get BTF line infos")
+		}
+		attr.lineInfoRecSize = recSize
+		attr.lineInfoCnt = uint32(uint64(len(bytes)) / uint64(recSize))
+		attr.lineInfo = internal.NewSlicePointer(bytes)
+
+		recSize, bytes, err = spec.BTF.FuncInfos()
+		if err != nil {
+			return nil, errors.Wrap(err, "can't get BTF function infos")
+		}
+		attr.funcInfoRecSize = recSize
+		attr.funcInfoCnt = uint32(uint64(len(bytes)) / uint64(recSize))
+		attr.funcInfo = internal.NewSlicePointer(bytes)
 	}
 
 	return attr, nil

@@ -43,7 +43,12 @@ func TestProgramRun(t *testing.T) {
 
 	t.Log(ins)
 
-	prog, err := NewProgram(&ProgramSpec{"test", XDP, AttachNone, ins, "MIT", 0})
+	prog, err := NewProgram(&ProgramSpec{
+		Name:         "test",
+		Type:         XDP,
+		Instructions: ins,
+		License:      "MIT",
+	})
 	if err != nil {
 		t.Fatal(err)
 	}

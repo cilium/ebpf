@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/cilium/ebpf/asm"
+	"github.com/cilium/ebpf/internal"
 
 	"github.com/pkg/errors"
 )
@@ -198,10 +199,7 @@ func (ec *elfCode) loadInstructions(section *elf.Section, symbols, relocations m
 }
 
 func (ec *elfCode) loadMaps(mapSections map[elf.SectionIndex]*elf.Section) (map[string]*MapSpec, error) {
-	var (
-		maps = make(map[string]*MapSpec)
-		b    = make([]byte, 1)
-	)
+	var maps = make(map[string]*MapSpec)
 	for idx, sec := range mapSections {
 		syms := ec.symbolsPerSection[idx]
 		if len(syms) == 0 {
@@ -243,17 +241,8 @@ func (ec *elfCode) loadMaps(mapSections map[elf.SectionIndex]*elf.Section) (map[
 				return nil, errors.Errorf("map %v: missing flags", mapSym)
 			}
 
-			for {
-				_, err := lr.Read(b)
-				if err == io.EOF {
-					break
-				}
-				if err != nil {
-					return nil, err
-				}
-				if b[0] != 0 {
-					return nil, errors.Errorf("map %v: unknown and non-zero fields in definition", mapSym)
-				}
+			if _, err := io.Copy(internal.DiscardZeroes{}, lr); err != nil {
+				return nil, errors.Errorf("map %v: unknown and non-zero fields in definition", mapSym)
 			}
 
 			maps[mapSym] = &spec

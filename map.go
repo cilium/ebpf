@@ -3,6 +3,7 @@ package ebpf
 import (
 	"fmt"
 
+	"github.com/cilium/ebpf/btf"
 	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/unix"
 
@@ -19,8 +20,12 @@ type MapSpec struct {
 	ValueSize  uint32
 	MaxEntries uint32
 	Flags      uint32
+
 	// InnerMap is used as a template for ArrayOfMaps and HashOfMaps
 	InnerMap *MapSpec
+
+	// The BTF associated with this map.
+	BTF *btf.Map
 }
 
 func (ms *MapSpec) String() string {
@@ -77,24 +82,37 @@ func NewMapFromFD(fd int) (*Map, error) {
 // Creating a map for the first time will perform feature detection
 // by creating small, temporary maps.
 func NewMap(spec *MapSpec) (*Map, error) {
+	if spec.BTF == nil {
+		return newMapWithBTF(spec, nil)
+	}
+
+	handle, err := btf.NewHandle(spec.BTF.Spec())
+	if err != nil && !btf.IsNotSupported(err) {
+		return nil, errors.Wrap(err, "can't load BTF")
+	}
+
+	return newMapWithBTF(spec, handle)
+}
+
+func newMapWithBTF(spec *MapSpec, handle *btf.Handle) (*Map, error) {
 	if spec.Type != ArrayOfMaps && spec.Type != HashOfMaps {
-		return createMap(spec, nil)
+		return createMap(spec, nil, handle)
 	}
 
 	if spec.InnerMap == nil {
 		return nil, errors.Errorf("%s requires InnerMap", spec.Type)
 	}
 
-	template, err := createMap(spec.InnerMap, nil)
+	template, err := createMap(spec.InnerMap, nil, handle)
 	if err != nil {
 		return nil, err
 	}
 	defer template.Close()
 
-	return createMap(spec, template.fd)
+	return createMap(spec, template.fd, handle)
 }
 
-func createMap(spec *MapSpec, inner *internal.FD) (*Map, error) {
+func createMap(spec *MapSpec, inner *internal.FD, btf *btf.Handle) (*Map, error) {
 	spec = spec.Copy()
 
 	switch spec.Type {
@@ -139,6 +157,12 @@ func createMap(spec *MapSpec, inner *internal.FD) (*Map, error) {
 		if err != nil {
 			return nil, errors.Wrap(err, "map create")
 		}
+	}
+
+	if btf != nil && spec.BTF != nil {
+		attr.btfFd = uint32(btf.FD())
+		attr.btfKeyTypeID = spec.BTF.Key().ID()
+		attr.btfValueTypeID = spec.BTF.Value().ID()
 	}
 
 	name, err := newBPFObjName(spec.Name)

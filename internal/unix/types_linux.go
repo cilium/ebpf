@@ -117,3 +117,11 @@ type PerfEventAttr = linux.PerfEventAttr
 func PerfEventOpen(attr *PerfEventAttr, pid int, cpu int, groupFd int, flags int) (fd int, err error) {
 	return linux.PerfEventOpen(attr, pid, cpu, groupFd, flags)
 }
+
+// Utsname is a wrapper
+type Utsname = linux.Utsname
+
+// Uname is a wrapper
+func Uname(buf *Utsname) (err error) {
+	return linux.Uname(buf)
+}

@@ -12,6 +12,7 @@ import (
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/asm"
 	"github.com/cilium/ebpf/internal"
+	"github.com/cilium/ebpf/internal/testutils"
 	"github.com/cilium/ebpf/internal/unix"
 )
 
@@ -42,6 +43,7 @@ func TestPerfReader(t *testing.T) {
 	defer rd.Close()
 
 	ret, _, err := prog.Test(make([]byte, 14))
+	testutils.SkipIfNotSupported(t, err)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -218,6 +220,7 @@ func TestPerfReaderLostSample(t *testing.T) {
 	defer rd.Close()
 
 	ret, _, err := prog.Test(make([]byte, 14))
+	testutils.SkipIfNotSupported(t, err)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -322,6 +325,7 @@ func TestPause(t *testing.T) {
 
 	// Write a sample. The reader should read it.
 	ret, _, err := prog.Test(make([]byte, 14))
+	testutils.SkipIfNotSupported(t, err)
 	if err != nil || ret != 0 {
 		t.Fatal("Can't write sample")
 	}
@@ -467,6 +471,4 @@ func ExampleReader() {
 
 	// Data is padded with 0 for alignment
 	fmt.Println("Sample:", record.RawSample)
-
-	// Output: Sample: [1 2 3 4 4 0 0 0 0 0 0 0]
 }

@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/cilium/ebpf/asm"
+	"github.com/cilium/ebpf/internal/testutils"
 )
 
 func TestLink(t *testing.T) {
@@ -24,6 +25,8 @@ func TestLink(t *testing.T) {
 	}
 
 	t.Log(insns)
+
+	testutils.SkipOnOldKernel(t, "4.16", "bpf2bpf calls")
 
 	prog, err := NewProgram(&ProgramSpec{
 		Type:         XDP,

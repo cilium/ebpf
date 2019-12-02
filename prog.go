@@ -134,6 +134,8 @@ func NewProgramWithOptions(spec *ProgramSpec, opts ProgramOptions) (*Program, er
 // NewProgramFromFD creates a program from a raw fd.
 //
 // You should not use fd after calling this function.
+//
+// Requires at least Linux 4.11.
 func NewProgramFromFD(fd int) (*Program, error) {
 	if fd < 0 {
 		return nil, errors.New("invalid fd")
@@ -445,6 +447,8 @@ func (p *Program) Detach(fd int, typ AttachType, flags AttachFlags) error {
 }
 
 // LoadPinnedProgram loads a Program from a BPF file.
+//
+// Requires at least Linux 4.11.
 func LoadPinnedProgram(fileName string) (*Program, error) {
 	fd, err := bpfGetObject(fileName)
 	if err != nil {
@@ -454,7 +458,7 @@ func LoadPinnedProgram(fileName string) (*Program, error) {
 	name, abi, err := newProgramABIFromFd(fd)
 	if err != nil {
 		_ = fd.close()
-		return nil, err
+		return nil, errors.Wrapf(err, "can't get ABI for %s", fileName)
 	}
 
 	return newProgram(fd, name, abi), nil

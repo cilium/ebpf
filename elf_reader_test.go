@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"reflect"
 	"testing"
+
+	"github.com/cilium/ebpf/internal/testutils"
 )
 
 func TestLoadCollectionSpec(t *testing.T) {
@@ -61,33 +63,12 @@ func TestLoadCollectionSpec(t *testing.T) {
 				KernelVersion: 0,
 			})
 
-			t.Log(spec.Programs["xdp_prog"].Instructions)
-
 			coll, err := NewCollection(spec)
+			testutils.SkipIfNotSupported(t, err)
 			if err != nil {
 				t.Fatal(err)
 			}
 			defer coll.Close()
-
-			hash := coll.DetachMap("hash_map")
-			if hash == nil {
-				t.Fatal("Program not returned from DetachMap")
-			}
-			defer hash.Close()
-
-			if _, ok := coll.Programs["hash_map"]; ok {
-				t.Error("DetachMap doesn't remove map from Maps")
-			}
-
-			prog := coll.DetachProgram("xdp_prog")
-			if prog == nil {
-				t.Fatal("Program not returned from DetachProgram")
-			}
-			defer prog.Close()
-
-			if _, ok := coll.Programs["xdp_prog"]; ok {
-				t.Error("DetachProgram doesn't remove program from Programs")
-			}
 		})
 	}
 }
@@ -160,6 +141,35 @@ func checkProgramSpec(t *testing.T, progs map[string]*ProgramSpec, name string, 
 		t.Log("Actual program")
 		t.Log(want.Instructions)
 		t.Error("Instructions do not match")
+	}
+}
+
+func TestCollectionSpecDetach(t *testing.T) {
+	coll := Collection{
+		Maps: map[string]*Map{
+			"foo": new(Map),
+		},
+		Programs: map[string]*Program{
+			"bar": new(Program),
+		},
+	}
+
+	foo := coll.DetachMap("foo")
+	if foo == nil {
+		t.Error("Program not returned from DetachMap")
+	}
+
+	if _, ok := coll.Programs["foo"]; ok {
+		t.Error("DetachMap doesn't remove map from Maps")
+	}
+
+	bar := coll.DetachProgram("bar")
+	if bar == nil {
+		t.Fatal("Program not returned from DetachProgram")
+	}
+
+	if _, ok := coll.Programs["bar"]; ok {
+		t.Error("DetachProgram doesn't remove program from Programs")
 	}
 }
 

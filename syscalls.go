@@ -8,6 +8,7 @@ import (
 	"strings"
 	"unsafe"
 
+	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/unix"
 
 	"github.com/pkg/errors"
@@ -226,6 +227,34 @@ func bpfMapCreate(attr *bpfMapCreateAttr) (*bpfFD, error) {
 	return newBPFFD(uint32(fd)), nil
 }
 
+var haveNestedMaps = internal.FeatureTest("nested maps", "4.12", func() bool {
+	inner, err := bpfMapCreate(&bpfMapCreateAttr{
+		mapType:    Array,
+		keySize:    4,
+		valueSize:  4,
+		maxEntries: 1,
+	})
+	if err != nil {
+		return false
+	}
+	defer inner.close()
+
+	innerFd, _ := inner.value()
+	nested, err := bpfMapCreate(&bpfMapCreateAttr{
+		mapType:    ArrayOfMaps,
+		keySize:    4,
+		valueSize:  4,
+		maxEntries: 1,
+		innerMapFd: innerFd,
+	})
+	if err != nil {
+		return false
+	}
+
+	_ = nested.close()
+	return true
+})
+
 func bpfMapLookupElem(m *bpfFD, key, valueOut syscallPtr) error {
 	fd, err := m.value()
 	if err != nil {
@@ -345,35 +374,33 @@ func bpfGetProgInfoByFD(fd *bpfFD) (*bpfProgInfo, error) {
 func bpfGetMapInfoByFD(fd *bpfFD) (*bpfMapInfo, error) {
 	var info bpfMapInfo
 	err := bpfGetObjectInfoByFD(fd, unsafe.Pointer(&info), unsafe.Sizeof(info))
-	return &info, errors.Wrap(err, "can't get map info:")
+	return &info, errors.Wrap(err, "can't get map info")
 }
 
-var haveObjName = featureTest{
-	Fn: func() bool {
-		name, err := newBPFObjName("feature_test")
-		if err != nil {
-			// This really is a fatal error, but it should be caught
-			// by the unit tests not working.
-			return false
-		}
+var haveObjName = internal.FeatureTest("object names", "4.15", func() bool {
+	name, err := newBPFObjName("feature_test")
+	if err != nil {
+		// This really is a fatal error, but it should be caught
+		// by the unit tests not working.
+		return false
+	}
 
-		attr := bpfMapCreateAttr{
-			mapType:    Array,
-			keySize:    4,
-			valueSize:  4,
-			maxEntries: 1,
-			mapName:    name,
-		}
+	attr := bpfMapCreateAttr{
+		mapType:    Array,
+		keySize:    4,
+		valueSize:  4,
+		maxEntries: 1,
+		mapName:    name,
+	}
 
-		fd, err := bpfMapCreate(&attr)
-		if err != nil {
-			return false
-		}
+	fd, err := bpfMapCreate(&attr)
+	if err != nil {
+		return false
+	}
 
-		_ = fd.close()
-		return true
-	},
-}
+	_ = fd.close()
+	return true
+})
 
 func bpfGetMapFDByID(id uint32) (*bpfFD, error) {
 	// available from 4.13

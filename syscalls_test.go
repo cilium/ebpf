@@ -2,6 +2,8 @@ package ebpf
 
 import (
 	"testing"
+
+	"github.com/cilium/ebpf/internal/testutils"
 )
 
 func TestObjName(t *testing.T) {
@@ -20,4 +22,12 @@ func TestObjName(t *testing.T) {
 			t.Errorf("Name '%s' is not null terminated", name)
 		}
 	}
+}
+
+func TestHaveObjName(t *testing.T) {
+	testutils.CheckFeatureTest(t, haveObjName)
+}
+
+func TestHaveNestedMaps(t *testing.T) {
+	testutils.CheckFeatureTest(t, haveNestedMaps)
 }

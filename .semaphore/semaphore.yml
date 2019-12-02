@@ -30,3 +30,6 @@ blocks:
       - name: Test on 4.19.81
         commands:
           - timeout -s KILL 60s ./run-tests.sh 4.19.81
+      - name: Test on 4.9.198
+        commands:
+          - timeout -s KILL 60s ./run-tests.sh 4.9.198

@@ -11,6 +11,7 @@ import (
 	"unsafe"
 
 	"github.com/cilium/ebpf/internal"
+	"github.com/cilium/ebpf/internal/testutils"
 	"github.com/cilium/ebpf/internal/unix"
 
 	"github.com/pkg/errors"
@@ -168,6 +169,7 @@ func TestMapInMap(t *testing.T) {
 			defer inner.Close()
 
 			outer, err := NewMap(spec)
+			testutils.SkipIfNotSupported(t, err)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -218,6 +220,7 @@ func TestNewMapInMapFromFD(t *testing.T) {
 			MaxEntries: 2,
 		},
 	})
+	testutils.SkipIfNotSupported(t, err)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -257,6 +260,7 @@ func createMapInMap(t *testing.T, typ MapType) *Map {
 	}
 
 	m, err := NewMap(spec)
+	testutils.SkipIfNotSupported(t, err)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -277,14 +281,19 @@ func TestMapInMapValueSize(t *testing.T) {
 		},
 	}
 
-	if _, err := NewMap(spec); err != nil {
+	m, err := NewMap(spec)
+	testutils.SkipIfNotSupported(t, err)
+	if err != nil {
 		t.Fatal(err)
 	}
+	m.Close()
 
 	spec.ValueSize = 4
-	if _, err := NewMap(spec); err != nil {
+	m, err = NewMap(spec)
+	if err != nil {
 		t.Fatal(err)
 	}
+	m.Close()
 
 	spec.ValueSize = 1
 	if _, err := NewMap(spec); err == nil {
@@ -506,6 +515,10 @@ func TestMapMarshalUnsafe(t *testing.T) {
 }
 
 func TestMapName(t *testing.T) {
+	if err := haveObjName(); err != nil {
+		t.Skip(err)
+	}
+
 	m, err := NewMap(&MapSpec{
 		Name:       "test",
 		Type:       Array,

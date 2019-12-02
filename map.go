@@ -102,6 +102,10 @@ func createMap(spec *MapSpec, inner *bpfFD) (*Map, error) {
 	case ArrayOfMaps:
 		fallthrough
 	case HashOfMaps:
+		if err := haveNestedMaps(); err != nil {
+			return nil, err
+		}
+
 		if spec.ValueSize != 0 && spec.ValueSize != 4 {
 			return nil, errors.Errorf("ValueSize must be zero or four for map of map")
 		}

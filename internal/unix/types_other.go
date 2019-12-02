@@ -181,3 +181,13 @@ type PerfEventAttr struct {
 func PerfEventOpen(attr *PerfEventAttr, pid int, cpu int, groupFd int, flags int) (fd int, err error) {
 	return 0, errNonLinux
 }
+
+// Utsname is a wrapper
+type Utsname struct {
+    Release    [65]byte
+}
+
+// Uname is a wrapper
+func Uname(buf *Utsname) (err error) {
+	return errNonLinux
+}

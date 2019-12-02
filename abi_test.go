@@ -1,6 +1,7 @@
 package ebpf
 
 import (
+	"github.com/cilium/ebpf/internal/testutils"
 	"testing"
 )
 
@@ -71,6 +72,7 @@ func TestMapABIFromProc(t *testing.T) {
 			MaxEntries: 2,
 		},
 	})
+	testutils.SkipIfNotSupported(t, err)
 	if err != nil {
 		t.Fatal(err)
 	}

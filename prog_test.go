@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/cilium/ebpf/asm"
+	"github.com/cilium/ebpf/internal/testutils"
 )
 
 func TestProgramRun(t *testing.T) {
@@ -57,6 +58,7 @@ func TestProgramRun(t *testing.T) {
 	prog = p2
 
 	ret, out, err := prog.Test(buf)
+	testutils.SkipIfNotSupported(t, err)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -75,6 +77,7 @@ func TestProgramBenchmark(t *testing.T) {
 	defer prog.Close()
 
 	ret, duration, err := prog.Benchmark(make([]byte, 14), 1)
+	testutils.SkipIfNotSupported(t, err)
 	if err != nil {
 		t.Fatal("Error from Benchmark:", err)
 	}
@@ -113,6 +116,7 @@ func TestProgramPin(t *testing.T) {
 	prog.Close()
 
 	prog, err = LoadPinnedProgram(path)
+	testutils.SkipIfNotSupported(t, err)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -156,6 +160,10 @@ func TestProgramVerifierOutput(t *testing.T) {
 }
 
 func TestProgramName(t *testing.T) {
+	if err := haveObjName(); err != nil {
+		t.Skip(err)
+	}
+
 	prog := createSocketFilter(t)
 	defer prog.Close()
 
@@ -217,7 +225,7 @@ func TestProgramMarshaling(t *testing.T) {
 	}
 
 	if err := arr.Lookup(idx, Program{}); err == nil {
-		t.Fatal("Get accepts Program")
+		t.Fatal("Lookup accepts non-pointer Program")
 	}
 
 	var prog2 *Program
@@ -226,6 +234,8 @@ func TestProgramMarshaling(t *testing.T) {
 	if err := arr.Lookup(idx, prog2); err == nil {
 		t.Fatal("Get accepts *Program")
 	}
+
+	testutils.SkipOnOldKernel(t, "4.12", "lookup for ProgramArray")
 
 	if err := arr.Lookup(idx, &prog2); err != nil {
 		t.Fatal("Can't unmarshal program:", err)
@@ -253,6 +263,7 @@ func TestProgramFromFD(t *testing.T) {
 	// If you're thinking about copying this, don't. Use
 	// Clone() instead.
 	prog2, err := NewProgramFromFD(prog.FD())
+	testutils.SkipIfNotSupported(t, err)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -261,6 +272,8 @@ func TestProgramFromFD(t *testing.T) {
 }
 
 func TestProgramAlter(t *testing.T) {
+	testutils.SkipOnOldKernel(t, "4.13", "SkSKB type")
+
 	var err error
 	var prog *Program
 	prog, err = NewProgram(&ProgramSpec{
@@ -294,6 +307,10 @@ func TestProgramAlter(t *testing.T) {
 	if err := prog.Detach(sockMap.FD(), AttachSkSKBStreamParser, AttachFlags(0)); err != nil {
 		t.Fatal(err)
 	}
+}
+
+func TestHaveProgTestRun(t *testing.T) {
+	testutils.CheckFeatureTest(t, haveProgTestRun)
 }
 
 func createProgramArray(t *testing.T) *Map {

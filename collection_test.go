@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/cilium/ebpf/asm"
+	"github.com/cilium/ebpf/internal/testutils"
 )
 
 func TestCollectionSpecNotModified(t *testing.T) {
@@ -143,6 +144,7 @@ func TestCollectionSpecOverwriteMaps(t *testing.T) {
 	}
 
 	ret, _, err := coll.Programs["test-prog"].Test(make([]byte, 14))
+	testutils.SkipIfNotSupported(t, err)
 	if err != nil {
 		t.Fatal(err)
 	}

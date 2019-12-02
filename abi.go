@@ -8,6 +8,7 @@ import (
 	"os"
 	"syscall"
 
+	"github.com/cilium/ebpf/internal"
 	"github.com/pkg/errors"
 )
 
@@ -125,6 +126,12 @@ func newProgramABIFromProc(fd *bpfFD) (string, *ProgramABI, error) {
 		"prog_type": &abi.Type,
 		"prog_tag":  &name,
 	})
+	if errors.Cause(err) == errMissingFields {
+		return "", nil, &internal.UnsupportedFeatureError{
+			Name:           "reading ABI from /proc/self/fdinfo",
+			MinimumVersion: internal.Version{4, 11, 0},
+		}
+	}
 	if err != nil {
 		return "", nil, err
 	}
@@ -146,6 +153,8 @@ func scanFdInfo(fd *bpfFD, fields map[string]interface{}) error {
 
 	return errors.Wrap(scanFdInfoReader(fh, fields), fh.Name())
 }
+
+var errMissingFields = errors.New("missing fields")
 
 func scanFdInfoReader(r io.Reader, fields map[string]interface{}) error {
 	var (
@@ -177,7 +186,7 @@ func scanFdInfoReader(r io.Reader, fields map[string]interface{}) error {
 	}
 
 	if scanned != len(fields) {
-		return errors.Errorf("parsed %d instead of %d fields", scanned, len(fields))
+		return errMissingFields
 	}
 
 	return nil

@@ -84,6 +84,13 @@ const (
 	_ProgGetFDByID
 	_MapGetFDByID
 	_ObjGetInfoByFD
+	_ProgQuery
+	_RawTracepointOpen
+	_BTFLoad
+	_BTFGetFDByID
+	_TaskFDQuery
+	_MapLookupAndDeleteElem
+	_MapFreeze
 )
 
 const (

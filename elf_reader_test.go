@@ -16,7 +16,8 @@ func TestLoadCollectionSpec(t *testing.T) {
 	}
 
 	for _, file := range files {
-		t.Run(file, func(t *testing.T) {
+		name := filepath.Base(file)
+		t.Run(name, func(t *testing.T) {
 			spec, err := LoadCollectionSpec(file)
 			if err != nil {
 				t.Fatal("Can't parse ELF:", err)
@@ -30,10 +31,11 @@ func TestLoadCollectionSpec(t *testing.T) {
 				1,
 				0,
 				nil,
+				nil,
 			}
 			checkMapSpec(t, spec.Maps, "hash_map", hashMapSpec)
 			checkMapSpec(t, spec.Maps, "array_of_hash_map", &MapSpec{
-				"hash_map", ArrayOfMaps, 4, 0, 2, 0, nil,
+				"hash_map", ArrayOfMaps, 4, 0, 2, 0, nil, nil,
 			})
 			spec.Maps["array_of_hash_map"].InnerMap = spec.Maps["hash_map"]
 
@@ -45,10 +47,11 @@ func TestLoadCollectionSpec(t *testing.T) {
 				2,
 				1,
 				nil,
+				nil,
 			}
 			checkMapSpec(t, spec.Maps, "hash_map2", hashMap2Spec)
 			checkMapSpec(t, spec.Maps, "hash_of_hash_map", &MapSpec{
-				"", HashOfMaps, 4, 0, 2, 0, nil,
+				"", HashOfMaps, 4, 0, 2, 0, nil, nil,
 			})
 			spec.Maps["hash_of_hash_map"].InnerMap = spec.Maps["hash_map2"]
 
@@ -63,7 +66,11 @@ func TestLoadCollectionSpec(t *testing.T) {
 				KernelVersion: 0,
 			})
 
-			coll, err := NewCollection(spec)
+			coll, err := NewCollectionWithOptions(spec, CollectionOptions{
+				Programs: ProgramOptions{
+					LogLevel: 1,
+				},
+			})
 			testutils.SkipIfNotSupported(t, err)
 			if err != nil {
 				t.Fatal(err)

@@ -149,6 +149,8 @@ const (
 	RawTracepointWritable
 	// CGroupSockopt program
 	CGroupSockopt
+	// Tracing program
+	Tracing
 )
 
 // AttachType of the eBPF program, needed to differentiate allowed context accesses in
@@ -183,6 +185,9 @@ const (
 	AttachCGroupUDP6Recvmsg
 	AttachCGroupGetsockopt
 	AttachCGroupSetsockopt
+	AttachTraceRawTp
+	AttachTraceFEntry
+	AttachTraceFExit
 )
 
 // AttachFlags of the eBPF program used in BPF_PROG_ATTACH command

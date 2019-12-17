@@ -5,8 +5,8 @@ import (
 	"strings"
 	"unsafe"
 
-	"github.com/cilium/ebpf/internal/btf"
 	"github.com/cilium/ebpf/internal"
+	"github.com/cilium/ebpf/internal/btf"
 	"github.com/cilium/ebpf/internal/unix"
 
 	"github.com/pkg/errors"
@@ -219,6 +219,21 @@ func bpfMapLookupElem(m *internal.FD, key, valueOut internal.Pointer) error {
 		value: valueOut,
 	}
 	_, err = internal.BPF(_MapLookupElem, unsafe.Pointer(&attr), unsafe.Sizeof(attr))
+	return err
+}
+
+func bpfMapLookupAndDelete(m *internal.FD, key, valueOut internal.Pointer) error {
+	fd, err := m.Value()
+	if err != nil {
+		return err
+	}
+
+	attr := bpfMapOpAttr{
+		mapFd: fd,
+		key:   key,
+		value: valueOut,
+	}
+	_, err = internal.BPF(_MapLookupAndDeleteElem, unsafe.Pointer(&attr), unsafe.Sizeof(attr))
 	return err
 }
 

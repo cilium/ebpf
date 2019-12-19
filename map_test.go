@@ -83,8 +83,9 @@ func TestMapLookupAndDelete(t *testing.T) {
 		t.Error("Want value 42, got", v)
 	}
 
-	if err := m.Lookup(uint32(0), &v); err != nil {
-		t.Fatal("Element 0 still exists:", err)
+	err := m.Lookup(uint32(0), &v)
+	if !IsNotExist(err) {
+		t.Error("IsNotExist returns false for missing key")
 	}
 }
 

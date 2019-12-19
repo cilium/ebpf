@@ -235,7 +235,7 @@ func (m *Map) Lookup(key, valueOut interface{}) error {
 	if valueBytes == nil {
 		return nil
 	}
-	return m.valueProcessing(valueOut, valueBytes)
+	return m.unmarshalValue(valueOut, valueBytes)
 }
 
 // LookupAndDelete retrieves and deletes a value from a Map.
@@ -247,17 +247,22 @@ func (m *Map) Lookup(key, valueOut interface{}) error {
 func (m *Map) LookupAndDelete(key, valueOut interface{}) error {
 	valuePtr, valueBytes := makeBuffer(valueOut, m.fullValueSize)
 
-	if err := m.lookup(key, valuePtr); err != nil {
-		return err
+	keyPtr, err := marshalPtr(key, int(m.abi.KeySize))
+	if err != nil {
+		return errors.WithMessage(err, "can't marshal key")
+	}
+
+	if err := bpfMapLookupAndDelete(m.fd, keyPtr, valuePtr); err != nil {
+		return errors.WithMessage(err, "lookup and delete failed")
 	}
 
 	if valueBytes == nil {
 		return nil
 	}
-	return m.valueProcessing(valueOut, valueBytes)
+	return m.unmarshalValue(valueOut, valueBytes)
 }
 
-func (m *Map) valueProcessing(valueOut interface{}, valueBytes []byte) error {
+func (m *Map) unmarshalValue(valueOut interface{}, valueBytes []byte) error {
 	if m.abi.Type.hasPerCPUValue() {
 		return unmarshalPerCPUValue(valueOut, int(m.abi.ValueSize), valueBytes)
 	}
@@ -319,16 +324,6 @@ func (m *Map) lookup(key interface{}, valueOut internal.Pointer) error {
 
 	err = bpfMapLookupElem(m.fd, keyPtr, valueOut)
 	return errors.WithMessage(err, "lookup failed")
-}
-
-func (m *Map) lookupAndDelete(key interface{}, valueOut internal.Pointer) error {
-	keyPtr, err := marshalPtr(key, int(m.abi.KeySize))
-	if err != nil {
-		return errors.WithMessage(err, "can't marshal key")
-	}
-
-	err = bpfMapLookupAndDelete(m.fd, keyPtr, valueOut)
-	return errors.WithMessage(err, "lookup and delete failed")
 }
 
 // MapUpdateFlags controls the behaviour of the Map.Update call.

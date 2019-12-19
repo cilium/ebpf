@@ -67,6 +67,28 @@ func TestMap(t *testing.T) {
 	}
 }
 
+func TestMapLookupAndDelete(t *testing.T) {
+	m := createArray(t)
+	defer m.Close()
+
+	if err := m.Put(uint32(0), uint32(42)); err != nil {
+		t.Fatal("Can't put:", err)
+	}
+
+	var v uint32
+	if err := m.LookupAndDelete(uint32(0), &v); err != nil {
+		t.Fatal("Can't lookup 0:", err)
+	}
+	if v != 42 {
+		t.Error("Want value 42, got", v)
+	}
+
+	err := m.Lookup(uint32(0), &v)
+	if !IsNotExist(err) {
+		t.Error("IsNotExist returns false for missing key")
+	}
+}
+
 func TestMapClose(t *testing.T) {
 	m := createArray(t)
 

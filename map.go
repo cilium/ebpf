@@ -235,7 +235,34 @@ func (m *Map) Lookup(key, valueOut interface{}) error {
 	if valueBytes == nil {
 		return nil
 	}
+	return m.unmarshalValue(valueOut, valueBytes)
+}
 
+// LookupAndDelete retrieves and deletes a value from a Map.
+//
+// Calls Close() on valueOut if it is of type **Map or **Program,
+// and *valueOut is not nil.
+//
+// Returns an error if the key doesn't exist, see IsNotExist.
+func (m *Map) LookupAndDelete(key, valueOut interface{}) error {
+	valuePtr, valueBytes := makeBuffer(valueOut, m.fullValueSize)
+
+	keyPtr, err := marshalPtr(key, int(m.abi.KeySize))
+	if err != nil {
+		return errors.WithMessage(err, "can't marshal key")
+	}
+
+	if err := bpfMapLookupAndDelete(m.fd, keyPtr, valuePtr); err != nil {
+		return errors.WithMessage(err, "lookup and delete failed")
+	}
+
+	if valueBytes == nil {
+		return nil
+	}
+	return m.unmarshalValue(valueOut, valueBytes)
+}
+
+func (m *Map) unmarshalValue(valueOut interface{}, valueBytes []byte) error {
 	if m.abi.Type.hasPerCPUValue() {
 		return unmarshalPerCPUValue(valueOut, int(m.abi.ValueSize), valueBytes)
 	}

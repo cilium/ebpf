@@ -44,6 +44,32 @@ func TestParseVmlinux(t *testing.T) {
 	}
 }
 
+func TestParseCurrentKernelBTF(t *testing.T) {
+	if _, err := os.Stat("/sys/kernel/btf/vmlinux"); os.IsNotExist(err) {
+		t.Skip("/sys/kernel/btf/vmlinux is not available")
+	}
+
+	fh, err := os.Open("/sys/kernel/btf/vmlinux")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer fh.Close()
+
+	s, err := parseBTF(fh, binary.LittleEndian)
+	if err != nil {
+		t.Fatal("Can't load BTF:", err)
+	}
+
+	var bpfAttr Union
+	if err := s.FindType("bpf_attr", &bpfAttr); err != nil {
+		t.Fatal("Can't find btf_attr:", err)
+	}
+
+	if name := bpfAttr.Name; name != "bpf_attr" {
+		t.Error("struct bpf_attr has incorrect name:", name)
+	}
+}
+
 func TestLoadSpecFromElf(t *testing.T) {
 	fh, err := os.Open("../../testdata/loader-clang-9.elf")
 	if err != nil {

@@ -145,6 +145,9 @@ func createArray(t *testing.T) *Map {
 }
 
 func TestMapQueue(t *testing.T) {
+
+	testutils.SkipOnOldKernel(t, "4.20", "map type queue")
+
 	m, err := NewMap(&MapSpec{
 		Type:       Queue,
 		ValueSize:  4,

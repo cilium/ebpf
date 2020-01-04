@@ -144,6 +144,61 @@ func createArray(t *testing.T) *Map {
 	return m
 }
 
+func TestMapQueue(t *testing.T) {
+
+	testutils.SkipOnOldKernel(t, "4.20", "map type queue")
+
+	m, err := NewMap(&MapSpec{
+		Type:       Queue,
+		ValueSize:  4,
+		MaxEntries: 2,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer m.Close()
+
+	if err := m.Push(uint32(42)); err != nil {
+		t.Fatal("Can't push:", err)
+	}
+
+	if err := m.Push(uint32(4242)); err != nil {
+		t.Fatal("Can't push:", err)
+	}
+
+	var v uint32
+	if err := m.Peek(&v); err != nil {
+		t.Fatal("Can't peek element:", err)
+	}
+	if v != 42 {
+		t.Error("Want value 42, got", v)
+	}
+
+	if err := m.Pop(&v); err != nil {
+		t.Fatal("Can't pop element:", err)
+	}
+	if v != 42 {
+		t.Error("Want value 42, got", v)
+	}
+
+	if err := m.Peek(&v); err != nil {
+		t.Fatal("Can't peek element:", err)
+	}
+	if v != 4242 {
+		t.Error("Want value 4242, got", v)
+	}
+	if err := m.Pop(&v); err != nil {
+		t.Fatal("Can't pop element:", err)
+	}
+	if v != 4242 {
+		t.Error("Want value 4242, got", v)
+	}
+
+	if err := m.Pop(&v); !IsNotExist(err) {
+		t.Fatal("Pop on empty Queue:", err)
+	}
+}
+
 func TestMapInMap(t *testing.T) {
 	for _, typ := range []MapType{ArrayOfMaps, HashOfMaps} {
 		t.Run(typ.String(), func(t *testing.T) {

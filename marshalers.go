@@ -14,6 +14,13 @@ import (
 )
 
 func marshalPtr(data interface{}, length int) (internal.Pointer, error) {
+	if data == nil {
+		if length == 0 {
+			return internal.NewPointer(nil), nil
+		}
+		return internal.Pointer{}, errors.New("can't use nil as key of map")
+	}
+
 	if ptr, ok := data.(unsafe.Pointer); ok {
 		return internal.NewPointer(ptr), nil
 	}

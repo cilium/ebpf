@@ -274,6 +274,20 @@ func (m *Map) Lookup(key, valueOut interface{}) error {
 	}
 }
 
+// LookupAndDelete retrieves and deletes a value from a Map.
+func (m *Map) LookupAndDelete(key, valueOut interface{}) error {
+	valueBytes := make([]byte, m.fullValueSize)
+	valuePtr := internal.NewSlicePointer(valueBytes)
+
+	keyPtr, err := marshalPtr(key, int(m.abi.KeySize))
+	if err != nil {
+		return errors.WithMessage(err, "can't marshal key")
+	}
+
+	err = bpfMapLookupAndDelete(m.fd, keyPtr, valuePtr)
+	return errors.WithMessage(err, "lookup and delete and delete failed")
+}
+
 // LookupBytes gets a value from Map.
 //
 // Returns a nil value if a key doesn't exist.
@@ -318,37 +332,6 @@ const (
 // It is equivalent to calling Update with UpdateAny.
 func (m *Map) Put(key, value interface{}) error {
 	return m.Update(key, value, UpdateAny)
-}
-
-// Push puts a value in a keyless map.
-func (m *Map) Push(value interface{}) error {
-	valuePtr, err := marshalPtr(value, int(m.abi.ValueSize))
-	if err != nil {
-		return errors.WithMessage(err, "can't marshal value")
-	}
-	return bpfMapUpdateElem(m.fd, internal.NewPointer(nil), valuePtr, uint64(UpdateAny))
-}
-
-// Pop returns a value from a keyless map.
-func (m *Map) Pop(valueOut interface{}) error {
-	valuePtr, valueBytes := makeBuffer(valueOut, m.fullValueSize)
-
-	if err := bpfMapLookupAndDelete(m.fd, internal.NewPointer(nil), valuePtr); err != nil {
-		return errors.WithMessage(err, "lookup and delete failed")
-	}
-
-	return unmarshalBytes(valueOut, valueBytes)
-}
-
-// Peek returns a value from a keyless map, without removing it.
-func (m *Map) Peek(valueOut interface{}) error {
-	valuePtr, valueBytes := makeBuffer(valueOut, m.fullValueSize)
-
-	if err := bpfMapLookupElem(m.fd, internal.NewPointer(nil), valuePtr); err != nil {
-		return errors.WithMessage(err, "lookup failed")
-	}
-
-	return unmarshalBytes(valueOut, valueBytes)
 }
 
 // Update changes the value of a key.

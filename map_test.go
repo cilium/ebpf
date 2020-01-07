@@ -158,44 +158,44 @@ func TestMapQueue(t *testing.T) {
 	}
 	defer m.Close()
 
-	if err := m.Push(uint32(42)); err != nil {
-		t.Fatal("Can't push:", err)
+	if err := m.Put(nil, uint32(42)); err != nil {
+		t.Fatal("Can't put 42:", err)
 	}
 
-	if err := m.Push(uint32(4242)); err != nil {
-		t.Fatal("Can't push:", err)
+	if err := m.Put(nil, uint32(4242)); err != nil {
+		t.Fatal("Can't put 4242:", err)
 	}
 
 	var v uint32
-	if err := m.Peek(&v); err != nil {
-		t.Fatal("Can't peek element:", err)
+	if err := m.Lookup(nil, &v); err != nil {
+		t.Fatal("Can't lookup element:", err)
 	}
 	if v != 42 {
 		t.Error("Want value 42, got", v)
 	}
 
-	if err := m.Pop(&v); err != nil {
-		t.Fatal("Can't pop element:", err)
+	if err := m.LookupAndDelete(nil, &v); err != nil {
+		t.Fatal("Can't lookup and delete element:", err)
 	}
 	if v != 42 {
 		t.Error("Want value 42, got", v)
 	}
 
-	if err := m.Peek(&v); err != nil {
-		t.Fatal("Can't peek element:", err)
+	if err := m.Lookup(nil, &v); err != nil {
+		t.Fatal("Can't lookup element:", err)
 	}
 	if v != 4242 {
 		t.Error("Want value 4242, got", v)
 	}
-	if err := m.Pop(&v); err != nil {
-		t.Fatal("Can't pop element:", err)
+	if err := m.LookupAndDelete(nil, &v); err != nil {
+		t.Fatal("Can't lookup and delete element:", err)
 	}
 	if v != 4242 {
 		t.Error("Want value 4242, got", v)
 	}
 
-	if err := m.Pop(&v); !IsNotExist(err) {
-		t.Fatal("Pop on empty Queue:", err)
+	if err := m.LookupAndDelete(nil, &v); !IsNotExist(err) {
+		t.Fatal("Lookup and delete on empty Queue:", err)
 	}
 }
 

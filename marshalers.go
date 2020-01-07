@@ -14,6 +14,10 @@ import (
 )
 
 func marshalPtr(data interface{}, length int) (internal.Pointer, error) {
+	if length == 0 {
+		return internal.NewPointer(nil), nil
+	}
+
 	if ptr, ok := data.(unsafe.Pointer); ok {
 		return internal.NewPointer(ptr), nil
 	}

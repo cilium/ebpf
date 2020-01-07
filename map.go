@@ -274,6 +274,20 @@ func (m *Map) Lookup(key, valueOut interface{}) error {
 	}
 }
 
+// LookupAndDelete retrieves and deletes a value from a Map.
+func (m *Map) LookupAndDelete(key, valueOut interface{}) error {
+	valueBytes := make([]byte, m.fullValueSize)
+	valuePtr := internal.NewSlicePointer(valueBytes)
+
+	keyPtr, err := marshalPtr(key, int(m.abi.KeySize))
+	if err != nil {
+		return errors.WithMessage(err, "can't marshal key")
+	}
+
+	err = bpfMapLookupAndDelete(m.fd, keyPtr, valuePtr)
+	return errors.WithMessage(err, "lookup and delete and delete failed")
+}
+
 // LookupBytes gets a value from Map.
 //
 // Returns a nil value if a key doesn't exist.

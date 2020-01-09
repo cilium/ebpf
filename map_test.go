@@ -174,6 +174,7 @@ func TestMapQueue(t *testing.T) {
 		t.Error("Want value 42, got", v)
 	}
 
+	v = 0
 	if err := m.LookupAndDelete(nil, &v); err != nil {
 		t.Fatal("Can't lookup and delete element:", err)
 	}

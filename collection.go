@@ -9,6 +9,7 @@ import (
 // CollectionOptions control loading a collection into the kernel.
 type CollectionOptions struct {
 	Programs ProgramOptions
+	ExistingMaps map[string]*Map
 }
 
 // CollectionSpec describes a collection.
@@ -96,6 +97,12 @@ func NewCollectionWithOptions(spec *CollectionSpec, opts CollectionOptions) (col
 	}
 
 	for mapName, mapSpec := range spec.Maps {
+		if opts.ExistingMaps[mapName] != nil {
+			// if an existing map of the same name is present (i.e. a map we want to reuse),
+			// we will use that one instead of creating a new one from the spec.
+			maps[mapName] = opts.ExistingMaps[mapName]
+			continue
+		}
 		var handle *btf.Handle
 		if mapSpec.BTF != nil {
 			handle, err = loadBTF(btf.MapSpec(mapSpec.BTF))

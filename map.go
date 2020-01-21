@@ -20,7 +20,6 @@ type MapSpec struct {
 	ValueSize  uint32
 	MaxEntries uint32
 	Flags      uint32
-	Pinning    uint32
 
 	// InnerMap is used as a template for ArrayOfMaps and HashOfMaps
 	InnerMap *MapSpec

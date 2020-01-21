@@ -137,16 +137,15 @@ func createMap(spec *MapSpec, inner *internal.FD, handle *btf.Handle) (*Map, err
 			if spec.ValueSize != 0 {
 				return nil, errors.Errorf("ValueSize must be zero for perf event array")
 			}
-			if spec.MaxEntries == 0 {
-				n, err := internal.OnlineCPUs()
-				if err != nil {
-					return nil, errors.Wrap(err, "perf event array")
-				}
-				spec.MaxEntries = uint32(n)
-			}
-
 			spec.KeySize = 4
 			spec.ValueSize = 4
+		}
+		if spec.MaxEntries == 0 {
+			n, err := internal.OnlineCPUs()
+			if err != nil {
+				return nil, errors.Wrap(err, "perf event array")
+			}
+			spec.MaxEntries = uint32(n)
 		}
 	}
 

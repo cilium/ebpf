@@ -48,7 +48,10 @@ func CheckFeatureTest(t *testing.T, fn func() error) {
 }
 
 func SkipIfNotSupported(tb testing.TB, err error) {
-	if err == nil || !xerrors.Is(err, (err).(*internal.UnsupportedFeatureError)) {
+	if err == nil {
+		return
+	}
+	if !xerrors.Is(err, (err).(*internal.UnsupportedFeatureError)) {
 		return
 	}
 	checkKernelVersion(tb, xerrors.Unwrap(err).(*internal.UnsupportedFeatureError))

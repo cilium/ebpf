@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/pkg/errors"
+	"golang.org/x/xerrors"
 )
 
 // UnsupportedFeatureError is returned by FeatureTest() functions.
@@ -61,7 +61,7 @@ func NewVersion(ver string) (Version, error) {
 	var major, minor, patch uint16
 	n, _ := fmt.Sscanf(ver, "%d.%d.%d", &major, &minor, &patch)
 	if n < 2 {
-		return Version{}, errors.Errorf("invalid version: %s", ver)
+		return Version{}, xerrors.Errorf("invalid version: %s", ver)
 	}
 	return Version{major, minor, patch}, nil
 }

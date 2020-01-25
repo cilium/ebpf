@@ -9,7 +9,7 @@ import (
 	"github.com/cilium/ebpf/internal/btf"
 	"github.com/cilium/ebpf/internal/unix"
 
-	"github.com/pkg/errors"
+	"golang.org/x/xerrors"
 )
 
 // bpfObjName is a null-terminated string made up of
@@ -20,7 +20,7 @@ type bpfObjName [unix.BPF_OBJ_NAME_LEN]byte
 func newBPFObjName(name string) (bpfObjName, error) {
 	idx := strings.IndexFunc(name, invalidBPFObjNameChar)
 	if idx != -1 {
-		return bpfObjName{}, errors.Errorf("invalid character '%c' in name '%s'", name[idx], name)
+		return bpfObjName{}, xerrors.Errorf("invalid character '%c' in name '%s'", name[idx], name)
 	}
 
 	var result bpfObjName
@@ -291,7 +291,7 @@ func bpfPinObject(fileName string, fd *internal.FD) error {
 		return err
 	}
 	if uint64(statfs.Type) != bpfFSType {
-		return errors.Errorf("%s is not on a bpf filesystem", fileName)
+		return xerrors.Errorf("%s is not on a bpf filesystem", fileName)
 	}
 
 	value, err := fd.Value()
@@ -303,7 +303,10 @@ func bpfPinObject(fileName string, fd *internal.FD) error {
 		fileName: internal.NewStringPointer(fileName),
 		fd:       value,
 	}), 16)
-	return errors.Wrapf(err, "pin object %s", fileName)
+	if err != nil {
+		return xerrors.Errorf("pin object %s: %w", fileName, err)
+	}
+	return nil
 }
 
 func bpfGetObject(fileName string) (*internal.FD, error) {
@@ -311,7 +314,7 @@ func bpfGetObject(fileName string) (*internal.FD, error) {
 		fileName: internal.NewStringPointer(fileName),
 	}), 16)
 	if err != nil {
-		return nil, errors.Wrapf(err, "get object %s", fileName)
+		return nil, xerrors.Errorf("get object %s: %w", fileName, err)
 	}
 	return internal.NewFD(uint32(ptr)), nil
 }
@@ -329,19 +332,27 @@ func bpfGetObjectInfoByFD(fd *internal.FD, info unsafe.Pointer, size uintptr) er
 		info:    internal.NewPointer(info),
 	}
 	_, err = internal.BPF(_ObjGetInfoByFD, unsafe.Pointer(&attr), unsafe.Sizeof(attr))
-	return errors.Wrapf(err, "fd %d", fd)
+	if err != nil {
+		return xerrors.Errorf("fd %d: %w", fd, err)
+	}
+	return nil
 }
 
 func bpfGetProgInfoByFD(fd *internal.FD) (*bpfProgInfo, error) {
 	var info bpfProgInfo
-	err := bpfGetObjectInfoByFD(fd, unsafe.Pointer(&info), unsafe.Sizeof(info))
-	return &info, errors.Wrap(err, "can't get program info")
+	if err := bpfGetObjectInfoByFD(fd, unsafe.Pointer(&info), unsafe.Sizeof(info)); err != nil {
+		return &info, xerrors.Errorf("can't get program info: %w", err)
+	}
+	return &info, nil
 }
 
 func bpfGetMapInfoByFD(fd *internal.FD) (*bpfMapInfo, error) {
 	var info bpfMapInfo
 	err := bpfGetObjectInfoByFD(fd, unsafe.Pointer(&info), unsafe.Sizeof(info))
-	return &info, errors.Wrap(err, "can't get map info")
+	if err != nil {
+		return &bpfMapInfo{}, xerrors.Errorf("can't get map info: %w", err)
+	}
+	return &info, nil
 }
 
 var haveObjName = internal.FeatureTest("object names", "4.15", func() bool {
@@ -376,7 +387,7 @@ func bpfGetMapFDByID(id uint32) (*internal.FD, error) {
 	}
 	ptr, err := internal.BPF(_MapGetFDByID, unsafe.Pointer(&attr), unsafe.Sizeof(attr))
 	if err != nil {
-		return nil, errors.Wrapf(err, "can't get fd for map id %d", id)
+		return nil, xerrors.Errorf("can't get fd for map id %d: %w", id, err)
 	}
 	return internal.NewFD(uint32(ptr)), nil
 }
@@ -388,7 +399,7 @@ func bpfGetProgramFDByID(id uint32) (*internal.FD, error) {
 	}
 	ptr, err := internal.BPF(_ProgGetFDByID, unsafe.Pointer(&attr), unsafe.Sizeof(attr))
 	if err != nil {
-		return nil, errors.Wrapf(err, "can't get fd for program id %d", id)
+		return nil, xerrors.Errorf("can't get fd for program id %d: %w", id, err)
 	}
 	return internal.NewFD(uint32(ptr)), nil
 }

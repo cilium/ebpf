@@ -3,7 +3,7 @@ package ebpf
 import (
 	"github.com/cilium/ebpf/asm"
 	"github.com/cilium/ebpf/internal/btf"
-	"github.com/pkg/errors"
+	"golang.org/x/xerrors"
 )
 
 // CollectionOptions control loading a collection into the kernel.
@@ -106,7 +106,7 @@ func NewCollectionWithOptions(spec *CollectionSpec, opts CollectionOptions) (col
 
 		m, err := newMapWithBTF(mapSpec, handle)
 		if err != nil {
-			return nil, errors.Wrapf(err, "map %s", mapName)
+			return nil, xerrors.Errorf("map %s: %w", mapName, err)
 		}
 		maps[mapName] = m
 	}
@@ -132,7 +132,7 @@ func NewCollectionWithOptions(spec *CollectionSpec, opts CollectionOptions) (col
 			}
 
 			if err := ins.RewriteMapPtr(m.FD()); err != nil {
-				return nil, errors.Wrapf(err, "progam %s: map %s", progName, ins.Reference)
+				return nil, xerrors.Errorf("progam %s: map %s: %w", progName, ins.Reference, err)
 			}
 		}
 
@@ -146,7 +146,7 @@ func NewCollectionWithOptions(spec *CollectionSpec, opts CollectionOptions) (col
 
 		prog, err := newProgramWithBTF(progSpec, handle, opts.Programs)
 		if err != nil {
-			return nil, errors.Wrapf(err, "program %s", progName)
+			return nil, xerrors.Errorf("program %s: %w", progName, err)
 		}
 		progs[progName] = prog
 	}

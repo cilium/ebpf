@@ -53,7 +53,7 @@ func parseExtInfos(r io.ReadSeeker, bo binary.ByteOrder, strings stringTable) (f
 	// .BTF ext header. We need to ignore non-null values.
 	_, err = io.CopyN(ioutil.Discard, r, remainder)
 	if err != nil {
-		return nil, nil, xerrors.Errorf("header padding: %w", err)
+		return nil, nil, xerrors.Errorf("header padding: %v", err)
 	}
 
 	if _, err := r.Seek(int64(header.HdrLen+header.FuncInfoOff), io.SeekStart); err != nil {

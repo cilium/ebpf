@@ -24,6 +24,9 @@ type MapSpec struct {
 	// The initial contents of the map. May be nil.
 	Contents []MapKV
 
+	// Whether to freeze a map after setting its initial contents.
+	Freeze bool
+
 	// InnerMap is used as a template for ArrayOfMaps and HashOfMaps
 	InnerMap *MapSpec
 
@@ -161,6 +164,12 @@ func createMap(spec *MapSpec, inner *internal.FD, handle *btf.Handle) (*Map, err
 		}
 	}
 
+	if abi.Flags&(unix.BPF_F_RDONLY_PROG|unix.BPF_F_WRONLY_PROG) > 0 || spec.Freeze {
+		if err := haveMapMutabilityModifiers(); err != nil {
+			return nil, xerrors.Errorf("map create: %w", err)
+		}
+	}
+
 	attr := bpfMapCreateAttr{
 		mapType:    abi.Type,
 		keySize:    abi.KeySize,
@@ -200,6 +209,13 @@ func createMap(spec *MapSpec, inner *internal.FD, handle *btf.Handle) (*Map, err
 	if err := m.populate(spec.Contents); err != nil {
 		m.Close()
 		return nil, xerrors.Errorf("map create: can't set initial contents: %w", err)
+	}
+
+	if spec.Freeze {
+		if err := m.Freeze(); err != nil {
+			m.Close()
+			return nil, xerrors.Errorf("can't freeze map: %w", err)
+		}
 	}
 
 	return m, nil
@@ -507,6 +523,20 @@ func (m *Map) Clone() (*Map, error) {
 // This requires bpffs to be mounted above fileName. See http://cilium.readthedocs.io/en/doc-1.0/kubernetes/install/#mounting-the-bpf-fs-optional
 func (m *Map) Pin(fileName string) error {
 	return bpfPinObject(fileName, m.fd)
+}
+
+// Freeze prevents a map to be modified from user space.
+//
+// It makes no changes to kernel-side restrictions.
+func (m *Map) Freeze() error {
+	if err := haveMapMutabilityModifiers(); err != nil {
+		return xerrors.Errorf("can't freeze map: %w", err)
+	}
+
+	if err := bpfMapFreeze(m.fd); err != nil {
+		return xerrors.Errorf("can't freeze map: %w", err)
+	}
+	return nil
 }
 
 func (m *Map) populate(contents []MapKV) error {

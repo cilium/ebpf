@@ -674,6 +674,22 @@ func TestMapContents(t *testing.T) {
 	}
 }
 
+func TestMapFreeze(t *testing.T) {
+	arr := createArray(t)
+	defer arr.Close()
+
+	err := arr.Freeze()
+	testutils.SkipIfNotSupported(t, err)
+
+	if err != nil {
+		t.Fatal("Can't freeze map:", err)
+	}
+
+	if err := arr.Put(uint32(0), uint32(1)); err == nil {
+		t.Error("Freeze doesn't prevent modification from user space")
+	}
+}
+
 type benchValue struct {
 	ID      uint32
 	Val16   uint16

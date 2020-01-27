@@ -119,7 +119,7 @@ func (ei extInfo) MarshalBinary() ([]byte, error) {
 		// while the ELF tracks it in bytes.
 		insnOff := uint32(info.InsnOff / asm.InstructionSize)
 		if err := binary.Write(buf, internal.NativeEndian, insnOff); err != nil {
-			return nil, xerrors.Errorf("can't write instruction offset: %w", err)
+			return nil, xerrors.Errorf("can't write instruction offset: %v", err)
 		}
 
 		buf.Write(info.Opaque)

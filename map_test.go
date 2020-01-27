@@ -292,13 +292,20 @@ func TestNewMapInMapFromFD(t *testing.T) {
 }
 
 func TestPerfEventArray(t *testing.T) {
-	m, err := NewMap(&MapSpec{
-		Type: PerfEventArray,
-	})
-	if err != nil {
-		t.Fatal("Can't create perf event array:", err)
+	specs := []*MapSpec{
+		{Type: PerfEventArray},
+		{Type: PerfEventArray, KeySize: 4},
+		{Type: PerfEventArray, ValueSize: 4},
 	}
-	m.Close()
+
+	for _, spec := range specs {
+		m, err := NewMap(spec)
+		if err != nil {
+			t.Errorf("Can't create perf event array from %v: %s", spec, err)
+		} else {
+			m.Close()
+		}
+	}
 }
 
 func createMapInMap(t *testing.T, typ MapType) *Map {

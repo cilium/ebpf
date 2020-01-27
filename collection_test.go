@@ -80,7 +80,7 @@ func TestCollectionSpecCopy(t *testing.T) {
 	}
 }
 
-func TestCollectionSpecOverwriteMaps(t *testing.T) {
+func TestCollectionSpecRewriteMaps(t *testing.T) {
 	insns := asm.Instructions{
 		// R1 map
 		asm.LoadMapPtr(asm.R1, 0),
@@ -126,9 +126,15 @@ func TestCollectionSpecOverwriteMaps(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	err = cs.Programs["test-prog"].Instructions.RewriteMapPtr("test-map", newMap.FD())
+	err = cs.RewriteMaps(map[string]*Map{
+		"test-map": newMap,
+	})
 	if err != nil {
 		t.Fatal(err)
+	}
+
+	if cs.Maps["test-map"] != nil {
+		t.Error("RewriteMaps doesn't remove map from CollectionSpec.Maps")
 	}
 
 	coll, err := NewCollection(cs)
@@ -137,19 +143,11 @@ func TestCollectionSpecOverwriteMaps(t *testing.T) {
 	}
 	defer coll.Close()
 
-	oldMap := coll.Maps["test-map"]
-	err = oldMap.Put(uint32(0), uint32(5))
-	if err != nil {
-		t.Fatal(err)
-	}
-
 	ret, _, err := coll.Programs["test-prog"].Test(make([]byte, 14))
 	testutils.SkipIfNotSupported(t, err)
 	if err != nil {
 		t.Fatal(err)
 	}
-
-	t.Log(ret)
 
 	if ret != 2 {
 		t.Fatal("new / override map not used")

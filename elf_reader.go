@@ -141,7 +141,7 @@ func loadVersion(sec *elf.Section, bo binary.ByteOrder) (uint32, error) {
 
 	var version uint32
 	if err := binary.Read(sec.Open(), bo, &version); err != nil {
-		return version, xerrors.Errorf("section %s: %w", sec.Name, err)
+		return version, xerrors.Errorf("section %s: %v", sec.Name, err)
 	}
 	return version, nil
 }

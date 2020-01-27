@@ -411,7 +411,7 @@ func ProgramSpec(s *Program) *Spec {
 func ProgramAppend(s, other *Program) error {
 	funcInfos, err := s.funcInfos.append(other.funcInfos, s.length)
 	if err != nil {
-		return xerrors.Errorf("func infos")
+		return xerrors.Errorf("func infos: %w", err)
 	}
 
 	lineInfos, err := s.lineInfos.append(other.lineInfos, s.length)

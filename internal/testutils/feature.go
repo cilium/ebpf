@@ -7,7 +7,7 @@ import (
 
 	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/unix"
-	"github.com/pkg/errors"
+	"golang.org/x/xerrors"
 )
 
 var (
@@ -48,13 +48,13 @@ func CheckFeatureTest(t *testing.T, fn func() error) {
 }
 
 func SkipIfNotSupported(tb testing.TB, err error) {
-	ufe, ok := errors.Cause(err).(*internal.UnsupportedFeatureError)
-	if !ok {
-		return
+	for err != nil {
+		if ufe, ok := err.(*internal.UnsupportedFeatureError); ok {
+			checkKernelVersion(tb, ufe)
+			tb.Skip(ufe.Error())
+		}
+		err = xerrors.Unwrap(err)
 	}
-
-	checkKernelVersion(tb, ufe)
-	tb.Skip(ufe.Error())
 }
 
 func checkKernelVersion(tb testing.TB, ufe *internal.UnsupportedFeatureError) {

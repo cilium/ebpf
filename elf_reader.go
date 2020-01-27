@@ -12,7 +12,7 @@ import (
 	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/btf"
 
-	"github.com/pkg/errors"
+	"golang.org/x/xerrors"
 )
 
 type elfCode struct {
@@ -32,7 +32,10 @@ func LoadCollectionSpec(file string) (*CollectionSpec, error) {
 	defer f.Close()
 
 	spec, err := LoadCollectionSpecFromReader(f)
-	return spec, errors.Wrapf(err, "file %s", file)
+	if err != nil {
+		return &CollectionSpec{}, xerrors.Errorf("file %s: %w", file, err)
+	}
+	return spec, nil
 }
 
 // LoadCollectionSpecFromReader parses an ELF file into a CollectionSpec.
@@ -45,7 +48,7 @@ func LoadCollectionSpecFromReader(rd io.ReaderAt) (*CollectionSpec, error) {
 
 	symbols, err := f.Symbols()
 	if err != nil {
-		return nil, errors.Wrap(err, "load symbols")
+		return nil, xerrors.Errorf("load symbols: %v", err)
 	}
 
 	ec := &elfCode{f, symbols, symbolsPerSection(symbols), "", 0}
@@ -71,13 +74,13 @@ func LoadCollectionSpecFromReader(rd io.ReaderAt) (*CollectionSpec, error) {
 			btfMaps[elf.SectionIndex(i)] = sec
 		case sec.Type == elf.SHT_REL:
 			if int(sec.Info) >= len(ec.Sections) {
-				return nil, errors.Errorf("found relocation section %v for missing section %v", i, sec.Info)
+				return nil, xerrors.Errorf("found relocation section %v for missing section %v", i, sec.Info)
 			}
 
 			// Store relocations under the section index of the target
 			idx := elf.SectionIndex(sec.Info)
 			if relSections[idx] != nil {
-				return nil, errors.Errorf("section %d has multiple relocation sections", sec.Info)
+				return nil, xerrors.Errorf("section %d has multiple relocation sections", sec.Info)
 			}
 			relSections[idx] = sec
 		case sec.Type == elf.SHT_PROGBITS && (sec.Flags&elf.SHF_EXECINSTR) != 0 && sec.Size > 0:
@@ -87,34 +90,34 @@ func LoadCollectionSpecFromReader(rd io.ReaderAt) (*CollectionSpec, error) {
 
 	ec.license, err = loadLicense(licenseSection)
 	if err != nil {
-		return nil, errors.Wrap(err, "load license")
+		return nil, xerrors.Errorf("load license: %w", err)
 	}
 
 	ec.version, err = loadVersion(versionSection, ec.ByteOrder)
 	if err != nil {
-		return nil, errors.Wrap(err, "load version")
+		return nil, xerrors.Errorf("load version: %w", err)
 	}
 
 	btf, err := btf.LoadSpecFromReader(rd)
 	if err != nil {
-		return nil, errors.Wrap(err, "load BTF")
+		return nil, xerrors.Errorf("load BTF: %w", err)
 	}
 
 	maps := make(map[string]*MapSpec)
 
 	if err := ec.loadMaps(maps, mapSections); err != nil {
-		return nil, errors.Wrap(err, "load maps")
+		return nil, xerrors.Errorf("load maps: %w", err)
 	}
 
 	if len(btfMaps) > 0 {
 		if err := ec.loadBTFMaps(maps, btfMaps, btf); err != nil {
-			return nil, errors.Wrap(err, "load BTF maps")
+			return nil, xerrors.Errorf("load BTF maps: %w", err)
 		}
 	}
 
 	progs, err := ec.loadPrograms(progSections, relSections, btf)
 	if err != nil {
-		return nil, errors.Wrap(err, "load programs")
+		return nil, xerrors.Errorf("load programs: %w", err)
 	}
 
 	return &CollectionSpec{maps, progs}, nil
@@ -122,11 +125,11 @@ func LoadCollectionSpecFromReader(rd io.ReaderAt) (*CollectionSpec, error) {
 
 func loadLicense(sec *elf.Section) (string, error) {
 	if sec == nil {
-		return "", errors.Errorf("missing license section")
+		return "", xerrors.Errorf("missing license section")
 	}
 	data, err := sec.Data()
 	if err != nil {
-		return "", errors.Wrapf(err, "section %s", sec.Name)
+		return "", xerrors.Errorf("section %s: %w", sec.Name, err)
 	}
 	return string(bytes.TrimRight(data, "\000")), nil
 }
@@ -137,8 +140,10 @@ func loadVersion(sec *elf.Section, bo binary.ByteOrder) (uint32, error) {
 	}
 
 	var version uint32
-	err := binary.Read(sec.Open(), bo, &version)
-	return version, errors.Wrapf(err, "section %s", sec.Name)
+	if err := binary.Read(sec.Open(), bo, &version); err != nil {
+		return version, xerrors.Errorf("section %s: %v", sec.Name, err)
+	}
+	return version, nil
 }
 
 func (ec *elfCode) loadPrograms(progSections, relSections map[elf.SectionIndex]*elf.Section, btf *btf.Spec) (map[string]*ProgramSpec, error) {
@@ -150,22 +155,22 @@ func (ec *elfCode) loadPrograms(progSections, relSections map[elf.SectionIndex]*
 	for idx, prog := range progSections {
 		syms := ec.symbolsPerSection[idx]
 		if len(syms) == 0 {
-			return nil, errors.Errorf("section %v: missing symbols", prog.Name)
+			return nil, xerrors.Errorf("section %v: missing symbols", prog.Name)
 		}
 
 		funcSym := syms[0]
 		if funcSym == "" {
-			return nil, errors.Errorf("section %v: no label at start", prog.Name)
+			return nil, xerrors.Errorf("section %v: no label at start", prog.Name)
 		}
 
 		rels, err := ec.loadRelocations(relSections[idx])
 		if err != nil {
-			return nil, errors.Wrapf(err, "program %s: can't load relocations", funcSym)
+			return nil, xerrors.Errorf("program %s: can't load relocations: %w", funcSym, err)
 		}
 
 		insns, length, err := ec.loadInstructions(prog, syms, rels)
 		if err != nil {
-			return nil, errors.Wrapf(err, "program %s: can't unmarshal instructions", funcSym)
+			return nil, xerrors.Errorf("program %s: can't unmarshal instructions: %w", funcSym, err)
 		}
 
 		progType, attachType := getProgType(prog.Name)
@@ -182,7 +187,7 @@ func (ec *elfCode) loadPrograms(progSections, relSections map[elf.SectionIndex]*
 		if btf != nil {
 			spec.BTF, err = btf.Program(prog.Name, length)
 			if err != nil {
-				return nil, errors.Wrapf(err, "BTF for section %s (program %s)", prog.Name, funcSym)
+				return nil, xerrors.Errorf("BTF for section %s (program %s): %w", prog.Name, funcSym, err)
 			}
 		}
 
@@ -200,7 +205,7 @@ func (ec *elfCode) loadPrograms(progSections, relSections map[elf.SectionIndex]*
 	for _, prog := range progs {
 		err := link(prog, libs)
 		if err != nil {
-			return nil, errors.Wrapf(err, "program %s", prog.Name)
+			return nil, xerrors.Errorf("program %s: %w", prog.Name, err)
 		}
 		res[prog.Name] = prog
 	}
@@ -221,7 +226,7 @@ func (ec *elfCode) loadInstructions(section *elf.Section, symbols, relocations m
 			return insns, offset, nil
 		}
 		if err != nil {
-			return nil, 0, errors.Wrapf(err, "offset %d", offset)
+			return nil, 0, xerrors.Errorf("offset %d: %w", offset, err)
 		}
 
 		ins.Symbol = symbols[offset]
@@ -236,11 +241,11 @@ func (ec *elfCode) loadMaps(maps map[string]*MapSpec, mapSections map[elf.Sectio
 	for idx, sec := range mapSections {
 		syms := ec.symbolsPerSection[idx]
 		if len(syms) == 0 {
-			return errors.Errorf("section %v: no symbols", sec.Name)
+			return xerrors.Errorf("section %v: no symbols", sec.Name)
 		}
 
 		if sec.Size%uint64(len(syms)) != 0 {
-			return errors.Errorf("section %v: map descriptors are not of equal size", sec.Name)
+			return xerrors.Errorf("section %v: map descriptors are not of equal size", sec.Name)
 		}
 
 		var (
@@ -250,11 +255,11 @@ func (ec *elfCode) loadMaps(maps map[string]*MapSpec, mapSections map[elf.Sectio
 		for i, offset := 0, uint64(0); i < len(syms); i, offset = i+1, offset+size {
 			mapSym := syms[offset]
 			if mapSym == "" {
-				return errors.Errorf("section %s: missing symbol for map at offset %d", sec.Name, offset)
+				return xerrors.Errorf("section %s: missing symbol for map at offset %d", sec.Name, offset)
 			}
 
 			if maps[mapSym] != nil {
-				return errors.Errorf("section %v: map %v already exists", sec.Name, mapSym)
+				return xerrors.Errorf("section %v: map %v already exists", sec.Name, mapSym)
 			}
 
 			lr := io.LimitReader(r, int64(size))
@@ -262,19 +267,19 @@ func (ec *elfCode) loadMaps(maps map[string]*MapSpec, mapSections map[elf.Sectio
 			var spec MapSpec
 			switch {
 			case binary.Read(lr, ec.ByteOrder, &spec.Type) != nil:
-				return errors.Errorf("map %v: missing type", mapSym)
+				return xerrors.Errorf("map %v: missing type", mapSym)
 			case binary.Read(lr, ec.ByteOrder, &spec.KeySize) != nil:
-				return errors.Errorf("map %v: missing key size", mapSym)
+				return xerrors.Errorf("map %v: missing key size", mapSym)
 			case binary.Read(lr, ec.ByteOrder, &spec.ValueSize) != nil:
-				return errors.Errorf("map %v: missing value size", mapSym)
+				return xerrors.Errorf("map %v: missing value size", mapSym)
 			case binary.Read(lr, ec.ByteOrder, &spec.MaxEntries) != nil:
-				return errors.Errorf("map %v: missing max entries", mapSym)
+				return xerrors.Errorf("map %v: missing max entries", mapSym)
 			case binary.Read(lr, ec.ByteOrder, &spec.Flags) != nil:
-				return errors.Errorf("map %v: missing flags", mapSym)
+				return xerrors.Errorf("map %v: missing flags", mapSym)
 			}
 
 			if _, err := io.Copy(internal.DiscardZeroes{}, lr); err != nil {
-				return errors.Errorf("map %v: unknown and non-zero fields in definition", mapSym)
+				return xerrors.Errorf("map %v: unknown and non-zero fields in definition", mapSym)
 			}
 
 			maps[mapSym] = &spec
@@ -287,28 +292,28 @@ func (ec *elfCode) loadMaps(maps map[string]*MapSpec, mapSections map[elf.Sectio
 func (ec *elfCode) loadBTFMaps(maps map[string]*MapSpec, mapSections map[elf.SectionIndex]*elf.Section, spec *btf.Spec) error {
 
 	if spec == nil {
-		return errors.Errorf("missing BTF")
+		return xerrors.Errorf("missing BTF")
 	}
 
 	for idx, sec := range mapSections {
 		syms := ec.symbolsPerSection[idx]
 		if len(syms) == 0 {
-			return errors.Errorf("section %v: no symbols", sec.Name)
+			return xerrors.Errorf("section %v: no symbols", sec.Name)
 		}
 
 		for _, sym := range syms {
 			if maps[sym] != nil {
-				return errors.Errorf("section %v: map %v already exists", sec.Name, sym)
+				return xerrors.Errorf("section %v: map %v already exists", sec.Name, sym)
 			}
 
 			btfMap, err := spec.Map(sym)
 			if err != nil {
-				return errors.Wrapf(err, "map %v: can't get BTF", sym)
+				return xerrors.Errorf("map %v: can't get BTF: %w", sym, err)
 			}
 
 			spec, err := mapSpecFromBTF(btfMap)
 			if err != nil {
-				return errors.Wrapf(err, "map %v", sym)
+				return xerrors.Errorf("map %v: %w", sym, err)
 			}
 
 			maps[sym] = spec
@@ -328,36 +333,36 @@ func mapSpecFromBTF(btfMap *btf.Map) (*MapSpec, error) {
 		case "type":
 			mapType, err = uintFromBTF(member.Type)
 			if err != nil {
-				return nil, errors.Wrap(err, "can't get type")
+				return nil, xerrors.Errorf("can't get type: %w", err)
 			}
 
 		case "map_flags":
 			flags, err = uintFromBTF(member.Type)
 			if err != nil {
-				return nil, errors.Wrap(err, "can't get BTF map flags")
+				return nil, xerrors.Errorf("can't get BTF map flags: %w", err)
 			}
 
 		case "max_entries":
 			maxEntries, err = uintFromBTF(member.Type)
 			if err != nil {
-				return nil, errors.Wrap(err, "can't get BTF map max entries")
+				return nil, xerrors.Errorf("can't get BTF map max entries: %w", err)
 			}
 
 		case "key":
 		case "value":
 		default:
-			return nil, errors.Errorf("unrecognized field %s in BTF map definition", member.Name)
+			return nil, xerrors.Errorf("unrecognized field %s in BTF map definition", member.Name)
 		}
 	}
 
 	keySize, err := btf.Sizeof(btf.MapKey(btfMap))
 	if err != nil {
-		return nil, errors.Wrap(err, "can't get size of BTF key")
+		return nil, xerrors.Errorf("can't get size of BTF key: %w", err)
 	}
 
 	valueSize, err := btf.Sizeof(btf.MapValue(btfMap))
 	if err != nil {
-		return nil, errors.Wrap(err, "can't get size of BTF value")
+		return nil, xerrors.Errorf("can't get size of BTF value: %w", err)
 	}
 
 	return &MapSpec{
@@ -375,12 +380,12 @@ func mapSpecFromBTF(btfMap *btf.Map) (*MapSpec, error) {
 func uintFromBTF(typ btf.Type) (uint32, error) {
 	ptr, ok := typ.(*btf.Pointer)
 	if !ok {
-		return 0, errors.Errorf("not a pointer: %v", typ)
+		return 0, xerrors.Errorf("not a pointer: %v", typ)
 	}
 
 	arr, ok := ptr.Target.(*btf.Array)
 	if !ok {
-		return 0, errors.Errorf("not a pointer to array: %v", typ)
+		return 0, xerrors.Errorf("not a pointer to array: %v", typ)
 	}
 
 	return arr.Nelems, nil
@@ -471,7 +476,7 @@ func (ec *elfCode) loadRelocations(sec *elf.Section) (map[uint64]string, error) 
 	}
 
 	if sec.Entsize < 16 {
-		return nil, errors.New("rels are less than 16 bytes")
+		return nil, xerrors.New("rels are less than 16 bytes")
 	}
 
 	r := sec.Open()
@@ -480,12 +485,12 @@ func (ec *elfCode) loadRelocations(sec *elf.Section) (map[uint64]string, error) 
 
 		var rel elf.Rel64
 		if binary.Read(ent, ec.ByteOrder, &rel) != nil {
-			return nil, errors.Errorf("can't parse relocation at offset %v", off)
+			return nil, xerrors.Errorf("can't parse relocation at offset %v", off)
 		}
 
 		symNo := int(elf.R_SYM64(rel.Info) - 1)
 		if symNo >= len(ec.symbols) {
-			return nil, errors.Errorf("relocation at offset %d: symbol %v doesnt exist", off, symNo)
+			return nil, xerrors.Errorf("relocation at offset %d: symbol %v doesnt exist", off, symNo)
 		}
 
 		rels[rel.Off] = ec.symbols[symNo].Name

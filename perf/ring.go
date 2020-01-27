@@ -9,7 +9,7 @@ import (
 
 	"github.com/cilium/ebpf/internal/unix"
 
-	"github.com/pkg/errors"
+	"golang.org/x/xerrors"
 )
 
 // perfEventRing is a page of metadata followed by
@@ -23,7 +23,7 @@ type perfEventRing struct {
 
 func newPerfEventRing(cpu, perCPUBuffer, watermark int) (*perfEventRing, error) {
 	if watermark >= perCPUBuffer {
-		return nil, errors.Errorf("watermark must be smaller than perCPUBuffer")
+		return nil, xerrors.New("watermark must be smaller than perCPUBuffer")
 	}
 
 	// Round to nearest page boundary and allocate
@@ -34,7 +34,7 @@ func newPerfEventRing(cpu, perCPUBuffer, watermark int) (*perfEventRing, error) 
 
 	fd, err := createPerfEvent(cpu, watermark)
 	if err != nil {
-		return nil, errors.Wrap(err, "can't create perf event")
+		return nil, xerrors.Errorf("can't create perf event: %w", err)
 	}
 
 	if err := unix.SetNonblock(fd, true); err != nil {
@@ -89,7 +89,10 @@ func createPerfEvent(cpu, watermark int) (int, error) {
 
 	attr.Size = uint32(unsafe.Sizeof(attr))
 	fd, err := unix.PerfEventOpen(&attr, -1, cpu, -1, unix.PERF_FLAG_FD_CLOEXEC)
-	return fd, errors.Wrap(err, "can't create perf event")
+	if err != nil {
+		return -1, xerrors.Errorf("can't create perf event: %v", err)
+	}
+	return fd, nil
 }
 
 type ringReader struct {

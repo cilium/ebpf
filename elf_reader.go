@@ -48,7 +48,7 @@ func LoadCollectionSpecFromReader(rd io.ReaderAt) (*CollectionSpec, error) {
 
 	symbols, err := f.Symbols()
 	if err != nil {
-		return nil, xerrors.Errorf("load symbols: %w", err)
+		return nil, xerrors.Errorf("load symbols: %v", err)
 	}
 
 	ec := &elfCode{f, symbols, symbolsPerSection(symbols), "", 0}

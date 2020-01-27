@@ -221,7 +221,7 @@ func convertProgramSpec(spec *ProgramSpec, handle *btf.Handle) (*bpfProgLoadAttr
 
 		recSize, bytes, err = btf.ProgramFuncInfos(spec.BTF)
 		if err != nil {
-			return nil, xerrors.Errorf("can't get BTF function infos")
+			return nil, xerrors.Errorf("can't get BTF function infos: %w", err)
 		}
 		attr.funcInfoRecSize = recSize
 		attr.funcInfoCnt = uint32(uint64(len(bytes)) / uint64(recSize))

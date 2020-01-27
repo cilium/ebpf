@@ -139,7 +139,7 @@ func readTypes(r io.Reader, bo binary.ByteOrder) ([]rawType, error) {
 		if err := binary.Read(r, bo, &header); err == io.EOF {
 			return types, nil
 		} else if err != nil {
-			return nil, xerrors.Errorf("can't read type info for id %v: %w", id, err)
+			return nil, xerrors.Errorf("can't read type info for id %v: %v", id, err)
 		}
 
 		var data interface{}

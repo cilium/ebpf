@@ -9,6 +9,7 @@ import (
 	"unsafe"
 
 	"github.com/cilium/ebpf/internal"
+
 	"golang.org/x/xerrors"
 )
 
@@ -46,7 +47,7 @@ func marshalBytes(data interface{}, length int) (buf []byte, err error) {
 		var wr bytes.Buffer
 		err = binary.Write(&wr, internal.NativeEndian, value)
 		if err != nil {
-			err = xerrors.Errorf("encoding %T: %w", value, err)
+			err = xerrors.Errorf("encoding %T: %v", value, err)
 		}
 		buf = wr.Bytes()
 	}
@@ -97,7 +98,7 @@ func unmarshalBytes(data interface{}, buf []byte) error {
 	default:
 		rd := bytes.NewReader(buf)
 		if err := binary.Read(rd, internal.NativeEndian, value); err != nil {
-			return xerrors.Errorf("decoding %T: %w", value, err)
+			return xerrors.Errorf("decoding %T: %v", value, err)
 		}
 		return nil
 	}

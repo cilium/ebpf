@@ -13,7 +13,7 @@ type stringTable []byte
 func readStringTable(r io.Reader) (stringTable, error) {
 	contents, err := ioutil.ReadAll(r)
 	if err != nil {
-		return nil, xerrors.Errorf("can't read string table: %w", err)
+		return nil, xerrors.Errorf("can't read string table: %v", err)
 	}
 
 	if len(contents) < 1 {

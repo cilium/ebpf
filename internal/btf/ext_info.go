@@ -161,7 +161,7 @@ func parseExtInfo(r io.Reader, bo binary.ByteOrder, strings stringTable) (map[st
 		for i := uint32(0); i < infoHeader.NumInfo; i++ {
 			var byteOff uint32
 			if err := binary.Read(r, bo, &byteOff); err != nil {
-				return nil, xerrors.Errorf("section %v: can't read extended info offset: %w", secName, err)
+				return nil, xerrors.Errorf("section %v: can't read extended info offset: %v", secName, err)
 			}
 
 			buf := make([]byte, int(recordSize-4))

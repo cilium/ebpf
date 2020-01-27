@@ -43,7 +43,7 @@ func addToEpoll(epollfd, fd int, cpu int) error {
 	}
 
 	if err := unix.EpollCtl(epollfd, unix.EPOLL_CTL_ADD, fd, &event); err != nil {
-		return xerrors.Errorf("can't add fd to epoll: %w", err)
+		return xerrors.Errorf("can't add fd to epoll: %v", err)
 	}
 	return nil
 }
@@ -88,7 +88,7 @@ func readRecord(rd io.Reader, cpu int) (Record, error) {
 	}
 
 	if err != nil {
-		return Record{}, xerrors.Errorf("can't read event header: %w", err)
+		return Record{}, xerrors.Errorf("can't read event header: %v", err)
 	}
 
 	switch header.Type {
@@ -114,7 +114,7 @@ func readLostRecords(rd io.Reader) (uint64, error) {
 
 	err := binary.Read(rd, internal.NativeEndian, &lostHeader)
 	if err != nil {
-		return 0, xerrors.Errorf("can't read lost records header: %w", err)
+		return 0, xerrors.Errorf("can't read lost records header: %v", err)
 	}
 
 	return lostHeader.Lost, nil
@@ -124,12 +124,12 @@ func readRawSample(rd io.Reader) ([]byte, error) {
 	// This must match 'struct perf_event_sample in kernel sources.
 	var size uint32
 	if err := binary.Read(rd, internal.NativeEndian, &size); err != nil {
-		return nil, xerrors.Errorf("can't read sample size: %w", err)
+		return nil, xerrors.Errorf("can't read sample size: %v", err)
 	}
 
 	data := make([]byte, int(size))
 	if _, err := io.ReadFull(rd, data); err != nil {
-		return []byte{}, xerrors.Errorf("can't read sample: %w", err)
+		return nil, xerrors.Errorf("can't read sample: %v", err)
 	}
 	return data, nil
 }
@@ -188,7 +188,7 @@ func NewReaderWithOptions(array *ebpf.Map, perCPUBuffer int, opts ReaderOptions)
 
 	epollFd, err := unix.EpollCreate1(unix.EPOLL_CLOEXEC)
 	if err != nil {
-		return nil, xerrors.Errorf("can't create epoll fd: %w", err)
+		return nil, xerrors.Errorf("can't create epoll fd: %v", err)
 	}
 
 	var (
@@ -276,7 +276,7 @@ func (pr *Reader) Close() error {
 		internal.NativeEndian.PutUint64(value[:], 1)
 		_, err = unix.Write(pr.closeFd, value[:])
 		if err != nil {
-			err = xerrors.Errorf("can't write event fd: %w", err)
+			err = xerrors.Errorf("can't write event fd: %v", err)
 			return
 		}
 

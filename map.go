@@ -284,7 +284,7 @@ func (m *Map) LookupAndDelete(key, valueOut interface{}) error {
 	}
 
 	if err := bpfMapLookupAndDelete(m.fd, keyPtr, valuePtr); err != nil {
-		return xerrors.Errorf("lookup and delete and delete failed: %w", err)
+		return xerrors.Errorf("lookup and delete failed: %w", err)
 	}
 
 	return unmarshalBytes(valueOut, valueBytes)

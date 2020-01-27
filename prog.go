@@ -213,7 +213,7 @@ func convertProgramSpec(spec *ProgramSpec, handle *btf.Handle) (*bpfProgLoadAttr
 
 		recSize, bytes, err := btf.ProgramLineInfos(spec.BTF)
 		if err != nil {
-			return nil, xerrors.Errorf("can't get BTF line infos")
+			return nil, xerrors.Errorf("can't get BTF line infos: %w", err)
 		}
 		attr.lineInfoRecSize = recSize
 		attr.lineInfoCnt = uint32(uint64(len(bytes)) / uint64(recSize))

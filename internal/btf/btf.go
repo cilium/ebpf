@@ -454,7 +454,8 @@ func ProgramLineInfos(s *Program) (recordSize uint32, bytes []byte, err error) {
 // IsNotSupported returns true if the error indicates that the kernel
 // doesn't support BTF.
 func IsNotSupported(err error) bool {
-	if xerrors.Is(err, (err).(*internal.UnsupportedFeatureError)) {
+	var ufe internal.UnsupportedFeatureError
+	return xerrors.As(err, &ufe) && ufe.Name == "BTF"
 		return (err).(*internal.UnsupportedFeatureError).Name == "BTF"
 	}
 	return false

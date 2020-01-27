@@ -21,6 +21,9 @@ type MapSpec struct {
 	MaxEntries uint32
 	Flags      uint32
 
+	// The initial contents of the map. May be nil.
+	Contents []MapKV
+
 	// InnerMap is used as a template for ArrayOfMaps and HashOfMaps
 	InnerMap *MapSpec
 
@@ -33,14 +36,24 @@ func (ms *MapSpec) String() string {
 }
 
 // Copy returns a copy of the spec.
+//
+// MapSpec.Contents is a shallow copy.
 func (ms *MapSpec) Copy() *MapSpec {
 	if ms == nil {
 		return nil
 	}
 
 	cpy := *ms
+	cpy.Contents = make([]MapKV, len(ms.Contents))
+	copy(cpy.Contents, ms.Contents)
 	cpy.InnerMap = ms.InnerMap.Copy()
 	return &cpy
+}
+
+// MapKV is used to initialize the contents of a Map.
+type MapKV struct {
+	Key   interface{}
+	Value interface{}
 }
 
 // Map represents a Map file descriptor.
@@ -113,7 +126,7 @@ func newMapWithBTF(spec *MapSpec, handle *btf.Handle) (*Map, error) {
 }
 
 func createMap(spec *MapSpec, inner *internal.FD, handle *btf.Handle) (*Map, error) {
-	spec = spec.Copy()
+	abi := newMapABIFromSpec(spec)
 
 	switch spec.Type {
 	case ArrayOfMaps:
@@ -123,36 +136,37 @@ func createMap(spec *MapSpec, inner *internal.FD, handle *btf.Handle) (*Map, err
 			return nil, err
 		}
 
-		if spec.ValueSize != 0 && spec.ValueSize != 4 {
-			return nil, fmt.Errorf("ValueSize must be zero or four for map of map")
+		if abi.ValueSize != 0 && abi.ValueSize != 4 {
+			return nil, xerrors.New("ValueSize must be zero or four for map of map")
 		}
-		spec.ValueSize = 4
+		abi.ValueSize = 4
 
 	case PerfEventArray:
-		if spec.KeySize != 0 && spec.KeySize != 4 {
-			return nil, fmt.Errorf("KeySize must be zero or four for perf event array")
+		if abi.KeySize != 0 && abi.KeySize != 4 {
+			return nil, xerrors.New("KeySize must be zero or four for perf event array")
 		}
-		if spec.ValueSize != 0 && spec.ValueSize != 4 {
-			return nil, fmt.Errorf("ValueSize must be zero or four for perf event array")
+		abi.KeySize = 4
+
+		if abi.ValueSize != 0 && abi.ValueSize != 4 {
+			return nil, xerrors.New("ValueSize must be zero or four for perf event array")
 		}
-		if spec.MaxEntries == 0 {
+		abi.ValueSize = 4
+
+		if abi.MaxEntries == 0 {
 			n, err := internal.OnlineCPUs()
 			if err != nil {
 				return nil, xerrors.Errorf("perf event array: %w", err)
 			}
-			spec.MaxEntries = uint32(n)
+			abi.MaxEntries = uint32(n)
 		}
-
-		spec.KeySize = 4
-		spec.ValueSize = 4
 	}
 
 	attr := bpfMapCreateAttr{
-		mapType:    spec.Type,
-		keySize:    spec.KeySize,
-		valueSize:  spec.ValueSize,
-		maxEntries: spec.MaxEntries,
-		flags:      spec.Flags,
+		mapType:    abi.Type,
+		keySize:    abi.KeySize,
+		valueSize:  abi.ValueSize,
+		maxEntries: abi.MaxEntries,
+		flags:      abi.Flags,
 	}
 
 	if inner != nil {
@@ -178,7 +192,17 @@ func createMap(spec *MapSpec, inner *internal.FD, handle *btf.Handle) (*Map, err
 		return nil, xerrors.Errorf("map create: %w", err)
 	}
 
-	return newMap(fd, spec.Name, newMapABIFromSpec(spec))
+	m, err := newMap(fd, spec.Name, abi)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := m.populate(spec.Contents); err != nil {
+		m.Close()
+		return nil, xerrors.Errorf("map create: can't set initial contents: %w", err)
+	}
+
+	return m, nil
 }
 
 func newMap(fd *internal.FD, name string, abi *MapABI) (*Map, error) {
@@ -483,6 +507,15 @@ func (m *Map) Clone() (*Map, error) {
 // This requires bpffs to be mounted above fileName. See http://cilium.readthedocs.io/en/doc-1.0/kubernetes/install/#mounting-the-bpf-fs-optional
 func (m *Map) Pin(fileName string) error {
 	return bpfPinObject(fileName, m.fd)
+}
+
+func (m *Map) populate(contents []MapKV) error {
+	for _, kv := range contents {
+		if err := m.Put(kv.Key, kv.Value); err != nil {
+			return xerrors.Errorf("key %v: %w", kv.Key, err)
+		}
+	}
+	return nil
 }
 
 // LoadPinnedMap load a Map from a BPF file.

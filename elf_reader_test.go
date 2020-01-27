@@ -24,34 +24,34 @@ func TestLoadCollectionSpec(t *testing.T) {
 			}
 
 			hashMapSpec := &MapSpec{
-				"hash_map",
-				Hash,
-				4,
-				2,
-				1,
-				0,
-				nil,
-				nil,
+				Name:       "hash_map",
+				Type:       Hash,
+				KeySize:    4,
+				ValueSize:  2,
+				MaxEntries: 1,
 			}
 			checkMapSpec(t, spec.Maps, "hash_map", hashMapSpec)
 			checkMapSpec(t, spec.Maps, "array_of_hash_map", &MapSpec{
-				"hash_map", ArrayOfMaps, 4, 0, 2, 0, nil, nil,
+				Name:       "hash_map",
+				Type:       ArrayOfMaps,
+				KeySize:    4,
+				MaxEntries: 2,
 			})
 			spec.Maps["array_of_hash_map"].InnerMap = spec.Maps["hash_map"]
 
 			hashMap2Spec := &MapSpec{
-				"",
-				Hash,
-				4,
-				1,
-				2,
-				1,
-				nil,
-				nil,
+				Name:       "",
+				Type:       Hash,
+				KeySize:    4,
+				ValueSize:  1,
+				MaxEntries: 2,
+				Flags:      1,
 			}
 			checkMapSpec(t, spec.Maps, "hash_map2", hashMap2Spec)
 			checkMapSpec(t, spec.Maps, "hash_of_hash_map", &MapSpec{
-				"", HashOfMaps, 4, 0, 2, 0, nil, nil,
+				Type:       HashOfMaps,
+				KeySize:    4,
+				MaxEntries: 2,
 			})
 			spec.Maps["hash_of_hash_map"].InnerMap = spec.Maps["hash_map2"]
 

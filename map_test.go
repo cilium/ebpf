@@ -633,6 +633,47 @@ func TestMapFromFD(t *testing.T) {
 	}
 }
 
+func TestMapContents(t *testing.T) {
+	spec := &MapSpec{
+		Type:       Array,
+		KeySize:    4,
+		ValueSize:  4,
+		MaxEntries: 2,
+		Contents: []MapKV{
+			{uint32(0), uint32(23)},
+			{uint32(1), uint32(42)},
+		},
+	}
+
+	m, err := NewMap(spec)
+	if err != nil {
+		t.Fatal("Can't create map:", err)
+	}
+	defer m.Close()
+
+	var value uint32
+	if err := m.Lookup(uint32(0), &value); err != nil {
+		t.Error("Can't look up key 0:", err)
+	} else if value != 23 {
+		t.Errorf("Incorrect value for key 0, expected 23, have %d", value)
+	}
+
+	if err := m.Lookup(uint32(1), &value); err != nil {
+		t.Error("Can't look up key 1:", err)
+	} else if value != 42 {
+		t.Errorf("Incorrect value for key 0, expected 23, have %d", value)
+	}
+
+	spec.Contents = []MapKV{
+		// Key is larger than MaxEntries
+		{uint32(14), uint32(0)},
+	}
+
+	if _, err = NewMap(spec); err == nil {
+		t.Error("Invalid contents should be rejected")
+	}
+}
+
 type benchValue struct {
 	ID      uint32
 	Val16   uint16

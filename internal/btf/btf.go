@@ -122,7 +122,7 @@ func parseBTF(btf io.ReadSeeker, bo binary.ByteOrder) (*Spec, error) {
 
 	strings, err := readStringTable(io.LimitReader(rd, int64(header.StringLen)))
 	if err != nil {
-		return nil, xerrors.Errorf("can't read type names")
+		return nil, xerrors.Errorf("can't read type names: %w", err)
 	}
 
 	if _, err := rd.Seek(int64(header.HdrLen+header.TypeOff), io.SeekStart); err != nil {

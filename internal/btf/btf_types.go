@@ -182,7 +182,7 @@ func readTypes(r io.Reader, bo binary.ByteOrder) ([]rawType, error) {
 		}
 
 		if err := binary.Read(r, bo, data); err != nil {
-			return nil, xerrors.Errorf("type id %d: kind %v: can't read %T: %w", id, header.Kind(), data, err)
+			return nil, xerrors.Errorf("type id %d: kind %v: can't read %T: %v", id, header.Kind(), data, err)
 		}
 
 		types = append(types, rawType{header, data})

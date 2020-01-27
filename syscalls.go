@@ -146,6 +146,10 @@ type bpfGetFDByIDAttr struct {
 	next uint32
 }
 
+type bpfMapFreezeAttr struct {
+	mapFd uint32
+}
+
 func bpfProgLoad(attr *bpfProgLoadAttr) (*internal.FD, error) {
 	for {
 		fd, err := internal.BPF(_ProgLoad, unsafe.Pointer(attr), unsafe.Sizeof(*attr))
@@ -202,6 +206,23 @@ var haveNestedMaps = internal.FeatureTest("nested maps", "4.12", func() bool {
 	}
 
 	_ = nested.Close()
+	return true
+})
+
+var haveMapMutabilityModifiers = internal.FeatureTest("read- and write-only maps", "5.2", func() bool {
+	// This checks BPF_F_RDONLY_PROG and BPF_F_WRONLY_PROG. Since
+	// BPF_MAP_FREEZE appeared in 5.2 as well we don't do a separate check.
+	m, err := bpfMapCreate(&bpfMapCreateAttr{
+		mapType:    Array,
+		keySize:    4,
+		valueSize:  4,
+		maxEntries: 1,
+		flags:      unix.BPF_F_RDONLY_PROG,
+	})
+	if err != nil {
+		return false
+	}
+	_ = m.Close()
 	return true
 })
 
@@ -290,6 +311,19 @@ func wrapMapError(err error) error {
 	}
 
 	return xerrors.New(err.Error())
+}
+
+func bpfMapFreeze(m *internal.FD) error {
+	fd, err := m.Value()
+	if err != nil {
+		return err
+	}
+
+	attr := bpfMapFreezeAttr{
+		mapFd: fd,
+	}
+	_, err = internal.BPF(_MapFreeze, unsafe.Pointer(&attr), unsafe.Sizeof(attr))
+	return err
 }
 
 const bpfFSType = 0xcafe4a11

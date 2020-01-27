@@ -113,7 +113,7 @@ func parseBTF(btf io.ReadSeeker, bo binary.ByteOrder) (*Spec, error) {
 	}
 
 	if _, err := io.CopyN(internal.DiscardZeroes{}, rd, remainder); err != nil {
-		return nil, xerrors.Errorf("header padding: %w", err)
+		return nil, xerrors.Errorf("header padding: %v", err)
 	}
 
 	if _, err := rd.Seek(int64(header.HdrLen+header.StringOff), io.SeekStart); err != nil {

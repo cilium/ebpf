@@ -66,7 +66,7 @@ func parseExtInfos(r io.ReadSeeker, bo binary.ByteOrder, strings stringTable) (f
 	}
 
 	if _, err := r.Seek(int64(header.HdrLen+header.LineInfoOff), io.SeekStart); err != nil {
-		return nil, nil, xerrors.Errorf("can't seek to line info section: %w", err)
+		return nil, nil, xerrors.Errorf("can't seek to line info section: %v", err)
 	}
 
 	lineInfo, err = parseExtInfo(io.LimitReader(r, int64(header.LineInfoLen)), bo, strings)

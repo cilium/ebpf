@@ -194,7 +194,7 @@ func (s *Spec) marshal(bo binary.ByteOrder) ([]byte, error) {
 	raw := buf.Bytes()
 	err := binary.Write(sliceWriter(raw[:headerLen]), bo, header)
 	if err != nil {
-		return nil, xerrors.Errorf("can't write header")
+		return nil, xerrors.Errorf("can't write header: %v", err)
 	}
 
 	return raw, nil

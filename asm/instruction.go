@@ -103,20 +103,50 @@ func (ins Instruction) Marshal(w io.Writer, bo binary.ByteOrder) (uint64, error)
 
 // RewriteMapPtr changes an instruction to use a new map fd.
 //
-// Returns an error if the fd is invalid, or the instruction
-// is incorrect.
+// Returns an error if the instruction doesn't load a map.
 func (ins *Instruction) RewriteMapPtr(fd int) error {
 	if !ins.OpCode.isDWordLoad() {
 		return xerrors.Errorf("%s is not a 64 bit load", ins.OpCode)
 	}
 
-	if fd < 0 {
-		return xerrors.New("invalid fd")
+	if ins.Src != PseudoMapFD && ins.Src != PseudoMapValue {
+		return xerrors.New("not a load from a map")
 	}
 
-	ins.Src = R1
-	ins.Constant = int64(fd)
+	// Preserve the offset value for direct map loads.
+	offset := uint64(ins.Constant) & (math.MaxUint32 << 32)
+	rawFd := uint64(uint32(fd))
+	ins.Constant = int64(offset | rawFd)
 	return nil
+}
+
+func (ins *Instruction) mapPtr() uint32 {
+	return uint32(uint64(ins.Constant) & math.MaxUint32)
+}
+
+// RewriteMapOffset changes the offset of a direct load from a map.
+//
+// Returns an error if the instruction is not a direct load.
+func (ins *Instruction) RewriteMapOffset(offset uint32) error {
+	if !ins.OpCode.isDWordLoad() {
+		return xerrors.Errorf("%s is not a 64 bit load", ins.OpCode)
+	}
+
+	if ins.Src != PseudoMapValue {
+		return xerrors.New("not a direct load from a map")
+	}
+
+	fd := uint64(ins.Constant) & math.MaxUint32
+	ins.Constant = int64(uint64(offset)<<32 | fd)
+	return nil
+}
+
+func (ins *Instruction) mapOffset() uint32 {
+	return uint32(uint64(ins.Constant) >> 32)
+}
+
+func (ins *Instruction) isLoadFromMap() bool {
+	return ins.OpCode == LoadImmOp(DWord) && (ins.Src == PseudoMapFD || ins.Src == PseudoMapValue)
 }
 
 // Format implements fmt.Formatter.
@@ -137,6 +167,19 @@ func (ins Instruction) Format(f fmt.State, c rune) {
 	if op.JumpOp() == Exit {
 		fmt.Fprint(f, op)
 		return
+	}
+
+	if ins.isLoadFromMap() {
+		fd := int32(ins.mapPtr())
+		switch ins.Src {
+		case PseudoMapFD:
+			fmt.Fprintf(f, "LoadMapPtr dst: %s fd: %d", ins.Dst, fd)
+
+		case PseudoMapValue:
+			fmt.Fprintf(f, "LoadMapValue dst: %s, fd: %d off: %d", ins.Dst, fd, ins.mapOffset())
+		}
+
+		goto ref
 	}
 
 	fmt.Fprintf(f, "%v ", op)
@@ -183,6 +226,7 @@ func (ins Instruction) Format(f fmt.State, c rune) {
 		}
 	}
 
+ref:
 	if ins.Reference != "" {
 		fmt.Fprintf(f, " <%s>", ins.Reference)
 	}

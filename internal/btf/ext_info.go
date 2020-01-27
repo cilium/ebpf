@@ -29,7 +29,7 @@ func parseExtInfos(r io.ReadSeeker, bo binary.ByteOrder, strings stringTable) (f
 
 	var header btfExtHeader
 	if err := binary.Read(r, bo, &header); err != nil {
-		return nil, nil, xerrors.Errorf("can't read header: %w", err)
+		return nil, nil, xerrors.Errorf("can't read header: %v", err)
 	}
 
 	if header.Magic != expectedMagic {

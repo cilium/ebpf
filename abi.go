@@ -179,7 +179,7 @@ func scanFdInfoReader(r io.Reader, fields map[string]interface{}) error {
 		}
 
 		if n, err := fmt.Fscanln(bytes.NewReader(parts[1]), field); err != nil || n != 1 {
-			return xerrors.Errorf("can't parse field %s: %w", name, err)
+			return xerrors.Errorf("can't parse field %s: %v", name, err)
 		}
 
 		scanned++

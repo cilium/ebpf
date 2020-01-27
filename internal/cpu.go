@@ -5,7 +5,7 @@ import (
 	"os"
 	"sync"
 
-	"github.com/pkg/errors"
+	"golang.org/x/xerrors"
 )
 
 var sysCPU struct {
@@ -53,7 +53,7 @@ func parseCPUs(path string) (int, error) {
 	var low, high int
 	n, _ := fmt.Fscanf(file, "%d-%d", &low, &high)
 	if n < 1 || low != 0 {
-		return 0, errors.Wrapf(err, "%s has unknown format", path)
+		return 0, xerrors.Errorf("%s has unknown format: %v", path, err)
 	}
 	if n == 1 {
 		high = low

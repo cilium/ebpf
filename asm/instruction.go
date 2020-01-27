@@ -7,7 +7,7 @@ import (
 	"math"
 	"strings"
 
-	"github.com/pkg/errors"
+	"golang.org/x/xerrors"
 )
 
 // InstructionSize is the size of a BPF instruction in bytes
@@ -51,10 +51,10 @@ func (ins *Instruction) Unmarshal(r io.Reader, bo binary.ByteOrder) (uint64, err
 	var bi2 bpfInstruction
 	if err := binary.Read(r, bo, &bi2); err != nil {
 		// No Wrap, to avoid io.EOF clash
-		return 0, errors.New("64bit immediate is missing second half")
+		return 0, xerrors.New("64bit immediate is missing second half")
 	}
 	if bi2.OpCode != 0 || bi2.Offset != 0 || bi2.Registers != 0 {
-		return 0, errors.New("64bit immediate has non-zero fields")
+		return 0, xerrors.New("64bit immediate has non-zero fields")
 	}
 	ins.Constant = int64(uint64(uint32(bi2.Constant))<<32 | uint64(uint32(bi.Constant)))
 
@@ -64,7 +64,7 @@ func (ins *Instruction) Unmarshal(r io.Reader, bo binary.ByteOrder) (uint64, err
 // Marshal encodes a BPF instruction.
 func (ins Instruction) Marshal(w io.Writer, bo binary.ByteOrder) (uint64, error) {
 	if ins.OpCode == InvalidOpCode {
-		return 0, errors.New("invalid opcode")
+		return 0, xerrors.New("invalid opcode")
 	}
 
 	isDWordLoad := ins.OpCode.isDWordLoad()
@@ -107,11 +107,11 @@ func (ins Instruction) Marshal(w io.Writer, bo binary.ByteOrder) (uint64, error)
 // is incorrect.
 func (ins *Instruction) RewriteMapPtr(fd int) error {
 	if !ins.OpCode.isDWordLoad() {
-		return errors.Errorf("%s is not a 64 bit load", ins.OpCode)
+		return xerrors.Errorf("%s is not a 64 bit load", ins.OpCode)
 	}
 
 	if fd < 0 {
-		return errors.New("invalid fd")
+		return xerrors.New("invalid fd")
 	}
 
 	ins.Src = R1
@@ -200,7 +200,7 @@ func (insns Instructions) String() string {
 // Returns an error if the symbol isn't used, see IsUnreferencedSymbol.
 func (insns Instructions) RewriteMapPtr(symbol string, fd int) error {
 	if symbol == "" {
-		return errors.New("empty symbol")
+		return xerrors.New("empty symbol")
 	}
 
 	found := false
@@ -235,7 +235,7 @@ func (insns Instructions) SymbolOffsets() (map[string]int, error) {
 		}
 
 		if _, ok := offsets[ins.Symbol]; ok {
-			return nil, errors.Errorf("duplicate symbol %s", ins.Symbol)
+			return nil, xerrors.Errorf("duplicate symbol %s", ins.Symbol)
 		}
 
 		offsets[ins.Symbol] = i
@@ -273,7 +273,7 @@ func (insns Instructions) marshalledOffsets() (map[string]int, error) {
 		}
 
 		if _, ok := symbols[ins.Symbol]; ok {
-			return nil, errors.Errorf("duplicate symbol %s", ins.Symbol)
+			return nil, xerrors.Errorf("duplicate symbol %s", ins.Symbol)
 		}
 
 		symbols[ins.Symbol] = currentPos
@@ -354,7 +354,7 @@ func (insns Instructions) Marshal(w io.Writer, bo binary.ByteOrder) error {
 			// Rewrite bpf to bpf call
 			offset, ok := absoluteOffsets[ins.Reference]
 			if !ok {
-				return errors.Errorf("instruction %d: reference to missing symbol %s", i, ins.Reference)
+				return xerrors.Errorf("instruction %d: reference to missing symbol %s", i, ins.Reference)
 			}
 
 			ins.Constant = int64(offset - num - 1)
@@ -363,7 +363,7 @@ func (insns Instructions) Marshal(w io.Writer, bo binary.ByteOrder) error {
 			// Rewrite jump to label
 			offset, ok := absoluteOffsets[ins.Reference]
 			if !ok {
-				return errors.Errorf("instruction %d: reference to missing symbol %s", i, ins.Reference)
+				return xerrors.Errorf("instruction %d: reference to missing symbol %s", i, ins.Reference)
 			}
 
 			ins.Offset = int16(offset - num - 1)
@@ -371,7 +371,7 @@ func (insns Instructions) Marshal(w io.Writer, bo binary.ByteOrder) error {
 
 		n, err := ins.Marshal(w, bo)
 		if err != nil {
-			return errors.Wrapf(err, "instruction %d", i)
+			return xerrors.Errorf("instruction %d: %w", i, err)
 		}
 
 		num += int(n / InstructionSize)

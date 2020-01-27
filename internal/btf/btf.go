@@ -416,7 +416,7 @@ func ProgramAppend(s, other *Program) error {
 
 	lineInfos, err := s.lineInfos.append(other.lineInfos, s.length)
 	if err != nil {
-		return xerrors.Errorf("line infos")
+		return xerrors.Errorf("line infos: %w", err)
 	}
 
 	s.length += other.length

@@ -131,7 +131,7 @@ func (ei extInfo) MarshalBinary() ([]byte, error) {
 func parseExtInfo(r io.Reader, bo binary.ByteOrder, strings stringTable) (map[string]extInfo, error) {
 	var recordSize uint32
 	if err := binary.Read(r, bo, &recordSize); err != nil {
-		return nil, xerrors.Errorf("can't read record size: %w", err)
+		return nil, xerrors.Errorf("can't read record size: %v", err)
 	}
 
 	if recordSize < 4 {

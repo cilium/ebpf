@@ -170,7 +170,7 @@ func (s *Spec) marshal(bo binary.ByteOrder) ([]byte, error) {
 		}
 
 		if err := typ.Marshal(&buf, bo); err != nil {
-			return nil, xerrors.Errorf("can't marshal BTF")
+			return nil, xerrors.Errorf("can't marshal BTF: %w", err)
 		}
 	}
 

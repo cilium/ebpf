@@ -166,7 +166,7 @@ func parseExtInfo(r io.Reader, bo binary.ByteOrder, strings stringTable) (map[st
 
 			buf := make([]byte, int(recordSize-4))
 			if _, err := io.ReadFull(r, buf); err != nil {
-				return nil, xerrors.Errorf("section %v: can't read record: %w", secName, err)
+				return nil, xerrors.Errorf("section %v: can't read record: %v", secName, err)
 			}
 
 			if byteOff%asm.InstructionSize != 0 {

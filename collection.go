@@ -39,6 +39,43 @@ func (cs *CollectionSpec) Copy() *CollectionSpec {
 	return &cpy
 }
 
+// RewriteMaps replaces all references to specific maps.
+//
+// Use this function to use pre-existing maps instead of creating new ones
+// when calling NewCollection. Any named maps are removed from CollectionSpec.Maps.
+//
+// Returns an error if a named map isn't used in at least one program.
+func (cs *CollectionSpec) RewriteMaps(maps map[string]*Map) error {
+	for symbol, m := range maps {
+		// have we seen a program that uses this symbol / map
+		seen := false
+		fd := m.FD()
+		for progName, progSpec := range cs.Programs {
+			err := progSpec.Instructions.RewriteMapPtr(symbol, fd)
+
+			switch {
+			case err == nil:
+				seen = true
+
+			case asm.IsUnreferencedSymbol(err):
+				// Not all programs need to use the map
+
+			default:
+				return errors.Wrapf(err, "program %s", progName)
+			}
+		}
+
+		if !seen {
+			return errors.Errorf("map %s not referenced by any programs", symbol)
+		}
+
+		// Prevent NewCollection from creating rewritten maps
+		delete(cs.Maps, symbol)
+	}
+
+	return nil
+}
+
 // Collection is a collection of Programs and Maps associated
 // with their symbols
 type Collection struct {

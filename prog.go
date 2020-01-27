@@ -399,7 +399,7 @@ func (p *Program) testRun(in []byte, repeat int) (uint32, []byte, time.Duration,
 
 	_, err = internal.BPF(_ProgTestRun, unsafe.Pointer(&attr), unsafe.Sizeof(attr))
 	if err != nil {
-		return 0, nil, 0, xerrors.Errorf("can't run test")
+		return 0, nil, 0, xerrors.Errorf("can't run test: %w", err)
 	}
 
 	if int(attr.dataSizeOut) > cap(out) {

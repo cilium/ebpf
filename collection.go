@@ -1,7 +1,10 @@
 package ebpf
 
 import (
+	"math"
+
 	"github.com/cilium/ebpf/asm"
+	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/btf"
 	"golang.org/x/xerrors"
 )
@@ -153,21 +156,27 @@ func NewCollectionWithOptions(spec *CollectionSpec, opts CollectionOptions) (col
 
 		// Rewrite any reference to a valid map.
 		for i := range progSpec.Instructions {
-			var (
-				ins = &progSpec.Instructions[i]
-				m   = maps[ins.Reference]
-			)
+			ins := &progSpec.Instructions[i]
 
-			if ins.Reference == "" || m == nil {
+			if ins.OpCode != asm.LoadImmOp(asm.DWord) || ins.Reference == "" {
 				continue
 			}
 
-			if ins.Src == asm.R1 {
+			if uint32(ins.Constant) != math.MaxUint32 {
 				// Don't overwrite maps already rewritten, users can
 				// rewrite programs in the spec themselves
 				continue
 			}
 
+			m := maps[ins.Reference]
+			if m == nil {
+				return nil, xerrors.Errorf("program %s: missing map %s", progName, ins.Reference)
+			}
+
+			fd := m.FD()
+			if fd < 0 {
+				return nil, xerrors.Errorf("map %s: %w", ins.Reference, internal.ErrClosedFd)
+			}
 			if err := ins.RewriteMapPtr(m.FD()); err != nil {
 				return nil, xerrors.Errorf("progam %s: map %s: %w", progName, ins.Reference, err)
 			}

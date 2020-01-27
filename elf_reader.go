@@ -231,6 +231,12 @@ func (ec *elfCode) loadInstructions(section *elf.Section, symbols, relocations m
 
 		ins.Symbol = symbols[offset]
 		ins.Reference = relocations[offset]
+		if ins.OpCode == asm.LoadImmOp(asm.DWord) && ins.Reference != "" {
+			ins.Src = asm.R1
+			if err := ins.RewriteMapPtr(-1); err != nil {
+				return nil, 0, err
+			}
+		}
 
 		insns = append(insns, ins)
 		offset += n

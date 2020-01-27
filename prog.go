@@ -304,7 +304,7 @@ func (p *Program) Close() error {
 func (p *Program) Test(in []byte) (uint32, []byte, error) {
 	ret, out, _, err := p.testRun(in, 1)
 	if err != nil {
-		return ret, []byte{}, xerrors.Errorf("can't test program: %w", err)
+		return ret, nil, xerrors.Errorf("can't test program: %w", err)
 	}
 	return ret, out, nil
 }

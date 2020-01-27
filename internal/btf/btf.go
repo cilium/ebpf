@@ -131,7 +131,7 @@ func parseBTF(btf io.ReadSeeker, bo binary.ByteOrder) (*Spec, error) {
 
 	rawTypes, err := readTypes(io.LimitReader(rd, int64(header.TypeLen)), bo)
 	if err != nil {
-		return nil, xerrors.Errorf("can't read types")
+		return nil, xerrors.Errorf("can't read types: %w", err)
 	}
 
 	types, err := inflateRawTypes(rawTypes, strings)

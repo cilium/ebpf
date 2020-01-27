@@ -33,6 +33,12 @@ const (
 	RFP          = R10
 )
 
+// Pseudo registers used by 64bit loads
+const (
+	PseudoMapFD    = R1 // BPF_PSEUDO_MAP_FD
+	PseudoMapValue = R2 // BPF_PSEUDO_MAP_VALUE
+)
+
 func (r Register) String() string {
 	v := uint8(r)
 	if v == 10 {

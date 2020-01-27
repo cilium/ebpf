@@ -117,7 +117,7 @@ func parseBTF(btf io.ReadSeeker, bo binary.ByteOrder) (*Spec, error) {
 	}
 
 	if _, err := rd.Seek(int64(header.HdrLen+header.StringOff), io.SeekStart); err != nil {
-		return nil, xerrors.Errorf("can't seek to start of string section: %w", err)
+		return nil, xerrors.Errorf("can't seek to start of string section: %v", err)
 	}
 
 	strings, err := readStringTable(io.LimitReader(rd, int64(header.StringLen)))

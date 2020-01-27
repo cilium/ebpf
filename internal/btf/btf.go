@@ -85,7 +85,7 @@ func LoadSpecFromReader(rd io.ReaderAt) (*Spec, error) {
 func parseBTF(btf io.ReadSeeker, bo binary.ByteOrder) (*Spec, error) {
 	rawBTF, err := ioutil.ReadAll(btf)
 	if err != nil {
-		return nil, xerrors.Errorf("can't read BTF: %w", err)
+		return nil, xerrors.Errorf("can't read BTF: %v", err)
 	}
 
 	rd := bytes.NewReader(rawBTF)

@@ -145,7 +145,7 @@ func parseExtInfo(r io.Reader, bo binary.ByteOrder, strings stringTable) (map[st
 		if err := binary.Read(r, bo, &infoHeader); err == io.EOF {
 			return result, nil
 		} else if err != nil {
-			return nil, xerrors.Errorf("can't read ext info header: %w", err)
+			return nil, xerrors.Errorf("can't read ext info header: %v", err)
 		}
 
 		secName, err := strings.Lookup(infoHeader.SecNameOff)

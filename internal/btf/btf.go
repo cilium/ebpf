@@ -92,7 +92,7 @@ func parseBTF(btf io.ReadSeeker, bo binary.ByteOrder) (*Spec, error) {
 
 	var header btfHeader
 	if err := binary.Read(rd, bo, &header); err != nil {
-		return nil, xerrors.Errorf("can't read header: %w", err)
+		return nil, xerrors.Errorf("can't read header: %v", err)
 	}
 
 	if header.Magic != btfMagic {

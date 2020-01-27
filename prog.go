@@ -269,7 +269,7 @@ func (p *Program) Clone() (*Program, error) {
 
 	dup, err := p.fd.Dup()
 	if err != nil {
-		return nil, xerrors.Errorf("can't clone program")
+		return nil, xerrors.Errorf("can't clone program: %w", err)
 	}
 
 	return newProgram(dup, p.name, &p.abi), nil

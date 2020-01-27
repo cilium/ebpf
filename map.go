@@ -7,7 +7,7 @@ import (
 	"github.com/cilium/ebpf/internal/btf"
 	"github.com/cilium/ebpf/internal/unix"
 
-	"github.com/pkg/errors"
+	"golang.org/x/xerrors"
 )
 
 // MapSpec defines a Map.
@@ -65,7 +65,7 @@ type Map struct {
 // You should not use fd after calling this function.
 func NewMapFromFD(fd int) (*Map, error) {
 	if fd < 0 {
-		return nil, errors.New("invalid fd")
+		return nil, xerrors.New("invalid fd")
 	}
 	bpfFd := internal.NewFD(uint32(fd))
 
@@ -88,7 +88,7 @@ func NewMap(spec *MapSpec) (*Map, error) {
 
 	handle, err := btf.NewHandle(btf.MapSpec(spec.BTF))
 	if err != nil && !btf.IsNotSupported(err) {
-		return nil, errors.Wrap(err, "can't load BTF")
+		return nil, xerrors.Errorf("can't load BTF: %w", err)
 	}
 
 	return newMapWithBTF(spec, handle)
@@ -100,7 +100,7 @@ func newMapWithBTF(spec *MapSpec, handle *btf.Handle) (*Map, error) {
 	}
 
 	if spec.InnerMap == nil {
-		return nil, errors.Errorf("%s requires InnerMap", spec.Type)
+		return nil, xerrors.Errorf("%s requires InnerMap", spec.Type)
 	}
 
 	template, err := createMap(spec.InnerMap, nil, handle)
@@ -124,21 +124,21 @@ func createMap(spec *MapSpec, inner *internal.FD, handle *btf.Handle) (*Map, err
 		}
 
 		if spec.ValueSize != 0 && spec.ValueSize != 4 {
-			return nil, errors.Errorf("ValueSize must be zero or four for map of map")
+			return nil, fmt.Errorf("ValueSize must be zero or four for map of map")
 		}
 		spec.ValueSize = 4
 
 	case PerfEventArray:
 		if spec.KeySize != 0 && spec.KeySize != 4 {
-			return nil, errors.Errorf("KeySize must be zero or four for perf event array")
+			return nil, fmt.Errorf("KeySize must be zero or four for perf event array")
 		}
 		if spec.ValueSize != 0 && spec.ValueSize != 4 {
-			return nil, errors.Errorf("ValueSize must be zero or four for perf event array")
+			return nil, fmt.Errorf("ValueSize must be zero or four for perf event array")
 		}
 		if spec.MaxEntries == 0 {
 			n, err := internal.OnlineCPUs()
 			if err != nil {
-				return nil, errors.Wrap(err, "perf event array")
+				return nil, xerrors.Errorf("perf event array: %w", err)
 			}
 			spec.MaxEntries = uint32(n)
 		}
@@ -159,7 +159,7 @@ func createMap(spec *MapSpec, inner *internal.FD, handle *btf.Handle) (*Map, err
 		var err error
 		attr.innerMapFd, err = inner.Value()
 		if err != nil {
-			return nil, errors.Wrap(err, "map create")
+			return nil, xerrors.Errorf("map create: %w", err)
 		}
 	}
 
@@ -171,7 +171,7 @@ func createMap(spec *MapSpec, inner *internal.FD, handle *btf.Handle) (*Map, err
 
 	name, err := newBPFObjName(spec.Name)
 	if err != nil {
-		return nil, errors.Wrap(err, "map create")
+		return nil, xerrors.Errorf("map create: %w", err)
 	}
 
 	if haveObjName() == nil {
@@ -180,7 +180,7 @@ func createMap(spec *MapSpec, inner *internal.FD, handle *btf.Handle) (*Map, err
 
 	fd, err := bpfMapCreate(&attr)
 	if err != nil {
-		return nil, errors.Wrap(err, "map create")
+		return nil, xerrors.Errorf("map create: %w", err)
 	}
 
 	return newMap(fd, spec.Name, newMapABIFromSpec(spec))
@@ -251,9 +251,9 @@ func (m *Map) Lookup(key, valueOut interface{}) error {
 		*value = m
 		return nil
 	case *Map:
-		return errors.Errorf("can't unmarshal into %T, need %T", value, (**Map)(nil))
+		return xerrors.Errorf("can't unmarshal into %T, need %T", value, (**Map)(nil))
 	case Map:
-		return errors.Errorf("can't unmarshal into %T, need %T", value, (**Map)(nil))
+		return xerrors.Errorf("can't unmarshal into %T, need %T", value, (**Map)(nil))
 
 	case **Program:
 		p, err := unmarshalProgram(valueBytes)
@@ -265,9 +265,9 @@ func (m *Map) Lookup(key, valueOut interface{}) error {
 		*value = p
 		return nil
 	case *Program:
-		return errors.Errorf("can't unmarshal into %T, need %T", value, (**Program)(nil))
+		return xerrors.Errorf("can't unmarshal into %T, need %T", value, (**Program)(nil))
 	case Program:
-		return errors.Errorf("can't unmarshal into %T, need %T", value, (**Program)(nil))
+		return xerrors.Errorf("can't unmarshal into %T, need %T", value, (**Program)(nil))
 
 	default:
 		return unmarshalBytes(valueOut, valueBytes)
@@ -280,11 +280,11 @@ func (m *Map) LookupAndDelete(key, valueOut interface{}) error {
 
 	keyPtr, err := marshalPtr(key, int(m.abi.KeySize))
 	if err != nil {
-		return errors.WithMessage(err, "can't marshal key")
+		return xerrors.Errorf("can't marshal key: %w", err)
 	}
 
 	if err := bpfMapLookupAndDelete(m.fd, keyPtr, valuePtr); err != nil {
-		return errors.WithMessage(err, "lookup and delete and delete failed")
+		return xerrors.Errorf("lookup and delete failed: %w", err)
 	}
 
 	return unmarshalBytes(valueOut, valueBytes)
@@ -308,11 +308,13 @@ func (m *Map) LookupBytes(key interface{}) ([]byte, error) {
 func (m *Map) lookup(key interface{}, valueOut internal.Pointer) error {
 	keyPtr, err := marshalPtr(key, int(m.abi.KeySize))
 	if err != nil {
-		return errors.WithMessage(err, "can't marshal key")
+		return xerrors.Errorf("can't marshal key: %w", err)
 	}
 
-	err = bpfMapLookupElem(m.fd, keyPtr, valueOut)
-	return errors.WithMessage(err, "lookup failed")
+	if err = bpfMapLookupElem(m.fd, keyPtr, valueOut); err != nil {
+		return xerrors.Errorf("lookup failed: %w", err)
+	}
+	return nil
 }
 
 // MapUpdateFlags controls the behaviour of the Map.Update call.
@@ -340,7 +342,7 @@ func (m *Map) Put(key, value interface{}) error {
 func (m *Map) Update(key, value interface{}, flags MapUpdateFlags) error {
 	keyPtr, err := marshalPtr(key, int(m.abi.KeySize))
 	if err != nil {
-		return errors.WithMessage(err, "can't marshal key")
+		return xerrors.Errorf("can't marshal key: %w", err)
 	}
 
 	var valuePtr internal.Pointer
@@ -350,7 +352,7 @@ func (m *Map) Update(key, value interface{}, flags MapUpdateFlags) error {
 		valuePtr, err = marshalPtr(value, int(m.abi.ValueSize))
 	}
 	if err != nil {
-		return errors.WithMessage(err, "can't marshal value")
+		return xerrors.Errorf("can't marshal value: %w", err)
 	}
 
 	return bpfMapUpdateElem(m.fd, keyPtr, valuePtr, uint64(flags))
@@ -362,11 +364,13 @@ func (m *Map) Update(key, value interface{}, flags MapUpdateFlags) error {
 func (m *Map) Delete(key interface{}) error {
 	keyPtr, err := marshalPtr(key, int(m.abi.KeySize))
 	if err != nil {
-		return errors.WithMessage(err, "can't marshal key")
+		return xerrors.Errorf("can't marshal key: %w", err)
 	}
 
-	err = bpfMapDeleteElem(m.fd, keyPtr)
-	return errors.WithMessage(err, "can't delete key")
+	if err = bpfMapDeleteElem(m.fd, keyPtr); err != nil {
+		return xerrors.Errorf("can't delete key: %w", err)
+	}
+	return nil
 }
 
 // NextKey finds the key following an initial key.
@@ -383,8 +387,10 @@ func (m *Map) NextKey(key, nextKeyOut interface{}) error {
 		return nil
 	}
 
-	err := unmarshalBytes(nextKeyOut, nextKeyBytes)
-	return errors.WithMessage(err, "can't unmarshal next key")
+	if err := unmarshalBytes(nextKeyOut, nextKeyBytes); err != nil {
+		return xerrors.Errorf("can't unmarshal next key: %w", err)
+	}
+	return nil
 }
 
 // NextKeyBytes returns the key following an initial key as a byte slice.
@@ -413,12 +419,14 @@ func (m *Map) nextKey(key interface{}, nextKeyOut internal.Pointer) error {
 	if key != nil {
 		keyPtr, err = marshalPtr(key, int(m.abi.KeySize))
 		if err != nil {
-			return errors.WithMessage(err, "can't marshal key")
+			return xerrors.Errorf("can't marshal key: %w", err)
 		}
 	}
 
-	err = bpfMapGetNextKey(m.fd, keyPtr, nextKeyOut)
-	return errors.WithMessage(err, "can't get next key")
+	if err = bpfMapGetNextKey(m.fd, keyPtr, nextKeyOut); err != nil {
+		return xerrors.Errorf("can't get next key: %w", err)
+	}
+	return nil
 }
 
 // Iterate traverses a map.
@@ -469,7 +477,7 @@ func (m *Map) Clone() (*Map, error) {
 
 	dup, err := m.fd.Dup()
 	if err != nil {
-		return nil, errors.Wrap(err, "can't clone map")
+		return nil, xerrors.Errorf("can't clone map: %w", err)
 	}
 
 	return newMap(dup, m.name, &m.abi)
@@ -510,7 +518,7 @@ func LoadPinnedMapExplicit(fileName string, abi *MapABI) (*Map, error) {
 
 func unmarshalMap(buf []byte) (*Map, error) {
 	if len(buf) != 4 {
-		return nil, errors.New("map id requires 4 byte value")
+		return nil, xerrors.New("map id requires 4 byte value")
 	}
 
 	// Looking up an entry in a nested map or prog array returns an id,
@@ -562,7 +570,7 @@ func newMapIterator(target *Map) *MapIterator {
 	}
 }
 
-var errIterationAborted = errors.New("iteration aborted")
+var errIterationAborted = xerrors.New("iteration aborted")
 
 // Next decodes the next key and value.
 //
@@ -632,12 +640,12 @@ func (mi *MapIterator) Err() error {
 // IsNotExist returns true if the error indicates that a
 // key doesn't exist.
 func IsNotExist(err error) bool {
-	return errors.Cause(err) == unix.ENOENT
+	return xerrors.Is(err, unix.ENOENT)
 }
 
 // IsIterationAborted returns true if the iteration was aborted.
 //
 // This occurs when keys are deleted from a hash map during iteration.
 func IsIterationAborted(err error) bool {
-	return errors.Cause(err) == errIterationAborted
+	return xerrors.Is(err, errIterationAborted)
 }

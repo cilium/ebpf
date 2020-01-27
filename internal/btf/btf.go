@@ -316,7 +316,7 @@ func NewHandle(spec *Spec) (*Handle, error) {
 
 	btf, err := spec.marshal(internal.NativeEndian)
 	if err != nil {
-		return nil, xerrors.Errorf("can't marshal BTF")
+		return nil, xerrors.Errorf("can't marshal BTF: %w")
 	}
 
 	if uint64(len(btf)) > math.MaxUint32 {

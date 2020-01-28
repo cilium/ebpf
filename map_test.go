@@ -108,7 +108,7 @@ func TestMapPin(t *testing.T) {
 	}
 	defer os.RemoveAll(tmp)
 
-	path := filepath.Join(tmp, "map")
+	path := filepath.Join(tmp, "kindaLongishMapNameFoobarBazBar")
 	if err := m.Pin(path); err != nil {
 		t.Fatal(err)
 	}

@@ -66,6 +66,8 @@ func TestLoadCollectionSpec(t *testing.T) {
 				KernelVersion: 0,
 			})
 
+			t.Log(spec.Programs["xdp_prog"].Instructions)
+
 			coll, err := NewCollectionWithOptions(spec, CollectionOptions{
 				Programs: ProgramOptions{
 					LogLevel: 1,

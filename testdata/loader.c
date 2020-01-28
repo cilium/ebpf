@@ -44,7 +44,7 @@ struct {
 } btf_map __section(".maps");
 #endif
 
-int __attribute__((noinline)) helper_func2(int arg) {
+static int __attribute__((noinline)) helper_func2(int arg) {
 	return arg > 5;
 }
 
@@ -53,10 +53,21 @@ int __attribute__((noinline)) helper_func(int arg) {
 	return helper_func2(arg);
 }
 
+#if __clang_major__ >= 9
+static volatile unsigned int key1 = 0; // .bss
+static volatile unsigned int key2 = 1; // .data
+static const unsigned int key3 = 2; // .rodata
+#endif
+
 __section("xdp") int xdp_prog() {
-	unsigned int key = 0;
-	map_lookup_elem(&hash_map, &key);
-	map_lookup_elem(&hash_map2, &key);
+#if __clang_major__ < 9
+	unsigned int key1 = 0;
+	unsigned int key2 = 1;
+	unsigned int key3 = 2;
+#endif
+	map_lookup_elem(&hash_map, (void*)&key1);
+	map_lookup_elem(&hash_map2, (void*)&key2);
+	map_lookup_elem(&hash_map2, (void*)&key3);
 	return helper_func(1);
 }
 

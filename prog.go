@@ -197,13 +197,8 @@ func convertProgramSpec(spec *ProgramSpec, handle *btf.Handle) (*bpfProgLoadAttr
 		license:            internal.NewStringPointer(spec.License),
 	}
 
-	name, err := newBPFObjName(spec.Name)
-	if err != nil {
-		return nil, err
-	}
-
 	if haveObjName() == nil {
-		attr.progName = name
+		attr.progName = newBPFObjName(spec.Name)
 	}
 
 	if handle != nil && spec.BTF != nil {

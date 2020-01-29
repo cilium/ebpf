@@ -66,6 +66,22 @@ func TestLoadCollectionSpec(t *testing.T) {
 				KernelVersion: 0,
 			})
 
+			if rodata := spec.Maps[".rodata"]; rodata != nil {
+				err := spec.RewriteConstants(map[string]interface{}{
+					"arg": uint32(1),
+				})
+				if err != nil {
+					t.Fatal("Can't rewrite constant:", err)
+				}
+
+				err = spec.RewriteConstants(map[string]interface{}{
+					"totallyBogus": uint32(1),
+				})
+				if err == nil {
+					t.Error("Rewriting a bogus constant doesn't fail")
+				}
+			}
+
 			t.Log(spec.Programs["xdp_prog"].Instructions)
 
 			coll, err := NewCollectionWithOptions(spec, CollectionOptions{
@@ -78,6 +94,15 @@ func TestLoadCollectionSpec(t *testing.T) {
 				t.Fatal(err)
 			}
 			defer coll.Close()
+
+			ret, _, err := coll.Programs["xdp_prog"].Test(make([]byte, 14))
+			if err != nil {
+				t.Fatal("Can't run program:", err)
+			}
+
+			if ret != 1 {
+				t.Error("Expected return value to be 1, got", ret)
+			}
 		})
 	}
 }

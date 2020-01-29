@@ -79,6 +79,52 @@ func (cs *CollectionSpec) RewriteMaps(maps map[string]*Map) error {
 	return nil
 }
 
+// RewriteConstants replaces the value of multiple constants.
+//
+// The constant must be defined like so in the C program:
+//
+//    static volatile const type foobar;
+//    static volatile const type foobar = default;
+//
+// Replacement values must be of the same length as the C sizeof(type).
+// If necessary, they are marshalled according to the same rules as
+// map values.
+//
+// From Linux 5.5 the verifier will use constants to eliminate dead code.
+//
+// Returns an error if a constant doesn't exist.
+func (cs *CollectionSpec) RewriteConstants(consts map[string]interface{}) error {
+	rodata := cs.Maps[".rodata"]
+	if rodata == nil {
+		return xerrors.New("missing .rodata section")
+	}
+
+	if rodata.BTF == nil {
+		return xerrors.New(".rodata section has no BTF")
+	}
+
+	if n := len(rodata.Contents); n != 1 {
+		return xerrors.Errorf("expected one key in .rodata, found %d", n)
+	}
+
+	kv := rodata.Contents[0]
+	value, ok := kv.Value.([]byte)
+	if !ok {
+		return xerrors.Errorf("first value in .rodata is %T not []byte", kv.Value)
+	}
+
+	buf := make([]byte, len(value))
+	copy(buf, value)
+
+	err := patchValue(buf, btf.MapValue(rodata.BTF), consts)
+	if err != nil {
+		return err
+	}
+
+	rodata.Contents[0] = MapKV{kv.Key, buf}
+	return nil
+}
+
 // Collection is a collection of Programs and Maps associated
 // with their symbols
 type Collection struct {

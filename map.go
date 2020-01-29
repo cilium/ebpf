@@ -2,6 +2,7 @@ package ebpf
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/btf"
@@ -606,6 +607,60 @@ func (m *Map) MarshalBinary() ([]byte, error) {
 	buf := make([]byte, 4)
 	internal.NativeEndian.PutUint32(buf, fd)
 	return buf, nil
+}
+
+func patchValue(value []byte, typ btf.Type, replacements map[string]interface{}) error {
+	replaced := make(map[string]bool)
+	replace := func(name string, offset, size int, replacement interface{}) error {
+		if offset+size > len(value) {
+			return xerrors.Errorf("%s: offset %d(+%d) is out of bounds", name, offset, size)
+		}
+
+		buf, err := marshalBytes(replacement, size)
+		if err != nil {
+			return xerrors.Errorf("marshal %s: %w", name, err)
+		}
+
+		copy(value[offset:offset+size], buf)
+		replaced[name] = true
+		return nil
+	}
+
+	switch parent := typ.(type) {
+	case *btf.Datasec:
+		for _, secinfo := range parent.Vars {
+			name := string(secinfo.Type.(*btf.Var).Name)
+			replacement, ok := replacements[name]
+			if !ok {
+				continue
+			}
+
+			err := replace(name, int(secinfo.Offset), int(secinfo.Size), replacement)
+			if err != nil {
+				return err
+			}
+		}
+
+	default:
+		return xerrors.Errorf("patching %T is not supported", typ)
+	}
+
+	if len(replaced) == len(replacements) {
+		return nil
+	}
+
+	var missing []string
+	for name := range replacements {
+		if !replaced[name] {
+			missing = append(missing, name)
+		}
+	}
+
+	if len(missing) == 1 {
+		return xerrors.Errorf("unknown field: %s", missing[0])
+	}
+
+	return xerrors.Errorf("unknown fields: %s", strings.Join(missing, ","))
 }
 
 // MapIterator iterates a Map.

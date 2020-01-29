@@ -1,31 +1,44 @@
 package ebpf
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/cilium/ebpf/internal/testutils"
+	"github.com/cilium/ebpf/internal/unix"
 )
 
-func TestObjName(t *testing.T) {
+func TestObjNameCharacters(t *testing.T) {
 	for in, valid := range map[string]bool{
-		"test":                         true,
-		"":                             true,
-		"a-b":                          false,
-		"yeah so":                      false,
-		"more_than_16_characters_long": true,
+		"test":    true,
+		"":        true,
+		"a-b":     false,
+		"yeah so": false,
+		"dot.":    objNameAllowsDot() == nil,
 	} {
-		name, err := newBPFObjName(in)
-		if result := err == nil; result != valid {
-			t.Errorf("Name '%s' classified incorrectly", name)
+		result := strings.IndexFunc(in, invalidBPFObjNameChar) == -1
+		if result != valid {
+			t.Errorf("Name '%s' classified incorrectly", in)
 		}
-		if name[len(name)-1] != 0 {
-			t.Errorf("Name '%s' is not null terminated", name)
-		}
+	}
+}
+
+func TestObjName(t *testing.T) {
+	name := newBPFObjName("more_than_16_characters_long")
+	if name[len(name)-1] != 0 {
+		t.Error("newBPFObjName doesn't null terminate")
+	}
+	if len(name) != unix.BPF_OBJ_NAME_LEN {
+		t.Errorf("Name is %d instead of %d bytes long", len(name), unix.BPF_OBJ_NAME_LEN)
 	}
 }
 
 func TestHaveObjName(t *testing.T) {
 	testutils.CheckFeatureTest(t, haveObjName)
+}
+
+func TestObjNameAllowsDot(t *testing.T) {
+	testutils.CheckFeatureTest(t, objNameAllowsDot)
 }
 
 func TestHaveNestedMaps(t *testing.T) {

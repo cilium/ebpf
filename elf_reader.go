@@ -259,7 +259,9 @@ func (ec *elfCode) loadMaps(maps map[string]*MapSpec, mapSections map[elf.Sectio
 
 			lr := io.LimitReader(r, int64(size))
 
-			var spec MapSpec
+			spec := MapSpec{
+				Name: SanitizeName(mapSym, -1),
+			}
 			switch {
 			case binary.Read(lr, ec.ByteOrder, &spec.Type) != nil:
 				return errors.Errorf("map %v: missing type", mapSym)

@@ -33,7 +33,7 @@ func LoadCollectionSpec(file string) (*CollectionSpec, error) {
 
 	spec, err := LoadCollectionSpecFromReader(f)
 	if err != nil {
-		return &CollectionSpec{}, xerrors.Errorf("file %s: %w", file, err)
+		return nil, xerrors.Errorf("file %s: %w", file, err)
 	}
 	return spec, nil
 }
@@ -141,7 +141,7 @@ func loadVersion(sec *elf.Section, bo binary.ByteOrder) (uint32, error) {
 
 	var version uint32
 	if err := binary.Read(sec.Open(), bo, &version); err != nil {
-		return version, xerrors.Errorf("section %s: %v", sec.Name, err)
+		return 0, xerrors.Errorf("section %s: %v", sec.Name, err)
 	}
 	return version, nil
 }

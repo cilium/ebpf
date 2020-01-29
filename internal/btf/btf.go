@@ -455,7 +455,7 @@ func ProgramLineInfos(s *Program) (recordSize uint32, bytes []byte, err error) {
 // doesn't support BTF.
 func IsNotSupported(err error) bool {
 	var ufe *internal.UnsupportedFeatureError
-	return xerrors.As(err, &ufe) && (err).(*internal.UnsupportedFeatureError).Name == "BTF"
+	return xerrors.As(err, &ufe) && ufe.Name == "BTF"
 }
 
 type bpfLoadBTFAttr struct {

@@ -341,7 +341,7 @@ func bpfGetObjectInfoByFD(fd *internal.FD, info unsafe.Pointer, size uintptr) er
 func bpfGetProgInfoByFD(fd *internal.FD) (*bpfProgInfo, error) {
 	var info bpfProgInfo
 	if err := bpfGetObjectInfoByFD(fd, unsafe.Pointer(&info), unsafe.Sizeof(info)); err != nil {
-		return &info, xerrors.Errorf("can't get program info: %w", err)
+		return nil, xerrors.Errorf("can't get program info: %w", err)
 	}
 	return &info, nil
 }
@@ -350,7 +350,7 @@ func bpfGetMapInfoByFD(fd *internal.FD) (*bpfMapInfo, error) {
 	var info bpfMapInfo
 	err := bpfGetObjectInfoByFD(fd, unsafe.Pointer(&info), unsafe.Sizeof(info))
 	if err != nil {
-		return &bpfMapInfo{}, xerrors.Errorf("can't get map info: %w", err)
+		return nil, xerrors.Errorf("can't get map info: %w", err)
 	}
 	return &info, nil
 }

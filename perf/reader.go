@@ -429,5 +429,6 @@ func (uev *unknownEventError) Error() string {
 // IsUnknownEvent returns true if the error occured
 // because an unknown event was submitted to the perf event ring.
 func IsUnknownEvent(err error) bool {
-	return xerrors.Is(err, (err).(*unknownEventError))
+	var uee *unknownEventError
+	return xerrors.As(err, &uee)
 }

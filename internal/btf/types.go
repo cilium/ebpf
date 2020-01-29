@@ -259,13 +259,29 @@ type Datasec struct {
 	TypeID
 	Name
 	Size uint32
+	Vars []VarSecinfo
 }
 
-func (ds *Datasec) size() uint32    { return ds.Size }
-func (ds *Datasec) walk(*copyStack) {}
+func (ds *Datasec) size() uint32 { return ds.Size }
+
+func (ds *Datasec) walk(cs *copyStack) {
+	for i := range ds.Vars {
+		cs.push(&ds.Vars[i].Type)
+	}
+}
+
 func (ds *Datasec) copy() Type {
 	cpy := *ds
+	cpy.Vars = make([]VarSecinfo, len(ds.Vars))
+	copy(cpy.Vars, ds.Vars)
 	return &cpy
+}
+
+// VarSecinfo describes variable in a Datasec
+type VarSecinfo struct {
+	Type   Type
+	Offset uint32
+	Size   uint32
 }
 
 type sizer interface {
@@ -521,7 +537,18 @@ func inflateRawTypes(rawTypes []rawType, rawStrings stringTable) (namedTypes map
 			typ = v
 
 		case kindDatasec:
-			typ = &Datasec{id, name, raw.SizeType}
+			btfVars := raw.data.([]btfVarSecinfo)
+			vars := make([]VarSecinfo, 0, len(btfVars))
+			for _, btfVar := range btfVars {
+				vars = append(vars, VarSecinfo{
+					Offset: btfVar.Offset,
+					Size:   btfVar.Size,
+				})
+			}
+			for i := range vars {
+				fixup(btfVars[i].Type, kindVar, &vars[i].Type)
+			}
+			typ = &Datasec{id, name, raw.SizeType, vars}
 
 		default:
 			return nil, xerrors.Errorf("type id %d: unknown kind: %v", id, raw.Kind())

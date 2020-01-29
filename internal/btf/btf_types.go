@@ -135,6 +135,10 @@ type btfVarSecinfo struct {
 	Size   uint32
 }
 
+type btfVariable struct {
+	Linkage uint32
+}
+
 func readTypes(r io.Reader, bo binary.ByteOrder) ([]rawType, error) {
 	var (
 		header btfType
@@ -173,8 +177,7 @@ func readTypes(r io.Reader, bo binary.ByteOrder) ([]rawType, error) {
 			// sizeof(struct btf_param)
 			data = make([]byte, header.Vlen()*4*2)
 		case kindVar:
-			// sizeof(struct btf_variable)
-			data = make([]byte, 4)
+			data = new(btfVariable)
 		case kindDatasec:
 			data = make([]btfVarSecinfo, header.Vlen())
 		default:

@@ -140,10 +140,7 @@ func newProgramWithBTF(spec *ProgramSpec, btf *btf.Handle, opts ProgramOptions) 
 		_, logErr := bpfProgLoad(attr)
 		err = internal.ErrorWithLog(err, logBuf, logErr)
 	}
-	if err != nil {
-		return nil, xerrors.Errorf("can't load program: %w", err)
-	}
-	return nil, nil
+	return nil, xerrors.Errorf("can't load program: %w", err)
 }
 
 // NewProgramFromFD creates a program from a raw fd.

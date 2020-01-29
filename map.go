@@ -169,13 +169,8 @@ func createMap(spec *MapSpec, inner *internal.FD, handle *btf.Handle) (*Map, err
 		attr.btfValueTypeID = btf.MapValue(spec.BTF).ID()
 	}
 
-	name, err := newBPFObjName(spec.Name)
-	if err != nil {
-		return nil, errors.Wrap(err, "map create")
-	}
-
 	if haveObjName() == nil {
-		attr.mapName = name
+		attr.mapName = newBPFObjName(spec.Name)
 	}
 
 	fd, err := bpfMapCreate(&attr)

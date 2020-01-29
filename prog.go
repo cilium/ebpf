@@ -526,5 +526,6 @@ func SanitizeName(name string, replacement rune) string {
 // IsNotSupported returns true if an error occurred because
 // the kernel does not have support for a specific feature.
 func IsNotSupported(err error) bool {
-	return xerrors.Is(err, (err).(*internal.UnsupportedFeatureError))
+	var ufe *internal.UnsupportedFeatureError
+	return xerrors.As(err, &ufe)
 }

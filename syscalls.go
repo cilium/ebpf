@@ -2,7 +2,6 @@ package ebpf
 
 import (
 	"path/filepath"
-	"strings"
 	"unsafe"
 
 	"github.com/cilium/ebpf/internal"
@@ -17,24 +16,23 @@ import (
 type bpfObjName [unix.BPF_OBJ_NAME_LEN]byte
 
 // newBPFObjName truncates the result if it is too long.
-func newBPFObjName(name string) (bpfObjName, error) {
-	idx := strings.IndexFunc(name, invalidBPFObjNameChar)
-	if idx != -1 {
-		return bpfObjName{}, errors.Errorf("invalid character '%c' in name '%s'", name[idx], name)
-	}
-
+func newBPFObjName(name string) bpfObjName {
 	var result bpfObjName
 	copy(result[:unix.BPF_OBJ_NAME_LEN-1], name)
-	return result, nil
+	return result
 }
 
 func invalidBPFObjNameChar(char rune) bool {
+	dotAllowed := objNameAllowsDot() == nil
+
 	switch {
 	case char >= 'A' && char <= 'Z':
 		fallthrough
 	case char >= 'a' && char <= 'z':
 		fallthrough
 	case char >= '0' && char <= '9':
+		fallthrough
+	case dotAllowed && char == '.':
 		fallthrough
 	case char == '_':
 		return false
@@ -345,10 +343,25 @@ func bpfGetMapInfoByFD(fd *internal.FD) (*bpfMapInfo, error) {
 }
 
 var haveObjName = internal.FeatureTest("object names", "4.15", func() bool {
-	name, err := newBPFObjName("feature_test")
+	attr := bpfMapCreateAttr{
+		mapType:    Array,
+		keySize:    4,
+		valueSize:  4,
+		maxEntries: 1,
+		mapName:    newBPFObjName("feature_test"),
+	}
+
+	fd, err := bpfMapCreate(&attr)
 	if err != nil {
-		// This really is a fatal error, but it should be caught
-		// by the unit tests not working.
+		return false
+	}
+
+	_ = fd.Close()
+	return true
+})
+
+var objNameAllowsDot = internal.FeatureTest("dot in object names", "5.2", func() bool {
+	if err := haveObjName(); err != nil {
 		return false
 	}
 
@@ -357,7 +370,7 @@ var haveObjName = internal.FeatureTest("object names", "4.15", func() bool {
 		keySize:    4,
 		valueSize:  4,
 		maxEntries: 1,
-		mapName:    name,
+		mapName:    newBPFObjName(".test"),
 	}
 
 	fd, err := bpfMapCreate(&attr)

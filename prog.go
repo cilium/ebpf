@@ -13,7 +13,7 @@ import (
 	"github.com/cilium/ebpf/internal/btf"
 	"github.com/cilium/ebpf/internal/unix"
 
-	"github.com/pkg/errors"
+	"golang.org/x/xerrors"
 )
 
 const (
@@ -98,7 +98,7 @@ func NewProgramWithOptions(spec *ProgramSpec, opts ProgramOptions) (*Program, er
 
 	handle, err := btf.NewHandle(btf.ProgramSpec(spec.BTF))
 	if err != nil && !btf.IsNotSupported(err) {
-		return nil, errors.Wrap(err, "can't load BTF")
+		return nil, xerrors.Errorf("can't load BTF: %w", err)
 	}
 
 	return newProgramWithBTF(spec, handle, opts)
@@ -140,8 +140,7 @@ func newProgramWithBTF(spec *ProgramSpec, btf *btf.Handle, opts ProgramOptions) 
 		_, logErr := bpfProgLoad(attr)
 		err = internal.ErrorWithLog(err, logBuf, logErr)
 	}
-
-	return nil, errors.Wrap(err, "can't load program")
+	return nil, xerrors.Errorf("can't load program: %w", err)
 }
 
 // NewProgramFromFD creates a program from a raw fd.
@@ -151,7 +150,7 @@ func newProgramWithBTF(spec *ProgramSpec, btf *btf.Handle, opts ProgramOptions) 
 // Requires at least Linux 4.11.
 func NewProgramFromFD(fd int) (*Program, error) {
 	if fd < 0 {
-		return nil, errors.New("invalid fd")
+		return nil, xerrors.New("invalid fd")
 	}
 	bpfFd := internal.NewFD(uint32(fd))
 
@@ -174,11 +173,11 @@ func newProgram(fd *internal.FD, name string, abi *ProgramABI) *Program {
 
 func convertProgramSpec(spec *ProgramSpec, handle *btf.Handle) (*bpfProgLoadAttr, error) {
 	if len(spec.Instructions) == 0 {
-		return nil, errors.New("Instructions cannot be empty")
+		return nil, xerrors.New("Instructions cannot be empty")
 	}
 
 	if len(spec.License) == 0 {
-		return nil, errors.New("License cannot be empty")
+		return nil, xerrors.New("License cannot be empty")
 	}
 
 	buf := bytes.NewBuffer(make([]byte, 0, len(spec.Instructions)*asm.InstructionSize))
@@ -206,7 +205,7 @@ func convertProgramSpec(spec *ProgramSpec, handle *btf.Handle) (*bpfProgLoadAttr
 
 		recSize, bytes, err := btf.ProgramLineInfos(spec.BTF)
 		if err != nil {
-			return nil, errors.Wrap(err, "can't get BTF line infos")
+			return nil, xerrors.Errorf("can't get BTF line infos: %w", err)
 		}
 		attr.lineInfoRecSize = recSize
 		attr.lineInfoCnt = uint32(uint64(len(bytes)) / uint64(recSize))
@@ -214,7 +213,7 @@ func convertProgramSpec(spec *ProgramSpec, handle *btf.Handle) (*bpfProgLoadAttr
 
 		recSize, bytes, err = btf.ProgramFuncInfos(spec.BTF)
 		if err != nil {
-			return nil, errors.Wrap(err, "can't get BTF function infos")
+			return nil, xerrors.Errorf("can't get BTF function infos: %w", err)
 		}
 		attr.funcInfoRecSize = recSize
 		attr.funcInfoCnt = uint32(uint64(len(bytes)) / uint64(recSize))
@@ -262,7 +261,7 @@ func (p *Program) Clone() (*Program, error) {
 
 	dup, err := p.fd.Dup()
 	if err != nil {
-		return nil, errors.Wrap(err, "can't clone program")
+		return nil, xerrors.Errorf("can't clone program: %w", err)
 	}
 
 	return newProgram(dup, p.name, &p.abi), nil
@@ -272,7 +271,10 @@ func (p *Program) Clone() (*Program, error) {
 //
 // This requires bpffs to be mounted above fileName. See http://cilium.readthedocs.io/en/doc-1.0/kubernetes/install/#mounting-the-bpf-fs-optional
 func (p *Program) Pin(fileName string) error {
-	return errors.Wrap(bpfPinObject(fileName, p.fd), "can't pin program")
+	if err := bpfPinObject(fileName, p.fd); err != nil {
+		return xerrors.Errorf("can't pin program: %w", err)
+	}
+	return nil
 }
 
 // Close unloads the program from the kernel.
@@ -293,7 +295,10 @@ func (p *Program) Close() error {
 // This function requires at least Linux 4.12.
 func (p *Program) Test(in []byte) (uint32, []byte, error) {
 	ret, out, _, err := p.testRun(in, 1)
-	return ret, out, errors.Wrap(err, "can't test program")
+	if err != nil {
+		return ret, nil, xerrors.Errorf("can't test program: %w", err)
+	}
+	return ret, out, nil
 }
 
 // Benchmark runs the Program with the given input for a number of times
@@ -305,7 +310,10 @@ func (p *Program) Test(in []byte) (uint32, []byte, error) {
 // This function requires at least Linux 4.12.
 func (p *Program) Benchmark(in []byte, repeat int) (uint32, time.Duration, error) {
 	ret, _, total, err := p.testRun(in, repeat)
-	return ret, total, errors.Wrap(err, "can't benchmark program")
+	if err != nil {
+		return ret, total, xerrors.Errorf("can't benchmark program: %w", err)
+	}
+	return ret, total, nil
 }
 
 var haveProgTestRun = internal.FeatureTest("BPF_PROG_TEST_RUN", "4.12", func() bool {
@@ -340,7 +348,7 @@ var haveProgTestRun = internal.FeatureTest("BPF_PROG_TEST_RUN", "4.12", func() b
 
 	// Check for EINVAL specifically, rather than err != nil since we
 	// otherwise misdetect due to insufficient permissions.
-	return errors.Cause(err) != unix.EINVAL
+	return !xerrors.Is(err, unix.EINVAL)
 })
 
 func (p *Program) testRun(in []byte, repeat int) (uint32, []byte, time.Duration, error) {
@@ -383,7 +391,7 @@ func (p *Program) testRun(in []byte, repeat int) (uint32, []byte, time.Duration,
 
 	_, err = internal.BPF(_ProgTestRun, unsafe.Pointer(&attr), unsafe.Sizeof(attr))
 	if err != nil {
-		return 0, nil, 0, errors.Wrap(err, "can't run test")
+		return 0, nil, 0, xerrors.Errorf("can't run test: %w", err)
 	}
 
 	if int(attr.dataSizeOut) > cap(out) {
@@ -399,7 +407,7 @@ func (p *Program) testRun(in []byte, repeat int) (uint32, []byte, time.Duration,
 
 func unmarshalProgram(buf []byte) (*Program, error) {
 	if len(buf) != 4 {
-		return nil, errors.New("program id requires 4 byte value")
+		return nil, xerrors.New("program id requires 4 byte value")
 	}
 
 	// Looking up an entry in a nested map or prog array returns an id,
@@ -434,7 +442,7 @@ func (p *Program) MarshalBinary() ([]byte, error) {
 // Attach a Program to a container object fd
 func (p *Program) Attach(fd int, typ AttachType, flags AttachFlags) error {
 	if fd < 0 {
-		return errors.New("invalid fd")
+		return xerrors.New("invalid fd")
 	}
 
 	pfd, err := p.fd.Value()
@@ -455,7 +463,7 @@ func (p *Program) Attach(fd int, typ AttachType, flags AttachFlags) error {
 // Detach a Program from a container object fd
 func (p *Program) Detach(fd int, typ AttachType, flags AttachFlags) error {
 	if fd < 0 {
-		return errors.New("invalid fd")
+		return xerrors.New("invalid fd")
 	}
 
 	pfd, err := p.fd.Value()
@@ -485,7 +493,7 @@ func LoadPinnedProgram(fileName string) (*Program, error) {
 	name, abi, err := newProgramABIFromFd(fd)
 	if err != nil {
 		_ = fd.Close()
-		return nil, errors.Wrapf(err, "can't get ABI for %s", fileName)
+		return nil, xerrors.Errorf("can't get ABI for %s: %w", fileName, err)
 	}
 
 	return newProgram(fd, name, abi), nil
@@ -510,6 +518,6 @@ func SanitizeName(name string, replacement rune) string {
 // IsNotSupported returns true if an error occurred because
 // the kernel does not have support for a specific feature.
 func IsNotSupported(err error) bool {
-	_, notSupported := errors.Cause(err).(*internal.UnsupportedFeatureError)
-	return notSupported
+	var ufe *internal.UnsupportedFeatureError
+	return xerrors.As(err, &ufe)
 }

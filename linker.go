@@ -46,7 +46,7 @@ func linkSection(insns, section asm.Instructions) (asm.Instructions, error) {
 			continue
 		}
 
-		if ins.OpCode.JumpOp() != asm.Call || ins.Src != asm.R1 {
+		if ins.OpCode.JumpOp() != asm.Call || ins.Src != asm.PseudoCall {
 			continue
 		}
 

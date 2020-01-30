@@ -44,3 +44,7 @@ func TestObjNameAllowsDot(t *testing.T) {
 func TestHaveNestedMaps(t *testing.T) {
 	testutils.CheckFeatureTest(t, haveNestedMaps)
 }
+
+func TestHaveMapMutabilityModifiers(t *testing.T) {
+	testutils.CheckFeatureTest(t, haveMapMutabilityModifiers)
+}

@@ -29,18 +29,9 @@ func TestParseVmlinux(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	s, err := parseBTF(bytes.NewReader(buf), binary.LittleEndian)
+	_, _, err = parseBTF(bytes.NewReader(buf), binary.LittleEndian)
 	if err != nil {
 		t.Fatal("Can't load BTF:", err)
-	}
-
-	var bpfAttr Union
-	if err := s.FindType("bpf_attr", &bpfAttr); err != nil {
-		t.Fatal("Can't find btf_attr:", err)
-	}
-
-	if name := bpfAttr.Name; name != "bpf_attr" {
-		t.Error("struct bpf_attr has incorrect name:", name)
 	}
 }
 
@@ -55,18 +46,9 @@ func TestParseCurrentKernelBTF(t *testing.T) {
 	}
 	defer fh.Close()
 
-	s, err := parseBTF(fh, binary.LittleEndian)
+	_, _, err = parseBTF(fh, binary.LittleEndian)
 	if err != nil {
 		t.Fatal("Can't load BTF:", err)
-	}
-
-	var bpfAttr Union
-	if err := s.FindType("bpf_attr", &bpfAttr); err != nil {
-		t.Fatal("Can't find btf_attr:", err)
-	}
-
-	if name := bpfAttr.Name; name != "bpf_attr" {
-		t.Error("struct bpf_attr has incorrect name:", name)
 	}
 }
 
@@ -96,6 +78,15 @@ func TestLoadSpecFromElf(t *testing.T) {
 		t.Error("Can't get BTF for the socket section:", err)
 	} else if sec == nil {
 		t.Error("Missing BTF for the socket section")
+	}
+
+	var bpfMapDef Struct
+	if err := spec.FindType("bpf_map_def", &bpfMapDef); err != nil {
+		t.Fatal("Can't find bpf_map_def:", err)
+	}
+
+	if name := bpfMapDef.Name; name != "bpf_map_def" {
+		t.Error("struct bpf_map_def has incorrect name:", name)
 	}
 
 	t.Run("Handle", func(t *testing.T) {

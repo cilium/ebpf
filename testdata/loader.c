@@ -1,4 +1,4 @@
-/* This file excercises the ELF loader. It is not a valid BPF program.
+/* This file excercises the ELF loader.
  */
 
 #include "common.h"
@@ -44,20 +44,33 @@ struct {
 } btf_map __section(".maps");
 #endif
 
-int __attribute__((noinline)) helper_func2(int arg) {
-	return arg > 5;
+static int __attribute__((noinline)) helper_func2(uint32_t arg) {
+	return arg;
 }
 
-int __attribute__((noinline)) helper_func(int arg) {
+int __attribute__((noinline)) helper_func(uint32_t arg) {
 	// Enforce bpf-to-bpf call in .text section
 	return helper_func2(arg);
 }
 
+#if __clang_major__ >= 9
+static volatile unsigned int key1 = 0; // .bss
+static volatile unsigned int key2 = 1; // .data
+static volatile const unsigned int key3 = 2; // .rodata
+static volatile const uint32_t arg; // .rodata, rewritten by loader
+#endif
+
 __section("xdp") int xdp_prog() {
-	unsigned int key = 0;
-	map_lookup_elem(&hash_map, &key);
-	map_lookup_elem(&hash_map2, &key);
-	return helper_func(1);
+#if __clang_major__ < 9
+	unsigned int key1 = 0;
+	unsigned int key2 = 1;
+	unsigned int key3 = 2;
+	uint32_t arg = 1;
+#endif
+	map_lookup_elem(&hash_map, (void*)&key1);
+	map_lookup_elem(&hash_map2, (void*)&key2);
+	map_lookup_elem(&hash_map2, (void*)&key3);
+	return helper_func(arg);
 }
 
 // This function has no relocations, and is thus parsed differently.

@@ -103,7 +103,8 @@ func (s *Struct) walk(cs *copyStack) {
 
 func (s *Struct) copy() Type {
 	cpy := *s
-	cpy.Members = copyMembers(cpy.Members)
+	cpy.Members = make([]Member, len(s.Members))
+	copy(cpy.Members, s.Members)
 	return &cpy
 }
 
@@ -126,7 +127,8 @@ func (u *Union) walk(cs *copyStack) {
 
 func (u *Union) copy() Type {
 	cpy := *u
-	cpy.Members = copyMembers(cpy.Members)
+	cpy.Members = make([]Member, len(u.Members))
+	copy(cpy.Members, u.Members)
 	return &cpy
 }
 
@@ -137,14 +139,6 @@ type Member struct {
 	Name
 	Type   Type
 	Offset uint32
-}
-
-func copyMembers(in []Member) []Member {
-	cpy := make([]Member, 0, len(in))
-	for _, member := range in {
-		cpy = append(cpy, member)
-	}
-	return cpy
 }
 
 // Enum lists possible values.
@@ -405,12 +399,17 @@ var _ namer = Name("")
 // compilation units, multiple types may share the same name. A Type may form a
 // cyclic graph by pointing at itself.
 func inflateRawTypes(rawTypes []rawType, rawStrings stringTable) (namedTypes map[string][]Type, err error) {
-	type fixup struct {
-		id  TypeID
-		typ *Type
+	type fixupDef struct {
+		id           TypeID
+		expectedKind btfKind
+		typ          *Type
 	}
 
-	var fixups []fixup
+	var fixups []fixupDef
+	fixup := func(id TypeID, expectedKind btfKind, typ *Type) {
+		fixups = append(fixups, fixupDef{id, expectedKind, typ})
+	}
+
 	convertMembers := func(raw []btfMember) ([]Member, error) {
 		// NB: The fixup below relies on pre-allocating this array to
 		// work, since otherwise append might re-allocate members.
@@ -426,7 +425,7 @@ func inflateRawTypes(rawTypes []rawType, rawStrings stringTable) (namedTypes map
 			})
 		}
 		for i := range members {
-			fixups = append(fixups, fixup{raw[i].Type, &members[i].Type})
+			fixup(raw[i].Type, kindUnknown, &members[i].Type)
 		}
 		return members, nil
 	}
@@ -454,7 +453,7 @@ func inflateRawTypes(rawTypes []rawType, rawStrings stringTable) (namedTypes map
 
 		case kindPointer:
 			ptr := &Pointer{id, nil}
-			fixups = append(fixups, fixup{raw.Type(), &ptr.Target})
+			fixup(raw.Type(), kindUnknown, &ptr.Target)
 			typ = ptr
 
 		case kindArray:
@@ -463,7 +462,7 @@ func inflateRawTypes(rawTypes []rawType, rawStrings stringTable) (namedTypes map
 			// IndexType is unused according to btf.rst.
 			// Don't make it available right now.
 			arr := &Array{id, nil, btfArr.Nelems}
-			fixups = append(fixups, fixup{btfArr.Type, &arr.Type})
+			fixup(btfArr.Type, kindUnknown, &arr.Type)
 			typ = arr
 
 		case kindStruct:
@@ -488,37 +487,37 @@ func inflateRawTypes(rawTypes []rawType, rawStrings stringTable) (namedTypes map
 
 		case kindTypedef:
 			typedef := &Typedef{id, name, nil}
-			fixups = append(fixups, fixup{raw.Type(), &typedef.Type})
+			fixup(raw.Type(), kindUnknown, &typedef.Type)
 			typ = typedef
 
 		case kindVolatile:
 			volatile := &Volatile{id, nil}
-			fixups = append(fixups, fixup{raw.Type(), &volatile.Type})
+			fixup(raw.Type(), kindUnknown, &volatile.Type)
 			typ = volatile
 
 		case kindConst:
 			cnst := &Const{id, nil}
-			fixups = append(fixups, fixup{raw.Type(), &cnst.Type})
+			fixup(raw.Type(), kindUnknown, &cnst.Type)
 			typ = cnst
 
 		case kindRestrict:
 			restrict := &Restrict{id, nil}
-			fixups = append(fixups, fixup{raw.Type(), &restrict.Type})
+			fixup(raw.Type(), kindUnknown, &restrict.Type)
 			typ = restrict
 
 		case kindFunc:
 			fn := &Func{id, name, nil}
-			fixups = append(fixups, fixup{raw.Type(), &fn.Type})
+			fixup(raw.Type(), kindFuncProto, &fn.Type)
 			typ = fn
 
 		case kindFuncProto:
 			fp := &FuncProto{id, nil}
-			fixups = append(fixups, fixup{raw.Type(), &fp.Return})
+			fixup(raw.Type(), kindUnknown, &fp.Return)
 			typ = fp
 
 		case kindVar:
 			v := &Var{id, name, nil}
-			fixups = append(fixups, fixup{raw.Type(), &v.Type})
+			fixup(raw.Type(), kindUnknown, &v.Type)
 			typ = v
 
 		case kindDatasec:
@@ -541,6 +540,16 @@ func inflateRawTypes(rawTypes []rawType, rawStrings stringTable) (namedTypes map
 		i := int(fixup.id)
 		if i >= len(types) {
 			return nil, xerrors.Errorf("reference to invalid type id: %d", fixup.id)
+		}
+
+		// Default void (id 0) to unknown
+		rawKind := kindUnknown
+		if i > 0 {
+			rawKind = rawTypes[i-1].Kind()
+		}
+
+		if expected := fixup.expectedKind; expected != kindUnknown && rawKind != expected {
+			return nil, xerrors.Errorf("expected type id %d to have kind %s, found %s", expected, rawKind)
 		}
 
 		*fixup.typ = types[i]

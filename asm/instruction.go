@@ -209,7 +209,7 @@ func (ins Instruction) Format(f fmt.State, c rune) {
 	case JumpClass:
 		switch jop := op.JumpOp(); jop {
 		case Call:
-			if ins.Src == R1 {
+			if ins.Src == PseudoCall {
 				// bpf-to-bpf call
 				fmt.Fprint(f, ins.Constant)
 			} else {

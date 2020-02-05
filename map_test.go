@@ -150,7 +150,6 @@ func createArray(t *testing.T) *Map {
 }
 
 func TestMapQueue(t *testing.T) {
-
 	testutils.SkipOnOldKernel(t, "4.20", "map type queue")
 
 	m, err := NewMap(&MapSpec{
@@ -193,6 +192,7 @@ func TestMapQueue(t *testing.T) {
 	if v != 4242 {
 		t.Error("Want value 4242, got", v)
 	}
+
 	v = 0
 	if err := m.LookupAndDelete(nil, &v); err != nil {
 		t.Fatal("Can't lookup and delete element:", err)
@@ -201,7 +201,7 @@ func TestMapQueue(t *testing.T) {
 		t.Error("Want value 4242, got", v)
 	}
 
-	if err := m.LookupAndDelete(nil, &v); !IsNotExist(err) {
+	if err := m.LookupAndDelete(nil, &v); !xerrors.Is(err, ErrKeyNotExist) {
 		t.Fatal("Lookup and delete on empty Queue:", err)
 	}
 }
@@ -435,8 +435,8 @@ func TestNotExist(t *testing.T) {
 
 	var tmp uint32
 	err := hash.Lookup("hello", &tmp)
-	if !IsNotExist(err) {
-		t.Error("IsNotExist returns false for missing key")
+	if !xerrors.Is(err, ErrKeyNotExist) {
+		t.Error("Lookup doesn't return ErrKeyNotExist")
 	}
 
 	buf, err := hash.LookupBytes("hello")
@@ -447,11 +447,11 @@ func TestNotExist(t *testing.T) {
 		t.Error("LookupBytes returns non-nil buffer for non-existent key")
 	}
 
-	if err := hash.Delete("hello"); !IsNotExist(err) {
-		t.Error("Deleting unknown key doesn't return a non-existing error")
+	if err := hash.Delete("hello"); !xerrors.Is(err, ErrKeyNotExist) {
+		t.Error("Deleting unknown key doesn't return ErrKeyNotExist")
 	}
 
-	if err := hash.NextKey(nil, &tmp); !IsNotExist(err) {
+	if err := hash.NextKey(nil, &tmp); !xerrors.Is(err, ErrKeyNotExist) {
 		t.Error("Looking up next key in empty map doesn't return a non-existing error")
 	}
 }
@@ -787,7 +787,7 @@ func BenchmarkMap(b *testing.B) {
 
 		for i := 0; i < b.N; i++ {
 			err := m.Delete(unsafe.Pointer(&key))
-			if err != nil && !IsNotExist(err) {
+			if err != nil && !xerrors.Is(err, ErrKeyNotExist) {
 				b.Fatal(err)
 			}
 		}

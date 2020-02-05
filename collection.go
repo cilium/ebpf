@@ -136,7 +136,7 @@ func NewCollectionWithOptions(spec *CollectionSpec, opts CollectionOptions) (col
 		var handle *btf.Handle
 		if mapSpec.BTF != nil {
 			handle, err = loadBTF(btf.MapSpec(mapSpec.BTF))
-			if err != nil && !btf.IsNotSupported(err) {
+			if err != nil && !xerrors.Is(err, btf.ErrNotSupported) {
 				return nil, err
 			}
 		}
@@ -176,7 +176,7 @@ func NewCollectionWithOptions(spec *CollectionSpec, opts CollectionOptions) (col
 		var handle *btf.Handle
 		if progSpec.BTF != nil {
 			handle, err = loadBTF(btf.ProgramSpec(progSpec.BTF))
-			if err != nil && !btf.IsNotSupported(err) {
+			if err != nil && !xerrors.Is(err, btf.ErrNotSupported) {
 				return nil, err
 			}
 		}

@@ -8,8 +8,12 @@ import (
 
 func TestParseCPUs(t *testing.T) {
 	for str, result := range map[string]int{
-		"0-1": 2,
-		"0":   1,
+		"0-1":        2,
+		"0":          1,
+		"0,2":        2,
+		"0-2,3":      4,
+		"0,2-4,7":    5,
+		"0,2-4,7-15": 13,
 	} {
 		fh, err := ioutil.TempFile("", "ebpf")
 		if err != nil {

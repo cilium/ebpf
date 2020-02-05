@@ -13,7 +13,6 @@ blocks:
         commands:
           - checkout
           - sem-version go 1.13
-          - go get -d ./...
           - go build ./...
           - sudo pip3 install https://github.com/amluto/virtme/archive/538f1e756139a6b57a4780e7ceb3ac6bcaa4fe6f.zip
           - sudo apt-get install -y qemu-system-x86

@@ -13,7 +13,6 @@ blocks:
         commands:
           - checkout
           - sem-version go 1.13
-          - go get -d ./...
           - go build ./...
           - sudo pip3 install https://github.com/amluto/virtme/archive/538f1e756139a6b57a4780e7ceb3ac6bcaa4fe6f.zip
           - sudo apt-get install -y qemu-system-x86
@@ -25,10 +24,10 @@ blocks:
           - GOARCH=arm64 go build ./...
       - name: Test on 5.4.5
         commands:
-          - timeout -s KILL 60s ./run-tests.sh 5.4.5
+          - timeout -s KILL 90s ./run-tests.sh 5.4.5
       - name: Test on 4.19.81
         commands:
-          - timeout -s KILL 60s ./run-tests.sh 4.19.81
+          - timeout -s KILL 90s ./run-tests.sh 4.19.81
       - name: Test on 4.9.198
         commands:
-          - timeout -s KILL 60s ./run-tests.sh 4.9.198
+          - timeout -s KILL 90s ./run-tests.sh 4.9.198

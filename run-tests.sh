@@ -8,23 +8,18 @@ set -o pipefail
 if [[ "${1:-}" = "--in-vm" ]]; then
   shift
 
-  readonly home="$(mktemp --directory)"
-
   mount -t bpf bpf /sys/fs/bpf
   export CGO_ENABLED=0
   export GOFLAGS=-mod=readonly
-  export GOPROXY=file:///run/go-proxy
+  export GOPATH=/run/go-path
+  export GOPROXY=file:///run/go-root/pkg/mod/cache/download
   export GOCACHE=/run/go-cache
-  export HOME="$home"
 
   echo Running tests...
   /usr/local/bin/go test -coverprofile="$1/coverage.txt" -covermode=atomic -v ./...
   touch "$1/success"
   exit 0
 fi
-
-# Force Go modules, so that vendoring and building are easier.
-export GO111MODULE=on
 
 # Pull all dependencies, so that we can run tests without the
 # vm having network access.
@@ -53,11 +48,11 @@ test -e "${tmp_dir}/${kernel}" || {
 }
 
 echo Testing on ${kernel_version}
-$sudo virtme-run --kimg "${tmp_dir}/${kernel}" --memory 256M --pwd \
+$sudo virtme-run --kimg "${tmp_dir}/${kernel}" --memory 512M --pwd \
   --rwdir=/run/output="${output}" \
-  --rodir=/run/go-proxy="$(go env GOPATH)/pkg/mod/cache/download" \
+  --rodir=/run/go-path="$(go env GOPATH)" \
   --rwdir=/run/go-cache="$(go env GOCACHE)" \
-  --script-sh "$(realpath "$0") --in-vm /run/output" --qemu-opts -smp 2
+  --script-sh "$(realpath "$0") --in-vm /run/output"
 
 if [[ ! -e "${output}/success" ]]; then
   echo "Test failed on ${kernel_version}"

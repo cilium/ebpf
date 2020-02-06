@@ -379,7 +379,7 @@ func (pr *Reader) Pause() error {
 	}
 
 	for i := 0; i < len(pr.pauseFds); i++ {
-		if err := pr.array.Delete(uint32(i)); err != nil && !ebpf.IsNotExist(err) {
+		if err := pr.array.Delete(uint32(i)); err != nil && !xerrors.Is(err, ebpf.ErrKeyNotExist) {
 			return xerrors.Errorf("could't delete event fd for CPU %d: %w", i, err)
 		}
 	}

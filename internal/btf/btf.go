@@ -18,6 +18,11 @@ import (
 
 const btfMagic = 0xeB9F
 
+// Errors returned by BTF functions.
+var (
+	ErrNotSupported = internal.ErrNotSupported
+)
+
 // Spec represents decoded BTF.
 type Spec struct {
 	rawTypes  []rawType
@@ -307,8 +312,7 @@ type Handle struct {
 
 // NewHandle loads BTF into the kernel.
 //
-// Returns an error if BTF is not supported, which can
-// be checked by IsNotSupported.
+// Returns ErrNotSupported if BTF is not supported.
 func NewHandle(spec *Spec) (*Handle, error) {
 	if err := haveBTF(); err != nil {
 		return nil, err
@@ -449,13 +453,6 @@ func ProgramLineInfos(s *Program) (recordSize uint32, bytes []byte, err error) {
 	}
 
 	return s.lineInfos.recordSize, bytes, nil
-}
-
-// IsNotSupported returns true if the error indicates that the kernel
-// doesn't support BTF.
-func IsNotSupported(err error) bool {
-	var ufe *internal.UnsupportedFeatureError
-	return xerrors.As(err, &ufe) && ufe.Name == "BTF"
 }
 
 type bpfLoadBTFAttr struct {

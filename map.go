@@ -5,9 +5,14 @@ import (
 
 	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/btf"
-	"github.com/cilium/ebpf/internal/unix"
 
 	"golang.org/x/xerrors"
+)
+
+// Errors returned by Map and MapIterator methods.
+var (
+	ErrKeyNotExist      = xerrors.New("key does not exist")
+	ErrIterationAborted = xerrors.New("iteration aborted")
 )
 
 // MapSpec defines a Map.
@@ -87,7 +92,7 @@ func NewMap(spec *MapSpec) (*Map, error) {
 	}
 
 	handle, err := btf.NewHandle(btf.MapSpec(spec.BTF))
-	if err != nil && !btf.IsNotSupported(err) {
+	if err != nil && !xerrors.Is(err, btf.ErrNotSupported) {
 		return nil, xerrors.Errorf("can't load BTF: %w", err)
 	}
 
@@ -270,6 +275,8 @@ func (m *Map) Lookup(key, valueOut interface{}) error {
 }
 
 // LookupAndDelete retrieves and deletes a value from a Map.
+//
+// Returns ErrKeyNotExist if the key doesn't exist.
 func (m *Map) LookupAndDelete(key, valueOut interface{}) error {
 	valuePtr, valueBytes := makeBuffer(valueOut, m.fullValueSize)
 
@@ -293,7 +300,7 @@ func (m *Map) LookupBytes(key interface{}) ([]byte, error) {
 	valuePtr := internal.NewSlicePointer(valueBytes)
 
 	err := m.lookup(key, valuePtr)
-	if IsNotExist(err) {
+	if xerrors.Is(err, ErrKeyNotExist) {
 		return nil, nil
 	}
 
@@ -350,12 +357,16 @@ func (m *Map) Update(key, value interface{}, flags MapUpdateFlags) error {
 		return xerrors.Errorf("can't marshal value: %w", err)
 	}
 
-	return bpfMapUpdateElem(m.fd, keyPtr, valuePtr, uint64(flags))
+	if err = bpfMapUpdateElem(m.fd, keyPtr, valuePtr, uint64(flags)); err != nil {
+		return xerrors.Errorf("update failed: %w", err)
+	}
+
+	return nil
 }
 
 // Delete removes a value.
 //
-// Returns an error if the key does not exist, see IsNotExist.
+// Returns ErrKeyNotExist if the key does not exist.
 func (m *Map) Delete(key interface{}) error {
 	keyPtr, err := marshalPtr(key, int(m.abi.KeySize))
 	if err != nil {
@@ -363,7 +374,7 @@ func (m *Map) Delete(key interface{}) error {
 	}
 
 	if err = bpfMapDeleteElem(m.fd, keyPtr); err != nil {
-		return xerrors.Errorf("can't delete key: %w", err)
+		return xerrors.Errorf("delete failed: %w", err)
 	}
 	return nil
 }
@@ -371,6 +382,8 @@ func (m *Map) Delete(key interface{}) error {
 // NextKey finds the key following an initial key.
 //
 // See NextKeyBytes for details.
+//
+// Returns ErrKeyNotExist if there is no next key.
 func (m *Map) NextKey(key, nextKeyOut interface{}) error {
 	nextKeyPtr, nextKeyBytes := makeBuffer(nextKeyOut, int(m.abi.KeySize))
 
@@ -393,12 +406,14 @@ func (m *Map) NextKey(key, nextKeyOut interface{}) error {
 // Passing nil will return the first key.
 //
 // Use Iterate if you want to traverse all entries in the map.
+//
+// Returns nil if there are no more keys.
 func (m *Map) NextKeyBytes(key interface{}) ([]byte, error) {
 	nextKey := make([]byte, m.abi.KeySize)
 	nextKeyPtr := internal.NewSlicePointer(nextKey)
 
 	err := m.nextKey(key, nextKeyPtr)
-	if IsNotExist(err) {
+	if xerrors.Is(err, ErrKeyNotExist) {
 		return nil, nil
 	}
 
@@ -419,7 +434,7 @@ func (m *Map) nextKey(key interface{}, nextKeyOut internal.Pointer) error {
 	}
 
 	if err = bpfMapGetNextKey(m.fd, keyPtr, nextKeyOut); err != nil {
-		return xerrors.Errorf("can't get next key: %w", err)
+		return xerrors.Errorf("next key failed: %w", err)
 	}
 	return nil
 }
@@ -565,8 +580,6 @@ func newMapIterator(target *Map) *MapIterator {
 	}
 }
 
-var errIterationAborted = xerrors.New("iteration aborted")
-
 // Next decodes the next key and value.
 //
 // Iterating a hash map from which keys are being deleted is not
@@ -602,7 +615,7 @@ func (mi *MapIterator) Next(keyOut, valueOut interface{}) bool {
 		mi.prevKey = mi.prevBytes
 
 		mi.err = mi.target.Lookup(nextBytes, valueOut)
-		if IsNotExist(mi.err) {
+		if xerrors.Is(mi.err, ErrKeyNotExist) {
 			// Even though the key should be valid, we couldn't look up
 			// its value. If we're iterating a hash map this is probably
 			// because a concurrent delete removed the value before we
@@ -621,26 +634,15 @@ func (mi *MapIterator) Next(keyOut, valueOut interface{}) bool {
 		return mi.err == nil
 	}
 
-	mi.err = errIterationAborted
+	mi.err = xerrors.Errorf("%w", ErrIterationAborted)
 	return false
 }
 
 // Err returns any encountered error.
 //
 // The method must be called after Next returns nil.
+//
+// Returns ErrIterationAborted if it wasn't possible to do a full iteration.
 func (mi *MapIterator) Err() error {
 	return mi.err
-}
-
-// IsNotExist returns true if the error indicates that a
-// key doesn't exist.
-func IsNotExist(err error) bool {
-	return xerrors.Is(err, unix.ENOENT)
-}
-
-// IsIterationAborted returns true if the iteration was aborted.
-//
-// This occurs when keys are deleted from a hash map during iteration.
-func IsIterationAborted(err error) bool {
-	return xerrors.Is(err, errIterationAborted)
 }

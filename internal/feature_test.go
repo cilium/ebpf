@@ -1,8 +1,11 @@
 package internal
 
-import "testing"
+import (
+	"strings"
+	"testing"
 
-import "strings"
+	"golang.org/x/xerrors"
+)
 
 func TestFeatureTest(t *testing.T) {
 	var called bool
@@ -41,6 +44,10 @@ func TestFeatureTest(t *testing.T) {
 
 	if !strings.Contains(fte.Error(), "2.1.1") {
 		t.Error("UnsupportedFeatureError.Error doesn't contain version")
+	}
+
+	if !xerrors.Is(err, ErrNotSupported) {
+		t.Error("UnsupportedFeatureError is not ErrNotSupported")
 	}
 }
 

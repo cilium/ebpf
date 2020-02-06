@@ -7,6 +7,9 @@ import (
 	"golang.org/x/xerrors"
 )
 
+// ErrNotSupported indicates that a feature is not supported by the current kernel.
+var ErrNotSupported = xerrors.New("not supported")
+
 // UnsupportedFeatureError is returned by FeatureTest() functions.
 type UnsupportedFeatureError struct {
 	// The minimum Linux mainline version required for this feature.
@@ -19,6 +22,11 @@ type UnsupportedFeatureError struct {
 
 func (ufe *UnsupportedFeatureError) Error() string {
 	return fmt.Sprintf("%s not supported (requires >= %s)", ufe.Name, ufe.MinimumVersion)
+}
+
+// Is indicates that UnsupportedFeatureError is ErrNotSupported.
+func (ufe *UnsupportedFeatureError) Is(target error) bool {
+	return target == ErrNotSupported
 }
 
 // FeatureTest wraps a function so that it is run at most once.

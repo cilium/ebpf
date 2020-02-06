@@ -16,6 +16,9 @@ import (
 	"golang.org/x/xerrors"
 )
 
+// ErrNotSupported is returned whenever the kernel doesn't support a feature.
+var ErrNotSupported = internal.ErrNotSupported
+
 const (
 	// Number of bytes to pad the output buffer for BPF_PROG_TEST_RUN.
 	// This is currently the maximum of spare space allocated for SKB
@@ -97,7 +100,7 @@ func NewProgramWithOptions(spec *ProgramSpec, opts ProgramOptions) (*Program, er
 	}
 
 	handle, err := btf.NewHandle(btf.ProgramSpec(spec.BTF))
-	if err != nil && !btf.IsNotSupported(err) {
+	if err != nil && !xerrors.Is(err, btf.ErrNotSupported) {
 		return nil, xerrors.Errorf("can't load BTF: %w", err)
 	}
 
@@ -513,11 +516,4 @@ func SanitizeName(name string, replacement rune) string {
 		}
 		return char
 	}, name)
-}
-
-// IsNotSupported returns true if an error occurred because
-// the kernel does not have support for a specific feature.
-func IsNotSupported(err error) bool {
-	var ufe *internal.UnsupportedFeatureError
-	return xerrors.As(err, &ufe)
 }

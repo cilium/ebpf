@@ -217,7 +217,7 @@ func bpfMapLookupElem(m *internal.FD, key, valueOut internal.Pointer) error {
 		value: valueOut,
 	}
 	_, err = internal.BPF(_MapLookupElem, unsafe.Pointer(&attr), unsafe.Sizeof(attr))
-	return err
+	return wrapMapError(err)
 }
 
 func bpfMapLookupAndDelete(m *internal.FD, key, valueOut internal.Pointer) error {
@@ -232,7 +232,7 @@ func bpfMapLookupAndDelete(m *internal.FD, key, valueOut internal.Pointer) error
 		value: valueOut,
 	}
 	_, err = internal.BPF(_MapLookupAndDeleteElem, unsafe.Pointer(&attr), unsafe.Sizeof(attr))
-	return err
+	return wrapMapError(err)
 }
 
 func bpfMapUpdateElem(m *internal.FD, key, valueOut internal.Pointer, flags uint64) error {
@@ -248,7 +248,7 @@ func bpfMapUpdateElem(m *internal.FD, key, valueOut internal.Pointer, flags uint
 		flags: flags,
 	}
 	_, err = internal.BPF(_MapUpdateElem, unsafe.Pointer(&attr), unsafe.Sizeof(attr))
-	return err
+	return wrapMapError(err)
 }
 
 func bpfMapDeleteElem(m *internal.FD, key internal.Pointer) error {
@@ -262,7 +262,7 @@ func bpfMapDeleteElem(m *internal.FD, key internal.Pointer) error {
 		key:   key,
 	}
 	_, err = internal.BPF(_MapDeleteElem, unsafe.Pointer(&attr), unsafe.Sizeof(attr))
-	return err
+	return wrapMapError(err)
 }
 
 func bpfMapGetNextKey(m *internal.FD, key, nextKeyOut internal.Pointer) error {
@@ -277,7 +277,19 @@ func bpfMapGetNextKey(m *internal.FD, key, nextKeyOut internal.Pointer) error {
 		value: nextKeyOut,
 	}
 	_, err = internal.BPF(_MapGetNextKey, unsafe.Pointer(&attr), unsafe.Sizeof(attr))
-	return err
+	return wrapMapError(err)
+}
+
+func wrapMapError(err error) error {
+	if err == nil {
+		return nil
+	}
+
+	if xerrors.Is(err, unix.ENOENT) {
+		return ErrKeyNotExist
+	}
+
+	return xerrors.New(err.Error())
 }
 
 const bpfFSType = 0xcafe4a11

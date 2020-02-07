@@ -2,9 +2,11 @@ package ebpf
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/btf"
+	"github.com/cilium/ebpf/internal/unix"
 
 	"golang.org/x/xerrors"
 )
@@ -26,6 +28,12 @@ type MapSpec struct {
 	MaxEntries uint32
 	Flags      uint32
 
+	// The initial contents of the map. May be nil.
+	Contents []MapKV
+
+	// Whether to freeze a map after setting its initial contents.
+	Freeze bool
+
 	// InnerMap is used as a template for ArrayOfMaps and HashOfMaps
 	InnerMap *MapSpec
 
@@ -38,14 +46,24 @@ func (ms *MapSpec) String() string {
 }
 
 // Copy returns a copy of the spec.
+//
+// MapSpec.Contents is a shallow copy.
 func (ms *MapSpec) Copy() *MapSpec {
 	if ms == nil {
 		return nil
 	}
 
 	cpy := *ms
+	cpy.Contents = make([]MapKV, len(ms.Contents))
+	copy(cpy.Contents, ms.Contents)
 	cpy.InnerMap = ms.InnerMap.Copy()
 	return &cpy
+}
+
+// MapKV is used to initialize the contents of a Map.
+type MapKV struct {
+	Key   interface{}
+	Value interface{}
 }
 
 // Map represents a Map file descriptor.
@@ -118,7 +136,7 @@ func newMapWithBTF(spec *MapSpec, handle *btf.Handle) (*Map, error) {
 }
 
 func createMap(spec *MapSpec, inner *internal.FD, handle *btf.Handle) (*Map, error) {
-	spec = spec.Copy()
+	abi := newMapABIFromSpec(spec)
 
 	switch spec.Type {
 	case ArrayOfMaps:
@@ -128,36 +146,43 @@ func createMap(spec *MapSpec, inner *internal.FD, handle *btf.Handle) (*Map, err
 			return nil, err
 		}
 
-		if spec.ValueSize != 0 && spec.ValueSize != 4 {
-			return nil, fmt.Errorf("ValueSize must be zero or four for map of map")
+		if abi.ValueSize != 0 && abi.ValueSize != 4 {
+			return nil, xerrors.New("ValueSize must be zero or four for map of map")
 		}
-		spec.ValueSize = 4
+		abi.ValueSize = 4
 
 	case PerfEventArray:
-		if spec.KeySize != 0 && spec.KeySize != 4 {
-			return nil, fmt.Errorf("KeySize must be zero or four for perf event array")
+		if abi.KeySize != 0 && abi.KeySize != 4 {
+			return nil, xerrors.New("KeySize must be zero or four for perf event array")
 		}
-		if spec.ValueSize != 0 && spec.ValueSize != 4 {
-			return nil, fmt.Errorf("ValueSize must be zero or four for perf event array")
+		abi.KeySize = 4
+
+		if abi.ValueSize != 0 && abi.ValueSize != 4 {
+			return nil, xerrors.New("ValueSize must be zero or four for perf event array")
 		}
-		if spec.MaxEntries == 0 {
+		abi.ValueSize = 4
+
+		if abi.MaxEntries == 0 {
 			n, err := internal.OnlineCPUs()
 			if err != nil {
 				return nil, xerrors.Errorf("perf event array: %w", err)
 			}
-			spec.MaxEntries = uint32(n)
+			abi.MaxEntries = uint32(n)
 		}
+	}
 
-		spec.KeySize = 4
-		spec.ValueSize = 4
+	if abi.Flags&(unix.BPF_F_RDONLY_PROG|unix.BPF_F_WRONLY_PROG) > 0 || spec.Freeze {
+		if err := haveMapMutabilityModifiers(); err != nil {
+			return nil, xerrors.Errorf("map create: %w", err)
+		}
 	}
 
 	attr := bpfMapCreateAttr{
-		mapType:    spec.Type,
-		keySize:    spec.KeySize,
-		valueSize:  spec.ValueSize,
-		maxEntries: spec.MaxEntries,
-		flags:      spec.Flags,
+		mapType:    abi.Type,
+		keySize:    abi.KeySize,
+		valueSize:  abi.ValueSize,
+		maxEntries: abi.MaxEntries,
+		flags:      abi.Flags,
 	}
 
 	if inner != nil {
@@ -183,7 +208,24 @@ func createMap(spec *MapSpec, inner *internal.FD, handle *btf.Handle) (*Map, err
 		return nil, xerrors.Errorf("map create: %w", err)
 	}
 
-	return newMap(fd, spec.Name, newMapABIFromSpec(spec))
+	m, err := newMap(fd, spec.Name, abi)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := m.populate(spec.Contents); err != nil {
+		m.Close()
+		return nil, xerrors.Errorf("map create: can't set initial contents: %w", err)
+	}
+
+	if spec.Freeze {
+		if err := m.Freeze(); err != nil {
+			m.Close()
+			return nil, xerrors.Errorf("can't freeze map: %w", err)
+		}
+	}
+
+	return m, nil
 }
 
 func newMap(fd *internal.FD, name string, abi *MapABI) (*Map, error) {
@@ -500,6 +542,29 @@ func (m *Map) Pin(fileName string) error {
 	return bpfPinObject(fileName, m.fd)
 }
 
+// Freeze prevents a map to be modified from user space.
+//
+// It makes no changes to kernel-side restrictions.
+func (m *Map) Freeze() error {
+	if err := haveMapMutabilityModifiers(); err != nil {
+		return xerrors.Errorf("can't freeze map: %w", err)
+	}
+
+	if err := bpfMapFreeze(m.fd); err != nil {
+		return xerrors.Errorf("can't freeze map: %w", err)
+	}
+	return nil
+}
+
+func (m *Map) populate(contents []MapKV) error {
+	for _, kv := range contents {
+		if err := m.Put(kv.Key, kv.Value); err != nil {
+			return xerrors.Errorf("key %v: %w", kv.Key, err)
+		}
+	}
+	return nil
+}
+
 // LoadPinnedMap load a Map from a BPF file.
 //
 // The function is not compatible with nested maps.
@@ -558,6 +623,60 @@ func (m *Map) MarshalBinary() ([]byte, error) {
 	buf := make([]byte, 4)
 	internal.NativeEndian.PutUint32(buf, fd)
 	return buf, nil
+}
+
+func patchValue(value []byte, typ btf.Type, replacements map[string]interface{}) error {
+	replaced := make(map[string]bool)
+	replace := func(name string, offset, size int, replacement interface{}) error {
+		if offset+size > len(value) {
+			return xerrors.Errorf("%s: offset %d(+%d) is out of bounds", name, offset, size)
+		}
+
+		buf, err := marshalBytes(replacement, size)
+		if err != nil {
+			return xerrors.Errorf("marshal %s: %w", name, err)
+		}
+
+		copy(value[offset:offset+size], buf)
+		replaced[name] = true
+		return nil
+	}
+
+	switch parent := typ.(type) {
+	case *btf.Datasec:
+		for _, secinfo := range parent.Vars {
+			name := string(secinfo.Type.(*btf.Var).Name)
+			replacement, ok := replacements[name]
+			if !ok {
+				continue
+			}
+
+			err := replace(name, int(secinfo.Offset), int(secinfo.Size), replacement)
+			if err != nil {
+				return err
+			}
+		}
+
+	default:
+		return xerrors.Errorf("patching %T is not supported", typ)
+	}
+
+	if len(replaced) == len(replacements) {
+		return nil
+	}
+
+	var missing []string
+	for name := range replacements {
+		if !replaced[name] {
+			missing = append(missing, name)
+		}
+	}
+
+	if len(missing) == 1 {
+		return xerrors.Errorf("unknown field: %s", missing[0])
+	}
+
+	return xerrors.Errorf("unknown fields: %s", strings.Join(missing, ","))
 }
 
 // MapIterator iterates a Map.

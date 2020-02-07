@@ -14,6 +14,8 @@ const (
 	ENOSPC                   = linux.ENOSPC
 	EINVAL                   = linux.EINVAL
 	EPOLLIN                  = linux.EPOLLIN
+	BPF_F_RDONLY_PROG        = linux.BPF_F_RDONLY_PROG
+	BPF_F_WRONLY_PROG        = linux.BPF_F_WRONLY_PROG
 	BPF_OBJ_NAME_LEN         = linux.BPF_OBJ_NAME_LEN
 	BPF_TAG_SIZE             = linux.BPF_TAG_SIZE
 	SYS_BPF                  = linux.SYS_BPF

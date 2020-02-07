@@ -59,18 +59,50 @@ func TestSignedJump(t *testing.T) {
 	}
 }
 
-func TestInstructionRewriteMapPtr(t *testing.T) {
+func TestInstructionRewriteMapConstant(t *testing.T) {
 	ins := LoadMapPtr(R2, 0)
+	ins.Src = R2
+
 	if err := ins.RewriteMapPtr(1); err != nil {
-		t.Fatal("Can't rewrite map pointer")
+		t.Fatal("Can't rewrite map pointer:", err)
 	}
-	if ins.Constant != 1 {
-		t.Error("Expected Constant to be 1, got", ins.Constant)
+	if ins.mapPtr() != 1 {
+		t.Fatal("Expected map ptr to be 1, got", ins.Constant)
+	}
+
+	if err := ins.RewriteMapOffset(123); err != nil {
+		t.Fatal("Can't rewrite map offset:", err)
+	}
+	if fd := ins.mapPtr(); fd != 1 {
+		t.Fatal("Expected map ptr to be 1 after changing the offset, got", fd)
+	}
+
+	if err := ins.RewriteMapPtr(2); err != nil {
+		t.Fatal("Can't rewrite map pointer:", err)
+	}
+	if off := ins.mapOffset(); off != 123 {
+		t.Fatal("Expected map offset to be 123 after changin the pointer, got", off)
 	}
 
 	ins = Mov.Imm(R1, 32)
 	if err := ins.RewriteMapPtr(1); err == nil {
-		t.Error("Allows rewriting bogus instruction")
+		t.Error("RewriteMapPtr rewriting bogus instruction")
+	}
+	if err := ins.RewriteMapOffset(1); err == nil {
+		t.Error("RewriteMapOffset rewriting bogus instruction")
+	}
+}
+
+func TestInstructionLoadMapValue(t *testing.T) {
+	ins := LoadMapValue(R0, 1, 123)
+	if !ins.isLoadFromMap() {
+		t.Error("isLoadFromMap returns false")
+	}
+	if fd := ins.mapPtr(); fd != 1 {
+		t.Error("Expected map fd to be 1, got", fd)
+	}
+	if off := ins.mapOffset(); off != 123 {
+		t.Fatal("Expected map offset to be 123 after changin the pointer, got", off)
 	}
 }
 

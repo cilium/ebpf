@@ -1,7 +1,10 @@
 package ebpf
 
 import (
+	"math"
+
 	"github.com/cilium/ebpf/asm"
+	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/btf"
 	"golang.org/x/xerrors"
 )
@@ -73,6 +76,52 @@ func (cs *CollectionSpec) RewriteMaps(maps map[string]*Map) error {
 		delete(cs.Maps, symbol)
 	}
 
+	return nil
+}
+
+// RewriteConstants replaces the value of multiple constants.
+//
+// The constant must be defined like so in the C program:
+//
+//    static volatile const type foobar;
+//    static volatile const type foobar = default;
+//
+// Replacement values must be of the same length as the C sizeof(type).
+// If necessary, they are marshalled according to the same rules as
+// map values.
+//
+// From Linux 5.5 the verifier will use constants to eliminate dead code.
+//
+// Returns an error if a constant doesn't exist.
+func (cs *CollectionSpec) RewriteConstants(consts map[string]interface{}) error {
+	rodata := cs.Maps[".rodata"]
+	if rodata == nil {
+		return xerrors.New("missing .rodata section")
+	}
+
+	if rodata.BTF == nil {
+		return xerrors.New(".rodata section has no BTF")
+	}
+
+	if n := len(rodata.Contents); n != 1 {
+		return xerrors.Errorf("expected one key in .rodata, found %d", n)
+	}
+
+	kv := rodata.Contents[0]
+	value, ok := kv.Value.([]byte)
+	if !ok {
+		return xerrors.Errorf("first value in .rodata is %T not []byte", kv.Value)
+	}
+
+	buf := make([]byte, len(value))
+	copy(buf, value)
+
+	err := patchValue(buf, btf.MapValue(rodata.BTF), consts)
+	if err != nil {
+		return err
+	}
+
+	rodata.Contents[0] = MapKV{kv.Key, buf}
 	return nil
 }
 
@@ -153,21 +202,27 @@ func NewCollectionWithOptions(spec *CollectionSpec, opts CollectionOptions) (col
 
 		// Rewrite any reference to a valid map.
 		for i := range progSpec.Instructions {
-			var (
-				ins = &progSpec.Instructions[i]
-				m   = maps[ins.Reference]
-			)
+			ins := &progSpec.Instructions[i]
 
-			if ins.Reference == "" || m == nil {
+			if ins.OpCode != asm.LoadImmOp(asm.DWord) || ins.Reference == "" {
 				continue
 			}
 
-			if ins.Src == asm.R1 {
+			if uint32(ins.Constant) != math.MaxUint32 {
 				// Don't overwrite maps already rewritten, users can
 				// rewrite programs in the spec themselves
 				continue
 			}
 
+			m := maps[ins.Reference]
+			if m == nil {
+				return nil, xerrors.Errorf("program %s: missing map %s", progName, ins.Reference)
+			}
+
+			fd := m.FD()
+			if fd < 0 {
+				return nil, xerrors.Errorf("map %s: %w", ins.Reference, internal.ErrClosedFd)
+			}
 			if err := ins.RewriteMapPtr(m.FD()); err != nil {
 				return nil, xerrors.Errorf("progam %s: map %s: %w", progName, ins.Reference, err)
 			}

@@ -57,6 +57,7 @@ func LoadSpecFromReader(rd io.ReaderAt) (*Spec, error) {
 	var (
 		btfSection    *elf.Section
 		btfExtSection *elf.Section
+		sectionSizes  = make(map[string]uint32)
 	)
 
 	for _, sec := range file.Sections {
@@ -65,6 +66,16 @@ func LoadSpecFromReader(rd io.ReaderAt) (*Spec, error) {
 			btfSection = sec
 		case ".BTF.ext":
 			btfExtSection = sec
+		default:
+			if sec.Type != elf.SHT_PROGBITS && sec.Type != elf.SHT_NOBITS {
+				break
+			}
+
+			if sec.Size > math.MaxUint32 {
+				return nil, xerrors.Errorf("section %s exceeds maximum size", sec.Name)
+			}
+
+			sectionSizes[sec.Name] = uint32(sec.Size)
 		}
 	}
 
@@ -72,85 +83,165 @@ func LoadSpecFromReader(rd io.ReaderAt) (*Spec, error) {
 		return nil, nil
 	}
 
-	spec, err := parseBTF(btfSection.Open(), file.ByteOrder)
+	symbols, err := file.Symbols()
+	if err != nil {
+		return nil, xerrors.Errorf("can't read symbols: %v", err)
+	}
+
+	variableOffsets := make(map[variable]uint32)
+	for _, symbol := range symbols {
+		if idx := symbol.Section; idx >= elf.SHN_LORESERVE && idx <= elf.SHN_HIRESERVE {
+			// Ignore things like SHN_ABS
+			continue
+		}
+
+		secName := file.Sections[symbol.Section].Name
+		if _, ok := sectionSizes[secName]; !ok {
+			continue
+		}
+
+		if symbol.Value > math.MaxUint32 {
+			return nil, xerrors.Errorf("section %s: symbol %s: size exceeds maximum", secName, symbol.Name)
+		}
+
+		variableOffsets[variable{secName, symbol.Name}] = uint32(symbol.Value)
+	}
+
+	rawTypes, rawStrings, err := parseBTF(btfSection.Open(), file.ByteOrder)
 	if err != nil {
 		return nil, err
 	}
 
+	err = fixupDatasec(rawTypes, rawStrings, sectionSizes, variableOffsets)
+	if err != nil {
+		return nil, err
+	}
+
+	types, err := inflateRawTypes(rawTypes, rawStrings)
+	if err != nil {
+		return nil, err
+	}
+
+	var (
+		funcInfos = make(map[string]extInfo)
+		lineInfos = make(map[string]extInfo)
+	)
 	if btfExtSection != nil {
-		spec.funcInfos, spec.lineInfos, err = parseExtInfos(btfExtSection.Open(), file.ByteOrder, spec.strings)
+		funcInfos, lineInfos, err = parseExtInfos(btfExtSection.Open(), file.ByteOrder, rawStrings)
 		if err != nil {
 			return nil, xerrors.Errorf("can't read ext info: %w", err)
 		}
 	}
 
-	return spec, nil
+	return &Spec{
+		rawTypes:  rawTypes,
+		types:     types,
+		strings:   rawStrings,
+		funcInfos: funcInfos,
+		lineInfos: lineInfos,
+	}, nil
 }
 
-func parseBTF(btf io.ReadSeeker, bo binary.ByteOrder) (*Spec, error) {
+func parseBTF(btf io.ReadSeeker, bo binary.ByteOrder) ([]rawType, stringTable, error) {
 	rawBTF, err := ioutil.ReadAll(btf)
 	if err != nil {
-		return nil, xerrors.Errorf("can't read BTF: %v", err)
+		return nil, nil, xerrors.Errorf("can't read BTF: %v", err)
 	}
 
 	rd := bytes.NewReader(rawBTF)
 
 	var header btfHeader
 	if err := binary.Read(rd, bo, &header); err != nil {
-		return nil, xerrors.Errorf("can't read header: %v", err)
+		return nil, nil, xerrors.Errorf("can't read header: %v", err)
 	}
 
 	if header.Magic != btfMagic {
-		return nil, xerrors.Errorf("incorrect magic value %v", header.Magic)
+		return nil, nil, xerrors.Errorf("incorrect magic value %v", header.Magic)
 	}
 
 	if header.Version != 1 {
-		return nil, xerrors.Errorf("unexpected version %v", header.Version)
+		return nil, nil, xerrors.Errorf("unexpected version %v", header.Version)
 	}
 
 	if header.Flags != 0 {
-		return nil, xerrors.Errorf("unsupported flags %v", header.Flags)
+		return nil, nil, xerrors.Errorf("unsupported flags %v", header.Flags)
 	}
 
 	remainder := int64(header.HdrLen) - int64(binary.Size(&header))
 	if remainder < 0 {
-		return nil, xerrors.New("header is too short")
+		return nil, nil, xerrors.New("header is too short")
 	}
 
 	if _, err := io.CopyN(internal.DiscardZeroes{}, rd, remainder); err != nil {
-		return nil, xerrors.Errorf("header padding: %v", err)
+		return nil, nil, xerrors.Errorf("header padding: %v", err)
 	}
 
 	if _, err := rd.Seek(int64(header.HdrLen+header.StringOff), io.SeekStart); err != nil {
-		return nil, xerrors.Errorf("can't seek to start of string section: %v", err)
+		return nil, nil, xerrors.Errorf("can't seek to start of string section: %v", err)
 	}
 
-	strings, err := readStringTable(io.LimitReader(rd, int64(header.StringLen)))
+	rawStrings, err := readStringTable(io.LimitReader(rd, int64(header.StringLen)))
 	if err != nil {
-		return nil, xerrors.Errorf("can't read type names: %w", err)
+		return nil, nil, xerrors.Errorf("can't read type names: %w", err)
 	}
 
 	if _, err := rd.Seek(int64(header.HdrLen+header.TypeOff), io.SeekStart); err != nil {
-		return nil, xerrors.Errorf("can't seek to start of type section: %v", err)
+		return nil, nil, xerrors.Errorf("can't seek to start of type section: %v", err)
 	}
 
 	rawTypes, err := readTypes(io.LimitReader(rd, int64(header.TypeLen)), bo)
 	if err != nil {
-		return nil, xerrors.Errorf("can't read types: %w", err)
+		return nil, nil, xerrors.Errorf("can't read types: %w", err)
 	}
 
-	types, err := inflateRawTypes(rawTypes, strings)
-	if err != nil {
-		return nil, err
+	return rawTypes, rawStrings, nil
+}
+
+type variable struct {
+	section string
+	name    string
+}
+
+func fixupDatasec(rawTypes []rawType, rawStrings stringTable, sectionSizes map[string]uint32, variableOffsets map[variable]uint32) error {
+	for i, rawType := range rawTypes {
+		if rawType.Kind() != kindDatasec {
+			continue
+		}
+
+		name, err := rawStrings.Lookup(rawType.NameOff)
+		if err != nil {
+			return err
+		}
+
+		size, ok := sectionSizes[name]
+		if !ok {
+			return xerrors.Errorf("data section %s: missing size", name)
+		}
+
+		rawTypes[i].SizeType = size
+
+		secinfos := rawType.data.([]btfVarSecinfo)
+		for j, secInfo := range secinfos {
+			id := int(secInfo.Type - 1)
+			if id >= len(rawTypes) {
+				return xerrors.Errorf("data section %s: invalid type id %d for variable %d", name, id, j)
+			}
+
+			varName, err := rawStrings.Lookup(rawTypes[id].NameOff)
+			if err != nil {
+				return xerrors.Errorf("data section %s: can't get name for type %d: %w", name, id, err)
+			}
+
+			offset, ok := variableOffsets[variable{name, varName}]
+			if !ok {
+				return xerrors.Errorf("data section %s: missing offset for variable %s", name, varName)
+			}
+
+			secinfos[j].Offset = offset
+		}
 	}
 
-	return &Spec{
-		rawTypes:  rawTypes,
-		types:     types,
-		strings:   strings,
-		funcInfos: make(map[string]extInfo),
-		lineInfos: make(map[string]extInfo),
-	}, nil
+	return nil
 }
 
 func (s *Spec) marshal(bo binary.ByteOrder) ([]byte, error) {
@@ -166,14 +257,6 @@ func (s *Spec) marshal(bo binary.ByteOrder) ([]byte, error) {
 
 	// Write type section, just after the header.
 	for _, typ := range s.rawTypes {
-		if typ.Kind() == kindDatasec {
-			// Datasec requires patching with information from the ELF
-			// file. We don't support this at the moment, so patch
-			// out any Datasec by turning it into a void*.
-			typ = rawType{}
-			typ.SetKind(kindPointer)
-		}
-
 		if err := typ.Marshal(&buf, bo); err != nil {
 			return nil, xerrors.Errorf("can't marshal BTF: %w", err)
 		}
@@ -238,15 +321,15 @@ func (s *Spec) Program(name string, length uint64) (*Program, error) {
 // Map finds the BTF for a map.
 //
 // Returns an error if there is no BTF for the given name.
-func (s *Spec) Map(name string) (*Map, error) {
+func (s *Spec) Map(name string) (*Map, []Member, error) {
 	var mapVar Var
 	if err := s.FindType(name, &mapVar); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	mapStruct, ok := mapVar.Type.(*Struct)
 	if !ok {
-		return nil, xerrors.Errorf("expected struct, have %s", mapVar.Type)
+		return nil, nil, xerrors.Errorf("expected struct, have %s", mapVar.Type)
 	}
 
 	var key, value Type
@@ -261,14 +344,24 @@ func (s *Spec) Map(name string) (*Map, error) {
 	}
 
 	if key == nil {
-		return nil, xerrors.Errorf("map %s: missing 'key' in type", name)
+		return nil, nil, xerrors.Errorf("map %s: missing 'key' in type", name)
 	}
 
 	if value == nil {
-		return nil, xerrors.Errorf("map %s: missing 'value' in type", name)
+		return nil, nil, xerrors.Errorf("map %s: missing 'value' in type", name)
 	}
 
-	return &Map{mapStruct, s, key, value}, nil
+	return &Map{s, key, value}, mapStruct.Members, nil
+}
+
+// Datasec returns the BTF required to create maps which represent data sections.
+func (s *Spec) Datasec(name string) (*Map, error) {
+	var datasec Datasec
+	if err := s.FindType(name, &datasec); err != nil {
+		return nil, xerrors.Errorf("data section %s: can't get BTF: %w", name, err)
+	}
+
+	return &Map{s, &Void{}, &datasec}, nil
 }
 
 var errNotFound = xerrors.New("not found")
@@ -364,7 +457,6 @@ func (h *Handle) FD() int {
 
 // Map is the BTF for a map.
 type Map struct {
-	definition *Struct
 	spec       *Spec
 	key, value Type
 }
@@ -373,12 +465,6 @@ type Map struct {
 // to hide it from users of the ebpf package.
 func MapSpec(m *Map) *Spec {
 	return m.spec
-}
-
-// MapType should be a method on Map, but is a free function
-// to hide it from users of the ebpf package.
-func MapType(m *Map) *Struct {
-	return m.definition
 }
 
 // MapKey should be a method on Map, but is a free function

@@ -15,6 +15,8 @@ const (
 	EAGAIN                   = syscall.EAGAIN
 	ENOSPC                   = syscall.ENOSPC
 	EINVAL                   = syscall.EINVAL
+	BPF_F_RDONLY_PROG        = 0
+	BPF_F_WRONLY_PROG        = 0
 	BPF_OBJ_NAME_LEN         = 0x10
 	BPF_TAG_SIZE             = 0x8
 	SYS_BPF                  = 321
@@ -184,7 +186,7 @@ func PerfEventOpen(attr *PerfEventAttr, pid int, cpu int, groupFd int, flags int
 
 // Utsname is a wrapper
 type Utsname struct {
-    Release    [65]byte
+	Release [65]byte
 }
 
 // Uname is a wrapper

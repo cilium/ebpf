@@ -690,6 +690,20 @@ func TestMapFreeze(t *testing.T) {
 	}
 }
 
+func TestMapGetNextID(t *testing.T) {
+	var next uint32
+
+	hash := createHash()
+	defer hash.Close()
+
+	if err := MapGetNextID(0, &next); err != nil {
+		t.Fatal("Can't get next ID:", err)
+	}
+	if next == 0 {
+		t.Fatal("Expected next ID other than 0")
+	}
+}
+
 type benchValue struct {
 	ID      uint32
 	Val16   uint16

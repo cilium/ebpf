@@ -765,3 +765,8 @@ func (mi *MapIterator) Next(keyOut, valueOut interface{}) bool {
 func (mi *MapIterator) Err() error {
 	return mi.err
 }
+
+// MapGetNextID returns the ID of the next eBPF map
+func MapGetNextID(start uint32) (uint32, error) {
+	return objGetNextID(_MapGetNextID, start, next)
+}

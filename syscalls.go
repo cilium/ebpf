@@ -150,6 +150,12 @@ type bpfMapFreezeAttr struct {
 	mapFd uint32
 }
 
+type bpfObjGetNextIDAttr struct {
+	start uint32
+	next  uint32
+	flags uint32
+}
+
 func bpfProgLoad(attr *bpfProgLoadAttr) (*internal.FD, error) {
 	for {
 		fd, err := internal.BPF(_ProgLoad, unsafe.Pointer(attr), unsafe.Sizeof(*attr))
@@ -298,6 +304,17 @@ func bpfMapGetNextKey(m *internal.FD, key, nextKeyOut internal.Pointer) error {
 		value: nextKeyOut,
 	}
 	_, err = internal.BPF(_MapGetNextKey, unsafe.Pointer(&attr), unsafe.Sizeof(attr))
+	return wrapMapError(err)
+}
+
+func objGetNextID(cmd int, start uint32) (uint32, error) {
+	attr := bpfObjGetNextID{
+		start: start,
+	}
+	_, err := internal.BPF(cmd, unsafe.Pointer(&attr), unsafe.Sizeof(attr))
+	if err == nil {
+		*next = attr.next
+	}
 	return wrapMapError(err)
 }
 

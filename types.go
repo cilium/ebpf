@@ -115,6 +115,7 @@ const (
 	_TaskFDQuery
 	_MapLookupAndDeleteElem
 	_MapFreeze
+	_BTFGetNextID
 )
 
 const (

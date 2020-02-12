@@ -13,6 +13,7 @@ import (
 
 // Errors returned by Map and MapIterator methods.
 var (
+	ErrNotExist         = xerrors.New("requested object does not exit")
 	ErrKeyNotExist      = xerrors.New("key does not exist")
 	ErrIterationAborted = xerrors.New("iteration aborted")
 )
@@ -764,4 +765,9 @@ func (mi *MapIterator) Next(keyOut, valueOut interface{}) bool {
 // Returns ErrIterationAborted if it wasn't possible to do a full iteration.
 func (mi *MapIterator) Err() error {
 	return mi.err
+}
+
+// MapGetNextID returns the ID of the next eBPF map
+func MapGetNextID(startID uint32) (uint32, error) {
+	return objGetNextID(_MapGetNextID, startID)
 }

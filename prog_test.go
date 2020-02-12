@@ -319,6 +319,31 @@ func TestHaveProgTestRun(t *testing.T) {
 	testutils.CheckFeatureTest(t, haveProgTestRun)
 }
 
+func TestProgramGetNextID(t *testing.T) {
+	testutils.SkipOnOldKernel(t, "4.13", "bpf_prog_get_next_id")
+	var next uint32
+
+	prog, err := NewProgram(&ProgramSpec{
+		Type: SkSKB,
+		Instructions: asm.Instructions{
+			asm.LoadImm(asm.R0, 0, asm.DWord),
+			asm.Return(),
+		},
+		License: "MIT",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer prog.Close()
+
+	if next, err = ProgramGetNextID(0); err != nil {
+		t.Fatal("Can't get next ID:", err)
+	}
+	if next == 0 {
+		t.Fatal("Expected next ID other than 0")
+	}
+}
+
 func createProgramArray(t *testing.T) *Map {
 	t.Helper()
 

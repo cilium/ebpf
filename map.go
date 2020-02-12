@@ -767,6 +767,6 @@ func (mi *MapIterator) Err() error {
 }
 
 // MapGetNextID returns the ID of the next eBPF map
-func MapGetNextID(start uint32, next *uint32) error {
+func MapGetNextID(start uint32) (uint32, error) {
 	return objGetNextID(_MapGetNextID, start, next)
 }

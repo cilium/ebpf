@@ -150,7 +150,7 @@ type bpfMapFreezeAttr struct {
 	mapFd uint32
 }
 
-type bpfObjGetNextID struct {
+type bpfObjGetNextIDAttr struct {
 	start uint32
 	next  uint32
 	flags uint32
@@ -307,7 +307,7 @@ func bpfMapGetNextKey(m *internal.FD, key, nextKeyOut internal.Pointer) error {
 	return wrapMapError(err)
 }
 
-func objGetNextID(cmd int, start uint32, next *uint32) error {
+func objGetNextID(cmd int, start uint32) (uint32, error) {
 	attr := bpfObjGetNextID{
 		start: start,
 	}

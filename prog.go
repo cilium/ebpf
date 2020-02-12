@@ -517,3 +517,8 @@ func SanitizeName(name string, replacement rune) string {
 		return char
 	}, name)
 }
+
+// ProgramGetNextID returns the ID of the next eBPF program
+func ProgramGetNextID(startID uint32) (uint32, error) {
+	return objGetNextID(_ProgGetNextID, startID)
+}

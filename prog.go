@@ -19,6 +19,9 @@ import (
 // ErrNotSupported is returned whenever the kernel doesn't support a feature.
 var ErrNotSupported = internal.ErrNotSupported
 
+// ProgramID represents the unique ID of an eBPF program
+type ProgramID uint32
+
 const (
 	// Number of bytes to pad the output buffer for BPF_PROG_TEST_RUN.
 	// This is currently the maximum of spare space allocated for SKB
@@ -516,4 +519,10 @@ func SanitizeName(name string, replacement rune) string {
 		}
 		return char
 	}, name)
+}
+
+// ProgramGetNextID returns the ID of the next eBPF program
+func ProgramGetNextID(startID ProgramID) (ProgramID, error) {
+	id, err := objGetNextID(_ProgGetNextID, uint32(startID))
+	return ProgramID(id), err
 }

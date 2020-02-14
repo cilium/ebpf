@@ -11,6 +11,11 @@ import (
 	"golang.org/x/xerrors"
 )
 
+// Generic errors returned by BPF syscalls.
+var (
+	ErrNotExist = xerrors.New("requested object does not exit")
+)
+
 // bpfObjName is a null-terminated string made up of
 // 'A-Za-z0-9_' characters.
 type bpfObjName [unix.BPF_OBJ_NAME_LEN]byte
@@ -148,6 +153,12 @@ type bpfGetFDByIDAttr struct {
 
 type bpfMapFreezeAttr struct {
 	mapFd uint32
+}
+
+type bpfObjGetNextIDAttr struct {
+	startID   uint32
+	nextID    uint32
+	openFlags uint32
 }
 
 func bpfProgLoad(attr *bpfProgLoadAttr) (*internal.FD, error) {
@@ -299,6 +310,25 @@ func bpfMapGetNextKey(m *internal.FD, key, nextKeyOut internal.Pointer) error {
 	}
 	_, err = internal.BPF(_MapGetNextKey, unsafe.Pointer(&attr), unsafe.Sizeof(attr))
 	return wrapMapError(err)
+}
+
+func objGetNextID(cmd int, start uint32) (uint32, error) {
+	attr := bpfObjGetNextIDAttr{
+		startID: start,
+	}
+	_, err := internal.BPF(cmd, unsafe.Pointer(&attr), unsafe.Sizeof(attr))
+	return attr.nextID, wrapObjError(err)
+}
+
+func wrapObjError(err error) error {
+	if err == nil {
+		return nil
+	}
+	if xerrors.Is(err, unix.ENOENT) {
+		return xerrors.Errorf("%w", ErrNotExist)
+	}
+
+	return xerrors.New(err.Error())
 }
 
 func wrapMapError(err error) error {

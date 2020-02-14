@@ -12,6 +12,7 @@ import (
 	"github.com/cilium/ebpf/asm"
 	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/testutils"
+	"golang.org/x/xerrors"
 )
 
 func TestProgramRun(t *testing.T) {
@@ -317,6 +318,46 @@ func TestProgramAlter(t *testing.T) {
 
 func TestHaveProgTestRun(t *testing.T) {
 	testutils.CheckFeatureTest(t, haveProgTestRun)
+}
+
+func TestProgramGetNextID(t *testing.T) {
+	testutils.SkipOnOldKernel(t, "4.13", "bpf_prog_get_next_id")
+	var next ProgramID
+
+	prog, err := NewProgram(&ProgramSpec{
+		Type: SkSKB,
+		Instructions: asm.Instructions{
+			asm.LoadImm(asm.R0, 0, asm.DWord),
+			asm.Return(),
+		},
+		License: "MIT",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer prog.Close()
+
+	if next, err = ProgramGetNextID(ProgramID(0)); err != nil {
+		t.Fatal("Can't get next ID:", err)
+	}
+	if next == ProgramID(0) {
+		t.Fatal("Expected next ID other than 0")
+	}
+
+	// As there can be multiple eBPF programs, we loop over all of them and
+	// make sure, the IDs increase and the last call will return ErrNotExist
+	for {
+		last := next
+		if next, err = ProgramGetNextID(last); err != nil {
+			if !xerrors.Is(err, ErrNotExist) {
+				t.Fatal("Expected ErrNotExist, got:", err)
+			}
+			break
+		}
+		if next <= last {
+			t.Fatalf("Expected next ID (%d) to be higher than the last ID (%d)", next, last)
+		}
+	}
 }
 
 func createProgramArray(t *testing.T) *Map {

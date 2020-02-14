@@ -17,6 +17,9 @@ var (
 	ErrIterationAborted = xerrors.New("iteration aborted")
 )
 
+// MapID represents the unique ID of an eBPF map
+type MapID uint32
+
 // MapSpec defines a Map.
 type MapSpec struct {
 	// Name is passed to the kernel as a debug aid. Must only contain
@@ -764,4 +767,12 @@ func (mi *MapIterator) Next(keyOut, valueOut interface{}) bool {
 // Returns ErrIterationAborted if it wasn't possible to do a full iteration.
 func (mi *MapIterator) Err() error {
 	return mi.err
+}
+
+// MapGetNextID returns the ID of the next eBPF map.
+//
+// Returns ErrNotExist, if there is no next eBPF map.
+func MapGetNextID(startID MapID) (MapID, error) {
+	id, err := objGetNextID(_MapGetNextID, uint32(startID))
+	return MapID(id), err
 }

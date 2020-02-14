@@ -325,7 +325,7 @@ func wrapObjError(err error) error {
 		return nil
 	}
 	if xerrors.Is(err, unix.ENOENT) {
-		return ErrNotExist
+		return xerrors.Errorf("%w", ErrNotExist)
 	}
 
 	return xerrors.New(err.Error())

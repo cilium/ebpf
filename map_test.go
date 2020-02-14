@@ -690,6 +690,37 @@ func TestMapFreeze(t *testing.T) {
 	}
 }
 
+func TestMapGetNextID(t *testing.T) {
+	testutils.SkipOnOldKernel(t, "4.13", "bpf_map_get_next_id")
+	var next MapID
+	var err error
+
+	hash := createHash()
+	defer hash.Close()
+
+	if next, err = MapGetNextID(MapID(0)); err != nil {
+		t.Fatal("Can't get next ID:", err)
+	}
+	if next == MapID(0) {
+		t.Fatal("Expected next ID other than 0")
+	}
+
+	// As there can be multiple eBPF maps, we loop over all of them and
+	// make sure, the IDs increase and the last call will return ErrNotExist
+	for {
+		last := next
+		if next, err = MapGetNextID(last); err != nil {
+			if !xerrors.Is(err, ErrNotExist) {
+				t.Fatal("Expected ErrNotExist, got:", err)
+			}
+			break
+		}
+		if next <= last {
+			t.Fatalf("Expected next ID (%d) to be higher than the last ID (%d)", next, last)
+		}
+	}
+}
+
 type benchValue struct {
 	ID      uint32
 	Val16   uint16

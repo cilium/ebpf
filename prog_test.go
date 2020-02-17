@@ -360,6 +360,45 @@ func TestProgramGetNextID(t *testing.T) {
 	}
 }
 
+func TestProgramGetFDByID(t *testing.T) {
+	testutils.SkipOnOldKernel(t, "4.13", "bpf_prog_get_fd_by_id")
+
+	prog, err := NewProgram(&ProgramSpec{
+		Type: SkSKB,
+		Instructions: asm.Instructions{
+			asm.LoadImm(asm.R0, 0, asm.DWord),
+			asm.Return(),
+		},
+		License: "MIT",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer prog.Close()
+	var next ProgramID
+	var fd uint32
+
+	if next, err = ProgramGetNextID(ProgramID(0)); err != nil {
+		t.Fatal("Can't get next ID:", err)
+	}
+	if next == ProgramID(0) {
+		t.Fatal("Expected next ID other than 0")
+	}
+
+	if fd, err = ProgramGetFDByID(next); err != nil {
+		t.Fatalf("Can't get FD for program ID %d: %v", uint32(next), err)
+	}
+	if fd == 0 {
+		t.Fatal("Expected FD other than 0")
+	}
+
+	// As there can be multiple programs, we use max(uint32) as ProgramID to trigger an expected error.
+	_, err = ProgramGetFDByID(ProgramID(4294967295))
+	if !xerrors.Is(err, ErrNotExist) {
+		t.Fatal("Expected ErrNotExist, got:", err)
+	}
+}
+
 func createProgramArray(t *testing.T) *Map {
 	t.Helper()
 

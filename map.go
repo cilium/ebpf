@@ -602,18 +602,19 @@ func unmarshalMap(buf []byte) (*Map, error) {
 	// Looking up an entry in a nested map or prog array returns an id,
 	// not an fd.
 	id := internal.NativeEndian.Uint32(buf)
-	fd, err := bpfGetMapFDByID(id)
+	fd, err := MapGetFDByID(MapID(id))
 	if err != nil {
 		return nil, err
 	}
+	ifd := internal.NewFD(fd)
 
-	name, abi, err := newMapABIFromFd(fd)
+	name, abi, err := newMapABIFromFd(ifd)
 	if err != nil {
-		_ = fd.Close()
+		_ = ifd.Close()
 		return nil, err
 	}
 
-	return newMap(fd, name, abi)
+	return newMap(ifd, name, abi)
 }
 
 // MarshalBinary implements BinaryMarshaler.
@@ -775,4 +776,12 @@ func (mi *MapIterator) Err() error {
 func MapGetNextID(startID MapID) (MapID, error) {
 	id, err := objGetNextID(_MapGetNextID, uint32(startID))
 	return MapID(id), err
+}
+
+// MapGetFDByID returns the file descriptor of a map.
+//
+// Returns ErrNotExist, if there is no eBPF map with the given id.
+func MapGetFDByID(id MapID) (uint32, error) {
+	fd, err := objGetFDByID(_MapGetFDByID, uint32(id))
+	return fd, err
 }

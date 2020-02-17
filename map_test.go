@@ -721,6 +721,36 @@ func TestMapGetNextID(t *testing.T) {
 	}
 }
 
+func TestMapGetFDByID(t *testing.T) {
+	testutils.SkipOnOldKernel(t, "4.13", "bpf_map_get_fd_by_id")
+
+	hash := createHash()
+	defer hash.Close()
+	var next MapID
+	var err error
+	var fd uint32
+
+	if next, err = MapGetNextID(MapID(0)); err != nil {
+		t.Fatal("Can't get next ID:", err)
+	}
+	if next == MapID(0) {
+		t.Fatal("Expected next ID other than 0")
+	}
+
+	if fd, err = MapGetFDByID(next); err != nil {
+		t.Fatalf("Can't get FD for map ID %d: %v", uint32(next), err)
+	}
+	if fd == 0 {
+		t.Fatal("Expected FD other than 0")
+	}
+
+	// As there can be multiple maps, we use max(uint32) as MapID to trigger an expected error.
+	_, err = MapGetFDByID(MapID(4294967295))
+	if !xerrors.Is(err, ErrNotExist) {
+		t.Fatal("Expected ErrNotExist, got:", err)
+	}
+}
+
 type benchValue struct {
 	ID      uint32
 	Val16   uint16

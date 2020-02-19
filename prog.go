@@ -419,18 +419,7 @@ func unmarshalProgram(buf []byte) (*Program, error) {
 	// Looking up an entry in a nested map or prog array returns an id,
 	// not an fd.
 	id := internal.NativeEndian.Uint32(buf)
-	fd, err := bpfGetProgramFDByID(id)
-	if err != nil {
-		return nil, err
-	}
-
-	name, abi, err := newProgramABIFromFd(fd)
-	if err != nil {
-		_ = fd.Close()
-		return nil, err
-	}
-
-	return newProgram(fd, name, abi), nil
+	return NewProgramFromID(ProgramID(id))
 }
 
 // MarshalBinary implements BinaryMarshaler.
@@ -523,8 +512,35 @@ func SanitizeName(name string, replacement rune) string {
 
 // ProgramGetNextID returns the ID of the next eBPF program.
 //
-// // Returns ErrNotExist, if there is no next eBPF program.
+// Returns ErrNotExist, if there is no next eBPF program.
 func ProgramGetNextID(startID ProgramID) (ProgramID, error) {
 	id, err := objGetNextID(_ProgGetNextID, uint32(startID))
 	return ProgramID(id), err
+}
+
+// NewProgramFromID returns the program for a given id.
+//
+// Returns ErrNotExist, if there is no eBPF program with the given id.
+func NewProgramFromID(id ProgramID) (*Program, error) {
+	fd, err := bpfObjGetFDByID(_ProgGetFDByID, uint32(id))
+	if err != nil {
+		return nil, err
+	}
+
+	name, abi, err := newProgramABIFromFd(fd)
+	if err != nil {
+		_ = fd.Close()
+		return nil, err
+	}
+
+	return newProgram(fd, name, abi), nil
+}
+
+// ID returns the systemwide unique ID of the program.
+func (p *Program) ID() (ProgramID, error) {
+	info, err := bpfGetProgInfoByFD(p.fd)
+	if err != nil {
+		return ProgramID(0), err
+	}
+	return ProgramID(info.id), nil
 }

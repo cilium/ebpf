@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"io/ioutil"
+	"math"
 	"os"
 	"path/filepath"
 	"strings"
@@ -357,6 +358,39 @@ func TestProgramGetNextID(t *testing.T) {
 		if next <= last {
 			t.Fatalf("Expected next ID (%d) to be higher than the last ID (%d)", next, last)
 		}
+	}
+}
+
+func TestNewProgramFromID(t *testing.T) {
+	testutils.SkipOnOldKernel(t, "4.13", "bpf_prog_get_fd_by_id")
+
+	prog, err := NewProgram(&ProgramSpec{
+		Type: SkSKB,
+		Instructions: asm.Instructions{
+			asm.LoadImm(asm.R0, 0, asm.DWord),
+			asm.Return(),
+		},
+		License: "MIT",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer prog.Close()
+	var next ProgramID
+
+	next, err = prog.ID()
+	if err != nil {
+		t.Fatal("Could not get ID of program:", err)
+	}
+
+	if _, err = NewProgramFromID(next); err != nil {
+		t.Fatalf("Can't get FD for program ID %d: %v", uint32(next), err)
+	}
+
+	// As there can be multiple programs, we use max(uint32) as ProgramID to trigger an expected error.
+	_, err = NewProgramFromID(ProgramID(math.MaxUint32))
+	if !xerrors.Is(err, ErrNotExist) {
+		t.Fatal("Expected ErrNotExist, got:", err)
 	}
 }
 

@@ -469,26 +469,10 @@ var objNameAllowsDot = internal.FeatureTest("dot in object names", "5.2", func()
 	return true
 })
 
-func bpfGetMapFDByID(id uint32) (*internal.FD, error) {
-	// available from 4.13
+func bpfObjGetFDByID(cmd int, id uint32) (*internal.FD, error) {
 	attr := bpfGetFDByIDAttr{
 		id: id,
 	}
-	ptr, err := internal.BPF(_MapGetFDByID, unsafe.Pointer(&attr), unsafe.Sizeof(attr))
-	if err != nil {
-		return nil, xerrors.Errorf("can't get fd for map id %d: %w", id, err)
-	}
-	return internal.NewFD(uint32(ptr)), nil
-}
-
-func bpfGetProgramFDByID(id uint32) (*internal.FD, error) {
-	// available from 4.13
-	attr := bpfGetFDByIDAttr{
-		id: id,
-	}
-	ptr, err := internal.BPF(_ProgGetFDByID, unsafe.Pointer(&attr), unsafe.Sizeof(attr))
-	if err != nil {
-		return nil, xerrors.Errorf("can't get fd for program id %d: %w", id, err)
-	}
-	return internal.NewFD(uint32(ptr)), nil
+	ptr, err := internal.BPF(cmd, unsafe.Pointer(&attr), unsafe.Sizeof(attr))
+	return internal.NewFD(uint32(ptr)), wrapObjError(err)
 }

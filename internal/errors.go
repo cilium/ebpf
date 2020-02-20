@@ -20,24 +20,21 @@ func ErrorWithLog(err error, log []byte, logErr error) error {
 		logStr += " (truncated...)"
 	}
 
-	return &loadError{err, logStr}
+	return &VerifierError{err, logStr}
 }
 
-type loadError struct {
+// VerifierError includes information from the eBPF verifier.
+type VerifierError struct {
 	cause error
 	log   string
 }
 
-func (le *loadError) Error() string {
+func (le *VerifierError) Error() string {
 	if le.log == "" {
 		return le.cause.Error()
 	}
 
 	return fmt.Sprintf("%s: %s", le.cause, le.log)
-}
-
-func (le *loadError) Cause() error {
-	return le.cause
 }
 
 // CString turns a NUL / zero terminated byte buffer into a string.

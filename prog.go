@@ -136,6 +136,7 @@ func newProgramWithBTF(spec *ProgramSpec, btf *btf.Handle, opts ProgramOptions) 
 		return prog, nil
 	}
 
+	logErr := err
 	if opts.LogLevel == 0 {
 		// Re-run with the verifier enabled to get better error messages.
 		logBuf = make([]byte, logSize)
@@ -143,9 +144,10 @@ func newProgramWithBTF(spec *ProgramSpec, btf *btf.Handle, opts ProgramOptions) 
 		attr.logSize = uint32(len(logBuf))
 		attr.logBuf = internal.NewSlicePointer(logBuf)
 
-		_, logErr := bpfProgLoad(attr)
-		err = internal.ErrorWithLog(err, logBuf, logErr)
+		_, logErr = bpfProgLoad(attr)
 	}
+
+	err = internal.ErrorWithLog(err, logBuf, logErr)
 	return nil, xerrors.Errorf("can't load program: %w", err)
 }
 

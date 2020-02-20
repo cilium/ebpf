@@ -161,9 +161,28 @@ func TestProgramVerifierOutput(t *testing.T) {
 	}
 	defer prog.Close()
 
-	t.Log(prog.VerifierLog)
 	if prog.VerifierLog == "" {
-		t.Error("Expected VerifierLog to not be empty")
+		t.Error("Expected VerifierLog to be present")
+	}
+
+	// Issue 64
+	_, err = NewProgramWithOptions(&ProgramSpec{
+		Type: SocketFilter,
+		Instructions: asm.Instructions{
+			asm.Mov.Reg(asm.R0, asm.R1),
+		},
+		License: "MIT",
+	}, ProgramOptions{
+		LogLevel: 2,
+	})
+
+	if err == nil {
+		t.Fatal("Expected an error from invalid program")
+	}
+
+	var ve *internal.VerifierError
+	if !xerrors.As(err, &ve) {
+		t.Error("Error is not a VerifierError")
 	}
 }
 

@@ -77,8 +77,6 @@ var program = [...]byte{
 	0010, 0000, 0000, 0000, 0000, 0000, 0000, 0000, 0030, 0000, 0000, 0000, 0000, 0000, 0000, 0000,
 }
 
-const sockexPin = "/sys/fs/bpf/sockex1"
-
 // ExampleSocketELF demonstrates how to load an eBPF program from an ELF,
 // and attach it to a raw socket.
 func Example_socketELF() {

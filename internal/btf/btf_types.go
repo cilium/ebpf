@@ -2,6 +2,7 @@ package btf
 
 import (
 	"encoding/binary"
+	"fmt"
 	"io"
 
 	"golang.org/x/xerrors"
@@ -59,6 +60,45 @@ type btfType struct {
 	 * "type" is a type_id referring to another type.
 	 */
 	SizeType uint32
+}
+
+func (k btfKind) String() string {
+	switch k {
+	case kindUnknown:
+		return "Unknown"
+	case kindInt:
+		return "Int"
+	case kindPointer:
+		return "Pointer"
+	case kindArray:
+		return "Array"
+	case kindStruct:
+		return "Struct"
+	case kindUnion:
+		return "Union"
+	case kindEnum:
+		return "Enum"
+	case kindForward:
+		return "Forward"
+	case kindTypedef:
+		return "Typedef"
+	case kindVolatile:
+		return "Volatile"
+	case kindConst:
+		return "Const"
+	case kindRestrict:
+		return "Restrict"
+	case kindFunc:
+		return "Func"
+	case kindFuncProto:
+		return "FuncProto"
+	case kindVar:
+		return "Var"
+	case kindDatasec:
+		return "Datasec"
+	default:
+		return fmt.Sprintf("Unknown (%d)", k)
+	}
 }
 
 func mask(len uint32) uint32 {

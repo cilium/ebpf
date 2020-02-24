@@ -576,7 +576,7 @@ func inflateRawTypes(rawTypes []rawType, rawStrings stringTable) (namedTypes map
 		}
 
 		if expected := fixup.expectedKind; expected != kindUnknown && rawKind != expected {
-			return nil, xerrors.Errorf("expected type id %d to have kind %s, found %s", expected, rawKind)
+			return nil, xerrors.Errorf("expected type id %d to have kind %s, found %s", fixup.id, expected, rawKind)
 		}
 
 		*fixup.typ = types[i]

@@ -67,7 +67,7 @@ func (k btfKind) String() string {
 	case kindUnknown:
 		return "Unknown"
 	case kindInt:
-		return "Int"
+		return "Integer"
 	case kindPointer:
 		return "Pointer"
 	case kindArray:

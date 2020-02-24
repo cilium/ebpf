@@ -77,7 +77,7 @@ func (k btfKind) String() string {
 	case kindUnion:
 		return "Union"
 	case kindEnum:
-		return "Enum"
+		return "Enumeration"
 	case kindForward:
 		return "Forward"
 	case kindTypedef:
@@ -89,13 +89,13 @@ func (k btfKind) String() string {
 	case kindRestrict:
 		return "Restrict"
 	case kindFunc:
-		return "Func"
+		return "Function"
 	case kindFuncProto:
-		return "FuncProto"
+		return "Function Proto"
 	case kindVar:
-		return "Var"
+		return "Variable"
 	case kindDatasec:
-		return "Datasec"
+		return "Section"
 	default:
 		return fmt.Sprintf("Unknown (%d)", k)
 	}

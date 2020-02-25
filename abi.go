@@ -15,20 +15,26 @@ import (
 
 // MapABI are the attributes of a Map which are available across all supported kernels.
 type MapABI struct {
-	Type       MapType
-	KeySize    uint32
-	ValueSize  uint32
-	MaxEntries uint32
-	Flags      uint32
+	Type          MapType
+	ID            MapID
+	KeySize       uint32
+	ValueSize     uint32
+	MaxEntries    uint32
+	Flags         uint32
+	Name          string
+	OwnerProgType ProgramType
 }
 
 func newMapABIFromSpec(spec *MapSpec) *MapABI {
 	return &MapABI{
 		spec.Type,
+		0,
 		spec.KeySize,
 		spec.ValueSize,
 		spec.MaxEntries,
 		spec.Flags,
+		spec.Name,
+		UnspecifiedProgram,
 	}
 }
 
@@ -44,25 +50,42 @@ func newMapABIFromFd(fd *internal.FD) (string, *MapABI, error) {
 
 	return "", &MapABI{
 		MapType(info.mapType),
+		MapID(info.id),
 		info.keySize,
 		info.valueSize,
 		info.maxEntries,
 		info.flags,
+		internal.CString(info.mapName[:]),
+		UnspecifiedProgram,
 	}, nil
 }
 
 func newMapABIFromProc(fd *internal.FD) (*MapABI, error) {
 	var abi MapABI
-	err := scanFdInfo(fd, map[string]interface{}{
+	fields := map[string]interface{}{
 		"map_type":    &abi.Type,
 		"key_size":    &abi.KeySize,
 		"value_size":  &abi.ValueSize,
 		"max_entries": &abi.MaxEntries,
 		"map_flags":   &abi.Flags,
-	})
+		"map_id":      &abi.ID,
+	}
+	if abi.Type == ProgramArray {
+		fields["owner_prog_type"] = &abi.OwnerProgType
+	}
+
+	err := scanFdInfo(fd, fields)
+	if xerrors.Is(err, errMissingFields) {
+		return nil, &internal.UnsupportedFeatureError{
+			Name:           "reading map ABI from /proc/self/fdinfo",
+			MinimumVersion: internal.Version{4, 5, 0},
+		}
+	}
+
 	if err != nil {
 		return nil, err
 	}
+
 	return &abi, nil
 }
 
@@ -71,6 +94,8 @@ func (abi *MapABI) Equal(other *MapABI) bool {
 	switch {
 	case abi.Type != other.Type:
 		return false
+	case abi.ID != other.ID:
+		return false
 	case abi.KeySize != other.KeySize:
 		return false
 	case abi.ValueSize != other.ValueSize:
@@ -78,6 +103,10 @@ func (abi *MapABI) Equal(other *MapABI) bool {
 	case abi.MaxEntries != other.MaxEntries:
 		return false
 	case abi.Flags != other.Flags:
+		return false
+	case abi.Name != other.Name:
+		return false
+	case abi.OwnerProgType != other.OwnerProgType:
 		return false
 	default:
 		return true
@@ -129,7 +158,7 @@ func newProgramABIFromProc(fd *internal.FD) (string, *ProgramABI, error) {
 	})
 	if xerrors.Is(err, errMissingFields) {
 		return "", nil, &internal.UnsupportedFeatureError{
-			Name:           "reading ABI from /proc/self/fdinfo",
+			Name:           "reading program ABI from /proc/self/fdinfo",
 			MinimumVersion: internal.Version{4, 11, 0},
 		}
 	}

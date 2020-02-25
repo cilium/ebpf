@@ -8,19 +8,22 @@ import (
 
 func TestMapABIEqual(t *testing.T) {
 	abi := &MapABI{
-		Type:       Array,
-		KeySize:    4,
-		ValueSize:  2,
-		MaxEntries: 3,
-		Flags:      1,
+		Type:          Array,
+		ID:            42,
+		KeySize:       4,
+		ValueSize:     2,
+		MaxEntries:    3,
+		Flags:         1,
+		Name:          "foobar",
+		OwnerProgType: SocketFilter,
 	}
 
 	if !abi.Equal(abi) {
-		t.Error("Equal returns true when comparing an ABI to itself")
+		t.Error("Equal returns true when comparing a map ABI to itself")
 	}
 
 	if abi.Equal(&MapABI{}) {
-		t.Error("Equal returns true for different ABIs")
+		t.Error("Equal returns true for different map ABIs")
 	}
 }
 

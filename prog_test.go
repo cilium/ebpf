@@ -7,12 +7,16 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
+	"syscall"
 	"testing"
+	"time"
 
 	"github.com/cilium/ebpf/asm"
 	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/testutils"
+	"golang.org/x/sys/unix"
 	"golang.org/x/xerrors"
 )
 
@@ -96,6 +100,71 @@ func TestProgramBenchmark(t *testing.T) {
 
 	if duration == 0 {
 		t.Error("Expected non-zero duration")
+	}
+}
+
+func TestProgramTestRunInterrupt(t *testing.T) {
+	prog := createSocketFilter(t)
+	defer prog.Close()
+
+	var (
+		tgid        = unix.Getpid()
+		tidChan     = make(chan int, 1)
+		exited      = make(chan struct{})
+		interrupted = make(chan struct{})
+	)
+
+	go func() {
+		defer close(exited)
+
+		// Don't unlock this thread. Combined with runtime.Goexit
+		// it ensures that the thread is killed. Otherwise tgkill might
+		// send SIGUSR1 to the wrong thread.
+		runtime.LockOSThread()
+		tidChan <- unix.Gettid()
+
+		// Block this thread in the BPF syscall, so that we can
+		// trigger EINTR by sending a signal.
+		prog.testRun(make([]byte, 14), math.MaxInt32, func() {
+			// We don't know how long finishing the
+			// test run would take, so flag that we've seen
+			// an interruption and abort the goroutine.
+			close(interrupted)
+			runtime.Goexit()
+		})
+
+		t.Error("testRun wasn't interrupted")
+	}()
+
+	tid := <-tidChan
+	timeout := time.After(5 * time.Second)
+loop:
+	for {
+		err := unix.Tgkill(tgid, tid, syscall.SIGUSR1)
+		if err == unix.ESRCH {
+			// The thread is gone, we've managed to interrupt it or
+			// it has finished of its own volition.
+			break
+		}
+		if err != nil {
+			t.Fatal("Can't send signal to goroutine thread:", err)
+		}
+
+		select {
+		case <-exited:
+			break loop
+		case <-interrupted:
+			break loop
+		case <-timeout:
+			t.Fatal("Timed out trying to interrupt the goroutine")
+		default:
+		}
+	}
+
+	select {
+	case <-interrupted:
+	default:
+		t.Fatal("Reset was not called")
 	}
 }
 

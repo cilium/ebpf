@@ -15,6 +15,8 @@ const (
 	EAGAIN                   = syscall.EAGAIN
 	ENOSPC                   = syscall.ENOSPC
 	EINVAL                   = syscall.EINVAL
+	EINTR                    = syscall.EINTR
+	ESRCH                    = syscall.ESRCH
 	BPF_F_RDONLY_PROG        = 0
 	BPF_F_WRONLY_PROG        = 0
 	BPF_OBJ_NAME_LEN         = 0x10
@@ -191,5 +193,20 @@ type Utsname struct {
 
 // Uname is a wrapper
 func Uname(buf *Utsname) (err error) {
+	return errNonLinux
+}
+
+// Getpid is a wrapper
+func Getpid() int {
+	return -1
+}
+
+// Gettid is a wrapper
+func Gettid() int {
+	return -1
+}
+
+// Tgkill is a wrapper
+func Tgkill(tgid int, tid int, sig syscall.Signal) (err error) {
 	return errNonLinux
 }

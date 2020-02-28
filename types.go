@@ -118,12 +118,6 @@ const (
 	_BTFGetNextID
 )
 
-const (
-	_Any = iota
-	_NoExist
-	_Exist
-)
-
 // ProgramType of the eBPF program
 type ProgramType uint32
 

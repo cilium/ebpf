@@ -25,14 +25,12 @@ type btfExtHeader struct {
 }
 
 func parseExtInfos(r io.ReadSeeker, bo binary.ByteOrder, strings stringTable) (funcInfo, lineInfo map[string]extInfo, err error) {
-	const expectedMagic = 0xeB9F
-
 	var header btfExtHeader
 	if err := binary.Read(r, bo, &header); err != nil {
 		return nil, nil, xerrors.Errorf("can't read header: %v", err)
 	}
 
-	if header.Magic != expectedMagic {
+	if header.Magic != btfMagic {
 		return nil, nil, xerrors.Errorf("incorrect magic value %v", header.Magic)
 	}
 

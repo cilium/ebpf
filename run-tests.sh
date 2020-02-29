@@ -8,6 +8,12 @@ set -o pipefail
 if [[ "${1:-}" = "--in-vm" ]]; then
   shift
 
+  goBinary=/usr/local/bin/go
+  if [[ $# == 2 ]]; then
+    goBinary=$1
+    HOME=/run
+    shift
+  fi
   mount -t bpf bpf /sys/fs/bpf
   export CGO_ENABLED=0
   export GOFLAGS=-mod=readonly
@@ -16,7 +22,7 @@ if [[ "${1:-}" = "--in-vm" ]]; then
   export GOCACHE=/run/go-cache
 
   echo Running tests...
-  /usr/local/bin/go test -coverprofile="$1/coverage.txt" -covermode=atomic -v ./...
+  $goBinary test -coverprofile="$1/coverage.txt" -covermode=atomic -v ./...
   touch "$1/success"
   exit 0
 fi
@@ -38,6 +44,14 @@ if [[ -z "${kernel_version}" ]]; then
   exit 1
 fi
 
+# get current go stable versions
+versions=$(curl https://golang.org/dl/?mode=json | jq '.[] | select(.stable == true) | .version')
+for version in $versions; do
+  goVersion="${version//\"}"
+  go install golang.org/dl/$goVersion
+  $goVersion download
+done
+
 readonly kernel="linux-${kernel_version}.bz"
 readonly output="$(mktemp -d)"
 readonly tmp_dir="$(mktemp -d)"
@@ -47,23 +61,29 @@ test -e "${tmp_dir}/${kernel}" || {
   curl --fail -L "https://github.com/newtools/ci-kernels/blob/master/${kernel}?raw=true" -o "${tmp_dir}/${kernel}"
 }
 
-echo Testing on ${kernel_version}
-$sudo virtme-run --kimg "${tmp_dir}/${kernel}" --memory 512M --pwd \
-  --rwdir=/run/output="${output}" \
-  --rodir=/run/go-path="$(go env GOPATH)" \
-  --rwdir=/run/go-cache="$(go env GOCACHE)" \
-  --script-sh "$(realpath "$0") --in-vm /run/output"
+for version in $versions; do
+  goVersion="${version//\"}"
+  goBinary=$(which ${goVersion})
+  echo Testing on ${kernel_version} with go version $goVersion
+  $sudo virtme-run --kimg "${tmp_dir}/${kernel}" --memory 512M --pwd \
+    --rwdir=/run/output="${output}" \
+    --rodir=/run/go-path="$(go env GOPATH)" \
+    --rwdir=/run/go-cache="$(go env GOCACHE)" \
+    --rwdir=/run/sdk="${HOME}/sdk" \
+    --script-sh "$(realpath "$0") --in-vm ${goBinary} /run/output"
 
-if [[ ! -e "${output}/success" ]]; then
-  echo "Test failed on ${kernel_version}"
-  exit 1
-else
-  echo "Test successful on ${kernel_version}"
-  if [[ -v CODECOV_TOKEN ]]; then
-    curl --fail -s https://codecov.io/bash > "${tmp_dir}/codecov.sh"
-    chmod +x "${tmp_dir}/codecov.sh"
-    "${tmp_dir}/codecov.sh" -f "${output}/coverage.txt"
+  if [[ ! -e "${output}/success" ]]; then
+    echo "Test failed on ${kernel_version} with go version ${goVersion}"
+    exit 1
+  else
+    echo "Test successful on ${kernel_version} with go version ${goVersion}"
+    if [[ -v CODECOV_TOKEN ]]; then
+      curl --fail -s https://codecov.io/bash > "${tmp_dir}/codecov.sh"
+      chmod +x "${tmp_dir}/codecov.sh"
+      "${tmp_dir}/codecov.sh" -f "${output}/coverage.txt"
+    fi
   fi
-fi
+
+done
 
 $sudo rm -r "${output}"

@@ -12,22 +12,34 @@ blocks:
       prologue:
         commands:
           - checkout
-          - sem-version go 1.13
+          - sem-version $GO_VERSION
           - go build ./...
           - sudo pip3 install https://github.com/amluto/virtme/archive/538f1e756139a6b57a4780e7ceb3ac6bcaa4fe6f.zip
           - sudo apt-get install -y qemu-system-x86
       jobs:
       - name: Test building on other OS and arch
+        matrix:
+          - env_var: GO_VERSION
+            values: ["1.13.8", "1.14"]
         commands:
           - GOOS=darwin go build ./...
           - GOARCH=arm GOARM=6 go build ./...
           - GOARCH=arm64 go build ./...
       - name: Test on 5.4.5
+        matrix:
+          - env_var: GO_VERSION
+            values: ["1.13.8", "1.14"]
         commands:
           - timeout -s KILL 90s ./run-tests.sh 5.4.5
       - name: Test on 4.19.81
+        matrix:
+          - env_var: GO_VERSION
+            values: ["1.13.8", "1.14"]
         commands:
           - timeout -s KILL 90s ./run-tests.sh 4.19.81
       - name: Test on 4.9.198
+        matrix:
+          - env_var: GO_VERSION
+            values: ["1.13.8", "1.14"]
         commands:
           - timeout -s KILL 90s ./run-tests.sh 4.9.198

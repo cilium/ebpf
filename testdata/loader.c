@@ -53,6 +53,13 @@ int __attribute__((noinline)) helper_func(uint32_t arg) {
 	return helper_func2(arg);
 }
 
+// Static functions in other sections get different relocations
+// than global functions.
+static int __attribute__((noinline)) helper_func_static() {
+	uint32_t key = 0;
+	return !!map_lookup_elem(&hash_map, (void*)&key);
+}
+
 #if __clang_major__ >= 9
 static volatile unsigned int key1 = 0; // .bss
 static volatile unsigned int key2 = 1; // .data
@@ -70,6 +77,9 @@ __section("xdp") int xdp_prog() {
 	map_lookup_elem(&hash_map, (void*)&key1);
 	map_lookup_elem(&hash_map2, (void*)&key2);
 	map_lookup_elem(&hash_map2, (void*)&key3);
+	if (helper_func_static()) {
+		return 2;
+	}
 	return helper_func(arg);
 }
 

@@ -394,7 +394,7 @@ func (insns Instructions) Marshal(w io.Writer, bo binary.ByteOrder) error {
 	num := 0
 	for i, ins := range insns {
 		switch {
-		case ins.OpCode.JumpOp() == Call && ins.Constant == -1:
+		case ins.OpCode.JumpOp() == Call && ins.Src == PseudoCall && ins.Constant == -1:
 			// Rewrite bpf to bpf call
 			offset, ok := absoluteOffsets[ins.Reference]
 			if !ok {

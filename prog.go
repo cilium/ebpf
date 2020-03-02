@@ -302,7 +302,7 @@ func (p *Program) Close() error {
 //
 // This function requires at least Linux 4.12.
 func (p *Program) Test(in []byte) (uint32, []byte, error) {
-	ret, out, _, err := p.testRun(in, 1)
+	ret, out, _, err := p.testRun(in, 1, nil)
 	if err != nil {
 		return ret, nil, xerrors.Errorf("can't test program: %w", err)
 	}
@@ -312,12 +312,20 @@ func (p *Program) Test(in []byte) (uint32, []byte, error) {
 // Benchmark runs the Program with the given input for a number of times
 // and returns the time taken per iteration.
 //
-// The returned value is the return value of the last execution of
-// the program.
+// Returns the result of the last execution of the program and the time per
+// run or an error. reset is called whenever the benchmark syscall is
+// interrupted, and should be set to testing.B.ResetTimer or similar.
+//
+// Note: profiling a call to this function will skew it's results, see
+// https://github.com/cilium/ebpf/issues/24
 //
 // This function requires at least Linux 4.12.
-func (p *Program) Benchmark(in []byte, repeat int) (uint32, time.Duration, error) {
-	ret, _, total, err := p.testRun(in, repeat)
+func (p *Program) Benchmark(in []byte, repeat int, reset func()) (uint32, time.Duration, error) {
+	if reset == nil {
+		return 0, 0, xerrors.New("reset may not be nil")
+	}
+
+	ret, _, total, err := p.testRun(in, repeat, reset)
 	if err != nil {
 		return ret, total, xerrors.Errorf("can't benchmark program: %w", err)
 	}
@@ -359,7 +367,7 @@ var haveProgTestRun = internal.FeatureTest("BPF_PROG_TEST_RUN", "4.12", func() b
 	return !xerrors.Is(err, unix.EINVAL)
 })
 
-func (p *Program) testRun(in []byte, repeat int) (uint32, []byte, time.Duration, error) {
+func (p *Program) testRun(in []byte, repeat int, reset func()) (uint32, []byte, time.Duration, error) {
 	if uint(repeat) > math.MaxUint32 {
 		return 0, nil, 0, fmt.Errorf("repeat is too high")
 	}
@@ -397,8 +405,19 @@ func (p *Program) testRun(in []byte, repeat int) (uint32, []byte, time.Duration,
 		repeat:      uint32(repeat),
 	}
 
-	_, err = internal.BPF(_ProgTestRun, unsafe.Pointer(&attr), unsafe.Sizeof(attr))
-	if err != nil {
+	for {
+		_, err = internal.BPF(_ProgTestRun, unsafe.Pointer(&attr), unsafe.Sizeof(attr))
+		if err == nil {
+			break
+		}
+
+		if xerrors.Is(err, unix.EINTR) {
+			if reset != nil {
+				reset()
+			}
+			continue
+		}
+
 		return 0, nil, 0, xerrors.Errorf("can't run test: %w", err)
 	}
 

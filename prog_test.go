@@ -7,12 +7,16 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
+	"syscall"
 	"testing"
+	"time"
 
 	"github.com/cilium/ebpf/asm"
 	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/testutils"
+	"golang.org/x/sys/unix"
 	"golang.org/x/xerrors"
 )
 
@@ -84,7 +88,7 @@ func TestProgramBenchmark(t *testing.T) {
 	prog := createSocketFilter(t)
 	defer prog.Close()
 
-	ret, duration, err := prog.Benchmark(make([]byte, 14), 1)
+	ret, duration, err := prog.Benchmark(make([]byte, 14), 1, nil)
 	testutils.SkipIfNotSupported(t, err)
 	if err != nil {
 		t.Fatal("Error from Benchmark:", err)
@@ -96,6 +100,74 @@ func TestProgramBenchmark(t *testing.T) {
 
 	if duration == 0 {
 		t.Error("Expected non-zero duration")
+	}
+}
+
+func TestProgramTestRunInterrupt(t *testing.T) {
+	testutils.SkipOnOldKernel(t, "5.0", "EINTR from BPF_PROG_TEST_RUN")
+
+	prog := createSocketFilter(t)
+	defer prog.Close()
+
+	var (
+		tgid    = unix.Getpid()
+		tidChan = make(chan int, 1)
+		exit    = make(chan struct{})
+		errs    = make(chan error, 1)
+		timeout = time.After(5 * time.Second)
+	)
+
+	defer close(exit)
+
+	go func() {
+		runtime.LockOSThread()
+		defer func() {
+			// Wait for the test to allow us to unlock the OS thread, to
+			// ensure that we don't send SIGUSR1 to the wrong thread.
+			<-exit
+			runtime.UnlockOSThread()
+		}()
+
+		tidChan <- unix.Gettid()
+
+		// Block this thread in the BPF syscall, so that we can
+		// trigger EINTR by sending a signal.
+		_, _, _, err := prog.testRun(make([]byte, 14), math.MaxInt32, func() {
+			// We don't know how long finishing the
+			// test run would take, so flag that we've seen
+			// an interruption and abort the goroutine.
+			close(errs)
+			runtime.Goexit()
+		})
+
+		errs <- err
+	}()
+
+	tid := <-tidChan
+	for {
+		err := unix.Tgkill(tgid, tid, syscall.SIGUSR1)
+		if err != nil {
+			t.Fatal("Can't send signal to goroutine thread:", err)
+		}
+
+		select {
+		case err, ok := <-errs:
+			if !ok {
+				return
+			}
+
+			testutils.SkipIfNotSupported(t, err)
+			if err == nil {
+				t.Fatal("testRun wasn't interrupted")
+			}
+
+			t.Fatal("testRun returned an error:", err)
+
+		case <-timeout:
+			t.Fatal("Timed out trying to interrupt the goroutine")
+
+		default:
+		}
 	}
 }
 

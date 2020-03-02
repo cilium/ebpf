@@ -44,20 +44,20 @@ struct {
 } btf_map __section(".maps");
 #endif
 
-static int __attribute__((noinline)) helper_func2(uint32_t arg) {
+static int __attribute__((noinline)) static_fn(uint32_t arg) {
 	return arg;
 }
 
-int __attribute__((noinline)) helper_func(uint32_t arg) {
-	// Enforce bpf-to-bpf call in .text section
-	return helper_func2(arg);
+int __attribute__((noinline)) global_fn2(uint32_t arg) {
+	return arg++;
 }
 
-// Static functions in other sections get different relocations
-// than global functions.
-static int __attribute__((noinline)) helper_func_static() {
-	uint32_t key = 0;
-	return !!map_lookup_elem(&hash_map, (void*)&key);
+int __attribute__((noinline)) __section("other") global_fn3(uint32_t arg) {
+	return arg+1;
+}
+
+int __attribute__((noinline)) global_fn(uint32_t arg) {
+	return static_fn(arg) + global_fn2(arg) + global_fn3(arg);
 }
 
 #if __clang_major__ >= 9
@@ -77,10 +77,7 @@ __section("xdp") int xdp_prog() {
 	map_lookup_elem(&hash_map, (void*)&key1);
 	map_lookup_elem(&hash_map2, (void*)&key2);
 	map_lookup_elem(&hash_map2, (void*)&key3);
-	if (helper_func_static()) {
-		return 2;
-	}
-	return helper_func(arg);
+	return static_fn(arg) + global_fn(arg);
 }
 
 // This function has no relocations, and is thus parsed differently.

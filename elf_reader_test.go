@@ -100,8 +100,8 @@ func TestLoadCollectionSpec(t *testing.T) {
 				t.Fatal("Can't run program:", err)
 			}
 
-			if ret != 1 {
-				t.Error("Expected return value to be 1, got", ret)
+			if ret != 5 {
+				t.Error("Expected return value to be 5, got", ret)
 			}
 		})
 	}

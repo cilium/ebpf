@@ -20,14 +20,22 @@ func TestLink(t *testing.T) {
 		License: "MIT",
 	}
 
-	lib := &ProgramSpec{
-		Instructions: asm.Instructions{
-			asm.LoadImm(asm.R0, 1337, asm.DWord).Sym("my_func"),
-			asm.Return(),
+	libs := []*ProgramSpec{
+		{
+			Instructions: asm.Instructions{
+				asm.LoadImm(asm.R0, 1337, asm.DWord).Sym("my_other_func"),
+				asm.Return(),
+			},
+		},
+		{
+			Instructions: asm.Instructions{
+				asm.Call.Label("my_other_func").Sym("my_func"),
+				asm.Return(),
+			},
 		},
 	}
 
-	err := link(spec, []*ProgramSpec{lib})
+	err := link(spec, libs)
 	if err != nil {
 		t.Fatal(err)
 	}

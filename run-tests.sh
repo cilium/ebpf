@@ -40,14 +40,14 @@ fi
 
 readonly kernel="linux-${kernel_version}.bz"
 readonly output="$(mktemp -d)"
-readonly tmp_dir="$(mktemp -d)"
+readonly tmp_dir="${TMPDIR:-$(mktemp -d)}"
 
 test -e "${tmp_dir}/${kernel}" || {
-  echo Fetching ${kernel}
+  echo Fetching "${kernel}"
   curl --fail -L "https://github.com/newtools/ci-kernels/blob/master/${kernel}?raw=true" -o "${tmp_dir}/${kernel}"
 }
 
-echo Testing on ${kernel_version}
+echo Testing on "${kernel_version}"
 $sudo virtme-run --kimg "${tmp_dir}/${kernel}" --memory 512M --pwd \
   --rwdir=/run/output="${output}" \
   --rodir=/run/go-path="$(go env GOPATH)" \

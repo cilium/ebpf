@@ -197,7 +197,7 @@ func (ec *elfCode) loadPrograms(progSections map[elf.SectionIndex]*elf.Section, 
 		if btf != nil {
 			spec.BTF, err = btf.Program(prog.Name, length)
 			if err != nil {
-				return nil, xerrors.Errorf("BTF for section %s (program %s): %w", prog.Name, funcSym, err)
+				return nil, xerrors.Errorf("BTF for section %s (program %s): %w", funcSym.Name, prog.Name, err)
 			}
 		}
 
@@ -343,7 +343,7 @@ outer:
 			// A value of -1 references the first instruction in the section.
 			offset := int64(int32(ins.Constant)+1) * asm.InstructionSize
 			if offset < 0 {
-				return xerrors.Errorf("call: %s: invalid offset %d", offset)
+				return xerrors.Errorf("call: %s: invalid offset %d", name, offset)
 			}
 
 			sym, ok := ec.symbolsPerSection[rel.Section][uint64(offset)]

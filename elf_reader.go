@@ -167,23 +167,23 @@ func (ec *elfCode) loadPrograms(progSections map[elf.SectionIndex]*elf.Section, 
 		libs  []*ProgramSpec
 	)
 
-	for idx, prog := range progSections {
+	for idx, sec := range progSections {
 		syms := ec.symbolsPerSection[idx]
 		if len(syms) == 0 {
-			return nil, xerrors.Errorf("section %v: missing symbols", prog.Name)
+			return nil, xerrors.Errorf("section %v: missing symbols", sec.Name)
 		}
 
 		funcSym, ok := syms[0]
 		if !ok {
-			return nil, xerrors.Errorf("section %v: no label at start", prog.Name)
+			return nil, xerrors.Errorf("section %v: no label at start", sec.Name)
 		}
 
-		insns, length, err := ec.loadInstructions(prog, syms, relocations[idx])
+		insns, length, err := ec.loadInstructions(sec, syms, relocations[idx])
 		if err != nil {
 			return nil, xerrors.Errorf("program %s: can't unmarshal instructions: %w", funcSym.Name, err)
 		}
 
-		progType, attachType := getProgType(prog.Name)
+		progType, attachType := getProgType(sec.Name)
 
 		spec := &ProgramSpec{
 			Name:          funcSym.Name,
@@ -195,9 +195,9 @@ func (ec *elfCode) loadPrograms(progSections map[elf.SectionIndex]*elf.Section, 
 		}
 
 		if btf != nil {
-			spec.BTF, err = btf.Program(prog.Name, length)
+			spec.BTF, err = btf.Program(sec.Name, length)
 			if err != nil {
-				return nil, xerrors.Errorf("BTF for section %s (program %s): %w", prog.Name, funcSym.Name, err)
+				return nil, xerrors.Errorf("BTF for section %s (program %s): %w", sec.Name, funcSym.Name, err)
 			}
 		}
 

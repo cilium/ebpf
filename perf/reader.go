@@ -198,6 +198,15 @@ func NewReaderWithOptions(array *ebpf.Map, perCPUBuffer int, opts ReaderOptions)
 		pauseFds = make([]int, 0, nCPU)
 	)
 
+	onlineCPU, err := internal.OnlineCPUs()
+	if err != nil {
+		return nil, xerrors.Errorf("perf event array: %w", err)
+	}
+
+	if nCPU > onlineCPU {
+		nCPU = onlineCPU
+	}
+
 	defer func() {
 		if err != nil {
 			for _, fd := range fds {

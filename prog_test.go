@@ -224,6 +224,23 @@ func TestProgramVerifierOutputOnError(t *testing.T) {
 	}
 }
 
+func TestProgramKernelVersion(t *testing.T) {
+	testutils.SkipOnOldKernel(t, "4.20", "KernelVersion")
+	prog, err := NewProgram(&ProgramSpec{
+		Type: Kprobe,
+		Instructions: asm.Instructions{
+			asm.LoadImm(asm.R0, 0, asm.DWord),
+			asm.Return(),
+		},
+		KernelVersion: 42,
+		License:       "MIT",
+	})
+	if err != nil {
+		t.Fatal("Could not load Kprobe program")
+	}
+	defer prog.Close()
+}
+
 func TestProgramVerifierOutput(t *testing.T) {
 	prog, err := NewProgramWithOptions(socketFilterSpec, ProgramOptions{
 		LogLevel: 2,

@@ -202,6 +202,7 @@ func convertProgramSpec(spec *ProgramSpec, handle *btf.Handle) (*bpfProgLoadAttr
 		insCount:           insCount,
 		instructions:       internal.NewSlicePointer(bytecode),
 		license:            internal.NewStringPointer(spec.License),
+		kernelVersion:      spec.KernelVersion,
 	}
 
 	if haveObjName() == nil {

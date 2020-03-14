@@ -7,6 +7,7 @@ import (
 	"math"
 	"runtime"
 	"sync"
+	"syscall"
 
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/internal"
@@ -198,15 +199,6 @@ func NewReaderWithOptions(array *ebpf.Map, perCPUBuffer int, opts ReaderOptions)
 		pauseFds = make([]int, 0, nCPU)
 	)
 
-	onlineCPU, err := internal.OnlineCPUs()
-	if err != nil {
-		return nil, xerrors.Errorf("perf event array: %w", err)
-	}
-
-	if nCPU > onlineCPU {
-		nCPU = onlineCPU
-	}
-
 	defer func() {
 		if err != nil {
 			for _, fd := range fds {
@@ -224,6 +216,9 @@ func NewReaderWithOptions(array *ebpf.Map, perCPUBuffer int, opts ReaderOptions)
 	for i := 0; i < nCPU; i++ {
 		ring, err := newPerfEventRing(i, perCPUBuffer, opts.Watermark)
 		if err != nil {
+			if xerrors.Is(err, syscall.ENODEV) {
+				continue
+			}
 			return nil, xerrors.Errorf("failed to create perf ring for CPU %d: %w", i, err)
 		}
 		rings = append(rings, ring)

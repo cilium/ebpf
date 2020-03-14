@@ -14,6 +14,7 @@ import (
 	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/testutils"
 	"github.com/cilium/ebpf/internal/unix"
+	"golang.org/x/xerrors"
 )
 
 var (
@@ -289,6 +290,18 @@ func TestCreatePerfEvent(t *testing.T) {
 		t.Fatal("Can't create perf event:", err)
 	}
 	unix.Close(fd)
+
+	onlineCPU, err := internal.OnlineCPUs()
+	if err != nil {
+		t.Fatal("perf event array: ", err)
+	}
+	fd, err = createPerfEvent(onlineCPU, 1)
+	if !xerrors.Is(err, syscall.ENODEV) {
+		t.Fatal("should create perf event faile:", err)
+	}
+	if fd != -1 {
+		t.Fatal("should create perf event faile")
+	}
 }
 
 func TestReadRecord(t *testing.T) {

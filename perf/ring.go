@@ -90,7 +90,7 @@ func createPerfEvent(cpu, watermark int) (int, error) {
 	attr.Size = uint32(unsafe.Sizeof(attr))
 	fd, err := unix.PerfEventOpen(&attr, -1, cpu, -1, unix.PERF_FLAG_FD_CLOEXEC)
 	if err != nil {
-		return -1, xerrors.Errorf("can't create perf event: %v", err)
+		return -1, xerrors.Errorf("can't create perf event: %w", err)
 	}
 	return fd, nil
 }

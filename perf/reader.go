@@ -253,9 +253,6 @@ func NewReaderWithOptions(array *ebpf.Map, perCPUBuffer int, opts ReaderOptions)
 	if err = pr.Resume(); err != nil {
 		return nil, err
 	}
-	if err = pr.Resume(); err != nil {
-		return nil, err
-	}
 	runtime.SetFinalizer(pr, (*Reader).Close)
 	return pr, nil
 }
@@ -378,7 +375,7 @@ func (pr *Reader) Pause() error {
 		return errClosed
 	}
 
-	for i := 0; i < len(pr.pauseFds); i++ {
+	for i := range pr.pauseFds {
 		if err := pr.array.Delete(uint32(i)); err != nil && !xerrors.Is(err, ebpf.ErrKeyNotExist) {
 			return xerrors.Errorf("could't delete event fd for CPU %d: %w", i, err)
 		}
@@ -398,9 +395,8 @@ func (pr *Reader) Resume() error {
 		return errClosed
 	}
 
-	for i := 0; i < len(pr.pauseFds); i++ {
-		fd := uint32(pr.pauseFds[i])
-		if err := pr.array.Put(uint32(i), fd); err != nil {
+	for i, fd := range pr.pauseFds {
+		if err := pr.array.Put(uint32(i), uint32(fd)); err != nil {
 			return xerrors.Errorf("couldn't put event fd %d for CPU %d: %w", fd, i, err)
 		}
 	}

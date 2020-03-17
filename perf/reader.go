@@ -204,7 +204,9 @@ func NewReaderWithOptions(array *ebpf.Map, perCPUBuffer int, opts ReaderOptions)
 				unix.Close(fd)
 			}
 			for _, ring := range rings {
-				ring.Close()
+				if ring != nil {
+					ring.Close()
+				}
 			}
 		}
 	}()
@@ -214,8 +216,15 @@ func NewReaderWithOptions(array *ebpf.Map, perCPUBuffer int, opts ReaderOptions)
 	// Hence we have to create a ring for each CPU.
 	for i := 0; i < nCPU; i++ {
 		ring, err := newPerfEventRing(i, perCPUBuffer, opts.Watermark)
+		if xerrors.Is(err, unix.ENODEV) {
+			// The requested CPU is currently offline, skip it.
+			rings = append(rings, nil)
+			pauseFds = append(pauseFds, -1)
+			continue
+		}
+
 		if err != nil {
-			return nil, xerrors.Errorf("failed to create perf ring for CPU %d: %w", i, err)
+			return nil, xerrors.Errorf("failed to create perf ring for CPU %d: %v", i, err)
 		}
 		rings = append(rings, ring)
 		pauseFds = append(pauseFds, ring.fd)
@@ -290,7 +299,9 @@ func (pr *Reader) Close() error {
 
 		// Close rings
 		for _, ring := range pr.rings {
-			ring.Close()
+			if ring != nil {
+				ring.Close()
+			}
 		}
 		pr.rings = nil
 		pr.pauseFds = nil
@@ -396,6 +407,10 @@ func (pr *Reader) Resume() error {
 	}
 
 	for i, fd := range pr.pauseFds {
+		if fd == -1 {
+			continue
+		}
+
 		if err := pr.array.Put(uint32(i), uint32(fd)); err != nil {
 			return xerrors.Errorf("couldn't put event fd %d for CPU %d: %w", fd, i, err)
 		}

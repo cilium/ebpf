@@ -17,6 +17,7 @@ const (
 	EINVAL                   = syscall.EINVAL
 	EINTR                    = syscall.EINTR
 	ESRCH                    = syscall.ESRCH
+	ENODEV                   = syscall.ENODEV
 	BPF_F_RDONLY_PROG        = 0
 	BPF_F_WRONLY_PROG        = 0
 	BPF_OBJ_NAME_LEN         = 0x10

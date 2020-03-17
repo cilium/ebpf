@@ -16,6 +16,7 @@ const (
 	EPOLLIN                  = linux.EPOLLIN
 	EINTR                    = linux.EINTR
 	ESRCH                    = linux.ESRCH
+	ENODEV                   = linux.ENODEV
 	BPF_F_RDONLY_PROG        = linux.BPF_F_RDONLY_PROG
 	BPF_F_WRONLY_PROG        = linux.BPF_F_WRONLY_PROG
 	BPF_OBJ_NAME_LEN         = linux.BPF_OBJ_NAME_LEN

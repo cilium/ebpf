@@ -204,7 +204,9 @@ func NewReaderWithOptions(array *ebpf.Map, perCPUBuffer int, opts ReaderOptions)
 				unix.Close(fd)
 			}
 			for _, ring := range rings {
-				ring.Close()
+				if ring != nil {
+					ring.Close()
+				}
 			}
 		}
 	}()
@@ -214,8 +216,15 @@ func NewReaderWithOptions(array *ebpf.Map, perCPUBuffer int, opts ReaderOptions)
 	// Hence we have to create a ring for each CPU.
 	for i := 0; i < nCPU; i++ {
 		ring, err := newPerfEventRing(i, perCPUBuffer, opts.Watermark)
+		if xerrors.Is(err, unix.ENODEV) {
+			// The requested CPU is currently offline, skip it.
+			rings = append(rings, nil)
+			pauseFds = append(pauseFds, -1)
+			continue
+		}
+
 		if err != nil {
-			return nil, xerrors.Errorf("failed to create perf ring for CPU %d: %w", i, err)
+			return nil, xerrors.Errorf("failed to create perf ring for CPU %d: %v", i, err)
 		}
 		rings = append(rings, ring)
 		pauseFds = append(pauseFds, ring.fd)
@@ -249,9 +258,6 @@ func NewReaderWithOptions(array *ebpf.Map, perCPUBuffer int, opts ReaderOptions)
 		epollRings:  make([]*perfEventRing, 0, len(rings)),
 		closeFd:     closeFd,
 		pauseFds:    pauseFds,
-	}
-	if err = pr.Resume(); err != nil {
-		return nil, err
 	}
 	if err = pr.Resume(); err != nil {
 		return nil, err
@@ -293,7 +299,9 @@ func (pr *Reader) Close() error {
 
 		// Close rings
 		for _, ring := range pr.rings {
-			ring.Close()
+			if ring != nil {
+				ring.Close()
+			}
 		}
 		pr.rings = nil
 		pr.pauseFds = nil
@@ -378,7 +386,7 @@ func (pr *Reader) Pause() error {
 		return errClosed
 	}
 
-	for i := 0; i < len(pr.pauseFds); i++ {
+	for i := range pr.pauseFds {
 		if err := pr.array.Delete(uint32(i)); err != nil && !xerrors.Is(err, ebpf.ErrKeyNotExist) {
 			return xerrors.Errorf("could't delete event fd for CPU %d: %w", i, err)
 		}
@@ -398,9 +406,12 @@ func (pr *Reader) Resume() error {
 		return errClosed
 	}
 
-	for i := 0; i < len(pr.pauseFds); i++ {
-		fd := uint32(pr.pauseFds[i])
-		if err := pr.array.Put(uint32(i), fd); err != nil {
+	for i, fd := range pr.pauseFds {
+		if fd == -1 {
+			continue
+		}
+
+		if err := pr.array.Put(uint32(i), uint32(fd)); err != nil {
 			return xerrors.Errorf("couldn't put event fd %d for CPU %d: %w", fd, i, err)
 		}
 	}

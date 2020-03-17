@@ -166,7 +166,7 @@ func createMap(spec *MapSpec, inner *internal.FD, handle *btf.Handle) (*Map, err
 		abi.ValueSize = 4
 
 		if abi.MaxEntries == 0 {
-			n, err := internal.OnlineCPUs()
+			n, err := internal.PossibleCPUs()
 			if err != nil {
 				return nil, xerrors.Errorf("perf event array: %w", err)
 			}

@@ -22,9 +22,9 @@ blocks:
       jobs:
       - name: Test building on other OS and arch
         commands:
-          - GOOS=darwin go build ./...
-          - GOARCH=arm GOARM=6 go build ./...
-          - GOARCH=arm64 go build ./...
+          - GOOS=darwin go build ./... && for p in $(go list ./...) ; do GOOS=darwin go test -c $p ; done
+          - GOARCH=arm GOARM=6 go build ./... && for p in $(go list ./...) ; do GOARCH=arm GOARM=6 go test -c $p ; done
+          - GOARCH=arm64 go build ./... && for p in $(go list ./...) ; do GOARCH=arm64 go test -c $p ; done
       - name: Run unit tests
         matrix:
           - env_var: GO_VERSION

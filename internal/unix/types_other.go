@@ -37,6 +37,7 @@ const (
 	PerfBitWatermark         = 0x4000
 	PERF_SAMPLE_RAW          = 0x400
 	PERF_FLAG_FD_CLOEXEC     = 0x8
+	RLIM_INFINITY            = 0x7fffffffffffffff
 )
 
 // Statfs_t is a wrapper

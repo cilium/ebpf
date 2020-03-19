@@ -16,7 +16,7 @@ import (
 	"github.com/cilium/ebpf/asm"
 	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/testutils"
-	"golang.org/x/sys/unix"
+	"github.com/cilium/ebpf/internal/unix"
 	"golang.org/x/xerrors"
 )
 

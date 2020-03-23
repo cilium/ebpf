@@ -1,6 +1,7 @@
 package ebpf
 
 import (
+	"os"
 	"path/filepath"
 	"unsafe"
 
@@ -185,6 +186,18 @@ func bpfProgAlter(cmd int, attr *bpfProgAlterAttr) error {
 
 func bpfMapCreate(attr *bpfMapCreateAttr) (*internal.FD, error) {
 	fd, err := internal.BPF(_MapCreate, unsafe.Pointer(attr), unsafe.Sizeof(*attr))
+	if xerrors.Is(err, os.ErrPermission) {
+		// An EPERM being returned from bpf(2) could mean two things:
+		// - the user has no permissions to call bpf()
+		// - the user's rlimit is set too low to lock memory for bpf maps
+		// Since we cannot determine the exact amount of memory required,
+		// set the user's rlimit to unlimited to be able to create the map.
+		unix.Setrlimit(unix.RLIMIT_MEMLOCK, &unix.Rlimit{Cur: unix.RLIM_INFINITY, Max: unix.RLIM_INFINITY})
+
+		// Retry creating the map after bumping rlimit.
+		fd, err = internal.BPF(_MapCreate, unsafe.Pointer(attr), unsafe.Sizeof(*attr))
+	}
+
 	if err != nil {
 		return nil, err
 	}

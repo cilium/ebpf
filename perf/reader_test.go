@@ -21,7 +21,7 @@ var (
 )
 
 func TestMain(m *testing.M) {
-	err := unix.Setrlimit(8, &unix.Rlimit{
+	err := unix.Setrlimit(unix.RLIMIT_MEMLOCK, &unix.Rlimit{
 		Cur: unix.RLIM_INFINITY,
 		Max: unix.RLIM_INFINITY,
 	})

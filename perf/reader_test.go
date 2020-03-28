@@ -57,7 +57,7 @@ func TestPerfReader(t *testing.T) {
 		t.Fatal("Can't read samples:", err)
 	}
 
-	want := []byte{1, 2, 3, 4, 4, 0, 0, 0, 0, 0, 0, 0}
+	want := []byte{1, 2, 3, 4, 4, 0, 0, 0}
 	if !bytes.Equal(record.RawSample, want) {
 		t.Log(record.RawSample)
 		t.Error("Sample doesn't match expected output")

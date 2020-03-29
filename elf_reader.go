@@ -556,8 +556,11 @@ func (ec *elfCode) loadDataSections(maps map[string]*MapSpec, dataSections map[e
 
 		switch sec.Name {
 		case ".rodata":
-			mapSpec.Flags = unix.BPF_F_RDONLY_PROG
-			mapSpec.Freeze = true
+			// Only freeze and mark read-only if the kernel supports it.
+			if haveMapMutabilityModifiers() == nil {
+				mapSpec.Flags = unix.BPF_F_RDONLY_PROG
+				mapSpec.Freeze = true
+			}
 		case ".bss":
 			// The kernel already zero-initializes the map
 			mapSpec.Contents = nil

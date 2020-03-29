@@ -178,6 +178,11 @@ func BytePtrFromString(s string) (*byte, error) {
 	return linux.BytePtrFromString(s)
 }
 
+// ByteSliceToString is a wrapper
+func ByteSliceToString(s []byte) string {
+	return linux.ByteSliceToString(s)
+}
+
 // Renameat2 is a wrapper
 func Renameat2(olddirfd int, oldpath string, newdirfd int, newpath string, flags uint) error {
 	return linux.Renameat2(olddirfd, oldpath, newdirfd, newpath, flags)

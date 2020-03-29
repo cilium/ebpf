@@ -39,3 +39,11 @@ func (v Version) Less(other Version) bool {
 func (v Version) Unspecified() bool {
 	return v[0] == 0 && v[1] == 0 && v[2] == 0
 }
+
+// Kernel implements the kernel's KERNEL_VERSION macro from linux/version.h.
+// It represents the kernel version and patch level as a single value.
+func (v Version) Kernel() uint32 {
+	// Truncate members to uint8 to prevent them from spilling over into
+	// each other when overflowing 8 bits.
+	return uint32(uint8(v[0]))<<16 | uint32(uint8(v[1]))<<8 | uint32(uint8(v[2]))
+}

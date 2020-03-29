@@ -1,6 +1,8 @@
 package internal
 
-import "testing"
+import (
+	"testing"
+)
 
 func TestVersion(t *testing.T) {
 	a, err := NewVersion("1.2")
@@ -28,5 +30,18 @@ func TestVersion(t *testing.T) {
 
 	if v200.Less(a) {
 		t.Error("2.0.0 should not be less than 1.2.1")
+	}
+}
+
+func TestKernelVersion(t *testing.T) {
+	// Kernels 4.4 and 4.9 have a SUBLEVEL of over 255 and clamp it to 255.
+	// In our implementation, the other version segments are truncated.
+	if v, want := (Version{256, 256, 256}), uint32(255); v.Kernel() != want {
+		t.Errorf("256.256.256 should result in a kernel version of %d, got: %d", want, v.Kernel())
+	}
+
+	// Known good version.
+	if v, want := (Version{4, 9, 128}), uint32(264576); v.Kernel() != want {
+		t.Errorf("4.9.1 should result in a kernel version of %d, got: %d", want, v.Kernel())
 	}
 }

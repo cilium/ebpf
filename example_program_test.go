@@ -56,14 +56,14 @@ func Example_program() {
 
 	ins := asm.Instructions{
 		// store the integer 123 at FP[-8]
-		asm.Mov.Imm(asm.R2, int32(123)),
+		asm.Mov.Imm(asm.R2, 123),
 		asm.StoreMem(asm.RFP, -8, asm.R2, asm.Word),
 
 		// load registers with arguments for call of FnPerfEventOutput
 		asm.LoadMapPtr(asm.R2, events.FD()),
+		asm.LoadImm(asm.R3, 0xffffffff, asm.DWord),
 		asm.Mov.Reg(asm.R4, asm.RFP),
 		asm.Add.Imm(asm.R4, int32(-8)),
-		asm.LoadImm(asm.R3, 0xffffffff, asm.DWord),
 		asm.Mov.Imm(asm.R5, int32(4)),
 
 		// call FnPerfEventOutput
@@ -86,7 +86,7 @@ func Example_program() {
 	defer prog.Close()
 
 	// tracepoint id from /sys/kernel/debug/tracing/events/syscalls/sys_enter_open/id
-	var tid uint64 = 627
+	tid := uint64(627)
 
 	attr := unix.PerfEventAttr{
 		Type:        unix.PERF_TYPE_TRACEPOINT,

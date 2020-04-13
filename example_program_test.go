@@ -70,7 +70,7 @@ func Example_program() {
 		asm.FnPerfEventOutput.Call(),
 
 		// set exit code to 0
-		asm.Mov.Imm(asm.R0, int32(0)),
+		asm.Mov.Imm(asm.R0, 0),
 		asm.Return(),
 	}
 

@@ -63,8 +63,8 @@ func Example_program() {
 		asm.LoadMapPtr(asm.R2, events.FD()),
 		asm.LoadImm(asm.R3, 0xffffffff, asm.DWord),
 		asm.Mov.Reg(asm.R4, asm.RFP),
-		asm.Add.Imm(asm.R4, int32(-8)),
-		asm.Mov.Imm(asm.R5, int32(4)),
+		asm.Add.Imm(asm.R4, -8),
+		asm.Mov.Imm(asm.R5, 4),
 
 		// call FnPerfEventOutput
 		asm.FnPerfEventOutput.Call(),

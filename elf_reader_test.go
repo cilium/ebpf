@@ -215,17 +215,20 @@ func TestLoadInvalidMap(t *testing.T) {
 	}
 }
 
-var elfPattern = flag.String("elfs", "", "`PATTERN` for a path containing libbpf-compatible ELFs")
+var (
+	elfPath    = flag.String("elfs", "", "`Path` containing libbpf-compatible ELFs")
+	elfPattern = flag.String("elf-pattern", "test_*.o", "Glob `pattern` for object files that should be tested")
+)
 
 func TestLibBPFCompat(t *testing.T) {
-	if *elfPattern == "" {
+	if *elfPath == "" {
 		// Specify the path to the directory containing the eBPF for
-		// the kernel's selftests.
-		// As of 5.2 that is tools/testing/selftests/bpf/.
+		// the kernel's selftests if you want to run this test.
+		// As of 5.2 that is tools/testing/selftests/bpf/
 		t.Skip("No path specified")
 	}
 
-	files, err := filepath.Glob(*elfPattern)
+	files, err := filepath.Glob(filepath.Join(*elfPath, *elfPattern))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -241,6 +244,7 @@ func TestLibBPFCompat(t *testing.T) {
 			}
 
 			coll, err := NewCollection(spec)
+			testutils.SkipIfNotSupported(t, err)
 			if err != nil {
 				t.Fatal(err)
 			}

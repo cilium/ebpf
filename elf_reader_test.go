@@ -2,15 +2,27 @@ package ebpf
 
 import (
 	"flag"
+	"fmt"
 	"path/filepath"
 	"reflect"
 	"testing"
+	"unsafe"
 
 	"github.com/cilium/ebpf/internal/testutils"
 )
 
+func GetEndianness() string {
+	test := uint16(0x0740)
+	if *(*uint8)(unsafe.Pointer(&test)) == 0x40 {
+		return "el"
+	} else {
+		return "eb"
+	}
+}
+
 func TestLoadCollectionSpec(t *testing.T) {
-	files, err := filepath.Glob("testdata/loader-*.elf")
+	pattern := fmt.Sprintf("testdata/loader-*-%s.elf", GetEndianness())
+	files, err := filepath.Glob(pattern)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -208,7 +220,8 @@ func TestCollectionSpecDetach(t *testing.T) {
 }
 
 func TestLoadInvalidMap(t *testing.T) {
-	_, err := LoadCollectionSpec("testdata/invalid_map.elf")
+	path := fmt.Sprintf("testdata/invalid_map-*-%s.elf", GetEndianness())
+	_, err := LoadCollectionSpec(path)
 	t.Log(err)
 	if err == nil {
 		t.Fatal("should be fail")

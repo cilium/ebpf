@@ -22,7 +22,7 @@ type perfEventRing struct {
 }
 
 func newPerfEventRing(cpu, perCPUBuffer, watermark int) (*perfEventRing, error) {
-	if watermark >= perCPUBuffer {
+	if watermark > perCPUBuffer {
 		return nil, xerrors.New("watermark must be smaller than perCPUBuffer")
 	}
 

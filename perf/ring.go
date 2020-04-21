@@ -2,6 +2,7 @@ package perf
 
 import (
 	"io"
+	"math"
 	"os"
 	"runtime"
 	"sync/atomic"
@@ -26,12 +27,6 @@ func newPerfEventRing(cpu, perCPUBuffer, watermark int) (*perfEventRing, error) 
 		return nil, xerrors.New("watermark must be smaller than perCPUBuffer")
 	}
 
-	// Round to nearest page boundary and allocate
-	// an extra page for meta data
-	pageSize := os.Getpagesize()
-	nPages := (perCPUBuffer + pageSize - 1) / pageSize
-	size := (1 + nPages) * pageSize
-
 	fd, err := createPerfEvent(cpu, watermark)
 	if err != nil {
 		return nil, err
@@ -42,10 +37,10 @@ func newPerfEventRing(cpu, perCPUBuffer, watermark int) (*perfEventRing, error) 
 		return nil, err
 	}
 
-	mmap, err := unix.Mmap(fd, 0, size, unix.PROT_READ|unix.PROT_WRITE, unix.MAP_SHARED)
+	mmap, err := unix.Mmap(fd, 0, mmapBufferSize(perCPUBuffer), unix.PROT_READ|unix.PROT_WRITE, unix.MAP_SHARED)
 	if err != nil {
 		unix.Close(fd)
-		return nil, err
+		return nil, xerrors.Errorf("can't mmap: %w", err)
 	}
 
 	// This relies on the fact that we allocate an extra metadata page,
@@ -63,6 +58,22 @@ func newPerfEventRing(cpu, perCPUBuffer, watermark int) (*perfEventRing, error) 
 	runtime.SetFinalizer(ring, (*perfEventRing).Close)
 
 	return ring, nil
+}
+
+// mmapBufferSize returns a valid mmap buffer size for use with perf_event_open (1+2^n pages)
+func mmapBufferSize(perCPUBuffer int) int {
+	pageSize := os.Getpagesize()
+
+	// Smallest whole number of pages
+	nPages := (perCPUBuffer + pageSize - 1) / pageSize
+
+	// Round up to nearest power of two number of pages
+	nPages = int(math.Pow(2, math.Ceil(math.Log2(float64(nPages)))))
+
+	// Add one for metadata
+	nPages += 1
+
+	return nPages * pageSize
 }
 
 func (ring *perfEventRing) Close() {

@@ -3,6 +3,7 @@ package perf
 import (
 	"bytes"
 	"io"
+	"os"
 	"testing"
 
 	"github.com/cilium/ebpf/internal/unix"
@@ -64,15 +65,41 @@ func makeRing(size, offset int) *ringReader {
 }
 
 func TestPerfEventRing(t *testing.T) {
-	// watermark == buffer
-	_, err := newPerfEventRing(0, 8192, 8192)
-	if err != nil {
-		t.Fatal(err)
+	check := func(buffer, watermark int) {
+		ring, err := newPerfEventRing(0, buffer, watermark)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		size := len(ring.ringReader.ring)
+
+		// Ring size should be at least as big as buffer
+		if size < buffer {
+			t.Fatalf("ring size %d smaller than buffer %d", size, buffer)
+		}
+
+		// Ring size should be of the form 2^n pages (meta page has already been removed)
+		if size%os.Getpagesize() != 0 {
+			t.Fatalf("ring size %d not whole number of pages (pageSize %d)", size, os.Getpagesize())
+		}
+		nPages := size / os.Getpagesize()
+		if nPages&(nPages-1) != 0 {
+			t.Fatalf("ring size %d (%d pages) not a power of two pages (pageSize %d)", size, nPages, os.Getpagesize())
+		}
 	}
 
+	// watermark == buffer
+	check(8192, 8192)
+
 	// watermark > buffer
-	_, err = newPerfEventRing(0, 8192, 8193)
+	_, err := newPerfEventRing(0, 8192, 8193)
 	if err == nil {
 		t.Fatal("watermark > buffer allowed")
 	}
+
+	// buffer not a power of two
+	check(8193, 8192)
+
+	// large buffer not a multiple of page size at all (prime)
+	check(65537, 8192)
 }

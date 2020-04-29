@@ -2,6 +2,7 @@ package ebpf
 
 import (
 	"flag"
+	"fmt"
 	"path/filepath"
 	"reflect"
 	"testing"
@@ -10,7 +11,8 @@ import (
 )
 
 func TestLoadCollectionSpec(t *testing.T) {
-	files, err := filepath.Glob("testdata/loader-*.elf")
+	pattern := fmt.Sprintf("testdata/loader-*-%s.elf", testutils.GetHostEndianness())
+	files, err := filepath.Glob(pattern)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -208,7 +210,8 @@ func TestCollectionSpecDetach(t *testing.T) {
 }
 
 func TestLoadInvalidMap(t *testing.T) {
-	_, err := LoadCollectionSpec("testdata/invalid_map.elf")
+	path := fmt.Sprintf("testdata/invalid_map-%s.elf", testutils.GetHostEndianness())
+	_, err := LoadCollectionSpec(path)
 	t.Log(err)
 	if err == nil {
 		t.Fatal("should be fail")

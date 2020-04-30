@@ -19,9 +19,9 @@ import (
 )
 
 func TestMain(m *testing.M) {
-	err := unix.Setrlimit(8, &unix.Rlimit{
-		Cur: math.MaxUint64,
-		Max: math.MaxUint64,
+	err := unix.Setrlimit(unix.RLIMIT_MEMLOCK, &unix.Rlimit{
+		Cur: unix.RLIM_INFINITY,
+		Max: unix.RLIM_INFINITY,
 	})
 	if err != nil {
 		fmt.Println("WARNING: Failed to adjust rlimit, tests may fail")

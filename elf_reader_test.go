@@ -4,6 +4,7 @@ import (
 	"flag"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/cilium/ebpf/internal/testutils"
@@ -233,9 +234,14 @@ func TestLibBPFCompat(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	for _, file := range files {
+	for _, f := range files {
+		file := f // force copy
 		name := filepath.Base(file)
 		t.Run(name, func(t *testing.T) {
+			if strings.Contains(name, "_core_") {
+				t.Skip("CO-RE is not implemented")
+			}
+
 			t.Parallel()
 
 			spec, err := LoadCollectionSpec(file)

@@ -8,6 +8,8 @@ import (
 	"io/ioutil"
 	"math"
 	"testing"
+
+	"github.com/cilium/ebpf/internal"
 )
 
 var test64bitImmProg = []byte{
@@ -178,4 +180,33 @@ func ExampleInstructions_Format() {
 	// 	0: Call FnMapLookupElem
 	// 	1: LdImmDW dst: r0 imm: 42
 	// 	3: Exit
+}
+
+var testSrcDstProg = []byte{
+	// on little-endian: r0 = r1
+	// on big-endian: be: r1 = r0
+	0xbf, 0x10, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+}
+
+func TestReadSrcDst(t *testing.T) {
+	var ins Instruction
+	n, err := ins.Unmarshal(bytes.NewReader(testSrcDstProg), binary.BigEndian)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := uint64(InstructionSize); n != want {
+		t.Errorf("Expected %d bytes to be read, got %d", want, n)
+	}
+	var expDst, expSrc Register
+	if internal.NativeEndian == binary.LittleEndian {
+		expDst, expSrc = 0, 1
+	} else {
+		expDst, expSrc = 1, 0
+	}
+	if ins.Dst != expDst {
+		t.Errorf("Expected destination to be %v, got %v", expDst, ins.Dst)
+	}
+	if ins.Src != expSrc {
+		t.Errorf("Expected source to be %v, got %v", expSrc, ins.Src)
+	}
 }

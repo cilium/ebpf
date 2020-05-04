@@ -53,7 +53,7 @@ func TestParseCurrentKernelBTF(t *testing.T) {
 }
 
 func TestLoadSpecFromElf(t *testing.T) {
-	fh, err := os.Open("../../testdata/loader-clang-9.elf")
+	fh, err := os.Open(fmt.Sprintf("../../testdata/loader-clang-9-%s.elf", testutils.GetHostEndianness()));
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -523,14 +523,16 @@ func uintFromBTF(typ btf.Type) (uint32, error) {
 }
 
 func (ec *elfCode) loadDataSections(maps map[string]*MapSpec, dataSections map[elf.SectionIndex]*elf.Section, spec *btf.Spec) error {
-	if spec == nil {
-		return xerrors.New("data sections require BTF")
-	}
 
 	for _, sec := range dataSections {
-		btfMap, err := spec.Datasec(sec.Name)
-		if err != nil {
-			return err
+		var btfMap *btf.Map
+		var err error
+
+		if spec != nil {
+			btfMap, err = spec.Datasec(sec.Name)
+			if err != nil {
+				return err
+			}
 		}
 
 		data, err := sec.Data()
@@ -554,8 +556,11 @@ func (ec *elfCode) loadDataSections(maps map[string]*MapSpec, dataSections map[e
 
 		switch sec.Name {
 		case ".rodata":
-			mapSpec.Flags = unix.BPF_F_RDONLY_PROG
-			mapSpec.Freeze = true
+			// Only freeze and mark read-only if the kernel supports it.
+			if haveMapMutabilityModifiers() == nil {
+				mapSpec.Flags = unix.BPF_F_RDONLY_PROG
+				mapSpec.Freeze = true
+			}
 		case ".bss":
 			// The kernel already zero-initializes the map
 			mapSpec.Contents = nil

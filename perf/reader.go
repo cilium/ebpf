@@ -15,6 +15,15 @@ import (
 	"golang.org/x/xerrors"
 )
 
+const (
+	// `perf_raw_record` contains a trailing `u32 size`, whose length is
+	// included in `perf_event_header.size`, the size of the record's buffer.
+	// When reading raw perf samples from the ring, this many bytes need to be
+	// popped from the end of the data to avoid returning garbage once the ring
+	// has wrapped around.
+	perfRawRecordTailLength = 4
+)
+
 var (
 	errClosed = xerrors.New("perf reader was closed")
 	errEOR    = xerrors.New("end of ring")
@@ -131,7 +140,8 @@ func readRawSample(rd io.Reader) ([]byte, error) {
 	if _, err := io.ReadFull(rd, data); err != nil {
 		return nil, xerrors.Errorf("can't read sample: %v", err)
 	}
-	return data, nil
+
+	return data[:len(data)-perfRawRecordTailLength], nil
 }
 
 // Reader allows reading bpf_perf_event_output

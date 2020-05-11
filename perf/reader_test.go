@@ -21,7 +21,7 @@ var (
 )
 
 func TestMain(m *testing.M) {
-	err := unix.Setrlimit(8, &unix.Rlimit{
+	err := unix.Setrlimit(unix.RLIMIT_MEMLOCK, &unix.Rlimit{
 		Cur: unix.RLIM_INFINITY,
 		Max: unix.RLIM_INFINITY,
 	})
@@ -57,7 +57,7 @@ func TestPerfReader(t *testing.T) {
 		t.Fatal("Can't read samples:", err)
 	}
 
-	want := []byte{1, 2, 3, 4, 4, 0, 0, 0, 0, 0, 0, 0}
+	want := []byte{1, 2, 3, 4, 4, 0, 0, 0}
 	if !bytes.Equal(record.RawSample, want) {
 		t.Log(record.RawSample)
 		t.Error("Sample doesn't match expected output")

@@ -5,7 +5,9 @@ package ebpf_test
 import (
 	"context"
 	"fmt"
+	"io/ioutil"
 	"os"
+	"strconv"
 	"time"
 
 	"github.com/cilium/ebpf"
@@ -14,6 +16,15 @@ import (
 
 	"golang.org/x/sys/unix"
 )
+
+// getTracepointID returns the system specific ID for the tracepoint sys_enter_open.
+func getTracepointID() (uint64, error) {
+	data, err := ioutil.ReadFile("/sys/kernel/debug/tracing/events/syscalls/sys_enter_open/id")
+	if err != nil {
+		return 0, fmt.Errorf("failed to read tracepoint ID for 'sys_enter_open': %v", err)
+	}
+	return strconv.ParseUint(string(data), 10, 64)
+}
 
 // Example_program demonstrates how to attach an eBPF program to a tracepoint.
 // The program will be attached to the sys_enter_open syscall and print out the integer
@@ -85,8 +96,10 @@ func Example_program() {
 	}
 	defer prog.Close()
 
-	// tracepoint id from /sys/kernel/debug/tracing/events/syscalls/sys_enter_open/id
-	tid := uint64(627)
+	tid, err := getTracepointID()
+	if err != nil {
+		panic(fmt.Errorf("could not get tracepoint id: %v", err))
+	}
 
 	attr := unix.PerfEventAttr{
 		Type:        unix.PERF_TYPE_TRACEPOINT,
@@ -100,11 +113,15 @@ func Example_program() {
 		panic(fmt.Errorf("unable to open perf events: %v", err))
 	}
 	if _, _, errno := unix.Syscall(unix.SYS_IOCTL, uintptr(pfd), unix.PERF_EVENT_IOC_ENABLE, 0); errno != 0 {
-		panic(fmt.Errorf("unable to set up perf events: %v", err))
+		panic(fmt.Errorf("unable to enable perf events: %v", err))
 	}
 	if _, _, errno := unix.Syscall(unix.SYS_IOCTL, uintptr(pfd), unix.PERF_EVENT_IOC_SET_BPF, uintptr(prog.FD())); errno != 0 {
 		panic(fmt.Errorf("unable to attach bpf program to perf events: %v", err))
 	}
 
 	<-ctx.Done()
+
+	if _, _, errno := unix.Syscall(unix.SYS_IOCTL, uintptr(pfd), unix.PERF_EVENT_IOC_DISABLE, 0); errno != 0 {
+		panic(fmt.Errorf("unable to disable perf events: %v", err))
+	}
 }

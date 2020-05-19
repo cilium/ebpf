@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"os"
+	"reflect"
 	"syscall"
 	"testing"
 	"time"
@@ -387,6 +388,53 @@ func TestPause(t *testing.T) {
 	}
 	if err = rd.Resume(); err != errClosed {
 		t.Fatalf("Unexpected error: %s", err)
+	}
+}
+
+func TestPerfReaderGarbage(t *testing.T) {
+	// This test reproduces a kernel bug that causes garbage reads from the
+	// perf ring as soon as the ring's page boundary has wrapped for the first
+	// time. Sending a 61-byte (unaligned) payload will result in 80 bytes
+	// written to the perf ring:
+	// - perf event header (8 bytes)
+	// - payload (61 + 4 incorrectly added) = 65, aligned to 72
+
+	// The 80 bytes total is already aligned to 64 bits, so won't have any
+	// extra alignment padding when written to the ring. This should cause
+	// the 52nd write to a 4096-byte ring (4096/80 = 51.2) to wrap the page
+	// and return 7 `align(61+4)-4 - 61 = 7` bytes of garbage.
+
+	// This issue might be fixed in later versions of the kernel.
+	sl := 61
+
+	prog, events := mustOutputSamplesProg(t, sl)
+	defer prog.Close()
+	defer events.Close()
+
+	rd, err := NewReader(events, 4096)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rd.Close()
+
+	for i := 1; i <= 100; i++ {
+		if _, _, err := prog.Test(make([]byte, 14)); err != nil {
+			t.Fatal(err)
+		}
+
+		record, err := rd.Read()
+		if err != nil {
+			t.Fatal("Can't read samples:", err)
+		}
+
+		// Maintain a slice of zeroes the length of the padding section.
+		nb := make([]byte, len(record.RawSample)-sl)
+
+		// Compare the padding section to the empty slice.
+		if !reflect.DeepEqual(record.RawSample[sl:], nb) {
+			t.Skipf("%d non-zero bytes found in padding section of perf sample %d: %v", len(nb), i, record.RawSample[sl:])
+			break
+		}
 	}
 }
 

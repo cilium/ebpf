@@ -1,6 +1,7 @@
 package ebpf
 
 import (
+	"os"
 	"path/filepath"
 	"unsafe"
 
@@ -13,7 +14,7 @@ import (
 
 // Generic errors returned by BPF syscalls.
 var (
-	ErrNotExist = xerrors.New("requested object does not exit")
+	ErrNotExist = xerrors.New("requested object does not exist")
 )
 
 // bpfObjName is a null-terminated string made up of
@@ -185,6 +186,10 @@ func bpfProgAlter(cmd int, attr *bpfProgAlterAttr) error {
 
 func bpfMapCreate(attr *bpfMapCreateAttr) (*internal.FD, error) {
 	fd, err := internal.BPF(_MapCreate, unsafe.Pointer(attr), unsafe.Sizeof(*attr))
+	if xerrors.Is(err, os.ErrPermission) {
+		return nil, xerrors.Errorf("permission denied or insufficient rlimit to lock memory for map '%s'", attr.mapName)
+	}
+
 	if err != nil {
 		return nil, err
 	}

@@ -59,9 +59,8 @@ type Record struct {
 	CPU int
 
 	// The data submitted via bpf_perf_event_output.
-	// They are padded with 0 to have a 64-bit alignment.
-	// If you are using variable length samples you need to take
-	// this into account.
+	// Due to a kernel bug, this can contain between 0 and 7 bytes of trailing
+	// garbage from the ring depending on the input sample's length.
 	RawSample []byte
 
 	// The number of samples which could not be output, since
@@ -317,9 +316,11 @@ func (pr *Reader) Close() error {
 // Read the next record from the perf ring buffer.
 //
 // The function blocks until there are at least Watermark bytes in one
-// of the per CPU buffers.
+// of the per CPU buffers. Records from buffers below the Watermark
+// are not returned.
 //
-// Records from buffers below the Watermark are not returned.
+// Records can contain between 0 and 7 bytes of trailing garbage from the ring
+// depending on the input sample's length.
 //
 // Calling Close interrupts the function.
 func (pr *Reader) Read() (Record, error) {

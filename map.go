@@ -107,6 +107,10 @@ func NewMapFromFD(fd int) (*Map, error) {
 //
 // Creating a map for the first time will perform feature detection
 // by creating small, temporary maps.
+//
+// The caller is responsible for ensuring the process' rlimit is set
+// sufficiently high for locking memory during map creation. This can be done
+// by calling unix.Setrlimit with unix.RLIMIT_MEMLOCK prior to calling NewMap.
 func NewMap(spec *MapSpec) (*Map, error) {
 	if spec.BTF == nil {
 		return newMapWithBTF(spec, nil)

@@ -140,6 +140,11 @@ type bpfProgAlterAttr struct {
 	attachFlags uint32
 }
 
+type bpfRawTracepointOpenAttr struct {
+	name internal.Pointer
+	fd   uint32
+}
+
 type bpfObjGetInfoByFDAttr struct {
 	fd      uint32
 	infoLen uint32
@@ -180,6 +185,11 @@ func bpfProgLoad(attr *bpfProgLoadAttr) (*internal.FD, error) {
 
 func bpfProgAlter(cmd int, attr *bpfProgAlterAttr) error {
 	_, err := internal.BPF(cmd, unsafe.Pointer(attr), unsafe.Sizeof(*attr))
+	return err
+}
+
+func bpfRawTracepointOpen(attr *bpfRawTracepointOpenAttr) error {
+	_, err := internal.BPF(_RawTracepointOpen, unsafe.Pointer(attr), unsafe.Sizeof(*attr))
 	return err
 }
 

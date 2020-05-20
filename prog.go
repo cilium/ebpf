@@ -494,6 +494,23 @@ func (p *Program) Detach(fd int, typ AttachType, flags AttachFlags) error {
 	return bpfProgAlter(_ProgDetach, &attr)
 }
 
+// Attach a Program to raw tracepoint.
+//
+// Requires at least Linux 4.17.
+func (p *Program) AttachRawTracepoint(tpName string) error {
+	fd, err := p.fd.Value()
+	if err != nil {
+		return xerrors.Errorf("failed to get program FD: %w", err)
+	}
+
+	attr := bpfRawTracepointOpenAttr{
+		name: internal.NewStringPointer(tpName),
+		fd:   fd,
+	}
+
+	return bpfRawTracepointOpen(&attr)
+}
+
 // LoadPinnedProgram loads a Program from a BPF file.
 //
 // Requires at least Linux 4.11.

@@ -2,6 +2,7 @@ package ebpf
 
 import (
 	"bytes"
+	"encoding/binary"
 	"fmt"
 	"math"
 	"strings"
@@ -58,6 +59,9 @@ type ProgramSpec struct {
 	// will most likely invalidate the contained data, and may
 	// result in errors when attempting to load it into the kernel.
 	BTF *btf.Program
+
+	// The byte order this program was compiled for, may be nil.
+	ByteOrder binary.ByteOrder
 }
 
 // Copy returns a copy of the spec.
@@ -186,6 +190,10 @@ func convertProgramSpec(spec *ProgramSpec, handle *btf.Handle) (*bpfProgLoadAttr
 
 	if len(spec.License) == 0 {
 		return nil, xerrors.New("License cannot be empty")
+	}
+
+	if spec.ByteOrder != nil && spec.ByteOrder != internal.NativeEndian {
+		return nil, xerrors.Errorf("can't load %s program on %s", spec.ByteOrder, internal.NativeEndian)
 	}
 
 	buf := bytes.NewBuffer(make([]byte, 0, len(spec.Instructions)*asm.InstructionSize))

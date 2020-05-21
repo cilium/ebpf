@@ -3,7 +3,6 @@ package asm
 import (
 	"encoding/binary"
 	"fmt"
-	"github.com/cilium/ebpf/internal"
 	"io"
 	"math"
 	"strings"
@@ -40,10 +39,12 @@ func (ins *Instruction) Unmarshal(r io.Reader, bo binary.ByteOrder) (uint64, err
 	}
 
 	ins.OpCode = bi.OpCode
-	ins.Dst = bi.Registers.Dst()
-	ins.Src = bi.Registers.Src()
 	ins.Offset = bi.Offset
 	ins.Constant = int64(bi.Constant)
+	ins.Dst, ins.Src, err = bi.Registers.Unmarshal(bo)
+	if err != nil {
+		return 0, xerrors.Errorf("can't unmarshal registers: %s", err)
+	}
 
 	if !bi.OpCode.isDWordLoad() {
 		return InstructionSize, nil
@@ -76,9 +77,14 @@ func (ins Instruction) Marshal(w io.Writer, bo binary.ByteOrder) (uint64, error)
 		cons = int32(uint32(ins.Constant))
 	}
 
+	regs, err := newBPFRegisters(ins.Dst, ins.Src, bo)
+	if err != nil {
+		return 0, xerrors.Errorf("can't marshal registers: %s", err)
+	}
+
 	bpfi := bpfInstruction{
 		ins.OpCode,
-		newBPFRegisters(ins.Dst, ins.Src),
+		regs,
 		ins.Offset,
 		cons,
 	}
@@ -433,27 +439,25 @@ type bpfInstruction struct {
 
 type bpfRegisters uint8
 
-func newBPFRegisters(dst, src Register) bpfRegisters {
-	if internal.NativeEndian == binary.LittleEndian {
-		return bpfRegisters((src << 4) | (dst & 0xF))
-	} else {
-		return bpfRegisters((dst << 4) | (src & 0xF))
+func newBPFRegisters(dst, src Register, bo binary.ByteOrder) (bpfRegisters, error) {
+	switch bo {
+	case binary.LittleEndian:
+		return bpfRegisters((src << 4) | (dst & 0xF)), nil
+	case binary.BigEndian:
+		return bpfRegisters((dst << 4) | (src & 0xF)), nil
+	default:
+		return 0, xerrors.Errorf("unrecognized ByteOrder %T", bo)
 	}
 }
 
-func (r bpfRegisters) Dst() Register {
-	if internal.NativeEndian == binary.LittleEndian {
-		return Register(r & 0xF)
-	}else {
-		return Register(r >> 4)
-	}
-}
-
-func (r bpfRegisters) Src() Register {
-	if internal.NativeEndian == binary.LittleEndian {
-		return Register(r >> 4)
-	} else {
-		return Register(r & 0xf)
+func (r bpfRegisters) Unmarshal(bo binary.ByteOrder) (dst, src Register, err error) {
+	switch bo {
+	case binary.LittleEndian:
+		return Register(r & 0xF), Register(r >> 4), nil
+	case binary.BigEndian:
+		return Register(r >> 4), Register(r & 0xf), nil
+	default:
+		return 0, 0, xerrors.Errorf("unrecognized ByteOrder %T", bo)
 	}
 }
 

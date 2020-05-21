@@ -2,112 +2,107 @@ package ebpf
 
 import (
 	"flag"
-	"fmt"
 	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
 
+	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/testutils"
 )
 
 func TestLoadCollectionSpec(t *testing.T) {
-	pattern := fmt.Sprintf("testdata/loader-*-%s.elf", testutils.GetHostEndianness())
-	files, err := filepath.Glob(pattern)
-	if err != nil {
-		t.Fatal(err)
-	}
+	testutils.TestFiles(t, "testdata/loader-*.elf", func(t *testing.T, file string) {
+		spec, err := LoadCollectionSpec(file)
+		if err != nil {
+			t.Fatal("Can't parse ELF:", err)
+		}
 
-	for _, file := range files {
-		name := filepath.Base(file)
-		t.Run(name, func(t *testing.T) {
-			spec, err := LoadCollectionSpec(file)
-			if err != nil {
-				t.Fatal("Can't parse ELF:", err)
-			}
-
-			hashMapSpec := &MapSpec{
-				Name:       "hash_map",
-				Type:       Hash,
-				KeySize:    4,
-				ValueSize:  2,
-				MaxEntries: 1,
-			}
-			checkMapSpec(t, spec.Maps, "hash_map", hashMapSpec)
-			checkMapSpec(t, spec.Maps, "array_of_hash_map", &MapSpec{
-				Name:       "hash_map",
-				Type:       ArrayOfMaps,
-				KeySize:    4,
-				MaxEntries: 2,
-			})
-			spec.Maps["array_of_hash_map"].InnerMap = spec.Maps["hash_map"]
-
-			hashMap2Spec := &MapSpec{
-				Name:       "",
-				Type:       Hash,
-				KeySize:    4,
-				ValueSize:  1,
-				MaxEntries: 2,
-				Flags:      1,
-			}
-			checkMapSpec(t, spec.Maps, "hash_map2", hashMap2Spec)
-			checkMapSpec(t, spec.Maps, "hash_of_hash_map", &MapSpec{
-				Type:       HashOfMaps,
-				KeySize:    4,
-				MaxEntries: 2,
-			})
-			spec.Maps["hash_of_hash_map"].InnerMap = spec.Maps["hash_map2"]
-
-			checkProgramSpec(t, spec.Programs, "xdp_prog", &ProgramSpec{
-				Type:          XDP,
-				License:       "MIT",
-				KernelVersion: 0,
-			})
-			checkProgramSpec(t, spec.Programs, "no_relocation", &ProgramSpec{
-				Type:          SocketFilter,
-				License:       "MIT",
-				KernelVersion: 0,
-			})
-
-			if rodata := spec.Maps[".rodata"]; rodata != nil {
-				err := spec.RewriteConstants(map[string]interface{}{
-					"arg": uint32(1),
-				})
-				if err != nil {
-					t.Fatal("Can't rewrite constant:", err)
-				}
-
-				err = spec.RewriteConstants(map[string]interface{}{
-					"totallyBogus": uint32(1),
-				})
-				if err == nil {
-					t.Error("Rewriting a bogus constant doesn't fail")
-				}
-			}
-
-			t.Log(spec.Programs["xdp_prog"].Instructions)
-
-			coll, err := NewCollectionWithOptions(spec, CollectionOptions{
-				Programs: ProgramOptions{
-					LogLevel: 1,
-				},
-			})
-			testutils.SkipIfNotSupported(t, err)
-			if err != nil {
-				t.Fatal(err)
-			}
-			defer coll.Close()
-
-			ret, _, err := coll.Programs["xdp_prog"].Test(make([]byte, 14))
-			if err != nil {
-				t.Fatal("Can't run program:", err)
-			}
-
-			if ret != 5 {
-				t.Error("Expected return value to be 5, got", ret)
-			}
+		hashMapSpec := &MapSpec{
+			Name:       "hash_map",
+			Type:       Hash,
+			KeySize:    4,
+			ValueSize:  2,
+			MaxEntries: 1,
+		}
+		checkMapSpec(t, spec.Maps, "hash_map", hashMapSpec)
+		checkMapSpec(t, spec.Maps, "array_of_hash_map", &MapSpec{
+			Name:       "hash_map",
+			Type:       ArrayOfMaps,
+			KeySize:    4,
+			MaxEntries: 2,
 		})
-	}
+		spec.Maps["array_of_hash_map"].InnerMap = spec.Maps["hash_map"]
+
+		hashMap2Spec := &MapSpec{
+			Name:       "",
+			Type:       Hash,
+			KeySize:    4,
+			ValueSize:  1,
+			MaxEntries: 2,
+			Flags:      1,
+		}
+		checkMapSpec(t, spec.Maps, "hash_map2", hashMap2Spec)
+		checkMapSpec(t, spec.Maps, "hash_of_hash_map", &MapSpec{
+			Type:       HashOfMaps,
+			KeySize:    4,
+			MaxEntries: 2,
+		})
+		spec.Maps["hash_of_hash_map"].InnerMap = spec.Maps["hash_map2"]
+
+		checkProgramSpec(t, spec.Programs, "xdp_prog", &ProgramSpec{
+			Type:          XDP,
+			License:       "MIT",
+			KernelVersion: 0,
+		})
+		checkProgramSpec(t, spec.Programs, "no_relocation", &ProgramSpec{
+			Type:          SocketFilter,
+			License:       "MIT",
+			KernelVersion: 0,
+		})
+
+		if rodata := spec.Maps[".rodata"]; rodata != nil {
+			err := spec.RewriteConstants(map[string]interface{}{
+				"arg": uint32(1),
+			})
+			if err != nil {
+				t.Fatal("Can't rewrite constant:", err)
+			}
+
+			err = spec.RewriteConstants(map[string]interface{}{
+				"totallyBogus": uint32(1),
+			})
+			if err == nil {
+				t.Error("Rewriting a bogus constant doesn't fail")
+			}
+		}
+
+		t.Log(spec.Programs["xdp_prog"].Instructions)
+
+		if spec.Programs["xdp_prog"].ByteOrder != internal.NativeEndian {
+			return
+		}
+
+		coll, err := NewCollectionWithOptions(spec, CollectionOptions{
+			Programs: ProgramOptions{
+				LogLevel: 1,
+			},
+		})
+		testutils.SkipIfNotSupported(t, err)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer coll.Close()
+
+		ret, _, err := coll.Programs["xdp_prog"].Test(make([]byte, 14))
+		if err != nil {
+			t.Fatal("Can't run program:", err)
+		}
+
+		if ret != 5 {
+			t.Error("Expected return value to be 5, got", ret)
+		}
+	})
 }
 
 func checkMapSpec(t *testing.T, maps map[string]*MapSpec, name string, want *MapSpec) {
@@ -164,6 +159,10 @@ func checkProgramSpec(t *testing.T, progs map[string]*ProgramSpec, name string, 
 		return
 	}
 
+	if have.ByteOrder == nil {
+		t.Errorf("%s: nil ByteOrder", name)
+	}
+
 	if have.License != want.License {
 		t.Errorf("%s: expected %v license, got %v", name, want.License, have.License)
 	}
@@ -211,12 +210,13 @@ func TestCollectionSpecDetach(t *testing.T) {
 }
 
 func TestLoadInvalidMap(t *testing.T) {
-	path := fmt.Sprintf("testdata/invalid_map-%s.elf", testutils.GetHostEndianness())
-	_, err := LoadCollectionSpec(path)
-	t.Log(err)
-	if err == nil {
-		t.Fatal("should be fail")
-	}
+	testutils.TestFiles(t, "testdata/invalid_map-*.elf", func(t *testing.T, file string) {
+		_, err := LoadCollectionSpec(file)
+		t.Log(err)
+		if err == nil {
+			t.Fatal("Loading an invalid map should fail")
+		}
+	})
 }
 
 var (
@@ -232,32 +232,23 @@ func TestLibBPFCompat(t *testing.T) {
 		t.Skip("No path specified")
 	}
 
-	files, err := filepath.Glob(filepath.Join(*elfPath, *elfPattern))
-	if err != nil {
-		t.Fatal(err)
-	}
+	testutils.TestFiles(t, filepath.Join(*elfPath, *elfPattern), func(t *testing.T, file string) {
+		if strings.Contains(filepath.Base(file), "_core_") {
+			t.Skip("CO-RE is not implemented")
+		}
 
-	for _, f := range files {
-		file := f // force copy
-		name := filepath.Base(file)
-		t.Run(name, func(t *testing.T) {
-			if strings.Contains(name, "_core_") {
-				t.Skip("CO-RE is not implemented")
-			}
+		t.Parallel()
 
-			t.Parallel()
+		spec, err := LoadCollectionSpec(file)
+		if err != nil {
+			t.Fatalf("Can't read %s: %s", file, err)
+		}
 
-			spec, err := LoadCollectionSpec(file)
-			if err != nil {
-				t.Fatalf("Can't read %s: %s", name, err)
-			}
-
-			coll, err := NewCollection(spec)
-			testutils.SkipIfNotSupported(t, err)
-			if err != nil {
-				t.Fatal(err)
-			}
-			coll.Close()
-		})
-	}
+		coll, err := NewCollection(spec)
+		testutils.SkipIfNotSupported(t, err)
+		if err != nil {
+			t.Fatal(err)
+		}
+		coll.Close()
+	})
 }

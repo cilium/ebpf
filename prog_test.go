@@ -2,6 +2,7 @@ package ebpf
 
 import (
 	"bytes"
+	"encoding/binary"
 	"fmt"
 	"io/ioutil"
 	"math"
@@ -499,6 +500,20 @@ func TestNewProgramFromID(t *testing.T) {
 	_, err = NewProgramFromID(ProgramID(math.MaxUint32))
 	if !xerrors.Is(err, ErrNotExist) {
 		t.Fatal("Expected ErrNotExist, got:", err)
+	}
+}
+
+func TestProgramRejectIncorrectByteOrder(t *testing.T) {
+	spec := socketFilterSpec.Copy()
+
+	spec.ByteOrder = binary.BigEndian
+	if internal.NativeEndian == binary.BigEndian {
+		spec.ByteOrder = binary.LittleEndian
+	}
+
+	_, err := NewProgram(spec)
+	if err == nil {
+		t.Error("Incorrect ByteOrder should be rejected at load time")
 	}
 }
 

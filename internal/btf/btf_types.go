@@ -179,6 +179,16 @@ type btfVariable struct {
 	Linkage uint32
 }
 
+type btfEnum struct {
+	NameOff uint32
+	Val     int32
+}
+
+type btfParam struct {
+	NameOff uint32
+	Type    TypeID
+}
+
 func readTypes(r io.Reader, bo binary.ByteOrder) ([]rawType, error) {
 	var (
 		header btfType
@@ -195,8 +205,7 @@ func readTypes(r io.Reader, bo binary.ByteOrder) ([]rawType, error) {
 		var data interface{}
 		switch header.Kind() {
 		case kindInt:
-			// sizeof(uint32)
-			data = make([]byte, 4)
+			data = new(uint32)
 		case kindPointer:
 		case kindArray:
 			data = new(btfArray)
@@ -205,8 +214,7 @@ func readTypes(r io.Reader, bo binary.ByteOrder) ([]rawType, error) {
 		case kindUnion:
 			data = make([]btfMember, header.Vlen())
 		case kindEnum:
-			// sizeof(struct btf_enum)
-			data = make([]byte, header.Vlen()*4*2)
+			data = make([]btfEnum, header.Vlen())
 		case kindForward:
 		case kindTypedef:
 		case kindVolatile:
@@ -214,8 +222,7 @@ func readTypes(r io.Reader, bo binary.ByteOrder) ([]rawType, error) {
 		case kindRestrict:
 		case kindFunc:
 		case kindFuncProto:
-			// sizeof(struct btf_param)
-			data = make([]byte, header.Vlen()*4*2)
+			data = make([]btfParam, header.Vlen())
 		case kindVar:
 			data = new(btfVariable)
 		case kindDatasec:

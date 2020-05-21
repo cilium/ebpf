@@ -192,6 +192,7 @@ func (ec *elfCode) loadPrograms(progSections map[elf.SectionIndex]*elf.Section, 
 			License:       ec.license,
 			KernelVersion: ec.version,
 			Instructions:  insns,
+			ByteOrder:     ec.ByteOrder,
 		}
 
 		if btf != nil {

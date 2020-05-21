@@ -30,6 +30,7 @@ type Spec struct {
 	types     map[string][]Type
 	funcInfos map[string]extInfo
 	lineInfos map[string]extInfo
+	byteOrder binary.ByteOrder
 }
 
 type btfHeader struct {
@@ -139,6 +140,7 @@ func LoadSpecFromReader(rd io.ReaderAt) (*Spec, error) {
 		strings:   rawStrings,
 		funcInfos: funcInfos,
 		lineInfos: lineInfos,
+		byteOrder: file.ByteOrder,
 	}, nil
 }
 
@@ -409,6 +411,10 @@ type Handle struct {
 func NewHandle(spec *Spec) (*Handle, error) {
 	if err := haveBTF(); err != nil {
 		return nil, err
+	}
+
+	if spec.byteOrder != internal.NativeEndian {
+		return nil, xerrors.Errorf("can't load %s BTF on %s", spec.byteOrder, internal.NativeEndian)
 	}
 
 	btf, err := spec.marshal(internal.NativeEndian)

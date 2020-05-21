@@ -14,6 +14,7 @@ import (
 // Errors returned by Map and MapIterator methods.
 var (
 	ErrKeyNotExist      = xerrors.New("key does not exist")
+	ErrKeyExist         = xerrors.New("key does exist")
 	ErrIterationAborted = xerrors.New("iteration aborted")
 )
 

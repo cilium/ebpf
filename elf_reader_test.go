@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/testutils"
 )
 
@@ -87,6 +88,10 @@ func TestLoadCollectionSpec(t *testing.T) {
 
 			t.Log(spec.Programs["xdp_prog"].Instructions)
 
+			if spec.Programs["xdp_prog"].ByteOrder != internal.NativeEndian {
+				return
+			}
+
 			coll, err := NewCollectionWithOptions(spec, CollectionOptions{
 				Programs: ProgramOptions{
 					LogLevel: 1,
@@ -162,6 +167,10 @@ func checkProgramSpec(t *testing.T, progs map[string]*ProgramSpec, name string, 
 	if !ok {
 		t.Fatalf("Missing program %s", name)
 		return
+	}
+
+	if have.ByteOrder == nil {
+		t.Errorf("%s: nil ByteOrder", name)
 	}
 
 	if have.License != want.License {

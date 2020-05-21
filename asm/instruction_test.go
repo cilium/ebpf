@@ -8,8 +8,6 @@ import (
 	"io/ioutil"
 	"math"
 	"testing"
-
-	"github.com/cilium/ebpf/internal"
 )
 
 var test64bitImmProg = []byte{
@@ -182,31 +180,34 @@ func ExampleInstructions_Format() {
 	// 	3: Exit
 }
 
-var testSrcDstProg = []byte{
-	// on little-endian: r0 = r1
-	// on big-endian: be: r1 = r0
-	0xbf, 0x10, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-}
-
 func TestReadSrcDst(t *testing.T) {
-	var ins Instruction
-	n, err := ins.Unmarshal(bytes.NewReader(testSrcDstProg), binary.BigEndian)
-	if err != nil {
-		t.Fatal(err)
+	testSrcDstProg := []byte{
+		// on little-endian: r0 = r1
+		// on big-endian: be: r1 = r0
+		0xbf, 0x10, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 	}
-	if want := uint64(InstructionSize); n != want {
-		t.Errorf("Expected %d bytes to be read, got %d", want, n)
+
+	testcases := []struct {
+		bo       binary.ByteOrder
+		dst, src Register
+	}{
+		{binary.BigEndian, R1, R0},
+		{binary.LittleEndian, R0, R1},
 	}
-	var expDst, expSrc Register
-	if internal.NativeEndian == binary.LittleEndian {
-		expDst, expSrc = 0, 1
-	} else {
-		expDst, expSrc = 1, 0
-	}
-	if ins.Dst != expDst {
-		t.Errorf("Expected destination to be %v, got %v", expDst, ins.Dst)
-	}
-	if ins.Src != expSrc {
-		t.Errorf("Expected source to be %v, got %v", expSrc, ins.Src)
+
+	for _, tc := range testcases {
+		t.Run(tc.bo.String(), func(t *testing.T) {
+			var ins Instruction
+			_, err := ins.Unmarshal(bytes.NewReader(testSrcDstProg), tc.bo)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if ins.Dst != tc.dst {
+				t.Errorf("Expected destination to be %v, got %v", tc.dst, ins.Dst)
+			}
+			if ins.Src != tc.src {
+				t.Errorf("Expected source to be %v, got %v", tc.src, ins.Src)
+			}
+		})
 	}
 }

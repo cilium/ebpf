@@ -9,6 +9,7 @@ import (
 	"os"
 	"testing"
 
+	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/testutils"
 )
 
@@ -53,7 +54,7 @@ func TestParseCurrentKernelBTF(t *testing.T) {
 }
 
 func TestLoadSpecFromElf(t *testing.T) {
-	fh, err := os.Open(fmt.Sprintf("../../testdata/loader-clang-9-%s.elf", testutils.GetHostEndianness()));
+	fh, err := os.Open(fmt.Sprintf("../../testdata/loader-clang-9-%s.elf", testutils.GetHostEndianness()))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -87,6 +88,10 @@ func TestLoadSpecFromElf(t *testing.T) {
 
 	if name := bpfMapDef.Name; name != "bpf_map_def" {
 		t.Error("struct bpf_map_def has incorrect name:", name)
+	}
+
+	if spec.byteOrder != internal.NativeEndian {
+		return
 	}
 
 	t.Run("Handle", func(t *testing.T) {

@@ -340,6 +340,10 @@ func wrapMapError(err error) error {
 		return ErrKeyNotExist
 	}
 
+	if xerrors.Is(err, unix.EEXIST) {
+		return ErrKeyExist
+	}
+
 	return xerrors.New(err.Error())
 }
 

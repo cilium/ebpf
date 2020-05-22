@@ -456,6 +456,19 @@ func TestNotExist(t *testing.T) {
 	}
 }
 
+func TestExist(t *testing.T) {
+	hash := createHash()
+	defer hash.Close()
+
+	if err := hash.Put("hello", uint32(21)); err != nil {
+		t.Errorf("Failed to put key/value pair into hash: %v", err)
+	}
+
+	if err := hash.Update("hello", uint32(42), UpdateNoExist); !xerrors.Is(err, ErrKeyExist) {
+		t.Error("Updating existing key doesn't return ErrKeyExist")
+	}
+}
+
 func TestIterateMapInMap(t *testing.T) {
 	const idx = uint32(1)
 

@@ -10,6 +10,7 @@ import (
 
 const (
 	ENOENT                   = linux.ENOENT
+	EEXIST                   = linux.EEXIST
 	EAGAIN                   = linux.EAGAIN
 	ENOSPC                   = linux.ENOSPC
 	EINVAL                   = linux.EINVAL

@@ -164,7 +164,7 @@ type bpfObjGetNextIDAttr struct {
 
 func bpfProgLoad(attr *bpfProgLoadAttr) (*internal.FD, error) {
 	for {
-		fd, err := internal.BPF(_ProgLoad, unsafe.Pointer(attr), unsafe.Sizeof(*attr))
+		fd, err := internal.BPF(internal.BPF_PROG_LOAD, unsafe.Pointer(attr), unsafe.Sizeof(*attr))
 		// As of ~4.20 the verifier can be interrupted by a signal,
 		// and returns EAGAIN in that case.
 		if err == unix.EAGAIN {
@@ -179,13 +179,18 @@ func bpfProgLoad(attr *bpfProgLoadAttr) (*internal.FD, error) {
 	}
 }
 
-func bpfProgAlter(cmd int, attr *bpfProgAlterAttr) error {
+func bpfProgTestRun(attr *bpfProgTestRunAttr) error {
+	_, err := internal.BPF(internal.BPF_PROG_TEST_RUN, unsafe.Pointer(attr), unsafe.Sizeof(*attr))
+	return err
+}
+
+func bpfProgAlter(cmd internal.BPFCmd, attr *bpfProgAlterAttr) error {
 	_, err := internal.BPF(cmd, unsafe.Pointer(attr), unsafe.Sizeof(*attr))
 	return err
 }
 
 func bpfMapCreate(attr *bpfMapCreateAttr) (*internal.FD, error) {
-	fd, err := internal.BPF(_MapCreate, unsafe.Pointer(attr), unsafe.Sizeof(*attr))
+	fd, err := internal.BPF(internal.BPF_MAP_CREATE, unsafe.Pointer(attr), unsafe.Sizeof(*attr))
 	if xerrors.Is(err, os.ErrPermission) {
 		return nil, xerrors.New("permission denied or insufficient rlimit to lock memory for map")
 	}
@@ -253,7 +258,7 @@ func bpfMapLookupElem(m *internal.FD, key, valueOut internal.Pointer) error {
 		key:   key,
 		value: valueOut,
 	}
-	_, err = internal.BPF(_MapLookupElem, unsafe.Pointer(&attr), unsafe.Sizeof(attr))
+	_, err = internal.BPF(internal.BPF_MAP_LOOKUP_ELEM, unsafe.Pointer(&attr), unsafe.Sizeof(attr))
 	return wrapMapError(err)
 }
 
@@ -268,7 +273,7 @@ func bpfMapLookupAndDelete(m *internal.FD, key, valueOut internal.Pointer) error
 		key:   key,
 		value: valueOut,
 	}
-	_, err = internal.BPF(_MapLookupAndDeleteElem, unsafe.Pointer(&attr), unsafe.Sizeof(attr))
+	_, err = internal.BPF(internal.BPF_MAP_LOOKUP_AND_DELETE_ELEM, unsafe.Pointer(&attr), unsafe.Sizeof(attr))
 	return wrapMapError(err)
 }
 
@@ -284,7 +289,7 @@ func bpfMapUpdateElem(m *internal.FD, key, valueOut internal.Pointer, flags uint
 		value: valueOut,
 		flags: flags,
 	}
-	_, err = internal.BPF(_MapUpdateElem, unsafe.Pointer(&attr), unsafe.Sizeof(attr))
+	_, err = internal.BPF(internal.BPF_MAP_UPDATE_ELEM, unsafe.Pointer(&attr), unsafe.Sizeof(attr))
 	return wrapMapError(err)
 }
 
@@ -298,7 +303,7 @@ func bpfMapDeleteElem(m *internal.FD, key internal.Pointer) error {
 		mapFd: fd,
 		key:   key,
 	}
-	_, err = internal.BPF(_MapDeleteElem, unsafe.Pointer(&attr), unsafe.Sizeof(attr))
+	_, err = internal.BPF(internal.BPF_MAP_DELETE_ELEM, unsafe.Pointer(&attr), unsafe.Sizeof(attr))
 	return wrapMapError(err)
 }
 
@@ -313,11 +318,11 @@ func bpfMapGetNextKey(m *internal.FD, key, nextKeyOut internal.Pointer) error {
 		key:   key,
 		value: nextKeyOut,
 	}
-	_, err = internal.BPF(_MapGetNextKey, unsafe.Pointer(&attr), unsafe.Sizeof(attr))
+	_, err = internal.BPF(internal.BPF_MAP_GET_NEXT_KEY, unsafe.Pointer(&attr), unsafe.Sizeof(attr))
 	return wrapMapError(err)
 }
 
-func objGetNextID(cmd int, start uint32) (uint32, error) {
+func objGetNextID(cmd internal.BPFCmd, start uint32) (uint32, error) {
 	attr := bpfObjGetNextIDAttr{
 		startID: start,
 	}
@@ -361,7 +366,7 @@ func bpfMapFreeze(m *internal.FD) error {
 	attr := bpfMapFreezeAttr{
 		mapFd: fd,
 	}
-	_, err = internal.BPF(_MapFreeze, unsafe.Pointer(&attr), unsafe.Sizeof(attr))
+	_, err = internal.BPF(internal.BPF_MAP_FREEZE, unsafe.Pointer(&attr), unsafe.Sizeof(attr))
 	return err
 }
 
@@ -382,7 +387,7 @@ func bpfPinObject(fileName string, fd *internal.FD) error {
 		return err
 	}
 
-	_, err = internal.BPF(_ObjPin, unsafe.Pointer(&bpfPinObjAttr{
+	_, err = internal.BPF(internal.BPF_OBJ_PIN, unsafe.Pointer(&bpfPinObjAttr{
 		fileName: internal.NewStringPointer(fileName),
 		fd:       value,
 	}), 16)
@@ -393,7 +398,7 @@ func bpfPinObject(fileName string, fd *internal.FD) error {
 }
 
 func bpfGetObject(fileName string) (*internal.FD, error) {
-	ptr, err := internal.BPF(_ObjGet, unsafe.Pointer(&bpfPinObjAttr{
+	ptr, err := internal.BPF(internal.BPF_OBJ_GET, unsafe.Pointer(&bpfPinObjAttr{
 		fileName: internal.NewStringPointer(fileName),
 	}), 16)
 	if err != nil {
@@ -414,7 +419,7 @@ func bpfGetObjectInfoByFD(fd *internal.FD, info unsafe.Pointer, size uintptr) er
 		infoLen: uint32(size),
 		info:    internal.NewPointer(info),
 	}
-	_, err = internal.BPF(_ObjGetInfoByFD, unsafe.Pointer(&attr), unsafe.Sizeof(attr))
+	_, err = internal.BPF(internal.BPF_OBJ_GET_INFO_BY_FD, unsafe.Pointer(&attr), unsafe.Sizeof(attr))
 	if err != nil {
 		return xerrors.Errorf("fd %d: %w", fd, err)
 	}
@@ -478,7 +483,7 @@ var objNameAllowsDot = internal.FeatureTest("dot in object names", "5.2", func()
 	return true
 })
 
-func bpfObjGetFDByID(cmd int, id uint32) (*internal.FD, error) {
+func bpfObjGetFDByID(cmd internal.BPFCmd, id uint32) (*internal.FD, error) {
 	attr := bpfGetFDByIDAttr{
 		id: id,
 	}

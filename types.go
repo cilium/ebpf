@@ -91,33 +91,6 @@ func (mt MapType) hasPerCPUValue() bool {
 	return false
 }
 
-const (
-	_MapCreate = iota
-	_MapLookupElem
-	_MapUpdateElem
-	_MapDeleteElem
-	_MapGetNextKey
-	_ProgLoad
-	_ObjPin
-	_ObjGet
-	_ProgAttach
-	_ProgDetach
-	_ProgTestRun
-	_ProgGetNextID
-	_MapGetNextID
-	_ProgGetFDByID
-	_MapGetFDByID
-	_ObjGetInfoByFD
-	_ProgQuery
-	_RawTracepointOpen
-	_BTFLoad
-	_BTFGetFDByID
-	_TaskFDQuery
-	_MapLookupAndDeleteElem
-	_MapFreeze
-	_BTFGetNextID
-)
-
 // ProgramType of the eBPF program
 type ProgramType uint32
 

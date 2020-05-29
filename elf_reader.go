@@ -525,7 +525,7 @@ func uintFromBTF(typ btf.Type) (uint32, error) {
 
 func (ec *elfCode) loadDataSections(maps map[string]*MapSpec, dataSections map[elf.SectionIndex]*elf.Section, spec *btf.Spec) error {
 	if spec == nil {
-		return xerrors.New("data sections require BTF")
+		return xerrors.New("data sections require BTF, make sure all consts are marked as static")
 	}
 
 	for _, sec := range dataSections {

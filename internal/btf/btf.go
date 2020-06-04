@@ -7,7 +7,9 @@ import (
 	"io"
 	"io/ioutil"
 	"math"
+	"os"
 	"reflect"
+	"sync"
 	"unsafe"
 
 	"github.com/cilium/ebpf/internal"
@@ -21,6 +23,7 @@ const btfMagic = 0xeB9F
 // Errors returned by BTF functions.
 var (
 	ErrNotSupported = internal.ErrNotSupported
+	ErrNotFound     = xerrors.New("not found")
 )
 
 // Spec represents decoded BTF.
@@ -108,7 +111,25 @@ func LoadSpecFromReader(rd io.ReaderAt) (*Spec, error) {
 		variableOffsets[variable{secName, symbol.Name}] = uint32(symbol.Value)
 	}
 
-	rawTypes, rawStrings, err := parseBTF(btfSection.Open(), file.ByteOrder)
+	spec, err := loadNakedSpec(btfSection.Open(), file.ByteOrder, sectionSizes, variableOffsets)
+	if err != nil {
+		return nil, err
+	}
+
+	if btfExtSection == nil {
+		return spec, nil
+	}
+
+	spec.funcInfos, spec.lineInfos, err = parseExtInfos(btfExtSection.Open(), file.ByteOrder, spec.strings)
+	if err != nil {
+		return nil, xerrors.Errorf("can't read ext info: %w", err)
+	}
+
+	return spec, nil
+}
+
+func loadNakedSpec(btf io.ReadSeeker, bo binary.ByteOrder, sectionSizes map[string]uint32, variableOffsets map[variable]uint32) (*Spec, error) {
+	rawTypes, rawStrings, err := parseBTF(btf, bo)
 	if err != nil {
 		return nil, err
 	}
@@ -123,25 +144,47 @@ func LoadSpecFromReader(rd io.ReaderAt) (*Spec, error) {
 		return nil, err
 	}
 
-	var (
-		funcInfos = make(map[string]extInfo)
-		lineInfos = make(map[string]extInfo)
-	)
-	if btfExtSection != nil {
-		funcInfos, lineInfos, err = parseExtInfos(btfExtSection.Open(), file.ByteOrder, rawStrings)
-		if err != nil {
-			return nil, xerrors.Errorf("can't read ext info: %w", err)
-		}
-	}
-
 	return &Spec{
 		rawTypes:  rawTypes,
 		types:     types,
 		strings:   rawStrings,
-		funcInfos: funcInfos,
-		lineInfos: lineInfos,
-		byteOrder: file.ByteOrder,
+		byteOrder: bo,
 	}, nil
+}
+
+var kernelBTF struct {
+	sync.Mutex
+	*Spec
+}
+
+// LoadKernelSpec returns the current kernel's BTF information.
+//
+// Requires a >= 5.5 kernel with CONFIG_DEBUG_INFO_BTF enabled. Returns
+// ErrNotSupported if BTF is not enabled.
+func LoadKernelSpec() (*Spec, error) {
+	kernelBTF.Lock()
+	defer kernelBTF.Unlock()
+
+	if kernelBTF.Spec != nil {
+		return kernelBTF.Spec, nil
+	}
+
+	var err error
+	kernelBTF.Spec, err = loadKernelSpec()
+	return kernelBTF.Spec, err
+}
+
+func loadKernelSpec() (*Spec, error) {
+	fh, err := os.Open("/sys/kernel/btf/vmlinux")
+	if os.IsNotExist(err) {
+		return nil, xerrors.Errorf("can't open kernel BTF at /sys/kernel/btf/vmlinux: %w", ErrNotFound)
+	}
+	if err != nil {
+		return nil, xerrors.Errorf("can't read kernel BTF: %s", err)
+	}
+	defer fh.Close()
+
+	return loadNakedSpec(fh, internal.NativeEndian, nil, nil)
 }
 
 func parseBTF(btf io.ReadSeeker, bo binary.ByteOrder) ([]rawType, stringTable, error) {
@@ -366,13 +409,12 @@ func (s *Spec) Datasec(name string) (*Map, error) {
 	return &Map{s, &Void{}, &datasec}, nil
 }
 
-var errNotFound = xerrors.New("not found")
-
 // FindType searches for a type with a specific name.
 //
 // hint determines the type of the returned Type.
 //
-// Returns an error if there is no or multiple matches.
+// Returns an error wrapping ErrNotFound if no matching
+// type exists in spec.
 func (s *Spec) FindType(name string, typ Type) error {
 	var (
 		wanted    = reflect.TypeOf(typ)
@@ -392,7 +434,7 @@ func (s *Spec) FindType(name string, typ Type) error {
 	}
 
 	if candidate == nil {
-		return xerrors.Errorf("type %s: %w", name, errNotFound)
+		return xerrors.Errorf("type %s: %w", name, ErrNotFound)
 	}
 
 	value := reflect.Indirect(reflect.ValueOf(copyType(candidate)))

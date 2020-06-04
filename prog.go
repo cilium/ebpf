@@ -336,7 +336,7 @@ func (p *Program) Benchmark(in []byte, repeat int, reset func()) (uint32, time.D
 	return ret, total, nil
 }
 
-var haveProgTestRun = internal.FeatureTest("BPF_PROG_TEST_RUN", "4.12", func() bool {
+var haveProgTestRun = internal.FeatureTest("BPF_PROG_TEST_RUN", "4.12", func() (bool, error) {
 	prog, err := NewProgram(&ProgramSpec{
 		Type: SocketFilter,
 		Instructions: asm.Instructions{
@@ -347,19 +347,14 @@ var haveProgTestRun = internal.FeatureTest("BPF_PROG_TEST_RUN", "4.12", func() b
 	})
 	if err != nil {
 		// This may be because we lack sufficient permissions, etc.
-		return false
+		return false, err
 	}
 	defer prog.Close()
-
-	fd, err := prog.fd.Value()
-	if err != nil {
-		return false
-	}
 
 	// Programs require at least 14 bytes input
 	in := make([]byte, 14)
 	attr := bpfProgTestRunAttr{
-		fd:         fd,
+		fd:         uint32(prog.FD()),
 		dataSizeIn: uint32(len(in)),
 		dataIn:     internal.NewSlicePointer(in),
 	}
@@ -368,7 +363,7 @@ var haveProgTestRun = internal.FeatureTest("BPF_PROG_TEST_RUN", "4.12", func() b
 
 	// Check for EINVAL specifically, rather than err != nil since we
 	// otherwise misdetect due to insufficient permissions.
-	return !xerrors.Is(err, unix.EINVAL)
+	return !xerrors.Is(err, unix.EINVAL), nil
 })
 
 func (p *Program) testRun(in []byte, repeat int, reset func()) (uint32, []byte, time.Duration, error) {

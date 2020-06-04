@@ -29,33 +29,63 @@ func (ufe *UnsupportedFeatureError) Is(target error) bool {
 	return target == ErrNotSupported
 }
 
+type featureTest struct {
+	sync.Mutex
+	successful bool
+	result     error
+}
+
+// FeatureTestFn is used to determine whether the kernel supports
+// a certain feature.
+//
+// The return values have the following semantics:
+//
+//   err != nil: the test couldn't be executed
+//   err == nil && available: the feature is available
+//   err == nil && !available: the feature isn't available
+type FeatureTestFn func() (available bool, err error)
+
 // FeatureTest wraps a function so that it is run at most once.
 //
 // name should identify the tested feature, while version must be in the
 // form Major.Minor[.Patch].
 //
-// Returns a descriptive UnsupportedFeatureError if the feature is not available.
-func FeatureTest(name, version string, fn func() bool) func() error {
+// Returns an error wrapping ErrNotSupported if the feature is not supported.
+func FeatureTest(name, version string, fn FeatureTestFn) func() error {
 	v, err := NewVersion(version)
 	if err != nil {
 		return func() error { return err }
 	}
 
-	var (
-		once   sync.Once
-		result error
-	)
-
+	ft := new(featureTest)
 	return func() error {
-		once.Do(func() {
-			if !fn() {
-				result = &UnsupportedFeatureError{
-					MinimumVersion: v,
-					Name:           name,
-				}
+		ft.Lock()
+		defer ft.Unlock()
+
+		if ft.successful {
+			return ft.result
+		}
+
+		available, err := fn()
+		if xerrors.Is(err, ErrNotSupported) {
+			// The feature test aborted because a dependent feature
+			// is missing, which we should cache.
+			available = false
+		} else if err != nil {
+			// We couldn't execute the feature test to a point
+			// where it could make a determination.
+			// Don't cache the result, just return it.
+			return xerrors.Errorf("can't detect support for %s: %w", name, err)
+		}
+
+		ft.successful = true
+		if !available {
+			ft.result = &UnsupportedFeatureError{
+				MinimumVersion: v,
+				Name:           name,
 			}
-		})
-		return result
+		}
+		return ft.result
 	}
 }
 

@@ -604,7 +604,7 @@ func minimalBTF(bo binary.ByteOrder) []byte {
 	return buf.Bytes()
 }
 
-var haveBTF = internal.FeatureTest("BTF", "5.1", func() bool {
+var haveBTF = internal.FeatureTest("BTF", "5.1", func() (bool, error) {
 	btf := minimalBTF(internal.NativeEndian)
 	fd, err := bpfLoadBTF(&bpfLoadBTFAttr{
 		btf:     internal.NewSlicePointer(btf),
@@ -615,5 +615,5 @@ var haveBTF = internal.FeatureTest("BTF", "5.1", func() bool {
 	}
 	// Check for EINVAL specifically, rather than err != nil since we
 	// otherwise misdetect due to insufficient permissions.
-	return !xerrors.Is(err, unix.EINVAL)
+	return !xerrors.Is(err, unix.EINVAL), nil
 })

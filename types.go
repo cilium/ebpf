@@ -1,6 +1,6 @@
 package ebpf
 
-//go:generate stringer -output types_string.go -type=MapType,ProgramType
+//go:generate stringer -output types_string.go -type=MapType,ProgramType,AttachType
 
 // MapType indicates the type map structure
 // that will be initialized in the kernel.

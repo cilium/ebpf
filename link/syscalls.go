@@ -32,6 +32,45 @@ var haveProgAttach = internal.FeatureTest("BPF_PROG_ATTACH", "4.10", func() (boo
 	return true, nil
 })
 
+var haveProgAttachReplace = internal.FeatureTest("BPF_PROG_ATTACH atomic replacement", "5.5", func() (bool, error) {
+	if err := haveProgAttach(); err != nil {
+		return false, err
+	}
+
+	prog, err := ebpf.NewProgram(&ebpf.ProgramSpec{
+		Type:       ebpf.CGroupSKB,
+		AttachType: ebpf.AttachCGroupInetIngress,
+		License:    "MIT",
+		Instructions: asm.Instructions{
+			asm.Mov.Imm(asm.R0, 0),
+			asm.Return(),
+		},
+	})
+	if err != nil {
+		return false, nil
+	}
+	defer prog.Close()
+
+	// We know that we have BPF_PROG_ATTACH since we can load CGroupSKB programs.
+	// If passing BPF_F_REPLACE gives us EINVAL we know that the feature isn't
+	// present.
+	attr := internal.BPFProgAttachAttr{
+		// We rely on this being checked after attachFlags.
+		TargetFd:    ^uint32(0),
+		AttachBpfFd: uint32(prog.FD()),
+		AttachType:  uint32(ebpf.AttachCGroupInetIngress),
+		AttachFlags: uint32(flagReplace),
+	}
+
+	err = internal.BPFProgAttach(&attr)
+	if xerrors.Is(err, unix.EPERM) {
+		// We don't have enough permissions, so we never get to the point
+		// where flags are checked.
+		return false, err
+	}
+	return !xerrors.Is(err, unix.EINVAL), nil
+})
+
 type bpfLinkCreateAttr struct {
 	progFd     uint32
 	targetFd   uint32

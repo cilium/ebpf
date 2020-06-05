@@ -9,3 +9,7 @@ import (
 func TestHaveProgAttach(t *testing.T) {
 	testutils.CheckFeatureTest(t, haveProgAttach)
 }
+
+func TestHaveBPFLink(t *testing.T) {
+	testutils.CheckFeatureTest(t, haveBPFLink)
+}

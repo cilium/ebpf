@@ -287,7 +287,7 @@ func (p *Program) Clone() (*Program, error) {
 //
 // This requires bpffs to be mounted above fileName. See http://cilium.readthedocs.io/en/doc-1.0/kubernetes/install/#mounting-the-bpf-fs-optional
 func (p *Program) Pin(fileName string) error {
-	if err := bpfPinObject(fileName, p.fd); err != nil {
+	if err := internal.BPFObjPin(fileName, p.fd); err != nil {
 		return xerrors.Errorf("can't pin program: %w", err)
 	}
 	return nil
@@ -458,7 +458,7 @@ func (p *Program) MarshalBinary() ([]byte, error) {
 //
 // Requires at least Linux 4.11.
 func LoadPinnedProgram(fileName string) (*Program, error) {
-	fd, err := bpfGetObject(fileName)
+	fd, err := internal.BPFObjGet(fileName)
 	if err != nil {
 		return nil, err
 	}

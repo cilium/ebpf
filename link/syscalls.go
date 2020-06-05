@@ -7,6 +7,7 @@ import (
 	"github.com/cilium/ebpf/asm"
 	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/unix"
+
 	"golang.org/x/xerrors"
 )
 
@@ -42,6 +43,45 @@ var haveProgAttach = internal.FeatureTest("BPF_PROG_ATTACH", "4.10", func() (boo
 	// have the syscall.
 	prog.Close()
 	return true, nil
+})
+
+var haveProgAttachReplace = internal.FeatureTest("BPF_PROG_ATTACH atomic replacement", "5.5", func() (bool, error) {
+	if err := haveProgAttach(); err != nil {
+		return false, err
+	}
+
+	prog, err := ebpf.NewProgram(&ebpf.ProgramSpec{
+		Type:       ebpf.CGroupSKB,
+		AttachType: ebpf.AttachCGroupInetIngress,
+		License:    "MIT",
+		Instructions: asm.Instructions{
+			asm.Mov.Imm(asm.R0, 0),
+			asm.Return(),
+		},
+	})
+	if err != nil {
+		return false, nil
+	}
+	defer prog.Close()
+
+	// We know that we have BPF_PROG_ATTACH since we can load CGroupSKB programs.
+	// If passing BPF_F_REPLACE gives us EINVAL we know that the feature isn't
+	// present.
+	attr := bpfProgAlterAttr{
+		// We rely on this being checked after attachFlags.
+		targetFd:    ^uint32(0),
+		attachBpfFd: uint32(prog.FD()),
+		attachType:  ebpf.AttachCGroupInetIngress,
+		attachFlags: uint32(flagReplace),
+	}
+
+	err = bpfProgAlter(internal.BPF_PROG_ATTACH, &attr)
+	if xerrors.Is(err, unix.EPERM) {
+		// We don't have enough permissions, so we never get to the point
+		// where flags are checked.
+		return false, err
+	}
+	return !xerrors.Is(err, unix.EINVAL), nil
 })
 
 type bpfLinkCreateAttr struct {

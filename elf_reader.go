@@ -183,12 +183,13 @@ func (ec *elfCode) loadPrograms(progSections map[elf.SectionIndex]*elf.Section, 
 			return nil, xerrors.Errorf("program %s: can't unmarshal instructions: %w", funcSym.Name, err)
 		}
 
-		progType, attachType := getProgType(sec.Name)
+		progType, attachType, attachTo := getProgType(sec.Name)
 
 		spec := &ProgramSpec{
 			Name:          funcSym.Name,
 			Type:          progType,
 			AttachType:    attachType,
+			AttachTo:      attachTo,
 			License:       ec.license,
 			KernelVersion: ec.version,
 			Instructions:  insns,
@@ -567,82 +568,69 @@ func (ec *elfCode) loadDataSections(maps map[string]*MapSpec, dataSections map[e
 	return nil
 }
 
-func getProgType(v string) (ProgramType, AttachType) {
-	types := map[string]ProgramType{
-		// From https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/tools/lib/bpf/libbpf.c#n3568
-		"socket":          SocketFilter,
-		"seccomp":         SocketFilter,
-		"kprobe/":         Kprobe,
-		"uprobe/":         Kprobe,
-		"kretprobe/":      Kprobe,
-		"uretprobe/":      Kprobe,
-		"tracepoint/":     TracePoint,
-		"raw_tracepoint/": RawTracepoint,
-		"xdp":             XDP,
-		"perf_event":      PerfEvent,
-		"lwt_in":          LWTIn,
-		"lwt_out":         LWTOut,
-		"lwt_xmit":        LWTXmit,
-		"lwt_seg6local":   LWTSeg6Local,
-		"sockops":         SockOps,
-		"sk_skb":          SkSKB,
-		"sk_msg":          SkMsg,
-		"lirc_mode2":      LircMode2,
-		"flow_dissector":  FlowDissector,
+func getProgType(sectionName string) (ProgramType, AttachType, string) {
+	types := map[string]struct {
+		progType   ProgramType
+		attachType AttachType
+	}{
+		// From https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/tools/lib/bpf/libbpf.c
+		"socket":                {SocketFilter, AttachNone},
+		"seccomp":               {SocketFilter, AttachNone},
+		"kprobe/":               {Kprobe, AttachNone},
+		"uprobe/":               {Kprobe, AttachNone},
+		"kretprobe/":            {Kprobe, AttachNone},
+		"uretprobe/":            {Kprobe, AttachNone},
+		"tracepoint/":           {TracePoint, AttachNone},
+		"raw_tracepoint/":       {RawTracepoint, AttachNone},
+		"xdp":                   {XDP, AttachNone},
+		"perf_event":            {PerfEvent, AttachNone},
+		"lwt_in":                {LWTIn, AttachNone},
+		"lwt_out":               {LWTOut, AttachNone},
+		"lwt_xmit":              {LWTXmit, AttachNone},
+		"lwt_seg6local":         {LWTSeg6Local, AttachNone},
+		"sockops":               {SockOps, AttachCGroupSockOps},
+		"sk_skb/stream_parser":  {SkSKB, AttachSkSKBStreamParser},
+		"sk_skb/stream_verdict": {SkSKB, AttachSkSKBStreamParser},
+		"sk_msg":                {SkMsg, AttachSkSKBStreamVerdict},
+		"lirc_mode2":            {LircMode2, AttachLircMode2},
+		"flow_dissector":        {FlowDissector, AttachFlowDissector},
+		"iter/":                 {Tracing, AttachTraceIter},
 
-		"cgroup_skb/":       CGroupSKB,
-		"cgroup/dev":        CGroupDevice,
-		"cgroup/skb":        CGroupSKB,
-		"cgroup/sock":       CGroupSock,
-		"cgroup/post_bind":  CGroupSock,
-		"cgroup/bind":       CGroupSockAddr,
-		"cgroup/connect":    CGroupSockAddr,
-		"cgroup/sendmsg":    CGroupSockAddr,
-		"cgroup/recvmsg":    CGroupSockAddr,
-		"cgroup/sysctl":     CGroupSysctl,
-		"cgroup/getsockopt": CGroupSockopt,
-		"cgroup/setsockopt": CGroupSockopt,
-		"classifier":        SchedCLS,
-		"action":            SchedACT,
-	}
-	attachTypes := map[string]AttachType{
-		"cgroup_skb/ingress":    AttachCGroupInetIngress,
-		"cgroup_skb/egress":     AttachCGroupInetEgress,
-		"cgroup/sock":           AttachCGroupInetSockCreate,
-		"cgroup/post_bind4":     AttachCGroupInet4PostBind,
-		"cgroup/post_bind6":     AttachCGroupInet6PostBind,
-		"cgroup/dev":            AttachCGroupDevice,
-		"sockops":               AttachCGroupSockOps,
-		"sk_skb/stream_parser":  AttachSkSKBStreamParser,
-		"sk_skb/stream_verdict": AttachSkSKBStreamVerdict,
-		"sk_msg":                AttachSkSKBStreamVerdict,
-		"lirc_mode2":            AttachLircMode2,
-		"flow_dissector":        AttachFlowDissector,
-		"cgroup/bind4":          AttachCGroupInet4Bind,
-		"cgroup/bind6":          AttachCGroupInet6Bind,
-		"cgroup/connect4":       AttachCGroupInet4Connect,
-		"cgroup/connect6":       AttachCGroupInet6Connect,
-		"cgroup/sendmsg4":       AttachCGroupUDP4Sendmsg,
-		"cgroup/sendmsg6":       AttachCGroupUDP6Sendmsg,
-		"cgroup/recvmsg4":       AttachCGroupUDP4Recvmsg,
-		"cgroup/recvmsg6":       AttachCGroupUDP6Recvmsg,
-		"cgroup/sysctl":         AttachCGroupSysctl,
-		"cgroup/getsockopt":     AttachCGroupGetsockopt,
-		"cgroup/setsockopt":     AttachCGroupSetsockopt,
-	}
-	attachType := AttachNone
-	for k, t := range attachTypes {
-		if strings.HasPrefix(v, k) {
-			attachType = t
-		}
+		"cgroup_skb/ingress": {CGroupSKB, AttachCGroupInetIngress},
+		"cgroup_skb/egress":  {CGroupSKB, AttachCGroupInetEgress},
+		"cgroup/dev":         {CGroupDevice, AttachCGroupDevice},
+		"cgroup/skb":         {CGroupSKB, AttachNone},
+		"cgroup/sock":        {CGroupSock, AttachCGroupInetSockCreate},
+		"cgroup/post_bind4":  {CGroupSock, AttachCGroupInet4PostBind},
+		"cgroup/post_bind6":  {CGroupSock, AttachCGroupInet6PostBind},
+		"cgroup/bind4":       {CGroupSockAddr, AttachCGroupInet4Bind},
+		"cgroup/bind6":       {CGroupSockAddr, AttachCGroupInet6Bind},
+		"cgroup/connect4":    {CGroupSockAddr, AttachCGroupInet4Connect},
+		"cgroup/connect6":    {CGroupSockAddr, AttachCGroupInet6Connect},
+		"cgroup/sendmsg4":    {CGroupSockAddr, AttachCGroupUDP4Sendmsg},
+		"cgroup/sendmsg6":    {CGroupSockAddr, AttachCGroupUDP6Sendmsg},
+		"cgroup/recvmsg4":    {CGroupSockAddr, AttachCGroupUDP4Recvmsg},
+		"cgroup/recvmsg6":    {CGroupSockAddr, AttachCGroupUDP6Recvmsg},
+		"cgroup/sysctl":      {CGroupSysctl, AttachCGroupSysctl},
+		"cgroup/getsockopt":  {CGroupSockopt, AttachCGroupGetsockopt},
+		"cgroup/setsockopt":  {CGroupSockopt, AttachCGroupSetsockopt},
+		"classifier":         {SchedCLS, AttachNone},
+		"action":             {SchedACT, AttachNone},
 	}
 
-	for k, t := range types {
-		if strings.HasPrefix(v, k) {
-			return t, attachType
+	for prefix, t := range types {
+		if !strings.HasPrefix(sectionName, prefix) {
+			continue
 		}
+
+		if !strings.HasSuffix(prefix, "/") {
+			return t.progType, t.attachType, ""
+		}
+
+		return t.progType, t.attachType, sectionName[len(prefix):]
 	}
-	return UnspecifiedProgram, AttachNone
+
+	return UnspecifiedProgram, AttachNone, ""
 }
 
 func (ec *elfCode) loadRelocations(sections map[elf.SectionIndex]*elf.Section) (map[elf.SectionIndex]map[uint64]elf.Symbol, error) {

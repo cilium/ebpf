@@ -1,6 +1,6 @@
 package ebpf
 
-//go:generate stringer -output types_string.go -type=MapType,ProgramType
+//go:generate stringer -output types_string.go -type=MapType,ProgramType,AttachType
 
 // MapType indicates the type map structure
 // that will be initialized in the kernel.
@@ -90,33 +90,6 @@ func (mt MapType) hasPerCPUValue() bool {
 	}
 	return false
 }
-
-const (
-	_MapCreate = iota
-	_MapLookupElem
-	_MapUpdateElem
-	_MapDeleteElem
-	_MapGetNextKey
-	_ProgLoad
-	_ObjPin
-	_ObjGet
-	_ProgAttach
-	_ProgDetach
-	_ProgTestRun
-	_ProgGetNextID
-	_MapGetNextID
-	_ProgGetFDByID
-	_MapGetFDByID
-	_ObjGetInfoByFD
-	_ProgQuery
-	_RawTracepointOpen
-	_BTFLoad
-	_BTFGetFDByID
-	_TaskFDQuery
-	_MapLookupAndDeleteElem
-	_MapFreeze
-	_BTFGetNextID
-)
 
 // ProgramType of the eBPF program
 type ProgramType uint32
@@ -214,7 +187,7 @@ const (
 	AttachTraceRawTp
 	AttachTraceFEntry
 	AttachTraceFExit
+	AttachModifyReturn
+	AttachLSMMac
+	AttachTraceIter
 )
-
-// AttachFlags of the eBPF program used in BPF_PROG_ATTACH command
-type AttachFlags uint32

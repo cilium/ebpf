@@ -11,6 +11,7 @@ import (
 
 	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/testutils"
+	"golang.org/x/xerrors"
 )
 
 func TestParseVmlinux(t *testing.T) {
@@ -30,26 +31,23 @@ func TestParseVmlinux(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	_, _, err = parseBTF(bytes.NewReader(buf), binary.LittleEndian)
+	_, err = loadNakedSpec(bytes.NewReader(buf), binary.LittleEndian, nil, nil)
 	if err != nil {
 		t.Fatal("Can't load BTF:", err)
 	}
 }
 
 func TestParseCurrentKernelBTF(t *testing.T) {
-	if _, err := os.Stat("/sys/kernel/btf/vmlinux"); os.IsNotExist(err) {
-		t.Skip("/sys/kernel/btf/vmlinux is not available")
+	spec, err := loadKernelSpec()
+	if xerrors.Is(err, ErrNotFound) {
+		t.Skip("BTF is not available:", err)
 	}
-
-	fh, err := os.Open("/sys/kernel/btf/vmlinux")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer fh.Close()
-
-	_, _, err = parseBTF(fh, binary.LittleEndian)
 	if err != nil {
 		t.Fatal("Can't load BTF:", err)
+	}
+
+	if len(spec.types) == 0 {
+		t.Fatal("Empty kernel BTF")
 	}
 }
 
@@ -84,7 +82,12 @@ func TestLoadSpecFromElf(t *testing.T) {
 
 		var bpfMapDef Struct
 		if err := spec.FindType("bpf_map_def", &bpfMapDef); err != nil {
-			t.Fatal("Can't find bpf_map_def:", err)
+			t.Error("Can't find bpf_map_def:", err)
+		}
+
+		var tmp Void
+		if err := spec.FindType("totally_bogus_type", &tmp); !xerrors.Is(err, ErrNotFound) {
+			t.Error("FindType doesn't return ErrNotFound:", err)
 		}
 
 		if spec.byteOrder != internal.NativeEndian {

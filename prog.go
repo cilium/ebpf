@@ -7,7 +7,6 @@ import (
 	"math"
 	"strings"
 	"time"
-	"unsafe"
 
 	"github.com/cilium/ebpf/asm"
 	"github.com/cilium/ebpf/internal"
@@ -48,11 +47,24 @@ type ProgramOptions struct {
 type ProgramSpec struct {
 	// Name is passed to the kernel as a debug aid. Must only contain
 	// alpha numeric and '_' characters.
-	Name          string
-	Type          ProgramType
-	AttachType    AttachType
-	Instructions  asm.Instructions
-	License       string
+	Name string
+	// Type determines at which hook in the kernel a program will run.
+	Type       ProgramType
+	AttachType AttachType
+	// Name of a kernel data structure to attach to. It's interpretation
+	// depends on Type and AttachType.
+	AttachTo     string
+	Instructions asm.Instructions
+
+	// License of the program. Some helpers are only available if
+	// the license is deemed compatible with the GPL.
+	//
+	// See https://www.kernel.org/doc/html/latest/process/license-rules.html#id1
+	License string
+
+	// Version used by tracing programs.
+	//
+	// Deprecated: superseded by BTF.
 	KernelVersion uint32
 
 	// The BTF associated with this program. Changing Instructions
@@ -84,9 +96,10 @@ type Program struct {
 	// otherwise it is empty.
 	VerifierLog string
 
-	fd   *internal.FD
-	name string
-	abi  ProgramABI
+	fd         *internal.FD
+	name       string
+	abi        ProgramABI
+	attachType AttachType
 }
 
 // NewProgram creates a new Program.
@@ -237,6 +250,16 @@ func convertProgramSpec(spec *ProgramSpec, handle *btf.Handle) (*bpfProgLoadAttr
 		attr.funcInfo = internal.NewSlicePointer(bytes)
 	}
 
+	if spec.AttachTo != "" {
+		target, err := resolveBTFType(spec.AttachTo, spec.Type, spec.AttachType)
+		if err != nil {
+			return nil, err
+		}
+		if target != nil {
+			attr.attachBTFID = target.ID()
+		}
+	}
+
 	return attr, nil
 }
 
@@ -288,7 +311,7 @@ func (p *Program) Clone() (*Program, error) {
 //
 // This requires bpffs to be mounted above fileName. See http://cilium.readthedocs.io/en/doc-1.0/kubernetes/install/#mounting-the-bpf-fs-optional
 func (p *Program) Pin(fileName string) error {
-	if err := bpfPinObject(fileName, p.fd); err != nil {
+	if err := internal.BPFObjPin(fileName, p.fd); err != nil {
 		return xerrors.Errorf("can't pin program: %w", err)
 	}
 	return nil
@@ -337,7 +360,7 @@ func (p *Program) Benchmark(in []byte, repeat int, reset func()) (uint32, time.D
 	return ret, total, nil
 }
 
-var haveProgTestRun = internal.FeatureTest("BPF_PROG_TEST_RUN", "4.12", func() bool {
+var haveProgTestRun = internal.FeatureTest("BPF_PROG_TEST_RUN", "4.12", func() (bool, error) {
 	prog, err := NewProgram(&ProgramSpec{
 		Type: SocketFilter,
 		Instructions: asm.Instructions{
@@ -348,28 +371,23 @@ var haveProgTestRun = internal.FeatureTest("BPF_PROG_TEST_RUN", "4.12", func() b
 	})
 	if err != nil {
 		// This may be because we lack sufficient permissions, etc.
-		return false
+		return false, err
 	}
 	defer prog.Close()
-
-	fd, err := prog.fd.Value()
-	if err != nil {
-		return false
-	}
 
 	// Programs require at least 14 bytes input
 	in := make([]byte, 14)
 	attr := bpfProgTestRunAttr{
-		fd:         fd,
+		fd:         uint32(prog.FD()),
 		dataSizeIn: uint32(len(in)),
 		dataIn:     internal.NewSlicePointer(in),
 	}
 
-	_, err = internal.BPF(_ProgTestRun, unsafe.Pointer(&attr), unsafe.Sizeof(attr))
+	err = bpfProgTestRun(&attr)
 
 	// Check for EINVAL specifically, rather than err != nil since we
 	// otherwise misdetect due to insufficient permissions.
-	return !xerrors.Is(err, unix.EINVAL)
+	return !xerrors.Is(err, unix.EINVAL), nil
 })
 
 func (p *Program) testRun(in []byte, repeat int, reset func()) (uint32, []byte, time.Duration, error) {
@@ -411,7 +429,7 @@ func (p *Program) testRun(in []byte, repeat int, reset func()) (uint32, []byte, 
 	}
 
 	for {
-		_, err = internal.BPF(_ProgTestRun, unsafe.Pointer(&attr), unsafe.Sizeof(attr))
+		err = bpfProgTestRun(&attr)
 		if err == nil {
 			break
 		}
@@ -460,53 +478,11 @@ func (p *Program) MarshalBinary() ([]byte, error) {
 	return buf, nil
 }
 
-// Attach a Program to a container object fd
-func (p *Program) Attach(fd int, typ AttachType, flags AttachFlags) error {
-	if fd < 0 {
-		return xerrors.New("invalid fd")
-	}
-
-	pfd, err := p.fd.Value()
-	if err != nil {
-		return err
-	}
-
-	attr := bpfProgAlterAttr{
-		targetFd:    uint32(fd),
-		attachBpfFd: pfd,
-		attachType:  uint32(typ),
-		attachFlags: uint32(flags),
-	}
-
-	return bpfProgAlter(_ProgAttach, &attr)
-}
-
-// Detach a Program from a container object fd
-func (p *Program) Detach(fd int, typ AttachType, flags AttachFlags) error {
-	if fd < 0 {
-		return xerrors.New("invalid fd")
-	}
-
-	pfd, err := p.fd.Value()
-	if err != nil {
-		return err
-	}
-
-	attr := bpfProgAlterAttr{
-		targetFd:    uint32(fd),
-		attachBpfFd: pfd,
-		attachType:  uint32(typ),
-		attachFlags: uint32(flags),
-	}
-
-	return bpfProgAlter(_ProgDetach, &attr)
-}
-
 // LoadPinnedProgram loads a Program from a BPF file.
 //
 // Requires at least Linux 4.11.
 func LoadPinnedProgram(fileName string) (*Program, error) {
-	fd, err := bpfGetObject(fileName)
+	fd, err := internal.BPFObjGet(fileName)
 	if err != nil {
 		return nil, err
 	}
@@ -540,7 +516,7 @@ func SanitizeName(name string, replacement rune) string {
 //
 // Returns ErrNotExist, if there is no next eBPF program.
 func ProgramGetNextID(startID ProgramID) (ProgramID, error) {
-	id, err := objGetNextID(_ProgGetNextID, uint32(startID))
+	id, err := objGetNextID(internal.BPF_PROG_GET_NEXT_ID, uint32(startID))
 	return ProgramID(id), err
 }
 
@@ -548,7 +524,7 @@ func ProgramGetNextID(startID ProgramID) (ProgramID, error) {
 //
 // Returns ErrNotExist, if there is no eBPF program with the given id.
 func NewProgramFromID(id ProgramID) (*Program, error) {
-	fd, err := bpfObjGetFDByID(_ProgGetFDByID, uint32(id))
+	fd, err := bpfObjGetFDByID(internal.BPF_PROG_GET_FD_BY_ID, uint32(id))
 	if err != nil {
 		return nil, err
 	}
@@ -569,4 +545,30 @@ func (p *Program) ID() (ProgramID, error) {
 		return ProgramID(0), err
 	}
 	return ProgramID(info.id), nil
+}
+
+func resolveBTFType(name string, progType ProgramType, attachType AttachType) (btf.Type, error) {
+	kernel, err := btf.LoadKernelSpec()
+	if err != nil {
+		return nil, xerrors.Errorf("can't resolve BTF type %s: %w", name, err)
+	}
+
+	type match struct {
+		p ProgramType
+		a AttachType
+	}
+
+	target := match{progType, attachType}
+	switch target {
+	case match{Tracing, AttachTraceIter}:
+		var target btf.Func
+		if err := kernel.FindType("bpf_iter_"+name, &target); err != nil {
+			return nil, xerrors.Errorf("can't resolve BTF for iterator %s: %w", name, err)
+		}
+
+		return &target, nil
+
+	default:
+		return nil, nil
+	}
 }

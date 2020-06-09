@@ -547,7 +547,7 @@ func (m *Map) Clone() (*Map, error) {
 //
 // This requires bpffs to be mounted above fileName. See http://cilium.readthedocs.io/en/doc-1.0/kubernetes/install/#mounting-the-bpf-fs-optional
 func (m *Map) Pin(fileName string) error {
-	return bpfPinObject(fileName, m.fd)
+	return internal.BPFObjPin(fileName, m.fd)
 }
 
 // Freeze prevents a map to be modified from user space.
@@ -578,7 +578,7 @@ func (m *Map) populate(contents []MapKV) error {
 // The function is not compatible with nested maps.
 // Use LoadPinnedMapExplicit in these situations.
 func LoadPinnedMap(fileName string) (*Map, error) {
-	fd, err := bpfGetObject(fileName)
+	fd, err := internal.BPFObjGet(fileName)
 	if err != nil {
 		return nil, err
 	}
@@ -592,7 +592,7 @@ func LoadPinnedMap(fileName string) (*Map, error) {
 
 // LoadPinnedMapExplicit loads a map with explicit parameters.
 func LoadPinnedMapExplicit(fileName string, abi *MapABI) (*Map, error) {
-	fd, err := bpfGetObject(fileName)
+	fd, err := internal.BPFObjGet(fileName)
 	if err != nil {
 		return nil, err
 	}
@@ -767,7 +767,7 @@ func (mi *MapIterator) Err() error {
 //
 // Returns ErrNotExist, if there is no next eBPF map.
 func MapGetNextID(startID MapID) (MapID, error) {
-	id, err := objGetNextID(_MapGetNextID, uint32(startID))
+	id, err := objGetNextID(internal.BPF_MAP_GET_NEXT_ID, uint32(startID))
 	return MapID(id), err
 }
 
@@ -775,7 +775,7 @@ func MapGetNextID(startID MapID) (MapID, error) {
 //
 // Returns ErrNotExist, if there is no eBPF map with the given id.
 func NewMapFromID(id MapID) (*Map, error) {
-	fd, err := bpfObjGetFDByID(_MapGetFDByID, uint32(id))
+	fd, err := bpfObjGetFDByID(internal.BPF_MAP_GET_FD_BY_ID, uint32(id))
 	if err != nil {
 		return nil, err
 	}

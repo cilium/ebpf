@@ -99,6 +99,8 @@ type bpfProgLoadAttr struct {
 	lineInfoRecSize    uint32
 	lineInfo           internal.Pointer
 	lineInfoCnt        uint32
+	attachBTFID        btf.TypeID
+	attachProgFd       uint32
 }
 
 type bpfProgInfo struct {

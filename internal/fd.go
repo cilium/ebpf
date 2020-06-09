@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"os"
 	"runtime"
 	"strconv"
 
@@ -60,4 +61,9 @@ func (fd *FD) Dup() (*FD, error) {
 	}
 
 	return NewFD(uint32(dup)), nil
+}
+
+func (fd *FD) File(name string) *os.File {
+	fd.Forget()
+	return os.NewFile(uintptr(fd.raw), name)
 }

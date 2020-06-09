@@ -258,21 +258,27 @@ func TestGetProgType(t *testing.T) {
 		section string
 		pt      ProgramType
 		at      AttachType
+		to      string
 	}{
-		{"socket/garbage", SocketFilter, AttachNone},
-		{"kprobe/func", Kprobe, AttachNone},
-		{"xdp/foo", XDP, AttachNone},
-		{"cgroup_skb/ingress", CGroupSKB, AttachCGroupInetIngress},
+		{"socket/garbage", SocketFilter, AttachNone, ""},
+		{"kprobe/func", Kprobe, AttachNone, "func"},
+		{"xdp/foo", XDP, AttachNone, ""},
+		{"cgroup_skb/ingress", CGroupSKB, AttachCGroupInetIngress, ""},
+		{"iter/bpf_map", Tracing, AttachTraceIter, "bpf_map"},
 	}
 
 	for _, tc := range testcases {
-		pt, at := getProgType(tc.section)
+		pt, at, to := getProgType(tc.section)
 		if pt != tc.pt {
 			t.Errorf("section %s: expected type %s, got %s", tc.section, tc.pt, pt)
 		}
 
 		if at != tc.at {
 			t.Errorf("section %s: expected attach type %s, got %s", tc.section, tc.at, at)
+		}
+
+		if to != tc.to {
+			t.Errorf("section %s: expected attachment to be %q, got %q", tc.section, tc.to, to)
 		}
 	}
 }

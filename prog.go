@@ -47,11 +47,24 @@ type ProgramOptions struct {
 type ProgramSpec struct {
 	// Name is passed to the kernel as a debug aid. Must only contain
 	// alpha numeric and '_' characters.
-	Name          string
-	Type          ProgramType
-	AttachType    AttachType
-	Instructions  asm.Instructions
-	License       string
+	Name string
+	// Type determines at which hook in the kernel a program will run.
+	Type       ProgramType
+	AttachType AttachType
+	// Name of a kernel data structure to attach to. It's interpretation
+	// depends on Type and AttachType.
+	AttachTo     string
+	Instructions asm.Instructions
+
+	// License of the program. Some helpers are only available if
+	// the license is deemed compatible with the GPL.
+	//
+	// See https://www.kernel.org/doc/html/latest/process/license-rules.html#id1
+	License string
+
+	// Version used by tracing programs.
+	//
+	// Deprecated: superseded by BTF.
 	KernelVersion uint32
 
 	// The BTF associated with this program. Changing Instructions
@@ -83,9 +96,10 @@ type Program struct {
 	// otherwise it is empty.
 	VerifierLog string
 
-	fd   *internal.FD
-	name string
-	abi  ProgramABI
+	fd         *internal.FD
+	name       string
+	abi        ProgramABI
+	attachType AttachType
 }
 
 // NewProgram creates a new Program.
@@ -234,6 +248,16 @@ func convertProgramSpec(spec *ProgramSpec, handle *btf.Handle) (*bpfProgLoadAttr
 		attr.funcInfoRecSize = recSize
 		attr.funcInfoCnt = uint32(uint64(len(bytes)) / uint64(recSize))
 		attr.funcInfo = internal.NewSlicePointer(bytes)
+	}
+
+	if spec.AttachTo != "" {
+		target, err := resolveBTFType(spec.AttachTo, spec.Type, spec.AttachType)
+		if err != nil {
+			return nil, err
+		}
+		if target != nil {
+			attr.attachBTFID = target.ID()
+		}
 	}
 
 	return attr, nil
@@ -521,4 +545,30 @@ func (p *Program) ID() (ProgramID, error) {
 		return ProgramID(0), err
 	}
 	return ProgramID(info.id), nil
+}
+
+func resolveBTFType(name string, progType ProgramType, attachType AttachType) (btf.Type, error) {
+	kernel, err := btf.LoadKernelSpec()
+	if err != nil {
+		return nil, xerrors.Errorf("can't resolve BTF type %s: %w", name, err)
+	}
+
+	type match struct {
+		p ProgramType
+		a AttachType
+	}
+
+	target := match{progType, attachType}
+	switch target {
+	case match{Tracing, AttachTraceIter}:
+		var target btf.Func
+		if err := kernel.FindType("bpf_iter_"+name, &target); err != nil {
+			return nil, xerrors.Errorf("can't resolve BTF for iterator %s: %w", name, err)
+		}
+
+		return &target, nil
+
+	default:
+		return nil, nil
+	}
 }

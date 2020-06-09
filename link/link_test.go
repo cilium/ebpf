@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/cilium/ebpf"
+
 	"golang.org/x/xerrors"
 )
 

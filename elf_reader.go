@@ -183,12 +183,13 @@ func (ec *elfCode) loadPrograms(progSections map[elf.SectionIndex]*elf.Section, 
 			return nil, xerrors.Errorf("program %s: can't unmarshal instructions: %w", funcSym.Name, err)
 		}
 
-		progType, attachType := getProgType(sec.Name)
+		progType, attachType, attachTo := getProgType(sec.Name)
 
 		spec := &ProgramSpec{
 			Name:          funcSym.Name,
 			Type:          progType,
 			AttachType:    attachType,
+			AttachTo:      attachTo,
 			License:       ec.license,
 			KernelVersion: ec.version,
 			Instructions:  insns,
@@ -567,7 +568,7 @@ func (ec *elfCode) loadDataSections(maps map[string]*MapSpec, dataSections map[e
 	return nil
 }
 
-func getProgType(sectionName string) (ProgramType, AttachType) {
+func getProgType(sectionName string) (ProgramType, AttachType, string) {
 	types := map[string]struct {
 		progType   ProgramType
 		attachType AttachType
@@ -593,6 +594,7 @@ func getProgType(sectionName string) (ProgramType, AttachType) {
 		"sk_msg":                {SkMsg, AttachSkSKBStreamVerdict},
 		"lirc_mode2":            {LircMode2, AttachLircMode2},
 		"flow_dissector":        {FlowDissector, AttachFlowDissector},
+		"iter/":                 {Tracing, AttachTraceIter},
 
 		"cgroup_skb/ingress": {CGroupSKB, AttachCGroupInetIngress},
 		"cgroup_skb/egress":  {CGroupSKB, AttachCGroupInetEgress},
@@ -617,12 +619,18 @@ func getProgType(sectionName string) (ProgramType, AttachType) {
 	}
 
 	for prefix, t := range types {
-		if strings.HasPrefix(sectionName, prefix) {
-			return t.progType, t.attachType
+		if !strings.HasPrefix(sectionName, prefix) {
+			continue
 		}
+
+		if !strings.HasSuffix(prefix, "/") {
+			return t.progType, t.attachType, ""
+		}
+
+		return t.progType, t.attachType, sectionName[len(prefix):]
 	}
 
-	return UnspecifiedProgram, AttachNone
+	return UnspecifiedProgram, AttachNone, ""
 }
 
 func (ec *elfCode) loadRelocations(sections map[elf.SectionIndex]*elf.Section) (map[elf.SectionIndex]map[uint64]elf.Symbol, error) {

@@ -135,3 +135,16 @@ var haveBPFLink = internal.FeatureTest("bpf_link", "5.7", func() (bool, error) {
 	_, err = bpfLinkCreate(&attr)
 	return !xerrors.Is(err, unix.EINVAL), nil
 })
+
+type bpfIterCreateAttr struct {
+	linkFd uint32
+	flags  uint32
+}
+
+func bpfIterCreate(attr *bpfIterCreateAttr) (*internal.FD, error) {
+	ptr, err := internal.BPF(internal.BPF_ITER_CREATE, unsafe.Pointer(attr), unsafe.Sizeof(*attr))
+	if err == nil {
+		return internal.NewFD(uint32(ptr)), nil
+	}
+	return nil, err
+}

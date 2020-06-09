@@ -30,7 +30,7 @@ blocks:
           - env_var: GO_VERSION
             values: [ "1.13", "1.14" ]
           - env_var: KERNEL_VERSION
-            values: ["5.4.5", "4.19.81", "4.9.198"]
+            values: ["5.4", "4.19", "4.9"]
         commands:
           - sem-version go $GO_VERSION
           - timeout -s KILL 90s ./run-tests.sh $KERNEL_VERSION

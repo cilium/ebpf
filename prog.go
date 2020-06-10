@@ -7,7 +7,6 @@ import (
 	"math"
 	"strings"
 	"time"
-	"unsafe"
 
 	"github.com/cilium/ebpf/asm"
 	"github.com/cilium/ebpf/internal"
@@ -337,7 +336,7 @@ func (p *Program) Benchmark(in []byte, repeat int, reset func()) (uint32, time.D
 	return ret, total, nil
 }
 
-var haveProgTestRun = internal.FeatureTest("BPF_PROG_TEST_RUN", "4.12", func() bool {
+var haveProgTestRun = internal.FeatureTest("BPF_PROG_TEST_RUN", "4.12", func() (bool, error) {
 	prog, err := NewProgram(&ProgramSpec{
 		Type: SocketFilter,
 		Instructions: asm.Instructions{
@@ -348,28 +347,23 @@ var haveProgTestRun = internal.FeatureTest("BPF_PROG_TEST_RUN", "4.12", func() b
 	})
 	if err != nil {
 		// This may be because we lack sufficient permissions, etc.
-		return false
+		return false, err
 	}
 	defer prog.Close()
-
-	fd, err := prog.fd.Value()
-	if err != nil {
-		return false
-	}
 
 	// Programs require at least 14 bytes input
 	in := make([]byte, 14)
 	attr := bpfProgTestRunAttr{
-		fd:         fd,
+		fd:         uint32(prog.FD()),
 		dataSizeIn: uint32(len(in)),
 		dataIn:     internal.NewSlicePointer(in),
 	}
 
-	_, err = internal.BPF(_ProgTestRun, unsafe.Pointer(&attr), unsafe.Sizeof(attr))
+	err = bpfProgTestRun(&attr)
 
 	// Check for EINVAL specifically, rather than err != nil since we
 	// otherwise misdetect due to insufficient permissions.
-	return !xerrors.Is(err, unix.EINVAL)
+	return !xerrors.Is(err, unix.EINVAL), nil
 })
 
 func (p *Program) testRun(in []byte, repeat int, reset func()) (uint32, []byte, time.Duration, error) {
@@ -411,7 +405,7 @@ func (p *Program) testRun(in []byte, repeat int, reset func()) (uint32, []byte, 
 	}
 
 	for {
-		_, err = internal.BPF(_ProgTestRun, unsafe.Pointer(&attr), unsafe.Sizeof(attr))
+		err = bpfProgTestRun(&attr)
 		if err == nil {
 			break
 		}
@@ -478,7 +472,7 @@ func (p *Program) Attach(fd int, typ AttachType, flags AttachFlags) error {
 		attachFlags: uint32(flags),
 	}
 
-	return bpfProgAlter(_ProgAttach, &attr)
+	return bpfProgAlter(internal.BPF_PROG_ATTACH, &attr)
 }
 
 // Detach a Program from a container object fd
@@ -499,7 +493,7 @@ func (p *Program) Detach(fd int, typ AttachType, flags AttachFlags) error {
 		attachFlags: uint32(flags),
 	}
 
-	return bpfProgAlter(_ProgDetach, &attr)
+	return bpfProgAlter(internal.BPF_PROG_DETACH, &attr)
 }
 
 // LoadPinnedProgram loads a Program from a BPF file.
@@ -540,7 +534,7 @@ func SanitizeName(name string, replacement rune) string {
 //
 // Returns ErrNotExist, if there is no next eBPF program.
 func ProgramGetNextID(startID ProgramID) (ProgramID, error) {
-	id, err := objGetNextID(_ProgGetNextID, uint32(startID))
+	id, err := objGetNextID(internal.BPF_PROG_GET_NEXT_ID, uint32(startID))
 	return ProgramID(id), err
 }
 
@@ -548,7 +542,7 @@ func ProgramGetNextID(startID ProgramID) (ProgramID, error) {
 //
 // Returns ErrNotExist, if there is no eBPF program with the given id.
 func NewProgramFromID(id ProgramID) (*Program, error) {
-	fd, err := bpfObjGetFDByID(_ProgGetFDByID, uint32(id))
+	fd, err := bpfObjGetFDByID(internal.BPF_PROG_GET_FD_BY_ID, uint32(id))
 	if err != nil {
 		return nil, err
 	}

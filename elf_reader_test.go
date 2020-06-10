@@ -252,3 +252,27 @@ func TestLibBPFCompat(t *testing.T) {
 		coll.Close()
 	})
 }
+
+func TestGetProgType(t *testing.T) {
+	testcases := []struct {
+		section string
+		pt      ProgramType
+		at      AttachType
+	}{
+		{"socket/garbage", SocketFilter, AttachNone},
+		{"kprobe/func", Kprobe, AttachNone},
+		{"xdp/foo", XDP, AttachNone},
+		{"cgroup_skb/ingress", CGroupSKB, AttachCGroupInetIngress},
+	}
+
+	for _, tc := range testcases {
+		pt, at := getProgType(tc.section)
+		if pt != tc.pt {
+			t.Errorf("section %s: expected type %s, got %s", tc.section, tc.pt, pt)
+		}
+
+		if at != tc.at {
+			t.Errorf("section %s: expected attach type %s, got %s", tc.section, tc.at, at)
+		}
+	}
+}

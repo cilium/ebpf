@@ -187,4 +187,7 @@ const (
 	AttachTraceRawTp
 	AttachTraceFEntry
 	AttachTraceFExit
+	AttachModifyReturn
+	AttachLSMMac
+	AttachTraceIter
 )

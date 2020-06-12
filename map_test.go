@@ -503,45 +503,50 @@ func TestIterateMapInMap(t *testing.T) {
 }
 
 func TestPerCPUMarshaling(t *testing.T) {
-	numCPU, err := internal.PossibleCPUs()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if numCPU < 2 {
-		t.Skip("Test requires at least two CPUs")
-	}
+	for _, typ := range []MapType{PerCPUHash, PerCPUArray, LRUCPUHash} {
+		t.Run(typ.String(), func(t *testing.T) {
+			numCPU, err := internal.PossibleCPUs()
+			if err != nil {
+				t.Fatal(err)
+			}
+			if numCPU < 2 {
+				t.Skip("Test requires at least two CPUs")
+			}
 
-	arr, err := NewMap(&MapSpec{
-		Type:       PerCPUArray,
-		KeySize:    4,
-		ValueSize:  5,
-		MaxEntries: 1,
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer arr.Close()
+			arr, err := NewMap(&MapSpec{
+				Type:       typ,
+				KeySize:    4,
+				ValueSize:  5,
+				MaxEntries: 1,
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer arr.Close()
 
-	values := []*customEncoding{
-		&customEncoding{"hello"},
-		&customEncoding{"world"},
-	}
-	if err := arr.Put(uint32(0), values); err != nil {
-		t.Fatal(err)
-	}
+			values := []*customEncoding{
+				&customEncoding{"hello"},
+				&customEncoding{"world"},
+			}
+			if err := arr.Put(uint32(0), values); err != nil {
+				t.Fatal(err)
+			}
 
-	// Make sure unmarshaling works on slices containing pointers
-	var retrieved []*customEncoding
-	if err := arr.Lookup(uint32(0), &retrieved); err != nil {
-		t.Fatal("Can't retrieve key 0:", err)
-	}
+			// Make sure unmarshaling works on slices containing pointers
+			var retrieved []*customEncoding
+			if err := arr.Lookup(uint32(0), &retrieved); err != nil {
+				t.Fatal("Can't retrieve key 0:", err)
+			}
 
-	for i, want := range []string{"HELLO", "WORLD"} {
-		if retrieved[i] == nil {
-			t.Error("First item is nil")
-		} else if have := retrieved[i].data; have != want {
-			t.Errorf("Put doesn't use BinaryMarshaler, expected %s but got %s", want, have)
-		}
+			for i, want := range []string{"HELLO", "WORLD"} {
+				if retrieved[i] == nil {
+					t.Error("First item is nil")
+				} else if have := retrieved[i].data; have != want {
+					t.Errorf("Put doesn't use BinaryMarshaler, expected %s but got %s", want, have)
+				}
+			}
+
+		})
 	}
 }
 

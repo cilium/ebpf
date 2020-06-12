@@ -85,7 +85,7 @@ const (
 
 // hasPerCPUValue returns true if the Map stores a value per CPU.
 func (mt MapType) hasPerCPUValue() bool {
-	if mt == PerCPUHash || mt == PerCPUArray {
+	if mt == PerCPUHash || mt == PerCPUArray || mt == LRUCPUHash {
 		return true
 	}
 	return false

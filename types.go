@@ -187,7 +187,7 @@ const (
 	AttachTraceRawTp
 	AttachTraceFEntry
 	AttachTraceFExit
+	AttachModifyReturn
+	AttachLSMMac
+	AttachTraceIter
 )
-
-// AttachFlags of the eBPF program used in BPF_PROG_ATTACH command
-type AttachFlags uint32

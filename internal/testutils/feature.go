@@ -57,6 +57,9 @@ func SkipIfNotSupported(tb testing.TB, err error) {
 		checkKernelVersion(tb, ufe)
 		tb.Skip(ufe.Error())
 	}
+	if xerrors.Is(err, internal.ErrNotSupported) {
+		tb.Skip(err.Error())
+	}
 }
 
 func checkKernelVersion(tb testing.TB, ufe *internal.UnsupportedFeatureError) {

@@ -1,10 +1,12 @@
 package internal
 
 import (
+	"path/filepath"
 	"runtime"
 	"unsafe"
 
 	"github.com/cilium/ebpf/internal/unix"
+	"golang.org/x/xerrors"
 )
 
 //go:generate stringer -output syscall_string.go -type=BPFCmd
@@ -63,4 +65,51 @@ func BPF(cmd BPFCmd, attr unsafe.Pointer, size uintptr) (uintptr, error) {
 	}
 
 	return r1, err
+}
+
+type bpfObjAttr struct {
+	fileName  Pointer
+	fd        uint32
+	fileFlags uint32
+}
+
+const bpfFSType = 0xcafe4a11
+
+// BPFObjPin wraps BPF_OBJ_PIN.
+func BPFObjPin(fileName string, fd *FD) error {
+	dirName := filepath.Dir(fileName)
+	var statfs unix.Statfs_t
+	if err := unix.Statfs(dirName, &statfs); err != nil {
+		return err
+	}
+	if uint64(statfs.Type) != bpfFSType {
+		return xerrors.Errorf("%s is not on a bpf filesystem", fileName)
+	}
+
+	value, err := fd.Value()
+	if err != nil {
+		return err
+	}
+
+	attr := bpfObjAttr{
+		fileName: NewStringPointer(fileName),
+		fd:       value,
+	}
+	_, err = BPF(BPF_OBJ_PIN, unsafe.Pointer(&attr), unsafe.Sizeof(attr))
+	if err != nil {
+		return xerrors.Errorf("pin object %s: %w", fileName, err)
+	}
+	return nil
+}
+
+// BPFObjGet wraps BPF_OBJ_GET.
+func BPFObjGet(fileName string) (*FD, error) {
+	attr := bpfObjAttr{
+		fileName: NewStringPointer(fileName),
+	}
+	ptr, err := BPF(BPF_OBJ_GET, unsafe.Pointer(&attr), unsafe.Sizeof(attr))
+	if err != nil {
+		return nil, xerrors.Errorf("get object %s: %w", fileName, err)
+	}
+	return NewFD(uint32(ptr)), nil
 }

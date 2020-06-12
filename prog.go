@@ -287,7 +287,7 @@ func (p *Program) Clone() (*Program, error) {
 //
 // This requires bpffs to be mounted above fileName. See http://cilium.readthedocs.io/en/doc-1.0/kubernetes/install/#mounting-the-bpf-fs-optional
 func (p *Program) Pin(fileName string) error {
-	if err := bpfPinObject(fileName, p.fd); err != nil {
+	if err := internal.BPFObjPin(fileName, p.fd); err != nil {
 		return xerrors.Errorf("can't pin program: %w", err)
 	}
 	return nil
@@ -454,53 +454,11 @@ func (p *Program) MarshalBinary() ([]byte, error) {
 	return buf, nil
 }
 
-// Attach a Program to a container object fd
-func (p *Program) Attach(fd int, typ AttachType, flags AttachFlags) error {
-	if fd < 0 {
-		return xerrors.New("invalid fd")
-	}
-
-	pfd, err := p.fd.Value()
-	if err != nil {
-		return err
-	}
-
-	attr := bpfProgAlterAttr{
-		targetFd:    uint32(fd),
-		attachBpfFd: pfd,
-		attachType:  uint32(typ),
-		attachFlags: uint32(flags),
-	}
-
-	return bpfProgAlter(internal.BPF_PROG_ATTACH, &attr)
-}
-
-// Detach a Program from a container object fd
-func (p *Program) Detach(fd int, typ AttachType, flags AttachFlags) error {
-	if fd < 0 {
-		return xerrors.New("invalid fd")
-	}
-
-	pfd, err := p.fd.Value()
-	if err != nil {
-		return err
-	}
-
-	attr := bpfProgAlterAttr{
-		targetFd:    uint32(fd),
-		attachBpfFd: pfd,
-		attachType:  uint32(typ),
-		attachFlags: uint32(flags),
-	}
-
-	return bpfProgAlter(internal.BPF_PROG_DETACH, &attr)
-}
-
 // LoadPinnedProgram loads a Program from a BPF file.
 //
 // Requires at least Linux 4.11.
 func LoadPinnedProgram(fileName string) (*Program, error) {
-	fd, err := bpfGetObject(fileName)
+	fd, err := internal.BPFObjGet(fileName)
 	if err != nil {
 		return nil, err
 	}

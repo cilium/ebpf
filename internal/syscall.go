@@ -64,3 +64,27 @@ func BPF(cmd BPFCmd, attr unsafe.Pointer, size uintptr) (uintptr, error) {
 
 	return r1, err
 }
+
+type BPFProgAttachAttr struct {
+	TargetFd     uint32
+	AttachBpfFd  uint32
+	AttachType   uint32
+	AttachFlags  uint32
+	ReplaceBpfFd uint32
+}
+
+func BPFProgAttach(attr *BPFProgAttachAttr) error {
+	_, err := BPF(BPF_PROG_ATTACH, unsafe.Pointer(attr), unsafe.Sizeof(*attr))
+	return err
+}
+
+type BPFProgDetachAttr struct {
+	TargetFd    uint32
+	AttachBpfFd uint32
+	AttachType  uint32
+}
+
+func BPFProgDetach(attr *BPFProgDetachAttr) error {
+	_, err := BPF(BPF_PROG_DETACH, unsafe.Pointer(attr), unsafe.Sizeof(*attr))
+	return err
+}

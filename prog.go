@@ -454,7 +454,9 @@ func (p *Program) MarshalBinary() ([]byte, error) {
 	return buf, nil
 }
 
-// Attach a Program to a container object fd
+// Attach a Program.
+//
+// Deprecated: use link.RawAttachProgram instead.
 func (p *Program) Attach(fd int, typ AttachType, flags AttachFlags) error {
 	if fd < 0 {
 		return xerrors.New("invalid fd")
@@ -465,20 +467,26 @@ func (p *Program) Attach(fd int, typ AttachType, flags AttachFlags) error {
 		return err
 	}
 
-	attr := bpfProgAlterAttr{
-		targetFd:    uint32(fd),
-		attachBpfFd: pfd,
-		attachType:  uint32(typ),
-		attachFlags: uint32(flags),
+	attr := internal.BPFProgAttachAttr{
+		TargetFd:    uint32(fd),
+		AttachBpfFd: pfd,
+		AttachType:  uint32(typ),
+		AttachFlags: uint32(flags),
 	}
 
-	return bpfProgAlter(internal.BPF_PROG_ATTACH, &attr)
+	return internal.BPFProgAttach(&attr)
 }
 
-// Detach a Program from a container object fd
+// Detach a Program.
+//
+// Deprecated: use link.RawDetachProgram instead.
 func (p *Program) Detach(fd int, typ AttachType, flags AttachFlags) error {
 	if fd < 0 {
 		return xerrors.New("invalid fd")
+	}
+
+	if flags != 0 {
+		return xerrors.New("flags must be zero")
 	}
 
 	pfd, err := p.fd.Value()
@@ -486,14 +494,13 @@ func (p *Program) Detach(fd int, typ AttachType, flags AttachFlags) error {
 		return err
 	}
 
-	attr := bpfProgAlterAttr{
-		targetFd:    uint32(fd),
-		attachBpfFd: pfd,
-		attachType:  uint32(typ),
-		attachFlags: uint32(flags),
+	attr := internal.BPFProgDetachAttr{
+		TargetFd:    uint32(fd),
+		AttachBpfFd: pfd,
+		AttachType:  uint32(typ),
 	}
 
-	return bpfProgAlter(internal.BPF_PROG_DETACH, &attr)
+	return internal.BPFProgDetach(&attr)
 }
 
 // LoadPinnedProgram loads a Program from a BPF file.

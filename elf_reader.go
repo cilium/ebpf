@@ -140,8 +140,9 @@ func LoadCollectionSpecFromReader(rd io.ReaderAt) (*CollectionSpec, error) {
 
 func loadLicense(sec *elf.Section) (string, error) {
 	if sec == nil {
-		return "", xerrors.New("missing license section")
+		return "", nil
 	}
+
 	data, err := sec.Data()
 	if err != nil {
 		return "", xerrors.Errorf("section %s: %v", sec.Name, err)

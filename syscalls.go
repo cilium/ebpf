@@ -2,7 +2,6 @@ package ebpf
 
 import (
 	"os"
-	"path/filepath"
 	"unsafe"
 
 	"github.com/cilium/ebpf/internal"
@@ -80,12 +79,6 @@ type bpfMapInfo struct {
 	mapName    bpfObjName // since 4.15 ad5b177bd73f
 }
 
-type bpfPinObjAttr struct {
-	fileName internal.Pointer
-	fd       uint32
-	padding  uint32
-}
-
 type bpfProgLoadAttr struct {
 	progType           ProgramType
 	insCount           uint32
@@ -134,13 +127,6 @@ type bpfProgTestRunAttr struct {
 	duration    uint32
 }
 
-type bpfProgAlterAttr struct {
-	targetFd    uint32
-	attachBpfFd uint32
-	attachType  uint32
-	attachFlags uint32
-}
-
 type bpfObjGetInfoByFDAttr struct {
 	fd      uint32
 	infoLen uint32
@@ -181,11 +167,6 @@ func bpfProgLoad(attr *bpfProgLoadAttr) (*internal.FD, error) {
 
 func bpfProgTestRun(attr *bpfProgTestRunAttr) error {
 	_, err := internal.BPF(internal.BPF_PROG_TEST_RUN, unsafe.Pointer(attr), unsafe.Sizeof(*attr))
-	return err
-}
-
-func bpfProgAlter(cmd internal.BPFCmd, attr *bpfProgAlterAttr) error {
-	_, err := internal.BPF(cmd, unsafe.Pointer(attr), unsafe.Sizeof(*attr))
 	return err
 }
 
@@ -368,43 +349,6 @@ func bpfMapFreeze(m *internal.FD) error {
 	}
 	_, err = internal.BPF(internal.BPF_MAP_FREEZE, unsafe.Pointer(&attr), unsafe.Sizeof(attr))
 	return err
-}
-
-const bpfFSType = 0xcafe4a11
-
-func bpfPinObject(fileName string, fd *internal.FD) error {
-	dirName := filepath.Dir(fileName)
-	var statfs unix.Statfs_t
-	if err := unix.Statfs(dirName, &statfs); err != nil {
-		return err
-	}
-	if uint64(statfs.Type) != bpfFSType {
-		return xerrors.Errorf("%s is not on a bpf filesystem", fileName)
-	}
-
-	value, err := fd.Value()
-	if err != nil {
-		return err
-	}
-
-	_, err = internal.BPF(internal.BPF_OBJ_PIN, unsafe.Pointer(&bpfPinObjAttr{
-		fileName: internal.NewStringPointer(fileName),
-		fd:       value,
-	}), 16)
-	if err != nil {
-		return xerrors.Errorf("pin object %s: %w", fileName, err)
-	}
-	return nil
-}
-
-func bpfGetObject(fileName string) (*internal.FD, error) {
-	ptr, err := internal.BPF(internal.BPF_OBJ_GET, unsafe.Pointer(&bpfPinObjAttr{
-		fileName: internal.NewStringPointer(fileName),
-	}), 16)
-	if err != nil {
-		return nil, xerrors.Errorf("get object %s: %w", fileName, err)
-	}
-	return internal.NewFD(uint32(ptr)), nil
 }
 
 func bpfGetObjectInfoByFD(fd *internal.FD, info unsafe.Pointer, size uintptr) error {

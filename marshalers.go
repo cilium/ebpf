@@ -54,7 +54,8 @@ func marshalBytes(data interface{}, length int) (buf []byte, err error) {
 	if err != nil {
 		return nil, err
 	}
-	if int(reflect.TypeOf(data).Size()) != length {
+
+	if int(reflect.TypeOf(data).Size()) != length && len(buf) != length {
 		return nil, xerrors.Errorf("%T doesn't marshal to %d bytes", data, length)
 	}
 	return buf, nil

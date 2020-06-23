@@ -9,12 +9,12 @@ var m = &manager.Manager{
 	Probes: []*manager.Probe{
 		&manager.Probe{
 			Section: "classifier/egress",
-			Ifname: "enp0s3", // change this to the interface index connected to the internet
+			Ifname: "enp0s3", // change this to the interface connected to the internet
 			NetworkDirection: manager.Egress,
 		},
 		&manager.Probe{
 			Section: "classifier/ingress",
-			Ifname: "enp0s3", // change this to the interface index connected to the internet
+			Ifname: "enp0s3", // change this to the interface connected to the internet
 			NetworkDirection: manager.Ingress,
 		},
 	},
@@ -26,7 +26,7 @@ func main() {
 		logrus.Fatal(err)
 	}
 
-	// Start manager
+	// Start the manager
 	if err := m.Start(); err != nil {
 		logrus.Fatal(err)
 	}
@@ -36,7 +36,7 @@ func main() {
 	// Generate some network traffic to trigger the probe
 	trigger()
 
-	// Close manager
+	// Close the manager
 	if err := m.Stop(manager.CleanAll); err != nil {
 		logrus.Fatal(err)
 	}

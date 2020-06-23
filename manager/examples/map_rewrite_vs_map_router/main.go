@@ -41,7 +41,7 @@ func main() {
 		logrus.Fatal(err)
 	}
 
-	// Close managers
+	// Close the managers
 	if err := m1.Stop(manager.CleanAll); err != nil {
 		logrus.Fatal(err)
 	}

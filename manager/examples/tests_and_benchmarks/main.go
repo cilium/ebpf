@@ -55,11 +55,6 @@ func main() {
 
 	// Run benchmark
 	runtBenchmark(testMap, testProg)
-
-	// Close manager
-	if err := m.Stop(manager.CleanAll); err != nil {
-		logrus.Fatal(err)
-	}
 }
 
 func runtTest(testMap *ebpf.Map, testProg *ebpf.Program) {

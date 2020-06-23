@@ -42,7 +42,7 @@ func main() {
 		logrus.Fatal(err)
 	}
 
-	// Start manager
+	// Start the manager
 	if err := m.Start(); err != nil {
 		logrus.Fatal(err)
 	}
@@ -60,7 +60,7 @@ func main() {
 		return
 	}
 
-	// Close manager
+	// Close the manager
 	if err := m.Stop(manager.CleanAll); err != nil {
 		logrus.Fatal(err)
 	}

@@ -1,8 +1,8 @@
 package ebpf
 
 import (
-	"github.com/cilium/ebpf/asm"
-	"github.com/cilium/ebpf/internal/btf"
+	"github.com/DataDog/ebpf/asm"
+	"github.com/DataDog/ebpf/internal/btf"
 
 	"golang.org/x/xerrors"
 )

@@ -8,7 +8,7 @@ import (
 	"sync/atomic"
 	"unsafe"
 
-	"github.com/cilium/ebpf/internal/unix"
+	"github.com/DataDog/ebpf/internal/unix"
 
 	"golang.org/x/xerrors"
 )

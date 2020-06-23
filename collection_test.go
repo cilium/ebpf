@@ -3,8 +3,8 @@ package ebpf
 import (
 	"testing"
 
-	"github.com/cilium/ebpf/asm"
-	"github.com/cilium/ebpf/internal/testutils"
+	"github.com/DataDog/ebpf/asm"
+	"github.com/DataDog/ebpf/internal/testutils"
 )
 
 func TestCollectionSpecNotModified(t *testing.T) {

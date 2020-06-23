@@ -4,9 +4,9 @@ import (
 	"path/filepath"
 	"unsafe"
 
-	"github.com/cilium/ebpf/internal"
-	"github.com/cilium/ebpf/internal/btf"
-	"github.com/cilium/ebpf/internal/unix"
+	"github.com/DataDog/ebpf/internal"
+	"github.com/DataDog/ebpf/internal/btf"
+	"github.com/DataDog/ebpf/internal/unix"
 
 	"golang.org/x/xerrors"
 )

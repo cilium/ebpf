@@ -4,7 +4,7 @@ import (
 	"runtime"
 	"unsafe"
 
-	"github.com/cilium/ebpf/internal/unix"
+	"github.com/DataDog/ebpf/internal/unix"
 )
 
 // BPF wraps SYS_BPF.

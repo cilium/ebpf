@@ -8,7 +8,7 @@ import (
 var m = &manager.Manager{
 	Probes: []*manager.Probe{
 		&manager.Probe{
-			Section: "cgroup/skb/egress",
+			Section: "cgroup_skb/egress",
 			CGroupPath: "/sys/fs/cgroup/unified",
 		},
 	},

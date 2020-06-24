@@ -1,7 +1,7 @@
 #include "include/bpf.h"
 #include "include/bpf_helpers.h"
 
-SEC("cgroup/skb/egress")
+SEC("cgroup_skb/egress")
 int cgroup_egress_func(struct __sk_buff *skb)
 {
     bpf_printk("new packet captured on cgroup egress\n");

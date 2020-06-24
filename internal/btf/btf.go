@@ -403,11 +403,11 @@ func (s *Spec) Map(name string) (*Map, []Member, error) {
 	}
 
 	if key == nil {
-		return nil, nil, xerrors.Errorf("map %s: missing 'key' in type", name)
+		key = (*Void)(nil)
 	}
 
 	if value == nil {
-		return nil, nil, xerrors.Errorf("map %s: missing 'value' in type", name)
+		value = (*Void)(nil)
 	}
 
 	return &Map{s, key, value}, mapStruct.Members, nil

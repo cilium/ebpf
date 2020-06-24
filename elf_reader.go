@@ -440,27 +440,40 @@ func (ec *elfCode) loadBTFMaps(maps map[string]*MapSpec, mapSections map[elf.Sec
 				return xerrors.Errorf("section %v: map %v already exists", sec.Name, sym)
 			}
 
-			btfMap, btfMapMembers, err := spec.Map(name)
-			if err != nil {
-				return xerrors.Errorf("map %v: can't get BTF: %w", name, err)
-			}
-
-			spec, err := mapSpecFromBTF(btfMap, btfMapMembers)
+			mapSpec, err := mapSpecFromBTF(spec, name)
 			if err != nil {
 				return xerrors.Errorf("map %v: %w", name, err)
 			}
 
-			maps[name] = spec
+			maps[name] = mapSpec
 		}
 	}
 
 	return nil
 }
 
-func mapSpecFromBTF(btfMap *btf.Map, btfMapMembers []btf.Member) (*MapSpec, error) {
+func mapSpecFromBTF(spec *btf.Spec, name string) (*MapSpec, error) {
+	btfMap, btfMapMembers, err := spec.Map(name)
+	if err != nil {
+		return nil, xerrors.Errorf("can't get BTF: %w", err)
+	}
+
+	keyType := btf.MapKey(btfMap)
+	size, err := btf.Sizeof(keyType)
+	if err != nil {
+		return nil, xerrors.Errorf("can't get size of BTF key: %w", err)
+	}
+	keySize := uint32(size)
+
+	valueType := btf.MapValue(btfMap)
+	size, err = btf.Sizeof(valueType)
+	if err != nil {
+		return nil, xerrors.Errorf("can't get size of BTF value: %w", err)
+	}
+	valueSize := uint32(size)
+
 	var (
 		mapType, flags, maxEntries uint32
-		err                        error
 	)
 	for _, member := range btfMapMembers {
 		switch member.Name {
@@ -482,27 +495,36 @@ func mapSpecFromBTF(btfMap *btf.Map, btfMapMembers []btf.Member) (*MapSpec, erro
 				return nil, xerrors.Errorf("can't get BTF map max entries: %w", err)
 			}
 
-		case "key":
-		case "value":
+		case "key_size":
+			if _, isVoid := keyType.(*btf.Void); !isVoid {
+				return nil, xerrors.New("both key and key_size given")
+			}
+
+			keySize, err = uintFromBTF(member.Type)
+			if err != nil {
+				return nil, xerrors.Errorf("can't get BTF key size: %w", err)
+			}
+
+		case "value_size":
+			if _, isVoid := valueType.(*btf.Void); !isVoid {
+				return nil, xerrors.New("both value and value_size given")
+			}
+
+			valueSize, err = uintFromBTF(member.Type)
+			if err != nil {
+				return nil, xerrors.Errorf("can't get BTF value size: %w", err)
+			}
+
+		case "key", "value":
 		default:
 			return nil, xerrors.Errorf("unrecognized field %s in BTF map definition", member.Name)
 		}
 	}
 
-	keySize, err := btf.Sizeof(btf.MapKey(btfMap))
-	if err != nil {
-		return nil, xerrors.Errorf("can't get size of BTF key: %w", err)
-	}
-
-	valueSize, err := btf.Sizeof(btf.MapValue(btfMap))
-	if err != nil {
-		return nil, xerrors.Errorf("can't get size of BTF value: %w", err)
-	}
-
 	return &MapSpec{
 		Type:       MapType(mapType),
-		KeySize:    uint32(keySize),
-		ValueSize:  uint32(valueSize),
+		KeySize:    keySize,
+		ValueSize:  valueSize,
 		MaxEntries: maxEntries,
 		Flags:      flags,
 		BTF:        btfMap,

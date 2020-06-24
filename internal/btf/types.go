@@ -38,9 +38,10 @@ func (n Name) name() string {
 // Void is the unit type of BTF.
 type Void struct{}
 
-func (v Void) ID() TypeID      { return 0 }
-func (v Void) copy() Type      { return Void{} }
-func (v Void) walk(*copyStack) {}
+func (v *Void) ID() TypeID      { return 0 }
+func (v *Void) size() uint32    { return 0 }
+func (v *Void) copy() Type      { return (*Void)(nil) }
+func (v *Void) walk(*copyStack) {}
 
 // Int is an integer of a given length.
 type Int struct {
@@ -447,7 +448,7 @@ func inflateRawTypes(rawTypes []rawType, rawStrings stringTable) (namedTypes map
 	}
 
 	types := make([]Type, 0, len(rawTypes))
-	types = append(types, Void{})
+	types = append(types, (*Void)(nil))
 	namedTypes = make(map[string][]Type)
 
 	for i, raw := range rawTypes {

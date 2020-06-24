@@ -289,7 +289,12 @@ func fixupDatasec(rawTypes []rawType, rawStrings stringTable, sectionSizes map[s
 	return nil
 }
 
-func (s *Spec) marshal(bo binary.ByteOrder) ([]byte, error) {
+type marshalOpts struct {
+	ByteOrder        binary.ByteOrder
+	StripFuncLinkage bool
+}
+
+func (s *Spec) marshal(opts marshalOpts) ([]byte, error) {
 	var (
 		buf       bytes.Buffer
 		header    = new(btfHeader)
@@ -301,8 +306,13 @@ func (s *Spec) marshal(bo binary.ByteOrder) ([]byte, error) {
 	_, _ = buf.Write(make([]byte, headerLen))
 
 	// Write type section, just after the header.
-	for _, typ := range s.rawTypes {
-		if err := typ.Marshal(&buf, bo); err != nil {
+	for _, raw := range s.rawTypes {
+		switch {
+		case opts.StripFuncLinkage && raw.Kind() == kindFunc:
+			raw.SetLinkage(linkageStatic)
+		}
+
+		if err := raw.Marshal(&buf, opts.ByteOrder); err != nil {
 			return nil, xerrors.Errorf("can't marshal BTF: %w", err)
 		}
 	}
@@ -325,7 +335,7 @@ func (s *Spec) marshal(bo binary.ByteOrder) ([]byte, error) {
 	}
 
 	raw := buf.Bytes()
-	err := binary.Write(sliceWriter(raw[:headerLen]), bo, header)
+	err := binary.Write(sliceWriter(raw[:headerLen]), opts.ByteOrder, header)
 	if err != nil {
 		return nil, xerrors.Errorf("can't write header: %v", err)
 	}
@@ -459,7 +469,10 @@ func NewHandle(spec *Spec) (*Handle, error) {
 		return nil, xerrors.Errorf("can't load %s BTF on %s", spec.byteOrder, internal.NativeEndian)
 	}
 
-	btf, err := spec.marshal(internal.NativeEndian)
+	btf, err := spec.marshal(marshalOpts{
+		ByteOrder:        internal.NativeEndian,
+		StripFuncLinkage: haveFuncLinkage() != nil,
+	})
 	if err != nil {
 		return nil, xerrors.Errorf("can't marshal BTF: %w", err)
 	}
@@ -608,26 +621,36 @@ func bpfLoadBTF(attr *bpfLoadBTFAttr) (*internal.FD, error) {
 	return internal.NewFD(uint32(fd)), nil
 }
 
-func minimalBTF(bo binary.ByteOrder) []byte {
+func marshalBTF(types interface{}, strings []byte, bo binary.ByteOrder) []byte {
 	const minHeaderLength = 24
 
+	typesLen := uint32(binary.Size(types))
+	header := btfHeader{
+		Magic:     btfMagic,
+		Version:   1,
+		HdrLen:    minHeaderLength,
+		TypeOff:   0,
+		TypeLen:   typesLen,
+		StringOff: typesLen,
+		StringLen: uint32(len(strings)),
+	}
+
+	buf := new(bytes.Buffer)
+	_ = binary.Write(buf, bo, &header)
+	_ = binary.Write(buf, bo, types)
+	buf.Write(strings)
+
+	return buf.Bytes()
+}
+
+var haveBTF = internal.FeatureTest("BTF", "5.1", func() (bool, error) {
 	var (
 		types struct {
 			Integer btfType
 			Var     btfType
 			btfVar  struct{ Linkage uint32 }
 		}
-		typLen  = uint32(binary.Size(&types))
 		strings = []byte{0, 'a', 0}
-		header  = btfHeader{
-			Magic:     btfMagic,
-			Version:   1,
-			HdrLen:    minHeaderLength,
-			TypeOff:   0,
-			TypeLen:   typLen,
-			StringOff: typLen,
-			StringLen: uint32(len(strings)),
-		}
 	)
 
 	// We use a BTF_KIND_VAR here, to make sure that
@@ -638,16 +661,8 @@ func minimalBTF(bo binary.ByteOrder) []byte {
 	types.Var.SetKind(kindVar)
 	types.Var.SizeType = 1
 
-	buf := new(bytes.Buffer)
-	_ = binary.Write(buf, bo, &header)
-	_ = binary.Write(buf, bo, &types)
-	buf.Write(strings)
+	btf := marshalBTF(&types, strings, internal.NativeEndian)
 
-	return buf.Bytes()
-}
-
-var haveBTF = internal.FeatureTest("BTF", "5.1", func() (bool, error) {
-	btf := minimalBTF(internal.NativeEndian)
 	fd, err := bpfLoadBTF(&bpfLoadBTFAttr{
 		btf:     internal.NewSlicePointer(btf),
 		btfSize: uint32(len(btf)),
@@ -655,6 +670,36 @@ var haveBTF = internal.FeatureTest("BTF", "5.1", func() (bool, error) {
 	if err == nil {
 		fd.Close()
 	}
+	// Check for EINVAL specifically, rather than err != nil since we
+	// otherwise misdetect due to insufficient permissions.
+	return !xerrors.Is(err, unix.EINVAL), nil
+})
+
+var haveFuncLinkage = internal.FeatureTest("BTF func linkage", "5.6", func() (bool, error) {
+	var (
+		types struct {
+			FuncProto btfType
+			Func      btfType
+		}
+		strings = []byte{0, 'a', 0}
+	)
+
+	types.FuncProto.SetKind(kindFuncProto)
+	types.Func.SetKind(kindFunc)
+	types.Func.SizeType = 1 // aka FuncProto
+	types.Func.NameOff = 1
+	types.Func.SetLinkage(linkageGlobal)
+
+	btf := marshalBTF(&types, strings, internal.NativeEndian)
+
+	fd, err := bpfLoadBTF(&bpfLoadBTFAttr{
+		btf:     internal.NewSlicePointer(btf),
+		btfSize: uint32(len(btf)),
+	})
+	if err == nil {
+		fd.Close()
+	}
+
 	// Check for EINVAL specifically, rather than err != nil since we
 	// otherwise misdetect due to insufficient permissions.
 	return !xerrors.Is(err, unix.EINVAL), nil

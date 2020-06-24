@@ -71,7 +71,7 @@ func runtTest(testMap *ebpf.Map, testProg *ebpf.Program) {
 		if outLen == 0 {
 			logrus.Printf("%v - PASS", data)
 		} else {
-			logrus.Printf("%v - FAIL", data)
+			logrus.Printf("%v - FAIL (checkout /sys/kernel/debug/tracing/trace_pipe to see the logs)", data)
 		}
 	}
 }
@@ -90,7 +90,7 @@ func runtBenchmark(testMap *ebpf.Map, testProg *ebpf.Program) {
 		if outLen == 0 {
 			logrus.Printf("%v - PASS (duration: %v)", data, duration)
 		} else {
-			logrus.Printf("%v - benchmark FAILED", data)
+			logrus.Printf("%v - benchmark FAILED (checkout /sys/kernel/debug/tracing/trace_pipe to see the logs)", data)
 		}
 	}
 }

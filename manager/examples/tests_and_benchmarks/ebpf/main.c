@@ -31,7 +31,9 @@ int my_func_test(struct __sk_buff *skb)
         bpf_printk("no test data\n");
         return -1;
     }
-    if (my_func(data->input) != data->output) {
+    u32 ret = my_func(data->input);
+    if (ret != data->output) {
+        bpf_printk("expected %d for input %d, got %d\n", data->output, data->input, ret);
         return -1;
     }
     return 0;

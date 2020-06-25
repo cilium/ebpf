@@ -4,7 +4,6 @@ import (
 	"flag"
 	"path/filepath"
 	"reflect"
-	"strings"
 	"testing"
 
 	"github.com/cilium/ebpf/internal"
@@ -221,7 +220,7 @@ func TestLoadInvalidMap(t *testing.T) {
 
 var (
 	elfPath    = flag.String("elfs", "", "`Path` containing libbpf-compatible ELFs")
-	elfPattern = flag.String("elf-pattern", "test_*.o", "Glob `pattern` for object files that should be tested")
+	elfPattern = flag.String("elf-pattern", "*.o", "Glob `pattern` for object files that should be tested")
 )
 
 func TestLibBPFCompat(t *testing.T) {
@@ -232,24 +231,15 @@ func TestLibBPFCompat(t *testing.T) {
 		t.Skip("No path specified")
 	}
 
-	testutils.TestFiles(t, filepath.Join(*elfPath, *elfPattern), func(t *testing.T, file string) {
-		if strings.Contains(filepath.Base(file), "_core_") {
-			t.Skip("CO-RE is not implemented")
-		}
-
+	testutils.TestFiles(t, filepath.Join(*elfPath, *elfPattern), func(t *testing.T, path string) {
 		t.Parallel()
 
-		spec, err := LoadCollectionSpec(file)
+		file := filepath.Base(path)
+		_, err := LoadCollectionSpec(path)
+		testutils.SkipIfNotSupported(t, err)
 		if err != nil {
 			t.Fatalf("Can't read %s: %s", file, err)
 		}
-
-		coll, err := NewCollection(spec)
-		testutils.SkipIfNotSupported(t, err)
-		if err != nil {
-			t.Fatal(err)
-		}
-		coll.Close()
 	})
 }
 

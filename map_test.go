@@ -512,6 +512,9 @@ func TestPerCPUMarshaling(t *testing.T) {
 			if numCPU < 2 {
 				t.Skip("Test requires at least two CPUs")
 			}
+			if typ == LRUCPUHash {
+				testutils.SkipOnOldKernel(t, "4.10", "LRU per-CPU hash")
+			}
 
 			arr, err := NewMap(&MapSpec{
 				Type:       typ,
@@ -525,8 +528,8 @@ func TestPerCPUMarshaling(t *testing.T) {
 			defer arr.Close()
 
 			values := []*customEncoding{
-				&customEncoding{"hello"},
-				&customEncoding{"world"},
+				{"hello"},
+				{"world"},
 			}
 			if err := arr.Put(uint32(0), values); err != nil {
 				t.Fatal(err)

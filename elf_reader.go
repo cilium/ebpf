@@ -170,7 +170,7 @@ func loadVersion(sec *elf.Section, bo binary.ByteOrder) (uint32, error) {
 	return version, nil
 }
 
-func (ec *elfCode) loadPrograms(progSections map[elf.SectionIndex]*elf.Section, relocations map[elf.SectionIndex]map[uint64]elf.Symbol, btf *btf.Spec) (map[string]*ProgramSpec, error) {
+func (ec *elfCode) loadPrograms(progSections map[elf.SectionIndex]*elf.Section, relocations map[elf.SectionIndex]map[uint64]elf.Symbol, btfSpec *btf.Spec) (map[string]*ProgramSpec, error) {
 	var (
 		progs []*ProgramSpec
 		libs  []*ProgramSpec
@@ -205,10 +205,10 @@ func (ec *elfCode) loadPrograms(progSections map[elf.SectionIndex]*elf.Section, 
 			ByteOrder:     ec.ByteOrder,
 		}
 
-		if btf != nil {
-			spec.BTF, err = btf.Program(sec.Name, length)
-			if err != nil {
-				return nil, xerrors.Errorf("BTF for section %s (program %s): %w", sec.Name, funcSym.Name, err)
+		if btfSpec != nil {
+			spec.BTF, err = btfSpec.Program(sec.Name, length)
+			if err != nil && !xerrors.Is(err, btf.ErrNoExtendedInfo) {
+				return nil, xerrors.Errorf("program %s: %w", sec.Name, funcSym.Name, err)
 			}
 		}
 

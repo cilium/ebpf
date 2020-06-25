@@ -22,8 +22,9 @@ const btfMagic = 0xeB9F
 
 // Errors returned by BTF functions.
 var (
-	ErrNotSupported = internal.ErrNotSupported
-	ErrNotFound     = xerrors.New("not found")
+	ErrNotSupported   = internal.ErrNotSupported
+	ErrNotFound       = xerrors.New("not found")
+	ErrNoExtendedInfo = xerrors.New("no extended info")
 )
 
 // Spec represents decoded BTF.
@@ -361,17 +362,22 @@ func (sw sliceWriter) Write(p []byte) (int, error) {
 //
 // Length is the number of bytes in the raw BPF instruction stream.
 //
-// Returns an error if there is no BTF.
+// Returns an error which may wrap ErrNoExtendedInfo if the Spec doesn't
+// contain extended BTF info.
 func (s *Spec) Program(name string, length uint64) (*Program, error) {
 	if length == 0 {
 		return nil, xerrors.New("length musn't be zero")
+	}
+
+	if s.funcInfos == nil && s.lineInfos == nil {
+		return nil, xerrors.Errorf("BTF for section %s: %w", name, ErrNoExtendedInfo)
 	}
 
 	funcInfos, funcOK := s.funcInfos[name]
 	lineInfos, lineOK := s.lineInfos[name]
 
 	if !funcOK && !lineOK {
-		return nil, xerrors.Errorf("no BTF for program %s", name)
+		return nil, xerrors.Errorf("no extended BTF info for section %s", name)
 	}
 
 	return &Program{s, length, funcInfos, lineInfos}, nil

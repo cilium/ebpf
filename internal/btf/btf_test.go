@@ -109,6 +109,10 @@ func TestHaveBTF(t *testing.T) {
 	testutils.CheckFeatureTest(t, haveBTF)
 }
 
+func TestHaveFuncLinkage(t *testing.T) {
+	testutils.CheckFeatureTest(t, haveFuncLinkage)
+}
+
 func ExampleSpec_FindType() {
 	// Acquire a Spec via one of its constructors.
 	spec := new(Spec)

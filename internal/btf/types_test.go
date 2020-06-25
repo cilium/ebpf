@@ -1,17 +1,19 @@
 package btf
 
-import "testing"
-
-import "fmt"
+import (
+	"fmt"
+	"testing"
+)
 
 func TestSizeof(t *testing.T) {
 	testcases := []struct {
 		size int
 		typ  Type
 	}{
+		{0, (*Void)(nil)},
 		{1, &Int{Size: 1}},
 		{4, &Enum{}},
-		{0, &Array{Type: &Pointer{Target: Void{}}, Nelems: 0}},
+		{0, &Array{Type: &Pointer{Target: (*Void)(nil)}, Nelems: 0}},
 		{12, &Array{Type: &Enum{}, Nelems: 3}},
 	}
 
@@ -30,7 +32,7 @@ func TestSizeof(t *testing.T) {
 }
 
 func TestCopyType(t *testing.T) {
-	_ = copyType(Void{})
+	_ = copyType((*Void)(nil))
 
 	in := &Int{Size: 4}
 	out := copyType(in)

@@ -33,4 +33,4 @@ blocks:
             values: ["5.4", "4.19", "4.9"]
         commands:
           - sem-version go $GO_VERSION
-          - timeout -s KILL 90s ./run-tests.sh $KERNEL_VERSION
+          - timeout -s KILL 600s ./run-tests.sh $KERNEL_VERSION

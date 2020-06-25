@@ -108,6 +108,11 @@ func LoadCollectionSpecFromReader(rd io.ReaderAt) (*CollectionSpec, error) {
 		return nil, xerrors.Errorf("load BTF: %w", err)
 	}
 
+	relocations, referencedSections, err := ec.loadRelocations(relSections)
+	if err != nil {
+		return nil, xerrors.Errorf("load relocations: %w", err)
+	}
+
 	maps := make(map[string]*MapSpec)
 	if err := ec.loadMaps(maps, mapSections); err != nil {
 		return nil, xerrors.Errorf("load maps: %w", err)
@@ -120,14 +125,17 @@ func LoadCollectionSpecFromReader(rd io.ReaderAt) (*CollectionSpec, error) {
 	}
 
 	if len(dataSections) > 0 {
+		for idx := range dataSections {
+			if !referencedSections[idx] {
+				// Prune data sections which are not referenced by any
+				// instructions.
+				delete(dataSections, idx)
+			}
+		}
+
 		if err := ec.loadDataSections(maps, dataSections, btfSpec); err != nil {
 			return nil, xerrors.Errorf("load data sections: %w", err)
 		}
-	}
-
-	relocations, err := ec.loadRelocations(relSections)
-	if err != nil {
-		return nil, xerrors.Errorf("load relocations: %w", err)
 	}
 
 	progs, err := ec.loadPrograms(progSections, relocations, btfSpec)
@@ -648,13 +656,14 @@ func getProgType(sectionName string) (ProgramType, AttachType) {
 	return UnspecifiedProgram, AttachNone
 }
 
-func (ec *elfCode) loadRelocations(sections map[elf.SectionIndex]*elf.Section) (map[elf.SectionIndex]map[uint64]elf.Symbol, error) {
+func (ec *elfCode) loadRelocations(sections map[elf.SectionIndex]*elf.Section) (map[elf.SectionIndex]map[uint64]elf.Symbol, map[elf.SectionIndex]bool, error) {
 	result := make(map[elf.SectionIndex]map[uint64]elf.Symbol)
+	targets := make(map[elf.SectionIndex]bool)
 	for idx, sec := range sections {
 		rels := make(map[uint64]elf.Symbol)
 
 		if sec.Entsize < 16 {
-			return nil, xerrors.Errorf("section %s: relocations are less than 16 bytes", sec.Name)
+			return nil, nil, xerrors.Errorf("section %s: relocations are less than 16 bytes", sec.Name)
 		}
 
 		r := sec.Open()
@@ -663,20 +672,22 @@ func (ec *elfCode) loadRelocations(sections map[elf.SectionIndex]*elf.Section) (
 
 			var rel elf.Rel64
 			if binary.Read(ent, ec.ByteOrder, &rel) != nil {
-				return nil, xerrors.Errorf("can't parse relocation at offset %v", off)
+				return nil, nil, xerrors.Errorf("can't parse relocation at offset %v", off)
 			}
 
 			symNo := int(elf.R_SYM64(rel.Info) - 1)
 			if symNo >= len(ec.symbols) {
-				return nil, xerrors.Errorf("relocation at offset %d: symbol %v doesnt exist", off, symNo)
+				return nil, nil, xerrors.Errorf("relocation at offset %d: symbol %v doesnt exist", off, symNo)
 			}
 
+			symbol := ec.symbols[symNo]
+			targets[symbol.Section] = true
 			rels[rel.Off] = ec.symbols[symNo]
 		}
 
 		result[idx] = rels
 	}
-	return result, nil
+	return result, targets, nil
 }
 
 func symbolsPerSection(symbols []elf.Symbol) map[elf.SectionIndex]map[uint64]elf.Symbol {

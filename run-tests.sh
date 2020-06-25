@@ -61,7 +61,8 @@ $sudo virtme-run --kimg "${tmp_dir}/${kernel}" --memory 512M --pwd \
   --rwdir=/run/output="${output}" \
   --rodir=/run/go-path="$(go env GOPATH)" \
   --rwdir=/run/go-cache="$(go env GOCACHE)" \
-  --script-sh "$(realpath "$0") --in-vm /run/output"
+  --script-sh "$(realpath "$0") --in-vm /run/output" \
+  --qemu-opts -smp 2 # need at least two CPUs for some tests
 
 if [[ ! -e "${output}/success" ]]; then
   echo "Test failed on ${kernel_version}"

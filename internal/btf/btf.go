@@ -357,7 +357,8 @@ func (sw sliceWriter) Write(p []byte) (int, error) {
 //
 // Length is the number of bytes in the raw BPF instruction stream.
 //
-// Returns an error if there is no BTF.
+// Returns an error which may wrap ErrNotFound if there is no information
+// for a given program.
 func (s *Spec) Program(name string, length uint64) (*Program, error) {
 	if length == 0 {
 		return nil, xerrors.New("length musn't be zero")
@@ -367,7 +368,7 @@ func (s *Spec) Program(name string, length uint64) (*Program, error) {
 	lineInfos, lineOK := s.lineInfos[name]
 
 	if !funcOK && !lineOK {
-		return nil, xerrors.Errorf("no BTF for program %s", name)
+		return nil, xerrors.Errorf("BTF for section %s: %w", name, ErrNotFound)
 	}
 
 	return &Program{s, length, funcInfos, lineInfos}, nil

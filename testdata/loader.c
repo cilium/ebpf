@@ -42,6 +42,13 @@ struct {
 	__uint(max_entries, 1);
 	__uint(map_flags, BPF_F_NO_PREALLOC);
 } btf_map __section(".maps");
+
+struct {
+	__uint(type, BPF_MAP_TYPE_ARRAY);
+	__uint(key_size, 4);
+	__uint(value_size, 4);
+	__uint(max_entries, 1);
+} btf_map2 __section(".maps");
 #endif
 
 static int __attribute__((noinline)) static_fn(uint32_t arg) {

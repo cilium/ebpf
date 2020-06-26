@@ -102,7 +102,7 @@ func (m *Map) Init(manager *Manager) error {
 	if m.array == nil {
 		array, ok := manager.collection.Maps[m.Name]
 		if !ok {
-			errors.Wrapf(ErrUnknownSection, "couldn't find map at maps/%s", m.Name)
+			return errors.Wrapf(ErrUnknownSection, "couldn't find map at maps/%s", m.Name)
 		}
 		m.array = array
 

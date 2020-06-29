@@ -523,6 +523,16 @@ func mapSpecFromBTF(spec *btf.Spec, name string) (*MapSpec, error) {
 				return nil, xerrors.Errorf("can't get BTF value size: %w", err)
 			}
 
+		case "pinning":
+			pinning, err := uintFromBTF(member.Type)
+			if err != nil {
+				return nil, xerrors.Errorf("can't get pinning: %w", err)
+			}
+
+			if pinning != 0 {
+				return nil, xerrors.Errorf("'pinning' attribute not supported: %w", ErrNotSupported)
+			}
+
 		case "key", "value":
 		default:
 			return nil, xerrors.Errorf("unrecognized field %s in BTF map definition", member.Name)

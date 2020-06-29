@@ -33,6 +33,14 @@ const (
 	kindDatasec
 )
 
+type btfFuncLinkage uint8
+
+const (
+	linkageStatic btfFuncLinkage = iota
+	linkageGlobal
+	linkageExtern
+)
+
 const (
 	btfTypeKindShift = 24
 	btfTypeKindLen   = 4
@@ -44,7 +52,7 @@ const (
 type btfType struct {
 	NameOff uint32
 	/* "info" bits arrangement
-	 * bits  0-15: vlen (e.g. # of struct's members)
+	 * bits  0-15: vlen (e.g. # of struct's members), linkage
 	 * bits 16-23: unused
 	 * bits 24-27: kind (e.g. int, ptr, array...etc)
 	 * bits 28-30: unused
@@ -128,6 +136,14 @@ func (bt *btfType) Vlen() int {
 
 func (bt *btfType) SetVlen(vlen int) {
 	bt.setInfo(uint32(vlen), btfTypeVlenMask, btfTypeVlenShift)
+}
+
+func (bt *btfType) Linkage() btfFuncLinkage {
+	return btfFuncLinkage(bt.info(btfTypeVlenMask, btfTypeVlenShift))
+}
+
+func (bt *btfType) SetLinkage(linkage btfFuncLinkage) {
+	bt.setInfo(uint32(linkage), btfTypeVlenMask, btfTypeVlenShift)
 }
 
 func (bt *btfType) Type() TypeID {

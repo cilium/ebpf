@@ -258,6 +258,10 @@ func fixupDatasec(rawTypes []rawType, rawStrings stringTable, sectionSizes map[s
 			return err
 		}
 
+		if name == ".kconfig" || name == ".ksym" {
+			return xerrors.Errorf("reference to %s: %w", name, ErrNotSupported)
+		}
+
 		size, ok := sectionSizes[name]
 		if !ok {
 			return xerrors.Errorf("data section %s: missing size", name)

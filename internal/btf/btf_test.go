@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -11,7 +12,6 @@ import (
 
 	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/testutils"
-	"golang.org/x/xerrors"
 )
 
 func TestParseVmlinux(t *testing.T) {
@@ -39,7 +39,7 @@ func TestParseVmlinux(t *testing.T) {
 
 func TestParseCurrentKernelBTF(t *testing.T) {
 	spec, err := loadKernelSpec()
-	if xerrors.Is(err, ErrNotFound) {
+	if errors.Is(err, ErrNotFound) {
 		t.Skip("BTF is not available:", err)
 	}
 	if err != nil {
@@ -86,7 +86,7 @@ func TestLoadSpecFromElf(t *testing.T) {
 		}
 
 		var tmp Void
-		if err := spec.FindType("totally_bogus_type", &tmp); !xerrors.Is(err, ErrNotFound) {
+		if err := spec.FindType("totally_bogus_type", &tmp); !errors.Is(err, ErrNotFound) {
 			t.Error("FindType doesn't return ErrNotFound:", err)
 		}
 

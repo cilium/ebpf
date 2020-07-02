@@ -208,7 +208,7 @@ func (ec *elfCode) loadPrograms(progSections map[elf.SectionIndex]*elf.Section, 
 		if btfSpec != nil {
 			spec.BTF, err = btfSpec.Program(sec.Name, length)
 			if err != nil && !errors.Is(err, btf.ErrNoExtendedInfo) {
-				return nil, fmt.Errorf("program %s %s: %w", sec.Name, funcSym.Name, err)
+				return nil, fmt.Errorf("program %s: %w", funcSym.Name, err)
 			}
 		}
 

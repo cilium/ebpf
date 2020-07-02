@@ -1,14 +1,13 @@
 package link
 
 import (
+	"errors"
 	"unsafe"
 
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/asm"
 	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/unix"
-
-	"golang.org/x/xerrors"
 )
 
 var haveProgAttach = internal.FeatureTest("BPF_PROG_ATTACH", "4.10", func() (bool, error) {
@@ -63,12 +62,12 @@ var haveProgAttachReplace = internal.FeatureTest("BPF_PROG_ATTACH atomic replace
 	}
 
 	err = internal.BPFProgAttach(&attr)
-	if xerrors.Is(err, unix.EPERM) {
+	if errors.Is(err, unix.EPERM) {
 		// We don't have enough permissions, so we never get to the point
 		// where flags are checked.
 		return false, err
 	}
-	return !xerrors.Is(err, unix.EINVAL), nil
+	return !errors.Is(err, unix.EINVAL), nil
 })
 
 type bpfLinkCreateAttr struct {
@@ -120,7 +119,7 @@ var haveBPFLink = internal.FeatureTest("bpf_link", "5.7", func() (bool, error) {
 		attachType: ebpf.AttachCGroupInetIngress,
 	}
 	_, err = bpfLinkCreate(&attr)
-	return !xerrors.Is(err, unix.EINVAL), nil
+	return !errors.Is(err, unix.EINVAL), nil
 })
 
 type bpfIterCreateAttr struct {

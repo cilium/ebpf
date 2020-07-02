@@ -2,12 +2,12 @@ package testutils
 
 import (
 	"bytes"
+	"errors"
 	"sync"
 	"testing"
 
 	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/unix"
-	"golang.org/x/xerrors"
 )
 
 var (
@@ -44,7 +44,7 @@ func CheckFeatureTest(t *testing.T, fn func() error) {
 	}
 
 	var ufe *internal.UnsupportedFeatureError
-	if xerrors.As(err, &ufe) {
+	if errors.As(err, &ufe) {
 		checkKernelVersion(t, ufe)
 	} else {
 		t.Error("Feature test failed:", err)
@@ -53,11 +53,11 @@ func CheckFeatureTest(t *testing.T, fn func() error) {
 
 func SkipIfNotSupported(tb testing.TB, err error) {
 	var ufe *internal.UnsupportedFeatureError
-	if xerrors.As(err, &ufe) {
+	if errors.As(err, &ufe) {
 		checkKernelVersion(tb, ufe)
 		tb.Skip(ufe.Error())
 	}
-	if xerrors.Is(err, internal.ErrNotSupported) {
+	if errors.Is(err, internal.ErrNotSupported) {
 		tb.Skip(err.Error())
 	}
 }

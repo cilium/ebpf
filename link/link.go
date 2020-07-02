@@ -1,10 +1,10 @@
 package link
 
 import (
+	"fmt"
+
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/internal"
-
-	"golang.org/x/xerrors"
 )
 
 var ErrNotSupported = internal.ErrNotSupported
@@ -57,12 +57,12 @@ func AttachRawLink(opts RawLinkOptions) (*RawLink, error) {
 	}
 
 	if opts.Target < 0 {
-		return nil, xerrors.Errorf("invalid target: %s", internal.ErrClosedFd)
+		return nil, fmt.Errorf("invalid target: %s", internal.ErrClosedFd)
 	}
 
 	progFd := opts.Program.FD()
 	if progFd < 0 {
-		return nil, xerrors.Errorf("invalid program: %s", internal.ErrClosedFd)
+		return nil, fmt.Errorf("invalid program: %s", internal.ErrClosedFd)
 	}
 
 	attr := bpfLinkCreateAttr{
@@ -72,7 +72,7 @@ func AttachRawLink(opts RawLinkOptions) (*RawLink, error) {
 	}
 	fd, err := bpfLinkCreate(&attr)
 	if err != nil {
-		return nil, xerrors.Errorf("can't create link: %s", err)
+		return nil, fmt.Errorf("can't create link: %s", err)
 	}
 
 	return &RawLink{fd}, nil
@@ -82,7 +82,7 @@ func AttachRawLink(opts RawLinkOptions) (*RawLink, error) {
 func LoadPinnedRawLink(fileName string) (*RawLink, error) {
 	fd, err := internal.BPFObjGet(fileName)
 	if err != nil {
-		return nil, xerrors.Errorf("can't load pinned link: %s", err)
+		return nil, fmt.Errorf("can't load pinned link: %s", err)
 	}
 
 	return &RawLink{fd}, nil
@@ -103,7 +103,7 @@ func (l *RawLink) Close() error {
 // until the pin is removed.
 func (l *RawLink) Pin(fileName string) error {
 	if err := internal.BPFObjPin(fileName, l.fd); err != nil {
-		return xerrors.Errorf("can't pin link: %s", err)
+		return fmt.Errorf("can't pin link: %s", err)
 	}
 	return nil
 }
@@ -126,20 +126,20 @@ type RawLinkUpdateOptions struct {
 func (l *RawLink) UpdateArgs(opts RawLinkUpdateOptions) error {
 	newFd := opts.New.FD()
 	if newFd < 0 {
-		return xerrors.Errorf("invalid program: %s", internal.ErrClosedFd)
+		return fmt.Errorf("invalid program: %s", internal.ErrClosedFd)
 	}
 
 	var oldFd int
 	if opts.Old != nil {
 		oldFd = opts.Old.FD()
 		if oldFd < 0 {
-			return xerrors.Errorf("invalid replacement program: %s", internal.ErrClosedFd)
+			return fmt.Errorf("invalid replacement program: %s", internal.ErrClosedFd)
 		}
 	}
 
 	linkFd, err := l.fd.Value()
 	if err != nil {
-		return xerrors.Errorf("can't update link: %s", err)
+		return fmt.Errorf("can't update link: %s", err)
 	}
 
 	attr := bpfLinkUpdateAttr{

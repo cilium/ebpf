@@ -4,8 +4,6 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
-
-	"golang.org/x/xerrors"
 )
 
 // btfKind describes a Type.
@@ -215,7 +213,7 @@ func readTypes(r io.Reader, bo binary.ByteOrder) ([]rawType, error) {
 		if err := binary.Read(r, bo, &header); err == io.EOF {
 			return types, nil
 		} else if err != nil {
-			return nil, xerrors.Errorf("can't read type info for id %v: %v", id, err)
+			return nil, fmt.Errorf("can't read type info for id %v: %v", id, err)
 		}
 
 		var data interface{}
@@ -244,7 +242,7 @@ func readTypes(r io.Reader, bo binary.ByteOrder) ([]rawType, error) {
 		case kindDatasec:
 			data = make([]btfVarSecinfo, header.Vlen())
 		default:
-			return nil, xerrors.Errorf("type id %v: unknown kind: %v", id, header.Kind())
+			return nil, fmt.Errorf("type id %v: unknown kind: %v", id, header.Kind())
 		}
 
 		if data == nil {
@@ -253,7 +251,7 @@ func readTypes(r io.Reader, bo binary.ByteOrder) ([]rawType, error) {
 		}
 
 		if err := binary.Read(r, bo, data); err != nil {
-			return nil, xerrors.Errorf("type id %d: kind %v: can't read %T: %v", id, header.Kind(), data, err)
+			return nil, fmt.Errorf("type id %d: kind %v: can't read %T: %v", id, header.Kind(), data, err)
 		}
 
 		types = append(types, rawType{header, data})

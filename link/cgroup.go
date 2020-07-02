@@ -1,11 +1,11 @@
 package link
 
 import (
+	"errors"
+	"fmt"
 	"os"
 
 	"github.com/cilium/ebpf"
-
-	"golang.org/x/xerrors"
 )
 
 type cgroupAttachFlags uint32
@@ -30,7 +30,7 @@ type CgroupOptions struct {
 func AttachCgroup(opts CgroupOptions) (Link, error) {
 	cgroup, err := os.Open(opts.Path)
 	if err != nil {
-		return nil, xerrors.Errorf("can't open cgroup: %s", err)
+		return nil, fmt.Errorf("can't open cgroup: %s", err)
 	}
 
 	clone, err := opts.Program.Clone()
@@ -41,10 +41,10 @@ func AttachCgroup(opts CgroupOptions) (Link, error) {
 
 	var cg Link
 	cg, err = newLinkCgroup(cgroup, opts.Attach, clone)
-	if xerrors.Is(err, ErrNotSupported) {
+	if errors.Is(err, ErrNotSupported) {
 		cg, err = newProgAttachCgroup(cgroup, opts.Attach, clone, flagAllowMulti)
 	}
-	if xerrors.Is(err, ErrNotSupported) {
+	if errors.Is(err, ErrNotSupported) {
 		cg, err = newProgAttachCgroup(cgroup, opts.Attach, clone, flagAllowOverride)
 	}
 	if err != nil {
@@ -80,7 +80,7 @@ func (cg *progAttachCgroup) isLink() {}
 func newProgAttachCgroup(cgroup *os.File, attach ebpf.AttachType, prog *ebpf.Program, flags cgroupAttachFlags) (*progAttachCgroup, error) {
 	if flags&flagAllowMulti > 0 {
 		if err := haveProgAttachReplace(); err != nil {
-			return nil, xerrors.Errorf("can't support multiple programs: %w", err)
+			return nil, fmt.Errorf("can't support multiple programs: %w", err)
 		}
 	}
 
@@ -91,7 +91,7 @@ func newProgAttachCgroup(cgroup *os.File, attach ebpf.AttachType, prog *ebpf.Pro
 		Attach:  attach,
 	})
 	if err != nil {
-		return nil, xerrors.Errorf("cgroup: %w", err)
+		return nil, fmt.Errorf("cgroup: %w", err)
 	}
 
 	return &progAttachCgroup{cgroup, prog, attach, flags}, nil
@@ -107,7 +107,7 @@ func (cg *progAttachCgroup) Close() error {
 		Attach:  cg.attachType,
 	})
 	if err != nil {
-		return xerrors.Errorf("close cgroup: %s", err)
+		return fmt.Errorf("close cgroup: %s", err)
 	}
 	return nil
 }
@@ -135,7 +135,7 @@ func (cg *progAttachCgroup) Update(prog *ebpf.Program) error {
 
 	if err := RawAttachProgram(args); err != nil {
 		new.Close()
-		return xerrors.Errorf("can't update cgroup: %s", err)
+		return fmt.Errorf("can't update cgroup: %s", err)
 	}
 
 	cg.current.Close()
@@ -144,7 +144,7 @@ func (cg *progAttachCgroup) Update(prog *ebpf.Program) error {
 }
 
 func (cg *progAttachCgroup) Pin(string) error {
-	return xerrors.Errorf("can't pin cgroup: %w", ErrNotSupported)
+	return fmt.Errorf("can't pin cgroup: %w", ErrNotSupported)
 }
 
 type linkCgroup struct {

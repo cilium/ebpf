@@ -1,6 +1,7 @@
 package link
 
 import (
+	"errors"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -10,8 +11,6 @@ import (
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/asm"
 	"github.com/cilium/ebpf/internal/testutils"
-
-	"golang.org/x/xerrors"
 )
 
 func TestRawLink(t *testing.T) {
@@ -101,7 +100,7 @@ func testLink(t *testing.T, link Link, opts testLinkOptions) {
 	}
 
 	if opts.loadPinned == nil {
-		if !xerrors.Is(err, ErrNotSupported) {
+		if !errors.Is(err, ErrNotSupported) {
 			t.Errorf("%T.Pin doesn't return ErrNotSupported: %s", link, err)
 		}
 	} else {

@@ -1,10 +1,10 @@
 package link
 
 import (
+	"fmt"
 	"io"
 
 	"github.com/cilium/ebpf"
-	"golang.org/x/xerrors"
 )
 
 type IterOptions struct {
@@ -24,7 +24,7 @@ func AttachIter(opts IterOptions) (*Iter, error) {
 		Attach:  ebpf.AttachTraceIter,
 	})
 	if err != nil {
-		return nil, xerrors.Errorf("can't link iterator: %w", err)
+		return nil, fmt.Errorf("can't link iterator: %w", err)
 	}
 
 	return &Iter{link}, err
@@ -79,7 +79,7 @@ func (it *Iter) Open() (io.ReadCloser, error) {
 
 	fd, err := bpfIterCreate(attr)
 	if err != nil {
-		return nil, xerrors.Errorf("can't create iterator: %w", err)
+		return nil, fmt.Errorf("can't create iterator: %w", err)
 	}
 
 	return fd.File("bpf_iter"), nil

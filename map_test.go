@@ -1,6 +1,7 @@
 package ebpf
 
 import (
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"math"
@@ -14,8 +15,6 @@ import (
 	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/testutils"
 	"github.com/cilium/ebpf/internal/unix"
-
-	"golang.org/x/xerrors"
 )
 
 func TestMain(m *testing.M) {
@@ -75,11 +74,11 @@ func TestMapClose(t *testing.T) {
 		t.Fatal("Can't close map:", err)
 	}
 
-	if err := m.Put(uint32(0), uint32(42)); !xerrors.Is(err, internal.ErrClosedFd) {
+	if err := m.Put(uint32(0), uint32(42)); !errors.Is(err, internal.ErrClosedFd) {
 		t.Fatal("Put doesn't check for closed fd", err)
 	}
 
-	if _, err := m.LookupBytes(uint32(0)); !xerrors.Is(err, internal.ErrClosedFd) {
+	if _, err := m.LookupBytes(uint32(0)); !errors.Is(err, internal.ErrClosedFd) {
 		t.Fatal("Get doesn't check for closed fd", err)
 	}
 }
@@ -201,7 +200,7 @@ func TestMapQueue(t *testing.T) {
 		t.Error("Want value 4242, got", v)
 	}
 
-	if err := m.LookupAndDelete(nil, &v); !xerrors.Is(err, ErrKeyNotExist) {
+	if err := m.LookupAndDelete(nil, &v); !errors.Is(err, ErrKeyNotExist) {
 		t.Fatal("Lookup and delete on empty Queue:", err)
 	}
 }
@@ -435,7 +434,7 @@ func TestNotExist(t *testing.T) {
 
 	var tmp uint32
 	err := hash.Lookup("hello", &tmp)
-	if !xerrors.Is(err, ErrKeyNotExist) {
+	if !errors.Is(err, ErrKeyNotExist) {
 		t.Error("Lookup doesn't return ErrKeyNotExist")
 	}
 
@@ -447,11 +446,11 @@ func TestNotExist(t *testing.T) {
 		t.Error("LookupBytes returns non-nil buffer for non-existent key")
 	}
 
-	if err := hash.Delete("hello"); !xerrors.Is(err, ErrKeyNotExist) {
+	if err := hash.Delete("hello"); !errors.Is(err, ErrKeyNotExist) {
 		t.Error("Deleting unknown key doesn't return ErrKeyNotExist")
 	}
 
-	if err := hash.NextKey(nil, &tmp); !xerrors.Is(err, ErrKeyNotExist) {
+	if err := hash.NextKey(nil, &tmp); !errors.Is(err, ErrKeyNotExist) {
 		t.Error("Looking up next key in empty map doesn't return a non-existing error")
 	}
 }
@@ -464,7 +463,7 @@ func TestExist(t *testing.T) {
 		t.Errorf("Failed to put key/value pair into hash: %v", err)
 	}
 
-	if err := hash.Update("hello", uint32(42), UpdateNoExist); !xerrors.Is(err, ErrKeyExist) {
+	if err := hash.Update("hello", uint32(42), UpdateNoExist); !errors.Is(err, ErrKeyExist) {
 		t.Error("Updating existing key doesn't return ErrKeyExist")
 	}
 }
@@ -731,7 +730,7 @@ func TestMapGetNextID(t *testing.T) {
 	for {
 		last := next
 		if next, err = MapGetNextID(last); err != nil {
-			if !xerrors.Is(err, ErrNotExist) {
+			if !errors.Is(err, ErrNotExist) {
 				t.Fatal("Expected ErrNotExist, got:", err)
 			}
 			break
@@ -761,7 +760,7 @@ func TestNewMapFromID(t *testing.T) {
 
 	// As there can be multiple maps, we use max(uint32) as MapID to trigger an expected error.
 	_, err = NewMapFromID(MapID(math.MaxUint32))
-	if !xerrors.Is(err, ErrNotExist) {
+	if !errors.Is(err, ErrNotExist) {
 		t.Fatal("Expected ErrNotExist, got:", err)
 	}
 }
@@ -920,7 +919,7 @@ func BenchmarkMap(b *testing.B) {
 
 		for i := 0; i < b.N; i++ {
 			err := m.Delete(unsafe.Pointer(&key))
-			if err != nil && !xerrors.Is(err, ErrKeyNotExist) {
+			if err != nil && !errors.Is(err, ErrKeyNotExist) {
 				b.Fatal(err)
 			}
 		}

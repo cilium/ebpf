@@ -1,10 +1,10 @@
 package link
 
 import (
+	"fmt"
+
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/internal"
-
-	"golang.org/x/xerrors"
 )
 
 type RawAttachProgramOptions struct {
@@ -43,7 +43,7 @@ func RawAttachProgram(opts RawAttachProgramOptions) error {
 	}
 
 	if err := internal.BPFProgAttach(&attr); err != nil {
-		return xerrors.Errorf("can't attach program: %s", err)
+		return fmt.Errorf("can't attach program: %s", err)
 	}
 	return nil
 }
@@ -69,7 +69,7 @@ func RawDetachProgram(opts RawDetachProgramOptions) error {
 		AttachType:  uint32(opts.Attach),
 	}
 	if err := internal.BPFProgDetach(&attr); err != nil {
-		return xerrors.Errorf("can't detach program: %s", err)
+		return fmt.Errorf("can't detach program: %s", err)
 	}
 
 	return nil

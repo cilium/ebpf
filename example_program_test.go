@@ -8,8 +8,8 @@ import (
 	"io/ioutil"
 	"os"
 	"strconv"
+	"strings"
 	"time"
-      "strings"
 
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/asm"
@@ -24,8 +24,8 @@ func getTracepointID() (uint64, error) {
 	if err != nil {
 		return 0, fmt.Errorf("failed to read tracepoint ID for 'sys_enter_open': %v", err)
 	}
-      tid := strings.TrimSuffix(string(data), "\n")
-      return strconv.ParseUint(tid, 10, 64)
+	tid := strings.TrimSuffix(string(data), "\n")
+	return strconv.ParseUint(tid, 10, 64)
 }
 
 // Example_program demonstrates how to attach an eBPF program to a tracepoint.

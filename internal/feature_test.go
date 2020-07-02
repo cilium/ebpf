@@ -1,10 +1,10 @@
 package internal
 
 import (
+	"errors"
+	"fmt"
 	"strings"
 	"testing"
-
-	"golang.org/x/xerrors"
 )
 
 func TestFeatureTest(t *testing.T) {
@@ -46,12 +46,12 @@ func TestFeatureTest(t *testing.T) {
 		t.Error("UnsupportedFeatureError.Error doesn't contain version")
 	}
 
-	if !xerrors.Is(err, ErrNotSupported) {
+	if !errors.Is(err, ErrNotSupported) {
 		t.Error("UnsupportedFeatureError is not ErrNotSupported")
 	}
 
 	fn = FeatureTest("bar", "2.1.1", func() (bool, error) {
-		return false, xerrors.New("foo")
+		return false, errors.New("foo")
 	})
 
 	err1, err2 := fn(), fn()
@@ -60,7 +60,7 @@ func TestFeatureTest(t *testing.T) {
 	}
 
 	fn = FeatureTest("bar", "2.1.1", func() (bool, error) {
-		return false, xerrors.Errorf("bar: %w", ErrNotSupported)
+		return false, fmt.Errorf("bar: %w", ErrNotSupported)
 	})
 
 	err1, err2 = fn(), fn()

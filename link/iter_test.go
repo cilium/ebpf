@@ -1,14 +1,13 @@
 package link
 
 import (
+	"errors"
 	"io/ioutil"
 	"testing"
 
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/asm"
 	"github.com/cilium/ebpf/internal/btf"
-
-	"golang.org/x/xerrors"
 )
 
 func TestIter(t *testing.T) {
@@ -22,7 +21,7 @@ func TestIter(t *testing.T) {
 		},
 		License: "MIT",
 	})
-	if xerrors.Is(err, btf.ErrNotFound) {
+	if errors.Is(err, btf.ErrNotFound) {
 		t.Skip("Kernel doesn't support iter:", err)
 	}
 	if err != nil {

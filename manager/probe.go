@@ -62,6 +62,7 @@ type Probe struct {
 	stateLock        *sync.RWMutex
 	manualLoadNeeded bool
 	checkPin         bool
+	funcName         string
 
 	// UID - (optional) this field can be used to identify your probes when the same eBPF program is used on multiple
 	// hook points. Keep in mind that the pair (probe section, probe UID) needs to be unique
@@ -77,6 +78,11 @@ type Probe struct {
 	// If a syscall name is not provided, the section name (without its probe type prefix) is assumed to be the
 	// hook point.
 	SyscallFuncName string
+
+	// MatchFuncName - When this option is activated, the provided symbol is matched against the
+	// list of available symbols in /sys/kernel/debug/tracing/available_filter_functions. If the exact function does not
+	// exist, then the closest function will be used. This requires debugfs.
+	MatchFuncName string
 
 	// Enabled - Indicates if a probe should be enabled or not. This parameter can be set at runtime using the
 	// Manager options (see ActivatedProbes)
@@ -226,7 +232,16 @@ func (p *Probe) init() error {
 	// Update syscall function name with the correct arch prefix
 	if p.SyscallFuncName != "" {
 		var err error
-		p.SyscallFuncName, err = GetSyscallFnNameWithSymFile(p.SyscallFuncName, p.manager.options.SymFile)
+		p.funcName, err = GetSyscallFnNameWithSymFile(p.SyscallFuncName, p.manager.options.SymFile)
+		if err != nil {
+			return err
+		}
+	}
+
+	// Find function name match if required
+	if p.MatchFuncName != "" {
+		var err error
+		p.funcName, err = FindFilterFunction(p.MatchFuncName)
 		if err != nil {
 			return err
 		}
@@ -372,7 +387,7 @@ func (p *Probe) attachKprobe() error {
 	// Prepare kprobe_events line parameters
 	var probeType, maxactiveStr string
 	var err error
-	funcName := p.SyscallFuncName
+	funcName := p.funcName
 	if strings.HasPrefix(p.Section, "kretprobe/") {
 		if funcName == "" {
 			funcName = strings.TrimPrefix(p.Section, "kretprobe/")
@@ -409,7 +424,7 @@ func (p *Probe) attachKprobe() error {
 // detachKprobe - Detaches the probe from its kprobe
 func (p *Probe) detachKprobe() error {
 	// Prepare kprobe_events line parameters
-	funcName := p.SyscallFuncName
+	funcName := p.funcName
 	probeType := ""
 	if strings.HasPrefix(p.Section, "kretprobe/") {
 		if funcName == "" {

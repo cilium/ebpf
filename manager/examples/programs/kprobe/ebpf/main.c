@@ -8,6 +8,13 @@ int kprobe_vfs_mkdir(void *ctx)
     return 0;
 };
 
+SEC("kprobe/utimes_common")
+int kprobe_utimes_common(void *ctx)
+{
+    bpf_printk("utimes_common\n");
+    return 0;
+};
+
 SEC("kretprobe/mkdirat")
 int kretpobe_unlinkat(void *ctx)
 {

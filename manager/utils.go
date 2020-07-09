@@ -7,6 +7,7 @@ import (
 	"os"
 	"regexp"
 	"runtime"
+	"sort"
 	"strconv"
 	"strings"
 	"syscall"
@@ -32,6 +33,42 @@ func ConcatErrors(err1, err2 error) error {
 		return errors.Wrap(err1, err2.Error())
 	}
 	return err1
+}
+
+// availableFilterFunctions - cache of the list of available kernel functions.
+var availableFilterFunctions []string
+
+func FindFilterFunction(funcName string) (string, error) {
+	// Prepare matching pattern
+	searchedName, err := regexp.Compile(funcName)
+	if err != nil {
+		return "", err
+	}
+
+	// Cache available filter functions if necessary
+	if len(availableFilterFunctions) == 0 {
+		funcs, err := ioutil.ReadFile("/sys/kernel/debug/tracing/available_filter_functions")
+		if err != nil {
+			return "", err
+		}
+		availableFilterFunctions = strings.Split(string(funcs), "\n")
+		sort.Strings(availableFilterFunctions)
+	}
+
+	// Match function name
+	var potentialMatches []string
+	for _, f := range availableFilterFunctions {
+		if searchedName.MatchString(f) {
+			potentialMatches = append(potentialMatches, f)
+		}
+		if f == funcName {
+			return f, nil
+		}
+	}
+	if len(potentialMatches) > 0 {
+		return potentialMatches[0], nil
+	}
+	return "", nil
 }
 
 // cache of the syscall prefix depending on kernel version

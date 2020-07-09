@@ -1,7 +1,10 @@
 package main
 
 import (
+	"fmt"
 	"github.com/sirupsen/logrus"
+	"os"
+	"os/signal"
 
 	"github.com/DataDog/ebpf/manager"
 )
@@ -11,6 +14,11 @@ var m = &manager.Manager{
 		&manager.Probe{
 			UID: "MyVFSMkdir",
 			Section: "kprobe/vfs_mkdir",
+		},
+		&manager.Probe{
+			UID: "UtimesCommon",
+			Section: "kprobe/utimes_common",
+			MatchFuncName: "utimes_common",
 		},
 		&manager.Probe{
 			UID: "", // UID is needed only if there are multiple instances of your program (after using
@@ -35,15 +43,28 @@ func main() {
 		logrus.Fatal(err)
 	}
 
-	logrus.Println("successfully started, head over to /sys/kernel/debug/tracing/trace_pipe")
+	logrus.Println("successfully started")
+	logrus.Println("=> head over to /sys/kernel/debug/tracing/trace_pipe")
+	logrus.Println("=> checkout /sys/kernel/debug/tracing/kprobe_events, utimes_common might have become utimes_common.isra.0")
+	logrus.Println("=> Cmd+C to exit")
 
 	// Create a folder to trigger the probes
 	if err := trigger(); err != nil {
 		logrus.Error(err)
 	}
 
+	wait()
+
 	// Close the manager
 	if err := m.Stop(manager.CleanAll); err != nil {
 		logrus.Fatal(err)
 	}
+}
+
+// wait - Waits until an interrupt or kill signal is sent
+func wait() {
+	sig := make(chan os.Signal, 1)
+	signal.Notify(sig, os.Interrupt, os.Kill)
+	<-sig
+	fmt.Println()
 }

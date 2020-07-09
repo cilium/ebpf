@@ -962,7 +962,6 @@ func (m *Manager) editMapSpecs() error {
 	return nil
 }
 
-
 // editConstant - Edit the provided program with the provided constant using the asm method.
 func (m *Manager) editConstant(prog *ebpf.ProgramSpec, editor ConstantEditor) error {
 	edit := Edit(&prog.Instructions)

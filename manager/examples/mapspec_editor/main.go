@@ -2,6 +2,8 @@ package main
 
 import (
 	"github.com/sirupsen/logrus"
+	"golang.org/x/sys/unix"
+	"math"
 
 	"github.com/DataDog/ebpf"
 	"github.com/DataDog/ebpf/manager"
@@ -14,9 +16,13 @@ func main() {
 		MapSpecEditors: map[string]manager.MapSpecEditor{
 			"cache": manager.MapSpecEditor{
 				Type: ebpf.Hash,
-				MaxEntries: 1000,
+				MaxEntries: 1000000,
 				Flags: 0,
 			},
+		},
+		RLimit: &unix.Rlimit{
+			Cur: math.MaxUint64,
+			Max: math.MaxUint64,
 		},
 	}
 

@@ -3,11 +3,13 @@ package manager
 import (
 	"fmt"
 	"io"
+	"math"
 	"os"
 	"sync"
 
 	"github.com/florianl/go-tc"
 	"github.com/pkg/errors"
+	"golang.org/x/sys/unix"
 
 	"github.com/DataDog/ebpf"
 )
@@ -118,6 +120,10 @@ type Options struct {
 	// Watermark - Manager-level default value for the watermarks of the perf ring buffers.
 	// See PerfMap.Watermark for more.
 	DefaultWatermark int
+
+	// RLimit - The maps & programs provided to the manager might exceed the maximum allowed memory lock.
+	// (setrlimit resource 8) If a limit is provided here it will be applied when the manager is initialized.
+	RLimit *unix.Rlimit
 }
 
 // netlinkCacheKey - (TC classifier programs only) Key used to recover the netlink cache of an interface
@@ -321,6 +327,17 @@ func (m *Manager) InitWithOptions(elf io.ReaderAt, options Options) error {
 	if err := m.sanityCheck(); err != nil {
 		m.stateLock.Unlock()
 		return err
+	}
+
+	// set resource limit if requested
+	if m.options.RLimit != nil {
+		err := unix.Setrlimit(8, &unix.Rlimit{
+			Cur: math.MaxUint64,
+			Max: math.MaxUint64,
+		})
+		if err != nil {
+			return errors.Wrap(err, "couldn't adjust RLIMIT_MEMLOCK")
+		}
 	}
 
 	// Load the provided elf buffer

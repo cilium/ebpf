@@ -25,6 +25,10 @@ type ConstantEditor struct {
 	// Value - Value to write in the eBPF bytecode. When using the asm load method, the Value has to be a uint64.
 	Value interface{}
 
+	// FailOnMissing - If FailOMissing is set to true, the constant edition process will return an error if the constant
+	// was missing in at least one program
+	FailOnMissing bool
+
 	// ProbeIdentificationPairs - Identifies the list of programs to edit. If empty, it will apply to all the programs
 	// of the manager. Will return an error if at least one edition failed.
 	ProbeIdentificationPairs []ProbeIdentificationPair
@@ -966,7 +970,12 @@ func (m *Manager) editConstant(prog *ebpf.ProgramSpec, editor ConstantEditor) er
 	if !ok {
 		return fmt.Errorf("with the asm method, the constant value has to be of type uint64")
 	}
-	return edit.RewriteConstant(editor.Name, data)
+	if err := edit.RewriteConstant(editor.Name, data); err != nil {
+		if IsUnreferencedSymbol(err) && editor.FailOnMissing {
+			return err
+		}
+	}
+	return nil
 }
 
 // rewriteMaps - Rewrite the provided program spec with the provided maps

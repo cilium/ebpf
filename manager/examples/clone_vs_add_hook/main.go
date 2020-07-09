@@ -13,7 +13,7 @@ var m = &manager.Manager{
 			Section: "kprobe/vfs_mkdir",
 		},
 		&manager.Probe{
-			UID: "", // UID is not needed if there will be only one instance of the program
+			UID:             "", // UID is not needed if there will be only one instance of the program
 			Section:         "kretprobe/mkdir",
 			SyscallFuncName: "mkdir",
 			KProbeMaxActive: 100,
@@ -25,7 +25,7 @@ var m = &manager.Manager{
 				Name: "my_constants",
 			},
 			PerfMapOptions: manager.PerfMapOptions{
-				DataHandler:        myDataHandler,
+				DataHandler: myDataHandler,
 			},
 		},
 	},
@@ -39,18 +39,25 @@ func myDataHandler(cpu int, data []byte, perfmap *manager.PerfMap, manager *mana
 
 var editors = []manager.ConstantEditor{
 	{
-		Name:  "my_constant",
-		Value: uint64(100),
+		Name:          "my_constant",
+		Value:         uint64(100),
+		FailOnMissing: true,
 		ProbeIdentificationPairs: []manager.ProbeIdentificationPair{
 			{"MyFirstHook", "kprobe/vfs_mkdir"},
 		},
 	},
 	{
-		Name:  "my_constant",
-		Value: uint64(555),
+		Name:          "my_constant",
+		Value:         uint64(555),
+		FailOnMissing: true,
 		ProbeIdentificationPairs: []manager.ProbeIdentificationPair{
 			{"", "kprobe/vfs_rmdir"},
 		},
+	},
+	{
+		Name:                     "unused_constant",
+		Value:                    uint64(555),
+		ProbeIdentificationPairs: []manager.ProbeIdentificationPair{},
 	},
 }
 
@@ -89,4 +96,3 @@ func main() {
 		logrus.Fatal(err)
 	}
 }
-

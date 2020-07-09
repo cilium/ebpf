@@ -2,7 +2,6 @@ package manager
 
 import (
 	"fmt"
-	"sync"
 
 	"github.com/pkg/errors"
 
@@ -35,8 +34,6 @@ type PerfMapOptions struct {
 type PerfMap struct {
 	manager     *Manager
 	perfReader  *perf.Reader
-	running     bool
-	runningLock *sync.RWMutex
 
 	// Map - A PerfMap has the same features as a normal Map
 	Map
@@ -61,16 +58,10 @@ func loadNewPerfMap(spec ebpf.MapSpec, options MapOptions, perfOptions PerfMapOp
 
 // Init - Initialize a map
 func (m *PerfMap) Init(manager *Manager) error {
-	m.runningLock = &sync.RWMutex{}
 	m.manager = manager
 
 	if m.DataHandler == nil {
 		return fmt.Errorf("no DataHandler set for %s", m.Name)
-	}
-
-	// Initialize the underlying map structure
-	if err := m.Map.Init(manager); err != nil {
-		return err
 	}
 
 	// Set default values if not already set
@@ -80,15 +71,23 @@ func (m *PerfMap) Init(manager *Manager) error {
 	if m.Watermark == 0 {
 		m.Watermark = manager.options.DefaultWatermark
 	}
+
+	// Initialize the underlying map structure
+	if err := m.Map.Init(manager); err != nil {
+		return err
+	}
 	return nil
 }
 
 // Start - Starts fetching events on a perf ring buffer
 func (m *PerfMap) Start() error {
-	m.runningLock.Lock()
-	defer m.runningLock.Unlock()
-	if m.running == true {
+	m.stateLock.Lock()
+	defer m.stateLock.Unlock()
+	if m.state == running {
 		return nil
+	}
+	if m.state < initialized {
+		return ErrMapNotInitialized
 	}
 
 	// Create and start the perf map
@@ -124,15 +123,15 @@ func (m *PerfMap) Start() error {
 		}
 	}()
 
-	m.running = true
+	m.state = running
 	return nil
 }
 
 // Stop - Stops the perf ring buffer
 func (m *PerfMap) Stop(cleanup MapCleanupType) error {
-	m.runningLock.Lock()
-	defer m.runningLock.Unlock()
-	if m.running == false {
+	m.stateLock.Lock()
+	defer m.stateLock.Unlock()
+	if m.state < running {
 		return nil
 	}
 
@@ -140,23 +139,34 @@ func (m *PerfMap) Stop(cleanup MapCleanupType) error {
 	err := m.perfReader.Close()
 
 	// close underlying map
-	if errTmp := m.Map.Close(cleanup); errTmp != nil {
+	if errTmp := m.Map.close(cleanup); errTmp != nil {
 		if err == nil {
 			err = errTmp
 		} else {
 			err = errors.Wrap(errTmp, err.Error())
 		}
 	}
-	m.running = false
 	return err
 }
 
 // Pause - Pauses a perf ring buffer reader
 func (m *PerfMap) Pause() error {
-	return m.perfReader.Pause()
+	m.stateLock.RLock()
+	defer m.stateLock.RUnlock()
+	if m.state < running {
+		return ErrMapNotRunning
+	}
+	if err := m.perfReader.Pause(); err != nil {
+		return err
+	}
+	m.state = paused
+	return nil
 }
 
 // Resume - Resumes a perf ring buffer reader
 func (m *PerfMap) Resume() error {
+	if m.state < paused {
+		return ErrMapNotRunning
+	}
 	return m.perfReader.Resume()
 }

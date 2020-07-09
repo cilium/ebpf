@@ -113,7 +113,7 @@ type netlinkCacheKey struct {
 // netlinkCacheValue - (TC classifier programs only) Netlink socket and qdisc object used to update the classifiers of
 // an interface
 type netlinkCacheValue struct {
-	rtNetlink *tc.Tc
+	rtNetlink     *tc.Tc
 	schedClsCount int
 }
 
@@ -124,6 +124,8 @@ type Manager struct {
 	collection     *ebpf.Collection
 	options        Options
 	netlinkCache   map[netlinkCacheKey]*netlinkCacheValue
+	state          state
+	stateLock      *sync.RWMutex
 
 	// Probes - List of probes handled by the manager
 	Probes []*Probe
@@ -139,8 +141,10 @@ type Manager struct {
 // GetMap - Return a pointer to the requested eBPF map
 // name: name of the map, as defined by its section SEC("maps/[name]")
 func (m *Manager) GetMap(name string) (*ebpf.Map, bool, error) {
-	if m.collection == nil {
-		return nil, false, ErrManagerNotStarted
+	m.stateLock.RLock()
+	defer m.stateLock.RUnlock()
+	if m.collection == nil || m.state < initialized {
+		return nil, false, ErrManagerNotInitialized
 	}
 	eBPFMap, ok := m.collection.Maps[name]
 	if ok {
@@ -163,7 +167,9 @@ func (m *Manager) GetMap(name string) (*ebpf.Map, bool, error) {
 
 // GetMapSpec - Return a pointer to the requested eBPF MapSpec. This is useful when duplicating a map.
 func (m *Manager) GetMapSpec(name string) (*ebpf.MapSpec, bool, error) {
-	if m.collectionSpec == nil {
+	m.stateLock.RLock()
+	defer m.stateLock.RUnlock()
+	if m.collectionSpec == nil || m.state < initialized {
 		return nil, false, ErrManagerNotInitialized
 	}
 	eBPFMap, ok := m.collectionSpec.Maps[name]
@@ -200,9 +206,12 @@ func (m *Manager) GetPerfMap(name string) (*PerfMap, bool) {
 // UID: unique identifier given to a probe. If UID is empty, then all the programs matching the provided section are
 // returned.
 func (m *Manager) GetProgram(id ProbeIdentificationPair) ([]*ebpf.Program, bool, error) {
+	m.stateLock.RLock()
+	defer m.stateLock.RUnlock()
+
 	var programs []*ebpf.Program
-	if m.collection == nil {
-		return nil, false, ErrManagerNotStarted
+	if m.collection == nil || m.state < initialized {
+		return nil, false, ErrManagerNotInitialized
 	}
 	if id.UID == "" {
 		for _, probe := range m.Probes {
@@ -229,8 +238,11 @@ func (m *Manager) GetProgram(id ProbeIdentificationPair) ([]*ebpf.Program, bool,
 // UID: unique identifier given to a probe. If UID is empty, then the original program spec with the right section in the
 // collection spec (if found) is return
 func (m *Manager) GetProgramSpec(id ProbeIdentificationPair) ([]*ebpf.ProgramSpec, bool, error) {
+	m.stateLock.RLock()
+	defer m.stateLock.RUnlock()
+
 	var programs []*ebpf.ProgramSpec
-	if m.collectionSpec == nil {
+	if m.collectionSpec == nil || m.state < initialized {
 		return nil, false, ErrManagerNotInitialized
 	}
 	if id.UID == "" {
@@ -263,12 +275,6 @@ func (m *Manager) GetProbe(id ProbeIdentificationPair) (*Probe, bool) {
 	return nil, false
 }
 
-// CompileAndInit - Start by compiling the provided assets and then initialize the manager.
-func (m *Manager) CompileAndInit(path string, managerOptions Options) error {
-	// TODO: compile the eBPF program and then call Init
-	return nil
-}
-
 // Init - Initialize the manager.
 // elf: reader containing the eBPF bytecode
 func (m *Manager) Init(elf io.ReaderAt) error {
@@ -279,6 +285,15 @@ func (m *Manager) Init(elf io.ReaderAt) error {
 // elf: reader containing the eBPF bytecode
 // options: options provided to the manager to configure its initialization
 func (m *Manager) InitWithOptions(elf io.ReaderAt, options Options) error {
+	if m.stateLock == nil {
+		m.stateLock = &sync.RWMutex{}
+	}
+	m.stateLock.Lock()
+	if m.state > initialized {
+		m.stateLock.Unlock()
+		return ErrManagerRunning
+	}
+
 	m.wg = &sync.WaitGroup{}
 	m.options = options
 	m.netlinkCache = make(map[netlinkCacheKey]*netlinkCacheValue)
@@ -288,6 +303,7 @@ func (m *Manager) InitWithOptions(elf io.ReaderAt, options Options) error {
 
 	// perform a quick sanity check on the provided probes and maps
 	if err := m.sanityCheck(); err != nil {
+		m.stateLock.Unlock()
 		return err
 	}
 
@@ -295,16 +311,20 @@ func (m *Manager) InitWithOptions(elf io.ReaderAt, options Options) error {
 	var err error
 	m.collectionSpec, err = ebpf.LoadCollectionSpecFromReader(elf)
 	if err != nil {
+		m.stateLock.Unlock()
 		return err
 	}
 
 	// Match Maps and program specs
 	if err := m.matchSpecs(); err != nil {
+		m.stateLock.Unlock()
 		return err
 	}
 
 	// Configure activated probes
 	m.activateProbes()
+	m.state = initialized
+	m.stateLock.Unlock()
 
 	// Edit program constants
 	if len(options.ConstantEditors) > 0 {
@@ -326,16 +346,30 @@ func (m *Manager) InitWithOptions(elf io.ReaderAt, options Options) error {
 	}
 
 	// Load eBPF program with the provided verifier options
-	return m.loadCollection()
+	if err := m.loadCollection(); err != nil {
+		return err
+	}
+	return nil
 }
 
 // Start - Attach eBPF programs, start perf ring readers and apply maps and tail calls routing.
 func (m *Manager) Start() error {
+	m.stateLock.Lock()
+	if m.state < initialized {
+		m.stateLock.Unlock()
+		return ErrManagerNotInitialized
+	}
+	if m.state >= running {
+		m.stateLock.Unlock()
+		return nil
+	}
+
 	// Start perf ring readers
 	for _, perfRing := range m.PerfMaps {
 		if err := perfRing.Start(); err != nil {
 			// Clean up
-			_ = m.Stop(CleanInternal)
+			_ = m.stop(CleanInternal)
+			m.stateLock.Unlock()
 			return err
 		}
 	}
@@ -344,10 +378,13 @@ func (m *Manager) Start() error {
 	for _, probe := range m.Probes {
 		if err := probe.Attach(); err != nil {
 			// Clean up
-			_ = m.Stop(CleanInternal)
+			_ = m.stop(CleanInternal)
+			m.stateLock.Unlock()
 			return err
 		}
 	}
+	m.state = running
+	m.stateLock.Unlock()
 
 	// Handle Maps router
 	if err := m.UpdateMapRoutes(m.options.MapRouter...); err != nil {
@@ -368,6 +405,15 @@ func (m *Manager) Start() error {
 // Stop - Detach all eBPF programs and stop perf ring readers. The cleanup parameter defines which maps should be closed.
 // See MapCleanupType for mode.
 func (m *Manager) Stop(cleanup MapCleanupType) error {
+	m.stateLock.RLock()
+	defer m.stateLock.RUnlock()
+	if m.state < running {
+		return ErrManagerNotStarted
+	}
+	return m.stop(cleanup)
+}
+
+func (m *Manager) stop(cleanup MapCleanupType) error {
 	var err error
 	// Detach eBPF programs
 	for _, probe := range m.Probes {
@@ -406,6 +452,7 @@ func (m *Manager) Stop(cleanup MapCleanupType) error {
 
 	// Wait for all go routines to stop
 	m.wg.Wait()
+	m.state = reset
 	return err
 }
 

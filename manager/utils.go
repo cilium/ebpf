@@ -14,6 +14,15 @@ import (
 	"github.com/pkg/errors"
 )
 
+type state uint
+
+const (
+	reset state = iota
+	initialized
+	paused
+	running
+)
+
 // ConcatErrors - Concatenate 2 errors into one error.
 func ConcatErrors(err1, err2 error) error {
 	if err1 == nil {

@@ -128,7 +128,7 @@ func bindataProg1o() (*asset, error) {
 		size: 3144,
 		md5checksum: "",
 		mode: os.FileMode(436),
-		modTime: time.Unix(1594294985, 0),
+		modTime: time.Unix(1594297957, 0),
 	}
 
 	a := &asset{bytes: bytes, info: info}
@@ -188,7 +188,7 @@ func bindataProg2o() (*asset, error) {
 		size: 3176,
 		md5checksum: "",
 		mode: os.FileMode(436),
-		modTime: time.Unix(1594294985, 0),
+		modTime: time.Unix(1594297957, 0),
 	}
 
 	a := &asset{bytes: bytes, info: info}

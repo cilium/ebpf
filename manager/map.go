@@ -3,6 +3,7 @@ package manager
 import (
 	"github.com/pkg/errors"
 	"os"
+	"sync"
 
 	"github.com/DataDog/ebpf"
 )
@@ -49,6 +50,8 @@ type Map struct {
 	array     *ebpf.Map
 	arraySpec *ebpf.MapSpec
 	manager   *Manager
+	state     state
+	stateLock *sync.RWMutex
 
 	// externalMap - Indicates if the underlying eBPF map came from the current Manager or was loaded from an external
 	// source (=> pinned maps or rewritten maps)
@@ -69,11 +72,12 @@ type Map struct {
 	MapOptions
 }
 
-// loadNewMap - Creates a new map instance, load it and return a pointer to the Map structure
+// loadNewMap - Creates a new map instance, loads it and returns a pointer to the Map structure
 func loadNewMap(spec ebpf.MapSpec, options MapOptions) (*Map, error) {
 	// Create new map
 	managerMap := Map{
 		arraySpec:  &spec,
+		stateLock:  &sync.RWMutex{},
 		Name:       spec.Name,
 		Contents:   spec.Contents,
 		Freeze:     spec.Freeze,
@@ -97,6 +101,14 @@ func loadNewMap(spec ebpf.MapSpec, options MapOptions) (*Map, error) {
 
 // Init - Initialize a map
 func (m *Map) Init(manager *Manager) error {
+	if m.stateLock == nil {
+		m.stateLock = &sync.RWMutex{}
+	}
+	m.stateLock.Lock()
+	defer m.stateLock.Unlock()
+	if m.state >= initialized {
+		return ErrMapInitialized
+	}
 	m.manager = manager
 	// Look for the loaded Map if it isn't already set
 	if m.array == nil {
@@ -113,12 +125,24 @@ func (m *Map) Init(manager *Manager) error {
 			}
 		}
 	}
+	m.state = initialized
 	return nil
 }
 
 // Close - Close underlying eBPF map. When externalCleanup is set to true, even if the map was recovered from an external
 // source (pinned or rewritten from another manager), the map is cleaned up.
 func (m *Map) Close(cleanup MapCleanupType) error {
+	m.stateLock.Lock()
+	defer m.stateLock.Unlock()
+	if m.state < initialized {
+		return ErrMapInitialized
+	}
+	m.state = reset
+	return m.close(cleanup)
+}
+
+// close - (not thread safe) close
+func (m *Map) close(cleanup MapCleanupType) error {
 	var shouldClose bool
 	if m.AlwaysCleanup {
 		shouldClose = true

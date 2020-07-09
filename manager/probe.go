@@ -42,14 +42,6 @@ const (
 	Egress  TrafficType = tc.Egress
 )
 
-type probeState uint
-
-const (
-	reset probeState = iota
-	initialized
-	running
-)
-
 type ProbeIdentificationPair struct {
 	UID     string
 	Section string
@@ -66,7 +58,7 @@ type Probe struct {
 	program          *ebpf.Program
 	programSpec      *ebpf.ProgramSpec
 	perfEventFD      *internal.FD
-	state            probeState
+	state            state
 	stateLock        *sync.RWMutex
 	manualLoadNeeded bool
 	checkPin         bool

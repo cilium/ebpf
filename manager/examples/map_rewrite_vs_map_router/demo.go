@@ -24,7 +24,7 @@ func demoMapEditor() error {
 		"shared_cache1": sharedCache1,
 	}}
 	// Initialize m2, edit shared_cache1 and start it
-	if err = m2.InitWithOptions(recoverAsset("prog2.o"), options); err != nil {
+	if err = m2.InitWithOptions(recoverAsset("/prog2.o"), options); err != nil {
 		return err
 	}
 	if err = m2.Start(); err != nil {

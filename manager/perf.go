@@ -19,6 +19,9 @@ type PerfMapOptions struct {
 	// exceed this value. Must be smaller than PerfRingBufferSize. Defaults to the manager value if not set.
 	Watermark int
 
+	// PerfErrChan - Perf reader error channel
+	PerfErrChan chan error
+
 	// DataHandler - Callback function called when a new sample was retrieved from the perf
 	// ring buffer.
 	DataHandler func(CPU int, data []byte, perfMap *PerfMap, manager *Manager)
@@ -61,6 +64,10 @@ func (m *PerfMap) Init(manager *Manager) error {
 	m.runningLock = &sync.RWMutex{}
 	m.manager = manager
 
+	if m.DataHandler == nil {
+		return fmt.Errorf("no DataHandler set for %s", m.Name)
+	}
+
 	// Initialize the underlying map structure
 	if err := m.Map.Init(manager); err != nil {
 		return err
@@ -72,10 +79,6 @@ func (m *PerfMap) Init(manager *Manager) error {
 	}
 	if m.Watermark == 0 {
 		m.Watermark = manager.options.DefaultWatermark
-	}
-
-	if m.DataHandler == nil {
-		return fmt.Errorf("no DataHandler set for %s", m.Name)
 	}
 	return nil
 }
@@ -104,9 +107,12 @@ func (m *PerfMap) Start() error {
 		for {
 			record, err = m.perfReader.Read()
 			if err != nil {
-				if err.Error() == "perf reader was closed" {
+				if perf.IsClosed(err) {
 					m.manager.wg.Done()
 					return
+				}
+				if m.PerfErrChan != nil {
+					m.PerfErrChan <- err
 				}
 				continue
 			}

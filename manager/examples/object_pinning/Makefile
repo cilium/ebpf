@@ -18,7 +18,7 @@ build-ebpf:
 		-O2 -emit-llvm \
 		ebpf/main.c \
 		-c -o - | llc -march=bpf -filetype=obj -o ebpf/bin/probe.o
-	go-bindata -pkg main -prefix "ebpf/bin" -o "probe.go" "ebpf/bin"
+	go-bindata -pkg main -prefix "ebpf/bin" -o "probe.go" "ebpf/bin/probe.o"
 
 build:
 	go build -o bin/main .

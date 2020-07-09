@@ -23,7 +23,7 @@ var m2 = &manager.Manager{
 
 func main() {
 	// Initialize & start m1
-	if err := m1.Init(recoverAsset("prog1.o")); err != nil {
+	if err := m1.Init(recoverAsset("/prog1.o")); err != nil {
 		logrus.Fatal(err)
 	}
 	if err := m1.Start(); err != nil {

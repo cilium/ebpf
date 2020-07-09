@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"debug/elf"
 	"encoding/binary"
+	"github.com/pkg/errors"
 	"io"
 	"math"
 	"os"
@@ -15,6 +16,10 @@ import (
 	"github.com/DataDog/ebpf/internal/unix"
 
 	"golang.org/x/xerrors"
+)
+
+const (
+	useCurrentKernelVersion = 0xFFFFFFFE
 )
 
 type elfCode struct {
@@ -101,6 +106,12 @@ func LoadCollectionSpecFromReader(rd io.ReaderAt) (*CollectionSpec, error) {
 	ec.version, err = loadVersion(versionSection, ec.ByteOrder)
 	if err != nil {
 		return nil, xerrors.Errorf("load version: %w", err)
+	}
+	if ec.version == useCurrentKernelVersion {
+		ec.version, err = CurrentKernelVersion()
+		if err != nil {
+			return nil, errors.Wrap(err, "load version")
+		}
 	}
 
 	btfSpec, err := btf.LoadSpecFromReader(rd)

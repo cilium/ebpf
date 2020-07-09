@@ -65,6 +65,19 @@ type MapRoute struct {
 	Map *ebpf.Map
 }
 
+// MapSpecEditor - A MapSpec editor defines how specific parameters of specific maps should be updated at runtime
+//
+// For example, this can be used if you need to change the max_entries of a map before it is loaded in the kernel, but
+// you don't know what this value should be initially.
+type MapSpecEditor struct {
+	// Type - Type of the map
+	Type ebpf.MapType
+	// MaxEntries - Max Entries of the map
+	MaxEntries uint32
+	// Flags - Flags provided to the kernel during the loading process
+	Flags uint32
+}
+
 // Options - Options of a Manager. These options define how a manager should be initialized.
 type Options struct {
 	// ActivatedProbes - List of the probes that should be activated, identified by their identification string.
@@ -73,6 +86,9 @@ type Options struct {
 
 	// ConstantsEditor - Post-compilation constant edition. See ConstantEditor for more.
 	ConstantEditors []ConstantEditor
+
+	// MapSpecEditor - Pre-loading MapSpec editors.
+	MapSpecEditors map[string]MapSpecEditor
 
 	// VerifierOptions - Defines the log level of the verifier and the size of its log buffer. Set to 0 to disable
 	// logging and 1 to get a verbose output of the error. Increase the buffer size if the output is truncated.
@@ -333,6 +349,13 @@ func (m *Manager) InitWithOptions(elf io.ReaderAt, options Options) error {
 		}
 	}
 
+	// Edit map spec
+	if len(options.MapSpecEditors) > 0 {
+		if err := m.editMapSpecs(); err != nil {
+			return err
+		}
+	}
+
 	// Edit program maps
 	if len(options.MapEditors) > 0 {
 		if err := m.editMaps(options.MapEditors); err != nil {
@@ -407,8 +430,8 @@ func (m *Manager) Start() error {
 func (m *Manager) Stop(cleanup MapCleanupType) error {
 	m.stateLock.RLock()
 	defer m.stateLock.RUnlock()
-	if m.state < running {
-		return ErrManagerNotStarted
+	if m.state < initialized {
+		return ErrManagerNotInitialized
 	}
 	return m.stop(cleanup)
 }
@@ -899,6 +922,25 @@ func (m *Manager) editConstants() error {
 	}
 	return nil
 }
+
+// editMapSpecs - Update the MapSpec with the provided MapSpec editors.
+func (m *Manager) editMapSpecs() error {
+	for name, mapEditor := range m.options.MapSpecEditors {
+		// select the map spec
+		spec, exists, err := m.GetMapSpec(name)
+		if err != nil {
+			return err
+		}
+		if !exists {
+			return errors.Wrapf(ErrUnknownSection, "failed to edit maps/%s: couldn't find map", name)
+		}
+		spec.Type = mapEditor.Type
+		spec.MaxEntries = mapEditor.MaxEntries
+		spec.Flags = mapEditor.Flags
+	}
+	return nil
+}
+
 
 // editConstant - Edit the provided program with the provided constant using the asm method.
 func (m *Manager) editConstant(prog *ebpf.ProgramSpec, editor ConstantEditor) error {

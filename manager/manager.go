@@ -137,7 +137,7 @@ type Options struct {
 	DefaultWatermark int
 
 	// RLimit - The maps & programs provided to the manager might exceed the maximum allowed memory lock.
-	// (setrlimit resource 8) If a limit is provided here it will be applied when the manager is initialized.
+	// (RLIMIT_MEMLOCK) If a limit is provided here it will be applied when the manager is initialized.
 	RLimit *unix.Rlimit
 }
 
@@ -346,7 +346,7 @@ func (m *Manager) InitWithOptions(elf io.ReaderAt, options Options) error {
 
 	// set resource limit if requested
 	if m.options.RLimit != nil {
-		err := unix.Setrlimit(8, &unix.Rlimit{
+		err := unix.Setrlimit(unix.RLIMIT_MEMLOCK, &unix.Rlimit{
 			Cur: math.MaxUint64,
 			Max: math.MaxUint64,
 		})

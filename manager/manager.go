@@ -71,17 +71,28 @@ type MapRoute struct {
 	Map *ebpf.Map
 }
 
+// MapSpecEditorFlag - Flag used to specify what a MapSpecEditor should edit.
+type MapSpecEditorFlag uint
+
+const (
+	EditType       MapSpecEditorFlag = 1 << 1
+	EditMaxEntries MapSpecEditorFlag = 1 << 2
+	EditFlags      MapSpecEditorFlag = 1 << 3
+)
+
 // MapSpecEditor - A MapSpec editor defines how specific parameters of specific maps should be updated at runtime
 //
 // For example, this can be used if you need to change the max_entries of a map before it is loaded in the kernel, but
 // you don't know what this value should be initially.
 type MapSpecEditor struct {
-	// Type - Type of the map
+	// Type - Type of the map.
 	Type ebpf.MapType
-	// MaxEntries - Max Entries of the map
+	// MaxEntries - Max Entries of the map.
 	MaxEntries uint32
-	// Flags - Flags provided to the kernel during the loading process
+	// Flags - Flags provided to the kernel during the loading process.
 	Flags uint32
+	// EditorFlag - Use this flag to specify what fields should be updated. See MapSpecEditorFlag.
+	EditorFlag MapSpecEditorFlag
 }
 
 // Options - Options of a Manager. These options define how a manager should be initialized.
@@ -955,9 +966,15 @@ func (m *Manager) editMapSpecs() error {
 		if !exists {
 			return errors.Wrapf(ErrUnknownSection, "failed to edit maps/%s: couldn't find map", name)
 		}
-		spec.Type = mapEditor.Type
-		spec.MaxEntries = mapEditor.MaxEntries
-		spec.Flags = mapEditor.Flags
+		if EditType & mapEditor.EditorFlag == EditType {
+			spec.Type = mapEditor.Type
+		}
+		if EditMaxEntries & mapEditor.EditorFlag == EditMaxEntries {
+			spec.MaxEntries = mapEditor.MaxEntries
+		}
+		if EditFlags & mapEditor.EditorFlag == EditFlags {
+			spec.Flags = mapEditor.Flags
+		}
 	}
 	return nil
 }

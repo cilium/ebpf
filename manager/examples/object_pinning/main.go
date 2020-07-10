@@ -18,6 +18,15 @@ var m = &manager.Manager{
 			Section: "kretprobe/mkdirat",
 			SyscallFuncName: "mkdirat",
 		},
+		&manager.Probe{
+			Section: "kprobe/mkdir",
+			PinPath: "/sys/fs/bpf/mkdir",
+			SyscallFuncName: "mkdir",
+		},
+		&manager.Probe{
+			Section: "kretprobe/mkdir",
+			SyscallFuncName: "mkdir",
+		},
 	},
 	Maps: []*manager.Map{
 		&manager.Map{

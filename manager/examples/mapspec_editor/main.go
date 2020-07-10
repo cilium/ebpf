@@ -15,9 +15,9 @@ func main() {
 	options := manager.Options{
 		MapSpecEditors: map[string]manager.MapSpecEditor{
 			"cache": manager.MapSpecEditor{
-				Type: ebpf.Hash,
+				Type: ebpf.LRUHash,
 				MaxEntries: 1000000,
-				Flags: 0,
+				EditorFlag: manager.EditMaxEntries | manager.EditType,
 			},
 		},
 		RLimit: &unix.Rlimit{
@@ -31,7 +31,7 @@ func main() {
 		logrus.Fatal(err)
 	}
 
-	logrus.Println("successfully loaded, checkout the size of the map cache using bpftool")
+	logrus.Println("successfully loaded, checkout the parameters of the map \"cache\" using bpftool")
 
 	wait()
 

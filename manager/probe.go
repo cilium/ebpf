@@ -63,6 +63,7 @@ type Probe struct {
 	manualLoadNeeded bool
 	checkPin         bool
 	funcName         string
+	attachPID        int
 
 	// UID - (optional) this field can be used to identify your probes when the same eBPF program is used on multiple
 	// hook points. Keep in mind that the pair (probe section, probe UID) needs to be unique
@@ -405,12 +406,13 @@ func (p *Probe) attachKprobe() error {
 		// this might actually be a Uprobe
 		return p.attachUprobe()
 	}
+	p.attachPID = os.Getpid()
 
 	// Write kprobe_events line to register kprobe
-	kprobeID, err := EnableKprobeEvent(probeType, funcName, p.UID, maxactiveStr)
+	kprobeID, err := EnableKprobeEvent(probeType, funcName, p.UID, maxactiveStr, p.attachPID)
 	// fallback without KProbeMaxActive
 	if err == ErrKprobeIDNotExist {
-		kprobeID, err = EnableKprobeEvent(probeType, funcName, p.UID, "")
+		kprobeID, err = EnableKprobeEvent(probeType, funcName, p.UID, "", p.attachPID)
 	}
 	if err != nil {
 		return errors.Wrapf(err, "couldn't enable kprobe %s", p.Section)
@@ -442,7 +444,7 @@ func (p *Probe) detachKprobe() error {
 	}
 
 	// Write kprobe_events line to remove hook point
-	return DisableKprobeEvent(probeType, funcName, p.UID)
+	return DisableKprobeEvent(probeType, funcName, p.UID, p.attachPID)
 }
 
 // attachTracepoint - Attaches the probe to its tracepoint
@@ -480,9 +482,10 @@ func (p *Probe) attachUprobe() error {
 		// unknown type
 		return errors.Wrapf(ErrSectionFormat, "program type unrecognized in section %v", p.Section)
 	}
+	p.attachPID = os.Getpid()
 
 	// Write uprobe_events line to register uprobe
-	uprobeID, err := EnableUprobeEvent(probeType, funcName, p.BinaryPath, p.UID)
+	uprobeID, err := EnableUprobeEvent(probeType, funcName, p.BinaryPath, p.UID, p.attachPID)
 	if err != nil {
 		return errors.Wrapf(err, "couldn't enable uprobe %s", p.Section)
 	}
@@ -508,7 +511,7 @@ func (p *Probe) detachUprobe() error {
 	}
 
 	// Write uprobe_events line to remove hook point
-	return DisableUprobeEvent(probeType, funcName, p.BinaryPath, p.UID)
+	return DisableUprobeEvent(probeType, funcName, p.BinaryPath, p.UID, p.attachPID)
 }
 
 // attachCGroup - Attaches the probe to a cgroup hook point

@@ -3,7 +3,7 @@ package ebpf
 import (
 	"testing"
 
-	"github.com/cilium/ebpf/internal/testutils"
+	"github.com/DataDog/ebpf/internal/testutils"
 )
 
 func TestMapABIEqual(t *testing.T) {

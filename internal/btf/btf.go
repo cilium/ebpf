@@ -10,8 +10,8 @@ import (
 	"reflect"
 	"unsafe"
 
-	"github.com/cilium/ebpf/internal"
-	"github.com/cilium/ebpf/internal/unix"
+	"github.com/DataDog/ebpf/internal"
+	"github.com/DataDog/ebpf/internal/unix"
 
 	"golang.org/x/xerrors"
 )
@@ -111,6 +111,12 @@ func LoadSpecFromReader(rd io.ReaderAt) (*Spec, error) {
 	rawTypes, rawStrings, err := parseBTF(btfSection.Open(), file.ByteOrder)
 	if err != nil {
 		return nil, err
+	}
+
+	// If there are no types at all, then the BTF section was added by clang, but the eBPF program doesn't seem to use
+	// it, abort.
+	if len(rawTypes) == 0 {
+		return nil, nil
 	}
 
 	err = fixupDatasec(rawTypes, rawStrings, sectionSizes, variableOffsets)

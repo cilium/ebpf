@@ -35,8 +35,8 @@ import (
 	"net"
 	"syscall"
 
-	"github.com/cilium/ebpf"
-	"github.com/cilium/ebpf/asm"
+	"github.com/DataDog/ebpf"
+	"github.com/DataDog/ebpf/asm"
 )
 
 // ExampleExtractDistance shows how to attach an eBPF socket filter to

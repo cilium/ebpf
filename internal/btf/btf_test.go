@@ -9,8 +9,8 @@ import (
 	"os"
 	"testing"
 
-	"github.com/cilium/ebpf/internal"
-	"github.com/cilium/ebpf/internal/testutils"
+	"github.com/DataDog/ebpf/internal"
+	"github.com/DataDog/ebpf/internal/testutils"
 )
 
 func TestParseVmlinux(t *testing.T) {

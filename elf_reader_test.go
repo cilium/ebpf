@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/cilium/ebpf/internal"
-	"github.com/cilium/ebpf/internal/testutils"
+	"github.com/DataDog/ebpf/internal"
+	"github.com/DataDog/ebpf/internal/testutils"
 )
 
 func TestLoadCollectionSpec(t *testing.T) {

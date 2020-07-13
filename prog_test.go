@@ -14,10 +14,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/cilium/ebpf/asm"
-	"github.com/cilium/ebpf/internal"
-	"github.com/cilium/ebpf/internal/testutils"
-	"github.com/cilium/ebpf/internal/unix"
+	"github.com/DataDog/ebpf/asm"
+	"github.com/DataDog/ebpf/internal"
+	"github.com/DataDog/ebpf/internal/testutils"
+	"github.com/DataDog/ebpf/internal/unix"
 	"golang.org/x/xerrors"
 )
 

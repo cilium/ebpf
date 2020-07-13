@@ -6,8 +6,8 @@ import (
 	"io"
 	"io/ioutil"
 
-	"github.com/cilium/ebpf/asm"
-	"github.com/cilium/ebpf/internal"
+	"github.com/DataDog/ebpf/asm"
+	"github.com/DataDog/ebpf/internal"
 
 	"golang.org/x/xerrors"
 )

@@ -8,7 +8,7 @@ import (
 	"os"
 	"syscall"
 
-	"github.com/cilium/ebpf/internal"
+	"github.com/DataDog/ebpf/internal"
 
 	"golang.org/x/xerrors"
 )

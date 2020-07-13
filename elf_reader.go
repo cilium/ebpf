@@ -4,17 +4,22 @@ import (
 	"bytes"
 	"debug/elf"
 	"encoding/binary"
+	"github.com/pkg/errors"
 	"io"
 	"math"
 	"os"
 	"strings"
 
-	"github.com/cilium/ebpf/asm"
-	"github.com/cilium/ebpf/internal"
-	"github.com/cilium/ebpf/internal/btf"
-	"github.com/cilium/ebpf/internal/unix"
+	"github.com/DataDog/ebpf/asm"
+	"github.com/DataDog/ebpf/internal"
+	"github.com/DataDog/ebpf/internal/btf"
+	"github.com/DataDog/ebpf/internal/unix"
 
 	"golang.org/x/xerrors"
+)
+
+const (
+	useCurrentKernelVersion = 0xFFFFFFFE
 )
 
 type elfCode struct {
@@ -102,6 +107,12 @@ func LoadCollectionSpecFromReader(rd io.ReaderAt) (*CollectionSpec, error) {
 	if err != nil {
 		return nil, xerrors.Errorf("load version: %w", err)
 	}
+	if ec.version == useCurrentKernelVersion {
+		ec.version, err = CurrentKernelVersion()
+		if err != nil {
+			return nil, errors.Wrap(err, "load version")
+		}
+	}
 
 	btfSpec, err := btf.LoadSpecFromReader(rd)
 	if err != nil {
@@ -187,6 +198,7 @@ func (ec *elfCode) loadPrograms(progSections map[elf.SectionIndex]*elf.Section, 
 
 		spec := &ProgramSpec{
 			Name:          funcSym.Name,
+			SectionName:   sec.Name,
 			Type:          progType,
 			AttachType:    attachType,
 			License:       ec.license,
@@ -218,7 +230,9 @@ func (ec *elfCode) loadPrograms(progSections map[elf.SectionIndex]*elf.Section, 
 		if err != nil {
 			return nil, xerrors.Errorf("program %s: %w", prog.Name, err)
 		}
-		res[prog.Name] = prog
+		// Indexing by section names makes things much easier when it comes to selecting programs. Just like the
+		// function names, the section names are unique per ".o" so we won't have a conflict.
+		res[prog.SectionName] = prog
 	}
 
 	return res, nil
@@ -381,6 +395,7 @@ func (ec *elfCode) loadMaps(maps map[string]*MapSpec, mapSections map[elf.Sectio
 		var (
 			r    = sec.Open()
 			size = sec.Size / uint64(len(syms))
+			ordered []*MapSpec
 		)
 		for i, offset := 0, uint64(0); i < len(syms); i, offset = i+1, offset+size {
 			mapSym, ok := syms[offset]
@@ -397,6 +412,7 @@ func (ec *elfCode) loadMaps(maps map[string]*MapSpec, mapSections map[elf.Sectio
 			spec := MapSpec{
 				Name: SanitizeName(mapSym.Name, -1),
 			}
+			var inner uint32
 			switch {
 			case binary.Read(lr, ec.ByteOrder, &spec.Type) != nil:
 				return xerrors.Errorf("map %v: missing type", mapSym)
@@ -408,13 +424,28 @@ func (ec *elfCode) loadMaps(maps map[string]*MapSpec, mapSections map[elf.Sectio
 				return xerrors.Errorf("map %v: missing max entries", mapSym)
 			case binary.Read(lr, ec.ByteOrder, &spec.Flags) != nil:
 				return xerrors.Errorf("map %v: missing flags", mapSym)
+			case binary.Read(lr, ec.ByteOrder, &inner) != nil:
+				return xerrors.Errorf("map %v: can't read inner map index", mapSym)
 			}
 
 			if _, err := io.Copy(internal.DiscardZeroes{}, lr); err != nil {
 				return xerrors.Errorf("map %v: unknown and non-zero fields in definition", mapSym)
 			}
 
+			if spec.Type == ArrayOfMaps || spec.Type == HashOfMaps {
+				if int(inner) > len(ordered) {
+					return xerrors.Errorf("map %v: invalid inner map index %d", mapSym, inner)
+				}
+
+				innerSpec := ordered[int(inner)]
+				if innerSpec.InnerMap != nil {
+					return xerrors.Errorf("map %v: can't nest map of map", mapSym)
+				}
+				spec.InnerMap = innerSpec.Copy()
+			}
+
 			maps[mapSym.Name] = &spec
+			ordered = append(ordered, &spec)
 		}
 	}
 

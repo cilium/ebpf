@@ -1,10 +1,10 @@
 eBPF
 -------
-[![](https://godoc.org/github.com/cilium/ebpf?status.svg)](https://godoc.org/github.com/cilium/ebpf)
+[![](https://godoc.org/github.com/DataDog/ebpf?status.svg)](https://godoc.org/github.com/DataDog/ebpf)
 
 eBPF is a pure Go library that provides utilities for loading, compiling, and debugging eBPF programs. It has minimal external dependencies and is intended to be used in long running processes.
 
-[ebpf/asm](https://godoc.org/github.com/cilium/ebpf/asm) contains a basic assembler.
+[ebpf/asm](https://godoc.org/github.com/DataDog/ebpf/asm) contains a basic assembler.
 
 The library is maintained by [Cloudflare](https://www.cloudflare.com) and [Cilium](https://www.cilium.io). Feel free to [join](https://cilium.herokuapp.com/) the [libbpf-go](https://cilium.slack.com/messages/libbpf-go) channel on Slack.
 

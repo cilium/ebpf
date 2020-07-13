@@ -5,14 +5,15 @@ import (
 	"encoding/binary"
 	"fmt"
 	"math"
+	"path/filepath"
 	"strings"
 	"time"
 	"unsafe"
 
-	"github.com/cilium/ebpf/asm"
-	"github.com/cilium/ebpf/internal"
-	"github.com/cilium/ebpf/internal/btf"
-	"github.com/cilium/ebpf/internal/unix"
+	"github.com/DataDog/ebpf/asm"
+	"github.com/DataDog/ebpf/internal"
+	"github.com/DataDog/ebpf/internal/btf"
+	"github.com/DataDog/ebpf/internal/unix"
 
 	"golang.org/x/xerrors"
 )
@@ -49,6 +50,7 @@ type ProgramSpec struct {
 	// Name is passed to the kernel as a debug aid. Must only contain
 	// alpha numeric and '_' characters.
 	Name          string
+	SectionName   string
 	Type          ProgramType
 	AttachType    AttachType
 	Instructions  asm.Instructions
@@ -326,7 +328,7 @@ func (p *Program) Test(in []byte) (uint32, []byte, error) {
 // interrupted, and should be set to testing.B.ResetTimer or similar.
 //
 // Note: profiling a call to this function will skew it's results, see
-// https://github.com/cilium/ebpf/issues/24
+// https://github.com/DataDog/ebpf/issues/24
 //
 // This function requires at least Linux 4.12.
 func (p *Program) Benchmark(in []byte, repeat int, reset func()) (uint32, time.Duration, error) {
@@ -518,6 +520,16 @@ func LoadPinnedProgram(fileName string) (*Program, error) {
 	}
 
 	return newProgram(fd, name, abi), nil
+}
+
+// LoadPinnedProgramExplicit loads a program with explicit parameters.
+func LoadPinnedProgramExplicit(fileName string, abi *ProgramABI) (*Program, error) {
+	fd, err := bpfGetObject(fileName)
+	if err != nil {
+		return nil, err
+	}
+
+	return newProgram(fd, filepath.Base(fileName), abi), nil
 }
 
 // SanitizeName replaces all invalid characters in name.

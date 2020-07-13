@@ -8,9 +8,9 @@ import (
 	"runtime"
 	"sync"
 
-	"github.com/cilium/ebpf"
-	"github.com/cilium/ebpf/internal"
-	"github.com/cilium/ebpf/internal/unix"
+	"github.com/DataDog/ebpf"
+	"github.com/DataDog/ebpf/internal"
+	"github.com/DataDog/ebpf/internal/unix"
 
 	"golang.org/x/xerrors"
 )

@@ -144,7 +144,7 @@ func getSyscallFnNameWithKallsyms(name string, kallsymsContent string) (string, 
 	regexStr = `(\b__[Ss]y[sS]_` + name + `\b)`
 	fnRegex = regexp.MustCompile(regexStr)
 	match = fnRegex.FindAllString(kallsymsContent, -1)
-	// If we get something like 'sys_open' or 'SyS_open', return
+	// If we get something like '__sys_open' or '__SyS_open', return
 	// either (they have same addr) else, just return original string
 	if len(match) > 0 {
 		return match[0], nil

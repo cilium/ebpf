@@ -126,23 +126,31 @@ func getSyscallFnNameWithKallsyms(name string, kallsymsContent string) (string, 
 	fnRegex := regexp.MustCompile(regexStr)
 
 	match := fnRegex.FindAllString(kallsymsContent, -1)
-
-	// If nothing found, search for old syscall function to be sure
-	if len(match) == 0 {
-		newRegexStr := `(\b[Ss]y[sS]_` + name + `\b)`
-		fnRegex = regexp.MustCompile(newRegexStr)
-		newMatch := fnRegex.FindAllString(kallsymsContent, -1)
-
-		// If we get something like 'sys_open' or 'SyS_open', return
-		// either (they have same addr) else, just return original string
-		if len(newMatch) >= 1 {
-			return newMatch[0], nil
-		} else {
-			return "", errors.New("could not find a valid syscall name")
-		}
+	if len(match) > 0 {
+		return match[0], nil
 	}
 
-	return match[0], nil
+	// If nothing found, search for old syscall function to be sure
+	regexStr = `(\b[Ss]y[sS]_` + name + `\b)`
+	fnRegex = regexp.MustCompile(regexStr)
+	match = fnRegex.FindAllString(kallsymsContent, -1)
+	// If we get something like 'sys_open' or 'SyS_open', return
+	// either (they have same addr) else, just return original string
+	if len(match) > 0 {
+		return match[0], nil
+	}
+
+	// check for '__' prefixed functions, like '__sys_open'
+	regexStr = `(\b__[Ss]y[sS]_` + name + `\b)`
+	fnRegex = regexp.MustCompile(regexStr)
+	match = fnRegex.FindAllString(kallsymsContent, -1)
+	// If we get something like '__sys_open' or '__SyS_open', return
+	// either (they have same addr) else, just return original string
+	if len(match) > 0 {
+		return match[0], nil
+	}
+
+	return "", errors.New("could not find a valid syscall name")
 }
 
 var safeEventRegexp = regexp.MustCompile("[^a-zA-Z0-9]")
@@ -222,7 +230,7 @@ func EnableUprobeEvent(probeType, funcName, path, UID string, uprobeAttachPID in
 	// Retrieve dynamic symbol offset
 	offset, err := findSymbolOffset(path, funcName)
 	if err != nil {
-		return -1, errors.Wrapf(err,"couln't find symbol %s in %s", funcName, path)
+		return -1, errors.Wrapf(err, "couldn't find symbol %s in %s", funcName, path)
 	}
 
 	// Write line to uprobe_events
@@ -246,7 +254,7 @@ func EnableUprobeEvent(probeType, funcName, path, UID string, uprobeAttachPID in
 		if os.IsNotExist(err) {
 			return -1, ErrUprobeIDNotExist
 		}
-		return -1, errors.Wrap(err,"cannot read uprobe id")
+		return -1, errors.Wrap(err, "cannot read uprobe id")
 	}
 	uprobeId, err := strconv.Atoi(strings.TrimSpace(string(uprobeIdBytes)))
 	if err != nil {

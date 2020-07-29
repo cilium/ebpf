@@ -21,7 +21,8 @@ if [[ "${1:-}" = "--in-vm" ]]; then
   fi
 
   echo Running tests...
-  /usr/local/bin/go test -coverprofile="$1/coverage.txt" -covermode=atomic -v -elfs "$elfs" ./...
+  /usr/local/bin/go test -v -elfs "$elfs" -run TestLibBPFCompat
+  /usr/local/bin/go test -coverprofile="$1/coverage.txt" -covermode=atomic -v ./...
   touch "$1/success"
   exit 0
 fi

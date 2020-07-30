@@ -138,7 +138,7 @@ func bpfIterCreate(attr *bpfIterCreateAttr) (*internal.FD, error) {
 type bpfRawTracepointOpenAttr struct {
 	name internal.Pointer
 	fd   uint32
-	pad  uint32
+	_    uint32
 }
 
 func bpfRawTracepointOpen(attr *bpfRawTracepointOpenAttr) (*internal.FD, error) {

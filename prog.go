@@ -595,12 +595,16 @@ func (p *Program) ID() (ProgramID, error) {
 	return ProgramID(info.id), nil
 }
 
-func resolveBTFType(name string, progType ProgramType, attachType AttachType) (btf.Type, error) {
+func findKernelType(name string, typ btf.Type) error {
 	kernel, err := btf.LoadKernelSpec()
 	if err != nil {
-		return nil, fmt.Errorf("can't resolve BTF type %s: %w", name, err)
+		return fmt.Errorf("can't load kernel spec: %w", err)
 	}
 
+	return kernel.FindType(name, typ)
+}
+
+func resolveBTFType(name string, progType ProgramType, attachType AttachType) (btf.Type, error) {
 	type match struct {
 		p ProgramType
 		a AttachType
@@ -610,7 +614,7 @@ func resolveBTFType(name string, progType ProgramType, attachType AttachType) (b
 	switch target {
 	case match{Tracing, AttachTraceIter}:
 		var target btf.Func
-		if err := kernel.FindType("bpf_iter_"+name, &target); err != nil {
+		if err := findKernelType("bpf_iter_"+name, &target); err != nil {
 			return nil, fmt.Errorf("can't resolve BTF for iterator %s: %w", name, err)
 		}
 

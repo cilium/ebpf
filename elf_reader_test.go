@@ -218,6 +218,31 @@ func TestLoadInvalidMap(t *testing.T) {
 	})
 }
 
+func TestLoadRawTracepoint(t *testing.T) {
+	testutils.TestFiles(t, "testdata/raw_tracepoint-*.elf", func(t *testing.T, file string) {
+		spec, err := LoadCollectionSpec(file)
+		if err != nil {
+			t.Fatal("Can't parse ELF:", err)
+		}
+
+		if spec.Programs["sched_process_exec"].ByteOrder != internal.NativeEndian {
+			return
+		}
+
+		coll, err := NewCollectionWithOptions(spec, CollectionOptions{
+			Programs: ProgramOptions{
+				LogLevel: 1,
+			},
+		})
+		testutils.SkipIfNotSupported(t, err)
+		if err != nil {
+			t.Fatal("Can't create collection:", err)
+		}
+
+		coll.Close()
+	})
+}
+
 var (
 	elfPath    = flag.String("elfs", "", "`Path` containing libbpf-compatible ELFs")
 	elfPattern = flag.String("elf-pattern", "*.o", "Glob `pattern` for object files that should be tested")

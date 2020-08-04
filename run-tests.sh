@@ -21,7 +21,9 @@ if [[ "${1:-}" = "--in-vm" ]]; then
   fi
 
   echo Running tests...
-  /usr/local/bin/go test -coverprofile="$1/coverage.txt" -covermode=atomic -v -elfs "$elfs" ./...
+  # TestLibBPFCompat runs separately to pass the "-elfs" flag only for it: https://github.com/cilium/ebpf/pull/119
+  /usr/local/bin/go test -v -elfs "$elfs" -run TestLibBPFCompat
+  /usr/local/bin/go test -v ./...
   touch "$1/success"
   exit 0
 fi
@@ -78,11 +80,11 @@ if [[ ! -e "${output}/success" ]]; then
   exit 1
 else
   echo "Test successful on ${kernel_version}"
-  if [[ -v CODECOV_TOKEN ]]; then
-    curl --fail -s https://codecov.io/bash > "${tmp_dir}/codecov.sh"
-    chmod +x "${tmp_dir}/codecov.sh"
-    "${tmp_dir}/codecov.sh" -f "${output}/coverage.txt"
-  fi
+#  if [[ -v CODECOV_TOKEN ]]; then
+#    curl --fail -s https://codecov.io/bash > "${tmp_dir}/codecov.sh"
+#    chmod +x "${tmp_dir}/codecov.sh"
+#    "${tmp_dir}/codecov.sh" -f "${output}/coverage.txt"
+#  fi
 fi
 
 $sudo rm -r "${input}"

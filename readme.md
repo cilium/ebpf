@@ -1,6 +1,6 @@
 eBPF
 -------
-[![](https://godoc.org/github.com/cilium/ebpf?status.svg)](https://godoc.org/github.com/cilium/ebpf)
+[![PkgGoDev](https://pkg.go.dev/badge/github.com/cilium/ebpf)](https://pkg.go.dev/github.com/cilium/ebpf)
 
 eBPF is a pure Go library that provides utilities for loading, compiling, and debugging eBPF programs. It has minimal external dependencies and is intended to be used in long running processes.
 

@@ -18,23 +18,17 @@ type RawTracepointOptions struct {
 //
 // Requires at least Linux 4.17.
 func AttachRawTracepoint(opts RawTracepointOptions) (Link, error) {
-	if opts.Program.FD() < 0 {
-		return nil, fmt.Errorf("invalid program: %w", internal.ErrClosedFd)
-	}
-
-	fd, err := bpfRawTracepointOpen(&bpfRawTracepointOpenAttr{
-		name: internal.NewStringPointer(opts.Name),
-		fd:   uint32(opts.Program.FD()),
-	})
-	if err != nil {
+	link := progAttachRawTracepoint{tpName: opts.Name}
+	if err := link.Update(opts.Program); err != nil {
 		return nil, err
 	}
 
-	return &progAttachRawTracepoint{fd: fd}, nil
+	return &link, nil
 }
 
 type progAttachRawTracepoint struct {
-	fd *internal.FD
+	tpName string
+	fd     *internal.FD
 }
 
 var _ Link = (*progAttachRawTracepoint)(nil)
@@ -42,11 +36,29 @@ var _ Link = (*progAttachRawTracepoint)(nil)
 func (rt *progAttachRawTracepoint) isLink() {}
 
 func (rt *progAttachRawTracepoint) Close() error {
+	if rt.fd == nil {
+		return nil
+	}
+
 	return rt.fd.Close()
 }
 
-func (rt *progAttachRawTracepoint) Update(_ *ebpf.Program) error {
-	return fmt.Errorf("can't update raw_tracepoint: %w", ErrNotSupported)
+func (rt *progAttachRawTracepoint) Update(prog *ebpf.Program) error {
+	if prog.FD() < 0 {
+		return fmt.Errorf("invalid program: %w", internal.ErrClosedFd)
+	}
+
+	fd, err := bpfRawTracepointOpen(&bpfRawTracepointOpenAttr{
+		name: internal.NewStringPointer(rt.tpName),
+		fd:   uint32(prog.FD()),
+	})
+	if err != nil {
+		return err
+	}
+
+	_ = rt.Close()
+	rt.fd = fd
+	return err
 }
 
 func (rt *progAttachRawTracepoint) Pin(_ string) error {

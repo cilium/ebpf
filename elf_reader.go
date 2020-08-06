@@ -636,6 +636,7 @@ func getProgType(sectionName string) (ProgramType, AttachType, string) {
 		"lirc_mode2":            {LircMode2, AttachLircMode2},
 		"flow_dissector":        {FlowDissector, AttachFlowDissector},
 		"iter/":                 {Tracing, AttachTraceIter},
+		"sk_lookup/":            {SkLookup, AttachSkLookup},
 
 		"cgroup_skb/ingress": {CGroupSKB, AttachCGroupInetIngress},
 		"cgroup_skb/egress":  {CGroupSKB, AttachCGroupInetEgress},

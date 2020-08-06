@@ -96,60 +96,37 @@ type ProgramType uint32
 
 // eBPF program types
 const (
-	// Unrecognized program type
 	UnspecifiedProgram ProgramType = iota
-	// SocketFilter socket or seccomp filter
 	SocketFilter
-	// Kprobe program
 	Kprobe
-	// SchedCLS traffic control shaper
 	SchedCLS
-	// SchedACT routing control shaper
 	SchedACT
-	// TracePoint program
 	TracePoint
-	// XDP program
 	XDP
-	// PerfEvent program
 	PerfEvent
-	// CGroupSKB program
 	CGroupSKB
-	// CGroupSock program
 	CGroupSock
-	// LWTIn program
 	LWTIn
-	// LWTOut program
 	LWTOut
-	// LWTXmit program
 	LWTXmit
-	// SockOps program
 	SockOps
-	// SkSKB program
 	SkSKB
-	// CGroupDevice program
 	CGroupDevice
-	// SkMsg program
 	SkMsg
-	// RawTracepoint program
 	RawTracepoint
-	// CGroupSockAddr program
 	CGroupSockAddr
-	// LWTSeg6Local program
 	LWTSeg6Local
-	// LircMode2 program
 	LircMode2
-	// SkReuseport program
 	SkReuseport
-	// FlowDissector program
 	FlowDissector
-	// CGroupSysctl program
 	CGroupSysctl
-	// RawTracepointWritable program
 	RawTracepointWritable
-	// CGroupSockopt program
 	CGroupSockopt
-	// Tracing program
 	Tracing
+	StructOps
+	Extension
+	LSM
+	SkLookup
 )
 
 // AttachType of the eBPF program, needed to differentiate allowed context accesses in
@@ -190,6 +167,15 @@ const (
 	AttachModifyReturn
 	AttachLSMMac
 	AttachTraceIter
+	AttachCgroupInet4GetPeername
+	AttachCgroupInet6GetPeername
+	AttachCgroupInet4GetSockname
+	AttachCgroupInet6GetSockname
+	AttachXDPDevMap
+	AttachCgroupInetSockRelease
+	AttachXDPCPUMap
+	AttachSkLookup
+	AttachXDP
 )
 
 // AttachFlags of the eBPF program used in BPF_PROG_ATTACH command

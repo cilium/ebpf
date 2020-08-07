@@ -90,11 +90,16 @@ func Example_socketELF() {
 		panic(err)
 	}
 
-	coll, err := ebpf.NewCollection(spec)
-	if err != nil {
+	var objs struct {
+		Prog  *ebpf.Program `ebpf:"bpf_prog1"`
+		Stats *ebpf.Map     `ebpf:"my_map"`
+	}
+
+	if err := spec.LoadAndAssign(&objs, nil); err != nil {
 		panic(err)
 	}
-	defer coll.Close()
+	defer objs.Prog.Close()
+	defer objs.Stats.Close()
 
 	sock, err := openRawSock(*index)
 	if err != nil {
@@ -102,24 +107,12 @@ func Example_socketELF() {
 	}
 	defer syscall.Close(sock)
 
-	prog := coll.DetachProgram("bpf_prog1")
-	if prog == nil {
-		panic("no program named bpf_prog1 found")
-	}
-	defer prog.Close()
-
-	if err := syscall.SetsockoptInt(sock, syscall.SOL_SOCKET, SO_ATTACH_BPF, prog.FD()); err != nil {
+	if err := syscall.SetsockoptInt(sock, syscall.SOL_SOCKET, SO_ATTACH_BPF, objs.Prog.FD()); err != nil {
 		panic(err)
 	}
 
 	fmt.Printf("Filtering on eth index: %d\n", *index)
 	fmt.Println("Packet stats:")
-
-	protoStats := coll.DetachMap("my_map")
-	if protoStats == nil {
-		panic(fmt.Errorf("no map named my_map found"))
-	}
-	defer protoStats.Close()
 
 	for {
 		const (
@@ -132,15 +125,15 @@ func Example_socketELF() {
 		var icmp uint64
 		var tcp uint64
 		var udp uint64
-		err := protoStats.Lookup(uint32(ICMP), &icmp)
+		err := objs.Stats.Lookup(uint32(ICMP), &icmp)
 		if err != nil {
 			panic(err)
 		}
-		err = protoStats.Lookup(uint32(TCP), &tcp)
+		err = objs.Stats.Lookup(uint32(TCP), &tcp)
 		if err != nil {
 			panic(err)
 		}
-		err = protoStats.Lookup(uint32(UDP), &udp)
+		err = objs.Stats.Lookup(uint32(UDP), &udp)
 		if err != nil {
 			panic(err)
 		}

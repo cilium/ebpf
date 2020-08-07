@@ -1,6 +1,7 @@
 package ebpf
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/cilium/ebpf/asm"
@@ -152,4 +153,205 @@ func TestCollectionSpecRewriteMaps(t *testing.T) {
 	if ret != 2 {
 		t.Fatal("new / override map not used")
 	}
+}
+
+func TestCollectionAssign(t *testing.T) {
+	var specs struct {
+		Program *ProgramSpec `ebpf:"prog1"`
+		Map     *MapSpec     `ebpf:"map1"`
+	}
+
+	mapSpec := &MapSpec{
+		Type:       Array,
+		KeySize:    4,
+		ValueSize:  4,
+		MaxEntries: 1,
+	}
+	progSpec := &ProgramSpec{
+		Type: SocketFilter,
+		Instructions: asm.Instructions{
+			asm.LoadImm(asm.R0, 0, asm.DWord),
+			asm.Return(),
+		},
+		License: "MIT",
+	}
+
+	cs := &CollectionSpec{
+		Maps: map[string]*MapSpec{
+			"map1": mapSpec,
+		},
+		Programs: map[string]*ProgramSpec{
+			"prog1": progSpec,
+		},
+	}
+
+	if err := cs.Assign(&specs); err != nil {
+		t.Fatal("Can't assign spec:", err)
+	}
+
+	if specs.Program != progSpec {
+		t.Fatalf("Expected Program to be %p, got %p", progSpec, specs.Program)
+	}
+
+	if specs.Map != mapSpec {
+		t.Fatalf("Expected Map to be %p, got %p", mapSpec, specs.Map)
+	}
+
+	if err := cs.Assign(new(int)); err == nil {
+		t.Fatal("Assign allows to besides *struct")
+	}
+
+	if err := cs.Assign(new(struct{ Foo int })); err != nil {
+		t.Fatal("Assign doesn't ignore untagged fields")
+	}
+
+	unexported := new(struct {
+		foo *MapSpec `ebpf:"map1"`
+	})
+
+	if err := cs.Assign(unexported); err == nil {
+		t.Error("Assign should return an error on unexported fields")
+	}
+
+	coll, err := NewCollection(cs)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer coll.Close()
+
+	var objs struct {
+		Program *Program `ebpf:"prog1"`
+		Map     *Map     `ebpf:"map1"`
+	}
+
+	if err := coll.Assign(&objs); err != nil {
+		t.Fatal("Can't Assign objects:", err)
+	}
+	objs.Program.Close()
+	objs.Map.Close()
+
+	if coll.Programs["prog1"] != nil {
+		t.Fatal("Assign doesn't detach Program")
+	}
+
+	if coll.Maps["map1"] != nil {
+		t.Fatal("Assign doesn't detach Map")
+	}
+}
+
+func ExampleCollectionSpec_Assign() {
+	spec := &CollectionSpec{
+		Maps: map[string]*MapSpec{
+			"map1": {
+				Type:       Array,
+				KeySize:    4,
+				ValueSize:  4,
+				MaxEntries: 1,
+			},
+		},
+		Programs: map[string]*ProgramSpec{
+			"prog1": {
+				Type: SocketFilter,
+				Instructions: asm.Instructions{
+					asm.LoadImm(asm.R0, 0, asm.DWord),
+					asm.Return(),
+				},
+				License: "MIT",
+			},
+		},
+	}
+
+	var specs struct {
+		Program *ProgramSpec `ebpf:"prog1"`
+		Map     *MapSpec     `ebpf:"map1"`
+	}
+
+	if err := spec.Assign(&specs); err != nil {
+		panic(err)
+	}
+
+	fmt.Println(specs.Program.Type)
+	fmt.Println(specs.Map.Type)
+
+	// Output: SocketFilter
+	// Array
+}
+
+func ExampleCollectionSpec_LoadAndAssign() {
+	spec := &CollectionSpec{
+		Maps: map[string]*MapSpec{
+			"map1": {
+				Type:       Array,
+				KeySize:    4,
+				ValueSize:  4,
+				MaxEntries: 1,
+			},
+		},
+		Programs: map[string]*ProgramSpec{
+			"prog1": {
+				Type: SocketFilter,
+				Instructions: asm.Instructions{
+					asm.LoadImm(asm.R0, 0, asm.DWord),
+					asm.Return(),
+				},
+				License: "MIT",
+			},
+		},
+	}
+
+	var objs struct {
+		Program *Program `ebpf:"prog1"`
+		Map     *Map     `ebpf:"map1"`
+	}
+
+	if err := spec.LoadAndAssign(&objs, nil); err != nil {
+		panic(err)
+	}
+
+	fmt.Println(objs.Program.ABI().Type)
+	fmt.Println(objs.Map.ABI().Type)
+
+	// Output: SocketFilter
+	// Array
+}
+
+func ExampleCollection_Assign() {
+	coll, err := NewCollection(&CollectionSpec{
+		Maps: map[string]*MapSpec{
+			"map1": {
+				Type:       Array,
+				KeySize:    4,
+				ValueSize:  4,
+				MaxEntries: 1,
+			},
+		},
+		Programs: map[string]*ProgramSpec{
+			"prog1": {
+				Type: SocketFilter,
+				Instructions: asm.Instructions{
+					asm.LoadImm(asm.R0, 0, asm.DWord),
+					asm.Return(),
+				},
+				License: "MIT",
+			},
+		},
+	})
+	if err != nil {
+		panic(err)
+	}
+
+	var objs struct {
+		Program *Program `ebpf:"prog1"`
+		Map     *Map     `ebpf:"map1"`
+	}
+
+	if err := coll.Assign(&objs); err != nil {
+		panic(err)
+	}
+
+	fmt.Println(objs.Program.ABI().Type)
+	fmt.Println(objs.Map.ABI().Type)
+
+	// Output: SocketFilter
+	// Array
 }

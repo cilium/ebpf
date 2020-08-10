@@ -87,7 +87,7 @@ func TestLoadCollectionSpec(t *testing.T) {
 			Programs: ProgramOptions{
 				LogLevel: 1,
 			},
-		})
+		}, nil)
 		testutils.SkipIfNotSupported(t, err)
 		if err != nil {
 			t.Fatal(err)

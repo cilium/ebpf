@@ -101,6 +101,9 @@ type Options struct {
 	// If the list is empty, all probes will be activated.
 	ActivatedProbes []string
 
+	// ExcludedProbes is a list of probes that should not even be verified.
+	ExcludedProbes []string
+
 	// ConstantsEditor - Post-compilation constant edition. See ConstantEditor for more.
 	ConstantEditors []ConstantEditor
 
@@ -401,7 +404,7 @@ func (m *Manager) InitWithOptions(elf io.ReaderAt, options Options) error {
 	}
 
 	// Load eBPF program with the provided verifier options
-	if err := m.loadCollection(); err != nil {
+	if err := m.loadCollection(options.ExcludedProbes); err != nil {
 		return err
 	}
 	return nil
@@ -897,16 +900,20 @@ func (m *Manager) matchSpecs() error {
 }
 
 func (m *Manager) activateProbes() {
+	defaultEnabled := len(m.options.ActivatedProbes) == 0
 	for _, mProbe := range m.Probes {
-		shouldActivate := false
+		shouldActivate := defaultEnabled
 		for _, probe := range m.options.ActivatedProbes {
 			if probe == mProbe.Section {
 				shouldActivate = true
 			}
 		}
-		if shouldActivate || len(m.options.ActivatedProbes) == 0 {
-			mProbe.Enabled = true
+		for _, probe := range m.options.ExcludedProbes {
+			if probe == mProbe.Section {
+				shouldActivate = false
+			}
 		}
+		mProbe.Enabled = shouldActivate
 	}
 }
 
@@ -966,13 +973,13 @@ func (m *Manager) editMapSpecs() error {
 		if !exists {
 			return errors.Wrapf(ErrUnknownSection, "failed to edit maps/%s: couldn't find map", name)
 		}
-		if EditType & mapEditor.EditorFlag == EditType {
+		if EditType&mapEditor.EditorFlag == EditType {
 			spec.Type = mapEditor.Type
 		}
-		if EditMaxEntries & mapEditor.EditorFlag == EditMaxEntries {
+		if EditMaxEntries&mapEditor.EditorFlag == EditMaxEntries {
 			spec.MaxEntries = mapEditor.MaxEntries
 		}
-		if EditFlags & mapEditor.EditorFlag == EditFlags {
+		if EditFlags&mapEditor.EditorFlag == EditFlags {
 			spec.Flags = mapEditor.Flags
 		}
 	}
@@ -1048,10 +1055,10 @@ func (m *Manager) editMaps(maps map[string]*ebpf.Map) error {
 }
 
 // loadCollection - Load the eBPF maps and programs in the CollectionSpec. Programs and Maps are pinned when requested.
-func (m *Manager) loadCollection() error {
+func (m *Manager) loadCollection(excludedPrograms []string) error {
 	var err error
 	// Load collection
-	m.collection, err = ebpf.NewCollectionWithOptions(m.collectionSpec, m.options.VerifierOptions)
+	m.collection, err = ebpf.NewCollectionWithOptions(m.collectionSpec, m.options.VerifierOptions, excludedPrograms)
 	if err != nil {
 		return errors.Wrap(err, "couldn't load eBPF programs")
 	}

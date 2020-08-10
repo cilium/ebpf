@@ -197,18 +197,15 @@ func NewCollectionWithOptions(spec *CollectionSpec, opts CollectionOptions, excl
 		maps[mapName] = m
 	}
 
+	exProgs := make(map[string]struct{}, len(excludedPrograms))
+	for _, name := range excludedPrograms {
+		exProgs[name] = struct{}{}
+	}
+
 	for progName, origProgSpec := range spec.Programs {
-		shouldLoad := true
-		for _, exProg := range excludedPrograms {
-			if progName == exProg {
-				shouldLoad = false
-				break
-			}
-		}
-		if !shouldLoad {
+		if _, excluded := exProgs[progName]; excluded {
 			continue
 		}
-
 		progSpec := origProgSpec.Copy()
 
 		// Rewrite any reference to a valid map.

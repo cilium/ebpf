@@ -28,7 +28,7 @@ var (
 
 func (i Class) String() string {
 	switch {
-	case 0 <= i && i <= 5:
+	case i <= 5:
 		return _Class_name_0[_Class_index_0[i]:_Class_index_0[i+1]]
 	case i == 7:
 		return _Class_name_1

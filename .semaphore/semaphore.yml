@@ -12,7 +12,7 @@ blocks:
       prologue:
         commands:
           - checkout
-          - sem-version go 1.14
+          - sem-version go 1.15
           - go build ./...
           - sudo pip3 install https://github.com/amluto/virtme/archive/538f1e756139a6b57a4780e7ceb3ac6bcaa4fe6f.zip
           - sudo apt-get install -y qemu-system-x86
@@ -28,7 +28,7 @@ blocks:
       - name: Run unit tests
         matrix:
           - env_var: GO_VERSION
-            values: [ "1.13", "1.14" ]
+            values: [ "1.14", "1.15" ]
           - env_var: KERNEL_VERSION
             values: ["5.4", "4.19", "4.9"]
         commands:

@@ -22,8 +22,8 @@ if [[ "${1:-}" = "--in-vm" ]]; then
 
   echo Running tests...
   # TestLibBPFCompat runs separately to pass the "-elfs" flag only for it: https://github.com/cilium/ebpf/pull/119
-  /usr/local/bin/go test -v -elfs "$elfs" -run TestLibBPFCompat
-  /usr/local/bin/go test -v ./...
+  go test -v -elfs "$elfs" -run TestLibBPFCompat
+  go test -v ./...
   touch "$1/success"
   exit 0
 fi
@@ -68,11 +68,12 @@ fi
 
 echo Testing on "${kernel_version}"
 $sudo virtme-run --kimg "${tmp_dir}/${kernel}" --memory 512M --pwd \
+  --rw \
   --rwdir=/run/input="${input}" \
   --rwdir=/run/output="${output}" \
   --rodir=/run/go-path="$(go env GOPATH)" \
   --rwdir=/run/go-cache="$(go env GOCACHE)" \
-  --script-sh "$(realpath "$0") --in-vm /run/output" \
+  --script-sh "PATH=\"$PATH\" $(realpath "$0") --in-vm /run/output" \
   --qemu-opts -smp 2 # need at least two CPUs for some tests
 
 if [[ ! -e "${output}/success" ]]; then

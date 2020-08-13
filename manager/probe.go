@@ -199,6 +199,10 @@ func (p *Probe) Init(manager *Manager) error {
 	return p.init()
 }
 
+func (p *Probe) Program() *ebpf.Program {
+	return p.program
+}
+
 // init - Internal initialization function
 func (p *Probe) init() error {
 	// Load spec if necessary

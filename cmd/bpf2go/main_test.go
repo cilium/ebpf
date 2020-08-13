@@ -26,6 +26,7 @@ func TestRun(t *testing.T) {
 	defer os.RemoveAll(tmpDir)
 
 	err = run(ioutil.Discard, "foo", tmpDir, []string{
+		"-cc", "clang-9",
 		"bar",
 		tmpFile,
 	})

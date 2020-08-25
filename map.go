@@ -487,12 +487,22 @@ func (m *Map) nextKey(key interface{}, nextKeyOut internal.Pointer) error {
 
 // Iterate traverses a map.
 //
+// WARNING: Will not work on kernel versions < 4.4.132, which don't support using
+// a NULL `key` with the `BPF_MAP_GET_NEXT_KEY` command to the bpf syscall. Please
+// use IterateFrom instead with a non-existing key.
+//
 // It's safe to create multiple iterators at the same time.
 //
 // It's not possible to guarantee that all keys in a map will be
 // returned if there are concurrent modifications to the map.
 func (m *Map) Iterate() *MapIterator {
-	return newMapIterator(m)
+	return newMapIterator(m, nil)
+}
+
+// IterateFrom traverses a map, starting at prevKey. If prevKey is not found,
+// it will start from the beginning.
+func (m *Map) IterateFrom(prevKey interface{}) *MapIterator {
+	return newMapIterator(m, prevKey)
 }
 
 // Close removes a Map
@@ -684,11 +694,12 @@ type MapIterator struct {
 	err               error
 }
 
-func newMapIterator(target *Map) *MapIterator {
+func newMapIterator(target *Map, prevKey interface{}) *MapIterator {
 	return &MapIterator{
 		target:     target,
 		maxEntries: target.abi.MaxEntries,
 		prevBytes:  make([]byte, int(target.abi.KeySize)),
+		prevKey: 	prevKey,
 	}
 }
 

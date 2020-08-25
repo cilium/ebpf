@@ -116,7 +116,9 @@ func (m *PerfMap) Start() error {
 				continue
 			}
 			if record.LostSamples > 0 {
-				m.LostHandler(record.CPU, record.LostSamples, m, m.manager)
+				if m.LostHandler != nil {
+					m.LostHandler(record.CPU, record.LostSamples, m, m.manager)
+				}
 				continue
 			}
 			m.DataHandler(record.CPU, record.RawSample, m, m.manager)

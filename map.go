@@ -492,7 +492,13 @@ func (m *Map) nextKey(key interface{}, nextKeyOut internal.Pointer) error {
 // It's not possible to guarantee that all keys in a map will be
 // returned if there are concurrent modifications to the map.
 func (m *Map) Iterate() *MapIterator {
-	return newMapIterator(m)
+	return newMapIterator(m, nil)
+}
+
+// IterateFrom traverses a map, starting at prevKey. If prevKey is not found,
+// it will start from the beginning.
+func (m *Map) IterateFrom(prevKey interface{}) *MapIterator {
+	return newMapIterator(m, prevKey)
 }
 
 // Close removes a Map
@@ -684,11 +690,12 @@ type MapIterator struct {
 	err               error
 }
 
-func newMapIterator(target *Map) *MapIterator {
+func newMapIterator(target *Map, prevKey interface{}) *MapIterator {
 	return &MapIterator{
 		target:     target,
 		maxEntries: target.abi.MaxEntries,
 		prevBytes:  make([]byte, int(target.abi.KeySize)),
+		prevKey: 	prevKey,
 	}
 }
 

@@ -90,6 +90,15 @@ func LoadPinnedRawLink(fileName string) (*RawLink, error) {
 
 func (l *RawLink) isLink() {}
 
+// FD returns the raw file descriptor.
+func (l *RawLink) FD() int {
+	fd, err := l.fd.Value()
+	if err != nil {
+		return -1
+	}
+	return int(fd)
+}
+
 // Close breaks the link.
 //
 // Use Pin if you want to make the link persistent.

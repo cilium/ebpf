@@ -49,6 +49,11 @@ var _ Link = (*Iter)(nil)
 
 func (it *Iter) isLink() {}
 
+// FD returns the underlying file descriptor.
+func (it *Iter) FD() int {
+	return it.link.FD()
+}
+
 // Close implements Link.
 func (it *Iter) Close() error {
 	return it.link.Close()

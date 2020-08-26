@@ -42,11 +42,11 @@ func newMapABIFromFd(fd *internal.FD) (string, *MapABI, error) {
 	}
 
 	return "", &MapABI{
-		MapType(info.mapType),
-		info.keySize,
-		info.valueSize,
-		info.maxEntries,
-		info.flags,
+		MapType(info.map_type),
+		info.key_size,
+		info.value_size,
+		info.max_entries,
+		info.map_flags,
 	}, nil
 }
 
@@ -112,7 +112,7 @@ func newProgramABIFromFd(fd *internal.FD) (string, *ProgramABI, error) {
 	}
 
 	return name, &ProgramABI{
-		Type: ProgramType(info.progType),
+		Type: ProgramType(info.prog_type),
 	}, nil
 }
 

@@ -147,7 +147,11 @@ func newProgramWithBTF(spec *ProgramSpec, btf *btf.Handle, opts ProgramOptions) 
 
 	fd, err := bpfProgLoad(attr)
 	if err == nil {
-		prog := newProgram(fd, spec.Name, &ProgramABI{spec.Type})
+		_, abi, err := newProgramABIFromFd(fd)
+		if err != nil {
+			return nil, fmt.Errorf("program info: %s", err)
+		}
+		prog := newProgram(fd, spec.Name, abi)
 		prog.VerifierLog = internal.CString(logBuf)
 		return prog, nil
 	}

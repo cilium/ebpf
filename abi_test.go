@@ -86,7 +86,37 @@ func TestMapABIFromProc(t *testing.T) {
 }
 
 func TestProgramABI(t *testing.T) {
-	abi := &ProgramABI{Type: SocketFilter}
+	prog := createSocketFilter(t)
+	defer prog.Close()
+
+	_, genABI, err := newProgramABIFromFd(prog.fd)
+	if err != nil {
+		t.Fatal("Can't get program ABI:", err)
+	}
+
+	_, procABI, err := newProgramABIFromProc(prog.fd)
+	if err != nil {
+		t.Fatal("can't get program ABI from proc:", err)
+	}
+
+	for name, abi := range map[string]*ProgramABI{
+		"generic": genABI,
+		"proc":    procABI,
+	} {
+		t.Run(name, func(t *testing.T) {
+			if abi.Type != SocketFilter {
+				t.Error("Expected Type to be SocketFilter, got", abi.Type)
+			}
+
+			if want := "d7edec644f05498d"; abi.Tag != want {
+				t.Errorf("Expected Tag to be %s, got %s", want, abi.Tag)
+			}
+		})
+	}
+}
+
+func TestProgramABIEqual(t *testing.T) {
+	abi := &ProgramABI{Type: SocketFilter, Tag: "bar"}
 
 	if !abi.Equal(abi) {
 		t.Error("Equal returns true when comparing an ABI to itself")

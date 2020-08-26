@@ -42,11 +42,11 @@ func newMapABIFromFd(fd *internal.FD) (string, *MapABI, error) {
 	}
 
 	return "", &MapABI{
-		MapType(info.mapType),
-		info.keySize,
-		info.valueSize,
-		info.maxEntries,
-		info.flags,
+		MapType(info.map_type),
+		info.key_size,
+		info.value_size,
+		info.max_entries,
+		info.map_flags,
 	}, nil
 }
 
@@ -86,12 +86,7 @@ func (abi *MapABI) Equal(other *MapABI) bool {
 // ProgramABI are the attributes of a Program which are available across all supported kernels.
 type ProgramABI struct {
 	Type ProgramType
-}
-
-func newProgramABIFromSpec(spec *ProgramSpec) *ProgramABI {
-	return &ProgramABI{
-		spec.Type,
-	}
+	Tag  string
 }
 
 func newProgramABIFromFd(fd *internal.FD) (string, *ProgramABI, error) {
@@ -104,27 +99,24 @@ func newProgramABIFromFd(fd *internal.FD) (string, *ProgramABI, error) {
 		return "", nil, err
 	}
 
-	var name string
+	tag := internal.CString(info.tag[:])
+	name := tag
 	if bpfName := internal.CString(info.name[:]); bpfName != "" {
 		name = bpfName
-	} else {
-		name = internal.CString(info.tag[:])
 	}
 
 	return name, &ProgramABI{
-		Type: ProgramType(info.progType),
+		ProgramType(info.prog_type),
+		tag,
 	}, nil
 }
 
 func newProgramABIFromProc(fd *internal.FD) (string, *ProgramABI, error) {
-	var (
-		abi  ProgramABI
-		name string
-	)
+	var abi ProgramABI
 
 	err := scanFdInfo(fd, map[string]interface{}{
 		"prog_type": &abi.Type,
-		"prog_tag":  &name,
+		"prog_tag":  &abi.Tag,
 	})
 	if errors.Is(err, errMissingFields) {
 		return "", nil, &internal.UnsupportedFeatureError{
@@ -136,7 +128,7 @@ func newProgramABIFromProc(fd *internal.FD) (string, *ProgramABI, error) {
 		return "", nil, err
 	}
 
-	return name, &abi, nil
+	return abi.Tag, &abi, nil
 }
 
 func scanFdInfo(fd *internal.FD, fields map[string]interface{}) error {
@@ -199,6 +191,8 @@ func scanFdInfoReader(r io.Reader, fields map[string]interface{}) error {
 func (abi *ProgramABI) Equal(other *ProgramABI) bool {
 	switch {
 	case abi.Type != other.Type:
+		return false
+	case abi.Tag != other.Tag:
 		return false
 	default:
 		return true

@@ -10,6 +10,9 @@ import (
 	"github.com/cilium/ebpf/internal/unix"
 )
 
+// Specify numa node during map creation
+const NumaMode uint32 = unix.BPF_F_NUMA_NODE
+
 // Errors returned by Map and MapIterator methods.
 var (
 	ErrKeyNotExist      = errors.New("key does not exist")
@@ -185,6 +188,10 @@ func createMap(spec *MapSpec, inner *internal.FD, handle *btf.Handle) (*Map, err
 		if err := haveMapMutabilityModifiers(); err != nil {
 			return nil, fmt.Errorf("map create: %w", err)
 		}
+	}
+
+	if spec.NumaNode > 0 {
+		abi.Flags |= unix.BPF_F_NUMA_NODE
 	}
 
 	attr := bpfMapCreateAttr{

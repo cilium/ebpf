@@ -31,6 +31,9 @@ type MapSpec struct {
 	MaxEntries uint32
 	Flags      uint32
 
+	// Specify numa node during map creation
+	NumaNode uint32
+
 	// The initial contents of the map. May be nil.
 	Contents []MapKV
 
@@ -190,6 +193,7 @@ func createMap(spec *MapSpec, inner *internal.FD, handle *btf.Handle) (*Map, err
 		valueSize:  abi.ValueSize,
 		maxEntries: abi.MaxEntries,
 		flags:      abi.Flags,
+		numaNode:   spec.NumaNode,
 	}
 
 	if inner != nil {

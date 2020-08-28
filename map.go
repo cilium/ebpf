@@ -32,6 +32,7 @@ type MapSpec struct {
 	Flags      uint32
 
 	// Specify numa node during map creation
+	// (effective only if BPF_F_NUMA_NODE is set)
 	NumaNode uint32
 
 	// The initial contents of the map. May be nil.

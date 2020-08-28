@@ -43,13 +43,24 @@ func (v *Void) size() uint32    { return 0 }
 func (v *Void) copy() Type      { return (*Void)(nil) }
 func (v *Void) walk(*copyStack) {}
 
+type IntEncoding byte
+
+const (
+	Signed IntEncoding = 1 << 0
+	Char   IntEncoding = 1 << 1
+	Bool   IntEncoding = 1 << 2
+)
+
 // Int is an integer of a given length.
 type Int struct {
 	TypeID
 	Name
 
 	// The size of the integer in bytes.
-	Size uint32
+	Size     uint32
+	Encoding IntEncoding
+	Offset   uint32
+	Bits     byte
 }
 
 func (i *Int) size() uint32    { return i.Size }
@@ -466,7 +477,7 @@ func inflateRawTypes(rawTypes []rawType, rawStrings stringTable) (namedTypes map
 
 		switch raw.Kind() {
 		case kindInt:
-			typ = &Int{id, name, raw.Size()}
+			typ = &Int{id, name, raw.Size(), IntEncoding((raw.Info & 0x0f000000) >> 24), (raw.Info & 0x00ff0000) >> 16, byte(raw.Info & 0x000000ff)}
 
 		case kindPointer:
 			ptr := &Pointer{id, nil}

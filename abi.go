@@ -166,18 +166,18 @@ func scanFdInfoReader(r io.Reader, fields map[string]interface{}) error {
 	)
 
 	for scanner.Scan() {
-		parts := bytes.SplitN(scanner.Bytes(), []byte("\t"), 2)
+		parts := strings.SplitN(scanner.Text(), "\t", 2)
 		if len(parts) != 2 {
 			continue
 		}
 
-		name := bytes.TrimSuffix(parts[0], []byte(":"))
+		name := strings.TrimSuffix(parts[0], ":")
 		field, ok := fields[string(name)]
 		if !ok {
 			continue
 		}
 
-		if n, err := fmt.Fscanln(bytes.NewReader(parts[1]), field); err != nil || n != 1 {
+		if n, err := fmt.Sscanln(parts[1], field); err != nil || n != 1 {
 			return fmt.Errorf("can't parse field %s: %v", name, err)
 		}
 

@@ -123,7 +123,7 @@ func newProgramABIFromProc(fd *internal.FD) (string, *ProgramABI, error) {
 	if errors.Is(err, errMissingFields) {
 		return "", nil, &internal.UnsupportedFeatureError{
 			Name:           "reading ABI from /proc/self/fdinfo",
-			MinimumVersion: internal.Version{4, 11, 0},
+			MinimumVersion: internal.Version{4, 10, 0},
 		}
 	}
 	if err != nil {

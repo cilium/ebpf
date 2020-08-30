@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"io/ioutil"
 	"math"
 	"strings"
 	"time"
@@ -619,6 +620,17 @@ func resolveBTFType(name string, progType ProgramType, attachType AttachType) (b
 
 	target := match{progType, attachType}
 	switch target {
+	case match{LSM, AttachLSMMac}:
+		if err := haveBpfLSM(); err != nil {
+			return nil, err
+		}
+
+		var target btf.Func
+		if err := findKernelType("bpf_lsm_"+name, &target); err != nil {
+			return nil, fmt.Errorf("can't resolve BTF for LSM hook %s: %w", name, err)
+		}
+
+		return &target, nil
 	case match{Tracing, AttachTraceIter}:
 		var target btf.Func
 		if err := findKernelType("bpf_iter_"+name, &target); err != nil {
@@ -631,3 +643,18 @@ func resolveBTFType(name string, progType ProgramType, attachType AttachType) (b
 		return nil, nil
 	}
 }
+
+var haveBpfLSM = internal.FeatureTest("LSM", "5.8", func() (bool, error) {
+	lsm, err := ioutil.ReadFile("/sys/kernel/security/lsm")
+	if err != nil {
+		return false, fmt.Errorf("LSM unavailable: %w", ErrNotSupported)
+	}
+
+	for _, module := range strings.Split(string(lsm), ",") {
+		if module == "bpf" {
+			return true, nil
+		}
+	}
+
+	return false, fmt.Errorf("BPF LSM not loaded: %w", ErrNotSupported)
+})

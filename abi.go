@@ -3,10 +3,12 @@ package ebpf
 import (
 	"bufio"
 	"bytes"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
 	"os"
+	"strings"
 	"syscall"
 
 	"github.com/cilium/ebpf/internal"
@@ -86,57 +88,59 @@ func (abi *MapABI) Equal(other *MapABI) bool {
 // ProgramABI are the attributes of a Program which are available across all supported kernels.
 type ProgramABI struct {
 	Type ProgramType
+	// Truncated hash of the BPF bytecode.
+	Tag *string
+	// Name as supplied by user space at load time.
+	Name *string
 }
 
-func newProgramABIFromSpec(spec *ProgramSpec) *ProgramABI {
-	return &ProgramABI{
-		spec.Type,
-	}
-}
-
-func newProgramABIFromFd(fd *internal.FD) (string, *ProgramABI, error) {
+func newProgramABIFromFd(fd *internal.FD) (*ProgramABI, error) {
 	info, err := bpfGetProgInfoByFD(fd)
+	if errors.Is(err, syscall.EINVAL) {
+		return newProgramABIFromProc(fd)
+	}
 	if err != nil {
-		if errors.Is(err, syscall.EINVAL) {
-			return newProgramABIFromProc(fd)
-		}
-
-		return "", nil, err
+		return nil, err
 	}
 
-	var name string
-	if bpfName := internal.CString(info.name[:]); bpfName != "" {
-		name = bpfName
-	} else {
-		name = internal.CString(info.tag[:])
+	// tag is available if the kernel supports BPF_PROG_GET_INFO_BY_FD.
+	tag := strPtr(hex.EncodeToString(info.tag[:]))
+
+	// name is available from 4.15. To distinguish an unnamed program from
+	// a kernel that doesn't support names we can check whether load_time is
+	// present, since that also appeared in the same kernel version.
+	var name *string
+	if info.load_time > 0 {
+		name = strPtr(internal.CString(info.name[:]))
 	}
 
-	return name, &ProgramABI{
-		Type: ProgramType(info.prog_type),
+	return &ProgramABI{
+		ProgramType(info.prog_type),
+		tag,
+		name,
 	}, nil
 }
 
-func newProgramABIFromProc(fd *internal.FD) (string, *ProgramABI, error) {
+func newProgramABIFromProc(fd *internal.FD) (*ProgramABI, error) {
 	var (
-		abi  ProgramABI
-		name string
+		tag string
+		abi = ProgramABI{Tag: &tag}
 	)
-
 	err := scanFdInfo(fd, map[string]interface{}{
 		"prog_type": &abi.Type,
-		"prog_tag":  &name,
+		"prog_tag":  &tag,
 	})
 	if errors.Is(err, errMissingFields) {
-		return "", nil, &internal.UnsupportedFeatureError{
+		return nil, &internal.UnsupportedFeatureError{
 			Name:           "reading ABI from /proc/self/fdinfo",
 			MinimumVersion: internal.Version{4, 10, 0},
 		}
 	}
 	if err != nil {
-		return "", nil, err
+		return nil, err
 	}
 
-	return name, &abi, nil
+	return &abi, nil
 }
 
 func scanFdInfo(fd *internal.FD, fields map[string]interface{}) error {
@@ -195,12 +199,6 @@ func scanFdInfoReader(r io.Reader, fields map[string]interface{}) error {
 	return nil
 }
 
-// Equal returns true if two ABIs have the same values.
-func (abi *ProgramABI) Equal(other *ProgramABI) bool {
-	switch {
-	case abi.Type != other.Type:
-		return false
-	default:
-		return true
-	}
+func strPtr(str string) *string {
+	return &str
 }

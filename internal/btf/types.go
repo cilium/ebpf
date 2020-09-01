@@ -537,9 +537,11 @@ func inflateRawTypes(rawTypes []rawType, rawStrings stringTable) (namedTypes map
 		case kindFuncProto:
 			rawparams := raw.data.([]btfParam)
 			params := make([]FuncParam, 0, len(rawparams))
-			for _, param := range rawparams {
-				// OK for func params to not have a name
-				name, _ := rawStrings.LookupName(param.NameOff)
+			for i, param := range rawparams {
+				name, err := rawStrings.LookupName(param.NameOff)
+				if err != nil {
+					return nil, fmt.Errorf("can't get name for func proto parameter %d: %s", i, err)
+				}
 				params = append(params, FuncParam{
 					Name: name,
 				})

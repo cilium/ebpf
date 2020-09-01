@@ -90,9 +90,8 @@ type Struct struct {
 	TypeID
 	Name
 	// The size of the struct including padding, in bytes
-	Size     uint32
-	Members  []Member
-	KindFlag bool
+	Size    uint32
+	Members []Member
 }
 
 func (s *Struct) size() uint32 { return s.Size }
@@ -114,28 +113,13 @@ func (s *Struct) members() []Member {
 	return s.Members
 }
 
-func (s *Struct) MemberBitOffset(idx uint32) uint32 {
-	if s.KindFlag {
-		return s.Members[idx].BitOffset()
-	}
-	return s.Members[idx].Offset
-}
-
-func (s *Struct) MemberBitfieldSize(idx uint32) uint32 {
-	if s.KindFlag {
-		return s.Members[idx].BitfieldSize()
-	}
-	return 0
-}
-
 // Union is a compound type where members occupy the same memory.
 type Union struct {
 	TypeID
 	Name
 	// The size of the union including padding, in bytes.
-	Size     uint32
-	Members  []Member
-	KindFlag bool
+	Size    uint32
+	Members []Member
 }
 
 func (u *Union) size() uint32 { return u.Size }
@@ -157,24 +141,8 @@ func (u *Union) members() []Member {
 	return u.Members
 }
 
-func (u *Union) MemberBitOffset(idx uint32) uint32 {
-	if u.KindFlag {
-		return u.Members[idx].BitOffset()
-	}
-	return u.Members[idx].Offset
-}
-
-func (u *Union) MemberBitfieldSize(idx uint32) uint32 {
-	if u.KindFlag {
-		return u.Members[idx].BitfieldSize()
-	}
-	return 0
-}
-
 type composite interface {
 	members() []Member
-	MemberBitOffset(idx uint32) uint32
-	MemberBitfieldSize(idx uint32) uint32
 }
 
 var (
@@ -187,16 +155,10 @@ var (
 // It is not a valid Type.
 type Member struct {
 	Name
-	Type   Type
-	Offset uint32
-}
-
-func (m Member) BitfieldSize() uint32 {
-	return m.Offset >> 24
-}
-
-func (m Member) BitOffset() uint32 {
-	return m.Offset & 0xffffff
+	Type         Type
+	Offset       uint32
+	BitfieldSize uint32
+	BitOffset    uint32
 }
 
 // Enum lists possible values.
@@ -216,7 +178,6 @@ func (e *Enum) copy() Type {
 type Fwd struct {
 	TypeID
 	Name
-	KindFlag bool
 }
 
 func (f *Fwd) walk(*copyStack) {}
@@ -485,7 +446,7 @@ func inflateRawTypes(rawTypes []rawType, rawStrings stringTable) (namedTypes map
 		fixups = append(fixups, fixupDef{id, expectedKind, typ})
 	}
 
-	convertMembers := func(raw []btfMember) ([]Member, error) {
+	convertMembers := func(raw []btfMember, kindFlag bool) ([]Member, error) {
 		// NB: The fixup below relies on pre-allocating this array to
 		// work, since otherwise append might re-allocate members.
 		members := make([]Member, 0, len(raw))
@@ -494,10 +455,15 @@ func inflateRawTypes(rawTypes []rawType, rawStrings stringTable) (namedTypes map
 			if err != nil {
 				return nil, fmt.Errorf("can't get name for member %d: %w", i, err)
 			}
-			members = append(members, Member{
+			m := Member{
 				Name:   name,
 				Offset: btfMember.Offset,
-			})
+			}
+			if kindFlag {
+				m.BitfieldSize = btfMember.Offset >> 24
+				m.BitOffset = m.Offset & 0xffffff
+			}
+			members = append(members, m)
 		}
 		for i := range members {
 			fixup(raw[i].Type, kindUnknown, &members[i].Type)
@@ -541,24 +507,24 @@ func inflateRawTypes(rawTypes []rawType, rawStrings stringTable) (namedTypes map
 			typ = arr
 
 		case kindStruct:
-			members, err := convertMembers(raw.data.([]btfMember))
+			members, err := convertMembers(raw.data.([]btfMember), raw.KindFlag())
 			if err != nil {
 				return nil, fmt.Errorf("struct %s (id %d): %w", name, id, err)
 			}
-			typ = &Struct{id, name, raw.Size(), members, raw.KindFlag()}
+			typ = &Struct{id, name, raw.Size(), members}
 
 		case kindUnion:
-			members, err := convertMembers(raw.data.([]btfMember))
+			members, err := convertMembers(raw.data.([]btfMember), raw.KindFlag())
 			if err != nil {
 				return nil, fmt.Errorf("union %s (id %d): %w", name, id, err)
 			}
-			typ = &Union{id, name, raw.Size(), members, raw.KindFlag()}
+			typ = &Union{id, name, raw.Size(), members}
 
 		case kindEnum:
 			typ = &Enum{id, name}
 
 		case kindForward:
-			typ = &Fwd{id, name, raw.KindFlag()}
+			typ = &Fwd{id, name}
 
 		case kindTypedef:
 			typedef := &Typedef{id, name, nil}

@@ -2,7 +2,6 @@ package ebpf
 
 import (
 	"bufio"
-	"bytes"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -21,34 +20,30 @@ type MapABI struct {
 	ValueSize  uint32
 	MaxEntries uint32
 	Flags      uint32
+	// Name as supplied by user space at load time.
+	Name *string
 }
 
-func newMapABIFromSpec(spec *MapSpec) *MapABI {
-	return &MapABI{
-		spec.Type,
-		spec.KeySize,
-		spec.ValueSize,
-		spec.MaxEntries,
-		spec.Flags,
-	}
-}
-
-func newMapABIFromFd(fd *internal.FD) (string, *MapABI, error) {
+func newMapABIFromFd(fd *internal.FD) (*MapABI, error) {
 	info, err := bpfGetMapInfoByFD(fd)
+	if errors.Is(err, syscall.EINVAL) {
+		return newMapABIFromProc(fd)
+	}
 	if err != nil {
-		if errors.Is(err, syscall.EINVAL) {
-			abi, err := newMapABIFromProc(fd)
-			return "", abi, err
-		}
-		return "", nil, err
+		return nil, err
 	}
 
-	return "", &MapABI{
+	// name is available from 4.15. Unfortunately we can't discern between
+	// an unnamed map and a kernel that doesn't support names.
+	name := strPtr(internal.CString(info.name[:]))
+
+	return &MapABI{
 		MapType(info.map_type),
 		info.key_size,
 		info.value_size,
 		info.max_entries,
 		info.map_flags,
+		name,
 	}, nil
 }
 
@@ -65,24 +60,6 @@ func newMapABIFromProc(fd *internal.FD) (*MapABI, error) {
 		return nil, err
 	}
 	return &abi, nil
-}
-
-// Equal returns true if two ABIs have the same values.
-func (abi *MapABI) Equal(other *MapABI) bool {
-	switch {
-	case abi.Type != other.Type:
-		return false
-	case abi.KeySize != other.KeySize:
-		return false
-	case abi.ValueSize != other.ValueSize:
-		return false
-	case abi.MaxEntries != other.MaxEntries:
-		return false
-	case abi.Flags != other.Flags:
-		return false
-	default:
-		return true
-	}
 }
 
 // ProgramABI are the attributes of a Program which are available across all supported kernels.

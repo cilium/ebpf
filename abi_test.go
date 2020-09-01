@@ -7,24 +7,6 @@ import (
 	"github.com/cilium/ebpf/internal/testutils"
 )
 
-func TestMapABIEqual(t *testing.T) {
-	abi := &MapABI{
-		Type:       Array,
-		KeySize:    4,
-		ValueSize:  2,
-		MaxEntries: 3,
-		Flags:      1,
-	}
-
-	if !abi.Equal(abi) {
-		t.Error("Equal returns true when comparing an ABI to itself")
-	}
-
-	if abi.Equal(&MapABI{}) {
-		t.Error("Equal returns true for different ABIs")
-	}
-}
-
 func TestMapABIFromProc(t *testing.T) {
 	hash, err := NewMap(&MapSpec{
 		Type:       Hash,

@@ -7,7 +7,7 @@ import (
 	"github.com/cilium/ebpf/internal/testutils"
 )
 
-func TestMapABIFromProc(t *testing.T) {
+func TestMapInfoFromProc(t *testing.T) {
 	hash, err := NewMap(&MapSpec{
 		Type:       Hash,
 		KeySize:    4,
@@ -20,29 +20,29 @@ func TestMapABIFromProc(t *testing.T) {
 	}
 	defer hash.Close()
 
-	abi, err := newMapABIFromProc(hash.fd)
+	info, err := newMapInfoFromProc(hash.fd)
 	if err != nil {
-		t.Fatal("Can't get map ABI:", err)
+		t.Fatal("Can't get map info:", err)
 	}
 
-	if abi.Type != Hash {
-		t.Error("Expected Hash, got", abi.Type)
+	if info.Type != Hash {
+		t.Error("Expected Hash, got", info.Type)
 	}
 
-	if abi.KeySize != 4 {
-		t.Error("Expected KeySize of 4, got", abi.KeySize)
+	if info.KeySize != 4 {
+		t.Error("Expected KeySize of 4, got", info.KeySize)
 	}
 
-	if abi.ValueSize != 5 {
-		t.Error("Expected ValueSize of 5, got", abi.ValueSize)
+	if info.ValueSize != 5 {
+		t.Error("Expected ValueSize of 5, got", info.ValueSize)
 	}
 
-	if abi.MaxEntries != 2 {
-		t.Error("Expected MaxEntries of 2, got", abi.MaxEntries)
+	if info.MaxEntries != 2 {
+		t.Error("Expected MaxEntries of 2, got", info.MaxEntries)
 	}
 
-	if abi.Flags != 1 {
-		t.Error("Expected Flags to be 1, got", abi.Flags)
+	if info.Flags != 1 {
+		t.Error("Expected Flags to be 1, got", info.Flags)
 	}
 
 	nested, err := NewMap(&MapSpec{
@@ -62,25 +62,25 @@ func TestMapABIFromProc(t *testing.T) {
 	}
 	defer nested.Close()
 
-	_, err = newMapABIFromProc(nested.fd)
+	_, err = newMapInfoFromProc(nested.fd)
 	if err != nil {
-		t.Fatal("Can't get nested map ABI from /proc:", err)
+		t.Fatal("Can't get nested map info from /proc:", err)
 	}
 }
 
-func TestProgramABI(t *testing.T) {
+func TestProgramInfo(t *testing.T) {
 	prog := createSocketFilter(t)
 	defer prog.Close()
 
-	for name, fn := range map[string]func(*internal.FD) (*ProgramABI, error){
-		"generic": newProgramABIFromFd,
-		"proc":    newProgramABIFromProc,
+	for name, fn := range map[string]func(*internal.FD) (*ProgramInfo, error){
+		"generic": newProgramInfoFromFd,
+		"proc":    newProgramInfoFromProc,
 	} {
 		t.Run(name, func(t *testing.T) {
 			abi, err := fn(prog.fd)
 			testutils.SkipIfNotSupported(t, err)
 			if err != nil {
-				t.Fatal("Can't get program ABI:", err)
+				t.Fatal("Can't get program info:", err)
 			}
 
 			if abi.Type != SocketFilter {

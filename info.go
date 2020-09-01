@@ -13,8 +13,10 @@ import (
 	"github.com/cilium/ebpf/internal"
 )
 
-// MapABI are the attributes of a Map which are available across all supported kernels.
-type MapABI struct {
+// MapInfo describes a map.
+//
+// The pointer fields are not supported across all kernels, and may be nil.
+type MapInfo struct {
 	Type       MapType
 	KeySize    uint32
 	ValueSize  uint32
@@ -24,10 +26,10 @@ type MapABI struct {
 	Name *string
 }
 
-func newMapABIFromFd(fd *internal.FD) (*MapABI, error) {
+func newMapInfoFromFd(fd *internal.FD) (*MapInfo, error) {
 	info, err := bpfGetMapInfoByFD(fd)
 	if errors.Is(err, syscall.EINVAL) {
-		return newMapABIFromProc(fd)
+		return newMapInfoFromProc(fd)
 	}
 	if err != nil {
 		return nil, err
@@ -37,7 +39,7 @@ func newMapABIFromFd(fd *internal.FD) (*MapABI, error) {
 	// an unnamed map and a kernel that doesn't support names.
 	name := strPtr(internal.CString(info.name[:]))
 
-	return &MapABI{
+	return &MapInfo{
 		MapType(info.map_type),
 		info.key_size,
 		info.value_size,
@@ -47,23 +49,25 @@ func newMapABIFromFd(fd *internal.FD) (*MapABI, error) {
 	}, nil
 }
 
-func newMapABIFromProc(fd *internal.FD) (*MapABI, error) {
-	var abi MapABI
+func newMapInfoFromProc(fd *internal.FD) (*MapInfo, error) {
+	var mi MapInfo
 	err := scanFdInfo(fd, map[string]interface{}{
-		"map_type":    &abi.Type,
-		"key_size":    &abi.KeySize,
-		"value_size":  &abi.ValueSize,
-		"max_entries": &abi.MaxEntries,
-		"map_flags":   &abi.Flags,
+		"map_type":    &mi.Type,
+		"key_size":    &mi.KeySize,
+		"value_size":  &mi.ValueSize,
+		"max_entries": &mi.MaxEntries,
+		"map_flags":   &mi.Flags,
 	})
 	if err != nil {
 		return nil, err
 	}
-	return &abi, nil
+	return &mi, nil
 }
 
-// ProgramABI are the attributes of a Program which are available across all supported kernels.
-type ProgramABI struct {
+// ProgramInfo describes a program.
+//
+// The pointer fields are not supported across all kernels, and may be nil.
+type ProgramInfo struct {
 	Type ProgramType
 	// Truncated hash of the BPF bytecode.
 	Tag *string
@@ -71,10 +75,10 @@ type ProgramABI struct {
 	Name *string
 }
 
-func newProgramABIFromFd(fd *internal.FD) (*ProgramABI, error) {
+func newProgramInfoFromFd(fd *internal.FD) (*ProgramInfo, error) {
 	info, err := bpfGetProgInfoByFD(fd)
 	if errors.Is(err, syscall.EINVAL) {
-		return newProgramABIFromProc(fd)
+		return newProgramInfoFromProc(fd)
 	}
 	if err != nil {
 		return nil, err
@@ -91,17 +95,17 @@ func newProgramABIFromFd(fd *internal.FD) (*ProgramABI, error) {
 		name = strPtr(internal.CString(info.name[:]))
 	}
 
-	return &ProgramABI{
+	return &ProgramInfo{
 		ProgramType(info.prog_type),
 		tag,
 		name,
 	}, nil
 }
 
-func newProgramABIFromProc(fd *internal.FD) (*ProgramABI, error) {
+func newProgramInfoFromProc(fd *internal.FD) (*ProgramInfo, error) {
 	var (
 		tag string
-		abi = ProgramABI{Tag: &tag}
+		abi = ProgramInfo{Tag: &tag}
 	)
 	err := scanFdInfo(fd, map[string]interface{}{
 		"prog_type": &abi.Type,

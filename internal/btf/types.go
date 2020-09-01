@@ -233,13 +233,20 @@ func (f *Func) copy() Type {
 type FuncProto struct {
 	TypeID
 	Return Type
-	// Parameters not supported yet
+	Params []FuncParam
 }
 
 func (fp *FuncProto) walk(cs *copyStack) { cs.push(&fp.Return) }
 func (fp *FuncProto) copy() Type {
 	cpy := *fp
+	cpy.Params = make([]FuncParam, len(fp.Params))
+	copy(cpy.Params, fp.Params)
 	return &cpy
+}
+
+type FuncParam struct {
+	Name
+	Type Type
 }
 
 // Var is a global variable.
@@ -528,7 +535,22 @@ func inflateRawTypes(rawTypes []rawType, rawStrings stringTable) (namedTypes map
 			typ = fn
 
 		case kindFuncProto:
-			fp := &FuncProto{id, nil}
+			rawparams := raw.data.([]btfParam)
+			params := make([]FuncParam, 0, len(rawparams))
+			for i, param := range rawparams {
+				name, err := rawStrings.LookupName(param.NameOff)
+				if err != nil {
+					return nil, fmt.Errorf("can't get name for func proto parameter %d: %s", i, err)
+				}
+				params = append(params, FuncParam{
+					Name: name,
+				})
+			}
+			for i := range params {
+				fixup(rawparams[i].Type, kindUnknown, &params[i].Type)
+			}
+
+			fp := &FuncProto{id, nil, params}
 			fixup(raw.Type(), kindUnknown, &fp.Return)
 			typ = fp
 

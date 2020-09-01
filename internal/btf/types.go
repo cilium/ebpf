@@ -513,7 +513,7 @@ func inflateRawTypes(rawTypes []rawType, rawStrings stringTable) (namedTypes map
 			for i, btfVal := range rawvals {
 				name, err := rawStrings.LookupName(btfVal.NameOff)
 				if err != nil {
-					return nil, fmt.Errorf("can't get name for enum value %d: %w", i, err)
+					return nil, fmt.Errorf("can't get name for enum value %d: %s", i, err)
 				}
 				vals = append(vals, EnumValue{
 					Name:  name,

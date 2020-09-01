@@ -46,9 +46,9 @@ func (v *Void) walk(*copyStack) {}
 type IntEncoding byte
 
 const (
-	Signed IntEncoding = 1 << 0
-	Char   IntEncoding = 1 << 1
-	Bool   IntEncoding = 1 << 2
+	Signed IntEncoding = 1 << iota
+	Char
+	Bool
 )
 
 // Int is an integer of a given length.
@@ -477,7 +477,8 @@ func inflateRawTypes(rawTypes []rawType, rawStrings stringTable) (namedTypes map
 
 		switch raw.Kind() {
 		case kindInt:
-			typ = &Int{id, name, raw.Size(), IntEncoding((raw.Info & 0x0f000000) >> 24), (raw.Info & 0x00ff0000) >> 16, byte(raw.Info & 0x000000ff)}
+			encoding, offset, bits := raw.IntEncoding()
+			typ = &Int{id, name, raw.Size(), encoding, offset, bits}
 
 		case kindPointer:
 			ptr := &Pointer{id, nil}

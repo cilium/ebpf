@@ -307,12 +307,6 @@ func ExampleCollectionSpec_LoadAndAssign() {
 	if err := spec.LoadAndAssign(&objs, nil); err != nil {
 		panic(err)
 	}
-
-	fmt.Println(objs.Program.ABI().Type)
-	fmt.Println(objs.Map.ABI().Type)
-
-	// Output: SocketFilter
-	// Array
 }
 
 func ExampleCollection_Assign() {
@@ -348,10 +342,4 @@ func ExampleCollection_Assign() {
 	if err := coll.Assign(&objs); err != nil {
 		panic(err)
 	}
-
-	fmt.Println(objs.Program.ABI().Type)
-	fmt.Println(objs.Map.ABI().Type)
-
-	// Output: SocketFilter
-	// Array
 }

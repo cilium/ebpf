@@ -3,6 +3,7 @@ package ebpf
 import (
 	"testing"
 
+	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/testutils"
 )
 
@@ -86,13 +87,35 @@ func TestMapABIFromProc(t *testing.T) {
 }
 
 func TestProgramABI(t *testing.T) {
-	abi := &ProgramABI{Type: SocketFilter}
+	prog := createSocketFilter(t)
+	defer prog.Close()
 
-	if !abi.Equal(abi) {
-		t.Error("Equal returns true when comparing an ABI to itself")
-	}
+	for name, fn := range map[string]func(*internal.FD) (*ProgramABI, error){
+		"generic": newProgramABIFromFd,
+		"proc":    newProgramABIFromProc,
+	} {
+		t.Run(name, func(t *testing.T) {
+			abi, err := fn(prog.fd)
+			testutils.SkipIfNotSupported(t, err)
+			if err != nil {
+				t.Fatal("Can't get program ABI:", err)
+			}
 
-	if abi.Equal(&ProgramABI{}) {
-		t.Error("Equal returns true for different ABIs")
+			if abi.Type != SocketFilter {
+				t.Error("Expected Type to be SocketFilter, got", abi.Type)
+			}
+
+			if abi.Name != nil {
+				if *abi.Name != "test" {
+					t.Error("Expected Name to be test, got", *abi.Name)
+				}
+			}
+
+			if abi.Tag != nil {
+				if want := "d7edec644f05498d"; *abi.Tag != want {
+					t.Errorf("Expected Tag to be %s, got %s", want, *abi.Tag)
+				}
+			}
+		})
 	}
 }

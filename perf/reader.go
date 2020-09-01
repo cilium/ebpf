@@ -189,14 +189,14 @@ func NewReaderWithOptions(array *ebpf.Map, perCPUBuffer int, opts ReaderOptions)
 		return nil, fmt.Errorf("can't create epoll fd: %v", err)
 	}
 
-	abi, err := array.ABI()
+	info, err := array.Info()
 	if err != nil {
 		return nil, fmt.Errorf("map ABI: %s", err)
 	}
 
 	var (
 		fds      = []int{epollFd}
-		nCPU     = int(abi.MaxEntries)
+		nCPU     = int(info.MaxEntries)
 		rings    = make([]*perfEventRing, 0, nCPU)
 		pauseFds = make([]int, 0, nCPU)
 	)

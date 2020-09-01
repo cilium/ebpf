@@ -601,9 +601,6 @@ func (m *Map) populate(contents []MapKV) error {
 }
 
 // LoadPinnedMap load a Map from a BPF file.
-//
-// The function is not compatible with nested maps.
-// Use LoadPinnedMapExplicit in these situations.
 func LoadPinnedMap(fileName string) (*Map, error) {
 	fd, err := internal.BPFObjGet(fileName)
 	if err != nil {
@@ -615,15 +612,6 @@ func LoadPinnedMap(fileName string) (*Map, error) {
 		return nil, err
 	}
 	return newMap(fd, name, abi)
-}
-
-// LoadPinnedMapExplicit loads a map with explicit parameters.
-func LoadPinnedMapExplicit(fileName string, abi *MapABI) (*Map, error) {
-	fd, err := internal.BPFObjGet(fileName)
-	if err != nil {
-		return nil, err
-	}
-	return newMap(fd, "", abi)
 }
 
 func unmarshalMap(buf []byte) (*Map, error) {

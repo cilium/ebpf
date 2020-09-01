@@ -144,6 +144,11 @@ func (bt *btfType) SetLinkage(linkage btfFuncLinkage) {
 	bt.setInfo(uint32(linkage), btfTypeVlenMask, btfTypeVlenShift)
 }
 
+func (bt *btfType) IntEncoding() (IntEncoding, uint32, byte) {
+	// TODO: Panic here if wrong kind?
+	return IntEncoding((bt.Info & 0x0f000000) >> 24), (bt.Info & 0x00ff0000) >> 16, byte(bt.Info & 0x000000ff)
+}
+
 func (bt *btfType) Type() TypeID {
 	// TODO: Panic here if wrong kind?
 	return TypeID(bt.SizeType)

@@ -139,7 +139,7 @@ func (bt *btfType) SetVlen(vlen int) {
 }
 
 func (bt *btfType) KindFlag() bool {
-	return int(bt.info(btfTypeKindFlagMask, btfTypeKindFlagShift)) == 1
+	return bt.info(btfTypeKindFlagMask, btfTypeKindFlagShift) == 1
 }
 
 func (bt *btfType) Linkage() btfFuncLinkage {

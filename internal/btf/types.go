@@ -236,7 +236,13 @@ type FuncProto struct {
 	Params []FuncParam
 }
 
-func (fp *FuncProto) walk(cs *copyStack) { cs.push(&fp.Return) }
+func (fp *FuncProto) walk(cs *copyStack) {
+	cs.push(&fp.Return)
+	for _, m := range fp.Params {
+		cs.push(&m.Type)
+	}
+}
+
 func (fp *FuncProto) copy() Type {
 	cpy := *fp
 	cpy.Params = make([]FuncParam, len(fp.Params))

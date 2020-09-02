@@ -158,7 +158,6 @@ type Member struct {
 	Type         Type
 	Offset       uint32
 	BitfieldSize uint32
-	BitOffset    uint32
 }
 
 // Enum lists possible values.
@@ -461,7 +460,7 @@ func inflateRawTypes(rawTypes []rawType, rawStrings stringTable) (namedTypes map
 			}
 			if kindFlag {
 				m.BitfieldSize = btfMember.Offset >> 24
-				m.BitOffset = m.Offset & 0xffffff
+				m.Offset = m.Offset & 0xffffff
 			}
 			members = append(members, m)
 		}

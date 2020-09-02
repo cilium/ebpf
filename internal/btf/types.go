@@ -59,8 +59,10 @@ type Int struct {
 	// The size of the integer in bytes.
 	Size     uint32
 	Encoding IntEncoding
-	Offset   uint32
-	Bits     byte
+	// Offset is the starting bit offset. Currently always 0.
+	// See https://www.kernel.org/doc/html/latest/bpf/btf.html#btf-kind-int
+	Offset uint32
+	Bits   byte
 }
 
 func (i *Int) size() uint32    { return i.Size }

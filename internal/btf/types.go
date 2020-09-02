@@ -477,7 +477,7 @@ func inflateRawTypes(rawTypes []rawType, rawStrings stringTable) (namedTypes map
 
 		switch raw.Kind() {
 		case kindInt:
-			encoding, offset, bits := raw.IntEncoding()
+			encoding, offset, bits := intEncoding(*raw.data.(*uint32))
 			typ = &Int{id, name, raw.Size(), encoding, offset, bits}
 
 		case kindPointer:

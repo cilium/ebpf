@@ -146,12 +146,23 @@ type Member struct {
 type Enum struct {
 	TypeID
 	Name
+	Values []EnumValue
+}
+
+// EnumValue is part of an Enum
+//
+// Is is not a valid Type
+type EnumValue struct {
+	Name
+	Value int32
 }
 
 func (e *Enum) size() uint32    { return 4 }
 func (e *Enum) walk(*copyStack) {}
 func (e *Enum) copy() Type {
 	cpy := *e
+	cpy.Values = make([]EnumValue, len(e.Values))
+	copy(cpy.Values, e.Values)
 	return &cpy
 }
 
@@ -497,7 +508,19 @@ func inflateRawTypes(rawTypes []rawType, rawStrings stringTable) (namedTypes map
 			typ = &Union{id, name, raw.Size(), members}
 
 		case kindEnum:
-			typ = &Enum{id, name}
+			rawvals := raw.data.([]btfEnum)
+			vals := make([]EnumValue, 0, len(rawvals))
+			for i, btfVal := range rawvals {
+				name, err := rawStrings.LookupName(btfVal.NameOff)
+				if err != nil {
+					return nil, fmt.Errorf("can't get name for enum value %d: %s", i, err)
+				}
+				vals = append(vals, EnumValue{
+					Name:  name,
+					Value: btfVal.Val,
+				})
+			}
+			typ = &Enum{id, name, vals}
 
 		case kindForward:
 			typ = &Fwd{id, name}

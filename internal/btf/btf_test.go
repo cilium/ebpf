@@ -31,9 +31,38 @@ func TestParseVmlinux(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	_, err = loadNakedSpec(bytes.NewReader(buf), binary.LittleEndian, nil, nil)
+	spec, err := loadNakedSpec(bytes.NewReader(buf), binary.LittleEndian, nil, nil)
 	if err != nil {
 		t.Fatal("Can't load BTF:", err)
+	}
+
+	var iphdr Struct
+	err = spec.FindType("iphdr", &iphdr)
+	if err != nil {
+		t.Fatalf("unable to find `iphdr` struct: %s", err)
+	}
+	for _, m := range iphdr.Members {
+		if m.Name == "version" {
+			// __u8 is a typedef
+			td, ok := m.Type.(*Typedef)
+			if !ok {
+				t.Fatalf("version member of iphdr should be a __u8 typedef: actual: %T", m.Type)
+			}
+			u8int, ok := td.Type.(*Int)
+			if !ok {
+				t.Fatalf("__u8 typedef should point to an Int type: actual: %T", td.Type)
+			}
+			if u8int.Bits != 8 {
+				t.Fatalf("incorrect bit size of an __u8 int: expected: 8 actual: %d", u8int.Bits)
+			}
+			if u8int.Encoding != 0 {
+				t.Fatalf("incorrect encoding of an __u8 int: expected: 0 actual: %x", u8int.Encoding)
+			}
+			if u8int.Offset != 0 {
+				t.Fatalf("incorrect int offset of an __u8 int: expected: 0 actual: %d", u8int.Offset)
+			}
+			return
+		}
 	}
 }
 

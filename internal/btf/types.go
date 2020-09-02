@@ -155,7 +155,8 @@ var (
 // It is not a valid Type.
 type Member struct {
 	Name
-	Type         Type
+	Type Type
+	// Offset is the bit offset of this member
 	Offset       uint32
 	BitfieldSize uint32
 }
@@ -460,7 +461,7 @@ func inflateRawTypes(rawTypes []rawType, rawStrings stringTable) (namedTypes map
 			}
 			if kindFlag {
 				m.BitfieldSize = btfMember.Offset >> 24
-				m.Offset = m.Offset & 0xffffff
+				m.Offset &= 0xffffff
 			}
 			members = append(members, m)
 		}

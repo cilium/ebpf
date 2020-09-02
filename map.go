@@ -10,6 +10,10 @@ import (
 	"github.com/cilium/ebpf/internal/unix"
 )
 
+// Specify numa node during map creation
+// (effective only if MapSpec.NumaNode is set)
+const BPF_F_NUMA_NODE = unix.BPF_F_NUMA_NODE
+
 // Errors returned by Map and MapIterator methods.
 var (
 	ErrKeyNotExist      = errors.New("key does not exist")
@@ -30,6 +34,10 @@ type MapSpec struct {
 	ValueSize  uint32
 	MaxEntries uint32
 	Flags      uint32
+
+	// Specify numa node during map creation
+	// (effective only if BPF_F_NUMA_NODE is set)
+	NumaNode uint32
 
 	// The initial contents of the map. May be nil.
 	Contents []MapKV
@@ -190,6 +198,7 @@ func createMap(spec *MapSpec, inner *internal.FD, handle *btf.Handle) (*Map, err
 		valueSize:  abi.ValueSize,
 		maxEntries: abi.MaxEntries,
 		flags:      abi.Flags,
+		numaNode:   spec.NumaNode,
 	}
 
 	if inner != nil {

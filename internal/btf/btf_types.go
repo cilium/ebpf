@@ -40,10 +40,12 @@ const (
 )
 
 const (
-	btfTypeKindShift = 24
-	btfTypeKindLen   = 4
-	btfTypeVlenShift = 0
-	btfTypeVlenMask  = 16
+	btfTypeKindShift     = 24
+	btfTypeKindLen       = 4
+	btfTypeVlenShift     = 0
+	btfTypeVlenMask      = 16
+	btfTypeKindFlagShift = 31
+	btfTypeKindFlagMask  = 1
 )
 
 // btfType is equivalent to struct btf_type in Documentation/bpf/btf.rst.
@@ -134,6 +136,10 @@ func (bt *btfType) Vlen() int {
 
 func (bt *btfType) SetVlen(vlen int) {
 	bt.setInfo(uint32(vlen), btfTypeVlenMask, btfTypeVlenShift)
+}
+
+func (bt *btfType) KindFlag() bool {
+	return bt.info(btfTypeKindFlagMask, btfTypeKindFlagShift) == 1
 }
 
 func (bt *btfType) Linkage() btfFuncLinkage {

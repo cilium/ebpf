@@ -10,6 +10,10 @@ import (
 	"github.com/cilium/ebpf/internal/unix"
 )
 
+// Specify numa node during map creation
+// (effective only if MapSpec.NumaNode is set)
+const BPF_F_NUMA_NODE = unix.BPF_F_NUMA_NODE
+
 // Errors returned by Map and MapIterator methods.
 var (
 	ErrKeyNotExist      = errors.New("key does not exist")
@@ -46,13 +50,6 @@ type MapSpec struct {
 
 	// The BTF associated with this map.
 	BTF *btf.Map
-}
-
-// Specify numa node during map creation
-func (ms *MapSpec) WithNumaNode(node uint32) *MapSpec {
-	ms.Flags |= unix.BPF_F_NUMA_NODE
-	ms.NumaNode = node
-	return ms
 }
 
 func (ms *MapSpec) String() string {

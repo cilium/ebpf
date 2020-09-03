@@ -621,9 +621,7 @@ type bpfLoadBTFAttr struct {
 }
 
 func bpfLoadBTF(attr *bpfLoadBTFAttr) (*internal.FD, error) {
-	const _BTFLoad = 18
-
-	fd, err := internal.BPF(_BTFLoad, unsafe.Pointer(attr), unsafe.Sizeof(*attr))
+	fd, err := internal.BPF(internal.BPF_BTF_LOAD, unsafe.Pointer(attr), unsafe.Sizeof(*attr))
 	if err != nil {
 		return nil, err
 	}

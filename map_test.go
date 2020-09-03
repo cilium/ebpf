@@ -133,6 +133,44 @@ func TestMapPin(t *testing.T) {
 	}
 }
 
+func TestNestedMapPin(t *testing.T) {
+	m, err := NewMap(&MapSpec{
+		Type:       ArrayOfMaps,
+		KeySize:    4,
+		ValueSize:  4,
+		MaxEntries: 2,
+		InnerMap: &MapSpec{
+			Type:       Array,
+			KeySize:    4,
+			ValueSize:  4,
+			MaxEntries: 1,
+		},
+	})
+	testutils.SkipIfNotSupported(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer m.Close()
+
+	tmp, err := ioutil.TempDir("/sys/fs/bpf", "ebpf-test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tmp)
+
+	path := filepath.Join(tmp, "nested")
+	if err := m.Pin(path); err != nil {
+		t.Fatal(err)
+	}
+	m.Close()
+
+	m, err = LoadPinnedMap(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer m.Close()
+}
+
 func createArray(t *testing.T) *Map {
 	t.Helper()
 
@@ -625,7 +663,7 @@ func TestMapName(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if name := internal.CString(info.mapName[:]); name != "test" {
+	if name := internal.CString(info.name[:]); name != "test" {
 		t.Error("Expected name to be test, got", name)
 	}
 }

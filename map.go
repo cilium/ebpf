@@ -104,12 +104,12 @@ func NewMapFromFD(fd int) (*Map, error) {
 	}
 	bpfFd := internal.NewFD(uint32(fd))
 
-	abi, err := newMapABIFromFd(bpfFd)
+	info, err := newMapInfoFromFd(bpfFd)
 	if err != nil {
 		bpfFd.Forget()
 		return nil, err
 	}
-	return newMapFromABI(bpfFd, abi)
+	return newMapFromInfo(bpfFd, info)
 }
 
 // NewMap creates a new Map.
@@ -276,12 +276,12 @@ func newMap(fd *internal.FD, typ MapType, name string, keySize, valueSize, maxEn
 	return m, nil
 }
 
-func newMapFromABI(fd *internal.FD, abi *MapABI) (*Map, error) {
+func newMapFromInfo(fd *internal.FD, info *MapInfo) (*Map, error) {
 	name := ""
-	if abi.Name != nil {
-		name = *abi.Name
+	if info.Name != nil {
+		name = *info.Name
 	}
-	return newMap(fd, abi.Type, name, abi.KeySize, abi.ValueSize, abi.MaxEntries)
+	return newMap(fd, info.Type, name, info.KeySize, info.ValueSize, info.MaxEntries)
 }
 
 func (m *Map) String() string {
@@ -291,9 +291,9 @@ func (m *Map) String() string {
 	return fmt.Sprintf("Map(%v)", m.fd)
 }
 
-// ABI gets the ABI of the Map
-func (m *Map) ABI() (*MapABI, error) {
-	return newMapABIFromFd(m.fd)
+// Info returns metadata about the map.
+func (m *Map) Info() (*MapInfo, error) {
+	return newMapInfoFromFd(m.fd)
 }
 
 // Lookup retrieves a value from a Map.
@@ -615,13 +615,13 @@ func LoadPinnedMap(fileName string) (*Map, error) {
 		return nil, err
 	}
 
-	abi, err := newMapABIFromFd(fd)
+	info, err := newMapInfoFromFd(fd)
 	if err != nil {
 		_ = fd.Close()
 		return nil, err
 	}
 
-	return newMapFromABI(fd, abi)
+	return newMapFromInfo(fd, info)
 }
 
 func unmarshalMap(buf []byte) (*Map, error) {
@@ -805,13 +805,13 @@ func NewMapFromID(id MapID) (*Map, error) {
 		return nil, err
 	}
 
-	abi, err := newMapABIFromFd(fd)
+	info, err := newMapInfoFromFd(fd)
 	if err != nil {
 		_ = fd.Close()
 		return nil, err
 	}
 
-	return newMapFromABI(fd, abi)
+	return newMapFromInfo(fd, info)
 }
 
 // ID returns the systemwide unique ID of the map.

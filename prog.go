@@ -249,9 +249,9 @@ func (p *Program) String() string {
 	return fmt.Sprintf("Program(%v)", p.fd)
 }
 
-// ABI gets the ABI of the Program
-func (p *Program) ABI() (*ProgramABI, error) {
-	return newProgramABIFromFd(p.fd)
+// Info returns metadata about the program.
+func (p *Program) Info() (*ProgramInfo, error) {
+	return newProgramInfoFromFd(p.fd)
 }
 
 // FD gets the file descriptor of the Program.

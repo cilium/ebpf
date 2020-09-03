@@ -43,13 +43,26 @@ func (v *Void) size() uint32    { return 0 }
 func (v *Void) copy() Type      { return (*Void)(nil) }
 func (v *Void) walk(*copyStack) {}
 
+type IntEncoding byte
+
+const (
+	Signed IntEncoding = 1 << iota
+	Char
+	Bool
+)
+
 // Int is an integer of a given length.
 type Int struct {
 	TypeID
 	Name
 
 	// The size of the integer in bytes.
-	Size uint32
+	Size     uint32
+	Encoding IntEncoding
+	// Offset is the starting bit offset. Currently always 0.
+	// See https://www.kernel.org/doc/html/latest/bpf/btf.html#btf-kind-int
+	Offset uint32
+	Bits   byte
 }
 
 func (i *Int) size() uint32    { return i.Size }
@@ -514,7 +527,8 @@ func inflateRawTypes(rawTypes []rawType, rawStrings stringTable) (namedTypes map
 
 		switch raw.Kind() {
 		case kindInt:
-			typ = &Int{id, name, raw.Size()}
+			encoding, offset, bits := intEncoding(*raw.data.(*uint32))
+			typ = &Int{id, name, raw.Size(), encoding, offset, bits}
 
 		case kindPointer:
 			ptr := &Pointer{id, nil}

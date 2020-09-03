@@ -263,3 +263,7 @@ func readTypes(r io.Reader, bo binary.ByteOrder) ([]rawType, error) {
 		types = append(types, rawType{header, data})
 	}
 }
+
+func intEncoding(raw uint32) (IntEncoding, uint32, byte) {
+	return IntEncoding((raw & 0x0f000000) >> 24), (raw & 0x00ff0000) >> 16, byte(raw & 0x000000ff)
+}

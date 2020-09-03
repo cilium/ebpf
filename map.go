@@ -10,10 +10,6 @@ import (
 	"github.com/cilium/ebpf/internal/unix"
 )
 
-// Specify numa node during map creation
-// (effective only if MapSpec.NumaNode is set)
-const BPF_F_NUMA_NODE = unix.BPF_F_NUMA_NODE
-
 // Errors returned by Map and MapIterator methods.
 var (
 	ErrKeyNotExist      = errors.New("key does not exist")
@@ -36,7 +32,8 @@ type MapSpec struct {
 	Flags      uint32
 
 	// Specify numa node during map creation
-	// (effective only if BPF_F_NUMA_NODE is set)
+	// (effective only if unix.BPF_F_NUMA_NODE flag is set,
+	// which can be imported from golang.org/x/sys/unix)
 	NumaNode uint32
 
 	// The initial contents of the map. May be nil.

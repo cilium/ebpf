@@ -109,6 +109,10 @@ func (s *Struct) copy() Type {
 	return &cpy
 }
 
+func (s *Struct) members() []Member {
+	return s.Members
+}
+
 // Union is a compound type where members occupy the same memory.
 type Union struct {
 	TypeID
@@ -133,13 +137,28 @@ func (u *Union) copy() Type {
 	return &cpy
 }
 
+func (u *Union) members() []Member {
+	return u.Members
+}
+
+type composite interface {
+	members() []Member
+}
+
+var (
+	_ composite = (*Struct)(nil)
+	_ composite = (*Union)(nil)
+)
+
 // Member is part of a Struct or Union.
 //
 // It is not a valid Type.
 type Member struct {
 	Name
-	Type   Type
-	Offset uint32
+	Type Type
+	// Offset is the bit offset of this member
+	Offset       uint32
+	BitfieldSize uint32
 }
 
 // Enum lists possible values.
@@ -451,7 +470,7 @@ func inflateRawTypes(rawTypes []rawType, rawStrings stringTable) (namedTypes map
 		fixups = append(fixups, fixupDef{id, expectedKind, typ})
 	}
 
-	convertMembers := func(raw []btfMember) ([]Member, error) {
+	convertMembers := func(raw []btfMember, kindFlag bool) ([]Member, error) {
 		// NB: The fixup below relies on pre-allocating this array to
 		// work, since otherwise append might re-allocate members.
 		members := make([]Member, 0, len(raw))
@@ -460,10 +479,15 @@ func inflateRawTypes(rawTypes []rawType, rawStrings stringTable) (namedTypes map
 			if err != nil {
 				return nil, fmt.Errorf("can't get name for member %d: %w", i, err)
 			}
-			members = append(members, Member{
+			m := Member{
 				Name:   name,
 				Offset: btfMember.Offset,
-			})
+			}
+			if kindFlag {
+				m.BitfieldSize = btfMember.Offset >> 24
+				m.Offset &= 0xffffff
+			}
+			members = append(members, m)
 		}
 		for i := range members {
 			fixup(raw[i].Type, kindUnknown, &members[i].Type)
@@ -507,14 +531,14 @@ func inflateRawTypes(rawTypes []rawType, rawStrings stringTable) (namedTypes map
 			typ = arr
 
 		case kindStruct:
-			members, err := convertMembers(raw.data.([]btfMember))
+			members, err := convertMembers(raw.data.([]btfMember), raw.KindFlag())
 			if err != nil {
 				return nil, fmt.Errorf("struct %s (id %d): %w", name, id, err)
 			}
 			typ = &Struct{id, name, raw.Size(), members}
 
 		case kindUnion:
-			members, err := convertMembers(raw.data.([]btfMember))
+			members, err := convertMembers(raw.data.([]btfMember), raw.KindFlag())
 			if err != nil {
 				return nil, fmt.Errorf("union %s (id %d): %w", name, id, err)
 			}

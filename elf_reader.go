@@ -466,19 +466,35 @@ func mapSpecFromBTF(spec *btf.Spec, name string) (*MapSpec, error) {
 		return nil, fmt.Errorf("can't get BTF: %w", err)
 	}
 
+	var btfKeyType, btfValueType btf.Type = (*btf.Void)(nil), (*btf.Void)(nil)
+	var keySize, valueSize uint32
 	keyType := btf.MapKey(btfMap)
-	size, err := btf.Sizeof(keyType)
-	if err != nil {
-		return nil, fmt.Errorf("can't get size of BTF key: %w", err)
+	if pk, isPtr := keyType.(*btf.Pointer); !isPtr {
+		if _, isVoid := keyType.(*btf.Void); !isVoid {
+			return nil, fmt.Errorf("key type is not a pointer: %T", keyType)
+		}
+	} else {
+		size, err := btf.Sizeof(pk.Target)
+		if err != nil {
+			return nil, fmt.Errorf("can't get size of BTF key: %w", err)
+		}
+		keySize = uint32(size)
+		btfKeyType = pk.Target
 	}
-	keySize := uint32(size)
 
 	valueType := btf.MapValue(btfMap)
-	size, err = btf.Sizeof(valueType)
-	if err != nil {
-		return nil, fmt.Errorf("can't get size of BTF value: %w", err)
+	if pv, isPtr := valueType.(*btf.Pointer); !isPtr {
+		if _, isVoid := valueType.(*btf.Void); !isVoid {
+			return nil, fmt.Errorf("value type is not a pointer: %T", keyType)
+		}
+	} else {
+		size, err := btf.Sizeof(pv.Target)
+		if err != nil {
+			return nil, fmt.Errorf("can't get size of BTF value: %w", err)
+		}
+		valueSize = uint32(size)
+		btfValueType = pv.Target
 	}
-	valueSize := uint32(size)
 
 	var (
 		mapType, flags, maxEntries uint32
@@ -540,12 +556,14 @@ func mapSpecFromBTF(spec *btf.Spec, name string) (*MapSpec, error) {
 	}
 
 	return &MapSpec{
-		Type:       MapType(mapType),
-		KeySize:    keySize,
-		ValueSize:  valueSize,
-		MaxEntries: maxEntries,
-		Flags:      flags,
-		BTF:        btfMap,
+		Type:         MapType(mapType),
+		KeySize:      keySize,
+		ValueSize:    valueSize,
+		MaxEntries:   maxEntries,
+		Flags:        flags,
+		BTF:          btfMap,
+		btfKeyType:   btfKeyType,
+		btfValueType: btfValueType,
 	}, nil
 }
 

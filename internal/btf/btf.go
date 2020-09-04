@@ -12,10 +12,12 @@ import (
 	"os"
 	"reflect"
 	"sync"
+	"syscall"
 	"unsafe"
 
 	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/unix"
+	linux "golang.org/x/sys/unix"
 )
 
 const btfMagic = 0xeB9F
@@ -59,29 +61,9 @@ func LoadSpecFromReader(rd io.ReaderAt) (*Spec, error) {
 	}
 	defer file.Close()
 
-	var (
-		btfSection    *elf.Section
-		btfExtSection *elf.Section
-		sectionSizes  = make(map[string]uint32)
-	)
-
-	for _, sec := range file.Sections {
-		switch sec.Name {
-		case ".BTF":
-			btfSection = sec
-		case ".BTF.ext":
-			btfExtSection = sec
-		default:
-			if sec.Type != elf.SHT_PROGBITS && sec.Type != elf.SHT_NOBITS {
-				break
-			}
-
-			if sec.Size > math.MaxUint32 {
-				return nil, fmt.Errorf("section %s exceeds maximum size", sec.Name)
-			}
-
-			sectionSizes[sec.Name] = uint32(sec.Size)
-		}
+	btfSection, btfExtSection, sectionSizes, err := findBtfSections(file)
+	if err != nil {
+		return nil, err
 	}
 
 	if btfSection == nil {
@@ -127,6 +109,48 @@ func LoadSpecFromReader(rd io.ReaderAt) (*Spec, error) {
 	}
 
 	return spec, nil
+}
+
+func findBtfSections(file *elf.File) (*elf.Section, *elf.Section, map[string]uint32, error) {
+	var (
+		btfSection    *elf.Section
+		btfExtSection *elf.Section
+		sectionSizes  = make(map[string]uint32)
+	)
+
+	for _, sec := range file.Sections {
+		switch sec.Name {
+		case ".BTF":
+			btfSection = sec
+		case ".BTF.ext":
+			btfExtSection = sec
+		default:
+			if sec.Type != elf.SHT_PROGBITS && sec.Type != elf.SHT_NOBITS {
+				break
+			}
+
+			if sec.Size > math.MaxUint32 {
+				return nil, nil, nil, fmt.Errorf("section %s exceeds maximum size", sec.Name)
+			}
+
+			sectionSizes[sec.Name] = uint32(sec.Size)
+		}
+	}
+	return btfSection, btfExtSection, sectionSizes, nil
+}
+
+func loadNakedSpecFromReader(rd io.ReaderAt, sectionSizes map[string]uint32, variableOffsets map[variable]uint32) (*Spec, error) {
+	file, err := elf.NewFile(rd)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+
+	btfSection, _, _, err := findBtfSections(file)
+	if btfSection == nil {
+		return nil, fmt.Errorf("unable to find .BTF ELF section")
+	}
+	return loadNakedSpec(btfSection.Open(), file.ByteOrder, sectionSizes, variableOffsets)
 }
 
 func loadNakedSpec(btf io.ReadSeeker, bo binary.ByteOrder, sectionSizes map[string]uint32, variableOffsets map[variable]uint32) (*Spec, error) {
@@ -176,16 +200,52 @@ func LoadKernelSpec() (*Spec, error) {
 }
 
 func loadKernelSpec() (*Spec, error) {
-	fh, err := os.Open("/sys/kernel/btf/vmlinux")
-	if os.IsNotExist(err) {
-		return nil, fmt.Errorf("can't open kernel BTF at /sys/kernel/btf/vmlinux: %w", ErrNotFound)
-	}
+	release, err := unix.KernelRelease()
 	if err != nil {
-		return nil, fmt.Errorf("can't read kernel BTF: %s", err)
+		return nil, err
 	}
-	defer fh.Close()
 
-	return loadNakedSpec(fh, internal.NativeEndian, nil, nil)
+	locations := []struct {
+		pathFmt string
+		raw     bool
+	}{
+		/* try canonical vmlinux BTF through sysfs first */
+		{"/sys/kernel/btf/vmlinux", true /* raw BTF */},
+		/* fall back to trying to find vmlinux ELF on disk otherwise */
+		{"/boot/vmlinux-%s", false},
+		{"/lib/modules/%s/vmlinux-%s", false},
+		{"/lib/modules/%s/build/vmlinux", false},
+		{"/usr/lib/modules/%s/kernel/vmlinux", false},
+		{"/usr/lib/debug/boot/vmlinux-%s", false},
+		{"/usr/lib/debug/boot/vmlinux-%s.debug", false},
+		{"/usr/lib/debug/lib/modules/%s/vmlinux", false},
+	}
+
+	var spec *Spec
+	for _, loc := range locations {
+		path := fmt.Sprintf(loc.pathFmt, release)
+		if err := syscall.Access(path, linux.R_OK); err != nil {
+			continue
+		}
+
+		fh, err := os.Open(path)
+		if err != nil {
+			continue
+		}
+		defer fh.Close()
+		if loc.raw {
+			spec, err = loadNakedSpec(fh, internal.NativeEndian, nil, nil)
+		} else {
+			spec, err = loadNakedSpecFromReader(fh, nil, nil)
+		}
+
+		if err != nil {
+			continue
+		}
+		return spec, nil
+	}
+
+	return nil, ErrNotFound
 }
 
 func parseBTF(btf io.ReadSeeker, bo binary.ByteOrder) ([]rawType, stringTable, error) {

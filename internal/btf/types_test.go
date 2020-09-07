@@ -43,15 +43,7 @@ func TestCopyType(t *testing.T) {
 	}
 
 	t.Run("cyclical", func(t *testing.T) {
-		ptr := &Pointer{}
-		foo := &Struct{
-			Members: []Member{
-				{Type: ptr},
-			},
-		}
-		ptr.Target = foo
-
-		_ = copyType(foo)
+		_ = copyType(newCyclicalType(2))
 	})
 }
 
@@ -78,4 +70,30 @@ func ExampleType_validTypes() {
 	t = &Var{}
 	t = &Datasec{}
 	_ = t
+}
+
+func newCyclicalType(n int) Type {
+	ptr := &Pointer{}
+	prev := Type(ptr)
+	for i := 0; i < n; i++ {
+		switch i % 5 {
+		case 0:
+			prev = &Struct{
+				Members: []Member{
+					{Type: prev},
+				},
+			}
+
+		case 1:
+			prev = &Const{Type: prev}
+		case 2:
+			prev = &Volatile{Type: prev}
+		case 3:
+			prev = &Typedef{Type: prev}
+		case 4:
+			prev = &Array{Type: prev}
+		}
+	}
+	ptr.Target = prev
+	return ptr
 }

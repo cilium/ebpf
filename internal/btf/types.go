@@ -23,6 +23,8 @@ type Type interface {
 	// Make a copy of the type, without copying Type members.
 	copy() Type
 
+	// Enumerate all nested Types. Repeated calls must visit nested
+	// types in the same order.
 	walk(*copyStack)
 }
 
@@ -223,36 +225,39 @@ func (td *Typedef) copy() Type {
 	return &cpy
 }
 
-// Volatile is a modifier.
+// Volatile is a qualifier.
 type Volatile struct {
 	TypeID
 	Type Type
 }
 
+func (v *Volatile) qualify() Type      { return v.Type }
 func (v *Volatile) walk(cs *copyStack) { cs.push(&v.Type) }
 func (v *Volatile) copy() Type {
 	cpy := *v
 	return &cpy
 }
 
-// Const is a modifier.
+// Const is a qualifier.
 type Const struct {
 	TypeID
 	Type Type
 }
 
+func (c *Const) qualify() Type      { return c.Type }
 func (c *Const) walk(cs *copyStack) { cs.push(&c.Type) }
 func (c *Const) copy() Type {
 	cpy := *c
 	return &cpy
 }
 
-// Restrict is a modifier.
+// Restrict is a qualifier.
 type Restrict struct {
 	TypeID
 	Type Type
 }
 
+func (r *Restrict) qualify() Type      { return r.Type }
 func (r *Restrict) walk(cs *copyStack) { cs.push(&r.Type) }
 func (r *Restrict) copy() Type {
 	cpy := *r
@@ -354,6 +359,16 @@ var (
 	_ sizer = (*Datasec)(nil)
 )
 
+type qualifier interface {
+	qualify() Type
+}
+
+var (
+	_ qualifier = (*Const)(nil)
+	_ qualifier = (*Restrict)(nil)
+	_ qualifier = (*Volatile)(nil)
+)
+
 // Sizeof returns the size of a type in bytes.
 //
 // Returns an error if the size can't be computed.
@@ -382,14 +397,9 @@ func Sizeof(typ Type) (int, error) {
 		case *Typedef:
 			typ = v.Type
 			continue
-		case *Volatile:
-			typ = v.Type
-			continue
-		case *Const:
-			typ = v.Type
-			continue
-		case *Restrict:
-			typ = v.Type
+
+		case qualifier:
+			typ = v.qualify()
 			continue
 
 		default:
@@ -439,7 +449,7 @@ func copyType(typ Type) Type {
 }
 
 // copyStack keeps track of pointers to types which still
-// need to be copied.
+// need to be visited.
 type copyStack []*Type
 
 // push adds a type to the stack.

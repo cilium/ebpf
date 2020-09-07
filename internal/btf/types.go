@@ -23,6 +23,8 @@ type Type interface {
 	// Make a copy of the type, without copying Type members.
 	copy() Type
 
+	// Enumerate all nested Types. Repeated calls must visit nested
+	// types in the same order.
 	walk(*copyStack)
 }
 
@@ -439,7 +441,7 @@ func copyType(typ Type) Type {
 }
 
 // copyStack keeps track of pointers to types which still
-// need to be copied.
+// need to be visited.
 type copyStack []*Type
 
 // push adds a type to the stack.

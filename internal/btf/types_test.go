@@ -72,6 +72,52 @@ func ExampleType_validTypes() {
 	_ = t
 }
 
+func TestType(t *testing.T) {
+	types := []func() Type{
+		func() Type { return &Void{} },
+		func() Type { return &Int{} },
+		func() Type { return &Pointer{} },
+		func() Type { return &Array{} },
+		func() Type { return &Struct{} },
+		func() Type { return &Union{} },
+		func() Type { return &Enum{} },
+		func() Type { return &Fwd{} },
+		func() Type { return &Typedef{} },
+		func() Type { return &Volatile{} },
+		func() Type { return &Const{} },
+		func() Type { return &Restrict{} },
+		func() Type { return &Func{} },
+		func() Type { return &FuncProto{} },
+		func() Type { return &Var{} },
+		func() Type { return &Datasec{} },
+	}
+
+	for _, fn := range types {
+		typ := fn()
+		t.Run(fmt.Sprintf("%T", typ), func(t *testing.T) {
+			if typ == typ.copy() {
+				t.Error("Copy doesn't copy")
+			}
+
+			var first, second copyStack
+			typ.walk(&first)
+			typ.walk(&second)
+
+			a, b := first.pop(), second.pop()
+			for a != nil && b != nil {
+				if a != b {
+					t.Fatal("Order of walk is not the same")
+				}
+				a, b = first.pop(), second.pop()
+			}
+
+			if a != nil || b != nil {
+				t.Fatal("Number of types walked is not the same")
+			}
+		})
+	}
+}
+
 func newCyclicalType(n int) Type {
 	ptr := &Pointer{}
 	prev := Type(ptr)

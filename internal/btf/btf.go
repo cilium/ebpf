@@ -12,12 +12,10 @@ import (
 	"os"
 	"reflect"
 	"sync"
-	"syscall"
 	"unsafe"
 
 	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/unix"
-	linux "golang.org/x/sys/unix"
 )
 
 const btfMagic = 0xeB9F
@@ -202,9 +200,11 @@ func LoadKernelSpec() (*Spec, error) {
 func loadKernelSpec() (*Spec, error) {
 	release, err := unix.KernelRelease()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("can't read kernel release number: %w", err)
 	}
 
+	// use same list of locations as libbpf
+	// https://github.com/libbpf/libbpf/blob/9a3a42608dbe3731256a5682a125ac1e23bced8f/src/btf.c#L3114-L3122
 	locations := []struct {
 		pathFmt string
 		raw     bool
@@ -224,10 +224,6 @@ func loadKernelSpec() (*Spec, error) {
 	var spec *Spec
 	for _, loc := range locations {
 		path := fmt.Sprintf(loc.pathFmt, release)
-		if err := syscall.Access(path, linux.R_OK); err != nil {
-			continue
-		}
-
 		fh, err := os.Open(path)
 		if err != nil {
 			continue
@@ -245,7 +241,7 @@ func loadKernelSpec() (*Spec, error) {
 		return spec, nil
 	}
 
-	return nil, ErrNotFound
+	return nil, fmt.Errorf("can't find kernel BTF: %w", ErrNotSupported)
 }
 
 func parseBTF(btf io.ReadSeeker, bo binary.ByteOrder) ([]rawType, stringTable, error) {

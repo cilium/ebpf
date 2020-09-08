@@ -872,7 +872,7 @@ func (m *Manager) matchSpecs() error {
 	for _, probe := range m.Probes {
 		spec, ok := m.collectionSpec.Programs[probe.Section]
 		if !ok {
-			errors.Wrapf(ErrUnknownSection, "couldn't find program at %s", probe.Section)
+			return errors.Wrapf(ErrUnknownSection, "couldn't find program at %s", probe.Section)
 		}
 		probe.programSpec = spec
 	}
@@ -881,7 +881,7 @@ func (m *Manager) matchSpecs() error {
 	for _, managerMap := range m.Maps {
 		spec, ok := m.collectionSpec.Maps[managerMap.Name]
 		if !ok {
-			errors.Wrapf(ErrUnknownSection, "couldn't find map at maps/%s", managerMap.Name)
+			return errors.Wrapf(ErrUnknownSection, "couldn't find map at maps/%s", managerMap.Name)
 		}
 		spec.Contents = managerMap.Contents
 		spec.Freeze = managerMap.Freeze
@@ -892,7 +892,7 @@ func (m *Manager) matchSpecs() error {
 	for _, perfMap := range m.PerfMaps {
 		spec, ok := m.collectionSpec.Maps[perfMap.Name]
 		if !ok {
-			errors.Wrapf(ErrUnknownSection, "couldn't find map at maps/%s", perfMap.Name)
+			return errors.Wrapf(ErrUnknownSection, "couldn't find map at maps/%s", perfMap.Name)
 		}
 		perfMap.arraySpec = spec
 	}

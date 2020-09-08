@@ -3,6 +3,7 @@
 package unix
 
 import (
+	"bytes"
 	"syscall"
 
 	linux "golang.org/x/sys/unix"

@@ -402,9 +402,19 @@ func (s *Spec) Map(name string) (*Map, []Member, error) {
 		switch member.Name {
 		case "key":
 			key = member.Type
+			if pk, isPtr := key.(*Pointer); !isPtr {
+				return nil, nil, fmt.Errorf("key type is not a pointer: %T", key)
+			} else {
+				key = pk.Target
+			}
 
 		case "value":
 			value = member.Type
+			if vk, isPtr := value.(*Pointer); !isPtr {
+				return nil, nil, fmt.Errorf("value type is not a pointer: %T", value)
+			} else {
+				value = vk.Target
+			}
 		}
 	}
 

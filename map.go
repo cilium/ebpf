@@ -47,9 +47,6 @@ type MapSpec struct {
 
 	// The BTF associated with this map.
 	BTF *btf.Map
-
-	btfKeyType   btf.Type
-	btfValueType btf.Type
 }
 
 func (ms *MapSpec) String() string {
@@ -211,8 +208,8 @@ func createMap(spec *MapSpec, inner *internal.FD, handle *btf.Handle) (*Map, err
 
 	if handle != nil && spec.BTF != nil {
 		attr.btfFd = uint32(handle.FD())
-		attr.btfKeyTypeID = spec.btfKeyType.ID()
-		attr.btfValueTypeID = spec.btfValueType.ID()
+		attr.btfKeyTypeID = btf.MapKey(spec.BTF).ID()
+		attr.btfValueTypeID = btf.MapValue(spec.BTF).ID()
 	}
 
 	if haveObjName() == nil {

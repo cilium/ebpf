@@ -3,8 +3,8 @@ package manager
 import (
 	"fmt"
 	"io"
-	"math"
 	"os"
+	"strings"
 	"sync"
 
 	"github.com/florianl/go-tc"
@@ -95,14 +95,84 @@ type MapSpecEditor struct {
 	EditorFlag MapSpecEditorFlag
 }
 
+// ProbesSelector - A probe selector defines how a probe (or a group of probes) should be activated.
+//
+// For example, this can be used to specify that out of a group of optional probes, at least one should be activated.
+type ProbesSelector interface {
+	// GetProbesList - Returns the list of probes that this selector activates
+	GetProbesList() []ProbeSelector
+	// RunValidator - Ensures that the probes that were successfully activated follow the selector goal.
+	// For example, see OneOf.
+	RunValidator(manager *Manager) error
+	// String - Stringifies the probe selector
+	String() string
+}
+
+// ProbeSelector - This selector is used to unconditionally select a probe by its identification pair
+type ProbeSelector struct {
+	ProbeIdentificationPair
+}
+
+func (ps ProbeSelector) GetProbesList() []ProbeSelector {
+	return []ProbeSelector{ps}
+}
+
+func (ps ProbeSelector) RunValidator(manager *Manager) error {
+	p, ok := manager.GetProbe(ps.ProbeIdentificationPair)
+	if !ok {
+		return errors.Errorf("probe not found: %s", ps.ProbeIdentificationPair)
+	}
+	if !p.IsRunning() && p.Enabled {
+		return errors.Errorf("probe %s is not running, however it is enabled", ps.ProbeIdentificationPair)
+	}
+	return nil
+}
+
+// OneOf - This selector is used to ensure that at least of a list of probe selectors is valid. In other words, this
+// can be used to ensure that at least one of a list of optional probes is activated.
+type OneOf struct {
+	Selectors []ProbesSelector
+}
+
+func (oo OneOf) GetProbesList() []ProbeSelector {
+	var l []ProbeSelector
+	for _, selector := range oo.Selectors {
+		l = append(l, selector.GetProbesList()...)
+	}
+	return l
+}
+
+func (oo OneOf) RunValidator(manager *Manager) error {
+	var valid bool
+	for _, selector := range oo.Selectors {
+		if err := selector.RunValidator(manager); err == nil {
+			valid = true
+		}
+	}
+	if !valid {
+		return errors.Errorf("OneOf requirement failed, none of the following probes are running: %s", oo)
+	}
+	return nil
+}
+
+func (oo OneOf) String() string {
+	var message []string
+	for _, selector := range oo.Selectors {
+		message = append(message, selector.String())
+	}
+	return strings.Join(message, ",")
+}
+
 // Options - Options of a Manager. These options define how a manager should be initialized.
 type Options struct {
 	// ActivatedProbes - List of the probes that should be activated, identified by their identification string.
 	// If the list is empty, all probes will be activated.
-	ActivatedProbes []string
+	ActivatedProbes []ProbesSelector
 
-	// ExcludedProbes is a list of probes that should not even be verified.
-	ExcludedProbes []string
+	// ExcludedSections - A list of sections that should not even be verified. This list overrides the ActivatedProbes
+	// list: since the excluded sections aren't be loaded in the kernel, all the probes using those sections will be
+	// deactivated.
+	ExcludedSections []string
 
 	// ConstantsEditor - Post-compilation constant edition. See ConstantEditor for more.
 	ConstantEditors []ConstantEditor
@@ -349,10 +419,7 @@ func (m *Manager) InitWithOptions(elf io.ReaderAt, options Options) error {
 
 	// set resource limit if requested
 	if m.options.RLimit != nil {
-		err := unix.Setrlimit(unix.RLIMIT_MEMLOCK, &unix.Rlimit{
-			Cur: math.MaxUint64,
-			Max: math.MaxUint64,
-		})
+		err := unix.Setrlimit(unix.RLIMIT_MEMLOCK, m.options.RLimit)
 		if err != nil {
 			return errors.Wrap(err, "couldn't adjust RLIMIT_MEMLOCK")
 		}
@@ -364,6 +431,11 @@ func (m *Manager) InitWithOptions(elf io.ReaderAt, options Options) error {
 	if err != nil {
 		m.stateLock.Unlock()
 		return err
+	}
+
+	// Remove excluded sections
+	for _, excludedSection := range m.options.ExcludedSections {
+		delete(m.collectionSpec.Programs, excludedSection)
 	}
 
 	// Match Maps and program specs
@@ -404,7 +476,7 @@ func (m *Manager) InitWithOptions(elf io.ReaderAt, options Options) error {
 	}
 
 	// Load eBPF program with the provided verifier options
-	if err := m.loadCollection(options.ExcludedProbes); err != nil {
+	if err := m.loadCollection(); err != nil {
 		return err
 	}
 	return nil
@@ -441,8 +513,18 @@ func (m *Manager) Start() error {
 			return err
 		}
 	}
+
 	m.state = running
 	m.stateLock.Unlock()
+
+	// Check optional probes and probe selectors
+	for _, selector := range m.options.ActivatedProbes {
+		if err := selector.RunValidator(m); err != nil {
+			// Clean up
+			_ = m.Stop(CleanInternal)
+			return err
+		}
+	}
 
 	// Handle Maps router
 	if err := m.UpdateMapRoutes(m.options.MapRouter...); err != nil {
@@ -903,13 +985,15 @@ func (m *Manager) activateProbes() {
 	defaultEnabled := len(m.options.ActivatedProbes) == 0
 	for _, mProbe := range m.Probes {
 		shouldActivate := defaultEnabled
-		for _, probe := range m.options.ActivatedProbes {
-			if probe == mProbe.Section {
-				shouldActivate = true
+		for _, selector := range m.options.ActivatedProbes {
+			for _, p := range selector.GetProbesList() {
+				if mProbe.IdentificationPairMatches(p.ProbeIdentificationPair) {
+					shouldActivate = true
+				}
 			}
 		}
-		for _, probe := range m.options.ExcludedProbes {
-			if probe == mProbe.Section {
+		for _, p := range m.options.ExcludedSections {
+			if mProbe.Section == p {
 				shouldActivate = false
 			}
 		}
@@ -1055,10 +1139,10 @@ func (m *Manager) editMaps(maps map[string]*ebpf.Map) error {
 }
 
 // loadCollection - Load the eBPF maps and programs in the CollectionSpec. Programs and Maps are pinned when requested.
-func (m *Manager) loadCollection(excludedPrograms []string) error {
+func (m *Manager) loadCollection() error {
 	var err error
 	// Load collection
-	m.collection, err = ebpf.NewCollectionWithOptions(m.collectionSpec, m.options.VerifierOptions, excludedPrograms)
+	m.collection, err = ebpf.NewCollectionWithOptions(m.collectionSpec, m.options.VerifierOptions)
 	if err != nil {
 		return errors.Wrap(err, "couldn't load eBPF programs")
 	}

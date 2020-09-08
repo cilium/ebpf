@@ -136,13 +136,13 @@ type Collection struct {
 //
 // Only maps referenced by at least one of the programs are initialized.
 func NewCollection(spec *CollectionSpec) (*Collection, error) {
-	return NewCollectionWithOptions(spec, CollectionOptions{}, nil)
+	return NewCollectionWithOptions(spec, CollectionOptions{})
 }
 
 // NewCollectionWithOptions creates a Collection from a specification.
 //
 // Only maps referenced by at least one of the programs are initialized.
-func NewCollectionWithOptions(spec *CollectionSpec, opts CollectionOptions, excludedPrograms []string) (coll *Collection, err error) {
+func NewCollectionWithOptions(spec *CollectionSpec, opts CollectionOptions) (coll *Collection, err error) {
 	var (
 		maps  = make(map[string]*Map)
 		progs = make(map[string]*Program)
@@ -197,15 +197,7 @@ func NewCollectionWithOptions(spec *CollectionSpec, opts CollectionOptions, excl
 		maps[mapName] = m
 	}
 
-	exProgs := make(map[string]struct{}, len(excludedPrograms))
-	for _, name := range excludedPrograms {
-		exProgs[name] = struct{}{}
-	}
-
 	for progName, origProgSpec := range spec.Programs {
-		if _, excluded := exProgs[progName]; excluded {
-			continue
-		}
 		progSpec := origProgSpec.Copy()
 
 		// Rewrite any reference to a valid map.

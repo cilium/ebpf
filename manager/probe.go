@@ -49,7 +49,7 @@ type ProbeIdentificationPair struct {
 }
 
 func (pip ProbeIdentificationPair) String() string {
-	return fmt.Sprintf("[UID:%s, Section:%s]", pip.UID, pip.Section)
+	return fmt.Sprintf("[UID:%s Section:%s]", pip.UID, pip.Section)
 }
 
 // Probe - Main eBPF probe wrapper. This structure is used to store the required data to attach a loaded eBPF
@@ -89,6 +89,9 @@ type Probe struct {
 	// Enabled - Indicates if a probe should be enabled or not. This parameter can be set at runtime using the
 	// Manager options (see ActivatedProbes)
 	Enabled bool
+
+	// Optional - Indicates if a failure to start the probe should return an error
+	Optional bool
 
 	// PinPath - Once loaded, the eBPF program will be pinned to this path. If the eBPF program has already been pinned
 	// and is already running in the kernel, then it will be loaded from this path.
@@ -276,7 +279,9 @@ func (p *Probe) Attach() error {
 		return nil
 	}
 	if p.state < initialized {
-		return ErrProbeNotInitialized
+		if !p.Optional {
+			return ErrProbeNotInitialized
+		}
 	}
 
 	// Per program type start
@@ -302,6 +307,9 @@ func (p *Probe) Attach() error {
 	if err != nil {
 		// Clean up any progress made in the attach attempt
 		_ = p.stop()
+		if p.Optional {
+			return nil
+		}
 		return errors.Wrapf(err, "couldn't start probe %s", p.Section)
 	}
 

@@ -3,6 +3,7 @@
 package unix
 
 import (
+	"bytes"
 	"syscall"
 
 	linux "golang.org/x/sys/unix"
@@ -148,4 +149,16 @@ func Gettid() int {
 // Tgkill is a wrapper
 func Tgkill(tgid int, tid int, sig syscall.Signal) (err error) {
 	return linux.Tgkill(tgid, tid, sig)
+}
+
+func KernelRelease() (string, error) {
+	var uname Utsname
+	err := Uname(&uname)
+	if err != nil {
+		return "", err
+	}
+
+	end := bytes.IndexByte(uname.Release[:], 0)
+	release := string(uname.Release[:end])
+	return release, nil
 }

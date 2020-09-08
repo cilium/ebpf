@@ -216,3 +216,7 @@ func Gettid() int {
 func Tgkill(tgid int, tid int, sig syscall.Signal) (err error) {
 	return errNonLinux
 }
+
+func KernelRelease() (string, error) {
+	return "", errNonLinux
+}

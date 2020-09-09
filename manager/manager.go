@@ -147,6 +147,7 @@ func (oo OneOf) RunValidator(manager *Manager) error {
 	for _, selector := range oo.Selectors {
 		if err := selector.RunValidator(manager); err == nil {
 			valid = true
+			break
 		}
 	}
 	if !valid {
@@ -954,7 +955,14 @@ func (m *Manager) matchSpecs() error {
 	for _, probe := range m.Probes {
 		spec, ok := m.collectionSpec.Programs[probe.Section]
 		if !ok {
-			return errors.Wrapf(ErrUnknownSection, "couldn't find program at %s", probe.Section)
+			// Check if the probe section is in the list of excluded sections
+			var excluded bool
+			for _, excludedSection := range m.options.ExcludedSections {
+				excluded = excluded || (excludedSection == probe.Section)
+			}
+			if !excluded {
+				return errors.Wrapf(ErrUnknownSection, "couldn't find program at %s", probe.Section)
+			}
 		}
 		probe.programSpec = spec
 	}

@@ -402,9 +402,19 @@ func (s *Spec) Map(name string) (*Map, []Member, error) {
 		switch member.Name {
 		case "key":
 			key = member.Type
+			if pk, isPtr := key.(*Pointer); !isPtr {
+				return nil, nil, fmt.Errorf("key type is not a pointer: %T", key)
+			} else {
+				key = pk.Target
+			}
 
 		case "value":
 			value = member.Type
+			if vk, isPtr := value.(*Pointer); !isPtr {
+				return nil, nil, fmt.Errorf("value type is not a pointer: %T", value)
+			} else {
+				value = vk.Target
+			}
 		}
 	}
 
@@ -621,9 +631,7 @@ type bpfLoadBTFAttr struct {
 }
 
 func bpfLoadBTF(attr *bpfLoadBTFAttr) (*internal.FD, error) {
-	const _BTFLoad = 18
-
-	fd, err := internal.BPF(_BTFLoad, unsafe.Pointer(attr), unsafe.Sizeof(*attr))
+	fd, err := internal.BPF(internal.BPF_BTF_LOAD, unsafe.Pointer(attr), unsafe.Sizeof(*attr))
 	if err != nil {
 		return nil, err
 	}

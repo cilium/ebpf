@@ -99,33 +99,49 @@ type MapSpecEditor struct {
 //
 // For example, this can be used to specify that out of a group of optional probes, at least one should be activated.
 type ProbesSelector interface {
-	// GetProbesList - Returns the list of probes that this selector activates
-	GetProbesList() []ProbeSelector
+	// GetProbesIdentificationPairList - Returns the list of probes that this selector activates
+	GetProbesIdentificationPairList() []ProbeIdentificationPair
 	// RunValidator - Ensures that the probes that were successfully activated follow the selector goal.
 	// For example, see OneOf.
 	RunValidator(manager *Manager) error
-	// String - Stringifies the probe selector
-	String() string
+	// EditProbeIdentificationPair - Changes all the selectors looking for the old ProbeIdentificationPair so that they
+	// mow select the new one
+	EditProbeIdentificationPair(old ProbeIdentificationPair, new ProbeIdentificationPair)
 }
 
-// ProbeSelector - This selector is used to unconditionally select a probe by its identification pair
+// ProbeSelector - This selector is used to unconditionally select a probe by its identification pair and validate
+// that it is activated
 type ProbeSelector struct {
 	ProbeIdentificationPair
 }
 
-func (ps ProbeSelector) GetProbesList() []ProbeSelector {
-	return []ProbeSelector{ps}
+// GetProbesIdentificationPairList - Returns the list of probes that this selector activates
+func (ps *ProbeSelector) GetProbesIdentificationPairList() []ProbeIdentificationPair {
+	return []ProbeIdentificationPair{ps.ProbeIdentificationPair}
 }
 
-func (ps ProbeSelector) RunValidator(manager *Manager) error {
+// RunValidator - Ensures that the probes that were successfully activated follow the selector goal.
+// For example, see OneOf.
+func (ps *ProbeSelector) RunValidator(manager *Manager) error {
 	p, ok := manager.GetProbe(ps.ProbeIdentificationPair)
 	if !ok {
 		return errors.Errorf("probe not found: %s", ps.ProbeIdentificationPair)
 	}
-	if !p.IsRunning() && p.Enabled {
-		return errors.Errorf("probe %s is not running, however it is enabled", ps.ProbeIdentificationPair)
+	if !p.IsRunning() && p.Enabled && !p.Optional {
+		return errors.Wrap(p.GetLastError(), ps.ProbeIdentificationPair.String())
+	}
+	if !p.Enabled && !p.Optional {
+		return errors.Errorf("%s: is disabled and not optional", ps.ProbeIdentificationPair.String())
 	}
 	return nil
+}
+
+// EditProbeIdentificationPair - Changes all the selectors looking for the old ProbeIdentificationPair so that they
+// mow select the new one
+func (ps *ProbeSelector) EditProbeIdentificationPair(old ProbeIdentificationPair, new ProbeIdentificationPair) {
+	if ps.Matches(old) {
+		ps.ProbeIdentificationPair = new
+	}
 }
 
 // OneOf - This selector is used to ensure that at least of a list of probe selectors is valid. In other words, this
@@ -134,34 +150,58 @@ type OneOf struct {
 	Selectors []ProbesSelector
 }
 
-func (oo OneOf) GetProbesList() []ProbeSelector {
-	var l []ProbeSelector
+// GetProbesIdentificationPairList - Returns the list of probes that this selector activates
+func (oo *OneOf) GetProbesIdentificationPairList() []ProbeIdentificationPair {
+	var l []ProbeIdentificationPair
 	for _, selector := range oo.Selectors {
-		l = append(l, selector.GetProbesList()...)
+		l = append(l, selector.GetProbesIdentificationPairList()...)
 	}
 	return l
 }
 
-func (oo OneOf) RunValidator(manager *Manager) error {
-	var valid bool
+// RunValidator - Ensures that the probes that were successfully activated follow the selector goal.
+// For example, see OneOf.
+func (oo *OneOf) RunValidator(manager *Manager) error {
+	var errs []string
 	for _, selector := range oo.Selectors {
-		if err := selector.RunValidator(manager); err == nil {
-			valid = true
-			break
+		if err := selector.RunValidator(manager); err != nil {
+			errs = append(errs, err.Error())
 		}
 	}
-	if !valid {
-		return errors.Errorf("OneOf requirement failed, none of the following probes are running: %s", oo)
+	if len(errs) == len(oo.Selectors) {
+		return errors.Errorf(
+			"OneOf requirement failed, none of the following probes are running [%s]",
+			strings.Join(errs, " | "))
 	}
-	return nil
+
+	// Check that at least one probe is activated (keep in mind that a validation can be successfull even if the probe
+	// is not running)
+	for _, id := range oo.GetProbesIdentificationPairList() {
+		p, ok := manager.GetProbe(id)
+		if ok {
+			if p.IsRunning() {
+				return nil
+			}
+		}
+	}
+	return errors.Errorf("OneOf requirement failed, none of the following probes are running [%s]", oo)
 }
 
-func (oo OneOf) String() string {
-	var message []string
-	for _, selector := range oo.Selectors {
-		message = append(message, selector.String())
+func (oo *OneOf) String() string {
+	var strs []string
+	for _, id := range oo.GetProbesIdentificationPairList() {
+		str := fmt.Sprintf("%s", id)
+		strs = append(strs, str)
 	}
-	return strings.Join(message, ",")
+	return strings.Join(strs, ", ")
+}
+
+// EditProbeIdentificationPair - Changes all the selectors looking for the old ProbeIdentificationPair so that they
+// mow select the new one
+func (oo *OneOf) EditProbeIdentificationPair(old ProbeIdentificationPair, new ProbeIdentificationPair) {
+	for _, selector := range oo.Selectors {
+		selector.EditProbeIdentificationPair(old, new)
+	}
 }
 
 // Options - Options of a Manager. These options define how a manager should be initialized.
@@ -171,7 +211,7 @@ type Options struct {
 	ActivatedProbes []ProbesSelector
 
 	// ExcludedSections - A list of sections that should not even be verified. This list overrides the ActivatedProbes
-	// list: since the excluded sections aren't be loaded in the kernel, all the probes using those sections will be
+	// list: since the excluded sections aren't loaded in the kernel, all the probes using those sections will be
 	// deactivated.
 	ExcludedSections []string
 
@@ -314,7 +354,7 @@ func (m *Manager) GetPerfMap(name string) (*PerfMap, bool) {
 
 // GetProgram - Return a pointer to the requested eBPF program
 // section: section of the program, as defined by its section SEC("[section]")
-// UID: unique identifier given to a probe. If UID is empty, then all the programs matching the provided section are
+// id: unique identifier given to a probe. If UID is empty, then all the programs matching the provided section are
 // returned.
 func (m *Manager) GetProgram(id ProbeIdentificationPair) ([]*ebpf.Program, bool, error) {
 	m.stateLock.RLock()
@@ -346,7 +386,7 @@ func (m *Manager) GetProgram(id ProbeIdentificationPair) ([]*ebpf.Program, bool,
 
 // GetProgramSpec - Return a pointer to the requested eBPF program spec
 // section: section of the program, as defined by its section SEC("[section]")
-// UID: unique identifier given to a probe. If UID is empty, then the original program spec with the right section in the
+// id: unique identifier given to a probe. If UID is empty, then the original program spec with the right section in the
 // collection spec (if found) is return
 func (m *Manager) GetProgramSpec(id ProbeIdentificationPair) ([]*ebpf.ProgramSpec, bool, error) {
 	m.stateLock.RLock()
@@ -384,6 +424,34 @@ func (m *Manager) GetProbe(id ProbeIdentificationPair) (*Probe, bool) {
 		}
 	}
 	return nil, false
+}
+
+// RenameProbeIdentificationPair - Renames a probe identification pair. This change will propagate to all the features in
+// the manager that will try to select the probe by its old ProbeIdentificationPair.
+func (m *Manager) RenameProbeIdentificationPair(oldID ProbeIdentificationPair, newID ProbeIdentificationPair) error {
+	p, ok := m.GetProbe(oldID)
+	if !ok {
+		return ErrSymbolNotFound
+	}
+
+	if oldID.Section != newID.Section {
+		// edit the excluded sections
+		for i, section := range m.options.ExcludedSections {
+			if section == oldID.Section {
+				m.options.ExcludedSections[i] = newID.Section
+			}
+		}
+	}
+
+	// edit the probe selectors
+	for _, selector := range m.options.ActivatedProbes {
+		selector.EditProbeIdentificationPair(oldID, newID)
+	}
+
+	// edit the probe
+	p.Section = newID.Section
+	p.UID = newID.UID
+	return nil
 }
 
 // Init - Initialize the manager.
@@ -523,7 +591,7 @@ func (m *Manager) Start() error {
 		if err := selector.RunValidator(m); err != nil {
 			// Clean up
 			_ = m.Stop(CleanInternal)
-			return err
+			return errors.Wrap(err, "probes activation validation failed")
 		}
 	}
 
@@ -958,7 +1026,10 @@ func (m *Manager) matchSpecs() error {
 			// Check if the probe section is in the list of excluded sections
 			var excluded bool
 			for _, excludedSection := range m.options.ExcludedSections {
-				excluded = excluded || (excludedSection == probe.Section)
+				if excludedSection == probe.Section {
+					excluded = true
+					break
+				}
 			}
 			if !excluded {
 				return errors.Wrapf(ErrUnknownSection, "couldn't find program at %s", probe.Section)
@@ -994,8 +1065,8 @@ func (m *Manager) activateProbes() {
 	for _, mProbe := range m.Probes {
 		shouldActivate := defaultEnabled
 		for _, selector := range m.options.ActivatedProbes {
-			for _, p := range selector.GetProbesList() {
-				if mProbe.IdentificationPairMatches(p.ProbeIdentificationPair) {
+			for _, p := range selector.GetProbesIdentificationPairList() {
+				if mProbe.IdentificationPairMatches(p) {
 					shouldActivate = true
 				}
 			}

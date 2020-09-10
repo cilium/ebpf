@@ -10,10 +10,75 @@ import (
 	"github.com/DataDog/ebpf/manager"
 )
 
-var m = &manager.Manager{
+var m1 = &manager.Manager{
 	Probes: []*manager.Probe{
 		&manager.Probe{
-			UID: "MyVFSMkdir",
+			UID: "MyVFSMkdir1",
+			Section: "kprobe/vfs_mkdir",
+		},
+		&manager.Probe{
+			Section: "kprobe/utimes_common",
+			MatchFuncName: "utimes_common",
+			Optional: true,
+		},
+		&manager.Probe{
+			Section: "kprobe/vfs_opennnnnn",
+			Optional: true,
+		},
+		&manager.Probe{
+			Section: "kprobe/exclude",
+			Optional: true,
+		},
+	},
+}
+
+var options1 = manager.Options{
+	ActivatedProbes: []manager.ProbesSelector{
+		&manager.ProbeSelector{
+			ProbeIdentificationPair: manager.ProbeIdentificationPair{
+				UID:     "MyVFSMkdir1",
+				Section: "kprobe/vfs_mkdir",
+			},
+		},
+		&manager.OneOf{
+			Selectors: []manager.ProbesSelector{
+				&manager.ProbeSelector{
+					ProbeIdentificationPair: manager.ProbeIdentificationPair{
+						Section: "kprobe/utimes_common",
+					},
+				},
+				&manager.ProbeSelector{
+					ProbeIdentificationPair: manager.ProbeIdentificationPair{
+						Section: "kprobe/vfs_opennnnnn",
+					},
+				},
+				&manager.ProbeSelector{
+					ProbeIdentificationPair: manager.ProbeIdentificationPair{
+						Section: "kprobe/exclude",
+					},
+				},
+			},
+		},
+		&manager.ProbeSelector{
+			ProbeIdentificationPair: manager.ProbeIdentificationPair{
+				Section: "kprobe/exclude",
+			},
+		},
+		&manager.ProbeSelector{
+			ProbeIdentificationPair: manager.ProbeIdentificationPair{
+				Section: "kprobe/vfs_opennnnnn",
+			},
+		},
+	},
+	ExcludedSections: []string{
+		"kprobe/exclude",
+	},
+}
+
+var m2 = &manager.Manager{
+	Probes: []*manager.Probe{
+		&manager.Probe{
+			UID: "MyVFSMkdir2",
 			Section: "kprobe/vfs_mkdir",
 		},
 		&manager.Probe{
@@ -31,61 +96,81 @@ var m = &manager.Manager{
 	},
 }
 
+var options2 = manager.Options{
+	ActivatedProbes: []manager.ProbesSelector{
+		&manager.ProbeSelector{
+			ProbeIdentificationPair: manager.ProbeIdentificationPair{
+				UID:     "MyVFSMkdir2",
+				Section: "kprobe/vfs_mkdir",
+			},
+		},
+		&manager.OneOf{
+			Selectors: []manager.ProbesSelector{
+				&manager.ProbeSelector{
+					ProbeIdentificationPair: manager.ProbeIdentificationPair{
+						Section: "kprobe/vfs_opennnnnn",
+					},
+				},
+				&manager.ProbeSelector{
+					ProbeIdentificationPair: manager.ProbeIdentificationPair{
+						Section: "kprobe/exclude",
+					},
+				},
+			},
+		},
+	},
+	ExcludedSections: []string{
+		"kprobe/exclude",
+	},
+}
+
 func main() {
-	// Initialize the manager
-	options := manager.Options{
-		ActivatedProbes: []manager.ProbesSelector{
-			manager.ProbeSelector{
-				ProbeIdentificationPair: manager.ProbeIdentificationPair{
-					UID:     "MyVFSMkdir",
-					Section: "kprobe/vfs_mkdir",
-				},
-			},
-			manager.OneOf{
-				Selectors: []manager.ProbesSelector{
-					manager.ProbeSelector{
-						ProbeIdentificationPair: manager.ProbeIdentificationPair{
-							Section: "kprobe/utimes_common",
-						},
-					},
-					manager.ProbeSelector{
-						ProbeIdentificationPair: manager.ProbeIdentificationPair{
-							Section: "kprobe/vfs_opennnnnn",
-						},
-					},
-				},
-			},
-			manager.ProbeSelector{
-				ProbeIdentificationPair: manager.ProbeIdentificationPair{
-					Section: "kprobe/exclude",
-				},
-			},
-		},
-		ExcludedSections: []string{
-			"kprobe/exclude",
-		},
-	}
-	if err := m.InitWithOptions(recoverAssets(), options); err != nil {
+	// Initialize the managers
+	if err := m1.InitWithOptions(recoverAssets(), options1); err != nil {
 		logrus.Fatal(err)
 	}
 
-	// Start the manager
-	if err := m.Start(); err != nil {
+	newID := manager.ProbeIdentificationPair{Section: "kprobe/exclude2"}
+	if err := m1.RenameProbeIdentificationPair(manager.ProbeIdentificationPair{Section: "kprobe/exclude"}, newID); err != nil {
 		logrus.Fatal(err)
 	}
 
-	logrus.Println("successfully started")
-	logrus.Println("=> Cmd+C to exit")
+	_, ok := m1.GetProbe(newID)
+	if !ok {
+		logrus.Fatal("EditProbeIdentificationPair failed")
+	}
+
+	// Start the managers
+	if err := m1.Start(); err != nil {
+		logrus.Fatal(err)
+	}
+
+	logrus.Println("m1 successfully started")
 
 	// Create a folder to trigger the probes
 	if err := trigger(); err != nil {
 		logrus.Error(err)
 	}
 
+	logrus.Println("=> Cmd+C to continue")
 	wait()
 
-	// Close the manager
-	if err := m.Stop(manager.CleanAll); err != nil {
+	logrus.Println("moving on to m2 (an error is expected)")
+	// Initialize the managers
+	if err := m2.InitWithOptions(recoverAssets(), options2); err != nil {
+		logrus.Fatal(err)
+	}
+
+	// Start the managers
+	if err := m2.Start(); err != nil {
+		logrus.Fatal(err)
+	}
+
+	// Close the managers
+	if err := m1.Stop(manager.CleanAll); err != nil {
+		logrus.Fatal(err)
+	}
+	if err := m2.Stop(manager.CleanAll); err != nil {
 		logrus.Fatal(err)
 	}
 }

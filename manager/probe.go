@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/florianl/go-tc"
+	"github.com/florianl/go-tc/core"
 	"github.com/pkg/errors"
 	"github.com/vishvananda/netlink"
 	"golang.org/x/sys/unix"
@@ -38,8 +39,8 @@ const (
 type TrafficType uint32
 
 const (
-	Ingress TrafficType = tc.Ingress
-	Egress  TrafficType = tc.Egress
+	Ingress = TrafficType(tc.HandleMinIngress)
+	Egress = TrafficType(tc.HandleMinEgress)
 )
 
 type ProbeIdentificationPair struct {
@@ -584,8 +585,8 @@ func (p *Probe) attachTCCLS() error {
 		Msg: tc.Msg{
 			Family:  unix.AF_UNSPEC,
 			Ifindex: uint32(p.Ifindex),
-			Handle:  tc.BuildHandle(0xFFFF, 0x0000),
-			Parent:  0xFFFFFFF1,
+			Handle:  core.BuildHandle(tc.HandleRoot, 0x0000),
+			Parent:  tc.HandleIngress,
 			Info:    0,
 		},
 		Attribute: tc.Attribute{
@@ -602,21 +603,23 @@ func (p *Probe) attachTCCLS() error {
 	}
 
 	// Create qdisc filter
+	fd := uint32(p.program.FD())
+	flag := uint32(1)
 	filter := tc.Object{
 		Msg: tc.Msg{
 			Family:  unix.AF_UNSPEC,
 			Ifindex: uint32(p.Ifindex),
 			Handle:  0,
-			Parent:  uint32(p.NetworkDirection),
+			Parent:  core.BuildHandle(tc.HandleRoot, uint32(p.NetworkDirection)),
 			Info:    0x300,
 		},
 		Attribute: tc.Attribute{
 			Kind: "bpf",
 
 			BPF: &tc.Bpf{
-				FD:    uint32(p.program.FD()),
-				Name:  p.Section,
-				Flags: 0x1,
+				FD:    &fd,
+				Name:  &p.Section,
+				Flags: &flag,
 			},
 		},
 	}

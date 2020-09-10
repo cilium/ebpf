@@ -241,7 +241,7 @@ func loadKernelSpec() (*Spec, error) {
 		return spec, nil
 	}
 
-	return nil, fmt.Errorf("can't find kernel BTF: %w", ErrNotSupported)
+	return nil, fmt.Errorf("BTF for kernel version %s: %w", release, ErrNotFound)
 }
 
 func parseBTF(btf io.ReadSeeker, bo binary.ByteOrder) ([]rawType, stringTable, error) {

@@ -225,7 +225,7 @@ func DisableKprobeEvent(probeType, funcName, UID string, kprobeAttachPID int) er
 // to remove the krpobe.
 func EnableUprobeEvent(probeType, funcName, path, UID string, uprobeAttachPID int) (int, error) {
 	// Generate event name
-	eventName := SanitizeEventName(fmt.Sprintf("%s_%s_%s_%s_%d", probeType, funcName, path, UID, uprobeAttachPID))
+	eventName := SanitizeEventName(fmt.Sprintf("%s_%s_%s_%d", probeType, funcName, UID, uprobeAttachPID))
 
 	// Retrieve dynamic symbol offset
 	offset, err := findSymbolOffset(path, funcName)
@@ -288,9 +288,9 @@ func findSymbolOffset(path string, name string) (uint64, error) {
 }
 
 // DisableUprobeEvent - Removes a uprobe from uprobe_events
-func DisableUprobeEvent(probeType, funcName, path, UID string, uprobeAttachPID int) error {
+func DisableUprobeEvent(probeType, funcName, UID string, uprobeAttachPID int) error {
 	// Generate event name
-	eventName := SanitizeEventName(fmt.Sprintf("%s_%s_%s_%s_%d", probeType, funcName, path, UID, uprobeAttachPID))
+	eventName := SanitizeEventName(fmt.Sprintf("%s_%s_%s_%d", probeType, funcName, UID, uprobeAttachPID))
 
 	// Write uprobe_events line
 	uprobeEventsFileName := "/sys/kernel/debug/tracing/uprobe_events"

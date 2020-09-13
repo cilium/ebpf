@@ -22,6 +22,9 @@ const (
 	initialized
 	paused
 	running
+
+	// MaxEventNameLen - maximum length for a kprobe (or uprobe) event name
+	MaxEventNameLen = 64
 )
 
 // ConcatErrors - Concatenate 2 errors into one error.
@@ -165,6 +168,10 @@ func EnableKprobeEvent(probeType, funcName, UID, maxactiveStr string, kprobeAtta
 	// Generate event name
 	eventName := SanitizeEventName(fmt.Sprintf("%s_%s_%s_%d", probeType, funcName, UID, kprobeAttachPID))
 
+	if len(eventName) > MaxEventNameLen {
+		return -1, errors.Errorf("event name too long (kernel limit is %d): %s", MaxEventNameLen, eventName)
+	}
+
 	// Write line to kprobe_events
 	kprobeEventsFileName := "/sys/kernel/debug/tracing/kprobe_events"
 	f, err := os.OpenFile(kprobeEventsFileName, os.O_APPEND|os.O_WRONLY, 0666)
@@ -198,6 +205,10 @@ func DisableKprobeEvent(probeType, funcName, UID string, kprobeAttachPID int) er
 	// Generate event name
 	eventName := SanitizeEventName(fmt.Sprintf("%s_%s_%s_%d", probeType, funcName, UID, kprobeAttachPID))
 
+	if len(eventName) > MaxEventNameLen {
+		return errors.Errorf("event name too long (kernel limit is %d): %s", MaxEventNameLen, eventName)
+	}
+
 	// Write line to kprobe_events
 	kprobeEventsFileName := "/sys/kernel/debug/tracing/kprobe_events"
 	f, err := os.OpenFile(kprobeEventsFileName, os.O_APPEND|os.O_WRONLY, 0)
@@ -226,6 +237,10 @@ func DisableKprobeEvent(probeType, funcName, UID string, kprobeAttachPID int) er
 func EnableUprobeEvent(probeType, funcName, path, UID string, uprobeAttachPID int) (int, error) {
 	// Generate event name
 	eventName := SanitizeEventName(fmt.Sprintf("%s_%s_%s_%d", probeType, funcName, UID, uprobeAttachPID))
+
+	if len(eventName) > MaxEventNameLen {
+		return -1, errors.Errorf("event name too long (kernel limit is %d): %s", MaxEventNameLen, eventName)
+	}
 
 	// Retrieve dynamic symbol offset
 	offset, err := findSymbolOffset(path, funcName)
@@ -291,6 +306,10 @@ func findSymbolOffset(path string, name string) (uint64, error) {
 func DisableUprobeEvent(probeType, funcName, UID string, uprobeAttachPID int) error {
 	// Generate event name
 	eventName := SanitizeEventName(fmt.Sprintf("%s_%s_%s_%d", probeType, funcName, UID, uprobeAttachPID))
+
+	if len(eventName) > MaxEventNameLen {
+		return errors.Errorf("event name too long (kernel limit is %d): %s", MaxEventNameLen, eventName)
+	}
 
 	// Write uprobe_events line
 	uprobeEventsFileName := "/sys/kernel/debug/tracing/uprobe_events"

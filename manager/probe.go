@@ -516,7 +516,7 @@ func (p *Probe) detachUprobe() error {
 	}
 
 	// Write uprobe_events line to remove hook point
-	return DisableUprobeEvent(probeType, funcName, p.BinaryPath, p.UID, p.attachPID)
+	return DisableUprobeEvent(probeType, funcName, p.UID, p.attachPID)
 }
 
 // attachCGroup - Attaches the probe to a cgroup hook point

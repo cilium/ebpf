@@ -49,7 +49,12 @@ type ProbeIdentificationPair struct {
 }
 
 func (pip ProbeIdentificationPair) String() string {
-	return fmt.Sprintf("[UID:%s, Section:%s]", pip.UID, pip.Section)
+	return fmt.Sprintf("{UID:%s Section:%s}", pip.UID, pip.Section)
+}
+
+// Matches - Returns true if the identification pair (probe uid, probe section) matches.
+func (pip ProbeIdentificationPair) Matches(id ProbeIdentificationPair) bool {
+	return pip.UID == id.UID && pip.Section == id.Section
 }
 
 // Probe - Main eBPF probe wrapper. This structure is used to store the required data to attach a loaded eBPF
@@ -65,6 +70,9 @@ type Probe struct {
 	checkPin         bool
 	funcName         string
 	attachPID        int
+	// lastError - stores the last error that the probe encountered, it is used to surface a more useful error message
+	// when one of the validators (see Options.ActivatedProbes) fails.
+	lastError error
 
 	// UID - (optional) this field can be used to identify your probes when the same eBPF program is used on multiple
 	// hook points. Keep in mind that the pair (probe section, probe UID) needs to be unique
@@ -89,6 +97,9 @@ type Probe struct {
 	// Enabled - Indicates if a probe should be enabled or not. This parameter can be set at runtime using the
 	// Manager options (see ActivatedProbes)
 	Enabled bool
+
+	// Optional - Indicates if a failure to start the probe should return an error
+	Optional bool
 
 	// PinPath - Once loaded, the eBPF program will be pinned to this path. If the eBPF program has already been pinned
 	// and is already running in the kernel, then it will be loaded from this path.
@@ -134,9 +145,14 @@ type Probe struct {
 	tcObject *tc.Object
 }
 
-// IdentificationPairMatches - Returns true if the identification pair (probe uid, probe section) match.
+// GetLastError - Returns the last error that the probe encountered
+func (p *Probe) GetLastError() error {
+	return p.lastError
+}
+
+// IdentificationPairMatches - Returns true if the identification pair (probe uid, probe section) matches.
 func (p *Probe) IdentificationPairMatches(id ProbeIdentificationPair) bool {
-	return p.UID == id.UID && p.Section == id.Section
+	return p.GetIdentificationPair().Matches(id)
 }
 
 // GetIdentificationPair - Returns the identification pair (probe section, probe UID)
@@ -210,6 +226,7 @@ func (p *Probe) init() error {
 	if p.manualLoadNeeded {
 		prog, err := ebpf.NewProgramWithOptions(p.programSpec, p.manager.options.VerifierOptions.Programs)
 		if err != nil {
+			p.lastError = err
 			return errors.Wrapf(err, "couldn't load new probe %v", p.GetIdentificationPair())
 		}
 		p.program = prog
@@ -219,6 +236,7 @@ func (p *Probe) init() error {
 	if p.program == nil {
 		prog, ok := p.manager.collection.Programs[p.Section]
 		if !ok {
+			p.lastError = ErrUnknownSection
 			return errors.Wrapf(ErrUnknownSection, "couldn't find program %s", p.Section)
 		}
 		p.program = prog
@@ -229,6 +247,7 @@ func (p *Probe) init() error {
 		// Pin program if needed
 		if p.PinPath != "" {
 			if err := p.program.Pin(p.PinPath); err != nil {
+				p.lastError = err
 				return errors.Wrapf(err, "couldn't pin program %s at %s", p.Section, p.PinPath)
 			}
 		}
@@ -240,6 +259,7 @@ func (p *Probe) init() error {
 		var err error
 		p.funcName, err = GetSyscallFnNameWithSymFile(p.SyscallFuncName, p.manager.options.SymFile)
 		if err != nil {
+			p.lastError = err
 			return err
 		}
 	}
@@ -249,6 +269,7 @@ func (p *Probe) init() error {
 		var err error
 		p.funcName, err = FindFilterFunction(p.MatchFuncName)
 		if err != nil {
+			p.lastError = err
 			return err
 		}
 	}
@@ -257,6 +278,7 @@ func (p *Probe) init() error {
 	if p.Ifindex == 0 && p.Ifname != "" {
 		inter, err := net.InterfaceByName(p.Ifname)
 		if err != nil {
+			p.lastError = err
 			return errors.Wrapf(err, "couldn't find interface %v", p.Ifname)
 		}
 		p.Ifindex = int32(inter.Index)
@@ -276,7 +298,11 @@ func (p *Probe) Attach() error {
 		return nil
 	}
 	if p.state < initialized {
-		return ErrProbeNotInitialized
+		p.lastError = ErrProbeNotInitialized
+		if !p.Optional {
+			return ErrProbeNotInitialized
+		}
+		return nil
 	}
 
 	// Per program type start
@@ -300,8 +326,12 @@ func (p *Probe) Attach() error {
 		err = fmt.Errorf("program type %s not implemented yet", p.programSpec.Type)
 	}
 	if err != nil {
+		p.lastError = err
 		// Clean up any progress made in the attach attempt
 		_ = p.stop()
+		if p.Optional {
+			return nil
+		}
 		return errors.Wrapf(err, "couldn't start probe %s", p.Section)
 	}
 
@@ -324,6 +354,7 @@ func (p *Probe) Detach() error {
 
 	// update state of the probe
 	if err != nil {
+		p.lastError = err
 		p.state = initialized
 	}
 	return err
@@ -383,6 +414,7 @@ func (p *Probe) stop() error {
 
 	// update state of the probe
 	if err != nil {
+		p.lastError = err
 		p.state = 0
 	}
 	return errors.Wrapf(err, "coulnd't cleanup probe %s", p.Section)

@@ -3,8 +3,8 @@ package manager
 import (
 	"fmt"
 	"io"
-	"math"
 	"os"
+	"strings"
 	"sync"
 
 	"github.com/florianl/go-tc"
@@ -95,14 +95,125 @@ type MapSpecEditor struct {
 	EditorFlag MapSpecEditorFlag
 }
 
+// ProbesSelector - A probe selector defines how a probe (or a group of probes) should be activated.
+//
+// For example, this can be used to specify that out of a group of optional probes, at least one should be activated.
+type ProbesSelector interface {
+	// GetProbesIdentificationPairList - Returns the list of probes that this selector activates
+	GetProbesIdentificationPairList() []ProbeIdentificationPair
+	// RunValidator - Ensures that the probes that were successfully activated follow the selector goal.
+	// For example, see OneOf.
+	RunValidator(manager *Manager) error
+	// EditProbeIdentificationPair - Changes all the selectors looking for the old ProbeIdentificationPair so that they
+	// mow select the new one
+	EditProbeIdentificationPair(old ProbeIdentificationPair, new ProbeIdentificationPair)
+}
+
+// ProbeSelector - This selector is used to unconditionally select a probe by its identification pair and validate
+// that it is activated
+type ProbeSelector struct {
+	ProbeIdentificationPair
+}
+
+// GetProbesIdentificationPairList - Returns the list of probes that this selector activates
+func (ps *ProbeSelector) GetProbesIdentificationPairList() []ProbeIdentificationPair {
+	return []ProbeIdentificationPair{ps.ProbeIdentificationPair}
+}
+
+// RunValidator - Ensures that the probes that were successfully activated follow the selector goal.
+// For example, see OneOf.
+func (ps *ProbeSelector) RunValidator(manager *Manager) error {
+	p, ok := manager.GetProbe(ps.ProbeIdentificationPair)
+	if !ok {
+		return errors.Errorf("probe not found: %s", ps.ProbeIdentificationPair)
+	}
+	if !p.IsRunning() && p.Enabled && !p.Optional {
+		return errors.Wrap(p.GetLastError(), ps.ProbeIdentificationPair.String())
+	}
+	if !p.Enabled && !p.Optional {
+		return errors.Errorf("%s: is disabled and not optional", ps.ProbeIdentificationPair.String())
+	}
+	return nil
+}
+
+// EditProbeIdentificationPair - Changes all the selectors looking for the old ProbeIdentificationPair so that they
+// mow select the new one
+func (ps *ProbeSelector) EditProbeIdentificationPair(old ProbeIdentificationPair, new ProbeIdentificationPair) {
+	if ps.Matches(old) {
+		ps.ProbeIdentificationPair = new
+	}
+}
+
+// OneOf - This selector is used to ensure that at least of a list of probe selectors is valid. In other words, this
+// can be used to ensure that at least one of a list of optional probes is activated.
+type OneOf struct {
+	Selectors []ProbesSelector
+}
+
+// GetProbesIdentificationPairList - Returns the list of probes that this selector activates
+func (oo *OneOf) GetProbesIdentificationPairList() []ProbeIdentificationPair {
+	var l []ProbeIdentificationPair
+	for _, selector := range oo.Selectors {
+		l = append(l, selector.GetProbesIdentificationPairList()...)
+	}
+	return l
+}
+
+// RunValidator - Ensures that the probes that were successfully activated follow the selector goal.
+// For example, see OneOf.
+func (oo *OneOf) RunValidator(manager *Manager) error {
+	var errs []string
+	for _, selector := range oo.Selectors {
+		if err := selector.RunValidator(manager); err != nil {
+			errs = append(errs, err.Error())
+		}
+	}
+	if len(errs) == len(oo.Selectors) {
+		return errors.Errorf(
+			"OneOf requirement failed, none of the following probes are running [%s]",
+			strings.Join(errs, " | "))
+	}
+
+	// Check that at least one probe is activated (keep in mind that a validation can be successfull even if the probe
+	// is not running)
+	for _, id := range oo.GetProbesIdentificationPairList() {
+		p, ok := manager.GetProbe(id)
+		if ok {
+			if p.IsRunning() {
+				return nil
+			}
+		}
+	}
+	return errors.Errorf("OneOf requirement failed, none of the following probes are running [%s]", oo)
+}
+
+func (oo *OneOf) String() string {
+	var strs []string
+	for _, id := range oo.GetProbesIdentificationPairList() {
+		str := fmt.Sprintf("%s", id)
+		strs = append(strs, str)
+	}
+	return strings.Join(strs, ", ")
+}
+
+// EditProbeIdentificationPair - Changes all the selectors looking for the old ProbeIdentificationPair so that they
+// mow select the new one
+func (oo *OneOf) EditProbeIdentificationPair(old ProbeIdentificationPair, new ProbeIdentificationPair) {
+	for _, selector := range oo.Selectors {
+		selector.EditProbeIdentificationPair(old, new)
+	}
+}
+
 // Options - Options of a Manager. These options define how a manager should be initialized.
 type Options struct {
 	// ActivatedProbes - List of the probes that should be activated, identified by their identification string.
 	// If the list is empty, all probes will be activated.
-	ActivatedProbes []string
+	ActivatedProbes []ProbesSelector
 
-	// ExcludedProbes is a list of probes that should not even be verified.
-	ExcludedProbes []string
+	// ExcludedSections - A list of sections that should not even be verified. This list overrides the ActivatedProbes
+	// list: since the excluded sections aren't loaded in the kernel, all the probes using those sections will be
+	// deactivated.
+	ExcludedSections []string
 
 	// ConstantsEditor - Post-compilation constant edition. See ConstantEditor for more.
 	ConstantEditors []ConstantEditor
@@ -243,7 +354,7 @@ func (m *Manager) GetPerfMap(name string) (*PerfMap, bool) {
 
 // GetProgram - Return a pointer to the requested eBPF program
 // section: section of the program, as defined by its section SEC("[section]")
-// UID: unique identifier given to a probe. If UID is empty, then all the programs matching the provided section are
+// id: unique identifier given to a probe. If UID is empty, then all the programs matching the provided section are
 // returned.
 func (m *Manager) GetProgram(id ProbeIdentificationPair) ([]*ebpf.Program, bool, error) {
 	m.stateLock.RLock()
@@ -275,7 +386,7 @@ func (m *Manager) GetProgram(id ProbeIdentificationPair) ([]*ebpf.Program, bool,
 
 // GetProgramSpec - Return a pointer to the requested eBPF program spec
 // section: section of the program, as defined by its section SEC("[section]")
-// UID: unique identifier given to a probe. If UID is empty, then the original program spec with the right section in the
+// id: unique identifier given to a probe. If UID is empty, then the original program spec with the right section in the
 // collection spec (if found) is return
 func (m *Manager) GetProgramSpec(id ProbeIdentificationPair) ([]*ebpf.ProgramSpec, bool, error) {
 	m.stateLock.RLock()
@@ -315,6 +426,34 @@ func (m *Manager) GetProbe(id ProbeIdentificationPair) (*Probe, bool) {
 	return nil, false
 }
 
+// RenameProbeIdentificationPair - Renames a probe identification pair. This change will propagate to all the features in
+// the manager that will try to select the probe by its old ProbeIdentificationPair.
+func (m *Manager) RenameProbeIdentificationPair(oldID ProbeIdentificationPair, newID ProbeIdentificationPair) error {
+	p, ok := m.GetProbe(oldID)
+	if !ok {
+		return ErrSymbolNotFound
+	}
+
+	if oldID.Section != newID.Section {
+		// edit the excluded sections
+		for i, section := range m.options.ExcludedSections {
+			if section == oldID.Section {
+				m.options.ExcludedSections[i] = newID.Section
+			}
+		}
+	}
+
+	// edit the probe selectors
+	for _, selector := range m.options.ActivatedProbes {
+		selector.EditProbeIdentificationPair(oldID, newID)
+	}
+
+	// edit the probe
+	p.Section = newID.Section
+	p.UID = newID.UID
+	return nil
+}
+
 // Init - Initialize the manager.
 // elf: reader containing the eBPF bytecode
 func (m *Manager) Init(elf io.ReaderAt) error {
@@ -349,10 +488,7 @@ func (m *Manager) InitWithOptions(elf io.ReaderAt, options Options) error {
 
 	// set resource limit if requested
 	if m.options.RLimit != nil {
-		err := unix.Setrlimit(unix.RLIMIT_MEMLOCK, &unix.Rlimit{
-			Cur: math.MaxUint64,
-			Max: math.MaxUint64,
-		})
+		err := unix.Setrlimit(unix.RLIMIT_MEMLOCK, m.options.RLimit)
 		if err != nil {
 			return errors.Wrap(err, "couldn't adjust RLIMIT_MEMLOCK")
 		}
@@ -364,6 +500,11 @@ func (m *Manager) InitWithOptions(elf io.ReaderAt, options Options) error {
 	if err != nil {
 		m.stateLock.Unlock()
 		return err
+	}
+
+	// Remove excluded sections
+	for _, excludedSection := range m.options.ExcludedSections {
+		delete(m.collectionSpec.Programs, excludedSection)
 	}
 
 	// Match Maps and program specs
@@ -404,7 +545,7 @@ func (m *Manager) InitWithOptions(elf io.ReaderAt, options Options) error {
 	}
 
 	// Load eBPF program with the provided verifier options
-	if err := m.loadCollection(options.ExcludedProbes); err != nil {
+	if err := m.loadCollection(); err != nil {
 		return err
 	}
 	return nil
@@ -441,8 +582,18 @@ func (m *Manager) Start() error {
 			return err
 		}
 	}
+
 	m.state = running
 	m.stateLock.Unlock()
+
+	// Check optional probes and probe selectors
+	for _, selector := range m.options.ActivatedProbes {
+		if err := selector.RunValidator(m); err != nil {
+			// Clean up
+			_ = m.Stop(CleanInternal)
+			return errors.Wrap(err, "probes activation validation failed")
+		}
+	}
 
 	// Handle Maps router
 	if err := m.UpdateMapRoutes(m.options.MapRouter...); err != nil {
@@ -872,7 +1023,17 @@ func (m *Manager) matchSpecs() error {
 	for _, probe := range m.Probes {
 		spec, ok := m.collectionSpec.Programs[probe.Section]
 		if !ok {
-			return errors.Wrapf(ErrUnknownSection, "couldn't find program at %s", probe.Section)
+			// Check if the probe section is in the list of excluded sections
+			var excluded bool
+			for _, excludedSection := range m.options.ExcludedSections {
+				if excludedSection == probe.Section {
+					excluded = true
+					break
+				}
+			}
+			if !excluded {
+				return errors.Wrapf(ErrUnknownSection, "couldn't find program at %s", probe.Section)
+			}
 		}
 		probe.programSpec = spec
 	}
@@ -903,13 +1064,15 @@ func (m *Manager) activateProbes() {
 	defaultEnabled := len(m.options.ActivatedProbes) == 0
 	for _, mProbe := range m.Probes {
 		shouldActivate := defaultEnabled
-		for _, probe := range m.options.ActivatedProbes {
-			if probe == mProbe.Section {
-				shouldActivate = true
+		for _, selector := range m.options.ActivatedProbes {
+			for _, p := range selector.GetProbesIdentificationPairList() {
+				if mProbe.IdentificationPairMatches(p) {
+					shouldActivate = true
+				}
 			}
 		}
-		for _, probe := range m.options.ExcludedProbes {
-			if probe == mProbe.Section {
+		for _, p := range m.options.ExcludedSections {
+			if mProbe.Section == p {
 				shouldActivate = false
 			}
 		}
@@ -1055,10 +1218,10 @@ func (m *Manager) editMaps(maps map[string]*ebpf.Map) error {
 }
 
 // loadCollection - Load the eBPF maps and programs in the CollectionSpec. Programs and Maps are pinned when requested.
-func (m *Manager) loadCollection(excludedPrograms []string) error {
+func (m *Manager) loadCollection() error {
 	var err error
 	// Load collection
-	m.collection, err = ebpf.NewCollectionWithOptions(m.collectionSpec, m.options.VerifierOptions, excludedPrograms)
+	m.collection, err = ebpf.NewCollectionWithOptions(m.collectionSpec, m.options.VerifierOptions)
 	if err != nil {
 		return errors.Wrap(err, "couldn't load eBPF programs")
 	}

@@ -40,7 +40,7 @@ type TrafficType uint32
 
 const (
 	Ingress = TrafficType(tc.HandleMinIngress)
-	Egress = TrafficType(tc.HandleMinEgress)
+	Egress  = TrafficType(tc.HandleMinEgress)
 )
 
 type ProbeIdentificationPair struct {
@@ -143,6 +143,27 @@ type Probe struct {
 	// tcObject - (TC classifier) TC object created when the classifier was attached. It will be reused to delete it on
 	// exit.
 	tcObject *tc.Object
+}
+
+// Copy - Returns a copy of the current probe instance. Only the exported fields are copied.
+func (p *Probe) Copy() *Probe {
+	return &Probe{
+		UID:              p.UID,
+		Section:          p.Section,
+		SyscallFuncName:  p.SyscallFuncName,
+		MatchFuncName:    p.MatchFuncName,
+		Enabled:          p.Enabled,
+		PinPath:          p.PinPath,
+		KProbeMaxActive:  p.KProbeMaxActive,
+		BinaryPath:       p.BinaryPath,
+		CGroupPath:       p.CGroupPath,
+		SocketFD:         p.SocketFD,
+		Ifindex:          p.Ifindex,
+		Ifname:           p.Ifname,
+		IfindexNetns:     p.IfindexNetns,
+		XDPAttachMode:    p.XDPAttachMode,
+		NetworkDirection: p.NetworkDirection,
+	}
 }
 
 // GetLastError - Returns the last error that the probe encountered

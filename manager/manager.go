@@ -197,6 +197,55 @@ func (oo *OneOf) EditProbeIdentificationPair(old ProbeIdentificationPair, new Pr
 	}
 }
 
+// AllOf - This selector is used to ensure that all the proves in the provided list are running.
+type AllOf struct {
+	Selectors []ProbesSelector
+}
+
+// GetProbesIdentificationPairList - Returns the list of probes that this selector activates
+func (ao *AllOf) GetProbesIdentificationPairList() []ProbeIdentificationPair {
+	var l []ProbeIdentificationPair
+	for _, selector := range ao.Selectors {
+		l = append(l, selector.GetProbesIdentificationPairList()...)
+	}
+	return l
+}
+
+// RunValidator - Ensures that the probes that were successfully activated follow the selector goal.
+// For example, see OneOf.
+func (ao *AllOf) RunValidator(manager *Manager) error {
+	var errMsg []string
+	for _, selector := range ao.Selectors {
+		if err := selector.RunValidator(manager); err != nil {
+			errMsg = append(errMsg, err.Error())
+		}
+	}
+	if len(errMsg) > 0 {
+		return errors.Errorf(
+			"AllOf requirement failed, the following probes are not running [%s]",
+			strings.Join(errMsg, " | "))
+	}
+	// no error means that all the selectors were successful
+	return nil
+}
+
+func (ao *AllOf) String() string {
+	var strs []string
+	for _, id := range ao.GetProbesIdentificationPairList() {
+		str := fmt.Sprintf("%s", id)
+		strs = append(strs, str)
+	}
+	return strings.Join(strs, ", ")
+}
+
+// EditProbeIdentificationPair - Changes all the selectors looking for the old ProbeIdentificationPair so that they
+// mow select the new one
+func (ao *AllOf) EditProbeIdentificationPair(old ProbeIdentificationPair, new ProbeIdentificationPair) {
+	for _, selector := range ao.Selectors {
+		selector.EditProbeIdentificationPair(old, new)
+	}
+}
+
 // Options - Options of a Manager. These options define how a manager should be initialized.
 type Options struct {
 	// ActivatedProbes - List of the probes that should be activated, identified by their identification string.

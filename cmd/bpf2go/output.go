@@ -247,7 +247,6 @@ func binaryString(buf []byte) string {
 func writeFormatted(src []byte, out io.Writer) error {
 	formatted, err := format.Source(src)
 	if err != nil {
-		fmt.Println(string(src))
 		return fmt.Errorf("can't format source: %s", err)
 	}
 

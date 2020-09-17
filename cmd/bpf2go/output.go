@@ -44,7 +44,7 @@ type {{ .Name.Specs }} struct {
 }
 
 func {{ .Name.NewSpecs }}() (*{{ .Name.Specs }}, error) {
-	reader := bytes.NewReader({{ .Name.Bytes }}())
+	reader := bytes.NewReader({{ .Name.Bytes }})
 	spec, err := ebpf.LoadCollectionSpecFromReader(reader)
 	if err != nil {
 		return nil, fmt.Errorf("can't load {{ .Name }}: %w", err)
@@ -141,13 +141,9 @@ func (o *{{ .Name.Objects }}) Close() error {
 	return nil
 }
 
-func {{ .Name.Bytes }}() []byte {
-	var c string
-{{- range $line := .Lines }}
-	c += "{{ $line }}"
-{{- end }}
-	return []byte(c)
-}
+// Do not access this directly.
+var {{ .Name.Bytes }} = []byte("{{ .Bytes }}")
+
 `
 
 var (
@@ -169,7 +165,7 @@ func (n templateName) maybeExport(str string) string {
 }
 
 func (n templateName) Bytes() string {
-	return n.maybeExport(string(n) + "Bytes")
+	return "_" + toUpperFirst(string(n)) + "Bytes"
 }
 
 func (n templateName) Specs() string {
@@ -220,7 +216,7 @@ func writeCommon(args writeArgs) error {
 		Sections map[string]struct{}
 		Maps     map[string]struct{}
 		Programs map[string]*ebpf.ProgramSpec
-		Lines    []string
+		Bytes    string
 	}{
 		args.pkg,
 		args.tags,
@@ -228,7 +224,7 @@ func writeCommon(args writeArgs) error {
 		sections,
 		maps,
 		spec.Programs,
-		binaryStrings(obj),
+		binaryString(obj),
 	}
 
 	var buf bytes.Buffer
@@ -239,30 +235,13 @@ func writeCommon(args writeArgs) error {
 	return writeFormatted(buf.Bytes(), args.out)
 }
 
-func binaryStrings(buf []byte) []string {
-	const bytesPerLine = 70 / 4
-
-	var lines []string
+func binaryString(buf []byte) string {
 	var builder strings.Builder
-	for len(buf) > 0 {
-		n := bytesPerLine
-		if n > len(buf) {
-			n = len(buf)
-		}
-
-		bytes := buf[:n]
-		buf = buf[n:]
-
-		for _, b := range bytes {
-			builder.WriteString(`\x`)
-			builder.WriteString(fmt.Sprintf("%02x", b))
-		}
-
-		lines = append(lines, builder.String())
-		builder.Reset()
+	for _, b := range buf {
+		builder.WriteString(`\x`)
+		builder.WriteString(fmt.Sprintf("%02x", b))
 	}
-
-	return lines
+	return builder.String()
 }
 
 func writeFormatted(src []byte, out io.Writer) error {

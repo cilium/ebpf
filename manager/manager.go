@@ -624,19 +624,20 @@ func (m *Manager) Stop(cleanup MapCleanupType) error {
 
 func (m *Manager) stop(cleanup MapCleanupType) error {
 	var err error
-	// Detach eBPF programs
-	for _, probe := range m.Probes {
-		err = ConcatErrors(
-			err,
-			errors.Wrapf(probe.Stop(), "program %s couldn't gracefully shut down", probe.Section),
-		)
-	}
 
 	// Stop perf ring readers
 	for _, perfRing := range m.PerfMaps {
 		err = ConcatErrors(
 			err,
 			errors.Wrapf(perfRing.Stop(cleanup), "perf ring reader %s couldn't gracefully shut down", perfRing.Name),
+		)
+	}
+
+	// Detach eBPF programs
+	for _, probe := range m.Probes {
+		err = ConcatErrors(
+			err,
+			errors.Wrapf(probe.Stop(), "program %s couldn't gracefully shut down", probe.Section),
 		)
 	}
 

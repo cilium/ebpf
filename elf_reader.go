@@ -25,15 +25,24 @@ type elfCode struct {
 	version           uint32
 }
 
+type LoadOptions struct {
+	TargetBTF *btf.Spec
+}
+
 // LoadCollectionSpec parses an ELF file into a CollectionSpec.
 func LoadCollectionSpec(file string) (*CollectionSpec, error) {
+	return LoadCollectionSpecWithOptions(file, LoadOptions{})
+}
+
+// LoadCollectionSpec parses an ELF file into a CollectionSpec with the options specified.
+func LoadCollectionSpecWithOptions(file string, opts LoadOptions) (*CollectionSpec, error) {
 	f, err := os.Open(file)
 	if err != nil {
 		return nil, err
 	}
 	defer f.Close()
 
-	spec, err := LoadCollectionSpecFromReader(f)
+	spec, err := LoadCollectionSpecFromReaderWithOptions(f, opts)
 	if err != nil {
 		return nil, fmt.Errorf("file %s: %w", file, err)
 	}
@@ -42,6 +51,11 @@ func LoadCollectionSpec(file string) (*CollectionSpec, error) {
 
 // LoadCollectionSpecFromReader parses an ELF file into a CollectionSpec.
 func LoadCollectionSpecFromReader(rd io.ReaderAt) (*CollectionSpec, error) {
+	return LoadCollectionSpecFromReaderWithOptions(rd, LoadOptions{})
+}
+
+// LoadCollectionSpecFromReader parses an ELF file into a CollectionSpec with the options specified.
+func LoadCollectionSpecFromReaderWithOptions(rd io.ReaderAt, opts LoadOptions) (*CollectionSpec, error) {
 	f, err := elf.NewFile(rd)
 	if err != nil {
 		return nil, err
@@ -138,7 +152,7 @@ func LoadCollectionSpecFromReader(rd io.ReaderAt) (*CollectionSpec, error) {
 		}
 	}
 
-	progs, err := ec.loadPrograms(progSections, relocations, btfSpec)
+	progs, err := ec.loadPrograms(progSections, relocations, btfSpec, opts.TargetBTF)
 	if err != nil {
 		return nil, fmt.Errorf("load programs: %w", err)
 	}
@@ -170,7 +184,7 @@ func loadVersion(sec *elf.Section, bo binary.ByteOrder) (uint32, error) {
 	return version, nil
 }
 
-func (ec *elfCode) loadPrograms(progSections map[elf.SectionIndex]*elf.Section, relocations map[elf.SectionIndex]map[uint64]elf.Symbol, btfSpec *btf.Spec) (map[string]*ProgramSpec, error) {
+func (ec *elfCode) loadPrograms(progSections map[elf.SectionIndex]*elf.Section, relocations map[elf.SectionIndex]map[uint64]elf.Symbol, btfSpec *btf.Spec, targetBtfSpec *btf.Spec) (map[string]*ProgramSpec, error) {
 	var (
 		progs []*ProgramSpec
 		libs  []*ProgramSpec
@@ -707,7 +721,7 @@ func (ec *elfCode) loadRelocations(sections map[elf.SectionIndex]*elf.Section) (
 
 			symbol := ec.symbols[symNo]
 			targets[symbol.Section] = true
-			rels[rel.Off] = ec.symbols[symNo]
+			rels[rel.Off] = symbol
 		}
 
 		result[idx] = rels

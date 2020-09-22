@@ -29,12 +29,13 @@ var (
 
 // Spec represents decoded BTF.
 type Spec struct {
-	rawTypes  []rawType
-	strings   stringTable
-	types     map[string][]Type
-	funcInfos map[string]extInfo
-	lineInfos map[string]extInfo
-	byteOrder binary.ByteOrder
+	rawTypes     []rawType
+	strings      stringTable
+	types        map[string][]Type
+	funcInfos    map[string]extInfo
+	lineInfos    map[string]extInfo
+	reloInfos    map[string]extInfo
+	byteOrder    binary.ByteOrder
 }
 
 type btfHeader struct {
@@ -101,7 +102,7 @@ func LoadSpecFromReader(rd io.ReaderAt) (*Spec, error) {
 		return spec, nil
 	}
 
-	spec.funcInfos, spec.lineInfos, err = parseExtInfos(btfExtSection.Open(), file.ByteOrder, spec.strings)
+	spec.funcInfos, spec.lineInfos, spec.reloInfos, err = parseExtInfos(btfExtSection.Open(), file.ByteOrder, spec.strings)
 	if err != nil {
 		return nil, fmt.Errorf("can't read ext info: %w", err)
 	}

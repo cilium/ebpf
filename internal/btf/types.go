@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"strings"
 )
 
 const maxTypeDepth = 32
@@ -34,6 +35,21 @@ type Type interface {
 type Name string
 
 func (n Name) name() string {
+	return string(n)
+}
+
+func (n Name) essentialNameLen() int {
+	lastIdx := strings.LastIndex(string(n), "___")
+	if lastIdx != -1 {
+		return lastIdx
+	}
+	return len(n)
+}
+
+func (n Name) String() string {
+	if n == "" {
+		return "(anon)"
+	}
 	return string(n)
 }
 
@@ -128,6 +144,20 @@ func (s *Struct) members() []Member {
 	return s.Members
 }
 
+func (s *Struct) Format(f fmt.State, c rune) {
+	if c != 's' && c != 'v' {
+		fmt.Fprintf(f, "{UNKNOWN FORMAT '%c'}", c)
+		return
+	}
+
+	fmt.Fprintf(f, "[%d] STRUCT '%s' size=%d vlen=%d", s.TypeID.ID(), s.Name, s.Size, len(s.Members))
+	if f.Flag('+') {
+		for _, m := range s.Members {
+			fmt.Fprintf(f, "\n\t%v", m)
+		}
+	}
+}
+
 // Union is a compound type where members occupy the same memory.
 type Union struct {
 	TypeID
@@ -174,6 +204,18 @@ type Member struct {
 	// Offset is the bit offset of this member
 	Offset       uint32
 	BitfieldSize uint32
+}
+
+func (m Member) Format(f fmt.State, c rune) {
+	if c != 's' && c != 'v' {
+		fmt.Fprintf(f, "{UNKNOWN FORMAT '%c'}", c)
+		return
+	}
+
+	fmt.Fprintf(f, "'%s' type_id=%d bits_offset=%d", m.Name, m.Type.ID(), m.Offset)
+	if m.BitfieldSize > 0 {
+		fmt.Fprintf(f, " bitfield_size=%d", m.BitfieldSize)
+	}
 }
 
 // Enum lists possible values.

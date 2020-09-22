@@ -188,6 +188,7 @@ func (ec *elfCode) loadPrograms(progSections map[elf.SectionIndex]*elf.Section, 
 	var (
 		progs []*ProgramSpec
 		libs  []*ProgramSpec
+		err   error
 	)
 
 	for idx, sec := range progSections {
@@ -201,7 +202,15 @@ func (ec *elfCode) loadPrograms(progSections map[elf.SectionIndex]*elf.Section, 
 			return nil, fmt.Errorf("section %v: no label at start", sec.Name)
 		}
 
-		insns, length, err := ec.loadInstructions(sec, syms, relocations[idx])
+		var coreRelocations map[uint64]btf.CORERelocation
+		if btfSpec != nil {
+			coreRelocations, err = btfSpec.LoadCORERelocations(sec.Name, targetBtfSpec, ec.ByteOrder)
+			if err != nil {
+				return nil, fmt.Errorf("can't load CO-RE relocations: %w", err)
+			}
+		}
+
+		insns, length, err := ec.loadInstructions(sec, syms, relocations[idx], coreRelocations)
 		if err != nil {
 			return nil, fmt.Errorf("program %s: can't unmarshal instructions: %w", funcSym.Name, err)
 		}
@@ -248,7 +257,7 @@ func (ec *elfCode) loadPrograms(progSections map[elf.SectionIndex]*elf.Section, 
 	return res, nil
 }
 
-func (ec *elfCode) loadInstructions(section *elf.Section, symbols, relocations map[uint64]elf.Symbol) (asm.Instructions, uint64, error) {
+func (ec *elfCode) loadInstructions(section *elf.Section, symbols, relocations map[uint64]elf.Symbol, coreRelocations map[uint64]btf.CORERelocation) (asm.Instructions, uint64, error) {
 	var (
 		r      = section.Open()
 		insns  asm.Instructions
@@ -265,6 +274,12 @@ func (ec *elfCode) loadInstructions(section *elf.Section, symbols, relocations m
 		}
 
 		ins.Symbol = symbols[offset].Name
+
+		if cr, ok := coreRelocations[offset]; ok {
+			if err = ec.coreRelocateInstruction(&ins, cr); err != nil {
+				return nil, 0, fmt.Errorf("offset %d: can't CO-RE relocate instruction: %w", offset, err)
+			}
+		}
 
 		if rel, ok := relocations[offset]; ok {
 			if err = ec.relocateInstruction(&ins, rel); err != nil {
@@ -395,6 +410,53 @@ func (ec *elfCode) sectionName(idx int) (string, error) {
 		return "", fmt.Errorf("out of bounds section index")
 	}
 	return ec.Sections[idx].Name, nil
+}
+
+func (ec *elfCode) coreRelocateInstruction(ins *asm.Instruction, rel btf.CORERelocation) error {
+	res := rel.Result
+	if res.Poison {
+		ins.Poison()
+		return nil
+	}
+
+	origVal := res.OrigVal
+	newVal := res.NewVal
+
+	switch ins.OpCode.Class() {
+	case asm.ALUClass:
+		fallthrough
+	case asm.ALU64Class:
+		if ins.OpCode.Source() != asm.ImmSource {
+			return fmt.Errorf("invalid relocation instruction %v", ins)
+		}
+		if res.Validate && ins.Constant != int64(origVal) {
+			return fmt.Errorf("invalid immediate value")
+		}
+		ins.Constant = int64(newVal)
+	case asm.LdXClass:
+	case asm.StClass:
+	case asm.StXClass:
+		if res.Validate && ins.Constant != int64(origVal) {
+			return fmt.Errorf("invalid immediate value")
+		}
+		if newVal > math.MaxInt16 {
+			return fmt.Errorf("value too big")
+		}
+		ins.Offset = int16(newVal)
+	case asm.LdClass:
+		if !ins.OpCode.IsDWordLoad() ||
+			ins.Src != asm.R0 || ins.Offset != 0 {
+			return fmt.Errorf("unexpected form")
+		}
+		if res.Validate && ins.Constant != int64(origVal) {
+			return fmt.Errorf("invalid immediate value")
+		}
+		ins.Constant = int64(newVal)
+	default:
+		return fmt.Errorf("trying to relocate unrecognized instruction %v", ins)
+	}
+
+	return nil
 }
 
 func (ec *elfCode) loadMaps(maps map[string]*MapSpec, mapSections map[elf.SectionIndex]*elf.Section) error {

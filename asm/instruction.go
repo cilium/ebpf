@@ -155,6 +155,14 @@ func (ins *Instruction) isLoadFromMap() bool {
 	return ins.OpCode == LoadImmOp(DWord) && (ins.Src == PseudoMapFD || ins.Src == PseudoMapValue)
 }
 
+func (ins *Instruction) Poison() {
+	ins.OpCode = OpCode(JumpClass).SetJumpOp(Call)
+	ins.Dst = R0
+	ins.Src = R0
+	ins.Offset = 0
+	ins.Constant = 195896080 // 0xbad2310 => "bad relo"
+}
+
 // Format implements fmt.Formatter.
 func (ins Instruction) Format(f fmt.State, c rune) {
 	if c != 'v' {

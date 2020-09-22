@@ -34,6 +34,7 @@ type Spec struct {
 	types     map[string][]namedType
 	funcInfos map[string]extInfo
 	lineInfos map[string]extInfo
+	reloInfos map[string]extInfo
 	byteOrder binary.ByteOrder
 }
 
@@ -105,7 +106,7 @@ func LoadSpecFromReader(rd io.ReaderAt) (*Spec, error) {
 		return spec, nil
 	}
 
-	spec.funcInfos, spec.lineInfos, err = parseExtInfos(btfExtSection.Open(), file.ByteOrder, spec.strings)
+	spec.funcInfos, spec.lineInfos, spec.reloInfos, err = parseExtInfos(btfExtSection.Open(), file.ByteOrder, spec.strings)
 	if err != nil {
 		return nil, fmt.Errorf("can't read ext info: %w", err)
 	}

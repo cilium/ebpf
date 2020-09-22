@@ -32,6 +32,7 @@ type Spec struct {
 	rawTypes     []rawType
 	strings      stringTable
 	types        map[string][]Type
+	indexedTypes []Type
 	funcInfos    map[string]extInfo
 	lineInfos    map[string]extInfo
 	reloInfos    map[string]extInfo
@@ -149,6 +150,9 @@ func loadNakedSpecFromReader(rd io.ReaderAt, sectionSizes map[string]uint32, var
 	if btfSection == nil {
 		return nil, fmt.Errorf("unable to find .BTF ELF section")
 	}
+	if err != nil {
+		return nil, err
+	}
 	return loadNakedSpec(btfSection.Open(), file.ByteOrder, sectionSizes, variableOffsets)
 }
 
@@ -158,21 +162,24 @@ func loadNakedSpec(btf io.ReadSeeker, bo binary.ByteOrder, sectionSizes map[stri
 		return nil, err
 	}
 
-	err = fixupDatasec(rawTypes, rawStrings, sectionSizes, variableOffsets)
-	if err != nil {
-		return nil, err
+	if sectionSizes != nil {
+		err = fixupDatasec(rawTypes, rawStrings, sectionSizes, variableOffsets)
+		if err != nil {
+			return nil, err
+		}
 	}
 
-	types, err := inflateRawTypes(rawTypes, rawStrings)
+	types, indexedTypes, err := inflateRawTypes(rawTypes, rawStrings)
 	if err != nil {
 		return nil, err
 	}
 
 	return &Spec{
-		rawTypes:  rawTypes,
-		types:     types,
-		strings:   rawStrings,
-		byteOrder: bo,
+		rawTypes:     rawTypes,
+		types:        types,
+		indexedTypes: indexedTypes,
+		strings:      rawStrings,
+		byteOrder:    bo,
 	}, nil
 }
 

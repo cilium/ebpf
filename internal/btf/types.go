@@ -478,10 +478,10 @@ var _ namer = Name("")
 // inflateRawTypes takes a list of raw btf types linked via type IDs, and turns
 // it into a graph of Types connected via pointers.
 //
-// Returns a map of named types (so, where NameOff is non-zero). Since BTF ignores
-// compilation units, multiple types may share the same name. A Type may form a
-// cyclic graph by pointing at itself.
-func inflateRawTypes(rawTypes []rawType, rawStrings stringTable) (namedTypes map[string][]Type, err error) {
+// Returns a map of named types (so, where NameOff is non-zero) and a slice of types
+// indexed by TypeID. Since BTF ignores compilation units, multiple types may share
+// the same name. A Type may form a cyclic graph by pointing at itself.
+func inflateRawTypes(rawTypes []rawType, rawStrings stringTable) (namedTypes map[string][]Type, indexedTypes []Type, err error) {
 	type fixupDef struct {
 		id           TypeID
 		expectedKind btfKind
@@ -532,7 +532,7 @@ func inflateRawTypes(rawTypes []rawType, rawStrings stringTable) (namedTypes map
 
 		name, err := rawStrings.LookupName(raw.NameOff)
 		if err != nil {
-			return nil, fmt.Errorf("can't get name for type id %d: %w", id, err)
+			return nil, nil, fmt.Errorf("can't get name for type id %d: %w", id, err)
 		}
 
 		switch raw.Kind() {
@@ -557,14 +557,14 @@ func inflateRawTypes(rawTypes []rawType, rawStrings stringTable) (namedTypes map
 		case kindStruct:
 			members, err := convertMembers(raw.data.([]btfMember), raw.KindFlag())
 			if err != nil {
-				return nil, fmt.Errorf("struct %s (id %d): %w", name, id, err)
+				return nil, nil, fmt.Errorf("struct %s (id %d): %w", name, id, err)
 			}
 			typ = &Struct{id, name, raw.Size(), members}
 
 		case kindUnion:
 			members, err := convertMembers(raw.data.([]btfMember), raw.KindFlag())
 			if err != nil {
-				return nil, fmt.Errorf("union %s (id %d): %w", name, id, err)
+				return nil, nil, fmt.Errorf("union %s (id %d): %w", name, id, err)
 			}
 			typ = &Union{id, name, raw.Size(), members}
 
@@ -574,7 +574,7 @@ func inflateRawTypes(rawTypes []rawType, rawStrings stringTable) (namedTypes map
 			for i, btfVal := range rawvals {
 				name, err := rawStrings.LookupName(btfVal.NameOff)
 				if err != nil {
-					return nil, fmt.Errorf("can't get name for enum value %d: %s", i, err)
+					return nil, nil, fmt.Errorf("can't get name for enum value %d: %s", i, err)
 				}
 				vals = append(vals, EnumValue{
 					Name:  name,
@@ -617,7 +617,7 @@ func inflateRawTypes(rawTypes []rawType, rawStrings stringTable) (namedTypes map
 			for i, param := range rawparams {
 				name, err := rawStrings.LookupName(param.NameOff)
 				if err != nil {
-					return nil, fmt.Errorf("can't get name for func proto parameter %d: %s", i, err)
+					return nil, nil, fmt.Errorf("can't get name for func proto parameter %d: %s", i, err)
 				}
 				params = append(params, FuncParam{
 					Name: name,
@@ -651,7 +651,7 @@ func inflateRawTypes(rawTypes []rawType, rawStrings stringTable) (namedTypes map
 			typ = &Datasec{id, name, raw.SizeType, vars}
 
 		default:
-			return nil, fmt.Errorf("type id %d: unknown kind: %v", id, raw.Kind())
+			return nil, nil, fmt.Errorf("type id %d: unknown kind: %v", id, raw.Kind())
 		}
 
 		types = append(types, typ)
@@ -666,7 +666,7 @@ func inflateRawTypes(rawTypes []rawType, rawStrings stringTable) (namedTypes map
 	for _, fixup := range fixups {
 		i := int(fixup.id)
 		if i >= len(types) {
-			return nil, fmt.Errorf("reference to invalid type id: %d", fixup.id)
+			return nil, nil, fmt.Errorf("reference to invalid type id: %d", fixup.id)
 		}
 
 		// Default void (id 0) to unknown
@@ -676,11 +676,11 @@ func inflateRawTypes(rawTypes []rawType, rawStrings stringTable) (namedTypes map
 		}
 
 		if expected := fixup.expectedKind; expected != kindUnknown && rawKind != expected {
-			return nil, fmt.Errorf("expected type id %d to have kind %s, found %s", fixup.id, expected, rawKind)
+			return nil, nil, fmt.Errorf("expected type id %d to have kind %s, found %s", fixup.id, expected, rawKind)
 		}
 
 		*fixup.typ = types[i]
 	}
 
-	return namedTypes, nil
+	return namedTypes, types, nil
 }

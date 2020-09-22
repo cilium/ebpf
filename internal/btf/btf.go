@@ -29,13 +29,14 @@ var (
 
 // Spec represents decoded BTF.
 type Spec struct {
-	rawTypes  []rawType
-	strings   stringTable
-	types     map[string][]namedType
-	funcInfos map[string]extInfo
-	lineInfos map[string]extInfo
-	coreRelos map[string]bpfCoreRelos
-	byteOrder binary.ByteOrder
+	rawTypes   []rawType
+	strings    stringTable
+	types      []Type
+	namedTypes map[string][]namedType
+	funcInfos  map[string]extInfo
+	lineInfos  map[string]extInfo
+	coreRelos  map[string]bpfCoreRelos
+	byteOrder  binary.ByteOrder
 }
 
 type btfHeader struct {
@@ -170,16 +171,17 @@ func loadNakedSpec(btf io.ReadSeeker, bo binary.ByteOrder, sectionSizes map[stri
 		return nil, err
 	}
 
-	types, err := inflateRawTypes(rawTypes, rawStrings)
+	types, namedTypes, err := inflateRawTypes(rawTypes, rawStrings)
 	if err != nil {
 		return nil, err
 	}
 
 	return &Spec{
-		rawTypes:  rawTypes,
-		types:     types,
-		strings:   rawStrings,
-		byteOrder: bo,
+		rawTypes:   rawTypes,
+		namedTypes: namedTypes,
+		types:      types,
+		strings:    rawStrings,
+		byteOrder:  bo,
 	}, nil
 }
 
@@ -509,7 +511,7 @@ func (s *Spec) FindType(name string, typ Type) error {
 		candidate Type
 	)
 
-	for _, typ := range s.types[essentialName(name)] {
+	for _, typ := range s.namedTypes[essentialName(name)] {
 		if reflect.TypeOf(typ) != wanted {
 			continue
 		}

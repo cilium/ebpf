@@ -268,17 +268,16 @@ func (ec *elfCode) relocateInstruction(ins *asm.Instruction, rel elf.Symbol) err
 		typ  = elf.ST_TYPE(rel.Info)
 		bind = elf.ST_BIND(rel.Info)
 		name = rel.Name
+		err  error
 	)
 
 	if typ == elf.STT_SECTION {
 		// Symbols with section type do not have a name set. Get it
 		// from the section itself.
-		idx := int(rel.Section)
-		if idx > len(ec.Sections) {
-			return errors.New("out-of-bounds section index")
+		name, err = ec.sectionName(int(rel.Section))
+		if err != nil {
+			return err
 		}
-
-		name = ec.Sections[idx].Name
 	}
 
 outer:
@@ -375,6 +374,13 @@ outer:
 
 	ins.Reference = name
 	return nil
+}
+
+func (ec *elfCode) sectionName(idx int) (string, error) {
+	if idx >= len(ec.Sections) {
+		return "", fmt.Errorf("out of bounds section index")
+	}
+	return ec.Sections[idx].Name, nil
 }
 
 func (ec *elfCode) loadMaps(maps map[string]*MapSpec, mapSections map[elf.SectionIndex]*elf.Section) error {

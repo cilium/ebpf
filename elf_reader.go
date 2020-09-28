@@ -429,7 +429,7 @@ func (ec *elfCode) coreRelocateInstruction(ins *asm.Instruction, res *btf.CORERe
 			return fmt.Errorf("invalid relocation instruction %v", ins)
 		}
 		if res.Validate && ins.Constant != int64(origVal) {
-			return fmt.Errorf("invalid immediate value")
+			return fmt.Errorf("immediate value %#x doesn't match %#x", ins.Constant, origVal)
 		}
 		ins.Constant = int64(newVal)
 	case asm.LdXClass:
@@ -438,19 +438,19 @@ func (ec *elfCode) coreRelocateInstruction(ins *asm.Instruction, res *btf.CORERe
 		fallthrough
 	case asm.StXClass:
 		if res.Validate && ins.Offset != int16(origVal) {
-			return fmt.Errorf("invalid immediate value")
+			return fmt.Errorf("offset value %#x doesn't match %#x", ins.Offset, origVal)
 		}
 		if newVal > math.MaxInt16 {
-			return fmt.Errorf("new offset 0x%x is out of bounds", newVal)
+			return fmt.Errorf("new offset %#x is out of bounds", newVal)
 		}
 		ins.Offset = int16(newVal)
 	case asm.LdClass:
 		if !ins.OpCode.IsDWordLoad() ||
 			ins.Src != asm.R0 || ins.Offset != 0 {
-			return fmt.Errorf("unexpected form")
+			return fmt.Errorf("unexpected instruction form, expected dword load with src register R0 and offset 0")
 		}
 		if res.Validate && ins.Constant != int64(origVal) {
-			return fmt.Errorf("invalid immediate value")
+			return fmt.Errorf("immediate value %#x doesn't match %#x", ins.Constant, origVal)
 		}
 		ins.Constant = int64(newVal)
 	default:

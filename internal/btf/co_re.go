@@ -165,12 +165,9 @@ func coreParseSpec(typ Type, spec string, kind coreReloKind) (*coreSpec, error) 
 	if len(rawIndexes) > coreSpecMaxLen {
 		return nil, fmt.Errorf("spec string too big")
 	}
-	if len(rawIndexes) == 0 {
-		return nil, ErrInvalidCORESpec
-	}
 	coreSpec.rawSpec = make([]uint32, len(rawIndexes))
 	for i, s := range rawIndexes {
-		idx, err := strconv.Atoi(s)
+		idx, err := strconv.ParseUint(s, 10, 32)
 		if err != nil {
 			return nil, fmt.Errorf("invalid spec index %s: %w", s, err)
 		}
@@ -203,13 +200,18 @@ func coreParseSpec(typ Type, spec string, kind coreReloKind) (*coreSpec, error) 
 	if err != nil {
 		return nil, fmt.Errorf("failed to get size of type %v: %w", t, err)
 	}
+	// calculate initial offset due to array-style indexed access (e.g. a[3] is 3 sizeof(a) offsets from start)
 	coreSpec.bitOffset = accessIdx * uint32(sz) * 8
 
 	for i := 1; i < len(coreSpec.rawSpec); i++ {
 		t = skipModsAndTypedefs(t)
 		accessIdx = coreSpec.rawSpec[i]
 
-		if v, ok := t.(composite); ok {
+		switch v := t.(type) {
+		case composite:
+			if accessIdx >= uint32(len(v.members())) {
+				return nil, fmt.Errorf("invalid array index")
+			}
 			m := v.members()[accessIdx]
 			coreSpec.bitOffset += m.Offset
 			if m.Name != "" {
@@ -220,10 +222,10 @@ func coreParseSpec(typ Type, spec string, kind coreReloKind) (*coreSpec, error) 
 				})
 			}
 			t = m.Type
-		} else if a, ok := t.(*Array); ok {
-			t = skipModsAndTypedefs(a)
-			flex := isFlexArray(coreSpec.spec[len(coreSpec.spec)-1], a)
-			if !flex && accessIdx >= a.Nelems {
+		case *Array:
+			t = skipModsAndTypedefs(v)
+			flex := isFlexArray(coreSpec.spec[len(coreSpec.spec)-1], v)
+			if !flex && accessIdx >= v.Nelems {
 				return nil, fmt.Errorf("invalid array index")
 			}
 
@@ -236,7 +238,7 @@ func coreParseSpec(typ Type, spec string, kind coreReloKind) (*coreSpec, error) 
 				return nil, fmt.Errorf("failed to get size of type %v: %w", t, err)
 			}
 			coreSpec.bitOffset += accessIdx * uint32(sz) * 8
-		} else {
+		default:
 			return nil, fmt.Errorf("relo for [%v] %s (at idx %d) captures type [%d] of unexpected kind %s", typ, spec, i, t.ID(), t)
 		}
 	}

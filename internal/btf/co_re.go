@@ -1,7 +1,6 @@
 package btf
 
 import (
-	"bytes"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -24,7 +23,7 @@ var (
 // will attempted to be loaded. Returns a mapping between instruction offset and the relocation, with result.
 func (s *Spec) LoadCORERelocations(name string, targetBtf *Spec, bo binary.ByteOrder) (map[uint64]*CORERelocation, error) {
 	relos, ok := s.reloInfos[name]
-	if !ok || len(relos.records) == 0 {
+	if !ok || len(relos) == 0 {
 		return nil, nil
 	}
 
@@ -39,12 +38,7 @@ func (s *Spec) LoadCORERelocations(name string, targetBtf *Spec, bo binary.ByteO
 		}
 	}
 
-	for _, r := range relos.records {
-		cr := btfCOREReloRecord{}
-		if err := binary.Read(bytes.NewReader(r.Opaque), bo, &cr); err != nil {
-			return nil, fmt.Errorf("unable to read CO-RE relocation record: %w", err)
-		}
-
+	for _, cr := range relos {
 		relo := coreRelocationRecord{
 			Type: s.indexedTypes[cr.TypeId],
 			Kind: cr.ReloKind,
@@ -58,7 +52,7 @@ func (s *Spec) LoadCORERelocations(name string, targetBtf *Spec, bo binary.ByteO
 			return nil, fmt.Errorf("failed to calculate CO-RE relocation: %w", err)
 		}
 
-		rs[r.InsnOff] = result
+		rs[cr.InsnOff] = result
 	}
 	return rs, nil
 }
@@ -111,6 +105,7 @@ func calculateRelocation(relo *coreRelocationRecord, targetBtf *Spec, candCache 
 			return nil, fmt.Errorf("error matching candidate: %w", err)
 		}
 		if candSpec == nil {
+			// candidate doesn't match, so keep searching
 			continue
 		}
 		candRes, err := coreCalculateRelocation(relo, localSpec, candSpec)
@@ -311,10 +306,9 @@ func coreCalculateRelocation(relo *coreRelocationRecord, localSpec, targetSpec *
 
 	if errors.Is(err, errStructureNeedsCleaning) {
 		res.Poison = true
+	} else if errors.Is(err, errUnsupportedRelocation) {
+		return nil, fmt.Errorf("unrecognized CO-RE relocation %s (%d)", relo.Kind, relo.Kind)
 	} else if err != nil {
-		if errors.Is(err, errUnsupportedRelocation) {
-			return nil, fmt.Errorf("unrecognized CO-RE relocation %s (%d)", relo.Kind, relo.Kind)
-		}
 		return nil, err
 	}
 
@@ -347,9 +341,8 @@ func coreCalculateEnumvalRelocation(relo *coreRelocationRecord, spec *coreSpec) 
 	case reloEnumvalExists:
 		if spec != nil {
 			return 1, nil
-		} else {
-			return 0, nil
 		}
+		return 0, nil
 	case reloEnumvalValue:
 		if spec == nil {
 			return 0, errStructureNeedsCleaning
@@ -385,7 +378,7 @@ func coreCalculateFieldRelocation(relo *coreRelocationRecord, spec *coreSpec) (u
 	acc := spec.spec[len(spec.spec)-1]
 	t := acc.typ
 
-	if acc.name == "" {
+	if acc.isAnonymous() {
 		if relo.Kind == reloFieldByteOffset {
 			val = spec.bitOffset / 8
 		} else if relo.Kind == reloFieldByteSize {
@@ -411,24 +404,25 @@ func coreCalculateFieldRelocation(relo *coreRelocationRecord, spec *coreSpec) (u
 		return 0, nil, err
 	}
 	bitOffset := spec.bitOffset
-	bitSize := m.BitfieldSize
+	bitfieldSize := m.BitfieldSize
 	var byteSize uint32
 	var byteOffset uint32
 
-	bitfield := bitSize > 0
+	bitfield := bitfieldSize > 0
 	if bitfield {
-		if ms, ok := mt.(sizer); ok {
-			byteSize = ms.size()
-			byteOff := bitOffset / 8 / byteSize * byteSize
-			for (bitOffset + bitSize - byteOff*8) > (byteSize * 8) {
-				if byteSize >= 8 {
-					return 0, nil, fmt.Errorf("cannot be satisfied for bitfield")
-				}
-				byteSize *= 2
-				byteOff = bitOffset / 8 / byteSize * byteSize
-			}
-		} else {
+		ms, ok := mt.(sizer)
+		if !ok {
 			return 0, nil, fmt.Errorf("bit offset was non-zero for a non-sizeable type")
+		}
+		byteSize = ms.size()
+		byteOff := bitOffset / 8 / byteSize * byteSize
+		// figure out smallest size for bitfield load
+		for (bitOffset + bitfieldSize - byteOff*8) > (byteSize * 8) {
+			if byteSize >= 8 {
+				return 0, nil, fmt.Errorf("bitfield cannot be read with 64-bit read")
+			}
+			byteSize *= 2
+			byteOff = bitOffset / 8 / byteSize * byteSize
 		}
 	} else {
 		sz, err := Sizeof(m.Type)
@@ -436,8 +430,8 @@ func coreCalculateFieldRelocation(relo *coreRelocationRecord, spec *coreSpec) (u
 			return 0, nil, err
 		}
 		byteSize = uint32(sz)
-		byteOffset = spec.bitOffset / 8
-		bitSize = byteSize / 8
+		byteOffset = bitOffset / 8
+		bitfieldSize = byteSize * 8
 	}
 
 	validate = !bitfield
@@ -463,12 +457,12 @@ func coreCalculateFieldRelocation(relo *coreRelocationRecord, spec *coreSpec) (u
 		validate = true
 	case reloFieldLShiftU64:
 		if internal.NativeEndian == binary.LittleEndian {
-			val = 64 - (bitOffset + bitSize - byteOffset*8)
+			val = 64 - (bitOffset + bitfieldSize - byteOffset*8)
 		} else {
 			val = (8-byteSize)*8 + (bitOffset - byteOffset*8)
 		}
 	case reloFieldRShiftU64:
-		val = 64 - bitSize
+		val = 64 - bitfieldSize
 		validate = true
 	default:
 		return 0, nil, errUnsupportedRelocation
@@ -479,7 +473,7 @@ func coreCalculateFieldRelocation(relo *coreRelocationRecord, spec *coreSpec) (u
 
 func isFlexArray(acc *coreAccessor, arr *Array) bool {
 	// not a flexible array, if not inside a struct or has non-zero size
-	if acc.name == "" || arr.Nelems > 0 {
+	if acc.isAnonymous() || arr.Nelems > 0 {
 		return false
 	}
 
@@ -518,21 +512,21 @@ func (cs *coreSpec) Matches(targetType Type) (*coreSpec, error) {
 
 		localEssenName := localAcc.name.essentialName()
 		for i, tev := range te.Values {
-			if tev.essentialName() == localEssenName {
-				targetSpec.spec = append(targetSpec.spec, &coreAccessor{
-					typ:  targetType,
-					idx:  uint32(i),
-					name: tev.Name,
-				})
-				targetSpec.rawSpec = append(targetSpec.rawSpec, uint32(i))
-				return targetSpec, nil
+			if tev.essentialName() != localEssenName {
+				continue
 			}
+			targetSpec.spec = []*coreAccessor{{
+				typ:  targetType,
+				idx:  uint32(i),
+				name: tev.Name,
+			}}
+			targetSpec.rawSpec = []uint32{uint32(i)}
+			return targetSpec, nil
 		}
-
 	}
 
 	if !cs.reloKind.isFieldBased() {
-		return nil, ErrInvalidCORESpec
+		return nil, fmt.Errorf("%w: unknown relocation kind %#x", ErrInvalidCORESpec, cs.reloKind)
 	}
 
 	for i, lacc := range cs.spec {
@@ -541,47 +535,48 @@ func (cs *coreSpec) Matches(targetType Type) (*coreSpec, error) {
 			return nil, err
 		}
 
-		if lacc.name != "" {
+		if !lacc.isAnonymous() {
 			matchedType, err := matchMember(lacc, targetType, targetSpec)
 			if matchedType == nil || err != nil {
 				return nil, err
 			}
 			targetType = matchedType
-		} else {
-			// for i=0, target is treated as array type
-			// for others we must find the array type
-			if i > 0 {
-				a, isArray := targetType.(*Array)
-				if !isArray {
-					return nil, nil
-				}
-				flex := isFlexArray(targetSpec.spec[i-1], a)
-				if !flex && lacc.idx >= a.Nelems {
-					return nil, nil
-				}
-				targetType, err = skipModsAndTypedefs(a.Type)
-				if err != nil {
-					return nil, err
-				}
-			}
+			continue
+		}
 
-			if len(targetSpec.rawSpec) >= coreSpecMaxLen {
-				return nil, fmt.Errorf("struct/union/array nesting is too deep")
+		// for i=0, target is treated as array type
+		// for others we must find the array type
+		if i > 0 {
+			a, isArray := targetType.(*Array)
+			if !isArray {
+				return nil, nil
 			}
-
-			tacc := &coreAccessor{
-				typ: targetType,
-				idx: lacc.idx,
+			flex := isFlexArray(targetSpec.spec[i-1], a)
+			if !flex && lacc.idx >= a.Nelems {
+				return nil, nil
 			}
-			targetSpec.spec = append(targetSpec.spec, tacc)
-			targetSpec.rawSpec = append(targetSpec.rawSpec, tacc.idx)
-
-			sz, err := Sizeof(targetType)
+			targetType, err = skipModsAndTypedefs(a.Type)
 			if err != nil {
 				return nil, err
 			}
-			targetSpec.bitOffset += lacc.idx * uint32(sz) * 8
 		}
+
+		if len(targetSpec.rawSpec) >= coreSpecMaxLen {
+			return nil, fmt.Errorf("struct/union/array nesting is too deep")
+		}
+
+		tacc := &coreAccessor{
+			typ: targetType,
+			idx: lacc.idx,
+		}
+		targetSpec.spec = append(targetSpec.spec, tacc)
+		targetSpec.rawSpec = append(targetSpec.rawSpec, tacc.idx)
+
+		sz, err := Sizeof(targetType)
+		if err != nil {
+			return nil, err
+		}
+		targetSpec.bitOffset += lacc.idx * uint32(sz) * 8
 	}
 
 	return targetSpec, nil
@@ -659,12 +654,12 @@ func areTypesCompatible(localType Type, targetType Type) (bool, error) {
 		}
 	}
 
-	return false, nil
+	return false, errors.New("exceeded type depth")
 }
 
 func areMembersCompatible(localType Type, targetType Type) (bool, error) {
 	var err error
-	for {
+	for depth := 0; depth <= maxTypeDepth; depth++ {
 		localType, err = skipModsAndTypedefs(localType)
 		if err != nil {
 			return false, err
@@ -710,6 +705,8 @@ func areMembersCompatible(localType Type, targetType Type) (bool, error) {
 			return false, nil
 		}
 	}
+
+	return false, errors.New("exceeded type depth")
 }
 
 func matchMember(localAcc *coreAccessor, typ Type, targetSpec *coreSpec) (Type, error) {
@@ -747,16 +744,17 @@ func matchMember(localAcc *coreAccessor, typ Type, targetSpec *coreSpec) (Type, 
 			if err != nil {
 				return nil, err
 			}
-			if compat {
-				targetAcc := &coreAccessor{
-					typ:  typ,
-					idx:  uint32(i),
-					name: tm.Name,
-				}
-				targetSpec.spec = append(targetSpec.spec, targetAcc)
-				return tm.Type, nil
+			if !compat {
+				return nil, nil
 			}
-			return nil, nil
+
+			targetAcc := &coreAccessor{
+				typ:  typ,
+				idx:  uint32(i),
+				name: tm.Name,
+			}
+			targetSpec.spec = append(targetSpec.spec, targetAcc)
+			return tm.Type, nil
 		}
 		// turns out member wasn't correct
 		targetSpec.bitOffset -= bitOffset

@@ -35,7 +35,7 @@ type Spec struct {
 	indexedTypes []Type
 	funcInfos    map[string]extInfo
 	lineInfos    map[string]extInfo
-	reloInfos    map[string]extInfo
+	reloInfos    map[string][]bpfCoreRelo
 	byteOrder    binary.ByteOrder
 }
 

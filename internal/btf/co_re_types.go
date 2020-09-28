@@ -6,7 +6,13 @@ const (
 	coreSpecMaxLen = 64
 )
 
-type btfCOREReloRecord struct {
+// bpfCoreRelo matches `struct bpf_core_relo` from the kernel
+type bpfCoreRelo struct {
+	InsnOff uint64
+	bpfCoreReloOpaque
+}
+
+type bpfCoreReloOpaque struct {
 	TypeId       TypeID
 	AccessStrOff uint32
 	ReloKind     coreReloKind
@@ -19,13 +25,8 @@ type coreRelocationRecord struct {
 	Kind     coreReloKind
 }
 
-func (cr coreRelocationRecord) Format(f fmt.State, c rune) {
-	if c != 's' && c != 'v' {
-		fmt.Fprintf(f, "{UNKNOWN FORMAT '%c'}", c)
-		return
-	}
-
-	fmt.Fprintf(f, "[%v] %s (%s)", cr.Type, cr.Accessor, cr.Kind)
+func (cr coreRelocationRecord) String() string {
+	return fmt.Sprintf("[%v] %s (%s)", cr.Type, cr.Accessor, cr.Kind)
 }
 
 // coreReloKind is the type of CO-RE relocation
@@ -77,10 +78,41 @@ func (k coreReloKind) String() string {
 	}
 }
 
+func (k coreReloKind) isFieldBased() bool {
+	switch k {
+	case reloFieldByteOffset, reloFieldByteSize, reloFieldExists, reloFieldSigned, reloFieldLShiftU64, reloFieldRShiftU64:
+		return true
+	default:
+		return false
+	}
+}
+
+func (k coreReloKind) isTypeBased() bool {
+	switch k {
+	case reloTypeIDLocal, reloTypeIDTarget, reloTypeExists, reloTypeSize:
+		return true
+	default:
+		return false
+	}
+}
+
+func (k coreReloKind) isEnumValBased() bool {
+	switch k {
+	case reloEnumvalExists, reloEnumvalValue:
+		return true
+	default:
+		return false
+	}
+}
+
 type coreAccessor struct {
 	typ  Type
 	idx  uint32
 	name Name
+}
+
+func (acc coreAccessor) isAnonymous() bool {
+	return acc.name == ""
 }
 
 func (acc coreAccessor) Format(f fmt.State, c rune) {
@@ -136,32 +168,5 @@ func (rr CORERelocation) Format(f fmt.State, c rune) {
 		fmt.Fprintf(f, "POISON")
 	} else {
 		fmt.Fprintf(f, "%d => %d validate=%t", rr.OrigVal, rr.NewVal, rr.Validate)
-	}
-}
-
-func (k coreReloKind) isFieldBased() bool {
-	switch k {
-	case reloFieldByteOffset, reloFieldByteSize, reloFieldExists, reloFieldSigned, reloFieldLShiftU64, reloFieldRShiftU64:
-		return true
-	default:
-		return false
-	}
-}
-
-func (k coreReloKind) isTypeBased() bool {
-	switch k {
-	case reloTypeIDLocal, reloTypeIDTarget, reloTypeExists, reloTypeSize:
-		return true
-	default:
-		return false
-	}
-}
-
-func (k coreReloKind) isEnumValBased() bool {
-	switch k {
-	case reloEnumvalExists, reloEnumvalValue:
-		return true
-	default:
-		return false
 	}
 }

@@ -29,7 +29,7 @@ type btfExtCoreHeader struct {
 	CoreReloLen uint32
 }
 
-func parseExtInfos(r io.ReadSeeker, bo binary.ByteOrder, strings stringTable) (funcInfo, lineInfo, coreInfo map[string]extInfo, err error) {
+func parseExtInfos(r io.ReadSeeker, bo binary.ByteOrder, strings stringTable) (funcInfo, lineInfo map[string]extInfo, coreInfo map[string][]bpfCoreRelo, err error) {
 	var header btfExtHeader
 	var coreHeader btfExtCoreHeader
 	if err := binary.Read(r, bo, &header); err != nil {
@@ -91,9 +91,21 @@ func parseExtInfos(r io.ReadSeeker, bo binary.ByteOrder, strings stringTable) (f
 			return nil, nil, nil, fmt.Errorf("can't seek to CO-RE relocation section: %v", err)
 		}
 
-		coreInfo, err = parseExtInfo(io.LimitReader(r, int64(coreHeader.CoreReloLen)), bo, strings)
+		coreExtInfo, err := parseExtInfo(io.LimitReader(r, int64(coreHeader.CoreReloLen)), bo, strings)
 		if err != nil {
 			return nil, nil, nil, fmt.Errorf("CO-RE relocation info: %w", err)
+		}
+
+		coreInfo = make(map[string][]bpfCoreRelo, len(coreExtInfo))
+		for name, ei := range coreExtInfo {
+			coreInfo[name] = make([]bpfCoreRelo, 0, len(ei.records))
+			for _, r := range ei.records {
+				cr := bpfCoreReloOpaque{}
+				if err := binary.Read(bytes.NewReader(r.Opaque), bo, &cr); err != nil {
+					return nil, nil, nil, fmt.Errorf("unable to read CO-RE relocation record: %w", err)
+				}
+				coreInfo[name] = append(coreInfo[name], bpfCoreRelo{r.InsnOff, cr})
+			}
 		}
 	}
 

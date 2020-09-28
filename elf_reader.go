@@ -438,7 +438,7 @@ func (ec *elfCode) coreRelocateInstruction(ins *asm.Instruction, rel btf.CORERel
 	case asm.StClass:
 		fallthrough
 	case asm.StXClass:
-		if res.Validate && ins.Constant != int64(origVal) {
+		if res.Validate && ins.Offset != int16(origVal) {
 			return fmt.Errorf("invalid immediate value")
 		}
 		if newVal > math.MaxInt16 {

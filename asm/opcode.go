@@ -75,7 +75,7 @@ func (op OpCode) marshalledInstructions() int {
 	return 1
 }
 
-func (op OpCode) isDWordLoad() bool {
+func (op OpCode) IsDWordLoad() bool {
 	return op == LoadImmOp(DWord)
 }
 

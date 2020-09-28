@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"strings"
 )
 
 const maxTypeDepth = 32
@@ -34,6 +35,21 @@ type Type interface {
 type Name string
 
 func (n Name) name() string {
+	return string(n)
+}
+
+func (n Name) essentialName() string {
+	lastIdx := strings.LastIndex(string(n), "___")
+	if lastIdx != -1 {
+		return string(n)[:lastIdx]
+	}
+	return string(n)
+}
+
+func (n Name) String() string {
+	if n == "" {
+		return "(anon)"
+	}
 	return string(n)
 }
 
@@ -128,6 +144,20 @@ func (s *Struct) members() []Member {
 	return s.Members
 }
 
+func (s *Struct) Format(f fmt.State, c rune) {
+	if c != 's' && c != 'v' {
+		fmt.Fprintf(f, "{UNKNOWN FORMAT '%c'}", c)
+		return
+	}
+
+	fmt.Fprintf(f, "[%d] STRUCT '%s' size=%d vlen=%d", s.TypeID.ID(), s.Name, s.Size, len(s.Members))
+	if f.Flag('+') {
+		for _, m := range s.Members {
+			fmt.Fprintf(f, "\n\t%v", m)
+		}
+	}
+}
+
 // Union is a compound type where members occupy the same memory.
 type Union struct {
 	TypeID
@@ -174,6 +204,18 @@ type Member struct {
 	// Offset is the bit offset of this member
 	Offset       uint32
 	BitfieldSize uint32
+}
+
+func (m Member) Format(f fmt.State, c rune) {
+	if c != 's' && c != 'v' {
+		fmt.Fprintf(f, "{UNKNOWN FORMAT '%c'}", c)
+		return
+	}
+
+	fmt.Fprintf(f, "'%s' type_id=%d bits_offset=%d", m.Name, m.Type.ID(), m.Offset)
+	if m.BitfieldSize > 0 {
+		fmt.Fprintf(f, " bitfield_size=%d", m.BitfieldSize)
+	}
 }
 
 // Enum lists possible values.
@@ -421,6 +463,20 @@ func Sizeof(typ Type) (int, error) {
 	return 0, errors.New("exceeded type depth")
 }
 
+func skipModsAndTypedefs(t Type) (Type, error) {
+	for depth := 0; depth <= maxTypeDepth; depth++ {
+		switch v := t.(type) {
+		case qualifier:
+			t = v.qualify()
+		case *Typedef:
+			t = v.Type
+		default:
+			return t, nil
+		}
+	}
+	return nil, errors.New("exceeded type depth")
+}
+
 // copy a Type recursively.
 //
 // typ may form a cycle.
@@ -478,10 +534,10 @@ var _ namer = Name("")
 // inflateRawTypes takes a list of raw btf types linked via type IDs, and turns
 // it into a graph of Types connected via pointers.
 //
-// Returns a map of named types (so, where NameOff is non-zero). Since BTF ignores
-// compilation units, multiple types may share the same name. A Type may form a
-// cyclic graph by pointing at itself.
-func inflateRawTypes(rawTypes []rawType, rawStrings stringTable) (namedTypes map[string][]Type, err error) {
+// Returns a map of named types (so, where NameOff is non-zero) and a slice of types
+// indexed by TypeID. Since BTF ignores compilation units, multiple types may share
+// the same name. A Type may form a cyclic graph by pointing at itself.
+func inflateRawTypes(rawTypes []rawType, rawStrings stringTable) (namedTypes map[string][]Type, indexedTypes []Type, err error) {
 	type fixupDef struct {
 		id           TypeID
 		expectedKind btfKind
@@ -532,7 +588,7 @@ func inflateRawTypes(rawTypes []rawType, rawStrings stringTable) (namedTypes map
 
 		name, err := rawStrings.LookupName(raw.NameOff)
 		if err != nil {
-			return nil, fmt.Errorf("can't get name for type id %d: %w", id, err)
+			return nil, nil, fmt.Errorf("can't get name for type id %d: %w", id, err)
 		}
 
 		switch raw.Kind() {
@@ -557,14 +613,14 @@ func inflateRawTypes(rawTypes []rawType, rawStrings stringTable) (namedTypes map
 		case kindStruct:
 			members, err := convertMembers(raw.data.([]btfMember), raw.KindFlag())
 			if err != nil {
-				return nil, fmt.Errorf("struct %s (id %d): %w", name, id, err)
+				return nil, nil, fmt.Errorf("struct %s (id %d): %w", name, id, err)
 			}
 			typ = &Struct{id, name, raw.Size(), members}
 
 		case kindUnion:
 			members, err := convertMembers(raw.data.([]btfMember), raw.KindFlag())
 			if err != nil {
-				return nil, fmt.Errorf("union %s (id %d): %w", name, id, err)
+				return nil, nil, fmt.Errorf("union %s (id %d): %w", name, id, err)
 			}
 			typ = &Union{id, name, raw.Size(), members}
 
@@ -574,7 +630,7 @@ func inflateRawTypes(rawTypes []rawType, rawStrings stringTable) (namedTypes map
 			for i, btfVal := range rawvals {
 				name, err := rawStrings.LookupName(btfVal.NameOff)
 				if err != nil {
-					return nil, fmt.Errorf("can't get name for enum value %d: %s", i, err)
+					return nil, nil, fmt.Errorf("can't get name for enum value %d: %s", i, err)
 				}
 				vals = append(vals, EnumValue{
 					Name:  name,
@@ -617,7 +673,7 @@ func inflateRawTypes(rawTypes []rawType, rawStrings stringTable) (namedTypes map
 			for i, param := range rawparams {
 				name, err := rawStrings.LookupName(param.NameOff)
 				if err != nil {
-					return nil, fmt.Errorf("can't get name for func proto parameter %d: %s", i, err)
+					return nil, nil, fmt.Errorf("can't get name for func proto parameter %d: %s", i, err)
 				}
 				params = append(params, FuncParam{
 					Name: name,
@@ -651,7 +707,7 @@ func inflateRawTypes(rawTypes []rawType, rawStrings stringTable) (namedTypes map
 			typ = &Datasec{id, name, raw.SizeType, vars}
 
 		default:
-			return nil, fmt.Errorf("type id %d: unknown kind: %v", id, raw.Kind())
+			return nil, nil, fmt.Errorf("type id %d: unknown kind: %v", id, raw.Kind())
 		}
 
 		types = append(types, typ)
@@ -666,7 +722,7 @@ func inflateRawTypes(rawTypes []rawType, rawStrings stringTable) (namedTypes map
 	for _, fixup := range fixups {
 		i := int(fixup.id)
 		if i >= len(types) {
-			return nil, fmt.Errorf("reference to invalid type id: %d", fixup.id)
+			return nil, nil, fmt.Errorf("reference to invalid type id: %d", fixup.id)
 		}
 
 		// Default void (id 0) to unknown
@@ -676,11 +732,11 @@ func inflateRawTypes(rawTypes []rawType, rawStrings stringTable) (namedTypes map
 		}
 
 		if expected := fixup.expectedKind; expected != kindUnknown && rawKind != expected {
-			return nil, fmt.Errorf("expected type id %d to have kind %s, found %s", fixup.id, expected, rawKind)
+			return nil, nil, fmt.Errorf("expected type id %d to have kind %s, found %s", fixup.id, expected, rawKind)
 		}
 
 		*fixup.typ = types[i]
 	}
 
-	return namedTypes, nil
+	return namedTypes, types, nil
 }

@@ -434,7 +434,9 @@ func (ec *elfCode) coreRelocateInstruction(ins *asm.Instruction, rel btf.CORERel
 		}
 		ins.Constant = int64(newVal)
 	case asm.LdXClass:
+		fallthrough
 	case asm.StClass:
+		fallthrough
 	case asm.StXClass:
 		if res.Validate && ins.Constant != int64(origVal) {
 			return fmt.Errorf("invalid immediate value")

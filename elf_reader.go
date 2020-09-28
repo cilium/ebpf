@@ -442,7 +442,7 @@ func (ec *elfCode) coreRelocateInstruction(ins *asm.Instruction, rel btf.CORERel
 			return fmt.Errorf("invalid immediate value")
 		}
 		if newVal > math.MaxInt16 {
-			return fmt.Errorf("value too big")
+			return fmt.Errorf("new offset 0x%x is out of bounds", newVal)
 		}
 		ins.Offset = int16(newVal)
 	case asm.LdClass:

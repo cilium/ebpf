@@ -38,12 +38,12 @@ func (n Name) name() string {
 	return string(n)
 }
 
-func (n Name) essentialNameLen() int {
+func (n Name) essentialName() string {
 	lastIdx := strings.LastIndex(string(n), "___")
 	if lastIdx != -1 {
-		return lastIdx
+		return string(n)[:lastIdx]
 	}
-	return len(n)
+	return string(n)
 }
 
 func (n Name) String() string {

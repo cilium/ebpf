@@ -249,7 +249,7 @@ func findCandidates(localType Type, targetBtf *Spec) ([]Type, error) {
 	if !ok || ln.name() == "" {
 		return nil, fmt.Errorf("type %v must have a name", localType)
 	}
-	localEssenLen := Name(ln.name()).essentialNameLen()
+	localEssenName := Name(ln.name()).essentialName()
 	var cands []Type
 
 	// index 0 is void
@@ -262,10 +262,7 @@ func findCandidates(localType Type, targetBtf *Spec) ([]Type, error) {
 		if !ok || tn.name() == "" {
 			continue
 		}
-		if Name(tn.name()).essentialNameLen() != localEssenLen {
-			continue
-		}
-		if tn.name()[:localEssenLen] != ln.name()[:localEssenLen] {
+		if Name(tn.name()).essentialName() != localEssenName {
 			continue
 		}
 
@@ -517,12 +514,9 @@ func (cs *coreSpec) Matches(targetType Type) (*coreSpec, error) {
 			return nil, nil
 		}
 
-		localEssenLen := localAcc.name.essentialNameLen()
+		localEssenName := localAcc.name.essentialName()
 		for i, tev := range te.Values {
-			if tev.essentialNameLen() != localEssenLen {
-				continue
-			}
-			if string(localAcc.name)[:localEssenLen] == tev.name()[:localEssenLen] {
+			if tev.essentialName() == localEssenName {
 				targetSpec.spec = append(targetSpec.spec, &coreAccessor{
 					typ:  targetType,
 					idx:  uint32(i),
@@ -659,18 +653,16 @@ func areFieldsCompatible(localType Type, targetType Type) (bool, error) {
 			return true, nil
 		case *Enum:
 			tv := targetType.(*Enum)
-			localEssenLen := v.essentialNameLen()
-			targetEssenLen := tv.essentialNameLen()
-			return localEssenLen == 0 || targetEssenLen == 0 ||
-				(localEssenLen == targetEssenLen &&
-					v.name()[:localEssenLen] == tv.name()[:localEssenLen]), nil
+			localEssenName := v.essentialName()
+			targetEssenName := tv.essentialName()
+			matches := localEssenName == "" || targetEssenName == "" || localEssenName == targetEssenName
+			return matches, nil
 		case *Fwd:
 			tv := targetType.(*Fwd)
-			localEssenLen := v.essentialNameLen()
-			targetEssenLen := tv.essentialNameLen()
-			return localEssenLen == 0 || targetEssenLen == 0 ||
-				(localEssenLen == targetEssenLen &&
-					v.name()[:localEssenLen] == tv.name()[:localEssenLen]), nil
+			localEssenName := v.essentialName()
+			targetEssenName := tv.essentialName()
+			matches := localEssenName == "" || targetEssenName == "" || localEssenName == targetEssenName
+			return matches, nil
 		case *Int:
 			tv := targetType.(*Int)
 			return v.Offset == 0 && tv.Offset == 0, nil

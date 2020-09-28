@@ -634,7 +634,7 @@ func areTypesCompatible(localType Type, targetType Type) (bool, error) {
 	return false, nil
 }
 
-func areFieldsCompatible(localType Type, targetType Type) (bool, error) {
+func areMembersCompatible(localType Type, targetType Type) (bool, error) {
 	for {
 		localType = skipModsAndTypedefs(localType)
 		targetType = skipModsAndTypedefs(targetType)
@@ -705,7 +705,7 @@ func matchMember(localAcc *coreAccessor, typ Type, targetSpec *coreSpec) (Type, 
 				return foundType, err
 			}
 		} else if localMember.Name == tm.Name {
-			compat, err := areFieldsCompatible(localMember.Type, tm.Type)
+			compat, err := areMembersCompatible(localMember.Type, tm.Type)
 			if err != nil {
 				return nil, err
 			}

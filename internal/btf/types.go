@@ -463,6 +463,20 @@ func Sizeof(typ Type) (int, error) {
 	return 0, errors.New("exceeded type depth")
 }
 
+func skipModsAndTypedefs(t Type) (Type, error) {
+	for depth := 0; depth <= maxTypeDepth; depth++ {
+		switch v := t.(type) {
+		case qualifier:
+			t = v.qualify()
+		case *Typedef:
+			t = v.Type
+		default:
+			return t, nil
+		}
+	}
+	return nil, errors.New("exceeded type depth")
+}
+
 // copy a Type recursively.
 //
 // typ may form a cycle.

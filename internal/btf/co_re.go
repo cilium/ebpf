@@ -174,7 +174,10 @@ func coreParseSpec(typ Type, spec string, kind coreReloKind) (*coreSpec, error) 
 		coreSpec.rawSpec[i] = uint32(idx)
 	}
 
-	t := skipModsAndTypedefs(typ)
+	t, err := skipModsAndTypedefs(typ)
+	if err != nil {
+		return nil, err
+	}
 
 	accessIdx := coreSpec.rawSpec[0]
 	acc := &coreAccessor{
@@ -204,7 +207,10 @@ func coreParseSpec(typ Type, spec string, kind coreReloKind) (*coreSpec, error) 
 	coreSpec.bitOffset = accessIdx * uint32(sz) * 8
 
 	for i := 1; i < len(coreSpec.rawSpec); i++ {
-		t = skipModsAndTypedefs(t)
+		t, err = skipModsAndTypedefs(t)
+		if err != nil {
+			return nil, err
+		}
 		accessIdx = coreSpec.rawSpec[i]
 
 		switch v := t.(type) {
@@ -223,7 +229,10 @@ func coreParseSpec(typ Type, spec string, kind coreReloKind) (*coreSpec, error) 
 			}
 			t = m.Type
 		case *Array:
-			t = skipModsAndTypedefs(v)
+			t, err = skipModsAndTypedefs(v)
+			if err != nil {
+				return nil, err
+			}
 			flex := isFlexArray(coreSpec.spec[len(coreSpec.spec)-1], v)
 			if !flex && accessIdx >= v.Nelems {
 				return nil, fmt.Errorf("invalid array index")
@@ -397,7 +406,10 @@ func coreCalculateFieldRelocation(relo *coreRelocationRecord, spec *coreSpec) (u
 		return 0, nil, fmt.Errorf("non-composite type for relocation: %T", t)
 	}
 	m := ct.members()[acc.idx]
-	mt := skipModsAndTypedefs(m.Type)
+	mt, err := skipModsAndTypedefs(m.Type)
+	if err != nil {
+		return 0, nil, err
+	}
 	bitOffset := spec.bitOffset
 	bitSize := m.BitfieldSize
 	var byteSize uint32
@@ -465,23 +477,6 @@ func coreCalculateFieldRelocation(relo *coreRelocationRecord, spec *coreSpec) (u
 	return val, &validate, nil
 }
 
-func skipModsAndTypedefs(t Type) Type {
-	for {
-		switch v := t.(type) {
-		case *Volatile:
-			t = v.Type
-		case *Const:
-			t = v.Type
-		case *Restrict:
-			t = v.Type
-		case *Typedef:
-			t = v.Type
-		default:
-			return t
-		}
-	}
-}
-
 func isFlexArray(acc *coreAccessor, arr *Array) bool {
 	// not a flexible array, if not inside a struct or has non-zero size
 	if acc.name == "" || arr.Nelems > 0 {
@@ -495,6 +490,7 @@ func isFlexArray(acc *coreAccessor, arr *Array) bool {
 }
 
 func (cs *coreSpec) Matches(targetType Type) (*coreSpec, error) {
+	var err error
 	targetSpec := &coreSpec{
 		rootType: targetType,
 		reloKind: cs.reloKind,
@@ -510,7 +506,11 @@ func (cs *coreSpec) Matches(targetType Type) (*coreSpec, error) {
 	localAcc := cs.spec[0]
 
 	if cs.reloKind.isEnumValBased() {
-		targetType = skipModsAndTypedefs(targetType)
+		targetType, err = skipModsAndTypedefs(targetType)
+		if err != nil {
+			return nil, err
+		}
+
 		te, ok := targetType.(*Enum)
 		if !ok {
 			return nil, nil
@@ -536,7 +536,10 @@ func (cs *coreSpec) Matches(targetType Type) (*coreSpec, error) {
 	}
 
 	for i, lacc := range cs.spec {
-		targetType = skipModsAndTypedefs(targetType)
+		targetType, err = skipModsAndTypedefs(targetType)
+		if err != nil {
+			return nil, err
+		}
 
 		if lacc.name != "" {
 			matchedType, err := matchMember(lacc, targetType, targetSpec)
@@ -556,7 +559,10 @@ func (cs *coreSpec) Matches(targetType Type) (*coreSpec, error) {
 				if !flex && lacc.idx >= a.Nelems {
 					return nil, nil
 				}
-				targetType = skipModsAndTypedefs(a.Type)
+				targetType, err = skipModsAndTypedefs(a.Type)
+				if err != nil {
+					return nil, err
+				}
 			}
 
 			if len(targetSpec.rawSpec) >= coreSpecMaxLen {
@@ -586,9 +592,17 @@ func areTypesCompatible(localType Type, targetType Type) (bool, error) {
 		return false, nil
 	}
 
-	for depth := 32; depth >= 0; depth-- {
-		localType = skipModsAndTypedefs(localType)
-		targetType = skipModsAndTypedefs(targetType)
+	var err error
+	for depth := 0; depth <= maxTypeDepth; depth++ {
+		localType, err = skipModsAndTypedefs(localType)
+		if err != nil {
+			return false, err
+		}
+		targetType, err = skipModsAndTypedefs(targetType)
+		if err != nil {
+			return false, err
+		}
+
 		if reflect.TypeOf(localType) != reflect.TypeOf(targetType) {
 			return false, nil
 		}
@@ -617,16 +631,28 @@ func areTypesCompatible(localType Type, targetType Type) (bool, error) {
 
 			for i, p := range v.Params {
 				tp := tv.Params[i]
-				lpType := skipModsAndTypedefs(p.Type)
-				tpType := skipModsAndTypedefs(tp.Type)
+				lpType, err := skipModsAndTypedefs(p.Type)
+				if err != nil {
+					return false, err
+				}
+				tpType, err := skipModsAndTypedefs(tp.Type)
+				if err != nil {
+					return false, err
+				}
 				if compat, err := areTypesCompatible(lpType, tpType); !compat || err != nil {
 					return false, err
 				}
 			}
 
 			// tail recurse for return type check
-			localType = skipModsAndTypedefs(v.Return)
-			targetType = skipModsAndTypedefs(tv.Return)
+			localType, err = skipModsAndTypedefs(v.Return)
+			if err != nil {
+				return false, err
+			}
+			targetType, err = skipModsAndTypedefs(tv.Return)
+			if err != nil {
+				return false, err
+			}
 			continue
 		default:
 			return false, nil
@@ -637,9 +663,16 @@ func areTypesCompatible(localType Type, targetType Type) (bool, error) {
 }
 
 func areMembersCompatible(localType Type, targetType Type) (bool, error) {
+	var err error
 	for {
-		localType = skipModsAndTypedefs(localType)
-		targetType = skipModsAndTypedefs(targetType)
+		localType, err = skipModsAndTypedefs(localType)
+		if err != nil {
+			return false, err
+		}
+		targetType, err = skipModsAndTypedefs(targetType)
+		if err != nil {
+			return false, err
+		}
 
 		_, lok := localType.(composite)
 		_, tok := targetType.(composite)
@@ -680,7 +713,10 @@ func areMembersCompatible(localType Type, targetType Type) (bool, error) {
 }
 
 func matchMember(localAcc *coreAccessor, typ Type, targetSpec *coreSpec) (Type, error) {
-	targetType := skipModsAndTypedefs(typ)
+	targetType, err := skipModsAndTypedefs(typ)
+	if err != nil {
+		return nil, err
+	}
 	tc, ok := targetType.(composite)
 	if !ok {
 		return nil, nil

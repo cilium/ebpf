@@ -22,13 +22,13 @@ var (
 // LoadCORERelocations parses the relocations from the BTF extended ELF section and calculates how to apply
 // the relocation to the target, described by the BTF provided. If no BTF is provided, the current kernel BTF
 // will attempted to be loaded. Returns a mapping between instruction offset and the relocation, with result.
-func (s *Spec) LoadCORERelocations(name string, targetBtf *Spec, bo binary.ByteOrder) (map[uint64]CORERelocation, error) {
+func (s *Spec) LoadCORERelocations(name string, targetBtf *Spec, bo binary.ByteOrder) (map[uint64]*CORERelocation, error) {
 	relos, ok := s.reloInfos[name]
 	if !ok || len(relos.records) == 0 {
 		return nil, nil
 	}
 
-	rs := map[uint64]CORERelocation{}
+	rs := map[uint64]*CORERelocation{}
 	cache := map[Type][]Type{}
 	var err error
 
@@ -40,12 +40,12 @@ func (s *Spec) LoadCORERelocations(name string, targetBtf *Spec, bo binary.ByteO
 	}
 
 	for _, r := range relos.records {
-		cr := coreReloRecord{}
+		cr := btfCOREReloRecord{}
 		if err := binary.Read(bytes.NewReader(r.Opaque), bo, &cr); err != nil {
 			return nil, fmt.Errorf("unable to read CO-RE relocation record: %w", err)
 		}
 
-		relo := CORERelocation{
+		relo := coreRelocationRecord{
 			Type: s.indexedTypes[cr.TypeId],
 			Kind: cr.ReloKind,
 		}
@@ -53,17 +53,17 @@ func (s *Spec) LoadCORERelocations(name string, targetBtf *Spec, bo binary.ByteO
 		if err != nil {
 			return nil, fmt.Errorf("invalid CO-RE relocation accessor string: %w", err)
 		}
-		relo.Result, err = calculateRelocation(&relo, targetBtf, cache)
+		result, err := calculateRelocation(&relo, targetBtf, cache)
 		if err != nil {
 			return nil, fmt.Errorf("failed to calculate CO-RE relocation: %w", err)
 		}
 
-		rs[r.InsnOff] = relo
+		rs[r.InsnOff] = result
 	}
 	return rs, nil
 }
 
-func calculateRelocation(relo *CORERelocation, targetBtf *Spec, candCache map[Type][]Type) (*COREReloResult, error) {
+func calculateRelocation(relo *coreRelocationRecord, targetBtf *Spec, candCache map[Type][]Type) (*CORERelocation, error) {
 	typ := relo.Type
 
 	var localName string
@@ -79,11 +79,11 @@ func calculateRelocation(relo *CORERelocation, targetBtf *Spec, candCache map[Ty
 		return nil, fmt.Errorf("parsing [%v] %T %s + %s failed: %w", typ, typ, localName, relo.Accessor, err)
 	}
 
-	targetRes := &COREReloResult{}
+	targetRes := &CORERelocation{}
 	var targetSpec *coreSpec
 	// TYPE_ID_LOCAL relo is special and doesn't need candidate search
 	if relo.Kind == reloTypeIDLocal {
-		targetRes = &COREReloResult{
+		targetRes = &CORERelocation{
 			Validate: true,
 			OrigVal:  uint32(localSpec.rootType.ID()),
 			NewVal:   uint32(localSpec.rootType.ID()),
@@ -144,7 +144,7 @@ func calculateRelocation(relo *CORERelocation, targetBtf *Spec, candCache map[Ty
 	return targetRes, nil
 }
 
-func coreParseSpec(typ Type, spec string, kind COREReloKind) (*coreSpec, error) {
+func coreParseSpec(typ Type, spec string, kind coreReloKind) (*coreSpec, error) {
 	if spec == "" || spec == ":" {
 		return nil, ErrInvalidCORESpec
 	}
@@ -272,8 +272,8 @@ func findCandidates(localType Type, targetBtf *Spec) ([]Type, error) {
 	return cands, nil
 }
 
-func coreCalculateRelocation(relo *CORERelocation, localSpec, targetSpec *coreSpec) (*COREReloResult, error) {
-	res := &COREReloResult{Validate: true}
+func coreCalculateRelocation(relo *coreRelocationRecord, localSpec, targetSpec *coreSpec) (*CORERelocation, error) {
+	res := &CORERelocation{Validate: true}
 	err := errUnsupportedRelocation
 
 	if relo.Kind.isFieldBased() {
@@ -310,7 +310,7 @@ func coreCalculateRelocation(relo *CORERelocation, localSpec, targetSpec *coreSp
 	return res, nil
 }
 
-func coreCalculateTypeRelocation(relo *CORERelocation, spec *coreSpec) (uint32, error) {
+func coreCalculateTypeRelocation(relo *coreRelocationRecord, spec *coreSpec) (uint32, error) {
 	if spec == nil {
 		return 0, nil
 	}
@@ -331,7 +331,7 @@ func coreCalculateTypeRelocation(relo *CORERelocation, spec *coreSpec) (uint32, 
 	}
 }
 
-func coreCalculateEnumvalRelocation(relo *CORERelocation, spec *coreSpec) (uint32, error) {
+func coreCalculateEnumvalRelocation(relo *coreRelocationRecord, spec *coreSpec) (uint32, error) {
 	switch relo.Kind {
 	case reloEnumvalExists:
 		if spec != nil {
@@ -355,7 +355,7 @@ func coreCalculateEnumvalRelocation(relo *CORERelocation, spec *coreSpec) (uint3
 	}
 }
 
-func coreCalculateFieldRelocation(relo *CORERelocation, spec *coreSpec) (uint32, *bool, error) {
+func coreCalculateFieldRelocation(relo *coreRelocationRecord, spec *coreSpec) (uint32, *bool, error) {
 	var val uint32
 	var validate bool
 

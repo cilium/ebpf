@@ -6,34 +6,33 @@ const (
 	coreSpecMaxLen = 64
 )
 
-type coreReloRecord struct {
+type btfCOREReloRecord struct {
 	TypeId       TypeID
 	AccessStrOff uint32
-	ReloKind     COREReloKind
+	ReloKind     coreReloKind
 }
 
-// CORERelocation represents a requested CO-RE relocation
-type CORERelocation struct {
+// coreRelocationRecord represents a requested CO-RE relocation
+type coreRelocationRecord struct {
 	Type
 	Accessor string
-	Kind     COREReloKind
-	Result   *COREReloResult
+	Kind     coreReloKind
 }
 
-func (cr CORERelocation) Format(f fmt.State, c rune) {
+func (cr coreRelocationRecord) Format(f fmt.State, c rune) {
 	if c != 's' && c != 'v' {
 		fmt.Fprintf(f, "{UNKNOWN FORMAT '%c'}", c)
 		return
 	}
 
-	fmt.Fprintf(f, "[%v] %s (%s) = %v", cr.Type, cr.Accessor, cr.Kind, cr.Result)
+	fmt.Fprintf(f, "[%v] %s (%s)", cr.Type, cr.Accessor, cr.Kind)
 }
 
-// COREReloKind is the type of CO-RE relocation
-type COREReloKind uint32
+// coreReloKind is the type of CO-RE relocation
+type coreReloKind uint32
 
 const (
-	reloFieldByteOffset COREReloKind = iota /* field byte offset */
+	reloFieldByteOffset coreReloKind = iota /* field byte offset */
 	reloFieldByteSize                       /* field size in bytes */
 	reloFieldExists                         /* field existence in target kernel */
 	reloFieldSigned                         /* field signedness (0 - unsigned, 1 - signed) */
@@ -47,7 +46,7 @@ const (
 	reloEnumvalValue                        /* enum value integer value */
 )
 
-func (k COREReloKind) String() string {
+func (k coreReloKind) String() string {
 	switch k {
 	case reloFieldByteOffset:
 		return "byte_off"
@@ -96,7 +95,7 @@ func (acc coreAccessor) Format(f fmt.State, c rune) {
 type coreSpec struct {
 	spec      []*coreAccessor
 	rootType  Type
-	reloKind  COREReloKind
+	reloKind  coreReloKind
 	rawSpec   []uint32
 	bitOffset uint32
 }
@@ -115,8 +114,8 @@ func (cs coreSpec) Format(f fmt.State, c rune) {
 	}
 }
 
-// COREReloResult is the result of a CO-RE relocation
-type COREReloResult struct {
+// CORERelocation is the result of a CO-RE relocation
+type CORERelocation struct {
 	// OrigVal is the expected value in the instruction, unless Validate == false
 	OrigVal uint32
 	// NewVal is the new value that needs to be patched up to
@@ -127,7 +126,7 @@ type COREReloResult struct {
 	Validate bool
 }
 
-func (rr COREReloResult) Format(f fmt.State, c rune) {
+func (rr CORERelocation) Format(f fmt.State, c rune) {
 	if c != 's' && c != 'v' {
 		fmt.Fprintf(f, "{UNKNOWN FORMAT '%c'}", c)
 		return
@@ -140,7 +139,7 @@ func (rr COREReloResult) Format(f fmt.State, c rune) {
 	}
 }
 
-func (k COREReloKind) isFieldBased() bool {
+func (k coreReloKind) isFieldBased() bool {
 	switch k {
 	case reloFieldByteOffset, reloFieldByteSize, reloFieldExists, reloFieldSigned, reloFieldLShiftU64, reloFieldRShiftU64:
 		return true
@@ -149,7 +148,7 @@ func (k COREReloKind) isFieldBased() bool {
 	}
 }
 
-func (k COREReloKind) isTypeBased() bool {
+func (k coreReloKind) isTypeBased() bool {
 	switch k {
 	case reloTypeIDLocal, reloTypeIDTarget, reloTypeExists, reloTypeSize:
 		return true
@@ -158,7 +157,7 @@ func (k COREReloKind) isTypeBased() bool {
 	}
 }
 
-func (k COREReloKind) isEnumValBased() bool {
+func (k coreReloKind) isEnumValBased() bool {
 	switch k {
 	case reloEnumvalExists, reloEnumvalValue:
 		return true

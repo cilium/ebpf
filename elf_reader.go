@@ -202,7 +202,7 @@ func (ec *elfCode) loadPrograms(progSections map[elf.SectionIndex]*elf.Section, 
 			return nil, fmt.Errorf("section %v: no label at start", sec.Name)
 		}
 
-		var coreRelocations map[uint64]btf.CORERelocation
+		var coreRelocations map[uint64]*btf.CORERelocation
 		if btfSpec != nil {
 			coreRelocations, err = btfSpec.LoadCORERelocations(sec.Name, targetBtfSpec, ec.ByteOrder)
 			if err != nil {
@@ -257,7 +257,7 @@ func (ec *elfCode) loadPrograms(progSections map[elf.SectionIndex]*elf.Section, 
 	return res, nil
 }
 
-func (ec *elfCode) loadInstructions(section *elf.Section, symbols, relocations map[uint64]elf.Symbol, coreRelocations map[uint64]btf.CORERelocation) (asm.Instructions, uint64, error) {
+func (ec *elfCode) loadInstructions(section *elf.Section, symbols, relocations map[uint64]elf.Symbol, coreRelocations map[uint64]*btf.CORERelocation) (asm.Instructions, uint64, error) {
 	var (
 		r      = section.Open()
 		insns  asm.Instructions
@@ -412,8 +412,7 @@ func (ec *elfCode) sectionName(idx int) (string, error) {
 	return ec.Sections[idx].Name, nil
 }
 
-func (ec *elfCode) coreRelocateInstruction(ins *asm.Instruction, rel btf.CORERelocation) error {
-	res := rel.Result
+func (ec *elfCode) coreRelocateInstruction(ins *asm.Instruction, res *btf.CORERelocation) error {
 	if res.Poison {
 		ins.Poison()
 		return nil

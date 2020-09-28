@@ -85,10 +85,6 @@ func calculateRelocation(relo *coreRelocationRecord, targetBtf *Spec, candCache 
 		return targetRes, nil
 	}
 
-	if relo.Accessor == "" {
-		return nil, fmt.Errorf("relocation doesn't support anonymous types")
-	}
-
 	cands, ok := candCache[typ]
 	if !ok {
 		cands, err = findCandidates(typ, targetBtf)

@@ -482,7 +482,7 @@ func (s *Spec) Map(name string) (*Map, []Member, error) {
 		value = (*Void)(nil)
 	}
 
-	return &Map{s, key, value}, mapStruct.Members, nil
+	return &Map{spec: s, key: key, value: value}, mapStruct.Members, nil
 }
 
 // Datasec returns the BTF required to create maps which represent data sections.
@@ -492,7 +492,7 @@ func (s *Spec) Datasec(name string) (*Map, error) {
 		return nil, fmt.Errorf("data section %s: can't get BTF: %w", name, err)
 	}
 
-	return &Map{s, &Void{}, &datasec}, nil
+	return &Map{spec: s, key: &Void{}, value: &datasec}, nil
 }
 
 // FindType searches for a type with a specific name.
@@ -601,6 +601,7 @@ func (h *Handle) FD() int {
 type Map struct {
 	spec       *Spec
 	key, value Type
+	inner      bool
 }
 
 // MapSpec should be a method on Map, but is a free function

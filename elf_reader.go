@@ -464,7 +464,7 @@ func (ec *elfCode) loadBTFMaps(maps map[string]*MapSpec, mapSections map[elf.Sec
 				return fmt.Errorf("section %v: map %v already exists", sec.Name, sym)
 			}
 
-			mapSpec, err := mapSpecFromBTF(spec, name)
+			mapSpec, err := mapSpecFromBTF(spec, name, false)
 			if err != nil {
 				return fmt.Errorf("map %v: %w", name, err)
 			}
@@ -476,7 +476,7 @@ func (ec *elfCode) loadBTFMaps(maps map[string]*MapSpec, mapSections map[elf.Sec
 	return nil
 }
 
-func mapSpecFromBTF(spec *btf.Spec, name string) (*MapSpec, error) {
+func mapSpecFromBTF(spec *btf.Spec, name string, isInnermap bool) (*MapSpec, error) {
 	btfMap, btfMapMembers, err := spec.Map(name)
 	if err != nil {
 		return nil, fmt.Errorf("can't get BTF: %w", err)
@@ -499,7 +499,9 @@ func mapSpecFromBTF(spec *btf.Spec, name string) (*MapSpec, error) {
 	var (
 		mapType, flags, maxEntries uint32
 		pinType                    PinType
+		innerMap                   *MapSpec
 	)
+
 	for _, member := range btfMapMembers {
 		switch member.Name {
 		case "type":
@@ -541,12 +543,35 @@ func mapSpecFromBTF(spec *btf.Spec, name string) (*MapSpec, error) {
 			}
 
 		case "pinning":
+			if isInnermap {
+				return nil, fmt.Errorf("inner def can't be pinned")
+			}
+
 			pinning, err := uintFromBTF(member.Type)
 			if err != nil {
 				return nil, fmt.Errorf("can't get pinning: %w", err)
 			}
 
 			pinType = PinType(pinning)
+
+		case "values":
+			if isInnermap {
+				return nil, fmt.Errorf("multi-level inner maps not supported")
+			}
+
+			values, err := arrayFromBTF(member.Type)
+			if err != nil {
+				return nil, fmt.Errorf("can't get BTF map values: %w", err)
+			}
+
+			if MapType(mapType) != ArrayOfMaps && MapType(mapType) != HashOfMaps {
+				return nil, fmt.Errorf("should be map-in-map")
+			}
+
+			innerMap, err = mapSpecFromBTF(spec, string(values.Name), true)
+			if err != nil {
+				return nil, fmt.Errorf("innermap %v: %w", name, err)
+			}
 
 		case "key", "value":
 		default:
@@ -563,6 +588,7 @@ func mapSpecFromBTF(spec *btf.Spec, name string) (*MapSpec, error) {
 		Flags:      flags,
 		BTF:        btfMap,
 		Pinning:    pinType,
+		InnerMap:   innerMap,
 	}, nil
 }
 
@@ -580,6 +606,26 @@ func uintFromBTF(typ btf.Type) (uint32, error) {
 	}
 
 	return arr.Nelems, nil
+}
+
+// arrayFromBTF resolves the __array macro
+func arrayFromBTF(typ btf.Type) (*btf.Struct, error) {
+	arr, ok := typ.(*btf.Array)
+	if !ok {
+		return nil, fmt.Errorf("not a array: %v", typ)
+	}
+
+	ptr, ok := arr.Type.(*btf.Pointer)
+	if !ok {
+		return nil, fmt.Errorf("not a array to pointer: %v", typ)
+	}
+
+	btfstruct, ok := ptr.Target.(*btf.Struct)
+	if !ok {
+		return nil, fmt.Errorf("not a pointer to struct: %v", typ)
+	}
+
+	return btfstruct, nil
 }
 
 func (ec *elfCode) loadDataSections(maps map[string]*MapSpec, dataSections map[elf.SectionIndex]*elf.Section, spec *btf.Spec) error {

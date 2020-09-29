@@ -204,7 +204,7 @@ func (ec *elfCode) loadPrograms(progSections map[elf.SectionIndex]*elf.Section, 
 
 		var coreRelocations map[uint64]*btf.CORERelocation
 		if btfSpec != nil {
-			coreRelocations, err = btfSpec.LoadCORERelocations(sec.Name, targetBtfSpec, ec.ByteOrder)
+			coreRelocations, err = btfSpec.LoadCORERelocations(sec.Name, targetBtfSpec)
 			if err != nil {
 				return nil, fmt.Errorf("can't load CO-RE relocations: %w", err)
 			}
@@ -422,9 +422,7 @@ func (ec *elfCode) coreRelocateInstruction(ins *asm.Instruction, res *btf.CORERe
 	newVal := res.NewVal
 
 	switch ins.OpCode.Class() {
-	case asm.ALUClass:
-		fallthrough
-	case asm.ALU64Class:
+	case asm.ALUClass, asm.ALU64Class:
 		if ins.OpCode.Source() != asm.ImmSource {
 			return fmt.Errorf("invalid relocation instruction %v", ins)
 		}
@@ -432,11 +430,7 @@ func (ec *elfCode) coreRelocateInstruction(ins *asm.Instruction, res *btf.CORERe
 			return fmt.Errorf("immediate value %#x doesn't match %#x", ins.Constant, origVal)
 		}
 		ins.Constant = int64(newVal)
-	case asm.LdXClass:
-		fallthrough
-	case asm.StClass:
-		fallthrough
-	case asm.StXClass:
+	case asm.LdXClass, asm.StClass, asm.StXClass:
 		if res.Validate && ins.Offset != int16(origVal) {
 			return fmt.Errorf("offset value %#x doesn't match %#x", ins.Offset, origVal)
 		}

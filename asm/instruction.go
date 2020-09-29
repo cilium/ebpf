@@ -155,6 +155,8 @@ func (ins *Instruction) isLoadFromMap() bool {
 	return ins.OpCode == LoadImmOp(DWord) && (ins.Src == PseudoMapFD || ins.Src == PseudoMapValue)
 }
 
+// Poison rewrites the instruction to be invalid and forces the verifier to fail *only if* that instruction is needed.
+// The kernel will do some dead code elimination, and thus this instruction may be removed/ignored.
 func (ins *Instruction) Poison() {
 	ins.OpCode = OpCode(JumpClass).SetJumpOp(Call)
 	ins.Dst = R0

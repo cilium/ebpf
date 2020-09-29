@@ -7,8 +7,6 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
-
-	"github.com/cilium/ebpf/internal"
 )
 
 var (
@@ -21,7 +19,7 @@ var (
 // LoadCORERelocations parses the relocations from the BTF extended ELF section and calculates how to apply
 // the relocation to the target, described by the BTF provided. If no BTF is provided, the current kernel BTF
 // will attempted to be loaded. Returns a mapping between instruction offset and the relocation, with result.
-func (s *Spec) LoadCORERelocations(name string, targetBtf *Spec, bo binary.ByteOrder) (map[uint64]*CORERelocation, error) {
+func (s *Spec) LoadCORERelocations(name string, targetBtf *Spec) (map[uint64]*CORERelocation, error) {
 	relos, ok := s.reloInfos[name]
 	if !ok || len(relos) == 0 {
 		return nil, nil
@@ -38,6 +36,10 @@ func (s *Spec) LoadCORERelocations(name string, targetBtf *Spec, bo binary.ByteO
 		}
 	}
 
+	if s.byteOrder != targetBtf.byteOrder {
+		return nil, fmt.Errorf("program and target byte order does not match")
+	}
+
 	for _, cr := range relos {
 		relo := coreRelocationRecord{
 			Type: s.indexedTypes[cr.TypeId],
@@ -47,7 +49,7 @@ func (s *Spec) LoadCORERelocations(name string, targetBtf *Spec, bo binary.ByteO
 		if err != nil {
 			return nil, fmt.Errorf("invalid CO-RE relocation accessor string: %w", err)
 		}
-		result, err := calculateRelocation(&relo, targetBtf, cache)
+		result, err := calculateRelocation(&relo, targetBtf, s.byteOrder, cache)
 		if err != nil {
 			return nil, fmt.Errorf("failed to calculate CO-RE relocation: %w", err)
 		}
@@ -57,7 +59,7 @@ func (s *Spec) LoadCORERelocations(name string, targetBtf *Spec, bo binary.ByteO
 	return rs, nil
 }
 
-func calculateRelocation(relo *coreRelocationRecord, targetBtf *Spec, candCache map[Type][]Type) (*CORERelocation, error) {
+func calculateRelocation(relo *coreRelocationRecord, targetBtf *Spec, bo binary.ByteOrder, candCache map[Type][]Type) (*CORERelocation, error) {
 	typ := relo.Type
 
 	var localName string
@@ -104,7 +106,7 @@ func calculateRelocation(relo *coreRelocationRecord, targetBtf *Spec, candCache 
 			// candidate doesn't match, so keep searching
 			continue
 		}
-		candRes, err := coreCalculateRelocation(relo, localSpec, candSpec)
+		candRes, err := coreCalculateRelocation(relo, localSpec, candSpec, bo)
 		if err != nil {
 			return nil, err
 		}
@@ -126,7 +128,7 @@ func calculateRelocation(relo *coreRelocationRecord, targetBtf *Spec, candCache 
 	}
 
 	if len(matchingTypes) == 0 {
-		targetRes, err = coreCalculateRelocation(relo, localSpec, nil)
+		targetRes, err = coreCalculateRelocation(relo, localSpec, nil, bo)
 		if err != nil {
 			return nil, err
 		}
@@ -220,7 +222,7 @@ func coreParseSpec(typ Type, spec string, kind coreReloKind) (*coreSpec, error) 
 			}
 			t = m.Type
 		case *Array:
-			t, err = skipModsAndTypedefs(v)
+			t, err = skipModsAndTypedefs(v.Type)
 			if err != nil {
 				return nil, err
 			}
@@ -274,19 +276,19 @@ func findCandidates(localType Type, targetBtf *Spec) ([]Type, error) {
 	return cands, nil
 }
 
-func coreCalculateRelocation(relo *coreRelocationRecord, localSpec, targetSpec *coreSpec) (*CORERelocation, error) {
+func coreCalculateRelocation(relo *coreRelocationRecord, localSpec, targetSpec *coreSpec, bo binary.ByteOrder) (*CORERelocation, error) {
 	res := &CORERelocation{Validate: true}
 	err := errUnsupportedRelocation
 
 	if relo.Kind.isFieldBased() {
 		var validate *bool
-		res.OrigVal, validate, err = coreCalculateFieldRelocation(relo, localSpec)
+		res.OrigVal, validate, err = coreCalculateFieldRelocation(relo, localSpec, bo)
 		if validate != nil {
 			res.Validate = *validate
 		}
 
 		if err == nil {
-			res.NewVal, _, err = coreCalculateFieldRelocation(relo, targetSpec)
+			res.NewVal, _, err = coreCalculateFieldRelocation(relo, targetSpec, bo)
 		}
 	} else if relo.Kind.isTypeBased() {
 		res.OrigVal, err = coreCalculateTypeRelocation(relo, localSpec)
@@ -344,8 +346,7 @@ func coreCalculateEnumvalRelocation(relo *coreRelocationRecord, spec *coreSpec) 
 			return 0, errStructureNeedsCleaning
 		}
 		acc := spec.spec[0]
-		t := acc.typ
-		et, ok := t.(*Enum)
+		et, ok := acc.typ.(*Enum)
 		if !ok {
 			return 0, fmt.Errorf("enumval relocation against non-enum type")
 		}
@@ -355,7 +356,7 @@ func coreCalculateEnumvalRelocation(relo *coreRelocationRecord, spec *coreSpec) 
 	}
 }
 
-func coreCalculateFieldRelocation(relo *coreRelocationRecord, spec *coreSpec) (uint32, *bool, error) {
+func coreCalculateFieldRelocation(relo *coreRelocationRecord, spec *coreSpec, bo binary.ByteOrder) (uint32, *bool, error) {
 	var val uint32
 	var validate bool
 
@@ -435,6 +436,11 @@ func coreCalculateFieldRelocation(relo *coreRelocationRecord, spec *coreSpec) (u
 	switch relo.Kind {
 	case reloFieldByteOffset:
 		val = byteOffset
+	// all remaining relocations are used specifically to support bitfield relocations.
+	// the left and right shifts are used to isolate specific bits within a word
+	// byte size is used to ensure the correct size of memory read
+	// signed is to adjust to the signedness of the target bitfield
+	// see https://github.com/libbpf/libbpf/commit/4438972ccc172ce2a68ee5d2ec2a01303aa380a8
 	case reloFieldByteSize:
 		val = byteSize
 	case reloFieldSigned:
@@ -452,7 +458,7 @@ func coreCalculateFieldRelocation(relo *coreRelocationRecord, spec *coreSpec) (u
 		}
 		validate = true
 	case reloFieldLShiftU64:
-		if internal.NativeEndian == binary.LittleEndian {
+		if bo == binary.LittleEndian {
 			val = 64 - (bitOffset + bitfieldSize - byteOffset*8)
 		} else {
 			val = (8-byteSize)*8 + (bitOffset - byteOffset*8)
@@ -468,15 +474,17 @@ func coreCalculateFieldRelocation(relo *coreRelocationRecord, spec *coreSpec) (u
 }
 
 func isFlexArray(acc *coreAccessor, arr *Array) bool {
-	// not a flexible array, if not inside a struct or has non-zero size
+	// must be named and have zero size
 	if acc.isAnonymous() || arr.Nelems > 0 {
 		return false
 	}
-
-	if v, ok := acc.typ.(composite); ok {
-		return acc.idx == uint32(len(v.members())-1)
+	// parent must be a struct
+	s, parentIsStruct := acc.typ.(*Struct)
+	if !parentIsStruct {
+		return false
 	}
-	return false
+	// must be last field in struct
+	return acc.idx == uint32(len(s.Members)-1)
 }
 
 func (cs *coreSpec) Matches(targetType Type) (*coreSpec, error) {
@@ -487,7 +495,7 @@ func (cs *coreSpec) Matches(targetType Type) (*coreSpec, error) {
 	}
 
 	if cs.reloKind.isTypeBased() {
-		if compat, err := areTypesCompatible(cs.rootType, targetType); !compat || err != nil {
+		if compat, err := coreAreTypesCompatible(cs.rootType, targetType); !compat || err != nil {
 			return nil, err
 		}
 		return targetSpec, nil
@@ -578,7 +586,7 @@ func (cs *coreSpec) Matches(targetType Type) (*coreSpec, error) {
 	return targetSpec, nil
 }
 
-func areTypesCompatible(localType Type, targetType Type) (bool, error) {
+func coreAreTypesCompatible(localType Type, targetType Type) (bool, error) {
 	if reflect.TypeOf(localType) != reflect.TypeOf(targetType) {
 		return false, nil
 	}
@@ -630,7 +638,7 @@ func areTypesCompatible(localType Type, targetType Type) (bool, error) {
 				if err != nil {
 					return false, err
 				}
-				if compat, err := areTypesCompatible(lpType, tpType); !compat || err != nil {
+				if compat, err := coreAreTypesCompatible(lpType, tpType); !compat || err != nil {
 					return false, err
 				}
 			}
@@ -681,14 +689,20 @@ func areMembersCompatible(localType Type, targetType Type) (bool, error) {
 			tv := targetType.(*Enum)
 			localEssenName := v.essentialName()
 			targetEssenName := tv.essentialName()
-			matches := localEssenName == "" || targetEssenName == "" || localEssenName == targetEssenName
-			return matches, nil
+			// allow anonymous to named to match
+			if localEssenName == "" || targetEssenName == "" {
+				return true, nil
+			}
+			return localEssenName == targetEssenName, nil
 		case *Fwd:
 			tv := targetType.(*Fwd)
 			localEssenName := v.essentialName()
 			targetEssenName := tv.essentialName()
-			matches := localEssenName == "" || targetEssenName == "" || localEssenName == targetEssenName
-			return matches, nil
+			// allow anonymous to named to match
+			if localEssenName == "" || targetEssenName == "" {
+				return true, nil
+			}
+			return localEssenName == targetEssenName, nil
 		case *Int:
 			tv := targetType.(*Int)
 			return v.Offset == 0 && tv.Offset == 0, nil

@@ -25,15 +25,24 @@ type elfCode struct {
 	version           uint32
 }
 
+type LoadOptions struct {
+	TargetBTF *btf.Spec
+}
+
 // LoadCollectionSpec parses an ELF file into a CollectionSpec.
 func LoadCollectionSpec(file string) (*CollectionSpec, error) {
+	return LoadCollectionSpecWithOptions(file, LoadOptions{})
+}
+
+// LoadCollectionSpec parses an ELF file into a CollectionSpec with the options specified.
+func LoadCollectionSpecWithOptions(file string, opts LoadOptions) (*CollectionSpec, error) {
 	f, err := os.Open(file)
 	if err != nil {
 		return nil, err
 	}
 	defer f.Close()
 
-	spec, err := LoadCollectionSpecFromReader(f)
+	spec, err := LoadCollectionSpecFromReaderWithOptions(f, opts)
 	if err != nil {
 		return nil, fmt.Errorf("file %s: %w", file, err)
 	}
@@ -42,6 +51,11 @@ func LoadCollectionSpec(file string) (*CollectionSpec, error) {
 
 // LoadCollectionSpecFromReader parses an ELF file into a CollectionSpec.
 func LoadCollectionSpecFromReader(rd io.ReaderAt) (*CollectionSpec, error) {
+	return LoadCollectionSpecFromReaderWithOptions(rd, LoadOptions{})
+}
+
+// LoadCollectionSpecFromReader parses an ELF file into a CollectionSpec with the options specified.
+func LoadCollectionSpecFromReaderWithOptions(rd io.ReaderAt, opts LoadOptions) (*CollectionSpec, error) {
 	f, err := elf.NewFile(rd)
 	if err != nil {
 		return nil, err
@@ -138,7 +152,7 @@ func LoadCollectionSpecFromReader(rd io.ReaderAt) (*CollectionSpec, error) {
 		}
 	}
 
-	progs, err := ec.loadPrograms(progSections, relocations, btfSpec)
+	progs, err := ec.loadPrograms(progSections, relocations, btfSpec, opts.TargetBTF)
 	if err != nil {
 		return nil, fmt.Errorf("load programs: %w", err)
 	}
@@ -170,10 +184,11 @@ func loadVersion(sec *elf.Section, bo binary.ByteOrder) (uint32, error) {
 	return version, nil
 }
 
-func (ec *elfCode) loadPrograms(progSections map[elf.SectionIndex]*elf.Section, relocations map[elf.SectionIndex]map[uint64]elf.Symbol, btfSpec *btf.Spec) (map[string]*ProgramSpec, error) {
+func (ec *elfCode) loadPrograms(progSections map[elf.SectionIndex]*elf.Section, relocations map[elf.SectionIndex]map[uint64]elf.Symbol, btfSpec *btf.Spec, targetBtfSpec *btf.Spec) (map[string]*ProgramSpec, error) {
 	var (
 		progs []*ProgramSpec
 		libs  []*ProgramSpec
+		err   error
 	)
 
 	for idx, sec := range progSections {
@@ -187,7 +202,15 @@ func (ec *elfCode) loadPrograms(progSections map[elf.SectionIndex]*elf.Section, 
 			return nil, fmt.Errorf("section %v: no label at start", sec.Name)
 		}
 
-		insns, length, err := ec.loadInstructions(sec, syms, relocations[idx])
+		var coreRelocations map[uint64]*btf.CORERelocation
+		if btfSpec != nil {
+			coreRelocations, err = btfSpec.LoadCORERelocations(sec.Name, targetBtfSpec)
+			if err != nil {
+				return nil, fmt.Errorf("can't load CO-RE relocations: %w", err)
+			}
+		}
+
+		insns, length, err := ec.loadInstructions(sec, syms, relocations[idx], coreRelocations)
 		if err != nil {
 			return nil, fmt.Errorf("program %s: can't unmarshal instructions: %w", funcSym.Name, err)
 		}
@@ -234,7 +257,7 @@ func (ec *elfCode) loadPrograms(progSections map[elf.SectionIndex]*elf.Section, 
 	return res, nil
 }
 
-func (ec *elfCode) loadInstructions(section *elf.Section, symbols, relocations map[uint64]elf.Symbol) (asm.Instructions, uint64, error) {
+func (ec *elfCode) loadInstructions(section *elf.Section, symbols, relocations map[uint64]elf.Symbol, coreRelocations map[uint64]*btf.CORERelocation) (asm.Instructions, uint64, error) {
 	var (
 		r      = section.Open()
 		insns  asm.Instructions
@@ -252,6 +275,12 @@ func (ec *elfCode) loadInstructions(section *elf.Section, symbols, relocations m
 
 		ins.Symbol = symbols[offset].Name
 
+		if cr, ok := coreRelocations[offset]; ok {
+			if err = ec.coreRelocateInstruction(&ins, cr); err != nil {
+				return nil, 0, fmt.Errorf("offset %d: can't CO-RE relocate instruction: %w", offset, err)
+			}
+		}
+
 		if rel, ok := relocations[offset]; ok {
 			if err = ec.relocateInstruction(&ins, rel); err != nil {
 				return nil, 0, fmt.Errorf("offset %d: can't relocate instruction: %w", offset, err)
@@ -268,17 +297,16 @@ func (ec *elfCode) relocateInstruction(ins *asm.Instruction, rel elf.Symbol) err
 		typ  = elf.ST_TYPE(rel.Info)
 		bind = elf.ST_BIND(rel.Info)
 		name = rel.Name
+		err  error
 	)
 
 	if typ == elf.STT_SECTION {
 		// Symbols with section type do not have a name set. Get it
 		// from the section itself.
-		idx := int(rel.Section)
-		if idx > len(ec.Sections) {
-			return errors.New("out-of-bounds section index")
+		name, err = ec.sectionName(int(rel.Section))
+		if err != nil {
+			return err
 		}
-
-		name = ec.Sections[idx].Name
 	}
 
 outer:
@@ -374,6 +402,55 @@ outer:
 	}
 
 	ins.Reference = name
+	return nil
+}
+
+func (ec *elfCode) sectionName(idx int) (string, error) {
+	if idx >= len(ec.Sections) {
+		return "", fmt.Errorf("out of bounds section index")
+	}
+	return ec.Sections[idx].Name, nil
+}
+
+func (ec *elfCode) coreRelocateInstruction(ins *asm.Instruction, res *btf.CORERelocation) error {
+	if res.Poison {
+		ins.Poison()
+		return nil
+	}
+
+	origVal := res.OrigVal
+	newVal := res.NewVal
+
+	switch ins.OpCode.Class() {
+	case asm.ALUClass, asm.ALU64Class:
+		if ins.OpCode.Source() != asm.ImmSource {
+			return fmt.Errorf("invalid relocation instruction %v", ins)
+		}
+		if res.Validate && ins.Constant != int64(origVal) {
+			return fmt.Errorf("immediate value %#x doesn't match %#x", ins.Constant, origVal)
+		}
+		ins.Constant = int64(newVal)
+	case asm.LdXClass, asm.StClass, asm.StXClass:
+		if res.Validate && ins.Offset != int16(origVal) {
+			return fmt.Errorf("offset value %#x doesn't match %#x", ins.Offset, origVal)
+		}
+		if newVal > math.MaxInt16 {
+			return fmt.Errorf("new offset %#x is out of bounds", newVal)
+		}
+		ins.Offset = int16(newVal)
+	case asm.LdClass:
+		if !ins.OpCode.IsDWordLoad() ||
+			ins.Src != asm.R0 || ins.Offset != 0 {
+			return fmt.Errorf("unexpected instruction form, expected dword load with src register R0 and offset 0")
+		}
+		if res.Validate && ins.Constant != int64(origVal) {
+			return fmt.Errorf("immediate value %#x doesn't match %#x", ins.Constant, origVal)
+		}
+		ins.Constant = int64(newVal)
+	default:
+		return fmt.Errorf("trying to relocate unrecognized instruction %v", ins)
+	}
+
 	return nil
 }
 
@@ -701,7 +778,7 @@ func (ec *elfCode) loadRelocations(sections map[elf.SectionIndex]*elf.Section) (
 
 			symbol := ec.symbols[symNo]
 			targets[symbol.Section] = true
-			rels[rel.Off] = ec.symbols[symNo]
+			rels[rel.Off] = symbol
 		}
 
 		result[idx] = rels

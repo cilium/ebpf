@@ -45,7 +45,7 @@ func (ins *Instruction) Unmarshal(r io.Reader, bo binary.ByteOrder) (uint64, err
 		return 0, fmt.Errorf("can't unmarshal registers: %s", err)
 	}
 
-	if !bi.OpCode.isDWordLoad() {
+	if !bi.OpCode.IsDWordLoad() {
 		return InstructionSize, nil
 	}
 
@@ -68,7 +68,7 @@ func (ins Instruction) Marshal(w io.Writer, bo binary.ByteOrder) (uint64, error)
 		return 0, errors.New("invalid opcode")
 	}
 
-	isDWordLoad := ins.OpCode.isDWordLoad()
+	isDWordLoad := ins.OpCode.IsDWordLoad()
 
 	cons := int32(ins.Constant)
 	if isDWordLoad {
@@ -111,7 +111,7 @@ func (ins Instruction) Marshal(w io.Writer, bo binary.ByteOrder) (uint64, error)
 //
 // Returns an error if the instruction doesn't load a map.
 func (ins *Instruction) RewriteMapPtr(fd int) error {
-	if !ins.OpCode.isDWordLoad() {
+	if !ins.OpCode.IsDWordLoad() {
 		return fmt.Errorf("%s is not a 64 bit load", ins.OpCode)
 	}
 
@@ -134,7 +134,7 @@ func (ins *Instruction) mapPtr() uint32 {
 //
 // Returns an error if the instruction is not a direct load.
 func (ins *Instruction) RewriteMapOffset(offset uint32) error {
-	if !ins.OpCode.isDWordLoad() {
+	if !ins.OpCode.IsDWordLoad() {
 		return fmt.Errorf("%s is not a 64 bit load", ins.OpCode)
 	}
 
@@ -153,6 +153,16 @@ func (ins *Instruction) mapOffset() uint32 {
 
 func (ins *Instruction) isLoadFromMap() bool {
 	return ins.OpCode == LoadImmOp(DWord) && (ins.Src == PseudoMapFD || ins.Src == PseudoMapValue)
+}
+
+// Poison rewrites the instruction to be invalid and forces the verifier to fail *only if* that instruction is needed.
+// The kernel will do some dead code elimination, and thus this instruction may be removed/ignored.
+func (ins *Instruction) Poison() {
+	ins.OpCode = OpCode(JumpClass).SetJumpOp(Call)
+	ins.Dst = R0
+	ins.Src = R0
+	ins.Offset = 0
+	ins.Constant = 195896080 // 0xbad2310 => "bad relo"
 }
 
 // Format implements fmt.Formatter.

@@ -2,6 +2,7 @@ package ebpf
 
 import (
 	"bufio"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -61,6 +62,10 @@ func newMapInfoFromProc(fd *internal.FD) (*MapInfo, error) {
 // The pointer fields are not supported across all kernels, and may be nil.
 type ProgramInfo struct {
 	Type ProgramType
+	// Truncated hash of the BPF bytecode.
+	Tag *string
+	// Name as supplied by user space at load time.
+	Name *string
 }
 
 func newProgramInfoFromFd(fd *internal.FD) (*ProgramInfo, error) {
@@ -72,16 +77,33 @@ func newProgramInfoFromFd(fd *internal.FD) (*ProgramInfo, error) {
 		return nil, err
 	}
 
+	// tag is available if the kernel supports BPF_PROG_GET_INFO_BY_FD.
+	tag := strPtr(hex.EncodeToString(info.tag[:]))
+
+	// name is available from 4.15. To distinguish an unnamed program from
+	// a kernel that doesn't support names we can check whether load_time is
+	// present, since that also appeared in the same kernel version.
+	var name *string
+	if info.load_time > 0 {
+		name = strPtr(internal.CString(info.name[:]))
+	}
+
 	return &ProgramInfo{
 		ProgramType(info.prog_type),
+		tag,
+		name,
 	}, nil
 }
 
 func newProgramInfoFromProc(fd *internal.FD) (*ProgramInfo, error) {
-	var info ProgramInfo
+	var (
+		tag  string
+		info = ProgramInfo{Tag: &tag}
+	)
 
 	err := scanFdInfo(fd, map[string]interface{}{
 		"prog_type": &info.Type,
+		"prog_tag":  &tag,
 	})
 	if errors.Is(err, errMissingFields) {
 		return nil, &internal.UnsupportedFeatureError{
@@ -150,4 +172,8 @@ func scanFdInfoReader(r io.Reader, fields map[string]interface{}) error {
 	}
 
 	return nil
+}
+
+func strPtr(str string) *string {
+	return &str
 }

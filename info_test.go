@@ -86,6 +86,18 @@ func TestProgramInfo(t *testing.T) {
 			if info.Type != SocketFilter {
 				t.Error("Expected Type to be SocketFilter, got", info.Type)
 			}
+
+			if info.Name != nil {
+				if *info.Name != "test" {
+					t.Error("Expected Name to be test, got", *info.Name)
+				}
+			}
+
+			if info.Tag != nil {
+				if want := "d7edec644f05498d"; *info.Tag != want {
+					t.Errorf("Expected Tag to be %s, got %s", want, *info.Tag)
+				}
+			}
 		})
 	}
 }

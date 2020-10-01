@@ -2,18 +2,20 @@ package ebpf
 
 import (
 	"bufio"
-	"bytes"
 	"errors"
 	"fmt"
 	"io"
 	"os"
+	"strings"
 	"syscall"
 
 	"github.com/cilium/ebpf/internal"
 )
 
-// MapABI are the attributes of a Map which are available across all supported kernels.
-type MapABI struct {
+// MapInfo describes a map.
+//
+// The pointer fields are not supported across all kernels, and may be nil.
+type MapInfo struct {
 	Type       MapType
 	KeySize    uint32
 	ValueSize  uint32
@@ -21,27 +23,16 @@ type MapABI struct {
 	Flags      uint32
 }
 
-func newMapABIFromSpec(spec *MapSpec) *MapABI {
-	return &MapABI{
-		spec.Type,
-		spec.KeySize,
-		spec.ValueSize,
-		spec.MaxEntries,
-		spec.Flags,
-	}
-}
-
-func newMapABIFromFd(fd *internal.FD) (string, *MapABI, error) {
+func newMapInfoFromFd(fd *internal.FD) (*MapInfo, error) {
 	info, err := bpfGetMapInfoByFD(fd)
+	if errors.Is(err, syscall.EINVAL) {
+		return newMapInfoFromProc(fd)
+	}
 	if err != nil {
-		if errors.Is(err, syscall.EINVAL) {
-			abi, err := newMapABIFromProc(fd)
-			return "", abi, err
-		}
-		return "", nil, err
+		return nil, err
 	}
 
-	return "", &MapABI{
+	return &MapInfo{
 		MapType(info.map_type),
 		info.key_size,
 		info.value_size,
@@ -50,93 +41,59 @@ func newMapABIFromFd(fd *internal.FD) (string, *MapABI, error) {
 	}, nil
 }
 
-func newMapABIFromProc(fd *internal.FD) (*MapABI, error) {
-	var abi MapABI
+func newMapInfoFromProc(fd *internal.FD) (*MapInfo, error) {
+	var mi MapInfo
 	err := scanFdInfo(fd, map[string]interface{}{
-		"map_type":    &abi.Type,
-		"key_size":    &abi.KeySize,
-		"value_size":  &abi.ValueSize,
-		"max_entries": &abi.MaxEntries,
-		"map_flags":   &abi.Flags,
+		"map_type":    &mi.Type,
+		"key_size":    &mi.KeySize,
+		"value_size":  &mi.ValueSize,
+		"max_entries": &mi.MaxEntries,
+		"map_flags":   &mi.Flags,
 	})
 	if err != nil {
 		return nil, err
 	}
-	return &abi, nil
+	return &mi, nil
 }
 
-// Equal returns true if two ABIs have the same values.
-func (abi *MapABI) Equal(other *MapABI) bool {
-	switch {
-	case abi.Type != other.Type:
-		return false
-	case abi.KeySize != other.KeySize:
-		return false
-	case abi.ValueSize != other.ValueSize:
-		return false
-	case abi.MaxEntries != other.MaxEntries:
-		return false
-	case abi.Flags != other.Flags:
-		return false
-	default:
-		return true
-	}
-}
-
-// ProgramABI are the attributes of a Program which are available across all supported kernels.
-type ProgramABI struct {
+// ProgramInfo describes a program.
+//
+// The pointer fields are not supported across all kernels, and may be nil.
+type ProgramInfo struct {
 	Type ProgramType
 }
 
-func newProgramABIFromSpec(spec *ProgramSpec) *ProgramABI {
-	return &ProgramABI{
-		spec.Type,
-	}
-}
-
-func newProgramABIFromFd(fd *internal.FD) (string, *ProgramABI, error) {
+func newProgramInfoFromFd(fd *internal.FD) (*ProgramInfo, error) {
 	info, err := bpfGetProgInfoByFD(fd)
+	if errors.Is(err, syscall.EINVAL) {
+		return newProgramInfoFromProc(fd)
+	}
 	if err != nil {
-		if errors.Is(err, syscall.EINVAL) {
-			return newProgramABIFromProc(fd)
-		}
-
-		return "", nil, err
+		return nil, err
 	}
 
-	var name string
-	if bpfName := internal.CString(info.name[:]); bpfName != "" {
-		name = bpfName
-	} else {
-		name = internal.CString(info.tag[:])
-	}
-
-	return name, &ProgramABI{
-		Type: ProgramType(info.prog_type),
+	return &ProgramInfo{
+		ProgramType(info.prog_type),
 	}, nil
 }
 
-func newProgramABIFromProc(fd *internal.FD) (string, *ProgramABI, error) {
-	var (
-		abi  ProgramABI
-		name string
-	)
+func newProgramInfoFromProc(fd *internal.FD) (*ProgramInfo, error) {
+	var info ProgramInfo
 
 	err := scanFdInfo(fd, map[string]interface{}{
-		"prog_type": &abi.Type,
-		"prog_tag":  &name,
+		"prog_type": &info.Type,
 	})
 	if errors.Is(err, errMissingFields) {
-		return "", nil, &internal.UnsupportedFeatureError{
-			Name:           "reading ABI from /proc/self/fdinfo",
+		return nil, &internal.UnsupportedFeatureError{
+			Name:           "reading program info from /proc/self/fdinfo",
 			MinimumVersion: internal.Version{4, 10, 0},
 		}
 	}
 	if err != nil {
-		return "", nil, err
+		return nil, err
 	}
 
-	return name, &abi, nil
+	return &info, nil
 }
 
 func scanFdInfo(fd *internal.FD, fields map[string]interface{}) error {
@@ -193,14 +150,4 @@ func scanFdInfoReader(r io.Reader, fields map[string]interface{}) error {
 	}
 
 	return nil
-}
-
-// Equal returns true if two ABIs have the same values.
-func (abi *ProgramABI) Equal(other *ProgramABI) bool {
-	switch {
-	case abi.Type != other.Type:
-		return false
-	default:
-		return true
-	}
 }

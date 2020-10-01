@@ -137,7 +137,7 @@ func findBtfSections(file *elf.File) (*elf.Section, *elf.Section, map[string]uin
 	return btfSection, btfExtSection, sectionSizes, nil
 }
 
-func loadNakedSpecFromReader(rd io.ReaderAt, sectionSizes map[string]uint32, variableOffsets map[variable]uint32) (*Spec, error) {
+func loadSpecFromVmlinux(rd io.ReaderAt) (*Spec, error) {
 	file, err := elf.NewFile(rd)
 	if err != nil {
 		return nil, err
@@ -148,7 +148,7 @@ func loadNakedSpecFromReader(rd io.ReaderAt, sectionSizes map[string]uint32, var
 	if btfSection == nil {
 		return nil, fmt.Errorf("unable to find .BTF ELF section")
 	}
-	return loadNakedSpec(btfSection.Open(), file.ByteOrder, sectionSizes, variableOffsets)
+	return loadNakedSpec(btfSection.Open(), file.ByteOrder, nil, nil)
 }
 
 func loadNakedSpec(btf io.ReadSeeker, bo binary.ByteOrder, sectionSizes map[string]uint32, variableOffsets map[variable]uint32) (*Spec, error) {
@@ -203,42 +203,35 @@ func loadKernelSpec() (*Spec, error) {
 		return nil, fmt.Errorf("can't read kernel release number: %w", err)
 	}
 
-	// use same list of locations as libbpf
-	// https://github.com/libbpf/libbpf/blob/9a3a42608dbe3731256a5682a125ac1e23bced8f/src/btf.c#L3114-L3122
-	locations := []struct {
-		pathFmt string
-		raw     bool
-	}{
-		/* try canonical vmlinux BTF through sysfs first */
-		{"/sys/kernel/btf/vmlinux", true /* raw BTF */},
-		/* fall back to trying to find vmlinux ELF on disk otherwise */
-		{"/boot/vmlinux-%s", false},
-		{"/lib/modules/%s/vmlinux-%s", false},
-		{"/lib/modules/%s/build/vmlinux", false},
-		{"/usr/lib/modules/%s/kernel/vmlinux", false},
-		{"/usr/lib/debug/boot/vmlinux-%s", false},
-		{"/usr/lib/debug/boot/vmlinux-%s.debug", false},
-		{"/usr/lib/debug/lib/modules/%s/vmlinux", false},
+	fh, err := os.Open("/sys/kernel/btf/vmlinux")
+	if err == nil {
+		defer fh.Close()
+
+		return loadNakedSpec(fh, internal.NativeEndian, nil, nil)
 	}
 
-	var spec *Spec
+	// use same list of locations as libbpf
+	// https://github.com/libbpf/libbpf/blob/9a3a42608dbe3731256a5682a125ac1e23bced8f/src/btf.c#L3114-L3122
+	locations := []string{
+		"/boot/vmlinux-%s",
+		"/lib/modules/%s/vmlinux-%[1]s",
+		"/lib/modules/%s/build/vmlinux",
+		"/usr/lib/modules/%s/kernel/vmlinux",
+		"/usr/lib/debug/boot/vmlinux-%s",
+		"/usr/lib/debug/boot/vmlinux-%s.debug",
+		"/usr/lib/debug/lib/modules/%s/vmlinux",
+	}
+
 	for _, loc := range locations {
-		path := fmt.Sprintf(loc.pathFmt, release)
+		path := fmt.Sprintf(loc, release)
+
 		fh, err := os.Open(path)
 		if err != nil {
 			continue
 		}
 		defer fh.Close()
-		if loc.raw {
-			spec, err = loadNakedSpec(fh, internal.NativeEndian, nil, nil)
-		} else {
-			spec, err = loadNakedSpecFromReader(fh, nil, nil)
-		}
 
-		if err != nil {
-			continue
-		}
-		return spec, nil
+		return loadSpecFromVmlinux(fh)
 	}
 
 	return nil, fmt.Errorf("BTF for kernel version %s: %w", release, ErrNotFound)

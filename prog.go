@@ -97,7 +97,7 @@ type Program struct {
 
 	fd         *internal.FD
 	name       string
-	abi        ProgramABI
+	info       ProgramInfo
 	attachType AttachType
 }
 
@@ -147,7 +147,7 @@ func newProgramWithBTF(spec *ProgramSpec, btf *btf.Handle, opts ProgramOptions) 
 
 	fd, err := bpfProgLoad(attr)
 	if err == nil {
-		prog := newProgram(fd, spec.Name, &ProgramABI{spec.Type})
+		prog := newProgram(fd, spec.Name, &ProgramInfo{spec.Type})
 		prog.VerifierLog = internal.CString(logBuf)
 		return prog, nil
 	}
@@ -183,21 +183,20 @@ func NewProgramFromFD(fd int) (*Program, error) {
 		return nil, errors.New("invalid fd")
 	}
 	bpfFd := internal.NewFD(uint32(fd))
-
-	name, abi, err := newProgramABIFromFd(bpfFd)
+	info, err := newProgramInfoFromFd(bpfFd)
 	if err != nil {
 		bpfFd.Forget()
 		return nil, err
 	}
 
-	return newProgram(bpfFd, name, abi), nil
+	return newProgram(bpfFd, "", info), nil
 }
 
-func newProgram(fd *internal.FD, name string, abi *ProgramABI) *Program {
+func newProgram(fd *internal.FD, name string, info *ProgramInfo) *Program {
 	return &Program{
 		name: name,
 		fd:   fd,
-		abi:  *abi,
+		info: *info,
 	}
 }
 
@@ -277,21 +276,19 @@ func convertProgramSpec(spec *ProgramSpec, handle *btf.Handle) (*bpfProgLoadAttr
 
 func (p *Program) String() string {
 	if p.name != "" {
-		return fmt.Sprintf("%s(%s)#%v", p.abi.Type, p.name, p.fd)
+		return fmt.Sprintf("%s(%s)#%v", p.info.Type, p.name, p.fd)
 	}
-	return fmt.Sprintf("%s#%v", p.abi.Type, p.fd)
+	return fmt.Sprintf("%s#%v", p.info.Type, p.fd)
 }
 
 // Type returns the underlying type of the program.
 func (p *Program) Type() ProgramType {
-	return p.abi.Type
+	return p.info.Type
 }
 
-// ABI gets the ABI of the Program.
-//
-// Deprecated: use Type instead.
-func (p *Program) ABI() ProgramABI {
-	return p.abi
+// Info returns metadata about the program.
+func (p *Program) Info() (*ProgramInfo, error) {
+	return newProgramInfoFromFd(p.fd)
 }
 
 // FD gets the file descriptor of the Program.
@@ -323,7 +320,7 @@ func (p *Program) Clone() (*Program, error) {
 		return nil, fmt.Errorf("can't clone program: %w", err)
 	}
 
-	return newProgram(dup, p.name, &p.abi), nil
+	return newProgram(dup, p.name, &p.info), nil
 }
 
 // Pin persists the Program past the lifetime of the process that created it
@@ -555,13 +552,13 @@ func LoadPinnedProgram(fileName string) (*Program, error) {
 		return nil, err
 	}
 
-	name, abi, err := newProgramABIFromFd(fd)
+	info, err := newProgramInfoFromFd(fd)
 	if err != nil {
 		_ = fd.Close()
-		return nil, fmt.Errorf("can't get ABI for %s: %w", fileName, err)
+		return nil, fmt.Errorf("info for %s: %w", fileName, err)
 	}
 
-	return newProgram(fd, name, abi), nil
+	return newProgram(fd, "", info), nil
 }
 
 // SanitizeName replaces all invalid characters in name.
@@ -597,13 +594,13 @@ func NewProgramFromID(id ProgramID) (*Program, error) {
 		return nil, err
 	}
 
-	name, abi, err := newProgramABIFromFd(fd)
+	info, err := newProgramInfoFromFd(fd)
 	if err != nil {
 		_ = fd.Close()
 		return nil, err
 	}
 
-	return newProgram(fd, name, abi), nil
+	return newProgram(fd, "", info), nil
 }
 
 // ID returns the systemwide unique ID of the program.

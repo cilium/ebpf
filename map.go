@@ -3,6 +3,7 @@ package ebpf
 import (
 	"errors"
 	"fmt"
+	"io"
 	"strings"
 
 	"github.com/cilium/ebpf/internal"
@@ -152,7 +153,15 @@ func newMapWithBTF(spec *MapSpec, handle *btf.Handle) (*Map, error) {
 	return createMap(spec, template.fd, handle)
 }
 
-func createMap(spec *MapSpec, inner *internal.FD, handle *btf.Handle) (*Map, error) {
+func createMap(spec *MapSpec, inner *internal.FD, handle *btf.Handle) (_ *Map, err error) {
+	closeOnError := func(c io.Closer) {
+		if err != nil {
+			c.Close()
+		}
+	}
+
+	spec = spec.Copy()
+
 	switch spec.Type {
 	case ArrayOfMaps:
 		fallthrough
@@ -223,6 +232,7 @@ func createMap(spec *MapSpec, inner *internal.FD, handle *btf.Handle) (*Map, err
 	if err != nil {
 		return nil, fmt.Errorf("map create: %w", err)
 	}
+	defer closeOnError(fd)
 
 	m, err := newMap(fd, spec.Name, spec.Type, spec.KeySize, spec.ValueSize, spec.MaxEntries, spec.Flags)
 	if err != nil {
@@ -270,7 +280,11 @@ func newMap(fd *internal.FD, name string, typ MapType, keySize, valueSize, maxEn
 }
 
 func newMapFromInfo(fd *internal.FD, info *MapInfo) (*Map, error) {
-	return newMap(fd, "", info.Type, info.KeySize, info.ValueSize, info.MaxEntries, info.Flags)
+	var name string
+	if info.Name != nil {
+		name = *info.Name
+	}
+	return newMap(fd, name, info.Type, info.KeySize, info.ValueSize, info.MaxEntries, info.Flags)
 }
 
 func (m *Map) String() string {

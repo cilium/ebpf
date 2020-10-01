@@ -359,7 +359,11 @@ func newMap(fd *internal.FD, name string, typ MapType, keySize, valueSize, maxEn
 }
 
 func newMapFromInfo(fd *internal.FD, info *MapInfo) (*Map, error) {
-	return newMap(fd, "", info.Type, info.KeySize, info.ValueSize, info.MaxEntries, info.Flags)
+	var name string
+	if info.Name != nil {
+		name = *info.Name
+	}
+	return newMap(fd, name, info.Type, info.KeySize, info.ValueSize, info.MaxEntries, info.Flags)
 }
 
 func (m *Map) String() string {

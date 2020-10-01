@@ -269,7 +269,14 @@ func (p *Program) String() string {
 	return fmt.Sprintf("%s#%v", p.abi.Type, p.fd)
 }
 
-// ABI gets the ABI of the Program
+// Type returns the underlying type of the program.
+func (p *Program) Type() ProgramType {
+	return p.abi.Type
+}
+
+// ABI gets the ABI of the Program.
+//
+// Deprecated: use Type instead.
 func (p *Program) ABI() ProgramABI {
 	return p.abi
 }

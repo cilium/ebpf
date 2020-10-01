@@ -134,6 +134,17 @@ func TestLoadSpecFromElf(t *testing.T) {
 	})
 }
 
+func TestLoadKernelSpec(t *testing.T) {
+	if _, err := os.Stat("/sys/kernel/btf/vmlinux"); os.IsNotExist(err) {
+		t.Skip("/sys/kernel/btf/vmlinux not present")
+	}
+
+	_, err := LoadKernelSpec()
+	if err != nil {
+		t.Fatal("Can't load kernel spec:", err)
+	}
+}
+
 func TestHaveBTF(t *testing.T) {
 	testutils.CheckFeatureTest(t, haveBTF)
 }

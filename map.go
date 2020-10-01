@@ -269,7 +269,29 @@ func (m *Map) String() string {
 	return fmt.Sprintf("%s#%v", m.abi.Type, m.fd)
 }
 
-// ABI gets the ABI of the Map
+// Type returns the underlying type of the map.
+func (m *Map) Type() MapType {
+	return m.abi.Type
+}
+
+// KeySize returns the size of the map key in bytes.
+func (m *Map) KeySize() uint32 {
+	return m.abi.KeySize
+}
+
+// ValueSize returns the size of the map value in bytes.
+func (m *Map) ValueSize() uint32 {
+	return m.abi.ValueSize
+}
+
+// MaxEntries returns the maximum number of elements the map can hold.
+func (m *Map) MaxEntries() uint32 {
+	return m.abi.MaxEntries
+}
+
+// ABI gets the ABI of the Map.
+//
+// Deprecated: use Type, KeySize, ValueSize, MaxEntries instead.
 func (m *Map) ABI() MapABI {
 	return m.abi
 }

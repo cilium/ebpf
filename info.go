@@ -22,6 +22,8 @@ type MapInfo struct {
 	ValueSize  uint32
 	MaxEntries uint32
 	Flags      uint32
+	// Name as supplied by user space at load time.
+	Name *string
 }
 
 func newMapInfoFromFd(fd *internal.FD) (*MapInfo, error) {
@@ -33,12 +35,17 @@ func newMapInfoFromFd(fd *internal.FD) (*MapInfo, error) {
 		return nil, err
 	}
 
+	// name is available from 4.15. Unfortunately we can't discern between
+	// an unnamed map and a kernel that doesn't support names.
+	name := strPtr(internal.CString(info.name[:]))
+
 	return &MapInfo{
 		MapType(info.map_type),
 		info.key_size,
 		info.value_size,
 		info.max_entries,
 		info.map_flags,
+		name,
 	}, nil
 }
 

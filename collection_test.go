@@ -308,8 +308,8 @@ func ExampleCollectionSpec_LoadAndAssign() {
 		panic(err)
 	}
 
-	fmt.Println(objs.Program.ABI().Type)
-	fmt.Println(objs.Map.ABI().Type)
+	fmt.Println(objs.Program.Type())
+	fmt.Println(objs.Map.Type())
 
 	// Output: SocketFilter
 	// Array
@@ -349,8 +349,8 @@ func ExampleCollection_Assign() {
 		panic(err)
 	}
 
-	fmt.Println(objs.Program.ABI().Type)
-	fmt.Println(objs.Map.ABI().Type)
+	fmt.Println(objs.Program.Type())
+	fmt.Println(objs.Map.Type())
 
 	// Output: SocketFilter
 	// Array

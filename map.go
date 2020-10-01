@@ -90,20 +90,20 @@ type MapKV struct {
 
 func (ms *MapSpec) checkCompatibility(m *Map) error {
 	switch {
-	case m.abi.Type != ms.Type:
-		return fmt.Errorf("expected type %v, got %v", ms.Type, m.abi.Type)
+	case m.typ != ms.Type:
+		return fmt.Errorf("expected type %v, got %v", ms.Type, m.typ)
 
-	case m.abi.KeySize != ms.KeySize:
-		return fmt.Errorf("expected key size %v, got %v", ms.KeySize, m.abi.KeySize)
+	case m.keySize != ms.KeySize:
+		return fmt.Errorf("expected key size %v, got %v", ms.KeySize, m.keySize)
 
-	case m.abi.ValueSize != ms.ValueSize:
-		return fmt.Errorf("expected value size %v, got %v", ms.ValueSize, m.abi.ValueSize)
+	case m.valueSize != ms.ValueSize:
+		return fmt.Errorf("expected value size %v, got %v", ms.ValueSize, m.valueSize)
 
-	case m.abi.MaxEntries != ms.MaxEntries:
-		return fmt.Errorf("expected max entries %v, got %v", ms.MaxEntries, m.abi.MaxEntries)
+	case m.maxEntries != ms.MaxEntries:
+		return fmt.Errorf("expected max entries %v, got %v", ms.MaxEntries, m.maxEntries)
 
-	case m.abi.Flags != ms.Flags:
-		return fmt.Errorf("expected flags %v, got %v", ms.Flags, m.abi.Flags)
+	case m.flags != ms.Flags:
+		return fmt.Errorf("expected flags %v, got %v", ms.Flags, m.flags)
 	}
 	return nil
 }
@@ -118,9 +118,13 @@ func (ms *MapSpec) checkCompatibility(m *Map) error {
 // Implement encoding.BinaryMarshaler or encoding.BinaryUnmarshaler
 // if you require custom encoding.
 type Map struct {
-	name string
-	fd   *internal.FD
-	abi  MapABI
+	name       string
+	fd         *internal.FD
+	typ        MapType
+	keySize    uint32
+	valueSize  uint32
+	maxEntries uint32
+	flags      uint32
 	// Per CPU maps return values larger than the size in the spec
 	fullValueSize int
 }
@@ -134,12 +138,13 @@ func NewMapFromFD(fd int) (*Map, error) {
 	}
 	bpfFd := internal.NewFD(uint32(fd))
 
-	name, abi, err := newMapABIFromFd(bpfFd)
+	info, err := newMapInfoFromFd(bpfFd)
 	if err != nil {
 		bpfFd.Forget()
 		return nil, err
 	}
-	return newMap(bpfFd, name, abi)
+
+	return newMapFromInfo(bpfFd, info)
 }
 
 // NewMap creates a new Map.
@@ -236,7 +241,7 @@ func createMap(spec *MapSpec, inner *internal.FD, handle *btf.Handle, opts MapOp
 		}
 	}
 
-	abi := newMapABIFromSpec(spec)
+	spec = spec.Copy()
 
 	switch spec.Type {
 	case ArrayOfMaps:
@@ -246,43 +251,43 @@ func createMap(spec *MapSpec, inner *internal.FD, handle *btf.Handle, opts MapOp
 			return nil, err
 		}
 
-		if abi.ValueSize != 0 && abi.ValueSize != 4 {
+		if spec.ValueSize != 0 && spec.ValueSize != 4 {
 			return nil, errors.New("ValueSize must be zero or four for map of map")
 		}
-		abi.ValueSize = 4
+		spec.ValueSize = 4
 
 	case PerfEventArray:
-		if abi.KeySize != 0 && abi.KeySize != 4 {
+		if spec.KeySize != 0 && spec.KeySize != 4 {
 			return nil, errors.New("KeySize must be zero or four for perf event array")
 		}
-		abi.KeySize = 4
+		spec.KeySize = 4
 
-		if abi.ValueSize != 0 && abi.ValueSize != 4 {
+		if spec.ValueSize != 0 && spec.ValueSize != 4 {
 			return nil, errors.New("ValueSize must be zero or four for perf event array")
 		}
-		abi.ValueSize = 4
+		spec.ValueSize = 4
 
-		if abi.MaxEntries == 0 {
+		if spec.MaxEntries == 0 {
 			n, err := internal.PossibleCPUs()
 			if err != nil {
 				return nil, fmt.Errorf("perf event array: %w", err)
 			}
-			abi.MaxEntries = uint32(n)
+			spec.MaxEntries = uint32(n)
 		}
 	}
 
-	if abi.Flags&(unix.BPF_F_RDONLY_PROG|unix.BPF_F_WRONLY_PROG) > 0 || spec.Freeze {
+	if spec.Flags&(unix.BPF_F_RDONLY_PROG|unix.BPF_F_WRONLY_PROG) > 0 || spec.Freeze {
 		if err := haveMapMutabilityModifiers(); err != nil {
 			return nil, fmt.Errorf("map create: %w", err)
 		}
 	}
 
 	attr := bpfMapCreateAttr{
-		mapType:    abi.Type,
-		keySize:    abi.KeySize,
-		valueSize:  abi.ValueSize,
-		maxEntries: abi.MaxEntries,
-		flags:      abi.Flags,
+		mapType:    spec.Type,
+		keySize:    spec.KeySize,
+		valueSize:  spec.ValueSize,
+		maxEntries: spec.MaxEntries,
+		flags:      spec.Flags,
 		numaNode:   spec.NumaNode,
 	}
 
@@ -310,7 +315,7 @@ func createMap(spec *MapSpec, inner *internal.FD, handle *btf.Handle, opts MapOp
 	}
 	defer closeOnError(fd)
 
-	m, err := newMap(fd, spec.Name, abi)
+	m, err := newMap(fd, spec.Name, spec.Type, spec.KeySize, spec.ValueSize, spec.MaxEntries, spec.Flags)
 	if err != nil {
 		return nil, err
 	}
@@ -328,15 +333,19 @@ func createMap(spec *MapSpec, inner *internal.FD, handle *btf.Handle, opts MapOp
 	return m, nil
 }
 
-func newMap(fd *internal.FD, name string, abi *MapABI) (*Map, error) {
+func newMap(fd *internal.FD, name string, typ MapType, keySize, valueSize, maxEntries, flags uint32) (*Map, error) {
 	m := &Map{
 		name,
 		fd,
-		*abi,
-		int(abi.ValueSize),
+		typ,
+		keySize,
+		valueSize,
+		maxEntries,
+		flags,
+		int(valueSize),
 	}
 
-	if !abi.Type.hasPerCPUValue() {
+	if !typ.hasPerCPUValue() {
 		return m, nil
 	}
 
@@ -345,47 +354,49 @@ func newMap(fd *internal.FD, name string, abi *MapABI) (*Map, error) {
 		return nil, err
 	}
 
-	m.fullValueSize = align(int(abi.ValueSize), 8) * possibleCPUs
+	m.fullValueSize = align(int(valueSize), 8) * possibleCPUs
 	return m, nil
+}
+
+func newMapFromInfo(fd *internal.FD, info *MapInfo) (*Map, error) {
+	return newMap(fd, "", info.Type, info.KeySize, info.ValueSize, info.MaxEntries, info.Flags)
 }
 
 func (m *Map) String() string {
 	if m.name != "" {
-		return fmt.Sprintf("%s(%s)#%v", m.abi.Type, m.name, m.fd)
+		return fmt.Sprintf("%s(%s)#%v", m.typ, m.name, m.fd)
 	}
-	return fmt.Sprintf("%s#%v", m.abi.Type, m.fd)
+	return fmt.Sprintf("%s#%v", m.typ, m.fd)
 }
 
 // Type returns the underlying type of the map.
 func (m *Map) Type() MapType {
-	return m.abi.Type
+	return m.typ
 }
 
 // KeySize returns the size of the map key in bytes.
 func (m *Map) KeySize() uint32 {
-	return m.abi.KeySize
+	return m.keySize
 }
 
 // ValueSize returns the size of the map value in bytes.
 func (m *Map) ValueSize() uint32 {
-	return m.abi.ValueSize
+	return m.valueSize
 }
 
 // MaxEntries returns the maximum number of elements the map can hold.
 func (m *Map) MaxEntries() uint32 {
-	return m.abi.MaxEntries
+	return m.maxEntries
 }
 
 // Flags returns the flags of the map.
 func (m *Map) Flags() uint32 {
-	return m.abi.Flags
+	return m.flags
 }
 
-// ABI gets the ABI of the Map.
-//
-// Deprecated: use Type, KeySize, ValueSize, MaxEntries and Flags instead.
-func (m *Map) ABI() MapABI {
-	return m.abi
+// Info returns metadata about the map.
+func (m *Map) Info() (*MapInfo, error) {
+	return newMapInfoFromFd(m.fd)
 }
 
 // Lookup retrieves a value from a Map.
@@ -405,8 +416,8 @@ func (m *Map) Lookup(key, valueOut interface{}) error {
 		return nil
 	}
 
-	if m.abi.Type.hasPerCPUValue() {
-		return unmarshalPerCPUValue(valueOut, int(m.abi.ValueSize), valueBytes)
+	if m.typ.hasPerCPUValue() {
+		return unmarshalPerCPUValue(valueOut, int(m.valueSize), valueBytes)
 	}
 
 	switch value := valueOut.(type) {
@@ -449,7 +460,7 @@ func (m *Map) Lookup(key, valueOut interface{}) error {
 func (m *Map) LookupAndDelete(key, valueOut interface{}) error {
 	valuePtr, valueBytes := makeBuffer(valueOut, m.fullValueSize)
 
-	keyPtr, err := marshalPtr(key, int(m.abi.KeySize))
+	keyPtr, err := marshalPtr(key, int(m.keySize))
 	if err != nil {
 		return fmt.Errorf("can't marshal key: %w", err)
 	}
@@ -477,7 +488,7 @@ func (m *Map) LookupBytes(key interface{}) ([]byte, error) {
 }
 
 func (m *Map) lookup(key interface{}, valueOut internal.Pointer) error {
-	keyPtr, err := marshalPtr(key, int(m.abi.KeySize))
+	keyPtr, err := marshalPtr(key, int(m.keySize))
 	if err != nil {
 		return fmt.Errorf("can't marshal key: %w", err)
 	}
@@ -511,16 +522,16 @@ func (m *Map) Put(key, value interface{}) error {
 
 // Update changes the value of a key.
 func (m *Map) Update(key, value interface{}, flags MapUpdateFlags) error {
-	keyPtr, err := marshalPtr(key, int(m.abi.KeySize))
+	keyPtr, err := marshalPtr(key, int(m.keySize))
 	if err != nil {
 		return fmt.Errorf("can't marshal key: %w", err)
 	}
 
 	var valuePtr internal.Pointer
-	if m.abi.Type.hasPerCPUValue() {
-		valuePtr, err = marshalPerCPUValue(value, int(m.abi.ValueSize))
+	if m.typ.hasPerCPUValue() {
+		valuePtr, err = marshalPerCPUValue(value, int(m.valueSize))
 	} else {
-		valuePtr, err = marshalPtr(value, int(m.abi.ValueSize))
+		valuePtr, err = marshalPtr(value, int(m.valueSize))
 	}
 	if err != nil {
 		return fmt.Errorf("can't marshal value: %w", err)
@@ -537,7 +548,7 @@ func (m *Map) Update(key, value interface{}, flags MapUpdateFlags) error {
 //
 // Returns ErrKeyNotExist if the key does not exist.
 func (m *Map) Delete(key interface{}) error {
-	keyPtr, err := marshalPtr(key, int(m.abi.KeySize))
+	keyPtr, err := marshalPtr(key, int(m.keySize))
 	if err != nil {
 		return fmt.Errorf("can't marshal key: %w", err)
 	}
@@ -554,7 +565,7 @@ func (m *Map) Delete(key interface{}) error {
 //
 // Returns ErrKeyNotExist if there is no next key.
 func (m *Map) NextKey(key, nextKeyOut interface{}) error {
-	nextKeyPtr, nextKeyBytes := makeBuffer(nextKeyOut, int(m.abi.KeySize))
+	nextKeyPtr, nextKeyBytes := makeBuffer(nextKeyOut, int(m.keySize))
 
 	if err := m.nextKey(key, nextKeyPtr); err != nil {
 		return err
@@ -578,7 +589,7 @@ func (m *Map) NextKey(key, nextKeyOut interface{}) error {
 //
 // Returns nil if there are no more keys.
 func (m *Map) NextKeyBytes(key interface{}) ([]byte, error) {
-	nextKey := make([]byte, m.abi.KeySize)
+	nextKey := make([]byte, m.keySize)
 	nextKeyPtr := internal.NewSlicePointer(nextKey)
 
 	err := m.nextKey(key, nextKeyPtr)
@@ -596,7 +607,7 @@ func (m *Map) nextKey(key interface{}, nextKeyOut internal.Pointer) error {
 	)
 
 	if key != nil {
-		keyPtr, err = marshalPtr(key, int(m.abi.KeySize))
+		keyPtr, err = marshalPtr(key, int(m.keySize))
 		if err != nil {
 			return fmt.Errorf("can't marshal key: %w", err)
 		}
@@ -659,7 +670,16 @@ func (m *Map) Clone() (*Map, error) {
 		return nil, fmt.Errorf("can't clone map: %w", err)
 	}
 
-	return newMap(dup, m.name, &m.abi)
+	return &Map{
+		m.name,
+		dup,
+		m.typ,
+		m.keySize,
+		m.valueSize,
+		m.maxEntries,
+		m.flags,
+		m.fullValueSize,
+	}, nil
 }
 
 // Pin persists the map past the lifetime of the process that created it.
@@ -698,12 +718,14 @@ func LoadPinnedMap(fileName string) (*Map, error) {
 	if err != nil {
 		return nil, err
 	}
-	name, abi, err := newMapABIFromFd(fd)
+
+	info, err := newMapInfoFromFd(fd)
 	if err != nil {
 		_ = fd.Close()
 		return nil, err
 	}
-	return newMap(fd, name, abi)
+
+	return newMapFromInfo(fd, info)
 }
 
 func unmarshalMap(buf []byte) (*Map, error) {
@@ -798,8 +820,8 @@ type MapIterator struct {
 func newMapIterator(target *Map) *MapIterator {
 	return &MapIterator{
 		target:     target,
-		maxEntries: target.abi.MaxEntries,
-		prevBytes:  make([]byte, int(target.abi.KeySize)),
+		maxEntries: target.maxEntries,
+		prevBytes:  make([]byte, target.keySize),
 	}
 }
 
@@ -887,13 +909,13 @@ func NewMapFromID(id MapID) (*Map, error) {
 		return nil, err
 	}
 
-	name, abi, err := newMapABIFromFd(fd)
+	info, err := newMapInfoFromFd(fd)
 	if err != nil {
 		_ = fd.Close()
 		return nil, err
 	}
 
-	return newMap(fd, name, abi)
+	return newMapFromInfo(fd, info)
 }
 
 // ID returns the systemwide unique ID of the map.

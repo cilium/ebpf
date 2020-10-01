@@ -203,8 +203,8 @@ func TestProgramPin(t *testing.T) {
 	}
 	defer prog.Close()
 
-	if prog.abi.Type != SocketFilter {
-		t.Error("Expected pinned program to have type SocketFilter, but got", prog.abi.Type)
+	if prog.Type() != SocketFilter {
+		t.Error("Expected pinned program to have type SocketFilter, but got", prog.Type())
 	}
 }
 

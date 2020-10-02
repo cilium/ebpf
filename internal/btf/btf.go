@@ -206,25 +206,24 @@ func loadKernelSpec() (*Spec, error) {
 	// use same list of locations as libbpf
 	// https://github.com/libbpf/libbpf/blob/9a3a42608dbe3731256a5682a125ac1e23bced8f/src/btf.c#L3114-L3122
 	locations := []struct {
-		pathFmt string
-		raw     bool
+		path string
+		raw  bool
 	}{
 		/* try canonical vmlinux BTF through sysfs first */
 		{"/sys/kernel/btf/vmlinux", true /* raw BTF */},
 		/* fall back to trying to find vmlinux ELF on disk otherwise */
-		{"/boot/vmlinux-%s", false},
-		{"/lib/modules/%s/vmlinux-%s", false},
-		{"/lib/modules/%s/build/vmlinux", false},
-		{"/usr/lib/modules/%s/kernel/vmlinux", false},
-		{"/usr/lib/debug/boot/vmlinux-%s", false},
-		{"/usr/lib/debug/boot/vmlinux-%s.debug", false},
-		{"/usr/lib/debug/lib/modules/%s/vmlinux", false},
+		{fmt.Sprintf("/boot/vmlinux-%s", release), false},
+		{fmt.Sprintf("/lib/modules/%s/vmlinux-%s", release, release), false},
+		{fmt.Sprintf("/lib/modules/%s/build/vmlinux", release), false},
+		{fmt.Sprintf("/usr/lib/modules/%s/kernel/vmlinux", release), false},
+		{fmt.Sprintf("/usr/lib/debug/boot/vmlinux-%s", release), false},
+		{fmt.Sprintf("/usr/lib/debug/boot/vmlinux-%s.debug", release), false},
+		{fmt.Sprintf("/usr/lib/debug/lib/modules/%s/vmlinux", release), false},
 	}
 
 	var spec *Spec
 	for _, loc := range locations {
-		path := fmt.Sprintf(loc.pathFmt, release)
-		fh, err := os.Open(path)
+		fh, err := os.Open(loc.path)
 		if err != nil {
 			continue
 		}

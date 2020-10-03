@@ -637,6 +637,7 @@ func getProgType(sectionName string) (ProgramType, AttachType, string) {
 		"flow_dissector":        {FlowDissector, AttachFlowDissector},
 		"iter/":                 {Tracing, AttachTraceIter},
 		"sk_lookup/":            {SkLookup, AttachSkLookup},
+		"lsm/":                  {LSM, AttachLSMMac},
 
 		"cgroup_skb/ingress": {CGroupSKB, AttachCGroupInetIngress},
 		"cgroup_skb/egress":  {CGroupSKB, AttachCGroupInetEgress},

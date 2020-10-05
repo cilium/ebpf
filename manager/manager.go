@@ -2,13 +2,13 @@ package manager
 
 import (
 	"fmt"
-	"github.com/hashicorp/go-multierror"
 	"io"
 	"os"
 	"strings"
 	"sync"
 
 	"github.com/florianl/go-tc"
+	"github.com/hashicorp/go-multierror"
 	"github.com/pkg/errors"
 	"golang.org/x/sys/unix"
 

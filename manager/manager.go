@@ -2,6 +2,7 @@ package manager
 
 import (
 	"fmt"
+	"github.com/hashicorp/go-multierror"
 	"io"
 	"os"
 	"strings"
@@ -127,11 +128,13 @@ func (ps *ProbeSelector) RunValidator(manager *Manager) error {
 	if !ok {
 		return errors.Errorf("probe not found: %s", ps.ProbeIdentificationPair)
 	}
-	if !p.IsRunning() && p.Enabled && !p.Optional {
+	if !p.IsRunning() && p.Enabled {
 		return errors.Wrap(p.GetLastError(), ps.ProbeIdentificationPair.String())
 	}
-	if !p.Enabled && !p.Optional {
-		return errors.Errorf("%s: is disabled and not optional", ps.ProbeIdentificationPair.String())
+	if !p.Enabled {
+		return errors.Errorf(
+			"%s: is disabled, add it to the activation list and check that it was not explicitly excluded by the manager options",
+			ps.ProbeIdentificationPair.String())
 	}
 	return nil
 }
@@ -173,18 +176,8 @@ func (oo *OneOf) RunValidator(manager *Manager) error {
 			"OneOf requirement failed, none of the following probes are running [%s]",
 			strings.Join(errs, " | "))
 	}
-
-	// Check that at least one probe is activated (keep in mind that a validation can be successfull even if the probe
-	// is not running)
-	for _, id := range oo.GetProbesIdentificationPairList() {
-		p, ok := manager.GetProbe(id)
-		if ok {
-			if p.IsRunning() {
-				return nil
-			}
-		}
-	}
-	return errors.Errorf("OneOf requirement failed, none of the following probes are running [%s]", oo)
+	// at least one selector was successful
+	return nil
 }
 
 func (oo *OneOf) String() string {
@@ -575,24 +568,25 @@ func (m *Manager) Start() error {
 
 	// Attach eBPF programs
 	for _, probe := range m.Probes {
-		if err := probe.Attach(); err != nil {
-			// Clean up
-			_ = m.stop(CleanInternal)
-			m.stateLock.Unlock()
-			return err
-		}
+		// ignore the error, they are already collected per probes and will be surfaced by the
+		// activation validators if needed.
+		_ = probe.Attach()
 	}
 
 	m.state = running
 	m.stateLock.Unlock()
 
-	// Check optional probes and probe selectors
+	// Check probe selectors
+	var validationErrs error
 	for _, selector := range m.options.ActivatedProbes {
 		if err := selector.RunValidator(m); err != nil {
-			// Clean up
-			_ = m.Stop(CleanInternal)
-			return errors.Wrap(err, "probes activation validation failed")
+			validationErrs = multierror.Append(validationErrs, err)
 		}
+	}
+	if validationErrs != nil {
+		// Clean up
+		_ = m.Stop(CleanInternal)
+		return errors.Wrap(validationErrs, "probes activation validation failed")
 	}
 
 	// Handle Maps router
@@ -1062,9 +1056,9 @@ func (m *Manager) matchSpecs() error {
 }
 
 func (m *Manager) activateProbes() {
-	defaultEnabled := len(m.options.ActivatedProbes) == 0
+	shouldPopulateActivatedProbes := len(m.options.ActivatedProbes) == 0
 	for _, mProbe := range m.Probes {
-		shouldActivate := defaultEnabled
+		shouldActivate := shouldPopulateActivatedProbes
 		for _, selector := range m.options.ActivatedProbes {
 			for _, p := range selector.GetProbesIdentificationPairList() {
 				if mProbe.IdentificationPairMatches(p) {
@@ -1078,6 +1072,13 @@ func (m *Manager) activateProbes() {
 			}
 		}
 		mProbe.Enabled = shouldActivate
+
+		if shouldPopulateActivatedProbes {
+			// this will ensure that we check that everything has been activated by default when no selectors are provided
+			m.options.ActivatedProbes = append(m.options.ActivatedProbes, &ProbeSelector{
+				ProbeIdentificationPair: mProbe.GetIdentificationPair(),
+			})
+		}
 	}
 }
 

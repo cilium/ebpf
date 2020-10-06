@@ -422,6 +422,12 @@ func (m *Manager) GetProbe(id ProbeIdentificationPair) (*Probe, bool) {
 // RenameProbeIdentificationPair - Renames a probe identification pair. This change will propagate to all the features in
 // the manager that will try to select the probe by its old ProbeIdentificationPair.
 func (m *Manager) RenameProbeIdentificationPair(oldID ProbeIdentificationPair, newID ProbeIdentificationPair) error {
+	// sanity check: make sure the newID doesn't already exists
+	for _, mProbe := range m.Probes {
+		if mProbe.IdentificationPairMatches(newID) {
+			return ErrIdentificationPairInUse
+		}
+	}
 	p, ok := m.GetProbe(oldID)
 	if !ok {
 		return ErrSymbolNotFound
@@ -1367,14 +1373,14 @@ func (m *Manager) sanityCheck() error {
 		cache[perfMap.Name] = true
 	}
 
-	// Check if probes section are unique, request the usage of CloneProbe otherwise
+	// Check if probes identification pairs are unique, request the usage of CloneProbe otherwise
 	cache = map[string]bool{}
 	for _, managerProbe := range m.Probes {
-		_, ok := cache[managerProbe.Section]
+		_, ok := cache[managerProbe.GetIdentificationPair().String()]
 		if ok {
 			return errors.Wrapf(ErrCloneProbeRequired, "%v failed the sanity check", managerProbe.GetIdentificationPair())
 		}
-		cache[managerProbe.Section] = true
+		cache[managerProbe.GetIdentificationPair().String()] = true
 	}
 	return nil
 }

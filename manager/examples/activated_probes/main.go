@@ -19,15 +19,12 @@ var m1 = &manager.Manager{
 		&manager.Probe{
 			Section: "kprobe/utimes_common",
 			MatchFuncName: "utimes_common",
-			Optional: true,
 		},
 		&manager.Probe{
 			Section: "kprobe/vfs_opennnnnn",
-			Optional: true,
 		},
 		&manager.Probe{
 			Section: "kprobe/exclude",
-			Optional: true,
 		},
 	},
 }
@@ -59,19 +56,9 @@ var options1 = manager.Options{
 				},
 			},
 		},
-		&manager.ProbeSelector{
-			ProbeIdentificationPair: manager.ProbeIdentificationPair{
-				Section: "kprobe/exclude",
-			},
-		},
-		&manager.ProbeSelector{
-			ProbeIdentificationPair: manager.ProbeIdentificationPair{
-				Section: "kprobe/vfs_opennnnnn",
-			},
-		},
 	},
 	ExcludedSections: []string{
-		"kprobe/exclude",
+		"kprobe/exclude2",
 	},
 }
 
@@ -84,11 +71,9 @@ var m2 = &manager.Manager{
 		&manager.Probe{
 			Section: "kprobe/utimes_common",
 			MatchFuncName: "utimes_common",
-			Optional: true,
 		},
 		&manager.Probe{
 			Section: "kprobe/vfs_opennnnnn",
-			Optional: true,
 		},
 		&manager.Probe{
 			Section: "kprobe/exclude",
@@ -124,6 +109,25 @@ var options2 = manager.Options{
 	},
 }
 
+var m3 = &manager.Manager{
+	Probes: []*manager.Probe{
+		&manager.Probe{
+			UID: "MyVFSMkdir2",
+			Section: "kprobe/vfs_mkdir",
+		},
+		&manager.Probe{
+			Section: "kprobe/utimes_common",
+			MatchFuncName: "utimes_common",
+		},
+		&manager.Probe{
+			Section: "kprobe/vfs_opennnnnn",
+		},
+		&manager.Probe{
+			Section: "kprobe/exclude",
+		},
+	},
+}
+
 func main() {
 	// Initialize the managers
 	if err := m1.InitWithOptions(recoverAssets(), options1); err != nil {
@@ -140,7 +144,7 @@ func main() {
 		logrus.Fatal("EditProbeIdentificationPair failed")
 	}
 
-	// Start the managers
+	// Start m1
 	if err := m1.Start(); err != nil {
 		logrus.Fatal(err)
 	}
@@ -152,6 +156,10 @@ func main() {
 		logrus.Error(err)
 	}
 
+	if err := m1.Stop(manager.CleanAll); err != nil {
+		logrus.Fatal(err)
+	}
+
 	logrus.Println("=> Cmd+C to continue")
 	wait()
 
@@ -161,17 +169,22 @@ func main() {
 		logrus.Fatal(err)
 	}
 
-	// Start the managers
+	// Start m2
 	if err := m2.Start(); err != nil {
+		logrus.Error(err)
+	}
+
+	logrus.Println("=> Cmd+C to continue")
+	wait()
+
+	logrus.Println("moving on to m3 (an error is expected)")
+	if err := m3.Init(recoverAssets()); err != nil {
 		logrus.Fatal(err)
 	}
 
-	// Close the managers
-	if err := m1.Stop(manager.CleanAll); err != nil {
-		logrus.Fatal(err)
-	}
-	if err := m2.Stop(manager.CleanAll); err != nil {
-		logrus.Fatal(err)
+	// Start m3
+	if err := m3.Start(); err != nil {
+		logrus.Error(err)
 	}
 }
 

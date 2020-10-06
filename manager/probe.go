@@ -98,9 +98,6 @@ type Probe struct {
 	// Manager options (see ActivatedProbes)
 	Enabled bool
 
-	// Optional - Indicates if a failure to start the probe should return an error
-	Optional bool
-
 	// PinPath - Once loaded, the eBPF program will be pinned to this path. If the eBPF program has already been pinned
 	// and is already running in the kernel, then it will be loaded from this path.
 	PinPath string
@@ -320,10 +317,7 @@ func (p *Probe) Attach() error {
 	}
 	if p.state < initialized {
 		p.lastError = ErrProbeNotInitialized
-		if !p.Optional {
-			return ErrProbeNotInitialized
-		}
-		return nil
+		return ErrProbeNotInitialized
 	}
 
 	// Per program type start
@@ -350,9 +344,6 @@ func (p *Probe) Attach() error {
 		p.lastError = err
 		// Clean up any progress made in the attach attempt
 		_ = p.stop()
-		if p.Optional {
-			return nil
-		}
 		return errors.Wrapf(err, "couldn't start probe %s", p.Section)
 	}
 

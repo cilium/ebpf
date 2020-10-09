@@ -302,6 +302,11 @@ func (p *Probe) init() error {
 		p.Ifindex = int32(inter.Index)
 	}
 
+	// Default max active value
+	if p.KProbeMaxActive == 0 {
+		p.KProbeMaxActive = p.manager.options.DefaultKProbeMaxActive
+	}
+
 	// update probe state
 	p.state = initialized
 	return nil

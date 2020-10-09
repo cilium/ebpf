@@ -243,6 +243,10 @@ type Options struct {
 	// See PerfMap.Watermark for more.
 	DefaultWatermark int
 
+	// DefaultKProbeMaxActive - Manager-level default value for the kprobe max active parameter.
+	// See Probe.MaxActive for more.
+	DefaultKProbeMaxActive int
+
 	// RLimit - The maps & programs provided to the manager might exceed the maximum allowed memory lock.
 	// (RLIMIT_MEMLOCK) If a limit is provided here it will be applied when the manager is initialized.
 	RLimit *unix.Rlimit

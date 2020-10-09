@@ -37,6 +37,21 @@ var options1 = manager.Options{
 				Section: "kprobe/vfs_mkdir",
 			},
 		},
+		&manager.AllOf{
+			Selectors: []manager.ProbesSelector{
+				&manager.ProbeSelector{
+					ProbeIdentificationPair: manager.ProbeIdentificationPair{
+						UID:     "MyVFSMkdir1",
+						Section: "kprobe/vfs_mkdir",
+					},
+				},
+				&manager.ProbeSelector{
+					ProbeIdentificationPair: manager.ProbeIdentificationPair{
+						Section: "kprobe/utimes_common",
+					},
+				},
+			},
+		},
 		&manager.OneOf{
 			Selectors: []manager.ProbesSelector{
 				&manager.ProbeSelector{
@@ -87,6 +102,15 @@ var options2 = manager.Options{
 			ProbeIdentificationPair: manager.ProbeIdentificationPair{
 				UID:     "MyVFSMkdir2",
 				Section: "kprobe/vfs_mkdir",
+			},
+		},
+		&manager.AllOf{
+			Selectors: []manager.ProbesSelector{
+				&manager.ProbeSelector{
+					ProbeIdentificationPair: manager.ProbeIdentificationPair{
+						Section: "kprobe/vfs_opennnnnn",
+					},
+				},
 			},
 		},
 		&manager.OneOf{

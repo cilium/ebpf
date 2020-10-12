@@ -2,11 +2,11 @@ package main
 
 import (
 	"fmt"
+	"github.com/DataDog/ebpf/manager"
 	"github.com/sirupsen/logrus"
 	"os"
 	"os/signal"
-
-	"github.com/DataDog/ebpf/manager"
+	"time"
 )
 
 var m = &manager.Manager{
@@ -33,8 +33,13 @@ var m = &manager.Manager{
 }
 
 func main() {
+	options := manager.Options{
+		DefaultProbeRetry: 2,
+		DefaultProbeRetryDelay: time.Second,
+	}
+
 	// Initialize the manager
-	if err := m.Init(recoverAssets()); err != nil {
+	if err := m.InitWithOptions(recoverAssets(), options); err != nil {
 		logrus.Fatal(err)
 	}
 

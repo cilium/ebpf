@@ -3,6 +3,7 @@ module github.com/DataDog/ebpf
 go 1.12
 
 require (
+	github.com/avast/retry-go v2.7.0+incompatible
 	github.com/florianl/go-tc v0.2.0
 	github.com/hashicorp/go-multierror v1.1.0
 	github.com/pkg/errors v0.9.1

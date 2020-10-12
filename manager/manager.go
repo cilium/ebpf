@@ -6,6 +6,7 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/florianl/go-tc"
 	"github.com/hashicorp/go-multierror"
@@ -295,6 +296,12 @@ type Options struct {
 	// DefaultKProbeMaxActive - Manager-level default value for the kprobe max active parameter.
 	// See Probe.MaxActive for more.
 	DefaultKProbeMaxActive int
+
+	// ProbeRetry - Defines the number of times that a probe will retry to attach / detach on error.
+	DefaultProbeRetry uint
+
+	// ProbeRetryDelay - Defines the delay to wait before a probe should retry to attach / detach on error.
+	DefaultProbeRetryDelay time.Duration
 
 	// RLimit - The maps & programs provided to the manager might exceed the maximum allowed memory lock.
 	// (RLIMIT_MEMLOCK) If a limit is provided here it will be applied when the manager is initialized.

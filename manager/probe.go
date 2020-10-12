@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/avast/retry-go"
 	"github.com/florianl/go-tc"
 	"github.com/florianl/go-tc/core"
 	"github.com/pkg/errors"
@@ -106,6 +107,12 @@ type Probe struct {
 	// probed simultaneously with maxactive. If maxactive is 0 it will be set to the default value: if CONFIG_PREEMPT is
 	// enabled, this is max(10, 2*NR_CPUS); otherwise, it is NR_CPUS. For kprobes, maxactive is ignored.
 	KProbeMaxActive int
+
+	// ProbeRetry - Defines the number of times that the probe will retry to attach / detach on error.
+	ProbeRetry uint
+
+	// ProbeRetryDelay - Defines the delay to wait before the probe should retry to attach / detach on error.
+	ProbeRetryDelay time.Duration
 
 	// BinaryPath - (uprobes) A Uprobe is attached to a specific symbol in a user space binary. The offset is
 	// automatically computed for the symbol name provided in the uprobe section ( SEC("uprobe/[symbol_name]") ).
@@ -307,6 +314,16 @@ func (p *Probe) init() error {
 		p.KProbeMaxActive = p.manager.options.DefaultKProbeMaxActive
 	}
 
+	// Default retry
+	if p.ProbeRetry == 0 {
+		p.ProbeRetry = p.manager.options.DefaultProbeRetry
+	}
+
+	// Default retry delay
+	if p.ProbeRetryDelay == 0 {
+		p.ProbeRetryDelay = p.manager.options.DefaultProbeRetryDelay
+	}
+
 	// update probe state
 	p.state = initialized
 	return nil
@@ -315,6 +332,11 @@ func (p *Probe) init() error {
 // Attach - Attaches the probe to the right hook point in the kernel depending on the program type and the provided
 // parameters.
 func (p *Probe) Attach() error {
+	return retry.Do(p.attach, retry.Attempts(p.ProbeRetry), retry.Delay(p.ProbeRetryDelay))
+}
+
+// attach - Thread unsafe version of attach
+func (p *Probe) attach() error {
 	p.stateLock.Lock()
 	defer p.stateLock.Unlock()
 	if p.state >= running || !p.Enabled {
@@ -367,7 +389,7 @@ func (p *Probe) Detach() error {
 	}
 
 	// detach from hook point
-	err := p.detach()
+	err := p.detachRetry()
 
 	// update state of the probe
 	if err != nil {
@@ -375,6 +397,11 @@ func (p *Probe) Detach() error {
 		p.state = initialized
 	}
 	return err
+}
+
+// detachRetry - Thread unsafe version of Detach with retry
+func (p *Probe) detachRetry() error {
+	return retry.Do(p.detach, retry.Attempts(p.ProbeRetry), retry.Delay(p.ProbeRetryDelay))
 }
 
 // detach - Thread unsafe version of Detach.
@@ -424,7 +451,7 @@ func (p *Probe) Stop() error {
 
 func (p *Probe) stop() error {
 	// detach from hook point
-	err := p.detach()
+	err := p.detachRetry()
 
 	// close the loaded program
 	err = ConcatErrors(err, p.program.Close())

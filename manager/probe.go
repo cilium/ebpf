@@ -348,7 +348,7 @@ func (p *Probe) Attach() error {
 		if errors.Is(err, syscall.ENOENT) || errors.Is(err, syscall.EINVAL) {
 			return nil
 		}
-		return nil
+		return err
 	}, retry.Attempts(p.ProbeRetry), retry.Delay(p.ProbeRetryDelay))
 }
 

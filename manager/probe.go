@@ -6,6 +6,7 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/avast/retry-go"
@@ -337,7 +338,18 @@ func (p *Probe) init() error {
 // Attach - Attaches the probe to the right hook point in the kernel depending on the program type and the provided
 // parameters.
 func (p *Probe) Attach() error {
-	return retry.Do(p.attach, retry.Attempts(p.ProbeRetry), retry.Delay(p.ProbeRetryDelay))
+	return retry.Do(func() error {
+		err := p.attach()
+		if err == nil {
+			return nil
+		}
+
+		// not available, not a temporary error
+		if errors.Is(err, syscall.ENOENT) || errors.Is(err, syscall.EINVAL) {
+			return nil
+		}
+		return nil
+	}, retry.Attempts(p.ProbeRetry), retry.Delay(p.ProbeRetryDelay))
 }
 
 // attach - Thread unsafe version of attach

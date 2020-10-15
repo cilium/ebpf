@@ -965,12 +965,12 @@ func (m *Manager) CloneProgram(UID string, newProbe Probe, constantsEditors []Co
 
 	// Write current maps
 	if err = m.rewriteMaps(newProbe.programSpec, m.collection.Maps); err != nil {
-		return errors.Wrapf(err, "coulnd't rewrite maps in %v", newProbe.GetIdentificationPair())
+		return errors.Wrapf(err, "couldn't rewrite maps in %v", newProbe.GetIdentificationPair())
 	}
 
 	// Rewrite with new maps
 	if err = m.rewriteMaps(newProbe.programSpec, mapEditors); err != nil {
-		return errors.Wrapf(err, "coulnd't rewrite maps in %v", newProbe.GetIdentificationPair())
+		return errors.Wrapf(err, "couldn't rewrite maps in %v", newProbe.GetIdentificationPair())
 	}
 
 	// Init

@@ -474,11 +474,27 @@ func (p *Probe) stop() error {
 	err = ConcatErrors(err, p.program.Close())
 
 	// update state of the probe
-	if err != nil {
-		p.lastError = err
-		p.state = 0
+	p.lastError = err
+
+	// Cleanup probe if stop was successful
+	if err == nil {
+		p.reset()
 	}
-	return errors.Wrapf(err, "coulnd't cleanup probe %s", p.Section)
+	return errors.Wrapf(err, "couldn't stop probe %s", p.Section)
+}
+
+// reset - Cleans up the internal fields of the probe
+func (p *Probe) reset() {
+	p.manager = nil
+	p.program = nil
+	p.programSpec = nil
+	p.perfEventFD = nil
+	p.state = reset
+	p.manualLoadNeeded = false
+	p.checkPin = false
+	p.funcName = ""
+	p.attachPID = 0
+	p.lastError = nil
 }
 
 // attachKprobe - Attaches the probe to its kprobe
@@ -731,7 +747,7 @@ func (p *Probe) detachTCCLS() error {
 	// Recover the netlink socket of the interface from the manager
 	ntl, ok := p.manager.netlinkCache[netlinkCacheKey{p.Ifindex, p.IfindexNetns}]
 	if !ok {
-		return fmt.Errorf("coulnd't find qdisc from which the probe %v was meant to be detached", p.GetIdentificationPair())
+		return fmt.Errorf("couldn't find qdisc from which the probe %v was meant to be detached", p.GetIdentificationPair())
 	}
 
 	if ntl.schedClsCount >= 2 {

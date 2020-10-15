@@ -226,7 +226,7 @@ func DisableKprobeEvent(probeType, funcName, UID string, kprobeAttachPID int) er
 			// probe already has been cleared by the first.
 			return nil
 		} else {
-			return errors.Wrapf(err, "cannot write %q to kprobe_events: %v", cmd)
+			return errors.Wrapf(err, "cannot write %q to kprobe_events", cmd)
 		}
 	}
 	return nil
@@ -320,7 +320,7 @@ func DisableUprobeEvent(probeType, funcName, UID string, uprobeAttachPID int) er
 	defer f.Close()
 	cmd := fmt.Sprintf("-:%s\n", eventName)
 	if _, err = f.WriteString(cmd); err != nil {
-		return errors.Wrapf(err, "cannot write %q to uprobe_events: %v", cmd)
+		return errors.Wrapf(err, "cannot write %q to uprobe_events", cmd)
 	}
 	return nil
 }

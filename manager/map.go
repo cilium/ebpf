@@ -137,7 +137,6 @@ func (m *Map) Close(cleanup MapCleanupType) error {
 	if m.state < initialized {
 		return ErrMapInitialized
 	}
-	m.state = reset
 	return m.close(cleanup)
 }
 
@@ -178,7 +177,21 @@ func (m *Map) close(cleanup MapCleanupType) error {
 		if m.PinPath != "" {
 			err = ConcatErrors(err, os.Remove(m.PinPath))
 		}
-		return ConcatErrors(err, m.array.Close())
+		err = ConcatErrors(err, m.array.Close())
+		if err != nil {
+			return err
+		}
+		m.reset()
 	}
 	return nil
+}
+
+// reset - Cleans up the internal fields of the map
+func (m *Map) reset() {
+	m.array = nil
+	m.arraySpec = nil
+	m.manager = nil
+	m.state = reset
+	m.externalMap = false
+	m.editedMap = false
 }

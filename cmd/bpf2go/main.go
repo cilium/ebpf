@@ -124,7 +124,7 @@ func run(stdout io.Writer, pkg, outputDir string, args []string) (err error) {
 
 	tagsByTarget := map[string]string{
 		"bpf":   "",
-		"bpfel": "386 amd64 amd64p32 arm arm64 mipsle mips64le mips64p32le ppc64le",
+		"bpfel": "386 amd64 amd64p32 arm arm64 mipsle mips64le mips64p32le ppc64le riscv64",
 		"bpfeb": "armbe arm64be mips mips64 mips64p32 ppc64 s390 s390x sparc sparc64",
 	}
 

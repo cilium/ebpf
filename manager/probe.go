@@ -168,6 +168,8 @@ func (p *Probe) Copy() *Probe {
 		IfindexNetns:     p.IfindexNetns,
 		XDPAttachMode:    p.XDPAttachMode,
 		NetworkDirection: p.NetworkDirection,
+		ProbeRetry:       p.ProbeRetry,
+		ProbeRetryDelay:  p.ProbeRetryDelay,
 	}
 }
 

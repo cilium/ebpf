@@ -67,7 +67,7 @@ type Probe struct {
 	programSpec      *ebpf.ProgramSpec
 	perfEventFD      *internal.FD
 	state            state
-	stateLock        *sync.RWMutex
+	stateLock        sync.RWMutex
 	manualLoadNeeded bool
 	checkPin         bool
 	funcName         string
@@ -216,7 +216,6 @@ func (p *Probe) Benchmark(in []byte, repeat int, reset func()) (uint32, time.Dur
 
 // InitWithOptions - Initializes a probe with options
 func (p *Probe) InitWithOptions(manager *Manager, manualLoadNeeded bool, checkPin bool) error {
-	p.stateLock = &sync.RWMutex{}
 	if !p.Enabled {
 		return nil
 	}
@@ -231,7 +230,6 @@ func (p *Probe) InitWithOptions(manager *Manager, manualLoadNeeded bool, checkPi
 
 // Init - Initialize a probe
 func (p *Probe) Init(manager *Manager) error {
-	p.stateLock = &sync.RWMutex{}
 	if !p.Enabled {
 		return nil
 	}
@@ -348,6 +346,7 @@ func (p *Probe) Attach() error {
 		if errors.Is(err, syscall.ENOENT) || errors.Is(err, syscall.EINVAL) {
 			return nil
 		}
+
 		return err
 	}, retry.Attempts(p.ProbeRetry), retry.Delay(p.ProbeRetryDelay))
 }

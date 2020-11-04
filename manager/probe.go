@@ -411,8 +411,10 @@ func (p *Probe) Detach() error {
 	// update state of the probe
 	if err != nil {
 		p.lastError = err
+	} else {
 		p.state = initialized
 	}
+
 	return err
 }
 

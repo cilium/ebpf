@@ -1148,6 +1148,62 @@ func (m *Manager) activateProbes() {
 	}
 }
 
+// UpdateActivatedProbes - update the list of activated probes
+func (m *Manager) UpdateActivatedProbes(selectors []ProbesSelector) error {
+	currentProbes := make(map[ProbeIdentificationPair]*Probe)
+	for _, p := range m.Probes {
+		if p.Enabled {
+			currentProbes[p.GetIdentificationPair()] = p
+		}
+	}
+
+	nextProbes := make(map[ProbeIdentificationPair]bool)
+	for _, selector := range selectors {
+		for _, id := range selector.GetProbesIdentificationPairList() {
+			nextProbes[id] = true
+		}
+	}
+
+	for id, _ := range nextProbes {
+		if _, alreadyPresent := currentProbes[id]; alreadyPresent {
+			delete(currentProbes, id)
+		} else {
+			probe, _ := m.GetProbe(id)
+			probe.Enabled = true
+			if err := probe.Init(m); err != nil {
+				return err
+			}
+			if err := probe.Attach(); err != nil {
+				return err
+			}
+		}
+	}
+
+	for _, probe := range currentProbes {
+		if err := probe.Detach(); err != nil {
+			return err
+		}
+		probe.Enabled = false
+	}
+
+	// update activated probes & check activation
+	m.options.ActivatedProbes = selectors
+	var validationErrs error
+	for _, selector := range m.options.ActivatedProbes {
+		if err := selector.RunValidator(m); err != nil {
+			validationErrs = multierror.Append(validationErrs, err)
+		}
+	}
+
+	if validationErrs != nil {
+		// Clean up
+		_ = m.Stop(CleanInternal)
+		return errors.Wrap(validationErrs, "probes activation validation failed")
+	}
+
+	return nil
+}
+
 // editConstants - Edit the programs in the CollectionSpec with the provided constant editors. Tries with the BTF global
 // variable first, and fall back to the asm method if BTF is not available.
 func (m *Manager) editConstants() error {

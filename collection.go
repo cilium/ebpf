@@ -13,7 +13,10 @@ import (
 )
 
 // CollectionOptions control loading a collection into the kernel.
+//
+// Maps and Programs are passed to NewMapWithOptions and NewProgramsWithOptions.
 type CollectionOptions struct {
+	Maps     MapOptions
 	Programs ProgramOptions
 }
 
@@ -252,7 +255,7 @@ func NewCollectionWithOptions(spec *CollectionSpec, opts CollectionOptions) (col
 			}
 		}
 
-		m, err := newMapWithBTF(mapSpec, handle)
+		m, err := newMapWithBTF(mapSpec, handle, opts.Maps)
 		if err != nil {
 			return nil, fmt.Errorf("map %s: %w", mapName, err)
 		}

@@ -5,9 +5,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"math"
-	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -184,11 +182,7 @@ func TestProgramPin(t *testing.T) {
 	prog := createSocketFilter(t)
 	defer prog.Close()
 
-	tmp, err := ioutil.TempDir("/sys/fs/bpf", "ebpf-test")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(tmp)
+	tmp := tempBPFFS(t)
 
 	path := filepath.Join(tmp, "program")
 	if err := prog.Pin(path); err != nil {
@@ -196,7 +190,7 @@ func TestProgramPin(t *testing.T) {
 	}
 	prog.Close()
 
-	prog, err = LoadPinnedProgram(path)
+	prog, err := LoadPinnedProgram(path)
 	testutils.SkipIfNotSupported(t, err)
 	if err != nil {
 		t.Fatal(err)

@@ -1,6 +1,6 @@
 package ebpf
 
-//go:generate stringer -output types_string.go -type=MapType,ProgramType,AttachType
+//go:generate stringer -output types_string.go -type=MapType,ProgramType,AttachType,PinType
 
 // MapType indicates the type map structure
 // that will be initialized in the kernel.
@@ -180,3 +180,15 @@ const (
 
 // AttachFlags of the eBPF program used in BPF_PROG_ATTACH command
 type AttachFlags uint32
+
+// PinType determines whether a map is pinned into a BPFFS.
+type PinType int
+
+// Valid pin types.
+//
+// Mirrors enum libbpf_pin_type.
+const (
+	PinNone PinType = iota
+	// Pin an object by using its name as the filename.
+	PinByName
+)

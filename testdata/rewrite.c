@@ -23,7 +23,7 @@ __section("socket") int rewrite() {
 }
 
 __section("socket/map") int rewrite_map() {
-	unsigned int key = 0;
+	unsigned int key    = 0;
 	unsigned int *value = map_lookup_elem(&map_val, &key);
 	if (!value) {
 		return 0;

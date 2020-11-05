@@ -3,72 +3,90 @@ package ebpf
 import (
 	"flag"
 	"path/filepath"
-	"reflect"
 	"testing"
 
 	"github.com/cilium/ebpf/internal"
+	"github.com/cilium/ebpf/internal/btf"
 	"github.com/cilium/ebpf/internal/testutils"
+
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 )
 
 func TestLoadCollectionSpec(t *testing.T) {
+	const BPF_F_NO_PREALLOC = 1
+
+	coll := &CollectionSpec{
+		Maps: map[string]*MapSpec{
+			"hash_map": {
+				Name:       "hash_map",
+				Type:       Hash,
+				KeySize:    4,
+				ValueSize:  8,
+				MaxEntries: 1,
+				Flags:      BPF_F_NO_PREALLOC,
+			},
+			"hash_map2": {
+				Name:       "hash_map2",
+				Type:       Hash,
+				KeySize:    4,
+				ValueSize:  8,
+				MaxEntries: 2,
+			},
+			"array_of_hash_map": {
+				Name:       "array_of_hash_map",
+				Type:       ArrayOfMaps,
+				KeySize:    4,
+				MaxEntries: 2,
+			},
+		},
+		Programs: map[string]*ProgramSpec{
+			"xdp_prog": {
+				Name:    "xdp_prog",
+				Type:    XDP,
+				License: "MIT",
+			},
+			"no_relocation": {
+				Name:    "no_relocation",
+				Type:    SocketFilter,
+				License: "MIT",
+			},
+		},
+	}
+
+	opts := cmp.Options{
+		cmpopts.IgnoreTypes(new(btf.Map), new(btf.Program)),
+		cmpopts.IgnoreFields(ProgramSpec{}, "Instructions", "ByteOrder"),
+		cmpopts.IgnoreMapEntries(func(key string, _ *MapSpec) bool {
+			switch key {
+			case ".bss", ".data", ".rodata":
+				return true
+
+			default:
+				return false
+			}
+		}),
+	}
+
 	testutils.TestFiles(t, "testdata/loader-*.elf", func(t *testing.T, file string) {
-		spec, err := LoadCollectionSpec(file)
+		have, err := LoadCollectionSpec(file)
 		if err != nil {
 			t.Fatal("Can't parse ELF:", err)
 		}
 
-		hashMapSpec := &MapSpec{
-			Name:       "hash_map",
-			Type:       Hash,
-			KeySize:    4,
-			ValueSize:  2,
-			MaxEntries: 1,
+		if diff := cmp.Diff(coll, have, opts...); diff != "" {
+			t.Errorf("MapSpec mismatch (-want +got):\n%s", diff)
 		}
-		checkMapSpec(t, spec.Maps, "hash_map", hashMapSpec)
-		checkMapSpec(t, spec.Maps, "array_of_hash_map", &MapSpec{
-			Name:       "hash_map",
-			Type:       ArrayOfMaps,
-			KeySize:    4,
-			MaxEntries: 2,
-		})
-		spec.Maps["array_of_hash_map"].InnerMap = spec.Maps["hash_map"]
 
-		hashMap2Spec := &MapSpec{
-			Name:       "",
-			Type:       Hash,
-			KeySize:    4,
-			ValueSize:  1,
-			MaxEntries: 2,
-			Flags:      1,
-		}
-		checkMapSpec(t, spec.Maps, "hash_map2", hashMap2Spec)
-		checkMapSpec(t, spec.Maps, "hash_of_hash_map", &MapSpec{
-			Type:       HashOfMaps,
-			KeySize:    4,
-			MaxEntries: 2,
-		})
-		spec.Maps["hash_of_hash_map"].InnerMap = spec.Maps["hash_map2"]
-
-		checkProgramSpec(t, spec.Programs, "xdp_prog", &ProgramSpec{
-			Type:          XDP,
-			License:       "MIT",
-			KernelVersion: 0,
-		})
-		checkProgramSpec(t, spec.Programs, "no_relocation", &ProgramSpec{
-			Type:          SocketFilter,
-			License:       "MIT",
-			KernelVersion: 0,
-		})
-
-		if rodata := spec.Maps[".rodata"]; rodata != nil {
-			err := spec.RewriteConstants(map[string]interface{}{
+		if rodata := have.Maps[".rodata"]; rodata != nil {
+			err := have.RewriteConstants(map[string]interface{}{
 				"arg": uint32(1),
 			})
 			if err != nil {
 				t.Fatal("Can't rewrite constant:", err)
 			}
 
-			err = spec.RewriteConstants(map[string]interface{}{
+			err = have.RewriteConstants(map[string]interface{}{
 				"totallyBogus": uint32(1),
 			})
 			if err == nil {
@@ -76,13 +94,14 @@ func TestLoadCollectionSpec(t *testing.T) {
 			}
 		}
 
-		t.Log(spec.Programs["xdp_prog"].Instructions)
+		t.Log(have.Programs["xdp_prog"].Instructions)
 
-		if spec.Programs["xdp_prog"].ByteOrder != internal.NativeEndian {
+		if have.Programs["xdp_prog"].ByteOrder != internal.NativeEndian {
 			return
 		}
 
-		coll, err := NewCollectionWithOptions(spec, CollectionOptions{
+		have.Maps["array_of_hash_map"].InnerMap = have.Maps["hash_map"]
+		coll, err := NewCollectionWithOptions(have, CollectionOptions{
 			Programs: ProgramOptions{
 				LogLevel: 1,
 			},
@@ -102,81 +121,6 @@ func TestLoadCollectionSpec(t *testing.T) {
 			t.Error("Expected return value to be 5, got", ret)
 		}
 	})
-}
-
-func checkMapSpec(t *testing.T, maps map[string]*MapSpec, name string, want *MapSpec) {
-	t.Helper()
-
-	have, ok := maps[name]
-	if !ok {
-		t.Errorf("Missing map %s", name)
-		return
-	}
-
-	mapSpecEqual(t, name, have, want)
-}
-
-func mapSpecEqual(t *testing.T, name string, have, want *MapSpec) {
-	t.Helper()
-
-	if have.Type != want.Type {
-		t.Errorf("%s: expected type %v, got %v", name, want.Type, have.Type)
-	}
-
-	if have.KeySize != want.KeySize {
-		t.Errorf("%s: expected key size %v, got %v", name, want.KeySize, have.KeySize)
-	}
-
-	if have.ValueSize != want.ValueSize {
-		t.Errorf("%s: expected value size %v, got %v", name, want.ValueSize, have.ValueSize)
-	}
-
-	if have.MaxEntries != want.MaxEntries {
-		t.Errorf("%s: expected max entries %v, got %v", name, want.MaxEntries, have.MaxEntries)
-	}
-
-	if have.Flags != want.Flags {
-		t.Errorf("%s: expected flags %v, got %v", name, want.Flags, have.Flags)
-	}
-
-	switch {
-	case have.InnerMap != nil && want.InnerMap == nil:
-		t.Errorf("%s: extraneous InnerMap", name)
-	case have.InnerMap == nil && want.InnerMap != nil:
-		t.Errorf("%s: missing InnerMap", name)
-	case have.InnerMap != nil && want.InnerMap != nil:
-		mapSpecEqual(t, name+".InnerMap", have.InnerMap, want.InnerMap)
-	}
-}
-
-func checkProgramSpec(t *testing.T, progs map[string]*ProgramSpec, name string, want *ProgramSpec) {
-	t.Helper()
-
-	have, ok := progs[name]
-	if !ok {
-		t.Fatalf("Missing program %s", name)
-		return
-	}
-
-	if have.ByteOrder == nil {
-		t.Errorf("%s: nil ByteOrder", name)
-	}
-
-	if have.License != want.License {
-		t.Errorf("%s: expected %v license, got %v", name, want.License, have.License)
-	}
-
-	if have.Type != want.Type {
-		t.Errorf("%s: expected %v program, got %v", name, want.Type, have.Type)
-	}
-
-	if want.Instructions != nil && !reflect.DeepEqual(have.Instructions, want.Instructions) {
-		t.Log("Expected program")
-		t.Log(want.Instructions)
-		t.Log("Actual program")
-		t.Log(want.Instructions)
-		t.Error("Instructions do not match")
-	}
 }
 
 func TestCollectionSpecDetach(t *testing.T) {

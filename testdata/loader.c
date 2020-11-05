@@ -10,7 +10,7 @@ struct bpf_map_def hash_map __section("maps") = {
 	.key_size    = 4,
 	.value_size  = 2,
 	.max_entries = 1,
-	.map_flags       = 0,
+	.map_flags   = 0,
 };
 
 struct bpf_map_def hash_map2 __section("maps") = {
@@ -22,14 +22,14 @@ struct bpf_map_def hash_map2 __section("maps") = {
 };
 
 struct bpf_map_def array_of_hash_map __section("maps") = {
-	.type = BPF_MAP_TYPE_ARRAY_OF_MAPS,
-	.key_size = sizeof(uint32_t),
+	.type        = BPF_MAP_TYPE_ARRAY_OF_MAPS,
+	.key_size    = sizeof(uint32_t),
 	.max_entries = 2,
 };
 
 struct bpf_map_def hash_of_hash_map __section("maps") = {
-	.type = BPF_MAP_TYPE_HASH_OF_MAPS,
-	.key_size = sizeof(uint32_t),
+	.type        = BPF_MAP_TYPE_HASH_OF_MAPS,
+	.key_size    = sizeof(uint32_t),
 	.max_entries = 2,
 };
 
@@ -60,7 +60,7 @@ int __attribute__((noinline)) global_fn2(uint32_t arg) {
 }
 
 int __attribute__((noinline)) __section("other") global_fn3(uint32_t arg) {
-	return arg+1;
+	return arg + 1;
 }
 
 int __attribute__((noinline)) global_fn(uint32_t arg) {
@@ -68,10 +68,10 @@ int __attribute__((noinline)) global_fn(uint32_t arg) {
 }
 
 #if __clang_major__ >= 9
-static volatile unsigned int key1 = 0; // .bss
-static volatile unsigned int key2 = 1; // .data
+static volatile unsigned int key1       = 0; // .bss
+static volatile unsigned int key2       = 1; // .data
 static volatile const unsigned int key3 = 2; // .rodata
-static volatile const uint32_t arg; // .rodata, rewritten by loader
+static volatile const uint32_t arg;          // .rodata, rewritten by loader
 #endif
 
 __section("xdp") int xdp_prog() {
@@ -79,11 +79,11 @@ __section("xdp") int xdp_prog() {
 	unsigned int key1 = 0;
 	unsigned int key2 = 1;
 	unsigned int key3 = 2;
-	uint32_t arg = 1;
+	uint32_t arg      = 1;
 #endif
-	map_lookup_elem(&hash_map, (void*)&key1);
-	map_lookup_elem(&hash_map2, (void*)&key2);
-	map_lookup_elem(&hash_map2, (void*)&key3);
+	map_lookup_elem(&hash_map, (void *)&key1);
+	map_lookup_elem(&hash_map2, (void *)&key2);
+	map_lookup_elem(&hash_map2, (void *)&key3);
 	return static_fn(arg) + global_fn(arg);
 }
 

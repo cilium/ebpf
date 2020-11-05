@@ -9,5 +9,5 @@ struct bpf_args {
 };
 
 __section("raw_tracepoint/sched_process_exec") int sched_process_exec(struct bpf_args *ctx) {
-    return 0;
+	return 0;
 }

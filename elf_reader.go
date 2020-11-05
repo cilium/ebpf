@@ -540,6 +540,7 @@ func mapSpecFromBTF(spec *btf.Spec, name string) (*MapSpec, error) {
 	}
 
 	return &MapSpec{
+		Name:       SanitizeName(name, -1),
 		Type:       MapType(mapType),
 		KeySize:    keySize,
 		ValueSize:  valueSize,

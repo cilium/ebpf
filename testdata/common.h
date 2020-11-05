@@ -7,7 +7,7 @@ typedef unsigned long uint64_t;
 #define __uint(name, val) int(*name)[val]
 #define __type(name, val) typeof(val) *name
 
-#define BPF_MAP_TYPE_ARRAY (1)
+#define BPF_MAP_TYPE_HASH (1)
 #define BPF_MAP_TYPE_PERF_EVENT_ARRAY (4)
 #define BPF_MAP_TYPE_ARRAY_OF_MAPS (12)
 #define BPF_MAP_TYPE_HASH_OF_MAPS (13)

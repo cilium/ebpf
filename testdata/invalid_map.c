@@ -11,7 +11,7 @@ struct {
 } invalid_map __section("maps") = {
 	.def =
 		{
-			.type        = BPF_MAP_TYPE_ARRAY,
+			.type        = BPF_MAP_TYPE_HASH,
 			.key_size    = 4,
 			.value_size  = 2,
 			.max_entries = 1,

@@ -4,7 +4,7 @@ typedef unsigned int uint32_t;
 typedef unsigned long uint64_t;
 
 #define __section(NAME) __attribute__((section(NAME), used))
-#define __uint(name, val) int (*name)[val]
+#define __uint(name, val) int(*name)[val]
 #define __type(name, val) typeof(val) *name
 
 #define BPF_MAP_TYPE_ARRAY (1)
@@ -24,6 +24,8 @@ struct bpf_map_def {
 	unsigned int map_flags;
 };
 
-static void* (*map_lookup_elem)(const void *map, const void *key) = (void*)1;
-static int (*perf_event_output)(const void *ctx, const void *map, uint64_t index, const void *data, uint64_t size) = (void*)25;
-static uint32_t (*get_smp_processor_id)(void) = (void*)8;
+static void *(*map_lookup_elem)(const void *map, const void *key) = (void *)1;
+
+static int (*perf_event_output)(const void *ctx, const void *map, uint64_t index, const void *data, uint64_t size) = (void *)25;
+
+static uint32_t (*get_smp_processor_id)(void) = (void *)8;

@@ -5,51 +5,44 @@
 
 char __license[] __section("license") = "MIT";
 
+#if __clang_major__ >= 9
+// Clang < 9 doesn't emit the necessary BTF for this to work.
+struct {
+	__uint(type, BPF_MAP_TYPE_HASH);
+	__type(key, uint32_t);
+	__type(value, uint64_t);
+	__uint(max_entries, 1);
+	__uint(map_flags, BPF_F_NO_PREALLOC);
+} hash_map __section(".maps");
+
+struct {
+	__uint(type, BPF_MAP_TYPE_HASH);
+	__uint(key_size, sizeof(uint32_t));
+	__uint(value_size, sizeof(uint64_t));
+	__uint(max_entries, 2);
+} hash_map2 __section(".maps");
+#else
 struct bpf_map_def hash_map __section("maps") = {
-	.type        = BPF_MAP_TYPE_ARRAY,
-	.key_size    = 4,
-	.value_size  = 2,
+	.type        = BPF_MAP_TYPE_HASH,
+	.key_size    = sizeof(uint32_t),
+	.value_size  = sizeof(uint64_t),
 	.max_entries = 1,
-	.map_flags   = 0,
+	.map_flags   = BPF_F_NO_PREALLOC,
 };
 
 struct bpf_map_def hash_map2 __section("maps") = {
-	.type        = BPF_MAP_TYPE_ARRAY,
-	.key_size    = 4,
-	.value_size  = 1,
+	.type        = BPF_MAP_TYPE_HASH,
+	.key_size    = sizeof(uint32_t),
+	.value_size  = sizeof(uint64_t),
 	.max_entries = 2,
-	.map_flags   = BPF_F_NO_PREALLOC,
 };
+#endif
 
 struct bpf_map_def array_of_hash_map __section("maps") = {
 	.type        = BPF_MAP_TYPE_ARRAY_OF_MAPS,
 	.key_size    = sizeof(uint32_t),
 	.max_entries = 2,
 };
-
-struct bpf_map_def hash_of_hash_map __section("maps") = {
-	.type        = BPF_MAP_TYPE_HASH_OF_MAPS,
-	.key_size    = sizeof(uint32_t),
-	.max_entries = 2,
-};
-
-#if __clang_major__ >= 9
-// Clang < 9 doesn't emit the necessary BTF for this to work.
-struct {
-	__uint(type, BPF_MAP_TYPE_ARRAY);
-	__type(key, uint32_t);
-	__type(value, uint32_t);
-	__uint(max_entries, 1);
-	__uint(map_flags, BPF_F_NO_PREALLOC);
-} btf_map __section(".maps");
-
-struct {
-	__uint(type, BPF_MAP_TYPE_ARRAY);
-	__uint(key_size, 4);
-	__uint(value_size, 4);
-	__uint(max_entries, 1);
-} btf_map2 __section(".maps");
-#endif
 
 static int __attribute__((noinline)) static_fn(uint32_t arg) {
 	return arg;

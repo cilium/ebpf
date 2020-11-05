@@ -3,7 +3,6 @@ package ebpf
 import (
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"math"
 	"os"
 	"path/filepath"
@@ -102,11 +101,7 @@ func TestMapPin(t *testing.T) {
 		t.Fatal("Can't put:", err)
 	}
 
-	tmp, err := ioutil.TempDir("/sys/fs/bpf", "ebpf-test")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(tmp)
+	tmp := tempBPFFS(t)
 
 	// Issue 51: pad path out to a power of two, to avoid having a
 	// trailing zero at the end of the allocation which holds the string.
@@ -118,7 +113,7 @@ func TestMapPin(t *testing.T) {
 	}
 	m.Close()
 
-	m, err = LoadPinnedMap(path)
+	m, err := LoadPinnedMap(path)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -762,6 +757,45 @@ func TestNewMapFromID(t *testing.T) {
 	_, err = NewMapFromID(MapID(math.MaxUint32))
 	if !errors.Is(err, ErrNotExist) {
 		t.Fatal("Expected ErrNotExist, got:", err)
+	}
+}
+
+func TestMapPinning(t *testing.T) {
+	tmp := tempBPFFS(t)
+
+	spec := &MapSpec{
+		Name:       "test",
+		Type:       Hash,
+		KeySize:    4,
+		ValueSize:  4,
+		MaxEntries: 1,
+		Pinning:    PinByName,
+	}
+
+	m1, err := NewMapWithOptions(spec, MapOptions{PinPath: tmp})
+	if err != nil {
+		t.Fatal("Can't create map:", err)
+	}
+	defer m1.Close()
+
+	id1, err := m1.ID()
+	if err != nil {
+		t.Fatal("Can't get id:", err)
+	}
+
+	m2, err := NewMapWithOptions(spec, MapOptions{PinPath: tmp})
+	if err != nil {
+		t.Fatal("Can't create map:", err)
+	}
+	defer m2.Close()
+
+	id2, err := m2.ID()
+	if err != nil {
+		t.Fatal("Can't get id:", err)
+	}
+
+	if id1 != id2 {
+		t.Fatalf("ID %d doesn't match %d", id1, id2)
 	}
 }
 

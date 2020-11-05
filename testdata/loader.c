@@ -21,6 +21,14 @@ struct {
 	__uint(value_size, sizeof(uint64_t));
 	__uint(max_entries, 2);
 } hash_map2 __section(".maps");
+
+struct {
+	__uint(type, BPF_MAP_TYPE_HASH);
+	__type(key, uint32_t);
+	__type(value, uint64_t);
+	__uint(max_entries, 1);
+	__uint(pinning, 1 /* LIBBPF_PIN_BY_NAME */);
+} btf_pin __section(".maps");
 #else
 struct bpf_map_def hash_map __section("maps") = {
 	.type        = BPF_MAP_TYPE_HASH,

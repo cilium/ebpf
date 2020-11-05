@@ -2,7 +2,10 @@ package ebpf
 
 import (
 	"flag"
+	"io/ioutil"
+	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/cilium/ebpf/internal"
@@ -39,6 +42,14 @@ func TestLoadCollectionSpec(t *testing.T) {
 				KeySize:    4,
 				MaxEntries: 2,
 			},
+			"btf_pin": {
+				Name:       "btf_pin",
+				Type:       Hash,
+				KeySize:    4,
+				ValueSize:  8,
+				MaxEntries: 1,
+				Pinning:    PinByName,
+			},
 		},
 		Programs: map[string]*ProgramSpec{
 			"xdp_prog": {
@@ -54,7 +65,7 @@ func TestLoadCollectionSpec(t *testing.T) {
 		},
 	}
 
-	opts := cmp.Options{
+	defaultOpts := cmp.Options{
 		cmpopts.IgnoreTypes(new(btf.Map), new(btf.Program)),
 		cmpopts.IgnoreFields(ProgramSpec{}, "Instructions", "ByteOrder"),
 		cmpopts.IgnoreMapEntries(func(key string, _ *MapSpec) bool {
@@ -68,17 +79,20 @@ func TestLoadCollectionSpec(t *testing.T) {
 		}),
 	}
 
+	ignoreBTFOpts := append(defaultOpts,
+		cmpopts.IgnoreMapEntries(func(key string, _ *MapSpec) bool {
+			return strings.HasPrefix(key, "btf_")
+		}),
+	)
+
 	testutils.TestFiles(t, "testdata/loader-*.elf", func(t *testing.T, file string) {
 		have, err := LoadCollectionSpec(file)
 		if err != nil {
 			t.Fatal("Can't parse ELF:", err)
 		}
 
-		if diff := cmp.Diff(coll, have, opts...); diff != "" {
-			t.Errorf("MapSpec mismatch (-want +got):\n%s", diff)
-		}
-
-		if rodata := have.Maps[".rodata"]; rodata != nil {
+		opts := defaultOpts
+		if have.Maps[".rodata"] != nil {
 			err := have.RewriteConstants(map[string]interface{}{
 				"arg": uint32(1),
 			})
@@ -92,9 +106,13 @@ func TestLoadCollectionSpec(t *testing.T) {
 			if err == nil {
 				t.Error("Rewriting a bogus constant doesn't fail")
 			}
+		} else {
+			opts = ignoreBTFOpts
 		}
 
-		t.Log(have.Programs["xdp_prog"].Instructions)
+		if diff := cmp.Diff(coll, have, opts...); diff != "" {
+			t.Errorf("MapSpec mismatch (-want +got):\n%s", diff)
+		}
 
 		if have.Programs["xdp_prog"].ByteOrder != internal.NativeEndian {
 			return
@@ -102,6 +120,9 @@ func TestLoadCollectionSpec(t *testing.T) {
 
 		have.Maps["array_of_hash_map"].InnerMap = have.Maps["hash_map"]
 		coll, err := NewCollectionWithOptions(have, CollectionOptions{
+			Maps: MapOptions{
+				PinPath: tempBPFFS(t),
+			},
 			Programs: ProgramOptions{
 				LogLevel: 1,
 			},
@@ -242,4 +263,16 @@ func TestGetProgType(t *testing.T) {
 			t.Errorf("section %s: expected attachment to be %q, got %q", tc.section, tc.to, to)
 		}
 	}
+}
+
+func tempBPFFS(tb testing.TB) string {
+	tb.Helper()
+
+	tmp, err := ioutil.TempDir("/sys/fs/bpf", "ebpf-test")
+	if err != nil {
+		tb.Fatal(err)
+	}
+	tb.Cleanup(func() { os.RemoveAll(tmp) })
+
+	return tmp
 }

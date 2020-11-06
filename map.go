@@ -376,9 +376,14 @@ func (m *Map) MaxEntries() uint32 {
 	return m.abi.MaxEntries
 }
 
+// Flags returns the flags of the map.
+func (m *Map) Flags() uint32 {
+	return m.abi.Flags
+}
+
 // ABI gets the ABI of the Map.
 //
-// Deprecated: use Type, KeySize, ValueSize, MaxEntries instead.
+// Deprecated: use Type, KeySize, ValueSize, MaxEntries and Flags instead.
 func (m *Map) ABI() MapABI {
 	return m.abi
 }

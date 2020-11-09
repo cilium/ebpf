@@ -224,9 +224,20 @@ func TestLibBPFCompat(t *testing.T) {
 	}
 
 	testutils.TestFiles(t, filepath.Join(*elfPath, *elfPattern), func(t *testing.T, path string) {
+		file := filepath.Base(path)
+		switch file {
+		case "test_ksyms.o":
+			// Issue #114
+			t.Skip("Kernel symbols not supported")
+		case "test_sk_assign.o":
+			t.Skip("Incompatible struct bpf_map_def")
+		case "test_ringbuf_multi.o", "map_ptr_kern.o", "test_btf_map_in_map.o":
+			// Issue #155
+			t.Skip("BTF .values not supported")
+		}
+
 		t.Parallel()
 
-		file := filepath.Base(path)
 		_, err := LoadCollectionSpec(path)
 		testutils.SkipIfNotSupported(t, err)
 		if err != nil {

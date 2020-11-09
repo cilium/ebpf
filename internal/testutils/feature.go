@@ -63,6 +63,10 @@ func SkipIfNotSupported(tb testing.TB, err error) {
 }
 
 func checkKernelVersion(tb testing.TB, ufe *internal.UnsupportedFeatureError) {
+	if ufe.MinimumVersion.Unspecified() {
+		return
+	}
+
 	kernelVersion := mustKernelVersion()
 	if ufe.MinimumVersion.Less(kernelVersion) {
 		tb.Helper()

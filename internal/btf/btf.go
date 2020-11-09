@@ -145,6 +145,9 @@ func loadSpecFromVmlinux(rd io.ReaderAt) (*Spec, error) {
 	defer file.Close()
 
 	btfSection, _, _, err := findBtfSections(file)
+	if err != nil {
+		return nil, fmt.Errorf(".BTF ELF section: %s", err)
+	}
 	if btfSection == nil {
 		return nil, fmt.Errorf("unable to find .BTF ELF section")
 	}

@@ -22,8 +22,8 @@ if [[ "${1:-}" = "--in-vm" ]]; then
 
   echo Running tests...
   # TestLibBPFCompat runs separately to pass the "-elfs" flag only for it: https://github.com/cilium/ebpf/pull/119
-  go test -v -run TestLibBPFCompat -elfs "$elfs"
-  go test -v ./...
+  go test -v -count 1 -run TestLibBPFCompat -elfs "$elfs"
+  go test -v -count 1 ./...
   touch "$1/success"
   exit 0
 fi

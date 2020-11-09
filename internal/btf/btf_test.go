@@ -68,9 +68,7 @@ func TestParseVmlinux(t *testing.T) {
 
 func TestParseCurrentKernelBTF(t *testing.T) {
 	spec, err := loadKernelSpec()
-	if errors.Is(err, ErrNotFound) {
-		t.Skip("BTF is not available:", err)
-	}
+	testutils.SkipIfNotSupported(t, err)
 	if err != nil {
 		t.Fatal("Can't load BTF:", err)
 	}

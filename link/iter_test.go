@@ -1,13 +1,12 @@
 package link
 
 import (
-	"errors"
 	"io/ioutil"
 	"testing"
 
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/asm"
-	"github.com/cilium/ebpf/internal/btf"
+	"github.com/cilium/ebpf/internal/testutils"
 )
 
 func TestIter(t *testing.T) {
@@ -21,9 +20,7 @@ func TestIter(t *testing.T) {
 		},
 		License: "MIT",
 	})
-	if errors.Is(err, btf.ErrNotFound) {
-		t.Skip("Kernel doesn't support iter:", err)
-	}
+	testutils.SkipIfNotSupported(t, err)
 	if err != nil {
 		t.Fatal("Can't load program:", err)
 	}

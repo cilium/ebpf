@@ -269,6 +269,12 @@ func (p *Probe) init() error {
 		p.checkPin = true
 	}
 
+	if p.programSpec == nil {
+		if p.programSpec, p.lastError = p.manager.getProbeProgramSpec(p.Section); p.lastError != nil {
+			return errors.Wrapf(ErrUnknownSection, "couldn't find program spec %s", p.Section)
+		}
+	}
+
 	if p.checkPin {
 		// Pin program if needed
 		if p.PinPath != "" {

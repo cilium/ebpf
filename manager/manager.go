@@ -1078,25 +1078,33 @@ func (m *Manager) updateTailCallRoute(route TailCallRoute) error {
 	return nil
 }
 
+func (m *Manager) getProbeProgramSpec(section string) (*ebpf.ProgramSpec, error) {
+	spec, ok := m.collectionSpec.Programs[section]
+	if !ok {
+		// Check if the probe section is in the list of excluded sections
+		var excluded bool
+		for _, excludedSection := range m.options.ExcludedSections {
+			if excludedSection == section {
+				excluded = true
+				break
+			}
+		}
+		if !excluded {
+			return nil, errors.Wrapf(ErrUnknownSection, "couldn't find program at %s", section)
+		}
+	}
+	return spec, nil
+}
+
 // matchSpecs - Match loaded maps and program specs with the maps and programs provided to the manager
 func (m *Manager) matchSpecs() error {
 	// Match programs
 	for _, probe := range m.Probes {
-		spec, ok := m.collectionSpec.Programs[probe.Section]
-		if !ok {
-			// Check if the probe section is in the list of excluded sections
-			var excluded bool
-			for _, excludedSection := range m.options.ExcludedSections {
-				if excludedSection == probe.Section {
-					excluded = true
-					break
-				}
-			}
-			if !excluded {
-				return errors.Wrapf(ErrUnknownSection, "couldn't find program at %s", probe.Section)
-			}
+		programSpec, err := m.getProbeProgramSpec(probe.Section)
+		if err != nil {
+			return err
 		}
-		probe.programSpec = spec
+		probe.programSpec = programSpec
 	}
 
 	// Match maps

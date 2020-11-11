@@ -1,6 +1,7 @@
 package ebpf
 
 import (
+	"bufio"
 	"bytes"
 	"debug/elf"
 	"encoding/binary"
@@ -236,7 +237,7 @@ func (ec *elfCode) loadPrograms(progSections map[elf.SectionIndex]*elf.Section, 
 
 func (ec *elfCode) loadInstructions(section *elf.Section, symbols, relocations map[uint64]elf.Symbol) (asm.Instructions, uint64, error) {
 	var (
-		r      = section.Open()
+		r      = bufio.NewReader(section.Open())
 		insns  asm.Instructions
 		offset uint64
 	)
@@ -389,7 +390,7 @@ func (ec *elfCode) loadMaps(maps map[string]*MapSpec, mapSections map[elf.Sectio
 		}
 
 		var (
-			r    = sec.Open()
+			r    = bufio.NewReader(sec.Open())
 			size = sec.Size / uint64(len(syms))
 		)
 		for i, offset := 0, uint64(0); i < len(syms); i, offset = i+1, offset+size {
@@ -687,7 +688,7 @@ func (ec *elfCode) loadRelocations(sections map[elf.SectionIndex]*elf.Section) (
 			return nil, nil, fmt.Errorf("section %s: relocations are less than 16 bytes", sec.Name)
 		}
 
-		r := sec.Open()
+		r := bufio.NewReader(sec.Open())
 		for off := uint64(0); off < sec.Size; off += sec.Entsize {
 			ent := io.LimitReader(r, int64(sec.Entsize))
 

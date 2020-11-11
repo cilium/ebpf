@@ -32,6 +32,9 @@ type Link interface {
 	isLink()
 }
 
+// ID uniquely identifies a BPF link.
+type ID uint32
+
 // RawLinkOptions control the creation of a raw link.
 type RawLinkOptions struct {
 	// File descriptor to attach to. This differs for each attach type.

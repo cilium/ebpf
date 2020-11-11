@@ -1,6 +1,7 @@
 package btf
 
 import (
+	"bufio"
 	"bytes"
 	"encoding/binary"
 	"errors"
@@ -58,7 +59,8 @@ func parseExtInfos(r io.ReadSeeker, bo binary.ByteOrder, strings stringTable) (f
 		return nil, nil, fmt.Errorf("can't seek to function info section: %v", err)
 	}
 
-	funcInfo, err = parseExtInfo(io.LimitReader(r, int64(header.FuncInfoLen)), bo, strings)
+	buf := bufio.NewReader(io.LimitReader(r, int64(header.FuncInfoLen)))
+	funcInfo, err = parseExtInfo(buf, bo, strings)
 	if err != nil {
 		return nil, nil, fmt.Errorf("function info: %w", err)
 	}
@@ -67,7 +69,8 @@ func parseExtInfos(r io.ReadSeeker, bo binary.ByteOrder, strings stringTable) (f
 		return nil, nil, fmt.Errorf("can't seek to line info section: %v", err)
 	}
 
-	lineInfo, err = parseExtInfo(io.LimitReader(r, int64(header.LineInfoLen)), bo, strings)
+	buf = bufio.NewReader(io.LimitReader(r, int64(header.LineInfoLen)))
+	lineInfo, err = parseExtInfo(buf, bo, strings)
 	if err != nil {
 		return nil, nil, fmt.Errorf("line info: %w", err)
 	}

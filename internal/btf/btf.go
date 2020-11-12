@@ -31,7 +31,7 @@ var (
 type Spec struct {
 	rawTypes  []rawType
 	strings   stringTable
-	types     map[string][]Type
+	types     map[string][]namedType
 	funcInfos map[string]extInfo
 	lineInfos map[string]extInfo
 	byteOrder binary.ByteOrder
@@ -503,8 +503,13 @@ func (s *Spec) FindType(name string, typ Type) error {
 		candidate Type
 	)
 
-	for _, typ := range s.types[name] {
+	for _, typ := range s.types[essentialName(name)] {
 		if reflect.TypeOf(typ) != wanted {
+			continue
+		}
+
+		// Match against the full name, not just the essential one.
+		if typ.name() != name {
 			continue
 		}
 

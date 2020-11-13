@@ -143,8 +143,8 @@ func run(stdout io.Writer, pkg, outputDir string, args []string) (err error) {
 
 	cFlags = cFlags[:len(cFlags):len(cFlags)]
 	for _, target := range targets {
-		objFileName := fmt.Sprintf("%s_%s.o", stripExtension(inputFile), target)
-		objFileName = filepath.Join(inputDir, objFileName)
+		objFileName := fmt.Sprintf("%s_%s.o", strings.ToLower(ident), target)
+		objFileName = filepath.Join(outputDir, objFileName)
 
 		var dep bytes.Buffer
 		err = compile(compileArgs{

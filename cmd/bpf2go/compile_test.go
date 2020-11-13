@@ -13,8 +13,7 @@ import (
 const minimalSocketFilter = `__attribute__((section("socket"), used)) int main() { return 0; }`
 
 func TestCompile(t *testing.T) {
-	dir, cleanup := mustWriteTempFile(t, "test.c", minimalSocketFilter)
-	defer cleanup()
+	dir := mustWriteTempFile(t, "test.c", minimalSocketFilter)
 
 	var dep bytes.Buffer
 	err := compile(compileArgs{
@@ -47,8 +46,7 @@ func TestCompile(t *testing.T) {
 }
 
 func TestReproducibleCompile(t *testing.T) {
-	dir, cleanup := mustWriteTempFile(t, "test.c", minimalSocketFilter)
-	defer cleanup()
+	dir := mustWriteTempFile(t, "test.c", minimalSocketFilter)
 
 	err := compile(compileArgs{
 		cc:     "clang-9",
@@ -135,21 +133,19 @@ nothing:
 	}
 }
 
-func mustWriteTempFile(t *testing.T, name, contents string) (string, func()) {
+func mustWriteTempFile(t *testing.T, name, contents string) string {
 	t.Helper()
 
 	tmp, err := ioutil.TempDir("", "bpf2go")
 	if err != nil {
 		t.Fatal(err)
 	}
-
-	cleanup := func() { os.RemoveAll(tmp) }
+	t.Cleanup(func() { os.RemoveAll(tmp) })
 
 	tmpFile := filepath.Join(tmp, name)
 	if err := ioutil.WriteFile(tmpFile, []byte(contents), 0660); err != nil {
-		cleanup()
 		t.Fatal(err)
 	}
 
-	return tmp, cleanup
+	return tmp
 }

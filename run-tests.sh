@@ -12,7 +12,8 @@ if [[ "${1:-}" = "--in-vm" ]]; then
   export CGO_ENABLED=0
   export GOFLAGS=-mod=readonly
   export GOPATH=/run/go-path
-  export GOPROXY=file:///run/go-root/pkg/mod/cache/download
+  export GOPROXY=file:///run/go-path/pkg/mod/cache/download
+  export GOSUMDB=off
   export GOCACHE=/run/go-cache
 
   elfs=""

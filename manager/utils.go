@@ -119,7 +119,7 @@ func getSyscallFnNameWithKallsyms(name string, kallsymsContent string) (string, 
 	switch runtime.GOARCH {
 	case "386":
 		arch = "ia32"
-	case: "arm64":
+	case "arm64":
 		arch = "arm64"
 	default:
 		arch = "x64"

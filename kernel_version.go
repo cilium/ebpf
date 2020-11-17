@@ -68,8 +68,12 @@ func currentVersionUbuntu() (uint32, error) {
 	if err != nil {
 		return 0, err
 	}
+	return parseUbuntuVersion(string(procVersion))
+}
+
+func parseUbuntuVersion(procVersion string) (uint32, error) {
 	var u1, u2, releaseString string
-	_, err = fmt.Sscanf(string(procVersion), "%s %s %s", &u1, &u2, &releaseString)
+	_, err := fmt.Sscanf(procVersion, "%s %s %s", &u1, &u2, &releaseString)
 	if err != nil {
 		return 0, err
 	}

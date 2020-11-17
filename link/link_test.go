@@ -27,6 +27,18 @@ func TestRawLink(t *testing.T) {
 		t.Fatal("Can't create raw link:", err)
 	}
 
+	info, err := link.Info()
+	if err != nil {
+		t.Fatal("Can't get info:", err)
+	}
+	progID, err := prog.ID()
+	if err != nil {
+		t.Fatal("Can't get program ID:", err)
+	}
+	if info.Program != progID {
+		t.Error("Link program ID doesn't match program ID")
+	}
+
 	testLink(t, link, testLinkOptions{
 		prog: prog,
 		loadPinned: func(f string) (Link, error) {

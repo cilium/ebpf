@@ -315,7 +315,7 @@ func (p *Program) Clone() (*Program, error) {
 
 // Pin persists the Program past the lifetime of the process that created it
 //
-// This requires bpffs to be mounted above fileName. See http://cilium.readthedocs.io/en/doc-1.0/kubernetes/install/#mounting-the-bpf-fs-optional
+// This requires bpffs to be mounted above fileName. See https://docs.cilium.io/en/k8s-doc/admin/#admin-mount-bpffs
 func (p *Program) Pin(fileName string) error {
 	if err := internal.BPFObjPin(fileName, p.fd); err != nil {
 		return fmt.Errorf("can't pin program: %w", err)

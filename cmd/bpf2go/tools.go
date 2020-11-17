@@ -9,10 +9,6 @@ import (
 	"unicode/utf8"
 )
 
-func stripExtension(file string) string {
-	return file[:len(file)-len(filepath.Ext(file))]
-}
-
 func splitCFlagsFromArgs(in []string) (args, cflags []string) {
 	for i, arg := range in {
 		if arg == "--" {

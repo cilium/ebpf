@@ -2,6 +2,7 @@ package link
 
 import (
 	"fmt"
+	"unsafe"
 
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/internal"
@@ -32,6 +33,9 @@ type Link interface {
 	isLink()
 }
 
+// ID uniquely identifies a BPF link.
+type ID uint32
+
 // RawLinkOptions control the creation of a raw link.
 type RawLinkOptions struct {
 	// File descriptor to attach to. This differs for each attach type.
@@ -40,6 +44,13 @@ type RawLinkOptions struct {
 	Program *ebpf.Program
 	// Attach must match the attach type of Program.
 	Attach ebpf.AttachType
+}
+
+// RawLinkInfo contains metadata on a link.
+type RawLinkInfo struct {
+	Type    Type
+	ID      ID
+	Program ebpf.ProgramID
 }
 
 // RawLink is the low-level API to bpf_link.
@@ -80,12 +91,32 @@ func AttachRawLink(opts RawLinkOptions) (*RawLink, error) {
 
 // LoadPinnedRawLink loads a persisted link from a bpffs.
 func LoadPinnedRawLink(fileName string) (*RawLink, error) {
+	return loadPinnedRawLink(fileName, UnspecifiedType)
+}
+
+func loadPinnedRawLink(fileName string, typ Type) (*RawLink, error) {
 	fd, err := internal.BPFObjGet(fileName)
 	if err != nil {
-		return nil, fmt.Errorf("can't load pinned link: %s", err)
+		return nil, fmt.Errorf("load pinned link: %s", err)
 	}
 
-	return &RawLink{fd}, nil
+	link := &RawLink{fd}
+	if typ == UnspecifiedType {
+		return link, nil
+	}
+
+	info, err := link.Info()
+	if err != nil {
+		link.Close()
+		return nil, fmt.Errorf("get pinned link info: %s", err)
+	}
+
+	if info.Type != typ {
+		link.Close()
+		return nil, fmt.Errorf("link type %v doesn't match %v", info.Type, typ)
+	}
+
+	return link, nil
 }
 
 func (l *RawLink) isLink() {}
@@ -158,4 +189,26 @@ func (l *RawLink) UpdateArgs(opts RawLinkUpdateOptions) error {
 		flags:     opts.Flags,
 	}
 	return bpfLinkUpdate(&attr)
+}
+
+// struct bpf_link_info
+type bpfLinkInfo struct {
+	typ     uint32
+	id      uint32
+	prog_id uint32
+}
+
+// Info returns metadata about the link.
+func (l *RawLink) Info() (*RawLinkInfo, error) {
+	var info bpfLinkInfo
+	err := internal.BPFObjGetInfoByFD(l.fd, unsafe.Pointer(&info), unsafe.Sizeof(info))
+	if err != nil {
+		return nil, fmt.Errorf("link info: %s", err)
+	}
+
+	return &RawLinkInfo{
+		Type(info.typ),
+		ID(info.id),
+		ebpf.ProgramID(info.prog_id),
+	}, nil
 }

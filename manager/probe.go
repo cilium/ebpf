@@ -387,7 +387,7 @@ func (p *Probe) attach() error {
 	if err != nil {
 		p.lastError = err
 		// Clean up any progress made in the attach attempt
-		_ = p.stop()
+		_ = p.stop(false)
 		return errors.Wrapf(err, "couldn't start probe %s", p.Section)
 	}
 
@@ -463,10 +463,10 @@ func (p *Probe) Stop() error {
 	if p.state < running || !p.Enabled {
 		return nil
 	}
-	return p.stop()
+	return p.stop(true)
 }
 
-func (p *Probe) stop() error {
+func (p *Probe) stop(saveStopError bool) error {
 	// detach from hook point
 	err := p.detachRetry()
 
@@ -474,7 +474,9 @@ func (p *Probe) stop() error {
 	err = ConcatErrors(err, p.program.Close())
 
 	// update state of the probe
-	p.lastError = err
+	if saveStopError {
+		p.lastError = ConcatErrors(p.lastError, err)
+	}
 
 	// Cleanup probe if stop was successful
 	if err == nil {
@@ -494,7 +496,6 @@ func (p *Probe) reset() {
 	p.checkPin = false
 	p.funcName = ""
 	p.attachPID = 0
-	p.lastError = nil
 }
 
 // attachKprobe - Attaches the probe to its kprobe

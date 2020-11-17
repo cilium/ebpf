@@ -10,6 +10,22 @@ import (
 	"github.com/cilium/ebpf/internal/unix"
 )
 
+// Type is the kind of link.
+type Type uint32
+
+// Valid link types.
+//
+// Equivalent to enum bpf_link_type.
+const (
+	UnspecifiedType Type = iota
+	RawTracepointType
+	TracingType
+	CgroupType
+	IterType
+	NetNsType
+	XDPType
+)
+
 var haveProgAttach = internal.FeatureTest("BPF_PROG_ATTACH", "4.10", func() (bool, error) {
 	prog, err := ebpf.NewProgram(&ebpf.ProgramSpec{
 		Type:       ebpf.CGroupSKB,

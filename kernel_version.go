@@ -25,14 +25,14 @@ import (
 	"syscall"
 )
 
-var versionRegex = regexp.MustCompile(`^(\d+)\.(\d+).(\d+).*$`)
+var versionRegex = regexp.MustCompile(`^(\d+)\.(\d+)(?:.(\d+))?.*$`)
 
 // KernelVersionFromReleaseString converts a release string with format
 // 4.4.2[-1] to a kernel version number in LINUX_VERSION_CODE format.
 // That is, for kernel "a.b.c", the version number will be (a<<16 + b<<8 + c)
 func KernelVersionFromReleaseString(releaseString string) (uint32, error) {
 	versionParts := versionRegex.FindStringSubmatch(releaseString)
-	if len(versionParts) != 4 {
+	if len(versionParts) < 3 {
 		return 0, fmt.Errorf("got invalid release version %q (expected format '4.3.2-1')", releaseString)
 	}
 	major, err := strconv.Atoi(versionParts[1])
@@ -45,9 +45,10 @@ func KernelVersionFromReleaseString(releaseString string) (uint32, error) {
 		return 0, err
 	}
 
-	patch, err := strconv.Atoi(versionParts[3])
-	if err != nil {
-		return 0, err
+	// patch is optional
+	patch := 0
+	if len(versionParts) >= 4 {
+		patch, _ = strconv.Atoi(versionParts[3])
 	}
 	out := major*256*256 + minor*256 + patch
 	return uint32(out), nil
@@ -67,8 +68,12 @@ func currentVersionUbuntu() (uint32, error) {
 	if err != nil {
 		return 0, err
 	}
+	return parseUbuntuVersion(string(procVersion))
+}
+
+func parseUbuntuVersion(procVersion string) (uint32, error) {
 	var u1, u2, releaseString string
-	_, err = fmt.Sscanf(string(procVersion), "%s %s %s", &u1, &u2, &releaseString)
+	_, err := fmt.Sscanf(procVersion, "%s %s %s", &u1, &u2, &releaseString)
 	if err != nil {
 		return 0, err
 	}

@@ -35,8 +35,11 @@ var testData = []struct {
 	{false, "foo 4.1.2-3", 0},
 	{true, "4.1.2", 262402},
 	{false, ".4.1.2", 0},
-	{false, "4.1.", 0},
-	{false, "4.1", 0},
+	{false, "4", 0},
+	{false, "4.", 0},
+	{true, "4.1.", 262400},
+	{true, "4.1", 262400},
+	{true, "4.19-ovh", 267008},
 }
 
 func TestKernelVersionFromReleaseString(t *testing.T) {
@@ -73,6 +76,27 @@ func TestParseDebianVersion(t *testing.T) {
 			t.Errorf("expected %q to succeed: %s", tc.releaseString, err)
 		} else if err == nil && !tc.succeed {
 			t.Errorf("expected %q to fail", tc.releaseString)
+		}
+		if version != tc.kernelVersion {
+			t.Errorf("expected kernel version %d, got %d", tc.kernelVersion, version)
+		}
+	}
+}
+
+func TestParseUbuntuVersion(t *testing.T) {
+	for _, tc := range []struct {
+		succeed       bool
+		procVersion   string
+		kernelVersion uint32
+	}{
+		// 5.4.0-52.57
+		{true, "Ubuntu 5.4.0-52.57-generic 5.4.65", 328769},
+	} {
+		version, err := parseUbuntuVersion(tc.procVersion)
+		if err != nil && tc.succeed {
+			t.Errorf("expected %q to succeed: %s", tc.procVersion, err)
+		} else if err == nil && !tc.succeed {
+			t.Errorf("expected %q to fail", tc.procVersion)
 		}
 		if version != tc.kernelVersion {
 			t.Errorf("expected kernel version %d, got %d", tc.kernelVersion, version)

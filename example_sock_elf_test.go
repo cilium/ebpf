@@ -108,7 +108,7 @@ func Example_socketELF() {
 	}
 	defer prog.Close()
 
-	if err := syscall.SetsockoptInt(sock, syscall.SOL_SOCKET, syscall.SO_ATTACH_BPF, prog.FD()); err != nil {
+	if err := syscall.SetsockoptInt(sock, syscall.SOL_SOCKET, SO_ATTACH_BPF, prog.FD()); err != nil {
 		panic(err)
 	}
 

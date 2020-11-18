@@ -297,8 +297,8 @@ type FuncProto struct {
 
 func (fp *FuncProto) walk(cs *copyStack) {
 	cs.push(&fp.Return)
-	for _, m := range fp.Params {
-		cs.push(&m.Type)
+	for i := range fp.Params {
+		cs.push(&fp.Params[i].Type)
 	}
 }
 

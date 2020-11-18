@@ -3,6 +3,8 @@ package btf
 import (
 	"fmt"
 	"testing"
+
+	"github.com/google/go-cmp/cmp"
 )
 
 func TestSizeof(t *testing.T) {
@@ -76,21 +78,42 @@ func TestType(t *testing.T) {
 	types := []func() Type{
 		func() Type { return &Void{} },
 		func() Type { return &Int{} },
-		func() Type { return &Pointer{} },
-		func() Type { return &Array{} },
-		func() Type { return &Struct{} },
-		func() Type { return &Union{} },
+		func() Type { return &Pointer{Target: &Void{}} },
+		func() Type { return &Array{Type: &Int{}} },
+		func() Type {
+			return &Struct{
+				Members: []Member{{Type: &Void{}}},
+			}
+		},
+		func() Type {
+			return &Union{
+				Members: []Member{{Type: &Void{}}},
+			}
+		},
 		func() Type { return &Enum{} },
-		func() Type { return &Fwd{} },
-		func() Type { return &Typedef{} },
-		func() Type { return &Volatile{} },
-		func() Type { return &Const{} },
-		func() Type { return &Restrict{} },
-		func() Type { return &Func{} },
-		func() Type { return &FuncProto{} },
-		func() Type { return &Var{} },
-		func() Type { return &Datasec{} },
+		func() Type { return &Fwd{Name: "thunk"} },
+		func() Type { return &Typedef{Type: &Void{}} },
+		func() Type { return &Volatile{Type: &Void{}} },
+		func() Type { return &Const{Type: &Void{}} },
+		func() Type { return &Restrict{Type: &Void{}} },
+		func() Type { return &Func{Name: "foo", Type: &Void{}} },
+		func() Type {
+			return &FuncProto{
+				Params: []FuncParam{{Name: "bar", Type: &Void{}}},
+				Return: &Void{},
+			}
+		},
+		func() Type { return &Var{Type: &Void{}} },
+		func() Type {
+			return &Datasec{
+				Vars: []VarSecinfo{{Type: &Void{}}},
+			}
+		},
 	}
+
+	compareTypes := cmp.Comparer(func(a, b *Type) bool {
+		return a == b
+	})
 
 	for _, fn := range types {
 		typ := fn()
@@ -103,16 +126,8 @@ func TestType(t *testing.T) {
 			typ.walk(&first)
 			typ.walk(&second)
 
-			a, b := first.pop(), second.pop()
-			for a != nil && b != nil {
-				if a != b {
-					t.Fatal("Order of walk is not the same")
-				}
-				a, b = first.pop(), second.pop()
-			}
-
-			if a != nil || b != nil {
-				t.Fatal("Number of types walked is not the same")
+			if diff := cmp.Diff(first, second, compareTypes); diff != "" {
+				t.Errorf("Walk mismatch (-want +got):\n%s", diff)
 			}
 		})
 	}

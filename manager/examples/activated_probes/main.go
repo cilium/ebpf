@@ -13,11 +13,11 @@ import (
 var m1 = &manager.Manager{
 	Probes: []*manager.Probe{
 		&manager.Probe{
-			UID: "MyVFSMkdir1",
+			UID:     "MyVFSMkdir1",
 			Section: "kprobe/vfs_mkdir",
 		},
 		&manager.Probe{
-			Section: "kprobe/utimes_common",
+			Section:       "kprobe/utimes_common",
 			MatchFuncName: "utimes_common",
 		},
 		&manager.Probe{
@@ -80,11 +80,11 @@ var options1 = manager.Options{
 var m2 = &manager.Manager{
 	Probes: []*manager.Probe{
 		&manager.Probe{
-			UID: "MyVFSMkdir2",
+			UID:     "MyVFSMkdir2",
 			Section: "kprobe/vfs_mkdir",
 		},
 		&manager.Probe{
-			Section: "kprobe/utimes_common",
+			Section:       "kprobe/utimes_common",
 			MatchFuncName: "utimes_common",
 		},
 		&manager.Probe{
@@ -136,11 +136,11 @@ var options2 = manager.Options{
 var m3 = &manager.Manager{
 	Probes: []*manager.Probe{
 		&manager.Probe{
-			UID: "MyVFSMkdir2",
+			UID:     "MyVFSMkdir2",
 			Section: "kprobe/vfs_mkdir",
 		},
 		&manager.Probe{
-			Section: "kprobe/utimes_common",
+			Section:       "kprobe/utimes_common",
 			MatchFuncName: "utimes_common",
 		},
 		&manager.Probe{
@@ -209,6 +209,27 @@ func main() {
 	// Start m3
 	if err := m3.Start(); err != nil {
 		logrus.Error(err)
+	}
+
+	logrus.Println("updating activated probes of m3 (no error is expected)")
+
+	mkdirID := manager.ProbeIdentificationPair{UID: "MyVFSMkdir2", Section: "kprobe/vfs_mkdir"}
+	if err := m3.UpdateActivatedProbes([]manager.ProbesSelector{
+		&manager.ProbeSelector{
+			ProbeIdentificationPair: mkdirID,
+		},
+	}); err != nil {
+		logrus.Error(err)
+	}
+
+	vfsOpenID := manager.ProbeIdentificationPair{Section: "kprobe/vfs_opennnnnn"}
+	vfsOpenProbe, ok := m3.GetProbe(vfsOpenID)
+	if !ok {
+		logrus.Fatal("Failed to find kprobe/vfs_opennnnnn")
+	}
+
+	if vfsOpenProbe.Enabled {
+		logrus.Errorf("kprobe/vfs_opennnnnn should not be enabled")
 	}
 }
 

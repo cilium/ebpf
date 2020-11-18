@@ -1078,25 +1078,33 @@ func (m *Manager) updateTailCallRoute(route TailCallRoute) error {
 	return nil
 }
 
+func (m *Manager) getProbeProgramSpec(section string) (*ebpf.ProgramSpec, error) {
+	spec, ok := m.collectionSpec.Programs[section]
+	if !ok {
+		// Check if the probe section is in the list of excluded sections
+		var excluded bool
+		for _, excludedSection := range m.options.ExcludedSections {
+			if excludedSection == section {
+				excluded = true
+				break
+			}
+		}
+		if !excluded {
+			return nil, errors.Wrapf(ErrUnknownSection, "couldn't find program at %s", section)
+		}
+	}
+	return spec, nil
+}
+
 // matchSpecs - Match loaded maps and program specs with the maps and programs provided to the manager
 func (m *Manager) matchSpecs() error {
 	// Match programs
 	for _, probe := range m.Probes {
-		spec, ok := m.collectionSpec.Programs[probe.Section]
-		if !ok {
-			// Check if the probe section is in the list of excluded sections
-			var excluded bool
-			for _, excludedSection := range m.options.ExcludedSections {
-				if excludedSection == probe.Section {
-					excluded = true
-					break
-				}
-			}
-			if !excluded {
-				return errors.Wrapf(ErrUnknownSection, "couldn't find program at %s", probe.Section)
-			}
+		programSpec, err := m.getProbeProgramSpec(probe.Section)
+		if err != nil {
+			return err
 		}
-		probe.programSpec = spec
+		probe.programSpec = programSpec
 	}
 
 	// Match maps
@@ -1146,6 +1154,62 @@ func (m *Manager) activateProbes() {
 			})
 		}
 	}
+}
+
+// UpdateActivatedProbes - update the list of activated probes
+func (m *Manager) UpdateActivatedProbes(selectors []ProbesSelector) error {
+	currentProbes := make(map[ProbeIdentificationPair]*Probe)
+	for _, p := range m.Probes {
+		if p.Enabled {
+			currentProbes[p.GetIdentificationPair()] = p
+		}
+	}
+
+	nextProbes := make(map[ProbeIdentificationPair]bool)
+	for _, selector := range selectors {
+		for _, id := range selector.GetProbesIdentificationPairList() {
+			nextProbes[id] = true
+		}
+	}
+
+	for id, _ := range nextProbes {
+		if _, alreadyPresent := currentProbes[id]; alreadyPresent {
+			delete(currentProbes, id)
+		} else {
+			probe, _ := m.GetProbe(id)
+			probe.Enabled = true
+			if err := probe.Init(m); err != nil {
+				return err
+			}
+			if err := probe.Attach(); err != nil {
+				return err
+			}
+		}
+	}
+
+	for _, probe := range currentProbes {
+		if err := probe.Detach(); err != nil {
+			return err
+		}
+		probe.Enabled = false
+	}
+
+	// update activated probes & check activation
+	m.options.ActivatedProbes = selectors
+	var validationErrs error
+	for _, selector := range m.options.ActivatedProbes {
+		if err := selector.RunValidator(m); err != nil {
+			validationErrs = multierror.Append(validationErrs, err)
+		}
+	}
+
+	if validationErrs != nil {
+		// Clean up
+		_ = m.Stop(CleanInternal)
+		return errors.Wrap(validationErrs, "probes activation validation failed")
+	}
+
+	return nil
 }
 
 // editConstants - Edit the programs in the CollectionSpec with the provided constant editors. Tries with the BTF global

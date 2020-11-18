@@ -67,7 +67,7 @@ type Probe struct {
 	programSpec      *ebpf.ProgramSpec
 	perfEventFD      *internal.FD
 	state            state
-	stateLock        *sync.RWMutex
+	stateLock        sync.RWMutex
 	manualLoadNeeded bool
 	checkPin         bool
 	funcName         string
@@ -168,6 +168,8 @@ func (p *Probe) Copy() *Probe {
 		IfindexNetns:     p.IfindexNetns,
 		XDPAttachMode:    p.XDPAttachMode,
 		NetworkDirection: p.NetworkDirection,
+		ProbeRetry:       p.ProbeRetry,
+		ProbeRetryDelay:  p.ProbeRetryDelay,
 	}
 }
 
@@ -216,7 +218,6 @@ func (p *Probe) Benchmark(in []byte, repeat int, reset func()) (uint32, time.Dur
 
 // InitWithOptions - Initializes a probe with options
 func (p *Probe) InitWithOptions(manager *Manager, manualLoadNeeded bool, checkPin bool) error {
-	p.stateLock = &sync.RWMutex{}
 	if !p.Enabled {
 		return nil
 	}
@@ -231,7 +232,6 @@ func (p *Probe) InitWithOptions(manager *Manager, manualLoadNeeded bool, checkPi
 
 // Init - Initialize a probe
 func (p *Probe) Init(manager *Manager) error {
-	p.stateLock = &sync.RWMutex{}
 	if !p.Enabled {
 		return nil
 	}
@@ -267,6 +267,12 @@ func (p *Probe) init() error {
 		}
 		p.program = prog
 		p.checkPin = true
+	}
+
+	if p.programSpec == nil {
+		if p.programSpec, p.lastError = p.manager.getProbeProgramSpec(p.Section); p.lastError != nil {
+			return errors.Wrapf(ErrUnknownSection, "couldn't find program spec %s", p.Section)
+		}
 	}
 
 	if p.checkPin {
@@ -348,6 +354,7 @@ func (p *Probe) Attach() error {
 		if errors.Is(err, syscall.ENOENT) || errors.Is(err, syscall.EINVAL) {
 			return nil
 		}
+
 		return err
 	}, retry.Attempts(p.ProbeRetry), retry.Delay(p.ProbeRetryDelay))
 }
@@ -411,8 +418,10 @@ func (p *Probe) Detach() error {
 	// update state of the probe
 	if err != nil {
 		p.lastError = err
+	} else {
 		p.state = initialized
 	}
+
 	return err
 }
 

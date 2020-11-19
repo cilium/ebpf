@@ -1,6 +1,7 @@
 package ebpf
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/cilium/ebpf/internal"
@@ -86,6 +87,39 @@ func TestProgramInfo(t *testing.T) {
 			if info.Type != SocketFilter {
 				t.Error("Expected Type to be SocketFilter, got", info.Type)
 			}
+
+			if info.Name != "" && info.Name != "test" {
+				t.Error("Expected Name to be test, got", info.Name)
+			}
+
+			if want := "d7edec644f05498d"; info.Tag != want {
+				t.Errorf("Expected Tag to be %s, got %s", want, info.Tag)
+			}
 		})
+	}
+}
+
+func TestScanFdInfoReader(t *testing.T) {
+	tests := []struct {
+		fields map[string]interface{}
+		valid  bool
+	}{
+		{nil, true},
+		{map[string]interface{}{"foo": new(string)}, true},
+		{map[string]interface{}{"zap": new(string)}, false},
+		{map[string]interface{}{"foo": new(int)}, false},
+	}
+
+	for _, test := range tests {
+		err := scanFdInfoReader(strings.NewReader("foo:\tbar\n"), test.fields)
+		if test.valid {
+			if err != nil {
+				t.Errorf("fields %v returns an error: %s", test.fields, err)
+			}
+		} else {
+			if err == nil {
+				t.Errorf("fields %v doesn't return an error", test.fields)
+			}
+		}
 	}
 }

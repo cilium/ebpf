@@ -164,6 +164,8 @@ func newProgramWithBTF(spec *ProgramSpec, btf *btf.Handle, opts ProgramOptions) 
 	}
 
 	if errors.Is(logErr, unix.EPERM) && logBuf[0] == 0 {
+		// EPERM due to RLIMIT_MEMLOCK happens before the verifier, so we can
+		// check that the log is empty to reduce false positives.
 		return nil, fmt.Errorf("load program: RLIMIT_MEMLOCK may be too low: %w", logErr)
 	}
 

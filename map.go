@@ -306,6 +306,9 @@ func createMap(spec *MapSpec, inner *internal.FD, handle *btf.Handle, opts MapOp
 
 	fd, err := bpfMapCreate(&attr)
 	if err != nil {
+		if errors.Is(err, unix.EPERM) {
+			return nil, fmt.Errorf("map create: RLIMIT_MEMLOCK may be too low: %w", err)
+		}
 		return nil, fmt.Errorf("map create: %w", err)
 	}
 	defer closeOnError(fd)

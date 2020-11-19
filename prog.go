@@ -163,8 +163,12 @@ func newProgramWithBTF(spec *ProgramSpec, btf *btf.Handle, opts ProgramOptions) 
 		_, logErr = bpfProgLoad(attr)
 	}
 
+	if errors.Is(logErr, unix.EPERM) && logBuf[0] == 0 {
+		return nil, fmt.Errorf("load program: RLIMIT_MEMLOCK may be too low: %w", logErr)
+	}
+
 	err = internal.ErrorWithLog(err, logBuf, logErr)
-	return nil, fmt.Errorf("can't load program: %w", err)
+	return nil, fmt.Errorf("load program: %w", err)
 }
 
 // NewProgramFromFD creates a program from a raw fd.

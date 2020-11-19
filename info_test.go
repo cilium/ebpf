@@ -10,6 +10,7 @@ import (
 
 func TestMapInfoFromProc(t *testing.T) {
 	hash, err := NewMap(&MapSpec{
+		Name:       "testing",
 		Type:       Hash,
 		KeySize:    4,
 		ValueSize:  5,
@@ -44,6 +45,10 @@ func TestMapInfoFromProc(t *testing.T) {
 
 	if info.Flags != 1 {
 		t.Error("Expected Flags to be 1, got", info.Flags)
+	}
+
+	if info.Name != "" && info.Name != "testing" {
+		t.Error("Expected name to be testing, got", info.Name)
 	}
 
 	nested, err := NewMap(&MapSpec{

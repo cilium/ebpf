@@ -136,15 +136,18 @@ func NewMapFromFD(fd int) (*Map, error) {
 	if fd < 0 {
 		return nil, errors.New("invalid fd")
 	}
-	bpfFd := internal.NewFD(uint32(fd))
 
-	info, err := newMapInfoFromFd(bpfFd)
+	return newMapFromFD(internal.NewFD(uint32(fd)))
+}
+
+func newMapFromFD(fd *internal.FD) (*Map, error) {
+	info, err := newMapInfoFromFd(fd)
 	if err != nil {
-		bpfFd.Forget()
-		return nil, err
+		fd.Close()
+		return nil, fmt.Errorf("get map info: %s", err)
 	}
 
-	return newMapFromInfo(bpfFd, info)
+	return newMap(fd, info.Name, info.Type, info.KeySize, info.ValueSize, info.MaxEntries, info.Flags)
 }
 
 // NewMap creates a new Map.
@@ -356,10 +359,6 @@ func newMap(fd *internal.FD, name string, typ MapType, keySize, valueSize, maxEn
 
 	m.fullValueSize = align(int(valueSize), 8) * possibleCPUs
 	return m, nil
-}
-
-func newMapFromInfo(fd *internal.FD, info *MapInfo) (*Map, error) {
-	return newMap(fd, "", info.Type, info.KeySize, info.ValueSize, info.MaxEntries, info.Flags)
 }
 
 func (m *Map) String() string {
@@ -719,13 +718,7 @@ func LoadPinnedMap(fileName string) (*Map, error) {
 		return nil, err
 	}
 
-	info, err := newMapInfoFromFd(fd)
-	if err != nil {
-		_ = fd.Close()
-		return nil, err
-	}
-
-	return newMapFromInfo(fd, info)
+	return newMapFromFD(fd)
 }
 
 func unmarshalMap(buf []byte) (*Map, error) {
@@ -909,13 +902,7 @@ func NewMapFromID(id MapID) (*Map, error) {
 		return nil, err
 	}
 
-	info, err := newMapInfoFromFd(fd)
-	if err != nil {
-		_ = fd.Close()
-		return nil, err
-	}
-
-	return newMapFromInfo(fd, info)
+	return newMapFromFD(fd)
 }
 
 // ID returns the systemwide unique ID of the map.

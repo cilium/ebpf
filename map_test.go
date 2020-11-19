@@ -627,6 +627,8 @@ func TestMapName(t *testing.T) {
 
 func TestMapFromFD(t *testing.T) {
 	m := createArray(t)
+	defer m.Close()
+
 	if err := m.Put(uint32(0), uint32(123)); err != nil {
 		t.Fatal(err)
 	}
@@ -637,6 +639,13 @@ func TestMapFromFD(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
+	// Both m and m2 refer to the same fd now. Closing either of them will
+	// release the fd to the OS, which then might re-use that fd for another
+	// test. Once we close the second map we might close the re-used fd
+	// inadvertently, leading to spurious test failures.
+	// To avoid this we have to "leak" one of the maps.
+	m2.fd.Forget()
 
 	var val uint32
 	if err := m2.Lookup(uint32(0), &val); err != nil {

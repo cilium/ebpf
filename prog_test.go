@@ -379,7 +379,12 @@ func TestProgramFromFD(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	prog2.Close()
+	// Both programs refer to the same fd now. Closing either of them will
+	// release the fd to the OS, which then might re-use that fd for another
+	// test. Once we close the second map we might close the re-used fd
+	// inadvertently, leading to spurious test failures.
+	// To avoid this we have to "leak" one of the programs.
+	prog2.fd.Forget()
 }
 
 func TestHaveProgTestRun(t *testing.T) {

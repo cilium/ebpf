@@ -20,6 +20,8 @@ type MapInfo struct {
 	ValueSize  uint32
 	MaxEntries uint32
 	Flags      uint32
+	// Name as supplied by user space at load time.
+	Name string
 }
 
 func newMapInfoFromFd(fd *internal.FD) (*MapInfo, error) {
@@ -37,6 +39,8 @@ func newMapInfoFromFd(fd *internal.FD) (*MapInfo, error) {
 		info.value_size,
 		info.max_entries,
 		info.map_flags,
+		// name is available from 4.15.
+		internal.CString(info.name[:]),
 	}, nil
 }
 

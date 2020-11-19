@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -95,10 +96,9 @@ type Program struct {
 	// otherwise it is empty.
 	VerifierLog string
 
-	fd         *internal.FD
-	name       string
-	info       ProgramInfo
-	attachType AttachType
+	fd   *internal.FD
+	name string
+	typ  ProgramType
 }
 
 // NewProgram creates a new Program.
@@ -147,9 +147,7 @@ func newProgramWithBTF(spec *ProgramSpec, btf *btf.Handle, opts ProgramOptions) 
 
 	fd, err := bpfProgLoad(attr)
 	if err == nil {
-		prog := newProgram(fd, spec.Name, &ProgramInfo{spec.Type})
-		prog.VerifierLog = internal.CString(logBuf)
-		return prog, nil
+		return &Program{internal.CString(logBuf), fd, spec.Name, spec.Type}, nil
 	}
 
 	logErr := err
@@ -177,27 +175,35 @@ func newProgramWithBTF(spec *ProgramSpec, btf *btf.Handle, opts ProgramOptions) 
 //
 // You should not use fd after calling this function.
 //
-// Requires at least Linux 4.11.
+// Requires at least Linux 4.10.
 func NewProgramFromFD(fd int) (*Program, error) {
 	if fd < 0 {
 		return nil, errors.New("invalid fd")
 	}
-	bpfFd := internal.NewFD(uint32(fd))
-	info, err := newProgramInfoFromFd(bpfFd)
-	if err != nil {
-		bpfFd.Forget()
-		return nil, err
-	}
 
-	return newProgram(bpfFd, "", info), nil
+	return newProgramFromFD(internal.NewFD(uint32(fd)))
 }
 
-func newProgram(fd *internal.FD, name string, info *ProgramInfo) *Program {
-	return &Program{
-		name: name,
-		fd:   fd,
-		info: *info,
+// NewProgramFromID returns the program for a given id.
+//
+// Returns ErrNotExist, if there is no eBPF program with the given id.
+func NewProgramFromID(id ProgramID) (*Program, error) {
+	fd, err := bpfObjGetFDByID(internal.BPF_PROG_GET_FD_BY_ID, uint32(id))
+	if err != nil {
+		return nil, fmt.Errorf("get program by id: %w", err)
 	}
+
+	return newProgramFromFD(fd)
+}
+
+func newProgramFromFD(fd *internal.FD) (*Program, error) {
+	info, err := newProgramInfoFromFd(fd)
+	if err != nil {
+		fd.Close()
+		return nil, fmt.Errorf("discover program type: %w", err)
+	}
+
+	return &Program{"", fd, "", info.Type}, nil
 }
 
 func convertProgramSpec(spec *ProgramSpec, handle *btf.Handle) (*bpfProgLoadAttr, error) {
@@ -276,17 +282,19 @@ func convertProgramSpec(spec *ProgramSpec, handle *btf.Handle) (*bpfProgLoadAttr
 
 func (p *Program) String() string {
 	if p.name != "" {
-		return fmt.Sprintf("%s(%s)#%v", p.info.Type, p.name, p.fd)
+		return fmt.Sprintf("%s(%s)#%v", p.typ, p.name, p.fd)
 	}
-	return fmt.Sprintf("%s#%v", p.info.Type, p.fd)
+	return fmt.Sprintf("%s(%v)", p.typ, p.fd)
 }
 
 // Type returns the underlying type of the program.
 func (p *Program) Type() ProgramType {
-	return p.info.Type
+	return p.typ
 }
 
 // Info returns metadata about the program.
+//
+// Requires at least 4.10.
 func (p *Program) Info() (*ProgramInfo, error) {
 	return newProgramInfoFromFd(p.fd)
 }
@@ -320,7 +328,7 @@ func (p *Program) Clone() (*Program, error) {
 		return nil, fmt.Errorf("can't clone program: %w", err)
 	}
 
-	return newProgram(dup, p.name, &p.info), nil
+	return &Program{p.VerifierLog, dup, p.name, p.typ}, nil
 }
 
 // Pin persists the Program past the lifetime of the process that created it
@@ -558,7 +566,7 @@ func LoadPinnedProgram(fileName string) (*Program, error) {
 		return nil, fmt.Errorf("info for %s: %w", fileName, err)
 	}
 
-	return newProgram(fd, "", info), nil
+	return &Program{"", fd, filepath.Base(fileName), info.Type}, nil
 }
 
 // SanitizeName replaces all invalid characters in name.
@@ -583,24 +591,6 @@ func SanitizeName(name string, replacement rune) string {
 func ProgramGetNextID(startID ProgramID) (ProgramID, error) {
 	id, err := objGetNextID(internal.BPF_PROG_GET_NEXT_ID, uint32(startID))
 	return ProgramID(id), err
-}
-
-// NewProgramFromID returns the program for a given id.
-//
-// Returns ErrNotExist, if there is no eBPF program with the given id.
-func NewProgramFromID(id ProgramID) (*Program, error) {
-	fd, err := bpfObjGetFDByID(internal.BPF_PROG_GET_FD_BY_ID, uint32(id))
-	if err != nil {
-		return nil, err
-	}
-
-	info, err := newProgramInfoFromFd(fd)
-	if err != nil {
-		_ = fd.Close()
-		return nil, err
-	}
-
-	return newProgram(fd, "", info), nil
 }
 
 // ID returns the systemwide unique ID of the program.

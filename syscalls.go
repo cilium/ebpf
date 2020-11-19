@@ -3,7 +3,6 @@ package ebpf
 import (
 	"errors"
 	"fmt"
-	"os"
 	"unsafe"
 
 	"github.com/cilium/ebpf/internal"
@@ -168,10 +167,6 @@ func bpfProgTestRun(attr *bpfProgTestRunAttr) error {
 
 func bpfMapCreate(attr *bpfMapCreateAttr) (*internal.FD, error) {
 	fd, err := internal.BPF(internal.BPF_MAP_CREATE, unsafe.Pointer(attr), unsafe.Sizeof(*attr))
-	if errors.Is(err, os.ErrPermission) {
-		return nil, errors.New("permission denied or insufficient rlimit to lock memory for map")
-	}
-
 	if err != nil {
 		return nil, err
 	}

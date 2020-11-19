@@ -2,6 +2,7 @@ package ebpf
 
 import (
 	"bufio"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -57,6 +58,10 @@ func newMapInfoFromProc(fd *internal.FD) (*MapInfo, error) {
 // ProgramInfo describes a program.
 type ProgramInfo struct {
 	Type ProgramType
+	// Truncated hash of the BPF bytecode.
+	Tag string
+	// Name as supplied by user space at load time.
+	Name string
 }
 
 func newProgramInfoFromFd(fd *internal.FD) (*ProgramInfo, error) {
@@ -70,14 +75,18 @@ func newProgramInfoFromFd(fd *internal.FD) (*ProgramInfo, error) {
 
 	return &ProgramInfo{
 		ProgramType(info.prog_type),
+		// tag is available if the kernel supports BPF_PROG_GET_INFO_BY_FD.
+		hex.EncodeToString(info.tag[:]),
+		// name is available from 4.15.
+		internal.CString(info.name[:]),
 	}, nil
 }
 
 func newProgramInfoFromProc(fd *internal.FD) (*ProgramInfo, error) {
 	var info ProgramInfo
-
 	err := scanFdInfo(fd, map[string]interface{}{
 		"prog_type": &info.Type,
+		"prog_tag":  &info.Tag,
 	})
 	if errors.Is(err, errMissingFields) {
 		return nil, &internal.UnsupportedFeatureError{

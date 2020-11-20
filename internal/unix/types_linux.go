@@ -20,6 +20,7 @@ const (
 	EPERM                    = linux.EPERM
 	ESRCH                    = linux.ESRCH
 	ENODEV                   = linux.ENODEV
+	BPF_F_NO_PREALLOC        = linux.BPF_F_NO_PREALLOC
 	BPF_F_NUMA_NODE          = linux.BPF_F_NUMA_NODE
 	BPF_F_RDONLY_PROG        = linux.BPF_F_RDONLY_PROG
 	BPF_F_WRONLY_PROG        = linux.BPF_F_WRONLY_PROG

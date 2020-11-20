@@ -26,7 +26,7 @@ const (
 	XDPType
 )
 
-var haveProgAttach = internal.FeatureTest("BPF_PROG_ATTACH", "4.10", func() (bool, error) {
+var haveProgAttach = internal.FeatureTest("BPF_PROG_ATTACH", "4.10", func() error {
 	prog, err := ebpf.NewProgram(&ebpf.ProgramSpec{
 		Type:       ebpf.CGroupSKB,
 		AttachType: ebpf.AttachCGroupInetIngress,
@@ -37,19 +37,19 @@ var haveProgAttach = internal.FeatureTest("BPF_PROG_ATTACH", "4.10", func() (boo
 		},
 	})
 	if err != nil {
-		return false, nil
+		return internal.ErrNotSupported
 	}
 
 	// BPF_PROG_ATTACH was introduced at the same time as CGgroupSKB,
 	// so being able to load the program is enough to infer that we
 	// have the syscall.
 	prog.Close()
-	return true, nil
+	return nil
 })
 
-var haveProgAttachReplace = internal.FeatureTest("BPF_PROG_ATTACH atomic replacement", "5.5", func() (bool, error) {
+var haveProgAttachReplace = internal.FeatureTest("BPF_PROG_ATTACH atomic replacement", "5.5", func() error {
 	if err := haveProgAttach(); err != nil {
-		return false, err
+		return err
 	}
 
 	prog, err := ebpf.NewProgram(&ebpf.ProgramSpec{
@@ -62,7 +62,7 @@ var haveProgAttachReplace = internal.FeatureTest("BPF_PROG_ATTACH atomic replace
 		},
 	})
 	if err != nil {
-		return false, nil
+		return internal.ErrNotSupported
 	}
 	defer prog.Close()
 
@@ -78,12 +78,13 @@ var haveProgAttachReplace = internal.FeatureTest("BPF_PROG_ATTACH atomic replace
 	}
 
 	err = internal.BPFProgAttach(&attr)
-	if errors.Is(err, unix.EPERM) {
-		// We don't have enough permissions, so we never get to the point
-		// where flags are checked.
-		return false, err
+	if errors.Is(err, unix.EINVAL) {
+		return internal.ErrNotSupported
 	}
-	return !errors.Is(err, unix.EINVAL), nil
+	if errors.Is(err, unix.EBADF) {
+		return nil
+	}
+	return err
 })
 
 type bpfLinkCreateAttr struct {
@@ -113,7 +114,7 @@ func bpfLinkUpdate(attr *bpfLinkUpdateAttr) error {
 	return err
 }
 
-var haveBPFLink = internal.FeatureTest("bpf_link", "5.7", func() (bool, error) {
+var haveBPFLink = internal.FeatureTest("bpf_link", "5.7", func() error {
 	prog, err := ebpf.NewProgram(&ebpf.ProgramSpec{
 		Type:       ebpf.CGroupSKB,
 		AttachType: ebpf.AttachCGroupInetIngress,
@@ -124,7 +125,7 @@ var haveBPFLink = internal.FeatureTest("bpf_link", "5.7", func() (bool, error) {
 		},
 	})
 	if err != nil {
-		return false, nil
+		return internal.ErrNotSupported
 	}
 	defer prog.Close()
 
@@ -135,7 +136,13 @@ var haveBPFLink = internal.FeatureTest("bpf_link", "5.7", func() (bool, error) {
 		attachType: ebpf.AttachCGroupInetIngress,
 	}
 	_, err = bpfLinkCreate(&attr)
-	return !errors.Is(err, unix.EINVAL), nil
+	if errors.Is(err, unix.EINVAL) {
+		return internal.ErrNotSupported
+	}
+	if errors.Is(err, unix.EBADF) {
+		return nil
+	}
+	return err
 })
 
 type bpfIterCreateAttr struct {

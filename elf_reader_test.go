@@ -11,14 +11,13 @@ import (
 	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/btf"
 	"github.com/cilium/ebpf/internal/testutils"
+	"github.com/cilium/ebpf/internal/unix"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 )
 
 func TestLoadCollectionSpec(t *testing.T) {
-	const BPF_F_NO_PREALLOC = 1
-
 	coll := &CollectionSpec{
 		Maps: map[string]*MapSpec{
 			"hash_map": {
@@ -27,7 +26,7 @@ func TestLoadCollectionSpec(t *testing.T) {
 				KeySize:    4,
 				ValueSize:  8,
 				MaxEntries: 1,
-				Flags:      BPF_F_NO_PREALLOC,
+				Flags:      unix.BPF_F_NO_PREALLOC,
 			},
 			"hash_map2": {
 				Name:       "hash_map2",

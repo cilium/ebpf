@@ -6,6 +6,7 @@ import (
 
 	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/testutils"
+	"github.com/cilium/ebpf/internal/unix"
 )
 
 func TestMapInfoFromProc(t *testing.T) {
@@ -15,7 +16,7 @@ func TestMapInfoFromProc(t *testing.T) {
 		KeySize:    4,
 		ValueSize:  5,
 		MaxEntries: 2,
-		Flags:      0x1, // BPF_F_NO_PREALLOC
+		Flags:      unix.BPF_F_NO_PREALLOC,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -43,8 +44,8 @@ func TestMapInfoFromProc(t *testing.T) {
 		t.Error("Expected MaxEntries of 2, got", info.MaxEntries)
 	}
 
-	if info.Flags != 1 {
-		t.Error("Expected Flags to be 1, got", info.Flags)
+	if info.Flags != unix.BPF_F_NO_PREALLOC {
+		t.Errorf("Expected Flags to be %d, got %d", unix.BPF_F_NO_PREALLOC, info.Flags)
 	}
 
 	if info.Name != "" && info.Name != "testing" {

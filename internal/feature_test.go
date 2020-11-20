@@ -2,7 +2,6 @@ package internal
 
 import (
 	"errors"
-	"fmt"
 	"strings"
 	"testing"
 )
@@ -10,9 +9,9 @@ import (
 func TestFeatureTest(t *testing.T) {
 	var called bool
 
-	fn := FeatureTest("foo", "1.0", func() (bool, error) {
+	fn := FeatureTest("foo", "1.0", func() error {
 		called = true
-		return true, nil
+		return nil
 	})
 
 	if called {
@@ -28,8 +27,8 @@ func TestFeatureTest(t *testing.T) {
 		t.Error("Unexpected negative result:", err)
 	}
 
-	fn = FeatureTest("bar", "2.1.1", func() (bool, error) {
-		return false, nil
+	fn = FeatureTest("bar", "2.1.1", func() error {
+		return ErrNotSupported
 	})
 
 	err = fn()
@@ -50,22 +49,18 @@ func TestFeatureTest(t *testing.T) {
 		t.Error("UnsupportedFeatureError is not ErrNotSupported")
 	}
 
-	fn = FeatureTest("bar", "2.1.1", func() (bool, error) {
-		return false, errors.New("foo")
+	err2 := fn()
+	if err != err2 {
+		t.Error("Didn't cache an error wrapping ErrNotSupported")
+	}
+
+	fn = FeatureTest("bar", "2.1.1", func() error {
+		return errors.New("foo")
 	})
 
 	err1, err2 := fn(), fn()
 	if err1 == err2 {
 		t.Error("Cached result of unsuccessful execution")
-	}
-
-	fn = FeatureTest("bar", "2.1.1", func() (bool, error) {
-		return false, fmt.Errorf("bar: %w", ErrNotSupported)
-	})
-
-	err1, err2 = fn(), fn()
-	if err1 != err2 {
-		t.Error("Didn't cache an error wrapping ErrNotSupported")
 	}
 }
 

@@ -204,31 +204,21 @@ func bpfMapCreate(attr *bpfMapCreateAttr) (*internal.FD, error) {
 }
 
 var haveNestedMaps = internal.FeatureTest("nested maps", "4.12", func() error {
-	inner, err := bpfMapCreate(&bpfMapCreateAttr{
-		mapType:    Array,
-		keySize:    4,
-		valueSize:  4,
-		maxEntries: 1,
-	})
-	if err != nil {
-		return err
-	}
-	defer inner.Close()
-
-	innerFd, _ := inner.Value()
-	nested, err := bpfMapCreate(&bpfMapCreateAttr{
+	_, err := bpfMapCreate(&bpfMapCreateAttr{
 		mapType:    ArrayOfMaps,
 		keySize:    4,
 		valueSize:  4,
 		maxEntries: 1,
-		innerMapFd: innerFd,
+		// Invalid file descriptor.
+		innerMapFd: ^uint32(0),
 	})
-	if err != nil {
+	if errors.Is(err, unix.EINVAL) {
 		return internal.ErrNotSupported
 	}
-
-	_ = nested.Close()
-	return nil
+	if errors.Is(err, unix.EBADF) {
+		return nil
+	}
+	return err
 })
 
 var haveMapMutabilityModifiers = internal.FeatureTest("read- and write-only maps", "5.2", func() error {

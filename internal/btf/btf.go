@@ -718,7 +718,7 @@ func marshalBTF(types interface{}, strings []byte, bo binary.ByteOrder) []byte {
 	return buf.Bytes()
 }
 
-var haveBTF = internal.FeatureTest("BTF", "5.1", func() (bool, error) {
+var haveBTF = internal.FeatureTest("BTF", "5.1", func() error {
 	var (
 		types struct {
 			Integer btfType
@@ -742,15 +742,20 @@ var haveBTF = internal.FeatureTest("BTF", "5.1", func() (bool, error) {
 		btf:     internal.NewSlicePointer(btf),
 		btfSize: uint32(len(btf)),
 	})
-	if err == nil {
-		fd.Close()
+	if errors.Is(err, unix.EINVAL) {
+		// Check for EINVAL specifically, rather than err != nil since we
+		// otherwise misdetect due to insufficient permissions.
+		return internal.ErrNotSupported
 	}
-	// Check for EINVAL specifically, rather than err != nil since we
-	// otherwise misdetect due to insufficient permissions.
-	return !errors.Is(err, unix.EINVAL), nil
+	if err != nil {
+		return err
+	}
+
+	fd.Close()
+	return nil
 })
 
-var haveFuncLinkage = internal.FeatureTest("BTF func linkage", "5.6", func() (bool, error) {
+var haveFuncLinkage = internal.FeatureTest("BTF func linkage", "5.6", func() error {
 	var (
 		types struct {
 			FuncProto btfType
@@ -771,11 +776,15 @@ var haveFuncLinkage = internal.FeatureTest("BTF func linkage", "5.6", func() (bo
 		btf:     internal.NewSlicePointer(btf),
 		btfSize: uint32(len(btf)),
 	})
-	if err == nil {
-		fd.Close()
+	if errors.Is(err, unix.EINVAL) {
+		// Check for EINVAL specifically, rather than err != nil since we
+		// otherwise misdetect due to insufficient permissions.
+		return internal.ErrNotSupported
+	}
+	if err != nil {
+		return err
 	}
 
-	// Check for EINVAL specifically, rather than err != nil since we
-	// otherwise misdetect due to insufficient permissions.
-	return !errors.Is(err, unix.EINVAL), nil
+	fd.Close()
+	return nil
 })

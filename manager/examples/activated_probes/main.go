@@ -71,7 +71,20 @@ var options1 = manager.Options{
 				},
 			},
 		},
-	},
+		&manager.BestEffort{
+			Selectors: []manager.ProbesSelector{
+				&manager.ProbeSelector{
+					ProbeIdentificationPair: manager.ProbeIdentificationPair{
+						Section: "kprobe/vfs_opennnnnn",
+					},
+				},
+				&manager.ProbeSelector{
+					ProbeIdentificationPair: manager.ProbeIdentificationPair{
+						Section: "kprobe/exclude",
+					},
+				},
+			},
+		}},
 	ExcludedSections: []string{
 		"kprobe/exclude2",
 	},

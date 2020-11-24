@@ -25,5 +25,5 @@ right now**. Expect to update your code if you want to follow along.
 
 * [eBPF.io](https://ebpf.io) (recommended)
 * [Cilium eBPF documentation](https://docs.cilium.io/en/latest/bpf/#bpf-guide) (recommended)
-* [Linux documentation on BPF](http://elixir.free-electrons.com/linux/latest/source/Documentation/networking/filter.rst)
+* [Linux documentation on BPF](https://www.kernel.org/doc/html/latest/networking/filter.html)
 * [eBPF features by Linux version](https://github.com/iovisor/bcc/blob/master/docs/kernel-versions.md)

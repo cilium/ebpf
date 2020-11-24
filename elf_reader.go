@@ -124,7 +124,6 @@ func LoadCollectionSpecFromReader(rd io.ReaderAt) (*CollectionSpec, error) {
 			return nil, fmt.Errorf("load BTF maps: %w", err)
 		}
 	}
-
 	if len(dataSections) > 0 {
 		for idx := range dataSections {
 			if !referencedSections[idx] {
@@ -138,7 +137,6 @@ func LoadCollectionSpecFromReader(rd io.ReaderAt) (*CollectionSpec, error) {
 			return nil, fmt.Errorf("load data sections: %w", err)
 		}
 	}
-
 	progs, err := ec.loadPrograms(progSections, relocations, btfSpec)
 	if err != nil {
 		return nil, fmt.Errorf("load programs: %w", err)
@@ -442,14 +440,12 @@ func (ec *elfCode) loadBTFMaps(maps map[string]*MapSpec, mapSections map[elf.Sec
 		if len(syms) == 0 {
 			return fmt.Errorf("section %v: no symbols", sec.Name)
 		}
-
 		for _, sym := range syms {
 			name := sym.Name
 			if maps[name] != nil {
 				return fmt.Errorf("section %v: map %v already exists", sec.Name, sym)
 			}
-
-			mapSpec, err := mapSpecFromBTF(spec, name)
+			mapSpec, err := mapSpecFromBTF(spec, name, maps, false)
 			if err != nil {
 				return fmt.Errorf("map %v: %w", name, err)
 			}
@@ -461,7 +457,7 @@ func (ec *elfCode) loadBTFMaps(maps map[string]*MapSpec, mapSections map[elf.Sec
 	return nil
 }
 
-func mapSpecFromBTF(spec *btf.Spec, name string) (*MapSpec, error) {
+func mapSpecFromBTF(spec *btf.Spec, name string, maps map[string]*MapSpec, isInnermap bool) (*MapSpec, error) {
 	btfMap, btfMapMembers, err := spec.Map(name)
 	if err != nil {
 		return nil, fmt.Errorf("can't get BTF: %w", err)
@@ -479,76 +475,118 @@ func mapSpecFromBTF(spec *btf.Spec, name string) (*MapSpec, error) {
 	if err != nil {
 		return nil, fmt.Errorf("can't get size of BTF value: %w", err)
 	}
-	valueSize := uint32(size)
 
-	var (
-		mapType, flags, maxEntries uint32
-		pinType                    PinType
-	)
+	mapSpec := &MapSpec{
+		Name:      SanitizeName(name, -1),
+		ValueSize: uint32(size),
+		KeySize:   keySize,
+	}
+
 	for _, member := range btfMapMembers {
 		switch member.Name {
 		case "type":
-			mapType, err = uintFromBTF(member.Type)
+			mapType, err := uintFromBTF(member.Type)
 			if err != nil {
 				return nil, fmt.Errorf("can't get type: %w", err)
 			}
+			mapSpec.Type = MapType(mapType)
 
 		case "map_flags":
-			flags, err = uintFromBTF(member.Type)
+			flags, err := uintFromBTF(member.Type)
 			if err != nil {
 				return nil, fmt.Errorf("can't get BTF map flags: %w", err)
 			}
+			mapSpec.Flags = flags
 
 		case "max_entries":
-			maxEntries, err = uintFromBTF(member.Type)
+			maxEntries, err := uintFromBTF(member.Type)
 			if err != nil {
 				return nil, fmt.Errorf("can't get BTF map max entries: %w", err)
 			}
+			mapSpec.MaxEntries = maxEntries
 
 		case "key_size":
 			if _, isVoid := keyType.(*btf.Void); !isVoid {
 				return nil, errors.New("both key and key_size given")
 			}
 
-			keySize, err = uintFromBTF(member.Type)
+			keySize, err := uintFromBTF(member.Type)
 			if err != nil {
 				return nil, fmt.Errorf("can't get BTF key size: %w", err)
 			}
+			mapSpec.KeySize = keySize
 
 		case "value_size":
 			if _, isVoid := valueType.(*btf.Void); !isVoid {
 				return nil, errors.New("both value and value_size given")
 			}
 
-			valueSize, err = uintFromBTF(member.Type)
+			valueSize, err := uintFromBTF(member.Type)
 			if err != nil {
 				return nil, fmt.Errorf("can't get BTF value size: %w", err)
 			}
+			mapSpec.ValueSize = valueSize
 
 		case "pinning":
+			if isInnermap {
+				return nil, fmt.Errorf("inner def can't be pinned")
+			}
+
 			pinning, err := uintFromBTF(member.Type)
 			if err != nil {
 				return nil, fmt.Errorf("can't get pinning: %w", err)
 			}
 
-			pinType = PinType(pinning)
+			mapSpec.Pinning = PinType(pinning)
 
-		case "key", "value":
+		case "values":
+			if isInnermap {
+				return nil, fmt.Errorf("multi-level inner maps not supported")
+			}
+
+			innerMapStruct, err := arrayFromBTF(member.Type)
+			if err != nil {
+				return nil, fmt.Errorf("can't get BTF map values: %w", err)
+			}
+
+			if mapSpec.Type != ArrayOfMaps && mapSpec.Type != HashOfMaps {
+				return nil, fmt.Errorf("should be map-in-map")
+			}
+
+			inner, err := mapSpecFromBTF(spec, string(innerMapStruct.Name), maps, true)
+			if err != nil {
+				return nil, fmt.Errorf("innermap %v: %w", name, err)
+			}
+			mapSpec.InnerMap = inner.Copy()
+
+		case "value":
+			ptr, ok := member.Type.(*btf.Pointer)
+			if !ok {
+				return nil, fmt.Errorf("not a pointer: %v", member.Type)
+			}
+			size, err := btfResolveSize(ptr.Target)
+			if err != nil {
+				return nil, fmt.Errorf("can't determine value size for type: %w", err)
+			}
+			mapSpec.ValueSize = size
+
+		case "key":
+			ptr, ok := member.Type.(*btf.Pointer)
+			if !ok {
+				return nil, fmt.Errorf("not a pointer: %v", member.Type)
+			}
+			size, err := btfResolveSize(ptr.Target)
+			if err != nil {
+				return nil, fmt.Errorf("can't determine value size for type: %w", err)
+			}
+			mapSpec.KeySize = size
+
 		default:
 			return nil, fmt.Errorf("unrecognized field %s in BTF map definition", member.Name)
 		}
 	}
 
-	return &MapSpec{
-		Name:       SanitizeName(name, -1),
-		Type:       MapType(mapType),
-		KeySize:    keySize,
-		ValueSize:  valueSize,
-		MaxEntries: maxEntries,
-		Flags:      flags,
-		BTF:        btfMap,
-		Pinning:    pinType,
-	}, nil
+	return mapSpec, nil
 }
 
 // uintFromBTF resolves the __uint macro, which is a pointer to a sized
@@ -565,6 +603,84 @@ func uintFromBTF(typ btf.Type) (uint32, error) {
 	}
 
 	return arr.Nelems, nil
+}
+
+// arrayFromBTF resolves the __array macro
+func arrayFromBTF(typ btf.Type) (*btf.Struct, error) {
+	arr, ok := typ.(*btf.Array)
+	if !ok {
+		return nil, fmt.Errorf("not a array: %v", typ)
+	}
+
+	ptr, ok := arr.Type.(*btf.Pointer)
+	if !ok {
+		return nil, fmt.Errorf("not a array to pointer: %v", typ)
+	}
+
+	btfstruct, ok := ptr.Target.(*btf.Struct)
+	if !ok {
+		return nil, fmt.Errorf("not a pointer to struct: %v", typ)
+	}
+
+	return btfstruct, nil
+}
+
+const MAX_RESOLVE_DEPTH = 32
+
+func btfResolveSize(typ btf.Type) (uint32, error) {
+	size := uint32(0)
+	nelems := uint32(1)
+	nextType := typ
+
+L:
+	for i := 0; i < MAX_RESOLVE_DEPTH; i++ {
+		switch val := nextType.(type) {
+		case *btf.Int:
+			size = val.Size
+			break L
+		case *btf.Struct:
+			size = val.Size
+			break L
+		case *btf.Union:
+			size = val.Size
+			break L
+		case *btf.Enum:
+			//todo
+		case *btf.Datasec:
+			size = val.Size
+			break L
+		case *btf.Pointer:
+			//todo
+		case *btf.Typedef:
+			nextType = val.Type
+		case *btf.Volatile:
+			nextType = val.Type
+		case *btf.Const:
+			nextType = val.Type
+		case *btf.Restrict:
+			nextType = val.Type
+		case *btf.Var:
+			nextType = val.Type
+		case *btf.Array:
+			if val.Nelems > (math.MaxInt32 / nelems) {
+				return 0, fmt.Errorf("Argument list too long: %v", typ)
+			}
+			nelems *= val.Nelems
+			nextType = val.Type
+		default:
+			return 0, fmt.Errorf("unknown btf type: %v", typ)
+		}
+	}
+
+	if size < 0 {
+		return 0, fmt.Errorf("The size is a negative: %v", typ)
+	}
+	if size > (math.MaxInt32 / nelems) {
+		return 0, fmt.Errorf("Argument list too long: %v", typ)
+	}
+
+	return size, nil
+
 }
 
 func (ec *elfCode) loadDataSections(maps map[string]*MapSpec, dataSections map[elf.SectionIndex]*elf.Section, spec *btf.Spec) error {

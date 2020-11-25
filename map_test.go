@@ -638,7 +638,7 @@ func TestMapMarshalUnsafe(t *testing.T) {
 }
 
 func TestMapName(t *testing.T) {
-	if err := haveObjName(); err != nil {
+	if err := featureObjName(); err != nil {
 		t.Skip(err)
 	}
 

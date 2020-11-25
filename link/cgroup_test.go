@@ -21,7 +21,7 @@ func TestAttachCgroup(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if haveBPFLink() == nil {
+	if featureBPFLink() == nil {
 		if _, ok := link.(*linkCgroup); !ok {
 			t.Fatalf("Have support for bpf_link, but got %T instead of linkCgroup", link)
 		}

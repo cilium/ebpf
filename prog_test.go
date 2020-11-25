@@ -271,7 +271,7 @@ func TestProgramVerifierOutput(t *testing.T) {
 }
 
 func TestProgramName(t *testing.T) {
-	if err := haveObjName(); err != nil {
+	if err := featureObjName(); err != nil {
 		t.Skip(err)
 	}
 
@@ -388,7 +388,7 @@ func TestProgramFromFD(t *testing.T) {
 }
 
 func TestHaveProgTestRun(t *testing.T) {
-	testutils.CheckFeatureTest(t, haveProgTestRun)
+	testutils.CheckFeatureTest(t, featureProgTestRun)
 }
 
 func TestProgramGetNextID(t *testing.T) {

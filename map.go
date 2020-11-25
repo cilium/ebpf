@@ -250,7 +250,7 @@ func createMap(spec *MapSpec, inner *internal.FD, handle *btf.Handle, opts MapOp
 	case ArrayOfMaps:
 		fallthrough
 	case HashOfMaps:
-		if err := haveNestedMaps(); err != nil {
+		if err := featureNestedMaps(); err != nil {
 			return nil, err
 		}
 
@@ -280,7 +280,7 @@ func createMap(spec *MapSpec, inner *internal.FD, handle *btf.Handle, opts MapOp
 	}
 
 	if spec.Flags&(unix.BPF_F_RDONLY_PROG|unix.BPF_F_WRONLY_PROG) > 0 || spec.Freeze {
-		if err := haveMapMutabilityModifiers(); err != nil {
+		if err := featureMapMutabilityModifiers(); err != nil {
 			return nil, fmt.Errorf("map create: %w", err)
 		}
 	}
@@ -308,7 +308,7 @@ func createMap(spec *MapSpec, inner *internal.FD, handle *btf.Handle, opts MapOp
 		attr.btfValueTypeID = btf.MapValue(spec.BTF).ID()
 	}
 
-	if haveObjName() == nil {
+	if featureObjName() == nil {
 		attr.mapName = newBPFObjName(spec.Name)
 	}
 
@@ -695,7 +695,7 @@ func (m *Map) Pin(fileName string) error {
 //
 // It makes no changes to kernel-side restrictions.
 func (m *Map) Freeze() error {
-	if err := haveMapMutabilityModifiers(); err != nil {
+	if err := featureMapMutabilityModifiers(); err != nil {
 		return fmt.Errorf("can't freeze map: %w", err)
 	}
 

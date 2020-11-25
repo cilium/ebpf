@@ -79,7 +79,7 @@ func (cg *progAttachCgroup) isLink() {}
 
 func newProgAttachCgroup(cgroup *os.File, attach ebpf.AttachType, prog *ebpf.Program, flags cgroupAttachFlags) (*progAttachCgroup, error) {
 	if flags&flagAllowMulti > 0 {
-		if err := haveProgAttachReplace(); err != nil {
+		if err := featureProgAttachReplace(); err != nil {
 			return nil, fmt.Errorf("can't support multiple programs: %w", err)
 		}
 	}

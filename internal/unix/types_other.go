@@ -20,6 +20,7 @@ const (
 	EPERM                    = syscall.EPERM
 	ESRCH                    = syscall.ESRCH
 	ENODEV                   = syscall.ENODEV
+	EBADF                    = syscall.Errno(0)
 	BPF_F_NO_PREALLOC        = 0
 	BPF_F_NUMA_NODE          = 0
 	BPF_F_RDONLY_PROG        = 0

@@ -21,6 +21,8 @@ func (tid TypeID) ID() TypeID {
 type Type interface {
 	ID() TypeID
 
+	String() string
+
 	// Make a copy of the type, without copying Type members.
 	copy() Type
 
@@ -50,6 +52,7 @@ func (n Name) name() string {
 type Void struct{}
 
 func (v *Void) ID() TypeID      { return 0 }
+func (v *Void) String() string  { return "void#0" }
 func (v *Void) size() uint32    { return 0 }
 func (v *Void) copy() Type      { return (*Void)(nil) }
 func (v *Void) walk(*copyStack) {}
@@ -78,6 +81,31 @@ type Int struct {
 
 var _ namedType = (*Int)(nil)
 
+func (i *Int) String() string {
+	var s strings.Builder
+
+	switch {
+	case i.Encoding&Char != 0:
+		s.WriteString("char")
+	case i.Encoding&Bool != 0:
+		s.WriteString("bool")
+	default:
+		if i.Encoding&Signed == 0 {
+			s.WriteRune('u')
+		}
+		s.WriteString("int")
+		fmt.Fprintf(&s, "%d", i.Size*8)
+	}
+
+	fmt.Fprintf(&s, "#%d", i.TypeID)
+
+	if i.Bits > 0 {
+		fmt.Fprintf(&s, "[bits=%d]", i.Bits)
+	}
+
+	return s.String()
+}
+
 func (i *Int) size() uint32    { return i.Size }
 func (i *Int) walk(*copyStack) {}
 func (i *Int) copy() Type {
@@ -89,6 +117,10 @@ func (i *Int) copy() Type {
 type Pointer struct {
 	TypeID
 	Target Type
+}
+
+func (p *Pointer) String() string {
+	return fmt.Sprintf("pointer#%d[target=#%d]", p.TypeID, p.Target.ID())
 }
 
 func (p *Pointer) size() uint32       { return 8 }
@@ -105,6 +137,10 @@ type Array struct {
 	Nelems uint32
 }
 
+func (arr *Array) String() string {
+	return fmt.Sprintf("array#%d[type=#%d n=%d]", arr.TypeID, arr.Type.ID(), arr.Nelems)
+}
+
 func (arr *Array) walk(cs *copyStack) { cs.push(&arr.Type) }
 func (arr *Array) copy() Type {
 	cpy := *arr
@@ -118,6 +154,10 @@ type Struct struct {
 	// The size of the struct including padding, in bytes
 	Size    uint32
 	Members []Member
+}
+
+func (s *Struct) String() string {
+	return fmt.Sprintf("struct#%d[%q]", s.TypeID, s.Name)
 }
 
 func (s *Struct) size() uint32 { return s.Size }
@@ -146,6 +186,10 @@ type Union struct {
 	// The size of the union including padding, in bytes.
 	Size    uint32
 	Members []Member
+}
+
+func (u *Union) String() string {
+	return fmt.Sprintf("union#%d[%q]", u.TypeID, u.Name)
 }
 
 func (u *Union) size() uint32 { return u.Size }
@@ -194,6 +238,10 @@ type Enum struct {
 	Values []EnumValue
 }
 
+func (e *Enum) String() string {
+	return fmt.Sprintf("enum#%d[%q]", e.TypeID, e.Name)
+}
+
 // EnumValue is part of an Enum
 //
 // Is is not a valid Type
@@ -211,10 +259,35 @@ func (e *Enum) copy() Type {
 	return &cpy
 }
 
+// FwdKind is the type of forward declaration.
+type FwdKind int
+
+// Valid types of forward declaration.
+const (
+	FwdStruct FwdKind = iota
+	FwdUnion
+)
+
+func (fk FwdKind) String() string {
+	switch fk {
+	case FwdStruct:
+		return "struct"
+	case FwdUnion:
+		return "union"
+	default:
+		return fmt.Sprintf("%T(%d)", fk, int(fk))
+	}
+}
+
 // Fwd is a forward declaration of a Type.
 type Fwd struct {
 	TypeID
 	Name
+	Kind FwdKind
+}
+
+func (f *Fwd) String() string {
+	return fmt.Sprintf("fwd#%d[%s %q]", f.TypeID, f.Kind, f.Name)
 }
 
 func (f *Fwd) walk(*copyStack) {}
@@ -230,6 +303,10 @@ type Typedef struct {
 	Type Type
 }
 
+func (td *Typedef) String() string {
+	return fmt.Sprintf("typedef#%d[%q #%d]", td.TypeID, td.Name, td.Type.ID())
+}
+
 func (td *Typedef) walk(cs *copyStack) { cs.push(&td.Type) }
 func (td *Typedef) copy() Type {
 	cpy := *td
@@ -240,6 +317,10 @@ func (td *Typedef) copy() Type {
 type Volatile struct {
 	TypeID
 	Type Type
+}
+
+func (v *Volatile) String() string {
+	return fmt.Sprintf("volatile#%d[#%d]", v.TypeID, v.Type.ID())
 }
 
 func (v *Volatile) qualify() Type      { return v.Type }
@@ -255,6 +336,10 @@ type Const struct {
 	Type Type
 }
 
+func (c *Const) String() string {
+	return fmt.Sprintf("const#%d[#%d]", c.TypeID, c.Type.ID())
+}
+
 func (c *Const) qualify() Type      { return c.Type }
 func (c *Const) walk(cs *copyStack) { cs.push(&c.Type) }
 func (c *Const) copy() Type {
@@ -266,6 +351,10 @@ func (c *Const) copy() Type {
 type Restrict struct {
 	TypeID
 	Type Type
+}
+
+func (r *Restrict) String() string {
+	return fmt.Sprintf("restrict#%d[#%d]", r.TypeID, r.Type.ID())
 }
 
 func (r *Restrict) qualify() Type      { return r.Type }
@@ -282,6 +371,10 @@ type Func struct {
 	Type Type
 }
 
+func (f *Func) String() string {
+	return fmt.Sprintf("func#%d[%q proto=#%d]", f.TypeID, f.Name, f.Type.ID())
+}
+
 func (f *Func) walk(cs *copyStack) { cs.push(&f.Type) }
 func (f *Func) copy() Type {
 	cpy := *f
@@ -293,6 +386,16 @@ type FuncProto struct {
 	TypeID
 	Return Type
 	Params []FuncParam
+}
+
+func (fp *FuncProto) String() string {
+	var s strings.Builder
+	fmt.Fprintf(&s, "proto#%d[", fp.TypeID)
+	for _, param := range fp.Params {
+		fmt.Fprintf(&s, "%q=#%d, ", param.Name, param.Type.ID())
+	}
+	fmt.Fprintf(&s, "return=#%d]", fp.Return.ID())
+	return s.String()
 }
 
 func (fp *FuncProto) walk(cs *copyStack) {
@@ -321,6 +424,11 @@ type Var struct {
 	Type Type
 }
 
+func (v *Var) String() string {
+	// TODO: Linkage
+	return fmt.Sprintf("var#%d[%q]", v.TypeID, v.Name)
+}
+
 func (v *Var) walk(cs *copyStack) { cs.push(&v.Type) }
 func (v *Var) copy() Type {
 	cpy := *v
@@ -333,6 +441,10 @@ type Datasec struct {
 	Name
 	Size uint32
 	Vars []VarSecinfo
+}
+
+func (ds *Datasec) String() string {
+	return fmt.Sprintf("section#%d[%q]", ds.TypeID, ds.Name)
 }
 
 func (ds *Datasec) size() uint32 { return ds.Size }
@@ -351,6 +463,8 @@ func (ds *Datasec) copy() Type {
 }
 
 // VarSecinfo describes variable in a Datasec
+//
+// It is not a valid Type.
 type VarSecinfo struct {
 	Type   Type
 	Offset uint32
@@ -589,7 +703,11 @@ func inflateRawTypes(rawTypes []rawType, rawStrings stringTable) (namedTypes map
 			typ = &Enum{id, name, vals}
 
 		case kindForward:
-			typ = &Fwd{id, name}
+			if raw.KindFlag() {
+				typ = &Fwd{id, name, FwdUnion}
+			} else {
+				typ = &Fwd{id, name, FwdStruct}
+			}
 
 		case kindTypedef:
 			typedef := &Typedef{id, name, nil}

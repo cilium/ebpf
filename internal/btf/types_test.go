@@ -77,7 +77,7 @@ func ExampleType_validTypes() {
 func TestType(t *testing.T) {
 	types := []func() Type{
 		func() Type { return &Void{} },
-		func() Type { return &Int{} },
+		func() Type { return &Int{Size: 2, Bits: 3} },
 		func() Type { return &Pointer{Target: &Void{}} },
 		func() Type { return &Array{Type: &Int{}} },
 		func() Type {
@@ -118,6 +118,8 @@ func TestType(t *testing.T) {
 	for _, fn := range types {
 		typ := fn()
 		t.Run(fmt.Sprintf("%T", typ), func(t *testing.T) {
+			t.Logf("%v", typ)
+
 			if typ == typ.copy() {
 				t.Error("Copy doesn't copy")
 			}

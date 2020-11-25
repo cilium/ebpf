@@ -203,35 +203,25 @@ func bpfMapCreate(attr *bpfMapCreateAttr) (*internal.FD, error) {
 	return internal.NewFD(uint32(fd)), nil
 }
 
-var haveNestedMaps = internal.FeatureTest("nested maps", "4.12", func() (bool, error) {
-	inner, err := bpfMapCreate(&bpfMapCreateAttr{
-		mapType:    Array,
-		keySize:    4,
-		valueSize:  4,
-		maxEntries: 1,
-	})
-	if err != nil {
-		return false, err
-	}
-	defer inner.Close()
-
-	innerFd, _ := inner.Value()
-	nested, err := bpfMapCreate(&bpfMapCreateAttr{
+var haveNestedMaps = internal.FeatureTest("nested maps", "4.12", func() error {
+	_, err := bpfMapCreate(&bpfMapCreateAttr{
 		mapType:    ArrayOfMaps,
 		keySize:    4,
 		valueSize:  4,
 		maxEntries: 1,
-		innerMapFd: innerFd,
+		// Invalid file descriptor.
+		innerMapFd: ^uint32(0),
 	})
-	if err != nil {
-		return false, nil
+	if errors.Is(err, unix.EINVAL) {
+		return internal.ErrNotSupported
 	}
-
-	_ = nested.Close()
-	return true, nil
+	if errors.Is(err, unix.EBADF) {
+		return nil
+	}
+	return err
 })
 
-var haveMapMutabilityModifiers = internal.FeatureTest("read- and write-only maps", "5.2", func() (bool, error) {
+var haveMapMutabilityModifiers = internal.FeatureTest("read- and write-only maps", "5.2", func() error {
 	// This checks BPF_F_RDONLY_PROG and BPF_F_WRONLY_PROG. Since
 	// BPF_MAP_FREEZE appeared in 5.2 as well we don't do a separate check.
 	m, err := bpfMapCreate(&bpfMapCreateAttr{
@@ -242,10 +232,10 @@ var haveMapMutabilityModifiers = internal.FeatureTest("read- and write-only maps
 		flags:      unix.BPF_F_RDONLY_PROG,
 	})
 	if err != nil {
-		return false, nil
+		return internal.ErrNotSupported
 	}
 	_ = m.Close()
-	return true, nil
+	return nil
 })
 
 func bpfMapLookupElem(m *internal.FD, key, valueOut internal.Pointer) error {
@@ -388,7 +378,7 @@ func bpfGetMapInfoByFD(fd *internal.FD) (*bpfMapInfo, error) {
 	return &info, nil
 }
 
-var haveObjName = internal.FeatureTest("object names", "4.15", func() (bool, error) {
+var haveObjName = internal.FeatureTest("object names", "4.15", func() error {
 	attr := bpfMapCreateAttr{
 		mapType:    Array,
 		keySize:    4,
@@ -399,16 +389,16 @@ var haveObjName = internal.FeatureTest("object names", "4.15", func() (bool, err
 
 	fd, err := bpfMapCreate(&attr)
 	if err != nil {
-		return false, nil
+		return internal.ErrNotSupported
 	}
 
 	_ = fd.Close()
-	return true, nil
+	return nil
 })
 
-var objNameAllowsDot = internal.FeatureTest("dot in object names", "5.2", func() (bool, error) {
+var objNameAllowsDot = internal.FeatureTest("dot in object names", "5.2", func() error {
 	if err := haveObjName(); err != nil {
-		return false, err
+		return err
 	}
 
 	attr := bpfMapCreateAttr{
@@ -421,11 +411,11 @@ var objNameAllowsDot = internal.FeatureTest("dot in object names", "5.2", func()
 
 	fd, err := bpfMapCreate(&attr)
 	if err != nil {
-		return false, nil
+		return internal.ErrNotSupported
 	}
 
 	_ = fd.Close()
-	return true, nil
+	return nil
 })
 
 func bpfObjGetFDByID(cmd internal.BPFCmd, id uint32) (*internal.FD, error) {

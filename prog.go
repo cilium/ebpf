@@ -243,7 +243,7 @@ func convertProgramSpec(spec *ProgramSpec, handle *btf.Handle) (*bpfProgLoadAttr
 		kernelVersion:      spec.KernelVersion,
 	}
 
-	if haveObjName() == nil {
+	if featureObjName() == nil {
 		attr.progName = newBPFObjName(spec.Name)
 	}
 
@@ -384,7 +384,7 @@ func (p *Program) Benchmark(in []byte, repeat int, reset func()) (uint32, time.D
 	return ret, total, nil
 }
 
-var haveProgTestRun = internal.FeatureTest("BPF_PROG_TEST_RUN", "4.12", func() error {
+var featureProgTestRun = internal.FeatureTest("BPF_PROG_TEST_RUN", "4.12", func() error {
 	prog, err := NewProgram(&ProgramSpec{
 		Type: SocketFilter,
 		Instructions: asm.Instructions{
@@ -429,7 +429,7 @@ func (p *Program) testRun(in []byte, repeat int, reset func()) (uint32, []byte, 
 		return 0, nil, 0, fmt.Errorf("input is too long")
 	}
 
-	if err := haveProgTestRun(); err != nil {
+	if err := featureProgTestRun(); err != nil {
 		return 0, nil, 0, err
 	}
 

@@ -34,7 +34,7 @@ func TestObjName(t *testing.T) {
 }
 
 func TestHaveObjName(t *testing.T) {
-	testutils.CheckFeatureTest(t, haveObjName)
+	testutils.CheckFeatureTest(t, featureObjName)
 }
 
 func TestObjNameAllowsDot(t *testing.T) {
@@ -42,9 +42,9 @@ func TestObjNameAllowsDot(t *testing.T) {
 }
 
 func TestHaveNestedMaps(t *testing.T) {
-	testutils.CheckFeatureTest(t, haveNestedMaps)
+	testutils.CheckFeatureTest(t, featureNestedMaps)
 }
 
 func TestHaveMapMutabilityModifiers(t *testing.T) {
-	testutils.CheckFeatureTest(t, haveMapMutabilityModifiers)
+	testutils.CheckFeatureTest(t, featureMapMutabilityModifiers)
 }

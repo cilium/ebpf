@@ -26,7 +26,7 @@ const (
 	XDPType
 )
 
-var haveProgAttach = internal.FeatureTest("BPF_PROG_ATTACH", "4.10", func() error {
+var featureProgAttach = internal.FeatureTest("BPF_PROG_ATTACH", "4.10", func() error {
 	prog, err := ebpf.NewProgram(&ebpf.ProgramSpec{
 		Type:       ebpf.CGroupSKB,
 		AttachType: ebpf.AttachCGroupInetIngress,
@@ -47,8 +47,8 @@ var haveProgAttach = internal.FeatureTest("BPF_PROG_ATTACH", "4.10", func() erro
 	return nil
 })
 
-var haveProgAttachReplace = internal.FeatureTest("BPF_PROG_ATTACH atomic replacement", "5.5", func() error {
-	if err := haveProgAttach(); err != nil {
+var featureProgAttachReplace = internal.FeatureTest("BPF_PROG_ATTACH atomic replacement", "5.5", func() error {
+	if err := featureProgAttach(); err != nil {
 		return err
 	}
 
@@ -114,7 +114,7 @@ func bpfLinkUpdate(attr *bpfLinkUpdateAttr) error {
 	return err
 }
 
-var haveBPFLink = internal.FeatureTest("bpf_link", "5.7", func() error {
+var featureBPFLink = internal.FeatureTest("bpf_link", "5.7", func() error {
 	prog, err := ebpf.NewProgram(&ebpf.ProgramSpec{
 		Type:       ebpf.CGroupSKB,
 		AttachType: ebpf.AttachCGroupInetIngress,

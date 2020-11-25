@@ -7,13 +7,13 @@ import (
 )
 
 func TestHaveProgAttach(t *testing.T) {
-	testutils.CheckFeatureTest(t, haveProgAttach)
+	testutils.CheckFeatureTest(t, featureProgAttach)
 }
 
 func TestHaveProgAttachReplace(t *testing.T) {
-	testutils.CheckFeatureTest(t, haveProgAttachReplace)
+	testutils.CheckFeatureTest(t, featureProgAttachReplace)
 }
 
 func TestHaveBPFLink(t *testing.T) {
-	testutils.CheckFeatureTest(t, haveBPFLink)
+	testutils.CheckFeatureTest(t, featureBPFLink)
 }

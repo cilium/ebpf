@@ -63,7 +63,7 @@ type RawLink struct {
 
 // AttachRawLink creates a raw link.
 func AttachRawLink(opts RawLinkOptions) (*RawLink, error) {
-	if err := haveBPFLink(); err != nil {
+	if err := featureBPFLink(); err != nil {
 		return nil, err
 	}
 

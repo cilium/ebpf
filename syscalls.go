@@ -203,7 +203,7 @@ func bpfMapCreate(attr *bpfMapCreateAttr) (*internal.FD, error) {
 	return internal.NewFD(uint32(fd)), nil
 }
 
-var haveNestedMaps = internal.FeatureTest("nested maps", "4.12", func() error {
+var featureNestedMaps = internal.FeatureTest("nested maps", "4.12", func() error {
 	_, err := bpfMapCreate(&bpfMapCreateAttr{
 		mapType:    ArrayOfMaps,
 		keySize:    4,
@@ -221,7 +221,7 @@ var haveNestedMaps = internal.FeatureTest("nested maps", "4.12", func() error {
 	return err
 })
 
-var haveMapMutabilityModifiers = internal.FeatureTest("read- and write-only maps", "5.2", func() error {
+var featureMapMutabilityModifiers = internal.FeatureTest("read- and write-only maps", "5.2", func() error {
 	// This checks BPF_F_RDONLY_PROG and BPF_F_WRONLY_PROG. Since
 	// BPF_MAP_FREEZE appeared in 5.2 as well we don't do a separate check.
 	m, err := bpfMapCreate(&bpfMapCreateAttr{
@@ -378,7 +378,7 @@ func bpfGetMapInfoByFD(fd *internal.FD) (*bpfMapInfo, error) {
 	return &info, nil
 }
 
-var haveObjName = internal.FeatureTest("object names", "4.15", func() error {
+var featureObjName = internal.FeatureTest("object names", "4.15", func() error {
 	attr := bpfMapCreateAttr{
 		mapType:    Array,
 		keySize:    4,
@@ -397,7 +397,7 @@ var haveObjName = internal.FeatureTest("object names", "4.15", func() error {
 })
 
 var objNameAllowsDot = internal.FeatureTest("dot in object names", "5.2", func() error {
-	if err := haveObjName(); err != nil {
+	if err := featureObjName(); err != nil {
 		return err
 	}
 

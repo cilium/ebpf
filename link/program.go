@@ -25,7 +25,7 @@ type RawAttachProgramOptions struct {
 // You should use one of the higher level abstractions available in this
 // package if possible.
 func RawAttachProgram(opts RawAttachProgramOptions) error {
-	if err := haveProgAttach(); err != nil {
+	if err := featureProgAttach(); err != nil {
 		return err
 	}
 
@@ -59,7 +59,7 @@ type RawDetachProgramOptions struct {
 // You should use one of the higher level abstractions available in this
 // package if possible.
 func RawDetachProgram(opts RawDetachProgramOptions) error {
-	if err := haveProgAttach(); err != nil {
+	if err := featureProgAttach(); err != nil {
 		return err
 	}
 

@@ -50,7 +50,7 @@ func TestRawLink(t *testing.T) {
 func mustCgroupFixtures(t *testing.T) (*os.File, *ebpf.Program, func()) {
 	t.Helper()
 
-	testutils.SkipIfNotSupported(t, haveProgAttach())
+	testutils.SkipIfNotSupported(t, featureProgAttach())
 
 	prog := mustCgroupEgressProgram(t)
 	cgdir, err := ioutil.TempDir("/sys/fs/cgroup/unified", "ebpf-link")

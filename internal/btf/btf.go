@@ -538,7 +538,7 @@ type Handle struct {
 //
 // Returns ErrNotSupported if BTF is not supported.
 func NewHandle(spec *Spec) (*Handle, error) {
-	if err := haveBTF(); err != nil {
+	if err := featureBTF(); err != nil {
 		return nil, err
 	}
 
@@ -548,7 +548,7 @@ func NewHandle(spec *Spec) (*Handle, error) {
 
 	btf, err := spec.marshal(marshalOpts{
 		ByteOrder:        internal.NativeEndian,
-		StripFuncLinkage: haveFuncLinkage() != nil,
+		StripFuncLinkage: featureFuncLinkage() != nil,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("can't marshal BTF: %w", err)
@@ -718,7 +718,7 @@ func marshalBTF(types interface{}, strings []byte, bo binary.ByteOrder) []byte {
 	return buf.Bytes()
 }
 
-var haveBTF = internal.FeatureTest("BTF", "5.1", func() error {
+var featureBTF = internal.FeatureTest("BTF", "5.1", func() error {
 	var (
 		types struct {
 			Integer btfType
@@ -755,7 +755,7 @@ var haveBTF = internal.FeatureTest("BTF", "5.1", func() error {
 	return nil
 })
 
-var haveFuncLinkage = internal.FeatureTest("BTF func linkage", "5.6", func() error {
+var featureFuncLinkage = internal.FeatureTest("BTF func linkage", "5.6", func() error {
 	var (
 		types struct {
 			FuncProto btfType

@@ -144,11 +144,11 @@ func TestLoadKernelSpec(t *testing.T) {
 }
 
 func TestHaveBTF(t *testing.T) {
-	testutils.CheckFeatureTest(t, haveBTF)
+	testutils.CheckFeatureTest(t, featureBTF)
 }
 
 func TestHaveFuncLinkage(t *testing.T) {
-	testutils.CheckFeatureTest(t, haveFuncLinkage)
+	testutils.CheckFeatureTest(t, featureFuncLinkage)
 }
 
 func ExampleSpec_FindType() {

@@ -3,8 +3,8 @@ CLANG ?= $(LLVM_PREFIX)/clang
 CFLAGS := -target bpf -O2 -g -Wall -Werror $(CFLAGS)
 
 .PHONY: all clean
-all: loader-clang-6.0-el.elf loader-clang-7-el.elf loader-clang-8-el.elf loader-clang-9-el.elf invalid_map-el.elf raw_tracepoint-el.elf \
-	loader-clang-6.0-eb.elf loader-clang-7-eb.elf loader-clang-8-eb.elf loader-clang-9-eb.elf invalid_map-eb.elf raw_tracepoint-eb.elf
+all: loader-clang-6.0-el.elf loader-clang-7-el.elf loader-clang-8-el.elf loader-clang-9-el.elf invalid_map-el.elf raw_tracepoint-el.elf invalid_map_static-el.elf \
+	loader-clang-6.0-eb.elf loader-clang-7-eb.elf loader-clang-8-eb.elf loader-clang-9-eb.elf invalid_map-eb.elf raw_tracepoint-eb.elf invalid_map_static-eb.elf
 
 clean:
 	-$(RM) *.elf

@@ -291,10 +291,16 @@ outer:
 		// that goes via the helper. They are distinguished by
 		// different relocations.
 		switch typ {
+		// This is a direct load since the referenced symbol is a
+		// section. Weirdly, the offset of the real symbol in the
+		// section is encoded in the instruction stream.
 		case elf.STT_SECTION:
-			// This is a direct load since the referenced symbol is a
-			// section. Weirdly, the offset of the real symbol in the
-			// section is encoded in the instruction stream.
+			if name == "maps" || name == ".maps" {
+				// A direct load from the map definition sections doesn't make
+				// sense, this usually happens due to a stray `static`.
+				return fmt.Errorf("possible erroneous static qualifier on map definition: found reference to section %s", name)
+			}
+
 			if bind != elf.STB_LOCAL {
 				return fmt.Errorf("direct load: %s: unsupported relocation %s", name, bind)
 			}

@@ -444,6 +444,11 @@ func (ec *elfCode) loadBTFMaps(maps map[string]*MapSpec, mapSections map[elf.Sec
 	}
 
 	for idx, sec := range mapSections {
+		_, err := io.Copy(internal.DiscardZeroes{}, bufio.NewReader(sec.Open()))
+		if err != nil {
+			return fmt.Errorf("section %v: initializing BTF map definitions: %w", sec.Name, internal.ErrNotSupported)
+		}
+
 		syms := ec.symbolsPerSection[idx]
 		if len(syms) == 0 {
 			return fmt.Errorf("section %v: no symbols", sec.Name)

@@ -1,6 +1,7 @@
 package ebpf
 
 import (
+	"errors"
 	"flag"
 	"io/ioutil"
 	"os"
@@ -188,6 +189,16 @@ func TestLoadInvalidMapMissingSymbol(t *testing.T) {
 		t.Log(err)
 		if err == nil {
 			t.Fatal("Loading a map with static qualifier should fail")
+		}
+	})
+}
+
+func TestLoadInitializedBTFMap(t *testing.T) {
+	testutils.TestFiles(t, "testdata/initialized_btf_map-*.elf", func(t *testing.T, file string) {
+		_, err := LoadCollectionSpec(file)
+		t.Log(err)
+		if !errors.Is(err, internal.ErrNotSupported) {
+			t.Fatal("Loading an initialized BTF map should be unsupported")
 		}
 	})
 }

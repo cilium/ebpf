@@ -182,6 +182,16 @@ func TestLoadInvalidMap(t *testing.T) {
 	})
 }
 
+func TestLoadInvalidMapMissingSymbol(t *testing.T) {
+	testutils.TestFiles(t, "testdata/invalid_map_static-el.elf", func(t *testing.T, file string) {
+		_, err := LoadCollectionSpec(file)
+		t.Log(err)
+		if err == nil {
+			t.Fatal("Loading a map with static qualifier should fail")
+		}
+	})
+}
+
 func TestLoadRawTracepoint(t *testing.T) {
 	testutils.SkipOnOldKernel(t, "4.17", "BPF_RAW_TRACEPOINT API")
 

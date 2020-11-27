@@ -80,6 +80,10 @@ func LoadSpecFromReader(rd io.ReaderAt) (*Spec, error) {
 			continue
 		}
 
+		if int(symbol.Section) >= len(file.Sections) {
+			return nil, fmt.Errorf("symbol %s: invalid section %d", symbol.Name, symbol.Section)
+		}
+
 		secName := file.Sections[symbol.Section].Name
 		if _, ok := sectionSizes[secName]; !ok {
 			continue

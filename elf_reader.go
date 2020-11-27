@@ -19,7 +19,7 @@ import (
 )
 
 type elfCode struct {
-	*elf.File
+	*internal.SafeELFFile
 	symbols           []elf.Symbol
 	symbolsPerSection map[elf.SectionIndex]map[uint64]elf.Symbol
 	license           string
@@ -43,7 +43,7 @@ func LoadCollectionSpec(file string) (*CollectionSpec, error) {
 
 // LoadCollectionSpecFromReader parses an ELF file into a CollectionSpec.
 func LoadCollectionSpecFromReader(rd io.ReaderAt) (*CollectionSpec, error) {
-	f, err := elf.NewFile(rd)
+	f, err := internal.NewSafeELFFile(rd)
 	if err != nil {
 		return nil, err
 	}

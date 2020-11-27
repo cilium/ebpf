@@ -53,7 +53,7 @@ type btfHeader struct {
 //
 // Returns a nil Spec and no error if no BTF was present.
 func LoadSpecFromReader(rd io.ReaderAt) (*Spec, error) {
-	file, err := elf.NewFile(rd)
+	file, err := internal.NewSafeELFFile(rd)
 	if err != nil {
 		return nil, err
 	}
@@ -109,7 +109,7 @@ func LoadSpecFromReader(rd io.ReaderAt) (*Spec, error) {
 	return spec, nil
 }
 
-func findBtfSections(file *elf.File) (*elf.Section, *elf.Section, map[string]uint32, error) {
+func findBtfSections(file *internal.SafeELFFile) (*elf.Section, *elf.Section, map[string]uint32, error) {
 	var (
 		btfSection    *elf.Section
 		btfExtSection *elf.Section
@@ -138,7 +138,7 @@ func findBtfSections(file *elf.File) (*elf.Section, *elf.Section, map[string]uin
 }
 
 func loadSpecFromVmlinux(rd io.ReaderAt) (*Spec, error) {
-	file, err := elf.NewFile(rd)
+	file, err := internal.NewSafeELFFile(rd)
 	if err != nil {
 		return nil, err
 	}

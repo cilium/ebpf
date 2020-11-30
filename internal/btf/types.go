@@ -113,6 +113,10 @@ func (i *Int) copy() Type {
 	return &cpy
 }
 
+func (i *Int) isBitfield() bool {
+	return i.Offset > 0
+}
+
 // Pointer is a pointer to another type.
 type Pointer struct {
 	TypeID

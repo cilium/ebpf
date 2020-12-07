@@ -203,6 +203,16 @@ func TestLoadInitializedBTFMap(t *testing.T) {
 	})
 }
 
+func TestStringSection(t *testing.T) {
+	testutils.TestFiles(t, "testdata/strings-*.elf", func(t *testing.T, file string) {
+		_, err := LoadCollectionSpec(file)
+		t.Error(err)
+		if err == nil {
+			t.Error("References to a string section should return an error")
+		}
+	})
+}
+
 func TestLoadRawTracepoint(t *testing.T) {
 	testutils.SkipOnOldKernel(t, "4.17", "BPF_RAW_TRACEPOINT API")
 

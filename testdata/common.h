@@ -26,6 +26,8 @@ struct bpf_map_def {
 
 static void *(*map_lookup_elem)(const void *map, const void *key) = (void *)1;
 
+static long (*trace_printk)(const char *fmt, uint32_t fmt_size, ...) = (void *)6;
+
 static int (*perf_event_output)(const void *ctx, const void *map, uint64_t index, const void *data, uint64_t size) = (void *)25;
 
 static uint32_t (*get_smp_processor_id)(void) = (void *)8;

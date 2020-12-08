@@ -1,10 +1,18 @@
-LLVM_PREFIX ?= /usr/bin
-CLANG ?= $(LLVM_PREFIX)/clang
+CLANG ?= clang
 CFLAGS := -target bpf -O2 -g -Wall -Werror $(CFLAGS)
 
+TARGETS := loader-clang-6.0 \
+	loader-clang-7 \
+	loader-clang-8 \
+	loader-clang-9 \
+	invalid_map \
+	raw_tracepoint \
+	invalid_map_static \
+	initialized_btf_map \
+	strings
+
 .PHONY: all clean
-all: loader-clang-6.0-el.elf loader-clang-7-el.elf loader-clang-8-el.elf loader-clang-9-el.elf invalid_map-el.elf raw_tracepoint-el.elf invalid_map_static-el.elf initialized_btf_map-el.elf \
-	loader-clang-6.0-eb.elf loader-clang-7-eb.elf loader-clang-8-eb.elf loader-clang-9-eb.elf invalid_map-eb.elf raw_tracepoint-eb.elf invalid_map_static-eb.elf initialized_btf_map-eb.elf
+all: $(addsuffix -el.elf,$(TARGETS)) $(addsuffix -eb.elf,$(TARGETS))
 
 clean:
 	-$(RM) *.elf

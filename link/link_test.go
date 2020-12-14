@@ -131,20 +131,29 @@ func testLink(t *testing.T, link Link, opts testLinkOptions) {
 		}
 	}
 
-	if err := link.Update(opts.prog); err != nil {
-		t.Fatalf("%T.Update returns an error: %s", link, err)
-	}
-
-	func() {
-		// Panicking is OK
-		defer func() {
-			recover()
-		}()
-
-		if err := link.Update(nil); err == nil {
-			t.Fatalf("%T.Update accepts nil program", link)
+	t.Run("update", func(t *testing.T) {
+		err := link.Update(opts.prog)
+		if err == ErrNotSupported {
+			t.Fatal("Update returns unwrapped ErrNotSupported", link)
 		}
-	}()
+		if errors.Is(err, ErrNotSupported) {
+			return
+		}
+		if err != nil {
+			t.Fatal("Update returns an error:", err)
+		}
+
+		func() {
+			// Panicking is OK
+			defer func() {
+				recover()
+			}()
+
+			if err := link.Update(nil); err == nil {
+				t.Fatalf("%T.Update accepts nil program", link)
+			}
+		}()
+	})
 
 	if err := link.Close(); err != nil {
 		t.Fatalf("%T.Close returns an error: %s", link, err)

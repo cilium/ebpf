@@ -33,13 +33,9 @@ func TestRawTracepoint(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if link == nil {
-		t.Fatal("no link")
-	}
-
-	if err := link.Close(); err != nil {
-		t.Fatalf("failed to close link: %v", err)
-	}
+	testLink(t, link, testLinkOptions{
+		prog: prog,
+	})
 }
 
 func TestRawTracepoint_writable(t *testing.T) {
@@ -67,11 +63,7 @@ func TestRawTracepoint_writable(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if link == nil {
-		t.Fatal("no link")
-	}
-
-	if err := link.Close(); err != nil {
-		t.Fatalf("failed to close link: %v", err)
-	}
+	testLink(t, link, testLinkOptions{
+		prog: prog,
+	})
 }

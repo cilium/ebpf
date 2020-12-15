@@ -18,6 +18,9 @@ type RawTracepointOptions struct {
 //
 // Requires at least Linux 4.17.
 func AttachRawTracepoint(opts RawTracepointOptions) (Link, error) {
+	if t := opts.Program.Type(); t != ebpf.RawTracepoint && t != ebpf.RawTracepointWritable {
+		return nil, fmt.Errorf("invalid program type %s, expected RawTracepoint(Writable)", t)
+	}
 	if opts.Program.FD() < 0 {
 		return nil, fmt.Errorf("invalid program: %w", internal.ErrClosedFd)
 	}

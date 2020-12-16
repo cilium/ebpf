@@ -10,16 +10,19 @@ import (
 )
 
 const (
-	ENOENT                   = linux.ENOENT
-	EEXIST                   = linux.EEXIST
-	EAGAIN                   = linux.EAGAIN
-	ENOSPC                   = linux.ENOSPC
-	EINVAL                   = linux.EINVAL
-	EPOLLIN                  = linux.EPOLLIN
-	EINTR                    = linux.EINTR
-	EPERM                    = linux.EPERM
-	ESRCH                    = linux.ESRCH
-	ENODEV                   = linux.ENODEV
+	ENOENT  = linux.ENOENT
+	EEXIST  = linux.EEXIST
+	EAGAIN  = linux.EAGAIN
+	ENOSPC  = linux.ENOSPC
+	EINVAL  = linux.EINVAL
+	EPOLLIN = linux.EPOLLIN
+	EINTR   = linux.EINTR
+	EPERM   = linux.EPERM
+	ESRCH   = linux.ESRCH
+	ENODEV  = linux.ENODEV
+	// ENOTSUPP is not the same as ENOTSUP or EOPNOTSUP
+	ENOTSUPP = syscall.Errno(0x20c)
+
 	EBADF                    = linux.EBADF
 	BPF_F_NO_PREALLOC        = linux.BPF_F_NO_PREALLOC
 	BPF_F_NUMA_NODE          = linux.BPF_F_NUMA_NODE

@@ -7,6 +7,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"reflect"
 	"sort"
 	"strings"
 	"testing"
@@ -65,6 +66,197 @@ func TestMap(t *testing.T) {
 	}
 	if k != 1 {
 		t.Error("Want key 1, got", k)
+	}
+}
+
+func TestBatchAPIArray(t *testing.T) {
+	if err := haveBatchAPI(); err != nil {
+		t.Skipf("batch api not available: %v", err)
+	}
+	m, err := NewMap(&MapSpec{
+		Type:       Array,
+		KeySize:    4,
+		ValueSize:  4,
+		MaxEntries: 2,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer m.Close()
+
+	var (
+		nextKey      uint32
+		keys         = []uint32{0, 1}
+		values       = []uint32{42, 4242}
+		lookupKeys   = make([]uint32, 2)
+		lookupValues = make([]uint32, 2)
+		deleteKeys   = make([]uint32, 2)
+		deleteValues = make([]uint32, 2)
+	)
+
+	count, err := m.BatchUpdate(keys, values, nil)
+	if err != nil {
+		t.Fatalf("BatchUpdate: %v", err)
+	}
+	if count != len(keys) {
+		t.Fatalf("BatchUpdate: expected count, %d, to be %d", count, len(keys))
+	}
+
+	var v uint32
+	if err := m.Lookup(uint32(0), &v); err != nil {
+		t.Fatal("Can't lookup 0:", err)
+	}
+	if v != 42 {
+		t.Error("Want value 42, got", v)
+	}
+
+	count, err = m.BatchLookup(nil, &nextKey, lookupKeys, lookupValues, nil)
+	if err != nil {
+		t.Fatalf("BatchLookup: %v", err)
+	}
+	if count != len(lookupKeys) {
+		t.Fatalf("BatchLookup: returned %d results, expected %d", count, len(lookupKeys))
+	}
+	if nextKey != lookupKeys[1] {
+		t.Fatalf("BatchLookup: expected nextKey, %d, to be the same as the lastKey returned, %d", nextKey, lookupKeys[1])
+	}
+	if !reflect.DeepEqual(keys, lookupKeys) {
+		t.Errorf("BatchUpdate and BatchLookup keys disagree: %v %v", keys, lookupKeys)
+	}
+	if !reflect.DeepEqual(values, lookupValues) {
+		t.Errorf("BatchUpdate and BatchLookup values disagree: %v %v", values, lookupValues)
+	}
+
+	_, err = m.BatchLookupAndDelete(nil, &nextKey, deleteKeys, deleteValues, nil)
+	if !errors.Is(err, ErrBatchOpNotSup) {
+		t.Fatalf("BatchLookUpDelete: expected error %v, but got %v", ErrBatchOpNotSup, err)
+	}
+}
+
+func TestBatchAPIHash(t *testing.T) {
+	if err := haveBatchAPI(); err != nil {
+		t.Skipf("batch api not available: %v", err)
+	}
+	m, err := NewMap(&MapSpec{
+		Type:       Hash,
+		KeySize:    4,
+		ValueSize:  4,
+		MaxEntries: 10,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer m.Close()
+
+	var (
+		nextKey      uint32
+		keys         = []uint32{0, 1}
+		values       = []uint32{42, 4242}
+		lookupKeys   = make([]uint32, 2)
+		lookupValues = make([]uint32, 2)
+		deleteKeys   = make([]uint32, 2)
+		deleteValues = make([]uint32, 2)
+	)
+
+	count, err := m.BatchUpdate(keys, values, nil)
+	if err != nil {
+		t.Fatalf("BatchUpdate: %v", err)
+	}
+	if count != len(keys) {
+		t.Fatalf("BatchUpdate: expected count, %d, to be %d", count, len(keys))
+	}
+
+	var v uint32
+	if err := m.Lookup(uint32(0), &v); err != nil {
+		t.Fatal("Can't lookup 0:", err)
+	}
+	if v != 42 {
+		t.Error("Want value 42, got", v)
+	}
+
+	count, err = m.BatchLookup(nil, &nextKey, lookupKeys, lookupValues, nil)
+	if err != nil {
+		t.Fatalf("BatchLookup: %v", err)
+	}
+	if count != len(lookupKeys) {
+		t.Fatalf("BatchLookup: returned %d results, expected %d", count, len(lookupKeys))
+	}
+	sort.Slice(lookupKeys, func(i, j int) bool { return lookupKeys[i] < lookupKeys[j] })
+	if !reflect.DeepEqual(keys, lookupKeys) {
+		t.Errorf("BatchUpdate and BatchLookup keys disagree: %v %v", keys, lookupKeys)
+	}
+	sort.Slice(lookupValues, func(i, j int) bool { return lookupValues[i] < lookupValues[j] })
+	if !reflect.DeepEqual(values, lookupValues) {
+		t.Errorf("BatchUpdate and BatchLookup values disagree: %v %v", values, lookupValues)
+	}
+
+	count, err = m.BatchLookupAndDelete(nil, &nextKey, deleteKeys, deleteValues, nil)
+	if err != nil {
+		t.Fatalf("BatchLookupAndDelete: %v", err)
+	}
+	if count != len(deleteKeys) {
+		t.Fatalf("BatchLookupAndDelete: returned %d results, expected %d", count, len(deleteKeys))
+	}
+	sort.Slice(deleteKeys, func(i, j int) bool { return deleteKeys[i] < deleteKeys[j] })
+	if !reflect.DeepEqual(keys, deleteKeys) {
+		t.Errorf("BatchUpdate and BatchLookupAndDelete keys disagree: %v %v", keys, deleteKeys)
+	}
+	sort.Slice(deleteValues, func(i, j int) bool { return deleteValues[i] < deleteValues[j] })
+	if !reflect.DeepEqual(values, deleteValues) {
+		t.Errorf("BatchUpdate and BatchLookupAndDelete values disagree: %v %v", values, deleteValues)
+	}
+
+	if err := m.Lookup(uint32(0), &v); !errors.Is(err, ErrKeyNotExist) {
+		t.Fatalf("Lookup should have failed with error, %v, instead error is %v", ErrKeyNotExist, err)
+	}
+}
+
+func TestBatchAPIMapDelete(t *testing.T) {
+	if err := haveBatchAPI(); err != nil {
+		t.Skipf("batch api not available: %v", err)
+	}
+	m, err := NewMap(&MapSpec{
+		Type:       Hash,
+		KeySize:    4,
+		ValueSize:  4,
+		MaxEntries: 10,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer m.Close()
+
+	var (
+		keys   = []uint32{0, 1}
+		values = []uint32{42, 4242}
+	)
+
+	count, err := m.BatchUpdate(keys, values, nil)
+	if err != nil {
+		t.Fatalf("BatchUpdate: %v", err)
+	}
+	if count != len(keys) {
+		t.Fatalf("BatchUpdate: expected count, %d, to be %d", count, len(keys))
+	}
+
+	var v uint32
+	if err := m.Lookup(uint32(0), &v); err != nil {
+		t.Fatal("Can't lookup 0:", err)
+	}
+	if v != 42 {
+		t.Error("Want value 42, got", v)
+	}
+
+	count, err = m.BatchDelete(keys, nil)
+	if err != nil {
+		t.Fatalf("BatchDelete: %v", err)
+	}
+	if count != len(keys) {
+		t.Fatalf("BatchDelete: expected %d deletions got %d", len(keys), count)
+	}
+
+	if err := m.Lookup(uint32(0), &v); !errors.Is(err, ErrKeyNotExist) {
+		t.Fatalf("Lookup should have failed with error, %v, instead error is %v", ErrKeyNotExist, err)
 	}
 }
 

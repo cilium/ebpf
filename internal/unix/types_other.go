@@ -11,16 +11,19 @@ import (
 var errNonLinux = fmt.Errorf("unsupported platform %s/%s", runtime.GOOS, runtime.GOARCH)
 
 const (
-	ENOENT                   = syscall.ENOENT
-	EEXIST                   = syscall.EEXIST
-	EAGAIN                   = syscall.EAGAIN
-	ENOSPC                   = syscall.ENOSPC
-	EINVAL                   = syscall.EINVAL
-	EINTR                    = syscall.EINTR
-	EPERM                    = syscall.EPERM
-	ESRCH                    = syscall.ESRCH
-	ENODEV                   = syscall.ENODEV
-	EBADF                    = syscall.Errno(0)
+	ENOENT = syscall.ENOENT
+	EEXIST = syscall.EEXIST
+	EAGAIN = syscall.EAGAIN
+	ENOSPC = syscall.ENOSPC
+	EINVAL = syscall.EINVAL
+	EINTR  = syscall.EINTR
+	EPERM  = syscall.EPERM
+	ESRCH  = syscall.ESRCH
+	ENODEV = syscall.ENODEV
+	EBADF  = syscall.Errno(0)
+	// ENOTSUPP is not the same as ENOTSUP or EOPNOTSUP
+	ENOTSUPP = syscall.Errno(0x20c)
+
 	BPF_F_NO_PREALLOC        = 0
 	BPF_F_NUMA_NODE          = 0
 	BPF_F_RDONLY_PROG        = 0

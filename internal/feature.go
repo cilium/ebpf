@@ -32,9 +32,15 @@ func (ufe *UnsupportedFeatureError) Is(target error) bool {
 }
 
 type featureTest struct {
-	sync.Mutex
+	sync.RWMutex
 	successful bool
 	result     error
+}
+
+func (ft *featureTest) isSuccessful() bool {
+	ft.RLock()
+	defer ft.RUnlock()
+	return ft.successful
 }
 
 // FeatureTestFn is used to determine whether the kernel supports
@@ -61,13 +67,11 @@ func FeatureTest(name, version string, fn FeatureTestFn) func() error {
 
 	ft := new(featureTest)
 	return func() error {
-		ft.Lock()
-		defer ft.Unlock()
-
-		if ft.successful {
+		if ft.isSuccessful() {
 			return ft.result
 		}
-
+		ft.Lock()
+		defer ft.Unlock()
 		err := fn()
 		switch {
 		case errors.Is(err, ErrNotSupported):

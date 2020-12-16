@@ -33,6 +33,10 @@ func TestObjName(t *testing.T) {
 	}
 }
 
+func TestHaveBatchAPI(t *testing.T) {
+	testutils.CheckFeatureTest(t, hasBatchAPI)
+}
+
 func TestHaveObjName(t *testing.T) {
 	testutils.CheckFeatureTest(t, haveObjName)
 }

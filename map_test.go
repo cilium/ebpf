@@ -65,6 +65,18 @@ func TestMap(t *testing.T) {
 	if k != 1 {
 		t.Error("Want key 1, got", k)
 	}
+	var (
+		nextKey uint32
+		keys    []uint32 = make([]uint32, 2)
+		values  []uint32 = make([]uint32, 2)
+		count            = 1
+	)
+
+	count, err = m.BatchLookup(nil, &nextKey, &keys, &values, count)
+	if err != nil {
+		t.Fatal("Batch lookup failure: ", err)
+	}
+	fmt.Println(count, keys, values, nextKey)
 }
 
 func TestMapClose(t *testing.T) {

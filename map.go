@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"io"
 	"path/filepath"
+	"reflect"
 	"strings"
+	"syscall"
 
 	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/btf"
@@ -619,6 +621,49 @@ func (m *Map) nextKey(key interface{}, nextKeyOut internal.Pointer) error {
 		return fmt.Errorf("next key failed: %w", err)
 	}
 	return nil
+}
+
+func (m *Map) BatchLookup(startKey, nextKey, keysOut, valuesOut interface{}, count int) (int, error) {
+	if reflect.Indirect(reflect.ValueOf(valuesOut)).Kind() != reflect.Slice {
+		return 0, fmt.Errorf("keys must be a pointer to a slice")
+	}
+	if reflect.Indirect(reflect.ValueOf(valuesOut)).Kind() != reflect.Slice {
+		return 0, fmt.Errorf("valuesOut must be a pointer to a slice")
+	}
+	keyBuf := make([]byte, count*int(m.keySize))
+	keyPtr := internal.NewSlicePointer(keyBuf)
+	valueBuf := make([]byte, count*int(m.valueSize))
+	valuePtr := internal.NewSlicePointer(valueBuf)
+
+	var (
+		startPtr internal.Pointer
+		err      error
+	)
+	if startKey != nil {
+		startPtr, err = marshalPtr(startKey, int(m.keySize))
+		if err != nil {
+			return 0, err
+		}
+	} else {
+		startPtr = internal.NewPointer(nil)
+	}
+
+	nextPtr, nextBuf := makeBuffer(nextKey, int(m.keySize))
+	ct := uint32(count)
+	err = bpfMapBatchLookup(m.fd, startPtr, nextPtr, keyPtr, valuePtr, &ct)
+	if err != nil && err != syscall.ENOENT {
+		return 0, err
+	}
+	err = unmarshalBytes(nextKey, nextBuf)
+	if err != nil {
+		return 0, err
+	}
+	err = unmarshalBytes(keysOut, keyBuf)
+	if err != nil {
+		return 0, err
+	}
+	// TODO: needs map unmarshalling logic
+	return int(ct), unmarshalBytes(valuesOut, valueBuf)
 }
 
 // Iterate traverses a map.

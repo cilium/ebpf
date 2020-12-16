@@ -13,6 +13,8 @@ import (
 // Generic errors returned by BPF syscalls.
 var (
 	ErrNotExist = errors.New("requested object does not exist")
+
+	nilPtr = internal.NewPointer(nil)
 )
 
 // bpfObjName is a null-terminated string made up of
@@ -66,6 +68,17 @@ type bpfMapOpAttr struct {
 	key     internal.Pointer
 	value   internal.Pointer
 	flags   uint64
+}
+
+type bpfBatchMapOpAttr struct {
+	inBatch   internal.Pointer
+	outBatch  internal.Pointer
+	keys      internal.Pointer
+	values    internal.Pointer
+	count     uint32
+	mapFd     uint32
+	elemFlags uint64
+	flags     uint64
 }
 
 type bpfMapInfo struct {
@@ -321,6 +334,64 @@ func objGetNextID(cmd internal.BPFCmd, start uint32) (uint32, error) {
 	return attr.nextID, wrapObjError(err)
 }
 
+func bpfMapBatch(cmd internal.BPFCmd, m *internal.FD, inBatch, outBatch, keys, values internal.Pointer, count *uint32, opts *BatchOptions) error {
+	fd, err := m.Value()
+	if err != nil {
+		return err
+	}
+
+	var c uint32
+	if count != nil {
+		c = *count
+	}
+
+	attr := bpfBatchMapOpAttr{
+		inBatch:  inBatch,
+		outBatch: outBatch,
+		keys:     keys,
+		values:   values,
+		count:    c,
+		mapFd:    fd,
+	}
+	if opts != nil {
+		attr.elemFlags = opts.ElemFlags
+		attr.flags = opts.Flags
+	}
+	_, err = internal.BPF(cmd, unsafe.Pointer(&attr), unsafe.Sizeof(attr))
+	if err == nil && count != nil {
+		*count = attr.count
+	}
+	return wrapMapError(err)
+}
+
+func bpfMapBatchDelete(m *internal.FD, keys internal.Pointer, count *uint32, opts *BatchOptions) error {
+	if err := hasBatchAPI(); err != nil {
+		return err
+	}
+	return bpfMapBatch(internal.BPF_MAP_DELETE_BATCH, m, nilPtr, nilPtr, keys, nilPtr, count, opts)
+}
+
+func bpfMapBatchLookup(m *internal.FD, inBatch, outBatch, keys, values internal.Pointer, count *uint32, opts *BatchOptions) error {
+	if err := hasBatchAPI(); err != nil {
+		return err
+	}
+	return bpfMapBatch(internal.BPF_MAP_LOOKUP_BATCH, m, inBatch, outBatch, keys, values, count, opts)
+}
+
+func bpfMapBatchLookupAndDelete(m *internal.FD, inBatch, outBatch, keys, values internal.Pointer, count *uint32, opts *BatchOptions) error {
+	if err := hasBatchAPI(); err != nil {
+		return err
+	}
+	return bpfMapBatch(internal.BPF_MAP_LOOKUP_AND_DELETE_BATCH, m, inBatch, outBatch, keys, values, count, opts)
+}
+
+func bpfMapBatchUpdate(m *internal.FD, keys, values internal.Pointer, count *uint32, opts *BatchOptions) error {
+	if err := hasBatchAPI(); err != nil {
+		return err
+	}
+	return bpfMapBatch(internal.BPF_MAP_UPDATE_BATCH, m, nilPtr, nilPtr, keys, values, count, opts)
+}
+
 func wrapObjError(err error) error {
 	if err == nil {
 		return nil
@@ -415,6 +486,32 @@ var objNameAllowsDot = internal.FeatureTest("dot in object names", "5.2", func()
 	}
 
 	_ = fd.Close()
+	return nil
+})
+
+var hasBatchAPI = internal.FeatureTest("has batch api", "5.6", func() error {
+	var maxEntries uint32 = 2
+	attr := bpfMapCreateAttr{
+		mapType:    Hash,
+		keySize:    4,
+		valueSize:  4,
+		maxEntries: maxEntries,
+		mapName:    newBPFObjName("batch_test"),
+	}
+
+	fd, err := bpfMapCreate(&attr)
+	if err != nil {
+		return internal.ErrNotSupported
+	}
+	defer fd.Close()
+	keys := []uint32{1, 2}
+	values := []uint32{3, 4}
+	kp, _ := marshalPtr(keys, 8)
+	vp, _ := marshalPtr(values, 8)
+	err = bpfMapBatch(internal.BPF_MAP_UPDATE_BATCH, fd, nilPtr, nilPtr, kp, vp, &maxEntries, nil)
+	if err != nil {
+		return internal.ErrNotSupported
+	}
 	return nil
 })
 

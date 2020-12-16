@@ -2,7 +2,7 @@
 # Test the current package under a different kernel.
 # Requires virtme and qemu to be installed.
 
-set -eu
+set -eux
 set -o pipefail
 
 if [[ "${1:-}" = "--in-vm" ]]; then

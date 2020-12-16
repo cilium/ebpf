@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"path/filepath"
+	"reflect"
 	"strings"
 
 	"github.com/cilium/ebpf/internal"
@@ -17,6 +18,7 @@ var (
 	ErrKeyNotExist      = errors.New("key does not exist")
 	ErrKeyExist         = errors.New("key already exists")
 	ErrIterationAborted = errors.New("iteration aborted")
+	ErrBatchOpNotSup    = errors.New("batch operations not supported for this map type")
 )
 
 // MapOptions control loading a map into the kernel.
@@ -577,6 +579,133 @@ func (m *Map) nextKey(key interface{}, nextKeyOut internal.Pointer) error {
 		return fmt.Errorf("next key failed: %w", err)
 	}
 	return nil
+}
+
+// BatchLookup looks up many elements in a map at once
+// with the startKey being the first element to start
+// from.
+func (m *Map) BatchLookup(startKey, nextKey, keysOut, valuesOut interface{}, opts *BatchOptions) (int, error) {
+	return m.batchLookup(false, startKey, nextKey, keysOut, valuesOut, opts)
+}
+
+// BatchLookup looks up many elements in a map at once
+// with the startKey being the first element to start
+// from. It then deletes all those elements.
+func (m *Map) BatchLookupAndDelete(startKey, nextKey, keysOut, valuesOut interface{}, opts *BatchOptions) (int, error) {
+	return m.batchLookup(true, startKey, nextKey, keysOut, valuesOut, opts)
+}
+
+func (m *Map) batchLookup(del bool, startKey, nextKey, keysOut, valuesOut interface{}, opts *BatchOptions) (int, error) {
+	if err := haveBatchAPI(); err != nil {
+		return 0, err
+	}
+	if !m.typ.canBatch() || (del && !m.typ.canBatchDelete()) {
+		return 0, ErrBatchOpNotSup
+	}
+	keysValue := reflect.ValueOf(keysOut)
+	if keysValue.Kind() != reflect.Slice {
+		return 0, fmt.Errorf("keys must be a slice")
+	}
+	valuesValue := reflect.ValueOf(valuesOut)
+	if valuesValue.Kind() != reflect.Slice {
+		return 0, fmt.Errorf("valuesOut must be a slice")
+	}
+	count := keysValue.Len()
+	if count != valuesValue.Len() {
+		return 0, fmt.Errorf("keysOut and valuesOut must be the same length")
+	}
+	keyBuf := make([]byte, count*int(m.keySize))
+	keyPtr := internal.NewSlicePointer(keyBuf)
+	valueBuf := make([]byte, count*int(m.valueSize))
+	valuePtr := internal.NewSlicePointer(valueBuf)
+
+	var (
+		startPtr internal.Pointer
+		err      error
+	)
+	if startKey != nil {
+		startPtr, err = marshalPtr(startKey, int(m.keySize))
+		if err != nil {
+			return 0, err
+		}
+	}
+
+	nextPtr, nextBuf := makeBuffer(nextKey, int(m.keySize))
+	var ct uint32
+	if del {
+		ct, err = bpfMapBatch(internal.BPF_MAP_LOOKUP_AND_DELETE_BATCH, m.fd, startPtr, nextPtr, keyPtr, valuePtr, uint32(count), opts)
+	} else {
+		ct, err = bpfMapBatch(internal.BPF_MAP_LOOKUP_BATCH, m.fd, startPtr, nextPtr, keyPtr, valuePtr, uint32(count), opts)
+	}
+	if err != nil && !errors.Is(err, ErrKeyNotExist) {
+		return 0, err
+	}
+
+	err = m.unmarshalKey(nextKey, nextBuf)
+	if err != nil {
+		return 0, err
+	}
+	err = unmarshalBytes(keysOut, keyBuf)
+	if err != nil {
+		return 0, err
+	}
+	return int(ct), unmarshalBytes(valuesOut, valueBuf)
+}
+
+// BatchUpdate updates the map with multiple keys and values
+// simultaneously.
+func (m *Map) BatchUpdate(keys, values interface{}, opts *BatchOptions) (int, error) {
+	if err := haveBatchAPI(); err != nil {
+		return 0, err
+	}
+	if !m.typ.canBatch() {
+		return 0, ErrBatchOpNotSup
+	}
+	keysValue := reflect.ValueOf(keys)
+	if keysValue.Kind() != reflect.Slice {
+		return 0, fmt.Errorf("keys must be a slice")
+	}
+	valuesValue := reflect.ValueOf(values)
+	if valuesValue.Kind() != reflect.Slice {
+		return 0, fmt.Errorf("values must be a slice")
+	}
+	count := keysValue.Len()
+	if count != valuesValue.Len() {
+		return 0, fmt.Errorf("keys and values must be the same length")
+	}
+	keyPtr, err := marshalPtr(keys, count*int(m.keySize))
+	if err != nil {
+		return 0, fmt.Errorf("cannot marshal keys: %v", err)
+	}
+	valuePtr, err := marshalPtr(values, count*int(m.valueSize))
+	if err != nil {
+		return 0, fmt.Errorf("cannot marshal keys: %v", err)
+	}
+	var nilPtr internal.Pointer
+	ct, err := bpfMapBatch(internal.BPF_MAP_UPDATE_BATCH, m.fd, nilPtr, nilPtr, keyPtr, valuePtr, uint32(count), opts)
+	return int(ct), err
+}
+
+// BatchDelete batch deletes entries in the map by keys
+func (m *Map) BatchDelete(keys, opts *BatchOptions) (int, error) {
+	if err := haveBatchAPI(); err != nil {
+		return 0, err
+	}
+	if !m.typ.canBatchDelete() {
+		return 0, ErrBatchOpNotSup
+	}
+	keysValue := reflect.ValueOf(keys)
+	if keysValue.Kind() != reflect.Slice {
+		return 0, fmt.Errorf("keys must be a slice")
+	}
+	count := keysValue.Len()
+	keyPtr, err := marshalPtr(keys, count*int(m.keySize))
+	if err != nil {
+		return 0, fmt.Errorf("cannot marshal keys: %v", err)
+	}
+	var nilPtr internal.Pointer
+	ct, err := bpfMapBatch(internal.BPF_MAP_DELETE_BATCH, m.fd, nilPtr, nilPtr, keyPtr, nilPtr, uint32(count), opts)
+	return int(ct), err
 }
 
 // Iterate traverses a map.

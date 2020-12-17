@@ -32,7 +32,7 @@ func (ufe *UnsupportedFeatureError) Is(target error) bool {
 }
 
 type featureTest struct {
-	sync.Mutex
+	sync.RWMutex
 	successful bool
 	result     error
 }
@@ -61,13 +61,21 @@ func FeatureTest(name, version string, fn FeatureTestFn) func() error {
 
 	ft := new(featureTest)
 	return func() error {
+		ft.RLock()
+		if ft.successful {
+			defer ft.RUnlock()
+			return ft.result
+		}
+		ft.RUnlock()
 		ft.Lock()
 		defer ft.Unlock()
-
+		// check one more time on the off
+		// chance that two go routines
+		// were able to call into the write
+		// lock
 		if ft.successful {
 			return ft.result
 		}
-
 		err := fn()
 		switch {
 		case errors.Is(err, ErrNotSupported):

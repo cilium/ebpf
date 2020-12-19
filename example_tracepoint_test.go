@@ -5,28 +5,16 @@ package ebpf_test
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
 	"os"
-	"strconv"
-	"strings"
+	"runtime"
 	"time"
 
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/asm"
-	"github.com/cilium/ebpf/perf"
+	ringbuffer "github.com/cilium/ebpf/perf"
 
-	"golang.org/x/sys/unix"
+	"github.com/elastic/go-perf"
 )
-
-// getTracepointID returns the system specific ID for the tracepoint sys_enter_open.
-func getTracepointID() (uint64, error) {
-	data, err := ioutil.ReadFile("/sys/kernel/debug/tracing/events/syscalls/sys_enter_open/id")
-	if err != nil {
-		return 0, fmt.Errorf("failed to read tracepoint ID for 'sys_enter_open': %v", err)
-	}
-	tid := strings.TrimSuffix(string(data), "\n")
-	return strconv.ParseUint(tid, 10, 64)
-}
 
 // This demonstrates how to attach an eBPF program to a tracepoint.
 // The program will be attached to the sys_enter_open syscall and print out the integer
@@ -34,6 +22,7 @@ func getTracepointID() (uint64, error) {
 func Example_tracepoint() {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
+
 	events, err := ebpf.NewMap(&ebpf.MapSpec{
 		Type: ebpf.PerfEventArray,
 		Name: "pureGo",
@@ -43,7 +32,7 @@ func Example_tracepoint() {
 	}
 	defer events.Close()
 
-	rd, err := perf.NewReader(events, os.Getpagesize())
+	rd, err := ringbuffer.NewReader(events, os.Getpagesize())
 	if err != nil {
 		panic(fmt.Errorf("could not create event reader: %v", err))
 	}
@@ -58,7 +47,7 @@ func Example_tracepoint() {
 			}
 			record, err := rd.Read()
 			if err != nil {
-				if perf.IsClosed(err) {
+				if ringbuffer.IsClosed(err) {
 					return
 				}
 				panic(fmt.Errorf("could not read from reader: %v", err))
@@ -88,7 +77,7 @@ func Example_tracepoint() {
 	}
 
 	prog, err := ebpf.NewProgram(&ebpf.ProgramSpec{
-		Name:         "sys_enter_open",
+		Name:         "trace_open",
 		Type:         ebpf.TracePoint,
 		License:      "GPL",
 		Instructions: ins,
@@ -98,32 +87,24 @@ func Example_tracepoint() {
 	}
 	defer prog.Close()
 
-	tid, err := getTracepointID()
-	if err != nil {
-		panic(fmt.Errorf("could not get tracepoint id: %v", err))
+	ga := new(perf.Attr)
+	gtp := perf.Tracepoint("syscalls", "sys_enter_open")
+	if err := gtp.Configure(ga); err != nil {
+		panic(fmt.Errorf("failed to configure tracepoint: %v", err))
 	}
 
-	attr := unix.PerfEventAttr{
-		Type:        unix.PERF_TYPE_TRACEPOINT,
-		Config:      tid,
-		Sample_type: unix.PERF_SAMPLE_RAW,
-		Sample:      1,
-		Wakeup:      1,
-	}
-	pfd, err := unix.PerfEventOpen(&attr, -1, 0, -1, unix.PERF_FLAG_FD_CLOEXEC)
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
+
+	openTracepoint, err := perf.Open(ga, perf.CallingThread, perf.AnyCPU, nil)
 	if err != nil {
-		panic(fmt.Errorf("unable to open perf events: %v", err))
+		panic(fmt.Errorf("failed to open perf event on tracepoint: %v", err))
 	}
-	if _, _, errno := unix.Syscall(unix.SYS_IOCTL, uintptr(pfd), unix.PERF_EVENT_IOC_ENABLE, 0); errno != 0 {
-		panic(fmt.Errorf("unable to enable perf events: %v", err))
-	}
-	if _, _, errno := unix.Syscall(unix.SYS_IOCTL, uintptr(pfd), unix.PERF_EVENT_IOC_SET_BPF, uintptr(prog.FD())); errno != 0 {
-		panic(fmt.Errorf("unable to attach bpf program to perf events: %v", err))
+	defer openTracepoint.Close()
+
+	if err := openTracepoint.SetBPF(uint32(prog.FD())); err != nil {
+		panic(fmt.Errorf("failed to attach eBPF to tracepoint: %v", err))
 	}
 
 	<-ctx.Done()
-
-	if _, _, errno := unix.Syscall(unix.SYS_IOCTL, uintptr(pfd), unix.PERF_EVENT_IOC_DISABLE, 0); errno != 0 {
-		panic(fmt.Errorf("unable to disable perf events: %v", err))
-	}
 }

@@ -18,6 +18,7 @@ blocks:
           - sudo apt-get install -y qemu-system-x86 clang-9
           - go generate ./cmd/bpf2go
           - git diff --exit-code || { echo "generated files are not up to date" >&2; false; }
+          - for i in $(find _example -maxdepth 1 -mindepth 1 -type d); do cd $i; go build; cd -; done
       env_vars:
         - name: TMPDIR
           value: /tmp

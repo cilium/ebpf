@@ -470,6 +470,7 @@ func (p *Probe) Stop() error {
 	p.stateLock.Lock()
 	defer p.stateLock.Unlock()
 	if p.state < running || !p.Enabled {
+		p.reset()
 		return nil
 	}
 	return p.stop(true)

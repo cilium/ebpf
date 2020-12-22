@@ -94,6 +94,12 @@ func GetSyscallFnNameWithSymFile(name string, symFile string) (string, error) {
 		if err != nil {
 			return "", err
 		}
+		// copy to avoid memory leak due to go subslice
+		// see: https://go101.org/article/memory-leaking.html
+		var b strings.Builder
+		b.WriteString(syscall)
+		syscall = b.String()
+
 		syscallPrefix = strings.TrimSuffix(syscall, "open")
 	}
 

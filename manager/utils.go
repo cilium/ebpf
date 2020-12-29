@@ -188,7 +188,7 @@ func EnableKprobeEvent(probeType, funcName, UID, maxactiveStr string, kprobeAtta
 	}
 	defer f.Close()
 	cmd := fmt.Sprintf("%s%s:%s %s\n", probeType, maxactiveStr, eventName, funcName)
-	if _, err = f.WriteString(cmd); err != nil {
+	if _, err = f.WriteString(cmd); err != nil && !os.IsExist(err) {
 		return -1, errors.Wrapf(err, "cannot write %q to kprobe_events", cmd)
 	}
 
@@ -266,7 +266,7 @@ func EnableUprobeEvent(probeType, funcName, path, UID string, uprobeAttachPID in
 
 	cmd := fmt.Sprintf("%s:%s %s:%#x\n", probeType, eventName, path, offset)
 
-	if _, err = f.WriteString(cmd); err != nil {
+	if _, err = f.WriteString(cmd); err != nil && !os.IsExist(err) {
 		return -1, errors.Wrapf(err, "cannot write %q to uprobe_events", cmd)
 	}
 

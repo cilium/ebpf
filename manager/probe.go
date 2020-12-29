@@ -367,7 +367,9 @@ func (p *Probe) attach() error {
 		return nil
 	}
 	if p.state < initialized {
-		p.lastError = ErrProbeNotInitialized
+		if p.lastError == nil {
+			p.lastError = ErrProbeNotInitialized
+		}
 		return ErrProbeNotInitialized
 	}
 

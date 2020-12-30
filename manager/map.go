@@ -1,9 +1,10 @@
 package manager
 
 import (
-	"github.com/pkg/errors"
 	"os"
 	"sync"
+
+	"github.com/pkg/errors"
 
 	"github.com/DataDog/ebpf"
 )
@@ -51,7 +52,7 @@ type Map struct {
 	arraySpec *ebpf.MapSpec
 	manager   *Manager
 	state     state
-	stateLock *sync.RWMutex
+	stateLock sync.RWMutex
 
 	// externalMap - Indicates if the underlying eBPF map came from the current Manager or was loaded from an external
 	// source (=> pinned maps or rewritten maps)
@@ -77,7 +78,6 @@ func loadNewMap(spec ebpf.MapSpec, options MapOptions) (*Map, error) {
 	// Create new map
 	managerMap := Map{
 		arraySpec:  &spec,
-		stateLock:  &sync.RWMutex{},
 		Name:       spec.Name,
 		Contents:   spec.Contents,
 		Freeze:     spec.Freeze,
@@ -101,9 +101,6 @@ func loadNewMap(spec ebpf.MapSpec, options MapOptions) (*Map, error) {
 
 // Init - Initialize a map
 func (m *Map) Init(manager *Manager) error {
-	if m.stateLock == nil {
-		m.stateLock = &sync.RWMutex{}
-	}
 	m.stateLock.Lock()
 	defer m.stateLock.Unlock()
 	if m.state >= initialized {

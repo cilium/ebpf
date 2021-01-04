@@ -166,18 +166,31 @@ func getSyscallFnNameWithKallsyms(name string, kallsymsContent string) (string, 
 
 var safeEventRegexp = regexp.MustCompile("[^a-zA-Z0-9]")
 
-func SanitizeEventName(event string) string {
-	return safeEventRegexp.ReplaceAllString(event, "_")
+func GenerateEventName(probeType, funcName, UID string, attachPID int) (string, error) {
+	eventName := safeEventRegexp.ReplaceAllString(fmt.Sprintf("%s_%s_%s_%d", probeType, funcName, UID, attachPID), "_")
+
+	if len(eventName) > MaxEventNameLen {
+		return "", errors.Errorf("event name too long (kernel limit is %d): %s", MaxEventNameLen, eventName)
+	}
+	return eventName, nil
+}
+
+// ReadKprobeEvents - Returns the content of kprobe_events
+func ReadKprobeEvents() (string, error) {
+	kprobeEvents, err := ioutil.ReadFile("/sys/kernel/debug/tracing/kprobe_events")
+	if err != nil {
+		return "", err
+	}
+	return string(kprobeEvents), nil
 }
 
 // EnableKprobeEvent - Writes a new kprobe in kprobe_events with the provided parameters. Call DisableKprobeEvent
 // to remove the krpobe.
 func EnableKprobeEvent(probeType, funcName, UID, maxactiveStr string, kprobeAttachPID int) (int, error) {
 	// Generate event name
-	eventName := SanitizeEventName(fmt.Sprintf("%s_%s_%s_%d", probeType, funcName, UID, kprobeAttachPID))
-
-	if len(eventName) > MaxEventNameLen {
-		return -1, errors.Errorf("event name too long (kernel limit is %d): %s", MaxEventNameLen, eventName)
+	eventName, err := GenerateEventName(probeType, funcName, UID, kprobeAttachPID)
+	if err != nil {
+		return -1, err
 	}
 
 	// Write line to kprobe_events
@@ -211,12 +224,14 @@ func EnableKprobeEvent(probeType, funcName, UID, maxactiveStr string, kprobeAtta
 // DisableKprobeEvent - Removes a kprobe from kprobe_events
 func DisableKprobeEvent(probeType, funcName, UID string, kprobeAttachPID int) error {
 	// Generate event name
-	eventName := SanitizeEventName(fmt.Sprintf("%s_%s_%s_%d", probeType, funcName, UID, kprobeAttachPID))
-
-	if len(eventName) > MaxEventNameLen {
-		return errors.Errorf("event name too long (kernel limit is %d): %s", MaxEventNameLen, eventName)
+	eventName, err := GenerateEventName(probeType, funcName, UID, kprobeAttachPID)
+	if err != nil {
+		return err
 	}
+	return disableKprobeEvent(eventName)
+}
 
+func disableKprobeEvent(eventName string) error {
 	// Write line to kprobe_events
 	kprobeEventsFileName := "/sys/kernel/debug/tracing/kprobe_events"
 	f, err := os.OpenFile(kprobeEventsFileName, os.O_APPEND|os.O_WRONLY, 0)
@@ -240,14 +255,22 @@ func DisableKprobeEvent(probeType, funcName, UID string, kprobeAttachPID int) er
 	return nil
 }
 
+// ReadUprobeEvents - Returns the content of uprobe_events
+func ReadUprobeEvents() (string, error) {
+	uprobeEvents, err := ioutil.ReadFile("/sys/kernel/debug/tracing/uprobe_events")
+	if err != nil {
+		return "", err
+	}
+	return string(uprobeEvents), nil
+}
+
 // EnableUprobeEvent - Writes a new Uprobe in uprobe_events with the provided parameters. Call DisableUprobeEvent
 // to remove the krpobe.
 func EnableUprobeEvent(probeType, funcName, path, UID string, uprobeAttachPID int) (int, error) {
 	// Generate event name
-	eventName := SanitizeEventName(fmt.Sprintf("%s_%s_%s_%d", probeType, funcName, UID, uprobeAttachPID))
-
-	if len(eventName) > MaxEventNameLen {
-		return -1, errors.Errorf("event name too long (kernel limit is %d): %s", MaxEventNameLen, eventName)
+	eventName, err := GenerateEventName(probeType, funcName, UID, uprobeAttachPID)
+	if err != nil {
+		return -1, err
 	}
 
 	// Retrieve dynamic symbol offset
@@ -313,12 +336,14 @@ func findSymbolOffset(path string, name string) (uint64, error) {
 // DisableUprobeEvent - Removes a uprobe from uprobe_events
 func DisableUprobeEvent(probeType, funcName, UID string, uprobeAttachPID int) error {
 	// Generate event name
-	eventName := SanitizeEventName(fmt.Sprintf("%s_%s_%s_%d", probeType, funcName, UID, uprobeAttachPID))
-
-	if len(eventName) > MaxEventNameLen {
-		return errors.Errorf("event name too long (kernel limit is %d): %s", MaxEventNameLen, eventName)
+	eventName, err := GenerateEventName(probeType, funcName, UID, uprobeAttachPID)
+	if err != nil {
+		return err
 	}
+	return disableUprobeEvent(eventName)
+}
 
+func disableUprobeEvent(eventName string) error {
 	// Write uprobe_events line
 	uprobeEventsFileName := "/sys/kernel/debug/tracing/uprobe_events"
 	f, err := os.OpenFile(uprobeEventsFileName, os.O_APPEND|os.O_WRONLY, 0)

@@ -4,9 +4,12 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"regexp"
+	"strconv"
 	"sync"
 	"time"
 
+	"github.com/DataDog/gopsutil/process"
 	"github.com/florianl/go-tc"
 	"github.com/hashicorp/go-multierror"
 	"github.com/pkg/errors"
@@ -517,6 +520,11 @@ func (m *Manager) Start() error {
 	if m.state >= running {
 		m.stateLock.Unlock()
 		return nil
+	}
+
+	// clean up tracefs
+	if err := m.cleanupTracefs(); err != nil {
+		return errors.Wrap(err, "failed to cleanup tracefs")
 	}
 
 	// Start perf ring readers
@@ -1423,4 +1431,98 @@ func (m *Manager) newNetlinkConnection(ifindex int32, netns uint64) (*netlinkCac
 	// Insert in manager cache
 	m.netlinkCache[netlinkCacheKey{Ifindex: ifindex, Netns: netns}] = &cacheEntry
 	return &cacheEntry, nil
+}
+
+// cleanupKprobeEvents - Cleans up kprobe_events and uprobe_events by removing entries of known UIDs, that are not used
+// anymore.
+//
+// Previous instances of this manager might have been killed unexpectedly. When this happens,
+// kprobe_events is not cleaned up properly and can grow indefinitely until it reaches 65k
+// entries (see: https://elixir.bootlin.com/linux/latest/source/kernel/trace/trace_output.c#L696)
+// Once the limit is reached, the kernel refuses to load new probes and throws a "no such device"
+// error. To prevent this, start by cleaning up the kprobe_events entries of previous managers that
+// are not running anymore.
+func (m *Manager) cleanupTracefs() error {
+	// build the pattern to look for in kprobe_events and uprobe_events
+	var uids string
+	for _, p := range m.Probes {
+		if len(p.UID) == 0 {
+			continue
+		}
+
+		if len(uids) == 0 {
+			uids = p.UID
+		} else {
+			uids = uids + "|" + p.UID
+		}
+	}
+	pattern, err := regexp.Compile(fmt.Sprintf(`(p|r)[0-9]*:(kprobes|uprobes)/(.*(%s)_([0-9]*)) .*`, uids))
+	if err != nil {
+		return errors.Wrap(err, "pattern generation failed")
+	}
+
+	// clean up kprobe_events
+	if err := cleanupKprobeEvents(pattern); err != nil {
+		return err
+	}
+
+	// clean up uprobe_events
+	if err := cleanupUprobeEvents(pattern); err != nil {
+		return err
+	}
+	return nil
+}
+
+func cleanupKprobeEvents(pattern *regexp.Regexp) error {
+	kprobeEvents, err := ReadKprobeEvents()
+	if err != nil {
+		return errors.Wrap(err, "couldn't read kprobe_events")
+	}
+	for _, match := range pattern.FindAllStringSubmatch(kprobeEvents, -1) {
+		if len(match) < 6 {
+			continue
+		}
+
+		// check if the provided pid still exists
+		pid, err := strconv.Atoi(match[5])
+		if err != nil {
+			continue
+		}
+		_, err = process.NewProcess(int32(pid))
+		if err == nil {
+			// the process exists, continue
+			continue
+		}
+
+		// remove the entry
+		_ = disableKprobeEvent(match[3])
+	}
+	return nil
+}
+
+func cleanupUprobeEvents(pattern *regexp.Regexp) error {
+	uprobeEvents, err := ReadUprobeEvents()
+	if err != nil {
+		return errors.Wrap(err, "couldn't read uprobe_events")
+	}
+	for _, match := range pattern.FindAllStringSubmatch(uprobeEvents, -1) {
+		if len(match) < 6 {
+			continue
+		}
+
+		// check if the provided pid still exists
+		pid, err := strconv.Atoi(match[5])
+		if err != nil {
+			continue
+		}
+		_, err = process.NewProcess(int32(pid))
+		if err == nil {
+			// the process exists, continue
+			continue
+		}
+
+		// remove the entry
+		_ = disableUprobeEvent(match[3])
+	}
+	return nil
 }

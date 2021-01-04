@@ -229,7 +229,7 @@ type Manager struct {
 	options        Options
 	netlinkCache   map[netlinkCacheKey]*netlinkCacheValue
 	state          state
-	stateLock      *sync.RWMutex
+	stateLock      sync.RWMutex
 
 	// Probes - List of probes handled by the manager
 	Probes []*Probe
@@ -423,9 +423,6 @@ func (m *Manager) Init(elf io.ReaderAt) error {
 // elf: reader containing the eBPF bytecode
 // options: options provided to the manager to configure its initialization
 func (m *Manager) InitWithOptions(elf io.ReaderAt, options Options) error {
-	if m.stateLock == nil {
-		m.stateLock = &sync.RWMutex{}
-	}
 	m.stateLock.Lock()
 	if m.state > initialized {
 		m.stateLock.Unlock()

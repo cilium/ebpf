@@ -1462,18 +1462,19 @@ func (m *Manager) cleanupTracefs() error {
 	}
 
 	// clean up kprobe_events
-	if err := cleanupKprobeEvents(pattern); err != nil {
+	pidMask := make(map[int]bool)
+	if err := cleanupKprobeEvents(pattern, pidMask); err != nil {
 		return err
 	}
 
 	// clean up uprobe_events
-	if err := cleanupUprobeEvents(pattern); err != nil {
+	if err := cleanupUprobeEvents(pattern, pidMask); err != nil {
 		return err
 	}
 	return nil
 }
 
-func cleanupKprobeEvents(pattern *regexp.Regexp) error {
+func cleanupKprobeEvents(pattern *regexp.Regexp, pidMask map[int]bool) error {
 	kprobeEvents, err := ReadKprobeEvents()
 	if err != nil {
 		return errors.Wrap(err, "couldn't read kprobe_events")
@@ -1488,9 +1489,13 @@ func cleanupKprobeEvents(pattern *regexp.Regexp) error {
 		if err != nil {
 			continue
 		}
+		if _, ok := pidMask[pid]; ok {
+			continue
+		}
 		_, err = process.NewProcess(int32(pid))
 		if err == nil {
 			// the process exists, continue
+			pidMask[pid] = true
 			continue
 		}
 
@@ -1500,7 +1505,7 @@ func cleanupKprobeEvents(pattern *regexp.Regexp) error {
 	return nil
 }
 
-func cleanupUprobeEvents(pattern *regexp.Regexp) error {
+func cleanupUprobeEvents(pattern *regexp.Regexp, pidMask map[int]bool) error {
 	uprobeEvents, err := ReadUprobeEvents()
 	if err != nil {
 		return errors.Wrap(err, "couldn't read uprobe_events")
@@ -1515,9 +1520,13 @@ func cleanupUprobeEvents(pattern *regexp.Regexp) error {
 		if err != nil {
 			continue
 		}
+		if _, ok := pidMask[pid]; ok {
+			continue
+		}
 		_, err = process.NewProcess(int32(pid))
 		if err == nil {
 			// the process exists, continue
+			pidMask[pid] = true
 			continue
 		}
 

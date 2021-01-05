@@ -6,6 +6,7 @@ import (
 	"os"
 	"regexp"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -1451,19 +1452,24 @@ const (
 // are not running anymore.
 func (m *Manager) cleanupTracefs() error {
 	// build the pattern to look for in kprobe_events and uprobe_events
-	var uids string
+	var uidSet []string
 	for _, p := range m.Probes {
 		if len(p.UID) == 0 {
 			continue
 		}
-
-		if len(uids) == 0 {
-			uids = p.UID
-		} else {
-			uids = uids + "|" + p.UID
+		
+		var found bool
+		for _, uid := range uidSet {
+			if uid == p.UID {
+				found = true
+				break
+			}
+		}
+		if !found {
+			uidSet = append(uidSet, p.UID)
 		}
 	}
-	pattern, err := regexp.Compile(fmt.Sprintf(`(p|r)[0-9]*:(kprobes|uprobes)/(.*(%s)_([0-9]*)) .*`, uids))
+	pattern, err := regexp.Compile(fmt.Sprintf(`(p|r)[0-9]*:(kprobes|uprobes)/(.*(%s)_([0-9]*)) .*`, strings.Join(uidSet, "|")))
 	if err != nil {
 		return errors.Wrap(err, "pattern generation failed")
 	}

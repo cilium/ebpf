@@ -1433,6 +1433,13 @@ func (m *Manager) newNetlinkConnection(ifindex int32, netns uint64) (*netlinkCac
 	return &cacheEntry, nil
 }
 
+type procMask uint8
+
+const (
+	Running procMask = iota
+	Exited
+)
+
 // cleanupKprobeEvents - Cleans up kprobe_events and uprobe_events by removing entries of known UIDs, that are not used
 // anymore.
 //
@@ -1462,7 +1469,7 @@ func (m *Manager) cleanupTracefs() error {
 	}
 
 	// clean up kprobe_events
-	pidMask := make(map[int]bool)
+	pidMask := make(map[int]procMask)
 	if err := cleanupKprobeEvents(pattern, pidMask); err != nil {
 		return err
 	}
@@ -1474,7 +1481,7 @@ func (m *Manager) cleanupTracefs() error {
 	return nil
 }
 
-func cleanupKprobeEvents(pattern *regexp.Regexp, pidMask map[int]bool) error {
+func cleanupKprobeEvents(pattern *regexp.Regexp, pidMask map[int]procMask) error {
 	kprobeEvents, err := ReadKprobeEvents()
 	if err != nil {
 		return errors.Wrap(err, "couldn't read kprobe_events")
@@ -1489,14 +1496,23 @@ func cleanupKprobeEvents(pattern *regexp.Regexp, pidMask map[int]bool) error {
 		if err != nil {
 			continue
 		}
-		if _, ok := pidMask[pid]; ok {
-			continue
-		}
-		_, err = process.NewProcess(int32(pid))
-		if err == nil {
-			// the process exists, continue
-			pidMask[pid] = true
-			continue
+		if state, ok := pidMask[pid]; !ok {
+			// this short sleep is used to avoid a CPU spike (5s ~ 60k * 80 microseconds)
+			time.Sleep(80*time.Microsecond)
+
+			_, err = process.NewProcess(int32(pid))
+			if err == nil {
+				// the process is still running, continue
+				pidMask[pid] = Running
+				continue
+			} else {
+				pidMask[pid] = Exited
+			}
+		} else {
+			if state == Running {
+				// the process is still running, continue
+				continue
+			}
 		}
 
 		// remove the entry
@@ -1505,7 +1521,7 @@ func cleanupKprobeEvents(pattern *regexp.Regexp, pidMask map[int]bool) error {
 	return nil
 }
 
-func cleanupUprobeEvents(pattern *regexp.Regexp, pidMask map[int]bool) error {
+func cleanupUprobeEvents(pattern *regexp.Regexp, pidMask map[int]procMask) error {
 	uprobeEvents, err := ReadUprobeEvents()
 	if err != nil {
 		return errors.Wrap(err, "couldn't read uprobe_events")
@@ -1520,14 +1536,23 @@ func cleanupUprobeEvents(pattern *regexp.Regexp, pidMask map[int]bool) error {
 		if err != nil {
 			continue
 		}
-		if _, ok := pidMask[pid]; ok {
-			continue
-		}
-		_, err = process.NewProcess(int32(pid))
-		if err == nil {
-			// the process exists, continue
-			pidMask[pid] = true
-			continue
+		if state, ok := pidMask[pid]; !ok {
+			// this short sleep is used to avoid a CPU spike (5s ~ 60k * 80 microseconds)
+			time.Sleep(80*time.Microsecond)
+
+			_, err = process.NewProcess(int32(pid))
+			if err == nil {
+				// the process is still running, continue
+				pidMask[pid] = Running
+				continue
+			} else {
+				pidMask[pid] = Exited
+			}
+		} else {
+			if state == Running {
+				// the process is still running, continue
+				continue
+			}
 		}
 
 		// remove the entry

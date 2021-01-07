@@ -142,7 +142,8 @@ func Example_socketELF() {
 }
 
 func openRawSock(index int) (int, error) {
-	const ETH_P_ALL uint16 = 0x00<<8 | 0x03
+	// network byte order representation of ETH_P_ALL
+	const ETH_P_ALL uint16 = 0x03 << 8
 	sock, err := syscall.Socket(syscall.AF_PACKET, syscall.SOCK_RAW|syscall.SOCK_NONBLOCK|syscall.SOCK_CLOEXEC, int(ETH_P_ALL))
 	if err != nil {
 		return 0, err

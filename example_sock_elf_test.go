@@ -150,7 +150,7 @@ func openRawSock(index int) (int, error) {
 	}
 	sll := syscall.SockaddrLinklayer{
 		Ifindex:  index,
-		Protocol: htons(ETH_P_ALL),
+		Protocol: htons(syscall.ETH_P_ALL),
 	}
 	if err := syscall.Bind(sock, &sll); err != nil {
 		return 0, err

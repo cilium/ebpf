@@ -4,10 +4,12 @@ package ebpf_test
 
 import (
 	"bytes"
+	"encoding/binary"
 	"flag"
 	"fmt"
 	"syscall"
 	"time"
+	"unsafe"
 
 	"github.com/cilium/ebpf"
 )
@@ -142,16 +144,23 @@ func Example_socketELF() {
 }
 
 func openRawSock(index int) (int, error) {
-	const ETH_P_ALL uint16 = 0x00<<8 | 0x03
-	sock, err := syscall.Socket(syscall.AF_PACKET, syscall.SOCK_RAW|syscall.SOCK_NONBLOCK|syscall.SOCK_CLOEXEC, int(ETH_P_ALL))
+	sock, err := syscall.Socket(syscall.AF_PACKET, syscall.SOCK_RAW|syscall.SOCK_NONBLOCK|syscall.SOCK_CLOEXEC, int(htons(syscall.ETH_P_ALL)))
 	if err != nil {
 		return 0, err
 	}
-	sll := syscall.SockaddrLinklayer{}
-	sll.Protocol = ETH_P_ALL
-	sll.Ifindex = index
+	sll := syscall.SockaddrLinklayer{
+		Ifindex:  index,
+		Protocol: htons(syscall.ETH_P_ALL),
+	}
 	if err := syscall.Bind(sock, &sll); err != nil {
 		return 0, err
 	}
 	return sock, nil
+}
+
+// htons converts the unsigned short integer hostshort from host byte order to network byte order.
+func htons(i uint16) uint16 {
+	b := make([]byte, 2)
+	binary.BigEndian.PutUint16(b, i)
+	return *(*uint16)(unsafe.Pointer(&b[0]))
 }

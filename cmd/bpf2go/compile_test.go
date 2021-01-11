@@ -22,6 +22,44 @@ func TestCompile(t *testing.T) {
 		source: filepath.Join(dir, "test.c"),
 		dest:   filepath.Join(dir, "test.o"),
 		dep:    &dep,
+		usellc: false,
+	})
+	if err != nil {
+		t.Fatal("Can't compile:", err)
+	}
+
+	stat, err := os.Stat(filepath.Join(dir, "test.o"))
+	if err != nil {
+		t.Fatal("Can't stat output:", err)
+	}
+
+	if stat.Size() == 0 {
+		t.Error("Compilation creates an empty file")
+	}
+
+	if dep.Len() == 0 {
+		t.Error("Compilation doesn't generate depinfo")
+	}
+
+	if _, err := parseDependencies(dir, &dep); err != nil {
+		t.Error("Can't parse dependencies:", err)
+	}
+}
+
+func TestCompileKprobe(t *testing.T) {
+	dir := mustWriteTempFile(t, "test.c", minimalSocketFilter)
+
+	var dep bytes.Buffer
+	err := compile(compileArgs{
+		cc:     "clang-9",
+		dir:    dir,
+		source: filepath.Join(dir, "test.c"),
+		dest:   filepath.Join(dir, "test.o"),
+		dep:    &dep,
+		usellc: true,
+		cFlags: []string{"-O2", "-emit-llvm"}, // This is odd, but clang-9 crashes without the optimize
+		llc:    "llc-9",
+		target: "bpfeb",
 	})
 	if err != nil {
 		t.Fatal("Can't compile:", err)

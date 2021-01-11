@@ -49,6 +49,8 @@ func run(stdout io.Writer, pkg, outputDir string, args []string) (err error) {
 		flagTags     = fs.String("tags", "", "list of Go build tags to include in generated files")
 		flagTarget   = fs.String("target", "", "clang target to compile for (bpf, bpfel, bpfeb)")
 		flagMakeBase = fs.String("makebase", "", "write make compatible depinfo files relative to `directory`")
+		flagKprobe   = fs.Bool("buildkprobe", false, "compile a kprobe with clang incompatible headers")
+		flagLlc      = fs.String("llc", "llc", "name of llvm system compiler to use for kprobes")
 	)
 
 	fs.SetOutput(stdout)
@@ -147,14 +149,35 @@ func run(stdout io.Writer, pkg, outputDir string, args []string) (err error) {
 		objFileName = filepath.Join(outputDir, objFileName)
 
 		var dep bytes.Buffer
-		err = compile(compileArgs{
-			cc:     *flagCC,
-			cFlags: append(cFlags, "-target", target),
-			dir:    cwd,
-			source: inputDir + inputFile,
-			dest:   objFileName,
-			dep:    &dep,
-		})
+		var compile_args compileArgs
+		if *flagKprobe {
+			compile_args =
+				compileArgs{
+					cc:     *flagCC,
+					cFlags: append(cFlags, "-emit-llvm"),
+					dir:    cwd,
+					source: inputDir + inputFile,
+					dest:   objFileName,
+					dep:    &dep,
+					usellc: *flagKprobe,
+					llc:    *flagLlc,
+					target: target,
+				}
+		} else {
+			compile_args = compileArgs{
+				cc:     *flagCC,
+				cFlags: append(cFlags, "-target", target),
+				dir:    cwd,
+				source: inputDir + inputFile,
+				dest:   objFileName,
+				dep:    &dep,
+				usellc: *flagKprobe,
+				llc:    *flagLlc,
+				target: target,
+			}
+		}
+
+		err = compile(compile_args)
 		if err != nil {
 			return err
 		}

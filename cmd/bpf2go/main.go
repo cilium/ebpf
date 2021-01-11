@@ -49,7 +49,7 @@ func run(stdout io.Writer, pkg, outputDir string, args []string) (err error) {
 		flagTags     = fs.String("tags", "", "list of Go build tags to include in generated files")
 		flagTarget   = fs.String("target", "", "clang target to compile for (bpf, bpfel, bpfeb)")
 		flagMakeBase = fs.String("makebase", "", "write make compatible depinfo files relative to `directory`")
-		flagKprobe   = fs.Bool("buildkprobe", true, "compile a kprobe with clang incompatible headers")
+		flagKprobe   = fs.Bool("buildkprobe", false, "compile a kprobe with clang incompatible headers")
 		flagLlc      = fs.String("llc", "llc", "name of llvm system compiler to use for kprobes")
 	)
 

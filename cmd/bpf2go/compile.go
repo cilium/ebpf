@@ -17,17 +17,17 @@ type compileArgs struct {
 	cc     string
 	cFlags []string
 	// Absolute working directory
-	dir    string
+	dir string
 	// Absolute input file name
 	source string
 	// Absolute output file name
-	dest   string
+	dest string
 	// Depfile will be written here if depName is not empty
-	dep    io.Writer
+	dep io.Writer
 	// Pipe through llc?
 	usellc bool
 	// Which system compiler to use
-	llc    string
+	llc string
 	// Binary target
 	target string
 }
@@ -54,7 +54,7 @@ func compile(args compileArgs) error {
 	)
 
 	if args.usellc {
-		cmd.Args = append(cmd.Args, "-o", fmt.Sprintf("%s.llvm", args.dest) )
+		cmd.Args = append(cmd.Args, "-o", fmt.Sprintf("%s.llvm", args.dest))
 	} else {
 		cmd.Args = append(cmd.Args, "-o", args.dest)
 	}
@@ -100,13 +100,13 @@ func compile(args compileArgs) error {
 	// Need to llc system compiler to generate object code
 	if args.usellc {
 		var llc_args []string
-		llc_args = append(llc_args, fmt.Sprintf("-march=%s", args.target), "-filetype=obj", "-o", args.dest, fmt.Sprintf("%s.llvm", args.dest) )
+		llc_args = append(llc_args, fmt.Sprintf("-march=%s", args.target), "-filetype=obj", "-o", args.dest, fmt.Sprintf("%s.llvm", args.dest))
 		cmdllc := exec.Command(args.llc, llc_args...)
 		cmdllc.Stderr = os.Stderr
 		if err := cmdllc.Start(); err != nil {
 			return fmt.Errorf("can't execute %s: %s", args.llc, err)
 		}
-		if err := cmd.Wait(); err != nil {
+		if err := cmdllc.Wait(); err != nil {
 			return fmt.Errorf("%s: %s", args.llc, err)
 		}
 

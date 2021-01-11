@@ -51,14 +51,14 @@ func TestCompileKprobe(t *testing.T) {
 
 	var dep bytes.Buffer
 	err := compile(compileArgs{
-		cc:     "clang-10",
+		cc:     "clang-9",
 		dir:    dir,
 		source: filepath.Join(dir, "test.c"),
 		dest:   filepath.Join(dir, "test.o"),
 		dep:    &dep,
 		usellc: true,
-		cFlags: []string{"-emit-llvm"},
-		llc:    "llc-10",
+		cFlags: []string{"-O2", "-emit-llvm"}, // This is odd, but clang-9 crashes without the optimize
+		llc:    "llc-9",
 		target: "bpfeb",
 	})
 	if err != nil {

@@ -77,7 +77,7 @@ func main() {
 	}
 
 	prog, err := ebpf.NewProgram(&ebpf.ProgramSpec{
-		Name:         "sys_enter_open",
+		Name:         "trace_open",
 		Type:         ebpf.TracePoint,
 		License:      "GPL",
 		Instructions: ins,

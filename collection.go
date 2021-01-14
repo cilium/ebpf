@@ -411,28 +411,79 @@ func (coll *Collection) Assign(to interface{}) error {
 }
 
 func assignValues(to interface{}, valueOf func(reflect.Type, string) (reflect.Value, error)) error {
-	v := reflect.ValueOf(to)
-	if v.Kind() != reflect.Ptr || v.Elem().Kind() != reflect.Struct {
-		return fmt.Errorf("%T is not a pointer to a struct", to)
+	type structField struct {
+		reflect.StructField
+		value reflect.Value
+	}
+
+	var (
+		fields        []structField
+		visitedTypes  = make(map[reflect.Type]bool)
+		flattenStruct func(reflect.Value) error
+	)
+
+	flattenStruct = func(ptr reflect.Value) error {
+		ptrType := ptr.Type()
+		if ptrType.Kind() != reflect.Ptr || ptrType.Elem().Kind() != reflect.Struct {
+			return fmt.Errorf("%s is not a pointer to a struct", ptrType)
+		}
+
+		if ptr.IsNil() {
+			return fmt.Errorf("nil pointer to %s", ptrType)
+		}
+
+		if visitedTypes[ptrType] {
+			return fmt.Errorf("recursion on type %s", ptrType)
+		}
+
+		structVal := ptr.Elem()
+		structType := structVal.Type()
+		for i := 0; i < structType.NumField(); i++ {
+			field := structField{structType.Field(i), structVal.Field(i)}
+
+			name := field.Tag.Get("ebpf")
+			if name != "" {
+				fields = append(fields, field)
+				continue
+			}
+
+			var err error
+			switch field.Type.Kind() {
+			case reflect.Ptr:
+				if field.Type.Elem().Kind() != reflect.Struct {
+					continue
+				}
+
+				err = flattenStruct(field.value)
+
+			case reflect.Struct:
+				err = flattenStruct(field.value.Addr())
+
+			default:
+				continue
+			}
+
+			if err != nil {
+				return fmt.Errorf("field %s: %s", field.Name, err)
+			}
+		}
+
+		return nil
+	}
+
+	if err := flattenStruct(reflect.ValueOf(to)); err != nil {
+		return err
 	}
 
 	type elem struct {
+		// Either *Map or *Program
 		typ  reflect.Type
 		name string
 	}
 
-	var (
-		s          = v.Elem()
-		sT         = s.Type()
-		assignedTo = make(map[elem]string)
-	)
-	for i := 0; i < sT.NumField(); i++ {
-		field := sT.Field(i)
-
+	assignedTo := make(map[elem]string)
+	for _, field := range fields {
 		name := field.Tag.Get("ebpf")
-		if name == "" {
-			continue
-		}
 		if strings.Contains(name, ",") {
 			return fmt.Errorf("field %s: ebpf tag contains a comma", field.Name)
 		}
@@ -447,12 +498,11 @@ func assignValues(to interface{}, valueOf func(reflect.Type, string) (reflect.Va
 			return fmt.Errorf("field %s: %w", field.Name, err)
 		}
 
-		fieldValue := s.Field(i)
-		if !fieldValue.CanSet() {
-			return fmt.Errorf("can't set value of field %s", field.Name)
+		if !field.value.CanSet() {
+			return fmt.Errorf("field %s: can't set value", field.Name)
 		}
 
-		fieldValue.Set(value)
+		field.value.Set(value)
 		assignedTo[e] = field.Name
 	}
 

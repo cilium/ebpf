@@ -95,7 +95,7 @@ func TestInstructionRewriteMapConstant(t *testing.T) {
 
 func TestInstructionLoadMapValue(t *testing.T) {
 	ins := LoadMapValue(R0, 1, 123)
-	if !ins.isLoadFromMap() {
+	if !ins.IsLoadFromMap() {
 		t.Error("isLoadFromMap returns false")
 	}
 	if fd := ins.mapPtr(); fd != 1 {

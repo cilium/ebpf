@@ -2,6 +2,7 @@ package ebpf
 
 import (
 	"fmt"
+	"reflect"
 	"testing"
 
 	"github.com/cilium/ebpf/asm"
@@ -197,22 +198,6 @@ func TestCollectionAssign(t *testing.T) {
 		t.Fatalf("Expected Map to be %p, got %p", mapSpec, specs.Map)
 	}
 
-	if err := cs.Assign(new(int)); err == nil {
-		t.Fatal("Assign allows to besides *struct")
-	}
-
-	if err := cs.Assign(new(struct{ Foo int })); err != nil {
-		t.Fatal("Assign doesn't ignore untagged fields")
-	}
-
-	unexported := new(struct {
-		foo *MapSpec `ebpf:"map1"`
-	})
-
-	if err := cs.Assign(unexported); err == nil {
-		t.Error("Assign should return an error on unexported fields")
-	}
-
 	coll, err := NewCollection(cs)
 	if err != nil {
 		t.Fatal(err)
@@ -224,11 +209,23 @@ func TestCollectionAssign(t *testing.T) {
 		Map     *Map     `ebpf:"map1"`
 	}
 
+	prog1 := coll.Programs["prog1"]
+	defer prog1.Close()
+
+	map1 := coll.Maps["map1"]
+	defer map1.Close()
+
 	if err := coll.Assign(&objs); err != nil {
 		t.Fatal("Can't Assign objects:", err)
 	}
-	objs.Program.Close()
-	objs.Map.Close()
+
+	if objs.Program != prog1 {
+		t.Errorf("Program is %p not %p", objs.Program, prog1)
+	}
+
+	if objs.Map != map1 {
+		t.Errorf("Map is %p not %p", objs.Map, map1)
+	}
 
 	if coll.Programs["prog1"] != nil {
 		t.Fatal("Assign doesn't detach Program")
@@ -237,6 +234,72 @@ func TestCollectionAssign(t *testing.T) {
 	if coll.Maps["map1"] != nil {
 		t.Fatal("Assign doesn't detach Map")
 	}
+}
+
+func TestAssignValues(t *testing.T) {
+	zero := func(t reflect.Type, name string) (reflect.Value, error) {
+		return reflect.Zero(t), nil
+	}
+
+	type t1 struct {
+		Bar int `ebpf:"bar"`
+	}
+
+	type t2 struct {
+		t1
+		Foo int `ebpf:"foo"`
+	}
+
+	type t2ptr struct {
+		*t1
+		Foo int `ebpf:"foo"`
+	}
+
+	invalid := []struct {
+		name string
+		to   interface{}
+	}{
+		{"non-struct", 1},
+		{"non-pointer struct", t1{}},
+		{"pointer to non-struct", new(int)},
+		{"embedded nil pointer", &t2ptr{}},
+		{"unexported field", new(struct {
+			foo int `ebpf:"foo"`
+		})},
+		{"identical tag", new(struct {
+			Foo1 int `ebpf:"foo"`
+			Foo2 int `ebpf:"foo"`
+		})},
+	}
+
+	for _, testcase := range invalid {
+		t.Run(testcase.name, func(t *testing.T) {
+			if err := assignValues(testcase.to, zero); err == nil {
+				t.Fatal("assignValues didn't return an error")
+			} else {
+				t.Log(err)
+			}
+		})
+	}
+
+	valid := []struct {
+		name string
+		to   interface{}
+	}{
+		{"pointer to struct", new(t1)},
+		{"embedded struct", new(t2)},
+		{"embedded struct pointer", &t2ptr{t1: new(t1)}},
+		{"untagged field", new(struct{ Foo int })},
+	}
+
+	for _, testcase := range valid {
+		t.Run(testcase.name, func(t *testing.T) {
+			if err := assignValues(testcase.to, zero); err != nil {
+				t.Fatal("assignValues returned", err)
+			}
+		})
+	}
+
 }
 
 func ExampleCollectionSpec_Assign() {
@@ -316,7 +379,7 @@ func ExampleCollectionSpec_LoadAndAssign() {
 }
 
 func ExampleCollection_Assign() {
-	coll, err := NewCollection(&CollectionSpec{
+	coll, _ := NewCollection(&CollectionSpec{
 		Maps: map[string]*MapSpec{
 			"map1": {
 				Type:       Array,
@@ -336,18 +399,17 @@ func ExampleCollection_Assign() {
 			},
 		},
 	})
-	if err != nil {
-		panic(err)
+
+	type maps struct {
+		Map *Map `ebpf:"map1"`
 	}
 
 	var objs struct {
+		maps
 		Program *Program `ebpf:"prog1"`
-		Map     *Map     `ebpf:"map1"`
 	}
 
-	if err := coll.Assign(&objs); err != nil {
-		panic(err)
-	}
+	_ = coll.Assign(&objs)
 
 	fmt.Println(objs.Program.Type())
 	fmt.Println(objs.Map.Type())

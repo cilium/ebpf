@@ -88,6 +88,13 @@ func (ps *ProgramSpec) Copy() *ProgramSpec {
 	return &cpy
 }
 
+// Tag calculates the kernel tag for a series of instructions.
+//
+// Use asm.Instructions.Tag if you need to calculate for non-native endianness.
+func (ps *ProgramSpec) Tag() (string, error) {
+	return ps.Instructions.Tag(internal.NativeEndian)
+}
+
 // Program represents BPF program loaded into the kernel.
 //
 // It is not safe to close a Program which is used by other goroutines.

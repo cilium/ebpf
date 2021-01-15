@@ -478,6 +478,43 @@ func TestProgramRejectIncorrectByteOrder(t *testing.T) {
 	}
 }
 
+func TestProgramSpecTag(t *testing.T) {
+	arr := createArray(t)
+	defer arr.Close()
+
+	spec := &ProgramSpec{
+		Type: SocketFilter,
+		Instructions: asm.Instructions{
+			asm.LoadImm(asm.R0, -1, asm.DWord),
+			asm.LoadMapPtr(asm.R1, arr.FD()),
+			asm.Mov.Imm32(asm.R0, 0),
+			asm.Return(),
+		},
+		License: "MIT",
+	}
+
+	prog, err := NewProgram(spec)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer prog.Close()
+
+	info, err := prog.Info()
+	testutils.SkipIfNotSupported(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	tag, err := spec.Tag()
+	if err != nil {
+		t.Fatal("Can't calculate tag:", err)
+	}
+
+	if tag != info.Tag {
+		t.Errorf("Calculated tag %s doesn't match kernel tag %s", tag, info.Tag)
+	}
+}
+
 func TestProgramTypeLSM(t *testing.T) {
 	prog, err := NewProgram(&ProgramSpec{
 		AttachTo:   "task_getpgid",
@@ -587,5 +624,26 @@ func ExampleProgram_unmarshalFromMap() {
 
 	if err := entries.Err(); err != nil {
 		panic(err)
+	}
+}
+
+func ExampleProgramSpec_Tag() {
+	spec := &ProgramSpec{
+		Type: SocketFilter,
+		Instructions: asm.Instructions{
+			asm.LoadImm(asm.R0, 0, asm.DWord),
+			asm.Return(),
+		},
+		License: "MIT",
+	}
+
+	prog, _ := NewProgram(spec)
+	info, _ := prog.Info()
+	tag, _ := spec.Tag()
+
+	if info.Tag != tag {
+		fmt.Printf("The tags don't match: %s != %s\n", info.Tag, tag)
+	} else {
+		fmt.Println("The programs are identical, tag is", tag)
 	}
 }

@@ -53,7 +53,7 @@ func {{ .Name.NewSpecs }}() (*{{ .Name.Specs }}, error) {
 	}
 
 	specs := new({{ .Name.Specs }})
-	if err := spec.Assign(specs); err != nil {
+	if err := spec.LoadAndAssign(specs, nil); err != nil {
 		return nil, fmt.Errorf("can't assign {{ .Name }}: %w", err)
 	}
 

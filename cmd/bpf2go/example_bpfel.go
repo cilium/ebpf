@@ -23,7 +23,7 @@ func newExampleSpecs() (*exampleSpecs, error) {
 	}
 
 	specs := new(exampleSpecs)
-	if err := spec.Assign(specs); err != nil {
+	if err := spec.LoadAndAssign(specs, nil); err != nil {
 		return nil, fmt.Errorf("can't assign example: %w", err)
 	}
 

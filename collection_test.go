@@ -208,7 +208,7 @@ func TestCollectionSpec_LoadAndAssign_LazyLoading(t *testing.T) {
 	}
 }
 
-func TestCollectionAssign(t *testing.T) {
+func TestCollectionSpec_LoadAndAssign(t *testing.T) {
 	var specs struct {
 		Program *ProgramSpec `ebpf:"prog1"`
 		Map     *MapSpec     `ebpf:"map1"`
@@ -238,7 +238,7 @@ func TestCollectionAssign(t *testing.T) {
 		},
 	}
 
-	if err := cs.Assign(&specs); err != nil {
+	if err := cs.LoadAndAssign(&specs, nil); err != nil {
 		t.Fatal("Can't assign spec:", err)
 	}
 
@@ -249,8 +249,29 @@ func TestCollectionAssign(t *testing.T) {
 	if specs.Map != mapSpec {
 		t.Fatalf("Expected Map to be %p, got %p", mapSpec, specs.Map)
 	}
+}
 
-	coll, err := NewCollection(cs)
+func TestCollectionAssign(t *testing.T) {
+	coll, err := NewCollection(&CollectionSpec{
+		Maps: map[string]*MapSpec{
+			"map1": {
+				Type:       Array,
+				KeySize:    4,
+				ValueSize:  4,
+				MaxEntries: 1,
+			},
+		},
+		Programs: map[string]*ProgramSpec{
+			"prog1": {
+				Type: SocketFilter,
+				Instructions: asm.Instructions{
+					asm.LoadImm(asm.R0, 0, asm.DWord),
+					asm.Return(),
+				},
+				License: "MIT",
+			},
+		},
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -354,45 +375,7 @@ func TestAssignValues(t *testing.T) {
 
 }
 
-func ExampleCollectionSpec_Assign() {
-	spec := &CollectionSpec{
-		Maps: map[string]*MapSpec{
-			"map1": {
-				Type:       Array,
-				KeySize:    4,
-				ValueSize:  4,
-				MaxEntries: 1,
-			},
-		},
-		Programs: map[string]*ProgramSpec{
-			"prog1": {
-				Type: SocketFilter,
-				Instructions: asm.Instructions{
-					asm.LoadImm(asm.R0, 0, asm.DWord),
-					asm.Return(),
-				},
-				License: "MIT",
-			},
-		},
-	}
-
-	var specs struct {
-		Program *ProgramSpec `ebpf:"prog1"`
-		Map     *MapSpec     `ebpf:"map1"`
-	}
-
-	if err := spec.Assign(&specs); err != nil {
-		panic(err)
-	}
-
-	fmt.Println(specs.Program.Type)
-	fmt.Println(specs.Map.Type)
-
-	// Output: SocketFilter
-	// Array
-}
-
-func ExampleCollectionSpec_Load() {
+func ExampleCollectionSpec_LoadAndAssign() {
 	spec := &CollectionSpec{
 		Maps: map[string]*MapSpec{
 			"map1": {
@@ -415,8 +398,10 @@ func ExampleCollectionSpec_Load() {
 	}
 
 	var objs struct {
-		Program *Program `ebpf:"prog1"`
-		Map     *Map     `ebpf:"map1"`
+		Program     *Program     `ebpf:"prog1"`
+		Map         *Map         `ebpf:"map1"`
+		ProgramSpec *ProgramSpec `ebpf:"prog1"`
+		MapSpec     *MapSpec     `ebpf:"map1"`
 	}
 
 	if err := spec.LoadAndAssign(&objs, nil); err != nil {

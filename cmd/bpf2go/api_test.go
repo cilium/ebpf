@@ -5,28 +5,39 @@ import (
 )
 
 func TestLoadingSpec(t *testing.T) {
-	specs, err := newExampleSpecs()
+	spec, err := loadExampleSpecs()
 	if err != nil {
-		t.Fatal("Can't load specs:", err)
+		t.Fatal("Can't load spec:", err)
 	}
 
-	cpy := specs.Copy()
-	if cpy == specs || cpy.ProgramFilter == specs.ProgramFilter {
-		t.Error("Copy doesn't copy all fields")
+	if spec == nil {
+		t.Fatal("Got a nil spec")
 	}
+}
 
-	spec := specs.CollectionSpec()
-	if spec.Programs["filter"] != specs.ProgramFilter {
-		t.Error("CollectionSpec copies programs instead of using the same reference")
+func TestLoadingObjects(t *testing.T) {
+	var objs struct {
+		Specs exampleSpecs
+		exampleObjects
 	}
-
-	objs, err := specs.Load(nil)
-	if err != nil {
+	if err := loadExampleObjects(&objs, nil); err != nil {
 		t.Fatal("Can't load objects:", err)
 	}
 	defer objs.Close()
 
-	if objs.ProgramFilter == nil {
-		t.Error("Loading returns an object with nil references")
+	if objs.Specs.Filter == nil {
+		t.Error("Specs.Filter is nil")
+	}
+
+	if objs.Specs.Map1 == nil {
+		t.Error("Specs.Map1 is nil")
+	}
+
+	if objs.Filter == nil {
+		t.Error("Loading returns an object with nil programs")
+	}
+
+	if objs.Map1 == nil {
+		t.Error("Loading returns an object with nil maps")
 	}
 }

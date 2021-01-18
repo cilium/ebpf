@@ -156,6 +156,58 @@ func TestCollectionSpecRewriteMaps(t *testing.T) {
 	}
 }
 
+func TestCollectionSpec_LoadAndAssign_LazyLoading(t *testing.T) {
+	spec := &CollectionSpec{
+		Maps: map[string]*MapSpec{
+			"valid": {
+				Type:       Array,
+				KeySize:    4,
+				ValueSize:  4,
+				MaxEntries: 1,
+			},
+			"bogus": {
+				Type:       Array,
+				MaxEntries: 0,
+			},
+		},
+		Programs: map[string]*ProgramSpec{
+			"valid": {
+				Type: SocketFilter,
+				Instructions: asm.Instructions{
+					asm.LoadImm(asm.R0, 0, asm.DWord),
+					asm.Return(),
+				},
+				License: "MIT",
+			},
+			"bogus": {
+				Type: SocketFilter,
+				Instructions: asm.Instructions{
+					// Undefined return value is rejected
+					asm.Return(),
+				},
+				License: "MIT",
+			},
+		},
+	}
+
+	var objs struct {
+		Prog *Program `ebpf:"valid"`
+		Map  *Map     `ebpf:"valid"`
+	}
+
+	if err := spec.LoadAndAssign(&objs, nil); err != nil {
+		t.Fatal("Assign loads a map or program that isn't requested in the struct:", err)
+	}
+
+	if objs.Prog == nil {
+		t.Error("Program is nil")
+	}
+
+	if objs.Map == nil {
+		t.Error("Map is nil")
+	}
+}
+
 func TestCollectionAssign(t *testing.T) {
 	var specs struct {
 		Program *ProgramSpec `ebpf:"prog1"`
@@ -340,7 +392,7 @@ func ExampleCollectionSpec_Assign() {
 	// Array
 }
 
-func ExampleCollectionSpec_LoadAndAssign() {
+func ExampleCollectionSpec_Load() {
 	spec := &CollectionSpec{
 		Maps: map[string]*MapSpec{
 			"map1": {

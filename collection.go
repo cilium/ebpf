@@ -131,10 +131,11 @@ func (cs *CollectionSpec) RewriteConstants(consts map[string]interface{}) error 
 	return nil
 }
 
-// Assign the contents of a collection spec to a struct.
+// Assign the contents of a CollectionSpec to a struct.
 //
 // This function is a short-cut to manually checking the presence
-// of maps and programs in a collection spec.
+// of maps and programs in a collection spec. Consider using bpf2go if this
+// sounds useful.
 //
 // The argument to must be a pointer to a struct. A field of the
 // struct is updated with values from Programs or Maps if it
@@ -173,21 +174,61 @@ func (cs *CollectionSpec) Assign(to interface{}) error {
 	return assignValues(to, valueOf)
 }
 
-// LoadAndAssign creates a collection from a spec, and assigns it to a struct.
+// LoadAndAssign maps and programs into the kernel and assign them to a struct.
 //
-// See Collection.Assign for details.
+// This function is a short-cut to manually checking the presence
+// of maps and programs in a collection spec. Consider using bpf2go if this
+// sounds useful.
+//
+// The argument to must be a pointer to a struct. A field of the
+// struct is updated with values from Programs or Maps if it
+// has an `ebpf` tag and its type is *Program or *Map.
+// The tag gives the name of the program or map as found in
+// the CollectionSpec.
+//
+//    struct {
+//        Foo     *ebpf.Program `ebpf:"xdp_foo"`
+//        Bar     *ebpf.Map     `ebpf:"bar_map"`
+//        Ignored int
+//    }
+//
+// opts may be nil.
+//
+// Returns an error if any of the fields can't be found, or
+// if the same map or program is assigned multiple times.
 func (cs *CollectionSpec) LoadAndAssign(to interface{}, opts *CollectionOptions) error {
 	if opts == nil {
 		opts = &CollectionOptions{}
 	}
 
-	coll, err := NewCollectionWithOptions(cs, *opts)
-	if err != nil {
+	loadMap, loadProgram, done, cleanup := lazyLoadCollection(cs, opts)
+	defer cleanup()
+
+	valueOf := func(typ reflect.Type, name string) (reflect.Value, error) {
+		switch typ {
+		case reflect.TypeOf((*Program)(nil)):
+			p, err := loadProgram(name)
+			if err != nil {
+				return reflect.Value{}, err
+			}
+			return reflect.ValueOf(p), nil
+		case reflect.TypeOf((*Map)(nil)):
+			m, err := loadMap(name)
+			if err != nil {
+				return reflect.Value{}, err
+			}
+			return reflect.ValueOf(m), nil
+		default:
+			return reflect.Value{}, fmt.Errorf("unsupported type %s", typ)
+		}
+	}
+
+	if err := assignValues(to, valueOf); err != nil {
 		return err
 	}
-	defer coll.Close()
 
-	return coll.Assign(to)
+	done()
+	return nil
 }
 
 // Collection is a collection of Programs and Maps associated
@@ -198,31 +239,57 @@ type Collection struct {
 }
 
 // NewCollection creates a Collection from a specification.
-//
-// Only maps referenced by at least one of the programs are initialized.
 func NewCollection(spec *CollectionSpec) (*Collection, error) {
 	return NewCollectionWithOptions(spec, CollectionOptions{})
 }
 
 // NewCollectionWithOptions creates a Collection from a specification.
-//
-// Only maps referenced by at least one of the programs are initialized.
-func NewCollectionWithOptions(spec *CollectionSpec, opts CollectionOptions) (coll *Collection, err error) {
+func NewCollectionWithOptions(spec *CollectionSpec, opts CollectionOptions) (*Collection, error) {
+	loadMap, loadProgram, done, cleanup := lazyLoadCollection(spec, &opts)
+	defer cleanup()
+
+	for mapName := range spec.Maps {
+		_, err := loadMap(mapName)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	for progName := range spec.Programs {
+		_, err := loadProgram(progName)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	maps, progs := done()
+	return &Collection{
+		progs,
+		maps,
+	}, nil
+}
+
+func lazyLoadCollection(coll *CollectionSpec, opts *CollectionOptions) (
+	loadMap func(string) (*Map, error),
+	loadProgram func(string) (*Program, error),
+	done func() (map[string]*Map, map[string]*Program),
+	cleanup func(),
+) {
 	var (
-		maps  = make(map[string]*Map)
-		progs = make(map[string]*Program)
-		btfs  = make(map[*btf.Spec]*btf.Handle)
+		maps             = make(map[string]*Map)
+		progs            = make(map[string]*Program)
+		btfs             = make(map[*btf.Spec]*btf.Handle)
+		skipMapsAndProgs = false
 	)
 
-	defer func() {
+	cleanup = func() {
 		for _, btf := range btfs {
 			btf.Close()
 		}
 
-		if err == nil {
+		if skipMapsAndProgs {
 			return
 		}
-
 		for _, m := range maps {
 			m.Close()
 		}
@@ -230,7 +297,12 @@ func NewCollectionWithOptions(spec *CollectionSpec, opts CollectionOptions) (col
 		for _, p := range progs {
 			p.Close()
 		}
-	}()
+	}
+
+	done = func() (map[string]*Map, map[string]*Program) {
+		skipMapsAndProgs = true
+		return maps, progs
+	}
 
 	loadBTF := func(spec *btf.Spec) (*btf.Handle, error) {
 		if btfs[spec] != nil {
@@ -238,6 +310,9 @@ func NewCollectionWithOptions(spec *CollectionSpec, opts CollectionOptions) (col
 		}
 
 		handle, err := btf.NewHandle(spec)
+		if errors.Is(err, btf.ErrNotSupported) {
+			return nil, nil
+		}
 		if err != nil {
 			return nil, err
 		}
@@ -246,11 +321,21 @@ func NewCollectionWithOptions(spec *CollectionSpec, opts CollectionOptions) (col
 		return handle, nil
 	}
 
-	for mapName, mapSpec := range spec.Maps {
+	loadMap = func(mapName string) (*Map, error) {
+		if m := maps[mapName]; m != nil {
+			return m, nil
+		}
+
+		mapSpec := coll.Maps[mapName]
+		if mapSpec == nil {
+			return nil, fmt.Errorf("missing map %s", mapName)
+		}
+
 		var handle *btf.Handle
+		var err error
 		if mapSpec.BTF != nil {
 			handle, err = loadBTF(btf.MapSpec(mapSpec.BTF))
-			if err != nil && !errors.Is(err, btf.ErrNotSupported) {
+			if err != nil {
 				return nil, err
 			}
 		}
@@ -259,11 +344,22 @@ func NewCollectionWithOptions(spec *CollectionSpec, opts CollectionOptions) (col
 		if err != nil {
 			return nil, fmt.Errorf("map %s: %w", mapName, err)
 		}
+
 		maps[mapName] = m
+		return m, nil
 	}
 
-	for progName, origProgSpec := range spec.Programs {
-		progSpec := origProgSpec.Copy()
+	loadProgram = func(progName string) (*Program, error) {
+		if prog := progs[progName]; prog != nil {
+			return prog, nil
+		}
+
+		progSpec := coll.Programs[progName]
+		if progSpec == nil {
+			return nil, fmt.Errorf("unknown program %s", progName)
+		}
+
+		progSpec = progSpec.Copy()
 
 		// Rewrite any reference to a valid map.
 		for i := range progSpec.Instructions {
@@ -279,9 +375,9 @@ func NewCollectionWithOptions(spec *CollectionSpec, opts CollectionOptions) (col
 				continue
 			}
 
-			m := maps[ins.Reference]
-			if m == nil {
-				return nil, fmt.Errorf("program %s: missing map %s", progName, ins.Reference)
+			m, err := loadMap(ins.Reference)
+			if err != nil {
+				return nil, fmt.Errorf("program %s: %s", progName, err)
 			}
 
 			fd := m.FD()
@@ -294,9 +390,10 @@ func NewCollectionWithOptions(spec *CollectionSpec, opts CollectionOptions) (col
 		}
 
 		var handle *btf.Handle
+		var err error
 		if progSpec.BTF != nil {
 			handle, err = loadBTF(btf.ProgramSpec(progSpec.BTF))
-			if err != nil && !errors.Is(err, btf.ErrNotSupported) {
+			if err != nil {
 				return nil, err
 			}
 		}
@@ -305,13 +402,12 @@ func NewCollectionWithOptions(spec *CollectionSpec, opts CollectionOptions) (col
 		if err != nil {
 			return nil, fmt.Errorf("program %s: %w", progName, err)
 		}
+
 		progs[progName] = prog
+		return prog, nil
 	}
 
-	return &Collection{
-		progs,
-		maps,
-	}, nil
+	return
 }
 
 // LoadCollection parses an object file and converts it to a collection.
@@ -366,8 +462,6 @@ func (coll *Collection) DetachProgram(name string) *Program {
 //        Bar     *ebpf.Map     `ebpf:"bar_map"`
 //        Ignored int
 //    }
-//
-// See CollectionSpec.Assign for the semantics of this function.
 //
 // DetachMap and DetachProgram is invoked for all assigned elements
 // if the function is successful.

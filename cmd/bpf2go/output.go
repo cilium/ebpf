@@ -31,111 +31,97 @@ import (
 	"{{ .Module }}"
 )
 
-type {{ .Name.Specs }} struct {
-{{- range $name, $_ := .Programs }}
-	Program{{ identifier $name }} *ebpf.ProgramSpec {{ tag $name }}
-{{- end }}
-
-{{- range $name, $_ := .Maps }}
-	Map{{ identifier $name }} *ebpf.MapSpec {{ tag $name }}
-{{- end }}
-
-{{- range $name, $_ := .Sections }}
-	Section{{ identifier $name }} *ebpf.MapSpec {{ tag $name }}
-{{- end }}
-}
-
-func {{ .Name.NewSpecs }}() (*{{ .Name.Specs }}, error) {
+// {{ .Name.LoadSpecs }} returns the embedded CollectionSpec for {{ .Name }}.
+func {{ .Name.LoadSpecs }}() (*ebpf.CollectionSpec, error) {
 	reader := bytes.NewReader({{ .Name.Bytes }})
 	spec, err := ebpf.LoadCollectionSpecFromReader(reader)
 	if err != nil {
 		return nil, fmt.Errorf("can't load {{ .Name }}: %w", err)
 	}
 
-	specs := new({{ .Name.Specs }})
-	if err := spec.LoadAndAssign(specs, nil); err != nil {
-		return nil, fmt.Errorf("can't assign {{ .Name }}: %w", err)
-	}
-
-	return specs, nil
+	return spec, err
 }
 
-func (s *{{ .Name.Specs }}) CollectionSpec() *ebpf.CollectionSpec {
-	return &ebpf.CollectionSpec{
-		Programs: map[string]*ebpf.ProgramSpec{
-{{- range $name, $_ := .Programs }}
-			"{{ $name }}": s.Program{{ identifier $name }},
-{{- end }}
-		},
-		Maps: map[string]*ebpf.MapSpec{
-{{- range $name, $_ := .Maps }}
-			"{{ $name }}": s.Map{{ identifier $name }},
-{{- end }}
-{{- range $name, $_ := .Sections }}
-			"{{ $name }}": s.Section{{ identifier $name }},
-{{- end }}
-		},
+// {{ .Name.LoadObjects }} converts {{ .Name }} into a struct.
+//
+// The following types are suitable as obj argument:
+//
+//     *{{ .Name.Specs }}
+//     *{{ .Name.ProgramSpecs }}
+//     *{{ .Name.MapSpecs }}
+//     *{{ .Name.Objects }}
+//     *{{ .Name.Programs }}
+//     *{{ .Name.Maps }}
+//
+// See ebpf.CollectionSpec.Load documentation for details.
+func {{ .Name.LoadObjects }}(obj interface{}, opts *ebpf.CollectionOptions) (error) {
+	spec, err := {{ .Name.LoadSpecs }}()
+	if err != nil {
+		return err
 	}
+
+	return spec.LoadAndAssign(obj, opts)
 }
 
-func (s *{{ .Name.Specs }}) Load(opts *ebpf.CollectionOptions) (*{{ .Name.Objects }}, error) {
-	var objs {{ .Name.Objects }}
-	if err := s.CollectionSpec().LoadAndAssign(&objs, opts); err != nil {
-		return nil, err
-	}
-	return &objs, nil
+type {{ .Name.Specs }} struct {
+	{{ .Name.ProgramSpecs }}
+	{{ .Name.MapSpecs }}
 }
 
-func (s *{{ .Name.Specs }}) Copy() *{{ .Name.Specs }} {
-	return &{{ .Name.Specs }}{
-{{- range $name, $_ := .Programs }}
-{{- with $id := identifier $name }}
-		Program{{ $id }}: s.Program{{ $id }}.Copy(),
+type {{ .Name.ProgramSpecs }} struct {
+{{- range $name, $id := .Programs }}
+	{{ $id }} *ebpf.ProgramSpec {{ tag $name }}
 {{- end }}
-{{- end }}
+}
 
-{{- range $name, $_ := .Maps }}
-{{- with $id := identifier $name }}
-		Map{{ $id }}: s.Map{{ $id }}.Copy(),
+type {{ .Name.MapSpecs }} struct {
+{{- range $name, $id := .Maps }}
+	{{ $id }} *ebpf.MapSpec {{ tag $name }}
 {{- end }}
-{{- end }}
-
-{{- range $name, $_ := .Sections }}
-{{- with $id := identifier $name }}
-		Section{{ $id }}: s.Section{{ $id }}.Copy(),
-{{- end }}
-{{- end }}
-	}
 }
 
 type {{ .Name.Objects }} struct {
-{{- range $name, $_ := .Programs }}
-	Program{{ identifier $name }} *ebpf.Program {{ tag $name }}
-{{- end }}
-
-{{- range $name, $_ := .Maps }}
-	Map{{ identifier $name }} *ebpf.Map {{ tag $name }}
-{{- end }}
-
-{{- range $name, $_ := .Sections }}
-	Section{{ identifier $name }} *ebpf.Map {{ tag $name }}
-{{- end }}
+	{{ .Name.Programs }}
+	{{ .Name.Maps }}
 }
 
 func (o *{{ .Name.Objects }}) Close() error {
-	for _, closer := range []io.Closer{
-{{- range $name, $_ := .Programs }}
-		o.Program{{ identifier $name }},
-{{- end }}
+	return {{ .Name.CloseHelper }}(
+		&o.{{ .Name.Programs }},
+		&o.{{ .Name.Maps }},
+	)
+}
 
-{{- range $name, $_ := .Maps }}
-		o.Map{{ identifier $name}},
+type {{ .Name.Maps }} struct {
+{{- range $name, $id := .Maps }}
+	{{ $id }} *ebpf.Map {{ tag $name }}
 {{- end }}
+}
 
-{{- range $name, $_ := .Sections }}
-		o.Section{{ identifier $name}},
+func (m *{{ .Name.Maps }}) Close() error {
+	return {{ .Name.CloseHelper }}(
+{{- range $id := .Maps }}
+		m.{{ $id }},
 {{- end }}
-	} {
+	)
+}
+
+type {{ .Name.Programs }} struct {
+{{- range $name, $id := .Programs }}
+	{{ $id }} *ebpf.Program {{ tag $name }}
+{{- end }}
+}
+
+func (p *{{ .Name.Programs }}) Close() error {
+	return {{ .Name.CloseHelper }}(
+{{- range $id := .Programs }}
+		p.{{ $id }},
+{{- end }}
+	)
+}
+
+func {{ .Name.CloseHelper }}(closers ...io.Closer) error {
+	for _, closer := range closers {
 		if err := closer.Close(); err != nil {
 			return err
 		}
@@ -150,8 +136,7 @@ var {{ .Name.Bytes }} = []byte("{{ .Bytes }}")
 
 var (
 	tplFuncs = map[string]interface{}{
-		"identifier": identifier,
-		"tag":        tag,
+		"tag": tag,
 	}
 	commonTemplate = template.Must(template.New("common").Funcs(tplFuncs).Parse(commonRaw))
 )
@@ -174,12 +159,36 @@ func (n templateName) Specs() string {
 	return n.maybeExport(string(n) + "Specs")
 }
 
-func (n templateName) NewSpecs() string {
-	return n.maybeExport("new" + toUpperFirst(string(n)) + "Specs")
+func (n templateName) ProgramSpecs() string {
+	return n.maybeExport(string(n) + "ProgramSpecs")
+}
+
+func (n templateName) MapSpecs() string {
+	return n.maybeExport(string(n) + "MapSpecs")
+}
+
+func (n templateName) LoadSpecs() string {
+	return n.maybeExport("load" + toUpperFirst(string(n)) + "Specs")
+}
+
+func (n templateName) LoadObjects() string {
+	return n.maybeExport("load" + toUpperFirst(string(n)) + "Objects")
 }
 
 func (n templateName) Objects() string {
 	return n.maybeExport(string(n) + "Objects")
+}
+
+func (n templateName) Maps() string {
+	return n.maybeExport(string(n) + "Maps")
+}
+
+func (n templateName) Programs() string {
+	return n.maybeExport(string(n) + "Programs")
+}
+
+func (n templateName) CloseHelper() string {
+	return "_" + toUpperFirst(string(n)) + "Close"
 }
 
 type writeArgs struct {
@@ -201,14 +210,22 @@ func writeCommon(args writeArgs) error {
 		return fmt.Errorf("can't load BPF from ELF: %s", err)
 	}
 
-	sections := make(map[string]struct{})
-	maps := make(map[string]struct{})
+	maps := make(map[string]string)
 	for name := range spec.Maps {
 		if strings.HasPrefix(name, ".") {
-			sections[name] = struct{}{}
+			maps[name] = "Section" + identifier(name)
 		} else {
-			maps[name] = struct{}{}
+			maps[name] = identifier(name)
 		}
+	}
+
+	programs := make(map[string]string)
+	for name := range spec.Programs {
+		programs[name] = identifier(name)
+	}
+
+	type typ struct {
+		Name string
 	}
 
 	ctx := struct {
@@ -216,18 +233,16 @@ func writeCommon(args writeArgs) error {
 		Package  string
 		Tags     []string
 		Name     templateName
-		Sections map[string]struct{}
-		Maps     map[string]struct{}
-		Programs map[string]*ebpf.ProgramSpec
+		Maps     map[string]string
+		Programs map[string]string
 		Bytes    string
 	}{
 		ebpfModule,
 		args.pkg,
 		args.tags,
 		templateName(args.ident),
-		sections,
 		maps,
-		spec.Programs,
+		programs,
 		binaryString(obj),
 	}
 

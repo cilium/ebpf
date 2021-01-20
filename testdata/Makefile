@@ -9,7 +9,8 @@ TARGETS := loader-clang-6.0 \
 	raw_tracepoint \
 	invalid_map_static \
 	initialized_btf_map \
-	strings
+	strings \
+	global_var_no_static
 
 .PHONY: all clean
 all: $(addsuffix -el.elf,$(TARGETS)) $(addsuffix -eb.elf,$(TARGETS))

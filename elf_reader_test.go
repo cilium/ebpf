@@ -213,6 +213,16 @@ func TestStringSection(t *testing.T) {
 	})
 }
 
+func TestNonStaticGlobal(t *testing.T) {
+	testutils.TestFiles(t, "testdata/global_var_no_static-*.elf", func(t *testing.T, file string) {
+		_, err := LoadCollectionSpec(file)
+		t.Log(err)
+		if err == nil {
+			t.Error("Globals without static qualifier should be rejected")
+		}
+	})
+}
+
 func TestLoadRawTracepoint(t *testing.T) {
 	testutils.SkipOnOldKernel(t, "4.17", "BPF_RAW_TRACEPOINT API")
 

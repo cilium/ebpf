@@ -139,7 +139,7 @@ func LoadCollectionSpecFromReader(rd io.ReaderAt) (*CollectionSpec, error) {
 		}
 	}
 
-	progs, err := ec.loadPrograms(progSections, relocations, btfSpec)
+	progs, err := ec.loadPrograms(progSections, relocations, maps, btfSpec)
 	if err != nil {
 		return nil, fmt.Errorf("load programs: %w", err)
 	}
@@ -171,7 +171,12 @@ func loadVersion(sec *elf.Section, bo binary.ByteOrder) (uint32, error) {
 	return version, nil
 }
 
-func (ec *elfCode) loadPrograms(progSections map[elf.SectionIndex]*elf.Section, relocations map[elf.SectionIndex]map[uint64]elf.Symbol, btfSpec *btf.Spec) (map[string]*ProgramSpec, error) {
+func (ec *elfCode) loadPrograms(
+	progSections map[elf.SectionIndex]*elf.Section,
+	relocations map[elf.SectionIndex]map[uint64]elf.Symbol,
+	maps map[string]*MapSpec,
+	btfSpec *btf.Spec,
+) (map[string]*ProgramSpec, error) {
 	var (
 		progs []*ProgramSpec
 		libs  []*ProgramSpec
@@ -188,7 +193,7 @@ func (ec *elfCode) loadPrograms(progSections map[elf.SectionIndex]*elf.Section, 
 			return nil, fmt.Errorf("section %v: no label at start", sec.Name)
 		}
 
-		insns, length, err := ec.loadInstructions(sec, syms, relocations[idx])
+		insns, length, err := ec.loadInstructions(sec, syms, relocations[idx], maps)
 		if err != nil {
 			return nil, fmt.Errorf("program %s: %w", funcSym.Name, err)
 		}
@@ -235,7 +240,11 @@ func (ec *elfCode) loadPrograms(progSections map[elf.SectionIndex]*elf.Section, 
 	return res, nil
 }
 
-func (ec *elfCode) loadInstructions(section *elf.Section, symbols, relocations map[uint64]elf.Symbol) (asm.Instructions, uint64, error) {
+func (ec *elfCode) loadInstructions(
+	section *elf.Section,
+	symbols, relocations map[uint64]elf.Symbol,
+	maps map[string]*MapSpec,
+) (asm.Instructions, uint64, error) {
 	var (
 		r      = bufio.NewReader(section.Open())
 		insns  asm.Instructions
@@ -254,7 +263,7 @@ func (ec *elfCode) loadInstructions(section *elf.Section, symbols, relocations m
 		ins.Symbol = symbols[offset].Name
 
 		if rel, ok := relocations[offset]; ok {
-			if err = ec.relocateInstruction(&ins, rel); err != nil {
+			if err = ec.relocateInstruction(&ins, rel, maps); err != nil {
 				return nil, 0, fmt.Errorf("offset %d: can't relocate instruction: %w", offset, err)
 			}
 		}
@@ -264,7 +273,7 @@ func (ec *elfCode) loadInstructions(section *elf.Section, symbols, relocations m
 	}
 }
 
-func (ec *elfCode) relocateInstruction(ins *asm.Instruction, rel elf.Symbol) error {
+func (ec *elfCode) relocateInstruction(ins *asm.Instruction, rel elf.Symbol, maps map[string]*MapSpec) error {
 	var (
 		typ  = elf.ST_TYPE(rel.Info)
 		bind = elf.ST_BIND(rel.Info)
@@ -276,7 +285,7 @@ func (ec *elfCode) relocateInstruction(ins *asm.Instruction, rel elf.Symbol) err
 	}
 
 	section := ec.Sections[int(rel.Section)]
-	if typ == elf.STT_SECTION {
+	if typ == elf.STT_SECTION && bind == elf.STB_LOCAL {
 		// Symbols with section type do not have a name set. Get it
 		// from the section itself.
 		name = section.Name
@@ -329,6 +338,10 @@ outer:
 
 			if bind != elf.STB_GLOBAL {
 				return fmt.Errorf("load: %s: unsupported binding: %s", name, bind)
+			}
+
+			if maps[name] == nil {
+				return fmt.Errorf("possible missing static qualifier on global variable: found reference to unknown map %s", name)
 			}
 
 			ins.Src = asm.PseudoMapFD
@@ -612,11 +625,12 @@ func (ec *elfCode) loadDataSections(maps map[string]*MapSpec, dataSections map[e
 			BTF:        btfMap,
 		}
 
-		switch sec.Name {
-		case ".rodata":
+		if sec.Flags&elf.SHF_WRITE == 0 {
 			mapSpec.Flags = unix.BPF_F_RDONLY_PROG
 			mapSpec.Freeze = true
-		case ".bss":
+		}
+
+		if sec.Name == ".bss" {
 			// The kernel already zero-initializes the map
 			mapSpec.Contents = nil
 		}

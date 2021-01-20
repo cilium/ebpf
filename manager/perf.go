@@ -170,5 +170,9 @@ func (m *PerfMap) Resume() error {
 	if m.state < paused {
 		return ErrMapNotRunning
 	}
-	return m.perfReader.Resume()
+	if err := m.perfReader.Resume(); err != nil {
+		return err
+	}
+	m.state = running
+	return nil
 }

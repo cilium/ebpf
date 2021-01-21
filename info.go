@@ -16,6 +16,7 @@ import (
 // MapInfo describes a map.
 type MapInfo struct {
 	Type       MapType
+	id         MapID
 	KeySize    uint32
 	ValueSize  uint32
 	MaxEntries uint32
@@ -35,6 +36,7 @@ func newMapInfoFromFd(fd *internal.FD) (*MapInfo, error) {
 
 	return &MapInfo{
 		MapType(info.map_type),
+		MapID(info.id),
 		info.key_size,
 		info.value_size,
 		info.max_entries,
@@ -59,9 +61,19 @@ func newMapInfoFromProc(fd *internal.FD) (*MapInfo, error) {
 	return &mi, nil
 }
 
+// ID returns the map ID.
+//
+// Available from 4.13.
+//
+// The bool return value indicates whether this optional field is available.
+func (mi *MapInfo) ID() (MapID, bool) {
+	return mi.id, mi.id > 0
+}
+
 // ProgramInfo describes a program.
 type ProgramInfo struct {
 	Type ProgramType
+	id   ProgramID
 	// Truncated hash of the BPF bytecode.
 	Tag string
 	// Name as supplied by user space at load time.
@@ -79,6 +91,7 @@ func newProgramInfoFromFd(fd *internal.FD) (*ProgramInfo, error) {
 
 	return &ProgramInfo{
 		ProgramType(info.prog_type),
+		ProgramID(info.id),
 		// tag is available if the kernel supports BPF_PROG_GET_INFO_BY_FD.
 		hex.EncodeToString(info.tag[:]),
 		// name is available from 4.15.
@@ -103,6 +116,15 @@ func newProgramInfoFromProc(fd *internal.FD) (*ProgramInfo, error) {
 	}
 
 	return &info, nil
+}
+
+// ID returns the program ID.
+//
+// Available from 4.13.
+//
+// The bool return value indicates whether this optional field is available.
+func (pi *ProgramInfo) ID() (ProgramID, bool) {
+	return pi.id, pi.id > 0
 }
 
 func scanFdInfo(fd *internal.FD, fields map[string]interface{}) error {

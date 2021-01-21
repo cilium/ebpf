@@ -603,6 +603,8 @@ func ProgramGetNextID(startID ProgramID) (ProgramID, error) {
 }
 
 // ID returns the systemwide unique ID of the program.
+//
+// Deprecated: use ProgramInfo.ID() instead.
 func (p *Program) ID() (ProgramID, error) {
 	info, err := bpfGetProgInfoByFD(p.fd)
 	if err != nil {

@@ -315,7 +315,7 @@ func fixupDatasec(rawTypes []rawType, rawStrings stringTable, sectionSizes map[s
 			return err
 		}
 
-		if name == ".kconfig" || name == ".ksym" {
+		if name == ".kconfig" || name == ".ksyms" {
 			return fmt.Errorf("reference to %s: %w", name, ErrNotSupported)
 		}
 

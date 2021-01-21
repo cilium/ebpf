@@ -910,7 +910,7 @@ func NewMapFromID(id MapID) (*Map, error) {
 
 // ID returns the systemwide unique ID of the map.
 //
-// Requires at least Linux 4.13.
+// Deprecated: use MapInfo.ID() instead.
 func (m *Map) ID() (MapID, error) {
 	info, err := bpfGetMapInfoByFD(m.fd)
 	if err != nil {

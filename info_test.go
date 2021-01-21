@@ -52,6 +52,10 @@ func TestMapInfoFromProc(t *testing.T) {
 		t.Error("Expected name to be testing, got", info.Name)
 	}
 
+	if _, ok := info.ID(); ok {
+		t.Error("Expected ID to not be available")
+	}
+
 	nested, err := NewMap(&MapSpec{
 		Type:       ArrayOfMaps,
 		KeySize:    4,
@@ -100,6 +104,12 @@ func TestProgramInfo(t *testing.T) {
 
 			if want := "d7edec644f05498d"; info.Tag != want {
 				t.Errorf("Expected Tag to be %s, got %s", want, info.Tag)
+			}
+
+			if id, ok := info.ID(); ok && id == 0 {
+				t.Error("Expected a valid ID:", id)
+			} else if name == "proc" && ok {
+				t.Error("Expected ID to not be available")
 			}
 		})
 	}

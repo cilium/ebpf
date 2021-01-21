@@ -1475,16 +1475,14 @@ func (m *Manager) cleanupTracefs() error {
 	}
 
 	// clean up kprobe_events
+	var cleanUpErrors *multierror.Error
 	pidMask := make(map[int]procMask)
-	if err := cleanupKprobeEvents(pattern, pidMask); err != nil {
-		return err
+	cleanUpErrors = multierror.Append(cleanUpErrors, cleanupKprobeEvents(pattern, pidMask))
+	cleanUpErrors = multierror.Append(cleanUpErrors, cleanupUprobeEvents(pattern, pidMask))
+	if cleanUpErrors.Len() == 0 {
+		return nil
 	}
-
-	// clean up uprobe_events
-	if err := cleanupUprobeEvents(pattern, pidMask); err != nil {
-		return err
-	}
-	return nil
+	return cleanUpErrors
 }
 
 func cleanupKprobeEvents(pattern *regexp.Regexp, pidMask map[int]procMask) error {
@@ -1492,6 +1490,7 @@ func cleanupKprobeEvents(pattern *regexp.Regexp, pidMask map[int]procMask) error
 	if err != nil {
 		return errors.Wrap(err, "couldn't read kprobe_events")
 	}
+	var cleanUpErrors error
 	for _, match := range pattern.FindAllStringSubmatch(kprobeEvents, -1) {
 		if len(match) < 6 {
 			continue
@@ -1522,9 +1521,9 @@ func cleanupKprobeEvents(pattern *regexp.Regexp, pidMask map[int]procMask) error
 		}
 
 		// remove the entry
-		_ = disableKprobeEvent(match[3])
+		cleanUpErrors = multierror.Append(cleanUpErrors, disableKprobeEvent(match[3]))
 	}
-	return nil
+	return cleanUpErrors
 }
 
 func cleanupUprobeEvents(pattern *regexp.Regexp, pidMask map[int]procMask) error {
@@ -1532,6 +1531,7 @@ func cleanupUprobeEvents(pattern *regexp.Regexp, pidMask map[int]procMask) error
 	if err != nil {
 		return errors.Wrap(err, "couldn't read uprobe_events")
 	}
+	var cleanUpErrors error
 	for _, match := range pattern.FindAllStringSubmatch(uprobeEvents, -1) {
 		if len(match) < 6 {
 			continue
@@ -1562,7 +1562,7 @@ func cleanupUprobeEvents(pattern *regexp.Regexp, pidMask map[int]procMask) error
 		}
 
 		// remove the entry
-		_ = disableUprobeEvent(match[3])
+		cleanUpErrors = multierror.Append(cleanUpErrors, disableUprobeEvent(match[3]))
 	}
-	return nil
+	return cleanUpErrors
 }

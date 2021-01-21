@@ -131,7 +131,7 @@ func (cs *CollectionSpec) RewriteConstants(consts map[string]interface{}) error 
 	return nil
 }
 
-// Assign the contents of a CollectionSpec to a struct.
+// LoadAndAssign loads maps and programs into the kernel and assigns them to a struct.
 //
 // This function is a short-cut to manually checking the presence
 // of maps and programs in a collection spec. Consider using bpf2go if this
@@ -139,56 +139,15 @@ func (cs *CollectionSpec) RewriteConstants(consts map[string]interface{}) error 
 //
 // The argument to must be a pointer to a struct. A field of the
 // struct is updated with values from Programs or Maps if it
-// has an `ebpf` tag and its type is *ProgramSpec or *MapSpec.
+// has an `ebpf` tag and its type is *Program, *ProgramSpec, *Map or *MapSpec.
 // The tag gives the name of the program or map as found in
 // the CollectionSpec.
 //
 //    struct {
-//        Foo     *ebpf.ProgramSpec `ebpf:"xdp_foo"`
-//        Bar     *ebpf.MapSpec     `ebpf:"bar_map"`
-//        Ignored int
-//    }
-//
-// Returns an error if any of the fields can't be found, or
-// if the same map or program is assigned multiple times.
-func (cs *CollectionSpec) Assign(to interface{}) error {
-	valueOf := func(typ reflect.Type, name string) (reflect.Value, error) {
-		switch typ {
-		case reflect.TypeOf((*ProgramSpec)(nil)):
-			p := cs.Programs[name]
-			if p == nil {
-				return reflect.Value{}, fmt.Errorf("missing program %q", name)
-			}
-			return reflect.ValueOf(p), nil
-		case reflect.TypeOf((*MapSpec)(nil)):
-			m := cs.Maps[name]
-			if m == nil {
-				return reflect.Value{}, fmt.Errorf("missing map %q", name)
-			}
-			return reflect.ValueOf(m), nil
-		default:
-			return reflect.Value{}, fmt.Errorf("unsupported type %s", typ)
-		}
-	}
-
-	return assignValues(to, valueOf)
-}
-
-// LoadAndAssign maps and programs into the kernel and assign them to a struct.
-//
-// This function is a short-cut to manually checking the presence
-// of maps and programs in a collection spec. Consider using bpf2go if this
-// sounds useful.
-//
-// The argument to must be a pointer to a struct. A field of the
-// struct is updated with values from Programs or Maps if it
-// has an `ebpf` tag and its type is *Program or *Map.
-// The tag gives the name of the program or map as found in
-// the CollectionSpec.
-//
-//    struct {
-//        Foo     *ebpf.Program `ebpf:"xdp_foo"`
-//        Bar     *ebpf.Map     `ebpf:"bar_map"`
+//        Foo     *ebpf.Program     `ebpf:"xdp_foo"`
+//        FooSpec *ebpf.ProgramSpec `ebpf:"xdp_foo"`
+//        Bar     *ebpf.Map         `ebpf:"bar_map"`
+//        BarSpec *ebpf.MapSpec     `ebpf:"bar_map"`
 //        Ignored int
 //    }
 //
@@ -216,6 +175,18 @@ func (cs *CollectionSpec) LoadAndAssign(to interface{}, opts *CollectionOptions)
 			m, err := loadMap(name)
 			if err != nil {
 				return reflect.Value{}, err
+			}
+			return reflect.ValueOf(m), nil
+		case reflect.TypeOf((*ProgramSpec)(nil)):
+			p := cs.Programs[name]
+			if p == nil {
+				return reflect.Value{}, fmt.Errorf("missing program %q", name)
+			}
+			return reflect.ValueOf(p), nil
+		case reflect.TypeOf((*MapSpec)(nil)):
+			m := cs.Maps[name]
+			if m == nil {
+				return reflect.Value{}, fmt.Errorf("missing map %q", name)
 			}
 			return reflect.ValueOf(m), nil
 		default:
@@ -505,28 +476,86 @@ func (coll *Collection) Assign(to interface{}) error {
 }
 
 func assignValues(to interface{}, valueOf func(reflect.Type, string) (reflect.Value, error)) error {
-	v := reflect.ValueOf(to)
-	if v.Kind() != reflect.Ptr || v.Elem().Kind() != reflect.Struct {
-		return fmt.Errorf("%T is not a pointer to a struct", to)
+	type structField struct {
+		reflect.StructField
+		value reflect.Value
+	}
+
+	var (
+		fields        []structField
+		visitedTypes  = make(map[reflect.Type]bool)
+		flattenStruct func(reflect.Value) error
+	)
+
+	flattenStruct = func(structVal reflect.Value) error {
+		structType := structVal.Type()
+		if structType.Kind() != reflect.Struct {
+			return fmt.Errorf("%s is not a struct", structType)
+		}
+
+		if visitedTypes[structType] {
+			return fmt.Errorf("recursion on type %s", structType)
+		}
+
+		for i := 0; i < structType.NumField(); i++ {
+			field := structField{structType.Field(i), structVal.Field(i)}
+
+			name := field.Tag.Get("ebpf")
+			if name != "" {
+				fields = append(fields, field)
+				continue
+			}
+
+			var err error
+			switch field.Type.Kind() {
+			case reflect.Ptr:
+				if field.Type.Elem().Kind() != reflect.Struct {
+					continue
+				}
+
+				if field.value.IsNil() {
+					return fmt.Errorf("nil pointer to %s", structType)
+				}
+
+				err = flattenStruct(field.value.Elem())
+
+			case reflect.Struct:
+				err = flattenStruct(field.value)
+
+			default:
+				continue
+			}
+
+			if err != nil {
+				return fmt.Errorf("field %s: %s", field.Name, err)
+			}
+		}
+
+		return nil
+	}
+
+	toValue := reflect.ValueOf(to)
+	if toValue.Type().Kind() != reflect.Ptr {
+		return fmt.Errorf("%T is not a pointer to struct", to)
+	}
+
+	if toValue.IsNil() {
+		return fmt.Errorf("nil pointer to %T", to)
+	}
+
+	if err := flattenStruct(toValue.Elem()); err != nil {
+		return err
 	}
 
 	type elem struct {
+		// Either *Map or *Program
 		typ  reflect.Type
 		name string
 	}
 
-	var (
-		s          = v.Elem()
-		sT         = s.Type()
-		assignedTo = make(map[elem]string)
-	)
-	for i := 0; i < sT.NumField(); i++ {
-		field := sT.Field(i)
-
+	assignedTo := make(map[elem]string)
+	for _, field := range fields {
 		name := field.Tag.Get("ebpf")
-		if name == "" {
-			continue
-		}
 		if strings.Contains(name, ",") {
 			return fmt.Errorf("field %s: ebpf tag contains a comma", field.Name)
 		}
@@ -541,12 +570,11 @@ func assignValues(to interface{}, valueOf func(reflect.Type, string) (reflect.Va
 			return fmt.Errorf("field %s: %w", field.Name, err)
 		}
 
-		fieldValue := s.Field(i)
-		if !fieldValue.CanSet() {
-			return fmt.Errorf("can't set value of field %s", field.Name)
+		if !field.value.CanSet() {
+			return fmt.Errorf("field %s: can't set value", field.Name)
 		}
 
-		fieldValue.Set(value)
+		field.value.Set(value)
 		assignedTo[e] = field.Name
 	}
 

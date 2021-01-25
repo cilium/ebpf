@@ -121,20 +121,14 @@ func NewProgram(spec *ProgramSpec) (*Program, error) {
 // Loading a program for the first time will perform
 // feature detection by loading small, temporary programs.
 func NewProgramWithOptions(spec *ProgramSpec, opts ProgramOptions) (*Program, error) {
-	if spec.BTF == nil {
-		return newProgramWithBTF(spec, nil, opts)
-	}
+	btfs := make(lazyBTFLoader)
+	defer btfs.close()
 
-	handle, err := btf.NewHandle(btf.ProgramSpec(spec.BTF))
-	if err != nil && !errors.Is(err, btf.ErrNotSupported) {
-		return nil, fmt.Errorf("can't load BTF: %w", err)
-	}
-
-	return newProgramWithBTF(spec, handle, opts)
+	return newProgramWithOptions(spec, opts, btfs.load)
 }
 
-func newProgramWithBTF(spec *ProgramSpec, btf *btf.Handle, opts ProgramOptions) (*Program, error) {
-	attr, err := convertProgramSpec(spec, btf)
+func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions, newHandle func(*btf.Spec) (*btf.Handle, error)) (*Program, error) {
+	attr, err := convertProgramSpec(spec, newHandle)
 	if err != nil {
 		return nil, err
 	}
@@ -213,7 +207,7 @@ func newProgramFromFD(fd *internal.FD) (*Program, error) {
 	return &Program{"", fd, "", info.Type}, nil
 }
 
-func convertProgramSpec(spec *ProgramSpec, handle *btf.Handle) (*bpfProgLoadAttr, error) {
+func convertProgramSpec(spec *ProgramSpec, newHandle func(*btf.Spec) (*btf.Handle, error)) (*bpfProgLoadAttr, error) {
 	if len(spec.Instructions) == 0 {
 		return nil, errors.New("Instructions cannot be empty")
 	}
@@ -254,24 +248,31 @@ func convertProgramSpec(spec *ProgramSpec, handle *btf.Handle) (*bpfProgLoadAttr
 		attr.progName = newBPFObjName(spec.Name)
 	}
 
-	if handle != nil && spec.BTF != nil {
-		attr.progBTFFd = uint32(handle.FD())
-
-		recSize, bytes, err := btf.ProgramLineInfos(spec.BTF)
-		if err != nil {
-			return nil, fmt.Errorf("can't get BTF line infos: %w", err)
+	if spec.BTF != nil {
+		handle, err := newHandle(btf.ProgramSpec(spec.BTF))
+		if err != nil && !errors.Is(err, btf.ErrNotSupported) {
+			return nil, fmt.Errorf("load BTF: %w", err)
 		}
-		attr.lineInfoRecSize = recSize
-		attr.lineInfoCnt = uint32(uint64(len(bytes)) / uint64(recSize))
-		attr.lineInfo = internal.NewSlicePointer(bytes)
 
-		recSize, bytes, err = btf.ProgramFuncInfos(spec.BTF)
-		if err != nil {
-			return nil, fmt.Errorf("can't get BTF function infos: %w", err)
+		if handle != nil {
+			attr.progBTFFd = uint32(handle.FD())
+
+			recSize, bytes, err := btf.ProgramLineInfos(spec.BTF)
+			if err != nil {
+				return nil, fmt.Errorf("get BTF line infos: %w", err)
+			}
+			attr.lineInfoRecSize = recSize
+			attr.lineInfoCnt = uint32(uint64(len(bytes)) / uint64(recSize))
+			attr.lineInfo = internal.NewSlicePointer(bytes)
+
+			recSize, bytes, err = btf.ProgramFuncInfos(spec.BTF)
+			if err != nil {
+				return nil, fmt.Errorf("get BTF function infos: %w", err)
+			}
+			attr.funcInfoRecSize = recSize
+			attr.funcInfoCnt = uint32(uint64(len(bytes)) / uint64(recSize))
+			attr.funcInfo = internal.NewSlicePointer(bytes)
 		}
-		attr.funcInfoRecSize = recSize
-		attr.funcInfoCnt = uint32(uint64(len(bytes)) / uint64(recSize))
-		attr.funcInfo = internal.NewSlicePointer(bytes)
 	}
 
 	if spec.AttachTo != "" {

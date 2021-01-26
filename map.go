@@ -166,19 +166,13 @@ func NewMap(spec *MapSpec) (*Map, error) {
 // sufficiently high for locking memory during map creation. This can be done
 // by calling unix.Setrlimit with unix.RLIMIT_MEMLOCK prior to calling NewMapWithOptions.
 func NewMapWithOptions(spec *MapSpec, opts MapOptions) (*Map, error) {
-	if spec.BTF == nil {
-		return newMapWithBTF(spec, nil, opts)
-	}
+	btfs := make(btfHandleCache)
+	defer btfs.close()
 
-	handle, err := btf.NewHandle(btf.MapSpec(spec.BTF))
-	if err != nil && !errors.Is(err, btf.ErrNotSupported) {
-		return nil, fmt.Errorf("can't load BTF: %w", err)
-	}
-
-	return newMapWithBTF(spec, handle, opts)
+	return newMapWithOptions(spec, opts, btfs)
 }
 
-func newMapWithBTF(spec *MapSpec, handle *btf.Handle, opts MapOptions) (*Map, error) {
+func newMapWithOptions(spec *MapSpec, opts MapOptions, btfs btfHandleCache) (*Map, error) {
 	switch spec.Pinning {
 	case PinByName:
 		if spec.Name == "" || opts.PinPath == "" {
@@ -213,7 +207,7 @@ func newMapWithBTF(spec *MapSpec, handle *btf.Handle, opts MapOptions) (*Map, er
 			return nil, fmt.Errorf("%s requires InnerMap", spec.Type)
 		}
 
-		template, err := createMap(spec.InnerMap, nil, handle, opts)
+		template, err := createMap(spec.InnerMap, nil, opts, btfs)
 		if err != nil {
 			return nil, err
 		}
@@ -222,7 +216,7 @@ func newMapWithBTF(spec *MapSpec, handle *btf.Handle, opts MapOptions) (*Map, er
 		innerFd = template.fd
 	}
 
-	m, err := createMap(spec, innerFd, handle, opts)
+	m, err := createMap(spec, innerFd, opts, btfs)
 	if err != nil {
 		return nil, err
 	}
@@ -237,7 +231,7 @@ func newMapWithBTF(spec *MapSpec, handle *btf.Handle, opts MapOptions) (*Map, er
 	return m, nil
 }
 
-func createMap(spec *MapSpec, inner *internal.FD, handle *btf.Handle, opts MapOptions) (_ *Map, err error) {
+func createMap(spec *MapSpec, inner *internal.FD, opts MapOptions, btfs btfHandleCache) (_ *Map, err error) {
 	closeOnError := func(closer io.Closer) {
 		if err != nil {
 			closer.Close()
@@ -302,14 +296,21 @@ func createMap(spec *MapSpec, inner *internal.FD, handle *btf.Handle, opts MapOp
 		}
 	}
 
-	if handle != nil && spec.BTF != nil {
-		attr.btfFd = uint32(handle.FD())
-		attr.btfKeyTypeID = btf.MapKey(spec.BTF).ID()
-		attr.btfValueTypeID = btf.MapValue(spec.BTF).ID()
-	}
-
 	if haveObjName() == nil {
 		attr.mapName = newBPFObjName(spec.Name)
+	}
+
+	if spec.BTF != nil {
+		handle, err := btfs.load(btf.MapSpec(spec.BTF))
+		if err != nil && !errors.Is(err, btf.ErrNotSupported) {
+			return nil, fmt.Errorf("load BTF: %w", err)
+		}
+
+		if handle != nil {
+			attr.btfFd = uint32(handle.FD())
+			attr.btfKeyTypeID = btf.MapKey(spec.BTF).ID()
+			attr.btfValueTypeID = btf.MapValue(spec.BTF).ID()
+		}
 	}
 
 	fd, err := bpfMapCreate(&attr)

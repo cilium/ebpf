@@ -13,6 +13,7 @@ import (
 	"unsafe"
 
 	"github.com/cilium/ebpf/internal"
+	"github.com/cilium/ebpf/internal/btf"
 	"github.com/cilium/ebpf/internal/testutils"
 	"github.com/cilium/ebpf/internal/unix"
 )
@@ -829,6 +830,11 @@ func TestMapPinning(t *testing.T) {
 	if err := m1.Put(uint32(0), uint32(42)); err != nil {
 		t.Fatal("Can't write value:", err)
 	}
+
+	// This is a terrible hack: if loading a pinned map tries to load BTF,
+	// it will get a nil *btf.Spec from this *btf.Map. This is turn will make
+	// btf.NewHandle fail.
+	spec.BTF = new(btf.Map)
 
 	m2, err := NewMapWithOptions(spec, MapOptions{PinPath: tmp})
 	if err != nil {

@@ -16,6 +16,19 @@ import (
 	"github.com/cilium/ebpf/internal/btf"
 	"github.com/cilium/ebpf/internal/testutils"
 	"github.com/cilium/ebpf/internal/unix"
+
+	qt "github.com/frankban/quicktest"
+)
+
+var (
+	spec1 = &MapSpec{
+		Name:       "foo",
+		Type:       Hash,
+		KeySize:    4,
+		ValueSize:  4,
+		MaxEntries: 1,
+		Pinning:    PinByName,
+	}
 )
 
 func TestMain(m *testing.M) {
@@ -97,6 +110,7 @@ func TestMapCloneNil(t *testing.T) {
 
 func TestMapPin(t *testing.T) {
 	m := createArray(t)
+	c := qt.New(t)
 	defer m.Close()
 
 	if err := m.Put(uint32(0), uint32(42)); err != nil {
@@ -113,6 +127,11 @@ func TestMapPin(t *testing.T) {
 	if err := m.Pin(path); err != nil {
 		t.Fatal(err)
 	}
+
+	pinned := m.IsPinned()
+	c.Assert(pinned, qt.Equals, true)
+	c.Assert(path, qt.Equals, path)
+
 	m.Close()
 
 	m, err := LoadPinnedMap(path)
@@ -166,6 +185,110 @@ func TestNestedMapPin(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer m.Close()
+}
+
+func TestMapPinMultiple(t *testing.T) {
+	tmp := tempBPFFS(t)
+	c := qt.New(t)
+
+	spec := spec1.Copy()
+
+	m1, err := NewMapWithOptions(spec, MapOptions{PinPath: tmp})
+	if err != nil {
+		t.Fatal("Can't create map:", err)
+	}
+	defer m1.Close()
+	pinned := m1.IsPinned()
+	c.Assert(pinned, qt.Equals, true)
+
+	newPath := filepath.Join(tmp, "bar")
+	err = m1.Pin(newPath)
+	c.Assert(err, qt.IsNil)
+	oldPath := filepath.Join(tmp, spec.Name)
+	if _, err := os.Stat(oldPath); err == nil {
+		t.Fatal("Previous pinned map path still exists:", err)
+	}
+	m2, err := LoadPinnedMap(newPath)
+	c.Assert(err, qt.IsNil)
+	defer m2.Close()
+}
+
+func TestMapPinWithEmptyPath(t *testing.T) {
+	m := createArray(t)
+	c := qt.New(t)
+	defer m.Close()
+
+	err := m.Pin("")
+
+	c.Assert(err, qt.Not(qt.IsNil))
+}
+
+func TestMapUnpin(t *testing.T) {
+	tmp := tempBPFFS(t)
+	c := qt.New(t)
+	spec := spec1.Copy()
+
+	m, err := NewMapWithOptions(spec, MapOptions{PinPath: tmp})
+	if err != nil {
+		t.Fatal("Failed to create map:", err)
+	}
+	defer m.Close()
+
+	pinned := m.IsPinned()
+	c.Assert(pinned, qt.Equals, true)
+	path := filepath.Join(tmp, spec.Name)
+	m2, err := LoadPinnedMap(path)
+	c.Assert(err, qt.IsNil)
+	defer m2.Close()
+
+	if err = m.Unpin(); err != nil {
+		t.Fatal("Failed to unpin map:", err)
+	}
+	if _, err := os.Stat(path); err == nil {
+		t.Fatal("Pinned map path still exists after unpinning:", err)
+	}
+}
+
+func TestMapLoadPinned(t *testing.T) {
+	tmp := tempBPFFS(t)
+	c := qt.New(t)
+
+	spec := spec1.Copy()
+
+	m1, err := NewMapWithOptions(spec, MapOptions{PinPath: tmp})
+	c.Assert(err, qt.IsNil)
+	defer m1.Close()
+	pinned := m1.IsPinned()
+	c.Assert(pinned, qt.Equals, true)
+
+	path := filepath.Join(tmp, spec.Name)
+	m2, err := LoadPinnedMap(path)
+	c.Assert(err, qt.IsNil)
+	defer m2.Close()
+	pinned = m2.IsPinned()
+	c.Assert(pinned, qt.Equals, true)
+}
+
+func TestMapLoadPinnedUnpin(t *testing.T) {
+	tmp := tempBPFFS(t)
+	c := qt.New(t)
+
+	spec := spec1.Copy()
+
+	m1, err := NewMapWithOptions(spec, MapOptions{PinPath: tmp})
+	c.Assert(err, qt.IsNil)
+	defer m1.Close()
+	pinned := m1.IsPinned()
+	c.Assert(pinned, qt.Equals, true)
+
+	path := filepath.Join(tmp, spec.Name)
+	m2, err := LoadPinnedMap(path)
+	c.Assert(err, qt.IsNil)
+	defer m2.Close()
+	err = m1.Unpin()
+	c.Assert(err, qt.IsNil)
+	err = m2.Unpin()
+	c.Assert(err, qt.IsNil)
 }
 
 func createArray(t *testing.T) *Map {
@@ -794,6 +917,7 @@ func TestNewMapFromID(t *testing.T) {
 
 func TestMapPinning(t *testing.T) {
 	tmp := tempBPFFS(t)
+	c := qt.New(t)
 
 	spec := &MapSpec{
 		Name:       "test",
@@ -809,6 +933,8 @@ func TestMapPinning(t *testing.T) {
 		t.Fatal("Can't create map:", err)
 	}
 	defer m1.Close()
+	pinned := m1.IsPinned()
+	c.Assert(pinned, qt.Equals, true)
 
 	if err := m1.Put(uint32(0), uint32(42)); err != nil {
 		t.Fatal("Can't write value:", err)

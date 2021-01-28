@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -125,8 +126,14 @@ type Map struct {
 	valueSize  uint32
 	maxEntries uint32
 	flags      uint32
+	pinState   mapPinnedState
 	// Per CPU maps return values larger than the size in the spec
 	fullValueSize int
+}
+
+type mapPinnedState struct {
+	pinned bool
+	path   string
 }
 
 // NewMapFromFD creates a map from a raw fd.
@@ -354,6 +361,7 @@ func newMap(fd *internal.FD, name string, typ MapType, keySize, valueSize, maxEn
 		valueSize,
 		maxEntries,
 		flags,
+		mapPinnedState{},
 		int(valueSize),
 	}
 
@@ -666,6 +674,7 @@ func (m *Map) FD() int {
 //
 // Closing the duplicate does not affect the original, and vice versa.
 // Changes made to the map are reflected by both instances however.
+// If the original map was pinned, the cloned map will not be pinned by default.
 //
 // Cloning a nil Map returns nil.
 func (m *Map) Clone() (*Map, error) {
@@ -686,15 +695,53 @@ func (m *Map) Clone() (*Map, error) {
 		m.valueSize,
 		m.maxEntries,
 		m.flags,
+		mapPinnedState{},
 		m.fullValueSize,
 	}, nil
 }
 
 // Pin persists the map past the lifetime of the process that created it.
 //
+// Multiple calls to Pin with different pinned paths, without calling Unpin are not supported.
+// You can Clone a map to pin it to a different path.
+//
 // This requires bpffs to be mounted above fileName. See https://docs.cilium.io/en/k8s-doc/admin/#admin-mount-bpffs
 func (m *Map) Pin(fileName string) error {
-	return internal.BPFObjPin(fileName, m.fd)
+	if m.pinState.pinned {
+		if m.pinState.path == fileName {
+			return nil
+		} else {
+			return fmt.Errorf("map already pinned at %v", m.pinState.path)
+		}
+	}
+	err := internal.BPFObjPin(fileName, m.fd)
+	if err == nil {
+		m.pinState.pinned = true
+		m.pinState.path = fileName
+	}
+	return err
+}
+
+// Unpin removes the persisted state for the map.
+//
+// Unpinning a nil or un-pinned Map returns nil.
+func (m *Map) Unpin() error {
+	if m == nil || !m.pinState.pinned {
+		return nil
+	}
+	err := os.Remove(m.pinState.path)
+	if err == nil {
+		m.pinState = mapPinnedState{}
+	}
+	return err
+}
+
+// IsPinned returns (true, pinned path) if the map is pinned, (false, "") otherwise.
+func (m *Map) IsPinned() (string, bool) {
+	if m == nil || !m.pinState.pinned {
+		return "", false
+	}
+	return m.pinState.path, m.pinState.pinned
 }
 
 // Freeze prevents a map to be modified from user space.

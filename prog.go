@@ -121,99 +121,13 @@ func NewProgram(spec *ProgramSpec) (*Program, error) {
 // Loading a program for the first time will perform
 // feature detection by loading small, temporary programs.
 func NewProgramWithOptions(spec *ProgramSpec, opts ProgramOptions) (*Program, error) {
-	if spec.BTF == nil {
-		return newProgramWithBTF(spec, nil, opts)
-	}
+	btfs := make(btfHandleCache)
+	defer btfs.close()
 
-	handle, err := btf.NewHandle(btf.ProgramSpec(spec.BTF))
-	if err != nil && !errors.Is(err, btf.ErrNotSupported) {
-		return nil, fmt.Errorf("can't load BTF: %w", err)
-	}
-
-	return newProgramWithBTF(spec, handle, opts)
+	return newProgramWithOptions(spec, opts, btfs)
 }
 
-func newProgramWithBTF(spec *ProgramSpec, btf *btf.Handle, opts ProgramOptions) (*Program, error) {
-	attr, err := convertProgramSpec(spec, btf)
-	if err != nil {
-		return nil, err
-	}
-
-	logSize := DefaultVerifierLogSize
-	if opts.LogSize > 0 {
-		logSize = opts.LogSize
-	}
-
-	var logBuf []byte
-	if opts.LogLevel > 0 {
-		logBuf = make([]byte, logSize)
-		attr.logLevel = opts.LogLevel
-		attr.logSize = uint32(len(logBuf))
-		attr.logBuf = internal.NewSlicePointer(logBuf)
-	}
-
-	fd, err := bpfProgLoad(attr)
-	if err == nil {
-		return &Program{internal.CString(logBuf), fd, spec.Name, spec.Type}, nil
-	}
-
-	logErr := err
-	if opts.LogLevel == 0 {
-		// Re-run with the verifier enabled to get better error messages.
-		logBuf = make([]byte, logSize)
-		attr.logLevel = 1
-		attr.logSize = uint32(len(logBuf))
-		attr.logBuf = internal.NewSlicePointer(logBuf)
-
-		_, logErr = bpfProgLoad(attr)
-	}
-
-	if errors.Is(logErr, unix.EPERM) && logBuf[0] == 0 {
-		// EPERM due to RLIMIT_MEMLOCK happens before the verifier, so we can
-		// check that the log is empty to reduce false positives.
-		return nil, fmt.Errorf("load program: RLIMIT_MEMLOCK may be too low: %w", logErr)
-	}
-
-	err = internal.ErrorWithLog(err, logBuf, logErr)
-	return nil, fmt.Errorf("load program: %w", err)
-}
-
-// NewProgramFromFD creates a program from a raw fd.
-//
-// You should not use fd after calling this function.
-//
-// Requires at least Linux 4.10.
-func NewProgramFromFD(fd int) (*Program, error) {
-	if fd < 0 {
-		return nil, errors.New("invalid fd")
-	}
-
-	return newProgramFromFD(internal.NewFD(uint32(fd)))
-}
-
-// NewProgramFromID returns the program for a given id.
-//
-// Returns ErrNotExist, if there is no eBPF program with the given id.
-func NewProgramFromID(id ProgramID) (*Program, error) {
-	fd, err := bpfObjGetFDByID(internal.BPF_PROG_GET_FD_BY_ID, uint32(id))
-	if err != nil {
-		return nil, fmt.Errorf("get program by id: %w", err)
-	}
-
-	return newProgramFromFD(fd)
-}
-
-func newProgramFromFD(fd *internal.FD) (*Program, error) {
-	info, err := newProgramInfoFromFd(fd)
-	if err != nil {
-		fd.Close()
-		return nil, fmt.Errorf("discover program type: %w", err)
-	}
-
-	return &Program{"", fd, "", info.Type}, nil
-}
-
-func convertProgramSpec(spec *ProgramSpec, handle *btf.Handle) (*bpfProgLoadAttr, error) {
+func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions, btfs btfHandleCache) (*Program, error) {
 	if len(spec.Instructions) == 0 {
 		return nil, errors.New("Instructions cannot be empty")
 	}
@@ -254,24 +168,33 @@ func convertProgramSpec(spec *ProgramSpec, handle *btf.Handle) (*bpfProgLoadAttr
 		attr.progName = newBPFObjName(spec.Name)
 	}
 
-	if handle != nil && spec.BTF != nil {
-		attr.progBTFFd = uint32(handle.FD())
-
-		recSize, bytes, err := btf.ProgramLineInfos(spec.BTF)
-		if err != nil {
-			return nil, fmt.Errorf("can't get BTF line infos: %w", err)
+	var btfDisabled bool
+	if spec.BTF != nil {
+		handle, err := btfs.load(btf.ProgramSpec(spec.BTF))
+		btfDisabled = errors.Is(err, btf.ErrNotSupported)
+		if err != nil && !btfDisabled {
+			return nil, fmt.Errorf("load BTF: %w", err)
 		}
-		attr.lineInfoRecSize = recSize
-		attr.lineInfoCnt = uint32(uint64(len(bytes)) / uint64(recSize))
-		attr.lineInfo = internal.NewSlicePointer(bytes)
 
-		recSize, bytes, err = btf.ProgramFuncInfos(spec.BTF)
-		if err != nil {
-			return nil, fmt.Errorf("can't get BTF function infos: %w", err)
+		if handle != nil {
+			attr.progBTFFd = uint32(handle.FD())
+
+			recSize, bytes, err := btf.ProgramLineInfos(spec.BTF)
+			if err != nil {
+				return nil, fmt.Errorf("get BTF line infos: %w", err)
+			}
+			attr.lineInfoRecSize = recSize
+			attr.lineInfoCnt = uint32(uint64(len(bytes)) / uint64(recSize))
+			attr.lineInfo = internal.NewSlicePointer(bytes)
+
+			recSize, bytes, err = btf.ProgramFuncInfos(spec.BTF)
+			if err != nil {
+				return nil, fmt.Errorf("get BTF function infos: %w", err)
+			}
+			attr.funcInfoRecSize = recSize
+			attr.funcInfoCnt = uint32(uint64(len(bytes)) / uint64(recSize))
+			attr.funcInfo = internal.NewSlicePointer(bytes)
 		}
-		attr.funcInfoRecSize = recSize
-		attr.funcInfoCnt = uint32(uint64(len(bytes)) / uint64(recSize))
-		attr.funcInfo = internal.NewSlicePointer(bytes)
 	}
 
 	if spec.AttachTo != "" {
@@ -284,7 +207,81 @@ func convertProgramSpec(spec *ProgramSpec, handle *btf.Handle) (*bpfProgLoadAttr
 		}
 	}
 
-	return attr, nil
+	logSize := DefaultVerifierLogSize
+	if opts.LogSize > 0 {
+		logSize = opts.LogSize
+	}
+
+	var logBuf []byte
+	if opts.LogLevel > 0 {
+		logBuf = make([]byte, logSize)
+		attr.logLevel = opts.LogLevel
+		attr.logSize = uint32(len(logBuf))
+		attr.logBuf = internal.NewSlicePointer(logBuf)
+	}
+
+	fd, err := bpfProgLoad(attr)
+	if err == nil {
+		return &Program{internal.CString(logBuf), fd, spec.Name, spec.Type}, nil
+	}
+
+	logErr := err
+	if opts.LogLevel == 0 {
+		// Re-run with the verifier enabled to get better error messages.
+		logBuf = make([]byte, logSize)
+		attr.logLevel = 1
+		attr.logSize = uint32(len(logBuf))
+		attr.logBuf = internal.NewSlicePointer(logBuf)
+
+		_, logErr = bpfProgLoad(attr)
+	}
+
+	if errors.Is(logErr, unix.EPERM) && logBuf[0] == 0 {
+		// EPERM due to RLIMIT_MEMLOCK happens before the verifier, so we can
+		// check that the log is empty to reduce false positives.
+		return nil, fmt.Errorf("load program: RLIMIT_MEMLOCK may be too low: %w", logErr)
+	}
+
+	err = internal.ErrorWithLog(err, logBuf, logErr)
+	if btfDisabled {
+		return nil, fmt.Errorf("load program without BTF: %w", err)
+	}
+	return nil, fmt.Errorf("load program: %w", err)
+}
+
+// NewProgramFromFD creates a program from a raw fd.
+//
+// You should not use fd after calling this function.
+//
+// Requires at least Linux 4.10.
+func NewProgramFromFD(fd int) (*Program, error) {
+	if fd < 0 {
+		return nil, errors.New("invalid fd")
+	}
+
+	return newProgramFromFD(internal.NewFD(uint32(fd)))
+}
+
+// NewProgramFromID returns the program for a given id.
+//
+// Returns ErrNotExist, if there is no eBPF program with the given id.
+func NewProgramFromID(id ProgramID) (*Program, error) {
+	fd, err := bpfObjGetFDByID(internal.BPF_PROG_GET_FD_BY_ID, uint32(id))
+	if err != nil {
+		return nil, fmt.Errorf("get program by id: %w", err)
+	}
+
+	return newProgramFromFD(fd)
+}
+
+func newProgramFromFD(fd *internal.FD) (*Program, error) {
+	info, err := newProgramInfoFromFd(fd)
+	if err != nil {
+		fd.Close()
+		return nil, fmt.Errorf("discover program type: %w", err)
+	}
+
+	return &Program{"", fd, "", info.Type}, nil
 }
 
 func (p *Program) String() string {

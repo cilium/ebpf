@@ -746,9 +746,9 @@ var haveBTF = internal.FeatureTest("BTF", "5.1", func() error {
 		btf:     internal.NewSlicePointer(btf),
 		btfSize: uint32(len(btf)),
 	})
-	if errors.Is(err, unix.EINVAL) {
-		// Check for EINVAL specifically, rather than err != nil since we
-		// otherwise misdetect due to insufficient permissions.
+	if errors.Is(err, unix.EINVAL) || errors.Is(err, unix.EPERM) {
+		// Treat both EINVAL and EPERM as not supported: loading the program
+		// might still succeed without BTF.
 		return internal.ErrNotSupported
 	}
 	if err != nil {
@@ -760,6 +760,10 @@ var haveBTF = internal.FeatureTest("BTF", "5.1", func() error {
 })
 
 var haveFuncLinkage = internal.FeatureTest("BTF func linkage", "5.6", func() error {
+	if err := haveBTF(); err != nil {
+		return err
+	}
+
 	var (
 		types struct {
 			FuncProto btfType
@@ -781,8 +785,6 @@ var haveFuncLinkage = internal.FeatureTest("BTF func linkage", "5.6", func() err
 		btfSize: uint32(len(btf)),
 	})
 	if errors.Is(err, unix.EINVAL) {
-		// Check for EINVAL specifically, rather than err != nil since we
-		// otherwise misdetect due to insufficient permissions.
 		return internal.ErrNotSupported
 	}
 	if err != nil {

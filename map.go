@@ -623,12 +623,37 @@ func (m *Map) nextKey(key interface{}, nextKeyOut internal.Pointer) error {
 	return nil
 }
 
+// BatchLookup looks up many elements in a map at once
+// with the startKey being the first element to start
+// from.
 func (m *Map) BatchLookup(startKey, nextKey, keysOut, valuesOut interface{}, count int) (int, error) {
-	if reflect.Indirect(reflect.ValueOf(valuesOut)).Kind() != reflect.Slice {
-		return 0, fmt.Errorf("keys must be a pointer to a slice")
+	return m.batchLookup(false, startKey, nextKey, keysOut, valuesOut, count)
+}
+
+// BatchLookup looks up many elements in a map at once
+// with the startKey being the first element to start
+// from. It then deletes all those elements.
+func (m *Map) BatchLookupAndDelete(startKey, nextKey, keysOut, valuesOut interface{}, count int) (int, error) {
+	return m.batchLookup(true, startKey, nextKey, keysOut, valuesOut, count)
+}
+
+func (m *Map) batchLookup(del bool, startKey, nextKey, keysOut, valuesOut interface{}, count int) (int, error) {
+	keysValue := reflect.ValueOf(keysOut)
+	if keysValue.Kind() != reflect.Slice {
+		return 0, fmt.Errorf("keys must be a slice")
 	}
-	if reflect.Indirect(reflect.ValueOf(valuesOut)).Kind() != reflect.Slice {
-		return 0, fmt.Errorf("valuesOut must be a pointer to a slice")
+	valuesValue := reflect.ValueOf(valuesOut)
+	if valuesValue.Kind() != reflect.Slice {
+		return 0, fmt.Errorf("valuesOut must be a slice")
+	}
+	if count != keysValue.Len() || count != valuesValue.Len() {
+		return 0, fmt.Errorf("keysOut and valuesOut must be the same length as count")
+	}
+	switch value := valuesOut.(type) {
+	case []Map:
+		return 0, fmt.Errorf("can't unmarshal into %T, need %T", value, ([]*Map)(nil))
+	case []Program:
+		return 0, fmt.Errorf("can't unmarshal into %T, need %T", value, ([]*Program)(nil))
 	}
 	keyBuf := make([]byte, count*int(m.keySize))
 	keyPtr := internal.NewSlicePointer(keyBuf)
@@ -650,7 +675,11 @@ func (m *Map) BatchLookup(startKey, nextKey, keysOut, valuesOut interface{}, cou
 
 	nextPtr, nextBuf := makeBuffer(nextKey, int(m.keySize))
 	ct := uint32(count)
-	err = bpfMapBatchLookup(m.fd, startPtr, nextPtr, keyPtr, valuePtr, &ct)
+	if del {
+		err = bpfMapBatchLookupAndDelete(m.fd, startPtr, nextPtr, keyPtr, valuePtr, &ct)
+	} else {
+		err = bpfMapBatchLookup(m.fd, startPtr, nextPtr, keyPtr, valuePtr, &ct)
+	}
 	if err != nil && err != syscall.ENOENT {
 		return 0, err
 	}
@@ -662,8 +691,49 @@ func (m *Map) BatchLookup(startKey, nextKey, keysOut, valuesOut interface{}, cou
 	if err != nil {
 		return 0, err
 	}
-	// TODO: needs map unmarshalling logic
-	return int(ct), unmarshalBytes(valuesOut, valueBuf)
+	count = int(ct)
+	switch value := valuesOut.(type) {
+	case []*Map:
+		err := unmarshalMaps(valueBuf, value)
+		if err != nil {
+			return 0, err
+		}
+		return count, nil
+	case []*Program:
+		err := unmarshalPrograms(valueBuf, value)
+		if err != nil {
+			return 0, err
+		}
+		return count, nil
+	default:
+		return count, unmarshalBytes(valuesOut, valueBuf)
+	}
+}
+
+func (m *Map) BatchUpdate(keys, values interface{}, count int) error {
+	keysValue := reflect.ValueOf(keys)
+	if keysValue.Kind() != reflect.Slice {
+		return fmt.Errorf("keys must be a slice")
+	}
+	valuesValue := reflect.ValueOf(values)
+	if valuesValue.Kind() != reflect.Slice {
+		return fmt.Errorf("values must be a slice")
+	}
+	if count != keysValue.Len() || count != valuesValue.Len() {
+		return fmt.Errorf("keys and values must be the same length as count")
+	}
+	switch value := values.(type) {
+	case []Map:
+		return fmt.Errorf("can't unmarshal into %T, need %T", value, ([]*Map)(nil))
+	case []Program:
+		return fmt.Errorf("can't unmarshal into %T, need %T", value, ([]*Program)(nil))
+	}
+	keyBuf := make([]byte, count*int(m.keySize))
+	keyPtr := internal.NewSlicePointer(keyBuf)
+	valueBuf := make([]byte, count*int(m.valueSize))
+	valuePtr := internal.NewSlicePointer(valueBuf)
+	ct := uint32(count)
+	return bpfMapBatchUpdate(m.fd, keyPtr, valuePtr, &ct)
 }
 
 // Iterate traverses a map.
@@ -778,6 +848,23 @@ func unmarshalMap(buf []byte) (*Map, error) {
 	// not an fd.
 	id := internal.NativeEndian.Uint32(buf)
 	return NewMapFromID(MapID(id))
+}
+
+func unmarshalMaps(buf []byte, maps []*Map) error {
+	lbuf := len(buf)
+	if lbuf%4 != 0 {
+		return errors.New("map ids require 4 byte value")
+	}
+
+	for i := 0; i < lbuf; i += 4 {
+		id := internal.NativeEndian.Uint32(buf[i:])
+		m, err := NewMapFromID(MapID(id))
+		if err != nil {
+			return err
+		}
+		maps = append(maps, m)
+	}
+	return nil
 }
 
 // MarshalBinary implements BinaryMarshaler.

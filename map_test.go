@@ -7,6 +7,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"reflect"
 	"sort"
 	"strings"
 	"testing"
@@ -65,18 +66,103 @@ func TestMap(t *testing.T) {
 	if k != 1 {
 		t.Error("Want key 1, got", k)
 	}
+}
+
+func TestBatchAPIArray(t *testing.T) {
+	if err := hasBatchAPI(); err != nil {
+		t.Skipf("batch api not available: %v", err)
+	}
+	m, err := NewMap(&MapSpec{
+		Type:       Array,
+		KeySize:    4,
+		ValueSize:  4,
+		MaxEntries: 10,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer m.Close()
+	t.Log(m)
+
 	var (
 		nextKey uint32
-		keys    []uint32 = make([]uint32, 2)
-		values  []uint32 = make([]uint32, 2)
-		count            = 1
+		keys    = []uint32{0, 1}
+		values  = []uint32{42, 4242}
+		keys2   = make([]uint32, 2)
+		values2 = make([]uint32, 2)
+		count   = 2
+	)
+	if err := m.BatchUpdate(keys, values, count); err != nil {
+		t.Fatalf("BatchUpdate: %v", err)
+	}
+
+	var v uint32
+	if err := m.Lookup(uint32(0), &v); err != nil {
+		t.Fatal("Can't lookup 0:", err)
+	}
+	if v != 42 {
+		t.Error("Want value 42, got", v)
+	}
+
+	count, err = m.BatchLookup(nil, &nextKey, keys2, values2, count)
+	if err != nil {
+		t.Fatalf("BatchLookup: %v", err)
+	}
+	if !reflect.DeepEqual(keys, keys2) {
+		t.Errorf("BatchUpdate and BatchLookup keys disagree: %v %v", values, values2)
+	}
+	if !reflect.DeepEqual(values, values2) {
+		t.Errorf("BatchUpdate and BatchLookup values disagree: %v %v", values, values2)
+	}
+}
+
+func TestBatchAPIHash(t *testing.T) {
+	if err := hasBatchAPI(); err != nil {
+		t.Skipf("batch api not available: %v", err)
+	}
+	m, err := NewMap(&MapSpec{
+		Type:       Hash,
+		KeySize:    4,
+		ValueSize:  4,
+		MaxEntries: 10,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer m.Close()
+	t.Log(m)
+
+	var (
+		nextKey uint32 = 0
+		keys           = []uint32{0, 1}
+		values         = []uint32{42, 4242}
+		keys2          = make([]uint32, 2)
+		values2        = make([]uint32, 2)
+		count          = 2
 	)
 
-	count, err = m.BatchLookup(nil, &nextKey, &keys, &values, count)
-	if err != nil {
-		t.Fatal("Batch lookup failure: ", err)
+	if err := m.BatchUpdate(keys, values, count); err != nil {
+		t.Fatalf("BatchUpdate: %v", err)
 	}
-	fmt.Println(count, keys, values, nextKey)
+
+	var v uint32
+	if err := m.Lookup(uint32(0), &v); err != nil {
+		t.Fatal("Can't lookup 0:", err)
+	}
+	if v != 42 {
+		t.Error("Want value 42, got", v)
+	}
+
+	count, err = m.BatchLookup(nil, &nextKey, keys2, values2, count)
+	if err != nil {
+		t.Fatalf("BatchLookup: %v", err)
+	}
+	if !reflect.DeepEqual(keys, keys2) {
+		t.Errorf("BatchUpdate and BatchLookup keys disagree: %v %v", values, values2)
+	}
+	if !reflect.DeepEqual(values, values2) {
+		t.Errorf("BatchUpdate and BatchLookup values disagree: %v %v", values, values2)
+	}
 }
 
 func TestMapClose(t *testing.T) {

@@ -492,6 +492,25 @@ func unmarshalProgram(buf []byte) (*Program, error) {
 	return NewProgramFromID(ProgramID(id))
 }
 
+func unmarshalPrograms(buf []byte, progs []*Program) error {
+	lbuf := len(buf)
+	if lbuf%4 != 0 {
+		return errors.New("program id requires 4 byte value")
+	}
+
+	for i := 0; i < lbuf; i += 4 {
+		// Looking up an entry in a nested map or prog array returns an id,
+		// not an fd.
+		id := internal.NativeEndian.Uint32(buf)
+		p, err := NewProgramFromID(ProgramID(id))
+		if err != nil {
+			return err
+		}
+		progs = append(progs, p)
+	}
+	return nil
+}
+
 // MarshalBinary implements BinaryMarshaler.
 func (p *Program) MarshalBinary() ([]byte, error) {
 	value, err := p.fd.Value()

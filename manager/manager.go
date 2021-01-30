@@ -1010,7 +1010,12 @@ func (m *Manager) matchSpecs() error {
 		if err != nil {
 			return err
 		}
-		probe.programSpec = programSpec
+		if !probe.CopyProgram {
+			probe.programSpec = programSpec
+		} else {
+			probe.programSpec = programSpec.Copy()
+			m.collectionSpec.Programs[probe.Section + probe.UID] = probe.programSpec
+		}
 	}
 
 	// Match maps

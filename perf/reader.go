@@ -5,8 +5,11 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"math"
+	"os"
 	"runtime"
+	"strings"
 	"sync"
 
 	"github.com/cilium/ebpf"
@@ -17,6 +20,11 @@ import (
 var (
 	errClosed = errors.New("perf reader was closed")
 	errEOR    = errors.New("end of ring")
+)
+
+const (
+	// PossibleCPUSysfsPath is used to retrieve the number of CPUs for per-CPU maps.
+	PossibleCPUSysfsPath = "/sys/devices/system/cpu/possible"
 )
 
 // perfEventHeader must match 'struct perf_event_header` in <linux/perf_event.h>.
@@ -188,10 +196,13 @@ func NewReaderWithOptions(array *ebpf.Map, perCPUBuffer int, opts ReaderOptions)
 	if err != nil {
 		return nil, fmt.Errorf("can't create epoll fd: %v", err)
 	}
+	nCPU, err := GetNumPossibleCPUs()
+	if err != nil {
+		return nil, err
+	}
 
 	var (
 		fds      = []int{epollFd}
-		nCPU     = int(array.MaxEntries())
 		rings    = make([]*perfEventRing, 0, nCPU)
 		pauseFds = make([]int, 0, nCPU)
 	)
@@ -442,4 +453,47 @@ func (uev *unknownEventError) Error() string {
 func IsUnknownEvent(err error) bool {
 	var uee *unknownEventError
 	return errors.As(err, &uee)
+}
+
+// GetNumPossibleCPUs returns a total number of possible CPUS, i.e. CPUs that
+// have been allocated resources and can be brought online if they are present.
+// The number is retrieved by parsing /sys/device/system/cpu/possible.
+//
+// See https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/cpumask.h?h=v4.19#n50
+// for more details.
+func GetNumPossibleCPUs() (int, error) {
+	f, err := os.Open(PossibleCPUSysfsPath)
+	if err != nil {
+		return 0, fmt.Errorf("unable to open %q %w", PossibleCPUSysfsPath, err)
+	}
+	defer f.Close()
+
+	return getNumPossibleCPUsFromReader(f)
+}
+
+func getNumPossibleCPUsFromReader(r io.Reader) (int, error) {
+	out, err := ioutil.ReadAll(r)
+	if err != nil {
+		return 0, fmt.Errorf("unable to read %q to get CPU count: %w", PossibleCPUSysfsPath, err)
+	}
+
+	var start, end int
+	count := 0
+	for _, s := range strings.Split(string(out), ",") {
+		// Go's scanf will return an error if a format cannot be fully matched.
+		// So, just ignore it, as a partial match (e.g. when there is only one
+		// CPU) is expected.
+		n, err := fmt.Sscanf(s, "%d-%d", &start, &end)
+
+		switch n {
+		case 0:
+			return 0, fmt.Errorf("failed to scan %q to retrieve number of possible CPUs! %w", s, err)
+		case 1:
+			count++
+		default:
+			count += (end - start + 1)
+		}
+	}
+
+	return count, nil
 }

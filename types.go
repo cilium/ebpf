@@ -85,10 +85,19 @@ const (
 
 // hasPerCPUValue returns true if the Map stores a value per CPU.
 func (mt MapType) hasPerCPUValue() bool {
-	if mt == PerCPUHash || mt == PerCPUArray || mt == LRUCPUHash {
-		return true
-	}
-	return false
+	return mt == PerCPUHash || mt == PerCPUArray || mt == LRUCPUHash
+}
+
+// canStoreMap returns true if the map type accepts a map fd
+// for update and returns a map id for lookup.
+func (mt MapType) canStoreMap() bool {
+	return mt == ArrayOfMaps || mt == HashOfMaps
+}
+
+// canStoreProgram returns true if the map type accepts a program fd
+// for update and returns a program id for lookup.
+func (mt MapType) canStoreProgram() bool {
+	return mt == ProgramArray
 }
 
 // ProgramType of the eBPF program

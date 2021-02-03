@@ -196,23 +196,13 @@ func TestMapQueue(t *testing.T) {
 	}
 	defer m.Close()
 
-	if err := m.Put(nil, uint32(42)); err != nil {
-		t.Fatal("Can't put 42:", err)
-	}
-
-	if err := m.Put(nil, uint32(4242)); err != nil {
-		t.Fatal("Can't put 4242:", err)
+	for _, v := range []uint32{42, 4242} {
+		if err := m.Put(nil, v); err != nil {
+			t.Fatalf("Can't put %d: %s", v, err)
+		}
 	}
 
 	var v uint32
-	if err := m.Lookup(nil, &v); err != nil {
-		t.Fatal("Can't lookup element:", err)
-	}
-	if v != 42 {
-		t.Error("Want value 42, got", v)
-	}
-
-	v = 0
 	if err := m.LookupAndDelete(nil, &v); err != nil {
 		t.Fatal("Can't lookup and delete element:", err)
 	}
@@ -220,16 +210,9 @@ func TestMapQueue(t *testing.T) {
 		t.Error("Want value 42, got", v)
 	}
 
-	if err := m.Lookup(nil, &v); err != nil {
-		t.Fatal("Can't lookup element:", err)
-	}
-	if v != 4242 {
-		t.Error("Want value 4242, got", v)
-	}
-
 	v = 0
-	if err := m.LookupAndDelete(nil, &v); err != nil {
-		t.Fatal("Can't lookup and delete element:", err)
+	if err := m.LookupAndDelete(nil, unsafe.Pointer(&v)); err != nil {
+		t.Fatal("Can't lookup and delete element using unsafe.Pointer:", err)
 	}
 	if v != 4242 {
 		t.Error("Want value 4242, got", v)

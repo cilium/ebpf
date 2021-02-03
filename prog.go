@@ -496,8 +496,11 @@ func unmarshalProgram(buf []byte) (*Program, error) {
 	return NewProgramFromID(ProgramID(id))
 }
 
-// MarshalBinary implements BinaryMarshaler.
-func (p *Program) MarshalBinary() ([]byte, error) {
+func marshalProgram(p *Program, length int) ([]byte, error) {
+	if length != 4 {
+		return nil, fmt.Errorf("can't marshal program to %d bytes", length)
+	}
+
 	value, err := p.fd.Value()
 	if err != nil {
 		return nil, err

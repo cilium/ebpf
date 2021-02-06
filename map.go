@@ -412,7 +412,7 @@ func (m *Map) Info() (*MapInfo, error) {
 // Calls Close() on valueOut if it is of type **Map or **Program,
 // and *valueOut is not nil.
 //
-// Returns an error if the key doesn't exist, see IsNotExist.
+// Returns an error if the key doesn't exist, see ErrKeyNotExist.
 func (m *Map) Lookup(key, valueOut interface{}) error {
 	valuePtr, valueBytes := makeBuffer(valueOut, m.fullValueSize)
 

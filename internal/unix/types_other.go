@@ -44,6 +44,7 @@ const (
 	PERF_FLAG_FD_CLOEXEC     = 0x8
 	RLIM_INFINITY            = 0x7fffffffffffffff
 	RLIMIT_MEMLOCK           = 8
+	BPF_STATS_RUN_TIME       = 0
 )
 
 // Statfs_t is a wrapper

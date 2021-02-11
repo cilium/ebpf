@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/cilium/ebpf/asm"
 	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/testutils"
 	"github.com/cilium/ebpf/internal/unix"
@@ -137,5 +138,81 @@ func TestScanFdInfoReader(t *testing.T) {
 				t.Errorf("fields %v doesn't return an error", test.fields)
 			}
 		}
+	}
+}
+
+func TestStats(t *testing.T) {
+	testutils.SkipOnOldKernel(t, "5.8", "BPF_ENABLE_STATS")
+
+	spec := &ProgramSpec{
+		Type: SocketFilter,
+		Instructions: asm.Instructions{
+			asm.LoadImm(asm.R0, 42, asm.DWord),
+			asm.Return(),
+		},
+		License: "MIT",
+	}
+
+	prog, err := NewProgram(spec)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer prog.Close()
+
+	progInfo, err := prog.Info()
+	if err != nil {
+		t.Errorf("failed to get ProgramInfo: %v", err)
+	}
+
+	if cnt, available := progInfo.RunCount(); cnt != 0 || !available {
+		t.Errorf("expected a run count of 0 but got %d", cnt)
+	}
+
+	if runtime, available := progInfo.Runtime(); runtime != 0 || !available {
+		t.Errorf("expected a runtime of 0ns but got %v", runtime)
+	}
+
+	disableStats, err := EnableStats(uint32(unix.BPF_STATS_RUN_TIME))
+	if err != nil {
+		t.Errorf("failed to enable stats: %v", err)
+	}
+	defer disableStats.Close()
+
+	if _, _, err := prog.Test(make([]byte, 14)); err != nil {
+		t.Errorf("failed to trigger program: %v", err)
+	}
+
+	progInfo2, err := prog.Info()
+	if err != nil {
+		t.Errorf("failed to get ProgramInfo: %v", err)
+	}
+
+	if cnt, available := progInfo2.RunCount(); cnt != 1 || !available {
+		t.Errorf("expected a run count of 1 but got %d", cnt)
+	}
+
+	if runtime, available := progInfo2.Runtime(); runtime == 0 || !available {
+		t.Errorf("expected a runtime other than 0ns")
+	}
+
+	if err := disableStats.Close(); err != nil {
+		t.Errorf("failed to disable statistics: %v", err)
+	}
+
+	if _, _, err := prog.Test(make([]byte, 14)); err != nil {
+		t.Errorf("failed to trigger program: %v", err)
+	}
+
+	progInfo3, err := prog.Info()
+	if err != nil {
+		t.Errorf("failed to get ProgramInfo: %v", err)
+	}
+
+	if cnt, available := progInfo3.RunCount(); cnt != 1 || !available {
+		t.Errorf("expected a run count of 1 but got %d", cnt)
+	}
+
+	if runtime, available := progInfo3.Runtime(); runtime == 0 || !available {
+		t.Errorf("expected a runtime other than 0ns")
 	}
 }

@@ -43,6 +43,7 @@ const (
 	PERF_FLAG_FD_CLOEXEC     = linux.PERF_FLAG_FD_CLOEXEC
 	RLIM_INFINITY            = linux.RLIM_INFINITY
 	RLIMIT_MEMLOCK           = linux.RLIMIT_MEMLOCK
+	BPF_STATS_RUN_TIME       = linux.BPF_STATS_RUN_TIME
 )
 
 // Statfs_t is a wrapper

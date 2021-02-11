@@ -9,6 +9,7 @@ import (
 	"os"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/cilium/ebpf/internal"
 )
@@ -70,6 +71,14 @@ func (mi *MapInfo) ID() (MapID, bool) {
 	return mi.id, mi.id > 0
 }
 
+// programStats holds statistics of a program.
+type programStats struct {
+	// Total accumulated runtime of the program ins ns.
+	runtime time.Duration
+	// Total number of times the program was called.
+	runCount uint64
+}
+
 // ProgramInfo describes a program.
 type ProgramInfo struct {
 	Type ProgramType
@@ -78,6 +87,8 @@ type ProgramInfo struct {
 	Tag string
 	// Name as supplied by user space at load time.
 	Name string
+
+	stats *programStats
 }
 
 func newProgramInfoFromFd(fd *internal.FD) (*ProgramInfo, error) {
@@ -90,12 +101,16 @@ func newProgramInfoFromFd(fd *internal.FD) (*ProgramInfo, error) {
 	}
 
 	return &ProgramInfo{
-		ProgramType(info.prog_type),
-		ProgramID(info.id),
+		Type: ProgramType(info.prog_type),
+		id:   ProgramID(info.id),
 		// tag is available if the kernel supports BPF_PROG_GET_INFO_BY_FD.
-		hex.EncodeToString(info.tag[:]),
+		Tag: hex.EncodeToString(info.tag[:]),
 		// name is available from 4.15.
-		internal.CString(info.name[:]),
+		Name: internal.CString(info.name[:]),
+		stats: &programStats{
+			runtime:  time.Duration(info.run_time_ns),
+			runCount: info.run_cnt,
+		},
 	}, nil
 }
 
@@ -125,6 +140,28 @@ func newProgramInfoFromProc(fd *internal.FD) (*ProgramInfo, error) {
 // The bool return value indicates whether this optional field is available.
 func (pi *ProgramInfo) ID() (ProgramID, bool) {
 	return pi.id, pi.id > 0
+}
+
+// RunCount returns the total number of times the program was called.
+//
+// Can return 0 if the collection of statistics is not enabled. See EnableStats().
+// The bool return value indicates whether this optional field is available.
+func (pi *ProgramInfo) RunCount() (uint64, bool) {
+	if pi.stats != nil {
+		return pi.stats.runCount, true
+	}
+	return 0, false
+}
+
+// Runtime returns the total accumulated runtime of the program.
+//
+// Can return 0 if the collection of statistics is not enabled. See EnableStats().
+// The bool return value indicates whether this optional field is available.
+func (pi *ProgramInfo) Runtime() (time.Duration, bool) {
+	if pi.stats != nil {
+		return pi.stats.runtime, true
+	}
+	return time.Duration(0), false
 }
 
 func scanFdInfo(fd *internal.FD, fields map[string]interface{}) error {
@@ -181,4 +218,22 @@ func scanFdInfoReader(r io.Reader, fields map[string]interface{}) error {
 	}
 
 	return nil
+}
+
+// EnableStats starts the measuring of the runtime
+// and run counts of eBPF programs.
+//
+// Collecting statistics can have an impact on the performance.
+//
+// Requires at least 5.8.
+func EnableStats(which uint32) (io.Closer, error) {
+	attr := internal.BPFEnableStatsAttr{
+		StatsType: which,
+	}
+
+	fd, err := internal.BPFEnableStats(&attr)
+	if err != nil {
+		return nil, err
+	}
+	return fd, nil
 }

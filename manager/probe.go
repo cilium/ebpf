@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"regexp"
 	"strings"
 	"sync"
 	"syscall"
@@ -72,6 +73,7 @@ type Probe struct {
 	checkPin         bool
 	funcName         string
 	attachPID        int
+
 	// lastError - stores the last error that the probe encountered, it is used to surface a more useful error message
 	// when one of the validators (see Options.ActivatedProbes) fails.
 	lastError error
@@ -85,15 +87,23 @@ type Probe struct {
 	// a prefix
 	Section string
 
+	// CopyProgram - When enabled, this option will make a unique copy of the program section for the current program
+	CopyProgram bool
+
 	// SyscallFuncName - Name of the syscall on which the program should be hooked. As the exact kernel symbol may
 	// differ from one kernel version to the other, the right prefix will be computed automatically at runtime.
 	// If a syscall name is not provided, the section name (without its probe type prefix) is assumed to be the
 	// hook point.
 	SyscallFuncName string
 
-	// MatchFuncName - When this option is activated, the provided symbol is matched against the
-	// list of available symbols in /sys/kernel/debug/tracing/available_filter_functions. If the exact function does not
-	// exist, then the closest function will be used. This requires debugfs.
+	// MatchFuncName - Pattern used to find the function(s) to attach to
+	// FOR KPROBES: When this option is activated, the provided pattern is matched against the list of available symbols
+	// in /sys/kernel/debug/tracing/available_filter_functions. If the exact function does not exist, then the first
+	// symbol matching the provided pattern will be used. This option requires debugfs.
+	//
+	// FOR UPROBES: When this option is activated, the provided pattern is matched the list of symbols in the symbol
+	// table of the provided elf binary. If the exact function does not exist, then the first symbol matching the
+	// provided pattern will be used.
 	MatchFuncName string
 
 	// Enabled - Indicates if a probe should be enabled or not. This parameter can be set at runtime using the
@@ -108,6 +118,11 @@ type Probe struct {
 	// probed simultaneously with maxactive. If maxactive is 0 it will be set to the default value: if CONFIG_PREEMPT is
 	// enabled, this is max(10, 2*NR_CPUS); otherwise, it is NR_CPUS. For kprobes, maxactive is ignored.
 	KProbeMaxActive int
+
+	// UprobeOffset - If UprobeOffset is provided, the uprobe will be attached to it directly without looking for the
+	// symbol in the elf binary. If the file is a non-PIE executable, the provided address must be a virtual address,
+	// otherwise it must be an offset relative to the file load address.
+	UprobeOffset uint64
 
 	// ProbeRetry - Defines the number of times that the probe will retry to attach / detach on error.
 	ProbeRetry uint
@@ -258,20 +273,26 @@ func (p *Probe) init() error {
 		p.program = prog
 	}
 
+	// override section based on the CopyProgram parameter
+	section := p.Section
+	if p.CopyProgram {
+		section += p.UID
+	}
+
 	// Retrieve eBPF program if one isn't already set
 	if p.program == nil {
-		prog, ok := p.manager.collection.Programs[p.Section]
+		prog, ok := p.manager.collection.Programs[section]
 		if !ok {
 			p.lastError = ErrUnknownSection
-			return errors.Wrapf(ErrUnknownSection, "couldn't find program %s", p.Section)
+			return errors.Wrapf(ErrUnknownSection, "couldn't find program %s", section)
 		}
 		p.program = prog
 		p.checkPin = true
 	}
 
 	if p.programSpec == nil {
-		if p.programSpec, p.lastError = p.manager.getProbeProgramSpec(p.Section); p.lastError != nil {
-			return errors.Wrapf(ErrUnknownSection, "couldn't find program spec %s", p.Section)
+		if p.programSpec, p.lastError = p.manager.getProbeProgramSpec(section); p.lastError != nil {
+			return errors.Wrapf(ErrUnknownSection, "couldn't find program spec %s", section)
 		}
 	}
 
@@ -280,7 +301,7 @@ func (p *Probe) init() error {
 		if p.PinPath != "" {
 			if err := p.program.Pin(p.PinPath); err != nil {
 				p.lastError = err
-				return errors.Wrapf(err, "couldn't pin program %s at %s", p.Section, p.PinPath)
+				return errors.Wrapf(err, "couldn't pin program %s at %s", section, p.PinPath)
 			}
 		}
 		p.checkPin = false
@@ -298,11 +319,14 @@ func (p *Probe) init() error {
 
 	// Find function name match if required
 	if p.MatchFuncName != "" {
-		var err error
-		p.funcName, err = FindFilterFunction(p.MatchFuncName)
-		if err != nil {
-			p.lastError = err
-			return err
+		// if this is a kprobe or a kretprobe, look for the symbol now
+		if strings.HasPrefix(p.Section, "kretprobe/") || (strings.HasPrefix(p.Section, "kprobe/")) {
+			var err error
+			p.funcName, err = FindFilterFunction(p.MatchFuncName)
+			if err != nil {
+				p.lastError = err
+				return err
+			}
 		}
 	}
 
@@ -547,7 +571,7 @@ func (p *Probe) attachKprobe() error {
 
 	// Activate perf event
 	p.perfEventFD, err = perfEventOpenTracepoint(kprobeID, p.program.FD())
-	return errors.Wrapf(err, "couldn't enable kprobe %s", p.Section)
+	return errors.Wrapf(err, "couldn't enable kprobe %s", p.GetIdentificationPair())
 }
 
 // detachKprobe - Detaches the probe from its kprobe
@@ -592,11 +616,12 @@ func (p *Probe) attachTracepoint() error {
 
 	// Hook the eBPF program to the tracepoint
 	p.perfEventFD, err = perfEventOpenTracepoint(tracepointID, p.program.FD())
-	return errors.Wrapf(err, "couldn't enable tracepoint %s", p.Section)
+	return errors.Wrapf(err, "couldn't enable tracepoint %s", p.GetIdentificationPair())
 }
 
 // attachUprobe - Attaches the probe to its Uprobe
 func (p *Probe) attachUprobe() error {
+	p.attachPID = os.Getpid()
 	// Prepare uprobe_events line parameters
 	var probeType, funcName string
 	if strings.HasPrefix(p.Section, "uretprobe/") {
@@ -609,28 +634,47 @@ func (p *Probe) attachUprobe() error {
 		// unknown type
 		return errors.Wrapf(ErrSectionFormat, "program type unrecognized in section %v", p.Section)
 	}
-	p.attachPID = os.Getpid()
 
-	// Write uprobe_events line to register uprobe
-	uprobeID, err := EnableUprobeEvent(probeType, funcName, p.BinaryPath, p.UID, p.attachPID)
+	// compute the offset if it was not provided
+	if p.UprobeOffset == 0 {
+		// find the offset of the first symbol matching the provided pattern
+		if len(p.MatchFuncName) > 0 {
+			funcName = p.MatchFuncName
+		} else {
+			funcName = fmt.Sprintf("^%s$", funcName)
+		}
+		pattern, err := regexp.Compile(funcName)
+		if err != nil {
+			return errors.Wrapf(err, "failed to compile pattern %s", funcName)
+		}
+
+		// Retrieve dynamic symbol offset
+		offsets, err := FindSymbolOffsets(p.BinaryPath, pattern)
+		if err != nil {
+			return errors.Wrapf(err, "couldn't find symbol matching %s in %s", pattern.String(), p.BinaryPath)
+		}
+		p.UprobeOffset = offsets[0].Value
+		p.funcName = offsets[0].Name
+	}
+
+	// enable uprobe
+	uprobeID, err := EnableUprobeEvent(probeType, p.funcName, p.BinaryPath, p.UID, p.attachPID, p.UprobeOffset)
 	if err != nil {
 		return errors.Wrapf(err, "couldn't enable uprobe %s", p.Section)
 	}
 
 	// Activate perf event
 	p.perfEventFD, err = perfEventOpenTracepoint(uprobeID, p.program.FD())
-	return errors.Wrapf(err, "couldn't enable kprobe %s", p.Section)
+	return errors.Wrapf(err, "couldn't enable uprobe %s", p.GetIdentificationPair())
 }
 
 // detachUprobe - Detaches the probe from its Uprobe
 func (p *Probe) detachUprobe() error {
 	// Prepare uprobe_events line parameters
-	var probeType, funcName string
+	var probeType string
 	if strings.HasPrefix(p.Section, "uretprobe/") {
-		funcName = strings.TrimPrefix(p.Section, "uretprobe/")
 		probeType = "r"
 	} else if strings.HasPrefix(p.Section, "uprobe/") {
-		funcName = strings.TrimPrefix(p.Section, "uprobe/")
 		probeType = "p"
 	} else {
 		// unknown type
@@ -638,7 +682,7 @@ func (p *Probe) detachUprobe() error {
 	}
 
 	// Write uprobe_events line to remove hook point
-	return DisableUprobeEvent(probeType, funcName, p.UID, p.attachPID)
+	return DisableUprobeEvent(probeType, p.funcName, p.UID, p.attachPID)
 }
 
 // attachCGroup - Attaches the probe to a cgroup hook point

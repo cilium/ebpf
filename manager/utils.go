@@ -4,6 +4,7 @@ import (
 	"debug/elf"
 	"fmt"
 	"io/ioutil"
+	"math"
 	"os"
 	"regexp"
 	"runtime"
@@ -55,6 +56,13 @@ func FindFilterFunction(funcName string) (string, error) {
 			return "", err
 		}
 		availableFilterFunctions = strings.Split(string(funcs), "\n")
+		for i, name := range availableFilterFunctions {
+			splittedName := strings.Split(name, " ")
+			name = splittedName[0]
+			splittedName = strings.Split(name, "\t")
+			name = splittedName[0]
+			availableFilterFunctions[i] = name
+		}
 		sort.Strings(availableFilterFunctions)
 	}
 
@@ -170,6 +178,10 @@ func GenerateEventName(probeType, funcName, UID string, attachPID int) (string, 
 	eventName := safeEventRegexp.ReplaceAllString(fmt.Sprintf("%s_%s_%s_%d", probeType, funcName, UID, attachPID), "_")
 
 	if len(eventName) > MaxEventNameLen {
+		// truncate the function name and UID name to reduce the length of the event
+		eventName = safeEventRegexp.ReplaceAllString(fmt.Sprintf("%s_%s_%s_%d", probeType, funcName[0:int(math.Min(10, float64(len(funcName))))], UID[0:int(math.Min(10, float64(len(funcName))))], attachPID), "_")
+	}
+	if len(eventName) > MaxEventNameLen {
 		return "", errors.Errorf("event name too long (kernel limit is %d): %s", MaxEventNameLen, eventName)
 	}
 	return eventName, nil
@@ -266,17 +278,11 @@ func ReadUprobeEvents() (string, error) {
 
 // EnableUprobeEvent - Writes a new Uprobe in uprobe_events with the provided parameters. Call DisableUprobeEvent
 // to remove the krpobe.
-func EnableUprobeEvent(probeType, funcName, path, UID string, uprobeAttachPID int) (int, error) {
+func EnableUprobeEvent(probeType string, funcName, path, UID string, uprobeAttachPID int, offset uint64) (int, error) {
 	// Generate event name
 	eventName, err := GenerateEventName(probeType, funcName, UID, uprobeAttachPID)
 	if err != nil {
 		return -1, err
-	}
-
-	// Retrieve dynamic symbol offset
-	offset, err := findSymbolOffset(path, funcName)
-	if err != nil {
-		return -1, errors.Wrapf(err, "couldn't find symbol %s in %s", funcName, path)
 	}
 
 	// Write line to uprobe_events
@@ -310,31 +316,79 @@ func EnableUprobeEvent(probeType, funcName, path, UID string, uprobeAttachPID in
 	return uprobeId, nil
 }
 
-// findSymbolOffset - Parses the provided file to find the offset of the dynamic symbol provided in name
-// TODO: add support for library symbols, for some reason they do not show up in the dynamic symbols ("nm -D lib.so" works though)
-func findSymbolOffset(path string, name string) (uint64, error) {
+// OpenAndListSymbols - Opens an elf file and extracts all its symbols
+func OpenAndListSymbols(path string) (*elf.File, []elf.Symbol, error) {
 	// open elf file
 	f, err := elf.Open(path)
 	if err != nil {
-		return 0, errors.Wrapf(err, "couldn't open elf file %s", path)
+		return nil, nil, errors.Wrapf(err, "couldn't open elf file %s", path)
 	}
 	defer f.Close()
 
-	// Loop through all dynamic symbols
-	symbols, err := f.DynamicSymbols()
-	if err != nil {
-		return 0, errors.Wrapf(err, "couldn't list dynamic symbols")
-	}
-	for _, sym := range symbols {
-		if sym.Name == name {
-			return sym.Value, nil
+	// Loop through all symbols
+	syms, errSyms := f.Symbols()
+	dynSyms, errDynSyms := f.DynamicSymbols()
+	syms = append(syms, dynSyms...)
+
+	if len(syms) == 0 {
+		var err error
+		if errSyms != nil {
+			err = errors.Wrap(err, "failed to list symbols")
+		}
+		if errDynSyms != nil {
+			err = errors.Wrap(err, "failed to list dynamic symbols")
+		}
+		if err != nil {
+			return nil, nil, err
+		} else {
+			return nil, nil, errors.New("no symbols found")
 		}
 	}
-	return 0, ErrSymbolNotFound
+	return f, syms, nil
+}
+
+// SanitizeUprobeAddresses - sanitizes the addresses of the provided symbols
+func SanitizeUprobeAddresses(f *elf.File, syms []elf.Symbol) {
+	// If the binary is a non-PIE executable, addr must be a virtual address, otherwise it must be an offset relative to
+	// the file load address. For executable (ET_EXEC) binaries and shared objects (ET_DYN), translate the virtual
+	// address to physical address in the binary file.
+	if f.Type == elf.ET_EXEC || f.Type == elf.ET_DYN {
+		for i, sym := range syms {
+			for _, prog := range f.Progs {
+				if prog.Type == elf.PT_LOAD {
+					if sym.Value >= prog.Vaddr && sym.Value < (prog.Vaddr + prog.Memsz) {
+						syms[i].Value = sym.Value - prog.Vaddr + prog.Off
+					}
+				}
+			}
+		}
+	}
+}
+
+// FindSymbolOffsets - Parses the provided file and returns the offsets of the symbols that match the provided pattern
+func FindSymbolOffsets(path string, pattern *regexp.Regexp) ([]elf.Symbol, error) {
+	f, syms, err := OpenAndListSymbols(path)
+	if err != nil {
+		return nil, err
+	}
+
+	var matches []elf.Symbol
+	for _, sym := range syms {
+		if elf.ST_TYPE(sym.Info) == elf.STT_FUNC && pattern.MatchString(sym.Name) {
+			matches = append(matches, sym)
+		}
+	}
+
+	if len(matches) == 0 {
+		return nil, ErrSymbolNotFound
+	}
+
+	SanitizeUprobeAddresses(f, matches)
+	return matches, nil
 }
 
 // DisableUprobeEvent - Removes a uprobe from uprobe_events
-func DisableUprobeEvent(probeType, funcName, UID string, uprobeAttachPID int) error {
+func DisableUprobeEvent(probeType string, funcName string, UID string, uprobeAttachPID int) error {
 	// Generate event name
 	eventName, err := GenerateEventName(probeType, funcName, UID, uprobeAttachPID)
 	if err != nil {

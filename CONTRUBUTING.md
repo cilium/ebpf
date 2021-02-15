@@ -2,7 +2,8 @@
 
 Development is on [GitHub](https://github.com/cilium/ebpf) and contributions in
 the form of pull requests and issues reporting bugs or suggesting new features
-are welcome.
+are welcome. Please take a look at [the architecture](ARCHITECTURE.md) to get
+a better understanding for the high-level goals.
 
 New features must be accompanied by tests. Before starting work on any large
 feature, please [join](https://cilium.herokuapp.com/) the

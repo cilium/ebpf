@@ -53,11 +53,11 @@ struct bpf_map_def array_of_hash_map __section("maps") = {
 };
 
 static int __attribute__((noinline)) static_fn(uint32_t arg) {
-	return arg;
+	return arg - 1;
 }
 
 int __attribute__((noinline)) global_fn2(uint32_t arg) {
-	return arg++;
+	return arg + 2;
 }
 
 int __attribute__((noinline)) __section("other") global_fn3(uint32_t arg) {

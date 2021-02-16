@@ -69,10 +69,10 @@ int __attribute__((noinline)) global_fn(uint32_t arg) {
 }
 
 #if __clang_major__ >= 9
-static volatile unsigned int key1       = 0; // .bss
-static volatile unsigned int key2       = 1; // .data
-static volatile const unsigned int key3 = 2; // .rodata
-static volatile const uint32_t arg;          // .rodata, rewritten by loader
+static volatile unsigned int key1 = 0; // .bss
+static volatile unsigned int key2 = 1; // .data
+volatile const unsigned int key3  = 2; // .rodata
+static volatile const uint32_t arg;    // .rodata, rewritten by loader
 #endif
 
 __section("xdp") int xdp_prog() {

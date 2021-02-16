@@ -140,7 +140,7 @@ func LoadCollectionSpecFromReader(rd io.ReaderAt) (*CollectionSpec, error) {
 		for _, rel := range rels {
 			target := sections[rel.Section]
 			if target == nil {
-				return nil, fmt.Errorf("section %q: reference to section %s: %w", section.Name, rel.Section, ErrNotSupported)
+				return nil, fmt.Errorf("section %q: reference to %q in section %s: %w", section.Name, rel.Name, rel.Section, ErrNotSupported)
 			}
 
 			if target.Flags&elf.SHF_STRINGS > 0 {
@@ -358,16 +358,24 @@ func (ec *elfCode) relocateInstruction(ins *asm.Instruction, rel elf.Symbol) err
 		}
 
 	case dataSection:
-		if bind != elf.STB_LOCAL {
-			return fmt.Errorf("direct load: %s: unsupported relocation %s", name, bind)
-		}
+		switch typ {
+		case elf.STT_SECTION:
+			if bind != elf.STB_LOCAL {
+				return fmt.Errorf("direct load: %s: unsupported relocation %s", name, bind)
+			}
 
-		if typ != elf.STT_SECTION {
+		case elf.STT_OBJECT:
+			if bind != elf.STB_GLOBAL {
+				return fmt.Errorf("direct load: %s: unsupported relocation %s", name, bind)
+			}
+
+		default:
 			return fmt.Errorf("incorrect relocation type %v for direct map load", typ)
 		}
 
-		// Symbols with section type do not have a name set. Get it
-		// from the section itself.
+		// We rely on using the name of the data section as the reference. It
+		// would be nicer to keep the real name in case of an STT_OBJECT, but
+		// it's not clear how to encode that into Instruction.
 		name = target.Name
 
 		// For some reason, clang encodes the offset of the symbol its

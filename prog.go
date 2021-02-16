@@ -417,6 +417,10 @@ var haveProgTestRun = internal.FeatureTest("BPF_PROG_TEST_RUN", "4.12", func() e
 		// otherwise misdetect due to insufficient permissions.
 		return internal.ErrNotSupported
 	}
+	if errors.Is(err, unix.EINTR) {
+		// We know that PROG_TEST_RUN is supported if we get EINTR.
+		return nil
+	}
 	return err
 })
 

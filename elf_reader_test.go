@@ -62,6 +62,11 @@ func TestLoadCollectionSpec(t *testing.T) {
 				Type:    SocketFilter,
 				License: "MIT",
 			},
+			"asm_relocation": {
+				Name:    "asm_relocation",
+				Type:    SocketFilter,
+				License: "MIT",
+			},
 		},
 	}
 

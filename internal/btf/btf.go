@@ -439,50 +439,24 @@ func (s *Spec) Program(name string, length uint64) (*Program, error) {
 	return &Program{s, length, funcInfos, lineInfos}, nil
 }
 
-// Map finds the BTF for a map.
+// MapStruct looks up a global variable of type Struct which can contain a
+// map's members (fields). This Struct can be parsed into an eBPF map
+// definition.
 //
-// Returns an error if there is no BTF for the given name.
-func (s *Spec) Map(name string) (*Map, []Member, error) {
-	var mapVar Var
-	if err := s.FindType(name, &mapVar); err != nil {
-		return nil, nil, err
+// Returns an error if there is no BTF type with the given name, or if the
+// variable is not a struct.
+func (s *Spec) MapStruct(name string) (*Struct, error) {
+	v, err := s.VarByName(name)
+	if err != nil {
+		return nil, err
 	}
 
-	mapStruct, ok := mapVar.Type.(*Struct)
+	ms, ok := v.Type.(*Struct)
 	if !ok {
-		return nil, nil, fmt.Errorf("expected struct, have %s", mapVar.Type)
+		return nil, fmt.Errorf("expected struct, got %s", v.Type)
 	}
 
-	var key, value Type
-	for _, member := range mapStruct.Members {
-		switch member.Name {
-		case "key":
-			key = member.Type
-			if pk, isPtr := key.(*Pointer); !isPtr {
-				return nil, nil, fmt.Errorf("key type is not a pointer: %T", key)
-			} else {
-				key = pk.Target
-			}
-
-		case "value":
-			value = member.Type
-			if vk, isPtr := value.(*Pointer); !isPtr {
-				return nil, nil, fmt.Errorf("value type is not a pointer: %T", value)
-			} else {
-				value = vk.Target
-			}
-		}
-	}
-
-	if key == nil {
-		key = (*Void)(nil)
-	}
-
-	if value == nil {
-		value = (*Void)(nil)
-	}
-
-	return &Map{s, key, value}, mapStruct.Members, nil
+	return ms, nil
 }
 
 // Datasec returns the BTF required to create maps which represent data sections.
@@ -492,7 +466,8 @@ func (s *Spec) Datasec(name string) (*Map, error) {
 		return nil, fmt.Errorf("data section %s: can't get BTF: %w", name, err)
 	}
 
-	return &Map{s, &Void{}, &datasec}, nil
+	m := NewMap(name, s, &Void{}, &datasec, nil)
+	return &m, nil
 }
 
 // FindType searches for a type with a specific name.
@@ -531,6 +506,16 @@ func (s *Spec) FindType(name string, typ Type) error {
 	value := reflect.Indirect(reflect.ValueOf(copyType(candidate)))
 	reflect.Indirect(reflect.ValueOf(typ)).Set(value)
 	return nil
+}
+
+// VarByName looks up a global variable by name.
+func (s *Spec) VarByName(name string) (*Var, error) {
+	var v Var
+	if err := s.FindType(name, &v); err != nil {
+		return nil, err
+	}
+
+	return &v, nil
 }
 
 // Handle is a reference to BTF loaded into the kernel.
@@ -599,8 +584,29 @@ func (h *Handle) FD() int {
 
 // Map is the BTF for a map.
 type Map struct {
+	name       string
 	spec       *Spec
 	key, value Type
+	members    []Member
+}
+
+// NewMap returns a new Map containing the given values.
+// The key and value arguments are initialized to Void if nil values are given.
+func NewMap(name string, spec *Spec, key Type, value Type, members []Member) Map {
+	if key == nil {
+		key = &Void{}
+	}
+	if value == nil {
+		value = &Void{}
+	}
+
+	return Map{
+		name:    name,
+		spec:    spec,
+		key:     key,
+		value:   value,
+		members: members,
+	}
 }
 
 // MapSpec should be a method on Map, but is a free function

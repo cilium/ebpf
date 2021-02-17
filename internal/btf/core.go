@@ -9,6 +9,55 @@ import (
 // Code in this file is derived from libbpf, which is available under a BSD
 // 2-Clause license.
 
+// coreReloKind is the type of CO-RE relocation
+type coreReloKind uint32
+
+const (
+	reloFieldByteOffset coreReloKind = iota /* field byte offset */
+	reloFieldByteSize                       /* field size in bytes */
+	reloFieldExists                         /* field existence in target kernel */
+	reloFieldSigned                         /* field signedness (0 - unsigned, 1 - signed) */
+	reloFieldLShiftU64                      /* bitfield-specific left bitshift */
+	reloFieldRShiftU64                      /* bitfield-specific right bitshift */
+	reloTypeIDLocal                         /* type ID in local BPF object */
+	reloTypeIDTarget                        /* type ID in target kernel */
+	reloTypeExists                          /* type existence in target kernel */
+	reloTypeSize                            /* type size in bytes */
+	reloEnumvalExists                       /* enum value existence in target kernel */
+	reloEnumvalValue                        /* enum value integer value */
+)
+
+func (k coreReloKind) String() string {
+	switch k {
+	case reloFieldByteOffset:
+		return "byte_off"
+	case reloFieldByteSize:
+		return "byte_sz"
+	case reloFieldExists:
+		return "field_exists"
+	case reloFieldSigned:
+		return "signed"
+	case reloFieldLShiftU64:
+		return "lshift_u64"
+	case reloFieldRShiftU64:
+		return "rshift_u64"
+	case reloTypeIDLocal:
+		return "local_type_id"
+	case reloTypeIDTarget:
+		return "target_type_id"
+	case reloTypeExists:
+		return "type_exists"
+	case reloTypeSize:
+		return "type_size"
+	case reloEnumvalExists:
+		return "enumval_exists"
+	case reloEnumvalValue:
+		return "enumval_value"
+	default:
+		return "unknown"
+	}
+}
+
 /* The comment below is from bpf_core_types_are_compat in libbpf.c:
  *
  * Check local and target types for compatibility. This check is used for

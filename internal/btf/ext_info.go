@@ -208,7 +208,7 @@ type bpfCoreRelo struct {
 	InsnOff      uint32
 	TypeID       TypeID
 	AccessStrOff uint32
-	ReloKind     uint32
+	ReloKind     coreReloKind
 }
 
 type bpfCoreRelos []bpfCoreRelo

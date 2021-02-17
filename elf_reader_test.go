@@ -62,6 +62,11 @@ func TestLoadCollectionSpec(t *testing.T) {
 				Type:    SocketFilter,
 				License: "MIT",
 			},
+			"asm_relocation": {
+				Name:    "asm_relocation",
+				Type:    SocketFilter,
+				License: "MIT",
+			},
 		},
 	}
 
@@ -209,6 +214,9 @@ func TestStringSection(t *testing.T) {
 		t.Log(err)
 		if !errors.Is(err, ErrNotSupported) {
 			t.Error("References to a string section should be unsupported")
+		}
+		if !strings.Contains(err.Error(), ".L.str") {
+			t.Error("Error should contain symbol name")
 		}
 	})
 }

@@ -123,7 +123,7 @@ func unmarshalBytes(data interface{}, buf []byte) error {
 // Values are initialized to zero if the slice has less elements than CPUs.
 //
 // slice must have a type like []elementType.
-func marshalPerCPUValue(slice interface{}, elemLength int) (internal.Pointer, error) {
+func marshalPerCPUValue(slice interface{}, elemLength int, batch bool) (internal.Pointer, error) {
 	sliceType := reflect.TypeOf(slice)
 	if sliceType.Kind() != reflect.Slice {
 		return internal.Pointer{}, errors.New("per-CPU value requires slice")
@@ -136,12 +136,18 @@ func marshalPerCPUValue(slice interface{}, elemLength int) (internal.Pointer, er
 
 	sliceValue := reflect.ValueOf(slice)
 	sliceLen := sliceValue.Len()
-	if sliceLen > possibleCPUs {
+	if !batch && sliceLen > possibleCPUs {
 		return internal.Pointer{}, fmt.Errorf("per-CPU value exceeds number of CPUs")
+	} else if batch && sliceLen%possibleCPUs != 0 {
+		return internal.Pointer{}, fmt.Errorf("per-CPU value did not match the number of CPUs")
 	}
 
 	alignedElemLength := align(elemLength, 8)
-	buf := make([]byte, alignedElemLength*possibleCPUs)
+	alignedSliceLen := possibleCPUs
+	if sliceLen > alignedSliceLen {
+		alignedSliceLen = sliceLen
+	}
+	buf := make([]byte, alignedElemLength*alignedSliceLen)
 
 	for i := 0; i < sliceLen; i++ {
 		elem := sliceValue.Index(i).Interface()

@@ -11,6 +11,16 @@ import (
 // Code in this file is derived from libbpf, which is available under a BSD
 // 2-Clause license.
 
+// Relocation describes a CO-RE relocation.
+type Relocation struct {
+	Current uint32
+	New     uint32
+}
+
+func (r Relocation) equal(other Relocation) bool {
+	return r.Current == other.Current && r.New == other.New
+}
+
 // coreReloKind is the type of CO-RE relocation
 type coreReloKind uint32
 
@@ -60,6 +70,101 @@ func (k coreReloKind) String() string {
 	}
 }
 
+var errImpossibleRelocation = errors.New("impossible relocation")
+
+func coreRelocate(local, target *Spec, coreRelos bpfCoreRelos) (map[uint64]Relocation, error) {
+	if target == nil {
+		var err error
+		target, err = loadKernelSpec()
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	if local.byteOrder != target.byteOrder {
+		return nil, fmt.Errorf("can't relocate %s against %s", local.byteOrder, target.byteOrder)
+	}
+
+	relocations := make(map[uint64]Relocation, len(coreRelos))
+	for _, relo := range coreRelos {
+		accessorStr, err := local.strings.Lookup(relo.AccessStrOff)
+		if err != nil {
+			return nil, err
+		}
+
+		accessor, err := parseCoreAccessor(accessorStr)
+		if err != nil {
+			return nil, fmt.Errorf("accessor %q: %s", accessorStr, err)
+		}
+
+		if int(relo.TypeID) >= len(local.types) {
+			return nil, fmt.Errorf("invalid type id %d", relo.TypeID)
+		}
+
+		typ := local.types[relo.TypeID]
+		named, ok := typ.(namedType)
+		if !ok || named.name() == "" {
+			return nil, fmt.Errorf("relocate anonymous type %s: %w", typ.String(), ErrNotSupported)
+		}
+
+		name := named.name()
+		res, err := coreEvaluateCandidates(typ, target.namedTypes[name], relo.ReloKind, accessor)
+		if err != nil {
+			return nil, fmt.Errorf("relocate %s: %w", name, err)
+		}
+
+		relocations[uint64(relo.InsnOff)] = res
+	}
+
+	return relocations, nil
+}
+
+func coreEvaluateCandidates(local Type, targets []namedType, kind coreReloKind, localAccessor coreAccessor) (Relocation, error) {
+	var relos []Relocation
+	var matches []Type
+	for _, target := range targets {
+		relo, err := coreCalculateRelocation(local, target, kind, localAccessor)
+		if errors.Is(err, errImpossibleRelocation) {
+			continue
+		}
+		if err != nil {
+			return Relocation{}, err
+		}
+		relos = append(relos, relo)
+		matches = append(matches, target)
+	}
+
+	if len(relos) == 0 {
+		// TODO: Add switch for existence checks like reloEnumvalExists here.
+
+		// TODO: This might have to be poisoned.
+		return Relocation{}, fmt.Errorf("no relocation found, tried %v", targets)
+	}
+
+	relo := relos[0]
+	for _, altRelo := range relos[1:] {
+		if !altRelo.equal(relo) {
+			return Relocation{}, fmt.Errorf("ambiguous relocation for matching types %v", matches)
+		}
+	}
+
+	return relo, nil
+}
+
+func coreCalculateRelocation(local, target Type, kind coreReloKind, localAccessor coreAccessor) (Relocation, error) {
+	switch kind {
+	case reloTypeIDLocal:
+		if localAccessor[0] != 0 {
+			return Relocation{}, fmt.Errorf("%s: unexpected non-zero accessor", kind)
+		}
+
+		return Relocation{uint32(local.ID()), uint32(local.ID())}, nil
+
+	default:
+		return Relocation{}, fmt.Errorf("relocation %s: %w", kind, ErrNotSupported)
+	}
+}
+
 /* coreAccessor contains a path through a struct. It contains at least one index.
  *
  * The interpretation depends on the kind of the relocation. The following is
@@ -98,6 +203,7 @@ func parseCoreAccessor(accessor string) (coreAccessor, error) {
 	var result coreAccessor
 	parts := strings.Split(accessor, ":")
 	for _, part := range parts {
+		// 31 bits to avoid overflowing int on 32 bit platforms.
 		index, err := strconv.ParseUint(part, 10, 31)
 		if err != nil {
 			return nil, fmt.Errorf("accessor index %q: %s", part, err)

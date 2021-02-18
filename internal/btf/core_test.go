@@ -142,3 +142,30 @@ func TestCoreAreMembersCompatible(t *testing.T) {
 		}
 	}
 }
+
+func TestCoreAccessor(t *testing.T) {
+	for _, valid := range []string{
+		"0",
+		"1:0",
+		"1:0:3:34:10:1",
+	} {
+		_, err := parseCoreAccessor(valid)
+		if err != nil {
+			t.Errorf("Parse %q: %s", valid, err)
+		}
+	}
+
+	for _, invalid := range []string{
+		"",
+		"-1",
+		":",
+		"0:",
+		":12",
+		"4294967296",
+	} {
+		_, err := parseCoreAccessor(invalid)
+		if err == nil {
+			t.Errorf("Accepted invalid accessor %q", invalid)
+		}
+	}
+}

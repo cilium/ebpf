@@ -213,6 +213,18 @@ type bpfCoreRelo struct {
 
 type bpfCoreRelos []bpfCoreRelo
 
+// append two slices of extInfoRelo to each other. The InsnOff of b are adjusted
+// by offset.
+func (r bpfCoreRelos) append(other bpfCoreRelos, offset uint64) bpfCoreRelos {
+	result := make([]bpfCoreRelo, 0, len(r)+len(other))
+	result = append(result, r...)
+	for _, relo := range other {
+		relo.InsnOff += uint32(offset)
+		result = append(result, relo)
+	}
+	return result
+}
+
 var extInfoReloSize = binary.Size(bpfCoreRelo{})
 
 func parseExtInfoRelos(r io.Reader, bo binary.ByteOrder, strings stringTable) (map[string]bpfCoreRelos, error) {

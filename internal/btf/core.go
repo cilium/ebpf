@@ -4,6 +4,8 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"strconv"
+	"strings"
 )
 
 // Code in this file is derived from libbpf, which is available under a BSD
@@ -56,6 +58,55 @@ func (k coreReloKind) String() string {
 	default:
 		return "unknown"
 	}
+}
+
+/* coreAccessor contains a path through a struct. It contains at least one index.
+ *
+ * The interpretation depends on the kind of the relocation. The following is
+ * taken from struct bpf_core_relo in libbpf_internal.h:
+ *
+ * - for field-based relocations, string encodes an accessed field using
+ *   a sequence of field and array indices, separated by colon (:). It's
+ *   conceptually very close to LLVM's getelementptr ([0]) instruction's
+ *   arguments for identifying offset to a field.
+ * - for type-based relocations, strings is expected to be just "0";
+ * - for enum value-based relocations, string contains an index of enum
+ *   value within its enum type;
+ *
+ * Example to provide a better feel.
+ *
+ *   struct sample {
+ *       int a;
+ *       struct {
+ *           int b[10];
+ *       };
+ *   };
+ *
+ *   struct sample s = ...;
+ *   int x = &s->a;     // encoded as "0:0" (a is field #0)
+ *   int y = &s->b[5];  // encoded as "0:1:0:5" (anon struct is field #1,
+ *                      // b is field #0 inside anon struct, accessing elem #5)
+ *   int z = &s[10]->b; // encoded as "10:1" (ptr is used as an array)
+ */
+type coreAccessor []int
+
+func parseCoreAccessor(accessor string) (coreAccessor, error) {
+	if accessor == "" {
+		return nil, fmt.Errorf("empty accessor")
+	}
+
+	var result coreAccessor
+	parts := strings.Split(accessor, ":")
+	for _, part := range parts {
+		index, err := strconv.ParseUint(part, 10, 31)
+		if err != nil {
+			return nil, fmt.Errorf("accessor index %q: %s", part, err)
+		}
+
+		result = append(result, int(index))
+	}
+
+	return result, nil
 }
 
 /* The comment below is from bpf_core_types_are_compat in libbpf.c:

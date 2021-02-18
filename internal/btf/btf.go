@@ -426,18 +426,19 @@ func (s *Spec) Program(name string, length uint64) (*Program, error) {
 		return nil, errors.New("length musn't be zero")
 	}
 
-	if s.funcInfos == nil && s.lineInfos == nil {
+	if s.funcInfos == nil && s.lineInfos == nil && s.coreRelos == nil {
 		return nil, fmt.Errorf("BTF for section %s: %w", name, ErrNoExtendedInfo)
 	}
 
 	funcInfos, funcOK := s.funcInfos[name]
 	lineInfos, lineOK := s.lineInfos[name]
+	coreRelos, coreOK := s.coreRelos[name]
 
-	if !funcOK && !lineOK {
+	if !funcOK && !lineOK && !coreOK {
 		return nil, fmt.Errorf("no extended BTF info for section %s", name)
 	}
 
-	return &Program{s, length, funcInfos, lineInfos}, nil
+	return &Program{s, length, funcInfos, lineInfos, coreRelos}, nil
 }
 
 // Map finds the BTF for a map.
@@ -627,6 +628,7 @@ type Program struct {
 	spec                 *Spec
 	length               uint64
 	funcInfos, lineInfos extInfo
+	coreRelos            bpfCoreRelos
 }
 
 // ProgramSpec returns the Spec needed for loading function and line infos into the kernel.
@@ -652,9 +654,10 @@ func ProgramAppend(s, other *Program) error {
 		return fmt.Errorf("line infos: %w", err)
 	}
 
-	s.length += other.length
 	s.funcInfos = funcInfos
 	s.lineInfos = lineInfos
+	s.coreRelos = s.coreRelos.append(other.coreRelos, s.length)
+	s.length += other.length
 	return nil
 }
 

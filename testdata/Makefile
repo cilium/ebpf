@@ -1,6 +1,3 @@
-CLANG ?= clang
-CFLAGS := -target bpf -O2 -g -Wall -Werror $(CFLAGS)
-
 TARGETS := loader-clang-6.0 \
 	loader-clang-7 \
 	loader-clang-8 \
@@ -11,20 +8,10 @@ TARGETS := loader-clang-6.0 \
 	initialized_btf_map \
 	strings
 
-.PHONY: all clean
-all: $(addsuffix -el.elf,$(TARGETS)) $(addsuffix -eb.elf,$(TARGETS))
-
-clean:
-	-$(RM) *.elf
+include $(CURDIR)/base.mk
 
 loader-%-el.elf: loader.c
 	$* $(CFLAGS) -mlittle-endian -c $< -o $@
 
 loader-%-eb.elf: loader.c
 	$* $(CFLAGS) -mbig-endian -c $< -o $@
-
-%-el.elf: %.c
-	$(CLANG) $(CFLAGS) -mlittle-endian -c $< -o $@
-
-%-eb.elf : %.c
-	$(CLANG) $(CFLAGS) -mbig-endian -c $< -o $@

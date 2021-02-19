@@ -489,10 +489,12 @@ func TestProgramTypeLSM(t *testing.T) {
 		License: "GPL",
 		Type:    LSM,
 	})
+	fmt.Println("DEBUG1")
 	testutils.SkipIfNotSupported(t, err)
 	if err != nil {
 		t.Fatal(err)
 	}
+	fmt.Println("DEBUG2")
 	prog.Close()
 }
 

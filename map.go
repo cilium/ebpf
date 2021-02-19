@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -125,6 +126,7 @@ type Map struct {
 	valueSize  uint32
 	maxEntries uint32
 	flags      uint32
+	pinnedPath string
 	// Per CPU maps return values larger than the size in the spec
 	fullValueSize int
 }
@@ -354,6 +356,7 @@ func newMap(fd *internal.FD, name string, typ MapType, keySize, valueSize, maxEn
 		valueSize,
 		maxEntries,
 		flags,
+		"",
 		int(valueSize),
 	}
 
@@ -618,6 +621,7 @@ func (m *Map) FD() int {
 //
 // Closing the duplicate does not affect the original, and vice versa.
 // Changes made to the map are reflected by both instances however.
+// If the original map was pinned, the cloned map will not be pinned by default.
 //
 // Cloning a nil Map returns nil.
 func (m *Map) Clone() (*Map, error) {
@@ -638,15 +642,63 @@ func (m *Map) Clone() (*Map, error) {
 		m.valueSize,
 		m.maxEntries,
 		m.flags,
+		"",
 		m.fullValueSize,
 	}, nil
 }
 
 // Pin persists the map past the lifetime of the process that created it.
 //
+// Calling Pin on a previously pinned map will override the path.
+// You can Clone a map to pin it to a different path.
+//
 // This requires bpffs to be mounted above fileName. See https://docs.cilium.io/en/k8s-doc/admin/#admin-mount-bpffs
 func (m *Map) Pin(fileName string) error {
-	return internal.BPFObjPin(fileName, m.fd)
+	if fileName == "" {
+		return fmt.Errorf("pinned path cannot be empty")
+	}
+	if m.IsPinned() {
+		path := m.pinnedPath
+		if path == fileName {
+			return nil
+		}
+		if err := os.Rename(m.pinnedPath, fileName); err != nil {
+			if !os.IsNotExist(err) {
+				return fmt.Errorf("unable to pin the map at new path %v: %w", fileName, err)
+			}
+		} else {
+			m.pinnedPath = fileName
+			return nil
+		}
+	}
+	err := internal.BPFObjPin(fileName, m.fd)
+	if err == nil {
+		m.pinnedPath = fileName
+	}
+	return err
+}
+
+// Unpin removes the persisted state for the map.
+//
+// Unpinning an un-pinned Map returns nil.
+func (m *Map) Unpin() error {
+	if m.pinnedPath == "" {
+		return nil
+	}
+	err := os.Remove(m.pinnedPath)
+	if err == nil || os.IsNotExist(err) {
+		m.pinnedPath = ""
+		return nil
+	}
+	return err
+}
+
+// IsPinned returns true if the map has non-empty pinned path.
+func (m *Map) IsPinned() bool {
+	if m.pinnedPath == "" {
+		return false
+	}
+	return true
 }
 
 // Freeze prevents a map to be modified from user space.
@@ -789,7 +841,12 @@ func LoadPinnedMap(fileName string) (*Map, error) {
 		return nil, err
 	}
 
-	return newMapFromFD(fd)
+	m, err := newMapFromFD(fd)
+	if err == nil {
+		m.pinnedPath = fileName
+	}
+
+	return m, err
 }
 
 // unmarshalMap creates a map from a map ID encoded in host endianness.

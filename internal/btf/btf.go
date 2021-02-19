@@ -321,6 +321,7 @@ func fixupDatasec(rawTypes []rawType, rawStrings stringTable, sectionSizes map[s
 
 		size, ok := sectionSizes[name]
 		if !ok {
+			fmt.Println("DEBUG : return", sectionSizes)
 			return fmt.Errorf("data section %s: missing size", name)
 		}
 

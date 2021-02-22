@@ -27,7 +27,12 @@ type compileArgs struct {
 }
 
 func compile(args compileArgs) error {
-	cmd := exec.Command(args.cc, args.cFlags...)
+	// Default cflags that can be overriden by args.cFlags
+	overrideFlags := []string {
+		"-O2",
+	}
+
+	cmd := exec.Command(args.cc, append(overrideFlags, args.cFlags...)...)
 	cmd.Stderr = os.Stderr
 
 	inputDir := filepath.Dir(args.source)

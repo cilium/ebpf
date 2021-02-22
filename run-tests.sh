@@ -20,9 +20,12 @@ if [[ "${1:-}" = "--in-vm" ]]; then
     export KERNEL_SELFTESTS="/run/input/bpf"
   fi
 
+  readonly output="${1}"
+  shift
+
   echo Running tests...
-  go test -v -count 1 ./...
-  touch "$1/success"
+  go test -v -coverpkg=./... -coverprofile="$output/coverage.txt" -count 1 ./...
+  touch "$output/success"
   exit 0
 fi
 
@@ -79,11 +82,9 @@ if [[ ! -e "${output}/success" ]]; then
   exit 1
 else
   echo "Test successful on ${kernel_version}"
-#  if [[ -v CODECOV_TOKEN ]]; then
-#    curl --fail -s https://codecov.io/bash > "${tmp_dir}/codecov.sh"
-#    chmod +x "${tmp_dir}/codecov.sh"
-#    "${tmp_dir}/codecov.sh" -f "${output}/coverage.txt"
-#  fi
+  if [[ -v COVERALLS_TOKEN ]]; then
+    goveralls -coverprofile="${output}/coverage.txt" -service=semaphore -repotoken "$COVERALLS_TOKEN"
+  fi
 fi
 
 $sudo rm -r "${input}"

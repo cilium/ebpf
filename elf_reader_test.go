@@ -241,7 +241,7 @@ func TestLoadRawTracepoint(t *testing.T) {
 }
 
 var (
-	elfPath    = flag.String("elfs", "", "`Path` containing libbpf-compatible ELFs")
+	elfPath    = flag.String("elfs", os.Getenv("KERNEL_SELFTESTS"), "`Path` containing libbpf-compatible ELFs (defaults to $KERNEL_SELFTESTS)")
 	elfPattern = flag.String("elf-pattern", "*.o", "Glob `pattern` for object files that should be tested")
 )
 

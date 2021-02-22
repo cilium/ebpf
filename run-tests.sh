@@ -16,14 +16,11 @@ if [[ "${1:-}" = "--in-vm" ]]; then
   export GOSUMDB=off
   export GOCACHE=/run/go-cache
 
-  elfs=""
   if [[ -d "/run/input/bpf" ]]; then
-    elfs="/run/input/bpf"
+    export KERNEL_SELFTESTS="/run/input/bpf"
   fi
 
   echo Running tests...
-  # TestLibBPFCompat runs separately to pass the "-elfs" flag only for it: https://github.com/cilium/ebpf/pull/119
-  go test -v -count 1 -run TestLibBPFCompat -elfs "$elfs"
   go test -v -count 1 ./...
   touch "$1/success"
   exit 0

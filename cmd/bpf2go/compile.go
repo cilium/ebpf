@@ -39,6 +39,7 @@ func compile(args compileArgs) error {
 	cmd.Args = append(cmd.Args,
 		"-c", args.source,
 		"-o", args.dest,
+		"-O2",
 		// Don't include clang version
 		"-fno-ident",
 		// Don't output inputDir into debug info

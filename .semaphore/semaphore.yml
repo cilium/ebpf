@@ -6,6 +6,10 @@ agent:
     type: e1-standard-2
     os_image: ubuntu1804
 
+global_job_config:
+  secrets:
+    - name: Coveralls
+
 blocks:
   - name: Run tests
     task:
@@ -15,6 +19,8 @@ blocks:
           # Until go 1.16 is available on semaphore.
           - sudo mkdir -p /usr/local/golang/1.16 && curl -fL "https://golang.org/dl/go1.16.linux-amd64.tar.gz" | sudo tar -xz -C /usr/local/golang/1.16
           - sem-version go 1.16
+          - go install github.com/mattn/goveralls@latest
+          - export PATH="$PATH:$HOME/go/bin"
           - cache restore
           - go mod download
           - go build ./...

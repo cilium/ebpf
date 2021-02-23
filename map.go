@@ -897,7 +897,7 @@ func (m *Map) unmarshalKey(data interface{}, buf []byte) error {
 	return unmarshalBytes(data, buf)
 }
 
-func (m *Map) marshalValue(data interface{}, batch bool) (internal.Pointer, error) {
+func (m *Map) marshalValue(data interface{}) (internal.Pointer, error) {
 	if m.typ.hasPerCPUValue() {
 		return marshalPerCPUValue(data, int(m.valueSize))
 	}

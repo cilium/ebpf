@@ -73,7 +73,7 @@ func TestParseCurrentKernelBTF(t *testing.T) {
 		t.Fatal("Can't load BTF:", err)
 	}
 
-	if len(spec.types) == 0 {
+	if len(spec.namedTypes) == 0 {
 		t.Fatal("Empty kernel BTF")
 	}
 }

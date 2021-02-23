@@ -582,13 +582,12 @@ func (m *Map) nextKey(key interface{}, nextKeyOut internal.Pointer) error {
 	return nil
 }
 
-// BatchLookup looks up many elements in a map at once
-// with the startKey being the first element to start
-// from (nil if starting from the beginning is desired).
+// BatchLookup looks up many elements in a map at once.
+//
 // "keysOut" and "valuesOut" must be of type slice, a pointer
 // to a slice or buffer will not work.
 // "prevKey" is the key to start the batch lookup from, it will
-// *not* be included in the results.
+// *not* be included in the results. Use nil to start at the first key.
 //
 // ErrKeyNotExist is returned when the batch lookup has reached
 // the end of all possible results, even when partial results
@@ -597,14 +596,13 @@ func (m *Map) BatchLookup(prevKey, nextKeyOut, keysOut, valuesOut interface{}, o
 	return m.batchLookup(internal.BPF_MAP_LOOKUP_BATCH, prevKey, nextKeyOut, keysOut, valuesOut, opts)
 }
 
-// BatchLookupAndDelete looks up many elements in a map at once
-// with the startKey being the first element to start
-// from (nil if starting from the beginning is desired).
+// BatchLookupAndDelete looks up many elements in a map at once,
+//
 // It then deletes all those elements.
 // "keysOut" and "valuesOut" must be of type slice, a pointer
 // to a slice or buffer will not work.
 // "prevKey" is the key to start the batch lookup from, it will
-// *not* be included in the results.
+// *not* be included in the results. Use nil to start at the first key.
 //
 // ErrKeyNotExist is returned when the batch lookup has reached
 // the end of all possible results, even when partial results

@@ -649,7 +649,6 @@ func (m *Map) batchLookup(cmd internal.BPFCmd, startKey, nextKeyOut, keysOut, va
 	nextPtr, nextBuf := makeBuffer(nextKeyOut, int(m.keySize))
 
 	ct, err := bpfMapBatch(cmd, m.fd, startPtr, nextPtr, keyPtr, valuePtr, uint32(count), opts)
-	fmt.Println(err)
 	if err != nil {
 		if !errors.Is(err, ErrKeyNotExist) {
 			return 0, err

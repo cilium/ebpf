@@ -41,6 +41,14 @@ now**. Expect to update your code if you want to follow along.
 * [eBPF features by Linux
   version](https://github.com/iovisor/bcc/blob/master/docs/kernel-versions.md)
 
+## Regenerating Testdata
+
+Run `make` in the root of this repository to rebuild testdata in all
+subpackages. This requires Docker, as it relies on a standardized build
+environment to keep the build output stable.
+
+The toolchain image build files are kept in [testdata/docker/](testdata/docker/).
+
 ## License
 
 MIT

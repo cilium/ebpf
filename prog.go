@@ -170,6 +170,12 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions, btfs btfHandl
 
 	var btfDisabled bool
 	if spec.BTF != nil {
+		if relos, err := btf.ProgramRelocations(spec.BTF, nil); err != nil {
+			return nil, fmt.Errorf("CO-RE relocations: %s", err)
+		} else if len(relos) > 0 {
+			return nil, fmt.Errorf("applying CO-RE relocations: %w", ErrNotSupported)
+		}
+
 		handle, err := btfs.load(btf.ProgramSpec(spec.BTF))
 		btfDisabled = errors.Is(err, btf.ErrNotSupported)
 		if err != nil && !btfDisabled {

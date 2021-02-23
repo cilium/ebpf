@@ -201,3 +201,13 @@ const (
 	// Pin an object by using its name as the filename.
 	PinByName
 )
+
+// BatchOptions batch map operations options
+//
+// Mirrors libbpf struct bpf_map_batch_opts
+// Currently BPF_F_FLAG is the only supported
+// flag (for ElemFlags).
+type BatchOptions struct {
+	ElemFlags uint64
+	Flags     uint64
+}

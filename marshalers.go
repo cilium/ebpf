@@ -141,11 +141,7 @@ func marshalPerCPUValue(slice interface{}, elemLength int) (internal.Pointer, er
 	}
 
 	alignedElemLength := align(elemLength, 8)
-	alignedSliceLen := possibleCPUs
-	if sliceLen > alignedSliceLen {
-		alignedSliceLen = sliceLen
-	}
-	buf := make([]byte, alignedElemLength*alignedSliceLen)
+	buf := make([]byte, alignedElemLength*possibleCPUs)
 
 	for i := 0; i < sliceLen; i++ {
 		elem := sliceValue.Index(i).Interface()

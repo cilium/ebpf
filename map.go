@@ -499,7 +499,7 @@ func (m *Map) Update(key, value interface{}, flags MapUpdateFlags) error {
 		return fmt.Errorf("can't marshal key: %w", err)
 	}
 
-	valuePtr, err := m.marshalValue(value, false)
+	valuePtr, err := m.marshalValue(value)
 	if err != nil {
 		return fmt.Errorf("can't marshal value: %w", err)
 	}
@@ -897,7 +897,7 @@ func (m *Map) unmarshalKey(data interface{}, buf []byte) error {
 	return unmarshalBytes(data, buf)
 }
 
-func (m *Map) marshalValue(data interface{}, batch bool) (internal.Pointer, error) {
+func (m *Map) marshalValue(data interface{}) (internal.Pointer, error) {
 	if m.typ.hasPerCPUValue() {
 		return marshalPerCPUValue(data, int(m.valueSize))
 	}

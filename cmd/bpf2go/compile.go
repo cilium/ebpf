@@ -27,18 +27,16 @@ type compileArgs struct {
 }
 
 func compile(args compileArgs) error {
-	cmd := exec.Command(args.cc, args.cFlags...)
-	cmd.Stderr = os.Stderr
-
 	inputDir := filepath.Dir(args.source)
 	relInputDir, err := filepath.Rel(args.dir, inputDir)
 	if err != nil {
 		return err
 	}
 
-	cmd.Args = append(cmd.Args,
+	defaultArgs := []string {
 		"-c", args.source,
 		"-o", args.dest,
+		"-O2",
 		// Don't include clang version
 		"-fno-ident",
 		// Don't output inputDir into debug info
@@ -46,7 +44,11 @@ func compile(args compileArgs) error {
 		"-fdebug-compilation-dir", ".",
 		// We always want BTF to be generated, so enforce debug symbols
 		"-g",
-	)
+	}
+
+	cmd := exec.Command(args.cc, append(defaultArgs, args.cFlags...)...)
+	cmd.Stderr = os.Stderr
+
 	cmd.Dir = args.dir
 
 	var depRd, depWr *os.File

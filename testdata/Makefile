@@ -2,9 +2,10 @@ CLANG ?= clang
 CFLAGS := -target bpf -O2 -g -Wall -Werror $(CFLAGS)
 
 TARGETS := loader-clang-6.0 \
-	loader-clang-7 \
 	loader-clang-8 \
 	loader-clang-9 \
+	loader-clang-10 \
+	loader-clang-11 \
 	invalid_map \
 	raw_tracepoint \
 	invalid_map_static \

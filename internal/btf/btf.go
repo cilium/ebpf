@@ -171,14 +171,14 @@ func loadNakedSpec(btf io.ReadSeeker, bo binary.ByteOrder, sectionSizes map[stri
 		return nil, err
 	}
 
-	types, namedTypes, err := inflateRawTypes(rawTypes, rawStrings)
+	types, typesByName, err := inflateRawTypes(rawTypes, rawStrings)
 	if err != nil {
 		return nil, err
 	}
 
 	return &Spec{
 		rawTypes:   rawTypes,
-		namedTypes: namedTypes,
+		namedTypes: typesByName,
 		types:      types,
 		strings:    rawStrings,
 		byteOrder:  bo,
@@ -687,6 +687,19 @@ func ProgramLineInfos(s *Program) (recordSize uint32, bytes []byte, err error) {
 	}
 
 	return s.lineInfos.recordSize, bytes, nil
+}
+
+// ProgramRelocations returns the CO-RE relocations required to adjust the
+// program to the target.
+//
+// This is a free function instead of a method to hide it from users
+// of package ebpf.
+func ProgramRelocations(s *Program, target *Spec) (map[uint64]Relocation, error) {
+	if len(s.coreRelos) == 0 {
+		return nil, nil
+	}
+
+	return coreRelocate(s.spec, target, s.coreRelos)
 }
 
 type bpfLoadBTFAttr struct {

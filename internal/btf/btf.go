@@ -29,12 +29,14 @@ var (
 
 // Spec represents decoded BTF.
 type Spec struct {
-	rawTypes  []rawType
-	strings   stringTable
-	types     map[string][]namedType
-	funcInfos map[string]extInfo
-	lineInfos map[string]extInfo
-	byteOrder binary.ByteOrder
+	rawTypes   []rawType
+	strings    stringTable
+	types      []Type
+	namedTypes map[string][]namedType
+	funcInfos  map[string]extInfo
+	lineInfos  map[string]extInfo
+	coreRelos  map[string]bpfCoreRelos
+	byteOrder  binary.ByteOrder
 }
 
 type btfHeader struct {
@@ -105,7 +107,7 @@ func LoadSpecFromReader(rd io.ReaderAt) (*Spec, error) {
 		return spec, nil
 	}
 
-	spec.funcInfos, spec.lineInfos, err = parseExtInfos(btfExtSection.Open(), file.ByteOrder, spec.strings)
+	spec.funcInfos, spec.lineInfos, spec.coreRelos, err = parseExtInfos(btfExtSection.Open(), file.ByteOrder, spec.strings)
 	if err != nil {
 		return nil, fmt.Errorf("can't read ext info: %w", err)
 	}
@@ -169,16 +171,17 @@ func loadNakedSpec(btf io.ReadSeeker, bo binary.ByteOrder, sectionSizes map[stri
 		return nil, err
 	}
 
-	types, err := inflateRawTypes(rawTypes, rawStrings)
+	types, typesByName, err := inflateRawTypes(rawTypes, rawStrings)
 	if err != nil {
 		return nil, err
 	}
 
 	return &Spec{
-		rawTypes:  rawTypes,
-		types:     types,
-		strings:   rawStrings,
-		byteOrder: bo,
+		rawTypes:   rawTypes,
+		namedTypes: typesByName,
+		types:      types,
+		strings:    rawStrings,
+		byteOrder:  bo,
 	}, nil
 }
 
@@ -425,18 +428,19 @@ func (s *Spec) Program(name string, length uint64) (*Program, error) {
 		return nil, errors.New("length musn't be zero")
 	}
 
-	if s.funcInfos == nil && s.lineInfos == nil {
+	if s.funcInfos == nil && s.lineInfos == nil && s.coreRelos == nil {
 		return nil, fmt.Errorf("BTF for section %s: %w", name, ErrNoExtendedInfo)
 	}
 
 	funcInfos, funcOK := s.funcInfos[name]
 	lineInfos, lineOK := s.lineInfos[name]
+	coreRelos, coreOK := s.coreRelos[name]
 
-	if !funcOK && !lineOK {
+	if !funcOK && !lineOK && !coreOK {
 		return nil, fmt.Errorf("no extended BTF info for section %s", name)
 	}
 
-	return &Program{s, length, funcInfos, lineInfos}, nil
+	return &Program{s, length, funcInfos, lineInfos, coreRelos}, nil
 }
 
 // Map finds the BTF for a map.
@@ -507,7 +511,7 @@ func (s *Spec) FindType(name string, typ Type) error {
 		candidate Type
 	)
 
-	for _, typ := range s.types[essentialName(name)] {
+	for _, typ := range s.namedTypes[essentialName(name)] {
 		if reflect.TypeOf(typ) != wanted {
 			continue
 		}
@@ -626,6 +630,7 @@ type Program struct {
 	spec                 *Spec
 	length               uint64
 	funcInfos, lineInfos extInfo
+	coreRelos            bpfCoreRelos
 }
 
 // ProgramSpec returns the Spec needed for loading function and line infos into the kernel.
@@ -651,9 +656,10 @@ func ProgramAppend(s, other *Program) error {
 		return fmt.Errorf("line infos: %w", err)
 	}
 
-	s.length += other.length
 	s.funcInfos = funcInfos
 	s.lineInfos = lineInfos
+	s.coreRelos = s.coreRelos.append(other.coreRelos, s.length)
+	s.length += other.length
 	return nil
 }
 
@@ -681,6 +687,19 @@ func ProgramLineInfos(s *Program) (recordSize uint32, bytes []byte, err error) {
 	}
 
 	return s.lineInfos.recordSize, bytes, nil
+}
+
+// ProgramRelocations returns the CO-RE relocations required to adjust the
+// program to the target.
+//
+// This is a free function instead of a method to hide it from users
+// of package ebpf.
+func ProgramRelocations(s *Program, target *Spec) (map[uint64]Relocation, error) {
+	if len(s.coreRelos) == 0 {
+		return nil, nil
+	}
+
+	return coreRelocate(s.spec, target, s.coreRelos)
 }
 
 type bpfLoadBTFAttr struct {

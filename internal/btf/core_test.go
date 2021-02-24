@@ -1,6 +1,13 @@
 package btf
 
-import "testing"
+import (
+	"errors"
+	"os"
+	"strings"
+	"testing"
+
+	"github.com/cilium/ebpf/internal/testutils"
+)
 
 func TestCoreAreTypesCompatible(t *testing.T) {
 	tests := []struct {
@@ -168,4 +175,56 @@ func TestCoreAccessor(t *testing.T) {
 			t.Errorf("Accepted invalid accessor %q", invalid)
 		}
 	}
+}
+
+func TestCoreRelocation(t *testing.T) {
+	testutils.TestFiles(t, "testdata/*.elf", func(t *testing.T, file string) {
+		rd, err := os.Open(file)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer rd.Close()
+
+		spec, err := LoadSpecFromReader(rd)
+		testutils.SkipIfNotSupported(t, err)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		errs := map[string]error{
+			"ambiguous":         errAmbiguousRelocation,
+			"ambiguous_flavour": errAmbiguousRelocation,
+		}
+
+		for section := range spec.funcInfos {
+			name := strings.TrimPrefix(section, "socket_filter/")
+			t.Run(name, func(t *testing.T) {
+				prog, err := spec.Program(section, 1)
+				if err != nil {
+					t.Fatal("Retrieve program:", err)
+				}
+
+				relos, err := ProgramRelocations(prog, spec)
+				testutils.SkipIfNotSupported(t, err)
+				if want := errs[name]; want != nil {
+					if !errors.Is(err, want) {
+						t.Fatal("Expected", want, "got", err)
+					}
+					return
+				}
+
+				if err != nil {
+					t.Fatal("Can't relocate against itself:", err)
+				}
+
+				for i, relo := range relos {
+					if relo.Current != relo.New {
+						// Since we're relocating against ourselves both values
+						// should match.
+						t.Errorf("#%d: current %v doesn't match new %d", i, relo.Current, relo.New)
+					}
+				}
+			})
+		}
+	})
 }

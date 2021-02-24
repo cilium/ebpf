@@ -499,7 +499,7 @@ func (m *Map) Update(key, value interface{}, flags MapUpdateFlags) error {
 		return fmt.Errorf("can't marshal key: %w", err)
 	}
 
-	valuePtr, err := m.marshalValue(value)
+	valuePtr, err := m.marshalValue(value, false)
 	if err != nil {
 		return fmt.Errorf("can't marshal value: %w", err)
 	}
@@ -615,9 +615,6 @@ func (m *Map) batchLookup(cmd internal.BPFCmd, startKey, nextKeyOut, keysOut, va
 	if err := haveBatchAPI(); err != nil {
 		return 0, err
 	}
-	if m.typ.hasPerCPUValue() {
-		return 0, ErrNotSupported
-	}
 	keysValue := reflect.ValueOf(keysOut)
 	if keysValue.Kind() != reflect.Slice {
 		return 0, fmt.Errorf("keys must be a slice")
@@ -626,8 +623,20 @@ func (m *Map) batchLookup(cmd internal.BPFCmd, startKey, nextKeyOut, keysOut, va
 	if valuesValue.Kind() != reflect.Slice {
 		return 0, fmt.Errorf("valuesOut must be a slice")
 	}
+	var (
+		possibleCPUs   int = 1
+		hasPerCPUValue     = m.typ.hasPerCPUValue()
+	)
+
+	if hasPerCPUValue {
+		var err error
+		possibleCPUs, err = internal.PossibleCPUs()
+		if err != nil {
+			return 0, err
+		}
+	}
 	count := keysValue.Len()
-	if count != valuesValue.Len() {
+	if count != valuesValue.Len()/possibleCPUs {
 		return 0, fmt.Errorf("keysOut and valuesOut must be the same length")
 	}
 	keyBuf := make([]byte, count*int(m.keySize))
@@ -646,7 +655,7 @@ func (m *Map) batchLookup(cmd internal.BPFCmd, startKey, nextKeyOut, keysOut, va
 			return 0, err
 		}
 	}
-	nextPtr, nextBuf := makeBuffer(nextKeyOut, int(m.keySize))
+	nextPtr, nextBuf := makeBuffer(startKey, int(m.keySize))
 
 	ct, err := bpfMapBatch(cmd, m.fd, startPtr, nextPtr, keyPtr, valuePtr, uint32(count), opts)
 	if err != nil {
@@ -664,9 +673,22 @@ func (m *Map) batchLookup(cmd internal.BPFCmd, startKey, nextKeyOut, keysOut, va
 	if err != nil {
 		return 0, err
 	}
-	err = unmarshalBytes(valuesOut, valueBuf)
-	if err != nil {
-		retErr = err
+	if hasPerCPUValue {
+		step := len(valueBuf) / valuesValue.Len()
+		for i := 0; i < count*possibleCPUs; i++ {
+			var elem interface{}
+			elem = valuesValue.Index(i).Addr().Interface()
+			err := unmarshalBytes(elem, valueBuf[:m.valueSize])
+			if err != nil {
+				return 0, fmt.Errorf("element %d: %w", i, err)
+			}
+			valueBuf = valueBuf[step:]
+		}
+	} else {
+		err = unmarshalBytes(valuesOut, valueBuf)
+		if err != nil {
+			return int(ct), err
+		}
 	}
 	return int(ct), retErr
 }
@@ -679,9 +701,6 @@ func (m *Map) BatchUpdate(keys, values interface{}, opts *BatchOptions) (int, er
 	if err := haveBatchAPI(); err != nil {
 		return 0, err
 	}
-	if m.typ.hasPerCPUValue() {
-		return 0, ErrNotSupported
-	}
 	keysValue := reflect.ValueOf(keys)
 	if keysValue.Kind() != reflect.Slice {
 		return 0, fmt.Errorf("keys must be a slice")
@@ -691,18 +710,30 @@ func (m *Map) BatchUpdate(keys, values interface{}, opts *BatchOptions) (int, er
 		return 0, fmt.Errorf("values must be a slice")
 	}
 	var (
-		count    = keysValue.Len()
-		valuePtr internal.Pointer
-		err      error
+		count              = keysValue.Len()
+		hasPerCPUValue     = m.typ.hasPerCPUValue()
+		possibleCPUs   int = 1
+		valuePtr       internal.Pointer
+		err            error
 	)
-	if count != valuesValue.Len() {
+	if hasPerCPUValue {
+		possibleCPUs, err = internal.PossibleCPUs()
+		if err != nil {
+			return 0, err
+		}
+	}
+	if count != valuesValue.Len()/possibleCPUs {
 		return 0, fmt.Errorf("keys and values must be the same length")
 	}
 	keyPtr, err := marshalPtr(keys, count*int(m.keySize))
 	if err != nil {
 		return 0, err
 	}
-	valuePtr, err = marshalPtr(values, count*int(m.valueSize))
+	if hasPerCPUValue {
+		valuePtr, err = m.marshalValue(values, true)
+	} else {
+		valuePtr, err = marshalPtr(values, count*int(m.valueSize))
+	}
 	if err != nil {
 		return 0, err
 	}
@@ -716,9 +747,6 @@ func (m *Map) BatchUpdate(keys, values interface{}, opts *BatchOptions) (int, er
 func (m *Map) BatchDelete(keys interface{}, opts *BatchOptions) (int, error) {
 	if err := haveBatchAPI(); err != nil {
 		return 0, err
-	}
-	if m.typ.hasPerCPUValue() {
-		return 0, ErrNotSupported
 	}
 	keysValue := reflect.ValueOf(keys)
 	if keysValue.Kind() != reflect.Slice {
@@ -897,9 +925,9 @@ func (m *Map) unmarshalKey(data interface{}, buf []byte) error {
 	return unmarshalBytes(data, buf)
 }
 
-func (m *Map) marshalValue(data interface{}) (internal.Pointer, error) {
+func (m *Map) marshalValue(data interface{}, batch bool) (internal.Pointer, error) {
 	if m.typ.hasPerCPUValue() {
-		return marshalPerCPUValue(data, int(m.valueSize))
+		return marshalPerCPUValue(data, int(m.valueSize), batch)
 	}
 
 	var (

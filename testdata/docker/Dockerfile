@@ -14,5 +14,6 @@ RUN apt-get update && \
     apt-get -y --no-install-recommends install \
     clang-7 llvm-7 \
     clang-9 llvm-9 \
-    clang-11 llvm-11 && \
+    clang-11 llvm-11 \
+    clang-12 llvm-12 && \
     rm -rf /var/lib/apt/lists/*

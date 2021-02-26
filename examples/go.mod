@@ -1,4 +1,4 @@
-module github.com/cilium/ebpf/_example/tracepoint
+module github.com/cilium/ebpf/examples
 
 go 1.15
 

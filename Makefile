@@ -60,6 +60,8 @@ testdata/loader-%-eb.elf: testdata/loader.c
 %-eb.elf : %.c
 	$(CLANG) $(CFLAGS) -mbig-endian -c $< -o $@
 
-# Usage: make KDIR=/path/to/foo vmlinux-btf.gz
-vmlinux-btf.gz: $(KDIR)/vmlinux
-	objcopy --dump-section .BTF=/dev/stdout "$<" | gzip > "$@"
+# Usage: make VMLINUX=/path/to/vmlinux vmlinux-btf
+.PHONY: vmlinux-btf
+vmlinux-btf: internal/btf/testdata/vmlinux-btf.gz
+internal/btf/testdata/vmlinux-btf.gz: $(VMLINUX)
+	objcopy --dump-section .BTF=/dev/stdout "$<" /dev/null | gzip > "$@"

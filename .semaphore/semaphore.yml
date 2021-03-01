@@ -31,13 +31,13 @@ blocks:
         commands:
           - cache store
           - git diff --exit-code || { echo "generated files are not up to date" >&2; false; }
-          - for i in $(find _example -maxdepth 1 -mindepth 1 -type d); do cd $i; go build; cd -; done
       env_vars:
         - name: TMPDIR
           value: /tmp
       jobs:
-      - name: Test building on other OS and arch
+      - name: Build
         commands:
+          - pushd ./examples; go build -v -o "$(mktemp -d)" ./...; popd
           - GOOS=darwin go build ./... && for p in $(go list ./...) ; do GOOS=darwin go test -c $p ; done
           - GOARCH=arm GOARM=6 go build ./... && for p in $(go list ./...) ; do GOARCH=arm GOARM=6 go test -c $p ; done
           - GOARCH=arm64 go build ./... && for p in $(go list ./...) ; do GOARCH=arm64 go test -c $p ; done

@@ -16,11 +16,10 @@ Building the image requires Docker. Run the build with:
 
 `make build`
 
-Make sure to bump the value in `VERSION` when committing changes to
-the Dockerfile.
+This updates the `VERSION` file. Commit it and submit a PR upstream.
 
 ## Pushing
 
-After building, push the image to the Docker registry specified in `REPO` with:
+After building, push the image to the Docker registry specified in `IMAGE` with:
 
 `make push`

@@ -174,7 +174,7 @@ func TestStats(t *testing.T) {
 
 	disableStats, err := EnableStats(uint32(unix.BPF_STATS_RUN_TIME))
 	if err != nil {
-		t.Errorf("failed to enable stats: %v", err)
+		t.Fatalf("failed to enable stats: %v", err)
 	}
 	defer disableStats.Close()
 

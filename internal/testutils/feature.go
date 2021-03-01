@@ -2,12 +2,12 @@ package testutils
 
 import (
 	"bytes"
+	"errors"
 	"sync"
 	"testing"
 
 	"github.com/DataDog/ebpf/internal"
 	"github.com/DataDog/ebpf/internal/unix"
-	"golang.org/x/xerrors"
 )
 
 var (
@@ -49,7 +49,7 @@ func CheckFeatureTest(t *testing.T, fn func() error) {
 
 func SkipIfNotSupported(tb testing.TB, err error) {
 	var ufe *internal.UnsupportedFeatureError
-	if xerrors.As(err, &ufe) {
+	if errors.As(err, &ufe) {
 		checkKernelVersion(tb, ufe)
 		tb.Skip(ufe.Error())
 	}

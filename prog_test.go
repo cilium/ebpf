@@ -3,6 +3,7 @@ package ebpf
 import (
 	"bytes"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"math"
@@ -18,7 +19,6 @@ import (
 	"github.com/DataDog/ebpf/internal"
 	"github.com/DataDog/ebpf/internal/testutils"
 	"github.com/DataDog/ebpf/internal/unix"
-	"golang.org/x/xerrors"
 )
 
 func TestProgramRun(t *testing.T) {
@@ -271,7 +271,7 @@ func TestProgramVerifierOutput(t *testing.T) {
 	}
 
 	var ve *internal.VerifierError
-	if !xerrors.As(err, &ve) {
+	if !errors.As(err, &ve) {
 		t.Error("Error is not a VerifierError")
 	}
 }
@@ -459,7 +459,7 @@ func TestProgramGetNextID(t *testing.T) {
 	for {
 		last := next
 		if next, err = ProgramGetNextID(last); err != nil {
-			if !xerrors.Is(err, ErrNotExist) {
+			if !errors.Is(err, ErrNotExist) {
 				t.Fatal("Expected ErrNotExist, got:", err)
 			}
 			break
@@ -498,7 +498,7 @@ func TestNewProgramFromID(t *testing.T) {
 
 	// As there can be multiple programs, we use max(uint32) as ProgramID to trigger an expected error.
 	_, err = NewProgramFromID(ProgramID(math.MaxUint32))
-	if !xerrors.Is(err, ErrNotExist) {
+	if !errors.Is(err, ErrNotExist) {
 		t.Fatal("Expected ErrNotExist, got:", err)
 	}
 }

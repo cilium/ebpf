@@ -1,9 +1,9 @@
 package btf
 
 import (
+	"errors"
+	"fmt"
 	"math"
-
-	"golang.org/x/xerrors"
 )
 
 const maxTypeDepth = 32
@@ -310,7 +310,7 @@ func Sizeof(typ Type) (int, error) {
 		switch v := typ.(type) {
 		case *Array:
 			if n > 0 && int64(v.Nelems) > math.MaxInt64/n {
-				return 0, xerrors.New("overflow")
+				return 0, errors.New("overflow")
 			}
 
 			// Arrays may be of zero length, which allows
@@ -336,22 +336,22 @@ func Sizeof(typ Type) (int, error) {
 			continue
 
 		default:
-			return 0, xerrors.Errorf("unrecognized type %T", typ)
+			return 0, fmt.Errorf("unrecognized type %T", typ)
 		}
 
 		if n > 0 && elem > math.MaxInt64/n {
-			return 0, xerrors.New("overflow")
+			return 0, errors.New("overflow")
 		}
 
 		size := n * elem
 		if int64(int(size)) != size {
-			return 0, xerrors.New("overflow")
+			return 0, errors.New("overflow")
 		}
 
 		return int(size), nil
 	}
 
-	return 0, xerrors.New("exceeded type depth")
+	return 0, errors.New("exceeded type depth")
 }
 
 // copy a Type recursively.
@@ -433,7 +433,7 @@ func inflateRawTypes(rawTypes []rawType, rawStrings stringTable) (namedTypes map
 		for i, btfMember := range raw {
 			name, err := rawStrings.LookupName(btfMember.NameOff)
 			if err != nil {
-				return nil, xerrors.Errorf("can't get name for member %d: %w", i, err)
+				return nil, fmt.Errorf("can't get name for member %d: %w", i, err)
 			}
 			members = append(members, Member{
 				Name:   name,
@@ -460,7 +460,7 @@ func inflateRawTypes(rawTypes []rawType, rawStrings stringTable) (namedTypes map
 
 		name, err := rawStrings.LookupName(raw.NameOff)
 		if err != nil {
-			return nil, xerrors.Errorf("can't get name for type id %d: %w", id, err)
+			return nil, fmt.Errorf("can't get name for type id %d: %w", id, err)
 		}
 
 		switch raw.Kind() {
@@ -484,14 +484,14 @@ func inflateRawTypes(rawTypes []rawType, rawStrings stringTable) (namedTypes map
 		case kindStruct:
 			members, err := convertMembers(raw.data.([]btfMember))
 			if err != nil {
-				return nil, xerrors.Errorf("struct %s (id %d): %w", name, id, err)
+				return nil, fmt.Errorf("struct %s (id %d): %w", name, id, err)
 			}
 			typ = &Struct{id, name, raw.Size(), members}
 
 		case kindUnion:
 			members, err := convertMembers(raw.data.([]btfMember))
 			if err != nil {
-				return nil, xerrors.Errorf("union %s (id %d): %w", name, id, err)
+				return nil, fmt.Errorf("union %s (id %d): %w", name, id, err)
 			}
 			typ = &Union{id, name, raw.Size(), members}
 
@@ -551,7 +551,7 @@ func inflateRawTypes(rawTypes []rawType, rawStrings stringTable) (namedTypes map
 			typ = &Datasec{id, name, raw.SizeType, vars}
 
 		default:
-			return nil, xerrors.Errorf("type id %d: unknown kind: %v", id, raw.Kind())
+			return nil, fmt.Errorf("type id %d: unknown kind: %v", id, raw.Kind())
 		}
 
 		types = append(types, typ)
@@ -566,7 +566,7 @@ func inflateRawTypes(rawTypes []rawType, rawStrings stringTable) (namedTypes map
 	for _, fixup := range fixups {
 		i := int(fixup.id)
 		if i >= len(types) {
-			return nil, xerrors.Errorf("reference to invalid type id: %d", fixup.id)
+			return nil, fmt.Errorf("reference to invalid type id: %d", fixup.id)
 		}
 
 		// Default void (id 0) to unknown
@@ -576,7 +576,7 @@ func inflateRawTypes(rawTypes []rawType, rawStrings stringTable) (namedTypes map
 		}
 
 		if expected := fixup.expectedKind; expected != kindUnknown && rawKind != expected {
-			return nil, xerrors.Errorf("expected type id %d to have kind %s, found %s", fixup.id, expected, rawKind)
+			return nil, fmt.Errorf("expected type id %d to have kind %s, found %s", fixup.id, expected, rawKind)
 		}
 
 		*fixup.typ = types[i]

@@ -1,10 +1,9 @@
 package internal
 
 import (
+	"errors"
 	"strings"
 	"testing"
-
-	"golang.org/x/xerrors"
 )
 
 func TestFeatureTest(t *testing.T) {
@@ -46,7 +45,7 @@ func TestFeatureTest(t *testing.T) {
 		t.Error("UnsupportedFeatureError.Error doesn't contain version")
 	}
 
-	if !xerrors.Is(err, ErrNotSupported) {
+	if !errors.Is(err, ErrNotSupported) {
 		t.Error("UnsupportedFeatureError is not ErrNotSupported")
 	}
 }

@@ -27,11 +27,11 @@ blocks:
           - sudo pip3 install https://github.com/amluto/virtme/archive/538f1e756139a6b57a4780e7ceb3ac6bcaa4fe6f.zip
           - sudo apt-get install -y qemu-system-x86 clang-9
           - go generate ./cmd/bpf2go
+          - pushd ./examples; go build -o "$(mktemp -d)" ./...; popd
       epilogue:
         commands:
           - cache store
           - git diff --exit-code || { echo "generated files are not up to date" >&2; false; }
-          - for i in $(find _example -maxdepth 1 -mindepth 1 -type d); do cd $i; go build; cd -; done
       env_vars:
         - name: TMPDIR
           value: /tmp

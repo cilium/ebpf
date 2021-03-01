@@ -359,7 +359,7 @@ func (m *Map) lookup(key interface{}, valueOut internal.Pointer) error {
 	}
 
 	if err = bpfMapLookupElem(m.fd, keyPtr, valueOut); err != nil {
-		return fmt.Errorf("lookup failed: %w", err)
+		return err
 	}
 	return nil
 }

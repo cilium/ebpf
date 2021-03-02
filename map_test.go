@@ -702,15 +702,58 @@ func TestMapInMapValueSize(t *testing.T) {
 }
 
 func TestIterateEmptyMap(t *testing.T) {
-	hash := createHash()
-	defer hash.Close()
+	makeMap := func(t *testing.T, mapType MapType) *Map {
+		m, err := NewMap(&MapSpec{
+			Type:       mapType,
+			KeySize:    4,
+			ValueSize:  8,
+			MaxEntries: 2,
+		})
+		if errors.Is(err, unix.EINVAL) {
+			t.Skip(mapType, "is not supported")
+		}
+		if err != nil {
+			t.Fatal("Can't create map:", err)
+		}
+		t.Cleanup(func() { m.Close() })
+		return m
+	}
 
-	entries := hash.Iterate()
+	for _, mapType := range []MapType{
+		Hash,
+		SockHash,
+	} {
+		t.Run(mapType.String(), func(t *testing.T) {
+			m := makeMap(t, mapType)
+			entries := m.Iterate()
 
-	var key string
-	var value uint32
-	if entries.Next(&key, &value) != false {
-		t.Error("Empty map should not be iterable")
+			var key string
+			var value uint32
+			if entries.Next(&key, &value) != false {
+				t.Error("Empty hash should not be iterable")
+			}
+			if err := entries.Err(); err != nil {
+				t.Error("Empty hash shouldn't return an error:", err)
+			}
+		})
+	}
+
+	for _, mapType := range []MapType{
+		Array,
+		SockMap,
+	} {
+		t.Run(mapType.String(), func(t *testing.T) {
+			m := makeMap(t, mapType)
+			entries := m.Iterate()
+			var key string
+			var value uint32
+			for entries.Next(&key, &value) {
+				// Some empty arrays like sockmap don't return any keys.
+			}
+			if err := entries.Err(); err != nil {
+				t.Error("Empty array shouldn't return an error:", err)
+			}
+		})
 	}
 }
 

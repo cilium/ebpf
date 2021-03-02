@@ -32,7 +32,7 @@ TARGETS := \
 # Build all ELF binaries using a Dockerized LLVM toolchain.
 docker-all:
 	docker run --rm --user "${UIDGID}" \
-		-v "${REPODIR}":/ebpf -w /ebpf \
+		-v "${REPODIR}":/ebpf -w /ebpf --env MAKEFLAGS \
 		"${IMAGE}:${VERSION}" \
 		make all
 

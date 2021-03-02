@@ -1116,7 +1116,9 @@ func (mi *MapIterator) Next(keyOut, valueOut interface{}) bool {
 		return false
 	}
 
-	for ; mi.count < mi.maxEntries; mi.count++ {
+	// For array-like maps NextKeyBytes returns nil only on after maxEntries
+	// iterations.
+	for mi.count <= mi.maxEntries {
 		var nextBytes []byte
 		nextBytes, mi.err = mi.target.NextKeyBytes(mi.prevKey)
 		if mi.err != nil {
@@ -1135,6 +1137,7 @@ func (mi *MapIterator) Next(keyOut, valueOut interface{}) bool {
 		copy(mi.prevBytes, nextBytes)
 		mi.prevKey = mi.prevBytes
 
+		mi.count++
 		mi.err = mi.target.Lookup(nextBytes, valueOut)
 		if errors.Is(mi.err, ErrKeyNotExist) {
 			// Even though the key should be valid, we couldn't look up

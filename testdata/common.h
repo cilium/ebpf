@@ -31,3 +31,14 @@ static long (*trace_printk)(const char *fmt, uint32_t fmt_size, ...) = (void *)6
 static int (*perf_event_output)(const void *ctx, const void *map, uint64_t index, const void *data, uint64_t size) = (void *)25;
 
 static uint32_t (*get_smp_processor_id)(void) = (void *)8;
+
+static void *(*bpf_map_lookup_elem)(void *map, const void *key) = (void *) 1;
+
+static long (*bpf_map_update_elem)(void *map, const void *key, const void *value, uint64_t flags) = (void *) 2;
+
+enum {
+	BPF_ANY = 0,
+	BPF_NOEXIST = 1,
+	BPF_EXIST = 2,
+	BPF_F_LOCK = 4,
+};

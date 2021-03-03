@@ -1,5 +1,8 @@
 // +build linux
 
+// This program demonstrates how to attach an eBPF program to a tracepoint.
+// The program will be attached to the sys_enter_open syscall and print out the integer
+// 123 everytime the sycall is used.
 package main
 
 import (
@@ -17,18 +20,9 @@ import (
 	"github.com/elastic/go-perf"
 )
 
-// This program demonstrates how to attach an eBPF program to a tracepoint.
-// The program will be attached to the sys_enter_open syscall and print out the integer
-// 123 everytime the sycall is used.
 func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-
-	var originalLimit unix.Rlimit
-	// Get the original rlimit values so we can restore them laster.
-	if err := unix.Getrlimit(unix.RLIMIT_MEMLOCK, &originalLimit); err != nil {
-		panic(fmt.Errorf("failed to get rlimit: %v", err))
-	}
 
 	// Increase rlimit so the eBPF map and program can be loaded.
 	if err := unix.Setrlimit(unix.RLIMIT_MEMLOCK, &unix.Rlimit{
@@ -106,11 +100,6 @@ func main() {
 	gtp := perf.Tracepoint("syscalls", "sys_enter_open")
 	if err := gtp.Configure(ga); err != nil {
 		panic(fmt.Errorf("failed to configure tracepoint: %v", err))
-	}
-
-	// Restore original rlimit values.
-	if err := unix.Setrlimit(unix.RLIMIT_MEMLOCK, &originalLimit); err != nil {
-		panic(fmt.Errorf("failed to restore original rlimit: %v", err))
 	}
 
 	runtime.LockOSThread()

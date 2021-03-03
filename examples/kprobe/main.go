@@ -1,7 +1,6 @@
 // This program demonstrates how to attach an eBPF program to a kprobe.
 // The program will be attached to the __x64_sys_execve syscall and print out
 // the number of times it has been called every second.
-
 package main
 
 import (
@@ -174,11 +173,9 @@ func genID() string {
 		size  = 10
 		chars = []rune("abcdefghijklmnopqrstuvwxyz")
 	)
-
 	s := make([]rune, size)
 	for i := range s {
 		s[i] = chars[rand.Intn(len(chars))]
 	}
-
 	return string(s)
 }

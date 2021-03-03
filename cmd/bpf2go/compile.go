@@ -28,8 +28,14 @@ type compileArgs struct {
 
 func compile(args compileArgs) error {
 	// Default cflags that can be overriden by args.cFlags
-	overrideFlags := []string {
+	overrideFlags := []string{
+		// Code needs to be optimized, otherwise the verifier will often fail
+		// to understand it.
 		"-O2",
+		// Clang defaults to mcpu=probe which checks the kernel that we are
+		// compiling on. This isn't appropriate for ahead of time
+		// compiled code so force the most compatible version.
+		"-mcpu=v1",
 	}
 
 	cmd := exec.Command(args.cc, append(overrideFlags, args.cFlags...)...)

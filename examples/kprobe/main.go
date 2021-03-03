@@ -1,33 +1,25 @@
 // This program demonstrates how to attach an eBPF program to a kprobe.
 // The program will be attached to the __x64_sys_execve syscall and print out
 // the number of times it has been called every second.
-
 package main
 
 import (
 	"fmt"
-	"io/ioutil"
-	"math/rand"
+	"log"
 	"os"
 	"os/signal"
 	"runtime"
-	"strconv"
-	"strings"
 	"syscall"
 	"time"
+	"unsafe"
 
 	goperf "github.com/elastic/go-perf"
-
 	"golang.org/x/sys/unix"
 )
 
-//go:generate go run github.com/cilium/ebpf/cmd/bpf2go -cc clang-11 KProbeExample ./bpf/kprobe_example.c
+//go:generate go run github.com/cilium/ebpf/cmd/bpf2go -cc clang-11 KProbeExample ./bpf/kprobe_example.c -- -I../headers
 
-const (
-	mapKey           uint32 = 0
-	kProbesPath      string = "/sys/kernel/debug/tracing/events/kprobes/"
-	kProbeEventsPath string = "/sys/kernel/debug/tracing/kprobe_events"
-)
+const mapKey uint32 = 0
 
 func main() {
 	stopper := make(chan os.Signal, 1)
@@ -38,25 +30,26 @@ func main() {
 		Cur: unix.RLIM_INFINITY,
 		Max: unix.RLIM_INFINITY,
 	}); err != nil {
-		panic(fmt.Errorf("failed to set temporary rlimit: %v", err))
+		log.Fatalf("failed to set temporary rlimit: %v", err)
 	}
 
 	// Load Program and Map
 	specs, err := NewKProbeExampleSpecs()
 	if err != nil {
-		panic(fmt.Errorf("error while loading specs: %v", err))
+		log.Fatalf("error while loading specs: %v", err)
 	}
 	objs, err := specs.Load(nil)
 	if err != nil {
-		panic(fmt.Errorf("error while loading objects: %v", err))
+		log.Fatalf("error while loading objects: %v", err)
 	}
 
 	// Create and attach __x64_sys_execve kprobe
-	closer, err := createAndAttachKProbe("__x64_sys_execve", uint32(objs.ProgramKprobeExecve.FD()))
+	efd, err := openKProbe("__x64_sys_execve", uint32(objs.ProgramKprobeExecve.FD()))
 	if err != nil {
-		panic(fmt.Errorf("create and attach KProbe: %v", err))
+		log.Fatalf("create and attach KProbe: %v", err)
+
 	}
-	defer closer()
+	defer unix.Close(efd)
 
 	ticker := time.NewTicker(1 * time.Second)
 	for {
@@ -64,121 +57,50 @@ func main() {
 		case <-ticker.C:
 			var value uint64
 			if err := objs.MapKprobeMap.Lookup(mapKey, &value); err != nil {
-				panic(fmt.Errorf("error while reading map: %v", err))
+				log.Fatalf("error while reading map: %v", err)
 			}
-			fmt.Printf("__x64_sys_execve called %d times\n", value)
+			log.Printf("__x64_sys_execve called %d times\n", value)
 		case <-stopper:
 			return
 		}
 	}
 }
 
-// This function register a new kprobe in `kProbeEventsPath`
-func createAndAttachKProbe(syscall string, fd uint32) (func(), error) {
-	identifier := fmt.Sprintf("%s_%s", genID(), syscall)
-
-	if err := appendToFile(kProbeEventsPath, fmt.Sprintf("p:kprobes/%s %s", identifier, syscall)); err != nil {
-		return nil, fmt.Errorf("error while creating kprobe: %v", err)
-	}
-
-	closer, err := attachKProbe(identifier, fd)
+func openKProbe(syscall string, fd uint32) (int, error) {
+	et, err := goperf.LookupEventType("kprobe")
 	if err != nil {
-		return nil, fmt.Errorf("error while attaching kprobe: %v", err)
+		return 0, fmt.Errorf("read PMU type: %v", err)
 	}
 
-	return closer, nil
-}
-
-type configuratorFunc func(attr *goperf.Attr) error
-
-// Implements goperf.Configurator
-func (cf configuratorFunc) Configure(attr *goperf.Attr) error { return cf(attr) }
-
-func attachKProbe(identifier string, fd uint32) (func(), error) {
-	var (
-		closer                           = func() {}
-		attr                             = &goperf.Attr{}
-		configurator goperf.Configurator = configuratorFunc(func(attr *goperf.Attr) error {
-			kpID, err := getKProbeID(identifier)
-			if err != nil {
-				return err
-			}
-			attr.Label = identifier
-			attr.Type = goperf.TracepointEvent
-			attr.Config = kpID
-			return nil
-		})
-	)
-
-	if err := configurator.Configure(attr); err != nil {
-		return closer, err
-	}
-
-	runtime.LockOSThread()
-	closer = func() { runtime.UnlockOSThread() }
-
-	perfEv, err := goperf.Open(attr, goperf.CallingThread, goperf.AnyCPU, nil)
+	config1ptr := newStringPointer(syscall)
+	ev, err := goperf.Open(&goperf.Attr{Type: et, Config1: uint64(uintptr(config1ptr))}, goperf.AllThreads, 0, nil)
 	if err != nil {
-		return closer, err
+		return 0, fmt.Errorf("perf event open: %v", err)
 	}
-	closer = func() {
-		perfEv.Close()
-		runtime.UnlockOSThread()
-	}
-
-	if err := perfEv.Enable(); err != nil {
-		return closer, err
-	}
-
-	err = perfEv.SetBPF(fd)
-	return func() {
-		if err := perfEv.Disable(); err != nil {
-			panic(err)
-		}
-		perfEv.Close()
-		if err := removeKProbe(identifier); err != nil {
-			panic(err)
-		}
-	}, err
-}
-
-func getKProbeID(identifier string) (uint64, error) {
-	data, err := ioutil.ReadFile(fmt.Sprintf("%s%s/id", kProbesPath, identifier))
+	efd, err := ev.FD()
 	if err != nil {
-		return 0, err
+		return 0, fmt.Errorf("get perf event fd: %v", err)
 	}
-	tid := strings.TrimSuffix(string(data), "\n")
-	return strconv.ParseUint(tid, 10, 64)
+
+	// Ensure config1ptr is not finalized until goperf.Open returns.
+	runtime.KeepAlive(config1ptr)
+
+	if err := unix.IoctlSetInt(efd, unix.PERF_EVENT_IOC_ENABLE, 0); err != nil {
+		unix.Close(efd)
+		return 0, fmt.Errorf("perf event enable: %v", err)
+	}
+
+	if err := ev.SetBPF(fd); err != nil {
+		unix.Close(efd)
+		return 0, fmt.Errorf("perf event set bpf: %v", err)
+	}
+
+	return efd, nil
 }
 
-func removeKProbe(identifier string) error {
-	return appendToFile(kProbeEventsPath, fmt.Sprintf("-:kprobes/%s", identifier))
-}
-
-func appendToFile(path string, content string) error {
-	f, err := os.OpenFile(path, os.O_APPEND|os.O_WRONLY, 0644)
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-
-	if _, err = f.WriteString(content); err != nil {
-		return err
-	}
-	return nil
-}
-
-// Generate a random string
-func genID() string {
-	var (
-		size  = 10
-		chars = []rune("abcdefghijklmnopqrstuvwxyz")
-	)
-
-	s := make([]rune, size)
-	for i := range s {
-		s[i] = chars[rand.Intn(len(chars))]
-	}
-
-	return string(s)
+func newStringPointer(str string) unsafe.Pointer {
+	// The kernel expects strings to be zero terminated
+	buf := make([]byte, len(str)+1)
+	copy(buf, str)
+	return unsafe.Pointer(&buf[0])
 }

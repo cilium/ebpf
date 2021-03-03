@@ -1,5 +1,5 @@
-#include "../../headers/vmlinux.h"
-#include "../../headers/bpf_helpers.h"
+#include "common.h"
+#include "bpf_helpers.h"
 
 char __license[] SEC("license") = "GPL";
 

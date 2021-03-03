@@ -1,8 +1,0 @@
-{
-    "files.associations": {
-        "common.h": "c",
-        "vmlinux.h": "c",
-        "bpf_helper_defs.h": "c",
-        "bpf_helpers.h": "c"
-    }
-}

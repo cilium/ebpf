@@ -696,10 +696,14 @@ func mapSpecFromBTF(name string, def *btf.Struct, inner bool, spec *btf.Spec) (*
 					return nil, fmt.Errorf("nested inner maps are not supported")
 				}
 
-				// Inner maps are always unnamed, so provide an empty name value.
+				// This inner map spec is used as a map template, but it needs to be
+				// created as a traditional map before it can be used to do so.
+				// libbpf names the inner map template '<outer_name>.inner', but we
+				// opted for _inner to simplify validation logic. (dots only supported
+				// on kernels 5.2 and up)
 				// Pass the BTF spec from the parent object, since both parent and
 				// child must be created from the same BTF blob (on kernels that support BTF).
-				innerMapSpec, err = mapSpecFromBTF("", t, true, spec)
+				innerMapSpec, err = mapSpecFromBTF(name+"_inner", t, true, spec)
 				if err != nil {
 					return nil, fmt.Errorf("can't parse BTF map definition of inner map: %w", err)
 				}

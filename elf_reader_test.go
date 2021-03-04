@@ -58,6 +58,7 @@ func TestLoadCollectionSpec(t *testing.T) {
 				KeySize:    4,
 				MaxEntries: 1,
 				InnerMap: &MapSpec{
+					Name:       "btf_outer_map.inner",
 					Type:       Hash,
 					KeySize:    4,
 					ValueSize:  4,
@@ -70,6 +71,7 @@ func TestLoadCollectionSpec(t *testing.T) {
 				KeySize:    4,
 				MaxEntries: 1,
 				InnerMap: &MapSpec{
+					Name:       "btf_outer_map_anon.inner",
 					Type:       Hash,
 					KeySize:    4,
 					ValueSize:  4,

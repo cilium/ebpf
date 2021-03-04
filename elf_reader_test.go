@@ -42,6 +42,8 @@ func TestLoadCollectionSpec(t *testing.T) {
 				KeySize:    4,
 				MaxEntries: 2,
 			},
+			// Maps prefixed by btf_ are ignored when testing ELFs
+			// that don't have BTF info embedded. (clang<9)
 			"btf_pin": {
 				Name:       "btf_pin",
 				Type:       Hash,
@@ -49,6 +51,34 @@ func TestLoadCollectionSpec(t *testing.T) {
 				ValueSize:  8,
 				MaxEntries: 1,
 				Pinning:    PinByName,
+			},
+			"btf_outer_map": {
+				Name:       "btf_outer_map",
+				Type:       ArrayOfMaps,
+				KeySize:    4,
+				ValueSize:  4,
+				MaxEntries: 1,
+				InnerMap: &MapSpec{
+					Name:       "btf_outer_map.inner",
+					Type:       Hash,
+					KeySize:    4,
+					ValueSize:  4,
+					MaxEntries: 1,
+				},
+			},
+			"btf_outer_map_anon": {
+				Name:       "btf_outer_map_anon",
+				Type:       ArrayOfMaps,
+				KeySize:    4,
+				ValueSize:  4,
+				MaxEntries: 1,
+				InnerMap: &MapSpec{
+					Name:       "btf_outer_map_anon.inner",
+					Type:       Hash,
+					KeySize:    4,
+					ValueSize:  4,
+					MaxEntries: 1,
+				},
 			},
 		},
 		Programs: map[string]*ProgramSpec{

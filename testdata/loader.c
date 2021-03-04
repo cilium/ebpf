@@ -29,6 +29,35 @@ struct {
 	__uint(max_entries, 1);
 	__uint(pinning, 1 /* LIBBPF_PIN_BY_NAME */);
 } btf_pin __section(".maps");
+
+// Named map type definition, without structure variable declaration.
+struct inner_map_t {
+	__uint(type, BPF_MAP_TYPE_HASH);
+	__type(key, uint32_t);
+	__type(value, int);
+	__uint(max_entries, 1);
+};
+
+// Anonymous map type definition with structure variable declaration.
+struct {
+	__uint(type, BPF_MAP_TYPE_ARRAY_OF_MAPS);
+	__uint(key_size, sizeof(uint32_t));
+	__uint(max_entries, 1);
+	__array(values, struct inner_map_t);
+} btf_outer_map __section(".maps");
+
+// Array of maps with anonymous inner struct.
+struct {
+	__uint(type, BPF_MAP_TYPE_ARRAY_OF_MAPS);
+	__uint(key_size, sizeof(uint32_t));
+	__uint(max_entries, 1);
+	__array(values, struct {
+		__uint(type, BPF_MAP_TYPE_HASH);
+		__uint(max_entries, 1);
+		__type(key, uint32_t);
+		__type(value, uint32_t);
+	});
+} btf_outer_map_anon __section(".maps");
 #else
 struct bpf_map_def hash_map __section("maps") = {
 	.type        = BPF_MAP_TYPE_HASH,

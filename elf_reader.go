@@ -533,7 +533,21 @@ func (ec *elfCode) loadBTFMaps(maps map[string]*MapSpec) error {
 				return fmt.Errorf("section %v: map %v already exists", sec.Name, sym)
 			}
 
-			mapSpec, err := mapSpecFromBTF(ec.btf, name)
+			// A global Var is created by declaring a struct with a 'structure variable',
+			// as is common in eBPF C to declare eBPF maps. For example,
+			// `struct { ... } map_name ...;` emits a global variable `map_name`
+			// with the type of said struct (which can be anonymous).
+			var v btf.Var
+			if err := ec.btf.FindType(name, &v); err != nil {
+				return fmt.Errorf("cannot find global variable '%s' in BTF: %w", name, err)
+			}
+
+			mapStruct, ok := v.Type.(*btf.Struct)
+			if !ok {
+				return fmt.Errorf("expected struct, got %s", v.Type)
+			}
+
+			mapSpec, err := mapSpecFromBTF(name, mapStruct, false, ec.btf)
 			if err != nil {
 				return fmt.Errorf("map %v: %w", name, err)
 			}
@@ -545,31 +559,21 @@ func (ec *elfCode) loadBTFMaps(maps map[string]*MapSpec) error {
 	return nil
 }
 
-func mapSpecFromBTF(spec *btf.Spec, name string) (*MapSpec, error) {
-	btfMap, btfMapMembers, err := spec.Map(name)
-	if err != nil {
-		return nil, fmt.Errorf("can't get BTF: %w", err)
-	}
-
-	keyType := btf.MapKey(btfMap)
-	size, err := btf.Sizeof(keyType)
-	if err != nil {
-		return nil, fmt.Errorf("can't get size of BTF key: %w", err)
-	}
-	keySize := uint32(size)
-
-	valueType := btf.MapValue(btfMap)
-	size, err = btf.Sizeof(valueType)
-	if err != nil {
-		return nil, fmt.Errorf("can't get size of BTF value: %w", err)
-	}
-	valueSize := uint32(size)
+// mapSpecFromBTF produces a MapSpec based on a btf.Struct def representing
+// a BTF map definition. The name and spec arguments will be copied to the
+// resulting MapSpec, and inner must be true on any resursive invocations.
+func mapSpecFromBTF(name string, def *btf.Struct, inner bool, spec *btf.Spec) (*MapSpec, error) {
 
 	var (
+		key, value                 btf.Type
+		keySize, valueSize         uint32
 		mapType, flags, maxEntries uint32
 		pinType                    PinType
+		innerMapSpec               *MapSpec
+		err                        error
 	)
-	for _, member := range btfMapMembers {
+
+	for i, member := range def.Members {
 		switch member.Name {
 		case "type":
 			mapType, err = uintFromBTF(member.Type)
@@ -589,8 +593,48 @@ func mapSpecFromBTF(spec *btf.Spec, name string) (*MapSpec, error) {
 				return nil, fmt.Errorf("can't get BTF map max entries: %w", err)
 			}
 
+		case "key":
+			if keySize != 0 {
+				return nil, errors.New("both key and key_size given")
+			}
+
+			pk, ok := member.Type.(*btf.Pointer)
+			if !ok {
+				return nil, fmt.Errorf("key type is not a pointer: %T", member.Type)
+			}
+
+			key = pk.Target
+
+			size, err := btf.Sizeof(pk.Target)
+			if err != nil {
+				return nil, fmt.Errorf("can't get size of BTF key: %w", err)
+			}
+
+			keySize = uint32(size)
+
+		case "value":
+			if valueSize != 0 {
+				return nil, errors.New("both value and value_size given")
+			}
+
+			vk, ok := member.Type.(*btf.Pointer)
+			if !ok {
+				return nil, fmt.Errorf("value type is not a pointer: %T", member.Type)
+			}
+
+			value = vk.Target
+
+			size, err := btf.Sizeof(vk.Target)
+			if err != nil {
+				return nil, fmt.Errorf("can't get size of BTF value: %w", err)
+			}
+
+			valueSize = uint32(size)
+
 		case "key_size":
-			if _, isVoid := keyType.(*btf.Void); !isVoid {
+			// Key needs to be nil and keySize needs to be 0 for key_size to be
+			// considered a valid member.
+			if key != nil || keySize != 0 {
 				return nil, errors.New("both key and key_size given")
 			}
 
@@ -600,7 +644,9 @@ func mapSpecFromBTF(spec *btf.Spec, name string) (*MapSpec, error) {
 			}
 
 		case "value_size":
-			if _, isVoid := valueType.(*btf.Void); !isVoid {
+			// Value needs to be nil and valueSize needs to be 0 for value_size to be
+			// considered a valid member.
+			if value != nil || valueSize != 0 {
 				return nil, errors.New("both value and value_size given")
 			}
 
@@ -610,6 +656,10 @@ func mapSpecFromBTF(spec *btf.Spec, name string) (*MapSpec, error) {
 			}
 
 		case "pinning":
+			if inner {
+				return nil, errors.New("inner maps can't be pinned")
+			}
+
 			pinning, err := uintFromBTF(member.Type)
 			if err != nil {
 				return nil, fmt.Errorf("can't get pinning: %w", err)
@@ -617,11 +667,50 @@ func mapSpecFromBTF(spec *btf.Spec, name string) (*MapSpec, error) {
 
 			pinType = PinType(pinning)
 
-		case "key", "value":
+		case "values":
+			// The 'values' field in BTF map definitions is used for declaring map
+			// value types that are references to other BPF objects, like other maps
+			// or programs. It is always expected to be an array of pointers.
+			if i != len(def.Members)-1 {
+				return nil, errors.New("'values' must be the last member in a BTF map definition")
+			}
+
+			valueType, err := resolveBTFArrayMacro(member.Type)
+			if err != nil {
+				return nil, fmt.Errorf("can't resolve type of member 'values': %w", err)
+			}
+
+			switch t := valueType.(type) {
+			case *btf.Struct:
+				// The values member pointing to an array of structs means we're expecting
+				// a map-in-map declaration.
+				if MapType(mapType) != ArrayOfMaps && MapType(mapType) != HashOfMaps {
+					return nil, errors.New("outer map needs to be an array or a hash of maps")
+				}
+				if inner {
+					return nil, fmt.Errorf("nested inner maps are not supported")
+				}
+
+				// This inner map spec is used as a map template, but it needs to be
+				// created as a traditional map before it can be used to do so.
+				// libbpf names the inner map template <outer_name>.inner.
+				// Pass the BTF spec from the parent object, since both parent and
+				// child must be created from the same BTF blob (on kernels that support BTF).
+				innerMapSpec, err = mapSpecFromBTF(name+".inner", t, true, spec)
+				if err != nil {
+					return nil, fmt.Errorf("can't parse BTF map definition of inner map: %w", err)
+				}
+
+			default:
+				return nil, fmt.Errorf("unsupported value type %q in 'values' field", t)
+			}
+
 		default:
 			return nil, fmt.Errorf("unrecognized field %s in BTF map definition", member.Name)
 		}
 	}
+
+	bm := btf.NewMap(spec, key, value)
 
 	return &MapSpec{
 		Name:       SanitizeName(name, -1),
@@ -630,8 +719,9 @@ func mapSpecFromBTF(spec *btf.Spec, name string) (*MapSpec, error) {
 		ValueSize:  valueSize,
 		MaxEntries: maxEntries,
 		Flags:      flags,
-		BTF:        btfMap,
+		BTF:        &bm,
 		Pinning:    pinType,
+		InnerMap:   innerMapSpec,
 	}, nil
 }
 
@@ -649,6 +739,23 @@ func uintFromBTF(typ btf.Type) (uint32, error) {
 	}
 
 	return arr.Nelems, nil
+}
+
+// resolveBTFArrayMacro resolves the __array macro, which declares an array
+// of pointers to a given type. This function returns the target Type of
+// the pointers in the array.
+func resolveBTFArrayMacro(typ btf.Type) (btf.Type, error) {
+	arr, ok := typ.(*btf.Array)
+	if !ok {
+		return nil, fmt.Errorf("not an array: %v", typ)
+	}
+
+	ptr, ok := arr.Type.(*btf.Pointer)
+	if !ok {
+		return nil, fmt.Errorf("not an array of pointers: %v", typ)
+	}
+
+	return ptr.Target, nil
 }
 
 func (ec *elfCode) loadDataSections(maps map[string]*MapSpec) error {

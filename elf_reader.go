@@ -108,12 +108,27 @@ func LoadCollectionSpecFromReader(rd io.ReaderAt) (*CollectionSpec, error) {
 
 	for _, symbol := range symbols {
 		idx := symbol.Section
+		symType := elf.ST_TYPE(symbol.Info)
 
-		if sections[idx] == nil {
+		section := sections[idx]
+		if section == nil {
 			continue
 		}
 
-		sections[idx].symbols[symbol.Value] = symbol
+		// Older versions of LLVM don't tag symbols correctly, so keep
+		// all NOTYPE ones.
+		keep := symType == elf.STT_NOTYPE
+		switch section.kind {
+		case mapSection, btfMapSection, dataSection:
+			keep = keep || symType == elf.STT_OBJECT
+		case programSection:
+			keep = keep || symType == elf.STT_FUNC
+		}
+		if !keep || symbol.Name == "" {
+			continue
+		}
+
+		section.symbols[symbol.Value] = symbol
 	}
 
 	ec := &elfCode{

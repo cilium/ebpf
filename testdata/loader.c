@@ -52,7 +52,7 @@ struct bpf_map_def array_of_hash_map __section("maps") = {
 	.max_entries = 2,
 };
 
-static int __attribute__((noinline)) static_fn(uint32_t arg) {
+static int __attribute__((noinline)) __section("static") static_fn(uint32_t arg) {
 	return arg - 1;
 }
 

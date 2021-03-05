@@ -443,6 +443,7 @@ func (iter *InstructionIterator) Next() bool {
 	}
 
 	if iter.Ins != nil {
+		iter.Index++
 		iter.Offset += RawInstructionOffset(iter.Ins.OpCode.rawInstructions())
 	}
 	iter.Ins = &iter.insns[0]

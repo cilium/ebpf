@@ -211,3 +211,29 @@ func TestReadSrcDst(t *testing.T) {
 		})
 	}
 }
+
+func TestInstructionIterator(t *testing.T) {
+	insns := Instructions{
+		LoadImm(R0, 0, Word),
+		LoadImm(R0, 0, DWord),
+		Return(),
+	}
+	offsets := []RawInstructionOffset{0, 1, 3}
+
+	iter := insns.Iterate()
+	for i := 0; i < len(insns); i++ {
+		if !iter.Next() {
+			t.Fatalf("Expected %dth call to Next to return true", i)
+		}
+
+		if iter.Ins == nil {
+			t.Errorf("Expected iter.Ins to be non-nil")
+		}
+		if iter.Index != i {
+			t.Errorf("Expected iter.Index to be %d, got %d", i, iter.Index)
+		}
+		if iter.Offset != offsets[i] {
+			t.Errorf("Expected iter.Offset to be %d, got %d", offsets[i], iter.Offset)
+		}
+	}
+}

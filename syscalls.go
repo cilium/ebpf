@@ -24,18 +24,20 @@ func newBPFObjName(name string) bpfObjName {
 	return result
 }
 
+// invalidBPFObjNameChar returns true if char may not appear in
+// a BPF object name.
 func invalidBPFObjNameChar(char rune) bool {
 	dotAllowed := objNameAllowsDot() == nil
 
 	switch {
 	case char >= 'A' && char <= 'Z':
-		fallthrough
+		return false
 	case char >= 'a' && char <= 'z':
-		fallthrough
+		return false
 	case char >= '0' && char <= '9':
-		fallthrough
+		return false
 	case dotAllowed && char == '.':
-		fallthrough
+		return false
 	case char == '_':
 		return false
 	default:

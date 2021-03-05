@@ -8,30 +8,20 @@ set -o pipefail
 if [[ "${1:-}" = "--in-vm" ]]; then
   shift
 
-  mount -t bpf bpf /sys/fs/bpf
-  export CGO_ENABLED=0
-  export GOFLAGS=-mod=readonly
-  export GOPATH=/run/go-path
-  export GOPROXY=file:///run/go-path/pkg/mod/cache/download
-  export GOSUMDB=off
-  export GOCACHE=/run/go-cache
-
-  if [[ -d "/run/input/bpf" ]]; then
-    export KERNEL_SELFTESTS="/run/input/bpf"
-  fi
-
-  readonly output="${1}"
+  readonly scratch="${1}"
   shift
 
-  echo Running tests...
-  go test -v -coverpkg=./... -coverprofile="$output/coverage.txt" -count 1 ./...
-  touch "$output/success"
+  mount -t bpf bpf /sys/fs/bpf
+
+  if [[ -d "${scratch}/bpf" ]]; then
+    export KERNEL_SELFTESTS="${scratch}/bpf"
+  fi
+
+  echo "Running test binary in VM..."
+  "${scratch}"/ebpf.test -test.coverprofile="$scratch/coverage.txt" -test.v -test.count 1
+  touch "$scratch/success"
   exit 0
 fi
-
-# Pull all dependencies, so that we can run tests without the
-# vm having network access.
-go mod download
 
 # Use sudo if /dev/kvm isn't accessible by the current user.
 sudo=""
@@ -48,8 +38,7 @@ fi
 
 readonly kernel="linux-${kernel_version}.bz"
 readonly selftests="linux-${kernel_version}-selftests-bpf.bz"
-readonly input="$(mktemp -d)"
-readonly output="$(mktemp -d)"
+readonly scratch="$(mktemp -d)"
 readonly tmp_dir="${TMPDIR:-/tmp}"
 readonly branch="${BRANCH:-master}"
 
@@ -61,31 +50,30 @@ fetch() {
 fetch "${kernel}"
 
 if fetch "${selftests}"; then
-  mkdir "${input}/bpf"
-  tar --strip-components=4 -xjf "${tmp_dir}/${selftests}" -C "${input}/bpf"
+  mkdir "${scratch}/bpf"
+  tar --strip-components=4 -xjf "${tmp_dir}/${selftests}" -C "${scratch}/bpf"
 else
   echo "No selftests found, disabling"
 fi
 
+# Pre-build test binary on host, output into scratch directory shared with VM.
+CGO_ENABLED=0 go test -cover -c -o "${scratch}/ebpf.test"
+
 echo Testing on "${kernel_version}"
 $sudo virtme-run --kimg "${tmp_dir}/${kernel}" --memory 512M --pwd \
   --rw \
-  --rwdir=/run/input="${input}" \
-  --rwdir=/run/output="${output}" \
-  --rodir=/run/go-path="$(go env GOPATH)" \
-  --rwdir=/run/go-cache="$(go env GOCACHE)" \
-  --script-sh "PATH=\"$PATH\" $(realpath "$0") --in-vm /run/output" \
+  --rwdir=/run/scratch="${scratch}" \
+  --script-sh "PATH=\"$PATH\" $(realpath "$0") --in-vm /run/scratch" \
   --qemu-opts -smp 2 # need at least two CPUs for some tests
 
-if [[ ! -e "${output}/success" ]]; then
+if [[ ! -e "${scratch}/success" ]]; then
   echo "Test failed on ${kernel_version}"
   exit 1
 else
   echo "Test successful on ${kernel_version}"
   if [[ -v COVERALLS_TOKEN ]]; then
-    goveralls -coverprofile="${output}/coverage.txt" -service=semaphore -repotoken "$COVERALLS_TOKEN"
+    goveralls -coverprofile="${scratch}/coverage.txt" -service=semaphore -repotoken "$COVERALLS_TOKEN"
   fi
 fi
 
-$sudo rm -r "${input}"
-$sudo rm -r "${output}"
+$sudo rm -r "${scratch}"

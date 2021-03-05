@@ -19,7 +19,7 @@ import (
 // ErrNotSupported is returned whenever the kernel doesn't support a feature.
 var ErrNotSupported = internal.ErrNotSupported
 
-// ProgramID represents the unique ID of an eBPF program
+// ProgramID represents the unique ID of an eBPF program.
 type ProgramID uint32
 
 const (
@@ -43,7 +43,7 @@ type ProgramOptions struct {
 	LogSize int
 }
 
-// ProgramSpec defines a Program
+// ProgramSpec defines a Program.
 type ProgramSpec struct {
 	// Name is passed to the kernel as a debug aid. Must only contain
 	// alpha numeric and '_' characters.

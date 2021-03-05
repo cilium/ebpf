@@ -15,6 +15,7 @@ func TestObjNameCharacters(t *testing.T) {
 		"a-b":     false,
 		"yeah so": false,
 		"dot.":    objNameAllowsDot() == nil,
+		"Capital": true,
 	} {
 		result := strings.IndexFunc(in, invalidBPFObjNameChar) == -1
 		if result != valid {

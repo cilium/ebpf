@@ -143,7 +143,7 @@ const (
 // Will cause invalid argument (EINVAL) at program load time if set incorrectly.
 type AttachType uint32
 
-// AttachNone is an alias for AttachCGroupInetIngress for readability reasons
+// AttachNone is an alias for AttachCGroupInetIngress for readability reasons.
 const AttachNone AttachType = 0
 
 const (

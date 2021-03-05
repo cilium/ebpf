@@ -21,5 +21,5 @@
 // Requires at least clang 9.
 //
 // For a full list of accepted options check the `-help` output. There is a
-// fully worked example at https://github.com/cilium/ebpf/tree/master/cmd/bpf2go/example.
+// fully working example at https://github.com/cilium/ebpf/blob/master/cmd/bpf2go/example_test.go.
 package main

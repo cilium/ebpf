@@ -332,7 +332,7 @@ func createMap(spec *MapSpec, inner *internal.FD, opts MapOptions, btfs btfHandl
 
 	m, err := newMap(fd, spec.Name, spec.Type, spec.KeySize, spec.ValueSize, spec.MaxEntries, spec.Flags)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("map create: %w", err)
 	}
 
 	if err := m.populate(spec.Contents); err != nil {

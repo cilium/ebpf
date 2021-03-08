@@ -141,6 +141,16 @@ func TestScanFdInfoReader(t *testing.T) {
 	}
 }
 
+// TestStats loads a BPF program once and executes back-to-back test runs
+// of the program. First, a test run is executed with runtime statistics
+// enabled, followed by another with runtime stats disabled. Counters are only
+// expected to increase on the runs where runtime stats are enabled.
+//
+// Due to runtime behaviour on Go 1.14 and higher, the syscall backing
+// (*Program).Test() could be invoked multiple times for each call to Test(),
+// resulting in RunCount incrementing by more than one. Expecting RunCount to
+// be of a specific value after a call to Test() is therefore not possible.
+// See https://golang.org/doc/go1.14#runtime for more details.
 func TestStats(t *testing.T) {
 	testutils.SkipOnOldKernel(t, "5.8", "BPF_ENABLE_STATS")
 
@@ -159,60 +169,92 @@ func TestStats(t *testing.T) {
 	}
 	defer prog.Close()
 
-	progInfo, err := prog.Info()
+	pi, err := prog.Info()
 	if err != nil {
 		t.Errorf("failed to get ProgramInfo: %v", err)
 	}
 
-	if cnt, available := progInfo.RunCount(); cnt != 0 || !available {
-		t.Errorf("expected a run count of 0 but got %d", cnt)
+	rc, ok := pi.RunCount()
+	if !ok {
+		t.Errorf("expected run count info to be available")
+	}
+	if rc != 0 {
+		t.Errorf("expected a run count of 0 but got %d", rc)
 	}
 
-	if runtime, available := progInfo.Runtime(); runtime != 0 || !available {
-		t.Errorf("expected a runtime of 0ns but got %v", runtime)
+	rt, ok := pi.Runtime()
+	if !ok {
+		t.Errorf("expected runtime info to be available")
+	}
+	if rt != 0 {
+		t.Errorf("expected a runtime of 0ns but got %v", rt)
 	}
 
-	disableStats, err := EnableStats(uint32(unix.BPF_STATS_RUN_TIME))
+	stats, err := EnableStats(uint32(unix.BPF_STATS_RUN_TIME))
 	if err != nil {
 		t.Fatalf("failed to enable stats: %v", err)
 	}
-	defer disableStats.Close()
+	defer stats.Close()
 
+	// Program execution with runtime statistics enabled.
+	// Should increase both runtime and run counter.
 	if _, _, err := prog.Test(make([]byte, 14)); err != nil {
 		t.Errorf("failed to trigger program: %v", err)
 	}
 
-	progInfo2, err := prog.Info()
+	pi2, err := prog.Info()
 	if err != nil {
 		t.Errorf("failed to get ProgramInfo: %v", err)
 	}
 
-	if cnt, available := progInfo2.RunCount(); cnt != 1 || !available {
-		t.Errorf("expected a run count of 1 but got %d", cnt)
+	rc, ok = pi2.RunCount()
+	if !ok {
+		t.Errorf("expected run count info to be available")
 	}
+	if rc < 1 {
+		t.Errorf("expected a run count of at least 1 but got %d", rc)
+	}
+	// Store the run count for the next invocation.
+	lc := rc
 
-	if runtime, available := progInfo2.Runtime(); runtime == 0 || !available {
+	rt, ok = pi2.Runtime()
+	if !ok {
+		t.Errorf("expected runtime info to be available")
+	}
+	if rt == 0 {
 		t.Errorf("expected a runtime other than 0ns")
 	}
+	// Store the runtime value for the next invocation.
+	lt := rt
 
-	if err := disableStats.Close(); err != nil {
+	if err := stats.Close(); err != nil {
 		t.Errorf("failed to disable statistics: %v", err)
 	}
 
+	// Second program execution, with runtime statistics gathering disabled.
+	// Total runtime and run counters are not expected to increase.
 	if _, _, err := prog.Test(make([]byte, 14)); err != nil {
 		t.Errorf("failed to trigger program: %v", err)
 	}
 
-	progInfo3, err := prog.Info()
+	pi3, err := prog.Info()
 	if err != nil {
 		t.Errorf("failed to get ProgramInfo: %v", err)
 	}
 
-	if cnt, available := progInfo3.RunCount(); cnt != 1 || !available {
-		t.Errorf("expected a run count of 1 but got %d", cnt)
+	rc, ok = pi3.RunCount()
+	if !ok {
+		t.Errorf("expected run count info to be available")
+	}
+	if rc != lc {
+		t.Errorf("run count unexpectedly increased over previous value (current: %v, prev: %v)", rc, lc)
 	}
 
-	if runtime, available := progInfo3.Runtime(); runtime == 0 || !available {
-		t.Errorf("expected a runtime other than 0ns")
+	rt, ok = pi3.Runtime()
+	if !ok {
+		t.Errorf("expected runtime info to be available")
+	}
+	if rt != lt {
+		t.Errorf("runtime unexpectedly increased over the previous value (current: %v, prev: %v)", rt, lt)
 	}
 }

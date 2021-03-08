@@ -1,6 +1,8 @@
 package ebpf
 
 import (
+	"errors"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -142,15 +144,7 @@ func TestScanFdInfoReader(t *testing.T) {
 }
 
 // TestStats loads a BPF program once and executes back-to-back test runs
-// of the program. First, a test run is executed with runtime statistics
-// enabled, followed by another with runtime stats disabled. Counters are only
-// expected to increase on the runs where runtime stats are enabled.
-//
-// Due to runtime behaviour on Go 1.14 and higher, the syscall backing
-// (*Program).Test() could be invoked multiple times for each call to Test(),
-// resulting in RunCount incrementing by more than one. Expecting RunCount to
-// be of a specific value after a call to Test() is therefore not possible.
-// See https://golang.org/doc/go1.14#runtime for more details.
+// of the program. See testStats for details.
 func TestStats(t *testing.T) {
 	testutils.SkipOnOldKernel(t, "5.8", "BPF_ENABLE_STATS")
 
@@ -190,71 +184,120 @@ func TestStats(t *testing.T) {
 		t.Errorf("expected a runtime of 0ns but got %v", rt)
 	}
 
+	if err := testStats(prog); err != nil {
+		t.Error(err)
+	}
+}
+
+// BenchmarkStats is a benchmark of TestStats. See testStats for details.
+func BenchmarkStats(b *testing.B) {
+
+	testutils.SkipOnOldKernel(b, "5.8", "BPF_ENABLE_STATS")
+
+	spec := &ProgramSpec{
+		Type: SocketFilter,
+		Instructions: asm.Instructions{
+			asm.LoadImm(asm.R0, 42, asm.DWord),
+			asm.Return(),
+		},
+		License: "MIT",
+	}
+
+	// Don't insert the program in a loop as it causes a flood of kaudit messages.
+	prog, err := NewProgram(spec)
+	if err != nil {
+		b.Fatal(err)
+	}
+	defer prog.Close()
+
+	for n := 0; n < b.N; n++ {
+		if err := testStats(prog); err != nil {
+			b.Fatal(fmt.Errorf("iter %d: %w", n, err))
+		}
+	}
+}
+
+// testStats implements the behaviour under test for TestStats
+// and BenchmarkStats. First, a test run is executed with runtime statistics
+// enabled, followed by another with runtime stats disabled. Counters are only
+// expected to increase on the runs where runtime stats are enabled.
+//
+// Due to runtime behaviour on Go 1.14 and higher, the syscall backing
+// (*Program).Test() could be invoked multiple times for each call to Test(),
+// resulting in RunCount incrementing by more than one. Expecting RunCount to
+// be of a specific value after a call to Test() is therefore not possible.
+// See https://golang.org/doc/go1.14#runtime for more details.
+func testStats(prog *Program) error {
+
+	in := make([]byte, 14)
+
 	stats, err := EnableStats(uint32(unix.BPF_STATS_RUN_TIME))
 	if err != nil {
-		t.Fatalf("failed to enable stats: %v", err)
+		return fmt.Errorf("failed to enable stats: %v", err)
 	}
 	defer stats.Close()
 
 	// Program execution with runtime statistics enabled.
 	// Should increase both runtime and run counter.
-	if _, _, err := prog.Test(make([]byte, 14)); err != nil {
-		t.Errorf("failed to trigger program: %v", err)
+	if _, _, err := prog.Test(in); err != nil {
+		return fmt.Errorf("failed to trigger program: %v", err)
 	}
 
-	pi2, err := prog.Info()
+	pi, err := prog.Info()
 	if err != nil {
-		t.Errorf("failed to get ProgramInfo: %v", err)
+		return fmt.Errorf("failed to get ProgramInfo: %v", err)
 	}
 
-	rc, ok = pi2.RunCount()
+	rc, ok := pi.RunCount()
 	if !ok {
-		t.Errorf("expected run count info to be available")
+		return errors.New("expected run count info to be available")
 	}
 	if rc < 1 {
-		t.Errorf("expected a run count of at least 1 but got %d", rc)
+		return fmt.Errorf("expected a run count of at least 1 but got %d", rc)
 	}
 	// Store the run count for the next invocation.
 	lc := rc
 
-	rt, ok = pi2.Runtime()
+	rt, ok := pi.Runtime()
 	if !ok {
-		t.Errorf("expected runtime info to be available")
+		return errors.New("expected runtime info to be available")
 	}
 	if rt == 0 {
-		t.Errorf("expected a runtime other than 0ns")
+		return errors.New("expected a runtime other than 0ns")
 	}
 	// Store the runtime value for the next invocation.
 	lt := rt
 
 	if err := stats.Close(); err != nil {
-		t.Errorf("failed to disable statistics: %v", err)
+		return fmt.Errorf("failed to disable statistics: %v", err)
 	}
 
 	// Second program execution, with runtime statistics gathering disabled.
 	// Total runtime and run counters are not expected to increase.
-	if _, _, err := prog.Test(make([]byte, 14)); err != nil {
-		t.Errorf("failed to trigger program: %v", err)
+	if _, _, err := prog.Test(in); err != nil {
+		return fmt.Errorf("failed to trigger program: %v", err)
 	}
 
-	pi3, err := prog.Info()
+	pi, err = prog.Info()
 	if err != nil {
-		t.Errorf("failed to get ProgramInfo: %v", err)
+		return fmt.Errorf("failed to get ProgramInfo: %v", err)
 	}
 
-	rc, ok = pi3.RunCount()
+	rc, ok = pi.RunCount()
 	if !ok {
-		t.Errorf("expected run count info to be available")
+		return errors.New("expected run count info to be available")
 	}
 	if rc != lc {
-		t.Errorf("run count unexpectedly increased over previous value (current: %v, prev: %v)", rc, lc)
+		return fmt.Errorf("run count unexpectedly increased over previous value (current: %v, prev: %v)", rc, lc)
 	}
 
-	rt, ok = pi3.Runtime()
+	rt, ok = pi.Runtime()
 	if !ok {
-		t.Errorf("expected runtime info to be available")
+		return errors.New("expected runtime info to be available")
 	}
 	if rt != lt {
-		t.Errorf("runtime unexpectedly increased over the previous value (current: %v, prev: %v)", rt, lt)
+		return fmt.Errorf("runtime unexpectedly increased over the previous value (current: %v, prev: %v)", rt, lt)
 	}
+
+	return nil
 }

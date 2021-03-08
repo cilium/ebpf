@@ -29,7 +29,7 @@ includes debug aids like which source line corresponds to which instructions and
 what global variables are used.
 
 [BTF parsing](internal/btf/) lives in a separate internal package since exposing
-it would mean an additional maintenance burden, and because the API has still
+it would mean an additional maintenance burden, and because the API still
 has sharp corners. The most important concept is the `btf.Type` interface, which
 also describes things that aren't really types like `.rodata` or `.bss` sections.
 `btf.Type`s can form cyclical graphs, which can easily lead to infinite loops if
@@ -46,7 +46,7 @@ modify clang-compiled BPF code, for example to rewrite constants. At the same
 time the [asm](asm/) package provides an assembler that can be used to generate
 `ProgramSpec` on the fly.
 
-Creating a spec should never require any privileges or be restrictedin some way,
+Creating a spec should never require any privileges or be restricted in any way,
 for example by only allowing programs in native endianness. This ensures that
 the library stays flexible.
 

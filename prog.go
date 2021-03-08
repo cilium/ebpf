@@ -588,13 +588,13 @@ func LoadPinnedProgram(fileName string) (*Program, error) {
 	return &Program{"", fd, filepath.Base(fileName), info.Type}, nil
 }
 
-// SanitizeName replaces all invalid characters in name.
+// SanitizeName replaces all invalid characters in name with replacement.
+// Passing a negative value for replacement will delete characters instead
+// of replacing them. Use this to automatically generate valid names for maps
+// and programs at runtime.
 //
-// Use this to automatically generate valid names for maps and
-// programs at run time.
-//
-// Passing a negative value for replacement will delete characters
-// instead of replacing them.
+// The set of allowed characters depends on the running kernel version.
+// Dots are only allowed as of kernel 5.2.
 func SanitizeName(name string, replacement rune) string {
 	return strings.Map(func(char rune) rune {
 		if invalidBPFObjNameChar(char) {

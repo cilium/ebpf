@@ -103,9 +103,10 @@ type Program struct {
 	// otherwise it is empty.
 	VerifierLog string
 
-	fd   *internal.FD
-	name string
-	typ  ProgramType
+	fd         *internal.FD
+	name       string
+	pinnedPath string
+	typ        ProgramType
 }
 
 // NewProgram creates a new Program.
@@ -228,7 +229,7 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions, btfs btfHandl
 
 	fd, err := bpfProgLoad(attr)
 	if err == nil {
-		return &Program{internal.CString(logBuf), fd, spec.Name, spec.Type}, nil
+		return &Program{internal.CString(logBuf), fd, spec.Name, "", spec.Type}, nil
 	}
 
 	logErr := err
@@ -287,7 +288,7 @@ func newProgramFromFD(fd *internal.FD) (*Program, error) {
 		return nil, fmt.Errorf("discover program type: %w", err)
 	}
 
-	return &Program{"", fd, "", info.Type}, nil
+	return &Program{"", fd, "", "", info.Type}, nil
 }
 
 func (p *Program) String() string {
@@ -338,17 +339,29 @@ func (p *Program) Clone() (*Program, error) {
 		return nil, fmt.Errorf("can't clone program: %w", err)
 	}
 
-	return &Program{p.VerifierLog, dup, p.name, p.typ}, nil
+	return &Program{p.VerifierLog, dup, p.name, "", p.typ}, nil
 }
 
 // Pin persists the Program past the lifetime of the process that created it
 //
 // This requires bpffs to be mounted above fileName. See https://docs.cilium.io/en/k8s-doc/admin/#admin-mount-bpffs
 func (p *Program) Pin(fileName string) error {
-	if err := internal.BPFObjPin(fileName, p.fd); err != nil {
-		return fmt.Errorf("can't pin program: %w", err)
+	return pin(fileName, p)
+}
+
+// Unpin removes the persisted state for the Program.
+//
+// Unpinning an un-pinned Program returns nil.
+func (p *Program) Unpin() error {
+	return unpin(p)
+}
+
+// IsPinned returns true if the Program has a non-empty pinned path.
+func (p *Program) IsPinned() bool {
+	if p.pinnedPath == "" {
+		return false
 	}
-	return nil
+	return true
 }
 
 // Close unloads the program from the kernel.
@@ -585,7 +598,7 @@ func LoadPinnedProgram(fileName string) (*Program, error) {
 		return nil, fmt.Errorf("info for %s: %w", fileName, err)
 	}
 
-	return &Program{"", fd, filepath.Base(fileName), info.Type}, nil
+	return &Program{"", fd, filepath.Base(fileName), "", info.Type}, nil
 }
 
 // SanitizeName replaces all invalid characters in name.
@@ -671,4 +684,16 @@ func resolveBTFType(name string, progType ProgramType, attachType AttachType) (b
 	default:
 		return nil, nil
 	}
+}
+
+func (p *Program) getFD() *internal.FD {
+	return p.fd
+}
+
+func (p *Program) getPinnedPath() string {
+	return p.pinnedPath
+}
+
+func (p *Program) setPinnedPath(path string) {
+	p.pinnedPath = path
 }

@@ -22,6 +22,8 @@ type compileArgs struct {
 	source string
 	// Absolute output file name
 	dest string
+	// Target to compile for, defaults to "bpf".
+	target string
 	// Depfile will be written here if depName is not empty
 	dep io.Writer
 }
@@ -47,7 +49,13 @@ func compile(args compileArgs) error {
 		return err
 	}
 
+	target := args.target
+	if target == "" {
+		target = "bpf"
+	}
+
 	cmd.Args = append(cmd.Args,
+		"-target", target,
 		"-c", args.source,
 		"-o", args.dest,
 		// Don't include clang version

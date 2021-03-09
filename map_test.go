@@ -378,6 +378,25 @@ func TestNestedMapPin(t *testing.T) {
 	defer m.Close()
 }
 
+func TestNestedMapPinNested(t *testing.T) {
+	if _, err := NewMap(&MapSpec{
+		Type:       ArrayOfMaps,
+		KeySize:    4,
+		ValueSize:  4,
+		MaxEntries: 2,
+		InnerMap: &MapSpec{
+			Name:       "inner",
+			Type:       Array,
+			KeySize:    4,
+			ValueSize:  4,
+			MaxEntries: 1,
+			Pinning:    PinByName,
+		},
+	}); err == nil {
+		t.Error("Inner maps should not be pinnable")
+	}
+}
+
 func TestMapPinMultiple(t *testing.T) {
 	tmp := tempBPFFS(t)
 	c := qt.New(t)

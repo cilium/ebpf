@@ -186,7 +186,7 @@ func TestProgramPin(t *testing.T) {
 	c := qt.New(t)
 	defer prog.Close()
 
-	tmp := tempBPFFS(t)
+	tmp := testutils.TempBPFFS(t)
 
 	path := filepath.Join(tmp, "program")
 	if err := prog.Pin(path); err != nil {

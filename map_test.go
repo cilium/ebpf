@@ -309,7 +309,7 @@ func TestMapPin(t *testing.T) {
 		t.Fatal("Can't put:", err)
 	}
 
-	tmp := tempBPFFS(t)
+	tmp := testutils.TempBPFFS(t)
 
 	// Issue 51: pad path out to a power of two, to avoid having a
 	// trailing zero at the end of the allocation which holds the string.
@@ -398,7 +398,7 @@ func TestNestedMapPinNested(t *testing.T) {
 }
 
 func TestMapPinMultiple(t *testing.T) {
-	tmp := tempBPFFS(t)
+	tmp := testutils.TempBPFFS(t)
 	c := qt.New(t)
 
 	spec := spec1.Copy()
@@ -458,7 +458,7 @@ func TestMapPinFailReplace(t *testing.T) {
 }
 
 func TestMapUnpin(t *testing.T) {
-	tmp := tempBPFFS(t)
+	tmp := testutils.TempBPFFS(t)
 	c := qt.New(t)
 	spec := spec1.Copy()
 
@@ -484,7 +484,7 @@ func TestMapUnpin(t *testing.T) {
 }
 
 func TestMapLoadPinned(t *testing.T) {
-	tmp := tempBPFFS(t)
+	tmp := testutils.TempBPFFS(t)
 	c := qt.New(t)
 
 	spec := spec1.Copy()
@@ -504,7 +504,7 @@ func TestMapLoadPinned(t *testing.T) {
 }
 
 func TestMapLoadPinnedUnpin(t *testing.T) {
-	tmp := tempBPFFS(t)
+	tmp := testutils.TempBPFFS(t)
 	c := qt.New(t)
 
 	spec := spec1.Copy()
@@ -1193,7 +1193,7 @@ func TestNewMapFromID(t *testing.T) {
 }
 
 func TestMapPinning(t *testing.T) {
-	tmp := tempBPFFS(t)
+	tmp := testutils.TempBPFFS(t)
 	c := qt.New(t)
 
 	spec := &MapSpec{

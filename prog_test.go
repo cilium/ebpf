@@ -202,6 +202,30 @@ func TestProgramPin(t *testing.T) {
 	}
 }
 
+func TestProgramLoadPinnedReadOnly(t *testing.T) {
+	prog := createSocketFilter(t)
+	defer prog.Close()
+
+	tmp := tempBPFFS(t)
+
+	path := filepath.Join(tmp, "program")
+	if err := prog.Pin(path); err != nil {
+		t.Fatal(err)
+	}
+	prog.Close()
+
+	// This is a really terrible hack. We have to run tests as root, and the
+	// root user ignores file access modes. We could enter a capabilities only
+	// mode and drop CAP_DAC_OVERRIDE but that is non-trivial.
+	// Instead, ensure that we pass flags to the kernel by passing a bogus
+	// value.
+	_, err := LoadPinnedProgramWithFlags(path, math.MaxUint32)
+	testutils.SkipIfNotSupported(t, err)
+	if !errors.Is(err, unix.EINVAL) {
+		t.Fatal("Invalid flags don't trigger an error:", err)
+	}
+}
+
 func TestProgramVerifierOutputOnError(t *testing.T) {
 	_, err := NewProgram(&ProgramSpec{
 		Type: SocketFilter,

@@ -95,7 +95,7 @@ func LoadPinnedRawLink(fileName string) (*RawLink, error) {
 }
 
 func loadPinnedRawLink(fileName string, typ Type) (*RawLink, error) {
-	fd, err := internal.BPFObjGet(fileName)
+	fd, err := internal.BPFObjGet(fileName, 0)
 	if err != nil {
 		return nil, fmt.Errorf("load pinned link: %s", err)
 	}

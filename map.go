@@ -988,7 +988,14 @@ func (m *Map) unmarshalValue(value interface{}, buf []byte) error {
 
 // LoadPinnedMap load a Map from a BPF file.
 func LoadPinnedMap(fileName string) (*Map, error) {
-	fd, err := internal.BPFObjGet(fileName)
+	return LoadPinnedMapWithFlags(fileName, 0)
+}
+
+// LoadPinnedMapWithFlags loads a Map from a BPF file.
+//
+// flags may be BPF_F_RDONLY or BPF_F_WRONLY.
+func LoadPinnedMapWithFlags(fileName string, flags uint32) (*Map, error) {
+	fd, err := internal.BPFObjGet(fileName, flags)
 	if err != nil {
 		return nil, err
 	}

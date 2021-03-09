@@ -482,6 +482,30 @@ func TestMapLoadPinnedUnpin(t *testing.T) {
 	c.Assert(err, qt.IsNil)
 }
 
+func TestMapLoadPinnedReadOnly(t *testing.T) {
+	array := createArray(t)
+	defer array.Close()
+
+	tmp := tempBPFFS(t)
+
+	path := filepath.Join(tmp, "map")
+	if err := array.Pin(path); err != nil {
+		t.Fatal(err)
+	}
+	array.Close()
+
+	// This is a really terrible hack. We have to run tests as root, and the
+	// root user ignores file access modes. We could enter a capabilities only
+	// mode and drop CAP_DAC_OVERRIDE but that is non-trivial.
+	// Instead, ensure that we pass flags to the kernel by passing a bogus
+	// value.
+	_, err := LoadPinnedMapWithFlags(path, math.MaxUint32)
+	testutils.SkipIfNotSupported(t, err)
+	if !errors.Is(err, unix.EINVAL) {
+		t.Fatal("Invalid flags don't trigger an error:", err)
+	}
+}
+
 func createArray(t *testing.T) *Map {
 	t.Helper()
 

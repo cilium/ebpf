@@ -12,7 +12,10 @@ import (
 func TestSkLookup(t *testing.T) {
 	testutils.SkipOnOldKernel(t, "5.8", "sk_lookup program")
 
-	prog := createSkLookupProgram()
+	prog, err := createSkLookupProgram()
+	if err != nil {
+		t.Fatal(err)
+	}
 	defer prog.Close()
 
 	netns, err := os.Open("/proc/self/ns/net")
@@ -39,7 +42,7 @@ func TestSkLookup(t *testing.T) {
 	})
 }
 
-func createSkLookupProgram() *ebpf.Program {
+func createSkLookupProgram() (*ebpf.Program, error) {
 	prog, err := ebpf.NewProgram(&ebpf.ProgramSpec{
 		Type:       ebpf.SkLookup,
 		AttachType: ebpf.AttachSkLookup,
@@ -50,13 +53,16 @@ func createSkLookupProgram() *ebpf.Program {
 		},
 	})
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
-	return prog
+	return prog, nil
 }
 
 func ExampleAttachNetNs() {
-	prog := createSkLookupProgram()
+	prog, err := createSkLookupProgram()
+	if err != nil {
+		panic(err)
+	}
 	defer prog.Close()
 
 	// This can be a path to another netns as well.

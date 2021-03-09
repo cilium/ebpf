@@ -3,7 +3,6 @@ package ebpf
 import (
 	"errors"
 	"flag"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
@@ -156,7 +155,7 @@ func TestLoadCollectionSpec(t *testing.T) {
 		have.Maps["array_of_hash_map"].InnerMap = have.Maps["hash_map"]
 		coll, err := NewCollectionWithOptions(have, CollectionOptions{
 			Maps: MapOptions{
-				PinPath: tempBPFFS(t),
+				PinPath: testutils.TempBPFFS(t),
 			},
 			Programs: ProgramOptions{
 				LogLevel: 1,
@@ -342,16 +341,4 @@ func TestGetProgType(t *testing.T) {
 			t.Errorf("section %s: expected attachment to be %q, got %q", tc.section, tc.to, to)
 		}
 	}
-}
-
-func tempBPFFS(tb testing.TB) string {
-	tb.Helper()
-
-	tmp, err := ioutil.TempDir("/sys/fs/bpf", "ebpf-test")
-	if err != nil {
-		tb.Fatal(err)
-	}
-	tb.Cleanup(func() { os.RemoveAll(tmp) })
-
-	return tmp
 }

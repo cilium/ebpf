@@ -149,7 +149,8 @@ func run(stdout io.Writer, pkg, outputDir string, args []string) (err error) {
 		var dep bytes.Buffer
 		err = compile(compileArgs{
 			cc:     *flagCC,
-			cFlags: append(cFlags, "-target", target),
+			cFlags: cFlags,
+			target: target,
 			dir:    cwd,
 			source: inputDir + inputFile,
 			dest:   objFileName,

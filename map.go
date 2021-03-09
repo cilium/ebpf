@@ -210,6 +210,10 @@ func newMapWithOptions(spec *MapSpec, opts MapOptions, btfs btfHandleCache) (*Ma
 			return nil, fmt.Errorf("%s requires InnerMap", spec.Type)
 		}
 
+		if spec.InnerMap.Pinning != PinNone {
+			return nil, errors.New("inner maps cannot be pinned")
+		}
+
 		template, err := createMap(spec.InnerMap, nil, opts, btfs)
 		if err != nil {
 			return nil, err

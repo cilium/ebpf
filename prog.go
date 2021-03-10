@@ -88,6 +88,25 @@ func (ps *ProgramSpec) Copy() *ProgramSpec {
 	return &cpy
 }
 
+// RewriteMaps replaces all references to specific maps.
+//
+// Use this function to use pre-existing maps before loading the
+// program.
+func (ps *ProgramSpec) RewriteMaps(maps map[string]*Map) error {
+	for symbol, m := range maps {
+		fd := m.FD()
+		if err := ps.Instructions.RewriteMapPtr(symbol, fd); err != nil {
+			if asm.IsUnreferencedSymbol(err) {
+				// Not all programs need to use the map
+				continue
+			}
+			return fmt.Errorf("program %s: %w", ps.Name, err)
+		}
+	}
+
+	return nil
+}
+
 // Tag calculates the kernel tag for a series of instructions.
 //
 // Use asm.Instructions.Tag if you need to calculate for non-native endianness.

@@ -441,16 +441,8 @@ func (coll *Collection) DetachProgram(name string) *Program {
 
 // Assign the contents of a collection to a struct.
 //
-// `to` must be a pointer to a struct like the following:
-//
-//    struct {
-//        Foo     *ebpf.Program `ebpf:"xdp_foo"`
-//        Bar     *ebpf.Map     `ebpf:"bar_map"`
-//        Ignored int
-//    }
-//
-// DetachMap and DetachProgram is invoked for all assigned elements
-// if the function is successful.
+// Deprecated: use CollectionSpec.Assign instead. It provides the same
+// functionality but creates only the maps and programs requested.
 func (coll *Collection) Assign(to interface{}) error {
 	assignedMaps := make(map[string]struct{})
 	assignedPrograms := make(map[string]struct{})
@@ -491,28 +483,86 @@ func (coll *Collection) Assign(to interface{}) error {
 }
 
 func assignValues(to interface{}, valueOf func(reflect.Type, string) (reflect.Value, error)) error {
-	v := reflect.ValueOf(to)
-	if v.Kind() != reflect.Ptr || v.Elem().Kind() != reflect.Struct {
-		return fmt.Errorf("%T is not a pointer to a struct", to)
+	type structField struct {
+		reflect.StructField
+		value reflect.Value
+	}
+
+	var (
+		fields        []structField
+		visitedTypes  = make(map[reflect.Type]bool)
+		flattenStruct func(reflect.Value) error
+	)
+
+	flattenStruct = func(structVal reflect.Value) error {
+		structType := structVal.Type()
+		if structType.Kind() != reflect.Struct {
+			return fmt.Errorf("%s is not a struct", structType)
+		}
+
+		if visitedTypes[structType] {
+			return fmt.Errorf("recursion on type %s", structType)
+		}
+
+		for i := 0; i < structType.NumField(); i++ {
+			field := structField{structType.Field(i), structVal.Field(i)}
+
+			name := field.Tag.Get("ebpf")
+			if name != "" {
+				fields = append(fields, field)
+				continue
+			}
+
+			var err error
+			switch field.Type.Kind() {
+			case reflect.Ptr:
+				if field.Type.Elem().Kind() != reflect.Struct {
+					continue
+				}
+
+				if field.value.IsNil() {
+					return fmt.Errorf("nil pointer to %s", structType)
+				}
+
+				err = flattenStruct(field.value.Elem())
+
+			case reflect.Struct:
+				err = flattenStruct(field.value)
+
+			default:
+				continue
+			}
+
+			if err != nil {
+				return fmt.Errorf("field %s: %s", field.Name, err)
+			}
+		}
+
+		return nil
+	}
+
+	toValue := reflect.ValueOf(to)
+	if toValue.Type().Kind() != reflect.Ptr {
+		return fmt.Errorf("%T is not a pointer to struct", to)
+	}
+
+	if toValue.IsNil() {
+		return fmt.Errorf("nil pointer to %T", to)
+	}
+
+	if err := flattenStruct(toValue.Elem()); err != nil {
+		return err
 	}
 
 	type elem struct {
+		// Either *Map or *Program
 		typ  reflect.Type
 		name string
 	}
 
-	var (
-		s          = v.Elem()
-		sT         = s.Type()
-		assignedTo = make(map[elem]string)
-	)
-	for i := 0; i < sT.NumField(); i++ {
-		field := sT.Field(i)
-
+	assignedTo := make(map[elem]string)
+	for _, field := range fields {
 		name := field.Tag.Get("ebpf")
-		if name == "" {
-			continue
-		}
 		if strings.Contains(name, ",") {
 			return fmt.Errorf("field %s: ebpf tag contains a comma", field.Name)
 		}
@@ -527,12 +577,11 @@ func assignValues(to interface{}, valueOf func(reflect.Type, string) (reflect.Va
 			return fmt.Errorf("field %s: %w", field.Name, err)
 		}
 
-		fieldValue := s.Field(i)
-		if !fieldValue.CanSet() {
-			return fmt.Errorf("can't set value of field %s", field.Name)
+		if !field.value.CanSet() {
+			return fmt.Errorf("field %s: can't set value", field.Name)
 		}
 
-		fieldValue.Set(value)
+		field.value.Set(value)
 		assignedTo[e] = field.Name
 	}
 

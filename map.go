@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"os"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -810,46 +809,25 @@ func (m *Map) Clone() (*Map, error) {
 //
 // This requires bpffs to be mounted above fileName. See https://docs.cilium.io/en/k8s-doc/admin/#admin-mount-bpffs
 func (m *Map) Pin(fileName string) error {
-	if fileName == "" {
-		return fmt.Errorf("pinned path cannot be empty")
+	if err := pin(m.pinnedPath, fileName, m.fd); err != nil {
+		return err
 	}
-	if m.IsPinned() {
-		path := m.pinnedPath
-		if path == fileName {
-			return nil
-		}
-		if err := os.Rename(m.pinnedPath, fileName); err != nil {
-			if !os.IsNotExist(err) {
-				return fmt.Errorf("unable to pin the map at new path %v: %w", fileName, err)
-			}
-		} else {
-			m.pinnedPath = fileName
-			return nil
-		}
-	}
-	err := internal.BPFObjPin(fileName, m.fd)
-	if err == nil {
-		m.pinnedPath = fileName
-	}
-	return err
+	m.pinnedPath = fileName
+	return nil
 }
 
 // Unpin removes the persisted state for the map.
 //
 // Unpinning an un-pinned Map returns nil.
 func (m *Map) Unpin() error {
-	if m.pinnedPath == "" {
-		return nil
+	if err := unpin(m.pinnedPath); err != nil {
+		return err
 	}
-	err := os.Remove(m.pinnedPath)
-	if err == nil || os.IsNotExist(err) {
-		m.pinnedPath = ""
-		return nil
-	}
-	return err
+	m.pinnedPath = ""
+	return nil
 }
 
-// IsPinned returns true if the map has non-empty pinned path.
+// IsPinned returns true if the map has a non-empty pinned path.
 func (m *Map) IsPinned() bool {
 	if m.pinnedPath == "" {
 		return false
@@ -1204,4 +1182,16 @@ func (m *Map) ID() (MapID, error) {
 		return MapID(0), err
 	}
 	return MapID(info.id), nil
+}
+
+func (m *Map) getFD() *internal.FD {
+	return m.fd
+}
+
+func (m *Map) getPinnedPath() string {
+	return m.pinnedPath
+}
+
+func (m *Map) setPinnedPath(path string) {
+	m.pinnedPath = path
 }

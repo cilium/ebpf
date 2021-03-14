@@ -6,12 +6,15 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
 	"syscall"
 	"testing"
 	"time"
+
+	qt "github.com/frankban/quicktest"
 
 	"github.com/cilium/ebpf/asm"
 	"github.com/cilium/ebpf/internal"
@@ -180,6 +183,7 @@ func TestProgramClose(t *testing.T) {
 
 func TestProgramPin(t *testing.T) {
 	prog := createSocketFilter(t)
+	c := qt.New(t)
 	defer prog.Close()
 
 	tmp := tempBPFFS(t)
@@ -188,6 +192,10 @@ func TestProgramPin(t *testing.T) {
 	if err := prog.Pin(path); err != nil {
 		t.Fatal(err)
 	}
+
+	pinned := prog.IsPinned()
+	c.Assert(pinned, qt.Equals, true)
+
 	prog.Close()
 
 	prog, err := LoadPinnedProgram(path)
@@ -199,6 +207,29 @@ func TestProgramPin(t *testing.T) {
 
 	if prog.Type() != SocketFilter {
 		t.Error("Expected pinned program to have type SocketFilter, but got", prog.Type())
+	}
+}
+
+func TestProgramUnpin(t *testing.T) {
+	prog := createSocketFilter(t)
+	c := qt.New(t)
+	defer prog.Close()
+
+	tmp := tempBPFFS(t)
+
+	path := filepath.Join(tmp, "program")
+	if err := prog.Pin(path); err != nil {
+		t.Fatal(err)
+	}
+
+	pinned := prog.IsPinned()
+	c.Assert(pinned, qt.Equals, true)
+
+	if err := prog.Unpin(); err != nil {
+		t.Fatal("Failed to unpin program:", err)
+	}
+	if _, err := os.Stat(path); err == nil {
+		t.Fatal("Pinned program path still exists after unpinning:", err)
 	}
 }
 

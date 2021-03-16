@@ -181,7 +181,8 @@ func newMapWithOptions(spec *MapSpec, opts MapOptions, btfs btfHandleCache) (*Ma
 			return nil, fmt.Errorf("pin by name: missing Name or PinPath")
 		}
 
-		m, err := LoadPinnedMap(filepath.Join(opts.PinPath, spec.Name))
+		path := filepath.Join(opts.PinPath, spec.Name)
+		m, err := LoadPinnedMap(path, nil)
 		if errors.Is(err, unix.ENOENT) {
 			break
 		}
@@ -973,9 +974,9 @@ func (m *Map) unmarshalValue(value interface{}, buf []byte) error {
 	return unmarshalBytes(value, buf)
 }
 
-// LoadPinnedMap load a Map from a BPF file.
-func LoadPinnedMap(fileName string) (*Map, error) {
-	fd, err := internal.BPFObjGet(fileName)
+// LoadPinnedMap loads a Map from a BPF file.
+func LoadPinnedMap(fileName string, opts *LoadPinOptions) (*Map, error) {
+	fd, err := internal.BPFObjGet(fileName, opts.Marshal())
 	if err != nil {
 		return nil, err
 	}

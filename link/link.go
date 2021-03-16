@@ -96,18 +96,21 @@ func AttachRawLink(opts RawLinkOptions) (*RawLink, error) {
 }
 
 // LoadPinnedRawLink loads a persisted link from a bpffs.
-func LoadPinnedRawLink(fileName string) (*RawLink, error) {
-	return loadPinnedRawLink(fileName, UnspecifiedType)
-}
+//
+// Returns an error if the pinned link type doesn't match linkType. Pass
+// UnspecifiedType to disable this behaviour.
+func LoadPinnedRawLink(fileName string, linkType Type, opts *ebpf.LoadPinOptions) (*RawLink, error) {
+	if opts == nil {
+		opts = &ebpf.LoadPinOptions{}
+	}
 
-func loadPinnedRawLink(fileName string, typ Type) (*RawLink, error) {
-	fd, err := internal.BPFObjGet(fileName)
+	fd, err := internal.BPFObjGet(fileName, opts.Flags)
 	if err != nil {
-		return nil, fmt.Errorf("load pinned link: %s", err)
+		return nil, fmt.Errorf("load pinned link: %w", err)
 	}
 
 	link := &RawLink{fd, fileName}
-	if typ == UnspecifiedType {
+	if linkType == UnspecifiedType {
 		return link, nil
 	}
 
@@ -117,9 +120,9 @@ func loadPinnedRawLink(fileName string, typ Type) (*RawLink, error) {
 		return nil, fmt.Errorf("get pinned link info: %s", err)
 	}
 
-	if info.Type != typ {
+	if info.Type != linkType {
 		link.Close()
-		return nil, fmt.Errorf("link type %v doesn't match %v", info.Type, typ)
+		return nil, fmt.Errorf("link type %v doesn't match %v", info.Type, linkType)
 	}
 
 	return link, nil

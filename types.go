@@ -202,6 +202,12 @@ const (
 	PinByName
 )
 
+// LoadPinOptions control how a pinned object is loaded.
+type LoadPinOptions struct {
+	// Flags may be BPF_F_RDONLY or BPF_F_WRONLY.
+	Flags uint32
+}
+
 // BatchOptions batch map operations options
 //
 // Mirrors libbpf struct bpf_map_batch_opts

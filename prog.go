@@ -594,8 +594,12 @@ func (p *Program) Detach(fd int, typ AttachType, flags AttachFlags) error {
 // LoadPinnedProgram loads a Program from a BPF file.
 //
 // Requires at least Linux 4.11.
-func LoadPinnedProgram(fileName string) (*Program, error) {
-	fd, err := internal.BPFObjGet(fileName)
+func LoadPinnedProgram(fileName string, opts *LoadPinOptions) (*Program, error) {
+	if opts == nil {
+		opts = &LoadPinOptions{}
+	}
+
+	fd, err := internal.BPFObjGet(fileName, opts.Flags)
 	if err != nil {
 		return nil, err
 	}

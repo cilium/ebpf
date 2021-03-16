@@ -325,7 +325,7 @@ func TestMapPin(t *testing.T) {
 
 	m.Close()
 
-	m, err := LoadPinnedMap(path)
+	m, err := LoadPinnedMap(path, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -371,7 +371,7 @@ func TestNestedMapPin(t *testing.T) {
 	}
 	m.Close()
 
-	m, err = LoadPinnedMap(path)
+	m, err = LoadPinnedMap(path, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -418,7 +418,7 @@ func TestMapPinMultiple(t *testing.T) {
 	if _, err := os.Stat(oldPath); err == nil {
 		t.Fatal("Previous pinned map path still exists:", err)
 	}
-	m2, err := LoadPinnedMap(newPath)
+	m2, err := LoadPinnedMap(newPath, nil)
 	c.Assert(err, qt.IsNil)
 	defer m2.Close()
 }
@@ -447,7 +447,7 @@ func TestMapUnpin(t *testing.T) {
 	pinned := m.IsPinned()
 	c.Assert(pinned, qt.Equals, true)
 	path := filepath.Join(tmp, spec.Name)
-	m2, err := LoadPinnedMap(path)
+	m2, err := LoadPinnedMap(path, nil)
 	c.Assert(err, qt.IsNil)
 	defer m2.Close()
 
@@ -472,7 +472,7 @@ func TestMapLoadPinned(t *testing.T) {
 	c.Assert(pinned, qt.Equals, true)
 
 	path := filepath.Join(tmp, spec.Name)
-	m2, err := LoadPinnedMap(path)
+	m2, err := LoadPinnedMap(path, nil)
 	c.Assert(err, qt.IsNil)
 	defer m2.Close()
 	pinned = m2.IsPinned()
@@ -492,13 +492,34 @@ func TestMapLoadPinnedUnpin(t *testing.T) {
 	c.Assert(pinned, qt.Equals, true)
 
 	path := filepath.Join(tmp, spec.Name)
-	m2, err := LoadPinnedMap(path)
+	m2, err := LoadPinnedMap(path, nil)
 	c.Assert(err, qt.IsNil)
 	defer m2.Close()
 	err = m1.Unpin()
 	c.Assert(err, qt.IsNil)
 	err = m2.Unpin()
 	c.Assert(err, qt.IsNil)
+}
+
+func TestMapLoadPinnedWithFlags(t *testing.T) {
+	array := createArray(t)
+	defer array.Close()
+
+	tmp := testutils.TempBPFFS(t)
+
+	path := filepath.Join(tmp, "map")
+	if err := array.Pin(path); err != nil {
+		t.Fatal(err)
+	}
+	array.Close()
+
+	_, err := LoadPinnedMap(path, &LoadPinOptions{
+		Flags: math.MaxUint32,
+	})
+	testutils.SkipIfNotSupported(t, err)
+	if !errors.Is(err, unix.EINVAL) {
+		t.Fatal("Invalid flags don't trigger an error:", err)
+	}
 }
 
 func createArray(t *testing.T) *Map {

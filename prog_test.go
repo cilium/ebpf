@@ -198,7 +198,7 @@ func TestProgramPin(t *testing.T) {
 
 	prog.Close()
 
-	prog, err := LoadPinnedProgram(path)
+	prog, err := LoadPinnedProgram(path, nil)
 	testutils.SkipIfNotSupported(t, err)
 	if err != nil {
 		t.Fatal(err)
@@ -219,7 +219,7 @@ func TestProgramUnpin(t *testing.T) {
 	c := qt.New(t)
 	defer prog.Close()
 
-	tmp := tempBPFFS(t)
+	tmp := testutils.TempBPFFS(t)
 
 	path := filepath.Join(tmp, "program")
 	if err := prog.Pin(path); err != nil {
@@ -234,6 +234,28 @@ func TestProgramUnpin(t *testing.T) {
 	}
 	if _, err := os.Stat(path); err == nil {
 		t.Fatal("Pinned program path still exists after unpinning:", err)
+	}
+}
+
+func TestProgramLoadPinnedWithFlags(t *testing.T) {
+	prog := createSocketFilter(t)
+	defer prog.Close()
+
+	tmp := testutils.TempBPFFS(t)
+
+	path := filepath.Join(tmp, "program")
+	if err := prog.Pin(path); err != nil {
+		t.Fatal(err)
+	}
+
+	prog.Close()
+
+	_, err := LoadPinnedProgram(path, &LoadPinOptions{
+		Flags: math.MaxUint32,
+	})
+	testutils.SkipIfNotSupported(t, err)
+	if !errors.Is(err, unix.EINVAL) {
+		t.Fatal("Invalid flags don't trigger an error:", err)
 	}
 }
 
@@ -632,7 +654,7 @@ func ExampleNewProgramWithOptions() {
 
 // It's possible to read a program directly from a ProgramArray.
 func ExampleProgram_unmarshalFromMap() {
-	progArray, err := LoadPinnedMap("/path/to/map")
+	progArray, err := LoadPinnedMap("/path/to/map", nil)
 	if err != nil {
 		panic(err)
 	}

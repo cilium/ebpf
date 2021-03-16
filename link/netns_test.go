@@ -12,11 +12,7 @@ import (
 func TestSkLookup(t *testing.T) {
 	testutils.SkipOnOldKernel(t, "5.8", "sk_lookup program")
 
-	prog, err := createSkLookupProgram()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer prog.Close()
+	prog := mustCreateSkLookupProgram(t)
 
 	netns, err := os.Open("/proc/self/ns/net")
 	if err != nil {
@@ -36,10 +32,22 @@ func TestSkLookup(t *testing.T) {
 
 	testLink(t, link, testLinkOptions{
 		prog: prog,
-		loadPinned: func(fileName string) (Link, error) {
-			return LoadPinnedNetNs(fileName)
+		loadPinned: func(fileName string, opts *LoadPinOptions) (Link, error) {
+			return LoadPinnedNetNs(fileName, opts)
 		},
 	})
+}
+
+func mustCreateSkLookupProgram(tb testing.TB) *ebpf.Program {
+	tb.Helper()
+
+	prog, err := createSkLookupProgram()
+	if err != nil {
+		tb.Fatal(err)
+	}
+	tb.Cleanup(func() { prog.Close() })
+
+	return prog
 }
 
 func createSkLookupProgram() (*ebpf.Program, error) {

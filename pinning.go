@@ -6,6 +6,7 @@ import (
 	"os"
 
 	"github.com/cilium/ebpf/internal"
+	"github.com/cilium/ebpf/internal/unix"
 )
 
 func pin(currentPath, newPath string, fd *internal.FD) error {
@@ -39,4 +40,30 @@ func unpin(pinnedPath string) error {
 		return nil
 	}
 	return err
+}
+
+// LoadPinOptions control how a pinned object is loaded.
+type LoadPinOptions struct {
+	// Request a read-only or write-only object. The default is a read-write
+	// object. Only one of the flags may be set.
+	ReadOnly  bool
+	WriteOnly bool
+
+	// Raw flags for the syscall. Other fields of this struct take precedence.
+	Flags uint32
+}
+
+func loadPinFlags(opts *LoadPinOptions) uint32 {
+	if opts == nil {
+		return 0
+	}
+
+	flags := opts.Flags
+	if opts.ReadOnly {
+		flags |= unix.BPF_F_RDONLY
+	}
+	if opts.WriteOnly {
+		flags |= unix.BPF_F_WRONLY
+	}
+	return flags
 }

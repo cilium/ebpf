@@ -325,7 +325,7 @@ func TestMapPin(t *testing.T) {
 
 	m.Close()
 
-	m, err := LoadPinnedMap(path)
+	m, err := LoadPinnedMap(path, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -371,7 +371,7 @@ func TestNestedMapPin(t *testing.T) {
 	}
 	m.Close()
 
-	m, err = LoadPinnedMap(path)
+	m, err = LoadPinnedMap(path, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -418,7 +418,7 @@ func TestMapPinMultiple(t *testing.T) {
 	if _, err := os.Stat(oldPath); err == nil {
 		t.Fatal("Previous pinned map path still exists:", err)
 	}
-	m2, err := LoadPinnedMap(newPath)
+	m2, err := LoadPinnedMap(newPath, nil)
 	c.Assert(err, qt.IsNil)
 	defer m2.Close()
 }
@@ -471,7 +471,7 @@ func TestMapUnpin(t *testing.T) {
 	pinned := m.IsPinned()
 	c.Assert(pinned, qt.Equals, true)
 	path := filepath.Join(tmp, spec.Name)
-	m2, err := LoadPinnedMap(path)
+	m2, err := LoadPinnedMap(path, nil)
 	c.Assert(err, qt.IsNil)
 	defer m2.Close()
 
@@ -496,7 +496,7 @@ func TestMapLoadPinned(t *testing.T) {
 	c.Assert(pinned, qt.Equals, true)
 
 	path := filepath.Join(tmp, spec.Name)
-	m2, err := LoadPinnedMap(path)
+	m2, err := LoadPinnedMap(path, nil)
 	c.Assert(err, qt.IsNil)
 	defer m2.Close()
 	pinned = m2.IsPinned()
@@ -516,13 +516,63 @@ func TestMapLoadPinnedUnpin(t *testing.T) {
 	c.Assert(pinned, qt.Equals, true)
 
 	path := filepath.Join(tmp, spec.Name)
-	m2, err := LoadPinnedMap(path)
+	m2, err := LoadPinnedMap(path, nil)
 	c.Assert(err, qt.IsNil)
 	defer m2.Close()
 	err = m1.Unpin()
 	c.Assert(err, qt.IsNil)
 	err = m2.Unpin()
 	c.Assert(err, qt.IsNil)
+}
+
+func TestMapLoadPinnedWithOptions(t *testing.T) {
+	// Introduced in commit 6e71b04a8224.
+	testutils.SkipOnOldKernel(t, "4.14", "file_flags in BPF_OBJ_GET")
+
+	array := createArray(t)
+	defer array.Close()
+
+	tmp := testutils.TempBPFFS(t)
+
+	path := filepath.Join(tmp, "map")
+	if err := array.Pin(path); err != nil {
+		t.Fatal(err)
+	}
+	if err := array.Put(uint32(0), uint32(123)); err != nil {
+		t.Fatal(err)
+	}
+	array.Close()
+
+	t.Run("read-only", func(t *testing.T) {
+		array, err := LoadPinnedMap(path, &LoadPinOptions{
+			ReadOnly: true,
+		})
+		testutils.SkipIfNotSupported(t, err)
+		if err != nil {
+			t.Fatal("Can't load map:", err)
+		}
+		defer array.Close()
+
+		if err := array.Put(uint32(0), uint32(1)); !errors.Is(err, unix.EPERM) {
+			t.Fatal("Expected EPERM from Put, got", err)
+		}
+	})
+
+	t.Run("write-only", func(t *testing.T) {
+		array, err := LoadPinnedMap(path, &LoadPinOptions{
+			WriteOnly: true,
+		})
+		testutils.SkipIfNotSupported(t, err)
+		if err != nil {
+			t.Fatal("Can't load map:", err)
+		}
+		defer array.Close()
+
+		var value uint32
+		if err := array.Lookup(uint32(0), &value); !errors.Is(err, unix.EPERM) {
+			t.Fatal("Expected EPERM from Lookup, got", err)
+		}
+	})
 }
 
 func createArray(t *testing.T) *Map {

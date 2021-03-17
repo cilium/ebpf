@@ -10,19 +10,19 @@ import (
 	"github.com/cilium/ebpf/internal/testutils"
 )
 
-func TestGetTracepointID(t *testing.T) {
-	_, err := getTracepointID("syscalls/sys_enter_open")
+func TestTraceGetEventID(t *testing.T) {
+	_, err := getTraceEventID("syscalls", "sys_enter_open")
 	if err != nil {
-		t.Fatal("Can't read tracepoint ID:", err)
+		t.Fatal("Can't read trace event ID:", err)
 	}
 
-	_, err = getTracepointID("totally_bogus")
+	_, err = getTraceEventID("totally", "bogus")
 	if !errors.Is(err, internal.ErrNotSupported) {
 		t.Fatal("Doesn't return ErrNotSupported")
 	}
 }
 
-func TestAttachTracepoint(t *testing.T) {
+func TestTracepointAttach(t *testing.T) {
 	prog, err := ebpf.NewProgram(&ebpf.ProgramSpec{
 		Type:    ebpf.TracePoint,
 		License: "MIT",
@@ -37,16 +37,22 @@ func TestAttachTracepoint(t *testing.T) {
 	}
 	defer prog.Close()
 
-	tp, err := AttachTracepoint(TracepointOptions{
-		Name:    "syscalls/sys_enter_open",
-		Program: prog,
-	})
+	tp, err := Tracepoint("syscalls", "sys_enter_open")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	l, err := tp.Attach(prog)
 	testutils.SkipIfNotSupported(t, err)
 	if err != nil {
-		t.Fatal("Can't attach program:", err)
+		t.Fatal("attaching program:", err)
+	}
+
+	if err := l.Close(); err != nil {
+		t.Fatal("closing perf event:", err)
 	}
 
 	if err := tp.Close(); err != nil {
-		t.Error("Closing the tracepoint returns an error:", err)
+		t.Error("closing tracepoint:", err)
 	}
 }

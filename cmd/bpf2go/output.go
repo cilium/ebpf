@@ -240,10 +240,6 @@ func writeCommon(args writeArgs) error {
 		programs[name] = identifier(name)
 	}
 
-	type typ struct {
-		Name string
-	}
-
 	ctx := struct {
 		Module   string
 		Package  string

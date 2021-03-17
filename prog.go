@@ -369,10 +369,7 @@ func (p *Program) Unpin() error {
 
 // IsPinned returns true if the Program has a non-empty pinned path.
 func (p *Program) IsPinned() bool {
-	if p.pinnedPath == "" {
-		return false
-	}
-	return true
+	return p.pinnedPath != ""
 }
 
 // Close unloads the program from the kernel.

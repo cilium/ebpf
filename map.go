@@ -832,10 +832,7 @@ func (m *Map) Unpin() error {
 
 // IsPinned returns true if the map has a non-empty pinned path.
 func (m *Map) IsPinned() bool {
-	if m.pinnedPath == "" {
-		return false
-	}
-	return true
+	return m.pinnedPath != ""
 }
 
 // Freeze prevents a map to be modified from user space.
@@ -937,7 +934,9 @@ func (m *Map) unmarshalValue(value interface{}, buf []byte) error {
 			return err
 		}
 
-		(*value).Close()
+		// The caller might close the map externally, so ignore errors.
+		_ = (*value).Close()
+
 		*value = other
 		return nil
 
@@ -957,7 +956,9 @@ func (m *Map) unmarshalValue(value interface{}, buf []byte) error {
 			return err
 		}
 
-		(*value).Close()
+		// The caller might close the program externally, so ignore errors.
+		_ = (*value).Close()
+
 		*value = other
 		return nil
 

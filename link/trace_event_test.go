@@ -1,0 +1,41 @@
+package link
+
+import (
+	"errors"
+	"testing"
+
+	"github.com/cilium/ebpf/internal/testutils"
+	qt "github.com/frankban/quicktest"
+)
+
+func TestTraceEventTypePMU(t *testing.T) {
+
+	testutils.SkipOnOldKernel(t, "4.15", "perf_kprobe PMU")
+
+	c := qt.New(t)
+
+	et, err := getPMUEventType("kprobe")
+	c.Assert(err, qt.IsNil)
+	c.Assert(et, qt.Not(qt.Equals), 0)
+}
+
+func TestTraceEventID(t *testing.T) {
+
+	c := qt.New(t)
+
+	eid, err := getTraceEventID("syscalls", "sys_enter_fork")
+	c.Assert(err, qt.IsNil)
+	c.Assert(eid, qt.Not(qt.Equals), 0)
+}
+
+func TestTraceReadID(t *testing.T) {
+	_, err := uint64FromFile("/base/path/", "../escaped")
+	if !errors.Is(err, ErrInvalidInput) {
+		t.Errorf("expected error %s, got: %s", ErrInvalidInput, err)
+	}
+
+	_, err = uint64FromFile("/base/path/not", "../not/escaped")
+	if !errors.Is(err, ErrNotSupported) {
+		t.Errorf("expected error %s, got: %s", ErrNotSupported, err)
+	}
+}

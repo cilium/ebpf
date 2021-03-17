@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"os"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -803,53 +802,35 @@ func (m *Map) Clone() (*Map, error) {
 	}, nil
 }
 
-// Pin persists the map past the lifetime of the process that created it.
+// Pin persists the map on the BPF virtual file system past the lifetime of
+// the process that created it .
 //
 // Calling Pin on a previously pinned map will override the path.
 // You can Clone a map to pin it to a different path.
 //
 // This requires bpffs to be mounted above fileName. See https://docs.cilium.io/en/k8s-doc/admin/#admin-mount-bpffs
 func (m *Map) Pin(fileName string) error {
-	if fileName == "" {
-		return fmt.Errorf("pinned path cannot be empty")
+	if err := pin(m.pinnedPath, fileName, m.fd); err != nil {
+		return err
 	}
-	if m.IsPinned() {
-		path := m.pinnedPath
-		if path == fileName {
-			return nil
-		}
-		if err := os.Rename(m.pinnedPath, fileName); err != nil {
-			if !os.IsNotExist(err) {
-				return fmt.Errorf("unable to pin the map at new path %v: %w", fileName, err)
-			}
-		} else {
-			m.pinnedPath = fileName
-			return nil
-		}
-	}
-	err := internal.BPFObjPin(fileName, m.fd)
-	if err == nil {
-		m.pinnedPath = fileName
-	}
-	return err
+	m.pinnedPath = fileName
+	return nil
 }
 
-// Unpin removes the persisted state for the map.
+// Unpin removes the persisted state for the map from the BPF virtual filesystem.
 //
-// Unpinning an un-pinned Map returns nil.
+// Failed calls to Unpin will not alter the state returned by IsPinned.
+//
+// Unpinning an unpinned Map returns nil.
 func (m *Map) Unpin() error {
-	if m.pinnedPath == "" {
-		return nil
+	if err := unpin(m.pinnedPath); err != nil {
+		return err
 	}
-	err := os.Remove(m.pinnedPath)
-	if err == nil || os.IsNotExist(err) {
-		m.pinnedPath = ""
-		return nil
-	}
-	return err
+	m.pinnedPath = ""
+	return nil
 }
 
-// IsPinned returns true if the map has non-empty pinned path.
+// IsPinned returns true if the map has a non-empty pinned path.
 func (m *Map) IsPinned() bool {
 	if m.pinnedPath == "" {
 		return false

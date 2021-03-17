@@ -29,7 +29,7 @@ type compileArgs struct {
 }
 
 func compile(args compileArgs) error {
-	// Default cflags that can be overriden by args.cFlags
+	// Default cflags that can be overridden by args.cFlags
 	overrideFlags := []string{
 		// Code needs to be optimized, otherwise the verifier will often fail
 		// to understand it.
@@ -98,7 +98,9 @@ func compile(args compileArgs) error {
 		// Close our copy of the write end so that Copy will terminate
 		// when cc exits.
 		depWr.Close()
-		io.Copy(args.dep, depRd)
+		if _, err := io.Copy(args.dep, depRd); err != nil {
+			return fmt.Errorf("error writing depfile: %w", err)
+		}
 	}
 
 	if err := cmd.Wait(); err != nil {

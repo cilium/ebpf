@@ -54,24 +54,22 @@ func TestCopyType(t *testing.T) {
 // There currently is no better way to document which
 // types implement an interface.
 func ExampleType_validTypes() {
-	var t Type
-	t = &Void{}
-	t = &Int{}
-	t = &Pointer{}
-	t = &Array{}
-	t = &Struct{}
-	t = &Union{}
-	t = &Enum{}
-	t = &Fwd{}
-	t = &Typedef{}
-	t = &Volatile{}
-	t = &Const{}
-	t = &Restrict{}
-	t = &Func{}
-	t = &FuncProto{}
-	t = &Var{}
-	t = &Datasec{}
-	_ = t
+	var _ Type = &Void{}
+	var _ Type = &Int{}
+	var _ Type = &Pointer{}
+	var _ Type = &Array{}
+	var _ Type = &Struct{}
+	var _ Type = &Union{}
+	var _ Type = &Enum{}
+	var _ Type = &Fwd{}
+	var _ Type = &Typedef{}
+	var _ Type = &Volatile{}
+	var _ Type = &Const{}
+	var _ Type = &Restrict{}
+	var _ Type = &Func{}
+	var _ Type = &FuncProto{}
+	var _ Type = &Var{}
+	var _ Type = &Datasec{}
 }
 
 func TestType(t *testing.T) {

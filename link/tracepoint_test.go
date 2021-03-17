@@ -10,19 +10,34 @@ import (
 	"github.com/cilium/ebpf/internal/testutils"
 )
 
-func TestGetTracepointID(t *testing.T) {
-	_, err := getTracepointID("syscalls/sys_enter_open")
+func TestTracepoint(t *testing.T) {
+	tp, err := Tracepoint("syscalls", "sys_enter_open")
 	if err != nil {
-		t.Fatal("Can't read tracepoint ID:", err)
+		t.Error("opening tracepoint:", err)
+	}
+	if tp.Close() != nil {
+		t.Error("closing tracepoint:", err)
 	}
 
-	_, err = getTracepointID("totally_bogus")
+}
+
+func TestTraceGetEventID(t *testing.T) {
+	_, err := getTraceEventID("syscalls", "sys_enter_open")
+	if err != nil {
+		t.Fatal("Can't read trace event ID:", err)
+	}
+
+	_, err = getTraceEventID("totally", "bogus")
 	if !errors.Is(err, internal.ErrNotSupported) {
 		t.Fatal("Doesn't return ErrNotSupported")
 	}
 }
 
-func TestAttachTracepoint(t *testing.T) {
+func TestTracepointAttach(t *testing.T) {
+
+	// Requires at least 4.7 (98b5c2c65c29 "perf, bpf: allow bpf programs attach to tracepoints")
+	testutils.SkipOnOldKernel(t, "4.7", "tracepoint support")
+
 	prog, err := ebpf.NewProgram(&ebpf.ProgramSpec{
 		Type:    ebpf.TracePoint,
 		License: "MIT",
@@ -37,16 +52,23 @@ func TestAttachTracepoint(t *testing.T) {
 	}
 	defer prog.Close()
 
-	tp, err := AttachTracepoint(TracepointOptions{
-		Name:    "syscalls/sys_enter_open",
-		Program: prog,
-	})
-	testutils.SkipIfNotSupported(t, err)
+	// printk is guaranteed to be present.
+	// Kernels before 4.14 don't support attaching to syscall tracepoints.
+	tp, err := Tracepoint("printk", "console")
 	if err != nil {
-		t.Fatal("Can't attach program:", err)
+		t.Fatal(err)
+	}
+
+	l, err := tp.Attach(prog)
+	if err != nil {
+		t.Fatal("attaching program:", err)
+	}
+
+	if err := l.Close(); err != nil {
+		t.Fatal("closing perf event:", err)
 	}
 
 	if err := tp.Close(); err != nil {
-		t.Error("Closing the tracepoint returns an error:", err)
+		t.Error("closing tracepoint:", err)
 	}
 }

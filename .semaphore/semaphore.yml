@@ -20,7 +20,8 @@ blocks:
           - sudo mkdir -p /usr/local/golang/1.16 && curl -fL "https://golang.org/dl/go1.16.linux-amd64.tar.gz" | sudo tar -xz -C /usr/local/golang/1.16
           - sem-version go 1.16
           - go install github.com/mattn/goveralls@latest
-          - export PATH="$PATH:$HOME/go/bin"
+          - curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin v1.38.0
+          - export PATH="$PATH:$(go env GOPATH)/bin"
           - cache restore
           - go mod tidy
           - go build ./...
@@ -41,6 +42,9 @@ blocks:
           - GOOS=darwin go build ./... && for p in $(go list ./...) ; do GOOS=darwin go test -c $p ; done
           - GOARCH=arm GOARM=6 go build ./... && for p in $(go list ./...) ; do GOARCH=arm GOARM=6 go test -c $p ; done
           - GOARCH=arm64 go build ./... && for p in $(go list ./...) ; do GOARCH=arm64 go test -c $p ; done
+      - name: Lint
+        commands:
+          - golangci-lint run
       - name: Run unit tests on previous stable Go
         commands:
           - sem-version go 1.15

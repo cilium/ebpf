@@ -29,12 +29,19 @@ func TestRawLink(t *testing.T) {
 
 	info, err := link.Info()
 	if err != nil {
-		t.Fatal("Can't get info:", err)
+		t.Fatal("Can't get link info:", err)
 	}
-	progID, err := prog.ID()
+
+	pi, err := prog.Info()
 	if err != nil {
-		t.Fatal("Can't get program ID:", err)
+		t.Fatal("Can't get program info:", err)
 	}
+
+	progID, ok := pi.ID()
+	if !ok {
+		t.Fatal("Program ID not available in program info")
+	}
+
 	if info.Program != progID {
 		t.Error("Link program ID doesn't match program ID")
 	}
@@ -146,7 +153,7 @@ func testLink(t *testing.T, link Link, opts testLinkOptions) {
 		func() {
 			// Panicking is OK
 			defer func() {
-				recover()
+				_ = recover()
 			}()
 
 			if err := link.Update(nil); err == nil {

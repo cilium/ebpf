@@ -109,12 +109,12 @@ func coreRelocate(local, target *Spec, coreRelos bpfCoreRelos) (map[uint64]Reloc
 			continue
 		}
 
-		named, ok := typ.(namedType)
-		if !ok || named.name() == "" {
+		named, ok := typ.(NamedType)
+		if !ok || named.GetName() == "" {
 			return nil, fmt.Errorf("relocate anonymous type %s: %w", typ.String(), ErrNotSupported)
 		}
 
-		name := essentialName(named.name())
+		name := essentialName(named.GetName())
 		res, err := coreCalculateRelocation(typ, target.namedTypes[name], relo.ReloKind, accessor)
 		if err != nil {
 			return nil, fmt.Errorf("relocate %s: %w", name, err)
@@ -128,7 +128,7 @@ func coreRelocate(local, target *Spec, coreRelos bpfCoreRelos) (map[uint64]Reloc
 
 var errAmbiguousRelocation = errors.New("ambiguous relocation")
 
-func coreCalculateRelocation(local Type, targets []namedType, kind coreReloKind, localAccessor coreAccessor) (Relocation, error) {
+func coreCalculateRelocation(local Type, targets []NamedType, kind coreReloKind, localAccessor coreAccessor) (Relocation, error) {
 	var relos []Relocation
 	var matches []Type
 	for _, target := range targets {
@@ -348,11 +348,11 @@ func coreAreMembersCompatible(localType Type, targetType Type) (bool, error) {
 
 		case *Enum:
 			tv := targetType.(*Enum)
-			return doNamesMatch(lv.name(), tv.name()), nil
+			return doNamesMatch(lv.GetName(), tv.GetName()), nil
 
 		case *Fwd:
 			tv := targetType.(*Fwd)
-			return doNamesMatch(lv.name(), tv.name()), nil
+			return doNamesMatch(lv.GetName(), tv.GetName()), nil
 
 		case *Int:
 			tv := targetType.(*Int)

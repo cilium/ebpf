@@ -533,19 +533,25 @@ func (ec *elfCode) loadBTFMaps(maps map[string]*MapSpec) error {
 			return fmt.Errorf("missing BTF")
 		}
 
-		if len(sec.symbols) == 0 {
-			return fmt.Errorf("section %v: no symbols", sec.Name)
-		}
-
 		_, err := io.Copy(internal.DiscardZeroes{}, bufio.NewReader(sec.Open()))
 		if err != nil {
 			return fmt.Errorf("section %v: initializing BTF map definitions: %w", sec.Name, internal.ErrNotSupported)
 		}
 
-		for _, sym := range sec.symbols {
-			name := sym.Name
+		var ds btf.Datasec
+		if err := ec.btf.FindType(sec.Name, &ds); err != nil {
+			return fmt.Errorf("cannot find section '%s' in BTF: %w", sec.Name, err)
+		}
+
+		for _, vs := range ds.Vars {
+			nt, ok := vs.Type.(btf.NamedType)
+			if !ok {
+				return fmt.Errorf("cannot find name for map: %w", err)
+			}
+			name := nt.GetName()
+
 			if maps[name] != nil {
-				return fmt.Errorf("section %v: map %v already exists", sec.Name, sym)
+				return fmt.Errorf("section %v: map %s already exists", sec.Name, name)
 			}
 
 			// A global Var is created by declaring a struct with a 'structure variable',
@@ -570,7 +576,6 @@ func (ec *elfCode) loadBTFMaps(maps map[string]*MapSpec) error {
 			maps[name] = mapSpec
 		}
 	}
-
 	return nil
 }
 

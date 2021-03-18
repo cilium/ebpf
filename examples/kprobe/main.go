@@ -34,17 +34,14 @@ func main() {
 	}
 
 	// Load Program and Map
-	specs, err := NewKProbeExampleSpecs()
-	if err != nil {
-		log.Fatalf("error while loading specs: %v", err)
-	}
-	objs, err := specs.Load(nil)
-	if err != nil {
+	objs := KProbeExampleObjects{}
+	if err := LoadKProbeExampleObjects(&objs, nil); err != nil {
 		log.Fatalf("error while loading objects: %v", err)
 	}
+	defer objs.Close()
 
 	// Create and attach __x64_sys_execve kprobe
-	efd, err := openKProbe("__x64_sys_execve", uint32(objs.ProgramKprobeExecve.FD()))
+	efd, err := openKProbe("__x64_sys_execve", uint32(objs.KprobeExecve.FD()))
 	if err != nil {
 		log.Fatalf("create and attach KProbe: %v", err)
 
@@ -56,7 +53,7 @@ func main() {
 		select {
 		case <-ticker.C:
 			var value uint64
-			if err := objs.MapKprobeMap.Lookup(mapKey, &value); err != nil {
+			if err := objs.KprobeMap.Lookup(mapKey, &value); err != nil {
 				log.Fatalf("error while reading map: %v", err)
 			}
 			log.Printf("__x64_sys_execve called %d times\n", value)

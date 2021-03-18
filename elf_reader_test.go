@@ -355,3 +355,27 @@ func tempBPFFS(tb testing.TB) string {
 
 	return tmp
 }
+
+func TestNameFromBTFVarSecinfo(t *testing.T) {
+	testcases := []struct {
+		varSecinfo   btf.VarSecinfo
+		expectedType string
+		expectedName string
+	}{
+		{btf.VarSecinfo{Type: &btf.Struct{TypeID: 0, Name: btf.Name("test_name")}}, "struct#0[\"test_name\"]", "test_name"},
+		{btf.VarSecinfo{Type: &btf.Struct{TypeID: 999, Name: btf.Name("test_name")}}, "struct#999[\"test_name\"]", "test_name"},
+	}
+
+	for _, tc := range testcases {
+		name, err := nameFromBTFVarSecinfo(tc.varSecinfo)
+		if err != nil {
+			t.Errorf("cannot determine name from btf.VarSecinfo: %w", err)
+		}
+		if tc.varSecinfo.Type.String() != tc.expectedType {
+			t.Errorf("expected type to be %s, got %s", tc.expectedType, tc.varSecinfo.Type)
+		}
+		if name != tc.expectedName {
+			t.Errorf("name from btf.VarSecinfo: expected %s, got %s", tc.expectedName, name)
+		}
+	}
+}

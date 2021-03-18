@@ -36,7 +36,6 @@ type btfFuncLinkage uint8
 const (
 	linkageStatic btfFuncLinkage = iota
 	linkageGlobal
-	linkageExtern
 )
 
 const (

@@ -208,6 +208,10 @@ func TestProgramPin(t *testing.T) {
 	if prog.Type() != SocketFilter {
 		t.Error("Expected pinned program to have type SocketFilter, but got", prog.Type())
 	}
+
+	if !prog.IsPinned() {
+		t.Error("Expected IsPinned to be true")
+	}
 }
 
 func TestProgramUnpin(t *testing.T) {

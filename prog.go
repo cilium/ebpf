@@ -609,7 +609,7 @@ func LoadPinnedProgram(fileName string) (*Program, error) {
 		return nil, fmt.Errorf("info for %s: %w", fileName, err)
 	}
 
-	return &Program{"", fd, filepath.Base(fileName), "", info.Type}, nil
+	return &Program{"", fd, filepath.Base(fileName), fileName, info.Type}, nil
 }
 
 // SanitizeName replaces all invalid characters in name with replacement.

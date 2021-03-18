@@ -11,62 +11,100 @@ import (
 	"github.com/cilium/ebpf"
 )
 
-type KProbeExampleSpecs struct {
-	ProgramKprobeExecve *ebpf.ProgramSpec `ebpf:"kprobe_execve"`
-	MapKprobeMap        *ebpf.MapSpec     `ebpf:"kprobe_map"`
-}
-
-func NewKProbeExampleSpecs() (*KProbeExampleSpecs, error) {
+// LoadKProbeExample returns the embedded CollectionSpec for KProbeExample.
+func LoadKProbeExample() (*ebpf.CollectionSpec, error) {
 	reader := bytes.NewReader(_KProbeExampleBytes)
 	spec, err := ebpf.LoadCollectionSpecFromReader(reader)
 	if err != nil {
 		return nil, fmt.Errorf("can't load KProbeExample: %w", err)
 	}
 
-	specs := new(KProbeExampleSpecs)
-	if err := spec.Assign(specs); err != nil {
-		return nil, fmt.Errorf("can't assign KProbeExample: %w", err)
-	}
-
-	return specs, nil
+	return spec, err
 }
 
-func (s *KProbeExampleSpecs) CollectionSpec() *ebpf.CollectionSpec {
-	return &ebpf.CollectionSpec{
-		Programs: map[string]*ebpf.ProgramSpec{
-			"kprobe_execve": s.ProgramKprobeExecve,
-		},
-		Maps: map[string]*ebpf.MapSpec{
-			"kprobe_map": s.MapKprobeMap,
-		},
+// LoadKProbeExampleObjects loads KProbeExample and converts it into a struct.
+//
+// The following types are suitable as obj argument:
+//
+//     *KProbeExampleObjects
+//     *KProbeExamplePrograms
+//     *KProbeExampleMaps
+//
+// See ebpf.CollectionSpec.LoadAndAssign documentation for details.
+func LoadKProbeExampleObjects(obj interface{}, opts *ebpf.CollectionOptions) error {
+	spec, err := LoadKProbeExample()
+	if err != nil {
+		return err
 	}
+
+	return spec.LoadAndAssign(obj, opts)
 }
 
-func (s *KProbeExampleSpecs) Load(opts *ebpf.CollectionOptions) (*KProbeExampleObjects, error) {
-	var objs KProbeExampleObjects
-	if err := s.CollectionSpec().LoadAndAssign(&objs, opts); err != nil {
-		return nil, err
-	}
-	return &objs, nil
+// KProbeExampleSpecs contains maps and programs before they are loaded into the kernel.
+//
+// It can be passed ebpf.CollectionSpec.Assign.
+type KProbeExampleSpecs struct {
+	KProbeExampleProgramSpecs
+	KProbeExampleMapSpecs
 }
 
-func (s *KProbeExampleSpecs) Copy() *KProbeExampleSpecs {
-	return &KProbeExampleSpecs{
-		ProgramKprobeExecve: s.ProgramKprobeExecve.Copy(),
-		MapKprobeMap:        s.MapKprobeMap.Copy(),
-	}
+// KProbeExampleSpecs contains programs before they are loaded into the kernel.
+//
+// It can be passed ebpf.CollectionSpec.Assign.
+type KProbeExampleProgramSpecs struct {
+	KprobeExecve *ebpf.ProgramSpec `ebpf:"kprobe_execve"`
 }
 
+// KProbeExampleMapSpecs contains maps before they are loaded into the kernel.
+//
+// It can be passed ebpf.CollectionSpec.Assign.
+type KProbeExampleMapSpecs struct {
+	KprobeMap *ebpf.MapSpec `ebpf:"kprobe_map"`
+}
+
+// KProbeExampleObjects contains all objects after they have been loaded into the kernel.
+//
+// It can be passed to LoadKProbeExampleObjects or ebpf.CollectionSpec.LoadAndAssign.
 type KProbeExampleObjects struct {
-	ProgramKprobeExecve *ebpf.Program `ebpf:"kprobe_execve"`
-	MapKprobeMap        *ebpf.Map     `ebpf:"kprobe_map"`
+	KProbeExamplePrograms
+	KProbeExampleMaps
 }
 
 func (o *KProbeExampleObjects) Close() error {
-	for _, closer := range []io.Closer{
-		o.ProgramKprobeExecve,
-		o.MapKprobeMap,
-	} {
+	return _KProbeExampleClose(
+		&o.KProbeExamplePrograms,
+		&o.KProbeExampleMaps,
+	)
+}
+
+// KProbeExampleMaps contains all maps after they have been loaded into the kernel.
+//
+// It can be passed to LoadKProbeExampleObjects or ebpf.CollectionSpec.LoadAndAssign.
+type KProbeExampleMaps struct {
+	KprobeMap *ebpf.Map `ebpf:"kprobe_map"`
+}
+
+func (m *KProbeExampleMaps) Close() error {
+	return _KProbeExampleClose(
+		m.KprobeMap,
+	)
+}
+
+// KProbeExamplePrograms contains all programs after they have been loaded into the kernel.
+//
+// It can be passed to LoadKProbeExampleObjects or ebpf.CollectionSpec.LoadAndAssign.
+type KProbeExamplePrograms struct {
+	KprobeExecve *ebpf.Program `ebpf:"kprobe_execve"`
+}
+
+func (p *KProbeExamplePrograms) Close() error {
+	return _KProbeExampleClose(
+		p.KprobeExecve,
+	)
+}
+
+func _KProbeExampleClose(closers ...io.Closer) error {
+	for _, closer := range closers {
 		if err := closer.Close(); err != nil {
 			return err
 		}

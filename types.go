@@ -1,6 +1,8 @@
 package ebpf
 
-import "github.com/cilium/ebpf/internal/unix"
+import (
+	"github.com/cilium/ebpf/internal/unix"
+)
 
 //go:generate stringer -output types_string.go -type=MapType,ProgramType,AttachType,PinType
 

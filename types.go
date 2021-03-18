@@ -1,5 +1,7 @@
 package ebpf
 
+import "github.com/cilium/ebpf/internal"
+
 //go:generate stringer -output types_string.go -type=MapType,ProgramType,AttachType,PinType
 
 // MapType indicates the type map structure
@@ -202,16 +204,7 @@ const (
 	PinByName
 )
 
-// LoadPinOptions control how a pinned object is loaded.
-type LoadPinOptions struct {
-	// Request a read-only or write-only object. The default is a read-write
-	// object. Only one of the flags may be set.
-	ReadOnly  bool
-	WriteOnly bool
-
-	// Raw flags for the syscall. Other fields of this struct take precedence.
-	Flags uint32
-}
+type LoadPinOptions = internal.LoadPinOptions
 
 // BatchOptions batch map operations options
 //

@@ -1,23 +1,22 @@
-package ebpf
+package internal
 
 import (
 	"errors"
 	"fmt"
 	"os"
 
-	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/unix"
 )
 
-func pin(currentPath, newPath string, fd *internal.FD) error {
+func Pin(currentPath, newPath string, fd *FD) error {
 	if newPath == "" {
 		return errors.New("given pinning path cannot be empty")
 	}
-	if currentPath == "" {
-		return internal.BPFObjPin(newPath, fd)
-	}
 	if currentPath == newPath {
 		return nil
+	}
+	if currentPath == "" {
+		return BPFObjPin(newPath, fd)
 	}
 	var err error
 	// Object is now moved to the new pinning path.
@@ -28,10 +27,10 @@ func pin(currentPath, newPath string, fd *internal.FD) error {
 		return fmt.Errorf("unable to move pinned object to new path %v: %w", newPath, err)
 	}
 	// Internal state not in sync with the file system so let's fix it.
-	return internal.BPFObjPin(newPath, fd)
+	return BPFObjPin(newPath, fd)
 }
 
-func unpin(pinnedPath string) error {
+func Unpin(pinnedPath string) error {
 	if pinnedPath == "" {
 		return nil
 	}
@@ -53,7 +52,7 @@ type LoadPinOptions struct {
 	Flags uint32
 }
 
-func loadPinFlags(opts *LoadPinOptions) uint32 {
+func LoadPinFlags(opts *LoadPinOptions) uint32 {
 	if opts == nil {
 		return 0
 	}

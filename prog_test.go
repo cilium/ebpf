@@ -249,7 +249,7 @@ func TestProgramVerifierOutputOnError(t *testing.T) {
 		t.Fatal("Expected program to be invalid")
 	}
 
-	if strings.Index(err.Error(), "exit") == -1 {
+	if !strings.Contains(err.Error(), "exit") {
 		t.Error("No verifier output in error message")
 	}
 }

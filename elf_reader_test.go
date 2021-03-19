@@ -329,7 +329,7 @@ func TestGetProgType(t *testing.T) {
 	}
 
 	for _, tc := range testcases {
-		pt, at, to := getProgType(tc.section)
+		pt, at, _, to := getProgType(tc.section)
 		if pt != tc.pt {
 			t.Errorf("section %s: expected type %s, got %s", tc.section, tc.pt, pt)
 		}

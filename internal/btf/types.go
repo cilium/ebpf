@@ -31,12 +31,12 @@ type Type interface {
 	walk(*typeDeque)
 }
 
-// namedType is a type with a name.
+// NamedType is a type with a name.
 //
 // Most named types simply embed Name.
-type namedType interface {
+type NamedType interface {
 	Type
-	name() string
+	GetName() string
 }
 
 // Name identifies a type.
@@ -44,7 +44,7 @@ type namedType interface {
 // Anonymous types have an empty name.
 type Name string
 
-func (n Name) name() string {
+func (n Name) GetName() string {
 	return string(n)
 }
 
@@ -79,7 +79,7 @@ type Int struct {
 	Bits   byte
 }
 
-var _ namedType = (*Int)(nil)
+var _ NamedType = (*Int)(nil)
 
 func (i *Int) String() string {
 	var s strings.Builder
@@ -653,7 +653,7 @@ func (dq *typeDeque) all() []*Type {
 // Returns a map of named types (so, where NameOff is non-zero) and a slice of types
 // indexed by TypeID. Since BTF ignores compilation units, multiple types may share
 // the same name. A Type may form a cyclic graph by pointing at itself.
-func inflateRawTypes(rawTypes []rawType, rawStrings stringTable) (types []Type, namedTypes map[string][]namedType, err error) {
+func inflateRawTypes(rawTypes []rawType, rawStrings stringTable) (types []Type, namedTypes map[string][]NamedType, err error) {
 	type fixupDef struct {
 		id           TypeID
 		expectedKind btfKind
@@ -692,7 +692,7 @@ func inflateRawTypes(rawTypes []rawType, rawStrings stringTable) (types []Type, 
 
 	types = make([]Type, 0, len(rawTypes))
 	types = append(types, (*Void)(nil))
-	namedTypes = make(map[string][]namedType)
+	namedTypes = make(map[string][]NamedType)
 
 	for i, raw := range rawTypes {
 		var (
@@ -832,8 +832,8 @@ func inflateRawTypes(rawTypes []rawType, rawStrings stringTable) (types []Type, 
 
 		types = append(types, typ)
 
-		if named, ok := typ.(namedType); ok {
-			if name := essentialName(named.name()); name != "" {
+		if named, ok := typ.(NamedType); ok {
+			if name := essentialName(named.GetName()); name != "" {
 				namedTypes[name] = append(namedTypes[name], named)
 			}
 		}

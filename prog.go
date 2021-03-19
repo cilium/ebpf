@@ -55,7 +55,9 @@ type ProgramSpec struct {
 	// depends on Type and AttachType.
 	AttachTo     string
 	Instructions asm.Instructions
-
+	// Flags is passed to the kernel and specifies additional program
+	// load attributes.
+	Flags uint32
 	// License of the program. Some helpers are only available if
 	// the license is deemed compatible with the GPL.
 	//
@@ -158,6 +160,7 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions, btfs btfHandl
 	insCount := uint32(len(bytecode) / asm.InstructionSize)
 	attr := &bpfProgLoadAttr{
 		progType:           spec.Type,
+		progFlags:          spec.Flags,
 		expectedAttachType: spec.AttachType,
 		insCount:           insCount,
 		instructions:       internal.NewSlicePointer(bytecode),

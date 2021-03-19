@@ -315,31 +315,57 @@ func TestLibBPFCompat(t *testing.T) {
 }
 
 func TestGetProgType(t *testing.T) {
-	testcases := []struct {
-		section string
-		pt      ProgramType
-		at      AttachType
-		to      string
-	}{
-		{"socket/garbage", SocketFilter, AttachNone, ""},
-		{"kprobe/func", Kprobe, AttachNone, "func"},
-		{"xdp/foo", XDP, AttachNone, ""},
-		{"cgroup_skb/ingress", CGroupSKB, AttachCGroupInetIngress, ""},
-		{"iter/bpf_map", Tracing, AttachTraceIter, "bpf_map"},
+	type progTypeTestData struct {
+		Pt ProgramType
+		At AttachType
+		Fl uint32
+		To string
 	}
 
-	for _, tc := range testcases {
-		pt, at, to := getProgType(tc.section)
-		if pt != tc.pt {
-			t.Errorf("section %s: expected type %s, got %s", tc.section, tc.pt, pt)
-		}
+	testcases := map[string]progTypeTestData{
+		"socket/garbage": {
+			Pt: SocketFilter,
+			At: AttachNone,
+			To: "",
+		},
+		"kprobe/func": {
+			Pt: Kprobe,
+			At: AttachNone,
+			To: "func",
+		},
+		"xdp/foo": {
+			Pt: XDP,
+			At: AttachNone,
+			To: "",
+		},
+		"cgroup_skb/ingress": {
+			Pt: CGroupSKB,
+			At: AttachCGroupInetIngress,
+			To: "",
+		},
+		"iter/bpf_map": {
+			Pt: Tracing,
+			At: AttachTraceIter,
+			To: "bpf_map",
+		},
+		"lsm.s/file_ioctl_sleepable": {
+			Pt: LSM,
+			At: AttachLSMMac,
+			To: "file_ioctl_sleepable",
+			Fl: unix.BPF_F_SLEEPABLE,
+		},
+		"lsm/file_ioctl": {
+			Pt: LSM,
+			At: AttachLSMMac,
+			To: "file_ioctl",
+		},
+	}
 
-		if at != tc.at {
-			t.Errorf("section %s: expected attach type %s, got %s", tc.section, tc.at, at)
-		}
+	for section, want := range testcases {
+		pt, at, fl, to := getProgType(section)
 
-		if to != tc.to {
-			t.Errorf("section %s: expected attachment to be %q, got %q", tc.section, tc.to, to)
+		if diff := cmp.Diff(want, progTypeTestData{Pt: pt, At: at, Fl: fl, To: to}); diff != "" {
+			t.Errorf("getProgType mismatch (-want +got):\n%s", diff)
 		}
 	}
 }

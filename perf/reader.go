@@ -437,7 +437,7 @@ func (uev *unknownEventError) Error() string {
 	return fmt.Sprintf("unknown event type: %d", uev.eventType)
 }
 
-// IsUnknownEvent returns true if the error occured
+// IsUnknownEvent returns true if the error occurred
 // because an unknown event was submitted to the perf event ring.
 func IsUnknownEvent(err error) bool {
 	var uee *unknownEventError

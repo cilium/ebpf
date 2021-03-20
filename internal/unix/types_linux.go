@@ -47,6 +47,8 @@ const (
 	RLIM_INFINITY            = linux.RLIM_INFINITY
 	RLIMIT_MEMLOCK           = linux.RLIMIT_MEMLOCK
 	BPF_STATS_RUN_TIME       = linux.BPF_STATS_RUN_TIME
+	PERF_RECORD_LOST         = linux.PERF_RECORD_LOST
+	PERF_RECORD_SAMPLE       = linux.PERF_RECORD_SAMPLE
 )
 
 // Statfs_t is a wrapper

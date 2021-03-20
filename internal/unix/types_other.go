@@ -48,6 +48,8 @@ const (
 	RLIM_INFINITY            = 0x7fffffffffffffff
 	RLIMIT_MEMLOCK           = 8
 	BPF_STATS_RUN_TIME       = 0
+	PERF_RECORD_LOST         = 2
+	PERF_RECORD_SAMPLE       = 9
 )
 
 // Statfs_t is a wrapper

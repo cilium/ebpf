@@ -475,6 +475,13 @@ type VarSecinfo struct {
 	Size   uint32
 }
 
+// Var returns the variable described by the VarSecinfo.
+func (vsi VarSecinfo) Var() *Var {
+	// Type is guaranteed to be a *Var due to the fixup happening in
+	// inflateRawTypes.
+	return vsi.Type.(*Var)
+}
+
 type sizer interface {
 	size() uint32
 }

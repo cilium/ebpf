@@ -522,6 +522,35 @@ func TestMapLoadPinnedWithFlags(t *testing.T) {
 	}
 }
 
+func TestMapPinFlags(t *testing.T) {
+	tmp := testutils.TempBPFFS(t)
+
+	spec := &MapSpec{
+		Name:       "map",
+		Type:       Array,
+		KeySize:    4,
+		ValueSize:  4,
+		MaxEntries: 1,
+		Pinning:    PinByName,
+	}
+
+	m, err := NewMapWithOptions(spec, MapOptions{
+		PinPath: tmp,
+	})
+	qt.Assert(t, err, qt.IsNil)
+	m.Close()
+
+	_, err = NewMapWithOptions(spec, MapOptions{
+		PinPath: tmp,
+		LoadPinOptions: LoadPinOptions{
+			Flags: math.MaxUint32,
+		},
+	})
+	if !errors.Is(err, unix.EINVAL) {
+		t.Fatal("Invalid flags should trigger EINVAL:", err)
+	}
+}
+
 func createArray(t *testing.T) *Map {
 	t.Helper()
 

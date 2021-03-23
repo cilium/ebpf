@@ -3,6 +3,7 @@ package link
 import (
 	"errors"
 	"io/ioutil"
+	"math"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -11,11 +12,11 @@ import (
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/asm"
 	"github.com/cilium/ebpf/internal/testutils"
+	"github.com/cilium/ebpf/internal/unix"
 )
 
 func TestRawLink(t *testing.T) {
-	cgroup, prog, cleanup := mustCgroupFixtures(t)
-	defer cleanup()
+	cgroup, prog := mustCgroupFixtures(t)
 
 	link, err := AttachRawLink(RawLinkOptions{
 		Target:  int(cgroup.Fd()),
@@ -48,13 +49,41 @@ func TestRawLink(t *testing.T) {
 
 	testLink(t, link, testLinkOptions{
 		prog: prog,
-		loadPinned: func(f string) (Link, error) {
-			return LoadPinnedRawLink(f)
+		loadPinned: func(f string, opts *LoadPinOptions) (Link, error) {
+			return LoadPinnedRawLink(f, UnspecifiedType, opts)
 		},
 	})
 }
 
-func mustCgroupFixtures(t *testing.T) (*os.File, *ebpf.Program, func()) {
+func TestRawLinkLoadPinnedWithOptions(t *testing.T) {
+	cgroup, prog := mustCgroupFixtures(t)
+
+	link, err := AttachRawLink(RawLinkOptions{
+		Target:  int(cgroup.Fd()),
+		Program: prog,
+		Attach:  ebpf.AttachCGroupInetEgress,
+	})
+	testutils.SkipIfNotSupported(t, err)
+	if err != nil {
+		t.Fatal("Can't create raw link:", err)
+	}
+
+	path := filepath.Join(testutils.TempBPFFS(t), "link")
+	err = link.Pin(path)
+	testutils.SkipIfNotSupported(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = LoadPinnedRawLink(path, UnspecifiedType, &LoadPinOptions{
+		Flags: math.MaxUint32,
+	})
+	if !errors.Is(err, unix.EINVAL) {
+		t.Fatal("Invalid flags don't trigger an error:", err)
+	}
+}
+
+func mustCgroupFixtures(t *testing.T) (*os.File, *ebpf.Program) {
 	t.Helper()
 
 	testutils.SkipIfNotSupported(t, haveProgAttach())
@@ -72,12 +101,13 @@ func mustCgroupFixtures(t *testing.T) (*os.File, *ebpf.Program, func()) {
 		os.Remove(cgdir)
 		t.Fatal(err)
 	}
-
-	return cgroup, prog, func() {
+	t.Cleanup(func() {
 		prog.Close()
 		cgroup.Close()
 		os.Remove(cgdir)
-	}
+	})
+
+	return cgroup, prog
 }
 
 func mustCgroupEgressProgram(t *testing.T) *ebpf.Program {
@@ -100,7 +130,7 @@ func mustCgroupEgressProgram(t *testing.T) *ebpf.Program {
 
 type testLinkOptions struct {
 	prog       *ebpf.Program
-	loadPinned func(string) (Link, error)
+	loadPinned func(string, *LoadPinOptions) (Link, error)
 }
 
 func testLink(t *testing.T, link Link, opts testLinkOptions) {
@@ -127,7 +157,7 @@ func testLink(t *testing.T, link Link, opts testLinkOptions) {
 			t.Fatalf("Can't pin %T: %s", link, err)
 		}
 
-		link2, err := opts.loadPinned(path)
+		link2, err := opts.loadPinned(path, nil)
 		if err != nil {
 			t.Fatalf("Can't load pinned %T: %s", link, err)
 		}
@@ -135,6 +165,13 @@ func testLink(t *testing.T, link Link, opts testLinkOptions) {
 
 		if reflect.TypeOf(link) != reflect.TypeOf(link2) {
 			t.Errorf("Loading a pinned %T returns a %T", link, link2)
+		}
+
+		_, err = opts.loadPinned(path, &LoadPinOptions{
+			Flags: math.MaxUint32,
+		})
+		if !errors.Is(err, unix.EINVAL) {
+			t.Errorf("Loading a pinned %T doesn't respect flags", link)
 		}
 	}
 

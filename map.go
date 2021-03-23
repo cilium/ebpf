@@ -25,7 +25,8 @@ type MapOptions struct {
 	// The base path to pin maps in if requested via PinByName.
 	// Existing maps will be re-used if they are compatible, otherwise an
 	// error is returned.
-	PinPath string
+	PinPath        string
+	LoadPinOptions LoadPinOptions
 }
 
 // MapID represents the unique ID of an eBPF map
@@ -174,7 +175,13 @@ func NewMapWithOptions(spec *MapSpec, opts MapOptions) (*Map, error) {
 	return newMapWithOptions(spec, opts, btfs)
 }
 
-func newMapWithOptions(spec *MapSpec, opts MapOptions, btfs btfHandleCache) (*Map, error) {
+func newMapWithOptions(spec *MapSpec, opts MapOptions, btfs btfHandleCache) (_ *Map, err error) {
+	closeOnError := func(c io.Closer) {
+		if err != nil {
+			c.Close()
+		}
+	}
+
 	switch spec.Pinning {
 	case PinByName:
 		if spec.Name == "" || opts.PinPath == "" {
@@ -182,16 +189,16 @@ func newMapWithOptions(spec *MapSpec, opts MapOptions, btfs btfHandleCache) (*Ma
 		}
 
 		path := filepath.Join(opts.PinPath, spec.Name)
-		m, err := LoadPinnedMap(path, nil)
+		m, err := LoadPinnedMap(path, &opts.LoadPinOptions)
 		if errors.Is(err, unix.ENOENT) {
 			break
 		}
 		if err != nil {
-			return nil, fmt.Errorf("load pinned map: %s", err)
+			return nil, fmt.Errorf("load pinned map: %w", err)
 		}
+		defer closeOnError(m)
 
 		if err := spec.checkCompatibility(m); err != nil {
-			m.Close()
 			return nil, fmt.Errorf("use pinned map %s: %s", spec.Name, err)
 		}
 
@@ -227,10 +234,11 @@ func newMapWithOptions(spec *MapSpec, opts MapOptions, btfs btfHandleCache) (*Ma
 	if err != nil {
 		return nil, err
 	}
+	defer closeOnError(m)
 
 	if spec.Pinning == PinByName {
-		if err := m.Pin(filepath.Join(opts.PinPath, spec.Name)); err != nil {
-			m.Close()
+		path := filepath.Join(opts.PinPath, spec.Name)
+		if err := m.Pin(path); err != nil {
 			return nil, fmt.Errorf("pin map: %s", err)
 		}
 	}

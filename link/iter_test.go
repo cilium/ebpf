@@ -50,8 +50,8 @@ func TestIter(t *testing.T) {
 
 	testLink(t, it, testLinkOptions{
 		prog: prog,
-		loadPinned: func(s string) (Link, error) {
-			return LoadPinnedIter(s)
+		loadPinned: func(s string, opts *ebpf.LoadPinOptions) (Link, error) {
+			return LoadPinnedIter(s, opts)
 		},
 	})
 }

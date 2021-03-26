@@ -533,28 +533,25 @@ func (ec *elfCode) loadBTFMaps(maps map[string]*MapSpec) error {
 			return fmt.Errorf("missing BTF")
 		}
 
-		if len(sec.symbols) == 0 {
-			return fmt.Errorf("section %v: no symbols", sec.Name)
-		}
-
 		_, err := io.Copy(internal.DiscardZeroes{}, bufio.NewReader(sec.Open()))
 		if err != nil {
 			return fmt.Errorf("section %v: initializing BTF map definitions: %w", sec.Name, internal.ErrNotSupported)
 		}
 
-		for _, sym := range sec.symbols {
-			name := sym.Name
-			if maps[name] != nil {
-				return fmt.Errorf("section %v: map %v already exists", sec.Name, sym)
-			}
+		var ds btf.Datasec
+		if err := ec.btf.FindType(sec.Name, &ds); err != nil {
+			return fmt.Errorf("cannot find section '%s' in BTF: %w", sec.Name, err)
+		}
 
-			// A global Var is created by declaring a struct with a 'structure variable',
-			// as is common in eBPF C to declare eBPF maps. For example,
-			// `struct { ... } map_name ...;` emits a global variable `map_name`
-			// with the type of said struct (which can be anonymous).
-			var v btf.Var
-			if err := ec.btf.FindType(name, &v); err != nil {
-				return fmt.Errorf("cannot find global variable '%s' in BTF: %w", name, err)
+		for _, vs := range ds.Vars {
+			v, ok := vs.Type.(*btf.Var)
+			if !ok {
+				return fmt.Errorf("section %v: unexpected type %s", sec.Name, vs.Type)
+			}
+			name := string(v.Name)
+
+			if maps[name] != nil {
+				return fmt.Errorf("section %v: map %s already exists", sec.Name, name)
 			}
 
 			mapStruct, ok := v.Type.(*btf.Struct)

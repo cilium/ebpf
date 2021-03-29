@@ -159,6 +159,11 @@ func Tgkill(tgid int, tid int, sig syscall.Signal) (err error) {
 	return linux.Tgkill(tgid, tid, sig)
 }
 
+// BytePtrFromString is a wrapper
+func BytePtrFromString(s string) (*byte, error) {
+	return linux.BytePtrFromString(s)
+}
+
 func KernelRelease() (string, error) {
 	var uname Utsname
 	err := Uname(&uname)

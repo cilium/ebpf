@@ -1,6 +1,7 @@
 package link
 
 import (
+	"errors"
 	"fmt"
 	"unsafe"
 
@@ -9,6 +10,7 @@ import (
 )
 
 var ErrNotSupported = internal.ErrNotSupported
+var ErrInvalidInput = errors.New("invalid input")
 
 // Link represents a Program attached to a BPF hook.
 type Link interface {

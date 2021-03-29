@@ -225,6 +225,11 @@ func Tgkill(tgid int, tid int, sig syscall.Signal) (err error) {
 	return errNonLinux
 }
 
+// BytePtrFromString is a wrapper
+func BytePtrFromString(s string) (*byte, error) {
+	return nil, errNonLinux
+}
+
 func KernelRelease() (string, error) {
 	return "", errNonLinux
 }

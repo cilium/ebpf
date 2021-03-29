@@ -41,7 +41,10 @@ const (
 	PROT_WRITE               = 0x2
 	MAP_SHARED               = 0x1
 	PERF_TYPE_SOFTWARE       = 0x1
+	PERF_TYPE_TRACEPOINT     = 0
 	PERF_COUNT_SW_BPF_OUTPUT = 0xa
+	PERF_EVENT_IOC_ENABLE    = 0
+	PERF_EVENT_IOC_SET_BPF   = 0
 	PerfBitWatermark         = 0x4000
 	PERF_SAMPLE_RAW          = 0x400
 	PERF_FLAG_FD_CLOEXEC     = 0x8
@@ -87,6 +90,11 @@ func Syscall(trap, a1, a2, a3 uintptr) (r1, r2 uintptr, err syscall.Errno) {
 // FcntlInt is a wrapper
 func FcntlInt(fd uintptr, cmd, arg int) (int, error) {
 	return -1, errNonLinux
+}
+
+// IoctlSetInt is a wrapper
+func IoctlSetInt(fd int, req uint, value int) error {
+	return errNonLinux
 }
 
 // Statfs is a wrapper
@@ -223,6 +231,10 @@ func Gettid() int {
 // Tgkill is a wrapper
 func Tgkill(tgid int, tid int, sig syscall.Signal) (err error) {
 	return errNonLinux
+}
+
+func BytePtrFromString(s string) (*byte, error) {
+	return nil, errNonLinux
 }
 
 func KernelRelease() (string, error) {

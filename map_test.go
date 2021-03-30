@@ -309,7 +309,7 @@ func TestMapPin(t *testing.T) {
 		t.Fatal("Can't put:", err)
 	}
 
-	tmp := tempBPFFS(t)
+	tmp := testutils.TempBPFFS(t)
 
 	// Issue 51: pad path out to a power of two, to avoid having a
 	// trailing zero at the end of the allocation which holds the string.
@@ -325,7 +325,7 @@ func TestMapPin(t *testing.T) {
 
 	m.Close()
 
-	m, err := LoadPinnedMap(path)
+	m, err := LoadPinnedMap(path, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -371,7 +371,7 @@ func TestNestedMapPin(t *testing.T) {
 	}
 	m.Close()
 
-	m, err = LoadPinnedMap(path)
+	m, err = LoadPinnedMap(path, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -398,7 +398,7 @@ func TestNestedMapPinNested(t *testing.T) {
 }
 
 func TestMapPinMultiple(t *testing.T) {
-	tmp := tempBPFFS(t)
+	tmp := testutils.TempBPFFS(t)
 	c := qt.New(t)
 
 	spec := spec1.Copy()
@@ -418,7 +418,7 @@ func TestMapPinMultiple(t *testing.T) {
 	if _, err := os.Stat(oldPath); err == nil {
 		t.Fatal("Previous pinned map path still exists:", err)
 	}
-	m2, err := LoadPinnedMap(newPath)
+	m2, err := LoadPinnedMap(newPath, nil)
 	c.Assert(err, qt.IsNil)
 	defer m2.Close()
 }
@@ -434,7 +434,7 @@ func TestMapPinWithEmptyPath(t *testing.T) {
 }
 
 func TestMapUnpin(t *testing.T) {
-	tmp := tempBPFFS(t)
+	tmp := testutils.TempBPFFS(t)
 	c := qt.New(t)
 	spec := spec1.Copy()
 
@@ -447,7 +447,7 @@ func TestMapUnpin(t *testing.T) {
 	pinned := m.IsPinned()
 	c.Assert(pinned, qt.Equals, true)
 	path := filepath.Join(tmp, spec.Name)
-	m2, err := LoadPinnedMap(path)
+	m2, err := LoadPinnedMap(path, nil)
 	c.Assert(err, qt.IsNil)
 	defer m2.Close()
 
@@ -460,7 +460,7 @@ func TestMapUnpin(t *testing.T) {
 }
 
 func TestMapLoadPinned(t *testing.T) {
-	tmp := tempBPFFS(t)
+	tmp := testutils.TempBPFFS(t)
 	c := qt.New(t)
 
 	spec := spec1.Copy()
@@ -472,7 +472,7 @@ func TestMapLoadPinned(t *testing.T) {
 	c.Assert(pinned, qt.Equals, true)
 
 	path := filepath.Join(tmp, spec.Name)
-	m2, err := LoadPinnedMap(path)
+	m2, err := LoadPinnedMap(path, nil)
 	c.Assert(err, qt.IsNil)
 	defer m2.Close()
 	pinned = m2.IsPinned()
@@ -480,7 +480,7 @@ func TestMapLoadPinned(t *testing.T) {
 }
 
 func TestMapLoadPinnedUnpin(t *testing.T) {
-	tmp := tempBPFFS(t)
+	tmp := testutils.TempBPFFS(t)
 	c := qt.New(t)
 
 	spec := spec1.Copy()
@@ -492,13 +492,89 @@ func TestMapLoadPinnedUnpin(t *testing.T) {
 	c.Assert(pinned, qt.Equals, true)
 
 	path := filepath.Join(tmp, spec.Name)
-	m2, err := LoadPinnedMap(path)
+	m2, err := LoadPinnedMap(path, nil)
 	c.Assert(err, qt.IsNil)
 	defer m2.Close()
 	err = m1.Unpin()
 	c.Assert(err, qt.IsNil)
 	err = m2.Unpin()
 	c.Assert(err, qt.IsNil)
+}
+
+func TestMapLoadPinnedWithOptions(t *testing.T) {
+	array := createArray(t)
+	defer array.Close()
+
+	tmp := testutils.TempBPFFS(t)
+
+	path := filepath.Join(tmp, "map")
+	if err := array.Pin(path); err != nil {
+		t.Fatal(err)
+	}
+	if err := array.Put(uint32(0), uint32(123)); err != nil {
+		t.Fatal(err)
+	}
+	array.Close()
+
+	t.Run("read-only", func(t *testing.T) {
+		array, err := LoadPinnedMap(path, &LoadPinOptions{
+			ReadOnly: true,
+		})
+		testutils.SkipIfNotSupported(t, err)
+		if err != nil {
+			t.Fatal("Can't load map:", err)
+		}
+		defer array.Close()
+
+		if err := array.Put(uint32(0), uint32(1)); !errors.Is(err, unix.EPERM) {
+			t.Fatal("Expected EPERM from Put, got", err)
+		}
+	})
+
+	t.Run("write-only", func(t *testing.T) {
+		array, err := LoadPinnedMap(path, &LoadPinOptions{
+			WriteOnly: true,
+		})
+		testutils.SkipIfNotSupported(t, err)
+		if err != nil {
+			t.Fatal("Can't load map:", err)
+		}
+		defer array.Close()
+
+		var value uint32
+		if err := array.Lookup(uint32(0), &value); !errors.Is(err, unix.EPERM) {
+			t.Fatal("Expected EPERM from Lookup, got", err)
+		}
+	})
+}
+
+func TestMapPinFlags(t *testing.T) {
+	tmp := testutils.TempBPFFS(t)
+
+	spec := &MapSpec{
+		Name:       "map",
+		Type:       Array,
+		KeySize:    4,
+		ValueSize:  4,
+		MaxEntries: 1,
+		Pinning:    PinByName,
+	}
+
+	m, err := NewMapWithOptions(spec, MapOptions{
+		PinPath: tmp,
+	})
+	qt.Assert(t, err, qt.IsNil)
+	m.Close()
+
+	_, err = NewMapWithOptions(spec, MapOptions{
+		PinPath: tmp,
+		LoadPinOptions: LoadPinOptions{
+			Flags: math.MaxUint32,
+		},
+	})
+	if !errors.Is(err, unix.EINVAL) {
+		t.Fatal("Invalid flags should trigger EINVAL:", err)
+	}
 }
 
 func createArray(t *testing.T) *Map {
@@ -1169,7 +1245,7 @@ func TestNewMapFromID(t *testing.T) {
 }
 
 func TestMapPinning(t *testing.T) {
-	tmp := tempBPFFS(t)
+	tmp := testutils.TempBPFFS(t)
 	c := qt.New(t)
 
 	spec := &MapSpec{

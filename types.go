@@ -1,5 +1,7 @@
 package ebpf
 
+import "github.com/cilium/ebpf/internal"
+
 //go:generate stringer -output types_string.go -type=MapType,ProgramType,AttachType,PinType
 
 // MapType indicates the type map structure
@@ -201,6 +203,8 @@ const (
 	// Pin an object by using its name as the filename.
 	PinByName
 )
+
+type LoadPinOptions = internal.LoadPinOptions
 
 // BatchOptions batch map operations options
 //

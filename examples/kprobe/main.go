@@ -1,19 +1,19 @@
-// This program demonstrates how to attach an eBPF program to a kprobe.
-// The program will be attached to the __x64_sys_execve syscall and print out
-// the number of times it has been called every second.
+// +build linux
+
+// This program demonstrates attaching an eBPF program to a kernel symbol.
+// The eBPF program will be attached to the start of the __x64_sys_execve
+// kernel function and prints out the number of times it has been called
+// every second.
 package main
 
 import (
-	"fmt"
 	"log"
 	"os"
 	"os/signal"
-	"runtime"
 	"syscall"
 	"time"
-	"unsafe"
 
-	goperf "github.com/elastic/go-perf"
+	"github.com/cilium/ebpf/link"
 	"golang.org/x/sys/unix"
 )
 
@@ -22,10 +22,16 @@ import (
 const mapKey uint32 = 0
 
 func main() {
+
+	// Name of the kernel function to trace.
+	fn := "__x64_sys_execve"
+
+	// Subscribe to signals for terminating the program.
 	stopper := make(chan os.Signal, 1)
 	signal.Notify(stopper, os.Interrupt, syscall.SIGTERM)
 
-	// Increase rlimit so the eBPF map and program can be loaded.
+	// Increase the rlimit of the current process to provide sufficient space
+	// for locking memory for the eBPF map.
 	if err := unix.Setrlimit(unix.RLIMIT_MEMLOCK, &unix.Rlimit{
 		Cur: unix.RLIM_INFINITY,
 		Max: unix.RLIM_INFINITY,
@@ -33,71 +39,39 @@ func main() {
 		log.Fatalf("failed to set temporary rlimit: %v", err)
 	}
 
-	// Load Program and Map
+	// Load pre-compiled programs and maps into the kernel.
 	objs := KProbeExampleObjects{}
 	if err := LoadKProbeExampleObjects(&objs, nil); err != nil {
-		log.Fatalf("error while loading objects: %v", err)
+		log.Fatalf("loading objects: %v", err)
 	}
 	defer objs.Close()
 
-	// Create and attach __x64_sys_execve kprobe
-	efd, err := openKProbe("__x64_sys_execve", uint32(objs.KprobeExecve.FD()))
+	// Open a Kprobe at the entry point of the kernel function and attach the
+	// pre-compiled program. Each time the kernel function enters, the program
+	// will increment the execution counter by 1. The read loop below polls this
+	// map value once per second.
+	kp, err := link.Kprobe(fn, objs.KprobeExecve)
 	if err != nil {
-		log.Fatalf("create and attach KProbe: %v", err)
-
+		log.Fatalf("opening kprobe: %s", err)
 	}
-	defer unix.Close(efd)
+	defer kp.Close()
 
+	// Read loop reporting the total amount of times the kernel
+	// function was entered, once per second.
 	ticker := time.NewTicker(1 * time.Second)
+
+	log.Println("Waiting for events..")
+
 	for {
 		select {
 		case <-ticker.C:
 			var value uint64
 			if err := objs.KprobeMap.Lookup(mapKey, &value); err != nil {
-				log.Fatalf("error while reading map: %v", err)
+				log.Fatalf("reading map: %v", err)
 			}
-			log.Printf("__x64_sys_execve called %d times\n", value)
+			log.Printf("%s called %d times\n", fn, value)
 		case <-stopper:
 			return
 		}
 	}
-}
-
-func openKProbe(syscall string, fd uint32) (int, error) {
-	et, err := goperf.LookupEventType("kprobe")
-	if err != nil {
-		return 0, fmt.Errorf("read PMU type: %v", err)
-	}
-
-	config1ptr := newStringPointer(syscall)
-	ev, err := goperf.Open(&goperf.Attr{Type: et, Config1: uint64(uintptr(config1ptr))}, goperf.AllThreads, 0, nil)
-	if err != nil {
-		return 0, fmt.Errorf("perf event open: %v", err)
-	}
-	efd, err := ev.FD()
-	if err != nil {
-		return 0, fmt.Errorf("get perf event fd: %v", err)
-	}
-
-	// Ensure config1ptr is not finalized until goperf.Open returns.
-	runtime.KeepAlive(config1ptr)
-
-	if err := unix.IoctlSetInt(efd, unix.PERF_EVENT_IOC_ENABLE, 0); err != nil {
-		unix.Close(efd)
-		return 0, fmt.Errorf("perf event enable: %v", err)
-	}
-
-	if err := ev.SetBPF(fd); err != nil {
-		unix.Close(efd)
-		return 0, fmt.Errorf("perf event set bpf: %v", err)
-	}
-
-	return efd, nil
-}
-
-func newStringPointer(str string) unsafe.Pointer {
-	// The kernel expects strings to be zero terminated
-	buf := make([]byte, len(str)+1)
-	copy(buf, str)
-	return unsafe.Pointer(&buf[0])
 }

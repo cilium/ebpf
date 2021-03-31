@@ -26,6 +26,8 @@ const (
 
 	BPF_F_NO_PREALLOC        = 0
 	BPF_F_NUMA_NODE          = 0
+	BPF_F_RDONLY             = 0
+	BPF_F_WRONLY             = 0
 	BPF_F_RDONLY_PROG        = 0
 	BPF_F_WRONLY_PROG        = 0
 	BPF_OBJ_NAME_LEN         = 0x10

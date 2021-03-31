@@ -347,7 +347,7 @@ func (p *Program) Clone() (*Program, error) {
 //
 // This requires bpffs to be mounted above fileName. See https://docs.cilium.io/en/k8s-doc/admin/#admin-mount-bpffs
 func (p *Program) Pin(fileName string) error {
-	if err := pin(p.pinnedPath, fileName, p.fd); err != nil {
+	if err := internal.Pin(p.pinnedPath, fileName, p.fd); err != nil {
 		return err
 	}
 	p.pinnedPath = fileName
@@ -360,7 +360,7 @@ func (p *Program) Pin(fileName string) error {
 //
 // Unpinning an unpinned Program returns nil.
 func (p *Program) Unpin() error {
-	if err := unpin(p.pinnedPath); err != nil {
+	if err := internal.Unpin(p.pinnedPath); err != nil {
 		return err
 	}
 	p.pinnedPath = ""
@@ -594,8 +594,8 @@ func (p *Program) Detach(fd int, typ AttachType, flags AttachFlags) error {
 // LoadPinnedProgram loads a Program from a BPF file.
 //
 // Requires at least Linux 4.11.
-func LoadPinnedProgram(fileName string) (*Program, error) {
-	fd, err := internal.BPFObjGet(fileName)
+func LoadPinnedProgram(fileName string, opts *LoadPinOptions) (*Program, error) {
+	fd, err := internal.BPFObjGet(fileName, internal.LoadPinFlags(opts))
 	if err != nil {
 		return nil, err
 	}

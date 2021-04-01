@@ -1,7 +1,6 @@
 package btf
 
 import (
-	"errors"
 	"fmt"
 	"math"
 	"strings"
@@ -516,7 +515,7 @@ func Sizeof(typ Type) (int, error) {
 		switch v := typ.(type) {
 		case *Array:
 			if n > 0 && int64(v.Nelems) > math.MaxInt64/n {
-				return 0, errors.New("overflow")
+				return 0, fmt.Errorf("type %s: overflow", typ)
 			}
 
 			// Arrays may be of zero length, which allows
@@ -541,18 +540,18 @@ func Sizeof(typ Type) (int, error) {
 		}
 
 		if n > 0 && elem > math.MaxInt64/n {
-			return 0, errors.New("overflow")
+			return 0, fmt.Errorf("type %s: overflow", typ)
 		}
 
 		size := n * elem
 		if int64(int(size)) != size {
-			return 0, errors.New("overflow")
+			return 0, fmt.Errorf("type %s: overflow", typ)
 		}
 
 		return int(size), nil
 	}
 
-	return 0, errors.New("exceeded type depth")
+	return 0, fmt.Errorf("type %s: exceeded type depth", typ)
 }
 
 // copy a Type recursively.

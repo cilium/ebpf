@@ -339,7 +339,7 @@ func coreCalculateFixup(local Type, localID TypeID, target Type, targetID TypeID
 	zero := COREFixup{}
 
 	switch relo.kind {
-	case reloTypeIDTarget:
+	case reloTypeIDTarget, reloTypeSize, reloTypeExists:
 		if len(relo.accessor) > 1 || relo.accessor[0] != 0 {
 			return zero, fmt.Errorf("%s: unexpected accessor %v", relo.kind, relo.accessor)
 		}
@@ -352,7 +352,26 @@ func coreCalculateFixup(local Type, localID TypeID, target Type, targetID TypeID
 			return zero, fmt.Errorf("relocation %s: %w", relo.kind, err)
 		}
 
-		return fixup(uint32(localID), uint32(targetID))
+		switch relo.kind {
+		case reloTypeExists:
+			return fixup(1, 1)
+
+		case reloTypeIDTarget:
+			return fixup(uint32(localID), uint32(targetID))
+
+		case reloTypeSize:
+			localSize, err := Sizeof(local)
+			if err != nil {
+				return zero, err
+			}
+
+			targetSize, err := Sizeof(target)
+			if err != nil {
+				return zero, err
+			}
+
+			return fixup(uint32(localSize), uint32(targetSize))
+		}
 
 	case reloEnumvalValue, reloEnumvalExists:
 		localValue, targetValue, err := coreFindEnumValue(local, relo.accessor, target)

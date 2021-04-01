@@ -40,7 +40,11 @@ const (
 	PROT_WRITE               = linux.PROT_WRITE
 	MAP_SHARED               = linux.MAP_SHARED
 	PERF_TYPE_SOFTWARE       = linux.PERF_TYPE_SOFTWARE
+	PERF_TYPE_TRACEPOINT     = linux.PERF_TYPE_TRACEPOINT
 	PERF_COUNT_SW_BPF_OUTPUT = linux.PERF_COUNT_SW_BPF_OUTPUT
+	PERF_EVENT_IOC_DISABLE   = linux.PERF_EVENT_IOC_DISABLE
+	PERF_EVENT_IOC_ENABLE    = linux.PERF_EVENT_IOC_ENABLE
+	PERF_EVENT_IOC_SET_BPF   = linux.PERF_EVENT_IOC_SET_BPF
 	PerfBitWatermark         = linux.PerfBitWatermark
 	PERF_SAMPLE_RAW          = linux.PERF_SAMPLE_RAW
 	PERF_FLAG_FD_CLOEXEC     = linux.PERF_FLAG_FD_CLOEXEC
@@ -70,6 +74,11 @@ func Syscall(trap, a1, a2, a3 uintptr) (r1, r2 uintptr, err syscall.Errno) {
 // FcntlInt is a wrapper
 func FcntlInt(fd uintptr, cmd, arg int) (int, error) {
 	return linux.FcntlInt(fd, cmd, arg)
+}
+
+// IoctlSetInt is a wrapper
+func IoctlSetInt(fd int, req uint, value int) error {
+	return linux.IoctlSetInt(fd, req, value)
 }
 
 // Statfs is a wrapper

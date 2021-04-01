@@ -551,21 +551,51 @@ func TestProgramSpecTag(t *testing.T) {
 }
 
 func TestProgramTypeLSM(t *testing.T) {
-	prog, err := NewProgram(&ProgramSpec{
-		AttachTo:   "task_getpgid",
-		AttachType: AttachLSMMac,
-		Instructions: asm.Instructions{
-			asm.LoadImm(asm.R0, 0, asm.DWord),
-			asm.Return(),
+	lsmTests := []struct {
+		attachFn    string
+		flags       uint32
+		expectedErr bool
+	}{
+		{
+			attachFn: "task_getpgid",
 		},
-		License: "GPL",
-		Type:    LSM,
-	})
-	testutils.SkipIfNotSupported(t, err)
-	if err != nil {
-		t.Fatal(err)
+		{
+			attachFn:    "task_setnice",
+			flags:       unix.BPF_F_SLEEPABLE,
+			expectedErr: true,
+		},
+		{
+			attachFn: "file_open",
+			flags:    unix.BPF_F_SLEEPABLE,
+		},
 	}
-	prog.Close()
+	for _, tt := range lsmTests {
+		t.Run(tt.attachFn, func(t *testing.T) {
+			prog, err := NewProgram(&ProgramSpec{
+				AttachTo:   tt.attachFn,
+				AttachType: AttachLSMMac,
+				Instructions: asm.Instructions{
+					asm.LoadImm(asm.R0, 0, asm.DWord),
+					asm.Return(),
+				},
+				License: "GPL",
+				Type:    LSM,
+				Flags:   tt.flags,
+			})
+			testutils.SkipIfNotSupported(t, err)
+
+			if tt.flags&unix.BPF_F_SLEEPABLE != 0 {
+				testutils.SkipOnOldKernel(t, "5.10", "BPF_F_SLEEPABLE program flag")
+			}
+			if tt.expectedErr && err == nil {
+				t.Errorf("Test case '%s': expected error", tt.attachFn)
+			}
+			if !tt.expectedErr && err != nil {
+				t.Errorf("Test case '%s': expected success", tt.attachFn)
+			}
+			prog.Close()
+		})
+	}
 }
 
 func createProgramArray(t *testing.T) *Map {

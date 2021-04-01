@@ -17,34 +17,111 @@ struct s {
 
 typedef struct s s_t;
 
-#define local_id_not(expr, val) \
+union u {
+	int *_1;
+	char *_2;
+};
+
+typedef union u u_t;
+
+#define local_id_zero(expr) \
 	({ \
-		if (bpf_core_type_id_local(expr) == val) { \
+		if (bpf_core_type_id_local(expr) != 0) { \
 			return __LINE__; \
 		} \
 	})
 
-#define target_id_not(expr, val) \
+#define local_id_not_zero(expr) \
 	({ \
-		if (bpf_core_type_id_kernel(expr) == val) { \
+		if (bpf_core_type_id_local(expr) == 0) { \
+			return __LINE__; \
+		} \
+	})
+
+#define target_and_local_id_match(expr) \
+	({ \
+		if (bpf_core_type_id_kernel(expr) != bpf_core_type_id_local(expr)) { \
 			return __LINE__; \
 		} \
 	})
 
 __section("socket_filter/type_ids") int type_ids() {
-	local_id_not(int, 0);
-	local_id_not(
-		struct { int frob; }, 0);
-	local_id_not(enum {FRAP}, 0);
+	local_id_not_zero(int);
+	local_id_not_zero(struct { int frob; });
+	local_id_not_zero(enum {FRAP});
+	local_id_not_zero(union { char bar; });
 
-	local_id_not(struct s, 0);
-	local_id_not(s_t, 0);
-	local_id_not(const s_t, 0);
-	local_id_not(volatile s_t, 0);
-	local_id_not(enum e, 0);
-	local_id_not(e_t, 0);
-	local_id_not(const e_t, 0);
-	local_id_not(volatile e_t, 0);
+	local_id_not_zero(struct s);
+	local_id_not_zero(s_t);
+	local_id_not_zero(const s_t);
+	local_id_not_zero(volatile s_t);
+	local_id_not_zero(enum e);
+	local_id_not_zero(e_t);
+	local_id_not_zero(const e_t);
+	local_id_not_zero(volatile e_t);
+	local_id_not_zero(union u);
+	local_id_not_zero(u_t);
+	local_id_not_zero(const u_t);
+	local_id_not_zero(volatile u_t);
+
+	// Qualifiers on types crash clang.
+	target_and_local_id_match(struct s);
+	target_and_local_id_match(s_t);
+	// target_and_local_id_match(const s_t);
+	// target_and_local_id_match(volatile s_t);
+	target_and_local_id_match(enum e);
+	target_and_local_id_match(e_t);
+	// target_and_local_id_match(const e_t);
+	// target_and_local_id_match(volatile e_t);
+	target_and_local_id_match(union u);
+	target_and_local_id_match(u_t);
+	// target_and_local_id_match(const u_t);
+	// target_and_local_id_match(volatile u_t);
+
+	return 0;
+}
+
+#define type_exists(expr) \
+	({ \
+		if (!bpf_core_type_exists(expr)) { \
+			return __LINE__; \
+		} \
+	})
+
+#define type_size_matches(expr) \
+	({ \
+		if (bpf_core_type_size(expr) != sizeof(expr)) { \
+			return __LINE__; \
+		} \
+	})
+
+__section("socket_filter/types") int types() {
+	type_exists(struct s);
+	type_exists(s_t);
+	type_exists(const s_t);
+	type_exists(volatile s_t);
+	type_exists(enum e);
+	type_exists(e_t);
+	type_exists(const e_t);
+	type_exists(volatile e_t);
+	type_exists(union u);
+	type_exists(u_t);
+	type_exists(const u_t);
+	type_exists(volatile u_t);
+	// TODO: Check non-existence.
+
+	type_size_matches(struct s);
+	type_size_matches(s_t);
+	type_size_matches(const s_t);
+	type_size_matches(volatile s_t);
+	type_size_matches(enum e);
+	type_size_matches(e_t);
+	type_size_matches(const e_t);
+	type_size_matches(volatile e_t);
+	type_size_matches(union u);
+	type_size_matches(u_t);
+	type_size_matches(const u_t);
+	type_size_matches(volatile u_t);
 
 	return 0;
 }
@@ -89,11 +166,9 @@ struct ambiguous___flavour {
 };
 
 __section("socket_filter/err_ambiguous") int err_ambiguous() {
-	target_id_not(struct ambiguous, 0);
-	return 0;
+	return bpf_core_type_id_kernel(struct ambiguous);
 }
 
 __section("socket_filter/err_ambiguous_flavour") int err_ambiguous_flavour() {
-	target_id_not(struct ambiguous___flavour, 0);
-	return 0;
+	return bpf_core_type_id_kernel(struct ambiguous___flavour);
 }

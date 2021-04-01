@@ -253,7 +253,6 @@ func TestCoreRelocation(t *testing.T) {
 				}
 
 				relos, err := ProgramFixups(prog, spec)
-				testutils.SkipIfNotSupported(t, err)
 				if want := errs[name]; want != nil {
 					if !errors.Is(err, want) {
 						t.Fatal("Expected", want, "got", err)

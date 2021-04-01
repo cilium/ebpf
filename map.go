@@ -25,7 +25,8 @@ type MapOptions struct {
 	// The base path to pin maps in if requested via PinByName.
 	// Existing maps will be re-used if they are compatible, otherwise an
 	// error is returned.
-	PinPath string
+	PinPath        string
+	LoadPinOptions LoadPinOptions
 }
 
 // MapID represents the unique ID of an eBPF map
@@ -174,23 +175,30 @@ func NewMapWithOptions(spec *MapSpec, opts MapOptions) (*Map, error) {
 	return newMapWithOptions(spec, opts, btfs)
 }
 
-func newMapWithOptions(spec *MapSpec, opts MapOptions, btfs btfHandleCache) (*Map, error) {
+func newMapWithOptions(spec *MapSpec, opts MapOptions, btfs btfHandleCache) (_ *Map, err error) {
+	closeOnError := func(c io.Closer) {
+		if err != nil {
+			c.Close()
+		}
+	}
+
 	switch spec.Pinning {
 	case PinByName:
 		if spec.Name == "" || opts.PinPath == "" {
 			return nil, fmt.Errorf("pin by name: missing Name or PinPath")
 		}
 
-		m, err := LoadPinnedMap(filepath.Join(opts.PinPath, spec.Name))
+		path := filepath.Join(opts.PinPath, spec.Name)
+		m, err := LoadPinnedMap(path, &opts.LoadPinOptions)
 		if errors.Is(err, unix.ENOENT) {
 			break
 		}
 		if err != nil {
-			return nil, fmt.Errorf("load pinned map: %s", err)
+			return nil, fmt.Errorf("load pinned map: %w", err)
 		}
+		defer closeOnError(m)
 
 		if err := spec.checkCompatibility(m); err != nil {
-			m.Close()
 			return nil, fmt.Errorf("use pinned map %s: %s", spec.Name, err)
 		}
 
@@ -226,10 +234,11 @@ func newMapWithOptions(spec *MapSpec, opts MapOptions, btfs btfHandleCache) (*Ma
 	if err != nil {
 		return nil, err
 	}
+	defer closeOnError(m)
 
 	if spec.Pinning == PinByName {
-		if err := m.Pin(filepath.Join(opts.PinPath, spec.Name)); err != nil {
-			m.Close()
+		path := filepath.Join(opts.PinPath, spec.Name)
+		if err := m.Pin(path); err != nil {
 			return nil, fmt.Errorf("pin map: %s", err)
 		}
 	}
@@ -810,7 +819,7 @@ func (m *Map) Clone() (*Map, error) {
 //
 // This requires bpffs to be mounted above fileName. See https://docs.cilium.io/en/k8s-doc/admin/#admin-mount-bpffs
 func (m *Map) Pin(fileName string) error {
-	if err := pin(m.pinnedPath, fileName, m.fd); err != nil {
+	if err := internal.Pin(m.pinnedPath, fileName, m.fd); err != nil {
 		return err
 	}
 	m.pinnedPath = fileName
@@ -823,7 +832,7 @@ func (m *Map) Pin(fileName string) error {
 //
 // Unpinning an unpinned Map returns nil.
 func (m *Map) Unpin() error {
-	if err := unpin(m.pinnedPath); err != nil {
+	if err := internal.Unpin(m.pinnedPath); err != nil {
 		return err
 	}
 	m.pinnedPath = ""
@@ -972,9 +981,9 @@ func (m *Map) unmarshalValue(value interface{}, buf []byte) error {
 	return unmarshalBytes(value, buf)
 }
 
-// LoadPinnedMap load a Map from a BPF file.
-func LoadPinnedMap(fileName string) (*Map, error) {
-	fd, err := internal.BPFObjGet(fileName)
+// LoadPinnedMap loads a Map from a BPF file.
+func LoadPinnedMap(fileName string, opts *LoadPinOptions) (*Map, error) {
+	fd, err := internal.BPFObjGet(fileName, opts.Marshal())
 	if err != nil {
 		return nil, err
 	}

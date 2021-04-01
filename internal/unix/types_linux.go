@@ -26,6 +26,8 @@ const (
 	EBADF                    = linux.EBADF
 	BPF_F_NO_PREALLOC        = linux.BPF_F_NO_PREALLOC
 	BPF_F_NUMA_NODE          = linux.BPF_F_NUMA_NODE
+	BPF_F_RDONLY             = linux.BPF_F_RDONLY
+	BPF_F_WRONLY             = linux.BPF_F_WRONLY
 	BPF_F_RDONLY_PROG        = linux.BPF_F_RDONLY_PROG
 	BPF_F_WRONLY_PROG        = linux.BPF_F_WRONLY_PROG
 	BPF_OBJ_NAME_LEN         = linux.BPF_OBJ_NAME_LEN

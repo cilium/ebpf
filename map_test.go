@@ -433,6 +433,30 @@ func TestMapPinWithEmptyPath(t *testing.T) {
 	c.Assert(err, qt.Not(qt.IsNil))
 }
 
+func TestMapPinFailReplace(t *testing.T) {
+	tmp := tempBPFFS(t)
+	c := qt.New(t)
+	spec := spec1.Copy()
+	spec2 := spec1.Copy()
+	spec2.Name = spec1.Name + "bar"
+
+	m, err := NewMapWithOptions(spec, MapOptions{PinPath: tmp})
+	if err != nil {
+		t.Fatal("Failed to create map:", err)
+	}
+	defer m.Close()
+	m2, err := NewMapWithOptions(spec2, MapOptions{PinPath: tmp})
+	if err != nil {
+		t.Fatal("Failed to create map2:", err)
+	}
+	defer m2.Close()
+	c.Assert(m.IsPinned(), qt.Equals, true)
+	newPath := filepath.Join(tmp, spec2.Name)
+
+	c.Assert(m.Pin(newPath), qt.Not(qt.IsNil), qt.Commentf("Pin didn't"+
+		" fail new path from replacing an existing path"))
+}
+
 func TestMapUnpin(t *testing.T) {
 	tmp := tempBPFFS(t)
 	c := qt.New(t)

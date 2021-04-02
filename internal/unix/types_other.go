@@ -239,6 +239,11 @@ func BytePtrFromString(s string) (*byte, error) {
 	return nil, errNonLinux
 }
 
+// Renameat2 is a wrapper
+func Renameat2(olddirfd int, oldpath string, newdirfd int, newpath string, flags uint) error {
+	return errNonLinux
+}
+
 func KernelRelease() (string, error) {
 	return "", errNonLinux
 }

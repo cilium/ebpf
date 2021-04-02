@@ -805,7 +805,8 @@ func (m *Map) Clone() (*Map, error) {
 // Pin persists the map on the BPF virtual file system past the lifetime of
 // the process that created it .
 //
-// Calling Pin on a previously pinned map will override the path.
+// Calling Pin on a previously pinned map will overwrite the path, except when
+// the new path already exists. Re-pinning across filesystems is not supported.
 // You can Clone a map to pin it to a different path.
 //
 // This requires bpffs to be mounted above fileName. See https://docs.cilium.io/en/k8s-doc/admin/#admin-mount-bpffs

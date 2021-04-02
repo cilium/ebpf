@@ -53,6 +53,8 @@ const (
 	BPF_STATS_RUN_TIME       = linux.BPF_STATS_RUN_TIME
 	PERF_RECORD_LOST         = linux.PERF_RECORD_LOST
 	PERF_RECORD_SAMPLE       = linux.PERF_RECORD_SAMPLE
+	AT_FDCWD                 = linux.AT_FDCWD
+	RENAME_NOREPLACE         = linux.RENAME_NOREPLACE
 )
 
 // Statfs_t is a wrapper
@@ -171,6 +173,11 @@ func Tgkill(tgid int, tid int, sig syscall.Signal) (err error) {
 // BytePtrFromString is a wrapper
 func BytePtrFromString(s string) (*byte, error) {
 	return linux.BytePtrFromString(s)
+}
+
+// Renameat2 is a wrapper
+func Renameat2(olddirfd int, oldpath string, newdirfd int, newpath string, flags uint) error {
+	return linux.Renameat2(olddirfd, oldpath, newdirfd, newpath, flags)
 }
 
 func KernelRelease() (string, error) {

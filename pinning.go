@@ -6,6 +6,8 @@ import (
 	"os"
 
 	"github.com/cilium/ebpf/internal"
+
+	"golang.org/x/sys/unix"
 )
 
 func pin(currentPath, newPath string, fd *internal.FD) error {
@@ -20,7 +22,7 @@ func pin(currentPath, newPath string, fd *internal.FD) error {
 	}
 	var err error
 	// Object is now moved to the new pinning path.
-	if err = os.Rename(currentPath, newPath); err == nil {
+	if err = unix.Renameat2(unix.AT_FDCWD, currentPath, unix.AT_FDCWD, newPath, unix.RENAME_NOREPLACE); err == nil {
 		return nil
 	}
 	if !os.IsNotExist(err) {

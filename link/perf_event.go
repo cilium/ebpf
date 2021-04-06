@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strconv"
 	"strings"
 	"unsafe"
@@ -161,6 +162,7 @@ func (pe *perfEvent) attach(prog *ebpf.Program) error {
 		return fmt.Errorf("enable perf event: %s", err)
 	}
 
+	runtime.SetFinalizer(pe, (*perfEvent).Close)
 	return nil
 }
 

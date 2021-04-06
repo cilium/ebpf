@@ -78,6 +78,10 @@ func (pe *perfEvent) Pin(string) error {
 	return fmt.Errorf("pin perf event: %w", ErrNotSupported)
 }
 
+func (pe *perfEvent) Unpin() error {
+	return fmt.Errorf("unpin perf event: %w", ErrNotSupported)
+}
+
 // Since 4.15 (e87c6bc3852b "bpf: permit multiple bpf attachments for a single perf event"),
 // calling PERF_EVENT_IOC_SET_BPF appends the given program to a prog_array
 // owned by the perf event, which means multiple programs can be attached

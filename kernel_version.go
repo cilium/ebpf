@@ -35,20 +35,21 @@ func KernelVersionFromReleaseString(releaseString string) (uint32, error) {
 	if len(versionParts) < 3 {
 		return 0, fmt.Errorf("got invalid release version %q (expected format '4.3.2-1')", releaseString)
 	}
-	major, err := strconv.Atoi(versionParts[1])
+	var major, minor, patch uint64
+	var err error
+	major, err = strconv.ParseUint(versionParts[1], 10, 8)
 	if err != nil {
 		return 0, err
 	}
 
-	minor, err := strconv.Atoi(versionParts[2])
+	minor, err = strconv.ParseUint(versionParts[2], 10, 8)
 	if err != nil {
 		return 0, err
 	}
 
 	// patch is optional
-	patch := 0
 	if len(versionParts) >= 4 {
-		patch, _ = strconv.Atoi(versionParts[3])
+		patch, _ = strconv.ParseUint(versionParts[3], 10, 8)
 	}
 	out := major*256*256 + minor*256 + patch
 	return uint32(out), nil

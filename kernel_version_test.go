@@ -70,6 +70,8 @@ func TestParseDebianVersion(t *testing.T) {
 		{true, "Linux version 3.16.0-9-amd64 (debian-kernel@lists.debian.org) (gcc version 4.9.2 (Debian 4.9.2-10+deb8u2) ) #1 SMP Debian 3.16.68-1 (2019-05-22)", 200772},
 		// Invalid
 		{false, "Linux version 4.9.125-linuxkit (root@659b6d51c354) (gcc version 6.4.0 (Alpine 6.4.0) ) #1 SMP Fri Sep 7 08:20:28 UTC 2018", 0},
+		// 4.9.258-1 overflow of patch version which has max 255
+		{true, "Linux version 4.9.0-15-amd64 (debian-kernel@lists.debian.org) (gcc version 6.3.0 20170516 (Debian 6.3.0-18+deb9u1) ) #1 SMP Debian 4.9.258-1 (2021-03-08)", 264703},
 	} {
 		version, err := parseDebianVersion(tc.releaseString)
 		if err != nil && tc.succeed {

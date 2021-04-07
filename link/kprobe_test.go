@@ -25,11 +25,6 @@ var (
 )
 
 func TestKprobe(t *testing.T) {
-
-	//TODO: implement kprobe program version rewriting for pre-5.0 kernels.
-	// Requires at least 5.0 (6c4fc209fcf9 "bpf: remove useless version check for prog load")
-	testutils.SkipOnOldKernel(t, "5.0", "lifted version check for kprobes")
-
 	c := qt.New(t)
 
 	prog, err := ebpf.NewProgram(&kprobeSpec)
@@ -54,11 +49,6 @@ func TestKprobe(t *testing.T) {
 }
 
 func TestKretprobe(t *testing.T) {
-
-	//TODO: implement kprobe program version rewriting for pre-5.0 kernels.
-	// Requires at least 5.0 (6c4fc209fcf9 "bpf: remove useless version check for prog load")
-	testutils.SkipOnOldKernel(t, "5.0", "lifted version check for kprobes")
-
 	c := qt.New(t)
 
 	prog, err := ebpf.NewProgram(&kprobeSpec)

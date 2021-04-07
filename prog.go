@@ -141,6 +141,19 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions, btfs btfHandl
 		return nil, fmt.Errorf("can't load %s program on %s", spec.ByteOrder, internal.NativeEndian)
 	}
 
+	// Kernels before 5.0 (6c4fc209fcf9 "bpf: remove useless version check for prog load")
+	// require the version field to be set to the value of the KERNEL_VERSION
+	// macro for kprobe-type programs.
+	// Overwrite Kprobe program version if set to zero or the magic version constant.
+	kv := spec.KernelVersion
+	if spec.Type == Kprobe && (kv == 0 || kv == internal.MagicKernelVersion) {
+		v, err := internal.KernelVersion()
+		if err != nil {
+			return nil, fmt.Errorf("detecting kernel version: %w", err)
+		}
+		kv = v.Kernel()
+	}
+
 	insns := make(asm.Instructions, len(spec.Instructions))
 	copy(insns, spec.Instructions)
 
@@ -162,7 +175,7 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions, btfs btfHandl
 		insCount:           insCount,
 		instructions:       internal.NewSlicePointer(bytecode),
 		license:            internal.NewStringPointer(spec.License),
-		kernelVersion:      spec.KernelVersion,
+		kernelVersion:      kv,
 	}
 
 	if haveObjName() == nil {

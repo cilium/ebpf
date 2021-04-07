@@ -1,38 +1,18 @@
 package testutils
 
 import (
-	"bytes"
 	"errors"
-	"sync"
 	"testing"
 
 	"github.com/cilium/ebpf/internal"
-	"github.com/cilium/ebpf/internal/unix"
-)
-
-var (
-	kernelVersionOnce sync.Once
-	kernelVersion     internal.Version
 )
 
 func mustKernelVersion() internal.Version {
-	kernelVersionOnce.Do(func() {
-		var uname unix.Utsname
-		err := unix.Uname(&uname)
-		if err != nil {
-			panic(err)
-		}
-
-		end := bytes.IndexByte(uname.Release[:], 0)
-		release := string(uname.Release[:end])
-
-		kernelVersion, err = internal.NewVersion(release)
-		if err != nil {
-			panic(err)
-		}
-	})
-
-	return kernelVersion
+	v, err := internal.KernelVersion()
+	if err != nil {
+		panic(err)
+	}
+	return v
 }
 
 func CheckFeatureTest(t *testing.T, fn func() error) {

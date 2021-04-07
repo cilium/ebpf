@@ -48,6 +48,7 @@ func Tracepoint(group, name string, prog *ebpf.Program) (Link, error) {
 	}
 
 	if err := pe.attach(prog); err != nil {
+		pe.Close()
 		return nil, err
 	}
 

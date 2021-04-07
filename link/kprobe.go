@@ -234,10 +234,11 @@ func createTraceFSKprobeEvent(group, symbol string, ret bool) error {
 	// the eBPF program itself. See Documentation/kprobes.txt for more details.
 	pe := fmt.Sprintf("%s:%s/%s %s", kprobePrefix(ret), group, symbol, symbol)
 	_, err = f.WriteString(pe)
-	// Writing to <tracefs>/kprobe_events will return ENOENT when the tracee
-	// kernel symbol does not exist (yet) in the kernel.
-	if os.IsNotExist(err) {
-		return fmt.Errorf("kernel symbol %s not found: %w", symbol, ErrNotSupported)
+	// Since commit 97c753e62e6c, ENOENT is correctly returned instead of EINVAL
+	// when trying to create a kretprobe for a missing symbol. Make sure ENOENT
+	// is returned to the caller.
+	if errors.Is(err, os.ErrNotExist) || errors.Is(err, unix.EINVAL) {
+		return fmt.Errorf("kernel symbol %s not found: %w", symbol, os.ErrNotExist)
 	}
 	if err != nil {
 		return fmt.Errorf("writing '%s' to kprobe_events: %w", pe, err)

@@ -41,9 +41,10 @@ type MapSpec struct {
 	KeySize    uint32
 	ValueSize  uint32
 	MaxEntries uint32
+
 	// Flags is passed to the kernel and specifies additional map
 	// creation attributes.
-	Flags      uint32
+	Flags uint32
 
 	// Automatically pin and load a map from MapOptions.PinPath.
 	// Generates an error if an existing pinned map is incompatible with the MapSpec.

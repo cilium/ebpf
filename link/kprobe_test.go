@@ -25,11 +25,6 @@ var (
 )
 
 func TestKprobe(t *testing.T) {
-
-	//TODO: implement kprobe program version rewriting for pre-5.0 kernels.
-	// Requires at least 5.0 (6c4fc209fcf9 "bpf: remove useless version check for prog load")
-	testutils.SkipOnOldKernel(t, "5.0", "lifted version check for kprobes")
-
 	c := qt.New(t)
 
 	prog, err := ebpf.NewProgram(&kprobeSpec)
@@ -47,18 +42,13 @@ func TestKprobe(t *testing.T) {
 	})
 
 	k, err = Kprobe("bogus", prog)
-	c.Assert(errors.Is(err, os.ErrNotExist), qt.IsTrue)
+	c.Assert(errors.Is(err, os.ErrNotExist), qt.IsTrue, qt.Commentf("got error: %s", err))
 	if k != nil {
 		k.Close()
 	}
 }
 
 func TestKretprobe(t *testing.T) {
-
-	//TODO: implement kprobe program version rewriting for pre-5.0 kernels.
-	// Requires at least 5.0 (6c4fc209fcf9 "bpf: remove useless version check for prog load")
-	testutils.SkipOnOldKernel(t, "5.0", "lifted version check for kprobes")
-
 	c := qt.New(t)
 
 	prog, err := ebpf.NewProgram(&kprobeSpec)
@@ -161,35 +151,43 @@ func BenchmarkKprobeCreatePMU(b *testing.B) {
 }
 
 // Test tracefs k(ret)probe creation on all kernel versions.
-// Create two trace events on the same symbol and ensure their IDs differ.
 func TestKprobeTraceFS(t *testing.T) {
 	c := qt.New(t)
 
 	symbol := "printk"
 
-	// Open and close tracefs kprobe, checking all errors.
-	te, err := tracefsKprobe(symbol, false)
+	// Open and close tracefs k(ret)probes, checking all errors.
+	kp, err := tracefsKprobe(symbol, false)
 	c.Assert(err, qt.IsNil)
-	c.Assert(te.Close(), qt.IsNil)
-
-	// Create similar trace events, ensure their IDs differ.
-	te1, err := tracefsKprobe(symbol, false)
+	c.Assert(kp.Close(), qt.IsNil)
+	kp, err = tracefsKprobe(symbol, true)
 	c.Assert(err, qt.IsNil)
-	defer te1.Close()
-	c.Assert(te1.progType, qt.Equals, ebpf.Kprobe)
-	c.Assert(te1.tracefsID, qt.Not(qt.Equals), 0)
+	c.Assert(kp.Close(), qt.IsNil)
 
-	te2, err := tracefsKprobe(symbol, false)
+	// Create two identical trace events, ensure their IDs differ.
+	k1, err := tracefsKprobe(symbol, false)
 	c.Assert(err, qt.IsNil)
-	defer te2.Close()
-	c.Assert(te2.progType, qt.Equals, ebpf.Kprobe)
-	c.Assert(te2.tracefsID, qt.Not(qt.Equals), 0)
+	defer k1.Close()
+	c.Assert(k1.progType, qt.Equals, ebpf.Kprobe)
+	c.Assert(k1.tracefsID, qt.Not(qt.Equals), 0)
 
-	c.Assert(te1.tracefsID, qt.Not(qt.CmpEquals()), te2.tracefsID)
+	k2, err := tracefsKprobe(symbol, false)
+	c.Assert(err, qt.IsNil)
+	defer k2.Close()
+	c.Assert(k2.progType, qt.Equals, ebpf.Kprobe)
+	c.Assert(k2.tracefsID, qt.Not(qt.Equals), 0)
 
-	// Write a kprobe event for a non-existing symbol.
-	err = createTraceFSKprobeEvent("syscalls", "bogus", false)
-	c.Assert(errors.Is(err, ErrNotSupported), qt.IsTrue)
+	// Compare the kprobes' tracefs IDs.
+	c.Assert(k1.tracefsID, qt.Not(qt.CmpEquals()), k2.tracefsID)
+
+	// Write a k(ret)probe event for a non-existing symbol.
+	err = createTraceFSKprobeEvent("testgroup", "bogus", false)
+	c.Assert(errors.Is(err, os.ErrNotExist), qt.IsTrue, qt.Commentf("got error: %s", err))
+
+	// A kernel bug was fixed in 97c753e62e6c where EINVAL was returned instead
+	// of ENOENT, but only for kretprobes.
+	err = createTraceFSKprobeEvent("testgroup", "bogus", true)
+	c.Assert(errors.Is(err, os.ErrNotExist), qt.IsTrue, qt.Commentf("got error: %s", err))
 }
 
 func BenchmarkKprobeCreateTraceFS(b *testing.B) {

@@ -217,6 +217,7 @@ func PerfEventOpen(attr *PerfEventAttr, pid int, cpu int, groupFd int, flags int
 // Utsname is a wrapper
 type Utsname struct {
 	Release [65]byte
+	Version [65]byte
 }
 
 // Uname is a wrapper
@@ -242,6 +243,11 @@ func Tgkill(tgid int, tid int, sig syscall.Signal) (err error) {
 // BytePtrFromString is a wrapper
 func BytePtrFromString(s string) (*byte, error) {
 	return nil, errNonLinux
+}
+
+// ByteSliceToString is a wrapper
+func ByteSliceToString(s []byte) string {
+	return ""
 }
 
 // Renameat2 is a wrapper

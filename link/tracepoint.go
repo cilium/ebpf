@@ -11,7 +11,7 @@ import (
 // tracepoints. The top-level directory is the group, the event's subdirectory
 // is the name. Example:
 //
-//	Tracepoint("syscalls", "sys_enter_fork")
+//	Tracepoint("syscalls", "sys_enter_fork", prog)
 //
 // Note that attaching eBPF programs to syscalls (sys_enter_*/sys_exit_*) is
 // only possible as of kernel 4.14 (commit cf5f5ce).

@@ -21,7 +21,7 @@ var (
 // given kernel symbol starts executing. See /proc/kallsyms for available
 // symbols. For example, printk():
 //
-//	Kprobe("printk")
+//	Kprobe("printk", prog)
 //
 // The resulting Link must be Closed during program shutdown to avoid leaking
 // system resources.
@@ -44,7 +44,7 @@ func Kprobe(symbol string, prog *ebpf.Program) (Link, error) {
 // before the given kernel symbol exits, with the function stack left intact.
 // See /proc/kallsyms for available symbols. For example, printk():
 //
-//	Kretprobe("printk")
+//	Kretprobe("printk", prog)
 //
 // The resulting Link must be Closed during program shutdown to avoid leaking
 // system resources.

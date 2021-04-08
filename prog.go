@@ -64,9 +64,10 @@ type ProgramSpec struct {
 	// See https://www.kernel.org/doc/html/latest/process/license-rules.html#id1
 	License string
 
-	// Version used by tracing programs.
+	// Version used by Kprobe programs.
 	//
-	// Deprecated: superseded by BTF.
+	// Deprecated on kernels 5.0 and later. Leave empty to let the library
+	// detect this value automatically.
 	KernelVersion uint32
 
 	// The BTF associated with this program. Changing Instructions

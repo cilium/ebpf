@@ -428,6 +428,7 @@ func (p *Probe) attach() error {
 
 	// update probe state
 	p.state = running
+	p.attachRetryAttempt = p.ProbeRetry
 	return nil
 }
 

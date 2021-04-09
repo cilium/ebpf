@@ -211,7 +211,7 @@ func newMapWithOptions(spec *MapSpec, opts MapOptions, handles *handleCache) (_ 
 		// Nothing to do here
 
 	default:
-		return nil, fmt.Errorf("unsupported pin type %d", int(spec.Pinning))
+		return nil, fmt.Errorf("pin type %d: %w", int(spec.Pinning), ErrNotSupported)
 	}
 
 	var innerFd *internal.FD

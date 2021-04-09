@@ -3,9 +3,11 @@ package ebpf
 import (
 	"errors"
 	"flag"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
 
 	"github.com/cilium/ebpf/internal"
@@ -293,23 +295,55 @@ func TestLibBPFCompat(t *testing.T) {
 	testutils.TestFiles(t, filepath.Join(*elfPath, *elfPattern), func(t *testing.T, path string) {
 		file := filepath.Base(path)
 		switch file {
-		case "test_ksyms.o":
-			// Issue #114
-			t.Skip("Kernel symbols not supported")
 		case "test_sk_assign.o":
 			t.Skip("Incompatible struct bpf_map_def")
-		case "test_ringbuf_multi.o", "map_ptr_kern.o", "test_btf_map_in_map.o":
-			// Issue #155
-			t.Skip("BTF .values not supported")
+		case "test_map_in_map.o", "test_select_reuseport_kern.o":
+			t.Skip("Missing InnerMap in map definition")
 		}
 
 		t.Parallel()
 
-		_, err := LoadCollectionSpec(path)
+		fh, err := os.Open(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer fh.Close()
+
+		spec, err := LoadCollectionSpecFromReader(fh)
 		testutils.SkipIfNotSupported(t, err)
 		if err != nil {
 			t.Fatalf("Can't read %s: %s", file, err)
 		}
+
+		if _, err := fh.Seek(0, io.SeekStart); err != nil {
+			t.Fatal(err)
+		}
+		opts := CollectionOptions{
+			Programs: ProgramOptions{
+				TargetBTF: fh,
+			},
+		}
+
+		for _, mapSpec := range spec.Maps {
+			if mapSpec.Pinning != PinNone {
+				opts.Maps.PinPath = testutils.TempBPFFS(t)
+				break
+			}
+		}
+
+		coll, err := NewCollectionWithOptions(spec, opts)
+		testutils.SkipIfNotSupported(t, err)
+		var errno syscall.Errno
+		if errors.As(err, &errno) {
+			// This error is most likely from a syscall and caused by us not
+			// replicating some fixups done in the selftests. This is expected,
+			// so skip the test instead of failing.
+			t.Skip("Kernel rejected program:", errno)
+		}
+		if err != nil {
+			t.Fatal("Error when loading the collection:", err)
+		}
+		coll.Close()
 	})
 }
 

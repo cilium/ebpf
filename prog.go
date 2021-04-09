@@ -125,19 +125,15 @@ func NewProgram(spec *ProgramSpec) (*Program, error) {
 // Loading a program for the first time will perform
 // feature detection by loading small, temporary programs.
 func NewProgramWithOptions(spec *ProgramSpec, opts ProgramOptions) (*Program, error) {
-	btfs := make(btfHandleCache)
-	defer btfs.close()
+	handles := newHandleCache()
+	defer handles.close()
 
-	return newProgramWithOptions(spec, opts, btfs)
+	return newProgramWithOptions(spec, opts, handles)
 }
 
-func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions, btfs btfHandleCache) (*Program, error) {
+func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions, handles *handleCache) (*Program, error) {
 	if len(spec.Instructions) == 0 {
 		return nil, errors.New("Instructions cannot be empty")
-	}
-
-	if len(spec.License) == 0 {
-		return nil, errors.New("License cannot be empty")
 	}
 
 	if spec.ByteOrder != nil && spec.ByteOrder != internal.NativeEndian {

@@ -350,11 +350,10 @@ func (p *Probe) init() error {
 	if p.ProbeRetry == 0 {
 		if p.manager.options.DefaultProbeRetry > 0 {
 			p.ProbeRetry = p.manager.options.DefaultProbeRetry
-		} else {
-			// default to 1 to allow at least one attach / detach attempt
-			p.ProbeRetry = 1
 		}
 	}
+	// account for the initial attempt
+	p.ProbeRetry++
 
 	// Default retry delay
 	if p.ProbeRetryDelay == 0 {

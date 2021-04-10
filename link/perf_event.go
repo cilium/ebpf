@@ -2,6 +2,7 @@ package link
 
 import (
 	"bytes"
+	"crypto/rand"
 	"errors"
 	"fmt"
 	"io/ioutil"
@@ -31,6 +32,10 @@ import (
 //   exported kernel symbols. kprobe-based (tracefs) trace events can be
 //   created system-wide by writing to the <tracefs>/kprobe_events file, or
 //   they can be scoped to the current process by creating PMU perf events.
+// - u(ret)probe: Ephemeral trace events based on user provides ELF binaries
+//   and offsets. uprobe-based (tracefs) trace events can be
+//   created system-wide by writing to the <tracefs>/uprobe_events file, or
+//   they can be scoped to the current process by creating PMU perf events.
 // - perf event: An object instantiated based on an existing trace event or
 //   kernel symbol. Referred to by fd in userspace.
 //   Exactly one eBPF program can be attached to a perf event. Multiple perf
@@ -56,7 +61,6 @@ const (
 // can be attached to it. It is created based on a tracefs trace event or a
 // Performance Monitoring Unit (PMU).
 type perfEvent struct {
-
 	// Group and name of the tracepoint/kprobe/uprobe.
 	group string
 	name  string
@@ -68,6 +72,12 @@ type perfEvent struct {
 
 	// True for kretprobes/uretprobes.
 	ret bool
+
+	// Indicates whether this is an uprobe or a different type of perf event.
+	// Needed when cleaning up tracefs events.
+	//
+	// TODO(matt): store a perfEventType in here?
+	isUprobe bool
 
 	fd       *internal.FD
 	progType ebpf.ProgramType
@@ -119,8 +129,11 @@ func (pe *perfEvent) Close() error {
 
 	switch t := pe.progType; t {
 	case ebpf.Kprobe:
-		// For kprobes created using tracefs, clean up the <tracefs>/kprobe_events entry.
+		// For kprobes/uprobes created using tracefs, clean up the tracefs entry.
 		if pe.tracefsID != 0 {
+			if pe.isUprobe {
+				return closeTraceFSUprobeEvent(pe.group, pe.name)
+			}
 			return closeTraceFSKprobeEvent(pe.group, pe.name)
 		}
 	case ebpf.TracePoint:
@@ -204,6 +217,25 @@ func getPMUEventType(pmu string) (uint64, error) {
 	return et, nil
 }
 
+// determineRetprobeBit reads a Performance Monitoring Unit's retprobe (numeric identifier)
+// from /sys/bus/event_source/devices/<pmu>/format/retprobe.
+func determineRetprobeBit(pmu string) (uint64, error) {
+	p := filepath.Join("/sys/bus/event_source/devices/", pmu, "/format/retprobe")
+
+	data, err := os.Open(p)
+	if err != nil {
+		return 0, fmt.Errorf("reading file %s: %w", p, err)
+	}
+
+	var retprobe uint64
+	_, err = fmt.Fscanf(data, "config:%d", &retprobe)
+	if err != nil {
+		return 0, fmt.Errorf("reading %s pmu retprobe bit: %w", pmu, err)
+	}
+
+	return retprobe, nil
+}
+
 // openTracepointPerfEvent opens a tracepoint-type perf event. System-wide
 // kprobes created by writing to <tracefs>/kprobe_events are tracepoints
 // behind the scenes, and can be attached to using these perf events.
@@ -228,7 +260,6 @@ func openTracepointPerfEvent(tid uint64) (*internal.FD, error) {
 // and joined onto base. Returns error if base no longer prefixes the path after
 // joining all components.
 func uint64FromFile(base string, path ...string) (uint64, error) {
-
 	// Resolve leaf path separately for error feedback. Makes the join onto
 	// base more readable (can't mix with variadic args).
 	l := filepath.Join(path...)
@@ -250,4 +281,33 @@ func uint64FromFile(base string, path ...string) (uint64, error) {
 
 	et := bytes.TrimSpace(data)
 	return strconv.ParseUint(string(et), 10, 64)
+}
+
+// randomGroup generates a pseudorandom string for use as a tracefs group name.
+// Returns an error when the output string would exceed 63 characters (kernel
+// limitation), when rand.Read() fails or when prefix contains characters not
+// allowed by rgxTraceEvent.
+func randomGroup(prefix string) (string, error) {
+	if !rgxTraceEvent.MatchString(prefix) {
+		return "", fmt.Errorf("prefix '%s' must be alphanumeric or underscore: %w", prefix, errInvalidInput)
+	}
+
+	b := make([]byte, 8)
+	if _, err := rand.Read(b); err != nil {
+		return "", fmt.Errorf("reading random bytes: %w", err)
+	}
+
+	group := fmt.Sprintf("%s_%x", prefix, b)
+	if len(group) > 63 {
+		return "", fmt.Errorf("group name '%s' cannot be longer than 63 characters: %w", group, errInvalidInput)
+	}
+
+	return group, nil
+}
+
+func probePrefix(ret bool) string {
+	if ret {
+		return "r"
+	}
+	return "p"
 }

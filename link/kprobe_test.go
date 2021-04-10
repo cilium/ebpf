@@ -99,14 +99,14 @@ func TestKprobeCreatePMU(t *testing.T) {
 	c := qt.New(t)
 
 	// kprobe happy path. printk is always present.
-	pk, err := pmuKprobe("printk", false)
+	pk, err := pmuProbe(kprobeType, "printk", "", 0, false)
 	c.Assert(err, qt.IsNil)
 	defer pk.Close()
 
 	c.Assert(pk.typ, qt.Equals, kprobeEvent)
 
 	// kretprobe happy path.
-	pr, err := pmuKprobe("printk", true)
+	pr, err := pmuProbe(kprobeType, "printk", "", 0, true)
 	c.Assert(err, qt.IsNil)
 	defer pr.Close()
 
@@ -114,12 +114,12 @@ func TestKprobeCreatePMU(t *testing.T) {
 
 	// Expect os.ErrNotExist when specifying a non-existent kernel symbol
 	// on kernels 4.17 and up.
-	_, err = pmuKprobe("bogus", false)
+	_, err = pmuProbe(kprobeType, "bogus", "", 0, false)
 	c.Assert(errors.Is(err, os.ErrNotExist), qt.IsTrue, qt.Commentf("got error: %s", err))
 
 	// A kernel bug was fixed in 97c753e62e6c where EINVAL was returned instead
 	// of ENOENT, but only for kretprobes.
-	_, err = pmuKprobe("bogus", true)
+	_, err = pmuProbe(kprobeType, "bogus", "", 0, true)
 	c.Assert(errors.Is(err, os.ErrNotExist), qt.IsTrue, qt.Commentf("got error: %s", err))
 }
 
@@ -127,7 +127,7 @@ func TestKprobeCreatePMU(t *testing.T) {
 func TestKprobePMUUnavailable(t *testing.T) {
 	c := qt.New(t)
 
-	pk, err := pmuKprobe("printk", false)
+	pk, err := pmuProbe(kprobeType, "printk", "", 0, false)
 	if err == nil {
 		pk.Close()
 		t.Skipf("Kernel supports perf_kprobe PMU, not asserting error.")
@@ -139,7 +139,7 @@ func TestKprobePMUUnavailable(t *testing.T) {
 
 func BenchmarkKprobeCreatePMU(b *testing.B) {
 	for n := 0; n < b.N; n++ {
-		pr, err := pmuKprobe("printk", false)
+		pr, err := pmuProbe(kprobeType, "printk", "", 0, false)
 		if err != nil {
 			b.Error("error creating perf_kprobe PMU:", err)
 		}
@@ -157,23 +157,23 @@ func TestKprobeTraceFS(t *testing.T) {
 	symbol := "printk"
 
 	// Open and close tracefs k(ret)probes, checking all errors.
-	kp, err := tracefsKprobe(symbol, false)
+	kp, err := tracefsProbe(kprobeType, symbol, "", 0, false)
 	c.Assert(err, qt.IsNil)
 	c.Assert(kp.Close(), qt.IsNil)
 	c.Assert(kp.typ, qt.Equals, kprobeEvent)
 
-	kp, err = tracefsKprobe(symbol, true)
+	kp, err = tracefsProbe(kprobeType, symbol, "", 0, true)
 	c.Assert(err, qt.IsNil)
 	c.Assert(kp.Close(), qt.IsNil)
 	c.Assert(kp.typ, qt.Equals, kretprobeEvent)
 
 	// Create two identical trace events, ensure their IDs differ.
-	k1, err := tracefsKprobe(symbol, false)
+	k1, err := tracefsProbe(kprobeType, symbol, "", 0, false)
 	c.Assert(err, qt.IsNil)
 	defer k1.Close()
 	c.Assert(k1.tracefsID, qt.Not(qt.Equals), 0)
 
-	k2, err := tracefsKprobe(symbol, false)
+	k2, err := tracefsProbe(kprobeType, symbol, "", 0, false)
 	c.Assert(err, qt.IsNil)
 	defer k2.Close()
 	c.Assert(k2.tracefsID, qt.Not(qt.Equals), 0)
@@ -182,12 +182,12 @@ func TestKprobeTraceFS(t *testing.T) {
 	c.Assert(k1.tracefsID, qt.Not(qt.CmpEquals()), k2.tracefsID)
 
 	// Write a k(ret)probe event for a non-existing symbol.
-	err = createTraceFSKprobeEvent("testgroup", "bogus", false)
+	err = createTraceFSProbeEvent(kprobeType, "testgroup", "bogus", "", 0, false)
 	c.Assert(errors.Is(err, os.ErrNotExist), qt.IsTrue, qt.Commentf("got error: %s", err))
 
 	// A kernel bug was fixed in 97c753e62e6c where EINVAL was returned instead
 	// of ENOENT, but only for kretprobes.
-	err = createTraceFSKprobeEvent("testgroup", "bogus", true)
+	err = createTraceFSProbeEvent(kprobeType, "testgroup", "bogus", "", 0, true)
 	c.Assert(errors.Is(err, os.ErrNotExist), qt.IsTrue, qt.Commentf("got error: %s", err))
 }
 
@@ -195,7 +195,7 @@ func BenchmarkKprobeCreateTraceFS(b *testing.B) {
 	for n := 0; n < b.N; n++ {
 		// Include <tracefs>/kprobe_events operations in the benchmark loop
 		// because we create one per perf event.
-		pr, err := tracefsKprobe("printk", false)
+		pr, err := tracefsProbe(kprobeType, "printk", "", 0, false)
 		if err != nil {
 			b.Error("error creating tracefs perf event:", err)
 		}
@@ -221,34 +221,33 @@ func TestKprobeCreateTraceFS(t *testing.T) {
 
 	// Tee up cleanups in case any of the Asserts abort the function.
 	defer func() {
-		_ = closeTraceFSKprobeEvent(pg, symbol)
-		_ = closeTraceFSKprobeEvent(rg, symbol)
+		_ = closeTraceFSProbeEvent(kprobeType, pg, symbol)
+		_ = closeTraceFSProbeEvent(kprobeType, rg, symbol)
 	}()
 
 	// Create a kprobe.
-	err := createTraceFSKprobeEvent(pg, symbol, false)
+	err := createTraceFSProbeEvent(kprobeType, pg, symbol, "", 0, false)
 	c.Assert(err, qt.IsNil)
 
 	// Attempt to create an identical kprobe using tracefs,
 	// expect it to fail with os.ErrExist.
-	err = createTraceFSKprobeEvent(pg, symbol, false)
+	err = createTraceFSProbeEvent(kprobeType, pg, symbol, "", 0, false)
 	c.Assert(errors.Is(err, os.ErrExist), qt.IsTrue,
 		qt.Commentf("expected consecutive kprobe creation to contain os.ErrExist, got: %v", err))
 
 	// Expect a successful close of the kprobe.
-	c.Assert(closeTraceFSKprobeEvent(pg, symbol), qt.IsNil)
+	c.Assert(closeTraceFSProbeEvent(kprobeType, pg, symbol), qt.IsNil)
 
 	// Same test for a kretprobe.
-	err = createTraceFSKprobeEvent(rg, symbol, true)
+	err = createTraceFSProbeEvent(kprobeType, rg, symbol, "", 0, true)
 	c.Assert(err, qt.IsNil)
 
-	err = createTraceFSKprobeEvent(rg, symbol, true)
+	err = createTraceFSProbeEvent(kprobeType, rg, symbol, "", 0, true)
 	c.Assert(os.IsExist(err), qt.IsFalse,
 		qt.Commentf("expected consecutive kretprobe creation to contain os.ErrExist, got: %v", err))
 
 	// Expect a successful close of the kretprobe.
-	c.Assert(closeTraceFSKprobeEvent(rg, symbol), qt.IsNil)
-
+	c.Assert(closeTraceFSProbeEvent(kprobeType, rg, symbol), qt.IsNil)
 }
 
 func TestKprobeTraceFSGroup(t *testing.T) {
@@ -276,10 +275,11 @@ func TestDetermineRetprobeBit(t *testing.T) {
 	testutils.SkipOnOldKernel(t, "4.17", "perf_kprobe PMU")
 	c := qt.New(t)
 
-	rp, err := kretprobeBit()
+	rpk, err := kretprobeBit()
 	c.Assert(err, qt.IsNil)
-	c.Assert(rp, qt.Equals, uint64(0))
+	c.Assert(rpk, qt.Equals, uint64(0))
 
-	_, err = determineRetprobeBit("bogus")
-	c.Assert(errors.Is(err, os.ErrNotExist), qt.IsTrue, qt.Commentf("got error: %s", err))
+	rpu, err := uretprobeBit()
+	c.Assert(err, qt.IsNil)
+	c.Assert(rpu, qt.Equals, uint64(0))
 }

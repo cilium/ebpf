@@ -14,7 +14,7 @@ func TestTraceEventTypePMU(t *testing.T) {
 
 	c := qt.New(t)
 
-	et, err := getPMUEventType("kprobe")
+	et, err := getPMUEventType(kprobeType)
 	c.Assert(err, qt.IsNil)
 	c.Assert(et, qt.Not(qt.Equals), 0)
 }

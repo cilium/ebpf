@@ -22,7 +22,6 @@ import (
 const mapKey uint32 = 0
 
 func main() {
-
 	// Name of the kernel function to trace.
 	fn := "__x64_sys_execve"
 

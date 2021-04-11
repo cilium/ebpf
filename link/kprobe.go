@@ -1,7 +1,6 @@
 package link
 
 import (
-	"crypto/rand"
 	"errors"
 	"fmt"
 	"os"
@@ -103,7 +102,6 @@ func kprobe(symbol string, prog *ebpf.Program, ret bool) (*perfEvent, error) {
 // Returns ErrNotSupported if the kernel doesn't support perf_kprobe PMU,
 // or os.ErrNotExist if the given symbol does not exist in the kernel.
 func pmuKprobe(symbol string, ret bool) (*perfEvent, error) {
-
 	// Getting the PMU type will fail if the kernel doesn't support
 	// the perf_kprobe PMU.
 	et, err := getPMUEventType("kprobe")
@@ -117,16 +115,16 @@ func pmuKprobe(symbol string, ret bool) (*perfEvent, error) {
 		return nil, err
 	}
 
-	// TODO: Parse the position of the bit from /sys/bus/event_source/devices/%s/format/retprobe.
-	config := 0
-	if ret {
-		config = 1
-	}
-
 	attr := unix.PerfEventAttr{
-		Type:   uint32(et),          // PMU event type read from sysfs
-		Ext1:   uint64(uintptr(sp)), // Kernel symbol to trace
-		Config: uint64(config),      // perf_kprobe PMU treats config as flags
+		Type: uint32(et),          // PMU event type read from sysfs
+		Ext1: uint64(uintptr(sp)), // Kernel symbol to trace
+	}
+	if ret {
+		retprobeBit, err := determineRetprobeBit("kprobe")
+		if err != nil {
+			return nil, fmt.Errorf("determine retprobe bit: %w", err)
+		}
+		attr.Config |= 1 << retprobeBit
 	}
 
 	fd, err := unix.PerfEventOpen(&attr, perfAllThreads, 0, -1, unix.PERF_FLAG_FD_CLOEXEC)
@@ -159,7 +157,6 @@ func pmuKprobe(symbol string, ret bool) (*perfEvent, error) {
 // multiple trace events for the same kernel symbol. A perf event is then opened
 // on the newly-created trace event and returned to the caller.
 func tracefsKprobe(symbol string, ret bool) (*perfEvent, error) {
-
 	// Generate a random string for each trace event we attempt to create.
 	// This value is used as the 'group' token in tracefs to allow creating
 	// multiple kprobe trace events with the same name.
@@ -232,7 +229,7 @@ func createTraceFSKprobeEvent(group, symbol string, ret bool) error {
 	// kernel default to NR_CPUS. This is desired in most eBPF cases since
 	// subsampling or rate limiting logic can be more accurately implemented in
 	// the eBPF program itself. See Documentation/kprobes.txt for more details.
-	pe := fmt.Sprintf("%s:%s/%s %s", kprobePrefix(ret), group, symbol, symbol)
+	pe := fmt.Sprintf("%s:%s/%s %s", probePrefix(ret), group, symbol, symbol)
 	_, err = f.WriteString(pe)
 	// Since commit 97c753e62e6c, ENOENT is correctly returned instead of EINVAL
 	// when trying to create a kretprobe for a missing symbol. Make sure ENOENT
@@ -264,33 +261,4 @@ func closeTraceFSKprobeEvent(group, symbol string) error {
 	}
 
 	return nil
-}
-
-// randomGroup generates a pseudorandom string for use as a tracefs group name.
-// Returns an error when the output string would exceed 63 characters (kernel
-// limitation), when rand.Read() fails or when prefix contains characters not
-// allowed by rgxTraceEvent.
-func randomGroup(prefix string) (string, error) {
-	if !rgxTraceEvent.MatchString(prefix) {
-		return "", fmt.Errorf("prefix '%s' must be alphanumeric or underscore: %w", prefix, errInvalidInput)
-	}
-
-	b := make([]byte, 8)
-	if _, err := rand.Read(b); err != nil {
-		return "", fmt.Errorf("reading random bytes: %w", err)
-	}
-
-	group := fmt.Sprintf("%s_%x", prefix, b)
-	if len(group) > 63 {
-		return "", fmt.Errorf("group name '%s' cannot be longer than 63 characters: %w", group, errInvalidInput)
-	}
-
-	return group, nil
-}
-
-func kprobePrefix(ret bool) string {
-	if ret {
-		return "r"
-	}
-	return "p"
 }

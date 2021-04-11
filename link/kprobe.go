@@ -115,16 +115,16 @@ func pmuKprobe(symbol string, ret bool) (*perfEvent, error) {
 		return nil, err
 	}
 
-	// TODO: Use `determineRetprobeBit`
-	config := 0
-	if ret {
-		config = 1
-	}
-
 	attr := unix.PerfEventAttr{
-		Type:   uint32(et),          // PMU event type read from sysfs
-		Ext1:   uint64(uintptr(sp)), // Kernel symbol to trace
-		Config: uint64(config),      // perf_kprobe PMU treats config as flags
+		Type: uint32(et),          // PMU event type read from sysfs
+		Ext1: uint64(uintptr(sp)), // Kernel symbol to trace
+	}
+	if ret {
+		retprobeBit, err := determineRetprobeBit("kprobe")
+		if err != nil {
+			return nil, fmt.Errorf("determine retprobe bit: %w", err)
+		}
+		attr.Config |= 1 << retprobeBit
 	}
 
 	fd, err := unix.PerfEventOpen(&attr, perfAllThreads, 0, -1, unix.PERF_FLAG_FD_CLOEXEC)

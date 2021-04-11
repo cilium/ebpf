@@ -136,21 +136,17 @@ func pmuUprobe(s *elf.Symbol, path, symbol string, ret bool) (*perfEvent, error)
 		return nil, err
 	}
 
-	config, err := determineRetprobeBit("uprobe")
-	if err != nil {
-		// Fallback
-		// TODO(matt): is this ok to do here or is it better to return the error?
-		config = 0
-		if ret {
-			config = 1
-		}
-	}
-
 	attr := unix.PerfEventAttr{
-		Type:   uint32(et),               // PMU event type read from sysfs
-		Ext1:   uint64(uintptr(sp)),      // Uprobe path
-		Ext2:   uint64(uintptr(s.Value)), // Uprobe offset
-		Config: config,                   // perf_uprobe PMU treats config as flags
+		Type: uint32(et),               // PMU event type read from sysfs
+		Ext1: uint64(uintptr(sp)),      // Uprobe path
+		Ext2: uint64(uintptr(s.Value)), // Uprobe offset
+	}
+	if ret {
+		retprobeBit, err := determineRetprobeBit("uprobe")
+		if err != nil {
+			return nil, fmt.Errorf("determine retprobe bit: %w", err)
+		}
+		attr.Config |= 1 << retprobeBit
 	}
 
 	fd, err := unix.PerfEventOpen(&attr, perfAllThreads, 0, -1, unix.PERF_FLAG_FD_CLOEXEC)

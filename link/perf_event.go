@@ -52,11 +52,19 @@ const (
 	perfAllThreads = -1
 )
 
+type perfEventType uint32
+
+const (
+	perfEventTypeInvalid perfEventType = iota
+	perfEventTypeKprobe
+	perfEventTypeKretprobe
+	perfEventTypeTracepoint
+)
+
 // A perfEvent represents a perf event kernel object. Exactly one eBPF program
 // can be attached to it. It is created based on a tracefs trace event or a
 // Performance Monitoring Unit (PMU).
 type perfEvent struct {
-
 	// Group and name of the tracepoint/kprobe/uprobe.
 	group string
 	name  string
@@ -66,11 +74,9 @@ type perfEvent struct {
 	// ID of the trace event read from tracefs. Valid IDs are non-zero.
 	tracefsID uint64
 
-	// True for kretprobes/uretprobes.
-	ret bool
+	eventType perfEventType
 
-	fd       *internal.FD
-	progType ebpf.ProgramType
+	fd *internal.FD
 }
 
 func (pe *perfEvent) isLink() {}
@@ -117,13 +123,13 @@ func (pe *perfEvent) Close() error {
 		return fmt.Errorf("closing perf event fd: %w", err)
 	}
 
-	switch t := pe.progType; t {
-	case ebpf.Kprobe:
+	switch pe.eventType {
+	case perfEventTypeKprobe, perfEventTypeKretprobe:
 		// For kprobes created using tracefs, clean up the <tracefs>/kprobe_events entry.
 		if pe.tracefsID != 0 {
 			return closeTraceFSKprobeEvent(pe.group, pe.name)
 		}
-	case ebpf.TracePoint:
+	case perfEventTypeTracepoint:
 		// Tracepoint trace events don't hold any extra resources.
 		return nil
 	}
@@ -141,8 +147,12 @@ func (pe *perfEvent) attach(prog *ebpf.Program) error {
 	if pe.fd == nil {
 		return errors.New("cannot attach to nil perf event")
 	}
-	if t := prog.Type(); t != pe.progType {
-		return fmt.Errorf("invalid program type (expected %s): %s", pe.progType, t)
+	switch pe.eventType {
+	case perfEventTypeKprobe, perfEventTypeKretprobe:
+		t := prog.Type()
+		if t != ebpf.Kprobe {
+			return fmt.Errorf("invalid program type (expected %s): %s", ebpf.Kprobe, t)
+		}
 	}
 	if prog.FD() < 0 {
 		return fmt.Errorf("invalid program: %w", internal.ErrClosedFd)

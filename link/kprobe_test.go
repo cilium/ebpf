@@ -270,3 +270,23 @@ func TestKprobeTraceFSGroup(t *testing.T) {
 	_, err = randomGroup("/")
 	c.Assert(err, qt.Not(qt.IsNil))
 }
+
+func TestDetermineRetprobeBit(t *testing.T) {
+	c := qt.New(t)
+
+	tests := []struct {
+		pmu string
+		res uint64
+		err error
+	}{
+		{"kprobe", 0, nil},
+		{"uprobe", 0, nil},
+		{"xprobe", 0, os.ErrNotExist},
+	}
+
+	for _, test := range tests {
+		rp, err := determineRetprobeBit(test.pmu)
+		c.Assert(rp, qt.Equals, test.res)
+		c.Assert(errors.Is(err, test.err), qt.IsTrue, qt.Commentf("got error: %s", err))
+	}
+}

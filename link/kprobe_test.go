@@ -270,3 +270,16 @@ func TestKprobeTraceFSGroup(t *testing.T) {
 	_, err = randomGroup("/")
 	c.Assert(err, qt.Not(qt.IsNil))
 }
+
+func TestDetermineRetprobeBit(t *testing.T) {
+	testutils.SkipOnOldKernel(t, "4.17", "perf_kprobe PMU")
+	c := qt.New(t)
+
+	rp, err := kretprobeBit()
+	c.Assert(rp, qt.Equals, uint64(0))
+	c.Assert(err, qt.IsNil)
+
+	rp, err = determineRetprobeBit("bogus")
+	c.Assert(rp, qt.Equals, uint64(0))
+	c.Assert(err, qt.Not(qt.IsNil))
+}

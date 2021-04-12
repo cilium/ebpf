@@ -37,6 +37,10 @@ func TestKprobe(t *testing.T) {
 	c.Assert(err, qt.IsNil)
 	defer k.Close()
 
+	pe, ok := k.(*perfEvent)
+	c.Assert(ok, qt.IsTrue)
+	c.Assert(pe.eventType, qt.Equals, perfEventTypeKprobe)
+
 	testLink(t, k, testLinkOptions{
 		prog: prog,
 	})
@@ -60,6 +64,10 @@ func TestKretprobe(t *testing.T) {
 	k, err := Kretprobe("printk", prog)
 	c.Assert(err, qt.IsNil)
 	defer k.Close()
+
+	pe, ok := k.(*perfEvent)
+	c.Assert(ok, qt.IsTrue)
+	c.Assert(pe.eventType, qt.Equals, perfEventTypeKretprobe)
 
 	testLink(t, k, testLinkOptions{
 		prog: prog,
@@ -92,7 +100,6 @@ func TestKprobeErrors(t *testing.T) {
 
 // Test k(ret)probe creation using perf_kprobe PMU.
 func TestKprobeCreatePMU(t *testing.T) {
-
 	// Requires at least 4.17 (e12f03d7031a "perf/core: Implement the 'perf_kprobe' PMU")
 	testutils.SkipOnOldKernel(t, "4.17", "perf_kprobe PMU")
 
@@ -103,14 +110,10 @@ func TestKprobeCreatePMU(t *testing.T) {
 	c.Assert(err, qt.IsNil)
 	defer pk.Close()
 
-	c.Assert(pk.progType, qt.Equals, ebpf.Kprobe)
-
 	// kretprobe happy path.
 	pr, err := pmuKprobe("printk", true)
 	c.Assert(err, qt.IsNil)
 	defer pr.Close()
-
-	c.Assert(pr.progType, qt.Equals, ebpf.Kprobe)
 
 	// Expect os.ErrNotExist when specifying a non-existent kernel symbol
 	// on kernels 4.17 and up.
@@ -168,13 +171,11 @@ func TestKprobeTraceFS(t *testing.T) {
 	k1, err := tracefsKprobe(symbol, false)
 	c.Assert(err, qt.IsNil)
 	defer k1.Close()
-	c.Assert(k1.progType, qt.Equals, ebpf.Kprobe)
 	c.Assert(k1.tracefsID, qt.Not(qt.Equals), 0)
 
 	k2, err := tracefsKprobe(symbol, false)
 	c.Assert(err, qt.IsNil)
 	defer k2.Close()
-	c.Assert(k2.progType, qt.Equals, ebpf.Kprobe)
 	c.Assert(k2.tracefsID, qt.Not(qt.Equals), 0)
 
 	// Compare the kprobes' tracefs IDs.

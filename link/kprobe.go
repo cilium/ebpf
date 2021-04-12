@@ -1,9 +1,11 @@
 package link
 
 import (
+	"bytes"
 	"crypto/rand"
 	"errors"
 	"fmt"
+	"io/ioutil"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -117,16 +119,16 @@ func pmuKprobe(symbol string, ret bool) (*perfEvent, error) {
 		return nil, err
 	}
 
-	// TODO: Parse the position of the bit from /sys/bus/event_source/devices/%s/format/retprobe.
-	config := 0
-	if ret {
-		config = 1
-	}
-
 	attr := unix.PerfEventAttr{
-		Type:   uint32(et),          // PMU event type read from sysfs
-		Ext1:   uint64(uintptr(sp)), // Kernel symbol to trace
-		Config: uint64(config),      // perf_kprobe PMU treats config as flags
+		Type: uint32(et),          // PMU event type read from sysfs
+		Ext1: uint64(uintptr(sp)), // Kernel symbol to trace
+	}
+	if ret {
+		retprobeBit, err := determineRetprobeBit("kprobe")
+		if err != nil {
+			return nil, fmt.Errorf("determine retprobe bit: %w", err)
+		}
+		attr.Config |= 1 << retprobeBit
 	}
 
 	fd, err := unix.PerfEventOpen(&attr, perfAllThreads, 0, -1, unix.PERF_FLAG_FD_CLOEXEC)
@@ -293,4 +295,26 @@ func kprobePrefix(ret bool) string {
 		return "r"
 	}
 	return "p"
+}
+
+// determineRetprobeBit reads a Performance Monitoring Unit's retprobe bit
+// from /sys/bus/event_source/devices/<pmu>/format/retprobe.
+func determineRetprobeBit(pmu string) (uint64, error) {
+	p := filepath.Join("/sys/bus/event_source/devices/", pmu, "/format/retprobe")
+
+	data, err := ioutil.ReadFile(p)
+	if err != nil {
+		return 0, err
+	}
+
+	var rp uint64
+	n, err := fmt.Sscanf(string(bytes.TrimSpace(data)), "config:%d", &rp)
+	if err != nil {
+		return 0, fmt.Errorf("parse retprobe bit: %w", err)
+	}
+	if n != 1 {
+		return 0, fmt.Errorf("parse retprobe bit: expected 1 item, got %d", n)
+	}
+
+	return rp, nil
 }

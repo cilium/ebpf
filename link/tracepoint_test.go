@@ -12,12 +12,8 @@ import (
 	qt "github.com/frankban/quicktest"
 )
 
-func TestTracepoint(t *testing.T) {
-
-	// Requires at least 4.7 (98b5c2c65c29 "perf, bpf: allow bpf programs attach to tracepoints")
-	testutils.SkipOnOldKernel(t, "4.7", "tracepoint support")
-
-	prog, err := ebpf.NewProgram(&ebpf.ProgramSpec{
+var (
+	tracepointSpec = ebpf.ProgramSpec{
 		Type:    ebpf.TracePoint,
 		License: "MIT",
 		Instructions: asm.Instructions{
@@ -25,7 +21,15 @@ func TestTracepoint(t *testing.T) {
 			asm.Mov.Imm(asm.R0, 0),
 			asm.Return(),
 		},
-	})
+	}
+)
+
+func TestTracepoint(t *testing.T) {
+
+	// Requires at least 4.7 (98b5c2c65c29 "perf, bpf: allow bpf programs attach to tracepoints")
+	testutils.SkipOnOldKernel(t, "4.7", "tracepoint support")
+
+	prog, err := ebpf.NewProgram(&tracepointSpec)
 	if err != nil {
 		t.Fatal(err)
 	}

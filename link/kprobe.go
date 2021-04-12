@@ -30,6 +30,7 @@ func Kprobe(symbol string, prog *ebpf.Program) (Link, error) {
 	if err != nil {
 		return nil, err
 	}
+	k.eventType = perfEventTypeKprobe
 
 	err = k.attach(prog)
 	if err != nil {
@@ -53,6 +54,7 @@ func Kretprobe(symbol string, prog *ebpf.Program) (Link, error) {
 	if err != nil {
 		return nil, err
 	}
+	k.eventType = perfEventTypeKretprobe
 
 	err = k.attach(prog)
 	if err != nil {
@@ -103,7 +105,6 @@ func kprobe(symbol string, prog *ebpf.Program, ret bool) (*perfEvent, error) {
 // Returns ErrNotSupported if the kernel doesn't support perf_kprobe PMU,
 // or os.ErrNotExist if the given symbol does not exist in the kernel.
 func pmuKprobe(symbol string, ret bool) (*perfEvent, error) {
-
 	// Getting the PMU type will fail if the kernel doesn't support
 	// the perf_kprobe PMU.
 	et, err := getPMUEventType("kprobe")
@@ -146,11 +147,9 @@ func pmuKprobe(symbol string, ret bool) (*perfEvent, error) {
 
 	// Kernel has perf_kprobe PMU available, initialize perf event.
 	return &perfEvent{
-		fd:       internal.NewFD(uint32(fd)),
-		pmuID:    et,
-		name:     symbol,
-		ret:      ret,
-		progType: ebpf.Kprobe,
+		fd:    internal.NewFD(uint32(fd)),
+		pmuID: et,
+		name:  symbol,
 	}, nil
 }
 
@@ -159,7 +158,6 @@ func pmuKprobe(symbol string, ret bool) (*perfEvent, error) {
 // multiple trace events for the same kernel symbol. A perf event is then opened
 // on the newly-created trace event and returned to the caller.
 func tracefsKprobe(symbol string, ret bool) (*perfEvent, error) {
-
 	// Generate a random string for each trace event we attempt to create.
 	// This value is used as the 'group' token in tracefs to allow creating
 	// multiple kprobe trace events with the same name.
@@ -202,9 +200,7 @@ func tracefsKprobe(symbol string, ret bool) (*perfEvent, error) {
 		fd:        fd,
 		group:     group,
 		name:      symbol,
-		ret:       ret,
 		tracefsID: tid,
-		progType:  ebpf.Kprobe, // kernel only allows attaching kprobe programs to kprobe events
 	}, nil
 }
 

@@ -44,7 +44,7 @@ func Tracepoint(group, name string, prog *ebpf.Program) (Link, error) {
 		tracefsID: tid,
 		group:     group,
 		name:      name,
-		progType:  ebpf.TracePoint,
+		eventType: perfEventTypeTracepoint,
 	}
 
 	if err := pe.attach(prog); err != nil {

@@ -146,11 +146,10 @@ func pmuKprobe(symbol string, ret bool) (*perfEvent, error) {
 
 	// Kernel has perf_kprobe PMU available, initialize perf event.
 	return &perfEvent{
-		fd:       internal.NewFD(uint32(fd)),
-		pmuID:    et,
-		name:     symbol,
-		ret:      ret,
-		progType: ebpf.Kprobe,
+		fd:    internal.NewFD(uint32(fd)),
+		pmuID: et,
+		name:  symbol,
+		typ:   kprobeEventType(ret),
 	}, nil
 }
 
@@ -202,9 +201,8 @@ func tracefsKprobe(symbol string, ret bool) (*perfEvent, error) {
 		fd:        fd,
 		group:     group,
 		name:      symbol,
-		ret:       ret,
 		tracefsID: tid,
-		progType:  ebpf.Kprobe, // kernel only allows attaching kprobe programs to kprobe events
+		typ:       kprobeEventType(ret),
 	}, nil
 }
 
@@ -293,4 +291,11 @@ func kprobePrefix(ret bool) string {
 		return "r"
 	}
 	return "p"
+}
+
+func kprobeEventType(ret bool) perfEventType {
+	if ret {
+		return kretprobeEvent
+	}
+	return kprobeEvent
 }

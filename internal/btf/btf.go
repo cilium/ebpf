@@ -670,9 +670,16 @@ func ProgramLineInfos(s *Program) (recordSize uint32, bytes []byte, err error) {
 //
 // This is a free function instead of a method to hide it from users
 // of package ebpf.
-func ProgramRelocations(s *Program, target *Spec) (map[uint64]Relocation, error) {
+func ProgramRelocations(s *Program, target *Spec) (_ map[uint64]Relocation, err error) {
 	if len(s.coreRelos) == 0 {
 		return nil, nil
+	}
+
+	if target == nil {
+		target, err = LoadKernelSpec()
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	return coreRelocate(s.spec, target, s.coreRelos)

@@ -103,14 +103,14 @@ func TestKprobeCreatePMU(t *testing.T) {
 	c.Assert(err, qt.IsNil)
 	defer pk.Close()
 
-	c.Assert(pk.progType, qt.Equals, ebpf.Kprobe)
+	c.Assert(pk.typ, qt.Equals, kprobeEvent)
 
 	// kretprobe happy path.
 	pr, err := pmuKprobe("printk", true)
 	c.Assert(err, qt.IsNil)
 	defer pr.Close()
 
-	c.Assert(pr.progType, qt.Equals, ebpf.Kprobe)
+	c.Assert(pr.typ, qt.Equals, kretprobeEvent)
 
 	// Expect os.ErrNotExist when specifying a non-existent kernel symbol
 	// on kernels 4.17 and up.
@@ -160,21 +160,22 @@ func TestKprobeTraceFS(t *testing.T) {
 	kp, err := tracefsKprobe(symbol, false)
 	c.Assert(err, qt.IsNil)
 	c.Assert(kp.Close(), qt.IsNil)
+	c.Assert(kp.typ, qt.Equals, kprobeEvent)
+
 	kp, err = tracefsKprobe(symbol, true)
 	c.Assert(err, qt.IsNil)
 	c.Assert(kp.Close(), qt.IsNil)
+	c.Assert(kp.typ, qt.Equals, kretprobeEvent)
 
 	// Create two identical trace events, ensure their IDs differ.
 	k1, err := tracefsKprobe(symbol, false)
 	c.Assert(err, qt.IsNil)
 	defer k1.Close()
-	c.Assert(k1.progType, qt.Equals, ebpf.Kprobe)
 	c.Assert(k1.tracefsID, qt.Not(qt.Equals), 0)
 
 	k2, err := tracefsKprobe(symbol, false)
 	c.Assert(err, qt.IsNil)
 	defer k2.Close()
-	c.Assert(k2.progType, qt.Equals, ebpf.Kprobe)
 	c.Assert(k2.tracefsID, qt.Not(qt.Equals), 0)
 
 	// Compare the kprobes' tracefs IDs.

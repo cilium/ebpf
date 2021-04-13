@@ -16,6 +16,7 @@ func TestTracepoint(t *testing.T) {
 
 	// Requires at least 4.7 (98b5c2c65c29 "perf, bpf: allow bpf programs attach to tracepoints")
 	testutils.SkipOnOldKernel(t, "4.7", "tracepoint support")
+	c := qt.New(t)
 
 	prog, err := ebpf.NewProgram(&ebpf.ProgramSpec{
 		Type:    ebpf.TracePoint,
@@ -37,6 +38,10 @@ func TestTracepoint(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
+	pe, ok := tp.(*perfEvent)
+	c.Assert(ok, qt.IsTrue)
+	c.Assert(pe.typ, qt.Equals, tracepointEvent)
 
 	if err := tp.Close(); err != nil {
 		t.Error("closing tracepoint:", err)

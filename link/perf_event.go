@@ -52,6 +52,14 @@ const (
 	perfAllThreads = -1
 )
 
+type perfEventType uint8
+
+const (
+	tracepointEvent perfEventType = iota
+	kprobeEvent
+	kretprobeEvent
+)
+
 // A perfEvent represents a perf event kernel object. Exactly one eBPF program
 // can be attached to it. It is created based on a tracefs trace event or a
 // Performance Monitoring Unit (PMU).
@@ -66,11 +74,10 @@ type perfEvent struct {
 	// ID of the trace event read from tracefs. Valid IDs are non-zero.
 	tracefsID uint64
 
-	// True for kretprobes/uretprobes.
-	ret bool
+	// The event type determines the types of programs that can be attached.
+	typ perfEventType
 
-	fd       *internal.FD
-	progType ebpf.ProgramType
+	fd *internal.FD
 }
 
 func (pe *perfEvent) isLink() {}
@@ -117,13 +124,13 @@ func (pe *perfEvent) Close() error {
 		return fmt.Errorf("closing perf event fd: %w", err)
 	}
 
-	switch t := pe.progType; t {
-	case ebpf.Kprobe:
+	switch pe.typ {
+	case kprobeEvent, kretprobeEvent:
 		// For kprobes created using tracefs, clean up the <tracefs>/kprobe_events entry.
 		if pe.tracefsID != 0 {
 			return closeTraceFSKprobeEvent(pe.group, pe.name)
 		}
-	case ebpf.TracePoint:
+	case tracepointEvent:
 		// Tracepoint trace events don't hold any extra resources.
 		return nil
 	}
@@ -141,11 +148,20 @@ func (pe *perfEvent) attach(prog *ebpf.Program) error {
 	if pe.fd == nil {
 		return errors.New("cannot attach to nil perf event")
 	}
-	if t := prog.Type(); t != pe.progType {
-		return fmt.Errorf("invalid program type (expected %s): %s", pe.progType, t)
-	}
 	if prog.FD() < 0 {
 		return fmt.Errorf("invalid program: %w", internal.ErrClosedFd)
+	}
+	switch pe.typ {
+	case kprobeEvent, kretprobeEvent:
+		if t := prog.Type(); t != ebpf.Kprobe {
+			return fmt.Errorf("invalid program type (expected %s): %s", ebpf.Kprobe, t)
+		}
+	case tracepointEvent:
+		if t := prog.Type(); t != ebpf.TracePoint {
+			return fmt.Errorf("invalid program type (expected %s): %s", ebpf.TracePoint, t)
+		}
+	default:
+		return fmt.Errorf("unknown perf event type: %d", pe.typ)
 	}
 
 	// The ioctl below will fail when the fd is invalid.

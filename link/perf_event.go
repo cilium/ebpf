@@ -31,6 +31,10 @@ import (
 //   exported kernel symbols. kprobe-based (tracefs) trace events can be
 //   created system-wide by writing to the <tracefs>/kprobe_events file, or
 //   they can be scoped to the current process by creating PMU perf events.
+// - u(ret)probe: Ephemeral trace events based on user provides ELF binaries
+//   and offsets. uprobe-based (tracefs) trace events can be
+//   created system-wide by writing to the <tracefs>/uprobe_events file, or
+//   they can be scoped to the current process by creating PMU perf events.
 // - perf event: An object instantiated based on an existing trace event or
 //   kernel symbol. Referred to by fd in userspace.
 //   Exactly one eBPF program can be attached to a perf event. Multiple perf
@@ -58,13 +62,14 @@ const (
 	tracepointEvent perfEventType = iota
 	kprobeEvent
 	kretprobeEvent
+	uprobeEvent
+	uretprobeEvent
 )
 
 // A perfEvent represents a perf event kernel object. Exactly one eBPF program
 // can be attached to it. It is created based on a tracefs trace event or a
 // Performance Monitoring Unit (PMU).
 type perfEvent struct {
-
 	// Group and name of the tracepoint/kprobe/uprobe.
 	group string
 	name  string
@@ -126,9 +131,14 @@ func (pe *perfEvent) Close() error {
 
 	switch pe.typ {
 	case kprobeEvent, kretprobeEvent:
-		// For kprobes created using tracefs, clean up the <tracefs>/kprobe_events entry.
+		// Clean up kprobe tracefs entry.
 		if pe.tracefsID != 0 {
-			return closeTraceFSKprobeEvent(pe.group, pe.name)
+			return closeTraceFSProbeEvent(kprobeType, pe.group, pe.name)
+		}
+	case uprobeEvent, uretprobeEvent:
+		// Clean up uprobe tracefs entry.
+		if pe.tracefsID != 0 {
+			return closeTraceFSProbeEvent(uprobeType, pe.group, pe.name)
 		}
 	case tracepointEvent:
 		// Tracepoint trace events don't hold any extra resources.
@@ -152,7 +162,7 @@ func (pe *perfEvent) attach(prog *ebpf.Program) error {
 		return fmt.Errorf("invalid program: %w", internal.ErrClosedFd)
 	}
 	switch pe.typ {
-	case kprobeEvent, kretprobeEvent:
+	case kprobeEvent, kretprobeEvent, uprobeEvent, uretprobeEvent:
 		if t := prog.Type(); t != ebpf.Kprobe {
 			return fmt.Errorf("invalid program type (expected %s): %s", ebpf.Kprobe, t)
 		}
@@ -208,20 +218,20 @@ func getTraceEventID(group, name string) (uint64, error) {
 
 // getPMUEventType reads a Performance Monitoring Unit's type (numeric identifier)
 // from /sys/bus/event_source/devices/<pmu>/type.
-func getPMUEventType(pmu string) (uint64, error) {
-	et, err := uint64FromFile("/sys/bus/event_source/devices", pmu, "type")
+func getPMUEventType(typ probeType) (uint64, error) {
+	et, err := uint64FromFile("/sys/bus/event_source/devices", typ.String(), "type")
 	if errors.Is(err, ErrNotSupported) {
-		return 0, fmt.Errorf("pmu type %s: %w", pmu, ErrNotSupported)
+		return 0, fmt.Errorf("pmu type %s: %w", typ.String(), ErrNotSupported)
 	}
 	if err != nil {
-		return 0, fmt.Errorf("reading pmu type %s: %w", pmu, err)
+		return 0, fmt.Errorf("reading pmu type %s: %w", typ.String(), err)
 	}
 
 	return et, nil
 }
 
 // openTracepointPerfEvent opens a tracepoint-type perf event. System-wide
-// kprobes created by writing to <tracefs>/kprobe_events are tracepoints
+// [k,u]probes created by writing to <tracefs>/[k,u]probe_events are tracepoints
 // behind the scenes, and can be attached to using these perf events.
 func openTracepointPerfEvent(tid uint64) (*internal.FD, error) {
 	attr := unix.PerfEventAttr{
@@ -244,7 +254,6 @@ func openTracepointPerfEvent(tid uint64) (*internal.FD, error) {
 // and joined onto base. Returns error if base no longer prefixes the path after
 // joining all components.
 func uint64FromFile(base string, path ...string) (uint64, error) {
-
 	// Resolve leaf path separately for error feedback. Makes the join onto
 	// base more readable (can't mix with variadic args).
 	l := filepath.Join(path...)

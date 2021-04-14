@@ -32,7 +32,7 @@ fi
 
 # Pull all dependencies, so that we can run tests without the
 # vm having network access.
-go mod download
+go mod tidy
 
 # Use sudo if /dev/kvm isn't accessible by the current user.
 sudo=""

@@ -327,8 +327,6 @@ func TestLibBPFCompat(t *testing.T) {
 			t.Skip("Skipping due to missing InnerMap in map definition")
 		}
 
-		t.Parallel()
-
 		spec, err := LoadCollectionSpec(path)
 		testutils.SkipIfNotSupported(t, err)
 		if err != nil {

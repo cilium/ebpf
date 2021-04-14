@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"io"
 	"math"
 	"path/filepath"
 	"strings"
@@ -41,6 +42,10 @@ type ProgramOptions struct {
 	// Controls the output buffer size for the verifier. Defaults to
 	// DefaultVerifierLogSize.
 	LogSize int
+	// An ELF containing the BTF to relocate against for CO-RE. This is useful
+	// in environments where the kernel BTF is not available (containers) or
+	// where it is in a non-standard location.
+	TargetBTF io.ReaderAt
 }
 
 // ProgramSpec defines a Program.
@@ -125,19 +130,15 @@ func NewProgram(spec *ProgramSpec) (*Program, error) {
 // Loading a program for the first time will perform
 // feature detection by loading small, temporary programs.
 func NewProgramWithOptions(spec *ProgramSpec, opts ProgramOptions) (*Program, error) {
-	btfs := make(btfHandleCache)
-	defer btfs.close()
+	handles := newHandleCache()
+	defer handles.close()
 
-	return newProgramWithOptions(spec, opts, btfs)
+	return newProgramWithOptions(spec, opts, handles)
 }
 
-func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions, btfs btfHandleCache) (*Program, error) {
+func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions, handles *handleCache) (*Program, error) {
 	if len(spec.Instructions) == 0 {
 		return nil, errors.New("Instructions cannot be empty")
-	}
-
-	if len(spec.License) == 0 {
-		return nil, errors.New("License cannot be empty")
 	}
 
 	if spec.ByteOrder != nil && spec.ByteOrder != internal.NativeEndian {
@@ -188,13 +189,21 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions, btfs btfHandl
 
 	var btfDisabled bool
 	if spec.BTF != nil {
-		if relos, err := btf.ProgramRelocations(spec.BTF, nil); err != nil {
-			return nil, fmt.Errorf("CO-RE relocations: %s", err)
+		var target *btf.Spec
+		if opts.TargetBTF != nil {
+			target, err = handles.btfSpec(opts.TargetBTF)
+			if err != nil {
+				return nil, fmt.Errorf("load CO-RE target: %w", err)
+			}
+		}
+
+		if relos, err := btf.ProgramRelocations(spec.BTF, target); err != nil {
+			return nil, fmt.Errorf("CO-RE relocations: %w", err)
 		} else if len(relos) > 0 {
 			return nil, fmt.Errorf("applying CO-RE relocations: %w", ErrNotSupported)
 		}
 
-		handle, err := btfs.load(btf.ProgramSpec(spec.BTF))
+		handle, err := handles.btfHandle(btf.ProgramSpec(spec.BTF))
 		btfDisabled = errors.Is(err, btf.ErrNotSupported)
 		if err != nil && !btfDisabled {
 			return nil, fmt.Errorf("load BTF: %w", err)

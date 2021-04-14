@@ -675,6 +675,14 @@ func ProgramRelocations(s *Program, target *Spec) (map[uint64]Relocation, error)
 		return nil, nil
 	}
 
+	if target == nil {
+		var err error
+		target, err = LoadKernelSpec()
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	return coreRelocate(s.spec, target, s.coreRelos)
 }
 

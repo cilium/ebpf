@@ -4,6 +4,8 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/cilium/ebpf"
+	"github.com/cilium/ebpf/asm"
 	"github.com/cilium/ebpf/internal/testutils"
 	qt "github.com/frankban/quicktest"
 )
@@ -63,6 +65,86 @@ func TestTraceEventRegex(t *testing.T) {
 
 			if rgxTraceEvent.MatchString(tt.in) == tt.fail {
 				t.Errorf("expected string '%s' to %s regex match", tt.in, exp)
+			}
+		})
+	}
+}
+
+func TestPerfEventAttach(t *testing.T) {
+	baseSpec := &ebpf.ProgramSpec{
+		License: "MIT",
+		Instructions: asm.Instructions{
+			asm.Mov.Imm(asm.R0, 0),
+			asm.Return(),
+		},
+	}
+
+	// Get a random trace event id; for the scope of the test it's not important which one
+	tid, err := getTraceEventID("tcp", "tcp_probe")
+	if err != nil {
+		t.Fatalf("get trace event id: %v", err)
+	}
+	tfd, err := openTracepointPerfEvent(tid)
+	if err != nil {
+		t.Fatalf("open tracepoint event: %v", err)
+	}
+
+	var tests = []struct {
+		name  string
+		pe    *perfEvent
+		ptype ebpf.ProgramType
+		fail  bool
+	}{
+		{
+			name: "attach tracepoint perf event to tracepoint program",
+			pe: &perfEvent{
+				typ: tracepointEvent,
+				fd:  tfd,
+			},
+			ptype: ebpf.TracePoint,
+			fail:  false,
+		},
+		{
+			name: "attach tracepoint perf event to kprobe program",
+			pe: &perfEvent{
+				typ: tracepointEvent,
+				fd:  tfd,
+			},
+			ptype: ebpf.Kprobe,
+			fail:  true,
+		},
+		{
+			name: "missing perf event fd",
+			pe: &perfEvent{
+				typ: tracepointEvent,
+			},
+			ptype: ebpf.TracePoint,
+			fail:  true,
+		},
+		{
+			name: "ioctl fail",
+			pe: &perfEvent{
+				typ: kprobeEvent,
+				fd:  tfd,
+			},
+			ptype: ebpf.Kprobe,
+			fail:  true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			spec := baseSpec
+			spec.Type = tt.ptype
+			prog, err := ebpf.NewProgram(spec)
+			if err != nil {
+				t.Fatalf("create program from spec: %v", err)
+			}
+			defer prog.Close()
+			defer tt.pe.Close()
+
+			if err := tt.pe.attach(prog); tt.fail != (err != nil) {
+				t.Fatalf("perf event attach (fail=%v): %v", tt.fail, err)
 			}
 		})
 	}

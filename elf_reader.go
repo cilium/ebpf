@@ -576,7 +576,6 @@ func (ec *elfCode) loadBTFMaps(maps map[string]*MapSpec) error {
 // a BTF map definition. The name and spec arguments will be copied to the
 // resulting MapSpec, and inner must be true on any resursive invocations.
 func mapSpecFromBTF(name string, def *btf.Struct, inner bool, spec *btf.Spec) (*MapSpec, error) {
-
 	var (
 		key, value                 btf.Type
 		keySize, valueSize         uint32
@@ -863,6 +862,7 @@ func getProgType(sectionName string) (ProgramType, AttachType, uint32, string) {
 		"fentry.s/":             {Tracing, AttachTraceFEntry, unix.BPF_F_SLEEPABLE},
 		"fmod_ret.s/":           {Tracing, AttachModifyReturn, unix.BPF_F_SLEEPABLE},
 		"fexit.s/":              {Tracing, AttachTraceFExit, unix.BPF_F_SLEEPABLE},
+		"freplace/":             {Extension, AttachNone, 0},
 		"sk_lookup/":            {SkLookup, AttachSkLookup, 0},
 		"lsm/":                  {LSM, AttachLSMMac, 0},
 		"lsm.s/":                {LSM, AttachLSMMac, unix.BPF_F_SLEEPABLE},

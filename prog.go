@@ -51,9 +51,12 @@ type ProgramSpec struct {
 	// Type determines at which hook in the kernel a program will run.
 	Type       ProgramType
 	AttachType AttachType
-	// Name of a kernel data structure to attach to. It's interpretation
-	// depends on Type and AttachType.
-	AttachTo     string
+	// Name of a kernel data structure or function to attach to. Its
+	// interpretation depends on Type and AttachType.
+	AttachTo string
+	// The file descriptor of the target. Its interpretation depends on Type
+	// and AttachType. Must be manually specified.
+	AttachTarget int
 	Instructions asm.Instructions
 	// Flags is passed to the kernel and specifies additional program
 	// load attributes.
@@ -222,12 +225,15 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions, btfs btfHandl
 	}
 
 	if spec.AttachTo != "" {
-		target, err := resolveBTFType(spec.AttachTo, spec.Type, spec.AttachType)
+		targetBTF, targetProg, err := resolveBTFType(spec.AttachTo, spec.AttachTarget, spec.Type, spec.AttachType)
 		if err != nil {
 			return nil, err
 		}
-		if target != nil {
-			attr.attachBTFID = target.ID()
+		if targetBTF != nil {
+			attr.attachBTFID = targetBTF.ID()
+		}
+		if targetProg > -1 {
+			attr.attachProgFd = uint32(targetProg)
 		}
 	}
 
@@ -304,6 +310,7 @@ func newProgramFromFD(fd *internal.FD) (*Program, error) {
 		fd.Close()
 		return nil, fmt.Errorf("discover program type: %w", err)
 	}
+	defer info.Close()
 
 	return &Program{"", fd, "", "", info.Type}, nil
 }
@@ -673,7 +680,26 @@ func findKernelType(name string, typ btf.Type) error {
 	return kernel.FindType(name, typ)
 }
 
-func resolveBTFType(name string, progType ProgramType, attachType AttachType) (btf.Type, error) {
+func findProgramType(prog *Program, name string, typ btf.Type) error {
+	info, err := prog.Info()
+	if err != nil {
+		return fmt.Errorf("can't load program BTF spec: %w", err)
+	}
+	defer info.Close()
+
+	spec, err := btf.HandleSpec(info.BTF)
+	if err != nil {
+		return fmt.Errorf("can't load program BTF spec for %s: %w", info.Name, err)
+	}
+
+	if spec == nil {
+		return errors.New("missing BTF spec")
+	}
+
+	return spec.FindType(name, typ)
+}
+
+func resolveBTFType(name string, attachTarget int, progType ProgramType, attachType AttachType) (btf.Type, int, error) {
 	type match struct {
 		p ProgramType
 		a AttachType
@@ -685,31 +711,45 @@ func resolveBTFType(name string, progType ProgramType, attachType AttachType) (b
 		var target btf.Func
 		err := findKernelType("bpf_lsm_"+name, &target)
 		if errors.Is(err, btf.ErrNotFound) {
-			return nil, &internal.UnsupportedFeatureError{
+			return nil, -1, &internal.UnsupportedFeatureError{
 				Name: name + " LSM hook",
 			}
 		}
 		if err != nil {
-			return nil, fmt.Errorf("resolve BTF for LSM hook %s: %w", name, err)
+			return nil, -1, fmt.Errorf("resolve BTF for LSM hook %s: %w", name, err)
 		}
 
-		return &target, nil
+		return &target, -1, nil
 
 	case match{Tracing, AttachTraceIter}:
 		var target btf.Func
 		err := findKernelType("bpf_iter_"+name, &target)
 		if errors.Is(err, btf.ErrNotFound) {
-			return nil, &internal.UnsupportedFeatureError{
+			return nil, -1, &internal.UnsupportedFeatureError{
 				Name: name + " iterator",
 			}
 		}
 		if err != nil {
-			return nil, fmt.Errorf("resolve BTF for iterator %s: %w", name, err)
+			return nil, -1, fmt.Errorf("resolve BTF for iterator %s: %w", name, err)
 		}
 
-		return &target, nil
+		return &target, -1, nil
+
+	case match{Extension, AttachNone}:
+		targetProg, err := NewProgramFromFD(attachTarget)
+		if err != nil {
+			return nil, -1, fmt.Errorf("resolve BTF for function %s: %w", name, err)
+		}
+
+		var target btf.Func
+		err = findProgramType(targetProg, name, &target)
+		if err != nil {
+			return nil, -1, fmt.Errorf("resolve BTF for function %s: %w", name, err)
+		}
+
+		return &target, targetProg.FD(), nil
 
 	default:
-		return nil, nil
+		return nil, -1, nil
 	}
 }

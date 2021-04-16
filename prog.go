@@ -143,10 +143,6 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions, handles *hand
 		return nil, errors.New("Instructions cannot be empty")
 	}
 
-	if len(spec.License) == 0 {
-		return nil, errors.New("License cannot be empty")
-	}
-
 	if spec.ByteOrder != nil && spec.ByteOrder != internal.NativeEndian {
 		return nil, fmt.Errorf("can't load %s program on %s", spec.ByteOrder, internal.NativeEndian)
 	}

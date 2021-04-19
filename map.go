@@ -172,13 +172,13 @@ func NewMap(spec *MapSpec) (*Map, error) {
 // sufficiently high for locking memory during map creation. This can be done
 // by calling unix.Setrlimit with unix.RLIMIT_MEMLOCK prior to calling NewMapWithOptions.
 func NewMapWithOptions(spec *MapSpec, opts MapOptions) (*Map, error) {
-	btfs := make(btfHandleCache)
-	defer btfs.close()
+	handles := newHandleCache()
+	defer handles.close()
 
-	return newMapWithOptions(spec, opts, btfs)
+	return newMapWithOptions(spec, opts, handles)
 }
 
-func newMapWithOptions(spec *MapSpec, opts MapOptions, btfs btfHandleCache) (_ *Map, err error) {
+func newMapWithOptions(spec *MapSpec, opts MapOptions, handles *handleCache) (_ *Map, err error) {
 	closeOnError := func(c io.Closer) {
 		if err != nil {
 			c.Close()
@@ -224,7 +224,7 @@ func newMapWithOptions(spec *MapSpec, opts MapOptions, btfs btfHandleCache) (_ *
 			return nil, errors.New("inner maps cannot be pinned")
 		}
 
-		template, err := createMap(spec.InnerMap, nil, opts, btfs)
+		template, err := createMap(spec.InnerMap, nil, opts, handles)
 		if err != nil {
 			return nil, err
 		}
@@ -233,7 +233,7 @@ func newMapWithOptions(spec *MapSpec, opts MapOptions, btfs btfHandleCache) (_ *
 		innerFd = template.fd
 	}
 
-	m, err := createMap(spec, innerFd, opts, btfs)
+	m, err := createMap(spec, innerFd, opts, handles)
 	if err != nil {
 		return nil, err
 	}
@@ -249,7 +249,7 @@ func newMapWithOptions(spec *MapSpec, opts MapOptions, btfs btfHandleCache) (_ *
 	return m, nil
 }
 
-func createMap(spec *MapSpec, inner *internal.FD, opts MapOptions, btfs btfHandleCache) (_ *Map, err error) {
+func createMap(spec *MapSpec, inner *internal.FD, opts MapOptions, handles *handleCache) (_ *Map, err error) {
 	closeOnError := func(closer io.Closer) {
 		if err != nil {
 			closer.Close()
@@ -320,7 +320,7 @@ func createMap(spec *MapSpec, inner *internal.FD, opts MapOptions, btfs btfHandl
 
 	var btfDisabled bool
 	if spec.BTF != nil {
-		handle, err := btfs.load(btf.MapSpec(spec.BTF))
+		handle, err := handles.btfHandle(btf.MapSpec(spec.BTF))
 		btfDisabled = errors.Is(err, btf.ErrNotSupported)
 		if err != nil && !btfDisabled {
 			return nil, fmt.Errorf("load BTF: %w", err)

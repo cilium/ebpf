@@ -119,6 +119,7 @@ func coreRelocate(local, target *Spec, coreRelos bpfCoreRelos) (map[uint64]Reloc
 }
 
 var errAmbiguousRelocation = errors.New("ambiguous relocation")
+var errImpossibleRelocation = errors.New("impossible relocation")
 
 func coreCalculateRelocation(local Type, targets []namedType, kind coreReloKind, localAccessor coreAccessor) (Relocation, error) {
 	localID := local.ID()
@@ -142,10 +143,11 @@ func coreCalculateRelocation(local Type, targets []namedType, kind coreReloKind,
 				return Relocation{}, fmt.Errorf("%s: unexpected non-zero accessor", kind)
 			}
 
-			if compat, err := coreAreTypesCompatible(local, target); err != nil {
-				return Relocation{}, fmt.Errorf("%s: %s", kind, err)
-			} else if !compat {
+			err := coreAreTypesCompatible(local, target)
+			if errors.Is(err, errImpossibleRelocation) {
 				continue
+			} else if err != nil {
+				return Relocation{}, fmt.Errorf("%s: %s", kind, err)
 			}
 
 			relos = append(relos, Relocation{uint32(localID), uint32(targetID)})
@@ -243,8 +245,10 @@ func parseCoreAccessor(accessor string) (coreAccessor, error) {
  *     number of input args and compatible return and argument types.
  * These rules are not set in stone and probably will be adjusted as we get
  * more experience with using BPF CO-RE relocations.
+ *
+ * Returns errImpossibleRelocation if types are not compatible.
  */
-func coreAreTypesCompatible(localType Type, targetType Type) (bool, error) {
+func coreAreTypesCompatible(localType Type, targetType Type) error {
 	var (
 		localTs, targetTs typeDeque
 		l, t              = &localType, &targetType
@@ -253,14 +257,14 @@ func coreAreTypesCompatible(localType Type, targetType Type) (bool, error) {
 
 	for ; l != nil && t != nil; l, t = localTs.shift(), targetTs.shift() {
 		if depth >= maxTypeDepth {
-			return false, errors.New("types are nested too deep")
+			return errors.New("types are nested too deep")
 		}
 
 		localType = *l
 		targetType = *t
 
 		if reflect.TypeOf(localType) != reflect.TypeOf(targetType) {
-			return false, nil
+			return fmt.Errorf("type mismatch: %w", errImpossibleRelocation)
 		}
 
 		switch lv := (localType).(type) {
@@ -270,7 +274,7 @@ func coreAreTypesCompatible(localType Type, targetType Type) (bool, error) {
 		case *Int:
 			tv := targetType.(*Int)
 			if lv.isBitfield() || tv.isBitfield() {
-				return false, nil
+				return fmt.Errorf("bitfield: %w", errImpossibleRelocation)
 			}
 
 		case *Pointer, *Array:
@@ -281,7 +285,7 @@ func coreAreTypesCompatible(localType Type, targetType Type) (bool, error) {
 		case *FuncProto:
 			tv := targetType.(*FuncProto)
 			if len(lv.Params) != len(tv.Params) {
-				return false, nil
+				return fmt.Errorf("function param mismatch: %w", errImpossibleRelocation)
 			}
 
 			depth++
@@ -289,19 +293,19 @@ func coreAreTypesCompatible(localType Type, targetType Type) (bool, error) {
 			targetType.walk(&targetTs)
 
 		default:
-			return false, fmt.Errorf("unsupported type %T", localType)
+			return fmt.Errorf("unsupported type %T", localType)
 		}
 	}
 
 	if l != nil {
-		return false, fmt.Errorf("dangling local type %T", *l)
+		return fmt.Errorf("dangling local type %T", *l)
 	}
 
 	if t != nil {
-		return false, fmt.Errorf("dangling target type %T", *t)
+		return fmt.Errorf("dangling target type %T", *t)
 	}
 
-	return true, nil
+	return nil
 }
 
 /* The comment below is from bpf_core_fields_are_compat in libbpf.c:
@@ -321,43 +325,52 @@ func coreAreTypesCompatible(localType Type, targetType Type) (bool, error) {
  *   - everything else shouldn't be ever a target of relocation.
  * These rules are not set in stone and probably will be adjusted as we get
  * more experience with using BPF CO-RE relocations.
+ *
+ * Returns errImpossibleRelocation if the members are not compatible.
  */
-func coreAreMembersCompatible(localType Type, targetType Type) (bool, error) {
-	doNamesMatch := func(a, b string) bool {
+func coreAreMembersCompatible(localType Type, targetType Type) error {
+	doNamesMatch := func(a, b string) error {
 		if a == "" || b == "" {
 			// allow anonymous and named type to match
-			return true
+			return nil
 		}
 
-		return essentialName(a) == essentialName(b)
+		if essentialName(a) == essentialName(b) {
+			return nil
+		}
+
+		return fmt.Errorf("names don't match: %w", errImpossibleRelocation)
 	}
 
 	for depth := 0; depth <= maxTypeDepth; depth++ {
 		_, lok := localType.(composite)
 		_, tok := targetType.(composite)
 		if lok && tok {
-			return true, nil
+			return nil
 		}
 
 		if reflect.TypeOf(localType) != reflect.TypeOf(targetType) {
-			return false, nil
+			return fmt.Errorf("type mismatch: %w", errImpossibleRelocation)
 		}
 
 		switch lv := localType.(type) {
 		case *Pointer:
-			return true, nil
+			return nil
 
 		case *Enum:
 			tv := targetType.(*Enum)
-			return doNamesMatch(lv.name(), tv.name()), nil
+			return doNamesMatch(lv.name(), tv.name())
 
 		case *Fwd:
 			tv := targetType.(*Fwd)
-			return doNamesMatch(lv.name(), tv.name()), nil
+			return doNamesMatch(lv.name(), tv.name())
 
 		case *Int:
 			tv := targetType.(*Int)
-			return !lv.isBitfield() && !tv.isBitfield(), nil
+			if lv.isBitfield() || tv.isBitfield() {
+				return fmt.Errorf("bitfield: %w", errImpossibleRelocation)
+			}
+			return nil
 
 		case *Array:
 			tv := targetType.(*Array)
@@ -366,11 +379,11 @@ func coreAreMembersCompatible(localType Type, targetType Type) (bool, error) {
 			targetType = tv.Type
 
 		default:
-			return false, fmt.Errorf("unsupported type %T", localType)
+			return fmt.Errorf("unsupported type %T", localType)
 		}
 	}
 
-	return false, errors.New("types are nested too deep")
+	return errors.New("types are nested too deep")
 }
 
 func skipQualifierAndTypedef(typ Type) (Type, error) {

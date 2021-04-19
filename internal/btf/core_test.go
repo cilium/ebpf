@@ -48,34 +48,36 @@ func TestCoreAreTypesCompatible(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		compatible, err := coreAreTypesCompatible(test.a, test.b)
-		if err != nil {
-			t.Errorf("Can't compare types: %s\na = %#v\nb = %#v", err, test.a, test.b)
-			continue
-		}
-
-		if compatible != test.compatible {
-			if test.compatible {
-				t.Errorf("Expected types to be compatible:\na = %#v\nb = %#v", test.a, test.b)
-			} else {
-				t.Errorf("Expected types to be incompatible:\na = %#v\nb = %#v", test.a, test.b)
+		err := coreAreTypesCompatible(test.a, test.b)
+		if test.compatible {
+			if err != nil {
+				t.Errorf("Expected types to be compatible: %s\na = %#v\nb = %#v", err, test.a, test.b)
+				continue
 			}
-			continue
+		} else {
+			if !errors.Is(err, errImpossibleRelocation) {
+				t.Errorf("Expected types to be incompatible: %s\na = %#v\nb = %#v", err, test.a, test.b)
+				continue
+			}
 		}
 
-		compatibleReverse, err := coreAreTypesCompatible(test.b, test.a)
-		if err != nil {
-			t.Errorf("Can't compare reversed types: %s\na = %#v\nb = %#v", err, test.a, test.b)
-			continue
-		}
-		if compatibleReverse != compatible {
-			t.Errorf("Expected the reverse comparison to be %v as well:\na = %#v\nb = %#v", compatible, test.a, test.b)
+		err = coreAreTypesCompatible(test.b, test.a)
+		if test.compatible {
+			if err != nil {
+				t.Errorf("Expected reversed types to be compatible: %s\na = %#v\nb = %#v", err, test.a, test.b)
+			}
+		} else {
+			if !errors.Is(err, errImpossibleRelocation) {
+				t.Errorf("Expected reversed types to be incompatible: %s\na = %#v\nb = %#v", err, test.a, test.b)
+			}
 		}
 	}
 
 	for _, invalid := range []Type{&Var{}, &Datasec{}} {
-		_, err := coreAreTypesCompatible(invalid, invalid)
-		if err == nil {
+		err := coreAreTypesCompatible(invalid, invalid)
+		if errors.Is(err, errImpossibleRelocation) {
+			t.Errorf("Expected an error for %T, not errImpossibleRelocation", invalid)
+		} else if err == nil {
 			t.Errorf("Expected an error for %T", invalid)
 		}
 	}
@@ -99,38 +101,40 @@ func TestCoreAreMembersCompatible(t *testing.T) {
 		{&Int{Offset: 1}, &Int{}, false},
 		{&Pointer{Target: &Void{}}, &Pointer{Target: &Void{}}, true},
 		{&Pointer{Target: &Void{}}, &Void{}, false},
-		{&Array{}, &Array{}, true},
+		{&Array{Type: &Int{Size: 1}}, &Array{Type: &Int{Encoding: Signed}}, true},
 	}
 
 	for _, test := range tests {
-		compatible, err := coreAreMembersCompatible(test.a, test.b)
-		if err != nil {
-			t.Errorf("Can't compare types: %s\na = %#v\nb = %#v", err, test.a, test.b)
-			continue
-		}
-
-		if compatible != test.compatible {
-			if test.compatible {
-				t.Errorf("Expected types to be compatible:\na = %#v\nb = %#v", test.a, test.b)
-			} else {
-				t.Errorf("Expected types to be incompatible:\na = %#v\nb = %#v", test.a, test.b)
+		err := coreAreMembersCompatible(test.a, test.b)
+		if test.compatible {
+			if err != nil {
+				t.Errorf("Expected members to be compatible: %s\na = %#v\nb = %#v", err, test.a, test.b)
+				continue
 			}
-			continue
+		} else {
+			if !errors.Is(err, errImpossibleRelocation) {
+				t.Errorf("Expected members to be incompatible: %s\na = %#v\nb = %#v", err, test.a, test.b)
+				continue
+			}
 		}
 
-		compatibleReverse, err := coreAreMembersCompatible(test.b, test.a)
-		if err != nil {
-			t.Errorf("Can't compare reversed types: %s\na = %#v\nb = %#v", err, test.a, test.b)
-			continue
-		}
-		if compatibleReverse != compatible {
-			t.Errorf("Expected the reverse comparison to be %v as well:\na = %#v\nb = %#v", compatible, test.a, test.b)
+		err = coreAreMembersCompatible(test.b, test.a)
+		if test.compatible {
+			if err != nil {
+				t.Errorf("Expected reversed members to be compatible: %s\na = %#v\nb = %#v", err, test.a, test.b)
+			}
+		} else {
+			if !errors.Is(err, errImpossibleRelocation) {
+				t.Errorf("Expected reversed members to be incompatible: %s\na = %#v\nb = %#v", err, test.a, test.b)
+			}
 		}
 	}
 
 	for _, invalid := range []Type{&Void{}, &FuncProto{}, &Var{}, &Datasec{}} {
-		_, err := coreAreMembersCompatible(invalid, invalid)
-		if err == nil {
+		err := coreAreMembersCompatible(invalid, invalid)
+		if errors.Is(err, errImpossibleRelocation) {
+			t.Errorf("Expected an error for %T, not errImpossibleRelocation", invalid)
+		} else if err == nil {
 			t.Errorf("Expected an error for %T", invalid)
 		}
 	}

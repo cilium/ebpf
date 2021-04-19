@@ -34,7 +34,15 @@ func FuzzExtInfo(data []byte) int {
 		return -1
 	}
 
-	table := stringTable("\x00foo\x00barfoo\x00")
+	table := &stringTable{
+		[]byte("\x00foo\x00barfoo\x00"),
+		map[string]uint32{
+			"":       0,
+			"foo":    1,
+			"bar":    5,
+			"barfoo": 9,
+		},
+	}
 	info, err := parseExtInfo(bytes.NewReader(data), internal.NativeEndian, table)
 	if err != nil {
 		if info != nil {

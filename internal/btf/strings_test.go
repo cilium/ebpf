@@ -14,7 +14,7 @@ func TestStringTable(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if !bytes.Equal([]byte(in), []byte(st)) {
+	if !bytes.Equal([]byte(in), []byte(st.table)) {
 		t.Error("String table doesn't match input")
 	}
 

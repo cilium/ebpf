@@ -30,7 +30,7 @@ type btfExtCoreHeader struct {
 	CoreReloLen uint32
 }
 
-func parseExtInfos(r io.ReadSeeker, bo binary.ByteOrder, strings stringTable) (funcInfo, lineInfo map[string]extInfo, coreRelos map[string]bpfCoreRelos, err error) {
+func parseExtInfos(r io.ReadSeeker, bo binary.ByteOrder, strings *stringTable) (funcInfo, lineInfo map[string]extInfo, coreRelos map[string]bpfCoreRelos, err error) {
 	var header btfExtHeader
 	var coreHeader btfExtCoreHeader
 	if err := binary.Read(r, bo, &header); err != nil {
@@ -109,7 +109,7 @@ type btfExtInfoSec struct {
 }
 
 type extInfoRecord struct {
-	InsnOff uint64
+	InsnOff uint32
 	Opaque  []byte
 }
 
@@ -118,7 +118,7 @@ type extInfo struct {
 	records    []extInfoRecord
 }
 
-func (ei extInfo) append(other extInfo, offset uint64) (extInfo, error) {
+func (ei extInfo) append(other extInfo, offset uint32) (extInfo, error) {
 	if other.recordSize != ei.recordSize {
 		return extInfo{}, fmt.Errorf("ext_info record size mismatch, want %d (got %d)", ei.recordSize, other.recordSize)
 	}
@@ -154,7 +154,7 @@ func (ei extInfo) MarshalBinary() ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-func parseExtInfo(r io.Reader, bo binary.ByteOrder, strings stringTable) (map[string]extInfo, error) {
+func parseExtInfo(r io.Reader, bo binary.ByteOrder, strings *stringTable) (map[string]extInfo, error) {
 	const maxRecordSize = 256
 
 	var recordSize uint32
@@ -193,7 +193,7 @@ func parseExtInfo(r io.Reader, bo binary.ByteOrder, strings stringTable) (map[st
 				return nil, fmt.Errorf("section %v: offset %v is not aligned with instruction size", secName, byteOff)
 			}
 
-			records = append(records, extInfoRecord{uint64(byteOff), buf})
+			records = append(records, extInfoRecord{byteOff, buf})
 		}
 
 		result[secName] = extInfo{
@@ -215,7 +215,7 @@ type bpfCoreRelos []bpfCoreRelo
 
 // append two slices of extInfoRelo to each other. The InsnOff of b are adjusted
 // by offset.
-func (r bpfCoreRelos) append(other bpfCoreRelos, offset uint64) bpfCoreRelos {
+func (r bpfCoreRelos) append(other bpfCoreRelos, offset uint32) bpfCoreRelos {
 	result := make([]bpfCoreRelo, 0, len(r)+len(other))
 	result = append(result, r...)
 	for _, relo := range other {
@@ -227,7 +227,7 @@ func (r bpfCoreRelos) append(other bpfCoreRelos, offset uint64) bpfCoreRelos {
 
 var extInfoReloSize = binary.Size(bpfCoreRelo{})
 
-func parseExtInfoRelos(r io.Reader, bo binary.ByteOrder, strings stringTable) (map[string]bpfCoreRelos, error) {
+func parseExtInfoRelos(r io.Reader, bo binary.ByteOrder, strings *stringTable) (map[string]bpfCoreRelos, error) {
 	var recordSize uint32
 	if err := binary.Read(r, bo, &recordSize); err != nil {
 		return nil, fmt.Errorf("read record size: %v", err)
@@ -262,7 +262,7 @@ func parseExtInfoRelos(r io.Reader, bo binary.ByteOrder, strings stringTable) (m
 	}
 }
 
-func parseExtInfoHeader(r io.Reader, bo binary.ByteOrder, strings stringTable) (string, *btfExtInfoSec, error) {
+func parseExtInfoHeader(r io.Reader, bo binary.ByteOrder, strings *stringTable) (string, *btfExtInfoSec, error) {
 	var infoHeader btfExtInfoSec
 	if err := binary.Read(r, bo, &infoHeader); err != nil {
 		return "", nil, fmt.Errorf("read ext info header: %w", err)
@@ -278,4 +278,17 @@ func parseExtInfoHeader(r io.Reader, bo binary.ByteOrder, strings stringTable) (
 	}
 
 	return secName, &infoHeader, nil
+}
+
+type FuncInfo struct {
+	InstructionOffset uint32
+	Type              *Func
+}
+
+type LineInfo struct {
+	InstructionOffset uint32
+	FileName          string
+	Line              string
+	LineNumber        uint32
+	LineColumn        uint32
 }

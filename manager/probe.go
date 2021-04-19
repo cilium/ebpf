@@ -63,16 +63,17 @@ func (pip ProbeIdentificationPair) Matches(id ProbeIdentificationPair) bool {
 // Probe - Main eBPF probe wrapper. This structure is used to store the required data to attach a loaded eBPF
 // program to its hook point.
 type Probe struct {
-	manager          *Manager
-	program          *ebpf.Program
-	programSpec      *ebpf.ProgramSpec
-	perfEventFD      *internal.FD
-	state            state
-	stateLock        sync.RWMutex
-	manualLoadNeeded bool
-	checkPin         bool
-	funcName         string
-	attachPID        int
+	manager            *Manager
+	program            *ebpf.Program
+	programSpec        *ebpf.ProgramSpec
+	perfEventFD        *internal.FD
+	state              state
+	stateLock          sync.RWMutex
+	manualLoadNeeded   bool
+	checkPin           bool
+	funcName           string
+	attachPID          int
+	attachRetryAttempt uint
 
 	// lastError - stores the last error that the probe encountered, it is used to surface a more useful error message
 	// when one of the validators (see Options.ActivatedProbes) fails.
@@ -349,11 +350,10 @@ func (p *Probe) init() error {
 	if p.ProbeRetry == 0 {
 		if p.manager.options.DefaultProbeRetry > 0 {
 			p.ProbeRetry = p.manager.options.DefaultProbeRetry
-		} else {
-			// default to 1 to allow at least one attach / detach attempt
-			p.ProbeRetry = 1
 		}
 	}
+	// account for the initial attempt
+	p.ProbeRetry++
 
 	// Default retry delay
 	if p.ProbeRetryDelay == 0 {
@@ -369,6 +369,7 @@ func (p *Probe) init() error {
 // parameters.
 func (p *Probe) Attach() error {
 	return retry.Do(func() error {
+		p.attachRetryAttempt++
 		err := p.attach()
 		if err == nil {
 			return nil
@@ -426,6 +427,7 @@ func (p *Probe) attach() error {
 
 	// update probe state
 	p.state = running
+	p.attachRetryAttempt = p.ProbeRetry
 	return nil
 }
 
@@ -507,7 +509,9 @@ func (p *Probe) stop(saveStopError bool) error {
 	err := p.detachRetry()
 
 	// close the loaded program
-	err = ConcatErrors(err, p.program.Close())
+	if p.attachRetryAttempt >= p.ProbeRetry {
+		err = ConcatErrors(err, p.program.Close())
+	}
 
 	// update state of the probe
 	if saveStopError {
@@ -515,7 +519,7 @@ func (p *Probe) stop(saveStopError bool) error {
 	}
 
 	// Cleanup probe if stop was successful
-	if err == nil {
+	if err == nil && p.attachRetryAttempt >= p.ProbeRetry {
 		p.reset()
 	}
 	return errors.Wrapf(err, "couldn't stop probe %s", p.Section)
@@ -532,6 +536,7 @@ func (p *Probe) reset() {
 	p.checkPin = false
 	p.funcName = ""
 	p.attachPID = 0
+	p.attachRetryAttempt = 0
 }
 
 // attachKprobe - Attaches the probe to its kprobe

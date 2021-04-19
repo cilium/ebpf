@@ -623,6 +623,50 @@ func TestProgramTypeLSM(t *testing.T) {
 	}
 }
 
+func TestProgramTargetBTF(t *testing.T) {
+	// Load a file that contains valid BTF, but doesn't contain the types
+	// we need for bpf_iter.
+	fh, err := os.Open("testdata/initialized_btf_map-el.elf")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer fh.Close()
+
+	reader := &testReaderAt{file: fh}
+
+	prog, err := NewProgramWithOptions(&ProgramSpec{
+		Type:       Tracing,
+		AttachType: AttachTraceIter,
+		AttachTo:   "bpf_map",
+		Instructions: asm.Instructions{
+			asm.Mov.Imm(asm.R0, 0),
+			asm.Return(),
+		},
+		License: "MIT",
+	}, ProgramOptions{
+		TargetBTF: reader,
+	})
+	if err == nil {
+		prog.Close()
+	}
+	if !errors.Is(err, ErrNotSupported) {
+		t.Error("Expected ErrNotSupported, got", err)
+	}
+	if !reader.read {
+		t.Error("TargetBTF is not read")
+	}
+}
+
+type testReaderAt struct {
+	file *os.File
+	read bool
+}
+
+func (ra *testReaderAt) ReadAt(p []byte, off int64) (int, error) {
+	ra.read = true
+	return ra.file.ReadAt(p, off)
+}
+
 func createProgramArray(t *testing.T) *Map {
 	t.Helper()
 

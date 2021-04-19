@@ -561,8 +561,10 @@ func (p *Probe) attachKprobe() error {
 
 	// Write kprobe_events line to register kprobe
 	kprobeID, err := EnableKprobeEvent(probeType, funcName, p.UID, maxactiveStr, p.attachPID)
-	// fallback without KProbeMaxActive
 	if err == ErrKprobeIDNotExist {
+		// The probe might have been loaded under a kernel generated event name. Clean up just in case.
+		_ = disableKprobeEvent(getKernelGeneratedEventName(probeType, funcName))
+		// fallback without KProbeMaxActive
 		kprobeID, err = EnableKprobeEvent(probeType, funcName, p.UID, "", p.attachPID)
 	}
 	if err != nil {

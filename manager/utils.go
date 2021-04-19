@@ -187,6 +187,12 @@ func GenerateEventName(probeType, funcName, UID string, attachPID int) (string, 
 	return eventName, nil
 }
 
+// getKernelGeneratedEventName returns the pattern used by the kernel when a [k|u]probe is loaded without an event name.
+// The library doesn't support loading a [k|u]probe with an address directly, so only one pattern applies here.
+func getKernelGeneratedEventName(probeType, funcName string) string {
+	return fmt.Sprintf("%s_%s_0", probeType, funcName)
+}
+
 // ReadKprobeEvents - Returns the content of kprobe_events
 func ReadKprobeEvents() (string, error) {
 	kprobeEvents, err := ioutil.ReadFile("/sys/kernel/debug/tracing/kprobe_events")

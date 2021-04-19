@@ -147,7 +147,11 @@ func newProgramInfoFromProc(fd *internal.FD) (*ProgramInfo, error) {
 
 // Close closes any file descriptors held by the program information.
 func (pi *ProgramInfo) Close() error {
-	return pi.BTF.Close()
+	if pi.BTF != nil {
+		return pi.BTF.Close()
+	}
+
+	return nil
 }
 
 // ID returns the program ID.

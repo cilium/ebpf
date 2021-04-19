@@ -126,7 +126,7 @@ func (i *Int) raw(strings *stringTable) rawType {
 		},
 	}
 	raw.SetKind(kindInt)
-	raw.data = uint32(i.Encoding<<24) | i.Offset<<16 | uint32(i.Bits)
+	raw.data = uint32(i.Encoding)<<24 | i.Offset<<16 | uint32(i.Bits)
 
 	return raw
 }

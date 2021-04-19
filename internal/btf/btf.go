@@ -14,6 +14,7 @@ import (
 	"sync"
 	"unsafe"
 
+	"github.com/cilium/ebpf/asm"
 	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/unix"
 )
@@ -30,7 +31,7 @@ var (
 // Spec represents decoded BTF.
 type Spec struct {
 	rawTypes   []rawType
-	strings    stringTable
+	strings    *stringTable
 	types      []Type
 	namedTypes map[string][]namedType
 	funcInfos  map[string]extInfo
@@ -247,7 +248,7 @@ func loadKernelSpec() (*Spec, error) {
 	return nil, fmt.Errorf("no BTF for kernel version %s: %w", release, internal.ErrNotSupported)
 }
 
-func parseBTF(btf io.ReadSeeker, bo binary.ByteOrder) ([]rawType, stringTable, error) {
+func parseBTF(btf io.ReadSeeker, bo binary.ByteOrder) ([]rawType, *stringTable, error) {
 	rawBTF, err := ioutil.ReadAll(btf)
 	if err != nil {
 		return nil, nil, fmt.Errorf("can't read BTF: %v", err)
@@ -307,7 +308,7 @@ type variable struct {
 	name    string
 }
 
-func fixupDatasec(rawTypes []rawType, rawStrings stringTable, sectionSizes map[string]uint32, variableOffsets map[variable]uint32) error {
+func fixupDatasec(rawTypes []rawType, rawStrings *stringTable, sectionSizes map[string]uint32, variableOffsets map[variable]uint32) error {
 	for i, rawType := range rawTypes {
 		if rawType.Kind() != kindDatasec {
 			continue
@@ -388,7 +389,7 @@ func (s *Spec) marshal(opts marshalOpts) ([]byte, error) {
 	typeLen := uint32(buf.Len() - headerLen)
 
 	// Write string section after type section.
-	_, _ = buf.Write(s.strings)
+	_, _ = buf.Write(s.strings.table)
 
 	// Fill out the header, and write it out.
 	header = &btfHeader{
@@ -399,7 +400,7 @@ func (s *Spec) marshal(opts marshalOpts) ([]byte, error) {
 		TypeOff:   0,
 		TypeLen:   typeLen,
 		StringOff: typeLen,
-		StringLen: uint32(len(s.strings)),
+		StringLen: uint32(len(s.strings.table)),
 	}
 
 	raw := buf.Bytes()
@@ -543,6 +544,51 @@ func NewHandle(spec *Spec) (*Handle, error) {
 	return &Handle{fd}, nil
 }
 
+// NewHandleFromFD creates a BTF handle from a raw fd.
+//
+// You should not use fd after calling this function.
+func NewHandleromFD(fd int) (*Handle, error) {
+	if fd < 0 {
+		return nil, errors.New("invalid fd")
+	}
+
+	return newHandleFromFD(internal.NewFD(uint32(fd)))
+}
+
+// NewHandleFromID returns the BTF handle for a given id.
+//
+// Returns ErrNotExist, if there is no BTF with the given id.
+// Returns ErrNotSupported if BTF is not supported.
+func NewHandleFromID(id TypeID) (*Handle, error) {
+	if err := haveBTF(); err != nil {
+		return nil, err
+	}
+
+	fd, err := bpfObjGetFDByID(internal.BPF_BTF_GET_FD_BY_ID, uint32(id))
+	if err != nil {
+		return nil, fmt.Errorf("get BTF by id: %w", err)
+	}
+
+	return newHandleFromFD(fd)
+}
+
+func newHandleFromFD(fd *internal.FD) (*Handle, error) {
+	return &Handle{fd}, nil
+}
+
+// HandleSpec returns the Spec that defined the BTF loaded into the kernel.
+//
+// This is a free function instead of a method to hide it from users
+// of package ebpf.
+func HandleSpec(s *Handle) (*Spec, error) {
+	info, err := newBTFInfoFromFd(s.fd)
+	if err != nil {
+		return nil, fmt.Errorf("get BTF spec for handle: %w", err)
+	}
+
+	return info.BTF, nil
+}
+
 // Close destroys the handle.
 //
 // Subsequent calls to FD will return an invalid value.
@@ -609,6 +655,71 @@ type Program struct {
 	coreRelos            bpfCoreRelos
 }
 
+// NewProgram constructs the BTF for a program with the given name from the
+// provided BTF parts.
+//
+// This is a free function instead of a method to hide it from users
+// of package ebpf.
+func NewProgram(length uint64, types []Type, funcInfo []FuncInfo, lineInfo []LineInfo) (*Program, error) {
+	rawTypes := make([]rawType, 0, len(types))
+	strings := &stringTable{[]byte("\x00"), map[string]uint32{"": 0}}
+	namedTypes := make(map[string][]namedType, len(types))
+
+	for index, typ := range types {
+		// Void is ID 0, so each type will have an ID one greater than its
+		// index.
+		if TypeID(index+1) != typ.ID() {
+			return nil, fmt.Errorf("gap at type ID %d", index)
+		}
+
+		rawTypes = append(rawTypes, typ.raw(strings))
+		if typ, ok := typ.(namedType); ok {
+			if name := essentialName(typ.name()); name != "" {
+				namedTypes[name] = append(namedTypes[name], typ)
+			}
+		}
+	}
+
+	if len(funcInfo) == 0 {
+		return nil, errors.New("must provide function information for at least the program itself")
+	}
+
+	funcRecords := make([]extInfoRecord, 0, len(funcInfo))
+	name := funcInfo[0].Type.name()
+	for _, fi := range funcInfo {
+		buf := make([]byte, 4)
+		internal.NativeEndian.PutUint32(buf, uint32(fi.Type.ID()))
+		funcRecords = append(funcRecords, extInfoRecord{
+			InsnOff: uint32(fi.InstructionOffset) * asm.InstructionSize,
+			Opaque:  buf,
+		})
+	}
+
+	spec := &Spec{
+		rawTypes:   rawTypes,
+		strings:    strings,
+		types:      types,
+		namedTypes: namedTypes,
+		funcInfos: map[string]extInfo{
+			name: {8, funcRecords},
+		},
+		lineInfos: map[string]extInfo{
+			name: {16, nil},
+		},
+		coreRelos: map[string]bpfCoreRelos{
+			name: nil,
+		},
+		byteOrder: internal.NativeEndian,
+	}
+	return &Program{
+		spec:      spec,
+		length:    length,
+		funcInfos: spec.funcInfos[name],
+		lineInfos: spec.lineInfos[name],
+		coreRelos: spec.coreRelos[name],
+	}, nil
+}
+
 // ProgramSpec returns the Spec needed for loading function and line infos into the kernel.
 //
 // This is a free function instead of a method to hide it from users
@@ -622,19 +733,19 @@ func ProgramSpec(s *Program) *Spec {
 // This is a free function instead of a method to hide it from users
 // of package ebpf.
 func ProgramAppend(s, other *Program) error {
-	funcInfos, err := s.funcInfos.append(other.funcInfos, s.length)
+	funcInfos, err := s.funcInfos.append(other.funcInfos, uint32(s.length))
 	if err != nil {
 		return fmt.Errorf("func infos: %w", err)
 	}
 
-	lineInfos, err := s.lineInfos.append(other.lineInfos, s.length)
+	lineInfos, err := s.lineInfos.append(other.lineInfos, uint32(s.length))
 	if err != nil {
 		return fmt.Errorf("line infos: %w", err)
 	}
 
 	s.funcInfos = funcInfos
 	s.lineInfos = lineInfos
-	s.coreRelos = s.coreRelos.append(other.coreRelos, s.length)
+	s.coreRelos = s.coreRelos.append(other.coreRelos, uint32(s.length))
 	s.length += other.length
 	return nil
 }

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"reflect"
 	"strings"
 )
 
@@ -29,6 +30,9 @@ type Type interface {
 	// Enumerate all nested Types. Repeated calls must visit nested
 	// types in the same order.
 	walk(*typeDeque)
+
+	// Convert the Type into a rawType
+	raw(strings *stringTable) rawType
 }
 
 // namedType is a type with a name.
@@ -51,11 +55,12 @@ func (n Name) name() string {
 // Void is the unit type of BTF.
 type Void struct{}
 
-func (v *Void) ID() TypeID      { return 0 }
-func (v *Void) String() string  { return "void#0" }
-func (v *Void) size() uint32    { return 0 }
-func (v *Void) copy() Type      { return (*Void)(nil) }
-func (v *Void) walk(*typeDeque) {}
+func (v *Void) ID() TypeID                       { return 0 }
+func (v *Void) String() string                   { return "void#0" }
+func (v *Void) size() uint32                     { return 0 }
+func (v *Void) copy() Type                       { return (*Void)(nil) }
+func (v *Void) walk(*typeDeque)                  {}
+func (v *Void) raw(strings *stringTable) rawType { return rawType{} }
 
 type IntEncoding byte
 
@@ -113,6 +118,19 @@ func (i *Int) copy() Type {
 	return &cpy
 }
 
+func (i *Int) raw(strings *stringTable) rawType {
+	raw := rawType{
+		btfType: btfType{
+			NameOff:  strings.Offset(i.name()),
+			SizeType: i.Size,
+		},
+	}
+	raw.SetKind(kindInt)
+	raw.data = uint32(i.Encoding)<<24 | i.Offset<<16 | uint32(i.Bits)
+
+	return raw
+}
+
 func (i *Int) isBitfield() bool {
 	return i.Offset > 0
 }
@@ -134,6 +152,14 @@ func (p *Pointer) copy() Type {
 	return &cpy
 }
 
+func (p *Pointer) raw(strings *stringTable) rawType {
+	var raw rawType
+	raw.SetKind(kindPointer)
+	raw.SizeType = uint32(p.Target.ID())
+
+	return raw
+}
+
 // Array is an array with a fixed number of elements.
 type Array struct {
 	TypeID
@@ -149,6 +175,17 @@ func (arr *Array) walk(tdq *typeDeque) { tdq.push(&arr.Type) }
 func (arr *Array) copy() Type {
 	cpy := *arr
 	return &cpy
+}
+
+func (arr *Array) raw(strings *stringTable) rawType {
+	var raw rawType
+	raw.SetKind(kindArray)
+	raw.data = btfArray{
+		Type:   arr.Type.ID(),
+		Nelems: arr.Nelems,
+	}
+
+	return raw
 }
 
 // Struct is a compound type of consecutive members.
@@ -177,6 +214,38 @@ func (s *Struct) copy() Type {
 	cpy.Members = make([]Member, len(s.Members))
 	copy(cpy.Members, s.Members)
 	return &cpy
+}
+
+func (s *Struct) raw(strings *stringTable) rawType {
+	raw := rawType{
+		btfType: btfType{
+			NameOff:  strings.Offset(s.name()),
+			SizeType: s.Size,
+		},
+	}
+	raw.SetVlen(len(s.Members))
+	raw.SetKind(kindStruct)
+
+	members := reflect.Indirect(
+		reflect.New(reflect.ArrayOf(len(s.Members), reflect.TypeOf(btfMember{}))),
+	)
+	for index, member := range s.Members {
+		offset := member.Offset
+		if member.BitfieldSize != 0 {
+			raw.setInfo(1, btfTypeKindFlagMask, btfTypeKindFlagShift)
+			offset = member.BitfieldSize<<24 | member.Offset
+		}
+		members.Index(index).Set(reflect.ValueOf(
+			btfMember{
+				NameOff: strings.Offset(member.name()),
+				Type:    member.Type.ID(),
+				Offset:  offset,
+			},
+		))
+	}
+	raw.data = members.Interface()
+
+	return raw
 }
 
 func (s *Struct) members() []Member {
@@ -209,6 +278,38 @@ func (u *Union) copy() Type {
 	cpy.Members = make([]Member, len(u.Members))
 	copy(cpy.Members, u.Members)
 	return &cpy
+}
+
+func (u *Union) raw(strings *stringTable) rawType {
+	raw := rawType{
+		btfType: btfType{
+			NameOff:  strings.Offset(u.name()),
+			SizeType: u.Size,
+		},
+	}
+	raw.SetVlen(len(u.Members))
+	raw.SetKind(kindUnion)
+
+	members := reflect.Indirect(
+		reflect.New(reflect.ArrayOf(len(u.Members), reflect.TypeOf(btfMember{}))),
+	)
+	for index, member := range u.Members {
+		offset := member.Offset
+		if member.BitfieldSize != 0 {
+			raw.setInfo(1, btfTypeKindFlagMask, btfTypeKindFlagShift)
+			offset = member.BitfieldSize<<24 | member.Offset
+		}
+		members.Index(index).Set(reflect.ValueOf(
+			btfMember{
+				NameOff: strings.Offset(member.name()),
+				Type:    member.Type.ID(),
+				Offset:  offset,
+			},
+		))
+	}
+	raw.data = members.Interface()
+
+	return raw
 }
 
 func (u *Union) members() []Member {
@@ -263,6 +364,32 @@ func (e *Enum) copy() Type {
 	return &cpy
 }
 
+func (e *Enum) raw(strings *stringTable) rawType {
+	raw := rawType{
+		btfType: btfType{
+			NameOff:  strings.Offset(e.name()),
+			SizeType: 4,
+		},
+	}
+	raw.SetKind(kindEnum)
+	raw.SetVlen(len(e.Values))
+
+	values := reflect.Indirect(
+		reflect.New(reflect.ArrayOf(len(e.Values), reflect.TypeOf(btfEnum{}))),
+	)
+	for index, value := range e.Values {
+		values.Index(index).Set(reflect.ValueOf(
+			btfEnum{
+				NameOff: strings.Offset(value.name()),
+				Val:     value.Value,
+			},
+		))
+	}
+	raw.data = values.Interface()
+
+	return raw
+}
+
 // FwdKind is the type of forward declaration.
 type FwdKind int
 
@@ -300,6 +427,18 @@ func (f *Fwd) copy() Type {
 	return &cpy
 }
 
+func (f *Fwd) raw(strings *stringTable) rawType {
+	raw := rawType{
+		btfType: btfType{
+			NameOff: strings.Offset(f.name()),
+		},
+	}
+	raw.SetKind(kindForward)
+	raw.setInfo(uint32(f.Kind), btfTypeKindFlagMask, btfTypeKindFlagShift)
+
+	return raw
+}
+
 // Typedef is an alias of a Type.
 type Typedef struct {
 	TypeID
@@ -315,6 +454,18 @@ func (td *Typedef) walk(tdq *typeDeque) { tdq.push(&td.Type) }
 func (td *Typedef) copy() Type {
 	cpy := *td
 	return &cpy
+}
+
+func (td *Typedef) raw(strings *stringTable) rawType {
+	raw := rawType{
+		btfType: btfType{
+			NameOff:  strings.Offset(td.name()),
+			SizeType: uint32(td.Type.ID()),
+		},
+	}
+	raw.SetKind(kindTypedef)
+
+	return raw
 }
 
 // Volatile is a qualifier.
@@ -334,6 +485,17 @@ func (v *Volatile) copy() Type {
 	return &cpy
 }
 
+func (v *Volatile) raw(strings *stringTable) rawType {
+	raw := rawType{
+		btfType: btfType{
+			SizeType: uint32(v.Type.ID()),
+		},
+	}
+	raw.SetKind(kindVolatile)
+
+	return raw
+}
+
 // Const is a qualifier.
 type Const struct {
 	TypeID
@@ -349,6 +511,17 @@ func (c *Const) walk(tdq *typeDeque) { tdq.push(&c.Type) }
 func (c *Const) copy() Type {
 	cpy := *c
 	return &cpy
+}
+
+func (c *Const) raw(strings *stringTable) rawType {
+	raw := rawType{
+		btfType: btfType{
+			SizeType: uint32(c.Type.ID()),
+		},
+	}
+	raw.SetKind(kindConst)
+
+	return raw
 }
 
 // Restrict is a qualifier.
@@ -368,21 +541,67 @@ func (r *Restrict) copy() Type {
 	return &cpy
 }
 
+func (r *Restrict) raw(strings *stringTable) rawType {
+	raw := rawType{
+		btfType: btfType{
+			SizeType: uint32(r.Type.ID()),
+		},
+	}
+	raw.SetKind(kindRestrict)
+
+	return raw
+}
+
+type Linkage byte
+
+const (
+	Static Linkage = iota
+	Global
+	Extern
+)
+
+func (l Linkage) String() string {
+	switch l {
+	case Static:
+		return "static"
+	case Global:
+		return "global"
+	case Extern:
+		return "extern"
+	default:
+		return fmt.Sprintf("%T(%d)", l, int(l))
+	}
+}
+
 // Func is a function definition.
 type Func struct {
 	TypeID
 	Name
-	Type Type
+	Type    Type
+	Linkage Linkage
 }
 
 func (f *Func) String() string {
-	return fmt.Sprintf("func#%d[%q proto=#%d]", f.TypeID, f.Name, f.Type.ID())
+	return fmt.Sprintf("%s func#%d[%q proto=#%d]", f.Linkage, f.TypeID, f.Name, f.Type.ID())
 }
 
 func (f *Func) walk(tdq *typeDeque) { tdq.push(&f.Type) }
 func (f *Func) copy() Type {
 	cpy := *f
 	return &cpy
+}
+
+func (f *Func) raw(strings *stringTable) rawType {
+	raw := rawType{
+		btfType: btfType{
+			NameOff:  strings.Offset(f.name()),
+			SizeType: uint32(f.Type.ID()),
+		},
+	}
+	raw.SetKind(kindFunc)
+	raw.SetLinkage(btfFuncLinkage(f.Linkage))
+
+	return raw
 }
 
 // FuncProto is a function declaration.
@@ -416,6 +635,31 @@ func (fp *FuncProto) copy() Type {
 	return &cpy
 }
 
+func (fp *FuncProto) raw(strings *stringTable) rawType {
+	raw := rawType{
+		btfType: btfType{
+			SizeType: uint32(fp.Return.ID()),
+		},
+	}
+	raw.SetKind(kindFuncProto)
+	raw.SetVlen(len(fp.Params))
+
+	params := reflect.Indirect(
+		reflect.New(reflect.ArrayOf(len(fp.Params), reflect.TypeOf(btfParam{}))),
+	)
+	for index, param := range fp.Params {
+		params.Index(index).Set(reflect.ValueOf(
+			btfParam{
+				NameOff: strings.Offset(param.name()),
+				Type:    param.Type.ID(),
+			},
+		))
+	}
+	raw.data = params.Interface()
+
+	return raw
+}
+
 type FuncParam struct {
 	Name
 	Type Type
@@ -437,6 +681,22 @@ func (v *Var) walk(tdq *typeDeque) { tdq.push(&v.Type) }
 func (v *Var) copy() Type {
 	cpy := *v
 	return &cpy
+}
+
+func (v *Var) raw(strings *stringTable) rawType {
+	raw := rawType{
+		btfType: btfType{
+			NameOff:  strings.Offset(v.name()),
+			SizeType: uint32(v.Type.ID()),
+		},
+	}
+	raw.SetKind(kindVar)
+
+	raw.data = btfVariable{
+		Linkage: 1,
+	}
+
+	return raw
 }
 
 // Datasec is a global program section containing data.
@@ -464,6 +724,33 @@ func (ds *Datasec) copy() Type {
 	cpy.Vars = make([]VarSecinfo, len(ds.Vars))
 	copy(cpy.Vars, ds.Vars)
 	return &cpy
+}
+
+func (ds *Datasec) raw(strings *stringTable) rawType {
+	raw := rawType{
+		btfType: btfType{
+			NameOff:  strings.Offset(ds.name()),
+			SizeType: ds.Size,
+		},
+	}
+	raw.SetKind(kindDatasec)
+	raw.SetVlen(len(ds.Vars))
+
+	vars := reflect.Indirect(
+		reflect.New(reflect.ArrayOf(len(ds.Vars), reflect.TypeOf(btfVarSecinfo{}))),
+	)
+	for index, v := range ds.Vars {
+		vars.Index(index).Set(reflect.ValueOf(
+			btfVarSecinfo{
+				Type:   v.Type.ID(),
+				Offset: v.Offset,
+				Size:   v.Size,
+			},
+		))
+	}
+	raw.data = vars.Interface()
+
+	return raw
 }
 
 // VarSecinfo describes variable in a Datasec
@@ -653,7 +940,7 @@ func (dq *typeDeque) all() []*Type {
 // Returns a map of named types (so, where NameOff is non-zero) and a slice of types
 // indexed by TypeID. Since BTF ignores compilation units, multiple types may share
 // the same name. A Type may form a cyclic graph by pointing at itself.
-func inflateRawTypes(rawTypes []rawType, rawStrings stringTable) (types []Type, namedTypes map[string][]namedType, err error) {
+func inflateRawTypes(rawTypes []rawType, rawStrings *stringTable) (types []Type, namedTypes map[string][]namedType, err error) {
 	type fixupDef struct {
 		id           TypeID
 		expectedKind btfKind
@@ -783,7 +1070,7 @@ func inflateRawTypes(rawTypes []rawType, rawStrings stringTable) (types []Type, 
 			typ = restrict
 
 		case kindFunc:
-			fn := &Func{id, name, nil}
+			fn := &Func{id, name, nil, Linkage(raw.Vlen())}
 			fixup(raw.Type(), kindFuncProto, &fn.Type)
 			typ = fn
 

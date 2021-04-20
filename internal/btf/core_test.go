@@ -178,7 +178,7 @@ func TestCoreAccessor(t *testing.T) {
 }
 
 func TestCoreRelocation(t *testing.T) {
-	testutils.TestFiles(t, "testdata/*.elf", func(t *testing.T, file string) {
+	testutils.Files(t, testutils.Glob(t, "testdata/*.elf"), func(t *testing.T, file string) {
 		rd, err := os.Open(file)
 		if err != nil {
 			t.Fatal(err)

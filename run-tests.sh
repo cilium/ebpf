@@ -21,6 +21,7 @@ if [[ "${1:-}" = "--in-vm" ]]; then
   export GOPROXY=file:///run/go-path/pkg/mod/cache/download
   export GOSUMDB=off
   export GOCACHE=/run/go-cache
+  export GOGC=75
 
   if [[ -d "/run/input/bpf" ]]; then
     export KERNEL_SELFTESTS="/run/input/bpf"

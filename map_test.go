@@ -1315,6 +1315,16 @@ func TestMapPinning(t *testing.T) {
 	if value != 42 {
 		t.Fatal("Pinning doesn't use pinned maps")
 	}
+
+	spec.KeySize = 8
+	m3, err := NewMapWithOptions(spec, MapOptions{PinPath: tmp})
+	if err == nil {
+		m3.Close()
+		t.Fatalf("Opening a pinned map with a mismatching spec did not fail")
+	}
+	if !errors.Is(err, ErrMapIncompatible) {
+		t.Fatalf("Opening a pinned map with a mismatching spec failed with the wrong error")
+	}
 }
 
 type benchValue struct {

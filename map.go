@@ -18,6 +18,7 @@ var (
 	ErrKeyNotExist      = errors.New("key does not exist")
 	ErrKeyExist         = errors.New("key already exists")
 	ErrIterationAborted = errors.New("iteration aborted")
+	ErrMapIncompatible  = errors.New("map's spec is incompatible with pinned map")
 )
 
 // MapOptions control loading a map into the kernel.
@@ -96,19 +97,19 @@ type MapKV struct {
 func (ms *MapSpec) checkCompatibility(m *Map) error {
 	switch {
 	case m.typ != ms.Type:
-		return fmt.Errorf("expected type %v, got %v", ms.Type, m.typ)
+		return fmt.Errorf("expected type %v, got %v: %w", ms.Type, m.typ, ErrMapIncompatible)
 
 	case m.keySize != ms.KeySize:
-		return fmt.Errorf("expected key size %v, got %v", ms.KeySize, m.keySize)
+		return fmt.Errorf("expected key size %v, got %v: %w", ms.KeySize, m.keySize, ErrMapIncompatible)
 
 	case m.valueSize != ms.ValueSize:
-		return fmt.Errorf("expected value size %v, got %v", ms.ValueSize, m.valueSize)
+		return fmt.Errorf("expected value size %v, got %v: %w", ms.ValueSize, m.valueSize, ErrMapIncompatible)
 
 	case m.maxEntries != ms.MaxEntries:
-		return fmt.Errorf("expected max entries %v, got %v", ms.MaxEntries, m.maxEntries)
+		return fmt.Errorf("expected max entries %v, got %v: %w", ms.MaxEntries, m.maxEntries, ErrMapIncompatible)
 
 	case m.flags != ms.Flags:
-		return fmt.Errorf("expected flags %v, got %v", ms.Flags, m.flags)
+		return fmt.Errorf("expected flags %v, got %v: %w", ms.Flags, m.flags, ErrMapIncompatible)
 	}
 	return nil
 }
@@ -202,7 +203,7 @@ func newMapWithOptions(spec *MapSpec, opts MapOptions, handles *handleCache) (_ 
 		defer closeOnError(m)
 
 		if err := spec.checkCompatibility(m); err != nil {
-			return nil, fmt.Errorf("use pinned map %s: %s", spec.Name, err)
+			return nil, fmt.Errorf("use pinned map %s: %w", spec.Name, err)
 		}
 
 		return m, nil

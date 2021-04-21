@@ -21,12 +21,20 @@ if [[ "${1:-}" = "--in-vm" ]]; then
   export GOPROXY=file:///run/go-path/pkg/mod/cache/download
   export GOSUMDB=off
   export GOCACHE=/run/go-cache
+  export GOGC=75
 
   if [[ -d "/run/input/bpf" ]]; then
     export KERNEL_SELFTESTS="/run/input/bpf"
   fi
 
-  eval "$@"
+  echo 1 > /sys/kernel/debug/tracing/events/workqueue/workqueue_queue_work/enable
+  echo 1 > /sys/kernel/debug/tracing/events/workqueue/workqueue_execute_end/enable
+  cat /sys/kernel/debug/tracing/trace_pipe &
+  dmesg -C
+  if ! eval "$@"; then
+    dmesg
+    exit 1
+  fi
   touch "/run/output/success"
   exit 0
 fi

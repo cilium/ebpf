@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
 
 	"github.com/cilium/ebpf/internal"
@@ -119,7 +120,7 @@ func TestLoadCollectionSpec(t *testing.T) {
 		}),
 	)
 
-	testutils.TestFiles(t, "testdata/loader-*.elf", func(t *testing.T, file string) {
+	testutils.Files(t, testutils.Glob(t, "testdata/loader-*.elf"), func(t *testing.T, file string) {
 		have, err := LoadCollectionSpec(file)
 		if err != nil {
 			t.Fatal("Can't parse ELF:", err)
@@ -208,7 +209,7 @@ func TestCollectionSpecDetach(t *testing.T) {
 }
 
 func TestLoadInvalidMap(t *testing.T) {
-	testutils.TestFiles(t, "testdata/invalid_map-*.elf", func(t *testing.T, file string) {
+	testutils.Files(t, testutils.Glob(t, "testdata/invalid_map-*.elf"), func(t *testing.T, file string) {
 		_, err := LoadCollectionSpec(file)
 		t.Log(err)
 		if err == nil {
@@ -218,7 +219,7 @@ func TestLoadInvalidMap(t *testing.T) {
 }
 
 func TestLoadInvalidMapMissingSymbol(t *testing.T) {
-	testutils.TestFiles(t, "testdata/invalid_map_static-el.elf", func(t *testing.T, file string) {
+	testutils.Files(t, testutils.Glob(t, "testdata/invalid_map_static-el.elf"), func(t *testing.T, file string) {
 		_, err := LoadCollectionSpec(file)
 		t.Log(err)
 		if err == nil {
@@ -228,7 +229,7 @@ func TestLoadInvalidMapMissingSymbol(t *testing.T) {
 }
 
 func TestLoadInitializedBTFMap(t *testing.T) {
-	testutils.TestFiles(t, "testdata/initialized_btf_map-*.elf", func(t *testing.T, file string) {
+	testutils.Files(t, testutils.Glob(t, "testdata/initialized_btf_map-*.elf"), func(t *testing.T, file string) {
 		_, err := LoadCollectionSpec(file)
 		t.Log(err)
 		if !errors.Is(err, internal.ErrNotSupported) {
@@ -238,7 +239,7 @@ func TestLoadInitializedBTFMap(t *testing.T) {
 }
 
 func TestStringSection(t *testing.T) {
-	testutils.TestFiles(t, "testdata/strings-*.elf", func(t *testing.T, file string) {
+	testutils.Files(t, testutils.Glob(t, "testdata/strings-*.elf"), func(t *testing.T, file string) {
 		_, err := LoadCollectionSpec(file)
 		t.Log(err)
 		if !errors.Is(err, ErrNotSupported) {
@@ -253,7 +254,7 @@ func TestStringSection(t *testing.T) {
 func TestLoadRawTracepoint(t *testing.T) {
 	testutils.SkipOnOldKernel(t, "4.17", "BPF_RAW_TRACEPOINT API")
 
-	testutils.TestFiles(t, "testdata/raw_tracepoint-*.elf", func(t *testing.T, file string) {
+	testutils.Files(t, testutils.Glob(t, "testdata/raw_tracepoint-*.elf"), func(t *testing.T, file string) {
 		spec, err := LoadCollectionSpec(file)
 		if err != nil {
 			t.Fatal("Can't parse ELF:", err)
@@ -290,27 +291,114 @@ func TestLibBPFCompat(t *testing.T) {
 		t.Skip("No path specified")
 	}
 
-	testutils.TestFiles(t, filepath.Join(*elfPath, *elfPattern), func(t *testing.T, path string) {
+	load := func(t *testing.T, spec *CollectionSpec, opts CollectionOptions, valid bool) {
+		// Disable retrying a program load with the log enabled, it leads
+		// to OOM kills.
+		opts.Programs.LogSize = -1
+		coll, err := NewCollectionWithOptions(spec, opts)
+		testutils.SkipIfNotSupported(t, err)
+		var errno syscall.Errno
+		if errors.As(err, &errno) {
+			// This error is most likely from a syscall and caused by us not
+			// replicating some fixups done in the selftests. This is expected,
+			// so skip the test instead of failing.
+			t.Skip("Skipping since the kernel rejected the program:", errno)
+		}
+		if err == nil {
+			coll.Close()
+		}
+		if !valid {
+			if err == nil {
+				t.Fatal("Expected an error during load")
+			}
+		} else if err != nil {
+			t.Fatal("Error during loading:", err)
+		}
+	}
+
+	files := testutils.Glob(t, filepath.Join(*elfPath, *elfPattern),
+		// These files are only used as a source of btf.
+		"btf__core_reloc_*",
+	)
+
+	testutils.Files(t, files, func(t *testing.T, path string) {
 		file := filepath.Base(path)
 		switch file {
-		case "test_ksyms.o":
-			// Issue #114
-			t.Skip("Kernel symbols not supported")
 		case "test_sk_assign.o":
-			t.Skip("Incompatible struct bpf_map_def")
-		case "test_ringbuf_multi.o", "map_ptr_kern.o", "test_btf_map_in_map.o":
-			// Issue #155
-			t.Skip("BTF .values not supported")
+			t.Skip("Skipping due to incompatible struct bpf_map_def")
+		case "test_map_in_map.o", "test_select_reuseport_kern.o":
+			t.Skip("Skipping due to missing InnerMap in map definition")
+		case "test_core_autosize.o":
+			t.Skip("Skipping since the test generates dynamic BTF")
 		}
 
-		t.Parallel()
-
-		_, err := LoadCollectionSpec(path)
+		spec, err := LoadCollectionSpec(path)
 		testutils.SkipIfNotSupported(t, err)
 		if err != nil {
 			t.Fatalf("Can't read %s: %s", file, err)
 		}
+
+		var opts CollectionOptions
+		for _, mapSpec := range spec.Maps {
+			if mapSpec.Pinning != PinNone {
+				opts.Maps.PinPath = testutils.TempBPFFS(t)
+				break
+			}
+		}
+
+		coreFiles := sourceOfBTF(t, path)
+		if len(coreFiles) == 0 {
+			// NB: test_core_reloc_kernel.o doesn't have dedicated BTF and
+			// therefore goes via this code path.
+			load(t, spec, opts, true)
+			return
+		}
+
+		for _, coreFile := range coreFiles {
+			name := filepath.Base(coreFile)
+			t.Run(name, func(t *testing.T) {
+				// Some files like btf__core_reloc_arrays___err_too_small.o
+				// trigger an error on purpose. Use the name to infer whether
+				// the test should succeed.
+				var valid bool
+				switch name {
+				case "btf__core_reloc_type_based___all_missing.o",
+					"btf__core_reloc_type_id___missing_targets.o", "btf__core_reloc_flavors__err_wrong_name.o":
+					valid = false
+				default:
+					valid = !strings.Contains(name, "___err_")
+				}
+
+				fh, err := os.Open(coreFile)
+				if err != nil {
+					t.Fatal(err)
+				}
+				defer fh.Close()
+
+				opts := opts // copy
+				opts.Programs.TargetBTF = fh
+				load(t, spec, opts, valid)
+			})
+		}
 	})
+}
+
+func sourceOfBTF(tb testing.TB, path string) []string {
+	const testPrefix = "test_core_reloc_"
+	const btfPrefix = "btf__core_reloc_"
+
+	dir, base := filepath.Split(path)
+	if !strings.HasPrefix(base, testPrefix) {
+		return nil
+	}
+
+	base = strings.TrimSuffix(base[len(testPrefix):], ".o")
+	switch base {
+	case "bitfields_direct", "bitfields_probed":
+		base = "bitfields"
+	}
+
+	return testutils.Glob(tb, filepath.Join(dir, btfPrefix+base+"*.o"))
 }
 
 func TestGetProgType(t *testing.T) {

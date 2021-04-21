@@ -22,12 +22,17 @@ if [[ "${1:-}" = "--in-vm" ]]; then
   export GOSUMDB=off
   export GOCACHE=/run/go-cache
   export GOGC=75
+  export GODEBUG=scavtrace=1
 
   if [[ -d "/run/input/bpf" ]]; then
     export KERNEL_SELFTESTS="/run/input/bpf"
   fi
 
-  eval "$@"
+  dmesg -C
+  if ! eval "$@"; then
+    dmesg
+    exit 1
+  fi
   touch "/run/output/success"
   exit 0
 fi

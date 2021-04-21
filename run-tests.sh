@@ -26,7 +26,15 @@ if [[ "${1:-}" = "--in-vm" ]]; then
     export KERNEL_SELFTESTS="/run/input/bpf"
   fi
 
-  eval "$@"
+  dmesg -C
+  for i in kmalloc kmalloc_node kfree kmem_cache_alloc kmem_cache_alloc_node kmem_cache_free; do
+    echo 1 > /sys/kernel/debug/tracing/events/kmem/$i/enable
+  done
+  cat /sys/kernel/debug/tracing/trace_pipe &
+  if ! eval "$@"; then
+    dmesg
+    exit 1
+  fi
   touch "/run/output/success"
   exit 0
 fi
@@ -73,7 +81,7 @@ fi
 if (( $# > 0 )); then
   printf -v cmd " %q" "$@"
 else
-  printf -v cmd " %q" go test -v -coverpkg=./... -coverprofile="/run/output/coverage.txt" -count 1 ./...
+  printf -v cmd " %q" go test -v -failfast -coverpkg=./... -coverprofile="/run/output/coverage.txt" -count 1 ./...
 fi
 
 echo Testing on "${kernel_version}"

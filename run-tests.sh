@@ -26,7 +26,11 @@ if [[ "${1:-}" = "--in-vm" ]]; then
     export KERNEL_SELFTESTS="/run/input/bpf"
   fi
 
-  eval "$@"
+  dmesg -C
+  if ! eval "$@"; then
+    dmesg
+    exit 1
+  fi
   touch "/run/output/success"
   exit 0
 fi

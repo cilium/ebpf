@@ -143,10 +143,6 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions, handles *hand
 		return nil, errors.New("Instructions cannot be empty")
 	}
 
-	if len(spec.License) == 0 {
-		return nil, errors.New("License cannot be empty")
-	}
-
 	if spec.ByteOrder != nil && spec.ByteOrder != internal.NativeEndian {
 		return nil, fmt.Errorf("can't load %s program on %s", spec.ByteOrder, internal.NativeEndian)
 	}
@@ -265,7 +261,7 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions, handles *hand
 	}
 
 	logErr := err
-	if opts.LogLevel == 0 {
+	if opts.LogLevel == 0 && opts.LogSize >= 0 {
 		// Re-run with the verifier enabled to get better error messages.
 		logBuf = make([]byte, logSize)
 		attr.logLevel = 1

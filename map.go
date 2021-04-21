@@ -20,6 +20,18 @@ var (
 	ErrIterationAborted = errors.New("iteration aborted")
 )
 
+type ErrMapIncompatible struct {
+	mapName string
+}
+
+func NewErrMapIncompatible(mapName string) ErrMapIncompatible {
+	return ErrMapIncompatible{mapName}
+}
+
+func (e ErrMapIncompatible) Error() string {
+	return fmt.Sprintf("incompatible map's spec for pinned map %s", e.mapName)
+}
+
 // MapOptions control loading a map into the kernel.
 type MapOptions struct {
 	// The base path to pin maps in if requested via PinByName.
@@ -202,7 +214,7 @@ func newMapWithOptions(spec *MapSpec, opts MapOptions, btfs btfHandleCache) (_ *
 		defer closeOnError(m)
 
 		if err := spec.checkCompatibility(m); err != nil {
-			return nil, fmt.Errorf("use pinned map %s: %s", spec.Name, err)
+			return nil, fmt.Errorf("%w: %s", NewErrMapIncompatible(spec.Name), err)
 		}
 
 		return m, nil

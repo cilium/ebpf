@@ -2,6 +2,9 @@ package main
 
 import (
 	"testing"
+
+	// Raise RLIMIT_MEMLOCK
+	_ "github.com/cilium/ebpf/internal/testutils"
 )
 
 func TestLoadingSpec(t *testing.T) {

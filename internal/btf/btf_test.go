@@ -79,7 +79,7 @@ func TestParseCurrentKernelBTF(t *testing.T) {
 }
 
 func TestLoadSpecFromElf(t *testing.T) {
-	testutils.TestFiles(t, "../../testdata/loader-clang-9-*.elf", func(t *testing.T, file string) {
+	testutils.Files(t, testutils.Glob(t, "../../testdata/loader-clang-9-*.elf"), func(t *testing.T, file string) {
 		fh, err := os.Open(file)
 		if err != nil {
 			t.Fatal(err)

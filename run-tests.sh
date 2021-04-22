@@ -26,7 +26,11 @@ if [[ "${1:-}" = "--in-vm" ]]; then
     export KERNEL_SELFTESTS="/run/input/bpf"
   fi
 
-  eval "$@"
+  dmesg -C
+  if ! eval "$@"; then
+    dmesg
+    exit 1
+  fi
   touch "/run/output/success"
   exit 0
 fi
@@ -73,7 +77,7 @@ fi
 if (( $# > 0 )); then
   printf -v cmd " %q" "$@"
 else
-  printf -v cmd " %q" go test -v -coverpkg=./... -coverprofile="/run/output/coverage.txt" -count 1 ./...
+  printf -v cmd " %q" go test -p 1 -v -coverpkg=./... -coverprofile="/run/output/coverage.txt" -count 1 ./...
 fi
 
 echo Testing on "${kernel_version}"

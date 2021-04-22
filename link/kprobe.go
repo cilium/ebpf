@@ -169,9 +169,13 @@ func pmuProbe(typ probeType, symbol, path string, offset uint64, ret bool) (*per
 		return nil, err
 	}
 
-	config, err := typ.RetprobeBit()
-	if err != nil {
-		return nil, err
+	var config uint64
+	if ret {
+		bit, err := typ.RetprobeBit()
+		if err != nil {
+			return nil, err
+		}
+		config |= 1 << bit
 	}
 
 	var (
@@ -198,10 +202,15 @@ func pmuProbe(typ probeType, symbol, path string, offset uint64, ret bool) (*per
 		}
 
 		attr = unix.PerfEventAttr{
-			Type:   uint32(et),              // PMU event type read from sysfs
-			Ext1:   uint64(uintptr(sp)),     // Uprobe path
-			Ext2:   uint64(uintptr(offset)), // Uprobe offset
-			Config: config,                  // Retprobe flag
+			// The minimum size required for PMU uprobes is PERF_ATTR_SIZE_VER1,
+			// since it added the config2 (Ext2) field. The Size field controls the
+			// size of the internal buffer the kernel allocates for reading the
+			// perf_event_attr argument from userspace.
+			Size:   unix.PERF_ATTR_SIZE_VER1,
+			Type:   uint32(et),          // PMU event type read from sysfs
+			Ext1:   uint64(uintptr(sp)), // Uprobe path
+			Ext2:   offset,              // Uprobe offset
+			Config: config,              // Retprobe flag
 		}
 	}
 

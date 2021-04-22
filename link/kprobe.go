@@ -68,6 +68,36 @@ func (pt probeType) RetprobeBit() (uint64, error) {
 	return uretprobeBit()
 }
 
+func (pt probeType) PerfEventAttr(eventType uint64, symbol, path string, offset, config uint64) (*unix.PerfEventAttr, error) {
+	var sp unsafe.Pointer
+
+	switch pt {
+	case kprobeType:
+		// Create a pointer to a NUL-terminated string for the kernel.
+		ptr, err := unsafeStringPtr(symbol)
+		if err != nil {
+			return nil, err
+		}
+		sp = ptr
+	case uprobeType:
+		ptr, err := unsafeStringPtr(path)
+		if err != nil {
+			return nil, err
+		}
+		sp = ptr
+	}
+
+	attr := unix.PerfEventAttr{
+		Size:   uint32(unsafe.Sizeof(unix.PerfEventAttr{})), // Size is used to create the correct PerfEventAttr struct version
+		Type:   uint32(eventType),                           // PMU event type read from sysfs
+		Ext1:   uint64(uintptr(sp)),                         // Kernel symbol / Uprobe path
+		Ext2:   offset,                                      // Uprobe offset
+		Config: config,                                      // Retprobe flag
+	}
+
+	return &attr, nil
+}
+
 // Kprobe attaches the given eBPF program to a perf event that fires when the
 // given kernel symbol starts executing. See /proc/kallsyms for available
 // symbols. For example, printk():
@@ -169,43 +199,21 @@ func pmuProbe(typ probeType, symbol, path string, offset uint64, ret bool) (*per
 		return nil, err
 	}
 
-	config, err := typ.RetprobeBit()
+	var config uint64
+	if ret {
+		bit, err := typ.RetprobeBit()
+		if err != nil {
+			return nil, err
+		}
+		config |= 1 << bit
+	}
+
+	attr, err := typ.PerfEventAttr(et, symbol, path, offset, config)
 	if err != nil {
 		return nil, err
 	}
 
-	var (
-		attr unix.PerfEventAttr
-		sp   unsafe.Pointer
-	)
-	switch typ {
-	case kprobeType:
-		// Create a pointer to a NUL-terminated string for the kernel.
-		sp, err := unsafeStringPtr(symbol)
-		if err != nil {
-			return nil, err
-		}
-
-		attr = unix.PerfEventAttr{
-			Type:   uint32(et),          // PMU event type read from sysfs
-			Ext1:   uint64(uintptr(sp)), // Kernel symbol to trace
-			Config: config,              // Retprobe flag
-		}
-	case uprobeType:
-		sp, err := unsafeStringPtr(path)
-		if err != nil {
-			return nil, err
-		}
-
-		attr = unix.PerfEventAttr{
-			Type:   uint32(et),              // PMU event type read from sysfs
-			Ext1:   uint64(uintptr(sp)),     // Uprobe path
-			Ext2:   uint64(uintptr(offset)), // Uprobe offset
-			Config: config,                  // Retprobe flag
-		}
-	}
-
-	fd, err := unix.PerfEventOpen(&attr, perfAllThreads, 0, -1, unix.PERF_FLAG_FD_CLOEXEC)
+	fd, err := unix.PerfEventOpen(attr, perfAllThreads, 0, -1, unix.PERF_FLAG_FD_CLOEXEC)
 
 	// Since commit 97c753e62e6c, ENOENT is correctly returned instead of EINVAL
 	// when trying to create a kretprobe for a missing symbol. Make sure ENOENT
@@ -217,8 +225,8 @@ func pmuProbe(typ probeType, symbol, path string, offset uint64, ret bool) (*per
 		return nil, fmt.Errorf("opening perf event: %w", err)
 	}
 
-	// Ensure the string pointer is not collected before PerfEventOpen returns.
-	runtime.KeepAlive(sp)
+	// Ensure PerfEventAttr is not collected before PerfEventOpen returns.
+	runtime.KeepAlive(attr)
 
 	// Kernel has perf_[k,u]probe PMU available, initialize perf event.
 	return &perfEvent{

@@ -62,7 +62,11 @@ elif [[ "${1:-}" = "--exec-test" ]]; then
     export KERNEL_SELFTESTS="/run/input/bpf"
   fi
 
-  "$@"
+  dmesg -C
+  if ! "$@"; then
+    dmesg
+    exit 1
+  fi
   touch "/run/output/success"
   exit 0
 fi

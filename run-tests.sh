@@ -73,7 +73,7 @@ fi
 if (( $# > 0 )); then
   printf -v cmd " %q" "$@"
 else
-  printf -v cmd " %q" go test -v -coverpkg=./... -coverprofile="/run/output/coverage.txt" -count 1 ./...
+  printf -v cmd " %q" go test -short -v -coverpkg=./... -coverprofile="/run/output/coverage.txt" -count 1 ./...
 fi
 
 echo Testing on "${kernel_version}"

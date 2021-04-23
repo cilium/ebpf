@@ -49,6 +49,7 @@ blocks:
       - name: Run unit tests on previous stable Go
         commands:
           - sem-version go 1.15
+          - go test -v ./cmd/bpf2go -run TestRun
           - timeout -s KILL 600s ./run-tests.sh 5.10
       - name: Run unit tests
         matrix:

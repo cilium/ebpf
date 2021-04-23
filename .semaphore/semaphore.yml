@@ -24,12 +24,9 @@ blocks:
           - export PATH="$PATH:$(go env GOPATH)/bin"
           - cache restore
           - go mod tidy
-          - go build ./...
-          - sudo pip3 install https://github.com/amluto/virtme/archive/538f1e756139a6b57a4780e7ceb3ac6bcaa4fe6f.zip
+          - sudo pip3 install https://github.com/amluto/virtme/archive/beb85146cd91de37ae455eccb6ab67c393e6e290.zip
           - sudo apt-get update
           - sudo apt-get install -y --no-install-recommends qemu-system-x86 clang-9
-          - go generate ./cmd/bpf2go
-          - git diff --exit-code || { echo "generated files are not up to date" >&2; false; }
       epilogue:
         commands:
           - cache store
@@ -46,6 +43,9 @@ blocks:
       - name: Lint
         commands:
           - golangci-lint run
+          - go generate ./cmd/bpf2go
+          - pushd ./examples; go generate ./...; popd
+          - git diff --exit-code || { echo "generated files are not up to date" >&2; false; }
       - name: Run unit tests on previous stable Go
         commands:
           - sem-version go 1.15

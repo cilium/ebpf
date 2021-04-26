@@ -59,6 +59,7 @@ const (
 	PERF_RECORD_SAMPLE       = 9
 	AT_FDCWD                 = -0x2
 	RENAME_NOREPLACE         = 0x1
+	PERF_ATTR_SIZE_VER5      = 0
 )
 
 // Statfs_t is a wrapper

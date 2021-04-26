@@ -169,14 +169,21 @@ func pmuProbe(typ probeType, symbol, path string, offset uint64, ret bool) (*per
 		return nil, err
 	}
 
-	config, err := typ.RetprobeBit()
-	if err != nil {
-		return nil, err
+	var config uint64
+	if ret {
+		bit, err := typ.RetprobeBit()
+		if err != nil {
+			return nil, err
+		}
+		config |= 1 << bit
 	}
 
 	var (
 		attr unix.PerfEventAttr
 		sp   unsafe.Pointer
+		// Size is the size of perf_event_attr and it is used to create the correct version of PerfEventAttr.
+		// The minimum version required for PMU Uprobes is PERF_ATTR_SIZE_VER1.
+		size uint32 = unix.PERF_ATTR_SIZE_VER5
 	)
 	switch typ {
 	case kprobeType:
@@ -187,6 +194,7 @@ func pmuProbe(typ probeType, symbol, path string, offset uint64, ret bool) (*per
 		}
 
 		attr = unix.PerfEventAttr{
+			Size:   size,
 			Type:   uint32(et),          // PMU event type read from sysfs
 			Ext1:   uint64(uintptr(sp)), // Kernel symbol to trace
 			Config: config,              // Retprobe flag
@@ -198,6 +206,7 @@ func pmuProbe(typ probeType, symbol, path string, offset uint64, ret bool) (*per
 		}
 
 		attr = unix.PerfEventAttr{
+			Size:   size,
 			Type:   uint32(et),              // PMU event type read from sysfs
 			Ext1:   uint64(uintptr(sp)),     // Uprobe path
 			Ext2:   uint64(uintptr(offset)), // Uprobe offset

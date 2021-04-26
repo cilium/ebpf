@@ -11,62 +11,100 @@ import (
 	"github.com/cilium/ebpf"
 )
 
-type UProbeExampleSpecs struct {
-	ProgramUprobeBashReadline *ebpf.ProgramSpec `ebpf:"uprobe_bash_readline"`
-	MapEvents                 *ebpf.MapSpec     `ebpf:"events"`
-}
-
-func NewUProbeExampleSpecs() (*UProbeExampleSpecs, error) {
+// LoadUProbeExample returns the embedded CollectionSpec for UProbeExample.
+func LoadUProbeExample() (*ebpf.CollectionSpec, error) {
 	reader := bytes.NewReader(_UProbeExampleBytes)
 	spec, err := ebpf.LoadCollectionSpecFromReader(reader)
 	if err != nil {
 		return nil, fmt.Errorf("can't load UProbeExample: %w", err)
 	}
 
-	specs := new(UProbeExampleSpecs)
-	if err := spec.Assign(specs); err != nil {
-		return nil, fmt.Errorf("can't assign UProbeExample: %w", err)
-	}
-
-	return specs, nil
+	return spec, err
 }
 
-func (s *UProbeExampleSpecs) CollectionSpec() *ebpf.CollectionSpec {
-	return &ebpf.CollectionSpec{
-		Programs: map[string]*ebpf.ProgramSpec{
-			"uprobe_bash_readline": s.ProgramUprobeBashReadline,
-		},
-		Maps: map[string]*ebpf.MapSpec{
-			"events": s.MapEvents,
-		},
+// LoadUProbeExampleObjects loads UProbeExample and converts it into a struct.
+//
+// The following types are suitable as obj argument:
+//
+//     *UProbeExampleObjects
+//     *UProbeExamplePrograms
+//     *UProbeExampleMaps
+//
+// See ebpf.CollectionSpec.LoadAndAssign documentation for details.
+func LoadUProbeExampleObjects(obj interface{}, opts *ebpf.CollectionOptions) error {
+	spec, err := LoadUProbeExample()
+	if err != nil {
+		return err
 	}
+
+	return spec.LoadAndAssign(obj, opts)
 }
 
-func (s *UProbeExampleSpecs) Load(opts *ebpf.CollectionOptions) (*UProbeExampleObjects, error) {
-	var objs UProbeExampleObjects
-	if err := s.CollectionSpec().LoadAndAssign(&objs, opts); err != nil {
-		return nil, err
-	}
-	return &objs, nil
+// UProbeExampleSpecs contains maps and programs before they are loaded into the kernel.
+//
+// It can be passed ebpf.CollectionSpec.Assign.
+type UProbeExampleSpecs struct {
+	UProbeExampleProgramSpecs
+	UProbeExampleMapSpecs
 }
 
-func (s *UProbeExampleSpecs) Copy() *UProbeExampleSpecs {
-	return &UProbeExampleSpecs{
-		ProgramUprobeBashReadline: s.ProgramUprobeBashReadline.Copy(),
-		MapEvents:                 s.MapEvents.Copy(),
-	}
+// UProbeExampleSpecs contains programs before they are loaded into the kernel.
+//
+// It can be passed ebpf.CollectionSpec.Assign.
+type UProbeExampleProgramSpecs struct {
+	UprobeBashReadline *ebpf.ProgramSpec `ebpf:"uprobe_bash_readline"`
 }
 
+// UProbeExampleMapSpecs contains maps before they are loaded into the kernel.
+//
+// It can be passed ebpf.CollectionSpec.Assign.
+type UProbeExampleMapSpecs struct {
+	Events *ebpf.MapSpec `ebpf:"events"`
+}
+
+// UProbeExampleObjects contains all objects after they have been loaded into the kernel.
+//
+// It can be passed to LoadUProbeExampleObjects or ebpf.CollectionSpec.LoadAndAssign.
 type UProbeExampleObjects struct {
-	ProgramUprobeBashReadline *ebpf.Program `ebpf:"uprobe_bash_readline"`
-	MapEvents                 *ebpf.Map     `ebpf:"events"`
+	UProbeExamplePrograms
+	UProbeExampleMaps
 }
 
 func (o *UProbeExampleObjects) Close() error {
-	for _, closer := range []io.Closer{
-		o.ProgramUprobeBashReadline,
-		o.MapEvents,
-	} {
+	return _UProbeExampleClose(
+		&o.UProbeExamplePrograms,
+		&o.UProbeExampleMaps,
+	)
+}
+
+// UProbeExampleMaps contains all maps after they have been loaded into the kernel.
+//
+// It can be passed to LoadUProbeExampleObjects or ebpf.CollectionSpec.LoadAndAssign.
+type UProbeExampleMaps struct {
+	Events *ebpf.Map `ebpf:"events"`
+}
+
+func (m *UProbeExampleMaps) Close() error {
+	return _UProbeExampleClose(
+		m.Events,
+	)
+}
+
+// UProbeExamplePrograms contains all programs after they have been loaded into the kernel.
+//
+// It can be passed to LoadUProbeExampleObjects or ebpf.CollectionSpec.LoadAndAssign.
+type UProbeExamplePrograms struct {
+	UprobeBashReadline *ebpf.Program `ebpf:"uprobe_bash_readline"`
+}
+
+func (p *UProbeExamplePrograms) Close() error {
+	return _UProbeExampleClose(
+		p.UprobeBashReadline,
+	)
+}
+
+func _UProbeExampleClose(closers ...io.Closer) error {
+	for _, closer := range closers {
 		if err := closer.Close(); err != nil {
 			return err
 		}

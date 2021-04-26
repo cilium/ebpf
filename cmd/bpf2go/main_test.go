@@ -11,6 +11,10 @@ import (
 )
 
 func TestRun(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Not compiling with -short")
+	}
+
 	dir := mustWriteTempFile(t, "test.c", minimalSocketFilter)
 
 	cwd, err := os.Getwd()

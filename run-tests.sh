@@ -95,7 +95,7 @@ else
   echo "No selftests found, disabling"
 fi
 
-args=(-v -short -coverpkg=./... -coverprofile=coverage.txt -count 1 ./...)
+args=(-v -short -coverpkg=./... -coverprofile=coverage.out -count 1 ./...)
 if (( $# > 0 )); then
   args=("$@")
 fi
@@ -107,8 +107,8 @@ echo Testing on "${kernel_version}"
 go test -exec "$script --exec-vm $input" "${args[@]}"
 
 echo "Test successful on ${kernel_version}"
-if [[ -v COVERALLS_TOKEN && -f "coverage.txt" ]]; then
-  goveralls -coverprofile="coverage.txt" -service=semaphore -repotoken "$COVERALLS_TOKEN"
+if [[ -v COVERALLS_TOKEN && -f "coverage.out" ]]; then
+  goveralls -coverprofile="coverage.out" -service=semaphore -repotoken "$COVERALLS_TOKEN"
 fi
 
 rm -r "${input}"

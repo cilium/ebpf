@@ -39,7 +39,7 @@ if [[ "${1:-}" = "--exec-vm" ]]; then
   output="$(mktemp -d)"
   printf -v cmd "%q " "$@"
 
-  $sudo virtme-run --kimg "${input}/bzImage" --memory 512M --pwd \
+  $sudo virtme-run --kimg "${input}/bzImage" --memory 768M --pwd \
   --rwdir="${testdir}=${testdir}" \
   --rodir=/run/input="${input}" \
   --rwdir=/run/output="${output}" \
@@ -62,7 +62,11 @@ elif [[ "${1:-}" = "--exec-test" ]]; then
     export KERNEL_SELFTESTS="/run/input/bpf"
   fi
 
-  "$@"
+  dmesg -C
+  if ! "$@"; then
+    dmesg
+    exit 1
+  fi
   touch "/run/output/success"
   exit 0
 fi

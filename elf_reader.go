@@ -847,6 +847,8 @@ func getProgType(sectionName string) (ProgramType, AttachType, uint32, string) {
 		"uretprobe/":            {Kprobe, AttachNone, 0},
 		"tracepoint/":           {TracePoint, AttachNone, 0},
 		"raw_tracepoint/":       {RawTracepoint, AttachNone, 0},
+		"raw_tp/":               {RawTracepoint, AttachNone, 0},
+		"tp_btf/":               {Tracing, AttachTraceRawTp, 0},
 		"xdp":                   {XDP, AttachNone, 0},
 		"perf_event":            {PerfEvent, AttachNone, 0},
 		"lwt_in":                {LWTIn, AttachNone, 0},

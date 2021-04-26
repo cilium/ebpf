@@ -105,10 +105,6 @@ export CGO_ENABLED=0
 
 echo Testing on "${kernel_version}"
 go test -exec "$script --exec-vm $input" "${args[@]}"
-
 echo "Test successful on ${kernel_version}"
-if [[ -v COVERALLS_TOKEN && -f "coverage.out" ]]; then
-  goveralls -coverprofile="coverage.out" -service=semaphore -repotoken "$COVERALLS_TOKEN"
-fi
 
 rm -r "${input}"

@@ -108,7 +108,9 @@ go test -exec "$script --exec-vm $input" "${args[@]}"
 
 echo "Test successful on ${kernel_version}"
 if [[ -v COVERALLS_TOKEN && -f "coverage.out" ]]; then
-  goveralls -coverprofile="coverage.out" -service=semaphore -repotoken "$COVERALLS_TOKEN"
+  if ! goveralls -coverprofile="coverage.out" -service=semaphore -repotoken "$COVERALLS_TOKEN"; then
+    echo Submission to coveralls failed
+  fi
 fi
 
 rm -r "${input}"

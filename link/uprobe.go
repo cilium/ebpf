@@ -149,6 +149,13 @@ func (ex *Executable) uprobe(symbol string, prog *ebpf.Program, ret bool) (*perf
 		return nil, fmt.Errorf("symbol '%s' not found in '%s': %w", symbol, ex.path, err)
 	}
 
+	// Symbols with location 0 from section undef are shared library calls and
+	// are relocated before the binary is executed. Dynamic linking is not
+	// implemented by the library, so mark this as unsupported for now.
+	if sym.Section == elf.SHN_UNDEF && sym.Value == 0 {
+		return nil, fmt.Errorf("cannot resolve %s library call '%s': %w", ex.path, symbol, ErrNotSupported)
+	}
+
 	// Use uprobe PMU if the kernel has it available.
 	tp, err := pmuUprobe(sym.Name, ex.path, sym.Value, ret)
 	if err == nil {

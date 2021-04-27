@@ -13,6 +13,7 @@ import (
 )
 
 var bashEx, _ = OpenExecutable("/bin/bash")
+var bashSym = "main"
 
 func TestExecutable(t *testing.T) {
 	_, err := OpenExecutable("")
@@ -24,11 +25,11 @@ func TestExecutable(t *testing.T) {
 		t.Fatalf("create executable: unexpected path '%s'", bashEx.path)
 	}
 
-	sym, err := bashEx.symbol("readline")
+	sym, err := bashEx.symbol(bashSym)
 	if err != nil {
 		t.Fatalf("find symbol: %v", err)
 	}
-	if sym.Name != "readline" {
+	if sym.Name != bashSym {
 		t.Fatalf("find symbol: unexpected symbol '%s'", sym.Name)
 	}
 
@@ -47,7 +48,7 @@ func TestUprobe(t *testing.T) {
 	}
 	defer prog.Close()
 
-	up, err := bashEx.Uprobe("readline", prog)
+	up, err := bashEx.Uprobe(bashSym, prog)
 	c.Assert(err, qt.IsNil)
 	defer up.Close()
 
@@ -65,7 +66,7 @@ func TestUretprobe(t *testing.T) {
 	}
 	defer prog.Close()
 
-	up, err := bashEx.Uretprobe("readline", prog)
+	up, err := bashEx.Uretprobe(bashSym, prog)
 	c.Assert(err, qt.IsNil)
 	defer up.Close()
 
@@ -82,17 +83,17 @@ func TestUprobeCreatePMU(t *testing.T) {
 	c := qt.New(t)
 
 	// Fetch the elf.Symbol from the /bin/bash Executable already defined.
-	sym, err := bashEx.symbol("readline")
+	sym, err := bashEx.symbol(bashSym)
 	c.Assert(err, qt.IsNil)
 
-	// uprobe PMU /bin/bash::readline()
+	// uprobe PMU
 	pu, err := pmuUprobe(sym.Name, bashEx.path, sym.Value, false)
 	c.Assert(err, qt.IsNil)
 	defer pu.Close()
 
 	c.Assert(pu.typ, qt.Equals, uprobeEvent)
 
-	// uretprobe PMU /bin/bash::readline()
+	// uretprobe PMU
 	pr, err := pmuUprobe(sym.Name, bashEx.path, sym.Value, true)
 	c.Assert(err, qt.IsNil)
 	defer pr.Close()
@@ -105,7 +106,7 @@ func TestUprobePMUUnavailable(t *testing.T) {
 	c := qt.New(t)
 
 	// Fetch the elf.Symbol from the /bin/bash Executable already defined.
-	sym, err := bashEx.symbol("readline")
+	sym, err := bashEx.symbol(bashSym)
 	c.Assert(err, qt.IsNil)
 
 	pk, err := pmuUprobe(sym.Name, bashEx.path, sym.Value, false)
@@ -123,7 +124,7 @@ func TestUprobeTraceFS(t *testing.T) {
 	c := qt.New(t)
 
 	// Fetch the elf.Symbol from the /bin/bash Executable already defined.
-	sym, err := bashEx.symbol("readline")
+	sym, err := bashEx.symbol(bashSym)
 	c.Assert(err, qt.IsNil)
 
 	// Sanitize the symbol in order to be used in tracefs API.
@@ -165,7 +166,7 @@ func TestUprobeCreateTraceFS(t *testing.T) {
 	c := qt.New(t)
 
 	// Fetch the elf.Symbol from the /bin/bash Executable already defined.
-	sym, err := bashEx.symbol("readline")
+	sym, err := bashEx.symbol(bashSym)
 	c.Assert(err, qt.IsNil)
 
 	// Sanitize the symbol in order to be used in tracefs API.

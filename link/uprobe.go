@@ -92,13 +92,14 @@ func (ex *Executable) symbol(symbol string) (*elf.Symbol, error) {
 
 // Uprobe attaches the given eBPF program to a perf event that fires when the
 // given symbol starts executing in the given Executable.
-// For example, /bin/bash::readline():
+// For example, /bin/bash::main():
 //
 //  ex, _ = OpenExecutable("/bin/bash")
-//  ex.Uprobe("readline", prog)
+//  ex.Uprobe("main", prog)
 //
 // The resulting Link must be Closed during program shutdown to avoid leaking
-// system resources.
+// system resources. Functions provided by shared libraries can currently not
+// be traced and will result in an ErrNotSupported.
 func (ex *Executable) Uprobe(symbol string, prog *ebpf.Program) (Link, error) {
 	u, err := ex.uprobe(symbol, prog, false)
 	if err != nil {
@@ -115,10 +116,14 @@ func (ex *Executable) Uprobe(symbol string, prog *ebpf.Program) (Link, error) {
 }
 
 // Uretprobe attaches the given eBPF program to a perf event that fires right
-// before the given symbol exits.
+// before the given symbol exits. For example, /bin/bash::main():
+//
+//  ex, _ = OpenExecutable("/bin/bash")
+//  ex.Uretprobe("main", prog)
 //
 // The resulting Link must be Closed during program shutdown to avoid leaking
-// system resources.
+// system resources. Functions provided by shared libraries can currently not
+// be traced and will result in an ErrNotSupported.
 func (ex *Executable) Uretprobe(symbol string, prog *ebpf.Program) (Link, error) {
 	u, err := ex.uprobe(symbol, prog, true)
 	if err != nil {
@@ -147,6 +152,13 @@ func (ex *Executable) uprobe(symbol string, prog *ebpf.Program, ret bool) (*perf
 	sym, err := ex.symbol(symbol)
 	if err != nil {
 		return nil, fmt.Errorf("symbol '%s' not found in '%s': %w", symbol, ex.path, err)
+	}
+
+	// Symbols with location 0 from section undef are shared library calls and
+	// are relocated before the binary is executed. Dynamic linking is not
+	// implemented by the library, so mark this as unsupported for now.
+	if sym.Section == elf.SHN_UNDEF && sym.Value == 0 {
+		return nil, fmt.Errorf("cannot resolve %s library call '%s': %w", ex.path, symbol, ErrNotSupported)
 	}
 
 	// Use uprobe PMU if the kernel has it available.

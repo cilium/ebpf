@@ -666,12 +666,11 @@ func ProgramLineInfos(s *Program) (recordSize uint32, bytes []byte, err error) {
 	return s.lineInfos.recordSize, bytes, nil
 }
 
-// ProgramRelocations returns the CO-RE relocations required to adjust the
-// program to the target.
+// ProgramFixups returns the changes required to adjust the program to the target.
 //
 // This is a free function instead of a method to hide it from users
 // of package ebpf.
-func ProgramRelocations(s *Program, target *Spec) (map[uint64]Relocation, error) {
+func ProgramFixups(s *Program, target *Spec) (map[uint64]COREFixup, error) {
 	if len(s.coreRelos) == 0 {
 		return nil, nil
 	}

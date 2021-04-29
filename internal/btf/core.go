@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"sort"
 	"strconv"
 	"strings"
 )
@@ -11,35 +12,44 @@ import (
 // Code in this file is derived from libbpf, which is available under a BSD
 // 2-Clause license.
 
-// Relocation describes a CO-RE relocation.
-type Relocation struct {
-	Current uint32
-	New     uint32
+// COREFixup is the result of computing a CO-RE relocation for a target.
+type COREFixup struct {
+	Kind   COREKind
+	Local  uint32
+	Target uint32
+	Poison bool
 }
 
-func (r Relocation) equal(other Relocation) bool {
-	return r.Current == other.Current && r.New == other.New
+func (f COREFixup) equal(other COREFixup) bool {
+	return f.Local == other.Local && f.Target == other.Target
 }
 
-// coreReloKind is the type of CO-RE relocation
-type coreReloKind uint32
+func (f COREFixup) String() string {
+	if f.Poison {
+		return fmt.Sprintf("%s=poison", f.Kind)
+	}
+	return fmt.Sprintf("%s=%d->%d", f.Kind, f.Local, f.Target)
+}
+
+// COREKind is the type of CO-RE relocation
+type COREKind uint32
 
 const (
-	reloFieldByteOffset coreReloKind = iota /* field byte offset */
-	reloFieldByteSize                       /* field size in bytes */
-	reloFieldExists                         /* field existence in target kernel */
-	reloFieldSigned                         /* field signedness (0 - unsigned, 1 - signed) */
-	reloFieldLShiftU64                      /* bitfield-specific left bitshift */
-	reloFieldRShiftU64                      /* bitfield-specific right bitshift */
-	reloTypeIDLocal                         /* type ID in local BPF object */
-	reloTypeIDTarget                        /* type ID in target kernel */
-	reloTypeExists                          /* type existence in target kernel */
-	reloTypeSize                            /* type size in bytes */
-	reloEnumvalExists                       /* enum value existence in target kernel */
-	reloEnumvalValue                        /* enum value integer value */
+	reloFieldByteOffset COREKind = iota /* field byte offset */
+	reloFieldByteSize                   /* field size in bytes */
+	reloFieldExists                     /* field existence in target kernel */
+	reloFieldSigned                     /* field signedness (0 - unsigned, 1 - signed) */
+	reloFieldLShiftU64                  /* bitfield-specific left bitshift */
+	reloFieldRShiftU64                  /* bitfield-specific right bitshift */
+	reloTypeIDLocal                     /* type ID in local BPF object */
+	reloTypeIDTarget                    /* type ID in target kernel */
+	reloTypeExists                      /* type existence in target kernel */
+	reloTypeSize                        /* type size in bytes */
+	reloEnumvalExists                   /* enum value existence in target kernel */
+	reloEnumvalValue                    /* enum value integer value */
 )
 
-func (k coreReloKind) String() string {
+func (k COREKind) String() string {
 	switch k {
 	case reloFieldByteOffset:
 		return "byte_off"
@@ -70,99 +80,169 @@ func (k coreReloKind) String() string {
 	}
 }
 
-func coreRelocate(local, target *Spec, relos coreRelos) (map[uint64]Relocation, error) {
+func coreRelocate(local, target *Spec, relos coreRelos) (map[uint64]COREFixup, error) {
 	if local.byteOrder != target.byteOrder {
 		return nil, fmt.Errorf("can't relocate %s against %s", local.byteOrder, target.byteOrder)
 	}
 
-	relocations := make(map[uint64]Relocation, len(relos))
+	var ids []TypeID
+	relosByID := make(map[TypeID]coreRelos)
+	result := make(map[uint64]COREFixup, len(relos))
 	for _, relo := range relos {
-		if int(relo.typeID) >= len(local.types) {
-			return nil, fmt.Errorf("invalid type id %d", relo.typeID)
-		}
-
-		typ := local.types[relo.typeID]
-
 		if relo.kind == reloTypeIDLocal {
-			relocations[uint64(relo.insnOff)] = Relocation{
-				uint32(typ.ID()),
-				uint32(typ.ID()),
+			// Filtering out reloTypeIDLocal here makes our lives a lot easier
+			// down the line, since it doesn't have a target at all.
+			if len(relo.accessor) > 1 || relo.accessor[0] != 0 {
+				return nil, fmt.Errorf("%s: unexpected accessor %v", relo.kind, relo.accessor)
+			}
+
+			result[uint64(relo.insnOff)] = COREFixup{
+				relo.kind,
+				uint32(relo.typeID),
+				uint32(relo.typeID),
+				false,
 			}
 			continue
 		}
 
-		named, ok := typ.(namedType)
-		if !ok || named.name() == "" {
-			return nil, fmt.Errorf("relocate anonymous type %s: %w", typ.String(), ErrNotSupported)
+		relos, ok := relosByID[relo.typeID]
+		if !ok {
+			ids = append(ids, relo.typeID)
 		}
-
-		name := essentialName(named.name())
-		res, err := coreCalculateRelocation(typ, target.namedTypes[name], relo.kind, relo.accessor)
-		if err != nil {
-			return nil, fmt.Errorf("relocate %s: %w", typ, err)
-		}
-
-		relocations[uint64(relo.insnOff)] = res
+		relosByID[relo.typeID] = append(relos, relo)
 	}
 
-	return relocations, nil
+	// Ensure we work on relocations in a deterministic order.
+	sort.Slice(ids, func(i, j int) bool {
+		return ids[i] < ids[j]
+	})
+
+	for _, id := range ids {
+		if int(id) >= len(local.types) {
+			return nil, fmt.Errorf("invalid type id %d", id)
+		}
+
+		localType := local.types[id]
+		named, ok := localType.(namedType)
+		if !ok || named.name() == "" {
+			return nil, fmt.Errorf("relocate unnamed or anonymous type %s: %w", localType, ErrNotSupported)
+		}
+
+		relos := relosByID[id]
+		targets := target.namedTypes[named.essentialName()]
+		fixups, err := coreCalculateFixups(localType, targets, relos)
+		if err != nil {
+			return nil, fmt.Errorf("relocate %s: %w", localType, err)
+		}
+
+		for i, relo := range relos {
+			result[uint64(relo.insnOff)] = fixups[i]
+		}
+	}
+
+	return result, nil
 }
 
 var errAmbiguousRelocation = errors.New("ambiguous relocation")
 var errImpossibleRelocation = errors.New("impossible relocation")
 
-func coreCalculateRelocation(local Type, targets []namedType, kind coreReloKind, localAccessor coreAccessor) (Relocation, error) {
+// coreCalculateFixups calculates the fixups for the given relocations using
+// the "best" target.
+//
+// The best target is determined by scoring: the less poisoning we have to do
+// the better the target is.
+func coreCalculateFixups(local Type, targets []namedType, relos coreRelos) ([]COREFixup, error) {
 	localID := local.ID()
 	local, err := copyType(local, skipQualifierAndTypedef)
 	if err != nil {
-		return Relocation{}, err
+		return nil, err
 	}
 
-	var relos []Relocation
-	var matches []Type
-	for _, target := range targets {
-		targetID := target.ID()
-		target, err := copyType(target, skipQualifierAndTypedef)
+	bestScore := len(relos)
+	var bestFixups []COREFixup
+	for i := range targets {
+		targetID := targets[i].ID()
+		target, err := copyType(targets[i], skipQualifierAndTypedef)
 		if err != nil {
-			return Relocation{}, err
+			return nil, err
 		}
 
-		switch kind {
-		case reloTypeIDTarget:
-			if localAccessor[0] != 0 {
-				return Relocation{}, fmt.Errorf("%s: unexpected non-zero accessor", kind)
+		score := 0 // lower is better
+		fixups := make([]COREFixup, 0, len(relos))
+		for _, relo := range relos {
+			fixup, err := coreCalculateFixup(local, localID, target, targetID, relo)
+			if err != nil {
+				return nil, fmt.Errorf("target %s: %w", target, err)
 			}
-
-			err := coreAreTypesCompatible(local, target)
-			if errors.Is(err, errImpossibleRelocation) {
-				continue
-			} else if err != nil {
-				return Relocation{}, fmt.Errorf("%s: %s", kind, err)
+			if fixup.Poison {
+				score++
 			}
-
-			relos = append(relos, Relocation{uint32(localID), uint32(targetID)})
-
-		default:
-			return Relocation{}, fmt.Errorf("relocation %s: %w", kind, ErrNotSupported)
+			fixups = append(fixups, fixup)
 		}
-		matches = append(matches, target)
-	}
 
-	if len(relos) == 0 {
-		// TODO: Add switch for existence checks like reloEnumvalExists here.
+		if score > bestScore {
+			// We have a better target already, ignore this one.
+			continue
+		}
 
-		// TODO: This might have to be poisoned.
-		return Relocation{}, fmt.Errorf("no relocation found, tried %v", targets)
-	}
+		if score < bestScore {
+			// This is the best target yet, use it.
+			bestScore = score
+			bestFixups = fixups
+			continue
+		}
 
-	relo := relos[0]
-	for _, altRelo := range relos[1:] {
-		if !altRelo.equal(relo) {
-			return Relocation{}, fmt.Errorf("multiple types %v match: %w", matches, errAmbiguousRelocation)
+		// Some other target has the same score as the current one. Make sure
+		// the fixups agree with each other.
+		for i, fixup := range bestFixups {
+			if !fixup.equal(fixups[i]) {
+				return nil, fmt.Errorf("%s: multiple types match: %w", fixup.Kind, errAmbiguousRelocation)
+			}
 		}
 	}
 
-	return relo, nil
+	if bestFixups == nil {
+		// Nothing at all matched, probably because there are no suitable
+		// targets at all. Poison everything!
+		bestFixups = make([]COREFixup, len(relos))
+		for i, relo := range relos {
+			bestFixups[i] = COREFixup{Kind: relo.kind, Poison: true}
+		}
+	}
+
+	return bestFixups, nil
+}
+
+// coreCalculateFixup calculates the fixup for a single local type, target type
+// and relocation.
+func coreCalculateFixup(local Type, localID TypeID, target Type, targetID TypeID, relo coreRelo) (COREFixup, error) {
+	fixup := func(local, target uint32) (COREFixup, error) {
+		return COREFixup{relo.kind, local, target, false}, nil
+	}
+	poison := func() (COREFixup, error) {
+		return COREFixup{relo.kind, 0, 0, true}, nil
+	}
+	zero := COREFixup{}
+
+	switch relo.kind {
+	case reloTypeIDTarget:
+		if len(relo.accessor) > 1 || relo.accessor[0] != 0 {
+			return zero, fmt.Errorf("%s: unexpected accessor %v", relo.kind, relo.accessor)
+		}
+
+		err := coreAreTypesCompatible(local, target)
+		if errors.Is(err, errImpossibleRelocation) {
+			return poison()
+		}
+		if err != nil {
+			return zero, fmt.Errorf("relocation %s: %w", relo.kind, err)
+		}
+
+		return fixup(uint32(localID), uint32(targetID))
+
+	default:
+		return zero, fmt.Errorf("relocation %s: %w", relo.kind, ErrNotSupported)
+	}
 }
 
 /* coreAccessor contains a path through a struct. It contains at least one index.

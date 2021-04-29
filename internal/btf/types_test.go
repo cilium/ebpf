@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"testing"
 
+	qt "github.com/frankban/quicktest"
 	"github.com/google/go-cmp/cmp"
 )
 
@@ -34,10 +35,10 @@ func TestSizeof(t *testing.T) {
 }
 
 func TestCopyType(t *testing.T) {
-	_ = copyType((*Void)(nil))
+	_, _ = copyType((*Void)(nil), nil)
 
 	in := &Int{Size: 4}
-	out := copyType(in)
+	out, _ := copyType(in, nil)
 
 	in.Size = 8
 	if size := out.(*Int).Size; size != 4 {
@@ -45,7 +46,21 @@ func TestCopyType(t *testing.T) {
 	}
 
 	t.Run("cyclical", func(t *testing.T) {
-		_ = copyType(newCyclicalType(2))
+		_, _ = copyType(newCyclicalType(2), nil)
+	})
+
+	t.Run("identity", func(t *testing.T) {
+		u16 := &Int{Size: 2}
+
+		out, _ := copyType(&Struct{
+			Members: []Member{
+				{Name: "a", Type: u16},
+				{Name: "b", Type: u16},
+			},
+		}, nil)
+
+		outStruct := out.(*Struct)
+		qt.Assert(t, outStruct.Members[0].Type, qt.Equals, outStruct.Members[1].Type)
 	})
 }
 

@@ -37,6 +37,7 @@ type Type interface {
 type namedType interface {
 	Type
 	name() string
+	essentialName() string
 }
 
 // Name identifies a type.
@@ -46,6 +47,10 @@ type Name string
 
 func (n Name) name() string {
 	return string(n)
+}
+
+func (n Name) essentialName() string {
+	return essentialName(string(n))
 }
 
 // Void is the unit type of BTF.

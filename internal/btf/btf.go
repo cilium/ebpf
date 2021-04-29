@@ -491,7 +491,8 @@ func (s *Spec) FindType(name string, typ Type) error {
 		return fmt.Errorf("type %s: %w", name, ErrNotFound)
 	}
 
-	value := reflect.Indirect(reflect.ValueOf(copyType(candidate)))
+	cpy, _ := copyType(candidate, nil)
+	value := reflect.Indirect(reflect.ValueOf(cpy))
 	reflect.Indirect(reflect.ValueOf(typ)).Set(value)
 	return nil
 }

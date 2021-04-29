@@ -167,6 +167,64 @@ func TestCoreAccessor(t *testing.T) {
 	}
 }
 
+func TestCoreFindEnumValue(t *testing.T) {
+	a := &Enum{Values: []EnumValue{{"foo", 23}, {"bar", 42}}}
+	b := &Enum{Values: []EnumValue{
+		{"foo___flavour", 0},
+		{"bar", 123},
+		{"garbage", 3},
+	}}
+
+	invalid := []struct {
+		name   string
+		local  Type
+		target Type
+		acc    coreAccessor
+		err    error
+	}{
+		{"o-o-b accessor", a, b, coreAccessor{len(a.Values)}, nil},
+		{"long accessor", a, b, coreAccessor{0, 1}, nil},
+		{"wrong target", a, &Void{}, coreAccessor{0, 1}, nil},
+		{
+			"no matching value",
+			b, a,
+			coreAccessor{2},
+			errImpossibleRelocation,
+		},
+	}
+
+	for _, test := range invalid {
+		t.Run(test.name, func(t *testing.T) {
+			_, _, err := coreFindEnumValue(test.local, test.acc, test.target)
+			if test.err != nil && !errors.Is(err, test.err) {
+				t.Fatalf("Expected %s, got %s", test.err, err)
+			}
+			if err == nil {
+				t.Fatal("Accepted invalid case")
+			}
+		})
+	}
+
+	valid := []struct {
+		name                    string
+		local, target           Type
+		acc                     coreAccessor
+		localValue, targetValue int32
+	}{
+		{"a to b", a, b, coreAccessor{0}, 23, 0},
+		{"b to a", b, a, coreAccessor{1}, 123, 42},
+	}
+
+	for _, test := range valid {
+		t.Run(test.name, func(t *testing.T) {
+			local, target, err := coreFindEnumValue(test.local, test.acc, test.target)
+			qt.Assert(t, err, qt.IsNil)
+			qt.Check(t, local.Value, qt.Equals, test.localValue)
+			qt.Check(t, target.Value, qt.Equals, test.targetValue)
+		})
+	}
+}
+
 func TestCoreRelocation(t *testing.T) {
 	testutils.Files(t, testutils.Glob(t, "testdata/*.elf"), func(t *testing.T, file string) {
 		rd, err := os.Open(file)

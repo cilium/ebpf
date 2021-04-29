@@ -2,9 +2,10 @@
 #include "bpf_core_read.h"
 
 enum e {
-	ONE,
+	// clang-12 doesn't allow enum relocations with zero value.
+	// See https://reviews.llvm.org/D97659
+	ONE = 1,
 	TWO,
-	THREE,
 };
 
 typedef enum e e_t;
@@ -44,6 +45,35 @@ __section("socket_filter/type_ids") int type_ids() {
 	local_id_not(e_t, 0);
 	local_id_not(const e_t, 0);
 	local_id_not(volatile e_t, 0);
+
+	return 0;
+}
+
+#define enum_value_exists(t, v) \
+	({ \
+		if (!bpf_core_enum_value_exists(t, v)) { \
+			return __LINE__; \
+		} \
+	})
+
+#define enum_value_matches(t, v) \
+	({ \
+		if (v != bpf_core_enum_value(t, v)) { \
+			return __LINE__; \
+		} \
+	})
+
+__section("socket_filter/enums") int enums() {
+	enum_value_exists(enum e, ONE);
+	enum_value_exists(volatile enum e, ONE);
+	enum_value_exists(const enum e, ONE);
+	enum_value_exists(e_t, TWO);
+	// TODO: Check non-existence.
+
+	enum_value_matches(enum e, TWO);
+	enum_value_matches(e_t, ONE);
+	enum_value_matches(volatile e_t, ONE);
+	enum_value_matches(const e_t, ONE);
 
 	return 0;
 }

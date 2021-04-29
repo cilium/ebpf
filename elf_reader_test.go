@@ -245,9 +245,6 @@ func TestStringSection(t *testing.T) {
 		if !errors.Is(err, ErrNotSupported) {
 			t.Error("References to a string section should be unsupported")
 		}
-		if !strings.Contains(err.Error(), ".L.str") {
-			t.Error("Error should contain symbol name")
-		}
 	})
 }
 

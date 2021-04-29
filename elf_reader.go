@@ -159,7 +159,7 @@ func LoadCollectionSpecFromReader(rd io.ReaderAt) (*CollectionSpec, error) {
 			}
 
 			if target.Flags&elf.SHF_STRINGS > 0 {
-				return nil, fmt.Errorf("section %q: string %q is not stack allocated: %w", section.Name, rel.Name, ErrNotSupported)
+				return nil, fmt.Errorf("section %q: string is not stack allocated: %w", section.Name, ErrNotSupported)
 			}
 
 			target.references++

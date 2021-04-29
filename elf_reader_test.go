@@ -361,8 +361,16 @@ func TestLibBPFCompat(t *testing.T) {
 				// the test should succeed.
 				var valid bool
 				switch name {
-				case "btf__core_reloc_type_based___all_missing.o",
-					"btf__core_reloc_type_id___missing_targets.o", "btf__core_reloc_flavors__err_wrong_name.o":
+				case "btf__core_reloc_existence___err_wrong_arr_kind.o",
+					"btf__core_reloc_existence___err_wrong_arr_value_type.o",
+					"btf__core_reloc_existence___err_wrong_int_kind.o",
+					"btf__core_reloc_existence___err_wrong_int_sz.o",
+					"btf__core_reloc_existence___err_wrong_int_type.o",
+					"btf__core_reloc_existence___err_wrong_struct_type.o":
+					// These tests are buggy upstream, see https://lore.kernel.org/bpf/20210420111639.155580-1-lmb@cloudflare.com/
+					valid = true
+				case "btf__core_reloc_type_id___missing_targets.o",
+					"btf__core_reloc_flavors__err_wrong_name.o":
 					valid = false
 				default:
 					valid = !strings.Contains(name, "___err_")

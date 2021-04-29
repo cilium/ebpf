@@ -57,7 +57,7 @@ func (ins *Instruction) Unmarshal(r io.Reader, bo binary.ByteOrder) (uint64, err
 		return 0, fmt.Errorf("can't unmarshal registers: %s", err)
 	}
 
-	if !bi.OpCode.isDWordLoad() {
+	if !bi.OpCode.IsDWordLoad() {
 		return InstructionSize, nil
 	}
 
@@ -80,7 +80,7 @@ func (ins Instruction) Marshal(w io.Writer, bo binary.ByteOrder) (uint64, error)
 		return 0, errors.New("invalid opcode")
 	}
 
-	isDWordLoad := ins.OpCode.isDWordLoad()
+	isDWordLoad := ins.OpCode.IsDWordLoad()
 
 	cons := int32(ins.Constant)
 	if isDWordLoad {
@@ -123,7 +123,7 @@ func (ins Instruction) Marshal(w io.Writer, bo binary.ByteOrder) (uint64, error)
 //
 // Returns an error if the instruction doesn't load a map.
 func (ins *Instruction) RewriteMapPtr(fd int) error {
-	if !ins.OpCode.isDWordLoad() {
+	if !ins.OpCode.IsDWordLoad() {
 		return fmt.Errorf("%s is not a 64 bit load", ins.OpCode)
 	}
 
@@ -146,7 +146,7 @@ func (ins *Instruction) mapPtr() uint32 {
 //
 // Returns an error if the instruction is not a direct load.
 func (ins *Instruction) RewriteMapOffset(offset uint32) error {
-	if !ins.OpCode.isDWordLoad() {
+	if !ins.OpCode.IsDWordLoad() {
 		return fmt.Errorf("%s is not a 64 bit load", ins.OpCode)
 	}
 
@@ -175,6 +175,12 @@ func (ins *Instruction) isLoadFromMap() bool {
 // This is not the same thing as a BPF helper call.
 func (ins *Instruction) IsFunctionCall() bool {
 	return ins.OpCode.JumpOp() == Call && ins.Src == PseudoCall
+}
+
+// IsConstantLoad returns true if the instruction loads a constant of the
+// given size.
+func (ins *Instruction) IsConstantLoad(size Size) bool {
+	return ins.OpCode == LoadImmOp(size) && ins.Src == R0 && ins.Offset == 0
 }
 
 // Format implements fmt.Formatter.

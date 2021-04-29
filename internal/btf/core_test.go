@@ -2,11 +2,14 @@ package btf
 
 import (
 	"errors"
+	"math/rand"
 	"os"
 	"strings"
 	"testing"
 
 	"github.com/cilium/ebpf/internal/testutils"
+
+	qt "github.com/frankban/quicktest"
 )
 
 func TestCoreAreTypesCompatible(t *testing.T) {
@@ -42,14 +45,6 @@ func TestCoreAreTypesCompatible(t *testing.T) {
 			&FuncProto{Return: &Void{}, Params: []FuncParam{{Type: &Void{}}}},
 			false,
 		},
-		{&Typedef{Name: "a", Type: &Void{}}, &Void{}, true},
-		{&Typedef{Name: "a", Type: &Void{}}, &Int{}, false},
-		{&Const{Type: &Void{}}, &Void{}, true},
-		{&Const{Type: &Void{}}, &Int{}, false},
-		{&Volatile{Type: &Void{}}, &Void{}, true},
-		{&Volatile{Type: &Void{}}, &Int{}, false},
-		{&Restrict{Type: &Void{}}, &Void{}, true},
-		{&Restrict{Type: &Void{}}, &Int{}, false},
 	}
 
 	for _, test := range tests {
@@ -104,16 +99,7 @@ func TestCoreAreMembersCompatible(t *testing.T) {
 		{&Int{Offset: 1}, &Int{}, false},
 		{&Pointer{Target: &Void{}}, &Pointer{Target: &Void{}}, true},
 		{&Pointer{Target: &Void{}}, &Void{}, false},
-		{&Array{Type: &Int{}}, &Array{Type: &Int{}}, true},
-		{&Array{Type: &Int{}}, &Array{Type: &Void{}}, false},
-		{&Typedef{Name: "a", Type: &Int{}}, &Int{}, true},
-		{&Typedef{Name: "a", Type: &Int{}}, &Void{}, false},
-		{&Const{Type: &Int{}}, &Int{}, true},
-		{&Const{Type: &Int{}}, &Void{}, false},
-		{&Volatile{Type: &Int{}}, &Int{}, true},
-		{&Volatile{Type: &Int{}}, &Void{}, false},
-		{&Restrict{Type: &Int{}}, &Int{}, true},
-		{&Restrict{Type: &Int{}}, &Void{}, false},
+		{&Array{}, &Array{}, true},
 	}
 
 	for _, test := range tests {
@@ -226,5 +212,54 @@ func TestCoreRelocation(t *testing.T) {
 				}
 			})
 		}
+	})
+}
+
+func TestCoreCopyWithoutQualifiers(t *testing.T) {
+	qualifiers := []struct {
+		name string
+		fn   func(Type) Type
+	}{
+		{"const", func(t Type) Type { return &Const{Type: t} }},
+		{"volatile", func(t Type) Type { return &Volatile{Type: t} }},
+		{"restrict", func(t Type) Type { return &Restrict{Type: t} }},
+		{"typedef", func(t Type) Type { return &Typedef{Type: t} }},
+	}
+
+	for _, test := range qualifiers {
+		t.Run(test.name+" cycle", func(t *testing.T) {
+			root := &Volatile{}
+			root.Type = test.fn(root)
+
+			_, err := copyType(root, skipQualifierAndTypedef)
+			qt.Assert(t, err, qt.Not(qt.IsNil))
+		})
+	}
+
+	for _, a := range qualifiers {
+		for _, b := range qualifiers {
+			t.Run(a.name+" "+b.name, func(t *testing.T) {
+				v := a.fn(&Pointer{Target: b.fn(&Int{Name: "z"})})
+				want := &Pointer{Target: &Int{Name: "z"}}
+
+				got, err := copyType(v, skipQualifierAndTypedef)
+				qt.Assert(t, err, qt.IsNil)
+				qt.Assert(t, got, qt.DeepEquals, want)
+			})
+		}
+	}
+
+	t.Run("long chain", func(t *testing.T) {
+		root := &Int{Name: "abc"}
+		v := Type(root)
+		for i := 0; i < maxTypeDepth; i++ {
+			q := qualifiers[rand.Intn(len(qualifiers))]
+			v = q.fn(v)
+			t.Log(q.name)
+		}
+
+		got, err := copyType(v, skipQualifierAndTypedef)
+		qt.Assert(t, err, qt.IsNil)
+		qt.Assert(t, got, qt.DeepEquals, root)
 	})
 }

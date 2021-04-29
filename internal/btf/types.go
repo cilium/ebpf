@@ -553,7 +553,9 @@ func Sizeof(typ Type) (int, error) {
 // copy a Type recursively.
 //
 // typ may form a cycle.
-func copyType(typ Type) Type {
+//
+// Returns any errors from transform verbatim.
+func copyType(typ Type, transform func(Type) (Type, error)) (Type, error) {
 	var (
 		copies = make(map[Type]Type)
 		work   typeDeque
@@ -566,7 +568,17 @@ func copyType(typ Type) Type {
 			continue
 		}
 
-		cpy := (*t).copy()
+		var cpy Type
+		if transform != nil {
+			tf, err := transform(*t)
+			if err != nil {
+				return nil, fmt.Errorf("copy %s: %w", typ, err)
+			}
+			cpy = tf.copy()
+		} else {
+			cpy = (*t).copy()
+		}
+
 		copies[*t] = cpy
 		*t = cpy
 
@@ -574,7 +586,7 @@ func copyType(typ Type) Type {
 		cpy.walk(&work)
 	}
 
-	return typ
+	return typ, nil
 }
 
 // typeDeque keeps track of pointers to types which still

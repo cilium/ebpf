@@ -199,9 +199,9 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions, handles *hand
 
 	var btfDisabled bool
 	if spec.BTF != nil {
-		if relos, err := btf.ProgramRelocations(spec.BTF, targetBTF); err != nil {
+		if fixups, err := btf.ProgramFixups(spec.BTF, targetBTF); err != nil {
 			return nil, fmt.Errorf("CO-RE relocations: %w", err)
-		} else if len(relos) > 0 {
+		} else if len(fixups) > 0 {
 			return nil, fmt.Errorf("applying CO-RE relocations: %w", ErrNotSupported)
 		}
 

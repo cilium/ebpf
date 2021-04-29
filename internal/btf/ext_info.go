@@ -208,14 +208,14 @@ type bpfCoreRelo struct {
 	InsnOff      uint32
 	TypeID       TypeID
 	AccessStrOff uint32
-	Kind         coreReloKind
+	Kind         COREKind
 }
 
 type coreRelo struct {
 	insnOff  uint32
 	typeID   TypeID
 	accessor coreAccessor
-	kind     coreReloKind
+	kind     COREKind
 }
 
 type coreRelos []coreRelo

@@ -91,6 +91,10 @@ func (f COREFixup) apply(ins *asm.Instruction) error {
 	return nil
 }
 
+func (f COREFixup) isNonExistant() bool {
+	return f.Kind.checksForExistence() && f.Target == 0
+}
+
 type COREFixups map[uint64]COREFixup
 
 // Apply a set of CO-RE relocations to a BPF program.
@@ -181,6 +185,10 @@ func (k COREKind) String() string {
 	default:
 		return "unknown"
 	}
+}
+
+func (k COREKind) checksForExistence() bool {
+	return k == reloEnumvalExists || k == reloTypeExists || k == reloFieldExists
 }
 
 func coreRelocate(local, target *Spec, relos coreRelos) (COREFixups, error) {
@@ -277,7 +285,7 @@ func coreCalculateFixups(local Type, targets []namedType, relos coreRelos) ([]CO
 			if err != nil {
 				return nil, fmt.Errorf("target %s: %w", target, err)
 			}
-			if fixup.Poison {
+			if fixup.Poison || fixup.isNonExistant() {
 				score++
 			}
 			fixups = append(fixups, fixup)
@@ -323,6 +331,9 @@ func coreCalculateFixup(local Type, localID TypeID, target Type, targetID TypeID
 		return COREFixup{relo.kind, local, target, false}, nil
 	}
 	poison := func() (COREFixup, error) {
+		if relo.kind.checksForExistence() {
+			return fixup(1, 0)
+		}
 		return COREFixup{relo.kind, 0, 0, true}, nil
 	}
 	zero := COREFixup{}
@@ -343,9 +354,25 @@ func coreCalculateFixup(local Type, localID TypeID, target Type, targetID TypeID
 
 		return fixup(uint32(localID), uint32(targetID))
 
-	default:
-		return zero, fmt.Errorf("relocation %s: %w", relo.kind, ErrNotSupported)
+	case reloEnumvalValue, reloEnumvalExists:
+		localValue, targetValue, err := coreFindEnumValue(local, relo.accessor, target)
+		if errors.Is(err, errImpossibleRelocation) {
+			return poison()
+		}
+		if err != nil {
+			return zero, fmt.Errorf("relocation %s: %w", relo.kind, err)
+		}
+
+		switch relo.kind {
+		case reloEnumvalExists:
+			return fixup(1, 1)
+
+		case reloEnumvalValue:
+			return fixup(uint32(localValue.Value), uint32(targetValue.Value))
+		}
 	}
+
+	return zero, fmt.Errorf("relocation %s: %w", relo.kind, ErrNotSupported)
 }
 
 /* coreAccessor contains a path through a struct. It contains at least one index.
@@ -396,6 +423,56 @@ func parseCoreAccessor(accessor string) (coreAccessor, error) {
 	}
 
 	return result, nil
+}
+
+func (ca coreAccessor) String() string {
+	strs := make([]string, 0, len(ca))
+	for _, i := range ca {
+		strs = append(strs, strconv.Itoa(i))
+	}
+	return strings.Join(strs, ":")
+}
+
+func (ca coreAccessor) enumValue(t Type) (*EnumValue, error) {
+	e, ok := t.(*Enum)
+	if !ok {
+		return nil, fmt.Errorf("not an enum: %s", t)
+	}
+
+	if len(ca) > 1 {
+		return nil, fmt.Errorf("invalid accessor %s for enum", ca)
+	}
+
+	i := ca[0]
+	if i >= len(e.Values) {
+		return nil, fmt.Errorf("invalid index %d for %s", i, e)
+	}
+
+	return &e.Values[i], nil
+}
+
+// coreFindEnumValue follows localAcc to find the equivalent enum value in target.
+func coreFindEnumValue(local Type, localAcc coreAccessor, target Type) (localValue, targetValue *EnumValue, _ error) {
+	localValue, err := localAcc.enumValue(local)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	targetEnum, ok := target.(*Enum)
+	if !ok {
+		return nil, nil, errImpossibleRelocation
+	}
+
+	localName := localValue.Name.essentialName()
+	for i, targetValue := range targetEnum.Values {
+		if targetValue.Name.essentialName() != localName {
+			continue
+		}
+
+		return localValue, &targetEnum.Values[i], nil
+	}
+
+	return nil, nil, errImpossibleRelocation
 }
 
 /* The comment below is from bpf_core_types_are_compat in libbpf.c:

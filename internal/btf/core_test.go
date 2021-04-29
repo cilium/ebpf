@@ -194,7 +194,7 @@ func TestCoreRelocation(t *testing.T) {
 					t.Fatal("Retrieve program:", err)
 				}
 
-				relos, err := ProgramRelocations(prog, spec)
+				relos, err := ProgramFixups(prog, spec)
 				testutils.SkipIfNotSupported(t, err)
 				if want := errs[name]; want != nil {
 					if !errors.Is(err, want) {
@@ -207,11 +207,11 @@ func TestCoreRelocation(t *testing.T) {
 					t.Fatal("Can't relocate against itself:", err)
 				}
 
-				for i, relo := range relos {
-					if relo.Current != relo.New {
+				for offset, relo := range relos {
+					if relo.Local != relo.Target {
 						// Since we're relocating against ourselves both values
 						// should match.
-						t.Errorf("#%d: current %v doesn't match new %d", i, relo.Current, relo.New)
+						t.Errorf("offset %d: local %v doesn't match target %d", offset, relo.Local, relo.Target)
 					}
 				}
 			})

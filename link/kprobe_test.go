@@ -1,6 +1,7 @@
 package link
 
 import (
+	"encoding/binary"
 	"errors"
 	"os"
 	"testing"
@@ -9,7 +10,9 @@ import (
 
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/asm"
+	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/testutils"
+	"github.com/cilium/ebpf/internal/unix"
 )
 
 var (
@@ -282,4 +285,102 @@ func TestDetermineRetprobeBit(t *testing.T) {
 	rpu, err := uretprobeBit()
 	c.Assert(err, qt.IsNil)
 	c.Assert(rpu, qt.Equals, uint64(0))
+}
+
+func TestKprobeProgramCall(t *testing.T) {
+	var (
+		// Map key
+		key uint32
+		// Map value
+		val uint32
+	)
+
+	// Create ebpf map. Will contain only one key with initial value 0.
+	m, err := ebpf.NewMap(&ebpf.MapSpec{
+		Name:       "kprobetestmap",
+		Type:       ebpf.Array,
+		KeySize:    4,
+		ValueSize:  4,
+		MaxEntries: 1,
+		Contents: []ebpf.MapKV{
+			{Key: key, Value: val},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Create ebpf program. When called, will set the value of key 0 in
+	// the map created above to 1.
+	p, err := ebpf.NewProgram(&ebpf.ProgramSpec{
+		Name: "kprobetestprog",
+		Type: ebpf.Kprobe,
+		Instructions: asm.Instructions{
+			// u32 key = 0
+			asm.Mov.Imm(asm.R1, 0),
+			asm.StoreMem(asm.RFP, -4, asm.R1, asm.Word),
+
+			// u32 val = 1
+			asm.Mov.Imm(asm.R1, 1),
+			asm.StoreMem(asm.RFP, -8, asm.R1, asm.Word),
+
+			// bpf_map_update_elem(...)
+			asm.Mov.Reg(asm.R2, asm.RFP),
+			asm.Add.Imm(asm.R2, -4),
+			asm.Mov.Reg(asm.R3, asm.RFP),
+			asm.Add.Imm(asm.R3, -8),
+			asm.LoadMapPtr(asm.R1, m.FD()),
+			asm.Mov.Imm(asm.R4, 0),
+			asm.FnMapUpdateElem.Call(),
+
+			// exit 0
+			asm.Mov.Imm(asm.R0, 0),
+			asm.Return(),
+		},
+		License:   "Dual MIT/GPL",
+		ByteOrder: binary.LittleEndian,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Assert that the value is 0 as set earlier.
+	if err := m.Lookup(key, &val); err != nil {
+		t.Fatal(err)
+	}
+	if val != 0 {
+		t.Fatalf("unexpected value: want %d, got %d", 0, val)
+	}
+
+	// Use the correct symbol based on the kernel version.
+	// Since 4.17, syscalls symbols are generated with the `__x64_` prefix.
+	// https://github.com/torvalds/linux/commit/d5a00528b58cdb2c71206e18bd021e34c4eab878
+	v, err := internal.NewVersion("4.17")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ksym := "__x64_sys_getpid"
+	if testutils.MustKernelVersion().Less(v) {
+		ksym = "sys_getpid"
+	}
+
+	// Open Kprobe on `ksym` and attach it
+	// to the ebpf program created above.
+	k, err := Kprobe(ksym, p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer k.Close()
+
+	// Trigger ebpf program call.
+	unix.Getpid()
+
+	// Assert that the value has been updated to 1.
+	if err := m.Lookup(key, &val); err != nil {
+		t.Fatal(err)
+	}
+	if val != 1 {
+		t.Fatalf("unexpected value: want %d, got %d", 1, val)
+	}
 }

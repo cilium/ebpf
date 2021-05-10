@@ -19,6 +19,11 @@ import (
 )
 
 func TestLoadCollectionSpec(t *testing.T) {
+	cpus, err := internal.PossibleCPUs()
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	coll := &CollectionSpec{
 		Maps: map[string]*MapSpec{
 			"hash_map": {
@@ -41,6 +46,13 @@ func TestLoadCollectionSpec(t *testing.T) {
 				Type:       ArrayOfMaps,
 				KeySize:    4,
 				MaxEntries: 2,
+			},
+			"perf_event_array": {
+				Name:       "perf_event_array",
+				Type:       PerfEventArray,
+				KeySize:    4,
+				ValueSize:  4,
+				MaxEntries: uint32(cpus),
 			},
 			// Maps prefixed by btf_ are ignored when testing ELFs
 			// that don't have BTF info embedded. (clang<9)

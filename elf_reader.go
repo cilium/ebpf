@@ -491,33 +491,38 @@ func (ec *elfCode) loadMaps(maps map[string]*MapSpec) error {
 				return fmt.Errorf("section %s: missing symbol for map at offset %d", sec.Name, offset)
 			}
 
-			if maps[mapSym.Name] != nil {
+			mapName := mapSym.Name
+			if maps[mapName] != nil {
 				return fmt.Errorf("section %v: map %v already exists", sec.Name, mapSym)
 			}
 
 			lr := io.LimitReader(r, int64(size))
 
 			spec := MapSpec{
-				Name: SanitizeName(mapSym.Name, -1),
+				Name: SanitizeName(mapName, -1),
 			}
 			switch {
 			case binary.Read(lr, ec.ByteOrder, &spec.Type) != nil:
-				return fmt.Errorf("map %v: missing type", mapSym)
+				return fmt.Errorf("map %s: missing type", mapName)
 			case binary.Read(lr, ec.ByteOrder, &spec.KeySize) != nil:
-				return fmt.Errorf("map %v: missing key size", mapSym)
+				return fmt.Errorf("map %s: missing key size", mapName)
 			case binary.Read(lr, ec.ByteOrder, &spec.ValueSize) != nil:
-				return fmt.Errorf("map %v: missing value size", mapSym)
+				return fmt.Errorf("map %s: missing value size", mapName)
 			case binary.Read(lr, ec.ByteOrder, &spec.MaxEntries) != nil:
-				return fmt.Errorf("map %v: missing max entries", mapSym)
+				return fmt.Errorf("map %s: missing max entries", mapName)
 			case binary.Read(lr, ec.ByteOrder, &spec.Flags) != nil:
-				return fmt.Errorf("map %v: missing flags", mapSym)
+				return fmt.Errorf("map %s: missing flags", mapName)
 			}
 
 			if _, err := io.Copy(internal.DiscardZeroes{}, lr); err != nil {
-				return fmt.Errorf("map %v: unknown and non-zero fields in definition", mapSym)
+				return fmt.Errorf("map %s: unknown and non-zero fields in definition", mapName)
 			}
 
-			maps[mapSym.Name] = &spec
+			if err := spec.clampPerfEventArraySize(); err != nil {
+				return fmt.Errorf("map %s: %w", mapName, err)
+			}
+
+			maps[mapName] = &spec
 		}
 	}
 
@@ -562,6 +567,10 @@ func (ec *elfCode) loadBTFMaps(maps map[string]*MapSpec) error {
 
 			mapSpec, err := mapSpecFromBTF(name, mapStruct, false, ec.btf)
 			if err != nil {
+				return fmt.Errorf("map %v: %w", name, err)
+			}
+
+			if err := mapSpec.clampPerfEventArraySize(); err != nil {
 				return fmt.Errorf("map %v: %w", name, err)
 			}
 

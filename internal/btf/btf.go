@@ -35,7 +35,7 @@ type Spec struct {
 	namedTypes map[string][]namedType
 	funcInfos  map[string]extInfo
 	lineInfos  map[string]extInfo
-	coreRelos  map[string]bpfCoreRelos
+	coreRelos  map[string]coreRelos
 	byteOrder  binary.ByteOrder
 }
 
@@ -438,13 +438,13 @@ func (s *Spec) Program(name string, length uint64) (*Program, error) {
 
 	funcInfos, funcOK := s.funcInfos[name]
 	lineInfos, lineOK := s.lineInfos[name]
-	coreRelos, coreOK := s.coreRelos[name]
+	relos, coreOK := s.coreRelos[name]
 
 	if !funcOK && !lineOK && !coreOK {
 		return nil, fmt.Errorf("no extended BTF info for section %s", name)
 	}
 
-	return &Program{s, length, funcInfos, lineInfos, coreRelos}, nil
+	return &Program{s, length, funcInfos, lineInfos, relos}, nil
 }
 
 // Datasec returns the BTF required to create maps which represent data sections.
@@ -607,7 +607,7 @@ type Program struct {
 	spec                 *Spec
 	length               uint64
 	funcInfos, lineInfos extInfo
-	coreRelos            bpfCoreRelos
+	coreRelos            coreRelos
 }
 
 // ProgramSpec returns the Spec needed for loading function and line infos into the kernel.

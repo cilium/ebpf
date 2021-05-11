@@ -178,8 +178,7 @@ func (s *Struct) walk(tdq *typeDeque) {
 
 func (s *Struct) copy() Type {
 	cpy := *s
-	cpy.Members = make([]Member, len(s.Members))
-	copy(cpy.Members, s.Members)
+	cpy.Members = copyMembers(s.Members)
 	return &cpy
 }
 
@@ -210,13 +209,18 @@ func (u *Union) walk(tdq *typeDeque) {
 
 func (u *Union) copy() Type {
 	cpy := *u
-	cpy.Members = make([]Member, len(u.Members))
-	copy(cpy.Members, u.Members)
+	cpy.Members = copyMembers(u.Members)
 	return &cpy
 }
 
 func (u *Union) members() []Member {
 	return u.Members
+}
+
+func copyMembers(orig []Member) []Member {
+	cpy := make([]Member, len(orig))
+	copy(cpy, orig)
+	return cpy
 }
 
 type composite interface {
@@ -536,7 +540,7 @@ func Sizeof(typ Type) (int, error) {
 			continue
 
 		default:
-			return 0, fmt.Errorf("unrecognized type %T", typ)
+			return 0, fmt.Errorf("unsized type %T", typ)
 		}
 
 		if n > 0 && elem > math.MaxInt64/n {

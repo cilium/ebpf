@@ -288,7 +288,6 @@ func TestDetermineRetprobeBit(t *testing.T) {
 func TestKprobeProgramCall(t *testing.T) {
 	// Create ebpf map. Will contain only one key with initial value 0.
 	m, err := ebpf.NewMap(&ebpf.MapSpec{
-		Name:       "kprobetestmap",
 		Type:       ebpf.Array,
 		KeySize:    4,
 		ValueSize:  4,
@@ -300,36 +299,7 @@ func TestKprobeProgramCall(t *testing.T) {
 
 	// Create ebpf program. When called, will set the value of key 0 in
 	// the map created above to 1.
-	p, err := ebpf.NewProgram(&ebpf.ProgramSpec{
-		Name: "kprobetestprog",
-		Type: ebpf.Kprobe,
-		Instructions: asm.Instructions{
-			// u32 key = 0
-			asm.Mov.Imm(asm.R1, 0),
-			asm.StoreMem(asm.RFP, -4, asm.R1, asm.Word),
-
-			// u32 val = 1
-			asm.Mov.Imm(asm.R1, 1),
-			asm.StoreMem(asm.RFP, -8, asm.R1, asm.Word),
-
-			// bpf_map_update_elem(...)
-			asm.Mov.Reg(asm.R2, asm.RFP),
-			asm.Add.Imm(asm.R2, -4),
-			asm.Mov.Reg(asm.R3, asm.RFP),
-			asm.Add.Imm(asm.R3, -8),
-			asm.LoadMapPtr(asm.R1, m.FD()),
-			asm.Mov.Imm(asm.R4, 0),
-			asm.FnMapUpdateElem.Call(),
-
-			// exit 0
-			asm.Mov.Imm(asm.R0, 0),
-			asm.Return(),
-		},
-		License: "Dual MIT/GPL",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
+	p := newMapUpdaterProg(t, m, ebpf.Kprobe)
 
 	// Open Kprobe on `__x64_sys_getpid` and attach it
 	// to the ebpf program created above.
@@ -357,6 +327,39 @@ func TestKprobeProgramCall(t *testing.T) {
 		t.Fatal(err)
 	}
 	if val != 1 {
-		t.Fatalf("unexpected value: want '1', got %d", val)
+		t.Fatalf("unexpected value: want '1', got '%d'", val)
 	}
+}
+
+func newMapUpdaterProg(t *testing.T, m *ebpf.Map, typ ebpf.ProgramType) *ebpf.Program {
+	p, err := ebpf.NewProgram(&ebpf.ProgramSpec{
+		Type: typ,
+		Instructions: asm.Instructions{
+			// u32 key = 0
+			asm.Mov.Imm(asm.R1, 0),
+			asm.StoreMem(asm.RFP, -4, asm.R1, asm.Word),
+
+			// u32 val = 1
+			asm.Mov.Imm(asm.R1, 1),
+			asm.StoreMem(asm.RFP, -8, asm.R1, asm.Word),
+
+			// bpf_map_update_elem(...)
+			asm.Mov.Reg(asm.R2, asm.RFP),
+			asm.Add.Imm(asm.R2, -4),
+			asm.Mov.Reg(asm.R3, asm.RFP),
+			asm.Add.Imm(asm.R3, -8),
+			asm.LoadMapPtr(asm.R1, m.FD()),
+			asm.Mov.Imm(asm.R4, 0),
+			asm.FnMapUpdateElem.Call(),
+
+			// exit 0
+			asm.Mov.Imm(asm.R0, 0),
+			asm.Return(),
+		},
+		License: "Dual MIT/GPL",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return p
 }

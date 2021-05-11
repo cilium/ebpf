@@ -286,9 +286,50 @@ func TestDetermineRetprobeBit(t *testing.T) {
 }
 
 func TestKprobeProgramCall(t *testing.T) {
+	m, p := newUpdaterMapProg(t, ebpf.Kprobe)
+
+	// Open Kprobe on `__x64_sys_getpid` and attach it
+	// to the ebpf program created above.
+	k, err := Kprobe("__x64_sys_getpid", p)
+	if errors.Is(err, os.ErrNotExist) {
+		// Use the correct symbol based on the kernel version.
+		// Since 4.17, syscalls symbols are generated with the `__x64_` prefix.
+		// https://github.com/torvalds/linux/commit/d5a00528b58cdb2c71206e18bd021e34c4eab878
+		k, err = Kprobe("sys_getpid", p)
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Trigger ebpf program call.
+	unix.Getpid()
+
+	// Assert that the value at index 0 has been updated to 1.
+	assertMapValue(t, m, 0, 1)
+
+	// Detach the Kprobe.
+	if err := k.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	// Reset map value to 0 at index 0.
+	if err := m.Update(uint32(0), uint32(0), ebpf.UpdateExist); err != nil {
+		t.Fatal(err)
+	}
+
+	// Retrigger the ebpf program call.
+	unix.Getpid()
+
+	// Assert that this time the value has not been updated.
+	assertMapValue(t, m, 0, 0)
+}
+
+func newUpdaterMapProg(t *testing.T, typ ebpf.ProgramType) (*ebpf.Map, *ebpf.Program) {
 	// Create ebpf map. Will contain only one key with initial value 0.
 	m, err := ebpf.NewMap(&ebpf.MapSpec{
-		Name:       "kprobetestmap",
 		Type:       ebpf.Array,
 		KeySize:    4,
 		ValueSize:  4,
@@ -301,8 +342,7 @@ func TestKprobeProgramCall(t *testing.T) {
 	// Create ebpf program. When called, will set the value of key 0 in
 	// the map created above to 1.
 	p, err := ebpf.NewProgram(&ebpf.ProgramSpec{
-		Name: "kprobetestprog",
-		Type: ebpf.Kprobe,
+		Type: typ,
 		Instructions: asm.Instructions{
 			// u32 key = 0
 			asm.Mov.Imm(asm.R1, 0),
@@ -331,32 +371,21 @@ func TestKprobeProgramCall(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Open Kprobe on `__x64_sys_getpid` and attach it
-	// to the ebpf program created above.
-	k, err := Kprobe("__x64_sys_getpid", p)
-	if errors.Is(err, os.ErrNotExist) {
-		// Use the correct symbol based on the kernel version.
-		// Since 4.17, syscalls symbols are generated with the `__x64_` prefix.
-		// https://github.com/torvalds/linux/commit/d5a00528b58cdb2c71206e18bd021e34c4eab878
-		k, err = Kprobe("sys_getpid", p)
-		if err != nil {
-			t.Fatal(err)
-		}
-	}
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer k.Close()
+	// Close the program and map on test teardown.
+	t.Cleanup(func() {
+		m.Close()
+		p.Close()
+	})
 
-	// Trigger ebpf program call.
-	unix.Getpid()
+	return m, p
+}
 
-	// Assert that the value has been updated to 1.
+func assertMapValue(t *testing.T, m *ebpf.Map, k, v uint32) {
 	var val uint32
-	if err := m.Lookup(uint32(0), &val); err != nil {
+	if err := m.Lookup(k, &val); err != nil {
 		t.Fatal(err)
 	}
-	if val != 1 {
-		t.Fatalf("unexpected value: want '1', got %d", val)
+	if val != v {
+		t.Fatalf("unexpected value: want '%d', got '%d'", v, val)
 	}
 }

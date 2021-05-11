@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"testing"
 
 	qt "github.com/frankban/quicktest"
@@ -247,4 +248,48 @@ func TestUprobePathOffset(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestUprobeProgramCall(t *testing.T) {
+	m, p := newUpdaterMapProg(t, ebpf.Kprobe)
+
+	// Load the '/bin/sh' executable.
+	ex, err := OpenExecutable("/bin/sh")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Open Uprobe on '/bin/sh' for the symbol 'main'
+	// and attach it to the ebpf program created above.
+	u, err := ex.Uprobe("main", p)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Trigger ebpf program call.
+	trigger := func(t *testing.T) {
+		if err := exec.Command("/bin/sh", "--help").Run(); err != nil {
+			t.Fatal(err)
+		}
+	}
+	trigger(t)
+
+	// Assert that the value at index 0 has been updated to 1.
+	assertMapValue(t, m, 0, 1)
+
+	// Detach the Uprobe.
+	if err := u.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	// Reset map value to 0 at index 0.
+	if err := m.Update(uint32(0), uint32(0), ebpf.UpdateExist); err != nil {
+		t.Fatal(err)
+	}
+
+	// Retrigger the ebpf program call.
+	trigger(t)
+
+	// Assert that this time the value has not been updated.
+	assertMapValue(t, m, 0, 0)
 }

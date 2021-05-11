@@ -225,6 +225,263 @@ func TestCoreFindEnumValue(t *testing.T) {
 	}
 }
 
+func TestCoreFindField(t *testing.T) {
+	ptr := &Pointer{}
+	u16 := &Int{Size: 2}
+	u32 := &Int{Size: 4}
+	aFields := []Member{
+		{Name: "foo", Type: ptr, Offset: 1},
+		{Name: "bar", Type: u16, Offset: 2},
+	}
+	bFields := []Member{
+		{Name: "foo", Type: ptr, Offset: 10},
+		{Name: "bar", Type: u32, Offset: 20},
+		{Name: "other", Offset: 4},
+	}
+	aStruct := &Struct{Members: aFields, Size: 2}
+	bStruct := &Struct{Members: bFields, Size: 7}
+	aArray := &Array{Nelems: 4, Type: u16}
+	bArray := &Array{Nelems: 3, Type: u32}
+
+	invalid := []struct {
+		name          string
+		local, target Type
+		acc           coreAccessor
+		err           error
+	}{
+		{
+			"unsupported type",
+			&Void{}, &Void{},
+			coreAccessor{0, 0},
+			ErrNotSupported,
+		},
+		{
+			"different types",
+			&Union{}, &Array{Type: u16},
+			coreAccessor{0},
+			errImpossibleRelocation,
+		},
+		{
+			"invalid composite accessor",
+			aStruct, aStruct,
+			coreAccessor{0, len(aStruct.Members)},
+			nil,
+		},
+		{
+			"invalid array accessor",
+			aArray, aArray,
+			coreAccessor{0, int(aArray.Nelems)},
+			nil,
+		},
+		{
+			"o-o-b array accessor",
+			aArray, bArray,
+			coreAccessor{0, int(bArray.Nelems)},
+			errImpossibleRelocation,
+		},
+		{
+			"no match",
+			bStruct, aStruct,
+			coreAccessor{0, 2},
+			errImpossibleRelocation,
+		},
+		{
+			"incompatible match",
+			&Union{Members: []Member{{Name: "foo", Type: &Pointer{}}}},
+			&Union{Members: []Member{{Name: "foo", Type: &Int{}}}},
+			coreAccessor{0, 0},
+			errImpossibleRelocation,
+		},
+	}
+
+	for _, test := range invalid {
+		t.Run(test.name, func(t *testing.T) {
+			_, _, err := coreFindField(test.local, test.acc, test.target)
+			if test.err != nil && !errors.Is(err, test.err) {
+				t.Fatalf("Expected %s, got %s", test.err, err)
+			}
+			if err == nil {
+				t.Fatal("Accepted invalid case")
+			}
+			t.Log(err)
+		})
+	}
+
+	bits := func(typ Type) uint32 {
+		sz, err := Sizeof(typ)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return uint32(sz * 8)
+	}
+
+	anon := func(t Type, offset uint32) []Member {
+		return []Member{{Type: t, Offset: offset}}
+	}
+
+	anonStruct := func(m ...Member) Member {
+		return Member{Type: &Struct{Members: m}}
+	}
+
+	anonUnion := func(m ...Member) Member {
+		return Member{Type: &Union{Members: m}}
+	}
+
+	valid := []struct {
+		name                    string
+		local                   Type
+		target                  Type
+		acc                     coreAccessor
+		localField, targetField coreField
+	}{
+		{
+			"array[0]",
+			aArray,
+			bArray,
+			coreAccessor{0, 0},
+			coreField{u16, 0},
+			coreField{u32, 0},
+		},
+		{
+			"array[1]",
+			aArray,
+			bArray,
+			coreAccessor{0, 1},
+			coreField{u16, bits(aArray.Type)},
+			coreField{u32, bits(bArray.Type)},
+		},
+		{
+			"array[0] with base offset",
+			aArray,
+			bArray,
+			coreAccessor{1, 0},
+			coreField{u16, bits(aArray)},
+			coreField{u32, bits(bArray)},
+		},
+		{
+			"array[2] with base offset",
+			aArray,
+			bArray,
+			coreAccessor{1, 2},
+			coreField{u16, bits(aArray) + 2*bits(aArray.Type)},
+			coreField{u32, bits(bArray) + 2*bits(bArray.Type)},
+		},
+		{
+			"flex array",
+			&Struct{Members: []Member{{Name: "foo", Type: &Array{Nelems: 0, Type: u16}}}},
+			&Struct{Members: []Member{{Name: "foo", Type: &Array{Nelems: 0, Type: u32}}}},
+			coreAccessor{0, 0, 9000},
+			coreField{u16, bits(u16) * 9000},
+			coreField{u32, bits(u32) * 9000},
+		},
+		{
+			"struct.0",
+			aStruct, bStruct,
+			coreAccessor{0, 0},
+			coreField{ptr, 1},
+			coreField{ptr, 10},
+		},
+		{
+			"struct.0 anon",
+			aStruct, &Struct{Members: anon(bStruct, 23)},
+			coreAccessor{0, 0},
+			coreField{ptr, 1},
+			coreField{ptr, 23 + 10},
+		},
+		{
+			"struct.0 with base offset",
+			aStruct, bStruct,
+			coreAccessor{3, 0},
+			coreField{ptr, 3*bits(aStruct) + 1},
+			coreField{ptr, 3*bits(bStruct) + 10},
+		},
+		{
+			"struct.1",
+			aStruct, bStruct,
+			coreAccessor{0, 1},
+			coreField{u16, 2},
+			coreField{u32, 20},
+		},
+		{
+			"struct.1 anon",
+			aStruct, &Struct{Members: anon(bStruct, 1)},
+			coreAccessor{0, 1},
+			coreField{u16, 2},
+			coreField{u32, 1 + 20},
+		},
+		{
+			"union.1",
+			&Union{Members: aFields, Size: 32},
+			&Union{Members: bFields, Size: 32},
+			coreAccessor{0, 1},
+			coreField{u16, 2},
+			coreField{u32, 20},
+		},
+		{
+			"interchangeable composites",
+			&Struct{
+				Members: []Member{
+					anonStruct(anonUnion(Member{Name: "_1", Type: u16})),
+				},
+			},
+			&Struct{
+				Members: []Member{
+					anonUnion(anonStruct(Member{Name: "_1", Type: u16})),
+				},
+			},
+			coreAccessor{0, 0, 0, 0},
+			coreField{u16, 0},
+			coreField{u16, 0},
+		},
+	}
+
+	checkCoreField := func(t *testing.T, got, want coreField) {
+		t.Helper()
+		qt.Check(t, got.Type, qt.Equals, want.Type, qt.Commentf("type should match"))
+		qt.Check(t, got.offset, qt.Equals, want.offset, qt.Commentf("offset should match"))
+	}
+
+	for _, test := range valid {
+		t.Run(test.name, func(t *testing.T) {
+			localField, targetField, err := coreFindField(test.local, test.acc, test.target)
+			qt.Assert(t, err, qt.IsNil)
+			checkCoreField(t, localField, test.localField)
+			checkCoreField(t, targetField, test.targetField)
+		})
+	}
+}
+
+func TestCoreFindFieldCyclical(t *testing.T) {
+	members := []Member{{Name: "foo", Type: &Pointer{}}}
+
+	cyclicStruct := &Struct{}
+	cyclicStruct.Members = []Member{{Type: cyclicStruct}}
+
+	cyclicUnion := &Union{}
+	cyclicUnion.Members = []Member{{Type: cyclicUnion}}
+
+	cyclicArray := &Array{Nelems: 1}
+	cyclicArray.Type = &Pointer{Target: cyclicArray}
+
+	tests := []struct {
+		name          string
+		local, cyclic Type
+	}{
+		{"struct", &Struct{Members: members}, cyclicStruct},
+		{"union", &Union{Members: members}, cyclicUnion},
+		{"array", &Array{Nelems: 2, Type: &Int{}}, cyclicArray},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			_, _, err := coreFindField(test.local, coreAccessor{0, 0}, test.cyclic)
+			if !errors.Is(err, errImpossibleRelocation) {
+				t.Fatal("Should return errImpossibleRelocation, got", err)
+			}
+		})
+	}
+}
+
 func TestCoreRelocation(t *testing.T) {
 	testutils.Files(t, testutils.Glob(t, "testdata/*.elf"), func(t *testing.T, file string) {
 		rd, err := os.Open(file)
@@ -234,7 +491,6 @@ func TestCoreRelocation(t *testing.T) {
 		defer rd.Close()
 
 		spec, err := LoadSpecFromReader(rd)
-		testutils.SkipIfNotSupported(t, err)
 		if err != nil {
 			t.Fatal(err)
 		}

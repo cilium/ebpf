@@ -369,6 +369,15 @@ func TestLibBPFCompat(t *testing.T) {
 					"btf__core_reloc_existence___err_wrong_struct_type.o":
 					// These tests are buggy upstream, see https://lore.kernel.org/bpf/20210420111639.155580-1-lmb@cloudflare.com/
 					valid = true
+				case "btf__core_reloc_ints___err_wrong_sz_16.o",
+					"btf__core_reloc_ints___err_wrong_sz_32.o",
+					"btf__core_reloc_ints___err_wrong_sz_64.o",
+					"btf__core_reloc_ints___err_wrong_sz_8.o",
+					"btf__core_reloc_arrays___err_wrong_val_type1.o",
+					"btf__core_reloc_arrays___err_wrong_val_type2.o":
+					// These tests are valid according to current libbpf behaviour,
+					// see commit 42765ede5c54ca915de5bfeab83be97207e46f68.
+					valid = true
 				case "btf__core_reloc_type_id___missing_targets.o",
 					"btf__core_reloc_flavors__err_wrong_name.o":
 					valid = false

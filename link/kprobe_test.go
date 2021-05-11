@@ -352,7 +352,7 @@ func TestKprobeProgramCall(t *testing.T) {
 	unix.Getpid()
 
 	// Assert that the value has been updated to 1.
-	var val uint32 = 1
+	var val uint32
 	if err := m.Lookup(uint32(0), &val); err != nil {
 		t.Fatal(err)
 	}

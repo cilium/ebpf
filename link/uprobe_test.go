@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"testing"
 
 	qt "github.com/frankban/quicktest"
@@ -246,5 +247,46 @@ func TestUprobePathOffset(t *testing.T) {
 				t.Errorf("Expected path:offset to be '%s', got '%s'", tt.expected, po)
 			}
 		})
+	}
+}
+
+func TestUprobeProgramCall(t *testing.T) {
+	// Create ebpf map. Will contain only one key with initial value 0.
+	m, err := ebpf.NewMap(&ebpf.MapSpec{
+		Type:       ebpf.Array,
+		KeySize:    4,
+		ValueSize:  4,
+		MaxEntries: 1,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Create ebpf program. When called, will set the value of key 0 in
+	// the map created above to 1.
+	p := newMapUpdaterProg(t, m, ebpf.Kprobe)
+
+	// Open Uprobe on '/bin/bash' for the symbol 'main'
+	// and attach it to the ebpf program created above.
+	u, err := bashEx.Uprobe(bashSym, p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func(l Link) {
+		if err := l.Close(); err != nil {
+			t.Fatal(err)
+		}
+	}(u)
+
+	// Trigger ebpf program call.
+	_ = exec.Command("/bin/bash", "42").Run()
+
+	// Assert that the value has been updated to 1.
+	var val uint32
+	if err := m.Lookup(uint32(0), &val); err != nil {
+		t.Fatal(err)
+	}
+	if val != 1 {
+		t.Fatalf("unexpected value: want '1', got '%d'", val)
 	}
 }

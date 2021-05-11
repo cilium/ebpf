@@ -70,31 +70,21 @@ func (k coreReloKind) String() string {
 	}
 }
 
-func coreRelocate(local, target *Spec, coreRelos bpfCoreRelos) (map[uint64]Relocation, error) {
+func coreRelocate(local, target *Spec, relos coreRelos) (map[uint64]Relocation, error) {
 	if local.byteOrder != target.byteOrder {
 		return nil, fmt.Errorf("can't relocate %s against %s", local.byteOrder, target.byteOrder)
 	}
 
-	relocations := make(map[uint64]Relocation, len(coreRelos))
-	for _, relo := range coreRelos {
-		accessorStr, err := local.strings.Lookup(relo.AccessStrOff)
-		if err != nil {
-			return nil, err
+	relocations := make(map[uint64]Relocation, len(relos))
+	for _, relo := range relos {
+		if int(relo.typeID) >= len(local.types) {
+			return nil, fmt.Errorf("invalid type id %d", relo.typeID)
 		}
 
-		accessor, err := parseCoreAccessor(accessorStr)
-		if err != nil {
-			return nil, fmt.Errorf("accessor %q: %s", accessorStr, err)
-		}
+		typ := local.types[relo.typeID]
 
-		if int(relo.TypeID) >= len(local.types) {
-			return nil, fmt.Errorf("invalid type id %d", relo.TypeID)
-		}
-
-		typ := local.types[relo.TypeID]
-
-		if relo.ReloKind == reloTypeIDLocal {
-			relocations[uint64(relo.InsnOff)] = Relocation{
+		if relo.kind == reloTypeIDLocal {
+			relocations[uint64(relo.insnOff)] = Relocation{
 				uint32(typ.ID()),
 				uint32(typ.ID()),
 			}
@@ -107,12 +97,12 @@ func coreRelocate(local, target *Spec, coreRelos bpfCoreRelos) (map[uint64]Reloc
 		}
 
 		name := essentialName(named.name())
-		res, err := coreCalculateRelocation(typ, target.namedTypes[name], relo.ReloKind, accessor)
+		res, err := coreCalculateRelocation(typ, target.namedTypes[name], relo.kind, relo.accessor)
 		if err != nil {
 			return nil, fmt.Errorf("relocate %s: %w", typ, err)
 		}
 
-		relocations[uint64(relo.InsnOff)] = res
+		relocations[uint64(relo.insnOff)] = res
 	}
 
 	return relocations, nil

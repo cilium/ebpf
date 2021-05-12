@@ -8,6 +8,7 @@ import (
 	"github.com/cilium/ebpf/asm"
 	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/testutils"
+	"github.com/cilium/ebpf/internal/unix"
 
 	qt "github.com/frankban/quicktest"
 )
@@ -74,4 +75,40 @@ func TestTraceGetEventID(t *testing.T) {
 	if !errors.Is(err, internal.ErrNotSupported) {
 		t.Fatal("Doesn't return ErrNotSupported")
 	}
+}
+
+func TestTracepointProgramCall(t *testing.T) {
+	// Kernels before 4.14 don't support attaching to syscall tracepoints.
+	testutils.SkipOnOldKernel(t, "4.14", "syscalls tracepoint support")
+
+	m, p := newUpdaterMapProg(t, ebpf.TracePoint)
+
+	// Open Tracepoint at /sys/kernel/debug/tracing/events/syscalls/sys_enter_getpid
+	// and attach it to the ebpf program created above.
+	tp, err := Tracepoint("syscalls", "sys_enter_getpid", p)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Trigger ebpf program call.
+	unix.Getpid()
+
+	// Assert that the value at index 0 has been updated to 1.
+	assertMapValue(t, m, 0, 1)
+
+	// Detach the Tracepoint.
+	if err := tp.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	// Reset map value to 0 at index 0.
+	if err := m.Update(uint32(0), uint32(0), ebpf.UpdateExist); err != nil {
+		t.Fatal(err)
+	}
+
+	// Retrigger the ebpf program call.
+	unix.Getpid()
+
+	// Assert that this time the value has not been updated.
+	assertMapValue(t, m, 0, 0)
 }

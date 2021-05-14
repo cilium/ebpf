@@ -1,4 +1,5 @@
 # Makefile to build and push the `cilium/ebpf` llvm builder Docker image.
+GOARCH := $(shell go env GOARCH)
 IMAGE := $(shell cat IMAGE)
 EPOCH := $(shell date +'%s')
 
@@ -9,7 +10,7 @@ endif
 .PHONY: build push
 
 build:
-	docker build --no-cache . -t "$(IMAGE):$(EPOCH)"
+	docker build -f Dockerfile.$(GOARCH) --no-cache . -t "$(IMAGE):$(EPOCH)"
 	echo $(EPOCH) > VERSION
 
 push:

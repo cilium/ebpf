@@ -65,7 +65,7 @@ func TestTracepointErrors(t *testing.T) {
 }
 
 func TestTraceGetEventID(t *testing.T) {
-	_, err := getTraceEventID("syscalls", "sys_enter_open")
+	_, err := getTraceEventID("syscalls", "sys_enter_openat")
 	if err != nil {
 		t.Fatal("Can't read trace event ID:", err)
 	}

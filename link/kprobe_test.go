@@ -331,9 +331,9 @@ func TestKprobeProgramCall(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Open Kprobe on `__x64_sys_getpid` and attach it
+	// Open Kprobe on the arch specific `_sys_getpid` and attach it
 	// to the ebpf program created above.
-	k, err := Kprobe("__x64_sys_getpid", p)
+	k, err := Kprobe(_sys_get_pid, p)
 	if errors.Is(err, os.ErrNotExist) {
 		// Use the correct symbol based on the kernel version.
 		// Since 4.17, syscalls symbols are generated with the `__x64_` prefix.

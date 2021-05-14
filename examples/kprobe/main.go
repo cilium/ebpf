@@ -22,10 +22,6 @@ import (
 const mapKey uint32 = 0
 
 func main() {
-
-	// Name of the kernel function to trace.
-	fn := "__x64_sys_execve"
-
 	// Subscribe to signals for terminating the program.
 	stopper := make(chan os.Signal, 1)
 	signal.Notify(stopper, os.Interrupt, syscall.SIGTERM)

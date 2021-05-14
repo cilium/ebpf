@@ -26,7 +26,7 @@ func TestTraceEventTypePMU(t *testing.T) {
 func TestTraceEventID(t *testing.T) {
 	c := qt.New(t)
 
-	eid, err := getTraceEventID("syscalls", "sys_enter_fork")
+	eid, err := getTraceEventID("syscalls", "sys_enter_execve")
 	c.Assert(err, qt.IsNil)
 	c.Assert(eid, qt.Not(qt.Equals), 0)
 }

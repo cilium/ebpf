@@ -1,0 +1,4 @@
+# golang backport from https://launchpad.net/~longsleep/+archive/ubuntu/golang-backports
+
+deb http://ppa.launchpad.net/longsleep/golang-backports/ubuntu focal main
+deb-src http://ppa.launchpad.net/longsleep/golang-backports/ubuntu focal main

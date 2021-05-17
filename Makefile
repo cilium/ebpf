@@ -1,14 +1,7 @@
 # The development version of clang is distributed as the 'clang' binary,
 # while stable/released versions have a version number attached.
 # Pin the default clang to a stable version.
-GOARCH := $(shell go env GOARCH)
-ifneq ($(GOARCH),arm64)
 CLANG ?= clang-12
-else
-# Ubuntu Focal used for the ARM64 builder container does not provide
-# clang-12 out of the box
-CLANG ?= clang-11
-endif
 CFLAGS := -target bpf -O2 -g -Wall -Werror $(CFLAGS)
 
 # Obtain an absolute path to the directory of the Makefile.

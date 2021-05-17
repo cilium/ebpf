@@ -58,6 +58,11 @@ struct {
 		__type(value, uint32_t);
 	});
 } btf_outer_map_anon __section(".maps");
+
+struct {
+	__uint(type, BPF_MAP_TYPE_PERF_EVENT_ARRAY);
+	__uint(max_entries, 4096);
+} perf_event_array __section(".maps");
 #else
 struct bpf_map_def hash_map __section("maps") = {
 	.type        = BPF_MAP_TYPE_HASH,
@@ -72,6 +77,11 @@ struct bpf_map_def hash_map2 __section("maps") = {
 	.key_size    = sizeof(uint32_t),
 	.value_size  = sizeof(uint64_t),
 	.max_entries = 2,
+};
+
+struct bpf_map_def perf_event_array __section("maps") = {
+	.type        = BPF_MAP_TYPE_PERF_EVENT_ARRAY,
+	.max_entries = 4096,
 };
 #endif
 

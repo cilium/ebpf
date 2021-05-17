@@ -88,6 +88,23 @@ func (ms *MapSpec) Copy() *MapSpec {
 	return &cpy
 }
 
+func (ms *MapSpec) clampPerfEventArraySize() error {
+	if ms.Type != PerfEventArray {
+		return nil
+	}
+
+	n, err := internal.PossibleCPUs()
+	if err != nil {
+		return fmt.Errorf("perf event array: %w", err)
+	}
+
+	if n := uint32(n); ms.MaxEntries > n {
+		ms.MaxEntries = n
+	}
+
+	return nil
+}
+
 // MapKV is used to initialize the contents of a Map.
 type MapKV struct {
 	Key   interface{}

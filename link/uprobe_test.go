@@ -49,13 +49,43 @@ func TestUprobe(t *testing.T) {
 	}
 	defer prog.Close()
 
-	up, err := bashEx.Uprobe(bashSym, prog)
+	up, err := bashEx.Uprobe(bashSym, prog, nil)
 	c.Assert(err, qt.IsNil)
 	defer up.Close()
 
 	testLink(t, up, testLinkOptions{
 		prog: prog,
 	})
+}
+
+func TestUprobeExtNotFound(t *testing.T) {
+	prog, err := ebpf.NewProgram(&kprobeSpec)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer prog.Close()
+
+	// This symbol will not be present in Executable (elf.SHN_UNDEF).
+	_, err = bashEx.Uprobe("open", prog, nil)
+	if err == nil {
+		t.Fatal("expected error")
+	}
+}
+
+func TestUprobeExtWithOpts(t *testing.T) {
+	prog, err := ebpf.NewProgram(&kprobeSpec)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer prog.Close()
+
+	// This Uprobe is broken and will not work because the offset is not
+	// correct. This is expected since the offset is provided by the user.
+	up, err := bashEx.Uprobe("open", prog, &UprobeOptions{Offset: 0x12345})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer up.Close()
 }
 
 func TestUretprobe(t *testing.T) {
@@ -67,7 +97,7 @@ func TestUretprobe(t *testing.T) {
 	}
 	defer prog.Close()
 
-	up, err := bashEx.Uretprobe(bashSym, prog)
+	up, err := bashEx.Uretprobe(bashSym, prog, nil)
 	c.Assert(err, qt.IsNil)
 	defer up.Close()
 
@@ -261,7 +291,7 @@ func TestUprobeProgramCall(t *testing.T) {
 
 	// Open Uprobe on '/bin/bash' for the symbol 'main'
 	// and attach it to the ebpf program created above.
-	u, err := ex.Uprobe("main", p)
+	u, err := ex.Uprobe("main", p, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

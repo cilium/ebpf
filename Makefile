@@ -31,7 +31,7 @@ TARGETS := \
 
 # Build all ELF binaries using a Dockerized LLVM toolchain.
 docker-all:
-	docker run --rm --user "${UIDGID}" \
+	docker run --platform linux/amd64 --rm --user "${UIDGID}" \
 		-v "${REPODIR}":/ebpf -w /ebpf --env MAKEFLAGS \
 		--env CFLAGS="-fdebug-prefix-map=/ebpf=." \
 		"${IMAGE}:${VERSION}" \
@@ -39,7 +39,7 @@ docker-all:
 
 # (debug) Drop the user into a shell inside the Docker container as root.
 docker-shell:
-	docker run --rm -ti \
+	docker run --platform linux/amd64 --rm -ti \
 		-v "${REPODIR}":/ebpf -w /ebpf \
 		"${IMAGE}:${VERSION}"
 

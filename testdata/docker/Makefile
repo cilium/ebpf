@@ -9,7 +9,7 @@ endif
 .PHONY: build push
 
 build:
-	docker build --no-cache . -t "$(IMAGE):$(EPOCH)"
+	docker build --platform linux/amd64 --no-cache . -t "$(IMAGE):$(EPOCH)"
 	echo $(EPOCH) > VERSION
 
 push:

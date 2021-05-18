@@ -330,6 +330,23 @@ func TestProgramVerifierOutput(t *testing.T) {
 	}
 }
 
+func TestProgramWithUnsatisfiedReference(t *testing.T) {
+	coll, err := LoadCollectionSpec("testdata/loader-el.elf")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// The program will have at least one map reference.
+	progSpec := coll.Programs["xdp_prog"]
+	progSpec.ByteOrder = nil
+
+	_, err = NewProgram(progSpec)
+	if !errors.Is(err, errUnsatisfiedReference) {
+		t.Fatal("Expected an error wrapping errUnsatisfiedReference, got", err)
+	}
+	t.Log(err)
+}
+
 func TestProgramName(t *testing.T) {
 	if err := haveObjName(); err != nil {
 		t.Skip(err)

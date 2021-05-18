@@ -1,5 +1,7 @@
 package asm
 
+import "math"
+
 //go:generate stringer -output load_store_string.go -type=Mode,Size
 
 // Mode for load and store operations
@@ -111,7 +113,7 @@ func LoadMapPtr(dst Register, fd int) Instruction {
 		OpCode:   LoadImmOp(DWord),
 		Dst:      dst,
 		Src:      PseudoMapFD,
-		Constant: int64(fd),
+		Constant: int64(uint32(fd) & math.MaxUint32),
 	}
 }
 

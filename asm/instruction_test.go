@@ -8,6 +8,8 @@ import (
 	"io/ioutil"
 	"math"
 	"testing"
+
+	qt "github.com/frankban/quicktest"
 )
 
 var test64bitImmProg = []byte{
@@ -60,29 +62,25 @@ func TestSignedJump(t *testing.T) {
 }
 
 func TestInstructionRewriteMapConstant(t *testing.T) {
-	ins := LoadMapPtr(R2, 0)
-	ins.Src = R2
+	ins := LoadMapValue(R0, 123, 321)
 
-	if err := ins.RewriteMapPtr(1); err != nil {
-		t.Fatal("Can't rewrite map pointer:", err)
-	}
-	if ins.mapPtr() != 1 {
-		t.Fatal("Expected map ptr to be 1, got", ins.Constant)
-	}
+	qt.Assert(t, ins.MapPtr(), qt.Equals, 123)
+	qt.Assert(t, ins.mapOffset(), qt.Equals, uint32(321))
 
-	if err := ins.RewriteMapOffset(123); err != nil {
-		t.Fatal("Can't rewrite map offset:", err)
-	}
-	if fd := ins.mapPtr(); fd != 1 {
-		t.Fatal("Expected map ptr to be 1 after changing the offset, got", fd)
-	}
+	qt.Assert(t, ins.RewriteMapPtr(-1), qt.IsNil)
+	qt.Assert(t, ins.MapPtr(), qt.Equals, -1)
 
-	if err := ins.RewriteMapPtr(2); err != nil {
-		t.Fatal("Can't rewrite map pointer:", err)
-	}
-	if off := ins.mapOffset(); off != 123 {
-		t.Fatal("Expected map offset to be 123 after changin the pointer, got", off)
-	}
+	qt.Assert(t, ins.RewriteMapPtr(1), qt.IsNil)
+	qt.Assert(t, ins.MapPtr(), qt.Equals, 1)
+
+	// mapOffset should be unchanged after rewriting the pointer.
+	qt.Assert(t, ins.mapOffset(), qt.Equals, uint32(321))
+
+	qt.Assert(t, ins.RewriteMapOffset(123), qt.IsNil)
+	qt.Assert(t, ins.mapOffset(), qt.Equals, uint32(123))
+
+	// MapPtr should be unchanged.
+	qt.Assert(t, ins.MapPtr(), qt.Equals, 1)
 
 	ins = Mov.Imm(R1, 32)
 	if err := ins.RewriteMapPtr(1); err == nil {
@@ -95,10 +93,10 @@ func TestInstructionRewriteMapConstant(t *testing.T) {
 
 func TestInstructionLoadMapValue(t *testing.T) {
 	ins := LoadMapValue(R0, 1, 123)
-	if !ins.isLoadFromMap() {
+	if !ins.IsLoadFromMap() {
 		t.Error("isLoadFromMap returns false")
 	}
-	if fd := ins.mapPtr(); fd != 1 {
+	if fd := ins.MapPtr(); fd != 1 {
 		t.Error("Expected map fd to be 1, got", fd)
 	}
 	if off := ins.mapOffset(); off != 123 {

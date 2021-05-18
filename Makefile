@@ -48,6 +48,8 @@ clean:
 	-$(RM) internal/btf/testdata/*.elf
 
 all: $(addsuffix -el.elf,$(TARGETS)) $(addsuffix -eb.elf,$(TARGETS))
+	ln -srf testdata/loader-$(CLANG)-el.elf testdata/loader-el.elf
+	ln -srf testdata/loader-$(CLANG)-eb.elf testdata/loader-eb.elf
 
 testdata/loader-%-el.elf: testdata/loader.c
 	$* $(CFLAGS) -mlittle-endian -c $< -o $@

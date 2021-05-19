@@ -67,9 +67,6 @@ func compile(args compileArgs) error {
 		"-g",
 	)
 	cmd.Dir = args.dir
-	cmd.Env = append(cmd.Env,
-		"BPF_CFLAGS='-D"+getTargetArch()+"'",
-	)
 
 	var depRd, depWr *os.File
 	if args.dep != nil {

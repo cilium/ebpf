@@ -89,6 +89,8 @@ func run(stdout io.Writer, pkg, outputDir string, args []string) (err error) {
 		}
 	}
 
+	cFlags = addTargetArchToCflags(cFlags)
+
 	if len(args) < 2 {
 		return errors.New("expected at least two arguments")
 	}

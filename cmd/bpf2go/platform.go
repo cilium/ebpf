@@ -1,13 +1,23 @@
 package main
 
-import "runtime"
+import (
+	"os"
+	"runtime"
+)
 
-func getTargetArch() string {
-	if runtime.GOOS != "linux" {
-		panic("Not supported platform " + runtime.GOOS)
+func goBuildArch() string {
+	value, found := os.LookupEnv("GOARCH")
+
+	if !found {
+		return runtime.GOARCH
 	}
 
-	switch runtime.GOARCH {
+	return value
+}
+
+// get the target arch as defined in linux/tools/lib/bpf/bpf_tracing.h
+func getTargetArch() string {
+	switch goBuildArch() {
 	case "386", "amd64":
 		return "__TARGET_ARCH_x86"
 	case "s390", "s390x":
@@ -21,6 +31,15 @@ func getTargetArch() string {
 	case "ppc64", "ppc64le":
 		return "__TARGET_ARCH_powerpc"
 	default:
-		panic("Not supported platform " + runtime.GOARCH)
+		return ""
 	}
+}
+
+func addTargetArchToCflags(cflags []string) []string {
+	targetArch := getTargetArch()
+	if targetArch != "" {
+		cflags = append([]string{"-D" + targetArch}, cflags...)
+	}
+
+	return cflags
 }

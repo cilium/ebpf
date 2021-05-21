@@ -130,6 +130,9 @@ func fixupJumpsAndCalls(insns asm.Instructions) error {
 			}
 
 			ins.Offset = int16(jumpOffset - offset - 1)
+
+		case ins.IsLoadFromMap() && ins.MapPtr() == -1:
+			return fmt.Errorf("map %s: %w", ins.Reference, errUnsatisfiedReference)
 		}
 	}
 

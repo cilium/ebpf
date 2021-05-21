@@ -20,6 +20,8 @@ import (
 // ErrNotSupported is returned whenever the kernel doesn't support a feature.
 var ErrNotSupported = internal.ErrNotSupported
 
+var errUnsatisfiedReference = errors.New("unsatisfied reference")
+
 // ProgramID represents the unique ID of an eBPF program.
 type ProgramID uint32
 
@@ -135,7 +137,11 @@ func NewProgramWithOptions(spec *ProgramSpec, opts ProgramOptions) (*Program, er
 	handles := newHandleCache()
 	defer handles.close()
 
-	return newProgramWithOptions(spec, opts, handles)
+	prog, err := newProgramWithOptions(spec, opts, handles)
+	if errors.Is(err, errUnsatisfiedReference) {
+		return nil, fmt.Errorf("cannot load program without loading its whole collection: %w", err)
+	}
+	return prog, err
 }
 
 func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions, handles *handleCache) (*Program, error) {

@@ -138,8 +138,12 @@ func (ins *Instruction) RewriteMapPtr(fd int) error {
 	return nil
 }
 
-func (ins *Instruction) mapPtr() uint32 {
-	return uint32(uint64(ins.Constant) & math.MaxUint32)
+// MapPtr returns the map fd for this instruction.
+//
+// The result is undefined if the instruction is not a load from a map,
+// see IsLoadFromMap.
+func (ins *Instruction) MapPtr() int {
+	return int(int32(uint64(ins.Constant) & math.MaxUint32))
 }
 
 // RewriteMapOffset changes the offset of a direct load from a map.
@@ -163,10 +167,10 @@ func (ins *Instruction) mapOffset() uint32 {
 	return uint32(uint64(ins.Constant) >> 32)
 }
 
-// isLoadFromMap returns true if the instruction loads from a map.
+// IsLoadFromMap returns true if the instruction loads from a map.
 //
 // This covers both loading the map pointer and direct map value loads.
-func (ins *Instruction) isLoadFromMap() bool {
+func (ins *Instruction) IsLoadFromMap() bool {
 	return ins.OpCode == LoadImmOp(DWord) && (ins.Src == PseudoMapFD || ins.Src == PseudoMapValue)
 }
 
@@ -197,8 +201,8 @@ func (ins Instruction) Format(f fmt.State, c rune) {
 		return
 	}
 
-	if ins.isLoadFromMap() {
-		fd := int32(ins.mapPtr())
+	if ins.IsLoadFromMap() {
+		fd := ins.MapPtr()
 		switch ins.Src {
 		case PseudoMapFD:
 			fmt.Fprintf(f, "LoadMapPtr dst: %s fd: %d", ins.Dst, fd)
@@ -403,7 +407,7 @@ func (insns Instructions) Marshal(w io.Writer, bo binary.ByteOrder) error {
 func (insns Instructions) Tag(bo binary.ByteOrder) (string, error) {
 	h := sha1.New()
 	for i, ins := range insns {
-		if ins.isLoadFromMap() {
+		if ins.IsLoadFromMap() {
 			ins.Constant = 0
 		}
 		_, err := ins.Marshal(h, bo)

@@ -39,12 +39,21 @@ if [[ "${1:-}" = "--exec-vm" ]]; then
   output="$(mktemp -d)"
   printf -v cmd "%q " "$@"
 
+  if [[ "$(stat -c '%t:%T' -L /proc/$$/fd/0)" == "1:3" ]]; then
+    # stdin is /dev/null, which doesn't play well with qemu. Use a fifo as a
+    # blocking substitute.
+    mkfifo "${output}/fake-stdin"
+    # Open for reading and writing to avoid blocking.
+    exec 0<> "${output}/fake-stdin"
+    rm "${output}/fake-stdin"
+  fi
+
   $sudo virtme-run --kimg "${input}/bzImage" --memory 768M --pwd \
   --rwdir="${testdir}=${testdir}" \
   --rodir=/run/input="${input}" \
   --rwdir=/run/output="${output}" \
   --script-sh "PATH=\"$PATH\" \"$script\" --exec-test $cmd" \
-  --qemu-opts -smp 2 < /dev/zero # need at least two CPUs for some tests
+  --qemu-opts -smp 2 # need at least two CPUs for some tests
 
   if [[ ! -e "${output}/success" ]]; then
     exit 1

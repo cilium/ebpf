@@ -399,7 +399,7 @@ func lazyLoadCollection(coll *CollectionSpec, opts *CollectionOptions) (
 
 			m, err := loadMap(ins.Reference)
 			if err != nil {
-				return nil, fmt.Errorf("program %s: %s", progName, err)
+				return nil, fmt.Errorf("program %s: %w", progName, err)
 			}
 
 			fd := m.FD()
@@ -561,7 +561,7 @@ func assignValues(to interface{}, valueOf func(reflect.Type, string) (reflect.Va
 			}
 
 			if err != nil {
-				return fmt.Errorf("field %s: %s", field.Name, err)
+				return fmt.Errorf("field %s: %w", field.Name, err)
 			}
 		}
 

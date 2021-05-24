@@ -3,6 +3,7 @@ package ebpf
 import (
 	"errors"
 	"flag"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -107,6 +108,11 @@ func TestLoadCollectionSpec(t *testing.T) {
 				Type:    SocketFilter,
 				License: "MIT",
 			},
+			"data_sections": {
+				Name:    "data_sections",
+				Type:    SocketFilter,
+				License: "MIT",
+			},
 		},
 	}
 
@@ -187,6 +193,35 @@ func TestLoadCollectionSpec(t *testing.T) {
 			t.Error("Expected return value to be 5, got", ret)
 		}
 	})
+}
+
+func TestDataSections(t *testing.T) {
+	file := fmt.Sprintf("testdata/loader-clang-12-%s.elf", internal.ClangEndian)
+	coll, err := LoadCollectionSpec(file)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	t.Log(coll.Programs["data_sections"].Instructions)
+
+	var obj struct {
+		Program *Program `ebpf:"data_sections"`
+	}
+
+	err = coll.LoadAndAssign(&obj, nil)
+	testutils.SkipIfNotSupported(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ret, _, err := obj.Program.Test(make([]byte, 14))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if ret != 0 {
+		t.Error("BPF assertion failed on line", ret)
+	}
 }
 
 func TestCollectionSpecDetach(t *testing.T) {

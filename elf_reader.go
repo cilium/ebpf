@@ -374,16 +374,24 @@ func (ec *elfCode) relocateInstruction(ins *asm.Instruction, rel elf.Symbol) err
 		}
 
 	case dataSection:
+		var offset uint32
 		switch typ {
 		case elf.STT_SECTION:
 			if bind != elf.STB_LOCAL {
 				return fmt.Errorf("direct load: %s: unsupported relocation %s", name, bind)
 			}
 
+			// This is really a reference to a static symbol, which clang doesn't
+			// emit a symbol table entry for. Instead it encodes the offset in
+			// the instruction itself.
+			offset = uint32(uint64(ins.Constant))
+
 		case elf.STT_OBJECT:
 			if bind != elf.STB_GLOBAL {
 				return fmt.Errorf("direct load: %s: unsupported relocation %s", name, bind)
 			}
+
+			offset = uint32(rel.Value)
 
 		default:
 			return fmt.Errorf("incorrect relocation type %v for direct map load", typ)
@@ -394,10 +402,8 @@ func (ec *elfCode) relocateInstruction(ins *asm.Instruction, rel elf.Symbol) err
 		// it's not clear how to encode that into Instruction.
 		name = target.Name
 
-		// For some reason, clang encodes the offset of the symbol its
-		// section in the first basic BPF instruction, while the kernel
-		// expects it in the second one.
-		ins.Constant <<= 32
+		// The kernel expects the offset in the second basic BPF instruction.
+		ins.Constant = int64(uint64(offset) << 32)
 		ins.Src = asm.PseudoMapValue
 
 		// Mark the instruction as needing an update when creating the

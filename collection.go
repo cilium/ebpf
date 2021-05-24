@@ -561,7 +561,7 @@ func assignValues(to interface{}, valueOf func(reflect.Type, string) (reflect.Va
 			}
 
 			if err != nil {
-				return fmt.Errorf("field %s: %s", field.Name, err)
+				return fmt.Errorf("field %s: %w", field.Name, err)
 			}
 		}
 

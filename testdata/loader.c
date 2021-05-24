@@ -138,3 +138,30 @@ __section("socket/2") int asm_relocation() {
 	asm("%0 = MY_CONST ll" : "=r"(my_const));
 	return my_const;
 }
+
+#if __clang_major__ >= 9
+volatile const unsigned int uneg               = -1;
+volatile const int neg                         = -2;
+static volatile const unsigned int static_uneg = -3;
+static volatile const int static_neg           = -4;
+
+__section("socket/3") int data_sections() {
+	if (uneg != (unsigned int)-1)
+		return __LINE__;
+
+	if (neg != -2)
+		return __LINE__;
+
+	if (static_uneg != (unsigned int)-3)
+		return __LINE__;
+
+	if (static_neg != -4)
+		return __LINE__;
+
+	return 0;
+}
+#else
+__section("socket/3") int data_sections() {
+	return 0;
+}
+#endif

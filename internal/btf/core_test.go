@@ -182,8 +182,8 @@ func TestCoreRelocation(t *testing.T) {
 		}
 
 		errs := map[string]error{
-			"ambiguous":         errAmbiguousRelocation,
-			"ambiguous_flavour": errAmbiguousRelocation,
+			"err_ambiguous":         errAmbiguousRelocation,
+			"err_ambiguous_flavour": errAmbiguousRelocation,
 		}
 
 		for section := range spec.funcInfos {

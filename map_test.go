@@ -1148,6 +1148,48 @@ func TestMapFromFD(t *testing.T) {
 	}
 }
 
+func TestRingbuf(t *testing.T) {
+	testutils.SkipOnOldKernel(t, "5.8", "BPF ring buffer")
+
+	ringbufTests := []struct {
+		name        string
+		maxEntries  uint32
+		expectedErr bool
+	}{
+		{
+			name:        "RingBuf size OK",
+			maxEntries:  uint32(os.Getpagesize() * 128),
+			expectedErr: false,
+		},
+		{
+			name:        "RingBuf size smaller than page size",
+			maxEntries:  uint32(os.Getpagesize() / 4),
+			expectedErr: true,
+		},
+		{
+			name:        "RingBuf size larger than page size but not power of 2",
+			maxEntries:  uint32(os.Getpagesize()*64 + 1),
+			expectedErr: true,
+		},
+	}
+
+	for _, tt := range ringbufTests {
+		t.Run(tt.name, func(t *testing.T) {
+			m, err := NewMap(&MapSpec{
+				Type:       RingBuf,
+				MaxEntries: tt.maxEntries,
+			})
+			if tt.expectedErr && err == nil {
+				t.Errorf("Test case '%q': expected error", tt.name)
+			}
+			if !tt.expectedErr && err != nil {
+				t.Errorf("Test case '%q': expected success", tt.name)
+			}
+			defer m.Close()
+		})
+	}
+}
+
 func TestMapContents(t *testing.T) {
 	spec := &MapSpec{
 		Type:       Array,

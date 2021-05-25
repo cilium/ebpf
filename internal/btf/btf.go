@@ -670,7 +670,7 @@ func ProgramLineInfos(s *Program) (recordSize uint32, bytes []byte, err error) {
 //
 // This is a free function instead of a method to hide it from users
 // of package ebpf.
-func ProgramFixups(s *Program, target *Spec) (map[uint64]COREFixup, error) {
+func ProgramFixups(s *Program, target *Spec) (COREFixups, error) {
 	if len(s.coreRelos) == 0 {
 		return nil, nil
 	}

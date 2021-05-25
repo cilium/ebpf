@@ -58,12 +58,12 @@ struct ambiguous___flavour {
 	int _2;
 };
 
-__section("socket_filter/ambiguous") int ambiguous() {
+__section("socket_filter/err_ambiguous") int err_ambiguous() {
 	target_id_not(struct ambiguous, 0);
 	return 0;
 }
 
-__section("socket_filter/ambiguous_flavour") int ambiguous_flavour() {
+__section("socket_filter/err_ambiguous_flavour") int err_ambiguous_flavour() {
 	target_id_not(struct ambiguous___flavour, 0);
 	return 0;
 }

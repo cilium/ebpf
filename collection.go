@@ -90,8 +90,8 @@ func (cs *CollectionSpec) RewriteMaps(maps map[string]*Map) error {
 //
 // The constant must be defined like so in the C program:
 //
-//    static volatile const type foobar;
-//    static volatile const type foobar = default;
+//    volatile const type foobar;
+//    volatile const type foobar = default;
 //
 // Replacement values must be of the same length as the C sizeof(type).
 // If necessary, they are marshalled according to the same rules as

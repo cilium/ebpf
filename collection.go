@@ -387,7 +387,7 @@ func lazyLoadCollection(coll *CollectionSpec, opts *CollectionOptions) (
 		for i := range progSpec.Instructions {
 			ins := &progSpec.Instructions[i]
 
-			if ins.OpCode != asm.LoadImmOp(asm.DWord) || ins.Reference == "" {
+			if !ins.IsLoadFromMap() || ins.Reference == "" {
 				continue
 			}
 

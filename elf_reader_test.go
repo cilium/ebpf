@@ -196,7 +196,7 @@ func TestLoadCollectionSpec(t *testing.T) {
 }
 
 func TestDataSections(t *testing.T) {
-	file := fmt.Sprintf("testdata/loader-clang-12-%s.elf", internal.ClangEndian)
+	file := fmt.Sprintf("testdata/loader-%s.elf", internal.ClangEndian)
 	coll, err := LoadCollectionSpec(file)
 	if err != nil {
 		t.Fatal(err)
@@ -213,6 +213,7 @@ func TestDataSections(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer obj.Program.Close()
 
 	ret, _, err := obj.Program.Test(make([]byte, 14))
 	if err != nil {
@@ -222,6 +223,35 @@ func TestDataSections(t *testing.T) {
 	if ret != 0 {
 		t.Error("BPF assertion failed on line", ret)
 	}
+}
+
+func TestInlineASMConstant(t *testing.T) {
+	file := fmt.Sprintf("testdata/loader-%s.elf", internal.ClangEndian)
+	coll, err := LoadCollectionSpec(file)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	spec := coll.Programs["asm_relocation"]
+	if spec.Instructions[0].Reference != "MY_CONST" {
+		t.Fatal("First instruction is not a reference to MY_CONST")
+	}
+
+	// -1 is used by the loader to find unrewritten maps.
+	spec.Instructions[0].Constant = -1
+
+	t.Log(spec.Instructions)
+
+	var obj struct {
+		Program *Program `ebpf:"asm_relocation"`
+	}
+
+	err = coll.LoadAndAssign(&obj, nil)
+	testutils.SkipIfNotSupported(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
+	obj.Program.Close()
 }
 
 func TestCollectionSpecDetach(t *testing.T) {

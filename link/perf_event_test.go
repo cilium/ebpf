@@ -2,6 +2,7 @@ package link
 
 import (
 	"errors"
+	"os"
 	"testing"
 
 	"github.com/cilium/ebpf/internal/testutils"
@@ -38,8 +39,8 @@ func TestTraceReadID(t *testing.T) {
 	}
 
 	_, err = uint64FromFile("/base/path/not", "../not/escaped")
-	if !errors.Is(err, ErrNotSupported) {
-		t.Errorf("expected error %s, got: %s", ErrNotSupported, err)
+	if !errors.Is(err, os.ErrNotExist) {
+		t.Errorf("expected os.ErrNotExist, got: %s", err)
 	}
 }
 

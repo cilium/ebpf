@@ -207,8 +207,8 @@ func unsafeStringPtr(str string) (unsafe.Pointer, error) {
 // group and name must be alphanumeric or underscore, as required by the kernel.
 func getTraceEventID(group, name string) (uint64, error) {
 	tid, err := uint64FromFile(tracefsPath, "events", group, name, "id")
-	if errors.Is(err, ErrNotSupported) {
-		return 0, fmt.Errorf("trace event %s/%s: %w", group, name, ErrNotSupported)
+	if errors.Is(err, os.ErrNotExist) {
+		return 0, fmt.Errorf("trace event %s/%s: %w", group, name, os.ErrNotExist)
 	}
 	if err != nil {
 		return 0, fmt.Errorf("reading trace event ID of %s/%s: %w", group, name, err)
@@ -219,9 +219,11 @@ func getTraceEventID(group, name string) (uint64, error) {
 
 // getPMUEventType reads a Performance Monitoring Unit's type (numeric identifier)
 // from /sys/bus/event_source/devices/<pmu>/type.
+//
+// Returns ErrNotSupported if the pmu type is not supported.
 func getPMUEventType(typ probeType) (uint64, error) {
 	et, err := uint64FromFile("/sys/bus/event_source/devices", typ.String(), "type")
-	if errors.Is(err, ErrNotSupported) {
+	if errors.Is(err, os.ErrNotExist) {
 		return 0, fmt.Errorf("pmu type %s: %w", typ, ErrNotSupported)
 	}
 	if err != nil {
@@ -255,22 +257,13 @@ func openTracepointPerfEvent(tid uint64) (*internal.FD, error) {
 // and joined onto base. Returns error if base no longer prefixes the path after
 // joining all components.
 func uint64FromFile(base string, path ...string) (uint64, error) {
-
-	// Resolve leaf path separately for error feedback. Makes the join onto
-	// base more readable (can't mix with variadic args).
 	l := filepath.Join(path...)
-
 	p := filepath.Join(base, l)
 	if !strings.HasPrefix(p, base) {
 		return 0, fmt.Errorf("path '%s' attempts to escape base path '%s': %w", l, base, errInvalidInput)
 	}
 
 	data, err := ioutil.ReadFile(p)
-	if os.IsNotExist(err) {
-		// Only echo leaf path, the base path can be prepended at the call site
-		// if more verbosity is required.
-		return 0, fmt.Errorf("symbol %s: %w", l, ErrNotSupported)
-	}
 	if err != nil {
 		return 0, fmt.Errorf("reading file %s: %w", p, err)
 	}

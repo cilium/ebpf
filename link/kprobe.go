@@ -266,8 +266,7 @@ func tracefsProbe(typ probeType, symbol, path string, offset uint64, ret bool) (
 	if err == nil {
 		return nil, fmt.Errorf("trace event already exists: %s/%s", group, symbol)
 	}
-	// The read is expected to fail with ErrNotSupported due to a non-existing event.
-	if err != nil && !errors.Is(err, ErrNotSupported) {
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
 		return nil, fmt.Errorf("checking trace event %s/%s: %w", group, symbol, err)
 	}
 
@@ -346,7 +345,7 @@ func createTraceFSProbeEvent(typ probeType, group, symbol, path string, offset u
 	// when trying to create a kretprobe for a missing symbol. Make sure ENOENT
 	// is returned to the caller.
 	if errors.Is(err, os.ErrNotExist) || errors.Is(err, unix.EINVAL) {
-		return fmt.Errorf("kernel symbol %s not found: %w", symbol, os.ErrNotExist)
+		return fmt.Errorf("symbol %s not found: %w", symbol, os.ErrNotExist)
 	}
 	if err != nil {
 		return fmt.Errorf("writing '%s' to '%s': %w", pe, typ.EventsPath(), err)

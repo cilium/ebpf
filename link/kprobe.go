@@ -298,8 +298,9 @@ func tracefsProbe(typ probeType, symbol, path string, offset uint64, ret bool) (
 }
 
 // createTraceFSProbeEvent creates a new ephemeral trace event by writing to
-// <tracefs>/[k,u]probe_events. Returns ErrNotSupported if symbol is not a valid
-// kernel symbol, or if it is not traceable with kprobes.
+// <tracefs>/[k,u]probe_events. Returns os.ErrNotExist if symbol is not a valid
+// kernel symbol, or if it is not traceable with kprobes. Returns os.ErrExist
+// if a probe with the same group and symbol already exists.
 func createTraceFSProbeEvent(typ probeType, group, symbol, path string, offset uint64, ret bool) error {
 	// Open the kprobe_events file in tracefs.
 	f, err := os.OpenFile(typ.EventsPath(), os.O_APPEND|os.O_WRONLY, 0666)

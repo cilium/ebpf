@@ -2,11 +2,11 @@ package link
 
 import (
 	"errors"
+	"os"
 	"testing"
 
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/asm"
-	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/testutils"
 	"github.com/cilium/ebpf/internal/unix"
 
@@ -48,6 +48,19 @@ func TestTracepoint(t *testing.T) {
 	}
 }
 
+func TestTracepointMissing(t *testing.T) {
+	prog, err := ebpf.NewProgram(&tracepointSpec)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer prog.Close()
+
+	_, err = Tracepoint("missing", "foobazbar", prog)
+	if !errors.Is(err, os.ErrNotExist) {
+		t.Error("Expected os.ErrNotExist, got", err)
+	}
+}
+
 func TestTracepointErrors(t *testing.T) {
 	c := qt.New(t)
 
@@ -72,8 +85,8 @@ func TestTraceGetEventID(t *testing.T) {
 	}
 
 	_, err = getTraceEventID("totally", "bogus")
-	if !errors.Is(err, internal.ErrNotSupported) {
-		t.Fatal("Doesn't return ErrNotSupported")
+	if !errors.Is(err, os.ErrNotExist) {
+		t.Fatal("Expected os.ErrNotExist, got", err)
 	}
 }
 

@@ -38,6 +38,9 @@ const (
 	BPF_F_INNER_MAP          = linux.BPF_F_INNER_MAP
 	BPF_OBJ_NAME_LEN         = linux.BPF_OBJ_NAME_LEN
 	BPF_TAG_SIZE             = linux.BPF_TAG_SIZE
+	BPF_RINGBUF_BUSY_BIT     = linux.BPF_RINGBUF_BUSY_BIT
+	BPF_RINGBUF_DISCARD_BIT  = linux.BPF_RINGBUF_DISCARD_BIT
+	BPF_RINGBUF_HDR_SZ       = linux.BPF_RINGBUF_HDR_SZ
 	SYS_BPF                  = linux.SYS_BPF
 	F_DUPFD_CLOEXEC          = linux.F_DUPFD_CLOEXEC
 	EPOLL_CTL_ADD            = linux.EPOLL_CTL_ADD

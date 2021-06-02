@@ -46,7 +46,7 @@ func TestRingBufferReader(t *testing.T) {
 }
 
 func makeRing(size, offset int) *ringReader {
-	if size%2 != 0 {
+	if size != 0 && (size&(size-1)) != 0 {
 		panic("size must be power of two")
 	}
 

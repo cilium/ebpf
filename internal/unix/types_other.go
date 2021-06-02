@@ -33,6 +33,9 @@ const (
 	BPF_F_SLEEPABLE          = 0
 	BPF_OBJ_NAME_LEN         = 0x10
 	BPF_TAG_SIZE             = 0x8
+	BPF_RINGBUF_BUSY_BIT     = 0
+	BPF_RINGBUF_DISCARD_BIT  = 0
+	BPF_RINGBUF_HDR_SZ       = 8
 	SYS_BPF                  = 321
 	F_DUPFD_CLOEXEC          = 0x406
 	EPOLLIN                  = 0x1

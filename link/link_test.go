@@ -146,7 +146,7 @@ func testLink(t *testing.T, link Link, opts testLinkOptions) {
 
 	path := filepath.Join(tmp, "link")
 	err = link.Pin(path)
-	if err == ErrNotSupported {
+	if errors.Is(err, ErrNotSupported) {
 		t.Errorf("%T.Pin returns unwrapped ErrNotSupported", link)
 	}
 
@@ -179,7 +179,7 @@ func testLink(t *testing.T, link Link, opts testLinkOptions) {
 
 	t.Run("update", func(t *testing.T) {
 		err := link.Update(opts.prog)
-		if err == ErrNotSupported {
+		if errors.Is(err, ErrNotSupported) {
 			t.Fatal("Update returns unwrapped ErrNotSupported", link)
 		}
 		if errors.Is(err, ErrNotSupported) {

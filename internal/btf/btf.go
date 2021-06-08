@@ -72,7 +72,7 @@ func LoadSpecFromReader(rd io.ReaderAt) (*Spec, error) {
 
 	symbols, err := file.Symbols()
 	if err != nil {
-		return nil, fmt.Errorf("can't read symbols: %v", err)
+		return nil, fmt.Errorf("can't read symbols: %w", err)
 	}
 
 	variableOffsets := make(map[variable]uint32)
@@ -152,7 +152,7 @@ func loadSpecFromVmlinux(rd io.ReaderAt) (*Spec, error) {
 
 	btfSection, _, _, err := findBtfSections(file)
 	if err != nil {
-		return nil, fmt.Errorf(".BTF ELF section: %s", err)
+		return nil, fmt.Errorf(".BTF ELF section: %w", err)
 	}
 	if btfSection == nil {
 		return nil, fmt.Errorf("unable to find .BTF ELF section")
@@ -250,14 +250,14 @@ func loadKernelSpec() (*Spec, error) {
 func parseBTF(btf io.ReadSeeker, bo binary.ByteOrder) ([]rawType, stringTable, error) {
 	rawBTF, err := ioutil.ReadAll(btf)
 	if err != nil {
-		return nil, nil, fmt.Errorf("can't read BTF: %v", err)
+		return nil, nil, fmt.Errorf("can't read BTF: %w", err)
 	}
 
 	rd := bytes.NewReader(rawBTF)
 
 	var header btfHeader
 	if err := binary.Read(rd, bo, &header); err != nil {
-		return nil, nil, fmt.Errorf("can't read header: %v", err)
+		return nil, nil, fmt.Errorf("can't read header: %w", err)
 	}
 
 	if header.Magic != btfMagic {
@@ -278,11 +278,11 @@ func parseBTF(btf io.ReadSeeker, bo binary.ByteOrder) ([]rawType, stringTable, e
 	}
 
 	if _, err := io.CopyN(internal.DiscardZeroes{}, rd, remainder); err != nil {
-		return nil, nil, fmt.Errorf("header padding: %v", err)
+		return nil, nil, fmt.Errorf("header padding: %w", err)
 	}
 
 	if _, err := rd.Seek(int64(header.HdrLen+header.StringOff), io.SeekStart); err != nil {
-		return nil, nil, fmt.Errorf("can't seek to start of string section: %v", err)
+		return nil, nil, fmt.Errorf("can't seek to start of string section: %w", err)
 	}
 
 	rawStrings, err := readStringTable(io.LimitReader(rd, int64(header.StringLen)))
@@ -291,7 +291,7 @@ func parseBTF(btf io.ReadSeeker, bo binary.ByteOrder) ([]rawType, stringTable, e
 	}
 
 	if _, err := rd.Seek(int64(header.HdrLen+header.TypeOff), io.SeekStart); err != nil {
-		return nil, nil, fmt.Errorf("can't seek to start of type section: %v", err)
+		return nil, nil, fmt.Errorf("can't seek to start of type section: %w", err)
 	}
 
 	rawTypes, err := readTypes(io.LimitReader(rd, int64(header.TypeLen)), bo)
@@ -405,7 +405,7 @@ func (s *Spec) marshal(opts marshalOpts) ([]byte, error) {
 	raw := buf.Bytes()
 	err := binary.Write(sliceWriter(raw[:headerLen]), opts.ByteOrder, header)
 	if err != nil {
-		return nil, fmt.Errorf("can't write header: %v", err)
+		return nil, fmt.Errorf("can't write header: %w", err)
 	}
 
 	return raw, nil

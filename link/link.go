@@ -74,12 +74,12 @@ func AttachRawLink(opts RawLinkOptions) (*RawLink, error) {
 	}
 
 	if opts.Target < 0 {
-		return nil, fmt.Errorf("invalid target: %s", internal.ErrClosedFd)
+		return nil, fmt.Errorf("invalid target: %w", internal.ErrClosedFd)
 	}
 
 	progFd := opts.Program.FD()
 	if progFd < 0 {
-		return nil, fmt.Errorf("invalid program: %s", internal.ErrClosedFd)
+		return nil, fmt.Errorf("invalid program: %w", internal.ErrClosedFd)
 	}
 
 	attr := bpfLinkCreateAttr{
@@ -89,7 +89,7 @@ func AttachRawLink(opts RawLinkOptions) (*RawLink, error) {
 	}
 	fd, err := bpfLinkCreate(&attr)
 	if err != nil {
-		return nil, fmt.Errorf("can't create link: %s", err)
+		return nil, fmt.Errorf("can't create link: %w", err)
 	}
 
 	return &RawLink{fd, ""}, nil
@@ -113,7 +113,7 @@ func LoadPinnedRawLink(fileName string, linkType Type, opts *ebpf.LoadPinOptions
 	info, err := link.Info()
 	if err != nil {
 		link.Close()
-		return nil, fmt.Errorf("get pinned link info: %s", err)
+		return nil, fmt.Errorf("get pinned link info: %w", err)
 	}
 
 	if info.Type != linkType {
@@ -181,20 +181,20 @@ type RawLinkUpdateOptions struct {
 func (l *RawLink) UpdateArgs(opts RawLinkUpdateOptions) error {
 	newFd := opts.New.FD()
 	if newFd < 0 {
-		return fmt.Errorf("invalid program: %s", internal.ErrClosedFd)
+		return fmt.Errorf("invalid program: %w", internal.ErrClosedFd)
 	}
 
 	var oldFd int
 	if opts.Old != nil {
 		oldFd = opts.Old.FD()
 		if oldFd < 0 {
-			return fmt.Errorf("invalid replacement program: %s", internal.ErrClosedFd)
+			return fmt.Errorf("invalid replacement program: %w", internal.ErrClosedFd)
 		}
 	}
 
 	linkFd, err := l.fd.Value()
 	if err != nil {
-		return fmt.Errorf("can't update link: %s", err)
+		return fmt.Errorf("can't update link: %w", err)
 	}
 
 	attr := bpfLinkUpdateAttr{
@@ -218,7 +218,7 @@ func (l *RawLink) Info() (*RawLinkInfo, error) {
 	var info bpfLinkInfo
 	err := internal.BPFObjGetInfoByFD(l.fd, unsafe.Pointer(&info), unsafe.Sizeof(info))
 	if err != nil {
-		return nil, fmt.Errorf("link info: %s", err)
+		return nil, fmt.Errorf("link info: %w", err)
 	}
 
 	return &RawLinkInfo{

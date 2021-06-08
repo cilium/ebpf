@@ -54,7 +54,7 @@ func marshalBytes(data interface{}, length int) (buf []byte, err error) {
 		var wr bytes.Buffer
 		err = binary.Write(&wr, internal.NativeEndian, value)
 		if err != nil {
-			err = fmt.Errorf("encoding %T: %v", value, err)
+			err = fmt.Errorf("encoding %T: %w", value, err)
 		}
 		buf = wr.Bytes()
 	}
@@ -113,7 +113,7 @@ func unmarshalBytes(data interface{}, buf []byte) error {
 	default:
 		rd := bytes.NewReader(buf)
 		if err := binary.Read(rd, internal.NativeEndian, value); err != nil {
-			return fmt.Errorf("decoding %T: %v", value, err)
+			return fmt.Errorf("decoding %T: %w", value, err)
 		}
 		return nil
 	}

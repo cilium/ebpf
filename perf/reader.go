@@ -42,7 +42,7 @@ func addToEpoll(epollfd, fd int, cpu int) error {
 	}
 
 	if err := unix.EpollCtl(epollfd, unix.EPOLL_CTL_ADD, fd, &event); err != nil {
-		return fmt.Errorf("can't add fd to epoll: %v", err)
+		return fmt.Errorf("can't add fd to epoll: %w", err)
 	}
 	return nil
 }
@@ -76,12 +76,12 @@ func readRecordFromRing(ring *perfEventRing) (Record, error) {
 func readRecord(rd io.Reader, cpu int) (Record, error) {
 	var header perfEventHeader
 	err := binary.Read(rd, internal.NativeEndian, &header)
-	if err == io.EOF {
+	if errors.Is(err, io.EOF) {
 		return Record{}, errEOR
 	}
 
 	if err != nil {
-		return Record{}, fmt.Errorf("can't read event header: %v", err)
+		return Record{}, fmt.Errorf("can't read event header: %w", err)
 	}
 
 	switch header.Type {
@@ -107,7 +107,7 @@ func readLostRecords(rd io.Reader) (uint64, error) {
 
 	err := binary.Read(rd, internal.NativeEndian, &lostHeader)
 	if err != nil {
-		return 0, fmt.Errorf("can't read lost records header: %v", err)
+		return 0, fmt.Errorf("can't read lost records header: %w", err)
 	}
 
 	return lostHeader.Lost, nil
@@ -117,12 +117,12 @@ func readRawSample(rd io.Reader) ([]byte, error) {
 	// This must match 'struct perf_event_sample in kernel sources.
 	var size uint32
 	if err := binary.Read(rd, internal.NativeEndian, &size); err != nil {
-		return nil, fmt.Errorf("can't read sample size: %v", err)
+		return nil, fmt.Errorf("can't read sample size: %w", err)
 	}
 
 	data := make([]byte, int(size))
 	if _, err := io.ReadFull(rd, data); err != nil {
-		return nil, fmt.Errorf("can't read sample: %v", err)
+		return nil, fmt.Errorf("can't read sample: %w", err)
 	}
 	return data, nil
 }
@@ -181,7 +181,7 @@ func NewReaderWithOptions(array *ebpf.Map, perCPUBuffer int, opts ReaderOptions)
 
 	epollFd, err := unix.EpollCreate1(unix.EPOLL_CLOEXEC)
 	if err != nil {
-		return nil, fmt.Errorf("can't create epoll fd: %v", err)
+		return nil, fmt.Errorf("can't create epoll fd: %w", err)
 	}
 
 	var (
@@ -217,7 +217,7 @@ func NewReaderWithOptions(array *ebpf.Map, perCPUBuffer int, opts ReaderOptions)
 		}
 
 		if err != nil {
-			return nil, fmt.Errorf("failed to create perf ring for CPU %d: %v", i, err)
+			return nil, fmt.Errorf("failed to create perf ring for CPU %d: %w", i, err)
 		}
 		rings = append(rings, ring)
 		pauseFds = append(pauseFds, ring.fd)
@@ -275,7 +275,7 @@ func (pr *Reader) Close() error {
 		internal.NativeEndian.PutUint64(value[:], 1)
 		_, err = unix.Write(pr.closeFd, value[:])
 		if err != nil {
-			err = fmt.Errorf("can't write event fd: %v", err)
+			err = fmt.Errorf("can't write event fd: %w", err)
 			return
 		}
 
@@ -328,7 +328,8 @@ func (pr *Reader) Read() (Record, error) {
 	for {
 		if len(pr.epollRings) == 0 {
 			nEvents, err := unix.EpollWait(pr.epollFd, pr.epollEvents, -1)
-			if temp, ok := err.(temporaryError); ok && temp.Temporary() {
+			var temp temporaryError
+			if errors.As(err, &temp) && temp.Temporary() {
 				// Retry the syscall if we we're interrupted, see https://github.com/golang/go/issues/20400
 				continue
 			}
@@ -356,7 +357,7 @@ func (pr *Reader) Read() (Record, error) {
 		// process them doesn't matter, and starting at the back allows
 		// resizing epollRings to keep track of processed rings.
 		record, err := readRecordFromRing(pr.epollRings[len(pr.epollRings)-1])
-		if err == errEOR {
+		if errors.Is(err, errEOR) {
 			// We've emptied the current ring buffer, process
 			// the next one.
 			pr.epollRings = pr.epollRings[:len(pr.epollRings)-1]

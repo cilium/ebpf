@@ -473,7 +473,7 @@ func parseCoreAccessor(accessor string) (coreAccessor, error) {
 		// 31 bits to avoid overflowing int on 32 bit platforms.
 		index, err := strconv.ParseUint(part, 10, 31)
 		if err != nil {
-			return nil, fmt.Errorf("accessor index %q: %s", part, err)
+			return nil, fmt.Errorf("accessor index %q: %w", part, err)
 		}
 
 		result = append(result, int(index))
@@ -559,7 +559,7 @@ func coreFindField(local Type, localAcc coreAccessor, target Type) (_, _ coreFie
 			if localMember.Name == "" {
 				_, ok := localMember.Type.(composite)
 				if !ok {
-					return coreField{}, coreField{}, fmt.Errorf("unnamed field with type %s: %s", localMember.Type, ErrNotSupported)
+					return coreField{}, coreField{}, fmt.Errorf("unnamed field with type %s: %w", localMember.Type, ErrNotSupported)
 				}
 
 				// This is an anonymous struct or union, ignore it.

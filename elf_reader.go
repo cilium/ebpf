@@ -103,7 +103,7 @@ func LoadCollectionSpecFromReader(rd io.ReaderAt) (*CollectionSpec, error) {
 	// Assign symbols to all the sections we're interested in.
 	symbols, err := f.Symbols()
 	if err != nil {
-		return nil, fmt.Errorf("load symbols: %v", err)
+		return nil, fmt.Errorf("load symbols: %w", err)
 	}
 
 	for _, symbol := range symbols {
@@ -198,7 +198,7 @@ func loadLicense(sec *elf.Section) (string, error) {
 
 	data, err := sec.Data()
 	if err != nil {
-		return "", fmt.Errorf("section %s: %v", sec.Name, err)
+		return "", fmt.Errorf("section %s: %w", sec.Name, err)
 	}
 	return string(bytes.TrimRight(data, "\000")), nil
 }
@@ -210,7 +210,7 @@ func loadVersion(sec *elf.Section, bo binary.ByteOrder) (uint32, error) {
 
 	var version uint32
 	if err := binary.Read(sec.Open(), bo, &version); err != nil {
-		return 0, fmt.Errorf("section %s: %v", sec.Name, err)
+		return 0, fmt.Errorf("section %s: %w", sec.Name, err)
 	}
 	return version, nil
 }
@@ -324,7 +324,7 @@ func (ec *elfCode) loadInstructions(section *elfSection) (asm.Instructions, uint
 	for {
 		var ins asm.Instruction
 		n, err := ins.Unmarshal(r, ec.ByteOrder)
-		if err == io.EOF {
+		if errors.Is(err, io.EOF) {
 			return insns, offset, nil
 		}
 		if err != nil {

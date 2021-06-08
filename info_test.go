@@ -231,19 +231,19 @@ func testStats(prog *Program) error {
 
 	stats, err := EnableStats(uint32(unix.BPF_STATS_RUN_TIME))
 	if err != nil {
-		return fmt.Errorf("failed to enable stats: %v", err)
+		return fmt.Errorf("failed to enable stats: %w", err)
 	}
 	defer stats.Close()
 
 	// Program execution with runtime statistics enabled.
 	// Should increase both runtime and run counter.
 	if _, _, err := prog.Test(in); err != nil {
-		return fmt.Errorf("failed to trigger program: %v", err)
+		return fmt.Errorf("failed to trigger program: %w", err)
 	}
 
 	pi, err := prog.Info()
 	if err != nil {
-		return fmt.Errorf("failed to get ProgramInfo: %v", err)
+		return fmt.Errorf("failed to get ProgramInfo: %w", err)
 	}
 
 	rc, ok := pi.RunCount()
@@ -267,18 +267,18 @@ func testStats(prog *Program) error {
 	lt := rt
 
 	if err := stats.Close(); err != nil {
-		return fmt.Errorf("failed to disable statistics: %v", err)
+		return fmt.Errorf("failed to disable statistics: %w", err)
 	}
 
 	// Second program execution, with runtime statistics gathering disabled.
 	// Total runtime and run counters are not expected to increase.
 	if _, _, err := prog.Test(in); err != nil {
-		return fmt.Errorf("failed to trigger program: %v", err)
+		return fmt.Errorf("failed to trigger program: %w", err)
 	}
 
 	pi, err = prog.Info()
 	if err != nil {
-		return fmt.Errorf("failed to get ProgramInfo: %v", err)
+		return fmt.Errorf("failed to get ProgramInfo: %w", err)
 	}
 
 	rc, ok = pi.RunCount()

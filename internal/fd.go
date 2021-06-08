@@ -57,7 +57,7 @@ func (fd *FD) Dup() (*FD, error) {
 
 	dup, err := unix.FcntlInt(uintptr(fd.raw), unix.F_DUPFD_CLOEXEC, 0)
 	if err != nil {
-		return nil, fmt.Errorf("can't dup fd: %v", err)
+		return nil, fmt.Errorf("can't dup fd: %w", err)
 	}
 
 	return NewFD(uint32(dup)), nil

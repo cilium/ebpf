@@ -766,7 +766,7 @@ func inflateRawTypes(rawTypes []rawType, rawStrings stringTable) (types []Type, 
 			for i, btfVal := range rawvals {
 				name, err := rawStrings.LookupName(btfVal.NameOff)
 				if err != nil {
-					return nil, nil, fmt.Errorf("get name for enum value %d: %s", i, err)
+					return nil, nil, fmt.Errorf("get name for enum value %d: %w", i, err)
 				}
 				vals = append(vals, EnumValue{
 					Name:  name,
@@ -813,7 +813,7 @@ func inflateRawTypes(rawTypes []rawType, rawStrings stringTable) (types []Type, 
 			for i, param := range rawparams {
 				name, err := rawStrings.LookupName(param.NameOff)
 				if err != nil {
-					return nil, nil, fmt.Errorf("get name for func proto parameter %d: %s", i, err)
+					return nil, nil, fmt.Errorf("get name for func proto parameter %d: %w", i, err)
 				}
 				params = append(params, FuncParam{
 					Name: name,

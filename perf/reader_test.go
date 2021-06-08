@@ -3,6 +3,7 @@ package perf
 import (
 	"bytes"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"os"
 	"syscall"
@@ -371,10 +372,10 @@ func TestPause(t *testing.T) {
 	}
 
 	// Pause/Resume after close should be no-op.
-	if err = rd.Pause(); err != errClosed {
+	if err = rd.Pause(); !errors.Is(err, errClosed) {
 		t.Fatalf("Unexpected error: %s", err)
 	}
-	if err = rd.Resume(); err != errClosed {
+	if err = rd.Resume(); !errors.Is(err, errClosed) {
 		t.Fatalf("Unexpected error: %s", err)
 	}
 }

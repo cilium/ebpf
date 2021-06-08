@@ -28,7 +28,7 @@ func (ufe *UnsupportedFeatureError) Error() string {
 
 // Is indicates that UnsupportedFeatureError is ErrNotSupported.
 func (ufe *UnsupportedFeatureError) Is(target error) bool {
-	return target == ErrNotSupported
+	return errors.Is(target, ErrNotSupported)
 }
 
 type featureTest struct {

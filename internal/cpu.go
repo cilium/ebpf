@@ -31,7 +31,7 @@ func parseCPUsFromFile(path string) (int, error) {
 
 	n, err := parseCPUs(string(spec))
 	if err != nil {
-		return 0, fmt.Errorf("can't parse %s: %v", path, err)
+		return 0, fmt.Errorf("can't parse %s: %w", path, err)
 	}
 
 	return n, nil

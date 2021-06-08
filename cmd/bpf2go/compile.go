@@ -91,7 +91,7 @@ func compile(args compileArgs) error {
 	}
 
 	if err := cmd.Start(); err != nil {
-		return fmt.Errorf("can't execute %s: %s", args.cc, err)
+		return fmt.Errorf("can't execute %s: %w", args.cc, err)
 	}
 
 	if depRd != nil {
@@ -104,7 +104,7 @@ func compile(args compileArgs) error {
 	}
 
 	if err := cmd.Wait(); err != nil {
-		return fmt.Errorf("%s: %s", args.cc, err)
+		return fmt.Errorf("%s: %w", args.cc, err)
 	}
 
 	return nil

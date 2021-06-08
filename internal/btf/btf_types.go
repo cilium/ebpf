@@ -2,6 +2,7 @@ package btf
 
 import (
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"io"
 )
@@ -218,10 +219,10 @@ func readTypes(r io.Reader, bo binary.ByteOrder) ([]rawType, error) {
 	)
 
 	for id := TypeID(1); ; id++ {
-		if err := binary.Read(r, bo, &header); err == io.EOF {
+		if err := binary.Read(r, bo, &header); errors.Is(err, io.EOF) {
 			return types, nil
 		} else if err != nil {
-			return nil, fmt.Errorf("can't read type info for id %v: %v", id, err)
+			return nil, fmt.Errorf("can't read type info for id %v: %w", id, err)
 		}
 
 		var data interface{}
@@ -259,7 +260,7 @@ func readTypes(r io.Reader, bo binary.ByteOrder) ([]rawType, error) {
 		}
 
 		if err := binary.Read(r, bo, data); err != nil {
-			return nil, fmt.Errorf("type id %d: kind %v: can't read %T: %v", id, header.Kind(), data, err)
+			return nil, fmt.Errorf("type id %d: kind %v: can't read %T: %w", id, header.Kind(), data, err)
 		}
 
 		types = append(types, rawType{header, data})

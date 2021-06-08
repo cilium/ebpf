@@ -11,6 +11,7 @@ linters:
   enable:
     - deadcode
     - errcheck
+    - errorlint
     - goimports
     - gosimple
     - govet

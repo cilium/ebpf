@@ -204,19 +204,19 @@ func run(stdout io.Writer, pkg, outputDir string, args []string) (err error) {
 
 		deps, err := parseDependencies(cwd, &dep)
 		if err != nil {
-			return fmt.Errorf("can't read dependency information: %s", err)
+			return fmt.Errorf("can't read dependency information: %w", err)
 		}
 
 		// There is always at least a dependency for the main file.
 		deps[0].file = goFileName
 		depFile, err := adjustDependencies(makeBase, deps)
 		if err != nil {
-			return fmt.Errorf("can't adjust dependency information: %s", err)
+			return fmt.Errorf("can't adjust dependency information: %w", err)
 		}
 
 		depFileName := goFileName + ".d"
 		if err := ioutil.WriteFile(depFileName, depFile, 0666); err != nil {
-			return fmt.Errorf("can't write dependency file: %s", err)
+			return fmt.Errorf("can't write dependency file: %w", err)
 		}
 
 		fmt.Fprintln(stdout, "Wrote", depFileName)

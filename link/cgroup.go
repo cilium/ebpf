@@ -30,7 +30,7 @@ type CgroupOptions struct {
 func AttachCgroup(opts CgroupOptions) (Link, error) {
 	cgroup, err := os.Open(opts.Path)
 	if err != nil {
-		return nil, fmt.Errorf("can't open cgroup: %s", err)
+		return nil, fmt.Errorf("can't open cgroup: %w", err)
 	}
 
 	clone, err := opts.Program.Clone()
@@ -107,7 +107,7 @@ func (cg *progAttachCgroup) Close() error {
 		Attach:  cg.attachType,
 	})
 	if err != nil {
-		return fmt.Errorf("close cgroup: %s", err)
+		return fmt.Errorf("close cgroup: %w", err)
 	}
 	return nil
 }
@@ -135,7 +135,7 @@ func (cg *progAttachCgroup) Update(prog *ebpf.Program) error {
 
 	if err := RawAttachProgram(args); err != nil {
 		new.Close()
-		return fmt.Errorf("can't update cgroup: %s", err)
+		return fmt.Errorf("can't update cgroup: %w", err)
 	}
 
 	cg.current.Close()

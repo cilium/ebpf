@@ -217,12 +217,12 @@ type writeArgs struct {
 func writeCommon(args writeArgs) error {
 	obj, err := ioutil.ReadAll(args.obj)
 	if err != nil {
-		return fmt.Errorf("read object file contents: %s", err)
+		return fmt.Errorf("read object file contents: %w", err)
 	}
 
 	spec, err := ebpf.LoadCollectionSpecFromReader(bytes.NewReader(obj))
 	if err != nil {
-		return fmt.Errorf("can't load BPF from ELF: %s", err)
+		return fmt.Errorf("can't load BPF from ELF: %w", err)
 	}
 
 	maps := make(map[string]string)
@@ -260,7 +260,7 @@ func writeCommon(args writeArgs) error {
 
 	var buf bytes.Buffer
 	if err := commonTemplate.Execute(&buf, &ctx); err != nil {
-		return fmt.Errorf("can't generate types: %s", err)
+		return fmt.Errorf("can't generate types: %w", err)
 	}
 
 	return writeFormatted(buf.Bytes(), args.out)
@@ -278,7 +278,7 @@ func binaryString(buf []byte) string {
 func writeFormatted(src []byte, out io.Writer) error {
 	formatted, err := format.Source(src)
 	if err != nil {
-		return fmt.Errorf("can't format source: %s", err)
+		return fmt.Errorf("can't format source: %w", err)
 	}
 
 	_, err = out.Write(formatted)

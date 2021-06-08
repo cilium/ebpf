@@ -54,7 +54,7 @@ func (ins *Instruction) Unmarshal(r io.Reader, bo binary.ByteOrder) (uint64, err
 	ins.Constant = int64(bi.Constant)
 	ins.Dst, ins.Src, err = bi.Registers.Unmarshal(bo)
 	if err != nil {
-		return 0, fmt.Errorf("can't unmarshal registers: %s", err)
+		return 0, fmt.Errorf("can't unmarshal registers: %w", err)
 	}
 
 	if !bi.OpCode.IsDWordLoad() {
@@ -90,7 +90,7 @@ func (ins Instruction) Marshal(w io.Writer, bo binary.ByteOrder) (uint64, error)
 
 	regs, err := newBPFRegisters(ins.Dst, ins.Src, bo)
 	if err != nil {
-		return 0, fmt.Errorf("can't marshal registers: %s", err)
+		return 0, fmt.Errorf("can't marshal registers: %w", err)
 	}
 
 	bpfi := bpfInstruction{

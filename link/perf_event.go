@@ -186,7 +186,7 @@ func (pe *perfEvent) attach(prog *ebpf.Program) error {
 
 	// PERF_EVENT_IOC_ENABLE and _DISABLE ignore their given values.
 	if err := unix.IoctlSetInt(int(kfd), unix.PERF_EVENT_IOC_ENABLE, 0); err != nil {
-		return fmt.Errorf("enable perf event: %s", err)
+		return fmt.Errorf("enable perf event: %w", err)
 	}
 
 	// Close the perf event when its reference is lost to avoid leaking system resources.

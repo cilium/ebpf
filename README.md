@@ -57,12 +57,6 @@ environment to keep the build output stable.
 
 The toolchain image build files are kept in [testdata/docker/](testdata/docker/).
 
-### Regeneration Testdata on non-x86 platforms
-
-Before running `make`, ensure [Docker buildx](https://docs.docker.com/buildx/working-with-buildx/)
-is enabled. Additionally `QEMU user` and `binfmt` should be installed. On a Debian based distribution
-the command to add them is `apt install qemu-user-static binfmt-support`.
-
 ## License
 
 MIT

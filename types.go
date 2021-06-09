@@ -89,6 +89,8 @@ const (
 	RingBuf
 	InodeStorage
 	TaskStorage
+	// MaxMapType - Bound enum of MapTypes, has to be last in enum.
+	MaxMapType
 )
 
 // hasPerCPUValue returns true if the Map stores a value per CPU.

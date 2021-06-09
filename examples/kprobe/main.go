@@ -1,7 +1,7 @@
 // +build linux
 
 // This program demonstrates attaching an eBPF program to a kernel symbol.
-// The eBPF program will be attached to the start of the __x64_sys_execve
+// The eBPF program will be attached to the start of the
 // kernel function and prints out the number of times it has been called
 // every second.
 package main
@@ -24,7 +24,7 @@ const mapKey uint32 = 0
 func main() {
 
 	// Name of the kernel function to trace.
-	fn := "__x64_sys_execve"
+	fn := "sys_execve"
 
 	// Subscribe to signals for terminating the program.
 	stopper := make(chan os.Signal, 1)

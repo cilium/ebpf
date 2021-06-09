@@ -10,6 +10,11 @@ import (
 // that will be initialized in the kernel.
 type MapType uint32
 
+// Max returns the latest supported MapType.
+func (_ MapType) Max() MapType {
+	return maxMapType - 1
+}
+
 // All the various map types that can be created
 const (
 	UnspecifiedMap MapType = iota
@@ -85,10 +90,17 @@ const (
 	SkStorage
 	// DevMapHash - Hash-based indexing scheme for references to network devices.
 	DevMapHash
+	// StructOps - This map holds a kernel struct with its function pointer implemented in a BPF
+	// program.
 	StructOpts
+	// RingBuf - Similar to PerfEventArray, but shared across all CPUs.
 	RingBuf
+	// InodeStorage - Specialized local storage map for inodes.
 	InodeStorage
+	// TaskStorage - Specialized local storage map for task_struct.
 	TaskStorage
+	// maxMapType - Bound enum of MapTypes, has to be last in enum.
+	maxMapType
 )
 
 // hasPerCPUValue returns true if the Map stores a value per CPU.

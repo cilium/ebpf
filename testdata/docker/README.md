@@ -18,6 +18,13 @@ Building the image requires Docker. Run the build with:
 
 This updates the `VERSION` file. Commit it and submit a PR upstream.
 
+### Regeneration Testdata on non-x86 platforms
+
+Before running `make`, ensure [Docker buildx](https://docs.docker.com/buildx/working-with-buildx/)
+is enabled. Additionally `QEMU user` and `binfmt` should be installed. On a Debian based distribution
+the command to add them is `apt install qemu-user-static binfmt-support`.
+
+
 ## Pushing
 
 After building, push the image to the Docker registry specified in `IMAGE` with:

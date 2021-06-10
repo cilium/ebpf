@@ -288,18 +288,9 @@ func TestDetermineRetprobeBit(t *testing.T) {
 func TestKprobeProgramCall(t *testing.T) {
 	m, p := newUpdaterMapProg(t, ebpf.Kprobe)
 
-	// Open Kprobe on `__x64_sys_getpid` and attach it
+	// Open Kprobe on `sys_getpid` and attach it
 	// to the ebpf program created above.
-	k, err := Kprobe("__x64_sys_getpid", p)
-	if errors.Is(err, os.ErrNotExist) {
-		// Use the correct symbol based on the kernel version.
-		// Since 4.17, syscalls symbols are generated with the `__x64_` prefix.
-		// https://github.com/torvalds/linux/commit/d5a00528b58cdb2c71206e18bd021e34c4eab878
-		k, err = Kprobe("sys_getpid", p)
-		if err != nil {
-			t.Fatal(err)
-		}
-	}
+	k, err := Kprobe("sys_getpid", p)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"strconv"
 	"testing"
 
 	qt "github.com/frankban/quicktest"
@@ -49,13 +50,43 @@ func TestUprobe(t *testing.T) {
 	}
 	defer prog.Close()
 
-	up, err := bashEx.Uprobe(bashSym, prog)
+	up, err := bashEx.Uprobe(bashSym, prog, nil)
 	c.Assert(err, qt.IsNil)
 	defer up.Close()
 
 	testLink(t, up, testLinkOptions{
 		prog: prog,
 	})
+}
+
+func TestUprobeExtNotFound(t *testing.T) {
+	prog, err := ebpf.NewProgram(&kprobeSpec)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer prog.Close()
+
+	// This symbol will not be present in Executable (elf.SHN_UNDEF).
+	_, err = bashEx.Uprobe("open", prog, nil)
+	if err == nil {
+		t.Fatal("expected error")
+	}
+}
+
+func TestUprobeExtWithOpts(t *testing.T) {
+	prog, err := ebpf.NewProgram(&kprobeSpec)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer prog.Close()
+
+	// This Uprobe is broken and will not work because the offset is not
+	// correct. This is expected since the offset is provided by the user.
+	up, err := bashEx.Uprobe("open", prog, &UprobeOptions{Offset: 0x12345})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer up.Close()
 }
 
 func TestUretprobe(t *testing.T) {
@@ -67,7 +98,7 @@ func TestUretprobe(t *testing.T) {
 	}
 	defer prog.Close()
 
-	up, err := bashEx.Uretprobe(bashSym, prog)
+	up, err := bashEx.Uretprobe(bashSym, prog, nil)
 	c.Assert(err, qt.IsNil)
 	defer up.Close()
 
@@ -261,7 +292,7 @@ func TestUprobeProgramCall(t *testing.T) {
 
 	// Open Uprobe on '/bin/bash' for the symbol 'main'
 	// and attach it to the ebpf program created above.
-	u, err := ex.Uprobe("main", p)
+	u, err := ex.Uprobe("main", p, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -269,6 +300,64 @@ func TestUprobeProgramCall(t *testing.T) {
 	// Trigger ebpf program call.
 	trigger := func(t *testing.T) {
 		if err := exec.Command("/bin/bash", "--help").Run(); err != nil {
+			t.Fatal(err)
+		}
+	}
+	trigger(t)
+
+	// Assert that the value at index 0 has been updated to 1.
+	assertMapValue(t, m, 0, 1)
+
+	// Detach the Uprobe.
+	if err := u.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	// Reset map value to 0 at index 0.
+	if err := m.Update(uint32(0), uint32(0), ebpf.UpdateExist); err != nil {
+		t.Fatal(err)
+	}
+
+	// Retrigger the ebpf program call.
+	trigger(t)
+
+	// Assert that this time the value has not been updated.
+	assertMapValue(t, m, 0, 0)
+}
+
+func TestUprobeProgramCallSharedlib(t *testing.T) {
+	m, p := newUpdaterMapProg(t, ebpf.Kprobe)
+
+	// External symbol.
+	sym := "open"
+
+	// Load the '/bin/bash' executable.
+	ex, err := OpenExecutable("/bin/bash")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Obtain external symbol address.
+	out, err := exec.Command("/usr/bin/gdb", "/bin/bash", "--batch", "-ex", `printf "%p", `+sym).Output()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	off, err := strconv.ParseUint(string(out), 0, 64)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Open Uprobe on '/bin/bash' for `sym`
+	// and attach it to the ebpf program created above.
+	u, err := ex.Uprobe(sym, p, &UprobeOptions{Offset: off})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Trigger ebpf program call.
+	trigger := func(t *testing.T) {
+		if err := exec.Command("/bin/bash", "-c", "true").Run(); err != nil {
 			t.Fatal(err)
 		}
 	}

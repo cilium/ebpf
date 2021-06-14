@@ -1,16 +1,23 @@
 package ebpf
 
-import "github.com/cilium/ebpf/internal"
+import (
+	"sync"
 
-// unused at the moment
-// might be useful for functions that eventually return entire overview of features
-type Features struct {
-	MapTypes map[MapType]error
+	"github.com/cilium/ebpf/internal"
+)
+
+type MapCache struct {
+	mu       sync.RWMutex
+	mapTypes map[MapType]error
 }
 
 var (
-	mapTypeCache = make(map[MapType]error)
+	mc MapCache
 )
+
+func init() {
+	mc.mapTypes = make(map[MapType]error)
+}
 
 func probeMapTypeAttr(mt MapType) *bpfMapCreateAttr {
 	var keySize, valueSize, maxEntries, flags uint32
@@ -36,16 +43,14 @@ func probeMapTypeAttr(mt MapType) *bpfMapCreateAttr {
 }
 
 func ProbeMapType(mt MapType) error {
-	if err, ok := mapTypeCache[mt]; ok {
+	mc.mu.RLock()
+	if err, ok := mc.mapTypes[mt]; ok {
+		defer mc.mu.RUnlock()
 		return err
 	}
+	mc.mu.RUnlock()
 
-	// build create map attr for map type
 	attr := probeMapTypeAttr(mt)
-
-	// create map type
-	// Do we care about deleting those objects?
-	// Does this happen automatically once using process dies?
 	_, err := bpfMapCreate(attr)
 
 	// interpret kernel error as own error interface
@@ -54,9 +59,9 @@ func ProbeMapType(mt MapType) error {
 		err = internal.ErrNotSupported
 	}
 
-	// store result to cash
-	mapTypeCache[mt] = err
+	mc.mu.Lock()
+	defer mc.mu.Unlock()
+	mc.mapTypes[mt] = err
 
-	// return result
 	return err
 }

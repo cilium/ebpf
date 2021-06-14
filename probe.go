@@ -43,6 +43,13 @@ func probeMapTypeAttr(mt MapType) *bpfMapCreateAttr {
 }
 
 func ProbeMapType(mt MapType) error {
+	// make sure to bound Map types
+	// MaxMapType new value in enum, easier to handle than making sure
+	// we are checking the last value in the enum (which could eventually change)
+	if mt >= MaxMapType {
+		return internal.ErrNotSupported
+	}
+
 	mc.mu.RLock()
 	if err, ok := mc.mapTypes[mt]; ok {
 		defer mc.mu.RUnlock()

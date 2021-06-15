@@ -317,25 +317,25 @@ func createMap(spec *MapSpec, inner *internal.FD, opts MapOptions, handles *hand
 		}
 	}
 
-	attr := bpfMapCreateAttr{
-		mapType:    spec.Type,
-		keySize:    spec.KeySize,
-		valueSize:  spec.ValueSize,
-		maxEntries: spec.MaxEntries,
-		flags:      spec.Flags,
-		numaNode:   spec.NumaNode,
+	attr := internal.BPFMapCreateAttr{
+		MapType:    uint32(spec.Type),
+		KeySize:    spec.KeySize,
+		ValueSize:  spec.ValueSize,
+		MaxEntries: spec.MaxEntries,
+		Flags:      spec.Flags,
+		NumaNode:   spec.NumaNode,
 	}
 
 	if inner != nil {
 		var err error
-		attr.innerMapFd, err = inner.Value()
+		attr.InnerMapFd, err = inner.Value()
 		if err != nil {
 			return nil, fmt.Errorf("map create: %w", err)
 		}
 	}
 
 	if haveObjName() == nil {
-		attr.mapName = newBPFObjName(spec.Name)
+		attr.MapName = newBPFObjName(spec.Name)
 	}
 
 	var btfDisabled bool
@@ -347,13 +347,13 @@ func createMap(spec *MapSpec, inner *internal.FD, opts MapOptions, handles *hand
 		}
 
 		if handle != nil {
-			attr.btfFd = uint32(handle.FD())
-			attr.btfKeyTypeID = btf.MapKey(spec.BTF).ID()
-			attr.btfValueTypeID = btf.MapValue(spec.BTF).ID()
+			attr.BTFFd = uint32(handle.FD())
+			attr.BTFKeyTypeID = uint32(btf.MapKey(spec.BTF).ID())
+			attr.BTFValueTypeID = uint32(btf.MapValue(spec.BTF).ID())
 		}
 	}
 
-	fd, err := bpfMapCreate(&attr)
+	fd, err := internal.BPFMapCreate(&attr)
 	if err != nil {
 		if errors.Is(err, unix.EPERM) {
 			return nil, fmt.Errorf("map create: RLIMIT_MEMLOCK may be too low: %w", err)

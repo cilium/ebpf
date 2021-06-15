@@ -303,7 +303,7 @@ func TestMapPin(t *testing.T) {
 	// Issue 51: pad path out to a power of two, to avoid having a
 	// trailing zero at the end of the allocation which holds the string.
 	path := tmp + string(filepath.Separator)
-	path += strings.Repeat("a", 32-len(path))
+	path += strings.Repeat("a", 64-len(path))
 
 	if err := m.Pin(path); err != nil {
 		t.Fatal(err)

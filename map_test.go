@@ -299,11 +299,7 @@ func TestMapPin(t *testing.T) {
 	}
 
 	tmp := testutils.TempBPFFS(t)
-
-	// Issue 51: pad path out to a power of two, to avoid having a
-	// trailing zero at the end of the allocation which holds the string.
-	path := tmp + string(filepath.Separator)
-	path += strings.Repeat("a", 32-len(path))
+	path := filepath.Join(tmp, "map")
 
 	if err := m.Pin(path); err != nil {
 		t.Fatal(err)
@@ -327,6 +323,28 @@ func TestMapPin(t *testing.T) {
 	if v != 42 {
 		t.Error("Want value 42, got", v)
 	}
+}
+
+func TestMapPinIssue51(t *testing.T) {
+	m := createArray(t)
+	defer m.Close()
+
+	c := qt.New(t)
+
+	tmp := testutils.TempBPFFS(t)
+
+	// We used to not zero-terminate string pointers passed to the kernel. This
+	// was masked by the fact that the Go allocator zeroes and rounds up
+	// allocations to the next power of two. So only strings that are exactly
+	// a power of two bytes in length would trigger the bug. Create such a string
+	// here by padding to 64 bytes.
+	path := filepath.Join(tmp, "a")
+	path += strings.Repeat("a", 64-len(path))
+
+	c.Assert(m.Pin(path), qt.IsNil)
+
+	_, err := os.Stat(path)
+	c.Assert(err, qt.IsNil)
 }
 
 func TestNestedMapPin(t *testing.T) {

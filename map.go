@@ -311,8 +311,13 @@ func createMap(spec *MapSpec, inner *internal.FD, opts MapOptions, handles *hand
 		}
 	}
 
-	if spec.Flags&(unix.BPF_F_RDONLY_PROG|unix.BPF_F_WRONLY_PROG) > 0 || spec.Freeze {
+	switch {
+	case spec.Flags&(unix.BPF_F_RDONLY_PROG|unix.BPF_F_WRONLY_PROG) > 0 || spec.Freeze:
 		if err := haveMapMutabilityModifiers(); err != nil {
+			return nil, fmt.Errorf("map create: %w", err)
+		}
+	case spec.Flags&unix.BPF_F_MMAPABLE > 0:
+		if err := haveMmapableMaps(); err != nil {
 			return nil, fmt.Errorf("map create: %w", err)
 		}
 	}

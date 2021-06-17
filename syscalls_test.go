@@ -42,3 +42,7 @@ func TestHaveNestedMaps(t *testing.T) {
 func TestHaveMapMutabilityModifiers(t *testing.T) {
 	testutils.CheckFeatureTest(t, haveMapMutabilityModifiers)
 }
+
+func TestHaveMmapableMaps(t *testing.T) {
+	testutils.CheckFeatureTest(t, haveMmapableMaps)
+}

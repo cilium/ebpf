@@ -5,6 +5,7 @@
 #include <uapi/linux/pkt_cls.h>
 
 #define TAIL_CALL_KEY 1
+#define EXTERNAL_TAIL_CALL_KEY 2
 
 struct bpf_map_def SEC("maps/tc_prog_array") tc_prog_array = {
     .type = BPF_MAP_TYPE_PROG_ARRAY,
@@ -31,6 +32,13 @@ SEC("classifier/two")
 int classifier_two(struct __sk_buff *skb)
 {
     bpf_printk("(classifier/two) tail call triggered (TC)\n");
+
+    // Tail call
+    int key = EXTERNAL_TAIL_CALL_KEY;
+    bpf_tail_call(skb, &tc_prog_array, key);
+
+    // Tail call failed
+    bpf_printk("(classifier/two) external tail call failed (TC)\n");
     return TC_ACT_OK;
 };
 

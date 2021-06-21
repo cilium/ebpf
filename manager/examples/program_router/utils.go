@@ -2,15 +2,16 @@ package main
 
 import (
 	"bytes"
-	"github.com/pkg/errors"
-	"github.com/sirupsen/logrus"
 	"io"
 	"net/http"
+
+	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
 )
 
 // recoverAssets - Recover ebpf asset
-func recoverAssets() io.ReaderAt {
-	buf, err := Asset("/probe.o")
+func recoverAssets(probe string) io.ReaderAt {
+	buf, err := Asset(probe)
 	if err != nil {
 		logrus.Fatal(errors.Wrap(err, "couldn't find asset"))
 	}

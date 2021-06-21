@@ -46,3 +46,7 @@ func TestHaveMapMutabilityModifiers(t *testing.T) {
 func TestHaveMmapableMaps(t *testing.T) {
 	testutils.CheckFeatureTest(t, haveMmapableMaps)
 }
+
+func TestHaveInnerMaps(t *testing.T) {
+	testutils.CheckFeatureTest(t, haveInnerMaps)
+}

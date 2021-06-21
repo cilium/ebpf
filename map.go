@@ -321,6 +321,11 @@ func createMap(spec *MapSpec, inner *internal.FD, opts MapOptions, handles *hand
 			return nil, fmt.Errorf("map create: %w", err)
 		}
 	}
+	if spec.Flags&unix.BPF_F_INNER_MAP > 0 {
+		if err := haveInnerMaps(); err != nil {
+			return nil, fmt.Errorf("map create: %w", err)
+		}
+	}
 
 	attr := internal.BPFMapCreateAttr{
 		MapType:    uint32(spec.Type),

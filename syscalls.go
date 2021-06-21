@@ -230,6 +230,22 @@ var haveMmapableMaps = internal.FeatureTest("mmapable maps", "5.5", func() error
 	return nil
 })
 
+var haveInnerMaps = internal.FeatureTest("inner maps", "5.10", func() error {
+	// This checks BPF_F_INNER_MAP, which appeared in 5.10.
+	m, err := internal.BPFMapCreate(&internal.BPFMapCreateAttr{
+		MapType:    uint32(Array),
+		KeySize:    4,
+		ValueSize:  4,
+		MaxEntries: 1,
+		Flags:      unix.BPF_F_MMAPABLE,
+	})
+	if err != nil {
+		return internal.ErrNotSupported
+	}
+	_ = m.Close()
+	return nil
+})
+
 func bpfMapLookupElem(m *internal.FD, key, valueOut internal.Pointer) error {
 	fd, err := m.Value()
 	if err != nil {

@@ -24,10 +24,17 @@ func init() {
 }
 
 func probeMapTypeAttr(mt ebpf.MapType) *internal.BPFMapCreateAttr {
-	var keySize, valueSize, maxEntries, innerMapFd, flags uint32
-	keySize = 4
-	valueSize = 4
-	maxEntries = 1
+	var (
+		keySize               uint32 = 4
+		valueSize             uint32 = 4
+		maxEntries            uint32 = 1
+		innerMapFd            uint32
+		flags                 uint32
+		btfKeyTypeID          uint32
+		btfValueTypeID        uint32
+		btfFd                 uint32
+		btfVmLinuxValueTypeID uint32
+	)
 
 	// switch on map types to generate correct bpfMapCreateAttr
 	// BPF_MAP_TYPE_STRUCT_OPS, BPF_MAP_TYPE_RINGBUF, BPF_MAP_TYPE_INODE_STORAGE, BPF_MAP_TYPE_TASK_STORAGE
@@ -54,15 +61,37 @@ func probeMapTypeAttr(mt ebpf.MapType) *internal.BPFMapCreateAttr {
 		fallthrough
 	case ebpf.Stack:
 		keySize = 0
+	case ebpf.StructOpts:
+		// does not work currently
+		btfVmLinuxValueTypeID = 1
+	case ebpf.RingBuf:
+		keySize = 0
+		valueSize = 0
+		maxEntries = 4096
+	case ebpf.SkStorage:
+		fallthrough
+	case ebpf.InodeStorage:
+		fallthrough
+	case ebpf.TaskStorage:
+		valueSize = 8
+		maxEntries = 0
+		flags = unix.BPF_F_NO_PREALLOC
+		btfKeyTypeID = 1
+		btfValueTypeID = 3
+		btfFd = ^uint32(0)
 	}
 
 	return &internal.BPFMapCreateAttr{
-		MapType:    uint32(mt),
-		KeySize:    keySize,
-		ValueSize:  valueSize,
-		MaxEntries: maxEntries,
-		InnerMapFd: innerMapFd,
-		Flags:      flags,
+		MapType:               uint32(mt),
+		KeySize:               keySize,
+		ValueSize:             valueSize,
+		MaxEntries:            maxEntries,
+		InnerMapFd:            innerMapFd,
+		Flags:                 flags,
+		BTFKeyTypeID:          btfKeyTypeID,
+		BTFValueTypeID:        btfValueTypeID,
+		BTFFd:                 btfFd,
+		BTFVmLinuxValueTypeID: btfVmLinuxValueTypeID,
 	}
 
 }
@@ -75,12 +104,6 @@ func ProbeMapType(mt ebpf.MapType) error {
 		return internal.ErrNotSupported
 	}
 
-	if mt == ebpf.SkStorage {
-		// need more info on how to create BTF blob when creating map create attr
-		// for now ignore this map type and just return nil
-		return nil
-	}
-
 	mc.mu.RLock()
 	if err, ok := mc.mapTypes[mt]; ok {
 		defer mc.mu.RUnlock()
@@ -91,9 +114,11 @@ func ProbeMapType(mt ebpf.MapType) error {
 	attr := probeMapTypeAttr(mt)
 	_, err := internal.BPFMapCreate(attr)
 
-	// For nested maps we accept EBADF as indicator that nested maps are supported
-	if isNestedMap(mt) && errors.Is(err, unix.EBADF) {
-		err = nil
+	// For nested and storage maps we accept EBADF as indicator that nested maps are supported
+	if errors.Is(err, unix.EBADF) {
+		if isNestedMap(mt) || isStorageMap(mt) {
+			err = nil
+		}
 	}
 
 	// interpret kernel error as own error interface
@@ -112,6 +137,13 @@ func ProbeMapType(mt ebpf.MapType) error {
 
 func isNestedMap(mt ebpf.MapType) bool {
 	if mt == ebpf.ArrayOfMaps || mt == ebpf.HashOfMaps {
+		return true
+	}
+	return false
+}
+
+func isStorageMap(mt ebpf.MapType) bool {
+	if mt == ebpf.SkStorage || mt == ebpf.InodeStorage || mt == ebpf.TaskStorage {
 		return true
 	}
 	return false

@@ -191,18 +191,19 @@ func NewBPFObjName(name string) BPFObjName {
 }
 
 type BPFMapCreateAttr struct {
-	MapType        uint32
-	KeySize        uint32
-	ValueSize      uint32
-	MaxEntries     uint32
-	Flags          uint32
-	InnerMapFd     uint32     // since 4.12 56f668dfe00d
-	NumaNode       uint32     // since 4.14 96eabe7a40aa
-	MapName        BPFObjName // since 4.15 ad5b177bd73f
-	MapIfIndex     uint32
-	BTFFd          uint32
-	BTFKeyTypeID   uint32
-	BTFValueTypeID uint32
+	MapType               uint32
+	KeySize               uint32
+	ValueSize             uint32
+	MaxEntries            uint32
+	Flags                 uint32
+	InnerMapFd            uint32     // since 4.12 56f668dfe00d
+	NumaNode              uint32     // since 4.14 96eabe7a40aa
+	MapName               BPFObjName // since 4.15 ad5b177bd73f
+	MapIfIndex            uint32
+	BTFFd                 uint32
+	BTFKeyTypeID          uint32
+	BTFValueTypeID        uint32
+	BTFVmLinuxValueTypeID uint32
 }
 
 func BPFMapCreate(attr *BPFMapCreateAttr) (*FD, error) {

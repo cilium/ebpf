@@ -30,27 +30,26 @@ type Type interface {
 	walk(*typeDeque)
 }
 
-// namedType is a type with a name.
-//
-// Most named types simply embed Name.
-type namedType interface {
+// NamedType is a type with a name.
+type NamedType interface {
 	Type
-	name() string
-	essentialName() string
+
+	// Name of the type, empty for anonymous types.
+	TypeName() string
 }
 
-// Name identifies a type.
-//
-// Anonymous types have an empty name.
-type Name string
-
-func (n Name) name() string {
-	return string(n)
-}
-
-func (n Name) essentialName() string {
-	return essentialName(string(n))
-}
+var (
+	_ NamedType = (*Int)(nil)
+	_ NamedType = (*Struct)(nil)
+	_ NamedType = (*Union)(nil)
+	_ NamedType = (*Enum)(nil)
+	_ NamedType = (*Fwd)(nil)
+	_ NamedType = (*Func)(nil)
+	_ NamedType = (*Typedef)(nil)
+	_ NamedType = (*Var)(nil)
+	_ NamedType = (*Datasec)(nil)
+	_ NamedType = (*Float)(nil)
+)
 
 // Void is the unit type of BTF.
 type Void struct{}
@@ -72,7 +71,7 @@ const (
 // Int is an integer of a given length.
 type Int struct {
 	TypeID
-	Name
+	Name string
 
 	// The size of the integer in bytes.
 	Size     uint32
@@ -82,8 +81,6 @@ type Int struct {
 	OffsetBits uint32
 	Bits       byte
 }
-
-var _ namedType = (*Int)(nil)
 
 func (i *Int) String() string {
 	var s strings.Builder
@@ -110,8 +107,9 @@ func (i *Int) String() string {
 	return s.String()
 }
 
-func (i *Int) size() uint32    { return i.Size }
-func (i *Int) walk(*typeDeque) {}
+func (i *Int) TypeName() string { return i.Name }
+func (i *Int) size() uint32     { return i.Size }
+func (i *Int) walk(*typeDeque)  {}
 func (i *Int) copy() Type {
 	cpy := *i
 	return &cpy
@@ -158,7 +156,7 @@ func (arr *Array) copy() Type {
 // Struct is a compound type of consecutive members.
 type Struct struct {
 	TypeID
-	Name
+	Name string
 	// The size of the struct including padding, in bytes
 	Size    uint32
 	Members []Member
@@ -167,6 +165,8 @@ type Struct struct {
 func (s *Struct) String() string {
 	return fmt.Sprintf("struct#%d[%q]", s.TypeID, s.Name)
 }
+
+func (s *Struct) TypeName() string { return s.Name }
 
 func (s *Struct) size() uint32 { return s.Size }
 
@@ -189,7 +189,7 @@ func (s *Struct) members() []Member {
 // Union is a compound type where members occupy the same memory.
 type Union struct {
 	TypeID
-	Name
+	Name string
 	// The size of the union including padding, in bytes.
 	Size    uint32
 	Members []Member
@@ -198,6 +198,8 @@ type Union struct {
 func (u *Union) String() string {
 	return fmt.Sprintf("union#%d[%q]", u.TypeID, u.Name)
 }
+
+func (u *Union) TypeName() string { return u.Name }
 
 func (u *Union) size() uint32 { return u.Size }
 
@@ -236,7 +238,7 @@ var (
 //
 // It is not a valid Type.
 type Member struct {
-	Name
+	Name string
 	Type Type
 	// OffsetBits is the bit offset of this member.
 	OffsetBits   uint32
@@ -246,7 +248,7 @@ type Member struct {
 // Enum lists possible values.
 type Enum struct {
 	TypeID
-	Name
+	Name   string
 	Values []EnumValue
 }
 
@@ -254,11 +256,13 @@ func (e *Enum) String() string {
 	return fmt.Sprintf("enum#%d[%q]", e.TypeID, e.Name)
 }
 
+func (e *Enum) TypeName() string { return e.Name }
+
 // EnumValue is part of an Enum
 //
 // Is is not a valid Type
 type EnumValue struct {
-	Name
+	Name  string
 	Value int32
 }
 
@@ -294,13 +298,15 @@ func (fk FwdKind) String() string {
 // Fwd is a forward declaration of a Type.
 type Fwd struct {
 	TypeID
-	Name
+	Name string
 	Kind FwdKind
 }
 
 func (f *Fwd) String() string {
 	return fmt.Sprintf("fwd#%d[%s %q]", f.TypeID, f.Kind, f.Name)
 }
+
+func (f *Fwd) TypeName() string { return f.Name }
 
 func (f *Fwd) walk(*typeDeque) {}
 func (f *Fwd) copy() Type {
@@ -311,13 +317,15 @@ func (f *Fwd) copy() Type {
 // Typedef is an alias of a Type.
 type Typedef struct {
 	TypeID
-	Name
+	Name string
 	Type Type
 }
 
 func (td *Typedef) String() string {
 	return fmt.Sprintf("typedef#%d[%q #%d]", td.TypeID, td.Name, td.Type.ID())
 }
+
+func (td *Typedef) TypeName() string { return td.Name }
 
 func (td *Typedef) walk(tdq *typeDeque) { tdq.push(&td.Type) }
 func (td *Typedef) copy() Type {
@@ -379,7 +387,7 @@ func (r *Restrict) copy() Type {
 // Func is a function definition.
 type Func struct {
 	TypeID
-	Name
+	Name    string
 	Type    Type
 	Linkage FuncLinkage
 }
@@ -387,6 +395,8 @@ type Func struct {
 func (f *Func) String() string {
 	return fmt.Sprintf("func#%d[%s %q proto=#%d]", f.TypeID, f.Linkage, f.Name, f.Type.ID())
 }
+
+func (f *Func) TypeName() string { return f.Name }
 
 func (f *Func) walk(tdq *typeDeque) { tdq.push(&f.Type) }
 func (f *Func) copy() Type {
@@ -426,14 +436,14 @@ func (fp *FuncProto) copy() Type {
 }
 
 type FuncParam struct {
-	Name
+	Name string
 	Type Type
 }
 
 // Var is a global variable.
 type Var struct {
 	TypeID
-	Name
+	Name    string
 	Type    Type
 	Linkage VarLinkage
 }
@@ -441,6 +451,8 @@ type Var struct {
 func (v *Var) String() string {
 	return fmt.Sprintf("var#%d[%s %q]", v.TypeID, v.Linkage, v.Name)
 }
+
+func (v *Var) TypeName() string { return v.Name }
 
 func (v *Var) walk(tdq *typeDeque) { tdq.push(&v.Type) }
 func (v *Var) copy() Type {
@@ -451,7 +463,7 @@ func (v *Var) copy() Type {
 // Datasec is a global program section containing data.
 type Datasec struct {
 	TypeID
-	Name
+	Name string
 	Size uint32
 	Vars []VarSecinfo
 }
@@ -459,6 +471,8 @@ type Datasec struct {
 func (ds *Datasec) String() string {
 	return fmt.Sprintf("section#%d[%q]", ds.TypeID, ds.Name)
 }
+
+func (ds *Datasec) TypeName() string { return ds.Name }
 
 func (ds *Datasec) size() uint32 { return ds.Size }
 
@@ -487,7 +501,7 @@ type VarSecinfo struct {
 // Float is a float of a given length.
 type Float struct {
 	TypeID
-	Name
+	Name string
 
 	// The size of the float in bytes.
 	Size uint32
@@ -497,8 +511,9 @@ func (f *Float) String() string {
 	return fmt.Sprintf("float%d#%d[%q]", f.Size*8, f.TypeID, f.Name)
 }
 
-func (f *Float) size() uint32    { return f.Size }
-func (f *Float) walk(*typeDeque) {}
+func (f *Float) TypeName() string { return f.Name }
+func (f *Float) size() uint32     { return f.Size }
+func (f *Float) walk(*typeDeque)  {}
 func (f *Float) copy() Type {
 	cpy := *f
 	return &cpy
@@ -720,7 +735,7 @@ func (dq *typeDeque) all() []*Type {
 // Returns a map of named types (so, where NameOff is non-zero) and a slice of types
 // indexed by TypeID. Since BTF ignores compilation units, multiple types may share
 // the same name. A Type may form a cyclic graph by pointing at itself.
-func inflateRawTypes(rawTypes []rawType, rawStrings stringTable) (types []Type, namedTypes map[string][]namedType, err error) {
+func inflateRawTypes(rawTypes []rawType, rawStrings stringTable) (types []Type, namedTypes map[string][]NamedType, err error) {
 	type fixupDef struct {
 		id           TypeID
 		expectedKind btfKind
@@ -737,7 +752,7 @@ func inflateRawTypes(rawTypes []rawType, rawStrings stringTable) (types []Type, 
 		// work, since otherwise append might re-allocate members.
 		members := make([]Member, 0, len(raw))
 		for i, btfMember := range raw {
-			name, err := rawStrings.LookupName(btfMember.NameOff)
+			name, err := rawStrings.Lookup(btfMember.NameOff)
 			if err != nil {
 				return nil, fmt.Errorf("can't get name for member %d: %w", i, err)
 			}
@@ -759,7 +774,7 @@ func inflateRawTypes(rawTypes []rawType, rawStrings stringTable) (types []Type, 
 
 	types = make([]Type, 0, len(rawTypes))
 	types = append(types, (*Void)(nil))
-	namedTypes = make(map[string][]namedType)
+	namedTypes = make(map[string][]NamedType)
 
 	for i, raw := range rawTypes {
 		var (
@@ -769,7 +784,7 @@ func inflateRawTypes(rawTypes []rawType, rawStrings stringTable) (types []Type, 
 			typ Type
 		)
 
-		name, err := rawStrings.LookupName(raw.NameOff)
+		name, err := rawStrings.Lookup(raw.NameOff)
 		if err != nil {
 			return nil, nil, fmt.Errorf("get name for type id %d: %w", id, err)
 		}
@@ -811,7 +826,7 @@ func inflateRawTypes(rawTypes []rawType, rawStrings stringTable) (types []Type, 
 			rawvals := raw.data.([]btfEnum)
 			vals := make([]EnumValue, 0, len(rawvals))
 			for i, btfVal := range rawvals {
-				name, err := rawStrings.LookupName(btfVal.NameOff)
+				name, err := rawStrings.Lookup(btfVal.NameOff)
 				if err != nil {
 					return nil, nil, fmt.Errorf("get name for enum value %d: %s", i, err)
 				}
@@ -858,7 +873,7 @@ func inflateRawTypes(rawTypes []rawType, rawStrings stringTable) (types []Type, 
 			rawparams := raw.data.([]btfParam)
 			params := make([]FuncParam, 0, len(rawparams))
 			for i, param := range rawparams {
-				name, err := rawStrings.LookupName(param.NameOff)
+				name, err := rawStrings.Lookup(param.NameOff)
 				if err != nil {
 					return nil, nil, fmt.Errorf("get name for func proto parameter %d: %s", i, err)
 				}
@@ -903,8 +918,8 @@ func inflateRawTypes(rawTypes []rawType, rawStrings stringTable) (types []Type, 
 
 		types = append(types, typ)
 
-		if named, ok := typ.(namedType); ok {
-			if name := essentialName(named.name()); name != "" {
+		if named, ok := typ.(NamedType); ok {
+			if name := essentialName(named.TypeName()); name != "" {
 				namedTypes[name] = append(namedTypes[name], named)
 			}
 		}

@@ -234,13 +234,13 @@ func coreRelocate(local, target *Spec, relos coreRelos) (COREFixups, error) {
 		}
 
 		localType := local.types[id]
-		named, ok := localType.(namedType)
-		if !ok || named.name() == "" {
+		named, ok := localType.(NamedType)
+		if !ok || named.TypeName() == "" {
 			return nil, fmt.Errorf("relocate unnamed or anonymous type %s: %w", localType, ErrNotSupported)
 		}
 
 		relos := relosByID[id]
-		targets := target.namedTypes[named.essentialName()]
+		targets := target.namedTypes[essentialName(named.TypeName())]
 		fixups, err := coreCalculateFixups(localType, targets, relos)
 		if err != nil {
 			return nil, fmt.Errorf("relocate %s: %w", localType, err)
@@ -262,7 +262,7 @@ var errImpossibleRelocation = errors.New("impossible relocation")
 //
 // The best target is determined by scoring: the less poisoning we have to do
 // the better the target is.
-func coreCalculateFixups(local Type, targets []namedType, relos coreRelos) ([]COREFixup, error) {
+func coreCalculateFixups(local Type, targets []NamedType, relos coreRelos) ([]COREFixup, error) {
 	localID := local.ID()
 	local, err := copyType(local, skipQualifierAndTypedef)
 	if err != nil {
@@ -639,7 +639,7 @@ func coreFindField(local Type, localAcc coreAccessor, target Type) (_, _ coreFie
 
 // coreFindMember finds a member in a composite type while handling anonymous
 // structs and unions.
-func coreFindMember(typ composite, name Name) (Member, bool, error) {
+func coreFindMember(typ composite, name string) (Member, bool, error) {
 	if name == "" {
 		return Member{}, false, errors.New("can't search for anonymous member")
 	}
@@ -704,9 +704,9 @@ func coreFindEnumValue(local Type, localAcc coreAccessor, target Type) (localVal
 		return nil, nil, errImpossibleRelocation
 	}
 
-	localName := localValue.Name.essentialName()
+	localName := essentialName(localValue.Name)
 	for i, targetValue := range targetEnum.Values {
-		if targetValue.Name.essentialName() != localName {
+		if essentialName(targetValue.Name) != localName {
 			continue
 		}
 
@@ -853,11 +853,11 @@ func coreAreMembersCompatible(localType Type, targetType Type) error {
 
 	case *Enum:
 		tv := targetType.(*Enum)
-		return doNamesMatch(lv.name(), tv.name())
+		return doNamesMatch(lv.Name, tv.Name)
 
 	case *Fwd:
 		tv := targetType.(*Fwd)
-		return doNamesMatch(lv.name(), tv.name())
+		return doNamesMatch(lv.Name, tv.Name)
 
 	case *Int:
 		tv := targetType.(*Int)

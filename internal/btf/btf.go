@@ -35,7 +35,7 @@ type Spec struct {
 	rawTypes   []rawType
 	strings    stringTable
 	types      []Type
-	namedTypes map[string][]namedType
+	namedTypes map[string][]NamedType
 	funcInfos  map[string]extInfo
 	lineInfos  map[string]extInfo
 	coreRelos  map[string]coreRelos
@@ -363,10 +363,10 @@ func fixupDatasec(rawTypes []rawType, rawStrings stringTable, sectionSizes map[s
 // Copy creates a copy of Spec.
 func (s *Spec) Copy() *Spec {
 	types, _ := copyTypes(s.types, nil)
-	namedTypes := make(map[string][]namedType)
+	namedTypes := make(map[string][]NamedType)
 	for _, typ := range types {
-		if named, ok := typ.(namedType); ok {
-			name := named.essentialName()
+		if named, ok := typ.(NamedType); ok {
+			name := essentialName(named.TypeName())
 			namedTypes[name] = append(namedTypes[name], named)
 		}
 	}
@@ -492,7 +492,7 @@ func (s *Spec) FindType(name string, typ Type) error {
 		}
 
 		// Match against the full name, not just the essential one.
-		if typ.name() != name {
+		if typ.TypeName() != name {
 			continue
 		}
 

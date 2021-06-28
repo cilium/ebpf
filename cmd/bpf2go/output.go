@@ -2,8 +2,10 @@ package main
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"go/format"
+	"go/scanner"
 	"go/token"
 	"io"
 	"io/ioutil"
@@ -277,12 +279,35 @@ func binaryString(buf []byte) string {
 
 func writeFormatted(src []byte, out io.Writer) error {
 	formatted, err := format.Source(src)
-	if err != nil {
-		return fmt.Errorf("can't format source: %s", err)
+	if err == nil {
+		_, err = out.Write(formatted)
+		return err
 	}
 
-	_, err = out.Write(formatted)
-	return err
+	var el scanner.ErrorList
+	if !errors.As(err, &el) {
+		return err
+	}
+
+	var nel scanner.ErrorList
+	for _, err := range el {
+		if !err.Pos.IsValid() {
+			nel = append(nel, err)
+			continue
+		}
+
+		buf := src[err.Pos.Offset:]
+		nl := bytes.IndexRune(buf, '\n')
+		if nl == -1 {
+			nel = append(nel, err)
+			continue
+		}
+
+		err.Msg += ": " + string(buf[:nl])
+		nel = append(nel, err)
+	}
+
+	return nel
 }
 
 func identifier(str string) string {

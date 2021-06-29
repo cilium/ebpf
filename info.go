@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/cilium/ebpf/internal"
+	"github.com/cilium/ebpf/internal/btf"
 )
 
 // MapInfo describes a map.
@@ -87,6 +88,8 @@ type ProgramInfo struct {
 	Tag string
 	// Name as supplied by user space at load time.
 	Name string
+	// BTF for the program.
+	BTF *btf.Handle
 
 	stats *programStats
 }
@@ -100,6 +103,14 @@ func newProgramInfoFromFd(fd *internal.FD) (*ProgramInfo, error) {
 		return nil, err
 	}
 
+	var btfHandle *btf.Handle
+	if info.btf_id != 0 {
+		btfHandle, err = btf.NewHandleFromID(btf.TypeID(info.btf_id))
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	return &ProgramInfo{
 		Type: ProgramType(info.prog_type),
 		id:   ProgramID(info.id),
@@ -107,6 +118,7 @@ func newProgramInfoFromFd(fd *internal.FD) (*ProgramInfo, error) {
 		Tag: hex.EncodeToString(info.tag[:]),
 		// name is available from 4.15.
 		Name: internal.CString(info.name[:]),
+		BTF:  btfHandle,
 		stats: &programStats{
 			runtime:  time.Duration(info.run_time_ns),
 			runCount: info.run_cnt,

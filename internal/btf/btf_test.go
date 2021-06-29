@@ -61,7 +61,7 @@ func TestParseVmlinux(t *testing.T) {
 			if u8int.Offset != 0 {
 				t.Fatalf("incorrect int offset of an __u8 int: expected: 0 actual: %d", u8int.Offset)
 			}
-			return
+			break
 		}
 	}
 }
@@ -79,7 +79,7 @@ func TestParseCurrentKernelBTF(t *testing.T) {
 }
 
 func TestLoadSpecFromElf(t *testing.T) {
-	testutils.Files(t, testutils.Glob(t, "../../testdata/loader-clang-9-*.elf"), func(t *testing.T, file string) {
+	testutils.Files(t, testutils.Glob(t, "../../testdata/loader-e*.elf"), func(t *testing.T, file string) {
 		fh, err := os.Open(file)
 		if err != nil {
 			t.Fatal(err)
@@ -115,6 +115,24 @@ func TestLoadSpecFromElf(t *testing.T) {
 		var tmp Void
 		if err := spec.FindType("totally_bogus_type", &tmp); !errors.Is(err, ErrNotFound) {
 			t.Error("FindType doesn't return ErrNotFound:", err)
+		}
+
+		var fn Func
+		if err := spec.FindType("global_fn", &fn); err != nil {
+			t.Error("Can't find global_fn():", err)
+		} else {
+			if fn.Linkage != GlobalFunc {
+				t.Error("Expected global linkage:", fn)
+			}
+		}
+
+		var v Var
+		if err := spec.FindType("key3", &v); err != nil {
+			t.Error("Cant find key3:", err)
+		} else {
+			if v.Linkage != GlobalVar {
+				t.Error("Expected global linkage:", v)
+			}
 		}
 
 		if spec.byteOrder != internal.NativeEndian {

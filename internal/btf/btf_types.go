@@ -31,15 +31,50 @@ const (
 	kindDatasec
 )
 
-// btfFuncLinkage describes BTF function linkage metadata.
-type btfFuncLinkage uint8
+// FuncLinkage describes BTF function linkage metadata.
+type FuncLinkage int
 
 // Equivalent of enum btf_func_linkage.
 const (
-	linkageStatic btfFuncLinkage = iota
-	linkageGlobal
-	// linkageExtern // Currently unused in libbpf.
+	StaticFunc FuncLinkage = iota
+	GlobalFunc
+	ExternFunc // Currently unused in libbpf.
 )
+
+func (fl FuncLinkage) String() string {
+	switch fl {
+	case StaticFunc:
+		return "static"
+	case GlobalFunc:
+		return "global"
+	case ExternFunc:
+		return "extern"
+	default:
+		return fmt.Sprintf("unknown(%d)", int(fl))
+	}
+}
+
+// VarLinkage describes BTF variable linkage metadata.
+type VarLinkage int
+
+const (
+	StaticVar VarLinkage = iota
+	GlobalVar
+	ExternVar
+)
+
+func (vl VarLinkage) String() string {
+	switch vl {
+	case StaticVar:
+		return "static"
+	case GlobalVar:
+		return "global"
+	case ExternVar:
+		return "extern"
+	default:
+		return fmt.Sprintf("unknown(%d)", int(vl))
+	}
+}
 
 const (
 	btfTypeKindShift     = 24
@@ -144,11 +179,11 @@ func (bt *btfType) KindFlag() bool {
 	return bt.info(btfTypeKindFlagMask, btfTypeKindFlagShift) == 1
 }
 
-func (bt *btfType) Linkage() btfFuncLinkage {
-	return btfFuncLinkage(bt.info(btfTypeVlenMask, btfTypeVlenShift))
+func (bt *btfType) Linkage() FuncLinkage {
+	return FuncLinkage(bt.info(btfTypeVlenMask, btfTypeVlenShift))
 }
 
-func (bt *btfType) SetLinkage(linkage btfFuncLinkage) {
+func (bt *btfType) SetLinkage(linkage FuncLinkage) {
 	bt.setInfo(uint32(linkage), btfTypeVlenMask, btfTypeVlenShift)
 }
 

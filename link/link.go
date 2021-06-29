@@ -6,6 +6,7 @@ import (
 
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/internal"
+	"github.com/cilium/ebpf/internal/btf"
 )
 
 var ErrNotSupported = internal.ErrNotSupported
@@ -49,6 +50,8 @@ type RawLinkOptions struct {
 	Program *ebpf.Program
 	// Attach must match the attach type of Program.
 	Attach ebpf.AttachType
+	// BTF is the BTF of the attachment target.
+	BTF btf.Type
 }
 
 // RawLinkInfo contains metadata on a link.
@@ -82,10 +85,16 @@ func AttachRawLink(opts RawLinkOptions) (*RawLink, error) {
 		return nil, fmt.Errorf("invalid program: %s", internal.ErrClosedFd)
 	}
 
+	btfID := uint32(0)
+	if opts.BTF != nil {
+		btfID = uint32(opts.BTF.ID())
+	}
+
 	attr := bpfLinkCreateAttr{
-		targetFd:   uint32(opts.Target),
-		progFd:     uint32(progFd),
-		attachType: opts.Attach,
+		targetFd:    uint32(opts.Target),
+		progFd:      uint32(progFd),
+		attachType:  opts.Attach,
+		targetBTFID: btfID,
 	}
 	fd, err := bpfLinkCreate(&attr)
 	if err != nil {

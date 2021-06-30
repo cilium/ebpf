@@ -89,7 +89,7 @@ type ProgramInfo struct {
 	// Name as supplied by user space at load time.
 	Name string
 	// BTF for the program.
-	BTF *btf.Handle
+	btf btf.TypeID
 
 	stats *programStats
 }
@@ -103,14 +103,6 @@ func newProgramInfoFromFd(fd *internal.FD) (*ProgramInfo, error) {
 		return nil, err
 	}
 
-	var btfHandle *btf.Handle
-	if info.btf_id != 0 {
-		btfHandle, err = btf.NewHandleFromID(btf.TypeID(info.btf_id))
-		if err != nil {
-			return nil, err
-		}
-	}
-
 	return &ProgramInfo{
 		Type: ProgramType(info.prog_type),
 		id:   ProgramID(info.id),
@@ -118,7 +110,7 @@ func newProgramInfoFromFd(fd *internal.FD) (*ProgramInfo, error) {
 		Tag: hex.EncodeToString(info.tag[:]),
 		// name is available from 4.15.
 		Name: internal.CString(info.name[:]),
-		BTF:  btfHandle,
+		btf:  btf.TypeID(info.btf_id),
 		stats: &programStats{
 			runtime:  time.Duration(info.run_time_ns),
 			runCount: info.run_cnt,
@@ -152,6 +144,17 @@ func newProgramInfoFromProc(fd *internal.FD) (*ProgramInfo, error) {
 // The bool return value indicates whether this optional field is available.
 func (pi *ProgramInfo) ID() (ProgramID, bool) {
 	return pi.id, pi.id > 0
+}
+
+// BTFID returns the BTF ID associated with the program.
+//
+// Available from 4.??.
+//
+// The bool return value indicates whether this optional field is available and
+// populated. (The field may be available but not populated if the kernel
+// supports the field but the program was loaded without BTF information.)
+func (pi *ProgramInfo) BTFID() (btf.TypeID, bool) {
+	return pi.btf, pi.btf > 0
 }
 
 // RunCount returns the total number of times the program was called.

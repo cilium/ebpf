@@ -33,7 +33,15 @@ func AttachFreplace(targetProg *ebpf.Program, name string, prog *ebpf.Program) (
 	if err != nil {
 		return nil, err
 	}
-	spec, err := btf.HandleSpec(info.BTF)
+	btfID, ok := info.BTFID()
+	if !ok {
+		return nil, fmt.Errorf("could not get BTF ID for program %s: %w", info.Name, errInvalidInput)
+	}
+	btfHandle, err := btf.NewHandleFromID(btfID)
+	if err != nil {
+		return nil, err
+	}
+	spec, err := btf.HandleSpec(btfHandle)
 	if err != nil {
 		return nil, err
 	}

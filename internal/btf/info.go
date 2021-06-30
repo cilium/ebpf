@@ -6,14 +6,14 @@ import (
 	"github.com/cilium/ebpf/internal"
 )
 
-type BTFInfo struct {
+type Info struct {
 	BTF       *Spec
 	id        TypeID
 	Name      string
 	KernelBTF bool
 }
 
-func newBTFInfoFromFd(fd *internal.FD) (*BTFInfo, error) {
+func newBTFInfoFromFd(fd *internal.FD) (*Info, error) {
 	// We invoke the syscall once with a empty BTF and name buffers to get size
 	// information to allocate buffers. Then we invoke it a second time with
 	// buffers to receive the data.
@@ -34,7 +34,7 @@ func newBTFInfoFromFd(fd *internal.FD) (*BTFInfo, error) {
 		return nil, err
 	}
 
-	return &BTFInfo{
+	return &Info{
 		BTF:       spec,
 		id:        TypeID(info.id),
 		Name:      internal.CString(nameBuffer),

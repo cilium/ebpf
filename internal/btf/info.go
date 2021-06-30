@@ -39,24 +39,13 @@ func newBTFInfoFromFd(fd *internal.FD) (*BTFInfo, error) {
 		return nil, err
 	}
 
-	rawTypes, rawStrings, err := parseBTF(bytes.NewReader(btfBuffer), internal.NativeEndian)
-	if err != nil {
-		return nil, err
-	}
-
-	types, typesByName, err := inflateRawTypes(rawTypes, rawStrings)
+	spec, err := loadNakedSpec(bytes.NewReader(btfBuffer), internal.NativeEndian, nil, nil)
 	if err != nil {
 		return nil, err
 	}
 
 	return &BTFInfo{
-		BTF: &Spec{
-			rawTypes:   rawTypes,
-			namedTypes: typesByName,
-			types:      types,
-			strings:    rawStrings,
-			byteOrder:  internal.NativeEndian,
-		},
+		BTF:       spec,
 		id:        TypeID(info.id),
 		Name:      internal.CString(nameBuffer),
 		KernelBTF: info.kernelBTF != 0,

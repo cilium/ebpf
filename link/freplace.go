@@ -35,9 +35,9 @@ func AttachFreplace(targetProg *ebpf.Program, name string, prog *ebpf.Program) (
 	}
 	btfID, ok := info.BTFID()
 	if !ok {
-		return nil, fmt.Errorf("no BTF info available for target program %s", info.Name)
+		return nil, fmt.Errorf("could not get BTF ID for program %s: %w", info.Name, errInvalidInput)
 	}
-	btfHandle, err := btf.NewHandleFromID(btf.TypeID(btfID))
+	btfHandle, err := btf.NewHandleFromID(btfID)
 	if err != nil {
 		return nil, err
 	}

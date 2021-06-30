@@ -385,6 +385,19 @@ func (p *Program) Clone() (*Program, error) {
 	return &Program{p.VerifierLog, dup, p.name, "", p.typ}, nil
 }
 
+// CloneProgramFromFD creates a Program from a duplicate of a file descriptor.
+//
+// Closing the duplicate does not affect the original file descriptor, and vice
+// versa.
+func CloneProgramFromFD(fd int) (*Program, error) {
+	p, err := NewProgramFromFD(fd)
+	if err != nil {
+		return nil, err
+	}
+
+	return p.Clone()
+}
+
 // Pin persists the Program on the BPF virtual file system past the lifetime of
 // the process that created it
 //
@@ -699,6 +712,7 @@ func resolveBTFType(kernel *btf.Spec, name string, attachTarget int, progType Pr
 	var target btf.Type
 	var targetProg *Program
 	var typeName, featureName string
+	fd := -1
 	switch (match{progType, attachType}) {
 	case match{LSM, AttachLSMMac}:
 		target = new(btf.Func)
@@ -712,10 +726,11 @@ func resolveBTFType(kernel *btf.Spec, name string, attachTarget int, progType Pr
 
 	case match{Extension, AttachNone}:
 		var err error
-		targetProg, err = NewProgramFromFD(attachTarget)
+		targetProg, err = CloneProgramFromFD(attachTarget)
 		if err != nil {
 			return nil, -1, fmt.Errorf("resolve BTF for function %s: %w", name, err)
 		}
+		defer targetProg.Close()
 		info, err := targetProg.Info()
 		if err != nil {
 			return nil, -1, fmt.Errorf("can't load program BTF spec: %w", err)
@@ -729,6 +744,7 @@ func resolveBTFType(kernel *btf.Spec, name string, attachTarget int, progType Pr
 		if err != nil {
 			return nil, -1, fmt.Errorf("can't load program BTF spec for %s: %w", info.Name, err)
 		}
+		defer btfHandle.Close()
 		kernel, err = btf.HandleSpec(btfHandle)
 		if err != nil {
 			return nil, -1, fmt.Errorf("can't load program BTF spec for %s: %w", info.Name, err)
@@ -741,6 +757,7 @@ func resolveBTFType(kernel *btf.Spec, name string, attachTarget int, progType Pr
 		target = new(btf.Func)
 		typeName = name
 		featureName = "freplace " + name
+		fd = attachTarget
 
 	default:
 		return nil, -1, nil
@@ -764,9 +781,5 @@ func resolveBTFType(kernel *btf.Spec, name string, attachTarget int, progType Pr
 		return nil, -1, fmt.Errorf("resolve BTF for %s: %w", featureName, err)
 	}
 
-	fd := -1
-	if targetProg != nil {
-		fd = targetProg.FD()
-	}
 	return target, fd, nil
 }

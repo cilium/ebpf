@@ -12,9 +12,9 @@ type FreplaceLink struct {
 }
 
 // AttachFreplace attaches the given eBPF program to the function with the
-// given name in the given program. Example:
+// given name in the given target program. Example:
 //
-//	AttachFreplace("syscalls", "sys_enter_fork")
+//	AttachFreplace(dispatcher, "function", replacement)
 func AttachFreplace(targetProg *ebpf.Program, name string, prog *ebpf.Program) (*FreplaceLink, error) {
 	if name == "" {
 		return nil, fmt.Errorf("name cannot be empty: %w", errInvalidInput)

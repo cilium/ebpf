@@ -148,7 +148,7 @@ func (pi *ProgramInfo) ID() (ProgramID, bool) {
 
 // BTFID returns the BTF ID associated with the program.
 //
-// Available from 4.??.
+// Available from 5.0.
 //
 // The bool return value indicates whether this optional field is available and
 // populated. (The field may be available but not populated if the kernel

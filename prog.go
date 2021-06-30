@@ -721,7 +721,15 @@ func resolveBTFType(kernel *btf.Spec, name string, attachTarget int, progType Pr
 			return nil, -1, fmt.Errorf("can't load program BTF spec: %w", err)
 		}
 
-		kernel, err = btf.HandleSpec(info.BTF)
+		btfID, ok := info.BTFID()
+		if !ok {
+			return nil, -1, fmt.Errorf("can't load program BTF spec for %s: no BTF info available", info.Name)
+		}
+		btfHandle, err := btf.NewHandleFromID(btf.TypeID(btfID))
+		if err != nil {
+			return nil, -1, fmt.Errorf("can't load program BTF spec for %s: %w", info.Name, err)
+		}
+		kernel, err = btf.HandleSpec(btfHandle)
 		if err != nil {
 			return nil, -1, fmt.Errorf("can't load program BTF spec for %s: %w", info.Name, err)
 		}

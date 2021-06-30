@@ -8,7 +8,6 @@ import (
 	"io"
 	"os"
 	"strings"
-	"syscall"
 
 	"github.com/cilium/ebpf/internal"
 )
@@ -25,9 +24,6 @@ func newBTFInfoFromFd(fd *internal.FD) (*BTFInfo, error) {
 	// information to allocate buffers. Then we invoke it a second time with
 	// buffers to receive the data.
 	info, err := bpfGetBTFInfoByFD(fd, nil, nil)
-	if errors.Is(err, syscall.EINVAL) {
-		return newBTFInfoFromProc(fd)
-	}
 	if err != nil {
 		return nil, err
 	}
@@ -50,24 +46,6 @@ func newBTFInfoFromFd(fd *internal.FD) (*BTFInfo, error) {
 		Name:      internal.CString(nameBuffer),
 		KernelBTF: info.kernelBTF != 0,
 	}, nil
-}
-
-func newBTFInfoFromProc(fd *internal.FD) (*BTFInfo, error) {
-	var info BTFInfo
-	err := scanFdInfo(fd, map[string]interface{}{
-		"btf_id": &info.id,
-	})
-	if errors.Is(err, errMissingFields) {
-		return nil, &internal.UnsupportedFeatureError{
-			Name:           "reading BTF info from /proc/self/fdinfo",
-			MinimumVersion: internal.Version{5, 1, 0},
-		}
-	}
-	if err != nil {
-		return nil, err
-	}
-
-	return &info, nil
 }
 
 func scanFdInfo(fd *internal.FD, fields map[string]interface{}) error {

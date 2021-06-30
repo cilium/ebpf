@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/cilium/ebpf"
+	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/btf"
 )
 
@@ -16,6 +17,9 @@ type FreplaceLink struct {
 //
 //	AttachFreplace(dispatcher, "function", replacement)
 func AttachFreplace(targetProg *ebpf.Program, name string, prog *ebpf.Program) (*FreplaceLink, error) {
+	if err := haveFreplace(); err != nil {
+		return nil, err
+	}
 	if name == "" {
 		return nil, fmt.Errorf("name cannot be empty: %w", errInvalidInput)
 	}
@@ -63,3 +67,18 @@ func AttachFreplace(targetProg *ebpf.Program, name string, prog *ebpf.Program) (
 
 	return &FreplaceLink{link}, nil
 }
+
+var haveFreplace = internal.FeatureTest("freplace", "5.11", func() error {
+	kv, err := internal.KernelVersion()
+	if err != nil {
+		return internal.ErrNotSupported
+	}
+	minimumKV, err := internal.NewVersion("5.11")
+	if err != nil {
+		return internal.ErrNotSupported
+	}
+	if kv.Less(minimumKV) {
+		return internal.ErrNotSupported
+	}
+	return nil
+})

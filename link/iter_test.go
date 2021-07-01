@@ -55,3 +55,56 @@ func TestIter(t *testing.T) {
 		},
 	})
 }
+
+func TestIterMapElements(t *testing.T) {
+	prog, err := ebpf.NewProgram(&ebpf.ProgramSpec{
+		Type:       ebpf.Tracing,
+		AttachType: ebpf.AttachTraceIter,
+		AttachTo:   "bpf_map_elem",
+		Instructions: asm.Instructions{
+			asm.Mov.Imm(asm.R0, 0),
+			asm.Return(),
+		},
+		License: "MIT",
+	})
+	testutils.SkipIfNotSupported(t, err)
+	if err != nil {
+		t.Fatal("Can't load program:", err)
+	}
+	defer prog.Close()
+
+	arr, err := ebpf.NewMap(&ebpf.MapSpec{
+		Type:       ebpf.Array,
+		KeySize:    4,
+		ValueSize:  4,
+		MaxEntries: 3,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer arr.Close()
+
+	it, err := AttachIter(IterOptions{
+		Program: prog,
+		Map:     arr,
+	})
+	if err != nil {
+		t.Fatal("Can't create iter:", err)
+	}
+	defer it.Close()
+
+	file, err := it.Open()
+	if err != nil {
+		t.Fatal("Can't open iter instance:", err)
+	}
+	defer file.Close()
+
+	contents, err := ioutil.ReadAll(file)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(contents) != 0 {
+		t.Error("Non-empty output from no-op iterator:", string(contents))
+	}
+}

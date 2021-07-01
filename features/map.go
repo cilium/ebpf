@@ -23,6 +23,23 @@ func init() {
 	mc.mapTypes = make(map[ebpf.MapType]error)
 }
 
+// FlushMapCache invalidates the entire cache storing feature probe results.
+func FlushMapCache() {
+	mc.mu.Lock()
+	// could this approach introduce any unwanted side effects in multiple threads
+	// even if we lock access to the cache structure?
+	// should I rather delete() all the entries in the map?
+	mc.mapTypes = make(map[ebpf.MapType]error)
+	mc.mu.Unlock()
+}
+
+// FlushMapCacheEntry allows to delete a specified entry of the MapType feature cache.
+func FlushMapCacheEntry(mt ebpf.MapType) {
+	mc.mu.Lock()
+	delete(mc.mapTypes, mt)
+	mc.mu.Unlock()
+}
+
 func probeMapTypeAttr(mt ebpf.MapType) *internal.BPFMapCreateAttr {
 	var (
 		keySize               uint32 = 4
@@ -37,10 +54,9 @@ func probeMapTypeAttr(mt ebpf.MapType) *internal.BPFMapCreateAttr {
 	)
 
 	// switch on map types to generate correct bpfMapCreateAttr
-	// BPF_MAP_TYPE_STRUCT_OPS, BPF_MAP_TYPE_RINGBUF, BPF_MAP_TYPE_INODE_STORAGE, BPF_MAP_TYPE_TASK_STORAGE
-	// are added with open ringbuf PR
 	switch mt {
 	case ebpf.StackTrace:
+		// valueSize needs to be sizeof(uint64)
 		valueSize = 8
 	case ebpf.LPMTrie:
 		keySize = 8
@@ -62,7 +78,7 @@ func probeMapTypeAttr(mt ebpf.MapType) *internal.BPFMapCreateAttr {
 	case ebpf.Stack:
 		keySize = 0
 	case ebpf.StructOpts:
-		// does not work currently
+		// we can't support StructOps probes currently as it will require a valid BTF fd
 		btfVmLinuxValueTypeID = 1
 	case ebpf.RingBuf:
 		keySize = 0
@@ -96,6 +112,13 @@ func probeMapTypeAttr(mt ebpf.MapType) *internal.BPFMapCreateAttr {
 
 }
 
+// ProbeMapType allows probing the availability of a specified ebpf.MapType
+// It will call the syscall to create a dummy map of a given ebpf.MapType at most once
+// storing the result of the first call in a global cache.
+// This potentially can result in false results if the calling process changes its permissions
+// or capabilities.
+// Calling programs can avoid false cached results by invalidating the cache through
+// FlushMapCache() and FlushMapCacheEntry().
 func ProbeMapType(mt ebpf.MapType) error {
 	// make sure to bound Map types
 	// MaxMapType new value in enum, easier to handle than making sure

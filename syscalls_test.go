@@ -1,10 +1,12 @@
 package ebpf
 
 import (
+	"errors"
 	"strings"
 	"testing"
 
 	"github.com/cilium/ebpf/internal/testutils"
+	"golang.org/x/sys/unix"
 )
 
 func TestObjNameCharacters(t *testing.T) {
@@ -19,6 +21,20 @@ func TestObjNameCharacters(t *testing.T) {
 		result := strings.IndexFunc(in, invalidBPFObjNameChar) == -1
 		if result != valid {
 			t.Errorf("Name '%s' classified incorrectly", in)
+		}
+	}
+}
+
+func TestWrapObjError(t *testing.T) {
+	for inErr, outErr := range map[error]error{
+		unix.ENOENT: ErrNotExist,
+		unix.EPERM:  unix.EPERM,
+		unix.EACCES: unix.EACCES,
+		unix.ENOANO: unix.ENOANO, // dummy error -- never actually returned
+	} {
+		gotErr := wrapObjError(inErr)
+		if !errors.Is(gotErr, outErr) {
+			t.Errorf("wrapObjError(%v) doesn't wrap %v: got %v", inErr, outErr, gotErr)
 		}
 	}
 }

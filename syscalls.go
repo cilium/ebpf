@@ -3,6 +3,7 @@ package ebpf
 import (
 	"errors"
 	"fmt"
+	"os"
 	"unsafe"
 
 	"github.com/cilium/ebpf/internal"
@@ -10,8 +11,10 @@ import (
 	"github.com/cilium/ebpf/internal/unix"
 )
 
-// Generic errors returned by BPF syscalls.
-var ErrNotExist = errors.New("requested object does not exist")
+// ErrNotExist is returned when loading a non-existing map or program.
+//
+// Deprecated: use os.ErrNotExist instead.
+var ErrNotExist = os.ErrNotExist
 
 // invalidBPFObjNameChar returns true if char may not appear in
 // a BPF object name.
@@ -162,7 +165,7 @@ func bpfProgLoad(attr *bpfProgLoadAttr) (*internal.FD, error) {
 		fd, err := internal.BPF(internal.BPF_PROG_LOAD, unsafe.Pointer(attr), unsafe.Sizeof(*attr))
 		// As of ~4.20 the verifier can be interrupted by a signal,
 		// and returns EAGAIN in that case.
-		if err == unix.EAGAIN {
+		if errors.Is(err, unix.EAGAIN) {
 			continue
 		}
 
@@ -326,7 +329,7 @@ func objGetNextID(cmd internal.BPFCmd, start uint32) (uint32, error) {
 		startID: start,
 	}
 	_, err := internal.BPF(cmd, unsafe.Pointer(&attr), unsafe.Sizeof(attr))
-	return attr.nextID, wrapObjError(err)
+	return attr.nextID, err
 }
 
 func bpfMapBatch(cmd internal.BPFCmd, m *internal.FD, inBatch, outBatch, keys, values internal.Pointer, count uint32, opts *BatchOptions) (uint32, error) {
@@ -352,32 +355,21 @@ func bpfMapBatch(cmd internal.BPFCmd, m *internal.FD, inBatch, outBatch, keys, v
 	return attr.count, wrapMapError(err)
 }
 
-func wrapObjError(err error) error {
-	if err == nil {
-		return nil
-	}
-	if errors.Is(err, unix.ENOENT) {
-		return fmt.Errorf("%w", ErrNotExist)
-	}
-
-	return errors.New(err.Error())
-}
-
 func wrapMapError(err error) error {
 	if err == nil {
 		return nil
 	}
 
 	if errors.Is(err, unix.ENOENT) {
-		return ErrKeyNotExist
+		return internal.SyscallError(ErrKeyNotExist, unix.ENOENT)
 	}
 
 	if errors.Is(err, unix.EEXIST) {
-		return ErrKeyExist
+		return internal.SyscallError(ErrKeyExist, unix.EEXIST)
 	}
 
 	if errors.Is(err, unix.ENOTSUPP) {
-		return ErrNotSupported
+		return internal.SyscallError(ErrNotSupported, unix.ENOTSUPP)
 	}
 
 	return err
@@ -484,5 +476,5 @@ func bpfObjGetFDByID(cmd internal.BPFCmd, id uint32) (*internal.FD, error) {
 		id: id,
 	}
 	ptr, err := internal.BPF(cmd, unsafe.Pointer(&attr), unsafe.Sizeof(attr))
-	return internal.NewFD(uint32(ptr)), wrapObjError(err)
+	return internal.NewFD(uint32(ptr)), err
 }

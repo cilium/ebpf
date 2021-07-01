@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"runtime"
+	"syscall"
 	"unsafe"
 
 	"github.com/cilium/ebpf/internal/unix"
@@ -61,7 +62,7 @@ func BPF(cmd BPFCmd, attr unsafe.Pointer, size uintptr) (uintptr, error) {
 
 	var err error
 	if errNo != 0 {
-		err = errNo
+		err = wrappedErrno{errNo}
 	}
 
 	return r1, err
@@ -212,4 +213,33 @@ func BPFMapCreate(attr *BPFMapCreateAttr) (*FD, error) {
 	}
 
 	return NewFD(uint32(fd)), nil
+}
+
+// wrappedErrno wraps syscall.Errno to prevent direct comparisons with
+// syscall.E* or unix.E* constants.
+//
+// You should never export an error of this type.
+type wrappedErrno struct {
+	syscall.Errno
+}
+
+func (we wrappedErrno) Unwrap() error {
+	return we.Errno
+}
+
+type syscallError struct {
+	error
+	errno syscall.Errno
+}
+
+func SyscallError(err error, errno syscall.Errno) error {
+	return &syscallError{err, errno}
+}
+
+func (se *syscallError) Is(target error) bool {
+	return target == se.error
+}
+
+func (se *syscallError) Unwrap() error {
+	return se.errno
 }

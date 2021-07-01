@@ -367,6 +367,17 @@ func TestLibBPFCompat(t *testing.T) {
 		// Disable retrying a program load with the log enabled, it leads
 		// to OOM kills.
 		opts.Programs.LogSize = -1
+
+		for name, p := range spec.Programs {
+			if p.Type != Extension {
+				continue
+			}
+
+			targetProg, targetColl := loadTargetProgram(t, name, opts)
+			defer targetColl.Close()
+			p.AttachTarget = targetProg.FD()
+		}
+
 		coll, err := NewCollectionWithOptions(spec, opts)
 		testutils.SkipIfNotSupported(t, err)
 		var errno syscall.Errno
@@ -472,6 +483,24 @@ func TestLibBPFCompat(t *testing.T) {
 			})
 		}
 	})
+}
+
+func loadTargetProgram(tb testing.TB, name string, opts CollectionOptions) (*Program, *Collection) {
+	switch name {
+	default:
+		file := filepath.Join(*elfPath, "test_pkt_access.o")
+		spec, err := LoadCollectionSpec(file)
+		if err != nil {
+			tb.Fatalf("Can't read %s: %s", file, err)
+		}
+
+		coll, err := NewCollectionWithOptions(spec, opts)
+		if err != nil {
+			tb.Fatalf("Can't load target: %s", err)
+		}
+
+		return coll.Programs["test_pkt_access"], coll
+	}
 }
 
 func sourceOfBTF(tb testing.TB, path string) []string {

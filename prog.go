@@ -245,7 +245,7 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions, handles *hand
 	attr.insCount = uint32(len(bytecode) / asm.InstructionSize)
 
 	if spec.AttachTo != "" {
-		targetBTF, targetProg, err := resolveBTFType(nil, spec.AttachTo, spec.AttachTarget, spec.Type, spec.AttachType)
+		targetBTF, targetProg, err := resolveBTFType(targetBTF, spec.AttachTo, spec.AttachTarget, spec.Type, spec.AttachType)
 		if err != nil {
 			return nil, err
 		}

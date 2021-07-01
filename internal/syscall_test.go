@@ -33,3 +33,24 @@ func TestWrappedErrno(t *testing.T) {
 		t.Error("errors.Is(wrappedErrno, EAGAIN) returns true")
 	}
 }
+
+func TestSyscallError(t *testing.T) {
+	err := errors.New("foo")
+	foo := SyscallError(err, unix.EINVAL)
+
+	if !errors.Is(foo, unix.EINVAL) {
+		t.Error("SyscallError is not the wrapped errno")
+	}
+
+	if !errors.Is(foo, err) {
+		t.Error("SyscallError is not the wrapped error")
+	}
+
+	if errors.Is(unix.EINVAL, foo) {
+		t.Error("Errno is the SyscallError")
+	}
+
+	if errors.Is(err, foo) {
+		t.Error("Error is the SyscallError")
+	}
+}

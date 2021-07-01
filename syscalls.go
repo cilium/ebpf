@@ -357,10 +357,9 @@ func wrapObjError(err error) error {
 		return nil
 	}
 	if errors.Is(err, unix.ENOENT) {
-		return fmt.Errorf("%w", ErrNotExist)
+		err = ErrNotExist
 	}
-
-	return errors.New(err.Error())
+	return fmt.Errorf("%w", err)
 }
 
 func wrapMapError(err error) error {

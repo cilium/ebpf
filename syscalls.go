@@ -361,15 +361,15 @@ func wrapMapError(err error) error {
 	}
 
 	if errors.Is(err, unix.ENOENT) {
-		return ErrKeyNotExist
+		return internal.SyscallError(ErrKeyNotExist, unix.ENOENT)
 	}
 
 	if errors.Is(err, unix.EEXIST) {
-		return ErrKeyExist
+		return internal.SyscallError(ErrKeyExist, unix.EEXIST)
 	}
 
 	if errors.Is(err, unix.ENOTSUPP) {
-		return ErrNotSupported
+		return internal.SyscallError(ErrNotSupported, unix.ENOTSUPP)
 	}
 
 	return err

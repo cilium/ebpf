@@ -226,3 +226,20 @@ type wrappedErrno struct {
 func (we wrappedErrno) Unwrap() error {
 	return we.Errno
 }
+
+type syscallError struct {
+	error
+	errno syscall.Errno
+}
+
+func SyscallError(err error, errno syscall.Errno) error {
+	return &syscallError{err, errno}
+}
+
+func (se *syscallError) Is(target error) bool {
+	return target == se.error
+}
+
+func (se *syscallError) Unwrap() error {
+	return se.errno
+}

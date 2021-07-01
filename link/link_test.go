@@ -7,6 +7,8 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
+	"sync"
 	"testing"
 
 	"github.com/cilium/ebpf"
@@ -14,6 +16,11 @@ import (
 	"github.com/cilium/ebpf/internal/testutils"
 	"github.com/cilium/ebpf/internal/unix"
 )
+
+var cgroup2Mount = struct {
+	once sync.Once
+	path string
+}{}
 
 func TestRawLink(t *testing.T) {
 	cgroup, prog := mustCgroupFixtures(t)
@@ -91,7 +98,7 @@ func mustCgroupFixtures(t *testing.T) (*os.File, *ebpf.Program) {
 	testutils.SkipIfNotSupported(t, haveProgAttach())
 
 	prog := mustCgroupEgressProgram(t)
-	cgdir, err := ioutil.TempDir("/sys/fs/cgroup/unified", "ebpf-link")
+	cgdir, err := ioutil.TempDir(cgroup2Path(t), "ebpf-link")
 	if err != nil {
 		prog.Close()
 		t.Fatal("Can't create cgroupv2:", err)
@@ -128,6 +135,28 @@ func mustCgroupEgressProgram(t *testing.T) *ebpf.Program {
 		t.Fatal(err)
 	}
 	return prog
+}
+
+func cgroup2Path(t *testing.T) string {
+	cgroup2Mount.once.Do(func() {
+		mounts, err := ioutil.ReadFile("/proc/mounts")
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, line := range strings.Split(string(mounts), "\n") {
+			mount := strings.SplitN(line, " ", 3)
+			if mount[0] == "cgroup2" {
+				cgroup2Mount.path = mount[1]
+				return
+			}
+
+			continue
+		}
+
+		t.Fatal(errors.New("cgroup2 not mounted"))
+	})
+
+	return cgroup2Mount.path
 }
 
 type testLinkOptions struct {

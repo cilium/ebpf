@@ -162,7 +162,7 @@ func bpfProgLoad(attr *bpfProgLoadAttr) (*internal.FD, error) {
 		fd, err := internal.BPF(internal.BPF_PROG_LOAD, unsafe.Pointer(attr), unsafe.Sizeof(*attr))
 		// As of ~4.20 the verifier can be interrupted by a signal,
 		// and returns EAGAIN in that case.
-		if err == unix.EAGAIN {
+		if errors.Is(err, unix.EAGAIN) {
 			continue
 		}
 

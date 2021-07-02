@@ -703,7 +703,7 @@ func (p *Program) ID() (ProgramID, error) {
 	return ProgramID(info.id), nil
 }
 
-func resolveBTFType(kernel *btf.Spec, name string, attachTarget int, progType ProgramType, attachType AttachType) (btf.Type, int, error) {
+func resolveBTFType(spec *btf.Spec, name string, attachTarget int, progType ProgramType, attachType AttachType) (btf.Type, int, error) {
 	type match struct {
 		p ProgramType
 		a AttachType
@@ -745,34 +745,34 @@ func resolveBTFType(kernel *btf.Spec, name string, attachTarget int, progType Pr
 			return nil, -1, fmt.Errorf("can't load program BTF spec for %s: %w", info.Name, err)
 		}
 		defer btfHandle.Close()
-		kernel, err = btf.HandleSpec(btfHandle)
+		spec, err = btf.HandleSpec(btfHandle)
 		if err != nil {
 			return nil, -1, fmt.Errorf("can't load program BTF spec for %s: %w", info.Name, err)
 		}
 
-		if kernel == nil {
+		if spec == nil {
 			return nil, -1, errors.New("missing BTF spec")
 		}
 
 		target = new(btf.Func)
 		typeName = name
-		featureName = "freplace " + name
+		featureName = fmt.Sprintf("freplace %s in %s", name, targetProg.name)
 		fd = attachTarget
 
 	default:
 		return nil, -1, nil
 	}
 
-	if kernel == nil {
+	if spec == nil {
 		var err error
-		kernel, err = btf.LoadKernelSpec()
+		spec, err = btf.LoadKernelSpec()
 		if err != nil {
 			return nil, -1, fmt.Errorf("load kernel spec: %w", err)
 		}
 	}
 
-	err := kernel.FindType(typeName, target)
-	if errors.Is(err, btf.ErrNotFound) {
+	err := spec.FindType(typeName, target)
+	if errors.Is(err, btf.ErrNotFound) && targetProg == nil {
 		return nil, -1, &internal.UnsupportedFeatureError{
 			Name: featureName,
 		}

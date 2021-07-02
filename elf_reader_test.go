@@ -486,21 +486,35 @@ func TestLibBPFCompat(t *testing.T) {
 }
 
 func loadTargetProgram(tb testing.TB, name string, opts CollectionOptions) (*Program, *Collection) {
+	file := "test_pkt_access.o"
+	program := "test_pkt_access"
 	switch name {
+	case "new_connect_v4_prog":
+		file = "connect4_prog.o"
+		program = "connect_v4_prog"
+	case "new_do_bind":
+		file = "connect4_prog.o"
+		program = "connect_v4_prog"
+	case "freplace_cls_redirect_test":
+		file = "test_cls_redirect.o"
+		program = "cls_redirect"
+	case "new_handle_kprobe":
+		file = "test_attach_probe.o"
+		program = "handle_kprobe"
 	default:
-		file := filepath.Join(*elfPath, "test_pkt_access.o")
-		spec, err := LoadCollectionSpec(file)
-		if err != nil {
-			tb.Fatalf("Can't read %s: %s", file, err)
-		}
-
-		coll, err := NewCollectionWithOptions(spec, opts)
-		if err != nil {
-			tb.Fatalf("Can't load target: %s", err)
-		}
-
-		return coll.Programs["test_pkt_access"], coll
 	}
+
+	spec, err := LoadCollectionSpec(filepath.Join(*elfPath, file))
+	if err != nil {
+		tb.Fatalf("Can't read %s: %s", file, err)
+	}
+
+	coll, err := NewCollectionWithOptions(spec, opts)
+	if err != nil {
+		tb.Fatalf("Can't load target: %s", err)
+	}
+
+	return coll.Programs[program], coll
 }
 
 func sourceOfBTF(tb testing.TB, path string) []string {

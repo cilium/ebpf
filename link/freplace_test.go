@@ -1,0 +1,62 @@
+package link
+
+import (
+	"fmt"
+	"os"
+	"testing"
+
+	"github.com/cilium/ebpf"
+	"github.com/cilium/ebpf/internal"
+	"github.com/cilium/ebpf/internal/testutils"
+)
+
+func TestFreplace(t *testing.T) {
+	testutils.SkipOnOldKernel(t, "5.10", "freplace")
+
+	fmt.Println(os.Getwd())
+	testutils.Files(t, testutils.Glob(t, "../testdata/freplace-*.elf"), func(t *testing.T, file string) {
+		spec, err := ebpf.LoadCollectionSpec(file)
+		if err != nil {
+			t.Fatal("Can't parse ELF:", err)
+		}
+
+		if spec.Programs["sched_process_exec"].ByteOrder != internal.NativeEndian {
+			return
+		}
+
+		target, err := ebpf.NewProgramWithOptions(spec.Programs["sched_process_exec"], ebpf.ProgramOptions{
+			LogLevel: 1,
+		})
+		testutils.SkipIfNotSupported(t, err)
+		if err != nil {
+			t.Fatal("Can't create target program:", err)
+		}
+		defer target.Close()
+
+		// Test attachment specified at load time
+		err = spec.Programs["replacement"].SetAttachTarget(target, "")
+		if err != nil {
+			t.Fatal("Can't set attach target:", err)
+		}
+		replacement, err := ebpf.NewProgramWithOptions(spec.Programs["replacement"], ebpf.ProgramOptions{
+			LogLevel: 1,
+		})
+		testutils.SkipIfNotSupported(t, err)
+		if err != nil {
+			t.Fatal("Can't create replacement program:", err)
+		}
+		defer replacement.Close()
+
+		freplace, err := AttachFreplace(nil, "", replacement)
+		if err != nil {
+			t.Fatal("Can't create freplace:", err)
+		}
+
+		testLink(t, freplace, testLinkOptions{
+			prog: replacement,
+			loadPinned: func(s string, opts *ebpf.LoadPinOptions) (Link, error) {
+				return LoadPinnedFreplace(s, opts)
+			},
+		})
+	})
+}

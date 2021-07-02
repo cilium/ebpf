@@ -547,7 +547,6 @@ func NewHandle(spec *Spec) (*Handle, error) {
 // NewHandleFromID returns the BTF handle for a given id.
 //
 // Returns ErrNotExist, if there is no BTF with the given id.
-// Returns ErrNotSupported if BTF is not supported.
 func NewHandleFromID(id TypeID) (*Handle, error) {
 	fd, err := bpfObjGetFDByID(internal.BPF_BTF_GET_FD_BY_ID, uint32(id))
 	if err != nil {
@@ -566,7 +565,7 @@ func newHandleFromFD(fd *internal.FD) (*Handle, error) {
 // This is a free function instead of a method to hide it from users
 // of package ebpf.
 func HandleSpec(s *Handle) (*Spec, error) {
-	info, err := newBTFInfoFromFd(s.fd)
+	info, err := newInfoFromFd(s.fd)
 	if err != nil {
 		return nil, fmt.Errorf("get BTF spec for handle: %w", err)
 	}

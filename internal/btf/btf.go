@@ -549,10 +549,6 @@ func NewHandle(spec *Spec) (*Handle, error) {
 // Returns ErrNotExist, if there is no BTF with the given id.
 // Returns ErrNotSupported if BTF is not supported.
 func NewHandleFromID(id TypeID) (*Handle, error) {
-	if err := haveBTF(); err != nil {
-		return nil, err
-	}
-
 	fd, err := bpfObjGetFDByID(internal.BPF_BTF_GET_FD_BY_ID, uint32(id))
 	if err != nil {
 		return nil, fmt.Errorf("get BTF by id: %w", err)

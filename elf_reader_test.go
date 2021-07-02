@@ -501,6 +501,9 @@ func loadTargetProgram(tb testing.TB, name string, opts CollectionOptions) (*Pro
 	case "new_handle_kprobe":
 		file = "test_attach_probe.o"
 		program = "handle_kprobe"
+	case "test_pkt_md_access_new":
+		file = "test_pkt_md_access.o"
+		program = "test_pkt_md_access"
 	default:
 	}
 

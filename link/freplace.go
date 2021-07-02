@@ -63,3 +63,13 @@ func AttachFreplace(targetProg *ebpf.Program, name string, prog *ebpf.Program) (
 
 	return &FreplaceLink{link}, nil
 }
+
+// LoadPinnedFreplace loads a pinned iterator from a bpffs.
+func LoadPinnedFreplace(fileName string, opts *ebpf.LoadPinOptions) (*FreplaceLink, error) {
+	link, err := LoadPinnedRawLink(fileName, TracingType, opts)
+	if err != nil {
+		return nil, err
+	}
+
+	return &FreplaceLink{link}, err
+}

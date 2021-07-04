@@ -23,6 +23,7 @@ TARGETS := \
 	testdata/invalid_map_static \
 	testdata/initialized_btf_map \
 	testdata/strings \
+	testdata/freplace \
 	internal/btf/testdata/relocs
 
 .PHONY: all clean docker-all docker-shell

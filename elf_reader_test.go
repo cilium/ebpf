@@ -416,8 +416,6 @@ func TestLibBPFCompat(t *testing.T) {
 			t.Skip("Skipping since the test generates dynamic BTF")
 		case "fexit_bpf2bpf.o":
 			t.Skip("Skipping due to freplace possibly causing parallel test flakiness")
-		case "test_trace_ext.o":
-			t.Skip("Skipping due to freplace possibly causing parallel test flakiness")
 		}
 
 		t.Parallel()

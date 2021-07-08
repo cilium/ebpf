@@ -204,7 +204,7 @@ type BPFMapCreateAttr struct {
 	BTFFd                 uint32
 	BTFKeyTypeID          uint32
 	BTFValueTypeID        uint32
-	BTFVmLinuxValueTypeID uint32
+	BTFVmlinuxValueTypeID uint32
 }
 
 func BPFMapCreate(attr *BPFMapCreateAttr) (*FD, error) {

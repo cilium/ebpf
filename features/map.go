@@ -10,37 +10,36 @@ import (
 	"github.com/cilium/ebpf/internal/unix"
 )
 
+var ErrInconclusive = errors.New("probe was inconclusive")
+
 type MapCache struct {
-	mu       sync.RWMutex
+	sync.RWMutex
 	mapTypes map[ebpf.MapType]error
 }
 
 var (
-	mc MapCache
+	mapCache MapCache
 )
 
 func init() {
-	mc.mapTypes = make(map[ebpf.MapType]error)
+	mapCache.mapTypes = make(map[ebpf.MapType]error)
 }
 
 // FlushMapCache invalidates the entire cache storing feature probe results.
 func FlushMapCache() {
-	mc.mu.Lock()
-	// could this approach introduce any unwanted side effects in multiple threads
-	// even if we lock access to the cache structure?
-	// should I rather delete() all the entries in the map?
-	mc.mapTypes = make(map[ebpf.MapType]error)
-	mc.mu.Unlock()
+	mapCache.Lock()
+	mapCache.mapTypes = make(map[ebpf.MapType]error)
+	mapCache.Unlock()
 }
 
 // FlushMapCacheEntry allows to delete a specified entry of the MapType feature cache.
 func FlushMapCacheEntry(mt ebpf.MapType) {
-	mc.mu.Lock()
-	delete(mc.mapTypes, mt)
-	mc.mu.Unlock()
+	mapCache.Lock()
+	delete(mapCache.mapTypes, mt)
+	mapCache.Unlock()
 }
 
-func probeMapTypeAttr(mt ebpf.MapType) *internal.BPFMapCreateAttr {
+func createMapTypeAttr(mt ebpf.MapType) *internal.BPFMapCreateAttr {
 	var (
 		keySize               uint32 = 4
 		valueSize             uint32 = 4
@@ -50,7 +49,7 @@ func probeMapTypeAttr(mt ebpf.MapType) *internal.BPFMapCreateAttr {
 		btfKeyTypeID          uint32
 		btfValueTypeID        uint32
 		btfFd                 uint32
-		btfVmLinuxValueTypeID uint32
+		btfVmlinuxValueTypeID uint32
 	)
 
 	// switch on map types to generate correct bpfMapCreateAttr
@@ -59,37 +58,37 @@ func probeMapTypeAttr(mt ebpf.MapType) *internal.BPFMapCreateAttr {
 		// valueSize needs to be sizeof(uint64)
 		valueSize = 8
 	case ebpf.LPMTrie:
+		// keySize and valueSize need to be sizeof(struct{u32 + u8}) + 1 + padding = 8
+		// BPF_F_NO_PREALLOC needs to be set
+		// checked at allocation time for lpm_trie maps
 		keySize = 8
 		valueSize = 8
 		flags = unix.BPF_F_NO_PREALLOC
-	case ebpf.ArrayOfMaps:
-		fallthrough
-	case ebpf.HashOfMaps:
+	case ebpf.ArrayOfMaps, ebpf.HashOfMaps:
+		// assign invalid innerMapFd to pass validation check
+		// will return EBADF
 		innerMapFd = ^uint32(0)
-	case ebpf.CGroupStorage:
-		fallthrough
-	case ebpf.PerCPUCGroupStorage:
-		// Why struct{u32 + u64} = 12 + padding = 16 ? can it be 12 for 32-bit cpus?
+	case ebpf.CGroupStorage, ebpf.PerCPUCGroupStorage:
+		// keySize and valueSize need to be sizeof(struct{u32 + u64}) = 12 + padding = 16
+		// can it be 12 for 32-bit cpus?
+		// checked at allocation time
 		keySize = 16
-		valueSize = 8
 		maxEntries = 0
-	case ebpf.Queue:
-		fallthrough
-	case ebpf.Stack:
+	case ebpf.Queue, ebpf.Stack:
+		// keySize needs to be 0, see alloc_check for queue and stack maps
 		keySize = 0
-	case ebpf.StructOpts:
-		// we can't support StructOps probes currently as it will require a valid BTF fd
-		btfVmLinuxValueTypeID = 1
 	case ebpf.RingBuf:
+		// keySize and valueSize need to be 0
+		// maxEntries needs to be power of 2 and PAGE_ALIGNED
+		// checked at allocation time
 		keySize = 0
 		valueSize = 0
 		maxEntries = 4096
-	case ebpf.SkStorage:
-		fallthrough
-	case ebpf.InodeStorage:
-		fallthrough
-	case ebpf.TaskStorage:
-		valueSize = 8
+	case ebpf.SkStorage, ebpf.InodeStorage, ebpf.TaskStorage:
+		// maxEntries needs to be 0
+		// BPF_F_NO_PREALLOC needs to be set
+		// btf* fields need to be set
+		// see alloc_check for local_storage map types
 		maxEntries = 0
 		flags = unix.BPF_F_NO_PREALLOC
 		btfKeyTypeID = 1
@@ -107,67 +106,71 @@ func probeMapTypeAttr(mt ebpf.MapType) *internal.BPFMapCreateAttr {
 		BTFKeyTypeID:          btfKeyTypeID,
 		BTFValueTypeID:        btfValueTypeID,
 		BTFFd:                 btfFd,
-		BTFVmLinuxValueTypeID: btfVmLinuxValueTypeID,
+		BTFVmlinuxValueTypeID: btfVmlinuxValueTypeID,
 	}
 
 }
 
-// ProbeMapType allows probing the availability of a specified ebpf.MapType
+// HaveMapType allows probing the availability of a specified ebpf.MapType
 // It will call the syscall to create a dummy map of a given ebpf.MapType at most once
 // storing the result of the first call in a global cache.
-// This potentially can result in false results if the calling process changes its permissions
-// or capabilities.
+// This potentially can result in false results if the calling process changes its capabilities.
 // Calling programs can avoid false cached results by invalidating the cache through
 // FlushMapCache() and FlushMapCacheEntry().
-func ProbeMapType(mt ebpf.MapType) error {
-	// make sure to bound Map types
-	// MaxMapType new value in enum, easier to handle than making sure
-	// we are checking the last value in the enum (which could eventually change)
+func HaveMapType(mt ebpf.MapType) error {
 	if mt >= ebpf.MaxMapType {
 		return internal.ErrNotSupported
 	}
 
-	mc.mu.RLock()
-	if err, ok := mc.mapTypes[mt]; ok {
-		defer mc.mu.RUnlock()
+	// For now a feature probe for StructOpts can't be supported by the API
+	// This means we cannot really tell if StructOpts is supported by the current kernel
+	if mt == ebpf.StructOpts {
+		return ErrInconclusive
+	}
+
+	mapCache.RLock()
+	err, ok := mapCache.mapTypes[mt]
+	mapCache.RUnlock()
+	if ok {
 		return err
 	}
-	mc.mu.RUnlock()
 
-	attr := probeMapTypeAttr(mt)
-	_, err := internal.BPFMapCreate(attr)
+	attr := createMapTypeAttr(mt)
+	_, err = internal.BPFMapCreate(attr)
 
-	// For nested and storage maps we accept EBADF as indicator that nested maps are supported
+	// For nested and storage map types we accept EBADF as indicator these maps are supported
 	if errors.Is(err, unix.EBADF) {
-		if isNestedMap(mt) || isStorageMap(mt) {
+		if isMapOfMaps(mt) || isStorageMap(mt) {
 			err = nil
 		}
 	}
 
-	// interpret kernel error as own error interface
-	// obviously needs more than just the err != nil check
+	// still needs policy for EPERM
 	if err != nil {
 		fmt.Println(err)
 		err = internal.ErrNotSupported
 	}
 
-	mc.mu.Lock()
-	defer mc.mu.Unlock()
-	mc.mapTypes[mt] = err
+	mapCache.Lock()
+	mapCache.mapTypes[mt] = err
+	mapCache.Unlock()
 
 	return err
 }
 
-func isNestedMap(mt ebpf.MapType) bool {
-	if mt == ebpf.ArrayOfMaps || mt == ebpf.HashOfMaps {
+func isMapOfMaps(mt ebpf.MapType) bool {
+	switch mt {
+	case ebpf.ArrayOfMaps, ebpf.HashOfMaps:
 		return true
 	}
 	return false
 }
 
 func isStorageMap(mt ebpf.MapType) bool {
-	if mt == ebpf.SkStorage || mt == ebpf.InodeStorage || mt == ebpf.TaskStorage {
+	switch mt {
+	case ebpf.SkStorage, ebpf.InodeStorage, ebpf.TaskStorage:
 		return true
 	}
+
 	return false
 }

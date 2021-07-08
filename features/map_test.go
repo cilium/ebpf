@@ -6,9 +6,9 @@ import (
 	"github.com/cilium/ebpf"
 )
 
-func TestProbeMapType(t *testing.T) {
+func TestHaveMapType(t *testing.T) {
 	for mt := ebpf.UnspecifiedMap + 1; mt < ebpf.MaxMapType; mt++ {
-		err := ProbeMapType(mt)
+		err := HaveMapType(mt)
 		if err != nil {
 			t.Logf("%s: %v", mt.String(), err)
 		}

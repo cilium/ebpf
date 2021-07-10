@@ -91,6 +91,16 @@ func mustCgroupFixtures(t *testing.T) (*os.File, *ebpf.Program) {
 	testutils.SkipIfNotSupported(t, haveProgAttach())
 
 	prog := mustCgroupEgressProgram(t)
+	cgroup := mustCgroupFixturesWithProgram(t, prog)
+
+	return cgroup, prog
+}
+
+func mustCgroupFixturesWithProgram(t *testing.T, prog *ebpf.Program) *os.File {
+	t.Helper()
+
+	testutils.SkipIfNotSupported(t, haveProgAttach())
+
 	cgdir, err := ioutil.TempDir("/sys/fs/cgroup/unified", "ebpf-link")
 	if err != nil {
 		prog.Close()
@@ -109,7 +119,7 @@ func mustCgroupFixtures(t *testing.T) (*os.File, *ebpf.Program) {
 		os.Remove(cgdir)
 	})
 
-	return cgroup, prog
+	return cgroup
 }
 
 func mustCgroupEgressProgram(t *testing.T) *ebpf.Program {
@@ -120,6 +130,27 @@ func mustCgroupEgressProgram(t *testing.T) *ebpf.Program {
 		AttachType: ebpf.AttachCGroupInetEgress,
 		License:    "MIT",
 		Instructions: asm.Instructions{
+			asm.Mov.Imm(asm.R0, 0),
+			asm.Return(),
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return prog
+}
+
+func mustCgroupEgressProgramWithMap(t *testing.T, arr *ebpf.Map) *ebpf.Program {
+	t.Helper()
+
+	prog, err := ebpf.NewProgram(&ebpf.ProgramSpec{
+		Type:       ebpf.CGroupSKB,
+		AttachType: ebpf.AttachCGroupInetEgress,
+		License:    "MIT",
+		Instructions: asm.Instructions{
+			asm.LoadMapPtr(asm.R1, arr.FD()),
+			asm.Mov.Imm(asm.R2, 0),
+			asm.FnGetLocalStorage.Call(),
 			asm.Mov.Imm(asm.R0, 0),
 			asm.Return(),
 		},

@@ -93,7 +93,7 @@ const (
 
 // hasPerCPUValue returns true if the Map stores a value per CPU.
 func (mt MapType) hasPerCPUValue() bool {
-	return mt == PerCPUHash || mt == PerCPUArray || mt == LRUCPUHash
+	return mt == PerCPUHash || mt == PerCPUArray || mt == LRUCPUHash || mt == PerCPUCGroupStorage
 }
 
 // canStoreMap returns true if the map type accepts a map fd

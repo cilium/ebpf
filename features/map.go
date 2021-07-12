@@ -2,8 +2,9 @@ package features
 
 import (
 	"errors"
-	"fmt"
+	"os"
 	"sync"
+	"unsafe"
 
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/internal"
@@ -13,7 +14,7 @@ import (
 var ErrInconclusive = errors.New("probe was inconclusive")
 
 type MapCache struct {
-	sync.RWMutex
+	sync.Mutex
 	mapTypes map[ebpf.MapType]error
 }
 
@@ -23,20 +24,10 @@ var (
 
 func init() {
 	mapCache.mapTypes = make(map[ebpf.MapType]error)
-}
 
-// FlushMapCache invalidates the entire cache storing feature probe results.
-func FlushMapCache() {
-	mapCache.Lock()
-	mapCache.mapTypes = make(map[ebpf.MapType]error)
-	mapCache.Unlock()
-}
-
-// FlushMapCacheEntry allows to delete a specified entry of the MapType feature cache.
-func FlushMapCacheEntry(mt ebpf.MapType) {
-	mapCache.Lock()
-	delete(mapCache.mapTypes, mt)
-	mapCache.Unlock()
+	// For now a feature probe for StructOpts can't be supported by the API
+	// This means we cannot really tell if StructOpts is supported by the current kernel
+	mapCache.mapTypes[ebpf.StructOpts] = ErrInconclusive
 }
 
 func createMapTypeAttr(mt ebpf.MapType) *internal.BPFMapCreateAttr {
@@ -69,10 +60,11 @@ func createMapTypeAttr(mt ebpf.MapType) *internal.BPFMapCreateAttr {
 		// will return EBADF
 		innerMapFd = ^uint32(0)
 	case ebpf.CGroupStorage, ebpf.PerCPUCGroupStorage:
-		// keySize and valueSize need to be sizeof(struct{u32 + u64}) = 12 + padding = 16
-		// can it be 12 for 32-bit cpus?
+		// keySize needs to be sizeof(struct{u32 + u64}) = 12 (+ padding = 16)
+		// by using unsafe.Sizeof(int) we are making sure that this works on 32bit and 64bit archs
 		// checked at allocation time
-		keySize = 16
+		var align int
+		keySize = uint32(8 + unsafe.Sizeof(align))
 		maxEntries = 0
 	case ebpf.Queue, ebpf.Stack:
 		// keySize needs to be 0, see alloc_check for queue and stack maps
@@ -83,7 +75,7 @@ func createMapTypeAttr(mt ebpf.MapType) *internal.BPFMapCreateAttr {
 		// checked at allocation time
 		keySize = 0
 		valueSize = 0
-		maxEntries = 4096
+		maxEntries = uint32(os.Getpagesize())
 	case ebpf.SkStorage, ebpf.InodeStorage, ebpf.TaskStorage:
 		// maxEntries needs to be 0
 		// BPF_F_NO_PREALLOC needs to be set
@@ -115,45 +107,32 @@ func createMapTypeAttr(mt ebpf.MapType) *internal.BPFMapCreateAttr {
 // It will call the syscall to create a dummy map of a given ebpf.MapType at most once
 // storing the result of the first call in a global cache.
 // This potentially can result in false results if the calling process changes its capabilities.
-// Calling programs can avoid false cached results by invalidating the cache through
-// FlushMapCache() and FlushMapCacheEntry().
 func HaveMapType(mt ebpf.MapType) error {
 	if mt >= ebpf.MaxMapType {
 		return internal.ErrNotSupported
 	}
 
-	// For now a feature probe for StructOpts can't be supported by the API
-	// This means we cannot really tell if StructOpts is supported by the current kernel
-	if mt == ebpf.StructOpts {
-		return ErrInconclusive
-	}
-
-	mapCache.RLock()
+	mapCache.Lock()
+	defer mapCache.Unlock()
 	err, ok := mapCache.mapTypes[mt]
-	mapCache.RUnlock()
 	if ok {
 		return err
 	}
 
-	attr := createMapTypeAttr(mt)
-	_, err = internal.BPFMapCreate(attr)
+	_, err = internal.BPFMapCreate(createMapTypeAttr(mt))
 
-	// For nested and storage map types we accept EBADF as indicator these maps are supported
+	// For nested and storage map types we accept EBADF as indicator that these maps are supported
 	if errors.Is(err, unix.EBADF) {
 		if isMapOfMaps(mt) || isStorageMap(mt) {
 			err = nil
 		}
 	}
 
-	// still needs policy for EPERM
 	if err != nil {
-		fmt.Println(err)
 		err = internal.ErrNotSupported
 	}
 
-	mapCache.Lock()
 	mapCache.mapTypes[mt] = err
-	mapCache.Unlock()
 
 	return err
 }

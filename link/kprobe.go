@@ -157,7 +157,7 @@ func kprobe(symbol string, prog *ebpf.Program, ret bool) (*perfEvent, error) {
 // pmuKprobe opens a perf event based on the kprobe PMU.
 // Returns os.ErrNotExist if the given symbol does not exist in the kernel.
 func pmuKprobe(symbol string, ret bool) (*perfEvent, error) {
-	return pmuProbe(kprobeType, symbol, "", 0, ret)
+	return pmuProbe(kprobeType, symbol, "", 0, ret, perfAllThreads)
 }
 
 // pmuProbe opens a perf event based on a Performance Monitoring Unit.
@@ -167,7 +167,7 @@ func pmuKprobe(symbol string, ret bool) (*perfEvent, error) {
 // 33ea4b24277b "perf/core: Implement the 'perf_uprobe' PMU"
 //
 // Returns ErrNotSupported if the kernel doesn't support perf_[k,u]probe PMU
-func pmuProbe(typ probeType, symbol, path string, offset uint64, ret bool) (*perfEvent, error) {
+func pmuProbe(typ probeType, symbol, path string, offset uint64, ret bool, pid int) (*perfEvent, error) {
 	// Getting the PMU type will fail if the kernel doesn't support
 	// the perf_[k,u]probe PMU.
 	et, err := getPMUEventType(typ)
@@ -220,7 +220,7 @@ func pmuProbe(typ probeType, symbol, path string, offset uint64, ret bool) (*per
 		}
 	}
 
-	fd, err := unix.PerfEventOpen(&attr, perfAllThreads, 0, -1, unix.PERF_FLAG_FD_CLOEXEC)
+	fd, err := unix.PerfEventOpen(&attr, pid, 0, -1, unix.PERF_FLAG_FD_CLOEXEC)
 
 	// Since commit 97c753e62e6c, ENOENT is correctly returned instead of EINVAL
 	// when trying to create a kretprobe for a missing symbol. Make sure ENOENT

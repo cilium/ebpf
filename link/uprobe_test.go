@@ -88,6 +88,55 @@ func TestUprobeExtWithOpts(t *testing.T) {
 	defer up.Close()
 }
 
+func TestUprobePMUWithPid(t *testing.T) {
+	// Only test the uprobe PMU branch
+	testutils.SkipOnOldKernel(t, "4.17", "perf_probe PMU")
+
+	prog, err := ebpf.NewProgram(&kprobeSpec)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer prog.Close()
+
+	up, err := bashEx.Uprobe(bashSym, prog, &UprobeOptions{Pid: -1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer up.Close()
+}
+
+func TestUprobePMUWithPidUnknownProcess(t *testing.T) {
+	// Only test the uprobe PMU branch
+	testutils.SkipOnOldKernel(t, "4.17", "perf_probe PMU")
+
+	prog, err := ebpf.NewProgram(&kprobeSpec)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer prog.Close()
+
+	_, err = bashEx.Uprobe(bashSym, prog, &UprobeOptions{Pid: 50000})
+	if err == nil {
+		t.Fatal("expected error")
+	}
+}
+
+func TestUprobeTraceFSWithPid(t *testing.T) {
+	// Only test the uprobe tracefs branch
+	testutils.SkipOnNewKernel(t, "4.17", "perf_probe PMU")
+
+	prog, err := ebpf.NewProgram(&kprobeSpec)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer prog.Close()
+
+	_, err = bashEx.Uprobe(bashSym, prog, &UprobeOptions{Pid: 50000})
+	if !errors.Is(err, ErrNotSupported) {
+		t.Fatalf("expected ErrNotSupported, got: %v", err)
+	}
+}
+
 func TestUretprobe(t *testing.T) {
 	c := qt.New(t)
 
@@ -118,14 +167,14 @@ func TestUprobeCreatePMU(t *testing.T) {
 	c.Assert(err, qt.IsNil)
 
 	// uprobe PMU
-	pu, err := pmuUprobe(sym.Name, bashEx.path, sym.Value, false)
+	pu, err := pmuUprobe(sym.Name, bashEx.path, sym.Value, false, perfAllThreads)
 	c.Assert(err, qt.IsNil)
 	defer pu.Close()
 
 	c.Assert(pu.typ, qt.Equals, uprobeEvent)
 
 	// uretprobe PMU
-	pr, err := pmuUprobe(sym.Name, bashEx.path, sym.Value, true)
+	pr, err := pmuUprobe(sym.Name, bashEx.path, sym.Value, true, perfAllThreads)
 	c.Assert(err, qt.IsNil)
 	defer pr.Close()
 
@@ -140,7 +189,7 @@ func TestUprobePMUUnavailable(t *testing.T) {
 	sym, err := bashEx.symbol(bashSym)
 	c.Assert(err, qt.IsNil)
 
-	pk, err := pmuUprobe(sym.Name, bashEx.path, sym.Value, false)
+	pk, err := pmuUprobe(sym.Name, bashEx.path, sym.Value, false, perfAllThreads)
 	if err == nil {
 		pk.Close()
 		t.Skipf("Kernel supports perf_uprobe PMU, not asserting error.")

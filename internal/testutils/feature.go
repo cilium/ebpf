@@ -67,3 +67,16 @@ func SkipOnOldKernel(tb testing.TB, minVersion, feature string) {
 		tb.Skipf("Test requires at least kernel %s (due to missing %s)", minv, feature)
 	}
 }
+
+func SkipOnNewKernel(tb testing.TB, maxVersion, feature string) {
+	tb.Helper()
+
+	maxv, err := internal.NewVersion(maxVersion)
+	if err != nil {
+		tb.Fatalf("Invalid version %s: %s", maxVersion, err)
+	}
+
+	if maxv.Less(mustKernelVersion()) {
+		tb.Skipf("Test should not run on kernel > %s (%s is present)", maxv, feature)
+	}
+}

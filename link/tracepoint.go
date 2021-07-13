@@ -38,7 +38,7 @@ func Tracepoint(group, name string, prog *ebpf.Program) (Link, error) {
 		return nil, err
 	}
 
-	fd, err := openTracepointPerfEvent(tid)
+	fd, err := openTracepointPerfEvent(tid, perfAllThreads)
 	if err != nil {
 		return nil, err
 	}

@@ -1033,6 +1033,46 @@ func TestPerCPUMarshaling(t *testing.T) {
 	}
 }
 
+func TestPerCPUCgroupMarshaling(t *testing.T) {
+	numCPU, err := internal.PossibleCPUs()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if numCPU < 2 {
+		t.Skip("Test requires at least two CPUs")
+	}
+	testutils.SkipOnOldKernel(t, "4.20", "per-CPU CGoup storage")
+
+	arr, err := NewMap(&MapSpec{
+		Type:      PerCPUCGroupStorage,
+		KeySize:   16,
+		ValueSize: 5,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer arr.Close()
+
+	valueBytes := make([]byte, 5*numCPU)
+	for i, value := range []byte("HELLOWORLD") {
+		valueBytes[i] = value
+	}
+
+	var retrieved []*customEncoding
+	err = arr.unmarshalValue(&retrieved, valueBytes)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for i, want := range []string{"HELLO", "WORLD"} {
+		if retrieved[i] == nil {
+			t.Error("First item is nil")
+		} else if have := retrieved[i].data; have != want {
+			t.Errorf("PerCPUCGroupStorage map is not correctly unmarshaled, expected %s but got %s", want, have)
+		}
+	}
+}
+
 func TestMapMarshalUnsafe(t *testing.T) {
 	m, err := NewMap(&MapSpec{
 		Type:       Hash,

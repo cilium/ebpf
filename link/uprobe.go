@@ -41,6 +41,9 @@ type UprobeOptions struct {
 	// Symbol offset. Must be provided in case of external symbols (shared libs).
 	// If set, overrides the offset eventually parsed from the executable.
 	Offset uint64
+	// Only set the uprobe on the given process ID. Useful when tracing
+	// shared library calls or programs that have many running instances.
+	PID int
 }
 
 // To open a new Executable, use:
@@ -191,8 +194,13 @@ func (ex *Executable) uprobe(symbol string, prog *ebpf.Program, opts *UprobeOpti
 		offset = sym.Value
 	}
 
+	pid := perfAllThreads
+	if opts != nil && opts.PID != 0 {
+		pid = opts.PID
+	}
+
 	// Use uprobe PMU if the kernel has it available.
-	tp, err := pmuUprobe(symbol, ex.path, offset, ret)
+	tp, err := pmuUprobe(symbol, ex.path, offset, pid, ret)
 	if err == nil {
 		return tp, nil
 	}
@@ -201,7 +209,7 @@ func (ex *Executable) uprobe(symbol string, prog *ebpf.Program, opts *UprobeOpti
 	}
 
 	// Use tracefs if uprobe PMU is missing.
-	tp, err = tracefsUprobe(uprobeSanitizedSymbol(symbol), ex.path, offset, ret)
+	tp, err = tracefsUprobe(uprobeSanitizedSymbol(symbol), ex.path, offset, pid, ret)
 	if err != nil {
 		return nil, fmt.Errorf("creating trace event '%s:%s' in tracefs: %w", ex.path, symbol, err)
 	}
@@ -210,13 +218,13 @@ func (ex *Executable) uprobe(symbol string, prog *ebpf.Program, opts *UprobeOpti
 }
 
 // pmuUprobe opens a perf event based on the uprobe PMU.
-func pmuUprobe(symbol, path string, offset uint64, ret bool) (*perfEvent, error) {
-	return pmuProbe(uprobeType, symbol, path, offset, ret)
+func pmuUprobe(symbol, path string, offset uint64, pid int, ret bool) (*perfEvent, error) {
+	return pmuProbe(uprobeType, symbol, path, offset, pid, ret)
 }
 
 // tracefsUprobe creates a Uprobe tracefs entry.
-func tracefsUprobe(symbol, path string, offset uint64, ret bool) (*perfEvent, error) {
-	return tracefsProbe(uprobeType, symbol, path, offset, ret)
+func tracefsUprobe(symbol, path string, offset uint64, pid int, ret bool) (*perfEvent, error) {
+	return tracefsProbe(uprobeType, symbol, path, offset, pid, ret)
 }
 
 // uprobeSanitizedSymbol replaces every invalid characted for the tracefs api with an underscore.

@@ -484,6 +484,26 @@ type VarSecinfo struct {
 	Size   uint32
 }
 
+// Float is a float of a given length.
+type Float struct {
+	TypeID
+	Name
+
+	// The size of the float in bytes.
+	Size uint32
+}
+
+func (f *Float) String() string {
+	return fmt.Sprintf("float%d#%d[%q]", f.Size*8, f.TypeID, f.Name)
+}
+
+func (f *Float) size() uint32    { return f.Size }
+func (f *Float) walk(*typeDeque) {}
+func (f *Float) copy() Type {
+	cpy := *f
+	return &cpy
+}
+
 type sizer interface {
 	size() uint32
 }
@@ -847,6 +867,9 @@ func inflateRawTypes(rawTypes []rawType, rawStrings stringTable) (types []Type, 
 				fixup(btfVars[i].Type, kindVar, &vars[i].Type)
 			}
 			typ = &Datasec{id, name, raw.SizeType, vars}
+
+		case kindFloat:
+			typ = &Float{id, name, raw.Size()}
 
 		default:
 			return nil, nil, fmt.Errorf("type id %d: unknown kind: %v", id, raw.Kind())

@@ -41,6 +41,8 @@ type UprobeOptions struct {
 	// Symbol offset. Must be provided in case of external symbols (shared libs).
 	// If set, overrides the offset eventually parsed from the executable.
 	Offset uint64
+	// Trace a specific pid.
+	Pid int
 }
 
 // To open a new Executable, use:
@@ -191,8 +193,13 @@ func (ex *Executable) uprobe(symbol string, prog *ebpf.Program, opts *UprobeOpti
 		offset = sym.Value
 	}
 
+	pid := perfAllThreads
+	if opts != nil && opts.Pid != 0 {
+		pid = opts.Pid
+	}
+
 	// Use uprobe PMU if the kernel has it available.
-	tp, err := pmuUprobe(symbol, ex.path, offset, ret)
+	tp, err := pmuUprobe(symbol, ex.path, offset, ret, pid)
 	if err == nil {
 		return tp, nil
 	}
@@ -201,7 +208,7 @@ func (ex *Executable) uprobe(symbol string, prog *ebpf.Program, opts *UprobeOpti
 	}
 
 	// Use tracefs if uprobe PMU is missing.
-	tp, err = tracefsUprobe(uprobeSanitizedSymbol(symbol), ex.path, offset, ret)
+	tp, err = tracefsUprobe(uprobeSanitizedSymbol(symbol), ex.path, offset, ret, pid)
 	if err != nil {
 		return nil, fmt.Errorf("creating trace event '%s:%s' in tracefs: %w", ex.path, symbol, err)
 	}
@@ -210,13 +217,13 @@ func (ex *Executable) uprobe(symbol string, prog *ebpf.Program, opts *UprobeOpti
 }
 
 // pmuUprobe opens a perf event based on the uprobe PMU.
-func pmuUprobe(symbol, path string, offset uint64, ret bool) (*perfEvent, error) {
-	return pmuProbe(uprobeType, symbol, path, offset, ret)
+func pmuUprobe(symbol, path string, offset uint64, ret bool, pid int) (*perfEvent, error) {
+	return pmuProbe(uprobeType, symbol, path, offset, ret, pid)
 }
 
 // tracefsUprobe creates a Uprobe tracefs entry.
-func tracefsUprobe(symbol, path string, offset uint64, ret bool) (*perfEvent, error) {
-	return tracefsProbe(uprobeType, symbol, path, offset, ret)
+func tracefsUprobe(symbol, path string, offset uint64, ret bool, pid int) (*perfEvent, error) {
+	return tracefsProbe(uprobeType, symbol, path, offset, ret, pid)
 }
 
 // uprobeSanitizedSymbol replaces every invalid characted for the tracefs api with an underscore.

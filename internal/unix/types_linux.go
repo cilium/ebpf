@@ -23,6 +23,7 @@ const (
 	// ENOTSUPP is not the same as ENOTSUP or EOPNOTSUP
 	ENOTSUPP = syscall.Errno(0x20c)
 
+	E2BIG                    = linux.E2BIG
 	EBADF                    = linux.EBADF
 	BPF_F_NO_PREALLOC        = linux.BPF_F_NO_PREALLOC
 	BPF_F_NUMA_NODE          = linux.BPF_F_NUMA_NODE

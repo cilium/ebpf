@@ -21,6 +21,7 @@ const (
 	ESRCH  = syscall.ESRCH
 	ENODEV = syscall.ENODEV
 	EBADF  = syscall.Errno(0)
+	E2BIG  = syscall.Errno(0)
 	// ENOTSUPP is not the same as ENOTSUP or EOPNOTSUP
 	ENOTSUPP = syscall.Errno(0x20c)
 

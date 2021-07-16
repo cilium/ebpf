@@ -112,11 +112,14 @@ func (ex *Executable) symbol(symbol string) (*elf.Symbol, error) {
 // When using symbols which belongs to shared libraries,
 // an offset must be provided via options:
 //
-//  ex.Uprobe("main", prog, &UprobeOptions{Offset: 0x123})
+//	up, err := ex.Uprobe("main", prog, &UprobeOptions{Offset: 0x123})
 //
-// The resulting Link must be Closed during program shutdown to avoid leaking
-// system resources. Functions provided by shared libraries can currently not
-// be traced and will result in an ErrNotSupported.
+// Losing the reference to the resulting Link (up) will close the Uprobe
+// and prevent further execution of prog. The Link must be Closed during
+// program shutdown to avoid leaking system resources.
+//
+// Functions provided by shared libraries can currently not be traced and
+// will result in an ErrNotSupported.
 func (ex *Executable) Uprobe(symbol string, prog *ebpf.Program, opts *UprobeOptions) (Link, error) {
 	u, err := ex.uprobe(symbol, prog, opts, false)
 	if err != nil {
@@ -141,11 +144,14 @@ func (ex *Executable) Uprobe(symbol string, prog *ebpf.Program, opts *UprobeOpti
 // When using symbols which belongs to shared libraries,
 // an offset must be provided via options:
 //
-//  ex.Uretprobe("main", prog, &UprobeOptions{Offset: 0x123})
+//	up, err := ex.Uretprobe("main", prog, &UprobeOptions{Offset: 0x123})
 //
-// The resulting Link must be Closed during program shutdown to avoid leaking
-// system resources. Functions provided by shared libraries can currently not
-// be traced and will result in an ErrNotSupported.
+// Losing the reference to the resulting Link (up) will close the Uprobe
+// and prevent further execution of prog. The Link must be Closed during
+// program shutdown to avoid leaking system resources.
+//
+// Functions provided by shared libraries can currently not be traced and
+// will result in an ErrNotSupported.
 func (ex *Executable) Uretprobe(symbol string, prog *ebpf.Program, opts *UprobeOptions) (Link, error) {
 	u, err := ex.uprobe(symbol, prog, opts, true)
 	if err != nil {

@@ -72,10 +72,11 @@ func (pt probeType) RetprobeBit() (uint64, error) {
 // given kernel symbol starts executing. See /proc/kallsyms for available
 // symbols. For example, printk():
 //
-//	Kprobe("printk", prog)
+//	kp, err := Kprobe("printk", prog)
 //
-// The resulting Link must be Closed during program shutdown to avoid leaking
-// system resources.
+// Losing the reference to the resulting Link (kp) will close the Kprobe
+// and prevent further execution of prog. The Link must be Closed during
+// program shutdown to avoid leaking system resources.
 func Kprobe(symbol string, prog *ebpf.Program) (Link, error) {
 	k, err := kprobe(symbol, prog, false)
 	if err != nil {
@@ -95,10 +96,11 @@ func Kprobe(symbol string, prog *ebpf.Program) (Link, error) {
 // before the given kernel symbol exits, with the function stack left intact.
 // See /proc/kallsyms for available symbols. For example, printk():
 //
-//	Kretprobe("printk", prog)
+//	kp, err := Kretprobe("printk", prog)
 //
-// The resulting Link must be Closed during program shutdown to avoid leaking
-// system resources.
+// Losing the reference to the resulting Link (kp) will close the Kretprobe
+// and prevent further execution of prog. The Link must be Closed during
+// program shutdown to avoid leaking system resources.
 func Kretprobe(symbol string, prog *ebpf.Program) (Link, error) {
 	k, err := kprobe(symbol, prog, true)
 	if err != nil {

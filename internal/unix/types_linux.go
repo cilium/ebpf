@@ -20,10 +20,11 @@ const (
 	EPERM   = linux.EPERM
 	ESRCH   = linux.ESRCH
 	ENODEV  = linux.ENODEV
+	E2BIG   = linux.E2BIG
+	EBADF   = linux.EBADF
 	// ENOTSUPP is not the same as ENOTSUP or EOPNOTSUP
 	ENOTSUPP = syscall.Errno(0x20c)
 
-	EBADF                    = linux.EBADF
 	BPF_F_NO_PREALLOC        = linux.BPF_F_NO_PREALLOC
 	BPF_F_NUMA_NODE          = linux.BPF_F_NUMA_NODE
 	BPF_F_RDONLY             = linux.BPF_F_RDONLY

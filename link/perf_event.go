@@ -236,7 +236,7 @@ func getPMUEventType(typ probeType) (uint64, error) {
 // openTracepointPerfEvent opens a tracepoint-type perf event. System-wide
 // [k,u]probes created by writing to <tracefs>/[k,u]probe_events are tracepoints
 // behind the scenes, and can be attached to using these perf events.
-func openTracepointPerfEvent(tid uint64) (*internal.FD, error) {
+func openTracepointPerfEvent(tid uint64, pid int) (*internal.FD, error) {
 	attr := unix.PerfEventAttr{
 		Type:        unix.PERF_TYPE_TRACEPOINT,
 		Config:      tid,
@@ -245,7 +245,7 @@ func openTracepointPerfEvent(tid uint64) (*internal.FD, error) {
 		Wakeup:      1,
 	}
 
-	fd, err := unix.PerfEventOpen(&attr, perfAllThreads, 0, -1, unix.PERF_FLAG_FD_CLOEXEC)
+	fd, err := unix.PerfEventOpen(&attr, pid, 0, -1, unix.PERF_FLAG_FD_CLOEXEC)
 	if err != nil {
 		return nil, fmt.Errorf("opening tracepoint perf event: %w", err)
 	}

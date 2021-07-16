@@ -8,7 +8,8 @@ import (
 )
 
 func TestAttachCgroup(t *testing.T) {
-	cgroup, prog := mustCgroupFixtures(t)
+	cgroup := testutils.CreateCgroup(t)
+	prog := mustCgroupEgressProgram(t)
 
 	link, err := AttachCgroup(CgroupOptions{
 		Path:    cgroup.Name(),
@@ -32,7 +33,8 @@ func TestAttachCgroup(t *testing.T) {
 }
 
 func TestProgAttachCgroup(t *testing.T) {
-	cgroup, prog := mustCgroupFixtures(t)
+	cgroup := testutils.CreateCgroup(t)
+	prog := mustCgroupEgressProgram(t)
 
 	link, err := newProgAttachCgroup(cgroup, ebpf.AttachCGroupInetEgress, prog, 0)
 	if err != nil {
@@ -45,7 +47,8 @@ func TestProgAttachCgroup(t *testing.T) {
 }
 
 func TestProgAttachCgroupAllowMulti(t *testing.T) {
-	cgroup, prog := mustCgroupFixtures(t)
+	cgroup := testutils.CreateCgroup(t)
+	prog := mustCgroupEgressProgram(t)
 
 	link, err := newProgAttachCgroup(cgroup, ebpf.AttachCGroupInetEgress, prog, flagAllowMulti)
 	testutils.SkipIfNotSupported(t, err)
@@ -62,7 +65,8 @@ func TestProgAttachCgroupAllowMulti(t *testing.T) {
 }
 
 func TestLinkCgroup(t *testing.T) {
-	cgroup, prog := mustCgroupFixtures(t)
+	cgroup := testutils.CreateCgroup(t)
+	prog := mustCgroupEgressProgram(t)
 
 	link, err := newLinkCgroup(cgroup, ebpf.AttachCGroupInetEgress, prog)
 	testutils.SkipIfNotSupported(t, err)

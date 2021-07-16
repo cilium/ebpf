@@ -56,7 +56,8 @@ func TestRawLink(t *testing.T) {
 }
 
 func TestRawLinkLoadPinnedWithOptions(t *testing.T) {
-	cgroup, prog := mustCgroupFixtures(t)
+	cgroup := testutils.CreateCgroup(t)
+	prog := mustCgroupEgressProgram(t)
 
 	link, err := AttachRawLink(RawLinkOptions{
 		Target:  int(cgroup.Fd()),
@@ -85,35 +86,10 @@ func TestRawLinkLoadPinnedWithOptions(t *testing.T) {
 	}
 }
 
-func mustCgroupFixtures(t *testing.T) (*os.File, *ebpf.Program) {
+func mustCgroupEgressProgram(t *testing.T) *ebpf.Program {
 	t.Helper()
 
 	testutils.SkipIfNotSupported(t, haveProgAttach())
-
-	prog := mustCgroupEgressProgram(t)
-	cgdir, err := ioutil.TempDir("/sys/fs/cgroup/unified", "ebpf-link")
-	if err != nil {
-		prog.Close()
-		t.Fatal("Can't create cgroupv2:", err)
-	}
-
-	cgroup, err := os.Open(cgdir)
-	if err != nil {
-		prog.Close()
-		os.Remove(cgdir)
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		prog.Close()
-		cgroup.Close()
-		os.Remove(cgdir)
-	})
-
-	return cgroup, prog
-}
-
-func mustCgroupEgressProgram(t *testing.T) *ebpf.Program {
-	t.Helper()
 
 	prog, err := ebpf.NewProgram(&ebpf.ProgramSpec{
 		Type:       ebpf.CGroupSKB,
@@ -127,6 +103,7 @@ func mustCgroupEgressProgram(t *testing.T) *ebpf.Program {
 	if err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(func() { prog.Close() })
 	return prog
 }
 

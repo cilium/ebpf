@@ -29,8 +29,8 @@ type Link interface {
 
 	// Close frees resources.
 	//
-	// The link will be broken unless it has been pinned. A link
-	// may continue past the lifetime of the process if Close is
+	// The link will be broken unless it has been successfully pinned.
+	// A link may continue past the lifetime of the process if Close is
 	// not called.
 	Close() error
 

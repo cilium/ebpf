@@ -140,22 +140,26 @@ func haveMapType(mt ebpf.MapType) error {
 
 	_, err = internal.BPFMapCreate(createMapTypeAttr(mt))
 
+	switch {
 	// For nested and storage map types we accept EBADF as indicator that these maps are supported
-	if errors.Is(err, unix.EBADF) {
+	case errors.Is(err, unix.EBADF):
 		if isMapOfMaps(mt) || isStorageMap(mt) {
 			err = nil
 		}
-	}
 
 	// EINVAL occurs when attempting to create a map with an unknown type.
 	// E2BIG occurs when BPFMapCreateAttr contains non-zero bytes past the end
 	// of the struct known by the running kernel, meaning the kernel is too old
 	// to support the given map type.
-	if errors.Is(err, unix.EINVAL) || errors.Is(err, unix.E2BIG) {
+	case errors.Is(err, unix.EINVAL), errors.Is(err, unix.E2BIG):
 		err = ebpf.ErrNotSupported
-	}
 
-	if err != nil && err != ebpf.ErrNotSupported {
+	// EPERM is kept as-is and is not converted or wrapped.
+	case errors.Is(err, unix.EPERM):
+		break
+
+	// Wrap unexpected errors.
+	case err != nil:
 		err = fmt.Errorf("unexpected error during feature probe: %w", err)
 	}
 

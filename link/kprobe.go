@@ -230,6 +230,11 @@ func pmuProbe(typ probeType, symbol, path string, offset uint64, ret bool) (*per
 	if errors.Is(err, os.ErrNotExist) || errors.Is(err, unix.EINVAL) {
 		return nil, fmt.Errorf("symbol '%s' not found: %w", symbol, os.ErrNotExist)
 	}
+	// Since commit cb9a19fe4aa51, ENOTSUPP is returned when attempting to set
+	// a uprobe on a trap instruction.
+	if errors.Is(err, unix.ENOTSUPP) {
+		return nil, fmt.Errorf("setting a uprobe on a trap insn (offset %#x) is not supported: %w", offset, err)
+	}
 	if err != nil {
 		return nil, fmt.Errorf("opening perf event: %w", err)
 	}

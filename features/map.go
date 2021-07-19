@@ -12,17 +12,17 @@ import (
 	"github.com/cilium/ebpf/internal/unix"
 )
 
-type MapCache struct {
-	sync.Mutex
-	mapTypes map[ebpf.MapType]error
+func init() {
+	mc.mapTypes = make(map[ebpf.MapType]error)
 }
 
 var (
-	mapCache MapCache
+	mc mapCache
 )
 
-func init() {
-	mapCache.mapTypes = make(map[ebpf.MapType]error)
+type mapCache struct {
+	sync.Mutex
+	mapTypes map[ebpf.MapType]error
 }
 
 func createMapTypeAttr(mt ebpf.MapType) *internal.BPFMapCreateAttr {
@@ -131,9 +131,9 @@ func validateMaptype(mt ebpf.MapType) error {
 }
 
 func haveMapType(mt ebpf.MapType) error {
-	mapCache.Lock()
-	defer mapCache.Unlock()
-	err, ok := mapCache.mapTypes[mt]
+	mc.Lock()
+	defer mc.Unlock()
+	err, ok := mc.mapTypes[mt]
 	if ok {
 		return err
 	}
@@ -163,7 +163,7 @@ func haveMapType(mt ebpf.MapType) error {
 		err = fmt.Errorf("unexpected error during feature probe: %w", err)
 	}
 
-	mapCache.mapTypes[mt] = err
+	mc.mapTypes[mt] = err
 
 	return err
 }

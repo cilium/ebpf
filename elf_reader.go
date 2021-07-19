@@ -907,6 +907,11 @@ func getProgType(sectionName string) (ProgramType, AttachType, uint32, string) {
 		"cgroup/setsockopt":  {CGroupSockopt, AttachCGroupSetsockopt, 0},
 		"classifier":         {SchedCLS, AttachNone, 0},
 		"action":             {SchedACT, AttachNone, 0},
+
+		"cgroup/getsockname4": {CGroupSockAddr, AttachCgroupInet4GetSockname, 0},
+		"cgroup/getsockname6": {CGroupSockAddr, AttachCgroupInet6GetSockname, 0},
+		"cgroup/getpeername4": {CGroupSockAddr, AttachCgroupInet4GetPeername, 0},
+		"cgroup/getpeername6": {CGroupSockAddr, AttachCgroupInet6GetPeername, 0},
 	}
 
 	for prefix, t := range types {

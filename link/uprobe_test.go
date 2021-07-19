@@ -81,7 +81,7 @@ func TestUprobeExtWithOpts(t *testing.T) {
 
 	// This Uprobe is broken and will not work because the offset is not
 	// correct. This is expected since the offset is provided by the user.
-	up, err := bashEx.Uprobe("open", prog, &UprobeOptions{Offset: 0x12345})
+	up, err := bashEx.Uprobe("open", prog, &UprobeOptions{Offset: 0x1})
 	if err != nil {
 		t.Fatal(err)
 	}

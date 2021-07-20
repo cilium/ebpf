@@ -4,7 +4,9 @@ import (
 	"fmt"
 )
 
-//go:generate go run github.com/cilium/ebpf/cmd/bpf2go -cc clang-9 example testdata/minimal.c
+// This will use the current bpf2go code to generate the example test.
+// To utilize it, run `go generate .` in the current folder
+//go:generate go run ./... -cc clang-9 example testdata/minimal.c
 
 func Example() {
 	var objs exampleObjects

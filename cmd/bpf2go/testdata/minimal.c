@@ -1,3 +1,9 @@
+#if !defined(__TARGET_ARCH_x86) && !defined(__TARGET_ARCH_arm) && \
+    !defined(__TARGET_ARCH_arm64) && !defined(__TARGET_ARCH_mips) && \
+    !defined(__TARGET_ARCH_powerpc)
+#error __TARGET_ARCH is not defined
+#endif
+
 #include "../../../testdata/common.h"
 
 char __license[] __section("license") = "MIT";

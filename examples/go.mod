@@ -1,6 +1,6 @@
 module github.com/cilium/ebpf/examples
 
-go 1.15
+go 1.16
 
 require (
 	github.com/cilium/ebpf v0.6.1-0.20210610105443-1e7f01c7124c

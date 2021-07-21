@@ -11,16 +11,18 @@ type FreplaceLink struct {
 	*RawLink
 }
 
-// AttachFreplace attaches the given eBPF program to the function with the
-// given name in the given target program. Example:
+// AttachFreplace attaches the given eBPF program to the function it replaces.
+
+// The program and name can either be provided at link time, or can be provided
+// at program load time. If they were provided at load time, they should be nil
+// and empty respectively here, as they will be ignored by the kernel.
+// Examples:
 //
 //	AttachFreplace(dispatcher, "function", replacement)
+//	AttachFreplace(nil, "", replacement)
 func AttachFreplace(targetProg *ebpf.Program, name string, prog *ebpf.Program) (*FreplaceLink, error) {
-	if name == "" {
-		return nil, fmt.Errorf("name cannot be empty: %w", errInvalidInput)
-	}
-	if targetProg == nil {
-		return nil, fmt.Errorf("targetProg cannot be nil: %w", errInvalidInput)
+	if (name == "") != (targetProg == nil) {
+		return nil, fmt.Errorf("must provide both or neither of name and targetProg: %w", errInvalidInput)
 	}
 	if prog == nil {
 		return nil, fmt.Errorf("prog cannot be nil: %w", errInvalidInput)
@@ -29,31 +31,36 @@ func AttachFreplace(targetProg *ebpf.Program, name string, prog *ebpf.Program) (
 		return nil, fmt.Errorf("eBPF program type %s is not an Extension: %w", prog.Type(), errInvalidInput)
 	}
 
-	info, err := targetProg.Info()
-	if err != nil {
-		return nil, err
-	}
-	btfID, ok := info.BTFID()
-	if !ok {
-		return nil, fmt.Errorf("could not get BTF ID for program %s: %w", info.Name, errInvalidInput)
-	}
-	btfHandle, err := btf.NewHandleFromID(btfID)
-	if err != nil {
-		return nil, err
-	}
-	defer btfHandle.Close()
-	spec, err := btf.HandleSpec(btfHandle)
-	if err != nil {
-		return nil, err
-	}
-
+	var target int
 	var function btf.Func
-	if err := spec.FindType(name, &function); err != nil {
-		return nil, err
+	if targetProg != nil {
+		info, err := targetProg.Info()
+		if err != nil {
+			return nil, err
+		}
+		btfID, ok := info.BTFID()
+		if !ok {
+			return nil, fmt.Errorf("could not get BTF ID for program %s: %w", info.Name, errInvalidInput)
+		}
+		btfHandle, err := btf.NewHandleFromID(btfID)
+		if err != nil {
+			return nil, err
+		}
+		defer btfHandle.Close()
+		spec, err := btf.HandleSpec(btfHandle)
+		if err != nil {
+			return nil, err
+		}
+
+		if err := spec.FindType(name, &function); err != nil {
+			return nil, err
+		}
+
+		target = targetProg.FD()
 	}
 
 	link, err := AttachRawLink(RawLinkOptions{
-		Target:  targetProg.FD(),
+		Target:  target,
 		Program: prog,
 		Attach:  ebpf.AttachNone,
 		BTF:     &function,

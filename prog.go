@@ -63,9 +63,8 @@ type ProgramSpec struct {
 	// Name of a kernel data structure or function to attach to. Its
 	// interpretation depends on Type and AttachType.
 	AttachTo string
-	// The file descriptor of the target. Its interpretation depends on Type
-	// and AttachType. Must be manually specified.
-	AttachTarget int
+	// The program to attach to. Should be provided via SetAttachTarget.
+	AttachTarget *Program
 	Instructions asm.Instructions
 	// Flags is passed to the kernel and specifies additional program
 	// load attributes.
@@ -108,6 +107,28 @@ func (ps *ProgramSpec) Copy() *ProgramSpec {
 // Use asm.Instructions.Tag if you need to calculate for non-native endianness.
 func (ps *ProgramSpec) Tag() (string, error) {
 	return ps.Instructions.Tag(internal.NativeEndian)
+}
+
+// SetAttachTarget configures the program to be attached to the optionally
+// specified function in the given program.
+//
+// If the function is not specified, it must have been set via other means
+// (such as loaded from the ELF file via the section name).
+func (ps *ProgramSpec) SetAttachTarget(program *Program, function string) error {
+	if program == nil {
+		return errors.New("must provide a program to attach to")
+	}
+
+	if function == "" && ps.AttachTo == "" {
+		return errors.New("function can only be empty if AttachTo is not")
+	}
+
+	ps.AttachTarget = program
+	if function != "" {
+		ps.AttachTo = function
+	}
+
+	return nil
 }
 
 // Program represents BPF program loaded into the kernel.
@@ -188,6 +209,25 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions, handles *hand
 		if err != nil {
 			return nil, fmt.Errorf("load target BTF: %w", err)
 		}
+	} else if spec.AttachTarget != nil {
+		info, err := spec.AttachTarget.Info()
+		if err != nil {
+			return nil, fmt.Errorf("load target BTF: %w", err)
+		}
+
+		btfID, ok := info.BTFID()
+		if !ok {
+			return nil, fmt.Errorf("load target BTF: no BTF info available")
+		}
+		btfHandle, err := btf.NewHandleFromID(btfID)
+		if err != nil {
+			return nil, fmt.Errorf("load target BTF: %w", err)
+		}
+		defer btfHandle.Close()
+		targetBTF, err = btf.HandleSpec(btfHandle)
+		if err != nil {
+			return nil, fmt.Errorf("load target BTF: %w", err)
+		}
 	}
 
 	var btfDisabled bool
@@ -245,15 +285,15 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions, handles *hand
 	attr.insCount = uint32(len(bytecode) / asm.InstructionSize)
 
 	if spec.AttachTo != "" {
-		targetBTF, targetProg, err := resolveBTFType(targetBTF, spec.AttachTo, spec.AttachTarget, spec.Type, spec.AttachType)
+		target, err := resolveBTFType(targetBTF, spec.AttachTo, spec.Type, spec.AttachType)
 		if err != nil {
 			return nil, err
 		}
-		if targetBTF != nil {
-			attr.attachBTFID = targetBTF.ID()
+		if target != nil {
+			attr.attachBTFID = target.ID()
 		}
-		if targetProg > -1 {
-			attr.attachProgFd = uint32(targetProg)
+		if spec.AttachTarget != nil {
+			attr.attachProgFd = uint32(spec.AttachTarget.FD())
 		}
 	}
 
@@ -703,7 +743,7 @@ func (p *Program) ID() (ProgramID, error) {
 	return ProgramID(info.id), nil
 }
 
-func resolveBTFType(spec *btf.Spec, name string, attachTarget int, progType ProgramType, attachType AttachType) (btf.Type, int, error) {
+func resolveBTFType(spec *btf.Spec, name string, progType ProgramType, attachType AttachType) (btf.Type, error) {
 	type match struct {
 		p ProgramType
 		a AttachType
@@ -712,7 +752,6 @@ func resolveBTFType(spec *btf.Spec, name string, attachTarget int, progType Prog
 	var target btf.Type
 	var targetProg *Program
 	var typeName, featureName string
-	fd := -1
 	switch (match{progType, attachType}) {
 	case match{LSM, AttachLSMMac}:
 		target = new(btf.Func)
@@ -725,61 +764,31 @@ func resolveBTFType(spec *btf.Spec, name string, attachTarget int, progType Prog
 		featureName = name + " iterator"
 
 	case match{Extension, AttachNone}:
-		var err error
-		targetProg, err = CloneProgramFromFD(attachTarget)
-		if err != nil {
-			return nil, -1, fmt.Errorf("resolve BTF for function %s: %w", name, err)
-		}
-		defer targetProg.Close()
-		info, err := targetProg.Info()
-		if err != nil {
-			return nil, -1, fmt.Errorf("can't load program BTF spec: %w", err)
-		}
-
-		btfID, ok := info.BTFID()
-		if !ok {
-			return nil, -1, fmt.Errorf("can't load program BTF spec for %s: no BTF info available", info.Name)
-		}
-		btfHandle, err := btf.NewHandleFromID(btfID)
-		if err != nil {
-			return nil, -1, fmt.Errorf("can't load program BTF spec for %s: %w", info.Name, err)
-		}
-		defer btfHandle.Close()
-		spec, err = btf.HandleSpec(btfHandle)
-		if err != nil {
-			return nil, -1, fmt.Errorf("can't load program BTF spec for %s: %w", info.Name, err)
-		}
-
-		if spec == nil {
-			return nil, -1, errors.New("missing BTF spec")
-		}
-
 		target = new(btf.Func)
 		typeName = name
-		featureName = fmt.Sprintf("freplace %s in %s", name, targetProg.name)
-		fd = attachTarget
+		featureName = fmt.Sprintf("freplace %s", name)
 
 	default:
-		return nil, -1, nil
+		return nil, nil
 	}
 
 	if spec == nil {
 		var err error
 		spec, err = btf.LoadKernelSpec()
 		if err != nil {
-			return nil, -1, fmt.Errorf("load kernel spec: %w", err)
+			return nil, fmt.Errorf("load kernel spec: %w", err)
 		}
 	}
 
 	err := spec.FindType(typeName, target)
 	if errors.Is(err, btf.ErrNotFound) && targetProg == nil {
-		return nil, -1, &internal.UnsupportedFeatureError{
+		return nil, &internal.UnsupportedFeatureError{
 			Name: featureName,
 		}
 	}
 	if err != nil {
-		return nil, -1, fmt.Errorf("resolve BTF for %s: %w", featureName, err)
+		return nil, fmt.Errorf("resolve BTF for %s: %w", featureName, err)
 	}
 
-	return target, fd, nil
+	return target, nil
 }

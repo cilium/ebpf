@@ -33,7 +33,8 @@ func TestFreplace(t *testing.T) {
 		}
 		defer target.Close()
 
-		spec.Programs["replacement"].AttachTarget = target.FD()
+		// Test attachment specified at load time
+		spec.Programs["replacement"].SetAttachTarget(target, "")
 		replacement, err := ebpf.NewProgramWithOptions(spec.Programs["replacement"], ebpf.ProgramOptions{
 			LogLevel: 1,
 		})
@@ -43,7 +44,7 @@ func TestFreplace(t *testing.T) {
 		}
 		defer replacement.Close()
 
-		freplace, err := AttachFreplace(target, spec.Programs["replacement"].AttachTo, replacement)
+		freplace, err := AttachFreplace(nil, "", replacement)
 		if err != nil {
 			t.Fatal("Can't create freplace:", err)
 		}

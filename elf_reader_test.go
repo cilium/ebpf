@@ -375,7 +375,7 @@ func TestLibBPFCompat(t *testing.T) {
 
 			targetProg, targetColl := loadTargetProgram(t, name, opts)
 			defer targetColl.Close()
-			p.AttachTarget = targetProg.FD()
+			p.SetAttachTarget(targetProg, "")
 		}
 
 		coll, err := NewCollectionWithOptions(spec, opts)

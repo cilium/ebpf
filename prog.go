@@ -425,19 +425,6 @@ func (p *Program) Clone() (*Program, error) {
 	return &Program{p.VerifierLog, dup, p.name, "", p.typ}, nil
 }
 
-// CloneProgramFromFD creates a Program from a duplicate of a file descriptor.
-//
-// Closing the duplicate does not affect the original file descriptor, and vice
-// versa.
-func CloneProgramFromFD(fd int) (*Program, error) {
-	p, err := NewProgramFromFD(fd)
-	if err != nil {
-		return nil, err
-	}
-
-	return p.Clone()
-}
-
 // Pin persists the Program on the BPF virtual file system past the lifetime of
 // the process that created it
 //

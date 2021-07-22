@@ -6,10 +6,15 @@ import (
 	"github.com/cilium/ebpf/internal"
 )
 
+// Info describes a BTF object.
 type Info struct {
-	BTF       *Spec
-	id        TypeID
-	Name      string
+	BTF *Spec
+	ID  ID
+	// Name is an identifying name for the BTF, currently only used by the
+	// kernel.
+	Name string
+	// KernelBTF is true if the BTf originated with the kernel and not
+	// userspace.
 	KernelBTF bool
 }
 
@@ -36,7 +41,7 @@ func newInfoFromFd(fd *internal.FD) (*Info, error) {
 
 	return &Info{
 		BTF:       spec,
-		id:        TypeID(info.id),
+		ID:        ID(info.id),
 		Name:      internal.CString(nameBuffer),
 		KernelBTF: info.kernelBTF != 0,
 	}, nil

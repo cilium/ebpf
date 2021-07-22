@@ -89,7 +89,7 @@ type ProgramInfo struct {
 	// Name as supplied by user space at load time.
 	Name string
 	// BTF for the program.
-	btf btf.TypeID
+	btf btf.ID
 
 	stats *programStats
 }
@@ -110,7 +110,7 @@ func newProgramInfoFromFd(fd *internal.FD) (*ProgramInfo, error) {
 		Tag: hex.EncodeToString(info.tag[:]),
 		// name is available from 4.15.
 		Name: internal.CString(info.name[:]),
-		btf:  btf.TypeID(info.btf_id),
+		btf:  btf.ID(info.btf_id),
 		stats: &programStats{
 			runtime:  time.Duration(info.run_time_ns),
 			runCount: info.run_cnt,
@@ -153,7 +153,7 @@ func (pi *ProgramInfo) ID() (ProgramID, bool) {
 // The bool return value indicates whether this optional field is available and
 // populated. (The field may be available but not populated if the kernel
 // supports the field but the program was loaded without BTF information.)
-func (pi *ProgramInfo) BTFID() (btf.TypeID, bool) {
+func (pi *ProgramInfo) BTFID() (btf.ID, bool) {
 	return pi.btf, pi.btf > 0
 }
 

@@ -50,7 +50,7 @@ type RawLinkOptions struct {
 	Program *ebpf.Program
 	// Attach must match the attach type of Program.
 	Attach ebpf.AttachType
-	// BTF is the BTF of the attachment target (or 0).
+	// BTF is the BTF of the attachment target.
 	BTF btf.Type
 }
 
@@ -86,10 +86,6 @@ func AttachRawLink(opts RawLinkOptions) (*RawLink, error) {
 	}
 
 	btfID := uint32(0)
-	if opts.Program.Type() == ebpf.Extension && opts.BTF == nil {
-		return nil, fmt.Errorf("extensions require BTF targets: %s", internal.ErrClosedFd)
-	}
-
 	if opts.BTF != nil {
 		btfID = uint32(opts.BTF.ID())
 	}

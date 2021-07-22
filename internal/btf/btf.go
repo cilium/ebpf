@@ -27,6 +27,9 @@ var (
 	ErrNoExtendedInfo = errors.New("no extended info")
 )
 
+// ID represents the unique ID of a BTF object.
+type ID uint32
+
 // Spec represents decoded BTF.
 type Spec struct {
 	rawTypes   []rawType
@@ -547,7 +550,9 @@ func NewHandle(spec *Spec) (*Handle, error) {
 // NewHandleFromID returns the BTF handle for a given id.
 //
 // Returns ErrNotExist, if there is no BTF with the given id.
-func NewHandleFromID(id TypeID) (*Handle, error) {
+//
+// Requires CAP_SYS_ADMIN.
+func NewHandleFromID(id ID) (*Handle, error) {
 	fd, err := bpfObjGetFDByID(internal.BPF_BTF_GET_FD_BY_ID, uint32(id))
 	if err != nil {
 		return nil, fmt.Errorf("get BTF by id: %w", err)

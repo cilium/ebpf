@@ -8,7 +8,7 @@ import (
 )
 
 type FreplaceLink struct {
-	*RawLink
+	RawLink
 }
 
 // AttachFreplace attaches the given eBPF program to the function it replaces.
@@ -32,7 +32,7 @@ func AttachFreplace(targetProg *ebpf.Program, name string, prog *ebpf.Program) (
 	}
 
 	var target int
-	var function btf.Func
+	function := new(btf.Func)
 	if targetProg != nil {
 		info, err := targetProg.Info()
 		if err != nil {
@@ -52,7 +52,7 @@ func AttachFreplace(targetProg *ebpf.Program, name string, prog *ebpf.Program) (
 			return nil, err
 		}
 
-		if err := spec.FindType(name, &function); err != nil {
+		if err := spec.FindType(name, function); err != nil {
 			return nil, err
 		}
 
@@ -63,13 +63,13 @@ func AttachFreplace(targetProg *ebpf.Program, name string, prog *ebpf.Program) (
 		Target:  target,
 		Program: prog,
 		Attach:  ebpf.AttachNone,
-		BTF:     &function,
+		BTF:     function,
 	})
 	if err != nil {
 		return nil, err
 	}
 
-	return &FreplaceLink{link}, nil
+	return &FreplaceLink{*link}, nil
 }
 
 // LoadPinnedFreplace loads a pinned iterator from a bpffs.
@@ -79,5 +79,5 @@ func LoadPinnedFreplace(fileName string, opts *ebpf.LoadPinOptions) (*FreplaceLi
 		return nil, err
 	}
 
-	return &FreplaceLink{link}, err
+	return &FreplaceLink{*link}, err
 }

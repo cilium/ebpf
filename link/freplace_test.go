@@ -34,7 +34,10 @@ func TestFreplace(t *testing.T) {
 		defer target.Close()
 
 		// Test attachment specified at load time
-		spec.Programs["replacement"].SetAttachTarget(target, "")
+		err = spec.Programs["replacement"].SetAttachTarget(target, "")
+		if err != nil {
+			t.Fatal("Can't set attach target:", err)
+		}
 		replacement, err := ebpf.NewProgramWithOptions(spec.Programs["replacement"], ebpf.ProgramOptions{
 			LogLevel: 1,
 		})

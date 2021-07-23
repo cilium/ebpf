@@ -535,6 +535,9 @@ func (ec *elfCode) loadMaps(maps map[string]*MapSpec) error {
 	return nil
 }
 
+// loadBTFMaps iterates over all ELF sections marked as BTF map sections
+// (like .maps) and parses them into MapSpecs. Dump the .maps section and
+// any relocations with `readelf -x .maps -r <elf_file>`.
 func (ec *elfCode) loadBTFMaps(maps map[string]*MapSpec) error {
 	for _, sec := range ec.sections {
 		if sec.kind != btfMapSection {
@@ -545,27 +548,40 @@ func (ec *elfCode) loadBTFMaps(maps map[string]*MapSpec) error {
 			return fmt.Errorf("missing BTF")
 		}
 
-		_, err := io.Copy(internal.DiscardZeroes{}, bufio.NewReader(sec.Open()))
-		if err != nil {
-			return fmt.Errorf("section %v: initializing BTF map definitions: %w", sec.Name, internal.ErrNotSupported)
-		}
-
+		// Each section must appear as a DataSec in the ELF's BTF blob.
 		var ds btf.Datasec
 		if err := ec.btf.FindType(sec.Name, &ds); err != nil {
 			return fmt.Errorf("cannot find section '%s' in BTF: %w", sec.Name, err)
 		}
 
+		// Open a Reader to the ELF's raw section bytes so we can assert that all
+		// of them are zero on a per-map (per-Var) basis. For now, the section's
+		// sole purpose is to receive relocations, so all must be zero.
+		rs := sec.Open()
+
 		for _, vs := range ds.Vars {
+			// BPF maps are declared as and assigned to global variables,
+			// so iterate over each Var in the DataSec and validate their types.
 			v, ok := vs.Type.(*btf.Var)
 			if !ok {
 				return fmt.Errorf("section %v: unexpected type %s", sec.Name, vs.Type)
 			}
 			name := string(v.Name)
 
+			// The BTF metadata for each Var contains the full length of the map
+			// declaration, so read the corresponding amount of bytes from the ELF.
+			// This way, we can pinpoint which map declaration contains unexpected
+			// (and therefore unsupported) data.
+			_, err := io.Copy(internal.DiscardZeroes{}, io.LimitReader(rs, int64(vs.Size)))
+			if err != nil {
+				return fmt.Errorf("section %v: map %s: initializing BTF map definitions: %w", sec.Name, name, internal.ErrNotSupported)
+			}
+
 			if maps[name] != nil {
 				return fmt.Errorf("section %v: map %s already exists", sec.Name, name)
 			}
 
+			// Each Var representing a BTF map definition contains a Struct.
 			mapStruct, ok := v.Type.(*btf.Struct)
 			if !ok {
 				return fmt.Errorf("expected struct, got %s", v.Type)
@@ -581,6 +597,13 @@ func (ec *elfCode) loadBTFMaps(maps map[string]*MapSpec) error {
 			}
 
 			maps[name] = mapSpec
+		}
+
+		// Drain the ELF section reader to make sure all bytes are accounted for
+		// with BTF metadata.
+		var b bytes.Buffer
+		if i, err := b.ReadFrom(rs); i > 0 || err != nil {
+			return fmt.Errorf("section %v: unexpected remaining bytes in ELF section: %v, error: %v", sec.Name, b.Bytes(), err)
 		}
 	}
 

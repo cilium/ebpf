@@ -166,16 +166,16 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions, handles *hand
 		kv = v.Kernel()
 	}
 
-	attr := &bpfProgLoadAttr{
-		progType:           spec.Type,
-		progFlags:          spec.Flags,
-		expectedAttachType: spec.AttachType,
-		license:            internal.NewStringPointer(spec.License),
-		kernelVersion:      kv,
+	attr := &internal.BPFProgLoadAttr{
+		ProgType:           uint32(spec.Type),
+		ProgFlags:          spec.Flags,
+		ExpectedAttachType: uint32(spec.AttachType),
+		License:            internal.NewStringPointer(spec.License),
+		KernelVersion:      kv,
 	}
 
 	if haveObjName() == nil {
-		attr.progName = internal.NewBPFObjName(spec.Name)
+		attr.ProgName = internal.NewBPFObjName(spec.Name)
 	}
 
 	var err error
@@ -202,23 +202,23 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions, handles *hand
 		}
 
 		if handle != nil {
-			attr.progBTFFd = uint32(handle.FD())
+			attr.ProgBTFFd = uint32(handle.FD())
 
 			recSize, bytes, err := btf.ProgramLineInfos(spec.BTF)
 			if err != nil {
 				return nil, fmt.Errorf("get BTF line infos: %w", err)
 			}
-			attr.lineInfoRecSize = recSize
-			attr.lineInfoCnt = uint32(uint64(len(bytes)) / uint64(recSize))
-			attr.lineInfo = internal.NewSlicePointer(bytes)
+			attr.LineInfoRecSize = recSize
+			attr.LineInfoCnt = uint32(uint64(len(bytes)) / uint64(recSize))
+			attr.LineInfo = internal.NewSlicePointer(bytes)
 
 			recSize, bytes, err = btf.ProgramFuncInfos(spec.BTF)
 			if err != nil {
 				return nil, fmt.Errorf("get BTF function infos: %w", err)
 			}
-			attr.funcInfoRecSize = recSize
-			attr.funcInfoCnt = uint32(uint64(len(bytes)) / uint64(recSize))
-			attr.funcInfo = internal.NewSlicePointer(bytes)
+			attr.FuncInfoRecSize = recSize
+			attr.FuncInfoCnt = uint32(uint64(len(bytes)) / uint64(recSize))
+			attr.FuncInfo = internal.NewSlicePointer(bytes)
 		}
 	}
 
@@ -238,8 +238,8 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions, handles *hand
 	}
 
 	bytecode := buf.Bytes()
-	attr.instructions = internal.NewSlicePointer(bytecode)
-	attr.insCount = uint32(len(bytecode) / asm.InstructionSize)
+	attr.Instructions = internal.NewSlicePointer(bytecode)
+	attr.InsCount = uint32(len(bytecode) / asm.InstructionSize)
 
 	if spec.AttachTo != "" {
 		target, err := resolveBTFType(targetBTF, spec.AttachTo, spec.Type, spec.AttachType)
@@ -247,7 +247,7 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions, handles *hand
 			return nil, err
 		}
 		if target != nil {
-			attr.attachBTFID = target.ID()
+			attr.AttachBTFID = uint32(target.ID())
 		}
 	}
 
@@ -259,12 +259,12 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions, handles *hand
 	var logBuf []byte
 	if opts.LogLevel > 0 {
 		logBuf = make([]byte, logSize)
-		attr.logLevel = opts.LogLevel
-		attr.logSize = uint32(len(logBuf))
-		attr.logBuf = internal.NewSlicePointer(logBuf)
+		attr.LogLevel = opts.LogLevel
+		attr.LogSize = uint32(len(logBuf))
+		attr.LogBuf = internal.NewSlicePointer(logBuf)
 	}
 
-	fd, err := bpfProgLoad(attr)
+	fd, err := internal.BPFProgLoad(attr)
 	if err == nil {
 		return &Program{internal.CString(logBuf), fd, spec.Name, "", spec.Type}, nil
 	}
@@ -273,11 +273,11 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions, handles *hand
 	if opts.LogLevel == 0 && opts.LogSize >= 0 {
 		// Re-run with the verifier enabled to get better error messages.
 		logBuf = make([]byte, logSize)
-		attr.logLevel = 1
-		attr.logSize = uint32(len(logBuf))
-		attr.logBuf = internal.NewSlicePointer(logBuf)
+		attr.LogLevel = 1
+		attr.LogSize = uint32(len(logBuf))
+		attr.LogBuf = internal.NewSlicePointer(logBuf)
 
-		_, logErr = bpfProgLoad(attr)
+		_, logErr = internal.BPFProgLoad(attr)
 	}
 
 	if errors.Is(logErr, unix.EPERM) && logBuf[0] == 0 {

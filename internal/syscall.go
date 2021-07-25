@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"errors"
 	"fmt"
 	"path/filepath"
 	"runtime"
@@ -66,6 +67,48 @@ func BPF(cmd BPFCmd, attr unsafe.Pointer, size uintptr) (uintptr, error) {
 	}
 
 	return r1, err
+}
+
+type BPFProgLoadAttr struct {
+	ProgType           uint32
+	InsCount           uint32
+	Instructions       Pointer
+	License            Pointer
+	LogLevel           uint32
+	LogSize            uint32
+	LogBuf             Pointer
+	KernelVersion      uint32     // since 4.1  2541517c32be
+	ProgFlags          uint32     // since 4.11 e07b98d9bffe
+	ProgName           BPFObjName // since 4.15 067cae47771c
+	ProgIfIndex        uint32     // since 4.15 1f6f4cb7ba21
+	ExpectedAttachType uint32     // since 4.17 5e43f899b03a
+	ProgBTFFd          uint32
+	FuncInfoRecSize    uint32
+	FuncInfo           Pointer
+	FuncInfoCnt        uint32
+	LineInfoRecSize    uint32
+	LineInfo           Pointer
+	LineInfoCnt        uint32
+	AttachBTFID        uint32
+	AttachProgFd       uint32
+}
+
+// BPFProgLoad wraps BPF_PROG_LOAD.
+func BPFProgLoad(attr *BPFProgLoadAttr) (*FD, error) {
+	for {
+		fd, err := BPF(BPF_PROG_LOAD, unsafe.Pointer(attr), unsafe.Sizeof(*attr))
+		// As of ~4.20 the verifier can be interrupted by a signal,
+		// and returns EAGAIN in that case.
+		if errors.Is(err, unix.EAGAIN) {
+			continue
+		}
+
+		if err != nil {
+			return nil, err
+		}
+
+		return NewFD(uint32(fd)), nil
+	}
 }
 
 type BPFProgAttachAttr struct {

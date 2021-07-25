@@ -123,6 +123,11 @@ func (mt MapType) canStoreProgram() bool {
 // ProgramType of the eBPF program
 type ProgramType uint32
 
+// Max return the latest supported ProgramType.
+func (_ ProgramType) Max() ProgramType {
+	return maxProgramType - 1
+}
+
 // eBPF program types
 const (
 	UnspecifiedProgram ProgramType = iota
@@ -156,6 +161,7 @@ const (
 	Extension
 	LSM
 	SkLookup
+	maxProgramType
 )
 
 // AttachType of the eBPF program, needed to differentiate allowed context accesses in

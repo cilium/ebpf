@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/cilium/ebpf/internal"
+	"github.com/cilium/ebpf/internal/btf"
 )
 
 // MapInfo describes a map.
@@ -87,6 +88,8 @@ type ProgramInfo struct {
 	Tag string
 	// Name as supplied by user space at load time.
 	Name string
+	// BTF for the program.
+	btf btf.ID
 
 	stats *programStats
 }
@@ -107,6 +110,7 @@ func newProgramInfoFromFd(fd *internal.FD) (*ProgramInfo, error) {
 		Tag: hex.EncodeToString(info.tag[:]),
 		// name is available from 4.15.
 		Name: internal.CString(info.name[:]),
+		btf:  btf.ID(info.btf_id),
 		stats: &programStats{
 			runtime:  time.Duration(info.run_time_ns),
 			runCount: info.run_cnt,
@@ -140,6 +144,17 @@ func newProgramInfoFromProc(fd *internal.FD) (*ProgramInfo, error) {
 // The bool return value indicates whether this optional field is available.
 func (pi *ProgramInfo) ID() (ProgramID, bool) {
 	return pi.id, pi.id > 0
+}
+
+// BTFID returns the BTF ID associated with the program.
+//
+// Available from 5.0.
+//
+// The bool return value indicates whether this optional field is available and
+// populated. (The field may be available but not populated if the kernel
+// supports the field but the program was loaded without BTF information.)
+func (pi *ProgramInfo) BTFID() (btf.ID, bool) {
+	return pi.btf, pi.btf > 0
 }
 
 // RunCount returns the total number of times the program was called.

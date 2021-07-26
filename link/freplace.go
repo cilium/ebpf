@@ -74,7 +74,7 @@ func AttachFreplace(targetProg *ebpf.Program, name string, prog *ebpf.Program) (
 
 // Update implements the Link interface.
 func (f *FreplaceLink) Update(new *ebpf.Program) error {
-	return ErrNotSupported
+	return fmt.Errorf("freplace update: %w", ErrNotSupported)
 }
 
 // LoadPinnedFreplace loads a pinned iterator from a bpffs.

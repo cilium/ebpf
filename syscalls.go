@@ -145,11 +145,6 @@ type bpfProgTestRunAttr struct {
 	duration    uint32
 }
 
-type bpfGetFDByIDAttr struct {
-	id   uint32
-	next uint32
-}
-
 type bpfMapFreezeAttr struct {
 	mapFd uint32
 }
@@ -470,11 +465,3 @@ var haveBatchAPI = internal.FeatureTest("map batch api", "5.6", func() error {
 	}
 	return nil
 })
-
-func bpfObjGetFDByID(cmd internal.BPFCmd, id uint32) (*internal.FD, error) {
-	attr := bpfGetFDByIDAttr{
-		id: id,
-	}
-	ptr, err := internal.BPF(cmd, unsafe.Pointer(&attr), unsafe.Sizeof(attr))
-	return internal.NewFD(uint32(ptr)), err
-}

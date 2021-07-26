@@ -180,6 +180,22 @@ func BPFObjGetInfoByFD(fd *FD, info unsafe.Pointer, size uintptr) error {
 	return nil
 }
 
+type bpfGetFDByIDAttr struct {
+	id   uint32
+	next uint32
+}
+
+// BPFObjGetInfoByFD wraps BPF_*_GET_FD_BY_ID.
+//
+// Available from 4.13.
+func BPFObjGetFDByID(cmd BPFCmd, id uint32) (*FD, error) {
+	attr := bpfGetFDByIDAttr{
+		id: id,
+	}
+	ptr, err := BPF(cmd, unsafe.Pointer(&attr), unsafe.Sizeof(attr))
+	return NewFD(uint32(ptr)), err
+}
+
 // BPFObjName is a null-terminated string made up of
 // 'A-Za-z0-9_' characters.
 type BPFObjName [unix.BPF_OBJ_NAME_LEN]byte

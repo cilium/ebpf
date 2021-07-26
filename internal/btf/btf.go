@@ -27,6 +27,9 @@ var (
 	ErrNoExtendedInfo = errors.New("no extended info")
 )
 
+// ID represents the unique ID of a BTF object.
+type ID uint32
+
 // Spec represents decoded BTF.
 type Spec struct {
 	rawTypes   []rawType
@@ -542,6 +545,33 @@ func NewHandle(spec *Spec) (*Handle, error) {
 	}
 
 	return &Handle{fd}, nil
+}
+
+// NewHandleFromID returns the BTF handle for a given id.
+//
+// Returns ErrNotExist, if there is no BTF with the given id.
+//
+// Requires CAP_SYS_ADMIN.
+func NewHandleFromID(id ID) (*Handle, error) {
+	fd, err := internal.BPFObjGetFDByID(internal.BPF_BTF_GET_FD_BY_ID, uint32(id))
+	if err != nil {
+		return nil, fmt.Errorf("get BTF by id: %w", err)
+	}
+
+	return &Handle{fd}, nil
+}
+
+// HandleSpec returns the Spec that defined the BTF loaded into the kernel.
+//
+// This is a free function instead of a method to hide it from users
+// of package ebpf.
+func HandleSpec(s *Handle) (*Spec, error) {
+	info, err := newInfoFromFd(s.fd)
+	if err != nil {
+		return nil, fmt.Errorf("get BTF spec for handle: %w", err)
+	}
+
+	return info.BTF, nil
 }
 
 // Close destroys the handle.

@@ -314,7 +314,7 @@ func NewProgramFromFD(fd int) (*Program, error) {
 //
 // Returns ErrNotExist, if there is no eBPF program with the given id.
 func NewProgramFromID(id ProgramID) (*Program, error) {
-	fd, err := bpfObjGetFDByID(internal.BPF_PROG_GET_FD_BY_ID, uint32(id))
+	fd, err := internal.BPFObjGetFDByID(internal.BPF_PROG_GET_FD_BY_ID, uint32(id))
 	if err != nil {
 		return nil, fmt.Errorf("get program by id: %w", err)
 	}

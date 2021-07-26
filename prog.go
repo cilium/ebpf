@@ -63,7 +63,7 @@ type ProgramSpec struct {
 	// Name of a kernel data structure or function to attach to. Its
 	// interpretation depends on Type and AttachType.
 	AttachTo string
-	// The program to attach to. Should be provided via SetAttachTarget.
+	// The program to attach to. Must be provided manually.
 	AttachTarget *Program
 	Instructions asm.Instructions
 	// Flags is passed to the kernel and specifies additional program
@@ -107,28 +107,6 @@ func (ps *ProgramSpec) Copy() *ProgramSpec {
 // Use asm.Instructions.Tag if you need to calculate for non-native endianness.
 func (ps *ProgramSpec) Tag() (string, error) {
 	return ps.Instructions.Tag(internal.NativeEndian)
-}
-
-// SetAttachTarget configures the program to be attached to the optionally
-// specified function in the given program.
-//
-// If the function is not specified, it must have been set via other means
-// (such as loaded from the ELF file via the section name).
-func (ps *ProgramSpec) SetAttachTarget(program *Program, function string) error {
-	if program == nil {
-		return errors.New("must provide a program to attach to")
-	}
-
-	if function == "" && ps.AttachTo == "" {
-		return errors.New("function can only be empty if AttachTo is not")
-	}
-
-	ps.AttachTarget = program
-	if function != "" {
-		ps.AttachTo = function
-	}
-
-	return nil
 }
 
 // Program represents BPF program loaded into the kernel.

@@ -375,9 +375,7 @@ func TestLibBPFCompat(t *testing.T) {
 
 			targetProg, targetColl := loadTargetProgram(t, name, opts)
 			defer targetColl.Close()
-			if err := p.SetAttachTarget(targetProg, ""); err != nil {
-				t.Fatalf("Can't set attach target: %s", err)
-			}
+			p.AttachTarget = targetProg
 		}
 
 		coll, err := NewCollectionWithOptions(spec, opts)

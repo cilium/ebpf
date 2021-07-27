@@ -314,8 +314,6 @@ func (hc handleCache) close() {
 	for _, handle := range hc.btfHandles {
 		handle.Close()
 	}
-	hc.btfHandles = nil
-	hc.btfSpecs = nil
 }
 
 func lazyLoadCollection(coll *CollectionSpec, opts *CollectionOptions) (

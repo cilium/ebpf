@@ -206,7 +206,7 @@ func (cs *CollectionSpec) LoadAndAssign(to interface{}, opts *CollectionOptions)
 		opts = &CollectionOptions{}
 	}
 
-	loadMap, loadProgram, done, cleanup := lazyLoadCollection(cs, opts)
+	loadMap, loadProgram, populateMaps, done, cleanup := lazyLoadCollection(cs, opts)
 	defer cleanup()
 
 	valueOf := func(typ reflect.Type, name string) (reflect.Value, error) {
@@ -217,18 +217,26 @@ func (cs *CollectionSpec) LoadAndAssign(to interface{}, opts *CollectionOptions)
 				return reflect.Value{}, err
 			}
 			return reflect.ValueOf(p), nil
+
 		case reflect.TypeOf((*Map)(nil)):
 			m, err := loadMap(name)
 			if err != nil {
 				return reflect.Value{}, err
 			}
 			return reflect.ValueOf(m), nil
+
 		default:
 			return reflect.Value{}, fmt.Errorf("unsupported type %s", typ)
 		}
 	}
 
+	// Load the Maps and Programs requested by the annotated struct.
 	if err := assignValues(to, valueOf); err != nil {
+		return err
+	}
+
+	// Finally, autopopulate the requested maps.
+	if err := populateMaps(); err != nil {
 		return err
 	}
 
@@ -250,21 +258,26 @@ func NewCollection(spec *CollectionSpec) (*Collection, error) {
 
 // NewCollectionWithOptions creates a Collection from a specification.
 func NewCollectionWithOptions(spec *CollectionSpec, opts CollectionOptions) (*Collection, error) {
-	loadMap, loadProgram, done, cleanup := lazyLoadCollection(spec, &opts)
+	loadMap, loadProgram, populateMaps, done, cleanup := lazyLoadCollection(spec, &opts)
 	defer cleanup()
 
+	// Create maps first, as their fds need to be linked into programs.
 	for mapName := range spec.Maps {
-		_, err := loadMap(mapName)
-		if err != nil {
+		if _, err := loadMap(mapName); err != nil {
 			return nil, err
 		}
 	}
 
 	for progName := range spec.Programs {
-		_, err := loadProgram(progName)
-		if err != nil {
+		if _, err := loadProgram(progName); err != nil {
 			return nil, err
 		}
+	}
+
+	// Maps can contain pointers to Programs, so populate them after
+	// all Maps and Programs have been successfully loaded.
+	if err := populateMaps(); err != nil {
+		return nil, err
 	}
 
 	maps, progs := done()
@@ -323,6 +336,7 @@ func (hc handleCache) close() {
 func lazyLoadCollection(coll *CollectionSpec, opts *CollectionOptions) (
 	loadMap func(string) (*Map, error),
 	loadProgram func(string) (*Program, error),
+	populateMaps func() error,
 	done func() (map[string]*Map, map[string]*Program),
 	cleanup func(),
 ) {
@@ -420,6 +434,44 @@ func lazyLoadCollection(coll *CollectionSpec, opts *CollectionOptions) (
 
 		progs[progName] = prog
 		return prog, nil
+	}
+
+	populateMaps = func() error {
+		for mapName, m := range maps {
+			// TODO: Store reference to MapSpec in Map to avoid this?
+			mapSpec, ok := coll.Maps[mapName]
+			if !ok {
+				return fmt.Errorf("missing map spec %s", mapName)
+			}
+
+			mapSpec = mapSpec.Copy()
+
+			// Replace any object stubs with loaded objects.
+			for i, kv := range mapSpec.Contents {
+				switch v := kv.Value.(type) {
+				case programStub:
+					prog, ok := progs[string(v)]
+					if !ok {
+						return fmt.Errorf("program %s not assigned, but map %s requires it: %w", v, mapName, errUnsatisfiedReference)
+					}
+					mapSpec.Contents[i] = MapKV{kv.Key, prog}
+
+				case mapStub:
+					innerMap, ok := maps[string(v)]
+					if !ok {
+						return fmt.Errorf("map %s not assigned, but map %s requires it: %w", v, mapName, errUnsatisfiedReference)
+					}
+					mapSpec.Contents[i] = MapKV{kv.Key, innerMap}
+				}
+			}
+
+			// Populate and freeze the map if specified.
+			if err := m.populate(mapSpec); err != nil {
+				return fmt.Errorf("populating map %s: %w", mapName, err)
+			}
+		}
+
+		return nil
 	}
 
 	return

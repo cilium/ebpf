@@ -204,7 +204,17 @@ func NewMapWithOptions(spec *MapSpec, opts MapOptions) (*Map, error) {
 	handles := newHandleCache()
 	defer handles.close()
 
-	return newMapWithOptions(spec, opts, handles)
+	m, err := newMapWithOptions(spec, opts, handles)
+	if err != nil {
+		return nil, fmt.Errorf("creating map: %w", err)
+	}
+
+	err = m.finalize(spec)
+	if err != nil {
+		return nil, fmt.Errorf("populating map: %w", err)
+	}
+
+	return m, nil
 }
 
 func newMapWithOptions(spec *MapSpec, opts MapOptions, handles *handleCache) (_ *Map, err error) {
@@ -270,11 +280,6 @@ func newMapWithOptions(spec *MapSpec, opts MapOptions, handles *handleCache) (_ 
 		return nil, err
 	}
 	defer closeOnError(m)
-
-	err = m.finalize(spec)
-	if err != nil {
-		return nil, err
-	}
 
 	if spec.Pinning == PinByName {
 		path := filepath.Join(opts.PinPath, spec.Name)
@@ -914,7 +919,7 @@ func (m *Map) Freeze() error {
 func (m *Map) finalize(spec *MapSpec) error {
 	for _, kv := range spec.Contents {
 		if err := m.Put(kv.Key, kv.Value); err != nil {
-			return fmt.Errorf("populating map: key %v: %w", kv.Key, err)
+			return fmt.Errorf("putting value: key %v: %w", kv.Key, err)
 		}
 	}
 

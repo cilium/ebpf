@@ -195,7 +195,17 @@ func NewMapWithOptions(spec *MapSpec, opts MapOptions) (*Map, error) {
 	handles := newHandleCache()
 	defer handles.close()
 
-	return newMapWithOptions(spec, opts, handles)
+	m, err := newMapWithOptions(spec, opts, handles)
+	if err != nil {
+		return nil, err
+	}
+
+	err = m.populate(spec)
+	if err != nil {
+		return nil, err
+	}
+
+	return m, nil
 }
 
 func newMapWithOptions(spec *MapSpec, opts MapOptions, handles *handleCache) (_ *Map, err error) {
@@ -261,11 +271,6 @@ func newMapWithOptions(spec *MapSpec, opts MapOptions, handles *handleCache) (_ 
 		return nil, err
 	}
 	defer closeOnError(m)
-
-	err = m.populate(spec)
-	if err != nil {
-		return nil, err
-	}
 
 	if spec.Pinning == PinByName {
 		path := filepath.Join(opts.PinPath, spec.Name)

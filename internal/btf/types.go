@@ -238,7 +238,7 @@ var (
 type Member struct {
 	Name
 	Type Type
-	// Offset is the bit offset of this member
+	// Offset is the bit offset of this member.
 	Offset       uint32
 	BitfieldSize uint32
 }
@@ -475,7 +475,7 @@ func (ds *Datasec) copy() Type {
 	return &cpy
 }
 
-// VarSecinfo describes variable in a Datasec
+// VarSecinfo describes variable in a Datasec.
 //
 // It is not a valid Type.
 type VarSecinfo struct {

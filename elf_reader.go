@@ -20,7 +20,7 @@ import (
 )
 
 // elfCode is a convenience to reduce the amount of arguments that have to
-// be passed around explicitly. You should treat it's contents as immutable.
+// be passed around explicitly. You should treat its contents as immutable.
 type elfCode struct {
 	*internal.SafeELFFile
 	sections map[elf.SectionIndex]*elfSection

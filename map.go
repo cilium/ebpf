@@ -253,20 +253,28 @@ func newMapWithOptions(spec *MapSpec, opts MapOptions, handles *handleCache) (_ 
 			return nil, errors.New("inner maps cannot be pinned")
 		}
 
-		template, err := createMap(spec.InnerMap, nil, opts, handles)
+		template, err := spec.InnerMap.createMap(nil, opts, handles)
 		if err != nil {
 			return nil, err
 		}
 		defer template.Close()
 
+		// Intentionally skip populating and freezing (finalizing)
+		// the inner map template since it will be removed shortly.
+
 		innerFd = template.fd
 	}
 
-	m, err := createMap(spec, innerFd, opts, handles)
+	m, err := spec.createMap(innerFd, opts, handles)
 	if err != nil {
 		return nil, err
 	}
 	defer closeOnError(m)
+
+	err = m.finalize(spec)
+	if err != nil {
+		return nil, err
+	}
 
 	if spec.Pinning == PinByName {
 		path := filepath.Join(opts.PinPath, spec.Name)
@@ -278,7 +286,9 @@ func newMapWithOptions(spec *MapSpec, opts MapOptions, handles *handleCache) (_ 
 	return m, nil
 }
 
-func createMap(spec *MapSpec, inner *internal.FD, opts MapOptions, handles *handleCache) (_ *Map, err error) {
+// createMap validates the spec's properties and creates the map in the kernel
+// using the given opts. It does not populate or freeze the map.
+func (spec *MapSpec) createMap(inner *internal.FD, opts MapOptions, handles *handleCache) (_ *Map, err error) {
 	closeOnError := func(closer io.Closer) {
 		if err != nil {
 			closer.Close()
@@ -395,19 +405,11 @@ func createMap(spec *MapSpec, inner *internal.FD, opts MapOptions, handles *hand
 		return nil, fmt.Errorf("map create: %w", err)
 	}
 
-	if err := m.populate(spec.Contents); err != nil {
-		return nil, fmt.Errorf("map create: can't set initial contents: %w", err)
-	}
-
-	if spec.Freeze {
-		if err := m.Freeze(); err != nil {
-			return nil, fmt.Errorf("can't freeze map: %w", err)
-		}
-	}
-
 	return m, nil
 }
 
+// newMap allocates and returns a new Map structure.
+// Sets the fullValueSize on per-CPU maps.
 func newMap(fd *internal.FD, name string, typ MapType, keySize, valueSize, maxEntries, flags uint32) (*Map, error) {
 	m := &Map{
 		name,
@@ -907,12 +909,21 @@ func (m *Map) Freeze() error {
 	return nil
 }
 
-func (m *Map) populate(contents []MapKV) error {
-	for _, kv := range contents {
+// finalize populates the Map according to the Contents specified
+// in spec and freezes the Map if requested by spec.
+func (m *Map) finalize(spec *MapSpec) error {
+	for _, kv := range spec.Contents {
 		if err := m.Put(kv.Key, kv.Value); err != nil {
-			return fmt.Errorf("key %v: %w", kv.Key, err)
+			return fmt.Errorf("populating map: key %v: %w", kv.Key, err)
 		}
 	}
+
+	if spec.Freeze {
+		if err := m.Freeze(); err != nil {
+			return fmt.Errorf("freezing map: %w", err)
+		}
+	}
+
 	return nil
 }
 

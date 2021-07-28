@@ -1,6 +1,7 @@
 package ebpf
 
 import (
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
@@ -25,6 +26,8 @@ type CollectionOptions struct {
 type CollectionSpec struct {
 	Maps     map[string]*MapSpec
 	Programs map[string]*ProgramSpec
+
+	byteOrder binary.ByteOrder
 }
 
 // Copy returns a recursive copy of the spec.
@@ -34,8 +37,9 @@ func (cs *CollectionSpec) Copy() *CollectionSpec {
 	}
 
 	cpy := CollectionSpec{
-		Maps:     make(map[string]*MapSpec, len(cs.Maps)),
-		Programs: make(map[string]*ProgramSpec, len(cs.Programs)),
+		Maps:      make(map[string]*MapSpec, len(cs.Maps)),
+		Programs:  make(map[string]*ProgramSpec, len(cs.Programs)),
+		byteOrder: cs.byteOrder,
 	}
 
 	for name, spec := range cs.Maps {

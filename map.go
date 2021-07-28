@@ -17,6 +17,7 @@ import (
 var (
 	ErrKeyNotExist      = errors.New("key does not exist")
 	ErrKeyExist         = errors.New("key already exists")
+	ErrMapSize          = errors.New("map too small for given key")
 	ErrIterationAborted = errors.New("iteration aborted")
 	ErrMapIncompatible  = errors.New("map's spec is incompatible with pinned map")
 )

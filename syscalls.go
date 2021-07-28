@@ -372,6 +372,10 @@ func wrapMapError(err error) error {
 		return internal.SyscallError(ErrNotSupported, unix.ENOTSUPP)
 	}
 
+	if errors.Is(err, unix.E2BIG) {
+		return internal.SyscallError(ErrMapSize, unix.E2BIG)
+	}
+
 	return err
 }
 

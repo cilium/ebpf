@@ -304,7 +304,7 @@ func TestLoadInvalidMapMissingSymbol(t *testing.T) {
 }
 
 func TestLoadInitializedBTFMap(t *testing.T) {
-	testutils.Files(t, testutils.Glob(t, "testdata/initialized_btf_map-*.elf"), func(t *testing.T, file string) {
+	testutils.Files(t, testutils.Glob(t, "testdata/invalid_btf_map_init-*.elf"), func(t *testing.T, file string) {
 		_, err := LoadCollectionSpec(file)
 		t.Log(err)
 		if !errors.Is(err, internal.ErrNotSupported) {

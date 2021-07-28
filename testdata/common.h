@@ -9,6 +9,8 @@ typedef unsigned long uint64_t;
 #define __array(name, val) typeof(val) *name[]
 
 #define BPF_MAP_TYPE_HASH (1)
+#define BPF_MAP_TYPE_ARRAY (2)
+#define BPF_MAP_TYPE_PROG_ARRAY (3)
 #define BPF_MAP_TYPE_PERF_EVENT_ARRAY (4)
 #define BPF_MAP_TYPE_ARRAY_OF_MAPS (12)
 #define BPF_MAP_TYPE_HASH_OF_MAPS (13)
@@ -28,6 +30,8 @@ struct bpf_map_def {
 static void *(*map_lookup_elem)(const void *map, const void *key) = (void *)1;
 
 static long (*trace_printk)(const char *fmt, uint32_t fmt_size, ...) = (void *)6;
+
+static long (*tail_call)(void *ctx, void *prog_array_map, uint32_t index) = (void *)12;
 
 static int (*perf_event_output)(const void *ctx, const void *map, uint64_t index, const void *data, uint64_t size) = (void *)25;
 

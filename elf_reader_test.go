@@ -165,7 +165,7 @@ func TestLoadCollectionSpec(t *testing.T) {
 			t.Errorf("MapSpec mismatch (-want +got):\n%s", diff)
 		}
 
-		if have.Programs["xdp_prog"].ByteOrder != internal.NativeEndian {
+		if have.ByteOrder() != internal.NativeEndian {
 			return
 		}
 
@@ -332,7 +332,7 @@ func TestLoadRawTracepoint(t *testing.T) {
 			t.Fatal("Can't parse ELF:", err)
 		}
 
-		if spec.Programs["sched_process_exec"].ByteOrder != internal.NativeEndian {
+		if spec.ByteOrder() != internal.NativeEndian {
 			return
 		}
 

@@ -39,6 +39,10 @@ func marshalPtr(data interface{}, length int) (internal.Pointer, error) {
 // Returns an error if the given value isn't representable in exactly
 // length bytes.
 func marshalBytes(data interface{}, length int) (buf []byte, err error) {
+	if data == nil {
+		return nil, errors.New("can't marshal a nil value")
+	}
+
 	switch value := data.(type) {
 	case encoding.BinaryMarshaler:
 		buf, err = value.MarshalBinary()

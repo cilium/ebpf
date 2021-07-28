@@ -620,21 +620,23 @@ func (ec *elfCode) loadBTFMaps(maps map[string]*MapSpec) error {
 func mapSpecFromBTF(name string, def *btf.Struct, inner bool, spec *btf.Spec) (*MapSpec, error) {
 
 	var (
-		key, value                 btf.Type
-		keySize, valueSize         uint32
-		mapType, flags, maxEntries uint32
-		pinType                    PinType
-		innerMapSpec               *MapSpec
-		err                        error
+		key, value         btf.Type
+		keySize, valueSize uint32
+		mapType            MapType
+		flags, maxEntries  uint32
+		pinType            PinType
+		innerMapSpec       *MapSpec
+		err                error
 	)
 
 	for i, member := range def.Members {
 		switch member.Name {
 		case "type":
-			mapType, err = uintFromBTF(member.Type)
+			mt, err := uintFromBTF(member.Type)
 			if err != nil {
 				return nil, fmt.Errorf("can't get type: %w", err)
 			}
+			mapType = MapType(mt)
 
 		case "map_flags":
 			flags, err = uintFromBTF(member.Type)
@@ -744,7 +746,7 @@ func mapSpecFromBTF(name string, def *btf.Struct, inner bool, spec *btf.Spec) (*
 			case *btf.Struct:
 				// The values member pointing to an array of structs means we're expecting
 				// a map-in-map declaration.
-				if MapType(mapType) != ArrayOfMaps && MapType(mapType) != HashOfMaps {
+				if mapType != ArrayOfMaps && mapType != HashOfMaps {
 					return nil, errors.New("outer map needs to be an array or a hash of maps")
 				}
 				if inner {

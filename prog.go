@@ -57,16 +57,20 @@ type ProgramSpec struct {
 	// Name is passed to the kernel as a debug aid. Must only contain
 	// alpha numeric and '_' characters.
 	Name string
+
 	// Type determines at which hook in the kernel a program will run.
 	Type       ProgramType
 	AttachType AttachType
-	// Name of a kernel data structure to attach to. It's interpretation
+
+	// Name of a kernel data structure to attach to. Its interpretation
 	// depends on Type and AttachType.
 	AttachTo     string
 	Instructions asm.Instructions
+
 	// Flags is passed to the kernel and specifies additional program
 	// load attributes.
 	Flags uint32
+
 	// License of the program. Some helpers are only available if
 	// the license is deemed compatible with the GPL.
 	//

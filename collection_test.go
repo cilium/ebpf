@@ -1,6 +1,7 @@
 package ebpf
 
 import (
+	"errors"
 	"fmt"
 	"reflect"
 	"testing"
@@ -153,6 +154,41 @@ func TestCollectionSpecRewriteMaps(t *testing.T) {
 
 	if ret != 2 {
 		t.Fatal("new / override map not used")
+	}
+}
+
+func TestCollectionSpecUnsatisfiedMapInit(t *testing.T) {
+	cs := &CollectionSpec{
+		Maps: map[string]*MapSpec{
+			"test-map": {
+				Type:       ProgramArray,
+				KeySize:    4,
+				ValueSize:  4,
+				MaxEntries: 1,
+				Contents: []MapKV{
+					{uint32(0), programStub("test-prog")},
+				},
+			},
+		},
+		Programs: map[string]*ProgramSpec{
+			"test-prog": {
+				Type: SocketFilter,
+				Instructions: asm.Instructions{
+					asm.LoadImm(asm.R0, 0, asm.DWord),
+					asm.Return(),
+				},
+				License: "MIT",
+			},
+		},
+	}
+
+	// Intentionally omit requesting the load of 'test-prog' in this struct.
+	var objs struct {
+		Map *Map `ebpf:"test-map"`
+	}
+
+	if err := cs.LoadAndAssign(&objs, nil); !errors.Is(err, errUnsatisfiedReference) {
+		t.Fatal("Expected assignment to fail:", err)
 	}
 }
 

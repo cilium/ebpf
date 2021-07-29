@@ -1,6 +1,7 @@
 package ebpf
 
 import (
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
@@ -47,6 +48,17 @@ func (cs *CollectionSpec) Copy() *CollectionSpec {
 	}
 
 	return &cpy
+}
+
+// ByteOrder returns the byte order of the Programs in the CollectionSpec.
+//
+// If the CollectionSpec doesn't contain any Programs, returns the host's
+// native endianness.
+func (cs *CollectionSpec) ByteOrder() binary.ByteOrder {
+	for _, p := range cs.Programs {
+		return p.ByteOrder
+	}
+	return internal.NativeEndian
 }
 
 // RewriteMaps replaces all references to specific maps.
@@ -314,8 +326,6 @@ func (hc handleCache) close() {
 	for _, handle := range hc.btfHandles {
 		handle.Close()
 	}
-	hc.btfHandles = nil
-	hc.btfSpecs = nil
 }
 
 func lazyLoadCollection(coll *CollectionSpec, opts *CollectionOptions) (

@@ -222,7 +222,7 @@ func writeCommon(args writeArgs) error {
 		return fmt.Errorf("read object file contents: %s", err)
 	}
 
-	spec, err := ebpf.LoadCollectionSpecFromReader(bytes.NewReader(obj))
+	spec, err := ebpf.LoadCollectionSpecFromReader(bytes.NewReader(obj), nil)
 	if err != nil {
 		return fmt.Errorf("can't load BPF from ELF: %s", err)
 	}

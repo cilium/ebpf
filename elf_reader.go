@@ -19,6 +19,10 @@ import (
 	"github.com/cilium/ebpf/internal/unix"
 )
 
+const (
+	elfPtrSize = 8
+)
+
 // elfCode is a convenience to reduce the amount of arguments that have to
 // be passed around explicitly. You should treat its contents as immutable.
 type elfCode struct {
@@ -588,7 +592,7 @@ func (ec *elfCode) loadBTFMaps(maps map[string]*MapSpec) error {
 				return fmt.Errorf("expected struct, got %s", v.Type)
 			}
 
-			mapSpec, err := mapSpecFromBTF(name, mapStruct, false, ec.btf)
+			mapSpec, err := sec.mapSpecFromBTF(name, &vs, mapStruct, false, ec.btf)
 			if err != nil {
 				return fmt.Errorf("map %v: %w", name, err)
 			}
@@ -614,10 +618,14 @@ func (ec *elfCode) loadBTFMaps(maps map[string]*MapSpec) error {
 	return nil
 }
 
+// A programStub is a placeholder for a Program to be inserted at a certain map key.
+// It needs to be resolved into a Program later on in the loader process.
+type programStub string
+
 // mapSpecFromBTF produces a MapSpec based on a btf.Struct def representing
 // a BTF map definition. The name and spec arguments will be copied to the
 // resulting MapSpec, and inner must be true on any resursive invocations.
-func mapSpecFromBTF(name string, def *btf.Struct, inner bool, spec *btf.Spec) (*MapSpec, error) {
+func (es *elfSection) mapSpecFromBTF(name string, vs *btf.VarSecinfo, def *btf.Struct, inner bool, spec *btf.Spec) (*MapSpec, error) {
 
 	var (
 		key, value         btf.Type
@@ -626,6 +634,7 @@ func mapSpecFromBTF(name string, def *btf.Struct, inner bool, spec *btf.Spec) (*
 		flags, maxEntries  uint32
 		pinType            PinType
 		innerMapSpec       *MapSpec
+		contents           []MapKV
 		err                error
 	)
 
@@ -760,9 +769,54 @@ func mapSpecFromBTF(name string, def *btf.Struct, inner bool, spec *btf.Spec) (*
 				// on kernels 5.2 and up)
 				// Pass the BTF spec from the parent object, since both parent and
 				// child must be created from the same BTF blob (on kernels that support BTF).
-				innerMapSpec, err = mapSpecFromBTF(name+"_inner", t, true, spec)
+				innerMapSpec, err = es.mapSpecFromBTF(name+"_inner", vs, t, true, spec)
 				if err != nil {
 					return nil, fmt.Errorf("can't parse BTF map definition of inner map: %w", err)
+				}
+
+			case *btf.FuncProto:
+				// The values member contains an array of function pointers, meaning an
+				// autopopulated PROG_ARRAY.
+				if mapType != ProgramArray {
+					return nil, errors.New("map needs to be a program array")
+				}
+
+				// The elements of a values pointer array are not encoded in BTF, but
+				// relocations are generated for each function pointer's offset.
+				// However, it's possible to leave certain array slots empty, so all
+				// possible slot offsets need to be checked for emitted relocations.
+
+				// The offset of the 'values' member (in bits) is the starting point
+				// of the array.
+				start := member.Offset / 8
+				// 'values' is encoded in BTF as a zero-length struct member, and its
+				//  contents are expected to run until the end of the VarSecinfo.
+				end := vs.Size
+
+				// Assume all pointers are 64 bits wide.
+				if (end-start)%elfPtrSize != 0 {
+					return nil, fmt.Errorf("length of static values section not a multiple of 8")
+				}
+				n := (end - start) / elfPtrSize
+
+				contents = make([]MapKV, 0, n)
+
+				// i is the array index, off is its corresponding ELF section offset.
+				for i, off := uint32(0), uint64(start); i < n; i++ {
+					r, ok := es.relocations[off]
+					if ok {
+						if t := elf.ST_TYPE(r.Info); t != elf.STT_FUNC {
+							return nil, fmt.Errorf("only relocations of type %s are supported, got %s", elf.STT_FUNC, t)
+						}
+
+						// Relocation exists for the current offset in the ELF section,
+						// emit a named stub for the Program to be replaced by a real fd
+						// before populating the map. The map key is encoded in the MapKV
+						// entry, empty array slots are ignored in this list.
+						contents = append(contents, MapKV{i, programStub(r.Name)})
+					}
+
+					off += elfPtrSize
 				}
 
 			default:
@@ -786,6 +840,7 @@ func mapSpecFromBTF(name string, def *btf.Struct, inner bool, spec *btf.Spec) (*
 		BTF:        &bm,
 		Pinning:    pinType,
 		InnerMap:   innerMapSpec,
+		Contents:   contents,
 	}, nil
 }
 

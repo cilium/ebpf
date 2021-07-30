@@ -87,7 +87,7 @@ func Example_socketELF() {
 	index := flag.Int("index", 0, "specify ethernet index")
 	flag.Parse()
 
-	spec, err := ebpf.LoadCollectionSpecFromReader(bytes.NewReader(program[:]))
+	spec, err := ebpf.LoadCollectionSpecFromReader(bytes.NewReader(program[:]), nil)
 	if err != nil {
 		panic(err)
 	}

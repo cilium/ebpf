@@ -12,7 +12,7 @@ func TestFreplace(t *testing.T) {
 	testutils.SkipOnOldKernel(t, "5.10", "freplace")
 
 	testutils.Files(t, testutils.Glob(t, "../testdata/freplace-*.elf"), func(t *testing.T, file string) {
-		spec, err := ebpf.LoadCollectionSpec(file)
+		spec, err := ebpf.LoadCollectionSpec(file, nil)
 		if err != nil {
 			t.Fatal("Can't parse ELF:", err)
 		}

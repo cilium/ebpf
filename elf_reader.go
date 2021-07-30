@@ -19,6 +19,15 @@ import (
 	"github.com/cilium/ebpf/internal/unix"
 )
 
+// CollectionSpecOptions control reading a CollectionSpec from an ELF binary.
+type CollectionSpecOptions struct {
+	// MapTailDecoder is a function that is invoked as the last step of parsing
+	// an ELF map definition from the 'maps' section. It can be used for reading
+	// extra fields at the end of BPF map definitions, for example, iproute2's
+	// struct bpf_elf_map.
+	MapTailDecoder func(*MapSpec, io.Reader, binary.ByteOrder) error
+}
+
 // elfCode is a convenience to reduce the amount of arguments that have to
 // be passed around explicitly. You should treat its contents as immutable.
 type elfCode struct {
@@ -30,14 +39,14 @@ type elfCode struct {
 }
 
 // LoadCollectionSpec parses an ELF file into a CollectionSpec.
-func LoadCollectionSpec(file string) (*CollectionSpec, error) {
+func LoadCollectionSpec(file string, opts *CollectionSpecOptions) (*CollectionSpec, error) {
 	f, err := os.Open(file)
 	if err != nil {
 		return nil, err
 	}
 	defer f.Close()
 
-	spec, err := LoadCollectionSpecFromReader(f)
+	spec, err := LoadCollectionSpecFromReader(f, opts)
 	if err != nil {
 		return nil, fmt.Errorf("file %s: %w", file, err)
 	}
@@ -45,7 +54,11 @@ func LoadCollectionSpec(file string) (*CollectionSpec, error) {
 }
 
 // LoadCollectionSpecFromReader parses an ELF file into a CollectionSpec.
-func LoadCollectionSpecFromReader(rd io.ReaderAt) (*CollectionSpec, error) {
+func LoadCollectionSpecFromReader(rd io.ReaderAt, opts *CollectionSpecOptions) (*CollectionSpec, error) {
+	if opts == nil {
+		opts = &CollectionSpecOptions{}
+	}
+
 	f, err := internal.NewSafeELFFile(rd)
 	if err != nil {
 		return nil, err
@@ -171,7 +184,7 @@ func LoadCollectionSpecFromReader(rd io.ReaderAt) (*CollectionSpec, error) {
 
 	// Collect all the various ways to define maps.
 	maps := make(map[string]*MapSpec)
-	if err := ec.loadMaps(maps); err != nil {
+	if err := ec.loadMaps(maps, opts.MapTailDecoder); err != nil {
 		return nil, fmt.Errorf("load maps: %w", err)
 	}
 
@@ -473,7 +486,26 @@ func (ec *elfCode) relocateInstruction(ins *asm.Instruction, rel elf.Symbol) err
 	return nil
 }
 
-func (ec *elfCode) loadMaps(maps map[string]*MapSpec) error {
+// mapTailDecoder is the signature of a function that can process trailing
+// bytes representing extra fields beyond the kernel's struct bpf_map_def
+// supported by this library.
+type mapTailDecoder func(*MapSpec, io.Reader, binary.ByteOrder) error
+
+// strictTailDecoder refuses any non-zero bytes at the tail of an ELF map
+// definition. This is the default behaviour for the ELF loader supporting
+// struct bpf_map_def.
+func strictTailDecoder(_ *MapSpec, lr io.Reader, _ binary.ByteOrder) error {
+	if _, err := io.Copy(internal.DiscardZeroes{}, lr); err != nil {
+		return errors.New("unknown and non-zero fields in definition")
+	}
+	return nil
+}
+
+func (ec *elfCode) loadMaps(maps map[string]*MapSpec, decodeTail mapTailDecoder) error {
+	if decodeTail == nil {
+		decodeTail = strictTailDecoder
+	}
+
 	for _, sec := range ec.sections {
 		if sec.kind != mapSection {
 			continue
@@ -521,8 +553,8 @@ func (ec *elfCode) loadMaps(maps map[string]*MapSpec) error {
 				return fmt.Errorf("map %s: missing flags", mapName)
 			}
 
-			if _, err := io.Copy(internal.DiscardZeroes{}, lr); err != nil {
-				return fmt.Errorf("map %s: unknown and non-zero fields in definition", mapName)
+			if err := decodeTail(&spec, lr, ec.ByteOrder); err != nil {
+				return fmt.Errorf("map %s: decoding tail: %w", mapName, err)
 			}
 
 			if err := spec.clampPerfEventArraySize(); err != nil {

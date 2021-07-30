@@ -4,7 +4,6 @@ import (
 	"debug/elf"
 	"fmt"
 	"io/ioutil"
-	"math"
 	"os"
 	"regexp"
 	"runtime"
@@ -179,7 +178,12 @@ func GenerateEventName(probeType, funcName, UID string, attachPID int) (string, 
 
 	if len(eventName) > MaxEventNameLen {
 		// truncate the function name and UID name to reduce the length of the event
-		eventName = safeEventRegexp.ReplaceAllString(fmt.Sprintf("%s_%s_%s_%d", probeType, funcName[0:int(math.Min(10, float64(len(funcName))))], UID[0:int(math.Min(10, float64(len(UID))))], attachPID), "_")
+		attachPIDstr := strconv.Itoa.attachPID
+		len := (MaxEventNameLen - 4 /* _ and \0 */ - len(probeType) - len(attachPIDstr)) / 2
+		if len <= 0 {
+			return "", error.Errorf("MaxEventNameLen is too small (kernel limit is %d): %s", MaxEventNameLen, eventName)
+		}
+		eventName = safeEventRegexp.ReplaceAllString(fmt.Sprintf("%s_%.*s_%.*s_%s", probeType, len, funcName, len, UID, attachPIDstr), "_")
 	}
 	if len(eventName) > MaxEventNameLen {
 		return "", errors.Errorf("event name too long (kernel limit is %d): %s", MaxEventNameLen, eventName)

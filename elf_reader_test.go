@@ -351,6 +351,36 @@ func TestLoadRawTracepoint(t *testing.T) {
 	})
 }
 
+func TestIPRoute2Compat(t *testing.T) {
+	testutils.Files(t, testutils.Glob(t, "testdata/iproute2_map_compat-*.elf"), func(t *testing.T, file string) {
+
+		opts := CollectionSpecOptions{
+			MapTailDecoder: IPRoute2TailDecoder,
+		}
+
+		spec, err := LoadCollectionSpec(file, &opts)
+		if err != nil {
+			t.Fatal("Can't parse ELF:", err)
+		}
+
+		if spec.byteOrder != internal.NativeEndian {
+			return
+		}
+
+		coll, err := NewCollectionWithOptions(spec, CollectionOptions{
+			Maps: MapOptions{
+				PinPath: testutils.TempBPFFS(t),
+			},
+		})
+		testutils.SkipIfNotSupported(t, err)
+		if err != nil {
+			t.Fatal("Can't create collection:", err)
+		}
+
+		coll.Close()
+	})
+}
+
 var (
 	elfPath    = flag.String("elfs", os.Getenv("KERNEL_SELFTESTS"), "`Path` containing libbpf-compatible ELFs (defaults to $KERNEL_SELFTESTS)")
 	elfPattern = flag.String("elf-pattern", "*.o", "Glob `pattern` for object files that should be tested")

@@ -501,6 +501,40 @@ func strictTailDecoder(_ *MapSpec, lr io.Reader, _ binary.ByteOrder) error {
 	return nil
 }
 
+// IPRoute2TailDecoder can be used as the MapTailDecoder for parsing iproute2's
+// struct bpf_elf_map, which carries 4 extra fields: id, pinning, inner_id and
+// inner_idx. Note that only the 'pinning' field is currently supported;
+// consider using BTF map definitions for automatically populating nested maps.
+//
+// If the pinning field is non-zero, the MapSpec's Pinning field will be set to
+// PinByName. iproute2 supports PIN_GLOBAL_NS or PIN_OBJECT_NS, but the Map's
+// pin path can be configured by setting MapOptions.PinPath instead.
+func IPRoute2TailDecoder(ms *MapSpec, r io.Reader, bo binary.ByteOrder) error {
+	var id, pinning, innerID, innerIndex uint32
+
+	switch {
+	case binary.Read(r, bo, &id) != nil:
+		return errors.New("missing id")
+	case binary.Read(r, bo, &pinning) != nil:
+		return errors.New("missing pinning")
+	case binary.Read(r, bo, &innerID) != nil:
+		return errors.New("missing inner_id")
+	case binary.Read(r, bo, &innerIndex) != nil:
+		return errors.New("missing inner_idx")
+	}
+
+	if id != 0 || innerID != 0 || innerIndex != 0 {
+		return errors.New("the id, inner_id and inner_idx fields are not supported, use BTF map definitions instead")
+	}
+
+	if pinning != 0 {
+		ms.Pinning = PinByName
+	}
+
+	// Expect all further bytes (if any) to be zero.
+	return strictTailDecoder(ms, r, bo)
+}
+
 func (ec *elfCode) loadMaps(maps map[string]*MapSpec, decodeTail mapTailDecoder) error {
 	if decodeTail == nil {
 		decodeTail = strictTailDecoder

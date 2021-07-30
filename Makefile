@@ -21,7 +21,7 @@ TARGETS := \
 	testdata/invalid_map \
 	testdata/raw_tracepoint \
 	testdata/invalid_map_static \
-	testdata/initialized_btf_map \
+	testdata/invalid_btf_map_init \
 	testdata/strings \
 	internal/btf/testdata/relocs
 

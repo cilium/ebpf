@@ -27,7 +27,9 @@ type CollectionSpec struct {
 	Maps     map[string]*MapSpec
 	Programs map[string]*ProgramSpec
 
-	byteOrder binary.ByteOrder
+	// ByteOrder specifies whether the ELF was compiled for
+	// big-endian or little-endian architectures.
+	ByteOrder binary.ByteOrder
 }
 
 // Copy returns a recursive copy of the spec.
@@ -39,7 +41,7 @@ func (cs *CollectionSpec) Copy() *CollectionSpec {
 	cpy := CollectionSpec{
 		Maps:      make(map[string]*MapSpec, len(cs.Maps)),
 		Programs:  make(map[string]*ProgramSpec, len(cs.Programs)),
-		byteOrder: cs.byteOrder,
+		ByteOrder: cs.ByteOrder,
 	}
 
 	for name, spec := range cs.Maps {

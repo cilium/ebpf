@@ -138,7 +138,7 @@ func TestLoadCollectionSpec(t *testing.T) {
 	)
 
 	testutils.Files(t, testutils.Glob(t, "testdata/loader-*.elf"), func(t *testing.T, file string) {
-		have, err := LoadCollectionSpec(file)
+		have, err := LoadCollectionSpec(file, nil)
 		if err != nil {
 			t.Fatal("Can't parse ELF:", err)
 		}
@@ -198,7 +198,7 @@ func TestLoadCollectionSpec(t *testing.T) {
 
 func TestDataSections(t *testing.T) {
 	file := fmt.Sprintf("testdata/loader-%s.elf", internal.ClangEndian)
-	coll, err := LoadCollectionSpec(file)
+	coll, err := LoadCollectionSpec(file, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -228,7 +228,7 @@ func TestDataSections(t *testing.T) {
 
 func TestInlineASMConstant(t *testing.T) {
 	file := fmt.Sprintf("testdata/loader-%s.elf", internal.ClangEndian)
-	coll, err := LoadCollectionSpec(file)
+	coll, err := LoadCollectionSpec(file, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -286,7 +286,7 @@ func TestCollectionSpecDetach(t *testing.T) {
 
 func TestLoadInvalidMap(t *testing.T) {
 	testutils.Files(t, testutils.Glob(t, "testdata/invalid_map-*.elf"), func(t *testing.T, file string) {
-		_, err := LoadCollectionSpec(file)
+		_, err := LoadCollectionSpec(file, nil)
 		t.Log(err)
 		if err == nil {
 			t.Fatal("Loading an invalid map should fail")
@@ -296,7 +296,7 @@ func TestLoadInvalidMap(t *testing.T) {
 
 func TestLoadInvalidMapMissingSymbol(t *testing.T) {
 	testutils.Files(t, testutils.Glob(t, "testdata/invalid_map_static-el.elf"), func(t *testing.T, file string) {
-		_, err := LoadCollectionSpec(file)
+		_, err := LoadCollectionSpec(file, nil)
 		t.Log(err)
 		if err == nil {
 			t.Fatal("Loading a map with static qualifier should fail")
@@ -306,7 +306,7 @@ func TestLoadInvalidMapMissingSymbol(t *testing.T) {
 
 func TestLoadInitializedBTFMap(t *testing.T) {
 	testutils.Files(t, testutils.Glob(t, "testdata/invalid_btf_map_init-*.elf"), func(t *testing.T, file string) {
-		_, err := LoadCollectionSpec(file)
+		_, err := LoadCollectionSpec(file, nil)
 		t.Log(err)
 		if !errors.Is(err, internal.ErrNotSupported) {
 			t.Fatal("Loading an initialized BTF map should be unsupported")
@@ -316,7 +316,7 @@ func TestLoadInitializedBTFMap(t *testing.T) {
 
 func TestStringSection(t *testing.T) {
 	testutils.Files(t, testutils.Glob(t, "testdata/strings-*.elf"), func(t *testing.T, file string) {
-		_, err := LoadCollectionSpec(file)
+		_, err := LoadCollectionSpec(file, nil)
 		t.Log(err)
 		if !errors.Is(err, ErrNotSupported) {
 			t.Error("References to a string section should be unsupported")
@@ -328,7 +328,7 @@ func TestLoadRawTracepoint(t *testing.T) {
 	testutils.SkipOnOldKernel(t, "4.17", "BPF_RAW_TRACEPOINT API")
 
 	testutils.Files(t, testutils.Glob(t, "testdata/raw_tracepoint-*.elf"), func(t *testing.T, file string) {
-		spec, err := LoadCollectionSpec(file)
+		spec, err := LoadCollectionSpec(file, nil)
 		if err != nil {
 			t.Fatal("Can't parse ELF:", err)
 		}
@@ -340,6 +340,36 @@ func TestLoadRawTracepoint(t *testing.T) {
 		coll, err := NewCollectionWithOptions(spec, CollectionOptions{
 			Programs: ProgramOptions{
 				LogLevel: 1,
+			},
+		})
+		testutils.SkipIfNotSupported(t, err)
+		if err != nil {
+			t.Fatal("Can't create collection:", err)
+		}
+
+		coll.Close()
+	})
+}
+
+func TestIPRoute2Compat(t *testing.T) {
+	testutils.Files(t, testutils.Glob(t, "testdata/iproute2_map_compat-*.elf"), func(t *testing.T, file string) {
+
+		opts := CollectionSpecOptions{
+			MapTailDecoder: IPRoute2TailDecoder,
+		}
+
+		spec, err := LoadCollectionSpec(file, &opts)
+		if err != nil {
+			t.Fatal("Can't parse ELF:", err)
+		}
+
+		if spec.byteOrder != internal.NativeEndian {
+			return
+		}
+
+		coll, err := NewCollectionWithOptions(spec, CollectionOptions{
+			Maps: MapOptions{
+				PinPath: testutils.TempBPFFS(t),
 			},
 		})
 		testutils.SkipIfNotSupported(t, err)
@@ -419,7 +449,7 @@ func TestLibBPFCompat(t *testing.T) {
 
 		t.Parallel()
 
-		spec, err := LoadCollectionSpec(path)
+		spec, err := LoadCollectionSpec(path, nil)
 		testutils.SkipIfNotSupported(t, err)
 		if err != nil {
 			t.Fatalf("Can't read %s: %s", file, err)
@@ -509,7 +539,7 @@ func loadTargetProgram(tb testing.TB, name string, opts CollectionOptions) (*Pro
 	default:
 	}
 
-	spec, err := LoadCollectionSpec(filepath.Join(*elfPath, file))
+	spec, err := LoadCollectionSpec(filepath.Join(*elfPath, file), nil)
 	if err != nil {
 		tb.Fatalf("Can't read %s: %s", file, err)
 	}

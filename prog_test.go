@@ -331,7 +331,7 @@ func TestProgramVerifierOutput(t *testing.T) {
 }
 
 func TestProgramWithUnsatisfiedReference(t *testing.T) {
-	coll, err := LoadCollectionSpec("testdata/loader-el.elf")
+	coll, err := LoadCollectionSpec("testdata/loader-el.elf", nil)
 	if err != nil {
 		t.Fatal(err)
 	}

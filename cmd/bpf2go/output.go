@@ -36,7 +36,7 @@ import (
 // {{ .Name.Load }} returns the embedded CollectionSpec for {{ .Name }}.
 func {{ .Name.Load }}() (*ebpf.CollectionSpec, error) {
 	reader := bytes.NewReader({{ .Name.Bytes }})
-	spec, err := ebpf.LoadCollectionSpecFromReader(reader)
+	spec, err := ebpf.LoadCollectionSpecFromReader(reader, nil)
 	if err != nil {
 		return nil, fmt.Errorf("can't load {{ .Name }}: %w", err)
 	}
@@ -222,7 +222,7 @@ func writeCommon(args writeArgs) error {
 		return fmt.Errorf("read object file contents: %s", err)
 	}
 
-	spec, err := ebpf.LoadCollectionSpecFromReader(bytes.NewReader(obj))
+	spec, err := ebpf.LoadCollectionSpecFromReader(bytes.NewReader(obj), nil)
 	if err != nil {
 		return fmt.Errorf("can't load BPF from ELF: %s", err)
 	}

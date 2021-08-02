@@ -118,6 +118,7 @@ func TestLoadCollectionSpec(t *testing.T) {
 
 	defaultOpts := cmp.Options{
 		cmpopts.IgnoreTypes(new(btf.Map), new(btf.Program)),
+		cmpopts.IgnoreFields(CollectionSpec{}, "byteOrder"),
 		cmpopts.IgnoreFields(ProgramSpec{}, "Instructions", "ByteOrder"),
 		cmpopts.IgnoreMapEntries(func(key string, _ *MapSpec) bool {
 			switch key {
@@ -165,7 +166,7 @@ func TestLoadCollectionSpec(t *testing.T) {
 			t.Errorf("MapSpec mismatch (-want +got):\n%s", diff)
 		}
 
-		if have.Programs["xdp_prog"].ByteOrder != internal.NativeEndian {
+		if have.byteOrder != internal.NativeEndian {
 			return
 		}
 
@@ -304,7 +305,7 @@ func TestLoadInvalidMapMissingSymbol(t *testing.T) {
 }
 
 func TestLoadInitializedBTFMap(t *testing.T) {
-	testutils.Files(t, testutils.Glob(t, "testdata/initialized_btf_map-*.elf"), func(t *testing.T, file string) {
+	testutils.Files(t, testutils.Glob(t, "testdata/invalid_btf_map_init-*.elf"), func(t *testing.T, file string) {
 		_, err := LoadCollectionSpec(file)
 		t.Log(err)
 		if !errors.Is(err, internal.ErrNotSupported) {
@@ -332,7 +333,7 @@ func TestLoadRawTracepoint(t *testing.T) {
 			t.Fatal("Can't parse ELF:", err)
 		}
 
-		if spec.Programs["sched_process_exec"].ByteOrder != internal.NativeEndian {
+		if spec.byteOrder != internal.NativeEndian {
 			return
 		}
 

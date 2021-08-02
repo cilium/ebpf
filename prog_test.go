@@ -643,7 +643,7 @@ func TestProgramTypeLSM(t *testing.T) {
 func TestProgramTargetBTF(t *testing.T) {
 	// Load a file that contains valid BTF, but doesn't contain the types
 	// we need for bpf_iter.
-	fh, err := os.Open("testdata/initialized_btf_map-el.elf")
+	fh, err := os.Open("testdata/invalid_btf_map_init-el.elf")
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -30,6 +30,12 @@ type CollectionSpec struct {
 	byteOrder binary.ByteOrder
 }
 
+// ByteOrder returns the byte order of the ELF object
+// the CollectionSpec was created from.
+func (cs *CollectionSpec) ByteOrder() binary.ByteOrder {
+	return cs.byteOrder
+}
+
 // Copy returns a recursive copy of the spec.
 func (cs *CollectionSpec) Copy() *CollectionSpec {
 	if cs == nil {

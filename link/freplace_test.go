@@ -17,7 +17,7 @@ func TestFreplace(t *testing.T) {
 			t.Fatal("Can't parse ELF:", err)
 		}
 
-		if spec.Programs["sched_process_exec"].ByteOrder != internal.NativeEndian {
+		if spec.ByteOrder() != internal.NativeEndian {
 			return
 		}
 

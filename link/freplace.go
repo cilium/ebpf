@@ -12,7 +12,7 @@ type FreplaceLink struct {
 }
 
 // AttachFreplace attaches the given eBPF program to the function it replaces.
-
+//
 // The program and name can either be provided at link time, or can be provided
 // at program load time. If they were provided at load time, they should be nil
 // and empty respectively here, as they will be ignored by the kernel.

@@ -18,7 +18,7 @@ func TestCoreRelocationLoad(t *testing.T) {
 		}
 		defer fh.Close()
 
-		spec, err := ebpf.LoadCollectionSpecFromReader(fh)
+		spec, err := ebpf.LoadCollectionSpecFromReader(fh, nil)
 		if err != nil {
 			t.Fatal(err)
 		}

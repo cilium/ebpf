@@ -14,7 +14,7 @@ import (
 // loadExample returns the embedded CollectionSpec for example.
 func loadExample() (*ebpf.CollectionSpec, error) {
 	reader := bytes.NewReader(_ExampleBytes)
-	spec, err := ebpf.LoadCollectionSpecFromReader(reader)
+	spec, err := ebpf.LoadCollectionSpecFromReader(reader, nil)
 	if err != nil {
 		return nil, fmt.Errorf("can't load example: %w", err)
 	}

@@ -1,6 +1,7 @@
 package ebpf
 
 import (
+	"errors"
 	"fmt"
 	"reflect"
 	"testing"
@@ -153,6 +154,68 @@ func TestCollectionSpecRewriteMaps(t *testing.T) {
 
 	if ret != 2 {
 		t.Fatal("new / override map not used")
+	}
+}
+
+func TestCollectionSpecUnsatisfiedMapInit(t *testing.T) {
+	inner := &MapSpec{
+		Type:       Array,
+		KeySize:    4,
+		ValueSize:  4,
+		MaxEntries: 1,
+	}
+
+	cs := &CollectionSpec{
+		Maps: map[string]*MapSpec{
+			"prog-map": {
+				Type:       ProgramArray,
+				KeySize:    4,
+				ValueSize:  4,
+				MaxEntries: 1,
+				Contents: []MapKV{
+					{uint32(0), programStub("prog")},
+				},
+			},
+			"outer-map": {
+				Type:       ArrayOfMaps,
+				KeySize:    4,
+				ValueSize:  4,
+				MaxEntries: 1,
+				InnerMap:   inner,
+				Contents: []MapKV{
+					{uint32(0), mapStub("inner-map")},
+				},
+			},
+			"inner-map": inner,
+		},
+		Programs: map[string]*ProgramSpec{
+			"prog": {
+				Type: SocketFilter,
+				Instructions: asm.Instructions{
+					asm.LoadImm(asm.R0, 0, asm.DWord),
+					asm.Return(),
+				},
+				License: "MIT",
+			},
+		},
+	}
+
+	// Intentionally omit requesting the load of 'prog' in this struct.
+	var po struct {
+		Prog *Map `ebpf:"prog-map"`
+	}
+
+	if err := cs.LoadAndAssign(&po, nil); !errors.Is(err, errUnsatisfiedReference) {
+		t.Fatal("Expected assignment to fail:", err)
+	}
+
+	// Intentionally omit requesting the load of 'inner-map' in this struct.
+	var mo struct {
+		Outer *Map `ebpf:"outer-map"`
+	}
+
+	if err := cs.LoadAndAssign(&mo, nil); !errors.Is(err, errUnsatisfiedReference) {
+		t.Fatal("Expected assignment to fail:", err)
 	}
 }
 

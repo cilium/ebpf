@@ -24,6 +24,7 @@ TARGETS := \
 	testdata/invalid_btf_map_init \
 	testdata/strings \
 	testdata/freplace \
+	testdata/iproute2_map_compat \
 	internal/btf/testdata/relocs
 
 .PHONY: all clean docker-all docker-shell

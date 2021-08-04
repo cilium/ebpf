@@ -193,7 +193,7 @@ func pmuProbe(typ probeType, symbol, path string, offset uint64, pid int, ret bo
 	switch typ {
 	case kprobeType:
 		// Create a pointer to a NUL-terminated string for the kernel.
-		sp, err := unsafeStringPtr(symbol)
+		sp, err = unsafeStringPtr(symbol)
 		if err != nil {
 			return nil, err
 		}
@@ -204,7 +204,7 @@ func pmuProbe(typ probeType, symbol, path string, offset uint64, pid int, ret bo
 			Config: config,              // Retprobe flag
 		}
 	case uprobeType:
-		sp, err := unsafeStringPtr(path)
+		sp, err = unsafeStringPtr(path)
 		if err != nil {
 			return nil, err
 		}

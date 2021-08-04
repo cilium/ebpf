@@ -1,6 +1,7 @@
 package ebpf
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"io"
@@ -65,6 +66,11 @@ type MapSpec struct {
 	// InnerMap is used as a template for ArrayOfMaps and HashOfMaps
 	InnerMap *MapSpec
 
+	// Extra trailing bytes found in the ELF map definition when using structs
+	// larger than libbpf's bpf_map_def. Must be empty before instantiating
+	// the MapSpec into a Map.
+	Extra bytes.Reader
+
 	// The BTF associated with this map.
 	BTF *btf.Map
 }
@@ -82,9 +88,12 @@ func (ms *MapSpec) Copy() *MapSpec {
 	}
 
 	cpy := *ms
+
 	cpy.Contents = make([]MapKV, len(ms.Contents))
 	copy(cpy.Contents, ms.Contents)
+
 	cpy.InnerMap = ms.InnerMap.Copy()
+
 	return &cpy
 }
 
@@ -278,10 +287,16 @@ func createMap(spec *MapSpec, inner *internal.FD, opts MapOptions, handles *hand
 
 	spec = spec.Copy()
 
+	// Kernels 4.13 through 5.4 used a struct bpf_map_def that contained
+	// additional 'inner_map_idx' and later 'numa_node' fields.
+	// In order to support loading these definitions, tolerate the presence of
+	// extra bytes, but require them to be zeroes.
+	if _, err := io.Copy(internal.DiscardZeroes{}, &spec.Extra); err != nil {
+		return nil, errors.New("Extra contains unhandled non-zero bytes, drain before creating map")
+	}
+
 	switch spec.Type {
-	case ArrayOfMaps:
-		fallthrough
-	case HashOfMaps:
+	case ArrayOfMaps, HashOfMaps:
 		if err := haveNestedMaps(); err != nil {
 			return nil, err
 		}

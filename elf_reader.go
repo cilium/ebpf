@@ -521,8 +521,12 @@ func (ec *elfCode) loadMaps(maps map[string]*MapSpec) error {
 				return fmt.Errorf("map %s: missing flags", mapName)
 			}
 
-			if _, err := io.Copy(internal.DiscardZeroes{}, lr); err != nil {
-				return fmt.Errorf("map %s: unknown and non-zero fields in definition", mapName)
+			extra, err := ioutil.ReadAll(lr)
+			if err != nil {
+				return fmt.Errorf("map %s: reading map tail: %w", mapName, err)
+			}
+			if len(extra) > 0 {
+				spec.Extra = *bytes.NewReader(extra)
 			}
 
 			if err := spec.clampPerfEventArraySize(); err != nil {

@@ -1,6 +1,8 @@
 package ebpf
 
 import (
+	"bytes"
+	"encoding/binary"
 	"errors"
 	"flag"
 	"fmt"
@@ -117,6 +119,16 @@ func TestLoadCollectionSpec(t *testing.T) {
 	}
 
 	defaultOpts := cmp.Options{
+		cmp.Comparer(func(a, b bytes.Buffer) bool {
+			// When reading from ELF, the map tail is unconditionally io.Copy'd
+			// into Extra, while the Extra values in the test cases above remain
+			// untouched. go-cmp also compares the backing arrays, so we need to
+			// convince it that two zero-length buffers are to be considered equal.
+			if a.Len() == 0 && b.Len() == 0 {
+				return true
+			}
+			return cmp.Equal(a.Bytes(), b.Bytes())
+		}),
 		cmpopts.IgnoreTypes(new(btf.Map), new(btf.Program)),
 		cmpopts.IgnoreFields(CollectionSpec{}, "ByteOrder"),
 		cmpopts.IgnoreFields(ProgramSpec{}, "Instructions", "ByteOrder"),
@@ -286,10 +298,21 @@ func TestCollectionSpecDetach(t *testing.T) {
 
 func TestLoadInvalidMap(t *testing.T) {
 	testutils.Files(t, testutils.Glob(t, "testdata/invalid_map-*.elf"), func(t *testing.T, file string) {
-		_, err := LoadCollectionSpec(file)
+		cs, err := LoadCollectionSpec(file)
+		if err != nil {
+			t.Fatal("Can't load CollectionSpec", err)
+		}
+
+		ms, ok := cs.Maps["invalid_map"]
+		if !ok {
+			t.Fatal("invalid_map not found in CollectionSpec")
+		}
+
+		m, err := NewMap(ms)
 		t.Log(err)
 		if err == nil {
-			t.Fatal("Loading an invalid map should fail")
+			m.Close()
+			t.Fatal("Creating a Map from a MapSpec with non-zero Extra is expected to fail.")
 		}
 	})
 }
@@ -340,6 +363,62 @@ func TestLoadRawTracepoint(t *testing.T) {
 		coll, err := NewCollectionWithOptions(spec, CollectionOptions{
 			Programs: ProgramOptions{
 				LogLevel: 1,
+			},
+		})
+		testutils.SkipIfNotSupported(t, err)
+		if err != nil {
+			t.Fatal("Can't create collection:", err)
+		}
+
+		coll.Close()
+	})
+}
+
+func TestIPRoute2Compat(t *testing.T) {
+	testutils.Files(t, testutils.Glob(t, "testdata/iproute2_map_compat-*.elf"), func(t *testing.T, file string) {
+		spec, err := LoadCollectionSpec(file)
+		if err != nil {
+			t.Fatal("Can't parse ELF:", err)
+		}
+
+		if spec.ByteOrder != internal.NativeEndian {
+			return
+		}
+
+		ms, ok := spec.Maps["hash_map"]
+		if !ok {
+			t.Fatal("Map hash_map not found")
+		}
+
+		var id, pinning, innerID, innerIndex uint32
+
+		switch {
+		case binary.Read(&ms.Extra, spec.ByteOrder, &id) != nil:
+			t.Fatal("missing id")
+		case binary.Read(&ms.Extra, spec.ByteOrder, &pinning) != nil:
+			t.Fatal("missing pinning")
+		case binary.Read(&ms.Extra, spec.ByteOrder, &innerID) != nil:
+			t.Fatal("missing inner_id")
+		case binary.Read(&ms.Extra, spec.ByteOrder, &innerIndex) != nil:
+			t.Fatal("missing inner_idx")
+		}
+
+		if id != 0 || innerID != 0 || innerIndex != 0 {
+			t.Fatal("expecting id, inner_id and inner_idx to be zero")
+		}
+
+		if pinning != 2 {
+			t.Fatal("expecting pinning field to be 2 (PIN_GLOBAL_NS)")
+		}
+
+		// iproute2 (tc) pins maps in /sys/fs/bpf/tc/globals with PIN_GLOBAL_NS,
+		// which needs to be be configured in this library using MapOptions.PinPath.
+		// For the sake of the test, we use a tempdir on bpffs below.
+		ms.Pinning = PinByName
+
+		coll, err := NewCollectionWithOptions(spec, CollectionOptions{
+			Maps: MapOptions{
+				PinPath: testutils.TempBPFFS(t),
 			},
 		})
 		testutils.SkipIfNotSupported(t, err)

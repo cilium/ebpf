@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"syscall"
 	"testing"
@@ -325,6 +326,55 @@ func TestLoadInvalidMapMissingSymbol(t *testing.T) {
 }
 
 func TestLoadInitializedBTFMap(t *testing.T) {
+	testutils.Files(t, testutils.Glob(t, "testdata/btf_map_init-*.elf"), func(t *testing.T, file string) {
+		coll, err := LoadCollectionSpec(file)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		t.Run("prog_array", func(t *testing.T) {
+			m, ok := coll.Maps["prog_array_init"]
+			if !ok {
+				t.Fatal("map prog_array_init not found in program")
+			}
+
+			if len(m.Contents) != 1 {
+				t.Error("expecting exactly 1 item in MapSpec contents")
+			}
+
+			p := m.Contents[0]
+			if cmp.Equal(p.Key, 1) {
+				t.Errorf("expecting MapSpec entry Key to equal 1, got %v", p.Key)
+			}
+
+			if _, ok := p.Value.(programStub); !ok {
+				t.Errorf("expecting MapSpec entry Value to be of type programStub, got %T", p.Value)
+			}
+		})
+
+		t.Run("array_of_maps", func(t *testing.T) {
+			m, ok := coll.Maps["outer_map_init"]
+			if !ok {
+				t.Fatal("map outer_map_init not found in program")
+			}
+
+			if len(m.Contents) != 1 {
+				t.Error("expecting exactly 1 item in MapSpec contents")
+			}
+
+			p := m.Contents[0]
+			if cmp.Equal(p.Key, 1) {
+				t.Errorf("expecting MapSpec entry Key to equal 1, got %v", p.Key)
+			}
+
+			if _, ok := p.Value.(mapStub); !ok {
+				t.Errorf("expecting MapSpec entry Value to be of type mapStub, got %T", p.Value)
+			}
+		})
+	})
+}
+
+func TestLoadInvalidInitializedBTFMap(t *testing.T) {
 	testutils.Files(t, testutils.Glob(t, "testdata/invalid_btf_map_init-*.elf"), func(t *testing.T, file string) {
 		_, err := LoadCollectionSpec(file)
 		t.Log(err)
@@ -368,6 +418,50 @@ func TestLoadRawTracepoint(t *testing.T) {
 		}
 
 		coll.Close()
+	})
+}
+
+func TestTailCall(t *testing.T) {
+	testutils.Files(t, testutils.Glob(t, "testdata/btf_map_init-*.elf"), func(t *testing.T, file string) {
+		spec, err := LoadCollectionSpec(file)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if spec.ByteOrder != internal.NativeEndian {
+			return
+		}
+
+		var obj struct {
+			TailMain  *Program `ebpf:"tail_main"`
+			ProgArray *Map     `ebpf:"prog_array_init"`
+		}
+
+		err = spec.LoadAndAssign(&obj, nil)
+		testutils.SkipIfNotSupported(t, err)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer obj.TailMain.Close()
+
+		// TODO: In this library, losing the reference to an fd means closing it.
+		// In the example above, forgetting to assign a prog array that's lazy-
+		// loaded as a dependency will close the prog_array on the first GC,
+		// resulting in the prog_array being truncated and missed tail calls.
+		// Remove this after implementing explicit rejection of prog_arrays without
+		// assigned references.
+		runtime.GC()
+
+		ret, _, err := obj.TailMain.Test(make([]byte, 14))
+		testutils.SkipIfNotSupported(t, err)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		// Expect the tail_1 tail call to be taken, returning value 42.
+		if ret != 42 {
+			t.Fatalf("Expected tail call to return value 42, got %d", ret)
+		}
 	})
 }
 

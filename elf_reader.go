@@ -592,7 +592,7 @@ func (ec *elfCode) loadBTFMaps(maps map[string]*MapSpec) error {
 				return fmt.Errorf("expected struct, got %s", v.Type)
 			}
 
-			mapSpec, err := mapSpecFromBTF(name, mapStruct, false, ec.btf)
+			mapSpec, err := mapSpecFromBTF(sec, &vs, mapStruct, ec.btf, name, false)
 			if err != nil {
 				return fmt.Errorf("map %v: %w", name, err)
 			}
@@ -618,10 +618,18 @@ func (ec *elfCode) loadBTFMaps(maps map[string]*MapSpec) error {
 	return nil
 }
 
+// A programStub is a placeholder for a Program to be inserted at a certain map key.
+// It needs to be resolved into a Program later on in the loader process.
+type programStub string
+
+// A mapStub is a placeholder for a Map to be inserted at a certain map key.
+// It needs to be resolved into a Map later on in the loader process.
+type mapStub string
+
 // mapSpecFromBTF produces a MapSpec based on a btf.Struct def representing
 // a BTF map definition. The name and spec arguments will be copied to the
 // resulting MapSpec, and inner must be true on any resursive invocations.
-func mapSpecFromBTF(name string, def *btf.Struct, inner bool, spec *btf.Spec) (*MapSpec, error) {
+func mapSpecFromBTF(es *elfSection, vs *btf.VarSecinfo, def *btf.Struct, spec *btf.Spec, name string, inner bool) (*MapSpec, error) {
 	var (
 		key, value         btf.Type
 		keySize, valueSize uint32
@@ -629,6 +637,7 @@ func mapSpecFromBTF(name string, def *btf.Struct, inner bool, spec *btf.Spec) (*
 		flags, maxEntries  uint32
 		pinType            PinType
 		innerMapSpec       *MapSpec
+		contents           []MapKV
 		err                error
 	)
 
@@ -763,13 +772,25 @@ func mapSpecFromBTF(name string, def *btf.Struct, inner bool, spec *btf.Spec) (*
 				// on kernels 5.2 and up)
 				// Pass the BTF spec from the parent object, since both parent and
 				// child must be created from the same BTF blob (on kernels that support BTF).
-				innerMapSpec, err = mapSpecFromBTF(name+"_inner", t, true, spec)
+				innerMapSpec, err = mapSpecFromBTF(es, vs, t, spec, name+"_inner", true)
 				if err != nil {
 					return nil, fmt.Errorf("can't parse BTF map definition of inner map: %w", err)
 				}
 
+			case *btf.FuncProto:
+				// The values member contains an array of function pointers, meaning an
+				// autopopulated PROG_ARRAY.
+				if mapType != ProgramArray {
+					return nil, errors.New("map needs to be a program array")
+				}
+
 			default:
 				return nil, fmt.Errorf("unsupported value type %q in 'values' field", t)
+			}
+
+			contents, err = resolveBTFValuesContents(es, vs, member)
+			if err != nil {
+				return nil, fmt.Errorf("resolving values contents: %w", err)
 			}
 
 		default:
@@ -789,6 +810,7 @@ func mapSpecFromBTF(name string, def *btf.Struct, inner bool, spec *btf.Spec) (*
 		BTF:        &bm,
 		Pinning:    pinType,
 		InnerMap:   innerMapSpec,
+		Contents:   contents,
 	}, nil
 }
 
@@ -823,6 +845,64 @@ func resolveBTFArrayMacro(typ btf.Type) (btf.Type, error) {
 	}
 
 	return ptr.Target, nil
+}
+
+// resolveBTFValuesContents resolves relocations into ELF sections belonging
+// to btf.VarSecinfo's. This can be used on the 'values' member in BTF map
+// definitions to extract static declarations of map contents.
+func resolveBTFValuesContents(es *elfSection, vs *btf.VarSecinfo, member btf.Member) ([]MapKV, error) {
+	// The elements of a .values pointer array are not encoded in BTF.
+	// Instead, relocations are generated into each array index.
+	// However, it's possible to leave certain array indices empty, so all
+	// indices' offsets need to be checked for emitted relocations.
+
+	// The offset of the 'values' member within the _struct_ (in bits)
+	// is the starting point of the array. Convert to bytes. Add VarSecinfo
+	// offset to get the absolute position in the ELF blob.
+	start := (member.Offset / 8) + vs.Offset
+	// 'values' is encoded in BTF as a zero (variable) length struct
+	// member, and its contents run until the end of the VarSecinfo.
+	// Add VarSecinfo offset to get the absolute position in the ELF blob.
+	end := vs.Size + vs.Offset
+	// The size of an address in this section. This determines the width of
+	// an index in the array.
+	align := uint32(es.SectionHeader.Addralign)
+
+	// Check if variable-length section is aligned.
+	if (end-start)%align != 0 {
+		return nil, errors.New("unaligned static values section")
+	}
+	elems := (end - start) / align
+
+	if elems == 0 {
+		return nil, nil
+	}
+
+	contents := make([]MapKV, 0, elems)
+
+	// k is the array index, off is its corresponding ELF section offset.
+	for k, off := uint32(0), start; k < elems; k, off = k+1, off+align {
+		r, ok := es.relocations[uint64(off)]
+		if !ok {
+			continue
+		}
+
+		// Relocation exists for the current offset in the ELF section.
+		// Emit a value stub based on the type of relocation to be replaced by
+		// a real fd later in the pipeline before populating the map.
+		// Map keys are encoded in MapKV entries, so empty array indices are
+		// skipped here.
+		switch t := elf.ST_TYPE(r.Info); t {
+		case elf.STT_FUNC:
+			contents = append(contents, MapKV{uint32(k), programStub(r.Name)})
+		case elf.STT_OBJECT:
+			contents = append(contents, MapKV{uint32(k), mapStub(r.Name)})
+		default:
+			return nil, fmt.Errorf("unknown relocation type %v", t)
+		}
+	}
+
+	return contents, nil
 }
 
 func (ec *elfCode) loadDataSections(maps map[string]*MapSpec) error {

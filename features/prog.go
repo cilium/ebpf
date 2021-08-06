@@ -16,6 +16,14 @@ import (
 
 func init() {
 	pc.progTypes = make(map[ebpf.ProgramType]error)
+	pc.helpers = make(map[ebpf.ProgramType]map[asm.BuiltinFunc]error)
+	allocHelperCache()
+}
+
+func allocHelperCache() {
+	for pt := ebpf.UnspecifiedProgram + 1; pt <= pt.Max(); pt++ {
+		pc.helpers[pt] = make(map[asm.BuiltinFunc]error)
+	}
 }
 
 var (
@@ -23,17 +31,24 @@ var (
 )
 
 type progCache struct {
-	sync.Mutex
+	typeMu    sync.Mutex
 	progTypes map[ebpf.ProgramType]error
+
+	helperMu sync.Mutex
+	helpers  map[ebpf.ProgramType]map[asm.BuiltinFunc]error
 }
 
-func createProgLoadAttr(pt ebpf.ProgramType) (*sys.ProgLoadAttr, error) {
+func createProgLoadAttr(pt ebpf.ProgramType, helper asm.BuiltinFunc) (*sys.ProgLoadAttr, error) {
 	var expectedAttachType ebpf.AttachType
 	var progFlags uint32
 
 	insns := asm.Instructions{
 		asm.LoadImm(asm.R0, 0, asm.DWord),
 		asm.Return(),
+	}
+
+	if helper != asm.FnUnspec {
+		insns = append(asm.Instructions{helper.Call()}, insns...)
 	}
 
 	buf := bytes.NewBuffer(make([]byte, 0, insns.Size()))
@@ -106,14 +121,13 @@ func validateProgType(pt ebpf.ProgramType) error {
 }
 
 func haveProgType(pt ebpf.ProgramType) error {
-	pc.Lock()
-	defer pc.Unlock()
-	err, ok := pc.progTypes[pt]
-	if ok {
+	pc.typeMu.Lock()
+	defer pc.typeMu.Unlock()
+	if err, ok := pc.progTypes[pt]; ok {
 		return err
 	}
 
-	attr, err := createProgLoadAttr(pt)
+	attr, err := createProgLoadAttr(pt, asm.FnUnspec)
 	if err != nil {
 		return fmt.Errorf("couldn't create the program load attribute: %w", err)
 	}
@@ -124,7 +138,7 @@ func haveProgType(pt ebpf.ProgramType) error {
 	// EINVAL occurs when attempting to create a program with an unknown type.
 	// E2BIG occurs when ProgLoadAttr contains non-zero bytes past the end
 	// of the struct known by the running kernel, meaning the kernel is too old
-	// to support the given map type.
+	// to support the given prog type.
 	case errors.Is(err, unix.EINVAL), errors.Is(err, unix.E2BIG):
 		err = ebpf.ErrNotSupported
 
@@ -141,6 +155,88 @@ func haveProgType(pt ebpf.ProgramType) error {
 	}
 
 	pc.progTypes[pt] = err
+
+	return err
+}
+
+// HaveProgramHelper probes the running kernel for the availability of the specified helper
+// function to a specified program type.
+// Return values have the following semantics:
+//
+//   err == nil: The feature is available.
+//   errors.Is(err, ebpf.ErrNotSupported): The feature is not available.
+//   err != nil: Any errors encountered during probe execution, wrapped.
+//
+// Note that the latter case may include false negatives, and that program creation may
+// succeed despite an error being returned.
+// Only `nil` and `ebpf.ErrNotSupported` are conclusive.
+//
+// Probe results are cached and persist throughout any process capability changes.
+func HaveProgramHelper(pt ebpf.ProgramType, helper asm.BuiltinFunc) error {
+	if err := validateProgType(pt); err != nil {
+		return err
+	}
+
+	if err := validateProgramHelper(helper); err != nil {
+		return err
+	}
+
+	return haveProgramHelper(pt, helper)
+}
+
+func validateProgramHelper(helper asm.BuiltinFunc) error {
+	if helper > helper.Max() {
+		return os.ErrInvalid
+	}
+
+	return nil
+}
+
+func haveProgramHelper(pt ebpf.ProgramType, helper asm.BuiltinFunc) error {
+	pc.helperMu.Lock()
+	defer pc.helperMu.Unlock()
+	if err, ok := pc.helpers[pt][helper]; ok {
+		return err
+	}
+
+	attr, err := createProgLoadAttr(pt, helper)
+	if err != nil {
+		return fmt.Errorf("couldn't create the program load attribute: %w", err)
+	}
+
+	fd, err := sys.ProgLoad(attr)
+
+	switch {
+	// If there is no error we need to close the FD of the prog.
+	case err == nil:
+		fd.Close()
+
+	// EACCES occurs when attempting to create a program probe with a helper
+	// while the register args when calling this helper aren't set up properly.
+	// We interpret this as the helper being available, because the verifier
+	// returns EINVAL if the helper is not supported by the running kernel.
+	case errors.Is(err, unix.EACCES):
+		// TODO: possibly we need to check verifier output here to be sure
+		err = nil
+
+	// EINVAL occurs when attempting to create a program with an unknown helper.
+	// E2BIG occurs when BPFProgLoadAttr contains non-zero bytes past the end
+	// of the struct known by the running kernel, meaning the kernel is too old
+	// to support the given prog type.
+	case errors.Is(err, unix.EINVAL), errors.Is(err, unix.E2BIG):
+		// TODO: possibly we need to check verifier output here to be sure
+		err = ebpf.ErrNotSupported
+
+	// EPERM is kept as-is and is not converted or wrapped.
+	case errors.Is(err, unix.EPERM):
+		break
+
+	// Wrap unexpected errors.
+	case err != nil:
+		err = fmt.Errorf("unexpected error during feature probe: %w", err)
+	}
+
+	pc.helpers[pt][helper] = err
 
 	return err
 }

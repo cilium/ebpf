@@ -47,7 +47,7 @@ func run(stdout io.Writer, pkg, outputDir string, args []string) (err error) {
 		flagCC       = fs.String("cc", "clang", "`binary` used to compile C to BPF")
 		flagCFlags   = fs.String("cflags", "", "flags passed to the compiler, may contain quoted arguments")
 		flagTags     = fs.String("tags", "", "list of Go build tags to include in generated files")
-		flagTarget   = fs.String("target", "", "clang target to compile for (bpf, bpfel, bpfeb)")
+		flagTarget   = fs.String("target", "bpfel,bpfeb", "clang target to compile for (bpf, bpfel, bpfeb)")
 		flagMakeBase = fs.String("makebase", "", "write make compatible depinfo files relative to `directory`")
 	)
 
@@ -128,12 +128,15 @@ func run(stdout io.Writer, pkg, outputDir string, args []string) (err error) {
 		"bpfeb": "armbe arm64be mips mips64 mips64p32 ppc64 s390 s390x sparc sparc64",
 	}
 
-	targets := []string{"bpfel", "bpfeb"}
-	if *flagTarget != "" {
-		if _, ok := tagsByTarget[*flagTarget]; !ok {
-			return fmt.Errorf("unsupported target %q", *flagTarget)
+	targets := strings.Split(*flagTarget, ",")
+	if len(targets) == 0 {
+		return fmt.Errorf("no targets specified")
+	}
+
+	for _, target := range targets {
+		if _, ok := tagsByTarget[target]; !ok {
+			return fmt.Errorf("unsupported target %q", target)
 		}
-		targets = []string{*flagTarget}
 	}
 
 	cwd, err := os.Getwd()

@@ -10,6 +10,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 )
 
@@ -34,10 +35,31 @@ Options:
 
 `
 
-var tagsByTarget = map[string]string{
-	"bpf":   "",
-	"bpfel": "386 amd64 amd64p32 arm arm64 mipsle mips64le mips64p32le ppc64le riscv64",
-	"bpfeb": "armbe arm64be mips mips64 mips64p32 ppc64 s390 s390x sparc sparc64",
+// Targets understood by bpf2go.
+//
+// Targets without a Linux string can't be used directly and are only included
+// for the generic bpf, bpfel, bpfeb targets.
+var targetByGoArch = map[string]target{
+	"386":         {"bpfel", "x86"},
+	"amd64":       {"bpfel", "x86"},
+	"amd64p32":    {"bpfel", ""},
+	"arm":         {"bpfel", "arm"},
+	"arm64":       {"bpfel", "arm64"},
+	"mipsle":      {"bpfel", ""},
+	"mips64le":    {"bpfel", ""},
+	"mips64p32le": {"bpfel", ""},
+	"ppc64le":     {"bpfel", "powerpc"},
+	"riscv64":     {"bpfel", ""},
+	"armbe":       {"bpfeb", "arm"},
+	"arm64be":     {"bpfeb", "arm64"},
+	"mips":        {"bpfeb", ""},
+	"mips64":      {"bpfeb", ""},
+	"mips64p32":   {"bpfeb", ""},
+	"ppc64":       {"bpfeb", "powerpc"},
+	"s390":        {"bpfeb", "s390"},
+	"s390x":       {"bpfeb", "s390"},
+	"sparc":       {"bpfeb", "sparc"},
+	"sparc64":     {"bpfeb", "sparc"},
 }
 
 func run(stdout io.Writer, pkg, outputDir string, args []string) (err error) {
@@ -51,13 +73,15 @@ func run(stdout io.Writer, pkg, outputDir string, args []string) (err error) {
 	fs.StringVar(&b2g.cc, "cc", "clang", "`binary` used to compile C to BPF")
 	flagCFlags := fs.String("cflags", "", "flags passed to the compiler, may contain quoted arguments")
 	fs.StringVar(&b2g.tags, "tags", "", "list of Go build tags to include in generated files")
-	flagTarget := fs.String("target", "bpfel,bpfeb", "clang target to compile for (bpf, bpfel, bpfeb)")
+	flagTarget := fs.String("target", "bpfel,bpfeb", "clang target to compile for")
 	fs.StringVar(&b2g.makeBase, "makebase", "", "write make compatible depinfo files relative to `directory`")
 
 	fs.SetOutput(stdout)
 	fs.Usage = func() {
 		fmt.Fprintf(fs.Output(), helpText, fs.Name())
 		fs.PrintDefaults()
+		fmt.Fprintln(fs.Output())
+		printTargets(fs.Output())
 	}
 	if err := fs.Parse(args); errors.Is(err, flag.ErrHelp) {
 		return nil
@@ -126,13 +150,23 @@ func run(stdout io.Writer, pkg, outputDir string, args []string) (err error) {
 		return fmt.Errorf("-tags mustn't contain new line characters")
 	}
 
-	targets := strings.Split(*flagTarget, ",")
-	if len(targets) == 0 {
+	targetArches := strings.Split(*flagTarget, ",")
+	if len(targetArches) == 0 {
 		return fmt.Errorf("no targets specified")
 	}
 
-	for _, target := range targets {
-		if err := b2g.convert(target); err != nil {
+	targets, err := collectTargets(targetArches)
+	if errors.Is(err, errInvalidTarget) {
+		printTargets(stdout)
+		fmt.Fprintln(stdout)
+		return err
+	}
+	if err != nil {
+		return err
+	}
+
+	for target, arches := range targets {
+		if err := b2g.convert(target, arches); err != nil {
 			return err
 		}
 	}
@@ -161,7 +195,7 @@ type bpf2go struct {
 	makeBase string
 }
 
-func (b2g *bpf2go) convert(target string) (err error) {
+func (b2g *bpf2go) convert(tgt target, arches []string) (err error) {
 	removeOnError := func(f *os.File) {
 		if err != nil {
 			os.Remove(f.Name())
@@ -169,7 +203,11 @@ func (b2g *bpf2go) convert(target string) (err error) {
 		f.Close()
 	}
 
-	stem := fmt.Sprintf("%s_%s", strings.ToLower(b2g.ident), target)
+	stem := fmt.Sprintf("%s_%s", strings.ToLower(b2g.ident), tgt.clang)
+	if tgt.linux != "" {
+		stem = fmt.Sprintf("%s_%s_%s", strings.ToLower(b2g.ident), tgt.clang, tgt.linux)
+	}
+
 	objFileName := filepath.Join(b2g.outputDir, stem+".o")
 
 	cwd, err := os.Getwd()
@@ -178,22 +216,24 @@ func (b2g *bpf2go) convert(target string) (err error) {
 	}
 
 	var tags []string
-	targetTags, ok := tagsByTarget[target]
-	if !ok {
-		return fmt.Errorf("unsupported target %q", target)
-	} else if targetTags != "" {
-		tags = append(tags, targetTags)
+	if len(arches) > 0 {
+		tags = append(tags, strings.Join(arches, " "))
 	}
-
 	if b2g.tags != "" {
 		tags = append(tags, b2g.tags)
+	}
+
+	cFlags := make([]string, len(b2g.cFlags))
+	copy(cFlags, b2g.cFlags)
+	if tgt.linux != "" {
+		cFlags = append(cFlags, "-D__TARGET_ARCH_"+tgt.linux)
 	}
 
 	var dep bytes.Buffer
 	err = compile(compileArgs{
 		cc:     b2g.cc,
-		cFlags: b2g.cFlags,
-		target: target,
+		cFlags: cFlags,
+		target: tgt.clang,
 		dir:    cwd,
 		source: b2g.sourceFile,
 		dest:   objFileName,
@@ -255,6 +295,68 @@ func (b2g *bpf2go) convert(target string) (err error) {
 
 	fmt.Fprintln(b2g.stdout, "Wrote", depFileName)
 	return nil
+}
+
+type target struct {
+	clang string
+	linux string
+}
+
+func printTargets(w io.Writer) {
+	var arches []string
+	for arch, archTarget := range targetByGoArch {
+		if archTarget.linux == "" {
+			continue
+		}
+		arches = append(arches, arch)
+	}
+	sort.Strings(arches)
+
+	fmt.Fprint(w, "Supported targets:\n")
+	fmt.Fprint(w, "\tbpf\n\tbpfel\n\tbpfeb\n")
+	for _, arch := range arches {
+		fmt.Fprintf(w, "\t%s\n", arch)
+	}
+}
+
+var errInvalidTarget = errors.New("unsupported target")
+
+func collectTargets(targets []string) (map[target][]string, error) {
+	result := make(map[target][]string)
+	for _, tgt := range targets {
+		switch tgt {
+		case "bpf", "bpfel", "bpfeb":
+			var goarches []string
+			for arch, archTarget := range targetByGoArch {
+				if archTarget.clang == tgt {
+					// Include tags for all goarches that have the same endianness.
+					goarches = append(goarches, arch)
+				}
+			}
+			sort.Strings(goarches)
+			result[target{tgt, ""}] = goarches
+
+		default:
+			archTarget, ok := targetByGoArch[tgt]
+			if !ok || archTarget.linux == "" {
+				return nil, fmt.Errorf("%q: %w", tgt, errInvalidTarget)
+			}
+
+			var goarches []string
+			for goarch, lt := range targetByGoArch {
+				if lt == archTarget {
+					// Include tags for all goarches that have the same
+					// target.
+					goarches = append(goarches, goarch)
+				}
+			}
+
+			sort.Strings(goarches)
+			result[archTarget] = goarches
+		}
+	}
+
+	return result, nil
 }
 
 func main() {

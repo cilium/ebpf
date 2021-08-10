@@ -34,22 +34,25 @@ Options:
 
 `
 
+var tagsByTarget = map[string]string{
+	"bpf":   "",
+	"bpfel": "386 amd64 amd64p32 arm arm64 mipsle mips64le mips64p32le ppc64le riscv64",
+	"bpfeb": "armbe arm64be mips mips64 mips64p32 ppc64 s390 s390x sparc sparc64",
+}
+
 func run(stdout io.Writer, pkg, outputDir string, args []string) (err error) {
-	removeOnError := func(f *os.File) {
-		if err != nil {
-			os.Remove(f.Name())
-		}
-		f.Close()
+	b2g := bpf2go{
+		stdout:    stdout,
+		pkg:       pkg,
+		outputDir: outputDir,
 	}
 
-	var (
-		fs           = flag.NewFlagSet("bpf2go", flag.ContinueOnError)
-		flagCC       = fs.String("cc", "clang", "`binary` used to compile C to BPF")
-		flagCFlags   = fs.String("cflags", "", "flags passed to the compiler, may contain quoted arguments")
-		flagTags     = fs.String("tags", "", "list of Go build tags to include in generated files")
-		flagTarget   = fs.String("target", "bpfel,bpfeb", "clang target to compile for (bpf, bpfel, bpfeb)")
-		flagMakeBase = fs.String("makebase", "", "write make compatible depinfo files relative to `directory`")
-	)
+	fs := flag.NewFlagSet("bpf2go", flag.ContinueOnError)
+	fs.StringVar(&b2g.cc, "cc", "clang", "`binary` used to compile C to BPF")
+	flagCFlags := fs.String("cflags", "", "flags passed to the compiler, may contain quoted arguments")
+	fs.StringVar(&b2g.tags, "tags", "", "list of Go build tags to include in generated files")
+	flagTarget := fs.String("target", "bpfel,bpfeb", "clang target to compile for (bpf, bpfel, bpfeb)")
+	fs.StringVar(&b2g.makeBase, "makebase", "", "write make compatible depinfo files relative to `directory`")
 
 	fs.SetOutput(stdout)
 	fs.Usage = func() {
@@ -62,11 +65,11 @@ func run(stdout io.Writer, pkg, outputDir string, args []string) (err error) {
 		return err
 	}
 
-	if pkg == "" {
+	if b2g.pkg == "" {
 		return errors.New("missing package, are you running via go generate?")
 	}
 
-	if *flagCC == "" {
+	if b2g.cc == "" {
 		return errors.New("no compiler specified")
 	}
 
@@ -89,13 +92,15 @@ func run(stdout io.Writer, pkg, outputDir string, args []string) (err error) {
 		}
 	}
 
+	b2g.cFlags = cFlags[:len(cFlags):len(cFlags)]
+
 	if len(args) < 2 {
 		return errors.New("expected at least two arguments")
 	}
 
-	ident := args[0]
-	if !token.IsIdentifier(ident) {
-		return fmt.Errorf("%q is not a valid identifier", ident)
+	b2g.ident = args[0]
+	if !token.IsIdentifier(b2g.ident) {
+		return fmt.Errorf("%q is not a valid identifier", b2g.ident)
 	}
 
 	input := args[1]
@@ -105,27 +110,20 @@ func run(stdout io.Writer, pkg, outputDir string, args []string) (err error) {
 		return fmt.Errorf("state %s: %s", input, err)
 	}
 
-	inputDir, inputFile, err := splitPathAbs(input)
+	b2g.sourceFile, err = filepath.Abs(input)
 	if err != nil {
 		return err
 	}
 
-	var makeBase string
-	if *flagMakeBase != "" {
-		makeBase, err = filepath.Abs(*flagMakeBase)
+	if b2g.makeBase != "" {
+		b2g.makeBase, err = filepath.Abs(b2g.makeBase)
 		if err != nil {
 			return err
 		}
 	}
 
-	if strings.ContainsRune(*flagTags, '\n') {
+	if strings.ContainsRune(b2g.tags, '\n') {
 		return fmt.Errorf("-tags mustn't contain new line characters")
-	}
-
-	tagsByTarget := map[string]string{
-		"bpf":   "",
-		"bpfel": "386 amd64 amd64p32 arm arm64 mipsle mips64le mips64p32le ppc64le riscv64",
-		"bpfeb": "armbe arm64be mips mips64 mips64p32 ppc64 s390 s390x sparc sparc64",
 	}
 
 	targets := strings.Split(*flagTarget, ",")
@@ -134,97 +132,128 @@ func run(stdout io.Writer, pkg, outputDir string, args []string) (err error) {
 	}
 
 	for _, target := range targets {
-		if _, ok := tagsByTarget[target]; !ok {
-			return fmt.Errorf("unsupported target %q", target)
+		if err := b2g.convert(target); err != nil {
+			return err
 		}
 	}
+
+	return nil
+}
+
+type bpf2go struct {
+	stdout io.Writer
+	// Absolute path to a .c file.
+	sourceFile string
+	// Absolute path to a directory where .go are written
+	outputDir string
+	// Valid go package name.
+	pkg string
+	// Valid go identifier.
+	ident string
+	// C compiler.
+	cc string
+	// C flags passed to the compiler.
+	cFlags []string
+	// Go tags included in the .go
+	tags string
+	// Base directory of the Makefile. Enables outputting make-style dependencies
+	// in .d files.
+	makeBase string
+}
+
+func (b2g *bpf2go) convert(target string) (err error) {
+	removeOnError := func(f *os.File) {
+		if err != nil {
+			os.Remove(f.Name())
+		}
+		f.Close()
+	}
+
+	stem := fmt.Sprintf("%s_%s", strings.ToLower(b2g.ident), target)
+	objFileName := filepath.Join(b2g.outputDir, stem+".o")
 
 	cwd, err := os.Getwd()
 	if err != nil {
 		return err
 	}
 
-	cFlags = cFlags[:len(cFlags):len(cFlags)]
-	for _, target := range targets {
-		objFileName := fmt.Sprintf("%s_%s.o", strings.ToLower(ident), target)
-		objFileName = filepath.Join(outputDir, objFileName)
-
-		var dep bytes.Buffer
-		err = compile(compileArgs{
-			cc:     *flagCC,
-			cFlags: cFlags,
-			target: target,
-			dir:    cwd,
-			source: inputDir + inputFile,
-			dest:   objFileName,
-			dep:    &dep,
-		})
-		if err != nil {
-			return err
-		}
-
-		fmt.Fprintln(stdout, "Compiled", objFileName)
-
-		// Write out generated go
-		goFileName := fmt.Sprintf("%s_%s.go", strings.ToLower(ident), target)
-		goFileName = filepath.Join(outputDir, goFileName)
-		goFile, err := os.Create(goFileName)
-		if err != nil {
-			return err
-		}
-		defer removeOnError(goFile)
-
-		var tags []string
-		if targetTags := tagsByTarget[target]; targetTags != "" {
-			tags = append(tags, targetTags)
-		}
-		if *flagTags != "" {
-			tags = append(tags, *flagTags)
-		}
-
-		obj, err := os.Open(objFileName)
-		if err != nil {
-			return err
-		}
-		defer obj.Close()
-
-		err = writeCommon(writeArgs{
-			pkg:   pkg,
-			ident: ident,
-			tags:  tags,
-			obj:   obj,
-			out:   goFile,
-		})
-		if err != nil {
-			return fmt.Errorf("can't write %s: %s", goFileName, err)
-		}
-
-		fmt.Fprintln(stdout, "Wrote", goFileName)
-
-		if makeBase == "" {
-			continue
-		}
-
-		deps, err := parseDependencies(cwd, &dep)
-		if err != nil {
-			return fmt.Errorf("can't read dependency information: %s", err)
-		}
-
-		// There is always at least a dependency for the main file.
-		deps[0].file = goFileName
-		depFile, err := adjustDependencies(makeBase, deps)
-		if err != nil {
-			return fmt.Errorf("can't adjust dependency information: %s", err)
-		}
-
-		depFileName := goFileName + ".d"
-		if err := ioutil.WriteFile(depFileName, depFile, 0666); err != nil {
-			return fmt.Errorf("can't write dependency file: %s", err)
-		}
-
-		fmt.Fprintln(stdout, "Wrote", depFileName)
+	var tags []string
+	targetTags, ok := tagsByTarget[target]
+	if !ok {
+		return fmt.Errorf("unsupported target %q", target)
+	} else if targetTags != "" {
+		tags = append(tags, targetTags)
 	}
 
+	if b2g.tags != "" {
+		tags = append(tags, b2g.tags)
+	}
+
+	var dep bytes.Buffer
+	err = compile(compileArgs{
+		cc:     b2g.cc,
+		cFlags: b2g.cFlags,
+		target: target,
+		dir:    cwd,
+		source: b2g.sourceFile,
+		dest:   objFileName,
+		dep:    &dep,
+	})
+	if err != nil {
+		return err
+	}
+
+	fmt.Fprintln(b2g.stdout, "Compiled", objFileName)
+
+	// Write out generated go
+	goFileName := filepath.Join(b2g.outputDir, stem+".go")
+	goFile, err := os.Create(goFileName)
+	if err != nil {
+		return err
+	}
+	defer removeOnError(goFile)
+
+	obj, err := os.Open(objFileName)
+	if err != nil {
+		return err
+	}
+	defer obj.Close()
+
+	err = writeCommon(writeArgs{
+		pkg:   b2g.pkg,
+		ident: b2g.ident,
+		tags:  tags,
+		obj:   obj,
+		out:   goFile,
+	})
+	if err != nil {
+		return fmt.Errorf("can't write %s: %s", goFileName, err)
+	}
+
+	fmt.Fprintln(b2g.stdout, "Wrote", goFileName)
+
+	if b2g.makeBase == "" {
+		return
+	}
+
+	deps, err := parseDependencies(cwd, &dep)
+	if err != nil {
+		return fmt.Errorf("can't read dependency information: %s", err)
+	}
+
+	// There is always at least a dependency for the main file.
+	deps[0].file = goFileName
+	depFile, err := adjustDependencies(b2g.makeBase, deps)
+	if err != nil {
+		return fmt.Errorf("can't adjust dependency information: %s", err)
+	}
+
+	depFileName := goFileName + ".d"
+	if err := ioutil.WriteFile(depFileName, depFile, 0666); err != nil {
+		return fmt.Errorf("can't write dependency file: %s", err)
+	}
+
+	fmt.Fprintln(b2g.stdout, "Wrote", depFileName)
 	return nil
 }
 

@@ -50,3 +50,7 @@ func TestHaveMmapableMaps(t *testing.T) {
 func TestHaveInnerMaps(t *testing.T) {
 	testutils.CheckFeatureTest(t, haveInnerMaps)
 }
+
+func TestHaveProbeReadKernel(t *testing.T) {
+	testutils.CheckFeatureTest(t, haveProbeReadKernel)
+}

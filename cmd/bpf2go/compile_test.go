@@ -83,6 +83,21 @@ func TestReproducibleCompile(t *testing.T) {
 	}
 }
 
+func TestTriggerMissingTarget(t *testing.T) {
+	dir := mustWriteTempFile(t, "test.c", `_Pragma(__BPF_TARGET_MISSING);`)
+
+	err := compile(compileArgs{
+		cc:     "clang-9",
+		dir:    dir,
+		source: filepath.Join(dir, "test.c"),
+		dest:   filepath.Join(dir, "a.o"),
+	})
+
+	if err == nil {
+		t.Fatal("No error when compiling __BPF_TARGET_MISSING")
+	}
+}
+
 func TestParseDependencies(t *testing.T) {
 	const input = `main.go: /foo/bar baz
 

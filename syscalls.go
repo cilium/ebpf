@@ -7,7 +7,6 @@ import (
 	"unsafe"
 
 	"github.com/cilium/ebpf/internal"
-	"github.com/cilium/ebpf/internal/btf"
 	"github.com/cilium/ebpf/internal/unix"
 )
 
@@ -73,30 +72,6 @@ type bpfMapInfo struct {
 	btf_value_type_id         uint32
 }
 
-type bpfProgLoadAttr struct {
-	progType           ProgramType
-	insCount           uint32
-	instructions       internal.Pointer
-	license            internal.Pointer
-	logLevel           uint32
-	logSize            uint32
-	logBuf             internal.Pointer
-	kernelVersion      uint32              // since 4.1  2541517c32be
-	progFlags          uint32              // since 4.11 e07b98d9bffe
-	progName           internal.BPFObjName // since 4.15 067cae47771c
-	progIfIndex        uint32              // since 4.15 1f6f4cb7ba21
-	expectedAttachType AttachType          // since 4.17 5e43f899b03a
-	progBTFFd          uint32
-	funcInfoRecSize    uint32
-	funcInfo           internal.Pointer
-	funcInfoCnt        uint32
-	lineInfoRecSize    uint32
-	lineInfo           internal.Pointer
-	lineInfoCnt        uint32
-	attachBTFID        btf.TypeID
-	attachProgFd       uint32
-}
-
 type bpfProgInfo struct {
 	prog_type                uint32
 	id                       uint32
@@ -153,23 +128,6 @@ type bpfObjGetNextIDAttr struct {
 	startID   uint32
 	nextID    uint32
 	openFlags uint32
-}
-
-func bpfProgLoad(attr *bpfProgLoadAttr) (*internal.FD, error) {
-	for {
-		fd, err := internal.BPF(internal.BPF_PROG_LOAD, unsafe.Pointer(attr), unsafe.Sizeof(*attr))
-		// As of ~4.20 the verifier can be interrupted by a signal,
-		// and returns EAGAIN in that case.
-		if errors.Is(err, unix.EAGAIN) {
-			continue
-		}
-
-		if err != nil {
-			return nil, err
-		}
-
-		return internal.NewFD(uint32(fd)), nil
-	}
 }
 
 func bpfProgTestRun(attr *bpfProgTestRunAttr) error {

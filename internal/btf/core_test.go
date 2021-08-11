@@ -24,7 +24,7 @@ func TestCoreAreTypesCompatible(t *testing.T) {
 		{&Enum{Name: "a"}, &Enum{Name: "b"}, true},
 		{&Fwd{Name: "a"}, &Fwd{Name: "b"}, true},
 		{&Int{Name: "a", Size: 2}, &Int{Name: "b", Size: 4}, true},
-		{&Int{Offset: 1}, &Int{}, false},
+		{&Int{OffsetBits: 1}, &Int{}, false},
 		{&Pointer{Target: &Void{}}, &Pointer{Target: &Void{}}, true},
 		{&Pointer{Target: &Void{}}, &Void{}, false},
 		{&Array{Type: &Void{}}, &Array{Type: &Void{}}, true},
@@ -98,7 +98,7 @@ func TestCoreAreMembersCompatible(t *testing.T) {
 		{&Fwd{Name: "a"}, &Fwd{Name: "a___foo"}, true},
 		{&Fwd{Name: "a"}, &Fwd{Name: ""}, true},
 		{&Int{Name: "a", Size: 2}, &Int{Name: "b", Size: 4}, true},
-		{&Int{Offset: 1}, &Int{}, false},
+		{&Int{OffsetBits: 1}, &Int{}, false},
 		{&Pointer{Target: &Void{}}, &Pointer{Target: &Void{}}, true},
 		{&Pointer{Target: &Void{}}, &Void{}, false},
 		{&Array{Type: &Int{Size: 1}}, &Array{Type: &Int{Encoding: Signed}}, true},
@@ -230,13 +230,13 @@ func TestCoreFindField(t *testing.T) {
 	u16 := &Int{Size: 2}
 	u32 := &Int{Size: 4}
 	aFields := []Member{
-		{Name: "foo", Type: ptr, Offset: 1},
-		{Name: "bar", Type: u16, Offset: 2},
+		{Name: "foo", Type: ptr, OffsetBits: 1},
+		{Name: "bar", Type: u16, OffsetBits: 2},
 	}
 	bFields := []Member{
-		{Name: "foo", Type: ptr, Offset: 10},
-		{Name: "bar", Type: u32, Offset: 20},
-		{Name: "other", Offset: 4},
+		{Name: "foo", Type: ptr, OffsetBits: 10},
+		{Name: "bar", Type: u32, OffsetBits: 20},
+		{Name: "other", OffsetBits: 4},
 	}
 	aStruct := &Struct{Members: aFields, Size: 2}
 	bStruct := &Struct{Members: bFields, Size: 7}
@@ -316,7 +316,7 @@ func TestCoreFindField(t *testing.T) {
 	}
 
 	anon := func(t Type, offset uint32) []Member {
-		return []Member{{Type: t, Offset: offset}}
+		return []Member{{Type: t, OffsetBits: offset}}
 	}
 
 	anonStruct := func(m ...Member) Member {

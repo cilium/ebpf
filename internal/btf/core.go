@@ -564,7 +564,7 @@ func coreFindField(local Type, localAcc coreAccessor, target Type) (_, _ coreFie
 
 				// This is an anonymous struct or union, ignore it.
 				local = localMember.Type
-				localOffset += localMember.Offset
+				localOffset += localMember.OffsetBits
 				localMaybeFlex = false
 				continue
 			}
@@ -585,10 +585,10 @@ func coreFindField(local Type, localAcc coreAccessor, target Type) (_, _ coreFie
 
 			local = localMember.Type
 			localMaybeFlex = acc == len(localMembers)-1
-			localOffset += localMember.Offset
+			localOffset += localMember.OffsetBits
 			target = targetMember.Type
 			targetMaybeFlex = last
-			targetOffset += targetMember.Offset
+			targetOffset += targetMember.OffsetBits
 
 		case *Array:
 			// For arrays, acc is the index in the target.
@@ -670,7 +670,7 @@ func coreFindMember(typ composite, name Name) (Member, bool, error) {
 		for j, member := range members {
 			if member.Name == name {
 				// NB: This is safe because member is a copy.
-				member.Offset += target.offset
+				member.OffsetBits += target.offset
 				return member, j == len(members)-1, nil
 			}
 
@@ -685,7 +685,7 @@ func coreFindMember(typ composite, name Name) (Member, bool, error) {
 				return Member{}, false, fmt.Errorf("anonymous non-composite type %T not allowed", member.Type)
 			}
 
-			targets = append(targets, offsetTarget{comp, target.offset + member.Offset})
+			targets = append(targets, offsetTarget{comp, target.offset + member.OffsetBits})
 		}
 	}
 

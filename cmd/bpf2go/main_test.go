@@ -3,11 +3,16 @@ package main
 import (
 	"bytes"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
+	"strings"
 	"testing"
+
+	"github.com/google/go-cmp/cmp"
 )
 
 func TestRun(t *testing.T) {
@@ -97,5 +102,103 @@ func TestHelp(t *testing.T) {
 
 	if stdout.Len() == 0 {
 		t.Error("-help doesn't write to stdout")
+	}
+}
+
+func TestCollectTargets(t *testing.T) {
+	clangArches := make(map[string][]string)
+	linuxArches := make(map[string][]string)
+	for arch, archTarget := range targetByGoArch {
+		clangArches[archTarget.clang] = append(clangArches[archTarget.clang], arch)
+		linuxArches[archTarget.linux] = append(linuxArches[archTarget.linux], arch)
+	}
+	for i := range clangArches {
+		sort.Strings(clangArches[i])
+	}
+	for i := range linuxArches {
+		sort.Strings(linuxArches[i])
+	}
+
+	tests := []struct {
+		targets []string
+		want    map[target][]string
+	}{
+		{
+			[]string{"bpf", "bpfel", "bpfeb"},
+			map[target][]string{
+				{"bpf", ""}:   nil,
+				{"bpfel", ""}: clangArches["bpfel"],
+				{"bpfeb", ""}: clangArches["bpfeb"],
+			},
+		},
+		{
+			[]string{"amd64", "386"},
+			map[target][]string{
+				{"bpfel", "x86"}: linuxArches["x86"],
+			},
+		},
+		{
+			[]string{"amd64", "arm64be"},
+			map[target][]string{
+				{"bpfeb", "arm64"}: linuxArches["arm64"],
+				{"bpfel", "x86"}:   linuxArches["x86"],
+			},
+		},
+	}
+
+	for _, test := range tests {
+		name := strings.Join(test.targets, ",")
+		t.Run(name, func(t *testing.T) {
+			have, err := collectTargets(test.targets)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			if diff := cmp.Diff(test.want, have); diff != "" {
+				t.Errorf("Result mismatch (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
+func TestCollectTargetsErrors(t *testing.T) {
+	tests := []struct {
+		name   string
+		target string
+	}{
+		{"unknown", "frood"},
+		{"no linux target", "mips64p32le"},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			_, err := collectTargets([]string{test.target})
+			if err == nil {
+				t.Fatal("Function did not return an error")
+			}
+			t.Log("Error message:", err)
+		})
+	}
+}
+
+func TestConvertGOARCH(t *testing.T) {
+	tmp := mustWriteTempFile(t, "test.c",
+		`
+#ifndef __TARGET_ARCH_x86
+#error __TARGET_ARCH_x86 is not defined
+#endif`,
+	)
+
+	b2g := bpf2go{
+		pkg:        "test",
+		stdout:     io.Discard,
+		ident:      "test",
+		cc:         "clang",
+		sourceFile: tmp + "/test.c",
+		outputDir:  tmp,
+	}
+
+	if err := b2g.convert(targetByGoArch["amd64"], nil); err != nil {
+		t.Fatal("Can't target GOARCH:", err)
 	}
 }

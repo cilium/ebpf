@@ -129,7 +129,7 @@ func (cs *CollectionSpec) RewriteConstants(consts map[string]interface{}) error 
 	buf := make([]byte, len(value))
 	copy(buf, value)
 
-	err := patchValue(buf, btf.MapValue(rodata.BTF), consts)
+	err := patchValue(buf, rodata.BTF.Value, consts)
 	if err != nil {
 		return err
 	}

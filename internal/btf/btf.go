@@ -598,6 +598,10 @@ func (p *Program) Spec() *Spec {
 
 // Append the information from other to the Program.
 func (p *Program) Append(other *Program) error {
+	if other.spec != p.spec {
+		return fmt.Errorf("can't append program with different BTF specs")
+	}
+
 	funcInfos, err := p.funcInfos.append(other.funcInfos, p.length)
 	if err != nil {
 		return fmt.Errorf("func infos: %w", err)

@@ -523,49 +523,6 @@ func (coll *Collection) DetachProgram(name string) *Program {
 	return p
 }
 
-// Assign the contents of a collection to a struct.
-//
-// Deprecated: use CollectionSpec.Assign instead. It provides the same
-// functionality but creates only the maps and programs requested.
-func (coll *Collection) Assign(to interface{}) error {
-	assignedMaps := make(map[string]struct{})
-	assignedPrograms := make(map[string]struct{})
-	valueOf := func(typ reflect.Type, name string) (reflect.Value, error) {
-		switch typ {
-		case reflect.TypeOf((*Program)(nil)):
-			p := coll.Programs[name]
-			if p == nil {
-				return reflect.Value{}, fmt.Errorf("missing program %q", name)
-			}
-			assignedPrograms[name] = struct{}{}
-			return reflect.ValueOf(p), nil
-		case reflect.TypeOf((*Map)(nil)):
-			m := coll.Maps[name]
-			if m == nil {
-				return reflect.Value{}, fmt.Errorf("missing map %q", name)
-			}
-			assignedMaps[name] = struct{}{}
-			return reflect.ValueOf(m), nil
-		default:
-			return reflect.Value{}, fmt.Errorf("unsupported type %s", typ)
-		}
-	}
-
-	if err := assignValues(to, valueOf); err != nil {
-		return err
-	}
-
-	for name := range assignedPrograms {
-		coll.DetachProgram(name)
-	}
-
-	for name := range assignedMaps {
-		coll.DetachMap(name)
-	}
-
-	return nil
-}
-
 func assignValues(to interface{}, valueOf func(reflect.Type, string) (reflect.Value, error)) error {
 	type structField struct {
 		reflect.StructField

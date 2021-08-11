@@ -1,11 +1,13 @@
 package ebpf
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"os"
 	"unsafe"
 
+	"github.com/cilium/ebpf/asm"
 	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/unix"
 )
@@ -425,5 +427,33 @@ var haveBatchAPI = internal.FeatureTest("map batch api", "5.6", func() error {
 	if err != nil {
 		return internal.ErrNotSupported
 	}
+	return nil
+})
+
+var haveProbeReadKernel = internal.FeatureTest("bpf_probe_read_kernel", "5.5", func() error {
+	insns := asm.Instructions{
+		asm.Mov.Reg(asm.R1, asm.R10),
+		asm.Add.Imm(asm.R1, -8),
+		asm.Mov.Imm(asm.R2, 8),
+		asm.Mov.Imm(asm.R3, 0),
+		asm.FnProbeReadKernel.Call(),
+		asm.Return(),
+	}
+	buf := bytes.NewBuffer(make([]byte, 0, len(insns)*asm.InstructionSize))
+	if err := insns.Marshal(buf, internal.NativeEndian); err != nil {
+		return err
+	}
+	bytecode := buf.Bytes()
+
+	fd, err := internal.BPFProgLoad(&internal.BPFProgLoadAttr{
+		ProgType:     uint32(Kprobe),
+		License:      internal.NewStringPointer("GPL"),
+		Instructions: internal.NewSlicePointer(bytecode),
+		InsCount:     uint32(len(bytecode) / asm.InstructionSize),
+	})
+	if err != nil {
+		return internal.ErrNotSupported
+	}
+	_ = fd.Close()
 	return nil
 })

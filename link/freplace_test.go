@@ -21,9 +21,7 @@ func TestFreplace(t *testing.T) {
 			return
 		}
 
-		target, err := ebpf.NewProgramWithOptions(spec.Programs["sched_process_exec"], ebpf.ProgramOptions{
-			LogLevel: 1,
-		})
+		target, err := ebpf.NewProgram(spec.Programs["sched_process_exec"])
 		testutils.SkipIfNotSupported(t, err)
 		if err != nil {
 			t.Fatal("Can't create target program:", err)
@@ -32,9 +30,7 @@ func TestFreplace(t *testing.T) {
 
 		// Test attachment specified at load time
 		spec.Programs["replacement"].AttachTarget = target
-		replacement, err := ebpf.NewProgramWithOptions(spec.Programs["replacement"], ebpf.ProgramOptions{
-			LogLevel: 1,
-		})
+		replacement, err := ebpf.NewProgram(spec.Programs["replacement"])
 		testutils.SkipIfNotSupported(t, err)
 		if err != nil {
 			t.Fatal("Can't create replacement program:", err)

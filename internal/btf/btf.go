@@ -649,6 +649,10 @@ func (p *Program) LineInfos() (recordSize uint32, bytes []byte, err error) {
 
 // Fixups returns the changes required to adjust the program to the target.
 func (p *Program) Fixups(target *Spec) (COREFixups, error) {
+	if p.spec.byteOrder != target.byteOrder {
+		return nil, fmt.Errorf("can't calculate fixups for mixed endianness")
+	}
+
 	if len(p.coreRelos) == 0 {
 		return nil, nil
 	}

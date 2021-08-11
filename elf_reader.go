@@ -798,7 +798,12 @@ func mapSpecFromBTF(es *elfSection, vs *btf.VarSecinfo, def *btf.Struct, spec *b
 		}
 	}
 
-	bm := btf.NewMap(spec, key, value)
+	if key == nil {
+		key = &btf.Void{}
+	}
+	if value == nil {
+		value = &btf.Void{}
+	}
 
 	return &MapSpec{
 		Name:       SanitizeName(name, -1),
@@ -807,7 +812,7 @@ func mapSpecFromBTF(es *elfSection, vs *btf.VarSecinfo, def *btf.Struct, spec *b
 		ValueSize:  valueSize,
 		MaxEntries: maxEntries,
 		Flags:      flags,
-		BTF:        &bm,
+		BTF:        &btf.Map{Spec: spec, Key: key, Value: value},
 		Pinning:    pinType,
 		InnerMap:   innerMapSpec,
 		Contents:   contents,
@@ -921,9 +926,9 @@ func (ec *elfCode) loadDataSections(maps map[string]*MapSpec) error {
 			return errors.New("data sections require BTF, make sure all consts are marked as static")
 		}
 
-		btfMap, err := ec.btf.Datasec(sec.Name)
-		if err != nil {
-			return err
+		var datasec btf.Datasec
+		if err := ec.btf.FindType(sec.Name, &datasec); err != nil {
+			return fmt.Errorf("data section %s: can't get BTF: %w", sec.Name, err)
 		}
 
 		data, err := sec.Data()
@@ -942,7 +947,7 @@ func (ec *elfCode) loadDataSections(maps map[string]*MapSpec) error {
 			ValueSize:  uint32(len(data)),
 			MaxEntries: 1,
 			Contents:   []MapKV{{uint32(0), data}},
-			BTF:        btfMap,
+			BTF:        &btf.Map{Spec: ec.btf, Key: &btf.Void{}, Value: &datasec},
 		}
 
 		switch sec.Name {

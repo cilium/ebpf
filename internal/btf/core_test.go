@@ -508,7 +508,7 @@ func TestCoreRelocation(t *testing.T) {
 					t.Fatal("Retrieve program:", err)
 				}
 
-				relos, err := ProgramFixups(prog, spec)
+				relos, err := prog.Fixups(spec)
 				if want := errs[name]; want != nil {
 					if !errors.Is(err, want) {
 						t.Fatal("Expected", want, "got", err)

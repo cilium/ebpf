@@ -491,7 +491,8 @@ func (s *Spec) FindType(name string, typ Type) error {
 
 // Handle is a reference to BTF loaded into the kernel.
 type Handle struct {
-	fd *internal.FD
+	spec *Spec
+	fd   *internal.FD
 }
 
 // NewHandle loads BTF into the kernel.
@@ -533,7 +534,7 @@ func NewHandle(spec *Spec) (*Handle, error) {
 		return nil, internal.ErrorWithLog(err, logBuf, logErr)
 	}
 
-	return &Handle{fd}, nil
+	return &Handle{spec, fd}, nil
 }
 
 // NewHandleFromID returns the BTF handle for a given id.
@@ -547,17 +548,18 @@ func NewHandleFromID(id ID) (*Handle, error) {
 		return nil, fmt.Errorf("get BTF by id: %w", err)
 	}
 
-	return &Handle{fd}, nil
-}
-
-// Spec returns the Spec that defined the BTF loaded into the kernel.
-func (h *Handle) Spec() (*Spec, error) {
-	info, err := newInfoFromFd(h.fd)
+	info, err := newInfoFromFd(fd)
 	if err != nil {
+		_ = fd.Close()
 		return nil, fmt.Errorf("get BTF spec for handle: %w", err)
 	}
 
-	return info.BTF, nil
+	return &Handle{info.BTF, fd}, nil
+}
+
+// Spec returns the Spec that defined the BTF loaded into the kernel.
+func (h *Handle) Spec() *Spec {
+	return h.spec
 }
 
 // Close destroys the handle.

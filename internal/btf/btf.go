@@ -661,6 +661,10 @@ func (p *Program) Fixups(target *Spec) (COREFixups, error) {
 		}
 	}
 
+	if p.spec.byteOrder != target.byteOrder {
+		return nil, fmt.Errorf("can't calculate fixups for mixed endianness")
+	}
+
 	return coreRelocate(p.spec, target, p.coreRelos)
 }
 

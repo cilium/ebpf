@@ -450,17 +450,6 @@ func (s *Spec) Program(name string, length uint64) (*Program, error) {
 	return &Program{s, length, funcInfos, lineInfos, relos}, nil
 }
 
-// Datasec returns the BTF required to create maps which represent data sections.
-func (s *Spec) Datasec(name string) (*Map, error) {
-	var datasec Datasec
-	if err := s.FindType(name, &datasec); err != nil {
-		return nil, fmt.Errorf("data section %s: can't get BTF: %w", name, err)
-	}
-
-	m := NewMap(s, &Void{}, &datasec)
-	return &m, nil
-}
-
 // FindType searches for a type with a specific name.
 //
 // hint determines the type of the returned Type.
@@ -561,12 +550,9 @@ func NewHandleFromID(id ID) (*Handle, error) {
 	return &Handle{fd}, nil
 }
 
-// HandleSpec returns the Spec that defined the BTF loaded into the kernel.
-//
-// This is a free function instead of a method to hide it from users
-// of package ebpf.
-func HandleSpec(s *Handle) (*Spec, error) {
-	info, err := newInfoFromFd(s.fd)
+// Spec returns the Spec that defined the BTF loaded into the kernel.
+func (h *Handle) Spec() (*Spec, error) {
+	info, err := newInfoFromFd(h.fd)
 	if err != nil {
 		return nil, fmt.Errorf("get BTF spec for handle: %w", err)
 	}
@@ -593,43 +579,8 @@ func (h *Handle) FD() int {
 
 // Map is the BTF for a map.
 type Map struct {
-	spec       *Spec
-	key, value Type
-}
-
-// NewMap returns a new Map containing the given values.
-// The key and value arguments are initialized to Void if nil values are given.
-func NewMap(spec *Spec, key Type, value Type) Map {
-	if key == nil {
-		key = &Void{}
-	}
-	if value == nil {
-		value = &Void{}
-	}
-
-	return Map{
-		spec:  spec,
-		key:   key,
-		value: value,
-	}
-}
-
-// MapSpec should be a method on Map, but is a free function
-// to hide it from users of the ebpf package.
-func MapSpec(m *Map) *Spec {
-	return m.spec
-}
-
-// MapKey should be a method on Map, but is a free function
-// to hide it from users of the ebpf package.
-func MapKey(m *Map) Type {
-	return m.key
-}
-
-// MapValue should be a method on Map, but is a free function
-// to hide it from users of the ebpf package.
-func MapValue(m *Map) Type {
-	return m.value
+	Spec       *Spec
+	Key, Value Type
 }
 
 // Program is the BTF information for a stream of instructions.
@@ -640,68 +591,53 @@ type Program struct {
 	coreRelos            coreRelos
 }
 
-// ProgramSpec returns the Spec needed for loading function and line infos into the kernel.
-//
-// This is a free function instead of a method to hide it from users
-// of package ebpf.
-func ProgramSpec(s *Program) *Spec {
-	return s.spec
+// Spec returns the BTF spec of this program.
+func (p *Program) Spec() *Spec {
+	return p.spec
 }
 
-// ProgramAppend the information from other to the Program.
-//
-// This is a free function instead of a method to hide it from users
-// of package ebpf.
-func ProgramAppend(s, other *Program) error {
-	funcInfos, err := s.funcInfos.append(other.funcInfos, s.length)
+// Append the information from other to the Program.
+func (p *Program) Append(other *Program) error {
+	funcInfos, err := p.funcInfos.append(other.funcInfos, p.length)
 	if err != nil {
 		return fmt.Errorf("func infos: %w", err)
 	}
 
-	lineInfos, err := s.lineInfos.append(other.lineInfos, s.length)
+	lineInfos, err := p.lineInfos.append(other.lineInfos, p.length)
 	if err != nil {
 		return fmt.Errorf("line infos: %w", err)
 	}
 
-	s.funcInfos = funcInfos
-	s.lineInfos = lineInfos
-	s.coreRelos = s.coreRelos.append(other.coreRelos, s.length)
-	s.length += other.length
+	p.funcInfos = funcInfos
+	p.lineInfos = lineInfos
+	p.coreRelos = p.coreRelos.append(other.coreRelos, p.length)
+	p.length += other.length
 	return nil
 }
 
-// ProgramFuncInfos returns the binary form of BTF function infos.
-//
-// This is a free function instead of a method to hide it from users
-// of package ebpf.
-func ProgramFuncInfos(s *Program) (recordSize uint32, bytes []byte, err error) {
-	bytes, err = s.funcInfos.MarshalBinary()
+// FuncInfos returns the binary form of BTF function infos.
+func (p *Program) FuncInfos() (recordSize uint32, bytes []byte, err error) {
+	bytes, err = p.funcInfos.MarshalBinary()
 	if err != nil {
 		return 0, nil, err
 	}
 
-	return s.funcInfos.recordSize, bytes, nil
+	return p.funcInfos.recordSize, bytes, nil
 }
 
-// ProgramLineInfos returns the binary form of BTF line infos.
-//
-// This is a free function instead of a method to hide it from users
-// of package ebpf.
-func ProgramLineInfos(s *Program) (recordSize uint32, bytes []byte, err error) {
-	bytes, err = s.lineInfos.MarshalBinary()
+// LineInfos returns the binary form of BTF line infos.
+func (p *Program) LineInfos() (recordSize uint32, bytes []byte, err error) {
+	bytes, err = p.lineInfos.MarshalBinary()
 	if err != nil {
 		return 0, nil, err
 	}
 
-	return s.lineInfos.recordSize, bytes, nil
+	return p.lineInfos.recordSize, bytes, nil
 }
 
-// ProgramFixups returns the changes required to adjust the program to the target.
-//
-// This is a free function instead of a method to hide it from users
-// of package ebpf.
-func ProgramFixups(s *Program, target *Spec) (COREFixups, error) {
-	if len(s.coreRelos) == 0 {
+// Fixups returns the changes required to adjust the program to the target.
+func (p *Program) Fixups(target *Spec) (COREFixups, error) {
+	if len(p.coreRelos) == 0 {
 		return nil, nil
 	}
 
@@ -713,7 +649,7 @@ func ProgramFixups(s *Program, target *Spec) (COREFixups, error) {
 		}
 	}
 
-	return coreRelocate(s.spec, target, s.coreRelos)
+	return coreRelocate(p.spec, target, p.coreRelos)
 }
 
 type bpfLoadBTFAttr struct {

@@ -195,12 +195,12 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions, handles *hand
 	var btfDisabled bool
 	var core btf.COREFixups
 	if spec.BTF != nil {
-		core, err = btf.ProgramFixups(spec.BTF, targetBTF)
+		core, err = spec.BTF.Fixups(targetBTF)
 		if err != nil {
 			return nil, fmt.Errorf("CO-RE relocations: %w", err)
 		}
 
-		handle, err := handles.btfHandle(btf.ProgramSpec(spec.BTF))
+		handle, err := handles.btfHandle(spec.BTF.Spec())
 		btfDisabled = errors.Is(err, btf.ErrNotSupported)
 		if err != nil && !btfDisabled {
 			return nil, fmt.Errorf("load BTF: %w", err)
@@ -209,7 +209,7 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions, handles *hand
 		if handle != nil {
 			attr.progBTFFd = uint32(handle.FD())
 
-			recSize, bytes, err := btf.ProgramLineInfos(spec.BTF)
+			recSize, bytes, err := spec.BTF.LineInfos()
 			if err != nil {
 				return nil, fmt.Errorf("get BTF line infos: %w", err)
 			}
@@ -217,7 +217,7 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions, handles *hand
 			attr.lineInfoCnt = uint32(uint64(len(bytes)) / uint64(recSize))
 			attr.lineInfo = internal.NewSlicePointer(bytes)
 
-			recSize, bytes, err = btf.ProgramFuncInfos(spec.BTF)
+			recSize, bytes, err = spec.BTF.FuncInfos()
 			if err != nil {
 				return nil, fmt.Errorf("get BTF function infos: %w", err)
 			}
@@ -262,7 +262,7 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions, handles *hand
 				return nil, fmt.Errorf("load target BTF: %w", err)
 			}
 			defer btfHandle.Close()
-			targetBTF, err = btf.HandleSpec(btfHandle)
+			targetBTF, err = btfHandle.Spec()
 			if err != nil {
 				return nil, fmt.Errorf("load target BTF: %w", err)
 			}

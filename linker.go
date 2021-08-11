@@ -4,7 +4,6 @@ import (
 	"fmt"
 
 	"github.com/cilium/ebpf/asm"
-	"github.com/cilium/ebpf/internal/btf"
 )
 
 // link resolves bpf-to-bpf calls.
@@ -40,7 +39,7 @@ func link(prog *ProgramSpec, libs []*ProgramSpec) error {
 			pending = append(pending, lib.Instructions)
 
 			if prog.BTF != nil && lib.BTF != nil {
-				if err := btf.ProgramAppend(prog.BTF, lib.BTF); err != nil {
+				if err := prog.BTF.Append(lib.BTF); err != nil {
 					return fmt.Errorf("linking BTF of %s: %w", lib.Name, err)
 				}
 			}

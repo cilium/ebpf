@@ -159,26 +159,10 @@ func (cs *CollectionSpec) RewriteConstants(consts map[string]interface{}) error 
 // Returns an error if any of the fields can't be found, or
 // if the same map or program is assigned multiple times.
 func (cs *CollectionSpec) Assign(to interface{}) error {
-	valueOf := func(typ reflect.Type, name string) (reflect.Value, error) {
-		switch typ {
-		case reflect.TypeOf((*ProgramSpec)(nil)):
-			p := cs.Programs[name]
-			if p == nil {
-				return reflect.Value{}, fmt.Errorf("missing program %q", name)
-			}
-			return reflect.ValueOf(p), nil
-		case reflect.TypeOf((*MapSpec)(nil)):
-			m := cs.Maps[name]
-			if m == nil {
-				return reflect.Value{}, fmt.Errorf("missing map %q", name)
-			}
-			return reflect.ValueOf(m), nil
-		default:
-			return reflect.Value{}, fmt.Errorf("unsupported type %s", typ)
-		}
-	}
+	loader := newCollectionLoader(cs, nil)
+	defer loader.close()
 
-	return assignValues(to, valueOf)
+	return loader.assignValues(to)
 }
 
 // LoadAndAssign maps and programs into the kernel and assign them to a struct.
@@ -204,36 +188,11 @@ func (cs *CollectionSpec) Assign(to interface{}) error {
 // Returns an error if any of the fields can't be found, or
 // if the same map or program is assigned multiple times.
 func (cs *CollectionSpec) LoadAndAssign(to interface{}, opts *CollectionOptions) error {
-	if opts == nil {
-		opts = &CollectionOptions{}
-	}
-
 	loader := newCollectionLoader(cs, opts)
 	defer loader.close()
 
-	valueOf := func(typ reflect.Type, name string) (reflect.Value, error) {
-		switch typ {
-		case reflect.TypeOf((*Program)(nil)):
-			p, err := loader.loadProgram(name)
-			if err != nil {
-				return reflect.Value{}, err
-			}
-			return reflect.ValueOf(p), nil
-
-		case reflect.TypeOf((*Map)(nil)):
-			m, err := loader.loadMap(name)
-			if err != nil {
-				return reflect.Value{}, err
-			}
-			return reflect.ValueOf(m), nil
-
-		default:
-			return reflect.Value{}, fmt.Errorf("unsupported type %s", typ)
-		}
-	}
-
 	// Load the Maps and Programs requested by the annotated struct.
-	if err := assignValues(to, valueOf); err != nil {
+	if err := loader.assignValues(to); err != nil {
 		return err
 	}
 
@@ -348,6 +307,10 @@ type collectionLoader struct {
 }
 
 func newCollectionLoader(coll *CollectionSpec, opts *CollectionOptions) *collectionLoader {
+	if opts == nil {
+		opts = &CollectionOptions{}
+	}
+
 	return &collectionLoader{
 		coll,
 		opts,
@@ -523,7 +486,7 @@ func (coll *Collection) DetachProgram(name string) *Program {
 	return p
 }
 
-func assignValues(to interface{}, valueOf func(reflect.Type, string) (reflect.Value, error)) error {
+func (cl *collectionLoader) assignValues(to interface{}) error {
 	type structField struct {
 		reflect.StructField
 		value reflect.Value
@@ -534,6 +497,41 @@ func assignValues(to interface{}, valueOf func(reflect.Type, string) (reflect.Va
 		visitedTypes  = make(map[reflect.Type]bool)
 		flattenStruct func(reflect.Value) error
 	)
+
+	valueOf := func(typ reflect.Type, name string) (reflect.Value, error) {
+		switch typ {
+		case reflect.TypeOf((*Program)(nil)):
+			p, err := cl.loadProgram(name)
+			if err != nil {
+				return reflect.Value{}, err
+			}
+			return reflect.ValueOf(p), nil
+
+		case reflect.TypeOf((*Map)(nil)):
+			m, err := cl.loadMap(name)
+			if err != nil {
+				return reflect.Value{}, err
+			}
+			return reflect.ValueOf(m), nil
+
+		case reflect.TypeOf((*ProgramSpec)(nil)):
+			p := cl.coll.Programs[name]
+			if p == nil {
+				return reflect.Value{}, fmt.Errorf("missing program %q", name)
+			}
+			return reflect.ValueOf(p), nil
+
+		case reflect.TypeOf((*MapSpec)(nil)):
+			m := cl.coll.Maps[name]
+			if m == nil {
+				return reflect.Value{}, fmt.Errorf("missing map %q", name)
+			}
+			return reflect.ValueOf(m), nil
+
+		default:
+			return reflect.Value{}, fmt.Errorf("unsupported type %s", typ)
+		}
+	}
 
 	flattenStruct = func(structVal reflect.Value) error {
 		structType := structVal.Type()

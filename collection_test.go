@@ -2,7 +2,6 @@ package ebpf
 
 import (
 	"fmt"
-	"reflect"
 	"testing"
 
 	"github.com/cilium/ebpf/asm"
@@ -268,9 +267,8 @@ func TestCollectionAssign(t *testing.T) {
 }
 
 func TestAssignValues(t *testing.T) {
-	zero := func(t reflect.Type, name string) (reflect.Value, error) {
-		return reflect.Zero(t), nil
-	}
+	loader := newCollectionLoader(nil, nil)
+	defer loader.close()
 
 	type t1 struct {
 		Bar int `ebpf:"bar"`
@@ -305,7 +303,7 @@ func TestAssignValues(t *testing.T) {
 
 	for _, testcase := range invalid {
 		t.Run(testcase.name, func(t *testing.T) {
-			if err := assignValues(testcase.to, zero); err == nil {
+			if err := loader.assignValues(testcase.to); err == nil {
 				t.Fatal("assignValues didn't return an error")
 			} else {
 				t.Log(err)
@@ -325,12 +323,11 @@ func TestAssignValues(t *testing.T) {
 
 	for _, testcase := range valid {
 		t.Run(testcase.name, func(t *testing.T) {
-			if err := assignValues(testcase.to, zero); err != nil {
-				t.Fatal("assignValues returned", err)
+			if err := loader.assignValues(testcase.to); err != nil {
+				t.Fatal("assignValues:", err)
 			}
 		})
 	}
-
 }
 
 func ExampleCollectionSpec_Assign() {

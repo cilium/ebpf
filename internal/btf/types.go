@@ -77,10 +77,10 @@ type Int struct {
 	// The size of the integer in bytes.
 	Size     uint32
 	Encoding IntEncoding
-	// Offset is the starting bit offset. Currently always 0.
+	// OffsetBits is the starting bit offset. Currently always 0.
 	// See https://www.kernel.org/doc/html/latest/bpf/btf.html#btf-kind-int
-	Offset uint32
-	Bits   byte
+	OffsetBits uint32
+	Bits       byte
 }
 
 var _ namedType = (*Int)(nil)
@@ -118,7 +118,7 @@ func (i *Int) copy() Type {
 }
 
 func (i *Int) isBitfield() bool {
-	return i.Offset > 0
+	return i.OffsetBits > 0
 }
 
 // Pointer is a pointer to another type.
@@ -238,8 +238,8 @@ var (
 type Member struct {
 	Name
 	Type Type
-	// Offset is the bit offset of this member.
-	Offset       uint32
+	// OffsetBits is the bit offset of this member.
+	OffsetBits   uint32
 	BitfieldSize uint32
 }
 
@@ -716,12 +716,12 @@ func inflateRawTypes(rawTypes []rawType, rawStrings stringTable) (types []Type, 
 				return nil, fmt.Errorf("can't get name for member %d: %w", i, err)
 			}
 			m := Member{
-				Name:   name,
-				Offset: btfMember.Offset,
+				Name:       name,
+				OffsetBits: btfMember.Offset,
 			}
 			if kindFlag {
 				m.BitfieldSize = btfMember.Offset >> 24
-				m.Offset &= 0xffffff
+				m.OffsetBits &= 0xffffff
 			}
 			members = append(members, m)
 		}

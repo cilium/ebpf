@@ -159,22 +159,28 @@ func (cs *CollectionSpec) RewriteConstants(consts map[string]interface{}) error 
 // Returns an error if any of the fields can't be found, or
 // if the same map or program is assigned multiple times.
 func (cs *CollectionSpec) Assign(to interface{}) error {
-	valueOf := func(typ reflect.Type, name string) (reflect.Value, error) {
+	loader := newCollectionLoader(cs, nil)
+	defer loader.close()
+
+	// From a CollectionSpec, only support assigning Program and-MapSpecs.
+	// Don't load any resources into the kernel.
+	valueOf := func(typ reflect.Type, name string) (interface{}, error) {
 		switch typ {
+
 		case reflect.TypeOf((*ProgramSpec)(nil)):
-			p := cs.Programs[name]
-			if p == nil {
-				return reflect.Value{}, fmt.Errorf("missing program %q", name)
+			if p := cs.Programs[name]; p != nil {
+				return p, nil
 			}
-			return reflect.ValueOf(p), nil
+			return nil, fmt.Errorf("missing program %q", name)
+
 		case reflect.TypeOf((*MapSpec)(nil)):
-			m := cs.Maps[name]
-			if m == nil {
-				return reflect.Value{}, fmt.Errorf("missing map %q", name)
+			if m := cs.Maps[name]; m != nil {
+				return m, nil
 			}
-			return reflect.ValueOf(m), nil
+			return nil, fmt.Errorf("missing map %q", name)
+
 		default:
-			return reflect.Value{}, fmt.Errorf("unsupported type %s", typ)
+			return nil, fmt.Errorf("unsupported type %s", typ)
 		}
 	}
 
@@ -204,31 +210,20 @@ func (cs *CollectionSpec) Assign(to interface{}) error {
 // Returns an error if any of the fields can't be found, or
 // if the same map or program is assigned multiple times.
 func (cs *CollectionSpec) LoadAndAssign(to interface{}, opts *CollectionOptions) error {
-	if opts == nil {
-		opts = &CollectionOptions{}
-	}
-
 	loader := newCollectionLoader(cs, opts)
 	defer loader.close()
 
-	valueOf := func(typ reflect.Type, name string) (reflect.Value, error) {
+	valueOf := func(typ reflect.Type, name string) (interface{}, error) {
 		switch typ {
+
 		case reflect.TypeOf((*Program)(nil)):
-			p, err := loader.loadProgram(name)
-			if err != nil {
-				return reflect.Value{}, err
-			}
-			return reflect.ValueOf(p), nil
+			return loader.loadProgram(name)
 
 		case reflect.TypeOf((*Map)(nil)):
-			m, err := loader.loadMap(name)
-			if err != nil {
-				return reflect.Value{}, err
-			}
-			return reflect.ValueOf(m), nil
+			return loader.loadMap(name)
 
 		default:
-			return reflect.Value{}, fmt.Errorf("unsupported type %s", typ)
+			return nil, fmt.Errorf("unsupported type %s", typ)
 		}
 	}
 
@@ -348,6 +343,10 @@ type collectionLoader struct {
 }
 
 func newCollectionLoader(coll *CollectionSpec, opts *CollectionOptions) *collectionLoader {
+	if opts == nil {
+		opts = &CollectionOptions{}
+	}
+
 	return &collectionLoader{
 		coll,
 		opts,
@@ -523,65 +522,75 @@ func (coll *Collection) DetachProgram(name string) *Program {
 	return p
 }
 
-func assignValues(to interface{}, valueOf func(reflect.Type, string) (reflect.Value, error)) error {
-	type structField struct {
-		reflect.StructField
-		value reflect.Value
+// structField represents a struct field containing the ebpf struct tag.
+type structField struct {
+	reflect.StructField
+	value reflect.Value
+}
+
+// ebpfFields extracts field names tagged with 'ebpf' from a struct type.
+// Keep track of visited types to avoid infinite recursion.
+func ebpfFields(structVal reflect.Value, visited map[reflect.Type]bool) ([]structField, error) {
+	if visited == nil {
+		visited = make(map[reflect.Type]bool)
 	}
 
-	var (
-		fields        []structField
-		visitedTypes  = make(map[reflect.Type]bool)
-		flattenStruct func(reflect.Value) error
-	)
+	structType := structVal.Type()
+	if structType.Kind() != reflect.Struct {
+		return nil, fmt.Errorf("%s is not a struct", structType)
+	}
 
-	flattenStruct = func(structVal reflect.Value) error {
-		structType := structVal.Type()
-		if structType.Kind() != reflect.Struct {
-			return fmt.Errorf("%s is not a struct", structType)
+	if visited[structType] {
+		return nil, fmt.Errorf("recursion on type %s", structType)
+	}
+
+	fields := make([]structField, 0, structType.NumField())
+	for i := 0; i < structType.NumField(); i++ {
+		field := structField{structType.Field(i), structVal.Field(i)}
+
+		// If the field is tagged, gather it and move on.
+		name := field.Tag.Get("ebpf")
+		if name != "" {
+			fields = append(fields, field)
+			continue
 		}
 
-		if visitedTypes[structType] {
-			return fmt.Errorf("recursion on type %s", structType)
-		}
-
-		for i := 0; i < structType.NumField(); i++ {
-			field := structField{structType.Field(i), structVal.Field(i)}
-
-			name := field.Tag.Get("ebpf")
-			if name != "" {
-				fields = append(fields, field)
+		// If the field does not have an ebpf tag, but is a struct or a pointer
+		// to a struct, attempt to gather its fields as well.
+		var v reflect.Value
+		switch field.Type.Kind() {
+		case reflect.Ptr:
+			if field.Type.Elem().Kind() != reflect.Struct {
 				continue
 			}
 
-			var err error
-			switch field.Type.Kind() {
-			case reflect.Ptr:
-				if field.Type.Elem().Kind() != reflect.Struct {
-					continue
-				}
-
-				if field.value.IsNil() {
-					return fmt.Errorf("nil pointer to %s", structType)
-				}
-
-				err = flattenStruct(field.value.Elem())
-
-			case reflect.Struct:
-				err = flattenStruct(field.value)
-
-			default:
-				continue
+			if field.value.IsNil() {
+				return nil, fmt.Errorf("nil pointer to %s", structType)
 			}
 
-			if err != nil {
-				return fmt.Errorf("field %s: %w", field.Name, err)
-			}
+			// Obtain the destination type of the pointer.
+			v = field.value.Elem()
+
+		case reflect.Struct:
+			// Reference the value's type directly.
+			v = field.value
+
+		default:
+			continue
 		}
 
-		return nil
+		inner, err := ebpfFields(v, visited)
+		if err != nil {
+			return nil, fmt.Errorf("field %s: %w", field.Name, err)
+		}
+
+		fields = append(fields, inner...)
 	}
 
+	return fields, nil
+}
+
+func assignValues(to interface{}, valueOf func(typ reflect.Type, name string) (interface{}, error)) error {
 	toValue := reflect.ValueOf(to)
 	if toValue.Type().Kind() != reflect.Ptr {
 		return fmt.Errorf("%T is not a pointer to struct", to)
@@ -591,39 +600,40 @@ func assignValues(to interface{}, valueOf func(reflect.Type, string) (reflect.Va
 		return fmt.Errorf("nil pointer to %T", to)
 	}
 
-	if err := flattenStruct(toValue.Elem()); err != nil {
-		return err
+	// Follow the pointer to the provided object and collect
+	// its fields that were tagged with 'ebpf'.
+	fields, err := ebpfFields(toValue.Elem(), nil)
+	if err != nil {
+		return fmt.Errorf("gathering field tags: %w", err)
 	}
 
-	type elem struct {
-		// Either *Map or *Program
-		typ  reflect.Type
-		name string
-	}
+	// Store assigned objects and the struct fields they are assigned to.
+	assigned := make(map[interface{}]string)
 
-	assignedTo := make(map[elem]string)
 	for _, field := range fields {
-		name := field.Tag.Get("ebpf")
-		if strings.Contains(name, ",") {
+		// Get string value the field is tagged with.
+		tag := field.Tag.Get("ebpf")
+		if strings.Contains(tag, ",") {
 			return fmt.Errorf("field %s: ebpf tag contains a comma", field.Name)
 		}
 
-		e := elem{field.Type, name}
-		if assignedField := assignedTo[e]; assignedField != "" {
-			return fmt.Errorf("field %s: %q was already assigned to %s", field.Name, name, assignedField)
-		}
-
-		value, err := valueOf(field.Type, name)
+		// Get the eBPF object referred to by the tag.
+		value, err := valueOf(field.Type, tag)
 		if err != nil {
 			return fmt.Errorf("field %s: %w", field.Name, err)
+		}
+
+		// Get the underlying interface value to use it as a unique key.
+		if fieldName, ok := assigned[value]; ok {
+			return fmt.Errorf("field %s: object %q (%v) was already assigned to field %s", field.Name, tag, value, fieldName)
 		}
 
 		if !field.value.CanSet() {
 			return fmt.Errorf("field %s: can't set value", field.Name)
 		}
+		field.value.Set(reflect.ValueOf(value))
 
-		field.value.Set(value)
-		assignedTo[e] = field.Name
+		assigned[value] = field.Name
 	}
 
 	return nil

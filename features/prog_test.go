@@ -66,12 +66,6 @@ func TestHaveProgType(t *testing.T) {
 			testutils.SkipOnOldKernel(t, minVersion, feature)
 
 			if err := HaveProgType(pt); err != nil {
-				if pt == ebpf.LircMode2 {
-					// The probe for LircMode2 technically works but needs to be skipped if unsuccessful
-					// because the current testing kernels don't support it.
-					testutils.SkipIfNotSupported(t, err)
-				}
-
 				t.Fatalf("Program type %s isn't supported even though kernel is at least %s: %v", pt.String(), minVersion, err)
 			}
 		})

@@ -262,7 +262,8 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions, handles *hand
 				return nil, fmt.Errorf("load target BTF: %w", err)
 			}
 			defer btfHandle.Close()
-			targetBTF, err = btfHandle.Spec()
+
+			targetBTF = btfHandle.Spec()
 			if err != nil {
 				return nil, fmt.Errorf("load target BTF: %w", err)
 			}

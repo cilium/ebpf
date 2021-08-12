@@ -66,6 +66,13 @@ func TestHaveProgType(t *testing.T) {
 			testutils.SkipOnOldKernel(t, minVersion, feature)
 
 			if err := HaveProgType(pt); err != nil {
+				if pt == ebpf.LircMode2 {
+					// CI kernels are built with CONFIG_BPF_LIRC_MODE2, but some
+					// mainstream distro's don't ship with it. Make this prog type
+					// optional to retain compatibility with those kernels.
+					testutils.SkipIfNotSupported(t, err)
+				}
+
 				t.Fatalf("Program type %s isn't supported even though kernel is at least %s: %v", pt.String(), minVersion, err)
 			}
 		})

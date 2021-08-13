@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/cilium/ebpf"
+	"github.com/cilium/ebpf/asm"
 	"github.com/cilium/ebpf/internal/testutils"
 )
 
@@ -90,4 +91,75 @@ func TestHaveProgTypeInvalid(t *testing.T) {
 	if err := HaveProgType(ebpf.ProgramType(math.MaxUint32)); err != os.ErrInvalid {
 		t.Fatalf("Expected os.ErrInvalid but was: %v", err)
 	}
+}
+
+func TestHaveProgHelper(t *testing.T) {
+	// TODO: t.Parallel() ? if we parallelize everything the output is a bit chaotic
+	for progType := ebpf.UnspecifiedProgram + 1; progType <= progType.Max(); progType++ {
+		minVersion, ok := progTypeMinVersion[progType]
+		if !ok {
+			// In cases where a new prog type wasn't added to progTypeMinVersion
+			// we should make sure the test runs anyway and fails on old kernels
+			minVersion = "0.0"
+		}
+
+		t.Run(progType.String(), func(t *testing.T) {
+			for helper := asm.FnMapLookupElem; helper <= asm.FnMapDeleteElem; helper++ {
+				feature := fmt.Sprintf("helper %s for program type %s", helper.String(), progType.String())
+
+				t.Run(helper.String(), func(t *testing.T) {
+
+					if progLoadProbeNotImplemented(progType) {
+						t.Skipf("Test for prog type %s requires working probe", progType.String())
+					}
+					testutils.SkipOnOldKernel(t, minVersion, feature)
+
+					if err := HaveProgHelper(progType, helper); err != nil {
+						if progType == ebpf.LircMode2 {
+							// CI kernels are built with CONFIG_BPF_LIRC_MODE2, but some
+							// mainstream distro's don't ship with it. Make this prog type
+							// optional to retain compatibility with those kernels.
+							testutils.SkipIfNotSupported(t, err)
+						}
+
+						t.Fatalf("%s: %s", progType.String(), helper.String())
+					}
+				})
+			}
+
+		})
+
+	}
+}
+
+func TestHaveProgHelperUnsupported(t *testing.T) {
+	for progType := ebpf.UnspecifiedProgram + 1; progType <= progType.Max(); progType++ {
+		// Need inner loop copy to make use of t.Parallel()
+		pt := progType
+
+		minVersion, ok := progTypeMinVersion[pt]
+		if !ok {
+			// In cases where a new prog type wasn't added to progTypeMinVersion
+			// we should make sure the test runs anyway and fails on old kernels
+			minVersion = "0.0"
+		}
+
+		feature := fmt.Sprintf("program type %s", pt.String())
+
+		t.Run(pt.String(), func(t *testing.T) {
+			t.Parallel()
+
+			if progLoadProbeNotImplemented(pt) {
+				t.Skipf("Test for prog type %s requires working probe", pt.String())
+			}
+			testutils.SkipOnOldKernel(t, minVersion, feature)
+
+			if err := haveProgHelper(pt, asm.BuiltinFunc(math.MaxInt32)); err != ebpf.ErrNotSupported {
+				t.Fatalf("Expected ebpf.ErrNotSupported but was: %v", err)
+			}
+
+		})
+
+	}
+
 }

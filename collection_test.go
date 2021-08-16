@@ -268,10 +268,6 @@ func TestCollectionAssign(t *testing.T) {
 }
 
 func TestAssignValues(t *testing.T) {
-	zero := func(t reflect.Type, name string) (reflect.Value, error) {
-		return reflect.Zero(t), nil
-	}
-
 	type t1 struct {
 		Bar int `ebpf:"bar"`
 	}
@@ -305,6 +301,11 @@ func TestAssignValues(t *testing.T) {
 
 	for _, testcase := range invalid {
 		t.Run(testcase.name, func(t *testing.T) {
+			// Assign each field its zero value.
+			zero := func(t reflect.Type, name string) (interface{}, error) {
+				return reflect.Zero(t).Interface(), nil
+			}
+
 			if err := assignValues(testcase.to, zero); err == nil {
 				t.Fatal("assignValues didn't return an error")
 			} else {
@@ -325,12 +326,19 @@ func TestAssignValues(t *testing.T) {
 
 	for _, testcase := range valid {
 		t.Run(testcase.name, func(t *testing.T) {
-			if err := assignValues(testcase.to, zero); err != nil {
-				t.Fatal("assignValues returned", err)
+			var ctr int
+			// Assign each field a unique int, since assignValues tracks values
+			// it's already seen. Each value can only be assigned once.
+			inc := func(t reflect.Type, name string) (interface{}, error) {
+				ctr++
+				return ctr, nil
+			}
+
+			if err := assignValues(testcase.to, inc); err != nil {
+				t.Fatal("assignValues:", err)
 			}
 		})
 	}
-
 }
 
 func ExampleCollectionSpec_Assign() {

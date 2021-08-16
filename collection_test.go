@@ -268,8 +268,8 @@ func TestCollectionAssign(t *testing.T) {
 }
 
 func TestAssignValues(t *testing.T) {
-	zero := func(t reflect.Type, name string) (reflect.Value, error) {
-		return reflect.Zero(t), nil
+	zero := func(t reflect.Type, name string) (interface{}, error) {
+		return reflect.Zero(t).Interface(), nil
 	}
 
 	type t1 struct {

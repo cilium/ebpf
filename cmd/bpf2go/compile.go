@@ -54,6 +54,7 @@ func compile(args compileArgs) error {
 		target = "bpf"
 	}
 
+	// C flags that can't be overridden.
 	cmd.Args = append(cmd.Args,
 		"-target", target,
 		"-c", args.source,
@@ -65,6 +66,7 @@ func compile(args compileArgs) error {
 		"-fdebug-compilation-dir", ".",
 		// We always want BTF to be generated, so enforce debug symbols
 		"-g",
+		fmt.Sprintf("-D__BPF_TARGET_MISSING=%q", "GCC error \"The eBPF is using target specific macros, please provide -target\""),
 	)
 	cmd.Dir = args.dir
 

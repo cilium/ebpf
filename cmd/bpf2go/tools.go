@@ -3,7 +3,6 @@ package main
 import (
 	"errors"
 	"fmt"
-	"path/filepath"
 	"strings"
 	"unicode"
 	"unicode/utf8"
@@ -17,16 +16,6 @@ func splitCFlagsFromArgs(in []string) (args, cflags []string) {
 	}
 
 	return in, nil
-}
-
-func splitPathAbs(path string) (dir, file string, err error) {
-	abs, err := filepath.Abs(path)
-	if err != nil {
-		return "", "", err
-	}
-
-	dir, file = filepath.Split(abs)
-	return
 }
 
 func splitArguments(in string) ([]string, error) {

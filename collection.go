@@ -211,6 +211,7 @@ func (cs *CollectionSpec) LoadAndAssign(to interface{}, opts *CollectionOptions)
 	defer loader.cleanup()
 
 	// Support assigning Programs and Maps, lazy-loading the required objects.
+	assignedMaps := make(map[string]bool)
 	getValue := func(typ reflect.Type, name string) (interface{}, error) {
 		switch typ {
 
@@ -218,6 +219,7 @@ func (cs *CollectionSpec) LoadAndAssign(to interface{}, opts *CollectionOptions)
 			return loader.loadProgram(name)
 
 		case reflect.TypeOf((*Map)(nil)):
+			assignedMaps[name] = true
 			return loader.loadMap(name)
 
 		default:
@@ -230,9 +232,22 @@ func (cs *CollectionSpec) LoadAndAssign(to interface{}, opts *CollectionOptions)
 		return err
 	}
 
-	// Finally, populate the requested maps.
+	// Populate the requested maps. Has a chance of lazy-loading other dependent maps.
 	if err := loader.populateMaps(); err != nil {
 		return err
+	}
+
+	// Evaluate the loader's objects after all (lazy)loading has taken place.
+	for n, m := range loader.maps {
+		switch m.typ {
+		case ProgramArray:
+			// Require all lazy-loaded ProgramArrays to be assigned to the given object.
+			// Without any references, they will be closed on the first GC and all tail
+			// calls into them will miss.
+			if !assignedMaps[n] {
+				return fmt.Errorf("ProgramArray %s must be assigned to prevent missed tail calls", n)
+			}
+		}
 	}
 
 	loader.finalize()
@@ -592,9 +607,12 @@ func ebpfFields(structVal reflect.Value, visited map[reflect.Type]bool) ([]struc
 }
 
 // assignValues attempts to populate all fields of 'to' tagged with 'ebpf'.
-// getValue is called for every such field of and must return the value
+//
+// getValue is called for every tagged field of 'to' and must return the value
 // to be assigned to the field with the given typ and name.
-func assignValues(to interface{}, getValue func(typ reflect.Type, name string) (interface{}, error)) error {
+func assignValues(to interface{},
+	getValue func(typ reflect.Type, name string) (interface{}, error)) error {
+
 	toValue := reflect.ValueOf(to)
 	if toValue.Type().Kind() != reflect.Ptr {
 		return fmt.Errorf("%T is not a pointer to struct", to)

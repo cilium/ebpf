@@ -140,15 +140,15 @@ func (cs *CollectionSpec) RewriteConstants(consts map[string]interface{}) error 
 
 // Assign the contents of a CollectionSpec to a struct.
 //
-// This function is a short-cut to manually checking the presence
-// of maps and programs in a collection spec. Consider using bpf2go if this
-// sounds useful.
+// This function is a shortcut to manually checking the presence
+// of maps and programs in a CollectionSpec. Consider using bpf2go
+// if this sounds useful.
 //
-// The argument to must be a pointer to a struct. A field of the
+// 'to' must be a pointer to a struct. A field of the
 // struct is updated with values from Programs or Maps if it
 // has an `ebpf` tag and its type is *ProgramSpec or *MapSpec.
-// The tag gives the name of the program or map as found in
-// the CollectionSpec.
+// The tag's value specifies the name of the program or map as
+// found in the CollectionSpec.
 //
 //    struct {
 //        Foo     *ebpf.ProgramSpec `ebpf:"xdp_foo"`
@@ -156,8 +156,8 @@ func (cs *CollectionSpec) RewriteConstants(consts map[string]interface{}) error 
 //        Ignored int
 //    }
 //
-// Returns an error if any of the fields can't be found, or
-// if the same map or program is assigned multiple times.
+// Returns an error if any of the eBPF objects can't be found, or
+// if the same MapSpec or ProgramSpec is assigned multiple times.
 func (cs *CollectionSpec) Assign(to interface{}) error {
 	// Assign() only supports assigning ProgramSpecs and MapSpecs,
 	// so doesn't load any resources into the kernel.
@@ -184,17 +184,19 @@ func (cs *CollectionSpec) Assign(to interface{}) error {
 	return assignValues(to, getValue, nil)
 }
 
-// LoadAndAssign maps and programs into the kernel and assign them to a struct.
+// LoadAndAssign loads Maps and Programs into the kernel and assigns them
+// to a struct.
 //
-// This function is a short-cut to manually checking the presence
-// of maps and programs in a collection spec. Consider using bpf2go if this
-// sounds useful.
+// This function is a shortcut to manually checking the presence
+// of maps and programs in a CollectionSpec. Consider using bpf2go
+// if this sounds useful.
 //
-// The argument to must be a pointer to a struct. A field of the
-// struct is updated with values from Programs or Maps if it
-// has an `ebpf` tag and its type is *Program or *Map.
-// The tag gives the name of the program or map as found in
-// the CollectionSpec.
+// 'to' must be a pointer to a struct. A field of the struct is updated with
+// a Program or Map if it has an `ebpf` tag and its type is *Program or *Map.
+// The tag's value specifies the name of the program or map as found in the
+// CollectionSpec. Before updating the struct, the requested objects and their
+// dependent resources are loaded into the kernel and populated with values if
+// specified.
 //
 //    struct {
 //        Foo     *ebpf.Program `ebpf:"xdp_foo"`
@@ -205,7 +207,7 @@ func (cs *CollectionSpec) Assign(to interface{}) error {
 // opts may be nil.
 //
 // Returns an error if any of the fields can't be found, or
-// if the same map or program is assigned multiple times.
+// if the same Map or Program is assigned multiple times.
 func (cs *CollectionSpec) LoadAndAssign(to interface{}, opts *CollectionOptions) error {
 	loader := newCollectionLoader(cs, opts)
 	defer loader.cleanup()

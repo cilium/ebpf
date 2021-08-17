@@ -181,7 +181,7 @@ func (cs *CollectionSpec) Assign(to interface{}) error {
 		}
 	}
 
-	return assignValues(to, getValue)
+	return assignValues(to, getValue, nil)
 }
 
 // LoadAndAssign maps and programs into the kernel and assign them to a struct.
@@ -225,8 +225,24 @@ func (cs *CollectionSpec) LoadAndAssign(to interface{}, opts *CollectionOptions)
 		}
 	}
 
+	validate := func(assigned map[interface{}]structField) error {
+		for n, m := range loader.maps {
+			switch m.typ {
+			case ProgramArray:
+				// Require all lazy-loaded ProgramArrays to be assigned to the given object.
+				// Without any references, they will be closed on the first GC and all tail
+				// calls into them will miss.
+				if _, ok := assigned[m]; !ok {
+					return fmt.Errorf("ProgramArray %s must be assigned to prevent missed tail calls", n)
+				}
+			}
+		}
+
+		return nil
+	}
+
 	// Load the Maps and Programs requested by the annotated struct.
-	if err := assignValues(to, getValue); err != nil {
+	if err := assignValues(to, getValue, validate); err != nil {
 		return err
 	}
 
@@ -592,9 +608,17 @@ func ebpfFields(structVal reflect.Value, visited map[reflect.Type]bool) ([]struc
 }
 
 // assignValues attempts to populate all fields of 'to' tagged with 'ebpf'.
-// getValue is called for every such field of and must return the value
+//
+// getValue is called for every tagged field of 'to' and must return the value
 // to be assigned to the field with the given typ and name.
-func assignValues(to interface{}, getValue func(typ reflect.Type, name string) (interface{}, error)) error {
+//
+// validate provides a hook for inspecting (and rejecting) the assignments
+// before they are applied to the object. If validate returns non-nil,
+// assignValues returns and no assignments are executed.
+func assignValues(to interface{},
+	getValue func(typ reflect.Type, name string) (interface{}, error),
+	validate func(assigned map[interface{}]structField) error) error {
+
 	toValue := reflect.ValueOf(to)
 	if toValue.Type().Kind() != reflect.Ptr {
 		return fmt.Errorf("%T is not a pointer to struct", to)
@@ -635,9 +659,20 @@ func assignValues(to interface{}, getValue func(typ reflect.Type, name string) (
 		if !field.value.CanSet() {
 			return fmt.Errorf("field %s: can't set value", field.Name)
 		}
-		field.value.Set(reflect.ValueOf(value))
 
 		assigned[value] = field
+	}
+
+	// Provide the caller with an option to inspect the assignment operations
+	// before applying them to the object.
+	if validate != nil {
+		if err := validate(assigned); err != nil {
+			return err
+		}
+	}
+
+	for value, field := range assigned {
+		field.value.Set(reflect.ValueOf(value))
 	}
 
 	return nil

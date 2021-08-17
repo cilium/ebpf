@@ -306,7 +306,7 @@ func TestAssignValues(t *testing.T) {
 				return reflect.Zero(t).Interface(), nil
 			}
 
-			if err := assignValues(testcase.to, zero); err == nil {
+			if err := assignValues(testcase.to, zero, nil); err == nil {
 				t.Fatal("assignValues didn't return an error")
 			} else {
 				t.Log(err)
@@ -334,7 +334,7 @@ func TestAssignValues(t *testing.T) {
 				return ctr, nil
 			}
 
-			if err := assignValues(testcase.to, inc); err != nil {
+			if err := assignValues(testcase.to, inc, nil); err != nil {
 				t.Fatal("assignValues:", err)
 			}
 		})

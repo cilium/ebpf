@@ -209,7 +209,7 @@ func (cs *CollectionSpec) LoadAndAssign(to interface{}, opts *CollectionOptions)
 	}
 
 	loader := newCollectionLoader(cs, opts)
-	defer loader.close()
+	defer loader.cleanup()
 
 	valueOf := func(typ reflect.Type, name string) (reflect.Value, error) {
 		switch typ {
@@ -262,7 +262,7 @@ func NewCollection(spec *CollectionSpec) (*Collection, error) {
 // NewCollectionWithOptions creates a Collection from a specification.
 func NewCollectionWithOptions(spec *CollectionSpec, opts CollectionOptions) (*Collection, error) {
 	loader := newCollectionLoader(spec, &opts)
-	defer loader.close()
+	defer loader.cleanup()
 
 	// Create maps first, as their fds need to be linked into programs.
 	for mapName := range spec.Maps {
@@ -363,7 +363,10 @@ func (cl *collectionLoader) finalize() {
 	cl.maps, cl.programs = nil, nil
 }
 
-func (cl *collectionLoader) close() {
+// cleanup cleans up all resources left over in the collectionLoader.
+// Call finalize() when Map and Program creation/population is successful
+// to prevent them from getting closed.
+func (cl *collectionLoader) cleanup() {
 	cl.handles.close()
 	for _, m := range cl.maps {
 		m.Close()

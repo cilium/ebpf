@@ -1,3 +1,4 @@
+//go:build linux
 // +build linux
 
 // This program demonstrates how to attach an eBPF program to a tracepoint.

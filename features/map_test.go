@@ -36,7 +36,7 @@ var mapTypeMinVersion = map[ebpf.MapType]string{
 	ebpf.Stack:               "4.20",
 	ebpf.SkStorage:           "5.2",
 	ebpf.DevMapHash:          "5.4",
-	ebpf.StructOpts:          "5.6", // requires vmlinux BTF, skip for now
+	ebpf.StructOpsMap:        "5.6", // requires vmlinux BTF, skip for now
 	ebpf.RingBuf:             "5.8",
 	ebpf.InodeStorage:        "5.10",
 	ebpf.TaskStorage:         "5.11",
@@ -54,9 +54,8 @@ func TestHaveMapType(t *testing.T) {
 		feature := fmt.Sprintf("map type %s", mt.String())
 
 		t.Run(mt.String(), func(t *testing.T) {
-			// skip StructOpts test as its not implemented
-			if mt == ebpf.StructOpts {
-				t.Skip("Test for map type StructOpts requires working probe")
+			if mt == ebpf.StructOpsMap {
+				t.Skip("Test for map type StructOpsMap requires working probe")
 			}
 
 			testutils.SkipOnOldKernel(t, minVersion, feature)
@@ -81,7 +80,7 @@ func TestHaveMapTypeInvalid(t *testing.T) {
 		t.Fatalf("Expected os.ErrInvalid but was: %v", err)
 	}
 
-	if err := HaveMapType(ebpf.MapType(ebpf.StructOpts)); err == nil {
+	if err := HaveMapType(ebpf.MapType(ebpf.StructOpsMap)); err == nil {
 		t.Fatal("Expected but was nil")
 	}
 }

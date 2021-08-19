@@ -18,7 +18,7 @@ be used in long running processes.
 The library is maintained by [Cloudflare](https://www.cloudflare.com) and
 [Cilium](https://www.cilium.io). Feel free to
 [join](https://cilium.herokuapp.com/) the
-[#libbpf-go](https://cilium.slack.com/messages/libbpf-go) channel on Slack.
+[#ebpf-go](https://cilium.slack.com/messages/ebpf-go) channel on Slack.
 
 ## Current status
 

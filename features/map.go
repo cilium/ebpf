@@ -121,10 +121,11 @@ func validateMaptype(mt ebpf.MapType) error {
 		return os.ErrInvalid
 	}
 
-	if mt == ebpf.StructOpts {
-		// A probe for a StructOpts map has vmlinux BTF requirements we currently cannot meet
-		// Once we figure out how to add a working probe in this package, we can remove this check
-		return errors.New("a probe for MapType StructOpts isn't implemented")
+	if mt == ebpf.StructOpsMap {
+		// A probe for StructOpsMap has vmlinux BTF requirements we currently
+		// cannot meet. Once we figure out how to add a working probe in this
+		// package, we can remove this check.
+		return errors.New("a probe for MapType StructOpsMap isn't implemented")
 	}
 
 	return nil

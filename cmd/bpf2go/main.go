@@ -173,7 +173,7 @@ func run(stdout io.Writer, pkg, outputDir string, args []string) (err error) {
 
 		var tags []string
 		if targetTags := tagsByTarget[target]; targetTags != "" {
-			tags = append(tags, targetTags)
+			tags = append(tags, strings.Split(targetTags, " ")...)
 		}
 		if *flagTags != "" {
 			tags = append(tags, *flagTags)

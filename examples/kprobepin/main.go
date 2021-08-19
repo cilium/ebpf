@@ -1,3 +1,4 @@
+//go:build linux
 // +build linux
 
 // This program demonstrates attaching an eBPF program to a kernel symbol.

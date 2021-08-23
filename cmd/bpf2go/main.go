@@ -173,23 +173,17 @@ func run(stdout io.Writer, pkg, outputDir string, args []string) (err error) {
 
 		var tags []string
 		if targetTags := tagsByTarget[target]; targetTags != "" {
-			tags = append(tags, strings.Split(targetTags, " ")...)
+			tags = append(tags, targetTags)
 		}
 		if *flagTags != "" {
 			tags = append(tags, *flagTags)
 		}
 
-		obj, err := os.Open(objFileName)
-		if err != nil {
-			return err
-		}
-		defer obj.Close()
-
 		err = writeCommon(writeArgs{
 			pkg:   pkg,
 			ident: ident,
 			tags:  tags,
-			obj:   obj,
+			obj:   objFileName,
 			out:   goFile,
 		})
 		if err != nil {

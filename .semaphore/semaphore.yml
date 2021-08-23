@@ -48,6 +48,7 @@ blocks:
       - name: Run unit tests on previous stable Go
         commands:
           - sem-version go 1.16
+          - pushd ./testdata/testbin; go build -v -o /tmp/testbin ./...; popd
           - go test -v ./cmd/bpf2go -run TestRun
           - timeout -s KILL 600s ./run-tests.sh 5.10
       - name: Run unit tests
@@ -55,5 +56,6 @@ blocks:
           - env_var: KERNEL_VERSION
             values: ["5.10", "5.4", "4.19", "4.9"]
         commands:
+          - pushd ./testdata/testbin; go build -v -o /tmp/testbin ./...; popd
           - timeout -s KILL 600s ./run-tests.sh $KERNEL_VERSION
           - goveralls -coverprofile="coverage.out" -service=semaphore -repotoken "$COVERALLS_TOKEN" || echo Submission to coveralls failed

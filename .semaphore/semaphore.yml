@@ -36,6 +36,7 @@ blocks:
       - name: Build
         commands:
           - pushd ./examples; go build -v -o "$(mktemp -d)" ./...; popd
+          - pushd ./testdata/testbin; go build -v -o /tmp/testbin ./...; popd
           - GOOS=darwin go build ./... && for p in $(go list ./...) ; do GOOS=darwin go test -c $p ; done
           - GOARCH=arm GOARM=6 go build ./... && for p in $(go list ./...) ; do GOARCH=arm GOARM=6 go test -c $p ; done
           - GOARCH=arm64 go build ./... && for p in $(go list ./...) ; do GOARCH=arm64 go test -c $p ; done

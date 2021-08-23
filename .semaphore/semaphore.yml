@@ -16,9 +16,8 @@ blocks:
       prologue:
         commands:
           - checkout
-          # Until go 1.16 is available on semaphore.
-          - sudo mkdir -p /usr/local/golang/1.16 && curl -fL "https://golang.org/dl/go1.16.5.linux-amd64.tar.gz" | sudo tar -xz -C /usr/local/golang/1.16
-          - sem-version go 1.16
+          - sudo mkdir -p /usr/local/golang/1.17 && curl -fL "https://golang.org/dl/go1.17.linux-amd64.tar.gz" | sudo tar -xz -C /usr/local/golang/1.17
+          - sem-version go 1.17
           - go install github.com/mattn/goveralls@latest
           - curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin v1.38.0
           - export PATH="$PATH:$(go env GOPATH)/bin"
@@ -48,7 +47,7 @@ blocks:
           - git diff --exit-code || { echo "generated files are not up to date" >&2; false; }
       - name: Run unit tests on previous stable Go
         commands:
-          - sem-version go 1.15
+          - sem-version go 1.16
           - go test -v ./cmd/bpf2go -run TestRun
           - timeout -s KILL 600s ./run-tests.sh 5.10
       - name: Run unit tests

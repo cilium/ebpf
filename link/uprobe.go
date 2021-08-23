@@ -31,8 +31,8 @@ var (
 type Executable struct {
 	// Path of the executable on the filesystem.
 	path string
-	// Parsed ELF symbols and dynamic symbols.
-	symbols map[string]elf.Symbol
+	// Parsed ELF symbols and dynamic symbols offsets.
+	offsets map[string]uint64
 }
 
 // UprobeOptions defines additional parameters that will be used
@@ -67,42 +67,66 @@ func OpenExecutable(path string) (*Executable, error) {
 		return nil, fmt.Errorf("parse ELF file: %w", err)
 	}
 
-	var ex = Executable{
+	ex := Executable{
 		path:    path,
-		symbols: make(map[string]elf.Symbol),
+		offsets: make(map[string]uint64),
 	}
-	if err := ex.addSymbols(se.Symbols); err != nil {
+
+	if err := ex.load(se, se.Symbols); err != nil {
 		return nil, err
 	}
 
-	if err := ex.addSymbols(se.DynamicSymbols); err != nil {
+	if err := ex.load(se, se.DynamicSymbols); err != nil {
 		return nil, err
 	}
 
 	return &ex, nil
 }
 
-func (ex *Executable) addSymbols(f func() ([]elf.Symbol, error)) error {
-	// elf.Symbols and elf.DynamicSymbols return ErrNoSymbols if the section is not found.
-	syms, err := f()
+func (ex *Executable) load(f *internal.SafeELFFile, fun func() ([]elf.Symbol, error)) error {
+	// Returns ErrNoSymbols if the section is not found.
+	syms, err := fun()
 	if err != nil && !errors.Is(err, elf.ErrNoSymbols) {
 		return err
 	}
+
 	for _, s := range syms {
 		if elf.ST_TYPE(s.Info) != elf.STT_FUNC {
 			// Symbol not associated with a function or other executable code.
 			continue
 		}
-		ex.symbols[s.Name] = s
+
+		off := s.Value
+		if f.Type == elf.ET_EXEC || f.Type == elf.ET_DYN {
+			for _, prog := range f.Progs {
+				if prog.Type != elf.PT_LOAD || (prog.ProgHeader.Flags&elf.PF_X) == 0 {
+					continue
+				}
+
+				if prog.Vaddr <= s.Value && s.Value < (prog.Vaddr+prog.Memsz) {
+					off = s.Value - prog.Vaddr + prog.Off
+				}
+			}
+		}
+
+		ex.offsets[s.Name] = off
 	}
+
 	return nil
 }
 
-func (ex *Executable) symbol(symbol string) (*elf.Symbol, error) {
-	if s, ok := ex.symbols[symbol]; ok {
-		return &s, nil
+func (ex *Executable) offset(symbol string) (uint64, error) {
+	if off, ok := ex.offsets[symbol]; ok {
+		// Symbols with location 0 from section undef are shared library calls and
+		// are relocated before the binary is executed. Dynamic linking is not
+		// implemented by the library, so mark this as unsupported for now.
+		if off == 0 {
+			return 0, fmt.Errorf("cannot resolve %s library call '%s', "+
+				"consider providing the offset via options: %w", ex.path, symbol, ErrNotSupported)
+		}
+		return off, nil
 	}
-	return nil, fmt.Errorf("symbol %s not found", symbol)
+	return 0, fmt.Errorf("symbol %s not found", symbol)
 }
 
 // Uprobe attaches the given eBPF program to a perf event that fires when the
@@ -184,20 +208,11 @@ func (ex *Executable) uprobe(symbol string, prog *ebpf.Program, opts *UprobeOpti
 	if opts != nil && opts.Offset != 0 {
 		offset = opts.Offset
 	} else {
-		sym, err := ex.symbol(symbol)
+		off, err := ex.offset(symbol)
 		if err != nil {
-			return nil, fmt.Errorf("symbol '%s' not found: %w", symbol, err)
+			return nil, err
 		}
-
-		// Symbols with location 0 from section undef are shared library calls and
-		// are relocated before the binary is executed. Dynamic linking is not
-		// implemented by the library, so mark this as unsupported for now.
-		if sym.Section == elf.SHN_UNDEF && sym.Value == 0 {
-			return nil, fmt.Errorf("cannot resolve %s library call '%s', "+
-				"consider providing the offset via options: %w", ex.path, symbol, ErrNotSupported)
-		}
-
-		offset = sym.Value
+		offset = off
 	}
 
 	pid := perfAllThreads

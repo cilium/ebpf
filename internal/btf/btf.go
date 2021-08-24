@@ -635,6 +635,22 @@ func (s *Spec) AnyTypesByName(name string) ([]Type, error) {
 	return result, nil
 }
 
+// AnyTypeByName returns a Type with the given name.
+//
+// Returns an error if multiple types of that name exist.
+func (s *Spec) AnyTypeByName(name string) (Type, error) {
+	types, err := s.AnyTypesByName(name)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(types) > 1 {
+		return nil, fmt.Errorf("found multiple types: %v", types)
+	}
+
+	return types[0], nil
+}
+
 // TypeByName searches for a Type with a specific name. Since multiple
 // Types with the same name can exist, the parameter typ is taken to
 // narrow down the search in case of a clash.

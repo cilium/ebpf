@@ -12,6 +12,8 @@ be used in long running processes.
   to various hooks
 * [perf](https://pkg.go.dev/github.com/cilium/ebpf/perf) allows reading from a
   `PERF_EVENT_ARRAY`
+* [ringbuf](https://pkg.go.dev/github.com/cilium/ebpf/ringbuf) allows reading from a
+  `BPF_MAP_TYPE_RINGBUF` map
 * [cmd/bpf2go](https://pkg.go.dev/github.com/cilium/ebpf/cmd/bpf2go) allows
   compiling and embedding eBPF programs in Go code
 
@@ -37,7 +39,7 @@ eBPF and the library, and help shape the future of the project.
 
 * A version of Go that is [supported by
   upstream](https://golang.org/doc/devel/release.html#policy)
-* Linux 4.9, 4.19 or 5.4 (versions in-between should work, but are not tested)
+* Linux 4.9, 4.19, 5.4 or 5.10 (versions in-between should work, but are not tested)
 
 ## Useful resources
 

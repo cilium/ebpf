@@ -360,6 +360,30 @@ func fixupDatasec(rawTypes []rawType, rawStrings stringTable, sectionSizes map[s
 	return nil
 }
 
+// Copy creates a copy of Spec.
+func (s *Spec) Copy() *Spec {
+	types, _ := copyTypes(s.types, nil)
+	namedTypes := make(map[string][]namedType)
+	for _, typ := range types {
+		if named, ok := typ.(namedType); ok {
+			name := named.essentialName()
+			namedTypes[name] = append(namedTypes[name], named)
+		}
+	}
+
+	// NB: Other parts of spec are not copied since they are immutable.
+	return &Spec{
+		s.rawTypes,
+		s.strings,
+		types,
+		namedTypes,
+		s.funcInfos,
+		s.lineInfos,
+		s.coreRelos,
+		s.byteOrder,
+	}
+}
+
 type marshalOpts struct {
 	ByteOrder        binary.ByteOrder
 	StripFuncLinkage bool
@@ -483,8 +507,7 @@ func (s *Spec) FindType(name string, typ Type) error {
 		return fmt.Errorf("type %s: %w", name, ErrNotFound)
 	}
 
-	cpy, _ := copyType(candidate, nil)
-	value := reflect.Indirect(reflect.ValueOf(cpy))
+	value := reflect.Indirect(reflect.ValueOf(candidate))
 	reflect.Indirect(reflect.ValueOf(typ)).Set(value)
 	return nil
 }
@@ -534,7 +557,7 @@ func NewHandle(spec *Spec) (*Handle, error) {
 		return nil, internal.ErrorWithLog(err, logBuf, logErr)
 	}
 
-	return &Handle{spec, fd}, nil
+	return &Handle{spec.Copy(), fd}, nil
 }
 
 // NewHandleFromID returns the BTF handle for a given id.

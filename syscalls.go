@@ -347,8 +347,13 @@ func bpfMapFreeze(m *internal.FD) error {
 	return err
 }
 
-func bpfGetProgInfoByFD(fd *internal.FD) (*bpfProgInfo, error) {
+func bpfGetProgInfoByFD(fd *internal.FD, ids []MapID) (*bpfProgInfo, error) {
 	var info bpfProgInfo
+	if len(ids) > 0 {
+		info.nr_map_ids = uint32(len(ids))
+		info.map_ids = internal.NewPointer(unsafe.Pointer(&ids[0]))
+	}
+
 	if err := internal.BPFObjGetInfoByFD(fd, unsafe.Pointer(&info), unsafe.Sizeof(info)); err != nil {
 		return nil, fmt.Errorf("can't get program info: %w", err)
 	}

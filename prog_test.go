@@ -355,7 +355,7 @@ func TestProgramName(t *testing.T) {
 	prog := createSocketFilter(t)
 	defer prog.Close()
 
-	info, err := bpfGetProgInfoByFD(prog.fd)
+	info, err := bpfGetProgInfoByFD(prog.fd, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

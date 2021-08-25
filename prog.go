@@ -706,7 +706,7 @@ func ProgramGetNextID(startID ProgramID) (ProgramID, error) {
 //
 // Deprecated: use ProgramInfo.ID() instead.
 func (p *Program) ID() (ProgramID, error) {
-	info, err := bpfGetProgInfoByFD(p.fd)
+	info, err := bpfGetProgInfoByFD(p.fd, nil)
 	if err != nil {
 		return ProgramID(0), err
 	}

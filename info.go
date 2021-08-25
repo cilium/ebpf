@@ -123,7 +123,7 @@ func newProgramInfoFromFd(fd *internal.FD) (*ProgramInfo, error) {
 		// name is available from 4.15.
 		Name: internal.CString(info.name[:]),
 		btf:  btf.ID(info.btf_id),
-		ids: mapIds[:info.nr_map_ids],
+		ids:  mapIds[:info.nr_map_ids],
 		stats: &programStats{
 			runtime:  time.Duration(info.run_time_ns),
 			runCount: info.run_cnt,

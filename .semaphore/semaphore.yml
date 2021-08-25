@@ -43,7 +43,7 @@ blocks:
         commands:
           - golangci-lint run
           - go generate ./cmd/bpf2go
-          - pushd ./examples; go generate ./...; popd
+          - pushd ./examples; go generate ./...; go build ./...; popd
           - git diff --exit-code || { echo "generated files are not up to date" >&2; false; }
       - name: Run unit tests on previous stable Go
         commands:

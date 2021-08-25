@@ -58,8 +58,8 @@ func TestParseVmlinux(t *testing.T) {
 			if u8int.Encoding != 0 {
 				t.Fatalf("incorrect encoding of an __u8 int: expected: 0 actual: %x", u8int.Encoding)
 			}
-			if u8int.Offset != 0 {
-				t.Fatalf("incorrect int offset of an __u8 int: expected: 0 actual: %d", u8int.Offset)
+			if u8int.OffsetBits != 0 {
+				t.Fatalf("incorrect int offset of an __u8 int: expected: 0 actual: %d", u8int.OffsetBits)
 			}
 			break
 		}
@@ -158,6 +158,37 @@ func TestLoadKernelSpec(t *testing.T) {
 	_, err := LoadKernelSpec()
 	if err != nil {
 		t.Fatal("Can't load kernel spec:", err)
+	}
+}
+
+func TestSpecCopy(t *testing.T) {
+	fh, err := os.Open("../../testdata/loader-el.elf")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer fh.Close()
+
+	spec, err := LoadSpecFromReader(fh)
+	if err != nil {
+		t.Fatal("Can't load BTF:", err)
+	}
+
+	if len(spec.types) < 1 {
+		t.Fatal("Not enough types")
+	}
+
+	cpy := spec.Copy()
+	for i := range cpy.types {
+		if _, ok := cpy.types[i].(*Void); ok {
+			// Since Void is an empty struct, a Type interface value containing
+			// &Void{} stores (*Void, nil). Since interface equality first compares
+			// the type and then the concrete value, Void is always equal.
+			continue
+		}
+
+		if cpy.types[i] == spec.types[i] {
+			t.Fatalf("Type at index %d is not a copy: %T == %T", i, cpy.types[i], spec.types[i])
+		}
 	}
 }
 

@@ -380,7 +380,7 @@ func (spec *MapSpec) createMap(inner *internal.FD, opts MapOptions, handles *han
 
 	var btfDisabled bool
 	if spec.BTF != nil {
-		handle, err := handles.btfHandle(btf.MapSpec(spec.BTF))
+		handle, err := handles.btfHandle(spec.BTF.Spec)
 		btfDisabled = errors.Is(err, btf.ErrNotSupported)
 		if err != nil && !btfDisabled {
 			return nil, fmt.Errorf("load BTF: %w", err)
@@ -388,8 +388,8 @@ func (spec *MapSpec) createMap(inner *internal.FD, opts MapOptions, handles *han
 
 		if handle != nil {
 			attr.BTFFd = uint32(handle.FD())
-			attr.BTFKeyTypeID = uint32(btf.MapKey(spec.BTF).ID())
-			attr.BTFValueTypeID = uint32(btf.MapValue(spec.BTF).ID())
+			attr.BTFKeyTypeID = uint32(spec.BTF.Key.ID())
+			attr.BTFValueTypeID = uint32(spec.BTF.Value.ID())
 		}
 	}
 

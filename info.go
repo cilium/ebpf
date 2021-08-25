@@ -196,7 +196,7 @@ func (pi *ProgramInfo) Runtime() (time.Duration, bool) {
 //
 // The bool return value indicates whether this optional field is available.
 func (pi *ProgramInfo) MapIDs() ([]MapID, bool) {
-	return pi.ids, len(pi.ids) > 0
+	return pi.ids, pi.ids != nil
 }
 
 func scanFdInfo(fd *internal.FD, fields map[string]interface{}) error {

@@ -161,6 +161,37 @@ func TestLoadKernelSpec(t *testing.T) {
 	}
 }
 
+func TestSpecCopy(t *testing.T) {
+	fh, err := os.Open("../../testdata/loader-el.elf")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer fh.Close()
+
+	spec, err := LoadSpecFromReader(fh)
+	if err != nil {
+		t.Fatal("Can't load BTF:", err)
+	}
+
+	if len(spec.types) < 1 {
+		t.Fatal("Not enough types")
+	}
+
+	cpy := spec.Copy()
+	for i := range cpy.types {
+		if _, ok := cpy.types[i].(*Void); ok {
+			// Since Void is an empty struct, a Type interface value containing
+			// &Void{} stores (*Void, nil). Since interface equality first compares
+			// the type and then the concrete value, Void is always equal.
+			continue
+		}
+
+		if cpy.types[i] == spec.types[i] {
+			t.Fatalf("Type at index %d is not a copy: %T == %T", i, cpy.types[i], spec.types[i])
+		}
+	}
+}
+
 func TestHaveBTF(t *testing.T) {
 	testutils.CheckFeatureTest(t, haveBTF)
 }

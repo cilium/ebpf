@@ -585,14 +585,36 @@ func Sizeof(typ Type) (int, error) {
 //
 // Returns any errors from transform verbatim.
 func copyType(typ Type, transform func(Type) (Type, error)) (Type, error) {
-	var (
-		copies = make(map[Type]Type)
-		work   typeDeque
-	)
+	copies := make(copier)
+	return typ, copies.copy(&typ, transform)
+}
 
-	for t := &typ; t != nil; t = work.pop() {
+// copy a slice of Types recursively.
+//
+// Types may form a cycle.
+//
+// Returns any errors from transform verbatim.
+func copyTypes(types []Type, transform func(Type) (Type, error)) ([]Type, error) {
+	result := make([]Type, len(types))
+	copy(result, types)
+
+	copies := make(copier)
+	for i := range result {
+		if err := copies.copy(&result[i], transform); err != nil {
+			return nil, err
+		}
+	}
+
+	return result, nil
+}
+
+type copier map[Type]Type
+
+func (c copier) copy(typ *Type, transform func(Type) (Type, error)) error {
+	var work typeDeque
+	for t := typ; t != nil; t = work.pop() {
 		// *t is the identity of the type.
-		if cpy := copies[*t]; cpy != nil {
+		if cpy := c[*t]; cpy != nil {
 			*t = cpy
 			continue
 		}
@@ -601,21 +623,21 @@ func copyType(typ Type, transform func(Type) (Type, error)) (Type, error) {
 		if transform != nil {
 			tf, err := transform(*t)
 			if err != nil {
-				return nil, fmt.Errorf("copy %s: %w", typ, err)
+				return fmt.Errorf("copy %s: %w", *t, err)
 			}
 			cpy = tf.copy()
 		} else {
 			cpy = (*t).copy()
 		}
 
-		copies[*t] = cpy
+		c[*t] = cpy
 		*t = cpy
 
 		// Mark any nested types for copying.
 		cpy.walk(&work)
 	}
 
-	return typ, nil
+	return nil
 }
 
 // typeDeque keeps track of pointers to types which still
@@ -624,6 +646,10 @@ type typeDeque struct {
 	types       []*Type
 	read, write uint64
 	mask        uint64
+}
+
+func (dq *typeDeque) empty() bool {
+	return dq.read == dq.write
 }
 
 // push adds a type to the stack.
@@ -652,7 +678,7 @@ func (dq *typeDeque) push(t *Type) {
 
 // shift returns the first element or null.
 func (dq *typeDeque) shift() *Type {
-	if dq.read == dq.write {
+	if dq.empty() {
 		return nil
 	}
 
@@ -665,7 +691,7 @@ func (dq *typeDeque) shift() *Type {
 
 // pop returns the last element or null.
 func (dq *typeDeque) pop() *Type {
-	if dq.read == dq.write {
+	if dq.empty() {
 		return nil
 	}
 

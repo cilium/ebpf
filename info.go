@@ -90,17 +90,29 @@ type ProgramInfo struct {
 	Name string
 	// BTF for the program.
 	btf btf.ID
+	// IDS map ids related to program.
+	ids []MapID
 
 	stats *programStats
 }
 
 func newProgramInfoFromFd(fd *internal.FD) (*ProgramInfo, error) {
-	info, err := bpfGetProgInfoByFD(fd)
+	const defaultNumMaps = 10
+	mapIds := make([]MapID, defaultNumMaps)
+	info, err := bpfGetProgInfoByFD(fd, mapIds)
 	if errors.Is(err, syscall.EINVAL) {
 		return newProgramInfoFromProc(fd)
 	}
 	if err != nil {
 		return nil, err
+	}
+
+	if info.nr_map_ids > defaultNumMaps {
+		mapIds = make([]MapID, info.nr_map_ids)
+		info, err = bpfGetProgInfoByFD(fd, mapIds)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	return &ProgramInfo{
@@ -111,6 +123,7 @@ func newProgramInfoFromFd(fd *internal.FD) (*ProgramInfo, error) {
 		// name is available from 4.15.
 		Name: internal.CString(info.name[:]),
 		btf:  btf.ID(info.btf_id),
+		ids:  mapIds[:info.nr_map_ids],
 		stats: &programStats{
 			runtime:  time.Duration(info.run_time_ns),
 			runCount: info.run_cnt,
@@ -177,6 +190,13 @@ func (pi *ProgramInfo) Runtime() (time.Duration, bool) {
 		return pi.stats.runtime, true
 	}
 	return time.Duration(0), false
+}
+
+// MapIDs returns the maps related to the program.
+//
+// The bool return value indicates whether this optional field is available.
+func (pi *ProgramInfo) MapIDs() ([]MapID, bool) {
+	return pi.ids, pi.ids != nil
 }
 
 func scanFdInfo(fd *internal.FD, fields map[string]interface{}) error {

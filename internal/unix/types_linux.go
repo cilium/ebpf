@@ -5,6 +5,7 @@ package unix
 
 import (
 	"bytes"
+	"fmt"
 	"syscall"
 
 	linux "golang.org/x/sys/unix"
@@ -70,11 +71,6 @@ type Statfs_t = linux.Statfs_t
 
 // Rlimit is a wrapper
 type Rlimit = linux.Rlimit
-
-// Setrlimit is a wrapper
-func Setrlimit(resource int, rlim *Rlimit) (err error) {
-	return linux.Setrlimit(resource, rlim)
-}
 
 // Syscall is a wrapper
 func Syscall(trap, a1, a2, a3 uintptr) (r1, r2 uintptr, err syscall.Errno) {
@@ -203,4 +199,25 @@ func KernelRelease() (string, error) {
 	end := bytes.IndexByte(uname.Release[:], 0)
 	release := string(uname.Release[:end])
 	return release, nil
+}
+
+func RemoveMemlockRlimit() (func() error, error) {
+	oldLimit := new(Rlimit)
+	if err := linux.Getrlimit(RLIMIT_MEMLOCK, oldLimit); err != nil {
+		return nil, fmt.Errorf("failed to get memlock rlimit: %w", err)
+	}
+
+	if err := linux.Setrlimit(RLIMIT_MEMLOCK, &Rlimit{
+		Cur: RLIM_INFINITY,
+		Max: RLIM_INFINITY,
+	}); err != nil {
+		return nil, fmt.Errorf("failed to set memlock rlimit: %w", err)
+	}
+
+	return func() error {
+		if err := linux.Setrlimit(RLIMIT_MEMLOCK, oldLimit); err != nil {
+			return fmt.Errorf("failed to reset memlock rlimit: %w", err)
+		}
+		return nil
+	}, nil
 }

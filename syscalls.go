@@ -17,6 +17,16 @@ import (
 // Deprecated: use os.ErrNotExist instead.
 var ErrNotExist = os.ErrNotExist
 
+// RemoveMemlockRlimit removes the limit on the amount of memory the current
+// process can lock into RAM. Returns a function that restores the limit to
+// its previous value.
+//
+// This is not required to load eBPF resources on kernel versions 5.11+
+// due to the introduction of cgroup-based memory accounting.
+func RemoveMemlockRlimit() (func() error, error) {
+	return unix.RemoveMemlockRlimit()
+}
+
 // invalidBPFObjNameChar returns true if char may not appear in
 // a BPF object name.
 func invalidBPFObjNameChar(char rune) bool {

@@ -19,7 +19,7 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-//go:generate go run github.com/cilium/ebpf/cmd/bpf2go -cc clang-11 UretProbeExample ./bpf/uretprobe_example.c -- -I../headers -O2
+//go:generate go run github.com/cilium/ebpf/cmd/bpf2go -cc clang-11 UretProbeExample ./bpf/uretprobe_example.c -- -nostdinc -I../headers -O2
 
 // An Event represents a perf event sent to userspace from the eBPF program
 // running in the kernel. Note that this must match the C event_t structure,

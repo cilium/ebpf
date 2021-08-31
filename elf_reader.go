@@ -967,6 +967,8 @@ func getProgType(sectionName string) (ProgramType, AttachType, uint32, string) {
 	}{
 		// From https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/tools/lib/bpf/libbpf.c
 		"socket":                {SocketFilter, AttachNone, 0},
+		"sk_reuseport/migrate":  {SkReuseport, AttachSkReuseportSelectOrMigrate, 0},
+		"sk_reuseport":          {SkReuseport, AttachSkReuseportSelect, 0},
 		"seccomp":               {SocketFilter, AttachNone, 0},
 		"kprobe/":               {Kprobe, AttachNone, 0},
 		"uprobe/":               {Kprobe, AttachNone, 0},

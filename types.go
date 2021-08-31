@@ -4,7 +4,7 @@ import (
 	"github.com/cilium/ebpf/internal/unix"
 )
 
-//go:generate stringer -output types_string.go -type=MapType,ProgramType,AttachType,PinType
+//go:generate stringer -output types_string.go -type=MapType,ProgramType,PinType
 
 // MapType indicates the type map structure
 // that will be initialized in the kernel.
@@ -175,6 +175,8 @@ const (
 // Will cause invalid argument (EINVAL) at program load time if set incorrectly.
 type AttachType uint32
 
+//go:generate stringer -type AttachType -trimprefix Attach
+
 // AttachNone is an alias for AttachCGroupInetIngress for readability reasons.
 const AttachNone AttachType = 0
 
@@ -217,6 +219,10 @@ const (
 	AttachXDPCPUMap
 	AttachSkLookup
 	AttachXDP
+	AttachSkSKBVerdict
+	AttachSkReuseportSelect
+	AttachSkReuseportSelectOrMigrate
+	AttachPerfEvent
 )
 
 // AttachFlags of the eBPF program used in BPF_PROG_ATTACH command

@@ -265,7 +265,7 @@ func newMapWithOptions(spec *MapSpec, opts MapOptions, handles *handleCache) (_ 
 
 		template, err := spec.InnerMap.createMap(nil, opts, handles)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("inner map: %w", err)
 		}
 		defer template.Close()
 

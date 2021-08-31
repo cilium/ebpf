@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"syscall"
 	"testing"
@@ -444,14 +443,6 @@ func TestTailCall(t *testing.T) {
 		}
 		defer obj.TailMain.Close()
 
-		// TODO: In this library, losing the reference to an fd means closing it.
-		// In the example above, forgetting to assign a prog array that's lazy-
-		// loaded as a dependency will close the prog_array on the first GC,
-		// resulting in the prog_array being truncated and missed tail calls.
-		// Remove this after implementing explicit rejection of prog_arrays without
-		// assigned references.
-		runtime.GC()
-
 		ret, _, err := obj.TailMain.Test(make([]byte, 14))
 		testutils.SkipIfNotSupported(t, err)
 		if err != nil {
@@ -461,6 +452,35 @@ func TestTailCall(t *testing.T) {
 		// Expect the tail_1 tail call to be taken, returning value 42.
 		if ret != 42 {
 			t.Fatalf("Expected tail call to return value 42, got %d", ret)
+		}
+	})
+}
+
+func TestUnassignedProgArray(t *testing.T) {
+	testutils.Files(t, testutils.Glob(t, "testdata/btf_map_init-*.elf"), func(t *testing.T, file string) {
+		spec, err := LoadCollectionSpec(file)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if spec.ByteOrder != internal.NativeEndian {
+			return
+		}
+
+		// tail_main references a ProgArray that is not being assigned
+		// to this struct. Normally, this would clear all its entries
+		// and make any tail calls into the ProgArray result in a miss.
+		// The library needs to explicitly refuse such operations.
+		var obj struct {
+			TailMain *Program `ebpf:"tail_main"`
+			// ProgArray *Map     `ebpf:"prog_array_init"`
+		}
+
+		err = spec.LoadAndAssign(&obj, nil)
+		testutils.SkipIfNotSupported(t, err)
+		if err == nil {
+			obj.TailMain.Close()
+			t.Fatal("Expecting LoadAndAssign to return error")
 		}
 	})
 }

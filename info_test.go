@@ -10,6 +10,7 @@ import (
 	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/testutils"
 	"github.com/cilium/ebpf/internal/unix"
+	qt "github.com/frankban/quicktest"
 )
 
 func TestMapInfoFromProc(t *testing.T) {
@@ -115,6 +116,49 @@ func TestProgramInfo(t *testing.T) {
 				t.Error("Expected ID to not be available")
 			}
 		})
+	}
+}
+
+func TestProgramInfoMapIDs(t *testing.T) {
+	testutils.SkipOnOldKernel(t, "4.10", "reading program info")
+
+	arr, err := NewMap(&MapSpec{
+		Type:       Array,
+		KeySize:    4,
+		ValueSize:  4,
+		MaxEntries: 1,
+	})
+	qt.Assert(t, err, qt.IsNil)
+	defer arr.Close()
+
+	prog, err := NewProgram(&ProgramSpec{
+		Type: SocketFilter,
+		Instructions: asm.Instructions{
+			asm.LoadMapPtr(asm.R0, arr.FD()),
+			asm.LoadImm(asm.R0, 2, asm.DWord),
+			asm.Return(),
+		},
+		License: "MIT",
+	})
+	qt.Assert(t, err, qt.IsNil)
+	defer prog.Close()
+
+	info, err := prog.Info()
+	qt.Assert(t, err, qt.IsNil)
+
+	ids, ok := info.MapIDs()
+	if testutils.MustKernelVersion().Less(internal.Version{4, 15, 0}) {
+		qt.Assert(t, ok, qt.IsFalse)
+		qt.Assert(t, ids, qt.HasLen, 0)
+	} else {
+		qt.Assert(t, ok, qt.IsTrue)
+		qt.Assert(t, ids, qt.HasLen, 1)
+
+		mapInfo, err := arr.Info()
+		qt.Assert(t, err, qt.IsNil)
+		mapID, ok := mapInfo.ID()
+		qt.Assert(t, ok, qt.IsTrue)
+		qt.Assert(t, ids[0], qt.Equals, mapID)
 	}
 }
 

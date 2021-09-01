@@ -84,7 +84,7 @@ type bpfProgInfo struct {
 	xlated_prog_insns        internal.Pointer
 	load_time                uint64 // since 4.15 cb4d2b3f03d8
 	created_by_uid           uint32
-	nr_map_ids               uint32
+	nr_map_ids               uint32 // since 4.15 cb4d2b3f03d8
 	map_ids                  internal.Pointer
 	name                     internal.BPFObjName // since 4.15 067cae47771c
 	ifindex                  uint32

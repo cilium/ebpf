@@ -3,6 +3,7 @@ package perf
 import (
 	"bytes"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"os"
 	"syscall"
@@ -14,6 +15,8 @@ import (
 	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/testutils"
 	"github.com/cilium/ebpf/internal/unix"
+
+	qt "github.com/frankban/quicktest"
 )
 
 var (
@@ -371,12 +374,13 @@ func TestPause(t *testing.T) {
 	}
 
 	// Pause/Resume after close should be no-op.
-	if err = rd.Pause(); err != errClosed {
-		t.Fatalf("Unexpected error: %s", err)
-	}
-	if err = rd.Resume(); err != errClosed {
-		t.Fatalf("Unexpected error: %s", err)
-	}
+	err = rd.Pause()
+	qt.Assert(t, err, qt.Not(qt.Equals), ErrClosed, qt.Commentf("returns unwrapped ErrClosed"))
+	qt.Assert(t, errors.Is(err, ErrClosed), qt.IsTrue, qt.Commentf("doesn't wrap ErrClosed"))
+
+	err = rd.Resume()
+	qt.Assert(t, err, qt.Not(qt.Equals), ErrClosed, qt.Commentf("returns unwrapped ErrClosed"))
+	qt.Assert(t, errors.Is(err, ErrClosed), qt.IsTrue, qt.Commentf("doesn't wrap ErrClosed"))
 }
 
 func BenchmarkReader(b *testing.B) {

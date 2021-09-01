@@ -265,48 +265,11 @@ func TestCollectionAssign(t *testing.T) {
 	if err := cs.Assign(unexported); err == nil {
 		t.Error("Assign should return an error on unexported fields")
 	}
-
-	coll, err := NewCollection(cs)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer coll.Close()
-
-	var objs struct {
-		Program *Program `ebpf:"prog1"`
-		Map     *Map     `ebpf:"map1"`
-	}
-
-	prog1 := coll.Programs["prog1"]
-	defer prog1.Close()
-
-	map1 := coll.Maps["map1"]
-	defer map1.Close()
-
-	if err := coll.Assign(&objs); err != nil {
-		t.Fatal("Can't Assign objects:", err)
-	}
-
-	if objs.Program != prog1 {
-		t.Errorf("Program is %p not %p", objs.Program, prog1)
-	}
-
-	if objs.Map != map1 {
-		t.Errorf("Map is %p not %p", objs.Map, map1)
-	}
-
-	if coll.Programs["prog1"] != nil {
-		t.Fatal("Assign doesn't detach Program")
-	}
-
-	if coll.Maps["map1"] != nil {
-		t.Fatal("Assign doesn't detach Map")
-	}
 }
 
 func TestAssignValues(t *testing.T) {
-	zero := func(t reflect.Type, name string) (reflect.Value, error) {
-		return reflect.Zero(t), nil
+	zero := func(t reflect.Type, name string) (interface{}, error) {
+		return reflect.Zero(t).Interface(), nil
 	}
 
 	type t1 struct {
@@ -440,51 +403,6 @@ func ExampleCollectionSpec_LoadAndAssign() {
 	}
 
 	if err := spec.LoadAndAssign(&objs, nil); err != nil {
-		panic(err)
-	}
-
-	fmt.Println(objs.Program.Type())
-	fmt.Println(objs.Map.Type())
-
-	// Output: SocketFilter
-	// Array
-}
-
-func ExampleCollection_Assign() {
-	coll, err := NewCollection(&CollectionSpec{
-		Maps: map[string]*MapSpec{
-			"map1": {
-				Type:       Array,
-				KeySize:    4,
-				ValueSize:  4,
-				MaxEntries: 1,
-			},
-		},
-		Programs: map[string]*ProgramSpec{
-			"prog1": {
-				Type: SocketFilter,
-				Instructions: asm.Instructions{
-					asm.LoadImm(asm.R0, 0, asm.DWord),
-					asm.Return(),
-				},
-				License: "MIT",
-			},
-		},
-	})
-	if err != nil {
-		panic(err)
-	}
-
-	type maps struct {
-		Map *Map `ebpf:"map1"`
-	}
-
-	var objs struct {
-		maps
-		Program *Program `ebpf:"prog1"`
-	}
-
-	if err := coll.Assign(&objs); err != nil {
 		panic(err)
 	}
 

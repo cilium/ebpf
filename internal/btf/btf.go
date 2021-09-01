@@ -665,6 +665,8 @@ func (p *Program) LineInfos() (recordSize uint32, bytes []byte, err error) {
 }
 
 // Fixups returns the changes required to adjust the program to the target.
+//
+// Passing a nil target will relocate against the running kernel.
 func (p *Program) Fixups(target *Spec) (COREFixups, error) {
 	if len(p.coreRelos) == 0 {
 		return nil, nil

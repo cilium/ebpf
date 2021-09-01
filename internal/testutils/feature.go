@@ -7,7 +7,7 @@ import (
 	"github.com/cilium/ebpf/internal"
 )
 
-func mustKernelVersion() internal.Version {
+func MustKernelVersion() internal.Version {
 	v, err := internal.KernelVersion()
 	if err != nil {
 		panic(err)
@@ -47,7 +47,7 @@ func checkKernelVersion(tb testing.TB, ufe *internal.UnsupportedFeatureError) {
 		return
 	}
 
-	kernelVersion := mustKernelVersion()
+	kernelVersion := MustKernelVersion()
 	if ufe.MinimumVersion.Less(kernelVersion) {
 		tb.Helper()
 		tb.Fatalf("Feature '%s' isn't supported even though kernel %s is newer than %s",
@@ -63,7 +63,7 @@ func SkipOnOldKernel(tb testing.TB, minVersion, feature string) {
 		tb.Fatalf("Invalid version %s: %s", minVersion, err)
 	}
 
-	if mustKernelVersion().Less(minv) {
+	if MustKernelVersion().Less(minv) {
 		tb.Skipf("Test requires at least kernel %s (due to missing %s)", minv, feature)
 	}
 }

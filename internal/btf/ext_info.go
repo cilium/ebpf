@@ -114,11 +114,16 @@ type extInfoRecord struct {
 }
 
 type extInfo struct {
+	byteOrder  binary.ByteOrder
 	recordSize uint32
 	records    []extInfoRecord
 }
 
 func (ei extInfo) append(other extInfo, offset uint64) (extInfo, error) {
+	if other.byteOrder != ei.byteOrder {
+		return extInfo{}, fmt.Errorf("ext_info byte order mismatch, want %v (got %v)", ei.byteOrder, other.byteOrder)
+	}
+
 	if other.recordSize != ei.recordSize {
 		return extInfo{}, fmt.Errorf("ext_info record size mismatch, want %d (got %d)", ei.recordSize, other.recordSize)
 	}
@@ -131,10 +136,14 @@ func (ei extInfo) append(other extInfo, offset uint64) (extInfo, error) {
 			Opaque:  info.Opaque,
 		})
 	}
-	return extInfo{ei.recordSize, records}, nil
+	return extInfo{ei.byteOrder, ei.recordSize, records}, nil
 }
 
 func (ei extInfo) MarshalBinary() ([]byte, error) {
+	if ei.byteOrder != internal.NativeEndian {
+		return nil, fmt.Errorf("%s is not the native byte order", ei.byteOrder)
+	}
+
 	if len(ei.records) == 0 {
 		return nil, nil
 	}
@@ -197,6 +206,7 @@ func parseExtInfo(r io.Reader, bo binary.ByteOrder, strings stringTable) (map[st
 		}
 
 		result[secName] = extInfo{
+			bo,
 			recordSize,
 			records,
 		}

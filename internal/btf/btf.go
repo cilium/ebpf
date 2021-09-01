@@ -646,13 +646,9 @@ func (p *Program) Append(other *Program) error {
 
 // FuncInfos returns the binary form of BTF function infos.
 func (p *Program) FuncInfos() (recordSize uint32, bytes []byte, err error) {
-	if p.spec.byteOrder != internal.NativeEndian {
-		return 0, nil, fmt.Errorf("can't marshal func infos different endianness")
-	}
-
 	bytes, err = p.funcInfos.MarshalBinary()
 	if err != nil {
-		return 0, nil, err
+		return 0, nil, fmt.Errorf("func infos: %w", err)
 	}
 
 	return p.funcInfos.recordSize, bytes, nil
@@ -660,13 +656,9 @@ func (p *Program) FuncInfos() (recordSize uint32, bytes []byte, err error) {
 
 // LineInfos returns the binary form of BTF line infos.
 func (p *Program) LineInfos() (recordSize uint32, bytes []byte, err error) {
-	if p.spec.byteOrder != internal.NativeEndian {
-		return 0, nil, fmt.Errorf("can't marshal line infos different endianness")
-	}
-
 	bytes, err = p.lineInfos.MarshalBinary()
 	if err != nil {
-		return 0, nil, err
+		return 0, nil, fmt.Errorf("line infos: %w", err)
 	}
 
 	return p.lineInfos.recordSize, bytes, nil

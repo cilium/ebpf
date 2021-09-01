@@ -97,9 +97,7 @@ type ProgramInfo struct {
 }
 
 func newProgramInfoFromFd(fd *internal.FD) (*ProgramInfo, error) {
-	const defaultNumMaps = 10
-	mapIds := make([]MapID, defaultNumMaps)
-	info, err := bpfGetProgInfoByFD(fd, mapIds)
+	info, err := bpfGetProgInfoByFD(fd, nil)
 	if errors.Is(err, syscall.EINVAL) {
 		return newProgramInfoFromProc(fd)
 	}
@@ -107,9 +105,10 @@ func newProgramInfoFromFd(fd *internal.FD) (*ProgramInfo, error) {
 		return nil, err
 	}
 
-	if info.nr_map_ids > defaultNumMaps {
-		mapIds = make([]MapID, info.nr_map_ids)
-		info, err = bpfGetProgInfoByFD(fd, mapIds)
+	var mapIDs []MapID
+	if info.nr_map_ids > 0 {
+		mapIDs = make([]MapID, info.nr_map_ids)
+		info, err = bpfGetProgInfoByFD(fd, mapIDs)
 		if err != nil {
 			return nil, err
 		}
@@ -123,7 +122,7 @@ func newProgramInfoFromFd(fd *internal.FD) (*ProgramInfo, error) {
 		// name is available from 4.15.
 		Name: internal.CString(info.name[:]),
 		btf:  btf.ID(info.btf_id),
-		ids:  mapIds[:info.nr_map_ids],
+		ids:  mapIDs,
 		stats: &programStats{
 			runtime:  time.Duration(info.run_time_ns),
 			runCount: info.run_cnt,

@@ -12,6 +12,8 @@ be used in long running processes.
   to various hooks
 * [perf](https://pkg.go.dev/github.com/cilium/ebpf/perf) allows reading from a
   `PERF_EVENT_ARRAY`
+* [ringbuf](https://pkg.go.dev/github.com/cilium/ebpf/ringbuf) allows reading from a
+  `BPF_MAP_TYPE_RINGBUF` map
 * [cmd/bpf2go](https://pkg.go.dev/github.com/cilium/ebpf/cmd/bpf2go) allows
   compiling and embedding eBPF programs in Go code
 

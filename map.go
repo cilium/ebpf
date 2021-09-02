@@ -437,7 +437,7 @@ func newMap(fd *internal.FD, name string, typ MapType, keySize, valueSize, maxEn
 		return nil, err
 	}
 
-	m.fullValueSize = align(int(valueSize), 8) * possibleCPUs
+	m.fullValueSize = internal.Align(int(valueSize), 8) * possibleCPUs
 	return m, nil
 }
 

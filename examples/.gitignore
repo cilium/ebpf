@@ -1,0 +1,3 @@
+*.o
+*bpfel.go
+*bpfeb.go

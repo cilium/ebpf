@@ -64,15 +64,6 @@ func LoadSpecFromReader(rd io.ReaderAt) (*Spec, error) {
 	}
 	defer file.Close()
 
-	btfSection, btfExtSection, sectionSizes, err := findBtfSections(file)
-	if err != nil {
-		return nil, err
-	}
-
-	if btfSection == nil {
-		return nil, fmt.Errorf("btf: %w", ErrNotFound)
-	}
-
 	symbols, err := file.Symbols()
 	if err != nil {
 		return nil, fmt.Errorf("can't read symbols: %v", err)
@@ -90,10 +81,6 @@ func LoadSpecFromReader(rd io.ReaderAt) (*Spec, error) {
 		}
 
 		secName := file.Sections[symbol.Section].Name
-		if _, ok := sectionSizes[secName]; !ok {
-			continue
-		}
-
 		if symbol.Value > math.MaxUint32 {
 			return nil, fmt.Errorf("section %s: symbol %s: size exceeds maximum", secName, symbol.Name)
 		}
@@ -101,24 +88,10 @@ func LoadSpecFromReader(rd io.ReaderAt) (*Spec, error) {
 		variableOffsets[variable{secName, symbol.Name}] = uint32(symbol.Value)
 	}
 
-	spec, err := loadNakedSpec(btfSection.Open(), file.ByteOrder, sectionSizes, variableOffsets)
-	if err != nil {
-		return nil, err
-	}
-
-	if btfExtSection == nil {
-		return spec, nil
-	}
-
-	spec.funcInfos, spec.lineInfos, spec.coreRelos, err = parseExtInfos(btfExtSection.Open(), file.ByteOrder, spec.strings)
-	if err != nil {
-		return nil, fmt.Errorf("can't read ext info: %w", err)
-	}
-
-	return spec, nil
+	return loadSpecFromELF(file, variableOffsets)
 }
 
-func findBtfSections(file *internal.SafeELFFile) (*elf.Section, *elf.Section, map[string]uint32, error) {
+func loadSpecFromELF(file *internal.SafeELFFile, variableOffsets map[variable]uint32) (*Spec, error) {
 	var (
 		btfSection    *elf.Section
 		btfExtSection *elf.Section
@@ -137,33 +110,45 @@ func findBtfSections(file *internal.SafeELFFile) (*elf.Section, *elf.Section, ma
 			}
 
 			if sec.Size > math.MaxUint32 {
-				return nil, nil, nil, fmt.Errorf("section %s exceeds maximum size", sec.Name)
+				return nil, fmt.Errorf("section %s exceeds maximum size", sec.Name)
 			}
 
 			sectionSizes[sec.Name] = uint32(sec.Size)
 		}
 	}
-	return btfSection, btfExtSection, sectionSizes, nil
-}
 
-func loadSpecFromVmlinux(rd io.ReaderAt) (*Spec, error) {
-	file, err := internal.NewSafeELFFile(rd)
+	if btfSection == nil {
+		return nil, fmt.Errorf("btf: %w", ErrNotFound)
+	}
+
+	spec, err := loadRawSpec(btfSection.Open(), file.ByteOrder, sectionSizes, variableOffsets)
 	if err != nil {
 		return nil, err
 	}
-	defer file.Close()
 
-	btfSection, _, _, err := findBtfSections(file)
+	if btfExtSection == nil {
+		return spec, nil
+	}
+
+	spec.funcInfos, spec.lineInfos, spec.coreRelos, err = parseExtInfos(btfExtSection.Open(), file.ByteOrder, spec.strings)
 	if err != nil {
-		return nil, fmt.Errorf(".BTF ELF section: %s", err)
+		return nil, fmt.Errorf("can't read ext info: %w", err)
 	}
-	if btfSection == nil {
-		return nil, fmt.Errorf("unable to find .BTF ELF section")
-	}
-	return loadNakedSpec(btfSection.Open(), file.ByteOrder, nil, nil)
+
+	return spec, nil
 }
 
-func loadNakedSpec(btf io.ReadSeeker, bo binary.ByteOrder, sectionSizes map[string]uint32, variableOffsets map[variable]uint32) (*Spec, error) {
+// LoadRawSpec reads a blob of BTF data that isn't wrapped in an ELF file.
+//
+// Prefer using LoadSpecFromReader, since this function only supports a subset
+// of BTF.
+func LoadRawSpec(btf io.Reader, bo binary.ByteOrder) (*Spec, error) {
+	// This will return an error if we encounter a Datasec, since we can't fix
+	// it up.
+	return loadRawSpec(btf, bo, nil, nil)
+}
+
+func loadRawSpec(btf io.Reader, bo binary.ByteOrder, sectionSizes map[string]uint32, variableOffsets map[variable]uint32) (*Spec, error) {
 	rawTypes, rawStrings, err := parseBTF(btf, bo)
 	if err != nil {
 		return nil, err
@@ -220,7 +205,7 @@ func loadKernelSpec() (*Spec, error) {
 	if err == nil {
 		defer fh.Close()
 
-		return loadNakedSpec(fh, internal.NativeEndian, nil, nil)
+		return LoadRawSpec(fh, internal.NativeEndian)
 	}
 
 	// use same list of locations as libbpf
@@ -244,13 +229,19 @@ func loadKernelSpec() (*Spec, error) {
 		}
 		defer fh.Close()
 
-		return loadSpecFromVmlinux(fh)
+		file, err := internal.NewSafeELFFile(fh)
+		if err != nil {
+			return nil, err
+		}
+		defer file.Close()
+
+		return loadSpecFromELF(file, nil)
 	}
 
 	return nil, fmt.Errorf("no BTF for kernel version %s: %w", release, internal.ErrNotSupported)
 }
 
-func parseBTF(btf io.ReadSeeker, bo binary.ByteOrder) ([]rawType, stringTable, error) {
+func parseBTF(btf io.Reader, bo binary.ByteOrder) ([]rawType, stringTable, error) {
 	rawBTF, err := ioutil.ReadAll(btf)
 	if err != nil {
 		return nil, nil, fmt.Errorf("can't read BTF: %v", err)

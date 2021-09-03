@@ -606,6 +606,12 @@ func Sizeof(typ Type) (int, error) {
 	return 0, fmt.Errorf("type %s: exceeded type depth", typ)
 }
 
+// Copy a Type recursively.
+func Copy(typ Type) Type {
+	typ, _ = copyType(typ, nil)
+	return typ
+}
+
 // copy a Type recursively.
 //
 // typ may form a cycle.

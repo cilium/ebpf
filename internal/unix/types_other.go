@@ -263,3 +263,7 @@ func Renameat2(olddirfd int, oldpath string, newdirfd int, newpath string, flags
 func KernelRelease() (string, error) {
 	return "", errNonLinux
 }
+
+func RemoveMemlockRlimit() (func() error, error) {
+	return nil, errNonLinux
+}

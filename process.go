@@ -3,7 +3,7 @@ package ebpf
 import (
 	"fmt"
 
-	"golang.org/x/sys/unix"
+	"github.com/cilium/ebpf/internal/unix"
 )
 
 // RemoveMemlockRlimit removes the limit on the amount of memory

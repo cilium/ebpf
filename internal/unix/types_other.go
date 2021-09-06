@@ -93,6 +93,11 @@ func Setrlimit(resource int, rlim *Rlimit) (err error) {
 	return errNonLinux
 }
 
+// Getrlimit is a wrapper
+func Getrlimit(resource int, rlim *Rlimit) (err error) {
+	return errNonLinux
+}
+
 // Syscall is a wrapper
 func Syscall(trap, a1, a2, a3 uintptr) (r1, r2 uintptr, err syscall.Errno) {
 	return 0, 0, syscall.Errno(1)

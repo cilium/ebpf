@@ -16,10 +16,7 @@ be used in long running processes.
   compiling and embedding eBPF programs in Go code
 
 The library is maintained by [Cloudflare](https://www.cloudflare.com) and
-[Cilium](https://www.cilium.io). Feel free to
-[join](https://ebpf.io/slack) the
-[#ebpf-go](https://cilium.slack.com/messages/ebpf-go) channel on Slack.
-
+[Cilium](https://www.cilium.io).
 See [ebpf.io](https://ebpf.io) for other projects from the eBPF ecosystem.
 
 ## Getting Started
@@ -29,6 +26,13 @@ your own tools can be found under [examples/](examples/).
 
 Contributions are highly encouraged, as they highlight certain use cases of
 eBPF and the library, and help shape the future of the project.
+
+## Getting Help
+
+Please
+[join](https://ebpf.io/slack) the
+[#ebpf-go](https://cilium.slack.com/messages/ebpf-go) channel on Slack if you
+have questions regarding the library.
 
 ## Requirements
 

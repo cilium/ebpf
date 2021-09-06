@@ -5,6 +5,7 @@ package unix
 
 import (
 	"bytes"
+	"fmt"
 	"syscall"
 
 	linux "golang.org/x/sys/unix"
@@ -74,6 +75,11 @@ type Rlimit = linux.Rlimit
 // Setrlimit is a wrapper
 func Setrlimit(resource int, rlim *Rlimit) (err error) {
 	return linux.Setrlimit(resource, rlim)
+}
+
+// Getrlimit is a wrapper
+func Getrlimit(resource int, rlim *Rlimit) (err error) {
+	return linux.Getrlimit(resource, rlim)
 }
 
 // Syscall is a wrapper
@@ -203,4 +209,30 @@ func KernelRelease() (string, error) {
 	end := bytes.IndexByte(uname.Release[:], 0)
 	release := string(uname.Release[:end])
 	return release, nil
+}
+
+// RemoveMemlockRlimit removes the limit on the amount of memory
+// the process can lock into RAM. Returns a function that restores
+// the limit to its previous value. This is not required to load
+// eBPF resources on kernel versions 5.11+ due to the introduction
+// of cgroup-bases memory accounting.
+func RemoveMemlockRlimit() (func() error, error) {
+	oldLimit := new(Rlimit)
+	if err := Getrlimit(RLIMIT_MEMLOCK, oldLimit); err != nil {
+		return nil, fmt.Errorf("failed to get memlock rlimit: %w", err)
+	}
+
+	if err := Setrlimit(RLIMIT_MEMLOCK, &Rlimit{
+		Cur: RLIM_INFINITY,
+		Max: RLIM_INFINITY,
+	}); err != nil {
+		return nil, fmt.Errorf("failed to set memlock rlimit: %w", err)
+	}
+
+	return func() error {
+		if err := Setrlimit(RLIMIT_MEMLOCK, oldLimit); err != nil {
+			return fmt.Errorf("failed to reset memlock rlimit: %w", err)
+		}
+		return nil
+	}, nil
 }

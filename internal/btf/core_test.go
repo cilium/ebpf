@@ -102,6 +102,7 @@ func TestCoreAreMembersCompatible(t *testing.T) {
 		{&Pointer{Target: &Void{}}, &Pointer{Target: &Void{}}, true},
 		{&Pointer{Target: &Void{}}, &Void{}, false},
 		{&Array{Type: &Int{Size: 1}}, &Array{Type: &Int{Encoding: Signed}}, true},
+		{&Float{Size: 2}, &Float{Size: 4}, true},
 	}
 
 	for _, test := range tests {

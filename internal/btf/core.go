@@ -813,6 +813,7 @@ func coreAreTypesCompatible(localType Type, targetType Type) error {
  *     least one of enums should be anonymous;
  *   - for ENUMs, check sizes, names are ignored;
  *   - for INT, size and signedness are ignored;
+ *   - any two FLOATs are always compatible;
  *   - for ARRAY, dimensionality is ignored, element types are checked for
  *     compatibility recursively;
  *     [ NB: coreAreMembersCompatible doesn't recurse, this check is done
@@ -848,7 +849,7 @@ func coreAreMembersCompatible(localType Type, targetType Type) error {
 	}
 
 	switch lv := localType.(type) {
-	case *Array, *Pointer:
+	case *Array, *Pointer, *Float:
 		return nil
 
 	case *Enum:

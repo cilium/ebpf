@@ -6,7 +6,9 @@ package unix
 import (
 	"bytes"
 	"fmt"
+	"runtime"
 	"syscall"
+	"unsafe"
 
 	linux "golang.org/x/sys/unix"
 )
@@ -59,6 +61,7 @@ const (
 	PERF_FLAG_FD_CLOEXEC     = linux.PERF_FLAG_FD_CLOEXEC
 	RLIM_INFINITY            = linux.RLIM_INFINITY
 	RLIMIT_MEMLOCK           = linux.RLIMIT_MEMLOCK
+	SYS_PRLIMIT64            = linux.SYS_PRLIMIT64
 	BPF_STATS_RUN_TIME       = linux.BPF_STATS_RUN_TIME
 	PERF_RECORD_LOST         = linux.PERF_RECORD_LOST
 	PERF_RECORD_SAMPLE       = linux.PERF_RECORD_SAMPLE
@@ -202,22 +205,44 @@ func KernelRelease() (string, error) {
 }
 
 func RemoveMemlockRlimit() (func() error, error) {
-	oldLimit := new(Rlimit)
-	if err := linux.Getrlimit(RLIMIT_MEMLOCK, oldLimit); err != nil {
-		return nil, fmt.Errorf("failed to get memlock rlimit: %w", err)
-	}
-
-	if err := linux.Setrlimit(RLIMIT_MEMLOCK, &Rlimit{
+	ol, err := prlimit(RLIMIT_MEMLOCK, Rlimit{
 		Cur: RLIM_INFINITY,
 		Max: RLIM_INFINITY,
-	}); err != nil {
+	})
+	if err != nil {
 		return nil, fmt.Errorf("failed to set memlock rlimit: %w", err)
 	}
 
 	return func() error {
-		if err := linux.Setrlimit(RLIMIT_MEMLOCK, oldLimit); err != nil {
-			return fmt.Errorf("failed to reset memlock rlimit: %w", err)
+		if err := linux.Setrlimit(RLIMIT_MEMLOCK, ol); err != nil {
+			return fmt.Errorf("failed to revert memlock rlimit: %w", err)
 		}
 		return nil
 	}, nil
+}
+
+// prlimit wraps the prlimit64 syscall. It is used for getting and setting
+// rlimit values atomically. Setting the pid is not supported, as that's
+// outside of the scope of the library.
+func prlimit(resource int, newLimit Rlimit) (*Rlimit, error) {
+	var oldLimit Rlimit
+
+	ol := unsafe.Pointer(&oldLimit)
+	nl := unsafe.Pointer(&newLimit)
+
+	_, _, errno := linux.RawSyscall6(SYS_PRLIMIT64,
+		0, // pid 0 means own process
+		uintptr(resource),
+		uintptr(nl),
+		uintptr(ol),
+		0, 0)
+
+	runtime.KeepAlive(ol)
+	runtime.KeepAlive(nl)
+
+	if errno != 0 {
+		return nil, syscall.Errno(errno)
+	}
+
+	return &oldLimit, nil
 }

@@ -333,6 +333,11 @@ func TestUprobeProgramCall(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			if tt.name == "go-binary" {
+				// https://github.com/cilium/ebpf/issues/406
+				testutils.SkipOnOldKernel(t, "4.14", "uprobes on Go binaries silently fail on kernel < 4.14")
+			}
+
 			m, p := newUpdaterMapProg(t, ebpf.Kprobe)
 
 			// Load the executable.

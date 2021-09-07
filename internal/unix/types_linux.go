@@ -59,6 +59,7 @@ const (
 	PERF_FLAG_FD_CLOEXEC     = linux.PERF_FLAG_FD_CLOEXEC
 	RLIM_INFINITY            = linux.RLIM_INFINITY
 	RLIMIT_MEMLOCK           = linux.RLIMIT_MEMLOCK
+	SYS_PRLIMIT64            = linux.SYS_PRLIMIT64
 	BPF_STATS_RUN_TIME       = linux.BPF_STATS_RUN_TIME
 	PERF_RECORD_LOST         = linux.PERF_RECORD_LOST
 	PERF_RECORD_SAMPLE       = linux.PERF_RECORD_SAMPLE
@@ -202,21 +203,17 @@ func KernelRelease() (string, error) {
 }
 
 func RemoveMemlockRlimit() (func() error, error) {
-	oldLimit := new(Rlimit)
-	if err := linux.Getrlimit(RLIMIT_MEMLOCK, oldLimit); err != nil {
-		return nil, fmt.Errorf("failed to get memlock rlimit: %w", err)
-	}
+	var oldLimit Rlimit
+	newLimit := Rlimit{Cur: RLIM_INFINITY, Max: RLIM_INFINITY}
 
-	if err := linux.Setrlimit(RLIMIT_MEMLOCK, &Rlimit{
-		Cur: RLIM_INFINITY,
-		Max: RLIM_INFINITY,
-	}); err != nil {
+	// pid 0 affects the current process.
+	if err := linux.Prlimit(0, RLIMIT_MEMLOCK, &newLimit, &oldLimit); err != nil {
 		return nil, fmt.Errorf("failed to set memlock rlimit: %w", err)
 	}
 
 	return func() error {
-		if err := linux.Setrlimit(RLIMIT_MEMLOCK, oldLimit); err != nil {
-			return fmt.Errorf("failed to reset memlock rlimit: %w", err)
+		if err := linux.Setrlimit(RLIMIT_MEMLOCK, &oldLimit); err != nil {
+			return fmt.Errorf("failed to revert memlock rlimit: %w", err)
 		}
 		return nil
 	}, nil

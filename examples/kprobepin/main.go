@@ -17,7 +17,6 @@ import (
 
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/link"
-	"golang.org/x/sys/unix"
 )
 
 //go:generate go run github.com/cilium/ebpf/cmd/bpf2go -cc clang-11 KProbePinExample ./bpf/kprobe_pin_example.c -- -nostdinc -I../headers
@@ -36,13 +35,10 @@ func main() {
 	stopper := make(chan os.Signal, 1)
 	signal.Notify(stopper, os.Interrupt, syscall.SIGTERM)
 
-	// Increase the rlimit of the current process to provide sufficient space
-	// for locking memory for the eBPF map.
-	if err := unix.Setrlimit(unix.RLIMIT_MEMLOCK, &unix.Rlimit{
-		Cur: unix.RLIM_INFINITY,
-		Max: unix.RLIM_INFINITY,
-	}); err != nil {
-		log.Fatalf("failed to set temporary rlimit: %v", err)
+	// Allow the current process to lock memory for eBPF resources.
+	rrl, err := ebpf.RemoveMemlockRlimit()
+	if err != nil {
+		log.Fatal(err)
 	}
 
 	pinPath := path.Join(bpfFSPath, fn)
@@ -63,6 +59,11 @@ func main() {
 		log.Fatalf("loading objects: %v", err)
 	}
 	defer kProbeObj.Close()
+
+	// Revert the process' rlimit after eBPF resources have been loaded.
+	if err := rrl(); err != nil {
+		log.Fatal(err)
+	}
 
 	// Open a Kprobe at the entry point of the kernel function and attach the
 	// pre-compiled program. Each time the kernel function enters, the program

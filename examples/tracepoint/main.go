@@ -12,8 +12,6 @@ import (
 	"os/signal"
 	"syscall"
 
-	"golang.org/x/sys/unix"
-
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/asm"
 	"github.com/cilium/ebpf/link"
@@ -33,12 +31,10 @@ func main() {
 	stopper := make(chan os.Signal, 1)
 	signal.Notify(stopper, os.Interrupt, syscall.SIGTERM)
 
-	// Increase rlimit so the eBPF map and program can be loaded.
-	if err := unix.Setrlimit(unix.RLIMIT_MEMLOCK, &unix.Rlimit{
-		Cur: unix.RLIM_INFINITY,
-		Max: unix.RLIM_INFINITY,
-	}); err != nil {
-		log.Fatalf("setting temporary rlimit: %s", err)
+	// Allow the current process to lock memory for eBPF resources.
+	rrl, err := ebpf.RemoveMemlockRlimit()
+	if err != nil {
+		log.Fatal(err)
 	}
 
 	// Create a perf event array for the kernel to write perf records to.
@@ -97,6 +93,11 @@ func main() {
 		log.Fatalf("creating ebpf program: %s", err)
 	}
 	defer prog.Close()
+
+	// Revert the process' rlimit after eBPF resources have been loaded.
+	if err := rrl(); err != nil {
+		log.Fatal(err)
+	}
 
 	// Open a trace event based on a pre-existing kernel hook (tracepoint).
 	// Each time a userspace program uses the 'openat()' syscall, the eBPF

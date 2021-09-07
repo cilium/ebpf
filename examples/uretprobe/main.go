@@ -14,6 +14,7 @@ import (
 	"os/signal"
 	"syscall"
 
+	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/link"
 	"github.com/cilium/ebpf/perf"
 	"golang.org/x/sys/unix"
@@ -43,12 +44,10 @@ func main() {
 	stopper := make(chan os.Signal, 1)
 	signal.Notify(stopper, os.Interrupt, syscall.SIGTERM)
 
-	// Increase rlimit so the eBPF map and program can be loaded.
-	if err := unix.Setrlimit(unix.RLIMIT_MEMLOCK, &unix.Rlimit{
-		Cur: unix.RLIM_INFINITY,
-		Max: unix.RLIM_INFINITY,
-	}); err != nil {
-		log.Fatalf("failed to set temporary rlimit: %v", err)
+	// Allow the current process to lock memory for eBPF resources.
+	rrl, err := ebpf.RemoveMemlockRlimit()
+	if err != nil {
+		log.Fatal(err)
 	}
 
 	// Load pre-compiled programs and maps into the kernel.
@@ -57,6 +56,11 @@ func main() {
 		log.Fatalf("loading objects: %s", err)
 	}
 	defer objs.Close()
+
+	// Revert the process' rlimit after eBPF resources have been loaded.
+	if err := rrl(); err != nil {
+		log.Fatal(err)
+	}
 
 	// Open an ELF binary and read its symbols.
 	ex, err := link.OpenExecutable(binPath)

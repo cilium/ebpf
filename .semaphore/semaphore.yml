@@ -26,8 +26,10 @@ blocks:
           - sudo pip3 install https://github.com/amluto/virtme/archive/beb85146cd91de37ae455eccb6ab67c393e6e290.zip
           - sudo apt-get update
           - sudo apt-get install -y --no-install-recommends qemu-system-x86 clang-9
+          - sudo dmesg -C
       epilogue:
         commands:
+          - sudo dmesg
           - cache store
       env_vars:
         - name: TMPDIR

@@ -121,20 +121,21 @@ func NewReader(ringbufMap *ebpf.Map) (r *Reader, err error) {
 		return nil, fmt.Errorf("invalid Map type: %s", ringbufMap.Type())
 	}
 
+	maxEntries := int(ringbufMap.MaxEntries())
+	if maxEntries == 0 || (maxEntries&(maxEntries-1)) != 0 {
+		return nil, fmt.Errorf("Ringbuffer map size %d is zero or not a power of two", maxEntries)
+	}
+
 	epollFd, err := unix.EpollCreate1(unix.EPOLL_CLOEXEC)
 	if err != nil {
 		return nil, fmt.Errorf("can't create epoll fd: %w", err)
 	}
 
 	var (
-		fds        = []int{epollFd}
-		maxEntries = int(ringbufMap.MaxEntries())
-		ring       *ringbufEventRing
+		fds  = []int{epollFd}
+		ring *ringbufEventRing
 	)
 
-	if maxEntries == 0 || (maxEntries&(maxEntries-1)) != 0 {
-		return nil, fmt.Errorf("Ringbuffer map size %d is zero or not a power of two", maxEntries)
-	}
 	defer func() {
 		if err != nil {
 			// close epollFd and closeFd

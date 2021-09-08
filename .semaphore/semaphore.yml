@@ -55,5 +55,7 @@ blocks:
           - env_var: KERNEL_VERSION
             values: ["5.10", "5.4", "4.19", "4.9"]
         commands:
+          - sudo dmesg -C
           - timeout -s KILL 600s ./run-tests.sh $KERNEL_VERSION
+          - sudo dmesg
           - goveralls -coverprofile="coverage.out" -service=semaphore -repotoken "$COVERALLS_TOKEN" || echo Submission to coveralls failed

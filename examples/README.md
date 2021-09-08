@@ -4,6 +4,7 @@
 - [kprobepin](kprobepin/) - Reuse a pinned map for the kprobe example. It assumes the BPF FS is mounted at `/sys/fs/bpf`.
 - [uretprobe](uretprobe/) - Like a kprobe, but for symbols in userspace binaries (e.g. `bash`).
 - [tracepoint](tracepoint/) - Attach a program to predetermined kernel tracepoints.
+- [ringbuffer](ringbuffer/) - Like the kprobe example, but using a RINGBUF map type.
 - Add your use case(s) here!
 
 ## How to run

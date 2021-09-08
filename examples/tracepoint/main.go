@@ -118,7 +118,7 @@ func main() {
 				log.Println("Received signal, exiting..")
 				return
 			}
-			log.Fatalf("reading from reader: %s", err)
+			log.Printf("reading from reader: %s", err)
 		}
 
 		log.Println("Record:", record)

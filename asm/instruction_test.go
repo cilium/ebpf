@@ -29,7 +29,7 @@ func TestRead64bitImmediate(t *testing.T) {
 	}
 
 	if c := ins.Constant; c != math.MinInt32-1 {
-		t.Errorf("Expected immediate to be %v, got %v", math.MinInt32-1, c)
+		t.Errorf("Expected immediate to be %v, got %v", int64(math.MinInt32)-1, c)
 	}
 }
 

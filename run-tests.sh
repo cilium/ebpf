@@ -56,6 +56,7 @@ if [[ "${1:-}" = "--exec-vm" ]]; then
   --qemu-opts -smp 2 # need at least two CPUs for some tests
 
   if [[ ! -e "${output}/success" ]]; then
+    echo "no success file"
     exit 1
   fi
 

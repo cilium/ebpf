@@ -145,7 +145,7 @@ func marshalPerCPUValue(slice interface{}, elemLength int) (internal.Pointer, er
 		return internal.Pointer{}, fmt.Errorf("per-CPU value exceeds number of CPUs")
 	}
 
-	alignedElemLength := align(elemLength, 8)
+	alignedElemLength := internal.Align(elemLength, 8)
 	buf := make([]byte, alignedElemLength*possibleCPUs)
 
 	for i := 0; i < sliceLen; i++ {
@@ -214,8 +214,4 @@ func unmarshalPerCPUValue(slicePtr interface{}, elemLength int, buf []byte) erro
 
 	reflect.ValueOf(slicePtr).Elem().Set(slice)
 	return nil
-}
-
-func align(n, alignment int) int {
-	return (int(n) + alignment - 1) / alignment * alignment
 }

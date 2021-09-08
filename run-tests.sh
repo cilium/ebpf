@@ -108,7 +108,7 @@ else
   echo "No selftests found, disabling"
 fi
 
-args=(-v -short -coverpkg=./... -coverprofile=coverage.out -count 1 ./...)
+args=(-short -coverpkg=./... -coverprofile=coverage.out -count 1 ./...)
 if (( $# > 0 )); then
   args=("$@")
 fi

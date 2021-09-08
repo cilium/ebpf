@@ -10,6 +10,10 @@ global_job_config:
   secrets:
     - name: Coveralls
 
+auto_cancel:
+  running:
+    when: "branch != 'master'"
+
 blocks:
   - name: Run tests
     task:

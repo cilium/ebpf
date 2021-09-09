@@ -226,8 +226,12 @@ func newMapWithOptions(spec *MapSpec, opts MapOptions, handles *handleCache) (_ 
 
 	switch spec.Pinning {
 	case PinByName:
-		if spec.Name == "" || opts.PinPath == "" {
-			return nil, fmt.Errorf("pin by name: missing Name or PinPath")
+		if spec.Name == "" {
+			return nil, fmt.Errorf("pin by name: missing Name")
+		}
+
+		if opts.PinPath == "" {
+			opts.PinPath = "/sys/fs/bpf"
 		}
 
 		path := filepath.Join(opts.PinPath, spec.Name)

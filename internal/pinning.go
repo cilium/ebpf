@@ -4,18 +4,29 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"github.com/cilium/ebpf/internal/sys"
 	"github.com/cilium/ebpf/internal/unix"
 )
 
 func Pin(currentPath, newPath string, fd *sys.FD) error {
+	const bpfFSType = 0xcafe4a11
+
 	if newPath == "" {
 		return errors.New("given pinning path cannot be empty")
 	}
 	if currentPath == newPath {
 		return nil
 	}
+
+	var statfs unix.Statfs_t
+	if err := unix.Statfs(filepath.Dir(newPath), &statfs); err != nil {
+		return err
+	} else if uint64(statfs.Type) != bpfFSType {
+		return fmt.Errorf("%s is not on a bpf filesystem", newPath)
+	}
+
 	if currentPath == "" {
 		return sys.BPFObjPin(newPath, fd)
 	}

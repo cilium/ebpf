@@ -3,7 +3,6 @@ package sys
 import (
 	"errors"
 	"fmt"
-	"path/filepath"
 	"runtime"
 	"syscall"
 	"unsafe"
@@ -158,15 +157,6 @@ const bpfFSType = 0xcafe4a11
 
 // BPFObjPin wraps BPF_OBJ_PIN.
 func BPFObjPin(fileName string, fd *FD) error {
-	dirName := filepath.Dir(fileName)
-	var statfs unix.Statfs_t
-	if err := unix.Statfs(dirName, &statfs); err != nil {
-		return err
-	}
-	if uint64(statfs.Type) != bpfFSType {
-		return fmt.Errorf("%s is not on a bpf filesystem", fileName)
-	}
-
 	value, err := fd.Value()
 	if err != nil {
 		return err

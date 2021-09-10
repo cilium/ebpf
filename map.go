@@ -362,12 +362,12 @@ func (spec *MapSpec) createMap(inner *sys.FD, opts MapOptions, handles *handleCa
 		}
 	}
 
-	attr := sys.BPFMapCreateAttr{
-		MapType:    uint32(spec.Type),
+	attr := sys.MapCreateAttr{
+		MapType:    sys.MapType(spec.Type),
 		KeySize:    spec.KeySize,
 		ValueSize:  spec.ValueSize,
 		MaxEntries: spec.MaxEntries,
-		Flags:      spec.Flags,
+		MapFlags:   spec.Flags,
 		NumaNode:   spec.NumaNode,
 	}
 
@@ -376,7 +376,7 @@ func (spec *MapSpec) createMap(inner *sys.FD, opts MapOptions, handles *handleCa
 	}
 
 	if haveObjName() == nil {
-		attr.MapName = sys.NewBPFObjName(spec.Name)
+		attr.MapName = sys.NewObjName(spec.Name)
 	}
 
 	var btfDisabled bool
@@ -388,13 +388,13 @@ func (spec *MapSpec) createMap(inner *sys.FD, opts MapOptions, handles *handleCa
 		}
 
 		if handle != nil {
-			attr.BTFFd = uint32(handle.FD())
-			attr.BTFKeyTypeID = uint32(spec.BTF.Key.ID())
-			attr.BTFValueTypeID = uint32(spec.BTF.Value.ID())
+			attr.BtfFd = uint32(handle.FD())
+			attr.BtfKeyTypeId = uint32(spec.BTF.Key.ID())
+			attr.BtfValueTypeId = uint32(spec.BTF.Value.ID())
 		}
 	}
 
-	fd, err := sys.BPFMapCreate(&attr)
+	fd, err := sys.MapCreate(&attr)
 	if err != nil {
 		if errors.Is(err, unix.EPERM) {
 			return nil, fmt.Errorf("map create: RLIMIT_MEMLOCK may be too low: %w", err)
@@ -679,7 +679,7 @@ func (m *Map) BatchLookupAndDelete(prevKey, nextKeyOut, keysOut, valuesOut inter
 	return m.batchLookup(sys.BPF_MAP_LOOKUP_AND_DELETE_BATCH, prevKey, nextKeyOut, keysOut, valuesOut, opts)
 }
 
-func (m *Map) batchLookup(cmd sys.BPFCmd, startKey, nextKeyOut, keysOut, valuesOut interface{}, opts *BatchOptions) (int, error) {
+func (m *Map) batchLookup(cmd sys.Cmd, startKey, nextKeyOut, keysOut, valuesOut interface{}, opts *BatchOptions) (int, error) {
 	if err := haveBatchAPI(); err != nil {
 		return 0, err
 	}
@@ -1042,7 +1042,7 @@ func (m *Map) unmarshalValue(value interface{}, buf []byte) error {
 
 // LoadPinnedMap loads a Map from a BPF file.
 func LoadPinnedMap(fileName string, opts *LoadPinOptions) (*Map, error) {
-	fd, err := sys.BPFObjGet(fileName, opts.Marshal())
+	fd, err := sys.ObjGet(fileName, opts.Marshal())
 	if err != nil {
 		return nil, err
 	}
@@ -1232,7 +1232,7 @@ func MapGetNextID(startID MapID) (MapID, error) {
 //
 // Returns ErrNotExist, if there is no eBPF map with the given id.
 func NewMapFromID(id MapID) (*Map, error) {
-	fd, err := sys.BPFObjGetFDByID(sys.BPF_MAP_GET_FD_BY_ID, uint32(id))
+	fd, err := sys.ObjGetFDByID(sys.BPF_MAP_GET_FD_BY_ID, uint32(id))
 	if err != nil {
 		return nil, err
 	}
@@ -1248,5 +1248,5 @@ func (m *Map) ID() (MapID, error) {
 	if err != nil {
 		return MapID(0), err
 	}
-	return MapID(info.id), nil
+	return MapID(info.Id), nil
 }

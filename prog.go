@@ -172,16 +172,16 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions, handles *hand
 		kv = v.Kernel()
 	}
 
-	attr := &sys.BPFProgLoadAttr{
-		ProgType:           uint32(spec.Type),
+	attr := &sys.ProgLoadAttr{
+		ProgType:           sys.ProgType(spec.Type),
 		ProgFlags:          spec.Flags,
-		ExpectedAttachType: uint32(spec.AttachType),
+		ExpectedAttachType: sys.AttachType(spec.AttachType),
 		License:            sys.NewStringPointer(spec.License),
-		KernelVersion:      kv,
+		KernVersion:        kv,
 	}
 
 	if haveObjName() == nil {
-		attr.ProgName = sys.NewBPFObjName(spec.Name)
+		attr.ProgName = sys.NewObjName(spec.Name)
 	}
 
 	var err error
@@ -208,7 +208,7 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions, handles *hand
 		}
 
 		if handle != nil {
-			attr.ProgBTFFd = uint32(handle.FD())
+			attr.ProgBtfFd = uint32(handle.FD())
 
 			recSize, bytes, err := spec.BTF.LineInfos()
 			if err != nil {
@@ -244,8 +244,8 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions, handles *hand
 	}
 
 	bytecode := buf.Bytes()
-	attr.Instructions = sys.NewSlicePointer(bytecode)
-	attr.InsCount = uint32(len(bytecode) / asm.InstructionSize)
+	attr.Insns = sys.NewSlicePointer(bytecode)
+	attr.InsnCnt = uint32(len(bytecode) / asm.InstructionSize)
 
 	if spec.AttachTo != "" {
 		if spec.AttachTarget != nil {
@@ -275,7 +275,7 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions, handles *hand
 			return nil, err
 		}
 		if target != nil {
-			attr.AttachBTFID = uint32(target.ID())
+			attr.AttachBtfId = uint32(target.ID())
 		}
 		if spec.AttachTarget != nil {
 			attr.AttachProgFd = uint32(spec.AttachTarget.FD())
@@ -295,7 +295,7 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions, handles *hand
 		attr.LogBuf = sys.NewSlicePointer(logBuf)
 	}
 
-	fd, err := sys.BPFProgLoad(attr)
+	fd, err := sys.ProgLoad(attr)
 	if err == nil {
 		return &Program{internal.CString(logBuf), fd, spec.Name, "", spec.Type}, nil
 	}
@@ -308,7 +308,7 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions, handles *hand
 		attr.LogSize = uint32(len(logBuf))
 		attr.LogBuf = sys.NewSlicePointer(logBuf)
 
-		_, logErr = sys.BPFProgLoad(attr)
+		_, logErr = sys.ProgLoad(attr)
 	}
 
 	if errors.Is(logErr, unix.EPERM) && logBuf[0] == 0 {
@@ -341,7 +341,7 @@ func NewProgramFromFD(fd int) (*Program, error) {
 //
 // Returns ErrNotExist, if there is no eBPF program with the given id.
 func NewProgramFromID(id ProgramID) (*Program, error) {
-	fd, err := sys.BPFObjGetFDByID(sys.BPF_PROG_GET_FD_BY_ID, uint32(id))
+	fd, err := sys.ObjGetFDByID(sys.BPF_PROG_GET_FD_BY_ID, uint32(id))
 	if err != nil {
 		return nil, fmt.Errorf("get program by id: %w", err)
 	}
@@ -496,10 +496,10 @@ var haveProgTestRun = internal.FeatureTest("BPF_PROG_TEST_RUN", "4.12", func() e
 
 	// Programs require at least 14 bytes input
 	in := make([]byte, 14)
-	attr := bpfProgTestRunAttr{
-		fd:         uint32(prog.FD()),
-		dataSizeIn: uint32(len(in)),
-		dataIn:     sys.NewSlicePointer(in),
+	attr := sys.ProgRunAttr{
+		ProgFd:     uint32(prog.FD()),
+		DataSizeIn: uint32(len(in)),
+		DataIn:     sys.NewSlicePointer(in),
 	}
 
 	err = bpfProgTestRun(&attr)
@@ -539,13 +539,13 @@ func (p *Program) testRun(in []byte, repeat int, reset func()) (uint32, []byte, 
 	// See https://patchwork.ozlabs.org/cover/1006822/
 	out := make([]byte, len(in)+outputPad)
 
-	attr := bpfProgTestRunAttr{
-		fd:          p.fd.Uint(),
-		dataSizeIn:  uint32(len(in)),
-		dataSizeOut: uint32(len(out)),
-		dataIn:      sys.NewSlicePointer(in),
-		dataOut:     sys.NewSlicePointer(out),
-		repeat:      uint32(repeat),
+	attr := sys.ProgRunAttr{
+		ProgFd:      p.fd.Uint(),
+		DataSizeIn:  uint32(len(in)),
+		DataSizeOut: uint32(len(out)),
+		DataIn:      sys.NewSlicePointer(in),
+		DataOut:     sys.NewSlicePointer(out),
+		Repeat:      uint32(repeat),
 	}
 
 	for {
@@ -564,15 +564,15 @@ func (p *Program) testRun(in []byte, repeat int, reset func()) (uint32, []byte, 
 		return 0, nil, 0, fmt.Errorf("can't run test: %w", err)
 	}
 
-	if int(attr.dataSizeOut) > cap(out) {
+	if int(attr.DataSizeOut) > cap(out) {
 		// Houston, we have a problem. The program created more data than we allocated,
 		// and the kernel wrote past the end of our buffer.
 		panic("kernel wrote past end of output buffer")
 	}
-	out = out[:int(attr.dataSizeOut)]
+	out = out[:int(attr.DataSizeOut)]
 
-	total := time.Duration(attr.duration) * time.Nanosecond
-	return attr.retval, out, total, nil
+	total := time.Duration(attr.Duration) * time.Nanosecond
+	return attr.Retval, out, total, nil
 }
 
 func unmarshalProgram(buf []byte) (*Program, error) {
@@ -604,14 +604,14 @@ func (p *Program) Attach(fd int, typ AttachType, flags AttachFlags) error {
 		return errors.New("invalid fd")
 	}
 
-	attr := sys.BPFProgAttachAttr{
+	attr := sys.ProgAttachAttr{
 		TargetFd:    uint32(fd),
 		AttachBpfFd: p.fd.Uint(),
 		AttachType:  uint32(typ),
 		AttachFlags: uint32(flags),
 	}
 
-	return sys.BPFProgAttach(&attr)
+	return sys.ProgAttach(&attr)
 }
 
 // Detach a Program.
@@ -626,20 +626,20 @@ func (p *Program) Detach(fd int, typ AttachType, flags AttachFlags) error {
 		return errors.New("flags must be zero")
 	}
 
-	attr := sys.BPFProgDetachAttr{
+	attr := sys.ProgAttachAttr{
 		TargetFd:    uint32(fd),
 		AttachBpfFd: p.fd.Uint(),
 		AttachType:  uint32(typ),
 	}
 
-	return sys.BPFProgDetach(&attr)
+	return sys.ProgDetach(&attr)
 }
 
 // LoadPinnedProgram loads a Program from a BPF file.
 //
 // Requires at least Linux 4.11.
 func LoadPinnedProgram(fileName string, opts *LoadPinOptions) (*Program, error) {
-	fd, err := sys.BPFObjGet(fileName, opts.Marshal())
+	fd, err := sys.ObjGet(fileName, opts.Marshal())
 	if err != nil {
 		return nil, err
 	}
@@ -685,7 +685,7 @@ func (p *Program) ID() (ProgramID, error) {
 	if err != nil {
 		return ProgramID(0), err
 	}
-	return ProgramID(info.id), nil
+	return ProgramID(info.Id), nil
 }
 
 func resolveBTFType(spec *btf.Spec, name string, progType ProgramType, attachType AttachType) (btf.Type, error) {

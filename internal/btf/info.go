@@ -28,8 +28,8 @@ func newInfoFromFd(fd *sys.FD) (*info, error) {
 		return nil, err
 	}
 
-	btfBuffer := make([]byte, bpfInfo.btfSize)
-	nameBuffer := make([]byte, bpfInfo.nameLen)
+	btfBuffer := make([]byte, bpfInfo.BtfSize)
+	nameBuffer := make([]byte, bpfInfo.NameLen)
 	bpfInfo, err = bpfGetBTFInfoByFD(fd, btfBuffer, nameBuffer)
 	if err != nil {
 		return nil, err
@@ -42,8 +42,8 @@ func newInfoFromFd(fd *sys.FD) (*info, error) {
 
 	return &info{
 		BTF:       spec,
-		ID:        ID(bpfInfo.id),
+		ID:        ID(bpfInfo.Id),
 		Name:      internal.CString(nameBuffer),
-		KernelBTF: bpfInfo.kernelBTF != 0,
+		KernelBTF: bpfInfo.KernelBtf != 0,
 	}, nil
 }

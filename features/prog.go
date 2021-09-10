@@ -124,7 +124,7 @@ func haveProgType(pt ebpf.ProgramType) error {
 		return fmt.Errorf("couldn't create the program load attribute: %w", err)
 	}
 
-	_, err = sys.ProgLoad(attr)
+	_, err = sys.BPFFd(attr)
 
 	switch {
 	// EINVAL occurs when attempting to create a program with an unknown type.

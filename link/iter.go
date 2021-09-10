@@ -77,13 +77,8 @@ type Iter struct {
 //
 // Reading from the returned reader triggers the BPF program.
 func (it *Iter) Open() (io.ReadCloser, error) {
-	linkFd, err := it.fd.Value()
-	if err != nil {
-		return nil, err
-	}
-
 	attr := &bpfIterCreateAttr{
-		linkFd: linkFd,
+		linkFd: it.fd.Uint(),
 	}
 
 	fd, err := bpfIterCreate(attr)

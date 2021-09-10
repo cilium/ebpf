@@ -101,7 +101,7 @@ func bpfLinkCreate(attr *bpfLinkCreateAttr) (*sys.FD, error) {
 	if err != nil {
 		return nil, err
 	}
-	return sys.NewFD(uint32(ptr)), nil
+	return sys.NewFD(int(ptr)), nil
 }
 
 type bpfLinkCreateIterAttr struct {
@@ -118,7 +118,7 @@ func bpfLinkCreateIter(attr *bpfLinkCreateIterAttr) (*sys.FD, error) {
 	if err != nil {
 		return nil, err
 	}
-	return sys.NewFD(uint32(ptr)), nil
+	return sys.NewFD(int(ptr)), nil
 }
 
 type bpfLinkUpdateAttr struct {
@@ -172,7 +172,7 @@ type bpfIterCreateAttr struct {
 func bpfIterCreate(attr *bpfIterCreateAttr) (*sys.FD, error) {
 	ptr, err := sys.BPF(sys.BPF_ITER_CREATE, unsafe.Pointer(attr), unsafe.Sizeof(*attr))
 	if err == nil {
-		return sys.NewFD(uint32(ptr)), nil
+		return sys.NewFD(int(ptr)), nil
 	}
 	return nil, err
 }
@@ -186,7 +186,7 @@ type bpfRawTracepointOpenAttr struct {
 func bpfRawTracepointOpen(attr *bpfRawTracepointOpenAttr) (*sys.FD, error) {
 	ptr, err := sys.BPF(sys.BPF_RAW_TRACEPOINT_OPEN, unsafe.Pointer(attr), unsafe.Sizeof(*attr))
 	if err == nil {
-		return sys.NewFD(uint32(ptr)), nil
+		return sys.NewFD(int(ptr)), nil
 	}
 	return nil, err
 }

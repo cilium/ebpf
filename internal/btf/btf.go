@@ -597,12 +597,7 @@ func (h *Handle) Close() error {
 
 // FD returns the file descriptor for the handle.
 func (h *Handle) FD() int {
-	value, err := h.fd.Value()
-	if err != nil {
-		return -1
-	}
-
-	return int(value)
+	return h.fd.Int()
 }
 
 // Map is the BTF for a map.
@@ -700,7 +695,7 @@ func bpfLoadBTF(attr *bpfLoadBTFAttr) (*sys.FD, error) {
 		return nil, err
 	}
 
-	return sys.NewFD(uint32(fd)), nil
+	return sys.NewFD(int(fd)), nil
 }
 
 func marshalBTF(types interface{}, strings []byte, bo binary.ByteOrder) []byte {

@@ -216,77 +216,54 @@ var haveInnerMaps = internal.FeatureTest("inner maps", "5.10", func() error {
 })
 
 func bpfMapLookupElem(m *sys.FD, key, valueOut sys.Pointer) error {
-	fd, err := m.Value()
-	if err != nil {
-		return err
-	}
 
 	attr := bpfMapOpAttr{
-		mapFd: fd,
+		mapFd: m.Uint(),
 		key:   key,
 		value: valueOut,
 	}
-	_, err = sys.BPF(sys.BPF_MAP_LOOKUP_ELEM, unsafe.Pointer(&attr), unsafe.Sizeof(attr))
+	_, err := sys.BPF(sys.BPF_MAP_LOOKUP_ELEM, unsafe.Pointer(&attr), unsafe.Sizeof(attr))
 	return wrapMapError(err)
 }
 
 func bpfMapLookupAndDelete(m *sys.FD, key, valueOut sys.Pointer) error {
-	fd, err := m.Value()
-	if err != nil {
-		return err
-	}
-
 	attr := bpfMapOpAttr{
-		mapFd: fd,
+		mapFd: m.Uint(),
 		key:   key,
 		value: valueOut,
 	}
-	_, err = sys.BPF(sys.BPF_MAP_LOOKUP_AND_DELETE_ELEM, unsafe.Pointer(&attr), unsafe.Sizeof(attr))
+	_, err := sys.BPF(sys.BPF_MAP_LOOKUP_AND_DELETE_ELEM, unsafe.Pointer(&attr), unsafe.Sizeof(attr))
 	return wrapMapError(err)
 }
 
 func bpfMapUpdateElem(m *sys.FD, key, valueOut sys.Pointer, flags uint64) error {
-	fd, err := m.Value()
-	if err != nil {
-		return err
-	}
 
 	attr := bpfMapOpAttr{
-		mapFd: fd,
+		mapFd: m.Uint(),
 		key:   key,
 		value: valueOut,
 		flags: flags,
 	}
-	_, err = sys.BPF(sys.BPF_MAP_UPDATE_ELEM, unsafe.Pointer(&attr), unsafe.Sizeof(attr))
+	_, err := sys.BPF(sys.BPF_MAP_UPDATE_ELEM, unsafe.Pointer(&attr), unsafe.Sizeof(attr))
 	return wrapMapError(err)
 }
 
 func bpfMapDeleteElem(m *sys.FD, key sys.Pointer) error {
-	fd, err := m.Value()
-	if err != nil {
-		return err
-	}
-
 	attr := bpfMapOpAttr{
-		mapFd: fd,
+		mapFd: m.Uint(),
 		key:   key,
 	}
-	_, err = sys.BPF(sys.BPF_MAP_DELETE_ELEM, unsafe.Pointer(&attr), unsafe.Sizeof(attr))
+	_, err := sys.BPF(sys.BPF_MAP_DELETE_ELEM, unsafe.Pointer(&attr), unsafe.Sizeof(attr))
 	return wrapMapError(err)
 }
 
 func bpfMapGetNextKey(m *sys.FD, key, nextKeyOut sys.Pointer) error {
-	fd, err := m.Value()
-	if err != nil {
-		return err
-	}
-
 	attr := bpfMapOpAttr{
-		mapFd: fd,
+		mapFd: m.Uint(),
 		key:   key,
 		value: nextKeyOut,
 	}
-	_, err = sys.BPF(sys.BPF_MAP_GET_NEXT_KEY, unsafe.Pointer(&attr), unsafe.Sizeof(attr))
+	_, err := sys.BPF(sys.BPF_MAP_GET_NEXT_KEY, unsafe.Pointer(&attr), unsafe.Sizeof(attr))
 	return wrapMapError(err)
 }
 
@@ -299,24 +276,19 @@ func objGetNextID(cmd sys.BPFCmd, start uint32) (uint32, error) {
 }
 
 func bpfMapBatch(cmd sys.BPFCmd, m *sys.FD, inBatch, outBatch, keys, values sys.Pointer, count uint32, opts *BatchOptions) (uint32, error) {
-	fd, err := m.Value()
-	if err != nil {
-		return 0, err
-	}
-
 	attr := bpfBatchMapOpAttr{
 		inBatch:  inBatch,
 		outBatch: outBatch,
 		keys:     keys,
 		values:   values,
 		count:    count,
-		mapFd:    fd,
+		mapFd:    m.Uint(),
 	}
 	if opts != nil {
 		attr.elemFlags = opts.ElemFlags
 		attr.flags = opts.Flags
 	}
-	_, err = sys.BPF(cmd, unsafe.Pointer(&attr), unsafe.Sizeof(attr))
+	_, err := sys.BPF(cmd, unsafe.Pointer(&attr), unsafe.Sizeof(attr))
 	// always return count even on an error, as things like update might partially be fulfilled.
 	return attr.count, wrapMapError(err)
 }
@@ -346,15 +318,10 @@ func wrapMapError(err error) error {
 }
 
 func bpfMapFreeze(m *sys.FD) error {
-	fd, err := m.Value()
-	if err != nil {
-		return err
-	}
-
 	attr := bpfMapFreezeAttr{
-		mapFd: fd,
+		mapFd: m.Uint(),
 	}
-	_, err = sys.BPF(sys.BPF_MAP_FREEZE, unsafe.Pointer(&attr), unsafe.Sizeof(attr))
+	_, err := sys.BPF(sys.BPF_MAP_FREEZE, unsafe.Pointer(&attr), unsafe.Sizeof(attr))
 	return err
 }
 

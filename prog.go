@@ -334,7 +334,7 @@ func NewProgramFromFD(fd int) (*Program, error) {
 		return nil, errors.New("invalid fd")
 	}
 
-	return newProgramFromFD(sys.NewFD(uint32(fd)))
+	return newProgramFromFD(sys.NewFD(fd))
 }
 
 // NewProgramFromID returns the program for a given id.
@@ -382,14 +382,7 @@ func (p *Program) Info() (*ProgramInfo, error) {
 //
 // It is invalid to call this function after Close has been called.
 func (p *Program) FD() int {
-	fd, err := p.fd.Value()
-	if err != nil {
-		// Best effort: -1 is the number most likely to be an
-		// invalid file descriptor.
-		return -1
-	}
-
-	return int(fd)
+	return p.fd.Int()
 }
 
 // Clone creates a duplicate of the Program.
@@ -546,13 +539,8 @@ func (p *Program) testRun(in []byte, repeat int, reset func()) (uint32, []byte, 
 	// See https://patchwork.ozlabs.org/cover/1006822/
 	out := make([]byte, len(in)+outputPad)
 
-	fd, err := p.fd.Value()
-	if err != nil {
-		return 0, nil, 0, err
-	}
-
 	attr := bpfProgTestRunAttr{
-		fd:          fd,
+		fd:          p.fd.Uint(),
 		dataSizeIn:  uint32(len(in)),
 		dataSizeOut: uint32(len(out)),
 		dataIn:      sys.NewSlicePointer(in),
@@ -561,7 +549,7 @@ func (p *Program) testRun(in []byte, repeat int, reset func()) (uint32, []byte, 
 	}
 
 	for {
-		err = bpfProgTestRun(&attr)
+		err := bpfProgTestRun(&attr)
 		if err == nil {
 			break
 		}
@@ -603,13 +591,8 @@ func marshalProgram(p *Program, length int) ([]byte, error) {
 		return nil, fmt.Errorf("can't marshal program to %d bytes", length)
 	}
 
-	value, err := p.fd.Value()
-	if err != nil {
-		return nil, err
-	}
-
 	buf := make([]byte, 4)
-	internal.NativeEndian.PutUint32(buf, value)
+	internal.NativeEndian.PutUint32(buf, p.fd.Uint())
 	return buf, nil
 }
 
@@ -621,14 +604,9 @@ func (p *Program) Attach(fd int, typ AttachType, flags AttachFlags) error {
 		return errors.New("invalid fd")
 	}
 
-	pfd, err := p.fd.Value()
-	if err != nil {
-		return err
-	}
-
 	attr := sys.BPFProgAttachAttr{
 		TargetFd:    uint32(fd),
-		AttachBpfFd: pfd,
+		AttachBpfFd: p.fd.Uint(),
 		AttachType:  uint32(typ),
 		AttachFlags: uint32(flags),
 	}
@@ -648,14 +626,9 @@ func (p *Program) Detach(fd int, typ AttachType, flags AttachFlags) error {
 		return errors.New("flags must be zero")
 	}
 
-	pfd, err := p.fd.Value()
-	if err != nil {
-		return err
-	}
-
 	attr := sys.BPFProgDetachAttr{
 		TargetFd:    uint32(fd),
-		AttachBpfFd: pfd,
+		AttachBpfFd: p.fd.Uint(),
 		AttachType:  uint32(typ),
 	}
 

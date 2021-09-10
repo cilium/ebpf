@@ -1,12 +1,10 @@
 package btf
 
 import (
-	"bytes"
 	"compress/gzip"
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"testing"
 
@@ -26,12 +24,7 @@ func TestParseVmlinux(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	buf, err := ioutil.ReadAll(rd)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	spec, err := loadNakedSpec(bytes.NewReader(buf), binary.LittleEndian, nil, nil)
+	spec, err := loadRawSpec(rd, binary.LittleEndian, nil, nil)
 	if err != nil {
 		t.Fatal("Can't load BTF:", err)
 	}

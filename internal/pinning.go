@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 
 	"github.com/cilium/ebpf/internal/sys"
 	"github.com/cilium/ebpf/internal/unix"
@@ -27,13 +28,20 @@ func Pin(currentPath, newPath string, fd *sys.FD) error {
 		return fmt.Errorf("%s is not on a bpf filesystem", newPath)
 	}
 
+	defer runtime.KeepAlive(fd)
+
 	if currentPath == "" {
-		return sys.ObjPin(newPath, fd)
+		_, err := sys.BPF(&sys.ObjPinAttr{
+			Pathname: sys.NewStringPointer(newPath),
+			BpfFd:    fd.Uint(),
+		})
+		return err
 	}
-	var err error
+
 	// Renameat2 is used instead of os.Rename to disallow the new path replacing
 	// an existing path.
-	if err = unix.Renameat2(unix.AT_FDCWD, currentPath, unix.AT_FDCWD, newPath, unix.RENAME_NOREPLACE); err == nil {
+	err := unix.Renameat2(unix.AT_FDCWD, currentPath, unix.AT_FDCWD, newPath, unix.RENAME_NOREPLACE)
+	if err == nil {
 		// Object is now moved to the new pinning path.
 		return nil
 	}
@@ -41,7 +49,11 @@ func Pin(currentPath, newPath string, fd *sys.FD) error {
 		return fmt.Errorf("unable to move pinned object to new path %v: %w", newPath, err)
 	}
 	// Internal state not in sync with the file system so let's fix it.
-	return sys.ObjPin(newPath, fd)
+	_, err = sys.BPF(&sys.ObjPinAttr{
+		Pathname: sys.NewStringPointer(newPath),
+		BpfFd:    fd.Uint(),
+	})
+	return err
 }
 
 func Unpin(pinnedPath string) error {

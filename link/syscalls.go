@@ -2,7 +2,6 @@ package link
 
 import (
 	"errors"
-	"unsafe"
 
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/asm"
@@ -78,7 +77,7 @@ var haveProgAttachReplace = internal.FeatureTest("BPF_PROG_ATTACH atomic replace
 		AttachFlags: uint32(flagReplace),
 	}
 
-	err = sys.ProgAttach(&attr)
+	_, err = sys.BPF(&attr)
 	if errors.Is(err, unix.EINVAL) {
 		return internal.ErrNotSupported
 	}
@@ -87,27 +86,6 @@ var haveProgAttachReplace = internal.FeatureTest("BPF_PROG_ATTACH atomic replace
 	}
 	return err
 })
-
-func bpfLinkCreate(attr *sys.LinkCreateAttr) (*sys.FD, error) {
-	ptr, err := sys.BPF(sys.BPF_LINK_CREATE, unsafe.Pointer(attr), unsafe.Sizeof(*attr))
-	if err != nil {
-		return nil, err
-	}
-	return sys.NewFD(int(ptr)), nil
-}
-
-func bpfLinkCreateIter(attr *sys.LinkCreateIterAttr) (*sys.FD, error) {
-	ptr, err := sys.BPF(sys.BPF_LINK_CREATE, unsafe.Pointer(attr), unsafe.Sizeof(*attr))
-	if err != nil {
-		return nil, err
-	}
-	return sys.NewFD(int(ptr)), nil
-}
-
-func bpfLinkUpdate(attr *sys.LinkUpdateAttr) error {
-	_, err := sys.BPF(sys.BPF_LINK_UPDATE, unsafe.Pointer(attr), unsafe.Sizeof(*attr))
-	return err
-}
 
 var haveBPFLink = internal.FeatureTest("bpf_link", "5.7", func() error {
 	prog, err := ebpf.NewProgram(&ebpf.ProgramSpec{
@@ -130,7 +108,7 @@ var haveBPFLink = internal.FeatureTest("bpf_link", "5.7", func() error {
 		ProgFd:     uint32(prog.FD()),
 		AttachType: sys.AttachType(ebpf.AttachCGroupInetIngress),
 	}
-	_, err = bpfLinkCreate(&attr)
+	_, err = sys.BPFFd(&attr)
 	if errors.Is(err, unix.EINVAL) {
 		return internal.ErrNotSupported
 	}
@@ -139,19 +117,3 @@ var haveBPFLink = internal.FeatureTest("bpf_link", "5.7", func() error {
 	}
 	return err
 })
-
-func bpfIterCreate(attr *sys.IterCreateAttr) (*sys.FD, error) {
-	ptr, err := sys.BPF(sys.BPF_ITER_CREATE, unsafe.Pointer(attr), unsafe.Sizeof(*attr))
-	if err == nil {
-		return sys.NewFD(int(ptr)), nil
-	}
-	return nil, err
-}
-
-func bpfRawTracepointOpen(attr *sys.RawTracepointOpenAttr) (*sys.FD, error) {
-	ptr, err := sys.BPF(sys.BPF_RAW_TRACEPOINT_OPEN, unsafe.Pointer(attr), unsafe.Sizeof(*attr))
-	if err == nil {
-		return sys.NewFD(int(ptr)), nil
-	}
-	return nil, err
-}

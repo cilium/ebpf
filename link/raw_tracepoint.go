@@ -25,7 +25,7 @@ func AttachRawTracepoint(opts RawTracepointOptions) (Link, error) {
 		return nil, fmt.Errorf("invalid program: %w", sys.ErrClosedFd)
 	}
 
-	fd, err := bpfRawTracepointOpen(&sys.RawTracepointOpenAttr{
+	fd, err := sys.BPFFd(&sys.RawTracepointOpenAttr{
 		Name:   sys.NewStringPointer(opts.Name),
 		ProgFd: uint32(opts.Program.FD()),
 	})

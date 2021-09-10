@@ -1,8 +1,8 @@
 package sys
 
 import (
-	"errors"
 	"fmt"
+	"math"
 	"os"
 	"runtime"
 	"strconv"
@@ -10,28 +10,33 @@ import (
 	"github.com/cilium/ebpf/internal/unix"
 )
 
-var ErrClosedFd = errors.New("use of closed file descriptor")
+var ErrClosedFd = unix.EBADF
 
 type FD struct {
-	raw int64
+	raw int
 }
 
-func NewFD(value uint32) *FD {
-	fd := &FD{int64(value)}
+func NewFD(value int) *FD {
+	fd := &FD{value}
 	runtime.SetFinalizer(fd, (*FD).Close)
 	return fd
 }
 
 func (fd *FD) String() string {
-	return strconv.FormatInt(fd.raw, 10)
+	return strconv.FormatInt(int64(fd.raw), 10)
 }
 
-func (fd *FD) Value() (uint32, error) {
-	if fd.raw < 0 {
-		return 0, ErrClosedFd
-	}
+func (fd *FD) Int() int {
+	return fd.raw
+}
 
-	return uint32(fd.raw), nil
+func (fd *FD) Uint() uint32 {
+	if fd.raw < 0 || int64(fd.raw) > math.MaxUint32 {
+		// Best effort: this is the number most likely to be an invalid file
+		// descriptor. It is equal to -1 (on two's complement arches).
+		return math.MaxUint32
+	}
+	return uint32(fd.raw)
 }
 
 func (fd *FD) Close() error {
@@ -60,7 +65,7 @@ func (fd *FD) Dup() (*FD, error) {
 		return nil, fmt.Errorf("can't dup fd: %v", err)
 	}
 
-	return NewFD(uint32(dup)), nil
+	return NewFD(dup), nil
 }
 
 func (fd *FD) File(name string) *os.File {

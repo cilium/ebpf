@@ -200,12 +200,7 @@ func (pi *ProgramInfo) MapIDs() ([]MapID, bool) {
 }
 
 func scanFdInfo(fd *sys.FD, fields map[string]interface{}) error {
-	raw, err := fd.Value()
-	if err != nil {
-		return err
-	}
-
-	fh, err := os.Open(fmt.Sprintf("/proc/self/fdinfo/%d", raw))
+	fh, err := os.Open(fmt.Sprintf("/proc/self/fdinfo/%d", fd.Int()))
 	if err != nil {
 		return err
 	}

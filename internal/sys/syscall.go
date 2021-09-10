@@ -10,53 +10,10 @@ import (
 	"github.com/cilium/ebpf/internal/unix"
 )
 
-//go:generate stringer -output syscall_string.go -type=BPFCmd
-
-// BPFCmd identifies a subcommand of the bpf syscall.
-type BPFCmd int
-
-// Well known BPF commands.
-const (
-	BPF_MAP_CREATE BPFCmd = iota
-	BPF_MAP_LOOKUP_ELEM
-	BPF_MAP_UPDATE_ELEM
-	BPF_MAP_DELETE_ELEM
-	BPF_MAP_GET_NEXT_KEY
-	BPF_PROG_LOAD
-	BPF_OBJ_PIN
-	BPF_OBJ_GET
-	BPF_PROG_ATTACH
-	BPF_PROG_DETACH
-	BPF_PROG_TEST_RUN
-	BPF_PROG_GET_NEXT_ID
-	BPF_MAP_GET_NEXT_ID
-	BPF_PROG_GET_FD_BY_ID
-	BPF_MAP_GET_FD_BY_ID
-	BPF_OBJ_GET_INFO_BY_FD
-	BPF_PROG_QUERY
-	BPF_RAW_TRACEPOINT_OPEN
-	BPF_BTF_LOAD
-	BPF_BTF_GET_FD_BY_ID
-	BPF_TASK_FD_QUERY
-	BPF_MAP_LOOKUP_AND_DELETE_ELEM
-	BPF_MAP_FREEZE
-	BPF_BTF_GET_NEXT_ID
-	BPF_MAP_LOOKUP_BATCH
-	BPF_MAP_LOOKUP_AND_DELETE_BATCH
-	BPF_MAP_UPDATE_BATCH
-	BPF_MAP_DELETE_BATCH
-	BPF_LINK_CREATE
-	BPF_LINK_UPDATE
-	BPF_LINK_GET_FD_BY_ID
-	BPF_LINK_GET_NEXT_ID
-	BPF_ENABLE_STATS
-	BPF_ITER_CREATE
-)
-
 // BPF wraps SYS_BPF.
 //
 // Any pointers contained in attr must use the Pointer type from this package.
-func BPF(cmd BPFCmd, attr unsafe.Pointer, size uintptr) (uintptr, error) {
+func BPF(cmd Cmd, attr unsafe.Pointer, size uintptr) (uintptr, error) {
 	r1, _, errNo := unix.Syscall(unix.SYS_BPF, uintptr(cmd), uintptr(attr), size)
 	runtime.KeepAlive(attr)
 
@@ -68,32 +25,8 @@ func BPF(cmd BPFCmd, attr unsafe.Pointer, size uintptr) (uintptr, error) {
 	return r1, err
 }
 
-type BPFProgLoadAttr struct {
-	ProgType           uint32
-	InsCount           uint32
-	Instructions       Pointer
-	License            Pointer
-	LogLevel           uint32
-	LogSize            uint32
-	LogBuf             Pointer
-	KernelVersion      uint32     // since 4.1  2541517c32be
-	ProgFlags          uint32     // since 4.11 e07b98d9bffe
-	ProgName           BPFObjName // since 4.15 067cae47771c
-	ProgIfIndex        uint32     // since 4.15 1f6f4cb7ba21
-	ExpectedAttachType uint32     // since 4.17 5e43f899b03a
-	ProgBTFFd          uint32
-	FuncInfoRecSize    uint32
-	FuncInfo           Pointer
-	FuncInfoCnt        uint32
-	LineInfoRecSize    uint32
-	LineInfo           Pointer
-	LineInfoCnt        uint32
-	AttachBTFID        uint32
-	AttachProgFd       uint32
-}
-
-// BPFProgLoad wraps BPF_PROG_LOAD.
-func BPFProgLoad(attr *BPFProgLoadAttr) (*FD, error) {
+// ProgLoad wraps BPF_PROG_LOAD.
+func ProgLoad(attr *ProgLoadAttr) (*FD, error) {
 	for {
 		fd, err := BPF(BPF_PROG_LOAD, unsafe.Pointer(attr), unsafe.Sizeof(*attr))
 		// As of ~4.20 the verifier can be interrupted by a signal,
@@ -110,35 +43,17 @@ func BPFProgLoad(attr *BPFProgLoadAttr) (*FD, error) {
 	}
 }
 
-type BPFProgAttachAttr struct {
-	TargetFd     uint32
-	AttachBpfFd  uint32
-	AttachType   uint32
-	AttachFlags  uint32
-	ReplaceBpfFd uint32
-}
-
-func BPFProgAttach(attr *BPFProgAttachAttr) error {
+func ProgAttach(attr *ProgAttachAttr) error {
 	_, err := BPF(BPF_PROG_ATTACH, unsafe.Pointer(attr), unsafe.Sizeof(*attr))
 	return err
 }
 
-type BPFProgDetachAttr struct {
-	TargetFd    uint32
-	AttachBpfFd uint32
-	AttachType  uint32
-}
-
-func BPFProgDetach(attr *BPFProgDetachAttr) error {
+func ProgDetach(attr *ProgAttachAttr) error {
 	_, err := BPF(BPF_PROG_DETACH, unsafe.Pointer(attr), unsafe.Sizeof(*attr))
 	return err
 }
 
-type BPFEnableStatsAttr struct {
-	StatsType uint32
-}
-
-func BPFEnableStats(attr *BPFEnableStatsAttr) (*FD, error) {
+func EnableStats(attr *EnableStatsAttr) (*FD, error) {
 	ptr, err := BPF(BPF_ENABLE_STATS, unsafe.Pointer(attr), unsafe.Sizeof(*attr))
 	if err != nil {
 		return nil, fmt.Errorf("enable stats: %w", err)
@@ -147,19 +62,11 @@ func BPFEnableStats(attr *BPFEnableStatsAttr) (*FD, error) {
 
 }
 
-type bpfObjAttr struct {
-	fileName  Pointer
-	fd        uint32
-	fileFlags uint32
-}
-
-const bpfFSType = 0xcafe4a11
-
-// BPFObjPin wraps BPF_OBJ_PIN.
-func BPFObjPin(fileName string, fd *FD) error {
-	attr := bpfObjAttr{
-		fileName: NewStringPointer(fileName),
-		fd:       fd.Uint(),
+// ObjPin wraps BPF_OBJ_PIN.
+func ObjPin(fileName string, fd *FD) error {
+	attr := ObjPinAttr{
+		Pathname: NewStringPointer(fileName),
+		BpfFd:    fd.Uint(),
 	}
 	_, err := BPF(BPF_OBJ_PIN, unsafe.Pointer(&attr), unsafe.Sizeof(attr))
 	if err != nil {
@@ -168,11 +75,11 @@ func BPFObjPin(fileName string, fd *FD) error {
 	return nil
 }
 
-// BPFObjGet wraps BPF_OBJ_GET.
-func BPFObjGet(fileName string, flags uint32) (*FD, error) {
-	attr := bpfObjAttr{
-		fileName:  NewStringPointer(fileName),
-		fileFlags: flags,
+// ObjGet wraps BPF_OBJ_GET.
+func ObjGet(fileName string, flags uint32) (*FD, error) {
+	attr := ObjPinAttr{
+		Pathname:  NewStringPointer(fileName),
+		FileFlags: flags,
 	}
 	ptr, err := BPF(BPF_OBJ_GET, unsafe.Pointer(&attr), unsafe.Sizeof(attr))
 	if err != nil {
@@ -181,20 +88,14 @@ func BPFObjGet(fileName string, flags uint32) (*FD, error) {
 	return NewFD(int(ptr)), nil
 }
 
-type bpfObjGetInfoByFDAttr struct {
-	fd      uint32
-	infoLen uint32
-	info    Pointer
-}
-
-// BPFObjGetInfoByFD wraps BPF_OBJ_GET_INFO_BY_FD.
+// ObjGetInfoByFD wraps BPF_OBJ_GET_INFO_BY_FD.
 //
 // Available from 4.13.
-func BPFObjGetInfoByFD(fd *FD, info unsafe.Pointer, size uintptr) error {
-	attr := bpfObjGetInfoByFDAttr{
-		fd:      fd.Uint(),
-		infoLen: uint32(size),
-		info:    NewPointer(info),
+func ObjGetInfoByFD(fd *FD, info unsafe.Pointer, size uintptr) error {
+	attr := ObjGetInfoByFdAttr{
+		BpfFd:   fd.Uint(),
+		InfoLen: uint32(size),
+		Info:    NewPointer(info),
 	}
 	_, err := BPF(BPF_OBJ_GET_INFO_BY_FD, unsafe.Pointer(&attr), unsafe.Sizeof(attr))
 	if err != nil {
@@ -203,17 +104,12 @@ func BPFObjGetInfoByFD(fd *FD, info unsafe.Pointer, size uintptr) error {
 	return nil
 }
 
-type bpfGetFDByIDAttr struct {
-	id   uint32
-	next uint32
-}
-
-// BPFObjGetInfoByFD wraps BPF_*_GET_FD_BY_ID.
+// ObjGetFDByID wraps BPF_*_GET_FD_BY_ID.
 //
 // Available from 4.13.
-func BPFObjGetFDByID(cmd BPFCmd, id uint32) (*FD, error) {
-	attr := bpfGetFDByIDAttr{
-		id: id,
+func ObjGetFDByID(cmd Cmd, id uint32) (*FD, error) {
+	attr := MapGetFdByIdAttr{
+		Id: id,
 	}
 	ptr, err := BPF(cmd, unsafe.Pointer(&attr), unsafe.Sizeof(attr))
 	return NewFD(int(ptr)), err
@@ -221,31 +117,16 @@ func BPFObjGetFDByID(cmd BPFCmd, id uint32) (*FD, error) {
 
 // BPFObjName is a null-terminated string made up of
 // 'A-Za-z0-9_' characters.
-type BPFObjName [unix.BPF_OBJ_NAME_LEN]byte
+type ObjName [unix.BPF_OBJ_NAME_LEN]byte
 
-// NewBPFObjName truncates the result if it is too long.
-func NewBPFObjName(name string) BPFObjName {
-	var result BPFObjName
+// NewObjName truncates the result if it is too long.
+func NewObjName(name string) ObjName {
+	var result ObjName
 	copy(result[:unix.BPF_OBJ_NAME_LEN-1], name)
 	return result
 }
 
-type BPFMapCreateAttr struct {
-	MapType        uint32
-	KeySize        uint32
-	ValueSize      uint32
-	MaxEntries     uint32
-	Flags          uint32
-	InnerMapFd     uint32     // since 4.12 56f668dfe00d
-	NumaNode       uint32     // since 4.14 96eabe7a40aa
-	MapName        BPFObjName // since 4.15 ad5b177bd73f
-	MapIfIndex     uint32
-	BTFFd          uint32
-	BTFKeyTypeID   uint32
-	BTFValueTypeID uint32
-}
-
-func BPFMapCreate(attr *BPFMapCreateAttr) (*FD, error) {
+func MapCreate(attr *MapCreateAttr) (*FD, error) {
 	fd, err := BPF(BPF_MAP_CREATE, unsafe.Pointer(attr), unsafe.Sizeof(*attr))
 	if err != nil {
 		return nil, err
@@ -271,7 +152,7 @@ type syscallError struct {
 	errno syscall.Errno
 }
 
-func SyscallError(err error, errno syscall.Errno) error {
+func Error(err error, errno syscall.Errno) error {
 	return &syscallError{err, errno}
 }
 

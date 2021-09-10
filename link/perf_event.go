@@ -115,12 +115,7 @@ func (pe *perfEvent) Close() error {
 		return nil
 	}
 
-	pfd, err := pe.fd.Value()
-	if err != nil {
-		return fmt.Errorf("getting perf event fd: %w", err)
-	}
-
-	err = unix.IoctlSetInt(int(pfd), unix.PERF_EVENT_IOC_DISABLE, 0)
+	err := unix.IoctlSetInt(pe.fd.Int(), unix.PERF_EVENT_IOC_DISABLE, 0)
 	if err != nil {
 		return fmt.Errorf("disabling perf event: %w", err)
 	}
@@ -175,8 +170,7 @@ func (pe *perfEvent) attach(prog *ebpf.Program) error {
 		return fmt.Errorf("unknown perf event type: %d", pe.typ)
 	}
 
-	// The ioctl below will fail when the fd is invalid.
-	kfd, _ := pe.fd.Value()
+	kfd := pe.fd.Int()
 
 	// Assign the eBPF program to the perf event.
 	err := unix.IoctlSetInt(int(kfd), unix.PERF_EVENT_IOC_SET_BPF, prog.FD())
@@ -250,7 +244,7 @@ func openTracepointPerfEvent(tid uint64, pid int) (*sys.FD, error) {
 		return nil, fmt.Errorf("opening tracepoint perf event: %w", err)
 	}
 
-	return sys.NewFD(uint32(fd)), nil
+	return sys.NewFD(fd), nil
 }
 
 // uint64FromFile reads a uint64 from a file. All elements of path are sanitized

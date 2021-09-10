@@ -133,11 +133,7 @@ func (l *RawLink) isLink() {}
 
 // FD returns the raw file descriptor.
 func (l *RawLink) FD() int {
-	fd, err := l.fd.Value()
-	if err != nil {
-		return -1
-	}
-	return int(fd)
+	return l.fd.Int()
 }
 
 // Close breaks the link.
@@ -197,13 +193,8 @@ func (l *RawLink) UpdateArgs(opts RawLinkUpdateOptions) error {
 		}
 	}
 
-	linkFd, err := l.fd.Value()
-	if err != nil {
-		return fmt.Errorf("can't update link: %s", err)
-	}
-
 	attr := bpfLinkUpdateAttr{
-		linkFd:    linkFd,
+		linkFd:    l.fd.Uint(),
 		newProgFd: uint32(newFd),
 		oldProgFd: uint32(oldFd),
 		flags:     opts.Flags,

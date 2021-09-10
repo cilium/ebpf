@@ -171,7 +171,7 @@ func NewMapFromFD(fd int) (*Map, error) {
 		return nil, errors.New("invalid fd")
 	}
 
-	return newMapFromFD(sys.NewFD(uint32(fd)))
+	return newMapFromFD(sys.NewFD(fd))
 }
 
 func newMapFromFD(fd *sys.FD) (*Map, error) {
@@ -372,11 +372,7 @@ func (spec *MapSpec) createMap(inner *sys.FD, opts MapOptions, handles *handleCa
 	}
 
 	if inner != nil {
-		var err error
-		attr.InnerMapFd, err = inner.Value()
-		if err != nil {
-			return nil, fmt.Errorf("map create: %w", err)
-		}
+		attr.InnerMapFd = inner.Uint()
 	}
 
 	if haveObjName() == nil {
@@ -831,14 +827,7 @@ func (m *Map) Close() error {
 //
 // Calling this function is invalid after Close has been called.
 func (m *Map) FD() int {
-	fd, err := m.fd.Value()
-	if err != nil {
-		// Best effort: -1 is the number most likely to be an
-		// invalid file descriptor.
-		return -1
-	}
-
-	return int(fd)
+	return m.fd.Int()
 }
 
 // Clone creates a duplicate of the Map.
@@ -1082,13 +1071,8 @@ func marshalMap(m *Map, length int) ([]byte, error) {
 		return nil, fmt.Errorf("can't marshal map to %d bytes", length)
 	}
 
-	fd, err := m.fd.Value()
-	if err != nil {
-		return nil, err
-	}
-
 	buf := make([]byte, 4)
-	internal.NativeEndian.PutUint32(buf, fd)
+	internal.NativeEndian.PutUint32(buf, m.fd.Uint())
 	return buf, nil
 }
 

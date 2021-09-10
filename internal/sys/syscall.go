@@ -106,7 +106,7 @@ func BPFProgLoad(attr *BPFProgLoadAttr) (*FD, error) {
 			return nil, err
 		}
 
-		return NewFD(uint32(fd)), nil
+		return NewFD(int(fd)), nil
 	}
 }
 
@@ -143,7 +143,7 @@ func BPFEnableStats(attr *BPFEnableStatsAttr) (*FD, error) {
 	if err != nil {
 		return nil, fmt.Errorf("enable stats: %w", err)
 	}
-	return NewFD(uint32(ptr)), nil
+	return NewFD(int(ptr)), nil
 
 }
 
@@ -157,16 +157,11 @@ const bpfFSType = 0xcafe4a11
 
 // BPFObjPin wraps BPF_OBJ_PIN.
 func BPFObjPin(fileName string, fd *FD) error {
-	value, err := fd.Value()
-	if err != nil {
-		return err
-	}
-
 	attr := bpfObjAttr{
 		fileName: NewStringPointer(fileName),
-		fd:       value,
+		fd:       fd.Uint(),
 	}
-	_, err = BPF(BPF_OBJ_PIN, unsafe.Pointer(&attr), unsafe.Sizeof(attr))
+	_, err := BPF(BPF_OBJ_PIN, unsafe.Pointer(&attr), unsafe.Sizeof(attr))
 	if err != nil {
 		return fmt.Errorf("pin object %s: %w", fileName, err)
 	}
@@ -183,7 +178,7 @@ func BPFObjGet(fileName string, flags uint32) (*FD, error) {
 	if err != nil {
 		return nil, fmt.Errorf("get object %s: %w", fileName, err)
 	}
-	return NewFD(uint32(ptr)), nil
+	return NewFD(int(ptr)), nil
 }
 
 type bpfObjGetInfoByFDAttr struct {
@@ -196,17 +191,12 @@ type bpfObjGetInfoByFDAttr struct {
 //
 // Available from 4.13.
 func BPFObjGetInfoByFD(fd *FD, info unsafe.Pointer, size uintptr) error {
-	value, err := fd.Value()
-	if err != nil {
-		return err
-	}
-
 	attr := bpfObjGetInfoByFDAttr{
-		fd:      value,
+		fd:      fd.Uint(),
 		infoLen: uint32(size),
 		info:    NewPointer(info),
 	}
-	_, err = BPF(BPF_OBJ_GET_INFO_BY_FD, unsafe.Pointer(&attr), unsafe.Sizeof(attr))
+	_, err := BPF(BPF_OBJ_GET_INFO_BY_FD, unsafe.Pointer(&attr), unsafe.Sizeof(attr))
 	if err != nil {
 		return fmt.Errorf("fd %v: %w", fd, err)
 	}
@@ -226,7 +216,7 @@ func BPFObjGetFDByID(cmd BPFCmd, id uint32) (*FD, error) {
 		id: id,
 	}
 	ptr, err := BPF(cmd, unsafe.Pointer(&attr), unsafe.Sizeof(attr))
-	return NewFD(uint32(ptr)), err
+	return NewFD(int(ptr)), err
 }
 
 // BPFObjName is a null-terminated string made up of
@@ -261,7 +251,7 @@ func BPFMapCreate(attr *BPFMapCreateAttr) (*FD, error) {
 		return nil, err
 	}
 
-	return NewFD(uint32(fd)), nil
+	return NewFD(int(fd)), nil
 }
 
 // wrappedErrno wraps syscall.Errno to prevent direct comparisons with

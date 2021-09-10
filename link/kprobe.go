@@ -244,7 +244,7 @@ func pmuProbe(typ probeType, symbol, path string, offset uint64, pid int, ret bo
 
 	// Kernel has perf_[k,u]probe PMU available, initialize perf event.
 	return &perfEvent{
-		fd:    sys.NewFD(uint32(fd)),
+		fd:    sys.NewFD(fd),
 		pmuID: et,
 		name:  symbol,
 		typ:   typ.PerfEventType(ret),

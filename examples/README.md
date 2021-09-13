@@ -12,3 +12,12 @@
 cd ebpf/examples/
 go run -exec sudo [./kprobe, ./uretprobe, ./tracepoint, ...]
 ```
+
+You can also compile an example from the scratch.
+
+```
+cd ebpf/examples/kprobe
+go generate
+go build
+./kprobe
+```

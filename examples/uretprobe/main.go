@@ -105,6 +105,7 @@ func main() {
 				return
 			}
 			log.Printf("reading from perf event reader: %s", err)
+			continue
 		}
 
 		if record.LostSamples != 0 {

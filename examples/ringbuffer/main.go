@@ -88,6 +88,7 @@ func main() {
 				return
 			}
 			log.Printf("reading from reader: %s", err)
+			continue
 		}
 
 		// Parse the ringbuf event entry into an Event structure.

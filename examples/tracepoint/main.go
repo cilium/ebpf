@@ -119,6 +119,7 @@ func main() {
 				return
 			}
 			log.Printf("reading from reader: %s", err)
+			continue
 		}
 
 		log.Println("Record:", record)

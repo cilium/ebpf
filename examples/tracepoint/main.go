@@ -7,6 +7,7 @@
 package main
 
 import (
+	"errors"
 	"log"
 	"os"
 	"os/signal"
@@ -114,7 +115,7 @@ func main() {
 	for {
 		record, err := rd.Read()
 		if err != nil {
-			if perf.IsClosed(err) {
+			if errors.Is(err, perf.ErrClosed) {
 				log.Println("Received signal, exiting..")
 				return
 			}

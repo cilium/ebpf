@@ -9,6 +9,7 @@ package main
 import (
 	"bytes"
 	"encoding/binary"
+	"errors"
 	"log"
 	"os"
 	"os/signal"
@@ -101,7 +102,7 @@ func main() {
 	for {
 		record, err := rd.Read()
 		if err != nil {
-			if perf.IsClosed(err) {
+			if errors.Is(err, perf.ErrClosed) {
 				return
 			}
 			log.Printf("reading from perf event reader: %s", err)

@@ -15,7 +15,8 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-//go:generate go run github.com/cilium/ebpf/cmd/bpf2go -cc clang-11 RingBufferExample ./bpf/ringbuffer_example.c -- -nostdinc -I../headers
+// $CLANG and $BPF_CFLAGS are set by the Makefile.
+//go:generate go run github.com/cilium/ebpf/cmd/bpf2go -cc $CLANG -cflags $BPF_CFLAGS RingBufferExample ./bpf/ringbuffer_example.c -- -I../headers
 
 // An Event represents a ringbuf event sent to userspace from the eBPF program
 // running in the kernel. Note that this must match the C event_t structure,

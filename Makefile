@@ -2,7 +2,9 @@
 # while stable/released versions have a version number attached.
 # Pin the default clang to a stable version.
 CLANG ?= clang-12
-CFLAGS := -target bpf -O2 -g -Wall -Werror $(CFLAGS)
+BPF_CFLAGS := -target bpf -O2 -g -Wall -Werror -nostdinc $(BPF_CFLAGS)
+export CLANG
+export BPF_CFLAGS
 
 # Obtain an absolute path to the directory of the Makefile.
 # Assume the Makefile is in the root of the repository.
@@ -36,7 +38,8 @@ TARGETS := \
 docker-all:
 	docker run --rm --user "${UIDGID}" \
 		-v "${REPODIR}":/ebpf -w /ebpf --env MAKEFLAGS \
-		--env CFLAGS="-fdebug-prefix-map=/ebpf=." \
+		--env BPF_CFLAGS="-fdebug-prefix-map=/ebpf=." \
+		--env HOME="/tmp" \
 		"${IMAGE}:${VERSION}" \
 		make all
 
@@ -50,21 +53,24 @@ clean:
 	-$(RM) testdata/*.elf
 	-$(RM) internal/btf/testdata/*.elf
 
-all: $(addsuffix -el.elf,$(TARGETS)) $(addsuffix -eb.elf,$(TARGETS))
+generate:
+	cd examples/ && go generate ./...
+
+all: $(addsuffix -el.elf,$(TARGETS)) $(addsuffix -eb.elf,$(TARGETS)) generate
 	ln -srf testdata/loader-$(CLANG)-el.elf testdata/loader-el.elf
 	ln -srf testdata/loader-$(CLANG)-eb.elf testdata/loader-eb.elf
 
 testdata/loader-%-el.elf: testdata/loader.c
-	$* $(CFLAGS) -mlittle-endian -c $< -o $@
+	$* $(BPF_CFLAGS) -mlittle-endian -c $< -o $@
 
 testdata/loader-%-eb.elf: testdata/loader.c
-	$* $(CFLAGS) -mbig-endian -c $< -o $@
+	$* $(BPF_CFLAGS) -mbig-endian -c $< -o $@
 
 %-el.elf: %.c
-	$(CLANG) $(CFLAGS) -mlittle-endian -c $< -o $@
+	$(CLANG) $(BPF_CFLAGS) -mlittle-endian -c $< -o $@
 
 %-eb.elf : %.c
-	$(CLANG) $(CFLAGS) -mbig-endian -c $< -o $@
+	$(CLANG) $(BPF_CFLAGS) -mbig-endian -c $< -o $@
 
 # Usage: make VMLINUX=/path/to/vmlinux vmlinux-btf
 .PHONY: vmlinux-btf

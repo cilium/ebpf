@@ -18,7 +18,8 @@ import (
 	"github.com/cilium/ebpf/link"
 )
 
-//go:generate go run github.com/cilium/ebpf/cmd/bpf2go -cc clang-11 KProbeExample ./bpf/kprobe_example.c -- -nostdinc -I../headers
+// $CLANG and $BPF_CFLAGS are set by the Makefile.
+//go:generate go run github.com/cilium/ebpf/cmd/bpf2go -cc $CLANG -cflags $BPF_CFLAGS KProbeExample ./bpf/kprobe_example.c -- -I../headers
 
 const mapKey uint32 = 0
 

@@ -13,3 +13,9 @@
 cd ebpf/examples/
 go run -exec sudo [./kprobe, ./uretprobe, ./tracepoint, ...]
 ```
+
+## How to recompile
+
+```
+make -C ..
+```

@@ -18,3 +18,9 @@
 cd ebpf/examples/
 go run -exec sudo [./kprobe, ./uretprobe, ./ringbuffer, ...]
 ```
+
+## How to recompile
+
+```
+make -C ..
+```

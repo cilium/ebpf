@@ -81,6 +81,11 @@ func makeBuffer(dst interface{}, length int) (internal.Pointer, []byte) {
 	return internal.NewSlicePointer(buf), buf
 }
 
+func noescape(p unsafe.Pointer) unsafe.Pointer {
+	x := uintptr(p)
+	return unsafe.Pointer(x ^ 0)
+}
+
 // unmarshalBytes converts a byte buffer into an arbitrary value.
 //
 // Prefer using Map.unmarshalKey and Map.unmarshalValue if possible, since
@@ -114,7 +119,8 @@ func unmarshalBytes(data interface{}, buf []byte) error {
 	case []byte:
 		return errors.New("require pointer to []byte")
 	default:
-		rd := bytes.NewReader(buf)
+		// Without noescape(), rd escapes to the heap for no good reason.
+		rd := (*bytes.Reader)(noescape(unsafe.Pointer(bytes.NewReader(buf))))
 		if err := binary.Read(rd, internal.NativeEndian, value); err != nil {
 			return fmt.Errorf("decoding %T: %v", value, err)
 		}

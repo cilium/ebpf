@@ -4,26 +4,26 @@ import (
 	"fmt"
 	"unsafe"
 
-	"github.com/cilium/ebpf/internal"
+	"github.com/cilium/ebpf/internal/sys"
 )
 
 type bpfBTFInfo struct {
-	btf       internal.Pointer
+	btf       sys.Pointer
 	btfSize   uint32
 	id        uint32
-	name      internal.Pointer
+	name      sys.Pointer
 	nameLen   uint32
 	kernelBTF uint32
 }
 
-func bpfGetBTFInfoByFD(fd *internal.FD, btf, name []byte) (*bpfBTFInfo, error) {
+func bpfGetBTFInfoByFD(fd *sys.FD, btf, name []byte) (*bpfBTFInfo, error) {
 	info := bpfBTFInfo{
-		btf:     internal.NewSlicePointer(btf),
+		btf:     sys.NewSlicePointer(btf),
 		btfSize: uint32(len(btf)),
-		name:    internal.NewSlicePointer(name),
+		name:    sys.NewSlicePointer(name),
 		nameLen: uint32(len(name)),
 	}
-	if err := internal.BPFObjGetInfoByFD(fd, unsafe.Pointer(&info), unsafe.Sizeof(info)); err != nil {
+	if err := sys.BPFObjGetInfoByFD(fd, unsafe.Pointer(&info), unsafe.Sizeof(info)); err != nil {
 		return nil, fmt.Errorf("can't get program info: %w", err)
 	}
 

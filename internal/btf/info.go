@@ -4,6 +4,7 @@ import (
 	"bytes"
 
 	"github.com/cilium/ebpf/internal"
+	"github.com/cilium/ebpf/internal/sys"
 )
 
 // info describes a BTF object.
@@ -18,7 +19,7 @@ type info struct {
 	KernelBTF bool
 }
 
-func newInfoFromFd(fd *internal.FD) (*info, error) {
+func newInfoFromFd(fd *sys.FD) (*info, error) {
 	// We invoke the syscall once with a empty BTF and name buffers to get size
 	// information to allocate buffers. Then we invoke it a second time with
 	// buffers to receive the data.

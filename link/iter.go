@@ -6,7 +6,7 @@ import (
 	"unsafe"
 
 	"github.com/cilium/ebpf"
-	"github.com/cilium/ebpf/internal"
+	"github.com/cilium/ebpf/internal/sys"
 )
 
 type IterOptions struct {
@@ -31,14 +31,14 @@ func AttachIter(opts IterOptions) (*Iter, error) {
 
 	progFd := opts.Program.FD()
 	if progFd < 0 {
-		return nil, fmt.Errorf("invalid program: %s", internal.ErrClosedFd)
+		return nil, fmt.Errorf("invalid program: %s", sys.ErrClosedFd)
 	}
 
 	var info bpfIterLinkInfoMap
 	if opts.Map != nil {
 		mapFd := opts.Map.FD()
 		if mapFd < 0 {
-			return nil, fmt.Errorf("invalid map: %w", internal.ErrClosedFd)
+			return nil, fmt.Errorf("invalid map: %w", sys.ErrClosedFd)
 		}
 		info.map_fd = uint32(mapFd)
 	}
@@ -46,7 +46,7 @@ func AttachIter(opts IterOptions) (*Iter, error) {
 	attr := bpfLinkCreateIterAttr{
 		prog_fd:       uint32(progFd),
 		attach_type:   ebpf.AttachTraceIter,
-		iter_info:     internal.NewPointer(unsafe.Pointer(&info)),
+		iter_info:     sys.NewPointer(unsafe.Pointer(&info)),
 		iter_info_len: uint32(unsafe.Sizeof(info)),
 	}
 

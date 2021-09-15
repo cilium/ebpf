@@ -8,7 +8,7 @@ import (
 	"unsafe"
 
 	"github.com/cilium/ebpf"
-	"github.com/cilium/ebpf/internal"
+	"github.com/cilium/ebpf/internal/sys"
 	"github.com/cilium/ebpf/internal/unix"
 )
 
@@ -25,7 +25,7 @@ type mapCache struct {
 	mapTypes map[ebpf.MapType]error
 }
 
-func createMapTypeAttr(mt ebpf.MapType) *internal.BPFMapCreateAttr {
+func createMapTypeAttr(mt ebpf.MapType) *sys.BPFMapCreateAttr {
 	var (
 		keySize        uint32 = 4
 		valueSize      uint32 = 4
@@ -82,7 +82,7 @@ func createMapTypeAttr(mt ebpf.MapType) *internal.BPFMapCreateAttr {
 		btfFd = ^uint32(0)
 	}
 
-	return &internal.BPFMapCreateAttr{
+	return &sys.BPFMapCreateAttr{
 		MapType:        uint32(mt),
 		KeySize:        keySize,
 		ValueSize:      valueSize,
@@ -139,7 +139,7 @@ func haveMapType(mt ebpf.MapType) error {
 		return err
 	}
 
-	_, err = internal.BPFMapCreate(createMapTypeAttr(mt))
+	_, err = sys.BPFMapCreate(createMapTypeAttr(mt))
 
 	switch {
 	// For nested and storage map types we accept EBADF as indicator that these maps are supported

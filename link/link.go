@@ -7,6 +7,7 @@ import (
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/btf"
+	"github.com/cilium/ebpf/internal/sys"
 )
 
 var ErrNotSupported = internal.ErrNotSupported
@@ -66,7 +67,7 @@ type RawLinkInfo struct {
 // You should consider using the higher level interfaces in this
 // package instead.
 type RawLink struct {
-	fd         *internal.FD
+	fd         *sys.FD
 	pinnedPath string
 }
 
@@ -77,12 +78,12 @@ func AttachRawLink(opts RawLinkOptions) (*RawLink, error) {
 	}
 
 	if opts.Target < 0 {
-		return nil, fmt.Errorf("invalid target: %s", internal.ErrClosedFd)
+		return nil, fmt.Errorf("invalid target: %s", sys.ErrClosedFd)
 	}
 
 	progFd := opts.Program.FD()
 	if progFd < 0 {
-		return nil, fmt.Errorf("invalid program: %s", internal.ErrClosedFd)
+		return nil, fmt.Errorf("invalid program: %s", sys.ErrClosedFd)
 	}
 
 	attr := bpfLinkCreateAttr{
@@ -104,7 +105,7 @@ func AttachRawLink(opts RawLinkOptions) (*RawLink, error) {
 // Returns an error if the pinned link type doesn't match linkType. Pass
 // UnspecifiedType to disable this behaviour.
 func LoadPinnedRawLink(fileName string, linkType Type, opts *ebpf.LoadPinOptions) (*RawLink, error) {
-	fd, err := internal.BPFObjGet(fileName, opts.Marshal())
+	fd, err := sys.BPFObjGet(fileName, opts.Marshal())
 	if err != nil {
 		return nil, fmt.Errorf("load pinned link: %w", err)
 	}
@@ -185,14 +186,14 @@ type RawLinkUpdateOptions struct {
 func (l *RawLink) UpdateArgs(opts RawLinkUpdateOptions) error {
 	newFd := opts.New.FD()
 	if newFd < 0 {
-		return fmt.Errorf("invalid program: %s", internal.ErrClosedFd)
+		return fmt.Errorf("invalid program: %s", sys.ErrClosedFd)
 	}
 
 	var oldFd int
 	if opts.Old != nil {
 		oldFd = opts.Old.FD()
 		if oldFd < 0 {
-			return fmt.Errorf("invalid replacement program: %s", internal.ErrClosedFd)
+			return fmt.Errorf("invalid replacement program: %s", sys.ErrClosedFd)
 		}
 	}
 
@@ -220,7 +221,7 @@ type bpfLinkInfo struct {
 // Info returns metadata about the link.
 func (l *RawLink) Info() (*RawLinkInfo, error) {
 	var info bpfLinkInfo
-	err := internal.BPFObjGetInfoByFD(l.fd, unsafe.Pointer(&info), unsafe.Sizeof(info))
+	err := sys.BPFObjGetInfoByFD(l.fd, unsafe.Pointer(&info), unsafe.Sizeof(info))
 	if err != nil {
 		return nil, fmt.Errorf("link info: %s", err)
 	}

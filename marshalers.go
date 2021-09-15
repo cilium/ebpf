@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"reflect"
 	"runtime"
+	"sync"
 	"unsafe"
 
 	"github.com/cilium/ebpf/internal"
@@ -81,6 +82,12 @@ func makeBuffer(dst interface{}, length int) (internal.Pointer, []byte) {
 	return internal.NewSlicePointer(buf), buf
 }
 
+var bytesReaderPool = sync.Pool{
+	New: func() interface{} {
+		return new(bytes.Reader)
+	},
+}
+
 // unmarshalBytes converts a byte buffer into an arbitrary value.
 //
 // Prefer using Map.unmarshalKey and Map.unmarshalValue if possible, since
@@ -114,7 +121,9 @@ func unmarshalBytes(data interface{}, buf []byte) error {
 	case []byte:
 		return errors.New("require pointer to []byte")
 	default:
-		rd := bytes.NewReader(buf)
+		rd := bytesReaderPool.Get().(*bytes.Reader)
+		rd.Reset(buf)
+		defer bytesReaderPool.Put(rd)
 		if err := binary.Read(rd, internal.NativeEndian, value); err != nil {
 			return fmt.Errorf("decoding %T: %v", value, err)
 		}

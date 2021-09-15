@@ -10,6 +10,7 @@ import (
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/asm"
 	"github.com/cilium/ebpf/internal"
+	"github.com/cilium/ebpf/internal/sys"
 	"github.com/cilium/ebpf/internal/unix"
 )
 
@@ -26,7 +27,7 @@ type progCache struct {
 	progTypes map[ebpf.ProgramType]error
 }
 
-func createProgLoadAttr(pt ebpf.ProgramType) (*internal.BPFProgLoadAttr, error) {
+func createProgLoadAttr(pt ebpf.ProgramType) (*sys.BPFProgLoadAttr, error) {
 	var expectedAttachType ebpf.AttachType
 
 	insns := asm.Instructions{
@@ -40,7 +41,7 @@ func createProgLoadAttr(pt ebpf.ProgramType) (*internal.BPFProgLoadAttr, error) 
 	}
 
 	bytecode := buf.Bytes()
-	instructions := internal.NewSlicePointer(bytecode)
+	instructions := sys.NewSlicePointer(bytecode)
 
 	// Some programs have expected attach types which are checked during the
 	// BPD_PROG_LOAD syscall.
@@ -64,12 +65,12 @@ func createProgLoadAttr(pt ebpf.ProgramType) (*internal.BPFProgLoadAttr, error) 
 	}
 	kv := v.Kernel()
 
-	return &internal.BPFProgLoadAttr{
+	return &sys.BPFProgLoadAttr{
 		ProgType:           uint32(pt),
 		Instructions:       instructions,
 		InsCount:           uint32(len(bytecode) / asm.InstructionSize),
 		ExpectedAttachType: uint32(expectedAttachType),
-		License:            internal.NewStringPointer("GPL"),
+		License:            sys.NewStringPointer("GPL"),
 		KernelVersion:      kv,
 	}, nil
 }
@@ -123,7 +124,7 @@ func haveProgType(pt ebpf.ProgramType) error {
 		return fmt.Errorf("couldn't create the program load attribute: %w", err)
 	}
 
-	_, err = internal.BPFProgLoad(attr)
+	_, err = sys.BPFProgLoad(attr)
 
 	switch {
 	// EINVAL occurs when attempting to create a program with an unknown type.

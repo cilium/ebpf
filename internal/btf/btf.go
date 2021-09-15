@@ -467,16 +467,28 @@ func (s *Spec) Program(name string, length uint64) (*Program, error) {
 
 // FindType searches for a type with a specific name.
 //
-// hint determines the type of the returned Type.
+// Called T a type that satisfies Type, typ must be a non-nil **T.
+// On success, the address of the found type will be copied in typ.
 //
 // Returns an error wrapping ErrNotFound if no matching
 // type exists in spec.
-func (s *Spec) FindType(name string, typ Type) error {
-	var (
-		wanted    = reflect.TypeOf(typ)
-		candidate Type
-	)
+func (s *Spec) FindType(name string, typ interface{}) error {
+	typValue := reflect.ValueOf(typ)
+	if typValue.Kind() != reflect.Ptr {
+		return fmt.Errorf("%T is not a pointer", typ)
+	}
 
+	typPtr := reflect.Indirect(typValue)
+	if !typPtr.CanSet() {
+		return fmt.Errorf("%T cannot be set", typ)
+	}
+
+	wanted := typPtr.Type()
+	if !wanted.AssignableTo(reflect.TypeOf((*Type)(nil)).Elem()) {
+		return fmt.Errorf("%T does not satisfy Type interface", typ)
+	}
+
+	var candidate Type
 	for _, typ := range s.namedTypes[essentialName(name)] {
 		if reflect.TypeOf(typ) != wanted {
 			continue
@@ -498,8 +510,8 @@ func (s *Spec) FindType(name string, typ Type) error {
 		return fmt.Errorf("type %s: %w", name, ErrNotFound)
 	}
 
-	value := reflect.Indirect(reflect.ValueOf(candidate))
-	reflect.Indirect(reflect.ValueOf(typ)).Set(value)
+	typPtr.Set(reflect.Indirect(reflect.ValueOf(candidate)).Addr())
+
 	return nil
 }
 

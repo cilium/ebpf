@@ -720,24 +720,17 @@ func resolveBTFType(spec *btf.Spec, name string, progType ProgramType, attachTyp
 		a AttachType
 	}
 
-	var target btf.Type
 	var typeName, featureName string
 	switch (match{progType, attachType}) {
 	case match{LSM, AttachLSMMac}:
-		target = new(btf.Func)
 		typeName = "bpf_lsm_" + name
 		featureName = name + " LSM hook"
-
 	case match{Tracing, AttachTraceIter}:
-		target = new(btf.Func)
 		typeName = "bpf_iter_" + name
 		featureName = name + " iterator"
-
 	case match{Extension, AttachNone}:
-		target = new(btf.Func)
 		typeName = name
 		featureName = fmt.Sprintf("freplace %s", name)
-
 	default:
 		return nil, nil
 	}
@@ -750,7 +743,8 @@ func resolveBTFType(spec *btf.Spec, name string, progType ProgramType, attachTyp
 		}
 	}
 
-	err := spec.FindType(typeName, target)
+	var target *btf.Func
+	err := spec.FindType(typeName, &target)
 	if errors.Is(err, btf.ErrNotFound) {
 		return nil, &internal.UnsupportedFeatureError{
 			Name: featureName,

@@ -31,8 +31,10 @@ func AttachFreplace(targetProg *ebpf.Program, name string, prog *ebpf.Program) (
 		return nil, fmt.Errorf("eBPF program type %s is not an Extension: %w", prog.Type(), errInvalidInput)
 	}
 
-	var target int
-	var function btf.Func
+	var (
+		target int
+		typeID btf.TypeID
+	)
 	if targetProg != nil {
 		info, err := targetProg.Info()
 		if err != nil {
@@ -48,18 +50,20 @@ func AttachFreplace(targetProg *ebpf.Program, name string, prog *ebpf.Program) (
 		}
 		defer btfHandle.Close()
 
+		var function *btf.Func
 		if err := btfHandle.Spec().FindType(name, &function); err != nil {
 			return nil, err
 		}
 
 		target = targetProg.FD()
+		typeID = function.ID()
 	}
 
 	link, err := AttachRawLink(RawLinkOptions{
 		Target:  target,
 		Program: prog,
 		Attach:  ebpf.AttachNone,
-		BTF:     function.ID(),
+		BTF:     typeID,
 	})
 	if err != nil {
 		return nil, err

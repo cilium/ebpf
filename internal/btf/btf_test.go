@@ -29,7 +29,7 @@ func TestParseVmlinux(t *testing.T) {
 		t.Fatal("Can't load BTF:", err)
 	}
 
-	var iphdr Struct
+	var iphdr *Struct
 	err = spec.FindType("iphdr", &iphdr)
 	if err != nil {
 		t.Fatalf("unable to find `iphdr` struct: %s", err)
@@ -100,17 +100,17 @@ func TestLoadSpecFromElf(t *testing.T) {
 			t.Error("Missing BTF for the socket section")
 		}
 
-		var bpfMapDef Struct
+		var bpfMapDef *Struct
 		if err := spec.FindType("bpf_map_def", &bpfMapDef); err != nil {
 			t.Error("Can't find bpf_map_def:", err)
 		}
 
-		var tmp Void
+		var tmp *Void
 		if err := spec.FindType("totally_bogus_type", &tmp); !errors.Is(err, ErrNotFound) {
 			t.Error("FindType doesn't return ErrNotFound:", err)
 		}
 
-		var fn Func
+		var fn *Func
 		if err := spec.FindType("global_fn", &fn); err != nil {
 			t.Error("Can't find global_fn():", err)
 		} else {
@@ -119,7 +119,7 @@ func TestLoadSpecFromElf(t *testing.T) {
 			}
 		}
 
-		var v Var
+		var v *Var
 		if err := spec.FindType("key3", &v); err != nil {
 			t.Error("Cant find key3:", err)
 		} else {
@@ -198,7 +198,7 @@ func ExampleSpec_FindType() {
 	spec := new(Spec)
 
 	// Declare a variable of the desired type
-	var foo Struct
+	var foo *Struct
 
 	if err := spec.FindType("foo", &foo); err != nil {
 		// There is no struct with name foo, or there

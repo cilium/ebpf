@@ -12,6 +12,49 @@ import (
 	"github.com/cilium/ebpf/internal/testutils"
 )
 
+func TestFindType(t *testing.T) {
+	fh, err := os.Open("testdata/vmlinux-btf.gz")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer fh.Close()
+
+	rd, err := gzip.NewReader(fh)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rd.Close()
+
+	spec, err := loadRawSpec(rd, binary.LittleEndian, nil, nil)
+	if err != nil {
+		t.Fatal("Can't load BTF:", err)
+	}
+
+	// spec.FindType MUST fail if typ is not a non-nil **T, where T satisfies btf.Type.
+	for _, typ := range []interface{}{
+		nil,
+		Struct{},
+		&Struct{},
+	} {
+		if err := spec.FindType("iphdr", nil); err == nil {
+			t.Fatalf("FindType does not fail with type %T", typ)
+		}
+	}
+
+	// spec.FindType MUST return the same address for multiple calls with the same type name.
+	var iphdr1, iphdr2 *Struct
+	if err := spec.FindType("iphdr", &iphdr1); err != nil {
+		t.Fatal(err)
+	}
+	if err := spec.FindType("iphdr", &iphdr2); err != nil {
+		t.Fatal(err)
+	}
+
+	if iphdr1 != iphdr2 {
+		t.Fatal("multiple FindType calls for `iphdr` name do not return the same addresses")
+	}
+}
+
 func TestParseVmlinux(t *testing.T) {
 	fh, err := os.Open("testdata/vmlinux-btf.gz")
 	if err != nil {

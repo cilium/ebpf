@@ -53,7 +53,7 @@ if [[ "${1:-}" = "--exec-vm" ]]; then
     --rodir=/run/input="${input}" \
     --rwdir=/run/output="${output}" \
     --script-sh "PATH=\"$PATH\" \"$script\" --exec-test $cmd" \
-    --qemu-opts -smp 2; then # need at least two CPUs for some tests
+    --kopt possible_cpus=2; then # need at least two CPUs for some tests
     exit 23
   fi
 

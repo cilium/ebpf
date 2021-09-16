@@ -21,7 +21,8 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-//go:generate go run github.com/cilium/ebpf/cmd/bpf2go -cc clang-11 UretProbeExample ./bpf/uretprobe_example.c -- -nostdinc -I../headers -O2
+// $BPF_CLANG and $BPF_CFLAGS are set by the Makefile.
+//go:generate go run github.com/cilium/ebpf/cmd/bpf2go -cc $BPF_CLANG -cflags $BPF_CFLAGS UretProbeExample ./bpf/uretprobe_example.c -- -I../headers
 
 // An Event represents a perf event sent to userspace from the eBPF program
 // running in the kernel. Note that this must match the C event_t structure,

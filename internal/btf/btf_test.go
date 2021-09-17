@@ -12,6 +12,57 @@ import (
 	"github.com/cilium/ebpf/internal/testutils"
 )
 
+func TestFindType(t *testing.T) {
+	fh, err := os.Open("testdata/vmlinux-btf.gz")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer fh.Close()
+
+	rd, err := gzip.NewReader(fh)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rd.Close()
+
+	spec, err := loadRawSpec(rd, binary.LittleEndian, nil, nil)
+	if err != nil {
+		t.Fatal("Can't load BTF:", err)
+	}
+
+	// spec.FindType MUST fail if typ is not a non-nil **T, where T satisfies btf.Type.
+	i := 0
+	p := &i
+	for _, typ := range []interface{}{
+		nil,
+		Struct{},
+		&Struct{},
+		[]Struct{},
+		&[]Struct{},
+		map[int]Struct{},
+		&map[int]Struct{},
+		p,
+		&p,
+	} {
+		if err := spec.FindType("iphdr", typ); err == nil {
+			t.Fatalf("FindType does not fail with type %T", typ)
+		}
+	}
+
+	// spec.FindType MUST return the same address for multiple calls with the same type name.
+	var iphdr1, iphdr2 *Struct
+	if err := spec.FindType("iphdr", &iphdr1); err != nil {
+		t.Fatal(err)
+	}
+	if err := spec.FindType("iphdr", &iphdr2); err != nil {
+		t.Fatal(err)
+	}
+
+	if iphdr1 != iphdr2 {
+		t.Fatal("multiple FindType calls for `iphdr` name do not return the same addresses")
+	}
+}
+
 func TestParseVmlinux(t *testing.T) {
 	fh, err := os.Open("testdata/vmlinux-btf.gz")
 	if err != nil {
@@ -29,7 +80,7 @@ func TestParseVmlinux(t *testing.T) {
 		t.Fatal("Can't load BTF:", err)
 	}
 
-	var iphdr Struct
+	var iphdr *Struct
 	err = spec.FindType("iphdr", &iphdr)
 	if err != nil {
 		t.Fatalf("unable to find `iphdr` struct: %s", err)
@@ -100,17 +151,17 @@ func TestLoadSpecFromElf(t *testing.T) {
 			t.Error("Missing BTF for the socket section")
 		}
 
-		var bpfMapDef Struct
+		var bpfMapDef *Struct
 		if err := spec.FindType("bpf_map_def", &bpfMapDef); err != nil {
 			t.Error("Can't find bpf_map_def:", err)
 		}
 
-		var tmp Void
+		var tmp *Void
 		if err := spec.FindType("totally_bogus_type", &tmp); !errors.Is(err, ErrNotFound) {
 			t.Error("FindType doesn't return ErrNotFound:", err)
 		}
 
-		var fn Func
+		var fn *Func
 		if err := spec.FindType("global_fn", &fn); err != nil {
 			t.Error("Can't find global_fn():", err)
 		} else {
@@ -119,7 +170,7 @@ func TestLoadSpecFromElf(t *testing.T) {
 			}
 		}
 
-		var v Var
+		var v *Var
 		if err := spec.FindType("key3", &v); err != nil {
 			t.Error("Cant find key3:", err)
 		} else {
@@ -198,7 +249,7 @@ func ExampleSpec_FindType() {
 	spec := new(Spec)
 
 	// Declare a variable of the desired type
-	var foo Struct
+	var foo *Struct
 
 	if err := spec.FindType("foo", &foo); err != nil {
 		// There is no struct with name foo, or there

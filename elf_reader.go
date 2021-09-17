@@ -554,7 +554,7 @@ func (ec *elfCode) loadBTFMaps(maps map[string]*MapSpec) error {
 		}
 
 		// Each section must appear as a DataSec in the ELF's BTF blob.
-		var ds btf.Datasec
+		var ds *btf.Datasec
 		if err := ec.btf.FindType(sec.Name, &ds); err != nil {
 			return fmt.Errorf("cannot find section '%s' in BTF: %w", sec.Name, err)
 		}
@@ -926,7 +926,7 @@ func (ec *elfCode) loadDataSections(maps map[string]*MapSpec) error {
 			return errors.New("data sections require BTF, make sure all consts are marked as static")
 		}
 
-		var datasec btf.Datasec
+		var datasec *btf.Datasec
 		if err := ec.btf.FindType(sec.Name, &datasec); err != nil {
 			return fmt.Errorf("data section %s: can't get BTF: %w", sec.Name, err)
 		}
@@ -947,7 +947,7 @@ func (ec *elfCode) loadDataSections(maps map[string]*MapSpec) error {
 			ValueSize:  uint32(len(data)),
 			MaxEntries: 1,
 			Contents:   []MapKV{{uint32(0), data}},
-			BTF:        &btf.Map{Spec: ec.btf, Key: &btf.Void{}, Value: &datasec},
+			BTF:        &btf.Map{Spec: ec.btf, Key: &btf.Void{}, Value: datasec},
 		}
 
 		switch sec.Name {

@@ -478,7 +478,7 @@ func (s *Spec) FindType(name string, typ interface{}) error {
 		return fmt.Errorf("%T is not a pointer", typ)
 	}
 
-	typPtr := reflect.Indirect(typValue)
+	typPtr := typValue.Elem()
 	if !typPtr.CanSet() {
 		return fmt.Errorf("%T cannot be set", typ)
 	}
@@ -510,7 +510,7 @@ func (s *Spec) FindType(name string, typ interface{}) error {
 		return fmt.Errorf("type %s: %w", name, ErrNotFound)
 	}
 
-	typPtr.Set(reflect.Indirect(reflect.ValueOf(candidate)).Addr())
+	typPtr.Set(reflect.ValueOf(candidate))
 
 	return nil
 }

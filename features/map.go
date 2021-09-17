@@ -138,7 +138,7 @@ func haveMapType(mt ebpf.MapType) error {
 		return err
 	}
 
-	_, err = sys.MapCreate(createMapTypeAttr(mt))
+	_, err = sys.BPFFd(createMapTypeAttr(mt))
 
 	switch {
 	// For nested and storage map types we accept EBADF as indicator that these maps are supported

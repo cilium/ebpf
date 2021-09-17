@@ -18,6 +18,7 @@ import (
 
 	"github.com/cilium/ebpf/asm"
 	"github.com/cilium/ebpf/internal"
+	"github.com/cilium/ebpf/internal/sys"
 	"github.com/cilium/ebpf/internal/testutils"
 	"github.com/cilium/ebpf/internal/unix"
 )
@@ -355,8 +356,8 @@ func TestProgramName(t *testing.T) {
 	prog := createSocketFilter(t)
 	defer prog.Close()
 
-	info, err := bpfGetProgInfoByFD(prog.fd, nil)
-	if err != nil {
+	var info sys.ProgInfo
+	if err := sys.ObjInfo(prog.fd, &info); err != nil {
 		t.Fatal(err)
 	}
 

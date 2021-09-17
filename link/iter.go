@@ -50,7 +50,7 @@ func AttachIter(opts IterOptions) (*Iter, error) {
 		IterInfoLen: uint32(unsafe.Sizeof(info)),
 	}
 
-	fd, err := bpfLinkCreateIter(&attr)
+	fd, err := sys.BPFFd(&attr)
 	if err != nil {
 		return nil, fmt.Errorf("can't link iterator: %w", err)
 	}
@@ -81,7 +81,7 @@ func (it *Iter) Open() (io.ReadCloser, error) {
 		LinkFd: it.fd.Uint(),
 	}
 
-	fd, err := bpfIterCreate(attr)
+	fd, err := sys.BPFFd(attr)
 	if err != nil {
 		return nil, fmt.Errorf("can't create iterator: %w", err)
 	}

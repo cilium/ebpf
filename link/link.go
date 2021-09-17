@@ -2,7 +2,6 @@ package link
 
 import (
 	"fmt"
-	"unsafe"
 
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/internal"
@@ -92,7 +91,7 @@ func AttachRawLink(opts RawLinkOptions) (*RawLink, error) {
 		AttachType:  sys.AttachType(opts.Attach),
 		TargetBtfId: uint32(opts.BTF),
 	}
-	fd, err := bpfLinkCreate(&attr)
+	fd, err := sys.BPFFd(&attr)
 	if err != nil {
 		return nil, fmt.Errorf("can't create link: %s", err)
 	}
@@ -105,7 +104,10 @@ func AttachRawLink(opts RawLinkOptions) (*RawLink, error) {
 // Returns an error if the pinned link type doesn't match linkType. Pass
 // UnspecifiedType to disable this behaviour.
 func LoadPinnedRawLink(fileName string, linkType Type, opts *ebpf.LoadPinOptions) (*RawLink, error) {
-	fd, err := sys.ObjGet(fileName, opts.Marshal())
+	fd, err := sys.BPFFd(&sys.ObjGetAttr{
+		Pathname:  sys.NewStringPointer(fileName),
+		FileFlags: opts.Marshal(),
+	})
 	if err != nil {
 		return nil, fmt.Errorf("load pinned link: %w", err)
 	}
@@ -199,14 +201,14 @@ func (l *RawLink) UpdateArgs(opts RawLinkUpdateOptions) error {
 		OldProgFd: uint32(oldFd),
 		Flags:     opts.Flags,
 	}
-	return bpfLinkUpdate(&attr)
+	_, err := sys.BPF(&attr)
+	return err
 }
 
 // Info returns metadata about the link.
 func (l *RawLink) Info() (*RawLinkInfo, error) {
 	var info sys.LinkInfo
-	err := sys.ObjGetInfoByFD(l.fd, unsafe.Pointer(&info), unsafe.Sizeof(info))
-	if err != nil {
+	if err := sys.ObjInfo(l.fd, &info); err != nil {
 		return nil, fmt.Errorf("link info: %s", err)
 	}
 

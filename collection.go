@@ -10,8 +10,8 @@ import (
 	"strings"
 
 	"github.com/cilium/ebpf/asm"
-	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/btf"
+	"github.com/cilium/ebpf/internal/sys"
 )
 
 // CollectionOptions control loading a collection into the kernel.
@@ -442,7 +442,7 @@ func (cl *collectionLoader) loadProgram(progName string) (*Program, error) {
 
 		fd := m.FD()
 		if fd < 0 {
-			return nil, fmt.Errorf("map %s: %w", ins.Reference, internal.ErrClosedFd)
+			return nil, fmt.Errorf("map %s: %w", ins.Reference, sys.ErrClosedFd)
 		}
 		if err := ins.RewriteMapPtr(m.FD()); err != nil {
 			return nil, fmt.Errorf("progam %s: map %s: %w", progName, ins.Reference, err)

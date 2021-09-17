@@ -2,11 +2,11 @@ package link
 
 import (
 	"fmt"
-	"unsafe"
 
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/btf"
+	"github.com/cilium/ebpf/internal/sys"
 )
 
 var ErrNotSupported = internal.ErrNotSupported
@@ -66,7 +66,7 @@ type RawLinkInfo struct {
 // You should consider using the higher level interfaces in this
 // package instead.
 type RawLink struct {
-	fd         *internal.FD
+	fd         *sys.FD
 	pinnedPath string
 }
 
@@ -77,21 +77,21 @@ func AttachRawLink(opts RawLinkOptions) (*RawLink, error) {
 	}
 
 	if opts.Target < 0 {
-		return nil, fmt.Errorf("invalid target: %s", internal.ErrClosedFd)
+		return nil, fmt.Errorf("invalid target: %s", sys.ErrClosedFd)
 	}
 
 	progFd := opts.Program.FD()
 	if progFd < 0 {
-		return nil, fmt.Errorf("invalid program: %s", internal.ErrClosedFd)
+		return nil, fmt.Errorf("invalid program: %s", sys.ErrClosedFd)
 	}
 
-	attr := bpfLinkCreateAttr{
-		targetFd:    uint32(opts.Target),
-		progFd:      uint32(progFd),
-		attachType:  opts.Attach,
-		targetBTFID: uint32(opts.BTF),
+	attr := sys.LinkCreateAttr{
+		TargetFd:    uint32(opts.Target),
+		ProgFd:      uint32(progFd),
+		AttachType:  sys.AttachType(opts.Attach),
+		TargetBtfId: uint32(opts.BTF),
 	}
-	fd, err := bpfLinkCreate(&attr)
+	fd, err := sys.BPFFd(&attr)
 	if err != nil {
 		return nil, fmt.Errorf("can't create link: %s", err)
 	}
@@ -104,7 +104,10 @@ func AttachRawLink(opts RawLinkOptions) (*RawLink, error) {
 // Returns an error if the pinned link type doesn't match linkType. Pass
 // UnspecifiedType to disable this behaviour.
 func LoadPinnedRawLink(fileName string, linkType Type, opts *ebpf.LoadPinOptions) (*RawLink, error) {
-	fd, err := internal.BPFObjGet(fileName, opts.Marshal())
+	fd, err := sys.BPFFd(&sys.ObjGetAttr{
+		Pathname:  sys.NewStringPointer(fileName),
+		FileFlags: opts.Marshal(),
+	})
 	if err != nil {
 		return nil, fmt.Errorf("load pinned link: %w", err)
 	}
@@ -132,11 +135,7 @@ func (l *RawLink) isLink() {}
 
 // FD returns the raw file descriptor.
 func (l *RawLink) FD() int {
-	fd, err := l.fd.Value()
-	if err != nil {
-		return -1
-	}
-	return int(fd)
+	return l.fd.Int()
 }
 
 // Close breaks the link.
@@ -185,49 +184,37 @@ type RawLinkUpdateOptions struct {
 func (l *RawLink) UpdateArgs(opts RawLinkUpdateOptions) error {
 	newFd := opts.New.FD()
 	if newFd < 0 {
-		return fmt.Errorf("invalid program: %s", internal.ErrClosedFd)
+		return fmt.Errorf("invalid program: %s", sys.ErrClosedFd)
 	}
 
 	var oldFd int
 	if opts.Old != nil {
 		oldFd = opts.Old.FD()
 		if oldFd < 0 {
-			return fmt.Errorf("invalid replacement program: %s", internal.ErrClosedFd)
+			return fmt.Errorf("invalid replacement program: %s", sys.ErrClosedFd)
 		}
 	}
 
-	linkFd, err := l.fd.Value()
-	if err != nil {
-		return fmt.Errorf("can't update link: %s", err)
+	attr := sys.LinkUpdateAttr{
+		LinkFd:    l.fd.Uint(),
+		NewProgFd: uint32(newFd),
+		OldProgFd: uint32(oldFd),
+		Flags:     opts.Flags,
 	}
-
-	attr := bpfLinkUpdateAttr{
-		linkFd:    linkFd,
-		newProgFd: uint32(newFd),
-		oldProgFd: uint32(oldFd),
-		flags:     opts.Flags,
-	}
-	return bpfLinkUpdate(&attr)
-}
-
-// struct bpf_link_info
-type bpfLinkInfo struct {
-	typ     uint32
-	id      uint32
-	prog_id uint32
+	_, err := sys.BPF(&attr)
+	return err
 }
 
 // Info returns metadata about the link.
 func (l *RawLink) Info() (*RawLinkInfo, error) {
-	var info bpfLinkInfo
-	err := internal.BPFObjGetInfoByFD(l.fd, unsafe.Pointer(&info), unsafe.Sizeof(info))
-	if err != nil {
+	var info sys.LinkInfo
+	if err := sys.ObjInfo(l.fd, &info); err != nil {
 		return nil, fmt.Errorf("link info: %s", err)
 	}
 
 	return &RawLinkInfo{
-		Type(info.typ),
-		ID(info.id),
-		ebpf.ProgramID(info.prog_id),
+		Type(info.Type),
+		ID(info.Id),
+		ebpf.ProgramID(info.ProgId),
 	}, nil
 }

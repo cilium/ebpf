@@ -8,6 +8,7 @@ import (
 
 	"github.com/cilium/ebpf/asm"
 	"github.com/cilium/ebpf/internal"
+	"github.com/cilium/ebpf/internal/sys"
 	"github.com/cilium/ebpf/internal/testutils"
 	"github.com/cilium/ebpf/internal/unix"
 	qt "github.com/frankban/quicktest"
@@ -87,7 +88,7 @@ func TestProgramInfo(t *testing.T) {
 	prog := createSocketFilter(t)
 	defer prog.Close()
 
-	for name, fn := range map[string]func(*internal.FD) (*ProgramInfo, error){
+	for name, fn := range map[string]func(*sys.FD) (*ProgramInfo, error){
 		"generic": newProgramInfoFromFd,
 		"proc":    newProgramInfoFromProc,
 	} {

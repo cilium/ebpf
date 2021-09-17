@@ -31,12 +31,20 @@ func TestFindType(t *testing.T) {
 	}
 
 	// spec.FindType MUST fail if typ is not a non-nil **T, where T satisfies btf.Type.
+	i := 0
+	p := &i
 	for _, typ := range []interface{}{
 		nil,
 		Struct{},
 		&Struct{},
+		[]Struct{},
+		&[]Struct{},
+		map[int]Struct{},
+		&map[int]Struct{},
+		p,
+		&p,
 	} {
-		if err := spec.FindType("iphdr", nil); err == nil {
+		if err := spec.FindType("iphdr", typ); err == nil {
 			t.Fatalf("FindType does not fail with type %T", typ)
 		}
 	}

@@ -68,6 +68,18 @@ const (
 	Bool
 )
 
+func (ie IntEncoding) IsSigned() bool {
+	return ie&Signed != 0
+}
+
+func (ie IntEncoding) IsChar() bool {
+	return ie&Char != 0
+}
+
+func (ie IntEncoding) IsBool() bool {
+	return ie&Bool != 0
+}
+
 // Int is an integer of a given length.
 type Int struct {
 	TypeID
@@ -86,12 +98,12 @@ func (i *Int) String() string {
 	var s strings.Builder
 
 	switch {
-	case i.Encoding&Char != 0:
+	case i.Encoding.IsChar():
 		s.WriteString("char")
-	case i.Encoding&Bool != 0:
+	case i.Encoding.IsBool():
 		s.WriteString("bool")
 	default:
-		if i.Encoding&Signed == 0 {
+		if !i.Encoding.IsSigned() {
 			s.WriteRune('u')
 		}
 		s.WriteString("int")
@@ -592,6 +604,12 @@ func Sizeof(typ Type) (int, error) {
 	}
 
 	return 0, fmt.Errorf("type %s: exceeded type depth", typ)
+}
+
+// Copy a Type recursively.
+func Copy(typ Type) Type {
+	typ, _ = copyType(typ, nil)
+	return typ
 }
 
 // copy a Type recursively.

@@ -12,9 +12,9 @@ import (
 	"path/filepath"
 	"strings"
 	"text/template"
-	"unicode"
 
 	"github.com/cilium/ebpf"
+	"github.com/cilium/ebpf/internal"
 )
 
 const ebpfModule = "github.com/cilium/ebpf"
@@ -237,12 +237,12 @@ func writeCommon(args writeArgs) error {
 			continue
 		}
 
-		maps[name] = identifier(name)
+		maps[name] = internal.Identifier(name)
 	}
 
 	programs := make(map[string]string)
 	for name := range spec.Programs {
-		programs[name] = identifier(name)
+		programs[name] = internal.Identifier(name)
 	}
 
 	ctx := struct {
@@ -302,42 +302,6 @@ func writeFormatted(src []byte, out io.Writer) error {
 	}
 
 	return nel
-}
-
-func identifier(str string) string {
-	prev := rune(-1)
-	return strings.Map(func(r rune) rune {
-		// See https://golang.org/ref/spec#Identifiers
-		switch {
-		case unicode.IsLetter(r):
-			if prev == -1 {
-				r = unicode.ToUpper(r)
-			}
-
-		case r == '_':
-			switch {
-			// The previous rune was deleted, or we are at the
-			// beginning of the string.
-			case prev == -1:
-				fallthrough
-
-			// The previous rune is a lower case letter or a digit.
-			case unicode.IsDigit(prev) || (unicode.IsLetter(prev) && unicode.IsLower(prev)):
-				// delete the current rune, and force the
-				// next character to be uppercased.
-				r = -1
-			}
-
-		case unicode.IsDigit(r):
-
-		default:
-			// Delete the current rune. prev is unchanged.
-			return -1
-		}
-
-		prev = r
-		return r
-	}, str)
 }
 
 func tag(str string) string {

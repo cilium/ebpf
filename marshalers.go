@@ -92,6 +92,9 @@ var bytesReaderPool = sync.Pool{
 //
 // Prefer using Map.unmarshalKey and Map.unmarshalValue if possible, since
 // those have special cases that allow more types to be encoded.
+//
+// The common int32 and int64 types are directly handled to avoid
+// unnecessary heap allocations as happening in the default case.
 func unmarshalBytes(data interface{}, buf []byte) error {
 	switch value := data.(type) {
 	case unsafe.Pointer:
@@ -115,6 +118,30 @@ func unmarshalBytes(data interface{}, buf []byte) error {
 		return nil
 	case *[]byte:
 		*value = buf
+		return nil
+	case *int32:
+		if len(buf) < 4 {
+			return errors.New("int32 requires 4 bytes")
+		}
+		*value = int32(internal.NativeEndian.Uint32(buf))
+		return nil
+	case *uint32:
+		if len(buf) < 4 {
+			return errors.New("uint32 requires 4 bytes")
+		}
+		*value = internal.NativeEndian.Uint32(buf)
+		return nil
+	case *int64:
+		if len(buf) < 8 {
+			return errors.New("int64 requires 8 bytes")
+		}
+		*value = int64(internal.NativeEndian.Uint64(buf))
+		return nil
+	case *uint64:
+		if len(buf) < 8 {
+			return errors.New("uint64 requires 8 bytes")
+		}
+		*value = internal.NativeEndian.Uint64(buf)
 		return nil
 	case string:
 		return errors.New("require pointer to string")

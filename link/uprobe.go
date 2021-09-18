@@ -25,6 +25,10 @@ var (
 		value uint64
 		err   error
 	}{}
+
+	// ErrNoSymbol indicates that the given symbol was not found
+	// in the ELF symbols table.
+	ErrNoSymbol = errors.New("symbol not found")
 )
 
 // Executable defines an executable program on the filesystem.
@@ -144,7 +148,7 @@ func (ex *Executable) offset(symbol string) (uint64, error) {
 		}
 		return off, nil
 	}
-	return 0, fmt.Errorf("symbol %s not found", symbol)
+	return 0, ErrNoSymbol
 }
 
 // Uprobe attaches the given eBPF program to a perf event that fires when the

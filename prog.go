@@ -307,7 +307,10 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions, handles *hand
 		attr.LogSize = uint32(len(logBuf))
 		attr.LogBuf = internal.NewSlicePointer(logBuf)
 
-		_, logErr = internal.BPFProgLoad(attr)
+		fd, logErr = internal.BPFProgLoad(attr)
+		if logErr == nil {
+			fd.Close()
+		}
 	}
 
 	if errors.Is(logErr, unix.EPERM) && logBuf[0] == 0 {

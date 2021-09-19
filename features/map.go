@@ -139,7 +139,7 @@ func haveMapType(mt ebpf.MapType) error {
 		return err
 	}
 
-	_, err = internal.BPFMapCreate(createMapTypeAttr(mt))
+	fd, err := internal.BPFMapCreate(createMapTypeAttr(mt))
 
 	switch {
 	// For nested and storage map types we accept EBADF as indicator that these maps are supported
@@ -162,6 +162,9 @@ func haveMapType(mt ebpf.MapType) error {
 	// Wrap unexpected errors.
 	case err != nil:
 		err = fmt.Errorf("unexpected error during feature probe: %w", err)
+
+	default:
+		fd.Close()
 	}
 
 	mc.mapTypes[mt] = err

@@ -2,6 +2,10 @@
 
 package sys
 
+import (
+	"unsafe"
+)
+
 type AdjRoomMode int32
 
 const (
@@ -483,6 +487,14 @@ type ProgInfo struct {
 
 type BtfGetFdByIdAttr struct{ Id uint32 }
 
+func BtfGetFdById(attr *BtfGetFdByIdAttr) (*FD, error) {
+	fd, err := BPF(BPF_BTF_GET_FD_BY_ID, unsafe.Pointer(attr), unsafe.Sizeof(*attr))
+	if err != nil {
+		return nil, err
+	}
+	return NewFD(int(fd)), nil
+}
+
 type BtfLoadAttr struct {
 	Btf         Pointer
 	BtfLogBuf   Pointer
@@ -492,11 +504,35 @@ type BtfLoadAttr struct {
 	_           [4]byte
 }
 
+func BtfLoad(attr *BtfLoadAttr) (*FD, error) {
+	fd, err := BPF(BPF_BTF_LOAD, unsafe.Pointer(attr), unsafe.Sizeof(*attr))
+	if err != nil {
+		return nil, err
+	}
+	return NewFD(int(fd)), nil
+}
+
 type EnableStatsAttr struct{ Type uint32 }
+
+func EnableStats(attr *EnableStatsAttr) (*FD, error) {
+	fd, err := BPF(BPF_ENABLE_STATS, unsafe.Pointer(attr), unsafe.Sizeof(*attr))
+	if err != nil {
+		return nil, err
+	}
+	return NewFD(int(fd)), nil
+}
 
 type IterCreateAttr struct {
 	LinkFd uint32
 	Flags  uint32
+}
+
+func IterCreate(attr *IterCreateAttr) (*FD, error) {
+	fd, err := BPF(BPF_ITER_CREATE, unsafe.Pointer(attr), unsafe.Sizeof(*attr))
+	if err != nil {
+		return nil, err
+	}
+	return NewFD(int(fd)), nil
 }
 
 type LinkCreateAttr struct {
@@ -506,6 +542,14 @@ type LinkCreateAttr struct {
 	Flags       uint32
 	TargetBtfId uint32
 	_           [12]byte
+}
+
+func LinkCreate(attr *LinkCreateAttr) (*FD, error) {
+	fd, err := BPF(BPF_LINK_CREATE, unsafe.Pointer(attr), unsafe.Sizeof(*attr))
+	if err != nil {
+		return nil, err
+	}
+	return NewFD(int(fd)), nil
 }
 
 type LinkCreateIterAttr struct {
@@ -518,11 +562,24 @@ type LinkCreateIterAttr struct {
 	_           [4]byte
 }
 
+func LinkCreateIter(attr *LinkCreateIterAttr) (*FD, error) {
+	fd, err := BPF(BPF_LINK_CREATE, unsafe.Pointer(attr), unsafe.Sizeof(*attr))
+	if err != nil {
+		return nil, err
+	}
+	return NewFD(int(fd)), nil
+}
+
 type LinkUpdateAttr struct {
 	LinkFd    uint32
 	NewProgFd uint32
 	Flags     uint32
 	OldProgFd uint32
+}
+
+func LinkUpdate(attr *LinkUpdateAttr) error {
+	_, err := BPF(BPF_LINK_UPDATE, unsafe.Pointer(attr), unsafe.Sizeof(*attr))
+	return err
 }
 
 type MapCreateAttr struct {
@@ -541,6 +598,14 @@ type MapCreateAttr struct {
 	BtfVmlinuxValueTypeId uint32
 }
 
+func MapCreate(attr *MapCreateAttr) (*FD, error) {
+	fd, err := BPF(BPF_MAP_CREATE, unsafe.Pointer(attr), unsafe.Sizeof(*attr))
+	if err != nil {
+		return nil, err
+	}
+	return NewFD(int(fd)), nil
+}
+
 type MapDeleteBatchAttr struct {
 	InBatch   Pointer
 	OutBatch  Pointer
@@ -552,6 +617,11 @@ type MapDeleteBatchAttr struct {
 	Flags     uint64
 }
 
+func MapDeleteBatch(attr *MapDeleteBatchAttr) error {
+	_, err := BPF(BPF_MAP_DELETE_BATCH, unsafe.Pointer(attr), unsafe.Sizeof(*attr))
+	return err
+}
+
 type MapDeleteElemAttr struct {
 	MapFd uint32
 	_     [4]byte
@@ -560,13 +630,36 @@ type MapDeleteElemAttr struct {
 	Flags uint64
 }
 
+func MapDeleteElem(attr *MapDeleteElemAttr) error {
+	_, err := BPF(BPF_MAP_DELETE_ELEM, unsafe.Pointer(attr), unsafe.Sizeof(*attr))
+	return err
+}
+
 type MapFreezeAttr struct{ MapFd uint32 }
 
+func MapFreeze(attr *MapFreezeAttr) error {
+	_, err := BPF(BPF_MAP_FREEZE, unsafe.Pointer(attr), unsafe.Sizeof(*attr))
+	return err
+}
+
 type MapGetFdByIdAttr struct{ Id uint32 }
+
+func MapGetFdById(attr *MapGetFdByIdAttr) (*FD, error) {
+	fd, err := BPF(BPF_MAP_GET_FD_BY_ID, unsafe.Pointer(attr), unsafe.Sizeof(*attr))
+	if err != nil {
+		return nil, err
+	}
+	return NewFD(int(fd)), nil
+}
 
 type MapGetNextIdAttr struct {
 	Id     uint32
 	NextId uint32
+}
+
+func MapGetNextId(attr *MapGetNextIdAttr) error {
+	_, err := BPF(BPF_MAP_GET_NEXT_ID, unsafe.Pointer(attr), unsafe.Sizeof(*attr))
+	return err
 }
 
 type MapGetNextKeyAttr struct {
@@ -574,6 +667,11 @@ type MapGetNextKeyAttr struct {
 	_       [4]byte
 	Key     Pointer
 	NextKey Pointer
+}
+
+func MapGetNextKey(attr *MapGetNextKeyAttr) error {
+	_, err := BPF(BPF_MAP_GET_NEXT_KEY, unsafe.Pointer(attr), unsafe.Sizeof(*attr))
+	return err
 }
 
 type MapLookupAndDeleteBatchAttr struct {
@@ -587,12 +685,22 @@ type MapLookupAndDeleteBatchAttr struct {
 	Flags     uint64
 }
 
+func MapLookupAndDeleteBatch(attr *MapLookupAndDeleteBatchAttr) error {
+	_, err := BPF(BPF_MAP_LOOKUP_AND_DELETE_BATCH, unsafe.Pointer(attr), unsafe.Sizeof(*attr))
+	return err
+}
+
 type MapLookupAndDeleteElemAttr struct {
 	MapFd uint32
 	_     [4]byte
 	Key   Pointer
 	Value Pointer
 	Flags uint64
+}
+
+func MapLookupAndDeleteElem(attr *MapLookupAndDeleteElemAttr) error {
+	_, err := BPF(BPF_MAP_LOOKUP_AND_DELETE_ELEM, unsafe.Pointer(attr), unsafe.Sizeof(*attr))
+	return err
 }
 
 type MapLookupBatchAttr struct {
@@ -606,12 +714,22 @@ type MapLookupBatchAttr struct {
 	Flags     uint64
 }
 
+func MapLookupBatch(attr *MapLookupBatchAttr) error {
+	_, err := BPF(BPF_MAP_LOOKUP_BATCH, unsafe.Pointer(attr), unsafe.Sizeof(*attr))
+	return err
+}
+
 type MapLookupElemAttr struct {
 	MapFd uint32
 	_     [4]byte
 	Key   Pointer
 	Value Pointer
 	Flags uint64
+}
+
+func MapLookupElem(attr *MapLookupElemAttr) error {
+	_, err := BPF(BPF_MAP_LOOKUP_ELEM, unsafe.Pointer(attr), unsafe.Sizeof(*attr))
+	return err
 }
 
 type MapUpdateBatchAttr struct {
@@ -625,6 +743,11 @@ type MapUpdateBatchAttr struct {
 	Flags     uint64
 }
 
+func MapUpdateBatch(attr *MapUpdateBatchAttr) error {
+	_, err := BPF(BPF_MAP_UPDATE_BATCH, unsafe.Pointer(attr), unsafe.Sizeof(*attr))
+	return err
+}
+
 type MapUpdateElemAttr struct {
 	MapFd uint32
 	_     [4]byte
@@ -633,10 +756,23 @@ type MapUpdateElemAttr struct {
 	Flags uint64
 }
 
+func MapUpdateElem(attr *MapUpdateElemAttr) error {
+	_, err := BPF(BPF_MAP_UPDATE_ELEM, unsafe.Pointer(attr), unsafe.Sizeof(*attr))
+	return err
+}
+
 type ObjGetAttr struct {
 	Pathname  Pointer
 	BpfFd     uint32
 	FileFlags uint32
+}
+
+func ObjGet(attr *ObjGetAttr) (*FD, error) {
+	fd, err := BPF(BPF_OBJ_GET, unsafe.Pointer(attr), unsafe.Sizeof(*attr))
+	if err != nil {
+		return nil, err
+	}
+	return NewFD(int(fd)), nil
 }
 
 type ObjGetInfoByFdAttr struct {
@@ -645,10 +781,20 @@ type ObjGetInfoByFdAttr struct {
 	Info    Pointer
 }
 
+func ObjGetInfoByFd(attr *ObjGetInfoByFdAttr) error {
+	_, err := BPF(BPF_OBJ_GET_INFO_BY_FD, unsafe.Pointer(attr), unsafe.Sizeof(*attr))
+	return err
+}
+
 type ObjPinAttr struct {
 	Pathname  Pointer
 	BpfFd     uint32
 	FileFlags uint32
+}
+
+func ObjPin(attr *ObjPinAttr) error {
+	_, err := BPF(BPF_OBJ_PIN, unsafe.Pointer(attr), unsafe.Sizeof(*attr))
+	return err
 }
 
 type ProgAttachAttr struct {
@@ -659,17 +805,40 @@ type ProgAttachAttr struct {
 	ReplaceBpfFd uint32
 }
 
+func ProgAttach(attr *ProgAttachAttr) error {
+	_, err := BPF(BPF_PROG_ATTACH, unsafe.Pointer(attr), unsafe.Sizeof(*attr))
+	return err
+}
+
 type ProgDetachAttr struct {
 	TargetFd    uint32
 	AttachBpfFd uint32
 	AttachType  uint32
 }
 
+func ProgDetach(attr *ProgDetachAttr) error {
+	_, err := BPF(BPF_PROG_DETACH, unsafe.Pointer(attr), unsafe.Sizeof(*attr))
+	return err
+}
+
 type ProgGetFdByIdAttr struct{ Id uint32 }
+
+func ProgGetFdById(attr *ProgGetFdByIdAttr) (*FD, error) {
+	fd, err := BPF(BPF_PROG_GET_FD_BY_ID, unsafe.Pointer(attr), unsafe.Sizeof(*attr))
+	if err != nil {
+		return nil, err
+	}
+	return NewFD(int(fd)), nil
+}
 
 type ProgGetNextIdAttr struct {
 	Id     uint32
 	NextId uint32
+}
+
+func ProgGetNextId(attr *ProgGetNextIdAttr) error {
+	_, err := BPF(BPF_PROG_GET_NEXT_ID, unsafe.Pointer(attr), unsafe.Sizeof(*attr))
+	return err
 }
 
 type ProgLoadAttr struct {
@@ -697,6 +866,14 @@ type ProgLoadAttr struct {
 	_                  [4]byte
 }
 
+func ProgLoad(attr *ProgLoadAttr) (*FD, error) {
+	fd, err := BPF(BPF_PROG_LOAD, unsafe.Pointer(attr), unsafe.Sizeof(*attr))
+	if err != nil {
+		return nil, err
+	}
+	return NewFD(int(fd)), nil
+}
+
 type ProgRunAttr struct {
 	ProgFd      uint32
 	Retval      uint32
@@ -714,8 +891,21 @@ type ProgRunAttr struct {
 	Cpu         uint32
 }
 
+func ProgRun(attr *ProgRunAttr) error {
+	_, err := BPF(BPF_PROG_TEST_RUN, unsafe.Pointer(attr), unsafe.Sizeof(*attr))
+	return err
+}
+
 type RawTracepointOpenAttr struct {
 	Name   Pointer
 	ProgFd uint32
 	_      [4]byte
+}
+
+func RawTracepointOpen(attr *RawTracepointOpenAttr) (*FD, error) {
+	fd, err := BPF(BPF_RAW_TRACEPOINT_OPEN, unsafe.Pointer(attr), unsafe.Sizeof(*attr))
+	if err != nil {
+		return nil, err
+	}
+	return NewFD(int(fd)), nil
 }

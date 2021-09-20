@@ -27,7 +27,7 @@ type progCache struct {
 	progTypes map[ebpf.ProgramType]error
 }
 
-func createProgLoadAttr(pt ebpf.ProgramType) (*sys.BPFProgLoadAttr, error) {
+func createProgLoadAttr(pt ebpf.ProgramType) (*sys.ProgLoadAttr, error) {
 	var expectedAttachType ebpf.AttachType
 
 	insns := asm.Instructions{
@@ -65,13 +65,13 @@ func createProgLoadAttr(pt ebpf.ProgramType) (*sys.BPFProgLoadAttr, error) {
 	}
 	kv := v.Kernel()
 
-	return &sys.BPFProgLoadAttr{
-		ProgType:           uint32(pt),
-		Instructions:       instructions,
-		InsCount:           uint32(len(bytecode) / asm.InstructionSize),
-		ExpectedAttachType: uint32(expectedAttachType),
+	return &sys.ProgLoadAttr{
+		ProgType:           sys.ProgType(pt),
+		Insns:              instructions,
+		InsnCnt:            uint32(len(bytecode) / asm.InstructionSize),
+		ExpectedAttachType: sys.AttachType(expectedAttachType),
 		License:            sys.NewStringPointer("GPL"),
-		KernelVersion:      kv,
+		KernVersion:        kv,
 	}, nil
 }
 
@@ -124,11 +124,11 @@ func haveProgType(pt ebpf.ProgramType) error {
 		return fmt.Errorf("couldn't create the program load attribute: %w", err)
 	}
 
-	_, err = sys.BPFProgLoad(attr)
+	_, err = sys.ProgLoad(attr)
 
 	switch {
 	// EINVAL occurs when attempting to create a program with an unknown type.
-	// E2BIG occurs when BPFProgLoadAttr contains non-zero bytes past the end
+	// E2BIG occurs when ProgLoadAttr contains non-zero bytes past the end
 	// of the struct known by the running kernel, meaning the kernel is too old
 	// to support the given map type.
 	case errors.Is(err, unix.EINVAL), errors.Is(err, unix.E2BIG):

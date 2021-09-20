@@ -1082,24 +1082,24 @@ func TestCgroupPerCPUStorageMarshaling(t *testing.T) {
 	}
 	defer prog.Close()
 
-	progAttachAttrs := sys.BPFProgAttachAttr{
+	progAttachAttrs := sys.ProgAttachAttr{
 		TargetFd:     uint32(cgroup.Fd()),
 		AttachBpfFd:  uint32(prog.FD()),
 		AttachType:   uint32(AttachCGroupInetEgress),
 		AttachFlags:  0,
 		ReplaceBpfFd: 0,
 	}
-	err = sys.BPFProgAttach(&progAttachAttrs)
+	err = sys.ProgAttach(&progAttachAttrs)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer func() {
-		attr := sys.BPFProgDetachAttr{
+		attr := sys.ProgAttachAttr{
 			TargetFd:    uint32(cgroup.Fd()),
 			AttachBpfFd: uint32(prog.FD()),
 			AttachType:  uint32(AttachCGroupInetEgress),
 		}
-		if err := sys.BPFProgDetach(&attr); err != nil {
+		if err := sys.ProgDetach(&attr); err != nil {
 			t.Fatal(err)
 		}
 	}()
@@ -1201,7 +1201,7 @@ func TestMapName(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if name := internal.CString(info.name[:]); name != "test" {
+	if name := internal.CString(info.Name[:]); name != "test" {
 		t.Error("Expected name to be test, got", name)
 	}
 }

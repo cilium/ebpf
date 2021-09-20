@@ -25,7 +25,7 @@ type mapCache struct {
 	mapTypes map[ebpf.MapType]error
 }
 
-func createMapTypeAttr(mt ebpf.MapType) *sys.BPFMapCreateAttr {
+func createMapTypeAttr(mt ebpf.MapType) *sys.MapCreateAttr {
 	var (
 		keySize        uint32 = 4
 		valueSize      uint32 = 4
@@ -37,7 +37,7 @@ func createMapTypeAttr(mt ebpf.MapType) *sys.BPFMapCreateAttr {
 		btfFd          uint32
 	)
 
-	// switch on map types to generate correct bpfMapCreateAttr
+	// switch on map types to generate correct MapCreateAttr
 	switch mt {
 	case ebpf.StackTrace:
 		// valueSize needs to be sizeof(uint64)
@@ -82,18 +82,17 @@ func createMapTypeAttr(mt ebpf.MapType) *sys.BPFMapCreateAttr {
 		btfFd = ^uint32(0)
 	}
 
-	return &sys.BPFMapCreateAttr{
-		MapType:        uint32(mt),
+	return &sys.MapCreateAttr{
+		MapType:        sys.MapType(mt),
 		KeySize:        keySize,
 		ValueSize:      valueSize,
 		MaxEntries:     maxEntries,
 		InnerMapFd:     innerMapFd,
-		Flags:          flags,
-		BTFKeyTypeID:   btfKeyTypeID,
-		BTFValueTypeID: btfValueTypeID,
-		BTFFd:          btfFd,
+		MapFlags:       flags,
+		BtfKeyTypeId:   btfKeyTypeID,
+		BtfValueTypeId: btfValueTypeID,
+		BtfFd:          btfFd,
 	}
-
 }
 
 // HaveMapType probes the running kernel for the availability of the specified map type.
@@ -139,7 +138,7 @@ func haveMapType(mt ebpf.MapType) error {
 		return err
 	}
 
-	_, err = sys.BPFMapCreate(createMapTypeAttr(mt))
+	_, err = sys.MapCreate(createMapTypeAttr(mt))
 
 	switch {
 	// For nested and storage map types we accept EBADF as indicator that these maps are supported
@@ -149,7 +148,7 @@ func haveMapType(mt ebpf.MapType) error {
 		}
 
 	// EINVAL occurs when attempting to create a map with an unknown type.
-	// E2BIG occurs when BPFMapCreateAttr contains non-zero bytes past the end
+	// E2BIG occurs when MapCreateAttr contains non-zero bytes past the end
 	// of the struct known by the running kernel, meaning the kernel is too old
 	// to support the given map type.
 	case errors.Is(err, unix.EINVAL), errors.Is(err, unix.E2BIG):

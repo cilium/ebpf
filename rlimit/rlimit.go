@@ -44,7 +44,7 @@ func detectMemcgAccounting() error {
 		return fmt.Errorf("lowering memlock rlimit: %s", err)
 	}
 
-	attr := sys.BPFMapCreateAttr{
+	attr := sys.MapCreateAttr{
 		MapType:    2, /* Array */
 		KeySize:    4,
 		ValueSize:  4,
@@ -55,7 +55,7 @@ func detectMemcgAccounting() error {
 	// the rlimit on pre-5.11 kernels, but against the memory cgroup budget on
 	// kernels 5.11 and over. If this call succeeds with the process' memlock
 	// rlimit set to 0, we can reasonably assume memcg accounting is supported.
-	fd, mapErr := sys.BPFMapCreate(&attr)
+	fd, mapErr := sys.MapCreate(&attr)
 
 	// Restore old limits regardless of what happened.
 	if err := unix.Prlimit(0, unix.RLIMIT_MEMLOCK, &oldLimit, nil); err != nil {

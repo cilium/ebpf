@@ -63,7 +63,7 @@ func RawDetachProgram(opts RawDetachProgramOptions) error {
 		return err
 	}
 
-	attr := sys.ProgAttachAttr{
+	attr := sys.ProgDetachAttr{
 		TargetFd:    uint32(opts.Target),
 		AttachBpfFd: uint32(opts.Program.FD()),
 		AttachType:  uint32(opts.Attach),

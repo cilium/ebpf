@@ -1498,6 +1498,43 @@ func BenchmarkMarshalling(b *testing.B) {
 	})
 }
 
+func BenchmarkPerCPUMarshalling(b *testing.B) {
+	newMap := func(valueSize uint32) *Map {
+		m, err := NewMap(&MapSpec{
+			Type:       PerCPUHash,
+			KeySize:    8,
+			ValueSize:  valueSize,
+			MaxEntries: 1,
+		})
+		if err != nil {
+			b.Fatal(err)
+		}
+		return m
+	}
+
+	key := uint64(1)
+	val := []uint64{1, 2, 3, 4, 5, 6, 7, 8}
+
+	m := newMap(8)
+	if err := m.Put(key, val[0:]); err != nil {
+		b.Fatal(err)
+	}
+
+	b.Run("reflection", func(b *testing.B) {
+		b.ReportAllocs()
+		b.ResetTimer()
+
+		var value []uint64
+
+		for i := 0; i < b.N; i++ {
+			err := m.Lookup(unsafe.Pointer(&key), &value)
+			if err != nil {
+				b.Fatal("Can't get key:", err)
+			}
+		}
+	})
+}
+
 func BenchmarkMap(b *testing.B) {
 	m, err := NewMap(&MapSpec{
 		Type:       Hash,

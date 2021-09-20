@@ -34,7 +34,7 @@ func RawAttachProgram(opts RawAttachProgramOptions) error {
 		replaceFd = uint32(opts.Replace.FD())
 	}
 
-	attr := sys.BPFProgAttachAttr{
+	attr := sys.ProgAttachAttr{
 		TargetFd:     uint32(opts.Target),
 		AttachBpfFd:  uint32(opts.Program.FD()),
 		ReplaceBpfFd: replaceFd,
@@ -42,7 +42,7 @@ func RawAttachProgram(opts RawAttachProgramOptions) error {
 		AttachFlags:  uint32(opts.Flags),
 	}
 
-	if err := sys.BPFProgAttach(&attr); err != nil {
+	if err := sys.ProgAttach(&attr); err != nil {
 		return fmt.Errorf("can't attach program: %w", err)
 	}
 	return nil
@@ -63,12 +63,12 @@ func RawDetachProgram(opts RawDetachProgramOptions) error {
 		return err
 	}
 
-	attr := sys.BPFProgDetachAttr{
+	attr := sys.ProgAttachAttr{
 		TargetFd:    uint32(opts.Target),
 		AttachBpfFd: uint32(opts.Program.FD()),
 		AttachType:  uint32(opts.Attach),
 	}
-	if err := sys.BPFProgDetach(&attr); err != nil {
+	if err := sys.ProgDetach(&attr); err != nil {
 		return fmt.Errorf("can't detach program: %w", err)
 	}
 

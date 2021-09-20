@@ -86,11 +86,11 @@ func AttachRawLink(opts RawLinkOptions) (*RawLink, error) {
 		return nil, fmt.Errorf("invalid program: %s", sys.ErrClosedFd)
 	}
 
-	attr := bpfLinkCreateAttr{
-		targetFd:    uint32(opts.Target),
-		progFd:      uint32(progFd),
-		attachType:  opts.Attach,
-		targetBTFID: uint32(opts.BTF),
+	attr := sys.LinkCreateAttr{
+		TargetFd:    uint32(opts.Target),
+		ProgFd:      uint32(progFd),
+		AttachType:  sys.AttachType(opts.Attach),
+		TargetBtfId: uint32(opts.BTF),
 	}
 	fd, err := bpfLinkCreate(&attr)
 	if err != nil {
@@ -105,7 +105,7 @@ func AttachRawLink(opts RawLinkOptions) (*RawLink, error) {
 // Returns an error if the pinned link type doesn't match linkType. Pass
 // UnspecifiedType to disable this behaviour.
 func LoadPinnedRawLink(fileName string, linkType Type, opts *ebpf.LoadPinOptions) (*RawLink, error) {
-	fd, err := sys.BPFObjGet(fileName, opts.Marshal())
+	fd, err := sys.ObjGet(fileName, opts.Marshal())
 	if err != nil {
 		return nil, fmt.Errorf("load pinned link: %w", err)
 	}
@@ -193,33 +193,26 @@ func (l *RawLink) UpdateArgs(opts RawLinkUpdateOptions) error {
 		}
 	}
 
-	attr := bpfLinkUpdateAttr{
-		linkFd:    l.fd.Uint(),
-		newProgFd: uint32(newFd),
-		oldProgFd: uint32(oldFd),
-		flags:     opts.Flags,
+	attr := sys.LinkUpdateAttr{
+		LinkFd:    l.fd.Uint(),
+		NewProgFd: uint32(newFd),
+		OldProgFd: uint32(oldFd),
+		Flags:     opts.Flags,
 	}
 	return bpfLinkUpdate(&attr)
 }
 
-// struct bpf_link_info
-type bpfLinkInfo struct {
-	typ     uint32
-	id      uint32
-	prog_id uint32
-}
-
 // Info returns metadata about the link.
 func (l *RawLink) Info() (*RawLinkInfo, error) {
-	var info bpfLinkInfo
-	err := sys.BPFObjGetInfoByFD(l.fd, unsafe.Pointer(&info), unsafe.Sizeof(info))
+	var info sys.LinkInfo
+	err := sys.ObjGetInfoByFD(l.fd, unsafe.Pointer(&info), unsafe.Sizeof(info))
 	if err != nil {
 		return nil, fmt.Errorf("link info: %s", err)
 	}
 
 	return &RawLinkInfo{
-		Type(info.typ),
-		ID(info.id),
-		ebpf.ProgramID(info.prog_id),
+		Type(info.Type),
+		ID(info.Id),
+		ebpf.ProgramID(info.ProgId),
 	}, nil
 }

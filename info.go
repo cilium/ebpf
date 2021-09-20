@@ -38,14 +38,14 @@ func newMapInfoFromFd(fd *sys.FD) (*MapInfo, error) {
 	}
 
 	return &MapInfo{
-		MapType(info.map_type),
-		MapID(info.id),
-		info.key_size,
-		info.value_size,
-		info.max_entries,
-		info.map_flags,
+		MapType(info.Type),
+		MapID(info.Id),
+		info.KeySize,
+		info.ValueSize,
+		info.MaxEntries,
+		info.MapFlags,
 		// name is available from 4.15.
-		internal.CString(info.name[:]),
+		internal.CString(info.Name[:]),
 	}, nil
 }
 
@@ -107,8 +107,8 @@ func newProgramInfoFromFd(fd *sys.FD) (*ProgramInfo, error) {
 	}
 
 	var mapIDs []MapID
-	if info.nr_map_ids > 0 {
-		mapIDs = make([]MapID, info.nr_map_ids)
+	if info.NrMapIds > 0 {
+		mapIDs = make([]MapID, info.NrMapIds)
 		info, err = bpfGetProgInfoByFD(fd, mapIDs)
 		if err != nil {
 			return nil, err
@@ -116,17 +116,17 @@ func newProgramInfoFromFd(fd *sys.FD) (*ProgramInfo, error) {
 	}
 
 	return &ProgramInfo{
-		Type: ProgramType(info.prog_type),
-		id:   ProgramID(info.id),
+		Type: ProgramType(info.Type),
+		id:   ProgramID(info.Id),
 		// tag is available if the kernel supports BPF_PROG_GET_INFO_BY_FD.
-		Tag: hex.EncodeToString(info.tag[:]),
+		Tag: hex.EncodeToString(info.Tag[:]),
 		// name is available from 4.15.
-		Name: internal.CString(info.name[:]),
-		btf:  btf.ID(info.btf_id),
+		Name: internal.CString(info.Name[:]),
+		btf:  btf.ID(info.BtfId),
 		ids:  mapIDs,
 		stats: &programStats{
-			runtime:  time.Duration(info.run_time_ns),
-			runCount: info.run_cnt,
+			runtime:  time.Duration(info.RunTimeNs),
+			runCount: info.RunCnt,
 		},
 	}, nil
 }
@@ -257,11 +257,11 @@ func scanFdInfoReader(r io.Reader, fields map[string]interface{}) error {
 //
 // Requires at least 5.8.
 func EnableStats(which uint32) (io.Closer, error) {
-	attr := sys.BPFEnableStatsAttr{
-		StatsType: which,
+	attr := sys.EnableStatsAttr{
+		Type: which,
 	}
 
-	fd, err := sys.BPFEnableStats(&attr)
+	fd, err := sys.EnableStats(&attr)
 	if err != nil {
 		return nil, err
 	}

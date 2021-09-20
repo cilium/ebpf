@@ -360,7 +360,7 @@ func TestProgramName(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if name := internal.CString(info.name[:]); name != "test" {
+	if name := internal.CString(info.Name[:]); name != "test" {
 		t.Errorf("Name is not test, got '%s'", name)
 	}
 }

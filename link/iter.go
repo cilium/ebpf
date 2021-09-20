@@ -43,11 +43,11 @@ func AttachIter(opts IterOptions) (*Iter, error) {
 		info.map_fd = uint32(mapFd)
 	}
 
-	attr := bpfLinkCreateIterAttr{
-		prog_fd:       uint32(progFd),
-		attach_type:   ebpf.AttachTraceIter,
-		iter_info:     sys.NewPointer(unsafe.Pointer(&info)),
-		iter_info_len: uint32(unsafe.Sizeof(info)),
+	attr := sys.LinkCreateIterAttr{
+		ProgFd:      uint32(progFd),
+		AttachType:  sys.AttachType(ebpf.AttachTraceIter),
+		IterInfo:    sys.NewPointer(unsafe.Pointer(&info)),
+		IterInfoLen: uint32(unsafe.Sizeof(info)),
 	}
 
 	fd, err := bpfLinkCreateIter(&attr)
@@ -77,8 +77,8 @@ type Iter struct {
 //
 // Reading from the returned reader triggers the BPF program.
 func (it *Iter) Open() (io.ReadCloser, error) {
-	attr := &bpfIterCreateAttr{
-		linkFd: it.fd.Uint(),
+	attr := &sys.IterCreateAttr{
+		LinkFd: it.fd.Uint(),
 	}
 
 	fd, err := bpfIterCreate(attr)

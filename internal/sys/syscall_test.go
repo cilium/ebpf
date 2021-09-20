@@ -8,7 +8,7 @@ import (
 )
 
 func TestObjName(t *testing.T) {
-	name := NewBPFObjName("more_than_16_characters_long")
+	name := NewObjName("more_than_16_characters_long")
 	if name[len(name)-1] != 0 {
 		t.Error("NewBPFObjName doesn't null terminate")
 	}
@@ -36,7 +36,7 @@ func TestWrappedErrno(t *testing.T) {
 
 func TestSyscallError(t *testing.T) {
 	err := errors.New("foo")
-	foo := SyscallError(err, unix.EINVAL)
+	foo := Error(err, unix.EINVAL)
 
 	if !errors.Is(foo, unix.EINVAL) {
 		t.Error("SyscallError is not the wrapped errno")

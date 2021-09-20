@@ -349,6 +349,12 @@ func TestUprobeProgramCall(t *testing.T) {
 			// Open Uprobe on the executable for the given symbol
 			// and attach it to the ebpf program created above.
 			u, err := ex.Uprobe(tt.sym, p, nil)
+			if errors.Is(err, ErrNoSymbol) {
+				// Assume bash::main and go::main.main always exists
+				// and skip the test if the symbol can't be found as
+				// certain OS (eg. Debian) strip binaries.
+				t.Skipf("executable %s appear to be stripped, skipping", tt.elf)
+			}
 			if err != nil {
 				t.Fatal(err)
 			}

@@ -10,6 +10,7 @@ import (
 	"strings"
 	"syscall"
 	"time"
+	"unsafe"
 
 	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/btf"
@@ -29,7 +30,8 @@ type MapInfo struct {
 }
 
 func newMapInfoFromFd(fd *sys.FD) (*MapInfo, error) {
-	info, err := bpfGetMapInfoByFD(fd)
+	var info sys.MapInfo
+	err := sys.ObjInfo(fd, &info)
 	if errors.Is(err, syscall.EINVAL) {
 		return newMapInfoFromProc(fd)
 	}
@@ -98,7 +100,8 @@ type ProgramInfo struct {
 }
 
 func newProgramInfoFromFd(fd *sys.FD) (*ProgramInfo, error) {
-	info, err := bpfGetProgInfoByFD(fd, nil)
+	var info sys.ProgInfo
+	err := sys.ObjInfo(fd, &info)
 	if errors.Is(err, syscall.EINVAL) {
 		return newProgramInfoFromProc(fd)
 	}
@@ -109,7 +112,13 @@ func newProgramInfoFromFd(fd *sys.FD) (*ProgramInfo, error) {
 	var mapIDs []MapID
 	if info.NrMapIds > 0 {
 		mapIDs = make([]MapID, info.NrMapIds)
-		info, err = bpfGetProgInfoByFD(fd, mapIDs)
+		info = sys.ProgInfo{
+			// We have to zero other fields here, otherwise we may get
+			// EFAULT.
+			NrMapIds: uint32(len(mapIDs)),
+			MapIds:   sys.NewPointer(unsafe.Pointer(&mapIDs[0])),
+		}
+		err = sys.ObjInfo(fd, &info)
 		if err != nil {
 			return nil, err
 		}
@@ -257,11 +266,9 @@ func scanFdInfoReader(r io.Reader, fields map[string]interface{}) error {
 //
 // Requires at least 5.8.
 func EnableStats(which uint32) (io.Closer, error) {
-	attr := sys.EnableStatsAttr{
+	fd, err := sys.EnableStats(&sys.EnableStatsAttr{
 		Type: which,
-	}
-
-	fd, err := sys.EnableStats(&attr)
+	})
 	if err != nil {
 		return nil, err
 	}

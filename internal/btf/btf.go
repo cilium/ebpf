@@ -545,17 +545,17 @@ func NewHandle(spec *Spec) (*Handle, error) {
 		return nil, errors.New("BTF exceeds the maximum size")
 	}
 
-	attr := &bpfLoadBTFAttr{
-		btf:     sys.NewSlicePointer(btf),
-		btfSize: uint32(len(btf)),
+	attr := &sys.BtfLoadAttr{
+		Btf:     sys.NewSlicePointer(btf),
+		BtfSize: uint32(len(btf)),
 	}
 
 	fd, err := bpfLoadBTF(attr)
 	if err != nil {
 		logBuf := make([]byte, 64*1024)
-		attr.logBuf = sys.NewSlicePointer(logBuf)
-		attr.btfLogSize = uint32(len(logBuf))
-		attr.btfLogLevel = 1
+		attr.BtfLogBuf = sys.NewSlicePointer(logBuf)
+		attr.BtfLogSize = uint32(len(logBuf))
+		attr.BtfLogLevel = 1
 		_, logErr := bpfLoadBTF(attr)
 		return nil, internal.ErrorWithLog(err, logBuf, logErr)
 	}
@@ -569,7 +569,7 @@ func NewHandle(spec *Spec) (*Handle, error) {
 //
 // Requires CAP_SYS_ADMIN.
 func NewHandleFromID(id ID) (*Handle, error) {
-	fd, err := sys.BPFObjGetFDByID(sys.BPF_BTF_GET_FD_BY_ID, uint32(id))
+	fd, err := sys.ObjGetFDByID(sys.BPF_BTF_GET_FD_BY_ID, uint32(id))
 	if err != nil {
 		return nil, fmt.Errorf("get BTF by id: %w", err)
 	}
@@ -681,15 +681,7 @@ func (p *Program) Fixups(target *Spec) (COREFixups, error) {
 	return coreRelocate(p.spec, target, p.coreRelos)
 }
 
-type bpfLoadBTFAttr struct {
-	btf         sys.Pointer
-	logBuf      sys.Pointer
-	btfSize     uint32
-	btfLogSize  uint32
-	btfLogLevel uint32
-}
-
-func bpfLoadBTF(attr *bpfLoadBTFAttr) (*sys.FD, error) {
+func bpfLoadBTF(attr *sys.BtfLoadAttr) (*sys.FD, error) {
 	fd, err := sys.BPF(sys.BPF_BTF_LOAD, unsafe.Pointer(attr), unsafe.Sizeof(*attr))
 	if err != nil {
 		return nil, err
@@ -740,9 +732,9 @@ var haveBTF = internal.FeatureTest("BTF", "5.1", func() error {
 
 	btf := marshalBTF(&types, strings, internal.NativeEndian)
 
-	fd, err := bpfLoadBTF(&bpfLoadBTFAttr{
-		btf:     sys.NewSlicePointer(btf),
-		btfSize: uint32(len(btf)),
+	fd, err := bpfLoadBTF(&sys.BtfLoadAttr{
+		Btf:     sys.NewSlicePointer(btf),
+		BtfSize: uint32(len(btf)),
 	})
 	if errors.Is(err, unix.EINVAL) || errors.Is(err, unix.EPERM) {
 		// Treat both EINVAL and EPERM as not supported: loading the program
@@ -778,9 +770,9 @@ var haveFuncLinkage = internal.FeatureTest("BTF func linkage", "5.6", func() err
 
 	btf := marshalBTF(&types, strings, internal.NativeEndian)
 
-	fd, err := bpfLoadBTF(&bpfLoadBTFAttr{
-		btf:     sys.NewSlicePointer(btf),
-		btfSize: uint32(len(btf)),
+	fd, err := bpfLoadBTF(&sys.BtfLoadAttr{
+		Btf:     sys.NewSlicePointer(btf),
+		BtfSize: uint32(len(btf)),
 	})
 	if errors.Is(err, unix.EINVAL) {
 		return internal.ErrNotSupported

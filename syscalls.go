@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"unsafe"
 
 	"github.com/cilium/ebpf/asm"
 	"github.com/cilium/ebpf/internal"
@@ -47,11 +46,6 @@ func invalidBPFObjNameChar(char rune) bool {
 	default:
 		return true
 	}
-}
-
-func bpfProgTestRun(attr *sys.ProgRunAttr) error {
-	_, err := sys.BPF(sys.BPF_PROG_TEST_RUN, unsafe.Pointer(attr), unsafe.Sizeof(*attr))
-	return err
 }
 
 var haveNestedMaps = internal.FeatureTest("nested maps", "4.12", func() error {
@@ -121,82 +115,6 @@ var haveInnerMaps = internal.FeatureTest("inner maps", "5.10", func() error {
 	return nil
 })
 
-func bpfMapLookupElem(m *sys.FD, key, valueOut sys.Pointer) error {
-	attr := sys.MapLookupElemAttr{
-		MapFd: m.Uint(),
-		Key:   key,
-		Value: valueOut,
-	}
-	_, err := sys.BPF(sys.BPF_MAP_LOOKUP_ELEM, unsafe.Pointer(&attr), unsafe.Sizeof(attr))
-	return wrapMapError(err)
-}
-
-func bpfMapLookupAndDelete(m *sys.FD, key, valueOut sys.Pointer) error {
-	attr := sys.MapLookupAndDeleteElemAttr{
-		MapFd: m.Uint(),
-		Key:   key,
-		Value: valueOut,
-	}
-	_, err := sys.BPF(sys.BPF_MAP_LOOKUP_AND_DELETE_ELEM, unsafe.Pointer(&attr), unsafe.Sizeof(attr))
-	return wrapMapError(err)
-}
-
-func bpfMapUpdateElem(m *sys.FD, key, valueOut sys.Pointer, flags uint64) error {
-	attr := sys.MapUpdateElemAttr{
-		MapFd: m.Uint(),
-		Key:   key,
-		Value: valueOut,
-		Flags: flags,
-	}
-	_, err := sys.BPF(sys.BPF_MAP_UPDATE_ELEM, unsafe.Pointer(&attr), unsafe.Sizeof(attr))
-	return wrapMapError(err)
-}
-
-func bpfMapDeleteElem(m *sys.FD, key sys.Pointer) error {
-	attr := sys.MapDeleteElemAttr{
-		MapFd: m.Uint(),
-		Key:   key,
-	}
-	_, err := sys.BPF(sys.BPF_MAP_DELETE_ELEM, unsafe.Pointer(&attr), unsafe.Sizeof(attr))
-	return wrapMapError(err)
-}
-
-func bpfMapGetNextKey(m *sys.FD, key, nextKeyOut sys.Pointer) error {
-	attr := sys.MapGetNextKeyAttr{
-		MapFd:   m.Uint(),
-		Key:     key,
-		NextKey: nextKeyOut,
-	}
-	_, err := sys.BPF(sys.BPF_MAP_GET_NEXT_KEY, unsafe.Pointer(&attr), unsafe.Sizeof(attr))
-	return wrapMapError(err)
-}
-
-func objGetNextID(cmd sys.Cmd, start uint32) (uint32, error) {
-	attr := sys.MapGetNextIdAttr{
-		Id: start,
-	}
-	_, err := sys.BPF(cmd, unsafe.Pointer(&attr), unsafe.Sizeof(attr))
-	return attr.NextId, err
-}
-
-func bpfMapBatch(cmd sys.Cmd, m *sys.FD, inBatch, outBatch, keys, values sys.Pointer, count uint32, opts *BatchOptions) (uint32, error) {
-	attr := sys.MapLookupBatchAttr{
-		InBatch:  inBatch,
-		OutBatch: outBatch,
-		Keys:     keys,
-		Values:   values,
-		Count:    count,
-		MapFd:    m.Uint(),
-	}
-	if opts != nil {
-		attr.ElemFlags = opts.ElemFlags
-		attr.Flags = opts.Flags
-	}
-	_, err := sys.BPF(cmd, unsafe.Pointer(&attr), unsafe.Sizeof(attr))
-	// always return count even on an error, as things like update might partially be fulfilled.
-	return attr.Count, wrapMapError(err)
-}
-
 func wrapMapError(err error) error {
 	if err == nil {
 		return nil
@@ -219,36 +137,6 @@ func wrapMapError(err error) error {
 	}
 
 	return err
-}
-
-func bpfMapFreeze(m *sys.FD) error {
-	attr := sys.MapFreezeAttr{
-		MapFd: m.Uint(),
-	}
-	_, err := sys.BPF(sys.BPF_MAP_FREEZE, unsafe.Pointer(&attr), unsafe.Sizeof(attr))
-	return err
-}
-
-func bpfGetProgInfoByFD(fd *sys.FD, ids []MapID) (*sys.ProgInfo, error) {
-	var info sys.ProgInfo
-	if len(ids) > 0 {
-		info.NrMapIds = uint32(len(ids))
-		info.MapIds = sys.NewPointer(unsafe.Pointer(&ids[0]))
-	}
-
-	if err := sys.ObjGetInfoByFD(fd, unsafe.Pointer(&info), unsafe.Sizeof(info)); err != nil {
-		return nil, fmt.Errorf("can't get program info: %w", err)
-	}
-	return &info, nil
-}
-
-func bpfGetMapInfoByFD(fd *sys.FD) (*sys.MapInfo, error) {
-	var info sys.MapInfo
-	err := sys.ObjGetInfoByFD(fd, unsafe.Pointer(&info), unsafe.Sizeof(info))
-	if err != nil {
-		return nil, fmt.Errorf("can't get map info: %w", err)
-	}
-	return &info, nil
 }
 
 var haveObjName = internal.FeatureTest("object names", "4.15", func() error {
@@ -305,12 +193,18 @@ var haveBatchAPI = internal.FeatureTest("map batch api", "5.6", func() error {
 		return internal.ErrNotSupported
 	}
 	defer fd.Close()
+
 	keys := []uint32{1, 2}
 	values := []uint32{3, 4}
 	kp, _ := marshalPtr(keys, 8)
 	vp, _ := marshalPtr(values, 8)
-	nilPtr := sys.NewPointer(nil)
-	_, err = bpfMapBatch(sys.BPF_MAP_UPDATE_BATCH, fd, nilPtr, nilPtr, kp, vp, maxEntries, nil)
+
+	err = sys.MapUpdateBatch(&sys.MapUpdateBatchAttr{
+		MapFd:  fd.Uint(),
+		Keys:   kp,
+		Values: vp,
+		Count:  maxEntries,
+	})
 	if err != nil {
 		return internal.ErrNotSupported
 	}

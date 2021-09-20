@@ -1,8 +1,6 @@
 package sys
 
 import (
-	"errors"
-	"fmt"
 	"runtime"
 	"syscall"
 	"unsafe"
@@ -14,105 +12,71 @@ import (
 //
 // Any pointers contained in attr must use the Pointer type from this package.
 func BPF(cmd Cmd, attr unsafe.Pointer, size uintptr) (uintptr, error) {
-	r1, _, errNo := unix.Syscall(unix.SYS_BPF, uintptr(cmd), uintptr(attr), size)
-	runtime.KeepAlive(attr)
-
-	var err error
-	if errNo != 0 {
-		err = wrappedErrno{errNo}
-	}
-
-	return r1, err
-}
-
-// ProgLoad wraps BPF_PROG_LOAD.
-func ProgLoad(attr *ProgLoadAttr) (*FD, error) {
 	for {
-		fd, err := BPF(BPF_PROG_LOAD, unsafe.Pointer(attr), unsafe.Sizeof(*attr))
+		r1, _, errNo := unix.Syscall(unix.SYS_BPF, uintptr(cmd), uintptr(attr), size)
+		runtime.KeepAlive(attr)
+
 		// As of ~4.20 the verifier can be interrupted by a signal,
 		// and returns EAGAIN in that case.
-		if errors.Is(err, unix.EAGAIN) {
+		if errNo == unix.EAGAIN && cmd == BPF_PROG_LOAD {
 			continue
 		}
 
-		if err != nil {
-			return nil, err
+		var err error
+		if errNo != 0 {
+			err = wrappedErrno{errNo}
 		}
 
-		return NewFD(int(fd)), nil
+		return r1, err
 	}
 }
 
-func ProgAttach(attr *ProgAttachAttr) error {
-	_, err := BPF(BPF_PROG_ATTACH, unsafe.Pointer(attr), unsafe.Sizeof(*attr))
-	return err
-}
-
-func ProgDetach(attr *ProgAttachAttr) error {
-	_, err := BPF(BPF_PROG_DETACH, unsafe.Pointer(attr), unsafe.Sizeof(*attr))
-	return err
-}
-
-func EnableStats(attr *EnableStatsAttr) (*FD, error) {
-	ptr, err := BPF(BPF_ENABLE_STATS, unsafe.Pointer(attr), unsafe.Sizeof(*attr))
-	if err != nil {
-		return nil, fmt.Errorf("enable stats: %w", err)
-	}
-	return NewFD(int(ptr)), nil
-
-}
-
-// ObjPin wraps BPF_OBJ_PIN.
-func ObjPin(fileName string, fd *FD) error {
-	attr := ObjPinAttr{
-		Pathname: NewStringPointer(fileName),
-		BpfFd:    fd.Uint(),
-	}
-	_, err := BPF(BPF_OBJ_PIN, unsafe.Pointer(&attr), unsafe.Sizeof(attr))
-	if err != nil {
-		return fmt.Errorf("pin object %s: %w", fileName, err)
-	}
-	return nil
-}
-
-// ObjGet wraps BPF_OBJ_GET.
-func ObjGet(fileName string, flags uint32) (*FD, error) {
-	attr := ObjPinAttr{
-		Pathname:  NewStringPointer(fileName),
-		FileFlags: flags,
-	}
-	ptr, err := BPF(BPF_OBJ_GET, unsafe.Pointer(&attr), unsafe.Sizeof(attr))
-	if err != nil {
-		return nil, fmt.Errorf("get object %s: %w", fileName, err)
-	}
-	return NewFD(int(ptr)), nil
-}
-
-// ObjGetInfoByFD wraps BPF_OBJ_GET_INFO_BY_FD.
+// Info is implemented by all structs that can be passed to the ObjInfo syscall.
 //
-// Available from 4.13.
-func ObjGetInfoByFD(fd *FD, info unsafe.Pointer, size uintptr) error {
-	attr := ObjGetInfoByFdAttr{
+//    MapInfo
+//    ProgInfo
+//    LinkInfo
+//    BtfInfo
+type Info interface {
+	info() (unsafe.Pointer, uint32)
+}
+
+var _ Info = (*MapInfo)(nil)
+
+func (i *MapInfo) info() (unsafe.Pointer, uint32) {
+	return unsafe.Pointer(i), uint32(unsafe.Sizeof(*i))
+}
+
+var _ Info = (*ProgInfo)(nil)
+
+func (i *ProgInfo) info() (unsafe.Pointer, uint32) {
+	return unsafe.Pointer(i), uint32(unsafe.Sizeof(*i))
+}
+
+var _ Info = (*LinkInfo)(nil)
+
+func (i *LinkInfo) info() (unsafe.Pointer, uint32) {
+	return unsafe.Pointer(i), uint32(unsafe.Sizeof(*i))
+}
+
+var _ Info = (*BtfInfo)(nil)
+
+func (i *BtfInfo) info() (unsafe.Pointer, uint32) {
+	return unsafe.Pointer(i), uint32(unsafe.Sizeof(*i))
+}
+
+// ObjInfo retrieves information about a BPF Fd.
+//
+// info may be one of MapInfo, ProgInfo, LinkInfo and BtfInfo.
+func ObjInfo(fd *FD, info Info) error {
+	ptr, len := info.info()
+	err := ObjGetInfoByFd(&ObjGetInfoByFdAttr{
 		BpfFd:   fd.Uint(),
-		InfoLen: uint32(size),
-		Info:    NewPointer(info),
-	}
-	_, err := BPF(BPF_OBJ_GET_INFO_BY_FD, unsafe.Pointer(&attr), unsafe.Sizeof(attr))
-	if err != nil {
-		return fmt.Errorf("fd %v: %w", fd, err)
-	}
-	return nil
-}
-
-// ObjGetFDByID wraps BPF_*_GET_FD_BY_ID.
-//
-// Available from 4.13.
-func ObjGetFDByID(cmd Cmd, id uint32) (*FD, error) {
-	attr := MapGetFdByIdAttr{
-		Id: id,
-	}
-	ptr, err := BPF(cmd, unsafe.Pointer(&attr), unsafe.Sizeof(attr))
-	return NewFD(int(ptr)), err
+		InfoLen: len,
+		Info:    NewPointer(ptr),
+	})
+	runtime.KeepAlive(fd)
+	return err
 }
 
 // BPFObjName is a null-terminated string made up of
@@ -124,15 +88,6 @@ func NewObjName(name string) ObjName {
 	var result ObjName
 	copy(result[:unix.BPF_OBJ_NAME_LEN-1], name)
 	return result
-}
-
-func MapCreate(attr *MapCreateAttr) (*FD, error) {
-	fd, err := BPF(BPF_MAP_CREATE, unsafe.Pointer(attr), unsafe.Sizeof(*attr))
-	if err != nil {
-		return nil, err
-	}
-
-	return NewFD(int(fd)), nil
 }
 
 // wrappedErrno wraps syscall.Errno to prevent direct comparisons with

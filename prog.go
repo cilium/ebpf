@@ -344,7 +344,9 @@ func NewProgramFromFD(fd int) (*Program, error) {
 //
 // Returns ErrNotExist, if there is no eBPF program with the given id.
 func NewProgramFromID(id ProgramID) (*Program, error) {
-	fd, err := sys.ObjGetFDByID(sys.BPF_PROG_GET_FD_BY_ID, uint32(id))
+	fd, err := sys.ProgGetFdById(&sys.ProgGetFdByIdAttr{
+		Id: uint32(id),
+	})
 	if err != nil {
 		return nil, fmt.Errorf("get program by id: %w", err)
 	}
@@ -505,7 +507,7 @@ var haveProgTestRun = internal.FeatureTest("BPF_PROG_TEST_RUN", "4.12", func() e
 		DataIn:     sys.NewSlicePointer(in),
 	}
 
-	err = bpfProgTestRun(&attr)
+	err = sys.ProgRun(&attr)
 	if errors.Is(err, unix.EINVAL) {
 		// Check for EINVAL specifically, rather than err != nil since we
 		// otherwise misdetect due to insufficient permissions.
@@ -552,7 +554,7 @@ func (p *Program) testRun(in []byte, repeat int, reset func()) (uint32, []byte, 
 	}
 
 	for {
-		err := bpfProgTestRun(&attr)
+		err := sys.ProgRun(&attr)
 		if err == nil {
 			break
 		}
@@ -635,14 +637,17 @@ func (p *Program) Detach(fd int, typ AttachType, flags AttachFlags) error {
 		AttachType:  uint32(typ),
 	}
 
-	return sys.ProgDetach(&attr)
+	return sys.ProgAttach(&attr)
 }
 
 // LoadPinnedProgram loads a Program from a BPF file.
 //
 // Requires at least Linux 4.11.
 func LoadPinnedProgram(fileName string, opts *LoadPinOptions) (*Program, error) {
-	fd, err := sys.ObjGet(fileName, opts.Marshal())
+	fd, err := sys.ObjGet(&sys.ObjGetAttr{
+		Pathname:  sys.NewStringPointer(fileName),
+		FileFlags: opts.Marshal(),
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -676,16 +681,16 @@ func SanitizeName(name string, replacement rune) string {
 //
 // Returns ErrNotExist, if there is no next eBPF program.
 func ProgramGetNextID(startID ProgramID) (ProgramID, error) {
-	id, err := objGetNextID(sys.BPF_PROG_GET_NEXT_ID, uint32(startID))
-	return ProgramID(id), err
+	attr := &sys.ProgGetNextIdAttr{Id: uint32(startID)}
+	return ProgramID(attr.NextId), sys.ProgGetNextId(attr)
 }
 
 // ID returns the systemwide unique ID of the program.
 //
 // Deprecated: use ProgramInfo.ID() instead.
 func (p *Program) ID() (ProgramID, error) {
-	info, err := bpfGetProgInfoByFD(p.fd, nil)
-	if err != nil {
+	var info sys.ProgInfo
+	if err := sys.ObjInfo(p.fd, &info); err != nil {
 		return ProgramID(0), err
 	}
 	return ProgramID(info.Id), nil

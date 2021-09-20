@@ -11,7 +11,6 @@ import (
 	"os"
 	"reflect"
 	"sync"
-	"unsafe"
 
 	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/sys"
@@ -550,13 +549,13 @@ func NewHandle(spec *Spec) (*Handle, error) {
 		BtfSize: uint32(len(btf)),
 	}
 
-	fd, err := bpfLoadBTF(attr)
+	fd, err := sys.BtfLoad(attr)
 	if err != nil {
 		logBuf := make([]byte, 64*1024)
 		attr.BtfLogBuf = sys.NewSlicePointer(logBuf)
 		attr.BtfLogSize = uint32(len(logBuf))
 		attr.BtfLogLevel = 1
-		_, logErr := bpfLoadBTF(attr)
+		_, logErr := sys.BtfLoad(attr)
 		return nil, internal.ErrorWithLog(err, logBuf, logErr)
 	}
 
@@ -569,7 +568,9 @@ func NewHandle(spec *Spec) (*Handle, error) {
 //
 // Requires CAP_SYS_ADMIN.
 func NewHandleFromID(id ID) (*Handle, error) {
-	fd, err := sys.ObjGetFDByID(sys.BPF_BTF_GET_FD_BY_ID, uint32(id))
+	fd, err := sys.BtfGetFdById(&sys.BtfGetFdByIdAttr{
+		Id: uint32(id),
+	})
 	if err != nil {
 		return nil, fmt.Errorf("get BTF by id: %w", err)
 	}
@@ -681,15 +682,6 @@ func (p *Program) Fixups(target *Spec) (COREFixups, error) {
 	return coreRelocate(p.spec, target, p.coreRelos)
 }
 
-func bpfLoadBTF(attr *sys.BtfLoadAttr) (*sys.FD, error) {
-	fd, err := sys.BPF(sys.BPF_BTF_LOAD, unsafe.Pointer(attr), unsafe.Sizeof(*attr))
-	if err != nil {
-		return nil, err
-	}
-
-	return sys.NewFD(int(fd)), nil
-}
-
 func marshalBTF(types interface{}, strings []byte, bo binary.ByteOrder) []byte {
 	const minHeaderLength = 24
 
@@ -732,7 +724,7 @@ var haveBTF = internal.FeatureTest("BTF", "5.1", func() error {
 
 	btf := marshalBTF(&types, strings, internal.NativeEndian)
 
-	fd, err := bpfLoadBTF(&sys.BtfLoadAttr{
+	fd, err := sys.BtfLoad(&sys.BtfLoadAttr{
 		Btf:     sys.NewSlicePointer(btf),
 		BtfSize: uint32(len(btf)),
 	})
@@ -770,7 +762,7 @@ var haveFuncLinkage = internal.FeatureTest("BTF func linkage", "5.6", func() err
 
 	btf := marshalBTF(&types, strings, internal.NativeEndian)
 
-	fd, err := bpfLoadBTF(&sys.BtfLoadAttr{
+	fd, err := sys.BtfLoad(&sys.BtfLoadAttr{
 		Btf:     sys.NewSlicePointer(btf),
 		BtfSize: uint32(len(btf)),
 	})

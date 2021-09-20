@@ -1093,7 +1093,7 @@ func TestCgroupPerCPUStorageMarshaling(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer func() {
-		attr := sys.ProgAttachAttr{
+		attr := sys.ProgDetachAttr{
 			TargetFd:    uint32(cgroup.Fd()),
 			AttachBpfFd: uint32(prog.FD()),
 			AttachType:  uint32(AttachCGroupInetEgress),
@@ -1195,8 +1195,8 @@ func TestMapName(t *testing.T) {
 	}
 	defer m.Close()
 
-	info, err := bpfGetMapInfoByFD(m.fd)
-	if err != nil {
+	var info sys.MapInfo
+	if err := sys.ObjInfo(m.fd, &info); err != nil {
 		t.Fatal(err)
 	}
 

@@ -28,7 +28,7 @@ func Pin(currentPath, newPath string, fd *sys.FD) error {
 	}
 
 	if currentPath == "" {
-		return sys.BPFObjPin(newPath, fd)
+		return sys.ObjPin(newPath, fd)
 	}
 	var err error
 	// Renameat2 is used instead of os.Rename to disallow the new path replacing
@@ -41,7 +41,7 @@ func Pin(currentPath, newPath string, fd *sys.FD) error {
 		return fmt.Errorf("unable to move pinned object to new path %v: %w", newPath, err)
 	}
 	// Internal state not in sync with the file system so let's fix it.
-	return sys.BPFObjPin(newPath, fd)
+	return sys.ObjPin(newPath, fd)
 }
 
 func Unpin(pinnedPath string) error {

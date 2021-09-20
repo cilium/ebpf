@@ -1,4 +1,4 @@
-package main
+package internal
 
 import (
 	"testing"
@@ -20,7 +20,7 @@ func TestIdentifier(t *testing.T) {
 	}
 
 	for _, tc := range testcases {
-		have := identifier(tc.in)
+		have := Identifier(tc.in)
 		if have != tc.out {
 			t.Errorf("Expected %q as output of %q, got %q", tc.out, tc.in, have)
 		}

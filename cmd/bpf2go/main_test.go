@@ -3,7 +3,7 @@ package main
 import (
 	"bytes"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -31,7 +31,7 @@ func TestRun(t *testing.T) {
 		t.Fatal("No go.mod file in", modRoot)
 	}
 
-	tmpDir, err := ioutil.TempDir("", "bpf2go-module-*")
+	tmpDir, err := os.MkdirTemp("", "bpf2go-module-*")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -60,7 +60,7 @@ func TestRun(t *testing.T) {
 		fmt.Sprintf("-replace=%s=%s", ebpfModule, modRoot),
 	)
 
-	err = run(ioutil.Discard, "foo", tmpDir, []string{
+	err = run(io.Discard, "foo", tmpDir, []string{
 		"-cc", "clang-9",
 		"bar",
 		filepath.Join(dir, "test.c"),
@@ -198,7 +198,7 @@ func TestConvertGOARCH(t *testing.T) {
 
 	b2g := bpf2go{
 		pkg:        "test",
-		stdout:     ioutil.Discard,
+		stdout:     io.Discard,
 		ident:      "test",
 		cc:         "clang-9",
 		sourceFile: tmp + "/test.c",

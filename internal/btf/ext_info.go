@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 
 	"github.com/cilium/ebpf/asm"
 	"github.com/cilium/ebpf/internal"
@@ -64,7 +63,7 @@ func parseExtInfos(r io.ReadSeeker, bo binary.ByteOrder, strings stringTable) (f
 
 	// Of course, the .BTF.ext header has different semantics than the
 	// .BTF ext header. We need to ignore non-null values.
-	_, err = io.CopyN(ioutil.Discard, r, remainder)
+	_, err = io.CopyN(io.Discard, r, remainder)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("header padding: %v", err)
 	}

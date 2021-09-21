@@ -5,7 +5,6 @@ import (
 	"crypto/rand"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -420,7 +419,7 @@ func probePrefix(ret bool) string {
 func determineRetprobeBit(typ probeType) (uint64, error) {
 	p := filepath.Join("/sys/bus/event_source/devices/", typ.String(), "/format/retprobe")
 
-	data, err := ioutil.ReadFile(p)
+	data, err := os.ReadFile(p)
 	if err != nil {
 		return 0, err
 	}

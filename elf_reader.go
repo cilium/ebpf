@@ -8,7 +8,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"math"
 	"os"
 	"strings"
@@ -521,7 +520,7 @@ func (ec *elfCode) loadMaps(maps map[string]*MapSpec) error {
 				return fmt.Errorf("map %s: missing flags", mapName)
 			}
 
-			extra, err := ioutil.ReadAll(lr)
+			extra, err := io.ReadAll(lr)
 			if err != nil {
 				return fmt.Errorf("map %s: reading map tail: %w", mapName, err)
 			}
@@ -606,7 +605,7 @@ func (ec *elfCode) loadBTFMaps(maps map[string]*MapSpec) error {
 
 		// Drain the ELF section reader to make sure all bytes are accounted for
 		// with BTF metadata.
-		i, err := io.Copy(ioutil.Discard, rs)
+		i, err := io.Copy(io.Discard, rs)
 		if err != nil {
 			return fmt.Errorf("section %v: unexpected error reading remainder of ELF section: %w", sec.Name, err)
 		}

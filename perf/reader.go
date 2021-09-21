@@ -337,12 +337,12 @@ func (pr *Reader) Read() (Record, error) {
 				return Record{}, err
 			}
 
-			for _, event := range pr.epollEvents[:nEvents] {
-				if int(event.Fd) == pr.closeFd {
+			for eventId := range pr.epollEvents[:nEvents] {
+				if int(pr.epollEvents[eventId].Fd) == pr.closeFd {
 					return Record{}, fmt.Errorf("%w", ErrClosed)
 				}
 
-				ring := pr.rings[cpuForEvent(&event)]
+				ring := pr.rings[cpuForEvent(&pr.epollEvents[eventId])]
 				pr.epollRings = append(pr.epollRings, ring)
 
 				// Read the current head pointer now, not every time

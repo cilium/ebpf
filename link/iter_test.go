@@ -1,7 +1,7 @@
 package link
 
 import (
-	"io/ioutil"
+	"io"
 	"testing"
 
 	"github.com/cilium/ebpf"
@@ -39,7 +39,7 @@ func TestIter(t *testing.T) {
 	}
 	defer file.Close()
 
-	contents, err := ioutil.ReadAll(file)
+	contents, err := io.ReadAll(file)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -99,7 +99,7 @@ func TestIterMapElements(t *testing.T) {
 	}
 	defer file.Close()
 
-	contents, err := ioutil.ReadAll(file)
+	contents, err := io.ReadAll(file)
 	if err != nil {
 		t.Fatal(err)
 	}

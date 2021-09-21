@@ -467,8 +467,8 @@ func parseCoreAccessor(accessor string) (coreAccessor, error) {
 		return nil, fmt.Errorf("empty accessor")
 	}
 
-	var result coreAccessor
 	parts := strings.Split(accessor, ":")
+	result := make(coreAccessor, 0, len(parts))
 	for _, part := range parts {
 		// 31 bits to avoid overflowing int on 32 bit platforms.
 		index, err := strconv.ParseUint(part, 10, 31)

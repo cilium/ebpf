@@ -564,7 +564,7 @@ func (ec *elfCode) loadBTFMaps(maps map[string]*MapSpec) error {
 		// sole purpose is to receive relocations, so all must be zero.
 		rs := sec.Open()
 
-		for _, vs := range ds.Vars {
+		for idx, vs := range ds.Vars {
 			// BPF maps are declared as and assigned to global variables,
 			// so iterate over each Var in the DataSec and validate their types.
 			v, ok := vs.Type.(*btf.Var)
@@ -592,7 +592,7 @@ func (ec *elfCode) loadBTFMaps(maps map[string]*MapSpec) error {
 				return fmt.Errorf("expected struct, got %s", v.Type)
 			}
 
-			mapSpec, err := mapSpecFromBTF(sec, &vs, mapStruct, ec.btf, name, false)
+			mapSpec, err := mapSpecFromBTF(sec, &ds.Vars[idx], mapStruct, ec.btf, name, false)
 			if err != nil {
 				return fmt.Errorf("map %v: %w", name, err)
 			}

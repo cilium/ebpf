@@ -5,7 +5,7 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"math"
 	"testing"
 
@@ -55,7 +55,7 @@ func TestSignedJump(t *testing.T) {
 
 	insns[0].Offset = 1
 
-	err := insns.Marshal(ioutil.Discard, binary.LittleEndian)
+	err := insns.Marshal(io.Discard, binary.LittleEndian)
 	if err != nil {
 		t.Error("Can't marshal signed jump:", err)
 	}

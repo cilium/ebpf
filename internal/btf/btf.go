@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"math"
 	"os"
 	"reflect"
@@ -242,7 +241,7 @@ func loadKernelSpec() (*Spec, error) {
 }
 
 func parseBTF(btf io.Reader, bo binary.ByteOrder) ([]rawType, stringTable, error) {
-	rawBTF, err := ioutil.ReadAll(btf)
+	rawBTF, err := io.ReadAll(btf)
 	if err != nil {
 		return nil, nil, fmt.Errorf("can't read BTF: %v", err)
 	}

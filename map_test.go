@@ -3,7 +3,6 @@ package ebpf
 import (
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"math"
 	"os"
 	"path/filepath"
@@ -344,7 +343,7 @@ func TestNestedMapPin(t *testing.T) {
 	}
 	defer m.Close()
 
-	tmp, err := ioutil.TempDir("/sys/fs/bpf", "ebpf-test")
+	tmp, err := os.MkdirTemp("/sys/fs/bpf", "ebpf-test")
 	if err != nil {
 		t.Fatal(err)
 	}

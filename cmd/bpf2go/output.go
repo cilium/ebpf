@@ -8,7 +8,7 @@ import (
 	"go/scanner"
 	"go/token"
 	"io"
-	"io/ioutil"
+	"os"
 	"path/filepath"
 	"strings"
 	"text/template"
@@ -220,7 +220,7 @@ type writeArgs struct {
 }
 
 func writeCommon(args writeArgs) error {
-	obj, err := ioutil.ReadFile(args.obj)
+	obj, err := os.ReadFile(args.obj)
 	if err != nil {
 		return fmt.Errorf("read object file contents: %s", err)
 	}

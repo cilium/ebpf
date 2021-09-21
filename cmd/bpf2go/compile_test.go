@@ -2,7 +2,6 @@ package main
 
 import (
 	"bytes"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -68,12 +67,12 @@ func TestReproducibleCompile(t *testing.T) {
 		t.Fatal("Can't compile:", err)
 	}
 
-	aBytes, err := ioutil.ReadFile(filepath.Join(dir, "a.o"))
+	aBytes, err := os.ReadFile(filepath.Join(dir, "a.o"))
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	bBytes, err := ioutil.ReadFile(filepath.Join(dir, "b.o"))
+	bBytes, err := os.ReadFile(filepath.Join(dir, "b.o"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -151,14 +150,14 @@ nothing:
 func mustWriteTempFile(t *testing.T, name, contents string) string {
 	t.Helper()
 
-	tmp, err := ioutil.TempDir("", "bpf2go")
+	tmp, err := os.MkdirTemp("", "bpf2go")
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { os.RemoveAll(tmp) })
 
 	tmpFile := filepath.Join(tmp, name)
-	if err := ioutil.WriteFile(tmpFile, []byte(contents), 0660); err != nil {
+	if err := os.WriteFile(tmpFile, []byte(contents), 0600); err != nil {
 		t.Fatal(err)
 	}
 

@@ -2,7 +2,6 @@ package link
 
 import (
 	"errors"
-	"io/ioutil"
 	"math"
 	"os"
 	"path/filepath"
@@ -124,7 +123,7 @@ type testLinkOptions struct {
 func testLink(t *testing.T, link Link, opts testLinkOptions) {
 	t.Helper()
 
-	tmp, err := ioutil.TempDir("/sys/fs/bpf", "ebpf-test")
+	tmp, err := os.MkdirTemp("/sys/fs/bpf", "ebpf-test")
 	if err != nil {
 		t.Fatal(err)
 	}

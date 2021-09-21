@@ -2,7 +2,6 @@ package testutils
 
 import (
 	"errors"
-	"io/ioutil"
 	"os"
 	"strings"
 	"sync"
@@ -19,7 +18,7 @@ var cgroup2 = struct {
 
 func cgroup2Path() (string, error) {
 	cgroup2.once.Do(func() {
-		mounts, err := ioutil.ReadFile("/proc/mounts")
+		mounts, err := os.ReadFile("/proc/mounts")
 		if err != nil {
 			cgroup2.err = err
 			return
@@ -53,7 +52,7 @@ func CreateCgroup(tb testing.TB) *os.File {
 		tb.Fatal("Can't locate cgroup2 mount:", err)
 	}
 
-	cgdir, err := ioutil.TempDir(cg2, "ebpf-link")
+	cgdir, err := os.MkdirTemp(cg2, "ebpf-link")
 	if err != nil {
 		tb.Fatal("Can't create cgroupv2:", err)
 	}

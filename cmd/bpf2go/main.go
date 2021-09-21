@@ -303,7 +303,7 @@ type target struct {
 }
 
 func printTargets(w io.Writer) {
-	var arches []string
+	arches := make([]string, len(targetByGoArch))
 	for arch, archTarget := range targetByGoArch {
 		if archTarget.linux == "" {
 			continue

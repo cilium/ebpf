@@ -289,7 +289,7 @@ func (b2g *bpf2go) convert(tgt target, arches []string) (err error) {
 	}
 
 	depFileName := goFileName + ".d"
-	if err := ioutil.WriteFile(depFileName, depFile, 0666); err != nil {
+	if err := ioutil.WriteFile(depFileName, depFile, 0660); err != nil {
 		return fmt.Errorf("can't write dependency file: %s", err)
 	}
 

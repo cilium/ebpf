@@ -12,6 +12,7 @@ linters:
     - deadcode
     - errcheck
     - goimports
+    - gosec
     - gosimple
     - govet
     - ineffassign
@@ -26,4 +27,12 @@ linters:
     # - gocyclo
     # - prealloc
     # - maligned
-    # - gosec
+
+linters-settings:
+  gosec:
+    excludes:
+      - G204
+      - G401
+      - G404
+    config:
+      G306: "0660"

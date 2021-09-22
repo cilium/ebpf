@@ -23,7 +23,7 @@ blocks:
           - sudo mkdir -p /usr/local/golang/1.17 && curl -fL "https://golang.org/dl/go1.17.linux-amd64.tar.gz" | sudo tar -xz -C /usr/local/golang/1.17
           - sem-version go 1.17
           - go install github.com/mattn/goveralls@latest
-          - curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin v1.38.0
+          - curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin v1.42.1
           - export PATH="$PATH:$(go env GOPATH)/bin"
           - cache restore
           - go mod tidy

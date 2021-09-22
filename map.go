@@ -1222,7 +1222,7 @@ func (mi *MapIterator) Next(keyOut, valueOut interface{}) bool {
 		return mi.err == nil
 	}
 
-	mi.err = fmt.Errorf("%w", ErrIterationAborted)
+	mi.err = ErrIterationAborted
 	return false
 }
 

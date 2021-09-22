@@ -223,7 +223,7 @@ func (r *Reader) Read() (Record, error) {
 	defer r.mu.Unlock()
 
 	if r.epollFd == -1 {
-		return Record{}, fmt.Errorf("%w", ErrClosed)
+		return Record{}, ErrClosed
 	}
 
 	for {
@@ -239,7 +239,7 @@ func (r *Reader) Read() (Record, error) {
 
 		for _, event := range r.epollEvents[:nEvents] {
 			if int(event.Fd) == r.closeFd {
-				return Record{}, fmt.Errorf("%w", ErrClosed)
+				return Record{}, ErrClosed
 			}
 		}
 

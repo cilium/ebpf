@@ -1,7 +1,7 @@
 package asm
 
 import (
-	"crypto/sha1"
+	"crypto/sha1" // #nosec G505: SHA1 used by the kernel so we must follow
 	"encoding/binary"
 	"encoding/hex"
 	"errors"

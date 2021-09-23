@@ -5,9 +5,11 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math/rand"
 	"path/filepath"
 	"reflect"
 	"strings"
+	"time"
 	"unsafe"
 
 	"github.com/cilium/ebpf/internal"
@@ -18,6 +20,7 @@ import (
 
 // Errors returned by Map and MapIterator methods.
 var (
+	ErrFirstKeyNotFound = errors.New("first key not found")
 	ErrKeyNotExist      = errors.New("key does not exist")
 	ErrKeyExist         = errors.New("key already exists")
 	ErrIterationAborted = errors.New("iteration aborted")
@@ -486,6 +489,34 @@ func (m *Map) Info() (*MapInfo, error) {
 	return newMapInfoFromFd(m.fd)
 }
 
+func (m *Map) guessFirstKey() (startKey sys.Pointer, err error) {
+	// (idea from iovisor/bcc) fast lookup the key by passing an invalid value pointer
+	// to validate the key, if the key doesn't exist, it's a valid first key to map iterate (on < 4.4.132 kernel)
+	valuePtr := sys.NewPointer(unsafe.Pointer(^uintptr(0)))
+	randKey := make([]byte, int(m.keySize))
+	for i := 0; i < 3; i++ {
+		// let's try
+		switch i {
+		case 0:
+		// empty (all zero) key
+		case 1:
+			// all 0xff key, last index for map array
+			for r := range randKey {
+				randKey[r] = 0xff
+			}
+		case 2:
+			// random key in case of hash map
+			rand.New(rand.NewSource(time.Now().UnixNano())).Read(randKey)
+		}
+
+		err := m.lookup(randKey, valuePtr)
+		if errors.Is(err, ErrKeyNotExist) {
+			return sys.NewSlicePointer(randKey), nil
+		}
+	}
+	return sys.Pointer{}, ErrFirstKeyNotFound
+}
+
 // Lookup retrieves a value from a Map.
 //
 // Calls Close() on valueOut if it is of type **Map or **Program,
@@ -683,7 +714,12 @@ func (m *Map) nextKey(key interface{}, nextKeyOut sys.Pointer) error {
 
 	if err = sys.MapGetNextKey(&attr); err != nil {
 		if key == nil && errors.Is(err, unix.EFAULT) {
-			attr.Key = sys.NewSlicePointer(make([]byte, int(m.keySize)))
+			var keyGuess sys.Pointer
+			keyGuess, err = m.guessFirstKey()
+			if err != nil {
+				return fmt.Errorf("can't guess starting key: %w", err)
+			}
+			attr.Key = keyGuess
 			if err = sys.MapGetNextKey(&attr); err == nil {
 				return nil
 			}

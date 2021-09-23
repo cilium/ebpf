@@ -5,9 +5,11 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math/rand"
 	"path/filepath"
 	"reflect"
 	"strings"
+	"time"
 
 	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/btf"
@@ -21,6 +23,28 @@ var (
 	ErrIterationAborted = errors.New("iteration aborted")
 	ErrMapIncompatible  = errors.New("map's spec is incompatible with pinned map")
 )
+
+var haveMapIterateFromNullKey = internal.FeatureTest("map iterate from null key", "4.4.132", func() error {
+	m, err := internal.BPFMapCreate(&internal.BPFMapCreateAttr{
+		MapType:    uint32(Array),
+		KeySize:    4,
+		ValueSize:  4,
+		MaxEntries: 1,
+	})
+	if err != nil {
+		return err
+	}
+	defer m.Close()
+
+	nextKey := make([]byte, 4)
+	nextKeyOut := internal.NewSlicePointer(nextKey)
+	var keyPtr internal.Pointer
+	err = bpfMapGetNextKey(m, keyPtr, nextKeyOut)
+	if errors.Is(err, unix.EFAULT) {
+		return ErrNotSupported
+	}
+	return err
+})
 
 // MapOptions control loading a map into the kernel.
 type MapOptions struct {
@@ -160,6 +184,9 @@ type Map struct {
 	pinnedPath string
 	// Per CPU maps return values larger than the size in the spec
 	fullValueSize int
+	// randKey used for kernel < 4.4.132 that didn't support nil key
+	randKey []byte
+	rand    *rand.Rand
 }
 
 // NewMapFromFD creates a map from a raw fd.
@@ -421,15 +448,19 @@ func (spec *MapSpec) createMap(inner *internal.FD, opts MapOptions, handles *han
 // Sets the fullValueSize on per-CPU maps.
 func newMap(fd *internal.FD, name string, typ MapType, keySize, valueSize, maxEntries, flags uint32) (*Map, error) {
 	m := &Map{
-		name,
-		fd,
-		typ,
-		keySize,
-		valueSize,
-		maxEntries,
-		flags,
-		"",
-		int(valueSize),
+		name:          name,
+		fd:            fd,
+		typ:           typ,
+		keySize:       keySize,
+		valueSize:     valueSize,
+		maxEntries:    maxEntries,
+		flags:         flags,
+		pinnedPath:    "",
+		fullValueSize: int(valueSize),
+	}
+
+	if err := haveMapIterateFromNullKey(); errors.Is(err, ErrNotSupported) {
+		m.randomizeKey()
 	}
 
 	if !typ.hasPerCPUValue() {
@@ -443,6 +474,17 @@ func newMap(fd *internal.FD, name string, typ MapType, keySize, valueSize, maxEn
 
 	m.fullValueSize = internal.Align(int(valueSize), 8) * possibleCPUs
 	return m, nil
+}
+
+// randomizeKey() is here for kernel versions < 4.4.132 (haveMapIterateFromNullKey()), which don't support using
+// a NULL `key` with the `BPF_MAP_GET_NEXT_KEY` command to the bpf syscall.
+func (m *Map) randomizeKey() []byte {
+	m.randKey = make([]byte, int(m.keySize))
+	if m.rand == nil {
+		m.rand = rand.New(rand.NewSource(time.Now().UnixNano()))
+	}
+	m.rand.Read(m.randKey)
+	return m.randKey
 }
 
 func (m *Map) String() string {
@@ -867,6 +909,8 @@ func (m *Map) Clone() (*Map, error) {
 		m.flags,
 		"",
 		m.fullValueSize,
+		m.randKey,
+		m.rand,
 	}, nil
 }
 
@@ -1178,6 +1222,29 @@ func newMapIterator(target *Map) *MapIterator {
 func (mi *MapIterator) Next(keyOut, valueOut interface{}) bool {
 	if mi.err != nil || mi.done {
 		return false
+	}
+
+	// guessing a random start key
+	if err := haveMapIterateFromNullKey(); mi.prevKey == nil && errors.Is(err, ErrNotSupported) {
+		var bytes1, bytes2, bytes3 []byte
+		bytes1, mi.err = mi.target.NextKeyBytes(mi.target.randKey)
+		if mi.err != nil {
+			return false
+		}
+		mi.prevKey = mi.target.randomizeKey()
+		bytes2, mi.err = mi.target.NextKeyBytes(mi.prevKey)
+		if mi.err != nil {
+			return false
+		}
+		if !bytes.Equal(bytes1, bytes2) {
+			mi.prevKey = mi.target.randomizeKey()
+			bytes3, mi.err = mi.target.NextKeyBytes(mi.prevKey)
+			if !bytes.Equal(bytes1, bytes3) && !bytes.Equal(bytes2, bytes3) {
+				// we didn't found a good start random key
+				mi.err = fmt.Errorf("%w", ErrIterationAborted)
+				return false
+			}
+		}
 	}
 
 	// For array-like maps NextKeyBytes returns nil only on after maxEntries

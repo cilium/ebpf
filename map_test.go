@@ -1,6 +1,7 @@
 package ebpf
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"math"
@@ -918,6 +919,54 @@ func TestMapIterate(t *testing.T) {
 	}
 	if keys[1] != "world" {
 		t.Error("Expected index 1 to be hello, got", keys[1])
+	}
+}
+
+func TestMapIterateKeyZero(t *testing.T) {
+	hash, err := NewMap(&MapSpec{
+		Type:       Hash,
+		KeySize:    5,
+		ValueSize:  4,
+		MaxEntries: 2,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer hash.Close()
+	key1 := make([]byte, hash.KeySize())
+	key2 := []byte{0x12, 0x34, 0x56, 0x78, 0x9A}
+
+	if err := hash.Put(key1, uint32(21)); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := hash.Put(key2, uint32(42)); err != nil {
+		t.Fatal(err)
+	}
+
+	var key []byte
+	var value uint32
+	var keys [][]byte
+
+	entries := hash.Iterate()
+	for entries.Next(&key, &value) {
+		keys = append(keys, key)
+	}
+
+	if err := entries.Err(); err != nil {
+		t.Fatal(err)
+	}
+
+	if n := len(keys); n != 2 {
+		t.Fatal("Expected to get 2 keys, have", n)
+	}
+
+	sort.Slice(keys, func(i, j int) bool { return bytes.Compare(keys[i], keys[j]) < 0 })
+	if bytes.Compare(keys[0], key1) != 0 {
+		t.Error("Expected index 0 all zero, got", keys[0])
+	}
+	if bytes.Compare(keys[1], key2) != 0 {
+		t.Error("Expected index 1 to be {0x12, 0x34, 0x56, 0x78, 0x9A}, got", keys[1])
 	}
 }
 

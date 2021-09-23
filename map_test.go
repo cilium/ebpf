@@ -921,6 +921,89 @@ func TestMapIterate(t *testing.T) {
 	}
 }
 
+func TestMapIterateKeyZero(t *testing.T) {
+	keyZeroTests := []struct {
+		name       string
+		mapType    MapType
+		maxEntries uint32
+	}{
+		{
+			name:       "hash key zero",
+			mapType:    Hash,
+			maxEntries: 2,
+		},
+		{
+			name:       "hash key zero only",
+			mapType:    Hash,
+			maxEntries: 1,
+		},
+		{
+			name:       "array max entries",
+			mapType:    Array,
+			maxEntries: math.MaxUint16,
+		},
+	}
+
+	key1 := uint32(0)
+	key2 := uint32(math.MaxUint16 - 1)
+
+	for _, tt := range keyZeroTests {
+		t.Run(tt.name, func(t *testing.T) {
+			hash, err := NewMap(&MapSpec{
+				Type:       tt.mapType,
+				KeySize:    4,
+				ValueSize:  4,
+				MaxEntries: tt.maxEntries,
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer hash.Close()
+
+			if err := hash.Put(key1, uint32(21)); err != nil {
+				t.Fatal(err)
+			}
+
+			if tt.maxEntries > 1 {
+				if err := hash.Put(key2, uint32(42)); err != nil {
+					t.Fatal(err)
+				}
+			}
+
+			var key uint32
+			var value uint32
+			var keys []uint32
+
+			entries := hash.Iterate()
+			for entries.Next(&key, &value) {
+				keys = append(keys, key)
+			}
+
+			if err := entries.Err(); err != nil {
+				t.Fatal(err)
+			}
+
+			if n := uint32(len(keys)); n != tt.maxEntries {
+				t.Fatalf("Expected to get %d keys, have %d", tt.maxEntries, n)
+			}
+
+			sort.Slice(keys, func(i, j int) bool { return keys[i] < keys[j] })
+			if keys[0] != key1 {
+				t.Error("Expected index 0 all zero, got", keys[0])
+			}
+			if tt.maxEntries > 1 {
+				k := keys[1]
+				if tt.mapType == Array {
+					k = keys[len(keys)-1]
+				}
+				if k != key2 {
+					t.Errorf("Expected index 1 to be %v, got %v", key2, k)
+				}
+			}
+		})
+	}
+}
+
 func TestNotExist(t *testing.T) {
 	hash := createHash()
 	defer hash.Close()

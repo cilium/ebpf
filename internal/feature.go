@@ -63,7 +63,11 @@ func FeatureTest(name, version string, fn FeatureTestFn) func() error {
 	return func() error {
 		ft.RLock()
 		if ft.successful {
-			defer ft.RUnlock()
+			ft.RUnlock()
+			return nil
+		}
+		if ft.result != nil {
+			ft.RUnlock()
 			return ft.result
 		}
 		ft.RUnlock()
@@ -74,6 +78,9 @@ func FeatureTest(name, version string, fn FeatureTestFn) func() error {
 		// were able to call into the write
 		// lock
 		if ft.successful {
+			return nil
+		}
+		if ft.result != nil {
 			return ft.result
 		}
 		err := fn()

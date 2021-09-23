@@ -5,9 +5,11 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math/rand"
 	"path/filepath"
 	"reflect"
 	"strings"
+	"time"
 
 	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/btf"
@@ -21,6 +23,30 @@ var (
 	ErrIterationAborted = errors.New("iteration aborted")
 	ErrMapIncompatible  = errors.New("map's spec is incompatible with pinned map")
 )
+
+var random *rand.Rand
+
+var haveMapIterateFromNullKey = internal.FeatureTest("map iterate from null key", "4.4.132", func() error {
+	m, err := internal.BPFMapCreate(&internal.BPFMapCreateAttr{
+		MapType:    uint32(Array),
+		KeySize:    4,
+		ValueSize:  4,
+		MaxEntries: 1,
+	})
+	if err != nil {
+		return err
+	}
+	defer m.Close()
+
+	nextKey := make([]byte, 4)
+	nextKeyOut := internal.NewSlicePointer(nextKey)
+	var keyPtr internal.Pointer
+	err = bpfMapGetNextKey(m, keyPtr, nextKeyOut)
+	if errors.Is(err, unix.EFAULT) {
+		return ErrNotSupported
+	}
+	return err
+})
 
 // MapOptions control loading a map into the kernel.
 type MapOptions struct {
@@ -426,15 +452,15 @@ func (spec *MapSpec) createMap(inner *internal.FD, opts MapOptions, handles *han
 // Sets the fullValueSize on per-CPU maps.
 func newMap(fd *internal.FD, name string, typ MapType, keySize, valueSize, maxEntries, flags uint32) (*Map, error) {
 	m := &Map{
-		name,
-		fd,
-		typ,
-		keySize,
-		valueSize,
-		maxEntries,
-		flags,
-		"",
-		int(valueSize),
+		name:          name,
+		fd:            fd,
+		typ:           typ,
+		keySize:       keySize,
+		valueSize:     valueSize,
+		maxEntries:    maxEntries,
+		flags:         flags,
+		pinnedPath:    "",
+		fullValueSize: int(valueSize),
 	}
 
 	if !typ.hasPerCPUValue() {
@@ -485,6 +511,40 @@ func (m *Map) Flags() uint32 {
 // Info returns metadata about the map.
 func (m *Map) Info() (*MapInfo, error) {
 	return newMapInfoFromFd(m.fd)
+}
+
+// randomizeKey() and guessingRandomStartKey() are here for kernel versions < 4.4.132
+// (haveMapIterateFromNullKey()), which don't support
+// a NULL `key` with the `BPF_MAP_GET_NEXT_KEY` command to the bpf syscall.
+func (m *Map) randomizeKey() []byte {
+	if random == nil {
+		random = rand.New(rand.NewSource(time.Now().UnixNano()))
+	}
+	randKey := make([]byte, int(m.keySize))
+	random.Read(randKey)
+	return randKey
+}
+
+func (m *Map) guessingRandomStartKey() (b []byte, err error) {
+	var bytes1, bytes2, bytes3 []byte
+	bytes1, err = m.NextKeyBytes(m.randomizeKey())
+	if err != nil {
+		return nil, err
+	}
+	bytes2, err = m.NextKeyBytes(m.randomizeKey())
+	if err != nil {
+		return nil, err
+	}
+	if !bytes.Equal(bytes1, bytes2) {
+		bytes3, err = m.NextKeyBytes(m.randomizeKey())
+		if !bytes.Equal(bytes1, bytes3) && !bytes.Equal(bytes2, bytes3) {
+			// we didn't found a good start random key
+			err = fmt.Errorf("%w", ErrIterationAborted)
+			return nil, err
+		}
+		return bytes3, nil
+	}
+	return bytes2, nil
 }
 
 // Lookup retrieves a value from a Map.
@@ -649,6 +709,17 @@ func (m *Map) nextKey(key interface{}, nextKeyOut internal.Pointer) error {
 		keyPtr, err = m.marshalKey(key)
 		if err != nil {
 			return fmt.Errorf("can't marshal key: %w", err)
+		}
+	} else {
+		// we check if the map is empty on old kernel
+		if err := haveMapIterateFromNullKey(); errors.Is(err, ErrNotSupported) {
+			keyGuess, err := m.guessingRandomStartKey()
+			if err != nil {
+				return fmt.Errorf("Can't guess starting key: %w", err)
+			}
+			if keyGuess == nil {
+				return ErrKeyNotExist
+			}
 		}
 	}
 
@@ -1191,9 +1262,18 @@ func (mi *MapIterator) Next(keyOut, valueOut interface{}) bool {
 		var nextBytes []byte
 		nextBytes, mi.err = mi.target.NextKeyBytes(mi.prevKey)
 		if mi.err != nil {
+			if mi.prevKey == nil && errors.Is(mi.err, unix.EFAULT) {
+				if err := haveMapIterateFromNullKey(); errors.Is(err, ErrNotSupported) {
+					nextBytes, mi.err = mi.target.guessingRandomStartKey()
+					if mi.err == nil {
+						goto foundKey
+					}
+				}
+			}
 			return false
 		}
 
+	foundKey:
 		if nextBytes == nil {
 			mi.done = true
 			return false

@@ -928,11 +928,16 @@ func TestNotExist(t *testing.T) {
 	}
 
 	if err := hash.Delete("hello"); !errors.Is(err, ErrKeyNotExist) {
-		t.Error("Deleting unknown key doesn't return ErrKeyNotExist")
+		t.Error("Deleting unknown key doesn't return ErrKeyNotExist", err)
+	}
+
+	var k = []byte{1, 2, 3, 4, 5}
+	if err := hash.NextKey(&k, &tmp); !errors.Is(err, ErrKeyNotExist) {
+		t.Error("Looking up next key in empty map doesn't return a non-existing error", err)
 	}
 
 	if err := hash.NextKey(nil, &tmp); !errors.Is(err, ErrKeyNotExist) {
-		t.Error("Looking up next key in empty map doesn't return a non-existing error")
+		t.Error("Looking up next key in empty map doesn't return a non-existing error", err)
 	}
 }
 

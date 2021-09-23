@@ -5,9 +5,12 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math/rand"
 	"path/filepath"
 	"reflect"
 	"strings"
+	"time"
+	"unsafe"
 
 	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/btf"
@@ -21,6 +24,30 @@ var (
 	ErrIterationAborted = errors.New("iteration aborted")
 	ErrMapIncompatible  = errors.New("map's spec is incompatible with pinned map")
 )
+
+var random *rand.Rand
+
+var haveMapIterateFromNullKey = internal.FeatureTest("map iterate from null key", "4.4.132", func() error {
+	m, err := internal.BPFMapCreate(&internal.BPFMapCreateAttr{
+		MapType:    uint32(Array),
+		KeySize:    4,
+		ValueSize:  4,
+		MaxEntries: 1,
+	})
+	if err != nil {
+		return err
+	}
+	defer m.Close()
+
+	nextKey := make([]byte, 4)
+	nextKeyOut := internal.NewSlicePointer(nextKey)
+	var keyPtr internal.Pointer
+	err = bpfMapGetNextKey(m, keyPtr, nextKeyOut)
+	if errors.Is(err, unix.EFAULT) {
+		return ErrNotSupported
+	}
+	return err
+})
 
 // MapOptions control loading a map into the kernel.
 type MapOptions struct {
@@ -426,15 +453,15 @@ func (spec *MapSpec) createMap(inner *internal.FD, opts MapOptions, handles *han
 // Sets the fullValueSize on per-CPU maps.
 func newMap(fd *internal.FD, name string, typ MapType, keySize, valueSize, maxEntries, flags uint32) (*Map, error) {
 	m := &Map{
-		name,
-		fd,
-		typ,
-		keySize,
-		valueSize,
-		maxEntries,
-		flags,
-		"",
-		int(valueSize),
+		name:          name,
+		fd:            fd,
+		typ:           typ,
+		keySize:       keySize,
+		valueSize:     valueSize,
+		maxEntries:    maxEntries,
+		flags:         flags,
+		pinnedPath:    "",
+		fullValueSize: int(valueSize),
 	}
 
 	if !typ.hasPerCPUValue() {
@@ -485,6 +512,25 @@ func (m *Map) Flags() uint32 {
 // Info returns metadata about the map.
 func (m *Map) Info() (*MapInfo, error) {
 	return newMapInfoFromFd(m.fd)
+}
+
+func (m *Map) guessFirstKey() (startKey []byte, err error) {
+	if random == nil {
+		random = rand.New(rand.NewSource(time.Now().UnixNano()))
+	}
+	// (idea from iovisor/bcc) fast lookup the key by passing an invalid value pointer
+	// to validate the key, if the key doesn't exist, it's a first key to map iterate on old kernel
+	valuePtr := internal.NewPointer(unsafe.Pointer(^uintptr(0)))
+	randKey := make([]byte, int(m.keySize))
+	for i := 0; i < 3; i++ {
+		random.Read(randKey)
+
+		err := m.lookup(randKey, valuePtr)
+		if errors.Is(err, ErrKeyNotExist) {
+			return randKey, nil
+		}
+	}
+	return nil, ErrKeyNotExist
 }
 
 // Lookup retrieves a value from a Map.
@@ -649,6 +695,18 @@ func (m *Map) nextKey(key interface{}, nextKeyOut internal.Pointer) error {
 		keyPtr, err = m.marshalKey(key)
 		if err != nil {
 			return fmt.Errorf("can't marshal key: %w", err)
+		}
+	} else {
+		// we check if the map is empty on old kernel
+		if err := haveMapIterateFromNullKey(); errors.Is(err, ErrNotSupported) {
+			keyGuess, err := m.guessFirstKey()
+			if err != nil {
+				return fmt.Errorf("can't guess starting key: %w", err)
+			}
+			keyPtr, err = m.marshalKey(keyGuess)
+			if err != nil {
+				return fmt.Errorf("can't marshal key: %w", err)
+			}
 		}
 	}
 

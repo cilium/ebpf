@@ -322,7 +322,7 @@ func (pr *Reader) Read() (Record, error) {
 	defer pr.mu.Unlock()
 
 	if pr.epollFd == -1 {
-		return Record{}, fmt.Errorf("%w", ErrClosed)
+		return Record{}, ErrClosed
 	}
 
 	for {
@@ -339,7 +339,7 @@ func (pr *Reader) Read() (Record, error) {
 
 			for _, event := range pr.epollEvents[:nEvents] {
 				if int(event.Fd) == pr.closeFd {
-					return Record{}, fmt.Errorf("%w", ErrClosed)
+					return Record{}, ErrClosed
 				}
 
 				ring := pr.rings[cpuForEvent(&event)]
@@ -378,7 +378,7 @@ func (pr *Reader) Pause() error {
 	defer pr.pauseMu.Unlock()
 
 	if pr.pauseFds == nil {
-		return fmt.Errorf("%w", ErrClosed)
+		return ErrClosed
 	}
 
 	for i := range pr.pauseFds {
@@ -398,7 +398,7 @@ func (pr *Reader) Resume() error {
 	defer pr.pauseMu.Unlock()
 
 	if pr.pauseFds == nil {
-		return fmt.Errorf("%w", ErrClosed)
+		return ErrClosed
 	}
 
 	for i, fd := range pr.pauseFds {

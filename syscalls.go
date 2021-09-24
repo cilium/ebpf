@@ -24,7 +24,7 @@ var ErrNotExist = os.ErrNotExist
 // This is not required to load eBPF resources on kernel versions 5.11+
 // due to the introduction of cgroup-based memory accounting.
 func RemoveMemlockRlimit() (func() error, error) {
-	return unix.RemoveMemlockRlimit()
+	return internal.RemoveMemlockRlimit()
 }
 
 // invalidBPFObjNameChar returns true if char may not appear in

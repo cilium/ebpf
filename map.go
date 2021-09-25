@@ -311,7 +311,7 @@ func (spec *MapSpec) createMap(inner *internal.FD, opts MapOptions, handles *han
 	// In order to support loading these definitions, tolerate the presence of
 	// extra bytes, but require them to be zeroes.
 	if _, err := io.Copy(internal.DiscardZeroes{}, &spec.Extra); err != nil {
-		return nil, errors.New("Extra contains unhandled non-zero bytes, drain before creating map")
+		return nil, errors.New("extra contains unhandled non-zero bytes, drain before creating map")
 	}
 
 	switch spec.Type {

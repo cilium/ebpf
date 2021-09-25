@@ -445,7 +445,7 @@ func (cl *collectionLoader) loadProgram(progName string) (*Program, error) {
 			return nil, fmt.Errorf("map %s: %w", ins.Reference, internal.ErrClosedFd)
 		}
 		if err := ins.RewriteMapPtr(m.FD()); err != nil {
-			return nil, fmt.Errorf("progam %s: map %s: %w", progName, ins.Reference, err)
+			return nil, fmt.Errorf("program %s: map %s: %w", progName, ins.Reference, err)
 		}
 	}
 

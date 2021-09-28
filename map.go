@@ -8,9 +8,11 @@ import (
 	"path/filepath"
 	"reflect"
 	"strings"
+	"unsafe"
 
 	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/btf"
+	"github.com/cilium/ebpf/internal/sys"
 	"github.com/cilium/ebpf/internal/unix"
 )
 
@@ -151,7 +153,7 @@ func (ms *MapSpec) checkCompatibility(m *Map) error {
 // if you require custom encoding.
 type Map struct {
 	name       string
-	fd         *internal.FD
+	fd         *sys.FD
 	typ        MapType
 	keySize    uint32
 	valueSize  uint32
@@ -170,10 +172,10 @@ func NewMapFromFD(fd int) (*Map, error) {
 		return nil, errors.New("invalid fd")
 	}
 
-	return newMapFromFD(internal.NewFD(uint32(fd)))
+	return newMapFromFD(sys.NewFD(fd))
 }
 
-func newMapFromFD(fd *internal.FD) (*Map, error) {
+func newMapFromFD(fd *sys.FD) (*Map, error) {
 	info, err := newMapInfoFromFd(fd)
 	if err != nil {
 		fd.Close()
@@ -257,7 +259,7 @@ func newMapWithOptions(spec *MapSpec, opts MapOptions, handles *handleCache) (_ 
 		return nil, fmt.Errorf("pin type %d: %w", int(spec.Pinning), ErrNotSupported)
 	}
 
-	var innerFd *internal.FD
+	var innerFd *sys.FD
 	if spec.Type == ArrayOfMaps || spec.Type == HashOfMaps {
 		if spec.InnerMap == nil {
 			return nil, fmt.Errorf("%s requires InnerMap", spec.Type)
@@ -297,7 +299,7 @@ func newMapWithOptions(spec *MapSpec, opts MapOptions, handles *handleCache) (_ 
 
 // createMap validates the spec's properties and creates the map in the kernel
 // using the given opts. It does not populate or freeze the map.
-func (spec *MapSpec) createMap(inner *internal.FD, opts MapOptions, handles *handleCache) (_ *Map, err error) {
+func (spec *MapSpec) createMap(inner *sys.FD, opts MapOptions, handles *handleCache) (_ *Map, err error) {
 	closeOnError := func(closer io.Closer) {
 		if err != nil {
 			closer.Close()
@@ -361,25 +363,21 @@ func (spec *MapSpec) createMap(inner *internal.FD, opts MapOptions, handles *han
 		}
 	}
 
-	attr := internal.BPFMapCreateAttr{
-		MapType:    uint32(spec.Type),
+	attr := sys.MapCreateAttr{
+		MapType:    sys.MapType(spec.Type),
 		KeySize:    spec.KeySize,
 		ValueSize:  spec.ValueSize,
 		MaxEntries: spec.MaxEntries,
-		Flags:      spec.Flags,
+		MapFlags:   spec.Flags,
 		NumaNode:   spec.NumaNode,
 	}
 
 	if inner != nil {
-		var err error
-		attr.InnerMapFd, err = inner.Value()
-		if err != nil {
-			return nil, fmt.Errorf("map create: %w", err)
-		}
+		attr.InnerMapFd = inner.Uint()
 	}
 
 	if haveObjName() == nil {
-		attr.MapName = internal.NewBPFObjName(spec.Name)
+		attr.MapName = sys.NewObjName(spec.Name)
 	}
 
 	var btfDisabled bool
@@ -391,13 +389,13 @@ func (spec *MapSpec) createMap(inner *internal.FD, opts MapOptions, handles *han
 		}
 
 		if handle != nil {
-			attr.BTFFd = uint32(handle.FD())
-			attr.BTFKeyTypeID = uint32(spec.BTF.Key.ID())
-			attr.BTFValueTypeID = uint32(spec.BTF.Value.ID())
+			attr.BtfFd = uint32(handle.FD())
+			attr.BtfKeyTypeId = uint32(spec.BTF.Key.ID())
+			attr.BtfValueTypeId = uint32(spec.BTF.Value.ID())
 		}
 	}
 
-	fd, err := internal.BPFMapCreate(&attr)
+	fd, err := sys.MapCreate(&attr)
 	if err != nil {
 		if errors.Is(err, unix.EPERM) {
 			return nil, fmt.Errorf("map create: RLIMIT_MEMLOCK may be too low: %w", err)
@@ -419,7 +417,7 @@ func (spec *MapSpec) createMap(inner *internal.FD, opts MapOptions, handles *han
 
 // newMap allocates and returns a new Map structure.
 // Sets the fullValueSize on per-CPU maps.
-func newMap(fd *internal.FD, name string, typ MapType, keySize, valueSize, maxEntries, flags uint32) (*Map, error) {
+func newMap(fd *sys.FD, name string, typ MapType, keySize, valueSize, maxEntries, flags uint32) (*Map, error) {
 	m := &Map{
 		name,
 		fd,
@@ -508,8 +506,14 @@ func (m *Map) LookupAndDelete(key, valueOut interface{}) error {
 		return fmt.Errorf("can't marshal key: %w", err)
 	}
 
-	if err := bpfMapLookupAndDelete(m.fd, keyPtr, valuePtr); err != nil {
-		return fmt.Errorf("lookup and delete failed: %w", err)
+	attr := sys.MapLookupAndDeleteElemAttr{
+		MapFd: m.fd.Uint(),
+		Key:   keyPtr,
+		Value: valuePtr,
+	}
+
+	if err := sys.MapLookupAndDeleteElem(&attr); err != nil {
+		return fmt.Errorf("lookup and delete: %w", wrapMapError(err))
 	}
 
 	return m.unmarshalValue(valueOut, valueBytes)
@@ -520,7 +524,7 @@ func (m *Map) LookupAndDelete(key, valueOut interface{}) error {
 // Returns a nil value if a key doesn't exist.
 func (m *Map) LookupBytes(key interface{}) ([]byte, error) {
 	valueBytes := make([]byte, m.fullValueSize)
-	valuePtr := internal.NewSlicePointer(valueBytes)
+	valuePtr := sys.NewSlicePointer(valueBytes)
 
 	err := m.lookup(key, valuePtr)
 	if errors.Is(err, ErrKeyNotExist) {
@@ -530,14 +534,20 @@ func (m *Map) LookupBytes(key interface{}) ([]byte, error) {
 	return valueBytes, err
 }
 
-func (m *Map) lookup(key interface{}, valueOut internal.Pointer) error {
+func (m *Map) lookup(key interface{}, valueOut sys.Pointer) error {
 	keyPtr, err := m.marshalKey(key)
 	if err != nil {
 		return fmt.Errorf("can't marshal key: %w", err)
 	}
 
-	if err = bpfMapLookupElem(m.fd, keyPtr, valueOut); err != nil {
-		return fmt.Errorf("lookup failed: %w", err)
+	attr := sys.MapLookupElemAttr{
+		MapFd: m.fd.Uint(),
+		Key:   keyPtr,
+		Value: valueOut,
+	}
+
+	if err = sys.MapLookupElem(&attr); err != nil {
+		return fmt.Errorf("lookup: %w", wrapMapError(err))
 	}
 	return nil
 }
@@ -575,8 +585,15 @@ func (m *Map) Update(key, value interface{}, flags MapUpdateFlags) error {
 		return fmt.Errorf("can't marshal value: %w", err)
 	}
 
-	if err = bpfMapUpdateElem(m.fd, keyPtr, valuePtr, uint64(flags)); err != nil {
-		return fmt.Errorf("update failed: %w", err)
+	attr := sys.MapUpdateElemAttr{
+		MapFd: m.fd.Uint(),
+		Key:   keyPtr,
+		Value: valuePtr,
+		Flags: uint64(flags),
+	}
+
+	if err = sys.MapUpdateElem(&attr); err != nil {
+		return fmt.Errorf("update: %w", wrapMapError(err))
 	}
 
 	return nil
@@ -591,8 +608,13 @@ func (m *Map) Delete(key interface{}) error {
 		return fmt.Errorf("can't marshal key: %w", err)
 	}
 
-	if err = bpfMapDeleteElem(m.fd, keyPtr); err != nil {
-		return fmt.Errorf("delete failed: %w", err)
+	attr := sys.MapDeleteElemAttr{
+		MapFd: m.fd.Uint(),
+		Key:   keyPtr,
+	}
+
+	if err = sys.MapDeleteElem(&attr); err != nil {
+		return fmt.Errorf("delete: %w", wrapMapError(err))
 	}
 	return nil
 }
@@ -624,7 +646,7 @@ func (m *Map) NextKey(key, nextKeyOut interface{}) error {
 // Returns nil if there are no more keys.
 func (m *Map) NextKeyBytes(key interface{}) ([]byte, error) {
 	nextKey := make([]byte, m.keySize)
-	nextKeyPtr := internal.NewSlicePointer(nextKey)
+	nextKeyPtr := sys.NewSlicePointer(nextKey)
 
 	err := m.nextKey(key, nextKeyPtr)
 	if errors.Is(err, ErrKeyNotExist) {
@@ -634,9 +656,9 @@ func (m *Map) NextKeyBytes(key interface{}) ([]byte, error) {
 	return nextKey, err
 }
 
-func (m *Map) nextKey(key interface{}, nextKeyOut internal.Pointer) error {
+func (m *Map) nextKey(key interface{}, nextKeyOut sys.Pointer) error {
 	var (
-		keyPtr internal.Pointer
+		keyPtr sys.Pointer
 		err    error
 	)
 
@@ -647,8 +669,14 @@ func (m *Map) nextKey(key interface{}, nextKeyOut internal.Pointer) error {
 		}
 	}
 
-	if err = bpfMapGetNextKey(m.fd, keyPtr, nextKeyOut); err != nil {
-		return fmt.Errorf("next key failed: %w", err)
+	attr := sys.MapGetNextKeyAttr{
+		MapFd:   m.fd.Uint(),
+		Key:     keyPtr,
+		NextKey: nextKeyOut,
+	}
+
+	if err = sys.MapGetNextKey(&attr); err != nil {
+		return fmt.Errorf("next key: %w", wrapMapError(err))
 	}
 	return nil
 }
@@ -664,7 +692,7 @@ func (m *Map) nextKey(key interface{}, nextKeyOut internal.Pointer) error {
 // the end of all possible results, even when partial results
 // are returned. It should be used to evaluate when lookup is "done".
 func (m *Map) BatchLookup(prevKey, nextKeyOut, keysOut, valuesOut interface{}, opts *BatchOptions) (int, error) {
-	return m.batchLookup(internal.BPF_MAP_LOOKUP_BATCH, prevKey, nextKeyOut, keysOut, valuesOut, opts)
+	return m.batchLookup(sys.BPF_MAP_LOOKUP_BATCH, prevKey, nextKeyOut, keysOut, valuesOut, opts)
 }
 
 // BatchLookupAndDelete looks up many elements in a map at once,
@@ -679,10 +707,10 @@ func (m *Map) BatchLookup(prevKey, nextKeyOut, keysOut, valuesOut interface{}, o
 // the end of all possible results, even when partial results
 // are returned. It should be used to evaluate when lookup is "done".
 func (m *Map) BatchLookupAndDelete(prevKey, nextKeyOut, keysOut, valuesOut interface{}, opts *BatchOptions) (int, error) {
-	return m.batchLookup(internal.BPF_MAP_LOOKUP_AND_DELETE_BATCH, prevKey, nextKeyOut, keysOut, valuesOut, opts)
+	return m.batchLookup(sys.BPF_MAP_LOOKUP_AND_DELETE_BATCH, prevKey, nextKeyOut, keysOut, valuesOut, opts)
 }
 
-func (m *Map) batchLookup(cmd internal.BPFCmd, startKey, nextKeyOut, keysOut, valuesOut interface{}, opts *BatchOptions) (int, error) {
+func (m *Map) batchLookup(cmd sys.Cmd, startKey, nextKeyOut, keysOut, valuesOut interface{}, opts *BatchOptions) (int, error) {
 	if err := haveBatchAPI(); err != nil {
 		return 0, err
 	}
@@ -702,29 +730,36 @@ func (m *Map) batchLookup(cmd internal.BPFCmd, startKey, nextKeyOut, keysOut, va
 		return 0, fmt.Errorf("keysOut and valuesOut must be the same length")
 	}
 	keyBuf := make([]byte, count*int(m.keySize))
-	keyPtr := internal.NewSlicePointer(keyBuf)
+	keyPtr := sys.NewSlicePointer(keyBuf)
 	valueBuf := make([]byte, count*int(m.fullValueSize))
-	valuePtr := internal.NewSlicePointer(valueBuf)
+	valuePtr := sys.NewSlicePointer(valueBuf)
+	nextPtr, nextBuf := makeBuffer(nextKeyOut, int(m.keySize))
 
-	var (
-		startPtr internal.Pointer
-		err      error
-		retErr   error
-	)
+	attr := sys.MapLookupBatchAttr{
+		MapFd:    m.fd.Uint(),
+		Keys:     keyPtr,
+		Values:   valuePtr,
+		Count:    uint32(count),
+		OutBatch: nextPtr,
+	}
+
+	if opts != nil {
+		attr.ElemFlags = opts.ElemFlags
+		attr.Flags = opts.Flags
+	}
+
+	var err error
 	if startKey != nil {
-		startPtr, err = marshalPtr(startKey, int(m.keySize))
+		attr.InBatch, err = marshalPtr(startKey, int(m.keySize))
 		if err != nil {
 			return 0, err
 		}
 	}
-	nextPtr, nextBuf := makeBuffer(nextKeyOut, int(m.keySize))
 
-	ct, err := bpfMapBatch(cmd, m.fd, startPtr, nextPtr, keyPtr, valuePtr, uint32(count), opts)
-	if err != nil {
-		if !errors.Is(err, ErrKeyNotExist) {
-			return 0, err
-		}
-		retErr = ErrKeyNotExist
+	_, sysErr := sys.BPF(cmd, unsafe.Pointer(&attr), unsafe.Sizeof(attr))
+	sysErr = wrapMapError(sysErr)
+	if sysErr != nil && !errors.Is(sysErr, unix.ENOENT) {
+		return 0, sysErr
 	}
 
 	err = m.unmarshalKey(nextKeyOut, nextBuf)
@@ -737,9 +772,10 @@ func (m *Map) batchLookup(cmd internal.BPFCmd, startKey, nextKeyOut, keysOut, va
 	}
 	err = unmarshalBytes(valuesOut, valueBuf)
 	if err != nil {
-		retErr = err
+		return 0, err
 	}
-	return int(ct), retErr
+
+	return int(attr.Count), sysErr
 }
 
 // BatchUpdate updates the map with multiple keys and values
@@ -763,7 +799,7 @@ func (m *Map) BatchUpdate(keys, values interface{}, opts *BatchOptions) (int, er
 	}
 	var (
 		count    = keysValue.Len()
-		valuePtr internal.Pointer
+		valuePtr sys.Pointer
 		err      error
 	)
 	if count != valuesValue.Len() {
@@ -777,9 +813,24 @@ func (m *Map) BatchUpdate(keys, values interface{}, opts *BatchOptions) (int, er
 	if err != nil {
 		return 0, err
 	}
-	var nilPtr internal.Pointer
-	ct, err := bpfMapBatch(internal.BPF_MAP_UPDATE_BATCH, m.fd, nilPtr, nilPtr, keyPtr, valuePtr, uint32(count), opts)
-	return int(ct), err
+
+	attr := sys.MapUpdateBatchAttr{
+		MapFd:  m.fd.Uint(),
+		Keys:   keyPtr,
+		Values: valuePtr,
+		Count:  uint32(count),
+	}
+	if opts != nil {
+		attr.ElemFlags = opts.ElemFlags
+		attr.Flags = opts.Flags
+	}
+
+	err = sys.MapUpdateBatch(&attr)
+	if err != nil {
+		return int(attr.Count), fmt.Errorf("batch update: %w", wrapMapError(err))
+	}
+
+	return int(attr.Count), nil
 }
 
 // BatchDelete batch deletes entries in the map by keys.
@@ -800,9 +851,23 @@ func (m *Map) BatchDelete(keys interface{}, opts *BatchOptions) (int, error) {
 	if err != nil {
 		return 0, fmt.Errorf("cannot marshal keys: %v", err)
 	}
-	var nilPtr internal.Pointer
-	ct, err := bpfMapBatch(internal.BPF_MAP_DELETE_BATCH, m.fd, nilPtr, nilPtr, keyPtr, nilPtr, uint32(count), opts)
-	return int(ct), err
+
+	attr := sys.MapDeleteBatchAttr{
+		MapFd: m.fd.Uint(),
+		Keys:  keyPtr,
+		Count: uint32(count),
+	}
+
+	if opts != nil {
+		attr.ElemFlags = opts.ElemFlags
+		attr.Flags = opts.Flags
+	}
+
+	if err = sys.MapDeleteBatch(&attr); err != nil {
+		return int(attr.Count), fmt.Errorf("batch delete: %w", wrapMapError(err))
+	}
+
+	return int(attr.Count), nil
 }
 
 // Iterate traverses a map.
@@ -830,14 +895,7 @@ func (m *Map) Close() error {
 //
 // Calling this function is invalid after Close has been called.
 func (m *Map) FD() int {
-	fd, err := m.fd.Value()
-	if err != nil {
-		// Best effort: -1 is the number most likely to be an
-		// invalid file descriptor.
-		return -1
-	}
-
-	return int(fd)
+	return m.fd.Int()
 }
 
 // Clone creates a duplicate of the Map.
@@ -912,7 +970,11 @@ func (m *Map) Freeze() error {
 		return fmt.Errorf("can't freeze map: %w", err)
 	}
 
-	if err := bpfMapFreeze(m.fd); err != nil {
+	attr := sys.MapFreezeAttr{
+		MapFd: m.fd.Uint(),
+	}
+
+	if err := sys.MapFreeze(&attr); err != nil {
 		return fmt.Errorf("can't freeze map: %w", err)
 	}
 	return nil
@@ -936,13 +998,13 @@ func (m *Map) finalize(spec *MapSpec) error {
 	return nil
 }
 
-func (m *Map) marshalKey(data interface{}) (internal.Pointer, error) {
+func (m *Map) marshalKey(data interface{}) (sys.Pointer, error) {
 	if data == nil {
 		if m.keySize == 0 {
 			// Queues have a key length of zero, so passing nil here is valid.
-			return internal.NewPointer(nil), nil
+			return sys.NewPointer(nil), nil
 		}
-		return internal.Pointer{}, errors.New("can't use nil as key of map")
+		return sys.Pointer{}, errors.New("can't use nil as key of map")
 	}
 
 	return marshalPtr(data, int(m.keySize))
@@ -957,7 +1019,7 @@ func (m *Map) unmarshalKey(data interface{}, buf []byte) error {
 	return unmarshalBytes(data, buf)
 }
 
-func (m *Map) marshalValue(data interface{}) (internal.Pointer, error) {
+func (m *Map) marshalValue(data interface{}) (sys.Pointer, error) {
 	if m.typ.hasPerCPUValue() {
 		return marshalPerCPUValue(data, int(m.valueSize))
 	}
@@ -970,13 +1032,13 @@ func (m *Map) marshalValue(data interface{}) (internal.Pointer, error) {
 	switch value := data.(type) {
 	case *Map:
 		if !m.typ.canStoreMap() {
-			return internal.Pointer{}, fmt.Errorf("can't store map in %s", m.typ)
+			return sys.Pointer{}, fmt.Errorf("can't store map in %s", m.typ)
 		}
 		buf, err = marshalMap(value, int(m.valueSize))
 
 	case *Program:
 		if !m.typ.canStoreProgram() {
-			return internal.Pointer{}, fmt.Errorf("can't store program in %s", m.typ)
+			return sys.Pointer{}, fmt.Errorf("can't store program in %s", m.typ)
 		}
 		buf, err = marshalProgram(value, int(m.valueSize))
 
@@ -985,10 +1047,10 @@ func (m *Map) marshalValue(data interface{}) (internal.Pointer, error) {
 	}
 
 	if err != nil {
-		return internal.Pointer{}, err
+		return sys.Pointer{}, err
 	}
 
-	return internal.NewSlicePointer(buf), nil
+	return sys.NewSlicePointer(buf), nil
 }
 
 func (m *Map) unmarshalValue(value interface{}, buf []byte) error {
@@ -1052,7 +1114,10 @@ func (m *Map) unmarshalValue(value interface{}, buf []byte) error {
 
 // LoadPinnedMap loads a Map from a BPF file.
 func LoadPinnedMap(fileName string, opts *LoadPinOptions) (*Map, error) {
-	fd, err := internal.BPFObjGet(fileName, opts.Marshal())
+	fd, err := sys.ObjGet(&sys.ObjGetAttr{
+		Pathname:  sys.NewStringPointer(fileName),
+		FileFlags: opts.Marshal(),
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -1081,13 +1146,8 @@ func marshalMap(m *Map, length int) ([]byte, error) {
 		return nil, fmt.Errorf("can't marshal map to %d bytes", length)
 	}
 
-	fd, err := m.fd.Value()
-	if err != nil {
-		return nil, err
-	}
-
 	buf := make([]byte, 4)
-	internal.NativeEndian.PutUint32(buf, fd)
+	internal.NativeEndian.PutUint32(buf, m.fd.Uint())
 	return buf, nil
 }
 
@@ -1239,15 +1299,17 @@ func (mi *MapIterator) Err() error {
 //
 // Returns ErrNotExist, if there is no next eBPF map.
 func MapGetNextID(startID MapID) (MapID, error) {
-	id, err := objGetNextID(internal.BPF_MAP_GET_NEXT_ID, uint32(startID))
-	return MapID(id), err
+	attr := &sys.MapGetNextIdAttr{Id: uint32(startID)}
+	return MapID(attr.NextId), sys.MapGetNextId(attr)
 }
 
 // NewMapFromID returns the map for a given id.
 //
 // Returns ErrNotExist, if there is no eBPF map with the given id.
 func NewMapFromID(id MapID) (*Map, error) {
-	fd, err := internal.BPFObjGetFDByID(internal.BPF_MAP_GET_FD_BY_ID, uint32(id))
+	fd, err := sys.MapGetFdById(&sys.MapGetFdByIdAttr{
+		Id: uint32(id),
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -1259,9 +1321,9 @@ func NewMapFromID(id MapID) (*Map, error) {
 //
 // Deprecated: use MapInfo.ID() instead.
 func (m *Map) ID() (MapID, error) {
-	info, err := bpfGetMapInfoByFD(m.fd)
-	if err != nil {
+	var info sys.MapInfo
+	if err := sys.ObjInfo(m.fd, &info); err != nil {
 		return MapID(0), err
 	}
-	return MapID(info.id), nil
+	return MapID(info.Id), nil
 }

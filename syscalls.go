@@ -18,12 +18,21 @@ import (
 var ErrNotExist = os.ErrNotExist
 
 // RemoveMemlockRlimit removes the limit on the amount of memory the current
-// process can lock into RAM. Returns a function that restores the limit to
-// its previous value.
+// process can lock into RAM, if necessary.
 //
 // This is not required to load eBPF resources on kernel versions 5.11+
-// due to the introduction of cgroup-based memory accounting.
-func RemoveMemlockRlimit() (func() error, error) {
+// due to the introduction of cgroup-based memory accounting. On such kernels
+// the function is a no-op.
+//
+// Since the function changes global per-process limits it should be invoked at
+// program start up, in main() or init().
+//
+// This function exists as a convenience and should only be used when
+// permanently raising RLIMIT_MEMLOCK to infinite is appropriate. Consider
+// invoking prlimit(2) directly if that is not the case.
+//
+// Requires CAP_SYS_RESOURCE on kernels < 5.11.
+func RemoveMemlockRlimit() error {
 	return internal.RemoveMemlockRlimit()
 }
 

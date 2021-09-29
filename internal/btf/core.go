@@ -264,7 +264,7 @@ var errImpossibleRelocation = errors.New("impossible relocation")
 // the better the target is.
 func coreCalculateFixups(local Type, targets []NamedType, relos coreRelos) ([]COREFixup, error) {
 	localID := local.ID()
-	local, err := copyType(local, skipQualifierAndTypedef)
+	local, err := copyType(local, skipQualifiersAndTypedefs)
 	if err != nil {
 		return nil, err
 	}
@@ -273,7 +273,7 @@ func coreCalculateFixups(local Type, targets []NamedType, relos coreRelos) ([]CO
 	var bestFixups []COREFixup
 	for i := range targets {
 		targetID := targets[i].ID()
-		target, err := copyType(targets[i], skipQualifierAndTypedef)
+		target, err := copyType(targets[i], skipQualifiersAndTypedefs)
 		if err != nil {
 			return nil, err
 		}
@@ -872,7 +872,7 @@ func coreAreMembersCompatible(localType Type, targetType Type) error {
 	}
 }
 
-func skipQualifierAndTypedef(typ Type) (Type, error) {
+func skipQualifiersAndTypedefs(typ Type) (Type, error) {
 	result := typ
 	for depth := 0; depth <= maxTypeDepth; depth++ {
 		switch v := (result).(type) {
@@ -880,6 +880,19 @@ func skipQualifierAndTypedef(typ Type) (Type, error) {
 			result = v.qualify()
 		case *Typedef:
 			result = v.Type
+		default:
+			return result, nil
+		}
+	}
+	return nil, errors.New("exceeded type depth")
+}
+
+func skipQualifiers(typ Type) (Type, error) {
+	result := typ
+	for depth := 0; depth <= maxTypeDepth; depth++ {
+		switch v := (result).(type) {
+		case qualifier:
+			result = v.qualify()
 		default:
 			return result, nil
 		}

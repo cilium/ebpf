@@ -197,7 +197,7 @@ func NewMap(spec *MapSpec) (*Map, error) {
 //
 // The caller is responsible for ensuring the process' rlimit is set
 // sufficiently high for locking memory during map creation. This can be done
-// by calling ebpf.RemoveMemlockRlimit() prior to calling NewMapWithOptions.
+// by calling rlimit.RemoveMemlock() prior to calling NewMapWithOptions.
 //
 // May return an error wrapping ErrMapIncompatible.
 func NewMapWithOptions(spec *MapSpec, opts MapOptions) (*Map, error) {

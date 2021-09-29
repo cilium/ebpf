@@ -2,9 +2,12 @@
 
 [![PkgGoDev](https://pkg.go.dev/badge/github.com/cilium/ebpf)](https://pkg.go.dev/github.com/cilium/ebpf)
 
+![HoneyGopher](.github/images/cilium-ebpf.png)
+
 eBPF is a pure Go library that provides utilities for loading, compiling, and
 debugging eBPF programs. It has minimal external dependencies and is intended to
 be used in long running processes.
+
 
 * [asm](https://pkg.go.dev/github.com/cilium/ebpf/asm) contains a basic
   assembler
@@ -53,3 +56,7 @@ The toolchain image build files are kept in [testdata/docker/](testdata/docker/)
 ## License
 
 MIT
+
+### eBPF Gopher
+
+The eBPF honeygopher is based on the Go gopher designed by Renee French.

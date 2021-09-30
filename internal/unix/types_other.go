@@ -262,6 +262,6 @@ func KernelRelease() (string, error) {
 	return "", errNonLinux
 }
 
-func RemoveMemlockRlimit() (func() error, error) {
-	return nil, errNonLinux
+func Prlimit(pid, resource int, new, old *Rlimit) error {
+	return errNonLinux
 }

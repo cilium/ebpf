@@ -360,6 +360,11 @@ func (spec *MapSpec) createMap(inner *internal.FD, opts MapOptions, handles *han
 			return nil, fmt.Errorf("map create: %w", err)
 		}
 	}
+	if spec.Flags&unix.BPF_F_NO_PREALLOC > 0 {
+		if err := haveNoPreallocMaps(); err != nil {
+			return nil, fmt.Errorf("map create: %w", err)
+		}
+	}
 
 	attr := internal.BPFMapCreateAttr{
 		MapType:    uint32(spec.Type),

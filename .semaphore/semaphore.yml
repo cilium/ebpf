@@ -38,6 +38,8 @@ blocks:
       env_vars:
         - name: TMPDIR
           value: /tmp
+        - name: BRANCH
+          value: nplanel/add-kernel-44
       jobs:
       - name: Build
         commands:

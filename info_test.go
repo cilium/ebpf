@@ -14,20 +14,25 @@ import (
 )
 
 func TestMapInfoFromProc(t *testing.T) {
-	hash, err := NewMap(&MapSpec{
+	mapSpec := &MapSpec{
 		Name:       "testing",
 		Type:       Hash,
 		KeySize:    4,
 		ValueSize:  5,
 		MaxEntries: 2,
-		Flags:      unix.BPF_F_NO_PREALLOC,
-	})
+	}
+	if haveNoPreallocMaps() == nil {
+		mapSpec.Flags = unix.BPF_F_NO_PREALLOC
+	}
+
+	hash, err := NewMap(mapSpec)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer hash.Close()
 
 	info, err := newMapInfoFromProc(hash.fd)
+	testutils.SkipIfNotSupported(t, err)
 	if err != nil {
 		t.Fatal("Can't get map info:", err)
 	}
@@ -48,7 +53,7 @@ func TestMapInfoFromProc(t *testing.T) {
 		t.Error("Expected MaxEntries of 2, got", info.MaxEntries)
 	}
 
-	if info.Flags != unix.BPF_F_NO_PREALLOC {
+	if mapSpec.Flags&unix.BPF_F_NO_PREALLOC > 0 && info.Flags != unix.BPF_F_NO_PREALLOC {
 		t.Errorf("Expected Flags to be %d, got %d", unix.BPF_F_NO_PREALLOC, info.Flags)
 	}
 

@@ -49,6 +49,9 @@ func TestTracepoint(t *testing.T) {
 }
 
 func TestTracepointMissing(t *testing.T) {
+	// Requires at least 4.7 (98b5c2c65c29 "perf, bpf: allow bpf programs attach to tracepoints")
+	testutils.SkipOnOldKernel(t, "4.7", "tracepoint support")
+
 	prog, err := ebpf.NewProgram(&tracepointSpec)
 	if err != nil {
 		t.Fatal(err)

@@ -14,8 +14,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/link"
+	"github.com/cilium/ebpf/rlimit"
 )
 
 //go:generate go run github.com/cilium/ebpf/cmd/bpf2go -cc clang-11 KProbeExample ./bpf/kprobe_example.c -- -nostdinc -I../headers
@@ -32,8 +32,7 @@ func main() {
 	signal.Notify(stopper, os.Interrupt, syscall.SIGTERM)
 
 	// Allow the current process to lock memory for eBPF resources.
-	rrl, err := ebpf.RemoveMemlockRlimit()
-	if err != nil {
+	if err := rlimit.RemoveMemlock(); err != nil {
 		log.Fatal(err)
 	}
 
@@ -43,11 +42,6 @@ func main() {
 		log.Fatalf("loading objects: %v", err)
 	}
 	defer objs.Close()
-
-	// Revert the process' rlimit after eBPF resources have been loaded.
-	if err := rrl(); err != nil {
-		log.Fatal(err)
-	}
 
 	// Open a Kprobe at the entry point of the kernel function and attach the
 	// pre-compiled program. Each time the kernel function enters, the program

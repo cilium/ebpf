@@ -61,7 +61,7 @@ blocks:
       - name: Run unit tests
         matrix:
           - env_var: KERNEL_VERSION
-            values: ["5.10", "5.4", "4.19", "4.9"]
+            values: ["5.10", "5.4", "4.19", "4.9", "4.4.131"]
         commands:
           - timeout -s KILL 600s ./run-tests.sh $KERNEL_VERSION
           - goveralls -coverprofile="coverage.out" -service=semaphore -repotoken "$COVERALLS_TOKEN" || echo Submission to coveralls failed

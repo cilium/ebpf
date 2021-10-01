@@ -316,7 +316,7 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions, handles *hand
 	if errors.Is(logErr, unix.EPERM) && logBuf[0] == 0 {
 		// EPERM due to RLIMIT_MEMLOCK happens before the verifier, so we can
 		// check that the log is empty to reduce false positives.
-		return nil, fmt.Errorf("load program: RLIMIT_MEMLOCK may be too low: %w", logErr)
+		return nil, fmt.Errorf("load program: %w (MEMLOCK bay be too low, consider rlimit.RemoveMemlock)", logErr)
 	}
 
 	err = internal.ErrorWithLog(err, logBuf, logErr)

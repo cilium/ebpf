@@ -197,7 +197,7 @@ func NewMap(spec *MapSpec) (*Map, error) {
 //
 // The caller is responsible for ensuring the process' rlimit is set
 // sufficiently high for locking memory during map creation. This can be done
-// by calling ebpf.RemoveMemlockRlimit() prior to calling NewMapWithOptions.
+// by calling rlimit.RemoveMemlock() prior to calling NewMapWithOptions.
 //
 // May return an error wrapping ErrMapIncompatible.
 func NewMapWithOptions(spec *MapSpec, opts MapOptions) (*Map, error) {
@@ -400,7 +400,7 @@ func (spec *MapSpec) createMap(inner *internal.FD, opts MapOptions, handles *han
 	fd, err := internal.BPFMapCreate(&attr)
 	if err != nil {
 		if errors.Is(err, unix.EPERM) {
-			return nil, fmt.Errorf("map create: RLIMIT_MEMLOCK may be too low: %w", err)
+			return nil, fmt.Errorf("map create: %w (MEMLOCK bay be too low, consider rlimit.RemoveMemlock)", err)
 		}
 		if btfDisabled {
 			return nil, fmt.Errorf("map create without BTF: %w", err)

@@ -20,6 +20,7 @@ blocks:
       prologue:
         commands:
           - checkout
+          - curl -sSfL http://security.ubuntu.com/ubuntu/pool/main/c/ca-certificates/ca-certificates_20210119~20.04.2_all.deb -o /tmp/ca-certificates.deb && sudo dpkg -i /tmp/ca-certificates.deb
           - sudo mkdir -p /usr/local/golang/1.17 && curl -fL "https://golang.org/dl/go1.17.linux-amd64.tar.gz" | sudo tar -xz -C /usr/local/golang/1.17
           - sem-version go 1.17
           - go install github.com/mattn/goveralls@latest

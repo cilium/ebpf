@@ -17,6 +17,7 @@ import (
 	"github.com/cilium/ebpf/asm"
 	"github.com/cilium/ebpf/link"
 	"github.com/cilium/ebpf/perf"
+	"github.com/cilium/ebpf/rlimit"
 )
 
 // Metadata for the eBPF program used in this example.
@@ -33,8 +34,7 @@ func main() {
 	signal.Notify(stopper, os.Interrupt, syscall.SIGTERM)
 
 	// Allow the current process to lock memory for eBPF resources.
-	rrl, err := ebpf.RemoveMemlockRlimit()
-	if err != nil {
+	if err := rlimit.RemoveMemlock(); err != nil {
 		log.Fatal(err)
 	}
 
@@ -94,11 +94,6 @@ func main() {
 		log.Fatalf("creating ebpf program: %s", err)
 	}
 	defer prog.Close()
-
-	// Revert the process' rlimit after eBPF resources have been loaded.
-	if err := rrl(); err != nil {
-		log.Fatal(err)
-	}
 
 	// Open a trace event based on a pre-existing kernel hook (tracepoint).
 	// Each time a userspace program uses the 'openat()' syscall, the eBPF

@@ -14,8 +14,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/link"
+	"github.com/cilium/ebpf/rlimit"
 )
 
 //go:generate go run github.com/cilium/ebpf/cmd/bpf2go -cc clang-11 KProbeExample ./bpf/kprobe_percpu_example.c -- -nostdinc -I../headers
@@ -31,11 +31,9 @@ func main() {
 	stopper := make(chan os.Signal, 1)
 	signal.Notify(stopper, os.Interrupt, syscall.SIGTERM)
 
-	// Increase the rlimit of the current process to provide sufficient space
-	// for locking memory for the eBPF map.
-	_, err := ebpf.RemoveMemlockRlimit()
-	if err != nil {
-		log.Fatalf("failed to set temporary rlimit: %v", err)
+	// Allow the current process to lock memory for eBPF resources.
+	if err := rlimit.RemoveMemlock(); err != nil {
+		log.Fatal(err)
 	}
 
 	// Load pre-compiled programs and maps into the kernel.

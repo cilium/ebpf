@@ -15,9 +15,9 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/link"
 	"github.com/cilium/ebpf/perf"
+	"github.com/cilium/ebpf/rlimit"
 	"golang.org/x/sys/unix"
 )
 
@@ -46,8 +46,7 @@ func main() {
 	signal.Notify(stopper, os.Interrupt, syscall.SIGTERM)
 
 	// Allow the current process to lock memory for eBPF resources.
-	rrl, err := ebpf.RemoveMemlockRlimit()
-	if err != nil {
+	if err := rlimit.RemoveMemlock(); err != nil {
 		log.Fatal(err)
 	}
 
@@ -57,11 +56,6 @@ func main() {
 		log.Fatalf("loading objects: %s", err)
 	}
 	defer objs.Close()
-
-	// Revert the process' rlimit after eBPF resources have been loaded.
-	if err := rrl(); err != nil {
-		log.Fatal(err)
-	}
 
 	// Open an ELF binary and read its symbols.
 	ex, err := link.OpenExecutable(binPath)

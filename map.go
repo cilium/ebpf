@@ -203,7 +203,7 @@ func newMapFromFD(fd *internal.FD) (*Map, error) {
 	info, err := newMapInfoFromFd(fd)
 	if err != nil {
 		fd.Close()
-		return nil, fmt.Errorf("get map info: %s", err)
+		return nil, fmt.Errorf("get map info: %w", err)
 	}
 
 	return newMap(fd, info.Name, info.Type, info.KeySize, info.ValueSize, info.MaxEntries, info.Flags)
@@ -314,7 +314,7 @@ func newMapWithOptions(spec *MapSpec, opts MapOptions, handles *handleCache) (_ 
 	if spec.Pinning == PinByName {
 		path := filepath.Join(opts.PinPath, spec.Name)
 		if err := m.Pin(path); err != nil {
-			return nil, fmt.Errorf("pin map: %s", err)
+			return nil, fmt.Errorf("pin map: %w", err)
 		}
 	}
 
@@ -962,6 +962,9 @@ func (m *Map) Clone() (*Map, error) {
 //
 // This requires bpffs to be mounted above fileName. See https://docs.cilium.io/en/k8s-doc/admin/#admin-mount-bpffs
 func (m *Map) Pin(fileName string) error {
+	if err := haveFdInfoMaps(); errors.Is(err, ErrNotSupported) {
+		return err
+	}
 	if err := internal.Pin(m.pinnedPath, fileName, m.fd); err != nil {
 		return err
 	}
@@ -975,6 +978,9 @@ func (m *Map) Pin(fileName string) error {
 //
 // Unpinning an unpinned Map returns nil.
 func (m *Map) Unpin() error {
+	if err := haveFdInfoMaps(); errors.Is(err, ErrNotSupported) {
+		return err
+	}
 	if err := internal.Unpin(m.pinnedPath); err != nil {
 		return err
 	}

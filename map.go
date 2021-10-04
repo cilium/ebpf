@@ -510,6 +510,9 @@ func (m *Map) Flags() uint32 {
 
 // Info returns metadata about the map.
 func (m *Map) Info() (*MapInfo, error) {
+	if _mapInfoPersistent != nil {
+		return _mapInfoPersistent.Info(m.pinnedPath)
+	}
 	return newMapInfoFromFd(m.fd)
 }
 
@@ -962,11 +965,13 @@ func (m *Map) Clone() (*Map, error) {
 //
 // This requires bpffs to be mounted above fileName. See https://docs.cilium.io/en/k8s-doc/admin/#admin-mount-bpffs
 func (m *Map) Pin(fileName string) error {
-	if err := haveFdInfoMaps(); errors.Is(err, ErrNotSupported) {
-		return err
-	}
 	if err := internal.Pin(m.pinnedPath, fileName, m.fd); err != nil {
 		return err
+	}
+	if _mapInfoPersistent != nil {
+		if err := _mapInfoPersistent.Pin(m, m.pinnedPath, fileName); err != nil {
+			return err
+		}
 	}
 	m.pinnedPath = fileName
 	return nil
@@ -978,11 +983,13 @@ func (m *Map) Pin(fileName string) error {
 //
 // Unpinning an unpinned Map returns nil.
 func (m *Map) Unpin() error {
-	if err := haveFdInfoMaps(); errors.Is(err, ErrNotSupported) {
-		return err
-	}
 	if err := internal.Unpin(m.pinnedPath); err != nil {
 		return err
+	}
+	if _mapInfoPersistent != nil {
+		if err := _mapInfoPersistent.Unpin(m.pinnedPath); err != nil {
+			return err
+		}
 	}
 	m.pinnedPath = ""
 	return nil
@@ -1140,17 +1147,25 @@ func (m *Map) unmarshalValue(value interface{}, buf []byte) error {
 }
 
 // LoadPinnedMap loads a Map from a BPF file.
-func LoadPinnedMap(fileName string, opts *LoadPinOptions) (*Map, error) {
+func LoadPinnedMap(fileName string, opts *LoadPinOptions) (m *Map, err error) {
 	fd, err := internal.BPFObjGet(fileName, opts.Marshal())
 	if err != nil {
 		return nil, err
 	}
 
-	m, err := newMapFromFD(fd)
+	if _mapInfoPersistent != nil {
+		var info *MapInfo
+		info, err = _mapInfoPersistent.Info(fileName)
+		if err != nil {
+			return nil, err
+		}
+		m, err = newMap(fd, info.Name, info.Type, info.KeySize, info.ValueSize, info.MaxEntries, info.Flags)
+	} else {
+		m, err = newMapFromFD(fd)
+	}
 	if err == nil {
 		m.pinnedPath = fileName
 	}
-
 	return m, err
 }
 

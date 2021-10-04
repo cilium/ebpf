@@ -301,6 +301,7 @@ func TestMapPin(t *testing.T) {
 	path := filepath.Join(tmp, "map")
 
 	if err := m.Pin(path); err != nil {
+		testutils.SkipIfNotSupported(t, err)
 		t.Fatal(err)
 	}
 
@@ -928,11 +929,16 @@ func TestNotExist(t *testing.T) {
 	}
 
 	if err := hash.Delete("hello"); !errors.Is(err, ErrKeyNotExist) {
-		t.Error("Deleting unknown key doesn't return ErrKeyNotExist")
+		t.Error("Deleting unknown key doesn't return ErrKeyNotExist", err)
+	}
+
+	var k = []byte{1, 2, 3, 4, 5}
+	if err := hash.NextKey(&k, &tmp); !errors.Is(err, ErrKeyNotExist) {
+		t.Error("Looking up next key in empty map doesn't return a non-existing error", err)
 	}
 
 	if err := hash.NextKey(nil, &tmp); !errors.Is(err, ErrKeyNotExist) {
-		t.Error("Looking up next key in empty map doesn't return a non-existing error")
+		t.Error("Looking up next key in empty map doesn't return a non-existing error", err)
 	}
 }
 
@@ -991,6 +997,9 @@ func TestPerCPUMarshaling(t *testing.T) {
 			}
 			if numCPU < 2 {
 				t.Skip("Test requires at least two CPUs")
+			}
+			if typ == PerCPUHash || typ == PerCPUArray {
+				testutils.SkipOnOldKernel(t, "4.6", "per-CPU hash and array")
 			}
 			if typ == LRUCPUHash {
 				testutils.SkipOnOldKernel(t, "4.10", "LRU per-CPU hash")
@@ -1215,6 +1224,7 @@ func TestMapFromFD(t *testing.T) {
 	// If you're thinking about copying this, don't. Use
 	// Clone() instead.
 	m2, err := NewMapFromFD(m.FD())
+	testutils.SkipIfNotSupported(t, err)
 	if err != nil {
 		t.Fatal(err)
 	}

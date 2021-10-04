@@ -311,7 +311,6 @@ func TestMapPin(t *testing.T) {
 	m.Close()
 
 	m, err := LoadPinnedMap(path, nil)
-	testutils.SkipIfNotSupported(t, err) // TODO: add support for old kernel for load pinned from MapSpec
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -390,7 +389,6 @@ func TestMapPinMultiple(t *testing.T) {
 	spec := spec1.Copy()
 
 	m1, err := NewMapWithOptions(spec, MapOptions{PinPath: tmp})
-	testutils.SkipIfNotSupported(t, err)
 	if err != nil {
 		t.Fatal("Can't create map:", err)
 	}
@@ -428,7 +426,6 @@ func TestMapPinFailReplace(t *testing.T) {
 	spec2.Name = spec1.Name + "bar"
 
 	m, err := NewMapWithOptions(spec, MapOptions{PinPath: tmp})
-	testutils.SkipIfNotSupported(t, err)
 	if err != nil {
 		t.Fatal("Failed to create map:", err)
 	}
@@ -451,7 +448,6 @@ func TestMapUnpin(t *testing.T) {
 	spec := spec1.Copy()
 
 	m, err := NewMapWithOptions(spec, MapOptions{PinPath: tmp})
-	testutils.SkipIfNotSupported(t, err)
 	if err != nil {
 		t.Fatal("Failed to create map:", err)
 	}
@@ -479,7 +475,6 @@ func TestMapLoadPinned(t *testing.T) {
 	spec := spec1.Copy()
 
 	m1, err := NewMapWithOptions(spec, MapOptions{PinPath: tmp})
-	testutils.SkipIfNotSupported(t, err)
 	c.Assert(err, qt.IsNil)
 	defer m1.Close()
 	pinned := m1.IsPinned()
@@ -500,7 +495,6 @@ func TestMapLoadPinnedUnpin(t *testing.T) {
 	spec := spec1.Copy()
 
 	m1, err := NewMapWithOptions(spec, MapOptions{PinPath: tmp})
-	testutils.SkipIfNotSupported(t, err)
 	c.Assert(err, qt.IsNil)
 	defer m1.Close()
 	pinned := m1.IsPinned()
@@ -581,7 +575,6 @@ func TestMapPinFlags(t *testing.T) {
 	m, err := NewMapWithOptions(spec, MapOptions{
 		PinPath: tmp,
 	})
-	testutils.SkipIfNotSupported(t, err)
 	qt.Assert(t, err, qt.IsNil)
 	m.Close()
 
@@ -1379,7 +1372,6 @@ func TestMapPinning(t *testing.T) {
 	}
 
 	m1, err := NewMapWithOptions(spec, MapOptions{PinPath: tmp})
-	testutils.SkipIfNotSupported(t, err)
 	if err != nil {
 		t.Fatal("Can't create map:", err)
 	}

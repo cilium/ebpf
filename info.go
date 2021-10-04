@@ -2,18 +2,153 @@ package ebpf
 
 import (
 	"bufio"
+	"encoding/gob"
 	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"strings"
 	"syscall"
 	"time"
 
 	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/btf"
+
+	"github.com/juju/fslock"
 )
+
+var defaultMapInfoPersistentFile = filepath.Join(os.TempDir(), "cilium-maps-info-v0.1")
+
+var _mapInfoPersistent *mapInfoPersistent
+
+func init() {
+	if err := haveFdInfoMaps(); err != nil && errors.Is(err, ErrNotSupported) {
+		mip, err := newMapInfoPersistent()
+		if err == nil {
+			_mapInfoPersistent = mip
+		}
+	}
+}
+
+type mapInfoPersistent struct {
+	lockFile string
+	infoPath map[string]MapInfo
+	lock     *fslock.Lock
+}
+
+func newMapInfoPersistent(lockFile ...string) (mip *mapInfoPersistent, err error) {
+	lock := defaultMapInfoPersistentFile
+	if len(lockFile) > 0 {
+		lock = lockFile[0]
+	}
+	mip = &mapInfoPersistent{
+		lockFile: lock,
+		infoPath: make(map[string]MapInfo),
+		lock:     fslock.New(lock),
+	}
+	err = mip.lock.Lock()
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = mip.lock.Unlock() }()
+	if err = mip.loadMapsInfo(); err != nil {
+		return nil, err
+	}
+	return mip, nil
+}
+
+func (mip *mapInfoPersistent) loadMapsInfo() error {
+	f, err := os.Open(mip.lockFile)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	fi, err := f.Stat()
+	if err != nil {
+		return err
+	}
+	if fi.Size() == 0 {
+		return nil
+	}
+
+	d := gob.NewDecoder(f)
+	err = d.Decode(&mip.infoPath)
+	if err != nil {
+		return fmt.Errorf("failed gob decode '%s': %w", mip.lockFile, err)
+	}
+	return nil
+}
+
+func (mip *mapInfoPersistent) saveMapsInfo() error {
+	f, err := os.OpenFile(mip.lockFile, os.O_RDWR, 0600)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	e := gob.NewEncoder(f)
+	err = e.Encode(mip.infoPath)
+	if err != nil {
+		return fmt.Errorf("failed gob encode '%s': %w", mip.lockFile, err)
+	}
+	return nil
+}
+
+func (mip *mapInfoPersistent) Info(filename string) (mi *MapInfo, err error) {
+	err = mip.lock.Lock()
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = mip.lock.Unlock() }()
+
+	if err = mip.loadMapsInfo(); err != nil {
+		return nil, err
+	}
+
+	info, found := mip.infoPath[filename]
+	if !found {
+		return nil, fmt.Errorf("filename '%s': %w", filename, os.ErrNotExist)
+	}
+	return &info, nil
+}
+
+func (mip *mapInfoPersistent) Pin(m *Map, oldFilename string, filename string) error {
+	err := mip.lock.Lock()
+	if err != nil {
+		return err
+	}
+	defer func() { _ = mip.lock.Unlock() }()
+
+	if oldFilename != "" {
+		delete(mip.infoPath, oldFilename)
+	}
+	return mip.save(m, filename)
+}
+
+func (mip *mapInfoPersistent) Unpin(filename string) error {
+	err := mip.lock.Lock()
+	if err != nil {
+		return err
+	}
+	defer mip.lock.Unlock()
+	delete(mip.infoPath, filename)
+	return mip.saveMapsInfo()
+}
+
+func (mip *mapInfoPersistent) save(m *Map, filename string) error {
+	info := MapInfo{
+		Name:       m.name,
+		Type:       m.typ,
+		KeySize:    m.keySize,
+		ValueSize:  m.valueSize,
+		MaxEntries: m.maxEntries,
+		Flags:      m.flags,
+	}
+	mip.infoPath[filename] = info
+
+	return mip.saveMapsInfo()
+}
 
 var haveFdInfoMaps = internal.FeatureTest("proc/pid/fdinfo maps", "4.9?", func() error {
 	// This checks we can scan /proc/pid/fdinfo, which appeared in 4.9?.

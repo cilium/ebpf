@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"math/rand"
+	"os"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -46,6 +47,59 @@ var haveMapIterateFromNullKey = internal.FeatureTest("map iterate from null key"
 		return ErrNotSupported
 	}
 	return err
+})
+
+var haveMapPinMove = internal.FeatureTest("map pin move", "4.4.xx", func() error {
+	var spec = &MapSpec{
+		Name:       "foo",
+		Type:       Hash,
+		KeySize:    4,
+		ValueSize:  4,
+		MaxEntries: 1,
+		Pinning:    PinByName,
+	}
+
+	tmp, err := os.MkdirTemp("/sys/fs/bpf", "ebpf-test-map-pin-move")
+	if err != nil {
+		return fmt.Errorf("create temporary directory on BPFFS: %w", err)
+	}
+	defer os.RemoveAll(tmp)
+
+	// equivalent to m1, err := NewMapWithOptions(spec, MapOptions{PinPath: tmp})
+	handles := newHandleCache()
+	opts := MapOptions{PinPath: tmp}
+	m1, err := spec.createMap(nil, opts, handles)
+	if err != nil {
+		return err
+	}
+	path := filepath.Join(opts.PinPath, spec.Name)
+	if err := internal.Pin(m1.pinnedPath, path, m1.fd, false); err != nil {
+		return err
+	}
+	m1.pinnedPath = path
+	handles.close()
+
+	if err != nil {
+		return fmt.Errorf("can't create map: %w", err)
+	}
+	defer m1.Close()
+
+	if pinned := m1.IsPinned(); !pinned {
+		return fmt.Errorf("map is not pinned")
+	}
+
+	newPath := filepath.Join(tmp, "bar")
+	err = internal.Pin(m1.pinnedPath, newPath, m1.fd, false)
+	if err == nil {
+		internal.Unpin(newPath)
+		return nil
+	}
+	defer internal.Unpin(m1.pinnedPath)
+
+	if !errors.Is(err, unix.EPERM) { // old kernel return EPERM
+		return err
+	}
+	return ErrNotSupported
 })
 
 // MapOptions control loading a map into the kernel.
@@ -961,7 +1015,7 @@ func (m *Map) Clone() (*Map, error) {
 //
 // This requires bpffs to be mounted above fileName. See https://docs.cilium.io/en/k8s-doc/admin/#admin-mount-bpffs
 func (m *Map) Pin(fileName string) error {
-	if err := internal.Pin(m.pinnedPath, fileName, m.fd); err != nil {
+	if err := internal.Pin(m.pinnedPath, fileName, m.fd, errors.Is(haveMapPinMove(), ErrNotSupported)); err != nil {
 		return err
 	}
 	if _mapInfoPersistent != nil {

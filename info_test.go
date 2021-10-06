@@ -3,6 +3,8 @@ package ebpf
 import (
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -14,20 +16,25 @@ import (
 )
 
 func TestMapInfoFromProc(t *testing.T) {
-	hash, err := NewMap(&MapSpec{
+	mapSpec := &MapSpec{
 		Name:       "testing",
 		Type:       Hash,
 		KeySize:    4,
 		ValueSize:  5,
 		MaxEntries: 2,
-		Flags:      unix.BPF_F_NO_PREALLOC,
-	})
+	}
+	if err := haveNoPreallocMaps(); err == nil {
+		mapSpec.Flags = unix.BPF_F_NO_PREALLOC
+	}
+
+	hash, err := NewMap(mapSpec)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer hash.Close()
 
 	info, err := newMapInfoFromProc(hash.fd)
+	testutils.SkipIfNotSupported(t, err)
 	if err != nil {
 		t.Fatal("Can't get map info:", err)
 	}
@@ -48,7 +55,7 @@ func TestMapInfoFromProc(t *testing.T) {
 		t.Error("Expected MaxEntries of 2, got", info.MaxEntries)
 	}
 
-	if info.Flags != unix.BPF_F_NO_PREALLOC {
+	if mapSpec.Flags&unix.BPF_F_NO_PREALLOC > 0 && info.Flags != unix.BPF_F_NO_PREALLOC {
 		t.Errorf("Expected Flags to be %d, got %d", unix.BPF_F_NO_PREALLOC, info.Flags)
 	}
 
@@ -81,6 +88,81 @@ func TestMapInfoFromProc(t *testing.T) {
 	if err != nil {
 		t.Fatal("Can't get nested map info from /proc:", err)
 	}
+}
+
+func TestMapInfoPersistent(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "cilium-TestMapInfoPersistent")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tmpDir)
+	lockFile := filepath.Join(tmpDir, "cilium-maps-info")
+
+	mapInfo := MapInfo{
+		Name:       "testing",
+		Type:       Hash,
+		KeySize:    4,
+		ValueSize:  5,
+		MaxEntries: 2,
+	}
+	mapSpec := &MapSpec{
+		Name:       "testing",
+		Type:       Hash,
+		KeySize:    4,
+		ValueSize:  5,
+		MaxEntries: 2,
+	}
+	if err := haveNoPreallocMaps(); err == nil {
+		mapInfo.Flags = unix.BPF_F_NO_PREALLOC
+		mapSpec.Flags = unix.BPF_F_NO_PREALLOC
+	}
+
+	hash, err := NewMap(mapSpec)
+	qt.Assert(t, err, qt.IsNil)
+	defer hash.Close()
+
+	tmp := testutils.TempBPFFS(t)
+
+	mip, err := newMapInfoPersistent(lockFile)
+	qt.Assert(t, err, qt.IsNil)
+
+	path := filepath.Join(tmp, "map")
+	err = mip.Pin(hash, "", path)
+	qt.Assert(t, err, qt.IsNil)
+
+	mip2, err := newMapInfoPersistent(lockFile)
+	qt.Assert(t, err, qt.IsNil)
+
+	info, err := mip2.Info(path)
+	qt.Assert(t, err, qt.IsNil)
+
+	qt.Assert(t, *info, qt.Equals, mapInfo)
+
+	// test non mutatability
+	info.Name = "testing-nomut"
+	err = mip2.Pin(hash, "", path)
+	qt.Assert(t, err, qt.IsNil)
+
+	info2, err := mip2.Info(path)
+	qt.Assert(t, err, qt.IsNil)
+	qt.Assert(t, *info2, qt.Equals, mapInfo)
+
+	// test hash.Info() result from unpinned and pinned map
+	mapInfo2, err := hash.Info()
+	if _mapInfoPersistent != nil { // on old kernel, only Pinned map can return info
+		qt.Assert(t, errors.Is(err, os.ErrNotExist), qt.IsTrue)
+		err = hash.Pin(path)
+		qt.Assert(t, err, qt.IsNil)
+	} else {
+		mapInfo2.id = 0            // hash.Info() return a valid id on recent kernel from 4.13
+		info2.Name = mapInfo2.Name // Ignore Name field as not all kernel return it
+		qt.Assert(t, *info2, qt.Equals, *mapInfo2)
+	}
+
+	mapInfo2, err = hash.Info()
+	qt.Assert(t, err, qt.IsNil)
+	mapInfo2.id = 0 // hash.Info() return a valid id on recent kernel from 4.13
+	qt.Assert(t, *info2, qt.Equals, *mapInfo2)
 }
 
 func TestProgramInfo(t *testing.T) {

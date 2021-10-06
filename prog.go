@@ -420,7 +420,7 @@ func (p *Program) Clone() (*Program, error) {
 //
 // This requires bpffs to be mounted above fileName. See https://docs.cilium.io/en/k8s-doc/admin/#admin-mount-bpffs
 func (p *Program) Pin(fileName string) error {
-	if err := internal.Pin(p.pinnedPath, fileName, p.fd); err != nil {
+	if err := internal.Pin(p.pinnedPath, fileName, p.fd, false); err != nil {
 		return err
 	}
 	p.pinnedPath = fileName

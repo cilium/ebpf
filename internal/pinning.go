@@ -26,6 +26,13 @@ func Pin(currentPath, newPath string, fd *FD) error {
 		return nil
 	}
 	if !os.IsNotExist(err) {
+		if errors.Is(err, unix.EPERM) {
+			// it's not atomic but that the best we can
+			if err := Unpin(currentPath); err != nil {
+				return fmt.Errorf("can't unpin current path %v : %w", currentPath, err)
+			}
+			return BPFObjPin(newPath, fd)
+		}
 		return fmt.Errorf("unable to move pinned object to new path %v: %w", newPath, err)
 	}
 	// Internal state not in sync with the file system so let's fix it.

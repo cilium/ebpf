@@ -383,7 +383,6 @@ func TestNestedMapPinNested(t *testing.T) {
 }
 
 func TestMapPinMultiple(t *testing.T) {
-	testutils.SkipOnOldKernel(t, "4.9", "skip for the moment, old kenrel can't renameat() pin to a new path")
 	tmp := testutils.TempBPFFS(t)
 	c := qt.New(t)
 
@@ -406,6 +405,8 @@ func TestMapPinMultiple(t *testing.T) {
 	}
 	m2, err := LoadPinnedMap(newPath, nil)
 	c.Assert(err, qt.IsNil)
+	pinned = m2.IsPinned()
+	c.Assert(pinned, qt.Equals, true)
 	defer m2.Close()
 }
 

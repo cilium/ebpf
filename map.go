@@ -22,6 +22,28 @@ var (
 	ErrMapIncompatible  = errors.New("map's spec is incompatible with pinned map")
 )
 
+var haveMapIterateFromNullKey = internal.FeatureTest("map iterate from null key", "4.4.132", func() error {
+	m, err := internal.BPFMapCreate(&internal.BPFMapCreateAttr{
+		MapType:    uint32(Array),
+		KeySize:    4,
+		ValueSize:  4,
+		MaxEntries: 1,
+	})
+	if err != nil {
+		return err
+	}
+	defer m.Close()
+
+	nextKey := make([]byte, 4)
+	nextKeyOut := internal.NewSlicePointer(nextKey)
+	var keyPtr internal.Pointer
+	err = bpfMapGetNextKey(m, keyPtr, nextKeyOut)
+	if errors.Is(err, unix.EFAULT) {
+		return ErrNotSupported
+	}
+	return err
+})
+
 // MapOptions control loading a map into the kernel.
 type MapOptions struct {
 	// The base path to pin maps in if requested via PinByName.
@@ -177,7 +199,7 @@ func newMapFromFD(fd *internal.FD) (*Map, error) {
 	info, err := newMapInfoFromFd(fd)
 	if err != nil {
 		fd.Close()
-		return nil, fmt.Errorf("get map info: %s", err)
+		return nil, fmt.Errorf("get map info: %w", err)
 	}
 
 	return newMap(fd, info.Name, info.Type, info.KeySize, info.ValueSize, info.MaxEntries, info.Flags)
@@ -288,7 +310,7 @@ func newMapWithOptions(spec *MapSpec, opts MapOptions, handles *handleCache) (_ 
 	if spec.Pinning == PinByName {
 		path := filepath.Join(opts.PinPath, spec.Name)
 		if err := m.Pin(path); err != nil {
-			return nil, fmt.Errorf("pin map: %s", err)
+			return nil, fmt.Errorf("pin map: %w", err)
 		}
 	}
 
@@ -357,6 +379,11 @@ func (spec *MapSpec) createMap(inner *internal.FD, opts MapOptions, handles *han
 	}
 	if spec.Flags&unix.BPF_F_INNER_MAP > 0 {
 		if err := haveInnerMaps(); err != nil {
+			return nil, fmt.Errorf("map create: %w", err)
+		}
+	}
+	if spec.Flags&unix.BPF_F_NO_PREALLOC > 0 {
+		if err := haveNoPreallocMaps(); err != nil {
 			return nil, fmt.Errorf("map create: %w", err)
 		}
 	}
@@ -644,6 +671,13 @@ func (m *Map) nextKey(key interface{}, nextKeyOut internal.Pointer) error {
 		keyPtr, err = m.marshalKey(key)
 		if err != nil {
 			return fmt.Errorf("can't marshal key: %w", err)
+		}
+	} else {
+		if err := haveMapIterateFromNullKey(); errors.Is(err, ErrNotSupported) {
+			keyPtr, err = m.marshalKey(make([]byte, int(m.keySize)))
+			if err != nil {
+				return fmt.Errorf("can't marshal key: %w", err)
+			}
 		}
 	}
 

@@ -180,7 +180,7 @@ func newMapFromFD(fd *sys.FD) (*Map, error) {
 	info, err := newMapInfoFromFd(fd)
 	if err != nil {
 		fd.Close()
-		return nil, fmt.Errorf("get map info: %s", err)
+		return nil, fmt.Errorf("get map info: %w", err)
 	}
 
 	return newMap(fd, info.Name, info.Type, info.KeySize, info.ValueSize, info.MaxEntries, info.Flags)
@@ -291,7 +291,7 @@ func newMapWithOptions(spec *MapSpec, opts MapOptions, handles *handleCache) (_ 
 	if spec.Pinning == PinByName {
 		path := filepath.Join(opts.PinPath, spec.Name)
 		if err := m.Pin(path); err != nil {
-			return nil, fmt.Errorf("pin map: %s", err)
+			return nil, fmt.Errorf("pin map: %w", err)
 		}
 	}
 
@@ -360,6 +360,11 @@ func (spec *MapSpec) createMap(inner *sys.FD, opts MapOptions, handles *handleCa
 	}
 	if spec.Flags&unix.BPF_F_INNER_MAP > 0 {
 		if err := haveInnerMaps(); err != nil {
+			return nil, fmt.Errorf("map create: %w", err)
+		}
+	}
+	if spec.Flags&unix.BPF_F_NO_PREALLOC > 0 {
+		if err := haveNoPreallocMaps(); err != nil {
 			return nil, fmt.Errorf("map create: %w", err)
 		}
 	}
@@ -677,6 +682,12 @@ func (m *Map) nextKey(key interface{}, nextKeyOut sys.Pointer) error {
 	}
 
 	if err = sys.MapGetNextKey(&attr); err != nil {
+		if key == nil && errors.Is(err, unix.EFAULT) {
+			attr.Key = sys.NewSlicePointer(make([]byte, int(m.keySize)))
+			if err = sys.MapGetNextKey(&attr); err == nil {
+				return nil
+			}
+		}
 		return fmt.Errorf("next key: %w", wrapMapError(err))
 	}
 	return nil

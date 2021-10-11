@@ -97,7 +97,7 @@ readonly branch="${BRANCH:-master}"
 
 fetch() {
     echo Fetching "${1}"
-    wget -nv -N -P "${tmp_dir}" "https://github.com/cilium/ci-kernels/raw/${branch}/${1}"
+    wget -nv -N -P "${tmp_dir}" "https://github.com/nplanel/ci-kernels/raw/${branch}/${1}"
 }
 
 fetch "${kernel}"

@@ -21,7 +21,7 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-//go:generate go run github.com/cilium/ebpf/cmd/bpf2go -cc clang-11 UretProbeExample ./bpf/uretprobe_example.c -- -nostdinc -I../headers -O2
+//go:generate go run github.com/cilium/ebpf/cmd/bpf2go -cc clang-11 bpf ./bpf/uretprobe_example.c -- -nostdinc -I../headers -O2
 
 // An Event represents a perf event sent to userspace from the eBPF program
 // running in the kernel. Note that this must match the C event_t structure,
@@ -51,8 +51,8 @@ func main() {
 	}
 
 	// Load pre-compiled programs and maps into the kernel.
-	objs := UretProbeExampleObjects{}
-	if err := LoadUretProbeExampleObjects(&objs, nil); err != nil {
+	objs := bpfObjects{}
+	if err := loadBpfObjects(&objs, nil); err != nil {
 		log.Fatalf("loading objects: %s", err)
 	}
 	defer objs.Close()

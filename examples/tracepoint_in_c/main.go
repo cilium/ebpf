@@ -18,7 +18,7 @@ import (
 	"github.com/cilium/ebpf/rlimit"
 )
 
-//go:generate go run github.com/cilium/ebpf/cmd/bpf2go -cc clang-11 Handler ./bpf/handler.c -- -nostdinc -I../headers
+//go:generate go run github.com/cilium/ebpf/cmd/bpf2go -cc clang-11 bpf ./bpf/handler.c -- -nostdinc -I../headers
 
 const mapKey uint32 = 0
 
@@ -35,8 +35,8 @@ func main() {
 	}
 
 	// Load pre-compiled programs and maps into the kernel.
-	objs := HandlerObjects{}
-	if err := LoadHandlerObjects(&objs, nil); err != nil {
+	objs := bpfObjects{}
+	if err := loadBpfObjects(&objs, nil); err != nil {
 		log.Fatalf("loading objects: %v", err)
 	}
 	defer objs.Close()

@@ -18,7 +18,7 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-//go:generate go run github.com/cilium/ebpf/cmd/bpf2go -cc clang-11 RingBufferExample ./bpf/ringbuffer_example.c -- -nostdinc -I../headers
+//go:generate go run github.com/cilium/ebpf/cmd/bpf2go -cc clang-11 bpf ./bpf/ringbuffer_example.c -- -nostdinc -I../headers
 
 // An Event represents a ringbuf event sent to userspace from the eBPF program
 // running in the kernel. Note that this must match the C event_t structure,
@@ -42,8 +42,8 @@ func main() {
 	}
 
 	// Load pre-compiled programs and maps into the kernel.
-	objs := RingBufferExampleObjects{}
-	if err := LoadRingBufferExampleObjects(&objs, nil); err != nil {
+	objs := bpfObjects{}
+	if err := loadBpfObjects(&objs, nil); err != nil {
 		log.Fatalf("loading objects: %v", err)
 	}
 	defer objs.Close()

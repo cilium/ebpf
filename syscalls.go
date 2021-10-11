@@ -105,6 +105,22 @@ var haveInnerMaps = internal.FeatureTest("inner maps", "5.10", func() error {
 	return nil
 })
 
+var haveNoPreallocMaps = internal.FeatureTest("prealloc maps", "4.6", func() error {
+	// This checks BPF_F_NO_PREALLOC, which appeared in 4.6.
+	m, err := sys.MapCreate(&sys.MapCreateAttr{
+		MapType:    sys.MapType(Hash),
+		KeySize:    4,
+		ValueSize:  4,
+		MaxEntries: 1,
+		MapFlags:   unix.BPF_F_NO_PREALLOC,
+	})
+	if err != nil {
+		return internal.ErrNotSupported
+	}
+	_ = m.Close()
+	return nil
+})
+
 func wrapMapError(err error) error {
 	if err == nil {
 		return nil

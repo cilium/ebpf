@@ -13,6 +13,7 @@ import (
 
 	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/btf"
+	"github.com/cilium/ebpf/internal/sys"
 )
 
 // MapInfo describes a map.
@@ -27,7 +28,7 @@ type MapInfo struct {
 	Name string
 }
 
-func newMapInfoFromFd(fd *internal.FD) (*MapInfo, error) {
+func newMapInfoFromFd(fd *sys.FD) (*MapInfo, error) {
 	info, err := bpfGetMapInfoByFD(fd)
 	if errors.Is(err, syscall.EINVAL) {
 		return newMapInfoFromProc(fd)
@@ -48,7 +49,7 @@ func newMapInfoFromFd(fd *internal.FD) (*MapInfo, error) {
 	}, nil
 }
 
-func newMapInfoFromProc(fd *internal.FD) (*MapInfo, error) {
+func newMapInfoFromProc(fd *sys.FD) (*MapInfo, error) {
 	var mi MapInfo
 	err := scanFdInfo(fd, map[string]interface{}{
 		"map_type":    &mi.Type,
@@ -96,7 +97,7 @@ type ProgramInfo struct {
 	stats *programStats
 }
 
-func newProgramInfoFromFd(fd *internal.FD) (*ProgramInfo, error) {
+func newProgramInfoFromFd(fd *sys.FD) (*ProgramInfo, error) {
 	info, err := bpfGetProgInfoByFD(fd, nil)
 	if errors.Is(err, syscall.EINVAL) {
 		return newProgramInfoFromProc(fd)
@@ -130,7 +131,7 @@ func newProgramInfoFromFd(fd *internal.FD) (*ProgramInfo, error) {
 	}, nil
 }
 
-func newProgramInfoFromProc(fd *internal.FD) (*ProgramInfo, error) {
+func newProgramInfoFromProc(fd *sys.FD) (*ProgramInfo, error) {
 	var info ProgramInfo
 	err := scanFdInfo(fd, map[string]interface{}{
 		"prog_type": &info.Type,
@@ -198,7 +199,7 @@ func (pi *ProgramInfo) MapIDs() ([]MapID, bool) {
 	return pi.ids, pi.ids != nil
 }
 
-func scanFdInfo(fd *internal.FD, fields map[string]interface{}) error {
+func scanFdInfo(fd *sys.FD, fields map[string]interface{}) error {
 	raw, err := fd.Value()
 	if err != nil {
 		return err
@@ -261,11 +262,11 @@ func scanFdInfoReader(r io.Reader, fields map[string]interface{}) error {
 //
 // Requires at least 5.8.
 func EnableStats(which uint32) (io.Closer, error) {
-	attr := internal.BPFEnableStatsAttr{
+	attr := sys.BPFEnableStatsAttr{
 		StatsType: which,
 	}
 
-	fd, err := internal.BPFEnableStats(&attr)
+	fd, err := sys.BPFEnableStats(&attr)
 	if err != nil {
 		return nil, err
 	}

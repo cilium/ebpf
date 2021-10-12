@@ -10,9 +10,11 @@ import (
 	"strings"
 	"syscall"
 	"time"
+	"unsafe"
 
 	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/btf"
+	"github.com/cilium/ebpf/internal/sys"
 )
 
 // MapInfo describes a map.
@@ -27,8 +29,9 @@ type MapInfo struct {
 	Name string
 }
 
-func newMapInfoFromFd(fd *internal.FD) (*MapInfo, error) {
-	info, err := bpfGetMapInfoByFD(fd)
+func newMapInfoFromFd(fd *sys.FD) (*MapInfo, error) {
+	var info sys.MapInfo
+	err := sys.ObjInfo(fd, &info)
 	if errors.Is(err, syscall.EINVAL) {
 		return newMapInfoFromProc(fd)
 	}
@@ -37,18 +40,18 @@ func newMapInfoFromFd(fd *internal.FD) (*MapInfo, error) {
 	}
 
 	return &MapInfo{
-		MapType(info.map_type),
-		MapID(info.id),
-		info.key_size,
-		info.value_size,
-		info.max_entries,
-		info.map_flags,
+		MapType(info.Type),
+		MapID(info.Id),
+		info.KeySize,
+		info.ValueSize,
+		info.MaxEntries,
+		info.MapFlags,
 		// name is available from 4.15.
-		internal.CString(info.name[:]),
+		internal.CString(info.Name[:]),
 	}, nil
 }
 
-func newMapInfoFromProc(fd *internal.FD) (*MapInfo, error) {
+func newMapInfoFromProc(fd *sys.FD) (*MapInfo, error) {
 	var mi MapInfo
 	err := scanFdInfo(fd, map[string]interface{}{
 		"map_type":    &mi.Type,
@@ -96,8 +99,9 @@ type ProgramInfo struct {
 	stats *programStats
 }
 
-func newProgramInfoFromFd(fd *internal.FD) (*ProgramInfo, error) {
-	info, err := bpfGetProgInfoByFD(fd, nil)
+func newProgramInfoFromFd(fd *sys.FD) (*ProgramInfo, error) {
+	var info sys.ProgInfo
+	err := sys.ObjInfo(fd, &info)
 	if errors.Is(err, syscall.EINVAL) {
 		return newProgramInfoFromProc(fd)
 	}
@@ -106,31 +110,37 @@ func newProgramInfoFromFd(fd *internal.FD) (*ProgramInfo, error) {
 	}
 
 	var mapIDs []MapID
-	if info.nr_map_ids > 0 {
-		mapIDs = make([]MapID, info.nr_map_ids)
-		info, err = bpfGetProgInfoByFD(fd, mapIDs)
+	if info.NrMapIds > 0 {
+		mapIDs = make([]MapID, info.NrMapIds)
+		info = sys.ProgInfo{
+			// We have to zero other fields here, otherwise we may get
+			// EFAULT.
+			NrMapIds: uint32(len(mapIDs)),
+			MapIds:   sys.NewPointer(unsafe.Pointer(&mapIDs[0])),
+		}
+		err = sys.ObjInfo(fd, &info)
 		if err != nil {
 			return nil, err
 		}
 	}
 
 	return &ProgramInfo{
-		Type: ProgramType(info.prog_type),
-		id:   ProgramID(info.id),
+		Type: ProgramType(info.Type),
+		id:   ProgramID(info.Id),
 		// tag is available if the kernel supports BPF_PROG_GET_INFO_BY_FD.
-		Tag: hex.EncodeToString(info.tag[:]),
+		Tag: hex.EncodeToString(info.Tag[:]),
 		// name is available from 4.15.
-		Name: internal.CString(info.name[:]),
-		btf:  btf.ID(info.btf_id),
+		Name: internal.CString(info.Name[:]),
+		btf:  btf.ID(info.BtfId),
 		ids:  mapIDs,
 		stats: &programStats{
-			runtime:  time.Duration(info.run_time_ns),
-			runCount: info.run_cnt,
+			runtime:  time.Duration(info.RunTimeNs),
+			runCount: info.RunCnt,
 		},
 	}, nil
 }
 
-func newProgramInfoFromProc(fd *internal.FD) (*ProgramInfo, error) {
+func newProgramInfoFromProc(fd *sys.FD) (*ProgramInfo, error) {
 	var info ProgramInfo
 	err := scanFdInfo(fd, map[string]interface{}{
 		"prog_type": &info.Type,
@@ -198,13 +208,8 @@ func (pi *ProgramInfo) MapIDs() ([]MapID, bool) {
 	return pi.ids, pi.ids != nil
 }
 
-func scanFdInfo(fd *internal.FD, fields map[string]interface{}) error {
-	raw, err := fd.Value()
-	if err != nil {
-		return err
-	}
-
-	fh, err := os.Open(fmt.Sprintf("/proc/self/fdinfo/%d", raw))
+func scanFdInfo(fd *sys.FD, fields map[string]interface{}) error {
+	fh, err := os.Open(fmt.Sprintf("/proc/self/fdinfo/%d", fd.Int()))
 	if err != nil {
 		return err
 	}
@@ -261,11 +266,9 @@ func scanFdInfoReader(r io.Reader, fields map[string]interface{}) error {
 //
 // Requires at least 5.8.
 func EnableStats(which uint32) (io.Closer, error) {
-	attr := internal.BPFEnableStatsAttr{
-		StatsType: which,
-	}
-
-	fd, err := internal.BPFEnableStats(&attr)
+	fd, err := sys.EnableStats(&sys.EnableStatsAttr{
+		Type: which,
+	})
 	if err != nil {
 		return nil, err
 	}

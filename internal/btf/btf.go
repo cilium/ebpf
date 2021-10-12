@@ -14,6 +14,7 @@ import (
 	"unsafe"
 
 	"github.com/cilium/ebpf/internal"
+	"github.com/cilium/ebpf/internal/sys"
 	"github.com/cilium/ebpf/internal/unix"
 )
 
@@ -517,7 +518,7 @@ func (s *Spec) FindType(name string, typ interface{}) error {
 // Handle is a reference to BTF loaded into the kernel.
 type Handle struct {
 	spec *Spec
-	fd   *internal.FD
+	fd   *sys.FD
 }
 
 // NewHandle loads BTF into the kernel.
@@ -545,14 +546,14 @@ func NewHandle(spec *Spec) (*Handle, error) {
 	}
 
 	attr := &bpfLoadBTFAttr{
-		btf:     internal.NewSlicePointer(btf),
+		btf:     sys.NewSlicePointer(btf),
 		btfSize: uint32(len(btf)),
 	}
 
 	fd, err := bpfLoadBTF(attr)
 	if err != nil {
 		logBuf := make([]byte, 64*1024)
-		attr.logBuf = internal.NewSlicePointer(logBuf)
+		attr.logBuf = sys.NewSlicePointer(logBuf)
 		attr.btfLogSize = uint32(len(logBuf))
 		attr.btfLogLevel = 1
 		_, logErr := bpfLoadBTF(attr)
@@ -568,7 +569,7 @@ func NewHandle(spec *Spec) (*Handle, error) {
 //
 // Requires CAP_SYS_ADMIN.
 func NewHandleFromID(id ID) (*Handle, error) {
-	fd, err := internal.BPFObjGetFDByID(internal.BPF_BTF_GET_FD_BY_ID, uint32(id))
+	fd, err := sys.BPFObjGetFDByID(sys.BPF_BTF_GET_FD_BY_ID, uint32(id))
 	if err != nil {
 		return nil, fmt.Errorf("get BTF by id: %w", err)
 	}
@@ -686,20 +687,20 @@ func (p *Program) Fixups(target *Spec) (COREFixups, error) {
 }
 
 type bpfLoadBTFAttr struct {
-	btf         internal.Pointer
-	logBuf      internal.Pointer
+	btf         sys.Pointer
+	logBuf      sys.Pointer
 	btfSize     uint32
 	btfLogSize  uint32
 	btfLogLevel uint32
 }
 
-func bpfLoadBTF(attr *bpfLoadBTFAttr) (*internal.FD, error) {
-	fd, err := internal.BPF(internal.BPF_BTF_LOAD, unsafe.Pointer(attr), unsafe.Sizeof(*attr))
+func bpfLoadBTF(attr *bpfLoadBTFAttr) (*sys.FD, error) {
+	fd, err := sys.BPF(sys.BPF_BTF_LOAD, unsafe.Pointer(attr), unsafe.Sizeof(*attr))
 	if err != nil {
 		return nil, err
 	}
 
-	return internal.NewFD(uint32(fd)), nil
+	return sys.NewFD(uint32(fd)), nil
 }
 
 func marshalBTF(types interface{}, strings []byte, bo binary.ByteOrder) []byte {
@@ -745,7 +746,7 @@ var haveBTF = internal.FeatureTest("BTF", "5.1", func() error {
 	btf := marshalBTF(&types, strings, internal.NativeEndian)
 
 	fd, err := bpfLoadBTF(&bpfLoadBTFAttr{
-		btf:     internal.NewSlicePointer(btf),
+		btf:     sys.NewSlicePointer(btf),
 		btfSize: uint32(len(btf)),
 	})
 	if errors.Is(err, unix.EINVAL) || errors.Is(err, unix.EPERM) {
@@ -783,7 +784,7 @@ var haveFuncLinkage = internal.FeatureTest("BTF func linkage", "5.6", func() err
 	btf := marshalBTF(&types, strings, internal.NativeEndian)
 
 	fd, err := bpfLoadBTF(&bpfLoadBTFAttr{
-		btf:     internal.NewSlicePointer(btf),
+		btf:     sys.NewSlicePointer(btf),
 		btfSize: uint32(len(btf)),
 	})
 	if errors.Is(err, unix.EINVAL) {

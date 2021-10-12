@@ -2,6 +2,7 @@
 
 * Kprobe - Attach a program to the entry or exit of an arbitrary kernel symbol (function).
   * [kprobe](kprobe/) - Kprobe using bpf2go.
+  * [kprobecore](kprobecore/) - Kprobe using bpf2go and CO-RE (Compile Once - Run Everywhere).
   * [kprobepin](kprobepin/) - Reuse a pinned map for the kprobe example. It assumes the BPF FS is mounted at `/sys/fs/bpf`.
   * [kprobe_percpu](kprobe_percpu/) - Use a `BPF_MAP_TYPE_PERCPU_ARRAY` map.
   * [ringbuffer](ringbuffer/) - Use a `BPF_MAP_TYPE_RINGBUF` map.

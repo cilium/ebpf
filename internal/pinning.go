@@ -5,10 +5,11 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/cilium/ebpf/internal/sys"
 	"github.com/cilium/ebpf/internal/unix"
 )
 
-func Pin(currentPath, newPath string, fd *FD) error {
+func Pin(currentPath, newPath string, fd *sys.FD) error {
 	if newPath == "" {
 		return errors.New("given pinning path cannot be empty")
 	}
@@ -16,7 +17,7 @@ func Pin(currentPath, newPath string, fd *FD) error {
 		return nil
 	}
 	if currentPath == "" {
-		return BPFObjPin(newPath, fd)
+		return sys.BPFObjPin(newPath, fd)
 	}
 	var err error
 	// Renameat2 is used instead of os.Rename to disallow the new path replacing
@@ -29,7 +30,7 @@ func Pin(currentPath, newPath string, fd *FD) error {
 		return fmt.Errorf("unable to move pinned object to new path %v: %w", newPath, err)
 	}
 	// Internal state not in sync with the file system so let's fix it.
-	return BPFObjPin(newPath, fd)
+	return sys.BPFObjPin(newPath, fd)
 }
 
 func Unpin(pinnedPath string) error {

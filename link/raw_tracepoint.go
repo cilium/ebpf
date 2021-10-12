@@ -4,7 +4,7 @@ import (
 	"fmt"
 
 	"github.com/cilium/ebpf"
-	"github.com/cilium/ebpf/internal"
+	"github.com/cilium/ebpf/internal/sys"
 )
 
 type RawTracepointOptions struct {
@@ -22,11 +22,11 @@ func AttachRawTracepoint(opts RawTracepointOptions) (Link, error) {
 		return nil, fmt.Errorf("invalid program type %s, expected RawTracepoint(Writable)", t)
 	}
 	if opts.Program.FD() < 0 {
-		return nil, fmt.Errorf("invalid program: %w", internal.ErrClosedFd)
+		return nil, fmt.Errorf("invalid program: %w", sys.ErrClosedFd)
 	}
 
 	fd, err := bpfRawTracepointOpen(&bpfRawTracepointOpenAttr{
-		name: internal.NewStringPointer(opts.Name),
+		name: sys.NewStringPointer(opts.Name),
 		fd:   uint32(opts.Program.FD()),
 	})
 	if err != nil {
@@ -37,7 +37,7 @@ func AttachRawTracepoint(opts RawTracepointOptions) (Link, error) {
 }
 
 type progAttachRawTracepoint struct {
-	fd *internal.FD
+	fd *sys.FD
 }
 
 var _ Link = (*progAttachRawTracepoint)(nil)

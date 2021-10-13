@@ -35,23 +35,22 @@ blocks:
       epilogue:
         commands:
           - sudo dmesg
-          - cache store
       env_vars:
         - name: TMPDIR
           value: /tmp
       jobs:
-      - name: Build
+      - name: Build and Lint
         commands:
-          - pushd ./examples; go build -v -o "$(mktemp -d)" ./...; popd
           - ( export GOOS=darwin; go build ./... && for p in $(go list ./...) ; do go test -c $p || exit ; done )
           - ( export GOARCH=arm GOARM=6; go build ./... && for p in $(go list ./...) ; do go test -c $p || exit ; done )
           - ( export GOARCH=arm64; go build ./... && for p in $(go list ./...) ; do go test -c $p || exit ; done )
-      - name: Lint
-        commands:
-          - golangci-lint run
-          - go generate ./cmd/bpf2go
-          - pushd ./examples; go generate ./...; go build ./...; popd
+          - make docker-all
           - git diff --exit-code || { echo "generated files are not up to date" >&2; false; }
+          - pushd ./examples
+          - go build -v -o "$(mktemp -d)" ./...
+          - popd
+          - golangci-lint run
+          - cache store
       - name: Run unit tests on previous stable Go
         commands:
           - sem-version go 1.16

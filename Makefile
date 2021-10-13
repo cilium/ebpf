@@ -2,7 +2,7 @@
 # while stable/released versions have a version number attached.
 # Pin the default clang to a stable version.
 CLANG ?= clang-12
-CFLAGS := -target bpf -O2 -g -Wall -Werror $(CFLAGS)
+CFLAGS := -O2 -g -Wall -Werror $(CFLAGS)
 
 # Obtain an absolute path to the directory of the Makefile.
 # Assume the Makefile is in the root of the repository.
@@ -37,8 +37,9 @@ docker-all:
 	docker run --rm --user "${UIDGID}" \
 		-v "${REPODIR}":/ebpf -w /ebpf --env MAKEFLAGS \
 		--env CFLAGS="-fdebug-prefix-map=/ebpf=." \
+		--env HOME="/tmp" \
 		"${IMAGE}:${VERSION}" \
-		make all
+		$(MAKE) all
 
 # (debug) Drop the user into a shell inside the Docker container as root.
 docker-shell:
@@ -50,21 +51,29 @@ clean:
 	-$(RM) testdata/*.elf
 	-$(RM) internal/btf/testdata/*.elf
 
-all: $(addsuffix -el.elf,$(TARGETS)) $(addsuffix -eb.elf,$(TARGETS))
+all: $(addsuffix -el.elf,$(TARGETS)) $(addsuffix -eb.elf,$(TARGETS)) generate
 	ln -srf testdata/loader-$(CLANG)-el.elf testdata/loader-el.elf
 	ln -srf testdata/loader-$(CLANG)-eb.elf testdata/loader-eb.elf
 
+# $BPF_CLANG is used in go:generate invocations. We can't use clang-12
+# since it's not available on CI.
+generate: export BPF_CLANG := clang-9
+generate: export BPF_CFLAGS := $(CFLAGS)
+generate:
+	go generate ./cmd/bpf2go
+	cd examples/ && go generate ./...
+
 testdata/loader-%-el.elf: testdata/loader.c
-	$* $(CFLAGS) -mlittle-endian -c $< -o $@
+	$* $(CFLAGS) -target bpfel -c $< -o $@
 
 testdata/loader-%-eb.elf: testdata/loader.c
-	$* $(CFLAGS) -mbig-endian -c $< -o $@
+	$* $(CFLAGS) -target bpfeb -c $< -o $@
 
 %-el.elf: %.c
-	$(CLANG) $(CFLAGS) -mlittle-endian -c $< -o $@
+	$(CLANG) $(CFLAGS) -target bpfel -c $< -o $@
 
 %-eb.elf : %.c
-	$(CLANG) $(CFLAGS) -mbig-endian -c $< -o $@
+	$(CLANG) $(CFLAGS) -target bpfeb -c $< -o $@
 
 # Usage: make VMLINUX=/path/to/vmlinux vmlinux-btf
 .PHONY: vmlinux-btf

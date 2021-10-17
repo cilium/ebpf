@@ -13,7 +13,7 @@ import (
 	"unsafe"
 
 	"github.com/cilium/ebpf"
-	"github.com/cilium/ebpf/internal"
+	"github.com/cilium/ebpf/internal/sys"
 	"github.com/cilium/ebpf/internal/unix"
 )
 
@@ -82,7 +82,7 @@ type perfEvent struct {
 	// The event type determines the types of programs that can be attached.
 	typ perfEventType
 
-	fd *internal.FD
+	fd *sys.FD
 }
 
 func (pe *perfEvent) isLink() {}
@@ -114,12 +114,7 @@ func (pe *perfEvent) Close() error {
 		return nil
 	}
 
-	pfd, err := pe.fd.Value()
-	if err != nil {
-		return fmt.Errorf("getting perf event fd: %w", err)
-	}
-
-	err = unix.IoctlSetInt(int(pfd), unix.PERF_EVENT_IOC_DISABLE, 0)
+	err := unix.IoctlSetInt(pe.fd.Int(), unix.PERF_EVENT_IOC_DISABLE, 0)
 	if err != nil {
 		return fmt.Errorf("disabling perf event: %w", err)
 	}
@@ -159,7 +154,7 @@ func (pe *perfEvent) attach(prog *ebpf.Program) error {
 		return errors.New("cannot attach to nil perf event")
 	}
 	if prog.FD() < 0 {
-		return fmt.Errorf("invalid program: %w", internal.ErrClosedFd)
+		return fmt.Errorf("invalid program: %w", sys.ErrClosedFd)
 	}
 	switch pe.typ {
 	case kprobeEvent, kretprobeEvent, uprobeEvent, uretprobeEvent:
@@ -174,8 +169,7 @@ func (pe *perfEvent) attach(prog *ebpf.Program) error {
 		return fmt.Errorf("unknown perf event type: %d", pe.typ)
 	}
 
-	// The ioctl below will fail when the fd is invalid.
-	kfd, _ := pe.fd.Value()
+	kfd := pe.fd.Int()
 
 	// Assign the eBPF program to the perf event.
 	err := unix.IoctlSetInt(int(kfd), unix.PERF_EVENT_IOC_SET_BPF, prog.FD())
@@ -235,7 +229,7 @@ func getPMUEventType(typ probeType) (uint64, error) {
 // openTracepointPerfEvent opens a tracepoint-type perf event. System-wide
 // [k,u]probes created by writing to <tracefs>/[k,u]probe_events are tracepoints
 // behind the scenes, and can be attached to using these perf events.
-func openTracepointPerfEvent(tid uint64, pid int) (*internal.FD, error) {
+func openTracepointPerfEvent(tid uint64, pid int) (*sys.FD, error) {
 	attr := unix.PerfEventAttr{
 		Type:        unix.PERF_TYPE_TRACEPOINT,
 		Config:      tid,
@@ -249,7 +243,7 @@ func openTracepointPerfEvent(tid uint64, pid int) (*internal.FD, error) {
 		return nil, fmt.Errorf("opening tracepoint perf event: %w", err)
 	}
 
-	return internal.NewFD(uint32(fd)), nil
+	return sys.NewFD(fd), nil
 }
 
 // uint64FromFile reads a uint64 from a file. All elements of path are sanitized

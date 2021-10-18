@@ -81,7 +81,7 @@ func TestTraceFexit(t *testing.T) {
 }
 
 func TestTraceFmod(t *testing.T) {
-	testutils.SkipOnOldKernel(t, "5.5", "BPF_TRACE_FEXIT API")
+	testutils.SkipOnOldKernel(t, "5.5", "BPF_MODIFY_RETURN API")
 
 	prog, err := ebpf.NewProgram(&ebpf.ProgramSpec{
 		Type:       ebpf.Tracing,
@@ -152,7 +152,7 @@ func TestTraceRawTP(t *testing.T) {
 	}
 }
 
-func TestTraceLSM(t *testing.T) {
+func TestLSM(t *testing.T) {
 	testutils.SkipOnOldKernel(t, "5.7", "BPF_LSM_MAC API")
 
 	prog, err := ebpf.NewProgram(&ebpf.ProgramSpec{

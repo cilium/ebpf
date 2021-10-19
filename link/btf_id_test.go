@@ -9,7 +9,7 @@ import (
 )
 
 func TestTraceFentry(t *testing.T) {
-	testutils.SkipOnOldKernel(t, "5.5", "BPF_TRACE_FENTRY API")
+	testutils.SkipOnOldKernel(t, "5.11", "BPF_TRACE_FENTRY API")
 
 	prog, err := ebpf.NewProgram(&ebpf.ProgramSpec{
 		Type:       ebpf.Tracing,
@@ -45,7 +45,7 @@ func TestTraceFentry(t *testing.T) {
 }
 
 func TestTraceFexit(t *testing.T) {
-	testutils.SkipOnOldKernel(t, "5.5", "BPF_TRACE_FEXIT API")
+	testutils.SkipOnOldKernel(t, "5.11", "BPF_TRACE_FEXIT API")
 
 	prog, err := ebpf.NewProgram(&ebpf.ProgramSpec{
 		Type:       ebpf.Tracing,
@@ -81,7 +81,7 @@ func TestTraceFexit(t *testing.T) {
 }
 
 func TestTraceFmod(t *testing.T) {
-	testutils.SkipOnOldKernel(t, "5.5", "BPF_MODIFY_RETURN API")
+	testutils.SkipOnOldKernel(t, "5.11", "BPF_MODIFY_RETURN API")
 
 	prog, err := ebpf.NewProgram(&ebpf.ProgramSpec{
 		Type:       ebpf.Tracing,
@@ -117,7 +117,7 @@ func TestTraceFmod(t *testing.T) {
 }
 
 func TestTraceRawTP(t *testing.T) {
-	testutils.SkipOnOldKernel(t, "5.5", "BPF_TRACE_RAW_TP API")
+	testutils.SkipOnOldKernel(t, "5.11", "BPF_TRACE_RAW_TP API")
 
 	prog, err := ebpf.NewProgram(&ebpf.ProgramSpec{
 		Type:       ebpf.Tracing,
@@ -153,7 +153,7 @@ func TestTraceRawTP(t *testing.T) {
 }
 
 func TestLSM(t *testing.T) {
-	testutils.SkipOnOldKernel(t, "5.7", "BPF_LSM_MAC API")
+	testutils.SkipOnOldKernel(t, "5.11", "BPF_LSM_MAC API")
 
 	prog, err := ebpf.NewProgram(&ebpf.ProgramSpec{
 		Type:       ebpf.LSM,

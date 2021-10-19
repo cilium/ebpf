@@ -43,7 +43,7 @@ func attachBTFID(program *ebpf.Program) (Link, error) {
 // a BTF-powered raw tracepoint (tp_btf) BPF Program to a BPF hook defined
 // in kernel modules.
 //
-// Requires at least Linux 5.5.
+// Requires at least Linux 5.11.
 func AttachTrace(program *ebpf.Program) (Link, error) {
 	return attachBTFID(program)
 }
@@ -51,7 +51,7 @@ func AttachTrace(program *ebpf.Program) (Link, error) {
 // AttachLSM links a Linux security module (LSM) BPF Program to a BPF
 // hook defined in kernel modules.
 //
-// Requires at least Linux 5.7.
+// Requires at least Linux 5.11.
 func AttachLSM(program *ebpf.Program) (Link, error) {
 	return attachBTFID(program)
 }

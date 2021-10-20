@@ -1,4 +1,4 @@
-#include "common.h"
+#include "common-uapi.h"
 
 #include "bpf_helpers.h"
 

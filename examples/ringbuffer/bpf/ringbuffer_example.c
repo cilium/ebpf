@@ -1,4 +1,5 @@
-#include "common.h"
+#include "common-uapi.h"
+
 #include "bpf_helpers.h"
 
 char __license[] SEC("license") = "Dual MIT/GPL";

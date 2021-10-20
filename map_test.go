@@ -14,6 +14,7 @@ import (
 	"github.com/cilium/ebpf/asm"
 	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/btf"
+	"github.com/cilium/ebpf/internal/sys"
 	"github.com/cilium/ebpf/internal/testutils"
 	"github.com/cilium/ebpf/internal/unix"
 
@@ -268,11 +269,11 @@ func TestMapClose(t *testing.T) {
 		t.Fatal("Can't close map:", err)
 	}
 
-	if err := m.Put(uint32(0), uint32(42)); !errors.Is(err, internal.ErrClosedFd) {
+	if err := m.Put(uint32(0), uint32(42)); !errors.Is(err, sys.ErrClosedFd) {
 		t.Fatal("Put doesn't check for closed fd", err)
 	}
 
-	if _, err := m.LookupBytes(uint32(0)); !errors.Is(err, internal.ErrClosedFd) {
+	if _, err := m.LookupBytes(uint32(0)); !errors.Is(err, sys.ErrClosedFd) {
 		t.Fatal("Get doesn't check for closed fd", err)
 	}
 }
@@ -1080,24 +1081,24 @@ func TestCgroupPerCPUStorageMarshaling(t *testing.T) {
 	}
 	defer prog.Close()
 
-	progAttachAttrs := internal.BPFProgAttachAttr{
+	progAttachAttrs := sys.ProgAttachAttr{
 		TargetFd:     uint32(cgroup.Fd()),
 		AttachBpfFd:  uint32(prog.FD()),
 		AttachType:   uint32(AttachCGroupInetEgress),
 		AttachFlags:  0,
 		ReplaceBpfFd: 0,
 	}
-	err = internal.BPFProgAttach(&progAttachAttrs)
+	err = sys.ProgAttach(&progAttachAttrs)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer func() {
-		attr := internal.BPFProgDetachAttr{
+		attr := sys.ProgDetachAttr{
 			TargetFd:    uint32(cgroup.Fd()),
 			AttachBpfFd: uint32(prog.FD()),
 			AttachType:  uint32(AttachCGroupInetEgress),
 		}
-		if err := internal.BPFProgDetach(&attr); err != nil {
+		if err := sys.ProgDetach(&attr); err != nil {
 			t.Fatal(err)
 		}
 	}()
@@ -1194,12 +1195,12 @@ func TestMapName(t *testing.T) {
 	}
 	defer m.Close()
 
-	info, err := bpfGetMapInfoByFD(m.fd)
-	if err != nil {
+	var info sys.MapInfo
+	if err := sys.ObjInfo(m.fd, &info); err != nil {
 		t.Fatal(err)
 	}
 
-	if name := internal.CString(info.name[:]); name != "test" {
+	if name := internal.CString(info.Name[:]); name != "test" {
 		t.Error("Expected name to be test, got", name)
 	}
 }

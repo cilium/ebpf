@@ -15,6 +15,34 @@ import (
 	"github.com/cilium/ebpf/internal/btf"
 )
 
+var haveFdInfoMaps = internal.FeatureTest("proc/pid/fdinfo maps", "4.5", func() error {
+	// This checks we can scan /proc/pid/fdinfo
+	// new format appeared in torvalds/linux@f99bf20 (linux 4.5)
+	m, err := internal.BPFMapCreate(&internal.BPFMapCreateAttr{
+		MapType:    uint32(Array),
+		KeySize:    4,
+		ValueSize:  4,
+		MaxEntries: 1,
+	})
+	if err != nil {
+		return internal.ErrNotSupported
+	}
+	defer m.Close()
+
+	var mi MapInfo
+	err = scanFdInfo(m, map[string]interface{}{
+		"map_type":    &mi.Type,
+		"key_size":    &mi.KeySize,
+		"value_size":  &mi.ValueSize,
+		"max_entries": &mi.MaxEntries,
+		"map_flags":   &mi.Flags,
+	})
+	if err != nil {
+		return internal.ErrNotSupported
+	}
+	return nil
+})
+
 // MapInfo describes a map.
 type MapInfo struct {
 	Type       MapType
@@ -49,6 +77,10 @@ func newMapInfoFromFd(fd *internal.FD) (*MapInfo, error) {
 }
 
 func newMapInfoFromProc(fd *internal.FD) (*MapInfo, error) {
+	if err := haveFdInfoMaps(); err != nil {
+		return nil, err
+	}
+
 	var mi MapInfo
 	err := scanFdInfo(fd, map[string]interface{}{
 		"map_type":    &mi.Type,

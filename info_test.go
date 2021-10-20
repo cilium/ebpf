@@ -23,12 +23,14 @@ func TestMapInfoFromProc(t *testing.T) {
 		MaxEntries: 2,
 		Flags:      unix.BPF_F_NO_PREALLOC,
 	})
+	testutils.SkipIfNotSupported(t, err)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer hash.Close()
 
 	info, err := newMapInfoFromProc(hash.fd)
+	testutils.SkipIfNotSupported(t, err)
 	if err != nil {
 		t.Fatal("Can't get map info:", err)
 	}

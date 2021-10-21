@@ -14,6 +14,18 @@ type BTFIDLink struct {
 	RawLink
 }
 
+type TraceOptions struct {
+	// Program must be of type Tracing with attach type
+	// AttachTraceFEntry/AttachTraceFExit/AttachModifyReturn or
+	// AttachTraceRawTp.
+	Program *ebpf.Program
+}
+type LSMOptions struct {
+	// Program must be of type LSM with attach type
+	// AttachLSMMac.
+	Program *ebpf.Program
+}
+
 // Update implements the Link interface.
 func (*BTFIDLink) Update(_ *ebpf.Program) error {
 	return fmt.Errorf("can't update fentry/fexit/fmod_ret/rp_raw/lsm: %w", ErrNotSupported)
@@ -44,16 +56,16 @@ func attachBTFID(program *ebpf.Program) (Link, error) {
 // in kernel modules.
 //
 // Requires at least Linux 5.11.
-func AttachTrace(program *ebpf.Program) (Link, error) {
-	return attachBTFID(program)
+func AttachTrace(opts TraceOptions) (Link, error) {
+	return attachBTFID(opts.Program)
 }
 
 // AttachLSM links a Linux security module (LSM) BPF Program to a BPF
 // hook defined in kernel modules.
 //
 // Requires at least Linux 5.11.
-func AttachLSM(program *ebpf.Program) (Link, error) {
-	return attachBTFID(program)
+func AttachLSM(opts LSMOptions) (Link, error) {
+	return attachBTFID(opts.Program)
 }
 
 // LoadPinnedTrace loads a tracing/LSM link from a bpffs.

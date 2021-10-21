@@ -492,7 +492,7 @@ func BtfGetFdById(attr *BtfGetFdByIdAttr) (*FD, error) {
 	if err != nil {
 		return nil, err
 	}
-	return NewFD(int(fd)), nil
+	return NewFD(int(fd))
 }
 
 type BtfLoadAttr struct {
@@ -509,7 +509,7 @@ func BtfLoad(attr *BtfLoadAttr) (*FD, error) {
 	if err != nil {
 		return nil, err
 	}
-	return NewFD(int(fd)), nil
+	return NewFD(int(fd))
 }
 
 type EnableStatsAttr struct{ Type uint32 }
@@ -519,7 +519,7 @@ func EnableStats(attr *EnableStatsAttr) (*FD, error) {
 	if err != nil {
 		return nil, err
 	}
-	return NewFD(int(fd)), nil
+	return NewFD(int(fd))
 }
 
 type IterCreateAttr struct {
@@ -532,7 +532,7 @@ func IterCreate(attr *IterCreateAttr) (*FD, error) {
 	if err != nil {
 		return nil, err
 	}
-	return NewFD(int(fd)), nil
+	return NewFD(int(fd))
 }
 
 type LinkCreateAttr struct {
@@ -549,7 +549,7 @@ func LinkCreate(attr *LinkCreateAttr) (*FD, error) {
 	if err != nil {
 		return nil, err
 	}
-	return NewFD(int(fd)), nil
+	return NewFD(int(fd))
 }
 
 type LinkCreateIterAttr struct {
@@ -567,7 +567,7 @@ func LinkCreateIter(attr *LinkCreateIterAttr) (*FD, error) {
 	if err != nil {
 		return nil, err
 	}
-	return NewFD(int(fd)), nil
+	return NewFD(int(fd))
 }
 
 type LinkUpdateAttr struct {
@@ -603,7 +603,7 @@ func MapCreate(attr *MapCreateAttr) (*FD, error) {
 	if err != nil {
 		return nil, err
 	}
-	return NewFD(int(fd)), nil
+	return NewFD(int(fd))
 }
 
 type MapDeleteBatchAttr struct {
@@ -649,7 +649,7 @@ func MapGetFdById(attr *MapGetFdByIdAttr) (*FD, error) {
 	if err != nil {
 		return nil, err
 	}
-	return NewFD(int(fd)), nil
+	return NewFD(int(fd))
 }
 
 type MapGetNextIdAttr struct {
@@ -772,7 +772,7 @@ func ObjGet(attr *ObjGetAttr) (*FD, error) {
 	if err != nil {
 		return nil, err
 	}
-	return NewFD(int(fd)), nil
+	return NewFD(int(fd))
 }
 
 type ObjGetInfoByFdAttr struct {
@@ -828,7 +828,7 @@ func ProgGetFdById(attr *ProgGetFdByIdAttr) (*FD, error) {
 	if err != nil {
 		return nil, err
 	}
-	return NewFD(int(fd)), nil
+	return NewFD(int(fd))
 }
 
 type ProgGetNextIdAttr struct {
@@ -871,7 +871,7 @@ func ProgLoad(attr *ProgLoadAttr) (*FD, error) {
 	if err != nil {
 		return nil, err
 	}
-	return NewFD(int(fd)), nil
+	return NewFD(int(fd))
 }
 
 type ProgRunAttr struct {
@@ -907,5 +907,5 @@ func RawTracepointOpen(attr *RawTracepointOpenAttr) (*FD, error) {
 	if err != nil {
 		return nil, err
 	}
-	return NewFD(int(fd)), nil
+	return NewFD(int(fd))
 }

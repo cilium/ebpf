@@ -168,11 +168,12 @@ type Map struct {
 //
 // You should not use fd after calling this function.
 func NewMapFromFD(fd int) (*Map, error) {
-	if fd < 0 {
-		return nil, errors.New("invalid fd")
+	f, err := sys.NewFD(fd)
+	if err != nil {
+		return nil, err
 	}
 
-	return newMapFromFD(sys.NewFD(fd))
+	return newMapFromFD(f)
 }
 
 func newMapFromFD(fd *sys.FD) (*Map, error) {

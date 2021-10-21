@@ -41,7 +41,7 @@ import (
 //   stops any further invocations of the attached eBPF program.
 
 var (
-	tracefsPath = "/sys/kernel/debug/tracing"
+	tracefsPath = "/proc/1/root/sys/kernel/debug/tracing"
 
 	// Trace event groups, names and kernel symbols must adhere to this set
 	// of characters. Non-empty, first character must not be a number, all

@@ -8,182 +8,82 @@ import (
 	"github.com/cilium/ebpf/internal/testutils"
 )
 
-func TestTraceFentry(t *testing.T) {
-	testutils.SkipOnOldKernel(t, "5.11", "BPF_TRACE_FENTRY API")
-
-	prog, err := ebpf.NewProgram(&ebpf.ProgramSpec{
-		Type:       ebpf.Tracing,
-		AttachType: ebpf.AttachTraceFEntry,
-		AttachTo:   "inet_dgram_connect",
-		Instructions: asm.Instructions{
-			asm.LoadImm(asm.R0, 0, asm.DWord),
-			asm.Return(),
+func TestTraceLSM(t *testing.T) {
+	testutils.SkipOnOldKernel(t, "5.11", "BPF_LINK_TYPE_TRACING")
+	tests := []struct {
+		name        string
+		attachTo    string
+		programType ebpf.ProgramType
+		attachType  ebpf.AttachType
+	}{
+		{
+			name:        "AttachTraceFEntry",
+			attachTo:    "inet_dgram_connect",
+			programType: ebpf.Tracing,
+			attachType:  ebpf.AttachTraceFEntry,
 		},
-		License: "GPL",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer prog.Close()
-
-	link, err := AttachTrace(prog)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	testLink(t, link, testLinkOptions{
-		prog: prog,
-		loadPinned: func(s string, opts *ebpf.LoadPinOptions) (Link, error) {
-			return LoadPinnedTrace(s, opts)
+		{
+			name:        "AttachTraceFExit",
+			attachTo:    "inet_dgram_connect",
+			programType: ebpf.Tracing,
+			attachType:  ebpf.AttachTraceFExit,
 		},
-	})
-
-	err = link.Close()
-	if err != nil {
-		t.Fatal(err)
-	}
-}
-
-func TestTraceFexit(t *testing.T) {
-	testutils.SkipOnOldKernel(t, "5.11", "BPF_TRACE_FEXIT API")
-
-	prog, err := ebpf.NewProgram(&ebpf.ProgramSpec{
-		Type:       ebpf.Tracing,
-		AttachType: ebpf.AttachTraceFExit,
-		AttachTo:   "inet_dgram_connect",
-		Instructions: asm.Instructions{
-			asm.LoadImm(asm.R0, 0, asm.DWord),
-			asm.Return(),
+		{
+			name:        "AttachModifyReturn",
+			attachTo:    "bpf_modify_return_test",
+			programType: ebpf.Tracing,
+			attachType:  ebpf.AttachModifyReturn,
 		},
-		License: "GPL",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer prog.Close()
-
-	link, err := AttachTrace(prog)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	testLink(t, link, testLinkOptions{
-		prog: prog,
-		loadPinned: func(s string, opts *ebpf.LoadPinOptions) (Link, error) {
-			return LoadPinnedTrace(s, opts)
+		{
+			name:        "AttachTraceRawTp",
+			attachTo:    "kfree_skb",
+			programType: ebpf.Tracing,
+			attachType:  ebpf.AttachTraceRawTp,
 		},
-	})
-
-	err = link.Close()
-	if err != nil {
-		t.Fatal(err)
-	}
-}
-
-func TestTraceFmod(t *testing.T) {
-	testutils.SkipOnOldKernel(t, "5.11", "BPF_MODIFY_RETURN API")
-
-	prog, err := ebpf.NewProgram(&ebpf.ProgramSpec{
-		Type:       ebpf.Tracing,
-		AttachType: ebpf.AttachModifyReturn,
-		AttachTo:   "bpf_modify_return_test",
-		Instructions: asm.Instructions{
-			asm.LoadImm(asm.R0, 0, asm.DWord),
-			asm.Return(),
+		{
+			name:        "AttachLSMMac",
+			attachTo:    "file_mprotect",
+			programType: ebpf.LSM,
+			attachType:  ebpf.AttachLSMMac,
 		},
-		License: "GPL",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer prog.Close()
-
-	link, err := AttachTrace(prog)
-	if err != nil {
-		t.Fatal(err)
 	}
 
-	testLink(t, link, testLinkOptions{
-		prog: prog,
-		loadPinned: func(s string, opts *ebpf.LoadPinOptions) (Link, error) {
-			return LoadPinnedTrace(s, opts)
-		},
-	})
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			prog, err := ebpf.NewProgram(&ebpf.ProgramSpec{
+				Type:       tt.programType,
+				AttachType: tt.attachType,
+				AttachTo:   tt.attachTo,
+				Instructions: asm.Instructions{
+					asm.LoadImm(asm.R0, 0, asm.DWord),
+					asm.Return(),
+				},
+				License: "GPL",
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer prog.Close()
 
-	err = link.Close()
-	if err != nil {
-		t.Fatal(err)
-	}
-}
+			link, err := AttachTrace(TraceOptions{Program: prog})
+			if err != nil {
+				t.Fatal(err)
+			}
 
-func TestTraceRawTP(t *testing.T) {
-	testutils.SkipOnOldKernel(t, "5.11", "BPF_TRACE_RAW_TP API")
+			testLink(t, link, testLinkOptions{
+				prog: prog,
+				loadPinned: func(s string, opts *ebpf.LoadPinOptions) (Link, error) {
+					if tt.attachType != ebpf.AttachTraceRawTp {
+						return LoadPinnedTrace(s, opts)
+					}
+					return LoadPinnedTraceRawTP(s, opts)
+				},
+			})
 
-	prog, err := ebpf.NewProgram(&ebpf.ProgramSpec{
-		Type:       ebpf.Tracing,
-		AttachType: ebpf.AttachTraceRawTp,
-		AttachTo:   "kfree_skb",
-		Instructions: asm.Instructions{
-			asm.LoadImm(asm.R0, 0, asm.DWord),
-			asm.Return(),
-		},
-		License: "GPL",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer prog.Close()
-
-	link, err := AttachTrace(prog)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	testLink(t, link, testLinkOptions{
-		prog: prog,
-		loadPinned: func(s string, opts *ebpf.LoadPinOptions) (Link, error) {
-			return LoadPinnedTraceRawTP(s, opts)
-		},
-	})
-
-	err = link.Close()
-	if err != nil {
-		t.Fatal(err)
-	}
-}
-
-func TestLSM(t *testing.T) {
-	testutils.SkipOnOldKernel(t, "5.11", "BPF_LSM_MAC API")
-
-	prog, err := ebpf.NewProgram(&ebpf.ProgramSpec{
-		Type:       ebpf.LSM,
-		AttachType: ebpf.AttachLSMMac,
-		AttachTo:   "file_mprotect",
-		Instructions: asm.Instructions{
-			asm.LoadImm(asm.R0, 0, asm.DWord),
-			asm.Return(),
-		},
-		License: "GPL",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer prog.Close()
-
-	link, err := AttachLSM(prog)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	testLink(t, link, testLinkOptions{
-		prog: prog,
-		loadPinned: func(s string, opts *ebpf.LoadPinOptions) (Link, error) {
-			return LoadPinnedTrace(s, opts)
-		},
-	})
-
-	err = link.Close()
-	if err != nil {
-		t.Fatal(err)
+			err = link.Close()
+			if err != nil {
+				t.Fatal(err)
+			}
+		})
 	}
 }

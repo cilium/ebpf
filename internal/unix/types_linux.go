@@ -23,6 +23,7 @@ const (
 	ENODEV  = linux.ENODEV
 	EBADF   = linux.EBADF
 	E2BIG   = linux.E2BIG
+	EFAULT  = linux.EFAULT
 	// ENOTSUPP is not the same as ENOTSUP or EOPNOTSUP
 	ENOTSUPP = syscall.Errno(0x20c)
 

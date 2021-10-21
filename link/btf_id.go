@@ -4,7 +4,7 @@ import (
 	"fmt"
 
 	"github.com/cilium/ebpf"
-	"github.com/cilium/ebpf/internal"
+	"github.com/cilium/ebpf/internal/sys"
 )
 
 var _ Link = (*BTFIDLink)(nil)
@@ -38,11 +38,11 @@ func attachBTFID(program *ebpf.Program) (Link, error) {
 	}
 
 	if program.FD() < 0 {
-		return nil, fmt.Errorf("invalid program %w", internal.ErrClosedFd)
+		return nil, fmt.Errorf("invalid program %w", sys.ErrClosedFd)
 	}
 
-	fd, err := bpfRawTracepointOpen(&bpfRawTracepointOpenAttr{
-		fd: uint32(program.FD()),
+	fd, err := sys.RawTracepointOpen(&sys.RawTracepointOpenAttr{
+		ProgFd: uint32(program.FD()),
 	})
 	if err != nil {
 		return nil, err

@@ -243,7 +243,7 @@ func openTracepointPerfEvent(tid uint64, pid int) (*sys.FD, error) {
 		return nil, fmt.Errorf("opening tracepoint perf event: %w", err)
 	}
 
-	return sys.NewFD(fd), nil
+	return sys.NewFD(fd)
 }
 
 // uint64FromFile reads a uint64 from a file. All elements of path are sanitized

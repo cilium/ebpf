@@ -726,8 +726,6 @@ func resolveBTFType(spec *btf.Spec, name string, progType ProgramType, attachTyp
 	var (
 		typeName, featureName string
 		isBTFTypeFunc         = true
-		target                btf.Type
-		err                   error
 	)
 
 	switch (match{progType, attachType}) {
@@ -757,6 +755,10 @@ func resolveBTFType(spec *btf.Spec, name string, progType ProgramType, attachTyp
 		return nil, nil
 	}
 
+	var (
+		target btf.Type
+		err    error
+	)
 	if spec == nil {
 		spec, err = btf.LoadKernelSpec()
 		if err != nil {

@@ -224,6 +224,10 @@ func scanFdInfo(fd *sys.FD, fields map[string]interface{}) error {
 var errMissingFields = errors.New("missing fields")
 
 func scanFdInfoReader(r io.Reader, fields map[string]interface{}) error {
+	if len(fields) == 0 {
+		return nil
+	}
+
 	var (
 		scanner = bufio.NewScanner(r)
 		scanned int
@@ -248,8 +252,16 @@ func scanFdInfoReader(r io.Reader, fields map[string]interface{}) error {
 		scanned++
 	}
 
+	if scanned == 0 {
+		return ErrNotSupported
+	}
+
 	if err := scanner.Err(); err != nil {
 		return err
+	}
+
+	if len(fields) > 0 && scanned == 0 {
+		return ErrNotSupported
 	}
 
 	if scanned != len(fields) {

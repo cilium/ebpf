@@ -1,6 +1,7 @@
 package ebpf
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"math"
@@ -302,6 +303,7 @@ func TestMapPin(t *testing.T) {
 	path := filepath.Join(tmp, "map")
 
 	if err := m.Pin(path); err != nil {
+		testutils.SkipIfNotSupported(t, err)
 		t.Fatal(err)
 	}
 
@@ -311,6 +313,7 @@ func TestMapPin(t *testing.T) {
 	m.Close()
 
 	m, err := LoadPinnedMap(path, nil)
+	testutils.SkipIfNotSupported(t, err)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -357,6 +360,7 @@ func TestNestedMapPin(t *testing.T) {
 	m.Close()
 
 	m, err = LoadPinnedMap(path, nil)
+	testutils.SkipIfNotSupported(t, err)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -383,6 +387,8 @@ func TestNestedMapPinNested(t *testing.T) {
 }
 
 func TestMapPinMultiple(t *testing.T) {
+	testutils.SkipOnOldKernel(t, "4.9", "move Pin map is introduced in 4.9 series")
+
 	tmp := testutils.TempBPFFS(t)
 	c := qt.New(t)
 
@@ -398,6 +404,7 @@ func TestMapPinMultiple(t *testing.T) {
 
 	newPath := filepath.Join(tmp, "bar")
 	err = m1.Pin(newPath)
+	testutils.SkipIfNotSupported(t, err)
 	c.Assert(err, qt.IsNil)
 	oldPath := filepath.Join(tmp, spec.Name)
 	if _, err := os.Stat(oldPath); err == nil {
@@ -405,6 +412,8 @@ func TestMapPinMultiple(t *testing.T) {
 	}
 	m2, err := LoadPinnedMap(newPath, nil)
 	c.Assert(err, qt.IsNil)
+	pinned = m2.IsPinned()
+	c.Assert(pinned, qt.Equals, true)
 	defer m2.Close()
 }
 
@@ -457,6 +466,7 @@ func TestMapUnpin(t *testing.T) {
 	c.Assert(pinned, qt.Equals, true)
 	path := filepath.Join(tmp, spec.Name)
 	m2, err := LoadPinnedMap(path, nil)
+	testutils.SkipIfNotSupported(t, err)
 	c.Assert(err, qt.IsNil)
 	defer m2.Close()
 
@@ -482,6 +492,7 @@ func TestMapLoadPinned(t *testing.T) {
 
 	path := filepath.Join(tmp, spec.Name)
 	m2, err := LoadPinnedMap(path, nil)
+	testutils.SkipIfNotSupported(t, err)
 	c.Assert(err, qt.IsNil)
 	defer m2.Close()
 	pinned = m2.IsPinned()
@@ -502,6 +513,7 @@ func TestMapLoadPinnedUnpin(t *testing.T) {
 
 	path := filepath.Join(tmp, spec.Name)
 	m2, err := LoadPinnedMap(path, nil)
+	testutils.SkipIfNotSupported(t, err)
 	c.Assert(err, qt.IsNil)
 	defer m2.Close()
 	err = m1.Unpin()
@@ -910,6 +922,54 @@ func TestMapIterate(t *testing.T) {
 	}
 }
 
+func TestMapIterateKeyZero(t *testing.T) {
+	hash, err := NewMap(&MapSpec{
+		Type:       Hash,
+		KeySize:    5,
+		ValueSize:  4,
+		MaxEntries: 2,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer hash.Close()
+	key1 := make([]byte, hash.KeySize())
+	key2 := []byte{0x12, 0x34, 0x56, 0x78, 0x9A}
+
+	if err := hash.Put(key1, uint32(21)); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := hash.Put(key2, uint32(42)); err != nil {
+		t.Fatal(err)
+	}
+
+	var key []byte
+	var value uint32
+	var keys [][]byte
+
+	entries := hash.Iterate()
+	for entries.Next(&key, &value) {
+		keys = append(keys, key)
+	}
+
+	if err := entries.Err(); err != nil {
+		t.Fatal(err)
+	}
+
+	if n := len(keys); n != 2 {
+		t.Fatal("Expected to get 2 keys, have", n)
+	}
+
+	sort.Slice(keys, func(i, j int) bool { return bytes.Compare(keys[i], keys[j]) < 0 })
+	if !bytes.Equal(keys[0], key1) {
+		t.Error("Expected index 0 all zero, got", keys[0])
+	}
+	if !bytes.Equal(keys[1], key2) {
+		t.Error("Expected index 1 to be {0x12, 0x34, 0x56, 0x78, 0x9A}, got", keys[1])
+	}
+}
+
 func TestNotExist(t *testing.T) {
 	hash := createHash()
 	defer hash.Close()
@@ -929,11 +989,16 @@ func TestNotExist(t *testing.T) {
 	}
 
 	if err := hash.Delete("hello"); !errors.Is(err, ErrKeyNotExist) {
-		t.Error("Deleting unknown key doesn't return ErrKeyNotExist")
+		t.Error("Deleting unknown key doesn't return ErrKeyNotExist", err)
+	}
+
+	var k = []byte{1, 2, 3, 4, 5}
+	if err := hash.NextKey(&k, &tmp); !errors.Is(err, ErrKeyNotExist) {
+		t.Error("Looking up next key in empty map doesn't return a non-existing error", err)
 	}
 
 	if err := hash.NextKey(nil, &tmp); !errors.Is(err, ErrKeyNotExist) {
-		t.Error("Looking up next key in empty map doesn't return a non-existing error")
+		t.Error("Looking up next key in empty map doesn't return a non-existing error", err)
 	}
 }
 
@@ -992,6 +1057,9 @@ func TestPerCPUMarshaling(t *testing.T) {
 			}
 			if numCPU < 2 {
 				t.Skip("Test requires at least two CPUs")
+			}
+			if typ == PerCPUHash || typ == PerCPUArray {
+				testutils.SkipOnOldKernel(t, "4.6", "per-CPU hash and array")
 			}
 			if typ == LRUCPUHash {
 				testutils.SkipOnOldKernel(t, "4.10", "LRU per-CPU hash")
@@ -1216,6 +1284,7 @@ func TestMapFromFD(t *testing.T) {
 	// If you're thinking about copying this, don't. Use
 	// Clone() instead.
 	m2, err := NewMapFromFD(m.FD())
+	testutils.SkipIfNotSupported(t, err)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1380,6 +1449,7 @@ func TestMapPinning(t *testing.T) {
 	spec.BTF = new(btf.Map)
 
 	m2, err := NewMapWithOptions(spec, MapOptions{PinPath: tmp})
+	testutils.SkipIfNotSupported(t, err)
 	if err != nil {
 		t.Fatal("Can't create map:", err)
 	}

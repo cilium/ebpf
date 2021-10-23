@@ -41,6 +41,7 @@ var progTypeMinVersion = map[ebpf.ProgramType]string{
 	ebpf.Extension:             "5.6",
 	ebpf.LSM:                   "5.7",
 	ebpf.SkLookup:              "5.9",
+	ebpf.Syscall:               "5.14",
 }
 
 func TestHaveProgType(t *testing.T) {

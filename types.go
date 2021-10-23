@@ -167,6 +167,7 @@ const (
 	Extension
 	LSM
 	SkLookup
+	Syscall
 	maxProgramType
 )
 

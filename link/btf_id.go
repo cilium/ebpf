@@ -28,7 +28,7 @@ type LSMOptions struct {
 
 // Update implements the Link interface.
 func (*BTFIDLink) Update(_ *ebpf.Program) error {
-	return fmt.Errorf("can't update fentry/fexit/fmod_ret/rp_raw/lsm: %w", ErrNotSupported)
+	return fmt.Errorf("can't update fentry/fexit/fmod_ret/tp_raw/lsm: %w", ErrNotSupported)
 }
 
 // attachBTFID links all BPF program types (Tracing/LSM) that they attach to a btf_id.

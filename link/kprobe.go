@@ -221,7 +221,7 @@ func pmuProbe(typ probeType, symbol, path string, offset uint64, pid int, ret bo
 		}
 	}
 
-	fd, err := unix.PerfEventOpen(&attr, pid, 0, -1, unix.PERF_FLAG_FD_CLOEXEC)
+	rawFd, err := unix.PerfEventOpen(&attr, pid, 0, -1, unix.PERF_FLAG_FD_CLOEXEC)
 
 	// Since commit 97c753e62e6c, ENOENT is correctly returned instead of EINVAL
 	// when trying to create a kretprobe for a missing symbol. Make sure ENOENT
@@ -241,9 +241,14 @@ func pmuProbe(typ probeType, symbol, path string, offset uint64, pid int, ret bo
 	// Ensure the string pointer is not collected before PerfEventOpen returns.
 	runtime.KeepAlive(sp)
 
+	fd, err := sys.NewFD(rawFd)
+	if err != nil {
+		return nil, err
+	}
+
 	// Kernel has perf_[k,u]probe PMU available, initialize perf event.
 	return &perfEvent{
-		fd:    sys.NewFD(fd),
+		fd:    fd,
 		pmuID: et,
 		name:  symbol,
 		typ:   typ.PerfEventType(ret),

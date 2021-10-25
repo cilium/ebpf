@@ -16,10 +16,30 @@ type FD struct {
 	raw int
 }
 
-func NewFD(value int) *FD {
+func newFD(value int) *FD {
 	fd := &FD{value}
 	runtime.SetFinalizer(fd, (*FD).Close)
 	return fd
+}
+
+// NewFD wraps a raw fd with a finalizer.
+//
+// You must not use the raw fd after calling this function, since the underlying
+// file descriptor number may change. This is because the BPF UAPI assumes that
+// zero is not a valid fd value.
+func NewFD(value int) (*FD, error) {
+	if value < 0 {
+		return nil, fmt.Errorf("invalid fd %d", value)
+	}
+
+	fd := newFD(value)
+	if value != 0 {
+		return fd, nil
+	}
+
+	dup, err := fd.Dup()
+	_ = fd.Close()
+	return dup, err
 }
 
 func (fd *FD) String() string {
@@ -60,12 +80,14 @@ func (fd *FD) Dup() (*FD, error) {
 		return nil, ErrClosedFd
 	}
 
-	dup, err := unix.FcntlInt(uintptr(fd.raw), unix.F_DUPFD_CLOEXEC, 0)
+	// Always require the fd to be larger than zero: the BPF API treats the value
+	// as "no argument provided".
+	dup, err := unix.FcntlInt(uintptr(fd.raw), unix.F_DUPFD_CLOEXEC, 1)
 	if err != nil {
 		return nil, fmt.Errorf("can't dup fd: %v", err)
 	}
 
-	return NewFD(dup), nil
+	return newFD(dup), nil
 }
 
 func (fd *FD) File(name string) *os.File {

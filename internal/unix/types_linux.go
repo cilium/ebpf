@@ -71,6 +71,8 @@ const (
 // Statfs_t is a wrapper
 type Statfs_t = linux.Statfs_t
 
+type Stat_t = linux.Stat_t
+
 // Rlimit is a wrapper
 type Rlimit = linux.Rlimit
 
@@ -205,4 +207,12 @@ func KernelRelease() (string, error) {
 
 func Prlimit(pid, resource int, new, old *Rlimit) error {
 	return linux.Prlimit(pid, resource, new, old)
+}
+
+func Open(path string, mode int, perm uint32) (int, error) {
+	return linux.Open(path, mode, perm)
+}
+
+func Fstat(fd int, stat *Stat_t) error {
+	return linux.Fstat(fd, stat)
 }

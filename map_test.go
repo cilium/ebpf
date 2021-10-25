@@ -307,7 +307,7 @@ func TestMapPin(t *testing.T) {
 	}
 
 	pinned := m.IsPinned()
-	c.Assert(pinned, qt.Equals, true)
+	c.Assert(pinned, qt.IsTrue)
 
 	m.Close()
 
@@ -399,7 +399,7 @@ func TestMapPinMultiple(t *testing.T) {
 	}
 	defer m1.Close()
 	pinned := m1.IsPinned()
-	c.Assert(pinned, qt.Equals, true)
+	c.Assert(pinned, qt.IsTrue)
 
 	newPath := filepath.Join(tmp, "bar")
 	err = m1.Pin(newPath)
@@ -412,7 +412,7 @@ func TestMapPinMultiple(t *testing.T) {
 	m2, err := LoadPinnedMap(newPath, nil)
 	c.Assert(err, qt.IsNil)
 	pinned = m2.IsPinned()
-	c.Assert(pinned, qt.Equals, true)
+	c.Assert(pinned, qt.IsTrue)
 	defer m2.Close()
 }
 
@@ -443,7 +443,7 @@ func TestMapPinFailReplace(t *testing.T) {
 		t.Fatal("Failed to create map2:", err)
 	}
 	defer m2.Close()
-	c.Assert(m.IsPinned(), qt.Equals, true)
+	c.Assert(m.IsPinned(), qt.IsTrue)
 	newPath := filepath.Join(tmp, spec2.Name)
 
 	c.Assert(m.Pin(newPath), qt.Not(qt.IsNil), qt.Commentf("Pin didn't"+
@@ -462,7 +462,7 @@ func TestMapUnpin(t *testing.T) {
 	defer m.Close()
 
 	pinned := m.IsPinned()
-	c.Assert(pinned, qt.Equals, true)
+	c.Assert(pinned, qt.IsTrue)
 	path := filepath.Join(tmp, spec.Name)
 	m2, err := LoadPinnedMap(path, nil)
 	testutils.SkipIfNotSupported(t, err)
@@ -487,7 +487,7 @@ func TestMapLoadPinned(t *testing.T) {
 	c.Assert(err, qt.IsNil)
 	defer m1.Close()
 	pinned := m1.IsPinned()
-	c.Assert(pinned, qt.Equals, true)
+	c.Assert(pinned, qt.IsTrue)
 
 	path := filepath.Join(tmp, spec.Name)
 	m2, err := LoadPinnedMap(path, nil)
@@ -495,7 +495,7 @@ func TestMapLoadPinned(t *testing.T) {
 	c.Assert(err, qt.IsNil)
 	defer m2.Close()
 	pinned = m2.IsPinned()
-	c.Assert(pinned, qt.Equals, true)
+	c.Assert(pinned, qt.IsTrue)
 }
 
 func TestMapLoadPinnedUnpin(t *testing.T) {
@@ -508,7 +508,7 @@ func TestMapLoadPinnedUnpin(t *testing.T) {
 	c.Assert(err, qt.IsNil)
 	defer m1.Close()
 	pinned := m1.IsPinned()
-	c.Assert(pinned, qt.Equals, true)
+	c.Assert(pinned, qt.IsTrue)
 
 	path := filepath.Join(tmp, spec.Name)
 	m2, err := LoadPinnedMap(path, nil)
@@ -1388,7 +1388,7 @@ func TestMapPinning(t *testing.T) {
 	}
 	defer m1.Close()
 	pinned := m1.IsPinned()
-	c.Assert(pinned, qt.Equals, true)
+	c.Assert(pinned, qt.IsTrue)
 
 	if err := m1.Put(uint32(0), uint32(42)); err != nil {
 		t.Fatal("Can't write value:", err)

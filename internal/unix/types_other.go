@@ -85,6 +85,8 @@ type Statfs_t struct {
 	Spare   [4]int64
 }
 
+type Stat_t struct{}
+
 // Rlimit is a wrapper
 type Rlimit struct {
 	Cur uint64
@@ -263,5 +265,13 @@ func KernelRelease() (string, error) {
 }
 
 func Prlimit(pid, resource int, new, old *Rlimit) error {
+	return errNonLinux
+}
+
+func Open(path string, mode int, perm uint32) (int, error) {
+	return -1, errNonLinux
+}
+
+func Fstat(fd int, stat *Stat_t) error {
 	return errNonLinux
 }

@@ -333,11 +333,12 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions, handles *hand
 //
 // Requires at least Linux 4.10.
 func NewProgramFromFD(fd int) (*Program, error) {
-	if fd < 0 {
-		return nil, errors.New("invalid fd")
+	f, err := sys.NewFD(fd)
+	if err != nil {
+		return nil, err
 	}
 
-	return newProgramFromFD(sys.NewFD(fd))
+	return newProgramFromFD(f)
 }
 
 // NewProgramFromID returns the program for a given id.

@@ -13,17 +13,15 @@ import (
 	"github.com/cilium/ebpf/internal/unix"
 )
 
-var (
-	kprobeSpec = ebpf.ProgramSpec{
-		Type:    ebpf.Kprobe,
-		License: "MIT",
-		Instructions: asm.Instructions{
-			// set exit code to 0
-			asm.Mov.Imm(asm.R0, 0),
-			asm.Return(),
-		},
-	}
-)
+var kprobeSpec = ebpf.ProgramSpec{
+	Type:    ebpf.Kprobe,
+	License: "MIT",
+	Instructions: asm.Instructions{
+		// set exit code to 0
+		asm.Mov.Imm(asm.R0, 0),
+		asm.Return(),
+	},
+}
 
 func TestKprobe(t *testing.T) {
 	c := qt.New(t)
@@ -93,7 +91,6 @@ func TestKprobeErrors(t *testing.T) {
 
 // Test k(ret)probe creation using perf_kprobe PMU.
 func TestKprobeCreatePMU(t *testing.T) {
-
 	// Requires at least 4.17 (e12f03d7031a "perf/core: Implement the 'perf_kprobe' PMU")
 	testutils.SkipOnOldKernel(t, "4.17", "perf_kprobe PMU")
 
@@ -183,12 +180,12 @@ func TestKprobeTraceFS(t *testing.T) {
 	c.Assert(k1.tracefsID, qt.Not(qt.CmpEquals()), k2.tracefsID)
 
 	// Write a k(ret)probe event for a non-existing symbol.
-	err = createTraceFSProbeEvent(kprobeType, "testgroup", "bogus", "", 0, false)
+	err = createTraceFSProbeEvent(kprobeType, "testgroup", "bogus", "", 0, 0, false)
 	c.Assert(errors.Is(err, os.ErrNotExist), qt.IsTrue, qt.Commentf("got error: %s", err))
 
 	// A kernel bug was fixed in 97c753e62e6c where EINVAL was returned instead
 	// of ENOENT, but only for kretprobes.
-	err = createTraceFSProbeEvent(kprobeType, "testgroup", "bogus", "", 0, true)
+	err = createTraceFSProbeEvent(kprobeType, "testgroup", "bogus", "", 0, 0, true)
 	c.Assert(errors.Is(err, os.ErrNotExist), qt.IsTrue, qt.Commentf("got error: %s", err))
 }
 
@@ -227,12 +224,12 @@ func TestKprobeCreateTraceFS(t *testing.T) {
 	}()
 
 	// Create a kprobe.
-	err := createTraceFSProbeEvent(kprobeType, pg, symbol, "", 0, false)
+	err := createTraceFSProbeEvent(kprobeType, pg, symbol, "", 0, 0, false)
 	c.Assert(err, qt.IsNil)
 
 	// Attempt to create an identical kprobe using tracefs,
 	// expect it to fail with os.ErrExist.
-	err = createTraceFSProbeEvent(kprobeType, pg, symbol, "", 0, false)
+	err = createTraceFSProbeEvent(kprobeType, pg, symbol, "", 0, 0, false)
 	c.Assert(errors.Is(err, os.ErrExist), qt.IsTrue,
 		qt.Commentf("expected consecutive kprobe creation to contain os.ErrExist, got: %v", err))
 
@@ -240,10 +237,10 @@ func TestKprobeCreateTraceFS(t *testing.T) {
 	c.Assert(closeTraceFSProbeEvent(kprobeType, pg, symbol), qt.IsNil)
 
 	// Same test for a kretprobe.
-	err = createTraceFSProbeEvent(kprobeType, rg, symbol, "", 0, true)
+	err = createTraceFSProbeEvent(kprobeType, rg, symbol, "", 0, 0, true)
 	c.Assert(err, qt.IsNil)
 
-	err = createTraceFSProbeEvent(kprobeType, rg, symbol, "", 0, true)
+	err = createTraceFSProbeEvent(kprobeType, rg, symbol, "", 0, 0, true)
 	c.Assert(os.IsExist(err), qt.IsFalse,
 		qt.Commentf("expected consecutive kretprobe creation to contain os.ErrExist, got: %v", err))
 

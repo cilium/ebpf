@@ -414,7 +414,7 @@ func (ec *elfCode) relocateInstruction(ins *asm.Instruction, rel elf.Symbol) err
 
 	case programSection:
 		if ins.OpCode.JumpOp() != asm.Call {
-			return fmt.Errorf("not a call instruction: %s", ins)
+			return fmt.Errorf("not a call instruction: %v", ins)
 		}
 
 		if ins.Src != asm.PseudoCall {

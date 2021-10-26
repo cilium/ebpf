@@ -601,10 +601,18 @@ func TestLibBPFCompat(t *testing.T) {
 		switch file {
 		case "test_sk_assign.o":
 			t.Skip("Skipping due to incompatible struct bpf_map_def")
-		case "test_map_in_map.o", "test_select_reuseport_kern.o":
+		case "test_map_in_map.o", "test_map_in_map.linked3.o",
+			"test_select_reuseport_kern.o", "test_select_reuseport_kern.linked3.o":
 			t.Skip("Skipping due to missing InnerMap in map definition")
 		case "test_core_autosize.o":
 			t.Skip("Skipping since the test generates dynamic BTF")
+		case "for_each_array_map_elem.o", "for_each_array_map_elem.linked3.o",
+			"for_each_hash_map_elem.o", "for_each_hash_map_elem.linked3.o":
+			t.Skip("Skipping since function pointers are not supported")
+		case "test_static_linked.linked3.o":
+			t.Skip("Skipping since .text contains 'subprog' twice")
+		case "linked_maps.linked3.o", "linked_funcs.linked3.o":
+			t.Skip("Skipping since weak relocations are not supported")
 		}
 
 		t.Parallel()

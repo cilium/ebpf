@@ -52,7 +52,7 @@ if [[ "${1:-}" = "--exec-vm" ]]; then
     --rwdir="${testdir}=${testdir}" \
     --rodir=/run/input="${input}" \
     --rwdir=/run/output="${output}" \
-    --script-sh "PATH=\"$PATH\" \"$script\" --exec-test $cmd" \
+    --script-sh "PATH=\"$PATH\" CI_MAX_KERNEL_VERSION="$CI_MAX_KERNEL_VERSION" \"$script\" --exec-test $cmd" \
     --kopt possible_cpus=2; then # need at least two CPUs for some tests
     exit 23
   fi

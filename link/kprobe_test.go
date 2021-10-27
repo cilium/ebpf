@@ -97,14 +97,14 @@ func TestKprobeCreatePMU(t *testing.T) {
 	c := qt.New(t)
 
 	// kprobe happy path. printk is always present.
-	pk, err := pmuKprobe("printk", false)
+	pk, err := pmuProbe(kprobeType, probeArgs{symbol: "printk"})
 	c.Assert(err, qt.IsNil)
 	defer pk.Close()
 
 	c.Assert(pk.typ, qt.Equals, kprobeEvent)
 
 	// kretprobe happy path.
-	pr, err := pmuKprobe("printk", true)
+	pr, err := pmuProbe(kprobeType, probeArgs{symbol: "printk", ret: true})
 	c.Assert(err, qt.IsNil)
 	defer pr.Close()
 
@@ -112,12 +112,12 @@ func TestKprobeCreatePMU(t *testing.T) {
 
 	// Expect os.ErrNotExist when specifying a non-existent kernel symbol
 	// on kernels 4.17 and up.
-	_, err = pmuKprobe("bogus", false)
+	_, err = pmuProbe(kprobeType, probeArgs{symbol: "bogus"})
 	c.Assert(errors.Is(err, os.ErrNotExist), qt.IsTrue, qt.Commentf("got error: %s", err))
 
 	// A kernel bug was fixed in 97c753e62e6c where EINVAL was returned instead
 	// of ENOENT, but only for kretprobes.
-	_, err = pmuKprobe("bogus", true)
+	_, err = pmuProbe(kprobeType, probeArgs{symbol: "bogus", ret: true})
 	c.Assert(errors.Is(err, os.ErrNotExist), qt.IsTrue, qt.Commentf("got error: %s", err))
 }
 
@@ -125,7 +125,7 @@ func TestKprobeCreatePMU(t *testing.T) {
 func TestKprobePMUUnavailable(t *testing.T) {
 	c := qt.New(t)
 
-	pk, err := pmuKprobe("printk", false)
+	pk, err := pmuProbe(kprobeType, probeArgs{symbol: "printk"})
 	if err == nil {
 		pk.Close()
 		t.Skipf("Kernel supports perf_kprobe PMU, not asserting error.")
@@ -137,7 +137,7 @@ func TestKprobePMUUnavailable(t *testing.T) {
 
 func BenchmarkKprobeCreatePMU(b *testing.B) {
 	for n := 0; n < b.N; n++ {
-		pr, err := pmuKprobe("printk", false)
+		pr, err := pmuProbe(kprobeType, probeArgs{symbol: "printk"})
 		if err != nil {
 			b.Error("error creating perf_kprobe PMU:", err)
 		}
@@ -155,23 +155,23 @@ func TestKprobeTraceFS(t *testing.T) {
 	symbol := "printk"
 
 	// Open and close tracefs k(ret)probes, checking all errors.
-	kp, err := tracefsKprobe(symbol, false)
+	kp, err := tracefsProbe(kprobeType, probeArgs{symbol: symbol})
 	c.Assert(err, qt.IsNil)
 	c.Assert(kp.Close(), qt.IsNil)
 	c.Assert(kp.typ, qt.Equals, kprobeEvent)
 
-	kp, err = tracefsKprobe(symbol, true)
+	kp, err = tracefsProbe(kprobeType, probeArgs{symbol: symbol, ret: true})
 	c.Assert(err, qt.IsNil)
 	c.Assert(kp.Close(), qt.IsNil)
 	c.Assert(kp.typ, qt.Equals, kretprobeEvent)
 
 	// Create two identical trace events, ensure their IDs differ.
-	k1, err := tracefsKprobe(symbol, false)
+	k1, err := tracefsProbe(kprobeType, probeArgs{symbol: symbol})
 	c.Assert(err, qt.IsNil)
 	defer k1.Close()
 	c.Assert(k1.tracefsID, qt.Not(qt.Equals), 0)
 
-	k2, err := tracefsKprobe(symbol, false)
+	k2, err := tracefsProbe(kprobeType, probeArgs{symbol: symbol})
 	c.Assert(err, qt.IsNil)
 	defer k2.Close()
 	c.Assert(k2.tracefsID, qt.Not(qt.Equals), 0)
@@ -197,7 +197,7 @@ func BenchmarkKprobeCreateTraceFS(b *testing.B) {
 	for n := 0; n < b.N; n++ {
 		// Include <tracefs>/kprobe_events operations in the benchmark loop
 		// because we create one per perf event.
-		pr, err := tracefsKprobe("printk", false)
+		pr, err := tracefsProbe(kprobeType, probeArgs{symbol: "printk"})
 		if err != nil {
 			b.Error("error creating tracefs perf event:", err)
 		}

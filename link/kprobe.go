@@ -138,10 +138,17 @@ func kprobe(symbol string, prog *ebpf.Program, ret bool) (*perfEvent, error) {
 		return nil, fmt.Errorf("eBPF program type %s is not a Kprobe: %w", prog.Type(), errInvalidInput)
 	}
 
+	args := probeArgs{
+		pid:    perfAllThreads,
+		symbol: platformPrefix(symbol),
+		ret:    ret,
+	}
+
 	// Use kprobe PMU if the kernel has it available.
-	tp, err := pmuKprobe(platformPrefix(symbol), ret)
+	tp, err := pmuProbe(kprobeType, args)
 	if errors.Is(err, os.ErrNotExist) {
-		tp, err = pmuKprobe(symbol, ret)
+		args.symbol = symbol
+		tp, err = pmuProbe(kprobeType, args)
 	}
 	if err == nil {
 		return tp, nil
@@ -151,27 +158,17 @@ func kprobe(symbol string, prog *ebpf.Program, ret bool) (*perfEvent, error) {
 	}
 
 	// Use tracefs if kprobe PMU is missing.
-	tp, err = tracefsKprobe(platformPrefix(symbol), ret)
+	args.symbol = platformPrefix(symbol)
+	tp, err = tracefsProbe(kprobeType, args)
 	if errors.Is(err, os.ErrNotExist) {
-		tp, err = tracefsKprobe(symbol, ret)
+		args.symbol = symbol
+		tp, err = tracefsProbe(kprobeType, args)
 	}
 	if err != nil {
 		return nil, fmt.Errorf("creating trace event '%s' in tracefs: %w", symbol, err)
 	}
 
 	return tp, nil
-}
-
-// pmuKprobe opens a perf event based on the kprobe PMU.
-// Returns os.ErrNotExist if the given symbol does not exist in the kernel.
-func pmuKprobe(symbol string, ret bool) (*perfEvent, error) {
-	args := probeArgs{
-		pid:    perfAllThreads,
-		symbol: symbol,
-		ret:    ret,
-	}
-
-	return pmuProbe(kprobeType, args)
 }
 
 // pmuProbe opens a perf event based on a Performance Monitoring Unit.
@@ -270,17 +267,6 @@ func pmuProbe(typ probeType, args probeArgs) (*perfEvent, error) {
 		name:  args.symbol,
 		typ:   typ.PerfEventType(args.ret),
 	}, nil
-}
-
-// tracefsKprobe creates a Kprobe tracefs entry.
-func tracefsKprobe(symbol string, ret bool) (*perfEvent, error) {
-	args := probeArgs{
-		pid:    perfAllThreads,
-		symbol: symbol,
-		ret:    ret,
-	}
-
-	return tracefsProbe(kprobeType, args)
 }
 
 // tracefsProbe creates a trace event by writing an entry to <tracefs>/[k,u]probe_events.

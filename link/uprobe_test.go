@@ -147,15 +147,23 @@ func TestUprobeCreatePMU(t *testing.T) {
 	off, err := bashEx.offset(bashSym)
 	c.Assert(err, qt.IsNil)
 
+	args := probeArgs{
+		symbol: bashSym,
+		path:   bashEx.path,
+		offset: off,
+		pid:    perfAllThreads,
+	}
+
 	// uprobe PMU
-	pu, err := pmuUprobe(bashSym, bashEx.path, off, perfAllThreads, 0, false)
+	pu, err := pmuProbe(uprobeType, args)
 	c.Assert(err, qt.IsNil)
 	defer pu.Close()
 
 	c.Assert(pu.typ, qt.Equals, uprobeEvent)
 
 	// uretprobe PMU
-	pr, err := pmuUprobe(bashSym, bashEx.path, off, perfAllThreads, 0, true)
+	args.ret = true
+	pr, err := pmuProbe(uprobeType, args)
 	c.Assert(err, qt.IsNil)
 	defer pr.Close()
 
@@ -170,7 +178,14 @@ func TestUprobePMUUnavailable(t *testing.T) {
 	off, err := bashEx.offset(bashSym)
 	c.Assert(err, qt.IsNil)
 
-	pk, err := pmuUprobe(bashSym, bashEx.path, off, perfAllThreads, 0, false)
+	args := probeArgs{
+		symbol: bashSym,
+		path:   bashEx.path,
+		offset: off,
+		pid:    perfAllThreads,
+	}
+
+	pk, err := pmuProbe(uprobeType, args)
 	if err == nil {
 		pk.Close()
 		t.Skipf("Kernel supports perf_uprobe PMU, not asserting error.")
@@ -191,24 +206,35 @@ func TestUprobeTraceFS(t *testing.T) {
 	// Sanitize the symbol in order to be used in tracefs API.
 	ssym := uprobeSanitizedSymbol(bashSym)
 
+	args := probeArgs{
+		symbol: ssym,
+		path:   bashEx.path,
+		offset: off,
+		pid:    perfAllThreads,
+	}
+
 	// Open and close tracefs u(ret)probes, checking all errors.
-	up, err := tracefsUprobe(ssym, bashEx.path, off, perfAllThreads, 0, false)
+	up, err := tracefsProbe(uprobeType, args)
 	c.Assert(err, qt.IsNil)
 	c.Assert(up.Close(), qt.IsNil)
 	c.Assert(up.typ, qt.Equals, uprobeEvent)
 
-	up, err = tracefsUprobe(ssym, bashEx.path, off, perfAllThreads, 0, true)
+	args.ret = true
+
+	up, err = tracefsProbe(uprobeType, args)
 	c.Assert(err, qt.IsNil)
 	c.Assert(up.Close(), qt.IsNil)
 	c.Assert(up.typ, qt.Equals, uretprobeEvent)
 
+	args.ret = false
+
 	// Create two identical trace events, ensure their IDs differ.
-	u1, err := tracefsUprobe(ssym, bashEx.path, off, perfAllThreads, 0, false)
+	u1, err := tracefsProbe(uprobeType, args)
 	c.Assert(err, qt.IsNil)
 	defer u1.Close()
 	c.Assert(u1.tracefsID, qt.Not(qt.Equals), 0)
 
-	u2, err := tracefsUprobe(ssym, bashEx.path, off, perfAllThreads, 0, false)
+	u2, err := tracefsProbe(uprobeType, args)
 	c.Assert(err, qt.IsNil)
 	defer u2.Close()
 	c.Assert(u2.tracefsID, qt.Not(qt.Equals), 0)

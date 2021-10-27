@@ -27,12 +27,15 @@ var (
 	}{}
 
 	uprobeRefCtrOffsetPMUPath = "/sys/bus/event_source/devices/uprobe/format/ref_ctr_offset"
-	uprobeRefCtrOffsetPMU     = struct {
-		once sync.Once
-		err  error
-	}{}
 	// elixir.bootlin.com/linux/v5.15-rc7/source/kernel/events/core.c#L9799
 	uprobeRefCtrOffsetShift = 32
+	haveRefCtrOffsetPMU     = internal.FeatureTest("RefCtrOffsetPMU", "4.20", func() error {
+		_, err := os.Stat(uprobeRefCtrOffsetPMUPath)
+		if err != nil {
+			return internal.ErrNotSupported
+		}
+		return nil
+	})
 
 	// ErrNoSymbol indicates that the given symbol was not found
 	// in the ELF symbols table.
@@ -239,11 +242,12 @@ func (ex *Executable) uprobe(symbol string, prog *ebpf.Program, opts *UprobeOpti
 	if prog.Type() != ebpf.Kprobe {
 		return nil, fmt.Errorf("eBPF program type %s is not Kprobe: %w", prog.Type(), errInvalidInput)
 	}
+	if opts == nil {
+		opts = &UprobeOptions{}
+	}
 
-	var offset uint64
-	if opts != nil && opts.Offset != 0 {
-		offset = opts.Offset
-	} else {
+	offset := opts.Offset
+	if offset == 0 {
 		off, err := ex.offset(symbol)
 		if err != nil {
 			return nil, err
@@ -251,21 +255,29 @@ func (ex *Executable) uprobe(symbol string, prog *ebpf.Program, opts *UprobeOpti
 		offset = off
 	}
 
-	pid := perfAllThreads
-	if opts != nil && opts.PID != 0 {
-		pid = opts.PID
+	pid := opts.PID
+	if pid == 0 {
+		pid = perfAllThreads
 	}
 
-	var refCtrOffset uint64
-	if opts != nil && opts.RefCtrOffset != 0 {
-		if err := readUprobeRefCtrOffsetPMU(); err != nil {
-			return nil, fmt.Errorf("ref_ctr_offset not supported: %w", err)
+	refCtrOffset := opts.RefCtrOffset
+	if refCtrOffset != 0 {
+		if err := haveRefCtrOffsetPMU(); err != nil {
+			return nil, fmt.Errorf("uprobe ref_ctr_offset: %w", err)
 		}
-		refCtrOffset = opts.RefCtrOffset
+	}
+
+	args := probeArgs{
+		symbol:       symbol,
+		path:         ex.path,
+		offset:       offset,
+		pid:          pid,
+		refCtrOffset: refCtrOffset,
+		ret:          ret,
 	}
 
 	// Use uprobe PMU if the kernel has it available.
-	tp, err := pmuUprobe(symbol, ex.path, offset, pid, refCtrOffset, ret)
+	tp, err := pmuUprobe(args)
 	if err == nil {
 		return tp, nil
 	}
@@ -274,7 +286,8 @@ func (ex *Executable) uprobe(symbol string, prog *ebpf.Program, opts *UprobeOpti
 	}
 
 	// Use tracefs if uprobe PMU is missing.
-	tp, err = tracefsUprobe(uprobeSanitizedSymbol(symbol), ex.path, offset, pid, refCtrOffset, ret)
+	args.symbol = uprobeSanitizedSymbol(symbol)
+	tp, err = tracefsUprobe(args)
 	if err != nil {
 		return nil, fmt.Errorf("creating trace event '%s:%s' in tracefs: %w", ex.path, symbol, err)
 	}
@@ -283,13 +296,13 @@ func (ex *Executable) uprobe(symbol string, prog *ebpf.Program, opts *UprobeOpti
 }
 
 // pmuUprobe opens a perf event based on the uprobe PMU.
-func pmuUprobe(symbol, path string, offset uint64, pid int, refCtrOffset uint64, ret bool) (*perfEvent, error) {
-	return pmuProbe(uprobeType, symbol, path, offset, pid, refCtrOffset, ret)
+func pmuUprobe(args probeArgs) (*perfEvent, error) {
+	return pmuProbe(uprobeType, args)
 }
 
 // tracefsUprobe creates a Uprobe tracefs entry.
-func tracefsUprobe(symbol, path string, offset uint64, pid int, refCtrOffset uint64, ret bool) (*perfEvent, error) {
-	return tracefsProbe(uprobeType, symbol, path, offset, pid, refCtrOffset, ret)
+func tracefsUprobe(args probeArgs) (*perfEvent, error) {
+	return tracefsProbe(uprobeType, args)
 }
 
 // uprobeSanitizedSymbol replaces every invalid characted for the tracefs api with an underscore.
@@ -297,14 +310,14 @@ func uprobeSanitizedSymbol(symbol string) string {
 	return rgxUprobeSymbol.ReplaceAllString(symbol, "_")
 }
 
-// uprobePathOffset creates the PATH:OFFSET(REF_CTR_OFFSET) token for the tracefs api.
-func uprobePathOffset(path string, offset, refCtrOffset uint64) string {
-	po := fmt.Sprintf("%s:%#x", path, offset)
+// uprobeToken creates the PATH:OFFSET(REF_CTR_OFFSET) token for the tracefs api.
+func uprobeToken(args probeArgs) string {
+	po := fmt.Sprintf("%s:%#x", args.path, args.offset)
 
-	if refCtrOffset != 0 {
+	if args.refCtrOffset != 0 {
 		// This is not documented in Documentation/trace/uprobetracer.txt.
-		// https://elixir.bootlin.com/linux/v5.15-rc7/source/kernel/trace/trace.c#L5564
-		po += fmt.Sprintf("(%#x)", refCtrOffset)
+		// elixir.bootlin.com/linux/v5.15-rc7/source/kernel/trace/trace.c#L5564
+		po += fmt.Sprintf("(%#x)", args.refCtrOffset)
 	}
 
 	return po
@@ -315,15 +328,4 @@ func uretprobeBit() (uint64, error) {
 		uprobeRetprobeBit.value, uprobeRetprobeBit.err = determineRetprobeBit(uprobeType)
 	})
 	return uprobeRetprobeBit.value, uprobeRetprobeBit.err
-}
-
-// readUprobeRefCtrOffsetPMU asserts uprobeRefCtrOffsetPMUPath exists.
-func readUprobeRefCtrOffsetPMU() error {
-	uprobeRefCtrOffsetPMU.once.Do(func() {
-		_, err := os.Stat(uprobeRefCtrOffsetPMUPath)
-		if err != nil {
-			uprobeRefCtrOffsetPMU.err = internal.ErrNotSupported
-		}
-	})
-	return uprobeRefCtrOffsetPMU.err
 }

@@ -284,12 +284,30 @@ func (ex *Executable) uprobe(symbol string, prog *ebpf.Program, opts *UprobeOpti
 
 // pmuUprobe opens a perf event based on the uprobe PMU.
 func pmuUprobe(symbol, path string, offset uint64, pid int, refCtrOffset uint64, ret bool) (*perfEvent, error) {
-	return pmuProbe(uprobeType, symbol, path, offset, pid, refCtrOffset, ret)
+	args := probeArgs{
+		symbol:       symbol,
+		path:         path,
+		offset:       offset,
+		pid:          pid,
+		refCtrOffset: refCtrOffset,
+		ret:          ret,
+	}
+
+	return pmuProbe(uprobeType, args)
 }
 
 // tracefsUprobe creates a Uprobe tracefs entry.
 func tracefsUprobe(symbol, path string, offset uint64, pid int, refCtrOffset uint64, ret bool) (*perfEvent, error) {
-	return tracefsProbe(uprobeType, symbol, path, offset, pid, refCtrOffset, ret)
+	args := probeArgs{
+		symbol:       symbol,
+		path:         path,
+		offset:       offset,
+		pid:          pid,
+		refCtrOffset: refCtrOffset,
+		ret:          ret,
+	}
+
+	return tracefsProbe(uprobeType, args)
 }
 
 // uprobeSanitizedSymbol replaces every invalid characted for the tracefs api with an underscore.
@@ -303,7 +321,7 @@ func uprobePathOffset(path string, offset, refCtrOffset uint64) string {
 
 	if refCtrOffset != 0 {
 		// This is not documented in Documentation/trace/uprobetracer.txt.
-		// https://elixir.bootlin.com/linux/v5.15-rc7/source/kernel/trace/trace.c#L5564
+		// elixir.bootlin.com/linux/v5.15-rc7/source/kernel/trace/trace.c#L5564
 		po += fmt.Sprintf("(%#x)", refCtrOffset)
 	}
 

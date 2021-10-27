@@ -242,24 +242,35 @@ func TestUprobeCreateTraceFS(t *testing.T) {
 		_ = closeTraceFSProbeEvent(uprobeType, rg, ssym)
 	}()
 
+	// Prepare probe args.
+	args := probeArgs{
+		group:  pg,
+		symbol: ssym,
+		path:   bashEx.path,
+		offset: off,
+	}
+
 	// Create a uprobe.
-	err = createTraceFSProbeEvent(uprobeType, pg, ssym, bashEx.path, off, 0, false)
+	err = createTraceFSProbeEvent(uprobeType, args)
 	c.Assert(err, qt.IsNil)
 
 	// Attempt to create an identical uprobe using tracefs,
 	// expect it to fail with os.ErrExist.
-	err = createTraceFSProbeEvent(uprobeType, pg, ssym, bashEx.path, off, 0, false)
+	err = createTraceFSProbeEvent(uprobeType, args)
 	c.Assert(errors.Is(err, os.ErrExist), qt.IsTrue,
 		qt.Commentf("expected consecutive uprobe creation to contain os.ErrExist, got: %v", err))
 
 	// Expect a successful close of the kprobe.
 	c.Assert(closeTraceFSProbeEvent(uprobeType, pg, ssym), qt.IsNil)
 
+	args.group = rg
+	args.ret = true
+
 	// Same test for a kretprobe.
-	err = createTraceFSProbeEvent(uprobeType, rg, ssym, bashEx.path, off, 0, true)
+	err = createTraceFSProbeEvent(uprobeType, args)
 	c.Assert(err, qt.IsNil)
 
-	err = createTraceFSProbeEvent(uprobeType, rg, ssym, bashEx.path, off, 0, true)
+	err = createTraceFSProbeEvent(uprobeType, args)
 	c.Assert(os.IsExist(err), qt.IsFalse,
 		qt.Commentf("expected consecutive uretprobe creation to contain os.ErrExist, got: %v", err))
 

@@ -431,11 +431,6 @@ func TestUprobeProgramWrongPID(t *testing.T) {
 	assertMapValue(t, m, 0, 0)
 }
 
-func TestReadUprobeRefCtrOffsetPMU(t *testing.T) {
-	testutils.SkipOnOldKernel(t, "4.20", "ref_ctr_offset PMU")
-
-	err := readUprobeRefCtrOffsetPMU()
-	if err != nil {
-		t.Fatal(err)
-	}
+func TestHaveRefCtrOffsetPMU(t *testing.T) {
+	testutils.CheckFeatureTest(t, haveRefCtrOffsetPMU)
 }

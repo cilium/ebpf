@@ -27,12 +27,15 @@ var (
 	}{}
 
 	uprobeRefCtrOffsetPMUPath = "/sys/bus/event_source/devices/uprobe/format/ref_ctr_offset"
-	uprobeRefCtrOffsetPMU     = struct {
-		once sync.Once
-		err  error
-	}{}
 	// elixir.bootlin.com/linux/v5.15-rc7/source/kernel/events/core.c#L9799
 	uprobeRefCtrOffsetShift = 32
+	haveRefCtrOffsetPMU     = internal.FeatureTest("RefCtrOffsetPMU", "4.20", func() error {
+		_, err := os.Stat(uprobeRefCtrOffsetPMUPath)
+		if err != nil {
+			return internal.ErrNotSupported
+		}
+		return nil
+	})
 
 	// ErrNoSymbol indicates that the given symbol was not found
 	// in the ELF symbols table.
@@ -258,8 +261,8 @@ func (ex *Executable) uprobe(symbol string, prog *ebpf.Program, opts *UprobeOpti
 
 	var refCtrOffset uint64
 	if opts != nil && opts.RefCtrOffset != 0 {
-		if err := readUprobeRefCtrOffsetPMU(); err != nil {
-			return nil, fmt.Errorf("ref_ctr_offset not supported: %w", err)
+		if err := haveRefCtrOffsetPMU(); err != nil {
+			return nil, fmt.Errorf("uprobe ref_ctr_offset: %w", err)
 		}
 		refCtrOffset = opts.RefCtrOffset
 	}
@@ -333,15 +336,4 @@ func uretprobeBit() (uint64, error) {
 		uprobeRetprobeBit.value, uprobeRetprobeBit.err = determineRetprobeBit(uprobeType)
 	})
 	return uprobeRetprobeBit.value, uprobeRetprobeBit.err
-}
-
-// readUprobeRefCtrOffsetPMU asserts uprobeRefCtrOffsetPMUPath exists.
-func readUprobeRefCtrOffsetPMU() error {
-	uprobeRefCtrOffsetPMU.once.Do(func() {
-		_, err := os.Stat(uprobeRefCtrOffsetPMUPath)
-		if err != nil {
-			uprobeRefCtrOffsetPMU.err = internal.ErrNotSupported
-		}
-	})
-	return uprobeRefCtrOffsetPMU.err
 }

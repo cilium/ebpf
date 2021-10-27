@@ -47,9 +47,9 @@ func main() {
 	}
 	defer objs.Close()
 
-	// Find the count_egress_packets program and the BPF VFS path where the
-	// program will persist.
+	// Find the count_egress_packets program.
 	bpfProg := objs.CountEgressPackets
+	// Find the BPF VFS path where the program will persist.
 	pinPath := filepath.Join(bpfFS, bpfProgName)
 	// Pin the program. Make sure the Close is being called.
 	bpfProg.Pin(pinPath)

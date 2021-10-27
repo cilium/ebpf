@@ -147,15 +147,24 @@ func TestUprobeCreatePMU(t *testing.T) {
 	off, err := bashEx.offset(bashSym)
 	c.Assert(err, qt.IsNil)
 
+	// Prepare probe args.
+	args := probeArgs{
+		symbol: bashSym,
+		path:   bashEx.path,
+		offset: off,
+		pid:    perfAllThreads,
+	}
+
 	// uprobe PMU
-	pu, err := pmuUprobe(bashSym, bashEx.path, off, perfAllThreads, 0, false)
+	pu, err := pmuUprobe(args)
 	c.Assert(err, qt.IsNil)
 	defer pu.Close()
 
 	c.Assert(pu.typ, qt.Equals, uprobeEvent)
 
 	// uretprobe PMU
-	pr, err := pmuUprobe(bashSym, bashEx.path, off, perfAllThreads, 0, true)
+	args.ret = true
+	pr, err := pmuUprobe(args)
 	c.Assert(err, qt.IsNil)
 	defer pr.Close()
 
@@ -170,7 +179,15 @@ func TestUprobePMUUnavailable(t *testing.T) {
 	off, err := bashEx.offset(bashSym)
 	c.Assert(err, qt.IsNil)
 
-	pk, err := pmuUprobe(bashSym, bashEx.path, off, perfAllThreads, 0, false)
+	// Prepare probe args.
+	args := probeArgs{
+		symbol: bashSym,
+		path:   bashEx.path,
+		offset: off,
+		pid:    perfAllThreads,
+	}
+
+	pk, err := pmuUprobe(args)
 	if err == nil {
 		pk.Close()
 		t.Skipf("Kernel supports perf_uprobe PMU, not asserting error.")
@@ -188,27 +205,34 @@ func TestUprobeTraceFS(t *testing.T) {
 	off, err := bashEx.offset(bashSym)
 	c.Assert(err, qt.IsNil)
 
-	// Sanitize the symbol in order to be used in tracefs API.
-	ssym := uprobeSanitizedSymbol(bashSym)
+	// Prepare probe args.
+	args := probeArgs{
+		symbol: uprobeSanitizedSymbol(bashSym),
+		path:   bashEx.path,
+		offset: off,
+		pid:    perfAllThreads,
+	}
 
 	// Open and close tracefs u(ret)probes, checking all errors.
-	up, err := tracefsUprobe(ssym, bashEx.path, off, perfAllThreads, 0, false)
+	up, err := tracefsUprobe(args)
 	c.Assert(err, qt.IsNil)
 	c.Assert(up.Close(), qt.IsNil)
 	c.Assert(up.typ, qt.Equals, uprobeEvent)
 
-	up, err = tracefsUprobe(ssym, bashEx.path, off, perfAllThreads, 0, true)
+	args.ret = true
+	up, err = tracefsUprobe(args)
 	c.Assert(err, qt.IsNil)
 	c.Assert(up.Close(), qt.IsNil)
 	c.Assert(up.typ, qt.Equals, uretprobeEvent)
 
 	// Create two identical trace events, ensure their IDs differ.
-	u1, err := tracefsUprobe(ssym, bashEx.path, off, perfAllThreads, 0, false)
+	args.ret = false
+	u1, err := tracefsUprobe(args)
 	c.Assert(err, qt.IsNil)
 	defer u1.Close()
 	c.Assert(u1.tracefsID, qt.Not(qt.Equals), 0)
 
-	u2, err := tracefsUprobe(ssym, bashEx.path, off, perfAllThreads, 0, false)
+	u2, err := tracefsUprobe(args)
 	c.Assert(err, qt.IsNil)
 	defer u2.Close()
 	c.Assert(u2.tracefsID, qt.Not(qt.Equals), 0)
@@ -242,24 +266,35 @@ func TestUprobeCreateTraceFS(t *testing.T) {
 		_ = closeTraceFSProbeEvent(uprobeType, rg, ssym)
 	}()
 
+	// Prepare probe args.
+	args := probeArgs{
+		group:  pg,
+		symbol: ssym,
+		path:   bashEx.path,
+		offset: off,
+	}
+
 	// Create a uprobe.
-	err = createTraceFSProbeEvent(uprobeType, pg, ssym, bashEx.path, off, 0, false)
+	err = createTraceFSProbeEvent(uprobeType, args)
 	c.Assert(err, qt.IsNil)
 
 	// Attempt to create an identical uprobe using tracefs,
 	// expect it to fail with os.ErrExist.
-	err = createTraceFSProbeEvent(uprobeType, pg, ssym, bashEx.path, off, 0, false)
+	err = createTraceFSProbeEvent(uprobeType, args)
 	c.Assert(errors.Is(err, os.ErrExist), qt.IsTrue,
 		qt.Commentf("expected consecutive uprobe creation to contain os.ErrExist, got: %v", err))
 
 	// Expect a successful close of the kprobe.
 	c.Assert(closeTraceFSProbeEvent(uprobeType, pg, ssym), qt.IsNil)
 
+	args.group = rg
+	args.ret = true
+
 	// Same test for a kretprobe.
-	err = createTraceFSProbeEvent(uprobeType, rg, ssym, bashEx.path, off, 0, true)
+	err = createTraceFSProbeEvent(uprobeType, args)
 	c.Assert(err, qt.IsNil)
 
-	err = createTraceFSProbeEvent(uprobeType, rg, ssym, bashEx.path, off, 0, true)
+	err = createTraceFSProbeEvent(uprobeType, args)
 	c.Assert(os.IsExist(err), qt.IsFalse,
 		qt.Commentf("expected consecutive uretprobe creation to contain os.ErrExist, got: %v", err))
 
@@ -420,11 +455,6 @@ func TestUprobeProgramWrongPID(t *testing.T) {
 	assertMapValue(t, m, 0, 0)
 }
 
-func TestReadUprobeRefCtrOffsetPMU(t *testing.T) {
-	testutils.SkipOnOldKernel(t, "4.20", "ref_ctr_offset PMU")
-
-	err := readUprobeRefCtrOffsetPMU()
-	if err != nil {
-		t.Fatal(err)
-	}
+func TestHaveRefCtrOffsetPMU(t *testing.T) {
+	testutils.CheckFeatureTest(t, haveRefCtrOffsetPMU)
 }

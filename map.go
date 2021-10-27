@@ -5,9 +5,11 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math/rand"
 	"path/filepath"
 	"reflect"
 	"strings"
+	"time"
 	"unsafe"
 
 	"github.com/cilium/ebpf/internal"
@@ -18,6 +20,7 @@ import (
 
 // Errors returned by Map and MapIterator methods.
 var (
+	ErrFirstKeyNotFound = errors.New("first key not found")
 	ErrKeyNotExist      = errors.New("key does not exist")
 	ErrKeyExist         = errors.New("key already exists")
 	ErrIterationAborted = errors.New("iteration aborted")
@@ -180,7 +183,7 @@ func newMapFromFD(fd *sys.FD) (*Map, error) {
 	info, err := newMapInfoFromFd(fd)
 	if err != nil {
 		fd.Close()
-		return nil, fmt.Errorf("get map info: %s", err)
+		return nil, fmt.Errorf("get map info: %w", err)
 	}
 
 	return newMap(fd, info.Name, info.Type, info.KeySize, info.ValueSize, info.MaxEntries, info.Flags)
@@ -291,7 +294,7 @@ func newMapWithOptions(spec *MapSpec, opts MapOptions, handles *handleCache) (_ 
 	if spec.Pinning == PinByName {
 		path := filepath.Join(opts.PinPath, spec.Name)
 		if err := m.Pin(path); err != nil {
-			return nil, fmt.Errorf("pin map: %s", err)
+			return nil, fmt.Errorf("pin map: %w", err)
 		}
 	}
 
@@ -360,6 +363,11 @@ func (spec *MapSpec) createMap(inner *sys.FD, opts MapOptions, handles *handleCa
 	}
 	if spec.Flags&unix.BPF_F_INNER_MAP > 0 {
 		if err := haveInnerMaps(); err != nil {
+			return nil, fmt.Errorf("map create: %w", err)
+		}
+	}
+	if spec.Flags&unix.BPF_F_NO_PREALLOC > 0 {
+		if err := haveNoPreallocMaps(); err != nil {
 			return nil, fmt.Errorf("map create: %w", err)
 		}
 	}
@@ -479,6 +487,48 @@ func (m *Map) Flags() uint32 {
 // Info returns metadata about the map.
 func (m *Map) Info() (*MapInfo, error) {
 	return newMapInfoFromFd(m.fd)
+}
+
+func (m *Map) guessFirstKey() (startKey sys.Pointer, err error) {
+	// (idea from iovisor/bcc) fast lookup the key by passing an invalid value pointer
+	// to validate the key, if the key doesn't exist, it's a valid first key to map iterate (on < 4.4.132 kernel)
+	valuePtr := sys.NewPointer(unsafe.Pointer(^uintptr(0)))
+	randKey := make([]byte, int(m.keySize))
+
+	// First (unknown) key as an array will be 0xff...
+	if m.typ == Array {
+		for r := range randKey {
+			randKey[r] = 0xff
+		}
+		return sys.NewSlicePointer(randKey), nil
+	}
+
+	for i := 0; i < 4; i++ {
+		// let's try ...
+		switch i {
+		case 0:
+			// empty (all zero) key
+		case 1:
+			// all 0xff key
+			for r := range randKey {
+				randKey[r] = 0xff
+			}
+		case 2:
+			// all 0x55 key like iovisor/bcc
+			for r := range randKey {
+				randKey[r] = 0xff
+			}
+		case 3:
+			// random key at last hope
+			rand.New(rand.NewSource(time.Now().UnixNano())).Read(randKey)
+		}
+
+		err := m.lookup(randKey, valuePtr)
+		if errors.Is(err, ErrKeyNotExist) {
+			return sys.NewSlicePointer(randKey), nil
+		}
+	}
+	return sys.Pointer{}, ErrFirstKeyNotFound
 }
 
 // Lookup retrieves a value from a Map.
@@ -677,6 +727,17 @@ func (m *Map) nextKey(key interface{}, nextKeyOut sys.Pointer) error {
 	}
 
 	if err = sys.MapGetNextKey(&attr); err != nil {
+		if key == nil && errors.Is(err, unix.EFAULT) {
+			var firstKey sys.Pointer
+			firstKey, err = m.guessFirstKey()
+			if err != nil {
+				return fmt.Errorf("can't guess starting key: %w", err)
+			}
+			attr.Key = firstKey
+			if err = sys.MapGetNextKey(&attr); err == nil {
+				return nil
+			}
+		}
 		return fmt.Errorf("next key: %w", wrapMapError(err))
 	}
 	return nil

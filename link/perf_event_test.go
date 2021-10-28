@@ -27,7 +27,8 @@ func TestTraceEventTypePMU(t *testing.T) {
 func TestTraceEventID(t *testing.T) {
 	c := qt.New(t)
 
-	eid, err := getTraceEventID("syscalls", "sys_enter_execve")
+	// using sys_enter_mkdir here as it exist in old kernel (< 4.9) as well
+	eid, err := getTraceEventID("syscalls", "sys_enter_mkdir")
 	c.Assert(err, qt.IsNil)
 	c.Assert(eid, qt.Not(qt.Equals), 0)
 }

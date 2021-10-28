@@ -54,7 +54,7 @@ This library includes the following packages:
 
 * A version of Go that is [supported by
   upstream](https://golang.org/doc/devel/release.html#policy)
-* Linux >= 4.9. CI is run against LTS releases.
+* Linux >= 4.4. CI is run against LTS releases.
 
 ## Regenerating Testdata
 

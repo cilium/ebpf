@@ -120,6 +120,9 @@ func outputSamplesProg(sampleSizes ...int) (*ebpf.Program, *ebpf.Map, error) {
 func mustOutputSamplesProg(tb testing.TB, sampleSizes ...int) (*ebpf.Program, *ebpf.Map) {
 	tb.Helper()
 
+	// Requires at least 4.9 (0515e5999a46 "bpf: introduce BPF_PROG_TYPE_PERF_EVENT program type")
+	testutils.SkipOnOldKernel(tb, "4.9", "perf events support")
+
 	prog, events, err := outputSamplesProg(sampleSizes...)
 	if err != nil {
 		tb.Fatal(err)

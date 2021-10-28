@@ -10,7 +10,6 @@ import (
 	"log"
 	"os"
 	"os/signal"
-	"path/filepath"
 	"syscall"
 	"time"
 
@@ -26,7 +25,6 @@ const mapKey uint32 = 0
 
 const (
 	cgroupFS    = "/sys/fs/cgroup/unified"
-	bpfFS       = "/sys/fs/bpf"
 	bpfProgName = "count_egress_packets"
 )
 
@@ -49,12 +47,8 @@ func main() {
 
 	// Find the count_egress_packets program.
 	bpfProg := objs.CountEgressPackets
-	// Find the BPF VFS path where the program will persist.
-	pinPath := filepath.Join(bpfFS, bpfProgName)
-	// Pin the program. Make sure the Close is being called.
-	bpfProg.Pin(pinPath)
 
-	// Get root cgroup file discriptor.
+	// Get the root cgroup file discriptor.
 	cgroup, err := os.Open(cgroupFS)
 	if err != nil {
 		log.Fatal(err)
@@ -65,7 +59,7 @@ func main() {
 	// Link the count_egress_packets program to the cgroup.
 	_, err = link.AttachCgroup(link.CgroupOptions{
 		Path:    cgroup.Name(),
-		Attach:  ebpf.AttachCGroupInetIngress,
+		Attach:  ebpf.AttachCGroupInetEgress,
 		Program: bpfProg,
 	})
 	if err != nil {

@@ -7,10 +7,10 @@ import (
 	"github.com/cilium/ebpf/internal/sys"
 )
 
-var _ Link = (*BTFIDLink)(nil)
+var _ Link = (*btfIDLink)(nil)
 
-// BTFIDLink is a program attached to a btf_id.
-type BTFIDLink struct {
+// btfIDLink is a program attached to a btf_id.
+type btfIDLink struct {
 	RawLink
 }
 
@@ -27,7 +27,7 @@ type LSMOptions struct {
 }
 
 // Update implements the Link interface.
-func (*BTFIDLink) Update(_ *ebpf.Program) error {
+func (*btfIDLink) Update(_ *ebpf.Program) error {
 	return fmt.Errorf("can't update fentry/fexit/fmod_ret/tp_raw/lsm: %w", ErrNotSupported)
 }
 
@@ -48,7 +48,7 @@ func attachBTFID(program *ebpf.Program) (Link, error) {
 		return nil, err
 	}
 
-	return &BTFIDLink{RawLink: RawLink{fd: fd}}, nil
+	return &btfIDLink{RawLink: RawLink{fd: fd}}, nil
 }
 
 // AttachTrace links a tracing (fentry/fexit/fmod_ret) BPF program or
@@ -69,21 +69,21 @@ func AttachLSM(opts LSMOptions) (Link, error) {
 }
 
 // LoadPinnedTrace loads a tracing/LSM link from a bpffs.
-func LoadPinnedTrace(fileName string, opts *ebpf.LoadPinOptions) (*BTFIDLink, error) {
+func LoadPinnedTrace(fileName string, opts *ebpf.LoadPinOptions) (Link, error) {
 	link, err := LoadPinnedRawLink(fileName, TracingType, opts)
 	if err != nil {
 		return nil, err
 	}
 
-	return &BTFIDLink{*link}, err
+	return &btfIDLink{*link}, err
 }
 
 // LoadPinnedTraceRawTP loads a tp_btf link from a bpffs.
-func LoadPinnedTraceRawTP(fileName string, opts *ebpf.LoadPinOptions) (*BTFIDLink, error) {
+func LoadPinnedTraceRawTP(fileName string, opts *ebpf.LoadPinOptions) (Link, error) {
 	link, err := LoadPinnedRawLink(fileName, RawTracepointType, opts)
 	if err != nil {
 		return nil, err
 	}
 
-	return &BTFIDLink{*link}, err
+	return &btfIDLink{*link}, err
 }

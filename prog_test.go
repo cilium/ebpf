@@ -24,6 +24,8 @@ import (
 )
 
 func TestProgramRun(t *testing.T) {
+	testutils.SkipOnOldKernel(t, "4.8", "XDP program")
+
 	pat := []byte{0xDE, 0xAD, 0xBE, 0xEF}
 	buf := make([]byte, 14)
 
@@ -195,7 +197,7 @@ func TestProgramPin(t *testing.T) {
 	}
 
 	pinned := prog.IsPinned()
-	c.Assert(pinned, qt.Equals, true)
+	c.Assert(pinned, qt.IsTrue)
 
 	prog.Close()
 
@@ -228,7 +230,7 @@ func TestProgramUnpin(t *testing.T) {
 	}
 
 	pinned := prog.IsPinned()
-	c.Assert(pinned, qt.Equals, true)
+	c.Assert(pinned, qt.IsTrue)
 
 	if err := prog.Unpin(); err != nil {
 		t.Fatal("Failed to unpin program:", err)

@@ -5,9 +5,11 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math/rand"
 	"path/filepath"
 	"reflect"
 	"strings"
+	"time"
 	"unsafe"
 
 	"github.com/cilium/ebpf/internal"
@@ -18,6 +20,7 @@ import (
 
 // Errors returned by Map and MapIterator methods.
 var (
+	errFirstKeyNotFound = errors.New("first key not found")
 	ErrKeyNotExist      = errors.New("key does not exist")
 	ErrKeyExist         = errors.New("key already exists")
 	ErrIterationAborted = errors.New("iteration aborted")
@@ -180,7 +183,7 @@ func newMapFromFD(fd *sys.FD) (*Map, error) {
 	info, err := newMapInfoFromFd(fd)
 	if err != nil {
 		fd.Close()
-		return nil, fmt.Errorf("get map info: %s", err)
+		return nil, fmt.Errorf("get map info: %w", err)
 	}
 
 	return newMap(fd, info.Name, info.Type, info.KeySize, info.ValueSize, info.MaxEntries, info.Flags)
@@ -291,7 +294,7 @@ func newMapWithOptions(spec *MapSpec, opts MapOptions, handles *handleCache) (_ 
 	if spec.Pinning == PinByName {
 		path := filepath.Join(opts.PinPath, spec.Name)
 		if err := m.Pin(path); err != nil {
-			return nil, fmt.Errorf("pin map: %s", err)
+			return nil, fmt.Errorf("pin map: %w", err)
 		}
 	}
 
@@ -360,6 +363,11 @@ func (spec *MapSpec) createMap(inner *sys.FD, opts MapOptions, handles *handleCa
 	}
 	if spec.Flags&unix.BPF_F_INNER_MAP > 0 {
 		if err := haveInnerMaps(); err != nil {
+			return nil, fmt.Errorf("map create: %w", err)
+		}
+	}
+	if spec.Flags&unix.BPF_F_NO_PREALLOC > 0 {
+		if err := haveNoPreallocMaps(); err != nil {
 			return nil, fmt.Errorf("map create: %w", err)
 		}
 	}
@@ -677,9 +685,68 @@ func (m *Map) nextKey(key interface{}, nextKeyOut sys.Pointer) error {
 	}
 
 	if err = sys.MapGetNextKey(&attr); err != nil {
+		// Kernels 4.4.131 and earlier return EFAULT instead of a pointer to the
+		// first map element when a nil key pointer is specified.
+		if key == nil && errors.Is(err, unix.EFAULT) {
+			var guessKey sys.Pointer
+			guessKey, err = m.guessNonExistentKey()
+			if err != nil {
+				return fmt.Errorf("can't guess starting key: %w", err)
+			}
+
+			// Retry the syscall with a valid non-existing key.
+			attr.Key = guessKey
+			if err = sys.MapGetNextKey(&attr); err == nil {
+				return nil
+			}
+		}
+
 		return fmt.Errorf("next key: %w", wrapMapError(err))
 	}
+
 	return nil
+}
+
+// guessNonExistentKey attempts to perform a map lookup that returns ENOENT.
+// This is necessary on kernels before 4.4.132, since those don't support
+// iterating maps from the start by providing an invalid key pointer.
+func (m *Map) guessNonExistentKey() (startKey sys.Pointer, err error) {
+	// Provide an invalid value pointer to prevent a copy on the kernel side.
+	valuePtr := sys.NewPointer(unsafe.Pointer(^uintptr(0)))
+	randKey := make([]byte, int(m.keySize))
+
+	for i := 0; i < 4; i++ {
+		switch i {
+		// For hash maps, the 0 key is less likely to be occupied. They're often
+		// used for storing data related to pointers, and their access pattern is
+		// generally scattered across the keyspace.
+		case 0:
+		// An all-0xff key is guaranteed to be out of bounds of any array, since
+		// those have a fixed key size of 4 bytes. The only corner case being
+		// arrays with 2^32 max entries, but those are prohibitively expensive
+		// in many environments.
+		case 1:
+			for r := range randKey {
+				randKey[r] = 0xff
+			}
+		// Inspired by BCC, 0x55 is an alternating binary pattern (0101), so
+		// is unlikely to be taken.
+		case 2:
+			for r := range randKey {
+				randKey[r] = 0x55
+			}
+		// Last ditch effort, generate a random key.
+		case 3:
+			rand.New(rand.NewSource(time.Now().UnixNano())).Read(randKey)
+		}
+
+		err := m.lookup(randKey, valuePtr)
+		if errors.Is(err, ErrKeyNotExist) {
+			return sys.NewSlicePointer(randKey), nil
+		}
+	}
+
+	return sys.Pointer{}, errFirstKeyNotFound
 }
 
 // BatchLookup looks up many elements in a map at once.

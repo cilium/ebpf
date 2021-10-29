@@ -48,6 +48,7 @@ func cgroup2Path() (string, error) {
 		}
 
 		for _, line := range strings.Split(string(mounts), "\n") {
+			// example mount: cgroup2 /sys/fs/cgroup/unified cgroup2 rw,nosuid,nodev,noexec,relatime 0 0
 			mount := strings.Split(line, " ")
 			if len(mount) >= 3 && mount[2] == "cgroup2" {
 				cgroup2Mount.path = mount[1]

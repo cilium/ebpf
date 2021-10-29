@@ -1,7 +1,7 @@
 # eBPF Examples
 
 * Cgroup - Attach a program to the control groups(cgroups).
-  * [cgroup_skb](cgroup_skb/) - Count the egress packets by attaching the program to the socket. It assumes cgroups2 file system was mounted at /sys/fs/cgroup/unified. If this is not true, run `sudo mkdir /mnt/cgroup2 && sudo mount -t cgroup2 none /mnt/cgroup2`.
+  * [cgroup_skb](cgroup_skb/) - Count the egress packets by attaching the program to the socket. It assumes cgroups2 file system was supported by your system.
 * Kprobe - Attach a program to the entry or exit of an arbitrary kernel symbol (function).
   * [kprobe](kprobe/) - Kprobe using bpf2go.
   * [kprobepin](kprobepin/) - Reuse a pinned map for the kprobe example. It assumes the BPF FS is mounted at `/sys/fs/bpf`.

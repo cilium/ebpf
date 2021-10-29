@@ -703,7 +703,11 @@ func resolveBTFType(spec *btf.Spec, name string, progType ProgramType, attachTyp
 		a AttachType
 	}
 
-	var typeName, featureName string
+	var (
+		typeName, featureName string
+		isBTFTypeFunc         = true
+	)
+
 	switch (match{progType, attachType}) {
 	case match{LSM, AttachLSMMac}:
 		typeName = "bpf_lsm_" + name
@@ -714,26 +718,50 @@ func resolveBTFType(spec *btf.Spec, name string, progType ProgramType, attachTyp
 	case match{Extension, AttachNone}:
 		typeName = name
 		featureName = fmt.Sprintf("freplace %s", name)
+	case match{Tracing, AttachTraceFEntry}:
+		typeName = name
+		featureName = fmt.Sprintf("fentry %s", name)
+	case match{Tracing, AttachTraceFExit}:
+		typeName = name
+		featureName = fmt.Sprintf("fexit %s", name)
+	case match{Tracing, AttachModifyReturn}:
+		typeName = name
+		featureName = fmt.Sprintf("fmod_ret %s", name)
+	case match{Tracing, AttachTraceRawTp}:
+		typeName = fmt.Sprintf("btf_trace_%s", name)
+		featureName = fmt.Sprintf("raw_tp %s", name)
+		isBTFTypeFunc = false
 	default:
 		return nil, nil
 	}
 
+	var (
+		target btf.Type
+		err    error
+	)
 	if spec == nil {
-		var err error
 		spec, err = btf.LoadKernelSpec()
 		if err != nil {
 			return nil, fmt.Errorf("load kernel spec: %w", err)
 		}
 	}
 
-	var target *btf.Func
-	err := spec.FindType(typeName, &target)
-	if errors.Is(err, btf.ErrNotFound) {
-		return nil, &internal.UnsupportedFeatureError{
-			Name: featureName,
-		}
+	if isBTFTypeFunc {
+		var targetFunc *btf.Func
+		err = spec.FindType(typeName, &targetFunc)
+		target = targetFunc
+	} else {
+		var targetTypedef *btf.Typedef
+		err = spec.FindType(typeName, &targetTypedef)
+		target = targetTypedef
 	}
+
 	if err != nil {
+		if errors.Is(err, btf.ErrNotFound) {
+			return nil, &internal.UnsupportedFeatureError{
+				Name: featureName,
+			}
+		}
 		return nil, fmt.Errorf("resolve BTF for %s: %w", featureName, err)
 	}
 

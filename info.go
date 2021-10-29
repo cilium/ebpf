@@ -252,6 +252,10 @@ func scanFdInfoReader(r io.Reader, fields map[string]interface{}) error {
 		return err
 	}
 
+	if len(fields) > 0 && scanned == 0 {
+		return ErrNotSupported
+	}
+
 	if scanned != len(fields) {
 		return errMissingFields
 	}

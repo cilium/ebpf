@@ -24,6 +24,8 @@ import (
 )
 
 func TestProgramRun(t *testing.T) {
+	testutils.SkipOnOldKernel(t, "4.8", "XDP program")
+
 	pat := []byte{0xDE, 0xAD, 0xBE, 0xEF}
 	buf := make([]byte, 14)
 

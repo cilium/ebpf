@@ -37,8 +37,8 @@ var cgroup2Mount = struct {
 	err  error
 }{}
 
-// The /proc/mounts will list the cgroupv2 mount point with the file system type
-//  of `cgroup2` which makes it convenient for locating the cgroupv2 file system.
+// The /proc/mounts lists the cgroupv2 mount point with the file system type of `cgroup2`
+// that makes it convenient for locating the cgroupv2 file system for different systems.
 func cgroup2Path() (string, error) {
 	cgroup2Mount.once.Do(func() {
 		mounts, err := ioutil.ReadFile(procFS)

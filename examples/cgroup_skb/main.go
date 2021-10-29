@@ -7,9 +7,13 @@
 package main
 
 import (
+	"errors"
+	"io/ioutil"
 	"log"
 	"os"
 	"os/signal"
+	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -21,12 +25,43 @@ import (
 // $BPF_CLANG and $BPF_CFLAGS are set by the Makefile.
 //go:generate go run github.com/cilium/ebpf/cmd/bpf2go -cc $BPF_CLANG -cflags $BPF_CFLAGS bpf ./bpf/cgroup_skb_example.c -- -I../headers
 
-const mapKey uint32 = 0
-
 const (
-	cgroupFS    = "/sys/fs/cgroup/unified"
-	bpfProgName = "count_egress_packets"
+	mapKey      uint32 = 0
+	procFS             = "/proc/mounts"
+	bpfProgName        = "count_egress_packets"
 )
+
+var cgroup2Mount = struct {
+	once sync.Once
+	path string
+	err  error
+}{}
+
+// The /proc/mounts will list the cgroupv2 mount point with the file system type
+//  of `cgroup2` which makes it convenient for locating the cgroupv2 file system.
+func cgroup2Path() (string, error) {
+	cgroup2Mount.once.Do(func() {
+		mounts, err := ioutil.ReadFile(procFS)
+		if err != nil {
+			cgroup2Mount.err = err
+			return
+		}
+
+		for _, line := range strings.Split(string(mounts), "\n") {
+			mount := strings.Split(line, " ")
+			if len(mount) >= 3 && mount[2] == "cgroup2" {
+				cgroup2Mount.path = mount[1]
+				return
+			}
+
+			continue
+		}
+
+		cgroup2Mount.err = errors.New("cgroup2 not mounted")
+	})
+
+	return cgroup2Mount.path, cgroup2Mount.err
+}
 
 func main() {
 	// Subscribe to signals for terminating the program.
@@ -49,6 +84,10 @@ func main() {
 	bpfProg := objs.CountEgressPackets
 
 	// Get the root cgroup file discriptor.
+	cgroupFS, err := cgroup2Path()
+	if err != nil {
+		log.Fatal(err)
+	}
 	cgroup, err := os.Open(cgroupFS)
 	if err != nil {
 		log.Fatal(err)

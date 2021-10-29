@@ -29,6 +29,7 @@ type progCache struct {
 
 func createProgLoadAttr(pt ebpf.ProgramType) (*sys.ProgLoadAttr, error) {
 	var expectedAttachType ebpf.AttachType
+	var progFlags uint32
 
 	insns := asm.Instructions{
 		asm.LoadImm(asm.R0, 0, asm.DWord),
@@ -52,6 +53,8 @@ func createProgLoadAttr(pt ebpf.ProgramType) (*sys.ProgLoadAttr, error) {
 		expectedAttachType = ebpf.AttachCGroupGetsockopt
 	case ebpf.SkLookup:
 		expectedAttachType = ebpf.AttachSkLookup
+	case ebpf.Syscall:
+		progFlags = unix.BPF_F_SLEEPABLE
 	default:
 		expectedAttachType = ebpf.AttachNone
 	}
@@ -69,6 +72,7 @@ func createProgLoadAttr(pt ebpf.ProgramType) (*sys.ProgLoadAttr, error) {
 		ProgType:           sys.ProgType(pt),
 		Insns:              instructions,
 		InsnCnt:            uint32(len(bytecode) / asm.InstructionSize),
+		ProgFlags:          progFlags,
 		ExpectedAttachType: sys.AttachType(expectedAttachType),
 		License:            sys.NewStringPointer("GPL"),
 		KernVersion:        kv,

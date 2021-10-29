@@ -66,10 +66,6 @@ func TestHaveProgType(t *testing.T) {
 			}
 			testutils.SkipOnOldKernel(t, minVersion, feature)
 
-			if pt == ebpf.Syscall {
-				t.Skip("HaveProgType(Syscall) is broken on 5.14")
-			}
-
 			if err := HaveProgType(pt); err != nil {
 				if pt == ebpf.LircMode2 {
 					// CI kernels are built with CONFIG_BPF_LIRC_MODE2, but some

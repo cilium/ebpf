@@ -90,22 +90,27 @@ fi
 shift
 
 readonly kernel="linux-${kernel_version}.bz"
-readonly selftests="linux-${kernel_version}-selftests-bpf.bz"
+readonly selftests="linux-${kernel_version}-selftests-bpf.tgz"
 readonly input="$(mktemp -d)"
 readonly tmp_dir="${TMPDIR:-/tmp}"
 readonly branch="${BRANCH:-master}"
 
 fetch() {
     echo Fetching "${1}"
-    wget -nv -N -P "${tmp_dir}" "https://github.com/cilium/ci-kernels/raw/${branch}/${1}"
+    pushd "${tmp_dir}" > /dev/null
+    curl -s -L -O --fail --etag-compare "${1}.etag" --etag-save "${1}.etag" "https://github.com/cilium/ci-kernels/raw/${branch}/${1}"
+    local ret=$?
+    popd > /dev/null
+    return $ret
 }
 
 fetch "${kernel}"
 cp "${tmp_dir}/${kernel}" "${input}/bzImage"
 
 if fetch "${selftests}"; then
+  echo "Decompressing selftests"
   mkdir "${input}/bpf"
-  tar --strip-components=4 -xjf "${tmp_dir}/${selftests}" -C "${input}/bpf"
+  tar --strip-components=4 -xf "${tmp_dir}/${selftests}" -C "${input}/bpf"
 else
   echo "No selftests found, disabling"
 fi

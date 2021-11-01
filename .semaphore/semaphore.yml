@@ -15,9 +15,9 @@ auto_cancel:
     when: "branch != 'master'"
 
 blocks:
-  - name: Run tests
+  - name: Build and Lint
     task:
-      prologue:
+      prologue: &prologue
         commands:
           - checkout
           - curl -sSfL http://security.ubuntu.com/ubuntu/pool/main/c/ca-certificates/ca-certificates_20210119~20.04.2_all.deb -o /tmp/ca-certificates.deb && sudo dpkg -i /tmp/ca-certificates.deb
@@ -26,23 +26,15 @@ blocks:
           - go install github.com/mattn/goveralls@latest
           - curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin v1.42.1
           - export PATH="$PATH:$(go env GOPATH)/bin"
-          - cache restore
-          - go mod tidy
           - sudo pip3 install https://github.com/amluto/virtme/archive/beb85146cd91de37ae455eccb6ab67c393e6e290.zip
           - sudo apt-get update
           - sudo apt-get install -y --no-install-recommends qemu-system-x86 clang-9
           - sudo dmesg -C
-      epilogue:
-        commands:
-          - sudo dmesg
-      env_vars:
-        - name: TMPDIR
-          value: /tmp
-        - name: CI_MAX_KERNEL_VERSION
-          value: "5.14"
+          - cache restore "go-cache-$SEMAPHORE_JOB_ID" "go-modcache-$SEMAPHORE_JOB_ID"
       jobs:
       - name: Build and Lint
         commands:
+          - ( go build ./... && for p in $(go list ./...) ; do go test -c $p || exit ; done )
           - ( export GOOS=darwin; go build ./... && for p in $(go list ./...) ; do go test -c $p || exit ; done )
           - ( export GOARCH=arm GOARM=6; go build ./... && for p in $(go list ./...) ; do go test -c $p || exit ; done )
           - ( export GOARCH=arm64; go build ./... && for p in $(go list ./...) ; do go test -c $p || exit ; done )
@@ -53,12 +45,25 @@ blocks:
           - go build -v -o "$(mktemp -d)" ./...
           - popd
           - golangci-lint run
-          - cache store
+          - cache store "go-cache-$SEMAPHORE_JOB_ID" "$(go env GOCACHE)"
+          - cache store "go-modcache-$SEMAPHORE_JOB_ID" "$(go env GOMODCACHE)"
+  - name: Run tests
+    task:
+      prologue: *prologue
+      epilogue:
+        commands:
+          - sudo dmesg
+      env_vars:
+        - name: TMPDIR
+          value: /tmp
+        - name: CI_MAX_KERNEL_VERSION
+          value: "5.14"
+      jobs:
       - name: Run unit tests on previous stable Go
         commands:
           - sem-version go 1.16
           - go test -v ./cmd/bpf2go -run TestRun
-          - timeout -s KILL 600s ./run-tests.sh 5.10
+          - timeout -s KILL 600s ./run-tests.sh "$CI_MAX_KERNEL_VERSION"
       - name: Run unit tests
         matrix:
           - env_var: KERNEL_VERSION

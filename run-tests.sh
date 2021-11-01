@@ -90,7 +90,7 @@ fi
 shift
 
 readonly kernel="linux-${kernel_version}.bz"
-readonly selftests="linux-${kernel_version}-selftests-bpf.bz"
+readonly selftests="linux-${kernel_version}-selftests-bpf.tgz"
 readonly input="$(mktemp -d)"
 readonly tmp_dir="${TMPDIR:-/tmp}"
 readonly branch="${BRANCH:-master}"
@@ -110,7 +110,7 @@ cp "${tmp_dir}/${kernel}" "${input}/bzImage"
 if fetch "${selftests}"; then
   echo "Decompressing selftests"
   mkdir "${input}/bpf"
-  tar --strip-components=4 -xjf "${tmp_dir}/${selftests}" -C "${input}/bpf"
+  tar --strip-components=4 -xf "${tmp_dir}/${selftests}" -C "${input}/bpf"
 else
   echo "No selftests found, disabling"
 fi

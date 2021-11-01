@@ -93,7 +93,7 @@ readonly kernel="linux-${kernel_version}.bz"
 readonly selftests="linux-${kernel_version}-selftests-bpf.tgz"
 readonly input="$(mktemp -d)"
 readonly tmp_dir="${TMPDIR:-/tmp}"
-readonly branch="${BRANCH:-master}"
+readonly branch="${BRANCH:-lmb/enable-tracing}"
 
 fetch() {
     echo Fetching "${1}"

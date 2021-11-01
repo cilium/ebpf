@@ -104,6 +104,7 @@ fetch "${kernel}"
 cp "${tmp_dir}/${kernel}" "${input}/bzImage"
 
 if fetch "${selftests}"; then
+  echo "Decompressing selftests"
   mkdir "${input}/bpf"
   tar --strip-components=4 -xjf "${tmp_dir}/${selftests}" -C "${input}/bpf"
 else

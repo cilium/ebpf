@@ -97,13 +97,16 @@ readonly branch="${BRANCH:-master}"
 
 fetch() {
     echo Fetching "${1}"
-    wget -nv -N -P "${tmp_dir}" "https://github.com/cilium/ci-kernels/raw/${branch}/${1}"
+    pushd "${tmp_dir}" > /dev/null
+    curl -s -L -O --fail --etag-compare "${1}.etag" --etag-save "${1}.etag" "https://github.com/cilium/ci-kernels/raw/${branch}/${1}"
+    popd > /dev/null
 }
 
 fetch "${kernel}"
 cp "${tmp_dir}/${kernel}" "${input}/bzImage"
 
 if fetch "${selftests}"; then
+  echo "Decompressing selftests"
   mkdir "${input}/bpf"
   tar --strip-components=4 -xjf "${tmp_dir}/${selftests}" -C "${input}/bpf"
 else

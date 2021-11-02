@@ -7,6 +7,7 @@
   * [ringbuffer](ringbuffer/) - Use a `BPF_MAP_TYPE_RINGBUF` map.
 * Uprobe - Attach a program to the entry or exit of an arbitrary userspace binary symbol (function).
   * [uretprobe](uretprobe/) - Uretprobe using bpf2go.
+  * [usdt](usdt/) - USDT built on top of Uprobe. This example traces SDT notes builtin in the Python binary. Requires a `-pid` flag.
 * Tracepoint - Attach a program to predetermined kernel tracepoints.
   * [tracepoint_in_c](tracepoint_in_c/) - Tracepoint using bpf2go.
   * [tracepoint_in_go](tracepoint_in_go/) - Tracepoint using the `ebpf.NewProgram` API and Go eBPF assembler.

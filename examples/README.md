@@ -1,5 +1,7 @@
 # eBPF Examples
 
+* Cgroup - Attach a program to the control groups(cgroups).
+  * [cgroup_skb](cgroup_skb/) - Count packets egressing the current cgroup.
 * Kprobe - Attach a program to the entry or exit of an arbitrary kernel symbol (function).
   * [kprobe](kprobe/) - Kprobe using bpf2go.
   * [kprobepin](kprobepin/) - Reuse a pinned map for the kprobe example. It assumes the BPF FS is mounted at `/sys/fs/bpf`.

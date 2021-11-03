@@ -10,6 +10,8 @@
 * Tracepoint - Attach a program to predetermined kernel tracepoints.
   * [tracepoint_in_c](tracepoint_in_c/) - Tracepoint using bpf2go.
   * [tracepoint_in_go](tracepoint_in_go/) - Tracepoint using the `ebpf.NewProgram` API and Go eBPF assembler.
+* Cgroup - Attach a program to the control groups(cgroups).
+  * [cgroup_skb](cgroup_skb/) - Count packets egressing the current cgroup.
 * Add your use case(s) here!
 
 ## How to run

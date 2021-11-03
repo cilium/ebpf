@@ -489,6 +489,12 @@ func (m *Map) Info() (*MapInfo, error) {
 	return newMapInfoFromFd(m.fd)
 }
 
+// MapLookupFlags controls the behaviour of the map lookup calls.
+type MapLookupFlags uint64
+
+// LookupLock look up the value of a spin-locked map.
+const LookupLock MapLookupFlags = 4
+
 // Lookup retrieves a value from a Map.
 //
 // Calls Close() on valueOut if it is of type **Map or **Program,
@@ -497,7 +503,26 @@ func (m *Map) Info() (*MapInfo, error) {
 // Returns an error if the key doesn't exist, see ErrKeyNotExist.
 func (m *Map) Lookup(key, valueOut interface{}) error {
 	valuePtr, valueBytes := makeBuffer(valueOut, m.fullValueSize)
-	if err := m.lookup(key, valuePtr); err != nil {
+	if err := m.lookup(key, valuePtr, 0); err != nil {
+		return err
+	}
+
+	return m.unmarshalValue(valueOut, valueBytes)
+}
+
+// LookupWithFlags retrieves a value from a Map with flags.
+//
+// Passing LookupLock flag will look up the value of a spin-locked
+// map without returning the lock. This must be specified if the
+// elements contain a spinlock.
+//
+// Calls Close() on valueOut if it is of type **Map or **Program,
+// and *valueOut is not nil.
+//
+// Returns an error if the key doesn't exist, see ErrKeyNotExist.
+func (m *Map) LookupWithFlags(key, valueOut interface{}, flags MapLookupFlags) error {
+	valuePtr, valueBytes := makeBuffer(valueOut, m.fullValueSize)
+	if err := m.lookup(key, valuePtr, flags); err != nil {
 		return err
 	}
 
@@ -508,6 +533,55 @@ func (m *Map) Lookup(key, valueOut interface{}) error {
 //
 // Returns ErrKeyNotExist if the key doesn't exist.
 func (m *Map) LookupAndDelete(key, valueOut interface{}) error {
+	return m.lookupAndDelete(key, valueOut, 0)
+}
+
+// LookupAndDeleteWithFlags retrieves and deletes a value from a Map.
+//
+// Passing LookupLock flag will look up and delete the value of a spin-locked
+// map without returning the lock. This must be specified if the elements
+// contain a spinlock.
+//
+// Returns ErrKeyNotExist if the key doesn't exist.
+func (m *Map) LookupAndDeleteWithFlags(key, valueOut interface{}, flags MapLookupFlags) error {
+	return m.lookupAndDelete(key, valueOut, flags)
+}
+
+// LookupBytes gets a value from Map.
+//
+// Returns a nil value if a key doesn't exist.
+func (m *Map) LookupBytes(key interface{}) ([]byte, error) {
+	valueBytes := make([]byte, m.fullValueSize)
+	valuePtr := sys.NewSlicePointer(valueBytes)
+
+	err := m.lookup(key, valuePtr, 0)
+	if errors.Is(err, ErrKeyNotExist) {
+		return nil, nil
+	}
+
+	return valueBytes, err
+}
+
+func (m *Map) lookup(key interface{}, valueOut sys.Pointer, flags MapLookupFlags) error {
+	keyPtr, err := m.marshalKey(key)
+	if err != nil {
+		return fmt.Errorf("can't marshal key: %w", err)
+	}
+
+	attr := sys.MapLookupElemAttr{
+		MapFd: m.fd.Uint(),
+		Key:   keyPtr,
+		Value: valueOut,
+		Flags: uint64(flags),
+	}
+
+	if err = sys.MapLookupElem(&attr); err != nil {
+		return fmt.Errorf("lookup: %w", wrapMapError(err))
+	}
+	return nil
+}
+
+func (m *Map) lookupAndDelete(key, valueOut interface{}, flags MapLookupFlags) error {
 	valuePtr, valueBytes := makeBuffer(valueOut, m.fullValueSize)
 
 	keyPtr, err := m.marshalKey(key)
@@ -519,6 +593,7 @@ func (m *Map) LookupAndDelete(key, valueOut interface{}) error {
 		MapFd: m.fd.Uint(),
 		Key:   keyPtr,
 		Value: valuePtr,
+		Flags: uint64(flags),
 	}
 
 	if err := sys.MapLookupAndDeleteElem(&attr); err != nil {
@@ -526,39 +601,6 @@ func (m *Map) LookupAndDelete(key, valueOut interface{}) error {
 	}
 
 	return m.unmarshalValue(valueOut, valueBytes)
-}
-
-// LookupBytes gets a value from Map.
-//
-// Returns a nil value if a key doesn't exist.
-func (m *Map) LookupBytes(key interface{}) ([]byte, error) {
-	valueBytes := make([]byte, m.fullValueSize)
-	valuePtr := sys.NewSlicePointer(valueBytes)
-
-	err := m.lookup(key, valuePtr)
-	if errors.Is(err, ErrKeyNotExist) {
-		return nil, nil
-	}
-
-	return valueBytes, err
-}
-
-func (m *Map) lookup(key interface{}, valueOut sys.Pointer) error {
-	keyPtr, err := m.marshalKey(key)
-	if err != nil {
-		return fmt.Errorf("can't marshal key: %w", err)
-	}
-
-	attr := sys.MapLookupElemAttr{
-		MapFd: m.fd.Uint(),
-		Key:   keyPtr,
-		Value: valueOut,
-	}
-
-	if err = sys.MapLookupElem(&attr); err != nil {
-		return fmt.Errorf("lookup: %w", wrapMapError(err))
-	}
-	return nil
 }
 
 // MapUpdateFlags controls the behaviour of the Map.Update call.
@@ -573,6 +615,8 @@ const (
 	UpdateNoExist MapUpdateFlags = 1 << (iota - 1)
 	// UpdateExist updates an existing element.
 	UpdateExist
+	// UpdateLock updates elements under bpf_spin_lock.
+	UpdateLock
 )
 
 // Put replaces or creates a value in map.
@@ -740,7 +784,7 @@ func (m *Map) guessNonExistentKey() (startKey sys.Pointer, err error) {
 			rand.New(rand.NewSource(time.Now().UnixNano())).Read(randKey)
 		}
 
-		err := m.lookup(randKey, valuePtr)
+		err := m.lookup(randKey, valuePtr, 0)
 		if errors.Is(err, ErrKeyNotExist) {
 			return sys.NewSlicePointer(randKey), nil
 		}

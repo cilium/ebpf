@@ -1,3 +1,5 @@
+/* This file excercises bpf_spin_lock. */
+
 #include "common.h"
 
 struct bpf_spin_lock {

@@ -47,7 +47,7 @@ blocks:
           - ( export GOARCH=arm GOARM=6; go build ./... && for p in $(go list ./...) ; do go test -c $p || exit ; done )
           - ( export GOARCH=arm64; go build ./... && for p in $(go list ./...) ; do go test -c $p || exit ; done )
           - make clean
-          - make docker-all
+          - make container-all
           - git diff --exit-code || { echo "generated files are not up to date" >&2; false; }
           - pushd ./examples
           - go build -v -o "$(mktemp -d)" ./...

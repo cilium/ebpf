@@ -9,6 +9,9 @@ CFLAGS := -O2 -g -Wall -Werror $(CFLAGS)
 REPODIR := $(shell dirname $(realpath $(firstword $(MAKEFILE_LIST))))
 UIDGID := $(shell stat -c '%u:%g' ${REPODIR})
 
+CONTAINER_ENGINE ?= docker
+CONTAINER_RUN_ARGS ?= --user "${UIDGID}"
+
 IMAGE := $(shell cat ${REPODIR}/testdata/docker/IMAGE)
 VERSION := $(shell cat ${REPODIR}/testdata/docker/VERSION)
 
@@ -28,22 +31,22 @@ TARGETS := \
 	testdata/iproute2_map_compat \
 	internal/btf/testdata/relocs
 
-.PHONY: all clean docker-all docker-shell
+.PHONY: all clean container-all container-shell
 
-.DEFAULT_TARGET = docker-all
+.DEFAULT_TARGET = container-all
 
-# Build all ELF binaries using a Dockerized LLVM toolchain.
-docker-all:
-	docker run --rm --user "${UIDGID}" \
+# Build all ELF binaries using a containerized LLVM toolchain.
+container-all:
+	${CONTAINER_ENGINE} run --rm ${CONTAINER_RUN_ARGS} \
 		-v "${REPODIR}":/ebpf -w /ebpf --env MAKEFLAGS \
 		--env CFLAGS="-fdebug-prefix-map=/ebpf=." \
 		--env HOME="/tmp" \
 		"${IMAGE}:${VERSION}" \
 		$(MAKE) all
 
-# (debug) Drop the user into a shell inside the Docker container as root.
-docker-shell:
-	docker run --rm -ti \
+# (debug) Drop the user into a shell inside the container as root.
+container-shell:
+	${CONTAINER_ENGINE} run --rm -ti \
 		-v "${REPODIR}":/ebpf -w /ebpf \
 		"${IMAGE}:${VERSION}"
 

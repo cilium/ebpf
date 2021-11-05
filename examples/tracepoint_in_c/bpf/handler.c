@@ -11,7 +11,7 @@ struct bpf_map_def SEC("maps") counting_map = {
 	.max_entries = 1,
 };
 
-// This struct is defined according to the following format file.
+// This struct is defined according to the following format file:
 // /sys/kernel/debug/tracing/events/kmem/mm_page_alloc/format
 struct alloc_info {
 	/* The first 8 bytes is not allowed to read */
@@ -23,7 +23,7 @@ struct alloc_info {
 	int migratetype;
 };
 
-// This tracepoint is define in mm/page_alloc.c:__alloc_pages_nodemask()
+// This tracepoint is defined in mm/page_alloc.c:__alloc_pages_nodemask()
 // Userspace pathname: /sys/kernel/debug/tracing/events/kmem/mm_page_alloc
 SEC("tracepoint/kmem/mm_page_alloc")
 int mm_page_alloc(struct alloc_info *info) {

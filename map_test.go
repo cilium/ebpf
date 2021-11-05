@@ -278,7 +278,7 @@ func TestMapClose(t *testing.T) {
 	}
 }
 
-func TestBatchAPIMapFLock(t *testing.T) {
+func TestBatchMapWithLock(t *testing.T) {
 	testutils.SkipOnOldKernel(t, "5.13", "MAP BATCH BPF_F_LOCK")
 	testutils.Files(t, testutils.Glob(t, "./testdata/map_spin_lock-*.elf"), func(t *testing.T, file string) {
 		spec, err := LoadCollectionSpec(file)
@@ -306,7 +306,7 @@ func TestBatchAPIMapFLock(t *testing.T) {
 
 		keys := []uint32{0, 1}
 		values := []spinLockValue{{Cnt: 42}, {Cnt: 4242}}
-		count, err := m.BatchUpdate(keys, values, &BatchOptions{ElemFlags: uint64(FLock)})
+		count, err := m.BatchUpdate(keys, values, &BatchOptions{ElemFlags: uint64(UpdateLock)})
 		if err != nil {
 			t.Fatalf("BatchUpdate: %v", err)
 		}
@@ -317,7 +317,7 @@ func TestBatchAPIMapFLock(t *testing.T) {
 		nextKey := uint32(0)
 		lookupKeys := make([]uint32, 2)
 		lookupValues := make([]spinLockValue, 2)
-		count, err = m.BatchLookup(nil, &nextKey, lookupKeys, lookupValues, &BatchOptions{ElemFlags: uint64(FLock)})
+		count, err = m.BatchLookup(nil, &nextKey, lookupKeys, lookupValues, &BatchOptions{ElemFlags: uint64(LookupLock)})
 		if !errors.Is(err, ErrKeyNotExist) {
 			t.Fatalf("BatchLookup: %v", err)
 		}
@@ -338,7 +338,7 @@ func TestBatchAPIMapFLock(t *testing.T) {
 	})
 }
 
-func TestMapWithFLock(t *testing.T) {
+func TestMapWithLock(t *testing.T) {
 	testutils.SkipOnOldKernel(t, "5.13", "MAP BPF_F_LOCK")
 	testutils.Files(t, testutils.Glob(t, "./testdata/map_spin_lock-*.elf"), func(t *testing.T, file string) {
 		spec, err := LoadCollectionSpec(file)
@@ -366,13 +366,13 @@ func TestMapWithFLock(t *testing.T) {
 
 		key := uint32(1)
 		value := spinLockValue{Cnt: 5}
-		err = m.Update(key, value, FLock)
+		err = m.Update(key, value, UpdateLock)
 		if err != nil {
 			t.Fatal(err)
 		}
 
 		value.Cnt = 0
-		err = m.LookupWithFlags(&key, &value, FLock)
+		err = m.LookupWithFlags(&key, &value, LookupLock)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -381,7 +381,7 @@ func TestMapWithFLock(t *testing.T) {
 		}
 
 		value.Cnt = 0
-		err = m.LookupAndDeleteWithFlags(&key, &value, FLock)
+		err = m.LookupAndDeleteWithFlags(&key, &value, LookupLock)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -389,7 +389,7 @@ func TestMapWithFLock(t *testing.T) {
 			t.Fatalf("Want value 5, got %d", value.Cnt)
 		}
 
-		err = m.LookupWithFlags(&key, &value, FLock)
+		err = m.LookupWithFlags(&key, &value, LookupLock)
 		if err != nil && !errors.Is(err, ErrKeyNotExist) {
 			t.Fatal(err)
 		}

@@ -489,6 +489,12 @@ func (m *Map) Info() (*MapInfo, error) {
 	return newMapInfoFromFd(m.fd)
 }
 
+// MapLookupFlags controls the behaviour of the map lookup calls.
+type MapLookupFlags uint64
+
+// LookupLock look up the value of a spin-locked map.
+const LookupLock MapLookupFlags = 4
+
 // Lookup retrieves a value from a Map.
 //
 // Calls Close() on valueOut if it is of type **Map or **Program,
@@ -506,7 +512,7 @@ func (m *Map) Lookup(key, valueOut interface{}) error {
 
 // LookupWithFlags retrieves a value from a Map with flags.
 //
-// Passing FLock flag will look up the value of a spin-locked
+// Passing LookupLock flag will look up the value of a spin-locked
 // map without returning the lock. This must be specified if the
 // elements contain a spinlock.
 //
@@ -514,7 +520,7 @@ func (m *Map) Lookup(key, valueOut interface{}) error {
 // and *valueOut is not nil.
 //
 // Returns an error if the key doesn't exist, see ErrKeyNotExist.
-func (m *Map) LookupWithFlags(key, valueOut interface{}, flags MapUpdateFlags) error {
+func (m *Map) LookupWithFlags(key, valueOut interface{}, flags MapLookupFlags) error {
 	valuePtr, valueBytes := makeBuffer(valueOut, m.fullValueSize)
 	if err := m.lookup(key, valuePtr, flags); err != nil {
 		return err
@@ -532,12 +538,12 @@ func (m *Map) LookupAndDelete(key, valueOut interface{}) error {
 
 // LookupAndDeleteWithFlags retrieves and deletes a value from a Map.
 //
-// Passing FLock flag will look up and delete the value of a spin-locked
+// Passing LookupLock flag will look up and delete the value of a spin-locked
 // map without returning the lock. This must be specified if the elements
 // contain a spinlock.
 //
 // Returns ErrKeyNotExist if the key doesn't exist.
-func (m *Map) LookupAndDeleteWithFlags(key, valueOut interface{}, flags MapUpdateFlags) error {
+func (m *Map) LookupAndDeleteWithFlags(key, valueOut interface{}, flags MapLookupFlags) error {
 	return m.lookupAndDelete(key, valueOut, flags)
 }
 
@@ -556,7 +562,7 @@ func (m *Map) LookupBytes(key interface{}) ([]byte, error) {
 	return valueBytes, err
 }
 
-func (m *Map) lookup(key interface{}, valueOut sys.Pointer, flags MapUpdateFlags) error {
+func (m *Map) lookup(key interface{}, valueOut sys.Pointer, flags MapLookupFlags) error {
 	keyPtr, err := m.marshalKey(key)
 	if err != nil {
 		return fmt.Errorf("can't marshal key: %w", err)
@@ -575,7 +581,7 @@ func (m *Map) lookup(key interface{}, valueOut sys.Pointer, flags MapUpdateFlags
 	return nil
 }
 
-func (m *Map) lookupAndDelete(key, valueOut interface{}, flags MapUpdateFlags) error {
+func (m *Map) lookupAndDelete(key, valueOut interface{}, flags MapLookupFlags) error {
 	valuePtr, valueBytes := makeBuffer(valueOut, m.fullValueSize)
 
 	keyPtr, err := m.marshalKey(key)
@@ -609,8 +615,8 @@ const (
 	UpdateNoExist MapUpdateFlags = 1 << (iota - 1)
 	// UpdateExist updates an existing element.
 	UpdateExist
-	// Allows user space to update/lookup map elements under bpf_spin_lock.
-	FLock
+	// UpdateLock updates elements under bpf_spin_lock.
+	UpdateLock
 )
 
 // Put replaces or creates a value in map.

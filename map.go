@@ -556,25 +556,6 @@ func (m *Map) LookupBytes(key interface{}) ([]byte, error) {
 	return valueBytes, err
 }
 
-// LookupBytesWithFlags gets a value from Map.
-//
-// Passing FLock flag will look up the value of a spin-locked
-// map without returning the lock. This must be specified if the
-// elements contain a spinlock.
-//
-// Returns a nil value if a key doesn't exist.
-func (m *Map) LookupBytesWithFlags(key interface{}, flags MapUpdateFlags) ([]byte, error) {
-	valueBytes := make([]byte, m.fullValueSize)
-	valuePtr := sys.NewSlicePointer(valueBytes)
-
-	err := m.lookup(key, valuePtr, flags)
-	if errors.Is(err, ErrKeyNotExist) {
-		return nil, nil
-	}
-
-	return valueBytes, err
-}
-
 func (m *Map) lookup(key interface{}, valueOut sys.Pointer, flags MapUpdateFlags) error {
 	keyPtr, err := m.marshalKey(key)
 	if err != nil {

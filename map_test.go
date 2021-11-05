@@ -381,18 +381,6 @@ func TestMapWithFLock(t *testing.T) {
 		}
 
 		value.Cnt = 0
-		b, err := m.LookupBytesWithFlags(&key, FLock)
-		if err != nil {
-			t.Fatal(err)
-		}
-		err = m.unmarshalValue(&value, b)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if value.Cnt != 5 {
-			t.Fatalf("Want value 5, got %d", value.Cnt)
-		}
-
 		err = m.LookupAndDeleteWithFlags(&key, &value, FLock)
 		if err != nil {
 			t.Fatal(err)

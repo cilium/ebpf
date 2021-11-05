@@ -25,7 +25,6 @@ const mapKey uint32 = 0
 
 func main() {
 
-	// Name of the kernel function to trace.
 	// Subscribe to signals for terminating the program.
 	stopper := make(chan os.Signal, 1)
 	signal.Notify(stopper, os.Interrupt, syscall.SIGTERM)
@@ -65,7 +64,7 @@ func main() {
 			if err := objs.CountingMap.Lookup(mapKey, &value); err != nil {
 				log.Fatalf("reading map: %v", err)
 			}
-			log.Printf("%v times\n", value)
+			log.Printf("%v times", value)
 		case <-stopper:
 			return
 		}

@@ -278,6 +278,125 @@ func TestMapClose(t *testing.T) {
 	}
 }
 
+func TestBatchMapWithLock(t *testing.T) {
+	testutils.SkipOnOldKernel(t, "5.13", "MAP BATCH BPF_F_LOCK")
+	testutils.Files(t, testutils.Glob(t, "./testdata/map_spin_lock-*.elf"), func(t *testing.T, file string) {
+		spec, err := LoadCollectionSpec(file)
+		if err != nil {
+			t.Fatal("Can't parse ELF:", err)
+		}
+		if spec.ByteOrder != internal.NativeEndian {
+			return
+		}
+
+		coll, err := NewCollection(spec)
+		if err != nil {
+			t.Fatal("Can't parse ELF:", err)
+		}
+
+		type spinLockValue struct {
+			Cnt     uint32
+			Padding uint32
+		}
+
+		m, ok := coll.Maps["spin_lock_map"]
+		if !ok {
+			t.Fatal(err)
+		}
+
+		keys := []uint32{0, 1}
+		values := []spinLockValue{{Cnt: 42}, {Cnt: 4242}}
+		count, err := m.BatchUpdate(keys, values, &BatchOptions{ElemFlags: uint64(UpdateLock)})
+		if err != nil {
+			t.Fatalf("BatchUpdate: %v", err)
+		}
+		if count != len(keys) {
+			t.Fatalf("BatchUpdate: expected count, %d, to be %d", count, len(keys))
+		}
+
+		nextKey := uint32(0)
+		lookupKeys := make([]uint32, 2)
+		lookupValues := make([]spinLockValue, 2)
+		count, err = m.BatchLookup(nil, &nextKey, lookupKeys, lookupValues, &BatchOptions{ElemFlags: uint64(LookupLock)})
+		if !errors.Is(err, ErrKeyNotExist) {
+			t.Fatalf("BatchLookup: %v", err)
+		}
+		if count != 2 {
+			t.Fatalf("BatchLookup: expected two keys, got %d", count)
+		}
+
+		nextKey = uint32(0)
+		deleteKeys := []uint32{0, 1}
+		deleteValues := make([]spinLockValue, 2)
+		count, err = m.BatchLookupAndDelete(nil, &nextKey, deleteKeys, deleteValues, nil)
+		if !errors.Is(err, ErrKeyNotExist) {
+			t.Fatalf("BatchLookupAndDelete: %v", err)
+		}
+		if count != 2 {
+			t.Fatalf("BatchLookupAndDelete: expected two keys, got %d", count)
+		}
+	})
+}
+
+func TestMapWithLock(t *testing.T) {
+	testutils.SkipOnOldKernel(t, "5.13", "MAP BPF_F_LOCK")
+	testutils.Files(t, testutils.Glob(t, "./testdata/map_spin_lock-*.elf"), func(t *testing.T, file string) {
+		spec, err := LoadCollectionSpec(file)
+		if err != nil {
+			t.Fatal("Can't parse ELF:", err)
+		}
+		if spec.ByteOrder != internal.NativeEndian {
+			return
+		}
+
+		coll, err := NewCollection(spec)
+		if err != nil {
+			t.Fatal("Can't parse ELF:", err)
+		}
+
+		type spinLockValue struct {
+			Cnt     uint32
+			Padding uint32
+		}
+
+		m, ok := coll.Maps["spin_lock_map"]
+		if !ok {
+			t.Fatal(err)
+		}
+
+		key := uint32(1)
+		value := spinLockValue{Cnt: 5}
+		err = m.Update(key, value, UpdateLock)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		value.Cnt = 0
+		err = m.LookupWithFlags(&key, &value, LookupLock)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if value.Cnt != 5 {
+			t.Fatalf("Want value 5, got %d", value.Cnt)
+		}
+
+		value.Cnt = 0
+		err = m.LookupAndDeleteWithFlags(&key, &value, LookupLock)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if value.Cnt != 5 {
+			t.Fatalf("Want value 5, got %d", value.Cnt)
+		}
+
+		err = m.LookupWithFlags(&key, &value, LookupLock)
+		if err != nil && !errors.Is(err, ErrKeyNotExist) {
+			t.Fatal(err)
+		}
+
+	})
+}
+
 func TestMapCloneNil(t *testing.T) {
 	m, err := (*Map)(nil).Clone()
 	if err != nil {

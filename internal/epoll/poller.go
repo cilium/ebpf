@@ -100,8 +100,8 @@ func (p *Poller) Add(fd int, id int) error {
 
 	// The representation of EpollEvent isn't entirely accurate.
 	// Pad is fully useable, not just padding. Hence we stuff the
-	// CPU in there, which allows us to use a slice to access
-	// the correct perf ring.
+	// id in there, which allows us to identify the event later (e.g.,
+	// in case of perf events, which CPU sent it).
 	event := unix.EpollEvent{
 		Events: unix.EPOLLIN,
 		Fd:     int32(fd),

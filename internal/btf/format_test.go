@@ -151,16 +151,16 @@ func TestGoTypeDeclarationNamed(t *testing.T) {
 
 	tests := []struct {
 		typ    Type
-		named  []NamedType
+		named  []Type
 		output string
 	}{
-		{e1, []NamedType{e1}, "type t int32"},
-		{s1, []NamedType{e1, s1}, "type t struct { frob E1; }"},
-		{s2, []NamedType{e1}, "type t struct { frood struct { frob E1; }; }"},
-		{s2, []NamedType{e1, s1}, "type t struct { frood S1; }"},
+		{e1, []Type{e1}, "type t int32"},
+		{s1, []Type{e1, s1}, "type t struct { frob E1; }"},
+		{s2, []Type{e1}, "type t struct { frood struct { frob E1; }; }"},
+		{s2, []Type{e1, s1}, "type t struct { frood S1; }"},
 		{td, nil, "type t int32"},
-		{td, []NamedType{td}, "type t int32"},
-		{arr, []NamedType{td}, "type t [1]TD"},
+		{td, []Type{td}, "type t int32"},
+		{arr, []Type{td}, "type t [1]TD"},
 	}
 
 	for _, test := range tests {

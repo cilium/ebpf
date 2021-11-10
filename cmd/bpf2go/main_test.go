@@ -62,6 +62,7 @@ func TestRun(t *testing.T) {
 
 	err = run(io.Discard, "foo", tmpDir, []string{
 		"-cc", "clang-9",
+		"-strip", "llvm-strip-9",
 		"bar",
 		filepath.Join(dir, "test.c"),
 	})
@@ -101,6 +102,22 @@ func TestHelp(t *testing.T) {
 
 	if stdout.Len() == 0 {
 		t.Error("-help doesn't write to stdout")
+	}
+}
+
+func TestDisableStripping(t *testing.T) {
+	dir := mustWriteTempFile(t, "test.c", minimalSocketFilter)
+
+	err := run(io.Discard, "foo", dir, []string{
+		"-cc", "clang-9",
+		"-strip", "binary-that-certainly-doesnt-exist",
+		"-no-strip",
+		"bar",
+		filepath.Join(dir, "test.c"),
+	})
+
+	if err != nil {
+		t.Fatal("Can't run with stripping disabled:", err)
 	}
 }
 
@@ -197,12 +214,13 @@ func TestConvertGOARCH(t *testing.T) {
 	)
 
 	b2g := bpf2go{
-		pkg:        "test",
-		stdout:     io.Discard,
-		ident:      "test",
-		cc:         "clang-9",
-		sourceFile: tmp + "/test.c",
-		outputDir:  tmp,
+		pkg:              "test",
+		stdout:           io.Discard,
+		ident:            "test",
+		cc:               "clang-9",
+		disableStripping: true,
+		sourceFile:       tmp + "/test.c",
+		outputDir:        tmp,
 	}
 
 	if err := b2g.convert(targetByGoArch["amd64"], nil); err != nil {

@@ -252,12 +252,6 @@ func (b2g *bpf2go) convert(tgt target, arches []string) (err error) {
 	}
 	defer removeOnError(goFile)
 
-	obj, err := os.Open(objFileName)
-	if err != nil {
-		return err
-	}
-	defer obj.Close()
-
 	err = writeCommon(writeArgs{
 		pkg:   b2g.pkg,
 		ident: b2g.ident,

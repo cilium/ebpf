@@ -14,7 +14,7 @@ import (
 	"github.com/cilium/ebpf/internal/testutils"
 )
 
-func parseVmLinux(tb testing.TB) (*Spec, error) {
+func parseVMLinuxBTF(tb testing.TB) (*Spec, error) {
 	fh, err := os.Open("testdata/vmlinux-btf.gz")
 	if err != nil {
 		tb.Fatal(err)
@@ -34,13 +34,52 @@ func parseVmLinux(tb testing.TB) (*Spec, error) {
 	return spec, nil
 }
 
-func TestFindType(t *testing.T) {
-	spec, err := parseVmLinux(t)
+func parseELFBTF(tb testing.TB, file string) (*Spec, error) {
+	fh, err := os.Open(file)
+	if err != nil {
+		tb.Fatal(err)
+	}
+	defer fh.Close()
+
+	elf, err := internal.NewSafeELFFile(fh)
+	if err != nil {
+		tb.Fatal(err)
+	}
+
+	sec := elf.Section(".BTF")
+	if sec == nil {
+		tb.Fatalf("ELF %s does not contain .BTF section", file)
+	}
+	rd := sec.Open()
+
+	return loadRawSpec(rd, elf.ByteOrder, nil, nil)
+}
+
+func TestAnyTypesByName(t *testing.T) {
+	testutils.Files(t, testutils.Glob(t, "testdata/relocs-*.elf"), func(t *testing.T, file string) {
+		spec, err := parseELFBTF(t, file)
+		if err != nil {
+			t.Fatalf("parsing ELF BTF: %v", err)
+		}
+
+		types, err := spec.AnyTypesByName("ambiguous")
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if len(types) != 2 {
+			t.Fatalf("expected to receive exactly 2 types from querying ambiguous type, got: %v", types)
+		}
+	})
+}
+
+func TestTypeByName(t *testing.T) {
+	spec, err := parseVMLinuxBTF(t)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	// spec.FindType MUST fail if typ is not a non-nil **T, where T satisfies btf.Type.
+	// spec.TypeByName MUST fail if typ is a nil btf.Type.
 	i := 0
 	p := &i
 	for _, typ := range []interface{}{
@@ -54,33 +93,33 @@ func TestFindType(t *testing.T) {
 		p,
 		&p,
 	} {
-		if err := spec.FindType("iphdr", typ); err == nil {
-			t.Fatalf("FindType does not fail with type %T", typ)
+		if err := spec.TypeByName("iphdr", typ); err == nil {
+			t.Fatalf("TypeByName does not fail with type %T", typ)
 		}
 	}
 
-	// spec.FindType MUST return the same address for multiple calls with the same type name.
+	// spec.TypeByName MUST return the same address for multiple calls with the same type name.
 	var iphdr1, iphdr2 *Struct
-	if err := spec.FindType("iphdr", &iphdr1); err != nil {
+	if err := spec.TypeByName("iphdr", &iphdr1); err != nil {
 		t.Fatal(err)
 	}
-	if err := spec.FindType("iphdr", &iphdr2); err != nil {
+	if err := spec.TypeByName("iphdr", &iphdr2); err != nil {
 		t.Fatal(err)
 	}
 
 	if iphdr1 != iphdr2 {
-		t.Fatal("multiple FindType calls for `iphdr` name do not return the same addresses")
+		t.Fatal("multiple TypeByName calls for `iphdr` name do not return the same addresses")
 	}
 }
 
 func TestParseVmlinux(t *testing.T) {
-	spec, err := parseVmLinux(t)
+	spec, err := parseVMLinuxBTF(t)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	var iphdr *Struct
-	err = spec.FindType("iphdr", &iphdr)
+	err = spec.TypeByName("iphdr", &iphdr)
 	if err != nil {
 		t.Fatalf("unable to find `iphdr` struct: %s", err)
 	}
@@ -181,18 +220,26 @@ func TestLoadSpecFromElf(t *testing.T) {
 			t.Error("Missing BTF for the socket section")
 		}
 
+		vt, err := spec.TypeByID(0)
+		if err != nil {
+			t.Error("Can't retrieve void type by ID:", err)
+		}
+		if _, ok := vt.(*Void); !ok {
+			t.Errorf("Expected Void for type id 0, but got: %T", vt)
+		}
+
 		var bpfMapDef *Struct
-		if err := spec.FindType("bpf_map_def", &bpfMapDef); err != nil {
+		if err := spec.TypeByName("bpf_map_def", &bpfMapDef); err != nil {
 			t.Error("Can't find bpf_map_def:", err)
 		}
 
 		var tmp *Void
-		if err := spec.FindType("totally_bogus_type", &tmp); !errors.Is(err, ErrNotFound) {
-			t.Error("FindType doesn't return ErrNotFound:", err)
+		if err := spec.TypeByName("totally_bogus_type", &tmp); !errors.Is(err, ErrNotFound) {
+			t.Error("TypeByName doesn't return ErrNotFound:", err)
 		}
 
 		var fn *Func
-		if err := spec.FindType("global_fn", &fn); err != nil {
+		if err := spec.TypeByName("global_fn", &fn); err != nil {
 			t.Error("Can't find global_fn():", err)
 		} else {
 			if fn.Linkage != GlobalFunc {
@@ -201,7 +248,7 @@ func TestLoadSpecFromElf(t *testing.T) {
 		}
 
 		var v *Var
-		if err := spec.FindType("key3", &v); err != nil {
+		if err := spec.TypeByName("key3", &v); err != nil {
 			t.Error("Cant find key3:", err)
 		} else {
 			if v.Linkage != GlobalVar {
@@ -274,14 +321,14 @@ func TestHaveFuncLinkage(t *testing.T) {
 	testutils.CheckFeatureTest(t, haveFuncLinkage)
 }
 
-func ExampleSpec_FindType() {
+func ExampleSpec_TypeByName() {
 	// Acquire a Spec via one of its constructors.
 	spec := new(Spec)
 
 	// Declare a variable of the desired type
 	var foo *Struct
 
-	if err := spec.FindType("foo", &foo); err != nil {
+	if err := spec.TypeByName("foo", &foo); err != nil {
 		// There is no struct with name foo, or there
 		// are multiple possibilities.
 	}

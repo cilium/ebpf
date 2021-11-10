@@ -132,7 +132,7 @@ import (
 		fmt.Println("enum", o.goType)
 
 		var t *btf.Enum
-		if err := spec.FindType(o.cType, &t); err != nil {
+		if err := spec.TypeByName(o.cType, &t); err != nil {
 			return nil, err
 		}
 
@@ -192,7 +192,7 @@ import (
 		fmt.Println("struct", s.goType)
 
 		var t *btf.Struct
-		if err := spec.FindType(s.cType, &t); err != nil {
+		if err := spec.TypeByName(s.cType, &t); err != nil {
 			return nil, err
 		}
 
@@ -414,7 +414,7 @@ func outputPatchedStruct(gf *btf.GoFormatter, w *bytes.Buffer, id string, s *btf
 
 func splitBpfAttr(spec *btf.Spec) (map[string]*btf.Struct, error) {
 	var bpfAttr *btf.Union
-	if err := spec.FindType("bpf_attr", &bpfAttr); err != nil {
+	if err := spec.TypeByName("bpf_attr", &bpfAttr); err != nil {
 		return nil, err
 	}
 
@@ -564,7 +564,7 @@ func flattenAnon(s *btf.Struct) error {
 		m := &s.Members[i]
 
 		cs, ok := m.Type.(*btf.Struct)
-		if !ok || cs.Name != "" {
+		if !ok || cs.TypeName() != "" {
 			continue
 		}
 

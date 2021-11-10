@@ -1,4 +1,4 @@
-package main
+package test
 
 import (
 	"testing"
@@ -8,7 +8,7 @@ import (
 )
 
 func TestLoadingSpec(t *testing.T) {
-	spec, err := loadExample()
+	spec, err := loadTest()
 	if err != nil {
 		t.Fatal("Can't load spec:", err)
 	}
@@ -19,8 +19,8 @@ func TestLoadingSpec(t *testing.T) {
 }
 
 func TestLoadingObjects(t *testing.T) {
-	var objs exampleObjects
-	if err := loadExampleObjects(&objs, nil); err != nil {
+	var objs testObjects
+	if err := loadTestObjects(&objs, nil); err != nil {
 		t.Fatal("Can't load objects:", err)
 	}
 	defer objs.Close()

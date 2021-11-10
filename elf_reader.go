@@ -554,7 +554,7 @@ func (ec *elfCode) loadBTFMaps(maps map[string]*MapSpec) error {
 
 		// Each section must appear as a DataSec in the ELF's BTF blob.
 		var ds *btf.Datasec
-		if err := ec.btf.FindType(sec.Name, &ds); err != nil {
+		if err := ec.btf.TypeByName(sec.Name, &ds); err != nil {
 			return fmt.Errorf("cannot find section '%s' in BTF: %w", sec.Name, err)
 		}
 
@@ -926,7 +926,7 @@ func (ec *elfCode) loadDataSections(maps map[string]*MapSpec) error {
 		}
 
 		var datasec *btf.Datasec
-		if err := ec.btf.FindType(sec.Name, &datasec); err != nil {
+		if err := ec.btf.TypeByName(sec.Name, &datasec); err != nil {
 			return fmt.Errorf("data section %s: can't get BTF: %w", sec.Name, err)
 		}
 

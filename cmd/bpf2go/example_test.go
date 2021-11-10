@@ -4,7 +4,8 @@ import (
 	"fmt"
 )
 
-//go:generate go run github.com/cilium/ebpf/cmd/bpf2go -cc $BPF_CLANG example testdata/minimal.c
+// $BPF_CLANG, $BPF_STRIP and $BPF_CFLAGS are set by the Makefile.
+//go:generate go run github.com/cilium/ebpf/cmd/bpf2go -cc $BPF_CLANG -strip $BPF_STRIP example testdata/minimal.c
 
 func Example() {
 	var objs exampleObjects

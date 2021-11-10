@@ -61,6 +61,7 @@ all: $(addsuffix -el.elf,$(TARGETS)) $(addsuffix -eb.elf,$(TARGETS)) generate
 # $BPF_CLANG is used in go:generate invocations. We can't use clang-12
 # since it's not available on CI.
 generate: export BPF_CLANG := clang-9
+generate: export BPF_STRIP := llvm-strip-9
 generate: export BPF_CFLAGS := $(CFLAGS)
 generate:
 	go generate ./cmd/bpf2go

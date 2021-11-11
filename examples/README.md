@@ -12,6 +12,8 @@
   * [tracepoint_in_go](tracepoint_in_go/) - Tracepoint using the `ebpf.NewProgram` API and Go eBPF assembler.
 * Cgroup - Attach a program to control groups (cgroups).
   * [cgroup_skb](cgroup_skb/) - Count packets egressing the current cgroup.
+* Fentry - It's roughly equivalent to kprobe but it provides better performance and usability.
+  * [tcp_connect](fentry/) - Trace IPv4 TCP connect (SYN) using bpf2go.  
 * Add your use case(s) here!
 
 ## How to run

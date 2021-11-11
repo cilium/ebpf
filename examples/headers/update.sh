@@ -8,6 +8,8 @@ prefix=libbpf-"$LIBBPF_VERSION"
 headers=(
     "$prefix"/src/bpf_helper_defs.h
     "$prefix"/src/bpf_helpers.h
+    "$prefix"/src/bpf_tracing.h
+    "$prefix"/src/bpf_endian.h
 )
 
 # Fetch libbpf release and extract the desired headers

@@ -810,6 +810,17 @@ func ProgAttach(attr *ProgAttachAttr) error {
 	return err
 }
 
+type ProgBindMapAttr struct {
+	ProgFd uint32
+	MapFd  uint32
+	Flags  uint32
+}
+
+func ProgBindMap(attr *ProgBindMapAttr) error {
+	_, err := BPF(BPF_PROG_BIND_MAP, unsafe.Pointer(attr), unsafe.Sizeof(*attr))
+	return err
+}
+
 type ProgDetachAttr struct {
 	TargetFd    uint32
 	AttachBpfFd uint32

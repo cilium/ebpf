@@ -270,6 +270,10 @@ import (
 			},
 		},
 		{
+			"ProgBindMap", retError, "prog_bind_map", "BPF_PROG_BIND_MAP",
+			nil,
+		},
+		{
 			"ObjPin", retError, "obj_pin", "BPF_OBJ_PIN",
 			[]patch{replace(pointer, "pathname")},
 		},

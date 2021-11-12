@@ -7,8 +7,12 @@ import (
 	"github.com/cilium/ebpf/internal/btf"
 )
 
-type freplaceLink struct {
+type tracing struct {
 	RawLink
+}
+
+func (f *tracing) Update(new *ebpf.Program) error {
+	return fmt.Errorf("tracing update: %w", ErrNotSupported)
 }
 
 // AttachFreplace attaches the given eBPF program to the function it replaces.
@@ -69,11 +73,7 @@ func AttachFreplace(targetProg *ebpf.Program, name string, prog *ebpf.Program) (
 		return nil, err
 	}
 
-	return &freplaceLink{*link}, nil
-}
-
-func (f *freplaceLink) Update(new *ebpf.Program) error {
-	return fmt.Errorf("freplace update: %w", ErrNotSupported)
+	return &tracing{*link}, nil
 }
 
 // LoadPinnedFreplace loads a pinned iterator from a bpffs.
@@ -83,5 +83,5 @@ func LoadPinnedFreplace(fileName string, opts *ebpf.LoadPinOptions) (Link, error
 		return nil, err
 	}
 
-	return &freplaceLink{*link}, err
+	return &tracing{*link}, err
 }

@@ -90,6 +90,9 @@ func NewObjName(name string) ObjName {
 	return result
 }
 
+// LinkID uniquely identifies a bpf_link.
+type LinkID uint32
+
 // wrappedErrno wraps syscall.Errno to prevent direct comparisons with
 // syscall.E* or unix.E* constants.
 //

@@ -40,7 +40,7 @@ type Link interface {
 }
 
 // ID uniquely identifies a BPF link.
-type ID uint32
+type ID = sys.LinkID
 
 // RawLinkOptions control the creation of a raw link.
 type RawLinkOptions struct {
@@ -212,8 +212,8 @@ func (l *RawLink) Info() (*RawLinkInfo, error) {
 	}
 
 	return &RawLinkInfo{
-		Type(info.Type),
-		ID(info.Id),
+		info.Type,
+		info.Id,
 		ebpf.ProgramID(info.ProgId),
 	}, nil
 }

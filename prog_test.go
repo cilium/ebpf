@@ -677,6 +677,34 @@ func TestProgramTargetBTF(t *testing.T) {
 	}
 }
 
+func TestProgramBindMap(t *testing.T) {
+	testutils.SkipOnOldKernel(t, "5.10", "BPF_PROG_BIND_MAP")
+
+	arr, err := NewMap(&MapSpec{
+		Type:       Array,
+		KeySize:    4,
+		ValueSize:  4,
+		MaxEntries: 1,
+	})
+	if err != nil {
+		t.Errorf("Failed to load map: %v", err)
+	}
+	defer arr.Close()
+
+	prog, err := NewProgram(socketFilterSpec)
+	if err != nil {
+		t.Errorf("Failed to load program: %v", err)
+	}
+	defer prog.Close()
+
+	// The attached map does not contain BTF information. So
+	// the metadata part of the program will be empty. This
+	// test just makes sure that we can bind a map to a program.
+	if err := prog.BindMap(arr); err != nil {
+		t.Errorf("Failed to bind map to program: %v", err)
+	}
+}
+
 type testReaderAt struct {
 	file *os.File
 	read bool

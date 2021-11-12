@@ -697,6 +697,19 @@ func (p *Program) ID() (ProgramID, error) {
 	return ProgramID(info.Id), nil
 }
 
+// BindMap binds map to the program and is only released once program is released.
+//
+// This may be used in cases where metadata should be associated with the program
+// which otherwise does not contain any references to the map.
+func (p *Program) BindMap(m *Map) error {
+	attr := &sys.ProgBindMapAttr{
+		ProgFd: uint32(p.FD()),
+		MapFd:  uint32(m.FD()),
+	}
+
+	return sys.ProgBindMap(attr)
+}
+
 func resolveBTFType(spec *btf.Spec, name string, progType ProgramType, attachType AttachType) (btf.Type, error) {
 	type match struct {
 		p ProgramType

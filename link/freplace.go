@@ -7,7 +7,7 @@ import (
 	"github.com/cilium/ebpf/internal/btf"
 )
 
-type FreplaceLink struct {
+type freplaceLink struct {
 	RawLink
 }
 
@@ -20,7 +20,7 @@ type FreplaceLink struct {
 //
 //	AttachFreplace(dispatcher, "function", replacement)
 //	AttachFreplace(nil, "", replacement)
-func AttachFreplace(targetProg *ebpf.Program, name string, prog *ebpf.Program) (*FreplaceLink, error) {
+func AttachFreplace(targetProg *ebpf.Program, name string, prog *ebpf.Program) (Link, error) {
 	if (name == "") != (targetProg == nil) {
 		return nil, fmt.Errorf("must provide both or neither of name and targetProg: %w", errInvalidInput)
 	}
@@ -69,20 +69,19 @@ func AttachFreplace(targetProg *ebpf.Program, name string, prog *ebpf.Program) (
 		return nil, err
 	}
 
-	return &FreplaceLink{*link}, nil
+	return &freplaceLink{*link}, nil
 }
 
-// Update implements the Link interface.
-func (f *FreplaceLink) Update(new *ebpf.Program) error {
+func (f *freplaceLink) Update(new *ebpf.Program) error {
 	return fmt.Errorf("freplace update: %w", ErrNotSupported)
 }
 
 // LoadPinnedFreplace loads a pinned iterator from a bpffs.
-func LoadPinnedFreplace(fileName string, opts *ebpf.LoadPinOptions) (*FreplaceLink, error) {
+func LoadPinnedFreplace(fileName string, opts *ebpf.LoadPinOptions) (Link, error) {
 	link, err := LoadPinnedRawLink(fileName, TracingType, opts)
 	if err != nil {
 		return nil, err
 	}
 
-	return &FreplaceLink{*link}, err
+	return &freplaceLink{*link}, err
 }

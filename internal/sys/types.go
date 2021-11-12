@@ -425,7 +425,7 @@ type LineInfo struct {
 
 type LinkInfo struct {
 	Type   LinkType
-	Id     uint32
+	Id     LinkID
 	ProgId uint32
 }
 

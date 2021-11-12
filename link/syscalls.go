@@ -11,19 +11,17 @@ import (
 )
 
 // Type is the kind of link.
-type Type uint32
+type Type = sys.LinkType
 
 // Valid link types.
-//
-// Equivalent to enum bpf_link_type.
 const (
-	UnspecifiedType Type = iota
-	RawTracepointType
-	TracingType
-	CgroupType
-	IterType
-	NetNsType
-	XDPType
+	UnspecifiedType   = sys.BPF_LINK_TYPE_UNSPEC
+	RawTracepointType = sys.BPF_LINK_TYPE_RAW_TRACEPOINT
+	TracingType       = sys.BPF_LINK_TYPE_TRACING
+	CgroupType        = sys.BPF_LINK_TYPE_CGROUP
+	IterType          = sys.BPF_LINK_TYPE_ITER
+	NetNsType         = sys.BPF_LINK_TYPE_NETNS
+	XDPType           = sys.BPF_LINK_TYPE_XDP
 )
 
 var haveProgAttach = internal.FeatureTest("BPF_PROG_ATTACH", "4.10", func() error {

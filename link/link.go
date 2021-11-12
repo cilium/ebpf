@@ -52,6 +52,8 @@ type RawLinkOptions struct {
 	Attach ebpf.AttachType
 	// BTF is the BTF of the attachment target.
 	BTF btf.TypeID
+	// Flags control the attach behaviour.
+	Flags uint32
 }
 
 // RawLinkInfo contains metadata on a link.
@@ -90,6 +92,7 @@ func AttachRawLink(opts RawLinkOptions) (*RawLink, error) {
 		ProgFd:      uint32(progFd),
 		AttachType:  sys.AttachType(opts.Attach),
 		TargetBtfId: uint32(opts.BTF),
+		Flags:       opts.Flags,
 	}
 	fd, err := sys.LinkCreate(&attr)
 	if err != nil {

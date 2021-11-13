@@ -9,8 +9,10 @@ CFLAGS := -O2 -g -Wall -Werror $(CFLAGS)
 REPODIR := $(shell dirname $(realpath $(firstword $(MAKEFILE_LIST))))
 UIDGID := $(shell stat -c '%u:%g' ${REPODIR})
 
-CONTAINER_ENGINE ?= docker
-CONTAINER_RUN_ARGS ?= --user "${UIDGID}"
+# Prefer podman if installed, otherwise use docker.
+# Note: Setting the var at runtime will always override.
+CONTAINER_ENGINE ?= $(if $(shell command -v podman), podman, docker)
+CONTAINER_RUN_ARGS ?= $(if $(filter ${CONTAINER_ENGINE}, podman),, --user "${UIDGID}")
 
 IMAGE := $(shell cat ${REPODIR}/testdata/docker/IMAGE)
 VERSION := $(shell cat ${REPODIR}/testdata/docker/VERSION)

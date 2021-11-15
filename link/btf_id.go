@@ -20,6 +20,7 @@ type TraceOptions struct {
 	// AttachTraceRawTp.
 	Program *ebpf.Program
 }
+
 type LSMOptions struct {
 	// Program must be of type LSM with attach type
 	// AttachLSMMac.
@@ -48,6 +49,19 @@ func attachBTFID(program *ebpf.Program) (Link, error) {
 		return nil, err
 	}
 
+	raw := RawLink{fd: fd}
+	info, err := raw.Info()
+	if err != nil {
+		raw.Close()
+		return nil, err
+	}
+
+	if info.Type == RawTracepointType {
+		// Sadness upon sadness: a Tracing program with AttachRawTp returns
+		// a raw_tracepoint link. Other types return a tracing link.
+		return &rawTracepoint{raw}, nil
+	}
+
 	return &btfIDLink{RawLink: RawLink{fd: fd}}, nil
 }
 
@@ -67,16 +81,6 @@ func AttachLSM(opts LSMOptions) (Link, error) {
 // LoadPinnedTrace loads a tracing/LSM link from a bpffs.
 func LoadPinnedTrace(fileName string, opts *ebpf.LoadPinOptions) (Link, error) {
 	link, err := LoadPinnedRawLink(fileName, TracingType, opts)
-	if err != nil {
-		return nil, err
-	}
-
-	return &btfIDLink{*link}, err
-}
-
-// LoadPinnedTraceRawTP loads a tp_btf link from a bpffs.
-func LoadPinnedTraceRawTP(fileName string, opts *ebpf.LoadPinOptions) (Link, error) {
-	link, err := LoadPinnedRawLink(fileName, RawTracepointType, opts)
 	if err != nil {
 		return nil, err
 	}

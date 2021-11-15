@@ -7,13 +7,6 @@ import (
 	"github.com/cilium/ebpf/internal/sys"
 )
 
-var _ Link = (*btfIDLink)(nil)
-
-// btfIDLink is a program attached to a btf_id.
-type btfIDLink struct {
-	RawLink
-}
-
 type TraceOptions struct {
 	// Program must be of type Tracing with attach type
 	// AttachTraceFEntry/AttachTraceFExit/AttachModifyReturn or
@@ -25,11 +18,6 @@ type LSMOptions struct {
 	// Program must be of type LSM with attach type
 	// AttachLSMMac.
 	Program *ebpf.Program
-}
-
-// Update implements the Link interface.
-func (*btfIDLink) Update(_ *ebpf.Program) error {
-	return fmt.Errorf("can't update fentry/fexit/fmod_ret/tp_raw/lsm: %w", ErrNotSupported)
 }
 
 // attachBTFID links all BPF program types (Tracing/LSM) that they attach to a btf_id.
@@ -62,7 +50,7 @@ func attachBTFID(program *ebpf.Program) (Link, error) {
 		return &rawTracepoint{raw}, nil
 	}
 
-	return &btfIDLink{RawLink: RawLink{fd: fd}}, nil
+	return &tracing{RawLink: RawLink{fd: fd}}, nil
 }
 
 // AttachTrace links a tracing (fentry/fexit/fmod_ret) BPF program or
@@ -85,5 +73,5 @@ func LoadPinnedTrace(fileName string, opts *ebpf.LoadPinOptions) (Link, error) {
 		return nil, err
 	}
 
-	return &btfIDLink{*link}, err
+	return &tracing{*link}, err
 }

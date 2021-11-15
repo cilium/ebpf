@@ -237,7 +237,7 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions, handles *hand
 		return nil, err
 	}
 
-	buf := bytes.NewBuffer(make([]byte, 0, len(spec.Instructions)*asm.InstructionSize))
+	buf := bytes.NewBuffer(make([]byte, 0, insns.Size()))
 	err = insns.Marshal(buf, internal.NativeEndian)
 	if err != nil {
 		return nil, err

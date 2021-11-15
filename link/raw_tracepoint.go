@@ -1,6 +1,7 @@
 package link
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/cilium/ebpf"
@@ -33,29 +34,60 @@ func AttachRawTracepoint(opts RawTracepointOptions) (Link, error) {
 		return nil, err
 	}
 
-	return &progAttachRawTracepoint{fd: fd}, nil
+	err = haveBPFLink()
+	if errors.Is(err, ErrNotSupported) {
+		// Prior to commit 70ed506c3bbc ("bpf: Introduce pinnable bpf_link abstraction")
+		// raw_tracepoints are just a plain fd.
+		return &simpleRawTracepoint{fd}, nil
+	}
+
+	if err != nil {
+		return nil, err
+	}
+
+	return &rawTracepoint{RawLink{fd: fd}}, nil
 }
 
-type progAttachRawTracepoint struct {
+// LoadPinnedRawTracepoint loads a raw_tracepoint link from a bpffs.
+func LoadPinnedRawTracepoint(fileName string, opts *ebpf.LoadPinOptions) (Link, error) {
+	link, err := LoadPinnedRawLink(fileName, RawTracepointType, opts)
+	if err != nil {
+		return nil, err
+	}
+
+	return &rawTracepoint{*link}, err
+}
+
+type simpleRawTracepoint struct {
 	fd *sys.FD
 }
 
-var _ Link = (*progAttachRawTracepoint)(nil)
+var _ Link = (*simpleRawTracepoint)(nil)
 
-func (rt *progAttachRawTracepoint) isLink() {}
+func (frt *simpleRawTracepoint) isLink() {}
 
-func (rt *progAttachRawTracepoint) Close() error {
-	return rt.fd.Close()
+func (frt *simpleRawTracepoint) Close() error {
+	return frt.fd.Close()
 }
 
-func (rt *progAttachRawTracepoint) Update(_ *ebpf.Program) error {
-	return fmt.Errorf("can't update raw_tracepoint: %w", ErrNotSupported)
+func (frt *simpleRawTracepoint) Update(_ *ebpf.Program) error {
+	return fmt.Errorf("update raw_tracepoint: %w", ErrNotSupported)
 }
 
-func (rt *progAttachRawTracepoint) Pin(_ string) error {
-	return fmt.Errorf("can't pin raw_tracepoint: %w", ErrNotSupported)
+func (frt *simpleRawTracepoint) Pin(string) error {
+	return fmt.Errorf("pin raw_tracepoint: %w", ErrNotSupported)
 }
 
-func (rt *progAttachRawTracepoint) Unpin() error {
+func (frt *simpleRawTracepoint) Unpin() error {
 	return fmt.Errorf("unpin raw_tracepoint: %w", ErrNotSupported)
+}
+
+type rawTracepoint struct {
+	RawLink
+}
+
+var _ Link = (*rawTracepoint)(nil)
+
+func (rt *rawTracepoint) Update(_ *ebpf.Program) error {
+	return fmt.Errorf("update raw_tracepoint: %w", ErrNotSupported)
 }

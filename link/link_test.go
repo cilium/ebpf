@@ -129,17 +129,10 @@ func testLink(t *testing.T, link Link, opts testLinkOptions) {
 	}
 	defer os.RemoveAll(tmp)
 
-	path := filepath.Join(tmp, "link")
-	err = link.Pin(path)
-	if err == ErrNotSupported {
-		t.Errorf("%T.Pin returns unwrapped ErrNotSupported", link)
-	}
-
-	if opts.loadPinned == nil {
-		if !errors.Is(err, ErrNotSupported) {
-			t.Errorf("%T.Pin doesn't return ErrNotSupported: %s", link, err)
-		}
-	} else {
+	t.Run("pinning", func(t *testing.T) {
+		path := filepath.Join(tmp, "link")
+		err = link.Pin(path)
+		testutils.SkipIfNotSupported(t, err)
 		if err != nil {
 			t.Fatalf("Can't pin %T: %s", link, err)
 		}
@@ -160,16 +153,11 @@ func testLink(t *testing.T, link Link, opts testLinkOptions) {
 		if !errors.Is(err, unix.EINVAL) {
 			t.Errorf("Loading a pinned %T doesn't respect flags", link)
 		}
-	}
+	})
 
 	t.Run("update", func(t *testing.T) {
 		err := link.Update(opts.prog)
-		if err == ErrNotSupported {
-			t.Fatal("Update returns unwrapped ErrNotSupported", link)
-		}
-		if errors.Is(err, ErrNotSupported) {
-			return
-		}
+		testutils.SkipIfNotSupported(t, err)
 		if err != nil {
 			t.Fatal("Update returns an error:", err)
 		}

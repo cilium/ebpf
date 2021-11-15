@@ -52,7 +52,7 @@ func TestFreplace(t *testing.T) {
 	})
 }
 
-func TestTraceLSM(t *testing.T) {
+func TestTracing(t *testing.T) {
 	testutils.SkipOnOldKernel(t, "5.11", "BPF_LINK_TYPE_TRACING")
 	tests := []struct {
 		name        string
@@ -84,12 +84,6 @@ func TestTraceLSM(t *testing.T) {
 			programType: ebpf.Tracing,
 			attachType:  ebpf.AttachTraceRawTp,
 		},
-		{
-			name:        "AttachLSMMac",
-			attachTo:    "file_mprotect",
-			programType: ebpf.LSM,
-			attachType:  ebpf.AttachLSMMac,
-		},
 	}
 
 	for _, tt := range tests {
@@ -109,7 +103,7 @@ func TestTraceLSM(t *testing.T) {
 			}
 			defer prog.Close()
 
-			link, err := AttachTrace(TraceOptions{Program: prog})
+			link, err := AttachTracing(TracingOptions{Program: prog})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -125,4 +119,35 @@ func TestTraceLSM(t *testing.T) {
 			})
 		})
 	}
+}
+
+func TestLSM(t *testing.T) {
+	testutils.SkipOnOldKernel(t, "5.11", "BPF_LINK_TYPE_TRACING")
+
+	prog, err := ebpf.NewProgram(&ebpf.ProgramSpec{
+		Type:       ebpf.LSM,
+		AttachType: ebpf.AttachLSMMac,
+		AttachTo:   "file_mprotect",
+		Instructions: asm.Instructions{
+			asm.LoadImm(asm.R0, 0, asm.DWord),
+			asm.Return(),
+		},
+		License: "GPL",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer prog.Close()
+
+	link, err := AttachLSM(LSMOptions{Program: prog})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	testLink(t, link, testLinkOptions{
+		prog: prog,
+		loadPinned: func(s string, opts *ebpf.LoadPinOptions) (Link, error) {
+			return LoadPinnedTrace(s, opts)
+		},
+	})
 }

@@ -226,7 +226,7 @@ var haveProbeReadKernel = internal.FeatureTest("bpf_probe_read_kernel", "5.5", f
 		asm.FnProbeReadKernel.Call(),
 		asm.Return(),
 	}
-	buf := bytes.NewBuffer(make([]byte, 0, len(insns)*asm.InstructionSize))
+	buf := bytes.NewBuffer(make([]byte, 0, insns.Size()))
 	if err := insns.Marshal(buf, internal.NativeEndian); err != nil {
 		return err
 	}

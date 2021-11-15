@@ -35,6 +35,9 @@ func TestRawTracepoint(t *testing.T) {
 
 	testLink(t, link, testLinkOptions{
 		prog: prog,
+		loadPinned: func(s string, opts *ebpf.LoadPinOptions) (Link, error) {
+			return LoadPinnedRawTracepoint(s, opts)
+		},
 	})
 }
 
@@ -65,5 +68,8 @@ func TestRawTracepoint_writable(t *testing.T) {
 
 	testLink(t, link, testLinkOptions{
 		prog: prog,
+		loadPinned: func(s string, opts *ebpf.LoadPinOptions) (Link, error) {
+			return LoadPinnedRawTracepoint(s, opts)
+		},
 	})
 }

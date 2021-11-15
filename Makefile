@@ -67,7 +67,7 @@ generate: export BPF_CLANG := clang-9
 generate: export BPF_STRIP := llvm-strip-9
 generate: export BPF_CFLAGS := $(CFLAGS)
 generate:
-	go generate ./cmd/bpf2go
+	go generate ./cmd/bpf2go/test
 	cd examples/ && go generate ./...
 
 testdata/loader-%-el.elf: testdata/loader.c

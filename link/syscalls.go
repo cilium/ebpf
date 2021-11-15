@@ -86,27 +86,13 @@ var haveProgAttachReplace = internal.FeatureTest("BPF_PROG_ATTACH atomic replace
 })
 
 var haveBPFLink = internal.FeatureTest("bpf_link", "5.7", func() error {
-	prog, err := ebpf.NewProgram(&ebpf.ProgramSpec{
-		Type:       ebpf.CGroupSKB,
-		AttachType: ebpf.AttachCGroupInetIngress,
-		License:    "MIT",
-		Instructions: asm.Instructions{
-			asm.Mov.Imm(asm.R0, 0),
-			asm.Return(),
-		},
-	})
-	if err != nil {
-		return internal.ErrNotSupported
-	}
-	defer prog.Close()
-
 	attr := sys.LinkCreateAttr{
 		// This is a hopefully invalid file descriptor, which triggers EBADF.
 		TargetFd:   ^uint32(0),
-		ProgFd:     uint32(prog.FD()),
+		ProgFd:     ^uint32(0),
 		AttachType: sys.AttachType(ebpf.AttachCGroupInetIngress),
 	}
-	_, err = sys.LinkCreate(&attr)
+	_, err := sys.LinkCreate(&attr)
 	if errors.Is(err, unix.EINVAL) {
 		return internal.ErrNotSupported
 	}

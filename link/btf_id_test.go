@@ -76,7 +76,7 @@ func TestTraceLSM(t *testing.T) {
 					if tt.attachType != ebpf.AttachTraceRawTp {
 						return LoadPinnedTrace(s, opts)
 					}
-					return LoadPinnedTraceRawTP(s, opts)
+					return LoadPinnedRawTracepoint(s, opts)
 				},
 			})
 

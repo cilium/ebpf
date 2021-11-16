@@ -40,6 +40,11 @@ func TestKernelVersion(t *testing.T) {
 		t.Errorf("256.256.256 should result in a kernel version of %d, got: %d", want, v.Kernel())
 	}
 
+	// kernel tree 4.14 clamps SUBLEVEL to 255 early at 252
+	if v, want := (Version{4, 14, 252}), uint32(265983); v.Kernel() != want {
+		t.Errorf("4.14.252+ should result in a kernel version of %d, got: %d", want, v.Kernel())
+	}
+
 	// Known good version.
 	if v, want := (Version{4, 9, 128}), uint32(264576); v.Kernel() != want {
 		t.Errorf("4.9.1 should result in a kernel version of %d, got: %d", want, v.Kernel())

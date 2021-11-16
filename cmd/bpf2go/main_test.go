@@ -61,8 +61,8 @@ func TestRun(t *testing.T) {
 	)
 
 	err = run(io.Discard, "foo", tmpDir, []string{
-		"-cc", "clang-9",
-		"-strip", "llvm-strip-9",
+		"-cc", clangBin,
+		"-strip", stripBin,
 		"bar",
 		filepath.Join(dir, "test.c"),
 	})
@@ -217,7 +217,7 @@ func TestConvertGOARCH(t *testing.T) {
 		pkg:              "test",
 		stdout:           io.Discard,
 		ident:            "test",
-		cc:               "clang-9",
+		cc:               clangBin,
 		disableStripping: true,
 		sourceFile:       tmp + "/test.c",
 		outputDir:        tmp,

@@ -66,7 +66,6 @@ func createProgLoadAttr(pt ebpf.ProgramType) (*sys.ProgLoadAttr, error) {
 	if err != nil {
 		return nil, fmt.Errorf("detecting kernel version: %w", err)
 	}
-	kv := v.Kernel()
 
 	return &sys.ProgLoadAttr{
 		ProgType:           sys.ProgType(pt),
@@ -75,7 +74,7 @@ func createProgLoadAttr(pt ebpf.ProgramType) (*sys.ProgLoadAttr, error) {
 		ProgFlags:          progFlags,
 		ExpectedAttachType: sys.AttachType(expectedAttachType),
 		License:            sys.NewStringPointer("GPL"),
-		KernVersion:        kv,
+		KernVersion:        v.Kernel(),
 	}, nil
 }
 

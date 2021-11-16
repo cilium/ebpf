@@ -11,12 +11,18 @@ import (
 
 const minimalSocketFilter = `__attribute__((section("socket"), used)) int main() { return 0; }`
 
+// Test against the minimum supported version of clang to avoid regressions.
+const (
+	clangBin = "clang-9"
+	stripBin = "llvm-strip-9"
+)
+
 func TestCompile(t *testing.T) {
 	dir := mustWriteTempFile(t, "test.c", minimalSocketFilter)
 
 	var dep bytes.Buffer
 	err := compile(compileArgs{
-		cc:     "clang-9",
+		cc:     clangBin,
 		dir:    dir,
 		source: filepath.Join(dir, "test.c"),
 		dest:   filepath.Join(dir, "test.o"),
@@ -48,7 +54,7 @@ func TestReproducibleCompile(t *testing.T) {
 	dir := mustWriteTempFile(t, "test.c", minimalSocketFilter)
 
 	err := compile(compileArgs{
-		cc:     "clang-9",
+		cc:     clangBin,
 		dir:    dir,
 		source: filepath.Join(dir, "test.c"),
 		dest:   filepath.Join(dir, "a.o"),
@@ -58,7 +64,7 @@ func TestReproducibleCompile(t *testing.T) {
 	}
 
 	err = compile(compileArgs{
-		cc:     "clang-9",
+		cc:     clangBin,
 		dir:    dir,
 		source: filepath.Join(dir, "test.c"),
 		dest:   filepath.Join(dir, "b.o"),
@@ -86,7 +92,7 @@ func TestTriggerMissingTarget(t *testing.T) {
 	dir := mustWriteTempFile(t, "test.c", `_Pragma(__BPF_TARGET_MISSING);`)
 
 	err := compile(compileArgs{
-		cc:     "clang-9",
+		cc:     clangBin,
 		dir:    dir,
 		source: filepath.Join(dir, "test.c"),
 		dest:   filepath.Join(dir, "a.o"),

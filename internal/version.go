@@ -76,14 +76,20 @@ func (v Version) Kernel() uint32 {
 	// Kernels 4.4 and 4.9 have their SUBLEVEL clamped to 255 to avoid
 	// overflowing into PATCHLEVEL.
 	// See kernel commit 9b82f13e7ef3 ("kbuild: clamp SUBLEVEL to 255").
-	s := v[2]
-	if s > 255 {
-		s = 255
+	maj, min, sub := v[0], v[1], v[2]
+	if sub > 255 {
+		sub = 255
+	}
+
+	// clamp SUBLEVEL to 255 EARLY in 4.14.252 because they merged this too early:
+	// https://github.com/torvalds/linux/commit/e131e0e880f942f138c4b5e6af944c7ddcd7ec96
+	if maj == 4 && min == 14 && sub >= 252 {
+		sub = 255
 	}
 
 	// Truncate members to uint8 to prevent them from spilling over into
 	// each other when overflowing 8 bits.
-	return uint32(uint8(v[0]))<<16 | uint32(uint8(v[1]))<<8 | uint32(uint8(s))
+	return uint32(uint8(maj))<<16 | uint32(uint8(min))<<8 | uint32(uint8(sub))
 }
 
 // KernelVersion returns the version of the currently running kernel.

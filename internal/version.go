@@ -29,6 +29,12 @@ var (
 		version Version
 		err     error
 	}{}
+
+	versionCode = struct {
+		once sync.Once
+		code uint32
+		err  error
+	}{}
 )
 
 // A Version in the form Major.Minor.Patch.
@@ -84,6 +90,24 @@ func (v Version) Kernel() uint32 {
 	// Truncate members to uint8 to prevent them from spilling over into
 	// each other when overflowing 8 bits.
 	return uint32(uint8(v[0]))<<16 | uint32(uint8(v[1]))<<8 | uint32(uint8(s))
+}
+
+// LinuxVersionCode returns the kernel version as represented by LINUX_VERSION_CODE from linux/version.h.
+// It correctly handles sublevel clamping for values > 255.
+func LinuxVersionCode() (uint32, error) {
+	versionCode.once.Do(func() {
+		versionCode.code, versionCode.err = vdsoVersion()
+		if versionCode.err != nil {
+			var kv Version
+			kv, versionCode.err = KernelVersion()
+			versionCode.code = kv.Kernel()
+		}
+	})
+
+	if versionCode.err != nil {
+		return 0, versionCode.err
+	}
+	return versionCode.code, nil
 }
 
 // KernelVersion returns the version of the currently running kernel.

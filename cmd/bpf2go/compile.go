@@ -207,3 +207,12 @@ func parseDependencies(baseDir string, in io.Reader) ([]dependency, error) {
 	}
 	return deps, nil
 }
+
+func strip(exe string, file string) error {
+	cmd := exec.Command(exe, "-g", file)
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("%s: %s", exe, err)
+	}
+	return nil
+}

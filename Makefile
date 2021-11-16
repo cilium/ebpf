@@ -2,6 +2,7 @@
 # while stable/released versions have a version number attached.
 # Pin the default clang to a stable version.
 CLANG ?= clang-12
+STRIP ?= llvm-strip-12
 CFLAGS := -O2 -g -Wall -Werror $(CFLAGS)
 
 # Obtain an absolute path to the directory of the Makefile.
@@ -64,22 +65,27 @@ all: $(addsuffix -el.elf,$(TARGETS)) $(addsuffix -eb.elf,$(TARGETS)) generate
 # $BPF_CLANG is used in go:generate invocations. We can't use clang-12
 # since it's not available on CI.
 generate: export BPF_CLANG := clang-9
+generate: export BPF_STRIP := llvm-strip-9
 generate: export BPF_CFLAGS := $(CFLAGS)
 generate:
-	go generate ./cmd/bpf2go
+	go generate ./cmd/bpf2go/test
 	cd examples/ && go generate ./...
 
 testdata/loader-%-el.elf: testdata/loader.c
 	$* $(CFLAGS) -target bpfel -c $< -o $@
+	$(STRIP) -g $@
 
 testdata/loader-%-eb.elf: testdata/loader.c
 	$* $(CFLAGS) -target bpfeb -c $< -o $@
+	$(STRIP) -g $@
 
 %-el.elf: %.c
 	$(CLANG) $(CFLAGS) -target bpfel -c $< -o $@
+	$(STRIP) -g $@
 
 %-eb.elf : %.c
 	$(CLANG) $(CFLAGS) -target bpfeb -c $< -o $@
+	$(STRIP) -g $@
 
 # Usage: make VMLINUX=/path/to/vmlinux vmlinux-btf
 .PHONY: vmlinux-btf

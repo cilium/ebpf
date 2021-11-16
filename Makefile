@@ -1,8 +1,8 @@
 # The development version of clang is distributed as the 'clang' binary,
 # while stable/released versions have a version number attached.
 # Pin the default clang to a stable version.
-CLANG ?= clang-12
-STRIP ?= llvm-strip-12
+CLANG ?= clang-13
+STRIP ?= llvm-strip-13
 CFLAGS := -O2 -g -Wall -Werror $(CFLAGS)
 
 # Obtain an absolute path to the directory of the Makefile.
@@ -35,7 +35,7 @@ TARGETS := \
 	testdata/map_spin_lock \
 	internal/btf/testdata/relocs
 
-.PHONY: all clean container-all container-shell
+.PHONY: all clean container-all container-shell generate
 
 .DEFAULT_TARGET = container-all
 
@@ -62,10 +62,9 @@ all: $(addsuffix -el.elf,$(TARGETS)) $(addsuffix -eb.elf,$(TARGETS)) generate
 	ln -srf testdata/loader-$(CLANG)-el.elf testdata/loader-el.elf
 	ln -srf testdata/loader-$(CLANG)-eb.elf testdata/loader-eb.elf
 
-# $BPF_CLANG is used in go:generate invocations. We can't use clang-12
-# since it's not available on CI.
-generate: export BPF_CLANG := clang-9
-generate: export BPF_STRIP := llvm-strip-9
+# $BPF_CLANG is used in go:generate invocations.
+generate: export BPF_CLANG := $(CLANG)
+generate: export BPF_STRIP := $(STRIP)
 generate: export BPF_CFLAGS := $(CFLAGS)
 generate:
 	go generate ./cmd/bpf2go/test

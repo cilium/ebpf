@@ -62,7 +62,7 @@ func createProgLoadAttr(pt ebpf.ProgramType) (*sys.ProgLoadAttr, error) {
 	// Kernels before 5.0 (6c4fc209fcf9 "bpf: remove useless version check for prog load")
 	// require the version field to be set to the value of the KERNEL_VERSION
 	// macro for kprobe-type programs.
-	kv, err := internal.LinuxVersionCode()
+	v, err := internal.KernelVersion()
 	if err != nil {
 		return nil, fmt.Errorf("detecting kernel version: %w", err)
 	}
@@ -74,7 +74,7 @@ func createProgLoadAttr(pt ebpf.ProgramType) (*sys.ProgLoadAttr, error) {
 		ProgFlags:          progFlags,
 		ExpectedAttachType: sys.AttachType(expectedAttachType),
 		License:            sys.NewStringPointer("GPL"),
-		KernVersion:        kv,
+		KernVersion:        v.Kernel(),
 	}, nil
 }
 

@@ -19,15 +19,6 @@ const (
 
 // vdsoVersion returns the LINUX_VERSION_CODE embedded in the vDSO library linked to the current process.
 func vdsoVersion() (uint32, error) {
-	vdsoAddr, err := vdsoMemoryAddress()
-	if err != nil {
-		return 0, fmt.Errorf("vdso elf header: %w", err)
-	}
-	return linuxVersionCode(vdsoAddr)
-}
-
-// vdsoMemoryAddress returns the memory address of the vDSO library linked to the current process.
-func vdsoMemoryAddress() (uint64, error) {
 	// read data from the auxiliary vector, which is normally passed directly to the process.
 	// Go does not expose that data, so we must read it from procfs.
 	// https://man7.org/linux/man-pages/man3/getauxval.3.html
@@ -37,7 +28,26 @@ func vdsoMemoryAddress() (uint64, error) {
 	}
 	defer av.Close()
 
-	abuf, err := io.ReadAll(av)
+	vdsoAddr, err := vdsoMemoryAddress(av)
+	if err != nil {
+		return 0, fmt.Errorf("vdso elf header: %w", err)
+	}
+
+	// use /proc/self/mem rather than unsafe.Pointer tricks
+	mem, err := os.Open("/proc/self/mem")
+	if err != nil {
+		return 0, fmt.Errorf("open mem: %w", err)
+	}
+	defer mem.Close()
+
+	// open ELF at provided memory address, as offset into /proc/self/mem
+	r := io.NewSectionReader(mem, int64(vdsoAddr), math.MaxInt64)
+	return linuxVersionCode(r)
+}
+
+// vdsoMemoryAddress returns the memory address of the vDSO library linked to the current process.
+func vdsoMemoryAddress(r io.Reader) (uint64, error) {
+	abuf, err := io.ReadAll(r)
 	if err != nil {
 		return 0, fmt.Errorf("readall auxv: %w", err)
 	}
@@ -75,17 +85,9 @@ type elfNote struct {
 }
 
 // linuxVersionCode returns the LINUX_VERSION_CODE embedded in the ELF notes section
-// of the binary at the provided memory address.
-func linuxVersionCode(binaryAddr uint64) (uint32, error) {
-	// use /proc/self/mem rather than unsafe.Pointer tricks
-	mem, err := os.Open("/proc/self/mem")
-	if err != nil {
-		return 0, fmt.Errorf("open mem: %w", err)
-	}
-	defer mem.Close()
-
-	// open ELF starting at memory address provided
-	hdr, err := NewSafeELFFile(io.NewSectionReader(mem, int64(binaryAddr), math.MaxInt64))
+// of the binary provided by the reader.
+func linuxVersionCode(r io.ReaderAt) (uint32, error) {
+	hdr, err := NewSafeELFFile(r)
 	if err != nil {
 		return 0, fmt.Errorf("new elf: %w", err)
 	}

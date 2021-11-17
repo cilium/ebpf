@@ -165,11 +165,11 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions, handles *hand
 	// Overwrite Kprobe program version if set to zero or the magic version constant.
 	kv := spec.KernelVersion
 	if spec.Type == Kprobe && (kv == 0 || kv == internal.MagicKernelVersion) {
-		vc, err := internal.LinuxVersionCode()
+		v, err := internal.KernelVersion()
 		if err != nil {
 			return nil, fmt.Errorf("detecting kernel version: %w", err)
 		}
-		kv = vc
+		kv = v.Kernel()
 	}
 
 	attr := &sys.ProgLoadAttr{

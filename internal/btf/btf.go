@@ -53,6 +53,18 @@ type btfHeader struct {
 	StringLen uint32
 }
 
+// typeStart returns the offset from the beginning of the .BTF section
+// to the start of its type entries.
+func (h *btfHeader) typeStart() int64 {
+	return int64(h.HdrLen + h.TypeOff)
+}
+
+// stringStart returns the offset from the beginning of the .BTF section
+// to the start of its string table.
+func (h *btfHeader) stringStart() int64 {
+	return int64(h.HdrLen + h.StringOff)
+}
+
 // LoadSpecFromReader reads BTF sections from an ELF.
 //
 // Returns ErrNotFound if the reader contains no BTF.
@@ -129,7 +141,7 @@ func loadSpecFromELF(file *internal.SafeELFFile, variableOffsets map[variable]ui
 		return spec, nil
 	}
 
-	spec.funcInfos, spec.lineInfos, spec.coreRelos, err = parseExtInfos(btfExtSection.Open(), file.ByteOrder, spec.strings)
+	spec.funcInfos, spec.lineInfos, spec.coreRelos, err = parseExtInfos(btfExtSection, file.ByteOrder, spec.strings)
 	if err != nil {
 		return nil, fmt.Errorf("can't read ext info: %w", err)
 	}
@@ -243,54 +255,59 @@ func loadKernelSpec() (*Spec, error) {
 	return nil, fmt.Errorf("no BTF for kernel version %s: %w", release, internal.ErrNotSupported)
 }
 
+// parseBTFHeader parses the header of the .BTF section.
+func parseBTFHeader(r io.Reader, bo binary.ByteOrder) (*btfHeader, error) {
+	var header btfHeader
+	if err := binary.Read(r, bo, &header); err != nil {
+		return nil, fmt.Errorf("can't read header: %v", err)
+	}
+
+	if header.Magic != btfMagic {
+		return nil, fmt.Errorf("incorrect magic value %v", header.Magic)
+	}
+
+	if header.Version != 1 {
+		return nil, fmt.Errorf("unexpected version %v", header.Version)
+	}
+
+	if header.Flags != 0 {
+		return nil, fmt.Errorf("unsupported flags %v", header.Flags)
+	}
+
+	remainder := int64(header.HdrLen) - int64(binary.Size(&header))
+	if remainder < 0 {
+		return nil, errors.New("header length shorter than btfHeader size")
+	}
+
+	if _, err := io.CopyN(internal.DiscardZeroes{}, r, remainder); err != nil {
+		return nil, fmt.Errorf("header padding: %v", err)
+	}
+
+	return &header, nil
+}
+
+// parseBTF reads a .BTF section into memory and parses it into a list of
+// raw types and a string table.
 func parseBTF(btf io.Reader, bo binary.ByteOrder) ([]rawType, stringTable, error) {
 	rawBTF, err := io.ReadAll(btf)
 	if err != nil {
 		return nil, nil, fmt.Errorf("can't read BTF: %v", err)
 	}
-
 	rd := bytes.NewReader(rawBTF)
 
-	var header btfHeader
-	if err := binary.Read(rd, bo, &header); err != nil {
-		return nil, nil, fmt.Errorf("can't read header: %v", err)
+	header, err := parseBTFHeader(rd, bo)
+	if err != nil {
+		return nil, nil, fmt.Errorf("parsing .BTF header: %v", err)
 	}
 
-	if header.Magic != btfMagic {
-		return nil, nil, fmt.Errorf("incorrect magic value %v", header.Magic)
-	}
-
-	if header.Version != 1 {
-		return nil, nil, fmt.Errorf("unexpected version %v", header.Version)
-	}
-
-	if header.Flags != 0 {
-		return nil, nil, fmt.Errorf("unsupported flags %v", header.Flags)
-	}
-
-	remainder := int64(header.HdrLen) - int64(binary.Size(&header))
-	if remainder < 0 {
-		return nil, nil, errors.New("header is too short")
-	}
-
-	if _, err := io.CopyN(internal.DiscardZeroes{}, rd, remainder); err != nil {
-		return nil, nil, fmt.Errorf("header padding: %v", err)
-	}
-
-	if _, err := rd.Seek(int64(header.HdrLen+header.StringOff), io.SeekStart); err != nil {
-		return nil, nil, fmt.Errorf("can't seek to start of string section: %v", err)
-	}
-
-	rawStrings, err := readStringTable(io.LimitReader(rd, int64(header.StringLen)))
+	buf := io.NewSectionReader(rd, header.stringStart(), int64(header.StringLen))
+	rawStrings, err := readStringTable(buf)
 	if err != nil {
 		return nil, nil, fmt.Errorf("can't read type names: %w", err)
 	}
 
-	if _, err := rd.Seek(int64(header.HdrLen+header.TypeOff), io.SeekStart); err != nil {
-		return nil, nil, fmt.Errorf("can't seek to start of type section: %v", err)
-	}
-
-	rawTypes, err := readTypes(io.LimitReader(rd, int64(header.TypeLen)), bo)
+	buf = io.NewSectionReader(rd, header.typeStart(), int64(header.TypeLen))
+	rawTypes, err := readTypes(buf, bo)
 	if err != nil {
 		return nil, nil, fmt.Errorf("can't read types: %w", err)
 	}
@@ -449,7 +466,7 @@ func (sw sliceWriter) Write(p []byte) (int, error) {
 // contain extended BTF info.
 func (s *Spec) Program(name string, length uint64) (*Program, error) {
 	if length == 0 {
-		return nil, errors.New("length musn't be zero")
+		return nil, errors.New("length must not be zero")
 	}
 
 	if s.funcInfos == nil && s.lineInfos == nil && s.coreRelos == nil {

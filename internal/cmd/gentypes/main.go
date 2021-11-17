@@ -70,6 +70,7 @@ func run(args []string) error {
 
 func generateTypes(spec *btf.Spec) ([]byte, error) {
 	objName := &btf.Array{Nelems: 16, Type: &btf.Int{Encoding: btf.Char, Size: 1}}
+	linkID := &btf.Int{Size: 4}
 	pointer := &btf.Int{Size: 8}
 
 	// Pre-declare handwritten types sys.ObjName and sys.Pointer so that
@@ -77,11 +78,13 @@ func generateTypes(spec *btf.Spec) ([]byte, error) {
 	var (
 		_ sys.Pointer
 		_ sys.ObjName
+		_ sys.LinkID
 	)
 
 	gf := &btf.GoFormatter{
 		Names: map[btf.Type]string{
 			objName: "ObjName",
+			linkID:  "LinkID",
 			pointer: "Pointer",
 		},
 		Identifier: internal.Identifier,
@@ -173,6 +176,7 @@ import (
 			"LinkInfo", "bpf_link_info",
 			[]patch{
 				replace(enumTypes["LinkType"], "type"),
+				replace(linkID, "id"),
 				truncateAfter("prog_id"),
 			},
 		},

@@ -90,8 +90,7 @@ func TestProgramRun(t *testing.T) {
 }
 
 func TestProgramBenchmark(t *testing.T) {
-	prog := createSocketFilter(t)
-	defer prog.Close()
+	prog := mustSocketFilter(t)
 
 	ret, duration, err := prog.Benchmark(make([]byte, 14), 1, nil)
 	testutils.SkipIfNotSupported(t, err)
@@ -111,8 +110,7 @@ func TestProgramBenchmark(t *testing.T) {
 func TestProgramTestRunInterrupt(t *testing.T) {
 	testutils.SkipOnOldKernel(t, "5.0", "EINTR from BPF_PROG_TEST_RUN")
 
-	prog := createSocketFilter(t)
-	defer prog.Close()
+	prog := mustSocketFilter(t)
 
 	var (
 		tgid    = unix.Getpid()
@@ -177,7 +175,7 @@ func TestProgramTestRunInterrupt(t *testing.T) {
 }
 
 func TestProgramClose(t *testing.T) {
-	prog := createSocketFilter(t)
+	prog := mustSocketFilter(t)
 
 	if err := prog.Close(); err != nil {
 		t.Fatal("Can't close program:", err)
@@ -185,9 +183,8 @@ func TestProgramClose(t *testing.T) {
 }
 
 func TestProgramPin(t *testing.T) {
-	prog := createSocketFilter(t)
+	prog := mustSocketFilter(t)
 	c := qt.New(t)
-	defer prog.Close()
 
 	tmp := testutils.TempBPFFS(t)
 
@@ -218,9 +215,8 @@ func TestProgramPin(t *testing.T) {
 }
 
 func TestProgramUnpin(t *testing.T) {
-	prog := createSocketFilter(t)
+	prog := mustSocketFilter(t)
 	c := qt.New(t)
-	defer prog.Close()
 
 	tmp := testutils.TempBPFFS(t)
 
@@ -244,8 +240,7 @@ func TestProgramLoadPinnedWithFlags(t *testing.T) {
 	// Introduced in commit 6e71b04a8224.
 	testutils.SkipOnOldKernel(t, "4.14", "file_flags in BPF_OBJ_GET")
 
-	prog := createSocketFilter(t)
-	defer prog.Close()
+	prog := mustSocketFilter(t)
 
 	tmp := testutils.TempBPFFS(t)
 
@@ -355,8 +350,7 @@ func TestProgramName(t *testing.T) {
 		t.Skip(err)
 	}
 
-	prog := createSocketFilter(t)
-	defer prog.Close()
+	prog := mustSocketFilter(t)
 
 	var info sys.ProgInfo
 	if err := sys.ObjInfo(prog.fd, &info); err != nil {
@@ -398,18 +392,7 @@ func TestProgramMarshaling(t *testing.T) {
 	arr := createProgramArray(t)
 	defer arr.Close()
 
-	prog, err := NewProgram(&ProgramSpec{
-		Type: SocketFilter,
-		Instructions: asm.Instructions{
-			asm.LoadImm(asm.R0, 0, asm.DWord),
-			asm.Return(),
-		},
-		License: "MIT",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer prog.Close()
+	prog := mustSocketFilter(t)
 
 	if err := arr.Put(idx, prog); err != nil {
 		t.Fatal("Can't put program:", err)
@@ -438,18 +421,7 @@ func TestProgramMarshaling(t *testing.T) {
 }
 
 func TestProgramFromFD(t *testing.T) {
-	prog, err := NewProgram(&ProgramSpec{
-		Type: SocketFilter,
-		Instructions: asm.Instructions{
-			asm.LoadImm(asm.R0, 0, asm.DWord),
-			asm.Return(),
-		},
-		License: "MIT",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer prog.Close()
+	prog := mustSocketFilter(t)
 
 	// If you're thinking about copying this, don't. Use
 	// Clone() instead.
@@ -475,23 +447,12 @@ func TestProgramGetNextID(t *testing.T) {
 	testutils.SkipOnOldKernel(t, "4.13", "bpf_prog_get_next_id")
 	var next ProgramID
 
-	prog, err := NewProgram(&ProgramSpec{
-		Type: SkSKB,
-		Instructions: asm.Instructions{
-			asm.LoadImm(asm.R0, 0, asm.DWord),
-			asm.Return(),
-		},
-		License: "MIT",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer prog.Close()
+	// Ensure there is at least one program loaded
+	_ = mustSocketFilter(t)
 
-	if next, err = ProgramGetNextID(ProgramID(0)); err != nil {
+	if next, err := ProgramGetNextID(ProgramID(0)); err != nil {
 		t.Fatal("Can't get next ID:", err)
-	}
-	if next == ProgramID(0) {
+	} else if next == ProgramID(0) {
 		t.Fatal("Expected next ID other than 0")
 	}
 
@@ -499,13 +460,12 @@ func TestProgramGetNextID(t *testing.T) {
 	// make sure, the IDs increase and the last call will return ErrNotExist
 	for {
 		last := next
-		if next, err = ProgramGetNextID(last); err != nil {
+		if next, err := ProgramGetNextID(last); err != nil {
 			if !errors.Is(err, ErrNotExist) {
 				t.Fatal("Expected ErrNotExist, got:", err)
 			}
 			break
-		}
-		if next <= last {
+		} else if next <= last {
 			t.Fatalf("Expected next ID (%d) to be higher than the last ID (%d)", next, last)
 		}
 	}
@@ -514,21 +474,11 @@ func TestProgramGetNextID(t *testing.T) {
 func TestNewProgramFromID(t *testing.T) {
 	testutils.SkipOnOldKernel(t, "4.13", "bpf_prog_get_fd_by_id")
 
-	prog, err := NewProgram(&ProgramSpec{
-		Type: SkSKB,
-		Instructions: asm.Instructions{
-			asm.LoadImm(asm.R0, 0, asm.DWord),
-			asm.Return(),
-		},
-		License: "MIT",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer prog.Close()
+	prog := mustSocketFilter(t)
+
 	var next ProgramID
 
-	next, err = prog.ID()
+	next, err := prog.ID()
 	if err != nil {
 		t.Fatal("Could not get ID of program:", err)
 	}
@@ -691,11 +641,7 @@ func TestProgramBindMap(t *testing.T) {
 	}
 	defer arr.Close()
 
-	prog, err := NewProgram(socketFilterSpec)
-	if err != nil {
-		t.Errorf("Failed to load program: %v", err)
-	}
-	defer prog.Close()
+	prog := mustSocketFilter(t)
 
 	// The attached map does not contain BTF information. So
 	// the metadata part of the program will be empty. This
@@ -740,13 +686,14 @@ var socketFilterSpec = &ProgramSpec{
 	License: "MIT",
 }
 
-func createSocketFilter(t *testing.T) *Program {
-	t.Helper()
+func mustSocketFilter(tb testing.TB) *Program {
+	tb.Helper()
 
 	prog, err := NewProgram(socketFilterSpec)
 	if err != nil {
-		t.Fatal(err)
+		tb.Fatal(err)
 	}
+	tb.Cleanup(func() { prog.Close() })
 
 	return prog
 }

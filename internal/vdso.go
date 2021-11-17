@@ -4,13 +4,12 @@ import (
 	"bytes"
 	"debug/elf"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
+	"math"
 	"os"
-	"reflect"
 	"strings"
-	"unsafe"
 )
 
 const (
@@ -18,33 +17,43 @@ const (
 	_AT_SYSINFO_EHDR = 33
 )
 
+// vdsoVersion returns the LINUX_VERSION_CODE embedded in the vDSO library linked to the current process.
 func vdsoVersion() (uint32, error) {
-	eh, err := vdsoELFHeader()
+	vdsoAddr, err := vdsoMemoryAddress()
 	if err != nil {
 		return 0, fmt.Errorf("vdso elf header: %w", err)
 	}
-	return linuxVersionCode(eh)
+	return linuxVersionCode(vdsoAddr)
 }
 
-func vdsoELFHeader() (*elf.File, error) {
+// vdsoMemoryAddress returns the memory address of the vDSO library linked to the current process.
+func vdsoMemoryAddress() (uint64, error) {
+	// read data from the auxiliary vector, which is normally passed directly to the process.
+	// Go does not expose that data, so we must read it from procfs.
+	// https://man7.org/linux/man-pages/man3/getauxval.3.html
 	av, err := os.Open("/proc/self/auxv")
 	if err != nil {
-		return nil, fmt.Errorf("open auxv: %w", err)
+		return 0, fmt.Errorf("open auxv: %w", err)
 	}
 	defer av.Close()
 
-	abuf, err := ioutil.ReadAll(av)
+	abuf, err := io.ReadAll(av)
 	if err != nil {
-		return nil, fmt.Errorf("readall auxv: %w", err)
+		return 0, fmt.Errorf("readall auxv: %w", err)
 	}
 
 	br := bytes.NewReader(abuf)
+	// ensure we only read the exact number of uint64s
 	buf := make([]uint64, len(abuf)/8)
 	err = binary.Read(br, NativeEndian, &buf)
 	if err != nil {
-		return nil, fmt.Errorf("binary read auxv: %w", err)
+		return 0, fmt.Errorf("binary read auxv: %w", err)
 	}
 
+	// loop through all the type+value pairs until we find `AT_SYSINFO_EHDR`, described as:
+	// The address of a page containing the virtual Dynamic
+	// Shared Object (vDSO) that the kernel creates in order to
+	// provide fast implementations of certain system calls.
 	for i := 0; i < len(buf)-1 && buf[i] != _AT_NULL; i += 2 {
 		tag, val := buf[i], buf[i+1]
 		switch tag {
@@ -52,89 +61,71 @@ func vdsoELFHeader() (*elf.File, error) {
 			if val == 0 {
 				continue
 			}
-			return elf.NewFile(newUnsafeReader(unsafe.Pointer(uintptr(val))))
+			return val, nil
 		}
 	}
-	return nil, fmt.Errorf("not found")
+	return 0, fmt.Errorf("not found")
 }
 
-type note struct {
+// format described at https://www.man7.org/linux/man-pages/man5/elf.5.html in section 'Notes (Nhdr)'
+type elfNote struct {
 	NameSize int32
 	DescSize int32
 	Type     int32
 }
 
-type unsafeReader struct {
-	base unsafe.Pointer
-	off  int64
-}
+// linuxVersionCode returns the LINUX_VERSION_CODE embedded in the ELF notes section
+// of the binary at the provided memory address.
+func linuxVersionCode(binaryAddr uint64) (uint32, error) {
+	// use /proc/self/mem rather than unsafe.Pointer tricks
+	mem, err := os.Open("/proc/self/mem")
+	if err != nil {
+		return 0, fmt.Errorf("open mem: %w", err)
+	}
+	defer mem.Close()
 
-func newUnsafeReader(base unsafe.Pointer) io.ReaderAt {
-	return &unsafeReader{base, 0}
-}
+	// open ELF starting at memory address provided
+	hdr, err := NewSafeELFFile(io.NewSectionReader(mem, int64(binaryAddr), math.MaxInt64))
+	if err != nil {
+		return 0, fmt.Errorf("new elf: %w", err)
+	}
 
-func (r *unsafeReader) offsetPtr(off int64) unsafe.Pointer {
-	return unsafe.Pointer(uintptr(r.base) + uintptr(off))
-}
-
-func (r *unsafeReader) ReadAt(p []byte, off int64) (n int, err error) {
-	sz := len(p)
-
-	var b []byte
-	hdr := (*reflect.SliceHeader)(unsafe.Pointer(&b))
-	hdr.Data = uintptr(r.offsetPtr(off))
-	hdr.Len = sz
-	hdr.Cap = sz
-	return copy(p, b), nil
-}
-
-func linuxVersionCode(hdr *elf.File) (uint32, error) {
 	sec := hdr.SectionByType(elf.SHT_NOTE)
 	if sec == nil {
 		return 0, fmt.Errorf("note elf section not found")
 	}
 
 	sr := sec.Open()
+	// keep reading notes until we find one named `Linux` with 4 bytes
 	for {
-		n := note{}
+		n := elfNote{}
 		if err := binary.Read(sr, hdr.ByteOrder, &n); err != nil {
-			if err == io.EOF {
+			if errors.Is(err, io.EOF) {
 				break
 			}
 			return 0, fmt.Errorf("read note: %w", err)
 		}
 		var name string
 		if n.NameSize > 0 {
-			nameData, err := readAligned4(sr, n.NameSize)
+			// make a 4-byte aligned read, but trim excess bytes and null terminating bytes to obtain name
+			nameData := make([]byte, Align(int(n.NameSize), 4))
+			err := binary.Read(sr, hdr.ByteOrder, &nameData)
 			if err != nil {
 				return 0, fmt.Errorf("read note name: %w", err)
 			}
-			name = strings.Trim(string(nameData), "\x00")
+			name = strings.Trim(string(nameData[:n.NameSize]), "\x00")
 		}
 		if n.DescSize > 0 {
-			if name == "Linux" && n.DescSize == 4 && n.Type == 0 {
-				desc, err := readAligned4(sr, n.DescSize)
-				if err != nil {
-					return 0, fmt.Errorf("read note desc: %w", err)
-				}
-				return hdr.ByteOrder.Uint32(desc), nil
-			}
-			full := int64((n.DescSize + 3) &^ 3)
-			_, err := sr.Seek(full, io.SeekCurrent)
+			desc := make([]byte, Align(int(n.DescSize), 4))
+			err := binary.Read(sr, hdr.ByteOrder, &desc)
 			if err != nil {
-				return 0, fmt.Errorf("seek past note desc: %w", err)
+				return 0, fmt.Errorf("read note desc: %w", err)
+			}
+			if name == "Linux" && n.DescSize == 4 && n.Type == 0 {
+				// LINUX_VERSION_CODE is a uint32 value
+				return hdr.ByteOrder.Uint32(desc[:n.DescSize]), nil
 			}
 		}
 	}
 	return 0, fmt.Errorf("linux version note not found")
-}
-
-func readAligned4(r io.Reader, sz int32) ([]byte, error) {
-	full := (sz + 3) &^ 3
-	data := make([]byte, full)
-	_, err := io.ReadFull(r, data)
-	if err != nil {
-		return nil, err
-	}
-	return data[:sz], nil
 }

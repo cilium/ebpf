@@ -53,7 +53,7 @@ func TestProgAttachCgroupAllowMulti(t *testing.T) {
 
 	// It's currently not possible for a program to replace
 	// itself.
-	prog2 := mustCgroupEgressProgram(t)
+	prog2 := mustLoadProgram(t, ebpf.CGroupSKB, ebpf.AttachCGroupInetEgress, "")
 	testLink(t, link, prog2)
 }
 

@@ -1,8 +1,8 @@
 package btf
 
 import (
-	"bufio"
 	"bytes"
+	"debug/elf"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -12,11 +12,15 @@ import (
 	"github.com/cilium/ebpf/internal"
 )
 
+// btfExtHeader is found at the start of the .BTF.ext section.
 type btfExtHeader struct {
 	Magic   uint16
 	Version uint8
 	Flags   uint8
-	HdrLen  uint32
+
+	// HdrLen is larger than the size of struct btfExtHeader when it is
+	// immediately followed by a btfExtCoreHeader.
+	HdrLen uint32
 
 	FuncInfoOff uint32
 	FuncInfoLen uint32
@@ -24,76 +28,108 @@ type btfExtHeader struct {
 	LineInfoLen uint32
 }
 
+// parseBTFExtHeader parses the header of the .BTF.ext section.
+func parseBTFExtHeader(r io.Reader, bo binary.ByteOrder) (*btfExtHeader, error) {
+	var header btfExtHeader
+	if err := binary.Read(r, bo, &header); err != nil {
+		return nil, fmt.Errorf("can't read header: %v", err)
+	}
+
+	if header.Magic != btfMagic {
+		return nil, fmt.Errorf("incorrect magic value %v", header.Magic)
+	}
+
+	if header.Version != 1 {
+		return nil, fmt.Errorf("unexpected version %v", header.Version)
+	}
+
+	if header.Flags != 0 {
+		return nil, fmt.Errorf("unsupported flags %v", header.Flags)
+	}
+
+	if int64(header.HdrLen) < int64(binary.Size(&header)) {
+		return nil, fmt.Errorf("header length shorter than btfExtHeader size")
+	}
+
+	return &header, nil
+}
+
+// funcInfoStart returns the offset from the beginning of the .BTF.ext section
+// to the start of its func_info entries.
+func (h *btfExtHeader) funcInfoStart() int64 {
+	return int64(h.HdrLen + h.FuncInfoOff)
+}
+
+// lineInfoStart returns the offset from the beginning of the .BTF.ext section
+// to the start of its line_info entries.
+func (h *btfExtHeader) lineInfoStart() int64 {
+	return int64(h.HdrLen + h.LineInfoOff)
+}
+
+// coreReloStart returns the offset from the beginning of the .BTF.ext section
+// to the start of its CO-RE relocation entries.
+func (h *btfExtHeader) coreReloStart(ch *btfExtCoreHeader) int64 {
+	return int64(h.HdrLen + ch.CoreReloOff)
+}
+
+// btfExtCoreHeader is found right after the btfExtHeader when its HdrLen
+// field is larger than its size.
 type btfExtCoreHeader struct {
 	CoreReloOff uint32
 	CoreReloLen uint32
 }
 
-func parseExtInfos(r io.ReadSeeker, bo binary.ByteOrder, strings stringTable) (funcInfo, lineInfo map[string]extInfo, relos map[string]coreRelos, err error) {
-	var header btfExtHeader
+// parseBTFExtCoreHeader parses the tail of the .BTF.ext header. If additional
+// header bytes are present, extHeader.HdrLen will be larger than the struct,
+// indicating the presence of a CO-RE extension header.
+func parseBTFExtCoreHeader(r io.Reader, bo binary.ByteOrder, extHeader *btfExtHeader) (*btfExtCoreHeader, error) {
+	extHdrSize := int64(binary.Size(&extHeader))
+	remainder := int64(extHeader.HdrLen) - extHdrSize
+
+	if remainder == 0 {
+		return nil, nil
+	}
+
 	var coreHeader btfExtCoreHeader
-	if err := binary.Read(r, bo, &header); err != nil {
-		return nil, nil, nil, fmt.Errorf("can't read header: %v", err)
+	if err := binary.Read(r, bo, &coreHeader); err != nil {
+		return nil, fmt.Errorf("can't read header: %v", err)
 	}
 
-	if header.Magic != btfMagic {
-		return nil, nil, nil, fmt.Errorf("incorrect magic value %v", header.Magic)
-	}
+	return &coreHeader, nil
+}
 
-	if header.Version != 1 {
-		return nil, nil, nil, fmt.Errorf("unexpected version %v", header.Version)
-	}
+// parseExtInfos parses the .BTF.ext section.
+// The resulting maps are keyed by the sections described by the extInfos.
+func parseExtInfos(sec *elf.Section, bo binary.ByteOrder, strings stringTable) (funcInfo, lineInfo map[string]extInfo, relos map[string]coreRelos, err error) {
+	// Open unbuffered section reader. binary.Read() calls io.ReadFull on
+	// the header structs, resulting in one syscall per header.
+	r := sec.Open()
 
-	if header.Flags != 0 {
-		return nil, nil, nil, fmt.Errorf("unsupported flags %v", header.Flags)
-	}
-
-	remainder := int64(header.HdrLen) - int64(binary.Size(&header))
-	if remainder < 0 {
-		return nil, nil, nil, errors.New("header is too short")
-	}
-
-	coreHdrSize := int64(binary.Size(&coreHeader))
-	if remainder >= coreHdrSize {
-		if err := binary.Read(r, bo, &coreHeader); err != nil {
-			return nil, nil, nil, fmt.Errorf("can't read CO-RE relocation header: %v", err)
-		}
-		remainder -= coreHdrSize
-	}
-
-	// Of course, the .BTF.ext header has different semantics than the
-	// .BTF ext header. We need to ignore non-null values.
-	_, err = io.CopyN(io.Discard, r, remainder)
+	extHeader, err := parseBTFExtHeader(r, bo)
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("header padding: %v", err)
+		return nil, nil, nil, fmt.Errorf("parsing BTF extension header: %w", err)
 	}
 
-	if _, err := r.Seek(int64(header.HdrLen+header.FuncInfoOff), io.SeekStart); err != nil {
-		return nil, nil, nil, fmt.Errorf("can't seek to function info section: %v", err)
+	coreHeader, err := parseBTFExtCoreHeader(r, bo, extHeader)
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("parsing BTF CO-RE header: %w", err)
 	}
 
-	buf := bufio.NewReader(io.LimitReader(r, int64(header.FuncInfoLen)))
+	buf := internal.NewBufferedSectionReader(sec, extHeader.funcInfoStart(), int64(extHeader.FuncInfoLen))
 	funcInfo, err = parseExtInfo(buf, bo, strings)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("function info: %w", err)
 	}
 
-	if _, err := r.Seek(int64(header.HdrLen+header.LineInfoOff), io.SeekStart); err != nil {
-		return nil, nil, nil, fmt.Errorf("can't seek to line info section: %v", err)
-	}
-
-	buf = bufio.NewReader(io.LimitReader(r, int64(header.LineInfoLen)))
+	buf = internal.NewBufferedSectionReader(sec, extHeader.lineInfoStart(), int64(extHeader.LineInfoLen))
 	lineInfo, err = parseExtInfo(buf, bo, strings)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("line info: %w", err)
 	}
 
 	if coreHeader.CoreReloOff > 0 && coreHeader.CoreReloLen > 0 {
-		if _, err := r.Seek(int64(header.HdrLen+coreHeader.CoreReloOff), io.SeekStart); err != nil {
-			return nil, nil, nil, fmt.Errorf("can't seek to CO-RE relocation section: %v", err)
-		}
-
-		relos, err = parseExtInfoRelos(io.LimitReader(r, int64(coreHeader.CoreReloLen)), bo, strings)
+		buf = internal.NewBufferedSectionReader(sec, extHeader.coreReloStart(coreHeader), int64(coreHeader.CoreReloLen))
+		relos, err = parseExtInfoRelos(buf, bo, strings)
 		if err != nil {
 			return nil, nil, nil, fmt.Errorf("CO-RE relocation info: %w", err)
 		}
@@ -162,6 +198,8 @@ func (ei extInfo) MarshalBinary() ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
+// parseExtInfo parses an ext info sub-section within .BTF.ext ito a map of
+// ext info indexed by section name.
 func parseExtInfo(r io.Reader, bo binary.ByteOrder, strings stringTable) (map[string]extInfo, error) {
 	const maxRecordSize = 256
 
@@ -212,7 +250,7 @@ func parseExtInfo(r io.Reader, bo binary.ByteOrder, strings stringTable) (map[st
 	}
 }
 
-// bpfCoreRelo matches `struct bpf_core_relo` from the kernel
+// bpfCoreRelo matches the kernel's struct bpf_core_relo.
 type bpfCoreRelo struct {
 	InsnOff      uint32
 	TypeID       TypeID
@@ -243,6 +281,8 @@ func (r coreRelos) append(other coreRelos, offset uint64) coreRelos {
 
 var extInfoReloSize = binary.Size(bpfCoreRelo{})
 
+// parseExtInfoRelos parses a core_relos sub-section within .BTF.ext ito a map of
+// CO-RE relocations indexed by section name.
 func parseExtInfoRelos(r io.Reader, bo binary.ByteOrder, strings stringTable) (map[string]coreRelos, error) {
 	var recordSize uint32
 	if err := binary.Read(r, bo, &recordSize); err != nil {
@@ -293,6 +333,10 @@ func parseExtInfoRelos(r io.Reader, bo binary.ByteOrder, strings stringTable) (m
 	}
 }
 
+// parseExtInfoHeader parses a btf_ext_info_sec header within .BTF.ext,
+// appearing within func_info and line_info sub-sections.
+// These headers appear once for each program section in the ELF and are
+// followed by one or more func/line_info records for the section.
 func parseExtInfoHeader(r io.Reader, bo binary.ByteOrder, strings stringTable) (string, *btfExtInfoSec, error) {
 	var infoHeader btfExtInfoSec
 	if err := binary.Read(r, bo, &infoHeader); err != nil {

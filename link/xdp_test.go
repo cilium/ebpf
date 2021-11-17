@@ -33,10 +33,5 @@ func TestAttachXDP(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	testLink(t, l, testLinkOptions{
-		prog: prog,
-		loadPinned: func(s string, opts *ebpf.LoadPinOptions) (Link, error) {
-			return LoadPinnedRawLink(s, XDPType, opts)
-		},
-	})
+	testLink(t, l, prog)
 }

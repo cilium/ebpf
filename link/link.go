@@ -39,6 +39,42 @@ type Link interface {
 	isLink()
 }
 
+// LoadPinnedLink loads a link that was persisted into a bpffs.
+func LoadPinnedLink(fileName string, opts *ebpf.LoadPinOptions) (Link, error) {
+	raw, err := loadPinnedRawLink(fileName, UnspecifiedType, opts)
+	if err != nil {
+		return nil, err
+	}
+
+	return wrapRawLink(raw)
+}
+
+// wrap a RawLink in a more specific type if possible.
+//
+// The function takes ownership of raw and closes it on error.
+func wrapRawLink(raw *RawLink) (Link, error) {
+	info, err := raw.Info()
+	if err != nil {
+		raw.Close()
+		return nil, err
+	}
+
+	switch info.Type {
+	case RawTracepointType:
+		return &rawTracepoint{*raw}, nil
+	case TracingType:
+		return &tracing{*raw}, nil
+	case CgroupType:
+		return &linkCgroup{*raw}, nil
+	case IterType:
+		return &Iter{*raw}, nil
+	case NetNsType:
+		return &NetNsLink{*raw}, nil
+	default:
+		return raw, nil
+	}
+}
+
 // ID uniquely identifies a BPF link.
 type ID uint32
 
@@ -106,7 +142,13 @@ func AttachRawLink(opts RawLinkOptions) (*RawLink, error) {
 //
 // Returns an error if the pinned link type doesn't match linkType. Pass
 // UnspecifiedType to disable this behaviour.
+//
+// Deprecated: use LoadPinnedLink instead.
 func LoadPinnedRawLink(fileName string, linkType Type, opts *ebpf.LoadPinOptions) (*RawLink, error) {
+	return loadPinnedRawLink(fileName, linkType, opts)
+}
+
+func loadPinnedRawLink(fileName string, linkType Type, opts *ebpf.LoadPinOptions) (*RawLink, error) {
 	fd, err := sys.ObjGet(&sys.ObjGetAttr{
 		Pathname:  sys.NewStringPointer(fileName),
 		FileFlags: opts.Marshal(),

@@ -46,12 +46,7 @@ func TestRawLink(t *testing.T) {
 		t.Error("Link program ID doesn't match program ID")
 	}
 
-	testLink(t, link, testLinkOptions{
-		prog: prog,
-		loadPinned: func(f string, opts *ebpf.LoadPinOptions) (Link, error) {
-			return LoadPinnedRawLink(f, UnspecifiedType, opts)
-		},
-	})
+	testLink(t, link, prog)
 }
 
 func TestRawLinkLoadPinnedWithOptions(t *testing.T) {
@@ -76,7 +71,7 @@ func TestRawLinkLoadPinnedWithOptions(t *testing.T) {
 
 	// It seems like the kernel ignores BPF_F_RDONLY when updating a link,
 	// so we can't test this.
-	_, err = LoadPinnedRawLink(path, UnspecifiedType, &ebpf.LoadPinOptions{
+	_, err = loadPinnedRawLink(path, UnspecifiedType, &ebpf.LoadPinOptions{
 		Flags: math.MaxUint32,
 	})
 	if !errors.Is(err, unix.EINVAL) {
@@ -115,12 +110,7 @@ func mustCgroupEgressProgram(t *testing.T) *ebpf.Program {
 	return prog
 }
 
-type testLinkOptions struct {
-	prog       *ebpf.Program
-	loadPinned func(string, *ebpf.LoadPinOptions) (Link, error)
-}
-
-func testLink(t *testing.T, link Link, opts testLinkOptions) {
+func testLink(t *testing.T, link Link, prog *ebpf.Program) {
 	t.Helper()
 
 	tmp, err := os.MkdirTemp("/sys/fs/bpf", "ebpf-test")
@@ -137,17 +127,17 @@ func testLink(t *testing.T, link Link, opts testLinkOptions) {
 			t.Fatalf("Can't pin %T: %s", link, err)
 		}
 
-		link2, err := opts.loadPinned(path, nil)
+		link2, err := LoadPinnedLink(path, nil)
 		if err != nil {
 			t.Fatalf("Can't load pinned %T: %s", link, err)
 		}
 		link2.Close()
 
-		if reflect.TypeOf(link) != reflect.TypeOf(link2) {
+		if _, raw := link.(*RawLink); !raw && reflect.TypeOf(link) != reflect.TypeOf(link2) {
 			t.Errorf("Loading a pinned %T returns a %T", link, link2)
 		}
 
-		_, err = opts.loadPinned(path, &ebpf.LoadPinOptions{
+		_, err = LoadPinnedLink(path, &ebpf.LoadPinOptions{
 			Flags: math.MaxUint32,
 		})
 		if !errors.Is(err, unix.EINVAL) {
@@ -156,7 +146,7 @@ func testLink(t *testing.T, link Link, opts testLinkOptions) {
 	})
 
 	t.Run("update", func(t *testing.T) {
-		err := link.Update(opts.prog)
+		err := link.Update(prog)
 		testutils.SkipIfNotSupported(t, err)
 		if err != nil {
 			t.Fatal("Update returns an error:", err)

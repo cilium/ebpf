@@ -30,12 +30,7 @@ func TestSkLookup(t *testing.T) {
 		t.Fatal("Info returns an error:", err)
 	}
 
-	testLink(t, link, testLinkOptions{
-		prog: prog,
-		loadPinned: func(fileName string, opts *ebpf.LoadPinOptions) (Link, error) {
-			return LoadPinnedNetNs(fileName, opts)
-		},
-	})
+	testLink(t, link, prog)
 }
 
 func mustCreateSkLookupProgram(tb testing.TB) *ebpf.Program {

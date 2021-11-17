@@ -55,9 +55,7 @@ func TestUprobe(t *testing.T) {
 	c.Assert(err, qt.IsNil)
 	defer up.Close()
 
-	testLink(t, up, testLinkOptions{
-		prog: prog,
-	})
+	testLink(t, up, prog)
 }
 
 func TestUprobeExtNotFound(t *testing.T) {
@@ -131,9 +129,7 @@ func TestUretprobe(t *testing.T) {
 	c.Assert(err, qt.IsNil)
 	defer up.Close()
 
-	testLink(t, up, testLinkOptions{
-		prog: prog,
-	})
+	testLink(t, up, prog)
 }
 
 // Test u(ret)probe creation using perf_uprobe PMU.

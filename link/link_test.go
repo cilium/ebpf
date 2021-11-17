@@ -84,30 +84,7 @@ func mustCgroupFixtures(t *testing.T) (*os.File, *ebpf.Program) {
 
 	testutils.SkipIfNotSupported(t, haveProgAttach())
 
-	return testutils.CreateCgroup(t), mustCgroupEgressProgram(t)
-}
-
-func mustCgroupEgressProgram(t *testing.T) *ebpf.Program {
-	t.Helper()
-
-	prog, err := ebpf.NewProgram(&ebpf.ProgramSpec{
-		Type:       ebpf.CGroupSKB,
-		AttachType: ebpf.AttachCGroupInetEgress,
-		License:    "MIT",
-		Instructions: asm.Instructions{
-			asm.Mov.Imm(asm.R0, 0),
-			asm.Return(),
-		},
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	t.Cleanup(func() {
-		prog.Close()
-	})
-
-	return prog
+	return testutils.CreateCgroup(t), mustLoadProgram(t, ebpf.CGroupSKB, ebpf.AttachCGroupInetEgress, "")
 }
 
 func testLink(t *testing.T, link Link, prog *ebpf.Program) {
@@ -167,4 +144,34 @@ func testLink(t *testing.T, link Link, prog *ebpf.Program) {
 	if err := link.Close(); err != nil {
 		t.Fatalf("%T.Close returns an error: %s", link, err)
 	}
+}
+
+func mustLoadProgram(tb testing.TB, typ ebpf.ProgramType, attachType ebpf.AttachType, attachTo string) *ebpf.Program {
+	tb.Helper()
+
+	license := "MIT"
+	switch typ {
+	case ebpf.RawTracepoint, ebpf.LSM:
+		license = "GPL"
+	}
+
+	prog, err := ebpf.NewProgram(&ebpf.ProgramSpec{
+		Type:       typ,
+		AttachType: attachType,
+		AttachTo:   attachTo,
+		License:    license,
+		Instructions: asm.Instructions{
+			asm.Mov.Imm(asm.R0, 0),
+			asm.Return(),
+		},
+	})
+	if err != nil {
+		tb.Fatal(err)
+	}
+
+	tb.Cleanup(func() {
+		prog.Close()
+	})
+
+	return prog
 }

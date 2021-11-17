@@ -78,8 +78,10 @@ func AttachFreplace(targetProg *ebpf.Program, name string, prog *ebpf.Program) (
 }
 
 // LoadPinnedFreplace loads a pinned iterator from a bpffs.
+//
+// Deprecated: use LoadPinnedLink instead.
 func LoadPinnedFreplace(fileName string, opts *ebpf.LoadPinOptions) (Link, error) {
-	link, err := LoadPinnedRawLink(fileName, TracingType, opts)
+	link, err := loadPinnedRawLink(fileName, TracingType, opts)
 	if err != nil {
 		return nil, err
 	}
@@ -148,14 +150,4 @@ func AttachLSM(opts LSMOptions) (Link, error) {
 	}
 
 	return attachBTFID(opts.Program)
-}
-
-// LoadPinnedTrace loads a tracing/LSM link from a bpffs.
-func LoadPinnedTrace(fileName string, opts *ebpf.LoadPinOptions) (Link, error) {
-	link, err := LoadPinnedRawLink(fileName, TracingType, opts)
-	if err != nil {
-		return nil, err
-	}
-
-	return &tracing{*link}, err
 }

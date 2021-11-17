@@ -48,12 +48,7 @@ func TestIter(t *testing.T) {
 		t.Error("Non-empty output from no-op iterator:", string(contents))
 	}
 
-	testLink(t, it, testLinkOptions{
-		prog: prog,
-		loadPinned: func(s string, opts *ebpf.LoadPinOptions) (Link, error) {
-			return LoadPinnedIter(s, opts)
-		},
-	})
+	testLink(t, it, prog)
 }
 
 func TestIterMapElements(t *testing.T) {

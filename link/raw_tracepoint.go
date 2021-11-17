@@ -48,16 +48,6 @@ func AttachRawTracepoint(opts RawTracepointOptions) (Link, error) {
 	return &rawTracepoint{RawLink{fd: fd}}, nil
 }
 
-// LoadPinnedRawTracepoint loads a raw_tracepoint link from a bpffs.
-func LoadPinnedRawTracepoint(fileName string, opts *ebpf.LoadPinOptions) (Link, error) {
-	link, err := LoadPinnedRawLink(fileName, RawTracepointType, opts)
-	if err != nil {
-		return nil, err
-	}
-
-	return &rawTracepoint{*link}, err
-}
-
 type simpleRawTracepoint struct {
 	fd *sys.FD
 }

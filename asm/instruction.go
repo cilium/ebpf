@@ -275,11 +275,25 @@ ref:
 	}
 }
 
+// SizeBytes returns the amount of bytes ins would occupy in binary form.
+func (ins Instruction) SizeBytes() uint64 {
+	return uint64(InstructionSize * ins.OpCode.rawInstructions())
+}
+
 // Instructions is an eBPF program.
 type Instructions []Instruction
 
 func (insns Instructions) String() string {
 	return fmt.Sprint(insns)
+}
+
+// SizeBytes returns the amount of bytes insns would occupy in binary form.
+func (insns Instructions) SizeBytes() uint64 {
+	var sum uint64
+	for _, ins := range insns {
+		sum += ins.SizeBytes()
+	}
+	return sum
 }
 
 // RewriteMapPtr rewrites all loads of a specific map pointer to a new fd.

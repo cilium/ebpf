@@ -39,9 +39,7 @@ func TestProgAttachCgroup(t *testing.T) {
 		t.Fatal("Can't create link:", err)
 	}
 
-	testLink(t, link, testLinkOptions{
-		prog: prog,
-	})
+	testLink(t, link, prog)
 }
 
 func TestProgAttachCgroupAllowMulti(t *testing.T) {
@@ -56,9 +54,7 @@ func TestProgAttachCgroupAllowMulti(t *testing.T) {
 	// It's currently not possible for a program to replace
 	// itself.
 	prog2 := mustCgroupEgressProgram(t)
-	testLink(t, link, testLinkOptions{
-		prog: prog2,
-	})
+	testLink(t, link, prog2)
 }
 
 func TestLinkCgroup(t *testing.T) {
@@ -70,8 +66,5 @@ func TestLinkCgroup(t *testing.T) {
 		t.Fatal("Can't create link:", err)
 	}
 
-	testLink(t, link, testLinkOptions{
-		prog:       prog,
-		loadPinned: LoadPinnedCgroup,
-	})
+	testLink(t, link, prog)
 }

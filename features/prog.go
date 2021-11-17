@@ -36,7 +36,7 @@ func createProgLoadAttr(pt ebpf.ProgramType) (*sys.ProgLoadAttr, error) {
 		asm.Return(),
 	}
 
-	buf := bytes.NewBuffer(make([]byte, 0, len(insns)*asm.InstructionSize))
+	buf := bytes.NewBuffer(make([]byte, 0, insns.Size()))
 	if err := insns.Marshal(buf, internal.NativeEndian); err != nil {
 		return nil, err
 	}

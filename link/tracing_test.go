@@ -43,12 +43,7 @@ func TestFreplace(t *testing.T) {
 			t.Fatal("Can't create freplace:", err)
 		}
 
-		testLink(t, freplace, testLinkOptions{
-			prog: replacement,
-			loadPinned: func(s string, opts *ebpf.LoadPinOptions) (Link, error) {
-				return LoadPinnedFreplace(s, opts)
-			},
-		})
+		testLink(t, freplace, replacement)
 	})
 }
 
@@ -108,15 +103,7 @@ func TestTracing(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			testLink(t, link, testLinkOptions{
-				prog: prog,
-				loadPinned: func(s string, opts *ebpf.LoadPinOptions) (Link, error) {
-					if tt.attachType != ebpf.AttachTraceRawTp {
-						return LoadPinnedTrace(s, opts)
-					}
-					return LoadPinnedRawTracepoint(s, opts)
-				},
-			})
+			testLink(t, link, prog)
 		})
 	}
 }
@@ -144,10 +131,5 @@ func TestLSM(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	testLink(t, link, testLinkOptions{
-		prog: prog,
-		loadPinned: func(s string, opts *ebpf.LoadPinOptions) (Link, error) {
-			return LoadPinnedTrace(s, opts)
-		},
-	})
+	testLink(t, link, prog)
 }

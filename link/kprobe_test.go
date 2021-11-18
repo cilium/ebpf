@@ -36,9 +36,7 @@ func TestKprobe(t *testing.T) {
 	c.Assert(err, qt.IsNil)
 	defer k.Close()
 
-	testLink(t, k, testLinkOptions{
-		prog: prog,
-	})
+	testLink(t, k, prog)
 
 	k, err = Kprobe("bogus", prog)
 	c.Assert(errors.Is(err, os.ErrNotExist), qt.IsTrue, qt.Commentf("got error: %s", err))
@@ -60,9 +58,7 @@ func TestKretprobe(t *testing.T) {
 	c.Assert(err, qt.IsNil)
 	defer k.Close()
 
-	testLink(t, k, testLinkOptions{
-		prog: prog,
-	})
+	testLink(t, k, prog)
 
 	k, err = Kretprobe("bogus", prog)
 	c.Assert(errors.Is(err, os.ErrNotExist), qt.IsTrue, qt.Commentf("got error: %s", err))

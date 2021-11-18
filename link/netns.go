@@ -13,7 +13,7 @@ type NetNsInfo struct {
 
 // NetNsLink is a program attached to a network namespace.
 type NetNsLink struct {
-	*RawLink
+	RawLink
 }
 
 // AttachNetNs attaches a program to a network namespace.
@@ -37,17 +37,19 @@ func AttachNetNs(ns int, prog *ebpf.Program) (*NetNsLink, error) {
 		return nil, err
 	}
 
-	return &NetNsLink{link}, nil
+	return &NetNsLink{*link}, nil
 }
 
 // LoadPinnedNetNs loads a network namespace link from bpffs.
+//
+// Deprecated: use LoadPinnedLink instead.
 func LoadPinnedNetNs(fileName string, opts *ebpf.LoadPinOptions) (*NetNsLink, error) {
 	link, err := LoadPinnedRawLink(fileName, NetNsType, opts)
 	if err != nil {
 		return nil, err
 	}
 
-	return &NetNsLink{link}, nil
+	return &NetNsLink{*link}, nil
 }
 
 // Info returns information about the link.

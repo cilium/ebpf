@@ -69,7 +69,7 @@ func vdsoMemoryAddress(r io.Reader) (uint64, error) {
 		switch tag {
 		case _AT_SYSINFO_EHDR:
 			if val == 0 {
-				continue
+				return 0, fmt.Errorf("invalid address")
 			}
 			return val, nil
 		}

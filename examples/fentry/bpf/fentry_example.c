@@ -1,7 +1,6 @@
 #include "common.h"
 #include "bpf_helpers.h"
 #include "bpf_tracing.h"
-#include "bpf_endian.h"
 
 #define AF_INET 2
 #define TASK_COMM_LEN 16
@@ -57,9 +56,9 @@ int BPF_PROG(tcp_connect, struct sock *sk) {
 		return 0;
 	}
 
-	tcp_info->saddr = bpf_ntohl(sk->__sk_common.skc_rcv_saddr);
-	tcp_info->daddr = bpf_ntohl(sk->__sk_common.skc_daddr);
-	tcp_info->dport = bpf_ntohs(sk->__sk_common.skc_dport);
+	tcp_info->saddr = sk->__sk_common.skc_rcv_saddr;
+	tcp_info->daddr = sk->__sk_common.skc_daddr;
+	tcp_info->dport = sk->__sk_common.skc_dport;
 	tcp_info->sport = sk->__sk_common.skc_num;
 
 	bpf_get_current_comm(&tcp_info->comm, TASK_COMM_LEN);

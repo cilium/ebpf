@@ -26,6 +26,7 @@ import (
 	"os/signal"
 	"syscall"
 
+	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/unix"
 	"github.com/cilium/ebpf/link"
 	"github.com/cilium/ebpf/ringbuf"
@@ -89,6 +90,7 @@ func main() {
 		"Port",
 	)
 
+	var event *Event
 	for {
 		record, err := rd.Read()
 		if err != nil {
@@ -101,11 +103,7 @@ func main() {
 		}
 
 		// Parse the ringbuf event entry into an Event structure.
-		var event Event
-		if err := binary.Read(bytes.NewBuffer(record.RawSample), binary.LittleEndian, &event); err != nil {
-			log.Printf("parsing ringbuf event: %s", err)
-			continue
-		}
+		event = unmarshal(record.RawSample)
 
 		log.Printf("%-16s %-15s %-6d -> %-15s %-6d",
 			unix.ByteSliceToString(event.Comm[:]),
@@ -115,6 +113,18 @@ func main() {
 			event.DPort,
 		)
 	}
+}
+
+func unmarshal(b []byte) *Event {
+	e := &Event{}
+	copy(e.Comm[:], b[:16])
+	r := bytes.NewReader(b[16:])
+	binary.Read(r, internal.NativeEndian, &e.SPort)
+	binary.Read(r, binary.BigEndian, &e.DPort)
+	binary.Read(r, binary.BigEndian, &e.SAddr)
+	binary.Read(r, binary.BigEndian, &e.DAddr)
+
+	return e
 }
 
 // intToIP converts IPv4 number to net.IP

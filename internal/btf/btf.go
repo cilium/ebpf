@@ -195,17 +195,20 @@ func LoadKernelSpec() (*Spec, error) {
 }
 
 func loadKernelSpec() (*Spec, error) {
-	release, err := unix.KernelRelease()
-	if err != nil {
-		return nil, fmt.Errorf("can't read kernel release number: %w", err)
-	}
-
 	fh, err := os.Open("/sys/kernel/btf/vmlinux")
 	if err == nil {
 		defer fh.Close()
 
 		return LoadRawSpec(fh, internal.NativeEndian)
 	}
+
+	var uname unix.Utsname
+	if err := unix.Uname(&uname); err != nil {
+		return nil, fmt.Errorf("uname failed: %w", err)
+	}
+
+	end := bytes.IndexByte(uname.Release[:], 0)
+	release := string(uname.Release[:end])
 
 	// use same list of locations as libbpf
 	// https://github.com/libbpf/libbpf/blob/9a3a42608dbe3731256a5682a125ac1e23bced8f/src/btf.c#L3114-L3122

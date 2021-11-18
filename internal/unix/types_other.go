@@ -261,10 +261,6 @@ func Renameat2(olddirfd int, oldpath string, newdirfd int, newpath string, flags
 	return errNonLinux
 }
 
-func KernelRelease() (string, error) {
-	return "", errNonLinux
-}
-
 func Prlimit(pid, resource int, new, old *Rlimit) error {
 	return errNonLinux
 }

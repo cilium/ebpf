@@ -4,7 +4,6 @@
 package unix
 
 import (
-	"bytes"
 	"syscall"
 
 	linux "golang.org/x/sys/unix"
@@ -192,18 +191,6 @@ func ByteSliceToString(s []byte) string {
 // Renameat2 is a wrapper
 func Renameat2(olddirfd int, oldpath string, newdirfd int, newpath string, flags uint) error {
 	return linux.Renameat2(olddirfd, oldpath, newdirfd, newpath, flags)
-}
-
-func KernelRelease() (string, error) {
-	var uname Utsname
-	err := Uname(&uname)
-	if err != nil {
-		return "", err
-	}
-
-	end := bytes.IndexByte(uname.Release[:], 0)
-	release := string(uname.Release[:end])
-	return release, nil
 }
 
 func Prlimit(pid, resource int, new, old *Rlimit) error {

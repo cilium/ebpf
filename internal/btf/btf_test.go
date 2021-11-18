@@ -12,22 +12,30 @@ import (
 	"github.com/cilium/ebpf/internal/testutils"
 )
 
-func TestFindType(t *testing.T) {
+func parseVmLinux(tb testing.TB) (*Spec, error) {
 	fh, err := os.Open("testdata/vmlinux-btf.gz")
 	if err != nil {
-		t.Fatal(err)
+		tb.Fatal(err)
 	}
 	defer fh.Close()
 
 	rd, err := gzip.NewReader(fh)
 	if err != nil {
-		t.Fatal(err)
+		tb.Fatal(err)
 	}
-	defer rd.Close()
 
 	spec, err := loadRawSpec(rd, binary.LittleEndian, nil, nil)
 	if err != nil {
-		t.Fatal("Can't load BTF:", err)
+		tb.Fatal("Can't load BTF:", err)
+	}
+
+	return spec, nil
+}
+
+func TestFindType(t *testing.T) {
+	spec, err := parseVmLinux(t)
+	if err != nil {
+		t.Fatal(err)
 	}
 
 	// spec.FindType MUST fail if typ is not a non-nil **T, where T satisfies btf.Type.
@@ -64,20 +72,9 @@ func TestFindType(t *testing.T) {
 }
 
 func TestParseVmlinux(t *testing.T) {
-	fh, err := os.Open("testdata/vmlinux-btf.gz")
+	spec, err := parseVmLinux(t)
 	if err != nil {
 		t.Fatal(err)
-	}
-	defer fh.Close()
-
-	rd, err := gzip.NewReader(fh)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	spec, err := loadRawSpec(rd, binary.LittleEndian, nil, nil)
-	if err != nil {
-		t.Fatal("Can't load BTF:", err)
 	}
 
 	var iphdr *Struct
@@ -106,6 +103,20 @@ func TestParseVmlinux(t *testing.T) {
 				t.Fatalf("incorrect int offset of an __u8 int: expected: 0 actual: %d", u8int.OffsetBits)
 			}
 			break
+		}
+	}
+}
+
+func BenchmarkParseVmlinux(b *testing.B) {
+	for n := 0; n < b.N; n++ {
+		spec, err := parseVmLinux(b)
+		if err != nil {
+			b.Fatal(err)
+		}
+
+		// Access spec to prevent it from being optimized away.
+		if spec.byteOrder == nil {
+			b.Fatal("byteOrder missing")
 		}
 	}
 }

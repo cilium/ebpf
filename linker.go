@@ -61,7 +61,7 @@ func needSection(insns, section asm.Instructions) (bool, error) {
 			continue
 		}
 
-		if ins.OpCode.JumpOp() != asm.Call || ins.Src != asm.PseudoCall {
+		if !ins.IsFunctionCall() && !ins.IsLoadOfFunctionPointer() {
 			continue
 		}
 
@@ -112,6 +112,8 @@ func fixupJumpsAndCalls(insns asm.Instructions) error {
 		}
 
 		switch {
+		case ins.IsLoadOfFunctionPointer() && ins.Constant == -1:
+			fallthrough
 		case ins.IsFunctionCall() && ins.Constant == -1:
 			// Rewrite bpf to bpf call
 			callOffset, ok := symbolOffsets[ins.Reference]

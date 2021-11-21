@@ -181,6 +181,11 @@ func (ins *Instruction) IsFunctionCall() bool {
 	return ins.OpCode.JumpOp() == Call && ins.Src == PseudoCall
 }
 
+// IsLoadOfFunctionPointer returns true if the instruction loads a function pointer.
+func (ins *Instruction) IsLoadOfFunctionPointer() bool {
+	return ins.OpCode.IsDWordLoad() && ins.Src == PseudoFunc
+}
+
 // IsBuiltinCall returns true if the instruction is a built-in call, i.e. BPF helper call.
 func (ins *Instruction) IsBuiltinCall() bool {
 	return ins.OpCode.JumpOp() == Call && ins.Src == R0 && ins.Dst == R0

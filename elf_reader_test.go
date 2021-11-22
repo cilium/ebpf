@@ -606,9 +606,6 @@ func TestLibBPFCompat(t *testing.T) {
 			t.Skip("Skipping due to missing InnerMap in map definition")
 		case "test_core_autosize.o":
 			t.Skip("Skipping since the test generates dynamic BTF")
-		case "for_each_array_map_elem.o", "for_each_array_map_elem.linked3.o",
-			"for_each_hash_map_elem.o", "for_each_hash_map_elem.linked3.o":
-			t.Skip("Skipping since function pointers are not supported")
 		case "test_static_linked.linked3.o":
 			t.Skip("Skipping since .text contains 'subprog' twice")
 		case "linked_maps.linked3.o", "linked_funcs.linked3.o":

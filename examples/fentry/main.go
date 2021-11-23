@@ -17,9 +17,9 @@
 package main
 
 import (
-	"bytes"
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"log"
 	"net"
 	"os"
@@ -36,12 +36,32 @@ import (
 // $BPF_CLANG and $BPF_CFLAGS are set by the Makefile.
 //go:generate go run github.com/cilium/ebpf/cmd/bpf2go -cc $BPF_CLANG -cflags $BPF_CFLAGS bpf ./bpf/fentry_example.c -- -I../headers
 
+// Length of struct event_t sent from kernelspace.
+var eventLength = 28
+
 type Event struct {
-	Comm  [16]byte
+	Comm  string
 	SPort uint16
 	DPort uint16
 	SAddr uint32
 	DAddr uint32
+}
+
+// UnmarshalBinary unmarshals a ringbuf record into an Event.
+func (e *Event) UnmarshalBinary(b []byte) error {
+	if len(b) != eventLength {
+		return fmt.Errorf("unexpected event length %d", len(b))
+	}
+
+	e.Comm = unix.ByteSliceToString(b[:16])
+
+	e.SPort = internal.NativeEndian.Uint16(b[16:18])
+	e.DPort = binary.BigEndian.Uint16(b[18:20])
+
+	e.SAddr = binary.BigEndian.Uint32(b[20:24])
+	e.DAddr = binary.BigEndian.Uint32(b[24:28])
+
+	return nil
 }
 
 func main() {
@@ -90,7 +110,7 @@ func main() {
 		"Port",
 	)
 
-	var event *Event
+	var event Event
 	for {
 		record, err := rd.Read()
 		if err != nil {
@@ -103,28 +123,18 @@ func main() {
 		}
 
 		// Parse the ringbuf event entry into an Event structure.
-		event = unmarshal(record.RawSample)
+		if err := event.UnmarshalBinary(record.RawSample); err != nil {
+			log.Fatal("unmarshaling event: %s", err)
+		}
 
 		log.Printf("%-16s %-15s %-6d -> %-15s %-6d",
-			unix.ByteSliceToString(event.Comm[:]),
+			event.Comm,
 			intToIP(event.SAddr),
 			event.SPort,
 			intToIP(event.DAddr),
 			event.DPort,
 		)
 	}
-}
-
-func unmarshal(b []byte) *Event {
-	e := &Event{}
-	copy(e.Comm[:], b[:16])
-	r := bytes.NewReader(b[16:])
-	binary.Read(r, internal.NativeEndian, &e.SPort)
-	binary.Read(r, binary.BigEndian, &e.DPort)
-	binary.Read(r, binary.BigEndian, &e.SAddr)
-	binary.Read(r, binary.BigEndian, &e.DAddr)
-
-	return e
 }
 
 // intToIP converts IPv4 number to net.IP

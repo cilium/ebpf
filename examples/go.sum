@@ -1,5 +1,5 @@
-github.com/cilium/ebpf v0.7.1-0.20211110135446-eced84a27004 h1:1YGHqgCGOIvqWDwe9F2UuZyLrJITpWJHoOauXOSqDJE=
-github.com/cilium/ebpf v0.7.1-0.20211110135446-eced84a27004/go.mod h1:f5zLIM0FSNuAkSyLAN7X+Hy6yznlF1mNiWUMfxMtrgk=
+github.com/cilium/ebpf v0.7.1-0.20211123152238-8df2d8a42fb0 h1:Qs71uPZOk0Jplz4Dj9BNQidNL7t2R6NewE4t7kCQ3yA=
+github.com/cilium/ebpf v0.7.1-0.20211123152238-8df2d8a42fb0/go.mod h1:f5zLIM0FSNuAkSyLAN7X+Hy6yznlF1mNiWUMfxMtrgk=
 github.com/creack/pty v1.1.9/go.mod h1:oKZEueFk5CKHvIhNR5MUki03XCEU+Q6VDXinZuGJ33E=
 github.com/frankban/quicktest v1.14.0 h1:+cqqvzZV87b4adx/5ayVOaYZ2CrvM4ejQvUdBzPPUss=
 github.com/frankban/quicktest v1.14.0/go.mod h1:NeW+ay9A/U67EYXNFA1nPE8e/tnQv/09mUdL/ijj8og=

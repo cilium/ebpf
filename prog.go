@@ -92,6 +92,10 @@ type ProgramSpec struct {
 
 	// The byte order this program was compiled for, may be nil.
 	ByteOrder binary.ByteOrder
+
+	// Programs called by this ProgramSpec's bytecode. Populated during ELF
+	// loading and read by the linker during marshaling.
+	neighbours []*ProgramSpec
 }
 
 // Copy returns a copy of the spec.
@@ -155,6 +159,10 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions, handles *hand
 		return nil, errors.New("instructions cannot be empty")
 	}
 
+	if spec.Type == UnspecifiedProgram {
+		return nil, errors.New("can't load program of unspecified type")
+	}
+
 	if spec.ByteOrder != nil && spec.ByteOrder != internal.NativeEndian {
 		return nil, fmt.Errorf("can't load %s program on %s", spec.ByteOrder, internal.NativeEndian)
 	}
@@ -193,6 +201,8 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions, handles *hand
 		}
 	}
 
+	chain := spec.flatten(nil)
+
 	var btfDisabled bool
 	var core btf.COREFixups
 	if spec.BTF != nil {
@@ -210,25 +220,27 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions, handles *hand
 		if handle != nil {
 			attr.ProgBtfFd = uint32(handle.FD())
 
-			recSize, bytes, err := spec.BTF.LineInfos()
+			fib, err := collectFuncInfos(chain)
 			if err != nil {
-				return nil, fmt.Errorf("get BTF line infos: %w", err)
+				return nil, err
 			}
-			attr.LineInfoRecSize = recSize
-			attr.LineInfoCnt = uint32(uint64(len(bytes)) / uint64(recSize))
-			attr.LineInfo = sys.NewSlicePointer(bytes)
+			attr.FuncInfoRecSize = uint32(binary.Size(btf.FuncInfo{}))
+			attr.FuncInfoCnt = uint32(len(fib)) / attr.FuncInfoRecSize
+			attr.FuncInfo = sys.NewSlicePointer(fib)
 
-			recSize, bytes, err = spec.BTF.FuncInfos()
+			lib, err := collectLineInfos(chain)
 			if err != nil {
-				return nil, fmt.Errorf("get BTF function infos: %w", err)
+				return nil, err
 			}
-			attr.FuncInfoRecSize = recSize
-			attr.FuncInfoCnt = uint32(uint64(len(bytes)) / uint64(recSize))
-			attr.FuncInfo = sys.NewSlicePointer(bytes)
+			attr.LineInfoRecSize = uint32(binary.Size(btf.LineInfo{}))
+			attr.LineInfoCnt = uint32(len(lib)) / attr.LineInfoRecSize
+			attr.LineInfo = sys.NewSlicePointer(lib)
 		}
 	}
 
-	insns, err := core.Apply(spec.Instructions)
+	insns := collectInstructions(chain)
+
+	insns, err = core.Apply(insns)
 	if err != nil {
 		return nil, fmt.Errorf("CO-RE fixup: %w", err)
 	}

@@ -100,37 +100,6 @@ func LoadCollectionSpecFromReader(rd io.ReaderAt) (*CollectionSpec, error) {
 		return nil, fmt.Errorf("load BTF: %w", err)
 	}
 
-	// Assign symbols to all the sections we're interested in.
-	symbols, err := f.Symbols()
-	if err != nil {
-		return nil, fmt.Errorf("load symbols: %v", err)
-	}
-
-	for _, symbol := range symbols {
-		idx := symbol.Section
-		symType := elf.ST_TYPE(symbol.Info)
-
-		section := sections[idx]
-		if section == nil {
-			continue
-		}
-
-		// Older versions of LLVM don't tag symbols correctly, so keep
-		// all NOTYPE ones.
-		keep := symType == elf.STT_NOTYPE
-		switch section.kind {
-		case mapSection, btfMapSection, dataSection:
-			keep = keep || symType == elf.STT_OBJECT
-		case programSection:
-			keep = keep || symType == elf.STT_FUNC
-		}
-		if !keep || symbol.Name == "" {
-			continue
-		}
-
-		section.symbols[symbol.Value] = symbol
-	}
-
 	ec := &elfCode{
 		SafeELFFile: f,
 		sections:    sections,
@@ -138,6 +107,13 @@ func LoadCollectionSpecFromReader(rd io.ReaderAt) (*CollectionSpec, error) {
 		version:     version,
 		btf:         btfSpec,
 	}
+
+	symbols, err := f.Symbols()
+	if err != nil {
+		return nil, fmt.Errorf("load symbols: %v", err)
+	}
+
+	ec.assignSymbols(symbols)
 
 	// Go through relocation sections, and parse the ones for sections we're
 	// interested in. Make sure that relocations point at valid sections.
@@ -244,6 +220,47 @@ func newElfSection(section *elf.Section, kind elfSectionKind) *elfSection {
 		make(map[uint64]elf.Symbol),
 		make(map[uint64]elf.Symbol),
 		0,
+	}
+}
+
+// assignSymbols takes a list of symbols and assigns them to their
+// respective sections, indexed by name.
+func (ec *elfCode) assignSymbols(symbols []elf.Symbol) {
+	for _, symbol := range symbols {
+		symType := elf.ST_TYPE(symbol.Info)
+		symSection := ec.sections[symbol.Section]
+		if symSection == nil {
+			continue
+		}
+
+		// Anonymous symbols only occur in debug sections which we don't process
+		// relocations for. Anonymous symbols are not referenced from other sections.
+		if symbol.Name == "" {
+			continue
+		}
+
+		// Older versions of LLVM don't tag symbols correctly, so keep
+		// all NOTYPE ones.
+		switch symSection.kind {
+		case mapSection, btfMapSection, dataSection:
+			if symType != elf.STT_NOTYPE && symType != elf.STT_OBJECT {
+				continue
+			}
+		case programSection:
+			if symType != elf.STT_NOTYPE && symType != elf.STT_FUNC {
+				continue
+			}
+			// LLVM emits LBB_ (Local Basic Block) symbols that seem to be jump
+			// targets within sections, but BPF has no use for them.
+			if strings.HasPrefix(symbol.Name, "LBB") {
+				continue
+			}
+		// Only collect symbols that occur in program/maps/data sections.
+		default:
+			continue
+		}
+
+		symSection.symbols[symbol.Value] = symbol
 	}
 }
 

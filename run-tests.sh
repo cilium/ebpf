@@ -122,6 +122,8 @@ fi
 
 export GOFLAGS=-mod=readonly
 export CGO_ENABLED=0
+# LINUX_VERSION_CODE test compares this to discovered value.
+export KERNEL_VERSION="${kernel_version}"
 
 echo Testing on "${kernel_version}"
 go test -exec "$script --exec-vm $input" "${args[@]}"

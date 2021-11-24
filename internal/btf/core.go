@@ -97,7 +97,7 @@ func (f COREFixup) isNonExistant() bool {
 
 type COREFixups map[uint64]COREFixup
 
-// Apply a set of CO-RE relocations to a BPF program.
+// Apply returns a copy of insns with CO-RE relocations applied.
 func (fs COREFixups) Apply(insns asm.Instructions) (asm.Instructions, error) {
 	if len(fs) == 0 {
 		cpy := make(asm.Instructions, len(insns))
@@ -191,13 +191,13 @@ func (k COREKind) checksForExistence() bool {
 	return k == reloEnumvalExists || k == reloTypeExists || k == reloFieldExists
 }
 
-func coreRelocate(local, target *Spec, relos coreRelos) (COREFixups, error) {
+func coreRelocate(local, target *Spec, relos CoreRelos) (COREFixups, error) {
 	if local.byteOrder != target.byteOrder {
 		return nil, fmt.Errorf("can't relocate %s against %s", local.byteOrder, target.byteOrder)
 	}
 
 	var ids []TypeID
-	relosByID := make(map[TypeID]coreRelos)
+	relosByID := make(map[TypeID]CoreRelos)
 	result := make(COREFixups, len(relos))
 	for _, relo := range relos {
 		if relo.kind == reloTypeIDLocal {
@@ -262,7 +262,7 @@ var errImpossibleRelocation = errors.New("impossible relocation")
 //
 // The best target is determined by scoring: the less poisoning we have to do
 // the better the target is.
-func coreCalculateFixups(local Type, targets []Type, relos coreRelos) ([]COREFixup, error) {
+func coreCalculateFixups(local Type, targets []Type, relos CoreRelos) ([]COREFixup, error) {
 	localID := local.ID()
 	local, err := copyType(local, skipQualifiersAndTypedefs)
 	if err != nil {
@@ -326,7 +326,7 @@ func coreCalculateFixups(local Type, targets []Type, relos coreRelos) ([]COREFix
 
 // coreCalculateFixup calculates the fixup for a single local type, target type
 // and relocation.
-func coreCalculateFixup(local Type, localID TypeID, target Type, targetID TypeID, relo coreRelo) (COREFixup, error) {
+func coreCalculateFixup(local Type, localID TypeID, target Type, targetID TypeID, relo CoreRelo) (COREFixup, error) {
 	fixup := func(local, target uint32) (COREFixup, error) {
 		return COREFixup{relo.kind, local, target, false}, nil
 	}

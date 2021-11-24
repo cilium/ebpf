@@ -80,7 +80,7 @@ func main() {
 	}
 	defer objs.Close()
 
-	link, err := link.AttachTrace(link.TraceOptions{
+	link, err := link.AttachTracing(link.TracingOptions{
 		Program: objs.bpfPrograms.TcpConnect,
 	})
 	if err != nil {

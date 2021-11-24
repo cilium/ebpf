@@ -129,6 +129,7 @@ func TestLoadCollectionSpec(t *testing.T) {
 		cmpopts.IgnoreTypes(new(btf.Map), new(btf.Program)),
 		cmpopts.IgnoreFields(CollectionSpec{}, "ByteOrder"),
 		cmpopts.IgnoreFields(ProgramSpec{}, "Instructions", "ByteOrder"),
+		cmpopts.IgnoreUnexported(ProgramSpec{}),
 		cmpopts.IgnoreMapEntries(func(key string, _ *MapSpec) bool {
 			switch key {
 			case ".bss", ".data", ".rodata":

@@ -1,8 +1,6 @@
 package btf
 
 import (
-	"bytes"
-	"debug/elf"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -98,156 +96,262 @@ func parseBTFExtCoreHeader(r io.Reader, bo binary.ByteOrder, extHeader *btfExtHe
 	return &coreHeader, nil
 }
 
-// parseExtInfos parses the .BTF.ext section.
-// The resulting maps are keyed by the sections described by the extInfos.
-func parseExtInfos(sec *elf.Section, bo binary.ByteOrder, strings stringTable) (funcInfo, lineInfo map[string]extInfo, relos map[string]coreRelos, err error) {
-	// Open unbuffered section reader. binary.Read() calls io.ReadFull on
-	// the header structs, resulting in one syscall per header.
-	r := sec.Open()
-
-	extHeader, err := parseBTFExtHeader(r, bo)
-	if err != nil {
-		return nil, nil, nil, fmt.Errorf("parsing BTF extension header: %w", err)
-	}
-
-	coreHeader, err := parseBTFExtCoreHeader(r, bo, extHeader)
-	if err != nil {
-		return nil, nil, nil, fmt.Errorf("parsing BTF CO-RE header: %w", err)
-	}
-
-	buf := internal.NewBufferedSectionReader(sec, extHeader.funcInfoStart(), int64(extHeader.FuncInfoLen))
-	funcInfo, err = parseExtInfo(buf, bo, strings)
-	if err != nil {
-		return nil, nil, nil, fmt.Errorf("function info: %w", err)
-	}
-
-	buf = internal.NewBufferedSectionReader(sec, extHeader.lineInfoStart(), int64(extHeader.LineInfoLen))
-	lineInfo, err = parseExtInfo(buf, bo, strings)
-	if err != nil {
-		return nil, nil, nil, fmt.Errorf("line info: %w", err)
-	}
-
-	if coreHeader.CoreReloOff > 0 && coreHeader.CoreReloLen > 0 {
-		buf = internal.NewBufferedSectionReader(sec, extHeader.coreReloStart(coreHeader), int64(coreHeader.CoreReloLen))
-		relos, err = parseExtInfoRelos(buf, bo, strings)
-		if err != nil {
-			return nil, nil, nil, fmt.Errorf("CO-RE relocation info: %w", err)
-		}
-	}
-
-	return funcInfo, lineInfo, relos, nil
-}
-
 type btfExtInfoSec struct {
 	SecNameOff uint32
 	NumInfo    uint32
 }
 
-type extInfoRecord struct {
-	InsnOff uint64
-	Opaque  []byte
+// parseExtInfoSec parses a btf_ext_info_sec header within .BTF.ext,
+// appearing within func_info and line_info sub-sections.
+// These headers appear once for each program section in the ELF and are
+// followed by one or more func/line_info records for the section.
+func parseExtInfoSec(r io.Reader, bo binary.ByteOrder, strings stringTable) (string, *btfExtInfoSec, error) {
+	var infoHeader btfExtInfoSec
+	if err := binary.Read(r, bo, &infoHeader); err != nil {
+		return "", nil, fmt.Errorf("read ext info header: %w", err)
+	}
+
+	secName, err := strings.Lookup(infoHeader.SecNameOff)
+	if err != nil {
+		return "", nil, fmt.Errorf("get section name: %w", err)
+	}
+	if secName == "" {
+		return "", nil, fmt.Errorf("extinfo header refers to empty section name")
+	}
+
+	if infoHeader.NumInfo == 0 {
+		return "", nil, fmt.Errorf("section %s has zero records", secName)
+	}
+
+	return secName, &infoHeader, nil
 }
 
-type extInfo struct {
-	byteOrder  binary.ByteOrder
-	recordSize uint32
-	records    []extInfoRecord
-}
-
-func (ei extInfo) append(other extInfo, offset uint64) (extInfo, error) {
-	if other.byteOrder != ei.byteOrder {
-		return extInfo{}, fmt.Errorf("ext_info byte order mismatch, want %v (got %v)", ei.byteOrder, other.byteOrder)
-	}
-
-	if other.recordSize != ei.recordSize {
-		return extInfo{}, fmt.Errorf("ext_info record size mismatch, want %d (got %d)", ei.recordSize, other.recordSize)
-	}
-
-	records := make([]extInfoRecord, 0, len(ei.records)+len(other.records))
-	records = append(records, ei.records...)
-	for _, info := range other.records {
-		records = append(records, extInfoRecord{
-			InsnOff: info.InsnOff + offset,
-			Opaque:  info.Opaque,
-		})
-	}
-	return extInfo{ei.byteOrder, ei.recordSize, records}, nil
-}
-
-func (ei extInfo) MarshalBinary() ([]byte, error) {
-	if ei.byteOrder != internal.NativeEndian {
-		return nil, fmt.Errorf("%s is not the native byte order", ei.byteOrder)
-	}
-
-	if len(ei.records) == 0 {
-		return nil, nil
-	}
-
-	buf := bytes.NewBuffer(make([]byte, 0, int(ei.recordSize)*len(ei.records)))
-	for _, info := range ei.records {
-		// The kernel expects offsets in number of raw bpf instructions,
-		// while the ELF tracks it in bytes.
-		insnOff := uint32(info.InsnOff / asm.InstructionSize)
-		if err := binary.Write(buf, internal.NativeEndian, insnOff); err != nil {
-			return nil, fmt.Errorf("can't write instruction offset: %v", err)
-		}
-
-		buf.Write(info.Opaque)
-	}
-
-	return buf.Bytes(), nil
-}
-
-// parseExtInfo parses an ext info sub-section within .BTF.ext ito a map of
-// ext info indexed by section name.
-func parseExtInfo(r io.Reader, bo binary.ByteOrder, strings stringTable) (map[string]extInfo, error) {
+// parseExtInfoRecordSize parses the uint32 at the beginning of a func_infos
+// or line_infos segment that describes the length of all extInfoRecords in
+// that segment.
+func parseExtInfoRecordSize(r io.Reader, bo binary.ByteOrder) (uint32, error) {
 	const maxRecordSize = 256
 
 	var recordSize uint32
 	if err := binary.Read(r, bo, &recordSize); err != nil {
-		return nil, fmt.Errorf("can't read record size: %v", err)
+		return 0, fmt.Errorf("can't read record size: %v", err)
 	}
 
 	if recordSize < 4 {
-		// Need at least insnOff
-		return nil, errors.New("record size too short")
+		// Need at least InsnOff worth of bytes per record.
+		return 0, errors.New("record size too short")
 	}
 	if recordSize > maxRecordSize {
-		return nil, fmt.Errorf("record size %v exceeds %v", recordSize, maxRecordSize)
+		return 0, fmt.Errorf("record size %v exceeds %v", recordSize, maxRecordSize)
 	}
 
-	result := make(map[string]extInfo)
+	return recordSize, nil
+}
+
+// FuncInfo represents the location and type ID of a function in a BPF ELF.
+type FuncInfo struct {
+	// Instruction offset of the function within an ELF section.
+	// Always zero after parsing a funcinfo from an ELF, instruction streams
+	// are split on function boundaries.
+	InsnOff uint32
+	TypeID  TypeID
+}
+
+// Name looks up the FuncInfo's corresponding function name in the given spec.
+func (fi FuncInfo) Name(spec *Spec) (string, error) {
+	// Look up function name based on type ID.
+	typ, err := spec.TypeByID(fi.TypeID)
+	if err != nil {
+		return "", fmt.Errorf("looking up type by ID: %w", err)
+	}
+	if _, ok := typ.(*Func); !ok {
+		return "", fmt.Errorf("type ID %d is a %T, but expected a Func", fi.TypeID, typ)
+	}
+
+	// C doesn't have anonymous functions, but check just in case.
+	if name := typ.TypeName(); name != "" {
+		return name, nil
+	}
+
+	return "", fmt.Errorf("Func with type ID %d doesn't have a name", fi.TypeID)
+}
+
+// Marshal writes the binary representation of the FuncInfo to w.
+// The function offset is converted from bytes to instructions.
+func (fi FuncInfo) Marshal(w io.Writer, offset uint64) error {
+	fi.InsnOff += uint32(offset)
+	// The kernel expects offsets in number of raw bpf instructions,
+	// while the ELF tracks it in bytes.
+	fi.InsnOff /= asm.InstructionSize
+	return binary.Write(w, internal.NativeEndian, fi)
+}
+
+type FuncInfos []FuncInfo
+
+// funcForOffset returns the function that the instruction at the given
+// ELF section offset belongs to.
+//
+// For example, consider an ELF section that contains 3 functions (a, b, c)
+// at offsets 0, 10 and 15 respectively. Offset 5 will return function a,
+// offset 12 will return b, offset >= 15 will return c, etc.
+func (infos FuncInfos) funcForOffset(offset uint32) *FuncInfo {
+	for n, fi := range infos {
+		// Iterator went past the offset the caller is looking for,
+		// no point in continuing the search.
+		if offset < fi.InsnOff {
+			return nil
+		}
+
+		// If there is no next item in the list, or if the given offset
+		// is smaller than the next function, the offset belongs to
+		// the current function.
+		if n+1 >= len(infos) || offset < infos[n+1].InsnOff {
+			return &fi
+		}
+	}
+
+	return nil
+}
+
+// parseLineInfos parses a func_info sub-section within .BTF.ext ito a map of
+// func infos indexed by section name.
+func parseFuncInfos(r io.Reader, bo binary.ByteOrder, strings stringTable) (map[string]FuncInfos, error) {
+	recordSize, err := parseExtInfoRecordSize(r, bo)
+	if err != nil {
+		return nil, err
+	}
+
+	result := make(map[string]FuncInfos)
 	for {
-		secName, infoHeader, err := parseExtInfoHeader(r, bo, strings)
+		secName, infoHeader, err := parseExtInfoSec(r, bo, strings)
 		if errors.Is(err, io.EOF) {
 			return result, nil
 		}
 
-		var records []extInfoRecord
-		for i := uint32(0); i < infoHeader.NumInfo; i++ {
-			var byteOff uint32
-			if err := binary.Read(r, bo, &byteOff); err != nil {
-				return nil, fmt.Errorf("section %v: can't read extended info offset: %v", secName, err)
-			}
-
-			buf := make([]byte, int(recordSize-4))
-			if _, err := io.ReadFull(r, buf); err != nil {
-				return nil, fmt.Errorf("section %v: can't read record: %v", secName, err)
-			}
-
-			if byteOff%asm.InstructionSize != 0 {
-				return nil, fmt.Errorf("section %v: offset %v is not aligned with instruction size", secName, byteOff)
-			}
-
-			records = append(records, extInfoRecord{uint64(byteOff), buf})
+		records, err := parseFuncInfoRecords(r, bo, recordSize, infoHeader.NumInfo)
+		if err != nil {
+			return nil, fmt.Errorf("section %v: %w", secName, err)
 		}
 
-		result[secName] = extInfo{
-			bo,
-			recordSize,
-			records,
+		result[secName] = records
+	}
+}
+
+// parseFuncInfoRecords parses a stream of func_infos into a funcInfos.
+// These records appear after a btf_ext_info_sec header in the func_info
+// sub-section of .BTF.ext.
+func parseFuncInfoRecords(r io.Reader, bo binary.ByteOrder, recordSize uint32, recordNum uint32) (FuncInfos, error) {
+	var out FuncInfos
+	var fi FuncInfo
+
+	if exp, got := uint32(binary.Size(fi)), recordSize; exp != got {
+		// BTF blob's record size is longer than we know how to parse.
+		return nil, fmt.Errorf("expected FuncInfo record size %d, but BTF blob contains %d", exp, got)
+	}
+
+	for i := uint32(0); i < recordNum; i++ {
+		if err := binary.Read(r, bo, &fi); err != nil {
+			return nil, fmt.Errorf("can't read function info: %v", err)
+		}
+
+		if fi.InsnOff%asm.InstructionSize != 0 {
+			return nil, fmt.Errorf("offset %v is not aligned with instruction size", fi.InsnOff)
+		}
+
+		out = append(out, fi)
+	}
+
+	return out, nil
+}
+
+// LineInfo represents the location and contents of a single line of source
+// code a BPF ELF was compiled from.
+type LineInfo struct {
+	// Instruction offset of the function within an ELF section.
+	// After parsing a LineInfo from an ELF, this offset is relative to
+	// the function body instead of an ELF section.
+	InsnOff     uint32
+	FileNameOff uint32
+	LineOff     uint32
+	LineCol     uint32
+}
+
+// Marshal writes the binary representation of the LineInfo to w.
+// The instruction offset is converted from bytes to instructions.
+func (li LineInfo) Marshal(w io.Writer, offset uint64) error {
+	li.InsnOff += uint32(offset)
+	// The kernel expects offsets in number of raw bpf instructions,
+	// while the ELF tracks it in bytes.
+	li.InsnOff /= asm.InstructionSize
+	return binary.Write(w, internal.NativeEndian, li)
+}
+
+type LineInfos []LineInfo
+
+// Marshal writes the binary representation of the LineInfos to w.
+func (li LineInfos) Marshal(w io.Writer, off uint64) error {
+	if len(li) == 0 {
+		return nil
+	}
+
+	for _, info := range li {
+		if err := info.Marshal(w, off); err != nil {
+			return err
 		}
 	}
+
+	return nil
+}
+
+// parseLineInfos parses a line_info sub-section within .BTF.ext ito a map of
+// line infos indexed by section name.
+func parseLineInfos(r io.Reader, bo binary.ByteOrder, strings stringTable) (map[string]LineInfos, error) {
+	recordSize, err := parseExtInfoRecordSize(r, bo)
+	if err != nil {
+		return nil, err
+	}
+
+	result := make(map[string]LineInfos)
+	for {
+		secName, infoHeader, err := parseExtInfoSec(r, bo, strings)
+		if errors.Is(err, io.EOF) {
+			return result, nil
+		}
+
+		records, err := parseLineInfoRecords(r, bo, recordSize, infoHeader.NumInfo)
+		if err != nil {
+			return nil, fmt.Errorf("section %v: %w", secName, err)
+		}
+
+		result[secName] = records
+	}
+}
+
+// parseLineInfoRecords parses a stream of line_infos into a lineInfos.
+// These records appear after a btf_ext_info_sec header in the line_info
+// sub-section of .BTF.ext.
+func parseLineInfoRecords(r io.Reader, bo binary.ByteOrder, recordSize uint32, recordNum uint32) (LineInfos, error) {
+	var out LineInfos
+	var li LineInfo
+
+	if exp, got := uint32(binary.Size(li)), recordSize; exp != got {
+		// BTF blob's record size is longer than we know how to parse.
+		return nil, fmt.Errorf("expected LineInfo record size %d, but BTF blob contains %d", exp, got)
+	}
+
+	for i := uint32(0); i < recordNum; i++ {
+		if err := binary.Read(r, bo, &li); err != nil {
+			return nil, fmt.Errorf("can't read line info: %v", err)
+		}
+
+		if li.InsnOff%asm.InstructionSize != 0 {
+			return nil, fmt.Errorf("offset %v is not aligned with instruction size", li.InsnOff)
+		}
+
+		out = append(out, li)
+	}
+
+	return out, nil
 }
 
 // bpfCoreRelo matches the kernel's struct bpf_core_relo.
@@ -258,99 +362,78 @@ type bpfCoreRelo struct {
 	Kind         COREKind
 }
 
-type coreRelo struct {
+type CoreRelo struct {
 	insnOff  uint32
 	typeID   TypeID
 	accessor coreAccessor
 	kind     COREKind
 }
 
-type coreRelos []coreRelo
-
-// append two slices of extInfoRelo to each other. The InsnOff of b are adjusted
-// by offset.
-func (r coreRelos) append(other coreRelos, offset uint64) coreRelos {
-	result := make([]coreRelo, 0, len(r)+len(other))
-	result = append(result, r...)
-	for _, relo := range other {
-		relo.insnOff += uint32(offset)
-		result = append(result, relo)
-	}
-	return result
-}
+type CoreRelos []CoreRelo
 
 var extInfoReloSize = binary.Size(bpfCoreRelo{})
 
-// parseExtInfoRelos parses a core_relos sub-section within .BTF.ext ito a map of
+// parseCoreRelos parses a core_relos sub-section within .BTF.ext ito a map of
 // CO-RE relocations indexed by section name.
-func parseExtInfoRelos(r io.Reader, bo binary.ByteOrder, strings stringTable) (map[string]coreRelos, error) {
-	var recordSize uint32
-	if err := binary.Read(r, bo, &recordSize); err != nil {
-		return nil, fmt.Errorf("read record size: %v", err)
+func parseCoreRelos(r io.Reader, bo binary.ByteOrder, strings stringTable) (map[string]CoreRelos, error) {
+	recordSize, err := parseExtInfoRecordSize(r, bo)
+	if err != nil {
+		return nil, err
 	}
 
 	if recordSize != uint32(extInfoReloSize) {
 		return nil, fmt.Errorf("expected record size %d, got %d", extInfoReloSize, recordSize)
 	}
 
-	result := make(map[string]coreRelos)
+	result := make(map[string]CoreRelos)
 	for {
-		secName, infoHeader, err := parseExtInfoHeader(r, bo, strings)
+		secName, infoHeader, err := parseExtInfoSec(r, bo, strings)
 		if errors.Is(err, io.EOF) {
 			return result, nil
 		}
 
-		var relos coreRelos
-		for i := uint32(0); i < infoHeader.NumInfo; i++ {
-			var relo bpfCoreRelo
-			if err := binary.Read(r, bo, &relo); err != nil {
-				return nil, fmt.Errorf("section %v: read record: %v", secName, err)
-			}
-
-			if relo.InsnOff%asm.InstructionSize != 0 {
-				return nil, fmt.Errorf("section %v: offset %v is not aligned with instruction size", secName, relo.InsnOff)
-			}
-
-			accessorStr, err := strings.Lookup(relo.AccessStrOff)
-			if err != nil {
-				return nil, err
-			}
-
-			accessor, err := parseCoreAccessor(accessorStr)
-			if err != nil {
-				return nil, fmt.Errorf("accessor %q: %s", accessorStr, err)
-			}
-
-			relos = append(relos, coreRelo{
-				relo.InsnOff,
-				relo.TypeID,
-				accessor,
-				relo.Kind,
-			})
+		records, err := parseCoreReloRecords(r, bo, recordSize, infoHeader.NumInfo, strings)
+		if err != nil {
+			return nil, fmt.Errorf("section %v: %w", secName, err)
 		}
 
-		result[secName] = relos
+		result[secName] = records
 	}
 }
 
-// parseExtInfoHeader parses a btf_ext_info_sec header within .BTF.ext,
-// appearing within func_info and line_info sub-sections.
-// These headers appear once for each program section in the ELF and are
-// followed by one or more func/line_info records for the section.
-func parseExtInfoHeader(r io.Reader, bo binary.ByteOrder, strings stringTable) (string, *btfExtInfoSec, error) {
-	var infoHeader btfExtInfoSec
-	if err := binary.Read(r, bo, &infoHeader); err != nil {
-		return "", nil, fmt.Errorf("read ext info header: %w", err)
+// parseCoreReloRecords parses a stream of CO-RE relocation entries into a
+// coreRelos. These records appear after a btf_ext_info_sec header in the
+// core_relos sub-section of .BTF.ext.
+func parseCoreReloRecords(r io.Reader, bo binary.ByteOrder, recordSize uint32, recordNum uint32, strings stringTable) (CoreRelos, error) {
+	var out CoreRelos
+
+	var relo bpfCoreRelo
+	for i := uint32(0); i < recordNum; i++ {
+		if err := binary.Read(r, bo, &relo); err != nil {
+			return nil, fmt.Errorf("can't read CO-RE relocation: %v", err)
+		}
+
+		if relo.InsnOff%asm.InstructionSize != 0 {
+			return nil, fmt.Errorf("offset %v is not aligned with instruction size", relo.InsnOff)
+		}
+
+		accessorStr, err := strings.Lookup(relo.AccessStrOff)
+		if err != nil {
+			return nil, err
+		}
+
+		accessor, err := parseCoreAccessor(accessorStr)
+		if err != nil {
+			return nil, fmt.Errorf("accessor %q: %s", accessorStr, err)
+		}
+
+		out = append(out, CoreRelo{
+			relo.InsnOff,
+			relo.TypeID,
+			accessor,
+			relo.Kind,
+		})
 	}
 
-	secName, err := strings.Lookup(infoHeader.SecNameOff)
-	if err != nil {
-		return "", nil, fmt.Errorf("get section name: %w", err)
-	}
-
-	if infoHeader.NumInfo == 0 {
-		return "", nil, fmt.Errorf("section %s has zero records", secName)
-	}
-
-	return secName, &infoHeader, nil
+	return out, nil
 }

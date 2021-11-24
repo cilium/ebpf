@@ -22,8 +22,8 @@ import (
 	"github.com/cilium/ebpf/rlimit"
 )
 
-// $BPF_CLANG and $BPF_CFLAGS are set by the Makefile.
-//go:generate go run github.com/cilium/ebpf/cmd/bpf2go -cc $BPF_CLANG -cflags $BPF_CFLAGS bpf ./bpf/cgroup_skb_example.c -- -I../headers
+// $BPF_CLANG, $BPF_STRIP and $BPF_CFLAGS are set by the Makefile.
+//go:generate go run github.com/cilium/ebpf/cmd/bpf2go -cc $BPF_CLANG -strip $BPF_STRIP -cflags $BPF_CFLAGS bpf ./bpf/cgroup_skb_example.c -- -I../headers
 
 var cgroupPath = ""
 

@@ -4,7 +4,6 @@ import (
 	"testing"
 
 	"github.com/cilium/ebpf"
-	"github.com/cilium/ebpf/asm"
 	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/testutils"
 )
@@ -83,20 +82,7 @@ func TestTracing(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			prog, err := ebpf.NewProgram(&ebpf.ProgramSpec{
-				Type:       tt.programType,
-				AttachType: tt.attachType,
-				AttachTo:   tt.attachTo,
-				Instructions: asm.Instructions{
-					asm.LoadImm(asm.R0, 0, asm.DWord),
-					asm.Return(),
-				},
-				License: "MIT",
-			})
-			if err != nil {
-				t.Fatal(err)
-			}
-			defer prog.Close()
+			prog := mustLoadProgram(t, tt.programType, tt.attachType, tt.attachTo)
 
 			link, err := AttachTracing(TracingOptions{Program: prog})
 			if err != nil {
@@ -111,20 +97,7 @@ func TestTracing(t *testing.T) {
 func TestLSM(t *testing.T) {
 	testutils.SkipOnOldKernel(t, "5.11", "BPF_LINK_TYPE_TRACING")
 
-	prog, err := ebpf.NewProgram(&ebpf.ProgramSpec{
-		Type:       ebpf.LSM,
-		AttachType: ebpf.AttachLSMMac,
-		AttachTo:   "file_mprotect",
-		Instructions: asm.Instructions{
-			asm.LoadImm(asm.R0, 0, asm.DWord),
-			asm.Return(),
-		},
-		License: "GPL",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer prog.Close()
+	prog := mustLoadProgram(t, ebpf.LSM, ebpf.AttachLSMMac, "file_mprotect")
 
 	link, err := AttachLSM(LSMOptions{Program: prog})
 	if err != nil {

@@ -13,24 +13,10 @@ import (
 	"github.com/cilium/ebpf/internal/unix"
 )
 
-var kprobeSpec = ebpf.ProgramSpec{
-	Type:    ebpf.Kprobe,
-	License: "MIT",
-	Instructions: asm.Instructions{
-		// set exit code to 0
-		asm.Mov.Imm(asm.R0, 0),
-		asm.Return(),
-	},
-}
-
 func TestKprobe(t *testing.T) {
 	c := qt.New(t)
 
-	prog, err := ebpf.NewProgram(&kprobeSpec)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer prog.Close()
+	prog := mustLoadProgram(t, ebpf.Kprobe, 0, "")
 
 	k, err := Kprobe("printk", prog)
 	c.Assert(err, qt.IsNil)
@@ -48,11 +34,7 @@ func TestKprobe(t *testing.T) {
 func TestKretprobe(t *testing.T) {
 	c := qt.New(t)
 
-	prog, err := ebpf.NewProgram(&kprobeSpec)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer prog.Close()
+	prog := mustLoadProgram(t, ebpf.Kprobe, 0, "")
 
 	k, err := Kretprobe("printk", prog)
 	c.Assert(err, qt.IsNil)

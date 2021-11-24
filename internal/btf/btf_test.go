@@ -190,16 +190,12 @@ func TestLoadSpecFromElf(t *testing.T) {
 	testutils.Files(t, testutils.Glob(t, "../../testdata/loader-e*.elf"), func(t *testing.T, file string) {
 		spec := parseELFBTF(t, file)
 
-		if sec, err := spec.Program("xdp", 1); err != nil {
-			t.Error("Can't get BTF for the xdp section:", err)
-		} else if sec == nil {
-			t.Error("Missing BTF for the xdp section")
+		if prog, err := spec.Program("xdp_prog"); err != nil || prog == nil {
+			t.Error("Can't get BTF for program xdp_prog:", err)
 		}
 
-		if sec, err := spec.Program("socket", 1); err != nil {
-			t.Error("Can't get BTF for the socket section:", err)
-		} else if sec == nil {
-			t.Error("Missing BTF for the socket section")
+		if prog, err := spec.Program("no_relocation"); err != nil || prog == nil {
+			t.Error("Can't get BTF for program no_relocation:", err)
 		}
 
 		vt, err := spec.TypeByID(0)

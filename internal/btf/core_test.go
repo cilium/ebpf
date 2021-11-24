@@ -504,7 +504,7 @@ func TestCoreRelocation(t *testing.T) {
 		for section := range spec.funcInfos {
 			name := strings.TrimPrefix(section, "socket_filter/")
 			t.Run(name, func(t *testing.T) {
-				prog, err := spec.Program(section, 1)
+				prog, err := spec.Program(section)
 				if err != nil {
 					t.Fatal("Retrieve program:", err)
 				}

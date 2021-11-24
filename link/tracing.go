@@ -56,7 +56,7 @@ func AttachFreplace(targetProg *ebpf.Program, name string, prog *ebpf.Program) (
 		defer btfHandle.Close()
 
 		var function *btf.Func
-		if err := btfHandle.Spec().FindType(name, &function); err != nil {
+		if err := btfHandle.Spec().TypeByName(name, &function); err != nil {
 			return nil, err
 		}
 

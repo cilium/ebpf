@@ -45,11 +45,7 @@ func TestExecutable(t *testing.T) {
 func TestUprobe(t *testing.T) {
 	c := qt.New(t)
 
-	prog, err := ebpf.NewProgram(&kprobeSpec)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer prog.Close()
+	prog := mustLoadProgram(t, ebpf.Kprobe, 0, "")
 
 	up, err := bashEx.Uprobe(bashSym, prog, nil)
 	c.Assert(err, qt.IsNil)
@@ -59,25 +55,17 @@ func TestUprobe(t *testing.T) {
 }
 
 func TestUprobeExtNotFound(t *testing.T) {
-	prog, err := ebpf.NewProgram(&kprobeSpec)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer prog.Close()
+	prog := mustLoadProgram(t, ebpf.Kprobe, 0, "")
 
 	// This symbol will not be present in Executable (elf.SHN_UNDEF).
-	_, err = bashEx.Uprobe("open", prog, nil)
+	_, err := bashEx.Uprobe("open", prog, nil)
 	if err == nil {
 		t.Fatal("expected error")
 	}
 }
 
 func TestUprobeExtWithOpts(t *testing.T) {
-	prog, err := ebpf.NewProgram(&kprobeSpec)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer prog.Close()
+	prog := mustLoadProgram(t, ebpf.Kprobe, 0, "")
 
 	// This Uprobe is broken and will not work because the offset is not
 	// correct. This is expected since the offset is provided by the user.
@@ -89,11 +77,7 @@ func TestUprobeExtWithOpts(t *testing.T) {
 }
 
 func TestUprobeWithPID(t *testing.T) {
-	prog, err := ebpf.NewProgram(&kprobeSpec)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer prog.Close()
+	prog := mustLoadProgram(t, ebpf.Kprobe, 0, "")
 
 	up, err := bashEx.Uprobe(bashSym, prog, &UprobeOptions{PID: os.Getpid()})
 	if err != nil {
@@ -103,14 +87,10 @@ func TestUprobeWithPID(t *testing.T) {
 }
 
 func TestUprobeWithNonExistentPID(t *testing.T) {
-	prog, err := ebpf.NewProgram(&kprobeSpec)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer prog.Close()
+	prog := mustLoadProgram(t, ebpf.Kprobe, 0, "")
 
 	// trying to open a perf event on a non-existent PID will return ESRCH.
-	_, err = bashEx.Uprobe(bashSym, prog, &UprobeOptions{PID: -2})
+	_, err := bashEx.Uprobe(bashSym, prog, &UprobeOptions{PID: -2})
 	if !errors.Is(err, unix.ESRCH) {
 		t.Fatalf("expected ESRCH, got %v", err)
 	}
@@ -119,11 +99,7 @@ func TestUprobeWithNonExistentPID(t *testing.T) {
 func TestUretprobe(t *testing.T) {
 	c := qt.New(t)
 
-	prog, err := ebpf.NewProgram(&kprobeSpec)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer prog.Close()
+	prog := mustLoadProgram(t, ebpf.Kprobe, 0, "")
 
 	up, err := bashEx.Uretprobe(bashSym, prog, nil)
 	c.Assert(err, qt.IsNil)

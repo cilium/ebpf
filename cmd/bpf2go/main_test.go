@@ -62,7 +62,6 @@ func TestRun(t *testing.T) {
 
 	err = run(io.Discard, "foo", tmpDir, []string{
 		"-cc", clangBin,
-		"-strip", stripBin,
 		"bar",
 		filepath.Join(dir, "test.c"),
 	})

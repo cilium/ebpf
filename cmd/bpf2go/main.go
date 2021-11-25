@@ -8,6 +8,7 @@ import (
 	"go/token"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -70,7 +71,7 @@ func run(stdout io.Writer, pkg, outputDir string, args []string) (err error) {
 
 	fs := flag.NewFlagSet("bpf2go", flag.ContinueOnError)
 	fs.StringVar(&b2g.cc, "cc", "clang", "`binary` used to compile C to BPF")
-	fs.StringVar(&b2g.strip, "strip", "llvm-strip", "`binary` used to strip DWARF from compiled BPF")
+	fs.StringVar(&b2g.strip, "strip", "", "`binary` used to strip DWARF from compiled BPF (default \"llvm-strip\")")
 	fs.BoolVar(&b2g.disableStripping, "no-strip", false, "disable stripping of DWARF")
 	flagCFlags := fs.String("cflags", "", "flags passed to the compiler, may contain quoted arguments")
 	fs.StringVar(&b2g.tags, "tags", "", "list of Go build tags to include in generated files")
@@ -164,6 +165,22 @@ func run(stdout io.Writer, pkg, outputDir string, args []string) (err error) {
 	}
 	if err != nil {
 		return err
+	}
+
+	if !b2g.disableStripping {
+		// Try to find a suitable llvm-strip, possibly with a version suffix derived
+		// from the clang binary.
+		if b2g.strip == "" {
+			b2g.strip = "llvm-strip"
+			if strings.HasPrefix(b2g.cc, "clang") {
+				b2g.strip += strings.TrimPrefix(b2g.cc, "clang")
+			}
+		}
+
+		b2g.strip, err = exec.LookPath(b2g.strip)
+		if err != nil {
+			return err
+		}
 	}
 
 	for target, arches := range targets {

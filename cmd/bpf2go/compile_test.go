@@ -14,7 +14,6 @@ const minimalSocketFilter = `__attribute__((section("socket"), used)) int main()
 // Test against the minimum supported version of clang to avoid regressions.
 const (
 	clangBin = "clang-9"
-	stripBin = "llvm-strip-9"
 )
 
 func TestCompile(t *testing.T) {

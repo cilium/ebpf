@@ -31,14 +31,20 @@ type ID uint32
 
 // Spec represents decoded BTF.
 type Spec struct {
-	rawTypes   []rawType
-	strings    stringTable
+	// Data from .BTF.
+	rawTypes []rawType
+	strings  stringTable
+
+	// Inflated Types.
 	types      []Type
-	namedTypes map[string][]NamedType
-	funcInfos  map[string]extInfo
-	lineInfos  map[string]extInfo
-	coreRelos  map[string]coreRelos
-	byteOrder  binary.ByteOrder
+	namedTypes map[string][]Type
+
+	// Data from .BTF.ext.
+	funcInfos map[string]FuncInfo
+	lineInfos map[string]LineInfos
+	coreRelos map[string]CoreRelos
+
+	byteOrder binary.ByteOrder
 }
 
 type btfHeader struct {
@@ -141,12 +147,132 @@ func loadSpecFromELF(file *internal.SafeELFFile, variableOffsets map[variable]ui
 		return spec, nil
 	}
 
-	spec.funcInfos, spec.lineInfos, spec.coreRelos, err = parseExtInfos(btfExtSection, file.ByteOrder, spec.strings)
-	if err != nil {
-		return nil, fmt.Errorf("can't read ext info: %w", err)
+	if err := spec.loadExtInfos(btfExtSection); err != nil {
+		return nil, fmt.Errorf("can't parse ext info: %w", err)
 	}
 
 	return spec, nil
+}
+
+// loadExtInfos parses the .BTF.ext section and populates spec's funcInfo,
+// lineInfo and coreRelos fields using the contents.
+func (spec *Spec) loadExtInfos(sec *elf.Section) error {
+	// Open unbuffered section reader. binary.Read() calls io.ReadFull on
+	// the header structs, resulting in one syscall per header.
+	r := sec.Open()
+
+	extHeader, err := parseBTFExtHeader(r, spec.byteOrder)
+	if err != nil {
+		return fmt.Errorf("parsing BTF extension header: %w", err)
+	}
+
+	coreHeader, err := parseBTFExtCoreHeader(r, spec.byteOrder, extHeader)
+	if err != nil {
+		return fmt.Errorf("parsing BTF CO-RE header: %w", err)
+	}
+
+	buf := internal.NewBufferedSectionReader(sec, extHeader.funcInfoStart(), int64(extHeader.FuncInfoLen))
+	funcInfos, err := parseFuncInfos(buf, spec.byteOrder, spec.strings)
+	if err != nil {
+		return fmt.Errorf("parsing BTF function info: %w", err)
+	}
+
+	buf = internal.NewBufferedSectionReader(sec, extHeader.lineInfoStart(), int64(extHeader.LineInfoLen))
+	lineInfos, err := parseLineInfos(buf, spec.byteOrder, spec.strings)
+	if err != nil {
+		return fmt.Errorf("parsing BTF line info: %w", err)
+	}
+
+	relos := make(map[string]CoreRelos)
+	if coreHeader != nil && coreHeader.CoreReloOff > 0 && coreHeader.CoreReloLen > 0 {
+		buf = internal.NewBufferedSectionReader(sec, extHeader.coreReloStart(coreHeader), int64(coreHeader.CoreReloLen))
+		relos, err = parseCoreRelos(buf, spec.byteOrder, spec.strings)
+		if err != nil {
+			return fmt.Errorf("parsing CO-RE relocation info: %w", err)
+		}
+	}
+
+	if err := spec.linkExtInfos(funcInfos, lineInfos, relos); err != nil {
+		return fmt.Errorf("linking funcInfos and lineInfos: %w", err)
+	}
+
+	return nil
+}
+
+// linkExtInfos takes FuncInfos, LineInfos and CoreRelos indexed by section and
+// transforms them to be indexed by function. Retrieves function names from
+// the BTF spec.
+func (spec *Spec) linkExtInfos(sfi map[string]FuncInfos, sli map[string]LineInfos, scr map[string]CoreRelos) error {
+
+	ofi := make(map[string]FuncInfo)
+	oli := make(map[string]LineInfos)
+	ocr := make(map[string]CoreRelos)
+
+	for secName, secFuncs := range sfi {
+		// Collect functions from each section and organize them by name.
+		for _, fi := range secFuncs {
+			name, err := fi.Name(spec)
+			if err != nil {
+				return fmt.Errorf("looking up function name: %w", err)
+			}
+
+			// FuncInfo offsets are scoped to the ELF section. Zero them out
+			// since they are meaningless outside of that context. The linker
+			// will determine the offset of the function within the final
+			// instruction stream before handing it off to the kernel.
+			fi.InsnOff = 0
+
+			ofi[name] = fi
+		}
+
+		// Attribute LineInfo records to their respective functions, if any.
+		if lines := sli[secName]; lines != nil {
+			for _, li := range lines {
+				fi := secFuncs.FuncForOffset(li.InsnOff)
+				if fi == nil {
+					return fmt.Errorf("section %s: error looking up FuncInfo for LineInfo %v", secName, li)
+				}
+
+				// Offsets are ELF section-scoped, make them function-scoped by
+				// subtracting the function's start offset.
+				li.InsnOff -= fi.InsnOff
+
+				name, err := fi.Name(spec)
+				if err != nil {
+					return fmt.Errorf("looking up function name: %w", err)
+				}
+
+				oli[name] = append(oli[name], li)
+			}
+		}
+
+		// Attribute CO-RE relocations to their respective functions, if any.
+		if relos := scr[secName]; relos != nil {
+			for _, r := range relos {
+				fi := secFuncs.FuncForOffset(r.insnOff)
+				if fi == nil {
+					return fmt.Errorf("section %s: error looking up FuncInfo for CO-RE relocation %v", secName, r)
+				}
+
+				// Offsets are ELF section-scoped, make them function-scoped by
+				// subtracting the function's start offset.
+				r.insnOff -= fi.InsnOff
+
+				name, err := fi.Name(spec)
+				if err != nil {
+					return fmt.Errorf("looking up function name: %w", err)
+				}
+
+				ocr[name] = append(ocr[name], r)
+			}
+		}
+	}
+
+	spec.funcInfos = ofi
+	spec.lineInfos = oli
+	spec.coreRelos = ocr
+
+	return nil
 }
 
 // LoadRawSpec reads a blob of BTF data that isn't wrapped in an ELF file.
@@ -373,11 +499,12 @@ func fixupDatasec(rawTypes []rawType, rawStrings stringTable, sectionSizes map[s
 // Copy creates a copy of Spec.
 func (s *Spec) Copy() *Spec {
 	types, _ := copyTypes(s.types, nil)
-	namedTypes := make(map[string][]NamedType)
+
+	namedTypes := make(map[string][]Type)
 	for _, typ := range types {
-		if named, ok := typ.(NamedType); ok {
-			name := essentialName(named.TypeName())
-			namedTypes[name] = append(namedTypes[name], named)
+		if name, _ := typ.TypeName(); name != "" {
+			name = essentialName(name)
+			namedTypes[name] = append(namedTypes[name], typ)
 		}
 	}
 
@@ -458,40 +585,66 @@ func (sw sliceWriter) Write(p []byte) (int, error) {
 	return copy(sw, p), nil
 }
 
-// Program finds the BTF for a specific section.
+// Program finds the BTF for a specific function.
 //
 // Length is the number of bytes in the raw BPF instruction stream.
 //
 // Returns an error which may wrap ErrNoExtendedInfo if the Spec doesn't
 // contain extended BTF info.
-func (s *Spec) Program(name string, length uint64) (*Program, error) {
-	if length == 0 {
-		return nil, errors.New("length must not be zero")
-	}
-
+func (s *Spec) Program(name string) (*Program, error) {
 	if s.funcInfos == nil && s.lineInfos == nil && s.coreRelos == nil {
-		return nil, fmt.Errorf("BTF for section %s: %w", name, ErrNoExtendedInfo)
+		return nil, fmt.Errorf("BTF for function %s: %w", name, ErrNoExtendedInfo)
 	}
 
-	funcInfos, funcOK := s.funcInfos[name]
-	lineInfos, lineOK := s.lineInfos[name]
+	fi, funcOK := s.funcInfos[name]
+	li, lineOK := s.lineInfos[name]
 	relos, coreOK := s.coreRelos[name]
 
 	if !funcOK && !lineOK && !coreOK {
-		return nil, fmt.Errorf("no extended BTF info for section %s", name)
+		return nil, fmt.Errorf("no extended BTF info for function %s", name)
 	}
 
-	return &Program{s, length, funcInfos, lineInfos, relos}, nil
+	return &Program{s, fi, li, relos}, nil
 }
 
-// FindType searches for a type with a specific name.
+// TypeByID returns the BTF Type with the given type ID.
 //
-// Called T a type that satisfies Type, typ must be a non-nil **T.
-// On success, the address of the found type will be copied in typ.
+// Returns an error wrapping ErrNotFound if a Type with the given ID
+// does not exist in the Spec.
+func (s *Spec) TypeByID(id TypeID) (Type, error) {
+	if int(id) > len(s.types) {
+		return nil, fmt.Errorf("type ID %d: %w", id, ErrNotFound)
+	}
+	return s.types[id], nil
+}
+
+// TypesByName returns a list of BTF Types with the given name.
+//
+// Multiple Types of the same name can exist in case multiple 'struct flavors'
+// are described in BTF info. These are used to deal with changes in kernel
+// data structures.
 //
 // Returns an error wrapping ErrNotFound if no matching
-// type exists in spec.
-func (s *Spec) FindType(name string, typ interface{}) error {
+// Type exists in the Spec.
+func (s *Spec) TypesByName(name string) ([]Type, error) {
+	types, ok := s.namedTypes[essentialName(name)]
+	if !ok {
+		return nil, fmt.Errorf("type name %s: %w", name, ErrNotFound)
+	}
+	return types, nil
+}
+
+// TypeByName searches for a Type with a specific name. Since multiple
+// Types with the same name can exist, the parameter typ is taken to
+// narrow down the search in case of a clash.
+//
+// typ must be a non-nil pointer to an implementation of a Type.
+// On success, the address of the found Type will be copied to typ.
+//
+// Returns an error wrapping ErrNotFound if no matching
+// Type exists in the Spec. If multiple candidates are found,
+// an error is returned.
+func (s *Spec) TypeByName(name string, typ interface{}) error {
 	typValue := reflect.ValueOf(typ)
 	if typValue.Kind() != reflect.Ptr {
 		return fmt.Errorf("%T is not a pointer", typ)
@@ -507,14 +660,20 @@ func (s *Spec) FindType(name string, typ interface{}) error {
 		return fmt.Errorf("%T does not satisfy Type interface", typ)
 	}
 
+	types, err := s.TypesByName(name)
+	if err != nil {
+		return err
+	}
+
 	var candidate Type
-	for _, typ := range s.namedTypes[essentialName(name)] {
+	for _, typ := range types {
 		if reflect.TypeOf(typ) != wanted {
 			continue
 		}
 
-		// Match against the full name, not just the essential one.
-		if typ.TypeName() != name {
+		// Match against the full name, not just the essential one
+		// in case the type being looked up is a struct flavor.
+		if n, _ := typ.TypeName(); n != name {
 			continue
 		}
 
@@ -629,10 +788,10 @@ type Map struct {
 
 // Program is the BTF information for a stream of instructions.
 type Program struct {
-	spec                 *Spec
-	length               uint64
-	funcInfos, lineInfos extInfo
-	coreRelos            coreRelos
+	spec      *Spec
+	FuncInfo  FuncInfo
+	LineInfos LineInfos
+	CoreRelos CoreRelos
 }
 
 // Spec returns the BTF spec of this program.
@@ -640,54 +799,11 @@ func (p *Program) Spec() *Spec {
 	return p.spec
 }
 
-// Append the information from other to the Program.
-func (p *Program) Append(other *Program) error {
-	if other.spec != p.spec {
-		return fmt.Errorf("can't append program with different BTF specs")
-	}
-
-	funcInfos, err := p.funcInfos.append(other.funcInfos, p.length)
-	if err != nil {
-		return fmt.Errorf("func infos: %w", err)
-	}
-
-	lineInfos, err := p.lineInfos.append(other.lineInfos, p.length)
-	if err != nil {
-		return fmt.Errorf("line infos: %w", err)
-	}
-
-	p.funcInfos = funcInfos
-	p.lineInfos = lineInfos
-	p.coreRelos = p.coreRelos.append(other.coreRelos, p.length)
-	p.length += other.length
-	return nil
-}
-
-// FuncInfos returns the binary form of BTF function infos.
-func (p *Program) FuncInfos() (recordSize uint32, bytes []byte, err error) {
-	bytes, err = p.funcInfos.MarshalBinary()
-	if err != nil {
-		return 0, nil, fmt.Errorf("func infos: %w", err)
-	}
-
-	return p.funcInfos.recordSize, bytes, nil
-}
-
-// LineInfos returns the binary form of BTF line infos.
-func (p *Program) LineInfos() (recordSize uint32, bytes []byte, err error) {
-	bytes, err = p.lineInfos.MarshalBinary()
-	if err != nil {
-		return 0, nil, fmt.Errorf("line infos: %w", err)
-	}
-
-	return p.lineInfos.recordSize, bytes, nil
-}
-
 // Fixups returns the changes required to adjust the program to the target.
 //
 // Passing a nil target will relocate against the running kernel.
 func (p *Program) Fixups(target *Spec) (COREFixups, error) {
-	if len(p.coreRelos) == 0 {
+	if len(p.CoreRelos) == 0 {
 		return nil, nil
 	}
 
@@ -699,7 +815,7 @@ func (p *Program) Fixups(target *Spec) (COREFixups, error) {
 		}
 	}
 
-	return coreRelocate(p.spec, target, p.coreRelos)
+	return coreRelocate(p.spec, target, p.CoreRelos)
 }
 
 func marshalBTF(types interface{}, strings []byte, bo binary.ByteOrder) []byte {

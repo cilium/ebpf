@@ -64,7 +64,6 @@ all: $(addsuffix -el.elf,$(TARGETS)) $(addsuffix -eb.elf,$(TARGETS)) generate
 
 # $BPF_CLANG is used in go:generate invocations.
 generate: export BPF_CLANG := $(CLANG)
-generate: export BPF_STRIP := $(STRIP)
 generate: export BPF_CFLAGS := $(CFLAGS)
 generate:
 	go generate ./cmd/bpf2go/test

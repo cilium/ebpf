@@ -456,6 +456,43 @@ func TestTailCall(t *testing.T) {
 	})
 }
 
+func TestSubprogRelocation(t *testing.T) {
+	testutils.SkipOnOldKernel(t, "5.13", "subprog addr loaded with ld_imm64")
+
+	testutils.Files(t, testutils.Glob(t, "testdata/subprog_reloc-*.elf"), func(t *testing.T, file string) {
+		spec, err := LoadCollectionSpec(file)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if spec.ByteOrder != internal.NativeEndian {
+			return
+		}
+
+		var obj struct {
+			Main    *Program `ebpf:"fp_relocation"`
+			HashMap *Map     `ebpf:"hash_map"`
+		}
+
+		err = spec.LoadAndAssign(&obj, nil)
+		testutils.SkipIfNotSupported(t, err)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer obj.Main.Close()
+
+		ret, _, err := obj.Main.Test(make([]byte, 14))
+		testutils.SkipIfNotSupported(t, err)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if ret != 42 {
+			t.Fatalf("Expected subprog reloc to return value 42, got %d", ret)
+		}
+	})
+}
+
 func TestUnassignedProgArray(t *testing.T) {
 	testutils.Files(t, testutils.Glob(t, "testdata/btf_map_init-*.elf"), func(t *testing.T, file string) {
 		spec, err := LoadCollectionSpec(file)

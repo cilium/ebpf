@@ -16,46 +16,48 @@ const (
 type AttachType int32
 
 const (
-	BPF_CGROUP_INET_INGRESS      AttachType = 0
-	BPF_CGROUP_INET_EGRESS       AttachType = 1
-	BPF_CGROUP_INET_SOCK_CREATE  AttachType = 2
-	BPF_CGROUP_SOCK_OPS          AttachType = 3
-	BPF_SK_SKB_STREAM_PARSER     AttachType = 4
-	BPF_SK_SKB_STREAM_VERDICT    AttachType = 5
-	BPF_CGROUP_DEVICE            AttachType = 6
-	BPF_SK_MSG_VERDICT           AttachType = 7
-	BPF_CGROUP_INET4_BIND        AttachType = 8
-	BPF_CGROUP_INET6_BIND        AttachType = 9
-	BPF_CGROUP_INET4_CONNECT     AttachType = 10
-	BPF_CGROUP_INET6_CONNECT     AttachType = 11
-	BPF_CGROUP_INET4_POST_BIND   AttachType = 12
-	BPF_CGROUP_INET6_POST_BIND   AttachType = 13
-	BPF_CGROUP_UDP4_SENDMSG      AttachType = 14
-	BPF_CGROUP_UDP6_SENDMSG      AttachType = 15
-	BPF_LIRC_MODE2               AttachType = 16
-	BPF_FLOW_DISSECTOR           AttachType = 17
-	BPF_CGROUP_SYSCTL            AttachType = 18
-	BPF_CGROUP_UDP4_RECVMSG      AttachType = 19
-	BPF_CGROUP_UDP6_RECVMSG      AttachType = 20
-	BPF_CGROUP_GETSOCKOPT        AttachType = 21
-	BPF_CGROUP_SETSOCKOPT        AttachType = 22
-	BPF_TRACE_RAW_TP             AttachType = 23
-	BPF_TRACE_FENTRY             AttachType = 24
-	BPF_TRACE_FEXIT              AttachType = 25
-	BPF_MODIFY_RETURN            AttachType = 26
-	BPF_LSM_MAC                  AttachType = 27
-	BPF_TRACE_ITER               AttachType = 28
-	BPF_CGROUP_INET4_GETPEERNAME AttachType = 29
-	BPF_CGROUP_INET6_GETPEERNAME AttachType = 30
-	BPF_CGROUP_INET4_GETSOCKNAME AttachType = 31
-	BPF_CGROUP_INET6_GETSOCKNAME AttachType = 32
-	BPF_XDP_DEVMAP               AttachType = 33
-	BPF_CGROUP_INET_SOCK_RELEASE AttachType = 34
-	BPF_XDP_CPUMAP               AttachType = 35
-	BPF_SK_LOOKUP                AttachType = 36
-	BPF_XDP                      AttachType = 37
-	BPF_SK_SKB_VERDICT           AttachType = 38
-	__MAX_BPF_ATTACH_TYPE        AttachType = 39
+	BPF_CGROUP_INET_INGRESS            AttachType = 0
+	BPF_CGROUP_INET_EGRESS             AttachType = 1
+	BPF_CGROUP_INET_SOCK_CREATE        AttachType = 2
+	BPF_CGROUP_SOCK_OPS                AttachType = 3
+	BPF_SK_SKB_STREAM_PARSER           AttachType = 4
+	BPF_SK_SKB_STREAM_VERDICT          AttachType = 5
+	BPF_CGROUP_DEVICE                  AttachType = 6
+	BPF_SK_MSG_VERDICT                 AttachType = 7
+	BPF_CGROUP_INET4_BIND              AttachType = 8
+	BPF_CGROUP_INET6_BIND              AttachType = 9
+	BPF_CGROUP_INET4_CONNECT           AttachType = 10
+	BPF_CGROUP_INET6_CONNECT           AttachType = 11
+	BPF_CGROUP_INET4_POST_BIND         AttachType = 12
+	BPF_CGROUP_INET6_POST_BIND         AttachType = 13
+	BPF_CGROUP_UDP4_SENDMSG            AttachType = 14
+	BPF_CGROUP_UDP6_SENDMSG            AttachType = 15
+	BPF_LIRC_MODE2                     AttachType = 16
+	BPF_FLOW_DISSECTOR                 AttachType = 17
+	BPF_CGROUP_SYSCTL                  AttachType = 18
+	BPF_CGROUP_UDP4_RECVMSG            AttachType = 19
+	BPF_CGROUP_UDP6_RECVMSG            AttachType = 20
+	BPF_CGROUP_GETSOCKOPT              AttachType = 21
+	BPF_CGROUP_SETSOCKOPT              AttachType = 22
+	BPF_TRACE_RAW_TP                   AttachType = 23
+	BPF_TRACE_FENTRY                   AttachType = 24
+	BPF_TRACE_FEXIT                    AttachType = 25
+	BPF_MODIFY_RETURN                  AttachType = 26
+	BPF_LSM_MAC                        AttachType = 27
+	BPF_TRACE_ITER                     AttachType = 28
+	BPF_CGROUP_INET4_GETPEERNAME       AttachType = 29
+	BPF_CGROUP_INET6_GETPEERNAME       AttachType = 30
+	BPF_CGROUP_INET4_GETSOCKNAME       AttachType = 31
+	BPF_CGROUP_INET6_GETSOCKNAME       AttachType = 32
+	BPF_XDP_DEVMAP                     AttachType = 33
+	BPF_CGROUP_INET_SOCK_RELEASE       AttachType = 34
+	BPF_XDP_CPUMAP                     AttachType = 35
+	BPF_SK_LOOKUP                      AttachType = 36
+	BPF_XDP                            AttachType = 37
+	BPF_SK_SKB_VERDICT                 AttachType = 38
+	BPF_SK_REUSEPORT_SELECT            AttachType = 39
+	BPF_SK_REUSEPORT_SELECT_OR_MIGRATE AttachType = 40
+	__MAX_BPF_ATTACH_TYPE              AttachType = 41
 )
 
 type Cmd int32
@@ -72,6 +74,7 @@ const (
 	BPF_PROG_ATTACH                 Cmd = 8
 	BPF_PROG_DETACH                 Cmd = 9
 	BPF_PROG_TEST_RUN               Cmd = 10
+	BPF_PROG_RUN                    Cmd = 10
 	BPF_PROG_GET_NEXT_ID            Cmd = 11
 	BPF_MAP_GET_NEXT_ID             Cmd = 12
 	BPF_PROG_GET_FD_BY_ID           Cmd = 13
@@ -268,7 +271,10 @@ const (
 	BPF_FUNC_check_mtu                      FunctionId = 163
 	BPF_FUNC_for_each_map_elem              FunctionId = 164
 	BPF_FUNC_snprintf                       FunctionId = 165
-	__BPF_FUNC_MAX_ID                       FunctionId = 166
+	BPF_FUNC_sys_bpf                        FunctionId = 166
+	BPF_FUNC_btf_find_by_name_kind          FunctionId = 167
+	BPF_FUNC_sys_close                      FunctionId = 168
+	__BPF_FUNC_MAX_ID                       FunctionId = 169
 )
 
 type HdrStartOff int32
@@ -360,6 +366,7 @@ const (
 	BPF_PROG_TYPE_EXT                     ProgType = 28
 	BPF_PROG_TYPE_LSM                     ProgType = 29
 	BPF_PROG_TYPE_SK_LOOKUP               ProgType = 30
+	BPF_PROG_TYPE_SYSCALL                 ProgType = 31
 )
 
 type RetCode int32
@@ -427,6 +434,8 @@ type LinkInfo struct {
 	Type   LinkType
 	Id     LinkID
 	ProgId uint32
+	_      [4]byte
+	Extra  [16]uint8
 }
 
 type MapInfo struct {
@@ -875,6 +884,7 @@ type ProgLoadAttr struct {
 	AttachBtfId        uint32
 	AttachProgFd       uint32
 	_                  [4]byte
+	FdArray            uint64
 }
 
 func ProgLoad(attr *ProgLoadAttr) (*FD, error) {
@@ -920,3 +930,34 @@ func RawTracepointOpen(attr *RawTracepointOpenAttr) (*FD, error) {
 	}
 	return NewFD(int(fd))
 }
+
+type CGroupExtraLinkInfo struct {
+	CgroupId   uint64
+	AttachType uint32
+	_          [4]byte
+}
+
+type IterExtraLinkInfo struct {
+	TargetName    uint64
+	TargetNameLen uint32
+	Map           struct{ MapId uint32 }
+}
+
+type NetNsExtraLinkInfo struct {
+	NetNsIno   uint32
+	AttachType uint32
+}
+
+type RawTPExtraLinkInfo struct {
+	TpName    uint64
+	TpNameLen uint32
+	_         [4]byte
+}
+
+type TracingExtraLinkInfo struct {
+	AttachType  uint32
+	TargetObjId uint32
+	TargetBtfId uint32
+}
+
+type XDPExtraLinkInfo struct{ IfIndex uint32 }

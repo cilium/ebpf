@@ -7,9 +7,7 @@ import (
 )
 
 // NetNsInfo contains metadata about a network namespace link.
-type NetNsInfo struct {
-	RawLinkInfo
-}
+type NetNsInfo = RawLinkInfo
 
 // NetNsLink is a program attached to a network namespace.
 type NetNsLink struct {
@@ -58,5 +56,5 @@ func (nns *NetNsLink) Info() (*NetNsInfo, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &NetNsInfo{*info}, nil
+	return info, nil
 }

@@ -6,6 +6,7 @@ import (
 
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/asm"
+	"github.com/cilium/ebpf/internal/sys"
 	"github.com/cilium/ebpf/internal/testutils"
 )
 
@@ -25,9 +26,13 @@ func TestSkLookup(t *testing.T) {
 		t.Fatal("Can't attach link:", err)
 	}
 
-	_, err = link.Info()
+	linkInfo, err := link.Info()
 	if err != nil {
 		t.Fatal("Info returns an error:", err)
+	}
+	info := linkInfo.ExtraNetNs()
+	if info.AttachType != uint32(sys.BPF_SK_LOOKUP) {
+		t.Fatalf("expecting attachType %d, got %d", sys.BPF_SK_LOOKUP, info.AttachType)
 	}
 
 	testLink(t, link, prog)

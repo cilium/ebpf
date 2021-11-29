@@ -427,6 +427,8 @@ type LinkInfo struct {
 	Type   LinkType
 	Id     LinkID
 	ProgId uint32
+	_      [4]byte
+	Extra  [16]uint8
 }
 
 type MapInfo struct {
@@ -920,3 +922,33 @@ func RawTracepointOpen(attr *RawTracepointOpenAttr) (*FD, error) {
 	}
 	return NewFD(int(fd))
 }
+
+type CgroupLinkInfo struct {
+	CgroupId   uint64
+	AttachType AttachType
+	_          [4]byte
+}
+
+type IterLinkInfo struct {
+	TargetName    Pointer
+	TargetNameLen uint32
+}
+
+type NetNsLinkInfo struct {
+	NetnsIno   uint32
+	AttachType AttachType
+}
+
+type RawTracepointLinkInfo struct {
+	TpName    Pointer
+	TpNameLen uint32
+	_         [4]byte
+}
+
+type TracingLinkInfo struct {
+	AttachType  AttachType
+	TargetObjId uint32
+	TargetBtfId uint32
+}
+
+type XDPLinkInfo struct{ Ifindex uint32 }

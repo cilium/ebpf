@@ -109,6 +109,10 @@ func (pe *perfEvent) Update(prog *ebpf.Program) error {
 	return fmt.Errorf("can't replace eBPF program in perf event: %w", ErrNotSupported)
 }
 
+func (pe *perfEvent) Info() (*Info, error) {
+	return nil, fmt.Errorf("can't get perf event info: %w", ErrNotSupported)
+}
+
 func (pe *perfEvent) Close() error {
 	if pe.fd == nil {
 		return nil

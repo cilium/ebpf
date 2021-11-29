@@ -27,6 +27,8 @@ type MapInfo struct {
 	Flags      uint32
 	// Name as supplied by user space at load time.
 	Name string
+	// BTF for the map.
+	btf btf.ID
 }
 
 func newMapInfoFromFd(fd *sys.FD) (*MapInfo, error) {
@@ -48,6 +50,7 @@ func newMapInfoFromFd(fd *sys.FD) (*MapInfo, error) {
 		info.MapFlags,
 		// name is available from 4.15.
 		internal.CString(info.Name[:]),
+		btf.ID(info.BtfId),
 	}, nil
 }
 
@@ -64,6 +67,17 @@ func newMapInfoFromProc(fd *sys.FD) (*MapInfo, error) {
 		return nil, err
 	}
 	return &mi, nil
+}
+
+// BTFID returns the BTF ID associated with the map.
+//
+// Available from 5.0.
+//
+// The bool return value indicates whether this optional field is available and
+// populated. (The field may be available but not populated if the kernel
+// supports the field but the map was loaded without BTF information.)
+func (mi *MapInfo) BTFID() (btf.ID, bool) {
+	return mi.btf, mi.btf > 0
 }
 
 // ID returns the map ID.

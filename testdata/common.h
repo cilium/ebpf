@@ -1,7 +1,18 @@
 #pragma once
 
-typedef unsigned int uint32_t;
-typedef unsigned long uint64_t;
+typedef _Bool bool;
+
+typedef __signed__ char __s8;
+typedef unsigned char __u8;
+
+typedef __signed__ short __s16;
+typedef unsigned short __u16;
+
+typedef __signed__ int __s32;
+typedef unsigned int __u32, uint32_t;
+
+typedef __signed__ long __s64;
+typedef unsigned long __u64, uint64_t;
 
 #define __section(NAME) __attribute__((section(NAME), used))
 #define __uint(name, val) int(*name)[val]

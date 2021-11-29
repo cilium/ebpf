@@ -1,6 +1,8 @@
 package link
 
 import (
+	"bytes"
+	"encoding/binary"
 	"fmt"
 
 	"github.com/cilium/ebpf"
@@ -34,6 +36,11 @@ type Link interface {
 	// A link may continue past the lifetime of the process if Close is
 	// not called.
 	Close() error
+
+	// Info returns metadata on a link.
+	//
+	// May return an error wrapping ErrNotSupported.
+	Info() (*Info, error)
 
 	// Prevent external users from implementing this interface.
 	isLink()
@@ -92,11 +99,54 @@ type RawLinkOptions struct {
 	Flags uint32
 }
 
-// RawLinkInfo contains metadata on a link.
-type RawLinkInfo struct {
+// Info contains metadata on a link.
+type Info struct {
 	Type    Type
 	ID      ID
 	Program ebpf.ProgramID
+	extra   interface{}
+}
+
+// RawLinkInfo contains information on a raw link.
+//
+// Deprecated: use Info instead.
+type RawLinkInfo = Info
+
+type TracingInfo sys.TracingLinkInfo
+type CgroupInfo sys.CgroupLinkInfo
+type NetNsInfo sys.NetNsLinkInfo
+type XDPInfo sys.XDPLinkInfo
+
+// Tracing returns tracing type-specific link info.
+//
+// Returns nil if the type-specific link info isn't available.
+func (r Info) Tracing() *TracingInfo {
+	e, _ := r.extra.(*TracingInfo)
+	return e
+}
+
+// Cgroup returns cgroup type-specific link info.
+//
+// Returns nil if the type-specific link info isn't available.
+func (r Info) Cgroup() *CgroupInfo {
+	e, _ := r.extra.(*CgroupInfo)
+	return e
+}
+
+// NetNs returns netns type-specific link info.
+//
+// Returns nil if the type-specific link info isn't available.
+func (r Info) NetNs() *NetNsInfo {
+	e, _ := r.extra.(*NetNsInfo)
+	return e
+}
+
+// ExtraNetNs returns XDP type-specific link info.
+//
+// Returns nil if the type-specific link info isn't available.
+func (r Info) XDP() *XDPInfo {
+	e, _ := r.extra.(*XDPInfo)
+	return e
 }
 
 // RawLink is the low-level API to bpf_link.
@@ -254,15 +304,43 @@ func (l *RawLink) UpdateArgs(opts RawLinkUpdateOptions) error {
 }
 
 // Info returns metadata about the link.
-func (l *RawLink) Info() (*RawLinkInfo, error) {
+func (l *RawLink) Info() (*Info, error) {
 	var info sys.LinkInfo
+
 	if err := sys.ObjInfo(l.fd, &info); err != nil {
 		return nil, fmt.Errorf("link info: %s", err)
 	}
 
-	return &RawLinkInfo{
+	var extra interface{}
+	switch info.Type {
+	case CgroupType:
+		extra = &CgroupInfo{}
+	case IterType:
+		// not supported
+	case NetNsType:
+		extra = &NetNsInfo{}
+	case RawTracepointType:
+		// not supported
+	case TracingType:
+		extra = &TracingInfo{}
+	case XDPType:
+		extra = &XDPInfo{}
+	default:
+		return nil, fmt.Errorf("unknown link info type: %d", info.Type)
+	}
+
+	if info.Type != RawTracepointType && info.Type != IterType {
+		buf := bytes.NewReader(info.Extra[:])
+		err := binary.Read(buf, internal.NativeEndian, extra)
+		if err != nil {
+			return nil, fmt.Errorf("can not read extra link info: %w", err)
+		}
+	}
+
+	return &Info{
 		info.Type,
 		info.Id,
 		ebpf.ProgramID(info.ProgId),
+		extra,
 	}, nil
 }

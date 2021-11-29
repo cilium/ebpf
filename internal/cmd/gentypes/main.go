@@ -177,7 +177,7 @@ import (
 			[]patch{
 				replace(enumTypes["LinkType"], "type"),
 				replace(linkID, "id"),
-				truncateAfter("prog_id"),
+				addUnion("extra"),
 			},
 		},
 		{"FuncInfo", "bpf_func_info", nil},
@@ -390,6 +390,47 @@ import (
 		}
 	}
 
+	linkInfoTypes, err := splitLinkInfoTypes(spec)
+	if err != nil {
+		return nil, fmt.Errorf("splitting bpf_attr: %w", err)
+	}
+	linkInfoExtraTypes := []struct {
+		goType  string
+		cType   string
+		patches []patch
+	}{
+		{
+			"CGroupExtraLinkInfo", "cgroup",
+			[]patch{},
+		},
+		{
+			"IterExtraLinkInfo", "iter",
+			[]patch{},
+		},
+		{
+			"NetNsExtraLinkInfo", "netns",
+			[]patch{rename("netns_ino", "net_ns_ino")},
+		},
+		{
+			"RawTPExtraLinkInfo", "raw_tracepoint",
+			[]patch{},
+		},
+		{
+			"TracingExtraLinkInfo", "tracing",
+			[]patch{},
+		},
+		{
+			"XDPExtraLinkInfo", "xdp",
+			[]patch{rename("ifindex", "if_index")},
+		},
+	}
+	for _, s := range linkInfoExtraTypes {
+		t := linkInfoTypes[s.cType]
+		if err := outputPatchedStruct(gf, w, s.goType, t, s.patches); err != nil {
+			return nil, fmt.Errorf("output %q: %w", s.goType, err)
+		}
+	}
+
 	return w.Bytes(), nil
 }
 
@@ -410,6 +451,51 @@ func outputPatchedStruct(gf *btf.GoFormatter, w *bytes.Buffer, id string, s *btf
 	w.WriteString(decl)
 	w.WriteString("\n\n")
 	return nil
+}
+
+func splitLinkInfoTypes(spec *btf.Spec) (map[string]*btf.Struct, error) {
+	var bpfLinkInfo *btf.Struct
+	if err := spec.FindType("bpf_link_info", &bpfLinkInfo); err != nil {
+		return nil, err
+	}
+
+	structs := make(map[string]*btf.Struct)
+	member := bpfLinkInfo.Members[len(bpfLinkInfo.Members)-1]
+
+	types := []struct {
+		name                string
+		cFieldOrFirstMember string
+	}{
+		{"raw_tracepoint", "tp_name"},
+		{"tracing", "attach_type"},
+		{"cgroup", "cgroup_id"},
+		{"iter", "target_name"},
+		{"netns", "netns_ino"},
+		{"xdp", "ifindex"},
+	}
+
+	u, ok := member.Type.(*btf.Union)
+	if !ok {
+		return nil, fmt.Errorf("there is not type-specific union")
+	}
+
+	for i, t := range types {
+		member := u.Members[i]
+		s, ok := member.Type.(*btf.Struct)
+		if !ok {
+			return nil, fmt.Errorf("%q: %s is not a struct", t.name, member.Type)
+		}
+		if len(s.Members) == 0 {
+			return nil, fmt.Errorf("name for %q doesn't have any member", t.name)
+		}
+		if s.Members[0].Name != t.cFieldOrFirstMember {
+			return nil, fmt.Errorf("name for %q is %q, not %q", t.name, s.Members[0].Name, t.cFieldOrFirstMember)
+		}
+
+		structs[member.Name] = s
+	}
+
+	return structs, nil
 }
 
 func splitBpfAttr(spec *btf.Spec) (map[string]*btf.Struct, error) {
@@ -613,5 +699,24 @@ func rename(from, to string) patch {
 			}
 		}
 		return fmt.Errorf("no member named %q", from)
+	}
+}
+
+func addUnion(name string) patch {
+	return func(s *btf.Struct) error {
+		for i, m := range s.Members {
+			if u, ok := m.Type.(*btf.Union); ok {
+				s.Members[i] = btf.Member{
+					Name: name,
+					Type: &btf.Array{
+						Type:   &btf.Int{Size: 1},
+						Nelems: u.Size,
+					},
+					OffsetBits:   s.Members[i].OffsetBits,
+					BitfieldSize: s.Members[i].BitfieldSize,
+				}
+			}
+		}
+		return nil
 	}
 }

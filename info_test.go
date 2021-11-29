@@ -63,6 +63,10 @@ func TestMapInfoFromProc(t *testing.T) {
 		t.Error("Expected ID to not be available")
 	}
 
+	if _, ok := info.BTFID(); ok {
+		t.Error("Expected BTFID to not be available")
+	}
+
 	nested, err := NewMap(&MapSpec{
 		Type:       ArrayOfMaps,
 		KeySize:    4,

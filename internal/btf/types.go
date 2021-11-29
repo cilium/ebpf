@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"math"
 	"strings"
+
+	"github.com/cilium/ebpf/internal"
 )
 
 const maxTypeDepth = 32
@@ -129,6 +131,43 @@ func (i *Int) copy() Type {
 
 func (i *Int) isBitfield() bool {
 	return i.OffsetBits > 0
+}
+
+func (i *Int) parse(buf []byte) (interface{}, error) {
+	if len(buf) != int(i.Size) {
+		return nil, fmt.Errorf("buffer length (%d) does not match integer size (%d)", len(buf), i.Size)
+	}
+	if i.Encoding.IsBool() {
+		return buf[0] != 0, nil
+	}
+	switch i.Size {
+	case 1:
+		if i.Encoding.IsSigned() {
+			return int8(buf[0]), nil
+		} else {
+			return uint8(buf[0]), nil
+		}
+	case 2:
+		if i.Encoding.IsSigned() {
+			return int16(internal.NativeEndian.Uint16(buf)), nil
+		} else {
+			return internal.NativeEndian.Uint16(buf), nil
+		}
+	case 4:
+		if i.Encoding.IsSigned() {
+			return int32(internal.NativeEndian.Uint32(buf)), nil
+		} else {
+			return internal.NativeEndian.Uint32(buf), nil
+		}
+	case 8:
+		if i.Encoding.IsSigned() {
+			return int64(internal.NativeEndian.Uint64(buf)), nil
+		} else {
+			return internal.NativeEndian.Uint64(buf), nil
+		}
+	default:
+		return nil, fmt.Errorf("unsupported integer size: %d", i.Size)
+	}
 }
 
 // Pointer is a pointer to another type.
@@ -499,6 +538,48 @@ func (ds *Datasec) copy() Type {
 	cpy.Vars = make([]VarSecinfo, len(ds.Vars))
 	copy(cpy.Vars, ds.Vars)
 	return &cpy
+}
+
+// Parse the variables defined in the datasec from the provided byte slice
+func (ds *Datasec) ParseValues(in []byte) (map[string]interface{}, error) {
+	var values = make(map[string]interface{})
+	for _, varsec := range ds.Vars {
+		v, ok := varsec.Type.(*Var)
+		if !(ok && v.Linkage == GlobalVar) {
+			// only vars are supported
+			continue
+		}
+
+		var (
+			depth = 0
+			ts    typeDeque
+			typ   = v.Type
+		)
+		for t := &typ; t != nil; t = ts.shift() {
+			if depth >= maxTypeDepth {
+				return nil, fmt.Errorf("type %s: exceeded type depth", v.Type)
+			}
+			typ = *t
+			typ.walk(&ts)
+		}
+
+		if len(in) < int(varsec.Offset+varsec.Size) {
+			return nil, fmt.Errorf("input slice has length %d, cannot read bytes %d-%d", len(in), varsec.Offset, varsec.Offset+varsec.Size)
+		}
+		buf := in[varsec.Offset : varsec.Offset+varsec.Size]
+
+		switch t := (typ).(type) {
+		case *Int:
+			i, err := t.parse(buf)
+			if err != nil {
+				return nil, fmt.Errorf("unable to parse int: %w", err)
+			}
+			values[v.Name] = i
+		default:
+			return nil, fmt.Errorf("unsupported type %T", typ)
+		}
+	}
+	return values, nil
 }
 
 // VarSecinfo describes variable in a Datasec.

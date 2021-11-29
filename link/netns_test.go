@@ -25,11 +25,6 @@ func TestSkLookup(t *testing.T) {
 		t.Fatal("Can't attach link:", err)
 	}
 
-	_, err = link.Info()
-	if err != nil {
-		t.Fatal("Info returns an error:", err)
-	}
-
 	testLink(t, link, prog)
 }
 

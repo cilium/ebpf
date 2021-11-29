@@ -1,7 +1,10 @@
 package link
 
 import (
+	"bytes"
+	"encoding/binary"
 	"fmt"
+	"unsafe"
 
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/internal"
@@ -34,6 +37,11 @@ type Link interface {
 	// A link may continue past the lifetime of the process if Close is
 	// not called.
 	Close() error
+
+	// Info returns metadata on a link.
+	//
+	// May return an error wrapping ErrNotSupported.
+	Info() (*Info, error)
 
 	// Prevent external users from implementing this interface.
 	isLink()
@@ -92,11 +100,78 @@ type RawLinkOptions struct {
 	Flags uint32
 }
 
-// RawLinkInfo contains metadata on a link.
-type RawLinkInfo struct {
+// Info contains metadata on a link.
+type Info struct {
 	Type    Type
 	ID      ID
 	Program ebpf.ProgramID
+	extra   interface{}
+}
+
+// RawLinkInfo contains information on a raw link.
+//
+// Deprecated: use Info instead.
+type RawLinkInfo = Info
+
+type RawTracepointInfo struct {
+	TPName string
+}
+
+type IterInfo struct {
+	TargetName string
+}
+
+type TracingInfo sys.TracingLinkInfo
+type CgroupInfo sys.CgroupLinkInfo
+type NetNsInfo sys.NetNsLinkInfo
+type XDPInfo sys.XDPLinkInfo
+
+// ExtraRawTracepoint returns raw tracepoint type-specific link info.
+//
+// Returns nil if the type-specific link info isn't available.
+func (r Info) ExtraRawTracepoint() *RawTracepointInfo {
+	e, _ := r.extra.(*RawTracepointInfo)
+	return e
+}
+
+// ExtraTracing returns tracing type-specific link info.
+//
+// Returns nil if the type-specific link info isn't available.
+func (r Info) ExtraTracing() *TracingInfo {
+	e, _ := r.extra.(*TracingInfo)
+	return e
+}
+
+// ExtraCgroup returns cgroup type-specific link info.
+//
+// Returns nil if the type-specific link info isn't available.
+func (r Info) ExtraCgroup() *CgroupInfo {
+	e, _ := r.extra.(*CgroupInfo)
+	return e
+}
+
+// ExtraIter returns iter type-specific link info.
+//
+// Returns nil if the type-specific link info isn't available.
+func (r Info) ExtraIter() *IterInfo {
+	e, _ := r.extra.(*IterInfo)
+	return e
+}
+
+// ExtraNetNs returns netns type-specific link info.
+//
+// Returns nil if the type-specific link info isn't available.
+func (r Info) ExtraNetNs() *NetNsInfo {
+	e, _ := r.extra.(*NetNsInfo)
+	return e
+}
+
+// ExtraNetNs returns XDP type-specific link info.
+//
+// Returns nil if the type-specific link info isn't available.
+func (r Info) ExtraXDP() *XDPInfo {
+	e, _ := r.extra.(*XDPInfo)
+	return e
 }
 
 // RawLink is the low-level API to bpf_link.
@@ -254,15 +329,50 @@ func (l *RawLink) UpdateArgs(opts RawLinkUpdateOptions) error {
 }
 
 // Info returns metadata about the link.
-func (l *RawLink) Info() (*RawLinkInfo, error) {
+func (l *RawLink) Info() (*Info, error) {
 	var info sys.LinkInfo
+	var maxNameLen uint32 = 128
+
+	name := make([]byte, maxNameLen)
+	internal.NativeEndian.PutUint64(info.Extra[:], uint64(uintptr(unsafe.Pointer(&name[0]))))
+	internal.NativeEndian.PutUint32(info.Extra[:][8:], maxNameLen)
+
 	if err := sys.ObjInfo(l.fd, &info); err != nil {
 		return nil, fmt.Errorf("link info: %s", err)
 	}
 
-	return &RawLinkInfo{
+	var extra interface{}
+	switch info.Type {
+	case RawTracepointType:
+		nameLen := internal.NativeEndian.Uint32(info.Extra[8:])
+		extra = &RawTracepointInfo{TPName: string(name[:nameLen])}
+	case TracingType:
+		extra = &TracingInfo{}
+	case CgroupType:
+		extra = &CgroupInfo{}
+	case IterType:
+		nameLen := internal.NativeEndian.Uint32(info.Extra[8:])
+		extra = &IterInfo{TargetName: string(name[:nameLen])}
+	case NetNsType:
+		extra = &NetNsInfo{}
+	case XDPType:
+		extra = &XDPInfo{}
+	default:
+		return nil, fmt.Errorf("unknown link info type: %d", info.Type)
+	}
+
+	if info.Type != RawTracepointType && info.Type != IterType {
+		buf := bytes.NewReader(info.Extra[:])
+		err := binary.Read(buf, internal.NativeEndian, extra)
+		if err != nil {
+			return nil, fmt.Errorf("can not read extra link info: %w", err)
+		}
+	}
+
+	return &Info{
 		info.Type,
 		info.Id,
 		ebpf.ProgramID(info.ProgId),
+		extra,
 	}, nil
 }

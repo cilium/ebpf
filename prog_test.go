@@ -89,6 +89,37 @@ func TestProgramRun(t *testing.T) {
 	}
 }
 
+func TestProgramRunWithContext(t *testing.T) {
+	var skbMarkOffset int16 = 8
+	prog, err := NewProgram(&ProgramSpec{
+		Name: "test",
+		Type: SocketFilter,
+		Instructions: asm.Instructions{
+			asm.LoadMem(asm.R0, asm.R1, skbMarkOffset, asm.Word),
+			asm.Return(),
+		},
+		License: "MIT",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { prog.Close() })
+
+	data := make([]byte, 14)
+	ctx := make([]byte, skbMarkOffset+4)
+	binary.LittleEndian.PutUint32(ctx[skbMarkOffset:skbMarkOffset+4], 42)
+
+	ret, _, err := prog.TestWithContext(data, ctx)
+	testutils.SkipIfNotSupported(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if ret != 42 {
+		t.Error("Expected return value to be 42, got", ret)
+	}
+}
+
 func TestProgramBenchmark(t *testing.T) {
 	prog := mustSocketFilter(t)
 
@@ -135,7 +166,7 @@ func TestProgramTestRunInterrupt(t *testing.T) {
 
 		// Block this thread in the BPF syscall, so that we can
 		// trigger EINTR by sending a signal.
-		_, _, _, err := prog.testRun(make([]byte, 14), math.MaxInt32, func() {
+		_, _, _, err := prog.testRun(make([]byte, 14), nil, math.MaxInt32, func() {
 			// We don't know how long finishing the
 			// test run would take, so flag that we've seen
 			// an interruption and abort the goroutine.

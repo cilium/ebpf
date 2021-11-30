@@ -459,7 +459,26 @@ func (p *Program) Close() error {
 //
 // This function requires at least Linux 4.12.
 func (p *Program) Test(in []byte) (uint32, []byte, error) {
-	ret, out, _, err := p.testRun(in, 1, nil)
+	ret, out, _, err := p.testRun(in, nil, 1, nil)
+	if err != nil {
+		return ret, nil, fmt.Errorf("can't test program: %w", err)
+	}
+	return ret, out, nil
+}
+
+// Test runs the Program in the kernel with the given input and metadata and
+// returns the value returned by the eBPF program. outLen may be zero.
+//
+// Note: the kernel expects at least 14 bytes input for an ethernet header for
+// XDP and SKB programs.
+//
+// This function requires at least the following Linux versions by program type:
+// * flow dissector: 5.4
+// * SK lookup: 5.13
+// * SKB: 5.2
+// * XDP: 5.15
+func (p *Program) TestWithContext(dataIn []byte, ctxIn []byte) (uint32, []byte, error) {
+	ret, out, _, err := p.testRun(dataIn, ctxIn, 1, nil)
 	if err != nil {
 		return ret, nil, fmt.Errorf("can't test program: %w", err)
 	}
@@ -478,7 +497,7 @@ func (p *Program) Test(in []byte) (uint32, []byte, error) {
 //
 // This function requires at least Linux 4.12.
 func (p *Program) Benchmark(in []byte, repeat int, reset func()) (uint32, time.Duration, error) {
-	ret, _, total, err := p.testRun(in, repeat, reset)
+	ret, _, total, err := p.testRun(in, nil, repeat, reset)
 	if err != nil {
 		return ret, total, fmt.Errorf("can't benchmark program: %w", err)
 	}
@@ -521,16 +540,16 @@ var haveProgTestRun = internal.FeatureTest("BPF_PROG_TEST_RUN", "4.12", func() e
 	return err
 })
 
-func (p *Program) testRun(in []byte, repeat int, reset func()) (uint32, []byte, time.Duration, error) {
+func (p *Program) testRun(dataIn []byte, ctxIn []byte, repeat int, reset func()) (uint32, []byte, time.Duration, error) {
 	if uint(repeat) > math.MaxUint32 {
 		return 0, nil, 0, fmt.Errorf("repeat is too high")
 	}
 
-	if len(in) == 0 {
+	if len(dataIn) == 0 {
 		return 0, nil, 0, fmt.Errorf("missing input")
 	}
 
-	if uint(len(in)) > math.MaxUint32 {
+	if uint(len(dataIn)) > math.MaxUint32 {
 		return 0, nil, 0, fmt.Errorf("input is too long")
 	}
 
@@ -543,15 +562,19 @@ func (p *Program) testRun(in []byte, repeat int, reset func()) (uint32, []byte, 
 	// size will be. Hence we allocate an output buffer which we hope will always be large
 	// enough, and panic if the kernel wrote past the end of the allocation.
 	// See https://patchwork.ozlabs.org/cover/1006822/
-	out := make([]byte, len(in)+outputPad)
+	dataOut := make([]byte, len(dataIn)+outputPad)
 
 	attr := sys.ProgRunAttr{
 		ProgFd:      p.fd.Uint(),
-		DataSizeIn:  uint32(len(in)),
-		DataSizeOut: uint32(len(out)),
-		DataIn:      sys.NewSlicePointer(in),
-		DataOut:     sys.NewSlicePointer(out),
+		DataSizeIn:  uint32(len(dataIn)),
+		DataSizeOut: uint32(len(dataOut)),
+		DataIn:      sys.NewSlicePointer(dataIn),
+		DataOut:     sys.NewSlicePointer(dataOut),
 		Repeat:      uint32(repeat),
+	}
+	if len(ctxIn) != 0 {
+		attr.CtxSizeIn = uint32(len(ctxIn))
+		attr.CtxIn = sys.NewSlicePointer(ctxIn)
 	}
 
 	for {
@@ -570,15 +593,15 @@ func (p *Program) testRun(in []byte, repeat int, reset func()) (uint32, []byte, 
 		return 0, nil, 0, fmt.Errorf("can't run test: %w", err)
 	}
 
-	if int(attr.DataSizeOut) > cap(out) {
+	if int(attr.DataSizeOut) > cap(dataOut) {
 		// Houston, we have a problem. The program created more data than we allocated,
 		// and the kernel wrote past the end of our buffer.
 		panic("kernel wrote past end of output buffer")
 	}
-	out = out[:int(attr.DataSizeOut)]
+	dataOut = dataOut[:int(attr.DataSizeOut)]
 
 	total := time.Duration(attr.Duration) * time.Nanosecond
-	return attr.Retval, out, total, nil
+	return attr.Retval, dataOut, total, nil
 }
 
 func unmarshalProgram(buf []byte) (*Program, error) {

@@ -1727,6 +1727,48 @@ func TestMapPinning(t *testing.T) {
 	}
 }
 
+func TestMapGetROData(t *testing.T) {
+	testutils.SkipOnOldKernel(t, "5.2", "global data")
+
+	c := qt.New(t)
+	testutils.Files(t, testutils.Glob(t, "./testdata/rodata-*.elf"), func(t *testing.T, file string) {
+		spec, err := LoadCollectionSpec(file)
+		if err != nil {
+			t.Fatal("Can't parse ELF:", err)
+		}
+		if spec.ByteOrder != internal.NativeEndian {
+			return
+		}
+
+		coll, err := NewCollection(spec)
+		if err != nil {
+			t.Fatal("Can't parse ELF:", err)
+		}
+
+		m, ok := coll.Maps[".rodata"]
+		if !ok {
+			t.Fatal("rodata map missing from collection:", coll.Maps)
+		}
+
+		values, err := m.GetROData()
+		if err != nil {
+			t.Fatal("Can't read rodata", err)
+		}
+
+		c.Assert(values, qt.DeepEquals, map[string]interface{}{
+			"var1": true,
+			"var2": int8(-1),
+			"var3": int16(-2),
+			"var4": int32(-3),
+			"var5": int64(-4),
+			"var6": uint8(1),
+			"var7": uint16(2),
+			"var8": uint32(3),
+			"var9": uint64(4),
+		})
+	})
+}
+
 type benchValue struct {
 	ID      uint32
 	Val16   uint16

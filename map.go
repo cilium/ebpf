@@ -1439,3 +1439,48 @@ func (m *Map) ID() (MapID, error) {
 	}
 	return MapID(info.Id), nil
 }
+
+// GetROData reads the map entry and parses it as variable values using the
+// associated BTF spec.
+//
+// See also CollectionSpec.RewriteConstants, which allows setting these values
+// before the map has been loaded.
+//
+// Returns an error if the map does not meet certain expectations, namely that
+// it has a reference to a BTF object, the BTF has an rodata section, and the
+// value can be parsed using the BTF spec
+func (m *Map) GetROData() (map[string]interface{}, error) {
+	info, err := m.Info()
+	if err != nil {
+		return nil, err
+	}
+
+	btfID, ok := info.BTFID()
+	if !ok {
+		return nil, errors.New("map has no btf")
+	}
+
+	h, err := btf.NewHandleFromID(btfID)
+	if err != nil {
+		return nil, err
+	}
+
+	spec := h.Spec()
+	var datasec *btf.Datasec
+	err = spec.FindType(".rodata", &datasec)
+	if err != nil {
+		return nil, fmt.Errorf("unable to find rodata section in BTF: %w", err)
+	}
+
+	var (
+		key = make([]byte, info.KeySize)
+		buf = make([]byte, info.ValueSize)
+	)
+	// rodata is written to key 0
+	err = m.Lookup(&key, &buf)
+	if err != nil {
+		return nil, err
+	}
+
+	return datasec.ParseValues(buf)
+}

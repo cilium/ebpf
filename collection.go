@@ -244,9 +244,14 @@ func (cs *CollectionSpec) LoadAndAssign(to interface{}, opts *CollectionOptions)
 		switch m.typ {
 		case ProgramArray:
 			// Require all lazy-loaded ProgramArrays to be assigned to the given object.
-			// Without any references, they will be closed on the first GC and all tail
-			// calls into them will miss.
-			if !assignedMaps[n] {
+			// The kernel empties a ProgramArray once the last user space reference
+			// to it closes, which leads to failed tail calls. Combined with the library
+			// closing map fds via GC finalizers this can lead to surprising behaviour.
+			// Only allow unassigned ProgramArrays when the library hasn't pre-populated
+			// any entries from static value declarations. At this point, we know the map
+			// is empty and there's no way for the caller to interact with the map going
+			// forward.
+			if !assignedMaps[n] && len(cs.Maps[n].Contents) > 0 {
 				return fmt.Errorf("ProgramArray %s must be assigned to prevent missed tail calls", n)
 			}
 		}

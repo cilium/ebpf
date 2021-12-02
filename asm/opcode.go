@@ -38,6 +38,9 @@ const (
 	ALUClass Class = 0x04
 	// JumpClass jump operators
 	JumpClass Class = 0x05
+	// Jump32Class jump operators with 32 bit comparaisons
+	// Requires kernel 5.1
+	Jump32Class Class = 0x06
 	// ALU64Class arithmetic in 64 bit mode
 	ALU64Class Class = 0x07
 )
@@ -46,7 +49,7 @@ func (cls Class) encoding() encoding {
 	switch cls {
 	case LdClass, LdXClass, StClass, StXClass:
 		return loadOrStore
-	case ALU64Class, ALUClass, JumpClass:
+	case ALU64Class, ALUClass, JumpClass, Jump32Class:
 		return jumpOrALU
 	default:
 		return unknownEncoding
@@ -109,8 +112,9 @@ func (op OpCode) Source() Source {
 }
 
 // ALUOp returns the ALUOp.
+// Returns InvalidALUOp if it doesn't encode an alu.
 func (op OpCode) ALUOp() ALUOp {
-	if op.Class().encoding() != jumpOrALU {
+	if op.Class() != ALU64Class && op.Class() != ALUClass {
 		return InvalidALUOp
 	}
 	return ALUOp(op & aluMask)
@@ -125,11 +129,20 @@ func (op OpCode) Endianness() Endianness {
 }
 
 // JumpOp returns the JumpOp.
+// Returns InvalidJumpOp if it doesn't encode a jump.
 func (op OpCode) JumpOp() JumpOp {
-	if op.Class().encoding() != jumpOrALU {
+	if op.Class() != JumpClass && op.Class() != Jump32Class {
 		return InvalidJumpOp
 	}
-	return JumpOp(op & jumpMask)
+
+	jumpOp := JumpOp(op & jumpMask)
+
+	// Some JumpOps are only supported by JumpClass, not Jump32Class.
+	if op.Class() == Jump32Class && (jumpOp == Exit || jumpOp == Call || jumpOp == Ja) {
+		return InvalidJumpOp
+	}
+
+	return jumpOp
 }
 
 // SetMode sets the mode on load and store operations.
@@ -177,10 +190,18 @@ func (op OpCode) SetALUOp(alu ALUOp) OpCode {
 //
 // Returns InvalidOpCode if op is of the wrong class.
 func (op OpCode) SetJumpOp(jump JumpOp) OpCode {
-	if op.Class() != JumpClass || !valid(OpCode(jump), jumpMask) {
+	if !valid(OpCode(jump), jumpMask) {
 		return InvalidOpCode
 	}
-	return (op & ^jumpMask) | OpCode(jump)
+
+	newOp := (op & ^jumpMask) | OpCode(jump)
+
+	// Check newOp is legal.
+	if newOp.JumpOp() == InvalidJumpOp {
+		return InvalidOpCode
+	}
+
+	return newOp
 }
 
 func (op OpCode) String() string {
@@ -218,7 +239,7 @@ func (op OpCode) String() string {
 			f.WriteString(strings.TrimSuffix(op.Source().String(), "Source"))
 		}
 
-	case JumpClass:
+	case JumpClass, Jump32Class:
 		f.WriteString(op.JumpOp().String())
 		if jop := op.JumpOp(); jop != Exit && jop != Call {
 			f.WriteString(strings.TrimSuffix(op.Source().String(), "Source"))

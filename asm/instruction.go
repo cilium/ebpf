@@ -254,7 +254,7 @@ func (ins Instruction) Format(f fmt.State, c rune) {
 			fmt.Fprintf(f, "src: %s", ins.Src)
 		}
 
-	case JumpClass:
+	case JumpClass, Jump32Class:
 		switch jop := op.JumpOp(); jop {
 		case Call:
 			if ins.Src == PseudoCall {

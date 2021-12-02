@@ -121,7 +121,7 @@ func fixupJumpsAndCalls(insns asm.Instructions) error {
 
 			ins.Constant = int64(callOffset - offset - 1)
 
-		case ins.OpCode.Class() == asm.JumpClass && ins.Offset == -1:
+		case ins.OpCode.JumpOp() != asm.InvalidJumpOp && ins.Offset == -1:
 			// Rewrite jump to label
 			jumpOffset, ok := symbolOffsets[ins.Reference]
 			if !ok {

@@ -24,6 +24,18 @@ func TestDSL(t *testing.T) {
 		{"Add.Imm32", Add.Imm32(R1, 22), Instruction{
 			OpCode: 0x04, Dst: R1, Constant: 22,
 		}},
+		{"JSGT.Imm", JSGT.Imm(R1, 4, "foo"), Instruction{
+			OpCode: 0x65, Dst: R1, Constant: 4, Offset: -1, Reference: "foo",
+		}},
+		{"JSGT.Imm32", JSGT.Imm32(R1, -2, "foo"), Instruction{
+			OpCode: 0x66, Dst: R1, Constant: -2, Offset: -1, Reference: "foo",
+		}},
+		{"JSLT.Reg", JSLT.Reg(R1, R2, "foo"), Instruction{
+			OpCode: 0xcd, Dst: R1, Src: R2, Offset: -1, Reference: "foo",
+		}},
+		{"JSLT.Reg32", JSLT.Reg32(R1, R3, "foo"), Instruction{
+			OpCode: 0xce, Dst: R1, Src: R3, Offset: -1, Reference: "foo",
+		}},
 	}
 
 	for _, tc := range testcases {

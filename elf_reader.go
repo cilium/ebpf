@@ -413,44 +413,70 @@ func (ec *elfCode) relocateInstruction(ins *asm.Instruction, rel elf.Symbol) err
 		}
 
 	case programSection:
-		if ins.OpCode.JumpOp() != asm.Call {
-			return fmt.Errorf("not a call instruction: %v", ins)
-		}
-
-		if ins.Src != asm.PseudoCall {
-			return fmt.Errorf("call: %s: incorrect source register", name)
-		}
-
-		switch typ {
-		case elf.STT_NOTYPE, elf.STT_FUNC:
-			if bind != elf.STB_GLOBAL {
-				return fmt.Errorf("call: %s: unsupported binding: %s", name, bind)
+		switch opCode := ins.OpCode; {
+		case opCode.JumpOp() == asm.Call:
+			if ins.Src != asm.PseudoCall {
+				return fmt.Errorf("call: %s: incorrect source register", name)
 			}
 
-		case elf.STT_SECTION:
-			if bind != elf.STB_LOCAL {
-				return fmt.Errorf("call: %s: unsupported binding: %s", name, bind)
+			switch typ {
+			case elf.STT_NOTYPE, elf.STT_FUNC:
+				if bind != elf.STB_GLOBAL {
+					return fmt.Errorf("call: %s: unsupported binding: %s", name, bind)
+				}
+
+			case elf.STT_SECTION:
+				if bind != elf.STB_LOCAL {
+					return fmt.Errorf("call: %s: unsupported binding: %s", name, bind)
+				}
+
+				// The function we want to call is in the indicated section,
+				// at the offset encoded in the instruction itself. Reverse
+				// the calculation to find the real function we're looking for.
+				// A value of -1 references the first instruction in the section.
+				offset := int64(int32(ins.Constant)+1) * asm.InstructionSize
+				sym, ok := target.symbols[uint64(offset)]
+				if !ok {
+					return fmt.Errorf("call: no symbol at offset %d", offset)
+				}
+
+				name = sym.Name
+				ins.Constant = -1
+
+			default:
+				return fmt.Errorf("call: %s: invalid symbol type %s", name, typ)
+			}
+		case opCode.IsDWordLoad():
+			switch typ {
+			case elf.STT_FUNC:
+				if bind != elf.STB_GLOBAL {
+					return fmt.Errorf("load: %s: unsupported binding: %s", name, bind)
+				}
+
+			case elf.STT_SECTION:
+				if bind != elf.STB_LOCAL {
+					return fmt.Errorf("load: %s: unsupported binding: %s", name, bind)
+				}
+
+				// ins.Constant already contains the offset in bytes from the
+				// start of the section. This is different than a call to a
+				// static function.
+
+			default:
+				return fmt.Errorf("load: %s: invalid symbol type %s", name, typ)
 			}
 
-			// The function we want to call is in the indicated section,
-			// at the offset encoded in the instruction itself. Reverse
-			// the calculation to find the real function we're looking for.
-			// A value of -1 references the first instruction in the section.
-			offset := int64(int32(ins.Constant)+1) * asm.InstructionSize
-			if offset < 0 {
-				return fmt.Errorf("call: %s: invalid offset %d", name, offset)
-			}
-
-			sym, ok := target.symbols[uint64(offset)]
+			sym, ok := target.symbols[uint64(ins.Constant)]
 			if !ok {
-				return fmt.Errorf("call: %s: no symbol at offset %d", name, offset)
+				return fmt.Errorf("load: no symbol at offset %d", ins.Constant)
 			}
 
-			ins.Constant = -1
 			name = sym.Name
+			ins.Constant = -1
+			ins.Src = asm.PseudoFunc
 
 		default:
-			return fmt.Errorf("call: %s: invalid symbol type %s", name, typ)
+			return fmt.Errorf("neither a call nor a load instruction: %v", ins)
 		}
 
 	case undefSection:

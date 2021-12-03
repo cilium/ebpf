@@ -61,7 +61,7 @@ func needSection(insns, section asm.Instructions) (bool, error) {
 			continue
 		}
 
-		if ins.OpCode.JumpOp() != asm.Call || ins.Src != asm.PseudoCall {
+		if !ins.IsFunctionCall() && !ins.IsLoadOfFunctionPointer() {
 			continue
 		}
 
@@ -111,28 +111,35 @@ func fixupJumpsAndCalls(insns asm.Instructions) error {
 			continue
 		}
 
+		symOffset, ok := symbolOffsets[ins.Reference]
 		switch {
+		case ins.IsLoadOfFunctionPointer() && ins.Constant == -1:
+			fallthrough
+
 		case ins.IsFunctionCall() && ins.Constant == -1:
-			// Rewrite bpf to bpf call
-			callOffset, ok := symbolOffsets[ins.Reference]
 			if !ok {
-				return fmt.Errorf("call at %d: reference to missing symbol %q", i, ins.Reference)
+				break
 			}
 
-			ins.Constant = int64(callOffset - offset - 1)
+			ins.Constant = int64(symOffset - offset - 1)
+			continue
 
 		case ins.OpCode.Class() == asm.JumpClass && ins.Offset == -1:
-			// Rewrite jump to label
-			jumpOffset, ok := symbolOffsets[ins.Reference]
 			if !ok {
-				return fmt.Errorf("jump at %d: reference to missing symbol %q", i, ins.Reference)
+				break
 			}
 
-			ins.Offset = int16(jumpOffset - offset - 1)
+			ins.Offset = int16(symOffset - offset - 1)
+			continue
 
 		case ins.IsLoadFromMap() && ins.MapPtr() == -1:
 			return fmt.Errorf("map %s: %w", ins.Reference, errUnsatisfiedReference)
+		default:
+			// no fixup needed
+			continue
 		}
+
+		return fmt.Errorf("%s at %d: reference to missing symbol %q", ins.OpCode, i, ins.Reference)
 	}
 
 	// fixupBPFCalls replaces bpf_probe_read_{kernel,user}[_str] with bpf_probe_read[_str] on older kernels

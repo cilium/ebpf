@@ -38,6 +38,7 @@ blocks:
       epilogue:
         always:
           commands:
+            - df -h
             - sudo dmesg
       env_vars:
         - name: TMPDIR

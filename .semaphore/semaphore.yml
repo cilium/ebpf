@@ -36,8 +36,9 @@ blocks:
           - sudo apt-get install -y --no-install-recommends qemu-system-x86 clang-9 llvm-9
           - sudo dmesg -C
       epilogue:
-        commands:
-          - sudo dmesg
+        always:
+          commands:
+            - sudo dmesg
       env_vars:
         - name: TMPDIR
           value: /tmp

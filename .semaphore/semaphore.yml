@@ -6,6 +6,9 @@ agent:
     type: e1-standard-2
     os_image: ubuntu2004
 
+execution_time_limit:
+  minutes: 30
+
 global_job_config:
   secrets:
     - name: Coveralls

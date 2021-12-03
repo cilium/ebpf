@@ -22,6 +22,7 @@ blocks:
     task:
       prologue:
         commands:
+          - sudo swapoff -a && sudo fallocate -l 2G /swapfile && chmod 0600 /swapfile && sudo mkswap /swapfile && sudo swapon /swapfile
           - checkout
           - curl -sSfL http://security.ubuntu.com/ubuntu/pool/main/c/ca-certificates/ca-certificates_20210119~20.04.2_all.deb -o /tmp/ca-certificates.deb && sudo dpkg -i /tmp/ca-certificates.deb
           - sudo mkdir -p /usr/local/golang/1.17 && curl -fL "https://golang.org/dl/go1.17.linux-amd64.tar.gz" | sudo tar -xz -C /usr/local/golang/1.17

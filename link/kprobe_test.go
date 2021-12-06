@@ -13,12 +13,15 @@ import (
 	"github.com/cilium/ebpf/internal/unix"
 )
 
+// Kernel symbol that should be present on all tested kernels.
+var ksym = "vprintk"
+
 func TestKprobe(t *testing.T) {
 	c := qt.New(t)
 
 	prog := mustLoadProgram(t, ebpf.Kprobe, 0, "")
 
-	k, err := Kprobe("printk", prog)
+	k, err := Kprobe(ksym, prog)
 	c.Assert(err, qt.IsNil)
 	defer k.Close()
 
@@ -36,7 +39,7 @@ func TestKretprobe(t *testing.T) {
 
 	prog := mustLoadProgram(t, ebpf.Kprobe, 0, "")
 
-	k, err := Kretprobe("printk", prog)
+	k, err := Kretprobe(ksym, prog)
 	c.Assert(err, qt.IsNil)
 	defer k.Close()
 
@@ -75,14 +78,14 @@ func TestKprobeCreatePMU(t *testing.T) {
 	c := qt.New(t)
 
 	// kprobe happy path. printk is always present.
-	pk, err := pmuKprobe(probeArgs{symbol: "printk"})
+	pk, err := pmuKprobe(probeArgs{symbol: ksym})
 	c.Assert(err, qt.IsNil)
 	defer pk.Close()
 
 	c.Assert(pk.typ, qt.Equals, kprobeEvent)
 
 	// kretprobe happy path.
-	pr, err := pmuKprobe(probeArgs{symbol: "printk", ret: true})
+	pr, err := pmuKprobe(probeArgs{symbol: ksym, ret: true})
 	c.Assert(err, qt.IsNil)
 	defer pr.Close()
 
@@ -103,7 +106,7 @@ func TestKprobeCreatePMU(t *testing.T) {
 func TestKprobePMUUnavailable(t *testing.T) {
 	c := qt.New(t)
 
-	pk, err := pmuKprobe(probeArgs{symbol: "printk"})
+	pk, err := pmuKprobe(probeArgs{symbol: ksym})
 	if err == nil {
 		pk.Close()
 		t.Skipf("Kernel supports perf_kprobe PMU, not asserting error.")
@@ -115,7 +118,7 @@ func TestKprobePMUUnavailable(t *testing.T) {
 
 func BenchmarkKprobeCreatePMU(b *testing.B) {
 	for n := 0; n < b.N; n++ {
-		pr, err := pmuKprobe(probeArgs{symbol: "printk"})
+		pr, err := pmuKprobe(probeArgs{symbol: ksym})
 		if err != nil {
 			b.Error("error creating perf_kprobe PMU:", err)
 		}
@@ -130,26 +133,24 @@ func BenchmarkKprobeCreatePMU(b *testing.B) {
 func TestKprobeTraceFS(t *testing.T) {
 	c := qt.New(t)
 
-	symbol := "printk"
-
 	// Open and close tracefs k(ret)probes, checking all errors.
-	kp, err := tracefsKprobe(probeArgs{symbol: symbol})
+	kp, err := tracefsKprobe(probeArgs{symbol: ksym})
 	c.Assert(err, qt.IsNil)
 	c.Assert(kp.Close(), qt.IsNil)
 	c.Assert(kp.typ, qt.Equals, kprobeEvent)
 
-	kp, err = tracefsKprobe(probeArgs{symbol: symbol, ret: true})
+	kp, err = tracefsKprobe(probeArgs{symbol: ksym, ret: true})
 	c.Assert(err, qt.IsNil)
 	c.Assert(kp.Close(), qt.IsNil)
 	c.Assert(kp.typ, qt.Equals, kretprobeEvent)
 
 	// Create two identical trace events, ensure their IDs differ.
-	k1, err := tracefsKprobe(probeArgs{symbol: symbol})
+	k1, err := tracefsKprobe(probeArgs{symbol: ksym})
 	c.Assert(err, qt.IsNil)
 	defer k1.Close()
 	c.Assert(k1.tracefsID, qt.Not(qt.Equals), 0)
 
-	k2, err := tracefsKprobe(probeArgs{symbol: symbol})
+	k2, err := tracefsKprobe(probeArgs{symbol: ksym})
 	c.Assert(err, qt.IsNil)
 	defer k2.Close()
 	c.Assert(k2.tracefsID, qt.Not(qt.Equals), 0)
@@ -175,7 +176,7 @@ func BenchmarkKprobeCreateTraceFS(b *testing.B) {
 	for n := 0; n < b.N; n++ {
 		// Include <tracefs>/kprobe_events operations in the benchmark loop
 		// because we create one per perf event.
-		pr, err := tracefsKprobe(probeArgs{symbol: "printk"})
+		pr, err := tracefsKprobe(probeArgs{symbol: ksym})
 		if err != nil {
 			b.Error("error creating tracefs perf event:", err)
 		}
@@ -195,18 +196,17 @@ func TestKprobeCreateTraceFS(t *testing.T) {
 
 	c := qt.New(t)
 
-	symbol := "printk"
 	pg, _ := randomGroup("ebpftest")
 	rg, _ := randomGroup("ebpftest")
 
 	// Tee up cleanups in case any of the Asserts abort the function.
 	defer func() {
-		_ = closeTraceFSProbeEvent(kprobeType, pg, symbol)
-		_ = closeTraceFSProbeEvent(kprobeType, rg, symbol)
+		_ = closeTraceFSProbeEvent(kprobeType, pg, ksym)
+		_ = closeTraceFSProbeEvent(kprobeType, rg, ksym)
 	}()
 
 	// Prepare probe args.
-	args := probeArgs{group: pg, symbol: symbol}
+	args := probeArgs{group: pg, symbol: ksym}
 
 	// Create a kprobe.
 	err := createTraceFSProbeEvent(kprobeType, args)
@@ -219,7 +219,7 @@ func TestKprobeCreateTraceFS(t *testing.T) {
 		qt.Commentf("expected consecutive kprobe creation to contain os.ErrExist, got: %v", err))
 
 	// Expect a successful close of the kprobe.
-	c.Assert(closeTraceFSProbeEvent(kprobeType, pg, symbol), qt.IsNil)
+	c.Assert(closeTraceFSProbeEvent(kprobeType, pg, ksym), qt.IsNil)
 
 	args.group = rg
 	args.ret = true
@@ -233,7 +233,7 @@ func TestKprobeCreateTraceFS(t *testing.T) {
 		qt.Commentf("expected consecutive kretprobe creation to contain os.ErrExist, got: %v", err))
 
 	// Expect a successful close of the kretprobe.
-	c.Assert(closeTraceFSProbeEvent(kprobeType, rg, symbol), qt.IsNil)
+	c.Assert(closeTraceFSProbeEvent(kprobeType, rg, ksym), qt.IsNil)
 }
 
 func TestKprobeTraceFSGroup(t *testing.T) {

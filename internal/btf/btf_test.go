@@ -70,6 +70,15 @@ func TestAnyTypesByName(t *testing.T) {
 		if len(types) != 2 {
 			t.Fatalf("expected to receive exactly 2 types from querying ambiguous type, got: %v", types)
 		}
+
+		types, err = spec.AnyTypesByName("ambiguous___flavour")
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if len(types) != 1 {
+			t.Fatalf("expected to receive exactly 1 type from querying ambiguous flavour, got: %v", types)
+		}
 	})
 }
 

@@ -9,9 +9,6 @@ package main
 
 import (
 	"log"
-	"os"
-	"os/signal"
-	"syscall"
 	"time"
 
 	"github.com/cilium/ebpf/link"
@@ -24,11 +21,6 @@ import (
 const mapKey uint32 = 0
 
 func main() {
-
-	// Subscribe to signals for terminating the program.
-	stopper := make(chan os.Signal, 1)
-	signal.Notify(stopper, os.Interrupt, syscall.SIGTERM)
-
 	// Allow the current process to lock memory for eBPF resources.
 	if err := rlimit.RemoveMemlock(); err != nil {
 		log.Fatal(err)
@@ -57,16 +49,11 @@ func main() {
 	// function was entered, once per second.
 	ticker := time.NewTicker(1 * time.Second)
 	log.Println("Waiting for events..")
-	for {
-		select {
-		case <-ticker.C:
-			var value uint64
-			if err := objs.CountingMap.Lookup(mapKey, &value); err != nil {
-				log.Fatalf("reading map: %v", err)
-			}
-			log.Printf("%v times", value)
-		case <-stopper:
-			return
+	for range ticker.C {
+		var value uint64
+		if err := objs.CountingMap.Lookup(mapKey, &value); err != nil {
+			log.Fatalf("reading map: %v", err)
 		}
+		log.Printf("%v times", value)
 	}
 }

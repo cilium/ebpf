@@ -9,9 +9,6 @@ package main
 
 import (
 	"log"
-	"os"
-	"os/signal"
-	"syscall"
 	"time"
 
 	"github.com/cilium/ebpf/link"
@@ -19,7 +16,7 @@ import (
 )
 
 // $BPF_CLANG and $BPF_CFLAGS are set by the Makefile.
-//go:generate go run github.com/cilium/ebpf/cmd/bpf2go -cc $BPF_CLANG -cflags $BPF_CFLAGS bpf ./bpf/kprobe_example.c -- -I../headers
+//go:generate go run github.com/cilium/ebpf/cmd/bpf2go -cc $BPF_CLANG -cflags $BPF_CFLAGS bpf kprobe.c -- -I../headers
 
 const mapKey uint32 = 0
 
@@ -27,10 +24,6 @@ func main() {
 
 	// Name of the kernel function to trace.
 	fn := "sys_execve"
-
-	// Subscribe to signals for terminating the program.
-	stopper := make(chan os.Signal, 1)
-	signal.Notify(stopper, os.Interrupt, syscall.SIGTERM)
 
 	// Allow the current process to lock memory for eBPF resources.
 	if err := rlimit.RemoveMemlock(); err != nil {
@@ -60,16 +53,11 @@ func main() {
 
 	log.Println("Waiting for events..")
 
-	for {
-		select {
-		case <-ticker.C:
-			var value uint64
-			if err := objs.KprobeMap.Lookup(mapKey, &value); err != nil {
-				log.Fatalf("reading map: %v", err)
-			}
-			log.Printf("%s called %d times\n", fn, value)
-		case <-stopper:
-			return
+	for range ticker.C {
+		var value uint64
+		if err := objs.KprobeMap.Lookup(mapKey, &value); err != nil {
+			log.Fatalf("reading map: %v", err)
 		}
+		log.Printf("%s called %d times\n", fn, value)
 	}
 }

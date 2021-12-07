@@ -1,3 +1,5 @@
+// +build ignore
+
 #include "common.h"
 
 #include "bpf_helpers.h"

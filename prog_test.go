@@ -593,9 +593,11 @@ func TestProgramTypeLSM(t *testing.T) {
 }
 
 func TestProgramTargetBTF(t *testing.T) {
-	// Load a file that contains valid BTF, but doesn't contain the types
-	// we need for bpf_iter.
-	fh, err := os.Open("testdata/invalid_btf_map_init-el.elf")
+	if _, err := os.Stat("/sys/kernel/btf/vmlinux"); os.IsNotExist(err) {
+		t.Skip("/sys/kernel/btf/vmlinux not present")
+	}
+
+	fh, err := os.Open("/sys/kernel/btf/vmlinux")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -615,12 +617,10 @@ func TestProgramTargetBTF(t *testing.T) {
 	}, ProgramOptions{
 		TargetBTF: reader,
 	})
-	if err == nil {
-		prog.Close()
+	if err != nil {
+		t.Fatal("NewProgram with TargetBTF:", err)
 	}
-	if !errors.Is(err, ErrNotSupported) {
-		t.Error("Expected ErrNotSupported, got", err)
-	}
+	prog.Close()
 	if !reader.read {
 		t.Error("TargetBTF is not read")
 	}

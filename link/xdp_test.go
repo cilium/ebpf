@@ -22,5 +22,14 @@ func TestAttachXDP(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	linkInfo, err := l.Info()
+	if err != nil {
+		t.Fatal(err)
+	}
+	info := linkInfo.ExtraXDP()
+	if info.Ifindex != 1 {
+		t.Fatalf("expecting ifIndex 1, got %d", info.Ifindex)
+	}
+
 	testLink(t, l, prog)
 }

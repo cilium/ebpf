@@ -65,10 +65,25 @@ func (h *btfHeader) stringStart() int64 {
 	return int64(h.HdrLen + h.StringOff)
 }
 
-// LoadSpecFromReader reads BTF sections from an ELF.
+// LoadSpecFromReader reads from an ELF or a raw BTF blob.
 //
-// Returns ErrNotFound if the reader contains no BTF.
+// Returns ErrNotFound if reading from an ELF which contains no BTF.
 func LoadSpecFromReader(rd io.ReaderAt) (*Spec, error) {
+	ident := make([]byte, len(elf.ELFMAG))
+	if _, err := rd.ReadAt(ident, 0); err != nil {
+		return nil, fmt.Errorf("read identifier: %w", err)
+	}
+	if !bytes.Equal(ident, []byte(elf.ELFMAG)) {
+		bo, err := guessBTFByteOrder(rd)
+		if err != nil {
+			return nil, err
+		}
+
+		// Try to parse a naked BTF blob. This will return an error if
+		// we encounter a Datasec, since we can't fix it up.
+		return loadRawSpec(io.NewSectionReader(rd, 0, math.MaxInt64), bo, nil, nil)
+	}
+
 	file, err := internal.NewSafeELFFile(rd)
 	if err != nil {
 		return nil, err
@@ -149,16 +164,6 @@ func loadSpecFromELF(file *internal.SafeELFFile, variableOffsets map[variable]ui
 	return spec, nil
 }
 
-// LoadRawSpec reads a blob of BTF data that isn't wrapped in an ELF file.
-//
-// Prefer using LoadSpecFromReader, since this function only supports a subset
-// of BTF.
-func LoadRawSpec(btf io.Reader, bo binary.ByteOrder) (*Spec, error) {
-	// This will return an error if we encounter a Datasec, since we can't fix
-	// it up.
-	return loadRawSpec(btf, bo, nil, nil)
-}
-
 func loadRawSpec(btf io.Reader, bo binary.ByteOrder, sectionSizes map[string]uint32, variableOffsets map[variable]uint32) (*Spec, error) {
 	rawTypes, rawStrings, err := parseBTF(btf, bo)
 	if err != nil {
@@ -211,7 +216,7 @@ func loadKernelSpec() (*Spec, error) {
 	if err == nil {
 		defer fh.Close()
 
-		return LoadRawSpec(fh, internal.NativeEndian)
+		return loadRawSpec(fh, internal.NativeEndian, nil, nil)
 	}
 
 	var uname unix.Utsname
@@ -284,6 +289,20 @@ func parseBTFHeader(r io.Reader, bo binary.ByteOrder) (*btfHeader, error) {
 	}
 
 	return &header, nil
+}
+
+func guessBTFByteOrder(r io.ReaderAt) (binary.ByteOrder, error) {
+	for _, bo := range []binary.ByteOrder{
+		binary.LittleEndian,
+		binary.BigEndian,
+	} {
+		_, err := parseBTFHeader(internal.NewBufferedSectionReader(r, 0, math.MaxInt64), bo)
+		if err == nil {
+			return bo, nil
+		}
+	}
+
+	return nil, fmt.Errorf("no valid big- or little-endian BTF header")
 }
 
 // parseBTF reads a .BTF section into memory and parses it into a list of

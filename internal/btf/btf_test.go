@@ -2,47 +2,44 @@ package btf
 
 import (
 	"bytes"
-	"compress/gzip"
 	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
 	"os"
+	"sync"
 	"testing"
 
 	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/testutils"
 )
 
-func parseVmLinux(tb testing.TB) (*Spec, error) {
-	fh, err := os.Open("testdata/vmlinux-btf.gz")
-	if err != nil {
-		tb.Fatal(err)
-	}
-	defer fh.Close()
+var vmlinux struct {
+	sync.Once
+	err error
+	raw []byte
+}
 
-	rd, err := gzip.NewReader(fh)
-	if err != nil {
-		tb.Fatal(err)
+func readVmLinux(tb testing.TB) *bytes.Reader {
+	tb.Helper()
+
+	vmlinux.Do(func() {
+		vmlinux.raw, vmlinux.err = internal.ReadAllCompressed("testdata/vmlinux-btf.gz")
+	})
+
+	if vmlinux.err != nil {
+		tb.Fatal(vmlinux.err)
 	}
 
-	spec, err := loadRawSpec(rd, binary.LittleEndian, nil, nil)
-	if err != nil {
-		tb.Fatal("Can't load BTF:", err)
-	}
-
-	return spec, nil
+	return bytes.NewReader(vmlinux.raw)
 }
 
 func TestFindType(t *testing.T) {
-	spec, err := parseVmLinux(t)
+	spec, err := LoadSpecFromReader(readVmLinux(t))
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	// spec.FindType MUST fail if typ is not a non-nil **T, where T satisfies btf.Type.
-	i := 0
-	p := &i
 	for _, typ := range []interface{}{
 		nil,
 		Struct{},
@@ -51,12 +48,15 @@ func TestFindType(t *testing.T) {
 		&[]Struct{},
 		map[int]Struct{},
 		&map[int]Struct{},
-		p,
-		&p,
+		int(0),
+		new(int),
 	} {
-		if err := spec.FindType("iphdr", typ); err == nil {
-			t.Fatalf("FindType does not fail with type %T", typ)
-		}
+		t.Run(fmt.Sprintf("%T", typ), func(t *testing.T) {
+			// spec.FindType MUST fail if typ is not a non-nil **T, where T satisfies btf.Type.
+			if err := spec.FindType("iphdr", typ); err == nil {
+				t.Fatalf("FindType does not fail with type %T", typ)
+			}
+		})
 	}
 
 	// spec.FindType MUST return the same address for multiple calls with the same type name.
@@ -71,20 +71,8 @@ func TestFindType(t *testing.T) {
 	if iphdr1 != iphdr2 {
 		t.Fatal("multiple FindType calls for `iphdr` name do not return the same addresses")
 	}
-}
 
-func TestParseVmlinux(t *testing.T) {
-	spec, err := parseVmLinux(t)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	var iphdr *Struct
-	err = spec.FindType("iphdr", &iphdr)
-	if err != nil {
-		t.Fatalf("unable to find `iphdr` struct: %s", err)
-	}
-	for _, m := range iphdr.Members {
+	for _, m := range iphdr1.Members {
 		if m.Name == "version" {
 			// __u8 is a typedef
 			td, ok := m.Type.(*Typedef)
@@ -110,23 +98,7 @@ func TestParseVmlinux(t *testing.T) {
 }
 
 func BenchmarkParseVmlinux(b *testing.B) {
-	fh, err := os.Open("testdata/vmlinux-btf.gz")
-	if err != nil {
-		b.Fatal(err)
-	}
-	defer fh.Close()
-
-	gr, err := gzip.NewReader(fh)
-	if err != nil {
-		b.Fatal(err)
-	}
-
-	var buf bytes.Buffer
-	if _, err := buf.ReadFrom(gr); err != nil {
-		b.Fatal(err)
-	}
-	rd := bytes.NewReader(buf.Bytes())
-
+	rd := readVmLinux(b)
 	b.ResetTimer()
 
 	for n := 0; n < b.N; n++ {
@@ -232,6 +204,17 @@ func TestLoadKernelSpec(t *testing.T) {
 	_, err := LoadKernelSpec()
 	if err != nil {
 		t.Fatal("Can't load kernel spec:", err)
+	}
+}
+
+func TestGuessBTFByteOrder(t *testing.T) {
+	bo, err := guessBTFByteOrder(readVmLinux(t))
+	if err != nil {
+		t.Fatal("Guess order:", err)
+	}
+
+	if bo != binary.LittleEndian {
+		t.Fatalf("Guessed %s instead of %s", bo, binary.LittleEndian)
 	}
 }
 

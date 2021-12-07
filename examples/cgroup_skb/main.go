@@ -12,9 +12,7 @@ import (
 	"errors"
 	"log"
 	"os"
-	"os/signal"
 	"strings"
-	"syscall"
 	"time"
 
 	"github.com/cilium/ebpf"
@@ -26,10 +24,6 @@ import (
 //go:generate go run github.com/cilium/ebpf/cmd/bpf2go -cc $BPF_CLANG -cflags $BPF_CFLAGS bpf cgroup_skb.c -- -I../headers
 
 func main() {
-	// Subscribe to signals for terminating the program.
-	stopper := make(chan os.Signal, 1)
-	signal.Notify(stopper, os.Interrupt, syscall.SIGTERM)
-
 	// Allow the current process to lock memory for eBPF resources.
 	if err := rlimit.RemoveMemlock(); err != nil {
 		log.Fatal(err)
@@ -65,17 +59,12 @@ func main() {
 	// function was entered, once per second.
 	ticker := time.NewTicker(1 * time.Second)
 
-	for {
-		select {
-		case <-ticker.C:
-			var value uint64
-			if err := objs.PktCount.Lookup(uint32(0), &value); err != nil {
-				log.Fatalf("reading map: %v", err)
-			}
-			log.Printf("number of packets: %d\n", value)
-		case <-stopper:
-			return
+	for range ticker.C {
+		var value uint64
+		if err := objs.PktCount.Lookup(uint32(0), &value); err != nil {
+			log.Fatalf("reading map: %v", err)
 		}
+		log.Printf("number of packets: %d\n", value)
 	}
 }
 

@@ -10,9 +10,7 @@ package main
 import (
 	"log"
 	"os"
-	"os/signal"
 	"path"
-	"syscall"
 	"time"
 
 	"github.com/cilium/ebpf"
@@ -32,10 +30,6 @@ func main() {
 
 	// Name of the kernel function to trace.
 	fn := "sys_execve"
-
-	// Subscribe to signals for terminating the program.
-	stopper := make(chan os.Signal, 1)
-	signal.Notify(stopper, os.Interrupt, syscall.SIGTERM)
 
 	// Allow the current process to lock memory for eBPF resources.
 	if err := rlimit.RemoveMemlock(); err != nil {
@@ -77,16 +71,11 @@ func main() {
 
 	log.Println("Waiting for events..")
 
-	for {
-		select {
-		case <-ticker.C:
-			var value uint64
-			if err := objs.KprobeMap.Lookup(mapKey, &value); err != nil {
-				log.Fatalf("reading map: %v", err)
-			}
-			log.Printf("%s called %d times\n", fn, value)
-		case <-stopper:
-			return
+	for range ticker.C {
+		var value uint64
+		if err := objs.KprobeMap.Lookup(mapKey, &value); err != nil {
+			log.Fatalf("reading map: %v", err)
 		}
+		log.Printf("%s called %d times\n", fn, value)
 	}
 }

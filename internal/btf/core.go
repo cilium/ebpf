@@ -234,13 +234,13 @@ func coreRelocate(local, target *Spec, relos coreRelos) (COREFixups, error) {
 		}
 
 		localType := local.types[id]
-		named, ok := localType.(NamedType)
-		if !ok || named.TypeName() == "" {
+		localTypeName := localType.TypeName()
+		if localTypeName == "" {
 			return nil, fmt.Errorf("relocate unnamed or anonymous type %s: %w", localType, ErrNotSupported)
 		}
 
 		relos := relosByID[id]
-		targets := target.namedTypes[essentialName(named.TypeName())]
+		targets := target.namedTypes[essentialName(localTypeName)]
 		fixups, err := coreCalculateFixups(localType, targets, relos)
 		if err != nil {
 			return nil, fmt.Errorf("relocate %s: %w", localType, err)
@@ -262,7 +262,7 @@ var errImpossibleRelocation = errors.New("impossible relocation")
 //
 // The best target is determined by scoring: the less poisoning we have to do
 // the better the target is.
-func coreCalculateFixups(local Type, targets []NamedType, relos coreRelos) ([]COREFixup, error) {
+func coreCalculateFixups(local Type, targets []Type, relos coreRelos) ([]COREFixup, error) {
 	localID := local.ID()
 	local, err := copyType(local, skipQualifiersAndTypedefs)
 	if err != nil {

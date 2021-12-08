@@ -40,9 +40,6 @@ func TestFindType(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// spec.FindType MUST fail if typ is not a non-nil **T, where T satisfies btf.Type.
-	i := 0
-	p := &i
 	for _, typ := range []interface{}{
 		nil,
 		Struct{},
@@ -51,12 +48,15 @@ func TestFindType(t *testing.T) {
 		&[]Struct{},
 		map[int]Struct{},
 		&map[int]Struct{},
-		p,
-		&p,
+		int(0),
+		new(int),
 	} {
-		if err := spec.FindType("iphdr", typ); err == nil {
-			t.Fatalf("FindType does not fail with type %T", typ)
-		}
+		t.Run(fmt.Sprintf("%T", typ), func(t *testing.T) {
+			// spec.FindType MUST fail if typ is not a non-nil **T, where T satisfies btf.Type.
+			if err := spec.FindType("iphdr", typ); err == nil {
+				t.Fatalf("FindType does not fail with type %T", typ)
+			}
+		})
 	}
 
 	// spec.FindType MUST return the same address for multiple calls with the same type name.
@@ -71,20 +71,8 @@ func TestFindType(t *testing.T) {
 	if iphdr1 != iphdr2 {
 		t.Fatal("multiple FindType calls for `iphdr` name do not return the same addresses")
 	}
-}
 
-func TestParseVmlinux(t *testing.T) {
-	spec, err := parseVmLinux(t)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	var iphdr *Struct
-	err = spec.FindType("iphdr", &iphdr)
-	if err != nil {
-		t.Fatalf("unable to find `iphdr` struct: %s", err)
-	}
-	for _, m := range iphdr.Members {
+	for _, m := range iphdr1.Members {
 		if m.Name == "version" {
 			// __u8 is a typedef
 			td, ok := m.Type.(*Typedef)

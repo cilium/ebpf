@@ -10,6 +10,7 @@ import (
 
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/asm"
+	"github.com/cilium/ebpf/internal/sys"
 	"github.com/cilium/ebpf/internal/testutils"
 	"github.com/cilium/ebpf/internal/unix"
 )
@@ -162,6 +163,36 @@ func testLink(t *testing.T, link Link, prog *ebpf.Program) {
 				t.Fatalf("%T.Update accepts nil program", link)
 			}
 		}()
+	})
+
+	t.Run("link_info", func(t *testing.T) {
+		linkInfo, err := link.Info()
+		testutils.SkipIfNotSupported(t, err)
+		if err != nil {
+			t.Fatal("Link info returns an error:", err)
+		}
+
+		var e interface{}
+		switch linkInfo.Type {
+		case sys.BPF_LINK_TYPE_RAW_TRACEPOINT:
+			e = linkInfo.ExtraRawTracepoint()
+		case sys.BPF_LINK_TYPE_TRACING:
+			e = linkInfo.ExtraTracing()
+		case sys.BPF_LINK_TYPE_CGROUP:
+			e = linkInfo.ExtraCgroup()
+		case sys.BPF_LINK_TYPE_ITER:
+			e = linkInfo.ExtraIter()
+		case sys.BPF_LINK_TYPE_NETNS:
+			e = linkInfo.ExtraNetNs()
+		case sys.BPF_LINK_TYPE_XDP:
+			e = linkInfo.ExtraXDP()
+		default:
+			t.Fatalf("Unknown link type: %d", linkInfo.Type)
+		}
+
+		if e != nil && reflect.ValueOf(e).IsNil() {
+			t.Fatalf("Link extra info is not available")
+		}
 	})
 
 	if err := link.Close(); err != nil {

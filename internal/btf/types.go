@@ -18,9 +18,13 @@ func (tid TypeID) ID() TypeID {
 
 // Type represents a type described by BTF.
 type Type interface {
+	// The type ID of the Type within this BTF spec.
 	ID() TypeID
 
-	String() string
+	// Name of the type, empty for anonymous types.
+	// The boolean is false if the type cannot be named,
+	// e.g. Void and Pointer.
+	TypeName() (string, bool)
 
 	// Make a copy of the type, without copying Type members.
 	copy() Type
@@ -28,37 +32,32 @@ type Type interface {
 	// Enumerate all nested Types. Repeated calls must visit nested
 	// types in the same order.
 	walk(*typeDeque)
-}
 
-// NamedType is a type with a name.
-type NamedType interface {
-	Type
-
-	// Name of the type, empty for anonymous types.
-	TypeName() string
+	String() string
 }
 
 var (
-	_ NamedType = (*Int)(nil)
-	_ NamedType = (*Struct)(nil)
-	_ NamedType = (*Union)(nil)
-	_ NamedType = (*Enum)(nil)
-	_ NamedType = (*Fwd)(nil)
-	_ NamedType = (*Func)(nil)
-	_ NamedType = (*Typedef)(nil)
-	_ NamedType = (*Var)(nil)
-	_ NamedType = (*Datasec)(nil)
-	_ NamedType = (*Float)(nil)
+	_ Type = (*Int)(nil)
+	_ Type = (*Struct)(nil)
+	_ Type = (*Union)(nil)
+	_ Type = (*Enum)(nil)
+	_ Type = (*Fwd)(nil)
+	_ Type = (*Func)(nil)
+	_ Type = (*Typedef)(nil)
+	_ Type = (*Var)(nil)
+	_ Type = (*Datasec)(nil)
+	_ Type = (*Float)(nil)
 )
 
 // Void is the unit type of BTF.
 type Void struct{}
 
-func (v *Void) ID() TypeID      { return 0 }
-func (v *Void) String() string  { return "void#0" }
-func (v *Void) size() uint32    { return 0 }
-func (v *Void) copy() Type      { return (*Void)(nil) }
-func (v *Void) walk(*typeDeque) {}
+func (v *Void) ID() TypeID               { return 0 }
+func (v *Void) String() string           { return "void#0" }
+func (v *Void) TypeName() (string, bool) { return "", false }
+func (v *Void) size() uint32             { return 0 }
+func (v *Void) copy() Type               { return (*Void)(nil) }
+func (v *Void) walk(*typeDeque)          {}
 
 type IntEncoding byte
 
@@ -83,6 +82,7 @@ func (ie IntEncoding) IsBool() bool {
 // Int is an integer of a given length.
 type Int struct {
 	TypeID
+
 	Name string
 
 	// The size of the integer in bytes.
@@ -119,9 +119,9 @@ func (i *Int) String() string {
 	return s.String()
 }
 
-func (i *Int) TypeName() string { return i.Name }
-func (i *Int) size() uint32     { return i.Size }
-func (i *Int) walk(*typeDeque)  {}
+func (i *Int) TypeName() (string, bool) { return i.Name, true }
+func (i *Int) size() uint32             { return i.Size }
+func (i *Int) walk(*typeDeque)          {}
 func (i *Int) copy() Type {
 	cpy := *i
 	return &cpy
@@ -141,8 +141,9 @@ func (p *Pointer) String() string {
 	return fmt.Sprintf("pointer#%d[target=#%d]", p.TypeID, p.Target.ID())
 }
 
-func (p *Pointer) size() uint32        { return 8 }
-func (p *Pointer) walk(tdq *typeDeque) { tdq.push(&p.Target) }
+func (p *Pointer) TypeName() (string, bool) { return "", false }
+func (p *Pointer) size() uint32             { return 8 }
+func (p *Pointer) walk(tdq *typeDeque)      { tdq.push(&p.Target) }
 func (p *Pointer) copy() Type {
 	cpy := *p
 	return &cpy
@@ -158,6 +159,8 @@ type Array struct {
 func (arr *Array) String() string {
 	return fmt.Sprintf("array#%d[type=#%d n=%d]", arr.TypeID, arr.Type.ID(), arr.Nelems)
 }
+
+func (arr *Array) TypeName() (string, bool) { return "", false }
 
 func (arr *Array) walk(tdq *typeDeque) { tdq.push(&arr.Type) }
 func (arr *Array) copy() Type {
@@ -178,7 +181,7 @@ func (s *Struct) String() string {
 	return fmt.Sprintf("struct#%d[%q]", s.TypeID, s.Name)
 }
 
-func (s *Struct) TypeName() string { return s.Name }
+func (s *Struct) TypeName() (string, bool) { return s.Name, true }
 
 func (s *Struct) size() uint32 { return s.Size }
 
@@ -211,7 +214,7 @@ func (u *Union) String() string {
 	return fmt.Sprintf("union#%d[%q]", u.TypeID, u.Name)
 }
 
-func (u *Union) TypeName() string { return u.Name }
+func (u *Union) TypeName() (string, bool) { return u.Name, true }
 
 func (u *Union) size() uint32 { return u.Size }
 
@@ -268,7 +271,7 @@ func (e *Enum) String() string {
 	return fmt.Sprintf("enum#%d[%q]", e.TypeID, e.Name)
 }
 
-func (e *Enum) TypeName() string { return e.Name }
+func (e *Enum) TypeName() (string, bool) { return e.Name, true }
 
 // EnumValue is part of an Enum
 //
@@ -318,7 +321,7 @@ func (f *Fwd) String() string {
 	return fmt.Sprintf("fwd#%d[%s %q]", f.TypeID, f.Kind, f.Name)
 }
 
-func (f *Fwd) TypeName() string { return f.Name }
+func (f *Fwd) TypeName() (string, bool) { return f.Name, true }
 
 func (f *Fwd) walk(*typeDeque) {}
 func (f *Fwd) copy() Type {
@@ -337,7 +340,7 @@ func (td *Typedef) String() string {
 	return fmt.Sprintf("typedef#%d[%q #%d]", td.TypeID, td.Name, td.Type.ID())
 }
 
-func (td *Typedef) TypeName() string { return td.Name }
+func (td *Typedef) TypeName() (string, bool) { return td.Name, true }
 
 func (td *Typedef) walk(tdq *typeDeque) { tdq.push(&td.Type) }
 func (td *Typedef) copy() Type {
@@ -354,6 +357,8 @@ type Volatile struct {
 func (v *Volatile) String() string {
 	return fmt.Sprintf("volatile#%d[#%d]", v.TypeID, v.Type.ID())
 }
+
+func (v *Volatile) TypeName() (string, bool) { return "", false }
 
 func (v *Volatile) qualify() Type       { return v.Type }
 func (v *Volatile) walk(tdq *typeDeque) { tdq.push(&v.Type) }
@@ -372,6 +377,8 @@ func (c *Const) String() string {
 	return fmt.Sprintf("const#%d[#%d]", c.TypeID, c.Type.ID())
 }
 
+func (c *Const) TypeName() (string, bool) { return "", false }
+
 func (c *Const) qualify() Type       { return c.Type }
 func (c *Const) walk(tdq *typeDeque) { tdq.push(&c.Type) }
 func (c *Const) copy() Type {
@@ -388,6 +395,8 @@ type Restrict struct {
 func (r *Restrict) String() string {
 	return fmt.Sprintf("restrict#%d[#%d]", r.TypeID, r.Type.ID())
 }
+
+func (r *Restrict) TypeName() (string, bool) { return "", false }
 
 func (r *Restrict) qualify() Type       { return r.Type }
 func (r *Restrict) walk(tdq *typeDeque) { tdq.push(&r.Type) }
@@ -408,7 +417,7 @@ func (f *Func) String() string {
 	return fmt.Sprintf("func#%d[%s %q proto=#%d]", f.TypeID, f.Linkage, f.Name, f.Type.ID())
 }
 
-func (f *Func) TypeName() string { return f.Name }
+func (f *Func) TypeName() (string, bool) { return f.Name, true }
 
 func (f *Func) walk(tdq *typeDeque) { tdq.push(&f.Type) }
 func (f *Func) copy() Type {
@@ -432,6 +441,8 @@ func (fp *FuncProto) String() string {
 	fmt.Fprintf(&s, "return=#%d]", fp.Return.ID())
 	return s.String()
 }
+
+func (fp *FuncProto) TypeName() (string, bool) { return "", false }
 
 func (fp *FuncProto) walk(tdq *typeDeque) {
 	tdq.push(&fp.Return)
@@ -464,7 +475,7 @@ func (v *Var) String() string {
 	return fmt.Sprintf("var#%d[%s %q]", v.TypeID, v.Linkage, v.Name)
 }
 
-func (v *Var) TypeName() string { return v.Name }
+func (v *Var) TypeName() (string, bool) { return v.Name, true }
 
 func (v *Var) walk(tdq *typeDeque) { tdq.push(&v.Type) }
 func (v *Var) copy() Type {
@@ -484,7 +495,7 @@ func (ds *Datasec) String() string {
 	return fmt.Sprintf("section#%d[%q]", ds.TypeID, ds.Name)
 }
 
-func (ds *Datasec) TypeName() string { return ds.Name }
+func (ds *Datasec) TypeName() (string, bool) { return ds.Name, true }
 
 func (ds *Datasec) size() uint32 { return ds.Size }
 
@@ -523,9 +534,9 @@ func (f *Float) String() string {
 	return fmt.Sprintf("float%d#%d[%q]", f.Size*8, f.TypeID, f.Name)
 }
 
-func (f *Float) TypeName() string { return f.Name }
-func (f *Float) size() uint32     { return f.Size }
-func (f *Float) walk(*typeDeque)  {}
+func (f *Float) TypeName() (string, bool) { return f.Name, true }
+func (f *Float) size() uint32             { return f.Size }
+func (f *Float) walk(*typeDeque)          {}
 func (f *Float) copy() Type {
 	cpy := *f
 	return &cpy
@@ -753,7 +764,7 @@ func (dq *typeDeque) all() []*Type {
 // Returns a map of named types (so, where NameOff is non-zero) and a slice of types
 // indexed by TypeID. Since BTF ignores compilation units, multiple types may share
 // the same name. A Type may form a cyclic graph by pointing at itself.
-func inflateRawTypes(rawTypes []rawType, rawStrings stringTable) (types []Type, namedTypes map[string][]NamedType, err error) {
+func inflateRawTypes(rawTypes []rawType, rawStrings stringTable) (types []Type, namedTypes map[string][]Type, err error) {
 	type fixupDef struct {
 		id           TypeID
 		expectedKind btfKind
@@ -792,7 +803,7 @@ func inflateRawTypes(rawTypes []rawType, rawStrings stringTable) (types []Type, 
 
 	types = make([]Type, 0, len(rawTypes))
 	types = append(types, (*Void)(nil))
-	namedTypes = make(map[string][]NamedType)
+	namedTypes = make(map[string][]Type)
 
 	for i, raw := range rawTypes {
 		var (
@@ -935,11 +946,10 @@ func inflateRawTypes(rawTypes []rawType, rawStrings stringTable) (types []Type, 
 		}
 
 		types = append(types, typ)
+		typeName, _ := typ.TypeName()
 
-		if named, ok := typ.(NamedType); ok {
-			if name := essentialName(named.TypeName()); name != "" {
-				namedTypes[name] = append(namedTypes[name], named)
-			}
+		if name := essentialName(typeName); name != "" {
+			namedTypes[name] = append(namedTypes[name], typ)
 		}
 	}
 
@@ -966,6 +976,11 @@ func inflateRawTypes(rawTypes []rawType, rawStrings stringTable) (types []Type, 
 }
 
 // essentialName returns name without a ___ suffix.
+//
+// CO-RE has the concept of 'struct flavors', which are used to deal with
+// changes in kernel data structures. Anything after three underscores
+// in a type name is ignored for the purpose of finding a candidate type
+// in the kernel's BTF.
 func essentialName(name string) string {
 	lastIdx := strings.LastIndex(name, "___")
 	if lastIdx > 0 {

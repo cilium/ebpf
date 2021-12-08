@@ -35,7 +35,7 @@ func readVmLinux(tb testing.TB) *bytes.Reader {
 }
 
 func TestFindType(t *testing.T) {
-	spec, err := loadRawSpec(readVmLinux(t), binary.LittleEndian, nil, nil)
+	spec, err := LoadSpecFromReader(readVmLinux(t))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -204,6 +204,13 @@ func TestLoadKernelSpec(t *testing.T) {
 	_, err := LoadKernelSpec()
 	if err != nil {
 		t.Fatal("Can't load kernel spec:", err)
+	}
+}
+
+func TestGuessBTFByteOrder(t *testing.T) {
+	bo := guessRawBTFByteOrder(readVmLinux(t))
+	if bo != binary.LittleEndian {
+		t.Fatalf("Guessed %s instead of %s", bo, binary.LittleEndian)
 	}
 }
 

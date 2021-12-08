@@ -97,7 +97,7 @@ func TestTypeByNameAmbiguous(t *testing.T) {
 }
 
 func TestTypeByName(t *testing.T) {
-	spec, err := loadRawSpec(readVMLinux(t), binary.LittleEndian, nil, nil)
+	spec, err := LoadSpecFromReader(readVMLinux(t))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -261,6 +261,13 @@ func TestLoadKernelSpec(t *testing.T) {
 	_, err := LoadKernelSpec()
 	if err != nil {
 		t.Fatal("Can't load kernel spec:", err)
+	}
+}
+
+func TestGuessBTFByteOrder(t *testing.T) {
+	bo := guessRawBTFByteOrder(readVMLinux(t))
+	if bo != binary.LittleEndian {
+		t.Fatalf("Guessed %s instead of %s", bo, binary.LittleEndian)
 	}
 }
 

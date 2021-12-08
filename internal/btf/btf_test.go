@@ -2,36 +2,36 @@ package btf
 
 import (
 	"bytes"
-	"compress/gzip"
 	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
 	"os"
+	"sync"
 	"testing"
 
 	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/testutils"
 )
 
-func parseVMLinuxBTF(tb testing.TB) (*Spec, error) {
-	fh, err := os.Open("testdata/vmlinux-btf.gz")
-	if err != nil {
-		tb.Fatal(err)
-	}
-	defer fh.Close()
+var vmlinux struct {
+	sync.Once
+	err error
+	raw []byte
+}
 
-	rd, err := gzip.NewReader(fh)
-	if err != nil {
-		tb.Fatal(err)
+func readVMLinux(tb testing.TB) *bytes.Reader {
+	tb.Helper()
+
+	vmlinux.Do(func() {
+		vmlinux.raw, vmlinux.err = internal.ReadAllCompressed("testdata/vmlinux-btf.gz")
+	})
+
+	if vmlinux.err != nil {
+		tb.Fatal(vmlinux.err)
 	}
 
-	spec, err := loadRawSpec(rd, binary.LittleEndian, nil, nil)
-	if err != nil {
-		tb.Fatal("Can't load BTF:", err)
-	}
-
-	return spec, nil
+	return bytes.NewReader(vmlinux.raw)
 }
 
 func parseELFBTF(tb testing.TB, file string) *Spec {
@@ -97,7 +97,7 @@ func TestTypeByNameAmbiguous(t *testing.T) {
 }
 
 func TestTypeByName(t *testing.T) {
-	spec, err := parseVMLinuxBTF(t)
+	spec, err := loadRawSpec(readVMLinux(t), binary.LittleEndian, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -160,23 +160,7 @@ func TestTypeByName(t *testing.T) {
 }
 
 func BenchmarkParseVmlinux(b *testing.B) {
-	fh, err := os.Open("testdata/vmlinux-btf.gz")
-	if err != nil {
-		b.Fatal(err)
-	}
-	defer fh.Close()
-
-	gr, err := gzip.NewReader(fh)
-	if err != nil {
-		b.Fatal(err)
-	}
-
-	var buf bytes.Buffer
-	if _, err := buf.ReadFrom(gr); err != nil {
-		b.Fatal(err)
-	}
-	rd := bytes.NewReader(buf.Bytes())
-
+	rd := readVMLinux(b)
 	b.ResetTimer()
 
 	for n := 0; n < b.N; n++ {

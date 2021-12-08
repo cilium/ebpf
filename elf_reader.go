@@ -340,48 +340,39 @@ func (ec *elfCode) loadProgramSections() (map[string]*ProgramSpec, error) {
 //
 // The resulting map is indexed by function name.
 func (ec *elfCode) loadFunctions(section *elfSection) (map[string]asm.Instructions, error) {
-	funcs := make(map[string]asm.Instructions)
-	for _, sym := range section.symbols {
-		// Load the function's instructions given the ELF section and the
-		// function's symbol containing the offset and length of the function.
-		si, err := ec.loadInstructions(section, sym)
-		if err != nil {
-			return nil, fmt.Errorf("loading instructions: %w", err)
-		}
-
-		funcs[sym.Name] = si
-	}
-
-	return funcs, nil
-}
-
-// loadInstructions extracts the instruction stream of the given symbol
-// from the given ELF section.
-func (ec *elfCode) loadInstructions(section *elfSection, sym elf.Symbol) (asm.Instructions, error) {
-	// clang up until at least version 7 does not set the symbol's size field.
-	// In this case, buffer the remainder of the section, since we only read up
-	// to the first Exit instruction.
-	if sym.Size == 0 {
-		// Don't use Max(U)Int64, the offset is added to this number
-		// during SectionReader creation and will overflow.
-		sym.Size = section.Size
-	}
-
-	r := internal.NewBufferedSectionReader(section, int64(sym.Value), int64(sym.Size))
-
-	// Starting point of the function within the section.
-	offset := sym.Value
-
-	var insns asm.Instructions
+	var (
+		r      = bufio.NewReader(section.Open())
+		funcs  = make(map[string]asm.Instructions)
+		offset uint64
+		ins    asm.Instruction
+		insns  asm.Instructions
+	)
 	for {
-		var ins asm.Instruction
+		// Check if a symbol exists at the current offset, denoting the start
+		// of a new function. Tag the current instruction with the function name.
+		ins.Symbol = section.symbols[offset].Name
+
+		// Pull one instruction from the instruction stream.
 		n, err := ins.Unmarshal(r, ec.ByteOrder)
+		if errors.Is(err, io.EOF) {
+			if fn := insns.Name(); fn != "" {
+				// Reached the end of the section and the decoded instruction buffer
+				// contains at least one valid instruction belonging to a function.
+				// Store the result and stop processing instructions.
+				funcs[fn] = insns
+			}
+			break
+		}
 		if err != nil {
-			// EOF is an error, a valid instruction stream ends with an Exit instruction.
 			return nil, fmt.Errorf("offset %d: %w", offset, err)
 		}
 
-		ins.Symbol = section.symbols[offset].Name
+		// Decoded the first instruction of a new function but insns already
+		// holds a valid instruction stream. Store the result and flush insns.
+		if ins.Symbol != "" && insns.Name() != "" {
+			funcs[insns.Name()] = insns
+			insns = nil
+		}
 
 		// Up to clang9, jumps to subprograms within the same ELF section were
 		// encoded using offsets relative to the instruction. When parsing
@@ -404,18 +395,9 @@ func (ec *elfCode) loadInstructions(section *elfSection, sym elf.Symbol) (asm.In
 
 		insns = append(insns, ins)
 		offset += n
-
-		// Read up until the first exit instruction.
-		if ins.OpCode.JumpOp() == asm.Exit {
-			break
-		}
 	}
 
-	if len(insns) == 0 {
-		return nil, errors.New("no instructions")
-	}
-
-	return insns, nil
+	return funcs, nil
 }
 
 func (ec *elfCode) relocateInstruction(ins *asm.Instruction, rel elf.Symbol) error {

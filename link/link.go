@@ -1,6 +1,8 @@
 package link
 
 import (
+	"bytes"
+	"encoding/binary"
 	"fmt"
 
 	"github.com/cilium/ebpf"
@@ -34,6 +36,11 @@ type Link interface {
 	// A link may continue past the lifetime of the process if Close is
 	// not called.
 	Close() error
+
+	// Info returns metadata on a link.
+	//
+	// May return an error wrapping ErrNotSupported.
+	Info() (*LinkInfo, error)
 
 	// Prevent external users from implementing this interface.
 	isLink()
@@ -92,11 +99,40 @@ type RawLinkOptions struct {
 	Flags uint32
 }
 
-// RawLinkInfo contains metadata on a link.
-type RawLinkInfo struct {
+// LinkInfo contains metadata on a link.
+type LinkInfo struct {
 	Type    Type
 	ID      ID
 	Program ebpf.ProgramID
+	extra   interface{}
+}
+
+// RawLinkInfo deprecated: use LinkInfo instead.
+type RawLinkInfo = LinkInfo
+
+func (r LinkInfo) ExtraRawTracepoint() *sys.RawTracepointLinkInfo {
+	e, _ := r.extra.(*sys.RawTracepointLinkInfo)
+	return e
+}
+func (r LinkInfo) ExtraTracing() *sys.TracingLinkInfo {
+	e, _ := r.extra.(*sys.TracingLinkInfo)
+	return e
+}
+func (r LinkInfo) ExtraCgroup() *sys.CgroupLinkInfo {
+	e, _ := r.extra.(*sys.CgroupLinkInfo)
+	return e
+}
+func (r LinkInfo) ExtraIter() *sys.IterLinkInfo {
+	e, _ := r.extra.(*sys.IterLinkInfo)
+	return e
+}
+func (r LinkInfo) ExtraNetNs() *sys.NetNsLinkInfo {
+	e, _ := r.extra.(*sys.NetNsLinkInfo)
+	return e
+}
+func (r LinkInfo) ExtraXDP() *sys.XDPLinkInfo {
+	e, _ := r.extra.(*sys.XDPLinkInfo)
+	return e
 }
 
 // RawLink is the low-level API to bpf_link.
@@ -254,15 +290,40 @@ func (l *RawLink) UpdateArgs(opts RawLinkUpdateOptions) error {
 }
 
 // Info returns metadata about the link.
-func (l *RawLink) Info() (*RawLinkInfo, error) {
+func (l *RawLink) Info() (*LinkInfo, error) {
 	var info sys.LinkInfo
 	if err := sys.ObjInfo(l.fd, &info); err != nil {
 		return nil, fmt.Errorf("link info: %s", err)
 	}
 
-	return &RawLinkInfo{
+	var extra interface{}
+	switch info.Type {
+	case RawTracepointType:
+		extra = &sys.RawTracepointLinkInfo{}
+	case TracingType:
+		extra = &sys.TracingLinkInfo{}
+	case CgroupType:
+		extra = &sys.CgroupLinkInfo{}
+	case IterType:
+		extra = &sys.IterLinkInfo{}
+	case NetNsType:
+		extra = &sys.NetNsLinkInfo{}
+	case XDPType:
+		extra = &sys.XDPLinkInfo{}
+	default:
+		return nil, fmt.Errorf("unknown link info type: %d", info.Type)
+	}
+
+	buf := bytes.NewReader(info.Extra[:])
+	err := binary.Read(buf, internal.NativeEndian, extra)
+	if err != nil {
+		return nil, fmt.Errorf("can not read extra link info: %w", err)
+	}
+
+	return &LinkInfo{
 		info.Type,
 		info.Id,
 		ebpf.ProgramID(info.ProgId),
+		extra,
 	}, nil
 }

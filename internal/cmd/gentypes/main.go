@@ -6,7 +6,6 @@ package main
 
 import (
 	"bytes"
-	"compress/gzip"
 	"encoding/binary"
 	"fmt"
 	"os"
@@ -37,19 +36,12 @@ func run(args []string) error {
 		return fmt.Errorf("expect location of compressed vmlinux .BTF as argument")
 	}
 
-	fh, err := os.Open(args[0])
+	raw, err := internal.ReadAllCompressed(args[0])
 	if err != nil {
 		return err
 	}
-	defer fh.Close()
 
-	gz, err := gzip.NewReader(fh)
-	if err != nil {
-		return err
-	}
-	defer gz.Close()
-
-	spec, err := btf.LoadRawSpec(gz, binary.LittleEndian)
+	spec, err := btf.LoadRawSpec(bytes.NewReader(raw), binary.LittleEndian)
 	if err != nil {
 		return err
 	}

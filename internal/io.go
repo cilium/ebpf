@@ -2,6 +2,7 @@ package internal
 
 import (
 	"bufio"
+	"compress/gzip"
 	"errors"
 	"io"
 	"os"
@@ -41,4 +42,21 @@ func (DiscardZeroes) Write(p []byte) (int, error) {
 		}
 	}
 	return len(p), nil
+}
+
+// ReadAllCompressed decompresses a gzipped file into memory.
+func ReadAllCompressed(file string) ([]byte, error) {
+	fh, err := os.Open(file)
+	if err != nil {
+		return nil, err
+	}
+	defer fh.Close()
+
+	gz, err := gzip.NewReader(fh)
+	if err != nil {
+		return nil, err
+	}
+	defer gz.Close()
+
+	return io.ReadAll(gz)
 }

@@ -10,6 +10,7 @@ import (
 
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/asm"
+	"github.com/cilium/ebpf/internal/sys"
 	"github.com/cilium/ebpf/internal/testutils"
 	"github.com/cilium/ebpf/internal/unix"
 )
@@ -139,6 +140,40 @@ func testLink(t *testing.T, link Link, prog *ebpf.Program) {
 				t.Fatalf("%T.Update accepts nil program", link)
 			}
 		}()
+	})
+
+	t.Run("link_info", func(t *testing.T) {
+		info, err := link.Info()
+		testutils.SkipIfNotSupported(t, err)
+		if err != nil {
+			t.Fatal("Link info returns an error:", err)
+		}
+
+		if info.Type == 0 {
+			t.Fatal("Failed to get link info type")
+		}
+
+		switch info.Type {
+		case sys.BPF_LINK_TYPE_TRACING:
+			if info.Tracing() == nil {
+				t.Fatalf("Failed to get link tracing extra info")
+			}
+		case sys.BPF_LINK_TYPE_CGROUP:
+			cg := info.Cgroup()
+			if cg.CgroupId == 0 {
+				t.Fatalf("Failed to get link Cgroup extra info")
+			}
+		case sys.BPF_LINK_TYPE_NETNS:
+			netns := info.NetNs()
+			if netns.AttachType == 0 {
+				t.Fatalf("Failed to get link NetNs extra info")
+			}
+		case sys.BPF_LINK_TYPE_XDP:
+			xdp := info.XDP()
+			if xdp.Ifindex == 0 {
+				t.Fatalf("Failed to get link XDP extra info")
+			}
+		}
 	})
 
 	if err := link.Close(); err != nil {

@@ -6,7 +6,6 @@ package main
 
 import (
 	"bytes"
-	"encoding/binary"
 	"fmt"
 	"os"
 	"sort"
@@ -41,7 +40,7 @@ func run(args []string) error {
 		return err
 	}
 
-	spec, err := btf.LoadRawSpec(bytes.NewReader(raw), binary.LittleEndian)
+	spec, err := btf.LoadSpecFromReader(bytes.NewReader(raw))
 	if err != nil {
 		return err
 	}

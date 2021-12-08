@@ -10,6 +10,7 @@ import (
 
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/asm"
+	"github.com/cilium/ebpf/internal/sys"
 	"github.com/cilium/ebpf/internal/testutils"
 	"github.com/cilium/ebpf/internal/unix"
 )
@@ -139,6 +140,49 @@ func testLink(t *testing.T, link Link, prog *ebpf.Program) {
 				t.Fatalf("%T.Update accepts nil program", link)
 			}
 		}()
+	})
+
+	t.Run("link_info", func(t *testing.T) {
+		info, err := link.Info()
+		testutils.SkipIfNotSupported(t, err)
+		if err != nil {
+			t.Fatal("Link info returns an error:", err)
+		}
+
+		switch info.Type {
+		case sys.BPF_LINK_TYPE_RAW_TRACEPOINT:
+			tp := info.ExtraRawTracepoint()
+			if tp.TPName == "" {
+				t.Fatalf("Raw tracepoint extra info is not available")
+			}
+		case sys.BPF_LINK_TYPE_TRACING:
+			trace := info.ExtraTracing()
+			if trace.TargetObjId == 0 {
+				t.Fatalf("Tracing extra info is not available")
+			}
+		case sys.BPF_LINK_TYPE_CGROUP:
+			cg := info.ExtraCgroup()
+			if cg.CgroupId == 0 {
+				t.Fatalf("Cgroup extra info is not available")
+			}
+		case sys.BPF_LINK_TYPE_ITER:
+			iter := info.ExtraIter()
+			if iter.TargetName == "" {
+				t.Fatalf("Iter extra info is not available")
+			}
+		case sys.BPF_LINK_TYPE_NETNS:
+			netns := info.ExtraNetNs()
+			if netns.AttachType == 0 {
+				t.Fatalf("NetNs extra info is not available")
+			}
+		case sys.BPF_LINK_TYPE_XDP:
+			xdp := info.ExtraXDP()
+			if xdp.Ifindex == 0 {
+				t.Fatalf("XDP extra info is not available")
+			}
+		default:
+			t.Fatalf("Unknown link type: %d", info.Type)
+		}
 	})
 
 	if err := link.Close(); err != nil {

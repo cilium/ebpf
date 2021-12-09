@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"sync"
+	"time"
 
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/internal"
@@ -15,9 +16,10 @@ import (
 )
 
 var (
-	ErrClosed  = os.ErrClosed
-	errDiscard = errors.New("sample discarded")
-	errBusy    = errors.New("sample not committed yet")
+	ErrClosed    = os.ErrClosed
+	ErrNoRecords = errors.New("no records")
+	errDiscard   = errors.New("sample discarded")
+	errBusy      = errors.New("sample not committed yet")
 )
 
 // ringbufHeader from 'struct bpf_ringbuf_hdr' in kernel/bpf/ringbuf.c
@@ -159,6 +161,20 @@ func (r *Reader) Close() error {
 //
 // Calling Close interrupts the function.
 func (r *Reader) Read() (Record, error) {
+	return r.read(-1)
+}
+
+// ReadTimeout is Read but will timeout and return ErrNoRecords
+// if the timeout expires. The minimum timeout is 1 millisecond.
+func (r *Reader) ReadTimeout(timeout time.Duration) (Record, error) {
+	if timeout < time.Millisecond {
+		return Record{}, fmt.Errorf("timeout too small")
+	}
+
+	return r.read(int(timeout.Nanoseconds() / int64(time.Millisecond)))
+}
+
+func (r *Reader) read(timeout int) (Record, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
@@ -167,9 +183,12 @@ func (r *Reader) Read() (Record, error) {
 	}
 
 	for {
-		_, err := r.poller.Wait(r.epollEvents)
+		nEvents, err := r.poller.Wait(r.epollEvents, timeout)
 		if err != nil {
 			return Record{}, err
+		}
+		if nEvents == 0 {
+			return Record{}, ErrNoRecords
 		}
 
 		record, err := readRecord(r.ring)

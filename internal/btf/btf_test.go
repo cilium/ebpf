@@ -112,6 +112,29 @@ func TestTypeByName(t *testing.T) {
 	}
 }
 
+func TestTypeByNameAmbiguous(t *testing.T) {
+	testutils.Files(t, testutils.Glob(t, "testdata/relocs-*.elf"), func(t *testing.T, file string) {
+		spec := parseELFBTF(t, file)
+
+		var typ *Struct
+		if err := spec.TypeByName("ambiguous", &typ); err != nil {
+			t.Fatal(err)
+		}
+
+		if name := typ.TypeName(); name != "ambiguous" {
+			t.Fatal("expected type name 'ambiguous', got:", name)
+		}
+
+		if err := spec.TypeByName("ambiguous___flavour", &typ); err != nil {
+			t.Fatal(err)
+		}
+
+		if name := typ.TypeName(); name != "ambiguous___flavour" {
+			t.Fatal("expected type name 'ambiguous___flavour', got:", name)
+		}
+	})
+}
+
 func TestParseVmlinux(t *testing.T) {
 	spec, err := parseVMLinuxBTF(t)
 	if err != nil {

@@ -763,7 +763,7 @@ func (dq *typeDeque) all() []*Type {
 // Returns a map of named types (so, where NameOff is non-zero) and a slice of types
 // indexed by TypeID. Since BTF ignores compilation units, multiple types may share
 // the same name. A Type may form a cyclic graph by pointing at itself.
-func inflateRawTypes(rawTypes []rawType, rawStrings stringTable) (types []Type, namedTypes map[string][]Type, err error) {
+func inflateRawTypes(rawTypes []rawType, rawStrings stringTable) (types []Type, namedTypes map[essentialname][]Type, err error) {
 	type fixupDef struct {
 		id           TypeID
 		expectedKind btfKind
@@ -802,7 +802,7 @@ func inflateRawTypes(rawTypes []rawType, rawStrings stringTable) (types []Type, 
 
 	types = make([]Type, 0, len(rawTypes))
 	types = append(types, (*Void)(nil))
-	namedTypes = make(map[string][]Type)
+	namedTypes = make(map[essentialname][]Type)
 
 	for i, raw := range rawTypes {
 		var (
@@ -979,10 +979,10 @@ func inflateRawTypes(rawTypes []rawType, rawStrings stringTable) (types []Type, 
 // changes in kernel data structures. Anything after three underscores
 // in a type name is ignored for the purpose of finding a candidate type
 // in the kernel's BTF.
-func essentialName(name string) string {
+func essentialName(name string) essentialname {
 	lastIdx := strings.LastIndex(name, "___")
 	if lastIdx > 0 {
-		return name[:lastIdx]
+		return essentialname(name[:lastIdx])
 	}
-	return name
+	return essentialname(name)
 }

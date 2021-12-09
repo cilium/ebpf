@@ -29,6 +29,10 @@ var (
 // ID represents the unique ID of a BTF object.
 type ID uint32
 
+// essentialName represents the name of a BTF type stripped of any flavor
+// suffixes after a ___ delimiter.
+type essentialname string
+
 // Spec represents decoded BTF.
 type Spec struct {
 	// Data from .BTF.
@@ -36,8 +40,11 @@ type Spec struct {
 	strings  stringTable
 
 	// Inflated Types.
-	types      []Type
-	namedTypes map[string][]Type
+	types []Type
+
+	// Types indexed by essential name.
+	// Includes all struct flavors and types with the same name.
+	namedTypes map[essentialname][]Type
 
 	// Data from .BTF.ext.
 	funcInfos map[string]extInfo
@@ -380,11 +387,11 @@ func fixupDatasec(rawTypes []rawType, rawStrings stringTable, sectionSizes map[s
 func (s *Spec) Copy() *Spec {
 	types, _ := copyTypes(s.types, nil)
 
-	namedTypes := make(map[string][]Type)
+	namedTypes := make(map[essentialname][]Type)
 	for _, typ := range types {
 		if name := typ.TypeName(); name != "" {
-			name = essentialName(name)
-			namedTypes[name] = append(namedTypes[name], typ)
+			en := essentialName(name)
+			namedTypes[en] = append(namedTypes[en], typ)
 		}
 	}
 
@@ -502,7 +509,10 @@ func (s *Spec) TypeByID(id TypeID) (Type, error) {
 	return s.types[id], nil
 }
 
-// AnyTypesByName returns a list of BTF Types with the given name.
+// AnyTypesByName returns a list of BTF Types with the given name. If name
+// contains a struct flavor suffix (e.g. 'thread_struct___v46'), an exact match
+// will be performed. Otherwise, returns all types that carry the given name,
+// including all struct flavors.
 //
 // Multiple Types of the same name can exist in case multiple 'struct flavors'
 // are described in BTF info. These are used to deal with changes in kernel
@@ -514,11 +524,34 @@ func (s *Spec) TypeByID(id TypeID) (Type, error) {
 //
 // Returns an error wrapping ErrNotFound if no matching Type exists in the Spec.
 func (s *Spec) AnyTypesByName(name string) ([]Type, error) {
-	types, ok := s.namedTypes[essentialName(name)]
+	en := essentialName(name)
+
+	// Named types are indexed by essential name.
+	types, ok := s.namedTypes[en]
 	if !ok {
 		return nil, fmt.Errorf("type name %s: %w", name, ErrNotFound)
 	}
-	return types, nil
+
+	if string(en) == name {
+		// Return a copy to prevent changes to namedTypes.
+		cpy := make([]Type, len(types))
+		copy(cpy, types)
+		return cpy, nil
+	}
+
+	// If name contains a flavor suffix, require an exact match.
+	var filtered []Type
+	for _, t := range types {
+		if t.TypeName() == name {
+			filtered = append(filtered, t)
+		}
+	}
+
+	if len(filtered) == 0 {
+		return nil, fmt.Errorf("type flavor %s: %w", name, ErrNotFound)
+	}
+
+	return filtered, nil
 }
 
 // TypeByName searches for a Type with a specific name. Since multiple

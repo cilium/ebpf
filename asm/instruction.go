@@ -119,6 +119,24 @@ func (ins Instruction) Marshal(w io.Writer, bo binary.ByteOrder) (uint64, error)
 	return 2 * InstructionSize, nil
 }
 
+// JumpTarget takes the offset (in bytes) of ins within an instruction stream
+// and returns the absolute jump target within said instruction stream as
+// described by ins' Constant.
+func (ins Instruction) JumpTarget(offset uint64) uint64 {
+	// A relative jump instruction describes the amount of raw BPF instructions
+	// to jump, convert the offset into bytes.
+	dest := ins.Constant * InstructionSize
+
+	// The starting point of the jump is the end of the current instruction.
+	dest += int64(offset + InstructionSize)
+
+	if dest < 0 {
+		return 0
+	}
+
+	return uint64(dest)
+}
+
 // RewriteMapPtr changes an instruction to use a new map fd.
 //
 // Returns an error if the instruction doesn't load a map.

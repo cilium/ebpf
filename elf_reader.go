@@ -382,8 +382,7 @@ func (ec *elfCode) loadFunctions(section *elfSection) (map[string]asm.Instructio
 		// reference by name and blind the relative jump offset. The linker will
 		// figure out what this jump points to later.
 		if ins.IsFunctionCall() && ins.Constant != -1 {
-			jmp := uint64(int64(offset) + (ins.Constant+1)*asm.InstructionSize)
-			ins.Reference = section.symbols[jmp].Name
+			ins.Reference = section.symbols[ins.JumpTarget(offset)].Name
 			ins.Constant = -1
 		}
 

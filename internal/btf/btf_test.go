@@ -34,33 +34,24 @@ func parseVMLinuxBTF(tb testing.TB) (*Spec, error) {
 	return spec, nil
 }
 
-func parseELFBTF(tb testing.TB, file string) (*Spec, error) {
+func parseELFBTF(tb testing.TB, file string) *Spec {
 	fh, err := os.Open(file)
 	if err != nil {
 		tb.Fatal(err)
 	}
 	defer fh.Close()
 
-	elf, err := internal.NewSafeELFFile(fh)
+	spec, err := LoadSpecFromReader(fh)
 	if err != nil {
-		tb.Fatal(err)
+		tb.Fatal("Can't load BTF:", err)
 	}
 
-	sec := elf.Section(".BTF")
-	if sec == nil {
-		tb.Fatalf("ELF %s does not contain .BTF section", file)
-	}
-	rd := sec.Open()
-
-	return loadRawSpec(rd, elf.ByteOrder, nil, nil)
+	return spec
 }
 
 func TestAnyTypesByName(t *testing.T) {
 	testutils.Files(t, testutils.Glob(t, "testdata/relocs-*.elf"), func(t *testing.T, file string) {
-		spec, err := parseELFBTF(t, file)
-		if err != nil {
-			t.Fatalf("parsing ELF BTF: %v", err)
-		}
+		spec := parseELFBTF(t, file)
 
 		types, err := spec.AnyTypesByName("ambiguous")
 		if err != nil {
@@ -69,6 +60,15 @@ func TestAnyTypesByName(t *testing.T) {
 
 		if len(types) != 2 {
 			t.Fatalf("expected to receive exactly 2 types from querying ambiguous type, got: %v", types)
+		}
+
+		types, err = spec.AnyTypesByName("ambiguous___flavour")
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if len(types) != 1 {
+			t.Fatalf("expected to receive exactly 1 type from querying ambiguous flavour, got: %v", types)
 		}
 	})
 }
@@ -193,20 +193,7 @@ func TestParseCurrentKernelBTF(t *testing.T) {
 
 func TestLoadSpecFromElf(t *testing.T) {
 	testutils.Files(t, testutils.Glob(t, "../../testdata/loader-e*.elf"), func(t *testing.T, file string) {
-		fh, err := os.Open(file)
-		if err != nil {
-			t.Fatal(err)
-		}
-		defer fh.Close()
-
-		spec, err := LoadSpecFromReader(fh)
-		if err != nil {
-			t.Fatal("Can't load BTF:", err)
-		}
-
-		if spec == nil {
-			t.Error("No BTF found in ELF")
-		}
+		spec := parseELFBTF(t, file)
 
 		if sec, err := spec.Program("xdp", 1); err != nil {
 			t.Error("Can't get BTF for the xdp section:", err)
@@ -283,16 +270,7 @@ func TestLoadKernelSpec(t *testing.T) {
 }
 
 func TestSpecCopy(t *testing.T) {
-	fh, err := os.Open("../../testdata/loader-el.elf")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer fh.Close()
-
-	spec, err := LoadSpecFromReader(fh)
-	if err != nil {
-		t.Fatal("Can't load BTF:", err)
-	}
+	spec := parseELFBTF(t, "../../testdata/loader-el.elf")
 
 	if len(spec.types) < 1 {
 		t.Fatal("Not enough types")

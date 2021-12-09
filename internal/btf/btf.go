@@ -603,15 +603,15 @@ func (s *Spec) Program(name string) (*Program, error) {
 		return nil, fmt.Errorf("BTF for function %s: %w", name, ErrNoExtendedInfo)
 	}
 
-	fi, funcOK := s.funcInfos[name]
-	li, lineOK := s.lineInfos[name]
+	funcInfos, funcOK := s.funcInfos[name]
+	lineInfos, lineOK := s.lineInfos[name]
 	relos, coreOK := s.coreRelos[name]
 
 	if !funcOK && !lineOK && !coreOK {
 		return nil, fmt.Errorf("no extended BTF info for function %s", name)
 	}
 
-	return &Program{s, fi, li, relos}, nil
+	return &Program{s, funcInfos, lineInfos, relos}, nil
 }
 
 // TypeByID returns the BTF Type with the given type ID.

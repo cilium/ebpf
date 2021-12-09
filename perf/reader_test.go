@@ -279,7 +279,7 @@ func TestPerfReaderClose(t *testing.T) {
 }
 
 func TestCreatePerfEvent(t *testing.T) {
-	fd, err := createPerfEvent(0, 1)
+	fd, err := createPerfEvent(0, 1, 0)
 	if err != nil {
 		t.Fatal("Can't create perf event:", err)
 	}
@@ -384,6 +384,104 @@ func TestPause(t *testing.T) {
 	err = rd.Resume()
 	qt.Assert(t, err, qt.Not(qt.Equals), ErrClosed, qt.Commentf("returns unwrapped ErrClosed"))
 	qt.Assert(t, errors.Is(err, ErrClosed), qt.IsTrue, qt.Commentf("doesn't wrap ErrClosed"))
+}
+
+func TestPerfReaderWakeupEvents(t *testing.T) {
+	prog, events := mustOutputSamplesProg(t, 5)
+	defer prog.Close()
+	defer events.Close()
+
+	numEvents := 2
+	rd, err := NewReaderWithOptions(events, 4096, ReaderOptions{WakeupEvents: numEvents})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rd.Close()
+
+	ret, _, err := prog.Test(make([]byte, 14))
+	testutils.SkipIfNotSupported(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if errno := syscall.Errno(-int32(ret)); errno != 0 {
+		t.Fatal("Expected 0 as return value, got", errno)
+	}
+
+	_, err = rd.ReadTimeout(100 * time.Millisecond)
+	if err != nil {
+		if !errors.Is(err, ErrNoRecords) {
+			t.Fatal("Can't read samples:", err)
+		}
+	} else {
+		t.Fatal("Expected no records")
+	}
+
+	// send followup events
+	for i := 1; i < numEvents; i++ {
+		_, _, err = prog.Test(make([]byte, 14))
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	for i := 0; i < numEvents; i++ {
+		record, err := rd.Read()
+		if err != nil {
+			t.Fatal("Can't read samples:", err)
+		}
+		want := []byte{1, 2, 3, 4, 4, 0, 0, 0, 0, 0, 0, 0}
+		if !bytes.Equal(record.RawSample, want) {
+			t.Log(record.RawSample)
+			t.Error("Sample doesn't match expected output")
+		}
+	}
+}
+
+func TestPerfReaderQueued(t *testing.T) {
+	prog, events := mustOutputSamplesProg(t, 5)
+	defer prog.Close()
+	defer events.Close()
+
+	numEvents := 2
+	rd, err := NewReaderWithOptions(events, 4096, ReaderOptions{WakeupEvents: 5})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rd.Close()
+
+	for i := 0; i < numEvents; i++ {
+		ret, _, err := prog.Test(make([]byte, 14))
+		testutils.SkipIfNotSupported(t, err)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if errno := syscall.Errno(-int32(ret)); errno != 0 {
+			t.Fatal("Expected 0 as return value, got", errno)
+		}
+	}
+
+	_, err = rd.ReadTimeout(100 * time.Millisecond)
+	if err != nil {
+		if !errors.Is(err, ErrNoRecords) {
+			t.Fatal("Can't read samples:", err)
+		}
+	} else {
+		t.Fatal("Expected no records")
+	}
+
+	rd.TriggerAll()
+	for i := 0; i < numEvents; i++ {
+		record, err := rd.Read()
+		if err != nil {
+			t.Fatal("Can't read samples:", err)
+		}
+		want := []byte{1, 2, 3, 4, 4, 0, 0, 0, 0, 0, 0, 0}
+		if !bytes.Equal(record.RawSample, want) {
+			t.Log(record.RawSample)
+			t.Error("Sample doesn't match expected output")
+		}
+	}
 }
 
 func BenchmarkReader(b *testing.B) {

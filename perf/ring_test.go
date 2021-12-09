@@ -65,8 +65,8 @@ func makeRing(size, offset int) *ringReader {
 }
 
 func TestPerfEventRing(t *testing.T) {
-	check := func(buffer, watermark int) {
-		ring, err := newPerfEventRing(0, buffer, watermark)
+	check := func(buffer, wakeupBytes, wakeupEvents int) {
+		ring, err := newPerfEventRing(0, buffer, wakeupBytes, wakeupEvents)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -89,20 +89,20 @@ func TestPerfEventRing(t *testing.T) {
 	}
 
 	// watermark > buffer
-	_, err := newPerfEventRing(0, 8192, 8193)
+	_, err := newPerfEventRing(0, 8192, 8193, 0)
 	if err == nil {
 		t.Fatal("watermark > buffer allowed")
 	}
 
 	// watermark == buffer
-	_, err = newPerfEventRing(0, 8192, 8192)
+	_, err = newPerfEventRing(0, 8192, 8192, 0)
 	if err == nil {
 		t.Fatal("watermark == buffer allowed")
 	}
 
 	// buffer not a power of two, watermark < buffer
-	check(8193, 8192)
+	check(8193, 8192, 0)
 
 	// large buffer not a multiple of page size at all (prime)
-	check(65537, 8192)
+	check(65537, 8192, 0)
 }

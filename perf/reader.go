@@ -134,6 +134,11 @@ type Reader struct {
 // ReaderOptions control the behaviour of the user
 // space reader.
 type ReaderOptions struct {
+	// The number of events required in any per CPU buffer before
+	// Read will process data. This is mutually exclusive with Watermark.
+	// The default is zero, which means Watermark will take precedence.
+	WakeupEvents int
+
 	// The number of written bytes required in any per CPU buffer before
 	// Read will process data. Must be smaller than PerCPUBuffer.
 	// The default is to start processing as soon as data is available.
@@ -185,7 +190,7 @@ func NewReaderWithOptions(array *ebpf.Map, perCPUBuffer int, opts ReaderOptions)
 	// but doesn't allow using a wildcard like -1 to specify "all CPUs".
 	// Hence we have to create a ring for each CPU.
 	for i := 0; i < nCPU; i++ {
-		ring, err := newPerfEventRing(i, perCPUBuffer, opts.Watermark)
+		ring, err := newPerfEventRing(i, perCPUBuffer, opts.Watermark, opts.WakeupEvents)
 		if errors.Is(err, unix.ENODEV) {
 			// The requested CPU is currently offline, skip it.
 			rings = append(rings, nil)
@@ -303,6 +308,18 @@ func (pr *Reader) Read() (Record, error) {
 		}
 
 		return record, err
+	}
+}
+
+// TriggerAll forces all rings to be queued up reading on the next call to Read.
+// This is useful to forcefully read pending events that haven't met the threshold of WakeupEvents yet.
+func (pr *Reader) TriggerAll() {
+	pr.mu.Lock()
+	defer pr.mu.Unlock()
+
+	for _, ring := range pr.rings {
+		pr.epollRings = append(pr.epollRings, ring)
+		ring.loadHead()
 	}
 }
 

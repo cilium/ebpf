@@ -761,11 +761,11 @@ func resolveBTFType(spec *btf.Spec, name string, progType ProgramType, attachTyp
 
 	if isBTFTypeFunc {
 		var targetFunc *btf.Func
-		err = spec.FindType(typeName, &targetFunc)
+		err = spec.TypeByName(typeName, &targetFunc)
 		target = targetFunc
 	} else {
 		var targetTypedef *btf.Typedef
-		err = spec.FindType(typeName, &targetTypedef)
+		err = spec.TypeByName(typeName, &targetTypedef)
 		target = targetTypedef
 	}
 

@@ -8,6 +8,7 @@ import (
 	"os"
 	"runtime"
 	"sync"
+	"time"
 
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/internal"
@@ -16,8 +17,9 @@ import (
 )
 
 var (
-	ErrClosed = os.ErrClosed
-	errEOR    = errors.New("end of ring")
+	ErrClosed    = os.ErrClosed
+	ErrNoRecords = errors.New("no records")
+	errEOR       = errors.New("end of ring")
 )
 
 // perfEventHeader must match 'struct perf_event_header` in <linux/perf_event.h>.
@@ -266,6 +268,20 @@ func (pr *Reader) Close() error {
 //
 // Calling Close interrupts the function.
 func (pr *Reader) Read() (Record, error) {
+	return pr.read(-1)
+}
+
+// ReadTimeout is Read but will timeout and return ErrNoRecords
+// if the timeout expires. The minimum timeout is 1 millisecond.
+func (pr *Reader) ReadTimeout(timeout time.Duration) (Record, error) {
+	if timeout < time.Millisecond {
+		return Record{}, fmt.Errorf("timeout too small")
+	}
+
+	return pr.read(int(timeout.Nanoseconds() / int64(time.Millisecond)))
+}
+
+func (pr *Reader) read(msec int) (Record, error) {
 	pr.mu.Lock()
 	defer pr.mu.Unlock()
 
@@ -275,9 +291,12 @@ func (pr *Reader) Read() (Record, error) {
 
 	for {
 		if len(pr.epollRings) == 0 {
-			nEvents, err := pr.poller.Wait(pr.epollEvents)
+			nEvents, err := pr.poller.Wait(pr.epollEvents, msec)
 			if err != nil {
 				return Record{}, err
+			}
+			if nEvents == 0 {
+				return Record{}, ErrNoRecords
 			}
 
 			for _, event := range pr.epollEvents[:nEvents] {

@@ -1,6 +1,7 @@
 package ringbuf
 
 import (
+	"bytes"
 	"errors"
 	"syscall"
 	"testing"
@@ -209,6 +210,48 @@ func TestRingbufReaderClose(t *testing.T) {
 
 	if _, err := rd.Read(); !errors.Is(err, ErrClosed) {
 		t.Fatal("Second Read on a closed RingbufReader doesn't return ErrClosed")
+	}
+}
+
+func TestRingBufferReaderTimeout(t *testing.T) {
+	testutils.SkipOnOldKernel(t, "5.8", "BPF ring buffer")
+
+	prog, events := mustOutputSamplesProg(t, 5)
+	defer prog.Close()
+	defer events.Close()
+
+	rd, err := NewReader(events)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rd.Close()
+
+	_, err = rd.ReadTimeout(1 * time.Millisecond)
+	if err != nil {
+		if !errors.Is(err, ErrNoRecords) {
+			t.Fatal("Can't read samples:", err)
+		}
+	} else {
+		t.Fatal("Expected no records")
+	}
+
+	ret, _, err := prog.Test(make([]byte, 14))
+	testutils.SkipIfNotSupported(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if errno := syscall.Errno(-int32(ret)); errno != 0 {
+		t.Fatal("Expected 0 as return value, got", errno)
+	}
+
+	record, err := rd.Read()
+	if err != nil {
+		t.Fatal("Can't read samples:", err)
+	}
+	want := []byte{1, 2, 3, 4, 4, 0, 0, 0, 0, 0, 0, 0}
+	if !bytes.Equal(record.RawSample, want) {
+		t.Log(record.RawSample)
+		t.Error("Sample doesn't match expected output")
 	}
 }
 

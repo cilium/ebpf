@@ -391,8 +391,13 @@ func (ec *elfCode) loadFunctions(section *elfSection) (map[string]asm.Instructio
 			// When splitting sections into subprograms, the targets of these calls
 			// are no longer in scope, so they must be resolved here.
 			if (ins.IsFunctionCall() || ins.IsLoadOfFunctionPointer()) && ins.Constant != -1 {
-				jmp := uint64(int64(offset) + (ins.Constant+1)*asm.InstructionSize)
-				ins.Reference = section.symbols[jmp].Name
+				tgt := jumpTarget(offset, ins)
+				sym := section.symbols[tgt].Name
+				if sym == "" {
+					return nil, fmt.Errorf("offset %d: no jump target found at offset %d", offset, tgt)
+				}
+
+				ins.Reference = sym
 				ins.Constant = -1
 			}
 		}
@@ -402,6 +407,24 @@ func (ec *elfCode) loadFunctions(section *elfSection) (map[string]asm.Instructio
 	}
 
 	return funcs, nil
+}
+
+// jumpTarget takes ins' offset within an instruction stream (in bytes)
+// and returns its absolute jump destination (in bytes) within the
+// instruction stream.
+func jumpTarget(offset uint64, ins asm.Instruction) uint64 {
+	// A relative jump instruction describes the amount of raw BPF instructions
+	// to jump, convert the offset into bytes.
+	dest := ins.Constant * asm.InstructionSize
+
+	// The starting point of the jump is the end of the current instruction.
+	dest += int64(offset + asm.InstructionSize)
+
+	if dest < 0 {
+		return 0
+	}
+
+	return uint64(dest)
 }
 
 func (ec *elfCode) relocateInstruction(ins *asm.Instruction, rel elf.Symbol) error {

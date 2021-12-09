@@ -29,16 +29,29 @@ var (
 // ID represents the unique ID of a BTF object.
 type ID uint32
 
+// essentialName represents the name of a BTF type stripped of any flavor
+// suffixes after a ___ delimiter.
+type essentialname string
+
 // Spec represents decoded BTF.
 type Spec struct {
-	rawTypes   []rawType
-	strings    stringTable
-	types      []Type
-	namedTypes map[string][]NamedType
-	funcInfos  map[string]extInfo
-	lineInfos  map[string]extInfo
-	coreRelos  map[string]coreRelos
-	byteOrder  binary.ByteOrder
+	// Data from .BTF.
+	rawTypes []rawType
+	strings  stringTable
+
+	// Inflated Types.
+	types []Type
+
+	// Types indexed by essential name.
+	// Includes all struct flavors and types with the same name.
+	namedTypes map[essentialname][]Type
+
+	// Data from .BTF.ext.
+	funcInfos map[string]extInfo
+	lineInfos map[string]extInfo
+	coreRelos map[string]coreRelos
+
+	byteOrder binary.ByteOrder
 }
 
 type btfHeader struct {
@@ -373,11 +386,12 @@ func fixupDatasec(rawTypes []rawType, rawStrings stringTable, sectionSizes map[s
 // Copy creates a copy of Spec.
 func (s *Spec) Copy() *Spec {
 	types, _ := copyTypes(s.types, nil)
-	namedTypes := make(map[string][]NamedType)
+
+	namedTypes := make(map[essentialname][]Type)
 	for _, typ := range types {
-		if named, ok := typ.(NamedType); ok {
-			name := essentialName(named.TypeName())
-			namedTypes[name] = append(namedTypes[name], named)
+		if name := typ.TypeName(); name != "" {
+			en := essentialName(name)
+			namedTypes[en] = append(namedTypes[en], typ)
 		}
 	}
 
@@ -484,14 +498,65 @@ func (s *Spec) Program(name string, length uint64) (*Program, error) {
 	return &Program{s, length, funcInfos, lineInfos, relos}, nil
 }
 
-// FindType searches for a type with a specific name.
+// TypeByID returns the BTF Type with the given type ID.
 //
-// Called T a type that satisfies Type, typ must be a non-nil **T.
-// On success, the address of the found type will be copied in typ.
+// Returns an error wrapping ErrNotFound if a Type with the given ID
+// does not exist in the Spec.
+func (s *Spec) TypeByID(id TypeID) (Type, error) {
+	if int(id) > len(s.types) {
+		return nil, fmt.Errorf("type ID %d: %w", id, ErrNotFound)
+	}
+	return s.types[id], nil
+}
+
+// AnyTypesByName returns a list of BTF Types with the given name. If name
+// contains a struct flavor suffix (e.g. 'thread_struct___v46'), an exact match
+// will be performed. Otherwise, returns all types that carry the given name,
+// including all struct flavors.
+//
+// Multiple Types of the same name can exist in case multiple 'struct flavors'
+// are described in BTF info. These are used to deal with changes in kernel
+// data structures.
+//
+// If the BTF blob describes multiple compilation units like vmlinux, multiple
+// Types with the same name and kind can exist, but might not describe the same
+// data structure.
+//
+// Returns an error wrapping ErrNotFound if no matching Type exists in the Spec.
+func (s *Spec) AnyTypesByName(name string) ([]Type, error) {
+	en := essentialName(name)
+
+	// Named types are indexed by essential name.
+	types, ok := s.namedTypes[en]
+	if !ok {
+		return nil, fmt.Errorf("type name %s: %w", name, ErrNotFound)
+	}
+
+	// If name contains a flavor suffix, require an exact match.
+	if string(en) != name {
+		for _, t := range types {
+			if t.TypeName() == name {
+				return []Type{t}, nil
+			}
+		}
+
+		return nil, fmt.Errorf("type flavor %s: %w", name, ErrNotFound)
+	}
+
+	return types, nil
+}
+
+// TypeByName searches for a Type with a specific name. Since multiple
+// Types with the same name can exist, the parameter typ is taken to
+// narrow down the search in case of a clash.
+//
+// typ must be a non-nil pointer to an implementation of a Type.
+// On success, the address of the found Type will be copied to typ.
 //
 // Returns an error wrapping ErrNotFound if no matching
-// type exists in spec.
-func (s *Spec) FindType(name string, typ interface{}) error {
+// Type exists in the Spec. If multiple candidates are found,
+// an error is returned.
+func (s *Spec) TypeByName(name string, typ interface{}) error {
 	typValue := reflect.ValueOf(typ)
 	if typValue.Kind() != reflect.Ptr {
 		return fmt.Errorf("%T is not a pointer", typ)
@@ -507,13 +572,19 @@ func (s *Spec) FindType(name string, typ interface{}) error {
 		return fmt.Errorf("%T does not satisfy Type interface", typ)
 	}
 
+	types, err := s.AnyTypesByName(name)
+	if err != nil {
+		return err
+	}
+
 	var candidate Type
-	for _, typ := range s.namedTypes[essentialName(name)] {
+	for _, typ := range types {
 		if reflect.TypeOf(typ) != wanted {
 			continue
 		}
 
-		// Match against the full name, not just the essential one.
+		// Match against the full name, not just the essential one
+		// in case the type being looked up is a struct flavor.
 		if typ.TypeName() != name {
 			continue
 		}

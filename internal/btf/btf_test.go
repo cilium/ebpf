@@ -73,45 +73,6 @@ func TestAnyTypesByName(t *testing.T) {
 	})
 }
 
-func TestTypeByName(t *testing.T) {
-	spec, err := parseVMLinuxBTF(t)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// spec.TypeByName MUST fail if typ is a nil btf.Type.
-	i := 0
-	p := &i
-	for _, typ := range []interface{}{
-		nil,
-		Struct{},
-		&Struct{},
-		[]Struct{},
-		&[]Struct{},
-		map[int]Struct{},
-		&map[int]Struct{},
-		p,
-		&p,
-	} {
-		if err := spec.TypeByName("iphdr", typ); err == nil {
-			t.Fatalf("TypeByName does not fail with type %T", typ)
-		}
-	}
-
-	// spec.TypeByName MUST return the same address for multiple calls with the same type name.
-	var iphdr1, iphdr2 *Struct
-	if err := spec.TypeByName("iphdr", &iphdr1); err != nil {
-		t.Fatal(err)
-	}
-	if err := spec.TypeByName("iphdr", &iphdr2); err != nil {
-		t.Fatal(err)
-	}
-
-	if iphdr1 != iphdr2 {
-		t.Fatal("multiple TypeByName calls for `iphdr` name do not return the same addresses")
-	}
-}
-
 func TestTypeByNameAmbiguous(t *testing.T) {
 	testutils.Files(t, testutils.Glob(t, "testdata/relocs-*.elf"), func(t *testing.T, file string) {
 		spec := parseELFBTF(t, file)
@@ -135,18 +96,45 @@ func TestTypeByNameAmbiguous(t *testing.T) {
 	})
 }
 
-func TestParseVmlinux(t *testing.T) {
+func TestTypeByName(t *testing.T) {
 	spec, err := parseVMLinuxBTF(t)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	var iphdr *Struct
-	err = spec.TypeByName("iphdr", &iphdr)
-	if err != nil {
-		t.Fatalf("unable to find `iphdr` struct: %s", err)
+	for _, typ := range []interface{}{
+		nil,
+		Struct{},
+		&Struct{},
+		[]Struct{},
+		&[]Struct{},
+		map[int]Struct{},
+		&map[int]Struct{},
+		int(0),
+		new(int),
+	} {
+		t.Run(fmt.Sprintf("%T", typ), func(t *testing.T) {
+			// spec.TypeByName MUST fail if typ is a nil btf.Type.
+			if err := spec.TypeByName("iphdr", typ); err == nil {
+				t.Fatalf("FindType does not fail with type %T", typ)
+			}
+		})
 	}
-	for _, m := range iphdr.Members {
+
+	// spec.TypeByName MUST return the same address for multiple calls with the same type name.
+	var iphdr1, iphdr2 *Struct
+	if err := spec.TypeByName("iphdr", &iphdr1); err != nil {
+		t.Fatal(err)
+	}
+	if err := spec.TypeByName("iphdr", &iphdr2); err != nil {
+		t.Fatal(err)
+	}
+
+	if iphdr1 != iphdr2 {
+		t.Fatal("multiple TypeByName calls for `iphdr` name do not return the same addresses")
+	}
+
+	for _, m := range iphdr1.Members {
 		if m.Name == "version" {
 			// __u8 is a typedef
 			td, ok := m.Type.(*Typedef)

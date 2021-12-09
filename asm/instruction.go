@@ -288,6 +288,14 @@ func (ins Instruction) Size() uint64 {
 // Instructions is an eBPF program.
 type Instructions []Instruction
 
+// Name returns the name of the function insns belongs to, if any.
+func (insns Instructions) Name() string {
+	if len(insns) == 0 {
+		return ""
+	}
+	return insns[0].Symbol
+}
+
 func (insns Instructions) String() string {
 	return fmt.Sprint(insns)
 }

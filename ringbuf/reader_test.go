@@ -3,6 +3,7 @@ package ringbuf
 import (
 	"bytes"
 	"errors"
+	"os"
 	"syscall"
 	"testing"
 	"time"
@@ -227,12 +228,8 @@ func TestRingBufferReaderTimeout(t *testing.T) {
 	defer rd.Close()
 
 	_, err = rd.ReadTimeout(1 * time.Millisecond)
-	if err != nil {
-		if !errors.Is(err, ErrNoRecords) {
-			t.Fatal("Can't read samples:", err)
-		}
-	} else {
-		t.Fatal("Expected no records")
+	if !errors.Is(err, os.ErrDeadlineExceeded) {
+		t.Fatal("Expected timeout")
 	}
 
 	ret, _, err := prog.Test(make([]byte, 14))
@@ -244,7 +241,7 @@ func TestRingBufferReaderTimeout(t *testing.T) {
 		t.Fatal("Expected 0 as return value, got", errno)
 	}
 
-	record, err := rd.Read()
+	record, err := rd.ReadTimeout(100 * time.Millisecond)
 	if err != nil {
 		t.Fatal("Can't read samples:", err)
 	}

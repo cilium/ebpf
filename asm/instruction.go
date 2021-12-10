@@ -196,16 +196,13 @@ func (ins *Instruction) IsLoadFromMap() bool {
 	return ins.OpCode == LoadImmOp(DWord) && (ins.Src == PseudoMapFD || ins.Src == PseudoMapValue)
 }
 
-// IsFunctionCall returns true if the instruction calls another BPF function.
+// IsFunctionCall returns true if the instruction calls another BPF function,
+// either by invoking a Call jump operation or by loading a function pointer.
 //
 // This is not the same thing as a BPF helper call.
 func (ins *Instruction) IsFunctionCall() bool {
-	return ins.OpCode.JumpOp() == Call && ins.Src == PseudoCall
-}
-
-// IsLoadOfFunctionPointer returns true if the instruction loads a function pointer.
-func (ins *Instruction) IsLoadOfFunctionPointer() bool {
-	return ins.OpCode.IsDWordLoad() && ins.Src == PseudoFunc
+	return ins.OpCode.JumpOp() == Call && ins.Src == PseudoCall ||
+		ins.OpCode.IsDWordLoad() && ins.Src == PseudoFunc
 }
 
 // IsBuiltinCall returns true if the instruction is a built-in call, i.e. BPF helper call.
@@ -370,7 +367,7 @@ func (insns Instructions) PseudoCalls() map[string]bool {
 			continue
 		}
 
-		if !ins.IsFunctionCall() && !ins.IsLoadOfFunctionPointer() {
+		if !ins.IsFunctionCall() {
 			continue
 		}
 

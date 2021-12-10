@@ -2,36 +2,36 @@ package btf
 
 import (
 	"bytes"
-	"compress/gzip"
 	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
 	"os"
+	"sync"
 	"testing"
 
 	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/testutils"
 )
 
-func parseVMLinuxBTF(tb testing.TB) (*Spec, error) {
-	fh, err := os.Open("testdata/vmlinux-btf.gz")
-	if err != nil {
-		tb.Fatal(err)
-	}
-	defer fh.Close()
+var vmlinux struct {
+	sync.Once
+	err error
+	raw []byte
+}
 
-	rd, err := gzip.NewReader(fh)
-	if err != nil {
-		tb.Fatal(err)
+func readVMLinux(tb testing.TB) *bytes.Reader {
+	tb.Helper()
+
+	vmlinux.Do(func() {
+		vmlinux.raw, vmlinux.err = internal.ReadAllCompressed("testdata/vmlinux-btf.gz")
+	})
+
+	if vmlinux.err != nil {
+		tb.Fatal(vmlinux.err)
 	}
 
-	spec, err := loadRawSpec(rd, binary.LittleEndian, nil, nil)
-	if err != nil {
-		tb.Fatal("Can't load BTF:", err)
-	}
-
-	return spec, nil
+	return bytes.NewReader(vmlinux.raw)
 }
 
 func parseELFBTF(tb testing.TB, file string) *Spec {
@@ -73,45 +73,6 @@ func TestAnyTypesByName(t *testing.T) {
 	})
 }
 
-func TestTypeByName(t *testing.T) {
-	spec, err := parseVMLinuxBTF(t)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// spec.TypeByName MUST fail if typ is a nil btf.Type.
-	i := 0
-	p := &i
-	for _, typ := range []interface{}{
-		nil,
-		Struct{},
-		&Struct{},
-		[]Struct{},
-		&[]Struct{},
-		map[int]Struct{},
-		&map[int]Struct{},
-		p,
-		&p,
-	} {
-		if err := spec.TypeByName("iphdr", typ); err == nil {
-			t.Fatalf("TypeByName does not fail with type %T", typ)
-		}
-	}
-
-	// spec.TypeByName MUST return the same address for multiple calls with the same type name.
-	var iphdr1, iphdr2 *Struct
-	if err := spec.TypeByName("iphdr", &iphdr1); err != nil {
-		t.Fatal(err)
-	}
-	if err := spec.TypeByName("iphdr", &iphdr2); err != nil {
-		t.Fatal(err)
-	}
-
-	if iphdr1 != iphdr2 {
-		t.Fatal("multiple TypeByName calls for `iphdr` name do not return the same addresses")
-	}
-}
-
 func TestTypeByNameAmbiguous(t *testing.T) {
 	testutils.Files(t, testutils.Glob(t, "testdata/relocs-*.elf"), func(t *testing.T, file string) {
 		spec := parseELFBTF(t, file)
@@ -135,18 +96,45 @@ func TestTypeByNameAmbiguous(t *testing.T) {
 	})
 }
 
-func TestParseVmlinux(t *testing.T) {
-	spec, err := parseVMLinuxBTF(t)
+func TestTypeByName(t *testing.T) {
+	spec, err := LoadSpecFromReader(readVMLinux(t))
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	var iphdr *Struct
-	err = spec.TypeByName("iphdr", &iphdr)
-	if err != nil {
-		t.Fatalf("unable to find `iphdr` struct: %s", err)
+	for _, typ := range []interface{}{
+		nil,
+		Struct{},
+		&Struct{},
+		[]Struct{},
+		&[]Struct{},
+		map[int]Struct{},
+		&map[int]Struct{},
+		int(0),
+		new(int),
+	} {
+		t.Run(fmt.Sprintf("%T", typ), func(t *testing.T) {
+			// spec.TypeByName MUST fail if typ is a nil btf.Type.
+			if err := spec.TypeByName("iphdr", typ); err == nil {
+				t.Fatalf("FindType does not fail with type %T", typ)
+			}
+		})
 	}
-	for _, m := range iphdr.Members {
+
+	// spec.TypeByName MUST return the same address for multiple calls with the same type name.
+	var iphdr1, iphdr2 *Struct
+	if err := spec.TypeByName("iphdr", &iphdr1); err != nil {
+		t.Fatal(err)
+	}
+	if err := spec.TypeByName("iphdr", &iphdr2); err != nil {
+		t.Fatal(err)
+	}
+
+	if iphdr1 != iphdr2 {
+		t.Fatal("multiple TypeByName calls for `iphdr` name do not return the same addresses")
+	}
+
+	for _, m := range iphdr1.Members {
 		if m.Name == "version" {
 			// __u8 is a typedef
 			td, ok := m.Type.(*Typedef)
@@ -172,23 +160,7 @@ func TestParseVmlinux(t *testing.T) {
 }
 
 func BenchmarkParseVmlinux(b *testing.B) {
-	fh, err := os.Open("testdata/vmlinux-btf.gz")
-	if err != nil {
-		b.Fatal(err)
-	}
-	defer fh.Close()
-
-	gr, err := gzip.NewReader(fh)
-	if err != nil {
-		b.Fatal(err)
-	}
-
-	var buf bytes.Buffer
-	if _, err := buf.ReadFrom(gr); err != nil {
-		b.Fatal(err)
-	}
-	rd := bytes.NewReader(buf.Bytes())
-
+	rd := readVMLinux(b)
 	b.ResetTimer()
 
 	for n := 0; n < b.N; n++ {
@@ -289,6 +261,13 @@ func TestLoadKernelSpec(t *testing.T) {
 	_, err := LoadKernelSpec()
 	if err != nil {
 		t.Fatal("Can't load kernel spec:", err)
+	}
+}
+
+func TestGuessBTFByteOrder(t *testing.T) {
+	bo := guessRawBTFByteOrder(readVMLinux(t))
+	if bo != binary.LittleEndian {
+		t.Fatalf("Guessed %s instead of %s", bo, binary.LittleEndian)
 	}
 }
 

@@ -78,12 +78,18 @@ func (h *btfHeader) stringStart() int64 {
 	return int64(h.HdrLen + h.StringOff)
 }
 
-// LoadSpecFromReader reads BTF sections from an ELF.
+// LoadSpecFromReader reads from an ELF or a raw BTF blob.
 //
-// Returns ErrNotFound if the reader contains no BTF.
+// Returns ErrNotFound if reading from an ELF which contains no BTF.
 func LoadSpecFromReader(rd io.ReaderAt) (*Spec, error) {
 	file, err := internal.NewSafeELFFile(rd)
 	if err != nil {
+		if bo := guessRawBTFByteOrder(rd); bo != nil {
+			// Try to parse a naked BTF blob. This will return an error if
+			// we encounter a Datasec, since we can't fix it up.
+			return loadRawSpec(io.NewSectionReader(rd, 0, math.MaxInt64), bo, nil, nil)
+		}
+
 		return nil, err
 	}
 	defer file.Close()
@@ -162,16 +168,6 @@ func loadSpecFromELF(file *internal.SafeELFFile, variableOffsets map[variable]ui
 	return spec, nil
 }
 
-// LoadRawSpec reads a blob of BTF data that isn't wrapped in an ELF file.
-//
-// Prefer using LoadSpecFromReader, since this function only supports a subset
-// of BTF.
-func LoadRawSpec(btf io.Reader, bo binary.ByteOrder) (*Spec, error) {
-	// This will return an error if we encounter a Datasec, since we can't fix
-	// it up.
-	return loadRawSpec(btf, bo, nil, nil)
-}
-
 func loadRawSpec(btf io.Reader, bo binary.ByteOrder, sectionSizes map[string]uint32, variableOffsets map[variable]uint32) (*Spec, error) {
 	rawTypes, rawStrings, err := parseBTF(btf, bo)
 	if err != nil {
@@ -224,7 +220,7 @@ func loadKernelSpec() (*Spec, error) {
 	if err == nil {
 		defer fh.Close()
 
-		return LoadRawSpec(fh, internal.NativeEndian)
+		return loadRawSpec(fh, internal.NativeEndian, nil, nil)
 	}
 
 	var uname unix.Utsname
@@ -297,6 +293,19 @@ func parseBTFHeader(r io.Reader, bo binary.ByteOrder) (*btfHeader, error) {
 	}
 
 	return &header, nil
+}
+
+func guessRawBTFByteOrder(r io.ReaderAt) binary.ByteOrder {
+	for _, bo := range []binary.ByteOrder{
+		binary.LittleEndian,
+		binary.BigEndian,
+	} {
+		if _, err := parseBTFHeader(io.NewSectionReader(r, 0, math.MaxInt64), bo); err == nil {
+			return bo
+		}
+	}
+
+	return nil
 }
 
 // parseBTF reads a .BTF section into memory and parses it into a list of

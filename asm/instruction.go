@@ -208,6 +208,13 @@ func (ins *Instruction) IsLoadOfFunctionPointer() bool {
 	return ins.OpCode.IsDWordLoad() && ins.Src == PseudoFunc
 }
 
+// IsFunctionReference returns true if the instruction references another BPF
+// function, either by invoking a Call jump operation or by loading a function
+// pointer.
+func (ins *Instruction) IsFunctionReference() bool {
+	return ins.IsFunctionCall() || ins.IsLoadOfFunctionPointer()
+}
+
 // IsBuiltinCall returns true if the instruction is a built-in call, i.e. BPF helper call.
 func (ins *Instruction) IsBuiltinCall() bool {
 	return ins.OpCode.JumpOp() == Call && ins.Src == R0 && ins.Dst == R0
@@ -370,7 +377,7 @@ func (insns Instructions) PseudoCalls() map[string]bool {
 			continue
 		}
 
-		if !ins.IsFunctionCall() && !ins.IsLoadOfFunctionPointer() {
+		if !ins.IsFunctionReference() {
 			continue
 		}
 

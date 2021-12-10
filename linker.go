@@ -126,10 +126,7 @@ func fixupJumpsAndCalls(insns asm.Instructions) error {
 
 		symOffset, ok := symbolOffsets[ins.Reference]
 		switch {
-		case ins.IsLoadOfFunctionPointer() && ins.Constant == -1:
-			fallthrough
-
-		case ins.IsFunctionCall() && ins.Constant == -1:
+		case ins.IsFunctionReference() && ins.Constant == -1:
 			if !ok {
 				break
 			}

@@ -383,7 +383,7 @@ func (ec *elfCode) loadFunctions(section *elfSection) (map[string]asm.Instructio
 		// Look up the jump destination in the section's symbol table, store its
 		// reference by name and blind the relative jump offset. The linker will
 		// figure out what this jump points to later.
-		if (ins.IsFunctionCall() || ins.IsLoadOfFunctionPointer()) && ins.Constant < -1 {
+		if ins.IsFunctionReference() && ins.Constant < -1 {
 			tgt := jumpTarget(offset, ins)
 			sym := section.symbols[tgt].Name
 			if sym == "" {

@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"sync"
+	"time"
 
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/internal"
@@ -159,6 +160,20 @@ func (r *Reader) Close() error {
 //
 // Calling Close interrupts the function.
 func (r *Reader) Read() (Record, error) {
+	return r.read(-1)
+}
+
+// ReadTimeout is Read but will time out and return os.ErrDeadlineExceeded
+// if the timeout expires.
+func (r *Reader) ReadTimeout(timeout time.Duration) (Record, error) {
+	if timeout > 0 && timeout < time.Millisecond {
+		return Record{}, fmt.Errorf("non-zero timeout too small")
+	}
+
+	return r.read(timeout)
+}
+
+func (r *Reader) read(timeout time.Duration) (Record, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
@@ -167,9 +182,12 @@ func (r *Reader) Read() (Record, error) {
 	}
 
 	for {
-		_, err := r.poller.Wait(r.epollEvents)
+		nEvents, err := r.poller.Wait(r.epollEvents, int(timeout.Milliseconds()))
 		if err != nil {
 			return Record{}, err
+		}
+		if nEvents == 0 {
+			return Record{}, os.ErrDeadlineExceeded
 		}
 
 		record, err := readRecord(r.ring)

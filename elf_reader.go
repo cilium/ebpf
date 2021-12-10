@@ -390,7 +390,7 @@ func (ec *elfCode) loadFunctions(section *elfSection) (map[string]asm.Instructio
 			// symbol within the section.
 			// When splitting sections into subprograms, the targets of these calls
 			// are no longer in scope, so they must be resolved here.
-			if (ins.IsFunctionCall() || ins.IsLoadOfFunctionPointer()) && ins.Constant != -1 {
+			if ins.IsFunctionReference() && ins.Constant != -1 {
 				tgt := jumpTarget(offset, ins)
 				sym := section.symbols[tgt].Name
 				if sym == "" {

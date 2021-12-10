@@ -28,24 +28,20 @@ import (
 // to all other programs directly referenced by its bytecode.
 func findReferences(progs map[string]*ProgramSpec) error {
 	// Check all ProgramSpecs in the collection against each other.
-	for _, prog := range progs {
+	for _, caller := range progs {
+		// Obtain a list of call targets in the calling program.
+		calls := caller.Instructions.FunctionReferences()
+
 		for _, dep := range progs {
 			// Don't link a program against itself.
-			if prog == dep {
+			if caller == dep {
 				continue
 			}
 
-			need, err := needProg(prog.Instructions, dep.Instructions)
-			if err != nil {
-				return fmt.Errorf("dependency-checking program '%s' and '%s': %w", prog.Name, dep.Name, err)
+			if calls[dep.Instructions.Name()] {
+				// Register a direct reference to another program.
+				caller.references = append(caller.references, dep)
 			}
-
-			if !need {
-				continue
-			}
-
-			// Register a direct reference to another program.
-			prog.references = append(prog.references, dep)
 		}
 	}
 
@@ -101,43 +97,6 @@ func marshalLineInfos(progs []*ProgramSpec) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-// needProg checks insns for references to symbols in instruction stream dep.
-// Returns true if a reference is found from insns to dep.
-func needProg(insns, dep asm.Instructions) (bool, error) {
-	// A map of symbols to the instructions which contain them.
-	symbols, err := dep.SymbolOffsets()
-	if err != nil {
-		return false, err
-	}
-
-	for _, ins := range insns {
-		if ins.Reference == "" {
-			continue
-		}
-
-		if !ins.IsFunctionCall() && !ins.IsLoadOfFunctionPointer() {
-			continue
-		}
-
-		if ins.Constant != -1 {
-			// This is already a valid call, no need to link again.
-			continue
-		}
-
-		if _, ok := symbols[ins.Reference]; !ok {
-			// Symbol isn't available in this section
-			continue
-		}
-
-		// At this point we know that at least one function in the
-		// library is called from insns, so we have to link it.
-		return true, nil
-	}
-
-	// None of the functions in the section are called.
-	return false, nil
-}
-
 func fixupJumpsAndCalls(insns asm.Instructions) error {
 	symbolOffsets := make(map[string]asm.RawInstructionOffset)
 	iter := insns.Iterate()
@@ -167,10 +126,7 @@ func fixupJumpsAndCalls(insns asm.Instructions) error {
 
 		symOffset, ok := symbolOffsets[ins.Reference]
 		switch {
-		case ins.IsLoadOfFunctionPointer() && ins.Constant == -1:
-			fallthrough
-
-		case ins.IsFunctionCall() && ins.Constant == -1:
+		case ins.IsFunctionReference() && ins.Constant == -1:
 			if !ok {
 				break
 			}

@@ -26,13 +26,17 @@ func (rio RawInstructionOffset) Bytes() uint64 {
 
 // Instruction is a single eBPF instruction.
 type Instruction struct {
-	OpCode    OpCode
-	Dst       Register
-	Src       Register
-	Offset    int16
-	Constant  int64
+	OpCode   OpCode
+	Dst      Register
+	Src      Register
+	Offset   int16
+	Constant int64
+
+	// Reference denotes a reference (e.g. a jump) to another symbol.
 	Reference string
-	Symbol    string
+
+	// Symbol denotes an instruction at the start of a function body.
+	Symbol string
 }
 
 // Sym creates a symbol.
@@ -117,6 +121,24 @@ func (ins Instruction) Marshal(w io.Writer, bo binary.ByteOrder) (uint64, error)
 	}
 
 	return 2 * InstructionSize, nil
+}
+
+// JumpTarget takes the offset (in bytes) of ins within an instruction stream
+// and returns the absolute jump target within said instruction stream as
+// described by ins' Constant.
+func (ins Instruction) JumpTarget(offset uint64) uint64 {
+	// A relative jump instruction describes the amount of raw BPF instructions
+	// to jump, convert the offset into bytes.
+	dest := ins.Constant * InstructionSize
+
+	// The starting point of the jump is the end of the current instruction.
+	dest += int64(offset + InstructionSize)
+
+	if dest < 0 {
+		return 0
+	}
+
+	return uint64(dest)
 }
 
 // RewriteMapPtr changes an instruction to use a new map fd.
@@ -288,6 +310,14 @@ func (ins Instruction) Size() uint64 {
 // Instructions is an eBPF program.
 type Instructions []Instruction
 
+// Name returns the name of the function insns belongs to, if any.
+func (insns Instructions) Name() string {
+	if len(insns) == 0 {
+		return ""
+	}
+	return insns[0].Symbol
+}
+
 func (insns Instructions) String() string {
 	return fmt.Sprint(insns)
 }
@@ -330,24 +360,29 @@ func (insns Instructions) RewriteMapPtr(symbol string, fd int) error {
 	return nil
 }
 
-// SymbolOffsets returns the set of symbols and their offset in
-// the instructions.
-func (insns Instructions) SymbolOffsets() (map[string]int, error) {
-	offsets := make(map[string]int)
+// PseudoCalls returns a set of symbol names these Instructions make
+// bpf-to-bpf calls to.
+func (insns Instructions) PseudoCalls() map[string]bool {
+	calls := make(map[string]bool)
 
-	for i, ins := range insns {
-		if ins.Symbol == "" {
+	for _, ins := range insns {
+		if ins.Reference == "" {
 			continue
 		}
 
-		if _, ok := offsets[ins.Symbol]; ok {
-			return nil, fmt.Errorf("duplicate symbol %s", ins.Symbol)
+		if !ins.IsFunctionCall() && !ins.IsLoadOfFunctionPointer() {
+			continue
 		}
 
-		offsets[ins.Symbol] = i
+		if ins.Constant != -1 {
+			// BPF-to-BPF calls have -1 constants.
+			continue
+		}
+
+		calls[ins.Reference] = true
 	}
 
-	return offsets, nil
+	return calls
 }
 
 // ReferenceOffsets returns the set of references and their offset in

@@ -6,11 +6,6 @@ import (
 	"github.com/cilium/ebpf"
 )
 
-// NetNsInfo contains metadata about a network namespace link.
-type NetNsInfo struct {
-	RawLinkInfo
-}
-
 // NetNsLink is a program attached to a network namespace.
 type NetNsLink struct {
 	RawLink
@@ -50,13 +45,4 @@ func LoadPinnedNetNs(fileName string, opts *ebpf.LoadPinOptions) (*NetNsLink, er
 	}
 
 	return &NetNsLink{*link}, nil
-}
-
-// Info returns information about the link.
-func (nns *NetNsLink) Info() (*NetNsInfo, error) {
-	info, err := nns.RawLink.Info()
-	if err != nil {
-		return nil, err
-	}
-	return &NetNsInfo{*info}, nil
 }

@@ -100,37 +100,6 @@ func LoadCollectionSpecFromReader(rd io.ReaderAt) (*CollectionSpec, error) {
 		return nil, fmt.Errorf("load BTF: %w", err)
 	}
 
-	// Assign symbols to all the sections we're interested in.
-	symbols, err := f.Symbols()
-	if err != nil {
-		return nil, fmt.Errorf("load symbols: %v", err)
-	}
-
-	for _, symbol := range symbols {
-		idx := symbol.Section
-		symType := elf.ST_TYPE(symbol.Info)
-
-		section := sections[idx]
-		if section == nil {
-			continue
-		}
-
-		// Older versions of LLVM don't tag symbols correctly, so keep
-		// all NOTYPE ones.
-		keep := symType == elf.STT_NOTYPE
-		switch section.kind {
-		case mapSection, btfMapSection, dataSection:
-			keep = keep || symType == elf.STT_OBJECT
-		case programSection:
-			keep = keep || symType == elf.STT_FUNC
-		}
-		if !keep || symbol.Name == "" {
-			continue
-		}
-
-		section.symbols[symbol.Value] = symbol
-	}
-
 	ec := &elfCode{
 		SafeELFFile: f,
 		sections:    sections,
@@ -138,6 +107,13 @@ func LoadCollectionSpecFromReader(rd io.ReaderAt) (*CollectionSpec, error) {
 		version:     version,
 		btf:         btfSpec,
 	}
+
+	symbols, err := f.Symbols()
+	if err != nil {
+		return nil, fmt.Errorf("load symbols: %v", err)
+	}
+
+	ec.assignSymbols(symbols)
 
 	// Go through relocation sections, and parse the ones for sections we're
 	// interested in. Make sure that relocations point at valid sections.
@@ -183,7 +159,7 @@ func LoadCollectionSpecFromReader(rd io.ReaderAt) (*CollectionSpec, error) {
 	}
 
 	// Finally, collect programs and link them.
-	progs, err := ec.loadPrograms()
+	progs, err := ec.loadProgramSections()
 	if err != nil {
 		return nil, fmt.Errorf("load programs: %w", err)
 	}
@@ -247,12 +223,57 @@ func newElfSection(section *elf.Section, kind elfSectionKind) *elfSection {
 	}
 }
 
-func (ec *elfCode) loadPrograms() (map[string]*ProgramSpec, error) {
-	var (
-		progs []*ProgramSpec
-		libs  []*ProgramSpec
-	)
+// assignSymbols takes a list of symbols and assigns them to their
+// respective sections, indexed by name.
+func (ec *elfCode) assignSymbols(symbols []elf.Symbol) {
+	for _, symbol := range symbols {
+		symType := elf.ST_TYPE(symbol.Info)
+		symSection := ec.sections[symbol.Section]
+		if symSection == nil {
+			continue
+		}
 
+		// Anonymous symbols only occur in debug sections which we don't process
+		// relocations for. Anonymous symbols are not referenced from other sections.
+		if symbol.Name == "" {
+			continue
+		}
+
+		// Older versions of LLVM don't tag symbols correctly, so keep
+		// all NOTYPE ones.
+		switch symSection.kind {
+		case mapSection, btfMapSection, dataSection:
+			if symType != elf.STT_NOTYPE && symType != elf.STT_OBJECT {
+				continue
+			}
+		case programSection:
+			if symType != elf.STT_NOTYPE && symType != elf.STT_FUNC {
+				continue
+			}
+			// LLVM emits LBB_ (Local Basic Block) symbols that seem to be jump
+			// targets within sections, but BPF has no use for them.
+			if symType == elf.STT_NOTYPE && elf.ST_BIND(symbol.Info) == elf.STB_LOCAL &&
+				strings.HasPrefix(symbol.Name, "LBB") {
+				continue
+			}
+		// Only collect symbols that occur in program/maps/data sections.
+		default:
+			continue
+		}
+
+		symSection.symbols[symbol.Value] = symbol
+	}
+}
+
+// loadProgramSections iterates ec's sections and emits a ProgramSpec
+// for each function it finds.
+//
+// The resulting map is indexed by function name.
+func (ec *elfCode) loadProgramSections() (map[string]*ProgramSpec, error) {
+
+	progs := make(map[string]*ProgramSpec)
+
+	// Generate a ProgramSpec for each function found in each program section.
 	for _, sec := range ec.sections {
 		if sec.kind != programSection {
 			continue
@@ -262,86 +283,144 @@ func (ec *elfCode) loadPrograms() (map[string]*ProgramSpec, error) {
 			return nil, fmt.Errorf("section %v: missing symbols", sec.Name)
 		}
 
-		funcSym, ok := sec.symbols[0]
-		if !ok {
-			return nil, fmt.Errorf("section %v: no label at start", sec.Name)
-		}
-
-		insns, length, err := ec.loadInstructions(sec)
+		funcs, err := ec.loadFunctions(sec)
 		if err != nil {
-			return nil, fmt.Errorf("program %s: %w", funcSym.Name, err)
+			return nil, fmt.Errorf("section %v: %w", sec.Name, err)
 		}
 
 		progType, attachType, progFlags, attachTo := getProgType(sec.Name)
 
-		spec := &ProgramSpec{
-			Name:          funcSym.Name,
-			Type:          progType,
-			Flags:         progFlags,
-			AttachType:    attachType,
-			AttachTo:      attachTo,
-			License:       ec.license,
-			KernelVersion: ec.version,
-			Instructions:  insns,
-			ByteOrder:     ec.ByteOrder,
-		}
-
-		if ec.btf != nil {
-			spec.BTF, err = ec.btf.Program(sec.Name, length)
-			if err != nil && !errors.Is(err, btf.ErrNoExtendedInfo) {
-				return nil, fmt.Errorf("program %s: %w", funcSym.Name, err)
+		for name, insns := range funcs {
+			spec := &ProgramSpec{
+				Name:          name,
+				Type:          progType,
+				Flags:         progFlags,
+				AttachType:    attachType,
+				AttachTo:      attachTo,
+				License:       ec.license,
+				KernelVersion: ec.version,
+				Instructions:  insns,
+				ByteOrder:     ec.ByteOrder,
 			}
-		}
 
-		if spec.Type == UnspecifiedProgram {
-			// There is no single name we can use for "library" sections,
-			// since they may contain multiple functions. We'll decode the
-			// labels they contain later on, and then link sections that way.
-			libs = append(libs, spec)
-		} else {
-			progs = append(progs, spec)
+			if ec.btf != nil {
+				spec.BTF, err = ec.btf.Program(name)
+				if err != nil && !errors.Is(err, btf.ErrNoExtendedInfo) {
+					return nil, fmt.Errorf("program %s: %w", name, err)
+				}
+			}
+
+			// Function names must be unique within a single ELF blob.
+			if progs[name] != nil {
+				return nil, fmt.Errorf("duplicate program name %s", name)
+			}
+			progs[name] = spec
 		}
 	}
 
-	res := make(map[string]*ProgramSpec, len(progs))
-	for _, prog := range progs {
-		err := link(prog, libs)
-		if err != nil {
-			return nil, fmt.Errorf("program %s: %w", prog.Name, err)
-		}
-		res[prog.Name] = prog
+	// Populate each program's references with pointers to the other
+	// programs it directly references.
+	if err := findReferences(progs); err != nil {
+		return nil, fmt.Errorf("finding program references: %w", err)
 	}
 
-	return res, nil
+	// Don't emit programs of unknown type to preserve backwards compatibility.
+	for n, p := range progs {
+		if p.Type == UnspecifiedProgram {
+			delete(progs, n)
+		}
+	}
+
+	return progs, nil
 }
 
-func (ec *elfCode) loadInstructions(section *elfSection) (asm.Instructions, uint64, error) {
+// loadFunctions extracts instruction streams from the given program section
+// starting at each symbol in the section. The section's symbols must already
+// be narrowed down to STT_NOTYPE (emitted by clang <8) or STT_FUNC.
+//
+// The resulting map is indexed by function name.
+func (ec *elfCode) loadFunctions(section *elfSection) (map[string]asm.Instructions, error) {
 	var (
 		r      = bufio.NewReader(section.Open())
-		insns  asm.Instructions
+		funcs  = make(map[string]asm.Instructions)
 		offset uint64
+		ins    asm.Instruction
+		insns  asm.Instructions
 	)
 	for {
-		var ins asm.Instruction
+		// Check if a symbol exists at the current offset, denoting the start
+		// of a new function. Tag the current instruction with the function name.
+		ins.Symbol = section.symbols[offset].Name
+
+		// Pull one instruction from the instruction stream.
 		n, err := ins.Unmarshal(r, ec.ByteOrder)
-		if err == io.EOF {
-			return insns, offset, nil
+		if errors.Is(err, io.EOF) {
+			if fn := insns.Name(); fn != "" {
+				// Reached the end of the section and the decoded instruction buffer
+				// contains at least one valid instruction belonging to a function.
+				// Store the result and stop processing instructions.
+				funcs[fn] = insns
+			}
+			break
 		}
 		if err != nil {
-			return nil, 0, fmt.Errorf("offset %d: %w", offset, err)
+			return nil, fmt.Errorf("offset %d: %w", offset, err)
 		}
 
-		ins.Symbol = section.symbols[offset].Name
+		// Decoded the first instruction of a new function but insns already
+		// holds a valid instruction stream. Store the result and flush insns.
+		if ins.Symbol != "" && insns.Name() != "" {
+			funcs[insns.Name()] = insns
+			insns = nil
+		}
+
+		// Up to clang9, jumps to subprograms within the same ELF section were
+		// encoded using offsets relative to the instruction. When parsing
+		// subprograms individually, other subprograms within the same section
+		// are no longer in scope, so these jump offsets are no longer meaningful.
+		// Look up the destination in the section's symbol table, store its
+		// reference by name and blind the relative jump offset. The linker will
+		// figure out what this jump points to later.
+		if ins.IsFunctionReference() && ins.Constant != -1 {
+			tgt := jumpTarget(offset, ins)
+			sym := section.symbols[tgt].Name
+			if sym == "" {
+				return nil, fmt.Errorf("offset %d: no jump target found at offset %d", offset, tgt)
+			}
+
+			ins.Reference = sym
+			ins.Constant = -1
+		}
 
 		if rel, ok := section.relocations[offset]; ok {
 			if err = ec.relocateInstruction(&ins, rel); err != nil {
-				return nil, 0, fmt.Errorf("offset %d: relocate instruction: %w", offset, err)
+				return nil, fmt.Errorf("offset %d: relocate instruction: %w", offset, err)
 			}
 		}
 
 		insns = append(insns, ins)
 		offset += n
 	}
+
+	return funcs, nil
+}
+
+// jumpTarget takes ins' offset within an instruction stream (in bytes)
+// and returns its absolute jump destination (in bytes) within the
+// instruction stream.
+func jumpTarget(offset uint64, ins asm.Instruction) uint64 {
+	// A relative jump instruction describes the amount of raw BPF instructions
+	// to jump, convert the offset into bytes.
+	dest := ins.Constant * asm.InstructionSize
+
+	// The starting point of the jump is the end of the current instruction.
+	dest += int64(offset + asm.InstructionSize)
+
+	if dest < 0 {
+		return 0
+	}
+
+	return uint64(dest)
 }
 
 func (ec *elfCode) relocateInstruction(ins *asm.Instruction, rel elf.Symbol) error {

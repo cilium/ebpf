@@ -181,8 +181,13 @@ func (r *Reader) read(timeout time.Duration) (Record, error) {
 		return Record{}, fmt.Errorf("ringbuffer: %w", ErrClosed)
 	}
 
+	msec := int(timeout.Milliseconds())
+	if timeout == -1 {
+		msec = -1
+	}
+
 	for {
-		nEvents, err := r.poller.Wait(r.epollEvents, int(timeout.Milliseconds()))
+		nEvents, err := r.poller.Wait(r.epollEvents, msec)
 		if err != nil {
 			return Record{}, err
 		}

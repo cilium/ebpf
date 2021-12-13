@@ -288,13 +288,13 @@ func (pr *Reader) read(timeout time.Duration) (Record, error) {
 		return Record{}, fmt.Errorf("perf ringbuffer: %w", ErrClosed)
 	}
 
+	msec := int(timeout.Milliseconds())
+	if timeout == -1 {
+		msec = -1
+	}
+
 	for {
 		if len(pr.epollRings) == 0 {
-			msec := int(timeout.Milliseconds())
-			if timeout == -1 {
-				msec = -1
-			}
-
 			nEvents, err := pr.poller.Wait(pr.epollEvents, msec)
 			if err != nil {
 				return Record{}, err

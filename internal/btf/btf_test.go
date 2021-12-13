@@ -58,7 +58,7 @@ func TestAnyTypesByName(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		if len(types) != 2 {
+		if len(types) != 1 {
 			t.Fatalf("expected to receive exactly 2 types from querying ambiguous type, got: %v", types)
 		}
 

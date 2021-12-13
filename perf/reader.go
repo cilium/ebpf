@@ -290,7 +290,12 @@ func (pr *Reader) read(timeout time.Duration) (Record, error) {
 
 	for {
 		if len(pr.epollRings) == 0 {
-			nEvents, err := pr.poller.Wait(pr.epollEvents, int(timeout.Milliseconds()))
+			msec := int(timeout.Milliseconds())
+			if timeout == -1 {
+				msec = -1
+			}
+
+			nEvents, err := pr.poller.Wait(pr.epollEvents, msec)
 			if err != nil {
 				return Record{}, err
 			}

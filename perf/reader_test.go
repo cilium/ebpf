@@ -386,6 +386,42 @@ func TestPause(t *testing.T) {
 	qt.Assert(t, errors.Is(err, ErrClosed), qt.IsTrue, qt.Commentf("doesn't wrap ErrClosed"))
 }
 
+func TestPerfReaderReadTimeout(t *testing.T) {
+	prog, events := mustOutputSamplesProg(t, 5)
+	defer prog.Close()
+	defer events.Close()
+
+	rd, err := NewReader(events, 4096)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rd.Close()
+
+	_, err = rd.ReadTimeout(1 * time.Millisecond)
+	if !errors.Is(err, os.ErrDeadlineExceeded) {
+		t.Fatal("Expected timeout")
+	}
+
+	ret, _, err := prog.Test(make([]byte, 14))
+	testutils.SkipIfNotSupported(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if errno := syscall.Errno(-int32(ret)); errno != 0 {
+		t.Fatal("Expected 0 as return value, got", errno)
+	}
+
+	record, err := rd.ReadTimeout(100 * time.Millisecond)
+	if err != nil {
+		t.Fatal("Can't read samples:", err)
+	}
+	want := []byte{1, 2, 3, 4, 4, 0, 0, 0, 0, 0, 0, 0}
+	if !bytes.Equal(record.RawSample, want) {
+		t.Log(record.RawSample)
+		t.Error("Sample doesn't match expected output")
+	}
+}
+
 func BenchmarkReader(b *testing.B) {
 	prog, events := mustOutputSamplesProg(b, 80)
 	defer prog.Close()

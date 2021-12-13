@@ -632,14 +632,7 @@ func (s *Spec) TypeByID(id TypeID) (Type, error) {
 	return s.types[id], nil
 }
 
-// AnyTypesByName returns a list of BTF Types with the given name. If name
-// contains a struct flavor suffix (e.g. 'thread_struct___v46'), an exact match
-// will be performed. Otherwise, returns all types that carry the given name,
-// including all struct flavors.
-//
-// Multiple Types of the same name can exist in case multiple 'struct flavors'
-// are described in BTF info. These are used to deal with changes in kernel
-// data structures.
+// AnyTypesByName returns a list of BTF Types with the given name.
 //
 // If the BTF blob describes multiple compilation units like vmlinux, multiple
 // Types with the same name and kind can exist, but might not describe the same
@@ -647,34 +640,21 @@ func (s *Spec) TypeByID(id TypeID) (Type, error) {
 //
 // Returns an error wrapping ErrNotFound if no matching Type exists in the Spec.
 func (s *Spec) AnyTypesByName(name string) ([]Type, error) {
-	en := essentialName(name)
-
-	// Named types are indexed by essential name.
-	types, ok := s.namedTypes[en]
-	if !ok {
+	types := s.namedTypes[essentialName(name)]
+	if len(types) == 0 {
 		return nil, fmt.Errorf("type name %s: %w", name, ErrNotFound)
 	}
 
-	if string(en) == name {
-		// Return a copy to prevent changes to namedTypes.
-		cpy := make([]Type, len(types))
-		copy(cpy, types)
-		return cpy, nil
-	}
-
-	// If name contains a flavor suffix, require an exact match.
-	var filtered []Type
+	// Return a copy to prevent changes to namedTypes.
+	result := make([]Type, 0, len(types))
 	for _, t := range types {
+		// Match against the full name, not just the essential one
+		// in case the type being looked up is a struct flavor.
 		if t.TypeName() == name {
-			filtered = append(filtered, t)
+			result = append(result, t)
 		}
 	}
-
-	if len(filtered) == 0 {
-		return nil, fmt.Errorf("type flavor %s: %w", name, ErrNotFound)
-	}
-
-	return filtered, nil
+	return result, nil
 }
 
 // TypeByName searches for a Type with a specific name. Since multiple
@@ -711,12 +691,6 @@ func (s *Spec) TypeByName(name string, typ interface{}) error {
 	var candidate Type
 	for _, typ := range types {
 		if reflect.TypeOf(typ) != wanted {
-			continue
-		}
-
-		// Match against the full name, not just the essential one
-		// in case the type being looked up is a struct flavor.
-		if typ.TypeName() != name {
 			continue
 		}
 

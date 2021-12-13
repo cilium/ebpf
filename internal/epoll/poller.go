@@ -119,7 +119,7 @@ func (p *Poller) Add(fd int, id int) error {
 //
 // Returns the number of pending events or an error wrapping os.ErrClosed if
 // Close is called.
-func (p *Poller) Wait(events []unix.EpollEvent) (int, error) {
+func (p *Poller) Wait(events []unix.EpollEvent, msec int) (int, error) {
 	p.epollMu.Lock()
 	defer p.epollMu.Unlock()
 
@@ -128,7 +128,7 @@ func (p *Poller) Wait(events []unix.EpollEvent) (int, error) {
 	}
 
 	for {
-		n, err := unix.EpollWait(p.epollFd, events, -1)
+		n, err := unix.EpollWait(p.epollFd, events, msec)
 		if temp, ok := err.(temporaryError); ok && temp.Temporary() {
 			// Retry the syscall if we were interrupted, see https://github.com/golang/go/issues/20400
 			continue

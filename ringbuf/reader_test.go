@@ -217,9 +217,7 @@ func TestRingbufReaderClose(t *testing.T) {
 func TestRingBufferReaderTimeout(t *testing.T) {
 	testutils.SkipOnOldKernel(t, "5.8", "BPF ring buffer")
 
-	prog, events := mustOutputSamplesProg(t, 5)
-	defer prog.Close()
-	defer events.Close()
+	prog, events := mustOutputSamplesProg(t, 0, 5)
 
 	rd, err := NewReader(events)
 	if err != nil {
@@ -245,7 +243,7 @@ func TestRingBufferReaderTimeout(t *testing.T) {
 	if err != nil {
 		t.Fatal("Can't read samples:", err)
 	}
-	want := []byte{1, 2, 3, 4, 4, 0, 0, 0, 0, 0, 0, 0}
+	want := []byte{1, 2, 3, 4, 4}
 	if !bytes.Equal(record.RawSample, want) {
 		t.Log(record.RawSample)
 		t.Error("Sample doesn't match expected output")

@@ -29,10 +29,6 @@ var (
 // ID represents the unique ID of a BTF object.
 type ID uint32
 
-// essentialName represents the name of a BTF type stripped of any flavor
-// suffixes after a ___ delimiter.
-type essentialname string
-
 // Spec represents decoded BTF.
 type Spec struct {
 	// Data from .BTF.
@@ -44,7 +40,7 @@ type Spec struct {
 
 	// Types indexed by essential name.
 	// Includes all struct flavors and types with the same name.
-	namedTypes map[essentialname][]Type
+	namedTypes map[essentialName][]Type
 
 	// Data from .BTF.ext.
 	funcInfos map[string]FuncInfo
@@ -516,10 +512,10 @@ func fixupDatasec(rawTypes []rawType, rawStrings stringTable, sectionSizes map[s
 func (s *Spec) Copy() *Spec {
 	types, _ := copyTypes(s.types, nil)
 
-	namedTypes := make(map[essentialname][]Type)
+	namedTypes := make(map[essentialName][]Type)
 	for _, typ := range types {
 		if name := typ.TypeName(); name != "" {
-			en := essentialName(name)
+			en := newEssentialName(name)
 			namedTypes[en] = append(namedTypes[en], typ)
 		}
 	}
@@ -640,7 +636,7 @@ func (s *Spec) TypeByID(id TypeID) (Type, error) {
 //
 // Returns an error wrapping ErrNotFound if no matching Type exists in the Spec.
 func (s *Spec) AnyTypesByName(name string) ([]Type, error) {
-	types := s.namedTypes[essentialName(name)]
+	types := s.namedTypes[newEssentialName(name)]
 	if len(types) == 0 {
 		return nil, fmt.Errorf("type name %s: %w", name, ErrNotFound)
 	}

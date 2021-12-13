@@ -240,7 +240,7 @@ func coreRelocate(local, target *Spec, relos CoreRelos) (COREFixups, error) {
 		}
 
 		relos := relosByID[id]
-		targets := target.namedTypes[essentialName(localTypeName)]
+		targets := target.namedTypes[newEssentialName(localTypeName)]
 		fixups, err := coreCalculateFixups(localType, targets, relos)
 		if err != nil {
 			return nil, fmt.Errorf("relocate %s: %w", localType, err)
@@ -704,9 +704,9 @@ func coreFindEnumValue(local Type, localAcc coreAccessor, target Type) (localVal
 		return nil, nil, errImpossibleRelocation
 	}
 
-	localName := essentialName(localValue.Name)
+	localName := newEssentialName(localValue.Name)
 	for i, targetValue := range targetEnum.Values {
-		if essentialName(targetValue.Name) != localName {
+		if newEssentialName(targetValue.Name) != localName {
 			continue
 		}
 
@@ -831,7 +831,7 @@ func coreAreMembersCompatible(localType Type, targetType Type) error {
 			return nil
 		}
 
-		if essentialName(a) == essentialName(b) {
+		if newEssentialName(a) == newEssentialName(b) {
 			return nil
 		}
 

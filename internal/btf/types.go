@@ -763,7 +763,7 @@ func (dq *typeDeque) all() []*Type {
 // Returns a map of named types (so, where NameOff is non-zero) and a slice of types
 // indexed by TypeID. Since BTF ignores compilation units, multiple types may share
 // the same name. A Type may form a cyclic graph by pointing at itself.
-func inflateRawTypes(rawTypes []rawType, rawStrings stringTable) (types []Type, namedTypes map[essentialname][]Type, err error) {
+func inflateRawTypes(rawTypes []rawType, rawStrings stringTable) (types []Type, namedTypes map[essentialName][]Type, err error) {
 	type fixupDef struct {
 		id           TypeID
 		expectedKind btfKind
@@ -802,7 +802,7 @@ func inflateRawTypes(rawTypes []rawType, rawStrings stringTable) (types []Type, 
 
 	types = make([]Type, 0, len(rawTypes))
 	types = append(types, (*Void)(nil))
-	namedTypes = make(map[essentialname][]Type)
+	namedTypes = make(map[essentialName][]Type)
 
 	for i, raw := range rawTypes {
 		var (
@@ -946,7 +946,7 @@ func inflateRawTypes(rawTypes []rawType, rawStrings stringTable) (types []Type, 
 
 		types = append(types, typ)
 
-		if name := essentialName(typ.TypeName()); name != "" {
+		if name := newEssentialName(typ.TypeName()); name != "" {
 			namedTypes[name] = append(namedTypes[name], typ)
 		}
 	}
@@ -973,16 +973,20 @@ func inflateRawTypes(rawTypes []rawType, rawStrings stringTable) (types []Type, 
 	return types, namedTypes, nil
 }
 
-// essentialName returns name without a ___ suffix.
+// essentialName represents the name of a BTF type stripped of any flavor
+// suffixes after a ___ delimiter.
+type essentialName string
+
+// newEssentialName returns name without a ___ suffix.
 //
 // CO-RE has the concept of 'struct flavors', which are used to deal with
 // changes in kernel data structures. Anything after three underscores
 // in a type name is ignored for the purpose of finding a candidate type
 // in the kernel's BTF.
-func essentialName(name string) essentialname {
+func newEssentialName(name string) essentialName {
 	lastIdx := strings.LastIndex(name, "___")
 	if lastIdx > 0 {
-		return essentialname(name[:lastIdx])
+		return essentialName(name[:lastIdx])
 	}
-	return essentialname(name)
+	return essentialName(name)
 }

@@ -34,7 +34,7 @@ func TestPoller(t *testing.T) {
 
 		events := make([]unix.EpollEvent, 1)
 
-		n, err := poller.Wait(events)
+		n, err := poller.Wait(events, -1)
 		if errors.Is(err, os.ErrClosed) {
 			return
 		}

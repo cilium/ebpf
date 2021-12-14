@@ -1,47 +1,46 @@
 package ebpf
 
 import (
+	"bytes"
+	"encoding/binary"
 	"fmt"
 
 	"github.com/cilium/ebpf/asm"
+	"github.com/cilium/ebpf/internal/btf"
 )
 
-// link resolves bpf-to-bpf calls.
+// The linker is responsible for resolving bpf-to-bpf calls between programs
+// within an ELF. Each BPF program must be a self-contained binary blob,
+// so when an instruction in one ELF program section wants to jump to
+// a function in another, the linker needs to pull in the bytecode
+// (and BTF info) of the target function and concatenate the instruction
+// streams together.
 //
-// Each library may contain multiple functions / labels, and is only linked
-// if prog references one of these functions.
+// Later on in the pipeline, all call sites are fixed up with relative jumps
+// within this newly-created instruction stream to then finally hand off to
+// the kernel with BPF_PROG_LOAD.
 //
-// Libraries also linked.
-func link(prog *ProgramSpec, libs []*ProgramSpec) error {
-	var (
-		linked  = make(map[*ProgramSpec]bool)
-		pending = []asm.Instructions{prog.Instructions}
-		insns   asm.Instructions
-	)
-	for len(pending) > 0 {
-		insns, pending = pending[0], pending[1:]
-		for _, lib := range libs {
-			if linked[lib] {
+// Each function is denoted by an ELF symbol and the compiler takes care of
+// register setup before each jump instruction.
+
+// findReferences finds bpf-to-bpf calls in all given progs.
+// It populates each ProgramSpec's references with pointers
+// to all other programs directly referenced by its bytecode.
+func findReferences(progs map[string]*ProgramSpec) error {
+	// Check all ProgramSpecs in the collection against each other.
+	for _, caller := range progs {
+		// Obtain a list of call targets in the calling program.
+		calls := caller.Instructions.FunctionReferences()
+
+		for _, dep := range progs {
+			// Don't link a program against itself.
+			if caller == dep {
 				continue
 			}
 
-			needed, err := needSection(insns, lib.Instructions)
-			if err != nil {
-				return fmt.Errorf("linking %s: %w", lib.Name, err)
-			}
-
-			if !needed {
-				continue
-			}
-
-			linked[lib] = true
-			prog.Instructions = append(prog.Instructions, lib.Instructions...)
-			pending = append(pending, lib.Instructions)
-
-			if prog.BTF != nil && lib.BTF != nil {
-				if err := prog.BTF.Append(lib.BTF); err != nil {
-					return fmt.Errorf("linking BTF of %s: %w", lib.Name, err)
-				}
+			if calls[dep.Instructions.Name()] {
+				// Register a direct reference to another program.
+				caller.references = append(caller.references, dep)
 			}
 		}
 	}
@@ -49,39 +48,53 @@ func link(prog *ProgramSpec, libs []*ProgramSpec) error {
 	return nil
 }
 
-func needSection(insns, section asm.Instructions) (bool, error) {
-	// A map of symbols to the libraries which contain them.
-	symbols, err := section.SymbolOffsets()
-	if err != nil {
-		return false, err
+// collectInstructions returns the instruction stream of all progs in order.
+func collectInstructions(progs []*ProgramSpec) asm.Instructions {
+	var out asm.Instructions
+
+	for _, prog := range progs {
+		out = append(out, prog.Instructions...)
 	}
 
-	for _, ins := range insns {
-		if ins.Reference == "" {
-			continue
-		}
+	return out
+}
 
-		if !ins.IsFunctionCall() && !ins.IsLoadOfFunctionPointer() {
-			continue
-		}
-
-		if ins.Constant != -1 {
-			// This is already a valid call, no need to link again.
-			continue
-		}
-
-		if _, ok := symbols[ins.Reference]; !ok {
-			// Symbol isn't available in this section
-			continue
-		}
-
-		// At this point we know that at least one function in the
-		// library is called from insns, so we have to link it.
-		return true, nil
+// marshalFuncInfos returns the BTF func infos of all progs in order.
+func marshalFuncInfos(progs []*ProgramSpec) ([]byte, error) {
+	if len(progs) == 0 {
+		return nil, nil
 	}
 
-	// None of the functions in the section are called.
-	return false, nil
+	var off uint64
+
+	buf := bytes.NewBuffer(make([]byte, 0, binary.Size(&btf.FuncInfo{})*len(progs)))
+	for _, prog := range progs {
+		if err := prog.BTF.FuncInfo.Marshal(buf, off); err != nil {
+			return nil, fmt.Errorf("marshaling prog %s func info: %w", prog.Name, err)
+		}
+		off += prog.Instructions.Size()
+	}
+
+	return buf.Bytes(), nil
+}
+
+// marshalLineInfos returns the BTF line infos of all progs in order.
+func marshalLineInfos(progs []*ProgramSpec) ([]byte, error) {
+	if len(progs) == 0 {
+		return nil, nil
+	}
+
+	var off uint64
+
+	buf := bytes.NewBuffer(make([]byte, 0, binary.Size(&btf.LineInfo{})*len(progs)))
+	for _, prog := range progs {
+		if err := prog.BTF.LineInfos.Marshal(buf, off); err != nil {
+			return nil, fmt.Errorf("marshaling prog %s line infos: %w", prog.Name, err)
+		}
+		off += prog.Instructions.Size()
+	}
+
+	return buf.Bytes(), nil
 }
 
 func fixupJumpsAndCalls(insns asm.Instructions) error {
@@ -113,10 +126,7 @@ func fixupJumpsAndCalls(insns asm.Instructions) error {
 
 		symOffset, ok := symbolOffsets[ins.Reference]
 		switch {
-		case ins.IsLoadOfFunctionPointer() && ins.Constant == -1:
-			fallthrough
-
-		case ins.IsFunctionCall() && ins.Constant == -1:
+		case ins.IsFunctionReference() && ins.Constant == -1:
 			if !ok {
 				break
 			}

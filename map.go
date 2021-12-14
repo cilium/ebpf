@@ -407,7 +407,7 @@ func (spec *MapSpec) createMap(inner *sys.FD, opts MapOptions, handles *handleCa
 	fd, err := sys.MapCreate(&attr)
 	if err != nil {
 		if errors.Is(err, unix.EPERM) {
-			return nil, fmt.Errorf("map create: %w (MEMLOCK bay be too low, consider rlimit.RemoveMemlock)", err)
+			return nil, fmt.Errorf("map create: %w (MEMLOCK may be too low, consider rlimit.RemoveMemlock)", err)
 		}
 		if btfDisabled {
 			return nil, fmt.Errorf("map create without BTF: %w", err)

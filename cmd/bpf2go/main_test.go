@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
 	"testing"
@@ -142,6 +143,18 @@ func TestCollectTargets(t *testing.T) {
 		sort.Strings(linuxArchesBE[i])
 	}
 
+	nativeTarget := make(map[target][]string)
+	for arch, archTarget := range targetByGoArch {
+		if arch == runtime.GOARCH {
+			if archTarget.clang == "bpfel" {
+				nativeTarget[archTarget] = linuxArchesLE[archTarget.linux]
+			} else {
+				nativeTarget[archTarget] = linuxArchesBE[archTarget.linux]
+			}
+			break
+		}
+	}
+
 	tests := []struct {
 		targets []string
 		want    map[target][]string
@@ -166,6 +179,10 @@ func TestCollectTargets(t *testing.T) {
 				{"bpfeb", "arm64"}: linuxArchesBE["arm64"],
 				{"bpfel", "x86"}:   linuxArchesLE["x86"],
 			},
+		},
+		{
+			[]string{"native"},
+			nativeTarget,
 		},
 	}
 

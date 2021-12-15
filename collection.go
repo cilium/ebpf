@@ -424,9 +424,8 @@ func (cl *collectionLoader) loadProgram(progName string) (*Program, error) {
 		return nil, fmt.Errorf("unknown program %s", progName)
 	}
 
-	progSpec = progSpec.Copy()
-
-	// Rewrite any reference to a valid map.
+	// Rewrite any reference to a valid map in the program's instructions,
+	// which includes all of its dependencies.
 	for i := range progSpec.Instructions {
 		ins := &progSpec.Instructions[i]
 

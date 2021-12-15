@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
 )
@@ -357,6 +358,10 @@ func collectTargets(targets []string) (map[target][]string, error) {
 			}
 			sort.Strings(goarches)
 			result[target{tgt, ""}] = goarches
+
+		case "native":
+			tgt = runtime.GOARCH
+			fallthrough
 
 		default:
 			archTarget, ok := targetByGoArch[tgt]

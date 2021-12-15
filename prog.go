@@ -93,9 +93,8 @@ type ProgramSpec struct {
 	// The byte order this program was compiled for, may be nil.
 	ByteOrder binary.ByteOrder
 
-	// Programs called by this ProgramSpec's bytecode. Populated during ELF
-	// loading and read by the linker during marshaling.
-	references []*ProgramSpec
+	// Programs called by this ProgramSpec. Includes all dependencies.
+	references map[string]*ProgramSpec
 }
 
 // Copy returns a copy of the spec.
@@ -117,39 +116,81 @@ func (ps *ProgramSpec) Tag() (string, error) {
 	return ps.Instructions.Tag(internal.NativeEndian)
 }
 
-// flatten returns a unique list of programs that need to be
-// included in spec's bytestream when inserting it into the kernel.
+// flatten returns spec's full instruction stream including all of its
+// dependencies and an expanded map of references that includes all symbols
+// appearing in the instruction stream.
 //
-// It recursively collects spec's dependencies by stepping into its neighboring
-// ProgramSpecs. Each visited program is recorded to both avoid infinite
-// recursion and to prevent collecting the same program more than once.
-//
-// Always returns spec itself as the first entry. Returns nil when spec was
-// already visited.
-func (spec *ProgramSpec) flatten(visited map[*ProgramSpec]bool) []*ProgramSpec {
+// Returns nil, nil if spec was already visited.
+func (spec *ProgramSpec) flatten(visited map[*ProgramSpec]bool) (asm.Instructions, map[string]*ProgramSpec) {
 	if visited == nil {
 		visited = make(map[*ProgramSpec]bool)
 	}
 
 	// This program and its dependencies were already collected.
 	if visited[spec] {
-		return nil
+		return nil, nil
 	}
 
 	visited[spec] = true
 
-	// Always return the current program as the first one in the chain.
-	out := []*ProgramSpec{spec}
+	// Start off with spec's direct references and instructions.
+	progs := spec.references
+	insns := spec.Instructions
 
-	// Recurse into each reference and collect its references in turn,
-	// keeping track of visited nodes.
-	for _, dep := range spec.references {
-		if dn := dep.flatten(visited); dn != nil {
-			out = append(out, dn...)
+	// Recurse into each reference and append/merge its references into
+	// a temporary buffer as to not interfere with the resolution process.
+	for _, ref := range spec.references {
+		if ri, rp := ref.flatten(visited); ri != nil || rp != nil {
+			insns = append(insns, ri...)
+
+			// Merge nested references into the top-level scope.
+			for n, p := range rp {
+				progs[n] = p
+			}
 		}
 	}
 
-	return out
+	return insns, progs
+}
+
+// A reference describes a byte offset to a Instruction containing a Symbol
+// pointing to another ProgramSpec.
+type reference struct {
+	offset uint64
+	spec   *ProgramSpec
+}
+
+// layout returns a unique list of programs that must be included
+// in spec's instruction stream when inserting it into the kernel.
+// Always returns spec itself as the first entry in the chain.
+func (spec *ProgramSpec) layout() ([]reference, error) {
+	out := []reference{{0, spec}}
+
+	name := spec.Instructions.Name()
+
+	var ins asm.Instruction
+	iter := spec.Instructions.Iterate()
+	for iter.Next() {
+		ins = *iter.Ins
+
+		// Skip non-symbols and symbols that describe the ProgramSpec itself,
+		// which is usually the first instruction in Instructions.
+		// ProgramSpec itself is already included and not present in references.
+		if ins.Symbol == "" || ins.Symbol == name {
+			continue
+		}
+
+		// Failure to look up a reference is not an error. There are existing tests
+		// with valid progs that contain multiple symbols and don't have references
+		// populated. Assume ProgramSpec is used similarly in the wild, so don't
+		// alter this behaviour.
+		ref := spec.references[ins.Symbol]
+		if ref != nil {
+			out = append(out, reference{iter.Offset.Bytes(), ref})
+		}
+	}
+
+	return out, nil
 }
 
 // Program represents BPF program loaded into the kernel.
@@ -236,7 +277,10 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions, handles *hand
 		}
 	}
 
-	chain := spec.flatten(nil)
+	layout, err := spec.layout()
+	if err != nil {
+		return nil, fmt.Errorf("get program layout: %w, insns: %s", err, spec.Instructions)
+	}
 
 	var btfDisabled bool
 	var core btf.COREFixups
@@ -255,7 +299,7 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions, handles *hand
 		if handle != nil {
 			attr.ProgBtfFd = uint32(handle.FD())
 
-			fib, err := marshalFuncInfos(chain)
+			fib, err := marshalFuncInfos(layout)
 			if err != nil {
 				return nil, err
 			}
@@ -263,7 +307,7 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions, handles *hand
 			attr.FuncInfoCnt = uint32(len(fib)) / attr.FuncInfoRecSize
 			attr.FuncInfo = sys.NewSlicePointer(fib)
 
-			lib, err := marshalLineInfos(chain)
+			lib, err := marshalLineInfos(layout)
 			if err != nil {
 				return nil, err
 			}
@@ -273,7 +317,7 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions, handles *hand
 		}
 	}
 
-	insns := collectInstructions(chain)
+	insns := spec.Instructions
 
 	insns, err = core.Apply(insns)
 	if err != nil {

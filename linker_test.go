@@ -34,7 +34,7 @@ func TestFindReferences(t *testing.T) {
 		},
 	}
 
-	if err := findReferences(progs); err != nil {
+	if err := populateReferences(progs); err != nil {
 		t.Fatal(err)
 	}
 

@@ -424,34 +424,32 @@ func (cl *collectionLoader) loadProgram(progName string) (*Program, error) {
 		return nil, fmt.Errorf("unknown program %s", progName)
 	}
 
-	// Substitute map references in all of the program's dependencies.
-	for _, p := range progSpec.flatten(nil) {
-		// Rewrite any reference to a valid map.
-		for i := range p.Instructions {
-			ins := &p.Instructions[i]
+	// Rewrite any reference to a valid map in the program's instructions,
+	// which includes all of its dependencies.
+	for i := range progSpec.Instructions {
+		ins := &progSpec.Instructions[i]
 
-			if !ins.IsLoadFromMap() || ins.Reference == "" {
-				continue
-			}
+		if !ins.IsLoadFromMap() || ins.Reference == "" {
+			continue
+		}
 
-			if uint32(ins.Constant) != math.MaxUint32 {
-				// Don't overwrite maps already rewritten, users can
-				// rewrite programs in the spec themselves
-				continue
-			}
+		if uint32(ins.Constant) != math.MaxUint32 {
+			// Don't overwrite maps already rewritten, users can
+			// rewrite programs in the spec themselves
+			continue
+		}
 
-			m, err := cl.loadMap(ins.Reference)
-			if err != nil {
-				return nil, fmt.Errorf("program %s: %w", progName, err)
-			}
+		m, err := cl.loadMap(ins.Reference)
+		if err != nil {
+			return nil, fmt.Errorf("program %s: %w", progName, err)
+		}
 
-			fd := m.FD()
-			if fd < 0 {
-				return nil, fmt.Errorf("map %s: %w", ins.Reference, sys.ErrClosedFd)
-			}
-			if err := ins.RewriteMapPtr(m.FD()); err != nil {
-				return nil, fmt.Errorf("program %s: map %s: %w", progName, ins.Reference, err)
-			}
+		fd := m.FD()
+		if fd < 0 {
+			return nil, fmt.Errorf("map %s: %w", ins.Reference, sys.ErrClosedFd)
+		}
+		if err := ins.RewriteMapPtr(m.FD()); err != nil {
+			return nil, fmt.Errorf("program %s: map %s: %w", progName, ins.Reference, err)
 		}
 	}
 

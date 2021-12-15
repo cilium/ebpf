@@ -177,7 +177,7 @@ func (fi FuncInfo) Name(spec *Spec) (string, error) {
 }
 
 // Marshal writes the binary representation of the FuncInfo to w.
-// The instruction offset is converted from bytes to instructions.
+// The function offset is converted from bytes to instructions.
 func (fi FuncInfo) Marshal(w io.Writer, offset uint64) error {
 	fi.InsnOff += uint32(offset)
 	// The kernel expects offsets in number of raw bpf instructions,

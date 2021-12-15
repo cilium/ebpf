@@ -14,7 +14,7 @@ import (
 // so when an instruction in one ELF program section wants to jump to
 // a function in another, the linker needs to pull in the bytecode
 // (and BTF info) of the target function and concatenate the instruction
-// streams together.
+// streams.
 //
 // Later on in the pipeline, all call sites are fixed up with relative jumps
 // within this newly-created instruction stream to then finally hand off to
@@ -23,75 +23,90 @@ import (
 // Each function is denoted by an ELF symbol and the compiler takes care of
 // register setup before each jump instruction.
 
-// findReferences finds bpf-to-bpf calls in all given progs.
-// It populates each ProgramSpec's references with pointers
-// to all other programs directly referenced by its bytecode.
+// populateReferences populates all of progs' Instructions and references
+// with their full dependency chains including transient dependencies.
+func populateReferences(progs map[string]*ProgramSpec) error {
+	type props struct {
+		insns asm.Instructions
+		refs  map[string]*ProgramSpec
+	}
+
+	out := make(map[string]props)
+
+	// Resolve and store direct references between all progs.
+	if err := findReferences(progs); err != nil {
+		return fmt.Errorf("finding references: %w", err)
+	}
+
+	// Flatten all progs' instruction streams.
+	for name, prog := range progs {
+		insns, refs := prog.flatten(nil)
+
+		prop := props{
+			insns: insns,
+			refs:  refs,
+		}
+
+		out[name] = prop
+	}
+
+	// Replace all progs' instructions and references
+	for name, props := range out {
+		progs[name].Instructions = props.insns
+		progs[name].references = props.refs
+	}
+
+	return nil
+}
+
+// findReferences finds bpf-to-bpf calls between progs and populates each
+// prog's references field with its direct neighbours.
 func findReferences(progs map[string]*ProgramSpec) error {
 	// Check all ProgramSpecs in the collection against each other.
-	for _, caller := range progs {
-		// Obtain a list of call targets in the calling program.
-		calls := caller.Instructions.FunctionReferences()
+	for _, prog := range progs {
+		prog.references = make(map[string]*ProgramSpec)
 
-		for _, dep := range progs {
-			// Don't link a program against itself.
-			if caller == dep {
-				continue
+		// Look up call targets in progs and store pointers to their corresponding
+		// ProgramSpecs as direct references.
+		for refname := range prog.Instructions.FunctionReferences() {
+			ref := progs[refname]
+			if ref == nil {
+				return fmt.Errorf("symbol reference %s not present in progs", refname)
 			}
-
-			if calls[dep.Instructions.Name()] {
-				// Register a direct reference to another program.
-				caller.references = append(caller.references, dep)
-			}
+			prog.references[refname] = ref
 		}
 	}
 
 	return nil
 }
 
-// collectInstructions returns the instruction stream of all progs in order.
-func collectInstructions(progs []*ProgramSpec) asm.Instructions {
-	var out asm.Instructions
-
-	for _, prog := range progs {
-		out = append(out, prog.Instructions...)
-	}
-
-	return out
-}
-
 // marshalFuncInfos returns the BTF func infos of all progs in order.
-func marshalFuncInfos(progs []*ProgramSpec) ([]byte, error) {
-	if len(progs) == 0 {
+func marshalFuncInfos(layout []reference) ([]byte, error) {
+	if len(layout) == 0 {
 		return nil, nil
 	}
 
-	var off uint64
-
-	buf := bytes.NewBuffer(make([]byte, 0, binary.Size(&btf.FuncInfo{})*len(progs)))
-	for _, prog := range progs {
-		if err := prog.BTF.FuncInfo.Marshal(buf, off); err != nil {
-			return nil, fmt.Errorf("marshaling prog %s func info: %w", prog.Name, err)
+	buf := bytes.NewBuffer(make([]byte, 0, binary.Size(&btf.FuncInfo{})*len(layout)))
+	for _, sym := range layout {
+		if err := sym.spec.BTF.FuncInfo.Marshal(buf, sym.offset); err != nil {
+			return nil, fmt.Errorf("marshaling prog %s func info: %w", sym.spec.Name, err)
 		}
-		off += prog.Instructions.Size()
 	}
 
 	return buf.Bytes(), nil
 }
 
 // marshalLineInfos returns the BTF line infos of all progs in order.
-func marshalLineInfos(progs []*ProgramSpec) ([]byte, error) {
-	if len(progs) == 0 {
+func marshalLineInfos(layout []reference) ([]byte, error) {
+	if len(layout) == 0 {
 		return nil, nil
 	}
 
-	var off uint64
-
-	buf := bytes.NewBuffer(make([]byte, 0, binary.Size(&btf.LineInfo{})*len(progs)))
-	for _, prog := range progs {
-		if err := prog.BTF.LineInfos.Marshal(buf, off); err != nil {
-			return nil, fmt.Errorf("marshaling prog %s line infos: %w", prog.Name, err)
+	buf := bytes.NewBuffer(make([]byte, 0, binary.Size(&btf.LineInfo{})*len(layout)))
+	for _, sym := range layout {
+		if err := sym.spec.BTF.LineInfos.Marshal(buf, sym.offset); err != nil {
+			return nil, fmt.Errorf("marshaling prog %s line infos: %w", sym.spec.Name, err)
 		}
-		off += prog.Instructions.Size()
 	}
 
 	return buf.Bytes(), nil

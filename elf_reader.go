@@ -318,10 +318,9 @@ func (ec *elfCode) loadProgramSections() (map[string]*ProgramSpec, error) {
 		}
 	}
 
-	// Populate each program's references with pointers to the other
-	// programs it directly references.
-	if err := findReferences(progs); err != nil {
-		return nil, fmt.Errorf("finding program references: %w", err)
+	// Populate each prog's references with pointers to all of its callees.
+	if err := populateReferences(progs); err != nil {
+		return nil, fmt.Errorf("populating references: %w", err)
 	}
 
 	// Don't emit programs of unknown type to preserve backwards compatibility.

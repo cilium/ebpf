@@ -7,14 +7,6 @@ import (
 
 //go:generate stringer -output opcode_string.go -type=Class
 
-type encoding int
-
-const (
-	unknownEncoding encoding = iota
-	loadOrStore
-	jumpOrALU
-)
-
 // Class of operations
 //
 //    msb      lsb
@@ -42,15 +34,32 @@ const (
 	ALU64Class Class = 0x07
 )
 
-func (cls Class) encoding() encoding {
-	switch cls {
-	case LdClass, LdXClass, StClass, StXClass:
-		return loadOrStore
-	case ALU64Class, ALUClass, JumpClass:
-		return jumpOrALU
-	default:
-		return unknownEncoding
-	}
+// IsLoad checks if this is either LdClass or LdXClass.
+func (cls Class) IsLoad() bool {
+	return cls == LdClass || cls == LdXClass
+}
+
+// IsStore checks if this is either StClass or StXClass.
+func (cls Class) IsStore() bool {
+	return cls == StClass || cls == StXClass
+}
+
+func (cls Class) isLoadOrStore() bool {
+	return cls.IsLoad() || cls.IsStore()
+}
+
+// IsALU checks if this is either ALUClass or ALU64Class.
+func (cls Class) IsALU() bool {
+	return cls == ALUClass || cls == ALU64Class
+}
+
+// IsJump checks if this is JumpClass.
+func (cls Class) IsJump() bool {
+	return cls == JumpClass
+}
+
+func (cls Class) isJumpOrALU() bool {
+	return cls.IsJump() || cls.IsALU()
 }
 
 // OpCode is a packed eBPF opcode.
@@ -86,7 +95,7 @@ func (op OpCode) Class() Class {
 
 // Mode returns the mode for load and store operations.
 func (op OpCode) Mode() Mode {
-	if op.Class().encoding() != loadOrStore {
+	if !op.Class().isLoadOrStore() {
 		return InvalidMode
 	}
 	return Mode(op & modeMask)
@@ -94,7 +103,7 @@ func (op OpCode) Mode() Mode {
 
 // Size returns the size for load and store operations.
 func (op OpCode) Size() Size {
-	if op.Class().encoding() != loadOrStore {
+	if !op.Class().isLoadOrStore() {
 		return InvalidSize
 	}
 	return Size(op & sizeMask)
@@ -102,7 +111,7 @@ func (op OpCode) Size() Size {
 
 // Source returns the source for branch and ALU operations.
 func (op OpCode) Source() Source {
-	if op.Class().encoding() != jumpOrALU || op.ALUOp() == Swap {
+	if !op.Class().isJumpOrALU() || op.ALUOp() == Swap {
 		return InvalidSource
 	}
 	return Source(op & sourceMask)
@@ -110,7 +119,7 @@ func (op OpCode) Source() Source {
 
 // ALUOp returns the ALUOp.
 func (op OpCode) ALUOp() ALUOp {
-	if op.Class().encoding() != jumpOrALU {
+	if !op.Class().IsALU() {
 		return InvalidALUOp
 	}
 	return ALUOp(op & aluMask)
@@ -126,7 +135,7 @@ func (op OpCode) Endianness() Endianness {
 
 // JumpOp returns the JumpOp.
 func (op OpCode) JumpOp() JumpOp {
-	if op.Class().encoding() != jumpOrALU {
+	if !op.Class().IsJump() {
 		return InvalidJumpOp
 	}
 	return JumpOp(op & jumpMask)
@@ -136,7 +145,7 @@ func (op OpCode) JumpOp() JumpOp {
 //
 // Returns InvalidOpCode if op is of the wrong class.
 func (op OpCode) SetMode(mode Mode) OpCode {
-	if op.Class().encoding() != loadOrStore || !valid(OpCode(mode), modeMask) {
+	if !op.Class().isLoadOrStore() || !valid(OpCode(mode), modeMask) {
 		return InvalidOpCode
 	}
 	return (op & ^modeMask) | OpCode(mode)
@@ -146,7 +155,7 @@ func (op OpCode) SetMode(mode Mode) OpCode {
 //
 // Returns InvalidOpCode if op is of the wrong class.
 func (op OpCode) SetSize(size Size) OpCode {
-	if op.Class().encoding() != loadOrStore || !valid(OpCode(size), sizeMask) {
+	if !op.Class().isLoadOrStore() || !valid(OpCode(size), sizeMask) {
 		return InvalidOpCode
 	}
 	return (op & ^sizeMask) | OpCode(size)
@@ -156,7 +165,7 @@ func (op OpCode) SetSize(size Size) OpCode {
 //
 // Returns InvalidOpCode if op is of the wrong class.
 func (op OpCode) SetSource(source Source) OpCode {
-	if op.Class().encoding() != jumpOrALU || !valid(OpCode(source), sourceMask) {
+	if !op.Class().isJumpOrALU() || !valid(OpCode(source), sourceMask) {
 		return InvalidOpCode
 	}
 	return (op & ^sourceMask) | OpCode(source)
@@ -166,8 +175,7 @@ func (op OpCode) SetSource(source Source) OpCode {
 //
 // Returns InvalidOpCode if op is of the wrong class.
 func (op OpCode) SetALUOp(alu ALUOp) OpCode {
-	class := op.Class()
-	if (class != ALUClass && class != ALU64Class) || !valid(OpCode(alu), aluMask) {
+	if !op.Class().IsALU() || !valid(OpCode(alu), aluMask) {
 		return InvalidOpCode
 	}
 	return (op & ^aluMask) | OpCode(alu)
@@ -177,7 +185,7 @@ func (op OpCode) SetALUOp(alu ALUOp) OpCode {
 //
 // Returns InvalidOpCode if op is of the wrong class.
 func (op OpCode) SetJumpOp(jump JumpOp) OpCode {
-	if op.Class() != JumpClass || !valid(OpCode(jump), jumpMask) {
+	if !op.Class().IsJump() || !valid(OpCode(jump), jumpMask) {
 		return InvalidOpCode
 	}
 	return (op & ^jumpMask) | OpCode(jump)
@@ -186,8 +194,9 @@ func (op OpCode) SetJumpOp(jump JumpOp) OpCode {
 func (op OpCode) String() string {
 	var f strings.Builder
 
-	switch class := op.Class(); class {
-	case LdClass, LdXClass, StClass, StXClass:
+	class := op.Class()
+	switch {
+	case class.isLoadOrStore():
 		f.WriteString(strings.TrimSuffix(class.String(), "Class"))
 
 		mode := op.Mode()
@@ -204,7 +213,7 @@ func (op OpCode) String() string {
 			f.WriteString("B")
 		}
 
-	case ALU64Class, ALUClass:
+	case class.IsALU():
 		f.WriteString(op.ALUOp().String())
 
 		if op.ALUOp() == Swap {
@@ -218,7 +227,7 @@ func (op OpCode) String() string {
 			f.WriteString(strings.TrimSuffix(op.Source().String(), "Source"))
 		}
 
-	case JumpClass:
+	case class.IsJump():
 		f.WriteString(op.JumpOp().String())
 		if jop := op.JumpOp(); jop != Exit && jop != Call {
 			f.WriteString(strings.TrimSuffix(op.Source().String(), "Source"))

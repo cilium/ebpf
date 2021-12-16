@@ -124,7 +124,7 @@ func fixupJumpsAndCalls(insns asm.Instructions) error {
 			ins.Constant = int64(symOffset - offset - 1)
 			continue
 
-		case ins.OpCode.Class() == asm.JumpClass && ins.Offset == -1:
+		case ins.OpCode.Class().IsJump() && ins.Offset == -1:
 			if !ok {
 				break
 			}

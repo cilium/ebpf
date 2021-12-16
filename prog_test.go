@@ -15,6 +15,7 @@ import (
 	"time"
 
 	qt "github.com/frankban/quicktest"
+	"github.com/google/go-cmp/cmp"
 
 	"github.com/cilium/ebpf/asm"
 	"github.com/cilium/ebpf/internal"
@@ -86,6 +87,40 @@ func TestProgramRun(t *testing.T) {
 
 	if !bytes.Equal(out[:len(pat)], pat) {
 		t.Errorf("Expected %v, got %v", pat, out)
+	}
+}
+
+func TestProgramSpecFlattenOrder(t *testing.T) {
+	prog_a := ProgramSpec{Name: "prog_a"}
+	prog_b := ProgramSpec{Name: "prog_b"}
+	prog_c := ProgramSpec{
+		Name: "prog_c",
+		references: map[string]*ProgramSpec{
+			"prog_a": &prog_a,
+			"prog_b": &prog_b,
+		},
+	}
+
+	spec := ProgramSpec{
+		references: map[string]*ProgramSpec{
+			// Depend on prog_a since it's a mutual dependency of prog_c.
+			"prog_a": &prog_a,
+			// Omit prog_b to ensure indirect dependencies get pulled in.
+			"prog_c": &prog_c,
+		},
+	}
+
+	// Run the flatten operation twice to make sure both yield the same output.
+	ins1, refs1 := spec.flatten(nil)
+	ins2, refs2 := spec.flatten(nil)
+
+	opts := cmp.AllowUnexported(spec)
+	if diff := cmp.Diff(ins1, ins2, opts); diff != "" {
+		t.Fatal(diff)
+	}
+
+	if diff := cmp.Diff(refs1, refs2, opts); diff != "" {
+		t.Fatal(diff)
 	}
 }
 

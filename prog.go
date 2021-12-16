@@ -62,11 +62,17 @@ type ProgramSpec struct {
 	// Type determines at which hook in the kernel a program will run.
 	Type       ProgramType
 	AttachType AttachType
+
 	// Name of a kernel data structure or function to attach to. Its
 	// interpretation depends on Type and AttachType.
 	AttachTo string
+
 	// The program to attach to. Must be provided manually.
 	AttachTarget *Program
+
+	// The name of the ELF section this program orininated from.
+	SectionName string
+
 	Instructions asm.Instructions
 
 	// Flags is passed to the kernel and specifies additional program

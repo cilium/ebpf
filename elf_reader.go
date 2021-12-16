@@ -297,6 +297,7 @@ func (ec *elfCode) loadProgramSections() (map[string]*ProgramSpec, error) {
 				Flags:         progFlags,
 				AttachType:    attachType,
 				AttachTo:      attachTo,
+				SectionName:   sec.Name,
 				License:       ec.license,
 				KernelVersion: ec.version,
 				Instructions:  insns,
@@ -323,9 +324,9 @@ func (ec *elfCode) loadProgramSections() (map[string]*ProgramSpec, error) {
 		return nil, fmt.Errorf("populating references: %w", err)
 	}
 
-	// Don't emit programs of unknown type to preserve backwards compatibility.
+	// Hide programs that were not explicitly emitted to an ELF section.
 	for n, p := range progs {
-		if p.Type == UnspecifiedProgram {
+		if p.SectionName == ".text" {
 			delete(progs, n)
 		}
 	}

@@ -286,7 +286,11 @@ func NewCollectionWithOptions(spec *CollectionSpec, opts CollectionOptions) (*Co
 		}
 	}
 
-	for progName := range spec.Programs {
+	for progName, prog := range spec.Programs {
+		if prog.Type == UnspecifiedProgram {
+			continue
+		}
+
 		if _, err := loader.loadProgram(progName); err != nil {
 			return nil, err
 		}

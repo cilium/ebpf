@@ -286,7 +286,11 @@ func NewCollectionWithOptions(spec *CollectionSpec, opts CollectionOptions) (*Co
 		}
 	}
 
-	for progName := range spec.Programs {
+	for progName, prog := range spec.Programs {
+		if prog.Type == UnspecifiedProgram {
+			continue
+		}
+
 		if _, err := loader.loadProgram(progName); err != nil {
 			return nil, err
 		}
@@ -422,6 +426,12 @@ func (cl *collectionLoader) loadProgram(progName string) (*Program, error) {
 	progSpec := cl.coll.Programs[progName]
 	if progSpec == nil {
 		return nil, fmt.Errorf("unknown program %s", progName)
+	}
+
+	// Bail out early if we know the kernel is going to reject the program.
+	// This skips loading map dependencies, saving some cleanup work later.
+	if progSpec.Type == UnspecifiedProgram {
+		return nil, fmt.Errorf("cannot load program %s: program type is unspecified", progName)
 	}
 
 	progSpec = progSpec.Copy()

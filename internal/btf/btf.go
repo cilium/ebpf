@@ -156,68 +156,71 @@ func loadSpecFromELF(file *internal.SafeELFFile, variableOffsets map[variable]ui
 		return spec, nil
 	}
 
-	if err := spec.loadExtInfos(btfExtSection); err != nil {
+	if btfExtSection.ReaderAt == nil {
+		return nil, fmt.Errorf("compressed ext_info is not supported")
+	}
+
+	extInfo, err := loadExtInfos(btfExtSection, file.ByteOrder, spec.strings)
+	if err != nil {
 		return nil, fmt.Errorf("can't parse ext info: %w", err)
+	}
+
+	if err := spec.splitExtInfos(extInfo); err != nil {
+		return nil, fmt.Errorf("linking funcInfos and lineInfos: %w", err)
 	}
 
 	return spec, nil
 }
 
-// loadExtInfos parses the .BTF.ext section and populates spec's funcInfo,
-// lineInfo and coreRelos fields using the contents.
-func (spec *Spec) loadExtInfos(sec *elf.Section) error {
+// loadExtInfos parses the .BTF.ext section into its constituent parts.
+func loadExtInfos(r io.ReaderAt, bo binary.ByteOrder, strings stringTable) (*extInfo, error) {
 	// Open unbuffered section reader. binary.Read() calls io.ReadFull on
 	// the header structs, resulting in one syscall per header.
-	r := sec.Open()
-
-	extHeader, err := parseBTFExtHeader(r, spec.byteOrder)
+	headerRd := io.NewSectionReader(r, 0, math.MaxInt64)
+	extHeader, err := parseBTFExtHeader(headerRd, bo)
 	if err != nil {
-		return fmt.Errorf("parsing BTF extension header: %w", err)
+		return nil, fmt.Errorf("parsing BTF extension header: %w", err)
 	}
 
-	coreHeader, err := parseBTFExtCoreHeader(r, spec.byteOrder, extHeader)
+	coreHeader, err := parseBTFExtCoreHeader(headerRd, bo, extHeader)
 	if err != nil {
-		return fmt.Errorf("parsing BTF CO-RE header: %w", err)
+		return nil, fmt.Errorf("parsing BTF CO-RE header: %w", err)
 	}
 
-	buf := internal.NewBufferedSectionReader(sec, extHeader.funcInfoStart(), int64(extHeader.FuncInfoLen))
-	funcInfos, err := parseFuncInfos(buf, spec.byteOrder, spec.strings)
+	buf := internal.NewBufferedSectionReader(r, extHeader.funcInfoStart(), int64(extHeader.FuncInfoLen))
+	funcInfos, err := parseFuncInfos(buf, bo, strings)
 	if err != nil {
-		return fmt.Errorf("parsing BTF function info: %w", err)
+		return nil, fmt.Errorf("parsing BTF function info: %w", err)
 	}
 
-	buf = internal.NewBufferedSectionReader(sec, extHeader.lineInfoStart(), int64(extHeader.LineInfoLen))
-	lineInfos, err := parseLineInfos(buf, spec.byteOrder, spec.strings)
+	buf = internal.NewBufferedSectionReader(r, extHeader.lineInfoStart(), int64(extHeader.LineInfoLen))
+	lineInfos, err := parseLineInfos(buf, bo, strings)
 	if err != nil {
-		return fmt.Errorf("parsing BTF line info: %w", err)
+		return nil, fmt.Errorf("parsing BTF line info: %w", err)
 	}
 
 	relos := make(map[string]CoreRelos)
 	if coreHeader != nil && coreHeader.CoreReloOff > 0 && coreHeader.CoreReloLen > 0 {
-		buf = internal.NewBufferedSectionReader(sec, extHeader.coreReloStart(coreHeader), int64(coreHeader.CoreReloLen))
-		relos, err = parseCoreRelos(buf, spec.byteOrder, spec.strings)
+		buf = internal.NewBufferedSectionReader(r, extHeader.coreReloStart(coreHeader), int64(coreHeader.CoreReloLen))
+		relos, err = parseCoreRelos(buf, bo, strings)
 		if err != nil {
-			return fmt.Errorf("parsing CO-RE relocation info: %w", err)
+			return nil, fmt.Errorf("parsing CO-RE relocation info: %w", err)
 		}
 	}
 
-	if err := spec.splitExtInfos(funcInfos, lineInfos, relos); err != nil {
-		return fmt.Errorf("linking funcInfos and lineInfos: %w", err)
-	}
-
-	return nil
+	return &extInfo{funcInfos, lineInfos, relos}, nil
 }
 
 // splitExtInfos takes FuncInfos, LineInfos and CoreRelos indexed by section and
 // transforms them to be indexed by function. Retrieves function names from
 // the BTF spec.
-func (spec *Spec) splitExtInfos(sfi map[string]FuncInfos, sli map[string]LineInfos, scr map[string]CoreRelos) error {
+func (spec *Spec) splitExtInfos(info *extInfo) error {
 
 	ofi := make(map[string]FuncInfo)
 	oli := make(map[string]LineInfos)
 	ocr := make(map[string]CoreRelos)
 
-	for secName, secFuncs := range sfi {
+	for secName, secFuncs := range info.funcInfos {
 		// Collect functions from each section and organize them by name.
 		for _, fi := range secFuncs {
 			name, err := fi.Name(spec)
@@ -235,7 +238,7 @@ func (spec *Spec) splitExtInfos(sfi map[string]FuncInfos, sli map[string]LineInf
 		}
 
 		// Attribute LineInfo records to their respective functions, if any.
-		if lines := sli[secName]; lines != nil {
+		if lines := info.lineInfos[secName]; lines != nil {
 			for _, li := range lines {
 				fi := secFuncs.funcForOffset(li.InsnOff)
 				if fi == nil {
@@ -256,7 +259,7 @@ func (spec *Spec) splitExtInfos(sfi map[string]FuncInfos, sli map[string]LineInf
 		}
 
 		// Attribute CO-RE relocations to their respective functions, if any.
-		if relos := scr[secName]; relos != nil {
+		if relos := info.relos[secName]; relos != nil {
 			for _, r := range relos {
 				fi := secFuncs.funcForOffset(r.insnOff)
 				if fi == nil {

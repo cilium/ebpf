@@ -276,6 +276,9 @@ func parseFuncInfos(r io.Reader, bo binary.ByteOrder, strings stringTable) (map[
 		if errors.Is(err, io.EOF) {
 			return result, nil
 		}
+		if err != nil {
+			return nil, err
+		}
 
 		records, err := parseFuncInfoRecords(r, bo, recordSize, infoHeader.NumInfo)
 		if err != nil {
@@ -366,6 +369,9 @@ func parseLineInfos(r io.Reader, bo binary.ByteOrder, strings stringTable) (map[
 		if errors.Is(err, io.EOF) {
 			return result, nil
 		}
+		if err != nil {
+			return nil, err
+		}
 
 		records, err := parseLineInfoRecords(r, bo, recordSize, infoHeader.NumInfo)
 		if err != nil {
@@ -439,6 +445,9 @@ func parseCoreRelos(r io.Reader, bo binary.ByteOrder, strings stringTable) (map[
 		secName, infoHeader, err := parseExtInfoSec(r, bo, strings)
 		if errors.Is(err, io.EOF) {
 			return result, nil
+		}
+		if err != nil {
+			return nil, err
 		}
 
 		records, err := parseCoreReloRecords(r, bo, recordSize, infoHeader.NumInfo, strings)

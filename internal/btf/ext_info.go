@@ -10,6 +10,15 @@ import (
 	"github.com/cilium/ebpf/internal"
 )
 
+// extInfo contains extended program metadata.
+//
+// It is indexed per section.
+type extInfo struct {
+	funcInfos map[string]FuncInfos
+	lineInfos map[string]LineInfos
+	relos     map[string]CoreRelos
+}
+
 // btfExtHeader is found at the start of the .BTF.ext section.
 type btfExtHeader struct {
 	Magic   uint16

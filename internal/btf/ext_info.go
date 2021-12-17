@@ -5,10 +5,59 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 
 	"github.com/cilium/ebpf/asm"
 	"github.com/cilium/ebpf/internal"
 )
+
+// extInfo contains extended program metadata.
+//
+// It is indexed per section.
+type extInfo struct {
+	funcInfos map[string]FuncInfos
+	lineInfos map[string]LineInfos
+	relos     map[string]CoreRelos
+}
+
+// loadExtInfos parses the .BTF.ext section into it's constituent parts.
+func loadExtInfos(r io.ReaderAt, bo binary.ByteOrder, strings stringTable) (*extInfo, error) {
+	// Open unbuffered section reader. binary.Read() calls io.ReadFull on
+	// the header structs, resulting in one syscall per header.
+	headerRd := io.NewSectionReader(r, 0, math.MaxInt64)
+	extHeader, err := parseBTFExtHeader(headerRd, bo)
+	if err != nil {
+		return nil, fmt.Errorf("parsing BTF extension header: %w", err)
+	}
+
+	coreHeader, err := parseBTFExtCoreHeader(headerRd, bo, extHeader)
+	if err != nil {
+		return nil, fmt.Errorf("parsing BTF CO-RE header: %w", err)
+	}
+
+	buf := internal.NewBufferedSectionReader(r, extHeader.funcInfoStart(), int64(extHeader.FuncInfoLen))
+	funcInfos, err := parseFuncInfos(buf, bo, strings)
+	if err != nil {
+		return nil, fmt.Errorf("parsing BTF function info: %w", err)
+	}
+
+	buf = internal.NewBufferedSectionReader(r, extHeader.lineInfoStart(), int64(extHeader.LineInfoLen))
+	lineInfos, err := parseLineInfos(buf, bo, strings)
+	if err != nil {
+		return nil, fmt.Errorf("parsing BTF line info: %w", err)
+	}
+
+	relos := make(map[string]CoreRelos)
+	if coreHeader != nil && coreHeader.CoreReloOff > 0 && coreHeader.CoreReloLen > 0 {
+		buf = internal.NewBufferedSectionReader(r, extHeader.coreReloStart(coreHeader), int64(coreHeader.CoreReloLen))
+		relos, err = parseCoreRelos(buf, bo, strings)
+		if err != nil {
+			return nil, fmt.Errorf("parsing CO-RE relocation info: %w", err)
+		}
+	}
+
+	return &extInfo{funcInfos, lineInfos, relos}, nil
+}
 
 // btfExtHeader is found at the start of the .BTF.ext section.
 type btfExtHeader struct {
@@ -227,6 +276,9 @@ func parseFuncInfos(r io.Reader, bo binary.ByteOrder, strings stringTable) (map[
 		if errors.Is(err, io.EOF) {
 			return result, nil
 		}
+		if err != nil {
+			return nil, err
+		}
 
 		records, err := parseFuncInfoRecords(r, bo, recordSize, infoHeader.NumInfo)
 		if err != nil {
@@ -316,6 +368,9 @@ func parseLineInfos(r io.Reader, bo binary.ByteOrder, strings stringTable) (map[
 		secName, infoHeader, err := parseExtInfoSec(r, bo, strings)
 		if errors.Is(err, io.EOF) {
 			return result, nil
+		}
+		if err != nil {
+			return nil, err
 		}
 
 		records, err := parseLineInfoRecords(r, bo, recordSize, infoHeader.NumInfo)

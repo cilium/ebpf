@@ -33,6 +33,18 @@ func TestRead64bitImmediate(t *testing.T) {
 	}
 }
 
+func BenchmarkRead64bitImmediate(b *testing.B) {
+	r := &bytes.Reader{}
+	for i := 0; i < b.N; i++ {
+		r.Reset(test64bitImmProg)
+
+		var ins Instruction
+		if _, err := ins.Unmarshal(r, binary.LittleEndian); err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
 func TestWrite64bitImmediate(t *testing.T) {
 	insns := Instructions{
 		LoadImm(R0, math.MinInt32-1, DWord),
@@ -45,6 +57,19 @@ func TestWrite64bitImmediate(t *testing.T) {
 
 	if prog := buf.Bytes(); !bytes.Equal(prog, test64bitImmProg) {
 		t.Errorf("Marshalled program does not match:\n%s", hex.Dump(prog))
+	}
+}
+
+func BenchmarkWrite64BitImmediate(b *testing.B) {
+	ins := LoadImm(R0, math.MinInt32-1, DWord)
+
+	var buf bytes.Buffer
+	for i := 0; i < b.N; i++ {
+		buf.Reset()
+
+		if _, err := ins.Marshal(&buf, binary.LittleEndian); err != nil {
+			b.Fatal(err)
+		}
 	}
 }
 

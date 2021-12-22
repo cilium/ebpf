@@ -390,7 +390,7 @@ func (spec *MapSpec) createMap(inner *sys.FD, opts MapOptions, handles *handleCa
 	}
 
 	var btfDisabled bool
-	if spec.BTF != nil {
+	if spec.BTF != nil && spec.Type.supportBTFKeyValue() {
 		handle, err := handles.btfHandle(spec.BTF.Spec)
 		btfDisabled = errors.Is(err, btf.ErrNotSupported)
 		if err != nil && !btfDisabled {

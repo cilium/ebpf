@@ -11,7 +11,7 @@ import (
 type MapType uint32
 
 // Max returns the latest supported MapType.
-func (_ MapType) Max() MapType {
+func (MapType) Max() MapType {
 	return maxMapType - 1
 }
 
@@ -126,11 +126,23 @@ func (mt MapType) canStoreProgram() bool {
 	return mt == ProgramArray
 }
 
+// supportBTFKeyValue return true if the map type allows
+// BTF-defined key/value specification
+func (mt MapType) supportBTFKeyValue() bool {
+	switch mt {
+	case PerfEventArray, CGroupArray, StackTrace, ArrayOfMaps, HashOfMaps, DevMap,
+		DevMapHash, CPUMap, XSKMap, SockMap, SockHash, Queue, Stack, RingBuf:
+		return false
+	default:
+		return true
+	}
+}
+
 // ProgramType of the eBPF program
 type ProgramType uint32
 
 // Max return the latest supported ProgramType.
-func (_ ProgramType) Max() ProgramType {
+func (ProgramType) Max() ProgramType {
 	return maxProgramType - 1
 }
 

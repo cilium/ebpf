@@ -126,6 +126,18 @@ func (mt MapType) canStoreProgram() bool {
 	return mt == ProgramArray
 }
 
+// supportBTFKeyValue return true if the map type allows
+// BTF-defined key/value specification
+func (mt MapType) supportBTFKeyValue() bool {
+	switch mt {
+	case PerfEventArray, CGroupArray, StackTrace, ArrayOfMaps, HashOfMaps, DevMap,
+		DevMapHash, CPUMap, XSKMap, SockMap, SockHash, Queue, Stack, RingBuf:
+		return false
+	default:
+		return true
+	}
+}
+
 // ProgramType of the eBPF program
 type ProgramType uint32
 

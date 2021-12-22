@@ -11,7 +11,7 @@ import (
 type MapType uint32
 
 // Max returns the latest supported MapType.
-func (_ MapType) Max() MapType {
+func (MapType) Max() MapType {
 	return maxMapType - 1
 }
 
@@ -141,7 +141,7 @@ func (mt MapType) hasBTF() bool {
 type ProgramType uint32
 
 // Max return the latest supported ProgramType.
-func (_ ProgramType) Max() ProgramType {
+func (ProgramType) Max() ProgramType {
 	return maxProgramType - 1
 }
 

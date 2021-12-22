@@ -37,8 +37,17 @@ func init() {
 }
 
 func detectMemcgAccounting() error {
-	// Reduce the limit to zero and store the previous limit. This should always succeed.
+	// Retrieve the original limit to prevent lowering Max, since
+	// doing so is a permanent operation when running unprivileged.
 	var oldLimit unix.Rlimit
+	if err := unix.Getrlimit(unix.RLIMIT_MEMLOCK, &oldLimit); err != nil {
+		return fmt.Errorf("getting original memlock rlimit: %s", err)
+	}
+
+	// Drop the current limit to zero, maintaining the old Max value.
+	// This is always permitted by the kernel for unprivileged users.
+	// Retrieve a new copy of the old limit tuple to minimize the chances
+	// of failing the restore operation below.
 	zeroLimit := unix.Rlimit{Cur: 0, Max: oldLimit.Max}
 	if err := unix.Prlimit(0, unix.RLIMIT_MEMLOCK, &zeroLimit, &oldLimit); err != nil {
 		return fmt.Errorf("lowering memlock rlimit: %s", err)

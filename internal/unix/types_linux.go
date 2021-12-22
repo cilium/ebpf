@@ -193,6 +193,10 @@ func Renameat2(olddirfd int, oldpath string, newdirfd int, newpath string, flags
 	return linux.Renameat2(olddirfd, oldpath, newdirfd, newpath, flags)
 }
 
+func Getrlimit(resource int, rlim *Rlimit) error {
+	return linux.Getrlimit(resource, rlim)
+}
+
 func Prlimit(pid, resource int, new, old *Rlimit) error {
 	return linux.Prlimit(pid, resource, new, old)
 }

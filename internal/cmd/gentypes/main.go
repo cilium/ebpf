@@ -153,7 +153,11 @@ import (
 	}{
 		{
 			"ProgInfo", "bpf_prog_info",
-			[]patch{replace(objName, "name"), replace(pointer, "map_ids")},
+			[]patch{
+				replace(objName, "name"),
+				replace(pointer, "xlated_prog_insns"),
+				replace(pointer, "map_ids"),
+			},
 		},
 		{
 			"MapInfo", "bpf_map_info",

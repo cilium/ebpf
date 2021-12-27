@@ -7,9 +7,11 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"os"
 	"path/filepath"
 	"strings"
 	"time"
+	"unsafe"
 
 	"github.com/cilium/ebpf/asm"
 	"github.com/cilium/ebpf/internal"
@@ -544,6 +546,52 @@ func (p *Program) Close() error {
 	}
 
 	return p.fd.Close()
+}
+
+// Instructions returns the 'translated' instruction stream of the program
+// after verification. For example, map accesses are made to reference their
+// kernel map IDs, not the FDs they had when the program was inserted.
+//
+// The first instruction is marked as a symbol using the Program's name.
+//
+// Available from 4.13. Requires CAP_BPF or equivalent.
+func (p *Program) Instructions() (asm.Instructions, error) {
+	var info sys.ProgInfo
+	err := sys.ObjInfo(p.fd, &info)
+	if errors.Is(err, unix.EINVAL) {
+		err = internal.ErrNotSupported
+	}
+	if err != nil {
+		// If obj info syscall is not present, insns can't be retrieved.
+		return nil, fmt.Errorf("getting program info: %w", err)
+	}
+
+	// If the calling process is not BPF-capable, the field will be empty.
+	if info.XlatedProgLen == 0 {
+		return nil, fmt.Errorf("getting xlated instructions: %w", os.ErrPermission)
+	}
+
+	bi := make([]byte, info.XlatedProgLen)
+	// Allocate a new info struct, any other non-zero fields might cause EFAULT.
+	info = sys.ProgInfo{
+		XlatedProgLen:   info.XlatedProgLen,
+		XlatedProgInsns: sys.NewPointer(unsafe.Pointer(&bi[0])),
+	}
+
+	if err := sys.ObjInfo(p.fd, &info); err != nil {
+		return nil, fmt.Errorf("getting xlated prog insns: %w", err)
+	}
+
+	r := bytes.NewReader(bi)
+	var insns asm.Instructions
+	if err := insns.Unmarshal(r, internal.NativeEndian); err != nil {
+		return nil, fmt.Errorf("unmarshaling instructions: %w", err)
+	}
+
+	// Tag the first instruction with the name of the program, if available.
+	insns[0] = insns[0].Sym(p.name)
+
+	return insns, nil
 }
 
 // Test runs the Program in the kernel with the given input and returns the

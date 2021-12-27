@@ -5,6 +5,7 @@ import (
 
 	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/sys"
+	"github.com/cilium/ebpf/internal/unix"
 )
 
 // info describes a BTF object.
@@ -44,7 +45,7 @@ func newInfoFromFd(fd *sys.FD) (*info, error) {
 	return &info{
 		BTF:       spec,
 		ID:        ID(btfInfo.Id),
-		Name:      internal.CString(nameBuffer),
+		Name:      unix.ByteSliceToString(nameBuffer),
 		KernelBTF: btfInfo.KernelBtf != 0,
 	}, nil
 }

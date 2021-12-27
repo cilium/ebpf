@@ -211,7 +211,7 @@ func TestLoadCollectionSpec(t *testing.T) {
 		}
 		defer coll.Close()
 
-		ret, _, err := coll.Programs["xdp_prog"].Test(make([]byte, 14))
+		ret, _, err := coll.Programs["xdp_prog"].Test(nil)
 		if err != nil {
 			t.Fatal("Can't run program:", err)
 		}
@@ -242,7 +242,7 @@ func TestDataSections(t *testing.T) {
 	}
 	defer obj.Program.Close()
 
-	ret, _, err := obj.Program.Test(make([]byte, 14))
+	ret, _, err := obj.Program.Test(nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -460,7 +460,7 @@ func TestTailCall(t *testing.T) {
 		}
 		defer obj.TailMain.Close()
 
-		ret, _, err := obj.TailMain.Test(make([]byte, 14))
+		ret, _, err := obj.TailMain.Test(nil)
 		testutils.SkipIfNotSupported(t, err)
 		if err != nil {
 			t.Fatal(err)
@@ -498,7 +498,7 @@ func TestSubprogRelocation(t *testing.T) {
 		}
 		defer obj.Main.Close()
 
-		ret, _, err := obj.Main.Test(make([]byte, 14))
+		ret, _, err := obj.Main.Test(nil)
 		testutils.SkipIfNotSupported(t, err)
 		if err != nil {
 			t.Fatal(err)

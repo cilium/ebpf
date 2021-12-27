@@ -15,6 +15,7 @@ import (
 	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/btf"
 	"github.com/cilium/ebpf/internal/sys"
+	"github.com/cilium/ebpf/internal/unix"
 )
 
 // MapInfo describes a map.
@@ -25,7 +26,7 @@ type MapInfo struct {
 	ValueSize  uint32
 	MaxEntries uint32
 	Flags      uint32
-	// Name as supplied by user space at load time.
+	// Name as supplied by user space at load time. Available from 4.15.
 	Name string
 }
 
@@ -46,8 +47,7 @@ func newMapInfoFromFd(fd *sys.FD) (*MapInfo, error) {
 		info.ValueSize,
 		info.MaxEntries,
 		info.MapFlags,
-		// name is available from 4.15.
-		internal.CString(info.Name[:]),
+		unix.ByteSliceToString(info.Name[:]),
 	}, nil
 }
 
@@ -87,9 +87,9 @@ type programStats struct {
 type ProgramInfo struct {
 	Type ProgramType
 	id   ProgramID
-	// Truncated hash of the BPF bytecode.
+	// Truncated hash of the BPF bytecode. Available from 4.13.
 	Tag string
-	// Name as supplied by user space at load time.
+	// Name as supplied by user space at load time. Available from 4.15.
 	Name string
 	// BTF for the program.
 	btf btf.ID
@@ -127,10 +127,8 @@ func newProgramInfoFromFd(fd *sys.FD) (*ProgramInfo, error) {
 	return &ProgramInfo{
 		Type: ProgramType(info.Type),
 		id:   ProgramID(info.Id),
-		// tag is available if the kernel supports BPF_PROG_GET_INFO_BY_FD.
-		Tag: hex.EncodeToString(info.Tag[:]),
-		// name is available from 4.15.
-		Name: internal.CString(info.Name[:]),
+		Tag:  hex.EncodeToString(info.Tag[:]),
+		Name: unix.ByteSliceToString(info.Name[:]),
 		btf:  btf.ID(info.BtfId),
 		ids:  mapIDs,
 		stats: &programStats{
@@ -202,6 +200,8 @@ func (pi *ProgramInfo) Runtime() (time.Duration, bool) {
 }
 
 // MapIDs returns the maps related to the program.
+//
+// Available from 4.15.
 //
 // The bool return value indicates whether this optional field is available.
 func (pi *ProgramInfo) MapIDs() ([]MapID, bool) {

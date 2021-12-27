@@ -1520,7 +1520,7 @@ func TestMapName(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if name := internal.CString(info.Name[:]); name != "test" {
+	if name := unix.ByteSliceToString(info.Name[:]); name != "test" {
 		t.Error("Expected name to be test, got", name)
 	}
 }

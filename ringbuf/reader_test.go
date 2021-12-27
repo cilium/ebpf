@@ -46,7 +46,7 @@ func TestRingbufReader(t *testing.T) {
 			}
 			defer rd.Close()
 
-			ret, _, err := prog.Test(make([]byte, 14))
+			ret, _, err := prog.Test(nil)
 			testutils.SkipIfNotSupported(t, err)
 			if err != nil {
 				t.Fatal(err)

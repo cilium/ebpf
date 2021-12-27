@@ -45,7 +45,7 @@ func TestFindReferences(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	ret, _, err := prog.Test(make([]byte, 14))
+	ret, _, err := prog.Test(nil)
 	if err != nil {
 		t.Fatal(err)
 	}

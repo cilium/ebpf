@@ -34,7 +34,7 @@ func TestPerfReader(t *testing.T) {
 	}
 	defer rd.Close()
 
-	ret, _, err := prog.Test(make([]byte, 14))
+	ret, _, err := prog.Test(nil)
 	testutils.SkipIfNotSupported(t, err)
 	if err != nil {
 		t.Fatal(err)
@@ -214,7 +214,7 @@ func TestPerfReaderLostSample(t *testing.T) {
 	}
 	defer rd.Close()
 
-	ret, _, err := prog.Test(make([]byte, 14))
+	ret, _, err := prog.Test(nil)
 	testutils.SkipIfNotSupported(t, err)
 	if err != nil {
 		t.Fatal(err)
@@ -319,7 +319,7 @@ func TestPause(t *testing.T) {
 	}
 
 	// Write a sample. The reader should read it.
-	ret, _, err := prog.Test(make([]byte, 14))
+	ret, _, err := prog.Test(nil)
 	testutils.SkipIfNotSupported(t, err)
 	if err != nil || ret != 0 {
 		t.Fatal("Can't write sample")
@@ -338,7 +338,7 @@ func TestPause(t *testing.T) {
 		_, err := rd.Read()
 		errChan <- err
 	}()
-	ret, _, err = prog.Test(make([]byte, 14))
+	ret, _, err = prog.Test(nil)
 	if err == nil && ret == 0 {
 		t.Fatal("Unexpectedly wrote sample while paused")
 	} // else Success
@@ -359,7 +359,7 @@ func TestPause(t *testing.T) {
 	if err = rd.Resume(); err != nil {
 		t.Fatal(err)
 	}
-	ret, _, err = prog.Test(make([]byte, 14))
+	ret, _, err = prog.Test(nil)
 	if err != nil || ret != 0 {
 		t.Fatal("Can't write sample")
 	}
@@ -455,7 +455,7 @@ func ExampleReader() {
 	defer rd.Close()
 
 	// Writes out a sample with content 1,2,3,4,4
-	ret, _, err := prog.Test(make([]byte, 14))
+	ret, _, err := prog.Test(nil)
 	if err != nil || ret != 0 {
 		panic("Can't write sample")
 	}

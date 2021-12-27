@@ -23,6 +23,8 @@ var ErrNotSupported = internal.ErrNotSupported
 
 var errUnsatisfiedReference = errors.New("unsatisfied reference")
 
+var emptyProgTestInput = make([]byte, 14)
+
 // ProgramID represents the unique ID of an eBPF program.
 type ProgramID uint32
 
@@ -549,11 +551,16 @@ func (p *Program) Close() error {
 // Test runs the Program in the kernel with the given input and returns the
 // value returned by the eBPF program. outLen may be zero.
 //
-// Note: the kernel expects at least 14 bytes input for an ethernet header for
-// XDP and SKB programs.
+// If in is nil, the Program's test invocation is automatically provided
+// an input of 14 zero bytes, as the kernel expects at least 14 bytes input
+// for an ethernet header for XDP and SKB programs.
 //
 // This function requires at least Linux 4.12.
 func (p *Program) Test(in []byte) (uint32, []byte, error) {
+	if in == nil {
+		in = emptyProgTestInput
+	}
+
 	ret, out, _, err := p.testRun(in, 1, nil)
 	if err != nil {
 		return ret, nil, fmt.Errorf("can't test program: %w", err)

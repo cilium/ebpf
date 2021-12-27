@@ -686,6 +686,55 @@ func TestProgramBindMap(t *testing.T) {
 	}
 }
 
+func TestProgramInstructions(t *testing.T) {
+	arr := createArray(t)
+	defer arr.Close()
+
+	info, err := arr.Info()
+	testutils.SkipIfNotSupported(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	id, ok := info.ID()
+	if !ok {
+		t.Fatal("Can't determine map ID")
+	}
+
+	name := "test_prog"
+
+	spec := &ProgramSpec{
+		Type: SocketFilter,
+		Name: name,
+		Instructions: asm.Instructions{
+			asm.LoadImm(asm.R0, -1, asm.DWord).Sym(name),
+			asm.LoadMapPtr(asm.R1, arr.FD()),
+			asm.Mov.Imm32(asm.R0, 0),
+			asm.Return(),
+		},
+		License: "MIT",
+	}
+
+	prog, err := NewProgram(spec)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer prog.Close()
+
+	// Replace the map's fd in spec with the map's ID,
+	// which is what the xlated instructions reflect.
+	spec.Instructions[1].Constant = int64(id)
+
+	insns, err := prog.Instructions()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if diff := cmp.Diff(insns, spec.Instructions); diff != "" {
+		t.Fatal(diff)
+	}
+}
+
 type testReaderAt struct {
 	file *os.File
 	read bool

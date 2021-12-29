@@ -68,6 +68,7 @@ const (
 	PERF_RECORD_SAMPLE       = 9
 	AT_FDCWD                 = -0x2
 	RENAME_NOREPLACE         = 0x1
+	SO_ATTACH_BPF            = 0x32
 )
 
 // Statfs_t is a wrapper

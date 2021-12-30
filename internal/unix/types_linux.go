@@ -66,6 +66,7 @@ const (
 	PERF_RECORD_SAMPLE       = linux.PERF_RECORD_SAMPLE
 	AT_FDCWD                 = linux.AT_FDCWD
 	RENAME_NOREPLACE         = linux.RENAME_NOREPLACE
+	SO_ATTACH_BPF            = linux.SO_ATTACH_BPF
 )
 
 // Statfs_t is a wrapper

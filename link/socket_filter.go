@@ -3,7 +3,9 @@ package link
 import (
 	"encoding/binary"
 	"fmt"
+	"io"
 	"net"
+	"os"
 	"syscall"
 
 	"github.com/cilium/ebpf"
@@ -20,20 +22,20 @@ type SocketFilterOptions struct {
 }
 
 // AttachSocketFilter links a BPF program to an interface.
-func AttachSocketFilter(opts SocketFilterOptions) (Link, error) {
+func AttachSocketFilter(opts SocketFilterOptions) (Link, io.Reader, error) {
 	sockFD, err := rawSocket(opts.InterfaceName)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	if err := syscall.SetsockoptInt(sockFD, syscall.SOL_SOCKET, unix.SO_ATTACH_BPF, opts.Program.FD()); err != nil {
 		syscall.Close(sockFD)
-		return nil, err
+		return nil, nil, err
 	}
 
 	return &linkSocketFilter{
 		sockFD: sockFD,
-	}, nil
+	}, os.NewFile(uintptr(sockFD), ""), nil
 }
 
 type linkSocketFilter struct {

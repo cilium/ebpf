@@ -527,6 +527,69 @@ func (insns Instructions) Tag(bo binary.ByteOrder) (string, error) {
 	return hex.EncodeToString(h.Sum(nil)[:unix.BPF_TAG_SIZE]), nil
 }
 
+// RewriteJumps updates all jumps to also take the symbol offset into account.
+//
+// Returns an error if a reference isn't used, see IsUnsatisfiedMapReference and IsUnsatisfiedProgReference.
+func (insns Instructions) RewriteJumps() error {
+	symbolOffsets := make(map[string]RawInstructionOffset)
+	iter := insns.Iterate()
+	for iter.Next() {
+		ins := iter.Ins
+
+		if ins.Symbol == "" {
+			continue
+		}
+
+		if _, ok := symbolOffsets[ins.Symbol]; ok {
+			return fmt.Errorf("duplicate symbol %s", ins.Symbol)
+		}
+
+		symbolOffsets[ins.Symbol] = iter.Offset
+	}
+
+	iter = insns.Iterate()
+	for iter.Next() {
+		i := iter.Index
+		offset := iter.Offset
+		ins := iter.Ins
+
+		if ins.Reference == "" {
+			continue
+		}
+
+		symOffset, ok := symbolOffsets[ins.Reference]
+		switch {
+		case ins.IsFunctionReference() && ins.Constant == -1:
+			if !ok {
+				break
+			}
+
+			ins.Constant = int64(symOffset - offset - 1)
+			continue
+
+		case ins.OpCode.Class().IsJump() && ins.Offset == -1:
+			if !ok {
+				break
+			}
+
+			ins.Offset = int16(symOffset - offset - 1)
+			continue
+
+		case ins.IsLoadFromMap() && ins.MapPtr() == -1:
+			return &unsatisfiedMapReferenceError{reference: ins.Reference}
+		default:
+			// no fixup needed
+			continue
+		}
+		return &unsatisfiedProgReferenceError{
+			reference: ins.Reference,
+			at:        i,
+			opCode:    ins.OpCode,
+		}
+	}
+	return nil
+}
+
 // Iterate allows iterating a BPF program while keeping track of
 // various offsets.
 //
@@ -587,5 +650,38 @@ func (use *unreferencedSymbolError) Error() string {
 // an unreferenced symbol.
 func IsUnreferencedSymbol(err error) bool {
 	_, ok := err.(*unreferencedSymbolError)
+	return ok
+}
+
+type unsatisfiedMapReferenceError struct {
+	reference string
+}
+
+func (use *unsatisfiedMapReferenceError) Error() string {
+	return fmt.Sprintf("unsatisfied map reference %s", use.reference)
+}
+
+// IsUnsatisfiedMapReference returns true if err was caused by
+// an unsatisfied reference.
+func IsUnsatisfiedMapReference(err error) bool {
+	_, ok := err.(*unsatisfiedMapReferenceError)
+	return ok
+}
+
+type unsatisfiedProgReferenceError struct {
+	reference string
+	opCode    OpCode
+	at        int
+}
+
+func (use *unsatisfiedProgReferenceError) Error() string {
+	return fmt.Sprintf("%s at insn %d: unsatisfiedreference %q",
+		use.opCode, use.at, use.reference)
+}
+
+// IsUnsatisfiedProgReference returns true if err was caused by
+// an unsatisfied reference.
+func IsUnsatisfiedProgReference(err error) bool {
+	_, ok := err.(*unsatisfiedProgReferenceError)
 	return ok
 }

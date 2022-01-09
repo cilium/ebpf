@@ -1,41 +1,27 @@
 package link
 
 import (
-	"encoding/binary"
 	"fmt"
-	"io"
-	"net"
-	"os"
 	"syscall"
 
 	"github.com/cilium/ebpf"
-	"github.com/cilium/ebpf/internal/sys"
 	"github.com/cilium/ebpf/internal/unix"
 )
 
 type SocketFilterOptions struct {
-	// Name of the interface to attach to.
-	InterfaceName string
+	// File descriptor of the raw socket.
+	SockFD int
 
 	// Program must be of type SocketFilter.
 	Program *ebpf.Program
 }
 
-// AttachSocketFilter links a BPF program to an interface.
-func AttachSocketFilter(opts SocketFilterOptions) (Link, io.Reader, error) {
-	sockFD, err := rawSocket(opts.InterfaceName)
-	if err != nil {
-		return nil, nil, err
+// AttachSocketFilter links a BPF program to a raw socket.
+func AttachSocketFilter(opts SocketFilterOptions) (Link, error) {
+	if err := syscall.SetsockoptInt(opts.SockFD, unix.SOL_SOCKET, unix.SO_ATTACH_BPF, opts.Program.FD()); err != nil {
+		return nil, err
 	}
-
-	if err := syscall.SetsockoptInt(sockFD, syscall.SOL_SOCKET, unix.SO_ATTACH_BPF, opts.Program.FD()); err != nil {
-		syscall.Close(sockFD)
-		return nil, nil, err
-	}
-
-	return &linkSocketFilter{
-		sockFD: sockFD,
-	}, os.NewFile(uintptr(sockFD), ""), nil
+	return &linkSocketFilter{sockFD: opts.SockFD}, nil
 }
 
 type linkSocketFilter struct {
@@ -61,32 +47,7 @@ func (lsf *linkSocketFilter) Info() (*Info, error) {
 }
 
 func (lsf *linkSocketFilter) Close() error {
-	return syscall.Close(lsf.sockFD)
+	return syscall.SetsockoptInt(lsf.sockFD, syscall.SOL_SOCKET, unix.SO_DETACH_BPF, 0)
 }
 
 func (lsf *linkSocketFilter) isLink() {}
-
-func rawSocket(ifName string) (int, error) {
-	intf, err := net.InterfaceByName(ifName)
-	if err != nil {
-		return 0, err
-	}
-	fd, err := syscall.Socket(syscall.AF_PACKET, syscall.SOCK_RAW|syscall.SOCK_NONBLOCK|syscall.SOCK_CLOEXEC, int(htons(syscall.ETH_P_ALL)))
-	if err != nil {
-		return 0, fmt.Errorf("open raw socket: %w", err)
-	}
-	sll := syscall.SockaddrLinklayer{
-		Protocol: htons(syscall.ETH_P_ALL),
-		Ifindex:  intf.Index,
-	}
-	if err := syscall.Bind(fd, &sll); err != nil {
-		return 0, fmt.Errorf("bind raw socket: %w", err)
-	}
-	return fd, nil
-}
-
-func htons(i uint16) uint16 {
-	b := make([]byte, 2)
-	binary.BigEndian.PutUint16(b, i)
-	return sys.HostByteorder.Uint16(b)
-}

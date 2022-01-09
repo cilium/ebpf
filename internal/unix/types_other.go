@@ -69,6 +69,8 @@ const (
 	AT_FDCWD                 = -0x2
 	RENAME_NOREPLACE         = 0x1
 	SO_ATTACH_BPF            = 0x32
+	SO_DETACH_BPF            = 0x1b
+	SOL_SOCKET               = 0x1
 )
 
 // Statfs_t is a wrapper

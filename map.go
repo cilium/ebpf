@@ -102,6 +102,12 @@ func (ms *MapSpec) Copy() *MapSpec {
 	return &cpy
 }
 
+// hasBTF returns true if the MapSpec has a valid BTF spec and if its
+// map type supports associated BTF metadata in the kernel.
+func (ms *MapSpec) hasBTF() bool {
+	return ms.BTF != nil && ms.Type.hasBTF()
+}
+
 func (ms *MapSpec) clampPerfEventArraySize() error {
 	if ms.Type != PerfEventArray {
 		return nil
@@ -389,11 +395,9 @@ func (spec *MapSpec) createMap(inner *sys.FD, opts MapOptions, handles *handleCa
 		attr.MapName = sys.NewObjName(spec.Name)
 	}
 
-	var btfDisabled bool
-	if spec.BTF != nil && spec.Type.hasBTF() {
+	if spec.hasBTF() {
 		handle, err := handles.btfHandle(spec.BTF.Spec)
-		btfDisabled = errors.Is(err, btf.ErrNotSupported)
-		if err != nil && !btfDisabled {
+		if err != nil && !errors.Is(err, btf.ErrNotSupported) {
 			return nil, fmt.Errorf("load BTF: %w", err)
 		}
 
@@ -409,7 +413,7 @@ func (spec *MapSpec) createMap(inner *sys.FD, opts MapOptions, handles *handleCa
 		if errors.Is(err, unix.EPERM) {
 			return nil, fmt.Errorf("map create: %w (MEMLOCK may be too low, consider rlimit.RemoveMemlock)", err)
 		}
-		if btfDisabled {
+		if !spec.hasBTF() {
 			return nil, fmt.Errorf("map create without BTF: %w", err)
 		}
 		return nil, fmt.Errorf("map create: %w", err)

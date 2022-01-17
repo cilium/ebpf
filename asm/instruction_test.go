@@ -73,6 +73,26 @@ func BenchmarkWrite64BitImmediate(b *testing.B) {
 	}
 }
 
+func TestUnmarshalInstructions(t *testing.T) {
+	r := bytes.NewReader(test64bitImmProg)
+
+	var insns Instructions
+	if err := insns.Unmarshal(r, binary.LittleEndian); err != nil {
+		t.Fatal(err)
+	}
+
+	// Unmarshaling into the same Instructions multiple times replaces
+	// the instruction stream.
+	r.Reset(test64bitImmProg)
+	if err := insns.Unmarshal(r, binary.LittleEndian); err != nil {
+		t.Fatal(err)
+	}
+
+	if len(insns) != 1 {
+		t.Fatalf("Expected one instruction, got %d", len(insns))
+	}
+}
+
 func TestSignedJump(t *testing.T) {
 	insns := Instructions{
 		JSGT.Imm(R0, -1, "foo"),

@@ -456,7 +456,7 @@ type ProgInfo struct {
 	JitedProgLen         uint32
 	XlatedProgLen        uint32
 	JitedProgInsns       uint64
-	XlatedProgInsns      uint64
+	XlatedProgInsns      Pointer
 	LoadTime             uint64
 	CreatedByUid         uint32
 	NrMapIds             uint32

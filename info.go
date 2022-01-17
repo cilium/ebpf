@@ -91,12 +91,11 @@ type ProgramInfo struct {
 	Tag string
 	// Name as supplied by user space at load time. Available from 4.15.
 	Name string
-	// BTF for the program.
-	btf btf.ID
-	// IDS map ids related to program.
-	ids []MapID
 
+	btf   btf.ID
 	stats *programStats
+
+	maps []MapID
 }
 
 func newProgramInfoFromFd(fd *sys.FD) (*ProgramInfo, error) {
@@ -109,33 +108,34 @@ func newProgramInfoFromFd(fd *sys.FD) (*ProgramInfo, error) {
 		return nil, err
 	}
 
-	var mapIDs []MapID
-	if info.NrMapIds > 0 {
-		mapIDs = make([]MapID, info.NrMapIds)
-		info = sys.ProgInfo{
-			// We have to zero other fields here, otherwise we may get
-			// EFAULT.
-			NrMapIds: uint32(len(mapIDs)),
-			MapIds:   sys.NewPointer(unsafe.Pointer(&mapIDs[0])),
-		}
-		err = sys.ObjInfo(fd, &info)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	return &ProgramInfo{
+	pi := ProgramInfo{
 		Type: ProgramType(info.Type),
 		id:   ProgramID(info.Id),
 		Tag:  hex.EncodeToString(info.Tag[:]),
 		Name: unix.ByteSliceToString(info.Name[:]),
 		btf:  btf.ID(info.BtfId),
-		ids:  mapIDs,
 		stats: &programStats{
 			runtime:  time.Duration(info.RunTimeNs),
 			runCount: info.RunCnt,
 		},
-	}, nil
+	}
+
+	// Start with a clean struct for the second call, otherwise we may get EFAULT.
+	var info2 sys.ProgInfo
+
+	if info.NrMapIds > 0 {
+		pi.maps = make([]MapID, info.NrMapIds)
+		info2.NrMapIds = info.NrMapIds
+		info2.MapIds = sys.NewPointer(unsafe.Pointer(&pi.maps[0]))
+	}
+
+	if info.NrMapIds > 0 {
+		if err := sys.ObjInfo(fd, &info2); err != nil {
+			return nil, err
+		}
+	}
+
+	return &pi, nil
 }
 
 func newProgramInfoFromProc(fd *sys.FD) (*ProgramInfo, error) {
@@ -205,7 +205,7 @@ func (pi *ProgramInfo) Runtime() (time.Duration, bool) {
 //
 // The bool return value indicates whether this optional field is available.
 func (pi *ProgramInfo) MapIDs() ([]MapID, bool) {
-	return pi.ids, pi.ids != nil
+	return pi.maps, pi.maps != nil
 }
 
 func scanFdInfo(fd *sys.FD, fields map[string]interface{}) error {

@@ -686,6 +686,41 @@ func TestProgramBindMap(t *testing.T) {
 	}
 }
 
+func TestProgramInstructions(t *testing.T) {
+	name := "test_prog"
+	spec := &ProgramSpec{
+		Type: SocketFilter,
+		Name: name,
+		Instructions: asm.Instructions{
+			asm.LoadImm(asm.R0, -1, asm.DWord).Sym(name),
+			asm.Mov.Imm32(asm.R0, 0),
+			asm.Return(),
+		},
+		License: "MIT",
+	}
+
+	prog, err := NewProgram(spec)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer prog.Close()
+
+	pi, err := prog.Info()
+	testutils.SkipIfNotSupported(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	insns, err := pi.Instructions()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if diff := cmp.Diff(insns, spec.Instructions); diff != "" {
+		t.Fatal(diff)
+	}
+}
+
 type testReaderAt struct {
 	file *os.File
 	read bool

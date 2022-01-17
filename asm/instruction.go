@@ -309,6 +309,26 @@ func (ins Instruction) Size() uint64 {
 // Instructions is an eBPF program.
 type Instructions []Instruction
 
+// Unmarshal unmarshals an Instructions from a binary instruction stream.
+func (insns *Instructions) Unmarshal(r io.Reader, bo binary.ByteOrder) error {
+	var offset uint64
+	for {
+		var ins Instruction
+		n, err := ins.Unmarshal(r, bo)
+		if errors.Is(err, io.EOF) {
+			break
+		}
+		if err != nil {
+			return fmt.Errorf("offset %d: %w", offset, err)
+		}
+
+		*insns = append(*insns, ins)
+		offset += n
+	}
+
+	return nil
+}
+
 // Name returns the name of the function insns belongs to, if any.
 func (insns Instructions) Name() string {
 	if len(insns) == 0 {

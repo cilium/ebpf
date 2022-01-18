@@ -31,10 +31,6 @@ func readStringTable(r io.Reader) (stringTable, error) {
 }
 
 func (st stringTable) Lookup(offset uint32) (string, error) {
-	if int64(offset) > int64(^uint(0)>>1) {
-		return "", fmt.Errorf("offset %d overflows int", offset)
-	}
-
 	pos := int(offset)
 	if pos >= len(st) {
 		return "", fmt.Errorf("offset %d is out of bounds", offset)

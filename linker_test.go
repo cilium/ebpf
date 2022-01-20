@@ -1,9 +1,11 @@
 package ebpf
 
 import (
+	"errors"
 	"testing"
 
 	"github.com/cilium/ebpf/asm"
+	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/testutils"
 )
 
@@ -53,4 +55,48 @@ func TestFindReferences(t *testing.T) {
 	if ret != 1337 {
 		t.Errorf("Expected return code 1337, got %d", ret)
 	}
+}
+
+func TestForwardFunctionDeclaration(t *testing.T) {
+	testutils.Files(t, testutils.Glob(t, "testdata/fwd_decl-*.elf"), func(t *testing.T, file string) {
+		coll, err := LoadCollectionSpec(file)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if coll.ByteOrder != internal.NativeEndian {
+			t.Skip()
+		}
+
+		spec := coll.Programs["call_fwd"]
+
+		// This program calls an unimplemented forward function declaration.
+		_, err = NewProgram(spec)
+		if !errors.Is(err, errUnsatisfiedReference) {
+			t.Fatal("Expected an error wrapping errUnsatisfiedReference, got:", err)
+		}
+
+		// Append the implementation of fwd().
+		spec.Instructions = append(spec.Instructions,
+			asm.Mov.Imm32(asm.R0, 23).Sym("fwd"),
+			asm.Return(),
+		)
+
+		// The body of the subprog we appended does not come with BTF func_infos,
+		// so the verifier will reject it. Load without BTF.
+		spec.BTF = nil
+
+		prog, err := NewProgram(spec)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		ret, _, err := prog.Test(make([]byte, 14))
+		if err != nil {
+			t.Fatal("Running program:", err)
+		}
+		if ret != 23 {
+			t.Fatalf("Expected 23, got %d", ret)
+		}
+	})
 }

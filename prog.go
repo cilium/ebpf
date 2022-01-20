@@ -22,6 +22,7 @@ import (
 var ErrNotSupported = internal.ErrNotSupported
 
 var errUnsatisfiedMap = errors.New("unsatisfied map reference")
+var errUnsatisfiedProgram = errors.New("unsatisfied program reference")
 
 // ProgramID represents the unique ID of an eBPF program.
 type ProgramID uint32
@@ -226,6 +227,10 @@ func NewProgram(spec *ProgramSpec) (*Program, error) {
 // Loading a program for the first time will perform
 // feature detection by loading small, temporary programs.
 func NewProgramWithOptions(spec *ProgramSpec, opts ProgramOptions) (*Program, error) {
+	if spec == nil {
+		return nil, errors.New("can't load a program from a nil spec")
+	}
+
 	handles := newHandleCache()
 	defer handles.close()
 

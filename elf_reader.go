@@ -636,7 +636,7 @@ func (ec *elfCode) loadMaps(maps map[string]*MapSpec) error {
 				return fmt.Errorf("map %s: reading map tail: %w", mapName, err)
 			}
 			if len(extra) > 0 {
-				spec.Extra = *bytes.NewReader(extra)
+				spec.Extra = bytes.NewReader(extra)
 			}
 
 			if err := spec.clampPerfEventArraySize(); err != nil {

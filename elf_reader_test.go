@@ -6,6 +6,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -653,8 +654,6 @@ func TestLibBPFCompat(t *testing.T) {
 	testutils.Files(t, files, func(t *testing.T, path string) {
 		file := filepath.Base(path)
 		switch file {
-		case "test_sk_assign.o":
-			t.Skip("Skipping due to incompatible struct bpf_map_def")
 		case "test_map_in_map.o", "test_map_in_map.linked3.o",
 			"test_select_reuseport_kern.o", "test_select_reuseport_kern.linked3.o":
 			t.Skip("Skipping due to missing InnerMap in map definition")
@@ -672,6 +671,18 @@ func TestLibBPFCompat(t *testing.T) {
 		testutils.SkipIfNotSupported(t, err)
 		if err != nil {
 			t.Fatalf("Can't read %s: %s", file, err)
+		}
+
+		switch file {
+		case "test_sk_assign.o":
+			// Test contains a legacy iproute2 bpf_elf_map definition.
+			for _, m := range spec.Maps {
+				if m.Extra.Len() == 0 {
+					t.Fatalf("Expected extra bytes in map %s", m.Name)
+				}
+				_, _ = io.Copy(io.Discard, &m.Extra)
+				m.Pinning = PinByName
+			}
 		}
 
 		var opts CollectionOptions

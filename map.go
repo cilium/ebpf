@@ -72,9 +72,9 @@ type MapSpec struct {
 	InnerMap *MapSpec
 
 	// Extra trailing bytes found in the ELF map definition when using structs
-	// larger than libbpf's bpf_map_def. Must be empty before instantiating
-	// the MapSpec into a Map.
-	Extra bytes.Reader
+	// larger than libbpf's bpf_map_def. nil if no trailing bytes were present.
+	// Must be nil or empty before instantiating the MapSpec into a Map.
+	Extra *bytes.Reader
 
 	// The BTF associated with this map.
 	BTF *btf.Map
@@ -322,8 +322,10 @@ func (spec *MapSpec) createMap(inner *sys.FD, opts MapOptions, handles *handleCa
 	// additional 'inner_map_idx' and later 'numa_node' fields.
 	// In order to support loading these definitions, tolerate the presence of
 	// extra bytes, but require them to be zeroes.
-	if _, err := io.Copy(internal.DiscardZeroes{}, &spec.Extra); err != nil {
-		return nil, errors.New("extra contains unhandled non-zero bytes, drain before creating map")
+	if spec.Extra != nil {
+		if _, err := io.Copy(internal.DiscardZeroes{}, spec.Extra); err != nil {
+			return nil, errors.New("extra contains unhandled non-zero bytes, drain before creating map")
+		}
 	}
 
 	switch spec.Type {

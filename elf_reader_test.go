@@ -6,7 +6,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -558,14 +557,18 @@ func TestIPRoute2Compat(t *testing.T) {
 
 		var id, pinning, innerID, innerIndex uint32
 
+		if ms.Extra == nil {
+			t.Fatal("missing extra bytes")
+		}
+
 		switch {
-		case binary.Read(&ms.Extra, spec.ByteOrder, &id) != nil:
+		case binary.Read(ms.Extra, spec.ByteOrder, &id) != nil:
 			t.Fatal("missing id")
-		case binary.Read(&ms.Extra, spec.ByteOrder, &pinning) != nil:
+		case binary.Read(ms.Extra, spec.ByteOrder, &pinning) != nil:
 			t.Fatal("missing pinning")
-		case binary.Read(&ms.Extra, spec.ByteOrder, &innerID) != nil:
+		case binary.Read(ms.Extra, spec.ByteOrder, &innerID) != nil:
 			t.Fatal("missing inner_id")
-		case binary.Read(&ms.Extra, spec.ByteOrder, &innerIndex) != nil:
+		case binary.Read(ms.Extra, spec.ByteOrder, &innerIndex) != nil:
 			t.Fatal("missing inner_idx")
 		}
 
@@ -677,10 +680,10 @@ func TestLibBPFCompat(t *testing.T) {
 		case "test_sk_assign.o":
 			// Test contains a legacy iproute2 bpf_elf_map definition.
 			for _, m := range spec.Maps {
-				if m.Extra.Len() == 0 {
+				if m.Extra == nil || m.Extra.Len() == 0 {
 					t.Fatalf("Expected extra bytes in map %s", m.Name)
 				}
-				_, _ = io.Copy(io.Discard, &m.Extra)
+				m.Extra = nil
 			}
 		}
 

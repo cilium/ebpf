@@ -158,7 +158,7 @@ func fixupJumpsAndCalls(insns asm.Instructions) error {
 			continue
 
 		case ins.IsLoadFromMap() && ins.MapPtr() == -1:
-			return fmt.Errorf("map %s: %w", ins.Reference, errUnsatisfiedReference)
+			return fmt.Errorf("map %s: %w", ins.Reference, errUnsatisfiedMap)
 		default:
 			// no fixup needed
 			continue

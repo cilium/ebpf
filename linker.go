@@ -70,10 +70,12 @@ func findReferences(progs map[string]*ProgramSpec) error {
 		// ProgramSpecs as direct references.
 		for refname := range prog.Instructions.FunctionReferences() {
 			ref := progs[refname]
-			if ref == nil {
-				return fmt.Errorf("symbol reference %s not present in progs", refname)
+			// Call targets are allowed to be missing from an ELF. This occurs when
+			// a program calls into a forward function declaration that is left
+			// unimplemented. This is caught at load time during fixups.
+			if ref != nil {
+				prog.references[refname] = ref
 			}
-			prog.references[refname] = ref
 		}
 	}
 
@@ -158,13 +160,13 @@ func fixupJumpsAndCalls(insns asm.Instructions) error {
 			continue
 
 		case ins.IsLoadFromMap() && ins.MapPtr() == -1:
-			return fmt.Errorf("map %s: %w", ins.Reference, errUnsatisfiedReference)
+			return fmt.Errorf("map %s: %w", ins.Reference, errUnsatisfiedMap)
 		default:
 			// no fixup needed
 			continue
 		}
 
-		return fmt.Errorf("%s at %d: reference to missing symbol %q", ins.OpCode, i, ins.Reference)
+		return fmt.Errorf("%s at insn %d: symbol %q: %w", ins.OpCode, i, ins.Reference, errUnsatisfiedProgram)
 	}
 
 	// fixupBPFCalls replaces bpf_probe_read_{kernel,user}[_str] with bpf_probe_read[_str] on older kernels

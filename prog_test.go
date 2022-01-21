@@ -363,7 +363,7 @@ func TestProgramVerifierOutput(t *testing.T) {
 	}
 }
 
-func TestProgramWithUnsatisfiedReference(t *testing.T) {
+func TestProgramWithUnsatisfiedMap(t *testing.T) {
 	coll, err := LoadCollectionSpec("testdata/loader-el.elf")
 	if err != nil {
 		t.Fatal(err)
@@ -374,8 +374,8 @@ func TestProgramWithUnsatisfiedReference(t *testing.T) {
 	progSpec.ByteOrder = nil
 
 	_, err = NewProgram(progSpec)
-	if !errors.Is(err, errUnsatisfiedReference) {
-		t.Fatal("Expected an error wrapping errUnsatisfiedReference, got", err)
+	if !errors.Is(err, errUnsatisfiedMap) {
+		t.Fatal("Expected an error wrapping errUnsatisfiedMap, got", err)
 	}
 	t.Log(err)
 }

@@ -557,14 +557,18 @@ func TestIPRoute2Compat(t *testing.T) {
 
 		var id, pinning, innerID, innerIndex uint32
 
+		if ms.Extra == nil {
+			t.Fatal("missing extra bytes")
+		}
+
 		switch {
-		case binary.Read(&ms.Extra, spec.ByteOrder, &id) != nil:
+		case binary.Read(ms.Extra, spec.ByteOrder, &id) != nil:
 			t.Fatal("missing id")
-		case binary.Read(&ms.Extra, spec.ByteOrder, &pinning) != nil:
+		case binary.Read(ms.Extra, spec.ByteOrder, &pinning) != nil:
 			t.Fatal("missing pinning")
-		case binary.Read(&ms.Extra, spec.ByteOrder, &innerID) != nil:
+		case binary.Read(ms.Extra, spec.ByteOrder, &innerID) != nil:
 			t.Fatal("missing inner_id")
-		case binary.Read(&ms.Extra, spec.ByteOrder, &innerIndex) != nil:
+		case binary.Read(ms.Extra, spec.ByteOrder, &innerIndex) != nil:
 			t.Fatal("missing inner_idx")
 		}
 

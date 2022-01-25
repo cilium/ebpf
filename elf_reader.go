@@ -728,14 +728,6 @@ func (ec *elfCode) loadBTFMaps(maps map[string]*MapSpec) error {
 	return nil
 }
 
-// A programStub is a placeholder for a Program to be inserted at a certain map key.
-// It needs to be resolved into a Program later on in the loader process.
-type programStub string
-
-// A mapStub is a placeholder for a Map to be inserted at a certain map key.
-// It needs to be resolved into a Map later on in the loader process.
-type mapStub string
-
 // mapSpecFromBTF produces a MapSpec based on a btf.Struct def representing
 // a BTF map definition. The name and spec arguments will be copied to the
 // resulting MapSpec, and inner must be true on any resursive invocations.
@@ -1009,9 +1001,9 @@ func resolveBTFValuesContents(es *elfSection, vs *btf.VarSecinfo, member btf.Mem
 		// skipped here.
 		switch t := elf.ST_TYPE(r.Info); t {
 		case elf.STT_FUNC:
-			contents = append(contents, MapKV{uint32(k), programStub(r.Name)})
+			contents = append(contents, MapKV{uint32(k), r.Name})
 		case elf.STT_OBJECT:
-			contents = append(contents, MapKV{uint32(k), mapStub(r.Name)})
+			contents = append(contents, MapKV{uint32(k), r.Name})
 		default:
 			return nil, fmt.Errorf("unknown relocation type %v", t)
 		}

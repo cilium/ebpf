@@ -826,6 +826,11 @@ func TestGetProgType(t *testing.T) {
 			At: AttachNone,
 			To: "",
 		},
+		"xdp_devmap/foo": {
+			Pt: XDP,
+			At: AttachXDPDevMap,
+			To: "foo",
+		},
 		"cgroup_skb/ingress": {
 			Pt: CGroupSKB,
 			At: AttachCGroupInetIngress,
@@ -846,6 +851,16 @@ func TestGetProgType(t *testing.T) {
 			Pt: LSM,
 			At: AttachLSMMac,
 			To: "file_ioctl",
+		},
+		"sk_skb/stream_verdict/foo": {
+			Pt: SkSKB,
+			At: AttachSkSKBStreamVerdict,
+			To: "",
+		},
+		"sk_skb/bar": {
+			Pt: SkSKB,
+			At: AttachNone,
+			To: "",
 		},
 	}
 

@@ -363,8 +363,12 @@ func TestLoadInitializedBTFMap(t *testing.T) {
 				t.Errorf("expecting MapSpec entry Key to equal 1, got %v", p.Key)
 			}
 
-			if _, ok := p.Value.(programStub); !ok {
-				t.Errorf("expecting MapSpec entry Value to be of type programStub, got %T", p.Value)
+			if _, ok := p.Value.(string); !ok {
+				t.Errorf("expecting MapSpec entry Value to be a string, got %T", p.Value)
+			}
+
+			if p.Value != "tail_1" {
+				t.Errorf("expected MapSpec entry Value 'tail_1', got: %s", p.Value)
 			}
 		})
 
@@ -383,8 +387,12 @@ func TestLoadInitializedBTFMap(t *testing.T) {
 				t.Errorf("expecting MapSpec entry Key to equal 1, got %v", p.Key)
 			}
 
-			if _, ok := p.Value.(mapStub); !ok {
-				t.Errorf("expecting MapSpec entry Value to be of type mapStub, got %T", p.Value)
+			if _, ok := p.Value.(string); !ok {
+				t.Errorf("expecting MapSpec entry Value to be a string, got %T", p.Value)
+			}
+
+			if p.Value != "inner_map" {
+				t.Errorf("expected MapSpec entry Value 'inner_map', got: %s", p.Value)
 			}
 		})
 	})

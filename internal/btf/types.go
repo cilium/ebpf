@@ -990,3 +990,23 @@ func newEssentialName(name string) essentialName {
 	}
 	return essentialName(name)
 }
+
+// UnderlyingType skips qualifiers and Typedefs.
+//
+// May return typ verbatim if too many types have to be skipped to protect against
+// circular Types.
+func UnderlyingType(typ Type) Type {
+	result := typ
+	for depth := 0; depth <= maxTypeDepth; depth++ {
+		switch v := (result).(type) {
+		case qualifier:
+			result = v.qualify()
+		case *Typedef:
+			result = v.Type
+		default:
+			return result
+		}
+	}
+	// Return the original argument, since we can't find an underlying type.
+	return typ
+}

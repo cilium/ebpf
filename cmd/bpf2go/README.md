@@ -23,6 +23,12 @@ across a project, e.g. to set specific C flags:
 By exporting `$BPF_CFLAGS` from your build system you can then control
 all builds from a single location.
 
+## Generated types
+
+`bpf2go` generates Go types for all map keys and values by default. You can
+disable this behaviour using `-no-global-types`. You can add to the set of
+types by specifying `-type foo` for each type you'd like to generate.
+
 ## Examples
 
 See [examples/kprobe](../../examples/kprobe/main.go) for a fully worked out example.

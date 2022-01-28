@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"sort"
 	"strings"
@@ -78,6 +79,8 @@ func run(stdout io.Writer, pkg, outputDir string, args []string) (err error) {
 	fs.StringVar(&b2g.tags, "tags", "", "list of Go build tags to include in generated files")
 	flagTarget := fs.String("target", "bpfel,bpfeb", "clang target to compile for")
 	fs.StringVar(&b2g.makeBase, "makebase", "", "write make compatible depinfo files relative to `directory`")
+	fs.Var(&b2g.cTypes, "type", "`Name` of a type to generate a Go declaration for, may be repeated")
+	fs.BoolVar(&b2g.skipGlobalTypes, "no-global-types", false, "Skip generating types for map keys and values, etc.")
 
 	fs.SetOutput(stdout)
 	fs.Usage = func() {
@@ -193,6 +196,44 @@ func run(stdout io.Writer, pkg, outputDir string, args []string) (err error) {
 	return nil
 }
 
+// cTypes collects the C type names a user wants to generate Go types for.
+//
+// Names are guaranteed to be unique, and only a subset of names is accepted so
+// that we may extend the flag syntax in the future.
+type cTypes []string
+
+var _ flag.Value = (*cTypes)(nil)
+
+func (ct *cTypes) String() string {
+	if ct == nil {
+		return "[]"
+	}
+	return fmt.Sprint(*ct)
+}
+
+const validCTypeChars = `[a-z0-9_]`
+
+var reValidCType = regexp.MustCompile(`(?i)^` + validCTypeChars + `+$`)
+
+func (ct *cTypes) Set(value string) error {
+	if !reValidCType.MatchString(value) {
+		return fmt.Errorf("%q contains characters outside of %s", value, validCTypeChars)
+	}
+
+	i := sort.SearchStrings(*ct, value)
+	if i >= len(*ct) {
+		*ct = append(*ct, value)
+		return nil
+	}
+
+	if (*ct)[i] == value {
+		return fmt.Errorf("duplicate type %q", value)
+	}
+
+	*ct = append((*ct)[:i], append([]string{value}, (*ct)[i:]...)...)
+	return nil
+}
+
 type bpf2go struct {
 	stdout io.Writer
 	// Absolute path to a .c file.
@@ -209,7 +250,10 @@ type bpf2go struct {
 	strip            string
 	disableStripping bool
 	// C flags passed to the compiler.
-	cFlags []string
+	cFlags          []string
+	skipGlobalTypes bool
+	// C types to include in the generatd output.
+	cTypes cTypes
 	// Go tags included in the .go
 	tags string
 	// Base directory of the Makefile. Enables outputting make-style dependencies
@@ -282,12 +326,14 @@ func (b2g *bpf2go) convert(tgt target, arches []string) (err error) {
 	}
 	defer removeOnError(goFile)
 
-	err = writeCommon(writeArgs{
-		pkg:   b2g.pkg,
-		ident: b2g.ident,
-		tags:  tags,
-		obj:   objFileName,
-		out:   goFile,
+	err = output(outputArgs{
+		pkg:             b2g.pkg,
+		ident:           b2g.ident,
+		cTypes:          b2g.cTypes,
+		skipGlobalTypes: b2g.skipGlobalTypes,
+		tags:            tags,
+		obj:             objFileName,
+		out:             goFile,
 	})
 	if err != nil {
 		return fmt.Errorf("can't write %s: %s", goFileName, err)

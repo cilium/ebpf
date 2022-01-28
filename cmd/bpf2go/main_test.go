@@ -12,6 +12,7 @@ import (
 	"strings"
 	"testing"
 
+	qt "github.com/frankban/quicktest"
 	"github.com/google/go-cmp/cmp"
 )
 
@@ -242,4 +243,38 @@ func TestConvertGOARCH(t *testing.T) {
 	if err := b2g.convert(targetByGoArch["amd64"], nil); err != nil {
 		t.Fatal("Can't target GOARCH:", err)
 	}
+}
+
+func TestCTypes(t *testing.T) {
+	var ct cTypes
+	valid := []string{
+		"abcdefghijklmnopqrstuvqxyABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890_",
+		"y",
+	}
+	for _, value := range valid {
+		if err := ct.Set(value); err != nil {
+			t.Fatalf("Set returned an error for %q: %s", value, err)
+		}
+	}
+	qt.Assert(t, ct, qt.ContentEquals, cTypes(valid))
+
+	for _, value := range []string{
+		"",
+		" ",
+		" frood",
+		"foo\nbar",
+		".",
+		",",
+		"+",
+		"-",
+	} {
+		ct = nil
+		if err := ct.Set(value); err == nil {
+			t.Fatalf("Set did not return an error for %q", value)
+		}
+	}
+
+	ct = nil
+	qt.Assert(t, ct.Set("foo"), qt.IsNil)
+	qt.Assert(t, ct.Set("foo"), qt.IsNotNil)
 }

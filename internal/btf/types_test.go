@@ -249,3 +249,55 @@ func newCyclicalType(n int) Type {
 	ptr.Target = prev
 	return ptr
 }
+
+func TestUnderlyingType(t *testing.T) {
+	wrappers := []struct {
+		name string
+		fn   func(Type) Type
+	}{
+		{"const", func(t Type) Type { return &Const{Type: t} }},
+		{"volatile", func(t Type) Type { return &Volatile{Type: t} }},
+		{"restrict", func(t Type) Type { return &Restrict{Type: t} }},
+		{"typedef", func(t Type) Type { return &Typedef{Type: t} }},
+	}
+
+	for _, test := range wrappers {
+		t.Run(test.name+" cycle", func(t *testing.T) {
+			root := &Volatile{}
+			root.Type = test.fn(root)
+
+			got := UnderlyingType(root)
+			qt.Assert(t, got, qt.Equals, root)
+		})
+	}
+
+	for _, test := range wrappers {
+		t.Run(test.name, func(t *testing.T) {
+			want := &Int{}
+			got := UnderlyingType(test.fn(want))
+			qt.Assert(t, got, qt.Equals, want)
+		})
+	}
+}
+
+func BenchmarkUnderlyingType(b *testing.B) {
+	b.Run("no unwrapping", func(b *testing.B) {
+		v := &Int{}
+		b.ReportAllocs()
+		b.ResetTimer()
+
+		for i := 0; i < b.N; i++ {
+			UnderlyingType(v)
+		}
+	})
+
+	b.Run("single unwrapping", func(b *testing.B) {
+		v := &Typedef{Type: &Int{}}
+		b.ReportAllocs()
+		b.ResetTimer()
+
+		for i := 0; i < b.N; i++ {
+			UnderlyingType(v)
+		}
+	})
+}

@@ -107,9 +107,6 @@ func LoadSpecFromReader(rd io.ReaderAt) (*Spec, error) {
 		}
 
 		secName := file.Sections[symbol.Section].Name
-		if symbol.Value > math.MaxUint32 {
-			return nil, fmt.Errorf("section %s: symbol %s: size exceeds maximum", secName, symbol.Name)
-		}
 
 		variableOffsets[variable{secName, symbol.Name}] = uint32(symbol.Value)
 	}

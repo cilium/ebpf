@@ -102,15 +102,16 @@ func LoadSpecFromReader(rd io.ReaderAt) (*Spec, error) {
 			continue
 		}
 
+		if symbol.Value > math.MaxUint32 {
+			// VarSecinfo offset is u32, cannot reference symbols in higher regions.
+			continue
+		}
+
 		if int(symbol.Section) >= len(file.Sections) {
 			return nil, fmt.Errorf("symbol %s: invalid section %d", symbol.Name, symbol.Section)
 		}
 
 		secName := file.Sections[symbol.Section].Name
-		if symbol.Value > math.MaxUint32 {
-			return nil, fmt.Errorf("section %s: symbol %s: size exceeds maximum", secName, symbol.Name)
-		}
-
 		variableOffsets[variable{secName, symbol.Name}] = uint32(symbol.Value)
 	}
 

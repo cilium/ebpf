@@ -186,6 +186,23 @@ func TestParseCurrentKernelBTF(t *testing.T) {
 	}
 }
 
+func TestFindVMLinux(t *testing.T) {
+	file, err := findVMLinux()
+	testutils.SkipIfNotSupported(t, err)
+	if err != nil {
+		t.Fatal("Can't find vmlinux:", err)
+	}
+
+	spec, err := loadSpecFromELF(file)
+	if err != nil {
+		t.Fatal("Can't load BTF:", err)
+	}
+
+	if len(spec.namedTypes) == 0 {
+		t.Fatal("Empty kernel BTF")
+	}
+}
+
 func TestLoadSpecFromElf(t *testing.T) {
 	testutils.Files(t, testutils.Glob(t, "../../testdata/loader-e*.elf"), func(t *testing.T, file string) {
 		spec := parseELFBTF(t, file)

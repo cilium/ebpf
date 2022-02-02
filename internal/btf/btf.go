@@ -90,6 +90,12 @@ func LoadSpecFromReader(rd io.ReaderAt) (*Spec, error) {
 	}
 	defer file.Close()
 
+	return loadSpecFromELF(file)
+}
+
+// variableOffsets extracts all symbols offsets from an ELF and indexes them by
+// section and variable name.
+func variableOffsets(file *internal.SafeELFFile) (map[variable]uint32, error) {
 	symbols, err := file.Symbols()
 	if err != nil {
 		return nil, fmt.Errorf("can't read symbols: %v", err)
@@ -118,10 +124,10 @@ func LoadSpecFromReader(rd io.ReaderAt) (*Spec, error) {
 		variableOffsets[variable{secName, symbol.Name}] = uint32(symbol.Value)
 	}
 
-	return loadSpecFromELF(file, variableOffsets)
+	return variableOffsets, nil
 }
 
-func loadSpecFromELF(file *internal.SafeELFFile, variableOffsets map[variable]uint32) (*Spec, error) {
+func loadSpecFromELF(file *internal.SafeELFFile) (*Spec, error) {
 	var (
 		btfSection    *elf.Section
 		btfExtSection *elf.Section
@@ -151,7 +157,12 @@ func loadSpecFromELF(file *internal.SafeELFFile, variableOffsets map[variable]ui
 		return nil, fmt.Errorf("btf: %w", ErrNotFound)
 	}
 
-	spec, err := loadRawSpec(btfSection.Open(), file.ByteOrder, sectionSizes, variableOffsets)
+	vars, err := variableOffsets(file)
+	if err != nil {
+		return nil, err
+	}
+
+	spec, err := loadRawSpec(btfSection.Open(), file.ByteOrder, sectionSizes, vars)
 	if err != nil {
 		return nil, err
 	}
@@ -342,7 +353,7 @@ func loadKernelSpec() (*Spec, error) {
 		}
 		defer file.Close()
 
-		return loadSpecFromELF(file, nil)
+		return loadSpecFromELF(file)
 	}
 
 	return nil, fmt.Errorf("no BTF for kernel version %s: %w", release, internal.ErrNotSupported)

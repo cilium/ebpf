@@ -312,6 +312,9 @@ func LoadKernelSpec() (*Spec, error) {
 	return kernelBTF.Spec, err
 }
 
+// loadKernelSpec attempts to load the raw vmlinux BTF blob at
+// /sys/kernel/btf/vmlinux and falls back to scanning the file system
+// for vmlinux ELFs.
 func loadKernelSpec() (*Spec, error) {
 	fh, err := os.Open("/sys/kernel/btf/vmlinux")
 	if err == nil {
@@ -320,13 +323,21 @@ func loadKernelSpec() (*Spec, error) {
 		return loadRawSpec(fh, internal.NativeEndian, nil, nil)
 	}
 
-	var uname unix.Utsname
-	if err := unix.Uname(&uname); err != nil {
-		return nil, fmt.Errorf("uname failed: %w", err)
+	file, err := findVMLinux()
+	if err != nil {
+		return nil, err
 	}
+	defer file.Close()
 
-	end := bytes.IndexByte(uname.Release[:], 0)
-	release := string(uname.Release[:end])
+	return loadSpecFromELF(file)
+}
+
+// findVMLinux scans multiple well-known paths for vmlinux kernel images.
+func findVMLinux() (*internal.SafeELFFile, error) {
+	release, err := internal.KernelRelease()
+	if err != nil {
+		return nil, err
+	}
 
 	// use same list of locations as libbpf
 	// https://github.com/libbpf/libbpf/blob/9a3a42608dbe3731256a5682a125ac1e23bced8f/src/btf.c#L3114-L3122
@@ -341,24 +352,14 @@ func loadKernelSpec() (*Spec, error) {
 	}
 
 	for _, loc := range locations {
-		path := fmt.Sprintf(loc, release)
-
-		fh, err := os.Open(path)
+		fh, err := os.Open(fmt.Sprintf(loc, release))
 		if err != nil {
 			continue
 		}
-		defer fh.Close()
-
-		file, err := internal.NewSafeELFFile(fh)
-		if err != nil {
-			return nil, err
-		}
-		defer file.Close()
-
-		return loadSpecFromELF(file)
+		return internal.NewSafeELFFile(fh)
 	}
 
-	return nil, fmt.Errorf("no BTF for kernel version %s: %w", release, internal.ErrNotSupported)
+	return nil, fmt.Errorf("no BTF found for kernel version %s: %w", release, internal.ErrNotSupported)
 }
 
 // parseBTFHeader parses the header of the .BTF section.

@@ -1046,11 +1046,11 @@ func (ec *elfCode) loadDataSections(maps map[string]*MapSpec) error {
 			BTF:        ec.btf,
 		}
 
-		switch sec.Name {
-		case ".rodata":
+		switch n := sec.Name; {
+		case strings.HasPrefix(n, ".rodata"):
 			mapSpec.Flags = unix.BPF_F_RDONLY_PROG
 			mapSpec.Freeze = true
-		case ".bss":
+		case n == ".bss":
 			// The kernel already zero-initializes the map
 			mapSpec.Contents = nil
 		}

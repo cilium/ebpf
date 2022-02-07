@@ -39,37 +39,36 @@ func TestAuxvNoVDSO(t *testing.T) {
 }
 
 func TestLinuxVersionCodeEmbedded(t *testing.T) {
-	vdso, err := os.Open("../testdata/vdso.bin")
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { vdso.Close() })
-
-	vc, err := vdsoLinuxVersionCode(vdso)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	expected := uint32(328828) // 5.4.124
-	if vc != expected {
-		t.Errorf("Expected version code %d, got %d", expected, vc)
-	}
-}
-
-func TestLinuxVersionCodeEmbeddedMultipleNotes(t *testing.T) {
-	vdso, err := os.Open("../testdata/vdso_multiple_notes.bin")
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { vdso.Close() })
-
-	vc, err := vdsoLinuxVersionCode(vdso)
-	if err != nil {
-		t.Fatal(err)
+	tests := []struct {
+		file    string
+		version uint32
+	}{
+		{
+			"../testdata/vdso.bin",
+			uint32(328828), // 5.4.124
+		},
+		{
+			"../testdata/vdso_multiple_notes.bin",
+			uint32(328875), // Container Optimized OS v85 with a 5.4.x kernel
+		},
 	}
 
-	expected := uint32(328875) // 5.4.171
-	if vc != expected {
-		t.Errorf("Expected version code %d, got %d", expected, vc)
+	for _, test := range tests {
+		t.Run(test.file, func(t *testing.T) {
+			vdso, err := os.Open(test.file)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer vdso.Close()
+
+			vc, err := vdsoLinuxVersionCode(vdso)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			if vc != test.version {
+				t.Errorf("Expected version code %d, got %d", test.version, vc)
+			}
+		})
 	}
 }

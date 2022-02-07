@@ -527,6 +527,65 @@ func (insns Instructions) Tag(bo binary.ByteOrder) (string, error) {
 	return hex.EncodeToString(h.Sum(nil)[:unix.BPF_TAG_SIZE]), nil
 }
 
+// RewriteJumps updates all jumps to also take the symbol offset into account.
+//
+// Returns an error if a reference isn't used, see IsUnsatisfiedReference.
+func (insns Instructions) RewriteJumps() error {
+	symbolOffsets := make(map[string]RawInstructionOffset)
+	iter := insns.Iterate()
+	for iter.Next() {
+		ins := iter.Ins
+
+		if ins.Symbol == "" {
+			continue
+		}
+
+		if _, ok := symbolOffsets[ins.Symbol]; ok {
+			return fmt.Errorf("duplicate symbol %s", ins.Symbol)
+		}
+
+		symbolOffsets[ins.Symbol] = iter.Offset
+	}
+
+	iter = insns.Iterate()
+	for iter.Next() {
+		i := iter.Index
+		offset := iter.Offset
+		ins := iter.Ins
+
+		if ins.Reference == "" {
+			continue
+		}
+
+		symOffset, ok := symbolOffsets[ins.Reference]
+		switch {
+		case ins.IsFunctionReference() && ins.Constant == -1:
+			if !ok {
+				break
+			}
+
+			ins.Constant = int64(symOffset - offset - 1)
+			continue
+
+		case ins.OpCode.Class().IsJump() && ins.Offset == -1:
+			if !ok {
+				break
+			}
+
+			ins.Offset = int16(symOffset - offset - 1)
+			continue
+
+		case ins.IsLoadFromMap() && ins.MapPtr() == -1:
+			return &unsatisfiedReferenceError{reference: ins.Reference}
+		default:
+			// no fixup needed
+			continue
+		}
+		return fmt.Errorf("%s at %d: reference to missing symbol %q", ins.OpCode, i, ins.Reference)
+	}
+	return nil
+}
+
 // Iterate allows iterating a BPF program while keeping track of
 // various offsets.
 //
@@ -587,5 +646,20 @@ func (use *unreferencedSymbolError) Error() string {
 // an unreferenced symbol.
 func IsUnreferencedSymbol(err error) bool {
 	_, ok := err.(*unreferencedSymbolError)
+	return ok
+}
+
+type unsatisfiedReferenceError struct {
+	reference string
+}
+
+func (use *unsatisfiedReferenceError) Error() string {
+	return fmt.Sprintf("unsatisfied reference %s", use.reference)
+}
+
+// IsUnsatisfiedReference returns true if err was caused by
+// an unsatisfied reference.
+func IsUnsatisfiedReference(err error) bool {
+	_, ok := err.(*unsatisfiedReferenceError)
 	return ok
 }

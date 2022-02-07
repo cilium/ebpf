@@ -1,7 +1,6 @@
 package ebpf
 
 import (
-	"errors"
 	"testing"
 
 	"github.com/cilium/ebpf/asm"
@@ -74,7 +73,7 @@ func TestForwardFunctionDeclaration(t *testing.T) {
 
 		// This program calls an unimplemented forward function declaration.
 		_, err = NewProgram(spec)
-		if !errors.Is(err, errUnsatisfiedProgram) {
+		if !asm.IsUnsatisfiedProgReference(err) {
 			t.Fatal("Expected an error wrapping errUnsatisfiedProgram, got:", err)
 		}
 

@@ -68,7 +68,7 @@ func TestLinuxVersionCodeEmbeddedMultipleNotes(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	expected := uint32(657579) // 5.4.171
+	expected := uint32(328875) // 5.4.171
 	if vc != expected {
 		t.Errorf("Expected version code %d, got %d", expected, vc)
 	}

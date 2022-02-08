@@ -374,8 +374,8 @@ func TestProgramWithUnsatisfiedMap(t *testing.T) {
 	progSpec.ByteOrder = nil
 
 	_, err = NewProgram(progSpec)
-	if !errors.Is(err, errUnsatisfiedMap) {
-		t.Fatal("Expected an error wrapping errUnsatisfiedMap, got", err)
+	if !errors.Is(err, asm.ErrUnsatisfiedMapReference) {
+		t.Fatal("Expected an error wrapping errUnsatisfiedMapReference, got", err)
 	}
 	t.Log(err)
 }

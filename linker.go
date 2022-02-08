@@ -115,63 +115,13 @@ func marshalLineInfos(layout []reference) ([]byte, error) {
 }
 
 func fixupJumpsAndCalls(insns asm.Instructions) error {
-	symbolOffsets := make(map[string]asm.RawInstructionOffset)
-	iter := insns.Iterate()
-	for iter.Next() {
-		ins := iter.Ins
-
-		if ins.Symbol == "" {
-			continue
-		}
-
-		if _, ok := symbolOffsets[ins.Symbol]; ok {
-			return fmt.Errorf("duplicate symbol %s", ins.Symbol)
-		}
-
-		symbolOffsets[ins.Symbol] = iter.Offset
-	}
-
-	iter = insns.Iterate()
-	for iter.Next() {
-		i := iter.Index
-		offset := iter.Offset
-		ins := iter.Ins
-
-		if ins.Reference == "" {
-			continue
-		}
-
-		symOffset, ok := symbolOffsets[ins.Reference]
-		switch {
-		case ins.IsFunctionReference() && ins.Constant == -1:
-			if !ok {
-				break
-			}
-
-			ins.Constant = int64(symOffset - offset - 1)
-			continue
-
-		case ins.OpCode.Class().IsJump() && ins.Offset == -1:
-			if !ok {
-				break
-			}
-
-			ins.Offset = int16(symOffset - offset - 1)
-			continue
-
-		case ins.IsLoadFromMap() && ins.MapPtr() == -1:
-			return fmt.Errorf("map %s: %w", ins.Reference, errUnsatisfiedMap)
-		default:
-			// no fixup needed
-			continue
-		}
-
-		return fmt.Errorf("%s at insn %d: symbol %q: %w", ins.OpCode, i, ins.Reference, errUnsatisfiedProgram)
+	if err := insns.FixupReferences(); err != nil {
+		return err
 	}
 
 	// fixupBPFCalls replaces bpf_probe_read_{kernel,user}[_str] with bpf_probe_read[_str] on older kernels
 	// https://github.com/libbpf/libbpf/blob/master/src/libbpf.c#L6009
-	iter = insns.Iterate()
+	iter := insns.Iterate()
 	for iter.Next() {
 		ins := iter.Ins
 		if !ins.IsBuiltinCall() {

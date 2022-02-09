@@ -79,6 +79,7 @@ elif [[ "${1:-}" = "--exec-test" ]]; then
     exit 1 # this return code is "swallowed" by qemu
   fi
   touch "/run/output/success"
+  sync -f "/run/output/success"
   exit 0
 fi
 

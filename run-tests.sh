@@ -48,7 +48,7 @@ if [[ "${1:-}" = "--exec-vm" ]]; then
     rm "${output}/fake-stdin"
   fi
 
-  if ! $sudo virtme-run --kimg "${input}/bzImage" --memory 768M --pwd \
+  if ! $sudo strace -c -f virtme-run --kimg "${input}/bzImage" --memory 768M --pwd \
     --rwdir="${testdir}=${testdir}" \
     --rodir=/run/input="${input}" \
     --rwdir=/run/output="${output}" \

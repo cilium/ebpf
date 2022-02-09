@@ -48,7 +48,7 @@ if [[ "${1:-}" = "--exec-vm" ]]; then
     rm "${output}/fake-stdin"
   fi
 
-  if ! $sudo virtme-run --kimg "${input}/bzImage" --memory 768M --pwd \
+  if ! $sudo strace -o "${output}/strace.log" -f virtme-run --kimg "${input}/bzImage" --memory 768M --pwd \
     --rwdir="${testdir}=${testdir}" \
     --rodir=/run/input="${input}" \
     --rwdir=/run/output="${output}" \
@@ -57,12 +57,14 @@ if [[ "${1:-}" = "--exec-vm" ]]; then
     exit 23
   fi
 
-  if [[ ! -e "${output}/success" ]]; then
+  if [[ ! -e "${output}/status" ]]; then
+    tail -n 20 "${output}/strace.log" || true
     exit 42
   fi
 
+  rc=$(<"${output}/status")
   $sudo rm -r "$output"
-  exit 0
+  exit $rc
 elif [[ "${1:-}" = "--exec-test" ]]; then
   shift
 
@@ -73,13 +75,12 @@ elif [[ "${1:-}" = "--exec-test" ]]; then
     export KERNEL_SELFTESTS="/run/input/bpf"
   fi
 
-  dmesg -C
-  if ! "$@"; then
-    dmesg
-    exit 1 # this return code is "swallowed" by qemu
-  fi
-  touch "/run/output/success"
-  exit 0
+  dmesg --clear
+  rc=0
+  "$@" || rc=$?
+  dmesg
+  echo $rc > "/run/output/status"
+  exit $rc # this return code is "swallowed" by qemu
 fi
 
 readonly kernel_version="${1:-}"

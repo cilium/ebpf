@@ -262,7 +262,7 @@ import (
 				replace(objName, "prog_name"),
 				replace(enumTypes["ProgType"], "prog_type"),
 				replace(enumTypes["AttachType"], "expected_attach_type"),
-				replace(pointer, "insns", "license", "log_buf", "func_info", "line_info"),
+				replace(pointer, "insns", "license", "log_buf", "func_info", "line_info", "fd_array"),
 			},
 		},
 		{
@@ -340,6 +340,14 @@ import (
 				replace(enumTypes["AttachType"], "attach_type"),
 				flattenAnon,
 				replace(pointer, "iter_info"),
+			},
+		},
+		{
+			"LinkCreatePerfEvent", retFd, "link_create", "BPF_LINK_CREATE",
+			[]patch{
+				chooseNth(4, 2),
+				replace(enumTypes["AttachType"], "attach_type"),
+				flattenAnon,
 			},
 		},
 		{

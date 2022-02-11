@@ -21,13 +21,13 @@ func TestKprobe(t *testing.T) {
 
 	prog := mustLoadProgram(t, ebpf.Kprobe, 0, "")
 
-	k, err := Kprobe(ksym, prog)
+	k, err := Kprobe(ksym, prog, nil)
 	c.Assert(err, qt.IsNil)
 	defer k.Close()
 
 	testLink(t, k, prog)
 
-	k, err = Kprobe("bogus", prog)
+	k, err = Kprobe("bogus", prog, nil)
 	c.Assert(errors.Is(err, os.ErrNotExist), qt.IsTrue, qt.Commentf("got error: %s", err))
 	if k != nil {
 		k.Close()
@@ -39,13 +39,13 @@ func TestKretprobe(t *testing.T) {
 
 	prog := mustLoadProgram(t, ebpf.Kprobe, 0, "")
 
-	k, err := Kretprobe(ksym, prog)
+	k, err := Kretprobe(ksym, prog, nil)
 	c.Assert(err, qt.IsNil)
 	defer k.Close()
 
 	testLink(t, k, prog)
 
-	k, err = Kretprobe("bogus", prog)
+	k, err = Kretprobe("bogus", prog, nil)
 	c.Assert(errors.Is(err, os.ErrNotExist), qt.IsTrue, qt.Commentf("got error: %s", err))
 	if k != nil {
 		k.Close()
@@ -57,16 +57,16 @@ func TestKprobeErrors(t *testing.T) {
 
 	// Invalid Kprobe incantations. Kretprobe uses the same code paths
 	// with a different ret flag.
-	_, err := Kprobe("", nil) // empty symbol
+	_, err := Kprobe("", nil, nil) // empty symbol
 	c.Assert(errors.Is(err, errInvalidInput), qt.IsTrue)
 
-	_, err = Kprobe("_", nil) // empty prog
+	_, err = Kprobe("_", nil, nil) // empty prog
 	c.Assert(errors.Is(err, errInvalidInput), qt.IsTrue)
 
-	_, err = Kprobe(".", &ebpf.Program{}) // illegal chars in symbol
+	_, err = Kprobe(".", &ebpf.Program{}, nil) // illegal chars in symbol
 	c.Assert(errors.Is(err, errInvalidInput), qt.IsTrue)
 
-	_, err = Kprobe("foo", &ebpf.Program{}) // wrong prog type
+	_, err = Kprobe("foo", &ebpf.Program{}, nil) // wrong prog type
 	c.Assert(errors.Is(err, errInvalidInput), qt.IsTrue)
 }
 
@@ -275,7 +275,7 @@ func TestKprobeProgramCall(t *testing.T) {
 
 	// Open Kprobe on `sys_getpid` and attach it
 	// to the ebpf program created above.
-	k, err := Kprobe("sys_getpid", p)
+	k, err := Kprobe("sys_getpid", p, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -364,4 +364,15 @@ func assertMapValue(t *testing.T, m *ebpf.Map, k, v uint32) {
 	if val != v {
 		t.Fatalf("unexpected value: want '%d', got '%d'", v, val)
 	}
+}
+
+func TestKprobeCookie(t *testing.T) {
+	testutils.SkipOnOldKernel(t, "5.15", "bpf_perf_link")
+
+	prog := mustLoadProgram(t, ebpf.Kprobe, 0, "")
+	k, err := Kprobe(ksym, prog, &KprobeOptions{BpfCookie: 1000})
+	if err != nil {
+		t.Fatal(err)
+	}
+	k.Close()
 }

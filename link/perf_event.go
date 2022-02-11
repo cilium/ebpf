@@ -87,6 +87,9 @@ type perfEvent struct {
 	// BPF link FD.
 	bpfLinkFD *sys.FD
 
+	// User provided arbitrary value.
+	bpfCookie uint64
+
 	fd *sys.FD
 }
 
@@ -195,6 +198,7 @@ func (pe *perfEvent) attach(prog *ebpf.Program) error {
 			ProgFd:     uint32(prog.FD()),
 			TargetFd:   uint32(kfd),
 			AttachType: sys.BPF_PERF_EVENT,
+			BpfCookie:  pe.bpfCookie,
 		}
 
 		fd, err := sys.LinkCreatePerfEvent(&attr)
@@ -203,6 +207,10 @@ func (pe *perfEvent) attach(prog *ebpf.Program) error {
 		}
 		pe.bpfLinkFD = fd
 	} else {
+		if pe.bpfCookie != 0 {
+			return fmt.Errorf("bpf cookies are available from kernel version 5.15+: %w", ErrNotSupported)
+		}
+
 		// Assign the eBPF program to the perf event.
 		err := unix.IoctlSetInt(int(kfd), unix.PERF_EVENT_IOC_SET_BPF, prog.FD())
 		if err != nil {

@@ -29,10 +29,20 @@ var (
 type probeType uint8
 
 type probeArgs struct {
-	symbol, group, path  string
-	offset, refCtrOffset uint64
-	pid                  int
-	ret                  bool
+	symbol, group, path             string
+	offset, refCtrOffset, bpfCookie uint64
+	pid                             int
+	ret                             bool
+}
+
+// KprobeOptions defines additional parameters that will be used
+// when loading Kprobes.
+type KprobeOptions struct {
+	// Arbitrary value that can be fetched from an eBPF program
+	// via `bpf_get_attach_cookie()`.
+	//
+	// Needs kernel 5.15+.
+	BpfCookie uint64
 }
 
 const (
@@ -78,13 +88,13 @@ func (pt probeType) RetprobeBit() (uint64, error) {
 // given kernel symbol starts executing. See /proc/kallsyms for available
 // symbols. For example, printk():
 //
-//	kp, err := Kprobe("printk", prog)
+//	kp, err := Kprobe("printk", prog, nil)
 //
 // Losing the reference to the resulting Link (kp) will close the Kprobe
 // and prevent further execution of prog. The Link must be Closed during
 // program shutdown to avoid leaking system resources.
-func Kprobe(symbol string, prog *ebpf.Program) (Link, error) {
-	k, err := kprobe(symbol, prog, false)
+func Kprobe(symbol string, prog *ebpf.Program, opts *KprobeOptions) (Link, error) {
+	k, err := kprobe(symbol, prog, opts, false)
 	if err != nil {
 		return nil, err
 	}
@@ -102,13 +112,13 @@ func Kprobe(symbol string, prog *ebpf.Program) (Link, error) {
 // before the given kernel symbol exits, with the function stack left intact.
 // See /proc/kallsyms for available symbols. For example, printk():
 //
-//	kp, err := Kretprobe("printk", prog)
+//	kp, err := Kretprobe("printk", prog, nil)
 //
 // Losing the reference to the resulting Link (kp) will close the Kretprobe
 // and prevent further execution of prog. The Link must be Closed during
 // program shutdown to avoid leaking system resources.
-func Kretprobe(symbol string, prog *ebpf.Program) (Link, error) {
-	k, err := kprobe(symbol, prog, true)
+func Kretprobe(symbol string, prog *ebpf.Program, opts *KprobeOptions) (Link, error) {
+	k, err := kprobe(symbol, prog, opts, true)
 	if err != nil {
 		return nil, err
 	}
@@ -124,7 +134,7 @@ func Kretprobe(symbol string, prog *ebpf.Program) (Link, error) {
 
 // kprobe opens a perf event on the given symbol and attaches prog to it.
 // If ret is true, create a kretprobe.
-func kprobe(symbol string, prog *ebpf.Program, ret bool) (*perfEvent, error) {
+func kprobe(symbol string, prog *ebpf.Program, opts *KprobeOptions, ret bool) (*perfEvent, error) {
 	if symbol == "" {
 		return nil, fmt.Errorf("symbol name cannot be empty: %w", errInvalidInput)
 	}
@@ -139,9 +149,10 @@ func kprobe(symbol string, prog *ebpf.Program, ret bool) (*perfEvent, error) {
 	}
 
 	args := probeArgs{
-		pid:    perfAllThreads,
-		symbol: platformPrefix(symbol),
-		ret:    ret,
+		pid:       perfAllThreads,
+		symbol:    platformPrefix(symbol),
+		ret:       ret,
+		bpfCookie: opts.BpfCookie,
 	}
 
 	// Use kprobe PMU if the kernel has it available.
@@ -268,10 +279,11 @@ func pmuProbe(typ probeType, args probeArgs) (*perfEvent, error) {
 
 	// Kernel has perf_[k,u]probe PMU available, initialize perf event.
 	return &perfEvent{
-		fd:    fd,
-		pmuID: et,
-		name:  args.symbol,
-		typ:   typ.PerfEventType(args.ret),
+		fd:        fd,
+		pmuID:     et,
+		name:      args.symbol,
+		typ:       typ.PerfEventType(args.ret),
+		bpfCookie: args.bpfCookie,
 	}, nil
 }
 
@@ -331,6 +343,7 @@ func tracefsProbe(typ probeType, args probeArgs) (*perfEvent, error) {
 		name:      args.symbol,
 		tracefsID: tid,
 		typ:       typ.PerfEventType(args.ret),
+		bpfCookie: args.bpfCookie,
 	}, nil
 }
 

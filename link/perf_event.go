@@ -13,6 +13,8 @@ import (
 	"unsafe"
 
 	"github.com/cilium/ebpf"
+	"github.com/cilium/ebpf/asm"
+	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/sys"
 	"github.com/cilium/ebpf/internal/unix"
 )
@@ -82,6 +84,12 @@ type perfEvent struct {
 	// The event type determines the types of programs that can be attached.
 	typ perfEventType
 
+	// BPF link FD.
+	bpfLinkFD *sys.FD
+
+	// User provided arbitrary value.
+	bpfCookie uint64
+
 	fd *sys.FD
 }
 
@@ -126,6 +134,13 @@ func (pe *perfEvent) Close() error {
 	err = pe.fd.Close()
 	if err != nil {
 		return fmt.Errorf("closing perf event fd: %w", err)
+	}
+
+	if pe.bpfLinkFD != nil {
+		err = pe.bpfLinkFD.Close()
+		if err != nil {
+			return fmt.Errorf("closing bpf perf link: %w", err)
+		}
 	}
 
 	switch pe.typ {
@@ -175,10 +190,32 @@ func (pe *perfEvent) attach(prog *ebpf.Program) error {
 
 	kfd := pe.fd.Int()
 
-	// Assign the eBPF program to the perf event.
-	err := unix.IoctlSetInt(int(kfd), unix.PERF_EVENT_IOC_SET_BPF, prog.FD())
-	if err != nil {
-		return fmt.Errorf("setting perf event bpf program: %w", err)
+	if err := haveBPFLinkPerfEvent(); err == nil {
+		// Use the bpf api to attach the perf event (BPF_LINK_TYPE_PERF_EVENT, 5.15+).
+		//
+		// https://github.com/torvalds/linux/commit/b89fbfbb854c9afc3047e8273cc3a694650b802e
+		attr := sys.LinkCreatePerfEventAttr{
+			ProgFd:     uint32(prog.FD()),
+			TargetFd:   uint32(kfd),
+			AttachType: sys.BPF_PERF_EVENT,
+			BpfCookie:  pe.bpfCookie,
+		}
+
+		fd, err := sys.LinkCreatePerfEvent(&attr)
+		if err != nil {
+			return fmt.Errorf("cannot create bpf perf link: %v", err)
+		}
+		pe.bpfLinkFD = fd
+	} else {
+		if pe.bpfCookie != 0 {
+			return fmt.Errorf("bpf cookies are available from kernel version 5.15+: %w", ErrNotSupported)
+		}
+
+		// Assign the eBPF program to the perf event.
+		err := unix.IoctlSetInt(int(kfd), unix.PERF_EVENT_IOC_SET_BPF, prog.FD())
+		if err != nil {
+			return fmt.Errorf("setting perf event bpf program: %w", err)
+		}
 	}
 
 	// PERF_EVENT_IOC_ENABLE and _DISABLE ignore their given values.
@@ -268,3 +305,41 @@ func uint64FromFile(base string, path ...string) (uint64, error) {
 	et := bytes.TrimSpace(data)
 	return strconv.ParseUint(string(et), 10, 64)
 }
+
+// Probe BPF perf link.
+//
+// https://elixir.bootlin.com/linux/v5.16.8/source/kernel/bpf/syscall.c#L4307
+// https://github.com/torvalds/linux/commit/b89fbfbb854c9afc3047e8273cc3a694650b802e
+var haveBPFLinkPerfEvent = internal.FeatureTest("bpf_link_perf_event", "5.15", func() error {
+	prog, err := ebpf.NewProgram(&ebpf.ProgramSpec{
+		Name: "probe_bpf_perf_link",
+		Type: ebpf.Kprobe,
+		Instructions: asm.Instructions{
+			asm.Mov.Imm(asm.R0, 0),
+			asm.Return(),
+		},
+		License: "MIT",
+	})
+	if err != nil {
+		return err
+	}
+
+	fd, err := sys.NewFD(prog.FD())
+	if err != nil {
+		return err
+	}
+	defer fd.Close()
+
+	attr := sys.LinkCreatePerfEventAttr{
+		ProgFd:     fd.Uint(),
+		AttachType: sys.BPF_PERF_EVENT,
+	}
+	_, err = sys.LinkCreatePerfEvent(&attr)
+	if errors.Is(err, unix.EINVAL) {
+		return internal.ErrNotSupported
+	}
+	if errors.Is(err, unix.EBADF) {
+		return nil
+	}
+	return err
+})

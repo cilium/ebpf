@@ -84,3 +84,14 @@ func TestVersionFromCode(t *testing.T) {
 		})
 	}
 }
+
+func TestKernelRelease(t *testing.T) {
+	r, err := KernelRelease()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if r == "" {
+		t.Fatal("unexpected empty kernel release")
+	}
+}

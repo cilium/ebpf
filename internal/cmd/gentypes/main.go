@@ -343,6 +343,14 @@ import (
 			},
 		},
 		{
+			"LinkCreatePerfEvent", retFd, "link_create", "BPF_LINK_CREATE",
+			[]patch{
+				chooseNth(4, 2),
+				replace(enumTypes["AttachType"], "attach_type"),
+				flattenAnon,
+			},
+		},
+		{
 			"LinkUpdate", retError, "link_update", "BPF_LINK_UPDATE",
 			nil,
 		},

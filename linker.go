@@ -120,15 +120,15 @@ func fixupJumpsAndCalls(insns asm.Instructions) error {
 	for iter.Next() {
 		ins := iter.Ins
 
-		if ins.Symbol == "" {
+		if ins.Symbol() == "" {
 			continue
 		}
 
-		if _, ok := symbolOffsets[ins.Symbol]; ok {
-			return fmt.Errorf("duplicate symbol %s", ins.Symbol)
+		if _, ok := symbolOffsets[ins.Symbol()]; ok {
+			return fmt.Errorf("duplicate symbol %s", ins.Symbol())
 		}
 
-		symbolOffsets[ins.Symbol] = iter.Offset
+		symbolOffsets[ins.Symbol()] = iter.Offset
 	}
 
 	iter = insns.Iterate()
@@ -137,11 +137,11 @@ func fixupJumpsAndCalls(insns asm.Instructions) error {
 		offset := iter.Offset
 		ins := iter.Ins
 
-		if ins.Reference == "" {
+		if ins.Reference() == "" {
 			continue
 		}
 
-		symOffset, ok := symbolOffsets[ins.Reference]
+		symOffset, ok := symbolOffsets[ins.Reference()]
 		switch {
 		case ins.IsFunctionReference() && ins.Constant == -1:
 			if !ok {
@@ -160,13 +160,13 @@ func fixupJumpsAndCalls(insns asm.Instructions) error {
 			continue
 
 		case ins.IsLoadFromMap() && ins.MapPtr() == -1:
-			return fmt.Errorf("map %s: %w", ins.Reference, errUnsatisfiedMap)
+			return fmt.Errorf("map %s: %w", ins.Reference(), errUnsatisfiedMap)
 		default:
 			// no fixup needed
 			continue
 		}
 
-		return fmt.Errorf("%s at insn %d: symbol %q: %w", ins.OpCode, i, ins.Reference, errUnsatisfiedProgram)
+		return fmt.Errorf("%s at insn %d: symbol %q: %w", ins.OpCode, i, ins.Reference(), errUnsatisfiedProgram)
 	}
 
 	// fixupBPFCalls replaces bpf_probe_read_{kernel,user}[_str] with bpf_probe_read[_str] on older kernels

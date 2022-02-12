@@ -441,7 +441,7 @@ func (cl *collectionLoader) loadProgram(progName string) (*Program, error) {
 	for i := range progSpec.Instructions {
 		ins := &progSpec.Instructions[i]
 
-		if !ins.IsLoadFromMap() || ins.Reference == "" {
+		if !ins.IsLoadFromMap() || ins.Reference() == "" {
 			continue
 		}
 
@@ -451,17 +451,17 @@ func (cl *collectionLoader) loadProgram(progName string) (*Program, error) {
 			continue
 		}
 
-		m, err := cl.loadMap(ins.Reference)
+		m, err := cl.loadMap(ins.Reference())
 		if err != nil {
 			return nil, fmt.Errorf("program %s: %w", progName, err)
 		}
 
 		fd := m.FD()
 		if fd < 0 {
-			return nil, fmt.Errorf("map %s: %w", ins.Reference, sys.ErrClosedFd)
+			return nil, fmt.Errorf("map %s: %w", ins.Reference(), sys.ErrClosedFd)
 		}
 		if err := ins.RewriteMapPtr(m.FD()); err != nil {
-			return nil, fmt.Errorf("program %s: map %s: %w", progName, ins.Reference, err)
+			return nil, fmt.Errorf("program %s: map %s: %w", progName, ins.Reference(), err)
 		}
 	}
 

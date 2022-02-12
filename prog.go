@@ -183,7 +183,7 @@ func (spec *ProgramSpec) layout() ([]reference, error) {
 		// Skip non-symbols and symbols that describe the ProgramSpec itself,
 		// which is usually the first instruction in Instructions.
 		// ProgramSpec itself is already included and not present in references.
-		if ins.Symbol == "" || ins.Symbol == name {
+		if ins.Symbol() == "" || ins.Symbol() == name {
 			continue
 		}
 
@@ -191,7 +191,7 @@ func (spec *ProgramSpec) layout() ([]reference, error) {
 		// with valid progs that contain multiple symbols and don't have references
 		// populated. Assume ProgramSpec is used similarly in the wild, so don't
 		// alter this behaviour.
-		ref := spec.references[ins.Symbol]
+		ref := spec.references[ins.Symbol()]
 		if ref != nil {
 			out = append(out, reference{iter.Offset.Bytes(), ref})
 		}

@@ -154,7 +154,7 @@ func TestInstructionsRewriteMapPtr(t *testing.T) {
 		LoadMapPtr(R1, 0),
 		Return(),
 	}
-	insns[0].Reference = "good"
+	insns[0] = insns[0].SetReference("good")
 
 	if err := insns.RewriteMapPtr("good", 1); err != nil {
 		t.Fatal(err)

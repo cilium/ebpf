@@ -349,10 +349,8 @@ func (ec *elfCode) loadFunctions(section *elfSection) (map[string]asm.Instructio
 		insns  asm.Instructions
 	)
 	for {
-		ins := asm.Instruction{
-			// Symbols denote the first instruction of a function body.
-			Symbol: section.symbols[offset].Name,
-		}
+		// Symbols denote the first instruction of a function body.
+		ins := asm.Instruction{}.Sym(section.symbols[offset].Name)
 
 		// Pull one instruction from the instruction stream.
 		n, err := ins.Unmarshal(r, ec.ByteOrder)
@@ -374,7 +372,7 @@ func (ec *elfCode) loadFunctions(section *elfSection) (map[string]asm.Instructio
 
 		// Decoded the first instruction of a function body but insns already
 		// holds a valid instruction stream. Store the result and flush insns.
-		if ins.Symbol != "" && insns.Name() != "" {
+		if ins.Symbol() != "" && insns.Name() != "" {
 			funcs[insns.Name()] = insns
 			insns = nil
 		}
@@ -399,7 +397,7 @@ func (ec *elfCode) loadFunctions(section *elfSection) (map[string]asm.Instructio
 					return nil, fmt.Errorf("offset %d: no jump target found at offset %d", offset, tgt)
 				}
 
-				ins.Reference = sym
+				ins = ins.SetReference(sym)
 				ins.Constant = -1
 			}
 		}
@@ -579,7 +577,7 @@ func (ec *elfCode) relocateInstruction(ins *asm.Instruction, rel elf.Symbol) err
 		return fmt.Errorf("relocation to %q: %w", target.Name, ErrNotSupported)
 	}
 
-	ins.Reference = name
+	*ins = ins.SetReference(name)
 	return nil
 }
 

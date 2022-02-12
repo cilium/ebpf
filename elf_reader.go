@@ -343,14 +343,17 @@ func (ec *elfCode) loadProgramSections() (map[string]*ProgramSpec, error) {
 // The resulting map is indexed by function name.
 func (ec *elfCode) loadFunctions(section *elfSection) (map[string]asm.Instructions, error) {
 	var (
-		r      = bufio.NewReader(section.Open())
-		funcs  = make(map[string]asm.Instructions)
-		offset uint64
-		insns  asm.Instructions
+		r          = bufio.NewReader(section.Open())
+		funcs      = make(map[string]asm.Instructions)
+		secOffset  uint64
+		funcOffset uint64
+		insns      asm.Instructions
+		lineInfos  btf.LineInfos
 	)
+
 	for {
 		// Symbols denote the first instruction of a function body.
-		ins := asm.Instruction{}.Sym(section.symbols[offset].Name)
+		ins := asm.Instruction{}.Sym(section.symbols[secOffset].Name)
 
 		// Pull one instruction from the instruction stream.
 		n, err := ins.Unmarshal(r, ec.ByteOrder)
@@ -367,7 +370,7 @@ func (ec *elfCode) loadFunctions(section *elfSection) (map[string]asm.Instructio
 			break
 		}
 		if err != nil {
-			return nil, fmt.Errorf("offset %d: %w", offset, err)
+			return nil, fmt.Errorf("offset %d: %w", secOffset, err)
 		}
 
 		// Decoded the first instruction of a function body but insns already
@@ -375,12 +378,13 @@ func (ec *elfCode) loadFunctions(section *elfSection) (map[string]asm.Instructio
 		if ins.Symbol() != "" && insns.Name() != "" {
 			funcs[insns.Name()] = insns
 			insns = nil
+			funcOffset = 0
 		}
 
-		if rel, ok := section.relocations[offset]; ok {
+		if rel, ok := section.relocations[secOffset]; ok {
 			// A relocation was found for the current offset. Apply it to the insn.
 			if err = ec.relocateInstruction(&ins, rel); err != nil {
-				return nil, fmt.Errorf("offset %d: relocate instruction: %w", offset, err)
+				return nil, fmt.Errorf("offset %d: relocate instruction: %w", secOffset, err)
 			}
 		} else {
 			// Up to LLVM 9, calls to subprograms within the same ELF section are
@@ -391,10 +395,10 @@ func (ec *elfCode) loadFunctions(section *elfSection) (map[string]asm.Instructio
 			// When splitting sections into subprograms, the targets of these calls
 			// are no longer in scope, so they must be resolved here.
 			if ins.IsFunctionReference() && ins.Constant != -1 {
-				tgt := jumpTarget(offset, ins)
+				tgt := jumpTarget(secOffset, ins)
 				sym := section.symbols[tgt].Name
 				if sym == "" {
-					return nil, fmt.Errorf("offset %d: no jump target found at offset %d", offset, tgt)
+					return nil, fmt.Errorf("offset %d: no jump target found at offset %d", secOffset, tgt)
 				}
 
 				ins = ins.SetReference(sym)
@@ -402,8 +406,37 @@ func (ec *elfCode) loadFunctions(section *elfSection) (map[string]asm.Instructio
 			}
 		}
 
+		if ec.btf != nil {
+			name := ins.Symbol()
+			if name == "" {
+				name = insns.Name()
+			}
+
+			lineInfos = ec.btf.GetFuncLineInfos(name)
+		}
+		for _, lineInfo := range lineInfos {
+			if uint64(lineInfo.InsnOff) == funcOffset {
+				fileName, err := lineInfo.FileName(ec.btf)
+				if err != nil {
+					continue
+				}
+
+				line, err := lineInfo.Line(ec.btf)
+				if err != nil {
+					continue
+				}
+
+				ins = ins.SetFileName(fileName).
+					SetLine(line).
+					SetLineNumber(int(lineInfo.LineNum())).
+					SetColumnNumber(int(lineInfo.ColNum()))
+				break
+			}
+		}
+
 		insns = append(insns, ins)
-		offset += n
+		secOffset += n
+		funcOffset += n
 	}
 
 	return funcs, nil

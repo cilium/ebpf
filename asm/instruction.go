@@ -679,8 +679,14 @@ func (insns Instructions) Format(f fmt.State, c rune) {
 
 	iter := insns.Iterate()
 	for iter.Next() {
-		if iter.Ins.Symbol != "" {
-			fmt.Fprintf(f, "%s%s:\n", symIndent, iter.Ins.Symbol)
+		if iter.Ins.Symbol() != "" {
+			fmt.Fprintf(f, "%s%s:\n", symIndent, iter.Ins.Symbol())
+		}
+		if line := iter.Ins.Line(); line != "" {
+			line := strings.TrimSpace(line)
+			if line != "" {
+				fmt.Fprintf(f, "%s%*s; %s\n", indent, offsetWidth, " ", line)
+			}
 		}
 		fmt.Fprintf(f, "%s%*d: %v\n", indent, offsetWidth, iter.Offset, iter.Ins)
 	}

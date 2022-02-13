@@ -144,15 +144,39 @@ func (ins Instruction) Marshal(w io.Writer, bo binary.ByteOrder) (uint64, error)
 	return 2 * InstructionSize, nil
 }
 
+// RewriteMap changes an instruction to use a new map's fd.
+// This function also adds a reference to `m` in the instruction so the passed map isn't garbage collected if no other
+// references exist.
+//
+// Returns an error if the instruction doesn't load a map.
+func (ins *Instruction) RewriteMap(m ebpfMap) error {
+	if !ins.IsLoadFromMap() {
+		return errors.New("not a load from a map")
+	}
+
+	// nil is a valid value for m to unset the map reference
+	fd := -1
+	if m != nil {
+		fd = m.FD()
+	}
+
+	// Set the FD of the passed map.
+	err := ins.RewriteMapPtr(fd)
+	if err != nil {
+		return err
+	}
+
+	*ins = ins.setMap(m)
+	return nil
+}
+
 // RewriteMapPtr changes an instruction to use a new map fd.
 //
 // Returns an error if the instruction doesn't load a map.
+//
+// Deprecated: use RewriteMap instead.
 func (ins *Instruction) RewriteMapPtr(fd int) error {
-	if !ins.OpCode.IsDWordLoad() {
-		return fmt.Errorf("%s is not a 64 bit load", ins.OpCode)
-	}
-
-	if ins.Src != PseudoMapFD && ins.Src != PseudoMapValue {
+	if !ins.IsLoadFromMap() {
 		return errors.New("not a load from a map")
 	}
 
@@ -422,8 +446,8 @@ func (ins Instruction) LineColumn() int {
 	return int(ins.metadata.lineCol & 0x3ff)
 }
 
-// SetMap sets denotes the *ebpf.Program to which the current instruction is performing a BPF-to-BPF call.
-func (ins Instruction) SetProgram(program ebpfProgram) Instruction {
+// setProgram sets denotes the *ebpf.Program to which the current instruction is performing a BPF-to-BPF call.
+func (ins Instruction) setProgram(program ebpfProgram) Instruction {
 	ins.metadata = ins.metadata.copy()
 	ins.metadata.program = program
 	return ins
@@ -438,8 +462,8 @@ func (ins Instruction) Program() ebpfProgram {
 	return ins.metadata.program
 }
 
-// SetMap sets the *ebpf.Map from which this instruction preforms a data.
-func (ins Instruction) SetMap(ebpfMap ebpfMap) Instruction {
+// setMap sets the *ebpf.Map from which this instruction preforms a data.
+func (ins Instruction) setMap(ebpfMap ebpfMap) Instruction {
 	ins.metadata = ins.metadata.copy()
 	ins.metadata.bpfMap = ebpfMap
 	return ins
@@ -458,6 +482,7 @@ func (ins Instruction) Map() ebpfMap {
 // since this would cause in import loop. The methods were chosen because they are unique to ebpf.Map and don't
 // reference other types in the ebpf package
 type ebpfMap interface {
+	FD() int
 	ValueSize() uint32
 	Freeze() error
 }
@@ -466,6 +491,7 @@ type ebpfMap interface {
 // as type since this would cause in import loop. The methods were chosen because they are unique to ebpf.Program
 // and don't reference other types in the ebpf package
 type ebpfProgram interface {
+	FD() int
 	Benchmark(in []byte, repeat int, reset func()) (uint32, time.Duration, error)
 	Test(in []byte) (uint32, []byte, error)
 }
@@ -558,9 +584,40 @@ func (insns Instructions) Size() uint64 {
 	return sum
 }
 
+// RewriteMap rewrites all loads of a specific map pointer.
+//
+// Returns an error if the symbol isn't used, see IsUnreferencedSymbol.
+func (insns Instructions) RewriteMap(symbol string, m ebpfMap) error {
+	if symbol == "" {
+		return errors.New("empty symbol")
+	}
+
+	found := false
+	for i := range insns {
+		ins := &insns[i]
+		if ins.Reference() != symbol {
+			continue
+		}
+
+		if err := ins.RewriteMap(m); err != nil {
+			return err
+		}
+
+		found = true
+	}
+
+	if !found {
+		return &unreferencedSymbolError{symbol}
+	}
+
+	return nil
+}
+
 // RewriteMapPtr rewrites all loads of a specific map pointer to a new fd.
 //
 // Returns an error if the symbol isn't used, see IsUnreferencedSymbol.
+//
+// Deprecated: use RewriteMap instead.
 func (insns Instructions) RewriteMapPtr(symbol string, fd int) error {
 	if symbol == "" {
 		return errors.New("empty symbol")

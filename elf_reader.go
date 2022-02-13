@@ -485,7 +485,7 @@ func (ec *elfCode) relocateInstruction(ins *asm.Instruction, rel elf.Symbol) err
 
 		// Mark the instruction as needing an update when creating the
 		// collection.
-		if err := ins.RewriteMapPtr(-1); err != nil {
+		if err := ins.RewriteMap(nil); err != nil {
 			return err
 		}
 
@@ -524,7 +524,7 @@ func (ec *elfCode) relocateInstruction(ins *asm.Instruction, rel elf.Symbol) err
 
 		// Mark the instruction as needing an update when creating the
 		// collection.
-		if err := ins.RewriteMapPtr(-1); err != nil {
+		if err := ins.RewriteMap(nil); err != nil {
 			return err
 		}
 

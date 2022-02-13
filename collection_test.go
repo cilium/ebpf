@@ -139,6 +139,10 @@ func TestCollectionSpecRewriteMaps(t *testing.T) {
 		t.Error("RewriteMaps doesn't remove map from CollectionSpec.Maps")
 	}
 
+	if insns[0].Map() != newMap {
+		t.Error("RewriteMaps didn't add map reference to the instruction")
+	}
+
 	coll, err := NewCollection(cs)
 	if err != nil {
 		t.Fatal(err)

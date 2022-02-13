@@ -411,7 +411,7 @@ func (ins Instruction) Line() string {
 // SetLine sets the line number within the source file which created this instruction.
 func (ins Instruction) SetLineNumber(lineNumber int) Instruction {
 	ins.metadata = ins.metadata.copy()
-	ins.metadata.lineCol = (uint32(lineNumber) << 10) & (ins.metadata.lineCol & 0x3ff)
+	ins.metadata.lineCol = (uint32(lineNumber) << 10) | (ins.metadata.lineCol & 0x3ff)
 	return ins
 }
 
@@ -426,12 +426,12 @@ func (ins Instruction) LineNumber() int {
 }
 
 // SetColumnNumber sets the column number within the source line which created this instruction.
-func (ins Instruction) SetColumnNumber(lineNumber int) Instruction {
+func (ins Instruction) SetColumnNumber(colNumber int) Instruction {
 	ins.metadata = ins.metadata.copy()
 	// Zero out the lower 10 bits of lineCol
-	ins.metadata.lineCol = ins.metadata.lineCol & (0x3ff ^ 0x3ff)
-	// Replace with lower 10 bits of lineNumber
-	ins.metadata.lineCol = ins.metadata.lineCol | (ins.metadata.lineCol & 0x3ff)
+	ins.metadata.lineCol = ins.metadata.lineCol & (0xFFFFFC00)
+	// Replace with lower 10 bits of colNumber
+	ins.metadata.lineCol = ins.metadata.lineCol | (uint32(colNumber) & 0x3ff)
 	return ins
 }
 

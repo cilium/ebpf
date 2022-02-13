@@ -9,7 +9,6 @@ import (
 	"io"
 	"math"
 	"strings"
-	"time"
 
 	"github.com/cilium/ebpf/internal/unix"
 )
@@ -446,22 +445,6 @@ func (ins Instruction) LineColumn() int {
 	return int(ins.metadata.lineCol & 0x3ff)
 }
 
-// setProgram sets denotes the *ebpf.Program to which the current instruction is performing a BPF-to-BPF call.
-func (ins Instruction) setProgram(program ebpfProgram) Instruction {
-	ins.metadata = ins.metadata.copy()
-	ins.metadata.program = program
-	return ins
-}
-
-// Program denotes the *ebpf.Program to which the current instruction is performing a BPF-to-BPF call.
-func (ins Instruction) Program() ebpfProgram {
-	if ins.metadata == nil {
-		return nil
-	}
-
-	return ins.metadata.program
-}
-
 // setMap sets the *ebpf.Map from which this instruction preforms a data.
 func (ins Instruction) setMap(ebpfMap ebpfMap) Instruction {
 	ins.metadata = ins.metadata.copy()
@@ -487,15 +470,6 @@ type ebpfMap interface {
 	Freeze() error
 }
 
-// ebpfProgram isn't actually used as a meaningful interface, rater it is used since we can't directly use ebpf.Program
-// as type since this would cause in import loop. The methods were chosen because they are unique to ebpf.Program
-// and don't reference other types in the ebpf package
-type ebpfProgram interface {
-	FD() int
-	Benchmark(in []byte, repeat int, reset func()) (uint32, time.Duration, error)
-	Test(in []byte) (uint32, []byte, error)
-}
-
 // metadata holds metadata about a Instruction which are not relevant for the kernel but useful for the loader
 type metadata struct {
 	// reference denotes a reference (e.g. a jump) to another symbol.
@@ -509,8 +483,6 @@ type metadata struct {
 	// lineCol denotes both the line and column number within the source file which generated this instruction.
 	lineCol uint32
 
-	// program denotes the *ebpf.Program to which the current instruction is performing a BPF-to-BPF call.
-	program ebpfProgram
 	// bpfMap denotes the *ebpf.Map from which this instruction preforms a data.
 	bpfMap ebpfMap
 }

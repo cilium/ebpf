@@ -322,3 +322,18 @@ func TestMetadataCopyOnWrite(t *testing.T) {
 		t.Fatal("instructions with the same effective metadata should be equal")
 	}
 }
+
+func TestColLine(t *testing.T) {
+	ins := Mov.Imm(R1, 123)
+
+	ins = ins.SetLineNumber(23445)
+	ins = ins.SetColumnNumber(500)
+
+	if ins.LineNumber() != 23445 {
+		t.Fatalf("line number in instruction metadata incorrect, expected 23445, got: %d", ins.LineNumber())
+	}
+
+	if ins.LineColumn() != 500 {
+		t.Fatalf("column number in instruction metadata incorrect, expected 500, got: %d", ins.LineColumn())
+	}
+}

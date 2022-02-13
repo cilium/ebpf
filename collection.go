@@ -68,9 +68,8 @@ func (cs *CollectionSpec) RewriteMaps(maps map[string]*Map) error {
 	for symbol, m := range maps {
 		// have we seen a program that uses this symbol / map
 		seen := false
-		fd := m.FD()
 		for progName, progSpec := range cs.Programs {
-			err := progSpec.Instructions.RewriteMapPtr(symbol, fd)
+			err := progSpec.Instructions.RewriteMap(symbol, m)
 
 			switch {
 			case err == nil:
@@ -471,7 +470,7 @@ func (cl *collectionLoader) loadProgram(progName string) (*Program, error) {
 		if fd < 0 {
 			return nil, fmt.Errorf("map %s: %w", ins.Reference(), sys.ErrClosedFd)
 		}
-		if err := ins.RewriteMapPtr(m.FD()); err != nil {
+		if err := ins.RewriteMap(m); err != nil {
 			return nil, fmt.Errorf("program %s: map %s: %w", progName, ins.Reference(), err)
 		}
 	}

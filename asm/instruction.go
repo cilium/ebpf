@@ -41,6 +41,11 @@ type Instruction struct {
 
 // Sym creates a symbol.
 func (ins Instruction) Sym(name string) Instruction {
+	if (ins.metadata != nil && ins.metadata.symbol == name) ||
+		(ins.metadata == nil && name == "") {
+		return ins
+	}
+
 	ins.metadata = ins.metadata.copy()
 	ins.metadata.symbol = name
 	return ins
@@ -362,6 +367,11 @@ func (ins Instruction) Size() uint64 {
 
 // SetReference set a reference(e.g. a jump) to another symbol
 func (ins Instruction) SetReference(ref string) Instruction {
+	if (ins.metadata != nil && ins.metadata.reference == ref) ||
+		(ins.metadata == nil && ref == "") {
+		return ins
+	}
+
 	ins.metadata = ins.metadata.copy()
 	ins.metadata.reference = ref
 	return ins
@@ -378,6 +388,11 @@ func (ins Instruction) Reference() string {
 
 // SetFileName sets the absolute file path to the source file which generated the instrution.
 func (ins Instruction) SetFileName(fileName string) Instruction {
+	if (ins.metadata != nil && ins.metadata.fileName == fileName) ||
+		(ins.metadata == nil && fileName == "") {
+		return ins
+	}
+
 	ins.metadata = ins.metadata.copy()
 	ins.metadata.fileName = fileName
 	return ins
@@ -394,6 +409,11 @@ func (ins Instruction) FileName() string {
 
 // SetLine sets the line of source code which generated the instruction.
 func (ins Instruction) SetLine(line string) Instruction {
+	if (ins.metadata != nil && ins.metadata.line == line) ||
+		(ins.metadata == nil && line == "") {
+		return ins
+	}
+
 	ins.metadata = ins.metadata.copy()
 	ins.metadata.line = line
 	return ins
@@ -410,6 +430,11 @@ func (ins Instruction) Line() string {
 
 // SetLine sets the line number within the source file which created this instruction.
 func (ins Instruction) SetLineNumber(lineNumber int) Instruction {
+	if (ins.metadata != nil && int(ins.metadata.lineCol>>10) == lineNumber) ||
+		(ins.metadata == nil && lineNumber == 0) {
+		return ins
+	}
+
 	ins.metadata = ins.metadata.copy()
 	ins.metadata.lineCol = (uint32(lineNumber) << 10) | (ins.metadata.lineCol & 0x3ff)
 	return ins
@@ -427,6 +452,11 @@ func (ins Instruction) LineNumber() int {
 
 // SetColumnNumber sets the column number within the source line which created this instruction.
 func (ins Instruction) SetColumnNumber(colNumber int) Instruction {
+	if (ins.metadata != nil && int(ins.metadata.lineCol&0x3ff) == colNumber) ||
+		(ins.metadata == nil && colNumber == 0) {
+		return ins
+	}
+
 	ins.metadata = ins.metadata.copy()
 	// Zero out the lower 10 bits of lineCol
 	ins.metadata.lineCol = ins.metadata.lineCol & (0xFFFFFC00)
@@ -447,6 +477,11 @@ func (ins Instruction) LineColumn() int {
 
 // setMap sets the *ebpf.Map from which this instruction preforms a data.
 func (ins Instruction) setMap(ebpfMap ebpfMap) Instruction {
+	if (ins.metadata != nil && ins.metadata.bpfMap == ebpfMap) ||
+		(ins.metadata == nil && ebpfMap == nil) {
+		return ins
+	}
+
 	ins.metadata = ins.metadata.copy()
 	ins.metadata.bpfMap = ebpfMap
 	return ins

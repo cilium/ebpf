@@ -73,3 +73,7 @@ func TestTraceEventRegex(t *testing.T) {
 		})
 	}
 }
+
+func TestHaveBPFLinkPerfEvent(t *testing.T) {
+	testutils.CheckFeatureTest(t, haveBPFLinkPerfEvent)
+}

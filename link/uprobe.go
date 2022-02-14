@@ -70,6 +70,11 @@ type UprobeOptions struct {
 	// github.com/torvalds/linux/commit/1cc33161a83d
 	// github.com/torvalds/linux/commit/a6ca88b241d5
 	RefCtrOffset uint64
+	// Arbitrary value that can be fetched from an eBPF program
+	// via `bpf_get_attach_cookie()`.
+	//
+	// Needs kernel 5.15+.
+	BpfCookie uint64
 }
 
 // To open a new Executable, use:
@@ -278,6 +283,7 @@ func (ex *Executable) uprobe(symbol string, prog *ebpf.Program, opts *UprobeOpti
 		pid:          pid,
 		refCtrOffset: opts.RefCtrOffset,
 		ret:          ret,
+		bpfCookie:    opts.BpfCookie,
 	}
 
 	// Use uprobe PMU if the kernel has it available.

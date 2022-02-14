@@ -43,7 +43,7 @@ blocks:
         - name: TMPDIR
           value: /tmp
         - name: CI_MAX_KERNEL_VERSION
-          value: "5.14"
+          value: "5.15"
       jobs:
       - name: Build and Lint
         commands:

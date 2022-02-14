@@ -84,6 +84,9 @@ type perfEvent struct {
 	// The event type determines the types of programs that can be attached.
 	typ perfEventType
 
+	// User provided arbitrary value.
+	cookie uint64
+
 	// This is the proper perf event FD.
 	fd *sys.FD
 	// If bpf perf link is available, this is the bpf link FD.
@@ -195,6 +198,7 @@ func (pe *perfEvent) attach(prog *ebpf.Program) error {
 			ProgFd:     uint32(prog.FD()),
 			TargetFd:   pfd.Uint(),
 			AttachType: sys.BPF_PERF_EVENT,
+			BpfCookie:  pe.cookie,
 		}
 
 		fd, err := sys.LinkCreatePerfEvent(&attr)
@@ -203,6 +207,10 @@ func (pe *perfEvent) attach(prog *ebpf.Program) error {
 		}
 		pe.bpfLinkFD = fd
 	} else {
+		if pe.cookie != 0 {
+			return fmt.Errorf("bpf cookies are not available: %w", ErrNotSupported)
+		}
+
 		// Assign the eBPF program to the perf event.
 		err := unix.IoctlSetInt(pfd.Int(), unix.PERF_EVENT_IOC_SET_BPF, prog.FD())
 		if err != nil {

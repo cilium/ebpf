@@ -716,7 +716,11 @@ func TestProgramInstructions(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if diff := cmp.Diff(insns, spec.Instructions); diff != "" {
+	instructionComparer := func(a, b asm.Instruction) bool {
+		return a.Equal(b)
+	}
+
+	if diff := cmp.Diff(insns, spec.Instructions, cmp.Comparer(instructionComparer)); diff != "" {
 		t.Fatal(diff)
 	}
 }

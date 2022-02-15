@@ -35,17 +35,29 @@ type Instruction struct {
 	Offset   int16
 	Constant int64
 
-	// Reference denotes a reference (e.g. a jump) to another symbol.
-	Reference string
-
-	// Symbol denotes an instruction at the start of a function body.
-	Symbol string
+	// Metadata contains optional metadata about this instruction
+	metadata *metadata
 }
 
 // Sym creates a symbol.
 func (ins Instruction) Sym(name string) Instruction {
-	ins.Symbol = name
+	if (ins.metadata != nil && ins.metadata.symbol == name) ||
+		(ins.metadata == nil && name == "") {
+		return ins
+	}
+
+	ins.metadata = ins.metadata.copy()
+	ins.metadata.symbol = name
 	return ins
+}
+
+// Symbol denotes an instruction at the start of a function body.
+func (ins Instruction) Symbol() string {
+	if ins.metadata == nil {
+		return ""
+	}
+
+	return ins.metadata.symbol
 }
 
 // Unmarshal decodes a BPF instruction.
@@ -136,15 +148,39 @@ func (ins Instruction) Marshal(w io.Writer, bo binary.ByteOrder) (uint64, error)
 	return 2 * InstructionSize, nil
 }
 
+// RewriteMap changes an instruction to use a new map's fd.
+// This function also adds a reference to `m` in the instruction so the passed map isn't garbage collected if no other
+// references exist.
+//
+// Returns an error if the instruction doesn't load a map.
+func (ins *Instruction) RewriteMap(m ebpfMap) error {
+	if !ins.IsLoadFromMap() {
+		return errors.New("not a load from a map")
+	}
+
+	// nil is a valid value for m to unset the map reference
+	fd := -1
+	if m != nil {
+		fd = m.FD()
+	}
+
+	// Set the FD of the passed map.
+	err := ins.RewriteMapPtr(fd)
+	if err != nil {
+		return err
+	}
+
+	*ins = ins.setMap(m)
+	return nil
+}
+
 // RewriteMapPtr changes an instruction to use a new map fd.
 //
 // Returns an error if the instruction doesn't load a map.
+//
+// Deprecated: use RewriteMap instead.
 func (ins *Instruction) RewriteMapPtr(fd int) error {
-	if !ins.OpCode.IsDWordLoad() {
-		return fmt.Errorf("%s is not a 64 bit load", ins.OpCode)
-	}
-
-	if ins.Src != PseudoMapFD && ins.Src != PseudoMapValue {
+	if !ins.IsLoadFromMap() {
 		return errors.New("not a load from a map")
 	}
 
@@ -310,14 +346,200 @@ func (ins Instruction) Format(f fmt.State, c rune) {
 	}
 
 ref:
-	if ins.Reference != "" {
-		fmt.Fprintf(f, " <%s>", ins.Reference)
+	if ins.Reference() != "" {
+		fmt.Fprintf(f, " <%s>", ins.Reference())
 	}
+}
+
+func (ins Instruction) Equal(other Instruction) bool {
+	return ins.OpCode == other.OpCode &&
+		ins.Dst == other.Dst &&
+		ins.Src == other.Src &&
+		ins.Offset == other.Offset &&
+		ins.Constant == other.Constant &&
+		ins.metadata.equal(other.metadata)
 }
 
 // Size returns the amount of bytes ins would occupy in binary form.
 func (ins Instruction) Size() uint64 {
 	return uint64(InstructionSize * ins.OpCode.rawInstructions())
+}
+
+// SetReference set a reference(e.g. a jump) to another symbol
+func (ins Instruction) SetReference(ref string) Instruction {
+	if (ins.metadata != nil && ins.metadata.reference == ref) ||
+		(ins.metadata == nil && ref == "") {
+		return ins
+	}
+
+	ins.metadata = ins.metadata.copy()
+	ins.metadata.reference = ref
+	return ins
+}
+
+// Reference denotes a reference (e.g. a jump) to another symbol.
+func (ins Instruction) Reference() string {
+	if ins.metadata == nil {
+		return ""
+	}
+
+	return ins.metadata.reference
+}
+
+// SetFileName sets the absolute file path to the source file which generated the instrution.
+func (ins Instruction) SetFileName(fileName string) Instruction {
+	if (ins.metadata != nil && ins.metadata.fileName == fileName) ||
+		(ins.metadata == nil && fileName == "") {
+		return ins
+	}
+
+	ins.metadata = ins.metadata.copy()
+	ins.metadata.fileName = fileName
+	return ins
+}
+
+// FileName denotes the absolute file path to the source file which generated the instrution.
+func (ins Instruction) FileName() string {
+	if ins.metadata == nil {
+		return ""
+	}
+
+	return ins.metadata.fileName
+}
+
+// SetLine sets the line of source code which generated the instruction.
+func (ins Instruction) SetLine(line string) Instruction {
+	if (ins.metadata != nil && ins.metadata.line == line) ||
+		(ins.metadata == nil && line == "") {
+		return ins
+	}
+
+	ins.metadata = ins.metadata.copy()
+	ins.metadata.line = line
+	return ins
+}
+
+// Line denotes the line of source code which generated the instruction.
+func (ins Instruction) Line() string {
+	if ins.metadata == nil {
+		return ""
+	}
+
+	return ins.metadata.line
+}
+
+// SetLine sets the line number within the source file which created this instruction.
+func (ins Instruction) SetLineNumber(lineNumber int) Instruction {
+	if (ins.metadata != nil && int(ins.metadata.lineCol>>10) == lineNumber) ||
+		(ins.metadata == nil && lineNumber == 0) {
+		return ins
+	}
+
+	ins.metadata = ins.metadata.copy()
+	ins.metadata.lineCol = (uint32(lineNumber) << 10) | (ins.metadata.lineCol & 0x3ff)
+	return ins
+}
+
+// LineNumber denotes the line number within the source file which created this instruction.
+func (ins Instruction) LineNumber() int {
+	if ins.metadata == nil {
+		return -1
+	}
+
+	// #define BPF_LINE_INFO_LINE_NUM(line_col)        ((line_col) >> 10)
+	return int(ins.metadata.lineCol >> 10)
+}
+
+// SetColumnNumber sets the column number within the source line which created this instruction.
+func (ins Instruction) SetColumnNumber(colNumber int) Instruction {
+	if (ins.metadata != nil && int(ins.metadata.lineCol&0x3ff) == colNumber) ||
+		(ins.metadata == nil && colNumber == 0) {
+		return ins
+	}
+
+	ins.metadata = ins.metadata.copy()
+	// Zero out the lower 10 bits of lineCol
+	ins.metadata.lineCol = ins.metadata.lineCol & (0xFFFFFC00)
+	// Replace with lower 10 bits of colNumber
+	ins.metadata.lineCol = ins.metadata.lineCol | (uint32(colNumber) & 0x3ff)
+	return ins
+}
+
+// LineColumn denotes the column number within the source line which created this instruction.
+func (ins Instruction) LineColumn() int {
+	if ins.metadata == nil {
+		return -1
+	}
+
+	// #define BPF_LINE_INFO_LINE_COL(line_col)        ((line_col) & 0x3ff)
+	return int(ins.metadata.lineCol & 0x3ff)
+}
+
+// setMap sets the *ebpf.Map from which this instruction preforms a data.
+func (ins Instruction) setMap(ebpfMap ebpfMap) Instruction {
+	if (ins.metadata != nil && ins.metadata.bpfMap == ebpfMap) ||
+		(ins.metadata == nil && ebpfMap == nil) {
+		return ins
+	}
+
+	ins.metadata = ins.metadata.copy()
+	ins.metadata.bpfMap = ebpfMap
+	return ins
+}
+
+// Map denotes the *ebpf.Map from which this instruction preforms a data.
+func (ins Instruction) Map() ebpfMap {
+	if ins.metadata == nil {
+		return nil
+	}
+
+	return ins.metadata.bpfMap
+}
+
+// ebpfMap isn't actually used as a meaningful interface, rater it is used since we can't directly use ebpf.Map as type
+// since this would cause in import loop. The methods were chosen because they are unique to ebpf.Map and don't
+// reference other types in the ebpf package
+type ebpfMap interface {
+	FD() int
+	ValueSize() uint32
+	Freeze() error
+}
+
+// metadata holds metadata about a Instruction which are not relevant for the kernel but useful for the loader
+type metadata struct {
+	// reference denotes a reference (e.g. a jump) to another symbol.
+	reference string
+	// symbol denotes an instruction at the start of a function body.
+	symbol string
+	// filename denotes the absolute file path to the source file which generated the instrution.
+	fileName string
+	// line denotes the line of source code which generated the instruction.
+	line string
+	// lineCol denotes both the line and column number within the source file which generated this instruction.
+	lineCol uint32
+
+	// bpfMap denotes the *ebpf.Map from which this instruction preforms a data.
+	bpfMap ebpfMap
+}
+
+func (m *metadata) equal(other *metadata) bool {
+	var a, b metadata
+	if m != nil {
+		a = *m
+	}
+	if other != nil {
+		b = *other
+	}
+
+	return a == b
+}
+
+func (m *metadata) copy() *metadata {
+	var copy metadata
+	if m != nil {
+		copy = *m
+	}
+	return &copy
 }
 
 // Instructions is an eBPF program.
@@ -353,7 +575,7 @@ func (insns Instructions) Name() string {
 	if len(insns) == 0 {
 		return ""
 	}
-	return insns[0].Symbol
+	return insns[0].Symbol()
 }
 
 func (insns Instructions) String() string {
@@ -369,9 +591,40 @@ func (insns Instructions) Size() uint64 {
 	return sum
 }
 
+// RewriteMap rewrites all loads of a specific map pointer.
+//
+// Returns an error if the symbol isn't used, see IsUnreferencedSymbol.
+func (insns Instructions) RewriteMap(symbol string, m ebpfMap) error {
+	if symbol == "" {
+		return errors.New("empty symbol")
+	}
+
+	found := false
+	for i := range insns {
+		ins := &insns[i]
+		if ins.Reference() != symbol {
+			continue
+		}
+
+		if err := ins.RewriteMap(m); err != nil {
+			return err
+		}
+
+		found = true
+	}
+
+	if !found {
+		return &unreferencedSymbolError{symbol}
+	}
+
+	return nil
+}
+
 // RewriteMapPtr rewrites all loads of a specific map pointer to a new fd.
 //
 // Returns an error if the symbol isn't used, see IsUnreferencedSymbol.
+//
+// Deprecated: use RewriteMap instead.
 func (insns Instructions) RewriteMapPtr(symbol string, fd int) error {
 	if symbol == "" {
 		return errors.New("empty symbol")
@@ -380,7 +633,7 @@ func (insns Instructions) RewriteMapPtr(symbol string, fd int) error {
 	found := false
 	for i := range insns {
 		ins := &insns[i]
-		if ins.Reference != symbol {
+		if ins.Reference() != symbol {
 			continue
 		}
 
@@ -404,15 +657,15 @@ func (insns Instructions) SymbolOffsets() (map[string]int, error) {
 	offsets := make(map[string]int)
 
 	for i, ins := range insns {
-		if ins.Symbol == "" {
+		if ins.Symbol() == "" {
 			continue
 		}
 
-		if _, ok := offsets[ins.Symbol]; ok {
-			return nil, fmt.Errorf("duplicate symbol %s", ins.Symbol)
+		if _, ok := offsets[ins.Symbol()]; ok {
+			return nil, fmt.Errorf("duplicate symbol %s", ins.Symbol())
 		}
 
-		offsets[ins.Symbol] = i
+		offsets[ins.Symbol()] = i
 	}
 
 	return offsets, nil
@@ -429,7 +682,7 @@ func (insns Instructions) FunctionReferences() map[string]bool {
 			continue
 		}
 
-		if ins.Reference == "" {
+		if ins.Reference() == "" {
 			continue
 		}
 
@@ -437,7 +690,7 @@ func (insns Instructions) FunctionReferences() map[string]bool {
 			continue
 		}
 
-		calls[ins.Reference] = true
+		calls[ins.Reference()] = true
 	}
 
 	return calls
@@ -449,11 +702,11 @@ func (insns Instructions) ReferenceOffsets() map[string][]int {
 	offsets := make(map[string][]int)
 
 	for i, ins := range insns {
-		if ins.Reference == "" {
+		if ins.Reference() == "" {
 			continue
 		}
 
-		offsets[ins.Reference] = append(offsets[ins.Reference], i)
+		offsets[ins.Reference()] = append(offsets[ins.Reference()], i)
 	}
 
 	return offsets
@@ -504,8 +757,14 @@ func (insns Instructions) Format(f fmt.State, c rune) {
 
 	iter := insns.Iterate()
 	for iter.Next() {
-		if iter.Ins.Symbol != "" {
-			fmt.Fprintf(f, "%s%s:\n", symIndent, iter.Ins.Symbol)
+		if iter.Ins.Symbol() != "" {
+			fmt.Fprintf(f, "%s%s:\n", symIndent, iter.Ins.Symbol())
+		}
+		if line := iter.Ins.Line(); line != "" {
+			line := strings.TrimSpace(line)
+			if line != "" {
+				fmt.Fprintf(f, "%s%*s; %s\n", indent, offsetWidth, " ", line)
+			}
 		}
 		fmt.Fprintf(f, "%s%*d: %v\n", indent, offsetWidth, iter.Offset, iter.Ins)
 	}
@@ -550,15 +809,15 @@ func (insns Instructions) FixupReferences() error {
 	for iter.Next() {
 		ins := iter.Ins
 
-		if ins.Symbol == "" {
+		if ins.Symbol() == "" {
 			continue
 		}
 
-		if _, ok := symbolOffsets[ins.Symbol]; ok {
-			return fmt.Errorf("duplicate symbol %s", ins.Symbol)
+		if _, ok := symbolOffsets[ins.Symbol()]; ok {
+			return fmt.Errorf("duplicate symbol %s", ins.Symbol())
 		}
 
-		symbolOffsets[ins.Symbol] = iter.Offset
+		symbolOffsets[ins.Symbol()] = iter.Offset
 	}
 
 	iter = insns.Iterate()
@@ -567,11 +826,11 @@ func (insns Instructions) FixupReferences() error {
 		offset := iter.Offset
 		ins := iter.Ins
 
-		if ins.Reference == "" {
+		if ins.Reference() == "" {
 			continue
 		}
 
-		symOffset, ok := symbolOffsets[ins.Reference]
+		symOffset, ok := symbolOffsets[ins.Reference()]
 		switch {
 		case ins.IsFunctionReference() && ins.Constant == -1:
 			if !ok {
@@ -590,12 +849,12 @@ func (insns Instructions) FixupReferences() error {
 			continue
 
 		case ins.IsLoadFromMap() && ins.MapPtr() == -1:
-			return fmt.Errorf("map %s: %w", ins.Reference, ErrUnsatisfiedMapReference)
+			return fmt.Errorf("map %s: %w", ins.Reference(), ErrUnsatisfiedMapReference)
 		default:
 			// no fixup needed
 			continue
 		}
-		return fmt.Errorf("%s at insn %d: symbol %q: %w", ins.OpCode, i, ins.Reference, ErrUnsatisfiedReference)
+		return fmt.Errorf("%s at insn %d: symbol %q: %w", ins.OpCode, i, ins.Reference(), ErrUnsatisfiedReference)
 	}
 	return nil
 }

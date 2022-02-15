@@ -348,7 +348,7 @@ func (ec *elfCode) loadFunctions(section *elfSection) (map[string]asm.Instructio
 		secOffset  uint64
 		funcOffset uint64
 		insns      asm.Instructions
-		lineInfos  btf.LineInfos
+		lineInfos  map[uint64]btf.LineInfo
 	)
 
 	for {
@@ -406,32 +406,31 @@ func (ec *elfCode) loadFunctions(section *elfSection) (map[string]asm.Instructio
 			}
 		}
 
-		if ec.btf != nil {
-			name := ins.Symbol()
-			if name == "" {
-				name = insns.Name()
+		// Only rebuild lineInfos at the start of a function
+		if funcOffset == 0 {
+			lineInfos = make(map[uint64]btf.LineInfo)
+			if ec.btf != nil {
+				for _, lineInfo := range ec.btf.GetFuncLineInfos(ins.Symbol()) {
+					lineInfos[uint64(lineInfo.InsnOff)] = lineInfo
+				}
 			}
-
-			lineInfos = ec.btf.GetFuncLineInfos(name)
 		}
-		for _, lineInfo := range lineInfos {
-			if uint64(lineInfo.InsnOff) == funcOffset {
-				fileName, err := lineInfo.FileName(ec.btf)
-				if err != nil {
-					continue
-				}
 
-				line, err := lineInfo.Line(ec.btf)
-				if err != nil {
-					continue
-				}
-
-				ins = ins.SetFileName(fileName).
-					SetLine(line).
-					SetLineNumber(int(lineInfo.LineNum())).
-					SetColumnNumber(int(lineInfo.ColNum()))
-				break
+		if lineInfo, found := lineInfos[funcOffset]; found {
+			fileName, err := lineInfo.FileName(ec.btf)
+			if err != nil {
+				fileName = ""
 			}
+
+			line, err := lineInfo.Line(ec.btf)
+			if err != nil {
+				line = ""
+			}
+
+			ins = ins.SetFileName(fileName).
+				SetLine(line).
+				SetLineNumber(int(lineInfo.LineNum())).
+				SetColumnNumber(int(lineInfo.ColNum()))
 		}
 
 		insns = append(insns, ins)

@@ -149,11 +149,9 @@ func (ins Instruction) Marshal(w io.Writer, bo binary.ByteOrder) (uint64, error)
 }
 
 // RewriteMap changes an instruction to use a new map's fd.
-// This function also adds a reference to `m` in the instruction so the passed map isn't garbage collected if no other
-// references exist.
 //
 // Returns an error if the instruction doesn't load a map.
-func (ins *Instruction) RewriteMap(m ebpfMap) error {
+func (ins *Instruction) RewriteMap(m FDer) error {
 	if !ins.IsLoadFromMap() {
 		return errors.New("not a load from a map")
 	}
@@ -465,7 +463,7 @@ func (ins Instruction) LineColumn() int {
 }
 
 // setMap sets the *ebpf.Map from which this instruction preforms a data.
-func (ins Instruction) setMap(ebpfMap ebpfMap) Instruction {
+func (ins Instruction) setMap(ebpfMap FDer) Instruction {
 	if (ins.metadata != nil && ins.metadata.bpfMap == ebpfMap) ||
 		(ins.metadata == nil && ebpfMap == nil) {
 		return ins
@@ -476,22 +474,10 @@ func (ins Instruction) setMap(ebpfMap ebpfMap) Instruction {
 	return ins
 }
 
-// Map denotes the *ebpf.Map from which this instruction preforms a data.
-func (ins Instruction) Map() ebpfMap {
-	if ins.metadata == nil {
-		return nil
-	}
-
-	return ins.metadata.bpfMap
-}
-
-// ebpfMap isn't actually used as a meaningful interface, rater it is used since we can't directly use ebpf.Map as type
-// since this would cause in import loop. The methods were chosen because they are unique to ebpf.Map and don't
-// reference other types in the ebpf package
-type ebpfMap interface {
+// FDer isn't actually used as a meaningful interface, rater it is used because we can't directly use types from the
+// ebpf package since this would cause in import loop.
+type FDer interface {
 	FD() int
-	ValueSize() uint32
-	Freeze() error
 }
 
 // metadata holds metadata about a Instruction which are not relevant for the kernel but useful for the loader
@@ -508,7 +494,7 @@ type metadata struct {
 	lineCol uint32
 
 	// bpfMap denotes the *ebpf.Map from which this instruction preforms a data.
-	bpfMap ebpfMap
+	bpfMap FDer
 }
 
 func (m *metadata) equal(other *metadata) bool {
@@ -523,6 +509,7 @@ func (m *metadata) equal(other *metadata) bool {
 	return a == b
 }
 
+// returns a copy of metadata, return value is never nil, even if called on a nil value
 func (m *metadata) copy() *metadata {
 	var copy metadata
 	if m != nil {
@@ -583,7 +570,7 @@ func (insns Instructions) Size() uint64 {
 // RewriteMap rewrites all loads of a specific map pointer.
 //
 // Returns an error if the symbol isn't used, see IsUnreferencedSymbol.
-func (insns Instructions) RewriteMap(symbol string, m ebpfMap) error {
+func (insns Instructions) RewriteMap(symbol string, m FDer) error {
 	if symbol == "" {
 		return errors.New("empty symbol")
 	}

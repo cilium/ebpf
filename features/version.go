@@ -12,4 +12,3 @@ func KernelVersion() (uint32, error) {
 	}
 	return v.Kernel(), nil
 }
-

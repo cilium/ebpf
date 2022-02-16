@@ -246,11 +246,14 @@ func (spec *Spec) splitExtInfos(info *extInfo) error {
 					return fmt.Errorf("section %s: error looking up FuncInfo for LineInfo %v", secName, li)
 				}
 
-				// Offsets are ELF section-scoped, make them function-scoped by
-				// subtracting the function's start offset.
-				li.InsnOff -= fnOffset
-
-				oli[fn.Name] = append(oli[fn.Name], li)
+				oli[fn.Name] = append(oli[fn.Name], LineInfo{
+					// Offsets are ELF section-scoped, make them function-scoped by
+					// subtracting the function's start offset.
+					li.InsnOff - fnOffset,
+					li.FileNameOff,
+					li.LineOff,
+					li.LineCol,
+				})
 			}
 		}
 

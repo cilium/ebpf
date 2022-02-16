@@ -288,11 +288,18 @@ var LineInfoSize = uint32(binary.Size(bpfLineInfo{}))
 // LineInfo represents the location and contents of a single line of source
 // code a BPF ELF was compiled from.
 type LineInfo struct {
+	fileName   string
+	line       string
+	lineNumber uint32
+	lineColumn uint32
+
+	// TODO: We should get rid of the fields below, but for that we need to be
+	// able to write BTF.
+
 	// Instruction offset of the line within its enclosing function, in instructions.
 	insnOff     uint32
 	fileNameOff uint32
 	lineOff     uint32
-	lineCol     uint32
 }
 
 type bpfLineInfo struct {
@@ -303,14 +310,36 @@ type bpfLineInfo struct {
 	LineCol     uint32
 }
 
+func (li *LineInfo) FileName() string {
+	return li.fileName
+}
+
+func (li *LineInfo) Line() string {
+	return li.line
+}
+
+func (li *LineInfo) LineNumber() uint32 {
+	return li.lineNumber
+}
+
+func (li *LineInfo) LineColumn() uint32 {
+	return li.lineColumn
+}
+
+func (li *LineInfo) String() string {
+	return li.line
+}
+
 // Marshal writes the binary representation of the LineInfo to w.
 // The instruction offset is converted from bytes to instructions.
-func (li LineInfo) Marshal(w io.Writer, offset uint64) error {
+func (li *LineInfo) Marshal(w io.Writer, offset uint64) error {
+	// TODO: Error out if lineNumber, lineColumn are out of bounds.
+	lineCol := (uint32(li.lineNumber) << 10) | (li.lineColumn & 0x3ff)
 	bli := bpfLineInfo{
 		li.insnOff + uint32(offset/asm.InstructionSize),
 		li.fileNameOff,
 		li.lineOff,
-		li.lineCol,
+		lineCol,
 	}
 	return binary.Write(w, internal.NativeEndian, &bli)
 }

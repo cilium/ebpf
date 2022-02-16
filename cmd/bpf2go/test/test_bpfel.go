@@ -13,6 +13,20 @@ import (
 	"github.com/cilium/ebpf"
 )
 
+type testBarfoo struct {
+	Bar int64
+	Baz bool
+	_   [3]byte
+	Boo testE
+}
+
+type testE int32
+
+const (
+	testEHOOPY testE = 0
+	testEFROOD testE = 1
+)
+
 // loadTest returns the embedded CollectionSpec for test.
 func loadTest() (*ebpf.CollectionSpec, error) {
 	reader := bytes.NewReader(_TestBytes)

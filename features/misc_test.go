@@ -1,20 +1,11 @@
 package features
 
 import (
-	"errors"
 	"fmt"
-	"math"
-	"os"
 	"testing"
 
 	"github.com/cilium/ebpf/internal/testutils"
 )
-
-func TestInvalidMisc(t *testing.T) {
-	if err := probeMisc(miscType(math.MaxUint32)); !errors.Is(err, os.ErrInvalid) {
-		t.Fatalf("Expected os.ErrInvalid but was: %v", err)
-	}
-}
 
 func TestHaveMisc(t *testing.T) {
 	tests := map[miscType]struct {

@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"os"
 	"sync"
 
 	"github.com/cilium/ebpf"
@@ -15,7 +14,7 @@ import (
 )
 
 func init() {
-	miscs.miscTypes = make(map[miscType]error, maxMiscType)
+	miscs.miscTypes = make(map[miscType]error)
 }
 
 var (
@@ -28,11 +27,6 @@ type miscCache struct {
 }
 
 type miscType uint32
-
-// Max returns the latest supported MiscType.
-func (_ miscType) max() miscType {
-	return maxMiscType - 1
-}
 
 const (
 	// largeInsn support introduced in
@@ -47,8 +41,6 @@ const (
 	// v3ISA support introduced in
 	// commit 092ed0968bb648cd18e8a0430cd0a8a71727315c
 	v3ISA
-	// maxMiscType - Bound enum of FeatureTypes, has to be last in enum.
-	maxMiscType
 )
 
 const (
@@ -124,9 +116,6 @@ func HaveV3ISA() error {
 // a specialized program probe and loading it.
 // Results are cached and persist throughout any process capability changes.
 func probeMisc(mt miscType) error {
-	if mt > mt.max() {
-		return os.ErrInvalid
-	}
 	mc.Lock()
 	defer mc.Unlock()
 	err, ok := miscs.miscTypes[mt]

@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"os"
 	"sync"
 
 	"github.com/cilium/ebpf"
@@ -15,7 +14,7 @@ import (
 )
 
 func init() {
-	miscs.miscTypes = make(map[miscType]error, maxMiscType)
+	miscs.miscTypes = make(map[miscType]error)
 }
 
 var (
@@ -28,11 +27,6 @@ type miscCache struct {
 }
 
 type miscType uint32
-
-// Max returns the latest supported MiscType.
-func (_ miscType) max() miscType {
-	return maxMiscType - 1
-}
 
 const (
 	// largeInsn support introduced in
@@ -47,8 +41,6 @@ const (
 	// v3ISA support introduced in
 	// commit 092ed0968bb648cd18e8a0430cd0a8a71727315c
 	v3ISA
-	// maxMiscType - Bound enum of FeatureTypes, has to be last in enum.
-	maxMiscType
 )
 
 const (
@@ -57,76 +49,36 @@ const (
 
 // HaveLargeInstructions probes the running kernel if more than 4096 instructions
 // per program are supported.
-// Return values have the following semantics:
 //
-//   err == nil: The feature is available.
-//   errors.Is(err, ebpf.ErrNotSupported): The feature is not available.
-//   err != nil: Any errors encountered during probe execution, wrapped.
-//
-// Note that the latter case may include false negatives, and that program creation may
-// succeed despite an error being returned. Some program types cannot reliably be probed and
-// will also return error. Only `nil` and `ebpf.ErrNotSupported` are conclusive.
-//
-// Probe results are cached and persist throughout any process capability changes.
+// See the package documentation for the meaning of the error return value.
 func HaveLargeInstructions() error {
 	return probeMisc(largeInsn)
 }
 
 // HaveBoundedLoops probes the running kernel if bounded loops are supported.
-// Return values have the following semantics:
 //
-//   err == nil: The feature is available.
-//   errors.Is(err, ebpf.ErrNotSupported): The feature is not available.
-//   err != nil: Any errors encountered during probe execution, wrapped.
-//
-// Note that the latter case may include false negatives, and that program creation may
-// succeed despite an error being returned. Some program types cannot reliably be probed and
-// will also return error. Only `nil` and `ebpf.ErrNotSupported` are conclusive.
-//
-// Probe results are cached and persist throughout any process capability changes.
+// See the package documentation for the meaning of the error return value.
 func HaveBoundedLoops() error {
 	return probeMisc(boundedLoops)
 }
 
 // HaveV2ISA probes the running kernel if instructions of the v2 ISA are supported.
-// Return values have the following semantics:
 //
-//   err == nil: The feature is available.
-//   errors.Is(err, ebpf.ErrNotSupported): The feature is not available.
-//   err != nil: Any errors encountered during probe execution, wrapped.
-//
-// Note that the latter case may include false negatives, and that program creation may
-// succeed despite an error being returned. Some program types cannot reliably be probed and
-// will also return error. Only `nil` and `ebpf.ErrNotSupported` are conclusive.
-//
-// Probe results are cached and persist throughout any process capability changes.
+// See the package documentation for the meaning of the error return value.
 func HaveV2ISA() error {
 	return probeMisc(v2ISA)
 }
 
 // HaveV3ISA probes the running kernel if instructions of the v3 ISA are supported.
-// Return values have the following semantics:
 //
-//   err == nil: The feature is available.
-//   errors.Is(err, ebpf.ErrNotSupported): The feature is not available.
-//   err != nil: Any errors encountered during probe execution, wrapped.
-//
-// Note that the latter case may include false negatives, and that program creation may
-// succeed despite an error being returned. Some program types cannot reliably be probed and
-// will also return error. Only `nil` and `ebpf.ErrNotSupported` are conclusive.
-//
-// Probe results are cached and persist throughout any process capability changes.
+// See the package documentation for the meaning of the error return value.
 func HaveV3ISA() error {
 	return probeMisc(v3ISA)
 }
 
 // probeMisc checks the kernel for a given supported misc by creating
 // a specialized program probe and loading it.
-// Results are cached and persist throughout any process capability changes.
 func probeMisc(mt miscType) error {
-	if mt > mt.max() {
-		return os.ErrInvalid
-	}
 	mc.Lock()
 	defer mc.Unlock()
 	err, ok := miscs.miscTypes[mt]
@@ -195,10 +147,8 @@ func createMiscProbeAttr(mt miscType) (*sys.ProgLoadAttr, error) {
 			asm.Return(),
 		}
 		// To test the v2 ISA we need a dedicated jump offset other
-		// than the one we would get from Instruction.FixupReferences().
-		if err := insns[1].RewriteJumpOffset(1); err != nil {
-			return nil, err
-		}
+		// than the one we would get from Instructions.FixupReferences().
+		insns[1].Offset = 1
 	case v3ISA:
 		label = "v3isa"
 		insns = asm.Instructions{

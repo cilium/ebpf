@@ -319,8 +319,8 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions, handles *hand
 			if err != nil {
 				return nil, err
 			}
-			attr.LineInfoRecSize = uint32(binary.Size(btf.LineInfo{}))
-			attr.LineInfoCnt = uint32(len(lib)) / attr.LineInfoRecSize
+			attr.LineInfoRecSize = btf.LineInfoSize
+			attr.LineInfoCnt = uint32(len(lib)) / btf.LineInfoSize
 			attr.LineInfo = sys.NewSlicePointer(lib)
 		}
 	}

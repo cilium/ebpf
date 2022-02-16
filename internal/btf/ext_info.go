@@ -15,7 +15,7 @@ import (
 //
 // It is indexed per section.
 type extInfo struct {
-	funcInfos map[string]FuncInfos
+	funcInfos map[string][]bpfFuncInfo
 	lineInfos map[string]LineInfos
 	relos     map[string]CoreRelos
 }
@@ -197,80 +197,43 @@ func parseExtInfoRecordSize(r io.Reader, bo binary.ByteOrder) (uint32, error) {
 	return recordSize, nil
 }
 
-// FuncInfo represents the location and type ID of a function in a BPF ELF.
+// The size of a FuncInfo in BTF wire format.
+var FuncInfoSize = uint32(binary.Size(bpfFuncInfo{}))
+
 type FuncInfo struct {
+	fn *Func
+}
+
+type bpfFuncInfo struct {
 	// Instruction offset of the function within an ELF section.
-	// Always zero after parsing a funcinfo from an ELF, instruction streams
-	// are split on function boundaries.
 	InsnOff uint32
 	TypeID  TypeID
 }
 
-// Name looks up the FuncInfo's corresponding function name in the given spec.
-func (fi FuncInfo) Name(spec *Spec) (string, error) {
-	// Look up function name based on type ID.
-	typ, err := spec.TypeByID(fi.TypeID)
-	if err != nil {
-		return "", fmt.Errorf("looking up type by ID: %w", err)
-	}
-	if _, ok := typ.(*Func); !ok {
-		return "", fmt.Errorf("type ID %d is a %T, but expected a Func", fi.TypeID, typ)
-	}
-
-	// C doesn't have anonymous functions, but check just in case.
-	if name := typ.TypeName(); name != "" {
-		return name, nil
-	}
-
-	return "", fmt.Errorf("Func with type ID %d doesn't have a name", fi.TypeID)
+func (fi *FuncInfo) Func() *Func {
+	return fi.fn
 }
 
-// Marshal writes the binary representation of the FuncInfo to w.
-// The function offset is converted from bytes to instructions.
-func (fi FuncInfo) Marshal(w io.Writer, offset uint64) error {
-	fi.InsnOff += uint32(offset)
-	// The kernel expects offsets in number of raw bpf instructions,
-	// while the ELF tracks it in bytes.
-	fi.InsnOff /= asm.InstructionSize
-	return binary.Write(w, internal.NativeEndian, fi)
-}
-
-type FuncInfos []FuncInfo
-
-// funcForOffset returns the function that the instruction at the given
-// ELF section offset belongs to.
+// Marshal into the BTF wire format.
 //
-// For example, consider an ELF section that contains 3 functions (a, b, c)
-// at offsets 0, 10 and 15 respectively. Offset 5 will return function a,
-// offset 12 will return b, offset >= 15 will return c, etc.
-func (infos FuncInfos) funcForOffset(offset uint32) *FuncInfo {
-	for n, fi := range infos {
-		// Iterator went past the offset the caller is looking for,
-		// no point in continuing the search.
-		if offset < fi.InsnOff {
-			return nil
-		}
-
-		// If there is no next item in the list, or if the given offset
-		// is smaller than the next function, the offset belongs to
-		// the current function.
-		if n+1 >= len(infos) || offset < infos[n+1].InsnOff {
-			return &fi
-		}
+// The offset is converted from bytes to instructions.
+func (fi *FuncInfo) Marshal(w io.Writer, offset uint64) error {
+	bfi := bpfFuncInfo{
+		InsnOff: uint32(offset / asm.InstructionSize),
+		TypeID:  fi.fn.TypeID,
 	}
-
-	return nil
+	return binary.Write(w, internal.NativeEndian, &bfi)
 }
 
 // parseLineInfos parses a func_info sub-section within .BTF.ext ito a map of
 // func infos indexed by section name.
-func parseFuncInfos(r io.Reader, bo binary.ByteOrder, strings stringTable) (map[string]FuncInfos, error) {
+func parseFuncInfos(r io.Reader, bo binary.ByteOrder, strings stringTable) (map[string][]bpfFuncInfo, error) {
 	recordSize, err := parseExtInfoRecordSize(r, bo)
 	if err != nil {
 		return nil, err
 	}
 
-	result := make(map[string]FuncInfos)
+	result := make(map[string][]bpfFuncInfo)
 	for {
 		secName, infoHeader, err := parseExtInfoSec(r, bo, strings)
 		if errors.Is(err, io.EOF) {
@@ -292,11 +255,11 @@ func parseFuncInfos(r io.Reader, bo binary.ByteOrder, strings stringTable) (map[
 // parseFuncInfoRecords parses a stream of func_infos into a funcInfos.
 // These records appear after a btf_ext_info_sec header in the func_info
 // sub-section of .BTF.ext.
-func parseFuncInfoRecords(r io.Reader, bo binary.ByteOrder, recordSize uint32, recordNum uint32) (FuncInfos, error) {
-	var out FuncInfos
-	var fi FuncInfo
+func parseFuncInfoRecords(r io.Reader, bo binary.ByteOrder, recordSize uint32, recordNum uint32) ([]bpfFuncInfo, error) {
+	var out []bpfFuncInfo
+	var fi bpfFuncInfo
 
-	if exp, got := uint32(binary.Size(fi)), recordSize; exp != got {
+	if exp, got := FuncInfoSize, recordSize; exp != got {
 		// BTF blob's record size is longer than we know how to parse.
 		return nil, fmt.Errorf("expected FuncInfo record size %d, but BTF blob contains %d", exp, got)
 	}

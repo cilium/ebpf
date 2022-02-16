@@ -49,72 +49,35 @@ const (
 
 // HaveLargeInstructions probes the running kernel if more than 4096 instructions
 // per program are supported.
-// Return values have the following semantics:
 //
-//   err == nil: The feature is available.
-//   errors.Is(err, ebpf.ErrNotSupported): The feature is not available.
-//   err != nil: Any errors encountered during probe execution, wrapped.
-//
-// Note that the latter case may include false negatives, and that program creation may
-// succeed despite an error being returned. Some program types cannot reliably be probed and
-// will also return error. Only `nil` and `ebpf.ErrNotSupported` are conclusive.
-//
-// Probe results are cached and persist throughout any process capability changes.
+// See the package documentation for the meaning of the error return value.
 func HaveLargeInstructions() error {
 	return probeMisc(largeInsn)
 }
 
 // HaveBoundedLoops probes the running kernel if bounded loops are supported.
-// Return values have the following semantics:
 //
-//   err == nil: The feature is available.
-//   errors.Is(err, ebpf.ErrNotSupported): The feature is not available.
-//   err != nil: Any errors encountered during probe execution, wrapped.
-//
-// Note that the latter case may include false negatives, and that program creation may
-// succeed despite an error being returned. Some program types cannot reliably be probed and
-// will also return error. Only `nil` and `ebpf.ErrNotSupported` are conclusive.
-//
-// Probe results are cached and persist throughout any process capability changes.
+// See the package documentation for the meaning of the error return value.
 func HaveBoundedLoops() error {
 	return probeMisc(boundedLoops)
 }
 
 // HaveV2ISA probes the running kernel if instructions of the v2 ISA are supported.
-// Return values have the following semantics:
 //
-//   err == nil: The feature is available.
-//   errors.Is(err, ebpf.ErrNotSupported): The feature is not available.
-//   err != nil: Any errors encountered during probe execution, wrapped.
-//
-// Note that the latter case may include false negatives, and that program creation may
-// succeed despite an error being returned. Some program types cannot reliably be probed and
-// will also return error. Only `nil` and `ebpf.ErrNotSupported` are conclusive.
-//
-// Probe results are cached and persist throughout any process capability changes.
+// See the package documentation for the meaning of the error return value.
 func HaveV2ISA() error {
 	return probeMisc(v2ISA)
 }
 
 // HaveV3ISA probes the running kernel if instructions of the v3 ISA are supported.
-// Return values have the following semantics:
 //
-//   err == nil: The feature is available.
-//   errors.Is(err, ebpf.ErrNotSupported): The feature is not available.
-//   err != nil: Any errors encountered during probe execution, wrapped.
-//
-// Note that the latter case may include false negatives, and that program creation may
-// succeed despite an error being returned. Some program types cannot reliably be probed and
-// will also return error. Only `nil` and `ebpf.ErrNotSupported` are conclusive.
-//
-// Probe results are cached and persist throughout any process capability changes.
+// See the package documentation for the meaning of the error return value.
 func HaveV3ISA() error {
 	return probeMisc(v3ISA)
 }
 
 // probeMisc checks the kernel for a given supported misc by creating
 // a specialized program probe and loading it.
-// Results are cached and persist throughout any process capability changes.
 func probeMisc(mt miscType) error {
 	mc.Lock()
 	defer mc.Unlock()

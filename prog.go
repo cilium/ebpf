@@ -311,16 +311,16 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions, handles *hand
 			if err != nil {
 				return nil, err
 			}
-			attr.FuncInfoRecSize = uint32(binary.Size(btf.FuncInfo{}))
-			attr.FuncInfoCnt = uint32(len(fib)) / attr.FuncInfoRecSize
+			attr.FuncInfoRecSize = btf.FuncInfoSize
+			attr.FuncInfoCnt = uint32(len(fib)) / btf.FuncInfoSize
 			attr.FuncInfo = sys.NewSlicePointer(fib)
 
 			lib, err := marshalLineInfos(layout)
 			if err != nil {
 				return nil, err
 			}
-			attr.LineInfoRecSize = uint32(binary.Size(btf.LineInfo{}))
-			attr.LineInfoCnt = uint32(len(lib)) / attr.LineInfoRecSize
+			attr.LineInfoRecSize = btf.LineInfoSize
+			attr.LineInfoCnt = uint32(len(lib)) / btf.LineInfoSize
 			attr.LineInfo = sys.NewSlicePointer(lib)
 		}
 	}

@@ -247,11 +247,30 @@ func (spec *Spec) splitExtInfos(info *extInfo) error {
 					return fmt.Errorf("section %s: error looking up FuncInfo for LineInfo %v", secName, li)
 				}
 
-				// Offsets are ELF section-scoped, make them function-scoped by
-				// subtracting the function's start offset.
-				li.InsnOff -= fnOffset
+				line, err := spec.strings.Lookup(li.LineOff)
+				if err != nil {
+					return fmt.Errorf("lookup of line: %w", err)
+				}
 
-				oli[fn.Name] = append(oli[fn.Name], li)
+				fileName, err := spec.strings.Lookup(li.FileNameOff)
+				if err != nil {
+					return fmt.Errorf("lookup of filename: %w", err)
+				}
+
+				lineNumber := li.LineCol >> bpfLineShift
+				lineColumn := li.LineCol & bpfColumnMax
+
+				oli[fn.Name] = append(oli[fn.Name], LineInfo{
+					fileName,
+					line,
+					lineNumber,
+					lineColumn,
+					// Offsets are ELF section-scoped, make them function-scoped by
+					// subtracting the function's start offset.
+					li.InsnOff - fnOffset,
+					li.FileNameOff,
+					li.LineOff,
+				})
 			}
 		}
 

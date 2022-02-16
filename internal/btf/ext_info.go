@@ -16,7 +16,7 @@ import (
 // It is indexed per section.
 type extInfo struct {
 	funcInfos map[string][]bpfFuncInfo
-	lineInfos map[string]LineInfos
+	lineInfos map[string][]bpfLineInfo
 	relos     map[string]CoreRelos
 }
 
@@ -273,44 +273,98 @@ func parseFuncInfoRecords(r io.Reader, bo binary.ByteOrder, recordSize uint32, r
 			return nil, fmt.Errorf("offset %v is not aligned with instruction size", fi.InsnOff)
 		}
 
+		// ELF tracks offset in bytes, the kernel expects raw BPF instructions.
+		// Convert as early as possible.
+		fi.InsnOff /= asm.InstructionSize
+
 		out = append(out, fi)
 	}
 
 	return out, nil
 }
 
+var LineInfoSize = uint32(binary.Size(bpfLineInfo{}))
+
 // LineInfo represents the location and contents of a single line of source
 // code a BPF ELF was compiled from.
 type LineInfo struct {
-	// Instruction offset of the function within an ELF section.
-	// After parsing a LineInfo from an ELF, this offset is relative to
-	// the function body instead of an ELF section.
+	fileName   string
+	line       string
+	lineNumber uint32
+	lineColumn uint32
+
+	// TODO: We should get rid of the fields below, but for that we need to be
+	// able to write BTF.
+
+	// Instruction offset of the line within its enclosing function, in instructions.
+	insnOff     uint32
+	fileNameOff uint32
+	lineOff     uint32
+}
+
+// Constants for the format of bpfLineInfo.LineCol.
+const (
+	bpfLineShift = 10
+	bpfLineMax   = (1 << (32 - bpfLineShift)) - 1
+	bpfColumnMax = (1 << bpfLineShift) - 1
+)
+
+type bpfLineInfo struct {
+	// Instruction offset of the line within the whole instruction stream, in instructions.
 	InsnOff     uint32
 	FileNameOff uint32
 	LineOff     uint32
 	LineCol     uint32
 }
 
+func (li *LineInfo) FileName() string {
+	return li.fileName
+}
+
+func (li *LineInfo) Line() string {
+	return li.line
+}
+
+func (li *LineInfo) LineNumber() uint32 {
+	return li.lineNumber
+}
+
+func (li *LineInfo) LineColumn() uint32 {
+	return li.lineColumn
+}
+
+func (li *LineInfo) String() string {
+	return li.line
+}
+
 // Marshal writes the binary representation of the LineInfo to w.
 // The instruction offset is converted from bytes to instructions.
-func (li LineInfo) Marshal(w io.Writer, offset uint64) error {
-	li.InsnOff += uint32(offset)
-	// The kernel expects offsets in number of raw bpf instructions,
-	// while the ELF tracks it in bytes.
-	li.InsnOff /= asm.InstructionSize
-	return binary.Write(w, internal.NativeEndian, li)
+func (li *LineInfo) Marshal(w io.Writer, offset uint64) error {
+	if li.lineNumber > bpfLineMax {
+		return fmt.Errorf("line %d exceeds %d", li.lineNumber, bpfLineMax)
+	}
+
+	if li.lineColumn > bpfColumnMax {
+		return fmt.Errorf("column %d exceeds %d", li.lineColumn, bpfColumnMax)
+	}
+
+	bli := bpfLineInfo{
+		li.insnOff + uint32(offset/asm.InstructionSize),
+		li.fileNameOff,
+		li.lineOff,
+		(li.lineNumber << bpfLineShift) | li.lineColumn,
+	}
+	return binary.Write(w, internal.NativeEndian, &bli)
 }
 
 type LineInfos []LineInfo
 
-// Marshal writes the binary representation of the LineInfos to w.
-func (li LineInfos) Marshal(w io.Writer, off uint64) error {
-	if len(li) == 0 {
-		return nil
-	}
-
+// Marshal writes the BTF wire format of the LineInfos to w.
+//
+// offset is the start of the enclosing function in bytes.
+func (li LineInfos) Marshal(w io.Writer, offset uint64) error {
 	for _, info := range li {
-		if err := info.Marshal(w, off); err != nil {
+		if err := info.Marshal(w, offset); err != nil {
 			return err
 		}
 	}
@@ -320,13 +374,13 @@ func (li LineInfos) Marshal(w io.Writer, off uint64) error {
 
 // parseLineInfos parses a line_info sub-section within .BTF.ext ito a map of
 // line infos indexed by section name.
-func parseLineInfos(r io.Reader, bo binary.ByteOrder, strings stringTable) (map[string]LineInfos, error) {
+func parseLineInfos(r io.Reader, bo binary.ByteOrder, strings stringTable) (map[string][]bpfLineInfo, error) {
 	recordSize, err := parseExtInfoRecordSize(r, bo)
 	if err != nil {
 		return nil, err
 	}
 
-	result := make(map[string]LineInfos)
+	result := make(map[string][]bpfLineInfo)
 	for {
 		secName, infoHeader, err := parseExtInfoSec(r, bo, strings)
 		if errors.Is(err, io.EOF) {
@@ -348,9 +402,9 @@ func parseLineInfos(r io.Reader, bo binary.ByteOrder, strings stringTable) (map[
 // parseLineInfoRecords parses a stream of line_infos into a lineInfos.
 // These records appear after a btf_ext_info_sec header in the line_info
 // sub-section of .BTF.ext.
-func parseLineInfoRecords(r io.Reader, bo binary.ByteOrder, recordSize uint32, recordNum uint32) (LineInfos, error) {
-	var out LineInfos
-	var li LineInfo
+func parseLineInfoRecords(r io.Reader, bo binary.ByteOrder, recordSize uint32, recordNum uint32) ([]bpfLineInfo, error) {
+	var out []bpfLineInfo
+	var li bpfLineInfo
 
 	if exp, got := uint32(binary.Size(li)), recordSize; exp != got {
 		// BTF blob's record size is longer than we know how to parse.
@@ -365,6 +419,10 @@ func parseLineInfoRecords(r io.Reader, bo binary.ByteOrder, recordSize uint32, r
 		if li.InsnOff%asm.InstructionSize != 0 {
 			return nil, fmt.Errorf("offset %v is not aligned with instruction size", li.InsnOff)
 		}
+
+		// ELF tracks offset in bytes, the kernel expects raw BPF instructions.
+		// Convert as early as possible.
+		li.InsnOff /= asm.InstructionSize
 
 		out = append(out, li)
 	}

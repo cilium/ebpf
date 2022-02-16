@@ -501,7 +501,7 @@ func TestCoreRelocation(t *testing.T) {
 			"err_ambiguous_flavour": errAmbiguousRelocation,
 		}
 
-		for section := range spec.funcInfos {
+		for section := range spec.funcs {
 			name := strings.TrimPrefix(section, "socket_filter/")
 			t.Run(name, func(t *testing.T) {
 				prog, err := spec.Program(section)

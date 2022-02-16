@@ -88,9 +88,9 @@ func marshalFuncInfos(layout []reference) ([]byte, error) {
 		return nil, nil
 	}
 
-	buf := bytes.NewBuffer(make([]byte, 0, binary.Size(&btf.FuncInfo{})*len(layout)))
+	var buf bytes.Buffer
 	for _, sym := range layout {
-		if err := sym.spec.BTF.FuncInfo.Marshal(buf, sym.offset); err != nil {
+		if err := sym.spec.BTF.FuncInfo.Marshal(&buf, sym.offset); err != nil {
 			return nil, fmt.Errorf("marshaling prog %s func info: %w", sym.spec.Name, err)
 		}
 	}

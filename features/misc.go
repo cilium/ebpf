@@ -195,10 +195,8 @@ func createMiscProbeAttr(mt miscType) (*sys.ProgLoadAttr, error) {
 			asm.Return(),
 		}
 		// To test the v2 ISA we need a dedicated jump offset other
-		// than the one we would get from Instruction.FixupReferences().
-		if err := insns[1].RewriteJumpOffset(1); err != nil {
-			return nil, err
-		}
+		// than the one we would get from Instructions.FixupReferences().
+		insns[1].Offset = 1
 	case v3ISA:
 		label = "v3isa"
 		insns = asm.Instructions{

@@ -180,17 +180,6 @@ func (ins *Instruction) RewriteMapOffset(offset uint32) error {
 	return nil
 }
 
-// RewriteJumpOffset sets the offset for a jump operation.
-//
-// Returns an error if the instruction is not a jump operation.
-func (ins *Instruction) RewriteJumpOffset(offset int16) error {
-	if ins.OpCode.JumpOp() == InvalidJumpOp {
-		return errors.New("not a jump operation")
-	}
-	ins.Offset = offset
-	return nil
-}
-
 func (ins *Instruction) mapOffset() uint32 {
 	return uint32(uint64(ins.Constant) >> 32)
 }

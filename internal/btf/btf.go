@@ -10,6 +10,7 @@ import (
 	"math"
 	"os"
 	"reflect"
+	"sort"
 	"sync"
 
 	"github.com/cilium/ebpf/internal"
@@ -42,7 +43,7 @@ type Spec struct {
 	// Includes all struct flavors and types with the same name.
 	namedTypes map[essentialName][]Type
 
-	// Data from .BTF.ext.
+	// Data from .BTF.ext. indexed by function name.
 	funcInfos map[string]FuncInfo
 	lineInfos map[string]LineInfos
 	coreRelos map[string]CoreRelos
@@ -193,67 +194,79 @@ func loadSpecFromELF(file *internal.SafeELFFile) (*Spec, error) {
 // transforms them to be indexed by function. Retrieves function names from
 // the BTF spec.
 func (spec *Spec) splitExtInfos(info *extInfo) error {
-
 	ofi := make(map[string]FuncInfo)
 	oli := make(map[string]LineInfos)
 	ocr := make(map[string]CoreRelos)
 
 	for secName, secFuncs := range info.funcInfos {
 		// Collect functions from each section and organize them by name.
+		var funcs []*Func
 		for _, fi := range secFuncs {
-			name, err := fi.Name(spec)
+			typ, err := spec.TypeByID(fi.TypeID)
 			if err != nil {
-				return fmt.Errorf("looking up function name: %w", err)
+				return err
 			}
 
-			// FuncInfo offsets are scoped to the ELF section. Zero them out
-			// since they are meaningless outside of that context. The linker
-			// will determine the offset of the function within the final
-			// instruction stream before handing it off to the kernel.
-			fi.InsnOff = 0
+			fn, ok := typ.(*Func)
+			if !ok {
+				return fmt.Errorf("type ID %d is a %T, but expected a Func", fi.TypeID, typ)
+			}
 
-			ofi[name] = fi
+			// C doesn't have anonymous functions, but check just in case.
+			if fn.Name == "" {
+				return fmt.Errorf("func with type ID %d doesn't have a name", fi.TypeID)
+			}
+
+			ofi[fn.Name] = FuncInfo{fn}
+			funcs = append(funcs, fn)
+		}
+
+		// Consider an ELF section that contains 3 functions (a, b, c)
+		// at offsets 0, 10 and 15 respectively. Offset 5 will return function a,
+		// offset 12 will return b, offset >= 15 will return c, etc.
+		sort.Slice(secFuncs, func(i, j int) bool {
+			return secFuncs[i].InsnOff < secFuncs[j].InsnOff
+		})
+		funcForOffset := func(offset uint32) (fn *Func, fnOffset uint32) {
+			for i, fi := range secFuncs {
+				if fi.InsnOff > offset {
+					break
+				}
+				fn = funcs[i]
+				fnOffset = fi.InsnOff
+			}
+			return
 		}
 
 		// Attribute LineInfo records to their respective functions, if any.
 		if lines := info.lineInfos[secName]; lines != nil {
 			for _, li := range lines {
-				fi := secFuncs.funcForOffset(li.InsnOff)
-				if fi == nil {
+				fn, fnOffset := funcForOffset(li.InsnOff)
+				if fn == nil {
 					return fmt.Errorf("section %s: error looking up FuncInfo for LineInfo %v", secName, li)
 				}
 
 				// Offsets are ELF section-scoped, make them function-scoped by
 				// subtracting the function's start offset.
-				li.InsnOff -= fi.InsnOff
+				li.InsnOff -= fnOffset
 
-				name, err := fi.Name(spec)
-				if err != nil {
-					return fmt.Errorf("looking up function name: %w", err)
-				}
-
-				oli[name] = append(oli[name], li)
+				oli[fn.Name] = append(oli[fn.Name], li)
 			}
 		}
 
 		// Attribute CO-RE relocations to their respective functions, if any.
 		if relos := info.relos[secName]; relos != nil {
 			for _, r := range relos {
-				fi := secFuncs.funcForOffset(r.insnOff)
-				if fi == nil {
+				fn, fnOffset := funcForOffset(r.insnOff)
+				if fn == nil {
 					return fmt.Errorf("section %s: error looking up FuncInfo for CO-RE relocation %v", secName, r)
 				}
 
 				// Offsets are ELF section-scoped, make them function-scoped by
 				// subtracting the function's start offset.
-				r.insnOff -= fi.InsnOff
+				r.insnOff -= fnOffset
 
-				name, err := fi.Name(spec)
-				if err != nil {
-					return fmt.Errorf("looking up function name: %w", err)
-				}
-
-				ocr[name] = append(ocr[name], r)
+				ocr[fn.Name] = append(ocr[fn.Name], r)
 			}
 		}
 	}
@@ -588,7 +601,7 @@ func (s *Spec) Program(name string) (*Program, error) {
 		return nil, fmt.Errorf("BTF for function %s: %w", name, ErrNoExtendedInfo)
 	}
 
-	funcInfos, funcOK := s.funcInfos[name]
+	funcInfo, funcOK := s.funcInfos[name]
 	lineInfos, lineOK := s.lineInfos[name]
 	relos, coreOK := s.coreRelos[name]
 
@@ -596,7 +609,7 @@ func (s *Spec) Program(name string) (*Program, error) {
 		return nil, fmt.Errorf("no extended BTF info for function %s", name)
 	}
 
-	return &Program{s, funcInfos, lineInfos, relos}, nil
+	return &Program{s, funcInfo, lineInfos, relos}, nil
 }
 
 // TypeByID returns the BTF Type with the given type ID.

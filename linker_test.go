@@ -74,8 +74,8 @@ func TestForwardFunctionDeclaration(t *testing.T) {
 
 		// This program calls an unimplemented forward function declaration.
 		_, err = NewProgram(spec)
-		if !errors.Is(err, asm.ErrUnsatisfiedReference) {
-			t.Fatal("Expected an error wrapping errUnsatisfiedProgram, got:", err)
+		if !errors.Is(err, asm.ErrUnsatisfiedProgramReference) {
+			t.Fatal("Expected an error wrapping ErrUnsatisfiedProgramReference, got:", err)
 		}
 
 		// Append the implementation of fwd().

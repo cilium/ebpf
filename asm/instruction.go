@@ -20,7 +20,7 @@ const InstructionSize = 8
 type RawInstructionOffset uint64
 
 var ErrUnsatisfiedMapReference = errors.New("unsatisfied map reference")
-var ErrUnsatisfiedReference = errors.New("unsatisfied reference")
+var ErrUnsatisfiedProgramReference = errors.New("unsatisfied program reference")
 
 // Bytes returns the offset of an instruction in bytes.
 func (rio RawInstructionOffset) Bytes() uint64 {
@@ -584,7 +584,7 @@ func (insns Instructions) FixupReferences() error {
 			// no fixup needed
 			continue
 		}
-		return fmt.Errorf("%s at insn %d: symbol %q: %w", ins.OpCode, i, ins.Reference, ErrUnsatisfiedReference)
+		return fmt.Errorf("%s at insn %d: symbol %q: %w", ins.OpCode, i, ins.Reference, ErrUnsatisfiedProgramReference)
 	}
 	return nil
 }

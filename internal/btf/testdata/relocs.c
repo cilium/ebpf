@@ -238,3 +238,15 @@ __section("socket_filter/err_ambiguous") int err_ambiguous() {
 __section("socket_filter/err_ambiguous_flavour") int err_ambiguous_flavour() {
 	return bpf_core_type_id_kernel(struct ambiguous___flavour);
 }
+
+struct b {
+	int _1;
+	unsigned long b1:1, b5:5, b10:10;
+	int _2;
+};
+
+__section("socket_filter/bitfields") int bitfields() {
+	struct b b = {};
+	if (BPF_CORE_READ_BITFIELD(&b, b5)) return __LINE__;
+	return 0;
+}

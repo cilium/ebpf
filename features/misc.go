@@ -29,16 +29,16 @@ type miscCache struct {
 type miscType uint32
 
 const (
-	// largeInsn support introduced in
+	// largeInsn support introduced in Linux 5.2
 	// commit c04c0d2b968ac45d6ef020316808ef6c82325a82
 	largeInsn miscType = iota
-	// boundedLoops support introduced in
+	// boundedLoops support introduced in Linux 5.3
 	// commit 2589726d12a1b12eaaa93c7f1ea64287e383c7a5
 	boundedLoops
-	// v2ISA support introduced in
+	// v2ISA support introduced in Linux 4.14
 	// commit 92b31a9af73b3a3fc801899335d6c47966351830
 	v2ISA
-	// v3ISA support introduced in
+	// v3ISA support introduced in Linux 5.1
 	// commit 092ed0968bb648cd18e8a0430cd0a8a71727315c
 	v3ISA
 )
@@ -119,11 +119,7 @@ func probeMisc(mt miscType) error {
 }
 
 func createMiscProbeAttr(mt miscType) (*sys.ProgLoadAttr, error) {
-	var (
-		insns asm.Instructions
-		label string
-	)
-
+	var insns asm.Instructions
 	switch mt {
 	case largeInsn:
 		for i := 0; i < maxInsns; i++ {
@@ -131,34 +127,28 @@ func createMiscProbeAttr(mt miscType) (*sys.ProgLoadAttr, error) {
 		}
 		insns = append(insns, asm.Return())
 	case boundedLoops:
-		label = "boundedLoop"
 		insns = asm.Instructions{
 			asm.Mov.Imm(asm.R0, 10),
-			asm.Sub.Imm(asm.R0, 1).Sym(label),
-			asm.JNE.Imm(asm.R0, 0, label),
+			asm.Sub.Imm(asm.R0, 1).Sym("loop"),
+			asm.JNE.Imm(asm.R0, 0, "loop"),
 			asm.Return(),
 		}
 	case v2ISA:
-		label = "v2isa"
 		insns = asm.Instructions{
-			asm.Mov.Imm(asm.R0, 0).Sym(label),
-			asm.JLT.Imm(asm.R0, 0, label),
+			asm.Mov.Imm(asm.R0, 0),
+			asm.JLT.Imm(asm.R0, 0, "exit"),
 			asm.Mov.Imm(asm.R0, 1),
-			asm.Return(),
+			asm.Return().Sym("exit"),
 		}
-		// To test the v2 ISA we need a dedicated jump offset other
-		// than the one we would get from Instructions.FixupReferences().
-		insns[1].Offset = 1
 	case v3ISA:
-		label = "v3isa"
 		insns = asm.Instructions{
-			asm.Mov.Imm(asm.R0, 0).Sym(label),
-			asm.JLT.Imm32(asm.R0, 0, label),
+			asm.Mov.Imm(asm.R0, 0),
+			asm.JLT.Imm32(asm.R0, 0, "exit"),
 			asm.Mov.Imm(asm.R0, 1),
-			asm.Return(),
+			asm.Return().Sym("exit"),
 		}
 	default:
-		return nil, fmt.Errorf("feature %d not yet implemented", mt)
+		return nil, fmt.Errorf("misc probe %d not implemented", mt)
 	}
 
 	buf := bytes.NewBuffer(make([]byte, 0, insns.Size()))

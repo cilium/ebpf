@@ -10,3 +10,24 @@ struct s {
 } __attribute__((preserve_access_index));
 
 struct s *unused_s __attribute__((unused));
+
+typedef unsigned int my_u32;
+typedef unsigned char u8;
+typedef unsigned short u16;
+typedef unsigned int u32;
+typedef unsigned long u64;
+
+struct bits {
+	/*int x;*/
+	u8 b:2, a:4; /* a was before b */
+	my_u32 d:2; /* was 'unsigned int' */
+	u16 c:1; /* was before d */
+	enum { ZERO = 0, ONE = 1 } e:1;
+	u16 f; /* was: u64 f:16 */
+	u32 g:30; /* was: u64 g:30 */
+};
+
+int dummy() {
+	return core_access((struct s){}.a) +
+		core_access((struct bits){}.a);
+}

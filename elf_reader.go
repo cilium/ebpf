@@ -401,7 +401,7 @@ func (ec *elfCode) loadFunctions(section *elfSection) (map[string]asm.Instructio
 					return nil, fmt.Errorf("offset %d: no jump target found at offset %d", secOffset, tgt)
 				}
 
-				ins = ins.SetReference(sym)
+				ins.SetReference(sym)
 				ins.Constant = -1
 			}
 		}
@@ -427,10 +427,14 @@ func (ec *elfCode) loadFunctions(section *elfSection) (map[string]asm.Instructio
 				line = ""
 			}
 
-			ins = ins.SetFileName(fileName).
-				SetLine(line).
-				SetLineNumber(int(lineInfo.LineNum())).
-				SetColumnNumber(int(lineInfo.ColNum()))
+			// TODO we should use the *btf.LineInfo here directly, as soon as it implements fmt.Stringer
+			ins = ins.WithContext(asm.SimpleContext(fmt.Sprintf(
+				"%s:%d:%d: %s",
+				fileName,
+				lineInfo.LineNum(),
+				lineInfo.ColNum(),
+				line,
+			)))
 		}
 
 		insns = append(insns, ins)
@@ -609,7 +613,7 @@ func (ec *elfCode) relocateInstruction(ins *asm.Instruction, rel elf.Symbol) err
 		return fmt.Errorf("relocation to %q: %w", target.Name, ErrNotSupported)
 	}
 
-	*ins = ins.SetReference(name)
+	ins.SetReference(name)
 	return nil
 }
 

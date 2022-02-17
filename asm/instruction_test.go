@@ -154,7 +154,7 @@ func TestInstructionsRewriteMapPtr(t *testing.T) {
 		LoadMapPtr(R1, 0),
 		Return(),
 	}
-	insns[0] = insns[0].SetReference("good")
+	insns[0].SetReference("good")
 
 	if err := insns.RewriteMapPtr("good", 1); err != nil {
 		t.Fatal(err)
@@ -181,8 +181,8 @@ func TestInstructionsRewriteMapPtr(t *testing.T) {
 // program is stringified.
 func ExampleInstructions_Format() {
 	insns := Instructions{
-		FnMapLookupElem.Call().Sym("my_func").SetLine("bpf_map_lookup_elem()"),
-		LoadImm(R0, 42, DWord).SetLine("abc = 42"),
+		FnMapLookupElem.Call().Sym("my_func").WithContext(SimpleContext("bpf_map_lookup_elem()")),
+		LoadImm(R0, 42, DWord).WithContext(SimpleContext("abc = 42")),
 		Return(),
 	}
 
@@ -291,7 +291,7 @@ func TestInstructionIterator(t *testing.T) {
 
 func TestMetadataCopyOnWrite(t *testing.T) {
 	insn := Instructions{
-		Mov.Imm(R1, 123).SetReference("my_func"),
+		JEq.Imm(R1, 123, "my_func"),
 		Mov.Reg(R2, R1),
 		Mul.Reg(R1, R2),
 	}
@@ -300,7 +300,7 @@ func TestMetadataCopyOnWrite(t *testing.T) {
 	copy(insn2, insn)
 
 	// Setting the reference should have copied the metadata object and not effected the exiting pointer
-	insn2[0] = insn2[0].SetReference("my_func2")
+	insn2[0].SetReference("my_func2")
 
 	if insn[0].Reference() != "my_func" {
 		t.Fatal("metadata modification to copied instruction effected the old instruction")
@@ -316,32 +316,18 @@ func TestMetadataCopyOnWrite(t *testing.T) {
 
 	// Set the reference, then clear it. Causing us to have a nil in one instruction and an empty metadata in the
 	// other.
-	insn[1] = insn[1].SetReference("SomeValue").SetReference("")
+	insn[1].SetReference("SomeValue")
+	insn[1].SetReference("")
 
 	// Metadata is value compared, not pointer compared, so so these should still be equal
 	if !insn[1].equal(insn2[1]) {
 		t.Fatal("instructions with nil and empty metadata should be equal")
 	}
 
-	insn[1] = insn[1].SetReference("abc")
-	insn2[1] = insn2[1].SetReference("abc")
+	insn[1].SetReference("abc")
+	insn2[1].SetReference("abc")
 
 	if !insn[1].equal(insn2[1]) {
 		t.Fatal("instructions with the same effective metadata should be equal")
-	}
-}
-
-func TestColLine(t *testing.T) {
-	ins := Mov.Imm(R1, 123)
-
-	ins = ins.SetLineNumber(23445)
-	ins = ins.SetColumnNumber(500)
-
-	if ins.LineNumber() != 23445 {
-		t.Fatalf("line number in instruction metadata incorrect, expected 23445, got: %d", ins.LineNumber())
-	}
-
-	if ins.LineColumn() != 500 {
-		t.Fatalf("column number in instruction metadata incorrect, expected 500, got: %d", ins.LineColumn())
 	}
 }

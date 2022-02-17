@@ -352,15 +352,14 @@ func (ins Instruction) Size() uint64 {
 }
 
 // SetReference set a reference(e.g. a jump) to another symbol
-func (ins Instruction) SetReference(ref string) Instruction {
+func (ins *Instruction) SetReference(ref string) {
 	if (ins.metadata != nil && ins.metadata.reference == ref) ||
 		(ins.metadata == nil && ref == "") {
-		return ins
+		return
 	}
 
 	ins.metadata = ins.metadata.copy()
 	ins.metadata.reference = ref
-	return ins
 }
 
 // Reference denotes a reference (e.g. a jump) to another symbol.
@@ -372,93 +371,25 @@ func (ins Instruction) Reference() string {
 	return ins.metadata.reference
 }
 
-// SetFileName sets the absolute file path to the source file which generated the instrution.
-func (ins Instruction) SetFileName(fileName string) Instruction {
-	if (ins.metadata != nil && ins.metadata.fileName == fileName) ||
-		(ins.metadata == nil && fileName == "") {
+// WithContext adds information about the origin/source of the instruction.
+func (ins Instruction) WithContext(ctx fmt.Stringer) Instruction {
+	if (ins.metadata != nil && ins.metadata.context == ctx) ||
+		(ins.metadata == nil && ctx == nil) {
 		return ins
 	}
 
 	ins.metadata = ins.metadata.copy()
-	ins.metadata.fileName = fileName
+	ins.metadata.context = ctx
 	return ins
 }
 
-// FileName denotes the absolute file path to the source file which generated the instrution.
-func (ins Instruction) FileName() string {
+// Context denotes information about the origin/source of the instruction.
+func (ins Instruction) Context() fmt.Stringer {
 	if ins.metadata == nil {
-		return ""
+		return nil
 	}
 
-	return ins.metadata.fileName
-}
-
-// SetLine sets the line of source code which generated the instruction.
-func (ins Instruction) SetLine(line string) Instruction {
-	if (ins.metadata != nil && ins.metadata.line == line) ||
-		(ins.metadata == nil && line == "") {
-		return ins
-	}
-
-	ins.metadata = ins.metadata.copy()
-	ins.metadata.line = line
-	return ins
-}
-
-// Line denotes the line of source code which generated the instruction.
-func (ins Instruction) Line() string {
-	if ins.metadata == nil {
-		return ""
-	}
-
-	return ins.metadata.line
-}
-
-// SetLine sets the line number within the source file which created this instruction.
-func (ins Instruction) SetLineNumber(lineNumber int) Instruction {
-	if (ins.metadata != nil && int(ins.metadata.lineCol>>10) == lineNumber) ||
-		(ins.metadata == nil && lineNumber == 0) {
-		return ins
-	}
-
-	ins.metadata = ins.metadata.copy()
-	ins.metadata.lineCol = (uint32(lineNumber) << 10) | (ins.metadata.lineCol & 0x3ff)
-	return ins
-}
-
-// LineNumber denotes the line number within the source file which created this instruction.
-func (ins Instruction) LineNumber() int {
-	if ins.metadata == nil {
-		return -1
-	}
-
-	// #define BPF_LINE_INFO_LINE_NUM(line_col)        ((line_col) >> 10)
-	return int(ins.metadata.lineCol >> 10)
-}
-
-// SetColumnNumber sets the column number within the source line which created this instruction.
-func (ins Instruction) SetColumnNumber(colNumber int) Instruction {
-	if (ins.metadata != nil && int(ins.metadata.lineCol&0x3ff) == colNumber) ||
-		(ins.metadata == nil && colNumber == 0) {
-		return ins
-	}
-
-	ins.metadata = ins.metadata.copy()
-	// Zero out the lower 10 bits of lineCol
-	ins.metadata.lineCol = ins.metadata.lineCol & (0xFFFFFC00)
-	// Replace with lower 10 bits of colNumber
-	ins.metadata.lineCol = ins.metadata.lineCol | (uint32(colNumber) & 0x3ff)
-	return ins
-}
-
-// LineColumn denotes the column number within the source line which created this instruction.
-func (ins Instruction) LineColumn() int {
-	if ins.metadata == nil {
-		return -1
-	}
-
-	// #define BPF_LINE_INFO_LINE_COL(line_col)        ((line_col) & 0x3ff)
-	return int(ins.metadata.lineCol & 0x3ff)
+	return ins.metadata.context
 }
 
 // setMap sets the *ebpf.Map from which this instruction preforms a data.
@@ -485,12 +416,8 @@ type metadata struct {
 	reference string
 	// symbol denotes an instruction at the start of a function body.
 	symbol string
-	// filename denotes the absolute file path to the source file which generated the instrution.
-	fileName string
-	// line denotes the line of source code which generated the instruction.
-	line string
-	// lineCol denotes both the line and column number within the source file which generated this instruction.
-	lineCol uint32
+	// context denotes information about the origin/source of the instruction.
+	context fmt.Stringer
 
 	// bpfMap denotes the *ebpf.Map from which this instruction preforms a data.
 	bpfMap FDer
@@ -515,6 +442,13 @@ func (m *metadata) copy() *metadata {
 		copy = *m
 	}
 	return &copy
+}
+
+// SimpleContext can be used to set a string as context of an Instruction.
+type SimpleContext string
+
+func (sc SimpleContext) String() string {
+	return string(sc)
 }
 
 // Instructions is an eBPF program.
@@ -735,8 +669,8 @@ func (insns Instructions) Format(f fmt.State, c rune) {
 		if iter.Ins.Symbol() != "" {
 			fmt.Fprintf(f, "%s%s:\n", symIndent, iter.Ins.Symbol())
 		}
-		if line := iter.Ins.Line(); line != "" {
-			line := strings.TrimSpace(line)
+		if ctx := iter.Ins.Context(); ctx != nil {
+			line := strings.TrimSpace(ctx.String())
 			if line != "" {
 				fmt.Fprintf(f, "%s%*s; %s\n", indent, offsetWidth, " ", line)
 			}

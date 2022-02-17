@@ -338,13 +338,12 @@ ref:
 	}
 }
 
-func (ins Instruction) Equal(other Instruction) bool {
+func (ins Instruction) equal(other Instruction) bool {
 	return ins.OpCode == other.OpCode &&
 		ins.Dst == other.Dst &&
 		ins.Src == other.Src &&
 		ins.Offset == other.Offset &&
-		ins.Constant == other.Constant &&
-		ins.metadata.equal(other.metadata)
+		ins.Constant == other.Constant
 }
 
 // Size returns the amount of bytes ins would occupy in binary form.

@@ -33,6 +33,10 @@ func TestCoreRelocationLoad(t *testing.T) {
 					TargetBTF: fh,
 				})
 
+				if strings.Contains(progSpec.SectionName, "/k54_") {
+					testutils.SkipOnOldKernel(t, "5.4", "5.4 kernel or newer")
+				}
+
 				if strings.HasPrefix(progSpec.Name, "err_") {
 					if err == nil {
 						prog.Close()

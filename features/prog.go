@@ -79,17 +79,8 @@ func createProgLoadAttr(pt ebpf.ProgramType) (*sys.ProgLoadAttr, error) {
 }
 
 // HaveProgType probes the running kernel for the availability of the specified program type.
-// Return values have the following semantics:
 //
-//   err == nil: The feature is available.
-//   errors.Is(err, ebpf.ErrNotSupported): The feature is not available.
-//   err != nil: Any errors encountered during probe execution, wrapped.
-//
-// Note that the latter case may include false negatives, and that program creation may
-// succeed despite an error being returned. Some program types cannot reliably be probed and
-// will also return error. Only `nil` and `ebpf.ErrNotSupported` are conclusive.
-//
-// Probe results are cached and persist throughout any process capability changes.
+// See the package documentation for the meaning of the error return value.
 func HaveProgType(pt ebpf.ProgramType) error {
 	if err := validateProgType(pt); err != nil {
 		return err

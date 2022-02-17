@@ -20,7 +20,7 @@ const InstructionSize = 8
 type RawInstructionOffset uint64
 
 var ErrUnsatisfiedMapReference = errors.New("unsatisfied map reference")
-var ErrUnsatisfiedReference = errors.New("unsatisfied reference")
+var ErrUnsatisfiedProgramReference = errors.New("unsatisfied program reference")
 
 // Bytes returns the offset of an instruction in bytes.
 func (rio RawInstructionOffset) Bytes() uint64 {
@@ -177,17 +177,6 @@ func (ins *Instruction) RewriteMapOffset(offset uint32) error {
 
 	fd := uint64(ins.Constant) & math.MaxUint32
 	ins.Constant = int64(uint64(offset)<<32 | fd)
-	return nil
-}
-
-// RewriteJumpOffset sets the offset for a jump operation.
-//
-// Returns an error if the instruction is not a jump operation.
-func (ins *Instruction) RewriteJumpOffset(offset int16) error {
-	if ins.OpCode.JumpOp() == InvalidJumpOp {
-		return errors.New("not a jump operation")
-	}
-	ins.Offset = offset
 	return nil
 }
 
@@ -571,31 +560,26 @@ func (insns Instructions) FixupReferences() error {
 			continue
 		}
 
-		symOffset, ok := symbolOffsets[ins.Reference]
 		switch {
 		case ins.IsFunctionReference() && ins.Constant == -1:
+			symOffset, ok := symbolOffsets[ins.Reference]
 			if !ok {
-				break
+				return fmt.Errorf("%s at insn %d: symbol %q: %w", ins.OpCode, i, ins.Reference, ErrUnsatisfiedProgramReference)
 			}
 
 			ins.Constant = int64(symOffset - offset - 1)
-			continue
 
 		case ins.OpCode.Class().IsJump() && ins.Offset == -1:
+			symOffset, ok := symbolOffsets[ins.Reference]
 			if !ok {
-				break
+				return fmt.Errorf("%s at insn %d: symbol %q: %w", ins.OpCode, i, ins.Reference, ErrUnsatisfiedProgramReference)
 			}
 
 			ins.Offset = int16(symOffset - offset - 1)
-			continue
 
 		case ins.IsLoadFromMap() && ins.MapPtr() == -1:
 			return fmt.Errorf("map %s: %w", ins.Reference, ErrUnsatisfiedMapReference)
-		default:
-			// no fixup needed
-			continue
 		}
-		return fmt.Errorf("%s at insn %d: symbol %q: %w", ins.OpCode, i, ins.Reference, ErrUnsatisfiedReference)
 	}
 	return nil
 }

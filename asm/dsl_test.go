@@ -39,7 +39,7 @@ func TestDSL(t *testing.T) {
 	}
 
 	for _, tc := range testcases {
-		if !tc.have.Equal(tc.want) {
+		if !tc.have.equal(tc.want) {
 			t.Errorf("%s: have %v, want %v", tc.name, tc.have, tc.want)
 		}
 	}

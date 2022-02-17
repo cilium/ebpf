@@ -181,8 +181,8 @@ func TestInstructionsRewriteMapPtr(t *testing.T) {
 // program is stringified.
 func ExampleInstructions_Format() {
 	insns := Instructions{
-		FnMapLookupElem.Call().Sym("my_func"),
-		LoadImm(R0, 42, DWord),
+		FnMapLookupElem.Call().Sym("my_func").SetLine("bpf_map_lookup_elem()"),
+		LoadImm(R0, 42, DWord).SetLine("abc = 42"),
 		Return(),
 	}
 
@@ -200,25 +200,33 @@ func ExampleInstructions_Format() {
 
 	// Output: Default format:
 	// my_func:
+	//	 ; bpf_map_lookup_elem()
 	// 	0: Call FnMapLookupElem
+	//	 ; abc = 42
 	// 	1: LdImmDW dst: r0 imm: 42
 	// 	3: Exit
 	//
 	// Don't indent instructions:
 	// my_func:
+	//  ; bpf_map_lookup_elem()
 	// 0: Call FnMapLookupElem
+	//  ; abc = 42
 	// 1: LdImmDW dst: r0 imm: 42
 	// 3: Exit
 	//
 	// Indent using spaces:
 	// my_func:
+	//   ; bpf_map_lookup_elem()
 	//  0: Call FnMapLookupElem
+	//   ; abc = 42
 	//  1: LdImmDW dst: r0 imm: 42
 	//  3: Exit
 	//
 	// Control symbol indentation:
 	// 		my_func:
+	//	 ; bpf_map_lookup_elem()
 	// 	0: Call FnMapLookupElem
+	//	 ; abc = 42
 	// 	1: LdImmDW dst: r0 imm: 42
 	// 	3: Exit
 }
@@ -302,7 +310,7 @@ func TestMetadataCopyOnWrite(t *testing.T) {
 		t.Fatal("SetReference didn't update new instruction")
 	}
 
-	if insn[0].Equal(insn2[0]) {
+	if insn[0].metadata == insn2[0].metadata {
 		t.Fatal("changed instruction should not be equal")
 	}
 
@@ -311,14 +319,14 @@ func TestMetadataCopyOnWrite(t *testing.T) {
 	insn[1] = insn[1].SetReference("SomeValue").SetReference("")
 
 	// Metadata is value compared, not pointer compared, so so these should still be equal
-	if !insn[1].Equal(insn2[1]) {
+	if !insn[1].equal(insn2[1]) {
 		t.Fatal("instructions with nil and empty metadata should be equal")
 	}
 
 	insn[1] = insn[1].SetReference("abc")
 	insn2[1] = insn2[1].SetReference("abc")
 
-	if !insn[1].Equal(insn2[1]) {
+	if !insn[1].equal(insn2[1]) {
 		t.Fatal("instructions with the same effective metadata should be equal")
 	}
 }

@@ -560,31 +560,26 @@ func (insns Instructions) FixupReferences() error {
 			continue
 		}
 
-		symOffset, ok := symbolOffsets[ins.Reference]
 		switch {
 		case ins.IsFunctionReference() && ins.Constant == -1:
+			symOffset, ok := symbolOffsets[ins.Reference]
 			if !ok {
-				break
+				return fmt.Errorf("%s at insn %d: symbol %q: %w", ins.OpCode, i, ins.Reference, ErrUnsatisfiedProgramReference)
 			}
 
 			ins.Constant = int64(symOffset - offset - 1)
-			continue
 
 		case ins.OpCode.Class().IsJump() && ins.Offset == -1:
+			symOffset, ok := symbolOffsets[ins.Reference]
 			if !ok {
-				break
+				return fmt.Errorf("%s at insn %d: symbol %q: %w", ins.OpCode, i, ins.Reference, ErrUnsatisfiedProgramReference)
 			}
 
 			ins.Offset = int16(symOffset - offset - 1)
-			continue
 
 		case ins.IsLoadFromMap() && ins.MapPtr() == -1:
 			return fmt.Errorf("map %s: %w", ins.Reference, ErrUnsatisfiedMapReference)
-		default:
-			// no fixup needed
-			continue
 		}
-		return fmt.Errorf("%s at insn %d: symbol %q: %w", ins.OpCode, i, ins.Reference, ErrUnsatisfiedProgramReference)
 	}
 	return nil
 }

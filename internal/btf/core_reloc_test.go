@@ -47,6 +47,13 @@ func TestCoreRelocationLoad(t *testing.T) {
 				}
 				defer prog.Close()
 
+				/*
+					defer func() {
+						fmt.Printf("waiting 1 min\n")
+						time.Sleep(time.Minute)
+
+					}()*/
+
 				ret, _, err := prog.Test(make([]byte, 14))
 				testutils.SkipIfNotSupported(t, err)
 				if err != nil {

@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"math"
 	"reflect"
 	"strings"
 
@@ -69,7 +68,7 @@ func (cs *CollectionSpec) RewriteMaps(maps map[string]*Map) error {
 		// have we seen a program that uses this symbol / map
 		seen := false
 		for progName, progSpec := range cs.Programs {
-			err := progSpec.Instructions.RewriteMap(symbol, m)
+			err := progSpec.Instructions.AssociateMap(symbol, m)
 
 			switch {
 			case err == nil:
@@ -455,12 +454,6 @@ func (cl *collectionLoader) loadProgram(progName string) (*Program, error) {
 			continue
 		}
 
-		if uint32(ins.Constant) != math.MaxUint32 {
-			// Don't overwrite maps already rewritten, users can
-			// rewrite programs in the spec themselves
-			continue
-		}
-
 		m, err := cl.loadMap(ins.Reference())
 		if err != nil {
 			return nil, fmt.Errorf("program %s: %w", progName, err)
@@ -470,7 +463,7 @@ func (cl *collectionLoader) loadProgram(progName string) (*Program, error) {
 		if fd < 0 {
 			return nil, fmt.Errorf("map %s: %w", ins.Reference(), sys.ErrClosedFd)
 		}
-		if err := ins.RewriteMap(m); err != nil {
+		if err := ins.AssociateMap(m); err != nil {
 			return nil, fmt.Errorf("program %s: map %s: %w", progName, ins.Reference(), err)
 		}
 	}

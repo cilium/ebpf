@@ -111,6 +111,13 @@ func (ins Instruction) Marshal(w io.Writer, bo binary.ByteOrder) (uint64, error)
 		return 0, errors.New("invalid opcode")
 	}
 
+	if ins.IsLoadFromMap() && ins.metadata != nil && ins.metadata.bpfMap != nil {
+		err := ins.RewriteMapPtr(ins.metadata.bpfMap.FD())
+		if err != nil {
+			return 0, fmt.Errorf("rewrite map fd: %w", err)
+		}
+	}
+
 	isDWordLoad := ins.OpCode.IsDWordLoad()
 
 	cons := int32(ins.Constant)
@@ -148,27 +155,20 @@ func (ins Instruction) Marshal(w io.Writer, bo binary.ByteOrder) (uint64, error)
 	return 2 * InstructionSize, nil
 }
 
-// RewriteMap changes an instruction to use a new map's fd.
+// AssociateMap associates a *ebpf.Map with this instruction.
 //
 // Returns an error if the instruction doesn't load a map.
-func (ins *Instruction) RewriteMap(m FDer) error {
+func (ins *Instruction) AssociateMap(m FDer) error {
 	if !ins.IsLoadFromMap() {
 		return errors.New("not a load from a map")
 	}
 
-	// nil is a valid value for m to unset the map reference
-	fd := -1
-	if m != nil {
-		fd = m.FD()
-	}
-
-	// Set the FD of the passed map.
-	err := ins.RewriteMapPtr(fd)
-	if err != nil {
+	// Set fd to -1 since it is technically not yet rewritten
+	if err := ins.RewriteMapPtr(-1); err != nil {
 		return err
 	}
 
-	*ins = ins.setMap(m)
+	ins.setMap(m)
 	return nil
 }
 
@@ -194,6 +194,12 @@ func (ins *Instruction) RewriteMapPtr(fd int) error {
 // The result is undefined if the instruction is not a load from a map,
 // see IsLoadFromMap.
 func (ins *Instruction) MapPtr() int {
+	// If there is a map associated with the instruction, return its FD.
+	if ins.metadata != nil && ins.metadata.bpfMap != nil {
+		return ins.metadata.bpfMap.FD()
+	}
+
+	// Otherwise fallback to the fd stored in the Constant field
 	return int(int32(uint64(ins.Constant) & math.MaxUint32))
 }
 
@@ -393,15 +399,14 @@ func (ins Instruction) Context() fmt.Stringer {
 }
 
 // setMap sets the *ebpf.Map from which this instruction preforms a data.
-func (ins Instruction) setMap(ebpfMap FDer) Instruction {
+func (ins *Instruction) setMap(ebpfMap FDer) {
 	if (ins.metadata != nil && ins.metadata.bpfMap == ebpfMap) ||
 		(ins.metadata == nil && ebpfMap == nil) {
-		return ins
+		return
 	}
 
 	ins.metadata = ins.metadata.copy()
 	ins.metadata.bpfMap = ebpfMap
-	return ins
 }
 
 // FDer isn't actually used as a meaningful interface, rater it is used because we can't directly use types from the
@@ -421,18 +426,6 @@ type metadata struct {
 
 	// bpfMap denotes the *ebpf.Map from which this instruction preforms a data.
 	bpfMap FDer
-}
-
-func (m *metadata) equal(other *metadata) bool {
-	var a, b metadata
-	if m != nil {
-		a = *m
-	}
-	if other != nil {
-		b = *other
-	}
-
-	return a == b
 }
 
 // returns a copy of metadata, return value is never nil, even if called on a nil value
@@ -500,10 +493,10 @@ func (insns Instructions) Size() uint64 {
 	return sum
 }
 
-// RewriteMap rewrites all loads of a specific map pointer.
+// AssociateMap rewrites all loads of a specific map pointer.
 //
 // Returns an error if the symbol isn't used, see IsUnreferencedSymbol.
-func (insns Instructions) RewriteMap(symbol string, m FDer) error {
+func (insns Instructions) AssociateMap(symbol string, m FDer) error {
 	if symbol == "" {
 		return errors.New("empty symbol")
 	}
@@ -515,9 +508,12 @@ func (insns Instructions) RewriteMap(symbol string, m FDer) error {
 			continue
 		}
 
-		if err := ins.RewriteMap(m); err != nil {
+		if err := ins.AssociateMap(m); err != nil {
 			return err
 		}
+
+		// Remove the reference, since we have now resolved it, so we will not attempt to do so again later.
+		ins.SetReference("")
 
 		found = true
 	}

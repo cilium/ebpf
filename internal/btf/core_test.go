@@ -233,14 +233,24 @@ func TestCOREFindField(t *testing.T) {
 	aFields := []Member{
 		{Name: "foo", Type: ptr, OffsetBits: 1},
 		{Name: "bar", Type: u16, OffsetBits: 2},
+		{Name: "baz", Type: u32, OffsetBits: 32, BitfieldSize: 3},
+		{Name: "quux", Type: u32, OffsetBits: 35, BitfieldSize: 10},
+		{Name: "quuz", Type: u32, OffsetBits: 45, BitfieldSize: 8},
 	}
 	bFields := []Member{
 		{Name: "foo", Type: ptr, OffsetBits: 10},
 		{Name: "bar", Type: u32, OffsetBits: 20},
 		{Name: "other", OffsetBits: 4},
+		// baz is separated out from the other bitfields
+		{Name: "baz", Type: u32, OffsetBits: 64, BitfieldSize: 3},
+		// quux's type changes u32->u16
+		{Name: "quux", Type: u16, OffsetBits: 96, BitfieldSize: 10},
+		// quuz becomes a normal field
+		{Name: "quuz", Type: u16, OffsetBits: 112},
 	}
-	aStruct := &Struct{Members: aFields, Size: 2}
-	bStruct := &Struct{Members: bFields, Size: 7}
+
+	aStruct := &Struct{Members: aFields, Size: 48}
+	bStruct := &Struct{Members: bFields, Size: 80}
 	aArray := &Array{Nelems: 4, Type: u16}
 	bArray := &Array{Nelems: 3, Type: u32}
 
@@ -340,83 +350,83 @@ func TestCOREFindField(t *testing.T) {
 			aArray,
 			bArray,
 			coreAccessor{0, 0},
-			coreField{u16, 0},
-			coreField{u32, 0},
+			coreField{u16, 0, 0, 0},
+			coreField{u32, 0, 0, 0},
 		},
 		{
 			"array[1]",
 			aArray,
 			bArray,
 			coreAccessor{0, 1},
-			coreField{u16, bits(aArray.Type)},
-			coreField{u32, bits(bArray.Type)},
+			coreField{u16, bits(aArray.Type), 0, 0},
+			coreField{u32, bits(bArray.Type), 0, 0},
 		},
 		{
 			"array[0] with base offset",
 			aArray,
 			bArray,
 			coreAccessor{1, 0},
-			coreField{u16, bits(aArray)},
-			coreField{u32, bits(bArray)},
+			coreField{u16, bits(aArray), 0, 0},
+			coreField{u32, bits(bArray), 0, 0},
 		},
 		{
 			"array[2] with base offset",
 			aArray,
 			bArray,
 			coreAccessor{1, 2},
-			coreField{u16, bits(aArray) + 2*bits(aArray.Type)},
-			coreField{u32, bits(bArray) + 2*bits(bArray.Type)},
+			coreField{u16, bits(aArray) + 2*bits(aArray.Type), 0, 0},
+			coreField{u32, bits(bArray) + 2*bits(bArray.Type), 0, 0},
 		},
 		{
 			"flex array",
 			&Struct{Members: []Member{{Name: "foo", Type: &Array{Nelems: 0, Type: u16}}}},
 			&Struct{Members: []Member{{Name: "foo", Type: &Array{Nelems: 0, Type: u32}}}},
 			coreAccessor{0, 0, 9000},
-			coreField{u16, bits(u16) * 9000},
-			coreField{u32, bits(u32) * 9000},
+			coreField{u16, bits(u16) * 9000, 0, 0},
+			coreField{u32, bits(u32) * 9000, 0, 0},
 		},
 		{
 			"struct.0",
 			aStruct, bStruct,
 			coreAccessor{0, 0},
-			coreField{ptr, 1},
-			coreField{ptr, 10},
+			coreField{ptr, 1, 0, 0},
+			coreField{ptr, 10, 0, 0},
 		},
 		{
 			"struct.0 anon",
 			aStruct, &Struct{Members: anon(bStruct, 23)},
 			coreAccessor{0, 0},
-			coreField{ptr, 1},
-			coreField{ptr, 23 + 10},
+			coreField{ptr, 1, 0, 0},
+			coreField{ptr, 23 + 10, 0, 0},
 		},
 		{
 			"struct.0 with base offset",
 			aStruct, bStruct,
 			coreAccessor{3, 0},
-			coreField{ptr, 3*bits(aStruct) + 1},
-			coreField{ptr, 3*bits(bStruct) + 10},
+			coreField{ptr, 3*bits(aStruct) + 1, 0, 0},
+			coreField{ptr, 3*bits(bStruct) + 10, 0, 0},
 		},
 		{
 			"struct.1",
 			aStruct, bStruct,
 			coreAccessor{0, 1},
-			coreField{u16, 2},
-			coreField{u32, 20},
+			coreField{u16, 2, 0, 0},
+			coreField{u32, 20, 0, 0},
 		},
 		{
 			"struct.1 anon",
 			aStruct, &Struct{Members: anon(bStruct, 1)},
 			coreAccessor{0, 1},
-			coreField{u16, 2},
-			coreField{u32, 1 + 20},
+			coreField{u16, 2, 0, 0},
+			coreField{u32, 1 + 20, 0, 0},
 		},
 		{
 			"union.1",
 			&Union{Members: aFields, Size: 32},
 			&Union{Members: bFields, Size: 32},
 			coreAccessor{0, 1},
-			coreField{u16, 2},
-			coreField{u32, 20},
+			coreField{u16, 2, 0, 0},
+			coreField{u32, 20, 0, 0},
 		},
 		{
 			"interchangeable composites",
@@ -431,8 +441,29 @@ func TestCOREFindField(t *testing.T) {
 				},
 			},
 			coreAccessor{0, 0, 0, 0},
-			coreField{u16, 0},
-			coreField{u16, 0},
+			coreField{u16, 0, 0, 0},
+			coreField{u16, 0, 0, 0},
+		},
+		{
+			"struct.2 (bitfield baz)",
+			aStruct, bStruct,
+			coreAccessor{0, 2},
+			coreField{u32, 32, 32, 3},
+			coreField{u32, 64, 64, 3},
+		},
+		{
+			"struct.3 (bitfield quux)",
+			aStruct, bStruct,
+			coreAccessor{0, 3},
+			coreField{u32, 35, 35, 10},
+			coreField{u16, 96, 96, 10},
+		},
+		{
+			"struct.4 (bitfield quuz)",
+			aStruct, bStruct,
+			coreAccessor{0, 4},
+			coreField{u32, 45, 45, 3},
+			coreField{u16, 112, 112, 16},
 		},
 	}
 
@@ -522,10 +553,10 @@ func TestCORERelocation(t *testing.T) {
 				}
 
 				for offset, relo := range relos {
-					if relo.Local != relo.Target {
+					if want := relo.Local; !relo.Kind.bitfield && want != relo.Target {
 						// Since we're relocating against ourselves both values
 						// should match.
-						t.Errorf("offset %d: local %v doesn't match target %d", offset, relo.Local, relo.Target)
+						t.Errorf("offset %d: local %v doesn't match target %d (kind %s)", offset, relo.Local, relo.Target, relo.Kind)
 					}
 				}
 			})

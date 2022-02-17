@@ -343,16 +343,17 @@ func (ec *elfCode) loadProgramSections() (map[string]*ProgramSpec, error) {
 // The resulting map is indexed by function name.
 func (ec *elfCode) loadFunctions(section *elfSection) (map[string]asm.Instructions, error) {
 	var (
-		r      = bufio.NewReader(section.Open())
-		funcs  = make(map[string]asm.Instructions)
-		offset uint64
-		insns  asm.Instructions
+		r          = bufio.NewReader(section.Open())
+		funcs      = make(map[string]asm.Instructions)
+		secOffset  uint64
+		funcOffset uint64
+		insns      asm.Instructions
+		lineInfos  map[uint64]btf.LineInfo
 	)
+
 	for {
-		ins := asm.Instruction{
-			// Symbols denote the first instruction of a function body.
-			Symbol: section.symbols[offset].Name,
-		}
+		// Symbols denote the first instruction of a function body.
+		ins := asm.Instruction{}.Sym(section.symbols[secOffset].Name)
 
 		// Pull one instruction from the instruction stream.
 		n, err := ins.Unmarshal(r, ec.ByteOrder)
@@ -369,20 +370,21 @@ func (ec *elfCode) loadFunctions(section *elfSection) (map[string]asm.Instructio
 			break
 		}
 		if err != nil {
-			return nil, fmt.Errorf("offset %d: %w", offset, err)
+			return nil, fmt.Errorf("offset %d: %w", secOffset, err)
 		}
 
 		// Decoded the first instruction of a function body but insns already
 		// holds a valid instruction stream. Store the result and flush insns.
-		if ins.Symbol != "" && insns.Name() != "" {
+		if ins.Symbol() != "" && insns.Name() != "" {
 			funcs[insns.Name()] = insns
 			insns = nil
+			funcOffset = 0
 		}
 
-		if rel, ok := section.relocations[offset]; ok {
+		if rel, ok := section.relocations[secOffset]; ok {
 			// A relocation was found for the current offset. Apply it to the insn.
 			if err = ec.relocateInstruction(&ins, rel); err != nil {
-				return nil, fmt.Errorf("offset %d: relocate instruction: %w", offset, err)
+				return nil, fmt.Errorf("offset %d: relocate instruction: %w", secOffset, err)
 			}
 		} else {
 			// Up to LLVM 9, calls to subprograms within the same ELF section are
@@ -393,19 +395,51 @@ func (ec *elfCode) loadFunctions(section *elfSection) (map[string]asm.Instructio
 			// When splitting sections into subprograms, the targets of these calls
 			// are no longer in scope, so they must be resolved here.
 			if ins.IsFunctionReference() && ins.Constant != -1 {
-				tgt := jumpTarget(offset, ins)
+				tgt := jumpTarget(secOffset, ins)
 				sym := section.symbols[tgt].Name
 				if sym == "" {
-					return nil, fmt.Errorf("offset %d: no jump target found at offset %d", offset, tgt)
+					return nil, fmt.Errorf("offset %d: no jump target found at offset %d", secOffset, tgt)
 				}
 
-				ins.Reference = sym
+				ins.SetReference(sym)
 				ins.Constant = -1
 			}
 		}
 
+		// Only rebuild lineInfos at the start of a function
+		if funcOffset == 0 {
+			lineInfos = make(map[uint64]btf.LineInfo)
+			if ec.btf != nil {
+				for _, lineInfo := range ec.btf.GetFuncLineInfos(ins.Symbol()) {
+					lineInfos[uint64(lineInfo.InsnOff)] = lineInfo
+				}
+			}
+		}
+
+		if lineInfo, found := lineInfos[funcOffset]; found {
+			fileName, err := lineInfo.FileName(ec.btf)
+			if err != nil {
+				fileName = ""
+			}
+
+			line, err := lineInfo.Line(ec.btf)
+			if err != nil {
+				line = ""
+			}
+
+			// TODO we should use the *btf.LineInfo here directly, as soon as it implements fmt.Stringer
+			ins = ins.WithContext(asm.SimpleContext(fmt.Sprintf(
+				"%s:%d:%d: %s",
+				fileName,
+				lineInfo.LineNum(),
+				lineInfo.ColNum(),
+				line,
+			)))
+		}
+
 		insns = append(insns, ins)
-		offset += n
+		secOffset += n
+		funcOffset += n
 	}
 
 	return funcs, nil
@@ -454,7 +488,7 @@ func (ec *elfCode) relocateInstruction(ins *asm.Instruction, rel elf.Symbol) err
 
 		// Mark the instruction as needing an update when creating the
 		// collection.
-		if err := ins.RewriteMapPtr(-1); err != nil {
+		if err := ins.RewriteMap(nil); err != nil {
 			return err
 		}
 
@@ -493,7 +527,7 @@ func (ec *elfCode) relocateInstruction(ins *asm.Instruction, rel elf.Symbol) err
 
 		// Mark the instruction as needing an update when creating the
 		// collection.
-		if err := ins.RewriteMapPtr(-1); err != nil {
+		if err := ins.RewriteMap(nil); err != nil {
 			return err
 		}
 
@@ -579,7 +613,7 @@ func (ec *elfCode) relocateInstruction(ins *asm.Instruction, rel elf.Symbol) err
 		return fmt.Errorf("relocation to %q: %w", target.Name, ErrNotSupported)
 	}
 
-	ins.Reference = name
+	ins.SetReference(name)
 	return nil
 }
 

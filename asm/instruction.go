@@ -35,17 +35,29 @@ type Instruction struct {
 	Offset   int16
 	Constant int64
 
-	// Reference denotes a reference (e.g. a jump) to another symbol.
-	Reference string
-
-	// Symbol denotes an instruction at the start of a function body.
-	Symbol string
+	// Metadata contains optional metadata about this instruction
+	metadata *metadata
 }
 
 // Sym creates a symbol.
 func (ins Instruction) Sym(name string) Instruction {
-	ins.Symbol = name
+	if (ins.metadata != nil && ins.metadata.symbol == name) ||
+		(ins.metadata == nil && name == "") {
+		return ins
+	}
+
+	ins.metadata = ins.metadata.copy()
+	ins.metadata.symbol = name
 	return ins
+}
+
+// Symbol denotes an instruction at the start of a function body.
+func (ins Instruction) Symbol() string {
+	if ins.metadata == nil {
+		return ""
+	}
+
+	return ins.metadata.symbol
 }
 
 // Unmarshal decodes a BPF instruction.
@@ -136,15 +148,37 @@ func (ins Instruction) Marshal(w io.Writer, bo binary.ByteOrder) (uint64, error)
 	return 2 * InstructionSize, nil
 }
 
+// RewriteMap changes an instruction to use a new map's fd.
+//
+// Returns an error if the instruction doesn't load a map.
+func (ins *Instruction) RewriteMap(m FDer) error {
+	if !ins.IsLoadFromMap() {
+		return errors.New("not a load from a map")
+	}
+
+	// nil is a valid value for m to unset the map reference
+	fd := -1
+	if m != nil {
+		fd = m.FD()
+	}
+
+	// Set the FD of the passed map.
+	err := ins.RewriteMapPtr(fd)
+	if err != nil {
+		return err
+	}
+
+	*ins = ins.setMap(m)
+	return nil
+}
+
 // RewriteMapPtr changes an instruction to use a new map fd.
 //
 // Returns an error if the instruction doesn't load a map.
+//
+// Deprecated: use RewriteMap instead.
 func (ins *Instruction) RewriteMapPtr(fd int) error {
-	if !ins.OpCode.IsDWordLoad() {
-		return fmt.Errorf("%s is not a 64 bit load", ins.OpCode)
-	}
-
-	if ins.Src != PseudoMapFD && ins.Src != PseudoMapValue {
+	if !ins.IsLoadFromMap() {
 		return errors.New("not a load from a map")
 	}
 
@@ -299,14 +333,122 @@ func (ins Instruction) Format(f fmt.State, c rune) {
 	}
 
 ref:
-	if ins.Reference != "" {
-		fmt.Fprintf(f, " <%s>", ins.Reference)
+	if ins.Reference() != "" {
+		fmt.Fprintf(f, " <%s>", ins.Reference())
 	}
+}
+
+func (ins Instruction) equal(other Instruction) bool {
+	return ins.OpCode == other.OpCode &&
+		ins.Dst == other.Dst &&
+		ins.Src == other.Src &&
+		ins.Offset == other.Offset &&
+		ins.Constant == other.Constant
 }
 
 // Size returns the amount of bytes ins would occupy in binary form.
 func (ins Instruction) Size() uint64 {
 	return uint64(InstructionSize * ins.OpCode.rawInstructions())
+}
+
+// SetReference set a reference(e.g. a jump) to another symbol
+func (ins *Instruction) SetReference(ref string) {
+	if (ins.metadata != nil && ins.metadata.reference == ref) ||
+		(ins.metadata == nil && ref == "") {
+		return
+	}
+
+	ins.metadata = ins.metadata.copy()
+	ins.metadata.reference = ref
+}
+
+// Reference denotes a reference (e.g. a jump) to another symbol.
+func (ins Instruction) Reference() string {
+	if ins.metadata == nil {
+		return ""
+	}
+
+	return ins.metadata.reference
+}
+
+// WithContext adds information about the origin/source of the instruction.
+func (ins Instruction) WithContext(ctx fmt.Stringer) Instruction {
+	if (ins.metadata != nil && ins.metadata.context == ctx) ||
+		(ins.metadata == nil && ctx == nil) {
+		return ins
+	}
+
+	ins.metadata = ins.metadata.copy()
+	ins.metadata.context = ctx
+	return ins
+}
+
+// Context denotes information about the origin/source of the instruction.
+func (ins Instruction) Context() fmt.Stringer {
+	if ins.metadata == nil {
+		return nil
+	}
+
+	return ins.metadata.context
+}
+
+// setMap sets the *ebpf.Map from which this instruction preforms a data.
+func (ins Instruction) setMap(ebpfMap FDer) Instruction {
+	if (ins.metadata != nil && ins.metadata.bpfMap == ebpfMap) ||
+		(ins.metadata == nil && ebpfMap == nil) {
+		return ins
+	}
+
+	ins.metadata = ins.metadata.copy()
+	ins.metadata.bpfMap = ebpfMap
+	return ins
+}
+
+// FDer isn't actually used as a meaningful interface, rater it is used because we can't directly use types from the
+// ebpf package since this would cause in import loop.
+type FDer interface {
+	FD() int
+}
+
+// metadata holds metadata about a Instruction which are not relevant for the kernel but useful for the loader
+type metadata struct {
+	// reference denotes a reference (e.g. a jump) to another symbol.
+	reference string
+	// symbol denotes an instruction at the start of a function body.
+	symbol string
+	// context denotes information about the origin/source of the instruction.
+	context fmt.Stringer
+
+	// bpfMap denotes the *ebpf.Map from which this instruction preforms a data.
+	bpfMap FDer
+}
+
+func (m *metadata) equal(other *metadata) bool {
+	var a, b metadata
+	if m != nil {
+		a = *m
+	}
+	if other != nil {
+		b = *other
+	}
+
+	return a == b
+}
+
+// returns a copy of metadata, return value is never nil, even if called on a nil value
+func (m *metadata) copy() *metadata {
+	var copy metadata
+	if m != nil {
+		copy = *m
+	}
+	return &copy
+}
+
+// SimpleContext can be used to set a string as context of an Instruction.
+type SimpleContext string
+
+func (sc SimpleContext) String() string {
+	return string(sc)
 }
 
 // Instructions is an eBPF program.
@@ -342,7 +484,7 @@ func (insns Instructions) Name() string {
 	if len(insns) == 0 {
 		return ""
 	}
-	return insns[0].Symbol
+	return insns[0].Symbol()
 }
 
 func (insns Instructions) String() string {
@@ -358,9 +500,40 @@ func (insns Instructions) Size() uint64 {
 	return sum
 }
 
+// RewriteMap rewrites all loads of a specific map pointer.
+//
+// Returns an error if the symbol isn't used, see IsUnreferencedSymbol.
+func (insns Instructions) RewriteMap(symbol string, m FDer) error {
+	if symbol == "" {
+		return errors.New("empty symbol")
+	}
+
+	found := false
+	for i := range insns {
+		ins := &insns[i]
+		if ins.Reference() != symbol {
+			continue
+		}
+
+		if err := ins.RewriteMap(m); err != nil {
+			return err
+		}
+
+		found = true
+	}
+
+	if !found {
+		return &unreferencedSymbolError{symbol}
+	}
+
+	return nil
+}
+
 // RewriteMapPtr rewrites all loads of a specific map pointer to a new fd.
 //
 // Returns an error if the symbol isn't used, see IsUnreferencedSymbol.
+//
+// Deprecated: use RewriteMap instead.
 func (insns Instructions) RewriteMapPtr(symbol string, fd int) error {
 	if symbol == "" {
 		return errors.New("empty symbol")
@@ -369,7 +542,7 @@ func (insns Instructions) RewriteMapPtr(symbol string, fd int) error {
 	found := false
 	for i := range insns {
 		ins := &insns[i]
-		if ins.Reference != symbol {
+		if ins.Reference() != symbol {
 			continue
 		}
 
@@ -393,15 +566,15 @@ func (insns Instructions) SymbolOffsets() (map[string]int, error) {
 	offsets := make(map[string]int)
 
 	for i, ins := range insns {
-		if ins.Symbol == "" {
+		if ins.Symbol() == "" {
 			continue
 		}
 
-		if _, ok := offsets[ins.Symbol]; ok {
-			return nil, fmt.Errorf("duplicate symbol %s", ins.Symbol)
+		if _, ok := offsets[ins.Symbol()]; ok {
+			return nil, fmt.Errorf("duplicate symbol %s", ins.Symbol())
 		}
 
-		offsets[ins.Symbol] = i
+		offsets[ins.Symbol()] = i
 	}
 
 	return offsets, nil
@@ -418,7 +591,7 @@ func (insns Instructions) FunctionReferences() map[string]bool {
 			continue
 		}
 
-		if ins.Reference == "" {
+		if ins.Reference() == "" {
 			continue
 		}
 
@@ -426,7 +599,7 @@ func (insns Instructions) FunctionReferences() map[string]bool {
 			continue
 		}
 
-		calls[ins.Reference] = true
+		calls[ins.Reference()] = true
 	}
 
 	return calls
@@ -438,11 +611,11 @@ func (insns Instructions) ReferenceOffsets() map[string][]int {
 	offsets := make(map[string][]int)
 
 	for i, ins := range insns {
-		if ins.Reference == "" {
+		if ins.Reference() == "" {
 			continue
 		}
 
-		offsets[ins.Reference] = append(offsets[ins.Reference], i)
+		offsets[ins.Reference()] = append(offsets[ins.Reference()], i)
 	}
 
 	return offsets
@@ -493,8 +666,14 @@ func (insns Instructions) Format(f fmt.State, c rune) {
 
 	iter := insns.Iterate()
 	for iter.Next() {
-		if iter.Ins.Symbol != "" {
-			fmt.Fprintf(f, "%s%s:\n", symIndent, iter.Ins.Symbol)
+		if iter.Ins.Symbol() != "" {
+			fmt.Fprintf(f, "%s%s:\n", symIndent, iter.Ins.Symbol())
+		}
+		if ctx := iter.Ins.Context(); ctx != nil {
+			line := strings.TrimSpace(ctx.String())
+			if line != "" {
+				fmt.Fprintf(f, "%s%*s; %s\n", indent, offsetWidth, " ", line)
+			}
 		}
 		fmt.Fprintf(f, "%s%*d: %v\n", indent, offsetWidth, iter.Offset, iter.Ins)
 	}
@@ -539,15 +718,15 @@ func (insns Instructions) FixupReferences() error {
 	for iter.Next() {
 		ins := iter.Ins
 
-		if ins.Symbol == "" {
+		if ins.Symbol() == "" {
 			continue
 		}
 
-		if _, ok := symbolOffsets[ins.Symbol]; ok {
-			return fmt.Errorf("duplicate symbol %s", ins.Symbol)
+		if _, ok := symbolOffsets[ins.Symbol()]; ok {
+			return fmt.Errorf("duplicate symbol %s", ins.Symbol())
 		}
 
-		symbolOffsets[ins.Symbol] = iter.Offset
+		symbolOffsets[ins.Symbol()] = iter.Offset
 	}
 
 	iter = insns.Iterate()
@@ -556,29 +735,29 @@ func (insns Instructions) FixupReferences() error {
 		offset := iter.Offset
 		ins := iter.Ins
 
-		if ins.Reference == "" {
+		if ins.Reference() == "" {
 			continue
 		}
 
 		switch {
 		case ins.IsFunctionReference() && ins.Constant == -1:
-			symOffset, ok := symbolOffsets[ins.Reference]
+			symOffset, ok := symbolOffsets[ins.Reference()]
 			if !ok {
-				return fmt.Errorf("%s at insn %d: symbol %q: %w", ins.OpCode, i, ins.Reference, ErrUnsatisfiedProgramReference)
+				return fmt.Errorf("%s at insn %d: symbol %q: %w", ins.OpCode, i, ins.Reference(), ErrUnsatisfiedProgramReference)
 			}
 
 			ins.Constant = int64(symOffset - offset - 1)
 
 		case ins.OpCode.Class().IsJump() && ins.Offset == -1:
-			symOffset, ok := symbolOffsets[ins.Reference]
+			symOffset, ok := symbolOffsets[ins.Reference()]
 			if !ok {
-				return fmt.Errorf("%s at insn %d: symbol %q: %w", ins.OpCode, i, ins.Reference, ErrUnsatisfiedProgramReference)
+				return fmt.Errorf("%s at insn %d: symbol %q: %w", ins.OpCode, i, ins.Reference(), ErrUnsatisfiedProgramReference)
 			}
 
 			ins.Offset = int16(symOffset - offset - 1)
 
 		case ins.IsLoadFromMap() && ins.MapPtr() == -1:
-			return fmt.Errorf("map %s: %w", ins.Reference, ErrUnsatisfiedMapReference)
+			return fmt.Errorf("map %s: %w", ins.Reference(), ErrUnsatisfiedMapReference)
 		}
 	}
 	return nil

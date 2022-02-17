@@ -112,7 +112,7 @@ func TestInstructionRewriteMapConstant(t *testing.T) {
 	qt.Assert(t, ins.MapPtr(), qt.Equals, 123)
 	qt.Assert(t, ins.mapOffset(), qt.Equals, uint32(321))
 
-	qt.Assert(t, ins.RewriteMap(nil), qt.IsNil)
+	qt.Assert(t, ins.RewriteMapPtr(-1), qt.IsNil)
 	qt.Assert(t, ins.MapPtr(), qt.Equals, -1)
 
 	qt.Assert(t, ins.RewriteMapPtr(1), qt.IsNil)

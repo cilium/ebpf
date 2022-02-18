@@ -501,10 +501,16 @@ func (insns Instructions) Format(f fmt.State, c rune) {
 }
 
 // Marshal encodes a BPF program into the kernel format.
+//
+// Returns ErrUnsatisfiedProgramReference if there is a Reference Instruction
+// without a matching Symbol Instruction within insns.
 func (insns Instructions) Marshal(w io.Writer, bo binary.ByteOrder) error {
+	if err := insns.resolveFunctionReferences(); err != nil {
+		return err
+	}
+
 	for i, ins := range insns {
-		_, err := ins.Marshal(w, bo)
-		if err != nil {
+		if _, err := ins.Marshal(w, bo); err != nil {
 			return fmt.Errorf("instruction %d: %w", i, err)
 		}
 	}
@@ -530,10 +536,17 @@ func (insns Instructions) Tag(bo binary.ByteOrder) (string, error) {
 	return hex.EncodeToString(h.Sum(nil)[:unix.BPF_TAG_SIZE]), nil
 }
 
-// FixupReferences updates all references to also take the symbol offset into account.
+// resolveFunctionReferences populates the Offset (or Constant, depending on
+// the instruction type) field of instructions with a Reference field to point
+// to the offset of the corresponding instruction with a matching Symbol field.
 //
-// Returns an error if a reference isn't used, see ErrUnsatisfiedMapReference and ErrUnsatisfiedReference.
-func (insns Instructions) FixupReferences() error {
+// Only Reference Instructions that are either jumps or BPF function references
+// (calls or function pointer loads) are populated.
+//
+// Returns ErrUnsatisfiedProgramReference if there is a Reference Instruction
+// without at least one corresponding Symbol Instruction within insns.
+func (insns Instructions) resolveFunctionReferences() error {
+	// Index the offsets of instructions tagged as a symbol.
 	symbolOffsets := make(map[string]RawInstructionOffset)
 	iter := insns.Iterate()
 	for iter.Next() {
@@ -550,6 +563,9 @@ func (insns Instructions) FixupReferences() error {
 		symbolOffsets[ins.Symbol] = iter.Offset
 	}
 
+	// Find all instructions tagged as references to other symbols.
+	// Depending on the instruction type, populate their constant or offset
+	// fields to point to the symbol they refer to within the insn stream.
 	iter = insns.Iterate()
 	for iter.Next() {
 		i := iter.Index
@@ -576,11 +592,9 @@ func (insns Instructions) FixupReferences() error {
 			}
 
 			ins.Offset = int16(symOffset - offset - 1)
-
-		case ins.IsLoadFromMap() && ins.MapPtr() == -1:
-			return fmt.Errorf("map %s: %w", ins.Reference, ErrUnsatisfiedMapReference)
 		}
 	}
+
 	return nil
 }
 

@@ -330,7 +330,7 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions, handles *hand
 		return nil, fmt.Errorf("CO-RE fixup: %w", err)
 	}
 
-	if err := fixupJumpsAndCalls(insns); err != nil {
+	if err := fixupAndValidate(insns); err != nil {
 		return nil, err
 	}
 

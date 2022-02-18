@@ -288,12 +288,26 @@ var LineInfoSize = uint32(binary.Size(bpfLineInfo{}))
 // LineInfo represents the location and contents of a single line of source
 // code a BPF ELF was compiled from.
 type LineInfo struct {
+	fileName   string
+	line       string
+	lineNumber uint32
+	lineColumn uint32
+
+	// TODO: We should get rid of the fields below, but for that we need to be
+	// able to write BTF.
+
 	// Instruction offset of the line within its enclosing function, in instructions.
 	insnOff     uint32
 	fileNameOff uint32
 	lineOff     uint32
-	lineCol     uint32
 }
+
+// Constants for the format of bpfLineInfo.LineCol.
+const (
+	bpfLineShift = 10
+	bpfLineMax   = (1 << (32 - bpfLineShift)) - 1
+	bpfColumnMax = (1 << bpfLineShift) - 1
+)
 
 type bpfLineInfo struct {
 	// Instruction offset of the line within the whole instruction stream, in instructions.
@@ -303,14 +317,42 @@ type bpfLineInfo struct {
 	LineCol     uint32
 }
 
+func (li *LineInfo) FileName() string {
+	return li.fileName
+}
+
+func (li *LineInfo) Line() string {
+	return li.line
+}
+
+func (li *LineInfo) LineNumber() uint32 {
+	return li.lineNumber
+}
+
+func (li *LineInfo) LineColumn() uint32 {
+	return li.lineColumn
+}
+
+func (li *LineInfo) String() string {
+	return li.line
+}
+
 // Marshal writes the binary representation of the LineInfo to w.
 // The instruction offset is converted from bytes to instructions.
-func (li LineInfo) Marshal(w io.Writer, offset uint64) error {
+func (li *LineInfo) Marshal(w io.Writer, offset uint64) error {
+	if li.lineNumber > bpfLineMax {
+		return fmt.Errorf("line %d exceeds %d", li.lineNumber, bpfLineMax)
+	}
+
+	if li.lineColumn > bpfColumnMax {
+		return fmt.Errorf("column %d exceeds %d", li.lineColumn, bpfColumnMax)
+	}
+
 	bli := bpfLineInfo{
 		li.insnOff + uint32(offset/asm.InstructionSize),
 		li.fileNameOff,
 		li.lineOff,
-		li.lineCol,
+		(li.lineNumber << bpfLineShift) | li.lineColumn,
 	}
 	return binary.Write(w, internal.NativeEndian, &bli)
 }

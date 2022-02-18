@@ -114,30 +114,40 @@ func marshalLineInfos(layout []reference) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-func fixupJumpsAndCalls(insns asm.Instructions) error {
-	if err := insns.FixupReferences(); err != nil {
-		return err
-	}
-
-	// fixupBPFCalls replaces bpf_probe_read_{kernel,user}[_str] with bpf_probe_read[_str] on older kernels
-	// https://github.com/libbpf/libbpf/blob/master/src/libbpf.c#L6009
+// fixupAndValidate is called by the ELF reader right before marshaling the
+// instruction stream. It performs last-minute adjustments to the program and
+// runs some sanity checks before sending it off to the kernel.
+func fixupAndValidate(insns asm.Instructions) error {
 	iter := insns.Iterate()
 	for iter.Next() {
 		ins := iter.Ins
-		if !ins.IsBuiltinCall() {
-			continue
+
+		if ins.IsLoadFromMap() && ins.MapPtr() == -1 {
+			return fmt.Errorf("instruction %d: map %s: %w", iter.Index, ins.Reference, asm.ErrUnsatisfiedMapReference)
 		}
-		switch asm.BuiltinFunc(ins.Constant) {
-		case asm.FnProbeReadKernel, asm.FnProbeReadUser:
-			if err := haveProbeReadKernel(); err != nil {
-				ins.Constant = int64(asm.FnProbeRead)
-			}
-		case asm.FnProbeReadKernelStr, asm.FnProbeReadUserStr:
-			if err := haveProbeReadKernel(); err != nil {
-				ins.Constant = int64(asm.FnProbeReadStr)
-			}
-		}
+
+		fixupProbeReadKernel(ins)
 	}
 
 	return nil
+}
+
+// fixupProbeReadKernel replaces calls to bpf_probe_read_{kernel,user}(_str)
+// with bpf_probe_read(_str) on kernels that don't support it yet.
+func fixupProbeReadKernel(ins *asm.Instruction) {
+	if !ins.IsBuiltinCall() {
+		return
+	}
+
+	// Kernel supports bpf_probe_read_kernel, nothing to do.
+	if haveProbeReadKernel() == nil {
+		return
+	}
+
+	switch asm.BuiltinFunc(ins.Constant) {
+	case asm.FnProbeReadKernel, asm.FnProbeReadUser:
+		ins.Constant = int64(asm.FnProbeRead)
+	case asm.FnProbeReadKernelStr, asm.FnProbeReadUserStr:
+		ins.Constant = int64(asm.FnProbeReadStr)
+	}
 }

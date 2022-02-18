@@ -1,13 +1,14 @@
 // +build ignore
 
 #include "common.h"
+
 #include "bpf_helpers.h"
 
 char __license[] SEC("license") = "Dual MIT/GPL";
 
-struct event_t {
+struct event {
 	u32 pid;
-	char comm[80];
+	u8 comm[80];
 };
 
 struct {
@@ -15,13 +16,16 @@ struct {
 	__uint(max_entries, 1 << 24);
 } events SEC(".maps");
 
+// Force emitting struct event into the ELF.
+const struct event *unused __attribute__((unused));
+
 SEC("kprobe/sys_execve")
 int kprobe_execve(struct pt_regs *ctx) {
-	u64 id = bpf_get_current_pid_tgid();
+	u64 id   = bpf_get_current_pid_tgid();
 	u32 tgid = id >> 32;
-	struct event_t *task_info;
+	struct event *task_info;
 
-	task_info = bpf_ringbuf_reserve(&events, sizeof(struct event_t), 0);
+	task_info = bpf_ringbuf_reserve(&events, sizeof(struct event), 0);
 	if (!task_info) {
 		return 0;
 	}

@@ -1,6 +1,8 @@
 // +build ignore
 
 #include "common.h"
+
+#include "bpf_endian.h"
 #include "bpf_helpers.h"
 #include "bpf_tracing.h"
 
@@ -38,8 +40,11 @@ struct {
 	__uint(max_entries, 1 << 24);
 } events SEC(".maps");
 
-struct event_t {
-	char comm[16];
+// Force emitting struct event into the ELF.
+const struct event *unused __attribute__((unused));
+
+struct event {
+	u8 comm[16];
 	__u16 sport;
 	__be16 dport;
 	__be32 saddr;
@@ -52,8 +57,8 @@ int BPF_PROG(tcp_connect, struct sock *sk) {
 		return 0;
 	}
 
-	struct event_t *tcp_info;
-	tcp_info = bpf_ringbuf_reserve(&events, sizeof(struct event_t), 0);
+	struct event *tcp_info;
+	tcp_info = bpf_ringbuf_reserve(&events, sizeof(struct event), 0);
 	if (!tcp_info) {
 		return 0;
 	}
@@ -61,7 +66,7 @@ int BPF_PROG(tcp_connect, struct sock *sk) {
 	tcp_info->saddr = sk->__sk_common.skc_rcv_saddr;
 	tcp_info->daddr = sk->__sk_common.skc_daddr;
 	tcp_info->dport = sk->__sk_common.skc_dport;
-	tcp_info->sport = sk->__sk_common.skc_num;
+	tcp_info->sport = bpf_htons(sk->__sk_common.skc_num);
 
 	bpf_get_current_comm(&tcp_info->comm, TASK_COMM_LEN);
 

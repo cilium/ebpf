@@ -2,11 +2,9 @@ package ebpf
 
 import (
 	"bytes"
-	"encoding/binary"
 	"fmt"
 
 	"github.com/cilium/ebpf/asm"
-	"github.com/cilium/ebpf/internal/btf"
 )
 
 // The linker is responsible for resolving bpf-to-bpf calls between programs
@@ -88,9 +86,9 @@ func marshalFuncInfos(layout []reference) ([]byte, error) {
 		return nil, nil
 	}
 
-	buf := bytes.NewBuffer(make([]byte, 0, binary.Size(&btf.FuncInfo{})*len(layout)))
+	var buf bytes.Buffer
 	for _, sym := range layout {
-		if err := sym.spec.BTF.FuncInfo.Marshal(buf, sym.offset); err != nil {
+		if err := sym.spec.BTF.FuncInfo.Marshal(&buf, sym.offset); err != nil {
 			return nil, fmt.Errorf("marshaling prog %s func info: %w", sym.spec.Name, err)
 		}
 	}
@@ -104,9 +102,9 @@ func marshalLineInfos(layout []reference) ([]byte, error) {
 		return nil, nil
 	}
 
-	buf := bytes.NewBuffer(make([]byte, 0, binary.Size(&btf.LineInfo{})*len(layout)))
+	var buf bytes.Buffer
 	for _, sym := range layout {
-		if err := sym.spec.BTF.LineInfos.Marshal(buf, sym.offset); err != nil {
+		if err := sym.spec.BTF.LineInfos.Marshal(&buf, sym.offset); err != nil {
 			return nil, fmt.Errorf("marshaling prog %s line infos: %w", sym.spec.Name, err)
 		}
 	}

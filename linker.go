@@ -115,10 +115,6 @@ func marshalLineInfos(layout []reference) ([]byte, error) {
 }
 
 func fixupJumpsAndCalls(insns asm.Instructions) error {
-	if err := insns.FixupReferences(); err != nil {
-		return err
-	}
-
 	// fixupBPFCalls replaces bpf_probe_read_{kernel,user}[_str] with bpf_probe_read[_str] on older kernels
 	// https://github.com/libbpf/libbpf/blob/master/src/libbpf.c#L6009
 	iter := insns.Iterate()

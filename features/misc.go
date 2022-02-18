@@ -161,10 +161,6 @@ func createMiscProbeAttr(mt miscType) (*sys.ProgLoadAttr, error) {
 		return nil, fmt.Errorf("feature %d not yet implemented", mt)
 	}
 
-	if err := insns.FixupReferences(); err != nil {
-		return nil, err
-	}
-
 	buf := bytes.NewBuffer(make([]byte, 0, insns.Size()))
 	if err := insns.Marshal(buf, internal.NativeEndian); err != nil {
 		return nil, err

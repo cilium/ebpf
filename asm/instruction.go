@@ -592,9 +592,6 @@ func (insns Instructions) resolveFunctionReferences() error {
 			}
 
 			ins.Offset = int16(symOffset - offset - 1)
-
-		case ins.IsLoadFromMap() && ins.MapPtr() == -1:
-			return fmt.Errorf("map %s: %w", ins.Reference, ErrUnsatisfiedMapReference)
 		}
 	}
 

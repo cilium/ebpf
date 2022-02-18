@@ -120,9 +120,15 @@ func fixupJumpsAndCalls(insns asm.Instructions) error {
 	iter := insns.Iterate()
 	for iter.Next() {
 		ins := iter.Ins
+
+		if ins.IsLoadFromMap() && ins.MapPtr() == -1 {
+			return fmt.Errorf("instruction %d: map %s: %w", iter.Index, ins.Reference, asm.ErrUnsatisfiedMapReference)
+		}
+
 		if !ins.IsBuiltinCall() {
 			continue
 		}
+
 		switch asm.BuiltinFunc(ins.Constant) {
 		case asm.FnProbeReadKernel, asm.FnProbeReadUser:
 			if err := haveProbeReadKernel(); err != nil {

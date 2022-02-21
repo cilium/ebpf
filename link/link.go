@@ -77,6 +77,8 @@ func wrapRawLink(raw *RawLink) (Link, error) {
 		return &Iter{*raw}, nil
 	case NetNsType:
 		return &NetNsLink{*raw}, nil
+	case PerfEventType:
+		return &perfEventLink{raw: raw}, nil
 	default:
 		return raw, nil
 	}
@@ -325,11 +327,13 @@ func (l *RawLink) Info() (*Info, error) {
 		extra = &TracingInfo{}
 	case XDPType:
 		extra = &XDPInfo{}
+	case PerfEventType:
+		// not supported
 	default:
 		return nil, fmt.Errorf("unknown link info type: %d", info.Type)
 	}
 
-	if info.Type != RawTracepointType && info.Type != IterType {
+	if info.Type != RawTracepointType && info.Type != IterType && info.Type != PerfEventType {
 		buf := bytes.NewReader(info.Extra[:])
 		err := binary.Read(buf, internal.NativeEndian, extra)
 		if err != nil {

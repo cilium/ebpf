@@ -128,18 +128,20 @@ func TestUprobeCreatePMU(t *testing.T) {
 	}
 
 	// uprobe PMU
-	pu, err := pmuUprobe(args)
+	l, err := pmuUprobe(args)
 	c.Assert(err, qt.IsNil)
-	defer pu.Close()
+	defer l.Close()
 
+	pu := perfEventFromLink(t, l)
 	c.Assert(pu.typ, qt.Equals, uprobeEvent)
 
 	// uretprobe PMU
 	args.ret = true
-	pr, err := pmuUprobe(args)
+	l, err = pmuUprobe(args)
 	c.Assert(err, qt.IsNil)
-	defer pr.Close()
+	defer l.Close()
 
+	pr := perfEventFromLink(t, l)
 	c.Assert(pr.typ, qt.Equals, uretprobeEvent)
 }
 
@@ -186,27 +188,35 @@ func TestUprobeTraceFS(t *testing.T) {
 	}
 
 	// Open and close tracefs u(ret)probes, checking all errors.
-	up, err := tracefsUprobe(args)
+	l, err := tracefsUprobe(args)
 	c.Assert(err, qt.IsNil)
-	c.Assert(up.Close(), qt.IsNil)
+	c.Assert(l.Close(), qt.IsNil)
+
+	up := perfEventFromLink(t, l)
 	c.Assert(up.typ, qt.Equals, uprobeEvent)
 
 	args.ret = true
-	up, err = tracefsUprobe(args)
+	l, err = tracefsUprobe(args)
 	c.Assert(err, qt.IsNil)
-	c.Assert(up.Close(), qt.IsNil)
+	c.Assert(l.Close(), qt.IsNil)
+
+	up = perfEventFromLink(t, l)
 	c.Assert(up.typ, qt.Equals, uretprobeEvent)
 
 	// Create two identical trace events, ensure their IDs differ.
 	args.ret = false
-	u1, err := tracefsUprobe(args)
+	l, err = tracefsUprobe(args)
 	c.Assert(err, qt.IsNil)
-	defer u1.Close()
+	defer l.Close()
+
+	u1 := perfEventFromLink(t, l)
 	c.Assert(u1.tracefsID, qt.Not(qt.Equals), 0)
 
-	u2, err := tracefsUprobe(args)
+	l, err = tracefsUprobe(args)
 	c.Assert(err, qt.IsNil)
-	defer u2.Close()
+	defer l.Close()
+
+	u2 := perfEventFromLink(t, l)
 	c.Assert(u2.tracefsID, qt.Not(qt.Equals), 0)
 
 	// Compare the uprobes' tracefs IDs.

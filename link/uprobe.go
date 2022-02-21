@@ -202,13 +202,7 @@ func (ex *Executable) Uprobe(symbol string, prog *ebpf.Program, opts *UprobeOpti
 		return nil, err
 	}
 
-	err = u.attach(prog)
-	if err != nil {
-		u.Close()
-		return nil, err
-	}
-
-	return u, nil
+	return attachPerfEvent(u, prog)
 }
 
 // Uretprobe attaches the given eBPF program to a perf event that fires right
@@ -234,18 +228,12 @@ func (ex *Executable) Uretprobe(symbol string, prog *ebpf.Program, opts *UprobeO
 		return nil, err
 	}
 
-	err = u.attach(prog)
-	if err != nil {
-		u.Close()
-		return nil, err
-	}
-
-	return u, nil
+	return attachPerfEvent(u, prog)
 }
 
 // uprobe opens a perf event for the given binary/symbol and attaches prog to it.
 // If ret is true, create a uretprobe.
-func (ex *Executable) uprobe(symbol string, prog *ebpf.Program, opts *UprobeOptions, ret bool) (*perfEvent, error) {
+func (ex *Executable) uprobe(symbol string, prog *ebpf.Program, opts *UprobeOptions, ret bool) (Link, error) {
 	if prog == nil {
 		return nil, fmt.Errorf("prog cannot be nil: %w", errInvalidInput)
 	}
@@ -306,12 +294,12 @@ func (ex *Executable) uprobe(symbol string, prog *ebpf.Program, opts *UprobeOpti
 }
 
 // pmuUprobe opens a perf event based on the uprobe PMU.
-func pmuUprobe(args probeArgs) (*perfEvent, error) {
+func pmuUprobe(args probeArgs) (Link, error) {
 	return pmuProbe(uprobeType, args)
 }
 
 // tracefsUprobe creates a Uprobe tracefs entry.
-func tracefsUprobe(args probeArgs) (*perfEvent, error) {
+func tracefsUprobe(args probeArgs) (Link, error) {
 	return tracefsProbe(uprobeType, args)
 }
 

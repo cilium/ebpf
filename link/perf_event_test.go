@@ -77,3 +77,15 @@ func TestTraceEventRegex(t *testing.T) {
 func TestHaveBPFLinkPerfEvent(t *testing.T) {
 	testutils.CheckFeatureTest(t, haveBPFLinkPerfEvent)
 }
+
+func perfEventFromLink(t *testing.T, l Link) *perfEvent {
+	pe, ok := l.(*perfEvent)
+	if !ok {
+		pl, ok := l.(*perfEventLink)
+		if !ok {
+			t.Fatal("link doesn't contain perf event")
+		}
+		return pl.pe
+	}
+	return pe
+}

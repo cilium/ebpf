@@ -99,13 +99,7 @@ func Kprobe(symbol string, prog *ebpf.Program, opts *KprobeOptions) (Link, error
 		return nil, err
 	}
 
-	err = k.attach(prog)
-	if err != nil {
-		k.Close()
-		return nil, err
-	}
-
-	return k, nil
+	return attachPerfEvent(k, prog)
 }
 
 // Kretprobe attaches the given eBPF program to a perf event that fires right
@@ -123,18 +117,12 @@ func Kretprobe(symbol string, prog *ebpf.Program, opts *KprobeOptions) (Link, er
 		return nil, err
 	}
 
-	err = k.attach(prog)
-	if err != nil {
-		k.Close()
-		return nil, err
-	}
-
-	return k, nil
+	return attachPerfEvent(k, prog)
 }
 
 // kprobe opens a perf event on the given symbol and attaches prog to it.
 // If ret is true, create a kretprobe.
-func kprobe(symbol string, prog *ebpf.Program, opts *KprobeOptions, ret bool) (*perfEvent, error) {
+func kprobe(symbol string, prog *ebpf.Program, opts *KprobeOptions, ret bool) (Link, error) {
 	if symbol == "" {
 		return nil, fmt.Errorf("symbol name cannot be empty: %w", errInvalidInput)
 	}
@@ -187,7 +175,7 @@ func kprobe(symbol string, prog *ebpf.Program, opts *KprobeOptions, ret bool) (*
 
 // pmuKprobe opens a perf event based on the kprobe PMU.
 // Returns os.ErrNotExist if the given symbol does not exist in the kernel.
-func pmuKprobe(args probeArgs) (*perfEvent, error) {
+func pmuKprobe(args probeArgs) (Link, error) {
 	return pmuProbe(kprobeType, args)
 }
 
@@ -198,7 +186,7 @@ func pmuKprobe(args probeArgs) (*perfEvent, error) {
 // 33ea4b24277b "perf/core: Implement the 'perf_uprobe' PMU"
 //
 // Returns ErrNotSupported if the kernel doesn't support perf_[k,u]probe PMU
-func pmuProbe(typ probeType, args probeArgs) (*perfEvent, error) {
+func pmuProbe(typ probeType, args probeArgs) (Link, error) {
 	// Getting the PMU type will fail if the kernel doesn't support
 	// the perf_[k,u]probe PMU.
 	et, err := getPMUEventType(typ)
@@ -281,17 +269,19 @@ func pmuProbe(typ probeType, args probeArgs) (*perfEvent, error) {
 	}
 
 	// Kernel has perf_[k,u]probe PMU available, initialize perf event.
-	return &perfEvent{
-		fd:     fd,
-		pmuID:  et,
-		name:   args.symbol,
-		typ:    typ.PerfEventType(args.ret),
-		cookie: args.cookie,
-	}, nil
+	return newPerfEvent(
+		typ.PerfEventType(args.ret), // typ
+		"",                          // group
+		args.symbol,                 // name
+		et,                          // pmuID
+		0,                           // tracefsID
+		args.cookie,                 // cookie
+		fd,                          // fd
+	), nil
 }
 
 // tracefsKprobe creates a Kprobe tracefs entry.
-func tracefsKprobe(args probeArgs) (*perfEvent, error) {
+func tracefsKprobe(args probeArgs) (Link, error) {
 	return tracefsProbe(kprobeType, args)
 }
 
@@ -301,7 +291,7 @@ func tracefsKprobe(args probeArgs) (*perfEvent, error) {
 // Path and offset are only set in the case of uprobe(s) and are used to set
 // the executable/library path on the filesystem and the offset where the probe is inserted.
 // A perf event is then opened on the newly-created trace event and returned to the caller.
-func tracefsProbe(typ probeType, args probeArgs) (*perfEvent, error) {
+func tracefsProbe(typ probeType, args probeArgs) (Link, error) {
 	// Generate a random string for each trace event we attempt to create.
 	// This value is used as the 'group' token in tracefs to allow creating
 	// multiple kprobe trace events with the same name.
@@ -340,14 +330,15 @@ func tracefsProbe(typ probeType, args probeArgs) (*perfEvent, error) {
 		return nil, err
 	}
 
-	return &perfEvent{
-		fd:        fd,
-		group:     group,
-		name:      args.symbol,
-		tracefsID: tid,
-		typ:       typ.PerfEventType(args.ret),
-		cookie:    args.cookie,
-	}, nil
+	return newPerfEvent(
+		typ.PerfEventType(args.ret), // typ
+		group,                       // group
+		args.symbol,                 // name
+		0,                           // pmuID
+		tid,                         // tracefsID
+		args.cookie,                 // cookie
+		fd,                          // fd
+	), nil
 }
 
 // createTraceFSProbeEvent creates a new ephemeral trace event by writing to

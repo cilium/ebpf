@@ -188,7 +188,11 @@ func (cs *CollectionSpec) Assign(to interface{}) error {
 }
 
 // LoadAndAssign loads Maps and Programs into the kernel and assigns them
-// to a struct.
+// to a struct. Losing all references to the given struct will cause the
+// underlying file descriptors of its *Map and *Program resources to be
+// closed, potentially removing those objects from the kernel. Retain a
+// reference to the Collection and close it explicitly upon termination of
+// the application.
 //
 // This function is a shortcut to manually checking the presence
 // of maps and programs in a CollectionSpec. Consider using bpf2go
@@ -272,12 +276,24 @@ type Collection struct {
 	Maps     map[string]*Map
 }
 
-// NewCollection creates a Collection from a specification.
+// NewCollection creates a Collection from the given spec, creating and
+// loading its declared resources into the kernel.
+//
+// Losing all references to the *Map and *Program resources in the Collection
+// will cause their underlying file descriptors to be closed, potentially
+// removing those objects from the kernel. Retain a reference to the Collection
+// and close it explicitly upon termination of the application.
 func NewCollection(spec *CollectionSpec) (*Collection, error) {
 	return NewCollectionWithOptions(spec, CollectionOptions{})
 }
 
-// NewCollectionWithOptions creates a Collection from a specification.
+// NewCollectionWithOptions creates a Collection from the given spec using
+// options, creating and loading its declared resources into the kernel.
+//
+// Losing all references to the *Map and *Program resources in the Collection
+// will cause their underlying file descriptors to be closed, potentially
+// removing those objects from the kernel. Retain a reference to the Collection
+// and close it explicitly upon termination of the application.
 func NewCollectionWithOptions(spec *CollectionSpec, opts CollectionOptions) (*Collection, error) {
 	loader := newCollectionLoader(spec, &opts)
 	defer loader.cleanup()
@@ -530,7 +546,13 @@ func (cl *collectionLoader) populateMaps() error {
 	return nil
 }
 
-// LoadCollection parses an object file and converts it to a collection.
+// LoadCollection parses an object file and creates and loads its declared
+// resources into the kernel, returning a Collection.
+//
+// Losing all references to the *Map and *Program resources in the Collection
+// will cause their underlying file descriptors to be closed, potentially
+// removing those objects from the kernel. Retain a reference to the Collection
+// and close it explicitly upon termination of the application.
 func LoadCollection(file string) (*Collection, error) {
 	spec, err := LoadCollectionSpec(file)
 	if err != nil {

@@ -119,10 +119,7 @@ func (ins Instruction) Marshal(w io.Writer, bo binary.ByteOrder) (uint64, error)
 	}
 
 	if ins.IsLoadFromMap() && ins.metadata != nil && ins.metadata.bpfMap != nil {
-		err := ins.RewriteMapPtr(ins.metadata.bpfMap.FD())
-		if err != nil {
-			return 0, fmt.Errorf("rewrite map fd: %w", err)
-		}
+		ins.encodeMapFD(ins.metadata.bpfMap.FD())
 	}
 
 	isDWordLoad := ins.OpCode.IsDWordLoad()
@@ -171,10 +168,7 @@ func (ins *Instruction) AssociateMap(m FDer) error {
 	}
 
 	// Set fd to -1 since it is technically not yet rewritten
-	if err := ins.RewriteMapPtr(-1); err != nil {
-		return err
-	}
-
+	ins.encodeMapFD(-1)
 	ins.setMap(m)
 	return nil
 }
@@ -183,17 +177,22 @@ func (ins *Instruction) AssociateMap(m FDer) error {
 //
 // Returns an error if the instruction doesn't load a map.
 //
-// Deprecated: use RewriteMap instead.
+// Deprecated: use AssociateMap instead.
 func (ins *Instruction) RewriteMapPtr(fd int) error {
 	if !ins.IsLoadFromMap() {
 		return errors.New("not a load from a map")
 	}
 
+	ins.encodeMapFD(fd)
+
+	return nil
+}
+
+func (ins *Instruction) encodeMapFD(fd int) {
 	// Preserve the offset value for direct map loads.
 	offset := uint64(ins.Constant) & (math.MaxUint32 << 32)
 	rawFd := uint64(uint32(fd))
 	ins.Constant = int64(offset | rawFd)
-	return nil
 }
 
 // MapPtr returns the map fd for this instruction.
@@ -536,7 +535,7 @@ func (insns Instructions) AssociateMap(symbol string, m FDer) error {
 //
 // Returns an error if the symbol isn't used, see IsUnreferencedSymbol.
 //
-// Deprecated: use RewriteMap instead.
+// Deprecated: use AssociateMap instead.
 func (insns Instructions) RewriteMapPtr(symbol string, fd int) error {
 	if symbol == "" {
 		return errors.New("empty symbol")
@@ -549,9 +548,11 @@ func (insns Instructions) RewriteMapPtr(symbol string, fd int) error {
 			continue
 		}
 
-		if err := ins.RewriteMapPtr(fd); err != nil {
-			return err
+		if !ins.IsLoadFromMap() {
+			return errors.New("not a load from a map")
 		}
+
+		ins.encodeMapFD(fd)
 
 		found = true
 	}

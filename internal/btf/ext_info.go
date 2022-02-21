@@ -328,6 +328,27 @@ type LineInfo struct {
 	LineCol     uint32
 }
 
+// FileName returns the file name as string
+func (li LineInfo) FileName(btfSpec *Spec) (string, error) {
+	return btfSpec.strings.Lookup(li.FileNameOff)
+}
+
+// Line returns the line of source code as a string
+func (li LineInfo) Line(btfSpec *Spec) (string, error) {
+	return btfSpec.strings.Lookup(li.LineOff)
+}
+
+// LineNum returns the line number within the FileName
+func (li LineInfo) LineNum() uint32 {
+	return li.LineCol >> 10
+}
+
+// ColNumber returns the column number within the Line
+func (li LineInfo) ColNum() uint32 {
+	const columnMask = 0x3ff
+	return li.LineCol & columnMask
+}
+
 // Marshal writes the binary representation of the LineInfo to w.
 // The instruction offset is converted from bytes to instructions.
 func (li LineInfo) Marshal(w io.Writer, offset uint64) error {

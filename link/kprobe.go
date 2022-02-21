@@ -99,13 +99,7 @@ func Kprobe(symbol string, prog *ebpf.Program, opts *KprobeOptions) (Link, error
 		return nil, err
 	}
 
-	err = k.attach(prog)
-	if err != nil {
-		k.Close()
-		return nil, err
-	}
-
-	return k, nil
+	return attachPerfEvent(k, prog)
 }
 
 // Kretprobe attaches the given eBPF program to a perf event that fires right
@@ -123,13 +117,7 @@ func Kretprobe(symbol string, prog *ebpf.Program, opts *KprobeOptions) (Link, er
 		return nil, err
 	}
 
-	err = k.attach(prog)
-	if err != nil {
-		k.Close()
-		return nil, err
-	}
-
-	return k, nil
+	return attachPerfEvent(k, prog)
 }
 
 // kprobe opens a perf event on the given symbol and attaches prog to it.
@@ -282,11 +270,11 @@ func pmuProbe(typ probeType, args probeArgs) (*perfEvent, error) {
 
 	// Kernel has perf_[k,u]probe PMU available, initialize perf event.
 	return &perfEvent{
-		fd:     fd,
-		pmuID:  et,
-		name:   args.symbol,
 		typ:    typ.PerfEventType(args.ret),
+		name:   args.symbol,
+		pmuID:  et,
 		cookie: args.cookie,
+		fd:     fd,
 	}, nil
 }
 
@@ -341,12 +329,12 @@ func tracefsProbe(typ probeType, args probeArgs) (*perfEvent, error) {
 	}
 
 	return &perfEvent{
-		fd:        fd,
+		typ:       typ.PerfEventType(args.ret),
 		group:     group,
 		name:      args.symbol,
 		tracefsID: tid,
-		typ:       typ.PerfEventType(args.ret),
 		cookie:    args.cookie,
+		fd:        fd,
 	}, nil
 }
 

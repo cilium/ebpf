@@ -345,7 +345,8 @@ func (li LineInfo) LineNum() uint32 {
 
 // ColNumber returns the column number within the Line
 func (li LineInfo) ColNum() uint32 {
-	return li.LineCol & 0x3ff
+	const columnMask = 0x3ff
+	return li.LineCol & columnMask
 }
 
 // Marshal writes the binary representation of the LineInfo to w.

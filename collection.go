@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"reflect"
 	"strings"
 
@@ -451,6 +452,12 @@ func (cl *collectionLoader) loadProgram(progName string) (*Program, error) {
 		ins := &progSpec.Instructions[i]
 
 		if !ins.IsLoadFromMap() || ins.Reference() == "" {
+			continue
+		}
+
+		if uint32(ins.Constant) != math.MaxUint32 {
+			// Don't overwrite maps already rewritten, users can
+			// rewrite programs in the spec themselves
 			continue
 		}
 

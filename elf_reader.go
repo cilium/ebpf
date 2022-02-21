@@ -379,6 +379,14 @@ func (ec *elfCode) loadFunctions(section *elfSection) (map[string]asm.Instructio
 			funcs[insns.Name()] = insns
 			insns = nil
 			funcOffset = 0
+
+			// Only rebuild lineInfos at the start of a function
+			lineInfos = make(map[uint64]btf.LineInfo)
+			if ec.btf != nil {
+				for _, lineInfo := range ec.btf.GetFuncLineInfos(ins.Symbol()) {
+					lineInfos[uint64(lineInfo.InsnOff)] = lineInfo
+				}
+			}
 		}
 
 		if rel, ok := section.relocations[secOffset]; ok {
@@ -403,16 +411,6 @@ func (ec *elfCode) loadFunctions(section *elfSection) (map[string]asm.Instructio
 
 				ins.SetReference(sym)
 				ins.Constant = -1
-			}
-		}
-
-		// Only rebuild lineInfos at the start of a function
-		if funcOffset == 0 {
-			lineInfos = make(map[uint64]btf.LineInfo)
-			if ec.btf != nil {
-				for _, lineInfo := range ec.btf.GetFuncLineInfos(ins.Symbol()) {
-					lineInfos[uint64(lineInfo.InsnOff)] = lineInfo
-				}
 			}
 		}
 

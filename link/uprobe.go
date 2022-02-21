@@ -202,13 +202,13 @@ func (ex *Executable) Uprobe(symbol string, prog *ebpf.Program, opts *UprobeOpti
 		return nil, err
 	}
 
-	err = u.attach(prog)
+	lnk, err := attachPerfEvent(u, prog)
 	if err != nil {
 		u.Close()
 		return nil, err
 	}
 
-	return u, nil
+	return lnk, nil
 }
 
 // Uretprobe attaches the given eBPF program to a perf event that fires right
@@ -234,13 +234,13 @@ func (ex *Executable) Uretprobe(symbol string, prog *ebpf.Program, opts *UprobeO
 		return nil, err
 	}
 
-	err = u.attach(prog)
+	lnk, err := attachPerfEvent(u, prog)
 	if err != nil {
 		u.Close()
 		return nil, err
 	}
 
-	return u, nil
+	return lnk, nil
 }
 
 // uprobe opens a perf event for the given binary/symbol and attaches prog to it.

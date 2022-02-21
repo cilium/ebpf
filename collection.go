@@ -191,6 +191,9 @@ func (cs *CollectionSpec) Assign(to interface{}) error {
 // LoadAndAssign loads Maps and Programs into the kernel and assigns them
 // to a struct.
 //
+// Omitting Map/Program.Close() during application shutdown is an error.
+// See the package documentation for details around Map and Program lifecycle.
+//
 // This function is a shortcut to manually checking the presence
 // of maps and programs in a CollectionSpec. Consider using bpf2go
 // if this sounds useful.
@@ -273,12 +276,20 @@ type Collection struct {
 	Maps     map[string]*Map
 }
 
-// NewCollection creates a Collection from a specification.
+// NewCollection creates a Collection from the given spec, creating and
+// loading its declared resources into the kernel.
+//
+// Omitting Collection.Close() during application shutdown is an error.
+// See the package documentation for details around Map and Program lifecycle.
 func NewCollection(spec *CollectionSpec) (*Collection, error) {
 	return NewCollectionWithOptions(spec, CollectionOptions{})
 }
 
-// NewCollectionWithOptions creates a Collection from a specification.
+// NewCollectionWithOptions creates a Collection from the given spec using
+// options, creating and loading its declared resources into the kernel.
+//
+// Omitting Collection.Close() during application shutdown is an error.
+// See the package documentation for details around Map and Program lifecycle.
 func NewCollectionWithOptions(spec *CollectionSpec, opts CollectionOptions) (*Collection, error) {
 	loader := newCollectionLoader(spec, &opts)
 	defer loader.cleanup()
@@ -531,7 +542,11 @@ func (cl *collectionLoader) populateMaps() error {
 	return nil
 }
 
-// LoadCollection parses an object file and converts it to a collection.
+// LoadCollection reads an object file and creates and loads its declared
+// resources into the kernel.
+//
+// Omitting Collection.Close() during application shutdown is an error.
+// See the package documentation for details around Map and Program lifecycle.
 func LoadCollection(file string) (*Collection, error) {
 	spec, err := LoadCollectionSpec(file)
 	if err != nil {

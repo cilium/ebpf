@@ -71,6 +71,8 @@ const (
 // can be attached to it. It is created based on a tracefs trace event or a
 // Performance Monitoring Unit (PMU).
 type perfEvent struct {
+	// The event type determines the types of programs that can be attached.
+	typ perfEventType
 
 	// Group and name of the tracepoint/kprobe/uprobe.
 	group string
@@ -81,66 +83,16 @@ type perfEvent struct {
 	// ID of the trace event read from tracefs. Valid IDs are non-zero.
 	tracefsID uint64
 
-	// The event type determines the types of programs that can be attached.
-	typ perfEventType
-
 	// User provided arbitrary value.
 	cookie uint64
 
-	// This is the proper perf event FD.
+	// This is the perf event FD.
 	fd *sys.FD
-	// If bpf perf link is available, this is the bpf link FD.
-	bpfLinkFD *sys.FD
-}
-
-func (pe *perfEvent) isLink() {}
-
-func (pe *perfEvent) Pin(string) error {
-	return fmt.Errorf("pin perf event: %w", ErrNotSupported)
-}
-
-func (pe *perfEvent) Unpin() error {
-	return fmt.Errorf("unpin perf event: %w", ErrNotSupported)
-}
-
-// Since 4.15 (e87c6bc3852b "bpf: permit multiple bpf attachments for a single perf event"),
-// calling PERF_EVENT_IOC_SET_BPF appends the given program to a prog_array
-// owned by the perf event, which means multiple programs can be attached
-// simultaneously.
-//
-// Before 4.15, calling PERF_EVENT_IOC_SET_BPF more than once on a perf event
-// returns EEXIST.
-//
-// Detaching a program from a perf event is currently not possible, so a
-// program replacement mechanism cannot be implemented for perf events.
-func (pe *perfEvent) Update(prog *ebpf.Program) error {
-	return fmt.Errorf("can't replace eBPF program in perf event: %w", ErrNotSupported)
-}
-
-func (pe *perfEvent) Info() (*Info, error) {
-	return nil, fmt.Errorf("can't get perf event info: %w", ErrNotSupported)
 }
 
 func (pe *perfEvent) Close() error {
-	if pe.fd == nil {
-		return nil
-	}
-
-	err := unix.IoctlSetInt(pe.fd.Int(), unix.PERF_EVENT_IOC_DISABLE, 0)
-	if err != nil {
-		return fmt.Errorf("disabling perf event: %w", err)
-	}
-
-	err = pe.fd.Close()
-	if err != nil {
+	if err := pe.fd.Close(); err != nil {
 		return fmt.Errorf("closing perf event fd: %w", err)
-	}
-
-	if pe.bpfLinkFD != nil {
-		err = pe.bpfLinkFD.Close()
-		if err != nil {
-			return fmt.Errorf("closing bpf perf link fd: %w", err)
-		}
 	}
 
 	switch pe.typ {
@@ -162,70 +114,151 @@ func (pe *perfEvent) Close() error {
 	return nil
 }
 
+// perfEventLink represents a bpf perf link.
+type perfEventLink struct {
+	RawLink
+	pe *perfEvent
+}
+
+func (pl *perfEventLink) isLink() {}
+
+func (pl *perfEventLink) Close() error {
+	if pl.pe != nil { // TODO: remove once pinning works
+		if err := pl.pe.Close(); err != nil {
+			return fmt.Errorf("perf event link close: %w", err)
+		}
+	}
+	return pl.fd.Close()
+}
+
+func (pl *perfEventLink) Update(prog *ebpf.Program) error {
+	return fmt.Errorf("perf event link update: %w", ErrNotSupported)
+}
+
+// perfEventIoctl implements Link and handles the perf event lifecycle
+// via ioctl().
+type perfEventIoctl struct {
+	*perfEvent
+}
+
+func (pi *perfEventIoctl) isLink() {}
+
+// Since 4.15 (e87c6bc3852b "bpf: permit multiple bpf attachments for a single perf event"),
+// calling PERF_EVENT_IOC_SET_BPF appends the given program to a prog_array
+// owned by the perf event, which means multiple programs can be attached
+// simultaneously.
+//
+// Before 4.15, calling PERF_EVENT_IOC_SET_BPF more than once on a perf event
+// returns EEXIST.
+//
+// Detaching a program from a perf event is currently not possible, so a
+// program replacement mechanism cannot be implemented for perf events.
+func (pi *perfEventIoctl) Update(prog *ebpf.Program) error {
+	return fmt.Errorf("perf event ioctl update: %w", ErrNotSupported)
+}
+
+func (pi *perfEventIoctl) Pin(string) error {
+	return fmt.Errorf("perf event ioctl pin: %w", ErrNotSupported)
+}
+
+func (pi *perfEventIoctl) Unpin() error {
+	return fmt.Errorf("perf event ioctl unpin: %w", ErrNotSupported)
+}
+
+func (pi *perfEventIoctl) Info() (*Info, error) {
+	return nil, fmt.Errorf("perf event ioctl info: %w", ErrNotSupported)
+}
+
 // attach the given eBPF prog to the perf event stored in pe.
 // pe must contain a valid perf event fd.
 // prog's type must match the program type stored in pe.
-func (pe *perfEvent) attach(prog *ebpf.Program) error {
+func attachPerfEvent(pe *perfEvent, prog *ebpf.Program) (Link, error) {
 	if prog == nil {
-		return errors.New("cannot attach a nil program")
-	}
-	if pe.fd == nil {
-		return errors.New("cannot attach to nil perf event")
+		pe.Close()
+		return nil, errors.New("cannot attach a nil program")
 	}
 	if prog.FD() < 0 {
-		return fmt.Errorf("invalid program: %w", sys.ErrClosedFd)
+		pe.Close()
+		return nil, fmt.Errorf("invalid program: %w", sys.ErrClosedFd)
+	}
+	if pe.fd == nil {
+		return nil, errors.New("cannot attach to nil perf event")
 	}
 	switch pe.typ {
 	case kprobeEvent, kretprobeEvent, uprobeEvent, uretprobeEvent:
 		if t := prog.Type(); t != ebpf.Kprobe {
-			return fmt.Errorf("invalid program type (expected %s): %s", ebpf.Kprobe, t)
+			pe.Close()
+			return nil, fmt.Errorf("invalid program type (expected %s): %s", ebpf.Kprobe, t)
 		}
 	case tracepointEvent:
 		if t := prog.Type(); t != ebpf.TracePoint {
-			return fmt.Errorf("invalid program type (expected %s): %s", ebpf.TracePoint, t)
+			pe.Close()
+			return nil, fmt.Errorf("invalid program type (expected %s): %s", ebpf.TracePoint, t)
 		}
 	default:
-		return fmt.Errorf("unknown perf event type: %d", pe.typ)
+		pe.Close()
+		return nil, fmt.Errorf("unknown perf event type: %d", pe.typ)
 	}
 
-	pfd := pe.fd
-
 	if err := haveBPFLinkPerfEvent(); err == nil {
-		// Use the bpf api to attach the perf event (BPF_LINK_TYPE_PERF_EVENT, 5.15+).
-		//
-		// https://github.com/torvalds/linux/commit/b89fbfbb854c9afc3047e8273cc3a694650b802e
-		attr := sys.LinkCreatePerfEventAttr{
-			ProgFd:     uint32(prog.FD()),
-			TargetFd:   pfd.Uint(),
-			AttachType: sys.BPF_PERF_EVENT,
-			BpfCookie:  pe.cookie,
-		}
-
-		fd, err := sys.LinkCreatePerfEvent(&attr)
+		lnk, err := attachPerfEventLink(pe, prog)
 		if err != nil {
-			return fmt.Errorf("cannot create bpf perf link: %v", err)
+			pe.Close()
+			return nil, err
 		}
-		pe.bpfLinkFD = fd
-	} else {
-		if pe.cookie != 0 {
-			return fmt.Errorf("bpf cookies are not available: %w", ErrNotSupported)
-		}
+		return lnk, nil
+	}
+	lnk, err := attachPerfEventIoctl(pe, prog)
+	if err != nil {
+		pe.Close()
+		return nil, err
+	}
+	return lnk, nil
+}
 
-		// Assign the eBPF program to the perf event.
-		err := unix.IoctlSetInt(pfd.Int(), unix.PERF_EVENT_IOC_SET_BPF, prog.FD())
-		if err != nil {
-			return fmt.Errorf("setting perf event bpf program: %w", err)
-		}
+func attachPerfEventIoctl(pe *perfEvent, prog *ebpf.Program) (*perfEventIoctl, error) {
+	if pe.cookie != 0 {
+		return nil, fmt.Errorf("cookies are not supported: %w", ErrNotSupported)
+	}
+
+	// Assign the eBPF program to the perf event.
+	err := unix.IoctlSetInt(pe.fd.Int(), unix.PERF_EVENT_IOC_SET_BPF, prog.FD())
+	if err != nil {
+		return nil, fmt.Errorf("setting perf event bpf program: %w", err)
 	}
 
 	// PERF_EVENT_IOC_ENABLE and _DISABLE ignore their given values.
-	if err := unix.IoctlSetInt(pfd.Int(), unix.PERF_EVENT_IOC_ENABLE, 0); err != nil {
-		return fmt.Errorf("enable perf event: %s", err)
+	if err := unix.IoctlSetInt(pe.fd.Int(), unix.PERF_EVENT_IOC_ENABLE, 0); err != nil {
+		return nil, fmt.Errorf("enable perf event: %s", err)
 	}
 
+	pi := &perfEventIoctl{pe}
+
 	// Close the perf event when its reference is lost to avoid leaking system resources.
-	runtime.SetFinalizer(pe, (*perfEvent).Close)
-	return nil
+	runtime.SetFinalizer(pi, (*perfEventIoctl).Close)
+	return pi, nil
+}
+
+// Use the bpf api to attach the perf event (BPF_LINK_TYPE_PERF_EVENT, 5.15+).
+//
+// https://github.com/torvalds/linux/commit/b89fbfbb854c9afc3047e8273cc3a694650b802e
+func attachPerfEventLink(pe *perfEvent, prog *ebpf.Program) (*perfEventLink, error) {
+	fd, err := sys.LinkCreatePerfEvent(&sys.LinkCreatePerfEventAttr{
+		ProgFd:     uint32(prog.FD()),
+		TargetFd:   pe.fd.Uint(),
+		AttachType: sys.BPF_PERF_EVENT,
+		BpfCookie:  pe.cookie,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("cannot create bpf perf link: %v", err)
+	}
+
+	pl := &perfEventLink{pe: pe}
+	pl.fd = fd
+
+	// Close the perf event when its reference is lost to avoid leaking system resources.
+	runtime.SetFinalizer(pl, (*perfEventLink).Close)
+	return pl, nil
 }
 
 // unsafeStringPtr returns an unsafe.Pointer to a NUL-terminated copy of str.

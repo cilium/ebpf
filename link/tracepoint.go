@@ -53,21 +53,19 @@ func Tracepoint(group, name string, prog *ebpf.Program, opts *TracepointOptions)
 		return nil, err
 	}
 
+	var cookie uint64
+	if opts != nil {
+		cookie = opts.Cookie
+	}
+
 	pe := &perfEvent{
-		fd:        fd,
-		tracefsID: tid,
+		typ:       tracepointEvent,
 		group:     group,
 		name:      name,
-		typ:       tracepointEvent,
-	}
-	if opts != nil {
-		pe.cookie = opts.Cookie
-	}
-
-	if err := pe.attach(prog); err != nil {
-		pe.Close()
-		return nil, err
+		tracefsID: tid,
+		cookie:    cookie,
+		fd:        fd,
 	}
 
-	return pe, nil
+	return attachPerfEvent(pe, prog)
 }

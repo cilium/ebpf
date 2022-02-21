@@ -205,7 +205,7 @@ func (ins *Instruction) MapPtr() int {
 		return ins.metadata.bpfMap.FD()
 	}
 
-	// Otherwise fallback to the fd stored in the Constant field
+	// Fall back to the fd stored in the Constant field
 	return int(int32(uint64(ins.Constant) & math.MaxUint32))
 }
 
@@ -363,7 +363,7 @@ func (ins Instruction) Size() uint64 {
 	return uint64(InstructionSize * ins.OpCode.rawInstructions())
 }
 
-// SetReference set a reference(e.g. a jump) to another symbol
+// SetReference makes ins reference another Instruction by name within the same
 func (ins *Instruction) SetReference(ref string) {
 	if (ins.metadata != nil && ins.metadata.reference == ref) ||
 		(ins.metadata == nil && ref == "") {
@@ -405,14 +405,14 @@ func (ins Instruction) Context() fmt.Stringer {
 }
 
 // setMap sets the *ebpf.Map from which this instruction preforms a data.
-func (ins *Instruction) setMap(ebpfMap FDer) {
-	if (ins.metadata != nil && ins.metadata.bpfMap == ebpfMap) ||
-		(ins.metadata == nil && ebpfMap == nil) {
+func (ins *Instruction) setMap(m FDer) {
+	if (ins.metadata != nil && ins.metadata.bpfMap == m) ||
+		(ins.metadata == nil && m == nil) {
 		return
 	}
 
 	ins.metadata = ins.metadata.copy()
-	ins.metadata.bpfMap = ebpfMap
+	ins.metadata.bpfMap = m
 }
 
 // FDer isn't actually used as a meaningful interface, rater it is used because we can't directly use types from the
@@ -421,7 +421,7 @@ type FDer interface {
 	FD() int
 }
 
-// metadata holds metadata about a Instruction which are not relevant for the kernel but useful for the loader
+// metadata holds metadata about an Instruction.
 type metadata struct {
 	// reference denotes a reference (e.g. a jump) to another symbol.
 	reference string
@@ -434,7 +434,8 @@ type metadata struct {
 	bpfMap FDer
 }
 
-// returns a copy of metadata, return value is never nil, even if called on a nil value
+// copy returns a copy of metadata.
+// Always returns a valid pointer, even when called on a nil metadata.
 func (m *metadata) copy() *metadata {
 	var copy metadata
 	if m != nil {

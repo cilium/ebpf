@@ -181,7 +181,7 @@ func TestInstructionsRewriteMapPtr(t *testing.T) {
 // program is stringified.
 func ExampleInstructions_Format() {
 	insns := Instructions{
-		FnMapLookupElem.Call().Sym("my_func").WithContext(SimpleContext("bpf_map_lookup_elem()")),
+		FnMapLookupElem.Call().WithSymbol("my_func").WithContext(SimpleContext("bpf_map_lookup_elem()")),
 		LoadImm(R0, 42, DWord).WithContext(SimpleContext("abc = 42")),
 		Return(),
 	}

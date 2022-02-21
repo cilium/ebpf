@@ -94,7 +94,7 @@ func TestCollectionSpecRewriteMaps(t *testing.T) {
 		asm.FnMapLookupElem.Call(),
 		asm.JEq.Imm(asm.R0, 0, "ret"),
 		asm.LoadMem(asm.R0, asm.R0, 0, asm.Word),
-		asm.Return().Sym("ret"),
+		asm.Return().WithSymbol("ret"),
 	}
 	insns[0].SetReference("test-map")
 

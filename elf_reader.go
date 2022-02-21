@@ -353,7 +353,7 @@ func (ec *elfCode) loadFunctions(section *elfSection) (map[string]asm.Instructio
 
 	for {
 		// Symbols denote the first instruction of a function body.
-		ins := asm.Instruction{}.Sym(section.symbols[secOffset].Name)
+		ins := asm.Instruction{}.WithSymbol(section.symbols[secOffset].Name)
 
 		// Pull one instruction from the instruction stream.
 		n, err := ins.Unmarshal(r, ec.ByteOrder)

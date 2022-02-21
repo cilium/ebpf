@@ -39,8 +39,8 @@ type Instruction struct {
 	metadata *metadata
 }
 
-// Sym creates a symbol.
-func (ins Instruction) Sym(name string) Instruction {
+// WithSymbol adds symbol metadata to the instruction, which other instructions can use as Reference.
+func (ins Instruction) WithSymbol(name string) Instruction {
 	if (ins.metadata != nil && ins.metadata.symbol == name) ||
 		(ins.metadata == nil && name == "") {
 		return ins
@@ -51,7 +51,14 @@ func (ins Instruction) Sym(name string) Instruction {
 	return ins
 }
 
-// Symbol denotes an instruction at the start of a function body.
+// Sym creates a symbol.
+//
+// Deprecated: use WithSymbol instread
+func (ins Instruction) Sym(name string) Instruction {
+	return ins.WithSymbol(name)
+}
+
+// Symbol returns the name of the function that starts at ins.
 func (ins Instruction) Symbol() string {
 	if ins.metadata == nil {
 		return ""

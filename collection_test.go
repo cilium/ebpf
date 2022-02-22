@@ -33,7 +33,7 @@ func TestCollectionSpecNotModified(t *testing.T) {
 		},
 	}
 
-	cs.Programs["test"].Instructions[0].Reference = "my-map"
+	cs.Programs["test"].Instructions[0] = cs.Programs["test"].Instructions[0].WithReference("my-map")
 
 	coll, err := NewCollection(&cs)
 	if err != nil {
@@ -100,9 +100,9 @@ func TestCollectionSpecRewriteMaps(t *testing.T) {
 		asm.FnMapLookupElem.Call(),
 		asm.JEq.Imm(asm.R0, 0, "ret"),
 		asm.LoadMem(asm.R0, asm.R0, 0, asm.Word),
-		asm.Return().Sym("ret"),
+		asm.Return().WithSymbol("ret"),
 	}
-	insns[0].Reference = "test-map"
+	insns[0] = insns[0].WithReference("test-map")
 
 	cs := &CollectionSpec{
 		Maps: map[string]*MapSpec{

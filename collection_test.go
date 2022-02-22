@@ -67,12 +67,12 @@ func TestCollectionSpecCopy(t *testing.T) {
 				License: "MIT",
 			},
 		},
-		BTF: &btf.Spec{},
+		btf: &btf.Spec{},
 	}
 	cpy := cs.Copy()
 
 	if cpy == cs {
-		t.Error("Copy returned the same pointner")
+		t.Error("Copy returned the same pointer")
 	}
 
 	if cpy.Maps["my-map"] == cs.Maps["my-map"] {
@@ -83,7 +83,7 @@ func TestCollectionSpecCopy(t *testing.T) {
 		t.Error("Copy returned same Programs")
 	}
 
-	if cpy.BTF != cs.BTF {
+	if cpy.BTF() != cs.BTF() {
 		t.Error("Copy returned different BTF")
 	}
 }

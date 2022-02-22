@@ -143,7 +143,7 @@ func TestLoadCollectionSpec(t *testing.T) {
 			return false
 		}),
 		cmpopts.IgnoreTypes(new(btf.Map), new(btf.Program)),
-		cmpopts.IgnoreFields(CollectionSpec{}, "ByteOrder", "BTF"),
+		cmpopts.IgnoreFields(CollectionSpec{}, "ByteOrder", "btf"),
 		cmpopts.IgnoreFields(ProgramSpec{}, "Instructions", "ByteOrder"),
 		cmpopts.IgnoreUnexported(ProgramSpec{}),
 		cmpopts.IgnoreMapEntries(func(key string, _ *MapSpec) bool {

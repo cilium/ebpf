@@ -255,7 +255,7 @@ func output(args outputArgs) error {
 	}
 
 	// Collect any types which we've been asked for explicitly.
-	cTypes, err := collectCTypes(spec.BTF, args.cTypes)
+	cTypes, err := collectCTypes(spec.Types, args.cTypes)
 	if err != nil {
 		return err
 	}

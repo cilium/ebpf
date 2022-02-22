@@ -121,7 +121,7 @@ func fixupAndValidate(insns asm.Instructions) error {
 		ins := iter.Ins
 
 		if ins.IsLoadFromMap() && ins.MapPtr() == -1 {
-			return fmt.Errorf("instruction %d: map %s: %w", iter.Index, ins.Reference, asm.ErrUnsatisfiedMapReference)
+			return fmt.Errorf("instruction %d: map %s: %w", iter.Index, ins.Reference(), asm.ErrUnsatisfiedMapReference)
 		}
 
 		fixupProbeReadKernel(ins)

@@ -35,17 +35,39 @@ type Instruction struct {
 	Offset   int16
 	Constant int64
 
-	// Reference denotes a reference (e.g. a jump) to another symbol.
-	Reference string
+	// Metadata contains optional metadata about this instruction
+	metadata *metadata
+}
 
-	// Symbol denotes an instruction at the start of a function body.
-	Symbol string
+// WithSymbol marks the Instruction as a Symbol, which other Instructions
+// can point to using corresponding calls to WithReference.
+func (ins Instruction) WithSymbol(name string) Instruction {
+	if (ins.metadata != nil && ins.metadata.symbol == name) ||
+		(ins.metadata == nil && name == "") {
+		return ins
+	}
+
+	ins.metadata = ins.metadata.copy()
+	ins.metadata.symbol = name
+	return ins
 }
 
 // Sym creates a symbol.
+//
+// Deprecated: use WithSymbol instead.
 func (ins Instruction) Sym(name string) Instruction {
-	ins.Symbol = name
-	return ins
+	return ins.WithSymbol(name)
+}
+
+// Symbol returns the value ins has been marked with using WithSymbol,
+// otherwise returns an empty string. A symbol is often an Instruction
+// at the start of a function body.
+func (ins Instruction) Symbol() string {
+	if ins.metadata == nil {
+		return ""
+	}
+
+	return ins.metadata.symbol
 }
 
 // Unmarshal decodes a BPF instruction.
@@ -299,14 +321,61 @@ func (ins Instruction) Format(f fmt.State, c rune) {
 	}
 
 ref:
-	if ins.Reference != "" {
-		fmt.Fprintf(f, " <%s>", ins.Reference)
+	if ins.Reference() != "" {
+		fmt.Fprintf(f, " <%s>", ins.Reference())
 	}
+}
+
+func (ins Instruction) equal(other Instruction) bool {
+	return ins.OpCode == other.OpCode &&
+		ins.Dst == other.Dst &&
+		ins.Src == other.Src &&
+		ins.Offset == other.Offset &&
+		ins.Constant == other.Constant
 }
 
 // Size returns the amount of bytes ins would occupy in binary form.
 func (ins Instruction) Size() uint64 {
 	return uint64(InstructionSize * ins.OpCode.rawInstructions())
+}
+
+// WithReference makes ins reference another Instruction by name within the same
+func (ins Instruction) WithReference(ref string) Instruction {
+	if (ins.metadata != nil && ins.metadata.reference == ref) ||
+		(ins.metadata == nil && ref == "") {
+		return ins
+	}
+
+	ins.metadata = ins.metadata.copy()
+	ins.metadata.reference = ref
+	return ins
+}
+
+// Reference returns a reference (e.g. a jump) to another symbol.
+func (ins Instruction) Reference() string {
+	if ins.metadata == nil {
+		return ""
+	}
+
+	return ins.metadata.reference
+}
+
+// metadata holds metadata about an Instruction.
+type metadata struct {
+	// reference denotes a reference (e.g. a jump) to another symbol.
+	reference string
+	// symbol denotes an instruction at the start of a function body.
+	symbol string
+}
+
+// copy returns a copy of metadata.
+// Always returns a valid pointer, even when called on a nil metadata.
+func (m *metadata) copy() *metadata {
+	var copy metadata
+	if m != nil {
+		copy = *m
+	}
+	return &copy
 }
 
 // Instructions is an eBPF program.
@@ -342,7 +411,7 @@ func (insns Instructions) Name() string {
 	if len(insns) == 0 {
 		return ""
 	}
-	return insns[0].Symbol
+	return insns[0].Symbol()
 }
 
 func (insns Instructions) String() string {
@@ -369,7 +438,7 @@ func (insns Instructions) RewriteMapPtr(symbol string, fd int) error {
 	found := false
 	for i := range insns {
 		ins := &insns[i]
-		if ins.Reference != symbol {
+		if ins.Reference() != symbol {
 			continue
 		}
 
@@ -393,15 +462,15 @@ func (insns Instructions) SymbolOffsets() (map[string]int, error) {
 	offsets := make(map[string]int)
 
 	for i, ins := range insns {
-		if ins.Symbol == "" {
+		if ins.Symbol() == "" {
 			continue
 		}
 
-		if _, ok := offsets[ins.Symbol]; ok {
-			return nil, fmt.Errorf("duplicate symbol %s", ins.Symbol)
+		if _, ok := offsets[ins.Symbol()]; ok {
+			return nil, fmt.Errorf("duplicate symbol %s", ins.Symbol())
 		}
 
-		offsets[ins.Symbol] = i
+		offsets[ins.Symbol()] = i
 	}
 
 	return offsets, nil
@@ -418,7 +487,7 @@ func (insns Instructions) FunctionReferences() map[string]bool {
 			continue
 		}
 
-		if ins.Reference == "" {
+		if ins.Reference() == "" {
 			continue
 		}
 
@@ -426,7 +495,7 @@ func (insns Instructions) FunctionReferences() map[string]bool {
 			continue
 		}
 
-		calls[ins.Reference] = true
+		calls[ins.Reference()] = true
 	}
 
 	return calls
@@ -438,11 +507,11 @@ func (insns Instructions) ReferenceOffsets() map[string][]int {
 	offsets := make(map[string][]int)
 
 	for i, ins := range insns {
-		if ins.Reference == "" {
+		if ins.Reference() == "" {
 			continue
 		}
 
-		offsets[ins.Reference] = append(offsets[ins.Reference], i)
+		offsets[ins.Reference()] = append(offsets[ins.Reference()], i)
 	}
 
 	return offsets
@@ -493,8 +562,8 @@ func (insns Instructions) Format(f fmt.State, c rune) {
 
 	iter := insns.Iterate()
 	for iter.Next() {
-		if iter.Ins.Symbol != "" {
-			fmt.Fprintf(f, "%s%s:\n", symIndent, iter.Ins.Symbol)
+		if iter.Ins.Symbol() != "" {
+			fmt.Fprintf(f, "%s%s:\n", symIndent, iter.Ins.Symbol())
 		}
 		fmt.Fprintf(f, "%s%*d: %v\n", indent, offsetWidth, iter.Offset, iter.Ins)
 	}
@@ -552,15 +621,15 @@ func (insns Instructions) resolveFunctionReferences() error {
 	for iter.Next() {
 		ins := iter.Ins
 
-		if ins.Symbol == "" {
+		if ins.Symbol() == "" {
 			continue
 		}
 
-		if _, ok := symbolOffsets[ins.Symbol]; ok {
-			return fmt.Errorf("duplicate symbol %s", ins.Symbol)
+		if _, ok := symbolOffsets[ins.Symbol()]; ok {
+			return fmt.Errorf("duplicate symbol %s", ins.Symbol())
 		}
 
-		symbolOffsets[ins.Symbol] = iter.Offset
+		symbolOffsets[ins.Symbol()] = iter.Offset
 	}
 
 	// Find all instructions tagged as references to other symbols.
@@ -572,23 +641,23 @@ func (insns Instructions) resolveFunctionReferences() error {
 		offset := iter.Offset
 		ins := iter.Ins
 
-		if ins.Reference == "" {
+		if ins.Reference() == "" {
 			continue
 		}
 
 		switch {
 		case ins.IsFunctionReference() && ins.Constant == -1:
-			symOffset, ok := symbolOffsets[ins.Reference]
+			symOffset, ok := symbolOffsets[ins.Reference()]
 			if !ok {
-				return fmt.Errorf("%s at insn %d: symbol %q: %w", ins.OpCode, i, ins.Reference, ErrUnsatisfiedProgramReference)
+				return fmt.Errorf("%s at insn %d: symbol %q: %w", ins.OpCode, i, ins.Reference(), ErrUnsatisfiedProgramReference)
 			}
 
 			ins.Constant = int64(symOffset - offset - 1)
 
 		case ins.OpCode.Class().IsJump() && ins.Offset == -1:
-			symOffset, ok := symbolOffsets[ins.Reference]
+			symOffset, ok := symbolOffsets[ins.Reference()]
 			if !ok {
-				return fmt.Errorf("%s at insn %d: symbol %q: %w", ins.OpCode, i, ins.Reference, ErrUnsatisfiedProgramReference)
+				return fmt.Errorf("%s at insn %d: symbol %q: %w", ins.OpCode, i, ins.Reference(), ErrUnsatisfiedProgramReference)
 			}
 
 			ins.Offset = int16(symOffset - offset - 1)

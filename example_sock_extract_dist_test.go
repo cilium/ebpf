@@ -107,11 +107,11 @@ func newDistanceFilter() (*ebpf.Program, *ebpf.Map, error) {
 
 		// 7th byte in IPv6 is Hop count
 		// LDABS requires ctx in R6
-		asm.Mov.Reg(asm.R6, asm.R1).Sym("ipv6"),
+		asm.Mov.Reg(asm.R6, asm.R1).WithSymbol("ipv6"),
 		asm.LoadAbs(-0x100000+7, asm.Byte),
 
 		// stash the load result into FP[-4]
-		asm.StoreMem(asm.RFP, -4, asm.R0, asm.Word).Sym("store-ttl"),
+		asm.StoreMem(asm.RFP, -4, asm.R0, asm.Word).WithSymbol("store-ttl"),
 		// stash the &FP[-4] into r2
 		asm.Mov.Reg(asm.R2, asm.RFP),
 		asm.Add.Imm(asm.R2, -4),
@@ -128,7 +128,7 @@ func newDistanceFilter() (*ebpf.Program, *ebpf.Map, error) {
 
 		// MapUpdate
 		// r1 has map ptr
-		asm.LoadMapPtr(asm.R1, ttls.FD()).Sym("update-map"),
+		asm.LoadMapPtr(asm.R1, ttls.FD()).WithSymbol("update-map"),
 		// r2 has key -> &FP[-4]
 		asm.Mov.Reg(asm.R2, asm.RFP),
 		asm.Add.Imm(asm.R2, -4),
@@ -141,7 +141,7 @@ func newDistanceFilter() (*ebpf.Program, *ebpf.Map, error) {
 		asm.FnMapUpdateElem.Call(),
 
 		// set exit code to -1, don't trunc packet
-		asm.Mov.Imm(asm.R0, -1).Sym("exit"),
+		asm.Mov.Imm(asm.R0, -1).WithSymbol("exit"),
 		asm.Return(),
 	}
 

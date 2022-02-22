@@ -134,7 +134,7 @@ func outputSamplesProg(flags int32, sampleSizes ...int) (*ebpf.Program, *ebpf.Ma
 	}
 
 	insns = append(insns,
-		asm.Mov.Imm(asm.R0, int32(0)).Sym("exit"),
+		asm.Mov.Imm(asm.R0, int32(0)).WithSymbol("exit"),
 		asm.Return(),
 	)
 

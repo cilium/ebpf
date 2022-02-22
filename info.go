@@ -233,7 +233,7 @@ func (pi *ProgramInfo) Instructions() (asm.Instructions, error) {
 	}
 
 	// Tag the first instruction with the name of the program, if available.
-	insns[0] = insns[0].Sym(pi.Name)
+	insns[0] = insns[0].WithSymbol(pi.Name)
 
 	return insns, nil
 }

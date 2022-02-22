@@ -67,7 +67,7 @@ func TestCollectionSpecCopy(t *testing.T) {
 				License: "MIT",
 			},
 		},
-		BTF: &btf.Spec{},
+		Types: &btf.Spec{},
 	}
 	cpy := cs.Copy()
 
@@ -83,8 +83,8 @@ func TestCollectionSpecCopy(t *testing.T) {
 		t.Error("Copy returned same Programs")
 	}
 
-	if cpy.BTF == cs.BTF {
-		t.Error("Copy returned same BTF")
+	if cpy.Types == cs.Types {
+		t.Error("Copy returned same Types")
 	}
 }
 

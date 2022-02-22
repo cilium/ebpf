@@ -49,7 +49,7 @@ func TestProgramRun(t *testing.T) {
 	}
 	ins = append(ins,
 		// return 42
-		asm.LoadImm(asm.R0, 42, asm.DWord).Sym("out"),
+		asm.LoadImm(asm.R0, 42, asm.DWord).WithSymbol("out"),
 		asm.Return(),
 	)
 
@@ -692,7 +692,7 @@ func TestProgramInstructions(t *testing.T) {
 		Type: SocketFilter,
 		Name: name,
 		Instructions: asm.Instructions{
-			asm.LoadImm(asm.R0, -1, asm.DWord).Sym(name),
+			asm.LoadImm(asm.R0, -1, asm.DWord).WithSymbol(name),
 			asm.Mov.Imm32(asm.R0, 0),
 			asm.Return(),
 		},
@@ -716,7 +716,15 @@ func TestProgramInstructions(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if diff := cmp.Diff(insns, spec.Instructions); diff != "" {
+	instructionComparer := func(a, b asm.Instruction) bool {
+		return a.OpCode == b.OpCode &&
+			a.Constant == b.Constant &&
+			a.Dst == b.Dst &&
+			a.Src == b.Src &&
+			a.Offset == b.Offset
+	}
+
+	if diff := cmp.Diff(insns, spec.Instructions, cmp.Comparer(instructionComparer)); diff != "" {
 		t.Fatal(diff)
 	}
 }

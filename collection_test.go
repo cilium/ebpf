@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/cilium/ebpf/asm"
+	"github.com/cilium/ebpf/internal/btf"
 	"github.com/cilium/ebpf/internal/testutils"
 )
 
@@ -66,11 +67,12 @@ func TestCollectionSpecCopy(t *testing.T) {
 				License: "MIT",
 			},
 		},
+		btf: &btf.Spec{},
 	}
 	cpy := cs.Copy()
 
 	if cpy == cs {
-		t.Error("Copy returned the same pointner")
+		t.Error("Copy returned the same pointer")
 	}
 
 	if cpy.Maps["my-map"] == cs.Maps["my-map"] {
@@ -79,6 +81,10 @@ func TestCollectionSpecCopy(t *testing.T) {
 
 	if cpy.Programs["test"] == cs.Programs["test"] {
 		t.Error("Copy returned same Programs")
+	}
+
+	if cpy.BTF() != cs.BTF() {
+		t.Error("Copy returned different BTF")
 	}
 }
 

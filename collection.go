@@ -27,12 +27,12 @@ type CollectionSpec struct {
 	Maps     map[string]*MapSpec
 	Programs map[string]*ProgramSpec
 
-	// The BTF used by maps and programs.
-	BTF *btf.Spec
-
 	// ByteOrder specifies whether the ELF was compiled for
 	// big-endian or little-endian architectures.
 	ByteOrder binary.ByteOrder
+
+	// The BTF used by maps and programs.
+	btf *btf.Spec
 }
 
 // Copy returns a recursive copy of the spec.
@@ -45,6 +45,7 @@ func (cs *CollectionSpec) Copy() *CollectionSpec {
 		Maps:      make(map[string]*MapSpec, len(cs.Maps)),
 		Programs:  make(map[string]*ProgramSpec, len(cs.Programs)),
 		ByteOrder: cs.ByteOrder,
+		btf:       cs.btf,
 	}
 
 	for name, spec := range cs.Maps {
@@ -56,6 +57,11 @@ func (cs *CollectionSpec) Copy() *CollectionSpec {
 	}
 
 	return &cpy
+}
+
+// BTF returns the BTF spec used by the CollectionSpec's Maps and Programs.
+func (cs *CollectionSpec) BTF() *btf.Spec {
+	return cs.btf
 }
 
 // RewriteMaps replaces all references to specific maps.
@@ -412,8 +418,8 @@ func (cl *collectionLoader) loadMap(mapName string) (*Map, error) {
 		return nil, fmt.Errorf("missing map %s", mapName)
 	}
 
-	if mapSpec.BTF != nil && cl.coll.BTF != mapSpec.BTF.Spec {
-		return nil, fmt.Errorf("map %s: BTF doesn't match collection", mapName)
+	if mapSpec.BTF != nil && cl.coll.BTF() != mapSpec.BTF.Spec {
+		return nil, fmt.Errorf("map %s: BTF doesn't match collection %v %v", mapName, cl.coll.BTF(), mapSpec.BTF.Spec)
 	}
 
 	m, err := newMapWithOptions(mapSpec, cl.opts.Maps, cl.handles)
@@ -441,7 +447,7 @@ func (cl *collectionLoader) loadProgram(progName string) (*Program, error) {
 		return nil, fmt.Errorf("cannot load program %s: program type is unspecified", progName)
 	}
 
-	if progSpec.BTF != nil && cl.coll.BTF != progSpec.BTF.Spec() {
+	if progSpec.BTF != nil && cl.coll.BTF() != progSpec.BTF.Spec() {
 		return nil, fmt.Errorf("program %s: BTF doesn't match collection", progName)
 	}
 

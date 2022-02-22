@@ -24,7 +24,7 @@ func TestCollectionSpecNotModified(t *testing.T) {
 			"test": {
 				Type: SocketFilter,
 				Instructions: asm.Instructions{
-					asm.LoadImm(asm.R1, 0, asm.DWord),
+					asm.LoadImm(asm.R1, 0, asm.DWord).WithReference("my-map"),
 					asm.LoadImm(asm.R0, 0, asm.DWord),
 					asm.Return(),
 				},
@@ -32,8 +32,6 @@ func TestCollectionSpecNotModified(t *testing.T) {
 			},
 		},
 	}
-
-	cs.Programs["test"].Instructions[0].Reference = "my-map"
 
 	coll, err := NewCollection(&cs)
 	if err != nil {
@@ -91,7 +89,7 @@ func TestCollectionSpecCopy(t *testing.T) {
 func TestCollectionSpecRewriteMaps(t *testing.T) {
 	insns := asm.Instructions{
 		// R1 map
-		asm.LoadMapPtr(asm.R1, 0),
+		asm.LoadMapPtr(asm.R1, 0).WithReference("test-map"),
 		// R2 key
 		asm.Mov.Reg(asm.R2, asm.R10),
 		asm.Add.Imm(asm.R2, -4),
@@ -100,9 +98,8 @@ func TestCollectionSpecRewriteMaps(t *testing.T) {
 		asm.FnMapLookupElem.Call(),
 		asm.JEq.Imm(asm.R0, 0, "ret"),
 		asm.LoadMem(asm.R0, asm.R0, 0, asm.Word),
-		asm.Return().Sym("ret"),
+		asm.Return().WithSymbol("ret"),
 	}
-	insns[0].Reference = "test-map"
 
 	cs := &CollectionSpec{
 		Maps: map[string]*MapSpec{

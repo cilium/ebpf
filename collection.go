@@ -45,6 +45,7 @@ func (cs *CollectionSpec) Copy() *CollectionSpec {
 		Maps:      make(map[string]*MapSpec, len(cs.Maps)),
 		Programs:  make(map[string]*ProgramSpec, len(cs.Programs)),
 		ByteOrder: cs.ByteOrder,
+		BTF:       cs.BTF,
 	}
 
 	for name, spec := range cs.Maps {

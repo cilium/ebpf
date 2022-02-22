@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/cilium/ebpf/asm"
+	"github.com/cilium/ebpf/internal/btf"
 	"github.com/cilium/ebpf/internal/testutils"
 )
 
@@ -66,6 +67,7 @@ func TestCollectionSpecCopy(t *testing.T) {
 				License: "MIT",
 			},
 		},
+		BTF: &btf.Spec{},
 	}
 	cpy := cs.Copy()
 
@@ -79,6 +81,10 @@ func TestCollectionSpecCopy(t *testing.T) {
 
 	if cpy.Programs["test"] == cs.Programs["test"] {
 		t.Error("Copy returned same Programs")
+	}
+
+	if cpy.BTF != cs.BTF {
+		t.Error("Copy returned different BTF")
 	}
 }
 

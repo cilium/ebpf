@@ -24,13 +24,13 @@ func TestFindReferences(t *testing.T) {
 		},
 		"my_other_func": {
 			Instructions: asm.Instructions{
-				asm.LoadImm(asm.R0, 1337, asm.DWord).Sym("my_other_func"),
+				asm.LoadImm(asm.R0, 1337, asm.DWord).WithSymbol("my_other_func"),
 				asm.Return(),
 			},
 		},
 		"my_func": {
 			Instructions: asm.Instructions{
-				asm.Call.Label("my_other_func").Sym("my_func"),
+				asm.Call.Label("my_other_func").WithSymbol("my_func"),
 				asm.Return(),
 			},
 		},
@@ -80,7 +80,7 @@ func TestForwardFunctionDeclaration(t *testing.T) {
 
 		// Append the implementation of fwd().
 		spec.Instructions = append(spec.Instructions,
-			asm.Mov.Imm32(asm.R0, 23).Sym("fwd"),
+			asm.Mov.Imm32(asm.R0, 23).WithSymbol("fwd"),
 			asm.Return(),
 		)
 

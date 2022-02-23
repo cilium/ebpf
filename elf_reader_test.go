@@ -739,6 +739,9 @@ func TestLibBPFCompat(t *testing.T) {
 				case "btf__core_reloc_type_id___missing_targets.o",
 					"btf__core_reloc_flavors__err_wrong_name.o":
 					valid = false
+				case "btf__core_reloc_ints___err_bitfield.o":
+					// Bitfields are now valid.
+					valid = true
 				default:
 					valid = !strings.Contains(name, "___err_")
 				}

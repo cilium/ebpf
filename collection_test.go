@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/cilium/ebpf/asm"
+	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/btf"
 	"github.com/cilium/ebpf/internal/testutils"
 )
@@ -83,8 +84,30 @@ func TestCollectionSpecCopy(t *testing.T) {
 		t.Error("Copy returned same Programs")
 	}
 
-	if cpy.Types == cs.Types {
-		t.Error("Copy returned same Types")
+	if cpy.Types != cs.Types {
+		t.Error("Copy returned different Types")
+	}
+}
+
+func TestCollectionSpecLoadCopy(t *testing.T) {
+	file := fmt.Sprintf("testdata/loader-%s.elf", internal.ClangEndian)
+	spec, err := LoadCollectionSpec(file)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	spec2 := spec.Copy()
+
+	var objs struct {
+		Prog *Program `ebpf:"xdp_prog"`
+	}
+
+	if err := spec.LoadAndAssign(&objs, nil); err != nil {
+		t.Fatal("Loading original spec:", err)
+	}
+
+	if err := spec2.LoadAndAssign(&objs, nil); err != nil {
+		t.Fatal("Loading copied spec:", err)
 	}
 }
 

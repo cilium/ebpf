@@ -28,6 +28,7 @@ type CollectionSpec struct {
 	Programs map[string]*ProgramSpec
 
 	// Types holds type information about Maps and Programs.
+	// Modifications to Types are currently undefined behaviour.
 	Types *btf.Spec
 
 	// ByteOrder specifies whether the ELF was compiled for
@@ -45,7 +46,7 @@ func (cs *CollectionSpec) Copy() *CollectionSpec {
 		Maps:      make(map[string]*MapSpec, len(cs.Maps)),
 		Programs:  make(map[string]*ProgramSpec, len(cs.Programs)),
 		ByteOrder: cs.ByteOrder,
-		Types:     cs.Types.Copy(),
+		Types:     cs.Types,
 	}
 
 	for name, spec := range cs.Maps {

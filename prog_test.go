@@ -687,12 +687,16 @@ func TestProgramBindMap(t *testing.T) {
 }
 
 func TestProgramInstructions(t *testing.T) {
+	arr := createArray(t)
+	defer arr.Close()
+
 	name := "test_prog"
 	spec := &ProgramSpec{
 		Type: SocketFilter,
 		Name: name,
 		Instructions: asm.Instructions{
 			asm.LoadImm(asm.R0, -1, asm.DWord).Sym(name),
+			asm.LoadMapPtr(asm.R1, arr.FD()),
 			asm.Mov.Imm32(asm.R0, 0),
 			asm.Return(),
 		},
@@ -716,8 +720,18 @@ func TestProgramInstructions(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if diff := cmp.Diff(insns, spec.Instructions); diff != "" {
-		t.Fatal(diff)
+	tag, err := spec.Tag()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	tagXlated, err := insns.Tag(internal.NativeEndian)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if tag != tagXlated {
+		t.Fatalf("tag %s differs from xlated instructions tag %s", tag, tagXlated)
 	}
 }
 

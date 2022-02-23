@@ -151,10 +151,9 @@ func TestInstructionLoadMapValue(t *testing.T) {
 
 func TestInstructionsRewriteMapPtr(t *testing.T) {
 	insns := Instructions{
-		LoadMapPtr(R1, 0),
+		LoadMapPtr(R1, 0).WithReference("good"),
 		Return(),
 	}
-	insns[0].Reference = "good"
 
 	if err := insns.RewriteMapPtr("good", 1); err != nil {
 		t.Fatal(err)
@@ -181,7 +180,7 @@ func TestInstructionsRewriteMapPtr(t *testing.T) {
 // program is stringified.
 func ExampleInstructions_Format() {
 	insns := Instructions{
-		FnMapLookupElem.Call().Sym("my_func"),
+		FnMapLookupElem.Call().WithSymbol("my_func"),
 		LoadImm(R0, 42, DWord),
 		Return(),
 	}

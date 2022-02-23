@@ -260,7 +260,7 @@ func TestInlineASMConstant(t *testing.T) {
 	}
 
 	spec := coll.Programs["asm_relocation"]
-	if spec.Instructions[0].Reference != "MY_CONST" {
+	if spec.Instructions[0].Reference() != "MY_CONST" {
 		t.Fatal("First instruction is not a reference to MY_CONST")
 	}
 

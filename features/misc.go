@@ -129,7 +129,7 @@ func createMiscProbeAttr(mt miscType) (*sys.ProgLoadAttr, error) {
 	case boundedLoops:
 		insns = asm.Instructions{
 			asm.Mov.Imm(asm.R0, 10),
-			asm.Sub.Imm(asm.R0, 1).Sym("loop"),
+			asm.Sub.Imm(asm.R0, 1).WithSymbol("loop"),
 			asm.JNE.Imm(asm.R0, 0, "loop"),
 			asm.Return(),
 		}
@@ -138,14 +138,14 @@ func createMiscProbeAttr(mt miscType) (*sys.ProgLoadAttr, error) {
 			asm.Mov.Imm(asm.R0, 0),
 			asm.JLT.Imm(asm.R0, 0, "exit"),
 			asm.Mov.Imm(asm.R0, 1),
-			asm.Return().Sym("exit"),
+			asm.Return().WithSymbol("exit"),
 		}
 	case v3ISA:
 		insns = asm.Instructions{
 			asm.Mov.Imm(asm.R0, 0),
 			asm.JLT.Imm32(asm.R0, 0, "exit"),
 			asm.Mov.Imm(asm.R0, 1),
-			asm.Return().Sym("exit"),
+			asm.Return().WithSymbol("exit"),
 		}
 	default:
 		return nil, fmt.Errorf("misc probe %d not implemented", mt)

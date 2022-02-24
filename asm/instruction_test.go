@@ -180,9 +180,10 @@ func TestInstructionsRewriteMapPtr(t *testing.T) {
 // You can use format flags to change the way an eBPF
 // program is stringified.
 func ExampleInstructions_Format() {
+
 	insns := Instructions{
-		FnMapLookupElem.Call().WithSymbol("my_func"),
-		LoadImm(R0, 42, DWord),
+		FnMapLookupElem.Call().WithSymbol("my_func").WithSource(Comment("bpf_map_lookup_elem()")),
+		LoadImm(R0, 42, DWord).WithSource(Comment("abc = 42")),
 		Return(),
 	}
 
@@ -200,25 +201,33 @@ func ExampleInstructions_Format() {
 
 	// Output: Default format:
 	// my_func:
+	//	 ; bpf_map_lookup_elem()
 	// 	0: Call FnMapLookupElem
+	//	 ; abc = 42
 	// 	1: LdImmDW dst: r0 imm: 42
 	// 	3: Exit
 	//
 	// Don't indent instructions:
 	// my_func:
+	//  ; bpf_map_lookup_elem()
 	// 0: Call FnMapLookupElem
+	//  ; abc = 42
 	// 1: LdImmDW dst: r0 imm: 42
 	// 3: Exit
 	//
 	// Indent using spaces:
 	// my_func:
+	//   ; bpf_map_lookup_elem()
 	//  0: Call FnMapLookupElem
+	//   ; abc = 42
 	//  1: LdImmDW dst: r0 imm: 42
 	//  3: Exit
 	//
 	// Control symbol indentation:
 	// 		my_func:
+	//	 ; bpf_map_lookup_elem()
 	// 	0: Call FnMapLookupElem
+	//	 ; abc = 42
 	// 	1: LdImmDW dst: r0 imm: 42
 	// 	3: Exit
 }

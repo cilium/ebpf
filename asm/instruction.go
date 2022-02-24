@@ -400,6 +400,30 @@ func (ins Instruction) Map() FDer {
 	return fd
 }
 
+type sourceMeta struct{}
+
+// WithSource adds source information about the Instruction.
+func (ins Instruction) WithSource(src fmt.Stringer) Instruction {
+	ins.Metadata.Set(sourceMeta{}, src)
+	return ins
+}
+
+// Source returns source information about the Instruction. The field is
+// present when the compiler emits BTF line info about the Instruction and
+// usually contains the line of source code responsible for it.
+func (ins Instruction) Source() fmt.Stringer {
+	str, _ := ins.Metadata.Get(sourceMeta{}).(fmt.Stringer)
+	return str
+}
+
+// A Comment can be passed to Instruction.WithSource to add a comment
+// to an instruction.
+type Comment string
+
+func (s Comment) String() string {
+	return string(s)
+}
+
 // FDer represents a resource tied to an underlying file descriptor.
 // Used as a stand-in for e.g. ebpf.Map since that type cannot be
 // imported here and FD() is the only method we rely on.
@@ -629,6 +653,12 @@ func (insns Instructions) Format(f fmt.State, c rune) {
 	for iter.Next() {
 		if iter.Ins.Symbol() != "" {
 			fmt.Fprintf(f, "%s%s:\n", symIndent, iter.Ins.Symbol())
+		}
+		if src := iter.Ins.Source(); src != nil {
+			line := strings.TrimSpace(src.String())
+			if line != "" {
+				fmt.Fprintf(f, "%s%*s; %s\n", indent, offsetWidth, " ", line)
+			}
 		}
 		fmt.Fprintf(f, "%s%*d: %v\n", indent, offsetWidth, iter.Offset, iter.Ins)
 	}

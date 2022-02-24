@@ -10,6 +10,7 @@ import (
 	"math"
 	"strings"
 
+	"github.com/cilium/ebpf/internal/sys"
 	"github.com/cilium/ebpf/internal/unix"
 )
 
@@ -19,6 +20,7 @@ const InstructionSize = 8
 // RawInstructionOffset is an offset in units of raw BPF instructions.
 type RawInstructionOffset uint64
 
+var ErrUnreferencedSymbol = errors.New("unreferenced symbol")
 var ErrUnsatisfiedMapReference = errors.New("unsatisfied map reference")
 var ErrUnsatisfiedProgramReference = errors.New("unsatisfied program reference")
 
@@ -127,31 +129,67 @@ func (ins Instruction) Marshal(w io.Writer, bo binary.ByteOrder) (uint64, error)
 	return 2 * InstructionSize, nil
 }
 
-// RewriteMapPtr changes an instruction to use a new map fd.
+// AssociateMap associates a Map with this Instruction.
 //
-// Returns an error if the instruction doesn't load a map.
-func (ins *Instruction) RewriteMapPtr(fd int) error {
-	if !ins.OpCode.IsDWordLoad() {
-		return fmt.Errorf("%s is not a 64 bit load", ins.OpCode)
-	}
-
-	if ins.Src != PseudoMapFD && ins.Src != PseudoMapValue {
+// Implicitly clears the Instruction's Reference field.
+//
+// Returns an error if the Instruction is not a map load.
+func (ins *Instruction) AssociateMap(m FDer) error {
+	if !ins.IsLoadFromMap() {
 		return errors.New("not a load from a map")
 	}
 
+	ins.setMap(m)
+
+	// Remove any Reference as it has now been resolved.
+	*ins = ins.WithReference("")
+
+	return nil
+}
+
+// RewriteMapPtr changes an instruction to use a new map fd.
+//
+// Returns an error if the instruction doesn't load a map.
+//
+// Deprecated: use AssociateMap instead. If you cannot provide a Map,
+// wrap an fd in a type implementing FDer.
+func (ins *Instruction) RewriteMapPtr(fd int) error {
+	if !ins.IsLoadFromMap() {
+		return errors.New("not a load from a map")
+	}
+
+	ins.encodeMapFD(fd)
+
+	return nil
+}
+
+func (ins *Instruction) encodeMapFD(fd int) {
 	// Preserve the offset value for direct map loads.
 	offset := uint64(ins.Constant) & (math.MaxUint32 << 32)
 	rawFd := uint64(uint32(fd))
 	ins.Constant = int64(offset | rawFd)
-	return nil
 }
 
 // MapPtr returns the map fd for this instruction.
 //
 // The result is undefined if the instruction is not a load from a map,
 // see IsLoadFromMap.
+//
+// Deprecated: use Map() instead.
 func (ins *Instruction) MapPtr() int {
-	return int(int32(uint64(ins.Constant) & math.MaxUint32))
+	// If there is a map associated with the instruction, return its FD.
+	if ins.metadata != nil && ins.metadata.bpfMap != nil {
+		return ins.metadata.bpfMap.FD()
+	}
+
+	// Fall back to the fd stored in the Constant field
+	return ins.mapFd()
+}
+
+// mapFd returns the map file descriptor stored in the 32 least significant
+// bits of ins' Constant field.
+func (ins *Instruction) mapFd() int {
+	return int(int32(ins.Constant))
 }
 
 // RewriteMapOffset changes the offset of a direct load from a map.
@@ -233,13 +271,22 @@ func (ins Instruction) Format(f fmt.State, c rune) {
 	}
 
 	if ins.IsLoadFromMap() {
-		fd := ins.MapPtr()
+		fd := ins.mapFd()
+		m := ins.Map()
 		switch ins.Src {
 		case PseudoMapFD:
-			fmt.Fprintf(f, "LoadMapPtr dst: %s fd: %d", ins.Dst, fd)
+			if m != nil {
+				fmt.Fprintf(f, "LoadMapPtr dst: %s map: %s", ins.Dst, m)
+			} else {
+				fmt.Fprintf(f, "LoadMapPtr dst: %s fd: %d", ins.Dst, fd)
+			}
 
 		case PseudoMapValue:
-			fmt.Fprintf(f, "LoadMapValue dst: %s, fd: %d off: %d", ins.Dst, fd, ins.mapOffset())
+			if m != nil {
+				fmt.Fprintf(f, "LoadMapValue dst: %s, map: %s off: %d", ins.Dst, m, ins.mapOffset())
+			} else {
+				fmt.Fprintf(f, "LoadMapValue dst: %s, fd: %d off: %d", ins.Dst, fd, ins.mapOffset())
+			}
 		}
 
 		goto ref
@@ -348,6 +395,13 @@ func (ins Instruction) Reference() string {
 	return ins.metadata.Reference()
 }
 
+// Map returns the Map referenced by ins, if any.
+// An Instruction will contain a Map if e.g. it references an existing,
+// pinned map that was opened during ELF loading.
+func (ins Instruction) Map() FDer {
+	return ins.metadata.Map()
+}
+
 // copyMetadata is a convenience method for copying ins.metadata, assigning
 // the new copy to its metadata field and returning a pointer to the copy
 // so one access can be chained.
@@ -356,12 +410,31 @@ func (ins *Instruction) copyMetadata() *metadata {
 	return ins.metadata
 }
 
+// setMap sets the given Map m in the metadata of this instruction.
+func (ins *Instruction) setMap(m FDer) {
+	if ins.metadata.Map() == m {
+		return
+	}
+
+	ins.copyMetadata().bpfMap = m
+}
+
+// FDer represents a resource tied to an underlying file descriptor.
+// Used as a stand-in for e.g. ebpf.Map since that type cannot be
+// imported here and FD() is the only method we rely on.
+type FDer interface {
+	FD() int
+}
+
 // metadata holds metadata about an Instruction.
 type metadata struct {
 	// reference denotes a reference (e.g. a jump) to another symbol.
 	reference string
 	// symbol denotes an instruction at the start of a function body.
 	symbol string
+
+	// bpfMap denotes the Map whose fd is used by this instruction.
+	bpfMap FDer
 }
 
 // Reference is a safe accessor to metadata's reference field.
@@ -380,6 +453,15 @@ func (m *metadata) Symbol() string {
 		return ""
 	}
 	return m.symbol
+}
+
+// Map is a safe accessor to metadata's bpfMap field.
+// It can be called on a nil m, in which case it will return the default value.
+func (m *metadata) Map() FDer {
+	if m == nil {
+		return nil
+	}
+	return m.bpfMap
 }
 
 // copy returns a copy of metadata.
@@ -441,22 +523,25 @@ func (insns Instructions) Size() uint64 {
 	return sum
 }
 
-// RewriteMapPtr rewrites all loads of a specific map pointer to a new fd.
+// AssociateMap updates all Instructions that Reference the given symbol
+// to point to an existing Map m instead.
 //
-// Returns an error if the symbol isn't used, see IsUnreferencedSymbol.
-func (insns Instructions) RewriteMapPtr(symbol string, fd int) error {
+// Returns ErrUnreferencedSymbol error if no references to symbol are found
+// in insns. If symbol is anything else than the symbol name of map (e.g.
+// a bpf2bpf subprogram), an error is returned.
+func (insns Instructions) AssociateMap(symbol string, m FDer) error {
 	if symbol == "" {
 		return errors.New("empty symbol")
 	}
 
-	found := false
+	var found bool
 	for i := range insns {
 		ins := &insns[i]
 		if ins.Reference() != symbol {
 			continue
 		}
 
-		if err := ins.RewriteMapPtr(fd); err != nil {
+		if err := ins.AssociateMap(m); err != nil {
 			return err
 		}
 
@@ -464,7 +549,40 @@ func (insns Instructions) RewriteMapPtr(symbol string, fd int) error {
 	}
 
 	if !found {
-		return &unreferencedSymbolError{symbol}
+		return fmt.Errorf("symbol %s: %w", symbol, ErrUnreferencedSymbol)
+	}
+
+	return nil
+}
+
+// RewriteMapPtr rewrites all loads of a specific map pointer to a new fd.
+//
+// Returns ErrUnreferencedSymbol if the symbol isn't used.
+//
+// Deprecated: use AssociateMap instead.
+func (insns Instructions) RewriteMapPtr(symbol string, fd int) error {
+	if symbol == "" {
+		return errors.New("empty symbol")
+	}
+
+	var found bool
+	for i := range insns {
+		ins := &insns[i]
+		if ins.Reference() != symbol {
+			continue
+		}
+
+		if !ins.IsLoadFromMap() {
+			return errors.New("not a load from a map")
+		}
+
+		ins.encodeMapFD(fd)
+
+		found = true
+	}
+
+	if !found {
+		return fmt.Errorf("symbol %s: %w", symbol, ErrUnreferencedSymbol)
 	}
 
 	return nil
@@ -588,7 +706,11 @@ func (insns Instructions) Format(f fmt.State, c rune) {
 // Returns ErrUnsatisfiedProgramReference if there is a Reference Instruction
 // without a matching Symbol Instruction within insns.
 func (insns Instructions) Marshal(w io.Writer, bo binary.ByteOrder) error {
-	if err := insns.resolveFunctionReferences(); err != nil {
+	if err := insns.encodeFunctionReferences(); err != nil {
+		return err
+	}
+
+	if err := insns.encodeMapPointers(); err != nil {
 		return err
 	}
 
@@ -619,7 +741,7 @@ func (insns Instructions) Tag(bo binary.ByteOrder) (string, error) {
 	return hex.EncodeToString(h.Sum(nil)[:unix.BPF_TAG_SIZE]), nil
 }
 
-// resolveFunctionReferences populates the Offset (or Constant, depending on
+// encodeFunctionReferences populates the Offset (or Constant, depending on
 // the instruction type) field of instructions with a Reference field to point
 // to the offset of the corresponding instruction with a matching Symbol field.
 //
@@ -628,7 +750,7 @@ func (insns Instructions) Tag(bo binary.ByteOrder) (string, error) {
 //
 // Returns ErrUnsatisfiedProgramReference if there is a Reference Instruction
 // without at least one corresponding Symbol Instruction within insns.
-func (insns Instructions) resolveFunctionReferences() error {
+func (insns Instructions) encodeFunctionReferences() error {
 	// Index the offsets of instructions tagged as a symbol.
 	symbolOffsets := make(map[string]RawInstructionOffset)
 	iter := insns.Iterate()
@@ -676,6 +798,33 @@ func (insns Instructions) resolveFunctionReferences() error {
 
 			ins.Offset = int16(symOffset - offset - 1)
 		}
+	}
+
+	return nil
+}
+
+// encodeMapPointers finds all Map Instructions and encodes their FDs
+// into their Constant fields.
+func (insns Instructions) encodeMapPointers() error {
+	iter := insns.Iterate()
+	for iter.Next() {
+		ins := iter.Ins
+
+		if !ins.IsLoadFromMap() {
+			continue
+		}
+
+		m := ins.Map()
+		if m == nil {
+			continue
+		}
+
+		fd := m.FD()
+		if fd < 0 {
+			return fmt.Errorf("map %s: %w", m, sys.ErrClosedFd)
+		}
+
+		ins.encodeMapFD(m.FD())
 	}
 
 	return nil
@@ -729,17 +878,10 @@ func newBPFRegisters(dst, src Register, bo binary.ByteOrder) (bpfRegisters, erro
 	}
 }
 
-type unreferencedSymbolError struct {
-	symbol string
-}
-
-func (use *unreferencedSymbolError) Error() string {
-	return fmt.Sprintf("unreferenced symbol %s", use.symbol)
-}
-
 // IsUnreferencedSymbol returns true if err was caused by
 // an unreferenced symbol.
+//
+// Deprecated: use errors.Is(err, asm.ErrUnreferencedSymbol).
 func IsUnreferencedSymbol(err error) bool {
-	_, ok := err.(*unreferencedSymbolError)
-	return ok
+	return errors.Is(err, ErrUnreferencedSymbol)
 }

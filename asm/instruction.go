@@ -402,6 +402,23 @@ func (ins Instruction) Map() FDer {
 	return ins.metadata.Map()
 }
 
+// WithSource adds source information about the Instruction.
+func (ins Instruction) WithSource(src fmt.Stringer) Instruction {
+	if ins.Source() == src {
+		return ins
+	}
+
+	ins.copyMetadata().source = src
+	return ins
+}
+
+// Source returns source information about the Instruction. The field is
+// present when the compiler emits BTF line info about the Instruction and
+// usually contains the line of source code responsible for it.
+func (ins Instruction) Source() fmt.Stringer {
+	return ins.metadata.Source()
+}
+
 // copyMetadata is a convenience method for copying ins.metadata, assigning
 // the new copy to its metadata field and returning a pointer to the copy
 // so one access can be chained.
@@ -419,6 +436,14 @@ func (ins *Instruction) setMap(m FDer) {
 	ins.copyMetadata().bpfMap = m
 }
 
+// A Comment can be passed to Instruction.WithSource to add a comment
+// to an instruction.
+type Comment string
+
+func (s Comment) String() string {
+	return string(s)
+}
+
 // FDer represents a resource tied to an underlying file descriptor.
 // Used as a stand-in for e.g. ebpf.Map since that type cannot be
 // imported here and FD() is the only method we rely on.
@@ -432,6 +457,8 @@ type metadata struct {
 	reference string
 	// symbol denotes an instruction at the start of a function body.
 	symbol string
+	// source denotes information about the origin/source of the instruction.
+	source fmt.Stringer
 
 	// bpfMap denotes the Map whose fd is used by this instruction.
 	bpfMap FDer
@@ -462,6 +489,15 @@ func (m *metadata) Map() FDer {
 		return nil
 	}
 	return m.bpfMap
+}
+
+// Source is a safe accessor to metadata's source field.
+// It can be called on a nil m, in which case it will return the default value.
+func (m *metadata) Source() fmt.Stringer {
+	if m == nil {
+		return nil
+	}
+	return m.source
 }
 
 // copy returns a copy of metadata.
@@ -696,6 +732,12 @@ func (insns Instructions) Format(f fmt.State, c rune) {
 	for iter.Next() {
 		if iter.Ins.Symbol() != "" {
 			fmt.Fprintf(f, "%s%s:\n", symIndent, iter.Ins.Symbol())
+		}
+		if src := iter.Ins.Source(); src != nil {
+			line := strings.TrimSpace(src.String())
+			if line != "" {
+				fmt.Fprintf(f, "%s%*s; %s\n", indent, offsetWidth, " ", line)
+			}
 		}
 		fmt.Fprintf(f, "%s%*d: %v\n", indent, offsetWidth, iter.Offset, iter.Ins)
 	}

@@ -3,6 +3,7 @@ package ebpf
 import (
 	"bytes"
 	"fmt"
+	"math"
 
 	"github.com/cilium/ebpf/asm"
 )
@@ -120,7 +121,8 @@ func fixupAndValidate(insns asm.Instructions) error {
 	for iter.Next() {
 		ins := iter.Ins
 
-		if ins.IsLoadFromMap() && ins.MapPtr() == -1 {
+		fd := int(int32(uint64(ins.Constant) & math.MaxUint32))
+		if ins.IsLoadFromMap() && fd <= 0 && ins.Map() == nil {
 			return fmt.Errorf("instruction %d: map %s: %w", iter.Index, ins.Reference(), asm.ErrUnsatisfiedMapReference)
 		}
 

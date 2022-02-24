@@ -450,12 +450,6 @@ func (ec *elfCode) relocateInstruction(ins *asm.Instruction, rel elf.Symbol) err
 
 		ins.Src = asm.PseudoMapFD
 
-		// Mark the instruction as needing an update when creating the
-		// collection.
-		if err := ins.RewriteMapPtr(-1); err != nil {
-			return err
-		}
-
 	case dataSection:
 		var offset uint32
 		switch typ {
@@ -488,12 +482,6 @@ func (ec *elfCode) relocateInstruction(ins *asm.Instruction, rel elf.Symbol) err
 		// The kernel expects the offset in the second basic BPF instruction.
 		ins.Constant = int64(uint64(offset) << 32)
 		ins.Src = asm.PseudoMapValue
-
-		// Mark the instruction as needing an update when creating the
-		// collection.
-		if err := ins.RewriteMapPtr(-1); err != nil {
-			return err
-		}
 
 	case programSection:
 		switch opCode := ins.OpCode; {

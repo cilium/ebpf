@@ -120,7 +120,8 @@ func fixupAndValidate(insns asm.Instructions) error {
 	for iter.Next() {
 		ins := iter.Ins
 
-		if ins.IsLoadFromMap() && ins.MapPtr() == -1 {
+		// Map load was tagged with a Reference, but does not contain a Map pointer.
+		if ins.IsLoadFromMap() && ins.Reference() != "" && ins.Map() == nil {
 			return fmt.Errorf("instruction %d: map %s: %w", iter.Index, ins.Reference(), asm.ErrUnsatisfiedMapReference)
 		}
 

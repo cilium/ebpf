@@ -375,6 +375,21 @@ func (ins Instruction) Reference() string {
 	return ins.metadata.Reference()
 }
 
+// WithSource adds information about the origin/source of the instruction.
+func (ins Instruction) WithSource(src fmt.Stringer) Instruction {
+	if ins.Source() == src {
+		return ins
+	}
+
+	ins.copyMetadata().source = src
+	return ins
+}
+
+// Source returns information about the origin/source of the instruction.
+func (ins Instruction) Source() fmt.Stringer {
+	return ins.metadata.Source()
+}
+
 // copyMetadata is a convenience method for copying ins.metadata, assigning
 // the new copy to its metadata field and returning a pointer to the copy
 // so one access can be chained.
@@ -406,6 +421,8 @@ type metadata struct {
 	reference string
 	// symbol denotes an instruction at the start of a function body.
 	symbol string
+	// source denotes information about the origin/source of the instruction.
+	source fmt.Stringer
 
 	// bpfMap denotes the *ebpf.Map from which this instruction preforms a data.
 	bpfMap FDer
@@ -427,6 +444,15 @@ func (m *metadata) Symbol() string {
 		return ""
 	}
 	return m.symbol
+}
+
+// Source is a safe accessor to metadata's source field.
+// It can be called on a nil m, in which case it will return the default value.
+func (m *metadata) Source() fmt.Stringer {
+	if m == nil {
+		return nil
+	}
+	return m.source
 }
 
 // copy returns a copy of metadata.
@@ -661,6 +687,12 @@ func (insns Instructions) Format(f fmt.State, c rune) {
 	for iter.Next() {
 		if iter.Ins.Symbol() != "" {
 			fmt.Fprintf(f, "%s%s:\n", symIndent, iter.Ins.Symbol())
+		}
+		if ctx := iter.Ins.Source(); ctx != nil {
+			line := strings.TrimSpace(ctx.String())
+			if line != "" {
+				fmt.Fprintf(f, "%s%*s; %s\n", indent, offsetWidth, " ", line)
+			}
 		}
 		fmt.Fprintf(f, "%s%*d: %v\n", indent, offsetWidth, iter.Offset, iter.Ins)
 	}

@@ -190,6 +190,22 @@ func loadSpecFromELF(file *internal.SafeELFFile) (*Spec, error) {
 	return spec, nil
 }
 
+// GetFuncLineInfos returns a map of LineInfo's for the given function name. The map is indexes by the
+// instruction offset of the lineInfo.
+func (spec *Spec) GetFuncLineInfos(funcName string) map[uint32]LineInfo {
+	if spec.lineInfos == nil {
+		return make(map[uint32]LineInfo)
+	}
+
+	infos := spec.lineInfos[funcName]
+	m := make(map[uint32]LineInfo, len(infos))
+	for _, lineInfo := range infos {
+		m[lineInfo.insnOff] = lineInfo
+	}
+
+	return m
+}
+
 // splitExtInfos takes FuncInfos, LineInfos and CoreRelos indexed by section and
 // transforms them to be indexed by function. Retrieves function names from
 // the BTF spec.

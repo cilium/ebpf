@@ -387,6 +387,27 @@ func (ins Instruction) Reference() string {
 	return ins.metadata.reference
 }
 
+// WithContext adds information about the origin/source of the instruction.
+func (ins Instruction) WithContext(ctx fmt.Stringer) Instruction {
+	if (ins.metadata != nil && ins.metadata.context == ctx) ||
+		(ins.metadata == nil && ctx == nil) {
+		return ins
+	}
+
+	ins.metadata = ins.metadata.copy()
+	ins.metadata.context = ctx
+	return ins
+}
+
+// Context denotes information about the origin/source of the instruction.
+func (ins Instruction) Context() fmt.Stringer {
+	if ins.metadata == nil {
+		return nil
+	}
+
+	return ins.metadata.context
+}
+
 // setMap sets the *ebpf.Map from which this instruction preforms a data.
 func (ins *Instruction) setMap(m FDer) {
 	if (ins.metadata != nil && ins.metadata.bpfMap == m) ||
@@ -410,6 +431,8 @@ type metadata struct {
 	reference string
 	// symbol denotes an instruction at the start of a function body.
 	symbol string
+	// context denotes information about the origin/source of the instruction.
+	context fmt.Stringer
 
 	// bpfMap denotes the *ebpf.Map from which this instruction preforms a data.
 	bpfMap FDer
@@ -647,6 +670,12 @@ func (insns Instructions) Format(f fmt.State, c rune) {
 	for iter.Next() {
 		if iter.Ins.Symbol() != "" {
 			fmt.Fprintf(f, "%s%s:\n", symIndent, iter.Ins.Symbol())
+		}
+		if ctx := iter.Ins.Context(); ctx != nil {
+			line := strings.TrimSpace(ctx.String())
+			if line != "" {
+				fmt.Fprintf(f, "%s%*s; %s\n", indent, offsetWidth, " ", line)
+			}
 		}
 		fmt.Fprintf(f, "%s%*d: %v\n", indent, offsetWidth, iter.Offset, iter.Ins)
 	}

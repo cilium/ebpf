@@ -42,13 +42,11 @@ type Instruction struct {
 // WithSymbol marks the Instruction as a Symbol, which other Instructions
 // can point to using corresponding calls to WithReference.
 func (ins Instruction) WithSymbol(name string) Instruction {
-	if (ins.metadata != nil && ins.metadata.symbol == name) ||
-		(ins.metadata == nil && name == "") {
+	if ins.Symbol() == name {
 		return ins
 	}
 
-	ins.metadata = ins.metadata.copy()
-	ins.metadata.symbol = name
+	ins.copyMetadata().symbol = name
 	return ins
 }
 
@@ -63,11 +61,7 @@ func (ins Instruction) Sym(name string) Instruction {
 // otherwise returns an empty string. A symbol is often an Instruction
 // at the start of a function body.
 func (ins Instruction) Symbol() string {
-	if ins.metadata == nil {
-		return ""
-	}
-
-	return ins.metadata.symbol
+	return ins.metadata.Symbol()
 }
 
 // Unmarshal decodes a BPF instruction.
@@ -341,23 +335,25 @@ func (ins Instruction) Size() uint64 {
 
 // WithReference makes ins reference another Symbol or map by name.
 func (ins Instruction) WithReference(ref string) Instruction {
-	if (ins.metadata != nil && ins.metadata.reference == ref) ||
-		(ins.metadata == nil && ref == "") {
+	if ins.Reference() == ref {
 		return ins
 	}
 
-	ins.metadata = ins.metadata.copy()
-	ins.metadata.reference = ref
+	ins.copyMetadata().reference = ref
 	return ins
 }
 
 // Reference returns the Symbol or map name referenced by ins, if any.
 func (ins Instruction) Reference() string {
-	if ins.metadata == nil {
-		return ""
-	}
+	return ins.metadata.Reference()
+}
 
-	return ins.metadata.reference
+// copyMetadata is a convenience method for copying ins.metadata, assigning
+// the new copy to its metadata field and returning a pointer to the copy
+// so one access can be chained.
+func (ins *Instruction) copyMetadata() *metadata {
+	ins.metadata = ins.metadata.copy()
+	return ins.metadata
 }
 
 // metadata holds metadata about an Instruction.
@@ -366,6 +362,24 @@ type metadata struct {
 	reference string
 	// symbol denotes an instruction at the start of a function body.
 	symbol string
+}
+
+// Reference is a safe accessor to metadata's reference field.
+// It can be called on a nil m, in which case it will return the default value.
+func (m *metadata) Reference() string {
+	if m == nil {
+		return ""
+	}
+	return m.reference
+}
+
+// Symbol is a safe accessor to metadata's symbol field.
+// It can be called on a nil m, in which case it will return the default value.
+func (m *metadata) Symbol() string {
+	if m == nil {
+		return ""
+	}
+	return m.symbol
 }
 
 // copy returns a copy of metadata.

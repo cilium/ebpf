@@ -39,31 +39,6 @@ type Instruction struct {
 	metadata *metadata
 }
 
-// WithSymbol marks the Instruction as a Symbol, which other Instructions
-// can point to using corresponding calls to WithReference.
-func (ins Instruction) WithSymbol(name string) Instruction {
-	if ins.Symbol() == name {
-		return ins
-	}
-
-	ins.copyMetadata().symbol = name
-	return ins
-}
-
-// Sym creates a symbol.
-//
-// Deprecated: use WithSymbol instead.
-func (ins Instruction) Sym(name string) Instruction {
-	return ins.WithSymbol(name)
-}
-
-// Symbol returns the value ins has been marked with using WithSymbol,
-// otherwise returns an empty string. A symbol is often an Instruction
-// at the start of a function body.
-func (ins Instruction) Symbol() string {
-	return ins.metadata.Symbol()
-}
-
 // Unmarshal decodes a BPF instruction.
 func (ins *Instruction) Unmarshal(r io.Reader, bo binary.ByteOrder) (uint64, error) {
 	data := make([]byte, InstructionSize)
@@ -331,6 +306,31 @@ func (ins Instruction) equal(other Instruction) bool {
 // Size returns the amount of bytes ins would occupy in binary form.
 func (ins Instruction) Size() uint64 {
 	return uint64(InstructionSize * ins.OpCode.rawInstructions())
+}
+
+// WithSymbol marks the Instruction as a Symbol, which other Instructions
+// can point to using corresponding calls to WithReference.
+func (ins Instruction) WithSymbol(name string) Instruction {
+	if ins.Symbol() == name {
+		return ins
+	}
+
+	ins.copyMetadata().symbol = name
+	return ins
+}
+
+// Sym creates a symbol.
+//
+// Deprecated: use WithSymbol instead.
+func (ins Instruction) Sym(name string) Instruction {
+	return ins.WithSymbol(name)
+}
+
+// Symbol returns the value ins has been marked with using WithSymbol,
+// otherwise returns an empty string. A symbol is often an Instruction
+// at the start of a function body.
+func (ins Instruction) Symbol() string {
+	return ins.metadata.Symbol()
 }
 
 // WithReference makes ins reference another Symbol or map by name.

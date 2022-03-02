@@ -319,21 +319,4 @@ func TestMetadataCopyOnWrite(t *testing.T) {
 	if insn[0].metadata == insn2[0].metadata {
 		t.Fatal("changed instruction should not be equal")
 	}
-
-	// Set the reference, then clear it. Causing us to have a nil in one instruction and an empty metadata in the
-	// other.
-	insn[1] = insn[1].WithReference("SomeValue")
-	insn[1] = insn[1].WithReference("")
-
-	// Metadata is value compared, not pointer compared, so so these should still be equal
-	if !insn[1].equal(insn2[1]) {
-		t.Fatal("instructions with nil and empty metadata should be equal")
-	}
-
-	insn[1] = insn[1].WithReference("abc")
-	insn2[1] = insn2[1].WithReference("abc")
-
-	if !insn[1].equal(insn2[1]) {
-		t.Fatal("instructions with the same effective metadata should be equal")
-	}
 }

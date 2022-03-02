@@ -176,12 +176,19 @@ func TestInstructionsRewriteMapPtr(t *testing.T) {
 	}
 }
 
+type Comment string
+
+func (s Comment) String() string {
+	return string(s)
+}
+
 // You can use format flags to change the way an eBPF
 // program is stringified.
 func ExampleInstructions_Format() {
+
 	insns := Instructions{
-		FnMapLookupElem.Call().WithSymbol("my_func"),
-		LoadImm(R0, 42, DWord),
+		FnMapLookupElem.Call().WithSymbol("my_func").WithSource(Comment("bpf_map_lookup_elem()")),
+		LoadImm(R0, 42, DWord).WithSource(Comment("abc = 42")),
 		Return(),
 	}
 
@@ -199,25 +206,33 @@ func ExampleInstructions_Format() {
 
 	// Output: Default format:
 	// my_func:
+	//	 ; bpf_map_lookup_elem()
 	// 	0: Call FnMapLookupElem
+	//	 ; abc = 42
 	// 	1: LdImmDW dst: r0 imm: 42
 	// 	3: Exit
 	//
 	// Don't indent instructions:
 	// my_func:
+	//  ; bpf_map_lookup_elem()
 	// 0: Call FnMapLookupElem
+	//  ; abc = 42
 	// 1: LdImmDW dst: r0 imm: 42
 	// 3: Exit
 	//
 	// Indent using spaces:
 	// my_func:
+	//   ; bpf_map_lookup_elem()
 	//  0: Call FnMapLookupElem
+	//   ; abc = 42
 	//  1: LdImmDW dst: r0 imm: 42
 	//  3: Exit
 	//
 	// Control symbol indentation:
 	// 		my_func:
+	//	 ; bpf_map_lookup_elem()
 	// 	0: Call FnMapLookupElem
+	//	 ; abc = 42
 	// 	1: LdImmDW dst: r0 imm: 42
 	// 	3: Exit
 }
@@ -277,5 +292,48 @@ func TestInstructionIterator(t *testing.T) {
 		if iter.Offset != offsets[i] {
 			t.Errorf("Expected iter.Offset to be %d, got %d", offsets[i], iter.Offset)
 		}
+	}
+}
+
+func TestMetadataCopyOnWrite(t *testing.T) {
+	insn := Instructions{
+		JEq.Imm(R1, 123, "my_func"),
+		Mov.Reg(R2, R1),
+		Mul.Reg(R1, R2),
+	}
+
+	insn2 := make([]Instruction, len(insn))
+	copy(insn2, insn)
+
+	// Setting the reference should have copied the metadata object and not effected the exiting pointer
+	insn2[0] = insn2[0].WithReference("my_func2")
+
+	if insn[0].Reference() != "my_func" {
+		t.Fatal("metadata modification to copied instruction effected the old instruction")
+	}
+
+	if insn2[0].Reference() != "my_func2" {
+		t.Fatal("SetReference didn't update new instruction")
+	}
+
+	if insn[0].metadata == insn2[0].metadata {
+		t.Fatal("changed instruction should not be equal")
+	}
+
+	// Set the reference, then clear it. Causing us to have a nil in one instruction and an empty metadata in the
+	// other.
+	insn[1] = insn[1].WithReference("SomeValue")
+	insn[1] = insn[1].WithReference("")
+
+	// Metadata is value compared, not pointer compared, so so these should still be equal
+	if !insn[1].equal(insn2[1]) {
+		t.Fatal("instructions with nil and empty metadata should be equal")
+	}
+
+	insn[1] = insn[1].WithReference("abc")
+	insn2[1] = insn2[1].WithReference("abc")
+
+	if !insn[1].equal(insn2[1]) {
+		t.Fatal("instructions with the same effective metadata should be equal")
 	}
 }

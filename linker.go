@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/cilium/ebpf/asm"
+	"github.com/cilium/ebpf/internal/btf"
 )
 
 // The linker is responsible for resolving bpf-to-bpf calls between programs
@@ -78,6 +79,24 @@ func findReferences(progs map[string]*ProgramSpec) error {
 	}
 
 	return nil
+}
+
+// collectCoreRelos returns a list of CO-RE relocations of the layout's progs
+// in order.
+func collectCoreRelos(layout []reference) btf.CoreRelos {
+	if len(layout) == 0 {
+		return nil
+	}
+
+	var relos btf.CoreRelos
+	for _, sym := range layout {
+		if sym.spec.BTF == nil {
+			continue
+		}
+		relos = append(relos, sym.spec.BTF.CoreRelos.Offset(uint32(sym.offset))...)
+	}
+
+	return relos
 }
 
 // marshalFuncInfos returns the BTF func infos of all progs in order.

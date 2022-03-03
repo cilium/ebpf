@@ -217,10 +217,10 @@ func coreRelocate(local, target *Spec, relos CoreRelos) (COREFixups, error) {
 			}
 
 			result[uint64(relo.insnOff)] = COREFixup{
-				Kind:   relo.kind,
-				Local:  OptionalLocalValue(relo.typeID),
-				Target: uint32(relo.typeID),
-				Poison: false,
+				relo.kind,
+				OptionalLocalValue(relo.typeID),
+				uint32(relo.typeID),
+				false,
 			}
 			continue
 		}
@@ -573,7 +573,7 @@ func adjustOffset(base uint32, t Type, n int) (uint32, error) {
 
 // calculateBitfieldLoad computes the size and offset for loading a bitfield from
 // the target structure.
-func calculateBitfieldLoad(bitOffset, bitSize int) (size int, offset int, err error) {
+func calculateBitfieldLoad(bitOffset, bitSize uint32) (size uint32, offset uint32, err error) {
 	// Start with the smallest possible aligned load before the bit offset.
 	size = 1
 	offset = bitOffset / 8 / size * size
@@ -581,7 +581,8 @@ func calculateBitfieldLoad(bitOffset, bitSize int) (size int, offset int, err er
 	// Iterate until the load is large enough to capture the target bitfield.
 	for bitOffset+bitSize > (offset+size)*8 {
 		if size >= 8 {
-			return -1, -1, fmt.Errorf("could not calculate bitfield load: load size too large (%dB)", size)
+			return 0, 0, fmt.Errorf("could not calculate bitfield load: 64-bit aligned load from %d not large enough to capture field at offset %d of %d bits",
+				offset, bitOffset, bitSize)
 		}
 		// Double the size of the load and recompute the offset.
 		size *= 2
@@ -655,22 +656,21 @@ func coreFindField(local Type, localAcc coreAccessor, target Type) (coreField, c
 			targetOffset += targetMember.OffsetBits
 
 			if targetMember.BitfieldSize > 0 {
-				// For bitfields we compute the offset from which to load
-				// the value, and we include the offset of the bitfield and its
+				// For bitfields we compute the offsetBytes from which to load
+				// the value, and we include the offsetBytes of the bitfield and its
 				// size in 'coreField' so we can later compute the proper bit shift.
-				size, offset, err := calculateBitfieldLoad(int(targetOffset), int(targetMember.BitfieldSize))
+				loadSizeBytes, offsetBytes, err := calculateBitfieldLoad(targetOffset, targetMember.BitfieldSize)
 				if err != nil {
 					return coreField{}, coreField{}, err
 				}
-
 				// Adjust the load instruction, if needed.
-				if targetLoad, ok := target.(*Int); ok && targetLoad.Size != uint32(size) {
+				if targetLoad, ok := target.(*Int); ok && targetLoad.Size != loadSizeBytes {
 					target = target.copy()
-					target.(*Int).Size = uint32(size)
+					target.(*Int).Size = loadSizeBytes
 				}
 
 				return coreField{local, localOffset, localMember.OffsetBits, localMember.BitfieldSize},
-					coreField{target, uint32(offset * 8), targetMember.OffsetBits, targetMember.BitfieldSize},
+					coreField{target, offsetBytes * 8, targetMember.OffsetBits, targetMember.BitfieldSize},
 					nil
 			} else if localMember.BitfieldSize > 0 {
 				// Going from a bitfield to a normal field. Special-cased here as we cannot

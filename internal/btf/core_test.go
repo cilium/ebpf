@@ -446,14 +446,14 @@ func TestCoreFindField(t *testing.T) {
 			"struct.3 (bitfield quux)",
 			aStruct, bStruct,
 			coreAccessor{0, 3},
-			coreField{u32, 32, 35, 10},
+			coreField{u32, 35, 35, 10},
 			coreField{u16, 64, 67, 10},
 		},
 		{
 			"struct.4 (bitfield quuz)",
 			aStruct, bStruct,
 			coreAccessor{0, 4},
-			coreField{u32, 32, 45, 3},
+			coreField{u32, 45, 45, 3},
 			coreField{u8, 72, 77, 3},
 		},
 	}
@@ -468,11 +468,34 @@ func TestCoreFindField(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			localField, targetField, err := coreFindField(test.local, test.acc, test.target)
 			qt.Assert(t, err, qt.IsNil)
-			if localField.bitfieldSize == 0 {
-				checkCoreField(t, localField, test.localField)
-			}
+			checkCoreField(t, localField, test.localField)
 			checkCoreField(t, targetField, test.targetField)
 		})
+	}
+}
+
+func TestCalculateBitfieldLoad(t *testing.T) {
+	for bitOffset := uint32(0); bitOffset < 256; bitOffset++ {
+		for bitSize := uint32(1); bitSize <= 32; bitSize++ {
+			loadSize, offset, err := calculateBitfieldLoad(bitOffset, bitSize)
+
+			if err != nil {
+				t.Errorf("calculating bitfield load failed: %s", err)
+			}
+
+			if offset%loadSize != 0 {
+				t.Errorf("offset %d is not aligned to %d bytes", offset, loadSize)
+			}
+
+			if offset*8 > bitOffset {
+				t.Errorf("load offset %d is after the bitfield start %d", offset*8, bitOffset)
+			}
+
+			loadEndBits := (offset + loadSize) * 8
+			if loadEndBits < bitOffset+bitSize {
+				t.Errorf("load too small: %d < %d", loadEndBits, bitOffset+bitSize)
+			}
+		}
 	}
 }
 

@@ -247,7 +247,7 @@ struct bitfield {
 	unsigned int c1:1, c5:5, c10:10;
 };
 
-__section("socket_filter/k54_bitfields") int bitfields() {
+__section("socket_filter/bitfields") int bitfields() {
 	struct bitfield bs = {};
 	if (BPF_CORE_READ_BITFIELD(&bs, b1)) return __LINE__;
 	if (BPF_CORE_READ_BITFIELD(&bs, b5)) return __LINE__;

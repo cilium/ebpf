@@ -398,15 +398,13 @@ func (ins *Instruction) copyMetadata() *metadata {
 	return ins.metadata
 }
 
-// setMap sets the *ebpf.Map from which this instruction preforms a data.
+// setMap sets the given Map `m` in the metadata of this instruction.
 func (ins *Instruction) setMap(m FDer) {
-	if (ins.metadata != nil && ins.metadata.bpfMap == m) ||
-		(ins.metadata == nil && m == nil) {
+	if ins.metadata.Map() == m {
 		return
 	}
 
-	ins.metadata = ins.metadata.copy()
-	ins.metadata.bpfMap = m
+	ins.copyMetadata().bpfMap = m
 }
 
 // FDer isn't actually used as a meaningful interface, rater it is used because we can't directly use types from the
@@ -424,7 +422,7 @@ type metadata struct {
 	// source denotes information about the origin/source of the instruction.
 	source fmt.Stringer
 
-	// bpfMap denotes the *ebpf.Map from which this instruction preforms a data.
+	// bpfMap denotes the Map whose fd is used by this instruction.
 	bpfMap FDer
 }
 
@@ -453,6 +451,15 @@ func (m *metadata) Source() fmt.Stringer {
 		return nil
 	}
 	return m.source
+}
+
+// Map is a safe accessor to metadata's bpfMap field.
+// It can be called on a nil m, in which case it will return the default value.
+func (m *metadata) Map() FDer {
+	if m == nil {
+		return nil
+	}
+	return m.bpfMap
 }
 
 // copy returns a copy of metadata.
@@ -688,8 +695,8 @@ func (insns Instructions) Format(f fmt.State, c rune) {
 		if iter.Ins.Symbol() != "" {
 			fmt.Fprintf(f, "%s%s:\n", symIndent, iter.Ins.Symbol())
 		}
-		if ctx := iter.Ins.Source(); ctx != nil {
-			line := strings.TrimSpace(ctx.String())
+		if src := iter.Ins.Source(); src != nil {
+			line := strings.TrimSpace(src.String())
 			if line != "" {
 				fmt.Fprintf(f, "%s%*s; %s\n", indent, offsetWidth, " ", line)
 			}

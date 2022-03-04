@@ -73,3 +73,47 @@ func TestTraceEventRegex(t *testing.T) {
 		})
 	}
 }
+
+func TestHaveBPFLinkPerfEvent(t *testing.T) {
+	testutils.CheckFeatureTest(t, haveBPFLinkPerfEvent)
+}
+
+/*
+func TestLoadPinnedPerfLink(t *testing.T) {
+	testutils.SkipOnOldKernel(t, "5.15", "bpf_perf_link")
+
+	link, err := Kprobe("vprintk", mustLoadProgram(t, ebpf.Kprobe, 0, ""), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = link.Disconnect()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	info, err := link.Info()
+	if err != nil {
+		t.Fatal(err)
+	}
+	fmt.Println(info)
+
+	tmp, err := os.MkdirTemp("/sys/fs/bpf", "perf_link")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tmp)
+
+	path := filepath.Join(tmp, "link")
+
+	err = link.Pin(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	pinned, err := LoadPinnedLink(path, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer pinned.Close()
+}
+*/

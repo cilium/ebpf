@@ -70,6 +70,11 @@ type UprobeOptions struct {
 	// github.com/torvalds/linux/commit/1cc33161a83d
 	// github.com/torvalds/linux/commit/a6ca88b241d5
 	RefCtrOffset uint64
+	// Arbitrary value that can be fetched from an eBPF program
+	// via `bpf_get_attach_cookie()`.
+	//
+	// Needs kernel 5.15+.
+	Cookie uint64
 }
 
 // To open a new Executable, use:
@@ -197,13 +202,7 @@ func (ex *Executable) Uprobe(symbol string, prog *ebpf.Program, opts *UprobeOpti
 		return nil, err
 	}
 
-	err = u.attach(prog)
-	if err != nil {
-		u.Close()
-		return nil, err
-	}
-
-	return u, nil
+	return attachPerfEvent(u, prog)
 }
 
 // Uretprobe attaches the given eBPF program to a perf event that fires right
@@ -229,13 +228,7 @@ func (ex *Executable) Uretprobe(symbol string, prog *ebpf.Program, opts *UprobeO
 		return nil, err
 	}
 
-	err = u.attach(prog)
-	if err != nil {
-		u.Close()
-		return nil, err
-	}
-
-	return u, nil
+	return attachPerfEvent(u, prog)
 }
 
 // uprobe opens a perf event for the given binary/symbol and attaches prog to it.
@@ -278,6 +271,7 @@ func (ex *Executable) uprobe(symbol string, prog *ebpf.Program, opts *UprobeOpti
 		pid:          pid,
 		refCtrOffset: opts.RefCtrOffset,
 		ret:          ret,
+		cookie:       opts.Cookie,
 	}
 
 	// Use uprobe PMU if the kernel has it available.

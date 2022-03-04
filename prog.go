@@ -331,7 +331,7 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions, handles *hand
 	}
 
 	if err := fixupAndValidate(insns); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("fixup and validate: %w", err)
 	}
 
 	buf := bytes.NewBuffer(make([]byte, 0, insns.Size()))

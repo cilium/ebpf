@@ -447,6 +447,17 @@ type CoreRelo struct {
 
 type CoreRelos []CoreRelo
 
+// Offset adds offset to the instruction offset of all CoreRelos
+// and returns the result.
+func (cr CoreRelos) Offset(offset uint32) CoreRelos {
+	var relos CoreRelos
+	for _, relo := range cr {
+		relo.insnOff += offset
+		relos = append(relos, relo)
+	}
+	return relos
+}
+
 var extInfoReloSize = binary.Size(bpfCoreRelo{})
 
 // parseCoreRelos parses a core_relos sub-section within .BTF.ext ito a map of

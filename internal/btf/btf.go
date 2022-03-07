@@ -843,11 +843,11 @@ func (p *Program) Spec() *Spec {
 	return p.spec
 }
 
-// Fixups returns the changes required to adjust the program to the target.
+// CORERelocate returns the changes required to adjust the program to the target.
 //
 // Passing a nil target will relocate against the running kernel.
-func (p *Program) Fixups(target *Spec) (COREFixups, error) {
-	if len(p.CoreRelos) == 0 {
+func CORERelocate(local, target *Spec, relos CoreRelos) (COREFixups, error) {
+	if len(relos) == 0 {
 		return nil, nil
 	}
 
@@ -859,7 +859,7 @@ func (p *Program) Fixups(target *Spec) (COREFixups, error) {
 		}
 	}
 
-	return coreRelocate(p.spec, target, p.CoreRelos)
+	return coreRelocate(local, target, relos)
 }
 
 func marshalBTF(types interface{}, strings []byte, bo binary.ByteOrder) []byte {

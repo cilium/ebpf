@@ -35,7 +35,9 @@ TARGETS := \
 	testdata/map_spin_lock \
 	testdata/subprog_reloc \
 	testdata/fwd_decl \
-	internal/btf/testdata/relocs
+	internal/btf/testdata/relocs \
+	internal/btf/testdata/relocs_read \
+	internal/btf/testdata/relocs_read_tgt
 
 .PHONY: all clean container-all container-shell generate
 

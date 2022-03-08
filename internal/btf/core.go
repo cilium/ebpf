@@ -681,7 +681,7 @@ func coreFindField(local Type, localAcc coreAccessor, target Type) (coreField, c
 			} else {
 				// Going from a bitfield to a normal field. Since the original BTF had it as a bitfield, we'll
 				// need to "emulate" a bitfield in target to compute the shifts correctly.
-				targetBitfieldSize = uint32(targetSize)
+				targetBitfieldSize = uint32(targetSize * 8)
 			}
 
 			if err := coreAreMembersCompatible(local, target); err != nil {

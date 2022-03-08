@@ -647,31 +647,39 @@ func coreFindField(local Type, localAcc coreAccessor, target Type) (coreField, c
 			targetMaybeFlex = last
 			targetOffset += targetMember.OffsetBits
 
+			if targetMember.BitfieldSize == 0 && localMember.BitfieldSize == 0 {
+				break
+			}
+
+			targetInt, ok := target.(*Int)
+			if !ok {
+				return coreField{}, coreField{}, fmt.Errorf("target not int: %w", errImpossibleRelocation)
+			}
+
+			targetBitfieldOffset := targetOffset
+			var targetBitfieldSize uint32
+
 			if targetMember.BitfieldSize > 0 {
-				targetInt, ok := target.(*Int)
-				if !ok {
-					return coreField{}, coreField{}, fmt.Errorf("target not int: %w", errImpossibleRelocation)
-				}
 				// From the target BTF, we know the word size of the field containing the target bitfield
 				// and we know the bitfields offset in bits, and since we know the load is aligned, we can
 				// compute the load offset by:
 				// 1) convert the bit offset to bytes with a flooring division, yielding "byte" aligned offset.
 				// 2) dividing and multiplying that offset by the load size, yielding the target load size aligned offset.
-				offsetBytes := targetOffset / 8 / targetInt.Size * targetInt.Size
-				return coreField{local, localOffset, localMember.OffsetBits, localMember.BitfieldSize},
-					coreField{target, offsetBytes * 8, targetMember.OffsetBits, targetMember.BitfieldSize},
-					nil
-			} else if localMember.BitfieldSize > 0 {
+				targetBitfieldSize = targetMember.BitfieldSize
+				targetOffset = 8 * (targetOffset / 8 / targetInt.Size * targetInt.Size)
+			} else {
 				// Going from a bitfield to a normal field. Since the original BTF had it as a bitfield, we'll
 				// need to "emulate" a bitfield in target to compute the shifts correctly.
-				targetInt, ok := target.(*Int)
-				if !ok {
-					return coreField{}, coreField{}, fmt.Errorf("target not int: %w", errImpossibleRelocation)
-				}
-				return coreField{local, localOffset, localMember.OffsetBits, localMember.BitfieldSize},
-					coreField{target, targetOffset, targetMember.OffsetBits, targetInt.Size},
-					nil
+				targetBitfieldSize = targetInt.Size
 			}
+
+			if err := coreAreMembersCompatible(local, target); err != nil {
+				return coreField{}, coreField{}, err
+			}
+
+			return coreField{local, localOffset, localMember.OffsetBits, localMember.BitfieldSize},
+				coreField{target, targetOffset, targetBitfieldOffset, targetBitfieldSize},
+				nil
 
 		case *Array:
 			// For arrays, acc is the index in the target.

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"math"
@@ -141,7 +142,7 @@ func TestInstructionLoadMapValue(t *testing.T) {
 	if !ins.IsLoadFromMap() {
 		t.Error("isLoadFromMap returns false")
 	}
-	if fd := ins.MapPtr(); fd != 1 {
+	if fd := ins.mapFd(); fd != 1 {
 		t.Error("Expected map fd to be 1, got", fd)
 	}
 	if off := ins.mapOffset(); off != 123 {
@@ -171,7 +172,7 @@ func TestInstructionsRewriteMapPtr(t *testing.T) {
 		t.Error("Constant should be 2, have", insns[0].Constant)
 	}
 
-	if err := insns.RewriteMapPtr("bad", 1); !IsUnreferencedSymbol(err) {
+	if err := insns.RewriteMapPtr("bad", 1); !errors.Is(err, ErrUnreferencedSymbol) {
 		t.Error("Rewriting unreferenced map doesn't return appropriate error")
 	}
 }

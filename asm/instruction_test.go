@@ -141,7 +141,7 @@ func TestInstructionLoadMapValue(t *testing.T) {
 	if !ins.IsLoadFromMap() {
 		t.Error("isLoadFromMap returns false")
 	}
-	if fd := ins.MapPtr(); fd != 1 {
+	if fd := ins.mapFd(); fd != 1 {
 		t.Error("Expected map fd to be 1, got", fd)
 	}
 	if off := ins.mapOffset(); off != 123 {

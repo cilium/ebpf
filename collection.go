@@ -5,13 +5,11 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"math"
 	"reflect"
 	"strings"
 
 	"github.com/cilium/ebpf/asm"
 	"github.com/cilium/ebpf/internal/btf"
-	"github.com/cilium/ebpf/internal/sys"
 )
 
 // CollectionOptions control loading a collection into the kernel.
@@ -70,15 +68,14 @@ func (cs *CollectionSpec) RewriteMaps(maps map[string]*Map) error {
 	for symbol, m := range maps {
 		// have we seen a program that uses this symbol / map
 		seen := false
-		fd := m.FD()
 		for progName, progSpec := range cs.Programs {
-			err := progSpec.Instructions.RewriteMapPtr(symbol, fd)
+			err := progSpec.Instructions.AssociateMap(symbol, m)
 
 			switch {
 			case err == nil:
 				seen = true
 
-			case asm.IsUnreferencedSymbol(err):
+			case errors.Is(err, asm.ErrUnreferencedSymbol):
 				// Not all programs need to use the map
 
 			default:
@@ -469,9 +466,10 @@ func (cl *collectionLoader) loadProgram(progName string) (*Program, error) {
 			continue
 		}
 
-		if uint32(ins.Constant) != math.MaxUint32 {
-			// Don't overwrite maps already rewritten, users can
-			// rewrite programs in the spec themselves
+		// Don't overwrite map loads containing non-zero map fd's,
+		// they can be manually included by the caller.
+		// Map FDs/IDs are placed in the lower 32 bits of Constant.
+		if int32(ins.Constant) > 0 {
 			continue
 		}
 
@@ -480,11 +478,7 @@ func (cl *collectionLoader) loadProgram(progName string) (*Program, error) {
 			return nil, fmt.Errorf("program %s: %w", progName, err)
 		}
 
-		fd := m.FD()
-		if fd < 0 {
-			return nil, fmt.Errorf("map %s: %w", ins.Reference(), sys.ErrClosedFd)
-		}
-		if err := ins.RewriteMapPtr(m.FD()); err != nil {
+		if err := ins.AssociateMap(m); err != nil {
 			return nil, fmt.Errorf("program %s: map %s: %w", progName, ins.Reference(), err)
 		}
 	}

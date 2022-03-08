@@ -404,15 +404,19 @@ func coreCalculateFixup(byteOrder binary.ByteOrder, local Type, localID TypeID, 
 		case *Enum:
 			return fixup(1, 1)
 		case *Int:
-			return COREFixup{Kind: relo.kind,
-				Local:  unsetLocalValue,
-				Target: uint32(target.(*Int).Encoding & Signed),
-				Poison: false}, nil
+			return COREFixup{
+				relo.kind,
+				OptionalLocalValue(local.(*Int).Encoding & Signed),
+				uint32(target.(*Int).Encoding & Signed),
+				false,
+			}, nil
 		default:
-			return COREFixup{Kind: relo.kind,
-				Local:  unsetLocalValue,
-				Target: 0,
-				Poison: false}, nil
+			return COREFixup{
+				relo.kind,
+				unsetLocalValue,
+				0,
+				false,
+			}, nil
 		}
 
 	case reloFieldByteOffset, reloFieldByteSize, reloFieldExists, reloFieldLShiftU64, reloFieldRShiftU64:
@@ -441,7 +445,7 @@ func coreCalculateFixup(byteOrder binary.ByteOrder, local Type, localID TypeID, 
 
 		switch relo.kind {
 		case reloFieldExists:
-			return fixupField(1, 1)
+			return fixup(1, 1)
 
 		case reloFieldByteOffset:
 			return fixupField(localField.offset/8, targetField.offset/8)
@@ -556,10 +560,18 @@ func (ca coreAccessor) enumValue(t Type) (*EnumValue, error) {
 }
 
 type coreField struct {
-	Type           Type
-	offset         uint32
+	Type Type
+
+	// offset is the load offset of the field in bytes.
+	offset uint32
+
+	// bitfieldOffset is optional and is the offset of the bitfield in bits.
+	// Used with bitfieldSize to compute the shifts required to pull the bitfield
+	// out from the word loaded from 'offset'.
 	bitfieldOffset uint32
-	bitfieldSize   uint32
+
+	// bitfieldSize is the size of the bitfield in bits.
+	bitfieldSize uint32
 }
 
 func adjustOffset(base uint32, t Type, n int) (uint32, error) {
@@ -569,26 +581,6 @@ func adjustOffset(base uint32, t Type, n int) (uint32, error) {
 	}
 
 	return base + (uint32(n) * uint32(size) * 8), nil
-}
-
-// calculateBitfieldLoad computes the size and offset for loading a bitfield from
-// the target structure.
-func calculateBitfieldLoad(bitOffset, bitSize uint32) (size uint32, offset uint32, err error) {
-	// Start with the smallest possible aligned load before the bit offset.
-	size = 1
-	offset = bitOffset / 8 / size * size
-
-	// Iterate until the load is large enough to capture the target bitfield.
-	for bitOffset+bitSize > (offset+size)*8 {
-		if size >= 8 {
-			return 0, 0, fmt.Errorf("could not calculate bitfield load: 64-bit aligned load from %d not large enough to capture field at offset %d of %d bits",
-				offset, bitOffset, bitSize)
-		}
-		// Double the size of the load and recompute the offset.
-		size *= 2
-		offset = bitOffset / 8 / size * size
-	}
-	return size, offset, nil
 }
 
 // coreFindField descends into the local type using the accessor and tries to
@@ -656,27 +648,28 @@ func coreFindField(local Type, localAcc coreAccessor, target Type) (coreField, c
 			targetOffset += targetMember.OffsetBits
 
 			if targetMember.BitfieldSize > 0 {
-				// For bitfields we compute the offsetBytes from which to load
-				// the value, and we include the offsetBytes of the bitfield and its
-				// size in 'coreField' so we can later compute the proper bit shift.
-				loadSizeBytes, offsetBytes, err := calculateBitfieldLoad(targetOffset, targetMember.BitfieldSize)
-				if err != nil {
-					return coreField{}, coreField{}, err
+				targetInt, ok := target.(*Int)
+				if !ok {
+					return coreField{}, coreField{}, fmt.Errorf("target not int: %w", errImpossibleRelocation)
 				}
-				// Adjust the load instruction, if needed.
-				if targetLoad, ok := target.(*Int); ok && targetLoad.Size != loadSizeBytes {
-					target = target.copy()
-					target.(*Int).Size = loadSizeBytes
-				}
-
+				// From the target BTF, we know the word size of the field containing the target bitfield
+				// and we know the bitfields offset in bits, and since we know the load is aligned, we can
+				// compute the load offset by:
+				// 1) convert the bit offset to bytes with a flooring division, yielding "byte" aligned offset.
+				// 2) dividing and multiplying that offset by the load size, yielding the target load size aligned offset.
+				offsetBytes := targetOffset / 8 / targetInt.Size * targetInt.Size
 				return coreField{local, localOffset, localMember.OffsetBits, localMember.BitfieldSize},
 					coreField{target, offsetBytes * 8, targetMember.OffsetBits, targetMember.BitfieldSize},
 					nil
 			} else if localMember.BitfieldSize > 0 {
-				// Going from a bitfield to a normal field. Special-cased here as we cannot
-				// validate 'local' e.g. for byte_sz.
+				// Going from a bitfield to a normal field. Since the original BTF had it as a bitfield, we'll
+				// need to "emulate" a bitfield in target to compute the shifts correctly.
+				targetInt, ok := target.(*Int)
+				if !ok {
+					return coreField{}, coreField{}, fmt.Errorf("target not int: %w", errImpossibleRelocation)
+				}
 				return coreField{local, localOffset, localMember.OffsetBits, localMember.BitfieldSize},
-					coreField{target, targetOffset, 0, 0},
+					coreField{target, targetOffset, targetMember.OffsetBits, targetInt.Size},
 					nil
 			}
 

@@ -228,7 +228,6 @@ func TestCoreFindEnumValue(t *testing.T) {
 
 func TestCoreFindField(t *testing.T) {
 	ptr := &Pointer{}
-	u8 := &Int{Size: 1}
 	u16 := &Int{Size: 2}
 	u32 := &Int{Size: 4}
 	aFields := []Member{
@@ -236,15 +235,18 @@ func TestCoreFindField(t *testing.T) {
 		{Name: "bar", Type: u16, OffsetBits: 2},
 		{Name: "baz", Type: u32, OffsetBits: 32, BitfieldSize: 3},
 		{Name: "quux", Type: u32, OffsetBits: 35, BitfieldSize: 10},
-		{Name: "quuz", Type: u32, OffsetBits: 45, BitfieldSize: 3},
+		{Name: "quuz", Type: u32, OffsetBits: 45, BitfieldSize: 16},
 	}
 	bFields := []Member{
 		{Name: "foo", Type: ptr, OffsetBits: 10},
 		{Name: "bar", Type: u32, OffsetBits: 20},
 		{Name: "other", OffsetBits: 4},
+		// baz is separated out from the other bitfields
 		{Name: "baz", Type: u32, OffsetBits: 64, BitfieldSize: 3},
-		{Name: "quux", Type: u32, OffsetBits: 67, BitfieldSize: 10},
-		{Name: "quuz", Type: u32, OffsetBits: 77, BitfieldSize: 3},
+		// quux's type changes u32->u16
+		{Name: "quux", Type: u16, OffsetBits: 96, BitfieldSize: 10},
+		// quuz becomes a normal field
+		{Name: "quuz", Type: u16, OffsetBits: 112},
 	}
 
 	aStruct := &Struct{Members: aFields, Size: 48}
@@ -443,18 +445,25 @@ func TestCoreFindField(t *testing.T) {
 			coreField{u16, 0, 0, 0},
 		},
 		{
+			"struct.2 (bitfield baz)",
+			aStruct, bStruct,
+			coreAccessor{0, 2},
+			coreField{u32, 32, 32, 3},
+			coreField{u32, 64, 64, 3},
+		},
+		{
 			"struct.3 (bitfield quux)",
 			aStruct, bStruct,
 			coreAccessor{0, 3},
 			coreField{u32, 35, 35, 10},
-			coreField{u16, 64, 67, 10},
+			coreField{u16, 96, 96, 10},
 		},
 		{
 			"struct.4 (bitfield quuz)",
 			aStruct, bStruct,
 			coreAccessor{0, 4},
 			coreField{u32, 45, 45, 3},
-			coreField{u8, 72, 77, 3},
+			coreField{u16, 112, 112, 16},
 		},
 	}
 
@@ -471,31 +480,6 @@ func TestCoreFindField(t *testing.T) {
 			checkCoreField(t, localField, test.localField)
 			checkCoreField(t, targetField, test.targetField)
 		})
-	}
-}
-
-func TestCalculateBitfieldLoad(t *testing.T) {
-	for bitOffset := uint32(0); bitOffset < 256; bitOffset++ {
-		for bitSize := uint32(1); bitSize <= 32; bitSize++ {
-			loadSize, offset, err := calculateBitfieldLoad(bitOffset, bitSize)
-
-			if err != nil {
-				t.Errorf("calculating bitfield load failed: %s", err)
-			}
-
-			if offset%loadSize != 0 {
-				t.Errorf("offset %d is not aligned to %d bytes", offset, loadSize)
-			}
-
-			if offset*8 > bitOffset {
-				t.Errorf("load offset %d is after the bitfield start %d", offset*8, bitOffset)
-			}
-
-			loadEndBits := (offset + loadSize) * 8
-			if loadEndBits < bitOffset+bitSize {
-				t.Errorf("load too small: %d < %d", loadEndBits, bitOffset+bitSize)
-			}
-		}
 	}
 }
 

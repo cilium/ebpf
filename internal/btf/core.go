@@ -667,6 +667,16 @@ func coreFindField(local Type, localAcc coreAccessor, target Type) (coreField, c
 				// 2) dividing and multiplying that offset by the load size, yielding the target load size aligned offset.
 				targetBitfieldSize = targetMember.BitfieldSize
 				targetOffset = 8 * (targetOffset / 8 / targetInt.Size * targetInt.Size)
+
+				// As sanity check, verify that the bitfield is captured by the chosen load. This should only happen
+				// if one of the two assumptions are broken: the bitfield size is smaller than the type of the variable
+				// and that the loads are aligned.
+				if targetOffset > targetBitfieldOffset ||
+					targetOffset+targetInt.Size*8 < targetBitfieldOffset+targetMember.BitfieldSize {
+					return coreField{}, coreField{},
+						fmt.Errorf("could not find load for bitfield: load of %d bytes at %d does not capture bitfield of size %d at %d",
+							targetInt.Size, targetOffset, targetMember.BitfieldSize, targetBitfieldOffset)
+				}
 			} else {
 				// Going from a bitfield to a normal field. Since the original BTF had it as a bitfield, we'll
 				// need to "emulate" a bitfield in target to compute the shifts correctly.

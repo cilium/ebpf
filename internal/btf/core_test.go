@@ -12,7 +12,7 @@ import (
 	qt "github.com/frankban/quicktest"
 )
 
-func TestCoreAreTypesCompatible(t *testing.T) {
+func TestCOREAreTypesCompatible(t *testing.T) {
 	tests := []struct {
 		a, b       Type
 		compatible bool
@@ -83,7 +83,7 @@ func TestCoreAreTypesCompatible(t *testing.T) {
 	}
 }
 
-func TestCoreAreMembersCompatible(t *testing.T) {
+func TestCOREAreMembersCompatible(t *testing.T) {
 	tests := []struct {
 		a, b       Type
 		compatible bool
@@ -141,13 +141,13 @@ func TestCoreAreMembersCompatible(t *testing.T) {
 	}
 }
 
-func TestCoreAccessor(t *testing.T) {
+func TestCOREAccessor(t *testing.T) {
 	for _, valid := range []string{
 		"0",
 		"1:0",
 		"1:0:3:34:10:1",
 	} {
-		_, err := parseCoreAccessor(valid)
+		_, err := parseCOREAccessor(valid)
 		if err != nil {
 			t.Errorf("Parse %q: %s", valid, err)
 		}
@@ -161,14 +161,14 @@ func TestCoreAccessor(t *testing.T) {
 		":12",
 		"4294967296",
 	} {
-		_, err := parseCoreAccessor(invalid)
+		_, err := parseCOREAccessor(invalid)
 		if err == nil {
 			t.Errorf("Accepted invalid accessor %q", invalid)
 		}
 	}
 }
 
-func TestCoreFindEnumValue(t *testing.T) {
+func TestCOREFindEnumValue(t *testing.T) {
 	a := &Enum{Values: []EnumValue{{"foo", 23}, {"bar", 42}}}
 	b := &Enum{Values: []EnumValue{
 		{"foo___flavour", 0},
@@ -226,7 +226,7 @@ func TestCoreFindEnumValue(t *testing.T) {
 	}
 }
 
-func TestCoreFindField(t *testing.T) {
+func TestCOREFindField(t *testing.T) {
 	ptr := &Pointer{}
 	u16 := &Int{Size: 2}
 	u32 := &Int{Size: 4}
@@ -436,7 +436,7 @@ func TestCoreFindField(t *testing.T) {
 		},
 	}
 
-	checkCoreField := func(t *testing.T, got, want coreField) {
+	checkCOREField := func(t *testing.T, got, want coreField) {
 		t.Helper()
 		qt.Check(t, got.Type, qt.Equals, want.Type, qt.Commentf("type should match"))
 		qt.Check(t, got.offset, qt.Equals, want.offset, qt.Commentf("offset should match"))
@@ -446,13 +446,13 @@ func TestCoreFindField(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			localField, targetField, err := coreFindField(test.local, test.acc, test.target)
 			qt.Assert(t, err, qt.IsNil)
-			checkCoreField(t, localField, test.localField)
-			checkCoreField(t, targetField, test.targetField)
+			checkCOREField(t, localField, test.localField)
+			checkCOREField(t, targetField, test.targetField)
 		})
 	}
 }
 
-func TestCoreFindFieldCyclical(t *testing.T) {
+func TestCOREFindFieldCyclical(t *testing.T) {
 	members := []Member{{Name: "foo", Type: &Pointer{}}}
 
 	cyclicStruct := &Struct{}
@@ -483,7 +483,7 @@ func TestCoreFindFieldCyclical(t *testing.T) {
 	}
 }
 
-func TestCoreRelocation(t *testing.T) {
+func TestCORERelocation(t *testing.T) {
 	testutils.Files(t, testutils.Glob(t, "testdata/*.elf"), func(t *testing.T, file string) {
 		rd, err := os.Open(file)
 		if err != nil {
@@ -509,7 +509,7 @@ func TestCoreRelocation(t *testing.T) {
 					t.Fatal("Retrieve program:", err)
 				}
 
-				relos, err := CORERelocate(prog.Spec(), spec, prog.CoreRelos)
+				relos, err := CORERelocate(prog.Spec(), spec, prog.CORERelos)
 				if want := errs[name]; want != nil {
 					if !errors.Is(err, want) {
 						t.Fatal("Expected", want, "got", err)
@@ -533,7 +533,7 @@ func TestCoreRelocation(t *testing.T) {
 	})
 }
 
-func TestCoreCopyWithoutQualifiers(t *testing.T) {
+func TestCORECopyWithoutQualifiers(t *testing.T) {
 	qualifiers := []struct {
 		name string
 		fn   func(Type) Type

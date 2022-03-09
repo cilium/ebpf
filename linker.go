@@ -81,19 +81,19 @@ func findReferences(progs map[string]*ProgramSpec) error {
 	return nil
 }
 
-// collectCoreRelos returns a list of CO-RE relocations of the layout's progs
+// collectCORERelos returns a list of CO-RE relocations of the layout's progs
 // in order.
-func collectCoreRelos(layout []reference) btf.CoreRelos {
 	if len(layout) == 0 {
 		return nil
 	}
 
-	var relos btf.CoreRelos
+func collectCORERelos(layout []reference) btf.CORERelos {
+	var relos btf.CORERelos
 	for _, sym := range layout {
 		if sym.spec.BTF == nil {
 			continue
 		}
-		relos = append(relos, sym.spec.BTF.CoreRelos.Offset(uint32(sym.offset))...)
+		relos = append(relos, sym.spec.BTF.CORERelos.Offset(uint32(sym.offset))...)
 	}
 
 	return relos

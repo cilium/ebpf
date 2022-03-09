@@ -46,7 +46,7 @@ type Spec struct {
 	// Data from .BTF.ext. indexed by function name.
 	funcInfos map[string]FuncInfo
 	lineInfos map[string]LineInfos
-	coreRelos map[string]CoreRelos
+	coreRelos map[string]CORERelos
 
 	byteOrder binary.ByteOrder
 }
@@ -190,13 +190,13 @@ func loadSpecFromELF(file *internal.SafeELFFile) (*Spec, error) {
 	return spec, nil
 }
 
-// splitExtInfos takes FuncInfos, LineInfos and CoreRelos indexed by section and
+// splitExtInfos takes FuncInfos, LineInfos and CORERelos indexed by section and
 // transforms them to be indexed by function. Retrieves function names from
 // the BTF spec.
 func (spec *Spec) splitExtInfos(info *extInfo) error {
 	ofi := make(map[string]FuncInfo)
 	oli := make(map[string]LineInfos)
-	ocr := make(map[string]CoreRelos)
+	ocr := make(map[string]CORERelos)
 
 	for secName, secFuncInfos := range info.funcInfos {
 		// Collect functions from each section and organize them by name.
@@ -835,7 +835,7 @@ type Program struct {
 	spec      *Spec
 	FuncInfo  FuncInfo
 	LineInfos LineInfos
-	CoreRelos CoreRelos
+	CORERelos CORERelos
 }
 
 // Spec returns the BTF spec of this program.
@@ -846,7 +846,7 @@ func (p *Program) Spec() *Spec {
 // CORERelocate returns the changes required to adjust the program to the target.
 //
 // Passing a nil target will relocate against the running kernel.
-func CORERelocate(local, target *Spec, relos CoreRelos) (COREFixups, error) {
+func CORERelocate(local, target *Spec, relos CORERelos) (COREFixups, error) {
 	if len(relos) == 0 {
 		return nil, nil
 	}

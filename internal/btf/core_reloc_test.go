@@ -12,7 +12,7 @@ import (
 	"github.com/cilium/ebpf/internal/testutils"
 )
 
-func TestCoreRelocationLoad(t *testing.T) {
+func TestCORERelocationLoad(t *testing.T) {
 	testutils.Files(t, testutils.Glob(t, "testdata/relocs-*.elf"), func(t *testing.T, file string) {
 		fh, err := os.Open(file)
 		if err != nil {
@@ -67,7 +67,7 @@ func TestCoreRelocationLoad(t *testing.T) {
 	})
 }
 
-func TestCoreRelocationRead(t *testing.T) {
+func TestCORERelocationRead(t *testing.T) {
 	testutils.Files(t, testutils.Glob(t, "testdata/relocs_read-*.elf"), func(t *testing.T, file string) {
 		fh, err := os.Open(file)
 		if err != nil {

@@ -17,7 +17,7 @@ import (
 type extInfo struct {
 	funcInfos map[string][]bpfFuncInfo
 	lineInfos map[string][]bpfLineInfo
-	relos     map[string]CoreRelos
+	relos     map[string]CORERelos
 }
 
 // loadExtInfos parses the .BTF.ext section into its constituent parts.
@@ -30,7 +30,7 @@ func loadExtInfos(r io.ReaderAt, bo binary.ByteOrder, strings stringTable) (*ext
 		return nil, fmt.Errorf("parsing BTF extension header: %w", err)
 	}
 
-	coreHeader, err := parseBTFExtCoreHeader(headerRd, bo, extHeader)
+	coreHeader, err := parseBTFExtCOREHeader(headerRd, bo, extHeader)
 	if err != nil {
 		return nil, fmt.Errorf("parsing BTF CO-RE header: %w", err)
 	}
@@ -47,10 +47,10 @@ func loadExtInfos(r io.ReaderAt, bo binary.ByteOrder, strings stringTable) (*ext
 		return nil, fmt.Errorf("parsing BTF line info: %w", err)
 	}
 
-	relos := make(map[string]CoreRelos)
-	if coreHeader != nil && coreHeader.CoreReloOff > 0 && coreHeader.CoreReloLen > 0 {
-		buf = internal.NewBufferedSectionReader(r, extHeader.coreReloStart(coreHeader), int64(coreHeader.CoreReloLen))
-		relos, err = parseCoreRelos(buf, bo, strings)
+	relos := make(map[string]CORERelos)
+	if coreHeader != nil && coreHeader.COREReloOff > 0 && coreHeader.COREReloLen > 0 {
+		buf = internal.NewBufferedSectionReader(r, extHeader.coreReloStart(coreHeader), int64(coreHeader.COREReloLen))
+		relos, err = parseCORERelos(buf, bo, strings)
 		if err != nil {
 			return nil, fmt.Errorf("parsing CO-RE relocation info: %w", err)
 		}
@@ -66,7 +66,7 @@ type btfExtHeader struct {
 	Flags   uint8
 
 	// HdrLen is larger than the size of struct btfExtHeader when it is
-	// immediately followed by a btfExtCoreHeader.
+	// immediately followed by a btfExtCOREHeader.
 	HdrLen uint32
 
 	FuncInfoOff uint32
@@ -115,21 +115,21 @@ func (h *btfExtHeader) lineInfoStart() int64 {
 
 // coreReloStart returns the offset from the beginning of the .BTF.ext section
 // to the start of its CO-RE relocation entries.
-func (h *btfExtHeader) coreReloStart(ch *btfExtCoreHeader) int64 {
-	return int64(h.HdrLen + ch.CoreReloOff)
+func (h *btfExtHeader) coreReloStart(ch *btfExtCOREHeader) int64 {
+	return int64(h.HdrLen + ch.COREReloOff)
 }
 
-// btfExtCoreHeader is found right after the btfExtHeader when its HdrLen
+// btfExtCOREHeader is found right after the btfExtHeader when its HdrLen
 // field is larger than its size.
-type btfExtCoreHeader struct {
-	CoreReloOff uint32
-	CoreReloLen uint32
+type btfExtCOREHeader struct {
+	COREReloOff uint32
+	COREReloLen uint32
 }
 
-// parseBTFExtCoreHeader parses the tail of the .BTF.ext header. If additional
+// parseBTFExtCOREHeader parses the tail of the .BTF.ext header. If additional
 // header bytes are present, extHeader.HdrLen will be larger than the struct,
 // indicating the presence of a CO-RE extension header.
-func parseBTFExtCoreHeader(r io.Reader, bo binary.ByteOrder, extHeader *btfExtHeader) (*btfExtCoreHeader, error) {
+func parseBTFExtCOREHeader(r io.Reader, bo binary.ByteOrder, extHeader *btfExtHeader) (*btfExtCOREHeader, error) {
 	extHdrSize := int64(binary.Size(&extHeader))
 	remainder := int64(extHeader.HdrLen) - extHdrSize
 
@@ -137,7 +137,7 @@ func parseBTFExtCoreHeader(r io.Reader, bo binary.ByteOrder, extHeader *btfExtHe
 		return nil, nil
 	}
 
-	var coreHeader btfExtCoreHeader
+	var coreHeader btfExtCOREHeader
 	if err := binary.Read(r, bo, &coreHeader); err != nil {
 		return nil, fmt.Errorf("can't read header: %v", err)
 	}
@@ -430,27 +430,27 @@ func parseLineInfoRecords(r io.Reader, bo binary.ByteOrder, recordSize uint32, r
 	return out, nil
 }
 
-// bpfCoreRelo matches the kernel's struct bpf_core_relo.
-type bpfCoreRelo struct {
+// bpfCORERelo matches the kernel's struct bpf_core_relo.
+type bpfCORERelo struct {
 	InsnOff      uint32
 	TypeID       TypeID
 	AccessStrOff uint32
 	Kind         COREKind
 }
 
-type CoreRelo struct {
+type CORERelocation struct {
 	insnOff  uint32
 	typeID   TypeID
 	accessor coreAccessor
 	kind     COREKind
 }
 
-type CoreRelos []CoreRelo
+type CORERelos []CORERelocation
 
-// Offset adds offset to the instruction offset of all CoreRelos
+// Offset adds offset to the instruction offset of all CORERelos
 // and returns the result.
-func (cr CoreRelos) Offset(offset uint32) CoreRelos {
-	var relos CoreRelos
+func (cr CORERelos) Offset(offset uint32) CORERelos {
+	var relos CORERelos
 	for _, relo := range cr {
 		relo.insnOff += offset
 		relos = append(relos, relo)
@@ -458,11 +458,11 @@ func (cr CoreRelos) Offset(offset uint32) CoreRelos {
 	return relos
 }
 
-var extInfoReloSize = binary.Size(bpfCoreRelo{})
+var extInfoReloSize = binary.Size(bpfCORERelo{})
 
-// parseCoreRelos parses a core_relos sub-section within .BTF.ext ito a map of
+// parseCORERelos parses a core_relos sub-section within .BTF.ext ito a map of
 // CO-RE relocations indexed by section name.
-func parseCoreRelos(r io.Reader, bo binary.ByteOrder, strings stringTable) (map[string]CoreRelos, error) {
+func parseCORERelos(r io.Reader, bo binary.ByteOrder, strings stringTable) (map[string]CORERelos, error) {
 	recordSize, err := parseExtInfoRecordSize(r, bo)
 	if err != nil {
 		return nil, err
@@ -472,7 +472,7 @@ func parseCoreRelos(r io.Reader, bo binary.ByteOrder, strings stringTable) (map[
 		return nil, fmt.Errorf("expected record size %d, got %d", extInfoReloSize, recordSize)
 	}
 
-	result := make(map[string]CoreRelos)
+	result := make(map[string]CORERelos)
 	for {
 		secName, infoHeader, err := parseExtInfoSec(r, bo, strings)
 		if errors.Is(err, io.EOF) {
@@ -482,7 +482,7 @@ func parseCoreRelos(r io.Reader, bo binary.ByteOrder, strings stringTable) (map[
 			return nil, err
 		}
 
-		records, err := parseCoreReloRecords(r, bo, recordSize, infoHeader.NumInfo, strings)
+		records, err := parseCOREReloRecords(r, bo, recordSize, infoHeader.NumInfo, strings)
 		if err != nil {
 			return nil, fmt.Errorf("section %v: %w", secName, err)
 		}
@@ -491,13 +491,13 @@ func parseCoreRelos(r io.Reader, bo binary.ByteOrder, strings stringTable) (map[
 	}
 }
 
-// parseCoreReloRecords parses a stream of CO-RE relocation entries into a
+// parseCOREReloRecords parses a stream of CO-RE relocation entries into a
 // coreRelos. These records appear after a btf_ext_info_sec header in the
 // core_relos sub-section of .BTF.ext.
-func parseCoreReloRecords(r io.Reader, bo binary.ByteOrder, recordSize uint32, recordNum uint32, strings stringTable) (CoreRelos, error) {
-	var out CoreRelos
+func parseCOREReloRecords(r io.Reader, bo binary.ByteOrder, recordSize uint32, recordNum uint32, strings stringTable) (CORERelos, error) {
+	var out CORERelos
 
-	var relo bpfCoreRelo
+	var relo bpfCORERelo
 	for i := uint32(0); i < recordNum; i++ {
 		if err := binary.Read(r, bo, &relo); err != nil {
 			return nil, fmt.Errorf("can't read CO-RE relocation: %v", err)
@@ -512,12 +512,12 @@ func parseCoreReloRecords(r io.Reader, bo binary.ByteOrder, recordSize uint32, r
 			return nil, err
 		}
 
-		accessor, err := parseCoreAccessor(accessorStr)
+		accessor, err := parseCOREAccessor(accessorStr)
 		if err != nil {
 			return nil, fmt.Errorf("accessor %q: %s", accessorStr, err)
 		}
 
-		out = append(out, CoreRelo{
+		out = append(out, CORERelocation{
 			relo.InsnOff,
 			relo.TypeID,
 			accessor,

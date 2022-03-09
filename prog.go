@@ -293,7 +293,10 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions, handles *hand
 	var btfDisabled bool
 	var core btf.COREFixups
 	if spec.BTF != nil {
-		relos := collectCORERelos(layout)
+		relos, err := collectCORERelos(layout)
+		if err != nil {
+			return nil, fmt.Errorf("collecting CO-RE relocations: %w", err)
+		}
 		core, err = btf.CORERelocate(spec.BTF.Spec(), targetBTF, relos)
 		if err != nil {
 			return nil, fmt.Errorf("generating CO-RE fixups: %w", err)

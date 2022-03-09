@@ -280,3 +280,43 @@ func TestInstructionIterator(t *testing.T) {
 		}
 	}
 }
+
+func TestMetadataCopyOnWrite(t *testing.T) {
+	c := qt.New(t)
+
+	// Setting metadata should copy Instruction and modify the metadata pointer
+	// of the new object without touching the old Instruction.
+
+	// Reference
+	ins := Ja.Label("my_func")
+	ins2 := ins.WithReference("my_func2")
+
+	c.Assert(ins.Reference(), qt.Equals, "my_func", qt.Commentf("WithReference updated ins"))
+	c.Assert(ins2.Reference(), qt.Equals, "my_func2", qt.Commentf("WithReference didn't update ins2"))
+	c.Assert(ins.metadata, qt.Not(qt.Equals), ins2.metadata, qt.Commentf("modified metadata should not be equal"))
+
+	// Symbol
+	ins = Ja.Label("").WithSymbol("my_sym")
+	ins2 = ins.WithSymbol("my_sym2")
+
+	c.Assert(ins.Symbol(), qt.Equals, "my_sym", qt.Commentf("WithSymbol updated ins"))
+	c.Assert(ins2.Symbol(), qt.Equals, "my_sym2", qt.Commentf("WithSymbol didn't update ins2"))
+	c.Assert(ins.metadata, qt.Not(qt.Equals), ins2.metadata, qt.Commentf("modified metadata should not be equal"))
+
+	// Map
+	ins = LoadMapPtr(R1, 0)
+	ins2 = ins
+
+	testMap := testFDer(1)
+	c.Assert(ins2.AssociateMap(testMap), qt.IsNil, qt.Commentf("failed to associate map with ins2"))
+
+	c.Assert(ins.Map(), qt.IsNil, qt.Commentf("AssociateMap updated ins"))
+	c.Assert(ins2.Map(), qt.Equals, testMap, qt.Commentf("AssociateMap didn't update ins2"))
+	c.Assert(ins.metadata, qt.Not(qt.Equals), ins2.metadata, qt.Commentf("modified metadata should not be equal"))
+}
+
+type testFDer int
+
+func (t testFDer) FD() int {
+	return int(t)
+}

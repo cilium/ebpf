@@ -115,33 +115,8 @@ func LoadCollectionSpecFromReader(rd io.ReaderAt) (*CollectionSpec, error) {
 
 	ec.assignSymbols(symbols)
 
-	// Go through relocation sections, and parse the ones for sections we're
-	// interested in. Make sure that relocations point at valid sections.
-	for idx, relSection := range relSections {
-		section := sections[idx]
-		if section == nil {
-			continue
-		}
-
-		rels, err := ec.loadRelocations(relSection, symbols)
-		if err != nil {
-			return nil, fmt.Errorf("relocation for section %q: %w", section.Name, err)
-		}
-
-		for _, rel := range rels {
-			target := sections[rel.Section]
-			if target == nil {
-				return nil, fmt.Errorf("section %q: reference to %q in section %s: %w", section.Name, rel.Name, rel.Section, ErrNotSupported)
-			}
-
-			if target.Flags&elf.SHF_STRINGS > 0 {
-				return nil, fmt.Errorf("section %q: string is not stack allocated: %w", section.Name, ErrNotSupported)
-			}
-
-			target.references++
-		}
-
-		section.relocations = rels
+	if err := ec.loadRelocations(relSections, symbols); err != nil {
+		return nil, fmt.Errorf("load relocations: %w", err)
 	}
 
 	// Collect all the various ways to define maps.
@@ -263,6 +238,39 @@ func (ec *elfCode) assignSymbols(symbols []elf.Symbol) {
 
 		symSection.symbols[symbol.Value] = symbol
 	}
+}
+
+// loadRelocations iterates .rel* sections and extracts relocation entries for
+// sections of interest. Makes sure relocations point at valid sections.
+func (ec *elfCode) loadRelocations(relSections map[elf.SectionIndex]*elf.Section, symbols []elf.Symbol) error {
+	for idx, relSection := range relSections {
+		section := ec.sections[idx]
+		if section == nil {
+			continue
+		}
+
+		rels, err := ec.loadSectionRelocations(relSection, symbols)
+		if err != nil {
+			return fmt.Errorf("relocation for section %q: %w", section.Name, err)
+		}
+
+		for _, rel := range rels {
+			target := ec.sections[rel.Section]
+			if target == nil {
+				return fmt.Errorf("section %q: reference to %q in section %s: %w", section.Name, rel.Name, rel.Section, ErrNotSupported)
+			}
+
+			if target.Flags&elf.SHF_STRINGS > 0 {
+				return fmt.Errorf("section %q: string is not stack allocated: %w", section.Name, ErrNotSupported)
+			}
+
+			target.references++
+		}
+
+		section.relocations = rels
+	}
+
+	return nil
 }
 
 // loadProgramSections iterates ec's sections and emits a ProgramSpec
@@ -1149,7 +1157,7 @@ func getProgType(sectionName string) (ProgramType, AttachType, uint32, string) {
 	return UnspecifiedProgram, AttachNone, 0, ""
 }
 
-func (ec *elfCode) loadRelocations(sec *elf.Section, symbols []elf.Symbol) (map[uint64]elf.Symbol, error) {
+func (ec *elfCode) loadSectionRelocations(sec *elf.Section, symbols []elf.Symbol) (map[uint64]elf.Symbol, error) {
 	rels := make(map[uint64]elf.Symbol)
 
 	if sec.Entsize < 16 {

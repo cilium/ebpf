@@ -333,6 +333,10 @@ func (li *LineInfo) LineColumn() uint32 {
 	return li.lineColumn
 }
 
+func (li *LineInfo) InsnOff() uint32 {
+	return li.insnOff
+}
+
 func (li *LineInfo) String() string {
 	return li.line
 }

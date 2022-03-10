@@ -320,3 +320,57 @@ type testFDer int
 func (t testFDer) FD() int {
 	return int(t)
 }
+
+func TestSliceInstructions(t *testing.T) {
+	c := qt.New(t)
+
+	// Slicing an empty insns results in a nil map with no error.
+	m, err := Instructions{}.SliceSymbols()
+	c.Assert(err, qt.IsNil, qt.Commentf("empty insns"))
+
+	c.Assert(m, qt.IsNil)
+
+	// Slicing non-empty insns without a leading Symbol is an error.
+	_, err = Instructions{
+		Ja.Label(""),
+	}.SliceSymbols()
+	c.Assert(err, qt.IsNotNil, qt.Commentf("insns must start with a Symbol"))
+
+	// Non-empty insns with a single Instruction that is a Symbol.
+	insns := Instructions{Ja.Label("").WithSymbol("sym")}
+	m, err = insns.SliceSymbols()
+	c.Assert(err, qt.IsNil, qt.Commentf("insns with a single Symbol"))
+
+	c.Assert(len(m), qt.Equals, 1)
+	c.Assert(m["sym"].equal(insns), qt.IsTrue)
+
+	// Insns containing duplicate Symbols.
+	_, err = Instructions{
+		Ja.Label("").WithSymbol("sym"),
+		Ja.Label("").WithSymbol("sym"),
+	}.SliceSymbols()
+	c.Assert(err, qt.IsNotNil, qt.Commentf("insns containing duplicate Symbols"))
+
+	// Insns with multiple Symbols and subprogs of various lengths.
+	m, err = Instructions{
+		Ja.Label("").WithSymbol("sym1"),
+		Ja.Label("").WithSymbol("sym2"),
+		Return(),
+		Ja.Label("").WithSymbol("sym3"),
+		Mov.Imm(R0, 1),
+		Return(),
+		Ja.Label("").WithSymbol("sym4"),
+		Mov.Imm(R0, 1),
+		Mov.Imm(R1, 1),
+		Return(),
+	}.SliceSymbols()
+	c.Assert(err, qt.IsNil, qt.Commentf("insns with multiple Symbols"))
+
+	fmt.Println(m)
+
+	c.Assert(len(m), qt.Equals, 4)
+	c.Assert(len(m["sym1"]), qt.Equals, 1)
+	c.Assert(len(m["sym2"]), qt.Equals, 2)
+	c.Assert(len(m["sym3"]), qt.Equals, 3)
+	c.Assert(len(m["sym4"]), qt.Equals, 4)
+}

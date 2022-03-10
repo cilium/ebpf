@@ -7,6 +7,8 @@ import (
 	"github.com/cilium/ebpf/asm"
 	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/testutils"
+
+	qt "github.com/frankban/quicktest"
 )
 
 func TestFindReferences(t *testing.T) {
@@ -101,4 +103,59 @@ func TestForwardFunctionDeclaration(t *testing.T) {
 			t.Fatalf("Expected 23, got %d", ret)
 		}
 	})
+}
+
+func TestSplitSymbols(t *testing.T) {
+	c := qt.New(t)
+
+	// Splitting an empty insns results in an error.
+	_, err := splitSymbols(asm.Instructions{})
+	c.Assert(err, qt.IsNotNil, qt.Commentf("empty insns"))
+
+	// Splitting non-empty insns without a leading Symbol is an error.
+	_, err = splitSymbols(asm.Instructions{
+		asm.Return(),
+	})
+	c.Assert(err, qt.IsNotNil, qt.Commentf("insns without leading Symbol"))
+
+	// Non-empty insns with a single Instruction that is a Symbol.
+	insns := asm.Instructions{
+		asm.Return().WithSymbol("sym"),
+	}
+	m, err := splitSymbols(insns)
+	c.Assert(err, qt.IsNil, qt.Commentf("insns with a single Symbol"))
+
+	c.Assert(len(m), qt.Equals, 1)
+	c.Assert(len(m["sym"]), qt.Equals, 1)
+
+	// Insns containing duplicate Symbols.
+	_, err = splitSymbols(asm.Instructions{
+		asm.Return().WithSymbol("sym"),
+		asm.Return().WithSymbol("sym"),
+	})
+	c.Assert(err, qt.IsNotNil, qt.Commentf("insns containing duplicate Symbols"))
+
+	// Insns with multiple Symbols and subprogs of various lengths.
+	m, err = splitSymbols(asm.Instructions{
+		asm.Return().WithSymbol("sym1"),
+
+		asm.Mov.Imm(asm.R0, 0).WithSymbol("sym2"),
+		asm.Return(),
+
+		asm.Mov.Imm(asm.R0, 0).WithSymbol("sym3"),
+		asm.Mov.Imm(asm.R0, 1),
+		asm.Return(),
+
+		asm.Mov.Imm(asm.R0, 0).WithSymbol("sym4"),
+		asm.Mov.Imm(asm.R0, 1),
+		asm.Mov.Imm(asm.R0, 2),
+		asm.Return(),
+	})
+	c.Assert(err, qt.IsNil, qt.Commentf("insns with multiple Symbols"))
+
+	c.Assert(len(m), qt.Equals, 4)
+	c.Assert(len(m["sym1"]), qt.Equals, 1)
+	c.Assert(len(m["sym2"]), qt.Equals, 2)
+	c.Assert(len(m["sym3"]), qt.Equals, 3)
+	c.Assert(len(m["sym4"]), qt.Equals, 4)
 }

@@ -2,11 +2,41 @@ package ebpf
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 
 	"github.com/cilium/ebpf/asm"
 	"github.com/cilium/ebpf/internal/btf"
 )
+
+// splitSymbols splits insns into subsections delimited by Symbol Instructions.
+// insns cannot be empty and must start with a Symbol Instruction.
+//
+// The resulting map is indexed by Symbol name.
+func splitSymbols(insns asm.Instructions) (map[string]asm.Instructions, error) {
+	if len(insns) == 0 {
+		return nil, errors.New("insns is empty")
+	}
+
+	if insns[0].Symbol() == "" {
+		return nil, errors.New("insns must start with a Symbol")
+	}
+
+	var name string
+	progs := make(map[string]asm.Instructions)
+	for _, ins := range insns {
+		if sym := ins.Symbol(); sym != "" {
+			if progs[sym] != nil {
+				return nil, fmt.Errorf("insns contains duplicate Symbol %s", sym)
+			}
+			name = sym
+		}
+
+		progs[name] = append(progs[name], ins)
+	}
+
+	return progs, nil
+}
 
 // The linker is responsible for resolving bpf-to-bpf calls between programs
 // within an ELF. Each BPF program must be a self-contained binary blob,

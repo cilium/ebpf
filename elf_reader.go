@@ -115,33 +115,8 @@ func LoadCollectionSpecFromReader(rd io.ReaderAt) (*CollectionSpec, error) {
 
 	ec.assignSymbols(symbols)
 
-	// Go through relocation sections, and parse the ones for sections we're
-	// interested in. Make sure that relocations point at valid sections.
-	for idx, relSection := range relSections {
-		section := sections[idx]
-		if section == nil {
-			continue
-		}
-
-		rels, err := ec.loadRelocations(relSection, symbols)
-		if err != nil {
-			return nil, fmt.Errorf("relocation for section %q: %w", section.Name, err)
-		}
-
-		for _, rel := range rels {
-			target := sections[rel.Section]
-			if target == nil {
-				return nil, fmt.Errorf("section %q: reference to %q in section %s: %w", section.Name, rel.Name, rel.Section, ErrNotSupported)
-			}
-
-			if target.Flags&elf.SHF_STRINGS > 0 {
-				return nil, fmt.Errorf("section %q: string is not stack allocated: %w", section.Name, ErrNotSupported)
-			}
-
-			target.references++
-		}
-
-		section.relocations = rels
+	if err := ec.loadRelocations(relSections, symbols); err != nil {
+		return nil, fmt.Errorf("load relocations: %w", err)
 	}
 
 	// Collect all the various ways to define maps.
@@ -265,6 +240,39 @@ func (ec *elfCode) assignSymbols(symbols []elf.Symbol) {
 	}
 }
 
+// loadRelocations iterates .rel* sections and extracts relocation entries for
+// sections of interest. Makes sure relocations point at valid sections.
+func (ec *elfCode) loadRelocations(relSections map[elf.SectionIndex]*elf.Section, symbols []elf.Symbol) error {
+	for idx, relSection := range relSections {
+		section := ec.sections[idx]
+		if section == nil {
+			continue
+		}
+
+		rels, err := ec.loadSectionRelocations(relSection, symbols)
+		if err != nil {
+			return fmt.Errorf("relocation for section %q: %w", section.Name, err)
+		}
+
+		for _, rel := range rels {
+			target := ec.sections[rel.Section]
+			if target == nil {
+				return fmt.Errorf("section %q: reference to %q in section %s: %w", section.Name, rel.Name, rel.Section, ErrNotSupported)
+			}
+
+			if target.Flags&elf.SHF_STRINGS > 0 {
+				return fmt.Errorf("section %q: string is not stack allocated: %w", section.Name, ErrNotSupported)
+			}
+
+			target.references++
+		}
+
+		section.relocations = rels
+	}
+
+	return nil
+}
+
 // loadProgramSections iterates ec's sections and emits a ProgramSpec
 // for each function it finds.
 //
@@ -342,71 +350,68 @@ func (ec *elfCode) loadProgramSections() (map[string]*ProgramSpec, error) {
 //
 // The resulting map is indexed by function name.
 func (ec *elfCode) loadFunctions(section *elfSection) (map[string]asm.Instructions, error) {
-	var (
-		r      = bufio.NewReader(section.Open())
-		funcs  = make(map[string]asm.Instructions)
-		offset uint64
-		insns  asm.Instructions
-	)
-	for {
-		// Symbols denote the first instruction of a function body.
-		ins := asm.Instruction{}.WithSymbol(section.symbols[offset].Name)
+	r := bufio.NewReader(section.Open())
 
-		// Pull one instruction from the instruction stream.
-		n, err := ins.Unmarshal(r, ec.ByteOrder)
-		if errors.Is(err, io.EOF) {
-			fn := insns.Name()
-			if fn == "" {
-				return nil, errors.New("reached EOF before finding a valid symbol")
-			}
-
-			// Reached the end of the section and the decoded instruction buffer
-			// contains at least one valid instruction belonging to a function.
-			// Store the result and stop processing instructions.
-			funcs[fn] = insns
-			break
-		}
-		if err != nil {
-			return nil, fmt.Errorf("offset %d: %w", offset, err)
-		}
-
-		// Decoded the first instruction of a function body but insns already
-		// holds a valid instruction stream. Store the result and flush insns.
-		if ins.Symbol() != "" && insns.Name() != "" {
-			funcs[insns.Name()] = insns
-			insns = nil
-		}
-
-		if rel, ok := section.relocations[offset]; ok {
-			// A relocation was found for the current offset. Apply it to the insn.
-			if err = ec.relocateInstruction(&ins, rel); err != nil {
-				return nil, fmt.Errorf("offset %d: relocate instruction: %w", offset, err)
-			}
-		} else {
-			// Up to LLVM 9, calls to subprograms within the same ELF section are
-			// sometimes encoded using relative jumps without relocation entries.
-			// If, after all relocations entries have been processed, there are
-			// still relative pseudocalls left, they must point to an existing
-			// symbol within the section.
-			// When splitting sections into subprograms, the targets of these calls
-			// are no longer in scope, so they must be resolved here.
-			if ins.IsFunctionReference() && ins.Constant != -1 {
-				tgt := jumpTarget(offset, ins)
-				sym := section.symbols[tgt].Name
-				if sym == "" {
-					return nil, fmt.Errorf("offset %d: no jump target found at offset %d", offset, tgt)
-				}
-
-				ins = ins.WithReference(sym)
-				ins.Constant = -1
-			}
-		}
-
-		insns = append(insns, ins)
-		offset += n
+	// Decode the section's instruction stream.
+	var insns asm.Instructions
+	if err := insns.Unmarshal(r, ec.ByteOrder); err != nil {
+		return nil, fmt.Errorf("decoding instructions for section %s: %w", section.Name, err)
+	}
+	if len(insns) == 0 {
+		return nil, fmt.Errorf("no instructions found in section %s", section.Name)
 	}
 
-	return funcs, nil
+	iter := insns.Iterate()
+	for iter.Next() {
+		ins := iter.Ins
+		offset := iter.Offset.Bytes()
+
+		// Tag Symbol Instructions.
+		if sym, ok := section.symbols[offset]; ok {
+			*ins = ins.WithSymbol(sym.Name)
+		}
+
+		// Apply any relocations for the current instruction.
+		// If no relocation is present, resolve any section-relative function calls.
+		if rel, ok := section.relocations[offset]; ok {
+			if err := ec.relocateInstruction(ins, rel); err != nil {
+				return nil, fmt.Errorf("offset %d: relocating instruction: %w", offset, err)
+			}
+		} else {
+			if err := referenceRelativeJump(ins, offset, section.symbols); err != nil {
+				return nil, fmt.Errorf("offset %d: resolving relative jump: %w", offset, err)
+			}
+		}
+	}
+
+	return splitSymbols(insns)
+}
+
+// referenceRelativeJump turns a relative jump to another bpf subprogram within
+// the same ELF section into a Reference Instruction.
+//
+// Up to LLVM 9, calls to subprograms within the same ELF section are sometimes
+// encoded using relative jumps instead of relocation entries. These jumps go
+// out of bounds of the current program, so their targets must be memoized
+// before the section's instruction stream is split.
+//
+// The relative jump Constant is blinded to -1 and the target Symbol is set as
+// the Instruction's Reference so it can be resolved by the linker.
+func referenceRelativeJump(ins *asm.Instruction, offset uint64, symbols map[uint64]elf.Symbol) error {
+	if !ins.IsFunctionReference() || ins.Constant == -1 {
+		return nil
+	}
+
+	tgt := jumpTarget(offset, *ins)
+	sym := symbols[tgt].Name
+	if sym == "" {
+		return fmt.Errorf("no jump target found at offset %d", tgt)
+	}
+
+	*ins = ins.WithReference(sym)
+	ins.Constant = -1
+
+	return nil
 }
 
 // jumpTarget takes ins' offset within an instruction stream (in bytes)
@@ -1149,7 +1154,7 @@ func getProgType(sectionName string) (ProgramType, AttachType, uint32, string) {
 	return UnspecifiedProgram, AttachNone, 0, ""
 }
 
-func (ec *elfCode) loadRelocations(sec *elf.Section, symbols []elf.Symbol) (map[uint64]elf.Symbol, error) {
+func (ec *elfCode) loadSectionRelocations(sec *elf.Section, symbols []elf.Symbol) (map[uint64]elf.Symbol, error) {
 	rels := make(map[uint64]elf.Symbol)
 
 	if sec.Entsize < 16 {

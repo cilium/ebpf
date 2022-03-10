@@ -649,6 +649,34 @@ func (insns Instructions) ReferenceOffsets() map[string][]int {
 	return offsets
 }
 
+// SplitSymbols splits insns into subsections delimited by Symbol Instructions.
+//
+// The resulting map is indexed by Symbol name.
+func (insns Instructions) SplitSymbols() (map[string]Instructions, error) {
+	if len(insns) == 0 {
+		return nil, nil
+	}
+
+	if insns[0].Symbol() == "" {
+		return nil, errors.New("insns must start with a Symbol")
+	}
+
+	var name string
+	progs := make(map[string]Instructions)
+	for _, ins := range insns {
+		if sym := ins.Symbol(); sym != "" {
+			if progs[sym] != nil {
+				return nil, fmt.Errorf("insns contains duplicate Symbol %s", sym)
+			}
+			name = sym
+		}
+
+		progs[name] = append(progs[name], ins)
+	}
+
+	return progs, nil
+}
+
 // Format implements fmt.Formatter.
 //
 // You can control indentation of symbols by
@@ -739,6 +767,20 @@ func (insns Instructions) Tag(bo binary.ByteOrder) (string, error) {
 		}
 	}
 	return hex.EncodeToString(h.Sum(nil)[:unix.BPF_TAG_SIZE]), nil
+}
+
+func (insns Instructions) equal(other Instructions) bool {
+	if len(insns) != len(other) {
+		return false
+	}
+
+	for i, ins := range insns {
+		if !ins.equal(other[i]) {
+			return false
+		}
+	}
+
+	return true
 }
 
 // encodeFunctionReferences populates the Offset (or Constant, depending on

@@ -53,16 +53,18 @@ if [[ "${1:-}" = "--exec-vm" ]]; then
     --rodir=/run/input="${input}" \
     --rwdir=/run/output="${output}" \
     --script-sh "PATH=\"$PATH\" CI_MAX_KERNEL_VERSION="${CI_MAX_KERNEL_VERSION:-}" \"$script\" --exec-test $cmd" \
-    --kopt possible_cpus=2; then # need at least two CPUs for some tests
+    --kopt possible_cpus=2 \
+    --qemu-opts -trace "qemu_system_*" -trace "kvm_run_exit"; then # need at least two CPUs for some tests
     exit 23
   fi
 
-  if [[ ! -e "${output}/success" ]]; then
+  if [[ ! -e "${output}/status" ]]; then
     exit 42
   fi
 
+  rc=$(<"${output}/status")
   $sudo rm -r "$output"
-  exit 0
+  exit $rc
 elif [[ "${1:-}" = "--exec-test" ]]; then
   shift
 
@@ -73,13 +75,13 @@ elif [[ "${1:-}" = "--exec-test" ]]; then
     export KERNEL_SELFTESTS="/run/input/bpf"
   fi
 
-  dmesg -C
-  if ! "$@"; then
-    dmesg
-    exit 1 # this return code is "swallowed" by qemu
-  fi
-  touch "/run/output/success"
-  exit 0
+  dmesg --clear
+  rc=0
+  "$@" || rc=$?
+  dmesg
+  echo $rc > "/run/output/status"
+  echo exiting with $rc
+  exit $rc # this return code is "swallowed" by qemu
 fi
 
 readonly kernel_version="${1:-}"

@@ -25,8 +25,8 @@ blocks:
           - sudo sh -c 'swapoff -a && fallocate -l 2G /swapfile && chmod 0600 /swapfile && mkswap /swapfile && swapon /swapfile'
           - checkout
           - curl -sSfL http://security.ubuntu.com/ubuntu/pool/main/c/ca-certificates/ca-certificates_20210119~20.04.2_all.deb -o /tmp/ca-certificates.deb && sudo dpkg -i /tmp/ca-certificates.deb
-          - sudo mkdir -p /usr/local/golang/1.17 && curl -fL "https://golang.org/dl/go1.17.linux-amd64.tar.gz" | sudo tar -xz -C /usr/local/golang/1.17
-          - sem-version go 1.17
+          - sudo mkdir -p /usr/local/golang/1.18 && curl -fL "https://go.dev/dl/go1.18.linux-amd64.tar.gz" | sudo tar -xz -C /usr/local/golang/1.18
+          - sem-version go 1.18
           - curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin v1.42.1
           - export PATH="$PATH:$(go env GOPATH)/bin"
           - cache restore
@@ -60,7 +60,7 @@ blocks:
           - cache store
       - name: Run unit tests on previous stable Go
         commands:
-          - sem-version go 1.16
+          - sem-version go 1.17
           - go test -v ./cmd/bpf2go -run TestRun
           - timeout -s KILL 600s ./run-tests.sh 5.10
       - name: Run unit tests

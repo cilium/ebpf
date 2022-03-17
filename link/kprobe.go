@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"sync"
 	"unsafe"
@@ -24,6 +25,11 @@ var (
 		value uint64
 		err   error
 	}{}
+
+	// Allow `.` in symbol name. GCC-compiled kernel may change symbol name
+	// to have a `.isra.$n` suffix, like `udp_send_skb.isra.52`.
+	// See: https://gcc.gnu.org/gcc-10/changes.html
+	rgxKprobe = regexp.MustCompile("^[a-zA-Z_][0-9a-zA-Z_.]*$")
 )
 
 type probeType uint8
@@ -141,8 +147,8 @@ func kprobe(symbol string, prog *ebpf.Program, opts *KprobeOptions, ret bool) (*
 	if prog == nil {
 		return nil, fmt.Errorf("prog cannot be nil: %w", errInvalidInput)
 	}
-	if !rgxTraceEvent.MatchString(symbol) {
-		return nil, fmt.Errorf("symbol '%s' must be alphanumeric or underscore: %w", symbol, errInvalidInput)
+	if !rgxKprobe.MatchString(symbol) {
+		return nil, fmt.Errorf("symbol '%s' must be a valid symbol in /proc/kallsyms: %w", symbol, errInvalidInput)
 	}
 	if prog.Type() != ebpf.Kprobe {
 		return nil, fmt.Errorf("eBPF program type %s is not a Kprobe: %w", prog.Type(), errInvalidInput)

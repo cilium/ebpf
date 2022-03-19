@@ -15,6 +15,7 @@
 * Fentry - Attach a program to the entrypoint of a kernel function.
   Like kprobes, but with better performance and usability, for kernels 5.5 and later.
   * [tcp_connect](fentry/) - Trace outgoing IPv4 TCP connections.
+  * [tcp_close](tcprtt/) - Log RTT of IPv4 TCP connections using eBPF CO-RE helpers.
 * Add your use case(s) here!
 
 ## How to run

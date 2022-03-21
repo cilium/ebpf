@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/cilium/ebpf/internal/testutils"
+	"github.com/google/go-cmp/cmp"
 
 	qt "github.com/frankban/quicktest"
 )
@@ -462,23 +463,26 @@ func TestCOREFindField(t *testing.T) {
 			"struct.4 (bitfield quuz)",
 			aStruct, bStruct,
 			coreAccessor{0, 4},
-			coreField{u32, 45, 45, 3},
+			coreField{u32, 45, 45, 8},
 			coreField{u16, 112, 112, 16},
 		},
 	}
 
-	checkCOREField := func(t *testing.T, got, want coreField) {
+	allowCoreField := cmp.AllowUnexported(coreField{})
+
+	checkCOREField := func(t *testing.T, which string, got, want coreField) {
 		t.Helper()
-		qt.Check(t, got.Type, qt.Equals, want.Type, qt.Commentf("type should match"))
-		qt.Check(t, got.offset, qt.Equals, want.offset, qt.Commentf("offset should match"))
+		if diff := cmp.Diff(want, got, allowCoreField); diff != "" {
+			t.Errorf("%s mismatch (-want +got):\n%s", which, diff)
+		}
 	}
 
 	for _, test := range valid {
 		t.Run(test.name, func(t *testing.T) {
 			localField, targetField, err := coreFindField(test.local, test.acc, test.target)
 			qt.Assert(t, err, qt.IsNil)
-			checkCOREField(t, localField, test.localField)
-			checkCOREField(t, targetField, test.targetField)
+			checkCOREField(t, "local", localField, test.localField)
+			checkCOREField(t, "target", targetField, test.targetField)
 		})
 	}
 }

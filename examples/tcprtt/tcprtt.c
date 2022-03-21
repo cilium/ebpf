@@ -5,7 +5,6 @@
 #include "bpf_endian.h"
 #include "bpf_helpers.h"
 #include "bpf_tracing.h"
-#include "bpf_core_read.h"
 
 #define AF_INET 2
 
@@ -29,15 +28,15 @@ struct sock_common {
 		};
 	};
 	short unsigned int skc_family;
-};
+} __attribute__((preserve_access_index));
 
 struct sock {
 	struct sock_common __sk_common;
-};
+}  __attribute__((preserve_access_index));
 
 struct tcp_sock {
 	u32 srtt_us;
-};
+} __attribute__((preserve_access_index));
 
 struct {
 	__uint(type, BPF_MAP_TYPE_RINGBUF);
@@ -61,7 +60,7 @@ int BPF_PROG(tcp_close, struct sock *sk) {
 		return 0;
 	}
 	
-	struct tcp_sock *ts = (struct tcp_sock *)(sk);
+	struct tcp_sock *ts = bpf_skc_to_tcp_sock(sk);
 	if (!ts) {
 		return 0;
 	}
@@ -72,12 +71,12 @@ int BPF_PROG(tcp_close, struct sock *sk) {
 		return 0;
 	}
 
-	tcp_info->saddr = BPF_CORE_READ(sk, __sk_common.skc_rcv_saddr);
-	tcp_info->daddr = BPF_CORE_READ(sk, __sk_common.skc_daddr);
-	tcp_info->dport = BPF_CORE_READ(sk, __sk_common.skc_dport);
-	tcp_info->sport = bpf_htons(BPF_CORE_READ(sk, __sk_common.skc_num));
+	tcp_info->saddr = sk->__sk_common.skc_rcv_saddr;
+	tcp_info->daddr = sk->__sk_common.skc_daddr;
+	tcp_info->dport = sk->__sk_common.skc_dport;
+	tcp_info->sport = bpf_htons(sk->__sk_common.skc_num);
 	
-	tcp_info->srtt = BPF_CORE_READ(ts, srtt_us) >> 3;
+	tcp_info->srtt = ts->srtt_us >> 3;
 	tcp_info->srtt /= 1000;
 
 	bpf_ringbuf_submit(tcp_info, 0);

@@ -449,22 +449,22 @@ func TestCOREFindField(t *testing.T) {
 			"struct.2 (bitfield baz)",
 			aStruct, bStruct,
 			coreAccessor{0, 2},
-			coreField{u32, 0, 0, 3},
-			coreField{u32, 8, 64, 3},
+			coreField{u32, 4, 0, 3},
+			coreField{u32, 8, 0, 3},
 		},
 		{
 			"struct.3 (bitfield quux)",
 			aStruct, bStruct,
 			coreAccessor{0, 3},
-			coreField{u32, 0, 0, 10},
-			coreField{u16, 12, 96, 10},
+			coreField{u32, 4, 3, 10},
+			coreField{u16, 12, 0, 10},
 		},
 		{
 			"struct.4 (bitfield quuz)",
 			aStruct, bStruct,
 			coreAccessor{0, 4},
-			coreField{u32, 0, 0, 8},
-			coreField{u16, 14, 112, 16},
+			coreField{u32, 4, 13, 8},
+			coreField{u16, 14, 0, 0},
 		},
 	}
 

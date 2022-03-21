@@ -21,11 +21,11 @@ typedef unsigned long u64;
 // Struct with bitfields.
 struct bits {
 	int x;
-	u8 a:4, b:2;
-	u16 c:1;
-	unsigned int d:2;
-	enum { ZERO = 0, ONE = 1 } e:1;
-	u64 f:16, g:30;
+	u8 a : 4, b : 2;
+	u16 c : 1;
+	unsigned int d : 2;
+	enum { ZERO = 0, ONE = 1 } e : 1;
+	u64 f : 16, g : 30;
 };
 
 // Perform a read from a subprog to ensure CO-RE relocations
@@ -70,13 +70,13 @@ __attribute__((noinline)) int read_subprog() {
 	*p++ = 0x55; // g
 #endif
 
-	if (BPF_CORE_READ_BITFIELD(&bar, a) != (1<<4)-1)
+	if (BPF_CORE_READ_BITFIELD(&bar, a) != (1 << 4) - 1)
 		return __LINE__;
 
-	if (BPF_CORE_READ_BITFIELD(&bar, b) != (1<<2)-1)
+	if (BPF_CORE_READ_BITFIELD(&bar, b) != (1 << 2) - 1)
 		return __LINE__;
 
-	if (BPF_CORE_READ_BITFIELD(&bar, d) != (1<<2)-1)
+	if (BPF_CORE_READ_BITFIELD(&bar, d) != (1 << 2) - 1)
 		return __LINE__;
 
 	if (BPF_CORE_READ_BITFIELD(&bar, c) != 0)
@@ -101,4 +101,3 @@ __section("socket") int reads() {
 
 	return 0;
 }
-

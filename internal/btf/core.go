@@ -672,6 +672,11 @@ func coreFindField(localT Type, localAcc coreAccessor, targetT Type) (coreField,
 			}
 
 			if target.bitfieldSize > 0 {
+				align, err := alignof(target.Type)
+				if err != nil {
+					return coreField{}, coreField{}, err
+				}
+
 				// From the target BTF, we know the word size of the field containing the target bitfield
 				// and we know the bitfields offset in bits, and since we know the load is aligned, we can
 				// compute the load offset by:
@@ -679,7 +684,7 @@ func coreFindField(localT Type, localAcc coreAccessor, targetT Type) (coreField,
 				// 2) dividing and multiplying that offset by the load size, yielding the target load size aligned offset.
 				offsetBits := targetMember.OffsetBits
 				target.bitfieldOffset = target.offset*8 + offsetBits
-				target.offset += (offsetBits / 8) / uint32(targetSize) * uint32(targetSize)
+				target.offset = (offsetBits / 8) / uint32(align) * uint32(align)
 
 				// As sanity check, verify that the bitfield is captured by the chosen load. This should only happen
 				// if one of the two assumptions are broken: the bitfield size is smaller than the type of the variable

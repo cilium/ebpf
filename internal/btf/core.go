@@ -430,8 +430,8 @@ func coreCalculateFixup(byteOrder binary.ByteOrder, local Type, localID TypeID, 
 		if err != nil {
 			return zero, fmt.Errorf("target %s: %w", target, err)
 		}
-		validateLocal := localField.bitfieldSize == 0 && targetField.bitfieldSize == 0
 
+		validateLocal := localField.bitfieldSize == 0
 		switch relo.kind {
 		case reloFieldExists:
 			return fixup(1, 1, validateLocal)

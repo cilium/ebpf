@@ -437,7 +437,7 @@ func coreCalculateFixup(byteOrder binary.ByteOrder, local Type, localID TypeID, 
 			return fixup(1, 1, validateLocal)
 
 		case reloFieldByteOffset:
-			return fixup(localField.offset/8, targetField.offset/8, validateLocal)
+			return fixup(localField.offset, targetField.offset, validateLocal)
 
 		case reloFieldByteSize:
 			localSize, err := Sizeof(localField.Type)
@@ -454,13 +454,13 @@ func coreCalculateFixup(byteOrder binary.ByteOrder, local Type, localID TypeID, 
 		case reloFieldLShiftU64:
 			var target uint32
 			if byteOrder == binary.LittleEndian {
-				target = 64 - (targetField.bitfieldOffset + targetField.bitfieldSize - targetField.offset)
+				target = 64 - (targetField.bitfieldOffset + targetField.bitfieldSize - targetField.offset*8)
 			} else {
 				targetSize, err := Sizeof(targetField.Type)
 				if err != nil {
 					return zero, err
 				}
-				target = (8-uint32(targetSize))*8 + (targetField.bitfieldOffset - targetField.offset)
+				target = (8-uint32(targetSize))*8 + (targetField.bitfieldOffset - targetField.offset*8)
 			}
 			return fixup(0, target, false)
 
@@ -548,28 +548,35 @@ func (ca coreAccessor) enumValue(t Type) (*EnumValue, error) {
 	return &e.Values[i], nil
 }
 
+// coreField represents the position of a "child" of a composite type from the
+// start of that type.
+//
+//     /- start of composite
+//     | offset * 8 | bitfieldOffset | bitfieldSize | ... |
+//                  \- start of field       end of field -/
 type coreField struct {
 	Type Type
 
-	// offset is the load offset of the field in bytes.
+	// The position of the field from the start of the composite type in bytes.
 	offset uint32
 
-	// bitfieldOffset is optional and is the offset of the bitfield in bits.
-	// Used with bitfieldSize to compute the shifts required to pull the bitfield
-	// out from the word loaded from 'offset'.
+	// The offset of the bitfield in bits from the start of the composite.
 	bitfieldOffset uint32
 
-	// bitfieldSize is the size of the bitfield in bits.
+	// The size of the bitfield in bits.
+	//
+	// Zero if the field is not a bitfield.
 	bitfieldSize uint32
 }
 
-func adjustOffset(base uint32, t Type, n int) (uint32, error) {
-	size, err := Sizeof(t)
+func (cf *coreField) adjustOffsetToNthElement(n int) error {
+	size, err := Sizeof(cf.Type)
 	if err != nil {
-		return 0, err
+		return err
 	}
 
-	return base + (uint32(n) * uint32(size) * 8), nil
+	cf.offset += uint32(n) * uint32(size)
+	return nil
 }
 
 // coreFindField descends into the local type using the accessor and tries to
@@ -577,32 +584,33 @@ func adjustOffset(base uint32, t Type, n int) (uint32, error) {
 //
 // Returns the field and the offset of the field from the start of
 // target in bits.
-func coreFindField(local Type, localAcc coreAccessor, target Type) (coreField, coreField, error) {
+func coreFindField(localT Type, localAcc coreAccessor, targetT Type) (coreField, coreField, error) {
+	local := coreField{Type: localT}
+	target := coreField{Type: targetT}
+
 	// The first index is used to offset a pointer of the base type like
 	// when accessing an array.
-	localOffset, err := adjustOffset(0, local, localAcc[0])
-	if err != nil {
+	if err := local.adjustOffsetToNthElement(localAcc[0]); err != nil {
 		return coreField{}, coreField{}, err
 	}
 
-	targetOffset, err := adjustOffset(0, target, localAcc[0])
-	if err != nil {
+	if err := target.adjustOffsetToNthElement(localAcc[0]); err != nil {
 		return coreField{}, coreField{}, err
 	}
 
-	if err := coreAreMembersCompatible(local, target); err != nil {
+	if err := coreAreMembersCompatible(local.Type, target.Type); err != nil {
 		return coreField{}, coreField{}, fmt.Errorf("fields: %w", err)
 	}
 
 	var localMaybeFlex, targetMaybeFlex bool
 	for _, acc := range localAcc[1:] {
-		switch localType := local.(type) {
+		switch localType := local.Type.(type) {
 		case composite:
 			// For composite types acc is used to find the field in the local type,
 			// and then we try to find a field in target with the same name.
 			localMembers := localType.members()
 			if acc >= len(localMembers) {
-				return coreField{}, coreField{}, fmt.Errorf("invalid accessor %d for %s", acc, local)
+				return coreField{}, coreField{}, fmt.Errorf("invalid accessor %d for %s", acc, localType)
 			}
 
 			localMember := localMembers[acc]
@@ -613,13 +621,15 @@ func coreFindField(local Type, localAcc coreAccessor, target Type) (coreField, c
 				}
 
 				// This is an anonymous struct or union, ignore it.
-				local = localMember.Type
-				localOffset += localMember.OffsetBits
+				local = coreField{
+					Type:   localMember.Type,
+					offset: local.offset + localMember.OffsetBits/8,
+				}
 				localMaybeFlex = false
 				continue
 			}
 
-			targetType, ok := target.(composite)
+			targetType, ok := target.Type.(composite)
 			if !ok {
 				return coreField{}, coreField{}, fmt.Errorf("target not composite: %w", errImpossibleRelocation)
 			}
@@ -629,61 +639,68 @@ func coreFindField(local Type, localAcc coreAccessor, target Type) (coreField, c
 				return coreField{}, coreField{}, err
 			}
 
-			local = localMember.Type
+			local = coreField{
+				Type:         localMember.Type,
+				offset:       local.offset,
+				bitfieldSize: localMember.BitfieldSize,
+			}
 			localMaybeFlex = acc == len(localMembers)-1
-			localOffset += localMember.OffsetBits
-			target = targetMember.Type
-			targetMaybeFlex = last
-			targetOffset += targetMember.OffsetBits
 
-			if targetMember.BitfieldSize == 0 && localMember.BitfieldSize == 0 {
+			target = coreField{
+				Type:         targetMember.Type,
+				offset:       target.offset,
+				bitfieldSize: targetMember.BitfieldSize,
+			}
+			targetMaybeFlex = last
+
+			if local.bitfieldSize == 0 && target.bitfieldSize == 0 {
+				local.offset += localMember.OffsetBits / 8
+				target.offset += targetMember.OffsetBits / 8
 				break
 			}
 
-			targetSize, err := Sizeof(target)
+			targetSize, err := Sizeof(target.Type)
 			if err != nil {
 				return coreField{}, coreField{},
 					fmt.Errorf("could not get target size: %w", err)
 			}
 
-			targetBitfieldOffset := targetOffset
-			var targetBitfieldSize uint32
-
-			if targetMember.BitfieldSize > 0 {
+			if target.bitfieldSize > 0 {
 				// From the target BTF, we know the word size of the field containing the target bitfield
 				// and we know the bitfields offset in bits, and since we know the load is aligned, we can
 				// compute the load offset by:
 				// 1) convert the bit offset to bytes with a flooring division, yielding "byte" aligned offset.
 				// 2) dividing and multiplying that offset by the load size, yielding the target load size aligned offset.
-				targetBitfieldSize = targetMember.BitfieldSize
-				targetOffset = 8 * (targetOffset / 8 / uint32(targetSize) * uint32(targetSize))
+				offsetBits := targetMember.OffsetBits
+				target.bitfieldOffset = target.offset*8 + offsetBits
+				target.offset += (offsetBits / 8) / uint32(targetSize) * uint32(targetSize)
 
 				// As sanity check, verify that the bitfield is captured by the chosen load. This should only happen
 				// if one of the two assumptions are broken: the bitfield size is smaller than the type of the variable
 				// and that the loads are aligned.
-				if targetOffset > targetBitfieldOffset ||
-					targetOffset+uint32(targetSize)*8 < targetBitfieldOffset+targetMember.BitfieldSize {
+				if target.offset > offsetBits/8 ||
+					target.offset+uint32(targetSize) < (offsetBits+targetMember.BitfieldSize)/8 {
 					return coreField{}, coreField{},
 						fmt.Errorf("could not find load for bitfield: load of %d bytes at %d does not capture bitfield of size %d at %d",
-							targetSize, targetOffset, targetMember.BitfieldSize, targetBitfieldOffset)
+							targetSize, target.offset, targetMember.BitfieldSize, offsetBits)
 				}
 			} else {
 				// Going from a bitfield to a normal field. Since the original BTF had it as a bitfield, we'll
 				// need to "emulate" a bitfield in target to compute the shifts correctly.
-				targetBitfieldSize = uint32(targetSize * 8)
+				target.bitfieldSize = uint32(targetSize * 8)
+				target.offset += targetMember.OffsetBits / 8
+				target.bitfieldOffset = target.offset * 8
 			}
 
-			if err := coreAreMembersCompatible(local, target); err != nil {
+			if err := coreAreMembersCompatible(local.Type, target.Type); err != nil {
 				return coreField{}, coreField{}, err
 			}
 
-			return coreField{local, localOffset, localMember.OffsetBits, localMember.BitfieldSize},
-				coreField{target, targetOffset, targetBitfieldOffset, targetBitfieldSize},
-				nil
+			return local, target, nil
 
 		case *Array:
 			// For arrays, acc is the index in the target.
-			targetType, ok := target.(*Array)
+			targetType, ok := target.Type.(*Array)
 			if !ok {
 				return coreField{}, coreField{}, fmt.Errorf("target not array: %w", errImpossibleRelocation)
 			}
@@ -702,17 +719,23 @@ func coreFindField(local Type, localAcc coreAccessor, target Type) (coreField, c
 				return coreField{}, coreField{}, fmt.Errorf("out of bounds access of target: %w", errImpossibleRelocation)
 			}
 
-			local = localType.Type
+			local = coreField{
+				Type:   localType.Type,
+				offset: local.offset,
+			}
 			localMaybeFlex = false
-			localOffset, err = adjustOffset(localOffset, local, acc)
-			if err != nil {
+
+			if err := local.adjustOffsetToNthElement(acc); err != nil {
 				return coreField{}, coreField{}, err
 			}
 
-			target = targetType.Type
+			target = coreField{
+				Type:   targetType.Type,
+				offset: target.offset,
+			}
 			targetMaybeFlex = false
-			targetOffset, err = adjustOffset(targetOffset, target, acc)
-			if err != nil {
+
+			if err := target.adjustOffsetToNthElement(acc); err != nil {
 				return coreField{}, coreField{}, err
 			}
 
@@ -720,12 +743,12 @@ func coreFindField(local Type, localAcc coreAccessor, target Type) (coreField, c
 			return coreField{}, coreField{}, fmt.Errorf("relocate field of %T: %w", localType, ErrNotSupported)
 		}
 
-		if err := coreAreMembersCompatible(local, target); err != nil {
+		if err := coreAreMembersCompatible(local.Type, target.Type); err != nil {
 			return coreField{}, coreField{}, err
 		}
 	}
 
-	return coreField{local, localOffset, 0, 0}, coreField{target, targetOffset, 0, 0}, nil
+	return local, target, nil
 }
 
 // coreFindMember finds a member in a composite type while handling anonymous

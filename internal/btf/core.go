@@ -603,7 +603,7 @@ func coreFindField(localT Type, localAcc coreAccessor, targetT Type) (coreField,
 	}
 
 	var localMaybeFlex, targetMaybeFlex bool
-	for _, acc := range localAcc[1:] {
+	for i, acc := range localAcc[1:] {
 		switch localType := local.Type.(type) {
 		case composite:
 			// For composite types acc is used to find the field in the local type,
@@ -659,6 +659,12 @@ func coreFindField(localT Type, localAcc coreAccessor, targetT Type) (coreField,
 				break
 			}
 
+			// Either of the members is a bitfield. Make sure we're at the
+			// end of the accessor.
+			if next := i + 1; next < len(localAcc[1:]) {
+				return coreField{}, coreField{}, fmt.Errorf("can't descend into bitfield")
+			}
+
 			targetSize, err := Sizeof(target.Type)
 			if err != nil {
 				return coreField{}, coreField{},
@@ -691,12 +697,6 @@ func coreFindField(localT Type, localAcc coreAccessor, targetT Type) (coreField,
 				target.offset += targetMember.OffsetBits / 8
 				target.bitfieldOffset = target.offset * 8
 			}
-
-			if err := coreAreMembersCompatible(local.Type, target.Type); err != nil {
-				return coreField{}, coreField{}, err
-			}
-
-			return local, target, nil
 
 		case *Array:
 			// For arrays, acc is the index in the target.

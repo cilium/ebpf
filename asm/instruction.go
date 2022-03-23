@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"sort"
 	"strings"
 
 	"github.com/cilium/ebpf/internal/sys"
@@ -567,9 +568,8 @@ func (insns Instructions) SymbolOffsets() (map[string]int, error) {
 
 // FunctionReferences returns a set of symbol names these Instructions make
 // bpf-to-bpf calls to.
-func (insns Instructions) FunctionReferences() map[string]bool {
-	calls := make(map[string]bool)
-
+func (insns Instructions) FunctionReferences() []string {
+	calls := make(map[string]struct{})
 	for _, ins := range insns {
 		if ins.Constant != -1 {
 			// BPF-to-BPF calls have -1 constants.
@@ -584,10 +584,16 @@ func (insns Instructions) FunctionReferences() map[string]bool {
 			continue
 		}
 
-		calls[ins.Reference()] = true
+		calls[ins.Reference()] = struct{}{}
 	}
 
-	return calls
+	result := make([]string, 0, len(calls))
+	for call := range calls {
+		result = append(result, call)
+	}
+
+	sort.Strings(result)
+	return result
 }
 
 // ReferenceOffsets returns the set of references and their offset in

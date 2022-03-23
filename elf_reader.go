@@ -321,21 +321,7 @@ func (ec *elfCode) loadProgramSections() (map[string]*ProgramSpec, error) {
 		}
 	}
 
-	// Populate each prog's references with pointers to all of its callees.
-	if err := populateReferences(progs); err != nil {
-		return nil, fmt.Errorf("populating references: %w", err)
-	}
-
-	// Hide programs (e.g. library functions) that were not explicitly emitted
-	// to an ELF section. These could be exposed in a separate CollectionSpec
-	// field later to allow them to be modified.
-	for n, p := range progs {
-		if p.SectionName == ".text" {
-			delete(progs, n)
-		}
-	}
-
-	return progs, nil
+	return linkPrograms(progs), nil
 }
 
 // loadFunctions extracts instruction streams from the given program section

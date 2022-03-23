@@ -50,63 +50,73 @@ func splitSymbols(insns asm.Instructions) (map[string]asm.Instructions, error) {
 // Each function is denoted by an ELF symbol and the compiler takes care of
 // register setup before each jump instruction.
 
-// populateReferences populates all of progs' Instructions and references
-// with their full dependency chains including transient dependencies.
-func populateReferences(progs map[string]*ProgramSpec) error {
-	type props struct {
-		insns asm.Instructions
-		refs  map[string]*ProgramSpec
+// linkPrograms resolves bpf-to-bpf calls for a set of programs.
+func linkPrograms(progs map[string]*ProgramSpec) map[string]*ProgramSpec {
+	// Pre-calculate all function references.
+	refs := make(map[*ProgramSpec][]string)
+	for _, prog := range progs {
+		refs[prog] = prog.Instructions.FunctionReferences()
 	}
 
-	out := make(map[string]props)
-
-	// Resolve and store direct references between all progs.
-	if err := findReferences(progs); err != nil {
-		return fmt.Errorf("finding references: %w", err)
-	}
-
-	// Flatten all progs' instruction streams.
-	for name, prog := range progs {
-		insns, refs := prog.flatten(nil)
-
-		prop := props{
-			insns: insns,
-			refs:  refs,
+	// Create a flattened instruction stream, but don't modify progs yet to
+	// avoid linking multiple times.
+	flattened := make(map[string]asm.Instructions)
+	for name, p := range progs {
+		if p.SectionName == ".text" {
+			// Hide programs (e.g. library functions) that were not explicitly emitted
+			// to an ELF section.
+			continue
 		}
 
-		out[name] = prop
+		flattened[name] = flattenInstructions(p, progs, refs)
 	}
 
-	// Replace all progs' instructions and references
-	for name, props := range out {
-		progs[name].Instructions = props.insns
-		progs[name].references = props.refs
+	// Finally, assign the flattened instructions.
+	linkedProgs := make(map[string]*ProgramSpec)
+	for name, insns := range flattened {
+		prog := progs[name]
+		prog.Instructions = insns
+		linkedProgs[name] = prog
 	}
 
-	return nil
+	return linkedProgs
 }
 
-// findReferences finds bpf-to-bpf calls between progs and populates each
-// prog's references field with its direct neighbours.
-func findReferences(progs map[string]*ProgramSpec) error {
-	// Check all ProgramSpecs in the collection against each other.
-	for _, prog := range progs {
-		prog.references = make(map[string]*ProgramSpec)
+// flattenInstructions resolves bpf-to-bpf calls for a single program.
+//
+// Flattens the instructions of prog, using progs to resolve the references given
+// in refs.
+func flattenInstructions(prog *ProgramSpec, progs map[string]*ProgramSpec, refs map[*ProgramSpec][]string) asm.Instructions {
+	var (
+		linked  = make(map[string]bool)
+		pending = refs[prog][:]
+		insns   = prog.Instructions[:]
+	)
 
-		// Look up call targets in progs and store pointers to their corresponding
-		// ProgramSpecs as direct references.
-		for refname := range prog.Instructions.FunctionReferences() {
-			ref := progs[refname]
-			// Call targets are allowed to be missing from an ELF. This occurs when
-			// a program calls into a forward function declaration that is left
-			// unimplemented. This is caught at load time during fixups.
-			if ref != nil {
-				prog.references[refname] = ref
-			}
+	// Reset cap to force copying when appending.
+	pending = pending[:len(pending):len(pending)]
+	insns = insns[:len(insns):len(insns)]
+
+	for len(pending) > 0 {
+		var ref string
+		ref, pending = pending[0], pending[1:]
+
+		if linked[ref] {
+			continue
 		}
+
+		progRef := progs[ref]
+		if progRef == nil {
+			// TODO: Is this legitimate?
+			continue
+		}
+
+		insns = append(insns, progRef.Instructions...)
+		pending = append(pending, refs[progRef]...)
+		linked[ref] = true
 	}
 
-	return nil
+	return insns
 }
 
 // fixupAndValidate is called by the ELF reader right before marshaling the

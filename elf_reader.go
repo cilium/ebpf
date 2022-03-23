@@ -310,13 +310,7 @@ func (ec *elfCode) loadProgramSections() (map[string]*ProgramSpec, error) {
 				KernelVersion: ec.version,
 				Instructions:  insns,
 				ByteOrder:     ec.ByteOrder,
-			}
-
-			if ec.btf != nil {
-				spec.BTF, err = ec.btf.Program(name)
-				if err != nil && !errors.Is(err, btf.ErrNoExtendedInfo) {
-					return nil, fmt.Errorf("program %s: %w", name, err)
-				}
+				BTF:           ec.btf,
 			}
 
 			// Function names must be unique within a single ELF blob.
@@ -381,6 +375,12 @@ func (ec *elfCode) loadFunctions(section *elfSection) (map[string]asm.Instructio
 			if err := referenceRelativeJump(ins, offset, section.symbols); err != nil {
 				return nil, fmt.Errorf("offset %d: resolving relative jump: %w", offset, err)
 			}
+		}
+	}
+
+	if ec.btf != nil {
+		if err := ec.btf.AssignExtInfos(section.Name, insns); err != nil {
+			return nil, err
 		}
 	}
 

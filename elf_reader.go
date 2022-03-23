@@ -904,7 +904,9 @@ func mapSpecFromBTF(es *elfSection, vs *btf.VarSecinfo, def *btf.Struct, spec *b
 		ValueSize:  valueSize,
 		MaxEntries: maxEntries,
 		Flags:      flags,
-		BTF:        &btf.Map{Spec: spec, Key: key, Value: value},
+		Key:        key,
+		Value:      value,
+		BTF:        spec,
 		Pinning:    pinType,
 		InnerMap:   innerMapSpec,
 		Contents:   contents,
@@ -1039,7 +1041,9 @@ func (ec *elfCode) loadDataSections(maps map[string]*MapSpec) error {
 			ValueSize:  uint32(len(data)),
 			MaxEntries: 1,
 			Contents:   []MapKV{{uint32(0), data}},
-			BTF:        &btf.Map{Spec: ec.btf, Key: &btf.Void{}, Value: datasec},
+			Key:        &btf.Void{},
+			Value:      datasec,
+			BTF:        ec.btf,
 		}
 
 		switch sec.Name {

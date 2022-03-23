@@ -1698,7 +1698,7 @@ func TestMapPinning(t *testing.T) {
 	// This is a terrible hack: if loading a pinned map tries to load BTF,
 	// it will get a nil *btf.Spec from this *btf.Map. This is turn will make
 	// btf.NewHandle fail.
-	spec.BTF = new(btf.Map)
+	spec.BTF = new(btf.Spec)
 
 	m2, err := NewMapWithOptions(spec, MapOptions{PinPath: tmp})
 	testutils.SkipIfNotSupported(t, err)

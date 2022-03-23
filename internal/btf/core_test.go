@@ -501,15 +501,19 @@ func TestCORERelocation(t *testing.T) {
 			"err_ambiguous_flavour": errAmbiguousRelocation,
 		}
 
-		for section := range spec.funcInfos {
+		for section := range spec.extInfo.funcInfos {
 			name := strings.TrimPrefix(section, "socket_filter/")
 			t.Run(name, func(t *testing.T) {
-				prog, err := spec.Program(section)
-				if err != nil {
-					t.Fatal("Retrieve program:", err)
+				var relos []*CORERelocation
+				for _, bpfRelo := range spec.extInfo.relos[section] {
+					relo, err := newCoreRelocation(bpfRelo, spec.strings)
+					if err != nil {
+						t.Fatal(err)
+					}
+					relos = append(relos, relo)
 				}
 
-				relos, err := CORERelocate(prog.Spec(), spec, prog.CORERelos)
+				fixups, err := coreRelocate(spec, spec, relos)
 				if want := errs[name]; want != nil {
 					if !errors.Is(err, want) {
 						t.Fatal("Expected", want, "got", err)
@@ -521,11 +525,11 @@ func TestCORERelocation(t *testing.T) {
 					t.Fatal("Can't relocate against itself:", err)
 				}
 
-				for offset, relo := range relos {
-					if relo.Local != relo.Target {
+				for offset, fixup := range fixups {
+					if fixup.Local != fixup.Target {
 						// Since we're relocating against ourselves both values
 						// should match.
-						t.Errorf("offset %d: local %v doesn't match target %d", offset, relo.Local, relo.Target)
+						t.Errorf("offset %d: local %v doesn't match target %d", offset, fixup.Local, fixup.Target)
 					}
 				}
 			})

@@ -784,12 +784,6 @@ func (h *Handle) FD() int {
 	return h.fd.Int()
 }
 
-// Map is the BTF for a map.
-type Map struct {
-	Spec       *Spec
-	Key, Value Type
-}
-
 func marshalBTF(types interface{}, strings []byte, bo binary.ByteOrder) []byte {
 	const minHeaderLength = 24
 

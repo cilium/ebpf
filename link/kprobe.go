@@ -49,6 +49,13 @@ type KprobeOptions struct {
 	//
 	// Needs kernel 5.15+.
 	Cookie uint64
+
+	// Fallback to legacy tracefs kprobe interface
+	// event if kernel has kprobe PMU
+	//
+	// This allows old kernels which has kprobe PMU
+	// but don't support `.` in symbol names to work properly
+	Legacy bool
 }
 
 const (
@@ -173,7 +180,7 @@ func kprobe(symbol string, prog *ebpf.Program, opts *KprobeOptions, ret bool) (*
 	if err == nil {
 		return tp, nil
 	}
-	if err != nil && !errors.Is(err, ErrNotSupported) {
+	if err != nil && !errors.Is(err, ErrNotSupported) && !opts.Legacy {
 		return nil, fmt.Errorf("creating perf_kprobe PMU: %w", err)
 	}
 

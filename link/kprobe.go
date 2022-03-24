@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime"
+	"strings"
 	"sync"
 	"unsafe"
 
@@ -262,6 +263,13 @@ func pmuProbe(typ probeType, args probeArgs) (*perfEvent, error) {
 	}
 
 	rawFd, err := unix.PerfEventOpen(&attr, args.pid, 0, -1, unix.PERF_FLAG_FD_CLOEXEC)
+
+	// On some old kernels, kprobe PMU don't allow `.` in symbol name and return -EINVAL
+	// in such cases. Returns ErrNotSupported to fallback to tracefs interface.
+	// https://github.com/torvalds/linux/blob/94710cac0ef4/kernel/trace/trace_kprobe.c#L340-L343
+	if errors.Is(err, unix.EINVAL) && strings.Contains(args.symbol, ".") {
+		return nil, fmt.Errorf("symbol '%s' not supported: %w", args.symbol, ErrNotSupported)
+	}
 
 	// Since commit 97c753e62e6c, ENOENT is correctly returned instead of EINVAL
 	// when trying to create a kretprobe for a missing symbol. Make sure ENOENT

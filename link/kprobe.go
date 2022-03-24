@@ -321,7 +321,7 @@ func tracefsProbe(typ probeType, args probeArgs) (*perfEvent, error) {
 	// check if an event with the same group and name already exists.
 	// Kernels 4.x and earlier don't return os.ErrExist on writing a duplicate
 	// entry, so we need to rely on reads for detecting uniqueness.
-	_, err = getTraceEventID(group, args.symbol)
+	_, err = getTraceEventID(group, sanitizedSymbol(args.symbol))
 	if err == nil {
 		return nil, fmt.Errorf("trace event already exists: %s/%s", group, args.symbol)
 	}
@@ -335,7 +335,7 @@ func tracefsProbe(typ probeType, args probeArgs) (*perfEvent, error) {
 	}
 
 	// Get the newly-created trace event's id.
-	tid, err := getTraceEventID(group, args.symbol)
+	tid, err := getTraceEventID(group, sanitizedSymbol(args.symbol))
 	if err != nil {
 		return nil, fmt.Errorf("getting trace event id: %w", err)
 	}
@@ -385,7 +385,7 @@ func createTraceFSProbeEvent(typ probeType, args probeArgs) error {
 		// subsampling or rate limiting logic can be more accurately implemented in
 		// the eBPF program itself.
 		// See Documentation/kprobes.txt for more details.
-		pe = fmt.Sprintf("%s:%s/%s %s", probePrefix(args.ret), args.group, args.symbol, args.symbol)
+		pe = fmt.Sprintf("%s:%s/%s %s", probePrefix(args.ret), args.group, sanitizedSymbol(args.symbol), args.symbol)
 	case uprobeType:
 		// The uprobe_events syntax is as follows:
 		// p[:[GRP/]EVENT] PATH:OFFSET [FETCHARGS] : Set a probe

@@ -16,9 +16,9 @@ import (
 var (
 	uprobeEventsPath = filepath.Join(tracefsPath, "uprobe_events")
 
-	// rgxUprobeSymbol is used to strip invalid characters from the uprobe symbol
+	// rgxEventSymbol is used to strip invalid characters from the [k,u]probe symbol
 	// as they are not allowed to be used as the EVENT token in tracefs.
-	rgxUprobeSymbol = regexp.MustCompile("[^a-zA-Z0-9]+")
+	rgxEventSymbol = regexp.MustCompile("[^a-zA-Z0-9]+")
 
 	uprobeRetprobeBit = struct {
 		once  sync.Once
@@ -296,7 +296,7 @@ func (ex *Executable) uprobe(symbol string, prog *ebpf.Program, opts *UprobeOpti
 	}
 
 	// Use tracefs if uprobe PMU is missing.
-	args.symbol = uprobeSanitizedSymbol(symbol)
+	args.symbol = sanitizedSymbol(symbol)
 	tp, err = tracefsUprobe(args)
 	if err != nil {
 		return nil, fmt.Errorf("creating trace event '%s:%s' in tracefs: %w", ex.path, symbol, err)
@@ -315,9 +315,9 @@ func tracefsUprobe(args probeArgs) (*perfEvent, error) {
 	return tracefsProbe(uprobeType, args)
 }
 
-// uprobeSanitizedSymbol replaces every invalid characted for the tracefs api with an underscore.
-func uprobeSanitizedSymbol(symbol string) string {
-	return rgxUprobeSymbol.ReplaceAllString(symbol, "_")
+// sanitizedSymbol replaces every invalid characted for the tracefs api with an underscore.
+func sanitizedSymbol(symbol string) string {
+	return rgxEventSymbol.ReplaceAllString(symbol, "_")
 }
 
 // uprobeToken creates the PATH:OFFSET(REF_CTR_OFFSET) token for the tracefs api.

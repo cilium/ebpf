@@ -49,6 +49,13 @@ type KprobeOptions struct {
 	//
 	// Needs kernel 5.15+.
 	Cookie uint64
+
+	// Fallback to legacy tracefs kprobe interface
+	// event if kernel has kprobe PMU
+	//
+	// This allows old kernels which has kprobe PMU
+	// but don't support `.` in symbol names to work properly
+	Legacy bool
 }
 
 const (
@@ -174,7 +181,9 @@ func kprobe(symbol string, prog *ebpf.Program, opts *KprobeOptions, ret bool) (*
 		return tp, nil
 	}
 	if err != nil && !errors.Is(err, ErrNotSupported) {
-		return nil, fmt.Errorf("creating perf_kprobe PMU: %w", err)
+		if opts == nil || !opts.Legacy {
+			return nil, fmt.Errorf("creating perf_kprobe PMU: %w", err)
+		}
 	}
 
 	// Use tracefs if kprobe PMU is missing.
@@ -321,7 +330,7 @@ func tracefsProbe(typ probeType, args probeArgs) (*perfEvent, error) {
 	// check if an event with the same group and name already exists.
 	// Kernels 4.x and earlier don't return os.ErrExist on writing a duplicate
 	// entry, so we need to rely on reads for detecting uniqueness.
-	_, err = getTraceEventID(group, args.symbol)
+	_, err = getTraceEventID(group, sanitizedSymbol(args.symbol))
 	if err == nil {
 		return nil, fmt.Errorf("trace event already exists: %s/%s", group, args.symbol)
 	}
@@ -335,7 +344,7 @@ func tracefsProbe(typ probeType, args probeArgs) (*perfEvent, error) {
 	}
 
 	// Get the newly-created trace event's id.
-	tid, err := getTraceEventID(group, args.symbol)
+	tid, err := getTraceEventID(group, sanitizedSymbol(args.symbol))
 	if err != nil {
 		return nil, fmt.Errorf("getting trace event id: %w", err)
 	}
@@ -385,7 +394,7 @@ func createTraceFSProbeEvent(typ probeType, args probeArgs) error {
 		// subsampling or rate limiting logic can be more accurately implemented in
 		// the eBPF program itself.
 		// See Documentation/kprobes.txt for more details.
-		pe = fmt.Sprintf("%s:%s/%s %s", probePrefix(args.ret), args.group, args.symbol, args.symbol)
+		pe = fmt.Sprintf("%s:%s/%s %s", probePrefix(args.ret), args.group, sanitizedSymbol(args.symbol), args.symbol)
 	case uprobeType:
 		// The uprobe_events syntax is as follows:
 		// p[:[GRP/]EVENT] PATH:OFFSET [FETCHARGS] : Set a probe

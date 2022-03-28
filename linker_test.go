@@ -38,9 +38,7 @@ func TestFindReferences(t *testing.T) {
 		},
 	}
 
-	if err := populateReferences(progs); err != nil {
-		t.Fatal(err)
-	}
+	linkPrograms(progs)
 
 	testutils.SkipOnOldKernel(t, "4.16", "bpf2bpf calls")
 

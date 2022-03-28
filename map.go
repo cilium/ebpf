@@ -76,8 +76,11 @@ type MapSpec struct {
 	// Must be nil or empty before instantiating the MapSpec into a Map.
 	Extra *bytes.Reader
 
+	// The key and value type of this map. May be nil.
+	Key, Value btf.Type
+
 	// The BTF associated with this map.
-	BTF *btf.Map
+	BTF *btf.Spec
 }
 
 func (ms *MapSpec) String() string {
@@ -398,15 +401,15 @@ func (spec *MapSpec) createMap(inner *sys.FD, opts MapOptions, handles *handleCa
 	}
 
 	if spec.hasBTF() {
-		handle, err := handles.btfHandle(spec.BTF.Spec)
+		handle, err := handles.btfHandle(spec.BTF)
 		if err != nil && !errors.Is(err, btf.ErrNotSupported) {
 			return nil, fmt.Errorf("load BTF: %w", err)
 		}
 
 		if handle != nil {
 			attr.BtfFd = uint32(handle.FD())
-			attr.BtfKeyTypeId = uint32(spec.BTF.Key.ID())
-			attr.BtfValueTypeId = uint32(spec.BTF.Value.ID())
+			attr.BtfKeyTypeId = uint32(spec.Key.ID())
+			attr.BtfValueTypeId = uint32(spec.Value.ID())
 		}
 	}
 

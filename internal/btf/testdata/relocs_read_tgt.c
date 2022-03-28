@@ -4,13 +4,9 @@
 	passed as a CO-RE target in the future.
 */
 
-#define core_access __builtin_preserve_access_index
-
 struct s {
 	char a;
 	char b;
-};
+} __attribute__((preserve_access_index));
 
-int dummy() {
-	return core_access((struct s){}.a);
-}
+struct s *unused_s __attribute__((unused));

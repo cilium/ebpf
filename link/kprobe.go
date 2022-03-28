@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime"
+	"strconv"
+	"strings"
 	"sync"
 	"unsafe"
 
@@ -29,7 +31,7 @@ var (
 	// Allow `.` in symbol name. GCC-compiled kernel may change symbol name
 	// to have a `.isra.$n` suffix, like `udp_send_skb.isra.52`.
 	// See: https://gcc.gnu.org/gcc-10/changes.html
-	rgxKprobe = regexp.MustCompile("^[a-zA-Z_][0-9a-zA-Z_.]*$")
+	rgxKprobe = regexp.MustCompile("^[a-zA-Z_][0-9a-zA-Z_+.]*$")
 )
 
 type probeType uint8
@@ -138,6 +140,21 @@ func Kretprobe(symbol string, prog *ebpf.Program, opts *KprobeOptions) (Link, er
 	return lnk, nil
 }
 
+func parseSymbolOffset(symbol string) (string, uint64, error) {
+	syms := strings.Split(symbol, "+")
+	if len(syms) > 2 {
+		return "", 0, fmt.Errorf("symbol included multi '+'")
+	} else if len(syms) == 2 {
+		offset, err := strconv.ParseUint(syms[1], 0, 64)
+		if err != nil {
+			return "", 0, fmt.Errorf("cannot parse symbol offset")
+		}
+		return syms[0], offset, nil
+	}
+
+	return syms[0], 0, nil
+}
+
 // kprobe opens a perf event on the given symbol and attaches prog to it.
 // If ret is true, create a kretprobe.
 func kprobe(symbol string, prog *ebpf.Program, opts *KprobeOptions, ret bool) (*perfEvent, error) {
@@ -154,10 +171,16 @@ func kprobe(symbol string, prog *ebpf.Program, opts *KprobeOptions, ret bool) (*
 		return nil, fmt.Errorf("eBPF program type %s is not a Kprobe: %w", prog.Type(), errInvalidInput)
 	}
 
+	symbol, offset, err := parseSymbolOffset(symbol)
+	if err != nil {
+		return nil, err
+	}
+
 	args := probeArgs{
 		pid:    perfAllThreads,
 		symbol: platformPrefix(symbol),
 		ret:    ret,
+		offset: offset,
 	}
 
 	if opts != nil {
@@ -176,7 +199,6 @@ func kprobe(symbol string, prog *ebpf.Program, opts *KprobeOptions, ret bool) (*
 	if err != nil && !errors.Is(err, ErrNotSupported) {
 		return nil, fmt.Errorf("creating perf_kprobe PMU: %w", err)
 	}
-
 	// Use tracefs if kprobe PMU is missing.
 	args.symbol = platformPrefix(symbol)
 	tp, err = tracefsKprobe(args)
@@ -234,8 +256,12 @@ func pmuProbe(typ probeType, args probeArgs) (*perfEvent, error) {
 		}
 
 		attr = unix.PerfEventAttr{
+			// The minimum size required for PMU uprobes is PERF_ATTR_SIZE_VER1,
+			// since it added the config2 (Ext2) field. Use Ext2 as probe_offset.
+			Size:   unix.PERF_ATTR_SIZE_VER1,
 			Type:   uint32(et),          // PMU event type read from sysfs
 			Ext1:   uint64(uintptr(sp)), // Kernel symbol to trace
+			Ext2:   args.offset,         // Kernel symbol offset
 			Config: config,              // Retprobe flag
 		}
 	case uprobeType:
@@ -386,6 +412,9 @@ func createTraceFSProbeEvent(typ probeType, args probeArgs) error {
 		// the eBPF program itself.
 		// See Documentation/kprobes.txt for more details.
 		pe = fmt.Sprintf("%s:%s/%s %s", probePrefix(args.ret), args.group, args.symbol, args.symbol)
+		if args.offset != 0 {
+			pe = fmt.Sprintf("%s:%s/%s %s+%d", probePrefix(args.ret), args.group, args.symbol, args.symbol, args.offset)
+		}
 	case uprobeType:
 		// The uprobe_events syntax is as follows:
 		// p[:[GRP/]EVENT] PATH:OFFSET [FETCHARGS] : Set a probe
@@ -398,6 +427,9 @@ func createTraceFSProbeEvent(typ probeType, args probeArgs) error {
 		//
 		// See Documentation/trace/uprobetracer.txt for more details.
 		pe = fmt.Sprintf("%s:%s/%s %s", probePrefix(args.ret), args.group, args.symbol, uprobeToken(args))
+		if args.offset != 0 {
+			pe = fmt.Sprintf("%s:%s/%s %s:%d", probePrefix(args.ret), args.group, args.symbol, uprobeToken(args), args.offset)
+		}
 	}
 	_, err = f.WriteString(pe)
 	// Since commit 97c753e62e6c, ENOENT is correctly returned instead of EINVAL

@@ -37,8 +37,8 @@ type Instruction struct {
 	Offset   int16
 	Constant int64
 
-	// Metadata contains optional metadata about this instruction
-	metadata *metadata
+	// Metadata contains optional metadata about this instruction.
+	Metadata Metadata
 }
 
 // Unmarshal decodes a BPF instruction.
@@ -139,10 +139,8 @@ func (ins *Instruction) AssociateMap(m FDer) error {
 		return errors.New("not a load from a map")
 	}
 
-	ins.setMap(m)
-
-	// Remove any Reference as it has now been resolved.
-	*ins = ins.WithReference("")
+	ins.Metadata.Set(mapMeta{}, m)
+	ins.Metadata.Set(referenceMeta{}, nil)
 
 	return nil
 }
@@ -178,8 +176,8 @@ func (ins *Instruction) encodeMapFD(fd int) {
 // Deprecated: use Map() instead.
 func (ins *Instruction) MapPtr() int {
 	// If there is a map associated with the instruction, return its FD.
-	if ins.metadata != nil && ins.metadata.bpfMap != nil {
-		return ins.metadata.bpfMap.FD()
+	if fd := ins.Metadata.Get(mapMeta{}); fd != nil {
+		return fd.(FDer).FD()
 	}
 
 	// Fall back to the fd stored in the Constant field
@@ -355,14 +353,12 @@ func (ins Instruction) Size() uint64 {
 	return uint64(InstructionSize * ins.OpCode.rawInstructions())
 }
 
+type symbolMeta struct{}
+
 // WithSymbol marks the Instruction as a Symbol, which other Instructions
 // can point to using corresponding calls to WithReference.
 func (ins Instruction) WithSymbol(name string) Instruction {
-	if ins.Symbol() == name {
-		return ins
-	}
-
-	ins.copyMetadata().symbol = name
+	ins.Metadata.Set(symbolMeta{}, name)
 	return ins
 }
 
@@ -377,46 +373,56 @@ func (ins Instruction) Sym(name string) Instruction {
 // otherwise returns an empty string. A symbol is often an Instruction
 // at the start of a function body.
 func (ins Instruction) Symbol() string {
-	return ins.metadata.Symbol()
+	sym, _ := ins.Metadata.Get(symbolMeta{}).(string)
+	return sym
 }
+
+type referenceMeta struct{}
 
 // WithReference makes ins reference another Symbol or map by name.
 func (ins Instruction) WithReference(ref string) Instruction {
-	if ins.Reference() == ref {
-		return ins
-	}
-
-	ins.copyMetadata().reference = ref
+	ins.Metadata.Set(referenceMeta{}, ref)
 	return ins
 }
 
 // Reference returns the Symbol or map name referenced by ins, if any.
 func (ins Instruction) Reference() string {
-	return ins.metadata.Reference()
+	ref, _ := ins.Metadata.Get(referenceMeta{}).(string)
+	return ref
 }
+
+type mapMeta struct{}
 
 // Map returns the Map referenced by ins, if any.
 // An Instruction will contain a Map if e.g. it references an existing,
 // pinned map that was opened during ELF loading.
 func (ins Instruction) Map() FDer {
-	return ins.metadata.Map()
+	fd, _ := ins.Metadata.Get(mapMeta{}).(FDer)
+	return fd
 }
 
-// copyMetadata is a convenience method for copying ins.metadata, assigning
-// the new copy to its metadata field and returning a pointer to the copy
-// so one access can be chained.
-func (ins *Instruction) copyMetadata() *metadata {
-	ins.metadata = ins.metadata.copy()
-	return ins.metadata
+type sourceMeta struct{}
+
+// WithSource adds source information about the Instruction.
+func (ins Instruction) WithSource(src fmt.Stringer) Instruction {
+	ins.Metadata.Set(sourceMeta{}, src)
+	return ins
 }
 
-// setMap sets the given Map m in the metadata of this instruction.
-func (ins *Instruction) setMap(m FDer) {
-	if ins.metadata.Map() == m {
-		return
-	}
+// Source returns source information about the Instruction. The field is
+// present when the compiler emits BTF line info about the Instruction and
+// usually contains the line of source code responsible for it.
+func (ins Instruction) Source() fmt.Stringer {
+	str, _ := ins.Metadata.Get(sourceMeta{}).(fmt.Stringer)
+	return str
+}
 
-	ins.copyMetadata().bpfMap = m
+// A Comment can be passed to Instruction.WithSource to add a comment
+// to an instruction.
+type Comment string
+
+func (s Comment) String() string {
+	return string(s)
 }
 
 // FDer represents a resource tied to an underlying file descriptor.
@@ -424,54 +430,6 @@ func (ins *Instruction) setMap(m FDer) {
 // imported here and FD() is the only method we rely on.
 type FDer interface {
 	FD() int
-}
-
-// metadata holds metadata about an Instruction.
-type metadata struct {
-	// reference denotes a reference (e.g. a jump) to another symbol.
-	reference string
-	// symbol denotes an instruction at the start of a function body.
-	symbol string
-
-	// bpfMap denotes the Map whose fd is used by this instruction.
-	bpfMap FDer
-}
-
-// Reference is a safe accessor to metadata's reference field.
-// It can be called on a nil m, in which case it will return the default value.
-func (m *metadata) Reference() string {
-	if m == nil {
-		return ""
-	}
-	return m.reference
-}
-
-// Symbol is a safe accessor to metadata's symbol field.
-// It can be called on a nil m, in which case it will return the default value.
-func (m *metadata) Symbol() string {
-	if m == nil {
-		return ""
-	}
-	return m.symbol
-}
-
-// Map is a safe accessor to metadata's bpfMap field.
-// It can be called on a nil m, in which case it will return the default value.
-func (m *metadata) Map() FDer {
-	if m == nil {
-		return nil
-	}
-	return m.bpfMap
-}
-
-// copy returns a copy of metadata.
-// Always returns a valid pointer, even when called on a nil metadata.
-func (m *metadata) copy() *metadata {
-	var copy metadata
-	if m != nil {
-		copy = *m
-	}
-	return &copy
 }
 
 // Instructions is an eBPF program.
@@ -696,6 +654,12 @@ func (insns Instructions) Format(f fmt.State, c rune) {
 	for iter.Next() {
 		if iter.Ins.Symbol() != "" {
 			fmt.Fprintf(f, "%s%s:\n", symIndent, iter.Ins.Symbol())
+		}
+		if src := iter.Ins.Source(); src != nil {
+			line := strings.TrimSpace(src.String())
+			if line != "" {
+				fmt.Fprintf(f, "%s%*s; %s\n", indent, offsetWidth, " ", line)
+			}
 		}
 		fmt.Fprintf(f, "%s%*d: %v\n", indent, offsetWidth, iter.Offset, iter.Ins)
 	}

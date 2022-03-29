@@ -1,8 +1,8 @@
 # The development version of clang is distributed as the 'clang' binary,
 # while stable/released versions have a version number attached.
 # Pin the default clang to a stable version.
-CLANG ?= clang-13
-STRIP ?= llvm-strip-13
+CLANG ?= clang-14
+STRIP ?= llvm-strip-14
 CFLAGS := -O2 -g -Wall -Werror $(CFLAGS)
 
 # Obtain an absolute path to the directory of the Makefile.
@@ -62,7 +62,10 @@ clean:
 	-$(RM) testdata/*.elf
 	-$(RM) internal/btf/testdata/*.elf
 
-all: $(addsuffix -el.elf,$(TARGETS)) $(addsuffix -eb.elf,$(TARGETS)) generate
+format:
+	find . -type f -name "*.c" | xargs clang-format -i
+
+all: format $(addsuffix -el.elf,$(TARGETS)) $(addsuffix -eb.elf,$(TARGETS)) generate
 	ln -srf testdata/loader-$(CLANG)-el.elf testdata/loader-el.elf
 	ln -srf testdata/loader-$(CLANG)-eb.elf testdata/loader-eb.elf
 

@@ -3,12 +3,12 @@
 #include "common.h"
 
 struct bpf_spin_lock {
-	uint32_t	val;
+	uint32_t val;
 };
 
 struct hash_elem {
-    int cnt;
-    struct bpf_spin_lock lock;
+	int cnt;
+	struct bpf_spin_lock lock;
 };
 
 #if __clang_major__ >= 9

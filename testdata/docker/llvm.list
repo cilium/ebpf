@@ -9,11 +9,5 @@ deb-src http://apt.llvm.org/buster/ llvm-toolchain-buster-7 main
 deb http://apt.llvm.org/buster/ llvm-toolchain-buster-9 main
 deb-src http://apt.llvm.org/buster/ llvm-toolchain-buster-9 main
 
-deb http://apt.llvm.org/buster/ llvm-toolchain-buster-11 main
-deb-src http://apt.llvm.org/buster/ llvm-toolchain-buster-11 main
-
-deb http://apt.llvm.org/buster/ llvm-toolchain-buster-12 main
-deb-src http://apt.llvm.org/buster/ llvm-toolchain-buster-12 main
-
-deb http://apt.llvm.org/buster/ llvm-toolchain-buster-13 main
-deb-src http://apt.llvm.org/buster/ llvm-toolchain-buster-13 main
+deb http://apt.llvm.org/buster/ llvm-toolchain-buster-14 main
+deb-src http://apt.llvm.org/buster/ llvm-toolchain-buster-14 main

@@ -51,12 +51,13 @@ struct {
 	__uint(type, BPF_MAP_TYPE_ARRAY_OF_MAPS);
 	__uint(key_size, sizeof(uint32_t));
 	__uint(max_entries, 1);
-	__array(values, struct {
-		__uint(type, BPF_MAP_TYPE_HASH);
-		__uint(max_entries, 1);
-		__type(key, uint32_t);
-		__type(value, uint32_t);
-	});
+	__array(
+		values, struct {
+			__uint(type, BPF_MAP_TYPE_HASH);
+			__uint(max_entries, 1);
+			__type(key, uint32_t);
+			__type(value, uint32_t);
+		});
 } btf_outer_map_anon __section(".maps");
 
 struct {

@@ -27,6 +27,4 @@ struct bits {
 	u32 g : 30; /* was: u64 g:30 */
 };
 
-int dummy() {
-	return core_access((struct s){}.a) + core_access((struct bits){}.a);
-}
+struct bits *unused_bits __attribute__((unused));

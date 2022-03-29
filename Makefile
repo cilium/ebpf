@@ -62,7 +62,10 @@ clean:
 	-$(RM) testdata/*.elf
 	-$(RM) internal/btf/testdata/*.elf
 
-all: $(addsuffix -el.elf,$(TARGETS)) $(addsuffix -eb.elf,$(TARGETS)) generate
+format:
+	find . -type f -name "*.c" | xargs clang-format -i
+
+all: format $(addsuffix -el.elf,$(TARGETS)) $(addsuffix -eb.elf,$(TARGETS)) generate
 	ln -srf testdata/loader-$(CLANG)-el.elf testdata/loader-el.elf
 	ln -srf testdata/loader-$(CLANG)-eb.elf testdata/loader-eb.elf
 

@@ -2,7 +2,7 @@
 
 #include "common.h"
 
-#define PIN_GLOBAL_NS	2
+#define PIN_GLOBAL_NS 2
 
 // bpf_elf_map is a custom BPF map definition used by iproute2.
 // It contains the id, pinning, inner_id and inner_idx fields

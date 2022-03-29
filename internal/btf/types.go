@@ -616,6 +616,25 @@ func Sizeof(typ Type) (int, error) {
 	return 0, fmt.Errorf("type %s: exceeded type depth", typ)
 }
 
+// alignof returns the alignment of a type.
+//
+// Currently only supports the subset of types necessary for bitfield relocations.
+func alignof(typ Type) (int, error) {
+	typ, err := skipQualifiersAndTypedefs(typ)
+	if err != nil {
+		return 0, err
+	}
+
+	switch t := typ.(type) {
+	case *Enum:
+		return int(t.size()), nil
+	case *Int:
+		return int(t.Size), nil
+	default:
+		return 0, fmt.Errorf("can't calculate alignment of %T", t)
+	}
+}
+
 // Copy a Type recursively.
 func Copy(typ Type) Type {
 	typ, _ = copyType(typ, nil)

@@ -49,6 +49,8 @@ type KprobeOptions struct {
 	//
 	// Needs kernel 5.15+.
 	Cookie uint64
+	// Kprobe symbol offset, or uprobe path offset.
+	Offset uint64
 }
 
 const (
@@ -162,6 +164,7 @@ func kprobe(symbol string, prog *ebpf.Program, opts *KprobeOptions, ret bool) (*
 
 	if opts != nil {
 		args.cookie = opts.Cookie
+		args.offset = opts.Offset
 	}
 
 	// Use kprobe PMU if the kernel has it available.
@@ -234,8 +237,12 @@ func pmuProbe(typ probeType, args probeArgs) (*perfEvent, error) {
 		}
 
 		attr = unix.PerfEventAttr{
+			// The minimum size required for PMU kprobes is PERF_ATTR_SIZE_VER1,
+			// since it added the config2 (Ext2) field. Use Ext2 as probe_offset.
+			Size:   unix.PERF_ATTR_SIZE_VER1,
 			Type:   uint32(et),          // PMU event type read from sysfs
 			Ext1:   uint64(uintptr(sp)), // Kernel symbol to trace
+			Ext2:   args.offset,         // Kernel symbol offset
 			Config: config,              // Retprobe flag
 		}
 	case uprobeType:
@@ -385,7 +392,7 @@ func createTraceFSProbeEvent(typ probeType, args probeArgs) error {
 		// subsampling or rate limiting logic can be more accurately implemented in
 		// the eBPF program itself.
 		// See Documentation/kprobes.txt for more details.
-		pe = fmt.Sprintf("%s:%s/%s %s", probePrefix(args.ret), args.group, args.symbol, args.symbol)
+		pe = fmt.Sprintf("%s:%s/%s %s", probePrefix(args.ret), args.group, args.symbol, kprobeToken(args))
 	case uprobeType:
 		// The uprobe_events syntax is as follows:
 		// p[:[GRP/]EVENT] PATH:OFFSET [FETCHARGS] : Set a probe
@@ -488,4 +495,15 @@ func kretprobeBit() (uint64, error) {
 		kprobeRetprobeBit.value, kprobeRetprobeBit.err = determineRetprobeBit(kprobeType)
 	})
 	return kprobeRetprobeBit.value, kprobeRetprobeBit.err
+}
+
+// kprobeToken creates the SYM[+offs] token for the tracefs api.
+func kprobeToken(args probeArgs) string {
+	po := args.symbol
+
+	if args.offset != 0 {
+		po += fmt.Sprintf("+%#x", args.offset)
+	}
+
+	return po
 }

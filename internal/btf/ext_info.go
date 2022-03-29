@@ -435,14 +435,14 @@ type bpfCORERelo struct {
 	InsnOff      uint32
 	TypeID       TypeID
 	AccessStrOff uint32
-	Kind         COREKind
+	Kind         coreKind
 }
 
 type CORERelocation struct {
 	insnOff  uint32
 	typeID   TypeID
 	accessor coreAccessor
-	kind     COREKind
+	kind     coreKind
 }
 
 type CORERelos []CORERelocation

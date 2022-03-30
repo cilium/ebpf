@@ -97,7 +97,7 @@ func testLink(t *testing.T, link Link, prog *ebpf.Program) {
 	}
 	defer os.RemoveAll(tmp)
 
-	t.Run("pinning", func(t *testing.T) {
+	t.Run("link/pinning", func(t *testing.T) {
 		path := filepath.Join(tmp, "link")
 		err = link.Pin(path)
 		testutils.SkipIfNotSupported(t, err)
@@ -123,7 +123,7 @@ func testLink(t *testing.T, link Link, prog *ebpf.Program) {
 		}
 	})
 
-	t.Run("update", func(t *testing.T) {
+	t.Run("link/update", func(t *testing.T) {
 		err := link.Update(prog)
 		testutils.SkipIfNotSupported(t, err)
 		if err != nil {
@@ -142,7 +142,7 @@ func testLink(t *testing.T, link Link, prog *ebpf.Program) {
 		}()
 	})
 
-	t.Run("link_info", func(t *testing.T) {
+	t.Run("link/info", func(t *testing.T) {
 		info, err := link.Info()
 		testutils.SkipIfNotSupported(t, err)
 		if err != nil {

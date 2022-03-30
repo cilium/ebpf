@@ -280,8 +280,12 @@ func unsafeStringPtr(str string) (unsafe.Pointer, error) {
 }
 
 // getTraceEventID reads a trace event's ID from tracefs given its group and name.
-// group and name must be alphanumeric or underscore, as required by the kernel.
+// The kernel requires group and name to be alphanumeric or underscore.
+//
+// name automatically has its invalid symbols converted to underscores so the caller
+// can pass a raw symbol name, e.g. a kernel symbol containing dots.
 func getTraceEventID(group, name string) (uint64, error) {
+	name = sanitizedSymbol(name)
 	tid, err := uint64FromFile(tracefsPath, "events", group, name, "id")
 	if errors.Is(err, os.ErrNotExist) {
 		return 0, fmt.Errorf("trace event %s/%s: %w", group, name, os.ErrNotExist)

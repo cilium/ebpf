@@ -13,43 +13,72 @@ import (
 	"github.com/cilium/ebpf/internal/unix"
 )
 
-// Kernel symbol that should be present on all tested kernels.
+// Global symbol, present on all tested kernels.
 var ksym = "vprintk"
 
-func TestKprobe(t *testing.T) {
-	c := qt.New(t)
+// Collection of various symbols present in all tested kernels.
+// Compiler optimizations result in different names for these symbols.
+var symTests = []string{
+	"async_resume.cold",         // marked with 'cold' gcc attribute, unlikely to be executed
+	"echo_char.isra.0",          // function optimized by -fipa-sra
+	"get_buffer.constprop.0",    // optimized function with constant operands
+	"unregister_kprobes.part.0", // function body that was split and partially inlined
+}
 
+func TestKprobe(t *testing.T) {
 	prog := mustLoadProgram(t, ebpf.Kprobe, 0, "")
 
-	k, err := Kprobe(ksym, prog, nil)
+	for _, tt := range symTests {
+		t.Run(tt, func(t *testing.T) {
+			k, err := Kprobe(tt, prog, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer k.Close()
+		})
+	}
+
+	c := qt.New(t)
+
+	k, err := Kprobe("bogus", prog, nil)
+	c.Assert(err, qt.ErrorIs, os.ErrNotExist, qt.Commentf("got error: %s", err))
+	if k != nil {
+		k.Close()
+	}
+
+	k, err = Kprobe(ksym, prog, nil)
 	c.Assert(err, qt.IsNil)
 	defer k.Close()
 
 	testLink(t, k, prog)
-
-	k, err = Kprobe("bogus", prog, nil)
-	c.Assert(errors.Is(err, os.ErrNotExist), qt.IsTrue, qt.Commentf("got error: %s", err))
-	if k != nil {
-		k.Close()
-	}
 }
 
 func TestKretprobe(t *testing.T) {
-	c := qt.New(t)
-
 	prog := mustLoadProgram(t, ebpf.Kprobe, 0, "")
 
-	k, err := Kretprobe(ksym, prog, nil)
+	for _, tt := range symTests {
+		t.Run(tt, func(t *testing.T) {
+			k, err := Kretprobe(tt, prog, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer k.Close()
+		})
+	}
+
+	c := qt.New(t)
+
+	k, err := Kretprobe("bogus", prog, nil)
+	c.Assert(err, qt.ErrorIs, os.ErrNotExist, qt.Commentf("got error: %s", err))
+	if k != nil {
+		k.Close()
+	}
+
+	k, err = Kretprobe(ksym, prog, nil)
 	c.Assert(err, qt.IsNil)
 	defer k.Close()
 
 	testLink(t, k, prog)
-
-	k, err = Kretprobe("bogus", prog, nil)
-	c.Assert(errors.Is(err, os.ErrNotExist), qt.IsTrue, qt.Commentf("got error: %s", err))
-	if k != nil {
-		k.Close()
-	}
 }
 
 func TestKprobeErrors(t *testing.T) {

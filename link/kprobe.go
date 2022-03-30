@@ -49,7 +49,7 @@ type KprobeOptions struct {
 	//
 	// Needs kernel 5.15+.
 	Cookie uint64
-	// Kprobe symbol offset, or uprobe path offset.
+	// Kprobe symbol offset.
 	Offset uint64
 }
 

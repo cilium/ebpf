@@ -3,7 +3,6 @@
 #include "common.h"
 
 #include "bpf_endian.h"
-#include "bpf_helpers.h"
 #include "bpf_tracing.h"
 
 #define AF_INET 2

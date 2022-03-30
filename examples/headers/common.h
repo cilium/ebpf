@@ -22,6 +22,8 @@ typedef __u32 __be32;
 typedef __u64 __be64;
 typedef __u32 __wsum;
 
+#include "bpf_helpers.h"
+
 enum bpf_map_type {
 	BPF_MAP_TYPE_UNSPEC                = 0,
 	BPF_MAP_TYPE_HASH                  = 1,

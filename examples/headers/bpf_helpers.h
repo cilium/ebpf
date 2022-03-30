@@ -8,7 +8,6 @@
  * in advance since bpf_helper_defs.h uses such types
  * as __u64.
  */
-#include "common.h"
 #include "bpf_helper_defs.h"
 
 #define __uint(name, val) int (*name)[val]

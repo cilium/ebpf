@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime"
+	"strings"
 	"sync"
 	"unsafe"
 
@@ -263,6 +264,12 @@ func pmuProbe(typ probeType, args probeArgs) (*perfEvent, error) {
 
 	rawFd, err := unix.PerfEventOpen(&attr, args.pid, 0, -1, unix.PERF_FLAG_FD_CLOEXEC)
 
+	// On some old kernels, kprobe PMU doesn't allow `.` in symbol names and
+	// return -EINVAL. Return ErrNotSupported to allow falling back to tracefs.
+	// https://github.com/torvalds/linux/blob/94710cac0ef4/kernel/trace/trace_kprobe.c#L340-L343
+	if errors.Is(err, unix.EINVAL) && strings.Contains(args.symbol, ".") {
+		return nil, fmt.Errorf("symbol '%s': older kernels don't accept dots: %w", args.symbol, ErrNotSupported)
+	}
 	// Since commit 97c753e62e6c, ENOENT is correctly returned instead of EINVAL
 	// when trying to create a kretprobe for a missing symbol. Make sure ENOENT
 	// is returned to the caller.
@@ -385,7 +392,7 @@ func createTraceFSProbeEvent(typ probeType, args probeArgs) error {
 		// subsampling or rate limiting logic can be more accurately implemented in
 		// the eBPF program itself.
 		// See Documentation/kprobes.txt for more details.
-		pe = fmt.Sprintf("%s:%s/%s %s", probePrefix(args.ret), args.group, args.symbol, args.symbol)
+		pe = fmt.Sprintf("%s:%s/%s %s", probePrefix(args.ret), args.group, sanitizedSymbol(args.symbol), args.symbol)
 	case uprobeType:
 		// The uprobe_events syntax is as follows:
 		// p[:[GRP/]EVENT] PATH:OFFSET [FETCHARGS] : Set a probe
@@ -424,7 +431,7 @@ func closeTraceFSProbeEvent(typ probeType, group, symbol string) error {
 
 	// See [k,u]probe_events syntax above. The probe type does not need to be specified
 	// for removals.
-	pe := fmt.Sprintf("-:%s/%s", group, symbol)
+	pe := fmt.Sprintf("-:%s/%s", group, sanitizedSymbol(symbol))
 	if _, err = f.WriteString(pe); err != nil {
 		return fmt.Errorf("writing '%s' to '%s': %w", pe, typ.EventsPath(), err)
 	}

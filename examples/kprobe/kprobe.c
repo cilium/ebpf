@@ -1,6 +1,6 @@
 // +build ignore
 
-#include "bpf_helpers.h"
+#include "common.h"
 
 char __license[] SEC("license") = "Dual MIT/GPL";
 

@@ -2,6 +2,7 @@ package link
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"testing"
 
@@ -375,4 +376,25 @@ func TestKprobeCookie(t *testing.T) {
 		t.Fatal(err)
 	}
 	k.Close()
+}
+
+func TestKprobeToken(t *testing.T) {
+	tests := []struct {
+		args     probeArgs
+		expected string
+	}{
+		{probeArgs{symbol: "symbol"}, "symbol"},
+		{probeArgs{symbol: "symbol", offset: 1}, "symbol+0x1"},
+		{probeArgs{symbol: "symbol", offset: 65535}, "symbol+0xffff"},
+		{probeArgs{symbol: "symbol", offset: 65536}, "symbol+0x10000"},
+	}
+
+	for i, tt := range tests {
+		t.Run(fmt.Sprint(i), func(t *testing.T) {
+			po := kprobeToken(tt.args)
+			if tt.expected != po {
+				t.Errorf("Expected symbol+offset to be '%s', got '%s'", tt.expected, po)
+			}
+		})
+	}
 }

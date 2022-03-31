@@ -1,7 +1,6 @@
 package perf
 
 import (
-	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
@@ -10,7 +9,6 @@ import (
 	"sync"
 
 	"github.com/cilium/ebpf"
-	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/epoll"
 	"github.com/cilium/ebpf/internal/unix"
 )
@@ -21,11 +19,12 @@ var (
 )
 
 // perfEventHeader must match 'struct perf_event_header` in <linux/perf_event.h>.
-type perfEventHeader struct {
-	Type uint32
-	Misc uint16
-	Size uint16
-}
+//type perfEventHeader struct {
+//	Type uint32
+//	Misc uint16
+//	Size uint16
+//}
+const perfEventHeaderSize = 4 + 2 + 2
 
 func cpuForEvent(event *unix.EpollEvent) int {
 	return int(event.Pad)
@@ -53,18 +52,25 @@ func readRecordFromRing(ring *perfEventRing) (Record, error) {
 	return readRecord(ring, ring.cpu)
 }
 
-func readRecord(rd io.Reader, cpu int) (Record, error) {
-	var header perfEventHeader
-	err := binary.Read(rd, internal.NativeEndian, &header)
+func readHeaderType(rd ringReaderSeeker) (uint32, error) {
+	t, err := rd.readUint32()
+	if err != nil {
+		return 0, err
+	}
+	err = rd.seek(perfEventHeaderSize - 4)
+	return t, err
+}
+
+func readRecord(rd ringReaderSeeker, cpu int) (Record, error) {
+	headerType, err := readHeaderType(rd)
 	if err == io.EOF {
 		return Record{}, errEOR
 	}
-
 	if err != nil {
 		return Record{}, fmt.Errorf("can't read event header: %v", err)
 	}
 
-	switch header.Type {
+	switch headerType {
 	case unix.PERF_RECORD_LOST:
 		lost, err := readLostRecords(rd)
 		return Record{CPU: cpu, LostSamples: lost}, err
@@ -74,29 +80,27 @@ func readRecord(rd io.Reader, cpu int) (Record, error) {
 		return Record{CPU: cpu, RawSample: sample}, err
 
 	default:
-		return Record{}, &unknownEventError{header.Type}
+		return Record{}, &unknownEventError{headerType}
 	}
 }
 
-func readLostRecords(rd io.Reader) (uint64, error) {
+func readLostRecords(rd ringReaderSeeker) (uint64, error) {
 	// lostHeader must match 'struct perf_event_lost in kernel sources.
-	var lostHeader struct {
-		ID   uint64
-		Lost uint64
-	}
-
-	err := binary.Read(rd, internal.NativeEndian, &lostHeader)
+	err := rd.seek(8)
 	if err != nil {
 		return 0, fmt.Errorf("can't read lost records header: %v", err)
 	}
-
-	return lostHeader.Lost, nil
+	lost, err := rd.readUint64()
+	if err != nil {
+		return 0, fmt.Errorf("can't read lost records header: %v", err)
+	}
+	return lost, nil
 }
 
-func readRawSample(rd io.Reader) ([]byte, error) {
+func readRawSample(rd ringReaderSeeker) ([]byte, error) {
 	// This must match 'struct perf_event_sample in kernel sources.
-	var size uint32
-	if err := binary.Read(rd, internal.NativeEndian, &size); err != nil {
+	size, err := rd.readUint32()
+	if err != nil {
 		return nil, fmt.Errorf("can't read sample size: %v", err)
 	}
 

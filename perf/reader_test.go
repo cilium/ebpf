@@ -2,7 +2,6 @@ package perf
 
 import (
 	"bytes"
-	"encoding/binary"
 	"errors"
 	"fmt"
 	"os"
@@ -12,7 +11,6 @@ import (
 
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/asm"
-	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/testutils"
 	"github.com/cilium/ebpf/internal/unix"
 
@@ -286,15 +284,27 @@ func TestCreatePerfEvent(t *testing.T) {
 	unix.Close(fd)
 }
 
+type noopRingReader struct {
+	bytes.Buffer
+}
+
+func (r *noopRingReader) seek(int) error {
+	return nil
+}
+func (r *noopRingReader) readUint32() (uint32, error) {
+	return 0, nil
+}
+func (r *noopRingReader) readUint64() (uint64, error) {
+	return 0, nil
+}
+
 func TestReadRecord(t *testing.T) {
 	var buf bytes.Buffer
-
-	err := binary.Write(&buf, internal.NativeEndian, &perfEventHeader{})
+	_, err := buf.Write(make([]byte, perfEventHeaderSize))
 	if err != nil {
 		t.Fatal(err)
 	}
-
-	_, err = readRecord(&buf, 0)
+	_, err = readRecord(&noopRingReader{buf}, 0)
 	if !IsUnknownEvent(err) {
 		t.Error("readRecord should return unknown event error, got", err)
 	}

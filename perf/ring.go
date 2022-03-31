@@ -3,6 +3,7 @@ package perf
 import (
 	"errors"
 	"fmt"
+	"github.com/cilium/ebpf/internal"
 	"io"
 	"math"
 	"os"
@@ -12,6 +13,13 @@ import (
 
 	"github.com/cilium/ebpf/internal/unix"
 )
+
+type ringReaderSeeker interface {
+	io.Reader
+	readUint32() (uint32, error)
+	readUint64() (uint64, error)
+	seek(int) error
+}
 
 // perfEventRing is a page of metadata followed by
 // a variable number of pages which form a ring buffer.
@@ -136,9 +144,20 @@ func (rr *ringReader) writeTail() {
 }
 
 func (rr *ringReader) Read(p []byte) (int, error) {
-	start := int(rr.tail & rr.mask)
+	start, end := rr.getBounds(len(p))
+	n := copy(p, rr.ring[start:end])
+	rr.tail += uint64(n)
 
-	n := len(p)
+	if rr.tail == rr.head {
+		return n, io.EOF
+	}
+
+	return n, nil
+}
+
+func (rr *ringReader) getBounds(len int) (start, end int) {
+	n := len
+	start = int(rr.tail & rr.mask)
 	// Truncate if the read wraps in the ring buffer
 	if remainder := cap(rr.ring) - start; n > remainder {
 		n = remainder
@@ -148,13 +167,37 @@ func (rr *ringReader) Read(p []byte) (int, error) {
 	if remainder := int(rr.head - rr.tail); n > remainder {
 		n = remainder
 	}
+	end = start + n
+	return
+}
 
-	copy(p, rr.ring[start:start+n])
-	rr.tail += uint64(n)
-
-	if rr.tail == rr.head {
-		return n, io.EOF
+func (rr *ringReader) readUint32() (uint32, error) {
+	n := 4
+	start, end := rr.getBounds(n)
+	if end-start < n {
+		return 0, io.EOF
 	}
+	num := internal.NativeEndian.Uint32(rr.ring[start:end])
+	rr.tail += uint64(n)
+	return num, nil
+}
 
-	return n, nil
+func (rr *ringReader) readUint64() (uint64, error) {
+	n := 8
+	start, end := rr.getBounds(n)
+	if end-start < n {
+		return 0, io.EOF
+	}
+	num := internal.NativeEndian.Uint64(rr.ring[start:end])
+	rr.tail += uint64(n)
+	return num, nil
+}
+
+func (rr *ringReader) seek(offset int) error {
+	start, end := rr.getBounds(offset)
+	rr.tail += uint64(end - start)
+	if rr.tail == rr.head {
+		return io.EOF
+	}
+	return nil
 }

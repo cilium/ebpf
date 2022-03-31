@@ -222,6 +222,14 @@ func TestLoadCollectionSpec(t *testing.T) {
 	})
 }
 
+func BenchmarkELFLoader(b *testing.B) {
+	b.ReportAllocs()
+
+	for i := 0; i < b.N; i++ {
+		LoadCollectionSpec("testdata/loader-el.elf")
+	}
+}
+
 func TestDataSections(t *testing.T) {
 	file := fmt.Sprintf("testdata/loader-%s.elf", internal.ClangEndian)
 	coll, err := LoadCollectionSpec(file)

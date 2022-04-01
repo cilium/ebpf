@@ -1,6 +1,7 @@
 package btf
 
 import (
+	"bytes"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -10,6 +11,27 @@ import (
 	"github.com/cilium/ebpf/asm"
 	"github.com/cilium/ebpf/internal"
 )
+
+// MarshalExtInfos encodes function and line info embeded in insns into kernel
+// wire format.
+func MarshalExtInfos(insns asm.Instructions) (funcInfos, lineInfos []byte, _ error) {
+	iter := insns.Iterate()
+	var fiBuf, liBuf bytes.Buffer
+	for iter.Next() {
+		if fi, ok := iter.Ins.Metadata.Get(funcInfoMeta{}).(*FuncInfo); ok {
+			if err := fi.Marshal(&fiBuf, iter.Offset.Bytes()); err != nil {
+				return nil, nil, err
+			}
+		}
+
+		if li, ok := iter.Ins.Source().(*LineInfo); ok {
+			if err := li.Marshal(&liBuf, iter.Offset.Bytes()); err != nil {
+				return nil, nil, err
+			}
+		}
+	}
+	return fiBuf.Bytes(), liBuf.Bytes(), nil
+}
 
 // extInfo contains extended program metadata.
 //
@@ -315,8 +337,6 @@ type LineInfo struct {
 	// TODO: We should get rid of the fields below, but for that we need to be
 	// able to write BTF.
 
-	// Instruction offset of the line within its enclosing function, in instructions.
-	insnOff     uint32
 	fileNameOff uint32
 	lineOff     uint32
 }
@@ -393,27 +413,12 @@ func (li *LineInfo) Marshal(w io.Writer, offset uint64) error {
 	}
 
 	bli := bpfLineInfo{
-		li.insnOff + uint32(offset/asm.InstructionSize),
+		uint32(offset / asm.InstructionSize),
 		li.fileNameOff,
 		li.lineOff,
 		(li.lineNumber << bpfLineShift) | li.lineColumn,
 	}
 	return binary.Write(w, internal.NativeEndian, &bli)
-}
-
-type LineInfos []LineInfo
-
-// Marshal writes the BTF wire format of the LineInfos to w.
-//
-// offset is the start of the enclosing function in bytes.
-func (li LineInfos) Marshal(w io.Writer, offset uint64) error {
-	for _, info := range li {
-		if err := info.Marshal(w, offset); err != nil {
-			return err
-		}
-	}
-
-	return nil
 }
 
 // parseLineInfos parses a line_info sub-section within .BTF.ext ito a map of
@@ -483,7 +488,6 @@ type bpfCORERelo struct {
 }
 
 type CORERelocation struct {
-	insnOff  uint32
 	typeID   TypeID
 	accessor coreAccessor
 	kind     coreKind
@@ -501,24 +505,10 @@ func newCoreRelocation(relo bpfCORERelo, strings stringTable) (*CORERelocation, 
 	}
 
 	return &CORERelocation{
-		relo.InsnOff,
 		relo.TypeID,
 		accessor,
 		relo.Kind,
 	}, nil
-}
-
-type CORERelos []CORERelocation
-
-// Offset adds offset to the instruction offset of all CORERelos
-// and returns the result.
-func (cr CORERelos) Offset(offset uint32) CORERelos {
-	var relos CORERelos
-	for _, relo := range cr {
-		relo.insnOff += offset
-		relos = append(relos, relo)
-	}
-	return relos
 }
 
 var extInfoReloSize = binary.Size(bpfCORERelo{})

@@ -10,9 +10,9 @@ import (
 	"math"
 	"os"
 	"reflect"
-	"sort"
 	"sync"
 
+	"github.com/cilium/ebpf/asm"
 	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/sys"
 	"github.com/cilium/ebpf/internal/unix"
@@ -43,10 +43,7 @@ type Spec struct {
 	// Includes all struct flavors and types with the same name.
 	namedTypes map[essentialName][]Type
 
-	// Data from .BTF.ext. indexed by function name.
-	funcInfos map[string]FuncInfo
-	lineInfos map[string]LineInfos
-	coreRelos map[string]CORERelos
+	extInfo *extInfo
 
 	byteOrder binary.ByteOrder
 }
@@ -178,105 +175,12 @@ func loadSpecFromELF(file *internal.SafeELFFile) (*Spec, error) {
 		return nil, fmt.Errorf("compressed ext_info is not supported")
 	}
 
-	extInfo, err := loadExtInfos(btfExtSection, file.ByteOrder, spec.strings)
+	spec.extInfo, err = loadExtInfos(btfExtSection, file.ByteOrder, spec.strings)
 	if err != nil {
 		return nil, fmt.Errorf("can't parse ext info: %w", err)
 	}
 
-	if err := spec.splitExtInfos(extInfo); err != nil {
-		return nil, fmt.Errorf("linking funcInfos and lineInfos: %w", err)
-	}
-
 	return spec, nil
-}
-
-// splitExtInfos takes FuncInfos, LineInfos and CORERelos indexed by section and
-// transforms them to be indexed by function. Retrieves function names from
-// the BTF spec.
-func (spec *Spec) splitExtInfos(info *extInfo) error {
-	ofi := make(map[string]FuncInfo)
-	oli := make(map[string]LineInfos)
-	ocr := make(map[string]CORERelos)
-
-	for secName, secFuncInfos := range info.funcInfos {
-		// Collect functions from each section and organize them by name.
-		var funcs []*Func
-		for _, bfi := range secFuncInfos {
-			fi, err := newFuncInfo(bfi, spec)
-			if err != nil {
-				return err
-			}
-
-			ofi[fi.fn.Name] = *fi
-			funcs = append(funcs, fi.fn)
-		}
-
-		sort.Slice(secFuncInfos, func(i, j int) bool {
-			return secFuncInfos[i].InsnOff < secFuncInfos[j].InsnOff
-		})
-
-		// Consider an ELF section that contains 3 functions (a, b, c)
-		// at offsets 0, 10 and 15 respectively. Offset 5 will return function a,
-		// offset 12 will return b, offset >= 15 will return c, etc.
-		funcForInstruction := func(offset uint32) (fn *Func, fnOffset uint32) {
-			for i, fi := range secFuncInfos {
-				if fi.InsnOff > offset {
-					break
-				}
-				fn = funcs[i]
-				fnOffset = fi.InsnOff
-			}
-			return fn, fnOffset
-		}
-
-		// Attribute LineInfo records to their respective functions, if any.
-		if lines := info.lineInfos[secName]; lines != nil {
-			for _, bli := range lines {
-				fn, fnOffset := funcForInstruction(bli.InsnOff)
-				if fn == nil {
-					return fmt.Errorf("section %s: error looking up FuncInfo for offset %v", secName, bli.InsnOff)
-				}
-
-				li, err := newLineInfo(bli, spec.strings)
-				if err != nil {
-					return err
-				}
-
-				// Offsets are ELF section-scoped, make them function-scoped by
-				// subtracting the function's start offset.
-				li.insnOff -= fnOffset
-
-				oli[fn.Name] = append(oli[fn.Name], *li)
-			}
-		}
-
-		// Attribute CO-RE relocations to their respective functions, if any.
-		if relos := info.relos[secName]; relos != nil {
-			for _, r := range relos {
-				fn, fnOffset := funcForInstruction(r.InsnOff)
-				if fn == nil {
-					return fmt.Errorf("section %s: error looking up FuncInfo for offset %v", secName, r.InsnOff)
-				}
-
-				relo, err := newCoreRelocation(r, spec.strings)
-				if err != nil {
-					return err
-				}
-
-				// Offsets are ELF section-scoped, make them function-scoped by
-				// subtracting the function's start offset.
-				relo.insnOff -= fnOffset
-
-				ocr[fn.Name] = append(ocr[fn.Name], *relo)
-			}
-		}
-	}
-
-	spec.funcInfos = ofi
-	spec.lineInfos = oli
-	spec.coreRelos = ocr
-
-	return nil
 }
 
 func loadRawSpec(btf io.Reader, bo binary.ByteOrder, sectionSizes map[string]uint32, variableOffsets map[variable]uint32) (*Spec, error) {
@@ -522,9 +426,7 @@ func (s *Spec) Copy() *Spec {
 		s.strings,
 		types,
 		namedTypes,
-		s.funcInfos,
-		s.lineInfos,
-		s.coreRelos,
+		s.extInfo,
 		s.byteOrder,
 	}
 }
@@ -591,26 +493,6 @@ func (sw sliceWriter) Write(p []byte) (int, error) {
 	}
 
 	return copy(sw, p), nil
-}
-
-// Program finds the BTF for a specific function.
-//
-// Returns an error which may wrap ErrNoExtendedInfo if the Spec doesn't
-// contain extended BTF info.
-func (s *Spec) Program(name string) (*Program, error) {
-	if s.funcInfos == nil && s.lineInfos == nil && s.coreRelos == nil {
-		return nil, fmt.Errorf("BTF for function %s: %w", name, ErrNoExtendedInfo)
-	}
-
-	funcInfo, funcOK := s.funcInfos[name]
-	lineInfos, lineOK := s.lineInfos[name]
-	relos, coreOK := s.coreRelos[name]
-
-	if !funcOK && !lineOK && !coreOK {
-		return nil, fmt.Errorf("no extended BTF info for function %s", name)
-	}
-
-	return &Program{s, funcInfo, lineInfos, relos}, nil
 }
 
 // TypeByID returns the BTF Type with the given type ID.
@@ -718,6 +600,84 @@ func (s *Spec) TypeByName(name string, typ interface{}) error {
 	return nil
 }
 
+type funcInfoMeta struct{}
+type coreRelocationMeta struct{}
+
+// AssignExtInfos stores extended BTF metadata in the instructions.
+//
+// section is the name of the source of the instructions.
+func (s *Spec) AssignExtInfos(section string, insns asm.Instructions) error {
+	if s.extInfo == nil {
+		return fmt.Errorf("metadata for section %s: %w", section, ErrNoExtendedInfo)
+	}
+
+	// Assumption: extInfos are sorted by ascending offset.
+	funcInfos := s.extInfo.funcInfos[section]
+	funcInfoForOffset := func(offset asm.RawInstructionOffset) (*FuncInfo, error) {
+		if len(funcInfos) == 0 || funcInfos[0].InsnOff != uint32(offset) {
+			return nil, nil
+		}
+
+		fi := funcInfos[0]
+		funcInfos = funcInfos[1:]
+
+		return newFuncInfo(fi, s)
+	}
+
+	lineInfos := s.extInfo.lineInfos[section]
+	lineInfoForOffset := func(offset asm.RawInstructionOffset) (*LineInfo, error) {
+		if len(lineInfos) == 0 || lineInfos[0].InsnOff != uint32(offset) {
+			return nil, nil
+		}
+
+		li := lineInfos[0]
+		lineInfos = lineInfos[1:]
+
+		return newLineInfo(li, s.strings)
+	}
+
+	relos := s.extInfo.relos[section]
+	coreReloForOffset := func(offset asm.RawInstructionOffset) (*CORERelocation, error) {
+		if len(relos) == 0 || relos[0].InsnOff != uint32(offset) {
+			return nil, nil
+		}
+
+		relo := relos[0]
+		relos = relos[1:]
+
+		return newCoreRelocation(relo, s.strings)
+	}
+
+	iter := insns.Iterate()
+	for iter.Next() {
+		fn, err := funcInfoForOffset(iter.Offset)
+		if err != nil {
+			return err
+		}
+		if fn != nil {
+			iter.Ins.Metadata.Set(funcInfoMeta{}, fn)
+		}
+
+		li, err := lineInfoForOffset(iter.Offset)
+		if err != nil {
+			return err
+		}
+		if li != nil {
+			*iter.Ins = iter.Ins.WithSource(li)
+		}
+
+		relo, err := coreReloForOffset(iter.Offset)
+		if err != nil {
+			return err
+		}
+		if relo != nil {
+			iter.Ins.Metadata.Set(coreRelocationMeta{}, relo)
+		}
+	}
+
+	return nil
+}
+
 // Handle is a reference to BTF loaded into the kernel.
 type Handle struct {
 	spec *Spec
@@ -809,19 +769,6 @@ func (h *Handle) FD() int {
 type Map struct {
 	Spec       *Spec
 	Key, Value Type
-}
-
-// Program is the BTF information for a stream of instructions.
-type Program struct {
-	spec      *Spec
-	FuncInfo  FuncInfo
-	LineInfos LineInfos
-	CORERelos CORERelos
-}
-
-// Spec returns the BTF spec of this program.
-func (p *Program) Spec() *Spec {
-	return p.spec
 }
 
 func marshalBTF(types interface{}, strings []byte, bo binary.ByteOrder) []byte {

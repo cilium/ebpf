@@ -114,7 +114,7 @@ func (fs COREFixups) Apply(insns asm.Instructions) (asm.Instructions, error) {
 	cpy := make(asm.Instructions, 0, len(insns))
 	iter := insns.Iterate()
 	for iter.Next() {
-		fixup, ok := fs[iter.Offset.Bytes()]
+		fixup, ok := fs[uint64(iter.Offset)]
 		if !ok {
 			cpy = append(cpy, *iter.Ins)
 			continue

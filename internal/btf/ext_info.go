@@ -570,6 +570,10 @@ func parseCOREReloRecords(r io.Reader, bo binary.ByteOrder, recordSize uint32, r
 			return nil, fmt.Errorf("offset %v is not aligned with instruction size", relo.InsnOff)
 		}
 
+		// ELF tracks offset in bytes, the kernel expects raw BPF instructions.
+		// Convert as early as possible.
+		relo.InsnOff /= asm.InstructionSize
+
 		out = append(out, relo)
 	}
 

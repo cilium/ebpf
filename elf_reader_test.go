@@ -142,9 +142,10 @@ func TestLoadCollectionSpec(t *testing.T) {
 			}
 			return false
 		}),
-		cmpopts.IgnoreTypes(new(btf.Map), new(btf.Program)),
+		cmpopts.IgnoreTypes(new(btf.Spec)),
 		cmpopts.IgnoreFields(CollectionSpec{}, "ByteOrder", "Types"),
 		cmpopts.IgnoreFields(ProgramSpec{}, "Instructions", "ByteOrder"),
+		cmpopts.IgnoreFields(MapSpec{}, "Key", "Value"),
 		cmpopts.IgnoreUnexported(ProgramSpec{}),
 		cmpopts.IgnoreMapEntries(func(key string, _ *MapSpec) bool {
 			switch key {
@@ -220,6 +221,14 @@ func TestLoadCollectionSpec(t *testing.T) {
 			t.Error("Expected return value to be 5, got", ret)
 		}
 	})
+}
+
+func BenchmarkELFLoader(b *testing.B) {
+	b.ReportAllocs()
+
+	for i := 0; i < b.N; i++ {
+		_, _ = LoadCollectionSpec("testdata/loader-el.elf")
+	}
 }
 
 func TestDataSections(t *testing.T) {

@@ -1,12 +1,10 @@
 package ebpf
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
 
 	"github.com/cilium/ebpf/asm"
-	"github.com/cilium/ebpf/internal/btf"
 )
 
 // splitSymbols splits insns into subsections delimited by Symbol Instructions.
@@ -109,52 +107,6 @@ func findReferences(progs map[string]*ProgramSpec) error {
 	}
 
 	return nil
-}
-
-// collectCORERelos returns a list of CO-RE relocations of the layout's progs
-// in order.
-func collectCORERelos(layout []reference) (btf.CORERelos, error) {
-	var relos btf.CORERelos
-	for _, sym := range layout {
-		if sym.spec.BTF == nil {
-			return nil, fmt.Errorf("program %s: missing BTF", sym.spec.Name)
-		}
-		relos = append(relos, sym.spec.BTF.CORERelos.Offset(uint32(sym.offset))...)
-	}
-
-	return relos, nil
-}
-
-// marshalFuncInfos returns the BTF func infos of all progs in order.
-func marshalFuncInfos(layout []reference) ([]byte, error) {
-	if len(layout) == 0 {
-		return nil, nil
-	}
-
-	var buf bytes.Buffer
-	for _, sym := range layout {
-		if err := sym.spec.BTF.FuncInfo.Marshal(&buf, sym.offset); err != nil {
-			return nil, fmt.Errorf("marshaling prog %s func info: %w", sym.spec.Name, err)
-		}
-	}
-
-	return buf.Bytes(), nil
-}
-
-// marshalLineInfos returns the BTF line infos of all progs in order.
-func marshalLineInfos(layout []reference) ([]byte, error) {
-	if len(layout) == 0 {
-		return nil, nil
-	}
-
-	var buf bytes.Buffer
-	for _, sym := range layout {
-		if err := sym.spec.BTF.LineInfos.Marshal(&buf, sym.offset); err != nil {
-			return nil, fmt.Errorf("marshaling prog %s line infos: %w", sym.spec.Name, err)
-		}
-	}
-
-	return buf.Bytes(), nil
 }
 
 // fixupAndValidate is called by the ELF reader right before marshaling the

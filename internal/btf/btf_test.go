@@ -161,6 +161,7 @@ func TestTypeByName(t *testing.T) {
 
 func BenchmarkParseVmlinux(b *testing.B) {
 	rd := readVMLinux(b)
+	b.ReportAllocs()
 	b.ResetTimer()
 
 	for n := 0; n < b.N; n++ {

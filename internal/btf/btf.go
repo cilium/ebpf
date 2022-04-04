@@ -1,6 +1,7 @@
 package btf
 
 import (
+	"bufio"
 	"bytes"
 	"debug/elf"
 	"encoding/binary"
@@ -165,7 +166,11 @@ func loadSpecFromELF(file *internal.SafeELFFile) (*Spec, error) {
 		return nil, err
 	}
 
-	spec, err := loadRawSpec(btfSection.Open(), file.ByteOrder, sectionSizes, vars)
+	if btfSection.ReaderAt == nil {
+		return nil, fmt.Errorf("compressed BTF is not supported")
+	}
+
+	spec, err := loadRawSpec(btfSection.ReaderAt, file.ByteOrder, sectionSizes, vars)
 	if err != nil {
 		return nil, err
 	}
@@ -298,7 +303,7 @@ func (spec *Spec) splitExtInfos(info *extInfo) error {
 	return nil
 }
 
-func loadRawSpec(btf io.Reader, bo binary.ByteOrder, sectionSizes map[string]uint32, variableOffsets map[variable]uint32) (*Spec, error) {
+func loadRawSpec(btf io.ReaderAt, bo binary.ByteOrder, sectionSizes map[string]uint32, variableOffsets map[variable]uint32) (*Spec, error) {
 	rawTypes, rawStrings, err := parseBTF(btf, bo)
 	if err != nil {
 		return nil, err
@@ -427,11 +432,13 @@ func parseBTFHeader(r io.Reader, bo binary.ByteOrder) (*btfHeader, error) {
 }
 
 func guessRawBTFByteOrder(r io.ReaderAt) binary.ByteOrder {
+	buf := new(bufio.Reader)
 	for _, bo := range []binary.ByteOrder{
 		binary.LittleEndian,
 		binary.BigEndian,
 	} {
-		if _, err := parseBTFHeader(io.NewSectionReader(r, 0, math.MaxInt64), bo); err == nil {
+		buf.Reset(io.NewSectionReader(r, 0, math.MaxInt64))
+		if _, err := parseBTFHeader(buf, bo); err == nil {
 			return bo
 		}
 	}
@@ -441,25 +448,20 @@ func guessRawBTFByteOrder(r io.ReaderAt) binary.ByteOrder {
 
 // parseBTF reads a .BTF section into memory and parses it into a list of
 // raw types and a string table.
-func parseBTF(btf io.Reader, bo binary.ByteOrder) ([]rawType, stringTable, error) {
-	rawBTF, err := io.ReadAll(btf)
-	if err != nil {
-		return nil, nil, fmt.Errorf("can't read BTF: %v", err)
-	}
-	rd := bytes.NewReader(rawBTF)
-
-	header, err := parseBTFHeader(rd, bo)
+func parseBTF(btf io.ReaderAt, bo binary.ByteOrder) ([]rawType, stringTable, error) {
+	buf := internal.NewBufferedSectionReader(btf, 0, math.MaxInt64)
+	header, err := parseBTFHeader(buf, bo)
 	if err != nil {
 		return nil, nil, fmt.Errorf("parsing .BTF header: %v", err)
 	}
 
-	buf := io.NewSectionReader(rd, header.stringStart(), int64(header.StringLen))
+	buf.Reset(io.NewSectionReader(btf, header.stringStart(), int64(header.StringLen)))
 	rawStrings, err := readStringTable(buf)
 	if err != nil {
 		return nil, nil, fmt.Errorf("can't read type names: %w", err)
 	}
 
-	buf = io.NewSectionReader(rd, header.typeStart(), int64(header.TypeLen))
+	buf.Reset(io.NewSectionReader(btf, header.typeStart(), int64(header.TypeLen)))
 	rawTypes, err := readTypes(buf, bo)
 	if err != nil {
 		return nil, nil, fmt.Errorf("can't read types: %w", err)

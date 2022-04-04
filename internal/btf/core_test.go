@@ -557,7 +557,7 @@ func TestCORERelocation(t *testing.T) {
 				}
 
 				for offset, relo := range relos {
-					if want := relo.local; relo.kind.validateLocal && want != relo.target {
+					if want := relo.local; !relo.skipLocalValidation && want != relo.target {
 						// Since we're relocating against ourselves both values
 						// should match.
 						t.Errorf("offset %d: local %v doesn't match target %d (kind %s)", offset, relo.local, relo.target, relo.kind)

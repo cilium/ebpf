@@ -18,12 +18,15 @@ import (
 
 // COREFixup is the result of computing a CO-RE relocation for a target.
 type COREFixup struct {
-	kind   FixupKind
+	kind   coreKind
 	local  uint32
 	target uint32
 	// True if there is no valid fixup. The instruction is replaced with an
 	// invalid dummy.
 	poison bool
+	// True if the validation of the local value should be skipped. Used by
+	// some kinds of bitfield relocations.
+	skipLocalValidation bool
 }
 
 func (f COREFixup) equal(other COREFixup) bool {
@@ -44,7 +47,7 @@ func (f COREFixup) apply(ins *asm.Instruction) error {
 
 	switch class := ins.OpCode.Class(); class {
 	case asm.LdXClass, asm.StClass, asm.StXClass:
-		if want := int16(f.local); f.kind.validateLocal && want != ins.Offset {
+		if want := int16(f.local); !f.skipLocalValidation && want != ins.Offset {
 			return fmt.Errorf("invalid offset %d, expected %d", ins.Offset, f.local)
 		}
 
@@ -59,7 +62,7 @@ func (f COREFixup) apply(ins *asm.Instruction) error {
 			return fmt.Errorf("not a dword-sized immediate load")
 		}
 
-		if want := int64(f.local); f.kind.validateLocal && want != ins.Constant {
+		if want := int64(f.local); !f.skipLocalValidation && want != ins.Constant {
 			return fmt.Errorf("invalid immediate %d, expected %d (fixup: %v)", ins.Constant, want, f)
 		}
 
@@ -77,7 +80,7 @@ func (f COREFixup) apply(ins *asm.Instruction) error {
 			return fmt.Errorf("invalid source %s", src)
 		}
 
-		if want := int64(f.local); f.kind.validateLocal && want != ins.Constant {
+		if want := int64(f.local); !f.skipLocalValidation && want != ins.Constant {
 			return fmt.Errorf("invalid immediate %d, expected %d (fixup: %v, kind: %v, ins: %v)", ins.Constant, want, f, f.kind, ins)
 		}
 
@@ -95,7 +98,7 @@ func (f COREFixup) apply(ins *asm.Instruction) error {
 }
 
 func (f COREFixup) isNonExistant() bool {
-	return f.kind.coreKind.checksForExistence() && f.target == 0
+	return f.kind.checksForExistence() && f.target == 0
 }
 
 type COREFixups map[uint64]COREFixup
@@ -194,16 +197,6 @@ func (k coreKind) String() string {
 	}
 }
 
-// FixupKind is the type of CO-RE relocation.
-type FixupKind struct {
-	coreKind      coreKind
-	validateLocal bool
-}
-
-func (fk FixupKind) String() string {
-	return fk.coreKind.String()
-}
-
 func coreRelocate(local, target *Spec, relos CORERelos) (COREFixups, error) {
 	if local.byteOrder != target.byteOrder {
 		return nil, fmt.Errorf("can't relocate %s against %s", local.byteOrder, target.byteOrder)
@@ -221,10 +214,9 @@ func coreRelocate(local, target *Spec, relos CORERelos) (COREFixups, error) {
 			}
 
 			result[uint64(relo.insnOff)] = COREFixup{
-				FixupKind{coreKind: relo.kind},
-				uint32(relo.typeID),
-				uint32(relo.typeID),
-				false,
+				kind:   relo.kind,
+				local:  uint32(relo.typeID),
+				target: uint32(relo.typeID),
 			}
 			continue
 		}
@@ -330,7 +322,7 @@ func coreCalculateFixups(byteOrder binary.ByteOrder, local Type, targets []Type,
 		// targets at all. Poison everything!
 		bestFixups = make([]COREFixup, len(relos))
 		for i, relo := range relos {
-			bestFixups[i] = COREFixup{kind: FixupKind{coreKind: relo.kind}, poison: true}
+			bestFixups[i] = COREFixup{kind: relo.kind, poison: true}
 		}
 	}
 
@@ -340,14 +332,14 @@ func coreCalculateFixups(byteOrder binary.ByteOrder, local Type, targets []Type,
 // coreCalculateFixup calculates the fixup for a single local type, target type
 // and relocation.
 func coreCalculateFixup(byteOrder binary.ByteOrder, local Type, localID TypeID, target Type, targetID TypeID, relo CORERelocation) (COREFixup, error) {
-	fixup := func(local, target uint32, validateLocal bool) (COREFixup, error) {
-		return COREFixup{FixupKind{relo.kind, validateLocal}, local, target, false}, nil
+	fixup := func(local, target uint32) (COREFixup, error) {
+		return COREFixup{kind: relo.kind, local: local, target: target}, nil
 	}
 	poison := func() (COREFixup, error) {
 		if relo.kind.checksForExistence() {
-			return fixup(1, 0, true)
+			return fixup(1, 0)
 		}
-		return COREFixup{kind: FixupKind{coreKind: relo.kind}, local: 0, target: 0, poison: true}, nil
+		return COREFixup{kind: relo.kind, poison: true}, nil
 	}
 	zero := COREFixup{}
 
@@ -367,10 +359,10 @@ func coreCalculateFixup(byteOrder binary.ByteOrder, local Type, localID TypeID, 
 
 		switch relo.kind {
 		case reloTypeExists:
-			return fixup(1, 1, true)
+			return fixup(1, 1)
 
 		case reloTypeIDTarget:
-			return fixup(uint32(localID), uint32(targetID), true)
+			return fixup(uint32(localID), uint32(targetID))
 
 		case reloTypeSize:
 			localSize, err := Sizeof(local)
@@ -383,7 +375,7 @@ func coreCalculateFixup(byteOrder binary.ByteOrder, local Type, localID TypeID, 
 				return zero, err
 			}
 
-			return fixup(uint32(localSize), uint32(targetSize), true)
+			return fixup(uint32(localSize), uint32(targetSize))
 		}
 
 	case reloEnumvalValue, reloEnumvalExists:
@@ -397,24 +389,23 @@ func coreCalculateFixup(byteOrder binary.ByteOrder, local Type, localID TypeID, 
 
 		switch relo.kind {
 		case reloEnumvalExists:
-			return fixup(1, 1, true)
+			return fixup(1, 1)
 
 		case reloEnumvalValue:
-			return fixup(uint32(localValue.Value), uint32(targetValue.Value), true)
+			return fixup(uint32(localValue.Value), uint32(targetValue.Value))
 		}
 
 	case reloFieldSigned:
 		switch local.(type) {
 		case *Enum:
-			return fixup(1, 1, true)
+			return fixup(1, 1)
 		case *Int:
 			return fixup(
 				uint32(local.(*Int).Encoding&Signed),
 				uint32(target.(*Int).Encoding&Signed),
-				true,
 			)
 		default:
-			return fixup(0, 0, false)
+			return fixup(0, 0)
 		}
 
 	case reloFieldByteOffset, reloFieldByteSize, reloFieldExists, reloFieldLShiftU64, reloFieldRShiftU64:
@@ -433,13 +424,17 @@ func coreCalculateFixup(byteOrder binary.ByteOrder, local Type, localID TypeID, 
 			return zero, fmt.Errorf("target %s: %w", target, err)
 		}
 
-		validateLocal := localField.bitfieldSize == 0
+		maybeSkipValidation := func(f COREFixup, err error) (COREFixup, error) {
+			f.skipLocalValidation = localField.bitfieldSize == 0
+			return f, err
+		}
+
 		switch relo.kind {
 		case reloFieldExists:
-			return fixup(1, 1, validateLocal)
+			return fixup(1, 1)
 
 		case reloFieldByteOffset:
-			return fixup(localField.offset, targetField.offset, validateLocal)
+			return maybeSkipValidation(fixup(localField.offset, targetField.offset))
 
 		case reloFieldByteSize:
 			localSize, err := Sizeof(localField.Type)
@@ -451,7 +446,7 @@ func coreCalculateFixup(byteOrder binary.ByteOrder, local Type, localID TypeID, 
 			if err != nil {
 				return zero, err
 			}
-			return fixup(uint32(localSize), uint32(targetSize), validateLocal)
+			return maybeSkipValidation(fixup(uint32(localSize), uint32(targetSize)))
 
 		case reloFieldLShiftU64:
 			var target uint32
@@ -470,7 +465,7 @@ func coreCalculateFixup(byteOrder binary.ByteOrder, local Type, localID TypeID, 
 
 				target = 64 - uint32(loadWidth)*8 + targetField.bitfieldOffset
 			}
-			return fixup(0, target, false)
+			return maybeSkipValidation(fixup(0, target))
 
 		case reloFieldRShiftU64:
 			targetSize, err := targetField.sizeBits()
@@ -478,7 +473,7 @@ func coreCalculateFixup(byteOrder binary.ByteOrder, local Type, localID TypeID, 
 				return zero, err
 			}
 
-			return fixup(0, 64-targetSize, false)
+			return maybeSkipValidation(fixup(0, 64-targetSize))
 		}
 	}
 

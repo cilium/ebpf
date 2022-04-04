@@ -131,7 +131,7 @@ func (cs *CollectionSpec) RewriteConstants(consts map[string]interface{}) error 
 	buf := make([]byte, len(value))
 	copy(buf, value)
 
-	err := patchValue(buf, rodata.BTF.Value, consts)
+	err := patchValue(buf, rodata.Value, consts)
 	if err != nil {
 		return err
 	}
@@ -422,7 +422,7 @@ func (cl *collectionLoader) loadMap(mapName string) (*Map, error) {
 		return nil, fmt.Errorf("missing map %s", mapName)
 	}
 
-	if mapSpec.BTF != nil && cl.coll.Types != mapSpec.BTF.Spec {
+	if mapSpec.BTF != nil && cl.coll.Types != mapSpec.BTF {
 		return nil, fmt.Errorf("map %s: BTF doesn't match collection", mapName)
 	}
 
@@ -451,7 +451,7 @@ func (cl *collectionLoader) loadProgram(progName string) (*Program, error) {
 		return nil, fmt.Errorf("cannot load program %s: program type is unspecified", progName)
 	}
 
-	if progSpec.BTF != nil && cl.coll.Types != progSpec.BTF.Spec() {
+	if progSpec.BTF != nil && cl.coll.Types != progSpec.BTF {
 		return nil, fmt.Errorf("program %s: BTF doesn't match collection", progName)
 	}
 

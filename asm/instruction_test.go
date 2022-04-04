@@ -180,9 +180,10 @@ func TestInstructionsRewriteMapPtr(t *testing.T) {
 // You can use format flags to change the way an eBPF
 // program is stringified.
 func ExampleInstructions_Format() {
+
 	insns := Instructions{
-		FnMapLookupElem.Call().WithSymbol("my_func"),
-		LoadImm(R0, 42, DWord),
+		FnMapLookupElem.Call().WithSymbol("my_func").WithSource(Comment("bpf_map_lookup_elem()")),
+		LoadImm(R0, 42, DWord).WithSource(Comment("abc = 42")),
 		Return(),
 	}
 
@@ -200,25 +201,33 @@ func ExampleInstructions_Format() {
 
 	// Output: Default format:
 	// my_func:
+	//	 ; bpf_map_lookup_elem()
 	// 	0: Call FnMapLookupElem
+	//	 ; abc = 42
 	// 	1: LdImmDW dst: r0 imm: 42
 	// 	3: Exit
 	//
 	// Don't indent instructions:
 	// my_func:
+	//  ; bpf_map_lookup_elem()
 	// 0: Call FnMapLookupElem
+	//  ; abc = 42
 	// 1: LdImmDW dst: r0 imm: 42
 	// 3: Exit
 	//
 	// Indent using spaces:
 	// my_func:
+	//   ; bpf_map_lookup_elem()
 	//  0: Call FnMapLookupElem
+	//   ; abc = 42
 	//  1: LdImmDW dst: r0 imm: 42
 	//  3: Exit
 	//
 	// Control symbol indentation:
 	// 		my_func:
+	//	 ; bpf_map_lookup_elem()
 	// 	0: Call FnMapLookupElem
+	//	 ; abc = 42
 	// 	1: LdImmDW dst: r0 imm: 42
 	// 	3: Exit
 }
@@ -293,7 +302,6 @@ func TestMetadataCopyOnWrite(t *testing.T) {
 
 	c.Assert(ins.Reference(), qt.Equals, "my_func", qt.Commentf("WithReference updated ins"))
 	c.Assert(ins2.Reference(), qt.Equals, "my_func2", qt.Commentf("WithReference didn't update ins2"))
-	c.Assert(ins.metadata, qt.Not(qt.Equals), ins2.metadata, qt.Commentf("modified metadata should not be equal"))
 
 	// Symbol
 	ins = Ja.Label("").WithSymbol("my_sym")
@@ -301,7 +309,6 @@ func TestMetadataCopyOnWrite(t *testing.T) {
 
 	c.Assert(ins.Symbol(), qt.Equals, "my_sym", qt.Commentf("WithSymbol updated ins"))
 	c.Assert(ins2.Symbol(), qt.Equals, "my_sym2", qt.Commentf("WithSymbol didn't update ins2"))
-	c.Assert(ins.metadata, qt.Not(qt.Equals), ins2.metadata, qt.Commentf("modified metadata should not be equal"))
 
 	// Map
 	ins = LoadMapPtr(R1, 0)
@@ -312,7 +319,6 @@ func TestMetadataCopyOnWrite(t *testing.T) {
 
 	c.Assert(ins.Map(), qt.IsNil, qt.Commentf("AssociateMap updated ins"))
 	c.Assert(ins2.Map(), qt.Equals, testMap, qt.Commentf("AssociateMap didn't update ins2"))
-	c.Assert(ins.metadata, qt.Not(qt.Equals), ins2.metadata, qt.Commentf("modified metadata should not be equal"))
 }
 
 type testFDer int

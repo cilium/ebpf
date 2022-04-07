@@ -17,7 +17,7 @@
 // Note that losing all references to Map and Program resources will cause
 // their underlying file descriptors to be closed, potentially removing those
 // objects from the kernel. Always retain a reference by e.g. deferring a
-// Close() of a Collection or LoadAndAssign object until application exit.
+// Close() of a Collection or LoadAndAssign object until application exits.
 //
 // Special care needs to be taken when handling maps of type ProgramArray,
 // as the kernel erases its contents when the last userspace or bpffs

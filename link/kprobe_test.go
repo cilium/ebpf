@@ -3,6 +3,7 @@ package link
 import (
 	"errors"
 	"fmt"
+	"math"
 	"os"
 	"testing"
 
@@ -423,6 +424,32 @@ func TestKprobeToken(t *testing.T) {
 			po := kprobeToken(tt.args)
 			if tt.expected != po {
 				t.Errorf("Expected symbol+offset to be '%s', got '%s'", tt.expected, po)
+			}
+		})
+	}
+}
+
+// Test Kprobe with Offset
+func TestKprobeOffset(t *testing.T) {
+	tests := []struct {
+		offset uint64
+		ok     bool
+	}{
+		{0, true},
+		{math.MaxUint64, false},
+	}
+
+	prog := mustLoadProgram(t, ebpf.Kprobe, 0, "")
+	for i, tt := range tests {
+		t.Run(fmt.Sprint(i), func(t *testing.T) {
+			k, err := Kprobe(ksym, prog, &KprobeOptions{Offset: tt.offset})
+
+			ok := err == nil
+			if tt.ok != ok {
+				t.Errorf("Expected symbol+offset load %v', got '%v'", tt.ok, ok)
+			}
+			if ok {
+				k.Close()
 			}
 		})
 	}

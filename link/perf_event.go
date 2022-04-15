@@ -211,19 +211,9 @@ func attachPerfEvent(pe *perfEvent, prog *ebpf.Program) (Link, error) {
 	}
 
 	if err := haveBPFLinkPerfEvent(); err == nil {
-		lnk, err := attachPerfEventLink(pe, prog)
-		if err != nil {
-			return nil, err
-		}
-		return lnk, nil
+		return attachPerfEventLink(pe, prog)
 	}
-
-	lnk, err := attachPerfEventIoctl(pe, prog)
-	if err != nil {
-		return nil, err
-	}
-
-	return lnk, nil
+	return attachPerfEventIoctl(pe, prog)
 }
 
 func attachPerfEventIoctl(pe *perfEvent, prog *ebpf.Program) (*perfEventIoctl, error) {

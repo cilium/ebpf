@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"math"
 	"os"
-	"syscall"
 	"testing"
 
 	qt "github.com/frankban/quicktest"
@@ -466,8 +465,8 @@ func TestKprobeOffset(t *testing.T) {
 		{"valid offset", 0x7, nil},
 		// ipv6_sock_mc_close()
 		{"valid offset", 0x17, nil},
-		{"bad insn boundary", 0x4, syscall.EILSEQ},
-		{"bad insn boundary", 0x6, syscall.EILSEQ},
+		{"bad insn boundary", 0x4, os.ErrNotExist},
+		{"bad insn boundary", 0x6, os.ErrNotExist},
 		{"bad probe address", math.MaxUint64, os.ErrNotExist},
 	}
 
@@ -477,15 +476,6 @@ func TestKprobeOffset(t *testing.T) {
 			k, err := Kprobe("inet6_release", prog, &KprobeOptions{Offset: tt.offset})
 			if tt.err != nil {
 				if !errors.Is(err, tt.err) {
-					// -EILSEQ is returned only since 5.2.
-					// https://github.com/torvalds/linux/commit/ab105a4fb89496c71c5a0f3222347c506c30feb0
-					if errors.Is(tt.err, syscall.EILSEQ) && errors.Is(err, os.ErrNotExist) {
-						return
-					}
-					// tracefs returns -ERANGE instead of os.ErrNotExist.
-					if errors.Is(tt.err, os.ErrNotExist) && errors.Is(err, syscall.ERANGE) {
-						return
-					}
 					t.Errorf("expected err '%v', got '%v'", tt.err, err)
 				}
 				return

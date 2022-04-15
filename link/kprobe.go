@@ -11,6 +11,7 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"syscall"
 	"unsafe"
 
 	"github.com/cilium/ebpf"
@@ -277,13 +278,18 @@ func pmuProbe(typ probeType, args probeArgs) (*perfEvent, error) {
 	// return -EINVAL. Return ErrNotSupported to allow falling back to tracefs.
 	// https://github.com/torvalds/linux/blob/94710cac0ef4/kernel/trace/trace_kprobe.c#L340-L343
 	if errors.Is(err, unix.EINVAL) && strings.Contains(args.symbol, ".") {
-		return nil, fmt.Errorf("symbol '%s': older kernels don't accept dots: %w", args.symbol, ErrNotSupported)
+		return nil, fmt.Errorf("symbol '%s+%#x': older kernels don't accept dots: %w", args.symbol, args.offset, ErrNotSupported)
 	}
 	// Since commit 97c753e62e6c, ENOENT is correctly returned instead of EINVAL
 	// when trying to create a kretprobe for a missing symbol. Make sure ENOENT
 	// is returned to the caller.
 	if errors.Is(err, os.ErrNotExist) || errors.Is(err, unix.EINVAL) {
-		return nil, fmt.Errorf("symbol '%s' not found: %w", args.symbol, os.ErrNotExist)
+		return nil, fmt.Errorf("symbol '%s+%#x' not found: %w", args.symbol, args.offset, os.ErrNotExist)
+	}
+	// Since commit ab105a4fb894, -EILSEQ is returned when a kprobe sym+offset is resolved
+	// to an invalid insn boundary.
+	if errors.Is(err, syscall.EILSEQ) {
+		return nil, fmt.Errorf("symbol '%s+%#x' not found (bad insn boundary): %w", args.symbol, args.offset, os.ErrNotExist)
 	}
 	// Since at least commit cb9a19fe4aa51, ENOTSUPP is returned
 	// when attempting to set a uprobe on a trap instruction.
@@ -384,7 +390,7 @@ func createTraceFSProbeEvent(typ probeType, args probeArgs) error {
 	}
 	defer f.Close()
 
-	var pe string
+	var pe, token string
 	switch typ {
 	case kprobeType:
 		// The kprobe_events syntax is as follows (see Documentation/trace/kprobetrace.txt):
@@ -401,7 +407,8 @@ func createTraceFSProbeEvent(typ probeType, args probeArgs) error {
 		// subsampling or rate limiting logic can be more accurately implemented in
 		// the eBPF program itself.
 		// See Documentation/kprobes.txt for more details.
-		pe = fmt.Sprintf("%s:%s/%s %s", probePrefix(args.ret), args.group, sanitizedSymbol(args.symbol), kprobeToken(args))
+		token = kprobeToken(args)
+		pe = fmt.Sprintf("%s:%s/%s %s", probePrefix(args.ret), args.group, sanitizedSymbol(args.symbol), token)
 	case uprobeType:
 		// The uprobe_events syntax is as follows:
 		// p[:[GRP/]EVENT] PATH:OFFSET [FETCHARGS] : Set a probe
@@ -413,14 +420,27 @@ func createTraceFSProbeEvent(typ probeType, args probeArgs) error {
 		// p:ebpf_5678/main_mySymbol /bin/mybin:0x12345(0x123)
 		//
 		// See Documentation/trace/uprobetracer.txt for more details.
-		pe = fmt.Sprintf("%s:%s/%s %s", probePrefix(args.ret), args.group, args.symbol, uprobeToken(args))
+		token = uprobeToken(args)
+		pe = fmt.Sprintf("%s:%s/%s %s", probePrefix(args.ret), args.group, args.symbol, token)
 	}
 	_, err = f.WriteString(pe)
 	// Since commit 97c753e62e6c, ENOENT is correctly returned instead of EINVAL
 	// when trying to create a kretprobe for a missing symbol. Make sure ENOENT
 	// is returned to the caller.
+	// EINVAL is also returned on pre-5.2 kernels when the `SYM[+offs]` token
+	// is resolved to an invalid insn boundary.
 	if errors.Is(err, os.ErrNotExist) || errors.Is(err, unix.EINVAL) {
-		return fmt.Errorf("symbol %s not found: %w", args.symbol, os.ErrNotExist)
+		return fmt.Errorf("token %s: %w", token, os.ErrNotExist)
+	}
+	// Since commit ab105a4fb894, -EILSEQ is returned when a kprobe sym+offset is resolved
+	// to an invalid insn boundary.
+	if errors.Is(err, syscall.EILSEQ) {
+		return fmt.Errorf("token %s: bad insn boundary: %w", token, os.ErrNotExist)
+	}
+	// ERANGE is returned when the `SYM[+offs]` token is too big and cannot
+	// be resolved.
+	if errors.Is(err, syscall.ERANGE) {
+		return fmt.Errorf("token %s: offset too big: %w", token, os.ErrNotExist)
 	}
 	if err != nil {
 		return fmt.Errorf("writing '%s' to '%s': %w", pe, typ.EventsPath(), err)

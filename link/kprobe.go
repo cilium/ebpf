@@ -161,7 +161,7 @@ func kprobe(symbol string, prog *ebpf.Program, opts *KprobeOptions, ret bool) (*
 
 	args := probeArgs{
 		pid:    perfAllThreads,
-		symbol: platformPrefix(symbol),
+		symbol: symbol,
 		ret:    ret,
 	}
 
@@ -173,7 +173,7 @@ func kprobe(symbol string, prog *ebpf.Program, opts *KprobeOptions, ret bool) (*
 	// Use kprobe PMU if the kernel has it available.
 	tp, err := pmuKprobe(args)
 	if errors.Is(err, os.ErrNotExist) {
-		args.symbol = symbol
+		args.symbol = platformPrefix(symbol)
 		tp, err = pmuKprobe(args)
 	}
 	if err == nil {
@@ -184,10 +184,10 @@ func kprobe(symbol string, prog *ebpf.Program, opts *KprobeOptions, ret bool) (*
 	}
 
 	// Use tracefs if kprobe PMU is missing.
-	args.symbol = platformPrefix(symbol)
+	args.symbol = symbol
 	tp, err = tracefsKprobe(args)
 	if errors.Is(err, os.ErrNotExist) {
-		args.symbol = symbol
+		args.symbol = platformPrefix(symbol)
 		tp, err = tracefsKprobe(args)
 	}
 	if err != nil {

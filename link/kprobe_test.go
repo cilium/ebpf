@@ -482,10 +482,6 @@ func TestKprobeOffset(t *testing.T) {
 					if errors.Is(tt.err, syscall.EILSEQ) && errors.Is(err, os.ErrNotExist) {
 						return
 					}
-					// tracefs returns -ERANGE instead of os.ErrNotExist.
-					if errors.Is(tt.err, os.ErrNotExist) && errors.Is(err, syscall.ERANGE) {
-						return
-					}
 					t.Errorf("expected err '%v', got '%v'", tt.err, err)
 				}
 				return

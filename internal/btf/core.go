@@ -197,6 +197,25 @@ func (k coreKind) String() string {
 	}
 }
 
+// CORERelocate returns the changes required to adjust the program to the target.
+//
+// Passing a nil target will relocate against the running kernel.
+func CORERelocate(local, target *Spec, relos CORERelos) (COREFixups, error) {
+	if len(relos) == 0 {
+		return nil, nil
+	}
+
+	if target == nil {
+		var err error
+		target, err = LoadKernelSpec()
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return coreRelocate(local, target, relos)
+}
+
 func coreRelocate(local, target *Spec, relos CORERelos) (COREFixups, error) {
 	if local.byteOrder != target.byteOrder {
 		return nil, fmt.Errorf("can't relocate %s against %s", local.byteOrder, target.byteOrder)

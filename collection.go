@@ -494,7 +494,7 @@ func (cl *collectionLoader) loadProgram(progName string) (*Program, error) {
 		return nil, fmt.Errorf("cannot load program %s: program type is unspecified", progName)
 	}
 
-	if progSpec.BTF != nil && cl.coll.Types != progSpec.BTF.Spec() {
+	if progSpec.BTF != nil && cl.coll.Types != progSpec.BTF {
 		return nil, fmt.Errorf("program %s: BTF doesn't match collection", progName)
 	}
 

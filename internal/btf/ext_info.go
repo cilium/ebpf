@@ -1,27 +1,44 @@
 package btf
 
 import (
+	"bytes"
 	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
 	"math"
+	"sort"
 
 	"github.com/cilium/ebpf/asm"
 	"github.com/cilium/ebpf/internal"
 )
 
-// extInfo contains extended program metadata.
-//
-// It is indexed per section.
-type extInfo struct {
-	funcInfos map[string][]bpfFuncInfo
-	lineInfos map[string][]bpfLineInfo
-	relos     map[string][]bpfCORERelo
+// ExtInfos contains ELF section metadata.
+type ExtInfos struct {
+	// The slices are sorted by offset in ascending order.
+	funcInfos       map[string][]funcInfo
+	lineInfos       map[string][]lineInfo
+	relocationInfos map[string][]coreRelocationInfo
 }
 
-// loadExtInfos parses the .BTF.ext section into its constituent parts.
-func loadExtInfos(r io.ReaderAt, bo binary.ByteOrder, strings *stringTable) (*extInfo, error) {
+// loadExtInfosFromELF parses ext infos from the .BTF.ext section in an ELF.
+//
+// Returns an error wrapping ErrNotFound if no ext infos are present.
+func loadExtInfosFromELF(file *internal.SafeELFFile, ts types, strings *stringTable) (*ExtInfos, error) {
+	section := file.Section(".BTF.ext")
+	if section == nil {
+		return nil, fmt.Errorf("btf ext infos: %w", ErrNotFound)
+	}
+
+	if section.ReaderAt == nil {
+		return nil, fmt.Errorf("compressed ext_info is not supported")
+	}
+
+	return loadExtInfos(section.ReaderAt, file.ByteOrder, ts, strings)
+}
+
+// loadExtInfos parses bare ext infos.
+func loadExtInfos(r io.ReaderAt, bo binary.ByteOrder, ts types, strings *stringTable) (*ExtInfos, error) {
 	// Open unbuffered section reader. binary.Read() calls io.ReadFull on
 	// the header structs, resulting in one syscall per header.
 	headerRd := io.NewSectionReader(r, 0, math.MaxInt64)
@@ -36,27 +53,110 @@ func loadExtInfos(r io.ReaderAt, bo binary.ByteOrder, strings *stringTable) (*ex
 	}
 
 	buf := internal.NewBufferedSectionReader(r, extHeader.funcInfoStart(), int64(extHeader.FuncInfoLen))
-	funcInfos, err := parseFuncInfos(buf, bo, strings)
+	btfFuncInfos, err := parseFuncInfos(buf, bo, strings)
 	if err != nil {
 		return nil, fmt.Errorf("parsing BTF function info: %w", err)
 	}
 
+	funcInfos := make(map[string][]funcInfo, len(btfFuncInfos))
+	for section, bfis := range btfFuncInfos {
+		funcInfos[section], err = newFuncInfos(bfis, ts)
+		if err != nil {
+			return nil, fmt.Errorf("section %s: func infos: %w", section, err)
+		}
+	}
+
 	buf = internal.NewBufferedSectionReader(r, extHeader.lineInfoStart(), int64(extHeader.LineInfoLen))
-	lineInfos, err := parseLineInfos(buf, bo, strings)
+	btfLineInfos, err := parseLineInfos(buf, bo, strings)
 	if err != nil {
 		return nil, fmt.Errorf("parsing BTF line info: %w", err)
 	}
 
-	relos := make(map[string][]bpfCORERelo)
-	if coreHeader != nil && coreHeader.COREReloOff > 0 && coreHeader.COREReloLen > 0 {
-		buf = internal.NewBufferedSectionReader(r, extHeader.coreReloStart(coreHeader), int64(coreHeader.COREReloLen))
-		relos, err = parseCORERelos(buf, bo, strings)
+	lineInfos := make(map[string][]lineInfo, len(btfLineInfos))
+	for section, blis := range btfLineInfos {
+		lineInfos[section], err = newLineInfos(blis, strings)
 		if err != nil {
-			return nil, fmt.Errorf("parsing CO-RE relocation info: %w", err)
+			return nil, fmt.Errorf("section %s: line infos: %w", section, err)
 		}
 	}
 
-	return &extInfo{funcInfos, lineInfos, relos}, nil
+	if coreHeader == nil || coreHeader.COREReloLen == 0 {
+		return &ExtInfos{funcInfos, lineInfos, nil}, nil
+	}
+
+	var btfCORERelos map[string][]bpfCORERelo
+	buf = internal.NewBufferedSectionReader(r, extHeader.coreReloStart(coreHeader), int64(coreHeader.COREReloLen))
+	btfCORERelos, err = parseCORERelos(buf, bo, strings)
+	if err != nil {
+		return nil, fmt.Errorf("parsing CO-RE relocation info: %w", err)
+	}
+
+	coreRelos := make(map[string][]coreRelocationInfo, len(btfCORERelos))
+	for section, brs := range btfCORERelos {
+		coreRelos[section], err = newRelocationInfos(brs, ts, strings)
+		if err != nil {
+			return nil, fmt.Errorf("section %s: CO-RE relocations: %w", section, err)
+		}
+	}
+
+	return &ExtInfos{funcInfos, lineInfos, coreRelos}, nil
+}
+
+type funcInfoMeta struct{}
+type coreRelocationMeta struct{}
+
+// Assign per-section metadata from BTF to a section's instructions.
+func (ei *ExtInfos) Assign(insns asm.Instructions, section string) {
+	funcInfos := ei.funcInfos[section]
+	lineInfos := ei.lineInfos[section]
+	reloInfos := ei.relocationInfos[section]
+
+	iter := insns.Iterate()
+	for iter.Next() {
+		if len(funcInfos) > 0 && funcInfos[0].offset == iter.Offset {
+			iter.Ins.Metadata.Set(funcInfoMeta{}, funcInfos[0].fn)
+			funcInfos = funcInfos[1:]
+		}
+
+		if len(lineInfos) > 0 && lineInfos[0].offset == iter.Offset {
+			*iter.Ins = iter.Ins.WithSource(lineInfos[0].line)
+			lineInfos = lineInfos[1:]
+		}
+
+		if len(reloInfos) > 0 && reloInfos[0].offset == iter.Offset {
+			iter.Ins.Metadata.Set(coreRelocationMeta{}, reloInfos[0].relo)
+			reloInfos = reloInfos[1:]
+		}
+	}
+}
+
+// MarshalExtInfos encodes function and line info embedded in insns into kernel
+// wire format.
+func MarshalExtInfos(insns asm.Instructions) (funcInfos, lineInfos []byte, _ error) {
+	iter := insns.Iterate()
+	var fiBuf, liBuf bytes.Buffer
+	for iter.Next() {
+		if fn := iter.Ins.Metadata.Get(funcInfoMeta{}).(*Func); fn != nil {
+			fi := &funcInfo{
+				fn:     fn,
+				offset: iter.Offset,
+			}
+			if err := fi.marshal(&fiBuf); err != nil {
+				return nil, nil, fmt.Errorf("write func info: %w", err)
+			}
+		}
+
+		if line, ok := iter.Ins.Source().(*Line); ok {
+			li := &lineInfo{
+				line:   line,
+				offset: iter.Offset,
+			}
+			if err := li.marshal(&liBuf); err != nil {
+				return nil, nil, fmt.Errorf("write line info: %w", err)
+			}
+		}
+	}
+	return fiBuf.Bytes(), liBuf.Bytes(), nil
 }
 
 // btfExtHeader is found at the start of the .BTF.ext section.
@@ -200,8 +300,9 @@ func parseExtInfoRecordSize(r io.Reader, bo binary.ByteOrder) (uint32, error) {
 // The size of a FuncInfo in BTF wire format.
 var FuncInfoSize = uint32(binary.Size(bpfFuncInfo{}))
 
-type FuncInfo struct {
-	fn *Func
+type funcInfo struct {
+	fn     *Func
+	offset asm.RawInstructionOffset
 }
 
 type bpfFuncInfo struct {
@@ -210,7 +311,7 @@ type bpfFuncInfo struct {
 	TypeID  TypeID
 }
 
-func newFuncInfo(fi bpfFuncInfo, ts types) (*FuncInfo, error) {
+func newFuncInfo(fi bpfFuncInfo, ts types) (*funcInfo, error) {
 	typ, err := ts.ByID(fi.TypeID)
 	if err != nil {
 		return nil, err
@@ -226,19 +327,31 @@ func newFuncInfo(fi bpfFuncInfo, ts types) (*FuncInfo, error) {
 		return nil, fmt.Errorf("func with type ID %d doesn't have a name", fi.TypeID)
 	}
 
-	return &FuncInfo{fn}, nil
+	return &funcInfo{
+		fn,
+		asm.RawInstructionOffset(fi.InsnOff),
+	}, nil
 }
 
-func (fi *FuncInfo) Func() *Func {
-	return fi.fn
+func newFuncInfos(bfis []bpfFuncInfo, ts types) ([]funcInfo, error) {
+	fis := make([]funcInfo, 0, len(bfis))
+	for _, bfi := range bfis {
+		fi, err := newFuncInfo(bfi, ts)
+		if err != nil {
+			return nil, fmt.Errorf("offset %d: %w", bfi.InsnOff, err)
+		}
+		fis = append(fis, *fi)
+	}
+	sort.Slice(fis, func(i, j int) bool {
+		return fis[i].offset <= fis[j].offset
+	})
+	return fis, nil
 }
 
-// Marshal into the BTF wire format.
-//
-// The offset is converted from bytes to instructions.
-func (fi *FuncInfo) Marshal(w io.Writer, offset uint64) error {
+// marshal into the BTF wire format.
+func (fi *funcInfo) marshal(w io.Writer) error {
 	bfi := bpfFuncInfo{
-		InsnOff: uint32(offset / asm.InstructionSize),
+		InsnOff: uint32(fi.offset),
 		TypeID:  fi.fn.TypeID,
 	}
 	return binary.Write(w, internal.NativeEndian, &bfi)
@@ -304,9 +417,9 @@ func parseFuncInfoRecords(r io.Reader, bo binary.ByteOrder, recordSize uint32, r
 
 var LineInfoSize = uint32(binary.Size(bpfLineInfo{}))
 
-// LineInfo represents the location and contents of a single line of source
+// Line represents the location and contents of a single line of source
 // code a BPF ELF was compiled from.
-type LineInfo struct {
+type Line struct {
 	fileName   string
 	line       string
 	lineNumber uint32
@@ -315,10 +428,33 @@ type LineInfo struct {
 	// TODO: We should get rid of the fields below, but for that we need to be
 	// able to write BTF.
 
-	// Instruction offset of the line within its enclosing function, in instructions.
-	insnOff     uint32
 	fileNameOff uint32
 	lineOff     uint32
+}
+
+func (li *Line) FileName() string {
+	return li.fileName
+}
+
+func (li *Line) Line() string {
+	return li.line
+}
+
+func (li *Line) LineNumber() uint32 {
+	return li.lineNumber
+}
+
+func (li *Line) LineColumn() uint32 {
+	return li.lineColumn
+}
+
+func (li *Line) String() string {
+	return li.line
+}
+
+type lineInfo struct {
+	line   *Line
+	offset asm.RawInstructionOffset
 }
 
 // Constants for the format of bpfLineInfo.LineCol.
@@ -336,7 +472,7 @@ type bpfLineInfo struct {
 	LineCol     uint32
 }
 
-func newLineInfo(li bpfLineInfo, strings *stringTable) (*LineInfo, error) {
+func newLineInfo(li bpfLineInfo, strings *stringTable) (*lineInfo, error) {
 	line, err := strings.Lookup(li.LineOff)
 	if err != nil {
 		return nil, fmt.Errorf("lookup of line: %w", err)
@@ -350,70 +486,52 @@ func newLineInfo(li bpfLineInfo, strings *stringTable) (*LineInfo, error) {
 	lineNumber := li.LineCol >> bpfLineShift
 	lineColumn := li.LineCol & bpfColumnMax
 
-	return &LineInfo{
-		fileName,
-		line,
-		lineNumber,
-		lineColumn,
-		li.InsnOff,
-		li.FileNameOff,
-		li.LineOff,
+	return &lineInfo{
+		&Line{
+			fileName,
+			line,
+			lineNumber,
+			lineColumn,
+			li.FileNameOff,
+			li.LineOff,
+		},
+		asm.RawInstructionOffset(li.InsnOff),
 	}, nil
 }
 
-func (li *LineInfo) FileName() string {
-	return li.fileName
+func newLineInfos(blis []bpfLineInfo, strings *stringTable) ([]lineInfo, error) {
+	lis := make([]lineInfo, 0, len(blis))
+	for _, bli := range blis {
+		li, err := newLineInfo(bli, strings)
+		if err != nil {
+			return nil, fmt.Errorf("offset %d: %w", bli.InsnOff, err)
+		}
+		lis = append(lis, *li)
+	}
+	sort.Slice(lis, func(i, j int) bool {
+		return lis[i].offset <= lis[j].offset
+	})
+	return lis, nil
 }
 
-func (li *LineInfo) Line() string {
-	return li.line
-}
-
-func (li *LineInfo) LineNumber() uint32 {
-	return li.lineNumber
-}
-
-func (li *LineInfo) LineColumn() uint32 {
-	return li.lineColumn
-}
-
-func (li *LineInfo) String() string {
-	return li.line
-}
-
-// Marshal writes the binary representation of the LineInfo to w.
-// The instruction offset is converted from bytes to instructions.
-func (li *LineInfo) Marshal(w io.Writer, offset uint64) error {
-	if li.lineNumber > bpfLineMax {
-		return fmt.Errorf("line %d exceeds %d", li.lineNumber, bpfLineMax)
+// marshal writes the binary representation of the LineInfo to w.
+func (li *lineInfo) marshal(w io.Writer) error {
+	line := li.line
+	if line.lineNumber > bpfLineMax {
+		return fmt.Errorf("line %d exceeds %d", line.lineNumber, bpfLineMax)
 	}
 
-	if li.lineColumn > bpfColumnMax {
-		return fmt.Errorf("column %d exceeds %d", li.lineColumn, bpfColumnMax)
+	if line.lineColumn > bpfColumnMax {
+		return fmt.Errorf("column %d exceeds %d", line.lineColumn, bpfColumnMax)
 	}
 
 	bli := bpfLineInfo{
-		li.insnOff + uint32(offset/asm.InstructionSize),
-		li.fileNameOff,
-		li.lineOff,
-		(li.lineNumber << bpfLineShift) | li.lineColumn,
+		uint32(li.offset),
+		line.fileNameOff,
+		line.lineOff,
+		(line.lineNumber << bpfLineShift) | line.lineColumn,
 	}
 	return binary.Write(w, internal.NativeEndian, &bli)
-}
-
-type LineInfos []LineInfo
-
-// Marshal writes the BTF wire format of the LineInfos to w.
-//
-// offset is the start of the enclosing function in bytes.
-func (li LineInfos) Marshal(w io.Writer, offset uint64) error {
-	for _, info := range li {
-		if err := info.Marshal(w, offset); err != nil {
-			return err
-		}
-	}
-
-	return nil
 }
 
 // parseLineInfos parses a line_info sub-section within .BTF.ext ito a map of
@@ -483,13 +601,17 @@ type bpfCORERelo struct {
 }
 
 type CORERelocation struct {
-	insnOff  uint32
 	typ      Type
 	accessor coreAccessor
 	kind     coreKind
 }
 
-func newCORERelocation(relo bpfCORERelo, ts types, strings *stringTable) (*CORERelocation, error) {
+type coreRelocationInfo struct {
+	relo   *CORERelocation
+	offset asm.RawInstructionOffset
+}
+
+func newRelocationInfo(relo bpfCORERelo, ts types, strings *stringTable) (*coreRelocationInfo, error) {
 	typ, err := ts.ByID(relo.TypeID)
 	if err != nil {
 		return nil, err
@@ -505,25 +627,29 @@ func newCORERelocation(relo bpfCORERelo, ts types, strings *stringTable) (*CORER
 		return nil, fmt.Errorf("accessor %q: %s", accessorStr, err)
 	}
 
-	return &CORERelocation{
-		relo.InsnOff,
-		typ,
-		accessor,
-		relo.Kind,
+	return &coreRelocationInfo{
+		&CORERelocation{
+			typ,
+			accessor,
+			relo.Kind,
+		},
+		asm.RawInstructionOffset(relo.InsnOff),
 	}, nil
 }
 
-type CORERelos []CORERelocation
-
-// Offset adds offset to the instruction offset of all CORERelos
-// and returns the result.
-func (cr CORERelos) Offset(offset uint32) CORERelos {
-	var relos CORERelos
-	for _, relo := range cr {
-		relo.insnOff += offset
-		relos = append(relos, relo)
+func newRelocationInfos(brs []bpfCORERelo, ts types, strings *stringTable) ([]coreRelocationInfo, error) {
+	rs := make([]coreRelocationInfo, 0, len(brs))
+	for _, br := range brs {
+		relo, err := newRelocationInfo(br, ts, strings)
+		if err != nil {
+			return nil, fmt.Errorf("offset %d: %w", br.InsnOff, err)
+		}
+		rs = append(rs, *relo)
 	}
-	return relos
+	sort.Slice(rs, func(i, j int) bool {
+		return rs[i].offset < rs[j].offset
+	})
+	return rs, nil
 }
 
 var extInfoReloSize = binary.Size(bpfCORERelo{})

@@ -97,7 +97,7 @@ type ProgramSpec struct {
 	// The BTF associated with this program. Changing Instructions
 	// will most likely invalidate the contained data, and may
 	// result in errors when attempting to load it into the kernel.
-	BTF *btf.Program
+	BTF *btf.Spec
 
 	// The byte order this program was compiled for, may be nil.
 	ByteOrder binary.ByteOrder
@@ -160,46 +160,6 @@ func (spec *ProgramSpec) flatten(visited map[*ProgramSpec]bool) (asm.Instruction
 	}
 
 	return insns, progs
-}
-
-// A reference describes a byte offset an Symbol Instruction pointing
-// to another ProgramSpec.
-type reference struct {
-	offset uint64
-	spec   *ProgramSpec
-}
-
-// layout returns a unique list of programs that must be included
-// in spec's instruction stream when inserting it into the kernel.
-// Always returns spec itself as the first entry in the chain.
-func (spec *ProgramSpec) layout() ([]reference, error) {
-	out := []reference{{0, spec}}
-
-	name := spec.Instructions.Name()
-
-	var ins *asm.Instruction
-	iter := spec.Instructions.Iterate()
-	for iter.Next() {
-		ins = iter.Ins
-
-		// Skip non-symbols and symbols that describe the ProgramSpec itself,
-		// which is usually the first instruction in Instructions.
-		// ProgramSpec itself is already included and not present in references.
-		if ins.Symbol() == "" || ins.Symbol() == name {
-			continue
-		}
-
-		// Failure to look up a reference is not an error. There are existing tests
-		// with valid progs that contain multiple symbols and don't have references
-		// populated. Assume ProgramSpec is used similarly in the wild, so don't
-		// alter this behaviour.
-		ref := spec.references[ins.Symbol()]
-		if ref != nil {
-			out = append(out, reference{iter.Offset.Bytes(), ref})
-		}
-	}
-
-	return out, nil
 }
 
 // Program represents BPF program loaded into the kernel.
@@ -290,24 +250,16 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions, handles *hand
 		}
 	}
 
-	layout, err := spec.layout()
-	if err != nil {
-		return nil, fmt.Errorf("get program layout: %w", err)
-	}
+	insns := make(asm.Instructions, len(spec.Instructions))
+	copy(insns, spec.Instructions)
 
 	var btfDisabled bool
-	var core btf.COREFixups
 	if spec.BTF != nil {
-		relos, err := collectCORERelos(layout)
-		if err != nil {
-			return nil, fmt.Errorf("collecting CO-RE relocations: %w", err)
-		}
-		core, err = btf.CORERelocate(spec.BTF.Spec(), targetBTF, relos)
-		if err != nil {
-			return nil, fmt.Errorf("generating CO-RE fixups: %w", err)
+		if err := btf.CORERelocate(insns, spec.BTF, targetBTF); err != nil {
+			return nil, fmt.Errorf("apply CO-RE relocations: %w", err)
 		}
 
-		handle, err := handles.btfHandle(spec.BTF.Spec())
+		handle, err := handles.btfHandle(spec.BTF)
 		btfDisabled = errors.Is(err, btf.ErrNotSupported)
 		if err != nil && !btfDisabled {
 			return nil, fmt.Errorf("load BTF: %w", err)
@@ -316,27 +268,19 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions, handles *hand
 		if handle != nil {
 			attr.ProgBtfFd = uint32(handle.FD())
 
-			fib, err := marshalFuncInfos(layout)
+			fib, lib, err := btf.MarshalExtInfos(insns)
 			if err != nil {
 				return nil, err
 			}
+
 			attr.FuncInfoRecSize = btf.FuncInfoSize
 			attr.FuncInfoCnt = uint32(len(fib)) / btf.FuncInfoSize
 			attr.FuncInfo = sys.NewSlicePointer(fib)
 
-			lib, err := marshalLineInfos(layout)
-			if err != nil {
-				return nil, err
-			}
 			attr.LineInfoRecSize = btf.LineInfoSize
 			attr.LineInfoCnt = uint32(len(lib)) / btf.LineInfoSize
 			attr.LineInfo = sys.NewSlicePointer(lib)
 		}
-	}
-
-	insns, err := core.Apply(spec.Instructions)
-	if err != nil {
-		return nil, fmt.Errorf("applying CO-RE fixups: %w", err)
 	}
 
 	if err := fixupAndValidate(insns); err != nil {

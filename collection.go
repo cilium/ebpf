@@ -356,7 +356,7 @@ func (hc handleCache) btfSpec(rd io.ReaderAt) (*btf.Spec, error) {
 		return hc.btfSpecs[rd], nil
 	}
 
-	spec, err := btf.LoadSpecFromReader(rd)
+	spec, _, err := btf.LoadSpecFromReader(rd)
 	if err != nil {
 		return nil, err
 	}
@@ -451,7 +451,7 @@ func (cl *collectionLoader) loadProgram(progName string) (*Program, error) {
 		return nil, fmt.Errorf("cannot load program %s: program type is unspecified", progName)
 	}
 
-	if progSpec.BTF != nil && cl.coll.Types != progSpec.BTF.Spec() {
+	if progSpec.BTF != nil && cl.coll.Types != progSpec.BTF {
 		return nil, fmt.Errorf("program %s: BTF doesn't match collection", progName)
 	}
 

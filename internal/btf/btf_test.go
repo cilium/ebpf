@@ -41,7 +41,7 @@ func parseELFBTF(tb testing.TB, file string) *Spec {
 	}
 	defer fh.Close()
 
-	spec, err := LoadSpecFromReader(fh)
+	spec, _, err := LoadSpecFromReader(fh)
 	if err != nil {
 		tb.Fatal("Can't load BTF:", err)
 	}
@@ -97,7 +97,7 @@ func TestTypeByNameAmbiguous(t *testing.T) {
 }
 
 func TestTypeByName(t *testing.T) {
-	spec, err := LoadSpecFromReader(readVMLinux(t))
+	spec, _, err := LoadSpecFromReader(readVMLinux(t))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -207,14 +207,6 @@ func TestFindVMLinux(t *testing.T) {
 func TestLoadSpecFromElf(t *testing.T) {
 	testutils.Files(t, testutils.Glob(t, "../../testdata/loader-e*.elf"), func(t *testing.T, file string) {
 		spec := parseELFBTF(t, file)
-
-		if prog, err := spec.Program("xdp_prog"); err != nil || prog == nil {
-			t.Error("Can't get BTF for program xdp_prog:", err)
-		}
-
-		if prog, err := spec.Program("no_relocation"); err != nil || prog == nil {
-			t.Error("Can't get BTF for program no_relocation:", err)
-		}
 
 		vt, err := spec.TypeByID(0)
 		if err != nil {

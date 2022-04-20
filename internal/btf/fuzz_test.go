@@ -56,7 +56,7 @@ func FuzzExtInfo(f *testing.F) {
 		}
 
 		table := stringTable(strings)
-		info, err := loadExtInfos(bytes.NewReader(data), internal.NativeEndian, table)
+		info, err := loadExtInfos(bytes.NewReader(data), internal.NativeEndian, nil, table)
 		if err != nil {
 			if info != nil {
 				t.Fatal("info is not nil")

@@ -90,7 +90,6 @@ func LoadSpecFromReader(rd io.ReaderAt) (*Spec, error) {
 
 		return nil, err
 	}
-	defer file.Close()
 
 	return loadSpecFromELF(file)
 }
@@ -390,11 +389,11 @@ func findVMLinux() (*internal.SafeELFFile, error) {
 	}
 
 	for _, loc := range locations {
-		fh, err := os.Open(fmt.Sprintf(loc, release))
-		if err != nil {
+		file, err := internal.OpenSafeELFFile(fmt.Sprintf(loc, release))
+		if errors.Is(err, os.ErrNotExist) {
 			continue
 		}
-		return internal.NewSafeELFFile(fh)
+		return file, err
 	}
 
 	return nil, fmt.Errorf("no BTF found for kernel version %s: %w", release, internal.ErrNotSupported)

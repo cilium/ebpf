@@ -49,7 +49,6 @@ func LoadCollectionSpecFromReader(rd io.ReaderAt) (*CollectionSpec, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer f.Close()
 
 	var (
 		licenseSection *elf.Section

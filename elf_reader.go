@@ -26,6 +26,7 @@ type elfCode struct {
 	license  string
 	version  uint32
 	btf      *btf.Spec
+	extInfo  *btf.ExtInfos
 }
 
 // LoadCollectionSpec parses an ELF file into a CollectionSpec.
@@ -95,7 +96,7 @@ func LoadCollectionSpecFromReader(rd io.ReaderAt) (*CollectionSpec, error) {
 		return nil, fmt.Errorf("load version: %w", err)
 	}
 
-	btfSpec, err := btf.LoadSpecFromReader(rd)
+	btfSpec, btfExtInfo, err := btf.LoadSpecFromReader(rd)
 	if err != nil && !errors.Is(err, btf.ErrNotFound) {
 		return nil, fmt.Errorf("load BTF: %w", err)
 	}
@@ -106,6 +107,7 @@ func LoadCollectionSpecFromReader(rd io.ReaderAt) (*CollectionSpec, error) {
 		license:     license,
 		version:     version,
 		btf:         btfSpec,
+		extInfo:     btfExtInfo,
 	}
 
 	symbols, err := f.Symbols()
@@ -310,13 +312,7 @@ func (ec *elfCode) loadProgramSections() (map[string]*ProgramSpec, error) {
 				KernelVersion: ec.version,
 				Instructions:  insns,
 				ByteOrder:     ec.ByteOrder,
-			}
-
-			if ec.btf != nil {
-				spec.BTF, err = ec.btf.Program(name)
-				if err != nil && !errors.Is(err, btf.ErrNoExtendedInfo) {
-					return nil, fmt.Errorf("program %s: %w", name, err)
-				}
+				BTF:           ec.btf,
 			}
 
 			// Function names must be unique within a single ELF blob.
@@ -381,6 +377,12 @@ func (ec *elfCode) loadFunctions(section *elfSection) (map[string]asm.Instructio
 			if err := referenceRelativeJump(ins, offset, section.symbols); err != nil {
 				return nil, fmt.Errorf("offset %d: resolving relative jump: %w", offset, err)
 			}
+		}
+	}
+
+	if ec.extInfo != nil {
+		if err := ec.extInfo.Assign(section.Name, insns); err != nil {
+			return nil, err
 		}
 	}
 
@@ -905,7 +907,9 @@ func mapSpecFromBTF(es *elfSection, vs *btf.VarSecinfo, def *btf.Struct, spec *b
 		ValueSize:  valueSize,
 		MaxEntries: maxEntries,
 		Flags:      flags,
-		BTF:        &btf.Map{Spec: spec, Key: key, Value: value},
+		Key:        key,
+		Value:      value,
+		BTF:        spec,
 		Pinning:    pinType,
 		InnerMap:   innerMapSpec,
 		Contents:   contents,
@@ -1040,7 +1044,9 @@ func (ec *elfCode) loadDataSections(maps map[string]*MapSpec) error {
 			ValueSize:  uint32(len(data)),
 			MaxEntries: 1,
 			Contents:   []MapKV{{uint32(0), data}},
-			BTF:        &btf.Map{Spec: ec.btf, Key: &btf.Void{}, Value: datasec},
+			Key:        &btf.Void{},
+			Value:      datasec,
+			BTF:        ec.btf,
 		}
 
 		switch sec.Name {

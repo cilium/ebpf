@@ -1,6 +1,7 @@
 package btf
 
 import (
+	"bytes"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -11,13 +12,34 @@ import (
 	"github.com/cilium/ebpf/internal"
 )
 
+// MarshalExtInfos encodes function and line info embeded in insns into kernel
+// wire format.
+func MarshalExtInfos(insns asm.Instructions) (funcInfos, lineInfos []byte, _ error) {
+	iter := insns.Iterate()
+	var fiBuf, liBuf bytes.Buffer
+	for iter.Next() {
+		if fi, ok := iter.Ins.Metadata.Get(funcInfoMeta{}).(*FuncInfo); ok {
+			if err := fi.Marshal(&fiBuf, iter.Offset.Bytes()); err != nil {
+				return nil, nil, err
+			}
+		}
+
+		if li, ok := iter.Ins.Source().(*LineInfo); ok {
+			if err := li.Marshal(&liBuf, iter.Offset.Bytes()); err != nil {
+				return nil, nil, err
+			}
+		}
+	}
+	return fiBuf.Bytes(), liBuf.Bytes(), nil
+}
+
 // extInfo contains extended program metadata.
 //
 // It is indexed per section.
 type extInfo struct {
 	funcInfos map[string][]bpfFuncInfo
 	lineInfos map[string][]bpfLineInfo
-	relos     map[string]CORERelos
+	relos     map[string][]bpfCORERelo
 }
 
 // loadExtInfos parses the .BTF.ext section into its constituent parts.
@@ -47,7 +69,7 @@ func loadExtInfos(r io.ReaderAt, bo binary.ByteOrder, strings stringTable) (*ext
 		return nil, fmt.Errorf("parsing BTF line info: %w", err)
 	}
 
-	relos := make(map[string]CORERelos)
+	relos := make(map[string][]bpfCORERelo)
 	if coreHeader != nil && coreHeader.COREReloOff > 0 && coreHeader.COREReloLen > 0 {
 		buf = internal.NewBufferedSectionReader(r, extHeader.coreReloStart(coreHeader), int64(coreHeader.COREReloLen))
 		relos, err = parseCORERelos(buf, bo, strings)
@@ -210,6 +232,25 @@ type bpfFuncInfo struct {
 	TypeID  TypeID
 }
 
+func newFuncInfo(fi bpfFuncInfo, spec *Spec) (*FuncInfo, error) {
+	typ, err := spec.TypeByID(fi.TypeID)
+	if err != nil {
+		return nil, err
+	}
+
+	fn, ok := typ.(*Func)
+	if !ok {
+		return nil, fmt.Errorf("type ID %d is a %T, but expected a Func", fi.TypeID, typ)
+	}
+
+	// C doesn't have anonymous functions, but check just in case.
+	if fn.Name == "" {
+		return nil, fmt.Errorf("func with type ID %d doesn't have a name", fi.TypeID)
+	}
+
+	return &FuncInfo{fn}, nil
+}
+
 func (fi *FuncInfo) Func() *Func {
 	return fi.fn
 }
@@ -296,8 +337,6 @@ type LineInfo struct {
 	// TODO: We should get rid of the fields below, but for that we need to be
 	// able to write BTF.
 
-	// Instruction offset of the line within its enclosing function, in instructions.
-	insnOff     uint32
 	fileNameOff uint32
 	lineOff     uint32
 }
@@ -315,6 +354,30 @@ type bpfLineInfo struct {
 	FileNameOff uint32
 	LineOff     uint32
 	LineCol     uint32
+}
+
+func newLineInfo(li bpfLineInfo, strings stringTable) (*LineInfo, error) {
+	line, err := strings.Lookup(li.LineOff)
+	if err != nil {
+		return nil, fmt.Errorf("lookup of line: %w", err)
+	}
+
+	fileName, err := strings.Lookup(li.FileNameOff)
+	if err != nil {
+		return nil, fmt.Errorf("lookup of filename: %w", err)
+	}
+
+	lineNumber := li.LineCol >> bpfLineShift
+	lineColumn := li.LineCol & bpfColumnMax
+
+	return &LineInfo{
+		fileName,
+		line,
+		lineNumber,
+		lineColumn,
+		li.FileNameOff,
+		li.LineOff,
+	}, nil
 }
 
 func (li *LineInfo) FileName() string {
@@ -349,27 +412,12 @@ func (li *LineInfo) Marshal(w io.Writer, offset uint64) error {
 	}
 
 	bli := bpfLineInfo{
-		li.insnOff + uint32(offset/asm.InstructionSize),
+		uint32(offset / asm.InstructionSize),
 		li.fileNameOff,
 		li.lineOff,
 		(li.lineNumber << bpfLineShift) | li.lineColumn,
 	}
 	return binary.Write(w, internal.NativeEndian, &bli)
-}
-
-type LineInfos []LineInfo
-
-// Marshal writes the BTF wire format of the LineInfos to w.
-//
-// offset is the start of the enclosing function in bytes.
-func (li LineInfos) Marshal(w io.Writer, offset uint64) error {
-	for _, info := range li {
-		if err := info.Marshal(w, offset); err != nil {
-			return err
-		}
-	}
-
-	return nil
 }
 
 // parseLineInfos parses a line_info sub-section within .BTF.ext ito a map of
@@ -439,30 +487,34 @@ type bpfCORERelo struct {
 }
 
 type CORERelocation struct {
-	insnOff  uint32
 	typeID   TypeID
 	accessor coreAccessor
 	kind     coreKind
 }
 
-type CORERelos []CORERelocation
-
-// Offset adds offset to the instruction offset of all CORERelos
-// and returns the result.
-func (cr CORERelos) Offset(offset uint32) CORERelos {
-	var relos CORERelos
-	for _, relo := range cr {
-		relo.insnOff += offset
-		relos = append(relos, relo)
+func newCoreRelocation(relo bpfCORERelo, strings stringTable) (*CORERelocation, error) {
+	accessorStr, err := strings.Lookup(relo.AccessStrOff)
+	if err != nil {
+		return nil, err
 	}
-	return relos
+
+	accessor, err := parseCOREAccessor(accessorStr)
+	if err != nil {
+		return nil, fmt.Errorf("accessor %q: %s", accessorStr, err)
+	}
+
+	return &CORERelocation{
+		relo.TypeID,
+		accessor,
+		relo.Kind,
+	}, nil
 }
 
 var extInfoReloSize = binary.Size(bpfCORERelo{})
 
 // parseCORERelos parses a core_relos sub-section within .BTF.ext ito a map of
 // CO-RE relocations indexed by section name.
-func parseCORERelos(r io.Reader, bo binary.ByteOrder, strings stringTable) (map[string]CORERelos, error) {
+func parseCORERelos(r io.Reader, bo binary.ByteOrder, strings stringTable) (map[string][]bpfCORERelo, error) {
 	recordSize, err := parseExtInfoRecordSize(r, bo)
 	if err != nil {
 		return nil, err
@@ -472,7 +524,7 @@ func parseCORERelos(r io.Reader, bo binary.ByteOrder, strings stringTable) (map[
 		return nil, fmt.Errorf("expected record size %d, got %d", extInfoReloSize, recordSize)
 	}
 
-	result := make(map[string]CORERelos)
+	result := make(map[string][]bpfCORERelo)
 	for {
 		secName, infoHeader, err := parseExtInfoSec(r, bo, strings)
 		if errors.Is(err, io.EOF) {
@@ -494,8 +546,8 @@ func parseCORERelos(r io.Reader, bo binary.ByteOrder, strings stringTable) (map[
 // parseCOREReloRecords parses a stream of CO-RE relocation entries into a
 // coreRelos. These records appear after a btf_ext_info_sec header in the
 // core_relos sub-section of .BTF.ext.
-func parseCOREReloRecords(r io.Reader, bo binary.ByteOrder, recordSize uint32, recordNum uint32, strings stringTable) (CORERelos, error) {
-	var out CORERelos
+func parseCOREReloRecords(r io.Reader, bo binary.ByteOrder, recordSize uint32, recordNum uint32, strings stringTable) ([]bpfCORERelo, error) {
+	var out []bpfCORERelo
 
 	var relo bpfCORERelo
 	for i := uint32(0); i < recordNum; i++ {
@@ -507,22 +559,11 @@ func parseCOREReloRecords(r io.Reader, bo binary.ByteOrder, recordSize uint32, r
 			return nil, fmt.Errorf("offset %v is not aligned with instruction size", relo.InsnOff)
 		}
 
-		accessorStr, err := strings.Lookup(relo.AccessStrOff)
-		if err != nil {
-			return nil, err
-		}
+		// ELF tracks offset in bytes, the kernel expects raw BPF instructions.
+		// Convert as early as possible.
+		relo.InsnOff /= asm.InstructionSize
 
-		accessor, err := parseCOREAccessor(accessorStr)
-		if err != nil {
-			return nil, fmt.Errorf("accessor %q: %s", accessorStr, err)
-		}
-
-		out = append(out, CORERelocation{
-			relo.InsnOff,
-			relo.TypeID,
-			accessor,
-			relo.Kind,
-		})
+		out = append(out, relo)
 	}
 
 	return out, nil

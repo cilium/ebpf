@@ -58,7 +58,8 @@ const (
 	BPF_SK_REUSEPORT_SELECT            AttachType = 39
 	BPF_SK_REUSEPORT_SELECT_OR_MIGRATE AttachType = 40
 	BPF_PERF_EVENT                     AttachType = 41
-	__MAX_BPF_ATTACH_TYPE              AttachType = 42
+	BPF_TRACE_KPROBE_MULTI             AttachType = 42
+	__MAX_BPF_ATTACH_TYPE              AttachType = 43
 )
 
 type Cmd int32
@@ -286,7 +287,21 @@ const (
 	BPF_FUNC_trace_vprintk                  FunctionId = 177
 	BPF_FUNC_skc_to_unix_sock               FunctionId = 178
 	BPF_FUNC_kallsyms_lookup_name           FunctionId = 179
-	__BPF_FUNC_MAX_ID                       FunctionId = 180
+	BPF_FUNC_find_vma                       FunctionId = 180
+	BPF_FUNC_loop                           FunctionId = 181
+	BPF_FUNC_strncmp                        FunctionId = 182
+	BPF_FUNC_get_func_arg                   FunctionId = 183
+	BPF_FUNC_get_func_ret                   FunctionId = 184
+	BPF_FUNC_get_func_arg_cnt               FunctionId = 185
+	BPF_FUNC_get_retval                     FunctionId = 186
+	BPF_FUNC_set_retval                     FunctionId = 187
+	BPF_FUNC_xdp_get_buff_len               FunctionId = 188
+	BPF_FUNC_xdp_load_bytes                 FunctionId = 189
+	BPF_FUNC_xdp_store_bytes                FunctionId = 190
+	BPF_FUNC_copy_from_user_task            FunctionId = 191
+	BPF_FUNC_skb_set_tstamp                 FunctionId = 192
+	BPF_FUNC_ima_file_hash                  FunctionId = 193
+	__BPF_FUNC_MAX_ID                       FunctionId = 194
 )
 
 type HdrStartOff int32
@@ -307,7 +322,8 @@ const (
 	BPF_LINK_TYPE_NETNS          LinkType = 5
 	BPF_LINK_TYPE_XDP            LinkType = 6
 	BPF_LINK_TYPE_PERF_EVENT     LinkType = 7
-	MAX_BPF_LINK_TYPE            LinkType = 8
+	BPF_LINK_TYPE_KPROBE_MULTI   LinkType = 8
+	MAX_BPF_LINK_TYPE            LinkType = 9
 )
 
 type MapType int32

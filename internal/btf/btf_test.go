@@ -193,6 +193,7 @@ func TestFindVMLinux(t *testing.T) {
 	if err != nil {
 		t.Fatal("Can't find vmlinux:", err)
 	}
+	defer file.Close()
 
 	spec, err := loadSpecFromELF(file)
 	if err != nil {

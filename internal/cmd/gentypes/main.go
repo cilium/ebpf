@@ -40,7 +40,7 @@ func run(args []string) error {
 		return err
 	}
 
-	spec, err := btf.LoadSpecFromReader(bytes.NewReader(raw))
+	spec, _, err := btf.LoadSpecFromReader(bytes.NewReader(raw))
 	if err != nil {
 		return err
 	}

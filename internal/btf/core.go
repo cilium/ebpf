@@ -234,17 +234,17 @@ func coreRelocate(local, target *Spec, relos CORERelos) (COREFixups, error) {
 
 			result[uint64(relo.insnOff)] = COREFixup{
 				kind:   relo.kind,
-				local:  uint32(relo.typeID),
-				target: uint32(relo.typeID),
+				local:  uint32(relo.typ.ID()),
+				target: uint32(relo.typ.ID()),
 			}
 			continue
 		}
 
-		relos, ok := relosByID[relo.typeID]
+		relos, ok := relosByID[relo.typ.ID()]
 		if !ok {
-			ids = append(ids, relo.typeID)
+			ids = append(ids, relo.typ.ID())
 		}
-		relosByID[relo.typeID] = append(relos, relo)
+		relosByID[relo.typ.ID()] = append(relos, relo)
 	}
 
 	// Ensure we work on relocations in a deterministic order.

@@ -11,7 +11,6 @@ import (
 	"math"
 	"os"
 	"reflect"
-	"sort"
 	"sync"
 
 	"github.com/cilium/ebpf/internal"
@@ -44,11 +43,6 @@ type Spec struct {
 	// Includes all struct flavors and types with the same name.
 	namedTypes map[essentialName][]Type
 
-	// Data from .BTF.ext. indexed by function name.
-	funcInfos map[string]FuncInfo
-	lineInfos map[string]LineInfos
-	coreRelos map[string]CORERelos
-
 	byteOrder binary.ByteOrder
 }
 
@@ -78,21 +72,33 @@ func (h *btfHeader) stringStart() int64 {
 
 // LoadSpecFromReader reads from an ELF or a raw BTF blob.
 //
-// Returns ErrNotFound if reading from an ELF which contains no BTF.
-func LoadSpecFromReader(rd io.ReaderAt) (*Spec, error) {
+// Returns ErrNotFound if reading from an ELF which contains no BTF. ExtInfos
+// may be nil.
+func LoadSpecFromReader(rd io.ReaderAt) (*Spec, *ExtInfos, error) {
 	file, err := internal.NewSafeELFFile(rd)
 	if err != nil {
 		if bo := guessRawBTFByteOrder(rd); bo != nil {
 			// Try to parse a naked BTF blob. This will return an error if
 			// we encounter a Datasec, since we can't fix it up.
-			return loadRawSpec(io.NewSectionReader(rd, 0, math.MaxInt64), bo, nil, nil)
+			spec, err := loadRawSpec(io.NewSectionReader(rd, 0, math.MaxInt64), bo, nil, nil)
+			return spec, nil, err
 		}
 
-		return nil, err
+		return nil, nil, err
 	}
 	defer file.Close()
 
-	return loadSpecFromELF(file)
+	spec, err := loadSpecFromELF(file)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	extInfos, err := loadExtInfosFromELF(file, spec.types, spec.strings)
+	if err != nil && !errors.Is(err, ErrNotFound) {
+		return nil, nil, err
+	}
+
+	return spec, extInfos, nil
 }
 
 // variableOffsets extracts all symbols offsets from an ELF and indexes them by
@@ -133,17 +139,14 @@ func variableOffsets(file *internal.SafeELFFile) (map[variable]uint32, error) {
 
 func loadSpecFromELF(file *internal.SafeELFFile) (*Spec, error) {
 	var (
-		btfSection    *elf.Section
-		btfExtSection *elf.Section
-		sectionSizes  = make(map[string]uint32)
+		btfSection   *elf.Section
+		sectionSizes = make(map[string]uint32)
 	)
 
 	for _, sec := range file.Sections {
 		switch sec.Name {
 		case ".BTF":
 			btfSection = sec
-		case ".BTF.ext":
-			btfExtSection = sec
 		default:
 			if sec.Type != elf.SHT_PROGBITS && sec.Type != elf.SHT_NOBITS {
 				break
@@ -170,118 +173,7 @@ func loadSpecFromELF(file *internal.SafeELFFile) (*Spec, error) {
 		return nil, fmt.Errorf("compressed BTF is not supported")
 	}
 
-	spec, err := loadRawSpec(btfSection.ReaderAt, file.ByteOrder, sectionSizes, vars)
-	if err != nil {
-		return nil, err
-	}
-
-	if btfExtSection == nil {
-		return spec, nil
-	}
-
-	if btfExtSection.ReaderAt == nil {
-		return nil, fmt.Errorf("compressed ext_info is not supported")
-	}
-
-	extInfo, err := loadExtInfos(btfExtSection, file.ByteOrder, spec.strings)
-	if err != nil {
-		return nil, fmt.Errorf("can't parse ext info: %w", err)
-	}
-
-	if err := spec.splitExtInfos(extInfo); err != nil {
-		return nil, fmt.Errorf("linking funcInfos and lineInfos: %w", err)
-	}
-
-	return spec, nil
-}
-
-// splitExtInfos takes FuncInfos, LineInfos and CORERelos indexed by section and
-// transforms them to be indexed by function. Retrieves function names from
-// the BTF spec.
-func (spec *Spec) splitExtInfos(info *extInfo) error {
-	ofi := make(map[string]FuncInfo)
-	oli := make(map[string]LineInfos)
-	ocr := make(map[string]CORERelos)
-
-	for secName, secFuncInfos := range info.funcInfos {
-		// Collect functions from each section and organize them by name.
-		var funcs []*Func
-		for _, bfi := range secFuncInfos {
-			fi, err := newFuncInfo(bfi, spec.types)
-			if err != nil {
-				return err
-			}
-
-			ofi[fi.fn.Name] = *fi
-			funcs = append(funcs, fi.fn)
-		}
-
-		sort.Slice(secFuncInfos, func(i, j int) bool {
-			return secFuncInfos[i].InsnOff < secFuncInfos[j].InsnOff
-		})
-
-		// Consider an ELF section that contains 3 functions (a, b, c)
-		// at offsets 0, 10 and 15 respectively. Offset 5 will return function a,
-		// offset 12 will return b, offset >= 15 will return c, etc.
-		funcForInstruction := func(offset uint32) (fn *Func, fnOffset uint32) {
-			for i, fi := range secFuncInfos {
-				if fi.InsnOff > offset {
-					break
-				}
-				fn = funcs[i]
-				fnOffset = fi.InsnOff
-			}
-			return fn, fnOffset
-		}
-
-		// Attribute LineInfo records to their respective functions, if any.
-		if lines := info.lineInfos[secName]; lines != nil {
-			for _, bli := range lines {
-				fn, fnOffset := funcForInstruction(bli.InsnOff)
-				if fn == nil {
-					return fmt.Errorf("section %s: error looking up FuncInfo for offset %v", secName, bli.InsnOff)
-				}
-
-				li, err := newLineInfo(bli, spec.strings)
-				if err != nil {
-					return err
-				}
-
-				// Offsets are ELF section-scoped, make them function-scoped by
-				// subtracting the function's start offset.
-				li.insnOff -= fnOffset
-
-				oli[fn.Name] = append(oli[fn.Name], *li)
-			}
-		}
-
-		// Attribute CO-RE relocations to their respective functions, if any.
-		if relos := info.relos[secName]; relos != nil {
-			for _, r := range relos {
-				fn, fnOffset := funcForInstruction(r.InsnOff)
-				if fn == nil {
-					return fmt.Errorf("section %s: error looking up FuncInfo for offset %v", secName, r.InsnOff)
-				}
-
-				relo, err := newCoreRelocation(r, spec.types, spec.strings)
-				if err != nil {
-					return err
-				}
-
-				// Offsets are ELF section-scoped, make them function-scoped by
-				// subtracting the function's start offset.
-				relo.insnOff -= fnOffset
-
-				ocr[fn.Name] = append(ocr[fn.Name], *relo)
-			}
-		}
-	}
-
-	spec.funcInfos = ofi
-	spec.lineInfos = oli
-	spec.coreRelos = ocr
-
-	return nil
+	return loadRawSpec(btfSection.ReaderAt, file.ByteOrder, sectionSizes, vars)
 }
 
 func loadRawSpec(btf io.ReaderAt, bo binary.ByteOrder, sectionSizes map[string]uint32, variableOffsets map[variable]uint32) (*Spec, error) {
@@ -524,9 +416,6 @@ func (s *Spec) Copy() *Spec {
 		s.strings,
 		types,
 		namedTypes,
-		s.funcInfos,
-		s.lineInfos,
-		s.coreRelos,
 		s.byteOrder,
 	}
 }
@@ -593,26 +482,6 @@ func (sw sliceWriter) Write(p []byte) (int, error) {
 	}
 
 	return copy(sw, p), nil
-}
-
-// Program finds the BTF for a specific function.
-//
-// Returns an error which may wrap ErrNoExtendedInfo if the Spec doesn't
-// contain extended BTF info.
-func (s *Spec) Program(name string) (*Program, error) {
-	if s.funcInfos == nil && s.lineInfos == nil && s.coreRelos == nil {
-		return nil, fmt.Errorf("BTF for function %s: %w", name, ErrNoExtendedInfo)
-	}
-
-	funcInfo, funcOK := s.funcInfos[name]
-	lineInfos, lineOK := s.lineInfos[name]
-	relos, coreOK := s.coreRelos[name]
-
-	if !funcOK && !lineOK && !coreOK {
-		return nil, fmt.Errorf("no extended BTF info for function %s", name)
-	}
-
-	return &Program{s, funcInfo, lineInfos, relos}, nil
 }
 
 // TypeByID returns the BTF Type with the given type ID.
@@ -808,19 +677,6 @@ func (h *Handle) FD() int {
 type Map struct {
 	Spec       *Spec
 	Key, Value Type
-}
-
-// Program is the BTF information for a stream of instructions.
-type Program struct {
-	spec      *Spec
-	FuncInfo  FuncInfo
-	LineInfos LineInfos
-	CORERelos CORERelos
-}
-
-// Spec returns the BTF spec of this program.
-func (p *Program) Spec() *Spec {
-	return p.spec
 }
 
 func marshalBTF(types interface{}, strings []byte, bo binary.ByteOrder) []byte {

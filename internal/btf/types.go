@@ -819,7 +819,7 @@ func inflateRawTypes(rawTypes []rawType, rawStrings stringTable) ([]Type, map[es
 		return members, nil
 	}
 
-	types := make([]Type, 0, len(rawTypes))
+	types := make([]Type, 0, len(rawTypes)+1)
 	types = append(types, (*Void)(nil))
 	namedTypes := make(map[essentialName][]Type)
 

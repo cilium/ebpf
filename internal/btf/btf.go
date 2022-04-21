@@ -527,7 +527,7 @@ func fixupDatasec(rawTypes []rawType, rawStrings stringTable, sectionSizes map[s
 
 // Copy creates a copy of Spec.
 func (s *Spec) Copy() *Spec {
-	types, _ := copyTypes(s.types, nil)
+	types := copyTypes(s.types, nil)
 
 	namedTypes := make(map[essentialName][]Type)
 	for _, typ := range types {

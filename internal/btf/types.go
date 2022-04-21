@@ -541,6 +541,20 @@ func (f *Float) copy() Type {
 	return &cpy
 }
 
+// cycle is a type which had to be elided due since it exceeded maxNestingDepth.
+type cycle struct {
+	root Type
+}
+
+func (c *cycle) ID() TypeID       { return math.MaxUint32 }
+func (c *cycle) String() string   { return fmt.Sprintf("cycle[%s]", c.root) }
+func (c *cycle) TypeName() string { return "" }
+func (c *cycle) walk(*typeDeque)  {}
+func (c *cycle) copy() Type {
+	cpy := *c
+	return &cpy
+}
+
 type sizer interface {
 	size() uint32
 }
@@ -620,12 +634,7 @@ func Sizeof(typ Type) (int, error) {
 //
 // Currently only supports the subset of types necessary for bitfield relocations.
 func alignof(typ Type) (int, error) {
-	typ, err := skipQualifiersAndTypedefs(typ)
-	if err != nil {
-		return 0, err
-	}
-
-	switch t := typ.(type) {
+	switch t := UnderlyingType(typ).(type) {
 	case *Enum:
 		return int(t.size()), nil
 	case *Int:
@@ -635,44 +644,34 @@ func alignof(typ Type) (int, error) {
 	}
 }
 
-// Copy a Type recursively.
-func Copy(typ Type) Type {
-	typ, _ = copyType(typ, nil)
-	return typ
-}
-
 // copy a Type recursively.
 //
-// typ may form a cycle.
-//
-// Returns any errors from transform verbatim.
-func copyType(typ Type, transform func(Type) (Type, error)) (Type, error) {
+// typ may form a cycle. If transform is not nil, it is called with the
+// to be copied type, and the return value is copied instead.
+func Copy(typ Type, transform func(Type) Type) Type {
 	copies := make(copier)
-	return typ, copies.copy(&typ, transform)
+	copies.copy(&typ, transform)
+	return typ
 }
 
 // copy a slice of Types recursively.
 //
-// Types may form a cycle.
-//
-// Returns any errors from transform verbatim.
-func copyTypes(types []Type, transform func(Type) (Type, error)) ([]Type, error) {
+// See Copy for the semantics.
+func copyTypes(types []Type, transform func(Type) Type) []Type {
 	result := make([]Type, len(types))
 	copy(result, types)
 
 	copies := make(copier)
 	for i := range result {
-		if err := copies.copy(&result[i], transform); err != nil {
-			return nil, err
-		}
+		copies.copy(&result[i], transform)
 	}
 
-	return result, nil
+	return result
 }
 
 type copier map[Type]Type
 
-func (c copier) copy(typ *Type, transform func(Type) (Type, error)) error {
+func (c copier) copy(typ *Type, transform func(Type) Type) {
 	var work typeDeque
 	for t := typ; t != nil; t = work.pop() {
 		// *t is the identity of the type.
@@ -683,11 +682,7 @@ func (c copier) copy(typ *Type, transform func(Type) (Type, error)) error {
 
 		var cpy Type
 		if transform != nil {
-			tf, err := transform(*t)
-			if err != nil {
-				return fmt.Errorf("copy %s: %w", *t, err)
-			}
-			cpy = tf.copy()
+			cpy = transform(*t).copy()
 		} else {
 			cpy = (*t).copy()
 		}
@@ -698,8 +693,6 @@ func (c copier) copy(typ *Type, transform func(Type) (Type, error)) error {
 		// Mark any nested types for copying.
 		cpy.walk(&work)
 	}
-
-	return nil
 }
 
 // typeDeque keeps track of pointers to types which still
@@ -1011,9 +1004,6 @@ func newEssentialName(name string) essentialName {
 }
 
 // UnderlyingType skips qualifiers and Typedefs.
-//
-// May return typ verbatim if too many types have to be skipped to protect against
-// circular Types.
 func UnderlyingType(typ Type) Type {
 	result := typ
 	for depth := 0; depth <= maxTypeDepth; depth++ {
@@ -1026,6 +1016,5 @@ func UnderlyingType(typ Type) Type {
 			return result
 		}
 	}
-	// Return the original argument, since we can't find an underlying type.
-	return typ
+	return &cycle{typ}
 }

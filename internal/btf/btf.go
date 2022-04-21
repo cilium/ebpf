@@ -461,7 +461,7 @@ func parseBTF(btf io.ReaderAt, bo binary.ByteOrder) ([]rawType, stringTable, err
 	}
 
 	buf.Reset(io.NewSectionReader(btf, header.typeStart(), int64(header.TypeLen)))
-	rawTypes, err := readTypes(buf, bo)
+	rawTypes, err := readTypes(buf, bo, header.TypeLen)
 	if err != nil {
 		return nil, nil, fmt.Errorf("can't read types: %w", err)
 	}

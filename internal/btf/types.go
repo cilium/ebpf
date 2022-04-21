@@ -782,7 +782,7 @@ func (dq *typeDeque) all() []*Type {
 // Returns a map of named types (so, where NameOff is non-zero) and a slice of types
 // indexed by TypeID. Since BTF ignores compilation units, multiple types may share
 // the same name. A Type may form a cyclic graph by pointing at itself.
-func inflateRawTypes(rawTypes []rawType, rawStrings stringTable) (types []Type, namedTypes map[essentialName][]Type, err error) {
+func inflateRawTypes(rawTypes []rawType, rawStrings stringTable) ([]Type, map[essentialName][]Type, error) {
 	type fixupDef struct {
 		id           TypeID
 		expectedKind btfKind
@@ -819,9 +819,9 @@ func inflateRawTypes(rawTypes []rawType, rawStrings stringTable) (types []Type, 
 		return members, nil
 	}
 
-	types = make([]Type, 0, len(rawTypes))
+	types := make([]Type, 0, len(rawTypes))
 	types = append(types, (*Void)(nil))
-	namedTypes = make(map[essentialName][]Type)
+	namedTypes := make(map[essentialName][]Type)
 
 	for i, raw := range rawTypes {
 		var (

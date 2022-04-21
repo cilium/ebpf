@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
+	"unsafe"
 )
 
 //go:generate stringer -linecomment -output=btf_types_string.go -type=FuncLinkage,VarLinkage
@@ -226,21 +227,25 @@ type btfParam struct {
 	Type    TypeID
 }
 
-func readTypes(r io.Reader, bo binary.ByteOrder) ([]rawType, error) {
-	var (
-		header btfType
-		types  []rawType
-	)
+const sizeOfbtfType = unsafe.Sizeof(btfType{})
+
+func readTypes(r io.Reader, bo binary.ByteOrder, header *btfHeader) ([]rawType, error) {
+	var tyHeader btfType
+	// because of the interleaving between types and struct members it is difficult to
+	// precompute the numbers of raw types this will parse
+	// this "guess" is a good first estimation
+	tyMaxCount := uintptr(header.TypeLen) / sizeOfbtfType / 2
+	types := make([]rawType, 0, tyMaxCount)
 
 	for id := TypeID(1); ; id++ {
-		if err := binary.Read(r, bo, &header); err == io.EOF {
+		if err := binary.Read(r, bo, &tyHeader); err == io.EOF {
 			return types, nil
 		} else if err != nil {
 			return nil, fmt.Errorf("can't read type info for id %v: %v", id, err)
 		}
 
 		var data interface{}
-		switch header.Kind() {
+		switch tyHeader.Kind() {
 		case kindInt:
 			data = new(uint32)
 		case kindPointer:
@@ -249,9 +254,9 @@ func readTypes(r io.Reader, bo binary.ByteOrder) ([]rawType, error) {
 		case kindStruct:
 			fallthrough
 		case kindUnion:
-			data = make([]btfMember, header.Vlen())
+			data = make([]btfMember, tyHeader.Vlen())
 		case kindEnum:
-			data = make([]btfEnum, header.Vlen())
+			data = make([]btfEnum, tyHeader.Vlen())
 		case kindForward:
 		case kindTypedef:
 		case kindVolatile:
@@ -259,26 +264,26 @@ func readTypes(r io.Reader, bo binary.ByteOrder) ([]rawType, error) {
 		case kindRestrict:
 		case kindFunc:
 		case kindFuncProto:
-			data = make([]btfParam, header.Vlen())
+			data = make([]btfParam, tyHeader.Vlen())
 		case kindVar:
 			data = new(btfVariable)
 		case kindDatasec:
-			data = make([]btfVarSecinfo, header.Vlen())
+			data = make([]btfVarSecinfo, tyHeader.Vlen())
 		case kindFloat:
 		default:
-			return nil, fmt.Errorf("type id %v: unknown kind: %v", id, header.Kind())
+			return nil, fmt.Errorf("type id %v: unknown kind: %v", id, tyHeader.Kind())
 		}
 
 		if data == nil {
-			types = append(types, rawType{header, nil})
+			types = append(types, rawType{tyHeader, nil})
 			continue
 		}
 
 		if err := binary.Read(r, bo, data); err != nil {
-			return nil, fmt.Errorf("type id %d: kind %v: can't read %T: %v", id, header.Kind(), data, err)
+			return nil, fmt.Errorf("type id %d: kind %v: can't read %T: %v", id, tyHeader.Kind(), data, err)
 		}
 
-		types = append(types, rawType{header, data})
+		types = append(types, rawType{tyHeader, data})
 	}
 }
 

@@ -776,20 +776,69 @@ func (dq *typeDeque) all() []*Type {
 	return types
 }
 
+// countFixups takes a list of raw btf types and returns the count of fixups that
+// will be required when building the graph of Types.
+func countFixups(rawTypes []rawType) int {
+	res := 0
+	for _, raw := range rawTypes {
+		switch raw.Kind() {
+		case kindPointer:
+			res++
+
+		case kindArray:
+			res++
+
+		case kindStruct, kindUnion:
+			members := raw.data.([]btfMember)
+			res += len(members)
+
+		case kindTypedef:
+			res++
+
+		case kindVolatile:
+			res++
+
+		case kindConst:
+			res++
+
+		case kindRestrict:
+			res++
+
+		case kindFunc:
+			res++
+
+		case kindFuncProto:
+			rawparams := raw.data.([]btfParam)
+			res += len(rawparams) + 1
+
+		case kindVar:
+			res++
+
+		case kindDatasec:
+			btfVars := raw.data.([]btfVarSecinfo)
+			res += len(btfVars)
+
+		}
+	}
+	return res
+}
+
 // inflateRawTypes takes a list of raw btf types linked via type IDs, and turns
 // it into a graph of Types connected via pointers.
 //
 // Returns a map of named types (so, where NameOff is non-zero) and a slice of types
 // indexed by TypeID. Since BTF ignores compilation units, multiple types may share
 // the same name. A Type may form a cyclic graph by pointing at itself.
-func inflateRawTypes(rawTypes []rawType, rawStrings stringTable) (types []Type, namedTypes map[essentialName][]Type, err error) {
+func inflateRawTypes(rawTypes []rawType, rawStrings stringTable) ([]Type, map[essentialName][]Type, error) {
 	type fixupDef struct {
 		id           TypeID
 		expectedKind btfKind
 		typ          *Type
 	}
 
-	var fixups []fixupDef
+	fixupsCount := countFixups(rawTypes)
+	fixups := make([]fixupDef, 0, fixupsCount)
+
 	fixup := func(id TypeID, expectedKind btfKind, typ *Type) {
 		fixups = append(fixups, fixupDef{id, expectedKind, typ})
 	}
@@ -819,9 +868,9 @@ func inflateRawTypes(rawTypes []rawType, rawStrings stringTable) (types []Type, 
 		return members, nil
 	}
 
-	types = make([]Type, 0, len(rawTypes))
+	types := make([]Type, 0, len(rawTypes)+1)
 	types = append(types, (*Void)(nil))
-	namedTypes = make(map[essentialName][]Type)
+	namedTypes := make(map[essentialName][]Type)
 
 	for i, raw := range rawTypes {
 		var (

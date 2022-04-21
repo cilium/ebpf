@@ -471,7 +471,7 @@ import (
 }
 
 func outputPatchedStruct(gf *btf.GoFormatter, w *bytes.Buffer, id string, s *btf.Struct, patches []patch) error {
-	s = btf.Copy(s).(*btf.Struct)
+	s = btf.Copy(s, nil).(*btf.Struct)
 
 	for i, p := range patches {
 		if err := p(s); err != nil {

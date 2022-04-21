@@ -779,48 +779,48 @@ func (dq *typeDeque) all() []*Type {
 // countFixups takes a list of raw btf types and returns the count of fixups that
 // will be required when building the graph of Types.
 func countFixups(rawTypes []rawType) int {
-	res := 0
+	fixupCount := 0
 	for _, raw := range rawTypes {
 		switch raw.Kind() {
 		case kindPointer:
-			res++
+			fixupCount++
 
 		case kindArray:
-			res++
+			fixupCount++
 
 		case kindStruct, kindUnion:
 			members := raw.data.([]btfMember)
-			res += len(members)
+			fixupCount += len(members)
 
 		case kindTypedef:
-			res++
+			fixupCount++
 
 		case kindVolatile:
-			res++
+			fixupCount++
 
 		case kindConst:
-			res++
+			fixupCount++
 
 		case kindRestrict:
-			res++
+			fixupCount++
 
 		case kindFunc:
-			res++
+			fixupCount++
 
 		case kindFuncProto:
 			rawparams := raw.data.([]btfParam)
-			res += len(rawparams) + 1
+			fixupCount += len(rawparams) + 1
 
 		case kindVar:
-			res++
+			fixupCount++
 
 		case kindDatasec:
 			btfVars := raw.data.([]btfVarSecinfo)
-			res += len(btfVars)
+			fixupCount += len(btfVars)
 
 		}
 	}
-	return res
+	return fixupCount
 }
 
 // inflateRawTypes takes a list of raw btf types linked via type IDs, and turns

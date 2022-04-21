@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"unsafe"
 )
 
 type stringTable []byte
@@ -50,5 +51,10 @@ func (st stringTable) Lookup(offset uint32) (string, error) {
 		return "", fmt.Errorf("offset %d isn't null terminated", offset)
 	}
 
-	return string(str[:end]), nil
+	return unsafeBytesToString(str[:end]), nil
+}
+
+func unsafeBytesToString(bytes []byte) string {
+	// trick used by https://go.dev/src/strings/builder.go#L45
+	return *(*string)(unsafe.Pointer(&bytes))
 }

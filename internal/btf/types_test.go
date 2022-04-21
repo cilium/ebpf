@@ -2,6 +2,7 @@ package btf
 
 import (
 	"fmt"
+	"reflect"
 	"testing"
 
 	qt "github.com/frankban/quicktest"
@@ -222,6 +223,57 @@ func TestTypeDeque(t *testing.T) {
 			t.Fatal("Elements don't match")
 		}
 	})
+}
+
+type testFormattableType struct {
+	name  string
+	extra []interface{}
+}
+
+var _ formattableType = (*testFormattableType)(nil)
+
+func (tft *testFormattableType) TypeName() string { return tft.name }
+func (tft *testFormattableType) Format(fs fmt.State, verb rune) {
+	formatType(fs, verb, tft, tft.extra...)
+}
+
+func TestFormatType(t *testing.T) {
+	t1 := &testFormattableType{"", []interface{}{"extra"}}
+	t1Addr := fmt.Sprintf("%#p", t1)
+	goType := reflect.TypeOf(t1).Elem().Name()
+
+	t2 := &testFormattableType{"foo", []interface{}{t1}}
+
+	tests := []struct {
+		t        formattableType
+		fmt      string
+		contains []string
+		omits    []string
+	}{
+		// %s doesn't contain extra.
+		{t1, "%s", []string{goType, t1Addr}, []string{"extra"}},
+		// %v does contain extra.
+		{t1, "%v", []string{goType, t1Addr, "extra"}, nil},
+		// %v doesn't print nested types' extra.
+		{t2, "%v", []string{goType, t2.name, t1Addr}, []string{"extra"}},
+		// %1v does print nested types' extra.
+		{t2, "%1v", []string{goType, t2.name, t1Addr, "extra"}, nil},
+	}
+
+	for _, test := range tests {
+		t.Run(test.fmt, func(t *testing.T) {
+			str := fmt.Sprintf(test.fmt, test.t)
+			t.Log(str)
+
+			for _, want := range test.contains {
+				qt.Assert(t, str, qt.Contains, want)
+			}
+
+			for _, notWant := range test.omits {
+				qt.Assert(t, str, qt.Not(qt.Contains), notWant)
+			}
+		})
+	}
 }
 
 func newCyclicalType(n int) Type {

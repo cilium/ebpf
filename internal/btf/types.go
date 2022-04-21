@@ -776,7 +776,9 @@ func (dq *typeDeque) all() []*Type {
 	return types
 }
 
-func countPotentialFixups(rawTypes []rawType) int {
+// countFixups takes a list of raw btf types and returns the count of fixups that
+// will be required when building the graph of Types.
+func countFixups(rawTypes []rawType) int {
 	res := 0
 	for _, raw := range rawTypes {
 		switch raw.Kind() {
@@ -834,8 +836,8 @@ func inflateRawTypes(rawTypes []rawType, rawStrings stringTable) ([]Type, map[es
 		typ          *Type
 	}
 
-	fixupsPreCount := countPotentialFixups(rawTypes)
-	fixups := make([]fixupDef, 0, fixupsPreCount)
+	fixupsCount := countFixups(rawTypes)
+	fixups := make([]fixupDef, 0, fixupsCount)
 
 	fixup := func(id TypeID, expectedKind btfKind, typ *Type) {
 		fixups = append(fixups, fixupDef{id, expectedKind, typ})

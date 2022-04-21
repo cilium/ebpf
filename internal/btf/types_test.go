@@ -35,10 +35,10 @@ func TestSizeof(t *testing.T) {
 }
 
 func TestCopyType(t *testing.T) {
-	_, _ = copyType((*Void)(nil), nil)
+	_ = Copy((*Void)(nil), nil)
 
 	in := &Int{Size: 4}
-	out, _ := copyType(in, nil)
+	out := Copy(in, nil)
 
 	in.Size = 8
 	if size := out.(*Int).Size; size != 4 {
@@ -46,13 +46,13 @@ func TestCopyType(t *testing.T) {
 	}
 
 	t.Run("cyclical", func(t *testing.T) {
-		_, _ = copyType(newCyclicalType(2), nil)
+		_ = Copy(newCyclicalType(2), nil)
 	})
 
 	t.Run("identity", func(t *testing.T) {
 		u16 := &Int{Size: 2}
 
-		out, _ := copyType(&Struct{
+		out := Copy(&Struct{
 			Members: []Member{
 				{Name: "a", Type: u16},
 				{Name: "b", Type: u16},
@@ -122,6 +122,7 @@ func TestType(t *testing.T) {
 				Vars: []VarSecinfo{{Type: &Void{}}},
 			}
 		},
+		func() Type { return &cycle{&Void{}} },
 	}
 
 	compareTypes := cmp.Comparer(func(a, b *Type) bool {
@@ -266,8 +267,9 @@ func TestUnderlyingType(t *testing.T) {
 			root := &Volatile{}
 			root.Type = test.fn(root)
 
-			got := UnderlyingType(root)
-			qt.Assert(t, got, qt.Equals, root)
+			got, ok := UnderlyingType(root).(*cycle)
+			qt.Assert(t, ok, qt.IsTrue)
+			qt.Assert(t, got.root, qt.Equals, root)
 		})
 	}
 

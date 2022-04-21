@@ -776,6 +776,51 @@ func (dq *typeDeque) all() []*Type {
 	return types
 }
 
+func countPotentialFixups(rawTypes []rawType) int {
+	res := 0
+	for _, raw := range rawTypes {
+		switch raw.Kind() {
+		case kindPointer:
+			res++
+
+		case kindArray:
+			res++
+
+		case kindStruct, kindUnion:
+			members := raw.data.([]btfMember)
+			res += len(members)
+
+		case kindTypedef:
+			res++
+
+		case kindVolatile:
+			res++
+
+		case kindConst:
+			res++
+
+		case kindRestrict:
+			res++
+
+		case kindFunc:
+			res++
+
+		case kindFuncProto:
+			rawparams := raw.data.([]btfParam)
+			res += len(rawparams) + 1
+
+		case kindVar:
+			res++
+
+		case kindDatasec:
+			btfVars := raw.data.([]btfVarSecinfo)
+			res += len(btfVars)
+
+		}
+	}
+	return res
+}
+
 // inflateRawTypes takes a list of raw btf types linked via type IDs, and turns
 // it into a graph of Types connected via pointers.
 //
@@ -789,7 +834,9 @@ func inflateRawTypes(rawTypes []rawType, rawStrings stringTable) ([]Type, map[es
 		typ          *Type
 	}
 
-	var fixups []fixupDef
+	fixupsPreCount := countPotentialFixups(rawTypes)
+	fixups := make([]fixupDef, 0, fixupsPreCount)
+
 	fixup := func(id TypeID, expectedKind btfKind, typ *Type) {
 		fixups = append(fixups, fixupDef{id, expectedKind, typ})
 	}

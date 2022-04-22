@@ -24,7 +24,7 @@ var (
 	ErrKeyNotExist      = errors.New("key does not exist")
 	ErrKeyExist         = errors.New("key already exists")
 	ErrIterationAborted = errors.New("iteration aborted")
-	ErrMapIncompatible  = errors.New("map's spec is incompatible with pinned map")
+	ErrMapIncompatible  = errors.New("map spec is incompatible with existing map")
 )
 
 // MapOptions control loading a map into the kernel.

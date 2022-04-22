@@ -1,6 +1,7 @@
 package ebpf
 
 import (
+	"errors"
 	"fmt"
 	"reflect"
 	"testing"
@@ -181,6 +182,144 @@ func TestCollectionSpecRewriteMaps(t *testing.T) {
 
 	if ret != 2 {
 		t.Fatal("new / override map not used")
+	}
+}
+
+func TestCollectionSpecMapReplacements(t *testing.T) {
+	insns := asm.Instructions{
+		// R1 map
+		asm.LoadMapPtr(asm.R1, 0).WithReference("test-map"),
+		// R2 key
+		asm.Mov.Reg(asm.R2, asm.R10),
+		asm.Add.Imm(asm.R2, -4),
+		asm.StoreImm(asm.R2, 0, 0, asm.Word),
+		// Lookup map[0]
+		asm.FnMapLookupElem.Call(),
+		asm.JEq.Imm(asm.R0, 0, "ret"),
+		asm.LoadMem(asm.R0, asm.R0, 0, asm.Word),
+		asm.Return().WithSymbol("ret"),
+	}
+
+	cs := &CollectionSpec{
+		Maps: map[string]*MapSpec{
+			"test-map": {
+				Type:       Array,
+				KeySize:    4,
+				ValueSize:  4,
+				MaxEntries: 1,
+			},
+		},
+		Programs: map[string]*ProgramSpec{
+			"test-prog": {
+				Type:         SocketFilter,
+				Instructions: insns,
+				License:      "MIT",
+			},
+		},
+	}
+
+	// Replace the map with another one
+	newMap, err := NewMap(cs.Maps["test-map"])
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer newMap.Close()
+
+	err = newMap.Put(uint32(0), uint32(2))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	coll, err := NewCollectionWithOptions(cs, CollectionOptions{
+		MapReplacements: map[string]*Map{
+			"test-map": newMap,
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer coll.Close()
+
+	ret, _, err := coll.Programs["test-prog"].Test(make([]byte, 14))
+	testutils.SkipIfNotSupported(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if ret != 2 {
+		t.Fatal("new / override map not used")
+	}
+
+	// Check that newMap isn't closed when the collection is closed
+	coll.Close()
+	err = newMap.Put(uint32(0), uint32(3))
+	if err != nil {
+		t.Fatalf("failed to update replaced map: %s", err)
+	}
+}
+func TestCollectionSpecMapReplacements_NonExistingMap(t *testing.T) {
+	cs := &CollectionSpec{
+		Maps: map[string]*MapSpec{
+			"test-map": {
+				Type:       Array,
+				KeySize:    4,
+				ValueSize:  4,
+				MaxEntries: 1,
+			},
+		},
+	}
+
+	// Override non-existing map
+	newMap, err := NewMap(cs.Maps["test-map"])
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer newMap.Close()
+
+	coll, err := NewCollectionWithOptions(cs, CollectionOptions{
+		MapReplacements: map[string]*Map{
+			"non-existing-map": newMap,
+		},
+	})
+	if err == nil {
+		coll.Close()
+		t.Fatal("Overriding a non existing map did not fail")
+	}
+}
+
+func TestCollectionSpecMapReplacements_SpecMismatch(t *testing.T) {
+	cs := &CollectionSpec{
+		Maps: map[string]*MapSpec{
+			"test-map": {
+				Type:       Array,
+				KeySize:    4,
+				ValueSize:  4,
+				MaxEntries: 1,
+			},
+		},
+	}
+
+	// Override map with mismatching spec
+	newMap, err := NewMap(&MapSpec{
+		Type:       Array,
+		KeySize:    4,
+		ValueSize:  8, // this is different
+		MaxEntries: 1,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	coll, err := NewCollectionWithOptions(cs, CollectionOptions{
+		MapReplacements: map[string]*Map{
+			"test-map": newMap,
+		},
+	})
+	if err == nil {
+		coll.Close()
+		t.Fatal("Overriding a map with a mismatching spec did not fail")
+	}
+	if !errors.Is(err, ErrMapIncompatible) {
+		t.Fatalf("Overriding a map with a mismatching spec failed with the wrong error")
 	}
 }
 

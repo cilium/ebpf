@@ -1,6 +1,7 @@
 package btf
 
 import (
+	"bytes"
 	"strings"
 	"testing"
 
@@ -9,7 +10,10 @@ import (
 
 func TestParseExtInfoBigRecordSize(t *testing.T) {
 	rd := strings.NewReader("\xff\xff\xff\xff\x00\x00\x00\x000709171295166016")
-	table := stringTable("\x00")
+	table, err := readStringTable(bytes.NewReader([]byte{0}))
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	if _, err := parseFuncInfos(rd, internal.NativeEndian, table); err == nil {
 		t.Error("Parsing func info with large record size doesn't return an error")

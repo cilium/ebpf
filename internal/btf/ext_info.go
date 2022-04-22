@@ -21,7 +21,7 @@ type extInfo struct {
 }
 
 // loadExtInfos parses the .BTF.ext section into its constituent parts.
-func loadExtInfos(r io.ReaderAt, bo binary.ByteOrder, strings stringTable) (*extInfo, error) {
+func loadExtInfos(r io.ReaderAt, bo binary.ByteOrder, strings *stringTable) (*extInfo, error) {
 	// Open unbuffered section reader. binary.Read() calls io.ReadFull on
 	// the header structs, resulting in one syscall per header.
 	headerRd := io.NewSectionReader(r, 0, math.MaxInt64)
@@ -154,7 +154,7 @@ type btfExtInfoSec struct {
 // appearing within func_info and line_info sub-sections.
 // These headers appear once for each program section in the ELF and are
 // followed by one or more func/line_info records for the section.
-func parseExtInfoSec(r io.Reader, bo binary.ByteOrder, strings stringTable) (string, *btfExtInfoSec, error) {
+func parseExtInfoSec(r io.Reader, bo binary.ByteOrder, strings *stringTable) (string, *btfExtInfoSec, error) {
 	var infoHeader btfExtInfoSec
 	if err := binary.Read(r, bo, &infoHeader); err != nil {
 		return "", nil, fmt.Errorf("read ext info header: %w", err)
@@ -227,7 +227,7 @@ func (fi *FuncInfo) Marshal(w io.Writer, offset uint64) error {
 
 // parseLineInfos parses a func_info sub-section within .BTF.ext ito a map of
 // func infos indexed by section name.
-func parseFuncInfos(r io.Reader, bo binary.ByteOrder, strings stringTable) (map[string][]bpfFuncInfo, error) {
+func parseFuncInfos(r io.Reader, bo binary.ByteOrder, strings *stringTable) (map[string][]bpfFuncInfo, error) {
 	recordSize, err := parseExtInfoRecordSize(r, bo)
 	if err != nil {
 		return nil, err
@@ -374,7 +374,7 @@ func (li LineInfos) Marshal(w io.Writer, offset uint64) error {
 
 // parseLineInfos parses a line_info sub-section within .BTF.ext ito a map of
 // line infos indexed by section name.
-func parseLineInfos(r io.Reader, bo binary.ByteOrder, strings stringTable) (map[string][]bpfLineInfo, error) {
+func parseLineInfos(r io.Reader, bo binary.ByteOrder, strings *stringTable) (map[string][]bpfLineInfo, error) {
 	recordSize, err := parseExtInfoRecordSize(r, bo)
 	if err != nil {
 		return nil, err
@@ -462,7 +462,7 @@ var extInfoReloSize = binary.Size(bpfCORERelo{})
 
 // parseCORERelos parses a core_relos sub-section within .BTF.ext ito a map of
 // CO-RE relocations indexed by section name.
-func parseCORERelos(r io.Reader, bo binary.ByteOrder, strings stringTable) (map[string]CORERelos, error) {
+func parseCORERelos(r io.Reader, bo binary.ByteOrder, strings *stringTable) (map[string]CORERelos, error) {
 	recordSize, err := parseExtInfoRecordSize(r, bo)
 	if err != nil {
 		return nil, err
@@ -494,7 +494,7 @@ func parseCORERelos(r io.Reader, bo binary.ByteOrder, strings stringTable) (map[
 // parseCOREReloRecords parses a stream of CO-RE relocation entries into a
 // coreRelos. These records appear after a btf_ext_info_sec header in the
 // core_relos sub-section of .BTF.ext.
-func parseCOREReloRecords(r io.Reader, bo binary.ByteOrder, recordSize uint32, recordNum uint32, strings stringTable) (CORERelos, error) {
+func parseCOREReloRecords(r io.Reader, bo binary.ByteOrder, recordSize uint32, recordNum uint32, strings *stringTable) (CORERelos, error) {
 	var out CORERelos
 
 	var relo bpfCORERelo

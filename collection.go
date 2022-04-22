@@ -18,6 +18,15 @@ import (
 type CollectionOptions struct {
 	Maps     MapOptions
 	Programs ProgramOptions
+
+	// MapReplacements defines a set of maps that will be used
+	// instead of creating new ones when loading the object. The
+	// maps' specs should be compatible and there must exist a map
+	// in CollectionSpec.Maps for each map in MapReplacements.
+	// MapReplacements are cloned before being used in the
+	// Collection, so the user can Close() them if not needed
+	// anymore.
+	MapReplacements map[string]*Map
 }
 
 // CollectionSpec describes a collection.
@@ -214,7 +223,10 @@ func (cs *CollectionSpec) Assign(to interface{}) error {
 // Returns an error if any of the fields can't be found, or
 // if the same Map or Program is assigned multiple times.
 func (cs *CollectionSpec) LoadAndAssign(to interface{}, opts *CollectionOptions) error {
-	loader := newCollectionLoader(cs, opts)
+	loader, err := newCollectionLoader(cs, opts)
+	if err != nil {
+		return err
+	}
 	defer loader.cleanup()
 
 	// Support assigning Programs and Maps, lazy-loading the required objects.
@@ -289,7 +301,10 @@ func NewCollection(spec *CollectionSpec) (*Collection, error) {
 // Omitting Collection.Close() during application shutdown is an error.
 // See the package documentation for details around Map and Program lifecycle.
 func NewCollectionWithOptions(spec *CollectionSpec, opts CollectionOptions) (*Collection, error) {
-	loader := newCollectionLoader(spec, &opts)
+	loader, err := newCollectionLoader(spec, &opts)
+	if err != nil {
+		return nil, err
+	}
 	defer loader.cleanup()
 
 	// Create maps first, as their fds need to be linked into programs.
@@ -379,9 +394,16 @@ type collectionLoader struct {
 	handles  *handleCache
 }
 
-func newCollectionLoader(coll *CollectionSpec, opts *CollectionOptions) *collectionLoader {
+func newCollectionLoader(coll *CollectionSpec, opts *CollectionOptions) (*collectionLoader, error) {
 	if opts == nil {
 		opts = &CollectionOptions{}
+	}
+
+	// Check for existing MapSpecs in the CollectionSpec for all provided replacement maps.
+	for name := range opts.MapReplacements {
+		if _, ok := coll.Maps[name]; !ok {
+			return nil, fmt.Errorf("replacement map %s not found in CollectionSpec", name)
+		}
 	}
 
 	return &collectionLoader{
@@ -390,7 +412,7 @@ func newCollectionLoader(coll *CollectionSpec, opts *CollectionOptions) *collect
 		make(map[string]*Map),
 		make(map[string]*Program),
 		newHandleCache(),
-	}
+	}, nil
 }
 
 // finalize should be called when all the collectionLoader's resources
@@ -424,6 +446,20 @@ func (cl *collectionLoader) loadMap(mapName string) (*Map, error) {
 
 	if mapSpec.BTF != nil && cl.coll.Types != mapSpec.BTF.Spec {
 		return nil, fmt.Errorf("map %s: BTF doesn't match collection", mapName)
+	}
+
+	if replaceMap, ok := cl.opts.MapReplacements[mapName]; ok {
+		if err := mapSpec.checkCompatibility(replaceMap); err != nil {
+			return nil, fmt.Errorf("use replacement map %s: %w", mapSpec.Name, err)
+		}
+		// Clone the map to avoid closing user's map later on.
+		m, err := replaceMap.Clone()
+		if err != nil {
+			return nil, err
+		}
+
+		cl.maps[mapName] = m
+		return m, nil
 	}
 
 	m, err := newMapWithOptions(mapSpec, cl.opts.Maps, cl.handles)

@@ -35,7 +35,7 @@ type ID uint32
 type Spec struct {
 	// Data from .BTF.
 	rawTypes []rawType
-	strings  stringTable
+	strings  *stringTable
 
 	// Inflated Types.
 	types []Type
@@ -447,15 +447,14 @@ func guessRawBTFByteOrder(r io.ReaderAt) binary.ByteOrder {
 
 // parseBTF reads a .BTF section into memory and parses it into a list of
 // raw types and a string table.
-func parseBTF(btf io.ReaderAt, bo binary.ByteOrder) ([]rawType, stringTable, error) {
+func parseBTF(btf io.ReaderAt, bo binary.ByteOrder) ([]rawType, *stringTable, error) {
 	buf := internal.NewBufferedSectionReader(btf, 0, math.MaxInt64)
 	header, err := parseBTFHeader(buf, bo)
 	if err != nil {
 		return nil, nil, fmt.Errorf("parsing .BTF header: %v", err)
 	}
 
-	buf.Reset(io.NewSectionReader(btf, header.stringStart(), int64(header.StringLen)))
-	rawStrings, err := readStringTable(buf)
+	rawStrings, err := readStringTable(io.NewSectionReader(btf, header.stringStart(), int64(header.StringLen)))
 	if err != nil {
 		return nil, nil, fmt.Errorf("can't read type names: %w", err)
 	}
@@ -474,7 +473,7 @@ type variable struct {
 	name    string
 }
 
-func fixupDatasec(rawTypes []rawType, rawStrings stringTable, sectionSizes map[string]uint32, variableOffsets map[variable]uint32) error {
+func fixupDatasec(rawTypes []rawType, rawStrings *stringTable, sectionSizes map[string]uint32, variableOffsets map[variable]uint32) error {
 	for i, rawType := range rawTypes {
 		if rawType.Kind() != kindDatasec {
 			continue
@@ -580,7 +579,11 @@ func (s *Spec) marshal(opts marshalOpts) ([]byte, error) {
 	typeLen := uint32(buf.Len() - headerLen)
 
 	// Write string section after type section.
-	_, _ = buf.Write(s.strings)
+	stringsLen := s.strings.Length()
+	buf.Grow(stringsLen)
+	if err := s.strings.Marshal(&buf); err != nil {
+		return nil, err
+	}
 
 	// Fill out the header, and write it out.
 	header = &btfHeader{
@@ -591,7 +594,7 @@ func (s *Spec) marshal(opts marshalOpts) ([]byte, error) {
 		TypeOff:   0,
 		TypeLen:   typeLen,
 		StringOff: typeLen,
-		StringLen: uint32(len(s.strings)),
+		StringLen: uint32(stringsLen),
 	}
 
 	raw := buf.Bytes()

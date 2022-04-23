@@ -3,6 +3,7 @@ package btf
 import (
 	"fmt"
 	"math"
+	"reflect"
 	"strings"
 )
 
@@ -776,31 +777,6 @@ func (dq *typeDeque) all() []*Type {
 	return types
 }
 
-// countFixups takes a list of raw btf types and returns the count of fixups that
-// will be required when building the graph of Types.
-func countFixups(rawTypes []rawType) int {
-	fixupCount := 0
-	for _, raw := range rawTypes {
-		switch raw.Kind() {
-		case kindStruct, kindUnion:
-			members := raw.data.([]btfMember)
-			fixupCount += len(members)
-
-		case kindFuncProto:
-			rawparams := raw.data.([]btfParam)
-			fixupCount += len(rawparams) + 1
-
-		case kindDatasec:
-			btfVars := raw.data.([]btfVarSecinfo)
-			fixupCount += len(btfVars)
-
-		default:
-			fixupCount++
-		}
-	}
-	return fixupCount
-}
-
 // inflateRawTypes takes a list of raw btf types linked via type IDs, and turns
 // it into a graph of Types connected via pointers.
 //
@@ -808,17 +784,40 @@ func countFixups(rawTypes []rawType) int {
 // indexed by TypeID. Since BTF ignores compilation units, multiple types may share
 // the same name. A Type may form a cyclic graph by pointing at itself.
 func inflateRawTypes(rawTypes []rawType, rawStrings *stringTable) ([]Type, map[essentialName][]Type, error) {
+	types := make([]Type, 0, len(rawTypes)+1)
+	types = append(types, (*Void)(nil))
+	namedTypes := make(map[essentialName][]Type)
 	type fixupDef struct {
-		id           TypeID
-		expectedKind btfKind
-		typ          *Type
+		id  TypeID
+		typ *Type
 	}
 
-	fixupsCount := countFixups(rawTypes)
-	fixups := make([]fixupDef, 0, fixupsCount)
+	var fixups []fixupDef
+	fixup := func(id TypeID, typ *Type) {
+		if id < TypeID(len(types)) {
+			// We've already inflated this type, fix it up immediately.
+			*typ = types[id]
+			return
+		}
+		fixups = append(fixups, fixupDef{id, typ})
+	}
 
-	fixup := func(id TypeID, expectedKind btfKind, typ *Type) {
-		fixups = append(fixups, fixupDef{id, expectedKind, typ})
+	type assertion struct {
+		typ  *Type
+		want reflect.Type
+	}
+
+	var assertions []assertion
+	assert := func(typ *Type, want reflect.Type) error {
+		if *typ != nil {
+			// The type has already been fixed up, check the type immediately.
+			if reflect.TypeOf(*typ) != want {
+				return fmt.Errorf("expected %s, got %T", want, *typ)
+			}
+			return nil
+		}
+		assertions = append(assertions, assertion{typ, want})
+		return nil
 	}
 
 	convertMembers := func(raw []btfMember, kindFlag bool) ([]Member, error) {
@@ -841,14 +840,10 @@ func inflateRawTypes(rawTypes []rawType, rawStrings *stringTable) ([]Type, map[e
 			members = append(members, m)
 		}
 		for i := range members {
-			fixup(raw[i].Type, kindUnknown, &members[i].Type)
+			fixup(raw[i].Type, &members[i].Type)
 		}
 		return members, nil
 	}
-
-	types := make([]Type, 0, len(rawTypes)+1)
-	types = append(types, (*Void)(nil))
-	namedTypes := make(map[essentialName][]Type)
 
 	for i, raw := range rawTypes {
 		var (
@@ -870,7 +865,7 @@ func inflateRawTypes(rawTypes []rawType, rawStrings *stringTable) ([]Type, map[e
 
 		case kindPointer:
 			ptr := &Pointer{id, nil}
-			fixup(raw.Type(), kindUnknown, &ptr.Target)
+			fixup(raw.Type(), &ptr.Target)
 			typ = ptr
 
 		case kindArray:
@@ -879,7 +874,7 @@ func inflateRawTypes(rawTypes []rawType, rawStrings *stringTable) ([]Type, map[e
 			// IndexType is unused according to btf.rst.
 			// Don't make it available right now.
 			arr := &Array{id, nil, btfArr.Nelems}
-			fixup(btfArr.Type, kindUnknown, &arr.Type)
+			fixup(btfArr.Type, &arr.Type)
 			typ = arr
 
 		case kindStruct:
@@ -920,27 +915,30 @@ func inflateRawTypes(rawTypes []rawType, rawStrings *stringTable) ([]Type, map[e
 
 		case kindTypedef:
 			typedef := &Typedef{id, name, nil}
-			fixup(raw.Type(), kindUnknown, &typedef.Type)
+			fixup(raw.Type(), &typedef.Type)
 			typ = typedef
 
 		case kindVolatile:
 			volatile := &Volatile{id, nil}
-			fixup(raw.Type(), kindUnknown, &volatile.Type)
+			fixup(raw.Type(), &volatile.Type)
 			typ = volatile
 
 		case kindConst:
 			cnst := &Const{id, nil}
-			fixup(raw.Type(), kindUnknown, &cnst.Type)
+			fixup(raw.Type(), &cnst.Type)
 			typ = cnst
 
 		case kindRestrict:
 			restrict := &Restrict{id, nil}
-			fixup(raw.Type(), kindUnknown, &restrict.Type)
+			fixup(raw.Type(), &restrict.Type)
 			typ = restrict
 
 		case kindFunc:
 			fn := &Func{id, name, nil, raw.Linkage()}
-			fixup(raw.Type(), kindFuncProto, &fn.Type)
+			fixup(raw.Type(), &fn.Type)
+			if err := assert(&fn.Type, reflect.TypeOf((*FuncProto)(nil))); err != nil {
+				return nil, nil, err
+			}
 			typ = fn
 
 		case kindFuncProto:
@@ -956,17 +954,17 @@ func inflateRawTypes(rawTypes []rawType, rawStrings *stringTable) ([]Type, map[e
 				})
 			}
 			for i := range params {
-				fixup(rawparams[i].Type, kindUnknown, &params[i].Type)
+				fixup(rawparams[i].Type, &params[i].Type)
 			}
 
 			fp := &FuncProto{id, nil, params}
-			fixup(raw.Type(), kindUnknown, &fp.Return)
+			fixup(raw.Type(), &fp.Return)
 			typ = fp
 
 		case kindVar:
 			variable := raw.data.(*btfVariable)
 			v := &Var{id, name, nil, VarLinkage(variable.Linkage)}
-			fixup(raw.Type(), kindUnknown, &v.Type)
+			fixup(raw.Type(), &v.Type)
 			typ = v
 
 		case kindDatasec:
@@ -979,7 +977,10 @@ func inflateRawTypes(rawTypes []rawType, rawStrings *stringTable) ([]Type, map[e
 				})
 			}
 			for i := range vars {
-				fixup(btfVars[i].Type, kindVar, &vars[i].Type)
+				fixup(btfVars[i].Type, &vars[i].Type)
+				if err := assert(&vars[i].Type, reflect.TypeOf((*Var)(nil))); err != nil {
+					return nil, nil, err
+				}
 			}
 			typ = &Datasec{id, name, raw.SizeType, vars}
 
@@ -1003,17 +1004,13 @@ func inflateRawTypes(rawTypes []rawType, rawStrings *stringTable) ([]Type, map[e
 			return nil, nil, fmt.Errorf("reference to invalid type id: %d", fixup.id)
 		}
 
-		// Default void (id 0) to unknown
-		rawKind := kindUnknown
-		if i > 0 {
-			rawKind = rawTypes[i-1].Kind()
-		}
-
-		if expected := fixup.expectedKind; expected != kindUnknown && rawKind != expected {
-			return nil, nil, fmt.Errorf("expected type id %d to have kind %s, found %s", fixup.id, expected, rawKind)
-		}
-
 		*fixup.typ = types[i]
+	}
+
+	for _, assertion := range assertions {
+		if reflect.TypeOf(*assertion.typ) != assertion.want {
+			return nil, nil, fmt.Errorf("expected %s, got %T", assertion.want, *assertion.typ)
+		}
 	}
 
 	return types, namedTypes, nil

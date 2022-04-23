@@ -226,11 +226,14 @@ type btfParam struct {
 	Type    TypeID
 }
 
-func readTypes(r io.Reader, bo binary.ByteOrder) ([]rawType, error) {
-	var (
-		header btfType
-		types  []rawType
-	)
+func readTypes(r io.Reader, bo binary.ByteOrder, typeLen uint32) ([]rawType, error) {
+	var header btfType
+	// because of the interleaving between types and struct members it is difficult to
+	// precompute the numbers of raw types this will parse
+	// this "guess" is a good first estimation
+	sizeOfbtfType := uintptr(binary.Size(btfType{}))
+	tyMaxCount := uintptr(typeLen) / sizeOfbtfType / 2
+	types := make([]rawType, 0, tyMaxCount)
 
 	for id := TypeID(1); ; id++ {
 		if err := binary.Read(r, bo, &header); err == io.EOF {

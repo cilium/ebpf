@@ -286,7 +286,13 @@ const (
 	BPF_FUNC_trace_vprintk                  FunctionId = 177
 	BPF_FUNC_skc_to_unix_sock               FunctionId = 178
 	BPF_FUNC_kallsyms_lookup_name           FunctionId = 179
-	__BPF_FUNC_MAX_ID                       FunctionId = 180
+	BPF_FUNC_find_vma                       FunctionId = 180
+	BPF_FUNC_loop                           FunctionId = 181
+	BPF_FUNC_strncmp                        FunctionId = 182
+	BPF_FUNC_get_func_arg                   FunctionId = 183
+	BPF_FUNC_get_func_ret                   FunctionId = 184
+	BPF_FUNC_get_func_arg_cnt               FunctionId = 185
+	__BPF_FUNC_MAX_ID                       FunctionId = 186
 )
 
 type HdrStartOff int32
@@ -918,8 +924,11 @@ type ProgLoadAttr struct {
 	LineInfoCnt        uint32
 	AttachBtfId        uint32
 	AttachProgFd       uint32
-	_                  [4]byte
+	CoreReloCnt        uint32
 	FdArray            Pointer
+	CoreRelos          Pointer
+	CoreReloRecSize    uint32
+	_                  [4]byte
 }
 
 func ProgLoad(attr *ProgLoadAttr) (*FD, error) {

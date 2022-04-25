@@ -429,7 +429,7 @@ func createTraceFSProbeEvent(typ probeType, args probeArgs) error {
 		// the eBPF program itself.
 		// See Documentation/kprobes.txt for more details.
 		token = kprobeToken(args)
-		pe = fmt.Sprintf("%s:%s/%s %s", probePrefix(args.ret), args.group, sanitizedSymbol(args.symbol), token)
+		pe = fmt.Sprintf("%s:%s/%s %s", probePrefix(args.ret), args.group, sanitizeSymbol(args.symbol), token)
 	case uprobeType:
 		// The uprobe_events syntax is as follows:
 		// p[:[GRP/]EVENT] PATH:OFFSET [FETCHARGS] : Set a probe
@@ -481,7 +481,7 @@ func closeTraceFSProbeEvent(typ probeType, group, symbol string) error {
 
 	// See [k,u]probe_events syntax above. The probe type does not need to be specified
 	// for removals.
-	pe := fmt.Sprintf("-:%s/%s", group, sanitizedSymbol(symbol))
+	pe := fmt.Sprintf("-:%s/%s", group, sanitizeSymbol(symbol))
 	if _, err = f.WriteString(pe); err != nil {
 		return fmt.Errorf("writing '%s' to '%s': %w", pe, typ.EventsPath(), err)
 	}

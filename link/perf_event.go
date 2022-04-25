@@ -269,7 +269,7 @@ func unsafeStringPtr(str string) (unsafe.Pointer, error) {
 // name automatically has its invalid symbols converted to underscores so the caller
 // can pass a raw symbol name, e.g. a kernel symbol containing dots.
 func getTraceEventID(group, name string) (uint64, error) {
-	name = sanitizedSymbol(name)
+	name = sanitizeSymbol(name)
 	tid, err := uint64FromFile(tracefsPath, "events", group, name, "id")
 	if errors.Is(err, os.ErrNotExist) {
 		return 0, fmt.Errorf("trace event %s/%s: %w", group, name, os.ErrNotExist)

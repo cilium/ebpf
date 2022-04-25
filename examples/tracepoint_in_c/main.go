@@ -39,7 +39,7 @@ func main() {
 	// second.
 	// The first two arguments are taken from the following pathname:
 	// /sys/kernel/debug/tracing/events/kmem/mm_page_alloc
-	kp, err := link.Tracepoint("kmem", "mm_page_alloc", objs.MmPageAlloc)
+	kp, err := link.Tracepoint("kmem", "mm_page_alloc", objs.MmPageAlloc, nil)
 	if err != nil {
 		log.Fatalf("opening tracepoint: %s", err)
 	}

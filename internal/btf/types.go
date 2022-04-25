@@ -163,17 +163,22 @@ func (p *Pointer) copy() Type {
 // Array is an array with a fixed number of elements.
 type Array struct {
 	TypeID
+	Index  Type
 	Type   Type
 	Nelems uint32
 }
 
 func (arr *Array) Format(fs fmt.State, verb rune) {
-	formatType(fs, verb, arr, "type=", arr.Type, "n=", arr.Nelems)
+	formatType(fs, verb, arr, "index=", arr.Index, "type=", arr.Type, "n=", arr.Nelems)
 }
 
 func (arr *Array) TypeName() string { return "" }
 
-func (arr *Array) walk(tdq *typeDeque) { tdq.push(&arr.Type) }
+func (arr *Array) walk(tdq *typeDeque) {
+	tdq.push(&arr.Index)
+	tdq.push(&arr.Type)
+}
+
 func (arr *Array) copy() Type {
 	cpy := *arr
 	return &cpy
@@ -876,9 +881,8 @@ func inflateRawTypes(rawTypes []rawType, rawStrings *stringTable) ([]Type, map[e
 		case kindArray:
 			btfArr := raw.data.(*btfArray)
 
-			// IndexType is unused according to btf.rst.
-			// Don't make it available right now.
-			arr := &Array{id, nil, btfArr.Nelems}
+			arr := &Array{id, nil, nil, btfArr.Nelems}
+			fixup(btfArr.IndexType, &arr.Index)
 			fixup(btfArr.Type, &arr.Type)
 			typ = arr
 

@@ -1,6 +1,26 @@
 package btf
 
-import "testing"
+import (
+	"testing"
+
+	qt "github.com/frankban/quicktest"
+)
+
+func TestFlatten(t *testing.T) {
+	ptr := newCyclicalType(2).(*Pointer)
+	cst := ptr.Target.(*Const)
+	str := cst.Type.(*Struct)
+
+	types := flattenType(ptr, nil)
+	qt.Assert(t, types, qt.HasLen, 3)
+	qt.Assert(t, types[0], qt.Equals, ptr)
+	qt.Assert(t, types[1], qt.Equals, cst)
+	qt.Assert(t, types[2], qt.Equals, str)
+
+	types = flattenType(ptr, func(t Type) bool { return t == cst })
+	qt.Assert(t, types, qt.HasLen, 1)
+	qt.Assert(t, types[0], qt.Equals, ptr)
+}
 
 func TestTypeDeque(t *testing.T) {
 	a, b := new(Type), new(Type)

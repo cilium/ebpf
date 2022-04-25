@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"regexp"
+	"strings"
 	"sync"
 
 	"github.com/cilium/ebpf"
@@ -15,10 +15,6 @@ import (
 
 var (
 	uprobeEventsPath = filepath.Join(tracefsPath, "uprobe_events")
-
-	// rgxEventSymbol is used to strip invalid characters from the [k,u]probe symbol
-	// as they are not allowed to be used as the EVENT token in tracefs.
-	rgxEventSymbol = regexp.MustCompile("[^a-zA-Z0-9]+")
 
 	uprobeRetprobeBit = struct {
 		once  sync.Once
@@ -296,7 +292,7 @@ func (ex *Executable) uprobe(symbol string, prog *ebpf.Program, opts *UprobeOpti
 	}
 
 	// Use tracefs if uprobe PMU is missing.
-	args.symbol = sanitizedSymbol(symbol)
+	args.symbol = sanitizeSymbol(symbol)
 	tp, err = tracefsUprobe(args)
 	if err != nil {
 		return nil, fmt.Errorf("creating trace event '%s:%s' in tracefs: %w", ex.path, symbol, err)
@@ -315,9 +311,29 @@ func tracefsUprobe(args probeArgs) (*perfEvent, error) {
 	return tracefsProbe(uprobeType, args)
 }
 
-// sanitizedSymbol replaces every invalid character for the tracefs api with an underscore.
-func sanitizedSymbol(symbol string) string {
-	return rgxEventSymbol.ReplaceAllString(symbol, "_")
+// sanitizeSymbol replaces every invalid character for the tracefs api with an underscore.
+// It is equivalent to calling regexp.MustCompile("[^a-zA-Z0-9]+").ReplaceAllString("_").
+func sanitizeSymbol(s string) string {
+	var b strings.Builder
+	b.Grow(len(s))
+	var skip bool
+	for _, c := range []byte(s) {
+		switch {
+		case c >= 'a' && c <= 'z',
+			c >= 'A' && c <= 'Z',
+			c >= '0' && c <= '9':
+			skip = false
+			b.WriteByte(c)
+
+		default:
+			if !skip {
+				b.WriteByte('_')
+				skip = true
+			}
+		}
+	}
+
+	return b.String()
 }
 
 // uprobeToken creates the PATH:OFFSET(REF_CTR_OFFSET) token for the tracefs api.

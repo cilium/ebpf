@@ -44,7 +44,7 @@ func main() {
 	// Open a Kprobe at the entry point of the kernel function and attach the
 	// pre-compiled program. Each time the kernel function enters, the program
 	// will emit an event containing pid and command of the execved task.
-	kp, err := link.Kprobe(fn, objs.KprobeExecve)
+	kp, err := link.Kprobe(fn, objs.KprobeExecve, nil)
 	if err != nil {
 		log.Fatalf("opening kprobe: %s", err)
 	}

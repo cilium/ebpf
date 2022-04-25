@@ -99,7 +99,7 @@ func main() {
 	// Each time a userspace program uses the 'openat()' syscall, the eBPF
 	// program specified above will be executed and a '123' value will appear
 	// in the perf ring.
-	tp, err := link.Tracepoint("syscalls", "sys_enter_openat", prog)
+	tp, err := link.Tracepoint("syscalls", "sys_enter_openat", prog, nil)
 	if err != nil {
 		log.Fatalf("opening tracepoint: %s", err)
 	}

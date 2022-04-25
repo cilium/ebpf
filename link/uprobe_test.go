@@ -280,9 +280,11 @@ func TestUprobeSanitizedSymbol(t *testing.T) {
 		expected string
 	}{
 		{"readline", "readline"},
-		{"main.Func", "main_Func"},
+		{"main.Func123", "main_Func123"},
 		{"a.....a", "a_a"},
 		{"./;'{}[]a", "_a"},
+		{"***xx**xx###", "_xx_xx_"},
+		{`@P#r$i%v^3*+t)i&k++--`, "_P_r_i_v_3_t_i_k_"},
 	}
 
 	for i, tt := range tests {

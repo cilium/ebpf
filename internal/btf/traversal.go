@@ -1,5 +1,35 @@
 package btf
 
+// flattenType returns all types reachable from typ.
+//
+// Types for which skip returns true are ignored. skip may be nil.
+//
+// Returns types ordered starting from typ and ending at the most nested type.
+func flattenType(typ Type, skip func(Type) bool) []Type {
+	var (
+		dq    typeDeque
+		types []Type
+		seen  = make(map[Type]struct{})
+	)
+
+	for t := &typ; t != nil; t = dq.shift() {
+		if skip != nil && skip(*t) {
+			continue
+		}
+
+		if _, ok := seen[*t]; ok {
+			continue
+		}
+
+		types = append(types, *t)
+		seen[*t] = struct{}{}
+
+		(*t).walk(&dq)
+	}
+
+	return types
+}
+
 // typeDeque keeps track of pointers to types which still
 // need to be visited.
 type typeDeque struct {

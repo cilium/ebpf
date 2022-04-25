@@ -138,8 +138,8 @@ func TestType(t *testing.T) {
 			}
 
 			var first, second typeDeque
-			typ.walk(&first)
-			typ.walk(&second)
+			walkType(typ, first.push)
+			walkType(typ, second.push)
 
 			if diff := cmp.Diff(first.all(), second.all(), compareTypes); diff != "" {
 				t.Errorf("Walk mismatch (-want +got):\n%s", diff)

@@ -908,8 +908,8 @@ func coreAreTypesCompatible(localType Type, targetType Type) error {
 
 		case *Pointer, *Array:
 			depth++
-			localType.walk(&localTs)
-			targetType.walk(&targetTs)
+			walkType(localType, localTs.push)
+			walkType(targetType, targetTs.push)
 
 		case *FuncProto:
 			tv := targetType.(*FuncProto)
@@ -918,8 +918,8 @@ func coreAreTypesCompatible(localType Type, targetType Type) error {
 			}
 
 			depth++
-			localType.walk(&localTs)
-			targetType.walk(&targetTs)
+			walkType(localType, localTs.push)
+			walkType(targetType, targetTs.push)
 
 		default:
 			return fmt.Errorf("unsupported type %T", localType)

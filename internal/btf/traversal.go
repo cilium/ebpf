@@ -24,7 +24,7 @@ func flattenType(typ Type, skip func(Type) bool) []Type {
 		types = append(types, *t)
 		seen[*t] = struct{}{}
 
-		(*t).walk(&dq)
+		walkType(*t, dq.push)
 	}
 
 	return types

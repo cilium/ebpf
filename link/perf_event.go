@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"regexp"
 	"runtime"
 	"strconv"
 	"strings"
@@ -44,11 +43,6 @@ import (
 
 var (
 	tracefsPath = "/sys/kernel/debug/tracing"
-
-	// Trace event groups, names and kernel symbols must adhere to this set
-	// of characters. Non-empty, first character must not be a number, all
-	// characters must be alphanumeric or underscore.
-	rgxTraceEvent = regexp.MustCompile("^[a-zA-Z_][0-9a-zA-Z_]*$")
 
 	errInvalidInput = errors.New("invalid input")
 )
@@ -373,3 +367,27 @@ var haveBPFLinkPerfEvent = internal.FeatureTest("bpf_link_perf_event", "5.15", f
 	}
 	return err
 })
+
+// Trace event groups, names and kernel symbols must adhere to this set
+// of characters. Non-empty, first character must not be a number, all
+// characters must be alphanumeric or underscore.
+func isValidTraceID(s string) bool {
+	// The code below produces the same result as
+	// regexp.MustCompile("^[a-zA-Z_][0-9a-zA-Z_]*$").MatchString(s).
+	if len(s) < 1 {
+		return false
+	}
+	for i := 0; i < len(s); i++ {
+		switch {
+		case s[i] >= 'a' && s[i] <= 'z':
+		case s[i] >= 'A' && s[i] <= 'Z':
+		case s[i] == '_':
+		case i > 0 && s[i] >= '0' && s[i] <= '9':
+
+		default:
+			return false
+		}
+	}
+
+	return true
+}

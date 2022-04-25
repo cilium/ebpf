@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"regexp"
 	"runtime"
 	"strings"
 	"sync"
@@ -27,11 +26,6 @@ var (
 		value uint64
 		err   error
 	}{}
-
-	// Allow `.` in symbol name. GCC-compiled kernel may change symbol name
-	// to have a `.isra.$n` suffix, like `udp_send_skb.isra.52`.
-	// See: https://gcc.gnu.org/gcc-10/changes.html
-	rgxKprobe = regexp.MustCompile("^[a-zA-Z_][0-9a-zA-Z_.]*$")
 )
 
 type probeType uint8
@@ -144,6 +138,34 @@ func Kretprobe(symbol string, prog *ebpf.Program, opts *KprobeOptions) (Link, er
 	return lnk, nil
 }
 
+func isValidSymbol(s string) bool {
+	// The code below produces the same results as
+	// regexp.MustCompile("^[a-zA-Z_][0-9a-zA-Z_.]*$").MatchString(s).
+
+	if len(s) < 1 {
+		return false
+	}
+
+	for i := 0; i < len(s); i++ {
+		switch {
+		case s[i] >= 'a' && s[i] <= 'z':
+		case s[i] >= 'A' && s[i] <= 'Z':
+		case s[i] == '_':
+		case i > 0 && s[i] >= '0' && s[i] <= '9':
+
+		// Allow `.` in symbol name. GCC-compiled kernel may change symbol name
+		// to have a `.isra.$n` suffix, like `udp_send_skb.isra.52`.
+		// See: https://gcc.gnu.org/gcc-10/changes.html
+		case i > 0 && s[i] == '.':
+
+		default:
+			return false
+		}
+	}
+
+	return true
+}
+
 // kprobe opens a perf event on the given symbol and attaches prog to it.
 // If ret is true, create a kretprobe.
 func kprobe(symbol string, prog *ebpf.Program, opts *KprobeOptions, ret bool) (*perfEvent, error) {
@@ -153,7 +175,7 @@ func kprobe(symbol string, prog *ebpf.Program, opts *KprobeOptions, ret bool) (*
 	if prog == nil {
 		return nil, fmt.Errorf("prog cannot be nil: %w", errInvalidInput)
 	}
-	if !rgxKprobe.MatchString(symbol) {
+	if !isValidSymbol(symbol) {
 		return nil, fmt.Errorf("symbol '%s' must be a valid symbol in /proc/kallsyms: %w", symbol, errInvalidInput)
 	}
 	if prog.Type() != ebpf.Kprobe {
@@ -471,9 +493,9 @@ func closeTraceFSProbeEvent(typ probeType, group, symbol string) error {
 // randomGroup generates a pseudorandom string for use as a tracefs group name.
 // Returns an error when the output string would exceed 63 characters (kernel
 // limitation), when rand.Read() fails or when prefix contains characters not
-// allowed by rgxTraceEvent.
+// allowed by isValidTraceID.
 func randomGroup(prefix string) (string, error) {
-	if !rgxTraceEvent.MatchString(prefix) {
+	if !isValidTraceID(prefix) {
 		return "", fmt.Errorf("prefix '%s' must be alphanumeric or underscore: %w", prefix, errInvalidInput)
 	}
 

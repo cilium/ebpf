@@ -783,6 +783,7 @@ func NewHandle(spec *Spec) (*Handle, error) {
 		attr.BtfLogSize = uint32(len(logBuf))
 		attr.BtfLogLevel = 1
 		_, logErr := sys.BtfLoad(attr)
+		// NB: The syscall will never return ENOSPC as of 5.18-rc4.
 		return nil, internal.ErrorWithLog(err, logBuf, logErr)
 	}
 

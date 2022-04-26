@@ -63,6 +63,8 @@ const (
 	btfTypeKindFlagMask  = 1
 )
 
+var btfTypeLen = binary.Size(btfType{})
+
 // btfType is equivalent to struct btf_type in Documentation/bpf/btf.rst.
 type btfType struct {
 	NameOff uint32
@@ -130,13 +132,22 @@ func mask(len uint32) uint32 {
 	return (1 << len) - 1
 }
 
+func readBits(value, len, shift uint32) uint32 {
+	return (value >> shift) & mask(len)
+}
+
+func writeBits(value, len, shift, new uint32) uint32 {
+	value &^= mask(len) << shift
+	value |= (new & mask(len)) << shift
+	return value
+}
+
 func (bt *btfType) info(len, shift uint32) uint32 {
-	return (bt.Info >> shift) & mask(len)
+	return readBits(bt.Info, len, shift)
 }
 
 func (bt *btfType) setInfo(value, len, shift uint32) {
-	bt.Info &^= mask(len) << shift
-	bt.Info |= (value & mask(len)) << shift
+	bt.Info = writeBits(bt.Info, len, shift, value)
 }
 
 func (bt *btfType) Kind() btfKind {
@@ -155,8 +166,25 @@ func (bt *btfType) SetVlen(vlen int) {
 	bt.setInfo(uint32(vlen), btfTypeVlenMask, btfTypeVlenShift)
 }
 
-func (bt *btfType) KindFlag() bool {
+// Bitfield returns true if the struct or union contain a bitfield.
+func (bt *btfType) Bitfield() bool {
 	return bt.info(btfTypeKindFlagMask, btfTypeKindFlagShift) == 1
+}
+
+func (bt *btfType) SetBitfield(isBitfield bool) {
+	var value uint32
+	if isBitfield {
+		value = 1
+	}
+	bt.setInfo(value, btfTypeKindFlagMask, btfTypeKindFlagShift)
+}
+
+func (bt *btfType) FwdKind() FwdKind {
+	return FwdKind(bt.info(btfTypeKindFlagMask, btfTypeKindFlagShift))
+}
+
+func (bt *btfType) SetFwdKind(kind FwdKind) {
+	bt.setInfo(uint32(kind), btfTypeKindFlagMask, btfTypeKindFlagShift)
 }
 
 func (bt *btfType) Linkage() FuncLinkage {
@@ -172,9 +200,17 @@ func (bt *btfType) Type() TypeID {
 	return TypeID(bt.SizeType)
 }
 
+func (bt *btfType) SetType(id TypeID) {
+	bt.SizeType = uint32(id)
+}
+
 func (bt *btfType) Size() uint32 {
 	// TODO: Panic here if wrong kind?
 	return bt.SizeType
+}
+
+func (bt *btfType) SetSize(size uint32) {
+	bt.SizeType = size
 }
 
 type rawType struct {
@@ -192,6 +228,50 @@ func (rt *rawType) Marshal(w io.Writer, bo binary.ByteOrder) error {
 	}
 
 	return binary.Write(w, bo, rt.data)
+}
+
+// btfInt encodes additional data for integers.
+//
+//    ? ? ? ? e e e e o o o o o o o o ? ? ? ? ? ? ? ? b b b b b b b b
+//    ? = undefined
+//    e = encoding
+//    o = offset (bitfields?)
+//    b = bits (bitfields)
+type btfInt struct {
+	Raw uint32
+}
+
+const (
+	btfIntEncodingLen   = 4
+	btfIntEncodingShift = 24
+	btfIntOffsetLen     = 8
+	btfIntOffsetShift   = 16
+	btfIntBitsLen       = 8
+	btfIntBitsShift     = 0
+)
+
+func (bi btfInt) Encoding() IntEncoding {
+	return IntEncoding(readBits(bi.Raw, btfIntEncodingLen, btfIntEncodingShift))
+}
+
+func (bi *btfInt) SetEncoding(e IntEncoding) {
+	bi.Raw = writeBits(uint32(bi.Raw), btfIntEncodingLen, btfIntEncodingShift, uint32(e))
+}
+
+func (bi btfInt) Offset() uint32 {
+	return readBits(bi.Raw, btfIntOffsetLen, btfIntOffsetShift)
+}
+
+func (bi *btfInt) SetOffset(offset uint32) {
+	bi.Raw = writeBits(bi.Raw, btfIntOffsetLen, btfIntOffsetShift, offset)
+}
+
+func (bi btfInt) Bits() byte {
+	return byte(readBits(bi.Raw, btfIntBitsLen, btfIntBitsShift))
+}
+
+func (bi *btfInt) SetBits(bits byte) {
+	bi.Raw = writeBits(bi.Raw, btfIntBitsLen, btfIntBitsShift, uint32(bits))
 }
 
 type btfArray struct {
@@ -245,7 +325,7 @@ func readTypes(r io.Reader, bo binary.ByteOrder, typeLen uint32) ([]rawType, err
 		var data interface{}
 		switch header.Kind() {
 		case kindInt:
-			data = new(uint32)
+			data = new(btfInt)
 		case kindPointer:
 		case kindArray:
 			data = new(btfArray)
@@ -283,8 +363,4 @@ func readTypes(r io.Reader, bo binary.ByteOrder, typeLen uint32) ([]rawType, err
 
 		types = append(types, rawType{header, data})
 	}
-}
-
-func intEncoding(raw uint32) (IntEncoding, uint32, byte) {
-	return IntEncoding((raw & 0x0f000000) >> 24), (raw & 0x00ff0000) >> 16, byte(raw & 0x000000ff)
 }

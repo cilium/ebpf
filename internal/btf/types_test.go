@@ -2,6 +2,7 @@ package btf
 
 import (
 	"fmt"
+	"reflect"
 	"testing"
 
 	qt "github.com/frankban/quicktest"
@@ -35,10 +36,10 @@ func TestSizeof(t *testing.T) {
 }
 
 func TestCopyType(t *testing.T) {
-	_, _ = copyType((*Void)(nil), nil)
+	_ = Copy((*Void)(nil), nil)
 
 	in := &Int{Size: 4}
-	out, _ := copyType(in, nil)
+	out := Copy(in, nil)
 
 	in.Size = 8
 	if size := out.(*Int).Size; size != 4 {
@@ -46,13 +47,13 @@ func TestCopyType(t *testing.T) {
 	}
 
 	t.Run("cyclical", func(t *testing.T) {
-		_, _ = copyType(newCyclicalType(2), nil)
+		_ = Copy(newCyclicalType(2), nil)
 	})
 
 	t.Run("identity", func(t *testing.T) {
 		u16 := &Int{Size: 2}
 
-		out, _ := copyType(&Struct{
+		out := Copy(&Struct{
 			Members: []Member{
 				{Name: "a", Type: u16},
 				{Name: "b", Type: u16},
@@ -122,6 +123,7 @@ func TestType(t *testing.T) {
 				Vars: []VarSecinfo{{Type: &Void{}}},
 			}
 		},
+		func() Type { return &cycle{&Void{}} },
 	}
 
 	compareTypes := cmp.Comparer(func(a, b *Type) bool {
@@ -224,6 +226,65 @@ func TestTypeDeque(t *testing.T) {
 	})
 }
 
+type testFormattableType struct {
+	name  string
+	extra []interface{}
+}
+
+var _ formattableType = (*testFormattableType)(nil)
+
+func (tft *testFormattableType) TypeName() string { return tft.name }
+func (tft *testFormattableType) Format(fs fmt.State, verb rune) {
+	formatType(fs, verb, tft, tft.extra...)
+}
+
+func TestFormatType(t *testing.T) {
+	t1 := &testFormattableType{"", []interface{}{"extra"}}
+	t1Addr := fmt.Sprintf("%#p", t1)
+	goType := reflect.TypeOf(t1).Elem().Name()
+
+	t2 := &testFormattableType{"foo", []interface{}{t1}}
+
+	t3 := &testFormattableType{extra: []interface{}{""}}
+
+	tests := []struct {
+		t        formattableType
+		fmt      string
+		contains []string
+		omits    []string
+	}{
+		// %s doesn't contain address or extra.
+		{t1, "%s", []string{goType}, []string{t1Addr, "extra"}},
+		// %+s doesn't contain extra.
+		{t1, "%+s", []string{goType, t1Addr}, []string{"extra"}},
+		// %v does contain extra.
+		{t1, "%v", []string{goType, "extra"}, []string{t1Addr}},
+		// %+v does contain address.
+		{t1, "%+v", []string{goType, "extra", t1Addr}, nil},
+		// %v doesn't print nested types' extra.
+		{t2, "%v", []string{goType, t2.name}, []string{"extra"}},
+		// %1v does print nested types' extra.
+		{t2, "%1v", []string{goType, t2.name, "extra"}, nil},
+		// empty strings in extra don't emit anything.
+		{t3, "%v", []string{"[]"}, nil},
+	}
+
+	for _, test := range tests {
+		t.Run(test.fmt, func(t *testing.T) {
+			str := fmt.Sprintf(test.fmt, test.t)
+			t.Log(str)
+
+			for _, want := range test.contains {
+				qt.Assert(t, str, qt.Contains, want)
+			}
+
+			for _, notWant := range test.omits {
+				qt.Assert(t, str, qt.Not(qt.Contains), notWant)
+			}
+		})
+	}
+}
+
 func newCyclicalType(n int) Type {
 	ptr := &Pointer{}
 	prev := Type(ptr)
@@ -266,8 +327,9 @@ func TestUnderlyingType(t *testing.T) {
 			root := &Volatile{}
 			root.Type = test.fn(root)
 
-			got := UnderlyingType(root)
-			qt.Assert(t, got, qt.Equals, root)
+			got, ok := UnderlyingType(root).(*cycle)
+			qt.Assert(t, ok, qt.IsTrue)
+			qt.Assert(t, got.root, qt.Equals, root)
 		})
 	}
 
@@ -300,4 +362,13 @@ func BenchmarkUnderlyingType(b *testing.B) {
 			UnderlyingType(v)
 		}
 	})
+}
+
+// Copy can be used with UnderlyingType to strip qualifiers from a type graph.
+func ExampleCopy_stripQualifiers() {
+	a := &Volatile{Type: &Pointer{Target: &Typedef{Name: "foo", Type: &Int{Size: 2}}}}
+	b := Copy(a, UnderlyingType)
+	// b has Volatile and Typedef removed.
+	fmt.Printf("%3v\n", b)
+	// Output: Pointer[target=Int[unsigned size=16]]
 }

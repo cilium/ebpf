@@ -2,6 +2,7 @@ package btf
 
 import (
 	"fmt"
+	"io"
 	"math"
 	"reflect"
 	"strings"
@@ -19,6 +20,17 @@ func (tid TypeID) ID() TypeID {
 
 // Type represents a type described by BTF.
 type Type interface {
+	// Type can be formatted using the %s and %v verbs. %s outputs only the
+	// identity of the type, without any detail. %v outputs additional detail.
+	//
+	// Use the '+' flag to include the address of the type.
+	//
+	// Use the width to specify how many levels of detail to output, for example
+	// %1v will output detail for the root type and a short description of its
+	// children. %2v would output details of the root type and its children
+	// as well as a short description of the grandchildren.
+	fmt.Formatter
+
 	// The type ID of the Type within this BTF spec.
 	ID() TypeID
 
@@ -32,8 +44,6 @@ type Type interface {
 	// Enumerate all nested Types. Repeated calls must visit nested
 	// types in the same order.
 	walk(*typeDeque)
-
-	String() string
 }
 
 var (
@@ -52,12 +62,12 @@ var (
 // Void is the unit type of BTF.
 type Void struct{}
 
-func (v *Void) ID() TypeID       { return 0 }
-func (v *Void) String() string   { return "void#0" }
-func (v *Void) TypeName() string { return "" }
-func (v *Void) size() uint32     { return 0 }
-func (v *Void) copy() Type       { return (*Void)(nil) }
-func (v *Void) walk(*typeDeque)  {}
+func (v *Void) ID() TypeID                     { return 0 }
+func (v *Void) Format(fs fmt.State, verb rune) { formatType(fs, verb, v) }
+func (v *Void) TypeName() string               { return "" }
+func (v *Void) size() uint32                   { return 0 }
+func (v *Void) copy() Type                     { return (*Void)(nil) }
+func (v *Void) walk(*typeDeque)                {}
 
 type IntEncoding byte
 
@@ -79,6 +89,21 @@ func (ie IntEncoding) IsBool() bool {
 	return ie&Bool != 0
 }
 
+func (ie IntEncoding) String() string {
+	switch {
+	case ie.IsChar() && ie.IsSigned():
+		return "char"
+	case ie.IsChar() && !ie.IsSigned():
+		return "uchar"
+	case ie.IsBool():
+		return "bool"
+	case ie.IsSigned():
+		return "signed"
+	default:
+		return "unsigned"
+	}
+}
+
 // Int is an integer of a given length.
 type Int struct {
 	TypeID
@@ -94,29 +119,15 @@ type Int struct {
 	Bits       byte
 }
 
-func (i *Int) String() string {
-	var s strings.Builder
-
-	switch {
-	case i.Encoding.IsChar():
-		s.WriteString("char")
-	case i.Encoding.IsBool():
-		s.WriteString("bool")
-	default:
-		if !i.Encoding.IsSigned() {
-			s.WriteRune('u')
-		}
-		s.WriteString("int")
-		fmt.Fprintf(&s, "%d", i.Size*8)
+func (i *Int) Format(fs fmt.State, verb rune) {
+	extra := []interface{}{
+		i.Encoding,
+		"size=", i.Size * 8,
 	}
-
-	fmt.Fprintf(&s, "#%d", i.TypeID)
-
 	if i.Bits > 0 {
-		fmt.Fprintf(&s, "[bits=%d]", i.Bits)
+		extra = append(extra, "bits=", i.Bits)
 	}
-
-	return s.String()
+	formatType(fs, verb, i, extra...)
 }
 
 func (i *Int) TypeName() string { return i.Name }
@@ -137,8 +148,8 @@ type Pointer struct {
 	Target Type
 }
 
-func (p *Pointer) String() string {
-	return fmt.Sprintf("pointer#%d[target=#%d]", p.TypeID, p.Target.ID())
+func (p *Pointer) Format(fs fmt.State, verb rune) {
+	formatType(fs, verb, p, "target=", p.Target)
 }
 
 func (p *Pointer) TypeName() string    { return "" }
@@ -156,8 +167,8 @@ type Array struct {
 	Nelems uint32
 }
 
-func (arr *Array) String() string {
-	return fmt.Sprintf("array#%d[type=#%d n=%d]", arr.TypeID, arr.Type.ID(), arr.Nelems)
+func (arr *Array) Format(fs fmt.State, verb rune) {
+	formatType(fs, verb, arr, "type=", arr.Type, "n=", arr.Nelems)
 }
 
 func (arr *Array) TypeName() string { return "" }
@@ -177,8 +188,8 @@ type Struct struct {
 	Members []Member
 }
 
-func (s *Struct) String() string {
-	return fmt.Sprintf("struct#%d[%q]", s.TypeID, s.Name)
+func (s *Struct) Format(fs fmt.State, verb rune) {
+	formatType(fs, verb, s, "fields=", len(s.Members))
 }
 
 func (s *Struct) TypeName() string { return s.Name }
@@ -210,8 +221,8 @@ type Union struct {
 	Members []Member
 }
 
-func (u *Union) String() string {
-	return fmt.Sprintf("union#%d[%q]", u.TypeID, u.Name)
+func (u *Union) Format(fs fmt.State, verb rune) {
+	formatType(fs, verb, u, "fields=", len(u.Members))
 }
 
 func (u *Union) TypeName() string { return u.Name }
@@ -267,8 +278,8 @@ type Enum struct {
 	Values []EnumValue
 }
 
-func (e *Enum) String() string {
-	return fmt.Sprintf("enum#%d[%q]", e.TypeID, e.Name)
+func (e *Enum) Format(fs fmt.State, verb rune) {
+	formatType(fs, verb, e, "values=", len(e.Values))
 }
 
 func (e *Enum) TypeName() string { return e.Name }
@@ -317,8 +328,8 @@ type Fwd struct {
 	Kind FwdKind
 }
 
-func (f *Fwd) String() string {
-	return fmt.Sprintf("fwd#%d[%s %q]", f.TypeID, f.Kind, f.Name)
+func (f *Fwd) Format(fs fmt.State, verb rune) {
+	formatType(fs, verb, f, f.Kind)
 }
 
 func (f *Fwd) TypeName() string { return f.Name }
@@ -336,8 +347,8 @@ type Typedef struct {
 	Type Type
 }
 
-func (td *Typedef) String() string {
-	return fmt.Sprintf("typedef#%d[%q #%d]", td.TypeID, td.Name, td.Type.ID())
+func (td *Typedef) Format(fs fmt.State, verb rune) {
+	formatType(fs, verb, td, td.Type)
 }
 
 func (td *Typedef) TypeName() string { return td.Name }
@@ -354,8 +365,8 @@ type Volatile struct {
 	Type Type
 }
 
-func (v *Volatile) String() string {
-	return fmt.Sprintf("volatile#%d[#%d]", v.TypeID, v.Type.ID())
+func (v *Volatile) Format(fs fmt.State, verb rune) {
+	formatType(fs, verb, v, v.Type)
 }
 
 func (v *Volatile) TypeName() string { return "" }
@@ -373,8 +384,8 @@ type Const struct {
 	Type Type
 }
 
-func (c *Const) String() string {
-	return fmt.Sprintf("const#%d[#%d]", c.TypeID, c.Type.ID())
+func (c *Const) Format(fs fmt.State, verb rune) {
+	formatType(fs, verb, c, c.Type)
 }
 
 func (c *Const) TypeName() string { return "" }
@@ -392,8 +403,8 @@ type Restrict struct {
 	Type Type
 }
 
-func (r *Restrict) String() string {
-	return fmt.Sprintf("restrict#%d[#%d]", r.TypeID, r.Type.ID())
+func (r *Restrict) Format(fs fmt.State, verb rune) {
+	formatType(fs, verb, r, r.Type)
 }
 
 func (r *Restrict) TypeName() string { return "" }
@@ -413,8 +424,8 @@ type Func struct {
 	Linkage FuncLinkage
 }
 
-func (f *Func) String() string {
-	return fmt.Sprintf("func#%d[%s %q proto=#%d]", f.TypeID, f.Linkage, f.Name, f.Type.ID())
+func (f *Func) Format(fs fmt.State, verb rune) {
+	formatType(fs, verb, f, f.Linkage, "proto=", f.Type)
 }
 
 func (f *Func) TypeName() string { return f.Name }
@@ -432,14 +443,8 @@ type FuncProto struct {
 	Params []FuncParam
 }
 
-func (fp *FuncProto) String() string {
-	var s strings.Builder
-	fmt.Fprintf(&s, "proto#%d[", fp.TypeID)
-	for _, param := range fp.Params {
-		fmt.Fprintf(&s, "%q=#%d, ", param.Name, param.Type.ID())
-	}
-	fmt.Fprintf(&s, "return=#%d]", fp.Return.ID())
-	return s.String()
+func (fp *FuncProto) Format(fs fmt.State, verb rune) {
+	formatType(fs, verb, fp, "args=", len(fp.Params), "return=", fp.Return)
 }
 
 func (fp *FuncProto) TypeName() string { return "" }
@@ -471,8 +476,8 @@ type Var struct {
 	Linkage VarLinkage
 }
 
-func (v *Var) String() string {
-	return fmt.Sprintf("var#%d[%s %q]", v.TypeID, v.Linkage, v.Name)
+func (v *Var) Format(fs fmt.State, verb rune) {
+	formatType(fs, verb, v, v.Linkage)
 }
 
 func (v *Var) TypeName() string { return v.Name }
@@ -491,8 +496,8 @@ type Datasec struct {
 	Vars []VarSecinfo
 }
 
-func (ds *Datasec) String() string {
-	return fmt.Sprintf("section#%d[%q]", ds.TypeID, ds.Name)
+func (ds *Datasec) Format(fs fmt.State, verb rune) {
+	formatType(fs, verb, ds)
 }
 
 func (ds *Datasec) TypeName() string { return ds.Name }
@@ -530,8 +535,8 @@ type Float struct {
 	Size uint32
 }
 
-func (f *Float) String() string {
-	return fmt.Sprintf("float%d#%d[%q]", f.Size*8, f.TypeID, f.Name)
+func (f *Float) Format(fs fmt.State, verb rune) {
+	formatType(fs, verb, f, "size=", f.Size*8)
 }
 
 func (f *Float) TypeName() string { return f.Name }
@@ -539,6 +544,20 @@ func (f *Float) size() uint32     { return f.Size }
 func (f *Float) walk(*typeDeque)  {}
 func (f *Float) copy() Type {
 	cpy := *f
+	return &cpy
+}
+
+// cycle is a type which had to be elided since it exceeded maxTypeDepth.
+type cycle struct {
+	root Type
+}
+
+func (c *cycle) ID() TypeID                     { return math.MaxUint32 }
+func (c *cycle) Format(fs fmt.State, verb rune) { formatType(fs, verb, c, "root=", c.root) }
+func (c *cycle) TypeName() string               { return "" }
+func (c *cycle) walk(*typeDeque)                {}
+func (c *cycle) copy() Type {
+	cpy := *c
 	return &cpy
 }
 
@@ -621,12 +640,7 @@ func Sizeof(typ Type) (int, error) {
 //
 // Currently only supports the subset of types necessary for bitfield relocations.
 func alignof(typ Type) (int, error) {
-	typ, err := skipQualifiersAndTypedefs(typ)
-	if err != nil {
-		return 0, err
-	}
-
-	switch t := typ.(type) {
+	switch t := UnderlyingType(typ).(type) {
 	case *Enum:
 		return int(t.size()), nil
 	case *Int:
@@ -636,44 +650,34 @@ func alignof(typ Type) (int, error) {
 	}
 }
 
-// Copy a Type recursively.
-func Copy(typ Type) Type {
-	typ, _ = copyType(typ, nil)
-	return typ
-}
-
 // copy a Type recursively.
 //
-// typ may form a cycle.
-//
-// Returns any errors from transform verbatim.
-func copyType(typ Type, transform func(Type) (Type, error)) (Type, error) {
+// typ may form a cycle. If transform is not nil, it is called with the
+// to be copied type, and the return value is copied instead.
+func Copy(typ Type, transform func(Type) Type) Type {
 	copies := make(copier)
-	return typ, copies.copy(&typ, transform)
+	copies.copy(&typ, transform)
+	return typ
 }
 
 // copy a slice of Types recursively.
 //
-// Types may form a cycle.
-//
-// Returns any errors from transform verbatim.
-func copyTypes(types []Type, transform func(Type) (Type, error)) ([]Type, error) {
+// See Copy for the semantics.
+func copyTypes(types []Type, transform func(Type) Type) []Type {
 	result := make([]Type, len(types))
 	copy(result, types)
 
 	copies := make(copier)
 	for i := range result {
-		if err := copies.copy(&result[i], transform); err != nil {
-			return nil, err
-		}
+		copies.copy(&result[i], transform)
 	}
 
-	return result, nil
+	return result
 }
 
 type copier map[Type]Type
 
-func (c copier) copy(typ *Type, transform func(Type) (Type, error)) error {
+func (c copier) copy(typ *Type, transform func(Type) Type) {
 	var work typeDeque
 	for t := typ; t != nil; t = work.pop() {
 		// *t is the identity of the type.
@@ -684,11 +688,7 @@ func (c copier) copy(typ *Type, transform func(Type) (Type, error)) error {
 
 		var cpy Type
 		if transform != nil {
-			tf, err := transform(*t)
-			if err != nil {
-				return fmt.Errorf("copy %s: %w", *t, err)
-			}
-			cpy = tf.copy()
+			cpy = transform(*t).copy()
 		} else {
 			cpy = (*t).copy()
 		}
@@ -699,8 +699,6 @@ func (c copier) copy(typ *Type, transform func(Type) (Type, error)) error {
 		// Mark any nested types for copying.
 		cpy.walk(&work)
 	}
-
-	return nil
 }
 
 // typeDeque keeps track of pointers to types which still
@@ -1035,9 +1033,6 @@ func newEssentialName(name string) essentialName {
 }
 
 // UnderlyingType skips qualifiers and Typedefs.
-//
-// May return typ verbatim if too many types have to be skipped to protect against
-// circular Types.
 func UnderlyingType(typ Type) Type {
 	result := typ
 	for depth := 0; depth <= maxTypeDepth; depth++ {
@@ -1050,6 +1045,93 @@ func UnderlyingType(typ Type) Type {
 			return result
 		}
 	}
-	// Return the original argument, since we can't find an underlying type.
-	return typ
+	return &cycle{typ}
+}
+
+type formatState struct {
+	fmt.State
+	depth int
+}
+
+// formattableType is a subset of Type, to ease unit testing of formatType.
+type formattableType interface {
+	fmt.Formatter
+	TypeName() string
+}
+
+// formatType formats a type in a canonical form.
+//
+// Handles cyclical types by only printing cycles up to a certain depth. Elements
+// in extra are separated by spaces unless the preceding element is a string
+// ending in '='.
+func formatType(f fmt.State, verb rune, t formattableType, extra ...interface{}) {
+	if verb != 'v' && verb != 's' {
+		fmt.Fprintf(f, "{UNRECOGNIZED: %c}", verb)
+		return
+	}
+
+	// This is the same as %T, but elides the package name. Assumes that
+	// formattableType is implemented by a pointer receiver.
+	goTypeName := reflect.TypeOf(t).Elem().Name()
+	_, _ = io.WriteString(f, goTypeName)
+
+	if name := t.TypeName(); name != "" {
+		// Output BTF type name if present.
+		fmt.Fprintf(f, ":%q", name)
+	}
+
+	if f.Flag('+') {
+		// Output address if requested.
+		fmt.Fprintf(f, ":%#p", t)
+	}
+
+	if verb == 's' {
+		// %s omits details.
+		return
+	}
+
+	var depth int
+	if ps, ok := f.(*formatState); ok {
+		depth = ps.depth
+		f = ps.State
+	}
+
+	maxDepth, ok := f.Width()
+	if !ok {
+		maxDepth = 0
+	}
+
+	if depth > maxDepth {
+		// We've reached the maximum depth. This avoids infinite recursion even
+		// for cyclical types.
+		return
+	}
+
+	if len(extra) == 0 {
+		return
+	}
+
+	wantSpace := false
+	_, _ = io.WriteString(f, "[")
+	for _, arg := range extra {
+		if wantSpace {
+			_, _ = io.WriteString(f, " ")
+		}
+
+		switch v := arg.(type) {
+		case string:
+			_, _ = io.WriteString(f, v)
+			wantSpace = len(v) > 0 && v[len(v)-1] != '='
+			continue
+
+		case formattableType:
+			v.Format(&formatState{f, depth + 1}, verb)
+
+		default:
+			fmt.Fprint(f, arg)
+		}
+
+		wantSpace = true
+	}
+	_, _ = io.WriteString(f, "]")
 }

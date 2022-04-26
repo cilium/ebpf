@@ -63,12 +63,7 @@ func (gf *GoFormatter) writeTypeDecl(name string, typ Type) error {
 		return fmt.Errorf("need a name for type %s", typ)
 	}
 
-	typ, err := skipQualifiers(typ)
-	if err != nil {
-		return err
-	}
-
-	switch v := typ.(type) {
+	switch v := skipQualifiers(typ).(type) {
 	case *Enum:
 		fmt.Fprintf(&gf.w, "type %s int32", name)
 		if len(v.Values) == 0 {
@@ -83,10 +78,11 @@ func (gf *GoFormatter) writeTypeDecl(name string, typ Type) error {
 		gf.w.WriteString(")")
 
 		return nil
-	}
 
-	fmt.Fprintf(&gf.w, "type %s ", name)
-	return gf.writeTypeLit(typ, 0)
+	default:
+		fmt.Fprintf(&gf.w, "type %s ", name)
+		return gf.writeTypeLit(v, 0)
+	}
 }
 
 // writeType outputs the name of a named type or a literal describing the type.
@@ -96,10 +92,7 @@ func (gf *GoFormatter) writeTypeDecl(name string, typ Type) error {
 //     foo                  (if foo is a named type)
 //     uint32
 func (gf *GoFormatter) writeType(typ Type, depth int) error {
-	typ, err := skipQualifiers(typ)
-	if err != nil {
-		return err
-	}
+	typ = skipQualifiers(typ)
 
 	name := gf.Names[typ]
 	if name != "" {
@@ -124,12 +117,8 @@ func (gf *GoFormatter) writeTypeLit(typ Type, depth int) error {
 		return errNestedTooDeep
 	}
 
-	typ, err := skipQualifiers(typ)
-	if err != nil {
-		return err
-	}
-
-	switch v := typ.(type) {
+	var err error
+	switch v := skipQualifiers(typ).(type) {
 	case *Int:
 		gf.writeIntLit(v)
 
@@ -154,7 +143,7 @@ func (gf *GoFormatter) writeTypeLit(typ Type, depth int) error {
 		err = gf.writeDatasecLit(v, depth)
 
 	default:
-		return fmt.Errorf("type %s: %w", typ, ErrNotSupported)
+		return fmt.Errorf("type %T: %w", v, ErrNotSupported)
 	}
 
 	if err != nil {
@@ -301,4 +290,17 @@ func (gf *GoFormatter) writePadding(bytes uint32) {
 	if bytes > 0 {
 		fmt.Fprintf(&gf.w, "_ [%d]byte; ", bytes)
 	}
+}
+
+func skipQualifiers(typ Type) Type {
+	result := typ
+	for depth := 0; depth <= maxTypeDepth; depth++ {
+		switch v := (result).(type) {
+		case qualifier:
+			result = v.qualify()
+		default:
+			return result
+		}
+	}
+	return &cycle{typ}
 }

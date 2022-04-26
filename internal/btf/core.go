@@ -269,19 +269,13 @@ var errImpossibleRelocation = errors.New("impossible relocation")
 // the better the target is.
 func coreCalculateFixups(byteOrder binary.ByteOrder, local Type, targets []Type, relos CORERelos) ([]COREFixup, error) {
 	localID := local.ID()
-	local, err := copyType(local, skipQualifiersAndTypedefs)
-	if err != nil {
-		return nil, err
-	}
+	local = Copy(local, UnderlyingType)
 
 	bestScore := len(relos)
 	var bestFixups []COREFixup
 	for i := range targets {
 		targetID := targets[i].ID()
-		target, err := copyType(targets[i], skipQualifiersAndTypedefs)
-		if err != nil {
-			return nil, err
-		}
+		target := Copy(targets[i], UnderlyingType)
 
 		score := 0 // lower is better
 		fixups := make([]COREFixup, 0, len(relos))
@@ -1008,32 +1002,4 @@ func coreAreMembersCompatible(localType Type, targetType Type) error {
 	default:
 		return fmt.Errorf("type %s: %w", localType, ErrNotSupported)
 	}
-}
-
-func skipQualifiersAndTypedefs(typ Type) (Type, error) {
-	result := typ
-	for depth := 0; depth <= maxTypeDepth; depth++ {
-		switch v := (result).(type) {
-		case qualifier:
-			result = v.qualify()
-		case *Typedef:
-			result = v.Type
-		default:
-			return result, nil
-		}
-	}
-	return nil, errors.New("exceeded type depth")
-}
-
-func skipQualifiers(typ Type) (Type, error) {
-	result := typ
-	for depth := 0; depth <= maxTypeDepth; depth++ {
-		switch v := (result).(type) {
-		case qualifier:
-			result = v.qualify()
-		default:
-			return result, nil
-		}
-	}
-	return nil, errors.New("exceeded type depth")
 }

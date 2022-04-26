@@ -6,6 +6,8 @@ package btf
 import (
 	"bytes"
 	"encoding/binary"
+	"fmt"
+	"io"
 	"testing"
 
 	"github.com/cilium/ebpf/internal"
@@ -32,8 +34,15 @@ func FuzzSpec(f *testing.F) {
 			if spec != nil {
 				t.Fatal("spec is not nil")
 			}
-		} else if spec == nil {
+			return
+		}
+
+		if spec == nil {
 			t.Fatal("spec is nil")
+		}
+
+		for _, typ := range spec.types {
+			fmt.Fprintf(io.Discard, "%+10v", typ)
 		}
 	})
 }

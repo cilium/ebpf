@@ -549,6 +549,16 @@ func (p *Program) Close() error {
 	return p.fd.Close()
 }
 
+// Extented Program test options and attributes
+type TestOptions struct {
+	In     []byte
+	Ctx    []byte
+	CtxOut []byte
+	Repeat uint32
+	Flags  uint32
+	Cpu    uint32
+}
+
 // Test runs the Program in the kernel with the given input and returns the
 // value returned by the eBPF program. outLen may be zero.
 //
@@ -557,7 +567,12 @@ func (p *Program) Close() error {
 //
 // This function requires at least Linux 4.12.
 func (p *Program) Test(in []byte) (uint32, []byte, error) {
-	ret, out, _, err := p.testRun(in, 1, nil)
+	opts := TestOptions{
+		In:     in,
+		Repeat: 1,
+	}
+
+	ret, out, _, err := p.testRun(opts, nil)
 	if err != nil {
 		return ret, nil, fmt.Errorf("can't test program: %w", err)
 	}
@@ -576,7 +591,12 @@ func (p *Program) Test(in []byte) (uint32, []byte, error) {
 //
 // This function requires at least Linux 4.12.
 func (p *Program) Benchmark(in []byte, repeat int, reset func()) (uint32, time.Duration, error) {
-	ret, _, total, err := p.testRun(in, repeat, reset)
+	opts := TestOptions{
+		In:     in,
+		Repeat: 1,
+	}
+
+	ret, _, total, err := p.testRun(opts, reset)
 	if err != nil {
 		return ret, total, fmt.Errorf("can't benchmark program: %w", err)
 	}
@@ -619,16 +639,16 @@ var haveProgTestRun = internal.FeatureTest("BPF_PROG_TEST_RUN", "4.12", func() e
 	return err
 })
 
-func (p *Program) testRun(in []byte, repeat int, reset func()) (uint32, []byte, time.Duration, error) {
-	if uint(repeat) > math.MaxUint32 {
+func (p *Program) testRun(opts TestOptions, reset func()) (uint32, []byte, time.Duration, error) {
+	if uint(opts.Repeat) > math.MaxUint32 {
 		return 0, nil, 0, fmt.Errorf("repeat is too high")
 	}
 
-	if len(in) == 0 {
+	if len(opts.In) == 0 {
 		return 0, nil, 0, fmt.Errorf("missing input")
 	}
 
-	if uint(len(in)) > math.MaxUint32 {
+	if uint(len(opts.In)) > math.MaxUint32 {
 		return 0, nil, 0, fmt.Errorf("input is too long")
 	}
 
@@ -641,15 +661,15 @@ func (p *Program) testRun(in []byte, repeat int, reset func()) (uint32, []byte, 
 	// size will be. Hence we allocate an output buffer which we hope will always be large
 	// enough, and panic if the kernel wrote past the end of the allocation.
 	// See https://patchwork.ozlabs.org/cover/1006822/
-	out := make([]byte, len(in)+outputPad)
+	out := make([]byte, len(opts.In)+outputPad)
 
 	attr := sys.ProgRunAttr{
 		ProgFd:      p.fd.Uint(),
-		DataSizeIn:  uint32(len(in)),
+		DataSizeIn:  uint32(len(opts.In)),
 		DataSizeOut: uint32(len(out)),
-		DataIn:      sys.NewSlicePointer(in),
+		DataIn:      sys.NewSlicePointer(opts.In),
 		DataOut:     sys.NewSlicePointer(out),
-		Repeat:      uint32(repeat),
+		Repeat:      uint32(opts.Repeat),
 	}
 
 	for {

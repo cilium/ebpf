@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"regexp"
 	"runtime"
 	"strconv"
 	"strings"
@@ -44,11 +43,6 @@ import (
 
 var (
 	tracefsPath = "/sys/kernel/debug/tracing"
-
-	// Trace event groups, names and kernel symbols must adhere to this set
-	// of characters. Non-empty, first character must not be a number, all
-	// characters must be alphanumeric or underscore.
-	rgxTraceEvent = regexp.MustCompile("^[a-zA-Z_][0-9a-zA-Z_]*$")
 
 	errInvalidInput = errors.New("invalid input")
 )
@@ -275,7 +269,7 @@ func unsafeStringPtr(str string) (unsafe.Pointer, error) {
 // name automatically has its invalid symbols converted to underscores so the caller
 // can pass a raw symbol name, e.g. a kernel symbol containing dots.
 func getTraceEventID(group, name string) (uint64, error) {
-	name = sanitizedSymbol(name)
+	name = sanitizeSymbol(name)
 	tid, err := uint64FromFile(tracefsPath, "events", group, name, "id")
 	if errors.Is(err, os.ErrNotExist) {
 		return 0, fmt.Errorf("trace event %s/%s: %w", group, name, os.ErrNotExist)
@@ -373,3 +367,28 @@ var haveBPFLinkPerfEvent = internal.FeatureTest("bpf_link_perf_event", "5.15", f
 	}
 	return err
 })
+
+// isValidTraceID implements the equivalent of a regex match
+// against "^[a-zA-Z_][0-9a-zA-Z_]*$".
+//
+// Trace event groups, names and kernel symbols must adhere to this set
+// of characters. Non-empty, first character must not be a number, all
+// characters must be alphanumeric or underscore.
+func isValidTraceID(s string) bool {
+	if len(s) < 1 {
+		return false
+	}
+	for i, c := range []byte(s) {
+		switch {
+		case c >= 'a' && c <= 'z':
+		case c >= 'A' && c <= 'Z':
+		case c == '_':
+		case i > 0 && c >= '0' && c <= '9':
+
+		default:
+			return false
+		}
+	}
+
+	return true
+}

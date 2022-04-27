@@ -36,7 +36,7 @@ func Tracepoint(group, name string, prog *ebpf.Program, opts *TracepointOptions)
 	if prog == nil {
 		return nil, fmt.Errorf("prog cannot be nil: %w", errInvalidInput)
 	}
-	if !rgxTraceEvent.MatchString(group) || !rgxTraceEvent.MatchString(name) {
+	if !isValidTraceID(group) || !isValidTraceID(name) {
 		return nil, fmt.Errorf("group and name '%s/%s' must be alphanumeric or underscore: %w", group, name, errInvalidInput)
 	}
 	if prog.Type() != ebpf.TracePoint {

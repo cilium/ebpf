@@ -2,7 +2,6 @@ package btf
 
 import (
 	"fmt"
-	"reflect"
 	"testing"
 
 	qt "github.com/frankban/quicktest"
@@ -139,142 +138,11 @@ func TestType(t *testing.T) {
 			}
 
 			var first, second typeDeque
-			typ.walk(&first)
-			typ.walk(&second)
+			walkType(typ, first.push)
+			walkType(typ, second.push)
 
 			if diff := cmp.Diff(first.all(), second.all(), compareTypes); diff != "" {
 				t.Errorf("Walk mismatch (-want +got):\n%s", diff)
-			}
-		})
-	}
-}
-
-func TestTypeDeque(t *testing.T) {
-	a, b := new(Type), new(Type)
-
-	t.Run("pop", func(t *testing.T) {
-		var td typeDeque
-		td.push(a)
-		td.push(b)
-
-		if td.pop() != b {
-			t.Error("Didn't pop b first")
-		}
-
-		if td.pop() != a {
-			t.Error("Didn't pop a second")
-		}
-
-		if td.pop() != nil {
-			t.Error("Didn't pop nil")
-		}
-	})
-
-	t.Run("shift", func(t *testing.T) {
-		var td typeDeque
-		td.push(a)
-		td.push(b)
-
-		if td.shift() != a {
-			t.Error("Didn't shift a second")
-		}
-
-		if td.shift() != b {
-			t.Error("Didn't shift b first")
-		}
-
-		if td.shift() != nil {
-			t.Error("Didn't shift nil")
-		}
-	})
-
-	t.Run("push", func(t *testing.T) {
-		var td typeDeque
-		td.push(a)
-		td.push(b)
-		td.shift()
-
-		ts := make([]Type, 12)
-		for i := range ts {
-			td.push(&ts[i])
-		}
-
-		if td.shift() != b {
-			t.Error("Didn't shift b first")
-		}
-		for i := range ts {
-			if td.shift() != &ts[i] {
-				t.Fatal("Shifted wrong Type at pos", i)
-			}
-		}
-	})
-
-	t.Run("all", func(t *testing.T) {
-		var td typeDeque
-		td.push(a)
-		td.push(b)
-
-		all := td.all()
-		if len(all) != 2 {
-			t.Fatal("Expected 2 elements, got", len(all))
-		}
-
-		if all[0] != a || all[1] != b {
-			t.Fatal("Elements don't match")
-		}
-	})
-}
-
-type testFormattableType struct {
-	name  string
-	extra []interface{}
-}
-
-var _ formattableType = (*testFormattableType)(nil)
-
-func (tft *testFormattableType) TypeName() string { return tft.name }
-func (tft *testFormattableType) Format(fs fmt.State, verb rune) {
-	formatType(fs, verb, tft, tft.extra...)
-}
-
-func TestFormatType(t *testing.T) {
-	t1 := &testFormattableType{"", []interface{}{"extra"}}
-	t1Addr := fmt.Sprintf("%#p", t1)
-	goType := reflect.TypeOf(t1).Elem().Name()
-
-	t2 := &testFormattableType{"foo", []interface{}{t1}}
-
-	tests := []struct {
-		t        formattableType
-		fmt      string
-		contains []string
-		omits    []string
-	}{
-		// %s doesn't contain address or extra.
-		{t1, "%s", []string{goType}, []string{t1Addr, "extra"}},
-		// %+s doesn't contain extra.
-		{t1, "%+s", []string{goType, t1Addr}, []string{"extra"}},
-		// %v does contain extra.
-		{t1, "%v", []string{goType, "extra"}, []string{t1Addr}},
-		// %+v does contain address.
-		{t1, "%+v", []string{goType, "extra", t1Addr}, nil},
-		// %v doesn't print nested types' extra.
-		{t2, "%v", []string{goType, t2.name}, []string{"extra"}},
-		// %1v does print nested types' extra.
-		{t2, "%1v", []string{goType, t2.name, "extra"}, nil},
-	}
-
-	for _, test := range tests {
-		t.Run(test.fmt, func(t *testing.T) {
-			str := fmt.Sprintf(test.fmt, test.t)
-			t.Log(str)
-
-			for _, want := range test.contains {
-				qt.Assert(t, str, qt.Contains, want)
-			}
-
-			for _, notWant := range test.omits {
-				qt.Assert(t, str, qt.Not(qt.Contains), notWant)
 			}
 		})
 	}
@@ -299,7 +167,7 @@ func newCyclicalType(n int) Type {
 		case 3:
 			prev = &Typedef{Type: prev}
 		case 4:
-			prev = &Array{Type: prev}
+			prev = &Array{Type: prev, Index: prev}
 		}
 	}
 	ptr.Target = prev

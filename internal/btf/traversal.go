@@ -1,5 +1,76 @@
 package btf
 
+// Functions to traverse a cyclic graph of types. The below was very useful:
+// https://eli.thegreenplace.net/2015/directed-graph-traversal-orderings-and-applications-to-data-flow-analysis/#post-order-and-reverse-post-order
+
+// preorderTraversal returns all types reachable from typ, in preorder.
+//
+// This means that children of typ appear before typ in the resulting slice.
+//
+// Types for which skip returns true are ignored. skip may be nil.
+func preorderTraversal(typ Type, skip func(Type) bool) []Type {
+	var (
+		// Contains types which need to be visited.
+		todo typeDeque
+		// Any type which has been pushed is present. Any type which has been
+		// walked has a true value.
+		walked = make(map[Type]bool)
+		// Contains types which have been fully visited.
+		result []Type
+	)
+
+	push := func(t *Type) {
+		if _, ok := walked[*t]; ok {
+			// This type has been pushed or walked before, skip it.
+			return
+		}
+
+		if skip != nil && skip(*t) {
+			return
+		}
+
+		// Prevent another push, but allow walking.
+		walked[*t] = false
+		todo.push(t)
+	}
+
+	walk := func(t Type) {
+		// Prevent walking or pushing the type.
+		walked[t] = true
+
+		// Add children of t to todo.
+		walkType(t, push)
+	}
+
+	// Unroll the iteration for typ. This let's us avoid taking &typ which would
+	// force it to be heap allocated.
+	if skip != nil && skip(typ) {
+		return nil
+	}
+
+	walk(typ)
+
+	for !todo.empty() {
+		t := todo.pop()
+
+		if !walked[*t] {
+			// Push the type again. The next time we pop it, walked[*t] will be
+			// true.
+			todo.push(t)
+
+			// Add all direct children to todo.
+			walk(*t)
+		} else {
+			// We've walked *t already, so we know that all children have been
+			// handled. Add *t to the result.
+			result = append(result, *t)
+		}
+	}
+
+	result = append(result, typ)
+	return result
+}
+
 // typeDeque keeps track of pointers to types which still
 // need to be visited.
 type typeDeque struct {

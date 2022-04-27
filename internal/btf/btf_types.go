@@ -63,6 +63,8 @@ const (
 	btfTypeKindFlagMask  = 1
 )
 
+var btfTypeLen = binary.Size(btfType{})
+
 // btfType is equivalent to struct btf_type in Documentation/bpf/btf.rst.
 type btfType struct {
 	NameOff uint32
@@ -164,8 +166,25 @@ func (bt *btfType) SetVlen(vlen int) {
 	bt.setInfo(uint32(vlen), btfTypeVlenMask, btfTypeVlenShift)
 }
 
-func (bt *btfType) KindFlag() bool {
+// Bitfield returns true if the struct or union contain a bitfield.
+func (bt *btfType) Bitfield() bool {
 	return bt.info(btfTypeKindFlagMask, btfTypeKindFlagShift) == 1
+}
+
+func (bt *btfType) SetBitfield(isBitfield bool) {
+	var value uint32
+	if isBitfield {
+		value = 1
+	}
+	bt.setInfo(value, btfTypeKindFlagMask, btfTypeKindFlagShift)
+}
+
+func (bt *btfType) FwdKind() FwdKind {
+	return FwdKind(bt.info(btfTypeKindFlagMask, btfTypeKindFlagShift))
+}
+
+func (bt *btfType) SetFwdKind(kind FwdKind) {
+	bt.setInfo(uint32(kind), btfTypeKindFlagMask, btfTypeKindFlagShift)
 }
 
 func (bt *btfType) Linkage() FuncLinkage {
@@ -181,9 +200,17 @@ func (bt *btfType) Type() TypeID {
 	return TypeID(bt.SizeType)
 }
 
+func (bt *btfType) SetType(id TypeID) {
+	bt.SizeType = uint32(id)
+}
+
 func (bt *btfType) Size() uint32 {
 	// TODO: Panic here if wrong kind?
 	return bt.SizeType
+}
+
+func (bt *btfType) SetSize(size uint32) {
+	bt.SizeType = size
 }
 
 type rawType struct {

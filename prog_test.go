@@ -170,7 +170,11 @@ func TestProgramTestRunInterrupt(t *testing.T) {
 
 		// Block this thread in the BPF syscall, so that we can
 		// trigger EINTR by sending a signal.
-		_, _, _, err := prog.testRun(make([]byte, 14), math.MaxInt32, func() {
+		opts := RunOptions{
+			Data:   make([]byte, 14),
+			Repeat: math.MaxInt32,
+		}
+		_, _, _, err := prog.testRun(opts, func() {
 			// We don't know how long finishing the
 			// test run would take, so flag that we've seen
 			// an interruption and abort the goroutine.

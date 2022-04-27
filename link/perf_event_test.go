@@ -45,8 +45,8 @@ func TestTraceReadID(t *testing.T) {
 	}
 }
 
-func TestTraceEventRegex(t *testing.T) {
-	var tests = []struct {
+func TestTraceValidID(t *testing.T) {
+	tests := []struct {
 		name string
 		in   string
 		fail bool
@@ -67,8 +67,8 @@ func TestTraceEventRegex(t *testing.T) {
 				exp = "fail"
 			}
 
-			if rgxTraceEvent.MatchString(tt.in) == tt.fail {
-				t.Errorf("expected string '%s' to %s regex match", tt.in, exp)
+			if isValidTraceID(tt.in) == tt.fail {
+				t.Errorf("expected string '%s' to %s valid ID check", tt.in, exp)
 			}
 		})
 	}

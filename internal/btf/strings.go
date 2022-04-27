@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"strings"
 )
 
 type stringTable struct {
@@ -109,4 +110,60 @@ func search(ints []uint32, needle uint32) int {
 	}
 	// i == j, f(i-1) == false, and f(j) (= f(i)) == true  =>  answer is i.
 	return i
+}
+
+// stringTableBuilder builds BTF string tables.
+type stringTableBuilder struct {
+	length  uint32
+	strings map[string]uint32
+}
+
+// newStringTableBuilder creates a new builder with the given initial capacity.
+//
+// capacity may be zero.
+func newStringTableBuilder(capacity int) *stringTableBuilder {
+	strings := make(map[string]uint32, capacity)
+	strings[""] = 0
+	return &stringTableBuilder{1, strings}
+}
+
+// Add a string to the table.
+//
+// Adding the same string multiple times will only store it once.
+func (stb *stringTableBuilder) Add(str string) (uint32, error) {
+	if strings.IndexByte(str, 0) != -1 {
+		return 0, fmt.Errorf("string contains null: %q", str)
+	}
+
+	offset, ok := stb.strings[str]
+	if ok {
+		return offset, nil
+	}
+
+	offset = stb.length
+	stb.length += uint32(len(str)) + 1
+	stb.strings[str] = offset
+	return offset, nil
+}
+
+// Length returns the length in bytes.
+func (stb *stringTableBuilder) Length() int {
+	return int(stb.length)
+}
+
+// Marshal a string table into its binary representation.
+func (stb *stringTableBuilder) Marshal() []byte {
+	buf := make([]byte, stb.Length())
+	stb.MarshalBuffer(buf)
+	return buf
+}
+
+// Marshal a string table into a pre-allocated buffer.
+//
+// The buffer must be at least of size Length().
+func (stb *stringTableBuilder) MarshalBuffer(buf []byte) {
+	for str, offset := range stb.strings {
+		n := copy(buf[offset:], str)
+		buf[offset+uint32(n)] = 0
+	}
 }

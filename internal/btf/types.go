@@ -40,10 +40,71 @@ type Type interface {
 
 	// Make a copy of the type, without copying Type members.
 	copy() Type
+}
 
-	// Enumerate all nested Types. Repeated calls must visit nested
-	// types in the same order.
-	walk(*typeDeque)
+// walkType iterates all nested types of typ.
+func walkType(typ Type, fn func(*Type)) {
+	// Each new implementation of Type must be added to this type switch.
+	switch v := typ.(type) {
+	case *Void:
+
+	case *Int:
+
+	case *Pointer:
+		fn(&v.Target)
+
+	case *Array:
+		fn(&v.Index)
+		fn(&v.Type)
+
+	case *Struct:
+		for i := range v.Members {
+			fn(&v.Members[i].Type)
+		}
+
+	case *Union:
+		for i := range v.Members {
+			fn(&v.Members[i].Type)
+		}
+
+	case *Enum:
+
+	case *Fwd:
+
+	case *Typedef:
+		fn(&v.Type)
+
+	case *Volatile:
+		fn(&v.Type)
+
+	case *Const:
+		fn(&v.Type)
+
+	case *Restrict:
+		fn(&v.Type)
+
+	case *Func:
+		fn(&v.Type)
+
+	case *FuncProto:
+		fn(&v.Return)
+		for i := range v.Params {
+			fn(&v.Params[i].Type)
+		}
+
+	case *Var:
+		fn(&v.Type)
+
+	case *Datasec:
+		for i := range v.Vars {
+			fn(&v.Vars[i].Type)
+		}
+
+	case *Float:
+
+	default:
+		panic(fmt.Errorf("don't know how to walk %T", v))
+	}
 }
 
 var (
@@ -67,7 +128,6 @@ func (v *Void) Format(fs fmt.State, verb rune) { formatType(fs, verb, v) }
 func (v *Void) TypeName() string               { return "" }
 func (v *Void) size() uint32                   { return 0 }
 func (v *Void) copy() Type                     { return (*Void)(nil) }
-func (v *Void) walk(*typeDeque)                {}
 
 type IntEncoding byte
 
@@ -132,7 +192,6 @@ func (i *Int) Format(fs fmt.State, verb rune) {
 
 func (i *Int) TypeName() string { return i.Name }
 func (i *Int) size() uint32     { return i.Size }
-func (i *Int) walk(*typeDeque)  {}
 func (i *Int) copy() Type {
 	cpy := *i
 	return &cpy
@@ -152,9 +211,8 @@ func (p *Pointer) Format(fs fmt.State, verb rune) {
 	formatType(fs, verb, p, "target=", p.Target)
 }
 
-func (p *Pointer) TypeName() string    { return "" }
-func (p *Pointer) size() uint32        { return 8 }
-func (p *Pointer) walk(tdq *typeDeque) { tdq.push(&p.Target) }
+func (p *Pointer) TypeName() string { return "" }
+func (p *Pointer) size() uint32     { return 8 }
 func (p *Pointer) copy() Type {
 	cpy := *p
 	return &cpy
@@ -163,17 +221,17 @@ func (p *Pointer) copy() Type {
 // Array is an array with a fixed number of elements.
 type Array struct {
 	TypeID
+	Index  Type
 	Type   Type
 	Nelems uint32
 }
 
 func (arr *Array) Format(fs fmt.State, verb rune) {
-	formatType(fs, verb, arr, "type=", arr.Type, "n=", arr.Nelems)
+	formatType(fs, verb, arr, "index=", arr.Index, "type=", arr.Type, "n=", arr.Nelems)
 }
 
 func (arr *Array) TypeName() string { return "" }
 
-func (arr *Array) walk(tdq *typeDeque) { tdq.push(&arr.Type) }
 func (arr *Array) copy() Type {
 	cpy := *arr
 	return &cpy
@@ -195,12 +253,6 @@ func (s *Struct) Format(fs fmt.State, verb rune) {
 func (s *Struct) TypeName() string { return s.Name }
 
 func (s *Struct) size() uint32 { return s.Size }
-
-func (s *Struct) walk(tdq *typeDeque) {
-	for i := range s.Members {
-		tdq.push(&s.Members[i].Type)
-	}
-}
 
 func (s *Struct) copy() Type {
 	cpy := *s
@@ -228,12 +280,6 @@ func (u *Union) Format(fs fmt.State, verb rune) {
 func (u *Union) TypeName() string { return u.Name }
 
 func (u *Union) size() uint32 { return u.Size }
-
-func (u *Union) walk(tdq *typeDeque) {
-	for i := range u.Members {
-		tdq.push(&u.Members[i].Type)
-	}
-}
 
 func (u *Union) copy() Type {
 	cpy := *u
@@ -292,8 +338,7 @@ type EnumValue struct {
 	Value int32
 }
 
-func (e *Enum) size() uint32    { return 4 }
-func (e *Enum) walk(*typeDeque) {}
+func (e *Enum) size() uint32 { return 4 }
 func (e *Enum) copy() Type {
 	cpy := *e
 	cpy.Values = make([]EnumValue, len(e.Values))
@@ -334,7 +379,6 @@ func (f *Fwd) Format(fs fmt.State, verb rune) {
 
 func (f *Fwd) TypeName() string { return f.Name }
 
-func (f *Fwd) walk(*typeDeque) {}
 func (f *Fwd) copy() Type {
 	cpy := *f
 	return &cpy
@@ -353,7 +397,6 @@ func (td *Typedef) Format(fs fmt.State, verb rune) {
 
 func (td *Typedef) TypeName() string { return td.Name }
 
-func (td *Typedef) walk(tdq *typeDeque) { tdq.push(&td.Type) }
 func (td *Typedef) copy() Type {
 	cpy := *td
 	return &cpy
@@ -371,8 +414,7 @@ func (v *Volatile) Format(fs fmt.State, verb rune) {
 
 func (v *Volatile) TypeName() string { return "" }
 
-func (v *Volatile) qualify() Type       { return v.Type }
-func (v *Volatile) walk(tdq *typeDeque) { tdq.push(&v.Type) }
+func (v *Volatile) qualify() Type { return v.Type }
 func (v *Volatile) copy() Type {
 	cpy := *v
 	return &cpy
@@ -390,8 +432,7 @@ func (c *Const) Format(fs fmt.State, verb rune) {
 
 func (c *Const) TypeName() string { return "" }
 
-func (c *Const) qualify() Type       { return c.Type }
-func (c *Const) walk(tdq *typeDeque) { tdq.push(&c.Type) }
+func (c *Const) qualify() Type { return c.Type }
 func (c *Const) copy() Type {
 	cpy := *c
 	return &cpy
@@ -409,8 +450,7 @@ func (r *Restrict) Format(fs fmt.State, verb rune) {
 
 func (r *Restrict) TypeName() string { return "" }
 
-func (r *Restrict) qualify() Type       { return r.Type }
-func (r *Restrict) walk(tdq *typeDeque) { tdq.push(&r.Type) }
+func (r *Restrict) qualify() Type { return r.Type }
 func (r *Restrict) copy() Type {
 	cpy := *r
 	return &cpy
@@ -430,7 +470,6 @@ func (f *Func) Format(fs fmt.State, verb rune) {
 
 func (f *Func) TypeName() string { return f.Name }
 
-func (f *Func) walk(tdq *typeDeque) { tdq.push(&f.Type) }
 func (f *Func) copy() Type {
 	cpy := *f
 	return &cpy
@@ -448,13 +487,6 @@ func (fp *FuncProto) Format(fs fmt.State, verb rune) {
 }
 
 func (fp *FuncProto) TypeName() string { return "" }
-
-func (fp *FuncProto) walk(tdq *typeDeque) {
-	tdq.push(&fp.Return)
-	for i := range fp.Params {
-		tdq.push(&fp.Params[i].Type)
-	}
-}
 
 func (fp *FuncProto) copy() Type {
 	cpy := *fp
@@ -482,7 +514,6 @@ func (v *Var) Format(fs fmt.State, verb rune) {
 
 func (v *Var) TypeName() string { return v.Name }
 
-func (v *Var) walk(tdq *typeDeque) { tdq.push(&v.Type) }
 func (v *Var) copy() Type {
 	cpy := *v
 	return &cpy
@@ -503,12 +534,6 @@ func (ds *Datasec) Format(fs fmt.State, verb rune) {
 func (ds *Datasec) TypeName() string { return ds.Name }
 
 func (ds *Datasec) size() uint32 { return ds.Size }
-
-func (ds *Datasec) walk(tdq *typeDeque) {
-	for i := range ds.Vars {
-		tdq.push(&ds.Vars[i].Type)
-	}
-}
 
 func (ds *Datasec) copy() Type {
 	cpy := *ds
@@ -541,7 +566,6 @@ func (f *Float) Format(fs fmt.State, verb rune) {
 
 func (f *Float) TypeName() string { return f.Name }
 func (f *Float) size() uint32     { return f.Size }
-func (f *Float) walk(*typeDeque)  {}
 func (f *Float) copy() Type {
 	cpy := *f
 	return &cpy
@@ -702,84 +726,10 @@ func (c copier) copy(typ *Type, transform func(Type) (Type, error)) error {
 		*t = cpy
 
 		// Mark any nested types for copying.
-		cpy.walk(&work)
+		walkType(cpy, work.push)
 	}
 
 	return nil
-}
-
-// typeDeque keeps track of pointers to types which still
-// need to be visited.
-type typeDeque struct {
-	types       []*Type
-	read, write uint64
-	mask        uint64
-}
-
-func (dq *typeDeque) empty() bool {
-	return dq.read == dq.write
-}
-
-// push adds a type to the stack.
-func (dq *typeDeque) push(t *Type) {
-	if dq.write-dq.read < uint64(len(dq.types)) {
-		dq.types[dq.write&dq.mask] = t
-		dq.write++
-		return
-	}
-
-	new := len(dq.types) * 2
-	if new == 0 {
-		new = 8
-	}
-
-	types := make([]*Type, new)
-	pivot := dq.read & dq.mask
-	n := copy(types, dq.types[pivot:])
-	n += copy(types[n:], dq.types[:pivot])
-	types[n] = t
-
-	dq.types = types
-	dq.mask = uint64(new) - 1
-	dq.read, dq.write = 0, uint64(n+1)
-}
-
-// shift returns the first element or null.
-func (dq *typeDeque) shift() *Type {
-	if dq.empty() {
-		return nil
-	}
-
-	index := dq.read & dq.mask
-	t := dq.types[index]
-	dq.types[index] = nil
-	dq.read++
-	return t
-}
-
-// pop returns the last element or null.
-func (dq *typeDeque) pop() *Type {
-	if dq.empty() {
-		return nil
-	}
-
-	dq.write--
-	index := dq.write & dq.mask
-	t := dq.types[index]
-	dq.types[index] = nil
-	return t
-}
-
-// all returns all elements.
-//
-// The deque is empty after calling this method.
-func (dq *typeDeque) all() []*Type {
-	length := dq.write - dq.read
-	types := make([]*Type, 0, length)
-	for t := dq.shift(); t != nil; t = dq.shift() {
-		types = append(types, t)
-	}
-	return types
 }
 
 // inflateRawTypes takes a list of raw btf types linked via type IDs, and turns
@@ -865,8 +815,8 @@ func inflateRawTypes(rawTypes []rawType, rawStrings *stringTable) ([]Type, map[e
 
 		switch raw.Kind() {
 		case kindInt:
-			encoding, offset, bits := intEncoding(*raw.data.(*uint32))
-			typ = &Int{id, name, raw.Size(), encoding, offset, bits}
+			bi := raw.data.(*btfInt)
+			typ = &Int{id, name, raw.Size(), bi.Encoding(), bi.Offset(), bi.Bits()}
 
 		case kindPointer:
 			ptr := &Pointer{id, nil}
@@ -876,21 +826,20 @@ func inflateRawTypes(rawTypes []rawType, rawStrings *stringTable) ([]Type, map[e
 		case kindArray:
 			btfArr := raw.data.(*btfArray)
 
-			// IndexType is unused according to btf.rst.
-			// Don't make it available right now.
-			arr := &Array{id, nil, btfArr.Nelems}
+			arr := &Array{id, nil, nil, btfArr.Nelems}
+			fixup(btfArr.IndexType, &arr.Index)
 			fixup(btfArr.Type, &arr.Type)
 			typ = arr
 
 		case kindStruct:
-			members, err := convertMembers(raw.data.([]btfMember), raw.KindFlag())
+			members, err := convertMembers(raw.data.([]btfMember), raw.Bitfield())
 			if err != nil {
 				return nil, nil, fmt.Errorf("struct %s (id %d): %w", name, id, err)
 			}
 			typ = &Struct{id, name, raw.Size(), members}
 
 		case kindUnion:
-			members, err := convertMembers(raw.data.([]btfMember), raw.KindFlag())
+			members, err := convertMembers(raw.data.([]btfMember), raw.Bitfield())
 			if err != nil {
 				return nil, nil, fmt.Errorf("union %s (id %d): %w", name, id, err)
 			}
@@ -912,11 +861,7 @@ func inflateRawTypes(rawTypes []rawType, rawStrings *stringTable) ([]Type, map[e
 			typ = &Enum{id, name, vals}
 
 		case kindForward:
-			if raw.KindFlag() {
-				typ = &Fwd{id, name, FwdUnion}
-			} else {
-				typ = &Fwd{id, name, FwdStruct}
-			}
+			typ = &Fwd{id, name, raw.FwdKind()}
 
 		case kindTypedef:
 			typedef := &Typedef{id, name, nil}
@@ -987,7 +932,7 @@ func inflateRawTypes(rawTypes []rawType, rawStrings *stringTable) ([]Type, map[e
 					return nil, nil, err
 				}
 			}
-			typ = &Datasec{id, name, raw.SizeType, vars}
+			typ = &Datasec{id, name, raw.Size(), vars}
 
 		case kindFloat:
 			typ = &Float{id, name, raw.Size()}

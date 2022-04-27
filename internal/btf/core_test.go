@@ -28,8 +28,8 @@ func TestCOREAreTypesCompatible(t *testing.T) {
 		{&Int{OffsetBits: 1}, &Int{}, false},
 		{&Pointer{Target: &Void{}}, &Pointer{Target: &Void{}}, true},
 		{&Pointer{Target: &Void{}}, &Void{}, false},
-		{&Array{Type: &Void{}}, &Array{Type: &Void{}}, true},
-		{&Array{Type: &Int{}}, &Array{Type: &Void{}}, false},
+		{&Array{Index: &Void{}, Type: &Void{}}, &Array{Index: &Void{}, Type: &Void{}}, true},
+		{&Array{Index: &Void{}, Type: &Int{}}, &Array{Index: &Void{}, Type: &Void{}}, false},
 		{&FuncProto{Return: &Int{}}, &FuncProto{Return: &Void{}}, false},
 		{
 			&FuncProto{Return: &Void{}, Params: []FuncParam{{Name: "a", Type: &Void{}}}},

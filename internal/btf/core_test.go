@@ -584,8 +584,9 @@ func TestCORECopyWithoutQualifiers(t *testing.T) {
 			root := &Volatile{}
 			root.Type = test.fn(root)
 
-			_, err := copyType(root, skipQualifiersAndTypedefs)
-			qt.Assert(t, err, qt.Not(qt.IsNil))
+			cycle, ok := Copy(root, UnderlyingType).(*cycle)
+			qt.Assert(t, ok, qt.IsTrue)
+			qt.Assert(t, cycle.root, qt.Equals, root)
 		})
 	}
 
@@ -595,8 +596,7 @@ func TestCORECopyWithoutQualifiers(t *testing.T) {
 				v := a.fn(&Pointer{Target: b.fn(&Int{Name: "z"})})
 				want := &Pointer{Target: &Int{Name: "z"}}
 
-				got, err := copyType(v, skipQualifiersAndTypedefs)
-				qt.Assert(t, err, qt.IsNil)
+				got := Copy(v, UnderlyingType)
 				qt.Assert(t, got, qt.DeepEquals, want)
 			})
 		}
@@ -611,8 +611,7 @@ func TestCORECopyWithoutQualifiers(t *testing.T) {
 			t.Log(q.name)
 		}
 
-		got, err := copyType(v, skipQualifiersAndTypedefs)
-		qt.Assert(t, err, qt.IsNil)
+		got := Copy(v, UnderlyingType)
 		qt.Assert(t, got, qt.DeepEquals, root)
 	})
 }

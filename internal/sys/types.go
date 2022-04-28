@@ -1004,3 +1004,12 @@ type TracingLinkInfo struct {
 }
 
 type XDPLinkInfo struct{ Ifindex uint32 }
+
+type XdpMd struct {
+	Data           uint32
+	DataEnd        uint32
+	DataMeta       uint32
+	IngressIfindex uint32
+	RxQueueIndex   uint32
+	EgressIfindex  uint32
+}

@@ -13,6 +13,7 @@ import (
 	"syscall"
 	"testing"
 	"time"
+	"unsafe"
 
 	qt "github.com/frankban/quicktest"
 	"github.com/google/go-cmp/cmp"
@@ -87,6 +88,56 @@ func TestProgramRun(t *testing.T) {
 
 	if !bytes.Equal(out[:len(pat)], pat) {
 		t.Errorf("Expected %v, got %v", pat, out)
+	}
+}
+
+func TestProgramRunWithOptions(t *testing.T) {
+	testutils.SkipOnOldKernel(t, "4.8", "XDP program")
+
+	ins := asm.Instructions{
+		// Return XDP_ABORTED
+		asm.LoadImm(asm.R0, 0, asm.DWord),
+		asm.Return(),
+	}
+
+	t.Log(ins)
+
+	prog, err := NewProgram(&ProgramSpec{
+		Name:         "test",
+		Type:         XDP,
+		Instructions: ins,
+		License:      "MIT",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer prog.Close()
+
+	buf := make([]byte, 14)
+	xdp := sys.XdpMd{
+		Data:    0,
+		DataEnd: 14,
+	}
+	xdpOut := sys.XdpMd{}
+	ctx := (*(*[unsafe.Sizeof(xdp)]byte)(unsafe.Pointer(&xdp)))[:]
+	ctxOut := (*(*[unsafe.Sizeof(xdpOut)]byte)(unsafe.Pointer(&xdpOut)))[:]
+	opts := TestOptions{
+		In:     buf,
+		Ctx:    ctx,
+		CtxOut: ctxOut,
+	}
+	ret, _, err := prog.TestWithOptions(opts)
+	testutils.SkipIfNotSupported(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if ret != 0 {
+		t.Error("Expected return value to be 0, got", ret)
+	}
+
+	if xdp != xdpOut {
+		t.Errorf("Expect xdp (%+v) != xdpOut (%+v)", xdp, xdpOut)
 	}
 }
 

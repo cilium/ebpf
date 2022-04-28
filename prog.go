@@ -579,6 +579,15 @@ func (p *Program) Test(in []byte) (uint32, []byte, error) {
 	return ret, out, nil
 }
 
+// Similar to `Test` except with more options
+func (p *Program) TestWithOptions(opts TestOptions) (uint32, []byte, error) {
+	ret, out, _, err := p.testRun(opts, nil)
+	if err != nil {
+		return ret, nil, fmt.Errorf("can't test program: %w", err)
+	}
+	return ret, out, nil
+}
+
 // Benchmark runs the Program with the given input for a number of times
 // and returns the time taken per iteration.
 //
@@ -670,6 +679,12 @@ func (p *Program) testRun(opts TestOptions, reset func()) (uint32, []byte, time.
 		DataIn:      sys.NewSlicePointer(opts.In),
 		DataOut:     sys.NewSlicePointer(out),
 		Repeat:      uint32(opts.Repeat),
+		CtxSizeIn:   uint32(len(opts.Ctx)),
+		CtxSizeOut:  uint32(len(opts.CtxOut)),
+		CtxIn:       sys.NewSlicePointer(opts.Ctx),
+		CtxOut:      sys.NewSlicePointer(opts.CtxOut),
+		Flags:       opts.Flags,
+		Cpu:         opts.Cpu,
 	}
 
 	for {

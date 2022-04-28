@@ -38,7 +38,7 @@ type Spec struct {
 	strings  *stringTable
 
 	// Inflated Types.
-	types []Type
+	types types
 
 	// Types indexed by essential name.
 	// Includes all struct flavors and types with the same name.
@@ -205,24 +205,14 @@ func (spec *Spec) splitExtInfos(info *extInfo) error {
 	for secName, secFuncInfos := range info.funcInfos {
 		// Collect functions from each section and organize them by name.
 		var funcs []*Func
-		for _, fi := range secFuncInfos {
-			typ, err := spec.TypeByID(fi.TypeID)
+		for _, bfi := range secFuncInfos {
+			fi, err := newFuncInfo(bfi, spec.types)
 			if err != nil {
 				return err
 			}
 
-			fn, ok := typ.(*Func)
-			if !ok {
-				return fmt.Errorf("type ID %d is a %T, but expected a Func", fi.TypeID, typ)
-			}
-
-			// C doesn't have anonymous functions, but check just in case.
-			if fn.Name == "" {
-				return fmt.Errorf("func with type ID %d doesn't have a name", fi.TypeID)
-			}
-
-			ofi[fn.Name] = FuncInfo{fn}
-			funcs = append(funcs, fn)
+			ofi[fi.fn.Name] = *fi
+			funcs = append(funcs, fi.fn)
 		}
 
 		sort.Slice(secFuncInfos, func(i, j int) bool {
@@ -245,52 +235,43 @@ func (spec *Spec) splitExtInfos(info *extInfo) error {
 
 		// Attribute LineInfo records to their respective functions, if any.
 		if lines := info.lineInfos[secName]; lines != nil {
-			for _, li := range lines {
-				fn, fnOffset := funcForInstruction(li.InsnOff)
+			for _, bli := range lines {
+				fn, fnOffset := funcForInstruction(bli.InsnOff)
 				if fn == nil {
-					return fmt.Errorf("section %s: error looking up FuncInfo for LineInfo %v", secName, li)
+					return fmt.Errorf("section %s: error looking up FuncInfo for offset %v", secName, bli.InsnOff)
 				}
 
-				line, err := spec.strings.Lookup(li.LineOff)
+				li, err := newLineInfo(bli, spec.strings)
 				if err != nil {
-					return fmt.Errorf("lookup of line: %w", err)
+					return err
 				}
 
-				fileName, err := spec.strings.Lookup(li.FileNameOff)
-				if err != nil {
-					return fmt.Errorf("lookup of filename: %w", err)
-				}
+				// Offsets are ELF section-scoped, make them function-scoped by
+				// subtracting the function's start offset.
+				li.insnOff -= fnOffset
 
-				lineNumber := li.LineCol >> bpfLineShift
-				lineColumn := li.LineCol & bpfColumnMax
-
-				oli[fn.Name] = append(oli[fn.Name], LineInfo{
-					fileName,
-					line,
-					lineNumber,
-					lineColumn,
-					// Offsets are ELF section-scoped, make them function-scoped by
-					// subtracting the function's start offset.
-					li.InsnOff - fnOffset,
-					li.FileNameOff,
-					li.LineOff,
-				})
+				oli[fn.Name] = append(oli[fn.Name], *li)
 			}
 		}
 
 		// Attribute CO-RE relocations to their respective functions, if any.
 		if relos := info.relos[secName]; relos != nil {
 			for _, r := range relos {
-				fn, fnOffset := funcForInstruction(r.insnOff)
+				fn, fnOffset := funcForInstruction(r.InsnOff)
 				if fn == nil {
-					return fmt.Errorf("section %s: error looking up FuncInfo for CO-RE relocation %v", secName, r)
+					return fmt.Errorf("section %s: error looking up FuncInfo for offset %v", secName, r.InsnOff)
+				}
+
+				relo, err := newCORERelocation(r, spec.types, spec.strings)
+				if err != nil {
+					return err
 				}
 
 				// Offsets are ELF section-scoped, make them function-scoped by
 				// subtracting the function's start offset.
-				r.insnOff -= fnOffset
+				relo.insnOff -= fnOffset
 
-				ocr[fn.Name] = append(ocr[fn.Name], r)
+				ocr[fn.Name] = append(ocr[fn.Name], *relo)
 			}
 		}
 	}
@@ -641,10 +622,7 @@ func (s *Spec) Program(name string) (*Program, error) {
 // Returns an error wrapping ErrNotFound if a Type with the given ID
 // does not exist in the Spec.
 func (s *Spec) TypeByID(id TypeID) (Type, error) {
-	if int(id) > len(s.types) {
-		return nil, fmt.Errorf("type ID %d: %w", id, ErrNotFound)
-	}
-	return s.types[id], nil
+	return s.types.ByID(id)
 }
 
 // AnyTypesByName returns a list of BTF Types with the given name.

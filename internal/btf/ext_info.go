@@ -132,7 +132,7 @@ func (ei *ExtInfos) Assign(insns asm.Instructions, section string) {
 
 // MarshalExtInfos encodes function and line info embedded in insns into kernel
 // wire format.
-func MarshalExtInfos(insns asm.Instructions) (funcInfos, lineInfos []byte, _ error) {
+func MarshalExtInfos(insns asm.Instructions, typeID func(Type) (TypeID, error)) (funcInfos, lineInfos []byte, _ error) {
 	iter := insns.Iterate()
 	var fiBuf, liBuf bytes.Buffer
 	for iter.Next() {
@@ -141,7 +141,7 @@ func MarshalExtInfos(insns asm.Instructions) (funcInfos, lineInfos []byte, _ err
 				fn:     fn,
 				offset: iter.Offset,
 			}
-			if err := fi.marshal(&fiBuf); err != nil {
+			if err := fi.marshal(&fiBuf, typeID); err != nil {
 				return nil, nil, fmt.Errorf("write func info: %w", err)
 			}
 		}
@@ -349,10 +349,14 @@ func newFuncInfos(bfis []bpfFuncInfo, ts types) ([]funcInfo, error) {
 }
 
 // marshal into the BTF wire format.
-func (fi *funcInfo) marshal(w io.Writer) error {
+func (fi *funcInfo) marshal(w io.Writer, typeID func(Type) (TypeID, error)) error {
+	id, err := typeID(fi.fn)
+	if err != nil {
+		return err
+	}
 	bfi := bpfFuncInfo{
 		InsnOff: uint32(fi.offset),
-		TypeID:  fi.fn.TypeID,
+		TypeID:  id,
 	}
 	return binary.Write(w, internal.NativeEndian, &bfi)
 }

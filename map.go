@@ -407,9 +407,19 @@ func (spec *MapSpec) createMap(inner *sys.FD, opts MapOptions, handles *handleCa
 		}
 
 		if handle != nil {
+			keyTypeID, err := spec.BTF.TypeID(spec.Key)
+			if err != nil {
+				return nil, err
+			}
+
+			valueTypeID, err := spec.BTF.TypeID(spec.Value)
+			if err != nil {
+				return nil, err
+			}
+
 			attr.BtfFd = uint32(handle.FD())
-			attr.BtfKeyTypeId = uint32(spec.Key.ID())
-			attr.BtfValueTypeId = uint32(spec.Value.ID())
+			attr.BtfKeyTypeId = uint32(keyTypeID)
+			attr.BtfValueTypeId = uint32(valueTypeID)
 		}
 	}
 

@@ -224,10 +224,15 @@ func coreRelocate(local, target *Spec, relos []*CORERelocation) ([]COREFixup, er
 				return nil, fmt.Errorf("%s: unexpected accessor %v", relo.kind, relo.accessor)
 			}
 
+			id, err := local.TypeID(relo.typ)
+			if err != nil {
+				return nil, fmt.Errorf("%s: %w", relo.kind, err)
+			}
+
 			result[i] = COREFixup{
 				kind:   relo.kind,
-				local:  uint32(relo.typ.ID()),
-				target: uint32(relo.typ.ID()),
+				local:  uint32(id),
+				target: uint32(id),
 			}
 			continue
 		}
@@ -248,7 +253,7 @@ func coreRelocate(local, target *Spec, relos []*CORERelocation) ([]COREFixup, er
 		}
 
 		targets := target.namedTypes[newEssentialName(localTypeName)]
-		fixups, err := coreCalculateFixups(local.byteOrder, localType, targets, group.relos)
+		fixups, err := coreCalculateFixups(local, target, localType, targets, group.relos)
 		if err != nil {
 			return nil, fmt.Errorf("relocate %s: %w", localType, err)
 		}
@@ -269,20 +274,26 @@ var errImpossibleRelocation = errors.New("impossible relocation")
 //
 // The best target is determined by scoring: the less poisoning we have to do
 // the better the target is.
-func coreCalculateFixups(byteOrder binary.ByteOrder, local Type, targets []Type, relos []*CORERelocation) ([]COREFixup, error) {
-	localID := local.ID()
+func coreCalculateFixups(localSpec, targetSpec *Spec, local Type, targets []Type, relos []*CORERelocation) ([]COREFixup, error) {
+	localID, err := localSpec.TypeID(local)
+	if err != nil {
+		return nil, fmt.Errorf("local type ID: %w", err)
+	}
 	local = Copy(local, UnderlyingType)
 
 	bestScore := len(relos)
 	var bestFixups []COREFixup
 	for i := range targets {
-		targetID := targets[i].ID()
+		targetID, err := targetSpec.TypeID(targets[i])
+		if err != nil {
+			return nil, fmt.Errorf("target type ID: %w", err)
+		}
 		target := Copy(targets[i], UnderlyingType)
 
 		score := 0 // lower is better
 		fixups := make([]COREFixup, 0, len(relos))
 		for _, relo := range relos {
-			fixup, err := coreCalculateFixup(byteOrder, local, localID, target, targetID, relo)
+			fixup, err := coreCalculateFixup(localSpec.byteOrder, local, localID, target, targetID, relo)
 			if err != nil {
 				return nil, fmt.Errorf("target %s: %w", target, err)
 			}

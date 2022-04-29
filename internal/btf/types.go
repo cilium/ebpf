@@ -13,11 +13,6 @@ const maxTypeDepth = 32
 // TypeID identifies a type in a BTF section.
 type TypeID uint32
 
-// ID implements part of the Type interface.
-func (tid TypeID) ID() TypeID {
-	return tid
-}
-
 // Type represents a type described by BTF.
 type Type interface {
 	// Type can be formatted using the %s and %v verbs. %s outputs only the
@@ -30,9 +25,6 @@ type Type interface {
 	// children. %2v would output details of the root type and its children
 	// as well as a short description of the grandchildren.
 	fmt.Formatter
-
-	// The type ID of the Type within this BTF spec.
-	ID() TypeID
 
 	// Name of the type, empty for anonymous types and types that cannot
 	// carry a name, like Void and Pointer.
@@ -74,7 +66,6 @@ func (ts types) ByID(id TypeID) (Type, error) {
 // Void is the unit type of BTF.
 type Void struct{}
 
-func (v *Void) ID() TypeID                     { return 0 }
 func (v *Void) Format(fs fmt.State, verb rune) { formatType(fs, verb, v) }
 func (v *Void) TypeName() string               { return "" }
 func (v *Void) size() uint32                   { return 0 }
@@ -118,8 +109,6 @@ func (ie IntEncoding) String() string {
 
 // Int is an integer of a given length.
 type Int struct {
-	TypeID
-
 	Name string
 
 	// The size of the integer in bytes.
@@ -156,7 +145,6 @@ func (i *Int) isBitfield() bool {
 
 // Pointer is a pointer to another type.
 type Pointer struct {
-	TypeID
 	Target Type
 }
 
@@ -174,7 +162,6 @@ func (p *Pointer) copy() Type {
 
 // Array is an array with a fixed number of elements.
 type Array struct {
-	TypeID
 	Type   Type
 	Nelems uint32
 }
@@ -193,7 +180,6 @@ func (arr *Array) copy() Type {
 
 // Struct is a compound type of consecutive members.
 type Struct struct {
-	TypeID
 	Name string
 	// The size of the struct including padding, in bytes
 	Size    uint32
@@ -226,7 +212,6 @@ func (s *Struct) members() []Member {
 
 // Union is a compound type where members occupy the same memory.
 type Union struct {
-	TypeID
 	Name string
 	// The size of the union including padding, in bytes.
 	Size    uint32
@@ -285,7 +270,6 @@ type Member struct {
 
 // Enum lists possible values.
 type Enum struct {
-	TypeID
 	Name   string
 	Values []EnumValue
 }
@@ -335,7 +319,6 @@ func (fk FwdKind) String() string {
 
 // Fwd is a forward declaration of a Type.
 type Fwd struct {
-	TypeID
 	Name string
 	Kind FwdKind
 }
@@ -354,7 +337,6 @@ func (f *Fwd) copy() Type {
 
 // Typedef is an alias of a Type.
 type Typedef struct {
-	TypeID
 	Name string
 	Type Type
 }
@@ -373,7 +355,6 @@ func (td *Typedef) copy() Type {
 
 // Volatile is a qualifier.
 type Volatile struct {
-	TypeID
 	Type Type
 }
 
@@ -392,7 +373,6 @@ func (v *Volatile) copy() Type {
 
 // Const is a qualifier.
 type Const struct {
-	TypeID
 	Type Type
 }
 
@@ -411,7 +391,6 @@ func (c *Const) copy() Type {
 
 // Restrict is a qualifier.
 type Restrict struct {
-	TypeID
 	Type Type
 }
 
@@ -430,7 +409,6 @@ func (r *Restrict) copy() Type {
 
 // Func is a function definition.
 type Func struct {
-	TypeID
 	Name    string
 	Type    Type
 	Linkage FuncLinkage
@@ -450,7 +428,6 @@ func (f *Func) copy() Type {
 
 // FuncProto is a function declaration.
 type FuncProto struct {
-	TypeID
 	Return Type
 	Params []FuncParam
 }
@@ -482,7 +459,6 @@ type FuncParam struct {
 
 // Var is a global variable.
 type Var struct {
-	TypeID
 	Name    string
 	Type    Type
 	Linkage VarLinkage
@@ -502,7 +478,6 @@ func (v *Var) copy() Type {
 
 // Datasec is a global program section containing data.
 type Datasec struct {
-	TypeID
 	Name string
 	Size uint32
 	Vars []VarSecinfo
@@ -540,7 +515,6 @@ type VarSecinfo struct {
 
 // Float is a float of a given length.
 type Float struct {
-	TypeID
 	Name string
 
 	// The size of the float in bytes.
@@ -799,10 +773,10 @@ func (dq *typeDeque) all() []*Type {
 // Returns a map of named types (so, where NameOff is non-zero) and a slice of types
 // indexed by TypeID. Since BTF ignores compilation units, multiple types may share
 // the same name. A Type may form a cyclic graph by pointing at itself.
-func inflateRawTypes(rawTypes []rawType, rawStrings *stringTable) ([]Type, map[essentialName][]Type, error) {
+func inflateRawTypes(rawTypes []rawType, rawStrings *stringTable) ([]Type, error) {
 	types := make([]Type, 0, len(rawTypes)+1)
 	types = append(types, (*Void)(nil))
-	namedTypes := make(map[essentialName][]Type)
+
 	type fixupDef struct {
 		id  TypeID
 		typ *Type
@@ -871,16 +845,16 @@ func inflateRawTypes(rawTypes []rawType, rawStrings *stringTable) ([]Type, map[e
 
 		name, err := rawStrings.Lookup(raw.NameOff)
 		if err != nil {
-			return nil, nil, fmt.Errorf("get name for type id %d: %w", id, err)
+			return nil, fmt.Errorf("get name for type id %d: %w", id, err)
 		}
 
 		switch raw.Kind() {
 		case kindInt:
 			encoding, offset, bits := intEncoding(*raw.data.(*uint32))
-			typ = &Int{id, name, raw.Size(), encoding, offset, bits}
+			typ = &Int{name, raw.Size(), encoding, offset, bits}
 
 		case kindPointer:
-			ptr := &Pointer{id, nil}
+			ptr := &Pointer{nil}
 			fixup(raw.Type(), &ptr.Target)
 			typ = ptr
 
@@ -889,23 +863,23 @@ func inflateRawTypes(rawTypes []rawType, rawStrings *stringTable) ([]Type, map[e
 
 			// IndexType is unused according to btf.rst.
 			// Don't make it available right now.
-			arr := &Array{id, nil, btfArr.Nelems}
+			arr := &Array{nil, btfArr.Nelems}
 			fixup(btfArr.Type, &arr.Type)
 			typ = arr
 
 		case kindStruct:
 			members, err := convertMembers(raw.data.([]btfMember), raw.KindFlag())
 			if err != nil {
-				return nil, nil, fmt.Errorf("struct %s (id %d): %w", name, id, err)
+				return nil, fmt.Errorf("struct %s (id %d): %w", name, id, err)
 			}
-			typ = &Struct{id, name, raw.Size(), members}
+			typ = &Struct{name, raw.Size(), members}
 
 		case kindUnion:
 			members, err := convertMembers(raw.data.([]btfMember), raw.KindFlag())
 			if err != nil {
-				return nil, nil, fmt.Errorf("union %s (id %d): %w", name, id, err)
+				return nil, fmt.Errorf("union %s (id %d): %w", name, id, err)
 			}
-			typ = &Union{id, name, raw.Size(), members}
+			typ = &Union{name, raw.Size(), members}
 
 		case kindEnum:
 			rawvals := raw.data.([]btfEnum)
@@ -913,47 +887,47 @@ func inflateRawTypes(rawTypes []rawType, rawStrings *stringTable) ([]Type, map[e
 			for i, btfVal := range rawvals {
 				name, err := rawStrings.Lookup(btfVal.NameOff)
 				if err != nil {
-					return nil, nil, fmt.Errorf("get name for enum value %d: %s", i, err)
+					return nil, fmt.Errorf("get name for enum value %d: %s", i, err)
 				}
 				vals = append(vals, EnumValue{
 					Name:  name,
 					Value: btfVal.Val,
 				})
 			}
-			typ = &Enum{id, name, vals}
+			typ = &Enum{name, vals}
 
 		case kindForward:
 			if raw.KindFlag() {
-				typ = &Fwd{id, name, FwdUnion}
+				typ = &Fwd{name, FwdUnion}
 			} else {
-				typ = &Fwd{id, name, FwdStruct}
+				typ = &Fwd{name, FwdStruct}
 			}
 
 		case kindTypedef:
-			typedef := &Typedef{id, name, nil}
+			typedef := &Typedef{name, nil}
 			fixup(raw.Type(), &typedef.Type)
 			typ = typedef
 
 		case kindVolatile:
-			volatile := &Volatile{id, nil}
+			volatile := &Volatile{nil}
 			fixup(raw.Type(), &volatile.Type)
 			typ = volatile
 
 		case kindConst:
-			cnst := &Const{id, nil}
+			cnst := &Const{nil}
 			fixup(raw.Type(), &cnst.Type)
 			typ = cnst
 
 		case kindRestrict:
-			restrict := &Restrict{id, nil}
+			restrict := &Restrict{nil}
 			fixup(raw.Type(), &restrict.Type)
 			typ = restrict
 
 		case kindFunc:
-			fn := &Func{id, name, nil, raw.Linkage()}
+			fn := &Func{name, nil, raw.Linkage()}
 			fixup(raw.Type(), &fn.Type)
 			if err := assert(&fn.Type, reflect.TypeOf((*FuncProto)(nil))); err != nil {
-				return nil, nil, err
+				return nil, err
 			}
 			typ = fn
 
@@ -963,7 +937,7 @@ func inflateRawTypes(rawTypes []rawType, rawStrings *stringTable) ([]Type, map[e
 			for i, param := range rawparams {
 				name, err := rawStrings.Lookup(param.NameOff)
 				if err != nil {
-					return nil, nil, fmt.Errorf("get name for func proto parameter %d: %s", i, err)
+					return nil, fmt.Errorf("get name for func proto parameter %d: %s", i, err)
 				}
 				params = append(params, FuncParam{
 					Name: name,
@@ -973,13 +947,13 @@ func inflateRawTypes(rawTypes []rawType, rawStrings *stringTable) ([]Type, map[e
 				fixup(rawparams[i].Type, &params[i].Type)
 			}
 
-			fp := &FuncProto{id, nil, params}
+			fp := &FuncProto{nil, params}
 			fixup(raw.Type(), &fp.Return)
 			typ = fp
 
 		case kindVar:
 			variable := raw.data.(*btfVariable)
-			v := &Var{id, name, nil, VarLinkage(variable.Linkage)}
+			v := &Var{name, nil, VarLinkage(variable.Linkage)}
 			fixup(raw.Type(), &v.Type)
 			typ = v
 
@@ -995,29 +969,25 @@ func inflateRawTypes(rawTypes []rawType, rawStrings *stringTable) ([]Type, map[e
 			for i := range vars {
 				fixup(btfVars[i].Type, &vars[i].Type)
 				if err := assert(&vars[i].Type, reflect.TypeOf((*Var)(nil))); err != nil {
-					return nil, nil, err
+					return nil, err
 				}
 			}
-			typ = &Datasec{id, name, raw.SizeType, vars}
+			typ = &Datasec{name, raw.SizeType, vars}
 
 		case kindFloat:
-			typ = &Float{id, name, raw.Size()}
+			typ = &Float{name, raw.Size()}
 
 		default:
-			return nil, nil, fmt.Errorf("type id %d: unknown kind: %v", id, raw.Kind())
+			return nil, fmt.Errorf("type id %d: unknown kind: %v", id, raw.Kind())
 		}
 
 		types = append(types, typ)
-
-		if name := newEssentialName(typ.TypeName()); name != "" {
-			namedTypes[name] = append(namedTypes[name], typ)
-		}
 	}
 
 	for _, fixup := range fixups {
 		i := int(fixup.id)
 		if i >= len(types) {
-			return nil, nil, fmt.Errorf("reference to invalid type id: %d", fixup.id)
+			return nil, fmt.Errorf("reference to invalid type id: %d", fixup.id)
 		}
 
 		*fixup.typ = types[i]
@@ -1025,11 +995,11 @@ func inflateRawTypes(rawTypes []rawType, rawStrings *stringTable) ([]Type, map[e
 
 	for _, assertion := range assertions {
 		if reflect.TypeOf(*assertion.typ) != assertion.want {
-			return nil, nil, fmt.Errorf("expected %s, got %T", assertion.want, *assertion.typ)
+			return nil, fmt.Errorf("expected %s, got %T", assertion.want, *assertion.typ)
 		}
 	}
 
-	return types, namedTypes, nil
+	return types, nil
 }
 
 // essentialName represents the name of a BTF type stripped of any flavor
@@ -1043,6 +1013,9 @@ type essentialName string
 // in a type name is ignored for the purpose of finding a candidate type
 // in the kernel's BTF.
 func newEssentialName(name string) essentialName {
+	if name == "" {
+		return ""
+	}
 	lastIdx := strings.LastIndex(name, "___")
 	if lastIdx > 0 {
 		return essentialName(name[:lastIdx])

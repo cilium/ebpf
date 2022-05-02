@@ -75,6 +75,9 @@ func (cs *CollectionSpec) Copy() *CollectionSpec {
 // when calling NewCollection. Any named maps are removed from CollectionSpec.Maps.
 //
 // Returns an error if a named map isn't used in at least one program.
+//
+// Deprecated: Pass CollectionOptions.MapReplacements when loading the Collection
+// instead.
 func (cs *CollectionSpec) RewriteMaps(maps map[string]*Map) error {
 	for symbol, m := range maps {
 		// have we seen a program that uses this symbol / map

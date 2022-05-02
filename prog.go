@@ -58,7 +58,12 @@ type ProgramSpec struct {
 	Name string
 
 	// Type determines at which hook in the kernel a program will run.
-	Type       ProgramType
+	Type ProgramType
+
+	// AttachType of the program, needed to differentiate allowed context
+	// accesses in some newer program types like CGroupSockAddr.
+	//
+	// Available on kernels 4.17 and later.
 	AttachType AttachType
 
 	// Name of a kernel data structure or function to attach to. Its

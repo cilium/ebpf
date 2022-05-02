@@ -27,9 +27,8 @@ const (
 
 var haveProgAttach = internal.FeatureTest("BPF_PROG_ATTACH", "4.10", func() error {
 	prog, err := ebpf.NewProgram(&ebpf.ProgramSpec{
-		Type:       ebpf.CGroupSKB,
-		AttachType: ebpf.AttachCGroupInetIngress,
-		License:    "MIT",
+		Type:    ebpf.CGroupSKB,
+		License: "MIT",
 		Instructions: asm.Instructions{
 			asm.Mov.Imm(asm.R0, 0),
 			asm.Return(),

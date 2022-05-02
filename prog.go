@@ -590,6 +590,7 @@ func (p *Program) Benchmark(in []byte, repeat int, reset func()) (uint32, time.D
 
 var haveProgTestRun = internal.FeatureTest("BPF_PROG_TEST_RUN", "4.12", func() error {
 	prog, err := NewProgram(&ProgramSpec{
+		// SocketFilter does not require privileges on newer kernels.
 		Type: SocketFilter,
 		Instructions: asm.Instructions{
 			asm.LoadImm(asm.R0, 0, asm.DWord),
@@ -612,15 +613,23 @@ var haveProgTestRun = internal.FeatureTest("BPF_PROG_TEST_RUN", "4.12", func() e
 	}
 
 	err = sys.ProgRun(&attr)
-	if errors.Is(err, unix.EINVAL) {
+	switch {
+	case errors.Is(err, unix.EINVAL):
 		// Check for EINVAL specifically, rather than err != nil since we
 		// otherwise misdetect due to insufficient permissions.
 		return internal.ErrNotSupported
-	}
-	if errors.Is(err, unix.EINTR) {
+
+	case errors.Is(err, unix.EINTR):
 		// We know that PROG_TEST_RUN is supported if we get EINTR.
 		return nil
+
+	case errors.Is(err, unix.ENOTSUPP):
+		// The first PROG_TEST_RUN patches shipped in 4.12 didn't include
+		// a test runner for SocketFilter. ENOTSUPP means PROG_TEST_RUN is
+		// supported, but not for the program type used in the probe.
+		return nil
 	}
+
 	return err
 })
 
@@ -668,6 +677,10 @@ func (p *Program) testRun(in []byte, repeat int, reset func()) (uint32, []byte, 
 				reset()
 			}
 			continue
+		}
+
+		if errors.Is(err, unix.ENOTSUPP) {
+			return 0, nil, 0, fmt.Errorf("kernel doesn't support testing program type %s: %w", p.Type(), ErrNotSupported)
 		}
 
 		return 0, nil, 0, fmt.Errorf("can't run test: %w", err)

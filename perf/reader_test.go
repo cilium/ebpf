@@ -435,6 +435,76 @@ func BenchmarkReader(b *testing.B) {
 	}
 }
 
+func BenchmarkUnmarshalSlice(b *testing.B) {
+	prog, events := mustOutputSamplesProg(b, 80)
+	defer prog.Close()
+	defer events.Close()
+
+	rd, err := NewReader(events, 4096)
+	if err != nil {
+		b.Fatal(err)
+	}
+	defer rd.Close()
+
+	buf := make([]byte, 14)
+	// TODO why must this be 84 bytes and not 80 bytes like the sample size provided above
+	readBuf := make([]byte, 84)
+
+	b.ResetTimer()
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		testProg(b, prog, buf)
+		if _, _, err = rd.Unmarshal(&readBuf); err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+type simpleSample struct {
+	a uint32
+	b uint32
+}
+
+func (s *simpleSample) UnmarshalBinary(b []byte) error {
+	s.a = internal.NativeEndian.Uint32(b[0:4])
+	s.b = internal.NativeEndian.Uint32(b[4:8])
+	return nil
+}
+
+func BenchmarkUnmarshalerSimple(b *testing.B) {
+	prog, events := mustOutputSamplesProg(b, 80)
+	defer prog.Close()
+	defer events.Close()
+
+	rd, err := NewReader(events, 4096)
+	if err != nil {
+		b.Fatal(err)
+	}
+	defer rd.Close()
+
+	buf := make([]byte, 14)
+	s := simpleSample{}
+
+	b.ResetTimer()
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		testProg(b, prog, buf)
+		if _, _, err = rd.Unmarshal(&s); err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+func testProg(b *testing.B, prog *ebpf.Program, buf []byte) {
+	b.Helper()
+	ret, _, err := prog.Test(buf)
+	if err != nil {
+		b.Fatal(err)
+	} else if errno := syscall.Errno(-int32(ret)); errno != 0 && errno != unix.ENOSPC {
+		b.Fatal("Expected 0 as return value, got", errno)
+	}
+}
+
 // This exists just to make the example below nicer.
 func bpfPerfEventOutputProgram() (*ebpf.Program, *ebpf.Map) {
 	prog, events, err := outputSamplesProg(5)

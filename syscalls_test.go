@@ -54,3 +54,7 @@ func TestHaveInnerMaps(t *testing.T) {
 func TestHaveProbeReadKernel(t *testing.T) {
 	testutils.CheckFeatureTest(t, haveProbeReadKernel)
 }
+
+func TestHaveProgAttachType(t *testing.T) {
+	testutils.CheckFeatureTest(t, haveProgAttachType)
+}

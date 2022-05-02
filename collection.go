@@ -19,13 +19,15 @@ type CollectionOptions struct {
 	Maps     MapOptions
 	Programs ProgramOptions
 
-	// MapReplacements defines a set of maps that will be used
-	// instead of creating new ones when loading the object. The
-	// maps' specs should be compatible and there must exist a map
-	// in CollectionSpec.Maps for each map in MapReplacements.
-	// MapReplacements are cloned before being used in the
-	// Collection, so the user can Close() them if not needed
-	// anymore.
+	// MapReplacements takes a set of Maps that will be used instead of
+	// creating new ones when loading the CollectionSpec.
+	//
+	// For each given Map, there must be a corresponding MapSpec in
+	// CollectionSpec.Maps, and its type, key/value size, max entries and flags
+	// must match the values of the MapSpec.
+	//
+	// The given Maps are Clone()d before being used in the Collection, so the
+	// caller can Close() them freely when they are no longer needed.
 	MapReplacements map[string]*Map
 }
 

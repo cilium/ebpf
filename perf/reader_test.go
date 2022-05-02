@@ -58,6 +58,25 @@ func TestPerfReader(t *testing.T) {
 	if record.CPU < 0 {
 		t.Error("Record has invalid CPU number")
 	}
+
+	// Test Unmarshal to slice
+	ret, _, err = prog.Test(make([]byte, 14))
+	if errno := syscall.Errno(-int32(ret)); errno != 0 {
+		t.Fatal("Expected 0 as return value, got", errno)
+	}
+
+	readBuf := make([]byte, 12)
+	cpu, lost, err := rd.Unmarshal(readBuf)
+	if !bytes.Equal(record.RawSample, want) {
+		t.Log(record.RawSample)
+		t.Error("Unmarshaled sample doesn't match expected output")
+	}
+	if cpu < 0 {
+		t.Error("Unmarshal has invalid CPU number")
+	}
+	if lost > 0 {
+		t.Error("Unmarshal lost record count is invalid")
+	}
 }
 
 func outputSamplesProg(sampleSizes ...int) (*ebpf.Program, *ebpf.Map, error) {
@@ -182,12 +201,13 @@ func TestPerfReaderLostSample(t *testing.T) {
 	//
 	//  8 (perf_event_header) + 4 (size) + 180 (payload)
 	const (
-		eventSize = 192
+		payloadSize = 180
 	)
 
 	var (
+		eventSize = binary.Size(perfEventHeader{}) + binary.Size(uint32(0)) + payloadSize
 		pageSize  = os.Getpagesize()
-		maxEvents = (pageSize / eventSize)
+		maxEvents = pageSize / eventSize
 	)
 	if remainder := pageSize % eventSize; remainder != 64 && remainder != 128 {
 		// Page size isn't 2^(6+m), m >= 0
@@ -198,7 +218,7 @@ func TestPerfReaderLostSample(t *testing.T) {
 	// Fill the ring with the maximum number of output_large events that will fit,
 	// and generate a lost event by writing an additional event.
 	for i := 0; i < maxEvents+1; i++ {
-		sampleSizes = append(sampleSizes, 180)
+		sampleSizes = append(sampleSizes, payloadSize)
 	}
 
 	// Generate a small event to trigger the lost record
@@ -224,10 +244,10 @@ func TestPerfReaderLostSample(t *testing.T) {
 		t.Fatal("Expected 0 as return value, got", errno)
 	}
 
-	for range sampleSizes {
+	for _, size := range sampleSizes {
 		record, err := rd.Read()
 		if err != nil {
-			t.Fatal(err)
+			t.Fatalf("error reading sample of size %d: %s", size, err)
 		}
 
 		if record.RawSample == nil && record.LostSamples != 1 {
@@ -293,8 +313,8 @@ func TestReadRecord(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-
-	_, err = readRecord(&buf, 0)
+	rdr := Reader{readBufs: make([][]byte, 1)}
+	_, err = rdr.readRecord(&buf, 0)
 	if !IsUnknownEvent(err) {
 		t.Error("readRecord should return unknown event error, got", err)
 	}

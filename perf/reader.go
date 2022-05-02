@@ -1,6 +1,8 @@
 package perf
 
 import (
+	"bytes"
+	"encoding"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -27,6 +29,37 @@ type perfEventHeader struct {
 	Size uint16
 }
 
+func (h *perfEventHeader) UnmarshalBinary(buf []byte) error {
+	h.Type = internal.NativeEndian.Uint32(buf[0:4])
+	// these fields are currently unused
+	//h.Misc = internal.NativeEndian.Uint16(buf[4:6])
+	//h.Size = internal.NativeEndian.Uint16(buf[6:8])
+	return nil
+}
+
+var perfEventHeaderSize = binary.Size(perfEventHeader{})
+var perfEventHeaderPool = sync.Pool{
+	New: func() interface{} {
+		buf := make([]byte, perfEventHeaderSize)
+		return &buf
+	},
+}
+
+type bufferSize uint32
+
+var bufferSizeSize = binary.Size(bufferSize(0))
+var bufferSizePool = sync.Pool{
+	New: func() interface{} {
+		buf := make([]byte, bufferSizeSize)
+		return &buf
+	},
+}
+
+func (b *bufferSize) UnmarshalBinary(buf []byte) error {
+	*b = bufferSize(internal.NativeEndian.Uint32(buf))
+	return nil
+}
+
 func cpuForEvent(event *unix.EpollEvent) int {
 	return int(event.Pad)
 }
@@ -48,20 +81,15 @@ type Record struct {
 }
 
 // NB: Has to be preceded by a call to ring.loadHead.
-func readRecordFromRing(ring *perfEventRing) (Record, error) {
+func (pr *Reader) readRecordFromRing(ring *perfEventRing) (Record, error) {
 	defer ring.writeTail()
-	return readRecord(ring, ring.cpu)
+	return pr.readRecord(ring, ring.cpu)
 }
 
-func readRecord(rd io.Reader, cpu int) (Record, error) {
+func (pr *Reader) readRecord(rd io.Reader, cpu int) (Record, error) {
 	var header perfEventHeader
-	err := binary.Read(rd, internal.NativeEndian, &header)
-	if err == io.EOF {
-		return Record{}, errEOR
-	}
-
-	if err != nil {
-		return Record{}, fmt.Errorf("can't read event header: %v", err)
+	if err := readHeader(rd, &header); err != nil {
+		return Record{}, err
 	}
 
 	switch header.Type {
@@ -70,12 +98,53 @@ func readRecord(rd io.Reader, cpu int) (Record, error) {
 		return Record{CPU: cpu, LostSamples: lost}, err
 
 	case unix.PERF_RECORD_SAMPLE:
-		sample, err := readRawSample(rd)
-		return Record{CPU: cpu, RawSample: sample}, err
+		// This must match 'struct perf_event_sample in kernel sources.
+		var size bufferSize
+		if err := readSampleSize(rd, &size); err != nil {
+			return Record{}, err
+		}
+		if len(pr.readBufs[cpu]) < int(size) {
+			pr.readBufs[cpu] = make([]byte, size)
+		}
+		buf := pr.readBufs[cpu][:size]
+		if _, err := io.ReadFull(rd, buf); err != nil {
+			return Record{}, fmt.Errorf("can't read sample: %v", err)
+		}
+		return Record{CPU: cpu, RawSample: buf}, nil
 
 	default:
 		return Record{}, &unknownEventError{header.Type}
 	}
+}
+
+func readHeader(rd io.Reader, header *perfEventHeader) error {
+	headerSlicePtr := perfEventHeaderPool.Get().(*[]byte)
+	defer perfEventHeaderPool.Put(headerSlicePtr)
+
+	headerSlice := *headerSlicePtr
+	if _, err := io.ReadFull(rd, headerSlice); err != nil {
+		if err == io.EOF {
+			return errEOR
+		}
+		return fmt.Errorf("can't read event header: %v", err)
+	}
+	if err := header.UnmarshalBinary(headerSlice); err != nil {
+		return fmt.Errorf("can't unmarshal event header: %v", err)
+	}
+	return nil
+}
+
+func readSampleSize(rd io.Reader, size *bufferSize) error {
+	sizeSlicePtr := bufferSizePool.Get().(*[]byte)
+	defer bufferSizePool.Put(sizeSlicePtr)
+	sizeSlice := *sizeSlicePtr
+	if _, err := io.ReadFull(rd, sizeSlice); err != nil {
+		return fmt.Errorf("can't read sample size: %v", err)
+	}
+	if err := size.UnmarshalBinary(sizeSlice); err != nil {
+		return fmt.Errorf("can't unmarshal event header: %v", err)
+	}
+	return nil
 }
 
 func readLostRecords(rd io.Reader) (uint64, error) {
@@ -91,20 +160,6 @@ func readLostRecords(rd io.Reader) (uint64, error) {
 	}
 
 	return lostHeader.Lost, nil
-}
-
-func readRawSample(rd io.Reader) ([]byte, error) {
-	// This must match 'struct perf_event_sample in kernel sources.
-	var size uint32
-	if err := binary.Read(rd, internal.NativeEndian, &size); err != nil {
-		return nil, fmt.Errorf("can't read sample size: %v", err)
-	}
-
-	data := make([]byte, int(size))
-	if _, err := io.ReadFull(rd, data); err != nil {
-		return nil, fmt.Errorf("can't read sample: %v", err)
-	}
-	return data, nil
 }
 
 // Reader allows reading bpf_perf_event_output
@@ -123,6 +178,7 @@ type Reader struct {
 	rings       []*perfEventRing
 	epollEvents []unix.EpollEvent
 	epollRings  []*perfEventRing
+	readBufs    [][]byte
 
 	// pauseFds are a copy of the fds in 'rings', protected by 'pauseMu'.
 	// These allow Pause/Resume to be executed independently of any ongoing
@@ -216,6 +272,7 @@ func NewReaderWithOptions(array *ebpf.Map, perCPUBuffer int, opts ReaderOptions)
 		epollEvents: make([]unix.EpollEvent, len(rings)),
 		epollRings:  make([]*perfEventRing, 0, len(rings)),
 		pauseFds:    pauseFds,
+		readBufs:    make([][]byte, nCPU),
 	}
 	if err = pr.Resume(); err != nil {
 		return nil, err
@@ -255,6 +312,53 @@ func (pr *Reader) Close() error {
 	return nil
 }
 
+var bytesReaderPool = sync.Pool{
+	New: func() interface{} {
+		return new(bytes.Reader)
+	},
+}
+
+// Unmarshal the next record from the perf ring buffer.
+//
+// The function blocks until there are at least Watermark bytes in one
+// of the per CPU buffers. Records from buffers below the Watermark
+// are not returned.
+//
+// If the object implements the `encoding.BinaryUnmarshaler` interface,
+// `UnmarshalBinary` will be called on it.
+//
+// Calling Close interrupts the function.
+func (pr *Reader) Unmarshal(valueOut interface{}) (cpu int, lost uint64, err error) {
+	record, err := pr.read()
+	if err != nil {
+		return 0, 0, err
+	}
+	if record.LostSamples > 0 || len(record.RawSample) == 0 {
+		return record.CPU, record.LostSamples, nil
+	}
+
+	err = unmarshalBytes(valueOut, record.RawSample)
+	return record.CPU, 0, err
+}
+
+func unmarshalBytes(data interface{}, buf []byte) error {
+	switch value := data.(type) {
+	case encoding.BinaryUnmarshaler:
+		return value.UnmarshalBinary(buf)
+	case *[]byte:
+		if len(*value) < len(buf) {
+			return fmt.Errorf("provided byte slice is too small. expected %d", len(buf))
+		}
+		copy(*value, buf)
+		return nil
+	default:
+		rd := bytesReaderPool.Get().(*bytes.Reader)
+		rd.Reset(buf)
+		defer bytesReaderPool.Put(rd)
+		return binary.Read(rd, internal.NativeEndian, value)
+	}
+}
+
 // Read the next record from the perf ring buffer.
 //
 // The function blocks until there are at least Watermark bytes in one
@@ -266,6 +370,20 @@ func (pr *Reader) Close() error {
 //
 // Calling Close interrupts the function.
 func (pr *Reader) Read() (Record, error) {
+	record, err := pr.read()
+	if err != nil {
+		return Record{}, err
+	}
+	// maintain previous behavior and copy the per-CPU buffer contents to new slice
+	if len(record.RawSample) > 0 {
+		tmp := make([]byte, len(record.RawSample))
+		copy(tmp, record.RawSample)
+		record.RawSample = tmp
+	}
+	return record, nil
+}
+
+func (pr *Reader) read() (Record, error) {
 	pr.mu.Lock()
 	defer pr.mu.Unlock()
 
@@ -294,7 +412,7 @@ func (pr *Reader) Read() (Record, error) {
 		// Start at the last available event. The order in which we
 		// process them doesn't matter, and starting at the back allows
 		// resizing epollRings to keep track of processed rings.
-		record, err := readRecordFromRing(pr.epollRings[len(pr.epollRings)-1])
+		record, err := pr.readRecordFromRing(pr.epollRings[len(pr.epollRings)-1])
 		if err == errEOR {
 			// We've emptied the current ring buffer, process
 			// the next one.

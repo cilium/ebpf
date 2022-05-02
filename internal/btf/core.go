@@ -315,10 +315,16 @@ func coreCalculateFixups(byteOrder binary.ByteOrder, local Type, targets []Type,
 
 	if bestFixups == nil {
 		// Nothing at all matched, probably because there are no suitable
-		// targets at all. Poison everything!
+		// targets at all.
+		//
+		// Poison everything except checksForExistence.
 		bestFixups = make([]COREFixup, len(relos))
 		for i, relo := range relos {
-			bestFixups[i] = COREFixup{kind: relo.kind, poison: true}
+			if relo.kind.checksForExistence() {
+				bestFixups[i] = COREFixup{kind: relo.kind, local: 1, target: 0}
+			} else {
+				bestFixups[i] = COREFixup{kind: relo.kind, poison: true}
+			}
 		}
 	}
 

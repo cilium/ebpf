@@ -19,13 +19,15 @@ type CollectionOptions struct {
 	Maps     MapOptions
 	Programs ProgramOptions
 
-	// MapReplacements defines a set of maps that will be used
-	// instead of creating new ones when loading the object. The
-	// maps' specs should be compatible and there must exist a map
-	// in CollectionSpec.Maps for each map in MapReplacements.
-	// MapReplacements are cloned before being used in the
-	// Collection, so the user can Close() them if not needed
-	// anymore.
+	// MapReplacements takes a set of Maps that will be used instead of
+	// creating new ones when loading the CollectionSpec.
+	//
+	// For each given Map, there must be a corresponding MapSpec in
+	// CollectionSpec.Maps, and its type, key/value size, max entries and flags
+	// must match the values of the MapSpec.
+	//
+	// The given Maps are Clone()d before being used in the Collection, so the
+	// caller can Close() them freely when they are no longer needed.
 	MapReplacements map[string]*Map
 }
 
@@ -73,6 +75,9 @@ func (cs *CollectionSpec) Copy() *CollectionSpec {
 // when calling NewCollection. Any named maps are removed from CollectionSpec.Maps.
 //
 // Returns an error if a named map isn't used in at least one program.
+//
+// Deprecated: Pass CollectionOptions.MapReplacements when loading the Collection
+// instead.
 func (cs *CollectionSpec) RewriteMaps(maps map[string]*Map) error {
 	for symbol, m := range maps {
 		// have we seen a program that uses this symbol / map
@@ -400,9 +405,14 @@ func newCollectionLoader(coll *CollectionSpec, opts *CollectionOptions) (*collec
 	}
 
 	// Check for existing MapSpecs in the CollectionSpec for all provided replacement maps.
-	for name := range opts.MapReplacements {
-		if _, ok := coll.Maps[name]; !ok {
+	for name, m := range opts.MapReplacements {
+		spec, ok := coll.Maps[name]
+		if !ok {
 			return nil, fmt.Errorf("replacement map %s not found in CollectionSpec", name)
+		}
+
+		if err := spec.checkCompatibility(m); err != nil {
+			return nil, fmt.Errorf("using replacement map %s: %w", spec.Name, err)
 		}
 	}
 
@@ -449,9 +459,6 @@ func (cl *collectionLoader) loadMap(mapName string) (*Map, error) {
 	}
 
 	if replaceMap, ok := cl.opts.MapReplacements[mapName]; ok {
-		if err := mapSpec.checkCompatibility(replaceMap); err != nil {
-			return nil, fmt.Errorf("use replacement map %s: %w", mapSpec.Name, err)
-		}
 		// Clone the map to avoid closing user's map later on.
 		m, err := replaceMap.Clone()
 		if err != nil {

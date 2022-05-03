@@ -151,8 +151,8 @@ func TestTypeByName(t *testing.T) {
 			if u8int.Encoding != 0 {
 				t.Fatalf("incorrect encoding of an __u8 int: expected: 0 actual: %x", u8int.Encoding)
 			}
-			if u8int.OffsetBits != 0 {
-				t.Fatalf("incorrect int offset of an __u8 int: expected: 0 actual: %d", u8int.OffsetBits)
+			if u8int.Offset != 0 {
+				t.Fatalf("incorrect int offset of an __u8 int: expected: 0 actual: %d", u8int.Offset)
 			}
 			break
 		}

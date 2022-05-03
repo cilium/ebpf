@@ -25,7 +25,7 @@ func TestCOREAreTypesCompatible(t *testing.T) {
 		{&Enum{Name: "a"}, &Enum{Name: "b"}, true},
 		{&Fwd{Name: "a"}, &Fwd{Name: "b"}, true},
 		{&Int{Name: "a", Size: 2}, &Int{Name: "b", Size: 4}, true},
-		{&Int{OffsetBits: 1}, &Int{}, false},
+		{&Int{Offset: 1}, &Int{}, false},
 		{&Pointer{Target: &Void{}}, &Pointer{Target: &Void{}}, true},
 		{&Pointer{Target: &Void{}}, &Void{}, false},
 		{&Array{Type: &Void{}}, &Array{Type: &Void{}}, true},
@@ -99,7 +99,7 @@ func TestCOREAreMembersCompatible(t *testing.T) {
 		{&Fwd{Name: "a"}, &Fwd{Name: "a___foo"}, true},
 		{&Fwd{Name: "a"}, &Fwd{Name: ""}, true},
 		{&Int{Name: "a", Size: 2}, &Int{Name: "b", Size: 4}, true},
-		{&Int{OffsetBits: 1}, &Int{}, false},
+		{&Int{Offset: 1}, &Int{}, false},
 		{&Pointer{Target: &Void{}}, &Pointer{Target: &Void{}}, true},
 		{&Pointer{Target: &Void{}}, &Void{}, false},
 		{&Array{Type: &Int{Size: 1}}, &Array{Type: &Int{Encoding: Signed}}, true},
@@ -232,22 +232,22 @@ func TestCOREFindField(t *testing.T) {
 	u16 := &Int{Size: 2}
 	u32 := &Int{Size: 4}
 	aFields := []Member{
-		{Name: "foo", Type: ptr, OffsetBits: 8},
-		{Name: "bar", Type: u16, OffsetBits: 16},
-		{Name: "baz", Type: u32, OffsetBits: 32, BitfieldSize: 3},
-		{Name: "quux", Type: u32, OffsetBits: 35, BitfieldSize: 10},
-		{Name: "quuz", Type: u32, OffsetBits: 45, BitfieldSize: 8},
+		{Name: "foo", Type: ptr, Offset: 8},
+		{Name: "bar", Type: u16, Offset: 16},
+		{Name: "baz", Type: u32, Offset: 32, BitfieldSize: 3},
+		{Name: "quux", Type: u32, Offset: 35, BitfieldSize: 10},
+		{Name: "quuz", Type: u32, Offset: 45, BitfieldSize: 8},
 	}
 	bFields := []Member{
-		{Name: "foo", Type: ptr, OffsetBits: 16},
-		{Name: "bar", Type: u32, OffsetBits: 8},
-		{Name: "other", OffsetBits: 4},
+		{Name: "foo", Type: ptr, Offset: 16},
+		{Name: "bar", Type: u32, Offset: 8},
+		{Name: "other", Offset: 4},
 		// baz is separated out from the other bitfields
-		{Name: "baz", Type: u32, OffsetBits: 64, BitfieldSize: 3},
+		{Name: "baz", Type: u32, Offset: 64, BitfieldSize: 3},
 		// quux's type changes u32->u16
-		{Name: "quux", Type: u16, OffsetBits: 96, BitfieldSize: 10},
+		{Name: "quux", Type: u16, Offset: 96, BitfieldSize: 10},
 		// quuz becomes a normal field
-		{Name: "quuz", Type: u16, OffsetBits: 112},
+		{Name: "quuz", Type: u16, Offset: 112},
 	}
 
 	aStruct := &Struct{Members: aFields, Size: 48}
@@ -327,8 +327,8 @@ func TestCOREFindField(t *testing.T) {
 		return uint32(sz)
 	}
 
-	anon := func(t Type, offset uint32) []Member {
-		return []Member{{Type: t, OffsetBits: offset}}
+	anon := func(t Type, offset Bits) []Member {
+		return []Member{{Type: t, Offset: offset}}
 	}
 
 	anonStruct := func(m ...Member) Member {

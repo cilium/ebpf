@@ -90,8 +90,6 @@ func TestCORERelocationRead(t *testing.T) {
 		}
 		defer tgt.Close()
 
-		testutils.SkipOnOldKernel(t, "4.16", "bpf2bpf calls")
-
 		for _, progSpec := range spec.Programs {
 			t.Run(progSpec.Name, func(t *testing.T) {
 				if _, err := tgt.Seek(0, io.SeekStart); err != nil {
@@ -101,6 +99,7 @@ func TestCORERelocationRead(t *testing.T) {
 				prog, err := ebpf.NewProgramWithOptions(progSpec, ebpf.ProgramOptions{
 					TargetBTF: tgt,
 				})
+				testutils.SkipIfNotSupported(t, err)
 				if err != nil {
 					t.Fatal("Load program:", err)
 				}

@@ -41,8 +41,8 @@ func TestGoTypeDeclaration(t *testing.T) {
 				Name: "field padding",
 				Size: 16,
 				Members: []Member{
-					{Name: "frob", Type: &Int{Size: 4}, OffsetBits: 0},
-					{Name: "foo", Type: &Int{Size: 8}, OffsetBits: 8 * 8},
+					{Name: "frob", Type: &Int{Size: 4}, Offset: 0},
+					{Name: "foo", Type: &Int{Size: 8}, Offset: 8 * 8},
 				},
 			},
 			"type t struct { frob uint32; _ [4]byte; foo uint64; }",
@@ -52,8 +52,8 @@ func TestGoTypeDeclaration(t *testing.T) {
 				Name: "end padding",
 				Size: 16,
 				Members: []Member{
-					{Name: "foo", Type: &Int{Size: 8}, OffsetBits: 0},
-					{Name: "frob", Type: &Int{Size: 4}, OffsetBits: 8 * 8},
+					{Name: "foo", Type: &Int{Size: 8}, Offset: 0},
+					{Name: "frob", Type: &Int{Size: 4}, Offset: 8 * 8},
 				},
 			},
 			"type t struct { foo uint64; frob uint32; _ [4]byte; }",
@@ -63,8 +63,8 @@ func TestGoTypeDeclaration(t *testing.T) {
 				Name: "bitfield",
 				Size: 8,
 				Members: []Member{
-					{Name: "foo", Type: &Int{Size: 4}, OffsetBits: 0, BitfieldSize: 1},
-					{Name: "frob", Type: &Int{Size: 4}, OffsetBits: 4 * 8},
+					{Name: "foo", Type: &Int{Size: 4}, Offset: 0, BitfieldSize: 1},
+					{Name: "frob", Type: &Int{Size: 4}, Offset: 4 * 8},
 				},
 			},
 			"type t struct { _ [4]byte /* unsupported bitfield */; frob uint32; }",
@@ -79,11 +79,11 @@ func TestGoTypeDeclaration(t *testing.T) {
 						Type: &Struct{
 							Size: 4,
 							Members: []Member{
-								{Name: "bar", Type: &Int{Size: 4}, OffsetBits: 0},
+								{Name: "bar", Type: &Int{Size: 4}, Offset: 0},
 							},
 						},
 					},
-					{Name: "frob", Type: &Int{Size: 4}, OffsetBits: 4 * 8},
+					{Name: "frob", Type: &Int{Size: 4}, Offset: 4 * 8},
 				},
 			},
 			"type t struct { foo struct { bar uint32; }; frob uint32; }",
@@ -98,8 +98,8 @@ func TestGoTypeDeclaration(t *testing.T) {
 						Type: &Union{
 							Size: 4,
 							Members: []Member{
-								{Name: "foo", Type: &Int{Size: 4}, OffsetBits: 0},
-								{Name: "bar", Type: &Int{Size: 4}, OffsetBits: 0},
+								{Name: "foo", Type: &Int{Size: 4}, Offset: 0},
+								{Name: "bar", Type: &Int{Size: 4}, Offset: 0},
 							},
 						},
 					},

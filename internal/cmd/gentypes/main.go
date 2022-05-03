@@ -628,7 +628,7 @@ func flattenAnon(s *btf.Struct) error {
 		}
 
 		for j := range cs.Members {
-			cs.Members[j].OffsetBits += m.OffsetBits
+			cs.Members[j].Offset += m.Offset
 		}
 
 		newMembers := make([]btf.Member, 0, len(s.Members)+len(cs.Members)-1)
@@ -655,7 +655,7 @@ func truncateAfter(name string) patch {
 			}
 
 			s.Members = s.Members[:i+1]
-			s.Size = (m.OffsetBits / 8) + uint32(size)
+			s.Size = m.Offset.Bytes() + uint32(size)
 			return nil
 		}
 
@@ -699,7 +699,7 @@ func replaceUnionWithBytes(name string) patch {
 						Type:   &btf.Int{Size: 1},
 						Nelems: u.Size,
 					},
-					OffsetBits:   s.Members[i].OffsetBits,
+					Offset:       s.Members[i].Offset,
 					BitfieldSize: s.Members[i].BitfieldSize,
 				}
 				return nil

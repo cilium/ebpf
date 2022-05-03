@@ -110,16 +110,17 @@ func (ie IntEncoding) String() string {
 }
 
 // Int is an integer of a given length.
+//
+// See https://www.kernel.org/doc/html/latest/bpf/btf.html#btf-kind-int
 type Int struct {
 	Name string
 
 	// The size of the integer in bytes.
 	Size     uint32
 	Encoding IntEncoding
-	// OffsetBits is the starting bit offset. Currently always 0.
-	// See https://www.kernel.org/doc/html/latest/bpf/btf.html#btf-kind-int
-	OffsetBits uint32
-	Bits       byte
+	// Offset is the starting bit offset. Currently always 0.
+	Offset Bits
+	Bits   Bits
 }
 
 func (i *Int) Format(fs fmt.State, verb rune) {
@@ -142,7 +143,7 @@ func (i *Int) copy() Type {
 }
 
 func (i *Int) isBitfield() bool {
-	return i.OffsetBits > 0
+	return i.Offset > 0
 }
 
 // Pointer is a pointer to another type.
@@ -259,15 +260,22 @@ var (
 	_ composite = (*Union)(nil)
 )
 
+// A value in bits.
+type Bits uint32
+
+// Bytes converts a bit value into bytes.
+func (b Bits) Bytes() uint32 {
+	return uint32(b / 8)
+}
+
 // Member is part of a Struct or Union.
 //
 // It is not a valid Type.
 type Member struct {
-	Name string
-	Type Type
-	// OffsetBits is the bit offset of this member.
-	OffsetBits   uint32
-	BitfieldSize uint32
+	Name         string
+	Type         Type
+	Offset       Bits
+	BitfieldSize Bits
 }
 
 // Enum lists possible values.
@@ -827,12 +835,12 @@ func inflateRawTypes(rawTypes []rawType, rawStrings *stringTable) ([]Type, error
 				return nil, fmt.Errorf("can't get name for member %d: %w", i, err)
 			}
 			m := Member{
-				Name:       name,
-				OffsetBits: btfMember.Offset,
+				Name:   name,
+				Offset: Bits(btfMember.Offset),
 			}
 			if kindFlag {
-				m.BitfieldSize = btfMember.Offset >> 24
-				m.OffsetBits &= 0xffffff
+				m.BitfieldSize = Bits(btfMember.Offset >> 24)
+				m.Offset &= 0xffffff
 			}
 			members = append(members, m)
 		}

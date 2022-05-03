@@ -893,14 +893,8 @@ func coreAreTypesCompatible(localType Type, targetType Type) error {
 		}
 
 		switch lv := (localType).(type) {
-		case *Void, *Struct, *Union, *Enum, *Fwd:
+		case *Void, *Struct, *Union, *Enum, *Fwd, *Int:
 			// Nothing to do here
-
-		case *Int:
-			tv := targetType.(*Int)
-			if lv.isBitfield() || tv.isBitfield() {
-				return fmt.Errorf("bitfield: %w", errImpossibleRelocation)
-			}
 
 		case *Pointer, *Array:
 			depth++
@@ -983,7 +977,7 @@ func coreAreMembersCompatible(localType Type, targetType Type) error {
 	}
 
 	switch lv := localType.(type) {
-	case *Array, *Pointer, *Float:
+	case *Array, *Pointer, *Float, *Int:
 		return nil
 
 	case *Enum:
@@ -993,13 +987,6 @@ func coreAreMembersCompatible(localType Type, targetType Type) error {
 	case *Fwd:
 		tv := targetType.(*Fwd)
 		return doNamesMatch(lv.Name, tv.Name)
-
-	case *Int:
-		tv := targetType.(*Int)
-		if lv.isBitfield() || tv.isBitfield() {
-			return fmt.Errorf("bitfield: %w", errImpossibleRelocation)
-		}
-		return nil
 
 	default:
 		return fmt.Errorf("type %s: %w", localType, ErrNotSupported)

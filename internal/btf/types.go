@@ -127,20 +127,10 @@ type Int struct {
 	// The size of the integer in bytes.
 	Size     uint32
 	Encoding IntEncoding
-	// Offset is the starting bit offset. Currently always 0.
-	Offset Bits
-	Bits   Bits
 }
 
 func (i *Int) Format(fs fmt.State, verb rune) {
-	extra := []interface{}{
-		i.Encoding,
-		"size=", i.Size * 8,
-	}
-	if i.Bits > 0 {
-		extra = append(extra, "bits=", i.Bits)
-	}
-	formatType(fs, verb, i, extra...)
+	formatType(fs, verb, i, i.Encoding, "size=", i.Size*8)
 }
 
 func (i *Int) TypeName() string { return i.Name }
@@ -149,10 +139,6 @@ func (i *Int) walk(*typeDeque)  {}
 func (i *Int) copy() Type {
 	cpy := *i
 	return &cpy
-}
-
-func (i *Int) isBitfield() bool {
-	return i.Offset > 0
 }
 
 // Pointer is a pointer to another type.
@@ -844,6 +830,15 @@ func inflateRawTypes(rawTypes []rawType, rawStrings *stringTable) ([]Type, map[e
 		return nil
 	}
 
+	type bitfieldFixupDef struct {
+		id TypeID
+		m  *Member
+	}
+
+	var (
+		legacyBitfields = make(map[TypeID][2]Bits) // offset, size
+		bitfieldFixups  []bitfieldFixupDef
+	)
 	convertMembers := func(raw []btfMember, kindFlag bool) ([]Member, error) {
 		// NB: The fixup below relies on pre-allocating this array to
 		// work, since otherwise append might re-allocate members.
@@ -853,18 +848,48 @@ func inflateRawTypes(rawTypes []rawType, rawStrings *stringTable) ([]Type, map[e
 			if err != nil {
 				return nil, fmt.Errorf("can't get name for member %d: %w", i, err)
 			}
-			m := Member{
+
+			members = append(members, Member{
 				Name:   name,
 				Offset: Bits(btfMember.Offset),
-			}
+			})
+
+			m := &members[i]
+			fixup(raw[i].Type, &m.Type)
+
 			if kindFlag {
 				m.BitfieldSize = Bits(btfMember.Offset >> 24)
 				m.Offset &= 0xffffff
+				// We ignore legacy bitfield definitions if the current composite
+				// is a new-style bitfield. This is kind of safe since offset and
+				// size on the type of the member must be zero if kindFlat is set
+				// according to spec.
+				continue
 			}
-			members = append(members, m)
-		}
-		for i := range members {
-			fixup(raw[i].Type, &members[i].Type)
+
+			// This may be a legacy bitfield, try to fix it up.
+			data, ok := legacyBitfields[raw[i].Type]
+			if ok {
+				// Bingo!
+				m.Offset += data[0]
+				m.BitfieldSize = data[1]
+				continue
+			}
+
+			if m.Type != nil {
+				// We couldn't find a legacy bitfield, but we know that the member's
+				// type has already been inflated. Hence we know that it can't be
+				// a legacy bitfield and there is nothing left to do.
+				continue
+			}
+
+			// We don't have fixup data, and the type we're pointing
+			// at hasn't been inflated yet. No choice but to defer
+			// the fixup.
+			bitfieldFixups = append(bitfieldFixups, bitfieldFixupDef{
+				raw[i].Type,
+				m,
+			})
 		}
 		return members, nil
 	}
@@ -884,8 +909,12 @@ func inflateRawTypes(rawTypes []rawType, rawStrings *stringTable) ([]Type, map[e
 
 		switch raw.Kind() {
 		case kindInt:
+			size := raw.Size()
 			encoding, offset, bits := intEncoding(*raw.data.(*uint32))
-			typ = &Int{id, name, raw.Size(), encoding, offset, bits}
+			if offset > 0 || bits.Bytes() != size {
+				legacyBitfields[id] = [2]Bits{offset, bits}
+			}
+			typ = &Int{id, name, size, encoding}
 
 		case kindPointer:
 			ptr := &Pointer{id, nil}
@@ -1029,6 +1058,15 @@ func inflateRawTypes(rawTypes []rawType, rawStrings *stringTable) ([]Type, map[e
 		}
 
 		*fixup.typ = types[i]
+	}
+
+	for _, bitfieldFixup := range bitfieldFixups {
+		data, ok := legacyBitfields[bitfieldFixup.id]
+		if ok {
+			// This is indeed a legacy bitfield, fix it up.
+			bitfieldFixup.m.Offset += data[0]
+			bitfieldFixup.m.BitfieldSize = data[1]
+		}
 	}
 
 	for _, assertion := range assertions {

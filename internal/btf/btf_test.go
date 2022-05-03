@@ -134,28 +134,38 @@ func TestTypeByName(t *testing.T) {
 		t.Fatal("multiple TypeByName calls for `iphdr` name do not return the same addresses")
 	}
 
-	for _, m := range iphdr1.Members {
-		if m.Name == "version" {
-			// __u8 is a typedef
-			td, ok := m.Type.(*Typedef)
-			if !ok {
-				t.Fatalf("version member of iphdr should be a __u8 typedef: actual: %T", m.Type)
-			}
-			u8int, ok := td.Type.(*Int)
-			if !ok {
-				t.Fatalf("__u8 typedef should point to an Int type: actual: %T", td.Type)
-			}
-			if u8int.Bits != 8 {
-				t.Fatalf("incorrect bit size of an __u8 int: expected: 8 actual: %d", u8int.Bits)
-			}
-			if u8int.Encoding != 0 {
-				t.Fatalf("incorrect encoding of an __u8 int: expected: 0 actual: %x", u8int.Encoding)
-			}
-			if u8int.Offset != 0 {
-				t.Fatalf("incorrect int offset of an __u8 int: expected: 0 actual: %d", u8int.Offset)
-			}
-			break
-		}
+	// Excerpt from linux/ip.h, https://elixir.bootlin.com/linux/latest/A/ident/iphdr
+	//
+	// struct iphdr {
+	// #if defined(__LITTLE_ENDIAN_BITFIELD)
+	//     __u8 ihl:4, version:4;
+	// #elif defined (__BIG_ENDIAN_BITFIELD)
+	//     __u8 version:4, ihl:4;
+	// #else
+	//     ...
+	// }
+	//
+	// The BTF we test against is for little endian.
+	m := iphdr1.Members[1]
+	if m.Name != "version" {
+		t.Fatal("Expected version as the second member, got", m.Name)
+	}
+	td, ok := m.Type.(*Typedef)
+	if !ok {
+		t.Fatalf("version member of iphdr should be a __u8 typedef: actual: %T", m.Type)
+	}
+	u8, ok := td.Type.(*Int)
+	if !ok {
+		t.Fatalf("__u8 typedef should point to an Int type: actual: %T", td.Type)
+	}
+	if m.BitfieldSize != 4 {
+		t.Fatalf("incorrect bitfield size: expected: 4 actual: %d", m.BitfieldSize)
+	}
+	if u8.Encoding != 0 {
+		t.Fatalf("incorrect encoding of an __u8 int: expected: 0 actual: %x", u8.Encoding)
+	}
+	if m.Offset != 4 {
+		t.Fatalf("incorrect bitfield offset: expected: 4 actual: %d", m.Offset)
 	}
 }
 

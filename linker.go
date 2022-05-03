@@ -169,6 +169,10 @@ func fixupAndValidate(insns asm.Instructions) error {
 			return fmt.Errorf("instruction %d: map %s: %w", iter.Index, ins.Reference(), asm.ErrUnsatisfiedMapReference)
 		}
 
+		if ins.IsFunctionReference() && haveBPFToBPFCalls() != nil {
+			return fmt.Errorf("kernel does not support bpf2bpf function calls: %w", haveBPFToBPFCalls())
+		}
+
 		fixupProbeReadKernel(ins)
 	}
 

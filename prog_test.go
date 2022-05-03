@@ -687,17 +687,12 @@ func TestProgramBindMap(t *testing.T) {
 }
 
 func TestProgramInstructions(t *testing.T) {
-	arr := createArray(t)
-	defer arr.Close()
-
 	name := "test_prog"
 	spec := &ProgramSpec{
 		Type: SocketFilter,
 		Name: name,
 		Instructions: asm.Instructions{
 			asm.LoadImm(asm.R0, -1, asm.DWord).WithSymbol(name),
-			asm.LoadMapPtr(asm.R1, arr.FD()),
-			asm.Mov.Imm32(asm.R0, 0),
 			asm.Return(),
 		},
 		License: "MIT",

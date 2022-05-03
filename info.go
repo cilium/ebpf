@@ -214,7 +214,10 @@ func (pi *ProgramInfo) Runtime() (time.Duration, bool) {
 // inspecting loaded programs for troubleshooting, dumping, etc.
 //
 // For example, map accesses are made to reference their kernel map IDs,
-// not the FDs they had when the program was inserted.
+// not the FDs they had when the program was inserted. Note that before
+// the introduction of bpf_insn_prepare_dump in kernel 4.16, xlated
+// instructions were not sanitized, making the output even less reusable
+// and less likely to round-trip or evaluate to the same program Tag.
 //
 // The first instruction is marked as a symbol using the Program's name.
 //

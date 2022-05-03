@@ -244,3 +244,32 @@ var haveProbeReadKernel = internal.FeatureTest("bpf_probe_read_kernel", "5.5", f
 	_ = fd.Close()
 	return nil
 })
+
+var haveProgAttachType = internal.FeatureTest("expected_attach_type", "4.17", func() error {
+	insns := asm.Instructions{
+		asm.Mov.Imm(asm.R0, 0),
+		asm.Return(),
+	}
+	buf := bytes.NewBuffer(make([]byte, 0, insns.Size()))
+	if err := insns.Marshal(buf, internal.NativeEndian); err != nil {
+		return err
+	}
+	bytecode := buf.Bytes()
+
+	fd, err := sys.ProgLoad(&sys.ProgLoadAttr{
+		ProgType: sys.ProgType(SocketFilter),
+		License:  sys.NewStringPointer("MIT"),
+		Insns:    sys.NewSlicePointer(bytecode),
+		InsnCnt:  uint32(len(bytecode) / asm.InstructionSize),
+		// Provide a non-zero value to trip check_uarg_tail_zero in the syscall handler.
+		ExpectedAttachType: sys.AttachType(1),
+	})
+	if errors.Is(err, unix.E2BIG) {
+		return internal.ErrNotSupported
+	}
+	if err != nil {
+		return err
+	}
+	_ = fd.Close()
+	return nil
+})

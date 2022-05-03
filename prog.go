@@ -58,7 +58,12 @@ type ProgramSpec struct {
 	Name string
 
 	// Type determines at which hook in the kernel a program will run.
-	Type       ProgramType
+	Type ProgramType
+
+	// AttachType of the program, needed to differentiate allowed context
+	// accesses in some newer program types like CGroupSockAddr.
+	//
+	// Ignored on kernels before 4.17.
 	AttachType AttachType
 
 	// Name of a kernel data structure or function to attach to. Its
@@ -265,15 +270,18 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions, handles *hand
 	}
 
 	attr := &sys.ProgLoadAttr{
-		ProgType:           sys.ProgType(spec.Type),
-		ProgFlags:          spec.Flags,
-		ExpectedAttachType: sys.AttachType(spec.AttachType),
-		License:            sys.NewStringPointer(spec.License),
-		KernVersion:        kv,
+		ProgType:    sys.ProgType(spec.Type),
+		ProgFlags:   spec.Flags,
+		License:     sys.NewStringPointer(spec.License),
+		KernVersion: kv,
 	}
 
 	if haveObjName() == nil {
 		attr.ProgName = sys.NewObjName(spec.Name)
+	}
+
+	if haveProgAttachType() == nil {
+		attr.ExpectedAttachType = sys.AttachType(spec.AttachType)
 	}
 
 	var err error

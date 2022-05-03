@@ -1,12 +1,15 @@
 package features
 
 import (
+	"errors"
 	"fmt"
 	"math"
 	"os"
 	"testing"
 
 	"github.com/cilium/ebpf"
+	"github.com/cilium/ebpf/asm"
+	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/testutils"
 )
 
@@ -90,5 +93,67 @@ func TestHaveProgTypeUnsupported(t *testing.T) {
 func TestHaveProgTypeInvalid(t *testing.T) {
 	if err := HaveProgType(ebpf.ProgramType(math.MaxUint32)); err != os.ErrInvalid {
 		t.Fatalf("Expected os.ErrInvalid but was: %v", err)
+	}
+}
+
+func TestHaveProgHelper(t *testing.T) {
+	type testCase struct {
+		prog     ebpf.ProgramType
+		helper   asm.BuiltinFunc
+		expected error
+		version  string
+	}
+
+	testCases := []testCase{
+		{ebpf.Kprobe, asm.FnMapLookupElem, nil, "3.19"},                     // helper added with torvalds/linux@d0003ec
+		{ebpf.Kprobe, asm.FnKtimeGetCoarseNs, ebpf.ErrNotSupported, "5.16"}, // helper removed for tracing progs with torvalds/linux@5e0bc30
+		{ebpf.SocketFilter, asm.FnKtimeGetCoarseNs, nil, "5.11"},            // helper added with torvalds/linux@d055126
+		{ebpf.SchedCLS, asm.FnSkbVlanPush, nil, "4.3"},                      // helper added with torvalds/linux@4e10df9
+		{ebpf.Kprobe, asm.FnSysBpf, ebpf.ErrNotSupported, "5.14"},           // helper added with torvalds/linux@79a7f8b
+		{ebpf.Syscall, asm.FnSysBpf, nil, "5.14"},                           // see above
+	}
+
+	for _, tc := range testCases {
+		minVersion := progTypeMinVersion[tc.prog]
+
+		progVersion, err := internal.NewVersion(minVersion)
+		if err != nil {
+			t.Fatalf("Could not read kernel version required for program: %v", err)
+		}
+
+		helperVersion, err := internal.NewVersion(tc.version)
+		if err != nil {
+			t.Fatalf("Could not read kernel version required for helper: %v", err)
+		}
+
+		if progVersion.Less(helperVersion) {
+			minVersion = tc.version
+		}
+
+		t.Run(fmt.Sprintf("%s/%s", tc.prog.String(), tc.helper.String()), func(t *testing.T) {
+			feature := fmt.Sprintf("helper %s for program type %s", tc.helper.String(), tc.prog.String())
+
+			testutils.SkipOnOldKernel(t, minVersion, feature)
+
+			err := HaveProgHelper(tc.prog, tc.helper)
+			if !errors.Is(err, tc.expected) {
+				t.Fatalf("%s/%s: %v", tc.prog.String(), tc.helper.String(), err)
+			}
+
+		})
+
+	}
+}
+
+func TestHaveProgHelperUnsupported(t *testing.T) {
+	pt := ebpf.SocketFilter
+	minVersion := progTypeMinVersion[pt]
+
+	feature := fmt.Sprintf("program type %s", pt.String())
+
+	testutils.SkipOnOldKernel(t, minVersion, feature)
+
+	if err := haveProgHelper(pt, asm.BuiltinFunc(math.MaxInt32)); err != ebpf.ErrNotSupported {
+		t.Fatalf("Expected ebpf.ErrNotSupported but was: %v", err)
 	}
 }

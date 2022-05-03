@@ -85,7 +85,7 @@ func mustCgroupFixtures(t *testing.T) (*os.File, *ebpf.Program) {
 
 	testutils.SkipIfNotSupported(t, haveProgAttach())
 
-	return testutils.CreateCgroup(t), mustLoadProgram(t, ebpf.CGroupSKB, ebpf.AttachCGroupInetEgress, "")
+	return testutils.CreateCgroup(t), mustLoadProgram(t, ebpf.CGroupSKB, 0, "")
 }
 
 func testLink(t *testing.T, link Link, prog *ebpf.Program) {

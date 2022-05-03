@@ -157,9 +157,8 @@ func marshalLineInfos(layout []reference) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-// fixupAndValidate is called by the ELF reader right before marshaling the
-// instruction stream. It performs last-minute adjustments to the program and
-// runs some sanity checks before sending it off to the kernel.
+// fixupAndValidate performs adjustments and sanity checks on the
+// program before it's sent off to the kernel.
 func fixupAndValidate(insns asm.Instructions) error {
 	iter := insns.Iterate()
 	for iter.Next() {

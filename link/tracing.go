@@ -61,7 +61,10 @@ func AttachFreplace(targetProg *ebpf.Program, name string, prog *ebpf.Program) (
 		}
 
 		target = targetProg.FD()
-		typeID = function.ID()
+		typeID, err = btfHandle.Spec().TypeID(function)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	link, err := AttachRawLink(RawLinkOptions{

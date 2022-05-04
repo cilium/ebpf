@@ -682,8 +682,10 @@ func (p *Program) testRun(opts TestOptions, reset func()) (uint32, []byte, time.
 	out := make([]byte, len(opts.Data)+outputPad)
 
 	ctx := new(bytes.Buffer)
-	if err := binary.Write(ctx, internal.NativeEndian, opts.Context); err != nil {
-		return 0, nil, 0, fmt.Errorf("cannot serialize context: %v", err)
+	if opts.Context != nil {
+		if err := binary.Write(ctx, internal.NativeEndian, opts.Context); err != nil {
+			return 0, nil, 0, fmt.Errorf("cannot serialize context: %v", err)
+		}
 	}
 
 	attr := sys.ProgRunAttr{

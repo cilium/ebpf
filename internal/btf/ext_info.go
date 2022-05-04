@@ -136,7 +136,7 @@ func MarshalExtInfos(insns asm.Instructions, typeID func(Type) (TypeID, error)) 
 	iter := insns.Iterate()
 	var fiBuf, liBuf bytes.Buffer
 	for iter.Next() {
-		if fn, ok := iter.Ins.Metadata.Get(funcInfoMeta{}).(*Func); ok {
+		if fn := FuncMetadata(iter.Ins); fn != nil {
 			fi := &funcInfo{
 				fn:     fn,
 				offset: iter.Offset,
@@ -608,6 +608,11 @@ type CORERelocation struct {
 	typ      Type
 	accessor coreAccessor
 	kind     coreKind
+}
+
+func CORERelocationMetadata(ins *asm.Instruction) *CORERelocation {
+	relo, _ := ins.Metadata.Get(coreRelocationMeta{}).(*CORERelocation)
+	return relo
 }
 
 type coreRelocationInfo struct {

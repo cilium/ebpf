@@ -255,7 +255,7 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions, handles *hand
 
 	var btfDisabled bool
 	if spec.BTF != nil {
-		if err := btf.CORERelocate(insns, spec.BTF, targetBTF); err != nil {
+		if err := applyRelocations(insns, spec.BTF, targetBTF); err != nil {
 			return nil, fmt.Errorf("apply CO-RE relocations: %w", err)
 		}
 

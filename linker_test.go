@@ -42,9 +42,8 @@ func TestFindReferences(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	testutils.SkipOnOldKernel(t, "4.16", "bpf2bpf calls")
-
 	prog, err := NewProgram(progs["entrypoint"])
+	testutils.SkipIfNotSupported(t, err)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -66,8 +65,6 @@ func TestForwardFunctionDeclaration(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		testutils.SkipOnOldKernel(t, "4.16", "bpf2bpf calls")
-
 		if coll.ByteOrder != internal.NativeEndian {
 			return
 		}
@@ -76,6 +73,7 @@ func TestForwardFunctionDeclaration(t *testing.T) {
 
 		// This program calls an unimplemented forward function declaration.
 		_, err = NewProgram(spec)
+		testutils.SkipIfNotSupported(t, err)
 		if !errors.Is(err, asm.ErrUnsatisfiedProgramReference) {
 			t.Fatal("Expected an error wrapping ErrUnsatisfiedProgramReference, got:", err)
 		}

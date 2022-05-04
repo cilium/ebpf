@@ -256,6 +256,10 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions, handles *hand
 		return nil, fmt.Errorf("can't load %s program on %s", spec.ByteOrder, internal.NativeEndian)
 	}
 
+	if err := fixupAndValidate(spec.Instructions); err != nil {
+		return nil, err
+	}
+
 	// Kernels before 5.0 (6c4fc209fcf9 "bpf: remove useless version check for prog load")
 	// require the version field to be set to the value of the KERNEL_VERSION
 	// macro for kprobe-type programs.
@@ -337,10 +341,6 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions, handles *hand
 	insns, err := core.Apply(spec.Instructions)
 	if err != nil {
 		return nil, fmt.Errorf("applying CO-RE fixups: %w", err)
-	}
-
-	if err := fixupAndValidate(insns); err != nil {
-		return nil, err
 	}
 
 	buf := bytes.NewBuffer(make([]byte, 0, insns.Size()))

@@ -157,9 +157,8 @@ func marshalLineInfos(layout []reference) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-// fixupAndValidate is called by the ELF reader right before marshaling the
-// instruction stream. It performs last-minute adjustments to the program and
-// runs some sanity checks before sending it off to the kernel.
+// fixupAndValidate performs adjustments and sanity checks on the
+// program before it's sent off to the kernel.
 func fixupAndValidate(insns asm.Instructions) error {
 	iter := insns.Iterate()
 	for iter.Next() {
@@ -168,6 +167,10 @@ func fixupAndValidate(insns asm.Instructions) error {
 		// Map load was tagged with a Reference, but does not contain a Map pointer.
 		if ins.IsLoadFromMap() && ins.Reference() != "" && ins.Map() == nil {
 			return fmt.Errorf("instruction %d: map %s: %w", iter.Index, ins.Reference(), asm.ErrUnsatisfiedMapReference)
+		}
+
+		if ins.IsFunctionReference() && haveBPFToBPFCalls() != nil {
+			return fmt.Errorf("kernel does not support bpf2bpf function calls: %w", haveBPFToBPFCalls())
 		}
 
 		fixupProbeReadKernel(ins)

@@ -119,12 +119,11 @@ func TestProgramRunWithOptions(t *testing.T) {
 		DataEnd: 14,
 	}
 	xdpOut := sys.XdpMd{}
-	ctx := (*(*[unsafe.Sizeof(xdp)]byte)(unsafe.Pointer(&xdp)))[:]
 	ctxOut := (*(*[unsafe.Sizeof(xdpOut)]byte)(unsafe.Pointer(&xdpOut)))[:]
 	opts := TestOptions{
-		In:     buf,
-		Ctx:    ctx,
-		CtxOut: ctxOut,
+		Data:       buf,
+		Context:    xdp,
+		ContextOut: ctxOut,
 	}
 	ret, _, err := prog.TestWithOptions(opts)
 	testutils.SkipIfNotSupported(t, err)
@@ -222,7 +221,7 @@ func TestProgramTestRunInterrupt(t *testing.T) {
 		// Block this thread in the BPF syscall, so that we can
 		// trigger EINTR by sending a signal.
 		opts := TestOptions{
-			In:     make([]byte, 14),
+			Data:   make([]byte, 14),
 			Repeat: math.MaxInt32,
 		}
 		_, _, _, err := prog.testRun(opts, func() {

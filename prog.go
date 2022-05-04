@@ -268,7 +268,7 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions, handles *hand
 		if handle != nil {
 			attr.ProgBtfFd = uint32(handle.FD())
 
-			fib, lib, err := btf.MarshalExtInfos(insns)
+			fib, lib, err := btf.MarshalExtInfos(insns, spec.BTF.TypeID)
 			if err != nil {
 				return nil, err
 			}
@@ -317,12 +317,12 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions, handles *hand
 			targetBTF = btfHandle.Spec()
 		}
 
-		target, err := resolveBTFType(targetBTF, spec.AttachTo, spec.Type, spec.AttachType)
+		targetID, err := resolveBTFType(targetBTF, spec.AttachTo, spec.Type, spec.AttachType)
 		if err != nil {
 			return nil, err
 		}
-		if target != nil {
-			attr.AttachBtfId = uint32(target.ID())
+		if targetID != 0 {
+			attr.AttachBtfId = uint32(targetID)
 		}
 		if spec.AttachTarget != nil {
 			attr.AttachProgFd = uint32(spec.AttachTarget.FD())
@@ -770,7 +770,7 @@ func (p *Program) BindMap(m *Map) error {
 	return sys.ProgBindMap(attr)
 }
 
-func resolveBTFType(spec *btf.Spec, name string, progType ProgramType, attachType AttachType) (btf.Type, error) {
+func resolveBTFType(spec *btf.Spec, name string, progType ProgramType, attachType AttachType) (btf.TypeID, error) {
 	type match struct {
 		p ProgramType
 		a AttachType
@@ -805,7 +805,7 @@ func resolveBTFType(spec *btf.Spec, name string, progType ProgramType, attachTyp
 		featureName = fmt.Sprintf("raw_tp %s", name)
 		isBTFTypeFunc = false
 	default:
-		return nil, nil
+		return 0, nil
 	}
 
 	var (
@@ -815,7 +815,7 @@ func resolveBTFType(spec *btf.Spec, name string, progType ProgramType, attachTyp
 	if spec == nil {
 		spec, err = btf.LoadKernelSpec()
 		if err != nil {
-			return nil, fmt.Errorf("load kernel spec: %w", err)
+			return 0, fmt.Errorf("load kernel spec: %w", err)
 		}
 	}
 
@@ -831,12 +831,12 @@ func resolveBTFType(spec *btf.Spec, name string, progType ProgramType, attachTyp
 
 	if err != nil {
 		if errors.Is(err, btf.ErrNotFound) {
-			return nil, &internal.UnsupportedFeatureError{
+			return 0, &internal.UnsupportedFeatureError{
 				Name: featureName,
 			}
 		}
-		return nil, fmt.Errorf("resolve BTF for %s: %w", featureName, err)
+		return 0, fmt.Errorf("resolve BTF for %s: %w", featureName, err)
 	}
 
-	return target, nil
+	return spec.TypeID(target)
 }

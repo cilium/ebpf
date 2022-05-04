@@ -958,7 +958,7 @@ func resolveBTFValuesContents(es *elfSection, vs *btf.VarSecinfo, member btf.Mem
 	// The offset of the 'values' member within the _struct_ (in bits)
 	// is the starting point of the array. Convert to bytes. Add VarSecinfo
 	// offset to get the absolute position in the ELF blob.
-	start := (member.OffsetBits / 8) + vs.Offset
+	start := member.Offset.Bytes() + vs.Offset
 	// 'values' is encoded in BTF as a zero (variable) length struct
 	// member, and its contents run until the end of the VarSecinfo.
 	// Add VarSecinfo offset to get the absolute position in the ELF blob.

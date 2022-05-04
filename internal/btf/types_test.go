@@ -102,7 +102,7 @@ func ExampleType_validTypes() {
 func TestType(t *testing.T) {
 	types := []func() Type{
 		func() Type { return &Void{} },
-		func() Type { return &Int{Size: 2, Bits: 3} },
+		func() Type { return &Int{Size: 2} },
 		func() Type { return &Pointer{Target: &Void{}} },
 		func() Type { return &Array{Type: &Int{}} },
 		func() Type {

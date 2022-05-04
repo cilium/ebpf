@@ -455,14 +455,14 @@ func coreCalculateFixup(byteOrder binary.ByteOrder, local Type, localID TypeID, 
 					return zero, err
 				}
 
-				target = 64 - targetField.bitfieldOffset - targetSize
+				target = uint32(64 - targetField.bitfieldOffset - targetSize)
 			} else {
 				loadWidth, err := Sizeof(targetField.Type)
 				if err != nil {
 					return zero, err
 				}
 
-				target = 64 - uint32(loadWidth)*8 + targetField.bitfieldOffset
+				target = uint32(64 - Bits(loadWidth*8) + targetField.bitfieldOffset)
 			}
 			return fixupWithoutValidation(0, target)
 
@@ -472,7 +472,7 @@ func coreCalculateFixup(byteOrder binary.ByteOrder, local Type, localID TypeID, 
 				return zero, err
 			}
 
-			return fixupWithoutValidation(0, 64-targetSize)
+			return fixupWithoutValidation(0, uint32(64-targetSize))
 		}
 	}
 
@@ -568,12 +568,12 @@ type coreField struct {
 	offset uint32
 
 	// The offset of the bitfield in bits from the start of the field.
-	bitfieldOffset uint32
+	bitfieldOffset Bits
 
 	// The size of the bitfield in bits.
 	//
 	// Zero if the field is not a bitfield.
-	bitfieldSize uint32
+	bitfieldSize Bits
 }
 
 func (cf *coreField) adjustOffsetToNthElement(n int) error {
@@ -586,7 +586,7 @@ func (cf *coreField) adjustOffsetToNthElement(n int) error {
 	return nil
 }
 
-func (cf *coreField) adjustOffsetBits(offset uint32) error {
+func (cf *coreField) adjustOffsetBits(offset Bits) error {
 	align, err := alignof(cf.Type)
 	if err != nil {
 		return err
@@ -596,11 +596,11 @@ func (cf *coreField) adjustOffsetBits(offset uint32) error {
 	// 1) converting the bit offset to bytes with a flooring division.
 	// 2) dividing and multiplying that offset by the alignment, yielding the
 	//    load size aligned offset.
-	offsetBytes := (offset / 8) / uint32(align) * uint32(align)
+	offsetBytes := uint32(offset/8) / uint32(align) * uint32(align)
 
 	// The number of bits remaining is the bit offset less the number of bits
 	// we can "skip" with the aligned offset.
-	cf.bitfieldOffset = offset - offsetBytes*8
+	cf.bitfieldOffset = offset - Bits(offsetBytes*8)
 
 	// We know that cf.offset is aligned at to at least align since we get it
 	// from the compiler via BTF. Adding an aligned offsetBytes preserves the
@@ -609,7 +609,7 @@ func (cf *coreField) adjustOffsetBits(offset uint32) error {
 	return nil
 }
 
-func (cf *coreField) sizeBits() (uint32, error) {
+func (cf *coreField) sizeBits() (Bits, error) {
 	if cf.bitfieldSize > 0 {
 		return cf.bitfieldSize, nil
 	}
@@ -621,7 +621,7 @@ func (cf *coreField) sizeBits() (uint32, error) {
 	if err != nil {
 		return 0, nil
 	}
-	return uint32(size) * 8, nil
+	return Bits(size * 8), nil
 }
 
 // coreFindField descends into the local type using the accessor and tries to
@@ -668,7 +668,7 @@ func coreFindField(localT Type, localAcc coreAccessor, targetT Type) (coreField,
 				// This is an anonymous struct or union, ignore it.
 				local = coreField{
 					Type:   localMember.Type,
-					offset: local.offset + localMember.OffsetBits/8,
+					offset: local.offset + localMember.Offset.Bytes(),
 				}
 				localMaybeFlex = false
 				continue
@@ -699,8 +699,8 @@ func coreFindField(localT Type, localAcc coreAccessor, targetT Type) (coreField,
 			targetMaybeFlex = last
 
 			if local.bitfieldSize == 0 && target.bitfieldSize == 0 {
-				local.offset += localMember.OffsetBits / 8
-				target.offset += targetMember.OffsetBits / 8
+				local.offset += localMember.Offset.Bytes()
+				target.offset += targetMember.Offset.Bytes()
 				break
 			}
 
@@ -710,11 +710,11 @@ func coreFindField(localT Type, localAcc coreAccessor, targetT Type) (coreField,
 				return coreField{}, coreField{}, fmt.Errorf("can't descend into bitfield")
 			}
 
-			if err := local.adjustOffsetBits(localMember.OffsetBits); err != nil {
+			if err := local.adjustOffsetBits(localMember.Offset); err != nil {
 				return coreField{}, coreField{}, err
 			}
 
-			if err := target.adjustOffsetBits(targetMember.OffsetBits); err != nil {
+			if err := target.adjustOffsetBits(targetMember.Offset); err != nil {
 				return coreField{}, coreField{}, err
 			}
 
@@ -780,7 +780,7 @@ func coreFindMember(typ composite, name string) (Member, bool, error) {
 
 	type offsetTarget struct {
 		composite
-		offset uint32
+		offset Bits
 	}
 
 	targets := []offsetTarget{{typ, 0}}
@@ -804,7 +804,7 @@ func coreFindMember(typ composite, name string) (Member, bool, error) {
 		for j, member := range members {
 			if member.Name == name {
 				// NB: This is safe because member is a copy.
-				member.OffsetBits += target.offset
+				member.Offset += target.offset
 				return member, j == len(members)-1, nil
 			}
 
@@ -819,7 +819,7 @@ func coreFindMember(typ composite, name string) (Member, bool, error) {
 				return Member{}, false, fmt.Errorf("anonymous non-composite type %T not allowed", member.Type)
 			}
 
-			targets = append(targets, offsetTarget{comp, target.offset + member.OffsetBits})
+			targets = append(targets, offsetTarget{comp, target.offset + member.Offset})
 		}
 	}
 
@@ -893,14 +893,8 @@ func coreAreTypesCompatible(localType Type, targetType Type) error {
 		}
 
 		switch lv := (localType).(type) {
-		case *Void, *Struct, *Union, *Enum, *Fwd:
+		case *Void, *Struct, *Union, *Enum, *Fwd, *Int:
 			// Nothing to do here
-
-		case *Int:
-			tv := targetType.(*Int)
-			if lv.isBitfield() || tv.isBitfield() {
-				return fmt.Errorf("bitfield: %w", errImpossibleRelocation)
-			}
 
 		case *Pointer, *Array:
 			depth++
@@ -983,7 +977,7 @@ func coreAreMembersCompatible(localType Type, targetType Type) error {
 	}
 
 	switch lv := localType.(type) {
-	case *Array, *Pointer, *Float:
+	case *Array, *Pointer, *Float, *Int:
 		return nil
 
 	case *Enum:
@@ -993,13 +987,6 @@ func coreAreMembersCompatible(localType Type, targetType Type) error {
 	case *Fwd:
 		tv := targetType.(*Fwd)
 		return doNamesMatch(lv.Name, tv.Name)
-
-	case *Int:
-		tv := targetType.(*Int)
-		if lv.isBitfield() || tv.isBitfield() {
-			return fmt.Errorf("bitfield: %w", errImpossibleRelocation)
-		}
-		return nil
 
 	default:
 		return fmt.Errorf("type %s: %w", localType, ErrNotSupported)

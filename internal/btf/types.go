@@ -59,6 +59,18 @@ var (
 	_ Type = (*Float)(nil)
 )
 
+// types is a list of Type.
+//
+// The order determines the ID of a type.
+type types []Type
+
+func (ts types) ByID(id TypeID) (Type, error) {
+	if int(id) > len(ts) {
+		return nil, fmt.Errorf("type ID %d: %w", id, ErrNotFound)
+	}
+	return ts[id], nil
+}
+
 // Void is the unit type of BTF.
 type Void struct{}
 

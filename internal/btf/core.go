@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"math"
 	"reflect"
-	"sort"
 	"strconv"
 	"strings"
 
@@ -42,7 +41,10 @@ func (f COREFixup) String() string {
 
 func (f COREFixup) apply(ins *asm.Instruction) error {
 	if f.poison {
-		return errors.New("can't poison individual instruction")
+		const badRelo = 0xbad2310
+
+		*ins = asm.BuiltinFunc(badRelo).Call()
+		return nil
 	}
 
 	switch class := ins.OpCode.Class(); class {
@@ -101,49 +103,6 @@ func (f COREFixup) isNonExistant() bool {
 	return f.kind.checksForExistence() && f.target == 0
 }
 
-type COREFixups map[uint64]COREFixup
-
-// Apply returns a copy of insns with CO-RE relocations applied.
-func (fs COREFixups) Apply(insns asm.Instructions) (asm.Instructions, error) {
-	if len(fs) == 0 {
-		cpy := make(asm.Instructions, len(insns))
-		copy(cpy, insns)
-		return insns, nil
-	}
-
-	cpy := make(asm.Instructions, 0, len(insns))
-	iter := insns.Iterate()
-	for iter.Next() {
-		fixup, ok := fs[iter.Offset.Bytes()]
-		if !ok {
-			cpy = append(cpy, *iter.Ins)
-			continue
-		}
-
-		ins := *iter.Ins
-		if fixup.poison {
-			const badRelo = asm.BuiltinFunc(0xbad2310)
-
-			cpy = append(cpy, badRelo.Call())
-			if ins.OpCode.IsDWordLoad() {
-				// 64 bit constant loads occupy two raw bpf instructions, so
-				// we need to add another instruction as padding.
-				cpy = append(cpy, badRelo.Call())
-			}
-
-			continue
-		}
-
-		if err := fixup.apply(&ins); err != nil {
-			return nil, fmt.Errorf("instruction %d, offset %d: %s: %w", iter.Index, iter.Offset.Bytes(), fixup.kind, err)
-		}
-
-		cpy = append(cpy, ins)
-	}
-
-	return cpy, nil
-}
-
 // coreKind is the type of CO-RE relocation as specified in BPF source code.
 type coreKind uint32
 
@@ -197,15 +156,67 @@ func (k coreKind) String() string {
 	}
 }
 
-func coreRelocate(local, target *Spec, relos CORERelos) (COREFixups, error) {
+// CORERelocate calculates the difference in types between local
+// and target and adjusts insns to match.
+//
+// Passing a nil target will relocate against the running kernel. insns are
+// modified in place.
+func CORERelocate(insns asm.Instructions, local, target *Spec) error {
+	var relos []*CORERelocation
+	var reloInsns []*asm.Instruction
+	iter := insns.Iterate()
+	for iter.Next() {
+		if relo, ok := iter.Ins.Metadata.Get(coreRelocationMeta{}).(*CORERelocation); ok {
+			relos = append(relos, relo)
+			reloInsns = append(reloInsns, iter.Ins)
+		}
+	}
+
+	if len(relos) == 0 {
+		return nil
+	}
+
+	if target == nil {
+		var err error
+		target, err = LoadKernelSpec()
+		if err != nil {
+			return err
+		}
+	}
+
+	fixups, err := coreRelocate(local, target, relos)
+	if err != nil {
+		return err
+	}
+
+	for i, fixup := range fixups {
+		if err := fixup.apply(reloInsns[i]); err != nil {
+			return fmt.Errorf("apply fixup %s: %w", fixup, err)
+		}
+	}
+
+	return nil
+}
+
+// coreRelocate calculates the difference in types between local and target.
+//
+// Fixups are returned in the order of relos, e.g. fixup[i] is the solution
+// for relos[i].
+func coreRelocate(local, target *Spec, relos []*CORERelocation) ([]COREFixup, error) {
 	if local.byteOrder != target.byteOrder {
 		return nil, fmt.Errorf("can't relocate %s against %s", local.byteOrder, target.byteOrder)
 	}
 
-	var ids []TypeID
-	relosByID := make(map[TypeID]CORERelos)
-	result := make(COREFixups, len(relos))
-	for _, relo := range relos {
+	type reloGroup struct {
+		relos []*CORERelocation
+		// Position of each relocation in relos.
+		indices []int
+	}
+
+	// Split relocations into per Type lists.
+	relosByType := make(map[Type]*reloGroup)
+	result := make([]COREFixup, len(relos))
+	for i, relo := range relos {
 		if relo.kind == reloTypeIDLocal {
 			// Filtering out reloTypeIDLocal here makes our lives a lot easier
 			// down the line, since it doesn't have a target at all.
@@ -213,46 +224,37 @@ func coreRelocate(local, target *Spec, relos CORERelos) (COREFixups, error) {
 				return nil, fmt.Errorf("%s: unexpected accessor %v", relo.kind, relo.accessor)
 			}
 
-			result[uint64(relo.insnOff)] = COREFixup{
+			result[i] = COREFixup{
 				kind:   relo.kind,
-				local:  uint32(relo.typeID),
-				target: uint32(relo.typeID),
+				local:  uint32(relo.typ.ID()),
+				target: uint32(relo.typ.ID()),
 			}
 			continue
 		}
 
-		relos, ok := relosByID[relo.typeID]
+		group, ok := relosByType[relo.typ]
 		if !ok {
-			ids = append(ids, relo.typeID)
+			group = &reloGroup{}
+			relosByType[relo.typ] = group
 		}
-		relosByID[relo.typeID] = append(relos, relo)
+		group.relos = append(group.relos, relo)
+		group.indices = append(group.indices, i)
 	}
 
-	// Ensure we work on relocations in a deterministic order.
-	sort.Slice(ids, func(i, j int) bool {
-		return ids[i] < ids[j]
-	})
-
-	for _, id := range ids {
-		if int(id) >= len(local.types) {
-			return nil, fmt.Errorf("invalid type id %d", id)
-		}
-
-		localType := local.types[id]
+	for localType, group := range relosByType {
 		localTypeName := localType.TypeName()
 		if localTypeName == "" {
 			return nil, fmt.Errorf("relocate unnamed or anonymous type %s: %w", localType, ErrNotSupported)
 		}
 
-		relos := relosByID[id]
 		targets := target.namedTypes[newEssentialName(localTypeName)]
-		fixups, err := coreCalculateFixups(local.byteOrder, localType, targets, relos)
+		fixups, err := coreCalculateFixups(local.byteOrder, localType, targets, group.relos)
 		if err != nil {
 			return nil, fmt.Errorf("relocate %s: %w", localType, err)
 		}
 
-		for i, relo := range relos {
-			result[uint64(relo.insnOff)] = fixups[i]
+		for j, index := range group.indices {
+			result[index] = fixups[j]
 		}
 	}
 
@@ -267,7 +269,7 @@ var errImpossibleRelocation = errors.New("impossible relocation")
 //
 // The best target is determined by scoring: the less poisoning we have to do
 // the better the target is.
-func coreCalculateFixups(byteOrder binary.ByteOrder, local Type, targets []Type, relos CORERelos) ([]COREFixup, error) {
+func coreCalculateFixups(byteOrder binary.ByteOrder, local Type, targets []Type, relos []*CORERelocation) ([]COREFixup, error) {
 	localID := local.ID()
 	local = Copy(local, UnderlyingType)
 
@@ -325,7 +327,7 @@ func coreCalculateFixups(byteOrder binary.ByteOrder, local Type, targets []Type,
 
 // coreCalculateFixup calculates the fixup for a single local type, target type
 // and relocation.
-func coreCalculateFixup(byteOrder binary.ByteOrder, local Type, localID TypeID, target Type, targetID TypeID, relo CORERelocation) (COREFixup, error) {
+func coreCalculateFixup(byteOrder binary.ByteOrder, local Type, localID TypeID, target Type, targetID TypeID, relo *CORERelocation) (COREFixup, error) {
 	fixup := func(local, target uint32) (COREFixup, error) {
 		return COREFixup{kind: relo.kind, local: local, target: target}, nil
 	}

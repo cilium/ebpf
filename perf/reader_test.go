@@ -294,7 +294,7 @@ func TestReadRecord(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	_, err = readRecord(&buf, 0)
+	_, err = readRecord(&buf, 0, make([]byte, perfEventHeaderSize), nil)
 	if !IsUnknownEvent(err) {
 		t.Error("readRecord should return unknown event error, got", err)
 	}
@@ -401,7 +401,11 @@ func BenchmarkReader(b *testing.B) {
 
 	b.ResetTimer()
 	b.ReportAllocs()
+
+	var sampleBuf []byte
 	for i := 0; i < b.N; i++ {
+		// NB: Submitting samples into the perf event ring dominates
+		// the benchmark time unfortunately.
 		ret, _, err := prog.Test(buf)
 		if err != nil {
 			b.Fatal(err)
@@ -409,9 +413,12 @@ func BenchmarkReader(b *testing.B) {
 			b.Fatal("Expected 0 as return value, got", errno)
 		}
 
-		if _, err = rd.Read(); err != nil {
+		record, err := rd.ReadBuffer(sampleBuf)
+		if err != nil {
 			b.Fatal(err)
 		}
+
+		sampleBuf = record.RawSample
 	}
 }
 
@@ -467,4 +474,38 @@ func ExampleReader() {
 
 	// Data is padded with 0 for alignment
 	fmt.Println("Sample:", record.RawSample)
+}
+
+// ReadBuffer allows reducing memory allocations.
+func ExampleReader_ReadBuffer() {
+	prog, events := bpfPerfEventOutputProgram()
+	defer prog.Close()
+	defer events.Close()
+
+	rd, err := NewReader(events, 4096)
+	if err != nil {
+		panic(err)
+	}
+	defer rd.Close()
+
+	for i := 0; i < 2; i++ {
+		// Write out two samples
+		ret, _, err := prog.Test(make([]byte, 14))
+		if err != nil || ret != 0 {
+			panic("Can't write sample")
+		}
+	}
+
+	buf := make([]byte, 128)
+	for i := 0; i < 2; i++ {
+		record, err := rd.ReadBuffer(buf)
+		if err != nil {
+			panic(err)
+		}
+
+		fmt.Println("Sample:", record.RawSample[:5])
+
+		// Re-use the (possibly larger) buffer for the next call to ReadBuffer.
+		buf = record.RawSample
+	}
 }

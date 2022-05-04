@@ -642,7 +642,7 @@ func TestMapLoadPinnedUnpin(t *testing.T) {
 
 func TestMapLoadPinnedWithOptions(t *testing.T) {
 	// Introduced in commit 6e71b04a8224.
-	testutils.SkipOnOldKernel(t, "4.14", "file_flags in BPF_OBJ_GET")
+	testutils.SkipOnOldKernel(t, "4.15", "file_flags in BPF_OBJ_GET")
 
 	array := createArray(t)
 	defer array.Close()

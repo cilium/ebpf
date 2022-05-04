@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/cilium/ebpf/asm"
+	"github.com/cilium/ebpf/internal/btf"
 )
 
 // splitSymbols splits insns into subsections delimited by Symbol Instructions.
@@ -103,6 +104,47 @@ func findReferences(progs map[string]*ProgramSpec) error {
 			if ref != nil {
 				prog.references[refname] = ref
 			}
+		}
+	}
+
+	return nil
+}
+
+// applyRelocations collects and applies any CO-RE relocations in insns.
+//
+// Passing a nil target will relocate against the running kernel. insns are
+// modified in place.
+func applyRelocations(insns asm.Instructions, local, target *btf.Spec) error {
+	var relos []*btf.CORERelocation
+	var reloInsns []*asm.Instruction
+	iter := insns.Iterate()
+	for iter.Next() {
+		if relo := btf.CORERelocationMetadata(iter.Ins); relo != nil {
+			relos = append(relos, relo)
+			reloInsns = append(reloInsns, iter.Ins)
+		}
+	}
+
+	if len(relos) == 0 {
+		return nil
+	}
+
+	if target == nil {
+		var err error
+		target, err = btf.LoadKernelSpec()
+		if err != nil {
+			return err
+		}
+	}
+
+	fixups, err := btf.CORERelocate(local, target, relos)
+	if err != nil {
+		return err
+	}
+
+	for i, fixup := range fixups {
+		if err := fixup.Apply(reloInsns[i]); err != nil {
+			return fmt.Errorf("apply fixup %s: %w", &fixup, err)
 		}
 	}
 

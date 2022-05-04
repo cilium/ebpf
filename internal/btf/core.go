@@ -28,18 +28,18 @@ type COREFixup struct {
 	skipLocalValidation bool
 }
 
-func (f COREFixup) equal(other COREFixup) bool {
+func (f *COREFixup) equal(other COREFixup) bool {
 	return f.local == other.local && f.target == other.target
 }
 
-func (f COREFixup) String() string {
+func (f *COREFixup) String() string {
 	if f.poison {
 		return fmt.Sprintf("%s=poison", f.kind)
 	}
 	return fmt.Sprintf("%s=%d->%d", f.kind, f.local, f.target)
 }
 
-func (f COREFixup) apply(ins *asm.Instruction) error {
+func (f *COREFixup) Apply(ins *asm.Instruction) error {
 	if f.poison {
 		const badRelo = 0xbad2310
 
@@ -156,53 +156,14 @@ func (k coreKind) String() string {
 	}
 }
 
-// CORERelocate calculates the difference in types between local
-// and target and adjusts insns to match.
+// CORERelocate calculates the difference in types between local and target.
 //
-// Passing a nil target will relocate against the running kernel. insns are
-// modified in place.
-func CORERelocate(insns asm.Instructions, local, target *Spec) error {
-	var relos []*CORERelocation
-	var reloInsns []*asm.Instruction
-	iter := insns.Iterate()
-	for iter.Next() {
-		if relo, ok := iter.Ins.Metadata.Get(coreRelocationMeta{}).(*CORERelocation); ok {
-			relos = append(relos, relo)
-			reloInsns = append(reloInsns, iter.Ins)
-		}
-	}
-
-	if len(relos) == 0 {
-		return nil
-	}
-
-	if target == nil {
-		var err error
-		target, err = LoadKernelSpec()
-		if err != nil {
-			return err
-		}
-	}
-
-	fixups, err := coreRelocate(local, target, relos)
-	if err != nil {
-		return err
-	}
-
-	for i, fixup := range fixups {
-		if err := fixup.apply(reloInsns[i]); err != nil {
-			return fmt.Errorf("apply fixup %s: %w", fixup, err)
-		}
-	}
-
-	return nil
-}
-
-// coreRelocate calculates the difference in types between local and target.
+// Returns a list of fixups which can be applied to instructions to make them
+// match the target type(s).
 //
 // Fixups are returned in the order of relos, e.g. fixup[i] is the solution
 // for relos[i].
-func coreRelocate(local, target *Spec, relos []*CORERelocation) ([]COREFixup, error) {
+func CORERelocate(local, target *Spec, relos []*CORERelocation) ([]COREFixup, error) {
 	if local.byteOrder != target.byteOrder {
 		return nil, fmt.Errorf("can't relocate %s against %s", local.byteOrder, target.byteOrder)
 	}

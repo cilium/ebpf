@@ -6,6 +6,8 @@ import (
 	"math"
 	"reflect"
 	"strings"
+
+	"github.com/cilium/ebpf/asm"
 )
 
 const maxTypeDepth = 32
@@ -434,6 +436,11 @@ type Func struct {
 	Name    string
 	Type    Type
 	Linkage FuncLinkage
+}
+
+func FuncMetadata(ins *asm.Instruction) *Func {
+	fn, _ := ins.Metadata.Get(funcInfoMeta{}).(*Func)
+	return fn
 }
 
 func (f *Func) Format(fs fmt.State, verb rune) {

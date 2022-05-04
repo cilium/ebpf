@@ -517,6 +517,15 @@ type ProgInfo struct {
 	_                    [4]byte
 }
 
+type XdpMd struct {
+	Data           uint32
+	DataEnd        uint32
+	DataMeta       uint32
+	IngressIfindex uint32
+	RxQueueIndex   uint32
+	EgressIfindex  uint32
+}
+
 type BtfGetFdByIdAttr struct{ Id uint32 }
 
 func BtfGetFdById(attr *BtfGetFdByIdAttr) (*FD, error) {

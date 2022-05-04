@@ -92,7 +92,7 @@ func TestProgramRun(t *testing.T) {
 }
 
 func TestProgramRunWithOptions(t *testing.T) {
-	testutils.SkipOnOldKernel(t, "4.8", "XDP program")
+	testutils.SkipOnOldKernel(t, "5.15", "XDP ctx_in/ctx_out")
 
 	ins := asm.Instructions{
 		// Return XDP_ABORTED

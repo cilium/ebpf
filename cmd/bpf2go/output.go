@@ -343,16 +343,12 @@ func collectCTypes(types *btf.Spec, names []string) ([]btf.Type, error) {
 func collectMapTypes(maps map[string]*ebpf.MapSpec) []btf.Type {
 	var result []btf.Type
 	for _, m := range maps {
-		if m.BTF == nil {
-			continue
+		if m.Key != nil && m.Key.TypeName() != "" {
+			result = append(result, m.Key)
 		}
 
-		if m.BTF.Key != nil && m.BTF.Key.TypeName() != "" {
-			result = append(result, m.BTF.Key)
-		}
-
-		if m.BTF.Value != nil && m.BTF.Value.TypeName() != "" {
-			result = append(result, m.BTF.Value)
+		if m.Value != nil && m.Value.TypeName() != "" {
+			result = append(result, m.Value)
 		}
 	}
 	return result

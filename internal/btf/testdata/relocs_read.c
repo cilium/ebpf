@@ -26,6 +26,12 @@ struct bits {
 	u64 f : 16, g : 30;
 };
 
+struct nonexist {
+	int non_exist;
+};
+
+enum nonexist_enum { NON_EXIST = 1 };
+
 // Perform a read from a subprog to ensure CO-RE relocations
 // occurring there are tracked and executed in the final linked program.
 __attribute__((noinline)) int read_subprog() {
@@ -87,6 +93,15 @@ __attribute__((noinline)) int read_subprog() {
 		return __LINE__;
 
 	if (BPF_CORE_READ_BITFIELD(&bar, g) != 0x15443322)
+		return __LINE__;
+
+	if (bpf_core_type_exists(struct nonexist) != 0)
+		return __LINE__;
+
+	if (bpf_core_field_exists(((struct nonexist *)0)->non_exist) != 0)
+		return __LINE__;
+
+	if (bpf_core_enum_value_exists(enum nonexist_enum, NON_EXIST) != 0)
 		return __LINE__;
 
 	return 0;

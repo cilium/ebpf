@@ -36,8 +36,12 @@ type Spec struct {
 	rawTypes []rawType
 	strings  *stringTable
 
-	// Inflated Types.
+	// All types contained by the spec, the position of a type in the slice
+	// is its ID.
 	types types
+
+	// Type IDs indexed by type.
+	typeIDs map[Type]TypeID
 
 	// Types indexed by essential name.
 	// Includes all struct flavors and types with the same name.
@@ -199,18 +203,45 @@ func loadRawSpec(btf io.ReaderAt, bo binary.ByteOrder, sectionSizes map[string]u
 		return nil, err
 	}
 
-	types, typesByName, err := inflateRawTypes(rawTypes, rawStrings)
+	types, err := inflateRawTypes(rawTypes, rawStrings)
 	if err != nil {
 		return nil, err
 	}
 
+	typeIDs, typesByName := indexTypes(types)
+
 	return &Spec{
 		rawTypes:   rawTypes,
 		namedTypes: typesByName,
+		typeIDs:    typeIDs,
 		types:      types,
 		strings:    rawStrings,
 		byteOrder:  bo,
 	}, nil
+}
+
+func indexTypes(types []Type) (map[Type]TypeID, map[essentialName][]Type) {
+	namedTypes := 0
+	for _, typ := range types {
+		if typ.TypeName() != "" {
+			// Do a pre-pass to figure out how big types by name has to be.
+			// Most types have unique names, so it's OK to ignore essentialName
+			// here.
+			namedTypes++
+		}
+	}
+
+	typeIDs := make(map[Type]TypeID, len(types))
+	typesByName := make(map[essentialName][]Type, namedTypes)
+
+	for i, typ := range types {
+		if name := newEssentialName(typ.TypeName()); name != "" {
+			typesByName[name] = append(typesByName[name], typ)
+		}
+		typeIDs[typ] = TypeID(i)
+	}
+
+	return typeIDs, typesByName
 }
 
 var kernelBTF struct {
@@ -413,20 +444,15 @@ func fixupDatasec(rawTypes []rawType, rawStrings *stringTable, sectionSizes map[
 func (s *Spec) Copy() *Spec {
 	types := copyTypes(s.types, nil)
 
-	namedTypes := make(map[essentialName][]Type)
-	for _, typ := range types {
-		if name := typ.TypeName(); name != "" {
-			en := newEssentialName(name)
-			namedTypes[en] = append(namedTypes[en], typ)
-		}
-	}
+	typeIDs, typesByName := indexTypes(types)
 
 	// NB: Other parts of spec are not copied since they are immutable.
 	return &Spec{
 		s.rawTypes,
 		s.strings,
 		types,
-		namedTypes,
+		typesByName,
+		typeIDs,
 		s.byteOrder,
 	}
 }
@@ -505,6 +531,23 @@ func (sw sliceWriter) Write(p []byte) (int, error) {
 // does not exist in the Spec.
 func (s *Spec) TypeByID(id TypeID) (Type, error) {
 	return s.types.ByID(id)
+}
+
+// TypeID returns the ID for a given Type.
+//
+// Returns an error wrapping ErrNoFound if the type isn't part of the Spec.
+func (s *Spec) TypeID(typ Type) (TypeID, error) {
+	if _, ok := typ.(*Void); ok {
+		// Equality is weird for void, since it is a zero sized type.
+		return 0, nil
+	}
+
+	id, ok := s.typeIDs[typ]
+	if !ok {
+		return 0, fmt.Errorf("no ID for type %s: %w", typ, ErrNotFound)
+	}
+
+	return id, nil
 }
 
 // AnyTypesByName returns a list of BTF Types with the given name.

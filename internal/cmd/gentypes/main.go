@@ -178,6 +178,7 @@ import (
 		},
 		{"FuncInfo", "bpf_func_info", nil},
 		{"LineInfo", "bpf_line_info", nil},
+		{"XdpMd", "xdp_md", nil},
 	}
 
 	sort.Slice(structs, func(i, j int) bool {

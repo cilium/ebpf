@@ -361,6 +361,13 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions, handles *hand
 		}
 	}
 
+	if errors.Is(logErr, unix.EINVAL) || errors.Is(logErr, unix.EPERM) &&
+		len(spec.Instructions.FunctionReferences()) > 0 {
+		if err := haveBPFToBPFCalls(); err != nil {
+			return nil, fmt.Errorf("load program: %w (program contains bpf2bpf calls)", err)
+		}
+	}
+
 	if errors.Is(logErr, unix.EPERM) && len(logBuf) > 0 && logBuf[0] == 0 {
 		// EPERM due to RLIMIT_MEMLOCK happens before the verifier, so we can
 		// check that the log is empty to reduce false positives.

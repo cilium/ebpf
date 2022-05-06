@@ -42,9 +42,8 @@ func TestFindReferences(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	testutils.SkipOnOldKernel(t, "4.16", "bpf2bpf calls")
-
 	prog, err := NewProgram(progs["entrypoint"])
+	testutils.SkipIfNotSupported(t, err)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -65,8 +64,6 @@ func TestForwardFunctionDeclaration(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-
-		testutils.SkipOnOldKernel(t, "4.16", "bpf2bpf calls")
 
 		if coll.ByteOrder != internal.NativeEndian {
 			return
@@ -91,6 +88,7 @@ func TestForwardFunctionDeclaration(t *testing.T) {
 		spec.BTF = nil
 
 		prog, err := NewProgram(spec)
+		testutils.SkipIfNotSupported(t, err)
 		if err != nil {
 			t.Fatal(err)
 		}

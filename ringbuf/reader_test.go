@@ -239,6 +239,7 @@ func BenchmarkReader(b *testing.B) {
 			b.ResetTimer()
 			b.ReportAllocs()
 
+			var sampleBuf []byte
 			for i := 0; i < b.N; i++ {
 				ret, _, err := prog.Test(buf)
 				if err != nil {
@@ -246,10 +247,13 @@ func BenchmarkReader(b *testing.B) {
 				} else if errno := syscall.Errno(-int32(ret)); errno != 0 {
 					b.Fatal("Expected 0 as return value, got", errno)
 				}
-				_, err = rd.Read()
+
+				record, err := rd.ReadBuffer(sampleBuf)
 				if err != nil {
 					b.Fatal("Can't read samples:", err)
 				}
+
+				sampleBuf = record.RawSample
 			}
 		})
 	}

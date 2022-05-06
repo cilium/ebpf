@@ -500,12 +500,25 @@ func (p *Program) Close() error {
 
 // Various options for Run'ing a Program
 type RunOptions struct {
-	Data    []byte
+	// Program's data input. Required field.
+	Data []byte
+	// Program's data after Program has run. Caller must allocate. Optional field.
+	// If the data output from the kernel is larger than the provided buffer, Run will panic.
 	DataOut []byte
-	Repeat  uint32
-	Flags   uint32
-	Cpu     uint32
-	Reset   func()
+	// Program's context input. Optional field.
+	Context interface{}
+	// Program's context after Program has run. Must be a pointer or slice. Optional field.
+	ContextOut interface{}
+	// Number of times to run Program. Optional field. Defaults to 1.
+	Repeat uint32
+	// Optional flags.
+	Flags uint32
+	// CPU to run Program on. Optional field.
+	// Note not all program types support this field.
+	CPU uint32
+	// Called whenever the syscall is interrupted, and should be set to testing.B.ResetTime
+	// or similar. Typically used during benchmarking. Optional field.
+	Reset func()
 }
 
 // Test runs the Program in the kernel with the given input and returns the
@@ -534,6 +547,17 @@ func (p *Program) Test(in []byte) (uint32, []byte, error) {
 		return ret, nil, fmt.Errorf("can't test program: %w", err)
 	}
 	return ret, opts.DataOut, nil
+}
+
+// Run runs the Program in kernel with given RunOptions.
+//
+// Note: the same restrictions from Test apply.
+func (p *Program) Run(opts RunOptions) (uint32, error) {
+	ret, _, err := p.testRun(opts)
+	if err != nil {
+		return ret, fmt.Errorf("can't test program: %w", err)
+	}
+	return ret, nil
 }
 
 // Benchmark runs the Program with the given input for a number of times
@@ -623,6 +647,17 @@ func (p *Program) testRun(opts RunOptions) (uint32, time.Duration, error) {
 		return 0, 0, err
 	}
 
+	ctx := new(bytes.Buffer)
+	var ctxOut []byte
+	if opts.Context != nil {
+		if err := binary.Write(ctx, internal.NativeEndian, opts.Context); err != nil {
+			return 0, 0, fmt.Errorf("cannot serialize context: %v", err)
+		}
+		if opts.ContextOut != nil {
+			ctxOut = make([]byte, len(ctx.Bytes()))
+		}
+	}
+
 	attr := sys.ProgRunAttr{
 		ProgFd:      p.fd.Uint(),
 		DataSizeIn:  uint32(len(opts.Data)),
@@ -630,6 +665,12 @@ func (p *Program) testRun(opts RunOptions) (uint32, time.Duration, error) {
 		DataIn:      sys.NewSlicePointer(opts.Data),
 		DataOut:     sys.NewSlicePointer(opts.DataOut),
 		Repeat:      uint32(opts.Repeat),
+		CtxSizeIn:   uint32(len(ctx.Bytes())),
+		CtxSizeOut:  uint32(len(ctxOut)),
+		CtxIn:       sys.NewSlicePointer(ctx.Bytes()),
+		CtxOut:      sys.NewSlicePointer(ctxOut),
+		Flags:       opts.Flags,
+		Cpu:         opts.CPU,
 	}
 
 	for {
@@ -659,6 +700,13 @@ func (p *Program) testRun(opts RunOptions) (uint32, time.Duration, error) {
 			panic("kernel wrote past end of output buffer")
 		}
 		opts.DataOut = opts.DataOut[:int(attr.DataSizeOut)]
+	}
+
+	if len(ctxOut) != 0 {
+		b := bytes.NewReader(ctxOut)
+		if err := binary.Read(b, internal.NativeEndian, opts.ContextOut); err != nil {
+			return 0, 0, fmt.Errorf("failed to decode ContextOut: %v", err)
+		}
 	}
 
 	total := time.Duration(attr.Duration) * time.Nanosecond

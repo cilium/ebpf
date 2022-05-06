@@ -90,6 +90,54 @@ func TestProgramRun(t *testing.T) {
 	}
 }
 
+func TestProgramRunWithOptions(t *testing.T) {
+	testutils.SkipOnOldKernel(t, "5.15", "XDP ctx_in/ctx_out")
+
+	ins := asm.Instructions{
+		// Return XDP_ABORTED
+		asm.LoadImm(asm.R0, 0, asm.DWord),
+		asm.Return(),
+	}
+
+	t.Log(ins)
+
+	prog, err := NewProgram(&ProgramSpec{
+		Name:         "test",
+		Type:         XDP,
+		Instructions: ins,
+		License:      "MIT",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer prog.Close()
+
+	buf := make([]byte, 14)
+	xdp := sys.XdpMd{
+		Data:    0,
+		DataEnd: 14,
+	}
+	xdpOut := sys.XdpMd{}
+	opts := RunOptions{
+		Data:       buf,
+		Context:    xdp,
+		ContextOut: &xdpOut,
+	}
+	ret, err := prog.Run(opts)
+	testutils.SkipIfNotSupported(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if ret != 0 {
+		t.Error("Expected return value to be 0, got", ret)
+	}
+
+	if xdp != xdpOut {
+		t.Errorf("Expect xdp (%+v) == xdpOut (%+v)", xdp, xdpOut)
+	}
+}
+
 func TestProgramSpecFlattenOrder(t *testing.T) {
 	prog_a := ProgramSpec{Name: "prog_a"}
 	prog_b := ProgramSpec{Name: "prog_b"}

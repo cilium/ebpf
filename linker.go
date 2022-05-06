@@ -110,6 +110,17 @@ func findReferences(progs map[string]*ProgramSpec) error {
 	return nil
 }
 
+// hasReferences returns true if insns contains one or more bpf2bpf
+// function references.
+func hasReferences(insns asm.Instructions) bool {
+	for _, i := range insns {
+		if i.IsFunctionReference() {
+			return true
+		}
+	}
+	return false
+}
+
 // applyRelocations collects and applies any CO-RE relocations in insns.
 //
 // Passing a nil target will relocate against the running kernel. insns are

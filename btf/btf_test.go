@@ -288,7 +288,7 @@ func TestGuessBTFByteOrder(t *testing.T) {
 }
 
 func TestSpecCopy(t *testing.T) {
-	spec := parseELFBTF(t, "../../testdata/loader-el.elf")
+	spec := parseELFBTF(t, "../testdata/loader-el.elf")
 
 	if len(spec.types) < 1 {
 		t.Fatal("Not enough types")

@@ -1,9 +1,9 @@
 package internal
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/cilium/ebpf/internal/unix"
 )
@@ -14,7 +14,7 @@ import (
 // logErr should be the error returned by the syscall that generated
 // the log. It is used to check for truncation of the output.
 func ErrorWithLog(err error, log []byte, logErr error) error {
-	logStr := unix.ByteSliceToString(bytes.Trim(log, "\t\r\n "))
+	logStr := strings.Trim(unix.ByteSliceToString(log), "\t\r\n ")
 	if errors.Is(logErr, unix.ENOSPC) {
 		logStr += " (truncated...)"
 	}

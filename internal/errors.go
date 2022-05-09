@@ -14,7 +14,13 @@ import (
 // logErr should be the error returned by the syscall that generated
 // the log. It is used to check for truncation of the output.
 func ErrorWithLog(err error, log []byte, logErr error) error {
-	logStr := unix.ByteSliceToString(bytes.Trim(log, "\t\r\n "))
+	// Convert verifier log C string by truncating it on the first 0 byte
+	// and trimming trailing whitespace before interpreting as a Go string.
+	if i := bytes.IndexByte(log, 0); i != -1 {
+		log = log[:i]
+	}
+	logStr := string(bytes.Trim(log, "\t\r\n "))
+
 	if errors.Is(logErr, unix.ENOSPC) {
 		logStr += " (truncated...)"
 	}

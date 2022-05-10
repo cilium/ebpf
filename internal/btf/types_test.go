@@ -102,7 +102,7 @@ func ExampleType_validTypes() {
 func TestType(t *testing.T) {
 	types := []func() Type{
 		func() Type { return &Void{} },
-		func() Type { return &Int{Size: 2, Bits: 3} },
+		func() Type { return &Int{Size: 2} },
 		func() Type { return &Pointer{Target: &Void{}} },
 		func() Type { return &Array{Type: &Int{}} },
 		func() Type {
@@ -349,6 +349,62 @@ func TestUnderlyingType(t *testing.T) {
 			want := &Int{}
 			got := UnderlyingType(test.fn(want))
 			qt.Assert(t, got, qt.Equals, want)
+		})
+	}
+}
+
+func TestInflateLegacyBitfield(t *testing.T) {
+	const offset = 3
+	const size = 5
+
+	var rawInt rawType
+	rawInt.SetKind(kindInt)
+	rawInt.SetSize(4)
+	offsetSize := uint32(offset<<16 | size)
+	rawInt.data = &offsetSize
+
+	var beforeInt rawType
+	beforeInt.SetKind(kindStruct)
+	beforeInt.SetVlen(1)
+	beforeInt.data = []btfMember{{Type: 2}}
+
+	afterInt := beforeInt
+	afterInt.data = []btfMember{{Type: 1}}
+
+	emptyStrings := newStringTable("")
+
+	for _, test := range []struct {
+		name string
+		raw  []rawType
+	}{
+		{"struct before int", []rawType{beforeInt, rawInt}},
+		{"struct after int", []rawType{rawInt, afterInt}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			types, err := inflateRawTypes(test.raw, emptyStrings)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			for _, typ := range types {
+				s, ok := typ.(*Struct)
+				if !ok {
+					continue
+				}
+
+				i := s.Members[0]
+				if i.BitfieldSize != size {
+					t.Errorf("Expected bitfield size %d, got %d", size, i.BitfieldSize)
+				}
+
+				if i.Offset != offset {
+					t.Errorf("Expected offset %d, got %d", offset, i.Offset)
+				}
+
+				return
+			}
+
+			t.Fatal("No Struct returned from inflateRawTypes")
 		})
 	}
 }

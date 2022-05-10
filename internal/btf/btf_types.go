@@ -177,6 +177,10 @@ func (bt *btfType) Size() uint32 {
 	return bt.SizeType
 }
 
+func (bt *btfType) SetSize(size uint32) {
+	bt.SizeType = size
+}
+
 type rawType struct {
 	btfType
 	data interface{}
@@ -285,6 +289,6 @@ func readTypes(r io.Reader, bo binary.ByteOrder, typeLen uint32) ([]rawType, err
 	}
 }
 
-func intEncoding(raw uint32) (IntEncoding, uint32, byte) {
-	return IntEncoding((raw & 0x0f000000) >> 24), (raw & 0x00ff0000) >> 16, byte(raw & 0x000000ff)
+func intEncoding(raw uint32) (IntEncoding, Bits, Bits) {
+	return IntEncoding((raw & 0x0f000000) >> 24), Bits(raw&0x00ff0000) >> 16, Bits(raw & 0x000000ff)
 }

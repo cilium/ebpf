@@ -179,7 +179,7 @@ func (gf *GoFormatter) writeStructLit(size uint32, members []Member, depth int) 
 			continue
 		}
 
-		offset := m.OffsetBits / 8
+		offset := m.Offset.Bytes()
 		if n := offset - prevOffset; skippedBitfield && n > 0 {
 			fmt.Fprintf(&gf.w, "_ [%d]byte /* unsupported bitfield */; ", n)
 		} else {
@@ -206,8 +206,8 @@ func (gf *GoFormatter) writeStructField(m Member, depth int) error {
 	if m.BitfieldSize > 0 {
 		return fmt.Errorf("bitfields are not supported")
 	}
-	if m.OffsetBits%8 != 0 {
-		return fmt.Errorf("unsupported offset %d", m.OffsetBits)
+	if m.Offset%8 != 0 {
+		return fmt.Errorf("unsupported offset %d", m.Offset)
 	}
 
 	if m.Name == "" {

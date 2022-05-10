@@ -58,7 +58,7 @@ func readRecord(rd *ringbufEventRing) (r Record, err error) {
 		// the next sample in the ring is not committed yet so we
 		// exit without storing the reader/consumer position
 		// and start again from the same position.
-		return Record{}, fmt.Errorf("%w", errBusy)
+		return Record{}, errBusy
 	}
 
 	/* read up to 8 byte alignment */
@@ -73,7 +73,7 @@ func readRecord(rd *ringbufEventRing) (r Record, err error) {
 		rd.skipRead(dataLenAligned)
 		rd.storeConsumer()
 
-		return Record{}, fmt.Errorf("%w", errDiscard)
+		return Record{}, errDiscard
 	}
 
 	data := make([]byte, dataLenAligned)
@@ -173,7 +173,7 @@ func (r *Reader) Read() (Record, error) {
 		}
 
 		record, err := readRecord(r.ring)
-		if errors.Is(err, errBusy) || errors.Is(err, errDiscard) {
+		if err == errBusy || err == errDiscard {
 			continue
 		}
 

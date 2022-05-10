@@ -5,15 +5,14 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"io"
 	"math"
 	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/cilium/ebpf/asm"
+	"github.com/cilium/ebpf/btf"
 	"github.com/cilium/ebpf/internal"
-	"github.com/cilium/ebpf/internal/btf"
 	"github.com/cilium/ebpf/internal/sys"
 	"github.com/cilium/ebpf/internal/unix"
 )
@@ -48,7 +47,7 @@ type ProgramOptions struct {
 	// This is useful in environments where the kernel BTF is not available
 	// (containers) or where it is in a non-standard location. Defaults to
 	// use the kernel BTF from a well-known location.
-	TargetBTF io.ReaderAt
+	Target *btf.Spec
 }
 
 // ProgramSpec defines a Program.
@@ -241,14 +240,7 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions, handles *hand
 		attr.ProgName = sys.NewObjName(spec.Name)
 	}
 
-	var err error
-	var targetBTF *btf.Spec
-	if opts.TargetBTF != nil {
-		targetBTF, err = handles.btfSpec(opts.TargetBTF)
-		if err != nil {
-			return nil, fmt.Errorf("load target BTF: %w", err)
-		}
-	}
+	targetBTF := opts.Target
 
 	insns := make(asm.Instructions, len(spec.Instructions))
 	copy(insns, spec.Instructions)
@@ -288,7 +280,7 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions, handles *hand
 	}
 
 	buf := bytes.NewBuffer(make([]byte, 0, insns.Size()))
-	err = insns.Marshal(buf, internal.NativeEndian)
+	err := insns.Marshal(buf, internal.NativeEndian)
 	if err != nil {
 		return nil, err
 	}

@@ -16,6 +16,7 @@ import (
 
 var (
 	ErrClosed  = os.ErrClosed
+	errEOR     = errors.New("end of ring")
 	errDiscard = errors.New("sample discarded")
 	errBusy    = errors.New("sample not committed yet")
 )
@@ -96,6 +97,7 @@ type Reader struct {
 	mu          sync.Mutex
 	ring        *ringbufEventRing
 	epollEvents []unix.EpollEvent
+	haveData    bool
 }
 
 // NewReader creates a new BPF ringbuf reader.
@@ -167,16 +169,25 @@ func (r *Reader) Read() (Record, error) {
 	}
 
 	for {
-		_, err := r.poller.Wait(r.epollEvents)
-		if err != nil {
-			return Record{}, err
+		if !r.haveData {
+			_, err := r.poller.Wait(r.epollEvents[:cap(r.epollEvents)])
+			if err != nil {
+				return Record{}, err
+			}
+			r.haveData = true
 		}
 
-		record, err := readRecord(r.ring)
-		if err == errBusy || err == errDiscard {
-			continue
-		}
+		for {
+			record, err := readRecord(r.ring)
+			if err == errBusy || err == errDiscard {
+				continue
+			}
+			if err == errEOR {
+				r.haveData = false
+				break
+			}
 
-		return record, err
+			return record, err
+		}
 	}
 }

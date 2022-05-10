@@ -224,9 +224,6 @@ func BenchmarkReader(b *testing.B) {
 		},
 	}
 
-	b.ResetTimer()
-	b.ReportAllocs()
-
 	for _, bm := range readerBenchmarks {
 		b.Run(bm.name, func(b *testing.B) {
 			prog, events := mustOutputSamplesProg(b, bm.flags, 80)
@@ -237,8 +234,13 @@ func BenchmarkReader(b *testing.B) {
 			}
 			defer rd.Close()
 
+			buf := make([]byte, 14)
+
+			b.ResetTimer()
+			b.ReportAllocs()
+
 			for i := 0; i < b.N; i++ {
-				ret, _, err := prog.Benchmark(make([]byte, 14), 1, nil)
+				ret, _, err := prog.Test(buf)
 				if err != nil {
 					b.Fatal(err)
 				} else if errno := syscall.Errno(-int32(ret)); errno != 0 {
@@ -250,5 +252,36 @@ func BenchmarkReader(b *testing.B) {
 				}
 			}
 		})
+	}
+}
+
+func BenchmarkReadRecord(b *testing.B) {
+	testutils.SkipOnOldKernel(b, "5.8", "BPF ring buffer")
+
+	prog, events := mustOutputSamplesProg(b, 0, 80)
+
+	rd, err := NewReader(events)
+	if err != nil {
+		b.Fatal(err)
+	}
+	defer rd.Close()
+
+	buf := make([]byte, 14)
+
+	b.ResetTimer()
+	b.ReportAllocs()
+
+	var rec Record
+	for i := 0; i < b.N; i++ {
+		ret, _, err := prog.Test(buf)
+		if err != nil {
+			b.Fatal(err)
+		} else if errno := syscall.Errno(-int32(ret)); errno != 0 {
+			b.Fatal("Expected 0 as return value, got", errno)
+		}
+
+		if err := rd.ReadRecord(&rec); err != nil {
+			b.Fatal("Can't read samples:", err)
+		}
 	}
 }

@@ -8,7 +8,7 @@ import (
 	"strings"
 
 	"github.com/cilium/ebpf/asm"
-	"github.com/cilium/ebpf/internal/btf"
+	"github.com/cilium/ebpf/btf"
 )
 
 // CollectionOptions control loading a collection into the kernel.

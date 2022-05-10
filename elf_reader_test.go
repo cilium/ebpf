@@ -687,6 +687,9 @@ func TestLibBPFCompat(t *testing.T) {
 			t.Skip("Skipping since .text contains 'subprog' twice")
 		case "linked_maps.linked3.o", "linked_funcs.linked3.o":
 			t.Skip("Skipping since weak relocations are not supported")
+		case "bloom_filter_map.o", "bloom_filter_map.linked3.o",
+			"bloom_filter_bench.o", "bloom_filter_bench.linked3.o":
+			t.Skip("Skipping due to missing MapExtra field in MapSpec")
 		}
 
 		t.Parallel()

@@ -35,13 +35,9 @@ func readVMLinux(tb testing.TB) *bytes.Reader {
 }
 
 func parseELFBTF(tb testing.TB, file string) *Spec {
-	fh, err := os.Open(file)
-	if err != nil {
-		tb.Fatal(err)
-	}
-	defer fh.Close()
+	tb.Helper()
 
-	spec, err := LoadSpecFromReader(fh)
+	spec, err := LoadSpec(file)
 	if err != nil {
 		tb.Fatal("Can't load BTF:", err)
 	}
@@ -292,7 +288,7 @@ func TestGuessBTFByteOrder(t *testing.T) {
 }
 
 func TestSpecCopy(t *testing.T) {
-	spec := parseELFBTF(t, "../../testdata/loader-el.elf")
+	spec := parseELFBTF(t, "../testdata/loader-el.elf")
 
 	if len(spec.types) < 1 {
 		t.Fatal("Not enough types")

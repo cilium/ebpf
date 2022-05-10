@@ -177,6 +177,10 @@ func (bt *btfType) Size() uint32 {
 	return bt.SizeType
 }
 
+func (bt *btfType) SetSize(size uint32) {
+	bt.SizeType = size
+}
+
 type rawType struct {
 	btfType
 	data interface{}

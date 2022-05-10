@@ -18,6 +18,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 
 	"github.com/cilium/ebpf/asm"
+	"github.com/cilium/ebpf/btf"
 	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/sys"
 	"github.com/cilium/ebpf/internal/testutils"
@@ -632,13 +633,10 @@ func TestProgramTargetBTF(t *testing.T) {
 		t.Skip("/sys/kernel/btf/vmlinux not present")
 	}
 
-	fh, err := os.Open("/sys/kernel/btf/vmlinux")
+	btfSpec, err := btf.LoadSpec("/sys/kernel/btf/vmlinux")
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer fh.Close()
-
-	reader := &testReaderAt{file: fh}
 
 	prog, err := NewProgramWithOptions(&ProgramSpec{
 		Type:       Tracing,
@@ -650,16 +648,13 @@ func TestProgramTargetBTF(t *testing.T) {
 		},
 		License: "MIT",
 	}, ProgramOptions{
-		TargetBTF: reader,
+		Target: btfSpec,
 	})
 	testutils.SkipIfNotSupported(t, err)
 	if err != nil {
-		t.Fatal("NewProgram with TargetBTF:", err)
+		t.Fatal("NewProgram with Target:", err)
 	}
 	prog.Close()
-	if !reader.read {
-		t.Error("TargetBTF is not read")
-	}
 }
 
 func TestProgramBindMap(t *testing.T) {
@@ -728,16 +723,6 @@ func TestProgramInstructions(t *testing.T) {
 	if tag != tagXlated {
 		t.Fatalf("tag %s differs from xlated instructions tag %s", tag, tagXlated)
 	}
-}
-
-type testReaderAt struct {
-	file *os.File
-	read bool
-}
-
-func (ra *testReaderAt) ReadAt(p []byte, off int64) (int, error) {
-	ra.read = true
-	return ra.file.ReadAt(p, off)
 }
 
 func createProgramArray(t *testing.T) *Map {

@@ -4,12 +4,11 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"io"
 	"reflect"
 	"strings"
 
 	"github.com/cilium/ebpf/asm"
-	"github.com/cilium/ebpf/internal/btf"
+	"github.com/cilium/ebpf/btf"
 )
 
 // CollectionOptions control loading a collection into the kernel.
@@ -347,13 +346,11 @@ func NewCollectionWithOptions(spec *CollectionSpec, opts CollectionOptions) (*Co
 
 type handleCache struct {
 	btfHandles map[*btf.Spec]*btf.Handle
-	btfSpecs   map[io.ReaderAt]*btf.Spec
 }
 
 func newHandleCache() *handleCache {
 	return &handleCache{
 		btfHandles: make(map[*btf.Spec]*btf.Handle),
-		btfSpecs:   make(map[io.ReaderAt]*btf.Spec),
 	}
 }
 
@@ -369,20 +366,6 @@ func (hc handleCache) btfHandle(spec *btf.Spec) (*btf.Handle, error) {
 
 	hc.btfHandles[spec] = handle
 	return handle, nil
-}
-
-func (hc handleCache) btfSpec(rd io.ReaderAt) (*btf.Spec, error) {
-	if hc.btfSpecs[rd] != nil {
-		return hc.btfSpecs[rd], nil
-	}
-
-	spec, err := btf.LoadSpecFromReader(rd)
-	if err != nil {
-		return nil, err
-	}
-
-	hc.btfSpecs[rd] = spec
-	return spec, nil
 }
 
 func (hc handleCache) close() {

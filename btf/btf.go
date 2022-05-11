@@ -273,14 +273,14 @@ func LoadKernelSpec() (*Spec, error) {
 	}
 
 	var err error
-	kernelBTF.Spec, err = loadKernelSpec()
+	kernelBTF.Spec, err = LoadKernelSpecUncached()
 	return kernelBTF.Spec, err
 }
 
-// loadKernelSpec attempts to load the raw vmlinux BTF blob at
+// LoadKernelSpecUncached attempts to load the raw vmlinux BTF blob at
 // /sys/kernel/btf/vmlinux and falls back to scanning the file system
 // for vmlinux ELFs.
-func loadKernelSpec() (*Spec, error) {
+func LoadKernelSpecUncached() (*Spec, error) {
 	fh, err := os.Open("/sys/kernel/btf/vmlinux")
 	if err == nil {
 		defer fh.Close()

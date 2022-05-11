@@ -167,10 +167,19 @@ func mustOutputSamplesProg(tb testing.TB, flags int32, sampleSizes ...int) (*ebp
 	return prog, events
 }
 
-func TestRingbufReaderClose(t *testing.T) {
+func TestReaderBlocking(t *testing.T) {
 	testutils.SkipOnOldKernel(t, "5.8", "BPF ring buffer")
 
-	_, events := mustOutputSamplesProg(t, 0, 5)
+	prog, events := mustOutputSamplesProg(t, 0, 5)
+	ret, _, err := prog.Test(make([]byte, 14))
+	testutils.SkipIfNotSupported(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if errno := syscall.Errno(-int32(ret)); errno != 0 {
+		t.Fatal("Expected 0 as return value, got", errno)
+	}
 
 	rd, err := NewReader(events)
 	if err != nil {
@@ -178,15 +187,23 @@ func TestRingbufReaderClose(t *testing.T) {
 	}
 	defer rd.Close()
 
-	errs := make(chan error, 1)
-	waiting := make(chan struct{})
+	errs := make(chan error)
 	go func() {
-		close(waiting)
-		_, err := rd.Read()
-		errs <- err
+		for {
+			_, err := rd.Read()
+			errs <- err
+		}
 	}()
 
-	<-waiting
+	if err := <-errs; err != nil {
+		t.Fatal("Can't read first sample", err)
+	}
+
+	select {
+	case err := <-errs:
+		t.Fatal("Read returns error instead of blocking:", err)
+	case <-time.After(100 * time.Millisecond):
+	}
 
 	// Close should interrupt blocking Read
 	if err := rd.Close(); err != nil {

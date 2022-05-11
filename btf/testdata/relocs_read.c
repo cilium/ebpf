@@ -1,4 +1,4 @@
-#include "../../../testdata/common.h"
+#include "../../testdata/common.h"
 #include "bpf_core_read.h"
 
 #define core_access __builtin_preserve_access_index

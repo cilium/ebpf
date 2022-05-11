@@ -12,8 +12,8 @@ import (
 	"text/template"
 
 	"github.com/cilium/ebpf"
+	"github.com/cilium/ebpf/btf"
 	"github.com/cilium/ebpf/internal"
-	"github.com/cilium/ebpf/internal/btf"
 )
 
 const ebpfModule = "github.com/cilium/ebpf"

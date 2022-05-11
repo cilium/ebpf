@@ -16,6 +16,7 @@ import (
 
 var (
 	ErrClosed  = os.ErrClosed
+	errEOR     = errors.New("end of ring")
 	errDiscard = errors.New("sample discarded")
 	errBusy    = errors.New("sample not committed yet")
 )
@@ -52,7 +53,7 @@ func readRecord(rd *ringbufEventRing, rec *Record, buf []byte) error {
 
 	buf = buf[:ringbufHeaderSize]
 	if _, err := io.ReadFull(rd, buf); err == io.EOF {
-		return err
+		return errEOR
 	} else if err != nil {
 		return fmt.Errorf("read event header: %w", err)
 	}
@@ -66,7 +67,7 @@ func readRecord(rd *ringbufEventRing, rec *Record, buf []byte) error {
 		// the next sample in the ring is not committed yet so we
 		// exit without storing the reader/consumer position
 		// and start again from the same position.
-		return fmt.Errorf("%w", errBusy)
+		return errBusy
 	}
 
 	/* read up to 8 byte alignment */
@@ -81,7 +82,7 @@ func readRecord(rd *ringbufEventRing, rec *Record, buf []byte) error {
 		rd.skipRead(dataLenAligned)
 		rd.storeConsumer()
 
-		return fmt.Errorf("%w", errDiscard)
+		return errDiscard
 	}
 
 	if cap(rec.RawSample) < int(dataLenAligned) {
@@ -109,6 +110,7 @@ type Reader struct {
 	ring        *ringbufEventRing
 	epollEvents []unix.EpollEvent
 	header      []byte
+	haveData    bool
 }
 
 // NewReader creates a new BPF ringbuf reader.
@@ -187,16 +189,25 @@ func (r *Reader) ReadInto(rec *Record) error {
 	}
 
 	for {
-		_, err := r.poller.Wait(r.epollEvents)
-		if err != nil {
+		if !r.haveData {
+			_, err := r.poller.Wait(r.epollEvents[:cap(r.epollEvents)])
+			if err != nil {
+				return err
+			}
+			r.haveData = true
+		}
+
+		for {
+			err := readRecord(r.ring, rec, r.header)
+			if err == errBusy || err == errDiscard {
+				continue
+			}
+			if err == errEOR {
+				r.haveData = false
+				break
+			}
+
 			return err
 		}
-
-		err = readRecord(r.ring, rec, r.header)
-		if errors.Is(err, errBusy) || errors.Is(err, errDiscard) {
-			continue
-		}
-
-		return err
 	}
 }

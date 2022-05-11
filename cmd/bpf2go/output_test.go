@@ -3,7 +3,7 @@ package main
 import (
 	"testing"
 
-	"github.com/cilium/ebpf/internal/btf"
+	"github.com/cilium/ebpf/btf"
 	qt "github.com/frankban/quicktest"
 )
 

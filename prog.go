@@ -5,7 +5,6 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"io"
 	"math"
 	"path/filepath"
 	"strings"
@@ -43,12 +42,13 @@ type ProgramOptions struct {
 	// Controls the output buffer size for the verifier. Defaults to
 	// DefaultVerifierLogSize.
 	LogSize int
-	// An ELF containing the target BTF for this program. It is used both to
-	// find the correct function to trace and to apply CO-RE relocations.
+	// Type information used for CO-RE relocations and when attaching to
+	// kernel functions.
+	//
 	// This is useful in environments where the kernel BTF is not available
 	// (containers) or where it is in a non-standard location. Defaults to
-	// use the kernel BTF from a well-known location.
-	TargetBTF io.ReaderAt
+	// use the kernel BTF from a well-known location if nil.
+	KernelTypes *btf.Spec
 }
 
 // ProgramSpec defines a Program.
@@ -241,21 +241,14 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions, handles *hand
 		attr.ProgName = sys.NewObjName(spec.Name)
 	}
 
-	var err error
-	var targetBTF *btf.Spec
-	if opts.TargetBTF != nil {
-		targetBTF, err = handles.btfSpec(opts.TargetBTF)
-		if err != nil {
-			return nil, fmt.Errorf("load target BTF: %w", err)
-		}
-	}
+	kernelTypes := opts.KernelTypes
 
 	insns := make(asm.Instructions, len(spec.Instructions))
 	copy(insns, spec.Instructions)
 
 	var btfDisabled bool
 	if spec.BTF != nil {
-		if err := applyRelocations(insns, spec.BTF, targetBTF); err != nil {
+		if err := applyRelocations(insns, spec.BTF, kernelTypes); err != nil {
 			return nil, fmt.Errorf("apply CO-RE relocations: %w", err)
 		}
 
@@ -288,7 +281,7 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions, handles *hand
 	}
 
 	buf := bytes.NewBuffer(make([]byte, 0, insns.Size()))
-	err = insns.Marshal(buf, internal.NativeEndian)
+	err := insns.Marshal(buf, internal.NativeEndian)
 	if err != nil {
 		return nil, err
 	}
@@ -314,10 +307,10 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions, handles *hand
 			}
 			defer btfHandle.Close()
 
-			targetBTF = btfHandle.Spec()
+			kernelTypes = btfHandle.Spec()
 		}
 
-		targetID, err := resolveBTFType(targetBTF, spec.AttachTo, spec.Type, spec.AttachType)
+		targetID, err := resolveBTFType(kernelTypes, spec.AttachTo, spec.Type, spec.AttachType)
 		if err != nil {
 			return nil, err
 		}

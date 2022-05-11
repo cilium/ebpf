@@ -5,15 +5,15 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"io"
 	"math"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 
 	"github.com/cilium/ebpf/asm"
+	"github.com/cilium/ebpf/btf"
 	"github.com/cilium/ebpf/internal"
-	"github.com/cilium/ebpf/internal/btf"
 	"github.com/cilium/ebpf/internal/sys"
 	"github.com/cilium/ebpf/internal/unix"
 )
@@ -43,12 +43,13 @@ type ProgramOptions struct {
 	// Controls the output buffer size for the verifier. Defaults to
 	// DefaultVerifierLogSize.
 	LogSize int
-	// An ELF containing the target BTF for this program. It is used both to
-	// find the correct function to trace and to apply CO-RE relocations.
+	// Type information used for CO-RE relocations and when attaching to
+	// kernel functions.
+	//
 	// This is useful in environments where the kernel BTF is not available
 	// (containers) or where it is in a non-standard location. Defaults to
-	// use the kernel BTF from a well-known location.
-	TargetBTF io.ReaderAt
+	// use the kernel BTF from a well-known location if nil.
+	KernelTypes *btf.Spec
 }
 
 // ProgramSpec defines a Program.
@@ -241,21 +242,14 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions, handles *hand
 		attr.ProgName = sys.NewObjName(spec.Name)
 	}
 
-	var err error
-	var targetBTF *btf.Spec
-	if opts.TargetBTF != nil {
-		targetBTF, err = handles.btfSpec(opts.TargetBTF)
-		if err != nil {
-			return nil, fmt.Errorf("load target BTF: %w", err)
-		}
-	}
+	kernelTypes := opts.KernelTypes
 
 	insns := make(asm.Instructions, len(spec.Instructions))
 	copy(insns, spec.Instructions)
 
 	var btfDisabled bool
 	if spec.BTF != nil {
-		if err := applyRelocations(insns, spec.BTF, targetBTF); err != nil {
+		if err := applyRelocations(insns, spec.BTF, kernelTypes); err != nil {
 			return nil, fmt.Errorf("apply CO-RE relocations: %w", err)
 		}
 
@@ -288,7 +282,7 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions, handles *hand
 	}
 
 	buf := bytes.NewBuffer(make([]byte, 0, insns.Size()))
-	err = insns.Marshal(buf, internal.NativeEndian)
+	err := insns.Marshal(buf, internal.NativeEndian)
 	if err != nil {
 		return nil, err
 	}
@@ -297,36 +291,24 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions, handles *hand
 	attr.Insns = sys.NewSlicePointer(bytecode)
 	attr.InsnCnt = uint32(len(bytecode) / asm.InstructionSize)
 
-	if spec.AttachTo != "" {
-		if spec.AttachTarget != nil {
-			info, err := spec.AttachTarget.Info()
-			if err != nil {
-				return nil, fmt.Errorf("load target BTF: %w", err)
-			}
-
-			btfID, ok := info.BTFID()
-			if !ok {
-				return nil, fmt.Errorf("load target BTF: no BTF info available")
-			}
-			btfHandle, err := btf.NewHandleFromID(btfID)
-			if err != nil {
-				return nil, fmt.Errorf("load target BTF: %w", err)
-			}
-			defer btfHandle.Close()
-
-			targetBTF = btfHandle.Spec()
-		}
-
-		targetID, err := resolveBTFType(targetBTF, spec.AttachTo, spec.Type, spec.AttachType)
+	if spec.AttachTarget != nil {
+		targetID, err := findTargetInProgram(spec.AttachTarget, spec.AttachTo, spec.Type, spec.AttachType)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("attach %s/%s: %w", spec.Type, spec.AttachType, err)
 		}
-		if targetID != 0 {
-			attr.AttachBtfId = uint32(targetID)
+
+		attr.AttachBtfId = uint32(targetID)
+		attr.AttachProgFd = uint32(spec.AttachTarget.FD())
+		defer runtime.KeepAlive(spec.AttachTarget)
+	} else if spec.AttachTo != "" {
+		targetID, err := findTargetInKernel(kernelTypes, spec.AttachTo, spec.Type, spec.AttachType)
+		if err != nil && !errors.Is(err, errUnrecognizedAttachType) {
+			// We ignore errUnrecognizedAttachType since AttachTo may be non-empty
+			// for programs that don't attach anywhere.
+			return nil, fmt.Errorf("attach %s/%s: %w", spec.Type, spec.AttachType, err)
 		}
-		if spec.AttachTarget != nil {
-			attr.AttachProgFd = uint32(spec.AttachTarget.FD())
-		}
+
+		attr.AttachBtfId = uint32(targetID)
 	}
 
 	logSize := DefaultVerifierLogSize
@@ -776,7 +758,15 @@ func (p *Program) BindMap(m *Map) error {
 	return sys.ProgBindMap(attr)
 }
 
-func resolveBTFType(spec *btf.Spec, name string, progType ProgramType, attachType AttachType) (btf.TypeID, error) {
+var errUnrecognizedAttachType = errors.New("unrecognized attach type")
+
+// find an attach target type in the kernel.
+//
+// spec may be nil and defaults to the canonical kernel BTF. name together with
+// progType and attachType determine which type we need to attach to.
+//
+// Returns errUnrecognizedAttachType.
+func findTargetInKernel(spec *btf.Spec, name string, progType ProgramType, attachType AttachType) (btf.TypeID, error) {
 	type match struct {
 		p ProgramType
 		a AttachType
@@ -794,9 +784,6 @@ func resolveBTFType(spec *btf.Spec, name string, progType ProgramType, attachTyp
 	case match{Tracing, AttachTraceIter}:
 		typeName = "bpf_iter_" + name
 		featureName = name + " iterator"
-	case match{Extension, AttachNone}:
-		typeName = name
-		featureName = fmt.Sprintf("freplace %s", name)
 	case match{Tracing, AttachTraceFEntry}:
 		typeName = name
 		featureName = fmt.Sprintf("fentry %s", name)
@@ -811,7 +798,7 @@ func resolveBTFType(spec *btf.Spec, name string, progType ProgramType, attachTyp
 		featureName = fmt.Sprintf("raw_tp %s", name)
 		isBTFTypeFunc = false
 	default:
-		return 0, nil
+		return 0, errUnrecognizedAttachType
 	}
 
 	var (
@@ -841,8 +828,52 @@ func resolveBTFType(spec *btf.Spec, name string, progType ProgramType, attachTyp
 				Name: featureName,
 			}
 		}
-		return 0, fmt.Errorf("resolve BTF for %s: %w", featureName, err)
+		return 0, fmt.Errorf("find target for %s: %w", featureName, err)
 	}
 
 	return spec.TypeID(target)
+}
+
+// find an attach target type in a program.
+//
+// Returns errUnrecognizedAttachType.
+func findTargetInProgram(prog *Program, name string, progType ProgramType, attachType AttachType) (btf.TypeID, error) {
+	type match struct {
+		p ProgramType
+		a AttachType
+	}
+
+	var typeName string
+	switch (match{progType, attachType}) {
+	case match{Extension, AttachNone}:
+		typeName = name
+	default:
+		return 0, errUnrecognizedAttachType
+	}
+
+	info, err := prog.Info()
+	if err != nil {
+		return 0, fmt.Errorf("load target BTF: %w", err)
+	}
+
+	btfID, ok := info.BTFID()
+	if !ok {
+		return 0, fmt.Errorf("load target BTF: no BTF info available")
+	}
+
+	btfHandle, err := btf.NewHandleFromID(btfID)
+	if err != nil {
+		return 0, fmt.Errorf("load target BTF: %w", err)
+	}
+	defer btfHandle.Close()
+
+	spec := btfHandle.Spec()
+
+	var targetFunc *btf.Func
+	err = spec.TypeByName(typeName, &targetFunc)
+	if err != nil {
+		return 0, fmt.Errorf("find target %s: %w", typeName, err)
+	}
+
+	return spec.TypeID(targetFunc)
 }

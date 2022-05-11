@@ -12,8 +12,8 @@ import (
 	"syscall"
 	"testing"
 
+	"github.com/cilium/ebpf/btf"
 	"github.com/cilium/ebpf/internal"
-	"github.com/cilium/ebpf/internal/btf"
 	"github.com/cilium/ebpf/internal/testutils"
 	"github.com/cilium/ebpf/internal/unix"
 
@@ -761,8 +761,13 @@ func TestLibBPFCompat(t *testing.T) {
 				}
 				defer fh.Close()
 
+				btfSpec, err := btf.LoadSpec(coreFile)
+				if err != nil {
+					t.Fatal(err)
+				}
+
 				opts := opts // copy
-				opts.Programs.TargetBTF = fh
+				opts.Programs.KernelTypes = btfSpec
 				load(t, spec, opts, valid)
 			})
 		}

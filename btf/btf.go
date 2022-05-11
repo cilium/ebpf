@@ -74,6 +74,17 @@ func (h *btfHeader) stringStart() int64 {
 	return int64(h.HdrLen + h.StringOff)
 }
 
+// LoadSpec opens file and calls LoadSpecFromReader on it.
+func LoadSpec(file string) (*Spec, error) {
+	fh, err := os.Open(file)
+	if err != nil {
+		return nil, err
+	}
+	defer fh.Close()
+
+	return LoadSpecFromReader(fh)
+}
+
 // LoadSpecFromReader reads from an ELF or a raw BTF blob.
 //
 // Returns ErrNotFound if reading from an ELF which contains no BTF. ExtInfos

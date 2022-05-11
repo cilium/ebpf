@@ -35,13 +35,9 @@ func readVMLinux(tb testing.TB) *bytes.Reader {
 }
 
 func parseELFBTF(tb testing.TB, file string) *Spec {
-	fh, err := os.Open(file)
-	if err != nil {
-		tb.Fatal(err)
-	}
-	defer fh.Close()
+	tb.Helper()
 
-	spec, err := LoadSpecFromReader(fh)
+	spec, err := LoadSpec(file)
 	if err != nil {
 		tb.Fatal("Can't load BTF:", err)
 	}
@@ -229,7 +225,7 @@ func TestFindVMLinux(t *testing.T) {
 }
 
 func TestLoadSpecFromElf(t *testing.T) {
-	testutils.Files(t, testutils.Glob(t, "../../testdata/loader-e*.elf"), func(t *testing.T, file string) {
+	testutils.Files(t, testutils.Glob(t, "../testdata/loader-e*.elf"), func(t *testing.T, file string) {
 		spec := parseELFBTF(t, file)
 
 		vt, err := spec.TypeByID(0)
@@ -302,7 +298,7 @@ func TestGuessBTFByteOrder(t *testing.T) {
 }
 
 func TestSpecCopy(t *testing.T) {
-	spec := parseELFBTF(t, "../../testdata/loader-el.elf")
+	spec := parseELFBTF(t, "../testdata/loader-el.elf")
 
 	if len(spec.types) < 1 {
 		t.Fatal("Not enough types")

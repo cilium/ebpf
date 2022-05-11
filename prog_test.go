@@ -90,6 +90,54 @@ func TestProgramRun(t *testing.T) {
 	}
 }
 
+func TestProgramRunWithOptions(t *testing.T) {
+	testutils.SkipOnOldKernel(t, "5.15", "XDP ctx_in/ctx_out")
+
+	ins := asm.Instructions{
+		// Return XDP_ABORTED
+		asm.LoadImm(asm.R0, 0, asm.DWord),
+		asm.Return(),
+	}
+
+	t.Log(ins)
+
+	prog, err := NewProgram(&ProgramSpec{
+		Name:         "test",
+		Type:         XDP,
+		Instructions: ins,
+		License:      "MIT",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer prog.Close()
+
+	buf := make([]byte, 14)
+	xdp := sys.XdpMd{
+		Data:    0,
+		DataEnd: 14,
+	}
+	xdpOut := sys.XdpMd{}
+	opts := RunOptions{
+		Data:       buf,
+		Context:    xdp,
+		ContextOut: &xdpOut,
+	}
+	ret, err := prog.Run(&opts)
+	testutils.SkipIfNotSupported(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if ret != 0 {
+		t.Error("Expected return value to be 0, got", ret)
+	}
+
+	if xdp != xdpOut {
+		t.Errorf("Expect xdp (%+v) == xdpOut (%+v)", xdp, xdpOut)
+	}
+}
+
 func TestProgramSpecFlattenOrder(t *testing.T) {
 	prog_a := ProgramSpec{Name: "prog_a"}
 	prog_b := ProgramSpec{Name: "prog_b"}
@@ -170,13 +218,18 @@ func TestProgramTestRunInterrupt(t *testing.T) {
 
 		// Block this thread in the BPF syscall, so that we can
 		// trigger EINTR by sending a signal.
-		_, _, _, err := prog.testRun(make([]byte, 14), math.MaxInt32, func() {
-			// We don't know how long finishing the
-			// test run would take, so flag that we've seen
-			// an interruption and abort the goroutine.
-			close(errs)
-			runtime.Goexit()
-		})
+		opts := RunOptions{
+			Data:   make([]byte, 14),
+			Repeat: math.MaxInt32,
+			Reset: func() {
+				// We don't know how long finishing the
+				// test run would take, so flag that we've seen
+				// an interruption and abort the goroutine.
+				close(errs)
+				runtime.Goexit()
+			},
+		}
+		_, _, err := prog.testRun(&opts)
 
 		errs <- err
 	}()

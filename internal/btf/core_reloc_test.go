@@ -9,6 +9,7 @@ import (
 
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/internal"
+	"github.com/cilium/ebpf/internal/btf"
 	"github.com/cilium/ebpf/internal/testutils"
 )
 
@@ -36,7 +37,7 @@ func TestCORERelocationLoad(t *testing.T) {
 				}
 
 				prog, err := ebpf.NewProgramWithOptions(progSpec, ebpf.ProgramOptions{
-					TargetBTF: fh,
+					KernelTypes: progSpec.BTF,
 				})
 
 				if strings.HasPrefix(progSpec.Name, "err_") {
@@ -69,13 +70,7 @@ func TestCORERelocationLoad(t *testing.T) {
 
 func TestCORERelocationRead(t *testing.T) {
 	testutils.Files(t, testutils.Glob(t, "testdata/relocs_read-*.elf"), func(t *testing.T, file string) {
-		fh, err := os.Open(file)
-		if err != nil {
-			t.Fatal(err)
-		}
-		defer fh.Close()
-
-		spec, err := ebpf.LoadCollectionSpecFromReader(fh)
+		spec, err := ebpf.LoadCollectionSpec(file)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -84,20 +79,16 @@ func TestCORERelocationRead(t *testing.T) {
 			return
 		}
 
-		tgt, err := os.Open(fmt.Sprintf("testdata/relocs_read_tgt-%s.elf", internal.ClangEndian))
+		targetFile := fmt.Sprintf("testdata/relocs_read_tgt-%s.elf", internal.ClangEndian)
+		targetSpec, err := btf.LoadSpec(targetFile)
 		if err != nil {
 			t.Fatal(err)
 		}
-		defer tgt.Close()
 
 		for _, progSpec := range spec.Programs {
 			t.Run(progSpec.Name, func(t *testing.T) {
-				if _, err := tgt.Seek(0, io.SeekStart); err != nil {
-					t.Fatal(err)
-				}
-
 				prog, err := ebpf.NewProgramWithOptions(progSpec, ebpf.ProgramOptions{
-					TargetBTF: tgt,
+					KernelTypes: targetSpec,
 				})
 				testutils.SkipIfNotSupported(t, err)
 				if err != nil {

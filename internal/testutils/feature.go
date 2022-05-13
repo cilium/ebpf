@@ -65,6 +65,14 @@ func checkKernelVersion(tb testing.TB, ufe *internal.UnsupportedFeatureError) {
 func SkipOnOldKernel(tb testing.TB, minVersion, feature string) {
 	tb.Helper()
 
+	if IsKernelLessThan(tb, minVersion) {
+		tb.Skipf("Test requires at least kernel %s (due to missing %s)", minVersion, feature)
+	}
+}
+
+func IsKernelLessThan(tb testing.TB, minVersion string) bool {
+	tb.Helper()
+
 	minv, err := internal.NewVersion(minVersion)
 	if err != nil {
 		tb.Fatalf("Invalid version %s: %s", minVersion, err)
@@ -81,7 +89,5 @@ func SkipOnOldKernel(tb testing.TB, minVersion, feature string) {
 		}
 	}
 
-	if MustKernelVersion().Less(minv) {
-		tb.Skipf("Test requires at least kernel %s (due to missing %s)", minv, feature)
-	}
+	return MustKernelVersion().Less(minv)
 }

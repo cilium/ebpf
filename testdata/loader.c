@@ -112,7 +112,9 @@ int __attribute__((noinline)) global_fn(uint32_t arg) {
 static volatile unsigned int key1 = 0; // .bss
 static volatile unsigned int key2 = 1; // .data
 volatile const unsigned int key3  = 2; // .rodata
-static volatile const uint32_t arg;    // .rodata, rewritten by loader
+static volatile const uint32_t arg;    // .rodata, populated by loader
+// custom .rodata section, populated by loader
+static volatile const uint32_t arg2 __section(".rodata.test");
 #endif
 
 __section("xdp") int xdp_prog() {
@@ -121,11 +123,12 @@ __section("xdp") int xdp_prog() {
 	unsigned int key2 = 1;
 	unsigned int key3 = 2;
 	uint32_t arg      = 1;
+	uint32_t arg2     = 2;
 #endif
 	map_lookup_elem(&hash_map, (void *)&key1);
 	map_lookup_elem(&hash_map2, (void *)&key2);
 	map_lookup_elem(&hash_map2, (void *)&key3);
-	return static_fn(arg) + global_fn(arg);
+	return static_fn(arg) + global_fn(arg) + arg2;
 }
 
 // This function has no relocations, and is thus parsed differently.

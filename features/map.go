@@ -14,6 +14,7 @@ import (
 
 func init() {
 	mc.mapTypes = make(map[ebpf.MapType]error)
+	mc.mapFlags = make(map[mapFlagCacheEntry]error)
 }
 
 var (

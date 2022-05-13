@@ -8,7 +8,6 @@ import (
 	"math/rand"
 	"path/filepath"
 	"reflect"
-	"strings"
 	"time"
 	"unsafe"
 
@@ -25,6 +24,7 @@ var (
 	ErrKeyExist         = errors.New("key already exists")
 	ErrIterationAborted = errors.New("iteration aborted")
 	ErrMapIncompatible  = errors.New("map spec is incompatible with existing map")
+	errMapNoBTFValue    = errors.New("map spec does not contain a BTF Value")
 )
 
 // MapOptions control loading a map into the kernel.
@@ -126,6 +126,31 @@ func (ms *MapSpec) clampPerfEventArraySize() error {
 	}
 
 	return nil
+}
+
+// dataSection returns the contents and BTF Datasec descriptor of the spec.
+func (ms *MapSpec) dataSection() ([]byte, *btf.Datasec, error) {
+
+	if ms.Value == nil {
+		return nil, nil, errMapNoBTFValue
+	}
+
+	ds, ok := ms.Value.(*btf.Datasec)
+	if !ok {
+		return nil, nil, fmt.Errorf("map value BTF is a %T, not a *btf.Datasec", ms.Value)
+	}
+
+	if n := len(ms.Contents); n != 1 {
+		return nil, nil, fmt.Errorf("expected one key, found %d", n)
+	}
+
+	kv := ms.Contents[0]
+	value, ok := kv.Value.([]byte)
+	if !ok {
+		return nil, nil, fmt.Errorf("value at first map key is %T, not []byte", kv.Value)
+	}
+
+	return value, ds, nil
 }
 
 // MapKV is used to initialize the contents of a Map.
@@ -1280,60 +1305,6 @@ func marshalMap(m *Map, length int) ([]byte, error) {
 	buf := make([]byte, 4)
 	internal.NativeEndian.PutUint32(buf, m.fd.Uint())
 	return buf, nil
-}
-
-func patchValue(value []byte, typ btf.Type, replacements map[string]interface{}) error {
-	replaced := make(map[string]bool)
-	replace := func(name string, offset, size int, replacement interface{}) error {
-		if offset+size > len(value) {
-			return fmt.Errorf("%s: offset %d(+%d) is out of bounds", name, offset, size)
-		}
-
-		buf, err := marshalBytes(replacement, size)
-		if err != nil {
-			return fmt.Errorf("marshal %s: %w", name, err)
-		}
-
-		copy(value[offset:offset+size], buf)
-		replaced[name] = true
-		return nil
-	}
-
-	switch parent := typ.(type) {
-	case *btf.Datasec:
-		for _, secinfo := range parent.Vars {
-			name := string(secinfo.Type.(*btf.Var).Name)
-			replacement, ok := replacements[name]
-			if !ok {
-				continue
-			}
-
-			err := replace(name, int(secinfo.Offset), int(secinfo.Size), replacement)
-			if err != nil {
-				return err
-			}
-		}
-
-	default:
-		return fmt.Errorf("patching %T is not supported", typ)
-	}
-
-	if len(replaced) == len(replacements) {
-		return nil
-	}
-
-	var missing []string
-	for name := range replacements {
-		if !replaced[name] {
-			missing = append(missing, name)
-		}
-	}
-
-	if len(missing) == 1 {
-		return fmt.Errorf("unknown field: %s", missing[0])
-	}
-
-	return fmt.Errorf("unknown fields: %s", strings.Join(missing, ","))
 }
 
 // MapIterator iterates a Map.

@@ -20,9 +20,15 @@ var (
 	mc mapCache
 )
 
+type mapFlagCacheEntry struct {
+	mt    ebpf.MapType
+	flags uint32
+}
+
 type mapCache struct {
 	sync.Mutex
 	mapTypes map[ebpf.MapType]error
+	mapFlags map[mapFlagCacheEntry]error
 }
 
 func createMapTypeAttr(mt ebpf.MapType) *sys.MapCreateAttr {
@@ -106,6 +112,17 @@ func HaveMapType(mt ebpf.MapType) error {
 	return haveMapType(mt)
 }
 
+// HaveMapFlags probes the running kernel for the availability of the specified map type and flags.
+//
+// See the package documentation for the meaning of the error return value.
+func HaveMapFlags(mt ebpf.MapType, flags uint32) error {
+	if err := validateMaptype(mt); err != nil {
+		return err
+	}
+
+	return haveMapFlags(mt, flags)
+}
+
 func validateMaptype(mt ebpf.MapType) error {
 	if mt > mt.Max() {
 		return os.ErrInvalid
@@ -129,13 +146,40 @@ func haveMapType(mt ebpf.MapType) error {
 		return err
 	}
 
+	err = checkMapCreation(mt, createMapTypeAttr(mt))
+
+	mc.mapTypes[mt] = err
+
+	return err
+}
+
+func haveMapFlags(mt ebpf.MapType, flags uint32) error {
+	cacheEntry := mapFlagCacheEntry{mt, flags}
+
+	mc.Lock()
+	defer mc.Unlock()
+	err, ok := mc.mapFlags[cacheEntry]
+	if ok {
+		return err
+	}
+
+	attr := createMapTypeAttr(mt)
+	attr.MapFlags |= flags
+	err = checkMapCreation(mt, attr)
+
+	mc.mapFlags[cacheEntry] = err
+
+	return err
+}
+
+func checkMapCreation(mt ebpf.MapType, attr *sys.MapCreateAttr) error {
 	fd, err := sys.MapCreate(createMapTypeAttr(mt))
 
 	switch {
 	// For nested and storage map types we accept EBADF as indicator that these maps are supported
 	case errors.Is(err, unix.EBADF):
 		if isMapOfMaps(mt) || isStorageMap(mt) {
-			err = nil
+			return nil
 		}
 
 	// EINVAL occurs when attempting to create a map with an unknown type.
@@ -143,23 +187,20 @@ func haveMapType(mt ebpf.MapType) error {
 	// of the struct known by the running kernel, meaning the kernel is too old
 	// to support the given map type.
 	case errors.Is(err, unix.EINVAL), errors.Is(err, unix.E2BIG):
-		err = ebpf.ErrNotSupported
+		return ebpf.ErrNotSupported
 
 	// EPERM is kept as-is and is not converted or wrapped.
 	case errors.Is(err, unix.EPERM):
-		break
+		return nil
 
 	// Wrap unexpected errors.
 	case err != nil:
-		err = fmt.Errorf("unexpected error during feature probe: %w", err)
+		return fmt.Errorf("unexpected error during feature probe: %w", err)
 
-	default:
-		fd.Close()
 	}
 
-	mc.mapTypes[mt] = err
-
-	return err
+	fd.Close()
+	return nil
 }
 
 func isMapOfMaps(mt ebpf.MapType) bool {

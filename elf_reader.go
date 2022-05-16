@@ -459,7 +459,7 @@ func (ec *elfCode) relocateInstruction(ins *asm.Instruction, rel elf.Symbol) err
 		switch typ {
 		case elf.STT_SECTION:
 			if bind != elf.STB_LOCAL {
-				return fmt.Errorf("direct load: %s: unsupported relocation %s", name, bind)
+				return fmt.Errorf("direct load: %s: unsupported section relocation %s", name, bind)
 			}
 
 			// This is really a reference to a static symbol, which clang doesn't
@@ -468,8 +468,17 @@ func (ec *elfCode) relocateInstruction(ins *asm.Instruction, rel elf.Symbol) err
 			offset = uint32(uint64(ins.Constant))
 
 		case elf.STT_OBJECT:
-			if bind != elf.STB_GLOBAL {
-				return fmt.Errorf("direct load: %s: unsupported relocation %s", name, bind)
+			// LLVM 9 emits OBJECT-LOCAL symbols for anonymous constants.
+			if bind != elf.STB_GLOBAL && bind != elf.STB_LOCAL {
+				return fmt.Errorf("direct load: %s: unsupported object relocation %s", name, bind)
+			}
+
+			offset = uint32(rel.Value)
+
+		case elf.STT_NOTYPE:
+			// LLVM 7 emits NOTYPE-LOCAL symbols for anonymous constants.
+			if bind != elf.STB_LOCAL {
+				return fmt.Errorf("direct load: %s: unsupported untyped relocation %s", name, bind)
 			}
 
 			offset = uint32(rel.Value)
@@ -1016,15 +1025,6 @@ func (ec *elfCode) loadDataSections(maps map[string]*MapSpec) error {
 			continue
 		}
 
-		if ec.btf == nil {
-			return errors.New("data sections require BTF, make sure all consts are marked as static")
-		}
-
-		var datasec *btf.Datasec
-		if err := ec.btf.TypeByName(sec.Name, &datasec); err != nil {
-			return fmt.Errorf("data section %s: can't get BTF: %w", sec.Name, err)
-		}
-
 		data, err := sec.Data()
 		if err != nil {
 			return fmt.Errorf("data section %s: can't get contents: %w", sec.Name, err)
@@ -1041,16 +1041,23 @@ func (ec *elfCode) loadDataSections(maps map[string]*MapSpec) error {
 			ValueSize:  uint32(len(data)),
 			MaxEntries: 1,
 			Contents:   []MapKV{{uint32(0), data}},
-			Key:        &btf.Void{},
-			Value:      datasec,
-			BTF:        ec.btf,
 		}
 
-		switch sec.Name {
-		case ".rodata":
+		// It is possible for a data section to exist without a corresponding BTF Datasec
+		// if it only contains anonymous values like macro-defined arrays.
+		value := &btf.Datasec{}
+		if ec.btf != nil && ec.btf.TypeByName(sec.Name, &value) == nil {
+			// Assign the spec's key and BTF only if the Datasec lookup was successful.
+			mapSpec.BTF = ec.btf
+			mapSpec.Key = &btf.Void{}
+			mapSpec.Value = value
+		}
+
+		switch n := sec.Name; {
+		case strings.HasPrefix(n, ".rodata"):
 			mapSpec.Flags = unix.BPF_F_RDONLY_PROG
 			mapSpec.Freeze = true
-		case ".bss":
+		case n == ".bss":
 			// The kernel already zero-initializes the map
 			mapSpec.Contents = nil
 		}

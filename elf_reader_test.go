@@ -131,6 +131,12 @@ func TestLoadCollectionSpec(t *testing.T) {
 				SectionName: "static",
 				License:     "MIT",
 			},
+			"anon_const": {
+				Name:        "anon_const",
+				Type:        SocketFilter,
+				SectionName: "socket/4",
+				License:     "MIT",
+			},
 		},
 	}
 
@@ -148,13 +154,10 @@ func TestLoadCollectionSpec(t *testing.T) {
 		cmpopts.IgnoreFields(MapSpec{}, "Key", "Value"),
 		cmpopts.IgnoreUnexported(ProgramSpec{}),
 		cmpopts.IgnoreMapEntries(func(key string, _ *MapSpec) bool {
-			switch key {
-			case ".bss", ".data", ".rodata":
+			if key == ".bss" || key == ".data" || strings.HasPrefix(key, ".rodata") {
 				return true
-
-			default:
-				return false
 			}
+			return false
 		}),
 	}
 
@@ -171,9 +174,10 @@ func TestLoadCollectionSpec(t *testing.T) {
 		}
 
 		opts := defaultOpts
-		if have.Maps[".rodata"] != nil {
+		if have.Types != nil {
 			err := have.RewriteConstants(map[string]interface{}{
-				"arg": uint32(1),
+				"arg":  uint32(1),
+				"arg2": uint32(2),
 			})
 			if err != nil {
 				t.Fatal("Can't rewrite constant:", err)
@@ -217,7 +221,7 @@ func TestLoadCollectionSpec(t *testing.T) {
 			t.Fatal("Can't run program:", err)
 		}
 
-		if ret != 5 {
+		if ret != 7 {
 			t.Error("Expected return value to be 5, got", ret)
 		}
 	})

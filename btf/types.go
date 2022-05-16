@@ -514,6 +514,13 @@ type VarSecinfo struct {
 	Size   uint32
 }
 
+func (vsi *VarSecinfo) TypeName() string {
+	if vsi.Type == nil {
+		return ""
+	}
+	return vsi.Type.TypeName()
+}
+
 // Float is a float of a given length.
 type Float struct {
 	Name string

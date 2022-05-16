@@ -112,7 +112,9 @@ int __attribute__((noinline)) global_fn(uint32_t arg) {
 static volatile unsigned int key1 = 0; // .bss
 static volatile unsigned int key2 = 1; // .data
 volatile const unsigned int key3  = 2; // .rodata
-static volatile const uint32_t arg;    // .rodata, rewritten by loader
+static volatile const uint32_t arg;    // .rodata, populated by loader
+// custom .rodata section, populated by loader
+static volatile const uint32_t arg2 __section(".rodata.test");
 #endif
 
 __section("xdp") int xdp_prog() {
@@ -121,11 +123,12 @@ __section("xdp") int xdp_prog() {
 	unsigned int key2 = 1;
 	unsigned int key3 = 2;
 	uint32_t arg      = 1;
+	uint32_t arg2     = 2;
 #endif
 	map_lookup_elem(&hash_map, (void *)&key1);
 	map_lookup_elem(&hash_map2, (void *)&key2);
 	map_lookup_elem(&hash_map2, (void *)&key3);
-	return static_fn(arg) + global_fn(arg);
+	return static_fn(arg) + global_fn(arg) + arg2;
 }
 
 // This function has no relocations, and is thus parsed differently.
@@ -166,3 +169,26 @@ __section("socket/3") int data_sections() {
 	return 0;
 }
 #endif
+
+/*
+ * Up until LLVM 14, this program results in an .rodata.cst32 section
+ * that is accessed by 'return values[i]'. For this section, no BTF is
+ * emitted. 'values' cannot be rewritten, since there is no BTF info
+ * describing the data section.
+ */
+__section("socket/4") int anon_const() {
+	volatile int ctx = 0;
+
+// 32 bytes wide results in a .rodata.cst32 section.
+#define values \
+	(uint64_t[]) { 0x0, 0x1, 0x2, 0x3 }
+
+	int i;
+	for (i = 0; i < 3; i++) {
+		if (ctx == values[i]) {
+			return values[i];
+		}
+	}
+
+	return 0;
+}

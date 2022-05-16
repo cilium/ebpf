@@ -166,3 +166,26 @@ __section("socket/3") int data_sections() {
 	return 0;
 }
 #endif
+
+/*
+ * Up until LLVM 14, this program results in an .rodata.cst32 section
+ * that is accessed by 'return values[i]'. For this section, no BTF is
+ * emitted. 'values' cannot be rewritten, since there is no BTF info
+ * describing the data section.
+ */
+__section("socket/4") int anon_const() {
+	volatile int ctx = 0;
+
+// 32 bytes wide results in a .rodata.cst32 section.
+#define values \
+	(uint64_t[]) { 0x0, 0x1, 0x2, 0x3 }
+
+	int i;
+	for (i = 0; i < 3; i++) {
+		if (ctx == values[i]) {
+			return values[i];
+		}
+	}
+
+	return 0;
+}

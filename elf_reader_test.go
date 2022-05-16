@@ -131,6 +131,12 @@ func TestLoadCollectionSpec(t *testing.T) {
 				SectionName: "static",
 				License:     "MIT",
 			},
+			"anon_const": {
+				Name:        "anon_const",
+				Type:        SocketFilter,
+				SectionName: "socket/4",
+				License:     "MIT",
+			},
 		},
 	}
 

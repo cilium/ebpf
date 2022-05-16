@@ -112,7 +112,7 @@ func TestTypeByName(t *testing.T) {
 		t.Run(fmt.Sprintf("%T", typ), func(t *testing.T) {
 			// spec.TypeByName MUST fail if typ is a nil btf.Type.
 			if err := spec.TypeByName("iphdr", typ); err == nil {
-				t.Fatalf("FindType does not fail with type %T", typ)
+				t.Fatalf("TypeByName does not fail with type %T", typ)
 			}
 		})
 	}

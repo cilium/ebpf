@@ -468,8 +468,17 @@ func (ec *elfCode) relocateInstruction(ins *asm.Instruction, rel elf.Symbol) err
 			offset = uint32(uint64(ins.Constant))
 
 		case elf.STT_OBJECT:
-			if bind != elf.STB_GLOBAL {
+			// LLVM 9 emits OBJECT-LOCAL symbols for anonymous constants.
+			if bind != elf.STB_GLOBAL && bind != elf.STB_LOCAL {
 				return fmt.Errorf("direct load: %s: unsupported object relocation %s", name, bind)
+			}
+
+			offset = uint32(rel.Value)
+
+		case elf.STT_NOTYPE:
+			// LLVM 7 emits NOTYPE-LOCAL symbols for anonymous constants.
+			if bind != elf.STB_LOCAL {
+				return fmt.Errorf("direct load: %s: unsupported untyped relocation %s", name, bind)
 			}
 
 			offset = uint32(rel.Value)

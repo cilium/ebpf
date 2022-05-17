@@ -801,17 +801,12 @@ func findTargetInKernel(spec *btf.Spec, name string, progType ProgramType, attac
 		return 0, errUnrecognizedAttachType
 	}
 
-	var (
-		target btf.Type
-		err    error
-	)
-	if spec == nil {
-		spec, err = btf.LoadKernelSpec()
-		if err != nil {
-			return 0, fmt.Errorf("load kernel spec: %w", err)
-		}
+	spec, err := maybeLoadKernelBTF(spec)
+	if err != nil {
+		return 0, fmt.Errorf("load kernel spec: %w", err)
 	}
 
+	var target btf.Type
 	if isBTFTypeFunc {
 		var targetFunc *btf.Func
 		err = spec.TypeByName(typeName, &targetFunc)

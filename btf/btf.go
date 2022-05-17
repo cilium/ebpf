@@ -655,6 +655,11 @@ func (s *Spec) TypeByName(name string, typ interface{}) error {
 	return nil
 }
 
+// GetNamedTypes returns a reference to named types.
+func (s *Spec) GetNamedTypes() map[essentialName][]Type {
+	return s.namedTypes
+}
+
 // Handle is a reference to BTF loaded into the kernel.
 type Handle struct {
 	spec *Spec

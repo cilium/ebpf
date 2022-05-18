@@ -342,3 +342,38 @@ func ExampleSpec_TypeByName() {
 	// We've found struct foo
 	fmt.Println(foo.Name)
 }
+
+func TestTypesIterator(t *testing.T) {
+	spec, err := LoadSpecFromReader(readVMLinux(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(spec.types) < 1 {
+		t.Fatal("Not enough types")
+	}
+
+	// Assertion that 'iphdr' type exists within the spec
+	_, err = spec.AnyTypeByName("iphdr")
+	if err != nil {
+		t.Fatalf("Failed to find 'iphdr' type by name: %s", err)
+	}
+
+	found := false
+	count := 0
+
+	iter := spec.Iterate()
+	for iter.Next() {
+		if !found && iter.Type.TypeName() == "iphdr" {
+			found = true
+		}
+		count += 1
+	}
+
+	if l := len(spec.types); l != count {
+		t.Fatalf("Failed to iterate over all types (%d vs %d)", l, count)
+	}
+	if !found {
+		t.Fatal("Cannot find 'iphdr' type")
+	}
+}

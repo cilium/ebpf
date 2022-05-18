@@ -3,6 +3,7 @@ package ebpf
 import (
 	"errors"
 	"fmt"
+	"sync"
 
 	"github.com/cilium/ebpf/asm"
 	"github.com/cilium/ebpf/btf"
@@ -140,12 +141,9 @@ func applyRelocations(insns asm.Instructions, local, target *btf.Spec) error {
 		return nil
 	}
 
-	if target == nil {
-		var err error
-		target, err = btf.LoadKernelSpec()
-		if err != nil {
-			return err
-		}
+	target, err := maybeLoadKernelBTF(target)
+	if err != nil {
+		return err
 	}
 
 	fixups, err := btf.CORERelocate(local, target, relos)
@@ -199,4 +197,30 @@ func fixupProbeReadKernel(ins *asm.Instruction) {
 	case asm.FnProbeReadKernelStr, asm.FnProbeReadUserStr:
 		ins.Constant = int64(asm.FnProbeReadStr)
 	}
+}
+
+var kernelBTF struct {
+	sync.Mutex
+	spec *btf.Spec
+}
+
+// maybeLoadKernelBTF loads the current kernel's BTF if spec is nil, otherwise
+// it returns spec unchanged.
+//
+// The kernel BTF is cached for the lifetime of the process.
+func maybeLoadKernelBTF(spec *btf.Spec) (*btf.Spec, error) {
+	if spec != nil {
+		return spec, nil
+	}
+
+	kernelBTF.Lock()
+	defer kernelBTF.Unlock()
+
+	if kernelBTF.spec != nil {
+		return kernelBTF.spec, nil
+	}
+
+	var err error
+	kernelBTF.spec, err = btf.LoadKernelSpec()
+	return kernelBTF.spec, err
 }

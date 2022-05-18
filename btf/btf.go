@@ -655,6 +655,31 @@ func (s *Spec) TypeByName(name string, typ interface{}) error {
 	return nil
 }
 
+// TypesIterator iterates over types of a given spec.
+type TypesIterator struct {
+	spec *Spec
+	// The index of the last visited type in the spec.
+	Index int
+	// The last visited type in the spec.
+	Type Type
+}
+
+// NewTypesIterator returns the types iterator.
+func (s *Spec) NewTypesIterator() *TypesIterator {
+	return &TypesIterator{spec: s, Index: 0}
+}
+
+// Next returns true as longs as there are any remaining types.
+func (iter *TypesIterator) Next() bool {
+	if len(iter.spec.types) <= iter.Index {
+		return false
+	}
+
+	iter.Type = iter.spec.types[iter.Index]
+	iter.Index++
+	return true
+}
+
 // Handle is a reference to BTF loaded into the kernel.
 type Handle struct {
 	spec *Spec

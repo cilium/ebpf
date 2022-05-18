@@ -182,7 +182,7 @@ func BenchmarkParseVmlinux(b *testing.B) {
 }
 
 func TestParseCurrentKernelBTF(t *testing.T) {
-	spec, err := loadKernelSpec()
+	spec, err := LoadKernelSpec()
 	testutils.SkipIfNotSupported(t, err)
 	if err != nil {
 		t.Fatal("Can't load BTF:", err)

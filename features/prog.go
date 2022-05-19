@@ -15,7 +15,7 @@ import (
 )
 
 func init() {
-	pc.progTypes = make(map[ebpf.ProgramType]error)
+	pc.types = make(map[ebpf.ProgramType]error)
 	pc.helpers = make(map[ebpf.ProgramType]map[asm.BuiltinFunc]error)
 	allocHelperCache()
 }
@@ -31,8 +31,8 @@ var (
 )
 
 type progCache struct {
-	typeMu    sync.Mutex
-	progTypes map[ebpf.ProgramType]error
+	typeMu sync.Mutex
+	types  map[ebpf.ProgramType]error
 
 	helperMu sync.Mutex
 	helpers  map[ebpf.ProgramType]map[asm.BuiltinFunc]error
@@ -95,17 +95,22 @@ func createProgLoadAttr(pt ebpf.ProgramType, helper asm.BuiltinFunc) (*sys.ProgL
 
 // HaveProgType probes the running kernel for the availability of the specified program type.
 //
+// Deprecated: use HaveProgramType() instead.
+var HaveProgType = HaveProgramType
+
+// HaveProgramType probes the running kernel for the availability of the specified program type.
+//
 // See the package documentation for the meaning of the error return value.
-func HaveProgType(pt ebpf.ProgramType) error {
-	if err := validateProgType(pt); err != nil {
+func HaveProgramType(pt ebpf.ProgramType) error {
+	if err := validateProgramType(pt); err != nil {
 		return err
 	}
 
-	return haveProgType(pt)
+	return haveProgramType(pt)
 
 }
 
-func validateProgType(pt ebpf.ProgramType) error {
+func validateProgramType(pt ebpf.ProgramType) error {
 	if pt > pt.Max() {
 		return os.ErrInvalid
 	}
@@ -120,10 +125,10 @@ func validateProgType(pt ebpf.ProgramType) error {
 	return nil
 }
 
-func haveProgType(pt ebpf.ProgramType) error {
+func haveProgramType(pt ebpf.ProgramType) error {
 	pc.typeMu.Lock()
 	defer pc.typeMu.Unlock()
-	if err, ok := pc.progTypes[pt]; ok {
+	if err, ok := pc.types[pt]; ok {
 		return err
 	}
 
@@ -154,7 +159,7 @@ func haveProgType(pt ebpf.ProgramType) error {
 		fd.Close()
 	}
 
-	pc.progTypes[pt] = err
+	pc.types[pt] = err
 
 	return err
 }
@@ -173,7 +178,7 @@ func haveProgType(pt ebpf.ProgramType) error {
 //
 // Probe results are cached and persist throughout any process capability changes.
 func HaveProgramHelper(pt ebpf.ProgramType, helper asm.BuiltinFunc) error {
-	if err := validateProgType(pt); err != nil {
+	if err := validateProgramType(pt); err != nil {
 		return err
 	}
 

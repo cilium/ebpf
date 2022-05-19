@@ -47,7 +47,7 @@ var progTypeMinVersion = map[ebpf.ProgramType]string{
 	ebpf.Syscall:               "5.14",
 }
 
-func TestHaveProgType(t *testing.T) {
+func TestHaveProgramType(t *testing.T) {
 	for progType := ebpf.UnspecifiedProgram + 1; progType <= progType.Max(); progType++ {
 		// Need inner loop copy to make use of t.Parallel()
 		pt := progType
@@ -69,7 +69,7 @@ func TestHaveProgType(t *testing.T) {
 			}
 			testutils.SkipOnOldKernel(t, minVersion, feature)
 
-			if err := HaveProgType(pt); err != nil {
+			if err := HaveProgramType(pt); err != nil {
 				if pt == ebpf.LircMode2 {
 					// CI kernels are built with CONFIG_BPF_LIRC_MODE2, but some
 					// mainstream distro's don't ship with it. Make this prog type
@@ -84,14 +84,14 @@ func TestHaveProgType(t *testing.T) {
 	}
 }
 
-func TestHaveProgTypeUnsupported(t *testing.T) {
-	if err := haveProgType(ebpf.ProgramType(math.MaxUint32)); err != ebpf.ErrNotSupported {
+func TestHaveProgramTypeUnsupported(t *testing.T) {
+	if err := haveProgramType(ebpf.ProgramType(math.MaxUint32)); err != ebpf.ErrNotSupported {
 		t.Fatalf("Expected ebpf.ErrNotSupported but was: %v", err)
 	}
 }
 
-func TestHaveProgTypeInvalid(t *testing.T) {
-	if err := HaveProgType(ebpf.ProgramType(math.MaxUint32)); err != os.ErrInvalid {
+func TestHaveProgramTypeInvalid(t *testing.T) {
+	if err := HaveProgramType(ebpf.ProgramType(math.MaxUint32)); err != os.ErrInvalid {
 		t.Fatalf("Expected os.ErrInvalid but was: %v", err)
 	}
 }

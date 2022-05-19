@@ -81,6 +81,8 @@ func LoadCollectionSpecFromReader(rd io.ReaderAt) (*CollectionSpec, error) {
 
 	// Collect all the sections we're interested in. This includes relocations
 	// which we parse later.
+	//
+	// Keep the documentation at docs/ebpf/loading/elf-sections.md up-to-date.
 	for i, sec := range f.Sections {
 		idx := elf.SectionIndex(i)
 
@@ -1260,6 +1262,7 @@ func getProgType(sectionName string) (ProgramType, AttachType, uint32, string) {
 		{"seccomp", SocketFilter, AttachNone, 0},
 		{"kprobe.multi", Kprobe, AttachTraceKprobeMulti, 0},
 		{"kretprobe.multi", Kprobe, AttachTraceKprobeMulti, 0},
+		// Document all prefixes in docs/ebpf/concepts/elf-sections.md.
 	}
 
 	for _, t := range types {

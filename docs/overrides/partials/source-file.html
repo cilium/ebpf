@@ -1,0 +1,12 @@
+<hr>
+<div class="md-source-file">
+  <small>
+    {% if page.meta.git_revision_date_localized %}
+    Last updated {{ page.meta.git_revision_date_localized }}
+    {% endif %}
+    <br />
+    {% if git_page_authors %}
+    Authored by {{ git_page_authors }}
+    {% endif %}
+  </small>
+</div>

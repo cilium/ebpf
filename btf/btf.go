@@ -11,7 +11,6 @@ import (
 	"math"
 	"os"
 	"reflect"
-	"sync"
 
 	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/sys"
@@ -255,32 +254,11 @@ func indexTypes(types []Type) (map[Type]TypeID, map[essentialName][]Type) {
 	return typeIDs, typesByName
 }
 
-var kernelBTF struct {
-	sync.Mutex
-	*Spec
-}
-
 // LoadKernelSpec returns the current kernel's BTF information.
 //
-// Requires a >= 5.5 kernel with CONFIG_DEBUG_INFO_BTF enabled. Returns
-// ErrNotSupported if BTF is not enabled.
+// Defaults to /sys/kernel/btf/vmlinux and falls back to scanning the file system
+// for vmlinux ELFs. Returns an error wrapping ErrNotSupported if BTF is not enabled.
 func LoadKernelSpec() (*Spec, error) {
-	kernelBTF.Lock()
-	defer kernelBTF.Unlock()
-
-	if kernelBTF.Spec != nil {
-		return kernelBTF.Spec, nil
-	}
-
-	var err error
-	kernelBTF.Spec, err = loadKernelSpec()
-	return kernelBTF.Spec, err
-}
-
-// loadKernelSpec attempts to load the raw vmlinux BTF blob at
-// /sys/kernel/btf/vmlinux and falls back to scanning the file system
-// for vmlinux ELFs.
-func loadKernelSpec() (*Spec, error) {
 	fh, err := os.Open("/sys/kernel/btf/vmlinux")
 	if err == nil {
 		defer fh.Close()

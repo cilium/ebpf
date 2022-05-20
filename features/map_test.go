@@ -68,26 +68,31 @@ func TestHaveMapType(t *testing.T) {
 	}
 }
 
-var mapFlagMinVersion = map[mapFlagCacheEntry]string{
-	{ebpf.Array, unix.BPF_F_RDONLY_PROG}: "5.2",
-	{ebpf.Array, unix.BPF_F_WRONLY_PROG}: "5.2",
-	{ebpf.Array, unix.BPF_F_MMAPABLE}:    "5.5",
-	{ebpf.Array, unix.BPF_F_INNER_MAP}:   "5.10",
+type haveMapFlagsTestEntry struct {
+	mapType          ebpf.MapType
+	flags            uint32
+	minKernelVersion string
+	description      string
 }
 
 func TestHaveMapFlags(t *testing.T) {
-	for entry, minVersion := range mapFlagMinVersion {
-		feature := fmt.Sprintf("%s:%d", entry.mt.String(), entry.flags)
+	mapFlagTestEntries := []haveMapFlagsTestEntry{
+		{ebpf.Array, unix.BPF_F_RDONLY_PROG, "5.2", "read_only_array_map"},
+		{ebpf.Array, unix.BPF_F_WRONLY_PROG, "5.2", "write_only_array_map"},
+		{ebpf.Array, unix.BPF_F_MMAPABLE, "5.5", "mmapable_array_map"},
+		{ebpf.Array, unix.BPF_F_INNER_MAP, "5.10", "inner_map_array_map"},
+	}
 
-		t.Run(feature, func(t *testing.T) {
-			err := HaveMapFlags(entry.mt, entry.flags)
-			if testutils.IsKernelLessThan(t, minVersion) {
+	for _, entry := range mapFlagTestEntries {
+		t.Run(entry.description, func(t *testing.T) {
+			err := HaveMapFlags(entry.mapType, entry.flags)
+			if testutils.IsKernelLessThan(t, entry.minKernelVersion) {
 				if err == nil {
-					t.Fatalf("Map type %s and flags %d are supported on this kernel even though kernel is less than %s", entry.mt.String(), entry.flags, minVersion)
+					t.Fatalf("Map type %s and flags %d are supported on this kernel even though kernel is less than %s", entry.mapType.String(), entry.flags, entry.minKernelVersion)
 				}
 			} else {
 				if err != nil {
-					t.Fatalf("Map type %s and flags %d aren't supported even though kernel is at least %s: %v", entry.mt.String(), entry.flags, minVersion, err)
+					t.Fatalf("Map type %s and flags %d aren't supported even though kernel is at least %s: %v", entry.mapType.String(), entry.flags, entry.minKernelVersion, err)
 				}
 			}
 		})

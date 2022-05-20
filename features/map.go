@@ -174,7 +174,7 @@ func haveMapFlags(mt ebpf.MapType, flags uint32) error {
 }
 
 func checkMapCreation(mt ebpf.MapType, attr *sys.MapCreateAttr) error {
-	fd, err := sys.MapCreate(createMapTypeAttr(mt))
+	fd, err := sys.MapCreate(attr)
 
 	switch {
 	// For nested and storage map types we accept EBADF as indicator that these maps are supported
@@ -192,7 +192,7 @@ func checkMapCreation(mt ebpf.MapType, attr *sys.MapCreateAttr) error {
 
 	// EPERM is kept as-is and is not converted or wrapped.
 	case errors.Is(err, unix.EPERM):
-		return nil
+		return err
 
 	// Wrap unexpected errors.
 	case err != nil:

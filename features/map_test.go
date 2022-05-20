@@ -77,10 +77,15 @@ func TestHaveMapFlags(t *testing.T) {
 		feature := fmt.Sprintf("%s:%d", entry.mt.String(), entry.flags)
 
 		t.Run(feature, func(t *testing.T) {
-			testutils.SkipOnOldKernel(t, minVersion, feature)
-
-			if err := HaveMapFlags(entry.mt, entry.flags); err != nil {
-				t.Fatalf("Map type %s and flags %d aren't supported even though kernel is at least %s: %v", entry.mt.String(), entry.flags, minVersion, err)
+			err := HaveMapFlags(entry.mt, entry.flags)
+			if testutils.IsKernelLessThan(t, minVersion) {
+				if err == nil {
+					t.Fatalf("Map type %s and flags %d are supported on this kernel even though kernel is less than %s", entry.mt.String(), entry.flags, minVersion)
+				}
+			} else {
+				if err != nil {
+					t.Fatalf("Map type %s and flags %d aren't supported even though kernel is at least %s: %v", entry.mt.String(), entry.flags, minVersion, err)
+				}
 			}
 		})
 	}

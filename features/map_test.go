@@ -69,7 +69,8 @@ func TestHaveMapType(t *testing.T) {
 }
 
 var mapFlagMinVersion = map[mapFlagCacheEntry]string{
-	{ebpf.Array, unix.BPF_F_MMAPABLE}: "5.5",
+	{ebpf.Array, unix.BPF_F_MMAPABLE}:  "5.5",
+	{ebpf.Array, unix.BPF_F_INNER_MAP}: "5.10",
 }
 
 func TestHaveMapFlags(t *testing.T) {

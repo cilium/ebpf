@@ -8,6 +8,7 @@ import (
 
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/internal/testutils"
+	"github.com/cilium/ebpf/internal/unix"
 )
 
 var mapTypeMinVersion = map[ebpf.MapType]string{
@@ -64,9 +65,31 @@ func TestHaveMapType(t *testing.T) {
 				t.Fatalf("Map type %s isn't supported even though kernel is at least %s: %v", mt.String(), minVersion, err)
 			}
 		})
-
 	}
+}
 
+var mapFlagMinVersion = map[mapFlagCacheEntry]string{
+	{ebpf.Array, unix.BPF_F_MMAPABLE}:  "5.5",
+	{ebpf.Array, unix.BPF_F_INNER_MAP}: "5.10",
+}
+
+func TestHaveMapFlags(t *testing.T) {
+	for entry, minVersion := range mapFlagMinVersion {
+		feature := fmt.Sprintf("%s:%d", entry.mt.String(), entry.flags)
+
+		t.Run(feature, func(t *testing.T) {
+			err := HaveMapFlags(entry.mt, entry.flags)
+			if testutils.IsKernelLessThan(t, minVersion) {
+				if err == nil {
+					t.Fatalf("Map type %s and flags %d are supported on this kernel even though kernel is less than %s", entry.mt.String(), entry.flags, minVersion)
+				}
+			} else {
+				if err != nil {
+					t.Fatalf("Map type %s and flags %d aren't supported even though kernel is at least %s: %v", entry.mt.String(), entry.flags, minVersion, err)
+				}
+			}
+		})
+	}
 }
 
 func TestHaveMapTypeUnsupported(t *testing.T) {

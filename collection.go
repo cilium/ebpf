@@ -122,34 +122,67 @@ func (cs *CollectionSpec) RewriteMaps(maps map[string]*Map) error {
 //
 // Returns an error if a constant doesn't exist.
 func (cs *CollectionSpec) RewriteConstants(consts map[string]interface{}) error {
-	rodata := cs.Maps[".rodata"]
-	if rodata == nil {
-		return errors.New("missing .rodata section")
+	replaced := make(map[string]bool)
+
+	for name, spec := range cs.Maps {
+		if !strings.HasPrefix(name, ".rodata") {
+			continue
+		}
+
+		b, ds, err := spec.dataSection()
+		if errors.Is(err, errMapNoBTFValue) {
+			// Data sections without a BTF Datasec are valid, but don't support
+			// constant replacements.
+			continue
+		}
+		if err != nil {
+			return fmt.Errorf("map %s: %w", name, err)
+		}
+
+		// MapSpec.Copy() performs a shallow copy. Fully copy the byte slice
+		// to avoid any changes affecting other copies of the MapSpec.
+		cpy := make([]byte, len(b))
+		copy(cpy, b)
+
+		for _, v := range ds.Vars {
+			vname := v.Type.TypeName()
+			replacement, ok := consts[vname]
+			if !ok {
+				continue
+			}
+
+			if replaced[vname] {
+				return fmt.Errorf("section %s: duplicate variable %s", name, vname)
+			}
+
+			if int(v.Offset+v.Size) > len(cpy) {
+				return fmt.Errorf("section %s: offset %d(+%d) for variable %s is out of bounds", name, v.Offset, v.Size, vname)
+			}
+
+			b, err := marshalBytes(replacement, int(v.Size))
+			if err != nil {
+				return fmt.Errorf("marshaling constant replacement %s: %w", vname, err)
+			}
+
+			copy(cpy[v.Offset:v.Offset+v.Size], b)
+
+			replaced[vname] = true
+		}
+
+		spec.Contents[0] = MapKV{Key: uint32(0), Value: cpy}
 	}
 
-	if rodata.BTF == nil {
-		return errors.New(".rodata section has no BTF")
+	var missing []string
+	for c := range consts {
+		if !replaced[c] {
+			missing = append(missing, c)
+		}
 	}
 
-	if n := len(rodata.Contents); n != 1 {
-		return fmt.Errorf("expected one key in .rodata, found %d", n)
+	if len(missing) != 0 {
+		return fmt.Errorf("spec is missing one or more constants: %s", strings.Join(missing, ","))
 	}
 
-	kv := rodata.Contents[0]
-	value, ok := kv.Value.([]byte)
-	if !ok {
-		return fmt.Errorf("first value in .rodata is %T not []byte", kv.Value)
-	}
-
-	buf := make([]byte, len(value))
-	copy(buf, value)
-
-	err := patchValue(buf, rodata.Value, consts)
-	if err != nil {
-		return err
-	}
-
-	rodata.Contents[0] = MapKV{kv.Key, buf}
 	return nil
 }
 

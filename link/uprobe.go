@@ -157,7 +157,7 @@ func (ex *Executable) load(f *internal.SafeELFFile) error {
 	return nil
 }
 
-func (ex *Executable) offset(symbol string) (uint64, error) {
+func (ex *Executable) Offset(symbol string) (uint64, error) {
 	if off, ok := ex.offsets[symbol]; ok {
 		// Symbols with location 0 from section undef are shared library calls and
 		// are relocated before the binary is executed. Dynamic linking is not
@@ -254,7 +254,7 @@ func (ex *Executable) uprobe(symbol string, prog *ebpf.Program, opts *UprobeOpti
 
 	offset := opts.Offset
 	if offset == 0 {
-		off, err := ex.offset(symbol)
+		off, err := ex.Offset(symbol)
 		if err != nil {
 			return nil, err
 		}

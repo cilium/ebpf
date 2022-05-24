@@ -31,12 +31,12 @@ func TestExecutable(t *testing.T) {
 		t.Fatalf("create executable: unexpected path '%s'", bashEx.path)
 	}
 
-	_, err = bashEx.offset(bashSym)
+	_, err = bashEx.Offset(bashSym)
 	if err != nil {
 		t.Fatalf("find offset: %v", err)
 	}
 
-	_, err = bashEx.offset("bogus")
+	_, err = bashEx.Offset("bogus")
 	if err == nil {
 		t.Fatal("find symbol: expected error")
 	}
@@ -116,7 +116,7 @@ func TestUprobeCreatePMU(t *testing.T) {
 	c := qt.New(t)
 
 	// Fetch the offset from the /bin/bash Executable already defined.
-	off, err := bashEx.offset(bashSym)
+	off, err := bashEx.Offset(bashSym)
 	c.Assert(err, qt.IsNil)
 
 	// Prepare probe args.
@@ -148,7 +148,7 @@ func TestUprobePMUUnavailable(t *testing.T) {
 	c := qt.New(t)
 
 	// Fetch the offset from the /bin/bash Executable already defined.
-	off, err := bashEx.offset(bashSym)
+	off, err := bashEx.Offset(bashSym)
 	c.Assert(err, qt.IsNil)
 
 	// Prepare probe args.
@@ -174,7 +174,7 @@ func TestUprobeTraceFS(t *testing.T) {
 	c := qt.New(t)
 
 	// Fetch the offset from the /bin/bash Executable already defined.
-	off, err := bashEx.offset(bashSym)
+	off, err := bashEx.Offset(bashSym)
 	c.Assert(err, qt.IsNil)
 
 	// Prepare probe args.
@@ -223,7 +223,7 @@ func TestUprobeCreateTraceFS(t *testing.T) {
 	c := qt.New(t)
 
 	// Fetch the offset from the /bin/bash Executable already defined.
-	off, err := bashEx.offset(bashSym)
+	off, err := bashEx.Offset(bashSym)
 	c.Assert(err, qt.IsNil)
 
 	// Sanitize the symbol in order to be used in tracefs API.

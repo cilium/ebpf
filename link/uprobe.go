@@ -49,9 +49,13 @@ type Executable struct {
 // UprobeOptions defines additional parameters that will be used
 // when loading Uprobes.
 type UprobeOptions struct {
-	// Symbol offset. Must be provided in case of external symbols (shared libs).
+	// Symbol offset (absolute). Must be provided in case of external symbols (shared libs).
 	// If set, overrides the offset eventually parsed from the executable.
 	Offset uint64
+	// The offset relative to given symbol. Useful when tracing an arbitrary point
+	// inside the frame of given symbol and eliminates the need of recalculating
+	// the absolute offset.
+	RelativeOffset uint64
 	// Only set the uprobe on the given process ID. Useful when tracing
 	// shared library calls or programs that have many running instances.
 	PID int
@@ -186,6 +190,8 @@ func (ex *Executable) offset(symbol string) (uint64, error) {
 //
 //  up, err := ex.Uprobe("main", prog, &UprobeOptions{Offset: 0x123})
 //
+// Note: Setting the Offset field in the options supersedes the symbol's offset.
+//
 // Losing the reference to the resulting Link (up) will close the Uprobe
 // and prevent further execution of prog. The Link must be Closed during
 // program shutdown to avoid leaking system resources.
@@ -217,6 +223,8 @@ func (ex *Executable) Uprobe(symbol string, prog *ebpf.Program, opts *UprobeOpti
 // an offset must be provided via options:
 //
 //  up, err := ex.Uretprobe("main", prog, &UprobeOptions{Offset: 0x123})
+//
+// Note: Setting the Offset field in the options supersedes the symbol's offset.
 //
 // Losing the reference to the resulting Link (up) will close the Uprobe
 // and prevent further execution of prog. The Link must be Closed during
@@ -254,11 +262,12 @@ func (ex *Executable) uprobe(symbol string, prog *ebpf.Program, opts *UprobeOpti
 
 	offset := opts.Offset
 	if offset == 0 {
+		offset = opts.RelativeOffset
 		off, err := ex.offset(symbol)
 		if err != nil {
 			return nil, err
 		}
-		offset = off
+		offset += off
 	}
 
 	pid := opts.PID

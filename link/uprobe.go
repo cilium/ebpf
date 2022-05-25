@@ -49,7 +49,7 @@ type Executable struct {
 // UprobeOptions defines additional parameters that will be used
 // when loading Uprobes.
 type UprobeOptions struct {
-	// Symbol offset (absolute). Must be provided in case of external symbols (shared libs).
+	// Symbol offset. Must be provided in case of external symbols (shared libs).
 	// If set, overrides the offset eventually parsed from the executable.
 	Offset uint64
 	// The offset relative to given symbol. Useful when tracing an arbitrary point

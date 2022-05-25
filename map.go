@@ -1418,14 +1418,3 @@ func NewMapFromID(id MapID) (*Map, error) {
 
 	return newMapFromFD(fd)
 }
-
-// ID returns the systemwide unique ID of the map.
-//
-// Deprecated: use MapInfo.ID() instead.
-func (m *Map) ID() (MapID, error) {
-	var info sys.MapInfo
-	if err := sys.ObjInfo(m.fd, &info); err != nil {
-		return MapID(0), err
-	}
-	return MapID(info.Id), nil
-}

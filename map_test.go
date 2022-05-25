@@ -1635,7 +1635,7 @@ func TestMapGetNextID(t *testing.T) {
 	for {
 		last := next
 		if next, err = MapGetNextID(last); err != nil {
-			if !errors.Is(err, ErrNotExist) {
+			if !errors.Is(err, os.ErrNotExist) {
 				t.Fatal("Expected ErrNotExist, got:", err)
 			}
 			break
@@ -1647,25 +1647,28 @@ func TestMapGetNextID(t *testing.T) {
 }
 
 func TestNewMapFromID(t *testing.T) {
-	testutils.SkipOnOldKernel(t, "4.13", "bpf_map_get_fd_by_id")
-
 	hash := createHash()
 	defer hash.Close()
-	var next MapID
-	var err error
 
-	next, err = hash.ID()
+	info, err := hash.Info()
 	if err != nil {
-		t.Fatal("Could not get ID of map:", err)
+		t.Fatal("Couldn't get map info:", err)
 	}
 
-	if _, err = NewMapFromID(next); err != nil {
-		t.Fatalf("Can't get map for ID %d: %v", uint32(next), err)
+	id, ok := info.ID()
+	if !ok {
+		t.Skip("Map ID not supported")
 	}
+
+	hash2, err := NewMapFromID(id)
+	if err != nil {
+		t.Fatalf("Can't get map for ID %d: %v", id, err)
+	}
+	hash2.Close()
 
 	// As there can be multiple maps, we use max(uint32) as MapID to trigger an expected error.
 	_, err = NewMapFromID(MapID(math.MaxUint32))
-	if !errors.Is(err, ErrNotExist) {
+	if !errors.Is(err, os.ErrNotExist) {
 		t.Fatal("Expected ErrNotExist, got:", err)
 	}
 }

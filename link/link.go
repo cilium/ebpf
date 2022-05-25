@@ -107,11 +107,6 @@ type Info struct {
 	extra   interface{}
 }
 
-// RawLinkInfo contains information on a raw link.
-//
-// Deprecated: use Info instead.
-type RawLinkInfo = Info
-
 type TracingInfo sys.TracingLinkInfo
 type CgroupInfo sys.CgroupLinkInfo
 type NetNsInfo sys.NetNsLinkInfo

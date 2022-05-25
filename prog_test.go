@@ -508,20 +508,24 @@ func TestProgramGetNextID(t *testing.T) {
 }
 
 func TestNewProgramFromID(t *testing.T) {
-	testutils.SkipOnOldKernel(t, "4.13", "bpf_prog_get_fd_by_id")
-
 	prog := mustSocketFilter(t)
 
-	var next ProgramID
-
-	next, err := prog.ID()
+	info, err := prog.Info()
+	testutils.SkipIfNotSupported(t, err)
 	if err != nil {
-		t.Fatal("Could not get ID of program:", err)
+		t.Fatal("Could not get program info:", err)
 	}
 
-	if _, err = NewProgramFromID(next); err != nil {
-		t.Fatalf("Can't get FD for program ID %d: %v", uint32(next), err)
+	id, ok := info.ID()
+	if !ok {
+		t.Skip("Program ID not supported")
 	}
+
+	prog2, err := NewProgramFromID(id)
+	if err != nil {
+		t.Fatalf("Can't get FD for program ID %d: %v", id, err)
+	}
+	prog2.Close()
 
 	// As there can be multiple programs, we use max(uint32) as ProgramID to trigger an expected error.
 	_, err = NewProgramFromID(ProgramID(math.MaxUint32))

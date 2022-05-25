@@ -491,7 +491,7 @@ func TestProgramGetNextID(t *testing.T) {
 	last := ProgramID(0)
 	for {
 		next, err := ProgramGetNextID(last)
-		if errors.Is(err, ErrNotExist) {
+		if errors.Is(err, os.ErrNotExist) {
 			if last == 0 {
 				t.Fatal("Got ErrNotExist on the first iteration")
 			}
@@ -525,7 +525,7 @@ func TestNewProgramFromID(t *testing.T) {
 
 	// As there can be multiple programs, we use max(uint32) as ProgramID to trigger an expected error.
 	_, err = NewProgramFromID(ProgramID(math.MaxUint32))
-	if !errors.Is(err, ErrNotExist) {
+	if !errors.Is(err, os.ErrNotExist) {
 		t.Fatal("Expected ErrNotExist, got:", err)
 	}
 }

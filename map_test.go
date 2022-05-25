@@ -1635,7 +1635,7 @@ func TestMapGetNextID(t *testing.T) {
 	for {
 		last := next
 		if next, err = MapGetNextID(last); err != nil {
-			if !errors.Is(err, ErrNotExist) {
+			if !errors.Is(err, os.ErrNotExist) {
 				t.Fatal("Expected ErrNotExist, got:", err)
 			}
 			break
@@ -1665,7 +1665,7 @@ func TestNewMapFromID(t *testing.T) {
 
 	// As there can be multiple maps, we use max(uint32) as MapID to trigger an expected error.
 	_, err = NewMapFromID(MapID(math.MaxUint32))
-	if !errors.Is(err, ErrNotExist) {
+	if !errors.Is(err, os.ErrNotExist) {
 		t.Fatal("Expected ErrNotExist, got:", err)
 	}
 }

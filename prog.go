@@ -650,45 +650,6 @@ func marshalProgram(p *Program, length int) ([]byte, error) {
 	return buf, nil
 }
 
-// Attach a Program.
-//
-// Deprecated: use link.RawAttachProgram instead.
-func (p *Program) Attach(fd int, typ AttachType, flags AttachFlags) error {
-	if fd < 0 {
-		return errors.New("invalid fd")
-	}
-
-	attr := sys.ProgAttachAttr{
-		TargetFd:    uint32(fd),
-		AttachBpfFd: p.fd.Uint(),
-		AttachType:  uint32(typ),
-		AttachFlags: uint32(flags),
-	}
-
-	return sys.ProgAttach(&attr)
-}
-
-// Detach a Program.
-//
-// Deprecated: use link.RawDetachProgram instead.
-func (p *Program) Detach(fd int, typ AttachType, flags AttachFlags) error {
-	if fd < 0 {
-		return errors.New("invalid fd")
-	}
-
-	if flags != 0 {
-		return errors.New("flags must be zero")
-	}
-
-	attr := sys.ProgAttachAttr{
-		TargetFd:    uint32(fd),
-		AttachBpfFd: p.fd.Uint(),
-		AttachType:  uint32(typ),
-	}
-
-	return sys.ProgAttach(&attr)
-}
-
 // LoadPinnedProgram loads a Program from a BPF file.
 //
 // Requires at least Linux 4.11.

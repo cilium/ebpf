@@ -734,17 +734,6 @@ func ProgramGetNextID(startID ProgramID) (ProgramID, error) {
 	return ProgramID(attr.NextId), sys.ProgGetNextId(attr)
 }
 
-// ID returns the systemwide unique ID of the program.
-//
-// Deprecated: use ProgramInfo.ID() instead.
-func (p *Program) ID() (ProgramID, error) {
-	var info sys.ProgInfo
-	if err := sys.ObjInfo(p.fd, &info); err != nil {
-		return ProgramID(0), err
-	}
-	return ProgramID(info.Id), nil
-}
-
 // BindMap binds map to the program and is only released once program is released.
 //
 // This may be used in cases where metadata should be associated with the program

@@ -80,18 +80,6 @@ func AttachFreplace(targetProg *ebpf.Program, name string, prog *ebpf.Program) (
 	return &tracing{*link}, nil
 }
 
-// LoadPinnedFreplace loads a pinned iterator from a bpffs.
-//
-// Deprecated: use LoadPinnedLink instead.
-func LoadPinnedFreplace(fileName string, opts *ebpf.LoadPinOptions) (Link, error) {
-	link, err := LoadPinnedRawLink(fileName, TracingType, opts)
-	if err != nil {
-		return nil, err
-	}
-
-	return &tracing{*link}, err
-}
-
 type TracingOptions struct {
 	// Program must be of type Tracing with attach type
 	// AttachTraceFEntry/AttachTraceFExit/AttachModifyReturn or

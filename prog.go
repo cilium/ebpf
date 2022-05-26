@@ -102,9 +102,6 @@ type ProgramSpec struct {
 
 	// The byte order this program was compiled for, may be nil.
 	ByteOrder binary.ByteOrder
-
-	// Programs called by this ProgramSpec. Includes all dependencies.
-	references map[string]*ProgramSpec
 }
 
 // Copy returns a copy of the spec.
@@ -124,43 +121,6 @@ func (ps *ProgramSpec) Copy() *ProgramSpec {
 // Use asm.Instructions.Tag if you need to calculate for non-native endianness.
 func (ps *ProgramSpec) Tag() (string, error) {
 	return ps.Instructions.Tag(internal.NativeEndian)
-}
-
-// flatten returns spec's full instruction stream including all of its
-// dependencies and an expanded map of references that includes all symbols
-// appearing in the instruction stream.
-//
-// Returns nil, nil if spec was already visited.
-func (spec *ProgramSpec) flatten(visited map[*ProgramSpec]bool) (asm.Instructions, map[string]*ProgramSpec) {
-	if visited == nil {
-		visited = make(map[*ProgramSpec]bool)
-	}
-
-	// This program and its dependencies were already collected.
-	if visited[spec] {
-		return nil, nil
-	}
-
-	visited[spec] = true
-
-	// Start off with spec's direct references and instructions.
-	progs := spec.references
-	insns := spec.Instructions
-
-	// Recurse into each reference and append/merge its references into
-	// a temporary buffer as to not interfere with the resolution process.
-	for _, ref := range spec.references {
-		if ri, rp := ref.flatten(visited); ri != nil || rp != nil {
-			insns = append(insns, ri...)
-
-			// Merge nested references into the top-level scope.
-			for n, p := range rp {
-				progs[n] = p
-			}
-		}
-	}
-
-	return insns, progs
 }
 
 // Program represents BPF program loaded into the kernel.
@@ -343,7 +303,7 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions, handles *hand
 		}
 	}
 
-	if (errors.Is(err, unix.EINVAL) || errors.Is(err, unix.EPERM)) && hasReferences(spec.Instructions) {
+	if (errors.Is(err, unix.EINVAL) || errors.Is(err, unix.EPERM)) && hasFunctionReferences(spec.Instructions) {
 		if err := haveBPFToBPFCalls(); err != nil {
 			return nil, fmt.Errorf("load program: %w", internal.ErrorWithLog(err, logBuf, logErr))
 		}

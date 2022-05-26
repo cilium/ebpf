@@ -38,9 +38,7 @@ func TestFindReferences(t *testing.T) {
 		},
 	}
 
-	if err := populateReferences(progs); err != nil {
-		t.Fatal(err)
-	}
+	flattenPrograms(progs, []string{"entrypoint"})
 
 	prog, err := NewProgram(progs["entrypoint"])
 	testutils.SkipIfNotSupported(t, err)

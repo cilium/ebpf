@@ -634,11 +634,13 @@ func (p *Program) testRun(opts *RunOptions) (uint32, time.Duration, error) {
 		return 0, 0, err
 	}
 
-	ctx := new(bytes.Buffer)
+	var ctxBytes []byte
 	if opts.Context != nil {
+		ctx := new(bytes.Buffer)
 		if err := binary.Write(ctx, internal.NativeEndian, opts.Context); err != nil {
 			return 0, 0, fmt.Errorf("cannot serialize context: %v", err)
 		}
+		ctxBytes = ctx.Bytes()
 	}
 
 	var ctxOut []byte
@@ -653,9 +655,9 @@ func (p *Program) testRun(opts *RunOptions) (uint32, time.Duration, error) {
 		DataIn:      sys.NewSlicePointer(opts.Data),
 		DataOut:     sys.NewSlicePointer(opts.DataOut),
 		Repeat:      uint32(opts.Repeat),
-		CtxSizeIn:   uint32(len(ctx.Bytes())),
+		CtxSizeIn:   uint32(len(ctxBytes)),
 		CtxSizeOut:  uint32(len(ctxOut)),
-		CtxIn:       sys.NewSlicePointer(ctx.Bytes()),
+		CtxIn:       sys.NewSlicePointer(ctxBytes),
 		CtxOut:      sys.NewSlicePointer(ctxOut),
 		Flags:       opts.Flags,
 		Cpu:         opts.CPU,

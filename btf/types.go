@@ -891,11 +891,11 @@ func inflateRawTypes(rawTypes []rawType, rawStrings *stringTable) ([]Type, error
 		switch raw.Kind() {
 		case kindInt:
 			size := raw.Size()
-			encoding, offset, bits := intEncoding(*raw.data.(*uint32))
-			if offset > 0 || bits.Bytes() != size {
-				legacyBitfields[id] = [2]Bits{offset, bits}
+			bi := raw.data.(*btfInt)
+			if bi.Offset() > 0 || bi.Bits().Bytes() != size {
+				legacyBitfields[id] = [2]Bits{bi.Offset(), bi.Bits()}
 			}
-			typ = &Int{name, size, encoding}
+			typ = &Int{name, raw.Size(), bi.Encoding()}
 
 		case kindPointer:
 			ptr := &Pointer{nil}

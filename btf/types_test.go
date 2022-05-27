@@ -360,8 +360,10 @@ func TestInflateLegacyBitfield(t *testing.T) {
 	var rawInt rawType
 	rawInt.SetKind(kindInt)
 	rawInt.SetSize(4)
-	offsetSize := uint32(offset<<16 | size)
-	rawInt.data = &offsetSize
+	var data btfInt
+	data.SetOffset(offset)
+	data.SetBits(size)
+	rawInt.data = &data
 
 	var beforeInt rawType
 	beforeInt.SetKind(kindStruct)

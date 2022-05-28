@@ -42,6 +42,47 @@ func TestExecutable(t *testing.T) {
 	}
 }
 
+func TestOffsetWithOpts(t *testing.T) {
+	c := qt.New(t)
+
+	_ = mustLoadProgram(t, ebpf.Kprobe, 0, "")
+
+	symbolOffset, err := bashEx.offset(bashSym)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	offset, err := bashEx.offsetWithOpts(bashSym, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	c.Assert(offset, qt.Equals, uint64(symbolOffset))
+
+	offset, err = bashEx.offsetWithOpts(bashSym, &UprobeOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	c.Assert(offset, qt.Equals, uint64(symbolOffset))
+
+	offset, err = bashEx.offsetWithOpts(bashSym, &UprobeOptions{Offset: 0x1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	c.Assert(offset, qt.Equals, uint64(0x1))
+
+	offset, err = bashEx.offsetWithOpts(bashSym, &UprobeOptions{RelativeOffset: 0x2})
+	if err != nil {
+		t.Fatal(err)
+	}
+	c.Assert(offset, qt.Equals, uint64(symbolOffset+0x2))
+
+	offset, err = bashEx.offsetWithOpts(bashSym, &UprobeOptions{Offset: 0x1, RelativeOffset: 0x2})
+	if err != nil {
+		t.Fatal(err)
+	}
+	c.Assert(offset, qt.Equals, uint64(0x1))
+}
+
 func TestUprobe(t *testing.T) {
 	c := qt.New(t)
 

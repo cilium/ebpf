@@ -262,11 +262,12 @@ func (ex *Executable) uprobe(symbol string, prog *ebpf.Program, opts *UprobeOpti
 
 	offset := opts.Offset
 	if offset == 0 {
+		offset = opts.RelativeOffset
 		off, err := ex.offset(symbol)
 		if err != nil {
 			return nil, err
 		}
-		offset = off
+		offset += off
 	}
 
 	pid := opts.PID
@@ -283,7 +284,7 @@ func (ex *Executable) uprobe(symbol string, prog *ebpf.Program, opts *UprobeOpti
 	args := probeArgs{
 		symbol:       symbol,
 		path:         ex.path,
-		offset:       offset + opts.RelativeOffset,
+		offset:       offset,
 		pid:          pid,
 		refCtrOffset: opts.RefCtrOffset,
 		ret:          ret,

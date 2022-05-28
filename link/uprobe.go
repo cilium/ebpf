@@ -178,6 +178,25 @@ func (ex *Executable) offset(symbol string) (uint64, error) {
 	return 0, fmt.Errorf("symbol %s: %w", symbol, ErrNoSymbol)
 }
 
+// offsetWithOpts adds opts.RelativeOffset to symbol's offset
+// if opts.Offset is not set.
+func (ex *Executable) offsetWithOpts(symbol string, opts *UprobeOptions) (uint64, error) {
+	if opts == nil {
+		return ex.offset(symbol)
+	}
+
+	offset := opts.Offset
+	if offset == 0 {
+		offset = opts.RelativeOffset
+		off, err := ex.offset(symbol)
+		if err != nil {
+			return 0, err
+		}
+		offset += off
+	}
+	return offset, nil
+}
+
 // Uprobe attaches the given eBPF program to a perf event that fires when the
 // given symbol starts executing in the given Executable.
 // For example, /bin/bash::main():
@@ -260,14 +279,9 @@ func (ex *Executable) uprobe(symbol string, prog *ebpf.Program, opts *UprobeOpti
 		opts = &UprobeOptions{}
 	}
 
-	offset := opts.Offset
-	if offset == 0 {
-		offset = opts.RelativeOffset
-		off, err := ex.offset(symbol)
-		if err != nil {
-			return nil, err
-		}
-		offset += off
+	offset, err := ex.offsetWithOpts(symbol, opts)
+	if err != nil {
+		return nil, err
 	}
 
 	pid := opts.PID

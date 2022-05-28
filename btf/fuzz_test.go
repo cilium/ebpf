@@ -29,7 +29,7 @@ func FuzzSpec(f *testing.F) {
 			t.Skip("data is too short")
 		}
 
-		spec, err := loadRawSpec(bytes.NewReader(data), internal.NativeEndian)
+		spec, err := loadRawSpec(bytes.NewReader(data), internal.NativeEndian, nil, nil)
 		if err != nil {
 			if spec != nil {
 				t.Fatal("spec is not nil")
@@ -64,7 +64,7 @@ func FuzzExtInfo(f *testing.F) {
 			t.Skip("data is too short")
 		}
 
-		table, err := readStringTable(bytes.NewReader(strings))
+		table, err := readStringTable(bytes.NewReader(strings), nil)
 		if err != nil {
 			t.Skip("invalid string table")
 		}

@@ -19,7 +19,7 @@ type sizedReader interface {
 	Size() int64
 }
 
-func readStringTable(r sizedReader) (*stringTable, error) {
+func readStringTable(r sizedReader, nextOffset uint32) (*stringTable, error) {
 	// Derived from vmlinux BTF.
 	const averageStringLength = 16
 
@@ -27,7 +27,7 @@ func readStringTable(r sizedReader) (*stringTable, error) {
 	offsets := make([]uint32, 0, n)
 	strings := make([]string, 0, n)
 
-	offset := uint32(0)
+	offset := nextOffset
 	scanner := bufio.NewScanner(r)
 	scanner.Split(splitNull)
 	for scanner.Scan() {
@@ -44,7 +44,7 @@ func readStringTable(r sizedReader) (*stringTable, error) {
 		return nil, errors.New("string table is empty")
 	}
 
-	if strings[0] != "" {
+	if nextOffset == 0 && strings[0] != "" {
 		return nil, errors.New("first item in string table is non-empty")
 	}
 
@@ -61,6 +61,13 @@ func splitNull(data []byte, atEOF bool) (advance int, token []byte, err error) {
 	}
 
 	return i + 1, data[:i], nil
+}
+
+func lookupString(offset uint32, rawStringTable, baseStringTable *stringTable) (string, error) {
+	if baseStringTable != nil && offset <= baseStringTable.offsets[len(baseStringTable.offsets)-1] {
+		return baseStringTable.Lookup(offset)
+	}
+	return rawStringTable.Lookup(offset)
 }
 
 func (st *stringTable) Lookup(offset uint32) (string, error) {

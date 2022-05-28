@@ -9,7 +9,7 @@ import (
 func TestStringTable(t *testing.T) {
 	const in = "\x00one\x00two\x00"
 
-	st, err := readStringTable(strings.NewReader(in))
+	st, err := readStringTable(strings.NewReader(in), uint32(0))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -49,12 +49,12 @@ func TestStringTable(t *testing.T) {
 	}
 
 	// Make sure we reject bogus tables
-	_, err = readStringTable(strings.NewReader("\x00one"))
+	_, err = readStringTable(strings.NewReader("\x00one"), uint32(0))
 	if err == nil {
 		t.Fatal("Accepted non-terminated string")
 	}
 
-	_, err = readStringTable(strings.NewReader("one\x00"))
+	_, err = readStringTable(strings.NewReader("one\x00"), uint32(0))
 	if err == nil {
 		t.Fatal("Accepted non-empty first item")
 	}

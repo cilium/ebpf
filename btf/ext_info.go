@@ -260,7 +260,7 @@ func parseExtInfoSec(r io.Reader, bo binary.ByteOrder, strings *stringTable) (st
 		return "", nil, fmt.Errorf("read ext info header: %w", err)
 	}
 
-	secName, err := strings.Lookup(infoHeader.SecNameOff)
+	secName, err := strings.Lookup(infoHeader.SecNameOff, nil)
 	if err != nil {
 		return "", nil, fmt.Errorf("get section name: %w", err)
 	}
@@ -477,12 +477,12 @@ type bpfLineInfo struct {
 }
 
 func newLineInfo(li bpfLineInfo, strings *stringTable) (*lineInfo, error) {
-	line, err := strings.Lookup(li.LineOff)
+	line, err := strings.Lookup(li.LineOff, nil)
 	if err != nil {
 		return nil, fmt.Errorf("lookup of line: %w", err)
 	}
 
-	fileName, err := strings.Lookup(li.FileNameOff)
+	fileName, err := strings.Lookup(li.FileNameOff, nil)
 	if err != nil {
 		return nil, fmt.Errorf("lookup of filename: %w", err)
 	}
@@ -626,7 +626,7 @@ func newRelocationInfo(relo bpfCORERelo, ts types, strings *stringTable) (*coreR
 		return nil, err
 	}
 
-	accessorStr, err := strings.Lookup(relo.AccessStrOff)
+	accessorStr, err := strings.Lookup(relo.AccessStrOff, nil)
 	if err != nil {
 		return nil, err
 	}

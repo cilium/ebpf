@@ -10,7 +10,7 @@ import (
 
 func TestParseExtInfoBigRecordSize(t *testing.T) {
 	rd := strings.NewReader("\xff\xff\xff\xff\x00\x00\x00\x000709171295166016")
-	table, err := readStringTable(bytes.NewReader([]byte{0}))
+	table, err := readStringTable(bytes.NewReader([]byte{0}), nil)
 	if err != nil {
 		t.Fatal(err)
 	}

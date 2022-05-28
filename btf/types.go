@@ -776,12 +776,24 @@ func (dq *typeDeque) all() []*Type {
 // inflateRawTypes takes a list of raw btf types linked via type IDs, and turns
 // it into a graph of Types connected via pointers.
 //
-// Returns a map of named types (so, where NameOff is non-zero) and a slice of types
-// indexed by TypeID. Since BTF ignores compilation units, multiple types may share
-// the same name. A Type may form a cyclic graph by pointing at itself.
-func inflateRawTypes(rawTypes []rawType, rawStrings *stringTable) ([]Type, error) {
-	types := make([]Type, 0, len(rawTypes)+1)
-	types = append(types, (*Void)(nil))
+// If baseTypes and baseRawStrings are provided, then the raw types are
+// considered to be of a split BTF (e.g., a kernel module).
+//
+// Returns  a slice of types indexed by TypeID. Since BTF ignores compilation
+// units, multiple types may share the same name. A Type may form a cyclic graph
+// by pointing at itself.
+func inflateRawTypes(rawTypes []rawType, baseTypes types, rawStrings, baseRawStrings *stringTable) ([]Type, error) {
+	types := make([]Type, 0, len(rawTypes)+1) // +1 for Void added to base types
+
+	typeIDOffset := TypeID(1) // Void is TypeID(0), so the rest starts from TypeID(1)
+
+	if baseTypes == nil {
+		// Void is defined to always be type ID 0, and is thus omitted from BTF.
+		types = append(types, (*Void)(nil))
+	} else {
+		// For split BTF, the next ID is max base BTF type ID + 1
+		typeIDOffset = TypeID(len(baseTypes))
+	}
 
 	type fixupDef struct {
 		id  TypeID
@@ -790,9 +802,18 @@ func inflateRawTypes(rawTypes []rawType, rawStrings *stringTable) ([]Type, error
 
 	var fixups []fixupDef
 	fixup := func(id TypeID, typ *Type) {
-		if id < TypeID(len(types)) {
+		if id < TypeID(len(baseTypes)) {
+			*typ = baseTypes[id]
+			return
+		}
+
+		idx := id
+		if baseTypes != nil {
+			idx = id - TypeID(len(baseTypes))
+		}
+		if idx < TypeID(len(types)) {
 			// We've already inflated this type, fix it up immediately.
-			*typ = types[id]
+			*typ = types[idx]
 			return
 		}
 		fixups = append(fixups, fixupDef{id, typ})
@@ -830,7 +851,7 @@ func inflateRawTypes(rawTypes []rawType, rawStrings *stringTable) ([]Type, error
 		// work, since otherwise append might re-allocate members.
 		members := make([]Member, 0, len(raw))
 		for i, btfMember := range raw {
-			name, err := rawStrings.Lookup(btfMember.NameOff)
+			name, err := rawStrings.Lookup(btfMember.NameOff, baseRawStrings)
 			if err != nil {
 				return nil, fmt.Errorf("can't get name for member %d: %w", i, err)
 			}
@@ -882,13 +903,11 @@ func inflateRawTypes(rawTypes []rawType, rawStrings *stringTable) ([]Type, error
 
 	for i, raw := range rawTypes {
 		var (
-			// Void is defined to always be type ID 0, and is thus
-			// omitted from BTF.
-			id  = TypeID(i + 1)
+			id  = typeIDOffset + TypeID(i)
 			typ Type
 		)
 
-		name, err := rawStrings.Lookup(raw.NameOff)
+		name, err := rawStrings.Lookup(raw.NameOff, baseRawStrings)
 		if err != nil {
 			return nil, fmt.Errorf("get name for type id %d: %w", id, err)
 		}
@@ -932,7 +951,7 @@ func inflateRawTypes(rawTypes []rawType, rawStrings *stringTable) ([]Type, error
 			rawvals := raw.data.([]btfEnum)
 			vals := make([]EnumValue, 0, len(rawvals))
 			for i, btfVal := range rawvals {
-				name, err := rawStrings.Lookup(btfVal.NameOff)
+				name, err := rawStrings.Lookup(btfVal.NameOff, baseRawStrings)
 				if err != nil {
 					return nil, fmt.Errorf("get name for enum value %d: %s", i, err)
 				}
@@ -982,7 +1001,7 @@ func inflateRawTypes(rawTypes []rawType, rawStrings *stringTable) ([]Type, error
 			rawparams := raw.data.([]btfParam)
 			params := make([]FuncParam, 0, len(rawparams))
 			for i, param := range rawparams {
-				name, err := rawStrings.Lookup(param.NameOff)
+				name, err := rawStrings.Lookup(param.NameOff, baseRawStrings)
 				if err != nil {
 					return nil, fmt.Errorf("get name for func proto parameter %d: %s", i, err)
 				}
@@ -1033,14 +1052,21 @@ func inflateRawTypes(rawTypes []rawType, rawStrings *stringTable) ([]Type, error
 
 	for _, fixup := range fixups {
 		i := int(fixup.id)
-		if i >= len(types) {
+		if i >= len(types)+len(baseTypes) {
 			return nil, fmt.Errorf("reference to invalid type id: %d", fixup.id)
 		}
+		if i < len(baseTypes) {
+			return nil, fmt.Errorf("fixup for base type id %d is not expected", i)
+		}
 
-		*fixup.typ = types[i]
+		*fixup.typ = types[i-len(baseTypes)]
 	}
 
 	for _, bitfieldFixup := range bitfieldFixups {
+		if bitfieldFixup.id < TypeID(len(baseTypes)) {
+			return nil, fmt.Errorf("bitfield fixup from split to base types is not expected")
+		}
+
 		data, ok := legacyBitfields[bitfieldFixup.id]
 		if ok {
 			// This is indeed a legacy bitfield, fix it up.

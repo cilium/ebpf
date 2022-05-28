@@ -69,28 +69,11 @@ func TestUprobeExtWithOpts(t *testing.T) {
 
 	// This Uprobe is broken and will not work because the offset is not
 	// correct. This is expected since the offset is provided by the user.
-	up1, err := bashEx.Uprobe("open", prog, &UprobeOptions{Offset: 0x1})
+	up, err := bashEx.Uprobe("open", prog, &UprobeOptions{Offset: 0x1})
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer up1.Close()
-
-	// Set RelativeOffset field. Can't verify the offset calculated inside uprobe
-	// but ProgramSpec in mustLoadProgram has enough number of instructions.
-	up2, err := bashEx.Uprobe("open", prog, &UprobeOptions{RelativeOffset: 0x2})
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer up2.Close()
-
-	// Set Offset and RelativeOffsets fields together.
-	// Can't verify the offset calculated inside uprobe
-	// but ProgramSpec in mustLoadProgram has enough number of instructions.
-	up3, err := bashEx.Uprobe("open", prog, &UprobeOptions{Offset: 0x1, RelativeOffset: 0x2})
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer up3.Close()
+	defer up.Close()
 }
 
 func TestUprobeWithPID(t *testing.T) {

@@ -197,6 +197,8 @@ func mustLoadProgram(tb testing.TB, typ ebpf.ProgramType, attachType ebpf.Attach
 		License:    license,
 		Instructions: asm.Instructions{
 			asm.Mov.Imm(asm.R0, 0),
+			asm.Mov.Imm(asm.R1, 1),
+			asm.Mov.Imm(asm.R2, 2),
 			asm.Return(),
 		},
 	})

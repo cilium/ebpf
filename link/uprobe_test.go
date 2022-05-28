@@ -47,17 +47,22 @@ func TestOffsetWithOpts(t *testing.T) {
 
 	_ = mustLoadProgram(t, ebpf.Kprobe, 0, "")
 
+	symbolOffset, err := bashEx.offset(bashSym)
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	offset, err := bashEx.offsetWithOpts(bashSym, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	c.Assert(offset, qt.Equals, uint64(0x2ebd0))
+	c.Assert(offset, qt.Equals, uint64(symbolOffset))
 
 	offset, err = bashEx.offsetWithOpts(bashSym, &UprobeOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	c.Assert(offset, qt.Equals, uint64(0x2ebd0))
+	c.Assert(offset, qt.Equals, uint64(symbolOffset))
 
 	offset, err = bashEx.offsetWithOpts(bashSym, &UprobeOptions{Offset: 0x1})
 	if err != nil {
@@ -69,7 +74,7 @@ func TestOffsetWithOpts(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	c.Assert(offset, qt.Equals, uint64(0x2ebd2))
+	c.Assert(offset, qt.Equals, uint64(symbolOffset+0x2))
 
 	offset, err = bashEx.offsetWithOpts(bashSym, &UprobeOptions{Offset: 0x1, RelativeOffset: 0x2})
 	if err != nil {

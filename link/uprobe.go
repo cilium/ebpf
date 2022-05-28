@@ -52,6 +52,10 @@ type UprobeOptions struct {
 	// Symbol offset. Must be provided in case of external symbols (shared libs).
 	// If set, overrides the offset eventually parsed from the executable.
 	Offset uint64
+	// The offset relative to given symbol. Useful when tracing an arbitrary point
+	// inside the frame of given symbol and eliminates the need of recalculating
+	// the absolute offset.
+	RelativeOffset uint64
 	// Only set the uprobe on the given process ID. Useful when tracing
 	// shared library calls or programs that have many running instances.
 	PID int
@@ -174,6 +178,25 @@ func (ex *Executable) offset(symbol string) (uint64, error) {
 	return 0, fmt.Errorf("symbol %s: %w", symbol, ErrNoSymbol)
 }
 
+// offsetWithOpts adds opts.RelativeOffset to symbol's offset
+// if opts.Offset is not set.
+func (ex *Executable) offsetWithOpts(symbol string, opts *UprobeOptions) (uint64, error) {
+	if opts == nil {
+		return ex.offset(symbol)
+	}
+
+	offset := opts.Offset
+	if offset == 0 {
+		offset = opts.RelativeOffset
+		off, err := ex.offset(symbol)
+		if err != nil {
+			return 0, err
+		}
+		offset += off
+	}
+	return offset, nil
+}
+
 // Uprobe attaches the given eBPF program to a perf event that fires when the
 // given symbol starts executing in the given Executable.
 // For example, /bin/bash::main():
@@ -185,6 +208,8 @@ func (ex *Executable) offset(symbol string) (uint64, error) {
 // an offset must be provided via options:
 //
 //  up, err := ex.Uprobe("main", prog, &UprobeOptions{Offset: 0x123})
+//
+// Note: Setting the Offset field in the options supersedes the symbol's offset.
 //
 // Losing the reference to the resulting Link (up) will close the Uprobe
 // and prevent further execution of prog. The Link must be Closed during
@@ -217,6 +242,8 @@ func (ex *Executable) Uprobe(symbol string, prog *ebpf.Program, opts *UprobeOpti
 // an offset must be provided via options:
 //
 //  up, err := ex.Uretprobe("main", prog, &UprobeOptions{Offset: 0x123})
+//
+// Note: Setting the Offset field in the options supersedes the symbol's offset.
 //
 // Losing the reference to the resulting Link (up) will close the Uprobe
 // and prevent further execution of prog. The Link must be Closed during
@@ -252,13 +279,9 @@ func (ex *Executable) uprobe(symbol string, prog *ebpf.Program, opts *UprobeOpti
 		opts = &UprobeOptions{}
 	}
 
-	offset := opts.Offset
-	if offset == 0 {
-		off, err := ex.offset(symbol)
-		if err != nil {
-			return nil, err
-		}
-		offset = off
+	offset, err := ex.offsetWithOpts(symbol, opts)
+	if err != nil {
+		return nil, err
 	}
 
 	pid := opts.PID

@@ -377,3 +377,34 @@ func TestTypesIterator(t *testing.T) {
 		t.Fatal("Cannot find 'iphdr' type")
 	}
 }
+
+func TestLoadModuleSpec(t *testing.T) {
+	spec, err := LoadSpecFromReader(readVMLinux(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	splitSpec, err := spec.LoadModuleSpec("testdata/xt_nat")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// net/netfilter/xt_nat.c:static int xt_nat_checkentry(const struct xt_tgchk_param *par)
+	typ, err := splitSpec.AnyTypeByName("xt_nat_checkentry")
+	if err != nil {
+		t.Fatal(err)
+	}
+	fnType := typ.(*Func)
+	fnProto := fnType.Type.(*FuncProto)
+
+	// 'int' is defined in the base BTF
+	intType, err := spec.AnyTypeByName("int")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if fnProto.Return != intType {
+		t.Fatalf("Return type of 'xt_nat_checkentry()' (%s) does not match 'int' type (%s)",
+			fnProto.Return, intType)
+	}
+}

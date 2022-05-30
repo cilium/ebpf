@@ -175,7 +175,7 @@ func BenchmarkParseVmlinux(b *testing.B) {
 			b.Fatal(err)
 		}
 
-		if _, err := loadRawSpec(rd, binary.LittleEndian, nil, nil); err != nil {
+		if _, err := loadRawSpec(rd, binary.LittleEndian, nil, nil, nil, nil); err != nil {
 			b.Fatal("Can't load BTF:", err)
 		}
 	}
@@ -375,5 +375,36 @@ func TestTypesIterator(t *testing.T) {
 	}
 	if !found {
 		t.Fatal("Cannot find 'iphdr' type")
+	}
+}
+
+func TestLoadSplitSpec(t *testing.T) {
+	spec, err := LoadSpecFromReader(readVMLinux(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	splitSpec, err := spec.LoadSplitSpec("testdata/xt_nat")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// net/netfilter/xt_nat.c:static int xt_nat_checkentry(const struct xt_tgchk_param *par)
+	typ, err := splitSpec.AnyTypeByName("xt_nat_checkentry")
+	if err != nil {
+		t.Fatal(err)
+	}
+	fnType := typ.(*Func)
+	fnProto := fnType.Type.(*FuncProto)
+
+	// 'int' is defined in the base BTF
+	intType, err := spec.AnyTypeByName("int")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if fnProto.Return != intType {
+		t.Fatalf("Return type of 'xt_nat_checkentry()' (%s) does not match 'int' type (%s)",
+			fnProto.Return, intType)
 	}
 }

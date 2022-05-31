@@ -64,14 +64,14 @@ var targetByGoArch = map[string]target{
 	"sparc64":     {"bpfeb", "sparc"},
 }
 
-func run(stdout io.Writer, pkg, outputDir string, args []string) (err error) {
+func run(stdout io.Writer, pkg, defaultOutputDir string, args []string) (err error) {
 	b2g := bpf2go{
-		stdout:    stdout,
-		pkg:       pkg,
-		outputDir: outputDir,
+		stdout: stdout,
+		pkg:    pkg,
 	}
 
 	fs := flag.NewFlagSet("bpf2go", flag.ContinueOnError)
+	outputDir := fs.String("o", "", "Path to a directory where .go and .o are written")
 	fs.StringVar(&b2g.cc, "cc", "clang", "`binary` used to compile C to BPF")
 	fs.StringVar(&b2g.strip, "strip", "", "`binary` used to strip DWARF from compiled BPF (default \"llvm-strip\")")
 	fs.BoolVar(&b2g.disableStripping, "no-strip", false, "disable stripping of DWARF")
@@ -97,6 +97,23 @@ func run(stdout io.Writer, pkg, outputDir string, args []string) (err error) {
 
 	if b2g.pkg == "" {
 		return errors.New("missing package, are you running via go generate?")
+	}
+
+	if *outputDir != "" {
+		absOutputDir, err := filepath.Abs(*outputDir)
+		if err != nil {
+			return fmt.Errorf("failed to obtain an absolute path from %q: %s", *outputDir, err)
+		}
+		info, err := os.Stat(absOutputDir)
+		if err != nil {
+			return fmt.Errorf("failed to get state for %q: %s", absOutputDir, err)
+		}
+		if !info.IsDir() {
+			return fmt.Errorf("%q is not a valid output directory path", absOutputDir)
+		}
+		b2g.outputDir = absOutputDir
+	} else {
+		b2g.outputDir = defaultOutputDir
 	}
 
 	if b2g.cc == "" {

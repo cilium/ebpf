@@ -818,10 +818,27 @@ func mustSocketFilter(tb testing.TB) *Program {
 	return prog
 }
 
+// Retrieve a verifier error when loading a program fails.
+func ExampleProgram_verifierError() {
+	_, err := NewProgram(&ProgramSpec{
+		Type: SocketFilter,
+		Instructions: asm.Instructions{
+			asm.LoadImm(asm.R0, 0, asm.DWord),
+			// Missing Return
+		},
+		License: "MIT",
+	})
+
+	var ve *VerifierError
+	if errors.As(err, &ve) {
+		fmt.Printf("Verifier error: %+1v\n", ve)
+	}
+}
+
 // Use NewProgramWithOptions if you'd like to get the verifier output
 // for a program, or if you want to change the buffer size used when
 // generating error messages.
-func ExampleNewProgramWithOptions() {
+func ExampleProgram_retrieveVerifierOutput() {
 	spec := &ProgramSpec{
 		Type: SocketFilter,
 		Instructions: asm.Instructions{

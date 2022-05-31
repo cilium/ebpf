@@ -161,8 +161,14 @@ func (ex *Executable) load(f *internal.SafeELFFile) error {
 	return nil
 }
 
-func (ex *Executable) offset(symbol string) (uint64, error) {
-	if off, ok := ex.offsets[symbol]; ok {
+// offset calculates the address of a symbol in the executable.
+//
+// opts must not be nil.
+func (ex *Executable) offset(symbol string, opts *UprobeOptions) (uint64, error) {
+	var offset uint64
+	if opts.Offset > 0 {
+		offset = opts.Offset
+	} else if off, ok := ex.offsets[symbol]; ok {
 		// Symbols with location 0 from section undef are shared library calls and
 		// are relocated before the binary is executed. Dynamic linking is not
 		// implemented by the library, so mark this as unsupported for now.
@@ -173,27 +179,15 @@ func (ex *Executable) offset(symbol string) (uint64, error) {
 			return 0, fmt.Errorf("cannot resolve %s library call '%s', "+
 				"consider providing the offset via options: %w", ex.path, symbol, ErrNotSupported)
 		}
-		return off, nil
-	}
-	return 0, fmt.Errorf("symbol %s: %w", symbol, ErrNoSymbol)
-}
 
-// offsetWithOpts adds opts.RelativeOffset to symbol's offset
-// if opts.Offset is not set.
-func (ex *Executable) offsetWithOpts(symbol string, opts *UprobeOptions) (uint64, error) {
-	if opts == nil {
-		return ex.offset(symbol)
+		offset = off
+	} else {
+		return 0, fmt.Errorf("symbol %s: %w", symbol, ErrNoSymbol)
 	}
 
-	offset := opts.Offset
-	if offset == 0 {
-		offset = opts.RelativeOffset
-		off, err := ex.offset(symbol)
-		if err != nil {
-			return 0, err
-		}
-		offset += off
-	}
+	// Always add the relative offset regardless where we got the absolute
+	// offset from.
+	offset += opts.RelativeOffset
 	return offset, nil
 }
 
@@ -279,7 +273,7 @@ func (ex *Executable) uprobe(symbol string, prog *ebpf.Program, opts *UprobeOpti
 		opts = &UprobeOptions{}
 	}
 
-	offset, err := ex.offsetWithOpts(symbol, opts)
+	offset, err := ex.offset(symbol, opts)
 	if err != nil {
 		return nil, err
 	}

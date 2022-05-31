@@ -31,56 +31,42 @@ func TestExecutable(t *testing.T) {
 		t.Fatalf("create executable: unexpected path '%s'", bashEx.path)
 	}
 
-	_, err = bashEx.offset(bashSym)
+	_, err = bashEx.offset(bashSym, &UprobeOptions{})
 	if err != nil {
 		t.Fatalf("find offset: %v", err)
 	}
 
-	_, err = bashEx.offset("bogus")
+	_, err = bashEx.offset("bogus", &UprobeOptions{})
 	if err == nil {
 		t.Fatal("find symbol: expected error")
 	}
 }
 
-func TestOffsetWithOpts(t *testing.T) {
+func TestExecutableOffset(t *testing.T) {
 	c := qt.New(t)
 
-	_ = mustLoadProgram(t, ebpf.Kprobe, 0, "")
-
-	symbolOffset, err := bashEx.offset(bashSym)
+	symbolOffset, err := bashEx.offset(bashSym, &UprobeOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	offset, err := bashEx.offsetWithOpts(bashSym, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	c.Assert(offset, qt.Equals, uint64(symbolOffset))
-
-	offset, err = bashEx.offsetWithOpts(bashSym, &UprobeOptions{})
-	if err != nil {
-		t.Fatal(err)
-	}
-	c.Assert(offset, qt.Equals, uint64(symbolOffset))
-
-	offset, err = bashEx.offsetWithOpts(bashSym, &UprobeOptions{Offset: 0x1})
+	offset, err := bashEx.offset(bashSym, &UprobeOptions{Offset: 0x1})
 	if err != nil {
 		t.Fatal(err)
 	}
 	c.Assert(offset, qt.Equals, uint64(0x1))
 
-	offset, err = bashEx.offsetWithOpts(bashSym, &UprobeOptions{RelativeOffset: 0x2})
+	offset, err = bashEx.offset(bashSym, &UprobeOptions{RelativeOffset: 0x2})
 	if err != nil {
 		t.Fatal(err)
 	}
-	c.Assert(offset, qt.Equals, uint64(symbolOffset+0x2))
+	c.Assert(offset, qt.Equals, symbolOffset+0x2)
 
-	offset, err = bashEx.offsetWithOpts(bashSym, &UprobeOptions{Offset: 0x1, RelativeOffset: 0x2})
+	offset, err = bashEx.offset(bashSym, &UprobeOptions{Offset: 0x1, RelativeOffset: 0x2})
 	if err != nil {
 		t.Fatal(err)
 	}
-	c.Assert(offset, qt.Equals, uint64(0x1))
+	c.Assert(offset, qt.Equals, uint64(0x1+0x2))
 }
 
 func TestUprobe(t *testing.T) {
@@ -157,7 +143,7 @@ func TestUprobeCreatePMU(t *testing.T) {
 	c := qt.New(t)
 
 	// Fetch the offset from the /bin/bash Executable already defined.
-	off, err := bashEx.offset(bashSym)
+	off, err := bashEx.offset(bashSym, &UprobeOptions{})
 	c.Assert(err, qt.IsNil)
 
 	// Prepare probe args.
@@ -189,7 +175,7 @@ func TestUprobePMUUnavailable(t *testing.T) {
 	c := qt.New(t)
 
 	// Fetch the offset from the /bin/bash Executable already defined.
-	off, err := bashEx.offset(bashSym)
+	off, err := bashEx.offset(bashSym, &UprobeOptions{})
 	c.Assert(err, qt.IsNil)
 
 	// Prepare probe args.
@@ -215,7 +201,7 @@ func TestUprobeTraceFS(t *testing.T) {
 	c := qt.New(t)
 
 	// Fetch the offset from the /bin/bash Executable already defined.
-	off, err := bashEx.offset(bashSym)
+	off, err := bashEx.offset(bashSym, &UprobeOptions{})
 	c.Assert(err, qt.IsNil)
 
 	// Prepare probe args.
@@ -264,7 +250,7 @@ func TestUprobeCreateTraceFS(t *testing.T) {
 	c := qt.New(t)
 
 	// Fetch the offset from the /bin/bash Executable already defined.
-	off, err := bashEx.offset(bashSym)
+	off, err := bashEx.offset(bashSym, &UprobeOptions{})
 	c.Assert(err, qt.IsNil)
 
 	// Sanitize the symbol in order to be used in tracefs API.

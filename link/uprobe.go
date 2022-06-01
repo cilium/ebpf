@@ -49,13 +49,15 @@ type Executable struct {
 // UprobeOptions defines additional parameters that will be used
 // when loading Uprobes.
 type UprobeOptions struct {
-	// Symbol offset. Must be provided in case of external symbols (shared libs).
-	// If set, overrides the offset eventually parsed from the executable.
-	Offset uint64
+	// Symbol address. Must be provided in case of external symbols (shared libs).
+	// If set, overrides the address eventually parsed from the executable.
+	Address uint64
 	// The offset relative to given symbol. Useful when tracing an arbitrary point
-	// inside the frame of given symbol and eliminates the need of recalculating
-	// the absolute offset.
-	RelativeOffset uint64
+	// inside the frame of given symbol.
+	//
+	// Note: this field changed from being an absolute offset to being relative
+	// to Address.
+	Offset uint64
 	// Only set the uprobe on the given process ID. Useful when tracing
 	// shared library calls or programs that have many running instances.
 	PID int
@@ -161,13 +163,13 @@ func (ex *Executable) load(f *internal.SafeELFFile) error {
 	return nil
 }
 
-// offset calculates the address of a symbol in the executable.
+// address calculates the address of a symbol in the executable.
 //
 // opts must not be nil.
-func (ex *Executable) offset(symbol string, opts *UprobeOptions) (uint64, error) {
-	var offset uint64
-	if opts.Offset > 0 {
-		offset = opts.Offset
+func (ex *Executable) address(symbol string, opts *UprobeOptions) (uint64, error) {
+	var address uint64
+	if opts.Address > 0 {
+		address = opts.Address
 	} else if off, ok := ex.offsets[symbol]; ok {
 		// Symbols with location 0 from section undef are shared library calls and
 		// are relocated before the binary is executed. Dynamic linking is not
@@ -176,19 +178,24 @@ func (ex *Executable) offset(symbol string, opts *UprobeOptions) (uint64, error)
 		// Since only offset values are stored and not elf.Symbol, if the value is 0,
 		// assume it's an external symbol.
 		if off == 0 {
-			return 0, fmt.Errorf("cannot resolve %s library call '%s', "+
-				"consider providing the offset via options: %w", ex.path, symbol, ErrNotSupported)
+			if opts.Offset == 0 {
+				return 0, fmt.Errorf("cannot resolve %s library call '%s', "+
+					"consider providing the offset via options: %w", ex.path, symbol, ErrNotSupported)
+			}
+
+			// Compatibility behaviour to allow using opts.Offset to specify the
+			// absolute address of a symbol.
+			off = opts.Offset
 		}
 
-		offset = off
+		address = off
 	} else {
 		return 0, fmt.Errorf("symbol %s: %w", symbol, ErrNoSymbol)
 	}
 
-	// Always add the relative offset regardless where we got the absolute
-	// offset from.
-	offset += opts.RelativeOffset
-	return offset, nil
+	// Always add the relative offset regardless where we got the address from.
+	address += opts.Offset
+	return address, nil
 }
 
 // Uprobe attaches the given eBPF program to a perf event that fires when the
@@ -273,7 +280,7 @@ func (ex *Executable) uprobe(symbol string, prog *ebpf.Program, opts *UprobeOpti
 		opts = &UprobeOptions{}
 	}
 
-	offset, err := ex.offset(symbol, opts)
+	offset, err := ex.address(symbol, opts)
 	if err != nil {
 		return nil, err
 	}

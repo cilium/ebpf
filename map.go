@@ -456,6 +456,9 @@ func (spec *MapSpec) createMap(inner *sys.FD, opts MapOptions, handles *handleCa
 		if !spec.hasBTF() {
 			return nil, fmt.Errorf("map create without BTF: %w", err)
 		}
+		if errors.Is(err, unix.EINVAL) && attr.MaxEntries == 0 {
+			return nil, fmt.Errorf("map create: %w (MaxEntries may be incorrectly set to zero)", err)
+		}
 		return nil, fmt.Errorf("map create: %w", err)
 	}
 	defer closeOnError(fd)

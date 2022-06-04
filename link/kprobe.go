@@ -380,12 +380,14 @@ func tracefsProbe(typ probeType, args probeArgs) (*perfEvent, error) {
 	// Get the newly-created trace event's id.
 	tid, err := getTraceEventID(group, args.symbol)
 	if err != nil {
+		_ = closeTraceFSProbeEvent(typ, args.group, args.symbol)
 		return nil, fmt.Errorf("getting trace event id: %w", err)
 	}
 
 	// Kprobes are ephemeral tracepoints and share the same perf event type.
 	fd, err := openTracepointPerfEvent(tid, args.pid)
 	if err != nil {
+		_ = closeTraceFSProbeEvent(typ, args.group, args.symbol)
 		return nil, err
 	}
 

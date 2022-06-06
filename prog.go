@@ -481,7 +481,10 @@ func (p *Program) Test(in []byte) (uint32, []byte, error) {
 	// size will be. Hence we allocate an output buffer which we hope will always be large
 	// enough, and panic if the kernel wrote past the end of the allocation.
 	// See https://patchwork.ozlabs.org/cover/1006822/
-	out := make([]byte, len(in)+outputPad)
+	var out []byte
+	if len(in) > 0 {
+		out = make([]byte, len(in)+outputPad)
+	}
 
 	opts := RunOptions{
 		Data:    in,
@@ -582,10 +585,6 @@ var haveProgTestRun = internal.FeatureTest("BPF_PROG_TEST_RUN", "4.12", func() e
 })
 
 func (p *Program) testRun(opts *RunOptions) (uint32, time.Duration, error) {
-	if len(opts.Data) == 0 {
-		return 0, 0, fmt.Errorf("missing input")
-	}
-
 	if uint(len(opts.Data)) > math.MaxUint32 {
 		return 0, 0, fmt.Errorf("input is too long")
 	}

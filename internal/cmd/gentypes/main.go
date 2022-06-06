@@ -179,6 +179,13 @@ import (
 		{"FuncInfo", "bpf_func_info", nil},
 		{"LineInfo", "bpf_line_info", nil},
 		{"XdpMd", "xdp_md", nil},
+		{
+			"BpfSkLookup", "bpf_sk_lookup",
+			[]patch{
+				name(0, "sk"),
+				replaceUnionWithBytes("sk"),
+			},
+		},
 	}
 
 	sort.Slice(structs, func(i, j int) bool {

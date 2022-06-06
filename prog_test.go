@@ -136,6 +136,45 @@ func TestProgramRunWithOptions(t *testing.T) {
 	}
 }
 
+func TestProgramRunEmptyData(t *testing.T) {
+	testutils.SkipOnOldKernel(t, "5.13", "sk_lookup BPF_PROG_RUN")
+
+	ins := asm.Instructions{
+		// Return SK_DROP
+		asm.LoadImm(asm.R0, 0, asm.DWord),
+		asm.Return(),
+	}
+
+	prog, err := NewProgram(&ProgramSpec{
+		Name:         "test",
+		Type:         SkLookup,
+		AttachType:   AttachSkLookup,
+		Instructions: ins,
+		License:      "MIT",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer prog.Close()
+
+	skLookup := sys.BpfSkLookup{
+		Family: 2, /* AF_INET */
+	}
+	opts := RunOptions{
+		Data:    []byte{},
+		Context: skLookup,
+	}
+	ret, err := prog.Run(&opts)
+	testutils.SkipIfNotSupported(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if ret != 0 {
+		t.Error("Expected return value to be 0, got", ret)
+	}
+}
+
 func TestProgramBenchmark(t *testing.T) {
 	prog := mustSocketFilter(t)
 

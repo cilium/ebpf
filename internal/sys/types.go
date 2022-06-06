@@ -450,6 +450,21 @@ const (
 	XDP_REDIRECT XdpAction = 4
 )
 
+type BpfSkLookup struct {
+	Sk             [8]uint8
+	Family         uint32
+	Protocol       uint32
+	RemoteIp4      uint32
+	RemoteIp6      [4]uint32
+	RemotePort     uint16
+	_              [2]byte
+	LocalIp4       uint32
+	LocalIp6       [4]uint32
+	LocalPort      uint32
+	IngressIfindex uint32
+	_              [4]byte
+}
+
 type BtfInfo struct {
 	Btf       Pointer
 	BtfSize   uint32

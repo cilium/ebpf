@@ -6,6 +6,7 @@ package main
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"os"
 	"sort"
@@ -173,12 +174,19 @@ import (
 				replace(enumTypes["LinkType"], "type"),
 				replace(linkID, "id"),
 				name(3, "extra"),
-				replaceUnionWithBytes("extra"),
+				replaceWithBytes("extra"),
 			},
 		},
 		{"FuncInfo", "bpf_func_info", nil},
 		{"LineInfo", "bpf_line_info", nil},
 		{"XdpMd", "xdp_md", nil},
+		{
+			"SkLookup", "bpf_sk_lookup",
+			[]patch{
+				choose(0, "cookie"),
+				replaceWithBytes("remote_ip4", "remote_ip6", "local_ip4", "local_ip6"),
+			},
+		},
 	}
 
 	sort.Slice(structs, func(i, j int) bool {
@@ -687,25 +695,22 @@ func name(member int, name string) patch {
 	}, member)
 }
 
-func replaceUnionWithBytes(name string) patch {
-	return func(s *btf.Struct) error {
-		for i, m := range s.Members {
-			if m.Name != name {
-				continue
-			}
-			if u, ok := m.Type.(*btf.Union); ok {
-				s.Members[i] = btf.Member{
-					Name: name,
-					Type: &btf.Array{
-						Type:   &btf.Int{Size: 1},
-						Nelems: u.Size,
-					},
-					Offset:       s.Members[i].Offset,
-					BitfieldSize: s.Members[i].BitfieldSize,
-				}
-				return nil
-			}
+func replaceWithBytes(members ...string) patch {
+	return modify(func(m *btf.Member) error {
+		if m.BitfieldSize != 0 {
+			return errors.New("replaceWithBytes: member is a bitfield")
 		}
-		return fmt.Errorf("the union name: %s not found", name)
-	}
+
+		size, err := btf.Sizeof(m.Type)
+		if err != nil {
+			return fmt.Errorf("replaceWithBytes: size of %s: %w", m.Type, err)
+		}
+
+		m.Type = &btf.Array{
+			Type:   &btf.Int{Size: 1},
+			Nelems: uint32(size),
+		}
+
+		return nil
+	}, members...)
 }

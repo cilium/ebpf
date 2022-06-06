@@ -538,6 +538,21 @@ type ProgInfo struct {
 	_                    [4]byte
 }
 
+type SkLookup struct {
+	Cookie         uint64
+	Family         uint32
+	Protocol       uint32
+	RemoteIp4      [4]uint8
+	RemoteIp6      [16]uint8
+	RemotePort     uint16
+	_              [2]byte
+	LocalIp4       [4]uint8
+	LocalIp6       [16]uint8
+	LocalPort      uint32
+	IngressIfindex uint32
+	_              [4]byte
+}
+
 type XdpMd struct {
 	Data           uint32
 	DataEnd        uint32

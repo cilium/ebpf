@@ -58,7 +58,8 @@ const (
 	BPF_SK_REUSEPORT_SELECT            AttachType = 39
 	BPF_SK_REUSEPORT_SELECT_OR_MIGRATE AttachType = 40
 	BPF_PERF_EVENT                     AttachType = 41
-	__MAX_BPF_ATTACH_TYPE              AttachType = 42
+	BPF_TRACE_KPROBE_MULTI             AttachType = 42
+	__MAX_BPF_ATTACH_TYPE              AttachType = 43
 )
 
 type Cmd int32
@@ -292,7 +293,25 @@ const (
 	BPF_FUNC_get_func_arg                   FunctionId = 183
 	BPF_FUNC_get_func_ret                   FunctionId = 184
 	BPF_FUNC_get_func_arg_cnt               FunctionId = 185
-	__BPF_FUNC_MAX_ID                       FunctionId = 186
+	BPF_FUNC_get_retval                     FunctionId = 186
+	BPF_FUNC_set_retval                     FunctionId = 187
+	BPF_FUNC_xdp_get_buff_len               FunctionId = 188
+	BPF_FUNC_xdp_load_bytes                 FunctionId = 189
+	BPF_FUNC_xdp_store_bytes                FunctionId = 190
+	BPF_FUNC_copy_from_user_task            FunctionId = 191
+	BPF_FUNC_skb_set_tstamp                 FunctionId = 192
+	BPF_FUNC_ima_file_hash                  FunctionId = 193
+	BPF_FUNC_kptr_xchg                      FunctionId = 194
+	BPF_FUNC_map_lookup_percpu_elem         FunctionId = 195
+	BPF_FUNC_skc_to_mptcp_sock              FunctionId = 196
+	BPF_FUNC_dynptr_from_mem                FunctionId = 197
+	BPF_FUNC_ringbuf_reserve_dynptr         FunctionId = 198
+	BPF_FUNC_ringbuf_submit_dynptr          FunctionId = 199
+	BPF_FUNC_ringbuf_discard_dynptr         FunctionId = 200
+	BPF_FUNC_dynptr_read                    FunctionId = 201
+	BPF_FUNC_dynptr_write                   FunctionId = 202
+	BPF_FUNC_dynptr_data                    FunctionId = 203
+	__BPF_FUNC_MAX_ID                       FunctionId = 204
 )
 
 type HdrStartOff int32
@@ -313,7 +332,9 @@ const (
 	BPF_LINK_TYPE_NETNS          LinkType = 5
 	BPF_LINK_TYPE_XDP            LinkType = 6
 	BPF_LINK_TYPE_PERF_EVENT     LinkType = 7
-	MAX_BPF_LINK_TYPE            LinkType = 8
+	BPF_LINK_TYPE_KPROBE_MULTI   LinkType = 8
+	BPF_LINK_TYPE_STRUCT_OPS     LinkType = 9
+	MAX_BPF_LINK_TYPE            LinkType = 10
 )
 
 type MapType int32
@@ -582,7 +603,7 @@ type LinkCreateAttr struct {
 	AttachType  AttachType
 	Flags       uint32
 	TargetBtfId uint32
-	_           [12]byte
+	_           [28]byte
 }
 
 func LinkCreate(attr *LinkCreateAttr) (*FD, error) {
@@ -600,7 +621,7 @@ type LinkCreateIterAttr struct {
 	Flags       uint32
 	IterInfo    Pointer
 	IterInfoLen uint32
-	_           [4]byte
+	_           [20]byte
 }
 
 func LinkCreateIter(attr *LinkCreateIterAttr) (*FD, error) {
@@ -617,7 +638,7 @@ type LinkCreatePerfEventAttr struct {
 	AttachType AttachType
 	Flags      uint32
 	BpfCookie  uint64
-	_          [8]byte
+	_          [24]byte
 }
 
 func LinkCreatePerfEvent(attr *LinkCreatePerfEventAttr) (*FD, error) {
@@ -963,6 +984,8 @@ type ProgRunAttr struct {
 	CtxOut      Pointer
 	Flags       uint32
 	Cpu         uint32
+	BatchSize   uint32
+	_           [4]byte
 }
 
 func ProgRun(attr *ProgRunAttr) error {

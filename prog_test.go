@@ -324,8 +324,13 @@ func TestProgramVerifierOutputOnError(t *testing.T) {
 		t.Fatal("Expected program to be invalid")
 	}
 
-	if !strings.Contains(err.Error(), "exit") {
-		t.Error("No verifier output in error message")
+	var ve *VerifierError
+	if !errors.As(err, &ve) {
+		t.Fatal("Error does not contain a VerifierError")
+	}
+
+	if !strings.Contains(ve.Error(), "R0 !read_ok") {
+		t.Error("Unexpected verifier error contents:", ve)
 	}
 }
 
@@ -783,10 +788,29 @@ func mustSocketFilter(tb testing.TB) *Program {
 	return prog
 }
 
+// Retrieve a verifier error when loading a program fails.
+func ExampleProgram_verifierError() {
+	_, err := NewProgram(&ProgramSpec{
+		Type: SocketFilter,
+		Instructions: asm.Instructions{
+			asm.LoadImm(asm.R0, 0, asm.DWord),
+			// Missing Return
+		},
+		License: "MIT",
+	})
+
+	var ve *VerifierError
+	if errors.As(err, &ve) {
+		// Using %+v will print the whole verifier error, not just the last
+		// few lines.
+		fmt.Printf("Verifier error: %+v\n", ve)
+	}
+}
+
 // Use NewProgramWithOptions if you'd like to get the verifier output
 // for a program, or if you want to change the buffer size used when
 // generating error messages.
-func ExampleNewProgramWithOptions() {
+func ExampleProgram_retrieveVerifierOutput() {
 	spec := &ProgramSpec{
 		Type: SocketFilter,
 		Instructions: asm.Instructions{

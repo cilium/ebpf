@@ -73,12 +73,8 @@ func (le *VerifierError) Error() string {
 	}
 
 	lines := log[n-1:]
-	if n >= 2 && (strings.HasPrefix(log[n-1], "\t") || le.Truncated) {
-		// Add one more line of context if the last line starts with a tab,
-		// or if it has been truncated.
-		// For example:
-		//     [13] STRUCT drm_rect size=16 vlen=4
-		//     \tx1 type_id=2
+	if n >= 2 && (includePreviousLine(log[n-1]) || le.Truncated) {
+		// Add one more line of context if it aids understanding the error.
 		lines = log[n-2:]
 	}
 
@@ -111,6 +107,28 @@ func (le *VerifierError) Error() string {
 	b.WriteString(")")
 
 	return b.String()
+}
+
+// includePreviousLine returns true if the given line likely is better
+// understood with additional context from the preceding line.
+func includePreviousLine(line string) bool {
+	// We need to find a good trade off between understandable error messages
+	// and too much complexity here. Checking the string prefix is ok, requiring
+	// regular expressions to do it is probably overkill.
+
+	if strings.HasPrefix(line, "\t") {
+		// [13] STRUCT drm_rect size=16 vlen=4
+		// \tx1 type_id=2
+		return true
+	}
+
+	if len(line) >= 2 && line[0] == 'R' && line[1] >= '0' && line[1] <= '9' {
+		// 0: (95) exit
+		// R0 !read_ok
+		return true
+	}
+
+	return false
 }
 
 // Format the error.

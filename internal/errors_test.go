@@ -69,6 +69,10 @@ func TestVerifierError(t *testing.T) {
 	t.Log(truncated)
 	qt.Assert(t, truncated.Truncated, qt.IsTrue)
 	qt.Assert(t, truncated.Error(), qt.Contains, "str_off: 3166088: str_len: 228")
+
+	invalidR0 := readErrorFromFile(t, "testdata/invalid-R0.log")
+	t.Log(invalidR0)
+	qt.Assert(t, invalidR0.Error(), qt.Contains, "0: (95) exit: R0 !read_ok")
 }
 
 func ExampleVerifierError() {

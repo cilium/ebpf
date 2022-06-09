@@ -324,8 +324,13 @@ func TestProgramVerifierOutputOnError(t *testing.T) {
 		t.Fatal("Expected program to be invalid")
 	}
 
-	if !strings.Contains(err.Error(), "exit") {
-		t.Error("No verifier output in error message")
+	var ve *VerifierError
+	if !errors.As(err, &ve) {
+		t.Fatal("Error does not contain a VerifierError")
+	}
+
+	if !strings.Contains(ve.Error(), "R0 !read_ok") {
+		t.Error("Unexpected verifier error contents:", ve)
 	}
 }
 

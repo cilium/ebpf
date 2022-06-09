@@ -123,6 +123,8 @@ func (ps *ProgramSpec) Tag() (string, error) {
 	return ps.Instructions.Tag(internal.NativeEndian)
 }
 
+type VerifierError = internal.VerifierError
+
 // Program represents BPF program loaded into the kernel.
 //
 // It is not safe to close a Program which is used by other goroutines.
@@ -139,8 +141,7 @@ type Program struct {
 
 // NewProgram creates a new Program.
 //
-// Loading a program for the first time will perform
-// feature detection by loading small, temporary programs.
+// See NewProgramWithOptions for details.
 func NewProgram(spec *ProgramSpec) (*Program, error) {
 	return NewProgramWithOptions(spec, ProgramOptions{})
 }
@@ -149,6 +150,9 @@ func NewProgram(spec *ProgramSpec) (*Program, error) {
 //
 // Loading a program for the first time will perform
 // feature detection by loading small, temporary programs.
+//
+// Returns an error wrapping VerifierError if the program or its BTF is rejected
+// by the kernel.
 func NewProgramWithOptions(spec *ProgramSpec, opts ProgramOptions) (*Program, error) {
 	if spec == nil {
 		return nil, errors.New("can't load a program from a nil spec")
@@ -289,35 +293,36 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions, handles *hand
 		return &Program{unix.ByteSliceToString(logBuf), fd, spec.Name, "", spec.Type}, nil
 	}
 
-	logErr := err
 	if opts.LogLevel == 0 && opts.LogSize >= 0 {
 		// Re-run with the verifier enabled to get better error messages.
 		logBuf = make([]byte, logSize)
 		attr.LogLevel = 1
 		attr.LogSize = uint32(len(logBuf))
 		attr.LogBuf = sys.NewSlicePointer(logBuf)
+		_, _ = sys.ProgLoad(attr)
+	}
 
-		fd, logErr = sys.ProgLoad(attr)
-		if logErr == nil {
-			fd.Close()
+	switch {
+	case errors.Is(err, unix.EPERM):
+		if len(logBuf) > 0 && logBuf[0] == 0 {
+			// EPERM due to RLIMIT_MEMLOCK happens before the verifier, so we can
+			// check that the log is empty to reduce false positives.
+			return nil, fmt.Errorf("load program: %w (MEMLOCK may be too low, consider rlimit.RemoveMemlock)", err)
+		}
+
+		fallthrough
+
+	case errors.Is(err, unix.EINVAL):
+		if hasFunctionReferences(spec.Instructions) {
+			if err := haveBPFToBPFCalls(); err != nil {
+				return nil, fmt.Errorf("load program: %w", err)
+			}
 		}
 	}
 
-	if (errors.Is(err, unix.EINVAL) || errors.Is(err, unix.EPERM)) && hasFunctionReferences(spec.Instructions) {
-		if err := haveBPFToBPFCalls(); err != nil {
-			return nil, fmt.Errorf("load program: %w", internal.ErrorWithLog(err, logBuf, logErr))
-		}
-	}
-
-	if errors.Is(logErr, unix.EPERM) && len(logBuf) > 0 && logBuf[0] == 0 {
-		// EPERM due to RLIMIT_MEMLOCK happens before the verifier, so we can
-		// check that the log is empty to reduce false positives.
-		return nil, fmt.Errorf("load program: %w (MEMLOCK may be too low, consider rlimit.RemoveMemlock)", logErr)
-	}
-
-	err = internal.ErrorWithLog(err, logBuf, logErr)
+	err = internal.ErrorWithLog(err, logBuf)
 	if btfDisabled {
-		return nil, fmt.Errorf("load program without BTF: %w", err)
+		return nil, fmt.Errorf("load program: %w (BTF disabled)", err)
 	}
 	return nil, fmt.Errorf("load program: %w", err)
 }

@@ -67,30 +67,24 @@ func (le *VerifierError) Error() string {
 		log = log[:n-1]
 	}
 
-	output := 0
-	switch n := len(log); n {
-	case 0:
+	n := len(log)
+	if n == 0 {
 		return le.Cause.Error()
+	}
 
-	case 1, 2:
-		output = n
-
-	default:
-		output = 1
-		if strings.HasPrefix(log[n-1], "\t") || le.Truncated {
-			// Add one more line of context if the last line starts with a tab,
-			// or if it has been truncated.
-			// For example:
-			//     [13] STRUCT drm_rect size=16 vlen=4
-			//     \tx1 type_id=2
-			output++
-		}
+	lines := log[n-1:]
+	if n >= 2 && (strings.HasPrefix(log[n-1], "\t") || le.Truncated) {
+		// Add one more line of context if the last line starts with a tab,
+		// or if it has been truncated.
+		// For example:
+		//     [13] STRUCT drm_rect size=16 vlen=4
+		//     \tx1 type_id=2
+		lines = log[n-2:]
 	}
 
 	var b strings.Builder
 	fmt.Fprintf(&b, "%s: ", le.Cause.Error())
 
-	lines := log[len(log)-output:]
 	for i, line := range lines {
 		b.WriteString(strings.TrimSpace(line))
 		if i != len(lines)-1 {

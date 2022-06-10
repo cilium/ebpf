@@ -30,7 +30,7 @@ func newInfoFromFd(fd *sys.FD) (*info, error) {
 	}
 
 	btfBuffer := make([]byte, btfInfo.BtfSize)
-	nameBuffer := make([]byte, btfInfo.NameLen)
+	nameBuffer := make([]byte, btfInfo.NameLen+1)
 	btfInfo.Btf, btfInfo.BtfSize = sys.NewSlicePointerLen(btfBuffer)
 	btfInfo.Name, btfInfo.NameLen = sys.NewSlicePointerLen(nameBuffer)
 	if err := sys.ObjInfo(fd, &btfInfo); err != nil {

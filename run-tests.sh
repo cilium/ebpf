@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Test the current package under a different kernel.
 # Requires virtme and qemu to be installed.
 # Examples:
@@ -61,7 +61,7 @@ if [[ "${1:-}" = "--exec-vm" ]]; then
     if [[ -e "${output}/status" ]]; then
       break
     fi
-    
+
     if [[ -v CI ]]; then
       echo "Retrying test run due to qemu crash"
       continue

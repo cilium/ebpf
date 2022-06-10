@@ -377,3 +377,13 @@ func TestTypesIterator(t *testing.T) {
 		t.Fatal("Cannot find 'iphdr' type")
 	}
 }
+
+func TestNewHandleFromID(t *testing.T) {
+	const vmlinux = ID(1)
+
+	h, err := NewHandleFromID(vmlinux)
+	if err != nil {
+		t.Fatal(err)
+	}
+	h.Close()
+}

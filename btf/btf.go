@@ -716,7 +716,7 @@ func NewHandleFromID(id ID) (*Handle, error) {
 		Id: uint32(id),
 	})
 	if err != nil {
-		return nil, fmt.Errorf("get BTF by id: %w", err)
+		return nil, fmt.Errorf("get FD for ID %d: %w", id, err)
 	}
 
 	info, err := newInfoFromFd(fd)

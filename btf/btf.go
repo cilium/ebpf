@@ -94,7 +94,7 @@ func LoadSpecFromReader(rd io.ReaderAt) (*Spec, error) {
 		if bo := guessRawBTFByteOrder(rd); bo != nil {
 			// Try to parse a naked BTF blob. This will return an error if
 			// we encounter a Datasec, since we can't fix it up.
-			spec, err := loadRawSpec(io.NewSectionReader(rd, 0, math.MaxInt64), bo, nil, nil)
+			spec, err := loadRawSpec(io.NewSectionReader(rd, 0, math.MaxInt64), bo)
 			return spec, err
 		}
 
@@ -199,20 +199,29 @@ func loadSpecFromELF(file *internal.SafeELFFile) (*Spec, error) {
 		return nil, fmt.Errorf("compressed BTF is not supported")
 	}
 
-	return loadRawSpec(btfSection.ReaderAt, file.ByteOrder, sectionSizes, vars)
+	rawTypes, rawStrings, err := parseBTF(btfSection.ReaderAt, file.ByteOrder)
+	if err != nil {
+		return nil, err
+	}
+
+	err = fixupDatasec(rawTypes, rawStrings, sectionSizes, vars)
+	if err != nil {
+		return nil, err
+	}
+
+	return inflateSpec(rawTypes, rawStrings, file.ByteOrder)
 }
 
-func loadRawSpec(btf io.ReaderAt, bo binary.ByteOrder, sectionSizes map[string]uint32, variableOffsets map[variable]uint32) (*Spec, error) {
+func loadRawSpec(btf io.ReaderAt, bo binary.ByteOrder) (*Spec, error) {
 	rawTypes, rawStrings, err := parseBTF(btf, bo)
 	if err != nil {
 		return nil, err
 	}
 
-	err = fixupDatasec(rawTypes, rawStrings, sectionSizes, variableOffsets)
-	if err != nil {
-		return nil, err
-	}
+	return inflateSpec(rawTypes, rawStrings, bo)
+}
 
+func inflateSpec(rawTypes []rawType, rawStrings *stringTable, bo binary.ByteOrder) (*Spec, error) {
 	types, err := inflateRawTypes(rawTypes, rawStrings)
 	if err != nil {
 		return nil, err
@@ -263,7 +272,7 @@ func LoadKernelSpec() (*Spec, error) {
 	if err == nil {
 		defer fh.Close()
 
-		return loadRawSpec(fh, internal.NativeEndian, nil, nil)
+		return loadRawSpec(fh, internal.NativeEndian)
 	}
 
 	file, err := findVMLinux()

@@ -2,6 +2,7 @@ package btf_test
 
 import (
 	"testing"
+	"time"
 
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/asm"
@@ -29,6 +30,8 @@ func TestNewHandleFromID(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer prog.Close()
+
+	time.Sleep(100 * time.Millisecond)
 
 	h, err := btf.NewHandleFromID(vmlinux)
 	if err != nil {

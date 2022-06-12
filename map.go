@@ -19,7 +19,6 @@ import (
 
 // Errors returned by Map and MapIterator methods.
 var (
-	errFirstKeyNotFound = errors.New("first key not found")
 	ErrKeyNotExist      = errors.New("key does not exist")
 	ErrKeyExist         = errors.New("key already exists")
 	ErrIterationAborted = errors.New("iteration aborted")
@@ -779,14 +778,14 @@ func (m *Map) nextKey(key interface{}, nextKeyOut sys.Pointer) error {
 		// Kernels 4.4.131 and earlier return EFAULT instead of a pointer to the
 		// first map element when a nil key pointer is specified.
 		if key == nil && errors.Is(err, unix.EFAULT) {
-			var guessKey sys.Pointer
+			var guessKey []byte
 			guessKey, err = m.guessNonExistentKey()
 			if err != nil {
-				return fmt.Errorf("can't guess starting key: %w", err)
+				return err
 			}
 
 			// Retry the syscall with a valid non-existing key.
-			attr.Key = guessKey
+			attr.Key = sys.NewSlicePointer(guessKey)
 			if err = sys.MapGetNextKey(&attr); err == nil {
 				return nil
 			}
@@ -801,7 +800,7 @@ func (m *Map) nextKey(key interface{}, nextKeyOut sys.Pointer) error {
 // guessNonExistentKey attempts to perform a map lookup that returns ENOENT.
 // This is necessary on kernels before 4.4.132, since those don't support
 // iterating maps from the start by providing an invalid key pointer.
-func (m *Map) guessNonExistentKey() (startKey sys.Pointer, err error) {
+func (m *Map) guessNonExistentKey() ([]byte, error) {
 	// Provide an invalid value pointer to prevent a copy on the kernel side.
 	valuePtr := sys.NewPointer(unsafe.Pointer(^uintptr(0)))
 	randKey := make([]byte, int(m.keySize))
@@ -833,11 +832,11 @@ func (m *Map) guessNonExistentKey() (startKey sys.Pointer, err error) {
 
 		err := m.lookup(randKey, valuePtr, 0)
 		if errors.Is(err, ErrKeyNotExist) {
-			return sys.NewSlicePointer(randKey), nil
+			return randKey, nil
 		}
 	}
 
-	return sys.Pointer{}, errFirstKeyNotFound
+	return nil, errors.New("couldn't find non-existing key")
 }
 
 // BatchLookup looks up many elements in a map at once.

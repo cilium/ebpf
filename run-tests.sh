@@ -83,6 +83,10 @@ elif [[ "${1:-}" = "--exec-test" ]]; then
     export KERNEL_SELFTESTS="/run/input/bpf"
   fi
 
+  if [[ -f "/run/input/bpf/bpf_testmod/bpf_testmod.ko" ]]; then
+    insmod "/run/input/bpf/bpf_testmod/bpf_testmod.ko"
+  fi
+
   dmesg --clear
   rc=0
   "$@" || rc=$?

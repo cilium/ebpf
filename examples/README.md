@@ -16,6 +16,8 @@
   Like kprobes, but with better performance and usability, for kernels 5.5 and later.
   * [tcp_connect](fentry/) - Trace outgoing IPv4 TCP connections.
   * [tcp_close](tcprtt/) - Log RTT of IPv4 TCP connections using eBPF CO-RE helpers.
+* XDP - Attach a program to a network interface to process incoming packets.
+  * [xdp](xdp_firewall/) - Block IPv4 packets by CIDR matching.
 * Add your use case(s) here!
 
 ## How to run

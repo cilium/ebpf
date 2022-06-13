@@ -22,6 +22,8 @@ typedef __u32 __be32;
 typedef __u64 __be64;
 typedef __u32 __wsum;
 
+typedef __u16 __sum16;
+
 #include "bpf_helpers.h"
 
 enum bpf_map_type {
@@ -105,3 +107,52 @@ struct pt_regs {
 	/* top of stack page */
 };
 #endif /* __TARGET_ARCH_x86 */
+
+enum xdp_action {
+	XDP_ABORTED  = 0,
+	XDP_DROP     = 1,
+	XDP_PASS     = 2,
+	XDP_TX       = 3,
+	XDP_REDIRECT = 4,
+};
+
+struct xdp_md {
+	__u32 data;
+	__u32 data_end;
+	__u32 data_meta;
+	/* Below access go through struct xdp_rxq_info */
+	__u32 ingress_ifindex; /* rxq->dev->ifindex */
+	__u32 rx_queue_index;  /* rxq->queue_index  */
+
+	__u32 egress_ifindex; /* txq->dev->ifindex */
+};
+
+#define ETH_ALEN 6 /* Octets in one ethernet addr */
+
+#define ETH_P_IP 0x0800 /* Internet Protocol packet	*/
+
+struct ethhdr {
+	unsigned char h_dest[ETH_ALEN];   /* destination eth addr	*/
+	unsigned char h_source[ETH_ALEN]; /* source ether addr	*/
+	__be16 h_proto;                   /* packet type ID field	*/
+} __attribute__((packed));
+
+struct iphdr {
+#if defined(__ORDER_LITTLE_ENDIAN__)
+	__u8 ihl : 4, version : 4;
+#elif defined(__ORDER_BIG_ENDIAN__)
+	__u8 version : 4, ihl : 4;
+#else
+#error "Please fix <asm/byteorder.h>"
+#endif
+	__u8 tos;
+	__be16 tot_len;
+	__be16 id;
+	__be16 frag_off;
+	__u8 ttl;
+	__u8 protocol;
+	__sum16 check;
+	__be32 saddr;
+	__be32 daddr;
+	/*The options start here. */
+};

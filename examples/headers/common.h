@@ -56,6 +56,47 @@ enum bpf_map_type {
 	BPF_MAP_TYPE_INODE_STORAGE         = 28,
 };
 
+enum xdp_action {
+	XDP_ABORTED = 0,
+	XDP_DROP = 1,
+	XDP_PASS = 2,
+	XDP_TX = 3,
+	XDP_REDIRECT = 4,
+};
+
+struct xdp_md {
+	__u32 data;
+	__u32 data_end;
+	__u32 data_meta;
+	__u32 ingress_ifindex;
+	__u32 rx_queue_index;
+	__u32 egress_ifindex;
+};
+
+typedef __u16 __sum16;
+
+#define ETH_P_IP 0x0800
+
+struct ethhdr {
+	unsigned char h_dest[6];
+	unsigned char h_source[6];
+	__be16 h_proto;
+};
+
+struct iphdr {
+	__u8 ihl: 4;
+	__u8 version: 4;
+	__u8 tos;
+	__be16 tot_len;
+	__be16 id;
+	__be16 frag_off;
+	__u8 ttl;
+	__u8 protocol;
+	__sum16 check;
+	__be32 saddr;
+	__be32 daddr;
+};
+
 enum {
 	BPF_ANY     = 0,
 	BPF_NOEXIST = 1,

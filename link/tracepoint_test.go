@@ -75,7 +75,7 @@ func TestTracepointProgramCall(t *testing.T) {
 	// Kernels before 4.14 don't support attaching to syscall tracepoints.
 	testutils.SkipOnOldKernel(t, "4.14", "syscalls tracepoint support")
 
-	m, p := newUpdaterMapProg(t, ebpf.TracePoint)
+	m, p := newUpdaterMapProg(t, ebpf.TracePoint, 0)
 
 	// Open Tracepoint at /sys/kernel/debug/tracing/events/syscalls/sys_enter_getpid
 	// and attach it to the ebpf program created above.

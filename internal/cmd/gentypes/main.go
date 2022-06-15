@@ -319,21 +319,21 @@ import (
 		{
 			"ProgGetNextId", retError, "obj_next_id", "BPF_PROG_GET_NEXT_ID",
 			[]patch{
-				choose(0, "start_id"), rename("start_id", "id"),
+				choose(0, "start_id"), rename("start_id", "id", 0),
 				truncateAfter("next_id"),
 			},
 		},
 		{
 			"MapGetNextId", retError, "obj_next_id", "BPF_MAP_GET_NEXT_ID",
 			[]patch{
-				choose(0, "start_id"), rename("start_id", "id"),
+				choose(0, "start_id"), rename("start_id", "id", 0),
 				truncateAfter("next_id"),
 			},
 		},
 		{
 			"BtfGetNextId", retError, "obj_next_id", "BPF_BTF_GET_NEXT_ID",
 			[]patch{
-				choose(0, "start_id"), rename("start_id", "id"),
+				choose(0, "start_id"), rename("start_id", "id", 0),
 				replace(btfID, "id", "next_id"),
 				truncateAfter("next_id"),
 			},
@@ -342,15 +342,15 @@ import (
 		// first field...
 		{
 			"BtfGetFdById", retFd, "obj_next_id", "BPF_BTF_GET_FD_BY_ID",
-			[]patch{choose(0, "start_id"), rename("start_id", "id"), truncateAfter("id")},
+			[]patch{choose(0, "start_id"), rename("start_id", "id", 0), truncateAfter("id")},
 		},
 		{
 			"MapGetFdById", retFd, "obj_next_id", "BPF_MAP_GET_FD_BY_ID",
-			[]patch{choose(0, "start_id"), rename("start_id", "id"), truncateAfter("id")},
+			[]patch{choose(0, "start_id"), rename("start_id", "id", 0), truncateAfter("id")},
 		},
 		{
 			"ProgGetFdById", retFd, "obj_next_id", "BPF_PROG_GET_FD_BY_ID",
-			[]patch{choose(0, "start_id"), rename("start_id", "id"), truncateAfter("id")},
+			[]patch{choose(0, "start_id"), rename("start_id", "id", 0), truncateAfter("id")},
 		},
 		{
 			"ObjGetInfoByFd", retError, "info_by_fd", "BPF_OBJ_GET_INFO_BY_FD",
@@ -383,6 +383,19 @@ import (
 				chooseNth(4, 2),
 				replace(enumTypes["AttachType"], "attach_type"),
 				flattenAnon,
+			},
+		},
+		{
+			"LinkCreateKprobeMulti", retFd, "link_create", "BPF_LINK_CREATE",
+			[]patch{
+				chooseNth(4, 3),
+				replace(enumTypes["AttachType"], "attach_type"),
+				flattenAnon,
+				replace(pointer, "cookies"),
+				replace(pointer, "addrs"),
+				replace(pointer, "syms"),
+				rename("cnt", "count", 0),
+				rename("flags", "kprobe_multi_flags", 1),
 			},
 		},
 		{
@@ -690,15 +703,19 @@ func truncateAfter(name string) patch {
 	}
 }
 
-func rename(from, to string) patch {
+func rename(from, to string, skip int) patch {
 	return func(s *btf.Struct) error {
 		for i, m := range s.Members {
 			if m.Name == from {
+				if skip > 0 {
+					skip--
+					continue
+				}
 				s.Members[i].Name = to
 				return nil
 			}
 		}
-		return fmt.Errorf("no member named %q", from)
+		return fmt.Errorf("no member named %q or skipped too many matches", from)
 	}
 }
 

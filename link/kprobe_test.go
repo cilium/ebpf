@@ -321,7 +321,7 @@ func TestDetermineRetprobeBit(t *testing.T) {
 }
 
 func TestKprobeProgramCall(t *testing.T) {
-	m, p := newUpdaterMapProg(t, ebpf.Kprobe)
+	m, p := newUpdaterMapProg(t, ebpf.Kprobe, 0)
 
 	// Open Kprobe on `sys_getpid` and attach it
 	// to the ebpf program created above.
@@ -353,7 +353,7 @@ func TestKprobeProgramCall(t *testing.T) {
 	assertMapValue(t, m, 0, 0)
 }
 
-func newUpdaterMapProg(t *testing.T, typ ebpf.ProgramType) (*ebpf.Map, *ebpf.Program) {
+func newUpdaterMapProg(t *testing.T, typ ebpf.ProgramType, attach ebpf.AttachType) (*ebpf.Map, *ebpf.Program) {
 	// Create ebpf map. Will contain only one key with initial value 0.
 	m, err := ebpf.NewMap(&ebpf.MapSpec{
 		Type:       ebpf.Array,
@@ -391,7 +391,8 @@ func newUpdaterMapProg(t *testing.T, typ ebpf.ProgramType) (*ebpf.Map, *ebpf.Pro
 			asm.Mov.Imm(asm.R0, 0),
 			asm.Return(),
 		},
-		License: "Dual MIT/GPL",
+		AttachType: attach,
+		License:    "Dual MIT/GPL",
 	})
 	if err != nil {
 		t.Fatal(err)

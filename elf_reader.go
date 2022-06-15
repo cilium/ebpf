@@ -1153,8 +1153,9 @@ func getProgType(sectionName string) (ProgramType, AttachType, uint32, string) {
 		{"cgroup/setsockopt", CGroupSockopt, AttachCGroupSetsockopt, 0},
 		{"struct_ops+", StructOps, AttachNone, 0},
 		{"sk_lookup/", SkLookup, AttachSkLookup, 0},
-
 		{"seccomp", SocketFilter, AttachNone, 0},
+		{"kprobe.multi", Kprobe, AttachTraceKprobeMulti, 0},
+		{"kretprobe.multi", Kprobe, AttachTraceKprobeMulti, 0},
 	}
 
 	for _, t := range types {

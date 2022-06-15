@@ -286,7 +286,8 @@ func (l *RawLink) Info() (*Info, error) {
 		extra = &TracingInfo{}
 	case XDPType:
 		extra = &XDPInfo{}
-	case RawTracepointType, IterType, PerfEventType:
+	case RawTracepointType, IterType,
+		PerfEventType, KprobeMultiType:
 		// Extra metadata not supported.
 	default:
 		return nil, fmt.Errorf("unknown link info type: %d", info.Type)
@@ -296,7 +297,7 @@ func (l *RawLink) Info() (*Info, error) {
 		buf := bytes.NewReader(info.Extra[:])
 		err := binary.Read(buf, internal.NativeEndian, extra)
 		if err != nil {
-			return nil, fmt.Errorf("can not read extra link info: %w", err)
+			return nil, fmt.Errorf("cannot read extra link info: %w", err)
 		}
 	}
 

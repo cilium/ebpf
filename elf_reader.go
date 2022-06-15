@@ -71,7 +71,7 @@ func LoadCollectionSpecFromReader(rd io.ReaderAt) (*CollectionSpec, error) {
 			licenseSection = sec
 		case strings.HasPrefix(sec.Name, "version"):
 			versionSection = sec
-		case strings.HasPrefix(sec.Name, "maps"):
+		case strings.HasPrefix(sec.Name, "maps") && !strings.HasSuffix(sec.Name, ".ext"):
 			sections[idx] = newElfSection(sec, mapSection)
 		case sec.Name == ".maps":
 			sections[idx] = newElfSection(sec, btfMapSection)
@@ -1127,7 +1127,9 @@ func getProgType(sectionName string) (ProgramType, AttachType, uint32, string) {
 		{"cgroup/dev", CGroupDevice, AttachCGroupDevice, 0},
 		{"sockops", SockOps, AttachCGroupSockOps, 0},
 		{"sk_skb/stream_parser", SkSKB, AttachSkSKBStreamParser, 0},
+		{"streamparser", SkSKB, AttachSkSKBStreamParser, 0},
 		{"sk_skb/stream_verdict", SkSKB, AttachSkSKBStreamVerdict, 0},
+		{"streamverdict", SkSKB, AttachSkSKBStreamVerdict, 0},
 		{"sk_skb", SkSKB, AttachNone, 0},
 		{"sk_msg", SkMsg, AttachSkMsgVerdict, 0},
 		{"lirc_mode2", LircMode2, AttachLircMode2, 0},

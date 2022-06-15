@@ -636,6 +636,26 @@ func LinkCreateIter(attr *LinkCreateIterAttr) (*FD, error) {
 	return NewFD(int(fd))
 }
 
+type LinkCreateKprobeMultiAttr struct {
+	ProgFd           uint32
+	TargetFd         uint32
+	AttachType       AttachType
+	Flags            uint32
+	KprobeMultiFlags uint32
+	Cnt              uint32
+	Syms             Pointer
+	Addrs            Pointer
+	Cookies          Pointer
+}
+
+func LinkCreateKprobeMulti(attr *LinkCreateKprobeMultiAttr) (*FD, error) {
+	fd, err := BPF(BPF_LINK_CREATE, unsafe.Pointer(attr), unsafe.Sizeof(*attr))
+	if err != nil {
+		return nil, err
+	}
+	return NewFD(int(fd))
+}
+
 type LinkCreatePerfEventAttr struct {
 	ProgFd     uint32
 	TargetFd   uint32

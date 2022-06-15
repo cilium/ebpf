@@ -8,9 +8,12 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"math"
 	"os"
 	"reflect"
+	"strings"
+	"unicode"
 
 	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/sys"
@@ -156,7 +159,7 @@ func variableOffsets(file *internal.SafeELFFile) (map[variable]uint32, error) {
 			return nil, fmt.Errorf("symbol %s: invalid section %d", symbol.Name, symbol.Section)
 		}
 
-		secName := file.Sections[symbol.Section].Name
+		secName := fixName(file.Sections[symbol.Section].Name, isNotAlphaNumericOrDot)
 		variableOffsets[variable{secName, symbol.Name}] = uint32(symbol.Value)
 	}
 
@@ -182,7 +185,7 @@ func loadSpecFromELF(file *internal.SafeELFFile) (*Spec, error) {
 				return nil, fmt.Errorf("section %s exceeds maximum size", sec.Name)
 			}
 
-			sectionSizes[sec.Name] = uint32(sec.Size)
+			sectionSizes[fixName(sec.Name, isNotAlphaNumericOrDot)] = uint32(sec.Size)
 		}
 	}
 
@@ -360,6 +363,51 @@ func guessRawBTFByteOrder(r io.ReaderAt) binary.ByteOrder {
 	return nil
 }
 
+func isNotAlphaNumeric(r rune) bool {
+	return !unicode.IsDigit(r) && (r < 'a' || r > 'z') && (r < 'A' || r > 'Z')
+}
+
+func isNotAlphaNumericOrDot(r rune) bool {
+	return isNotAlphaNumeric(r) && r != '.'
+}
+
+func fixName(name string, predicate func(r rune) bool) string {
+	var fixedName strings.Builder
+
+	for i, r := range name {
+		if i == 0 && unicode.IsDigit(r) {
+			fixedName.WriteRune('_')
+			continue
+		}
+
+		if predicate(r) {
+			fixedName.WriteRune('_')
+			continue
+		}
+
+		fixedName.WriteRune(r)
+	}
+
+	return fixedName.String()
+}
+
+func fixNameMaybe(nameOffset uint32, rawStrings *stringTable, predicate func(r rune) bool) error {
+	name, err := rawStrings.Lookup(nameOffset)
+	if err != nil {
+		return err
+	}
+
+	fixedName := fixName(name, predicate)
+
+	for i, offset := range rawStrings.offsets {
+		if offset == nameOffset && fixedName != rawStrings.strings[i] {
+			rawStrings.strings[i] = fixedName
+		}
+	}
+
+	return nil
+}
+
 // parseBTF reads a .BTF section into memory and parses it into a list of
 // raw types and a string table.
 func parseBTF(btf io.ReaderAt, bo binary.ByteOrder) ([]rawType, *stringTable, error) {
@@ -380,7 +428,29 @@ func parseBTF(btf io.ReaderAt, bo binary.ByteOrder) ([]rawType, *stringTable, er
 		return nil, nil, fmt.Errorf("can't read types: %w", err)
 	}
 
-	return rawTypes, rawStrings, nil
+	var rt []rawType
+	for _, typ := range rawTypes {
+		switch typ.Kind() {
+		case kindPointer:
+			if typ.NameOff != 0 {
+				name, _ := rawStrings.Lookup(typ.NameOff)
+				log.Printf("%q type should not have a name but its name is %q. erase the name", typ.Kind().String(), name)
+				typ.NameOff = 0
+			}
+		case kindTypedef, kindForward, kindFunc,
+			kindStruct, kindUnion, kindEnum, kindInt, kindFloat:
+			if err := fixNameMaybe(typ.NameOff, rawStrings, isNotAlphaNumeric); err != nil {
+				return nil, nil, err
+			}
+		case kindVar, kindDatasec:
+			if err := fixNameMaybe(typ.NameOff, rawStrings, isNotAlphaNumericOrDot); err != nil {
+				return nil, nil, err
+			}
+		}
+		rt = append(rt, typ)
+	}
+
+	return rt, rawStrings, nil
 }
 
 type variable struct {

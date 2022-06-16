@@ -375,7 +375,7 @@ func TestUprobeProgramCall(t *testing.T) {
 				testutils.SkipOnOldKernel(t, "4.14", "uprobes on Go binaries silently fail on kernel < 4.14")
 			}
 
-			m, p := newUpdaterMapProg(t, ebpf.Kprobe)
+			m, p := newUpdaterMapProg(t, ebpf.Kprobe, 0)
 
 			// Load the executable.
 			ex, err := OpenExecutable(tt.elf)
@@ -427,7 +427,7 @@ func TestUprobeProgramCall(t *testing.T) {
 }
 
 func TestUprobeProgramWrongPID(t *testing.T) {
-	m, p := newUpdaterMapProg(t, ebpf.Kprobe)
+	m, p := newUpdaterMapProg(t, ebpf.Kprobe, 0)
 
 	// Load the '/bin/bash' executable.
 	ex, err := OpenExecutable("/bin/bash")

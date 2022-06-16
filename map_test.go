@@ -1080,37 +1080,38 @@ func TestMapIterateHashKeyOneByteFull(t *testing.T) {
 
 func TestMapGuessNonExistentKey(t *testing.T) {
 	tests := []struct {
+		name    string
 		mapType MapType
 		keys    []uint32
 	}{
 		{
-			Hash, []uint32{},
+			"empty", Hash, []uint32{},
 		},
 		{
-			Hash, []uint32{0},
+			"all zero key", Hash, []uint32{0},
 		},
 		{
-			Hash, []uint32{math.MaxUint32},
+			"all ones key", Hash, []uint32{math.MaxUint32},
 		},
 		{
-			Hash, []uint32{0x5555_5555},
+			"alternating bits key", Hash, []uint32{0x5555_5555},
 		},
 		{
-			Hash, []uint32{0, math.MaxUint32, 0x5555_5555},
+			"all special patterns", Hash, []uint32{0, math.MaxUint32, 0x5555_5555},
 		},
 		{
-			Array, []uint32{},
+			"empty", Array, []uint32{},
 		},
 		{
-			Array, []uint32{0},
+			"all zero key", Array, []uint32{0},
 		},
 		{
-			Array, []uint32{0, 1},
+			"full", Array, []uint32{0, 1},
 		},
 	}
 
 	for _, tt := range tests {
-		t.Run(fmt.Sprintf("%s: %x", tt.mapType, tt.keys), func(t *testing.T) {
+		t.Run(fmt.Sprintf("%s: %s", tt.mapType, tt.name), func(t *testing.T) {
 			maxEntries := uint32(len(tt.keys))
 			if maxEntries == 0 {
 				maxEntries = 1

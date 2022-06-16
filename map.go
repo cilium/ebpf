@@ -170,7 +170,8 @@ func (ms *MapSpec) checkCompatibility(m *Map) error {
 	case m.valueSize != ms.ValueSize:
 		return fmt.Errorf("expected value size %v, got %v: %w", ms.ValueSize, m.valueSize, ErrMapIncompatible)
 
-	case m.maxEntries != ms.MaxEntries:
+	case !(ms.Type == PerfEventArray && ms.MaxEntries == 0) &&
+		m.maxEntries != ms.MaxEntries:
 		return fmt.Errorf("expected max entries %v, got %v: %w", ms.MaxEntries, m.maxEntries, ErrMapIncompatible)
 
 	case m.flags != ms.Flags:

@@ -15,9 +15,13 @@ import (
 
 // KprobeMultiOptions defines additional parameters that will be used
 // when opening a KprobeMulti Link.
+//
+// Symbols and Addresses are mutually exclusive.
 type KprobeMultiOptions struct {
 	// Symbols is an array of kernel symbols to attach the ebpf program to.
 	Symbols []string
+	// Addresses is an array of kernel symbols' addresses.
+	Addresses []uint64
 	// Cookies is an array of arbitrary values that can be fetched from an eBPF program
 	// via `bpf_get_attach_cookie()`.
 	//
@@ -25,11 +29,9 @@ type KprobeMultiOptions struct {
 	//
 	// Cookies will be assigned to Symbols based on their ordering.
 	Cookies []uint64
+
 	// Internal field. Only used for retprobes.
 	flags uint32
-
-	// TODO(matt): libbpf allows attaching via a pattern and an array of addresses;
-	//             add these options for the first iteration?
 }
 
 // KprobeMulti attaches the given eBPF program to the entry point of a set of
@@ -56,30 +58,46 @@ func kprobeMulti(prog *ebpf.Program, opts *KprobeMultiOptions) (Link, error) {
 		return nil, errors.New("kprobe.multi: missing options")
 	}
 
-	cnt := uint32(len(opts.Symbols))
+	symbolsCnt := uint32(len(opts.Symbols))
+	addressesCnt := uint32(len(opts.Addresses))
+
+	if symbolsCnt > 0 && addressesCnt > 0 {
+		return nil, errors.New("kprobe.multi: symbols and addresses are mutually exclusive")
+	}
+	if symbolsCnt == 0 && addressesCnt == 0 {
+		return nil, errors.New("kprobe.multi: missing symbols/addresses array")
+	}
+
 	cookiesCnt := uint32(len(opts.Cookies))
-	if cnt == 0 {
-		return nil, errors.New("kprobe.multi: missing symbols array")
-	}
-	if cookiesCnt > 0 && cookiesCnt != cnt {
-		return nil, errors.New("kprobe.multi: invalid cookies array length")
-	}
-
-	syms := make([]uint64, 0)
-	for _, s := range opts.Symbols {
-		sptr, err := unsafeStringPtr(s)
-		if err != nil {
-			return nil, fmt.Errorf("kprobe.multi: %w", err)
-		}
-		syms = append(syms, uint64(uintptr(sptr)))
-	}
-
 	attr := &sys.LinkCreateKprobeMultiAttr{
 		ProgFd:           uint32(prog.FD()),
 		AttachType:       sys.BPF_TRACE_KPROBE_MULTI,
 		KprobeMultiFlags: opts.flags,
-		Cnt:              cnt,
-		Syms:             sys.NewPointer(unsafe.Pointer(&syms[0])),
+	}
+
+	syms := make([]uint64, 0)
+	if symbolsCnt > addressesCnt {
+		if cookiesCnt > 0 && cookiesCnt != symbolsCnt {
+			return nil, errors.New("kprobe.multi: invalid cookies array length")
+		}
+
+		for _, s := range opts.Symbols {
+			sptr, err := unsafeStringPtr(s)
+			if err != nil {
+				return nil, fmt.Errorf("kprobe.multi: %w", err)
+			}
+			syms = append(syms, uint64(uintptr(sptr)))
+		}
+
+		attr.Cnt = symbolsCnt
+		attr.Syms = sys.NewPointer(unsafe.Pointer(&syms[0]))
+	} else {
+		if cookiesCnt > 0 && cookiesCnt != addressesCnt {
+			return nil, errors.New("kprobe.multi: invalid cookies array length")
+		}
+
+		attr.Cnt = addressesCnt
+		attr.Addrs = sys.NewPointer(unsafe.Pointer(&opts.Addresses[0]))
 	}
 
 	if cookiesCnt > 0 {
@@ -118,6 +136,8 @@ func (kml *kprobeMultiLink) Unpin() error {
 // Probe BPF kprobe multi link.
 //
 // patchwork.kernel.org/project/netdevbpf/list/?series=623878&state=*
+//
+// TODO(matt): do we need this feature check?
 var haveBPFLinkKprobeMulti = internal.FeatureTest("bpf_link_kprobe_multi", "5.18", func() error {
 	prog, err := ebpf.NewProgram(&ebpf.ProgramSpec{
 		Name: "probe_bpf_kprobe_multi_link",

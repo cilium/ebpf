@@ -329,7 +329,7 @@ import (
 		{
 			"BtfGetNextId", retError, "obj_next_id", "BPF_BTF_GET_NEXT_ID",
 			[]patch{
-				choose(0, "start_id"), rename("start_id", "id"),
+				choose(0, "start_id"), rename("start_id", "id", 0),
 				replace(btfID, "id", "next_id"),
 				truncateAfter("next_id"),
 			},

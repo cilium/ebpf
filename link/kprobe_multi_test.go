@@ -1,6 +1,8 @@
 package link
 
 import (
+	"math"
+	"strings"
 	"testing"
 
 	"github.com/cilium/ebpf"
@@ -28,6 +30,31 @@ func TestKprobeMulti(t *testing.T) {
 	_, err = KprobeMulti(prog, &opts)
 	if err == nil {
 		t.Fatal("expected err to not be nil")
+	}
+}
+
+func TestKprobeMultiAddresses(t *testing.T) {
+	testutils.SkipOnOldKernel(t, "5.18", "kprobe_multi link")
+
+	prog := mustLoadProgram(t, ebpf.Kprobe, ebpf.AttachTraceKprobeMulti, "")
+	// Only have a negative test for addresses as it would be hard to maintain
+	// a proper one.
+	// The test correctly fails if the address is set to the start range of perf kallsyms
+	// for any symbol:
+	//
+	// sudo perf kallsyms __x64_sys_getpid
+	// __x64_sys_getpid: [kernel] [kernel.kallsyms] 0xffffffffa10f9570-0xffffffffa10f9590 (0xffffffffa10f9570-0xffffffffa10f9590)
+	opts := KprobeMultiOptions{Addresses: []uint64{math.MaxUint64}}
+	_, err := KprobeMulti(prog, &opts)
+	if err == nil {
+		t.Fatal("expected err to not be nil")
+	}
+
+	opts.Symbols = []string{"bogus"}
+	_, err = KprobeMulti(prog, &opts)
+	// Assert this is not a link_create error.
+	if !strings.Contains(err.Error(), "mutually exclusive") {
+		t.Fatalf("expected fail due to Symbols and Addresses being mutual exclusive, got: %v", err)
 	}
 }
 

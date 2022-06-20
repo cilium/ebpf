@@ -10,12 +10,13 @@ import (
 	"testing"
 
 	"github.com/cilium/ebpf"
+	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/testutils"
 )
 
 func TestKprobeOffset(t *testing.T) {
-	// skip test on 4.4 and 4.9 as the offsets are different
-	// even if the function implementation hasn't changed:
+	// skip test on kernels older than 4.10 and newer than 5.15 as the offsets
+	// are different even if the function implementation hasn't changed:
 	//
 	// ffffffff81690670 <inet6_release>:
 	// ffffffff81690670:	e8 eb c0 15 00       	call   ffffffff817ec760 <__fentry__>
@@ -25,6 +26,13 @@ func TestKprobeOffset(t *testing.T) {
 	// ffffffff8169067b:	41 54                	push   %r12
 	// snip
 	testutils.SkipOnOldKernel(t, "4.10", "n/a")
+	v, err := internal.NewVersion("5.15")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if v.Less(testutils.MustKernelVersion()) {
+		t.Skip("Skipping: instructions changed on newer kernels")
+	}
 
 	tests := []struct {
 		name   string

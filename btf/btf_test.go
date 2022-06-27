@@ -175,7 +175,7 @@ func BenchmarkParseVmlinux(b *testing.B) {
 			b.Fatal(err)
 		}
 
-		if _, err := loadRawSpec(rd, binary.LittleEndian); err != nil {
+		if _, err := loadRawSpec(rd, binary.LittleEndian, nil, nil); err != nil {
 			b.Fatal("Can't load BTF:", err)
 		}
 	}
@@ -376,4 +376,62 @@ func TestTypesIterator(t *testing.T) {
 	if !found {
 		t.Fatal("Cannot find 'iphdr' type")
 	}
+}
+
+func TestLoadSplitSpecFromReader(t *testing.T) {
+	spec, err := LoadSpecFromReader(readVMLinux(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	f, err := os.Open("testdata/xt_nat")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+
+	splitSpec, err := LoadSplitSpecFromReader(f, spec)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// net/netfilter/xt_nat.c:static int xt_nat_checkentry(const struct xt_tgchk_param *par)
+	typ, err := splitSpec.AnyTypeByName("xt_nat_checkentry")
+	if err != nil {
+		t.Fatal(err)
+	}
+	typeID, err := splitSpec.TypeID(typ)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fnType := typ.(*Func)
+	fnProto := fnType.Type.(*FuncProto)
+
+	// 'int' is defined in the base BTF...
+	intType, err := spec.AnyTypeByName("int")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// ... but not in the split BTF
+	_, err = splitSpec.AnyTypeByName("int")
+	if err == nil {
+		t.Fatal("'int' is not supposed to be found in the split BTF")
+	}
+
+	if fnProto.Return != intType {
+		t.Fatalf("Return type of 'xt_nat_checkentry()' (%s) does not match 'int' type (%s)",
+			fnProto.Return, intType)
+	}
+
+	// Check that copied split-BTF's spec has correct type indexing
+	splitSpecCopy := splitSpec.Copy()
+	copyType, err := splitSpecCopy.AnyTypesByName("xt_nat_checkentry")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if copyTypeId, found := splitSpecCopy.typeIDs[copyType[0]]; typeID != copyTypeId {
+		t.Fatalf("'xt_nat_checkentry` type ID (%d) does not match copied spec's (%d %v)",
+			typeID, copyTypeId, found)
+	}
+
 }

@@ -472,6 +472,7 @@ func TestProgramMarshaling(t *testing.T) {
 	if err := arr.Lookup(idx, &prog2); err != nil {
 		t.Fatal("Can't unmarshal program:", err)
 	}
+	defer prog2.Close()
 
 	if prog2 == nil {
 		t.Fatal("Unmarshalling set program to nil")

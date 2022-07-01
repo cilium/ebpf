@@ -293,6 +293,7 @@ func TestBatchMapWithLock(t *testing.T) {
 		if err != nil {
 			t.Fatal("Can't parse ELF:", err)
 		}
+		defer coll.Close()
 
 		type spinLockValue struct {
 			Cnt     uint32
@@ -353,6 +354,7 @@ func TestMapWithLock(t *testing.T) {
 		if err != nil {
 			t.Fatal("Can't parse ELF:", err)
 		}
+		defer coll.Close()
 
 		type spinLockValue struct {
 			Cnt     uint32
@@ -1240,11 +1242,11 @@ func TestIterateMapInMap(t *testing.T) {
 		m       *Map
 		entries = parent.Iterate()
 	)
-	defer m.Close()
 
 	if !entries.Next(&key, &m) {
 		t.Fatal("Iterator encountered error:", entries.Err())
 	}
+	m.Close()
 
 	if key != 1 {
 		t.Error("Iterator didn't skip first entry")

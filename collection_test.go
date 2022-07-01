@@ -106,10 +106,12 @@ func TestCollectionSpecLoadCopy(t *testing.T) {
 	if err != nil {
 		t.Fatal("Loading original spec:", err)
 	}
+	defer objs.Prog.Close()
 
 	if err := spec2.LoadAndAssign(&objs, nil); err != nil {
 		t.Fatal("Loading copied spec:", err)
 	}
+	defer objs.Prog.Close()
 }
 
 func TestCollectionSpecRewriteMaps(t *testing.T) {
@@ -309,6 +311,9 @@ func TestCollectionSpecMapReplacements_SpecMismatch(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// Map fd is duplicated by MapReplacements, this one can be safely closed.
+	defer newMap.Close()
+
 	coll, err := NewCollectionWithOptions(cs, CollectionOptions{
 		MapReplacements: map[string]*Map{
 			"test-map": newMap,
@@ -365,6 +370,8 @@ func TestCollectionSpec_LoadAndAssign_LazyLoading(t *testing.T) {
 	if err := spec.LoadAndAssign(&objs, nil); err != nil {
 		t.Fatal("Assign loads a map or program that isn't requested in the struct:", err)
 	}
+	defer objs.Prog.Close()
+	defer objs.Map.Close()
 
 	if objs.Prog == nil {
 		t.Error("Program is nil")
@@ -572,6 +579,8 @@ func ExampleCollectionSpec_LoadAndAssign() {
 	if err := spec.LoadAndAssign(&objs, nil); err != nil {
 		panic(err)
 	}
+	defer objs.Program.Close()
+	defer objs.Map.Close()
 
 	fmt.Println(objs.Program.Type())
 	fmt.Println(objs.Map.Type())

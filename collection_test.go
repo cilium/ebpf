@@ -500,6 +500,116 @@ func TestAssignValues(t *testing.T) {
 
 }
 
+func TestCollectionLoaderClose(t *testing.T) {
+	spec := &CollectionSpec{
+		Maps: map[string]*MapSpec{
+			"test_map": {
+				Type:       Array,
+				KeySize:    4,
+				ValueSize:  4,
+				MaxEntries: 1,
+			},
+		},
+		Programs: map[string]*ProgramSpec{
+			"test_prog": {
+				Type: SocketFilter,
+				Instructions: asm.Instructions{
+					asm.LoadImm(asm.R0, 0, asm.DWord),
+					asm.Return(),
+				},
+				License: "MIT",
+			},
+		},
+	}
+
+	cl, err := newCollectionLoader(spec, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	m, err := cl.loadMap("test_map")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer m.Close()
+
+	p, err := cl.loadProgram("test_prog")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer p.Close()
+
+	// Preserve all Maps and Programs.
+	cl.close()
+	if m.FD() < 0 {
+		t.Fatal("map closed unexpectedly")
+	}
+	if p.FD() < 0 {
+		t.Fatal("prog closed unexpectedly")
+	}
+
+	// Preserve specific Maps and Programs.
+	skipMaps := map[string]bool{"test_map": true}
+	skipProgs := map[string]bool{"test_prog": true}
+	cl.closeFiltered(skipMaps, skipProgs)
+	if m.FD() < 0 {
+		t.Fatal("map closed unexpectedly with skip list")
+	}
+	if p.FD() < 0 {
+		t.Fatal("prog closed unexpectedly with skip list")
+	}
+
+	// Close all Maps and Programs.
+	cl.closeAll()
+	if m.FD() != -1 {
+		t.Fatal("expected closed map after closing loader with error")
+	}
+	if p.FD() != -1 {
+		t.Fatal("expected closed prog after closing loader with error")
+	}
+}
+
+func TestIncompleteLoadAndAssign(t *testing.T) {
+	spec := &CollectionSpec{
+		Programs: map[string]*ProgramSpec{
+			"valid": {
+				Type: SocketFilter,
+				Instructions: asm.Instructions{
+					asm.LoadImm(asm.R0, 0, asm.DWord),
+					asm.Return(),
+				},
+				License: "MIT",
+			},
+			"invalid": {
+				Type: SocketFilter,
+				Instructions: asm.Instructions{
+					asm.Return(),
+				},
+				License: "MIT",
+			},
+		},
+	}
+
+	s := struct {
+		// Assignment to Valid should execute and succeed.
+		Valid *Program `ebpf:"valid"`
+		// Assignment to Invalid should fail and cause Valid's fd to be closed.
+		Invalid *Program `ebpf:"invalid"`
+	}{}
+
+	if err := spec.LoadAndAssign(&s, nil); err == nil {
+		t.Fatal("expected error loading invalid ProgramSpec")
+	}
+
+	if fd := s.Valid.FD(); fd != -1 {
+		t.Fatal("expected valid prog to have closed fd -1, got:", fd)
+	}
+
+	if s.Invalid != nil {
+		t.Fatal("expected invalid prog to be nil due to never being assigned")
+	}
+}
+
 func ExampleCollectionSpec_Assign() {
 	spec := &CollectionSpec{
 		Maps: map[string]*MapSpec{

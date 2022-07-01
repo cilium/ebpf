@@ -442,7 +442,9 @@ func (p *Program) IsPinned() bool {
 	return p.pinnedPath != ""
 }
 
-// Close unloads the program from the kernel.
+// Close the Program's underlying file descriptor, which could unload
+// the program from the kernel if it is not pinned or attached to a
+// kernel hook.
 func (p *Program) Close() error {
 	if p == nil {
 		return nil

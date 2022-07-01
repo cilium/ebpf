@@ -249,8 +249,8 @@ func NewMapWithOptions(spec *MapSpec, opts MapOptions) (*Map, error) {
 		return nil, fmt.Errorf("creating map: %w", err)
 	}
 
-	err = m.finalize(spec)
-	if err != nil {
+	if err := m.finalize(spec); err != nil {
+		m.Close()
 		return nil, fmt.Errorf("populating map: %w", err)
 	}
 
@@ -1039,7 +1039,8 @@ func (m *Map) Iterate() *MapIterator {
 	return newMapIterator(m)
 }
 
-// Close removes a Map
+// Close the Map's underlying file descriptor, which could unload the
+// Map from the kernel if it is not pinned or in use by a loaded Program.
 func (m *Map) Close() error {
 	if m == nil {
 		// This makes it easier to clean up when iterating maps

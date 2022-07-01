@@ -259,19 +259,22 @@ func (cs *CollectionSpec) Assign(to interface{}) error {
 //
 // Returns an error if any of the fields can't be found, or
 // if the same Map or Program is assigned multiple times.
-func (cs *CollectionSpec) LoadAndAssign(to interface{}, opts *CollectionOptions) error {
+func (cs *CollectionSpec) LoadAndAssign(to interface{}, opts *CollectionOptions) (err error) {
 	loader, err := newCollectionLoader(cs, opts)
 	if err != nil {
 		return err
 	}
-	defer loader.cleanup()
+
+	assignedMaps := make(map[string]bool)
+	assignedProgs := make(map[string]bool)
+	defer loader.close(assignedMaps, assignedProgs, err)
 
 	// Support assigning Programs and Maps, lazy-loading the required objects.
-	assignedMaps := make(map[string]bool)
 	getValue := func(typ reflect.Type, name string) (interface{}, error) {
 		switch typ {
 
 		case reflect.TypeOf((*Program)(nil)):
+			assignedProgs[name] = true
 			return loader.loadProgram(name)
 
 		case reflect.TypeOf((*Map)(nil)):
@@ -311,8 +314,6 @@ func (cs *CollectionSpec) LoadAndAssign(to interface{}, opts *CollectionOptions)
 		}
 	}
 
-	loader.finalize()
-
 	return nil
 }
 
@@ -337,12 +338,12 @@ func NewCollection(spec *CollectionSpec) (*Collection, error) {
 //
 // Omitting Collection.Close() during application shutdown is an error.
 // See the package documentation for details around Map and Program lifecycle.
-func NewCollectionWithOptions(spec *CollectionSpec, opts CollectionOptions) (*Collection, error) {
+func NewCollectionWithOptions(spec *CollectionSpec, opts CollectionOptions) (_ *Collection, err error) {
 	loader, err := newCollectionLoader(spec, &opts)
 	if err != nil {
 		return nil, err
 	}
-	defer loader.cleanup()
+	defer loader.close(nil, nil, err)
 
 	// Create maps first, as their fds need to be linked into programs.
 	for mapName := range spec.Maps {
@@ -368,8 +369,6 @@ func NewCollectionWithOptions(spec *CollectionSpec, opts CollectionOptions) (*Co
 	}
 
 	maps, progs := loader.maps, loader.programs
-
-	loader.finalize()
 
 	return &Collection{
 		progs,
@@ -441,17 +440,41 @@ func newCollectionLoader(coll *CollectionSpec, opts *CollectionOptions) (*collec
 	}, nil
 }
 
-// finalize should be called when all the collectionLoader's resources
-// have been successfully loaded into the kernel and populated with values.
-func (cl *collectionLoader) finalize() {
-	cl.maps, cl.programs = nil, nil
+// close the resources associated with the collectionLoader.
+//
+// If err is not nil, all Maps and Programs are closed, regardless of the
+// other arguments.
+// If maps or progs is nil, all Maps or Programs are preserved.
+// If maps or progs is not nil, only the given resources are preserved.
+func (cl *collectionLoader) close(maps, progs map[string]bool, err error) {
+	cl.handles.close()
+
+	// Error occurred loading the collection, release all BPF objects.
+	if err != nil {
+		cl.closeMapsAndProgs()
+		return
+	}
+
+	// Close Maps and Programs that were not propagated to the caller,
+	// e.g. when omitted from an object passed to LoadAndAssign.
+	if maps != nil {
+		for name, m := range cl.maps {
+			if !maps[name] {
+				m.Close()
+			}
+		}
+	}
+	if progs != nil {
+		for name, p := range cl.programs {
+			if !progs[name] {
+				p.Close()
+			}
+		}
+	}
 }
 
-// cleanup cleans up all resources left over in the collectionLoader.
-// Call finalize() when Map and Program creation/population is successful
-// to prevent them from getting closed.
-func (cl *collectionLoader) cleanup() {
-	cl.handles.close()
+// closeMapsAndProgs closes all Maps and Programs in the collectionLoader.
+func (cl *collectionLoader) closeMapsAndProgs() {
 	for _, m := range cl.maps {
 		m.Close()
 	}

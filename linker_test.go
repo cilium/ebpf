@@ -45,6 +45,7 @@ func TestFindReferences(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer prog.Close()
 
 	ret, _, err := prog.Test(make([]byte, 14))
 	if err != nil {
@@ -90,6 +91,7 @@ func TestForwardFunctionDeclaration(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
+		defer prog.Close()
 
 		ret, _, err := prog.Test(make([]byte, 14))
 		if err != nil {

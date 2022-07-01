@@ -480,6 +480,7 @@ func TestTailCall(t *testing.T) {
 			t.Fatal(err)
 		}
 		defer obj.TailMain.Close()
+		defer obj.ProgArray.Close()
 
 		ret, _, err := obj.TailMain.Test(make([]byte, 14))
 		testutils.SkipIfNotSupported(t, err)
@@ -518,6 +519,7 @@ func TestSubprogRelocation(t *testing.T) {
 			t.Fatal(err)
 		}
 		defer obj.Main.Close()
+		defer obj.HashMap.Close()
 
 		ret, _, err := obj.Main.Test(make([]byte, 14))
 		testutils.SkipIfNotSupported(t, err)

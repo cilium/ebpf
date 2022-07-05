@@ -47,13 +47,18 @@ func AttachFreplace(targetProg *ebpf.Program, name string, prog *ebpf.Program) (
 		}
 		defer btfHandle.Close()
 
+		spec, err := btfHandle.Spec()
+		if err != nil {
+			return nil, err
+		}
+
 		var function *btf.Func
-		if err := btfHandle.Spec().TypeByName(name, &function); err != nil {
+		if err := spec.TypeByName(name, &function); err != nil {
 			return nil, err
 		}
 
 		target = targetProg.FD()
-		typeID, err = btfHandle.Spec().TypeID(function)
+		typeID, err = spec.TypeID(function)
 		if err != nil {
 			return nil, err
 		}

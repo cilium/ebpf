@@ -685,8 +685,7 @@ func (iter *TypesIterator) Next() bool {
 
 // Handle is a reference to BTF loaded into the kernel.
 type Handle struct {
-	spec *Spec
-	fd   *sys.FD
+	fd *sys.FD
 }
 
 // NewHandle loads BTF into the kernel.
@@ -729,7 +728,7 @@ func NewHandle(spec *Spec) (*Handle, error) {
 		return nil, internal.ErrorWithLog(err, logBuf)
 	}
 
-	return &Handle{spec.Copy(), fd}, nil
+	return &Handle{fd}, nil
 }
 
 // NewHandleFromID returns the BTF handle for a given id.
@@ -747,18 +746,17 @@ func NewHandleFromID(id ID) (*Handle, error) {
 		return nil, fmt.Errorf("get FD for ID %d: %w", id, err)
 	}
 
-	info, err := newInfoFromFd(fd)
-	if err != nil {
-		_ = fd.Close()
-		return nil, fmt.Errorf("get BTF spec for handle: %w", err)
-	}
-
-	return &Handle{info.BTF, fd}, nil
+	return &Handle{fd}, nil
 }
 
 // Spec returns the Spec that defined the BTF loaded into the kernel.
-func (h *Handle) Spec() *Spec {
-	return h.spec
+func (h *Handle) Spec() (*Spec, error) {
+	info, err := newInfoFromFd(h.fd)
+	if err != nil {
+		return nil, fmt.Errorf("get BTF spec for handle: %w", err)
+	}
+
+	return info.BTF, nil
 }
 
 // Close destroys the handle.

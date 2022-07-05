@@ -2,6 +2,7 @@ package btf
 
 import (
 	"bytes"
+	"fmt"
 
 	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/sys"
@@ -26,7 +27,7 @@ func newInfoFromFd(fd *sys.FD) (*info, error) {
 	// buffers to receive the data.
 	var btfInfo sys.BtfInfo
 	if err := sys.ObjInfo(fd, &btfInfo); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("get BTF info for fd %s: %w", fd, err)
 	}
 
 	if btfInfo.NameLen > 0 {

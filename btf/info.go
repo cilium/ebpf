@@ -42,7 +42,7 @@ func newInfoFromFd(fd *sys.FD) (*info, error) {
 		return nil, err
 	}
 
-	spec, err := loadRawSpec(bytes.NewReader(btfBuffer), internal.NativeEndian)
+	spec, err := loadRawSpec(bytes.NewReader(btfBuffer), internal.NativeEndian, nil, nil)
 	if err != nil {
 		return nil, err
 	}

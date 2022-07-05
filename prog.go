@@ -384,6 +384,24 @@ func (p *Program) Info() (*ProgramInfo, error) {
 	return newProgramInfoFromFd(p.fd)
 }
 
+// Handle returns a reference to the program's type information in the kernel.
+//
+// Returns ErrNotSupported if the kernel has no BTF support, or if there is no
+// BTF associated with the program.
+func (p *Program) Handle() (*btf.Handle, error) {
+	info, err := p.Info()
+	if err != nil {
+		return nil, err
+	}
+
+	id, ok := info.BTFID()
+	if !ok {
+		return nil, fmt.Errorf("program %s: retrieve BTF ID: %w", p, ErrNotSupported)
+	}
+
+	return btf.NewHandleFromID(id)
+}
+
 // FD gets the file descriptor of the Program.
 //
 // It is invalid to call this function after Close has been called.
@@ -836,17 +854,7 @@ func findTargetInProgram(prog *Program, name string, progType ProgramType, attac
 		return 0, errUnrecognizedAttachType
 	}
 
-	info, err := prog.Info()
-	if err != nil {
-		return 0, fmt.Errorf("load target BTF: %w", err)
-	}
-
-	btfID, ok := info.BTFID()
-	if !ok {
-		return 0, fmt.Errorf("load target BTF: no BTF info available")
-	}
-
-	btfHandle, err := btf.NewHandleFromID(btfID)
+	btfHandle, err := prog.Handle()
 	if err != nil {
 		return 0, fmt.Errorf("load target BTF: %w", err)
 	}

@@ -35,8 +35,8 @@ type Spec struct {
 	rawTypes []rawType
 	strings  *stringTable
 
-	// All types contained by the spec, the position of a type in the slice
-	// is its ID.
+	// All types contained by the spec. For the base type, the position of
+	// a type in the slice is its ID.
 	types types
 
 	// Type IDs indexed by type.
@@ -94,7 +94,7 @@ func LoadSpecFromReader(rd io.ReaderAt) (*Spec, error) {
 		if bo := guessRawBTFByteOrder(rd); bo != nil {
 			// Try to parse a naked BTF blob. This will return an error if
 			// we encounter a Datasec, since we can't fix it up.
-			spec, err := loadRawSpec(io.NewSectionReader(rd, 0, math.MaxInt64), bo)
+			spec, err := loadRawSpec(io.NewSectionReader(rd, 0, math.MaxInt64), bo, nil, nil)
 			return spec, err
 		}
 
@@ -199,7 +199,7 @@ func loadSpecFromELF(file *internal.SafeELFFile) (*Spec, error) {
 		return nil, fmt.Errorf("compressed BTF is not supported")
 	}
 
-	rawTypes, rawStrings, err := parseBTF(btfSection.ReaderAt, file.ByteOrder)
+	rawTypes, rawStrings, err := parseBTF(btfSection.ReaderAt, file.ByteOrder, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -209,25 +209,29 @@ func loadSpecFromELF(file *internal.SafeELFFile) (*Spec, error) {
 		return nil, err
 	}
 
-	return inflateSpec(rawTypes, rawStrings, file.ByteOrder)
+	return inflateSpec(rawTypes, rawStrings, file.ByteOrder, nil)
 }
 
-func loadRawSpec(btf io.ReaderAt, bo binary.ByteOrder) (*Spec, error) {
-	rawTypes, rawStrings, err := parseBTF(btf, bo)
+func loadRawSpec(btf io.ReaderAt, bo binary.ByteOrder,
+	baseTypes types, baseStrings *stringTable) (*Spec, error) {
+
+	rawTypes, rawStrings, err := parseBTF(btf, bo, baseStrings)
 	if err != nil {
 		return nil, err
 	}
 
-	return inflateSpec(rawTypes, rawStrings, bo)
+	return inflateSpec(rawTypes, rawStrings, bo, baseTypes)
 }
 
-func inflateSpec(rawTypes []rawType, rawStrings *stringTable, bo binary.ByteOrder) (*Spec, error) {
-	types, err := inflateRawTypes(rawTypes, rawStrings)
+func inflateSpec(rawTypes []rawType, rawStrings *stringTable, bo binary.ByteOrder,
+	baseTypes types) (*Spec, error) {
+
+	types, err := inflateRawTypes(rawTypes, baseTypes, rawStrings)
 	if err != nil {
 		return nil, err
 	}
 
-	typeIDs, typesByName := indexTypes(types)
+	typeIDs, typesByName := indexTypes(types, TypeID(len(baseTypes)))
 
 	return &Spec{
 		rawTypes:   rawTypes,
@@ -239,7 +243,7 @@ func inflateSpec(rawTypes []rawType, rawStrings *stringTable, bo binary.ByteOrde
 	}, nil
 }
 
-func indexTypes(types []Type) (map[Type]TypeID, map[essentialName][]Type) {
+func indexTypes(types []Type, typeIDOffset TypeID) (map[Type]TypeID, map[essentialName][]Type) {
 	namedTypes := 0
 	for _, typ := range types {
 		if typ.TypeName() != "" {
@@ -257,7 +261,7 @@ func indexTypes(types []Type) (map[Type]TypeID, map[essentialName][]Type) {
 		if name := newEssentialName(typ.TypeName()); name != "" {
 			typesByName[name] = append(typesByName[name], typ)
 		}
-		typeIDs[typ] = TypeID(i)
+		typeIDs[typ] = TypeID(i) + typeIDOffset
 	}
 
 	return typeIDs, typesByName
@@ -272,7 +276,7 @@ func LoadKernelSpec() (*Spec, error) {
 	if err == nil {
 		defer fh.Close()
 
-		return loadRawSpec(fh, internal.NativeEndian)
+		return loadRawSpec(fh, internal.NativeEndian, nil, nil)
 	}
 
 	file, err := findVMLinux()
@@ -362,14 +366,15 @@ func guessRawBTFByteOrder(r io.ReaderAt) binary.ByteOrder {
 
 // parseBTF reads a .BTF section into memory and parses it into a list of
 // raw types and a string table.
-func parseBTF(btf io.ReaderAt, bo binary.ByteOrder) ([]rawType, *stringTable, error) {
+func parseBTF(btf io.ReaderAt, bo binary.ByteOrder, baseStrings *stringTable) ([]rawType, *stringTable, error) {
 	buf := internal.NewBufferedSectionReader(btf, 0, math.MaxInt64)
 	header, err := parseBTFHeader(buf, bo)
 	if err != nil {
 		return nil, nil, fmt.Errorf("parsing .BTF header: %v", err)
 	}
 
-	rawStrings, err := readStringTable(io.NewSectionReader(btf, header.stringStart(), int64(header.StringLen)))
+	rawStrings, err := readStringTable(io.NewSectionReader(btf, header.stringStart(), int64(header.StringLen)),
+		baseStrings)
 	if err != nil {
 		return nil, nil, fmt.Errorf("can't read type names: %w", err)
 	}
@@ -442,7 +447,11 @@ func fixupDatasec(rawTypes []rawType, rawStrings *stringTable, sectionSizes map[
 func (s *Spec) Copy() *Spec {
 	types := copyTypes(s.types, nil)
 
-	typeIDs, typesByName := indexTypes(types)
+	typeIDOffset := TypeID(0)
+	if len(s.types) != 0 {
+		typeIDOffset = s.typeIDs[s.types[0]]
+	}
+	typeIDs, typesByName := indexTypes(types, typeIDOffset)
 
 	// NB: Other parts of spec are not copied since they are immutable.
 	return &Spec{
@@ -640,6 +649,14 @@ func (s *Spec) TypeByName(name string, typ interface{}) error {
 	typPtr.Set(reflect.ValueOf(candidate))
 
 	return nil
+}
+
+// LoadSplitSpecFromReader loads split BTF from a reader.
+//
+// Types from base are used to resolve references in the split BTF.
+// The returned Spec only contains types from the split BTF, not from the base.
+func LoadSplitSpecFromReader(r io.ReaderAt, base *Spec) (*Spec, error) {
+	return loadRawSpec(r, internal.NativeEndian, base.types, base.strings)
 }
 
 // TypesIterator iterates over types of a given spec.

@@ -49,7 +49,7 @@ func newInfoFromFd(fd *sys.FD) (*info, error) {
 
 	return &info{
 		BTF:       spec,
-		ID:        ID(btfInfo.Id),
+		ID:        btfInfo.Id,
 		Name:      unix.ByteSliceToString(nameBuffer),
 		KernelBTF: btfInfo.KernelBtf != 0,
 	}, nil

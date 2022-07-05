@@ -27,7 +27,18 @@ var (
 )
 
 // ID represents the unique ID of a BTF object.
-type ID uint32
+type ID = sys.BTFID
+
+// GetNextID returns the next allocated BTF ID after startID.
+//
+// Returns [os.ErrNotExist] if there is no next BTF ID.
+func GetNextID(startID ID) (ID, error) {
+	attr := &sys.BtfGetNextIdAttr{Id: startID}
+	if err := sys.BtfGetNextId(attr); err != nil {
+		return 0, fmt.Errorf("get next BTF ID: %w", err)
+	}
+	return attr.NextId, nil
+}
 
 // Spec represents decoded BTF.
 type Spec struct {

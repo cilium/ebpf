@@ -734,6 +734,8 @@ func NewHandle(spec *Spec) (*Handle, error) {
 
 // NewHandleFromID returns the BTF handle for a given id.
 //
+// Prefer calling [ebpf.Program.Handle] or [ebpf.Map.Handle] if possible.
+//
 // Returns ErrNotExist, if there is no BTF with the given id.
 //
 // Requires CAP_SYS_ADMIN.

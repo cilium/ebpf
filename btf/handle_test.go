@@ -1,6 +1,7 @@
 package btf_test
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/cilium/ebpf/btf"
@@ -8,16 +9,37 @@ import (
 )
 
 func TestNewHandleFromID(t *testing.T) {
-	// vmlinux is not guaranteed to be at ID 1, but it's highly likely, since
-	// module loading causes vmlinux to be parsed.
-	const vmlinux = btf.ID(1)
-
+	// There is no guarantee that there is a BTF ID allocated, but loading a module
+	// triggers loading vmlinux.
 	// See https://github.com/torvalds/linux/commit/5329722057d41aebc31e391907a501feaa42f7d9
 	testutils.SkipOnOldKernel(t, "5.11", "vmlinux BTF ID")
 
-	h, err := btf.NewHandleFromID(vmlinux)
-	if err != nil {
+	var h *btf.Handle
+	defer h.Close()
+
+	it := btf.NewHandleIterator()
+	if !it.Next(&h) {
+		t.Fatalf("No BTF loaded")
+	}
+	if err := it.Err(); err != nil {
 		t.Fatal(err)
 	}
-	h.Close()
+}
+
+func ExampleHandleIterator() {
+	var handle *btf.Handle
+	defer handle.Close()
+
+	it := btf.NewHandleIterator()
+	for it.Next(&handle) {
+		info, err := handle.Info()
+		if err != nil {
+			panic(err)
+		}
+
+		fmt.Printf("Found handle with name %q\n", info.Name)
+	}
+	if err := it.Err(); err != nil {
+		panic(err)
+	}
 }

@@ -63,6 +63,7 @@ func run(args []string) error {
 func generateTypes(spec *btf.Spec) ([]byte, error) {
 	objName := &btf.Array{Nelems: 16, Type: &btf.Int{Encoding: btf.Char, Size: 1}}
 	linkID := &btf.Int{Size: 4}
+	btfID := &btf.Int{Size: 4}
 	pointer := &btf.Int{Size: 8}
 
 	// Pre-declare handwritten types sys.ObjName and sys.Pointer so that
@@ -77,6 +78,7 @@ func generateTypes(spec *btf.Spec) ([]byte, error) {
 		Names: map[btf.Type]string{
 			objName: "ObjName",
 			linkID:  "LinkID",
+			btfID:   "BTFID",
 			pointer: "Pointer",
 		},
 		Identifier: internal.Identifier,
@@ -166,7 +168,10 @@ import (
 		},
 		{
 			"BtfInfo", "bpf_btf_info",
-			[]patch{replace(pointer, "btf", "name")},
+			[]patch{
+				replace(pointer, "btf", "name"),
+				replace(btfID, "id"),
+			},
 		},
 		{
 			"LinkInfo", "bpf_link_info",
@@ -317,6 +322,14 @@ import (
 			"MapGetNextId", retError, "obj_next_id", "BPF_MAP_GET_NEXT_ID",
 			[]patch{
 				choose(0, "start_id"), rename("start_id", "id"),
+				truncateAfter("next_id"),
+			},
+		},
+		{
+			"BtfGetNextId", retError, "obj_next_id", "BPF_BTF_GET_NEXT_ID",
+			[]patch{
+				choose(0, "start_id"), rename("start_id", "id"),
+				replace(btfID, "id", "next_id"),
 				truncateAfter("next_id"),
 			},
 		},

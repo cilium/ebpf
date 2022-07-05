@@ -453,7 +453,7 @@ const (
 type BtfInfo struct {
 	Btf       Pointer
 	BtfSize   uint32
-	Id        uint32
+	Id        BTFID
 	Name      Pointer
 	NameLen   uint32
 	KernelBtf uint32
@@ -570,6 +570,16 @@ func BtfGetFdById(attr *BtfGetFdByIdAttr) (*FD, error) {
 		return nil, err
 	}
 	return NewFD(int(fd))
+}
+
+type BtfGetNextIdAttr struct {
+	Id     BTFID
+	NextId BTFID
+}
+
+func BtfGetNextId(attr *BtfGetNextIdAttr) error {
+	_, err := BPF(BPF_BTF_GET_NEXT_ID, unsafe.Pointer(attr), unsafe.Sizeof(*attr))
+	return err
 }
 
 type BtfLoadAttr struct {

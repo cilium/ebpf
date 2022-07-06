@@ -259,19 +259,34 @@ func (cs *CollectionSpec) Assign(to interface{}) error {
 //
 // Returns an error if any of the fields can't be found, or
 // if the same Map or Program is assigned multiple times.
-func (cs *CollectionSpec) LoadAndAssign(to interface{}, opts *CollectionOptions) error {
+func (cs *CollectionSpec) LoadAndAssign(to interface{}, opts *CollectionOptions) (err error) {
 	loader, err := newCollectionLoader(cs, opts)
 	if err != nil {
 		return err
 	}
-	defer loader.cleanup()
+
+	assignedMaps := make(map[string]bool)
+	assignedProgs := make(map[string]bool)
+
+	defer func() {
+		if err != nil {
+			// If any error occurs during the loading process, make sure all
+			// previously-loaded Maps and Programs are closed before returning.
+			loader.closeAll()
+			return
+		}
+
+		// Close all Maps and Programs in the loader, except for the ones we've
+		// assigned to the caller-provided struct 'to'.
+		loader.closeFiltered(assignedMaps, assignedProgs)
+	}()
 
 	// Support assigning Programs and Maps, lazy-loading the required objects.
-	assignedMaps := make(map[string]bool)
 	getValue := func(typ reflect.Type, name string) (interface{}, error) {
 		switch typ {
 
 		case reflect.TypeOf((*Program)(nil)):
+			assignedProgs[name] = true
 			return loader.loadProgram(name)
 
 		case reflect.TypeOf((*Map)(nil)):
@@ -311,8 +326,6 @@ func (cs *CollectionSpec) LoadAndAssign(to interface{}, opts *CollectionOptions)
 		}
 	}
 
-	loader.finalize()
-
 	return nil
 }
 
@@ -337,12 +350,24 @@ func NewCollection(spec *CollectionSpec) (*Collection, error) {
 //
 // Omitting Collection.Close() during application shutdown is an error.
 // See the package documentation for details around Map and Program lifecycle.
-func NewCollectionWithOptions(spec *CollectionSpec, opts CollectionOptions) (*Collection, error) {
+func NewCollectionWithOptions(spec *CollectionSpec, opts CollectionOptions) (_ *Collection, err error) {
 	loader, err := newCollectionLoader(spec, &opts)
 	if err != nil {
 		return nil, err
 	}
-	defer loader.cleanup()
+
+	defer func() {
+		if err != nil {
+			// If any error occurs during the loading process, make sure all
+			// previously-loaded Maps and Programs are closed before returning.
+			loader.closeAll()
+			return
+		}
+
+		// All loaded Maps and Programs are passed to the caller,
+		// don't close any of them.
+		loader.close()
+	}()
 
 	// Create maps first, as their fds need to be linked into programs.
 	for mapName := range spec.Maps {
@@ -368,8 +393,6 @@ func NewCollectionWithOptions(spec *CollectionSpec, opts CollectionOptions) (*Co
 	}
 
 	maps, progs := loader.maps, loader.programs
-
-	loader.finalize()
 
 	return &Collection{
 		progs,
@@ -441,22 +464,33 @@ func newCollectionLoader(coll *CollectionSpec, opts *CollectionOptions) (*collec
 	}, nil
 }
 
-// finalize should be called when all the collectionLoader's resources
-// have been successfully loaded into the kernel and populated with values.
-func (cl *collectionLoader) finalize() {
-	cl.maps, cl.programs = nil, nil
+// close the resources associated with the collectionLoader,
+// except for Maps and Programs.
+func (cl *collectionLoader) close() {
+	cl.handles.close()
 }
 
-// cleanup cleans up all resources left over in the collectionLoader.
-// Call finalize() when Map and Program creation/population is successful
-// to prevent them from getting closed.
-func (cl *collectionLoader) cleanup() {
-	cl.handles.close()
-	for _, m := range cl.maps {
-		m.Close()
+// closeAll bails out of the loading process and closes all
+// Maps and Programs associated with the collectionLoader.
+func (cl *collectionLoader) closeAll() {
+	cl.close()
+	cl.closeFiltered(nil, nil)
+}
+
+// closeFiltered closes all Maps and Programs associated with the loader,
+// except for the ones specified in the maps and progs arguments.
+func (cl *collectionLoader) closeFiltered(maps, progs map[string]bool) {
+	cl.close()
+
+	for name, m := range cl.maps {
+		if !maps[name] {
+			m.Close()
+		}
 	}
-	for _, p := range cl.programs {
-		p.Close()
+	for name, p := range cl.programs {
+		if !progs[name] {
+			p.Close()
+		}
 	}
 }
 

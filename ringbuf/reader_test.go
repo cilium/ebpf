@@ -10,9 +10,14 @@ import (
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/asm"
 	"github.com/cilium/ebpf/internal"
+	"github.com/cilium/ebpf/internal/sys"
 	"github.com/cilium/ebpf/internal/testutils"
 	"github.com/google/go-cmp/cmp"
 )
+
+func TestMain(m *testing.M) {
+	sys.TraceTestMain(m)
+}
 
 func TestRingbufReader(t *testing.T) {
 	testutils.SkipOnOldKernel(t, "5.8", "BPF ring buffer")

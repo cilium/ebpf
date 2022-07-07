@@ -329,6 +329,8 @@ func pmuProbe(typ probeType, args probeArgs) (*perfEvent, error) {
 		return nil, err
 	}
 
+	fd.SetName(fmt.Sprintf("pmu(%s):'%s'", typ, args.symbol))
+
 	// Kernel has perf_[k,u]probe PMU available, initialize perf event.
 	return &perfEvent{
 		typ:    typ.PerfEventType(args.ret),

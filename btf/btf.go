@@ -745,7 +745,7 @@ func NewHandleFromID(id ID) (*Handle, error) {
 		return nil, fmt.Errorf("get FD for ID %d: %w", id, err)
 	}
 
-	info, err := newInfoFromFd(fd)
+	info, err := newHandleInfoFromFD(fd)
 	if err != nil {
 		_ = fd.Close()
 		return nil, fmt.Errorf("get BTF spec for handle: %w", err)
@@ -773,6 +773,11 @@ func (h *Handle) Close() error {
 // FD returns the file descriptor for the handle.
 func (h *Handle) FD() int {
 	return h.fd.Int()
+}
+
+// Info returns metadata about the handle.
+func (h *Handle) Info() (*HandleInfo, error) {
+	return newHandleInfoFromFD(h.fd)
 }
 
 func marshalBTF(types interface{}, strings []byte, bo binary.ByteOrder) []byte {

@@ -26,6 +26,64 @@ func TestNewHandleFromID(t *testing.T) {
 	}
 }
 
+func TestParseModuleSplitSpec(t *testing.T) {
+	// See TestNewHandleFromID for reasoning.
+	testutils.SkipOnOldKernel(t, "5.11", "vmlinux BTF ID")
+
+	var module *btf.Handle
+	defer module.Close()
+
+	it := btf.NewHandleIterator()
+	for it.Next(&module) {
+		info, err := module.Info()
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if !info.IsModule() {
+			continue
+		}
+
+		t.Log("Using module", info.Name)
+		break
+	}
+	if err := it.Err(); err != nil {
+		t.Fatal(err)
+	}
+
+	var vmlinux *btf.Handle
+	defer vmlinux.Close()
+
+	it = btf.NewHandleIterator()
+	for it.Next(&vmlinux) {
+		info, err := vmlinux.Info()
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if !info.IsVmlinux() {
+			continue
+		}
+
+		break
+	}
+
+	vmlinuxSpec, err := vmlinux.Spec(nil)
+	if err != nil {
+		t.Fatal("Parse vmlinux BTF:", err)
+	}
+
+	_, err = module.Spec(vmlinuxSpec)
+	if err != nil {
+		t.Fatal("Parse module BTF:", err)
+	}
+
+	_, err = module.Spec(nil)
+	if err == nil {
+		t.Fatal("Parsing module BTF without vmlinux base didn't fail")
+	}
+}
+
 func ExampleHandleIterator() {
 	var handle *btf.Handle
 	defer handle.Close()

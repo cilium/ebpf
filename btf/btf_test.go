@@ -24,7 +24,7 @@ func readVMLinux(tb testing.TB) *bytes.Reader {
 	tb.Helper()
 
 	vmlinux.Do(func() {
-		vmlinux.raw, vmlinux.err = internal.ReadAllCompressed("testdata/vmlinux-btf.gz")
+		vmlinux.raw, vmlinux.err = internal.ReadAllCompressed("testdata/vmlinux.btf.gz")
 	})
 
 	if vmlinux.err != nil {
@@ -384,7 +384,7 @@ func TestLoadSplitSpecFromReader(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	f, err := os.Open("testdata/xt_nat")
+	f, err := os.Open("testdata/btf_testmod.btf")
 	if err != nil {
 		t.Fatal(err)
 	}

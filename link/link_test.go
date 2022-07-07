@@ -15,6 +15,10 @@ import (
 	"github.com/cilium/ebpf/internal/unix"
 )
 
+func TestMain(m *testing.M) {
+	sys.TestMainWithTracing(m)
+}
+
 func TestRawLink(t *testing.T) {
 	cgroup, prog := mustCgroupFixtures(t)
 

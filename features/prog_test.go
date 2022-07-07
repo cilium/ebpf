@@ -10,6 +10,7 @@ import (
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/asm"
 	"github.com/cilium/ebpf/internal"
+	"github.com/cilium/ebpf/internal/sys"
 	"github.com/cilium/ebpf/internal/testutils"
 )
 
@@ -45,6 +46,10 @@ var progTypeMinVersion = map[ebpf.ProgramType]string{
 	ebpf.LSM:                   "5.7",
 	ebpf.SkLookup:              "5.9",
 	ebpf.Syscall:               "5.14",
+}
+
+func TestMain(m *testing.M) {
+	sys.TestMainWithTracing(m)
 }
 
 func TestHaveProgramType(t *testing.T) {

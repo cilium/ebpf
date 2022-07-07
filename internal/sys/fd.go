@@ -5,6 +5,7 @@ import (
 	"math"
 	"os"
 	"runtime"
+	"runtime/debug"
 	"strconv"
 
 	"github.com/cilium/ebpf/internal/unix"
@@ -13,13 +14,31 @@ import (
 var ErrClosedFd = unix.EBADF
 
 type FD struct {
-	raw int
+	raw  int
+	meta *metadata
 }
 
 func newFD(value int) *FD {
-	fd := &FD{value}
-	runtime.SetFinalizer(fd, (*FD).Close)
+	// Annotate the fd if there are active fd leak tracers.
+	var meta *metadata
+	if HaveLeakTracers() {
+		meta = &metadata{
+			stack: debug.Stack(),
+		}
+	}
+
+	fd := &FD{value, meta}
+	runtime.SetFinalizer(fd, (*FD).finalize)
 	return fd
+}
+
+// finalize is set as the FD's runtime finalizer and
+// sends an leak trace before calling FD.Close().
+func (fd *FD) finalize() {
+	if fd.raw != -1 {
+		leak.Trace(fd)
+	}
+	_ = fd.Close()
 }
 
 // NewFD wraps a raw fd with a finalizer.
@@ -87,10 +106,41 @@ func (fd *FD) Dup() (*FD, error) {
 		return nil, fmt.Errorf("can't dup fd: %v", err)
 	}
 
-	return newFD(dup), nil
+	n := newFD(dup)
+	n.SetName(fd.Name())
+	return n, nil
 }
 
 func (fd *FD) File(name string) *os.File {
 	fd.Forget()
 	return os.NewFile(uintptr(fd.raw), name)
+}
+
+// SetName annotates fd with a name if leak tracing is enabled.
+func (fd *FD) SetName(name string) {
+	if !HaveLeakTracers() {
+		return
+	}
+	if fd.meta == nil {
+		fd.meta = &metadata{name: name}
+		return
+	}
+	fd.meta.name = name
+}
+
+// Name returns fd's name if it was annotated when leak tracing was enabled.
+func (fd *FD) Name() string {
+	if fd.meta == nil {
+		return ""
+	}
+	return fd.meta.name
+}
+
+// Stack returns the stack trace of the goroutine fd was created on, if leak
+// tracing was enabled at the time.
+func (fd *FD) Stack() string {
+	if fd.meta == nil {
+		return ""
+	}
+	return string(fd.meta.stack)
 }

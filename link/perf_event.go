@@ -302,12 +302,19 @@ func openTracepointPerfEvent(tid uint64, pid int) (*sys.FD, error) {
 		Wakeup:      1,
 	}
 
-	fd, err := unix.PerfEventOpen(&attr, pid, 0, -1, unix.PERF_FLAG_FD_CLOEXEC)
+	pfd, err := unix.PerfEventOpen(&attr, pid, 0, -1, unix.PERF_FLAG_FD_CLOEXEC)
 	if err != nil {
 		return nil, fmt.Errorf("opening tracepoint perf event: %w", err)
 	}
 
-	return sys.NewFD(fd)
+	fd, err := sys.NewFD(pfd)
+	if err != nil {
+		return nil, err
+	}
+
+	fd.SetName(fmt.Sprintf("tracepoint id(%d)", tid))
+
+	return fd, nil
 }
 
 func sanitizePath(base string, path ...string) (string, error) {

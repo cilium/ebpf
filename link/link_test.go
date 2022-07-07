@@ -17,6 +17,10 @@ import (
 	qt "github.com/frankban/quicktest"
 )
 
+func TestMain(m *testing.M) {
+	sys.TraceTestMain(m)
+}
+
 func TestRawLink(t *testing.T) {
 	cgroup, prog := mustCgroupFixtures(t)
 

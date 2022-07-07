@@ -16,10 +16,29 @@ type FD struct {
 	raw int
 }
 
-func newFD(value int) *FD {
+func newFD(value int, name string) *FD {
+	if tracing() {
+		fdMeta[value] = &metadata{
+			name:  name,
+			stack: callersFrames(),
+		}
+	}
+
 	fd := &FD{value}
-	runtime.SetFinalizer(fd, (*FD).Close)
+	runtime.SetFinalizer(fd, (*FD).finalize)
+	Create.do(fd)
+
 	return fd
+}
+
+// finalize is set as the FD's runtime finalizer and
+// sends an leak trace before calling FD.Close().
+func (fd *FD) finalize() {
+	if fd.raw < 0 {
+		return
+	}
+	Finalize.do(fd)
+	_ = fd.Close()
 }
 
 // NewFD wraps a raw fd with a finalizer.
@@ -32,7 +51,7 @@ func NewFD(value int) (*FD, error) {
 		return nil, fmt.Errorf("invalid fd %d", value)
 	}
 
-	fd := newFD(value)
+	fd := newFD(value, "")
 	if value != 0 {
 		return fd, nil
 	}
@@ -64,8 +83,12 @@ func (fd *FD) Close() error {
 		return nil
 	}
 
+	Close.do(fd)
+
 	value := int(fd.raw)
 	fd.raw = -1
+
+	delete(fdMeta, value)
 
 	fd.Forget()
 	return unix.Close(value)
@@ -87,10 +110,29 @@ func (fd *FD) Dup() (*FD, error) {
 		return nil, fmt.Errorf("can't dup fd: %v", err)
 	}
 
-	return newFD(dup), nil
+	return newFD(dup, fd.Name()), nil
 }
 
 func (fd *FD) File(name string) *os.File {
 	fd.Forget()
 	return os.NewFile(uintptr(fd.raw), name)
+}
+
+// SetName annotates fd with a name if leak tracing is enabled.
+func (fd *FD) SetName(name string) {
+	if !tracing() {
+		return
+	}
+	m := fdMeta[fd.Int()]
+	if m != nil {
+		fdMeta[fd.Int()].name = name
+	}
+}
+
+// Name returns fd's name if it was annotated when leak tracing was enabled.
+func (fd *FD) Name() string {
+	if m := fdMeta[fd.Int()]; m != nil {
+		return m.name
+	}
+	return ""
 }

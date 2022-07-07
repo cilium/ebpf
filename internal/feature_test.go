@@ -4,7 +4,13 @@ import (
 	"errors"
 	"strings"
 	"testing"
+
+	"github.com/cilium/ebpf/internal/sys"
 )
+
+func TestMain(m *testing.M) {
+	sys.TraceTestMain(m)
+}
 
 func TestFeatureTest(t *testing.T) {
 	var called bool

@@ -301,17 +301,7 @@ const (
 	BPF_FUNC_copy_from_user_task            FunctionId = 191
 	BPF_FUNC_skb_set_tstamp                 FunctionId = 192
 	BPF_FUNC_ima_file_hash                  FunctionId = 193
-	BPF_FUNC_kptr_xchg                      FunctionId = 194
-	BPF_FUNC_map_lookup_percpu_elem         FunctionId = 195
-	BPF_FUNC_skc_to_mptcp_sock              FunctionId = 196
-	BPF_FUNC_dynptr_from_mem                FunctionId = 197
-	BPF_FUNC_ringbuf_reserve_dynptr         FunctionId = 198
-	BPF_FUNC_ringbuf_submit_dynptr          FunctionId = 199
-	BPF_FUNC_ringbuf_discard_dynptr         FunctionId = 200
-	BPF_FUNC_dynptr_read                    FunctionId = 201
-	BPF_FUNC_dynptr_write                   FunctionId = 202
-	BPF_FUNC_dynptr_data                    FunctionId = 203
-	__BPF_FUNC_MAX_ID                       FunctionId = 204
+	__BPF_FUNC_MAX_ID                       FunctionId = 194
 )
 
 type HdrStartOff int32
@@ -333,8 +323,7 @@ const (
 	BPF_LINK_TYPE_XDP            LinkType = 6
 	BPF_LINK_TYPE_PERF_EVENT     LinkType = 7
 	BPF_LINK_TYPE_KPROBE_MULTI   LinkType = 8
-	BPF_LINK_TYPE_STRUCT_OPS     LinkType = 9
-	MAX_BPF_LINK_TYPE            LinkType = 10
+	MAX_BPF_LINK_TYPE            LinkType = 9
 )
 
 type MapType int32

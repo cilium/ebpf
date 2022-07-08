@@ -9,8 +9,8 @@ import (
 	"github.com/cilium/ebpf/internal/unix"
 )
 
-// info describes a Handle.
-type info struct {
+// HandleInfo describes a Handle.
+type HandleInfo struct {
 	// ID of this handle in the kernel. The ID is only valid as long as the
 	// associated handle is kept alive.
 	ID ID
@@ -27,7 +27,7 @@ type info struct {
 	size uint32
 }
 
-func newInfoFromFd(fd *sys.FD) (*info, error) {
+func newHandleInfoFromFD(fd *sys.FD) (*HandleInfo, error) {
 	// We invoke the syscall once with a empty BTF and name buffers to get size
 	// information to allocate buffers. Then we invoke it a second time with
 	// buffers to receive the data.
@@ -51,12 +51,22 @@ func newInfoFromFd(fd *sys.FD) (*info, error) {
 		return nil, err
 	}
 
-	return &info{
+	return &HandleInfo{
 		ID:       ID(btfInfo.Id),
 		Name:     unix.ByteSliceToString(nameBuffer),
 		IsKernel: btfInfo.KernelBtf != 0,
 		size:     btfSize,
 	}, nil
+}
+
+// IsModule returns true if the BTF is for the kernel itself.
+func (i *HandleInfo) IsVmlinux() bool {
+	return i.IsKernel && i.Name == "vmlinux"
+}
+
+// IsModule returns true if the BTF is for a kernel module.
+func (i *HandleInfo) IsModule() bool {
+	return i.IsKernel && i.Name != "vmlinux"
 }
 
 // HandleIterator allows enumerating BTF blobs loaded into the kernel.

@@ -27,7 +27,7 @@ var (
 )
 
 // ID represents the unique ID of a BTF object.
-type ID uint32
+type ID = sys.BTFID
 
 // Spec represents decoded BTF.
 type Spec struct {
@@ -782,6 +782,10 @@ func (h *Handle) Spec(base *Spec) (*Spec, error) {
 //
 // Subsequent calls to FD will return an invalid value.
 func (h *Handle) Close() error {
+	if h == nil {
+		return nil
+	}
+
 	return h.fd.Close()
 }
 

@@ -1,7 +1,9 @@
 package btf
 
 import (
+	"errors"
 	"fmt"
+	"os"
 
 	"github.com/cilium/ebpf/internal/sys"
 	"github.com/cilium/ebpf/internal/unix"
@@ -55,4 +57,55 @@ func newInfoFromFd(fd *sys.FD) (*info, error) {
 		IsKernel: btfInfo.KernelBtf != 0,
 		size:     btfSize,
 	}, nil
+}
+
+// HandleIterator allows enumerating BTF blobs loaded into the kernel.
+type HandleIterator struct {
+	// The ID of the last retrieved handle. Only valid after a call to Next.
+	ID  ID
+	err error
+}
+
+// Next retrieves a handle for the next BTF blob.
+//
+// [Handle.Close] is called if *handle is non-nil to avoid leaking fds.
+//
+// Returns true if another BTF blob was found. Call [HandleIterator.Err] after
+// the function returns false.
+func (it *HandleIterator) Next(handle **Handle) bool {
+	if *handle != nil {
+		(*handle).Close()
+		*handle = nil
+	}
+
+	id := it.ID
+	for {
+		attr := &sys.BtfGetNextIdAttr{Id: id}
+		err := sys.BtfGetNextId(attr)
+		if errors.Is(err, os.ErrNotExist) {
+			// There are no more BTF objects.
+			return false
+		} else if err != nil {
+			it.err = fmt.Errorf("get next BTF ID: %w", err)
+			return false
+		}
+
+		id = attr.NextId
+		*handle, err = NewHandleFromID(id)
+		if errors.Is(err, os.ErrNotExist) {
+			// Try again with the next ID.
+			continue
+		} else if err != nil {
+			it.err = fmt.Errorf("retrieve handle for ID %d: %w", id, err)
+			return false
+		}
+
+		it.ID = id
+		return true
+	}
+}
+
+// Err returns an error if iteration failed for some reason.
+func (it *HandleIterator) Err() error {
+	return it.err
 }

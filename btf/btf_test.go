@@ -24,7 +24,7 @@ func readVMLinux(tb testing.TB) *bytes.Reader {
 	tb.Helper()
 
 	vmlinux.Do(func() {
-		vmlinux.raw, vmlinux.err = internal.ReadAllCompressed("testdata/vmlinux-btf.gz")
+		vmlinux.raw, vmlinux.err = internal.ReadAllCompressed("testdata/vmlinux.btf.gz")
 	})
 
 	if vmlinux.err != nil {
@@ -384,7 +384,7 @@ func TestLoadSplitSpecFromReader(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	f, err := os.Open("testdata/xt_nat")
+	f, err := os.Open("testdata/btf_testmod.btf")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -395,8 +395,7 @@ func TestLoadSplitSpecFromReader(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// net/netfilter/xt_nat.c:static int xt_nat_checkentry(const struct xt_tgchk_param *par)
-	typ, err := splitSpec.AnyTypeByName("xt_nat_checkentry")
+	typ, err := splitSpec.AnyTypeByName("bpf_testmod_init")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -419,19 +418,23 @@ func TestLoadSplitSpecFromReader(t *testing.T) {
 	}
 
 	if fnProto.Return != intType {
-		t.Fatalf("Return type of 'xt_nat_checkentry()' (%s) does not match 'int' type (%s)",
+		t.Fatalf("Return type of 'bpf_testmod_init()' (%s) does not match 'int' type (%s)",
 			fnProto.Return, intType)
 	}
 
 	// Check that copied split-BTF's spec has correct type indexing
 	splitSpecCopy := splitSpec.Copy()
-	copyType, err := splitSpecCopy.AnyTypesByName("xt_nat_checkentry")
+	copyType, err := splitSpecCopy.AnyTypeByName("bpf_testmod_init")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if copyTypeId, found := splitSpecCopy.typeIDs[copyType[0]]; typeID != copyTypeId {
-		t.Fatalf("'xt_nat_checkentry` type ID (%d) does not match copied spec's (%d %v)",
-			typeID, copyTypeId, found)
+	copyTypeID, err := splitSpecCopy.TypeID(copyType)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if copyTypeID != typeID {
+		t.Fatalf("'bpf_testmod_init` type ID (%d) does not match copied spec's (%d)",
+			typeID, copyTypeID)
 	}
 
 }

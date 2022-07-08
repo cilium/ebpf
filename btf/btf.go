@@ -685,8 +685,10 @@ func (iter *TypesIterator) Next() bool {
 
 // Handle is a reference to BTF loaded into the kernel.
 type Handle struct {
-	spec *Spec
-	fd   *sys.FD
+	fd *sys.FD
+
+	// Size of the raw BTF in bytes.
+	size uint32
 }
 
 // NewHandle loads BTF into the kernel.
@@ -729,7 +731,7 @@ func NewHandle(spec *Spec) (*Handle, error) {
 		return nil, internal.ErrorWithLog(err, logBuf)
 	}
 
-	return &Handle{spec.Copy(), fd}, nil
+	return &Handle{fd, attr.BtfSize}, nil
 }
 
 // NewHandleFromID returns the BTF handle for a given id.
@@ -748,15 +750,32 @@ func NewHandleFromID(id ID) (*Handle, error) {
 	info, err := newInfoFromFd(fd)
 	if err != nil {
 		_ = fd.Close()
-		return nil, fmt.Errorf("get BTF spec for handle: %w", err)
+		return nil, err
 	}
 
-	return &Handle{info.BTF, fd}, nil
+	return &Handle{fd, info.size}, nil
 }
 
-// Spec returns the Spec that defined the BTF loaded into the kernel.
-func (h *Handle) Spec() *Spec {
-	return h.spec
+// Spec parses the kernel BTF into Go types.
+//
+// base is used to decode split BTF and may be nil.
+func (h *Handle) Spec(base *Spec) (*Spec, error) {
+	var btfInfo sys.BtfInfo
+	btfBuffer := make([]byte, h.size)
+	btfInfo.Btf, btfInfo.BtfSize = sys.NewSlicePointerLen(btfBuffer)
+
+	if err := sys.ObjInfo(h.fd, &btfInfo); err != nil {
+		return nil, err
+	}
+
+	var baseTypes types
+	var baseStrings *stringTable
+	if base != nil {
+		baseTypes = base.types
+		baseStrings = base.strings
+	}
+
+	return loadRawSpec(bytes.NewReader(btfBuffer), internal.NativeEndian, baseTypes, baseStrings)
 }
 
 // Close destroys the handle.

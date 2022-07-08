@@ -1,23 +1,28 @@
 package btf
 
 import (
-	"bytes"
+	"fmt"
 
-	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/sys"
 	"github.com/cilium/ebpf/internal/unix"
 )
 
-// info describes a BTF object.
+// info describes a Handle.
 type info struct {
-	BTF *Spec
-	ID  ID
+	// ID of this handle in the kernel. The ID is only valid as long as the
+	// associated handle is kept alive.
+	ID ID
+
 	// Name is an identifying name for the BTF, currently only used by the
 	// kernel.
 	Name string
-	// KernelBTF is true if the BTf originated with the kernel and not
+
+	// IsKernel is true if the BTF originated with the kernel and not
 	// userspace.
-	KernelBTF bool
+	IsKernel bool
+
+	// Size of the raw BTF in bytes.
+	size uint32
 }
 
 func newInfoFromFd(fd *sys.FD) (*info, error) {
@@ -26,7 +31,7 @@ func newInfoFromFd(fd *sys.FD) (*info, error) {
 	// buffers to receive the data.
 	var btfInfo sys.BtfInfo
 	if err := sys.ObjInfo(fd, &btfInfo); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("get BTF info for fd %s: %w", fd, err)
 	}
 
 	if btfInfo.NameLen > 0 {
@@ -34,23 +39,20 @@ func newInfoFromFd(fd *sys.FD) (*info, error) {
 		btfInfo.NameLen++
 	}
 
-	btfBuffer := make([]byte, btfInfo.BtfSize)
+	// Don't pull raw BTF by default, since it may be quite large.
+	btfSize := btfInfo.BtfSize
+	btfInfo.BtfSize = 0
+
 	nameBuffer := make([]byte, btfInfo.NameLen)
-	btfInfo.Btf, btfInfo.BtfSize = sys.NewSlicePointerLen(btfBuffer)
 	btfInfo.Name, btfInfo.NameLen = sys.NewSlicePointerLen(nameBuffer)
 	if err := sys.ObjInfo(fd, &btfInfo); err != nil {
 		return nil, err
 	}
 
-	spec, err := loadRawSpec(bytes.NewReader(btfBuffer), internal.NativeEndian, nil, nil)
-	if err != nil {
-		return nil, err
-	}
-
 	return &info{
-		BTF:       spec,
-		ID:        ID(btfInfo.Id),
-		Name:      unix.ByteSliceToString(nameBuffer),
-		KernelBTF: btfInfo.KernelBtf != 0,
+		ID:       ID(btfInfo.Id),
+		Name:     unix.ByteSliceToString(nameBuffer),
+		IsKernel: btfInfo.KernelBtf != 0,
+		size:     btfSize,
 	}, nil
 }

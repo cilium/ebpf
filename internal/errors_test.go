@@ -73,6 +73,10 @@ func TestVerifierError(t *testing.T) {
 	invalidR0 := readErrorFromFile(t, "testdata/invalid-R0.log")
 	t.Log(invalidR0)
 	qt.Assert(t, invalidR0.Error(), qt.Contains, "0: (95) exit: R0 !read_ok")
+
+	invalidCtx := readErrorFromFile(t, "testdata/invalid-ctx-access.log")
+	t.Log(invalidCtx)
+	qt.Assert(t, invalidCtx.Error(), qt.Contains, "func '__x64_sys_recvfrom' arg0 type FWD is not a struct: invalid bpf_context access off=0 size=8")
 }
 
 func ExampleVerifierError() {

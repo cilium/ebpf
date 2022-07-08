@@ -128,6 +128,13 @@ func includePreviousLine(line string) bool {
 		return true
 	}
 
+	if strings.HasPrefix(line, "invalid bpf_context access") {
+		// 0: (79) r6 = *(u64 *)(r1 +0)
+		// func '__x64_sys_recvfrom' arg0 type FWD is not a struct
+		// invalid bpf_context access off=0 size=8
+		return true
+	}
+
 	return false
 }
 

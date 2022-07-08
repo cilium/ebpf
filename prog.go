@@ -852,7 +852,10 @@ func findTargetInProgram(prog *Program, name string, progType ProgramType, attac
 	}
 	defer btfHandle.Close()
 
-	spec := btfHandle.Spec()
+	spec, err := btfHandle.Spec(nil)
+	if err != nil {
+		return 0, err
+	}
 
 	var targetFunc *btf.Func
 	err = spec.TypeByName(typeName, &targetFunc)

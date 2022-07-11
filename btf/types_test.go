@@ -16,9 +16,9 @@ func TestSizeof(t *testing.T) {
 	}{
 		{0, (*Void)(nil)},
 		{1, &Int{Size: 1}},
-		{4, &Enum{}},
+		{8, &Enum{Size: 8}},
 		{0, &Array{Type: &Pointer{Target: (*Void)(nil)}, Nelems: 0}},
-		{12, &Array{Type: &Enum{}, Nelems: 3}},
+		{12, &Array{Type: &Enum{Size: 4}, Nelems: 3}},
 	}
 
 	for _, tc := range testcases {

@@ -507,6 +507,47 @@ func TestAssignValues(t *testing.T) {
 
 }
 
+func TestIncompleteLoadAndAssign(t *testing.T) {
+	spec := &CollectionSpec{
+		Programs: map[string]*ProgramSpec{
+			"valid": {
+				Type: SocketFilter,
+				Instructions: asm.Instructions{
+					asm.LoadImm(asm.R0, 0, asm.DWord),
+					asm.Return(),
+				},
+				License: "MIT",
+			},
+			"invalid": {
+				Type: SocketFilter,
+				Instructions: asm.Instructions{
+					asm.Return(),
+				},
+				License: "MIT",
+			},
+		},
+	}
+
+	s := struct {
+		// Assignment to Valid should execute and succeed.
+		Valid *Program `ebpf:"valid"`
+		// Assignment to Invalid should fail and cause Valid's fd to be closed.
+		Invalid *Program `ebpf:"invalid"`
+	}{}
+
+	if err := spec.LoadAndAssign(&s, nil); err == nil {
+		t.Fatal("expected error loading invalid ProgramSpec")
+	}
+
+	if fd := s.Valid.FD(); fd != -1 {
+		t.Fatal("expected valid prog to have closed fd -1, got:", fd)
+	}
+
+	if s.Invalid != nil {
+		t.Fatal("expected invalid prog to be nil due to never being assigned")
+	}
+}
+
 func ExampleCollectionSpec_Assign() {
 	spec := &CollectionSpec{
 		Maps: map[string]*MapSpec{

@@ -271,12 +271,14 @@ type Member struct {
 
 // Enum lists possible values.
 type Enum struct {
-	Name   string
+	Name string
+	// Size of the enum value in bytes.
+	Size   uint32
 	Values []EnumValue
 }
 
 func (e *Enum) Format(fs fmt.State, verb rune) {
-	formatType(fs, verb, e, "values=", len(e.Values))
+	formatType(fs, verb, e, "size=", e.Size, "values=", len(e.Values))
 }
 
 func (e *Enum) TypeName() string { return e.Name }
@@ -289,7 +291,7 @@ type EnumValue struct {
 	Value int32
 }
 
-func (e *Enum) size() uint32    { return 4 }
+func (e *Enum) size() uint32    { return e.Size }
 func (e *Enum) walk(*typeDeque) {}
 func (e *Enum) copy() Type {
 	cpy := *e
@@ -960,7 +962,7 @@ func inflateRawTypes(rawTypes []rawType, baseTypes types, rawStrings *stringTabl
 					Value: btfVal.Val,
 				})
 			}
-			typ = &Enum{name, vals}
+			typ = &Enum{name, raw.Size(), vals}
 
 		case kindForward:
 			if raw.KindFlag() {

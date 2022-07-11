@@ -24,7 +24,8 @@ func TestGoTypeDeclaration(t *testing.T) {
 		{&Int{Size: 8}, "type t uint64"},
 		{&Typedef{Name: "frob", Type: &Int{Size: 8}}, "type t uint64"},
 		{&Int{Size: 16}, "type t uint128"},
-		{&Enum{Values: []EnumValue{{"FOO", 32}}}, "type t int32; const ( tFOO t = 32; )"},
+		{&Enum{Values: []EnumValue{{"FOO", 32}}, Size: 4}, "type t int32; const ( tFOO t = 32; )"},
+		{&Enum{Values: []EnumValue{{"BAR", 1}}, Size: 1}, "type t int8; const ( tBAR t = 1; )"},
 		{&Array{Nelems: 2, Type: &Int{Size: 1}}, "type t [2]uint8"},
 		{
 			&Union{
@@ -131,7 +132,7 @@ func TestGoTypeDeclaration(t *testing.T) {
 }
 
 func TestGoTypeDeclarationNamed(t *testing.T) {
-	e1 := &Enum{Name: "e1"}
+	e1 := &Enum{Name: "e1", Size: 4}
 	s1 := &Struct{
 		Name: "s1",
 		Size: 4,

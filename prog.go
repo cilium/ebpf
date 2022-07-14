@@ -782,29 +782,34 @@ func findTargetInKernel(spec *btf.Spec, name string, progType ProgramType, attac
 
 	var (
 		typeName, featureName string
-		isBTFTypeFunc         = true
+		target                btf.Type
 	)
 
 	switch (match{progType, attachType}) {
 	case match{LSM, AttachLSMMac}:
 		typeName = "bpf_lsm_" + name
 		featureName = name + " LSM hook"
+		target = (*btf.Func)(nil)
 	case match{Tracing, AttachTraceIter}:
 		typeName = "bpf_iter_" + name
 		featureName = name + " iterator"
+		target = (*btf.Func)(nil)
 	case match{Tracing, AttachTraceFEntry}:
 		typeName = name
 		featureName = fmt.Sprintf("fentry %s", name)
+		target = (*btf.Func)(nil)
 	case match{Tracing, AttachTraceFExit}:
 		typeName = name
 		featureName = fmt.Sprintf("fexit %s", name)
+		target = (*btf.Func)(nil)
 	case match{Tracing, AttachModifyReturn}:
 		typeName = name
 		featureName = fmt.Sprintf("fmod_ret %s", name)
+		target = (*btf.Func)(nil)
 	case match{Tracing, AttachTraceRawTp}:
 		typeName = fmt.Sprintf("btf_trace_%s", name)
 		featureName = fmt.Sprintf("raw_tp %s", name)
-		isBTFTypeFunc = false
+		target = (*btf.Typedef)(nil)
 	default:
 		return 0, errUnrecognizedAttachType
 	}
@@ -814,18 +819,7 @@ func findTargetInKernel(spec *btf.Spec, name string, progType ProgramType, attac
 		return 0, fmt.Errorf("load kernel spec: %w", err)
 	}
 
-	var target btf.Type
-	if isBTFTypeFunc {
-		var targetFunc *btf.Func
-		err = spec.TypeByName(typeName, &targetFunc)
-		target = targetFunc
-	} else {
-		var targetTypedef *btf.Typedef
-		err = spec.TypeByName(typeName, &targetTypedef)
-		target = targetTypedef
-	}
-
-	if err != nil {
+	if err := spec.TypeByName(typeName, &target); err != nil {
 		if errors.Is(err, btf.ErrNotFound) {
 			return 0, &internal.UnsupportedFeatureError{
 				Name: featureName,

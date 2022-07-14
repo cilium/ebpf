@@ -190,7 +190,7 @@ func (r *Reader) ReadInto(rec *Record) error {
 
 	for {
 		if !r.haveData {
-			_, err := r.poller.Wait(r.epollEvents[:cap(r.epollEvents)])
+			_, err := r.poller.Wait(r.epollEvents[:cap(r.epollEvents)], -1)
 			if err != nil {
 				return err
 			}

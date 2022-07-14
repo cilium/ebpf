@@ -306,7 +306,7 @@ func (pr *Reader) ReadInto(rec *Record) error {
 
 	for {
 		if len(pr.epollRings) == 0 {
-			nEvents, err := pr.poller.Wait(pr.epollEvents)
+			nEvents, err := pr.poller.Wait(pr.epollEvents, -1)
 			if err != nil {
 				return err
 			}

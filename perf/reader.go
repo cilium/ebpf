@@ -16,8 +16,9 @@ import (
 )
 
 var (
-	ErrClosed = os.ErrClosed
-	errEOR    = errors.New("end of ring")
+	ErrClosed  = os.ErrClosed
+	ErrTimeOut = errors.New("timeout")
+	errEOR     = errors.New("end of ring")
 )
 
 var perfEventHeaderSize = binary.Size(perfEventHeader{})
@@ -162,6 +163,7 @@ type ReaderOptions struct {
 	// Read will process data. Must be smaller than PerCPUBuffer.
 	// The default is to start processing as soon as data is available.
 	Watermark int
+	TimeOut   int
 }
 
 // NewReader creates a new reader with default options.
@@ -290,13 +292,13 @@ func (pr *Reader) Close() error {
 // depending on the input sample's length.
 //
 // Calling Close interrupts the function.
-func (pr *Reader) Read() (Record, error) {
+func (pr *Reader) Read(opts *ReaderOptions) (Record, error) {
 	var r Record
-	return r, pr.ReadInto(&r)
+	return r, pr.ReadInto(&r, opts)
 }
 
 // ReadInto is like Read except that it allows reusing Record and associated buffers.
-func (pr *Reader) ReadInto(rec *Record) error {
+func (pr *Reader) ReadInto(rec *Record, opts *ReaderOptions) error {
 	pr.mu.Lock()
 	defer pr.mu.Unlock()
 
@@ -304,11 +306,20 @@ func (pr *Reader) ReadInto(rec *Record) error {
 		return fmt.Errorf("perf ringbuffer: %w", ErrClosed)
 	}
 
+	msec := -1
+	if opts != nil {
+		msec = opts.TimeOut
+	}
+
 	for {
 		if len(pr.epollRings) == 0 {
-			nEvents, err := pr.poller.Wait(pr.epollEvents, -1)
+			nEvents, err := pr.poller.Wait(pr.epollEvents, msec)
 			if err != nil {
 				return err
+			}
+			
+			if nEvents == 0 {
+				return ErrTimeOut
 			}
 
 			for _, event := range pr.epollEvents[:nEvents] {

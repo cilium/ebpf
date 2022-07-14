@@ -44,7 +44,7 @@ func TestPerfReader(t *testing.T) {
 		t.Fatal("Expected 0 as return value, got", errno)
 	}
 
-	record, err := rd.Read()
+	record, err := rd.Read(nil)
 	if err != nil {
 		t.Fatal("Can't read samples:", err)
 	}
@@ -225,7 +225,7 @@ func TestPerfReaderLostSample(t *testing.T) {
 	}
 
 	for range sampleSizes {
-		record, err := rd.Read()
+		record, err := rd.Read(nil)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -251,7 +251,7 @@ func TestPerfReaderClose(t *testing.T) {
 	waiting := make(chan struct{})
 	go func() {
 		close(waiting)
-		_, err := rd.Read()
+		_, err := rd.Read(nil)
 		errs <- err
 	}()
 
@@ -273,7 +273,7 @@ func TestPerfReaderClose(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, err := rd.Read(); err == nil {
+	if _, err := rd.Read(nil); err == nil {
 		t.Fatal("Read on a closed PerfReader doesn't return an error")
 	}
 }
@@ -325,7 +325,7 @@ func TestPause(t *testing.T) {
 	if err != nil || ret != 0 {
 		t.Fatal("Can't write sample")
 	}
-	if _, err := rd.Read(); err != nil {
+	if _, err := rd.Read(nil); err != nil {
 		t.Fatal(err)
 	}
 
@@ -336,7 +336,7 @@ func TestPause(t *testing.T) {
 	errChan := make(chan error, 1)
 	go func() {
 		// Read one notification then send any errors and exit.
-		_, err := rd.Read()
+		_, err := rd.Read(nil)
 		errChan <- err
 	}()
 	ret, _, err = prog.Test(make([]byte, 14))
@@ -410,7 +410,7 @@ func BenchmarkReader(b *testing.B) {
 			b.Fatal("Expected 0 as return value, got", errno)
 		}
 
-		if _, err = rd.Read(); err != nil {
+		if _, err = rd.Read(nil); err != nil {
 			b.Fatal(err)
 		}
 	}
@@ -443,7 +443,7 @@ func BenchmarkReadInto(b *testing.B) {
 			b.Fatal("Expected 0 as return value, got", errno)
 		}
 
-		if err := rd.ReadInto(&rec); err != nil {
+		if err := rd.ReadInto(&rec, nil); err != nil {
 			b.Fatal(err)
 		}
 	}
@@ -494,7 +494,7 @@ func ExampleReader() {
 		panic("Can't write sample")
 	}
 
-	record, err := rd.Read()
+	record, err := rd.Read(nil)
 	if err != nil {
 		panic(err)
 	}
@@ -525,7 +525,7 @@ func ExampleReader_ReadInto() {
 
 	var rec Record
 	for i := 0; i < 2; i++ {
-		if err := rd.ReadInto(&rec); err != nil {
+		if err := rd.ReadInto(&rec, nil); err != nil {
 			panic(err)
 		}
 

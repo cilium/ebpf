@@ -130,6 +130,12 @@ func TestTypeByName(t *testing.T) {
 		t.Fatal("multiple TypeByName calls for `iphdr` name do not return the same addresses")
 	}
 
+	// It's valid to pass a *Type to TypeByName.
+	typ := Type(iphdr2)
+	if err := spec.TypeByName("iphdr", &typ); err != nil {
+		t.Fatal("Can't look up using *Type:", err)
+	}
+
 	// Excerpt from linux/ip.h, https://elixir.bootlin.com/linux/latest/A/ident/iphdr
 	//
 	// struct iphdr {

@@ -609,6 +609,9 @@ func (s *Spec) AnyTypeByName(name string) (Type, error) {
 // Type exists in the Spec. If multiple candidates are found,
 // an error is returned.
 func (s *Spec) TypeByName(name string, typ interface{}) error {
+	typeInterface := reflect.TypeOf((*Type)(nil)).Elem()
+
+	// typ may be **T or *Type
 	typValue := reflect.ValueOf(typ)
 	if typValue.Kind() != reflect.Ptr {
 		return fmt.Errorf("%T is not a pointer", typ)
@@ -620,7 +623,12 @@ func (s *Spec) TypeByName(name string, typ interface{}) error {
 	}
 
 	wanted := typPtr.Type()
-	if !wanted.AssignableTo(reflect.TypeOf((*Type)(nil)).Elem()) {
+	if wanted == typeInterface {
+		// This is *Type. Unwrap the value's type.
+		wanted = typPtr.Elem().Type()
+	}
+
+	if !wanted.AssignableTo(typeInterface) {
 		return fmt.Errorf("%T does not satisfy Type interface", typ)
 	}
 
@@ -643,7 +651,7 @@ func (s *Spec) TypeByName(name string, typ interface{}) error {
 	}
 
 	if candidate == nil {
-		return fmt.Errorf("type %s: %w", name, ErrNotFound)
+		return fmt.Errorf("%s %s: %w", wanted, name, ErrNotFound)
 	}
 
 	typPtr.Set(reflect.ValueOf(candidate))

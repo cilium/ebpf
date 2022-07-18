@@ -43,8 +43,7 @@ type ProgramOptions struct {
 	// Controls the output buffer size for the verifier. Defaults to
 	// DefaultVerifierLogSize.
 	LogSize int
-	// Type information used for CO-RE relocations and when attaching to
-	// kernel functions.
+	// Type information used for CO-RE relocations.
 	//
 	// This is useful in environments where the kernel BTF is not available
 	// (containers) or where it is in a non-standard location. Defaults to
@@ -206,14 +205,12 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions, handles *hand
 		attr.ProgName = sys.NewObjName(spec.Name)
 	}
 
-	kernelTypes := opts.KernelTypes
-
 	insns := make(asm.Instructions, len(spec.Instructions))
 	copy(insns, spec.Instructions)
 
 	var btfDisabled bool
 	if spec.BTF != nil {
-		if err := applyRelocations(insns, spec.BTF, kernelTypes); err != nil {
+		if err := applyRelocations(insns, spec.BTF, opts.KernelTypes); err != nil {
 			return nil, fmt.Errorf("apply CO-RE relocations: %w", err)
 		}
 
@@ -262,10 +259,10 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions, handles *hand
 		}
 
 		attr.AttachBtfId = uint32(targetID)
-		attr.AttachProgFd = uint32(spec.AttachTarget.FD())
+		attr.AttachBtfObjFd = uint32(spec.AttachTarget.FD())
 		defer runtime.KeepAlive(spec.AttachTarget)
 	} else if spec.AttachTo != "" {
-		targetID, err := findTargetInKernel(kernelTypes, spec.AttachTo, spec.Type, spec.AttachType)
+		module, targetID, err := findTargetInKernel(spec.AttachTo, spec.Type, spec.AttachType)
 		if err != nil && !errors.Is(err, errUnrecognizedAttachType) {
 			// We ignore errUnrecognizedAttachType since AttachTo may be non-empty
 			// for programs that don't attach anywhere.
@@ -273,6 +270,10 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions, handles *hand
 		}
 
 		attr.AttachBtfId = uint32(targetID)
+		if module != nil {
+			attr.AttachBtfObjFd = uint32(module.FD())
+			defer module.Close()
+		}
 	}
 
 	logSize := DefaultVerifierLogSize
@@ -770,11 +771,15 @@ var errUnrecognizedAttachType = errors.New("unrecognized attach type")
 
 // find an attach target type in the kernel.
 //
-// spec may be nil and defaults to the canonical kernel BTF. name together with
-// progType and attachType determine which type we need to attach to.
+// name, progType and attachType determine which type we need to attach to.
 //
-// Returns errUnrecognizedAttachType.
-func findTargetInKernel(spec *btf.Spec, name string, progType ProgramType, attachType AttachType) (btf.TypeID, error) {
+// The attach target may be in a loaded kernel module.
+// In that case the returned handle will be non-nil.
+// The caller is responsible for closing the handle.
+//
+// Returns errUnrecognizedAttachType if the combination of progType and attachType
+// is not recognised.
+func findTargetInKernel(name string, progType ProgramType, attachType AttachType) (*btf.Handle, btf.TypeID, error) {
 	type match struct {
 		p ProgramType
 		a AttachType
@@ -782,59 +787,114 @@ func findTargetInKernel(spec *btf.Spec, name string, progType ProgramType, attac
 
 	var (
 		typeName, featureName string
-		isBTFTypeFunc         = true
+		target                btf.Type
 	)
 
 	switch (match{progType, attachType}) {
 	case match{LSM, AttachLSMMac}:
 		typeName = "bpf_lsm_" + name
 		featureName = name + " LSM hook"
+		target = (*btf.Func)(nil)
 	case match{Tracing, AttachTraceIter}:
 		typeName = "bpf_iter_" + name
 		featureName = name + " iterator"
+		target = (*btf.Func)(nil)
 	case match{Tracing, AttachTraceFEntry}:
 		typeName = name
 		featureName = fmt.Sprintf("fentry %s", name)
+		target = (*btf.Func)(nil)
 	case match{Tracing, AttachTraceFExit}:
 		typeName = name
 		featureName = fmt.Sprintf("fexit %s", name)
+		target = (*btf.Func)(nil)
 	case match{Tracing, AttachModifyReturn}:
 		typeName = name
 		featureName = fmt.Sprintf("fmod_ret %s", name)
+		target = (*btf.Func)(nil)
 	case match{Tracing, AttachTraceRawTp}:
 		typeName = fmt.Sprintf("btf_trace_%s", name)
 		featureName = fmt.Sprintf("raw_tp %s", name)
-		isBTFTypeFunc = false
+		target = (*btf.Typedef)(nil)
 	default:
-		return 0, errUnrecognizedAttachType
+		return nil, 0, errUnrecognizedAttachType
 	}
 
-	spec, err := maybeLoadKernelBTF(spec)
+	// maybeLoadKernelBTF may return external BTF if /sys/... is not available.
+	// Ideally we shouldn't use external BTF here, since we might try to use
+	// it for parsing kmod split BTF later on. That seems unlikely to work.
+	spec, err := maybeLoadKernelBTF(nil)
 	if err != nil {
-		return 0, fmt.Errorf("load kernel spec: %w", err)
+		return nil, 0, fmt.Errorf("load kernel spec: %w", err)
 	}
 
-	var target btf.Type
-	if isBTFTypeFunc {
-		var targetFunc *btf.Func
-		err = spec.TypeByName(typeName, &targetFunc)
-		target = targetFunc
-	} else {
-		var targetTypedef *btf.Typedef
-		err = spec.TypeByName(typeName, &targetTypedef)
-		target = targetTypedef
-	}
-
-	if err != nil {
+	err = spec.TypeByName(typeName, &target)
+	if errors.Is(err, btf.ErrNotFound) {
+		module, id, err := findTargetInModule(spec, typeName, target)
 		if errors.Is(err, btf.ErrNotFound) {
-			return 0, &internal.UnsupportedFeatureError{
-				Name: featureName,
-			}
+			return nil, 0, &internal.UnsupportedFeatureError{Name: featureName}
 		}
-		return 0, fmt.Errorf("find target for %s: %w", featureName, err)
+		if err != nil {
+			return nil, 0, fmt.Errorf("find target for %s in modules: %w", featureName, err)
+		}
+		return module, id, nil
+	}
+	if err != nil {
+		return nil, 0, fmt.Errorf("find target for %s in vmlinux: %w", featureName, err)
 	}
 
-	return spec.TypeID(target)
+	id, err := spec.TypeID(target)
+	return nil, id, err
+}
+
+// find an attach target type in a kernel module.
+//
+// vmlinux must contain the kernel's types and is used to parse kmod BTF.
+//
+// Returns btf.ErrNotFound if the target can't be found in any module.
+func findTargetInModule(vmlinux *btf.Spec, typeName string, target btf.Type) (*btf.Handle, btf.TypeID, error) {
+	var handle *btf.Handle
+	defer handle.Close()
+
+	it := new(btf.HandleIterator)
+	for it.Next(&handle) {
+		info, err := handle.Info()
+		if err != nil {
+			return nil, 0, fmt.Errorf("get info for BTF ID %d: %w", it.ID, err)
+		}
+
+		if !info.IsModule() {
+			continue
+		}
+
+		spec, err := handle.Spec(vmlinux)
+		if err != nil {
+			return nil, 0, fmt.Errorf("parse types for module %s: %w", info.Name, err)
+		}
+
+		err = spec.TypeByName(typeName, &target)
+		if errors.Is(err, btf.ErrNotFound) {
+			continue
+		}
+		if err != nil {
+			return nil, 0, fmt.Errorf("lookup type in module %s: %w", info.Name, err)
+		}
+
+		id, err := spec.TypeID(target)
+		if err != nil {
+			return nil, 0, fmt.Errorf("lookup type id in module %s: %w", info.Name, err)
+		}
+
+		// Avoid closing the returned handle via handle.Close().
+		module := handle
+		handle = nil
+
+		return module, id, nil
+	}
+	if err := it.Err(); err != nil {
+		return nil, 0, fmt.Errorf("iterate modules: %w", err)
+	}
+
+	return nil, 0, btf.ErrNotFound
 }
 
 // find an attach target type in a program.

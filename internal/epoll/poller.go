@@ -6,6 +6,7 @@ import (
 	"os"
 	"runtime"
 	"sync"
+	"time"
 
 	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/unix"
@@ -118,8 +119,8 @@ func (p *Poller) Add(fd int, id int) error {
 // Wait for events.
 //
 // Returns the number of pending events or an error wrapping os.ErrClosed if
-// Close is called.
-func (p *Poller) Wait(events []unix.EpollEvent) (int, error) {
+// Close is called, or os.ErrDeadlineExceeded if EpollWait timeout.
+func (p *Poller) Wait(events []unix.EpollEvent, deadline time.Time) (int, error) {
 	p.epollMu.Lock()
 	defer p.epollMu.Unlock()
 
@@ -128,7 +129,12 @@ func (p *Poller) Wait(events []unix.EpollEvent) (int, error) {
 	}
 
 	for {
-		n, err := unix.EpollWait(p.epollFd, events, -1)
+		msec := int(-1)
+		if !deadline.IsZero() {
+			msec = int(time.Until(deadline).Milliseconds())
+		}
+
+		n, err := unix.EpollWait(p.epollFd, events, msec)
 		if temp, ok := err.(temporaryError); ok && temp.Temporary() {
 			// Retry the syscall if we were interrupted, see https://github.com/golang/go/issues/20400
 			continue
@@ -136,6 +142,10 @@ func (p *Poller) Wait(events []unix.EpollEvent) (int, error) {
 
 		if err != nil {
 			return 0, err
+		}
+
+		if n == 0 && msec != -1 {
+			return 0, os.ErrDeadlineExceeded
 		}
 
 		for _, event := range events[:n] {

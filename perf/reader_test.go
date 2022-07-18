@@ -58,6 +58,10 @@ func TestPerfReader(t *testing.T) {
 	if record.CPU < 0 {
 		t.Error("Record has invalid CPU number")
 	}
+
+	rd.SetDeadline(time.Now().Add(100 * time.Millisecond))
+	_, err = rd.Read()
+	qt.Assert(t, errors.Is(err, ErrTimeOut), qt.IsTrue, qt.Commentf("doesn't wrap ErrTimeOut"))
 }
 
 func outputSamplesProg(sampleSizes ...int) (*ebpf.Program, *ebpf.Map, error) {

@@ -130,3 +130,30 @@ func (it *HandleIterator) Take() *Handle {
 func (it *HandleIterator) Err() error {
 	return it.err
 }
+
+// FindHandle returns the first handle for which predicate returns true.
+//
+// Requires CAP_SYS_ADMIN.
+//
+// Returns an error wrapping ErrNotFound if predicate never returns true or if
+// there is no BTF loaded into the kernel.
+func FindHandle(predicate func(info *HandleInfo) bool) (*Handle, error) {
+	it := new(HandleIterator)
+	defer it.Handle.Close()
+
+	for it.Next() {
+		info, err := it.Handle.Info()
+		if err != nil {
+			return nil, fmt.Errorf("info for ID %d: %w", it.ID, err)
+		}
+
+		if predicate(info) {
+			return it.Take(), nil
+		}
+	}
+	if err := it.Err(); err != nil {
+		return nil, fmt.Errorf("iterate handles: %w", err)
+	}
+
+	return nil, fmt.Errorf("find handle: %w", ErrNotFound)
+}

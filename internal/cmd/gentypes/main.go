@@ -285,6 +285,7 @@ import (
 					"fd_array",
 					"core_relos",
 				),
+				choose(20, "attach_btf_obj_fd"),
 			},
 		},
 		{

@@ -644,48 +644,95 @@ func TestProgramSpecTag(t *testing.T) {
 	}
 }
 
-func TestProgramTypeLSM(t *testing.T) {
-	lsmTests := []struct {
-		attachFn    string
+func TestProgramAttachToKernel(t *testing.T) {
+	// See https://github.com/torvalds/linux/commit/290248a5b7d829871b3ea3c62578613a580a1744
+	testutils.SkipOnOldKernel(t, "5.5", "attach_btf_id")
+
+	haveTestmod := false
+	if !testutils.MustKernelVersion().Less(internal.Version{5, 11}) {
+		// See https://github.com/torvalds/linux/commit/290248a5b7d829871b3ea3c62578613a580a1744
+		testmod, err := btf.FindHandle(func(info *btf.HandleInfo) bool {
+			return info.IsModule() && info.Name == "bpf_testmod"
+		})
+		if err != nil && !errors.Is(err, btf.ErrNotFound) {
+			t.Fatal(err)
+		}
+		haveTestmod = testmod != nil
+		testmod.Close()
+	}
+
+	tests := []struct {
+		attachTo    string
+		programType ProgramType
+		attachType  AttachType
 		flags       uint32
-		expectedErr bool
 	}{
 		{
-			attachFn: "task_getpgid",
+			attachTo:    "task_getpgid",
+			programType: LSM,
+			attachType:  AttachLSMMac,
 		},
 		{
-			attachFn:    "task_setnice",
-			flags:       unix.BPF_F_SLEEPABLE,
-			expectedErr: true,
+			attachTo:    "inet_dgram_connect",
+			programType: Tracing,
+			attachType:  AttachTraceFEntry,
 		},
 		{
-			attachFn: "file_open",
-			flags:    unix.BPF_F_SLEEPABLE,
+			attachTo:    "inet_dgram_connect",
+			programType: Tracing,
+			attachType:  AttachTraceFExit,
+		},
+		{
+			attachTo:    "bpf_modify_return_test",
+			programType: Tracing,
+			attachType:  AttachModifyReturn,
+		},
+		{
+			attachTo:    "kfree_skb",
+			programType: Tracing,
+			attachType:  AttachTraceRawTp,
+		},
+		{
+			attachTo:    "bpf_testmod_test_read",
+			programType: Tracing,
+			attachType:  AttachTraceFEntry,
+		},
+		{
+			attachTo:    "bpf_testmod_test_read",
+			programType: Tracing,
+			attachType:  AttachTraceFExit,
+		},
+		{
+			attachTo:    "bpf_testmod_test_read",
+			programType: Tracing,
+			attachType:  AttachModifyReturn,
+		},
+		{
+			attachTo:    "bpf_testmod_test_read",
+			programType: Tracing,
+			attachType:  AttachTraceRawTp,
 		},
 	}
-	for _, tt := range lsmTests {
-		t.Run(tt.attachFn, func(t *testing.T) {
+	for _, test := range tests {
+		name := fmt.Sprintf("%s:%s", test.attachType, test.attachTo)
+		t.Run(name, func(t *testing.T) {
+			if strings.HasPrefix(test.attachTo, "bpf_testmod_") && !haveTestmod {
+				t.Skip("bpf_testmod not loaded")
+			}
+
 			prog, err := NewProgram(&ProgramSpec{
-				AttachTo:   tt.attachFn,
-				AttachType: AttachLSMMac,
+				AttachTo:   test.attachTo,
+				AttachType: test.attachType,
 				Instructions: asm.Instructions{
 					asm.LoadImm(asm.R0, 0, asm.DWord),
 					asm.Return(),
 				},
 				License: "GPL",
-				Type:    LSM,
-				Flags:   tt.flags,
+				Type:    test.programType,
+				Flags:   test.flags,
 			})
-			testutils.SkipIfNotSupported(t, err)
-
-			if tt.flags&unix.BPF_F_SLEEPABLE != 0 {
-				testutils.SkipOnOldKernel(t, "5.11", "BPF_F_SLEEPABLE for LSM progs")
-			}
-			if tt.expectedErr && err == nil {
-				t.Errorf("Test case '%s': expected error", tt.attachFn)
-			}
-			if !tt.expectedErr && err != nil {
-				t.Errorf("Test case '%s': expected success", tt.attachFn)
+			if err != nil {
+				t.Fatal("Can't load program:", err)
 			}
 			prog.Close()
 		})

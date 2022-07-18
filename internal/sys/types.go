@@ -967,7 +967,7 @@ type ProgLoadAttr struct {
 	LineInfo           Pointer
 	LineInfoCnt        uint32
 	AttachBtfId        uint32
-	AttachProgFd       uint32
+	AttachBtfObjFd     uint32
 	CoreReloCnt        uint32
 	FdArray            Pointer
 	CoreRelos          Pointer

@@ -51,54 +51,25 @@ func TestParseModuleSplitSpec(t *testing.T) {
 	// See TestNewHandleFromID for reasoning.
 	testutils.SkipOnOldKernel(t, "5.11", "vmlinux BTF ID")
 
-	var module *btf.Handle
+	module, err := btf.FindHandle(func(info *btf.HandleInfo) bool {
+		if info.IsModule() {
+			t.Log("Using module", info.Name)
+			return true
+		}
+		return false
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
 	defer module.Close()
 
-	it := new(btf.HandleIterator)
-	for it.Next(&module) {
-		info, err := module.Info()
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		if !info.IsModule() {
-			continue
-		}
-
-		t.Log("Using module", info.Name)
-		break
-	}
-	if err := it.Err(); err != nil {
+	vmlinux, err := btf.FindHandle(func(info *btf.HandleInfo) bool {
+		return info.IsKernel
+	})
+	if err != nil {
 		t.Fatal(err)
 	}
-
-	if module == nil {
-		t.Fatal("No BTF for kernel module found")
-	}
-
-	var vmlinux *btf.Handle
 	defer vmlinux.Close()
-
-	it = new(btf.HandleIterator)
-	for it.Next(&vmlinux) {
-		info, err := vmlinux.Info()
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		if !info.IsVmlinux() {
-			continue
-		}
-
-		break
-	}
-	if err := it.Err(); err != nil {
-		t.Fatal(err)
-	}
-
-	if vmlinux == nil {
-		t.Fatal("No BTF for kernel found")
-	}
 
 	vmlinuxSpec, err := vmlinux.Spec(nil)
 	if err != nil {

@@ -7,7 +7,8 @@ import (
 	"io"
 	"os"
 	"sync"
-
+	"time"
+	
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/epoll"
@@ -190,7 +191,7 @@ func (r *Reader) ReadInto(rec *Record) error {
 
 	for {
 		if !r.haveData {
-			_, err := r.poller.Wait(r.epollEvents[:cap(r.epollEvents)], -1)
+			_, err := r.poller.Wait(r.epollEvents[:cap(r.epollEvents)], time.Time{})
 			if err != nil {
 				return err
 			}

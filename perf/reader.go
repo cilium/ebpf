@@ -8,6 +8,7 @@ import (
 	"os"
 	"runtime"
 	"sync"
+	"time"
 
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/internal"
@@ -17,7 +18,7 @@ import (
 
 var (
 	ErrClosed  = os.ErrClosed
-	ErrTimeOut = errors.New("timeout")
+	ErrTimeOut = os.ErrDeadlineExceeded
 	errEOR     = errors.New("end of ring")
 )
 
@@ -134,7 +135,8 @@ func readRawSample(rd io.Reader, buf, sampleBuf []byte) ([]byte, error) {
 // Reader allows reading bpf_perf_event_output
 // from user space.
 type Reader struct {
-	poller *epoll.Poller
+	poller  *epoll.Poller
+	timeOut time.Time
 
 	// mu protects read/write access to the Reader structure with the
 	// exception of 'pauseFds', which is protected by 'pauseMu'.
@@ -239,6 +241,7 @@ func NewReaderWithOptions(array *ebpf.Map, perCPUBuffer int, opts ReaderOptions)
 		array:       array,
 		rings:       rings,
 		poller:      poller,
+		timeOut:     time.Time{},
 		epollEvents: make([]unix.EpollEvent, len(rings)),
 		epollRings:  make([]*perfEventRing, 0, len(rings)),
 		eventHeader: make([]byte, perfEventHeaderSize),
@@ -282,6 +285,18 @@ func (pr *Reader) Close() error {
 	return nil
 }
 
+// SetDeadline the Read timeout
+//
+// If this function was not invoked, the Read, ReadInto
+// will be blocked until there are at least Watermark
+// bytes in one of the per CPU buffers.
+func (pr *Reader) SetDeadline(t time.Time) {
+	pr.mu.Lock()
+	defer pr.mu.Unlock()
+
+	pr.timeOut = t
+}
+
 // Read the next record from the perf ring buffer.
 //
 // The function blocks until there are at least Watermark bytes in one
@@ -292,34 +307,26 @@ func (pr *Reader) Close() error {
 // depending on the input sample's length.
 //
 // Calling Close interrupts the function.
-func (pr *Reader) Read(opts *ReaderOptions) (Record, error) {
+func (pr *Reader) Read() (Record, error) {
 	var r Record
-	return r, pr.ReadInto(&r, opts)
+	return r, pr.ReadInto(&r)
 }
 
 // ReadInto is like Read except that it allows reusing Record and associated buffers.
-func (pr *Reader) ReadInto(rec *Record, opts *ReaderOptions) error {
+func (pr *Reader) ReadInto(rec *Record) error {
 	pr.mu.Lock()
 	defer pr.mu.Unlock()
+	defer func() { pr.timeOut = time.Time{} }()
 
 	if pr.rings == nil {
 		return fmt.Errorf("perf ringbuffer: %w", ErrClosed)
 	}
 
-	msec := -1
-	if opts != nil {
-		msec = opts.TimeOut
-	}
-
 	for {
 		if len(pr.epollRings) == 0 {
-			nEvents, err := pr.poller.Wait(pr.epollEvents, msec)
+			nEvents, err := pr.poller.Wait(pr.epollEvents, pr.timeOut)
 			if err != nil {
 				return err
-			}
-			
-			if nEvents == 0 {
-				return ErrTimeOut
 			}
 
 			for _, event := range pr.epollEvents[:nEvents] {

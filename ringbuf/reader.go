@@ -8,7 +8,7 @@ import (
 	"os"
 	"sync"
 	"time"
-	
+
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/epoll"

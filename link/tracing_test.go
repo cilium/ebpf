@@ -38,6 +38,7 @@ func TestFreplace(t *testing.T) {
 		defer replacement.Close()
 
 		freplace, err := AttachFreplace(nil, "", replacement)
+		testutils.SkipIfNotSupported(t, err)
 		if err != nil {
 			t.Fatal("Can't create freplace:", err)
 		}
@@ -48,6 +49,7 @@ func TestFreplace(t *testing.T) {
 
 func TestTracing(t *testing.T) {
 	testutils.SkipOnOldKernel(t, "5.11", "BPF_LINK_TYPE_TRACING")
+
 	tests := []struct {
 		name        string
 		attachTo    string
@@ -85,6 +87,7 @@ func TestTracing(t *testing.T) {
 			prog := mustLoadProgram(t, tt.programType, tt.attachType, tt.attachTo)
 
 			link, err := AttachTracing(TracingOptions{Program: prog})
+			testutils.SkipIfNotSupported(t, err)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -100,6 +103,7 @@ func TestLSM(t *testing.T) {
 	prog := mustLoadProgram(t, ebpf.LSM, ebpf.AttachLSMMac, "file_mprotect")
 
 	link, err := AttachLSM(LSMOptions{Program: prog})
+	testutils.SkipIfNotSupported(t, err)
 	if err != nil {
 		t.Fatal(err)
 	}

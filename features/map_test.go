@@ -1,6 +1,7 @@
 package features
 
 import (
+	"errors"
 	"fmt"
 	"math"
 	"os"
@@ -70,13 +71,13 @@ func TestHaveMapType(t *testing.T) {
 }
 
 func TestHaveMapTypeUnsupported(t *testing.T) {
-	if err := haveMapType(ebpf.MapType(math.MaxUint32)); err != ebpf.ErrNotSupported {
+	if err := haveMapType(ebpf.MapType(math.MaxUint32)); !errors.Is(err, ebpf.ErrNotSupported) {
 		t.Fatalf("Expected ebpf.ErrNotSupported but was: %v", err)
 	}
 }
 
 func TestHaveMapTypeInvalid(t *testing.T) {
-	if err := HaveMapType(ebpf.MapType(math.MaxUint32)); err != os.ErrInvalid {
+	if err := HaveMapType(ebpf.MapType(math.MaxUint32)); !errors.Is(err, os.ErrInvalid) {
 		t.Fatalf("Expected os.ErrInvalid but was: %v", err)
 	}
 

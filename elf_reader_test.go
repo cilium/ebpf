@@ -423,10 +423,22 @@ func TestLoadInvalidInitializedBTFMap(t *testing.T) {
 
 func TestStringSection(t *testing.T) {
 	testutils.Files(t, testutils.Glob(t, "testdata/strings-*.elf"), func(t *testing.T, file string) {
-		_, err := LoadCollectionSpec(file)
-		t.Log(err)
-		if !errors.Is(err, ErrNotSupported) {
-			t.Error("References to a string section should be unsupported")
+		coll, err := LoadCollectionSpec(file)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		strMap, found := coll.Maps[".rodata.str1.1"]
+		if !found {
+			t.Fatal("Unable to find map '.rodata.str1.1' in loaded collection")
+		}
+
+		if !strMap.Freeze {
+			t.Fatal("Read only data maps should be frozen")
+		}
+
+		if strMap.Flags != unix.BPF_F_RDONLY_PROG {
+			t.Fatal("Read only data maps should have the prog-read-only flag set")
 		}
 	})
 }

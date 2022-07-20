@@ -20,10 +20,9 @@ var ksym = "vprintk"
 // Collection of various symbols present in all tested kernels.
 // Compiler optimizations result in different names for these symbols.
 var symTests = []string{
-	"async_resume.cold",         // marked with 'cold' gcc attribute, unlikely to be executed
-	"echo_char.isra.0",          // function optimized by -fipa-sra
-	"get_buffer.constprop.0",    // optimized function with constant operands
-	"unregister_kprobes.part.0", // function body that was split and partially inlined
+	"echo_char.isra.0",                // function optimized by -fipa-sra
+	"fbcon_clear_margins.constprop.0", // optimized function with constant operands
+	"unregister_kprobes.part.0",       // function body that was split and partially inlined
 }
 
 func TestKprobe(t *testing.T) {

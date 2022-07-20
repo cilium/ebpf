@@ -94,9 +94,13 @@ func TestUprobeExtNotFound(t *testing.T) {
 func TestUprobeExtWithOpts(t *testing.T) {
 	prog := mustLoadProgram(t, ebpf.Kprobe, 0, "")
 
-	// This Uprobe is broken and will not work because the offset is not
-	// correct. This is expected since the offset is provided by the user.
-	up, err := bashEx.Uprobe("open", prog, &UprobeOptions{Address: 0x1})
+	// NB: It's not possible to invoke the uprobe since we use an arbitrary
+	// address.
+	up, err := bashEx.Uprobe("open", prog, &UprobeOptions{
+		// arm64 doesn't seem to allow addresses on the first page. Use
+		// the first byte of the second page.
+		Address: uint64(os.Getpagesize()),
+	})
 	if err != nil {
 		t.Fatal(err)
 	}

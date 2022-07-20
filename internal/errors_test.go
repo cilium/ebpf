@@ -22,15 +22,16 @@ func TestVerifierErrorWhitespace(t *testing.T) {
 	)
 
 	err := ErrorWithLog(errors.New("test"), b)
+	qt.Assert(t, err.Error(), qt.Equals, "test: unreachable insn 28")
 
-	want := "test: unreachable insn 28"
-	got := err.Error()
+	err = ErrorWithLog(errors.New("test"), nil)
+	qt.Assert(t, err.Error(), qt.Equals, "test")
 
-	t.Log(got)
+	err = ErrorWithLog(errors.New("test"), []byte("\x00"))
+	qt.Assert(t, err.Error(), qt.Equals, "test")
 
-	if want != got {
-		t.Fatalf("\nwant: %s\ngot: %s", want, got)
-	}
+	err = ErrorWithLog(errors.New("test"), []byte(" "))
+	qt.Assert(t, err.Error(), qt.Equals, "test")
 }
 
 func TestVerifierError(t *testing.T) {

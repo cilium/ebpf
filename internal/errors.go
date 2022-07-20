@@ -20,7 +20,7 @@ func ErrorWithLog(err error, log []byte) *VerifierError {
 	// and trimming trailing whitespace before interpreting as a Go string.
 	truncated := false
 	if i := bytes.IndexByte(log, 0); i != -1 {
-		if i == len(log)-1 && !bytes.HasSuffix(log[:i], []byte{'\n'}) {
+		if i > 0 && i == len(log)-1 && log[i-1] != '\n' {
 			// The null byte is at the end of the buffer and it's not preceded
 			// by a newline character. Most likely the buffer was too short.
 			truncated = true
@@ -33,6 +33,10 @@ func ErrorWithLog(err error, log []byte) *VerifierError {
 	}
 
 	log = bytes.Trim(log, whitespace)
+	if len(log) == 0 {
+		return &VerifierError{err, nil, false}
+	}
+
 	logLines := bytes.Split(log, []byte{'\n'})
 	lines := make([]string, 0, len(logLines))
 	for _, line := range logLines {

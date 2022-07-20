@@ -86,7 +86,9 @@ func TestKretprobe(t *testing.T) {
 	c := qt.New(t)
 
 	k, err := Kretprobe("bogus", prog, nil)
-	c.Assert(err, qt.ErrorIs, os.ErrNotExist, qt.Commentf("got error: %s", err))
+	if !(errors.Is(err, os.ErrNotExist) || errors.Is(err, unix.EINVAL)) {
+		t.Fatal(err)
+	}
 	if k != nil {
 		k.Close()
 	}
@@ -215,7 +217,9 @@ func TestKprobeTraceFS(t *testing.T) {
 	// of ENOENT, but only for kretprobes.
 	args.ret = true
 	err = createTraceFSProbeEvent(kprobeType, args)
-	c.Assert(errors.Is(err, os.ErrNotExist), qt.IsTrue, qt.Commentf("got error: %s", err))
+	if !(errors.Is(err, os.ErrNotExist) || errors.Is(err, unix.EINVAL)) {
+		t.Fatal(err)
+	}
 }
 
 func BenchmarkKprobeCreateTraceFS(b *testing.B) {

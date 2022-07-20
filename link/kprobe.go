@@ -302,10 +302,9 @@ func pmuProbe(typ probeType, args probeArgs) (*perfEvent, error) {
 		return nil, fmt.Errorf("symbol '%s+%#x': older kernels don't accept dots: %w", args.symbol, args.offset, ErrNotSupported)
 	}
 	// Since commit 97c753e62e6c, ENOENT is correctly returned instead of EINVAL
-	// when trying to create a kretprobe for a missing symbol. Make sure ENOENT
-	// is returned to the caller.
-	if errors.Is(err, os.ErrNotExist) || errors.Is(err, unix.EINVAL) {
-		return nil, fmt.Errorf("symbol '%s+%#x' not found: %w", args.symbol, args.offset, os.ErrNotExist)
+	// when trying to create a retprobe for a missing symbol.
+	if errors.Is(err, os.ErrNotExist) {
+		return nil, fmt.Errorf("symbol '%s+%#x' not found: %w", args.symbol, args.offset, err)
 	}
 	// Since commit ab105a4fb894, EILSEQ is returned when a kprobe sym+offset is resolved
 	// to an invalid insn boundary. The exact conditions that trigger this error are
@@ -456,12 +455,9 @@ func createTraceFSProbeEvent(typ probeType, args probeArgs) error {
 	}
 	_, err = f.WriteString(pe)
 	// Since commit 97c753e62e6c, ENOENT is correctly returned instead of EINVAL
-	// when trying to create a kretprobe for a missing symbol. Make sure ENOENT
-	// is returned to the caller.
-	// EINVAL is also returned on pre-5.2 kernels when the `SYM[+offs]` token
-	// is resolved to an invalid insn boundary.
-	if errors.Is(err, os.ErrNotExist) || errors.Is(err, unix.EINVAL) {
-		return fmt.Errorf("token %s: %w", token, os.ErrNotExist)
+	// when trying to create a retprobe for a missing symbol.
+	if errors.Is(err, os.ErrNotExist) {
+		return fmt.Errorf("token %s: not found: %w", token, err)
 	}
 	// Since commit ab105a4fb894, -EILSEQ is returned when a kprobe sym+offset is resolved
 	// to an invalid insn boundary.

@@ -422,13 +422,64 @@ func TestLoadInvalidInitializedBTFMap(t *testing.T) {
 }
 
 func TestStringSection(t *testing.T) {
-	testutils.Files(t, testutils.Glob(t, "testdata/strings-*.elf"), func(t *testing.T, file string) {
-		_, err := LoadCollectionSpec(file)
-		t.Log(err)
-		if !errors.Is(err, ErrNotSupported) {
-			t.Error("References to a string section should be unsupported")
-		}
+	file := fmt.Sprintf("testdata/strings-%s.elf", internal.ClangEndian)
+	spec, err := LoadCollectionSpec(file)
+	if err != nil {
+		t.Fatalf("load collection spec: %s", err)
+	}
+
+	for name := range spec.Maps {
+		t.Log(name)
+	}
+
+	strMap := spec.Maps[".rodata.str1.1"]
+	if strMap == nil {
+		t.Fatal("Unable to find map '.rodata.str1.1' in loaded collection")
+	}
+
+	if !strMap.Freeze {
+		t.Fatal("Read only data maps should be frozen")
+	}
+
+	if strMap.Flags != unix.BPF_F_RDONLY_PROG {
+		t.Fatal("Read only data maps should have the prog-read-only flag set")
+	}
+
+	coll, err := NewCollection(spec)
+	testutils.SkipIfNotSupported(t, err)
+	if err != nil {
+		t.Fatalf("new collection: %s", err)
+	}
+
+	prog := coll.Programs["filter"]
+	if prog == nil {
+		t.Fatal("program not found")
+	}
+
+	testMap := coll.Maps["my_map"]
+	if testMap == nil {
+		t.Fatal("test map not found")
+	}
+
+	const runCount = 3
+
+	_, err = prog.Run(&RunOptions{
+		Data:   make([]byte, 14), // Min size for XDP programs
+		Repeat: runCount,
 	})
+	if err != nil {
+		t.Fatalf("prog run: %s", err)
+	}
+
+	key := []byte("This string is allocated in the string section\n\x00")
+	var value uint32
+	if err = testMap.Lookup(&key, &value); err != nil {
+		t.Fatalf("test map lookup: %s", err)
+	}
+
+	if value != runCount {
+		t.Fatal("Test map value not equal to run count!")
+	}
 }
 
 func TestLoadRawTracepoint(t *testing.T) {

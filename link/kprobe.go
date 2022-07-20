@@ -314,7 +314,7 @@ func pmuProbe(typ probeType, args probeArgs) (*perfEvent, error) {
 	}
 	// Since at least commit cb9a19fe4aa51, ENOTSUPP is returned
 	// when attempting to set a uprobe on a trap instruction.
-	if errors.Is(err, unix.ENOTSUPP) {
+	if errors.Is(err, sys.ENOTSUPP) {
 		return nil, fmt.Errorf("failed setting uprobe on offset %#x (possible trap insn): %w", args.offset, err)
 	}
 	if err != nil {

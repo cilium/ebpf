@@ -261,10 +261,6 @@ func (ec *elfCode) loadRelocations(relSections map[elf.SectionIndex]*elf.Section
 				return fmt.Errorf("section %q: reference to %q in section %s: %w", section.Name, rel.Name, rel.Section, ErrNotSupported)
 			}
 
-			if target.Flags&elf.SHF_STRINGS > 0 {
-				return fmt.Errorf("section %q: string is not stack allocated: %w", section.Name, ErrNotSupported)
-			}
-
 			target.references++
 		}
 

@@ -123,6 +123,9 @@ func Kprobe(symbol string, prog *ebpf.Program, opts *KprobeOptions) (Link, error
 // Losing the reference to the resulting Link (kp) will close the Kretprobe
 // and prevent further execution of prog. The Link must be Closed during
 // program shutdown to avoid leaking system resources.
+//
+// On kernels 5.10 and earlier, setting a kretprobe on a nonexistent symbol
+// incorrectly returns unix.EINVAL instead of os.ErrNotExist.
 func Kretprobe(symbol string, prog *ebpf.Program, opts *KprobeOptions) (Link, error) {
 	k, err := kprobe(symbol, prog, opts, true)
 	if err != nil {
@@ -194,7 +197,7 @@ func kprobe(symbol string, prog *ebpf.Program, opts *KprobeOptions, ret bool) (*
 
 	// Use kprobe PMU if the kernel has it available.
 	tp, err := pmuKprobe(args)
-	if errors.Is(err, os.ErrNotExist) {
+	if errors.Is(err, os.ErrNotExist) || errors.Is(err, unix.EINVAL) {
 		args.symbol = platformPrefix(symbol)
 		tp, err = pmuKprobe(args)
 	}
@@ -208,7 +211,7 @@ func kprobe(symbol string, prog *ebpf.Program, opts *KprobeOptions, ret bool) (*
 	// Use tracefs if kprobe PMU is missing.
 	args.symbol = symbol
 	tp, err = tracefsKprobe(args)
-	if errors.Is(err, os.ErrNotExist) {
+	if errors.Is(err, os.ErrNotExist) || errors.Is(err, unix.EINVAL) {
 		args.symbol = platformPrefix(symbol)
 		tp, err = tracefsKprobe(args)
 	}
@@ -302,10 +305,9 @@ func pmuProbe(typ probeType, args probeArgs) (*perfEvent, error) {
 		return nil, fmt.Errorf("symbol '%s+%#x': older kernels don't accept dots: %w", args.symbol, args.offset, ErrNotSupported)
 	}
 	// Since commit 97c753e62e6c, ENOENT is correctly returned instead of EINVAL
-	// when trying to create a kretprobe for a missing symbol. Make sure ENOENT
-	// is returned to the caller.
-	if errors.Is(err, os.ErrNotExist) || errors.Is(err, unix.EINVAL) {
-		return nil, fmt.Errorf("symbol '%s+%#x' not found: %w", args.symbol, args.offset, os.ErrNotExist)
+	// when trying to create a retprobe for a missing symbol.
+	if errors.Is(err, os.ErrNotExist) {
+		return nil, fmt.Errorf("symbol '%s+%#x' not found: %w", args.symbol, args.offset, err)
 	}
 	// Since commit ab105a4fb894, EILSEQ is returned when a kprobe sym+offset is resolved
 	// to an invalid insn boundary. The exact conditions that trigger this error are
@@ -456,12 +458,9 @@ func createTraceFSProbeEvent(typ probeType, args probeArgs) error {
 	}
 	_, err = f.WriteString(pe)
 	// Since commit 97c753e62e6c, ENOENT is correctly returned instead of EINVAL
-	// when trying to create a kretprobe for a missing symbol. Make sure ENOENT
-	// is returned to the caller.
-	// EINVAL is also returned on pre-5.2 kernels when the `SYM[+offs]` token
-	// is resolved to an invalid insn boundary.
-	if errors.Is(err, os.ErrNotExist) || errors.Is(err, unix.EINVAL) {
-		return fmt.Errorf("token %s: %w", token, os.ErrNotExist)
+	// when trying to create a retprobe for a missing symbol.
+	if errors.Is(err, os.ErrNotExist) {
+		return fmt.Errorf("token %s: not found: %w", token, err)
 	}
 	// Since commit ab105a4fb894, -EILSEQ is returned when a kprobe sym+offset is resolved
 	// to an invalid insn boundary.

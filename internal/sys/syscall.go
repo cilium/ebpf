@@ -8,6 +8,11 @@ import (
 	"github.com/cilium/ebpf/internal/unix"
 )
 
+// ENOTSUPP is a Linux internal error code that has leaked into UAPI.
+//
+// It is not the same as ENOTSUP or EOPNOTSUPP.
+var ENOTSUPP = syscall.Errno(524)
+
 // BPF wraps SYS_BPF.
 //
 // Any pointers contained in attr must use the Pointer type from this package.
@@ -106,6 +111,13 @@ type wrappedErrno struct {
 
 func (we wrappedErrno) Unwrap() error {
 	return we.Errno
+}
+
+func (we wrappedErrno) Error() string {
+	if we.Errno == ENOTSUPP {
+		return "operation not supported"
+	}
+	return we.Errno.Error()
 }
 
 type syscallError struct {

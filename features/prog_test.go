@@ -85,13 +85,13 @@ func TestHaveProgramType(t *testing.T) {
 }
 
 func TestHaveProgramTypeUnsupported(t *testing.T) {
-	if err := haveProgramType(ebpf.ProgramType(math.MaxUint32)); err != ebpf.ErrNotSupported {
+	if err := haveProgramType(ebpf.ProgramType(math.MaxUint32)); !errors.Is(err, ebpf.ErrNotSupported) {
 		t.Fatalf("Expected ebpf.ErrNotSupported but was: %v", err)
 	}
 }
 
 func TestHaveProgramTypeInvalid(t *testing.T) {
-	if err := HaveProgramType(ebpf.ProgramType(math.MaxUint32)); err != os.ErrInvalid {
+	if err := HaveProgramType(ebpf.ProgramType(math.MaxUint32)); !errors.Is(err, os.ErrInvalid) {
 		t.Fatalf("Expected os.ErrInvalid but was: %v", err)
 	}
 }
@@ -174,7 +174,7 @@ func TestHaveProgramHelperUnsupported(t *testing.T) {
 
 	testutils.SkipOnOldKernel(t, minVersion, feature)
 
-	if err := haveProgramHelper(pt, asm.BuiltinFunc(math.MaxInt32)); err != ebpf.ErrNotSupported {
+	if err := haveProgramHelper(pt, asm.BuiltinFunc(math.MaxInt32)); !errors.Is(err, ebpf.ErrNotSupported) {
 		t.Fatalf("Expected ebpf.ErrNotSupported but was: %v", err)
 	}
 }

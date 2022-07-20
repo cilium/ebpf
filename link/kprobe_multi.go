@@ -148,7 +148,7 @@ var haveBPFLinkKprobeMulti = internal.FeatureTest("bpf_link_kprobe_multi", "5.18
 		License:    "MIT",
 	})
 	if err != nil {
-		return err
+		return internal.ErrNotSupported
 	}
 	defer prog.Close()
 

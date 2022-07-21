@@ -229,6 +229,7 @@ const (
 	AttachSkReuseportSelect
 	AttachSkReuseportSelectOrMigrate
 	AttachPerfEvent
+	AttachTraceKprobeMulti
 )
 
 // AttachFlags of the eBPF program used in BPF_PROG_ATTACH command

@@ -382,20 +382,23 @@ func TestMapWithLock(t *testing.T) {
 			t.Fatalf("Want value 5, got %d", value.Cnt)
 		}
 
-		value.Cnt = 0
-		err = m.LookupAndDeleteWithFlags(&key, &value, LookupLock)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if value.Cnt != 5 {
-			t.Fatalf("Want value 5, got %d", value.Cnt)
-		}
+		t.Run("LookupAndDelete", func(t *testing.T) {
+			testutils.SkipOnOldKernel(t, "5.14", "LOOKUP_AND_DELETE flags")
 
-		err = m.LookupWithFlags(&key, &value, LookupLock)
-		if err != nil && !errors.Is(err, ErrKeyNotExist) {
-			t.Fatal(err)
-		}
+			value.Cnt = 0
+			err = m.LookupAndDeleteWithFlags(&key, &value, LookupLock)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if value.Cnt != 5 {
+				t.Fatalf("Want value 5, got %d", value.Cnt)
+			}
 
+			err = m.LookupWithFlags(&key, &value, LookupLock)
+			if err != nil && !errors.Is(err, ErrKeyNotExist) {
+				t.Fatal(err)
+			}
+		})
 	})
 }
 

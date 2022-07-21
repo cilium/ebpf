@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/cilium/ebpf/internal"
+	"github.com/cilium/ebpf/internal/sys"
 )
 
 func MustKernelVersion() internal.Version {
@@ -46,6 +47,9 @@ func SkipIfNotSupported(tb testing.TB, err error) {
 	}
 	if errors.Is(err, internal.ErrNotSupported) {
 		tb.Skip(err.Error())
+	}
+	if errors.Is(err, sys.ENOTSUPP) {
+		tb.Skip("Syscall returned ENOTSUPP")
 	}
 }
 

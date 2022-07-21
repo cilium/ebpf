@@ -25,8 +25,6 @@ const (
 	E2BIG  = syscall.Errno(0)
 	EFAULT = syscall.EFAULT
 	EACCES = syscall.Errno(0)
-	// ENOTSUPP is not the same as ENOTSUP or EOPNOTSUP
-	ENOTSUPP = syscall.Errno(0x20c)
 
 	BPF_F_NO_PREALLOC        = 0
 	BPF_F_NUMA_NODE          = 0

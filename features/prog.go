@@ -112,7 +112,7 @@ func HaveProgramType(pt ebpf.ProgramType) error {
 
 func validateProgramType(pt ebpf.ProgramType) error {
 	if pt > pt.Max() {
-		return os.ErrInvalid
+		return fmt.Errorf("%w", os.ErrInvalid)
 	}
 
 	if progLoadProbeNotImplemented(pt) {
@@ -145,7 +145,7 @@ func haveProgramType(pt ebpf.ProgramType) error {
 	// of the struct known by the running kernel, meaning the kernel is too old
 	// to support the given prog type.
 	case errors.Is(err, unix.EINVAL), errors.Is(err, unix.E2BIG):
-		err = ebpf.ErrNotSupported
+		err = fmt.Errorf("%w", ebpf.ErrNotSupported)
 
 	// EPERM is kept as-is and is not converted or wrapped.
 	case errors.Is(err, unix.EPERM):

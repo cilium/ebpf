@@ -600,7 +600,7 @@ var haveProgTestRun = internal.FeatureTest("BPF_PROG_TEST_RUN", "4.12", func() e
 		// We know that PROG_TEST_RUN is supported if we get EINTR.
 		return nil
 
-	case errors.Is(err, unix.ENOTSUPP):
+	case errors.Is(err, sys.ENOTSUPP):
 		// The first PROG_TEST_RUN patches shipped in 4.12 didn't include
 		// a test runner for SocketFilter. ENOTSUPP means PROG_TEST_RUN is
 		// supported, but not for the program type used in the probe.
@@ -661,7 +661,7 @@ func (p *Program) testRun(opts *RunOptions) (uint32, time.Duration, error) {
 			continue
 		}
 
-		if errors.Is(err, unix.ENOTSUPP) {
+		if errors.Is(err, sys.ENOTSUPP) {
 			return 0, 0, fmt.Errorf("kernel doesn't support testing program type %s: %w", p.Type(), ErrNotSupported)
 		}
 

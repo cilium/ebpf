@@ -154,6 +154,12 @@ func haveProgramType(pt ebpf.ProgramType) error {
 	// to support the given prog type.
 	case errors.Is(err, unix.EINVAL), errors.Is(err, unix.E2BIG):
 		err = ebpf.ErrNotSupported
+
+	// ENOTSUPP means the program type is at least known to the kernel.
+	case errors.Is(err, sys.ENOTSUPP):
+		if pt == ebpf.StructOps {
+			err = nil
+		}
 	}
 
 	pc.types[pt] = err
@@ -241,7 +247,7 @@ func haveProgramHelper(pt ebpf.ProgramType, helper asm.BuiltinFunc) error {
 
 func progLoadProbeNotImplemented(pt ebpf.ProgramType) bool {
 	switch pt {
-	case ebpf.Tracing, ebpf.StructOps, ebpf.Extension, ebpf.LSM:
+	case ebpf.Tracing, ebpf.Extension, ebpf.LSM:
 		return true
 	}
 	return false

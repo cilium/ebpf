@@ -27,14 +27,15 @@ type mapCache struct {
 
 func createMapTypeAttr(mt ebpf.MapType) *sys.MapCreateAttr {
 	var (
-		keySize        uint32 = 4
-		valueSize      uint32 = 4
-		maxEntries     uint32 = 1
-		innerMapFd     uint32
-		flags          uint32
-		btfKeyTypeID   uint32
-		btfValueTypeID uint32
-		btfFd          uint32
+		keySize               uint32 = 4
+		valueSize             uint32 = 4
+		maxEntries            uint32 = 1
+		innerMapFd            uint32
+		flags                 uint32
+		btfKeyTypeID          uint32
+		btfValueTypeID        uint32
+		btfVmlinuxValueTypeID uint32
+		btfFd                 uint32
 	)
 
 	// switch on map types to generate correct MapCreateAttr
@@ -80,18 +81,23 @@ func createMapTypeAttr(mt ebpf.MapType) *sys.MapCreateAttr {
 		btfKeyTypeID = 1   // BTF_KIND_INT
 		btfValueTypeID = 3 // BTF_KIND_ARRAY
 		btfFd = ^uint32(0)
+	case ebpf.StructOpsMap:
+		// StructOps requires setting a vmlinux type id, but id 1 will always
+		// be some type of integer. This will cause ENOTSUPP.
+		btfVmlinuxValueTypeID = 1
 	}
 
 	return &sys.MapCreateAttr{
-		MapType:        sys.MapType(mt),
-		KeySize:        keySize,
-		ValueSize:      valueSize,
-		MaxEntries:     maxEntries,
-		InnerMapFd:     innerMapFd,
-		MapFlags:       flags,
-		BtfKeyTypeId:   btfKeyTypeID,
-		BtfValueTypeId: btfValueTypeID,
-		BtfFd:          btfFd,
+		MapType:               sys.MapType(mt),
+		KeySize:               keySize,
+		ValueSize:             valueSize,
+		MaxEntries:            maxEntries,
+		InnerMapFd:            innerMapFd,
+		MapFlags:              flags,
+		BtfKeyTypeId:          btfKeyTypeID,
+		BtfValueTypeId:        btfValueTypeID,
+		BtfVmlinuxValueTypeId: btfVmlinuxValueTypeID,
+		BtfFd:                 btfFd,
 	}
 }
 
@@ -110,14 +116,6 @@ func validateMaptype(mt ebpf.MapType) error {
 	if mt > mt.Max() {
 		return os.ErrInvalid
 	}
-
-	if mt == ebpf.StructOpsMap {
-		// A probe for StructOpsMap has vmlinux BTF requirements we currently
-		// cannot meet. Once we figure out how to add a working probe in this
-		// package, we can remove this check.
-		return errors.New("a probe for MapType StructOpsMap isn't implemented")
-	}
-
 	return nil
 }
 
@@ -137,6 +135,10 @@ func haveMapType(mt ebpf.MapType) error {
 		if isMapOfMaps(mt) || isStorageMap(mt) {
 			err = nil
 		}
+
+	// ENOTSUPP means the map type is at least known to the kernel.
+	case errors.Is(err, unix.ENOTSUPP):
+		err = nil
 
 	// EINVAL occurs when attempting to create a map with an unknown type.
 	// E2BIG occurs when MapCreateAttr contains non-zero bytes past the end

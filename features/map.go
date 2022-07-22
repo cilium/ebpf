@@ -75,6 +75,10 @@ func createMapTypeAttr(mt ebpf.MapType) *sys.MapCreateAttr {
 		a.BtfKeyTypeId = 1   // BTF_KIND_INT
 		a.BtfValueTypeId = 3 // BTF_KIND_ARRAY
 		a.BtfFd = ^uint32(0)
+	case ebpf.StructOpsMap:
+		// StructOps requires setting a vmlinux type id, but id 1 will always
+		// resolve to some type of integer. This will cause ENOTSUPP.
+		a.BtfVmlinuxValueTypeId = 1
 	}
 
 	return a
@@ -100,14 +104,6 @@ func validateMaptype(mt ebpf.MapType) error {
 	if mt > mt.Max() {
 		return os.ErrInvalid
 	}
-
-	if mt == ebpf.StructOpsMap {
-		// A probe for StructOpsMap has vmlinux BTF requirements we currently
-		// cannot meet. Once we figure out how to add a working probe in this
-		// package, we can remove this check.
-		return errors.New("a probe for MapType StructOpsMap isn't implemented")
-	}
-
 	return nil
 }
 
@@ -128,6 +124,12 @@ func haveMapType(mt ebpf.MapType) error {
 	// For nested and storage map types we accept EBADF as indicator that these maps are supported
 	case errors.Is(err, unix.EBADF):
 		if isMapOfMaps(mt) || isStorageMap(mt) {
+			err = nil
+		}
+
+	// ENOTSUPP means the map type is at least known to the kernel.
+	case errors.Is(err, sys.ENOTSUPP):
+		if mt == ebpf.StructOpsMap {
 			err = nil
 		}
 

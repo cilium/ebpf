@@ -5,6 +5,8 @@ import (
 	"testing"
 
 	"github.com/cilium/ebpf/internal/unix"
+
+	qt "github.com/frankban/quicktest"
 )
 
 func TestObjName(t *testing.T) {
@@ -32,6 +34,9 @@ func TestWrappedErrno(t *testing.T) {
 	if errors.Is(a, unix.EAGAIN) {
 		t.Error("errors.Is(wrappedErrno, EAGAIN) returns true")
 	}
+
+	notsupp := wrappedErrno{ENOTSUPP}
+	qt.Assert(t, notsupp.Error(), qt.Contains, "operation not supported")
 }
 
 func TestSyscallError(t *testing.T) {

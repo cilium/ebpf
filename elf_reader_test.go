@@ -740,9 +740,6 @@ func TestLibBPFCompat(t *testing.T) {
 		case "bloom_filter_map.o", "bloom_filter_map.linked3.o",
 			"bloom_filter_bench.o", "bloom_filter_bench.linked3.o":
 			t.Skip("Skipping due to missing MapExtra field in MapSpec")
-		case "btf_type_tag.o", "btf_type_tag.linked3.o", "test_btf_decl_tag.o",
-			"test_btf_decl_tag.linked3.o":
-			t.Skip("Skipping due to missing support for BTF_KIND_TYPE_TAG and BTF_KIND_DECL_TAG")
 		case "netif_receive_skb.linked3.o":
 			t.Skip("Skipping due to possible bug in upstream CO-RE generation")
 		}

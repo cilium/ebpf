@@ -6,7 +6,7 @@ import (
 	"io"
 )
 
-//go:generate stringer -linecomment -output=btf_types_string.go -type=FuncLinkage,VarLinkage
+//go:generate go run golang.org/x/tools/cmd/stringer -linecomment -output=btf_types_string.go -type=FuncLinkage,VarLinkage
 
 // btfKind describes a Type.
 type btfKind uint8

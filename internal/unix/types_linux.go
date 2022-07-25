@@ -24,8 +24,6 @@ const (
 	E2BIG   = linux.E2BIG
 	EFAULT  = linux.EFAULT
 	EACCES  = linux.EACCES
-	// ENOTSUPP is not the same as ENOTSUP or EOPNOTSUP
-	ENOTSUPP = syscall.Errno(0x20c)
 
 	BPF_F_NO_PREALLOC        = linux.BPF_F_NO_PREALLOC
 	BPF_F_NUMA_NODE          = linux.BPF_F_NUMA_NODE

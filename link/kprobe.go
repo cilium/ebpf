@@ -304,7 +304,7 @@ func pmuProbe(typ probeType, args probeArgs) (*perfEvent, error) {
 	// Since commit 97c753e62e6c, ENOENT is correctly returned instead of EINVAL
 	// when trying to create a kretprobe for a missing symbol. Make sure ENOENT
 	// is returned to the caller.
-	if errors.Is(err, os.ErrNotExist) || errors.Is(err, unix.EINVAL) {
+	if errors.Is(err, os.ErrNotExist) {
 		return nil, fmt.Errorf("symbol '%s+%#x' not found: %w", args.symbol, args.offset, os.ErrNotExist)
 	}
 	// Since commit ab105a4fb894, -EILSEQ is returned when a kprobe sym+offset is resolved
@@ -314,7 +314,7 @@ func pmuProbe(typ probeType, args probeArgs) (*perfEvent, error) {
 	}
 	// Since at least commit cb9a19fe4aa51, ENOTSUPP is returned
 	// when attempting to set a uprobe on a trap instruction.
-	if errors.Is(err, unix.ENOTSUPP) {
+	if errors.Is(err, sys.ENOTSUPP) {
 		return nil, fmt.Errorf("failed setting uprobe on offset %#x (possible trap insn): %w", args.offset, err)
 	}
 	if err != nil {

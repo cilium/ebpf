@@ -7,7 +7,7 @@ agent:
     os_image: ubuntu2004
 
 execution_time_limit:
-  minutes: 30
+  minutes: 10
 
 global_job_config:
   secrets:
@@ -23,11 +23,12 @@ blocks:
       prologue:
         commands:
           - sudo sh -c 'swapoff -a && fallocate -l 2G /swapfile && chmod 0600 /swapfile && mkswap /swapfile && swapon /swapfile'
-          - checkout
           - sudo mkdir -p /usr/local/golang/1.18 && curl -fL "https://go.dev/dl/go1.18.linux-amd64.tar.gz" | sudo tar -xz -C /usr/local/golang/1.18
           - sem-version go 1.18
-          - curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin v1.45.0
           - export PATH="$PATH:$(go env GOPATH)/bin"
+          - curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin v1.45.0
+          - go install gotest.tools/gotestsum@v1.8.1
+          - checkout
           - cache restore
           - go mod tidy
           - sudo pip3 install https://github.com/amluto/virtme/archive/beb85146cd91de37ae455eccb6ab67c393e6e290.zip
@@ -38,6 +39,7 @@ blocks:
         always:
           commands:
             - sudo dmesg
+            - test-results publish junit.xml
       env_vars:
         - name: TMPDIR
           value: /tmp
@@ -61,10 +63,10 @@ blocks:
         commands:
           - sem-version go 1.17
           - go test -v ./cmd/bpf2go -run TestRun
-          - timeout -s KILL 600s ./run-tests.sh $CI_MAX_KERNEL_VERSION
+          - gotestsum --raw-command --ignore-non-json-output-lines --junitfile junit.xml -- ./run-tests.sh $CI_MAX_KERNEL_VERSION -json ./...
       - name: Run unit tests
         matrix:
           - env_var: KERNEL_VERSION
             values: ["5.18", "5.15", "5.10", "5.4", "4.19", "4.14", "4.9"]
         commands:
-          - timeout -s KILL 600s ./run-tests.sh $KERNEL_VERSION
+          - gotestsum --raw-command --ignore-non-json-output-lines --junitfile junit.xml -- ./run-tests.sh $KERNEL_VERSION -json ./...

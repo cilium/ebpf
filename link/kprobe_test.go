@@ -53,6 +53,23 @@ func TestKprobe(t *testing.T) {
 	testLink(t, k, prog)
 }
 
+func TestKprobeOffset(t *testing.T) {
+	prog := mustLoadProgram(t, ebpf.Kprobe, 0, "")
+
+	// The layout of a function is compiler and arch dependent, so we try to
+	// find a valid attach target in the first few bytes of the function.
+	for i := uint64(1); i < 16; i++ {
+		k, err := Kprobe("inet6_release", prog, &KprobeOptions{Offset: i})
+		if err != nil {
+			continue
+		}
+		k.Close()
+		return
+	}
+
+	t.Fatal("Can't attach with non-zero offset")
+}
+
 func TestKretprobe(t *testing.T) {
 	prog := mustLoadProgram(t, ebpf.Kprobe, 0, "")
 

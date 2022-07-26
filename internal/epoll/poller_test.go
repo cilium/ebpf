@@ -27,15 +27,15 @@ func TestPoller(t *testing.T) {
 	}
 
 	done := make(chan struct{}, 1)
-	read := func() {
+	read := func(timeOut time.Time) {
 		defer func() {
 			done <- struct{}{}
 		}()
 
 		events := make([]unix.EpollEvent, 1)
 
-		n, err := poller.Wait(events)
-		if errors.Is(err, os.ErrClosed) {
+		n, err := poller.Wait(events, timeOut)
+		if errors.Is(err, os.ErrClosed) || errors.Is(err, os.ErrDeadlineExceeded) {
 			return
 		}
 
@@ -57,7 +57,7 @@ func TestPoller(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	go read()
+	go read(time.Time{})
 	select {
 	case <-done:
 	case <-time.After(time.Second):
@@ -68,7 +68,14 @@ func TestPoller(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	go read()
+	go read(time.Now().Add(200 * time.Millisecond))
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("Timed out")
+	}
+
+	go read(time.Time{})
 	select {
 	case <-done:
 		t.Fatal("Wait doesn't block")

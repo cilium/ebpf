@@ -14,6 +14,9 @@ import (
 func TestKprobeOffset(t *testing.T) {
 	prog := mustLoadProgram(t, ebpf.Kprobe, 0, "")
 
+	// This test only works on amd64 because arches like arm64 don't allow
+	// probes on unaligned addresses and return EINVAL instead of EILSEQ,
+	// see arch_prepare_kprobe().
 	for i := uint64(2); i < 10; i++ {
 		k, err := Kprobe("inet6_release", prog, &KprobeOptions{Offset: i})
 		if err != nil {

@@ -7,7 +7,7 @@ agent:
     os_image: ubuntu2004
 
 execution_time_limit:
-  minutes: 30
+  minutes: 10
 
 global_job_config:
   secrets:
@@ -30,6 +30,7 @@ blocks:
           - export PATH="$PATH:$(go env GOPATH)/bin"
           - cache restore
           - go mod tidy
+          - go get gotest.tools/gotestsum@v1.8.1
           - sudo pip3 install https://github.com/amluto/virtme/archive/beb85146cd91de37ae455eccb6ab67c393e6e290.zip
           - sudo apt-get update
           - sudo apt-get install -y --no-install-recommends qemu-system-x86 clang-9 llvm-9
@@ -38,6 +39,7 @@ blocks:
         always:
           commands:
             - sudo dmesg
+            - test-results publish junit.xml
       env_vars:
         - name: TMPDIR
           value: /tmp
@@ -61,10 +63,10 @@ blocks:
         commands:
           - sem-version go 1.17
           - go test -v ./cmd/bpf2go -run TestRun
-          - timeout -s KILL 600s ./run-tests.sh $CI_MAX_KERNEL_VERSION
+          - gotestsum --raw-command --ignore-non-json-output-lines --junitfile junit.xml -- ./run-tests.sh $CI_MAX_KERNEL_VERSION -json ./...
       - name: Run unit tests
         matrix:
           - env_var: KERNEL_VERSION
             values: ["5.18", "5.15", "5.10", "5.4", "4.19", "4.14", "4.9"]
         commands:
-          - timeout -s KILL 600s ./run-tests.sh $KERNEL_VERSION
+          - gotestsum --raw-command --ignore-non-json-output-lines --junitfile junit.xml -- ./run-tests.sh $KERNEL_VERSION -json ./...

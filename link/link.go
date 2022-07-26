@@ -177,7 +177,7 @@ func AttachRawLink(opts RawLinkOptions) (*RawLink, error) {
 	}
 	fd, err := sys.LinkCreate(&attr)
 	if err != nil {
-		return nil, fmt.Errorf("can't create link: %s", err)
+		return nil, fmt.Errorf("create link: %w", err)
 	}
 
 	return &RawLink{fd, ""}, nil

@@ -20,9 +20,8 @@ var ksym = "vprintk"
 // Collection of various symbols present in all tested kernels.
 // Compiler optimizations result in different names for these symbols.
 var symTests = []string{
-	"async_resume.cold",         // marked with 'cold' gcc attribute, unlikely to be executed
 	"echo_char.isra.0",          // function optimized by -fipa-sra
-	"get_buffer.constprop.0",    // optimized function with constant operands
+	"create_dev.constprop.0",    // optimized function with constant operands
 	"unregister_kprobes.part.0", // function body that was split and partially inlined
 }
 
@@ -52,6 +51,23 @@ func TestKprobe(t *testing.T) {
 	defer k.Close()
 
 	testLink(t, k, prog)
+}
+
+func TestKprobeOffset(t *testing.T) {
+	prog := mustLoadProgram(t, ebpf.Kprobe, 0, "")
+
+	// The layout of a function is compiler and arch dependent, so we try to
+	// find a valid attach target in the first few bytes of the function.
+	for i := uint64(1); i < 16; i++ {
+		k, err := Kprobe("inet6_release", prog, &KprobeOptions{Offset: i})
+		if err != nil {
+			continue
+		}
+		k.Close()
+		return
+	}
+
+	t.Fatal("Can't attach with non-zero offset")
 }
 
 func TestKretprobe(t *testing.T) {

@@ -17,9 +17,8 @@ import (
 )
 
 var (
-	ErrClosed  = os.ErrClosed
-	ErrTimeOut = os.ErrDeadlineExceeded
-	errEOR     = errors.New("end of ring")
+	ErrClosed = os.ErrClosed
+	errEOR    = errors.New("end of ring")
 )
 
 var perfEventHeaderSize = binary.Size(perfEventHeader{})
@@ -135,8 +134,8 @@ func readRawSample(rd io.Reader, buf, sampleBuf []byte) ([]byte, error) {
 // Reader allows reading bpf_perf_event_output
 // from user space.
 type Reader struct {
-	poller  *epoll.Poller
-	timeOut time.Time
+	poller   *epoll.Poller
+	deadline time.Time
 
 	// mu protects read/write access to the Reader structure with the
 	// exception of 'pauseFds', which is protected by 'pauseMu'.
@@ -165,7 +164,6 @@ type ReaderOptions struct {
 	// Read will process data. Must be smaller than PerCPUBuffer.
 	// The default is to start processing as soon as data is available.
 	Watermark int
-	TimeOut   int
 }
 
 // NewReader creates a new reader with default options.
@@ -241,7 +239,7 @@ func NewReaderWithOptions(array *ebpf.Map, perCPUBuffer int, opts ReaderOptions)
 		array:       array,
 		rings:       rings,
 		poller:      poller,
-		timeOut:     time.Time{},
+		deadline:    time.Time{},
 		epollEvents: make([]unix.EpollEvent, len(rings)),
 		epollRings:  make([]*perfEventRing, 0, len(rings)),
 		eventHeader: make([]byte, perfEventHeaderSize),
@@ -285,16 +283,14 @@ func (pr *Reader) Close() error {
 	return nil
 }
 
-// SetDeadline the Read timeout
+// SetDeadline controls how long Read and ReadInto will block waiting for samples.
 //
-// If this function was not invoked, the Read, ReadInto
-// will be blocked until there are at least Watermark
-// bytes in one of the per CPU buffers.
+// Passing a zero time.Time will remove the deadline.
 func (pr *Reader) SetDeadline(t time.Time) {
 	pr.mu.Lock()
 	defer pr.mu.Unlock()
 
-	pr.timeOut = t
+	pr.deadline = t
 }
 
 // Read the next record from the perf ring buffer.
@@ -307,6 +303,8 @@ func (pr *Reader) SetDeadline(t time.Time) {
 // depending on the input sample's length.
 //
 // Calling Close interrupts the function.
+//
+// If SetDeadline the Read deadline, Read might return os.ErrDeadlineExceeded.
 func (pr *Reader) Read() (Record, error) {
 	var r Record
 	return r, pr.ReadInto(&r)
@@ -316,7 +314,6 @@ func (pr *Reader) Read() (Record, error) {
 func (pr *Reader) ReadInto(rec *Record) error {
 	pr.mu.Lock()
 	defer pr.mu.Unlock()
-	defer func() { pr.timeOut = time.Time{} }()
 
 	if pr.rings == nil {
 		return fmt.Errorf("perf ringbuffer: %w", ErrClosed)
@@ -324,7 +321,7 @@ func (pr *Reader) ReadInto(rec *Record) error {
 
 	for {
 		if len(pr.epollRings) == 0 {
-			nEvents, err := pr.poller.Wait(pr.epollEvents, pr.timeOut)
+			nEvents, err := pr.poller.Wait(pr.epollEvents, pr.deadline)
 			if err != nil {
 				return err
 			}

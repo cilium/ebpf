@@ -145,7 +145,7 @@ func (p *Poller) Wait(events []unix.EpollEvent, deadline time.Time) (int, error)
 		}
 
 		if n == 0 && msec != -1 {
-			return 0, os.ErrDeadlineExceeded
+			return 0, fmt.Errorf("poll: %w", os.ErrDeadlineExceeded)
 		}
 
 		for _, event := range events[:n] {

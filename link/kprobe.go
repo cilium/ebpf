@@ -307,9 +307,10 @@ func pmuProbe(typ probeType, args probeArgs) (*perfEvent, error) {
 	if errors.Is(err, os.ErrNotExist) {
 		return nil, fmt.Errorf("symbol '%s+%#x' not found: %w", args.symbol, args.offset, os.ErrNotExist)
 	}
-	// Since commit ab105a4fb894, -EILSEQ is returned when a kprobe sym+offset is resolved
-	// to an invalid insn boundary.
-	if errors.Is(err, syscall.EILSEQ) {
+	// Since commit ab105a4fb894, EILSEQ is returned when a kprobe sym+offset is resolved
+	// to an invalid insn boundary. The exact conditions that trigger this error are
+	// arch specific however.
+	if errors.Is(err, unix.EILSEQ) {
 		return nil, fmt.Errorf("symbol '%s+%#x' not found (bad insn boundary): %w", args.symbol, args.offset, os.ErrNotExist)
 	}
 	// Since at least commit cb9a19fe4aa51, ENOTSUPP is returned

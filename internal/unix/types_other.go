@@ -25,6 +25,7 @@ const (
 	E2BIG  = syscall.Errno(0)
 	EFAULT = syscall.EFAULT
 	EACCES = syscall.Errno(0)
+	EILSEQ = syscall.Errno(0)
 
 	BPF_F_NO_PREALLOC        = 0
 	BPF_F_NUMA_NODE          = 0

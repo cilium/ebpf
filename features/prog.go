@@ -138,6 +138,9 @@ func haveProgramType(pt ebpf.ProgramType) error {
 	}
 
 	fd, err := sys.ProgLoad(attr)
+	if fd != nil {
+		fd.Close()
+	}
 
 	switch {
 	// EINVAL occurs when attempting to create a program with an unknown type.
@@ -147,16 +150,9 @@ func haveProgramType(pt ebpf.ProgramType) error {
 	case errors.Is(err, unix.EINVAL), errors.Is(err, unix.E2BIG):
 		err = fmt.Errorf("%w", ebpf.ErrNotSupported)
 
-	// EPERM is kept as-is and is not converted or wrapped.
-	case errors.Is(err, unix.EPERM):
-		break
-
 	// Wrap unexpected errors.
 	case err != nil:
 		err = fmt.Errorf("unexpected error during feature probe: %w", err)
-
-	default:
-		fd.Close()
 	}
 
 	pc.types[pt] = err
@@ -210,12 +206,11 @@ func haveProgramHelper(pt ebpf.ProgramType, helper asm.BuiltinFunc) error {
 	}
 
 	fd, err := sys.ProgLoad(attr)
+	if fd != nil {
+		fd.Close()
+	}
 
 	switch {
-	// If there is no error we need to close the FD of the prog.
-	case err == nil:
-		fd.Close()
-
 	// EACCES occurs when attempting to create a program probe with a helper
 	// while the register args when calling this helper aren't set up properly.
 	// We interpret this as the helper being available, because the verifier
@@ -231,10 +226,6 @@ func haveProgramHelper(pt ebpf.ProgramType, helper asm.BuiltinFunc) error {
 	case errors.Is(err, unix.EINVAL), errors.Is(err, unix.E2BIG):
 		// TODO: possibly we need to check verifier output here to be sure
 		err = fmt.Errorf("%w", ebpf.ErrNotSupported)
-
-	// EPERM is kept as-is and is not converted or wrapped.
-	case errors.Is(err, unix.EPERM):
-		break
 
 	// Wrap unexpected errors.
 	case err != nil:

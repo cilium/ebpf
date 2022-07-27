@@ -130,6 +130,9 @@ func haveMapType(mt ebpf.MapType) error {
 	}
 
 	fd, err := sys.MapCreate(createMapTypeAttr(mt))
+	if err == nil {
+		fd.Close()
+	}
 
 	switch {
 	// For nested and storage map types we accept EBADF as indicator that these maps are supported
@@ -145,16 +148,9 @@ func haveMapType(mt ebpf.MapType) error {
 	case errors.Is(err, unix.EINVAL), errors.Is(err, unix.E2BIG):
 		err = fmt.Errorf("%w", ebpf.ErrNotSupported)
 
-	// EPERM is kept as-is and is not converted or wrapped.
-	case errors.Is(err, unix.EPERM):
-		break
-
 	// Wrap unexpected errors.
 	case err != nil:
 		err = fmt.Errorf("unexpected error during feature probe: %w", err)
-
-	default:
-		fd.Close()
 	}
 
 	mc.mapTypes[mt] = err

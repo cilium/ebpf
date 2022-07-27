@@ -101,7 +101,12 @@ var HaveProgType = HaveProgramType
 // HaveProgramType probes the running kernel for the availability of the specified program type.
 //
 // See the package documentation for the meaning of the error return value.
-func HaveProgramType(pt ebpf.ProgramType) error {
+func HaveProgramType(pt ebpf.ProgramType) (err error) {
+	defer func() {
+		// This closure modifies a named return variable.
+		err = wrapProbeErrors(err)
+	}()
+
 	if err := validateProgramType(pt); err != nil {
 		return err
 	}
@@ -112,7 +117,7 @@ func HaveProgramType(pt ebpf.ProgramType) error {
 
 func validateProgramType(pt ebpf.ProgramType) error {
 	if pt > pt.Max() {
-		return fmt.Errorf("%w", os.ErrInvalid)
+		return os.ErrInvalid
 	}
 
 	if progLoadProbeNotImplemented(pt) {
@@ -148,11 +153,7 @@ func haveProgramType(pt ebpf.ProgramType) error {
 	// of the struct known by the running kernel, meaning the kernel is too old
 	// to support the given prog type.
 	case errors.Is(err, unix.EINVAL), errors.Is(err, unix.E2BIG):
-		err = fmt.Errorf("%w", ebpf.ErrNotSupported)
-
-	// Wrap unexpected errors.
-	case err != nil:
-		err = fmt.Errorf("unexpected error during feature probe: %w", err)
+		err = ebpf.ErrNotSupported
 	}
 
 	pc.types[pt] = err
@@ -173,7 +174,12 @@ func haveProgramType(pt ebpf.ProgramType) error {
 // Only `nil` and `ebpf.ErrNotSupported` are conclusive.
 //
 // Probe results are cached and persist throughout any process capability changes.
-func HaveProgramHelper(pt ebpf.ProgramType, helper asm.BuiltinFunc) error {
+func HaveProgramHelper(pt ebpf.ProgramType, helper asm.BuiltinFunc) (err error) {
+	defer func() {
+		// This closure modifies a named return variable.
+		err = wrapProbeErrors(err)
+	}()
+
 	if err := validateProgramType(pt); err != nil {
 		return err
 	}
@@ -187,7 +193,7 @@ func HaveProgramHelper(pt ebpf.ProgramType, helper asm.BuiltinFunc) error {
 
 func validateProgramHelper(helper asm.BuiltinFunc) error {
 	if helper > helper.Max() {
-		return fmt.Errorf("%w", os.ErrInvalid)
+		return os.ErrInvalid
 	}
 
 	return nil
@@ -225,11 +231,7 @@ func haveProgramHelper(pt ebpf.ProgramType, helper asm.BuiltinFunc) error {
 	// to support the given prog type.
 	case errors.Is(err, unix.EINVAL), errors.Is(err, unix.E2BIG):
 		// TODO: possibly we need to check verifier output here to be sure
-		err = fmt.Errorf("%w", ebpf.ErrNotSupported)
-
-	// Wrap unexpected errors.
-	case err != nil:
-		err = fmt.Errorf("unexpected error during feature probe: %w", err)
+		err = ebpf.ErrNotSupported
 	}
 
 	pc.helpers[pt][helper] = err

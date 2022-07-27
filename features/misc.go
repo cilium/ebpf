@@ -92,6 +92,9 @@ func probeMisc(mt miscType) error {
 	}
 
 	fd, err := sys.ProgLoad(attr)
+	if err == nil {
+		fd.Close()
+	}
 
 	switch {
 	// EINVAL occurs when attempting to create a program with an unknown type.
@@ -101,16 +104,9 @@ func probeMisc(mt miscType) error {
 	case errors.Is(err, unix.EINVAL), errors.Is(err, unix.E2BIG):
 		err = fmt.Errorf("%w", ebpf.ErrNotSupported)
 
-	// EPERM is kept as-is and is not converted or wrapped.
-	case errors.Is(err, unix.EPERM):
-		break
-
 	// Wrap unexpected errors.
 	case err != nil:
 		err = fmt.Errorf("unexpected error during feature probe: %w", err)
-
-	default:
-		fd.Close()
 	}
 
 	miscs.miscTypes[mt] = err

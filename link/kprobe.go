@@ -123,6 +123,9 @@ func Kprobe(symbol string, prog *ebpf.Program, opts *KprobeOptions) (Link, error
 // Losing the reference to the resulting Link (kp) will close the Kretprobe
 // and prevent further execution of prog. The Link must be Closed during
 // program shutdown to avoid leaking system resources.
+//
+// On kernels 5.10 and earlier, setting a kretprobe on a nonexistent symbol
+// incorrectly returns unix.EINVAL instead of os.ErrNotExist.
 func Kretprobe(symbol string, prog *ebpf.Program, opts *KprobeOptions) (Link, error) {
 	k, err := kprobe(symbol, prog, opts, true)
 	if err != nil {
@@ -194,7 +197,7 @@ func kprobe(symbol string, prog *ebpf.Program, opts *KprobeOptions, ret bool) (*
 
 	// Use kprobe PMU if the kernel has it available.
 	tp, err := pmuKprobe(args)
-	if errors.Is(err, os.ErrNotExist) {
+	if errors.Is(err, os.ErrNotExist) || errors.Is(err, unix.EINVAL) {
 		args.symbol = platformPrefix(symbol)
 		tp, err = pmuKprobe(args)
 	}
@@ -208,7 +211,7 @@ func kprobe(symbol string, prog *ebpf.Program, opts *KprobeOptions, ret bool) (*
 	// Use tracefs if kprobe PMU is missing.
 	args.symbol = symbol
 	tp, err = tracefsKprobe(args)
-	if errors.Is(err, os.ErrNotExist) {
+	if errors.Is(err, os.ErrNotExist) || errors.Is(err, unix.EINVAL) {
 		args.symbol = platformPrefix(symbol)
 		tp, err = tracefsKprobe(args)
 	}
@@ -250,8 +253,9 @@ func pmuProbe(typ probeType, args probeArgs) (*perfEvent, error) {
 	}
 
 	var (
-		attr unix.PerfEventAttr
-		sp   unsafe.Pointer
+		attr  unix.PerfEventAttr
+		sp    unsafe.Pointer
+		token string
 	)
 	switch typ {
 	case kprobeType:
@@ -260,6 +264,8 @@ func pmuProbe(typ probeType, args probeArgs) (*perfEvent, error) {
 		if err != nil {
 			return nil, err
 		}
+
+		token = kprobeToken(args)
 
 		attr = unix.PerfEventAttr{
 			// The minimum size required for PMU kprobes is PERF_ATTR_SIZE_VER1,
@@ -280,6 +286,8 @@ func pmuProbe(typ probeType, args probeArgs) (*perfEvent, error) {
 			config |= args.refCtrOffset << uprobeRefCtrOffsetShift
 		}
 
+		token = uprobeToken(args)
+
 		attr = unix.PerfEventAttr{
 			// The minimum size required for PMU uprobes is PERF_ATTR_SIZE_VER1,
 			// since it added the config2 (Ext2) field. The Size field controls the
@@ -299,27 +307,27 @@ func pmuProbe(typ probeType, args probeArgs) (*perfEvent, error) {
 	// return -EINVAL. Return ErrNotSupported to allow falling back to tracefs.
 	// https://github.com/torvalds/linux/blob/94710cac0ef4/kernel/trace/trace_kprobe.c#L340-L343
 	if errors.Is(err, unix.EINVAL) && strings.Contains(args.symbol, ".") {
-		return nil, fmt.Errorf("symbol '%s+%#x': older kernels don't accept dots: %w", args.symbol, args.offset, ErrNotSupported)
+		return nil, fmt.Errorf("token %s: older kernels don't accept dots: %w", token, ErrNotSupported)
 	}
 	// Since commit 97c753e62e6c, ENOENT is correctly returned instead of EINVAL
-	// when trying to create a kretprobe for a missing symbol. Make sure ENOENT
-	// is returned to the caller.
-	if errors.Is(err, os.ErrNotExist) || errors.Is(err, unix.EINVAL) {
-		return nil, fmt.Errorf("symbol '%s+%#x' not found: %w", args.symbol, args.offset, os.ErrNotExist)
+	// when trying to create a retprobe for a missing symbol.
+	if errors.Is(err, os.ErrNotExist) {
+		return nil, fmt.Errorf("token %s: not found: %w", token, err)
 	}
 	// Since commit ab105a4fb894, EILSEQ is returned when a kprobe sym+offset is resolved
 	// to an invalid insn boundary. The exact conditions that trigger this error are
 	// arch specific however.
 	if errors.Is(err, unix.EILSEQ) {
-		return nil, fmt.Errorf("symbol '%s+%#x' not found (bad insn boundary): %w", args.symbol, args.offset, os.ErrNotExist)
+		return nil, fmt.Errorf("token %s: bad insn boundary: %w", token, os.ErrNotExist)
 	}
 	// Since at least commit cb9a19fe4aa51, ENOTSUPP is returned
 	// when attempting to set a uprobe on a trap instruction.
 	if errors.Is(err, sys.ENOTSUPP) {
-		return nil, fmt.Errorf("failed setting uprobe on offset %#x (possible trap insn): %w", args.offset, err)
+		return nil, fmt.Errorf("token %s: failed setting uprobe on offset %#x (possible trap insn): %w", token, args.offset, err)
 	}
+
 	if err != nil {
-		return nil, fmt.Errorf("opening perf event: %w", err)
+		return nil, fmt.Errorf("token %s: opening perf event: %w", token, err)
 	}
 
 	// Ensure the string pointer is not collected before PerfEventOpen returns.
@@ -455,16 +463,15 @@ func createTraceFSProbeEvent(typ probeType, args probeArgs) error {
 		pe = fmt.Sprintf("%s:%s/%s %s", probePrefix(args.ret), args.group, args.symbol, token)
 	}
 	_, err = f.WriteString(pe)
+
 	// Since commit 97c753e62e6c, ENOENT is correctly returned instead of EINVAL
-	// when trying to create a kretprobe for a missing symbol. Make sure ENOENT
-	// is returned to the caller.
-	// EINVAL is also returned on pre-5.2 kernels when the `SYM[+offs]` token
-	// is resolved to an invalid insn boundary.
-	if errors.Is(err, os.ErrNotExist) || errors.Is(err, unix.EINVAL) {
-		return fmt.Errorf("token %s: %w", token, os.ErrNotExist)
+	// when trying to create a retprobe for a missing symbol.
+	if errors.Is(err, os.ErrNotExist) {
+		return fmt.Errorf("token %s: not found: %w", token, err)
 	}
-	// Since commit ab105a4fb894, -EILSEQ is returned when a kprobe sym+offset is resolved
-	// to an invalid insn boundary.
+	// Since commit ab105a4fb894, EILSEQ is returned when a kprobe sym+offset is resolved
+	// to an invalid insn boundary. The exact conditions that trigger this error are
+	// arch specific however.
 	if errors.Is(err, syscall.EILSEQ) {
 		return fmt.Errorf("token %s: bad insn boundary: %w", token, os.ErrNotExist)
 	}
@@ -473,8 +480,9 @@ func createTraceFSProbeEvent(typ probeType, args probeArgs) error {
 	if errors.Is(err, syscall.ERANGE) {
 		return fmt.Errorf("token %s: offset too big: %w", token, os.ErrNotExist)
 	}
+
 	if err != nil {
-		return fmt.Errorf("writing '%s' to '%s': %w", pe, typ.EventsPath(), err)
+		return fmt.Errorf("token %s: writing '%s': %w", token, pe, err)
 	}
 
 	return nil

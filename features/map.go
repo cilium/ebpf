@@ -25,73 +25,63 @@ type mapCache struct {
 }
 
 func createMapTypeAttr(mt ebpf.MapType) *sys.MapCreateAttr {
-	var (
-		keySize        uint32 = 4
-		valueSize      uint32 = 4
-		maxEntries     uint32 = 1
-		innerMapFd     uint32
-		flags          uint32
-		btfKeyTypeID   uint32
-		btfValueTypeID uint32
-		btfFd          uint32
-	)
+	a := &sys.MapCreateAttr{
+		MapType:    sys.MapType(mt),
+		KeySize:    4,
+		ValueSize:  4,
+		MaxEntries: 1,
+	}
 
 	// switch on map types to generate correct MapCreateAttr
 	switch mt {
 	case ebpf.StackTrace:
 		// valueSize needs to be sizeof(uint64)
-		valueSize = 8
+		a.ValueSize = 8
 	case ebpf.LPMTrie:
 		// keySize and valueSize need to be sizeof(struct{u32 + u8}) + 1 + padding = 8
 		// BPF_F_NO_PREALLOC needs to be set
 		// checked at allocation time for lpm_trie maps
-		keySize = 8
-		valueSize = 8
-		flags = unix.BPF_F_NO_PREALLOC
+		a.KeySize = 8
+		a.ValueSize = 8
+		a.MapFlags = unix.BPF_F_NO_PREALLOC
 	case ebpf.ArrayOfMaps, ebpf.HashOfMaps:
 		// assign invalid innerMapFd to pass validation check
 		// will return EBADF
-		innerMapFd = ^uint32(0)
+		a.InnerMapFd = ^uint32(0)
 	case ebpf.CGroupStorage, ebpf.PerCPUCGroupStorage:
 		// keySize needs to be sizeof(struct{u32 + u64}) = 12 (+ padding = 16)
 		// by using unsafe.Sizeof(int) we are making sure that this works on 32bit and 64bit archs
 		// checked at allocation time
 		var align int
-		keySize = uint32(8 + unsafe.Sizeof(align))
-		maxEntries = 0
+		a.KeySize = uint32(8 + unsafe.Sizeof(align))
+		a.MaxEntries = 0
 	case ebpf.Queue, ebpf.Stack:
 		// keySize needs to be 0, see alloc_check for queue and stack maps
-		keySize = 0
+		a.KeySize = 0
 	case ebpf.RingBuf:
 		// keySize and valueSize need to be 0
 		// maxEntries needs to be power of 2 and PAGE_ALIGNED
 		// checked at allocation time
-		keySize = 0
-		valueSize = 0
-		maxEntries = uint32(os.Getpagesize())
+		a.KeySize = 0
+		a.ValueSize = 0
+		a.MaxEntries = uint32(os.Getpagesize())
 	case ebpf.SkStorage, ebpf.InodeStorage, ebpf.TaskStorage:
 		// maxEntries needs to be 0
 		// BPF_F_NO_PREALLOC needs to be set
 		// btf* fields need to be set
 		// see alloc_check for local_storage map types
-		maxEntries = 0
-		flags = unix.BPF_F_NO_PREALLOC
-		btfKeyTypeID = 1   // BTF_KIND_INT
-		btfValueTypeID = 3 // BTF_KIND_ARRAY
-		btfFd = ^uint32(0)
+		a.MaxEntries = 0
+		a.MapFlags = unix.BPF_F_NO_PREALLOC
+		a.BtfKeyTypeId = 1   // BTF_KIND_INT
+		a.BtfValueTypeId = 3 // BTF_KIND_ARRAY
+		a.BtfFd = ^uint32(0)
+	case ebpf.StructOpsMap:
+		// StructOps requires setting a vmlinux type id, but id 1 will always
+		// resolve to some type of integer. This will cause ENOTSUPP.
+		a.BtfVmlinuxValueTypeId = 1
 	}
 
-	return &sys.MapCreateAttr{
-		MapType:        sys.MapType(mt),
-		KeySize:        keySize,
-		ValueSize:      valueSize,
-		MaxEntries:     maxEntries,
-		InnerMapFd:     innerMapFd,
-		MapFlags:       flags,
-		BtfKeyTypeId:   btfKeyTypeID,
-		BtfValueTypeId: btfValueTypeID,
-		BtfFd:          btfFd,
-	}
+	return a
 }
 
 // HaveMapType probes the running kernel for the availability of the specified map type.
@@ -114,14 +104,6 @@ func validateMaptype(mt ebpf.MapType) error {
 	if mt > mt.Max() {
 		return os.ErrInvalid
 	}
-
-	if mt == ebpf.StructOpsMap {
-		// A probe for StructOpsMap has vmlinux BTF requirements we currently
-		// cannot meet. Once we figure out how to add a working probe in this
-		// package, we can remove this check.
-		return errors.New("a probe for MapType StructOpsMap isn't implemented")
-	}
-
 	return nil
 }
 
@@ -142,6 +124,12 @@ func haveMapType(mt ebpf.MapType) error {
 	// For nested and storage map types we accept EBADF as indicator that these maps are supported
 	case errors.Is(err, unix.EBADF):
 		if isMapOfMaps(mt) || isStorageMap(mt) {
+			err = nil
+		}
+
+	// ENOTSUPP means the map type is at least known to the kernel.
+	case errors.Is(err, sys.ENOTSUPP):
+		if mt == ebpf.StructOpsMap {
 			err = nil
 		}
 

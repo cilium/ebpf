@@ -78,7 +78,12 @@ func HaveV3ISA() error {
 
 // probeMisc checks the kernel for a given supported misc by creating
 // a specialized program probe and loading it.
-func probeMisc(mt miscType) error {
+func probeMisc(mt miscType) (err error) {
+	defer func() {
+		// This closure modifies a named return variable.
+		err = wrapProbeErrors(err)
+	}()
+
 	mc.Lock()
 	defer mc.Unlock()
 	err, ok := miscs.miscTypes[mt]
@@ -92,6 +97,9 @@ func probeMisc(mt miscType) error {
 	}
 
 	fd, err := sys.ProgLoad(attr)
+	if err == nil {
+		fd.Close()
+	}
 
 	switch {
 	// EINVAL occurs when attempting to create a program with an unknown type.
@@ -99,18 +107,7 @@ func probeMisc(mt miscType) error {
 	// of the struct known by the running kernel, meaning the kernel is too old
 	// to support the given map type.
 	case errors.Is(err, unix.EINVAL), errors.Is(err, unix.E2BIG):
-		err = fmt.Errorf("%w", ebpf.ErrNotSupported)
-
-	// EPERM is kept as-is and is not converted or wrapped.
-	case errors.Is(err, unix.EPERM):
-		break
-
-	// Wrap unexpected errors.
-	case err != nil:
-		err = fmt.Errorf("unexpected error during feature probe: %w", err)
-
-	default:
-		fd.Close()
+		err = ebpf.ErrNotSupported
 	}
 
 	miscs.miscTypes[mt] = err

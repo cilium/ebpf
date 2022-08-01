@@ -65,21 +65,24 @@ func generateTypes(spec *btf.Spec) ([]byte, error) {
 	linkID := &btf.Int{Size: 4}
 	btfID := &btf.Int{Size: 4}
 	pointer := &btf.Int{Size: 8}
+	logLevel := &btf.Int{Size: 4}
 
-	// Pre-declare handwritten types sys.ObjName and sys.Pointer so that
-	// generated types can refer to them.
+	// Pre-declare handwritten types so that generated types can refer to them.
 	var (
-		_ sys.Pointer
 		_ sys.ObjName
 		_ sys.LinkID
+		_ sys.BTFID
+		_ sys.Pointer
+		_ sys.LogLevel
 	)
 
 	gf := &btf.GoFormatter{
 		Names: map[btf.Type]string{
-			objName: "ObjName",
-			linkID:  "LinkID",
-			btfID:   "BTFID",
-			pointer: "Pointer",
+			objName:  "ObjName",
+			linkID:   "LinkID",
+			btfID:    "BTFID",
+			pointer:  "Pointer",
+			logLevel: "LogLevel",
 		},
 		Identifier: internal.Identifier,
 		EnumIdentifier: func(name, element string) string {
@@ -276,6 +279,7 @@ import (
 				replace(objName, "prog_name"),
 				replace(enumTypes["ProgType"], "prog_type"),
 				replace(enumTypes["AttachType"], "expected_attach_type"),
+				replace(logLevel, "log_level"),
 				replace(pointer,
 					"insns",
 					"license",

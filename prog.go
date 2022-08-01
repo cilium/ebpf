@@ -35,14 +35,47 @@ const (
 // verifier log.
 const DefaultVerifierLogSize = 64 * 1024
 
+type LogLevel uint32
+
+const (
+	// Print instruction and verifier state at branch points.
+	LogLevelBranch LogLevel = iota + 1
+	// Print instruction and verifier state for every instruction.
+	// Available since Linux v5.2.
+	LogLevelInstruction
+	// Print verifier errors and stats at the end of the verification process.
+	// Available since Linux v5.2.
+	LogLevelStats
+)
+
 // ProgramOptions control loading a program into the kernel.
 type ProgramOptions struct {
-	// Controls the detail emitted by the kernel verifier. Set to non-zero
-	// to enable logging.
-	LogLevel uint32
-	// Controls the output buffer size for the verifier. Defaults to
-	// DefaultVerifierLogSize.
+	// Bitmap controlling the detail emitted by the kernel's eBPF verifier.
+	// LogLevel-type values can be ORed together to request specific kinds of
+	// verifier output. See the documentation on [ebpf.LogLevel] for details.
+	//
+	//  opts.LogLevel = (ebpf.LogLevelBranch | ebpf.LogLevelStats)
+	//
+	// If left to its default value, the program will first be loaded without
+	// verifier output enabled. Upon error, the program load will be repeated
+	// with LogLevelBranch and the given (or default) LogSize value.
+	//
+	// Set to non-zero to unconditionally enable the verifier log. This will
+	// always preallocate the output buffer and will result in a single attempt
+	// at loading the program.
+	LogLevel LogLevel
+
+	// Controls the output buffer size for the verifier log, in bytes. See the
+	// documentation on ProgramOptions.LogLevel for details about how this value
+	// is used.
+	//
+	// If this value is set too low to fit the verifier log, the resulting
+	// [ebpf.VerifierError]'s Truncated flag will be true, and the error string
+	// will also contain a hint to that effect.
+	//
+	// Defaults to DefaultVerifierLogSize.
 	LogSize int
+
 	// Type information used for CO-RE relocations.
 	//
 	// This is useful in environments where the kernel BTF is not available
@@ -276,15 +309,17 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions, handles *hand
 		}
 	}
 
-	logSize := DefaultVerifierLogSize
-	if opts.LogSize > 0 {
-		logSize = opts.LogSize
+	if opts.LogSize == 0 {
+		opts.LogSize = DefaultVerifierLogSize
 	}
 
+	// The caller provided a specific verifier log level. Immediately load
+	// the program with the given log level and preallocated buffer, and skip
+	// loading it again with a different level / size later.
 	var logBuf []byte
-	if opts.LogLevel > 0 {
-		logBuf = make([]byte, logSize)
-		attr.LogLevel = opts.LogLevel
+	if opts.LogLevel != 0 {
+		logBuf = make([]byte, opts.LogSize)
+		attr.LogLevel = uint32(opts.LogLevel)
 		attr.LogSize = uint32(len(logBuf))
 		attr.LogBuf = sys.NewSlicePointer(logBuf)
 	}
@@ -294,10 +329,11 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions, handles *hand
 		return &Program{unix.ByteSliceToString(logBuf), fd, spec.Name, "", spec.Type}, nil
 	}
 
-	if opts.LogLevel == 0 && opts.LogSize >= 0 {
-		// Re-run with the verifier enabled to get better error messages.
-		logBuf = make([]byte, logSize)
-		attr.LogLevel = 1
+	// If the caller did not specify a log level, re-run with a log level of 1
+	// and the default log buffer size to get branch-level verifier output.
+	if opts.LogLevel == 0 {
+		logBuf = make([]byte, opts.LogSize)
+		attr.LogLevel = uint32(LogLevelBranch)
 		attr.LogSize = uint32(len(logBuf))
 		attr.LogBuf = sys.NewSlicePointer(logBuf)
 		_, _ = sys.ProgLoad(attr)
@@ -323,7 +359,7 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions, handles *hand
 
 	err = internal.ErrorWithLog(err, logBuf)
 	if btfDisabled {
-		return nil, fmt.Errorf("load program: %w (BTF disabled)", err)
+		return nil, fmt.Errorf("load program: %w (kernel without BTF support)", err)
 	}
 	return nil, fmt.Errorf("load program: %w", err)
 }

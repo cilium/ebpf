@@ -70,6 +70,30 @@ func TestKprobeOffset(t *testing.T) {
 	t.Fatal("Can't attach with non-zero offset")
 }
 
+func TestKretprobeMaxActive(t *testing.T) {
+	// Requires at least 4.12
+	// 696ced4 "tracing/kprobes: expose maxactive for kretprobe in kprobe_events"
+	testutils.SkipOnOldKernel(t, "4.12", "kretprobe maxactive")
+
+	prog := mustLoadProgram(t, ebpf.Kprobe, 0, "")
+
+	k, err := Kretprobe("do_sys_open", prog, &KprobeOptions{RetprobeMaxActive: -1})
+	if !errors.Is(err, errInvalidInput) {
+		t.Fatal(err)
+	}
+	if k != nil {
+		k.Close()
+	}
+
+	k, err = Kretprobe("do_sys_open", prog, &KprobeOptions{RetprobeMaxActive: 4096})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if k != nil {
+		k.Close()
+	}
+}
+
 func TestKretprobe(t *testing.T) {
 	prog := mustLoadProgram(t, ebpf.Kprobe, 0, "")
 

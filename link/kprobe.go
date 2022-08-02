@@ -14,6 +14,7 @@ import (
 	"unsafe"
 
 	"github.com/cilium/ebpf"
+	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/sys"
 	"github.com/cilium/ebpf/internal/unix"
 )
@@ -33,7 +34,7 @@ type probeType uint8
 type probeArgs struct {
 	symbol, group, path          string
 	offset, refCtrOffset, cookie uint64
-	pid                          int
+	pid, retprobeMaxActive       int
 	ret                          bool
 }
 
@@ -49,6 +50,12 @@ type KprobeOptions struct {
 	// Can be used to insert kprobes at arbitrary offsets in kernel functions,
 	// e.g. in places where functions have been inlined.
 	Offset uint64
+	// Increase the maximum number of concurrent invocations of a kretprobe.
+	// Required when tracing some long running functions in the kernel.
+	//
+	// Deprecated: this setting forces the use of an outdated kernel API and is not portable
+	// across kernel versions.
+	RetprobeMaxActive int
 }
 
 const (
@@ -191,6 +198,19 @@ func kprobe(symbol string, prog *ebpf.Program, opts *KprobeOptions, ret bool) (*
 	}
 
 	if opts != nil {
+		if opts.RetprobeMaxActive < 0 {
+			return nil, fmt.Errorf("requires opts.RetprobeMaxActive >= 0: %w", errInvalidInput)
+		} else if opts.RetprobeMaxActive > 0 {
+			// The kretprobe's maxactive can be set on kernels 4.12 and up.
+			v, err := internal.KernelVersion()
+			if err == nil {
+				if v[0] > 4 && v[1] > 11 {
+					args.retprobeMaxActive = opts.RetprobeMaxActive
+				} else {
+					args.retprobeMaxActive = 0
+				}
+			}
+		}
 		args.cookie = opts.Cookie
 		args.offset = opts.Offset
 	}
@@ -241,6 +261,11 @@ func pmuProbe(typ probeType, args probeArgs) (*perfEvent, error) {
 	et, err := getPMUEventType(typ)
 	if err != nil {
 		return nil, err
+	}
+
+	// Use tracefs if we want to set kretprobe's retprobeMaxActive.
+	if args.retprobeMaxActive > 0 {
+		return nil, fmt.Errorf("pmu probe: non-zero retprobeMaxActive: %w", ErrNotSupported)
 	}
 
 	var config uint64
@@ -447,7 +472,7 @@ func createTraceFSProbeEvent(typ probeType, args probeArgs) error {
 		// the eBPF program itself.
 		// See Documentation/kprobes.txt for more details.
 		token = kprobeToken(args)
-		pe = fmt.Sprintf("%s:%s/%s %s", probePrefix(args.ret), args.group, sanitizeSymbol(args.symbol), token)
+		pe = fmt.Sprintf("%s:%s/%s %s", probePrefix(args.ret, args.retprobeMaxActive), args.group, sanitizeSymbol(args.symbol), token)
 	case uprobeType:
 		// The uprobe_events syntax is as follows:
 		// p[:[GRP/]EVENT] PATH:OFFSET [FETCHARGS] : Set a probe
@@ -460,7 +485,7 @@ func createTraceFSProbeEvent(typ probeType, args probeArgs) error {
 		//
 		// See Documentation/trace/uprobetracer.txt for more details.
 		token = uprobeToken(args)
-		pe = fmt.Sprintf("%s:%s/%s %s", probePrefix(args.ret), args.group, args.symbol, token)
+		pe = fmt.Sprintf("%s:%s/%s %s", probePrefix(args.ret, 0), args.group, args.symbol, token)
 	}
 	_, err = f.WriteString(pe)
 
@@ -529,8 +554,11 @@ func randomGroup(prefix string) (string, error) {
 	return group, nil
 }
 
-func probePrefix(ret bool) string {
+func probePrefix(ret bool, maxActive int) string {
 	if ret {
+		if maxActive > 0 {
+			return fmt.Sprintf("r%d", maxActive)
+		}
 		return "r"
 	}
 	return "p"

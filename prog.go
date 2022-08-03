@@ -294,13 +294,14 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions, handles *hand
 		return &Program{unix.ByteSliceToString(logBuf), fd, spec.Name, "", spec.Type}, nil
 	}
 
+	var ve error
 	if opts.LogLevel == 0 && opts.LogSize >= 0 {
 		// Re-run with the verifier enabled to get better error messages.
 		logBuf = make([]byte, logSize)
 		attr.LogLevel = 1
 		attr.LogSize = uint32(len(logBuf))
 		attr.LogBuf = sys.NewSlicePointer(logBuf)
-		_, _ = sys.ProgLoad(attr)
+		_, ve = sys.ProgLoad(attr)
 	}
 
 	switch {
@@ -321,7 +322,7 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions, handles *hand
 		}
 	}
 
-	err = internal.ErrorWithLog(err, logBuf)
+	err = internal.ErrorWithLog(err, ve, logBuf)
 	if btfDisabled {
 		return nil, fmt.Errorf("load program: %w (BTF disabled)", err)
 	}

@@ -734,9 +734,8 @@ func NewHandle(spec *Spec) (*Handle, error) {
 		attr.BtfLogBuf = sys.NewSlicePointer(logBuf)
 		attr.BtfLogSize = uint32(len(logBuf))
 		attr.BtfLogLevel = 1
-		// NB: The syscall will never return ENOSPC as of 5.18-rc4.
-		_, _ = sys.BtfLoad(attr)
-		return nil, internal.ErrorWithLog(err, logBuf)
+		_, ve := sys.BtfLoad(attr)
+		return nil, internal.ErrorWithLog(err, ve, logBuf)
 	}
 
 	return &Handle{fd, attr.BtfSize}, nil

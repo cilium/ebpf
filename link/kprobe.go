@@ -33,7 +33,7 @@ type probeType uint8
 type probeArgs struct {
 	symbol, group, path          string
 	offset, refCtrOffset, cookie uint64
-	pid                          int
+	pid, maxactive               int
 	ret                          bool
 }
 
@@ -49,6 +49,9 @@ type KprobeOptions struct {
 	// Can be used to insert kprobes at arbitrary offsets in kernel functions,
 	// e.g. in places where functions have been inlined.
 	Offset uint64
+	//Set kretprobe's MAXACTIVE if you need.
+	//Set to 0 (or absent) will make the kernel default to NR_CPUS.
+	Maxactive int
 }
 
 const (
@@ -193,6 +196,7 @@ func kprobe(symbol string, prog *ebpf.Program, opts *KprobeOptions, ret bool) (*
 	if opts != nil {
 		args.cookie = opts.Cookie
 		args.offset = opts.Offset
+		args.maxactive = opts.Maxactive
 	}
 
 	// Use kprobe PMU if the kernel has it available.
@@ -245,6 +249,10 @@ func pmuProbe(typ probeType, args probeArgs) (*perfEvent, error) {
 
 	var config uint64
 	if args.ret {
+		// Use tracefs if we want to set kretprobe's maxactive.
+		if args.maxactive > 0 {
+			return nil, ErrNotSupported
+		}
 		bit, err := typ.RetprobeBit()
 		if err != nil {
 			return nil, err
@@ -441,13 +449,9 @@ func createTraceFSProbeEvent(typ probeType, args probeArgs) error {
 		// r:ebpf_1234/r_my_kretprobe nf_conntrack_destroy
 		// p:ebpf_5678/p_my_kprobe __x64_sys_execve
 		//
-		// Leaving the kretprobe's MAXACTIVE set to 0 (or absent) will make the
-		// kernel default to NR_CPUS. This is desired in most eBPF cases since
-		// subsampling or rate limiting logic can be more accurately implemented in
-		// the eBPF program itself.
 		// See Documentation/kprobes.txt for more details.
 		token = kprobeToken(args)
-		pe = fmt.Sprintf("%s:%s/%s %s", probePrefix(args.ret), args.group, sanitizeSymbol(args.symbol), token)
+		pe = fmt.Sprintf("%s:%s/%s %s", probePrefix(args.ret, args.maxactive), args.group, sanitizeSymbol(args.symbol), token)
 	case uprobeType:
 		// The uprobe_events syntax is as follows:
 		// p[:[GRP/]EVENT] PATH:OFFSET [FETCHARGS] : Set a probe
@@ -460,7 +464,7 @@ func createTraceFSProbeEvent(typ probeType, args probeArgs) error {
 		//
 		// See Documentation/trace/uprobetracer.txt for more details.
 		token = uprobeToken(args)
-		pe = fmt.Sprintf("%s:%s/%s %s", probePrefix(args.ret), args.group, args.symbol, token)
+		pe = fmt.Sprintf("%s:%s/%s %s", probePrefix(args.ret, args.maxactive), args.group, args.symbol, token)
 	}
 	_, err = f.WriteString(pe)
 
@@ -529,8 +533,11 @@ func randomGroup(prefix string) (string, error) {
 	return group, nil
 }
 
-func probePrefix(ret bool) string {
+func probePrefix(ret bool, maxactive int) string {
 	if ret {
+		if maxactive > 0 {
+			return fmt.Sprintf("r%d", maxactive)
+		}
 		return "r"
 	}
 	return "p"

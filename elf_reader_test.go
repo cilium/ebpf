@@ -686,7 +686,7 @@ func TestLibBPFCompat(t *testing.T) {
 	load := func(t *testing.T, spec *CollectionSpec, opts CollectionOptions, valid bool) {
 		// Disable retrying a program load with the log enabled, it leads
 		// to OOM kills.
-		opts.Programs.LogSize = -1
+		opts.Programs.LogDisabled = true
 
 		for name, p := range spec.Programs {
 			if p.Type != Extension {

@@ -951,7 +951,7 @@ type ProgLoadAttr struct {
 	InsnCnt            uint32
 	Insns              Pointer
 	License            Pointer
-	LogLevel           uint32
+	LogLevel           LogLevel
 	LogSize            uint32
 	LogBuf             Pointer
 	KernVersion        uint32

@@ -737,9 +737,13 @@ func NewHandle(spec *Spec) (*Handle, error) {
 		attr.BtfLogBuf = sys.NewSlicePointer(logBuf)
 		attr.BtfLogSize = uint32(len(logBuf))
 		attr.BtfLogLevel = 1
-		// NB: The syscall will never return ENOSPC as of 5.18-rc4.
-		_, _ = sys.BtfLoad(attr)
-		return nil, internal.ErrorWithLog(err, logBuf)
+
+		// Up until at least kernel 6.0, the BTF verifier does not return ENOSPC
+		// if there are other verification errors. ENOSPC is only returned when
+		// the BTF blob is correct, a log was requested, and the provided buffer
+		// is too small.
+		_, ve := sys.BtfLoad(attr)
+		return nil, internal.ErrorWithLog(err, logBuf, errors.Is(ve, unix.ENOSPC))
 	}
 
 	return &Handle{fd, attr.BtfSize}, nil

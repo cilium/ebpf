@@ -21,16 +21,16 @@ func TestVerifierErrorWhitespace(t *testing.T) {
 		0, 0, // trailing NUL bytes
 	)
 
-	err := ErrorWithLog(errors.New("test"), b)
+	err := ErrorWithLog(errors.New("test"), nil, b)
 	qt.Assert(t, err.Error(), qt.Equals, "test: unreachable insn 28")
 
-	err = ErrorWithLog(errors.New("test"), nil)
+	err = ErrorWithLog(errors.New("test"), nil, nil)
 	qt.Assert(t, err.Error(), qt.Equals, "test")
 
-	err = ErrorWithLog(errors.New("test"), []byte("\x00"))
+	err = ErrorWithLog(errors.New("test"), nil, []byte("\x00"))
 	qt.Assert(t, err.Error(), qt.Equals, "test")
 
-	err = ErrorWithLog(errors.New("test"), []byte(" "))
+	err = ErrorWithLog(errors.New("test"), nil, []byte(" "))
 	qt.Assert(t, err.Error(), qt.Equals, "test")
 }
 
@@ -43,13 +43,13 @@ func TestVerifierError(t *testing.T) {
 		{"missing newline before null", "foo\x00"},
 	} {
 		t.Run("truncate "+test.name, func(t *testing.T) {
-			ve := ErrorWithLog(syscall.ENOENT, []byte(test.log))
+			ve := ErrorWithLog(syscall.ENOENT, nil, []byte(test.log))
 			qt.Assert(t, ve, qt.IsNotNil, qt.Commentf("should return error"))
 			qt.Assert(t, ve.Truncated, qt.IsTrue, qt.Commentf("should be truncated"))
 		})
 	}
 
-	ve := ErrorWithLog(syscall.ENOENT, nil)
+	ve := ErrorWithLog(syscall.ENOENT, nil, nil)
 	qt.Assert(t, ve, qt.IsNotNil, qt.Commentf("should return error without log or logErr"))
 
 	errno524 := readErrorFromFile(t, "testdata/errno524.log")
@@ -120,5 +120,5 @@ func readErrorFromFile(tb testing.TB, file string) *VerifierError {
 		tb.Fatal("Read file:", err)
 	}
 
-	return ErrorWithLog(unix.EINVAL, contents)
+	return ErrorWithLog(unix.EINVAL, nil, contents)
 }

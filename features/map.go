@@ -110,7 +110,12 @@ func HaveMapType(mt ebpf.MapType) (err error) {
 // HaveMapFlags probes the running kernel for the availability of the specified map type and flags.
 //
 // See the package documentation for the meaning of the error return value.
-func HaveMapFlags(mt ebpf.MapType, flags uint32) error {
+func HaveMapFlags(mt ebpf.MapType, flags uint32) (err error) {
+	defer func() {
+		// This closure modifies a named return variable.
+		err = wrapProbeErrors(err)
+	}()
+
 	if err := validateMaptype(mt); err != nil {
 		return err
 	}

@@ -13,15 +13,22 @@ import (
 
 func init() {
 	mc.mapTypes = make(map[ebpf.MapType]error)
+	mc.mapFlags = make(map[mapFlagCacheEntry]error)
 }
 
 var (
 	mc mapCache
 )
 
+type mapFlagCacheEntry struct {
+	mt    ebpf.MapType
+	flags uint32
+}
+
 type mapCache struct {
 	sync.Mutex
 	mapTypes map[ebpf.MapType]error
+	mapFlags map[mapFlagCacheEntry]error
 }
 
 func createMapTypeAttr(mt ebpf.MapType) *sys.MapCreateAttr {
@@ -100,6 +107,22 @@ func HaveMapType(mt ebpf.MapType) (err error) {
 	return haveMapType(mt)
 }
 
+// HaveMapFlags probes the running kernel for the availability of the specified map type and flags.
+//
+// See the package documentation for the meaning of the error return value.
+func HaveMapFlags(mt ebpf.MapType, flags uint32) (err error) {
+	defer func() {
+		// This closure modifies a named return variable.
+		err = wrapProbeErrors(err)
+	}()
+
+	if err := validateMaptype(mt); err != nil {
+		return err
+	}
+
+	return haveMapFlags(mt, flags)
+}
+
 func validateMaptype(mt ebpf.MapType) error {
 	if mt > mt.Max() {
 		return os.ErrInvalid
@@ -119,18 +142,48 @@ func haveMapType(mt ebpf.MapType) error {
 	if err == nil {
 		fd.Close()
 	}
+	err = checkMapCreationError(mt, err)
 
+	mc.mapTypes[mt] = err
+
+	return err
+}
+
+func haveMapFlags(mt ebpf.MapType, flags uint32) error {
+	cacheEntry := mapFlagCacheEntry{mt, flags}
+
+	mc.Lock()
+	defer mc.Unlock()
+	err, ok := mc.mapFlags[cacheEntry]
+	if ok {
+		return err
+	}
+
+	attr := createMapTypeAttr(mt)
+	attr.MapFlags |= flags
+	fd, err := sys.MapCreate(attr)
+	if err == nil {
+		fd.Close()
+	}
+	err = checkMapCreationError(mt, err)
+
+	mc.mapFlags[cacheEntry] = err
+
+	return err
+}
+
+func checkMapCreationError(mt ebpf.MapType, err error) error {
 	switch {
 	// For nested and storage map types we accept EBADF as indicator that these maps are supported
 	case errors.Is(err, unix.EBADF):
 		if isMapOfMaps(mt) || isStorageMap(mt) {
-			err = nil
+			return nil
 		}
 
 	// ENOTSUPP means the map type is at least known to the kernel.
 	case errors.Is(err, sys.ENOTSUPP):
 		if mt == ebpf.StructOpsMap {
-			err = nil
+			return nil
 		}
 
 	// EINVAL occurs when attempting to create a map with an unknown type.
@@ -138,11 +191,8 @@ func haveMapType(mt ebpf.MapType) error {
 	// of the struct known by the running kernel, meaning the kernel is too old
 	// to support the given map type.
 	case errors.Is(err, unix.EINVAL), errors.Is(err, unix.E2BIG):
-		err = ebpf.ErrNotSupported
+		return ebpf.ErrNotSupported
 	}
-
-	mc.mapTypes[mt] = err
-
 	return err
 }
 

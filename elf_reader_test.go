@@ -151,7 +151,7 @@ func TestLoadCollectionSpec(t *testing.T) {
 		cmpopts.IgnoreTypes(new(btf.Spec)),
 		cmpopts.IgnoreFields(CollectionSpec{}, "ByteOrder", "Types"),
 		cmpopts.IgnoreFields(ProgramSpec{}, "Instructions", "ByteOrder"),
-		cmpopts.IgnoreFields(MapSpec{}, "Key", "Value"),
+		cmpopts.IgnoreFields(MapSpec{}, "Key", "Value", "SectionName"),
 		cmpopts.IgnoreUnexported(ProgramSpec{}),
 		cmpopts.IgnoreMapEntries(func(key string, _ *MapSpec) bool {
 			if key == ".bss" || key == ".data" || strings.HasPrefix(key, ".rodata") {

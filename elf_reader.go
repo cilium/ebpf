@@ -905,18 +905,19 @@ func mapSpecFromBTF(es *elfSection, vs *btf.VarSecinfo, def *btf.Struct, spec *b
 	}
 
 	return &MapSpec{
-		Name:       SanitizeName(name, -1),
-		Type:       MapType(mapType),
-		KeySize:    keySize,
-		ValueSize:  valueSize,
-		MaxEntries: maxEntries,
-		Flags:      flags,
-		Key:        key,
-		Value:      value,
-		BTF:        spec,
-		Pinning:    pinType,
-		InnerMap:   innerMapSpec,
-		Contents:   contents,
+		Name:        SanitizeName(name, -1),
+		Type:        MapType(mapType),
+		KeySize:     keySize,
+		ValueSize:   valueSize,
+		MaxEntries:  maxEntries,
+		Flags:       flags,
+		Key:         key,
+		Value:       value,
+		BTF:         spec,
+		Pinning:     pinType,
+		InnerMap:    innerMapSpec,
+		Contents:    contents,
+		SectionName: es.Name,
 	}, nil
 }
 

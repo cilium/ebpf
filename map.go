@@ -80,6 +80,9 @@ type MapSpec struct {
 
 	// The BTF associated with this map.
 	BTF *btf.Spec
+
+	// The name of the ELF section this map orininated from.
+	SectionName string
 }
 
 func (ms *MapSpec) String() string {

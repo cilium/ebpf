@@ -2,6 +2,7 @@ package epoll
 
 import (
 	"errors"
+	"math"
 	"os"
 	"testing"
 	"time"
@@ -10,32 +11,20 @@ import (
 )
 
 func TestPoller(t *testing.T) {
-	event, err := newEventFd()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer event.close()
+	t.Parallel()
 
-	poller, err := New()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer poller.Close()
-
-	if err := poller.Add(event.raw, 42); err != nil {
-		t.Fatal("Can't add fd:", err)
-	}
+	event, poller := mustNewPoller(t)
 
 	done := make(chan struct{}, 1)
-	read := func(timeOut time.Time) {
+	read := func() {
 		defer func() {
 			done <- struct{}{}
 		}()
 
 		events := make([]unix.EpollEvent, 1)
 
-		n, err := poller.Wait(events, timeOut)
-		if errors.Is(err, os.ErrClosed) || errors.Is(err, os.ErrDeadlineExceeded) {
+		n, err := poller.Wait(events, time.Time{})
+		if errors.Is(err, os.ErrClosed) {
 			return
 		}
 
@@ -57,7 +46,7 @@ func TestPoller(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	go read(time.Time{})
+	go read()
 	select {
 	case <-done:
 	case <-time.After(time.Second):
@@ -68,14 +57,7 @@ func TestPoller(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	go read(time.Now().Add(200 * time.Millisecond))
-	select {
-	case <-done:
-	case <-time.After(time.Second):
-		t.Fatal("Timed out")
-	}
-
-	go read(time.Time{})
+	go read()
 	select {
 	case <-done:
 		t.Fatal("Wait doesn't block")
@@ -95,4 +77,54 @@ func TestPoller(t *testing.T) {
 	if err := poller.Close(); !errors.Is(err, os.ErrClosed) {
 		t.Fatal("Closing a second time doesn't return ErrClosed:", err)
 	}
+}
+
+func TestPollerDeadline(t *testing.T) {
+	t.Parallel()
+
+	_, poller := mustNewPoller(t)
+	events := make([]unix.EpollEvent, 1)
+
+	_, err := poller.Wait(events, time.Now().Add(-time.Second))
+	if !errors.Is(err, os.ErrDeadlineExceeded) {
+		t.Fatal("Expected os.ErrDeadlineExceeded on deadline in the past, got", err)
+	}
+
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+
+		_, err := poller.Wait(events, time.Now().Add(math.MaxInt64))
+		if !errors.Is(err, os.ErrClosed) {
+			t.Error("Expected os.ErrClosed when interrupting deadline, got", err)
+		}
+	}()
+
+	// Wait for the goroutine to enter the syscall.
+	time.Sleep(time.Second)
+
+	poller.Close()
+	<-done
+}
+
+func mustNewPoller(t *testing.T) (*eventFd, *Poller) {
+	t.Helper()
+
+	event, err := newEventFd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { event.close() })
+
+	poller, err := New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { poller.Close() })
+
+	if err := poller.Add(event.raw, 42); err != nil {
+		t.Fatal("Can't add fd:", err)
+	}
+
+	return event, poller
 }

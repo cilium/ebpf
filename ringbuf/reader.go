@@ -112,6 +112,7 @@ type Reader struct {
 	epollEvents []unix.EpollEvent
 	header      []byte
 	haveData    bool
+	deadline    time.Time
 }
 
 // NewReader creates a new BPF ringbuf reader.
@@ -172,9 +173,20 @@ func (r *Reader) Close() error {
 	return nil
 }
 
+// SetDeadline controls how long Read and ReadInto will block waiting for samples.
+//
+// Passing a zero time.Time will remove the deadline.
+func (r *Reader) SetDeadline(t time.Time) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	r.deadline = t
+}
+
 // Read the next record from the BPF ringbuf.
 //
-// Calling Close interrupts the function.
+// Returns os.ErrClosed if Close is called on the Reader, or os.ErrDeadlineExceeded
+// if a deadline was set.
 func (r *Reader) Read() (Record, error) {
 	var rec Record
 	return rec, r.ReadInto(&rec)
@@ -191,7 +203,7 @@ func (r *Reader) ReadInto(rec *Record) error {
 
 	for {
 		if !r.haveData {
-			_, err := r.poller.Wait(r.epollEvents[:cap(r.epollEvents)], time.Time{})
+			_, err := r.poller.Wait(r.epollEvents[:cap(r.epollEvents)], r.deadline)
 			if err != nil {
 				return err
 			}

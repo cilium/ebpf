@@ -129,12 +129,20 @@ func (p *Poller) Wait(events []unix.EpollEvent, deadline time.Time) (int, error)
 	}
 
 	for {
-		msec := int(-1)
+		timeout := int(-1)
 		if !deadline.IsZero() {
-			msec = int(time.Until(deadline).Milliseconds())
+			msec := time.Until(deadline).Milliseconds()
+			if msec < 0 {
+				// Deadline is in the past.
+				msec = 0
+			} else if msec > math.MaxInt {
+				// Deadline is too far in the future.
+				msec = math.MaxInt
+			}
+			timeout = int(msec)
 		}
 
-		n, err := unix.EpollWait(p.epollFd, events, msec)
+		n, err := unix.EpollWait(p.epollFd, events, timeout)
 		if temp, ok := err.(temporaryError); ok && temp.Temporary() {
 			// Retry the syscall if we were interrupted, see https://github.com/golang/go/issues/20400
 			continue
@@ -144,8 +152,8 @@ func (p *Poller) Wait(events []unix.EpollEvent, deadline time.Time) (int, error)
 			return 0, err
 		}
 
-		if n == 0 && msec != -1 {
-			return 0, fmt.Errorf("poll: %w", os.ErrDeadlineExceeded)
+		if n == 0 {
+			return 0, fmt.Errorf("epoll wait: %w", os.ErrDeadlineExceeded)
 		}
 
 		for _, event := range events[:n] {

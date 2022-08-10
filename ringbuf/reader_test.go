@@ -187,17 +187,15 @@ func TestReaderBlocking(t *testing.T) {
 	}
 	defer rd.Close()
 
-	errs := make(chan error)
-	go func() {
-		for {
-			_, err := rd.Read()
-			errs <- err
-		}
-	}()
-
-	if err := <-errs; err != nil {
-		t.Fatal("Can't read first sample", err)
+	if _, err := rd.Read(); err != nil {
+		t.Fatal("Can't read first sample:", err)
 	}
+
+	errs := make(chan error, 1)
+	go func() {
+		_, err := rd.Read()
+		errs <- err
+	}()
 
 	select {
 	case err := <-errs:
@@ -213,7 +211,7 @@ func TestReaderBlocking(t *testing.T) {
 	select {
 	case err := <-errs:
 		if !errors.Is(err, ErrClosed) {
-			t.Fatal("Read from RingbufReader that got closed does return ErrClosed")
+			t.Fatal("Expected os.ErrClosed from interrupted Read, got:", err)
 		}
 	case <-time.After(time.Second):
 		t.Fatal("Close doesn't interrupt Read")

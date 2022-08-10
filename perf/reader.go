@@ -304,7 +304,7 @@ func (pr *Reader) SetDeadline(t time.Time) {
 //
 // Calling Close interrupts the function.
 //
-// If SetDeadline the Read deadline, Read might return os.ErrDeadlineExceeded.
+// Returns os.ErrDeadlineExceeded if a deadline was set.
 func (pr *Reader) Read() (Record, error) {
 	var r Record
 	return r, pr.ReadInto(&r)

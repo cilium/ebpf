@@ -25,8 +25,6 @@ var (
 
 func TestPerfReader(t *testing.T) {
 	prog, events := mustOutputSamplesProg(t, 5)
-	defer prog.Close()
-	defer events.Close()
 
 	rd, err := NewReader(events, 4096)
 	if err != nil {
@@ -62,6 +60,24 @@ func TestPerfReader(t *testing.T) {
 	rd.SetDeadline(time.Now().Add(4 * time.Millisecond))
 	_, err = rd.Read()
 	qt.Assert(t, errors.Is(err, os.ErrDeadlineExceeded), qt.IsTrue, qt.Commentf("expected os.ErrDeadlineExceeded"))
+}
+
+func TestReaderSetDeadline(t *testing.T) {
+	_, events := mustOutputSamplesProg(t, 5)
+
+	rd, err := NewReader(events, 4096)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rd.Close()
+
+	rd.SetDeadline(time.Now().Add(-time.Second))
+	if _, err := rd.Read(); !errors.Is(err, os.ErrDeadlineExceeded) {
+		t.Error("Expected os.ErrDeadlineExceeded from first Read, got:", err)
+	}
+	if _, err := rd.Read(); !errors.Is(err, os.ErrDeadlineExceeded) {
+		t.Error("Expected os.ErrDeadlineExceeded from second Read, got:", err)
+	}
 }
 
 func outputSamplesProg(sampleSizes ...int) (*ebpf.Program, *ebpf.Map, error) {
@@ -131,6 +147,10 @@ func mustOutputSamplesProg(tb testing.TB, sampleSizes ...int) (*ebpf.Program, *e
 	if err != nil {
 		tb.Fatal(err)
 	}
+	tb.Cleanup(func() {
+		prog.Close()
+		events.Close()
+	})
 
 	return prog, events
 }
@@ -209,8 +229,6 @@ func TestPerfReaderLostSample(t *testing.T) {
 	sampleSizes = append(sampleSizes, 5)
 
 	prog, events := mustOutputSamplesProg(t, sampleSizes...)
-	defer prog.Close()
-	defer events.Close()
 
 	rd, err := NewReader(events, pageSize)
 	if err != nil {
@@ -241,9 +259,7 @@ func TestPerfReaderLostSample(t *testing.T) {
 }
 
 func TestPerfReaderClose(t *testing.T) {
-	prog, events := mustOutputSamplesProg(t, 5)
-	defer prog.Close()
-	defer events.Close()
+	_, events := mustOutputSamplesProg(t, 5)
 
 	rd, err := NewReader(events, 4096)
 	if err != nil {
@@ -309,8 +325,6 @@ func TestPause(t *testing.T) {
 	t.Parallel()
 
 	prog, events := mustOutputSamplesProg(t, 5)
-	defer prog.Close()
-	defer events.Close()
 
 	rd, err := NewReader(events, 4096)
 	if err != nil {
@@ -393,8 +407,6 @@ func TestPause(t *testing.T) {
 
 func BenchmarkReader(b *testing.B) {
 	prog, events := mustOutputSamplesProg(b, 80)
-	defer prog.Close()
-	defer events.Close()
 
 	rd, err := NewReader(events, 4096)
 	if err != nil {
@@ -422,8 +434,6 @@ func BenchmarkReader(b *testing.B) {
 
 func BenchmarkReadInto(b *testing.B) {
 	prog, events := mustOutputSamplesProg(b, 80)
-	defer prog.Close()
-	defer events.Close()
 
 	rd, err := NewReader(events, 4096)
 	if err != nil {

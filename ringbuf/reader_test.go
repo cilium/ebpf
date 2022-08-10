@@ -2,6 +2,7 @@ package ringbuf
 
 import (
 	"errors"
+	"os"
 	"syscall"
 	"testing"
 	"time"
@@ -187,17 +188,15 @@ func TestReaderBlocking(t *testing.T) {
 	}
 	defer rd.Close()
 
-	errs := make(chan error)
-	go func() {
-		for {
-			_, err := rd.Read()
-			errs <- err
-		}
-	}()
-
-	if err := <-errs; err != nil {
-		t.Fatal("Can't read first sample", err)
+	if _, err := rd.Read(); err != nil {
+		t.Fatal("Can't read first sample:", err)
 	}
+
+	errs := make(chan error, 1)
+	go func() {
+		_, err := rd.Read()
+		errs <- err
+	}()
 
 	select {
 	case err := <-errs:
@@ -213,7 +212,7 @@ func TestReaderBlocking(t *testing.T) {
 	select {
 	case err := <-errs:
 		if !errors.Is(err, ErrClosed) {
-			t.Fatal("Read from RingbufReader that got closed does return ErrClosed")
+			t.Fatal("Expected os.ErrClosed from interrupted Read, got:", err)
 		}
 	case <-time.After(time.Second):
 		t.Fatal("Close doesn't interrupt Read")
@@ -226,6 +225,25 @@ func TestReaderBlocking(t *testing.T) {
 
 	if _, err := rd.Read(); !errors.Is(err, ErrClosed) {
 		t.Fatal("Second Read on a closed RingbufReader doesn't return ErrClosed")
+	}
+}
+
+func TestReaderSetDeadline(t *testing.T) {
+	testutils.SkipOnOldKernel(t, "5.8", "BPF ring buffer")
+
+	_, events := mustOutputSamplesProg(t, 0, 5)
+	rd, err := NewReader(events)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rd.Close()
+
+	rd.SetDeadline(time.Now().Add(-time.Second))
+	if _, err := rd.Read(); !errors.Is(err, os.ErrDeadlineExceeded) {
+		t.Error("Expected os.ErrDeadlineExceeded from first Read, got:", err)
+	}
+	if _, err := rd.Read(); !errors.Is(err, os.ErrDeadlineExceeded) {
+		t.Error("Expected os.ErrDeadlineExceeded from second Read, got:", err)
 	}
 }
 

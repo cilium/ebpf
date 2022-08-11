@@ -122,8 +122,13 @@ func haveMapType(mt ebpf.MapType) error {
 		fd.Close()
 	}
 
-	err = convertProbeError(mt, err)
+	// EINVAL occurs when attempting to create a map with an unknown type or an unknown flag.
+	if errors.Is(err, unix.EINVAL) {
+		err = ebpf.ErrNotSupported
+	}
+
 	mc.mapTypes[mt] = err
+
 	return err
 }
 
@@ -173,8 +178,8 @@ func haveMapFlag(flag uint32) error {
 		fd.Close()
 	}
 
-	err = convertProbeError(ebpf.MapType(attr.MapType), err)
 	mc.mapFlags[flag] = err
+
 	return err
 }
 
@@ -196,28 +201,4 @@ func createMapFlagTypeAttr(flag uint32) (*sys.MapCreateAttr, error) {
 	}
 
 	return nil, ebpf.ErrNotSupported
-}
-
-func convertProbeError(mt ebpf.MapType, err error) error {
-	switch {
-	// For nested and storage map types we accept EBADF as indicator that these maps are supported
-	case errors.Is(err, unix.EBADF):
-		if isMapOfMaps(mt) || isStorageMap(mt) {
-			return nil
-		}
-
-	// ENOTSUPP means the map type is at least known to the kernel.
-	case errors.Is(err, sys.ENOTSUPP):
-		if mt == ebpf.StructOpsMap {
-			return nil
-		}
-
-	// EINVAL occurs when attempting to create a map with an unknown type.
-	// E2BIG occurs when MapCreateAttr contains non-zero bytes past the end
-	// of the struct known by the running kernel, meaning the kernel is too old
-	// to support the given map type.
-	case errors.Is(err, unix.EINVAL), errors.Is(err, unix.E2BIG):
-		return ebpf.ErrNotSupported
-	}
-	return err
 }

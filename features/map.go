@@ -13,6 +13,7 @@ import (
 
 func init() {
 	mc.mapTypes = make(map[ebpf.MapType]error)
+	mc.mapFlags = make(map[uint32]error)
 }
 
 var (
@@ -22,6 +23,7 @@ var (
 type mapCache struct {
 	sync.Mutex
 	mapTypes map[ebpf.MapType]error
+	mapFlags map[uint32]error
 }
 
 func createMapTypeAttr(mt ebpf.MapType) *sys.MapCreateAttr {
@@ -120,24 +122,8 @@ func haveMapType(mt ebpf.MapType) error {
 		fd.Close()
 	}
 
-	switch {
-	// For nested and storage map types we accept EBADF as indicator that these maps are supported
-	case errors.Is(err, unix.EBADF):
-		if isMapOfMaps(mt) || isStorageMap(mt) {
-			err = nil
-		}
-
-	// ENOTSUPP means the map type is at least known to the kernel.
-	case errors.Is(err, sys.ENOTSUPP):
-		if mt == ebpf.StructOpsMap {
-			err = nil
-		}
-
-	// EINVAL occurs when attempting to create a map with an unknown type.
-	// E2BIG occurs when MapCreateAttr contains non-zero bytes past the end
-	// of the struct known by the running kernel, meaning the kernel is too old
-	// to support the given map type.
-	case errors.Is(err, unix.EINVAL), errors.Is(err, unix.E2BIG):
+	// EINVAL occurs when attempting to create a map with an unknown type or an unknown flag.
+	if errors.Is(err, unix.EINVAL) {
 		err = ebpf.ErrNotSupported
 	}
 
@@ -159,6 +145,60 @@ func isStorageMap(mt ebpf.MapType) bool {
 	case ebpf.SkStorage, ebpf.InodeStorage, ebpf.TaskStorage:
 		return true
 	}
-
 	return false
+}
+
+// HaveMapFlag probes the running kernel for the availability of the specified map flag.
+//
+// See the package documentation for the meaning of the error return value.
+func HaveMapFlag(flag uint32) (err error) {
+	defer func() {
+		// This closure modifies a named return variable.
+		err = wrapProbeErrors(err)
+	}()
+
+	return haveMapFlag(flag)
+}
+
+func haveMapFlag(flag uint32) error {
+	mc.Lock()
+	defer mc.Unlock()
+	err, ok := mc.mapFlags[flag]
+	if ok {
+		return err
+	}
+
+	attr, err := createMapFlagTypeAttr(flag)
+	if err != nil {
+		return err
+	}
+
+	fd, err := sys.MapCreate(attr)
+	if err == nil {
+		fd.Close()
+	}
+
+	mc.mapFlags[flag] = err
+
+	return err
+}
+
+func createMapFlagTypeAttr(flag uint32) (*sys.MapCreateAttr, error) {
+	a := &sys.MapCreateAttr{
+		KeySize:    4,
+		ValueSize:  4,
+		MaxEntries: 1,
+		MapFlags:   flag,
+	}
+
+	switch flag {
+	case unix.BPF_F_MMAPABLE, unix.BPF_F_INNER_MAP, unix.BPF_F_RDONLY_PROG, unix.BPF_F_WRONLY_PROG:
+		a.MapType = sys.MapType(ebpf.Array)
+		return a, nil
+	case unix.BPF_F_NO_PREALLOC:
+		a.MapType = sys.MapType(ebpf.Hash)
+		return a, nil
+	}
+
+	return nil, ebpf.ErrNotSupported
 }

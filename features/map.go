@@ -221,5 +221,5 @@ func createMapFlagTypeAttr(flag uint32) (*sys.MapCreateAttr, error) {
 		return a, nil
 	}
 
-	return nil, ebpf.ErrNotSupported
+	return nil, errors.New("probe not implemented")
 }

@@ -13,6 +13,29 @@ import (
 	"github.com/cilium/ebpf"
 )
 
+type bpfRttEvent struct {
+	Sport  uint16
+	Dport  uint16
+	Saddr  uint32
+	Daddr  uint32
+	Srtt   uint32
+	SkType uint8
+	_      [3]byte
+}
+
+type bpfSkInfo struct {
+	SkKey  bpfSkKey
+	SkType uint8
+	_      [3]byte
+}
+
+type bpfSkKey struct {
+	LocalIp4   uint32
+	RemoteIp4  uint32
+	LocalPort  uint32
+	RemotePort uint32
+}
+
 // loadBpf returns the embedded CollectionSpec for bpf.
 func loadBpf() (*ebpf.CollectionSpec, error) {
 	reader := bytes.NewReader(_BpfBytes)
@@ -61,7 +84,8 @@ type bpfProgramSpecs struct {
 //
 // It can be passed ebpf.CollectionSpec.Assign.
 type bpfMapSpecs struct {
-	Events *ebpf.MapSpec `ebpf:"events"`
+	MapEstabSk *ebpf.MapSpec `ebpf:"map_estab_sk"`
+	RttEvents  *ebpf.MapSpec `ebpf:"rtt_events"`
 }
 
 // bpfObjects contains all objects after they have been loaded into the kernel.
@@ -83,12 +107,14 @@ func (o *bpfObjects) Close() error {
 //
 // It can be passed to loadBpfObjects or ebpf.CollectionSpec.LoadAndAssign.
 type bpfMaps struct {
-	Events *ebpf.Map `ebpf:"events"`
+	MapEstabSk *ebpf.Map `ebpf:"map_estab_sk"`
+	RttEvents  *ebpf.Map `ebpf:"rtt_events"`
 }
 
 func (m *bpfMaps) Close() error {
 	return _BpfClose(
-		m.Events,
+		m.MapEstabSk,
+		m.RttEvents,
 	)
 }
 

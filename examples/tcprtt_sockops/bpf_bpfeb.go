@@ -14,13 +14,11 @@ import (
 )
 
 type bpfRttEvent struct {
-	Sport  uint16
-	Dport  uint16
-	Saddr  uint32
-	Daddr  uint32
-	Srtt   uint32
-	SkType uint8
-	_      [3]byte
+	Sport uint16
+	Dport uint16
+	Saddr uint32
+	Daddr uint32
+	Srtt  uint32
 }
 
 type bpfSkInfo struct {

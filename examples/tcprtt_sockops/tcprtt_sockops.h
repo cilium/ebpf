@@ -39,7 +39,6 @@ struct rtt_event {
 	u32 saddr;
 	u32 daddr;
     u32 srtt;
-	u8 sk_type;
 };
 struct rtt_event *unused_event __attribute__((unused));
 

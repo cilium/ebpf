@@ -1,19 +1,23 @@
 //go:build linux
 // +build linux
 
-// This program demonstrates attaching a fentry eBPF program to
-// tcp_close and reading the RTT from the TCP socket using CO-RE helpers.
-// It prints the IPs/ports/RTT information
-// once the host closes a TCP connection.
+// This program demonstrates attaching an eBPF program to
+// a cgroupv2 path and using sockops to process TCP socket events.
+// It prints the IPs/ports/RTT information every time TCP sockets
+// update their internal RTT value.
 // It supports only IPv4 for this example.
 //
 // Sample output:
 //
-// examples# go run -exec sudo ./tcprtt
-// 2022/03/19 22:30:34 Src addr        Port   -> Dest addr       Port   RTT
-// 2022/03/19 22:30:36 10.0.1.205      50578  -> 117.102.109.186 5201   195
-// 2022/03/19 22:30:53 10.0.1.205      0      -> 89.84.1.178     9200   30
-// 2022/03/19 22:30:53 10.0.1.205      36022  -> 89.84.1.178     9200   28
+// examples# go run -exec sudo ./tcprtt_sockops
+// 2022/08/14 20:58:03 eBPF program loaded and attached on cgroup /sys/fs/cgroup/unified
+// 2022/08/14 20:58:03 Src addr        Port   -> Dest addr       Port   RTT (ms)
+// 2022/08/14 20:58:09 10.0.1.205      54844  -> 20.42.73.25     443    67
+// 2022/08/14 20:58:09 10.0.1.205      54844  -> 20.42.73.25     443    67
+// 2022/08/14 20:58:33 10.0.1.205      38620  -> 140.82.121.4    443    26
+// 2022/08/14 20:58:33 10.0.1.205      38620  -> 140.82.121.4    443    26
+// 2022/08/14 20:58:43 34.67.40.146    45380  -> 10.0.1.205      5201   106
+// 2022/08/14 20:58:43 34.67.40.146    45380  -> 10.0.1.205      5201   106
 
 package main
 
@@ -49,6 +53,12 @@ func main() {
 		log.Fatal(err)
 	}
 
+	// Find the path to a cgroup enabled to version 2
+	cgroupPath, err := findCgroupPath()
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	// Load pre-compiled programs and maps into the kernel.
 	objs := bpfObjects{}
 	if err := loadBpfObjects(&objs, nil); err != nil {
@@ -56,11 +66,7 @@ func main() {
 	}
 	defer objs.Close()
 
-	cgroupPath, err := getCgroupPath()
-	if err != nil {
-		log.Fatal(err)
-	}
-
+	// Attach ebpf program to a cgroupv2
 	link, err := link.AttachCgroup(link.CgroupOptions{
 		Path:    cgroupPath,
 		Program: objs.bpfPrograms.BpfSockopsCb,
@@ -84,7 +90,7 @@ func main() {
 		"Port",
 		"Dest addr",
 		"Port",
-		"RTT",
+		"RTT (ms)",
 	)
 	go readLoop(rd)
 
@@ -92,15 +98,17 @@ func main() {
 	<-stopper
 }
 
-func getCgroupPath() (string, error) {
-	var err error = nil
+func findCgroupPath() (string, error) {
 	cgroupPath := "/sys/fs/cgroup"
 
 	enabled, err := cgroupv2.Enabled()
+	if err != nil {
+		return "", err
+	}
 	if !enabled {
 		cgroupPath = filepath.Join(cgroupPath, "unified")
 	}
-	return cgroupPath, err
+	return cgroupPath, nil
 }
 
 func readLoop(rd *ringbuf.Reader) {
@@ -117,7 +125,7 @@ func readLoop(rd *ringbuf.Reader) {
 			continue
 		}
 
-		// Parse the ringbuf event entry into a bpfEvent structure.
+		// Parse the ringbuf event entry into a bpfRttEvent structure.
 		if err := binary.Read(bytes.NewBuffer(record.RawSample), internal.NativeEndian, &event); err != nil {
 			log.Printf("parsing ringbuf event: %s", err)
 			continue

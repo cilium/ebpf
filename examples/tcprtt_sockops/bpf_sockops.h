@@ -1,3 +1,7 @@
+/*
+ * Note that this header file contains a subset of kernel 
+ * definitions needed for the tcprtt_sockops example.
+ */
 #ifndef BPF_SOCKOPS_H
 #define BPF_SOCKOPS_H
 

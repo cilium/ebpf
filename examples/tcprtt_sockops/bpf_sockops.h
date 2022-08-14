@@ -5,6 +5,10 @@
 #ifndef BPF_SOCKOPS_H
 #define BPF_SOCKOPS_H
 
+/*
+ * Copy of TCP states.
+ * See: https://elixir.bootlin.com/linux/latest/source/include/uapi/linux/bpf.h#L6347.
+ */
 enum {
 	TCP_ESTABLISHED = 1,
 	TCP_SYN_SENT = 2,
@@ -21,6 +25,10 @@ enum {
 	TCP_MAX_STATES = 13,
 };
 
+/*
+ * Copy of sock_ops operations.
+ * See: https://elixir.bootlin.com/linux/latest/source/include/uapi/linux/bpf.h#L6233.
+ */
 enum {
 	BPF_SOCK_OPS_VOID                   = 0,
 	BPF_SOCK_OPS_TIMEOUT_INIT           = 1,
@@ -40,6 +48,10 @@ enum {
 	BPF_SOCK_OPS_WRITE_HDR_OPT_CB       = 15,
 };
 
+/*
+ * Copy of definitions for bpf_sock_ops_cb_flags.
+ * See: https://elixir.bootlin.com/linux/latest/source/include/uapi/linux/bpf.h#L6178.
+ */
 enum {
 	BPF_SOCK_OPS_RTO_CB_FLAG                   = 1,
 	BPF_SOCK_OPS_RETRANS_CB_FLAG               = 2,
@@ -51,6 +63,11 @@ enum {
 	BPF_SOCK_OPS_ALL_CB_FLAGS                  = 127,
 };
 
+/*
+ * Copy of bpf.h's bpf_sock_ops with minimal subset 
+ * of fields used by the tcprtt_sockops example.
+ * See: https://elixir.bootlin.com/linux/latest/source/include/uapi/linux/bpf.h#L6101.
+ */
 struct bpf_sock_ops {
 	__u32 op;
 	union {

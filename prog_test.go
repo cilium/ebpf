@@ -390,7 +390,7 @@ func TestProgramKernelVersion(t *testing.T) {
 
 func TestProgramVerifierOutput(t *testing.T) {
 	prog, err := NewProgramWithOptions(socketFilterSpec, ProgramOptions{
-		LogLevel: 2,
+		LogLevel: LogLevelInstruction,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -409,7 +409,7 @@ func TestProgramVerifierOutput(t *testing.T) {
 		},
 		License: "MIT",
 	}, ProgramOptions{
-		LogLevel: 2,
+		LogLevel: LogLevelInstruction,
 	})
 
 	if err == nil {
@@ -906,7 +906,7 @@ func ExampleProgram_retrieveVerifierOutput() {
 	}
 
 	prog, err := NewProgramWithOptions(spec, ProgramOptions{
-		LogLevel: 2,
+		LogLevel: LogLevelInstruction,
 		LogSize:  1024,
 	})
 	if err != nil {

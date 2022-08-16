@@ -95,6 +95,15 @@ func NewObjName(name string) ObjName {
 	return result
 }
 
+// LogLevel controls the verbosity of the kernel's eBPF program verifier.
+type LogLevel uint32
+
+const (
+	BPF_LOG_LEVEL1 LogLevel = 1 << iota
+	BPF_LOG_LEVEL2
+	BPF_LOG_STATS
+)
+
 // LinkID uniquely identifies a bpf_link.
 type LinkID uint32
 

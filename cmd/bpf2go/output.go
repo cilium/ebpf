@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"go/token"
 	"io"
-	"io/ioutil"
+	"os"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -228,7 +228,7 @@ type outputArgs struct {
 }
 
 func output(args outputArgs) error {
-	obj, err := ioutil.ReadFile(args.obj)
+	obj, err := os.ReadFile(args.obj)
 	if err != nil {
 		return fmt.Errorf("read object file contents: %s", err)
 	}

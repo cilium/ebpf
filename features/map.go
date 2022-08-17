@@ -212,6 +212,11 @@ func createMapFlagTypeAttr(flag uint32) (*sys.MapCreateAttr, error) {
 		MapFlags:   flag,
 	}
 
+	// For now, we do not check if the map type is supported because we only support
+	// probing for flags defined on arrays and hashs that are always supported.
+	// In the future, if we allow probing on flags defined on newer types, checking for map type
+	// support will be required.
+
 	switch flag {
 	case unix.BPF_F_MMAPABLE, unix.BPF_F_INNER_MAP, unix.BPF_F_RDONLY_PROG, unix.BPF_F_WRONLY_PROG:
 		a.MapType = sys.MapType(ebpf.Array)

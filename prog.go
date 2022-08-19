@@ -102,7 +102,7 @@ type ProgramSpec struct {
 	// The program to attach to. Must be provided manually.
 	AttachTarget *Program
 
-	// The name of the ELF section this program orininated from.
+	// The name of the ELF section this program originated from.
 	SectionName string
 
 	Instructions asm.Instructions

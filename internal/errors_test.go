@@ -21,62 +21,60 @@ func TestVerifierErrorWhitespace(t *testing.T) {
 		0, 0, // trailing NUL bytes
 	)
 
-	err := ErrorWithLog(errors.New("test"), b)
+	err := ErrorWithLog(errors.New("test"), nil, b)
 	qt.Assert(t, err.Error(), qt.Equals, "test: unreachable insn 28")
 
-	err = ErrorWithLog(errors.New("test"), nil)
+	err = ErrorWithLog(errors.New("test"), nil, nil)
 	qt.Assert(t, err.Error(), qt.Equals, "test")
 
-	err = ErrorWithLog(errors.New("test"), []byte("\x00"))
+	err = ErrorWithLog(errors.New("test"), nil, []byte("\x00"))
 	qt.Assert(t, err.Error(), qt.Equals, "test")
 
-	err = ErrorWithLog(errors.New("test"), []byte(" "))
+	err = ErrorWithLog(errors.New("test"), nil, []byte(" "))
 	qt.Assert(t, err.Error(), qt.Equals, "test")
 }
 
-func TestVerifierError(t *testing.T) {
-	for _, test := range []struct {
-		name string
-		log  string
-	}{
-		{"missing null", "foo"},
-		{"missing newline before null", "foo\x00"},
-	} {
-		t.Run("truncate "+test.name, func(t *testing.T) {
-			ve := ErrorWithLog(syscall.ENOENT, []byte(test.log))
-			qt.Assert(t, ve, qt.IsNotNil, qt.Commentf("should return error"))
-			qt.Assert(t, ve.Truncated, qt.IsTrue, qt.Commentf("should be truncated"))
-		})
-	}
+func TestVerifierErrorWrapping(t *testing.T) {
+	ve := ErrorWithLog(unix.ENOENT, nil, nil)
+	qt.Assert(t, ve, qt.ErrorIs, unix.ENOENT, qt.Commentf("should wrap the primary error"))
+	qt.Assert(t, ve.Truncated, qt.IsFalse, qt.Commentf("no ENOSPC specified, should not be truncated"))
 
-	ve := ErrorWithLog(syscall.ENOENT, nil)
-	qt.Assert(t, ve, qt.IsNotNil, qt.Commentf("should return error without log or logErr"))
+	ve = ErrorWithLog(unix.EINVAL, unix.ENOSPC, nil)
+	qt.Assert(t, ve, qt.ErrorIs, unix.EINVAL, qt.Commentf("should wrap the primary error"))
+	qt.Assert(t, ve, qt.Not(qt.ErrorIs), unix.ENOSPC, qt.Commentf("should not wrap the secondary error"))
+	qt.Assert(t, ve.Truncated, qt.IsTrue, qt.Commentf("kernel signaled log buffer was full, should be truncated"))
 
+	ve = ErrorWithLog(unix.EINVAL, unix.ENOSPC, []byte("foo"))
+	qt.Assert(t, ve, qt.ErrorIs, unix.EINVAL, qt.Commentf("should wrap the primary error"))
+	qt.Assert(t, ve.Error(), qt.Contains, "foo", qt.Commentf("verifier log should appear in error string"))
+
+	ve = ErrorWithLog(unix.ENOSPC, nil, []byte("foo"))
+	qt.Assert(t, ve, qt.ErrorIs, unix.ENOSPC, qt.Commentf("should wrap the primary error"))
+	qt.Assert(t, ve.Error(), qt.Contains, "foo", qt.Commentf("verifier log should appear in error string"))
+	qt.Assert(t, ve.Truncated, qt.IsTrue, qt.Commentf("kernel signaled log buffer was full, should be truncated"))
+}
+
+func TestVerifierErrorSummary(t *testing.T) {
+	// Suppress the last line containing 'processed ... insns'.
 	errno524 := readErrorFromFile(t, "testdata/errno524.log")
-	t.Log(errno524)
 	qt.Assert(t, errno524.Error(), qt.Contains, "JIT doesn't support bpf-to-bpf calls")
 	qt.Assert(t, errno524.Error(), qt.Not(qt.Contains), "processed 39 insns")
 
+	// Include the previous line if the current one starts with a tab.
 	invalidMember := readErrorFromFile(t, "testdata/invalid-member.log")
-	t.Log(invalidMember)
 	qt.Assert(t, invalidMember.Error(), qt.Contains, "STRUCT task_struct size=7744 vlen=218: cpus_mask type_id=109 bitfield_size=0 bits_offset=7744 Invalid member")
 
+	// Only include the last line.
 	issue43 := readErrorFromFile(t, "testdata/issue-43.log")
-	t.Log(issue43)
 	qt.Assert(t, issue43.Error(), qt.Contains, "[11] FUNC helper_func2 type_id=10 vlen != 0")
 	qt.Assert(t, issue43.Error(), qt.Not(qt.Contains), "[10] FUNC_PROTO (anon) return=3 args=(3 arg)")
 
-	truncated := readErrorFromFile(t, "testdata/truncated.log")
-	t.Log(truncated)
-	qt.Assert(t, truncated.Truncated, qt.IsTrue)
-	qt.Assert(t, truncated.Error(), qt.Contains, "str_off: 3166088: str_len: 228")
-
+	// Include instruction that caused invalid register access.
 	invalidR0 := readErrorFromFile(t, "testdata/invalid-R0.log")
-	t.Log(invalidR0)
 	qt.Assert(t, invalidR0.Error(), qt.Contains, "0: (95) exit: R0 !read_ok")
 
+	// Include symbol that doesn't match context type.
 	invalidCtx := readErrorFromFile(t, "testdata/invalid-ctx-access.log")
-	t.Log(invalidCtx)
 	qt.Assert(t, invalidCtx.Error(), qt.Contains, "func '__x64_sys_recvfrom' arg0 type FWD is not a struct: invalid bpf_context access off=0 size=8")
 }
 
@@ -120,5 +118,5 @@ func readErrorFromFile(tb testing.TB, file string) *VerifierError {
 		tb.Fatal("Read file:", err)
 	}
 
-	return ErrorWithLog(unix.EINVAL, contents)
+	return ErrorWithLog(unix.EINVAL, nil, contents)
 }

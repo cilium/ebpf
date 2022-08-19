@@ -471,9 +471,10 @@ type marshalOpts struct {
 
 func (s *Spec) marshal(opts marshalOpts) ([]byte, error) {
 	var (
-		buf       bytes.Buffer
-		header    = new(btfHeader)
-		headerLen = binary.Size(header)
+		buf        bytes.Buffer
+		header     = new(btfHeader)
+		headerLen  = binary.Size(header)
+		stringsLen int
 	)
 
 	// Reserve space for the header. We have to write it last since
@@ -495,10 +496,12 @@ func (s *Spec) marshal(opts marshalOpts) ([]byte, error) {
 	typeLen := uint32(buf.Len() - headerLen)
 
 	// Write string section after type section.
-	stringsLen := s.strings.Length()
-	buf.Grow(stringsLen)
-	if err := s.strings.Marshal(&buf); err != nil {
-		return nil, err
+	if s.strings != nil {
+		stringsLen = s.strings.Length()
+		buf.Grow(stringsLen)
+		if err := s.strings.Marshal(&buf); err != nil {
+			return nil, err
+		}
 	}
 
 	// Fill out the header, and write it out.
@@ -707,7 +710,7 @@ func NewHandle(spec *Spec) (*Handle, error) {
 		return nil, err
 	}
 
-	if spec.byteOrder != internal.NativeEndian {
+	if spec.byteOrder != nil && spec.byteOrder != internal.NativeEndian {
 		return nil, fmt.Errorf("can't load %s BTF on %s", spec.byteOrder, internal.NativeEndian)
 	}
 

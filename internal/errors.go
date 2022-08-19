@@ -2,39 +2,42 @@ package internal
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"io"
 	"strings"
+
+	"github.com/cilium/ebpf/internal/unix"
 )
 
-// ErrorWithLog returns an error which includes logs from the kernel verifier.
+// ErrorWithLog wraps err in a VerifierError that includes the parsed verifier
+// log buffer.
 //
 // The default error output is a summary of the full log. The latter can be
 // accessed via VerifierError.Log or by formatting the error, see Format.
 //
-// A set of heuristics is used to determine whether the log has been truncated.
-func ErrorWithLog(err error, log []byte) *VerifierError {
+// A secondary error (e.g. from a retried load with verifier log enabled)
+// can be provided that is checked for ENOSPC to determine if the kernel
+// truncated the log.
+func ErrorWithLog(err, ve error, log []byte) *VerifierError {
 	const whitespace = "\t\r\v\n "
+
+	// Either error can be ENOSPC depending on whether or now the verifier
+	// was explicitly enabled by the caller.
+	truncated := false
+	if errors.Is(err, unix.ENOSPC) || errors.Is(ve, unix.ENOSPC) {
+		truncated = true
+	}
 
 	// Convert verifier log C string by truncating it on the first 0 byte
 	// and trimming trailing whitespace before interpreting as a Go string.
-	truncated := false
 	if i := bytes.IndexByte(log, 0); i != -1 {
-		if i > 0 && i == len(log)-1 && log[i-1] != '\n' {
-			// The null byte is at the end of the buffer and it's not preceded
-			// by a newline character. Most likely the buffer was too short.
-			truncated = true
-		}
-
 		log = log[:i]
-	} else if len(log) > 0 {
-		// No null byte? Dodgy!
-		truncated = true
 	}
 
 	log = bytes.Trim(log, whitespace)
 	if len(log) == 0 {
-		return &VerifierError{err, nil, false}
+		return &VerifierError{err, nil, truncated}
 	}
 
 	logLines := bytes.Split(log, []byte{'\n'})

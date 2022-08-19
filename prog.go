@@ -331,12 +331,13 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions, handles *hand
 
 	// If the caller did not specify a log level,
 	// re-run with branch-level verifier logs enabled.
+	var ve error
 	if !opts.LogDisabled && opts.LogLevel == 0 {
 		logBuf = make([]byte, opts.LogSize)
 		attr.LogLevel = LogLevelBranch
 		attr.LogSize = uint32(len(logBuf))
 		attr.LogBuf = sys.NewSlicePointer(logBuf)
-		_, _ = sys.ProgLoad(attr)
+		_, ve = sys.ProgLoad(attr)
 	}
 
 	switch {
@@ -361,7 +362,7 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions, handles *hand
 		}
 	}
 
-	err = internal.ErrorWithLog(err, logBuf)
+	err = internal.ErrorWithLog(err, ve, logBuf)
 	if btfDisabled {
 		return nil, fmt.Errorf("load program: %w (kernel without BTF support)", err)
 	}

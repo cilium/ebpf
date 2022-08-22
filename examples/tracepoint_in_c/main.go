@@ -1,6 +1,3 @@
-//go:build linux
-// +build linux
-
 // This program demonstrates attaching an eBPF program to a kernel tracepoint.
 // The eBPF program will be attached to the page allocation tracepoint and
 // prints out the number of times it has been reached. The tracepoint fields

@@ -1,6 +1,3 @@
-//go:build linux
-// +build linux
-
 // This program demonstrates how to attach an eBPF program to a uretprobe.
 // The program will be attached to the 'readline' symbol in the binary '/bin/bash' and print out
 // the line which 'readline' functions returns to the caller.

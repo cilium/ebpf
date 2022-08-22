@@ -477,17 +477,17 @@ func bpfPerfEventOutputProgram() (*ebpf.Program, *ebpf.Map) {
 //
 // The BPF will look something like this:
 //
-//    struct map events __section("maps") = {
-//      .type = BPF_MAP_TYPE_PERF_EVENT_ARRAY,
-//    };
+//	struct map events __section("maps") = {
+//	  .type = BPF_MAP_TYPE_PERF_EVENT_ARRAY,
+//	};
 //
-//    __section("xdp") int output_single(void *ctx) {
-//      unsigned char buf[] = {
-//        1, 2, 3, 4, 5
-//      };
+//	__section("xdp") int output_single(void *ctx) {
+//	  unsigned char buf[] = {
+//	    1, 2, 3, 4, 5
+//	  };
 //
-//       return perf_event_output(ctx, &events, BPF_F_CURRENT_CPU, &buf[0], 5);
-//     }
+//	   return perf_event_output(ctx, &events, BPF_F_CURRENT_CPU, &buf[0], 5);
+//	 }
 //
 // Also see BPF_F_CTXLEN_MASK if you want to sample packet data
 // from SKB or XDP programs.

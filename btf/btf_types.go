@@ -209,11 +209,11 @@ func (rt *rawType) Marshal(w io.Writer, bo binary.ByteOrder) error {
 
 // btfInt encodes additional data for integers.
 //
-//    ? ? ? ? e e e e o o o o o o o o ? ? ? ? ? ? ? ? b b b b b b b b
-//    ? = undefined
-//    e = encoding
-//    o = offset (bitfields?)
-//    b = bits (bitfields)
+//	? ? ? ? e e e e o o o o o o o o ? ? ? ? ? ? ? ? b b b b b b b b
+//	? = undefined
+//	e = encoding
+//	o = offset (bitfields?)
+//	b = bits (bitfields)
 type btfInt struct {
 	Raw uint32
 }

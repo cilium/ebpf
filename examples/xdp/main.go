@@ -1,6 +1,3 @@
-//go:build linux
-// +build linux
-
 // This program demonstrates attaching an eBPF program to a network interface
 // with XDP (eXpress Data Path). The program parses the IPv4 source address
 // from packets and writes the packet count by IP to an LRU hash map.
@@ -73,7 +70,7 @@ func main() {
 
 func formatMapContents(m *ebpf.Map) (string, error) {
 	var (
-		sb strings.Builder
+		sb  strings.Builder
 		key []byte
 		val uint32
 	)

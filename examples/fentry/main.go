@@ -1,6 +1,3 @@
-//go:build linux
-// +build linux
-
 // This program demonstrates attaching a fentry eBPF program to
 // tcp_connect. It prints the command/IPs/ports information
 // once the host sent a TCP SYN packet to a destination.

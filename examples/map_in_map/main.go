@@ -1,6 +1,3 @@
-//go:build linux
-// +build linux
-
 // An example of using maps within maps. This example demonstrates a few
 // features. Firstly, creating eBPF map specifications in pure Go
 // (typically you'd see them being generated from a loaded ELF).
@@ -13,11 +10,11 @@ import (
 	"math/rand"
 	"time"
 
-	"golang.org/x/sys/unix"
-
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/rlimit"
 )
+
+const BPF_F_INNER_MAP = 0x1000
 
 func main() {
 	// Allow the current process to lock memory for eBPF resources.
@@ -42,7 +39,7 @@ func main() {
 
 			// This flag is required for dynamically sized inner maps.
 			// Added in linux 5.10.
-			Flags: unix.BPF_F_INNER_MAP,
+			Flags: BPF_F_INNER_MAP,
 
 			// We set this to 1 now, but this inner map spec gets copied
 			// and altered later.

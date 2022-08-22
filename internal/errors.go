@@ -147,8 +147,8 @@ func includePreviousLine(line string) bool {
 // Understood verbs are %s and %v, which are equivalent to calling Error(). %v
 // allows outputting additional information using the following flags:
 //
-//     +   Output the first <width> lines, or all lines if no width is given.
-//     -   Output the last <width> lines, or all lines if no width is given.
+//	%+<width>v: Output the first <width> lines, or all lines if no width is given.
+//	%-<width>v: Output the last <width> lines, or all lines if no width is given.
 //
 // Use width to specify how many lines to output. Use the '-' flag to output
 // lines from the end of the log instead of the beginning.

@@ -56,9 +56,9 @@ func {{ .Name.Load }}() (*ebpf.CollectionSpec, error) {
 //
 // The following types are suitable as obj argument:
 //
-//     *{{ .Name.Objects }}
-//     *{{ .Name.Programs }}
-//     *{{ .Name.Maps }}
+//	*{{ .Name.Objects }}
+//	*{{ .Name.Programs }}
+//	*{{ .Name.Maps }}
 //
 // See ebpf.CollectionSpec.LoadAndAssign documentation for details.
 func {{ .Name.LoadObjects }}(obj interface{}, opts *ebpf.CollectionOptions) (error) {

@@ -56,8 +56,8 @@ func (gf *GoFormatter) enumIdentifier(name, element string) string {
 //
 // It encodes https://golang.org/ref/spec#Type_declarations:
 //
-//     type foo struct { bar uint32; }
-//     type bar int32
+//	type foo struct { bar uint32; }
+//	type bar int32
 func (gf *GoFormatter) writeTypeDecl(name string, typ Type) error {
 	if name == "" {
 		return fmt.Errorf("need a name for type %s", typ)
@@ -102,8 +102,8 @@ func (gf *GoFormatter) writeTypeDecl(name string, typ Type) error {
 //
 // It encodes https://golang.org/ref/spec#Types.
 //
-//     foo                  (if foo is a named type)
-//     uint32
+//	foo                  (if foo is a named type)
+//	uint32
 func (gf *GoFormatter) writeType(typ Type, depth int) error {
 	typ = skipQualifiers(typ)
 
@@ -122,8 +122,8 @@ func (gf *GoFormatter) writeType(typ Type, depth int) error {
 //
 // It encodes https://golang.org/ref/spec#TypeLit.
 //
-//     struct { bar uint32; }
-//     uint32
+//	struct { bar uint32; }
+//	uint32
 func (gf *GoFormatter) writeTypeLit(typ Type, depth int) error {
 	depth++
 	if depth > maxTypeDepth {

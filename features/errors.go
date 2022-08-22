@@ -14,12 +14,12 @@ import (
 // allowing it to intercept and rewrite all returns, regardless of whether
 // or not the return statements use the named return variable.
 //
-//  func foo() (err error) {
-//    defer func() {
-//      err = wrapProbeErrors(err)
-//    }
-//    return errors.New("this error will be wrapped")
-//  }
+//	func foo() (err error) {
+//	  defer func() {
+//	    err = wrapProbeErrors(err)
+//	  }
+//	  return errors.New("this error will be wrapped")
+//	}
 func wrapProbeErrors(err error) error {
 	if err == nil {
 		return nil

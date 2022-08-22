@@ -23,8 +23,8 @@ blocks:
       prologue:
         commands:
           - sudo sh -c 'swapoff -a && fallocate -l 2G /swapfile && chmod 0600 /swapfile && mkswap /swapfile && swapon /swapfile'
-          - sudo mkdir -p /usr/local/golang/1.18 && curl -fL "https://go.dev/dl/go1.18.linux-amd64.tar.gz" | sudo tar -xz -C /usr/local/golang/1.18
-          - sem-version go 1.18
+          - sudo mkdir -p /usr/local/golang/1.19 && curl -fL "https://go.dev/dl/go1.19.linux-amd64.tar.gz" | sudo tar -xz -C /usr/local/golang/1.19
+          - sem-version go 1.19
           - export PATH="$PATH:$(go env GOPATH)/bin"
           - curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin v1.45.0
           - go install gotest.tools/gotestsum@v1.8.1

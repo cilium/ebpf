@@ -73,7 +73,7 @@ func main() {
 
 func formatMapContents(m *ebpf.Map) (string, error) {
 	var (
-		sb strings.Builder
+		sb  strings.Builder
 		key []byte
 		val uint32
 	)

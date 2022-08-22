@@ -134,6 +134,9 @@ func TestType(t *testing.T) {
 				Vars: []VarSecinfo{{Type: &Void{}}},
 			}
 		},
+		func() Type { return &Float{} },
+		func() Type { return &declTag{Type: &Void{}} },
+		func() Type { return &typeTag{Type: &Void{}} },
 		func() Type { return &cycle{&Void{}} },
 	}
 
@@ -331,6 +334,7 @@ func TestUnderlyingType(t *testing.T) {
 		{"volatile", func(t Type) Type { return &Volatile{Type: t} }},
 		{"restrict", func(t Type) Type { return &Restrict{Type: t} }},
 		{"typedef", func(t Type) Type { return &Typedef{Type: t} }},
+		{"type tag", func(t Type) Type { return &typeTag{Type: t} }},
 	}
 
 	for _, test := range wrappers {

@@ -38,10 +38,10 @@ func BPF(cmd Cmd, attr unsafe.Pointer, size uintptr) (uintptr, error) {
 
 // Info is implemented by all structs that can be passed to the ObjInfo syscall.
 //
-//    MapInfo
-//    ProgInfo
-//    LinkInfo
-//    BtfInfo
+//	MapInfo
+//	ProgInfo
+//	LinkInfo
+//	BtfInfo
 type Info interface {
 	info() (unsafe.Pointer, uint32)
 }

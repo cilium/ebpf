@@ -42,9 +42,9 @@ func loadTest() (*ebpf.CollectionSpec, error) {
 //
 // The following types are suitable as obj argument:
 //
-//     *testObjects
-//     *testPrograms
-//     *testMaps
+//	*testObjects
+//	*testPrograms
+//	*testMaps
 //
 // See ebpf.CollectionSpec.LoadAndAssign documentation for details.
 func loadTestObjects(obj interface{}, opts *ebpf.CollectionOptions) error {
@@ -129,5 +129,6 @@ func _TestClose(closers ...io.Closer) error {
 }
 
 // Do not access this directly.
+//
 //go:embed test_bpfeb.o
 var _TestBytes []byte

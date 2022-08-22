@@ -1,6 +1,3 @@
-//go:build linux
-// +build linux
-
 // This program demonstrates attaching an eBPF program to a control group.
 // The eBPF program will be attached as an egress filter,
 // receiving an `__sk_buff` pointer for each outgoing packet.

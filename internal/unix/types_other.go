@@ -27,14 +27,14 @@ const (
 	EACCES = syscall.Errno(0)
 	EILSEQ = syscall.Errno(0)
 
-	BPF_F_NO_PREALLOC        = 0
+	BPF_F_NO_PREALLOC        = 1 << 0
 	BPF_F_NUMA_NODE          = 0
 	BPF_F_RDONLY             = 0
 	BPF_F_WRONLY             = 0
-	BPF_F_RDONLY_PROG        = 0
-	BPF_F_WRONLY_PROG        = 0
+	BPF_F_RDONLY_PROG        = 1 << 7
+	BPF_F_WRONLY_PROG        = 1 << 8
 	BPF_F_SLEEPABLE          = 0
-	BPF_F_MMAPABLE           = 0
+	BPF_F_MMAPABLE           = 1 << 10
 	BPF_F_INNER_MAP          = 0
 	BPF_OBJ_NAME_LEN         = 0x10
 	BPF_TAG_SIZE             = 0x8

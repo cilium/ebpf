@@ -13,6 +13,7 @@ import (
 
 func init() {
 	mc.mapTypes = make(map[ebpf.MapType]error)
+	mc.mapFlags = make(map[uint32]error)
 }
 
 var (
@@ -22,6 +23,7 @@ var (
 type mapCache struct {
 	sync.Mutex
 	mapTypes map[ebpf.MapType]error
+	mapFlags map[uint32]error
 }
 
 func createMapTypeAttr(mt ebpf.MapType) *sys.MapCreateAttr {
@@ -159,6 +161,70 @@ func isStorageMap(mt ebpf.MapType) bool {
 	case ebpf.SkStorage, ebpf.InodeStorage, ebpf.TaskStorage:
 		return true
 	}
-
 	return false
+}
+
+// HaveMapFlag probes the running kernel for the availability of the specified map flag.
+//
+// See the package documentation for the meaning of the error return value.
+func HaveMapFlag(flag uint32) (err error) {
+	defer func() {
+		// This closure modifies a named return variable.
+		err = wrapProbeErrors(err)
+	}()
+
+	return haveMapFlag(flag)
+}
+
+func haveMapFlag(flag uint32) error {
+	mc.Lock()
+	defer mc.Unlock()
+	err, ok := mc.mapFlags[flag]
+	if ok {
+		return err
+	}
+
+	attr, err := createMapFlagTypeAttr(flag)
+	if err != nil {
+		return err
+	}
+
+	fd, err := sys.MapCreate(attr)
+	if err == nil {
+		fd.Close()
+	}
+
+	// EINVAL occurs when attempting to create a map with an unknown type or an unknown flag.
+	if errors.Is(err, unix.EINVAL) {
+		err = ebpf.ErrNotSupported
+	}
+
+	mc.mapFlags[flag] = err
+
+	return err
+}
+
+func createMapFlagTypeAttr(flag uint32) (*sys.MapCreateAttr, error) {
+	a := &sys.MapCreateAttr{
+		KeySize:    4,
+		ValueSize:  4,
+		MaxEntries: 1,
+		MapFlags:   flag,
+	}
+
+	// For now, we do not check if the map type is supported because we only support
+	// probing for flags defined on arrays and hashs that are always supported.
+	// In the future, if we allow probing on flags defined on newer types, checking for map type
+	// support will be required.
+
+	switch flag {
+	case unix.BPF_F_MMAPABLE, unix.BPF_F_INNER_MAP, unix.BPF_F_RDONLY_PROG, unix.BPF_F_WRONLY_PROG:
+		a.MapType = sys.MapType(ebpf.Array)
+		return a, nil
+	case unix.BPF_F_NO_PREALLOC:
+		a.MapType = sys.MapType(ebpf.Hash)
+		return a, nil
+	}
+
+	return nil, errors.New("probe not implemented")
 }

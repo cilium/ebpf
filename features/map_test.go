@@ -66,7 +66,7 @@ func TestHaveMapType(t *testing.T) {
 }
 
 type haveMapFlagsTestEntry struct {
-	flags            uint32
+	flags            MapFlags
 	minKernelVersion string
 	description      string
 }

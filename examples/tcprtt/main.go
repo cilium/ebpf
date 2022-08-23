@@ -1,6 +1,3 @@
-//go:build linux
-// +build linux
-
 // This program demonstrates attaching a fentry eBPF program to
 // tcp_close and reading the RTT from the TCP socket using CO-RE helpers.
 // It prints the IPs/ports/RTT information

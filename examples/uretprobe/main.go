@@ -1,9 +1,9 @@
-//go:build linux
-// +build linux
-
 // This program demonstrates how to attach an eBPF program to a uretprobe.
 // The program will be attached to the 'readline' symbol in the binary '/bin/bash' and print out
 // the line which 'readline' functions returns to the caller.
+
+//go:build amd64
+
 package main
 
 import (
@@ -22,7 +22,7 @@ import (
 )
 
 // $BPF_CLANG and $BPF_CFLAGS are set by the Makefile.
-//go:generate go run github.com/cilium/ebpf/cmd/bpf2go -cc $BPF_CLANG -cflags $BPF_CFLAGS -target native -type event bpf uretprobe.c -- -I../headers
+//go:generate go run github.com/cilium/ebpf/cmd/bpf2go -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64 -type event bpf uretprobe.c -- -I../headers
 
 const (
 	// The path to the ELF binary containing the function to trace.

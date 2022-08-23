@@ -474,7 +474,7 @@ type MapInfo struct {
 	KeySize               uint32
 	ValueSize             uint32
 	MaxEntries            uint32
-	MapFlags              uint32
+	MapFlags              MapFlags
 	Name                  ObjName
 	Ifindex               uint32
 	BtfVmlinuxValueTypeId uint32
@@ -680,7 +680,7 @@ type MapCreateAttr struct {
 	KeySize               uint32
 	ValueSize             uint32
 	MaxEntries            uint32
-	MapFlags              uint32
+	MapFlags              MapFlags
 	InnerMapFd            uint32
 	NumaNode              uint32
 	MapName               ObjName

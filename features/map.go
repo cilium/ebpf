@@ -212,7 +212,7 @@ func createMapFlagTypeAttr(flag MapFlags) (*sys.MapCreateAttr, error) {
 		KeySize:    4,
 		ValueSize:  4,
 		MaxEntries: 1,
-		MapFlags:   uint32(flag),
+		MapFlags:   flag,
 	}
 
 	// For now, we do not check if the map type is supported because we only support

@@ -13,7 +13,7 @@ import (
 
 func init() {
 	mc.mapTypes = make(map[ebpf.MapType]error)
-	mc.mapFlags = make(map[uint32]error)
+	mc.mapFlags = make(map[MapFlags]error)
 }
 
 var (
@@ -23,7 +23,7 @@ var (
 type mapCache struct {
 	sync.Mutex
 	mapTypes map[ebpf.MapType]error
-	mapFlags map[uint32]error
+	mapFlags map[MapFlags]error
 }
 
 func createMapTypeAttr(mt ebpf.MapType) *sys.MapCreateAttr {
@@ -164,10 +164,13 @@ func isStorageMap(mt ebpf.MapType) bool {
 	return false
 }
 
+// MapFlags indicates the flags passed to the kernel during map creation
+type MapFlags = sys.MapFlags
+
 // HaveMapFlag probes the running kernel for the availability of the specified map flag.
 //
 // See the package documentation for the meaning of the error return value.
-func HaveMapFlag(flag uint32) (err error) {
+func HaveMapFlag(flag MapFlags) (err error) {
 	defer func() {
 		// This closure modifies a named return variable.
 		err = wrapProbeErrors(err)
@@ -176,7 +179,7 @@ func HaveMapFlag(flag uint32) (err error) {
 	return haveMapFlag(flag)
 }
 
-func haveMapFlag(flag uint32) error {
+func haveMapFlag(flag MapFlags) error {
 	mc.Lock()
 	defer mc.Unlock()
 	err, ok := mc.mapFlags[flag]
@@ -204,12 +207,12 @@ func haveMapFlag(flag uint32) error {
 	return err
 }
 
-func createMapFlagTypeAttr(flag uint32) (*sys.MapCreateAttr, error) {
+func createMapFlagTypeAttr(flag MapFlags) (*sys.MapCreateAttr, error) {
 	a := &sys.MapCreateAttr{
 		KeySize:    4,
 		ValueSize:  4,
 		MaxEntries: 1,
-		MapFlags:   flag,
+		MapFlags:   uint32(flag),
 	}
 
 	// For now, we do not check if the map type is supported because we only support

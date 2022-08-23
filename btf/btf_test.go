@@ -285,6 +285,19 @@ func TestLoadSpecFromElf(t *testing.T) {
 	})
 }
 
+func TestVerifierError(t *testing.T) {
+	_, err := NewHandle(&Spec{})
+	testutils.SkipIfNotSupported(t, err)
+	var ve *internal.VerifierError
+	if !errors.As(err, &ve) {
+		t.Fatalf("expected a VerifierError, got: %v", err)
+	}
+
+	if ve.Truncated {
+		t.Fatalf("expected non-truncated verifier log: %v", err)
+	}
+}
+
 func TestLoadKernelSpec(t *testing.T) {
 	if _, err := os.Stat("/sys/kernel/btf/vmlinux"); os.IsNotExist(err) {
 		t.Skip("/sys/kernel/btf/vmlinux not present")

@@ -167,6 +167,14 @@ func isStorageMap(mt ebpf.MapType) bool {
 // MapFlags indicates the flags passed to the kernel during map creation
 type MapFlags = sys.MapFlags
 
+const (
+	BPF_F_NO_PREALLOC MapFlags = unix.BPF_F_NO_PREALLOC
+	BPF_F_RDONLY_PROG MapFlags = unix.BPF_F_RDONLY_PROG
+	BPF_F_WRONLY_PROG MapFlags = unix.BPF_F_WRONLY_PROG
+	BPF_F_MMAPABLE    MapFlags = unix.BPF_F_MMAPABLE
+	BPF_F_INNER_MAP   MapFlags = unix.BPF_F_INNER_MAP
+)
+
 // HaveMapFlag probes the running kernel for the availability of the specified map flag.
 //
 // See the package documentation for the meaning of the error return value.

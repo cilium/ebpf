@@ -326,6 +326,7 @@ const (
 	MAX_BPF_LINK_TYPE            LinkType = 9
 )
 
+type MapFlags uint32
 type MapType int32
 
 const (

@@ -9,7 +9,6 @@ import (
 
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/internal/testutils"
-	"github.com/cilium/ebpf/internal/unix"
 )
 
 var mapTypeMinVersion = map[ebpf.MapType]string{
@@ -66,18 +65,18 @@ func TestHaveMapType(t *testing.T) {
 }
 
 type haveMapFlagsTestEntry struct {
-	flags            uint32
+	flags            MapFlags
 	minKernelVersion string
 	description      string
 }
 
 func TestHaveMapFlag(t *testing.T) {
 	mapFlagTestEntries := []haveMapFlagsTestEntry{
-		{unix.BPF_F_RDONLY_PROG, "5.2", "read_only_array_map"},
-		{unix.BPF_F_WRONLY_PROG, "5.2", "write_only_array_map"},
-		{unix.BPF_F_MMAPABLE, "5.5", "mmapable_array_map"},
-		{unix.BPF_F_INNER_MAP, "5.10", "inner_map_array_map"},
-		{unix.BPF_F_NO_PREALLOC, "4.6", "no_prealloc_hash_map"},
+		{BPF_F_RDONLY_PROG, "5.2", "read_only_array_map"},
+		{BPF_F_WRONLY_PROG, "5.2", "write_only_array_map"},
+		{BPF_F_MMAPABLE, "5.5", "mmapable_array_map"},
+		{BPF_F_INNER_MAP, "5.10", "inner_map_array_map"},
+		{BPF_F_NO_PREALLOC, "4.6", "no_prealloc_hash_map"},
 	}
 
 	for _, entry := range mapFlagTestEntries {

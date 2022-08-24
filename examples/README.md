@@ -29,6 +29,8 @@ go run -exec sudo [./kprobe, ./uretprobe, ./ringbuffer, ...]
 
 ## How to recompile
 
+The examples are built via `go generate` invoked by the Makefile in the project root.
+
 ```
-make -C ..
+make -C ../
 ```

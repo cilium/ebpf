@@ -5,9 +5,49 @@
 #include "bpf_endian.h"
 #include "bpf_sockops.h"
 #include "bpf_tracing.h"
-#include "tcprtt_sockops.h"
+
+#define AF_INET 2
+#define SOCKOPS_MAP_SIZE 65535
 
 char __license[] SEC("license") = "Dual MIT/GPL";
+
+enum {
+	SOCK_TYPE_ACTIVE  = 0,
+	SOCK_TYPE_PASSIVE = 1,
+};
+
+struct {
+	__uint(type, BPF_MAP_TYPE_HASH);
+	__uint(max_entries, SOCKOPS_MAP_SIZE);
+	__type(key, struct sk_key);
+	__type(value, struct sk_info);
+} map_estab_sk SEC(".maps");
+
+struct sk_key {
+	u32 local_ip4;
+	u32 remote_ip4;
+	u32 local_port;
+	u32 remote_port;
+};
+
+struct sk_info {
+	struct sk_key sk_key;
+	u8 sk_type;
+};
+
+struct {
+	__uint(type, BPF_MAP_TYPE_RINGBUF);
+	__uint(max_entries, 1 << 24);
+} rtt_events SEC(".maps");
+
+struct rtt_event {
+	u16 sport;
+	u16 dport;
+	u32 saddr;
+	u32 daddr;
+	u32 srtt;
+};
+struct rtt_event *unused_event __attribute__((unused));
 
 static inline void init_sk_key(struct bpf_sock_ops *skops, struct sk_key *sk_key) {
 	sk_key->local_ip4   = bpf_ntohl(skops->local_ip4);
@@ -31,7 +71,8 @@ static inline void bpf_sock_ops_establish_cb(struct bpf_sock_ops *skops, u8 sock
 	// We keep track of TCP connections in 'established' state
 	err = bpf_map_update_elem(&map_estab_sk, &sk_info.sk_key, &sk_info, BPF_NOEXIST);
 	if (err != 0) {
-		bpf_printk("Error in storing sk_key in map");
+		// Storing the 4-tuple in map has failed, return early.
+		// This can happen in case the 4-tuple already exists in the map (i.e. BPF_NOEXIST flag)
 		return;
 	}
 

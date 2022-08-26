@@ -38,7 +38,7 @@ import (
 	"github.com/cilium/ebpf/ringbuf"
 	"github.com/cilium/ebpf/rlimit"
 
-	"github.com/containers/common/pkg/cgroupv2"
+	"golang.org/x/sys/unix"
 )
 
 // $BPF_CLANG and $BPF_CFLAGS are set by the Makefile.
@@ -101,11 +101,13 @@ func main() {
 func findCgroupPath() (string, error) {
 	cgroupPath := "/sys/fs/cgroup"
 
-	enabled, err := cgroupv2.Enabled()
+	var st syscall.Statfs_t
+	err := syscall.Statfs(cgroupPath, &st)
 	if err != nil {
 		return "", err
 	}
-	if !enabled {
+	isCgroupV2Enabled := st.Type == unix.CGROUP2_SUPER_MAGIC
+	if !isCgroupV2Enabled {
 		cgroupPath = filepath.Join(cgroupPath, "unified")
 	}
 	return cgroupPath, nil

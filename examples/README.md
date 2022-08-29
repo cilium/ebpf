@@ -12,6 +12,7 @@
   * [tracepoint_in_go](tracepoint_in_go/) - Tracepoint using the `ebpf.NewProgram` API and Go eBPF assembler.
 * Cgroup - Attach a program to control groups (cgroups).
   * [cgroup_skb](cgroup_skb/) - Count packets egressing the current cgroup.
+  * [tcprtt_sockops](tcprtt_sockops/) - Log RTT of IPv4 TCP connections using eBPF sockops.
 * Fentry - Attach a program to the entrypoint of a kernel function.
   Like kprobes, but with better performance and usability, for kernels 5.5 and later.
   * [tcp_connect](fentry/) - Trace outgoing IPv4 TCP connections.

@@ -81,6 +81,7 @@ func run(stdout io.Writer, pkg, outputDir string, args []string) (err error) {
 	fs.StringVar(&b2g.makeBase, "makebase", "", "write make compatible depinfo files relative to `directory`")
 	fs.Var(&b2g.cTypes, "type", "`Name` of a type to generate a Go declaration for, may be repeated")
 	fs.BoolVar(&b2g.skipGlobalTypes, "no-global-types", false, "Skip generating types for map keys and values, etc.")
+	fs.StringVar(&b2g.filenameStem, "filename-stem", "", "alternative stem for names of generated files (defaults to ident)")
 
 	fs.SetOutput(stdout)
 	fs.Usage = func() {
@@ -259,6 +260,8 @@ type bpf2go struct {
 	// Base directory of the Makefile. Enables outputting make-style dependencies
 	// in .d files.
 	makeBase string
+	// Alternative filename stem. If empty, ident is used.
+	filenameStem string
 }
 
 func (b2g *bpf2go) convert(tgt target, arches []string) (err error) {
@@ -269,9 +272,13 @@ func (b2g *bpf2go) convert(tgt target, arches []string) (err error) {
 		f.Close()
 	}
 
-	stem := fmt.Sprintf("%s_%s", strings.ToLower(b2g.ident), tgt.clang)
+	filenameStem := b2g.filenameStem
+	if filenameStem == "" {
+		filenameStem = b2g.ident
+	}
+	stem := fmt.Sprintf("%s_%s", strings.ToLower(filenameStem), tgt.clang)
 	if tgt.linux != "" {
-		stem = fmt.Sprintf("%s_%s_%s", strings.ToLower(b2g.ident), tgt.clang, tgt.linux)
+		stem = fmt.Sprintf("%s_%s_%s", strings.ToLower(filenameStem), tgt.clang, tgt.linux)
 	}
 
 	objFileName := filepath.Join(b2g.outputDir, stem+".o")

@@ -66,7 +66,7 @@ func compile(args compileArgs) error {
 		"-fdebug-compilation-dir", ".",
 		// We always want BTF to be generated, so enforce debug symbols
 		"-g",
-		fmt.Sprintf("-D__BPF_TARGET_MISSING=%q", "GCC error \"The eBPF is using target specific macros, please provide -target\""),
+		fmt.Sprintf("-D__BPF_TARGET_MISSING=%q", "GCC error \"The eBPF is using target specific macros, please provide -target that is not bpf, bpfel or bpfeb\""),
 	)
 	cmd.Dir = args.dir
 

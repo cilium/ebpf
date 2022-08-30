@@ -164,9 +164,10 @@ func isStorageMap(mt ebpf.MapType) bool {
 	return false
 }
 
-// MapFlags indicates the flags passed to the kernel during map creation
+// MapFlags document which flags may be feature probed.
 type MapFlags = sys.MapFlags
 
+// Flags which may be feature probed.
 const (
 	BPF_F_NO_PREALLOC MapFlags = unix.BPF_F_NO_PREALLOC
 	BPF_F_RDONLY_PROG MapFlags = unix.BPF_F_RDONLY_PROG
@@ -177,6 +178,7 @@ const (
 
 // HaveMapFlag probes the running kernel for the availability of the specified map flag.
 //
+// Returns an error if flag is not one of the flags declared in this package.
 // See the package documentation for the meaning of the error return value.
 func HaveMapFlag(flag MapFlags) (err error) {
 	defer func() {

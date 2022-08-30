@@ -121,7 +121,6 @@ import (
 		{"HdrStartOff", "bpf_hdr_start_off"},
 		{"RetCode", "bpf_ret_code"},
 		{"XdpAction", "xdp_action"},
-		{"MapFlags", ""},
 	}
 
 	sort.Slice(enums, func(i, j int) bool {
@@ -132,16 +131,9 @@ import (
 	for _, o := range enums {
 		fmt.Println("enum", o.goType)
 
-		var t btf.Type
-		if o.cType != "" {
-			var enumTy *btf.Enum
-			if err := spec.TypeByName(o.cType, &enumTy); err != nil {
-				return nil, err
-			}
-			t = enumTy
-		} else {
-			// in the case of an anonymous enum, we default to an uin32
-			t = &btf.Int{Size: 4}
+		var t *btf.Enum
+		if err := spec.TypeByName(o.cType, &t); err != nil {
+			return nil, err
 		}
 
 		// Add the enum as a predeclared type so that generated structs

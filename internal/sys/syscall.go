@@ -110,6 +110,9 @@ type LinkID uint32
 // BTFID uniquely identifies a BTF blob loaded into the kernel.
 type BTFID uint32
 
+// MapFlags control map behaviour.
+type MapFlags uint32
+
 // wrappedErrno wraps syscall.Errno to prevent direct comparisons with
 // syscall.E* or unix.E* constants.
 //

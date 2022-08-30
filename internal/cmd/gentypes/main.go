@@ -66,6 +66,7 @@ func generateTypes(spec *btf.Spec) ([]byte, error) {
 	btfID := &btf.Int{Size: 4}
 	pointer := &btf.Int{Size: 8}
 	logLevel := &btf.Int{Size: 4}
+	mapFlags := &btf.Int{Size: 4}
 
 	// Pre-declare handwritten types so that generated types can refer to them.
 	var (
@@ -74,6 +75,7 @@ func generateTypes(spec *btf.Spec) ([]byte, error) {
 		_ sys.BTFID
 		_ sys.Pointer
 		_ sys.LogLevel
+		_ sys.MapFlags
 	)
 
 	gf := &btf.GoFormatter{
@@ -83,6 +85,7 @@ func generateTypes(spec *btf.Spec) ([]byte, error) {
 			btfID:    "BTFID",
 			pointer:  "Pointer",
 			logLevel: "LogLevel",
+			mapFlags: "MapFlags",
 		},
 		Identifier: internal.Identifier,
 		EnumIdentifier: func(name, element string) string {
@@ -167,7 +170,10 @@ import (
 		},
 		{
 			"MapInfo", "bpf_map_info",
-			[]patch{replace(objName, "name")},
+			[]patch{
+				replace(objName, "name"),
+				replace(mapFlags, "map_flags"),
+			},
 		},
 		{
 			"BtfInfo", "bpf_btf_info",
@@ -228,6 +234,7 @@ import (
 			[]patch{
 				replace(objName, "map_name"),
 				replace(enumTypes["MapType"], "map_type"),
+				replace(mapFlags, "map_flags"),
 			},
 		},
 		{

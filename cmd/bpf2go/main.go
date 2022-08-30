@@ -77,7 +77,7 @@ func run(stdout io.Writer, pkg, outputDir string, args []string) (err error) {
 	fs.BoolVar(&b2g.disableStripping, "no-strip", false, "disable stripping of DWARF")
 	flagCFlags := fs.String("cflags", "", "flags passed to the compiler, may contain quoted arguments")
 	fs.StringVar(&b2g.tags, "tags", "", "list of Go build tags to include in generated files")
-	flagTarget := fs.String("target", "bpfel,bpfeb", "clang target to compile for")
+	flagTarget := fs.String("target", "bpfel,bpfeb", "clang target(s) to compile for (comma separated)")
 	fs.StringVar(&b2g.makeBase, "makebase", "", "write make compatible depinfo files relative to `directory`")
 	fs.Var(&b2g.cTypes, "type", "`Name` of a type to generate a Go declaration for, may be repeated")
 	fs.BoolVar(&b2g.skipGlobalTypes, "no-global-types", false, "Skip generating types for map keys and values, etc.")

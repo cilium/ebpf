@@ -1,7 +1,6 @@
 package link
 
 import (
-	"bytes"
 	"crypto/rand"
 	"errors"
 	"fmt"
@@ -9,7 +8,6 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
-	"sync"
 	"syscall"
 	"unsafe"
 
@@ -20,12 +18,6 @@ import (
 
 var (
 	kprobeEventsPath = filepath.Join(tracefsPath, "kprobe_events")
-
-	kprobeRetprobeBit = struct {
-		once  sync.Once
-		value uint64
-		err   error
-	}{}
 )
 
 type probeType uint8
@@ -81,13 +73,6 @@ func (pt probeType) PerfEventType(ret bool) perfEventType {
 		return uretprobeEvent
 	}
 	return uprobeEvent
-}
-
-func (pt probeType) RetprobeBit() (uint64, error) {
-	if pt == kprobeType {
-		return kretprobeBit()
-	}
-	return uretprobeBit()
 }
 
 // Kprobe attaches the given eBPF program to a perf event that fires when the
@@ -238,14 +223,17 @@ func pmuKprobe(args probeArgs) (*perfEvent, error) {
 func pmuProbe(typ probeType, args probeArgs) (*perfEvent, error) {
 	// Getting the PMU type will fail if the kernel doesn't support
 	// the perf_[k,u]probe PMU.
-	et, err := getPMUEventType(typ)
+	et, err := readUint64FromFileOnce("%d\n", "/sys/bus/event_source/devices", typ.String(), "type")
+	if errors.Is(err, os.ErrNotExist) {
+		return nil, fmt.Errorf("%s: %w", typ, ErrNotSupported)
+	}
 	if err != nil {
 		return nil, err
 	}
 
 	var config uint64
 	if args.ret {
-		bit, err := typ.RetprobeBit()
+		bit, err := readUint64FromFileOnce("config:%d\n", "/sys/bus/event_source/devices", typ.String(), "/format/retprobe")
 		if err != nil {
 			return nil, err
 		}
@@ -534,35 +522,6 @@ func probePrefix(ret bool) string {
 		return "r"
 	}
 	return "p"
-}
-
-// determineRetprobeBit reads a Performance Monitoring Unit's retprobe bit
-// from /sys/bus/event_source/devices/<pmu>/format/retprobe.
-func determineRetprobeBit(typ probeType) (uint64, error) {
-	p := filepath.Join("/sys/bus/event_source/devices/", typ.String(), "/format/retprobe")
-
-	data, err := os.ReadFile(p)
-	if err != nil {
-		return 0, err
-	}
-
-	var rp uint64
-	n, err := fmt.Sscanf(string(bytes.TrimSpace(data)), "config:%d", &rp)
-	if err != nil {
-		return 0, fmt.Errorf("parse retprobe bit: %w", err)
-	}
-	if n != 1 {
-		return 0, fmt.Errorf("parse retprobe bit: expected 1 item, got %d", n)
-	}
-
-	return rp, nil
-}
-
-func kretprobeBit() (uint64, error) {
-	kprobeRetprobeBit.once.Do(func() {
-		kprobeRetprobeBit.value, kprobeRetprobeBit.err = determineRetprobeBit(kprobeType)
-	})
-	return kprobeRetprobeBit.value, kprobeRetprobeBit.err
 }
 
 // kprobeToken creates the SYM[+offs] token for the tracefs api.

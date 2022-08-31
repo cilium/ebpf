@@ -2,27 +2,11 @@ package link
 
 import (
 	"errors"
-	"os"
 	"testing"
 
 	"github.com/cilium/ebpf/internal/testutils"
 	qt "github.com/frankban/quicktest"
 )
-
-func TestTraceEventTypePMU(t *testing.T) {
-	// Requires at least 4.17 (e12f03d7031a "perf/core: Implement the 'perf_kprobe' PMU")
-	testutils.SkipOnOldKernel(t, "4.17", "perf_kprobe PMU")
-
-	c := qt.New(t)
-
-	et, err := getPMUEventType(kprobeType)
-	c.Assert(err, qt.IsNil)
-	c.Assert(et, qt.Not(qt.Equals), 0)
-
-	et, err = getPMUEventType(uprobeType)
-	c.Assert(err, qt.IsNil)
-	c.Assert(et, qt.Not(qt.Equals), 0)
-}
 
 func TestTraceEventID(t *testing.T) {
 	c := qt.New(t)
@@ -32,15 +16,15 @@ func TestTraceEventID(t *testing.T) {
 	c.Assert(eid, qt.Not(qt.Equals), 0)
 }
 
-func TestTraceReadID(t *testing.T) {
-	_, err := uint64FromFile("/base/path/", "../escaped")
+func TestSanitizePath(t *testing.T) {
+	_, err := sanitizePath("/base/path/", "../escaped")
 	if !errors.Is(err, errInvalidInput) {
 		t.Errorf("expected error %s, got: %s", errInvalidInput, err)
 	}
 
-	_, err = uint64FromFile("/base/path/not", "../not/escaped")
-	if !errors.Is(err, os.ErrNotExist) {
-		t.Errorf("expected os.ErrNotExist, got: %s", err)
+	_, err = sanitizePath("/base/path/not", "../not/escaped")
+	if err != nil {
+		t.Errorf("expected no error, got: %s", err)
 	}
 }
 

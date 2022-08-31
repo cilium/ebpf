@@ -307,19 +307,6 @@ func TestKprobeTraceFSGroup(t *testing.T) {
 	c.Assert(err, qt.Not(qt.IsNil))
 }
 
-func TestDetermineRetprobeBit(t *testing.T) {
-	testutils.SkipOnOldKernel(t, "4.17", "perf_kprobe PMU")
-	c := qt.New(t)
-
-	rpk, err := kretprobeBit()
-	c.Assert(err, qt.IsNil)
-	c.Assert(rpk, qt.Equals, uint64(0))
-
-	rpu, err := uretprobeBit()
-	c.Assert(err, qt.IsNil)
-	c.Assert(rpu, qt.Equals, uint64(0))
-}
-
 func TestKprobeProgramCall(t *testing.T) {
 	m, p := newUpdaterMapProg(t, ebpf.Kprobe)
 

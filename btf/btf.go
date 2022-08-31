@@ -786,7 +786,7 @@ func marshalBTF(types interface{}, strings []byte, bo binary.ByteOrder) []byte {
 	return buf.Bytes()
 }
 
-var haveBTF = internal.FeatureTest("BTF", "5.1", func() error {
+var haveBTF = internal.NewFeatureTest("BTF", "5.1", func() error {
 	var (
 		types struct {
 			Integer btfType
@@ -823,7 +823,7 @@ var haveBTF = internal.FeatureTest("BTF", "5.1", func() error {
 	return nil
 })
 
-var haveFuncLinkage = internal.FeatureTest("BTF func linkage", "5.6", func() error {
+var haveFuncLinkage = internal.NewFeatureTest("BTF func linkage", "5.6", func() error {
 	if err := haveBTF(); err != nil {
 		return err
 	}

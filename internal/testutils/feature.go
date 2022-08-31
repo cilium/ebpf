@@ -17,9 +17,10 @@ func MustKernelVersion() internal.Version {
 }
 
 func CheckFeatureTest(t *testing.T, fn func() error) {
-	t.Helper()
+	checkFeatureTestError(t, fn())
+}
 
-	err := fn()
+func checkFeatureTestError(t *testing.T, err error) {
 	if err == nil {
 		return
 	}
@@ -29,6 +30,16 @@ func CheckFeatureTest(t *testing.T, fn func() error) {
 		checkKernelVersion(t, ufe)
 	} else {
 		t.Error("Feature test failed:", err)
+	}
+}
+
+func CheckFeatureMatrix[K comparable](t *testing.T, fm internal.FeatureMatrix[K]) {
+	t.Helper()
+
+	for key, ft := range fm {
+		t.Run(ft.Name, func(t *testing.T) {
+			checkFeatureTestError(t, fm.Result(key))
+		})
 	}
 }
 

@@ -12,40 +12,6 @@ import (
 	"github.com/cilium/ebpf/internal/testutils"
 )
 
-var progTypeMinVersion = map[ebpf.ProgramType]string{
-	ebpf.SocketFilter:          "3.19",
-	ebpf.Kprobe:                "4.1",
-	ebpf.SchedCLS:              "4.1",
-	ebpf.SchedACT:              "4.1",
-	ebpf.TracePoint:            "4.7",
-	ebpf.XDP:                   "4.8",
-	ebpf.PerfEvent:             "4.9",
-	ebpf.CGroupSKB:             "4.10",
-	ebpf.CGroupSock:            "4.10",
-	ebpf.LWTIn:                 "4.10",
-	ebpf.LWTOut:                "4.10",
-	ebpf.LWTXmit:               "4.10",
-	ebpf.SockOps:               "4.13",
-	ebpf.SkSKB:                 "4.14",
-	ebpf.CGroupDevice:          "4.15",
-	ebpf.SkMsg:                 "4.17",
-	ebpf.RawTracepoint:         "4.17",
-	ebpf.CGroupSockAddr:        "4.17",
-	ebpf.LWTSeg6Local:          "4.18",
-	ebpf.LircMode2:             "4.18",
-	ebpf.SkReuseport:           "4.19",
-	ebpf.FlowDissector:         "4.20",
-	ebpf.CGroupSysctl:          "5.2",
-	ebpf.RawTracepointWritable: "5.2",
-	ebpf.CGroupSockopt:         "5.3",
-	ebpf.Tracing:               "5.5",
-	ebpf.StructOps:             "5.6",
-	ebpf.Extension:             "5.6",
-	ebpf.LSM:                   "5.7",
-	ebpf.SkLookup:              "5.9",
-	ebpf.Syscall:               "5.14",
-}
-
 func TestHaveProgramType(t *testing.T) {
 	testutils.CheckFeatureMatrix(t, haveProgramTypeMatrix)
 }
@@ -97,26 +63,10 @@ func TestHaveProgramHelper(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		minVersion := progTypeMinVersion[tc.prog]
-
-		progVersion, err := internal.NewVersion(minVersion)
-		if err != nil {
-			t.Fatalf("Could not read kernel version required for program: %v", err)
-		}
-
-		helperVersion, err := internal.NewVersion(tc.version)
-		if err != nil {
-			t.Fatalf("Could not read kernel version required for helper: %v", err)
-		}
-
-		if progVersion.Less(helperVersion) {
-			minVersion = tc.version
-		}
-
 		t.Run(fmt.Sprintf("%s/%s", tc.prog.String(), tc.helper.String()), func(t *testing.T) {
 			feature := fmt.Sprintf("helper %s for program type %s", tc.helper.String(), tc.prog.String())
 
-			testutils.SkipOnOldKernel(t, minVersion, feature)
+			testutils.SkipOnOldKernel(t, tc.version, feature)
 
 			err := HaveProgramHelper(tc.prog, tc.helper)
 			if !errors.Is(err, tc.expected) {
@@ -129,14 +79,9 @@ func TestHaveProgramHelper(t *testing.T) {
 }
 
 func TestHaveProgramHelperUnsupported(t *testing.T) {
-	pt := ebpf.SocketFilter
-	minVersion := progTypeMinVersion[pt]
+	testutils.SkipIfNotSupported(t, HaveProgramType(ebpf.SocketFilter))
 
-	feature := fmt.Sprintf("program type %s", pt.String())
-
-	testutils.SkipOnOldKernel(t, minVersion, feature)
-
-	if err := haveProgramHelper(pt, asm.BuiltinFunc(math.MaxInt32)); !errors.Is(err, ebpf.ErrNotSupported) {
+	if err := haveProgramHelper(ebpf.SocketFilter, asm.BuiltinFunc(math.MaxInt32)); !errors.Is(err, ebpf.ErrNotSupported) {
 		t.Fatalf("Expected ebpf.ErrNotSupported but was: %v", err)
 	}
 }

@@ -7,13 +7,13 @@ import (
 	"unsafe"
 
 	"github.com/cilium/ebpf"
+	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/sys"
 	"github.com/cilium/ebpf/internal/unix"
 )
 
 func init() {
 	mc.mapTypes = make(map[ebpf.MapType]error)
-	mc.mapFlags = make(map[MapFlags]error)
 }
 
 var (
@@ -23,7 +23,6 @@ var (
 type mapCache struct {
 	sync.Mutex
 	mapTypes map[ebpf.MapType]error
-	mapFlags map[MapFlags]error
 }
 
 func createMapTypeAttr(mt ebpf.MapType) *sys.MapCreateAttr {
@@ -181,63 +180,78 @@ const (
 // Returns an error if flag is not one of the flags declared in this package.
 // See the package documentation for the meaning of the error return value.
 func HaveMapFlag(flag MapFlags) (err error) {
-	defer func() {
-		// This closure modifies a named return variable.
-		err = wrapProbeErrors(err)
-	}()
-
-	return haveMapFlag(flag)
+	return haveMapFlagsMatrix.Result(flag)
 }
 
-func haveMapFlag(flag MapFlags) error {
-	mc.Lock()
-	defer mc.Unlock()
-	err, ok := mc.mapFlags[flag]
-	if ok {
-		return err
-	}
-
-	attr, err := createMapFlagTypeAttr(flag)
-	if err != nil {
-		return err
-	}
-
-	fd, err := sys.MapCreate(attr)
-	if err == nil {
-		fd.Close()
-	}
-
-	// EINVAL occurs when attempting to create a map with an unknown type or an unknown flag.
-	if errors.Is(err, unix.EINVAL) {
-		err = ebpf.ErrNotSupported
-	}
-
-	mc.mapFlags[flag] = err
-
-	return err
-}
-
-func createMapFlagTypeAttr(flag MapFlags) (*sys.MapCreateAttr, error) {
-	a := &sys.MapCreateAttr{
-		KeySize:    4,
-		ValueSize:  4,
-		MaxEntries: 1,
-		MapFlags:   flag,
-	}
-
+func probeMapFlag(attr *sys.MapCreateAttr) error {
 	// For now, we do not check if the map type is supported because we only support
 	// probing for flags defined on arrays and hashs that are always supported.
 	// In the future, if we allow probing on flags defined on newer types, checking for map type
 	// support will be required.
-
-	switch flag {
-	case unix.BPF_F_MMAPABLE, unix.BPF_F_INNER_MAP, unix.BPF_F_RDONLY_PROG, unix.BPF_F_WRONLY_PROG:
-		a.MapType = sys.MapType(ebpf.Array)
-		return a, nil
-	case unix.BPF_F_NO_PREALLOC:
-		a.MapType = sys.MapType(ebpf.Hash)
-		return a, nil
+	if attr.MapType == sys.BPF_MAP_TYPE_UNSPEC {
+		attr.MapType = sys.BPF_MAP_TYPE_ARRAY
 	}
 
-	return nil, errors.New("probe not implemented")
+	attr.KeySize = 4
+	attr.ValueSize = 4
+	attr.MaxEntries = 1
+
+	fd, err := sys.MapCreate(attr)
+	if err == nil {
+		fd.Close()
+	} else if errors.Is(err, unix.EINVAL) {
+		// EINVAL occurs when attempting to create a map with an unknown type or an unknown flag.
+		err = ebpf.ErrNotSupported
+	}
+
+	return err
+}
+
+var haveMapFlagsMatrix = internal.FeatureMatrix[MapFlags]{
+	BPF_F_NO_PREALLOC: {
+		Name:    "BPF_F_NO_PREALLOC",
+		Version: "4.6",
+		Fn: func() error {
+			return probeMapFlag(&sys.MapCreateAttr{
+				MapType:  sys.BPF_MAP_TYPE_HASH,
+				MapFlags: BPF_F_NO_PREALLOC,
+			})
+		},
+	},
+	BPF_F_RDONLY_PROG: {
+		Name:    "BPF_F_RDONLY_PROG",
+		Version: "5.2",
+		Fn: func() error {
+			return probeMapFlag(&sys.MapCreateAttr{
+				MapFlags: BPF_F_RDONLY_PROG,
+			})
+		},
+	},
+	BPF_F_WRONLY_PROG: {
+		Name:    "BPF_F_WRONLY_PROG",
+		Version: "5.2",
+		Fn: func() error {
+			return probeMapFlag(&sys.MapCreateAttr{
+				MapFlags: BPF_F_WRONLY_PROG,
+			})
+		},
+	},
+	BPF_F_MMAPABLE: {
+		Name:    "BPF_F_MMAPABLE",
+		Version: "5.5",
+		Fn: func() error {
+			return probeMapFlag(&sys.MapCreateAttr{
+				MapFlags: BPF_F_MMAPABLE,
+			})
+		},
+	},
+	BPF_F_INNER_MAP: {
+		Name:    "BPF_F_INNER_MAP",
+		Version: "5.10",
+		Fn: func() error {
+			return probeMapFlag(&sys.MapCreateAttr{
+				MapFlags: BPF_F_INNER_MAP,
+			})
+		},
+	},
 }

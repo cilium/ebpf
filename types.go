@@ -11,11 +11,6 @@ import (
 // that will be initialized in the kernel.
 type MapType uint32
 
-// Max returns the latest supported MapType.
-func (MapType) Max() MapType {
-	return maxMapType - 1
-}
-
 // All the various map types that can be created
 const (
 	UnspecifiedMap MapType = iota
@@ -100,8 +95,6 @@ const (
 	InodeStorage
 	// TaskStorage - Specialized local storage map for task_struct.
 	TaskStorage
-	// maxMapType - Bound enum of MapTypes, has to be last in enum.
-	maxMapType
 )
 
 // hasPerCPUValue returns true if the Map stores a value per CPU.

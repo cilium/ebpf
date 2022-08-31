@@ -25,7 +25,7 @@ const (
 	PerfEventType     = sys.BPF_LINK_TYPE_PERF_EVENT
 )
 
-var haveProgAttach = internal.FeatureTest("BPF_PROG_ATTACH", "4.10", func() error {
+var haveProgAttach = internal.NewFeatureTest("BPF_PROG_ATTACH", "4.10", func() error {
 	prog, err := ebpf.NewProgram(&ebpf.ProgramSpec{
 		Type:    ebpf.CGroupSKB,
 		License: "MIT",
@@ -45,7 +45,7 @@ var haveProgAttach = internal.FeatureTest("BPF_PROG_ATTACH", "4.10", func() erro
 	return nil
 })
 
-var haveProgAttachReplace = internal.FeatureTest("BPF_PROG_ATTACH atomic replacement", "5.5", func() error {
+var haveProgAttachReplace = internal.NewFeatureTest("BPF_PROG_ATTACH atomic replacement", "5.5", func() error {
 	if err := haveProgAttach(); err != nil {
 		return err
 	}
@@ -85,7 +85,7 @@ var haveProgAttachReplace = internal.FeatureTest("BPF_PROG_ATTACH atomic replace
 	return err
 })
 
-var haveBPFLink = internal.FeatureTest("bpf_link", "5.7", func() error {
+var haveBPFLink = internal.NewFeatureTest("bpf_link", "5.7", func() error {
 	attr := sys.LinkCreateAttr{
 		// This is a hopefully invalid file descriptor, which triggers EBADF.
 		TargetFd:   ^uint32(0),

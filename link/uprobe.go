@@ -7,7 +7,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"sync"
 
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/internal"
@@ -15,12 +14,6 @@ import (
 
 var (
 	uprobeEventsPath = filepath.Join(tracefsPath, "uprobe_events")
-
-	uprobeRetprobeBit = struct {
-		once  sync.Once
-		value uint64
-		err   error
-	}{}
 
 	uprobeRefCtrOffsetPMUPath = "/sys/bus/event_source/devices/uprobe/format/ref_ctr_offset"
 	// elixir.bootlin.com/linux/v5.15-rc7/source/kernel/events/core.c#L9799
@@ -363,11 +356,4 @@ func uprobeToken(args probeArgs) string {
 	}
 
 	return po
-}
-
-func uretprobeBit() (uint64, error) {
-	uprobeRetprobeBit.once.Do(func() {
-		uprobeRetprobeBit.value, uprobeRetprobeBit.err = determineRetprobeBit(uprobeType)
-	})
-	return uprobeRetprobeBit.value, uprobeRetprobeBit.err
 }

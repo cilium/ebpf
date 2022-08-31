@@ -84,8 +84,8 @@ func probeMisc(mt miscType) (err error) {
 		err = wrapProbeErrors(err)
 	}()
 
-	mc.Lock()
-	defer mc.Unlock()
+	miscs.Lock()
+	defer miscs.Unlock()
 	err, ok := miscs.miscTypes[mt]
 	if ok {
 		return err

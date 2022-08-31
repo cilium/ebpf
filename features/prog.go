@@ -15,7 +15,6 @@ import (
 )
 
 func init() {
-	pc.types = make(map[ebpf.ProgramType]error)
 	pc.helpers = make(map[ebpf.ProgramType]map[asm.BuiltinFunc]error)
 	allocHelperCache()
 }
@@ -31,9 +30,6 @@ var (
 )
 
 type progCache struct {
-	typeMu sync.Mutex
-	types  map[ebpf.ProgramType]error
-
 	helperMu sync.Mutex
 	helpers  map[ebpf.ProgramType]map[asm.BuiltinFunc]error
 }
@@ -102,17 +98,7 @@ var HaveProgType = HaveProgramType
 //
 // See the package documentation for the meaning of the error return value.
 func HaveProgramType(pt ebpf.ProgramType) (err error) {
-	defer func() {
-		// This closure modifies a named return variable.
-		err = wrapProbeErrors(err)
-	}()
-
-	if err := validateProgramType(pt); err != nil {
-		return err
-	}
-
-	return haveProgramType(pt)
-
+	return haveProgramTypeMatrix.Result(pt)
 }
 
 func validateProgramType(pt ebpf.ProgramType) error {
@@ -130,21 +116,18 @@ func validateProgramType(pt ebpf.ProgramType) error {
 	return nil
 }
 
-func haveProgramType(pt ebpf.ProgramType) error {
-	pc.typeMu.Lock()
-	defer pc.typeMu.Unlock()
-	if err, ok := pc.types[pt]; ok {
-		return err
+func probeProgram(spec *ebpf.ProgramSpec) error {
+	if spec.Instructions == nil {
+		spec.Instructions = asm.Instructions{
+			asm.LoadImm(asm.R0, 0, asm.DWord),
+			asm.Return(),
+		}
 	}
-
-	attr, err := createProgLoadAttr(pt, asm.FnUnspec)
-	if err != nil {
-		return fmt.Errorf("couldn't create the program load attribute: %w", err)
-	}
-
-	fd, err := sys.ProgLoad(attr)
-	if fd != nil {
-		fd.Close()
+	prog, err := ebpf.NewProgramWithOptions(spec, ebpf.ProgramOptions{
+		LogDisabled: true,
+	})
+	if err == nil {
+		prog.Close()
 	}
 
 	switch {
@@ -154,17 +137,98 @@ func haveProgramType(pt ebpf.ProgramType) error {
 	// to support the given prog type.
 	case errors.Is(err, unix.EINVAL), errors.Is(err, unix.E2BIG):
 		err = ebpf.ErrNotSupported
-
-	// ENOTSUPP means the program type is at least known to the kernel.
-	case errors.Is(err, sys.ENOTSUPP):
-		if pt == ebpf.StructOps {
-			err = nil
-		}
 	}
 
-	pc.types[pt] = err
-
 	return err
+}
+
+var haveProgramTypeMatrix = internal.FeatureMatrix[ebpf.ProgramType]{
+	ebpf.SocketFilter:  {Version: "3.19"},
+	ebpf.Kprobe:        {Version: "4.1"},
+	ebpf.SchedCLS:      {Version: "4.1"},
+	ebpf.SchedACT:      {Version: "4.1"},
+	ebpf.TracePoint:    {Version: "4.7"},
+	ebpf.XDP:           {Version: "4.8"},
+	ebpf.PerfEvent:     {Version: "4.9"},
+	ebpf.CGroupSKB:     {Version: "4.10"},
+	ebpf.CGroupSock:    {Version: "4.10"},
+	ebpf.LWTIn:         {Version: "4.10"},
+	ebpf.LWTOut:        {Version: "4.10"},
+	ebpf.LWTXmit:       {Version: "4.10"},
+	ebpf.SockOps:       {Version: "4.13"},
+	ebpf.SkSKB:         {Version: "4.14"},
+	ebpf.CGroupDevice:  {Version: "4.15"},
+	ebpf.SkMsg:         {Version: "4.17"},
+	ebpf.RawTracepoint: {Version: "4.17"},
+	ebpf.CGroupSockAddr: {
+		Version: "4.17",
+		Fn: func() error {
+			return probeProgram(&ebpf.ProgramSpec{
+				Type:       ebpf.CGroupSockAddr,
+				AttachType: ebpf.AttachCGroupInet4Connect,
+			})
+		},
+	},
+	ebpf.LWTSeg6Local:          {Version: "4.18"},
+	ebpf.LircMode2:             {Version: "4.18"},
+	ebpf.SkReuseport:           {Version: "4.19"},
+	ebpf.FlowDissector:         {Version: "4.20"},
+	ebpf.CGroupSysctl:          {Version: "5.2"},
+	ebpf.RawTracepointWritable: {Version: "5.2"},
+	ebpf.CGroupSockopt: {
+		Version: "5.3",
+		Fn: func() error {
+			return probeProgram(&ebpf.ProgramSpec{
+				Type:       ebpf.CGroupSockopt,
+				AttachType: ebpf.AttachCGroupGetsockopt,
+			})
+		},
+	},
+	// ebpf.Tracing:               {Version: "5.5"},
+	ebpf.StructOps: {
+		Version: "5.6",
+		Fn: func() error {
+			err := probeProgram(&ebpf.ProgramSpec{
+				Type:    ebpf.StructOps,
+				License: "GPL",
+			})
+			if errors.Is(err, sys.ENOTSUPP) {
+				// ENOTSUPP means the program type is at least known to the kernel.
+				return nil
+			}
+			return err
+		},
+	},
+	// ebpf.Extension:             {Version: "5.6"},
+	// ebpf.LSM:                   {Version: "5.7"},
+	ebpf.SkLookup: {
+		Version: "5.9",
+		Fn: func() error {
+			return probeProgram(&ebpf.ProgramSpec{
+				Type:       ebpf.SkLookup,
+				AttachType: ebpf.AttachSkLookup,
+			})
+		},
+	},
+	ebpf.Syscall: {
+		Version: "5.14",
+		Fn: func() error {
+			return probeProgram(&ebpf.ProgramSpec{
+				Type:  ebpf.Syscall,
+				Flags: unix.BPF_F_SLEEPABLE,
+			})
+		},
+	},
+}
+
+func init() {
+	for key, ft := range haveProgramTypeMatrix {
+		ft.Name = key.String()
+		if ft.Fn == nil {
+			key := key // avoid the dreaded loop variable problem
+			ft.Fn = func() error { return probeProgram(&ebpf.ProgramSpec{Type: key}) }
+		}
+	}
 }
 
 // HaveProgramHelper probes the running kernel for the availability of the specified helper

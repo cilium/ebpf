@@ -138,7 +138,7 @@ func (kml *kprobeMultiLink) Unpin() error {
 	return fmt.Errorf("unpin kprobe_multi: %w", ErrNotSupported)
 }
 
-var haveBPFLinkKprobeMulti = internal.FeatureTest("bpf_link_kprobe_multi", "5.18", func() error {
+var haveBPFLinkKprobeMulti = internal.NewFeatureTest("bpf_link_kprobe_multi", "5.18", func() error {
 	prog, err := ebpf.NewProgram(&ebpf.ProgramSpec{
 		Name: "probe_kpm_link",
 		Type: ebpf.Kprobe,

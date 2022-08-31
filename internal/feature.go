@@ -31,8 +31,18 @@ func (ufe *UnsupportedFeatureError) Is(target error) bool {
 	return target == ErrNotSupported
 }
 
-type featureTest struct {
-	sync.RWMutex
+// FeatureTest caches the result of a [FeatureTestFn].
+//
+// Fields should not be modified after creation.
+type FeatureTest struct {
+	// The name of the feature being detected.
+	Name string
+	// Version in in the form Major.Minor[.Patch].
+	Version string
+	// The feature test itself.
+	Fn FeatureTestFn
+
+	mu         sync.RWMutex
 	successful bool
 	result     error
 }
@@ -47,54 +57,76 @@ type featureTest struct {
 //	err != nil: the test couldn't be executed
 type FeatureTestFn func() error
 
-// FeatureTest wraps a function so that it is run at most once.
+// NewFeatureTest is a convenient way to create a single [FeatureTest].
+func NewFeatureTest(name, version string, fn FeatureTestFn) func() error {
+	return (&FeatureTest{
+		Name:    name,
+		Version: version,
+		Fn:      fn,
+	}).Result
+}
+
+// Result returns the outcome of a feature test, executing it if necessary.
 //
-// name should identify the tested feature, while version must be in the
-// form Major.Minor[.Patch].
-//
-// Returns an error wrapping ErrNotSupported if the feature is not supported.
-func FeatureTest(name, version string, fn FeatureTestFn) func() error {
-	ft := new(featureTest)
-	return func() error {
-		ft.RLock()
-		if ft.successful {
-			defer ft.RUnlock()
-			return ft.result
-		}
-		ft.RUnlock()
-		ft.Lock()
-		defer ft.Unlock()
-		// check one more time on the off
-		// chance that two go routines
-		// were able to call into the write
-		// lock
-		if ft.successful {
-			return ft.result
-		}
-		err := fn()
-		switch {
-		case errors.Is(err, ErrNotSupported):
-			v, err := NewVersion(version)
-			if err != nil {
-				return err
-			}
-
-			ft.result = &UnsupportedFeatureError{
-				MinimumVersion: v,
-				Name:           name,
-			}
-			fallthrough
-
-		case err == nil:
-			ft.successful = true
-
-		default:
-			// We couldn't execute the feature test to a point
-			// where it could make a determination.
-			// Don't cache the result, just return it.
-			return fmt.Errorf("detect support for %s: %w", name, err)
-		}
-
+// See [FeatureTestFn] for the meaning of the returned error.
+func (ft *FeatureTest) Result() error {
+	ft.mu.RLock()
+	if ft.successful {
+		defer ft.mu.RUnlock()
 		return ft.result
 	}
+	ft.mu.RUnlock()
+	ft.mu.Lock()
+	defer ft.mu.Unlock()
+	// check one more time on the off
+	// chance that two go routines
+	// were able to call into the write
+	// lock
+	if ft.successful {
+		return ft.result
+	}
+	err := ft.Fn()
+	switch {
+	case errors.Is(err, ErrNotSupported):
+		v, err := NewVersion(ft.Version)
+		if err != nil {
+			return err
+		}
+
+		ft.result = &UnsupportedFeatureError{
+			MinimumVersion: v,
+			Name:           ft.Name,
+		}
+		fallthrough
+
+	case err == nil:
+		ft.successful = true
+
+	default:
+		// We couldn't execute the feature test to a point
+		// where it could make a determination.
+		// Don't cache the result, just return it.
+		return fmt.Errorf("detect support for %s: %w", ft.Name, err)
+	}
+
+	return ft.result
+}
+
+// FeatureMatrix groups multiple related feature tests into a map.
+//
+// Useful when there is a small number of discrete features.
+//
+// It must not be modified concurrently with calling [FeatureMatrix.Result].
+type FeatureMatrix[K comparable] map[K]*FeatureTest
+
+// Result returns the outcome of the feature test for the given key.
+//
+// It's safe to call this function concurrently.
+func (fm FeatureMatrix[K]) Result(key K) error {
+	ft, ok := fm[key]
+	if !ok {
+		return fmt.Errorf("no feature probe for %v", key)
+	}
+
+	return ft.Result()
 }

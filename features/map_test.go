@@ -64,35 +64,8 @@ func TestHaveMapType(t *testing.T) {
 	}
 }
 
-type haveMapFlagsTestEntry struct {
-	flags            MapFlags
-	minKernelVersion string
-	description      string
-}
-
 func TestHaveMapFlag(t *testing.T) {
-	mapFlagTestEntries := []haveMapFlagsTestEntry{
-		{BPF_F_RDONLY_PROG, "5.2", "read_only_array_map"},
-		{BPF_F_WRONLY_PROG, "5.2", "write_only_array_map"},
-		{BPF_F_MMAPABLE, "5.5", "mmapable_array_map"},
-		{BPF_F_INNER_MAP, "5.10", "inner_map_array_map"},
-		{BPF_F_NO_PREALLOC, "4.6", "no_prealloc_hash_map"},
-	}
-
-	for _, entry := range mapFlagTestEntries {
-		t.Run(entry.description, func(t *testing.T) {
-			err := HaveMapFlag(entry.flags)
-			if testutils.IsKernelLessThan(t, entry.minKernelVersion) {
-				if err == nil {
-					t.Fatalf("Map flag %d is supported on this kernel even though kernel is less than %s", entry.flags, entry.minKernelVersion)
-				}
-			} else {
-				if err != nil {
-					t.Fatalf("Map flag %d isn't supported even though kernel is at least %s: %v", entry.flags, entry.minKernelVersion, err)
-				}
-			}
-		})
-	}
+	testutils.CheckFeatureMatrix(t, haveMapFlagsMatrix)
 }
 
 func TestHaveMapTypeUnsupported(t *testing.T) {

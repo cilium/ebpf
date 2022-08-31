@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"math"
-	"os"
 	"testing"
 
 	"github.com/cilium/ebpf"
@@ -48,51 +47,14 @@ var progTypeMinVersion = map[ebpf.ProgramType]string{
 }
 
 func TestHaveProgramType(t *testing.T) {
-	for progType := ebpf.UnspecifiedProgram + 1; progType <= progType.Max(); progType++ {
-		// Need inner loop copy to make use of t.Parallel()
-		pt := progType
-
-		minVersion, ok := progTypeMinVersion[pt]
-		if !ok {
-			// In cases where a new prog type wasn't added to progTypeMinVersion
-			// we should make sure the test runs anyway and fails on old kernels
-			minVersion = "0.0"
-		}
-
-		feature := fmt.Sprintf("program type %s", pt.String())
-
-		t.Run(pt.String(), func(t *testing.T) {
-			t.Parallel()
-
-			if progLoadProbeNotImplemented(pt) {
-				t.Skipf("Test for prog type %s requires working probe", pt.String())
-			}
-			testutils.SkipOnOldKernel(t, minVersion, feature)
-
-			if err := HaveProgramType(pt); err != nil {
-				if pt == ebpf.LircMode2 {
-					// CI kernels are built with CONFIG_BPF_LIRC_MODE2, but some
-					// mainstream distro's don't ship with it. Make this prog type
-					// optional to retain compatibility with those kernels.
-					testutils.SkipIfNotSupported(t, err)
-				}
-
-				t.Fatalf("Program type %s isn't supported even though kernel is at least %s: %v", pt.String(), minVersion, err)
-			}
-		})
-
-	}
-}
-
-func TestHaveProgramTypeUnsupported(t *testing.T) {
-	if err := haveProgramType(ebpf.ProgramType(math.MaxUint32)); !errors.Is(err, ebpf.ErrNotSupported) {
-		t.Fatalf("Expected ebpf.ErrNotSupported but was: %v", err)
-	}
+	testutils.CheckFeatureMatrix(t, haveProgramTypeMatrix)
 }
 
 func TestHaveProgramTypeInvalid(t *testing.T) {
-	if err := HaveProgramType(ebpf.ProgramType(math.MaxUint32)); !errors.Is(err, os.ErrInvalid) {
-		t.Fatalf("Expected os.ErrInvalid but was: %v", err)
+	if err := HaveProgramType(ebpf.ProgramType(math.MaxUint32)); err == nil {
+		t.Fatal("Expected an error")
+	} else if errors.Is(err, internal.ErrNotSupported) {
+		t.Fatal("Got ErrNotSupported:", err)
 	}
 }
 

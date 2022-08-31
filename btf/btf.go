@@ -762,7 +762,7 @@ func marshalBTF(types interface{}, strings []byte, bo binary.ByteOrder) []byte {
 
 // haveBTF attempts to load a BTF blob containing an Int. It should pass on any
 // kernel that supports BPF_BTF_LOAD.
-var haveBTF = internal.FeatureTest("BTF", "4.18", func() error {
+var haveBTF = internal.NewFeatureTest("BTF", "4.18", func() error {
 	var (
 		types struct {
 			Integer btfType
@@ -792,7 +792,7 @@ var haveBTF = internal.FeatureTest("BTF", "4.18", func() error {
 // haveMapBTF attempts to load a minimal BTF blob containing a Var. It is
 // used as a proxy for .bss, .data and .rodata map support, which generally
 // come with a Var and Datasec. These were introduced in Linux 5.2.
-var haveMapBTF = internal.FeatureTest("Map BTF (Var/Datasec)", "5.2", func() error {
+var haveMapBTF = internal.NewFeatureTest("Map BTF (Var/Datasec)", "5.2", func() error {
 	if err := haveBTF(); err != nil {
 		return err
 	}
@@ -833,7 +833,7 @@ var haveMapBTF = internal.FeatureTest("Map BTF (Var/Datasec)", "5.2", func() err
 // haveProgBTF attempts to load a BTF blob containing a Func and FuncProto. It
 // is used as a proxy for ext_info (func_info) support, which depends on
 // Func(Proto) by definition.
-var haveProgBTF = internal.FeatureTest("Program BTF (func/line_info)", "5.0", func() error {
+var haveProgBTF = internal.NewFeatureTest("Program BTF (func/line_info)", "5.0", func() error {
 	if err := haveBTF(); err != nil {
 		return err
 	}
@@ -868,7 +868,7 @@ var haveProgBTF = internal.FeatureTest("Program BTF (func/line_info)", "5.0", fu
 	return nil
 })
 
-var haveFuncLinkage = internal.FeatureTest("BTF func linkage", "5.6", func() error {
+var haveFuncLinkage = internal.NewFeatureTest("BTF func linkage", "5.6", func() error {
 	if err := haveProgBTF(); err != nil {
 		return err
 	}

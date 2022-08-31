@@ -1110,6 +1110,7 @@ func getProgType(sectionName string) (ProgramType, AttachType, uint32, string) {
 		{"lsm/", LSM, AttachLSMMac, 0},
 		{"lsm.s/", LSM, AttachLSMMac, unix.BPF_F_SLEEPABLE},
 		{"iter/", Tracing, AttachTraceIter, 0},
+		{"iter.s/", Tracing, AttachTraceIter, unix.BPF_F_SLEEPABLE},
 		{"syscall", Syscall, AttachNone, 0},
 		{"xdp_devmap/", XDP, AttachXDPDevMap, 0},
 		{"xdp_cpumap/", XDP, AttachXDPCPUMap, 0},

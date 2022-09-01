@@ -24,17 +24,17 @@ func TestGoTypeDeclaration(t *testing.T) {
 		{&Int{Size: 8}, "type t uint64"},
 		{&Typedef{Name: "frob", Type: &Int{Size: 8}}, "type t uint64"},
 		{&Int{Size: 16}, "type t uint128"},
-		{&Enum{Values: []EnumValue{{"FOO", 32}}, Size: 4}, "type t int32; const ( tFOO t = 32; )"},
-		{&Enum{Values: []EnumValue{{"BAR", 1}}, Size: 1}, "type t int8; const ( tBAR t = 1; )"},
+		{&Enum{Values: []EnumValue{{"FOO", 32}}, Size: 4}, "type t uint32; const ( tFOO t = 32; )"},
+		{&Enum{Values: []EnumValue{{"BAR", 1}}, Size: 1, Signed: true}, "type t int8; const ( tBAR t = 1; )"},
 		{
 			&Struct{
 				Name: "enum literals",
-				Size: 1,
+				Size: 2,
 				Members: []Member{
-					{Name: "enum", Type: &Enum{Values: []EnumValue{{"BAR", 1}}, Size: 1}, Offset: 0},
+					{Name: "enum", Type: &Enum{Values: []EnumValue{{"BAR", 1}}, Size: 2}, Offset: 0},
 				},
 			},
-			"type t struct { enum int8; }",
+			"type t struct { enum uint16; }",
 		},
 		{&Array{Nelems: 2, Type: &Int{Size: 1}}, "type t [2]uint8"},
 		{

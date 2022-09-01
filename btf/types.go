@@ -273,7 +273,9 @@ type Member struct {
 type Enum struct {
 	Name string
 	// Size of the enum value in bytes.
-	Size   uint32
+	Size uint32
+	// True if the values should be interpreted as signed integers.
+	Signed bool
 	Values []EnumValue
 }
 
@@ -288,7 +290,7 @@ func (e *Enum) TypeName() string { return e.Name }
 // Is is not a valid Type
 type EnumValue struct {
 	Name  string
-	Value int32
+	Value uint64
 }
 
 func (e *Enum) size() uint32    { return e.Size }
@@ -993,17 +995,20 @@ func inflateRawTypes(rawTypes []rawType, baseTypes types, rawStrings *stringTabl
 		case kindEnum:
 			rawvals := raw.data.([]btfEnum)
 			vals := make([]EnumValue, 0, len(rawvals))
+			signed := raw.KindFlag()
 			for i, btfVal := range rawvals {
 				name, err := rawStrings.Lookup(btfVal.NameOff)
 				if err != nil {
 					return nil, fmt.Errorf("get name for enum value %d: %s", i, err)
 				}
-				vals = append(vals, EnumValue{
-					Name:  name,
-					Value: btfVal.Val,
-				})
+				value := uint64(btfVal.Val)
+				if signed {
+					// Sign extend values to 64 bit.
+					value = uint64(int32(btfVal.Val))
+				}
+				vals = append(vals, EnumValue{name, value})
 			}
-			typ = &Enum{name, raw.Size(), vals}
+			typ = &Enum{name, raw.Size(), signed, vals}
 
 		case kindForward:
 			if raw.KindFlag() {

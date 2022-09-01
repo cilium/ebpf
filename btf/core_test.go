@@ -209,7 +209,7 @@ func TestCOREFindEnumValue(t *testing.T) {
 		name                    string
 		local, target           Type
 		acc                     coreAccessor
-		localValue, targetValue int32
+		localValue, targetValue uint64
 	}{
 		{"a to b", a, b, coreAccessor{0}, 23, 0},
 		{"b to a", b, a, coreAccessor{1}, 123, 42},

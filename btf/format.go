@@ -122,6 +122,9 @@ func (gf *GoFormatter) writeTypeLit(typ Type, depth int) error {
 		gf.writeIntLit(v)
 
 	case *Enum:
+		if !v.Signed {
+			gf.w.WriteRune('u')
+		}
 		switch v.Size {
 		case 1:
 			gf.w.WriteString("int8")

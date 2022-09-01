@@ -26,6 +26,16 @@ func TestGoTypeDeclaration(t *testing.T) {
 		{&Int{Size: 16}, "type t uint128"},
 		{&Enum{Values: []EnumValue{{"FOO", 32}}, Size: 4}, "type t int32; const ( tFOO t = 32; )"},
 		{&Enum{Values: []EnumValue{{"BAR", 1}}, Size: 1}, "type t int8; const ( tBAR t = 1; )"},
+		{
+			&Struct{
+				Name: "enum literals",
+				Size: 1,
+				Members: []Member{
+					{Name: "enum", Type: &Enum{Values: []EnumValue{{"BAR", 1}}, Size: 1}, Offset: 0},
+				},
+			},
+			"type t struct { enum int8; }",
+		},
 		{&Array{Nelems: 2, Type: &Int{Size: 1}}, "type t [2]uint8"},
 		{
 			&Union{

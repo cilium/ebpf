@@ -63,39 +63,25 @@ func (gf *GoFormatter) writeTypeDecl(name string, typ Type) error {
 		return fmt.Errorf("need a name for type %s", typ)
 	}
 
-	switch v := skipQualifiers(typ).(type) {
-	case *Enum:
-		fmt.Fprintf(&gf.w, "type %s ", name)
-		switch v.Size {
-		case 1:
-			gf.w.WriteString("int8")
-		case 2:
-			gf.w.WriteString("int16")
-		case 4:
-			gf.w.WriteString("int32")
-		case 8:
-			gf.w.WriteString("int64")
-		default:
-			return fmt.Errorf("%s: invalid enum size %d", typ, v.Size)
-		}
-
-		if len(v.Values) == 0 {
-			return nil
-		}
-
-		gf.w.WriteString("; const ( ")
-		for _, ev := range v.Values {
-			id := gf.enumIdentifier(name, ev.Name)
-			fmt.Fprintf(&gf.w, "%s %s = %d; ", id, name, ev.Value)
-		}
-		gf.w.WriteString(")")
-
-		return nil
-
-	default:
-		fmt.Fprintf(&gf.w, "type %s ", name)
-		return gf.writeTypeLit(v, 0)
+	typ = skipQualifiers(typ)
+	fmt.Fprintf(&gf.w, "type %s ", name)
+	if err := gf.writeTypeLit(typ, 0); err != nil {
+		return err
 	}
+
+	e, ok := typ.(*Enum)
+	if !ok || len(e.Values) == 0 {
+		return nil
+	}
+
+	gf.w.WriteString("; const ( ")
+	for _, ev := range e.Values {
+		id := gf.enumIdentifier(name, ev.Name)
+		fmt.Fprintf(&gf.w, "%s %s = %d; ", id, name, ev.Value)
+	}
+	gf.w.WriteString(")")
+
+	return nil
 }
 
 // writeType outputs the name of a named type or a literal describing the type.
@@ -136,7 +122,18 @@ func (gf *GoFormatter) writeTypeLit(typ Type, depth int) error {
 		gf.writeIntLit(v)
 
 	case *Enum:
-		gf.w.WriteString("int32")
+		switch v.Size {
+		case 1:
+			gf.w.WriteString("int8")
+		case 2:
+			gf.w.WriteString("int16")
+		case 4:
+			gf.w.WriteString("int32")
+		case 8:
+			gf.w.WriteString("int64")
+		default:
+			err = fmt.Errorf("invalid enum size %d", v.Size)
+		}
 
 	case *Typedef:
 		err = gf.writeType(v.Type, depth)

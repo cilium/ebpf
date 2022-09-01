@@ -196,11 +196,15 @@ func (gf *GoFormatter) writeStructLit(size uint32, members []Member, depth int) 
 			gf.writePadding(n)
 		}
 
-		size, err := Sizeof(m.Type)
+		fieldSize, err := Sizeof(m.Type)
 		if err != nil {
 			return fmt.Errorf("field %d: %w", i, err)
 		}
-		prevOffset = offset + uint32(size)
+
+		prevOffset = offset + uint32(fieldSize)
+		if prevOffset > size {
+			return fmt.Errorf("field %d of size %d exceeds type size %d", i, fieldSize, size)
+		}
 
 		if err := gf.writeStructField(m, depth); err != nil {
 			return fmt.Errorf("field %d: %w", i, err)

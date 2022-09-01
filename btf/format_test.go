@@ -222,6 +222,19 @@ func TestGoTypeDeclarationCycle(t *testing.T) {
 	}
 }
 
+func TestRejectBogusTypes(t *testing.T) {
+	var gf GoFormatter
+	_, err := gf.TypeDeclaration("t", &Struct{
+		Size: 1,
+		Members: []Member{
+			{Name: "foo", Type: &Int{Size: 2}, Offset: 0},
+		},
+	})
+	if err == nil {
+		t.Fatal("TypeDeclaration does not reject bogus struct")
+	}
+}
+
 func mustGoTypeDeclaration(tb testing.TB, typ Type, names map[Type]string, id func(string) string) string {
 	tb.Helper()
 

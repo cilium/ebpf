@@ -546,7 +546,7 @@ func TestCORERelocation(t *testing.T) {
 					relos = append(relos, reloInfo.relo)
 				}
 
-				fixups, err := CORERelocate(spec, spec, relos)
+				fixups, err := CORERelocate(relos, spec, spec.byteOrder)
 				if want := errs[name]; want != nil {
 					if !errors.Is(err, want) {
 						t.Fatal("Expected", want, "got", err)

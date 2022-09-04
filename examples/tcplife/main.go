@@ -14,32 +14,110 @@ import (
 	"github.com/cilium/ebpf/link"
 	"github.com/cilium/ebpf/perf"
 	"github.com/cilium/ebpf/rlimit"
-	"github.com/spf13/cobra"
+	"github.com/urfave/cli/v2"
 	"golang.org/x/sys/unix"
 	"log"
 	"net"
 	"os"
-	"time"
 )
 
 // $BPF_CLANG and $BPF_CFLAGS are set by the Makefile.
 //go:generate go run github.com/cilium/ebpf/cmd/bpf2go -cc $BPF_CLANG -cflags $BPF_CFLAGS bpf bpf/tcplife.c -- -I../headers
 
-var rootCmd = &cobra.Command{
-	Use:   "tcplife",
-	Short: "Trace the lifespan of TCP sessions and summarize.",
-	Long: `Trace the lifespan of TCP sessions and summarize.\n\n
-		USAGE: tcplife [-h] [-p PID] [-4] [-6] [-L] [-D] [-T] [-w]\n\n
-		EXAMPLES:\n
-			tcplife -p 1215             # only trace PID 1215\n
-			tcplife -p 1215 -4          # trace IPv4 only\n
-		   `,
-	Run: func(cmd *cobra.Command, args []string) {
+const (
+	name  = "inet_sock_set_state"
+	group = "sock"
+)
 
-	},
+type CommandArgs struct {
+	EmitTimestamp *bool
+	Verbose       *bool
 }
 
 func main() {
+	app := &cli.App{
+		Name: "tcplife",
+		Usage: `Trace the lifespan of TCP sessions and summarize.
+USAGE: tcplife [-h] [-p PID] [-4] [-6] [-L] [-D] [-T] [-w]
+EXAMPLES:
+    tcplife -p 1215             # only trace PID 1215
+    tcplife -p 1215 -4          # trace IPv4 only`,
+		Flags: []cli.Flag{
+			&cli.StringFlag{
+				Name:    "pid",
+				Aliases: []string{"p"},
+				EnvVars: []string{"PID"},
+				Value:   "0",
+				Usage:   "Process ID to trace",
+			},
+			&cli.BoolFlag{
+				Name:    "ipv4",
+				Aliases: []string{"4"},
+				Usage:   "Trace IPv4 only",
+			},
+			&cli.BoolFlag{
+				Name:    "ipv6",
+				Aliases: []string{"6"},
+				Usage:   "Trace IPv6 only",
+			},
+			&cli.BoolFlag{
+				Name:    "time",
+				Aliases: []string{"T"},
+				Usage:   "Include timestamp on output",
+			},
+			&cli.IntSliceFlag{
+				Name:    "localport",
+				Aliases: []string{"L"},
+				EnvVars: []string{"LOCALPORT"},
+				Usage:   "Comma-separated list of local ports to trace.",
+			},
+			&cli.IntSliceFlag{
+				Name:    "remoteport",
+				Aliases: []string{"D"},
+				EnvVars: []string{"REMOTEPORT"},
+				Usage:   "Comma-separated list of remote ports to trace.",
+			},
+			&cli.StringFlag{
+				Name:    "verbose",
+				Aliases: []string{"v"},
+				Value:   "0",
+				Usage:   "Verbose debug output",
+			},
+		},
+		Action: func(cCtx *cli.Context) error {
+			args := CommandArgs{}
+			consts := map[string]interface{}{}
+			if cCtx.Uint64("pid") != 0 {
+				consts["target_pid"] = cCtx.Uint64("pid")
+			}
+			if !(cCtx.Bool("ipv4") && cCtx.Bool("ipv6")) {
+				if cCtx.Bool("ipv4") {
+					consts["target_family"] = unix.AF_INET
+				} else if cCtx.Bool("ipv6") {
+					consts["target_family"] = unix.AF_INET6
+				}
+			}
+			if cCtx.IntSlice("localport") != nil {
+				consts["target_dports"] = cCtx.IntSlice("localport")
+			}
+			if cCtx.IntSlice("remoteport") != nil {
+				consts["target_sports"] = cCtx.IntSlice("remoteport")
+			}
+			if cCtx.Bool("time") {
+				timeVar := cCtx.Bool("time")
+				args.EmitTimestamp = &timeVar
+			}
+
+			return TCPLife(args, consts)
+		},
+	}
+
+	if err := app.Run(os.Args); err != nil {
+		log.Fatal(err)
+	}
+}
+
+func TCPLife(args CommandArgs, consts map[string]interface{}) error {
 	defer func() {
 		if r := recover(); r != nil {
 			fmt.Println(r)
@@ -51,31 +129,30 @@ func main() {
 	}
 
 	// Load pre-compiled programs and maps into the kernel.
-	objs := bpfObjects{}
-	if err := loadBpfObjects(&objs, nil); err != nil {
+	obj := bpfObjects{}
+	spec, err := loadBpf()
+	if err != nil {
 		log.Fatalf("loading objects: %v", err)
+		return err
 	}
-	defer objs.Close()
+	if len(consts) > 0 {
+		spec.RewriteConstants(consts)
+	}
+	err = spec.LoadAndAssign(obj, nil)
+	if err != nil {
+		log.Fatalf("loading objects: %v", err)
+		return err
+	}
+	defer obj.Close()
 
-	// Open a tracepoint and attach the pre-compiled program. Each time
-	// the kernel function enters, the program will increment the execution
-	// counter by 1. The read loop below polls this map value once per
-	// second.
-	// The first two arguments are taken from the following pathname:
-	// /sys/kernel/debug/tracing/events/kmem/mm_page_alloc
-	kp, err := link.Tracepoint("sock", "inet_sock_set_state", objs.InetSockSetState, nil)
+	kp, err := link.Tracepoint(group, name, obj.InetSockSetState, nil)
 	if err != nil {
 		log.Fatalf("opening tracepoint: %s", err)
 	}
 	defer kp.Close()
 
-	// Read loop reporting the total amount of times the kernel
-	// function was entered, once per second.
-	ticker := time.NewTicker(2 * time.Second)
-	defer ticker.Stop()
-
 	log.Println("Waiting for events..")
-	rd, err := perf.NewReader(objs.Events, os.Getpagesize())
+	rd, err := perf.NewReader(obj.Events, os.Getpagesize())
 	if err != nil {
 		log.Fatalf("creating event reader: %s", err)
 	}
@@ -89,7 +166,7 @@ func main() {
 		if err != nil {
 			if errors.Is(err, perf.ErrClosed) {
 				log.Println("Received signal, exiting..")
-				return
+				return nil
 			}
 			log.Printf("reading from reader: %s", err)
 			continue
@@ -111,13 +188,14 @@ func main() {
 			saddr = saddr_buf.Bytes()
 			fmt.Printf("%7d %20s %26s %5d %26s %5d %6d %6d %d\n",
 				event.Pid, comm, saddr.To16(), event.Sport,
-				daddr.To16(), event.Dport, event.TxB, event.RxB, event.TsUs)
+				daddr.To16(), event.Dport, event.TxB, event.RxB, event.TsUs/1000)
 		} else {
 			saddr = saddr_buf.Bytes()[:4]
 			daddr = daddr_buf.Bytes()[:4]
 			fmt.Printf("%7d %20s %26s %5d %26s %5d %6d %6d %d\n",
 				event.Pid, comm, saddr.To4(), event.Sport,
-				daddr.To4(), event.Dport, event.TxB, event.RxB, event.TsUs)
+				daddr.To4(), event.Dport, event.TxB, event.RxB, event.TsUs/1000)
 		}
 	}
+	return nil
 }

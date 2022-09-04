@@ -38,7 +38,7 @@ func main() {
 	app := &cli.App{
 		Name: "tcplife",
 		Usage: `Trace the lifespan of TCP sessions and summarize.
-USAGE: tcplife [-h] [-p PID] [-4] [-6] [-L] [-D] [-T] [-w]
+USAGE: tcplife [-h] [-p PID] [-4] [-6] [-L] [-D]
 EXAMPLES:
     tcplife -p 1215             # only trace PID 1215
     tcplife -p 1215 -4          # trace IPv4 only`,
@@ -60,11 +60,6 @@ EXAMPLES:
 				Aliases: []string{"6"},
 				Usage:   "Trace IPv6 only",
 			},
-			&cli.BoolFlag{
-				Name:    "time",
-				Aliases: []string{"T"},
-				Usage:   "Include timestamp on output",
-			},
 			&cli.IntSliceFlag{
 				Name:    "localport",
 				Aliases: []string{"L"},
@@ -76,12 +71,6 @@ EXAMPLES:
 				Aliases: []string{"D"},
 				EnvVars: []string{"REMOTEPORT"},
 				Usage:   "Comma-separated list of remote ports to trace.",
-			},
-			&cli.StringFlag{
-				Name:    "verbose",
-				Aliases: []string{"v"},
-				Value:   "0",
-				Usage:   "Verbose debug output",
 			},
 		},
 		Action: func(cCtx *cli.Context) error {

@@ -14,6 +14,7 @@ import (
 	"github.com/cilium/ebpf/link"
 	"github.com/cilium/ebpf/perf"
 	"github.com/cilium/ebpf/rlimit"
+	"github.com/spf13/cobra"
 	"golang.org/x/sys/unix"
 	"log"
 	"net"
@@ -24,9 +25,19 @@ import (
 // $BPF_CLANG and $BPF_CFLAGS are set by the Makefile.
 //go:generate go run github.com/cilium/ebpf/cmd/bpf2go -cc $BPF_CLANG -cflags $BPF_CFLAGS bpf bpf/tcplife.c -- -I../headers
 
-const mapKey uint32 = 0
+var rootCmd = &cobra.Command{
+	Use:   "tcplife",
+	Short: "Trace the lifespan of TCP sessions and summarize.",
+	Long: `Trace the lifespan of TCP sessions and summarize.\n\n
+		USAGE: tcplife [-h] [-p PID] [-4] [-6] [-L] [-D] [-T] [-w]\n\n
+		EXAMPLES:\n
+			tcplife -p 1215             # only trace PID 1215\n
+			tcplife -p 1215 -4          # trace IPv4 only\n
+		   `,
+	Run: func(cmd *cobra.Command, args []string) {
 
-var column_width = 16
+	},
+}
 
 func main() {
 	defer func() {
@@ -64,25 +75,6 @@ func main() {
 	defer ticker.Stop()
 
 	log.Println("Waiting for events..")
-	fmt.Println("birthIterate key size:", objs.Idents.KeySize())
-	//for range ticker.C {
-	//eventIterate := objs.Events.Iterate()
-	//identsIterate := objs.Idents.Iterate()
-	//birthIterate := objs.Birth.Iterate()
-	//var outerMapKey uint32
-	//var outterMapValue uint32
-	//
-	//for eventIterate.Next(&outerMapKey, &outterMapValue) {
-	//	fmt.Println("birthIterate Any Info,key:", outerMapKey, ",value:", outterMapValue)
-	//}
-	//for identsIterate.Next(&outerMapKey, &outterMapValue) {
-	//	fmt.Println("birthIterate Any Info,key:", outerMapKey, ",value:", outterMapValue)
-	//	//unsafe.Pointer(uintptr(outerMapKey))
-	//}
-	//for birthIterate.Next(&outerMapKey, &outterMapValue) {
-	//	fmt.Println("birthIterate Any Info,key:", outerMapKey, ",value:", outterMapValue)
-	//}
-	//}
 	rd, err := perf.NewReader(objs.Events, os.Getpagesize())
 	if err != nil {
 		log.Fatalf("creating event reader: %s", err)

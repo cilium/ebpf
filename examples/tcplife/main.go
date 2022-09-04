@@ -19,7 +19,6 @@ import (
 	"log"
 	"net"
 	"os"
-	"time"
 )
 
 // $BPF_CLANG and $BPF_CFLAGS are set by the Makefile.
@@ -173,7 +172,7 @@ func TCPLife(args CommandArgs, consts map[string]interface{}) error {
 		binary.Write(comm, binary.LittleEndian, event.Comm)
 		var saddr net.IP
 		var daddr net.IP
-		fmt.Println("\ncurrent_time:", time.UnixMicro(int64(event.TsUs)).Format("2006-01-02 15:04:05"))
+		fmt.Println("\nTime until kernel start(ms):", event.TsUs/1000)
 		if event.Family == unix.AF_INET6 {
 			daddr = daddr_buf.Bytes()
 			saddr = saddr_buf.Bytes()

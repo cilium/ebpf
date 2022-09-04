@@ -161,6 +161,8 @@ int inet_sock_set_state(struct trace_event_raw_inet_sock_set_state *args) {
 		bpf_probe_read_kernel(event.comm, sizeof(event.comm), (void *)identp->comm);
 
 	bpf_printk("family: %d\n", family);
+	bpf_printk("delta_us: %ld\n", delta_us);
+	bpf_printk("ts_us: %ld\n", ts);
 	if (family == AF_INET) {
 		bpf_probe_read_kernel(&event.saddr, sizeof(args->saddr), BPF_CORE_READ(args, saddr));
 		bpf_probe_read_kernel(&event.daddr, sizeof(args->daddr), BPF_CORE_READ(args, daddr));

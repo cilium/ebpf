@@ -19,6 +19,7 @@ import (
 	"log"
 	"net"
 	"os"
+	"time"
 )
 
 // $BPF_CLANG and $BPF_CFLAGS are set by the Makefile.
@@ -127,9 +128,9 @@ func TCPLife(args CommandArgs, consts map[string]interface{}) error {
 	if len(consts) > 0 {
 		spec.RewriteConstants(consts)
 	}
-	err = spec.LoadAndAssign(obj, nil)
+	err = spec.LoadAndAssign(&obj, nil)
 	if err != nil {
-		log.Fatalf("loading objects: %v", err)
+		log.Fatalf("load and assing: %v", err)
 		return err
 	}
 	defer obj.Close()
@@ -146,7 +147,7 @@ func TCPLife(args CommandArgs, consts map[string]interface{}) error {
 		log.Fatalf("creating event reader: %s", err)
 	}
 	defer rd.Close()
-	fmt.Printf("%7s %16s %26s %5s %26s %5s %6s %6s %s\n",
+	fmt.Printf("%7s %16s %26s %5s %26s %5s %6s %6s %6s\n",
 		"PID", "COMM", "LADDR", "LPORT", "RADDR", "RPORT",
 		"TX_KB", "RX_KB", "MS")
 	for {
@@ -172,18 +173,19 @@ func TCPLife(args CommandArgs, consts map[string]interface{}) error {
 		binary.Write(comm, binary.LittleEndian, event.Comm)
 		var saddr net.IP
 		var daddr net.IP
+		fmt.Println("\ncurrent_time:", time.UnixMicro(int64(event.TsUs)).Format("2006-01-02 15:04:05"))
 		if event.Family == unix.AF_INET6 {
 			daddr = daddr_buf.Bytes()
 			saddr = saddr_buf.Bytes()
-			fmt.Printf("%7d %20s %26s %5d %26s %5d %6d %6d %d\n",
+			fmt.Printf("%7d %20s %26s %5d %26s %5d %6d %6d %6d\n",
 				event.Pid, comm, saddr.To16(), event.Sport,
-				daddr.To16(), event.Dport, event.TxB, event.RxB, event.TsUs/1000)
+				daddr.To16(), event.Dport, event.TxB/1024, event.RxB/1024, event.SpanUs/1000)
 		} else {
 			saddr = saddr_buf.Bytes()[:4]
 			daddr = daddr_buf.Bytes()[:4]
-			fmt.Printf("%7d %20s %26s %5d %26s %5d %6d %6d %d\n",
+			fmt.Printf("%7d %20s %26s %5d %26s %5d %6d %6d %6d\n",
 				event.Pid, comm, saddr.To4(), event.Sport,
-				daddr.To4(), event.Dport, event.TxB, event.RxB, event.TsUs/1000)
+				daddr.To4(), event.Dport, event.TxB/1024, event.RxB/1024, event.SpanUs/1000)
 		}
 	}
 	return nil

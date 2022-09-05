@@ -20,7 +20,7 @@ type testBarfoo struct {
 	Boo testE
 }
 
-type testE int32
+type testE uint32
 
 const (
 	testEHOOPY testE = 0

@@ -11,6 +11,7 @@ import (
 	"math"
 	"os"
 	"strings"
+	"unsafe"
 
 	"github.com/cilium/ebpf/asm"
 	"github.com/cilium/ebpf/btf"
@@ -138,6 +139,10 @@ func LoadCollectionSpecFromReader(rd io.ReaderAt) (*CollectionSpec, error) {
 
 	if err := ec.loadDataSections(maps); err != nil {
 		return nil, fmt.Errorf("load data sections: %w", err)
+	}
+
+	if err := ec.populateDataSections(maps); err != nil {
+		return nil, fmt.Errorf("populate data sections: %w", err)
 	}
 
 	// Finally, collect programs and link them.
@@ -573,6 +578,29 @@ func (ec *elfCode) relocateInstruction(ins *asm.Instruction, rel elf.Symbol) err
 
 		if typ != elf.STT_NOTYPE {
 			return fmt.Errorf("asm relocation: %s: unsupported type %s", name, typ)
+		}
+
+		if ec.btf != nil {
+			// If we arrive, it can possibly be because we are dealing with .kconfig.
+			t, err := ec.btf.AnyTypeByName(".kconfig")
+			if err == nil {
+				datasec, ok := t.(*btf.Datasec)
+				if ok {
+					for _, varSecInfo := range datasec.Vars {
+						variable, ok := varSecInfo.Type.(*btf.Var)
+						if !ok {
+							continue
+						}
+
+						if variable.Name == rel.Name {
+							ins.Constant = int64(uint64(varSecInfo.Offset) << 32)
+							ins.Src = asm.PseudoMapValue
+
+							name = ".kconfig"
+						}
+					}
+				}
+			}
 		}
 
 		// There is nothing to do here but set ins.Reference.
@@ -1067,6 +1095,73 @@ func (ec *elfCode) loadDataSections(maps map[string]*MapSpec) error {
 
 		maps[sec.Name] = mapSpec
 	}
+
+	if ec.btf != nil {
+		var ds *btf.Datasec
+		if err := ec.btf.TypeByName(".kconfig", &ds); err != nil {
+			return err
+		}
+
+		maps[".kconfig"] = &MapSpec{
+			Name:       ".kconfig",
+			Type:       Array,
+			KeySize:    uint32(unsafe.Sizeof(ds.Size)),
+			MaxEntries: 1,
+			Flags:      unix.BPF_F_RDONLY_PROG|unix.BPF_F_MMAPABLE,
+		}
+	}
+
+	return nil
+}
+
+func (ec *elfCode) populateDataSections(maps map[string]*MapSpec) error {
+	if ec.btf == nil {
+		return nil
+	}
+
+	return ec.populateKconfigSection(maps)
+}
+
+func (ec *elfCode) populateKconfigSection(maps map[string]*MapSpec) error {
+	var ds *btf.Datasec
+	if err := ec.btf.TypeByName(".kconfig", &ds); err != nil {
+		return err
+	}
+
+	data := make([]byte, 0, ds.Size)
+	for _, vsi := range ds.Vars {
+		v, ok := vsi.Type.(*btf.Var)
+		if !ok {
+			return fmt.Errorf("info should point to a variable")
+		}
+
+		s, err := btf.Alignof(v.Type)
+		if err != nil {
+			return fmt.Errorf("getting size of kconfig variable %s: %w", v.TypeName(), err)
+		}
+		d := make([]byte, s)
+
+		switch n := v.TypeName(); n {
+		case "LINUX_KERNEL_VERSION":
+			if s < 4 {
+				return fmt.Errorf("kconfig variable %s must be at least u32, got %d", n, s)
+			}
+			kv, err := internal.KernelVersion()
+			if err != nil {
+				return fmt.Errorf("getting kernel version: %w", err)
+			}
+			internal.NativeEndian.PutUint32(d, kv.Kernel())
+
+		default:
+			return fmt.Errorf("unsupported kconfig variable: %s", n)
+		}
+
+		data = append(data, d...)
+	}
+
+	maps[".kconfig"].ValueSize = uint32(len(data))
+	maps[".kconfig"].Contents = []MapKV{{uint32(0), data}}
+
 	return nil
 }
 

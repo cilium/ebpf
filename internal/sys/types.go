@@ -488,12 +488,12 @@ type MapInfo struct {
 	MapFlags              MapFlags
 	Name                  ObjName
 	Ifindex               uint32
-	BtfVmlinuxValueTypeId uint32
+	BtfVmlinuxValueTypeId BtfTypeId
 	NetnsDev              uint64
 	NetnsIno              uint64
 	BtfId                 uint32
-	BtfKeyTypeId          uint32
-	BtfValueTypeId        uint32
+	BtfKeyTypeId          BtfTypeId
+	BtfValueTypeId        BtfTypeId
 	_                     [4]byte
 	MapExtra              uint64
 }
@@ -519,7 +519,7 @@ type ProgInfo struct {
 	NrJitedFuncLens      uint32
 	JitedKsyms           uint64
 	JitedFuncLens        uint64
-	BtfId                uint32
+	BtfId                BTFID
 	FuncInfoRecSize      uint32
 	FuncInfo             uint64
 	NrFuncInfo           uint32
@@ -627,7 +627,7 @@ type LinkCreateAttr struct {
 	TargetFd    uint32
 	AttachType  AttachType
 	Flags       uint32
-	TargetBtfId uint32
+	TargetBtfId BTFID
 	_           [28]byte
 }
 
@@ -736,9 +736,9 @@ type MapCreateAttr struct {
 	MapName               ObjName
 	MapIfindex            uint32
 	BtfFd                 uint32
-	BtfKeyTypeId          uint32
-	BtfValueTypeId        uint32
-	BtfVmlinuxValueTypeId uint32
+	BtfKeyTypeId          BtfTypeId
+	BtfValueTypeId        BtfTypeId
+	BtfVmlinuxValueTypeId BtfTypeId
 	MapExtra              uint64
 }
 
@@ -1016,7 +1016,7 @@ type ProgLoadAttr struct {
 	LineInfoRecSize    uint32
 	LineInfo           Pointer
 	LineInfoCnt        uint32
-	AttachBtfId        uint32
+	AttachBtfId        BTFID
 	AttachBtfObjFd     uint32
 	CoreReloCnt        uint32
 	FdArray            Pointer
@@ -1111,7 +1111,7 @@ type RawTracepointLinkInfo struct {
 type TracingLinkInfo struct {
 	AttachType  AttachType
 	TargetObjId uint32
-	TargetBtfId uint32
+	TargetBtfId BtfTypeId
 }
 
 type XDPLinkInfo struct{ Ifindex uint32 }

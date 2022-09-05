@@ -140,6 +140,10 @@ func LoadCollectionSpecFromReader(rd io.ReaderAt) (*CollectionSpec, error) {
 		return nil, fmt.Errorf("load data sections: %w", err)
 	}
 
+	if err := ec.populateDataSections(); err != nil {
+		return nil, fmt.Errorf("populate data sections: %w", err)
+	}
+
 	// Finally, collect programs and link them.
 	progs, err := ec.loadProgramSections()
 	if err != nil {
@@ -573,6 +577,19 @@ func (ec *elfCode) relocateInstruction(ins *asm.Instruction, rel elf.Symbol) err
 
 		if typ != elf.STT_NOTYPE {
 			return fmt.Errorf("asm relocation: %s: unsupported type %s", name, typ)
+		}
+
+		if m := ec.maps[".kconfig"]; m != nil {
+			for _, vsi := range m.Value.(*btf.Datasec).Vars {
+				variable := vsi.Type.(*btf.Var)
+
+				if variable.Name == rel.Name {
+					ins.Constant = int64(uint64(vsi.Offset) << 32)
+					ins.Src = asm.PseudoMapValue
+
+					name = ".kconfig"
+				}
+			}
 		}
 
 		// There is nothing to do here but set ins.Reference.
@@ -1067,6 +1084,86 @@ func (ec *elfCode) loadDataSections() error {
 
 		ec.maps[sec.Name] = mapSpec
 	}
+
+	if ec.btf != nil {
+		var ds *btf.Datasec
+		if err := ec.btf.TypeByName(".kconfig", &ds); err != nil {
+			if errors.Is(err, btf.ErrNotFound) {
+				return nil
+			}
+			return err
+		}
+
+		ec.maps[".kconfig"] = &MapSpec{
+			Name:       ".kconfig",
+			Type:       Array,
+			KeySize:    uint32(4),
+			MaxEntries: 1,
+			Flags:      unix.BPF_F_RDONLY_PROG | unix.BPF_F_MMAPABLE,
+			Key:        &btf.Void{},
+			Value:      ds,
+		}
+	}
+
+	return nil
+}
+
+func (ec *elfCode) populateDataSections() error {
+	if err := ec.populateKconfigSection(); err != nil {
+		return fmt.Errorf(".kconfig: %w", err)
+	}
+
+	return nil
+}
+
+func (ec *elfCode) populateKconfigSection() error {
+	m := ec.maps[".kconfig"]
+	if m == nil {
+		return nil
+	}
+
+	ds := m.Value.(*btf.Datasec)
+	data := make([]byte, 0, ds.Size)
+	for _, vsi := range ds.Vars {
+		v := vsi.Type.(*btf.Var)
+		s, err := btf.Alignof(v.Type)
+		if err != nil {
+			return fmt.Errorf("variable %s: getting size: %w", v.Name, err)
+		}
+
+		d := make([]byte, s)
+
+		switch n := v.TypeName(); n {
+		case "LINUX_KERNEL_VERSION":
+			if s < 4 {
+				return fmt.Errorf("variable %s must be at least u32, got %d", n, s)
+			}
+			kv, err := internal.KernelVersion()
+			if err != nil {
+				return fmt.Errorf("getting kernel version: %w", err)
+			}
+			internal.NativeEndian.PutUint32(d, kv.Kernel())
+
+		default:
+			return fmt.Errorf("unsupported variable: %s", n)
+		}
+
+		// We need to change Linkage for extern to global to avoid verifier error
+		// while marshaling the map value.
+		v.Linkage = btf.GlobalVar
+
+		data = append(data, d...)
+	}
+
+	length := uint32(len(data))
+
+	// We need to update DataSec size to avoid problems while marshaling the map
+	// value.
+	ds.Size = length
+
+	m.ValueSize = length
+	m.Contents = []MapKV{{uint32(0), data}}
+
 	return nil
 }
 

@@ -222,7 +222,7 @@ func TestLoadCollectionSpec(t *testing.T) {
 		}
 
 		if ret != 7 {
-			t.Error("Expected return value to be 5, got", ret)
+			t.Error("Expected return value to be 7, got", ret)
 		}
 	})
 }
@@ -572,6 +572,46 @@ func TestTailCall(t *testing.T) {
 	})
 }
 
+func TestLinuxKernelVersion(t *testing.T) {
+	testutils.Files(t, testutils.Glob(t, "testdata/linux_kernel_version-*.elf"), func(t *testing.T, file string) {
+		spec, err := LoadCollectionSpec(file)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if spec.ByteOrder != internal.NativeEndian {
+			return
+		}
+
+		var obj struct {
+			Main *Program `ebpf:"linux_kernel_version"`
+		}
+
+		err = spec.LoadAndAssign(&obj, nil)
+		testutils.SkipIfNotSupported(t, err)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer obj.Main.Close()
+
+		ret, _, err := obj.Main.Test(internal.EmptyBPFContext)
+		testutils.SkipIfNotSupported(t, err)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		v, err := internal.KernelVersion()
+		if err != nil {
+			t.Fatalf("getting kernel version: %s", err)
+		}
+
+		version := v.Kernel()
+		if ret != version {
+			t.Fatalf("Expected eBPF to return value %d, got %d", version, ret)
+		}
+	})
+}
+
 func TestSubprogRelocation(t *testing.T) {
 	testutils.SkipOnOldKernel(t, "5.13", "bpf_for_each_map_elem")
 
@@ -773,6 +813,8 @@ func TestLibBPFCompat(t *testing.T) {
 			t.Skip("Skipping due to possible bug in upstream CO-RE generation")
 		case "test_usdt.o", "test_usdt.linked3.o", "test_urandom_usdt.o", "test_urandom_usdt.linked3.o", "test_usdt_multispec.o":
 			t.Skip("Skipping due to missing support for usdt.bpf.h")
+		case "bpf_cubic.o", "bpf_iter_tcp6.o", "bpf_iter_tcp6.linked3.o", "bpf_iter_tcp4.o", "bpf_iter_tcp4.linked3.o", "bpf_iter_ipv6_route.o", "bpf_iter_ipv6_route.linked3.o", "test_subskeleton_lib.o", "test_skeleton.o", "test_skeleton.linked3.o", "test_subskeleton_lib.linked3.o", "test_subskeleton.o", "test_subskeleton.linked3.o", "test_core_extern.linked3.o", "test_core_extern.o", "profiler1.linked3.o", "profiler3.o", "profiler3.linked3.o", "profiler2.o", "profiler2.linked3.o", "profiler1.o":
+			t.Skip("Skipping due to using CONFIG_* variable which are not supported at the moment")
 		}
 
 		t.Parallel()

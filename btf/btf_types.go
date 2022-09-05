@@ -237,7 +237,7 @@ type btfVariable struct {
 
 type btfEnum struct {
 	NameOff uint32
-	Val     int32
+	Val     uint32
 }
 
 type btfParam struct {

@@ -18,6 +18,8 @@ import (
 	"github.com/cilium/ebpf/internal/unix"
 )
 
+const kconfigMap = ".kconfig"
+
 // elfCode is a convenience to reduce the amount of arguments that have to
 // be passed around explicitly. You should treat its contents as immutable.
 type elfCode struct {
@@ -138,6 +140,10 @@ func LoadCollectionSpecFromReader(rd io.ReaderAt) (*CollectionSpec, error) {
 
 	if err := ec.loadDataSections(); err != nil {
 		return nil, fmt.Errorf("load data sections: %w", err)
+	}
+
+	if err := ec.loadVirtualDataSections(); err != nil {
+		return nil, fmt.Errorf("load virtual data sections: %w", err)
 	}
 
 	// Finally, collect programs and link them.
@@ -566,6 +572,10 @@ func (ec *elfCode) relocateInstruction(ins *asm.Instruction, rel elf.Symbol) err
 			return fmt.Errorf("neither a call nor a load instruction: %v", ins)
 		}
 
+	// The Undefined section is used for 'virtual' symbols that aren't backed by
+	// an ELF section. This includes symbol references from inline asm, forward
+	// function declarations, as well as extern kfunc declarations using __ksym
+	// and extern kconfig variables declared using __kconfig.
 	case undefSection:
 		if bind != elf.STB_GLOBAL {
 			return fmt.Errorf("asm relocation: %s: unsupported binding: %s", name, bind)
@@ -575,7 +585,39 @@ func (ec *elfCode) relocateInstruction(ins *asm.Instruction, rel elf.Symbol) err
 			return fmt.Errorf("asm relocation: %s: unsupported type %s", name, typ)
 		}
 
-		// There is nothing to do here but set ins.Reference.
+		// If no kconfig map is found, this must be a symbol reference from inline
+		// asm (see testdata/loader.c:asm_relocation()) or a call to a forward
+		// function declaration (see testdata/fwd_decl.c). Don't interfere, these
+		// remain standard symbol references.
+		kc := ec.maps[kconfigMap]
+		if kc == nil {
+			break
+		}
+
+		// extern __kconfig reads are represented as dword loads that need to be
+		// rewritten to pseudo map loads from .kconfig. If the map is present,
+		// require it to contain the symbol to disambiguate between inline asm
+		// relos and kconfigs.
+		if ins.OpCode.IsDWordLoad() {
+			var found bool
+			for _, vsi := range kc.Value.(*btf.Datasec).Vars {
+				if vsi.Type.(*btf.Var).Name != rel.Name {
+					continue
+				}
+
+				// Encode a map read at the offset of the var in the datasec.
+				ins.Constant = int64(uint64(vsi.Offset) << 32)
+				ins.Src = asm.PseudoMapValue
+				name = kconfigMap
+
+				found = true
+				break
+			}
+
+			if !found {
+				return fmt.Errorf("kconfig %s not found in %s", rel.Name, kconfigMap)
+			}
+		}
 
 	default:
 		return fmt.Errorf("relocation to %q: %w", target.Name, ErrNotSupported)
@@ -1067,6 +1109,41 @@ func (ec *elfCode) loadDataSections() error {
 
 		ec.maps[sec.Name] = mapSpec
 	}
+
+	return nil
+}
+
+// loadVirtualDataSections handles 'virtual' Datasecs like .kconfig that don't
+// have corresponding ELF sections and exist purely in BTF.
+func (ec *elfCode) loadVirtualDataSections() error {
+	if ec.btf == nil {
+		return nil
+	}
+
+	var ds *btf.Datasec
+	err := ec.btf.TypeByName(kconfigMap, &ds)
+	if errors.Is(err, btf.ErrNotFound) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+
+	if ds.Size == 0 {
+		return errors.New("zero-length .kconfig")
+	}
+
+	ec.maps[kconfigMap] = &MapSpec{
+		Name:       kconfigMap,
+		Type:       Array,
+		KeySize:    uint32(4),
+		ValueSize:  ds.Size,
+		MaxEntries: 1,
+		Flags:      unix.BPF_F_RDONLY_PROG | unix.BPF_F_MMAPABLE,
+		Key:        &btf.Int{Size: 4},
+		Value:      ds,
+	}
+
 	return nil
 }
 

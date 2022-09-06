@@ -123,9 +123,9 @@ type ProgramSpec struct {
 	// detect this value automatically.
 	KernelVersion uint32
 
-	// The BTF associated with this program. Changing Instructions
-	// will most likely invalidate the contained data, and may
-	// result in errors when attempting to load it into the kernel.
+	// The BTF associated with this program.
+	//
+	// Deprecated: use [CollectionSpec.Types] instead.
 	BTF *btf.Spec
 
 	// The byte order this program was compiled for, may be nil.
@@ -186,17 +186,14 @@ func NewProgramWithOptions(spec *ProgramSpec, opts ProgramOptions) (*Program, er
 		return nil, errors.New("can't load a program from a nil spec")
 	}
 
-	handles := newHandleCache()
-	defer handles.close()
-
-	prog, err := newProgramWithOptions(spec, opts, handles)
+	prog, err := newProgramWithOptions(spec, opts)
 	if errors.Is(err, asm.ErrUnsatisfiedMapReference) {
 		return nil, fmt.Errorf("cannot load program without loading its whole collection: %w", err)
 	}
 	return prog, err
 }
 
-func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions, handles *handleCache) (*Program, error) {
+func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions) (*Program, error) {
 	if len(spec.Instructions) == 0 {
 		return nil, errors.New("instructions cannot be empty")
 	}
@@ -241,30 +238,23 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions, handles *hand
 	insns := make(asm.Instructions, len(spec.Instructions))
 	copy(insns, spec.Instructions)
 
-	var btfDisabled bool
-	if spec.BTF != nil {
-		handle, err := handles.btfHandle(spec.BTF)
-		btfDisabled = errors.Is(err, btf.ErrNotSupported)
-		if err != nil && !btfDisabled {
-			return nil, fmt.Errorf("load BTF: %w", err)
-		}
+	handle, fib, lib, err := btf.MarshalExtInfos(insns)
+	btfDisabled := errors.Is(err, btf.ErrNotSupported)
+	if err != nil && !btfDisabled {
+		return nil, fmt.Errorf("load ext_infos: %w", err)
+	}
+	if handle != nil {
+		defer handle.Close()
 
-		if handle != nil {
-			attr.ProgBtfFd = uint32(handle.FD())
+		attr.ProgBtfFd = uint32(handle.FD())
 
-			fib, lib, err := btf.MarshalExtInfos(insns, spec.BTF.TypeID)
-			if err != nil {
-				return nil, err
-			}
+		attr.FuncInfoRecSize = btf.FuncInfoSize
+		attr.FuncInfoCnt = uint32(len(fib)) / btf.FuncInfoSize
+		attr.FuncInfo = sys.NewSlicePointer(fib)
 
-			attr.FuncInfoRecSize = btf.FuncInfoSize
-			attr.FuncInfoCnt = uint32(len(fib)) / btf.FuncInfoSize
-			attr.FuncInfo = sys.NewSlicePointer(fib)
-
-			attr.LineInfoRecSize = btf.LineInfoSize
-			attr.LineInfoCnt = uint32(len(lib)) / btf.LineInfoSize
-			attr.LineInfo = sys.NewSlicePointer(lib)
-		}
+		attr.LineInfoRecSize = btf.LineInfoSize
+		attr.LineInfoCnt = uint32(len(lib)) / btf.LineInfoSize
+		attr.LineInfo = sys.NewSlicePointer(lib)
 	}
 
 	if err := applyRelocations(insns, opts.KernelTypes, spec.ByteOrder); err != nil {
@@ -276,7 +266,7 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions, handles *hand
 	}
 
 	buf := bytes.NewBuffer(make([]byte, 0, insns.Size()))
-	err := insns.Marshal(buf, internal.NativeEndian)
+	err = insns.Marshal(buf, internal.NativeEndian)
 	if err != nil {
 		return nil, err
 	}
@@ -366,7 +356,7 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions, handles *hand
 
 	err = internal.ErrorWithLog(err, logBuf, truncated)
 	if btfDisabled {
-		return nil, fmt.Errorf("load program: %w (kernel without BTF support)", err)
+		return nil, fmt.Errorf("load program: %w (BTF disabled)", err)
 	}
 	return nil, fmt.Errorf("load program: %w", err)
 }

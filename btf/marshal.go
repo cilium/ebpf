@@ -135,6 +135,19 @@ func (b *Encoder) Encode() ([]byte, error) {
 	return buf, nil
 }
 
+func (b *Encoder) Load() (*Handle, error) {
+	if b.opts.ByteOrder != internal.NativeEndian {
+		return nil, fmt.Errorf("can't load %s BTF on %s host", b.opts.ByteOrder, internal.NativeEndian)
+	}
+
+	raw, err := b.Encode()
+	if err != nil {
+		return nil, fmt.Errorf("encode BTF: %w", err)
+	}
+
+	return loadBTF(raw)
+}
+
 func (b *Encoder) deflateType(typ Type) (err error) {
 	raw := &b.raw
 	*raw = rawType{}

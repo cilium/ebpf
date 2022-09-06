@@ -644,10 +644,6 @@ type Handle struct {
 //
 // Returns ErrNotSupported if BTF is not supported.
 func NewHandle(spec *Spec) (*Handle, error) {
-	if err := haveBTF(); err != nil {
-		return nil, err
-	}
-
 	if spec.byteOrder != nil && spec.byteOrder != internal.NativeEndian {
 		return nil, fmt.Errorf("can't load %s BTF on %s", spec.byteOrder, internal.NativeEndian)
 	}
@@ -661,9 +657,12 @@ func NewHandle(spec *Spec) (*Handle, error) {
 		}
 	}
 
-	btf, err := enc.Encode()
-	if err != nil {
-		return nil, fmt.Errorf("marshal BTF: %w", err)
+	return enc.Load()
+}
+
+func loadBTF(btf []byte) (*Handle, error) {
+	if err := haveBTF(); err != nil {
+		return nil, err
 	}
 
 	if uint64(len(btf)) > math.MaxUint32 {

@@ -511,10 +511,6 @@ func (cl *collectionLoader) loadProgram(progName string) (*Program, error) {
 		return nil, fmt.Errorf("cannot load program %s: program type is unspecified", progName)
 	}
 
-	if progSpec.BTF != nil && cl.coll.Types != progSpec.BTF {
-		return nil, fmt.Errorf("program %s: BTF doesn't match collection", progName)
-	}
-
 	progSpec = progSpec.Copy()
 
 	// Rewrite any reference to a valid map in the program's instructions,
@@ -543,7 +539,7 @@ func (cl *collectionLoader) loadProgram(progName string) (*Program, error) {
 		}
 	}
 
-	prog, err := newProgramWithOptions(progSpec, cl.opts.Programs, cl.handles)
+	prog, err := newProgramWithOptions(progSpec, cl.opts.Programs)
 	if err != nil {
 		return nil, fmt.Errorf("program %s: %w", progName, err)
 	}

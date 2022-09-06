@@ -117,17 +117,3 @@ func BenchmarkBuildVmlinux(b *testing.B) {
 		}
 	}
 }
-
-func BenchmarkBuildVmlinuxLegacy(b *testing.B) {
-	spec := parseVMLinuxTypes(b)
-
-	b.ReportAllocs()
-	b.ResetTimer()
-
-	for i := 0; i < b.N; i++ {
-		_, err := spec.marshal(marshalOpts{ByteOrder: binary.LittleEndian})
-		if err != nil {
-			b.Fatal(err)
-		}
-	}
-}

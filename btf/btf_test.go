@@ -286,7 +286,7 @@ func TestLoadSpecFromElf(t *testing.T) {
 }
 
 func TestVerifierError(t *testing.T) {
-	_, err := NewHandle(&Spec{})
+	_, err := NewEncoder(KernelEncoderOptions).Load()
 	testutils.SkipIfNotSupported(t, err)
 	var ve *internal.VerifierError
 	if !errors.As(err, &ve) {

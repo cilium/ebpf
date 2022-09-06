@@ -37,7 +37,7 @@ func TestCORERelocationLoad(t *testing.T) {
 				}
 
 				prog, err := ebpf.NewProgramWithOptions(progSpec, ebpf.ProgramOptions{
-					KernelTypes: progSpec.BTF,
+					KernelTypes: spec.Types,
 				})
 
 				if strings.HasPrefix(progSpec.Name, "err_") {

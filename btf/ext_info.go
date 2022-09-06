@@ -8,6 +8,7 @@ import (
 	"io"
 	"math"
 	"sort"
+	"sync"
 
 	"github.com/cilium/ebpf/asm"
 	"github.com/cilium/ebpf/internal"
@@ -130,19 +131,42 @@ func (ei *ExtInfos) Assign(insns asm.Instructions, section string) {
 	}
 }
 
+var nativeEncoderPool = sync.Pool{
+	New: func() any {
+		return NewEncoder(KernelEncoderOptions)
+	},
+}
+
 // MarshalExtInfos encodes function and line info embedded in insns into kernel
 // wire format.
-func MarshalExtInfos(insns asm.Instructions, typeID func(Type) (TypeID, error)) (funcInfos, lineInfos []byte, _ error) {
+func MarshalExtInfos(insns asm.Instructions) (_ *Handle, funcInfos, lineInfos []byte, _ error) {
 	iter := insns.Iterate()
-	var fiBuf, liBuf bytes.Buffer
 	for iter.Next() {
+		_, ok := iter.Ins.Source().(*Line)
+		fn := FuncMetadata(iter.Ins)
+		if ok || fn != nil {
+			goto marshal
+		}
+	}
+
+	// Avoid allocating encoder, etc. if there is no BTF at all.
+	return nil, nil, nil, nil
+
+marshal:
+	enc := nativeEncoderPool.Get().(*Encoder)
+	defer nativeEncoderPool.Put(enc)
+
+	enc.Reset()
+
+	var fiBuf, liBuf bytes.Buffer
+	for {
 		if fn := FuncMetadata(iter.Ins); fn != nil {
 			fi := &funcInfo{
 				fn:     fn,
 				offset: iter.Offset,
 			}
-			if err := fi.marshal(&fiBuf, typeID); err != nil {
-				return nil, nil, fmt.Errorf("write func info: %w", err)
+			if err := fi.marshal(&fiBuf, enc); err != nil {
+				return nil, nil, nil, fmt.Errorf("write func info: %w", err)
 			}
 		}
 
@@ -151,12 +175,18 @@ func MarshalExtInfos(insns asm.Instructions, typeID func(Type) (TypeID, error)) 
 				line:   line,
 				offset: iter.Offset,
 			}
-			if err := li.marshal(&liBuf); err != nil {
-				return nil, nil, fmt.Errorf("write line info: %w", err)
+			if err := li.marshal(&liBuf, enc.strings); err != nil {
+				return nil, nil, nil, fmt.Errorf("write line info: %w", err)
 			}
 		}
+
+		if !iter.Next() {
+			break
+		}
 	}
-	return fiBuf.Bytes(), liBuf.Bytes(), nil
+
+	handle, err := enc.Load()
+	return handle, fiBuf.Bytes(), liBuf.Bytes(), err
 }
 
 // btfExtHeader is found at the start of the .BTF.ext section.
@@ -349,8 +379,8 @@ func newFuncInfos(bfis []bpfFuncInfo, ts types) ([]funcInfo, error) {
 }
 
 // marshal into the BTF wire format.
-func (fi *funcInfo) marshal(w io.Writer, typeID func(Type) (TypeID, error)) error {
-	id, err := typeID(fi.fn)
+func (fi *funcInfo) marshal(w io.Writer, enc *Encoder) error {
+	id, err := enc.Add(fi.fn)
 	if err != nil {
 		return err
 	}
@@ -428,12 +458,6 @@ type Line struct {
 	line       string
 	lineNumber uint32
 	lineColumn uint32
-
-	// TODO: We should get rid of the fields below, but for that we need to be
-	// able to write BTF.
-
-	fileNameOff uint32
-	lineOff     uint32
 }
 
 func (li *Line) FileName() string {
@@ -496,8 +520,6 @@ func newLineInfo(li bpfLineInfo, strings *stringTable) (*lineInfo, error) {
 			line,
 			lineNumber,
 			lineColumn,
-			li.FileNameOff,
-			li.LineOff,
 		},
 		asm.RawInstructionOffset(li.InsnOff),
 	}, nil
@@ -519,7 +541,7 @@ func newLineInfos(blis []bpfLineInfo, strings *stringTable) ([]lineInfo, error) 
 }
 
 // marshal writes the binary representation of the LineInfo to w.
-func (li *lineInfo) marshal(w io.Writer) error {
+func (li *lineInfo) marshal(w io.Writer, stb *stringTableBuilder) error {
 	line := li.line
 	if line.lineNumber > bpfLineMax {
 		return fmt.Errorf("line %d exceeds %d", line.lineNumber, bpfLineMax)
@@ -529,10 +551,20 @@ func (li *lineInfo) marshal(w io.Writer) error {
 		return fmt.Errorf("column %d exceeds %d", line.lineColumn, bpfColumnMax)
 	}
 
+	fileNameOff, err := stb.Add(line.fileName)
+	if err != nil {
+		return fmt.Errorf("file name %q: %w", line.fileName, err)
+	}
+
+	lineOff, err := stb.Add(line.line)
+	if err != nil {
+		return fmt.Errorf("line %q: %w", line.line, err)
+	}
+
 	bli := bpfLineInfo{
 		uint32(li.offset),
-		line.fileNameOff,
-		line.lineOff,
+		fileNameOff,
+		lineOff,
 		(line.lineNumber << bpfLineShift) | line.lineColumn,
 	}
 	return binary.Write(w, internal.NativeEndian, &bli)

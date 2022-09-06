@@ -415,6 +415,37 @@ func TestInflateLegacyBitfield(t *testing.T) {
 	}
 }
 
+func BenchmarkWalk(b *testing.B) {
+	types := []Type{
+		&Void{},
+		&Int{},
+		&Pointer{},
+		&Array{},
+		&Struct{Members: make([]Member, 2)},
+		&Union{Members: make([]Member, 2)},
+		&Enum{},
+		&Fwd{},
+		&Typedef{},
+		&Volatile{},
+		&Const{},
+		&Restrict{},
+		&Func{},
+		&FuncProto{Params: make([]FuncParam, 2)},
+		&Var{},
+		&Datasec{Vars: make([]VarSecinfo, 2)},
+	}
+
+	for _, typ := range types {
+		b.Run(fmt.Sprint(typ), func(b *testing.B) {
+			b.ReportAllocs()
+
+			for i := 0; i < b.N; i++ {
+				typ.walk(&typeDeque{})
+			}
+		})
+	}
+}
+
 func BenchmarkUnderlyingType(b *testing.B) {
 	b.Run("no unwrapping", func(b *testing.B) {
 		v := &Int{}

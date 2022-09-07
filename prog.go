@@ -624,8 +624,12 @@ var haveProgTestRun = internal.FeatureTest("BPF_PROG_TEST_RUN", "4.12", func() e
 	}
 	defer prog.Close()
 
-	// Programs require at least 14 bytes input
-	in := make([]byte, 14)
+	// Programs require at least 15 bytes input
+	// Looking in net/bpf/test_run.c, bpf_test_init() requires that the input is
+	// at least ETH_HLEN (14) bytes.  A recent patch[0] also ensures that the skb
+	// is not empty after the layer 2 header is removed.
+	// [0]: https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=fd1894224407c484f652ad456e1ce423e89bb3eb
+	in := make([]byte, 15)
 	attr := sys.ProgRunAttr{
 		ProgFd:     uint32(prog.FD()),
 		DataSizeIn: uint32(len(in)),

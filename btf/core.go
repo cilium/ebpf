@@ -855,7 +855,7 @@ func coreAreTypesCompatible(localType Type, targetType Type) error {
 		depth             = 0
 	)
 
-	for ; l != nil && t != nil; l, t = localTs.shift(), targetTs.shift() {
+	for ; l != nil && t != nil; l, t = localTs.Shift(), targetTs.Shift() {
 		if depth >= maxTypeDepth {
 			return errors.New("types are nested too deep")
 		}
@@ -873,8 +873,8 @@ func coreAreTypesCompatible(localType Type, targetType Type) error {
 
 		case *Pointer, *Array:
 			depth++
-			walkType(localType, localTs.push)
-			walkType(targetType, targetTs.push)
+			walkType(localType, localTs.Push)
+			walkType(targetType, targetTs.Push)
 
 		case *FuncProto:
 			tv := targetType.(*FuncProto)
@@ -883,8 +883,8 @@ func coreAreTypesCompatible(localType Type, targetType Type) error {
 			}
 
 			depth++
-			walkType(localType, localTs.push)
-			walkType(targetType, targetTs.push)
+			walkType(localType, localTs.Push)
+			walkType(targetType, targetTs.Push)
 
 		default:
 			return fmt.Errorf("unsupported type %T", localType)

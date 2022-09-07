@@ -855,7 +855,7 @@ func coreAreTypesCompatible(localType Type, targetType Type) error {
 		depth             = 0
 	)
 
-	for ; l != nil && t != nil; l, t = localTs.shift(), targetTs.shift() {
+	for ; l != nil && t != nil; l, t = localTs.Shift(), targetTs.Shift() {
 		if depth >= maxTypeDepth {
 			return errors.New("types are nested too deep")
 		}

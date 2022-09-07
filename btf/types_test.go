@@ -153,11 +153,7 @@ func TestType(t *testing.T) {
 				t.Error("Copy doesn't copy")
 			}
 
-			var first, second typeDeque
-			typ.walk(&first)
-			typ.walk(&second)
-
-			if diff := cmp.Diff(first.all(), second.all(), compareTypes); diff != "" {
+			if diff := cmp.Diff(typ.children(), typ.children(), compareTypes); diff != "" {
 				t.Errorf("Walk mismatch (-want +got):\n%s", diff)
 			}
 		})
@@ -440,7 +436,8 @@ func BenchmarkWalk(b *testing.B) {
 			b.ReportAllocs()
 
 			for i := 0; i < b.N; i++ {
-				typ.walk(&typeDeque{})
+				var dq typeDeque
+				walkType(typ, dq.Push)
 			}
 		})
 	}

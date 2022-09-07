@@ -160,77 +160,78 @@ func TestType(t *testing.T) {
 	}
 }
 
-func TestTypeDeque(t *testing.T) {
-	a, b := new(Type), new(Type)
-
+func TestDeque(t *testing.T) {
 	t.Run("pop", func(t *testing.T) {
-		var td typeDeque
-		td.push(a)
-		td.push(b)
+		var dq deque[int]
+		dq.push(1)
+		dq.push(2)
 
-		if td.pop() != b {
-			t.Error("Didn't pop b first")
+		if dq.pop() != 2 {
+			t.Error("Didn't pop 2 first")
 		}
 
-		if td.pop() != a {
-			t.Error("Didn't pop a second")
+		if dq.pop() != 1 {
+			t.Error("Didn't pop 1 second")
 		}
 
-		if td.pop() != nil {
-			t.Error("Didn't pop nil")
+		if dq.pop() != 0 {
+			t.Error("Didn't pop zero")
 		}
 	})
 
 	t.Run("shift", func(t *testing.T) {
-		var td typeDeque
-		td.push(a)
-		td.push(b)
+		var td deque[int]
+		td.push(1)
+		td.push(2)
 
-		if td.shift() != a {
-			t.Error("Didn't shift a second")
+		if td.shift() != 1 {
+			t.Error("Didn't shift 1 first")
 		}
 
-		if td.shift() != b {
-			t.Error("Didn't shift b first")
+		if td.shift() != 2 {
+			t.Error("Didn't shift b second")
 		}
 
-		if td.shift() != nil {
-			t.Error("Didn't shift nil")
+		if td.shift() != 0 {
+			t.Error("Didn't shift zero")
 		}
 	})
 
 	t.Run("push", func(t *testing.T) {
-		var td typeDeque
-		td.push(a)
-		td.push(b)
+		var td deque[int]
+		td.push(1)
+		td.push(2)
 		td.shift()
 
-		ts := make([]Type, 12)
-		for i := range ts {
-			td.push(&ts[i])
+		for i := 1; i <= 12; i++ {
+			td.push(i)
 		}
 
-		if td.shift() != b {
-			t.Error("Didn't shift b first")
+		if td.shift() != 2 {
+			t.Error("Didn't shift 2 first")
 		}
-		for i := range ts {
-			if td.shift() != &ts[i] {
-				t.Fatal("Shifted wrong Type at pos", i)
+		for i := 1; i <= 12; i++ {
+			if v := td.shift(); v != i {
+				t.Fatalf("Shifted %d at pos %d", v, i)
 			}
 		}
 	})
 
-	t.Run("all", func(t *testing.T) {
-		var td typeDeque
-		td.push(a)
-		td.push(b)
+	t.Run("linearise", func(t *testing.T) {
+		var td deque[int]
+		td.push(1)
+		td.push(2)
 
-		all := td.all()
+		all := td.linearise(0)
 		if len(all) != 2 {
 			t.Fatal("Expected 2 elements, got", len(all))
 		}
 
-		if all[0] != a || all[1] != b {
+		if cap(all)&(cap(all)-1) != 0 {
+			t.Fatalf("Capacity %d is not a power of two", cap(all))
+		}
+
+		if all[0] != 1 || all[1] != 2 {
 			t.Fatal("Elements don't match")
 		}
 	})

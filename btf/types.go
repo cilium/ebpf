@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"math/bits"
 	"reflect"
 	"strings"
 
@@ -699,77 +700,91 @@ func (c copier) copy(typ *Type, transform Transformer) {
 	}
 }
 
-// typeDeque keeps track of pointers to types which still
-// need to be visited.
-type typeDeque struct {
-	types       []*Type
+type typeDeque = deque[*Type]
+
+// deque implements a double ended queue.
+type deque[T any] struct {
+	elems       []T
 	read, write uint64
 	mask        uint64
 }
 
-func (dq *typeDeque) empty() bool {
+func (dq *deque[T]) empty() bool {
 	return dq.read == dq.write
 }
 
-// push adds a type to the stack.
-func (dq *typeDeque) push(t *Type) {
-	if dq.write-dq.read < uint64(len(dq.types)) {
-		dq.types[dq.write&dq.mask] = t
+func (dq *deque[T]) remainingCap() int {
+	return len(dq.elems) - int(dq.write-dq.read)
+}
+
+// push adds an element to the end.
+func (dq *deque[T]) push(e T) {
+	if dq.remainingCap() >= 1 {
+		dq.elems[dq.write&dq.mask] = e
 		dq.write++
 		return
 	}
 
-	new := len(dq.types) * 2
-	if new == 0 {
-		new = 8
-	}
+	elems := dq.linearise(1)
+	elems = append(elems, e)
 
-	types := make([]*Type, new)
-	pivot := dq.read & dq.mask
-	n := copy(types, dq.types[pivot:])
-	n += copy(types[n:], dq.types[:pivot])
-	types[n] = t
-
-	dq.types = types
-	dq.mask = uint64(new) - 1
-	dq.read, dq.write = 0, uint64(n+1)
+	dq.elems = elems[:cap(elems)]
+	dq.mask = uint64(cap(elems)) - 1
+	dq.read, dq.write = 0, uint64(len(elems))
 }
 
-// shift returns the first element or null.
-func (dq *typeDeque) shift() *Type {
+// shift returns the first element or the zero value.
+func (dq *deque[T]) shift() T {
+	var zero T
+
 	if dq.empty() {
-		return nil
+		return zero
 	}
 
 	index := dq.read & dq.mask
-	t := dq.types[index]
-	dq.types[index] = nil
+	t := dq.elems[index]
+	dq.elems[index] = zero
 	dq.read++
 	return t
 }
 
-// pop returns the last element or null.
-func (dq *typeDeque) pop() *Type {
+// pop returns the last element or the zero value.
+func (dq *deque[T]) pop() T {
+	var zero T
+
 	if dq.empty() {
-		return nil
+		return zero
 	}
 
 	dq.write--
 	index := dq.write & dq.mask
-	t := dq.types[index]
-	dq.types[index] = nil
+	t := dq.elems[index]
+	dq.elems[index] = zero
 	return t
 }
 
-// all returns all elements.
+// linearise the contents of the deque.
 //
-// The deque is empty after calling this method.
-func (dq *typeDeque) all() []*Type {
+// The returned slice has space for at least n more elements and has power
+// of two capacity.
+func (dq *deque[T]) linearise(n int) []T {
 	length := dq.write - dq.read
-	types := make([]*Type, 0, length)
-	for t := dq.shift(); t != nil; t = dq.shift() {
-		types = append(types, t)
+	need := length + uint64(n)
+	if need < length {
+		panic("overflow")
 	}
+
+	// Round up to the new power of two which is at least 8.
+	// See https://jameshfisher.com/2018/03/30/round-up-power-2/
+	capacity := 1 << (64 - bits.LeadingZeros64(need-1))
+	if capacity < 8 {
+		capacity = 8
+	}
+
+	types := make([]T, length, capacity)
+	pivot := dq.read & dq.mask
+	copied := copy(types, dq.elems[pivot:])
+	copy(types[copied:], dq.elems[:pivot])
 	return types
 }
 

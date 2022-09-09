@@ -337,8 +337,6 @@ func (spec *MapSpec) createMap(inner *sys.FD, opts MapOptions) (_ *Map, err erro
 		}
 	}
 
-	spec = spec.Copy()
-
 	// Kernels 4.13 through 5.4 used a struct bpf_map_def that contained
 	// additional 'inner_map_idx' and later 'numa_node' fields.
 	// In order to support loading these definitions, tolerate the presence of
@@ -358,17 +356,21 @@ func (spec *MapSpec) createMap(inner *sys.FD, opts MapOptions) (_ *Map, err erro
 		if spec.ValueSize != 0 && spec.ValueSize != 4 {
 			return nil, errors.New("ValueSize must be zero or four for map of map")
 		}
+
+		spec = spec.Copy()
 		spec.ValueSize = 4
 
 	case PerfEventArray:
 		if spec.KeySize != 0 && spec.KeySize != 4 {
 			return nil, errors.New("KeySize must be zero or four for perf event array")
 		}
-		spec.KeySize = 4
 
 		if spec.ValueSize != 0 && spec.ValueSize != 4 {
 			return nil, errors.New("ValueSize must be zero or four for perf event array")
 		}
+
+		spec = spec.Copy()
+		spec.KeySize = 4
 		spec.ValueSize = 4
 
 		if spec.MaxEntries == 0 {

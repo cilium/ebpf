@@ -522,17 +522,22 @@ func (cl *collectionLoader) populateMaps() error {
 			return fmt.Errorf("missing map spec %s", mapName)
 		}
 
-		mapSpec = mapSpec.Copy()
-
 		// MapSpecs that refer to inner maps or programs within the same
 		// CollectionSpec do so using strings. These strings are used as the key
 		// to look up the respective object in the Maps or Programs fields.
 		// Resolve those references to actual Map or Program resources that
 		// have been loaded into the kernel.
-		for i, kv := range mapSpec.Contents {
-			if objName, ok := kv.Value.(string); ok {
-				switch mapSpec.Type {
-				case ProgramArray:
+		if mapSpec.Type.canStoreMap() || mapSpec.Type.canStoreProgram() {
+			mapSpec = mapSpec.Copy()
+
+			for i, kv := range mapSpec.Contents {
+				objName, ok := kv.Value.(string)
+				if !ok {
+					continue
+				}
+
+				switch t := mapSpec.Type; {
+				case t.canStoreProgram():
 					// loadProgram is idempotent and could return an existing Program.
 					prog, err := cl.loadProgram(objName)
 					if err != nil {
@@ -540,7 +545,7 @@ func (cl *collectionLoader) populateMaps() error {
 					}
 					mapSpec.Contents[i] = MapKV{kv.Key, prog}
 
-				case ArrayOfMaps, HashOfMaps:
+				case t.canStoreMap():
 					// loadMap is idempotent and could return an existing Map.
 					innerMap, err := cl.loadMap(objName)
 					if err != nil {

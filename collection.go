@@ -522,8 +522,6 @@ func (cl *collectionLoader) populateMaps() error {
 			return fmt.Errorf("missing map spec %s", mapName)
 		}
 
-		mapSpec = mapSpec.Copy()
-
 		// MapSpecs that refer to inner maps or programs within the same
 		// CollectionSpec do so using strings. These strings are used as the key
 		// to look up the respective object in the Maps or Programs fields.
@@ -538,6 +536,7 @@ func (cl *collectionLoader) populateMaps() error {
 					if err != nil {
 						return fmt.Errorf("loading program %s, for map %s: %w", objName, mapName, err)
 					}
+					mapSpec = mapSpec.Copy()
 					mapSpec.Contents[i] = MapKV{kv.Key, prog}
 
 				case ArrayOfMaps, HashOfMaps:
@@ -546,6 +545,7 @@ func (cl *collectionLoader) populateMaps() error {
 					if err != nil {
 						return fmt.Errorf("loading inner map %s, for map %s: %w", objName, mapName, err)
 					}
+					mapSpec = mapSpec.Copy()
 					mapSpec.Contents[i] = MapKV{kv.Key, innerMap}
 				}
 			}

@@ -384,7 +384,7 @@ func newFuncInfos(bfis []bpfFuncInfo, ts types) ([]funcInfo, error) {
 }
 
 // marshal into the BTF wire format.
-func (fi *funcInfo) marshal(w io.Writer, enc *encoder) error {
+func (fi *funcInfo) marshal(w *bytes.Buffer, enc *encoder) error {
 	id, err := enc.Add(fi.fn)
 	if err != nil {
 		return err
@@ -393,7 +393,11 @@ func (fi *funcInfo) marshal(w io.Writer, enc *encoder) error {
 		InsnOff: uint32(fi.offset),
 		TypeID:  id,
 	}
-	return binary.Write(w, internal.NativeEndian, &bfi)
+	buf := make([]byte, FuncInfoSize)
+	internal.NativeEndian.PutUint32(buf, bfi.InsnOff)
+	internal.NativeEndian.PutUint32(buf[4:], uint32(bfi.TypeID))
+	_, err = w.Write(buf)
+	return err
 }
 
 // parseLineInfos parses a func_info sub-section within .BTF.ext ito a map of
@@ -546,7 +550,7 @@ func newLineInfos(blis []bpfLineInfo, strings *stringTable) ([]lineInfo, error) 
 }
 
 // marshal writes the binary representation of the LineInfo to w.
-func (li *lineInfo) marshal(w io.Writer, stb *stringTableBuilder) error {
+func (li *lineInfo) marshal(w *bytes.Buffer, stb *stringTableBuilder) error {
 	line := li.line
 	if line.lineNumber > bpfLineMax {
 		return fmt.Errorf("line %d exceeds %d", line.lineNumber, bpfLineMax)
@@ -572,7 +576,14 @@ func (li *lineInfo) marshal(w io.Writer, stb *stringTableBuilder) error {
 		lineOff,
 		(line.lineNumber << bpfLineShift) | line.lineColumn,
 	}
-	return binary.Write(w, internal.NativeEndian, &bli)
+
+	buf := make([]byte, LineInfoSize)
+	internal.NativeEndian.PutUint32(buf, bli.InsnOff)
+	internal.NativeEndian.PutUint32(buf[4:], bli.FileNameOff)
+	internal.NativeEndian.PutUint32(buf[8:], bli.LineOff)
+	internal.NativeEndian.PutUint32(buf[12:], bli.LineCol)
+	_, err = w.Write(buf)
+	return err
 }
 
 // parseLineInfos parses a line_info sub-section within .BTF.ext ito a map of

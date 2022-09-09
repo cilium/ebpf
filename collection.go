@@ -522,31 +522,34 @@ func (cl *collectionLoader) populateMaps() error {
 			return fmt.Errorf("missing map spec %s", mapName)
 		}
 
-		mapSpec = mapSpec.Copy()
+		switch mapSpec.Type {
+		case ProgramArray, ArrayOfMaps, HashOfMaps:
+			mapSpec = mapSpec.Copy()
 
-		// MapSpecs that refer to inner maps or programs within the same
-		// CollectionSpec do so using strings. These strings are used as the key
-		// to look up the respective object in the Maps or Programs fields.
-		// Resolve those references to actual Map or Program resources that
-		// have been loaded into the kernel.
-		for i, kv := range mapSpec.Contents {
-			if objName, ok := kv.Value.(string); ok {
-				switch mapSpec.Type {
-				case ProgramArray:
-					// loadProgram is idempotent and could return an existing Program.
-					prog, err := cl.loadProgram(objName)
-					if err != nil {
-						return fmt.Errorf("loading program %s, for map %s: %w", objName, mapName, err)
-					}
-					mapSpec.Contents[i] = MapKV{kv.Key, prog}
+			// MapSpecs that refer to inner maps or programs within the same
+			// CollectionSpec do so using strings. These strings are used as the key
+			// to look up the respective object in the Maps or Programs fields.
+			// Resolve those references to actual Map or Program resources that
+			// have been loaded into the kernel.
+			for i, kv := range mapSpec.Contents {
+				if objName, ok := kv.Value.(string); ok {
+					switch mapSpec.Type {
+					case ProgramArray:
+						// loadProgram is idempotent and could return an existing Program.
+						prog, err := cl.loadProgram(objName)
+						if err != nil {
+							return fmt.Errorf("loading program %s, for map %s: %w", objName, mapName, err)
+						}
+						mapSpec.Contents[i] = MapKV{kv.Key, prog}
 
-				case ArrayOfMaps, HashOfMaps:
-					// loadMap is idempotent and could return an existing Map.
-					innerMap, err := cl.loadMap(objName)
-					if err != nil {
-						return fmt.Errorf("loading inner map %s, for map %s: %w", objName, mapName, err)
+					case ArrayOfMaps, HashOfMaps:
+						// loadMap is idempotent and could return an existing Map.
+						innerMap, err := cl.loadMap(objName)
+						if err != nil {
+							return fmt.Errorf("loading inner map %s, for map %s: %w", objName, mapName, err)
+						}
+						mapSpec.Contents[i] = MapKV{kv.Key, innerMap}
 					}
-					mapSpec.Contents[i] = MapKV{kv.Key, innerMap}
 				}
 			}
 		}

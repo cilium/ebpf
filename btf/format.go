@@ -177,7 +177,11 @@ func (gf *GoFormatter) writeIntLit(i *Int) {
 	if i.Encoding.IsSigned() {
 		fmt.Fprintf(&gf.w, "int%d", bits)
 	} else {
-		fmt.Fprintf(&gf.w, "uint%d", bits)
+		if i.Size >= 16 {
+			fmt.Fprintf(&gf.w, "uint128.Uint128")
+		} else {
+			fmt.Fprintf(&gf.w, "uint%d", bits)
+		}
 	}
 }
 

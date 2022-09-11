@@ -964,7 +964,14 @@ func inflateRawTypes(rawTypes []rawType, baseTypes types, rawStrings *stringTabl
 			if bi.Offset() > 0 || bi.Bits().Bytes() != size {
 				legacyBitfields[id] = [2]Bits{bi.Offset(), bi.Bits()}
 			}
-			typ = &Int{name, raw.Size(), bi.Encoding()}
+			if size > 8 {
+				btfArr := &Array{Type: &Int{name, 1, bi.Encoding()}}
+				btfArr.Nelems = size
+				btfArr.Index = &Int{name, 8, bi.Encoding()}
+				typ = btfArr
+			} else {
+				typ = &Int{name, raw.Size(), bi.Encoding()}
+			}
 
 		case kindPointer:
 			ptr := &Pointer{nil}

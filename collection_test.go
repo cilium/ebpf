@@ -176,7 +176,7 @@ func TestCollectionSpecRewriteMaps(t *testing.T) {
 	}
 	defer coll.Close()
 
-	ret, _, err := coll.Programs["test-prog"].Test(make([]byte, 14))
+	ret, _, err := coll.Programs["test-prog"].Test(internal.EmptyBPFContext())
 	testutils.SkipIfNotSupported(t, err)
 	if err != nil {
 		t.Fatal(err)
@@ -242,7 +242,7 @@ func TestCollectionSpecMapReplacements(t *testing.T) {
 	}
 	defer coll.Close()
 
-	ret, _, err := coll.Programs["test-prog"].Test(make([]byte, 14))
+	ret, _, err := coll.Programs["test-prog"].Test(internal.EmptyBPFContext())
 	testutils.SkipIfNotSupported(t, err)
 	if err != nil {
 		t.Fatal(err)

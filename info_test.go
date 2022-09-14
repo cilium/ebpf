@@ -246,7 +246,7 @@ func BenchmarkStats(b *testing.B) {
 // be of a specific value after a call to Test() is therefore not possible.
 // See https://golang.org/doc/go1.14#runtime for more details.
 func testStats(prog *Program) error {
-	in := make([]byte, 14)
+	in := internal.EmptyBPFContext()
 
 	stats, err := EnableStats(uint32(unix.BPF_STATS_RUN_TIME))
 	if err != nil {

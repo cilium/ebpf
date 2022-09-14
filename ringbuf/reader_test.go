@@ -9,6 +9,7 @@ import (
 
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/asm"
+	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/testutils"
 	"github.com/google/go-cmp/cmp"
 )
@@ -47,7 +48,7 @@ func TestRingbufReader(t *testing.T) {
 			}
 			defer rd.Close()
 
-			ret, _, err := prog.Test(make([]byte, 14))
+			ret, _, err := prog.Test(internal.EmptyBPFContext)
 			testutils.SkipIfNotSupported(t, err)
 			if err != nil {
 				t.Fatal(err)
@@ -172,7 +173,7 @@ func TestReaderBlocking(t *testing.T) {
 	testutils.SkipOnOldKernel(t, "5.8", "BPF ring buffer")
 
 	prog, events := mustOutputSamplesProg(t, 0, 5)
-	ret, _, err := prog.Test(make([]byte, 14))
+	ret, _, err := prog.Test(internal.EmptyBPFContext)
 	testutils.SkipIfNotSupported(t, err)
 	if err != nil {
 		t.Fatal(err)
@@ -269,7 +270,7 @@ func BenchmarkReader(b *testing.B) {
 			}
 			defer rd.Close()
 
-			buf := make([]byte, 14)
+			buf := internal.EmptyBPFContext
 
 			b.ResetTimer()
 			b.ReportAllocs()
@@ -301,7 +302,7 @@ func BenchmarkReadInto(b *testing.B) {
 	}
 	defer rd.Close()
 
-	buf := make([]byte, 14)
+	buf := internal.EmptyBPFContext
 
 	b.ResetTimer()
 	b.ReportAllocs()

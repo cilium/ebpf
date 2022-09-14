@@ -28,7 +28,7 @@ func TestProgramRun(t *testing.T) {
 	testutils.SkipOnOldKernel(t, "4.8", "XDP program")
 
 	pat := []byte{0xDE, 0xAD, 0xBE, 0xEF}
-	buf := make([]byte, 14)
+	buf := internal.EmptyBPFContext
 
 	// r1  : ctx_start
 	// r1+4: ctx_end
@@ -110,10 +110,10 @@ func TestProgramRunWithOptions(t *testing.T) {
 	}
 	defer prog.Close()
 
-	buf := make([]byte, 14)
+	buf := internal.EmptyBPFContext
 	xdp := sys.XdpMd{
 		Data:    0,
-		DataEnd: 14,
+		DataEnd: uint32(len(buf)),
 	}
 	xdpOut := sys.XdpMd{}
 	opts := RunOptions{
@@ -176,7 +176,7 @@ func TestProgramRunEmptyData(t *testing.T) {
 func TestProgramBenchmark(t *testing.T) {
 	prog := mustSocketFilter(t)
 
-	ret, duration, err := prog.Benchmark(make([]byte, 14), 1, nil)
+	ret, duration, err := prog.Benchmark(internal.EmptyBPFContext, 1, nil)
 	testutils.SkipIfNotSupported(t, err)
 	if err != nil {
 		t.Fatal("Error from Benchmark:", err)
@@ -220,7 +220,7 @@ func TestProgramTestRunInterrupt(t *testing.T) {
 		// Block this thread in the BPF syscall, so that we can
 		// trigger EINTR by sending a signal.
 		opts := RunOptions{
-			Data:   make([]byte, 14),
+			Data:   internal.EmptyBPFContext,
 			Repeat: math.MaxInt32,
 			Reset: func() {
 				// We don't know how long finishing the

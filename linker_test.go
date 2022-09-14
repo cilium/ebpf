@@ -47,7 +47,7 @@ func TestFindReferences(t *testing.T) {
 	}
 	defer prog.Close()
 
-	ret, _, err := prog.Test(make([]byte, 14))
+	ret, _, err := prog.Test(internal.EmptyBPFContext)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -93,7 +93,7 @@ func TestForwardFunctionDeclaration(t *testing.T) {
 		}
 		defer prog.Close()
 
-		ret, _, err := prog.Test(make([]byte, 14))
+		ret, _, err := prog.Test(internal.EmptyBPFContext)
 		if err != nil {
 			t.Fatal("Running program:", err)
 		}

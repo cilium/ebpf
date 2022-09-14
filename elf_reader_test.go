@@ -216,7 +216,7 @@ func TestLoadCollectionSpec(t *testing.T) {
 		}
 		defer coll.Close()
 
-		ret, _, err := coll.Programs["xdp_prog"].Test(make([]byte, 14))
+		ret, _, err := coll.Programs["xdp_prog"].Test(internal.EmptyBPFContext)
 		if err != nil {
 			t.Fatal("Can't run program:", err)
 		}
@@ -255,7 +255,7 @@ func TestDataSections(t *testing.T) {
 	}
 	defer obj.Program.Close()
 
-	ret, _, err := obj.Program.Test(make([]byte, 14))
+	ret, _, err := obj.Program.Test(internal.EmptyBPFContext)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -462,7 +462,7 @@ func TestStringSection(t *testing.T) {
 	}
 
 	_, err = prog.Run(&RunOptions{
-		Data: make([]byte, 14), // Min size for XDP programs
+		Data: internal.EmptyBPFContext, // Min size for XDP programs
 	})
 	if err != nil {
 		t.Fatalf("prog run: %s", err)
@@ -530,7 +530,7 @@ func TestTailCall(t *testing.T) {
 		defer obj.TailMain.Close()
 		defer obj.ProgArray.Close()
 
-		ret, _, err := obj.TailMain.Test(make([]byte, 14))
+		ret, _, err := obj.TailMain.Test(internal.EmptyBPFContext)
 		testutils.SkipIfNotSupported(t, err)
 		if err != nil {
 			t.Fatal(err)
@@ -569,7 +569,7 @@ func TestSubprogRelocation(t *testing.T) {
 		defer obj.Main.Close()
 		defer obj.HashMap.Close()
 
-		ret, _, err := obj.Main.Test(make([]byte, 14))
+		ret, _, err := obj.Main.Test(internal.EmptyBPFContext)
 		testutils.SkipIfNotSupported(t, err)
 		if err != nil {
 			t.Fatal(err)

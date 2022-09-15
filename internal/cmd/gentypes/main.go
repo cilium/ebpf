@@ -393,6 +393,21 @@ import (
 			},
 		},
 		{
+			"LinkCreateKprobeMulti", retFd, "link_create", "BPF_LINK_CREATE",
+			[]patch{
+				chooseNth(4, 3),
+				replace(enumTypes["AttachType"], "attach_type"),
+				modify(func(m *btf.Member) error {
+					return rename("flags", "kprobe_multi_flags")(m.Type.(*btf.Struct))
+				}, "kprobe_multi"),
+				flattenAnon,
+				replace(pointer, "cookies"),
+				replace(pointer, "addrs"),
+				replace(pointer, "syms"),
+				rename("cnt", "count"),
+			},
+		},
+		{
 			"LinkUpdate", retError, "link_update", "BPF_LINK_UPDATE",
 			nil,
 		},

@@ -97,6 +97,7 @@ func ExampleType_validTypes() {
 	var _ Type = &FuncProto{}
 	var _ Type = &Var{}
 	var _ Type = &Datasec{}
+	var _ Type = &Float{}
 }
 
 func TestType(t *testing.T) {
@@ -153,15 +154,43 @@ func TestType(t *testing.T) {
 				t.Error("Copy doesn't copy")
 			}
 
-			var first, second typeDeque
-			typ.walk(&first)
-			typ.walk(&second)
+			var a []*Type
+			walkType(typ, func(t *Type) { a = append(a, t) })
 
-			if diff := cmp.Diff(first.all(), second.all(), compareTypes); diff != "" {
+			if _, ok := typ.(*cycle); !ok {
+				if n := countChildren(t, reflect.TypeOf(typ)); len(a) < n {
+					t.Errorf("walkType visited %d children, expected at least %d", len(a), n)
+				}
+			}
+
+			var b []*Type
+			walkType(typ, func(t *Type) { b = append(b, t) })
+
+			if diff := cmp.Diff(a, b, compareTypes); diff != "" {
 				t.Errorf("Walk mismatch (-want +got):\n%s", diff)
 			}
 		})
 	}
+}
+
+func countChildren(t *testing.T, typ reflect.Type) int {
+	if typ.Kind() != reflect.Pointer {
+		t.Fatal("Expected pointer, got", typ.Kind())
+	}
+
+	typ = typ.Elem()
+	if typ.Kind() != reflect.Struct {
+		t.Fatal("Expected struct, got", typ.Kind())
+	}
+
+	var n int
+	for i := 0; i < typ.NumField(); i++ {
+		if typ.Field(i).Type == reflect.TypeOf((*Type)(nil)).Elem() {
+			n++
+		}
+	}
+
+	return n
 }
 
 func TestTypeDeque(t *testing.T) {
@@ -440,7 +469,8 @@ func BenchmarkWalk(b *testing.B) {
 			b.ReportAllocs()
 
 			for i := 0; i < b.N; i++ {
-				typ.walk(&typeDeque{})
+				var dq typeDeque
+				walkType(typ, dq.push)
 			}
 		})
 	}

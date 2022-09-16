@@ -243,10 +243,6 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions, handles *hand
 
 	var btfDisabled bool
 	if spec.BTF != nil {
-		if err := applyRelocations(insns, spec.BTF, opts.KernelTypes); err != nil {
-			return nil, fmt.Errorf("apply CO-RE relocations: %w", err)
-		}
-
 		handle, err := handles.btfHandle(spec.BTF)
 		btfDisabled = errors.Is(err, btf.ErrNotSupported)
 		if err != nil && !btfDisabled {
@@ -269,6 +265,10 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions, handles *hand
 			attr.LineInfoCnt = uint32(len(lib)) / btf.LineInfoSize
 			attr.LineInfo = sys.NewSlicePointer(lib)
 		}
+	}
+
+	if err := applyRelocations(insns, opts.KernelTypes, spec.ByteOrder); err != nil {
+		return nil, fmt.Errorf("apply CO-RE relocations: %w", err)
 	}
 
 	if err := fixupAndValidate(insns); err != nil {

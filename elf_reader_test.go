@@ -742,6 +742,8 @@ func TestLibBPFCompat(t *testing.T) {
 			t.Skip("Skipping due to missing MapExtra field in MapSpec")
 		case "netif_receive_skb.linked3.o":
 			t.Skip("Skipping due to possible bug in upstream CO-RE generation")
+		case "test_usdt.o", "test_usdt.linked3.o", "test_urandom_usdt.o", "test_urandom_usdt.linked3.o", "test_usdt_multispec.o":
+			t.Skip("Skipping due to missing support for usdt.bpf.h")
 		}
 
 		t.Parallel()

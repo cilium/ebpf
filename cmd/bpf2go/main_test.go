@@ -110,7 +110,7 @@ func TestDisableStripping(t *testing.T) {
 	dir := mustWriteTempFile(t, "test.c", minimalSocketFilter)
 
 	err := run(io.Discard, "foo", dir, []string{
-		"-cc", "clang-9",
+		"-cc", clangBin,
 		"-strip", "binary-that-certainly-doesnt-exist",
 		"-no-strip",
 		"bar",

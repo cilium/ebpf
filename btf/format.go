@@ -174,10 +174,18 @@ func (gf *GoFormatter) writeIntLit(i *Int) {
 	}
 
 	bits := i.Size * 8
-	if i.Encoding.IsSigned() {
-		fmt.Fprintf(&gf.w, "int%d", bits)
+	if i.Size > 8 {
+		if i.Encoding.IsSigned() {
+			fmt.Fprintf(&gf.w, "[%d]byte /* int%d */", i.Size, bits)
+		} else {
+			fmt.Fprintf(&gf.w, "[%d]byte /* uint%d */", i.Size, bits)
+		}
 	} else {
-		fmt.Fprintf(&gf.w, "uint%d", bits)
+		if i.Encoding.IsSigned() {
+			fmt.Fprintf(&gf.w, "int%d", bits)
+		} else {
+			fmt.Fprintf(&gf.w, "uint%d", bits)
+		}
 	}
 }
 

@@ -9,6 +9,7 @@ import (
 	"syscall"
 	"testing"
 	"time"
+	"unsafe"
 
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/asm"
@@ -258,6 +259,162 @@ func TestPerfReaderLostSample(t *testing.T) {
 	}
 }
 
+func outputSamplesProgOverWritable(sampleSizes ...int) (*ebpf.Program, *ebpf.Map, error) {
+	const bpfFCurrentCPU = 0xffffffff
+
+	events, err := ebpf.NewMap(&ebpf.MapSpec{
+		Type: ebpf.PerfEventArray,
+	})
+	if err != nil {
+		return nil, nil, err
+	}
+
+	var maxSampleSize int
+	for _, sampleSize := range sampleSizes {
+		if sampleSize > maxSampleSize {
+			maxSampleSize = sampleSize
+		}
+	}
+
+	// Stash context somewhere
+	insns := asm.Instructions{
+		asm.LoadImm(asm.R0, 0, asm.DWord),
+		asm.Mov.Reg(asm.R9, asm.R1),
+	}
+
+	bufDwords := (maxSampleSize / 8) + 1
+	for i := 0; i < bufDwords; i++ {
+		insns = append(insns,
+			asm.StoreMem(asm.RFP, int16(i+1)*-8, asm.R0, asm.DWord),
+		)
+	}
+
+	for i, sampleSize := range sampleSizes {
+		insns = append(insns,
+			asm.Mov.Reg(asm.R1, asm.R9),
+			asm.LoadMapPtr(asm.R2, events.FD()),
+			asm.LoadImm(asm.R3, bpfFCurrentCPU, asm.DWord),
+			asm.LoadImm(asm.R0, int64(i), asm.DWord),
+			asm.StoreMem(asm.RFP, int16(bufDwords*-8), asm.R0, asm.DWord),
+			asm.Mov.Reg(asm.R4, asm.RFP),
+			asm.Add.Imm(asm.R4, int32(bufDwords*-8)),
+			asm.Mov.Imm(asm.R5, int32(sampleSize)),
+			asm.FnPerfEventOutput.Call(),
+		)
+	}
+
+	insns = append(insns, asm.Return())
+
+	prog, err := ebpf.NewProgram(&ebpf.ProgramSpec{
+		License:      "GPL",
+		Type:         ebpf.XDP,
+		Instructions: insns,
+	})
+	if err != nil {
+		events.Close()
+		return nil, nil, err
+	}
+
+	return prog, events, nil
+}
+
+func mustOutputSamplesProgOverWritable(tb testing.TB, sampleSizes ...int) (*ebpf.Program, *ebpf.Map) {
+	tb.Helper()
+
+	// Requires at least 4.10 (9ecda41acb97 "perf/core: Add ::write_backward attribute to perf event")
+	testutils.SkipOnOldKernel(tb, "4.10", "overwritable perf events support")
+
+	prog, events, err := outputSamplesProgOverWritable(sampleSizes...)
+	var errVerifier *ebpf.VerifierError
+	if errors.As(err, &errVerifier) {
+		fmt.Printf("loading ebpf program:\n%+v", errVerifier)
+	}
+	if err != nil {
+		tb.Fatal(err)
+	}
+	tb.Cleanup(func() {
+		prog.Close()
+		events.Close()
+	})
+
+	return prog, events
+}
+
+func TestPerfReaderOverWritable(t *testing.T) {
+	const (
+		eventSize = 192
+	)
+
+	var (
+		pageSize  = os.Getpagesize()
+		maxEvents = (pageSize / eventSize)
+	)
+	if remainder := pageSize % eventSize; remainder != 64 && remainder != 128 {
+		// Page size isn't 2^(6+m), m >= 0
+		t.Fatal("unsupported page size:", pageSize)
+	}
+
+	var sampleSizes []int
+	// Fill the ring with the maximum number of output_large events that will fit,
+	// and generate a lost event by writing an additional event.
+	for i := 0; i < maxEvents+1; i++ {
+		sampleSizes = append(sampleSizes, 180)
+	}
+
+	prog, events := mustOutputSamplesProgOverWritable(t, sampleSizes...)
+
+	rd, err := NewReaderWithOptions(events, pageSize, ReaderOptions{OverWritable: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rd.Close()
+
+	ret, _, err := prog.Test(internal.EmptyBPFContext)
+	testutils.SkipIfNotSupported(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if errno := syscall.Errno(-int32(ret)); errno != 0 {
+		t.Fatal("Expected 0 as return value, got", errno)
+	}
+
+	readSamples := make([]int32, 0)
+	for _, sampleSize := range sampleSizes {
+		err := rd.ReadCallback(func(record Record, size uint32) error {
+			if size != uint32(sampleSize) {
+				t.Fatalf("Expected %d as sample size got %d", sampleSize, size)
+			}
+
+			value := *(*int32)(unsafe.Pointer(&record.RawSample[0]))
+			readSamples = append(readSamples, value)
+
+			return nil
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	// At this time, readSamples should contain the following:
+	// [21 20 19 18 17 16 15 14 13 12 11 10 9 8 7 6 5 4 3 2 1]
+	// Value 0 is not present because it was overwritten by value 21.
+	// As a consequence, readSamples contains one value less than what was
+	// written to the perf buffer.
+
+	sampleNr := len(sampleSizes)
+	if len(readSamples) != sampleNr - 1  {
+		t.Fatalf("Expected %d events but got %d", sampleNr - 1, len(readSamples))
+	}
+
+	for i, value := range readSamples {
+		expected := int32(sampleNr - i - 1)
+		if value != expected {
+			t.Fatalf("Expected value %d got %d", value, expected)
+		}
+	}
+}
+
 func TestPerfReaderClose(t *testing.T) {
 	_, events := mustOutputSamplesProg(t, 5)
 
@@ -299,7 +456,7 @@ func TestPerfReaderClose(t *testing.T) {
 }
 
 func TestCreatePerfEvent(t *testing.T) {
-	fd, err := createPerfEvent(0, 1)
+	fd, err := createPerfEvent(0, 1, false)
 	if err != nil {
 		t.Fatal("Can't create perf event:", err)
 	}

@@ -30,7 +30,7 @@ type perfEventRing struct {
 // From C, we can deduce write_backward is the is the 27th bit.
 const perfBitWriteBackward = gounix.CBitFieldMaskBit27
 
-func newPerfEventRing(cpu, perCPUBuffer, watermark int, writeBackward bool) (*perfEventRing, error) {
+func newPerfEventRing(cpu, perCPUBuffer, watermark int, writeBackward, overWritable bool) (*perfEventRing, error) {
 	if watermark >= perCPUBuffer {
 		return nil, errors.New("watermark must be smaller than perCPUBuffer")
 	}
@@ -45,7 +45,12 @@ func newPerfEventRing(cpu, perCPUBuffer, watermark int, writeBackward bool) (*pe
 		return nil, err
 	}
 
-	mmap, err := unix.Mmap(fd, 0, perfBufferSize(perCPUBuffer), unix.PROT_READ|unix.PROT_WRITE, unix.MAP_SHARED)
+	protections := unix.PROT_READ
+	if !overWritable {
+		protections |= unix.PROT_WRITE
+	}
+
+	mmap, err := unix.Mmap(fd, 0, perfBufferSize(perCPUBuffer), protections, unix.MAP_SHARED)
 	if err != nil {
 		unix.Close(fd)
 		return nil, fmt.Errorf("can't mmap: %v", err)

@@ -166,6 +166,8 @@ type ReaderOptions struct {
 	Watermark     int
 	// This perf ring buffer will be written from backward.
 	WriteBackward bool
+	// This perf ring buffer will be over writable.
+	OverWritable bool
 }
 
 // NewReader creates a new reader with default options.
@@ -213,7 +215,7 @@ func NewReaderWithOptions(array *ebpf.Map, perCPUBuffer int, opts ReaderOptions)
 	// but doesn't allow using a wildcard like -1 to specify "all CPUs".
 	// Hence we have to create a ring for each CPU.
 	for i := 0; i < nCPU; i++ {
-		ring, err := newPerfEventRing(i, perCPUBuffer, opts.Watermark, opts.WriteBackward)
+		ring, err := newPerfEventRing(i, perCPUBuffer, opts.Watermark, opts.WriteBackward, opts.OverWritable)
 		if errors.Is(err, unix.ENODEV) {
 			// The requested CPU is currently offline, skip it.
 			rings = append(rings, nil)

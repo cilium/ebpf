@@ -45,7 +45,136 @@ func TestRingBufferReader(t *testing.T) {
 	}
 }
 
-func makeRing(size, offset int) *ringReader {
+func TestRingBufferReverseReader(t *testing.T) {
+	buf := make([]byte, 256)
+	expectedBuf := make([]byte, 256)
+	for i := range expectedBuf {
+		expectedBuf[i] = byte(i)
+	}
+
+	r := makeOverwritableRing(256)
+	ring, ok := r.(*reverseReader)
+	if !ok {
+		t.Errorf("ring should have type reverseReader and has %T", ring)
+	}
+
+	// First case: read 256, starting from head equals 2.
+	// The buffer should contain the following:
+	//
+	// [0 1 2 3 ... 255]
+	//      ^
+	//      |
+	//     head
+	//
+	// As we read from position 2, we should get [2, ..., 255].
+	// Then, when we read it for the second time, we should get [0, 1] as we would
+	// have looped around the buffer.
+	ring.meta.Data_head = 2
+	ring.loadHead()
+	n, err := ring.Read(buf)
+	if err != nil {
+		t.Error("Expected nil, got", err)
+	}
+	expectedLength := len(buf) - 2
+	if n != expectedLength {
+		t.Errorf("Expected to read %d bytes, got %d", expectedLength, n)
+	}
+	if !bytes.Equal(buf[:n], expectedBuf[2:]) {
+		t.Error("Expected [2 ... 255], got", buf)
+	}
+	n, err = ring.Read(buf)
+	if err != io.EOF {
+		t.Error("Expected io.EOF, got", err)
+	}
+	expectedLength = 2
+	if n != expectedLength {
+		t.Errorf("Expected to read %d bytes, got %d", expectedLength, n)
+	}
+	if !bytes.Equal(buf[:n], expectedBuf[:expectedLength]) {
+		t.Error("Expected [0 1], got", buf)
+	}
+
+	// Complicated case: read bytes until previous_head.
+	// We move head from 2 to 0, so previous_head should be 2.
+	// The buffer content is the same as above, that is to say:
+	//
+	// [0 1 2 3 ... 255]
+	//  ^   ^
+	//  |   |
+	//  |   +---previous_head
+	// head
+	//
+	// So, we should read [0, 1].
+	ring.meta.Data_head = 0
+	ring.loadHead()
+	n, err = ring.Read(buf)
+	if err != io.EOF {
+		t.Error("Expected io.EOF, got", err)
+	}
+	if n != 2 {
+		t.Error("Expected to read 2 bytes, got", n)
+	}
+	if !bytes.Equal(buf[:2], []byte{0, 1}) {
+		t.Error("Expected [0, 1], got", buf)
+	}
+
+	// Complicated case: read the whole buffer because it was "overwritten".
+	// We move head from previous_head plus the buffer size.
+	// So, we will limit reading the buffer size to avoid reading elements we
+	// already read
+	//
+	// [0 1 2 3 ... 255]
+	//      ^
+	//      |
+	//      +---previous_head
+	//      |
+	//     head
+	//
+	// So, we should first read [2, ..., 255] then [0, 1].
+	ring.meta.Data_head = ring.previousHead + 256
+	ring.loadHead()
+	n, err = ring.Read(buf)
+	if err != nil {
+		t.Error("Expected nil, got", err)
+	}
+	expectedLength = len(buf) - 2
+	if n != expectedLength {
+		t.Errorf("Expected to read %d bytes, got %d", expectedLength, n)
+	}
+	if !bytes.Equal(buf[:n], expectedBuf[2:]) {
+		t.Error("Expected [2 ... 255], got", buf)
+	}
+	n, err = ring.Read(buf)
+	if err != io.EOF {
+		t.Error("Expected io.EOF, got", err)
+	}
+	expectedLength = 2
+	if n != expectedLength {
+		t.Errorf("Expected to read %d bytes, got %d", expectedLength, n)
+	}
+	if !bytes.Equal(buf[:n], expectedBuf[:n]) {
+		t.Error("Expected [0 1], got", buf)
+	}
+}
+
+func makeOverwritableRing(size int) ringReader {
+	if size != 0 && (size&(size-1)) != 0 {
+		panic("size must be power of two")
+	}
+
+	ring := make([]byte, size)
+	for i := range ring {
+		ring[i] = byte(i)
+	}
+
+	meta := unix.PerfEventMmapPage{
+		Data_size: uint64(len(ring)),
+	}
+
+	return newRingReader(&meta, ring, true)
+}
+
+func makeRing(size, offset int) ringReader {
 	if size != 0 && (size&(size-1)) != 0 {
 		panic("size must be power of two")
 	}
@@ -61,17 +190,17 @@ func makeRing(size, offset int) *ringReader {
 		Data_size: uint64(len(ring)),
 	}
 
-	return newRingReader(&meta, ring)
+	return newRingReader(&meta, ring, false)
 }
 
 func TestPerfEventRing(t *testing.T) {
-	check := func(buffer, watermark int) {
-		ring, err := newPerfEventRing(0, buffer, watermark)
+	check := func(buffer, watermark int, overwritable bool) {
+		ring, err := newPerfEventRing(0, buffer, watermark, overwritable)
 		if err != nil {
 			t.Fatal(err)
 		}
 
-		size := len(ring.ringReader.ring)
+		size := ring.size()
 
 		// Ring size should be at least as big as buffer
 		if size < buffer {
@@ -89,20 +218,30 @@ func TestPerfEventRing(t *testing.T) {
 	}
 
 	// watermark > buffer
-	_, err := newPerfEventRing(0, 8192, 8193)
+	_, err := newPerfEventRing(0, 8192, 8193, false)
+	if err == nil {
+		t.Fatal("watermark > buffer allowed")
+	}
+	_, err = newPerfEventRing(0, 8192, 8193, true)
 	if err == nil {
 		t.Fatal("watermark > buffer allowed")
 	}
 
 	// watermark == buffer
-	_, err = newPerfEventRing(0, 8192, 8192)
+	_, err = newPerfEventRing(0, 8192, 8192, false)
+	if err == nil {
+		t.Fatal("watermark == buffer allowed")
+	}
+	_, err = newPerfEventRing(0, 8192, 8192, true)
 	if err == nil {
 		t.Fatal("watermark == buffer allowed")
 	}
 
 	// buffer not a power of two, watermark < buffer
-	check(8193, 8192)
+	check(8193, 8192, false)
+	check(8193, 8192, true)
 
 	// large buffer not a multiple of page size at all (prime)
-	check(65537, 8192)
+	check(65537, 8192, false)
+	check(65537, 8192, true)
 }

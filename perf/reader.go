@@ -53,7 +53,7 @@ type Record struct {
 // Read a record from a reader and tag it as being from the given CPU.
 //
 // buf must be at least perfEventHeaderSize bytes long.
-func readRecord(rd io.Reader, rec *Record, buf []byte) error {
+func readRecord(rd io.Reader, rec *Record, buf []byte, overwritable bool) error {
 	// Assert that the buffer is large enough.
 	buf = buf[:perfEventHeaderSize]
 	_, err := io.ReadFull(rd, buf)
@@ -82,6 +82,9 @@ func readRecord(rd io.Reader, rec *Record, buf []byte) error {
 		return err
 
 	default:
+		if overwritable && header.Type == 0 && header.Misc == 0 && header.Size == 0 {
+			return errEOR
+		}
 		return &unknownEventError{header.Type}
 	}
 }
@@ -111,7 +114,7 @@ type perfEventSample struct {
 func readRawSample(rd io.Reader, buf, sampleBuf []byte) ([]byte, error) {
 	buf = buf[:perfEventSampleSize]
 	if _, err := io.ReadFull(rd, buf); err != nil {
-		return nil, fmt.Errorf("read sample size: %v", err)
+		return nil, fmt.Errorf("read sample size: %w", err)
 	}
 
 	sample := perfEventSample{
@@ -126,7 +129,7 @@ func readRawSample(rd io.Reader, buf, sampleBuf []byte) ([]byte, error) {
 	}
 
 	if _, err := io.ReadFull(rd, data); err != nil {
-		return nil, fmt.Errorf("read sample: %v", err)
+		return nil, fmt.Errorf("read sample: %w", err)
 	}
 	return data, nil
 }
@@ -155,6 +158,9 @@ type Reader struct {
 	// Read calls, which would otherwise need to be interrupted.
 	pauseMu  sync.Mutex
 	pauseFds []int
+
+	paused       bool
+	overwritable bool
 }
 
 // ReaderOptions control the behaviour of the user
@@ -163,7 +169,10 @@ type ReaderOptions struct {
 	// The number of written bytes required in any per CPU buffer before
 	// Read will process data. Must be smaller than PerCPUBuffer.
 	// The default is to start processing as soon as data is available.
-	Watermark int
+	Watermark     int
+	// This perf ring buffer is overwritable, once full the oldest event will be
+	// overwritten by newest.
+	Overwritable bool
 }
 
 // NewReader creates a new reader with default options.
@@ -211,7 +220,7 @@ func NewReaderWithOptions(array *ebpf.Map, perCPUBuffer int, opts ReaderOptions)
 	// but doesn't allow using a wildcard like -1 to specify "all CPUs".
 	// Hence we have to create a ring for each CPU.
 	for i := 0; i < nCPU; i++ {
-		ring, err := newPerfEventRing(i, perCPUBuffer, opts.Watermark)
+		ring, err := newPerfEventRing(i, perCPUBuffer, opts.Watermark, opts.Overwritable)
 		if errors.Is(err, unix.ENODEV) {
 			// The requested CPU is currently offline, skip it.
 			rings = append(rings, nil)
@@ -236,14 +245,15 @@ func NewReaderWithOptions(array *ebpf.Map, perCPUBuffer int, opts ReaderOptions)
 	}
 
 	pr = &Reader{
-		array:       array,
-		rings:       rings,
-		poller:      poller,
-		deadline:    time.Time{},
-		epollEvents: make([]unix.EpollEvent, len(rings)),
-		epollRings:  make([]*perfEventRing, 0, len(rings)),
-		eventHeader: make([]byte, perfEventHeaderSize),
-		pauseFds:    pauseFds,
+		array:        array,
+		rings:        rings,
+		poller:       poller,
+		deadline:     time.Time{},
+		epollEvents:  make([]unix.EpollEvent, len(rings)),
+		epollRings:   make([]*perfEventRing, 0, len(rings)),
+		eventHeader:  make([]byte, perfEventHeaderSize),
+		pauseFds:     pauseFds,
+		overwritable: opts.Overwritable,
 	}
 	if err = pr.Resume(); err != nil {
 		return nil, err
@@ -307,6 +317,7 @@ func (pr *Reader) SetDeadline(t time.Time) {
 // Returns os.ErrDeadlineExceeded if a deadline was set.
 func (pr *Reader) Read() (Record, error) {
 	var r Record
+
 	return r, pr.ReadInto(&r)
 }
 
@@ -314,6 +325,10 @@ func (pr *Reader) Read() (Record, error) {
 func (pr *Reader) ReadInto(rec *Record) error {
 	pr.mu.Lock()
 	defer pr.mu.Unlock()
+
+	if pr.overwritable && !pr.paused {
+		return fmt.Errorf("perf ringbuffer: must have been paused before reading overwritable buffer")
+	}
 
 	if pr.rings == nil {
 		return fmt.Errorf("perf ringbuffer: %w", ErrClosed)
@@ -345,6 +360,11 @@ func (pr *Reader) ReadInto(rec *Record) error {
 			// We've emptied the current ring buffer, process
 			// the next one.
 			pr.epollRings = pr.epollRings[:len(pr.epollRings)-1]
+
+			if pr.overwritable && len(pr.epollRings) == 0 {
+				return io.EOF
+			}
+
 			continue
 		}
 
@@ -372,6 +392,8 @@ func (pr *Reader) Pause() error {
 		}
 	}
 
+	pr.paused = true
+
 	return nil
 }
 
@@ -396,15 +418,25 @@ func (pr *Reader) Resume() error {
 		}
 	}
 
+	pr.paused = false
+
 	return nil
 }
 
 // NB: Has to be preceded by a call to ring.loadHead.
 func (pr *Reader) readRecordFromRing(rec *Record, ring *perfEventRing) error {
-	defer ring.writeTail()
+	// tail is read only for overwritable perf buffer and the kernel makes no use
+	// of it.
+	if !pr.overwritable {
+		defer ring.writeTail()
+	}
 
 	rec.CPU = ring.cpu
-	return readRecord(ring, rec, pr.eventHeader)
+	err := readRecord(ring, rec, pr.eventHeader, pr.overwritable)
+	if pr.overwritable && (errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF)) {
+		return errEOR
+	}
+	return err
 }
 
 type unknownEventError struct {

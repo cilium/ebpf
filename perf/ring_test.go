@@ -45,7 +45,7 @@ func TestRingBufferReader(t *testing.T) {
 	}
 }
 
-func makeRing(size, offset int) *ringReader {
+func makeRing(size, offset int) ringReader {
 	if size != 0 && (size&(size-1)) != 0 {
 		panic("size must be power of two")
 	}
@@ -61,17 +61,17 @@ func makeRing(size, offset int) *ringReader {
 		Data_size: uint64(len(ring)),
 	}
 
-	return newRingReader(&meta, ring)
+	return newRingReader(&meta, ring, false)
 }
 
 func TestPerfEventRing(t *testing.T) {
-	check := func(buffer, watermark int) {
-		ring, err := newPerfEventRing(0, buffer, watermark)
+	check := func(buffer, watermark int, overwritable bool) {
+		ring, err := newPerfEventRing(0, buffer, watermark, overwritable)
 		if err != nil {
 			t.Fatal(err)
 		}
 
-		size := len(ring.ringReader.ring)
+		size := len(ring.getRing())
 
 		// Ring size should be at least as big as buffer
 		if size < buffer {
@@ -89,20 +89,30 @@ func TestPerfEventRing(t *testing.T) {
 	}
 
 	// watermark > buffer
-	_, err := newPerfEventRing(0, 8192, 8193)
+	_, err := newPerfEventRing(0, 8192, 8193, false)
+	if err == nil {
+		t.Fatal("watermark > buffer allowed")
+	}
+	_, err = newPerfEventRing(0, 8192, 8193, true)
 	if err == nil {
 		t.Fatal("watermark > buffer allowed")
 	}
 
 	// watermark == buffer
-	_, err = newPerfEventRing(0, 8192, 8192)
+	_, err = newPerfEventRing(0, 8192, 8192, false)
+	if err == nil {
+		t.Fatal("watermark == buffer allowed")
+	}
+	_, err = newPerfEventRing(0, 8192, 8192, true)
 	if err == nil {
 		t.Fatal("watermark == buffer allowed")
 	}
 
 	// buffer not a power of two, watermark < buffer
-	check(8193, 8192)
+	check(8193, 8192, false)
+	check(8193, 8192, true)
 
 	// large buffer not a multiple of page size at all (prime)
-	check(65537, 8192)
+	check(65537, 8192, false)
+	check(65537, 8192, true)
 }

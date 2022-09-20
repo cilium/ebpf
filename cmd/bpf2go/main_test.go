@@ -17,10 +17,7 @@ import (
 )
 
 func TestRun(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Not compiling with -short")
-	}
-
+	clangBin := clangBin(t)
 	dir := mustWriteTempFile(t, "test.c", minimalSocketFilter)
 
 	cwd, err := os.Getwd()
@@ -110,7 +107,7 @@ func TestDisableStripping(t *testing.T) {
 	dir := mustWriteTempFile(t, "test.c", minimalSocketFilter)
 
 	err := run(io.Discard, "foo", dir, []string{
-		"-cc", "clang-9",
+		"-cc", clangBin(t),
 		"-strip", "binary-that-certainly-doesnt-exist",
 		"-no-strip",
 		"bar",
@@ -234,7 +231,7 @@ func TestConvertGOARCH(t *testing.T) {
 		pkg:              "test",
 		stdout:           io.Discard,
 		ident:            "test",
-		cc:               clangBin,
+		cc:               clangBin(t),
 		disableStripping: true,
 		sourceFile:       tmp + "/test.c",
 		outputDir:        tmp,
@@ -277,4 +274,22 @@ func TestCTypes(t *testing.T) {
 	ct = nil
 	qt.Assert(t, ct.Set("foo"), qt.IsNil)
 	qt.Assert(t, ct.Set("foo"), qt.IsNotNil)
+}
+
+func clangBin(t *testing.T) string {
+	t.Helper()
+
+	if testing.Short() {
+		t.Skip("Not compiling with -short")
+	}
+
+	// Use a recent clang version for local development, but allow CI to run
+	// against oldest supported clang.
+	clang := "clang-14"
+	if minVersion := os.Getenv("CI_MIN_CLANG_VERSION"); minVersion != "" {
+		clang = fmt.Sprintf("clang-%s", minVersion)
+	}
+
+	t.Log("Testing against", clang)
+	return clang
 }

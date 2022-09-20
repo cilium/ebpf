@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -11,10 +12,19 @@ import (
 
 const minimalSocketFilter = `__attribute__((section("socket"), used)) int main() { return 0; }`
 
-// Test against the minimum supported version of clang to avoid regressions.
-const (
-	clangBin = "clang-9"
-)
+var clangBin string
+
+func init() {
+	// Use a recent clang version for local development, but allow CI to run
+	// against oldest supported clang.
+	if minVersion := os.Getenv("CI_MIN_CLANG_VERSION"); minVersion != "" {
+		clangBin = fmt.Sprintf("clang-%s", minVersion)
+	} else {
+		clangBin = "clang-14"
+	}
+
+	fmt.Println("Testing against", clangBin)
+}
 
 func TestCompile(t *testing.T) {
 	dir := mustWriteTempFile(t, "test.c", minimalSocketFilter)

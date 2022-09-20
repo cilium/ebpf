@@ -586,7 +586,7 @@ func (p *Program) Run(opts *RunOptions) (uint32, error) {
 // run or an error. reset is called whenever the benchmark syscall is
 // interrupted, and should be set to testing.B.ResetTimer or similar.
 //
-// Note: profiling a call to this function will skew it's results, see
+// Note: profiling a call to this function will skew its results, see
 // https://github.com/cilium/ebpf/issues/24
 //
 // This function requires at least Linux 4.12.
@@ -624,8 +624,7 @@ var haveProgTestRun = internal.FeatureTest("BPF_PROG_TEST_RUN", "4.12", func() e
 	}
 	defer prog.Close()
 
-	// Programs require at least 14 bytes input
-	in := make([]byte, 14)
+	in := internal.EmptyBPFContext
 	attr := sys.ProgRunAttr{
 		ProgFd:     uint32(prog.FD()),
 		DataSizeIn: uint32(len(in)),

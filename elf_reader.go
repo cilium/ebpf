@@ -1110,6 +1110,7 @@ func getProgType(sectionName string) (ProgramType, AttachType, uint32, string) {
 		{"lsm/", LSM, AttachLSMMac, 0},
 		{"lsm.s/", LSM, AttachLSMMac, unix.BPF_F_SLEEPABLE},
 		{"iter/", Tracing, AttachTraceIter, 0},
+		{"iter.s/", Tracing, AttachTraceIter, unix.BPF_F_SLEEPABLE},
 		{"syscall", Syscall, AttachNone, 0},
 		{"xdp_devmap/", XDP, AttachXDPDevMap, 0},
 		{"xdp_cpumap/", XDP, AttachXDPCPUMap, 0},
@@ -1152,8 +1153,9 @@ func getProgType(sectionName string) (ProgramType, AttachType, uint32, string) {
 		{"cgroup/setsockopt", CGroupSockopt, AttachCGroupSetsockopt, 0},
 		{"struct_ops+", StructOps, AttachNone, 0},
 		{"sk_lookup/", SkLookup, AttachSkLookup, 0},
-
 		{"seccomp", SocketFilter, AttachNone, 0},
+		{"kprobe.multi", Kprobe, AttachTraceKprobeMulti, 0},
+		{"kretprobe.multi", Kprobe, AttachTraceKprobeMulti, 0},
 	}
 
 	for _, t := range types {

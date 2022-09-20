@@ -548,6 +548,30 @@ func TestIncompleteLoadAndAssign(t *testing.T) {
 	}
 }
 
+func BenchmarkNewCollection(b *testing.B) {
+	file := fmt.Sprintf("testdata/loader-%s.elf", internal.ClangEndian)
+	spec, err := LoadCollectionSpec(file)
+	if err != nil {
+		b.Fatal(err)
+	}
+
+	spec.Maps["array_of_hash_map"].InnerMap = spec.Maps["hash_map"]
+	for _, m := range spec.Maps {
+		m.Pinning = PinNone
+	}
+
+	b.ReportAllocs()
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		coll, err := NewCollection(spec)
+		if err != nil {
+			b.Fatal(err)
+		}
+		coll.Close()
+	}
+}
+
 func ExampleCollectionSpec_Assign() {
 	spec := &CollectionSpec{
 		Maps: map[string]*MapSpec{

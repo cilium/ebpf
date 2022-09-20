@@ -77,36 +77,29 @@ func (v *Void) copy() Type                     { return (*Void)(nil) }
 
 type IntEncoding byte
 
+// Valid IntEncodings.
+//
+// These may look like they are flags, but they aren't.
 const (
-	Signed IntEncoding = 1 << iota
-	Char
-	Bool
+	Unsigned IntEncoding = 0
+	Signed   IntEncoding = 1
+	Char     IntEncoding = 2
+	Bool     IntEncoding = 4
 )
 
-func (ie IntEncoding) IsSigned() bool {
-	return ie&Signed != 0
-}
-
-func (ie IntEncoding) IsChar() bool {
-	return ie&Char != 0
-}
-
-func (ie IntEncoding) IsBool() bool {
-	return ie&Bool != 0
-}
-
 func (ie IntEncoding) String() string {
-	switch {
-	case ie.IsChar() && ie.IsSigned():
+	switch ie {
+	case Char:
+		// NB: There is no way to determine signedness for char.
 		return "char"
-	case ie.IsChar() && !ie.IsSigned():
-		return "uchar"
-	case ie.IsBool():
+	case Bool:
 		return "bool"
-	case ie.IsSigned():
+	case Signed:
 		return "signed"
-	default:
+	case Unsigned:
 		return "unsigned"
+	default:
+		return fmt.Sprintf("IntEncoding(%d)", byte(ie))
 	}
 }
 

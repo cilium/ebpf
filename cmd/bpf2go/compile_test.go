@@ -11,17 +11,12 @@ import (
 
 const minimalSocketFilter = `__attribute__((section("socket"), used)) int main() { return 0; }`
 
-// Test against the minimum supported version of clang to avoid regressions.
-const (
-	clangBin = "clang-9"
-)
-
 func TestCompile(t *testing.T) {
 	dir := mustWriteTempFile(t, "test.c", minimalSocketFilter)
 
 	var dep bytes.Buffer
 	err := compile(compileArgs{
-		cc:     clangBin,
+		cc:     clangBin(t),
 		dir:    dir,
 		source: filepath.Join(dir, "test.c"),
 		dest:   filepath.Join(dir, "test.o"),
@@ -50,6 +45,7 @@ func TestCompile(t *testing.T) {
 }
 
 func TestReproducibleCompile(t *testing.T) {
+	clangBin := clangBin(t)
 	dir := mustWriteTempFile(t, "test.c", minimalSocketFilter)
 
 	err := compile(compileArgs{
@@ -91,7 +87,7 @@ func TestTriggerMissingTarget(t *testing.T) {
 	dir := mustWriteTempFile(t, "test.c", `_Pragma(__BPF_TARGET_MISSING);`)
 
 	err := compile(compileArgs{
-		cc:     clangBin,
+		cc:     clangBin(t),
 		dir:    dir,
 		source: filepath.Join(dir, "test.c"),
 		dest:   filepath.Join(dir, "a.o"),

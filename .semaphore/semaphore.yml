@@ -45,6 +45,8 @@ blocks:
           value: /tmp
         - name: CI_MAX_KERNEL_VERSION
           value: "5.19"
+        - name: CI_MIN_CLANG_VERSION
+          value: "9"
       jobs:
       - name: Build and Lint
         commands:
@@ -62,7 +64,7 @@ blocks:
       - name: Run unit tests on previous stable Go
         commands:
           - sem-version go 1.18
-          - go test -v ./cmd/bpf2go -run TestRun
+          - go test -v ./cmd/bpf2go
           - gotestsum --raw-command --ignore-non-json-output-lines --junitfile junit.xml -- ./run-tests.sh $CI_MAX_KERNEL_VERSION -short -count 1 -json ./...
       - name: Run unit tests
         matrix:

@@ -15,10 +15,7 @@ func TestGoTypeDeclaration(t *testing.T) {
 	}{
 		{&Int{Size: 1}, "type t uint8"},
 		{&Int{Size: 1, Encoding: Bool}, "type t bool"},
-		{&Int{Size: 2, Encoding: Bool}, "type t uint16"},
 		{&Int{Size: 1, Encoding: Char}, "type t uint8"},
-		{&Int{Size: 1, Encoding: Char | Signed}, "type t int8"},
-		{&Int{Size: 2, Encoding: Char}, "type t uint16"},
 		{&Int{Size: 2, Encoding: Signed}, "type t int16"},
 		{&Int{Size: 4, Encoding: Signed}, "type t int32"},
 		{&Int{Size: 8}, "type t uint64"},
@@ -223,15 +220,28 @@ func TestGoTypeDeclarationCycle(t *testing.T) {
 }
 
 func TestRejectBogusTypes(t *testing.T) {
-	var gf GoFormatter
-	_, err := gf.TypeDeclaration("t", &Struct{
-		Size: 1,
-		Members: []Member{
-			{Name: "foo", Type: &Int{Size: 2}, Offset: 0},
-		},
-	})
-	if err == nil {
-		t.Fatal("TypeDeclaration does not reject bogus struct")
+	tests := []struct {
+		typ Type
+	}{
+		{&Struct{
+			Size: 1,
+			Members: []Member{
+				{Name: "foo", Type: &Int{Size: 2}, Offset: 0},
+			},
+		}},
+		{&Int{Size: 2, Encoding: Bool}},
+		{&Int{Size: 1, Encoding: Char | Signed}},
+		{&Int{Size: 2, Encoding: Char}},
+	}
+	for _, test := range tests {
+		t.Run(fmt.Sprint(test.typ), func(t *testing.T) {
+			var gf GoFormatter
+
+			_, err := gf.TypeDeclaration("t", test.typ)
+			if err == nil {
+				t.Fatal("TypeDeclaration does not reject bogus type")
+			}
+		})
 	}
 }
 

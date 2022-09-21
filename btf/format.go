@@ -182,8 +182,7 @@ func (gf *GoFormatter) writeIntLit(i *Int) error {
 		// we are dealing with unsigned, since this works nicely with []byte
 		// in Go code.
 		fallthrough
-	case Unsigned:
-	case Signed:
+	case Unsigned, Signed:
 		stem := "uint"
 		if i.Encoding == Signed {
 			stem = "int"

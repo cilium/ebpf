@@ -174,12 +174,6 @@ func (gf *GoFormatter) writeIntLit(i *Int) error {
 			return fmt.Errorf("bool with size %d", i.Size)
 		}
 		gf.w.WriteString("bool")
-	case Signed:
-		if i.Size > 8 {
-			fmt.Fprintf(&gf.w, "[%d]byte /* int%d */", i.Size, i.Size*8)
-		} else {
-			fmt.Fprintf(&gf.w, "int%d", bits)
-		}
 	case Char:
 		if i.Size != 1 {
 			return fmt.Errorf("char with size %d", i.Size)
@@ -189,10 +183,15 @@ func (gf *GoFormatter) writeIntLit(i *Int) error {
 		// in Go code.
 		fallthrough
 	case Unsigned:
+	case Signed:
+		stem := "uint"
+		if i.Encoding == Signed {
+			stem = "int"
+		}
 		if i.Size > 8 {
-			fmt.Fprintf(&gf.w, "[%d]byte /* uint%d */", i.Size, i.Size*8)
+			fmt.Fprintf(&gf.w, "[%d]byte /* %s%d */", i.Size, stem, i.Size*8)
 		} else {
-			fmt.Fprintf(&gf.w, "uint%d", bits)
+			fmt.Fprintf(&gf.w, "%s%d", stem, bits)
 		}
 	default:
 		return fmt.Errorf("can't encode %s", i.Encoding)

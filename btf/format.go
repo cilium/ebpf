@@ -174,8 +174,6 @@ func (gf *GoFormatter) writeIntLit(i *Int) error {
 			return fmt.Errorf("bool with size %d", i.Size)
 		}
 		gf.w.WriteString("bool")
-	case Signed:
-		fmt.Fprintf(&gf.w, "int%d", bits)
 	case Char:
 		if i.Size != 1 {
 			return fmt.Errorf("char with size %d", i.Size)
@@ -184,8 +182,16 @@ func (gf *GoFormatter) writeIntLit(i *Int) error {
 		// we are dealing with unsigned, since this works nicely with []byte
 		// in Go code.
 		fallthrough
-	case Unsigned:
-		fmt.Fprintf(&gf.w, "uint%d", bits)
+	case Unsigned, Signed:
+		stem := "uint"
+		if i.Encoding == Signed {
+			stem = "int"
+		}
+		if i.Size > 8 {
+			fmt.Fprintf(&gf.w, "[%d]byte /* %s%d */", i.Size, stem, i.Size*8)
+		} else {
+			fmt.Fprintf(&gf.w, "%s%d", stem, bits)
+		}
 	default:
 		return fmt.Errorf("can't encode %s", i.Encoding)
 	}

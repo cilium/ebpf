@@ -20,7 +20,7 @@ func TestGoTypeDeclaration(t *testing.T) {
 		{&Int{Size: 4, Encoding: Signed}, "type t int32"},
 		{&Int{Size: 8}, "type t uint64"},
 		{&Typedef{Name: "frob", Type: &Int{Size: 8}}, "type t uint64"},
-		{&Int{Size: 16}, "type t uint128"},
+		{&Int{Size: 16}, "type t [16]byte /* uint128 */"},
 		{&Enum{Values: []EnumValue{{"FOO", 32}}, Size: 4}, "type t uint32; const ( tFOO t = 32; )"},
 		{&Enum{Values: []EnumValue{{"BAR", 1}}, Size: 1, Signed: true}, "type t int8; const ( tBAR t = 1; )"},
 		{

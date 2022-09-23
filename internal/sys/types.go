@@ -996,6 +996,8 @@ type ProgLoadAttr struct {
 }
 
 func ProgLoad(attr *ProgLoadAttr) (*FD, error) {
+	MaskProfilerSignal()
+	defer UnmaskProfilerSignal()
 	fd, err := BPF(BPF_PROG_LOAD, unsafe.Pointer(attr), unsafe.Sizeof(*attr))
 	if err != nil {
 		return nil, err

@@ -4,14 +4,12 @@
 
 ![HoneyGopher](.github/images/cilium-ebpf.png)
 
-eBPF is a pure Go library that provides utilities for loading, compiling, and
+ebpf-go is a pure Go library that provides utilities for loading, compiling, and
 debugging eBPF programs. It has minimal external dependencies and is intended to
 be used in long running processes.
 
-The library is maintained by [Cloudflare](https://www.cloudflare.com) and
-[Cilium](https://www.cilium.io).
-
-See [ebpf.io](https://ebpf.io) for other projects from the eBPF ecosystem.
+See [ebpf.io](https://ebpf.io) for complementary projects from the wider eBPF
+ecosystem.
 
 ## Getting Started
 
@@ -23,10 +21,16 @@ eBPF and the library, and help shape the future of the project.
 
 ## Getting Help
 
-Please
-[join](https://ebpf.io/slack) the
+The community actively monitors our [GitHub Discussions](discussions/) page.
+Please search for existing threads before starting a new one. Refrain from
+opening issues on the bug tracker if you're just starting out or if you're not
+sure if something is a bug in the library code.
+
+Alternatively, [join](https://ebpf.io/slack) the
 [#ebpf-go](https://cilium.slack.com/messages/ebpf-go) channel on Slack if you
-have questions regarding the library.
+have other questions regarding the project. Note that this channel is ephemeral
+and has its history erased past a certain point, which is less helpful for
+others running into the same problem later.
 
 ## Packages
 

@@ -2,10 +2,17 @@ package sys
 
 import (
 	"fmt"
+	"runtime"
 	"unsafe"
 
 	"github.com/cilium/ebpf/internal/unix"
 )
+
+func init() {
+	if err := sigsetAdd(&profSet, unix.SIGPROF); err != nil {
+		panic(fmt.Errorf("creating signal set: %w", err))
+	}
+}
 
 const (
 	wordBytes = int(unsafe.Sizeof(unix.Sigset_t{}.Val[0]))
@@ -14,6 +21,34 @@ const (
 	setBytes = int(unsafe.Sizeof(unix.Sigset_t{}))
 	setBits  = setBytes * 8
 )
+
+var profSet unix.Sigset_t
+
+// maskProfilerSignal locks the calling goroutine to its underlying OS thread
+// and adds SIGPROF to the thread's signal mask. This prevents pprof from
+// interrupting expensive syscalls like e.g. BPF_PROG_LOAD.
+//
+// The caller must defer sys.UnmaskProfilerSignal() to reverse the operation.
+func maskProfilerSignal() {
+	runtime.LockOSThread()
+
+	if err := unix.PthreadSigmask(unix.SIG_BLOCK, &profSet, nil); err != nil {
+		runtime.UnlockOSThread()
+		panic(fmt.Errorf("masking profiler signal: %w", err))
+	}
+}
+
+// unmaskProfilerSignal removes SIGPROF from the underlying thread's signal
+// mask, allowing it to be interrupted for profiling once again.
+//
+// It also unlocks the current goroutine from its underlying OS thread.
+func unmaskProfilerSignal() {
+	defer runtime.UnlockOSThread()
+
+	if err := unix.PthreadSigmask(unix.SIG_UNBLOCK, &profSet, nil); err != nil {
+		panic(fmt.Errorf("unmasking profiler signal: %w", err))
+	}
+}
 
 // sigsetAdd adds signal to set.
 func sigsetAdd(set *unix.Sigset_t, signal unix.Signal) error {

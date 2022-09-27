@@ -72,6 +72,7 @@ const (
 	SO_ATTACH_BPF             = 0x32
 	SO_DETACH_BPF             = 0x1b
 	SOL_SOCKET                = 0x1
+	SIGPROF                   = 0
 )
 
 type Statfs_t struct {
@@ -105,6 +106,11 @@ type Sigset_t struct {
 // Syscall is a wrapper
 func Syscall(trap, a1, a2, a3 uintptr) (r1, r2 uintptr, err syscall.Errno) {
 	return 0, 0, syscall.Errno(1)
+}
+
+// PthreadSigmask is a wrapper
+func PthreadSigmask(how int, set, oldset *Sigset_t) error {
+	return errNonLinux
 }
 
 // FcntlInt is a wrapper

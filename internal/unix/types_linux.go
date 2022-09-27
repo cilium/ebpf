@@ -72,13 +72,11 @@ const (
 	SOL_SOCKET                = linux.SOL_SOCKET
 )
 
-// Statfs_t is a wrapper
 type Statfs_t = linux.Statfs_t
-
 type Stat_t = linux.Stat_t
-
-// Rlimit is a wrapper
 type Rlimit = linux.Rlimit
+type Signal = linux.Signal
+type Sigset_t = linux.Sigset_t
 
 // Syscall is a wrapper
 func Syscall(trap, a1, a2, a3 uintptr) (r1, r2 uintptr, err syscall.Errno) {

@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"strings"
 	"testing"
+
+	qt "github.com/frankban/quicktest"
 )
 
 func TestStringTable(t *testing.T) {
@@ -67,6 +69,32 @@ func TestStringTable(t *testing.T) {
 	if err == nil {
 		t.Fatal("Accepted non-empty first item")
 	}
+}
+
+func TestStringTableBuilder(t *testing.T) {
+	stb := newStringTableBuilder()
+
+	_, err := readStringTable(bytes.NewReader(stb.Marshal()), nil)
+	qt.Assert(t, err, qt.IsNil, qt.Commentf("Can't parse string table"))
+
+	_, err = stb.Add("foo\x00bar")
+	qt.Assert(t, err, qt.IsNotNil)
+
+	empty, err := stb.Add("")
+	qt.Assert(t, err, qt.IsNil)
+	qt.Assert(t, empty, qt.Equals, uint32(0), qt.Commentf("The empty string is not at index 0"))
+
+	foo1, _ := stb.Add("foo")
+	foo2, _ := stb.Add("foo")
+	qt.Assert(t, foo1, qt.Equals, foo2, qt.Commentf("Adding the same string returns different offsets"))
+
+	table := stb.Marshal()
+	if n := bytes.Count(table, []byte("foo")); n != 1 {
+		t.Fatalf("Marshalled string table contains foo %d times instead of once", n)
+	}
+
+	_, err = readStringTable(bytes.NewReader(table), nil)
+	qt.Assert(t, err, qt.IsNil, qt.Commentf("Can't parse string table"))
 }
 
 func newStringTable(strings ...string) *stringTable {

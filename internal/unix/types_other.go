@@ -72,9 +72,9 @@ const (
 	SO_ATTACH_BPF             = 0x32
 	SO_DETACH_BPF             = 0x1b
 	SOL_SOCKET                = 0x1
+	SIGPROF                   = 0
 )
 
-// Statfs_t is a wrapper
 type Statfs_t struct {
 	Type    int64
 	Bsize   int64
@@ -92,15 +92,25 @@ type Statfs_t struct {
 
 type Stat_t struct{}
 
-// Rlimit is a wrapper
 type Rlimit struct {
 	Cur uint64
 	Max uint64
 }
 
+type Signal int
+
+type Sigset_t struct {
+	Val [4]uint64
+}
+
 // Syscall is a wrapper
 func Syscall(trap, a1, a2, a3 uintptr) (r1, r2 uintptr, err syscall.Errno) {
 	return 0, 0, syscall.Errno(1)
+}
+
+// PthreadSigmask is a wrapper
+func PthreadSigmask(how int, set, oldset *Sigset_t) error {
+	return errNonLinux
 }
 
 // FcntlInt is a wrapper

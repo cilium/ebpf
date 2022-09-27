@@ -1,6 +1,7 @@
 package sys
 
 import (
+	"runtime"
 	"testing"
 
 	"github.com/cilium/ebpf/internal/unix"
@@ -36,5 +37,25 @@ func TestSigset(t *testing.T) {
 	}
 	if err := sigsetAdd(&got, -1); err == nil {
 		t.Fatal("expected negative signal to be rejected")
+	}
+}
+
+func TestProfilerSignal(t *testing.T) {
+	// Additional goroutine lock to make the PthreadSigmask below execute on the
+	// same OS thread as the functions under test. UnlockOSThread needs to be
+	// called as many times as LockOSThread to unlock the goroutine.
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
+
+	maskProfilerSignal()
+	unmaskProfilerSignal()
+
+	var old unix.Sigset_t
+	if err := unix.PthreadSigmask(0, nil, &old); err != nil {
+		t.Fatal("getting old sigmask:", err)
+	}
+	var want unix.Sigset_t
+	if old != want {
+		t.Fatal("unmask operation didn't result in empty signal mask")
 	}
 }

@@ -1,5 +1,4 @@
 //go:build linux
-// +build linux
 
 package unix
 
@@ -70,6 +69,7 @@ const (
 	SO_ATTACH_BPF             = linux.SO_ATTACH_BPF
 	SO_DETACH_BPF             = linux.SO_DETACH_BPF
 	SOL_SOCKET                = linux.SOL_SOCKET
+	SIGPROF                   = linux.SIGPROF
 )
 
 type Statfs_t = linux.Statfs_t
@@ -81,6 +81,11 @@ type Sigset_t = linux.Sigset_t
 // Syscall is a wrapper
 func Syscall(trap, a1, a2, a3 uintptr) (r1, r2 uintptr, err syscall.Errno) {
 	return linux.Syscall(trap, a1, a2, a3)
+}
+
+// PthreadSigmask is a wrapper
+func PthreadSigmask(how int, set, oldset *Sigset_t) error {
+	return linux.PthreadSigmask(how, set, oldset)
 }
 
 // FcntlInt is a wrapper

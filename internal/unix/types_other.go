@@ -74,7 +74,6 @@ const (
 	SOL_SOCKET                = 0x1
 )
 
-// Statfs_t is a wrapper
 type Statfs_t struct {
 	Type    int64
 	Bsize   int64
@@ -92,10 +91,15 @@ type Statfs_t struct {
 
 type Stat_t struct{}
 
-// Rlimit is a wrapper
 type Rlimit struct {
 	Cur uint64
 	Max uint64
+}
+
+type Signal int
+
+type Sigset_t struct {
+	Val [4]uint64
 }
 
 // Syscall is a wrapper

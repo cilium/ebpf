@@ -10,7 +10,8 @@ import (
 	"github.com/cilium/ebpf/asm"
 	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/sys"
-	"github.com/cilium/ebpf/internal/unix"
+
+	"golang.org/x/sys/unix"
 )
 
 // KprobeMultiOptions defines additional parameters that will be used

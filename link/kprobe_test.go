@@ -11,7 +11,8 @@ import (
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/asm"
 	"github.com/cilium/ebpf/internal/testutils"
-	"github.com/cilium/ebpf/internal/unix"
+
+	"golang.org/x/sys/unix"
 )
 
 // Global symbol, present on all tested kernels.

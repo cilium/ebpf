@@ -5,7 +5,7 @@ import (
 	"syscall"
 	"unsafe"
 
-	"github.com/cilium/ebpf/internal/unix"
+	"golang.org/x/sys/unix"
 )
 
 // ENOTSUPP is a Linux internal error code that has leaked into UAPI.

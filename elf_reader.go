@@ -15,7 +15,8 @@ import (
 	"github.com/cilium/ebpf/asm"
 	"github.com/cilium/ebpf/btf"
 	"github.com/cilium/ebpf/internal"
-	"github.com/cilium/ebpf/internal/unix"
+
+	"golang.org/x/sys/unix"
 )
 
 // elfCode is a convenience to reduce the amount of arguments that have to

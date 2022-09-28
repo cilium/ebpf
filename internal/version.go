@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/cilium/ebpf/internal/unix"
+	"golang.org/x/sys/unix"
 )
 
 const (

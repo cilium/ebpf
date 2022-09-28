@@ -3,7 +3,7 @@ package sys
 import (
 	"unsafe"
 
-	"github.com/cilium/ebpf/internal/unix"
+	"golang.org/x/sys/unix"
 )
 
 // NewPointer creates a 64-bit pointer from an unsafe Pointer.

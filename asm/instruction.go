@@ -12,7 +12,8 @@ import (
 	"strings"
 
 	"github.com/cilium/ebpf/internal/sys"
-	"github.com/cilium/ebpf/internal/unix"
+
+	"golang.org/x/sys/unix"
 )
 
 // InstructionSize is the size of a BPF instruction in bytes

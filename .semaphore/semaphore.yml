@@ -49,7 +49,6 @@ blocks:
       jobs:
       - name: Build and Lint
         commands:
-          - ( export GOOS=darwin; go build ./... && for p in $(go list ./...) ; do go test -c $p || exit ; done )
           - ( export GOARCH=arm GOARM=6; go build ./... && for p in $(go list ./...) ; do go test -c $p || exit ; done )
           - ( export GOARCH=arm64; go build ./... && for p in $(go list ./...) ; do go test -c $p || exit ; done )
           - make clean

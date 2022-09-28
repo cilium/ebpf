@@ -72,6 +72,21 @@ variables: `CONTAINER_ENGINE=podman CONTAINER_RUN_ARGS= make`.
 
 The toolchain image build files are kept in [testdata/docker/](testdata/docker/).
 
+## Editing on non-Linux OS
+
+Make sure that your editor / IDE passes the `linux` build tag to `gopls`. Otherwise
+you will see errors from the golang.org/x/sys/unix import.
+
+### VSCode
+
+Add the following snippet to the workspace `settings.json`:
+
+```json
+{
+	"go.buildTags": "linux",
+}
+```
+
 ## License
 
 MIT

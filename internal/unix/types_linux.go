@@ -70,6 +70,9 @@ const (
 	SO_DETACH_BPF             = linux.SO_DETACH_BPF
 	SOL_SOCKET                = linux.SOL_SOCKET
 	SIGPROF                   = linux.SIGPROF
+
+	SIG_BLOCK   = linux.SIG_BLOCK
+	SIG_UNBLOCK = linux.SIG_UNBLOCK
 )
 
 type Statfs_t = linux.Statfs_t

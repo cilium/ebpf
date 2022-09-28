@@ -24,6 +24,10 @@ const (
 	retFd
 )
 
+var (
+	maskProfiler = "MaskProfilerSignal(); defer UnmaskProfilerSignal();"
+)
+
 func main() {
 	if err := run(os.Args[1:]); err != nil {
 		fmt.Fprintln(os.Stderr, "Error:", err)
@@ -227,10 +231,11 @@ import (
 		ret     syscallRetval
 		cType   string
 		cmd     string
+		pre     string
 		patches []patch
 	}{
 		{
-			"MapCreate", retFd, "map_create", "BPF_MAP_CREATE",
+			"MapCreate", retFd, "map_create", "BPF_MAP_CREATE", "",
 			[]patch{
 				replace(objName, "map_name"),
 				replace(enumTypes["MapType"], "map_type"),
@@ -238,50 +243,50 @@ import (
 			},
 		},
 		{
-			"MapLookupElem", retError, "map_elem", "BPF_MAP_LOOKUP_ELEM",
+			"MapLookupElem", retError, "map_elem", "BPF_MAP_LOOKUP_ELEM", "",
 			[]patch{choose(2, "value"), replace(pointer, "key", "value")},
 		},
 		{
-			"MapLookupAndDeleteElem", retError, "map_elem", "BPF_MAP_LOOKUP_AND_DELETE_ELEM",
+			"MapLookupAndDeleteElem", retError, "map_elem", "BPF_MAP_LOOKUP_AND_DELETE_ELEM", "",
 			[]patch{choose(2, "value"), replace(pointer, "key", "value")},
 		},
 		{
-			"MapUpdateElem", retError, "map_elem", "BPF_MAP_UPDATE_ELEM",
+			"MapUpdateElem", retError, "map_elem", "BPF_MAP_UPDATE_ELEM", "",
 			[]patch{choose(2, "value"), replace(pointer, "key", "value")},
 		},
 		{
-			"MapDeleteElem", retError, "map_elem", "BPF_MAP_DELETE_ELEM",
+			"MapDeleteElem", retError, "map_elem", "BPF_MAP_DELETE_ELEM", "",
 			[]patch{choose(2, "value"), replace(pointer, "key", "value")},
 		},
 		{
-			"MapGetNextKey", retError, "map_elem", "BPF_MAP_GET_NEXT_KEY",
+			"MapGetNextKey", retError, "map_elem", "BPF_MAP_GET_NEXT_KEY", "",
 			[]patch{
 				choose(2, "next_key"), replace(pointer, "key", "next_key"),
 				truncateAfter("next_key"),
 			},
 		},
 		{
-			"MapFreeze", retError, "map_elem", "BPF_MAP_FREEZE",
+			"MapFreeze", retError, "map_elem", "BPF_MAP_FREEZE", "",
 			[]patch{truncateAfter("map_fd")},
 		},
 		{
-			"MapLookupBatch", retError, "map_elem_batch", "BPF_MAP_LOOKUP_BATCH",
+			"MapLookupBatch", retError, "map_elem_batch", "BPF_MAP_LOOKUP_BATCH", "",
 			[]patch{replace(pointer, "in_batch", "out_batch", "keys", "values")},
 		},
 		{
-			"MapLookupAndDeleteBatch", retError, "map_elem_batch", "BPF_MAP_LOOKUP_AND_DELETE_BATCH",
+			"MapLookupAndDeleteBatch", retError, "map_elem_batch", "BPF_MAP_LOOKUP_AND_DELETE_BATCH", "",
 			[]patch{replace(pointer, "in_batch", "out_batch", "keys", "values")},
 		},
 		{
-			"MapUpdateBatch", retError, "map_elem_batch", "BPF_MAP_UPDATE_BATCH",
+			"MapUpdateBatch", retError, "map_elem_batch", "BPF_MAP_UPDATE_BATCH", "",
 			[]patch{replace(pointer, "in_batch", "out_batch", "keys", "values")},
 		},
 		{
-			"MapDeleteBatch", retError, "map_elem_batch", "BPF_MAP_DELETE_BATCH",
+			"MapDeleteBatch", retError, "map_elem_batch", "BPF_MAP_DELETE_BATCH", "",
 			[]patch{replace(pointer, "in_batch", "out_batch", "keys", "values")},
 		},
 		{
-			"ProgLoad", retFd, "prog_load", "BPF_PROG_LOAD",
+			"ProgLoad", retFd, "prog_load", "BPF_PROG_LOAD", maskProfiler,
 			[]patch{
 				replace(objName, "prog_name"),
 				replace(enumTypes["ProgType"], "prog_type"),
@@ -300,45 +305,45 @@ import (
 			},
 		},
 		{
-			"ProgBindMap", retError, "prog_bind_map", "BPF_PROG_BIND_MAP",
+			"ProgBindMap", retError, "prog_bind_map", "BPF_PROG_BIND_MAP", "",
 			nil,
 		},
 		{
-			"ObjPin", retError, "obj_pin", "BPF_OBJ_PIN",
+			"ObjPin", retError, "obj_pin", "BPF_OBJ_PIN", "",
 			[]patch{replace(pointer, "pathname")},
 		},
 		{
-			"ObjGet", retFd, "obj_pin", "BPF_OBJ_GET",
+			"ObjGet", retFd, "obj_pin", "BPF_OBJ_GET", "",
 			[]patch{replace(pointer, "pathname")},
 		},
 		{
-			"ProgAttach", retError, "prog_attach", "BPF_PROG_ATTACH",
+			"ProgAttach", retError, "prog_attach", "BPF_PROG_ATTACH", "",
 			nil,
 		},
 		{
-			"ProgDetach", retError, "prog_attach", "BPF_PROG_DETACH",
+			"ProgDetach", retError, "prog_attach", "BPF_PROG_DETACH", "",
 			[]patch{truncateAfter("attach_type")},
 		},
 		{
-			"ProgRun", retError, "prog_run", "BPF_PROG_TEST_RUN",
+			"ProgRun", retError, "prog_run", "BPF_PROG_TEST_RUN", "",
 			[]patch{replace(pointer, "data_in", "data_out", "ctx_in", "ctx_out")},
 		},
 		{
-			"ProgGetNextId", retError, "obj_next_id", "BPF_PROG_GET_NEXT_ID",
+			"ProgGetNextId", retError, "obj_next_id", "BPF_PROG_GET_NEXT_ID", "",
 			[]patch{
 				choose(0, "start_id"), rename("start_id", "id"),
 				truncateAfter("next_id"),
 			},
 		},
 		{
-			"MapGetNextId", retError, "obj_next_id", "BPF_MAP_GET_NEXT_ID",
+			"MapGetNextId", retError, "obj_next_id", "BPF_MAP_GET_NEXT_ID", "",
 			[]patch{
 				choose(0, "start_id"), rename("start_id", "id"),
 				truncateAfter("next_id"),
 			},
 		},
 		{
-			"BtfGetNextId", retError, "obj_next_id", "BPF_BTF_GET_NEXT_ID",
+			"BtfGetNextId", retError, "obj_next_id", "BPF_BTF_GET_NEXT_ID", "",
 			[]patch{
 				choose(0, "start_id"), rename("start_id", "id"),
 				replace(btfID, "id", "next_id"),
@@ -348,35 +353,35 @@ import (
 		// These piggy back on the obj_next_id decl, but only support the
 		// first field...
 		{
-			"BtfGetFdById", retFd, "obj_next_id", "BPF_BTF_GET_FD_BY_ID",
+			"BtfGetFdById", retFd, "obj_next_id", "BPF_BTF_GET_FD_BY_ID", "",
 			[]patch{choose(0, "start_id"), rename("start_id", "id"), truncateAfter("id")},
 		},
 		{
-			"MapGetFdById", retFd, "obj_next_id", "BPF_MAP_GET_FD_BY_ID",
+			"MapGetFdById", retFd, "obj_next_id", "BPF_MAP_GET_FD_BY_ID", "",
 			[]patch{choose(0, "start_id"), rename("start_id", "id"), truncateAfter("id")},
 		},
 		{
-			"ProgGetFdById", retFd, "obj_next_id", "BPF_PROG_GET_FD_BY_ID",
+			"ProgGetFdById", retFd, "obj_next_id", "BPF_PROG_GET_FD_BY_ID", "",
 			[]patch{choose(0, "start_id"), rename("start_id", "id"), truncateAfter("id")},
 		},
 		{
-			"ObjGetInfoByFd", retError, "info_by_fd", "BPF_OBJ_GET_INFO_BY_FD",
+			"ObjGetInfoByFd", retError, "info_by_fd", "BPF_OBJ_GET_INFO_BY_FD", "",
 			[]patch{replace(pointer, "info")},
 		},
 		{
-			"RawTracepointOpen", retFd, "raw_tracepoint_open", "BPF_RAW_TRACEPOINT_OPEN",
+			"RawTracepointOpen", retFd, "raw_tracepoint_open", "BPF_RAW_TRACEPOINT_OPEN", "",
 			[]patch{replace(pointer, "name")},
 		},
 		{
-			"BtfLoad", retFd, "btf_load", "BPF_BTF_LOAD",
+			"BtfLoad", retFd, "btf_load", "BPF_BTF_LOAD", "",
 			[]patch{replace(pointer, "btf", "btf_log_buf")},
 		},
 		{
-			"LinkCreate", retFd, "link_create", "BPF_LINK_CREATE",
+			"LinkCreate", retFd, "link_create", "BPF_LINK_CREATE", "",
 			[]patch{replace(enumTypes["AttachType"], "attach_type")},
 		},
 		{
-			"LinkCreateIter", retFd, "link_create", "BPF_LINK_CREATE",
+			"LinkCreateIter", retFd, "link_create", "BPF_LINK_CREATE", "",
 			[]patch{
 				chooseNth(4, 1),
 				replace(enumTypes["AttachType"], "attach_type"),
@@ -385,7 +390,7 @@ import (
 			},
 		},
 		{
-			"LinkCreatePerfEvent", retFd, "link_create", "BPF_LINK_CREATE",
+			"LinkCreatePerfEvent", retFd, "link_create", "BPF_LINK_CREATE", "",
 			[]patch{
 				chooseNth(4, 2),
 				replace(enumTypes["AttachType"], "attach_type"),
@@ -393,7 +398,7 @@ import (
 			},
 		},
 		{
-			"LinkCreateKprobeMulti", retFd, "link_create", "BPF_LINK_CREATE",
+			"LinkCreateKprobeMulti", retFd, "link_create", "BPF_LINK_CREATE", "",
 			[]patch{
 				chooseNth(4, 3),
 				replace(enumTypes["AttachType"], "attach_type"),
@@ -408,15 +413,15 @@ import (
 			},
 		},
 		{
-			"LinkUpdate", retError, "link_update", "BPF_LINK_UPDATE",
+			"LinkUpdate", retError, "link_update", "BPF_LINK_UPDATE", "",
 			nil,
 		},
 		{
-			"EnableStats", retFd, "enable_stats", "BPF_ENABLE_STATS",
+			"EnableStats", retFd, "enable_stats", "BPF_ENABLE_STATS", "",
 			nil,
 		},
 		{
-			"IterCreate", retFd, "iter_create", "BPF_ITER_CREATE",
+			"IterCreate", retFd, "iter_create", "BPF_ITER_CREATE", "",
 			nil,
 		},
 	}
@@ -469,9 +474,9 @@ import (
 
 		switch s.ret {
 		case retError:
-			fmt.Fprintf(w, "func %s(attr *%s) error { _, err := BPF(%s, unsafe.Pointer(attr), unsafe.Sizeof(*attr)); return err }\n\n", s.goType, goAttrType, s.cmd)
+			fmt.Fprintf(w, "func %s(attr *%s) error { %s _, err := BPF(%s, unsafe.Pointer(attr), unsafe.Sizeof(*attr)); return err }\n\n", s.goType, goAttrType, s.pre, s.cmd)
 		case retFd:
-			fmt.Fprintf(w, "func %s(attr *%s) (*FD, error) { fd, err := BPF(%s, unsafe.Pointer(attr), unsafe.Sizeof(*attr)); if err != nil { return nil, err }; return NewFD(int(fd)) }\n\n", s.goType, goAttrType, s.cmd)
+			fmt.Fprintf(w, "func %s(attr *%s) (*FD, error) { %s fd, err := BPF(%s, unsafe.Pointer(attr), unsafe.Sizeof(*attr)); if err != nil { return nil, err }; return NewFD(int(fd)) }\n\n", s.goType, goAttrType, s.pre, s.cmd)
 		}
 	}
 

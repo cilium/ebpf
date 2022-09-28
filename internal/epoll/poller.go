@@ -9,7 +9,8 @@ import (
 	"time"
 
 	"github.com/cilium/ebpf/internal"
-	"github.com/cilium/ebpf/internal/unix"
+
+	"golang.org/x/sys/unix"
 )
 
 // Poller waits for readiness notifications from multiple file descriptors.

@@ -8,7 +8,8 @@ import (
 
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/internal/testutils"
-	"github.com/cilium/ebpf/internal/unix"
+
+	"golang.org/x/sys/unix"
 )
 
 var kprobeMultiSyms = []string{"vprintk", "inet6_release"}

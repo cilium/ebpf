@@ -4,7 +4,8 @@ import (
 	"syscall"
 
 	"github.com/cilium/ebpf"
-	"github.com/cilium/ebpf/internal/unix"
+
+	"golang.org/x/sys/unix"
 )
 
 // AttachSocketFilter attaches a SocketFilter BPF program to a socket.

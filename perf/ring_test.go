@@ -6,7 +6,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/cilium/ebpf/internal/unix"
+	"golang.org/x/sys/unix"
 )
 
 func TestRingBufferReader(t *testing.T) {

@@ -9,11 +9,11 @@ import (
 	"path"
 	"testing"
 
-	qt "github.com/frankban/quicktest"
-
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/internal/testutils"
-	"github.com/cilium/ebpf/internal/unix"
+
+	qt "github.com/frankban/quicktest"
+	"golang.org/x/sys/unix"
 )
 
 var (

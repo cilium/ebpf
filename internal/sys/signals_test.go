@@ -4,7 +4,7 @@ import (
 	"runtime"
 	"testing"
 
-	"github.com/cilium/ebpf/internal/unix"
+	"golang.org/x/sys/unix"
 )
 
 func TestSigset(t *testing.T) {

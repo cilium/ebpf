@@ -60,7 +60,7 @@ func createProgLoadAttr(pt ebpf.ProgramType, helper asm.BuiltinFunc) (*sys.ProgL
 	instructions := sys.NewSlicePointer(bytecode)
 
 	// Some programs have expected attach types which are checked during the
-	// BPD_PROG_LOAD syscall.
+	// BPF_PROG_LOAD syscall.
 	switch pt {
 	case ebpf.CGroupSockAddr:
 		expectedAttachType = ebpf.AttachCGroupInet4Connect

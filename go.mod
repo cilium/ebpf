@@ -5,7 +5,7 @@ go 1.18
 require (
 	github.com/frankban/quicktest v1.14.0
 	github.com/google/go-cmp v0.5.6
-	golang.org/x/sys v0.0.0-20220829200755-d48e67d00261
+	golang.org/x/sys v0.0.0-20220927170352-d9d178bc13c6
 )
 
 require (

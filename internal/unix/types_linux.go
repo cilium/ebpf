@@ -24,7 +24,9 @@ const (
 	EFAULT  = linux.EFAULT
 	EACCES  = linux.EACCES
 	EILSEQ  = linux.EILSEQ
+)
 
+const (
 	BPF_F_NO_PREALLOC         = linux.BPF_F_NO_PREALLOC
 	BPF_F_NUMA_NODE           = linux.BPF_F_NUMA_NODE
 	BPF_F_RDONLY              = linux.BPF_F_RDONLY
@@ -70,9 +72,8 @@ const (
 	SO_DETACH_BPF             = linux.SO_DETACH_BPF
 	SOL_SOCKET                = linux.SOL_SOCKET
 	SIGPROF                   = linux.SIGPROF
-
-	SIG_BLOCK   = linux.SIG_BLOCK
-	SIG_UNBLOCK = linux.SIG_UNBLOCK
+	SIG_BLOCK                 = linux.SIG_BLOCK
+	SIG_UNBLOCK               = linux.SIG_UNBLOCK
 )
 
 type Statfs_t = linux.Statfs_t
@@ -80,125 +81,95 @@ type Stat_t = linux.Stat_t
 type Rlimit = linux.Rlimit
 type Signal = linux.Signal
 type Sigset_t = linux.Sigset_t
+type PerfEventMmapPage = linux.PerfEventMmapPage
+type EpollEvent = linux.EpollEvent
+type PerfEventAttr = linux.PerfEventAttr
+type Utsname = linux.Utsname
 
-// Syscall is a wrapper
 func Syscall(trap, a1, a2, a3 uintptr) (r1, r2 uintptr, err syscall.Errno) {
 	return linux.Syscall(trap, a1, a2, a3)
 }
 
-// PthreadSigmask is a wrapper
 func PthreadSigmask(how int, set, oldset *Sigset_t) error {
 	return linux.PthreadSigmask(how, set, oldset)
 }
 
-// FcntlInt is a wrapper
 func FcntlInt(fd uintptr, cmd, arg int) (int, error) {
 	return linux.FcntlInt(fd, cmd, arg)
 }
 
-// IoctlSetInt is a wrapper
 func IoctlSetInt(fd int, req uint, value int) error {
 	return linux.IoctlSetInt(fd, req, value)
 }
 
-// Statfs is a wrapper
 func Statfs(path string, buf *Statfs_t) (err error) {
 	return linux.Statfs(path, buf)
 }
 
-// Close is a wrapper
 func Close(fd int) (err error) {
 	return linux.Close(fd)
 }
 
-// EpollEvent is a wrapper
-type EpollEvent = linux.EpollEvent
-
-// EpollWait is a wrapper
 func EpollWait(epfd int, events []EpollEvent, msec int) (n int, err error) {
 	return linux.EpollWait(epfd, events, msec)
 }
 
-// EpollCtl is a wrapper
 func EpollCtl(epfd int, op int, fd int, event *EpollEvent) (err error) {
 	return linux.EpollCtl(epfd, op, fd, event)
 }
 
-// Eventfd is a wrapper
 func Eventfd(initval uint, flags int) (fd int, err error) {
 	return linux.Eventfd(initval, flags)
 }
 
-// Write is a wrapper
 func Write(fd int, p []byte) (n int, err error) {
 	return linux.Write(fd, p)
 }
 
-// EpollCreate1 is a wrapper
 func EpollCreate1(flag int) (fd int, err error) {
 	return linux.EpollCreate1(flag)
 }
 
-// PerfEventMmapPage is a wrapper
-type PerfEventMmapPage linux.PerfEventMmapPage
-
-// SetNonblock is a wrapper
 func SetNonblock(fd int, nonblocking bool) (err error) {
 	return linux.SetNonblock(fd, nonblocking)
 }
 
-// Mmap is a wrapper
 func Mmap(fd int, offset int64, length int, prot int, flags int) (data []byte, err error) {
 	return linux.Mmap(fd, offset, length, prot, flags)
 }
 
-// Munmap is a wrapper
 func Munmap(b []byte) (err error) {
 	return linux.Munmap(b)
 }
 
-// PerfEventAttr is a wrapper
-type PerfEventAttr = linux.PerfEventAttr
-
-// PerfEventOpen is a wrapper
 func PerfEventOpen(attr *PerfEventAttr, pid int, cpu int, groupFd int, flags int) (fd int, err error) {
 	return linux.PerfEventOpen(attr, pid, cpu, groupFd, flags)
 }
 
-// Utsname is a wrapper
-type Utsname = linux.Utsname
-
-// Uname is a wrapper
 func Uname(buf *Utsname) (err error) {
 	return linux.Uname(buf)
 }
 
-// Getpid is a wrapper
 func Getpid() int {
 	return linux.Getpid()
 }
 
-// Gettid is a wrapper
 func Gettid() int {
 	return linux.Gettid()
 }
 
-// Tgkill is a wrapper
 func Tgkill(tgid int, tid int, sig syscall.Signal) (err error) {
 	return linux.Tgkill(tgid, tid, sig)
 }
 
-// BytePtrFromString is a wrapper
 func BytePtrFromString(s string) (*byte, error) {
 	return linux.BytePtrFromString(s)
 }
 
-// ByteSliceToString is a wrapper
 func ByteSliceToString(s []byte) string {
 	return linux.ByteSliceToString(s)
 }
 
-// Renameat2 is a wrapper
 func Renameat2(olddirfd int, oldpath string, newdirfd int, newpath string, flags uint) error {
 	return linux.Renameat2(olddirfd, oldpath, newdirfd, newpath, flags)
 }

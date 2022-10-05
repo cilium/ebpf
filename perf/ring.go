@@ -93,10 +93,22 @@ func createPerfEvent(cpu int, opts ReaderOptions) (int, error) {
 		watermark = 1
 	}
 
+	var bits uint64 = unix.PerfBitWatermark
+
+	if opts.MmapEvents {
+		bits |= unix.PerfBitMmap
+	}
+	if opts.Mmap2Events {
+		bits |= unix.PerfBitMmap2
+	}
+	if opts.BuildId {
+		bits |= unix.PerfBitBuildId
+	}
+
 	attr := unix.PerfEventAttr{
 		Type:        unix.PERF_TYPE_SOFTWARE,
 		Config:      unix.PERF_COUNT_SW_BPF_OUTPUT,
-		Bits:        unix.PerfBitWatermark,
+		Bits:        bits,
 		Sample_type: unix.PERF_SAMPLE_RAW,
 		Wakeup:      uint32(watermark),
 	}

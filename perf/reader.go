@@ -45,6 +45,8 @@ type Record struct {
 	// garbage from the ring depending on the input sample's length.
 	RawSample []byte
 
+	AuxEvent []byte
+
 	// The number of samples which could not be output, since
 	// the ring buffer was full.
 	LostSamples uint64
@@ -53,7 +55,7 @@ type Record struct {
 // Read a record from a reader and tag it as being from the given CPU.
 //
 // buf must be at least perfEventHeaderSize bytes long.
-func readRecord(rd io.Reader, rec *Record, buf []byte) error {
+func readRecord(rd io.Reader, rec *Record, buf []byte, auxEvents bool) error {
 	// Assert that the buffer is large enough.
 	buf = buf[:perfEventHeaderSize]
 	_, err := io.ReadFull(rd, buf)
@@ -72,13 +74,32 @@ func readRecord(rd io.Reader, rec *Record, buf []byte) error {
 	switch header.Type {
 	case unix.PERF_RECORD_LOST:
 		rec.RawSample = rec.RawSample[:0]
+		rec.AuxEvent = rec.AuxEvent[:0]
 		rec.LostSamples, err = readLostRecords(rd)
 		return err
 
 	case unix.PERF_RECORD_SAMPLE:
+		rec.AuxEvent = rec.AuxEvent[:0]
 		rec.LostSamples = 0
 		// We can reuse buf here because perfEventHeaderSize > perfEventSampleSize.
 		rec.RawSample, err = readRawSample(rd, buf, rec.RawSample)
+		return err
+
+	case unix.PERF_RECORD_MMAP, unix.PERF_RECORD_MMAP2, unix.PERF_RECORD_EXIT, unix.PERF_RECORD_FORK:
+		rec.LostSamples = 0
+		rec.RawSample = rec.RawSample[:0]
+
+		if !auxEvents {
+			return &unknownEventError{header.Type}
+		}
+
+		data, err := readRawEvent(rd, header, buf)
+		if err == nil {
+			rec.AuxEvent = append(buf, data...)
+			return err
+		}
+
+		rec.AuxEvent = rec.AuxEvent[:0]
 		return err
 
 	default:
@@ -131,6 +152,16 @@ func readRawSample(rd io.Reader, buf, sampleBuf []byte) ([]byte, error) {
 	return data, nil
 }
 
+func readRawEvent(rd io.Reader, header perfEventHeader, sampleBuf []byte) ([]byte, error) {
+	size := int(header.Size) - perfEventHeaderSize
+	data := make([]byte, size)
+
+	if _, err := io.ReadFull(rd, data); err != nil {
+		return nil, fmt.Errorf("read sample: %v", err)
+	}
+	return data, nil
+}
+
 // Reader allows reading bpf_perf_event_output
 // from user space.
 type Reader struct {
@@ -155,6 +186,8 @@ type Reader struct {
 	// Read calls, which would otherwise need to be interrupted.
 	pauseMu  sync.Mutex
 	pauseFds []int
+
+	auxEvents bool
 }
 
 // ReaderOptions control the behaviour of the user
@@ -164,6 +197,10 @@ type ReaderOptions struct {
 	// Read will process data. Must be smaller than PerCPUBuffer.
 	// The default is to start processing as soon as data is available.
 	Watermark int
+
+	MmapEvents  bool
+	Mmap2Events bool
+	BuildId     bool
 }
 
 // NewReader creates a new reader with default options.
@@ -179,6 +216,14 @@ func NewReader(array *ebpf.Map, perCPUBuffer int) (*Reader, error) {
 func NewReaderWithOptions(array *ebpf.Map, perCPUBuffer int, opts ReaderOptions) (pr *Reader, err error) {
 	if perCPUBuffer < 1 {
 		return nil, errors.New("perCPUBuffer must be larger than 0")
+	}
+
+	if opts.BuildId && !opts.Mmap2Events {
+		return nil, errors.New("BuildId needs Mmap2Events")
+	}
+
+	if opts.Mmap2Events && !opts.MmapEvents {
+		return nil, errors.New("Mmap2Events needs MmapEvents")
 	}
 
 	var (
@@ -244,6 +289,7 @@ func NewReaderWithOptions(array *ebpf.Map, perCPUBuffer int, opts ReaderOptions)
 		epollRings:  make([]*perfEventRing, 0, len(rings)),
 		eventHeader: make([]byte, perfEventHeaderSize),
 		pauseFds:    pauseFds,
+		auxEvents:   opts.MmapEvents || opts.Mmap2Events,
 	}
 	if err = pr.Resume(); err != nil {
 		return nil, err
@@ -404,7 +450,7 @@ func (pr *Reader) readRecordFromRing(rec *Record, ring *perfEventRing) error {
 	defer ring.writeTail()
 
 	rec.CPU = ring.cpu
-	return readRecord(ring, rec, pr.eventHeader)
+	return readRecord(ring, rec, pr.eventHeader, pr.auxEvents)
 }
 
 type unknownEventError struct {

@@ -59,6 +59,9 @@ const (
 	PERF_EVENT_IOC_ENABLE     = linux.PERF_EVENT_IOC_ENABLE
 	PERF_EVENT_IOC_SET_BPF    = linux.PERF_EVENT_IOC_SET_BPF
 	PerfBitWatermark          = linux.PerfBitWatermark
+	PerfBitMmap               = linux.PerfBitMmap
+	PerfBitMmap2              = linux.PerfBitMmap2
+	PerfBitBuildId            = linux.CBitFieldMaskBit34
 	PERF_SAMPLE_RAW           = linux.PERF_SAMPLE_RAW
 	PERF_FLAG_FD_CLOEXEC      = linux.PERF_FLAG_FD_CLOEXEC
 	RLIM_INFINITY             = linux.RLIM_INFINITY

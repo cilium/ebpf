@@ -24,6 +24,7 @@ const (
 	EFAULT  = linux.EFAULT
 	EACCES  = linux.EACCES
 	EILSEQ  = linux.EILSEQ
+	ENOTSUP = linux.ENOTSUP
 )
 
 const (

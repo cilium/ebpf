@@ -22,12 +22,19 @@ type perfEventRing struct {
 	*ringReader
 }
 
-func newPerfEventRing(cpu, perCPUBuffer, watermark int) (*perfEventRing, error) {
+
+// In C, struct perf_event_attr has a write_backward field which is a bit in a
+// 64-length bitfield.
+// In Golang, there is a Bits field which 64 bits long.
+// From C, we can deduce write_backward is the is the 27th bit.
+const writeBackwardBit = 1 << 27
+
+func newPerfEventRing(cpu, perCPUBuffer, watermark int, writeBackward, overWritable bool) (*perfEventRing, error) {
 	if watermark >= perCPUBuffer {
 		return nil, errors.New("watermark must be smaller than perCPUBuffer")
 	}
 
-	fd, err := createPerfEvent(cpu, watermark)
+	fd, err := createPerfEvent(cpu, watermark, writeBackward)
 	if err != nil {
 		return nil, err
 	}
@@ -37,7 +44,12 @@ func newPerfEventRing(cpu, perCPUBuffer, watermark int) (*perfEventRing, error) 
 		return nil, err
 	}
 
-	mmap, err := unix.Mmap(fd, 0, perfBufferSize(perCPUBuffer), unix.PROT_READ|unix.PROT_WRITE, unix.MAP_SHARED)
+	protections := unix.PROT_READ
+	if !overWritable {
+		protections |= unix.PROT_WRITE
+	}
+
+	mmap, err := unix.Mmap(fd, 0, perfBufferSize(perCPUBuffer), protections, unix.MAP_SHARED)
 	if err != nil {
 		unix.Close(fd)
 		return nil, fmt.Errorf("can't mmap: %v", err)
@@ -86,15 +98,20 @@ func (ring *perfEventRing) Close() {
 	ring.mmap = nil
 }
 
-func createPerfEvent(cpu, watermark int) (int, error) {
+func createPerfEvent(cpu, watermark int, writeBackward bool) (int, error) {
 	if watermark == 0 {
 		watermark = 1
+	}
+
+	bits := unix.PerfBitWatermark
+	if writeBackward {
+		bits |= writeBackwardBit
 	}
 
 	attr := unix.PerfEventAttr{
 		Type:        unix.PERF_TYPE_SOFTWARE,
 		Config:      unix.PERF_COUNT_SW_BPF_OUTPUT,
-		Bits:        unix.PerfBitWatermark,
+		Bits:        uint64(bits),
 		Sample_type: unix.PERF_SAMPLE_RAW,
 		Wakeup:      uint32(watermark),
 	}

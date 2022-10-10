@@ -22,12 +22,12 @@ type perfEventRing struct {
 	*ringReader
 }
 
-func newPerfEventRing(cpu, perCPUBuffer, watermark int) (*perfEventRing, error) {
-	if watermark >= perCPUBuffer {
+func newPerfEventRing(cpu, perCPUBuffer int, opts ReaderOptions) (*perfEventRing, error) {
+	if opts.Watermark >= perCPUBuffer {
 		return nil, errors.New("watermark must be smaller than perCPUBuffer")
 	}
 
-	fd, err := createPerfEvent(cpu, watermark)
+	fd, err := createPerfEvent(cpu, opts)
 	if err != nil {
 		return nil, err
 	}
@@ -86,15 +86,29 @@ func (ring *perfEventRing) Close() {
 	ring.mmap = nil
 }
 
-func createPerfEvent(cpu, watermark int) (int, error) {
+func createPerfEvent(cpu int, opts ReaderOptions) (int, error) {
+	watermark := opts.Watermark
+
 	if watermark == 0 {
 		watermark = 1
+	}
+
+	var bits uint64 = unix.PerfBitWatermark
+
+	if opts.MmapEvents {
+		bits |= unix.PerfBitMmap
+	}
+	if opts.Mmap2Events {
+		bits |= unix.PerfBitMmap2
+	}
+	if opts.BuildId {
+		bits |= unix.PerfBitBuildId
 	}
 
 	attr := unix.PerfEventAttr{
 		Type:        unix.PERF_TYPE_SOFTWARE,
 		Config:      unix.PERF_COUNT_SW_BPF_OUTPUT,
-		Bits:        unix.PerfBitWatermark,
+		Bits:        bits,
 		Sample_type: unix.PERF_SAMPLE_RAW,
 		Wakeup:      uint32(watermark),
 	}

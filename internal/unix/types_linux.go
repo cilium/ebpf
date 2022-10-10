@@ -59,6 +59,9 @@ const (
 	PERF_EVENT_IOC_ENABLE     = linux.PERF_EVENT_IOC_ENABLE
 	PERF_EVENT_IOC_SET_BPF    = linux.PERF_EVENT_IOC_SET_BPF
 	PerfBitWatermark          = linux.PerfBitWatermark
+	PerfBitMmap               = linux.PerfBitMmap
+	PerfBitMmap2              = linux.PerfBitMmap2
+	PerfBitBuildId            = linux.CBitFieldMaskBit34
 	PERF_SAMPLE_RAW           = linux.PERF_SAMPLE_RAW
 	PERF_FLAG_FD_CLOEXEC      = linux.PERF_FLAG_FD_CLOEXEC
 	RLIM_INFINITY             = linux.RLIM_INFINITY
@@ -66,6 +69,10 @@ const (
 	BPF_STATS_RUN_TIME        = linux.BPF_STATS_RUN_TIME
 	PERF_RECORD_LOST          = linux.PERF_RECORD_LOST
 	PERF_RECORD_SAMPLE        = linux.PERF_RECORD_SAMPLE
+	PERF_RECORD_MMAP          = linux.PERF_RECORD_MMAP
+	PERF_RECORD_MMAP2         = linux.PERF_RECORD_MMAP2
+	PERF_RECORD_EXIT          = linux.PERF_RECORD_EXIT
+	PERF_RECORD_FORK          = linux.PERF_RECORD_FORK
 	AT_FDCWD                  = linux.AT_FDCWD
 	RENAME_NOREPLACE          = linux.RENAME_NOREPLACE
 	SO_ATTACH_BPF             = linux.SO_ATTACH_BPF

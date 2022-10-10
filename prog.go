@@ -477,7 +477,8 @@ func (p *Program) Clone() (*Program, error) {
 // Calling Pin on a previously pinned program will overwrite the path, except when
 // the new path already exists. Re-pinning across filesystems is not supported.
 //
-// This requires bpffs to be mounted above fileName. See https://docs.cilium.io/en/k8s-doc/admin/#admin-mount-bpffs
+// This requires bpffs to be mounted above fileName.
+// See https://docs.cilium.io/en/stable/concepts/kubernetes/configuration/#mounting-bpffs-with-systemd
 func (p *Program) Pin(fileName string) error {
 	if err := internal.Pin(p.pinnedPath, fileName, p.fd); err != nil {
 		return err

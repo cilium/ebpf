@@ -1095,7 +1095,8 @@ func (m *Map) Clone() (*Map, error) {
 // the new path already exists. Re-pinning across filesystems is not supported.
 // You can Clone a map to pin it to a different path.
 //
-// This requires bpffs to be mounted above fileName. See https://docs.cilium.io/en/k8s-doc/admin/#admin-mount-bpffs
+// This requires bpffs to be mounted above fileName.
+// See https://docs.cilium.io/en/stable/concepts/kubernetes/configuration/#mounting-bpffs-with-systemd
 func (m *Map) Pin(fileName string) error {
 	if err := internal.Pin(m.pinnedPath, fileName, m.fd); err != nil {
 		return err

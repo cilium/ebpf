@@ -13,6 +13,8 @@ import (
 	"github.com/cilium/ebpf/internal/sys"
 	"github.com/cilium/ebpf/internal/testutils"
 	"github.com/cilium/ebpf/internal/unix"
+
+	qt "github.com/frankban/quicktest"
 )
 
 func TestRawLink(t *testing.T) {
@@ -52,6 +54,49 @@ func TestRawLink(t *testing.T) {
 
 func TestRawLinkLoadPinnedWithOptions(t *testing.T) {
 	cgroup, prog := mustCgroupFixtures(t)
+	link, path := newRawLink(t, cgroup, prog)
+	c := qt.New(t)
+
+	pinned := link.IsPinned()
+	c.Assert(pinned, qt.IsTrue)
+
+	// It seems like the kernel ignores BPF_F_RDONLY when updating a link,
+	// so we can't test this.
+	_, err := loadPinnedRawLink(path, &ebpf.LoadPinOptions{
+		Flags: math.MaxUint32,
+	})
+	if !errors.Is(err, unix.EINVAL) {
+		t.Fatal("Invalid flags don't trigger an error:", err)
+	}
+}
+
+func TestUnpinRawLink(t *testing.T) {
+	cgroup, prog := mustCgroupFixtures(t)
+	link, _ := newRawLink(t, cgroup, prog)
+	c := qt.New(t)
+
+	pinned := link.IsPinned()
+	c.Assert(pinned, qt.IsTrue)
+
+	err := link.Unpin()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	pinned = link.IsPinned()
+	c.Assert(pinned, qt.IsFalse)
+}
+
+func mustCgroupFixtures(t *testing.T) (*os.File, *ebpf.Program) {
+	t.Helper()
+
+	testutils.SkipIfNotSupported(t, haveProgAttach())
+
+	return testutils.CreateCgroup(t), mustLoadProgram(t, ebpf.CGroupSKB, 0, "")
+}
+
+func newRawLink(t *testing.T, cgroup *os.File, prog *ebpf.Program) (*RawLink, string) {
+	t.Helper()
 
 	link, err := AttachRawLink(RawLinkOptions{
 		Target:  int(cgroup.Fd()),
@@ -70,22 +115,7 @@ func TestRawLinkLoadPinnedWithOptions(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// It seems like the kernel ignores BPF_F_RDONLY when updating a link,
-	// so we can't test this.
-	_, err = loadPinnedRawLink(path, &ebpf.LoadPinOptions{
-		Flags: math.MaxUint32,
-	})
-	if !errors.Is(err, unix.EINVAL) {
-		t.Fatal("Invalid flags don't trigger an error:", err)
-	}
-}
-
-func mustCgroupFixtures(t *testing.T) (*os.File, *ebpf.Program) {
-	t.Helper()
-
-	testutils.SkipIfNotSupported(t, haveProgAttach())
-
-	return testutils.CreateCgroup(t), mustLoadProgram(t, ebpf.CGroupSKB, 0, "")
+	return link, path
 }
 
 func testLink(t *testing.T, link Link, prog *ebpf.Program) {

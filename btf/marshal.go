@@ -348,3 +348,32 @@ func (e *encoder) deflateVarSecinfos(vars []VarSecinfo) []btfVarSecinfo {
 	}
 	return vsis
 }
+
+// MarshalMapKV creates a BTF object containing a map key and value.
+//
+// The function is intended for the use of the ebpf package and may be removed
+// at any point in time.
+func MarshalMapKV(key, value Type) (_ *Handle, keyID, valueID TypeID, _ error) {
+	enc := nativeEncoderPool.Get().(*encoder)
+	defer nativeEncoderPool.Put(enc)
+
+	enc.Reset()
+
+	keyID, err := enc.Add(key)
+	if err != nil {
+		return nil, 0, 0, err
+	}
+
+	valueID, err = enc.Add(value)
+	if err != nil {
+		return nil, 0, 0, err
+	}
+
+	btf, err := enc.Encode()
+	if err != nil {
+		return nil, 0, 0, fmt.Errorf("marshal BTF: %w", err)
+	}
+
+	handle, err := newHandleFromRawBTF(btf)
+	return handle, keyID, valueID, err
+}

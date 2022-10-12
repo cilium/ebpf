@@ -386,42 +386,11 @@ func NewCollectionWithOptions(spec *CollectionSpec, opts CollectionOptions) (*Co
 	}, nil
 }
 
-type handleCache struct {
-	btfHandles map[*btf.Spec]*btf.Handle
-}
-
-func newHandleCache() *handleCache {
-	return &handleCache{
-		btfHandles: make(map[*btf.Spec]*btf.Handle),
-	}
-}
-
-func (hc handleCache) btfHandle(spec *btf.Spec) (*btf.Handle, error) {
-	if hc.btfHandles[spec] != nil {
-		return hc.btfHandles[spec], nil
-	}
-
-	handle, err := btf.NewHandle(spec)
-	if err != nil {
-		return nil, err
-	}
-
-	hc.btfHandles[spec] = handle
-	return handle, nil
-}
-
-func (hc handleCache) close() {
-	for _, handle := range hc.btfHandles {
-		handle.Close()
-	}
-}
-
 type collectionLoader struct {
 	coll     *CollectionSpec
 	opts     *CollectionOptions
 	maps     map[string]*Map
 	programs map[string]*Program
-	handles  *handleCache
 }
 
 func newCollectionLoader(coll *CollectionSpec, opts *CollectionOptions) (*collectionLoader, error) {
@@ -446,13 +415,11 @@ func newCollectionLoader(coll *CollectionSpec, opts *CollectionOptions) (*collec
 		opts,
 		make(map[string]*Map),
 		make(map[string]*Program),
-		newHandleCache(),
 	}, nil
 }
 
 // close all resources left over in the collectionLoader.
 func (cl *collectionLoader) close() {
-	cl.handles.close()
 	for _, m := range cl.maps {
 		m.Close()
 	}
@@ -486,7 +453,7 @@ func (cl *collectionLoader) loadMap(mapName string) (*Map, error) {
 		return m, nil
 	}
 
-	m, err := newMapWithOptions(mapSpec, cl.opts.Maps, cl.handles)
+	m, err := newMapWithOptions(mapSpec, cl.opts.Maps)
 	if err != nil {
 		return nil, fmt.Errorf("map %s: %w", mapName, err)
 	}

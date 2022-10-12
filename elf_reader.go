@@ -897,13 +897,6 @@ func mapSpecFromBTF(es *elfSection, vs *btf.VarSecinfo, def *btf.Struct, spec *b
 		}
 	}
 
-	if key == nil {
-		key = &btf.Void{}
-	}
-	if value == nil {
-		value = &btf.Void{}
-	}
-
 	return &MapSpec{
 		Name:       SanitizeName(name, -1),
 		Type:       MapType(mapType),

@@ -12,7 +12,6 @@ import (
 	"unsafe"
 
 	"github.com/cilium/ebpf/asm"
-	"github.com/cilium/ebpf/btf"
 	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/sys"
 	"github.com/cilium/ebpf/internal/testutils"
@@ -1655,14 +1654,12 @@ func TestMapPinning(t *testing.T) {
 	pinned := m1.IsPinned()
 	c.Assert(pinned, qt.IsTrue)
 
+	m1Info, err := m1.Info()
+	c.Assert(err, qt.IsNil)
+
 	if err := m1.Put(uint32(0), uint32(42)); err != nil {
 		t.Fatal("Can't write value:", err)
 	}
-
-	// This is a terrible hack: if loading a pinned map tries to load BTF,
-	// it will get a nil *btf.Spec from this *btf.Map. This is turn will make
-	// btf.NewHandle fail.
-	spec.BTF = new(btf.Spec)
 
 	m2, err := NewMapWithOptions(spec, MapOptions{PinPath: tmp})
 	testutils.SkipIfNotSupported(t, err)
@@ -1670,6 +1667,14 @@ func TestMapPinning(t *testing.T) {
 		t.Fatal("Can't create map:", err)
 	}
 	defer m2.Close()
+
+	m2Info, err := m2.Info()
+	c.Assert(err, qt.IsNil)
+
+	if m1ID, ok := m1Info.ID(); ok {
+		m2ID, _ := m2Info.ID()
+		c.Assert(m2ID, qt.Equals, m1ID)
+	}
 
 	var value uint32
 	if err := m2.Lookup(uint32(0), &value); err != nil {

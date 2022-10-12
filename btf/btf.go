@@ -49,6 +49,8 @@ type Spec struct {
 	byteOrder binary.ByteOrder
 }
 
+var btfHeaderLen = binary.Size(&btfHeader{})
+
 type btfHeader struct {
 	Magic   uint16
 	Version uint8
@@ -472,14 +474,12 @@ type marshalOpts struct {
 func (s *Spec) marshal(opts marshalOpts) ([]byte, error) {
 	var (
 		buf        bytes.Buffer
-		header     = new(btfHeader)
-		headerLen  = binary.Size(header)
 		stringsLen int
 	)
 
 	// Reserve space for the header. We have to write it last since
 	// we don't know the size of the type section yet.
-	_, _ = buf.Write(make([]byte, headerLen))
+	_, _ = buf.Write(make([]byte, btfHeaderLen))
 
 	// Write type section, just after the header.
 	for _, raw := range s.rawTypes {
@@ -493,7 +493,7 @@ func (s *Spec) marshal(opts marshalOpts) ([]byte, error) {
 		}
 	}
 
-	typeLen := uint32(buf.Len() - headerLen)
+	typeLen := uint32(buf.Len() - btfHeaderLen)
 
 	// Write string section after type section.
 	if s.strings != nil {
@@ -505,11 +505,11 @@ func (s *Spec) marshal(opts marshalOpts) ([]byte, error) {
 	}
 
 	// Fill out the header, and write it out.
-	header = &btfHeader{
+	header := &btfHeader{
 		Magic:     btfMagic,
 		Version:   1,
 		Flags:     0,
-		HdrLen:    uint32(headerLen),
+		HdrLen:    uint32(btfHeaderLen),
 		TypeOff:   0,
 		TypeLen:   typeLen,
 		StringOff: typeLen,
@@ -517,7 +517,7 @@ func (s *Spec) marshal(opts marshalOpts) ([]byte, error) {
 	}
 
 	raw := buf.Bytes()
-	err := binary.Write(sliceWriter(raw[:headerLen]), opts.ByteOrder, header)
+	err := binary.Write(sliceWriter(raw[:btfHeaderLen]), opts.ByteOrder, header)
 	if err != nil {
 		return nil, fmt.Errorf("can't write header: %v", err)
 	}

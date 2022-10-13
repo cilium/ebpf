@@ -22,12 +22,12 @@ type perfEventRing struct {
 	*ringReader
 }
 
-func newPerfEventRing(cpu, perCPUBuffer, watermark int) (*perfEventRing, error) {
-	if watermark >= perCPUBuffer {
+func newPerfEventRing(cpu, perCPUBuffer int, opts ReaderOptions) (*perfEventRing, error) {
+	if opts.Watermark >= perCPUBuffer {
 		return nil, errors.New("watermark must be smaller than perCPUBuffer")
 	}
 
-	fd, err := createPerfEvent(cpu, watermark)
+	fd, err := createPerfEvent(cpu, opts)
 	if err != nil {
 		return nil, err
 	}
@@ -86,7 +86,9 @@ func (ring *perfEventRing) Close() {
 	ring.mmap = nil
 }
 
-func createPerfEvent(cpu, watermark int) (int, error) {
+func createPerfEvent(cpu int, opts ReaderOptions) (int, error) {
+	watermark := opts.Watermark
+
 	if watermark == 0 {
 		watermark = 1
 	}

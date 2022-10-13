@@ -299,7 +299,7 @@ func TestPerfReaderClose(t *testing.T) {
 }
 
 func TestCreatePerfEvent(t *testing.T) {
-	fd, err := createPerfEvent(0, 1)
+	fd, err := createPerfEvent(0, ReaderOptions{1})
 	if err != nil {
 		t.Fatal("Can't create perf event:", err)
 	}

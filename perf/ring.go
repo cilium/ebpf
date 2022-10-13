@@ -93,16 +93,22 @@ func createPerfEvent(cpu int, opts ReaderOptions) (int, error) {
 		watermark = 1
 	}
 
-	attr := unix.PerfEventAttr{
-		Type:        unix.PERF_TYPE_SOFTWARE,
-		Config:      unix.PERF_COUNT_SW_BPF_OUTPUT,
-		Bits:        unix.PerfBitWatermark,
-		Sample_type: unix.PERF_SAMPLE_RAW,
-		Wakeup:      uint32(watermark),
+	var attr *unix.PerfEventAttr
+
+	if opts.Attr != nil {
+		attr = opts.Attr
+	} else {
+		attr = &unix.PerfEventAttr{
+			Type:        unix.PERF_TYPE_SOFTWARE,
+			Config:      unix.PERF_COUNT_SW_BPF_OUTPUT,
+			Bits:        unix.PerfBitWatermark,
+			Sample_type: unix.PERF_SAMPLE_RAW,
+			Wakeup:      uint32(watermark),
+		}
 	}
 
-	attr.Size = uint32(unsafe.Sizeof(attr))
-	fd, err := unix.PerfEventOpen(&attr, -1, cpu, -1, unix.PERF_FLAG_FD_CLOEXEC)
+	attr.Size = uint32(unsafe.Sizeof(*attr))
+	fd, err := unix.PerfEventOpen(attr, -1, cpu, -1, unix.PERF_FLAG_FD_CLOEXEC)
 	if err != nil {
 		return -1, fmt.Errorf("can't create perf event: %w", err)
 	}

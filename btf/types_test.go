@@ -271,7 +271,7 @@ func newCyclicalType(n int) Type {
 		case 3:
 			prev = &Typedef{Type: prev}
 		case 4:
-			prev = &Array{Type: prev}
+			prev = &Array{Type: prev, Index: &Int{Size: 1}}
 		}
 	}
 	ptr.Target = prev

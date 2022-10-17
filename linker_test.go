@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/cilium/ebpf/asm"
+	"github.com/cilium/ebpf/btf"
 	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/testutils"
 
@@ -84,12 +85,19 @@ func TestForwardFunctionDeclaration(t *testing.T) {
 
 		// The body of the subprog we appended does not come with BTF func_infos,
 		// so the verifier will reject it. Load without BTF.
-		spec.BTF = nil
+		for i, ins := range spec.Instructions {
+			if btf.FuncMetadata(&ins) != nil || ins.Source() != nil {
+				sym := ins.Symbol()
+				ref := ins.Reference()
+				ins.Metadata = asm.Metadata{}
+				spec.Instructions[i] = ins.WithSymbol(sym).WithReference(ref)
+			}
+		}
 
 		prog, err := NewProgram(spec)
 		testutils.SkipIfNotSupported(t, err)
 		if err != nil {
-			t.Fatal(err)
+			t.Fatalf("%+v", err)
 		}
 		defer prog.Close()
 

@@ -151,6 +151,10 @@ func (ps *ProgramSpec) Tag() (string, error) {
 	return ps.Instructions.Tag(internal.NativeEndian)
 }
 
+// VerifierError is returned by [NewProgram] and [NewProgramWithOptions] if a
+// program is rejected by the verifier.
+//
+// Use [errors.As] to access the error.
 type VerifierError = internal.VerifierError
 
 // Program represents BPF program loaded into the kernel.
@@ -179,8 +183,7 @@ func NewProgram(spec *ProgramSpec) (*Program, error) {
 // Loading a program for the first time will perform
 // feature detection by loading small, temporary programs.
 //
-// Returns an error wrapping VerifierError if the program or its BTF is rejected
-// by the kernel.
+// Returns a wrapped [VerifierError] if the program is rejected by the kernel.
 func NewProgramWithOptions(spec *ProgramSpec, opts ProgramOptions) (*Program, error) {
 	if spec == nil {
 		return nil, errors.New("can't load a program from a nil spec")

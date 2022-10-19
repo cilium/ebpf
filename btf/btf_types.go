@@ -36,6 +36,8 @@ const (
 	// Added 5.16
 	kindDeclTag // DeclTag
 	kindTypeTag // TypeTag
+	// Added 6.0
+	kindEnum64 // Enum64
 )
 
 // FuncLinkage describes BTF function linkage metadata.
@@ -279,6 +281,12 @@ type btfEnum struct {
 	Val     uint32
 }
 
+type btfEnum64 struct {
+	NameOff uint32
+	ValLo32 uint32
+	ValHi32 uint32
+}
+
 type btfParam struct {
 	NameOff uint32
 	Type    TypeID
@@ -333,6 +341,8 @@ func readTypes(r io.Reader, bo binary.ByteOrder, typeLen uint32) ([]rawType, err
 		case kindDeclTag:
 			data = new(btfDeclTag)
 		case kindTypeTag:
+		case kindEnum64:
+			data = make([]btfEnum64, header.Vlen())
 		default:
 			return nil, fmt.Errorf("type id %v: unknown kind: %v", id, header.Kind())
 		}

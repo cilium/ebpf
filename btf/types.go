@@ -991,6 +991,20 @@ func inflateRawTypes(rawTypes []rawType, baseTypes types, rawStrings *stringTabl
 			fixup(raw.Type(), &tt.Type)
 			typ = tt
 
+		case kindEnum64:
+			rawvals := raw.data.([]btfEnum64)
+			vals := make([]EnumValue, 0, len(rawvals))
+			signed := raw.KindFlag()
+			for i, btfVal := range rawvals {
+				name, err := rawStrings.Lookup(btfVal.NameOff)
+				if err != nil {
+					return nil, fmt.Errorf("get name for enum64 value %d: %s", i, err)
+				}
+				value := (uint64(btfVal.ValHi32) << 32) | uint64(btfVal.ValLo32)
+				vals = append(vals, EnumValue{name, value})
+			}
+			typ = &Enum{name, raw.Size(), signed, vals}
+
 		default:
 			return nil, fmt.Errorf("type id %d: unknown kind: %v", id, raw.Kind())
 		}

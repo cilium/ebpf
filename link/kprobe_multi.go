@@ -164,12 +164,16 @@ var haveBPFLinkKprobeMulti = internal.FeatureTest("bpf_link_kprobe_multi", "5.18
 		Count:      1,
 		Syms:       sys.NewStringSlicePointer([]string{"vprintk"}),
 	})
-	if errors.Is(err, unix.EINVAL) {
+	switch {
+	case errors.Is(err, unix.EINVAL):
 		return internal.ErrNotSupported
-	}
-	if err != nil {
+	// If CONFIG_FPROBE isn't set.
+	case errors.Is(err, unix.EOPNOTSUPP):
+		return internal.ErrNotSupported
+	case err != nil:
 		return err
 	}
+
 	fd.Close()
 
 	return nil

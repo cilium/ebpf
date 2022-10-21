@@ -26,6 +26,7 @@ const (
 	EFAULT
 	EACCES
 	EILSEQ
+	EOPNOTSUPP
 )
 
 // Constants are distinct to avoid breaking switch statements.

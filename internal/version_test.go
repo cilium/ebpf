@@ -95,3 +95,26 @@ func TestKernelRelease(t *testing.T) {
 		t.Fatal("unexpected empty kernel release")
 	}
 }
+
+func TestParseKernelRelease(t *testing.T) {
+	var tests = []struct {
+		in   string
+		want Version
+	}{
+		{"5.15.17-1-lts", Version{5, 15, 17}},
+		{"4.19.0-16-amd6", Version{4, 19, 0}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.in, func(t *testing.T) {
+			v, err := ParseKernelRelease(tt.in)
+			if err != nil {
+				t.Error(err)
+			}
+
+			if v != tt.want {
+				t.Errorf("got %v, want %v", v, tt.want)
+			}
+		})
+	}
+}

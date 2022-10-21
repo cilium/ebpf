@@ -90,7 +90,19 @@ func (v Version) Kernel() uint32 {
 // KernelVersion returns the version of the currently running kernel.
 func KernelVersion() (Version, error) {
 	kernelVersion.once.Do(func() {
-		kernelVersion.version, kernelVersion.err = detectKernelVersion()
+		version, err := detectKernelVersion()
+		if err != nil {
+			// Fallback to uname parsing. Parsing VDSO kernel version can
+			// fail if this code is in an executable with file capabilities
+			// and is running without root or CAP_DAC_OVERRIDE/CAP_DAC_READ_SEARCH.
+			s, err2 := KernelRelease()
+			if err2 == nil {
+				version, err = ParseKernelRelease(s)
+			}
+		}
+
+		kernelVersion.version = version
+		kernelVersion.err = err
 	})
 
 	if kernelVersion.err != nil {
@@ -119,4 +131,17 @@ func KernelRelease() (string, error) {
 	}
 
 	return unix.ByteSliceToString(uname.Release[:]), nil
+}
+
+func ParseKernelRelease(r string) (Version, error) {
+	var maj, min, patch int
+
+	n, err := fmt.Sscanf(r, "%d.%d.%d", &maj, &min, &patch)
+	if err != nil {
+		return Version{}, fmt.Errorf("failed to parse kernel version (%s): %w", r, err)
+	} else if n != 3 {
+		return Version{}, fmt.Errorf("failed to fully parse kernel version (%s)", r)
+	}
+
+	return Version{uint16(maj), uint16(min), uint16(patch)}, nil
 }

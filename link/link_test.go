@@ -13,6 +13,8 @@ import (
 	"github.com/cilium/ebpf/internal/sys"
 	"github.com/cilium/ebpf/internal/testutils"
 	"github.com/cilium/ebpf/internal/unix"
+
+	qt "github.com/frankban/quicktest"
 )
 
 func TestRawLink(t *testing.T) {
@@ -50,8 +52,38 @@ func TestRawLink(t *testing.T) {
 	testLink(t, &linkCgroup{*link}, prog)
 }
 
+func TestUnpinRawLink(t *testing.T) {
+	cgroup, prog := mustCgroupFixtures(t)
+	link, _ := newPinnedRawLink(t, cgroup, prog)
+
+	qt.Assert(t, link.IsPinned(), qt.IsTrue)
+
+	err := link.Unpin()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	qt.Assert(t, link.IsPinned(), qt.IsFalse)
+}
+
 func TestRawLinkLoadPinnedWithOptions(t *testing.T) {
 	cgroup, prog := mustCgroupFixtures(t)
+	link, path := newPinnedRawLink(t, cgroup, prog)
+
+	qt.Assert(t, link.IsPinned(), qt.IsTrue)
+
+	// It seems like the kernel ignores BPF_F_RDONLY when updating a link,
+	// so we can't test this.
+	_, err := loadPinnedRawLink(path, &ebpf.LoadPinOptions{
+		Flags: math.MaxUint32,
+	})
+	if !errors.Is(err, unix.EINVAL) {
+		t.Fatal("Invalid flags don't trigger an error:", err)
+	}
+}
+
+func newPinnedRawLink(t *testing.T, cgroup *os.File, prog *ebpf.Program) (*RawLink, string) {
+	t.Helper()
 
 	link, err := AttachRawLink(RawLinkOptions{
 		Target:  int(cgroup.Fd()),
@@ -70,14 +102,7 @@ func TestRawLinkLoadPinnedWithOptions(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// It seems like the kernel ignores BPF_F_RDONLY when updating a link,
-	// so we can't test this.
-	_, err = loadPinnedRawLink(path, &ebpf.LoadPinOptions{
-		Flags: math.MaxUint32,
-	})
-	if !errors.Is(err, unix.EINVAL) {
-		t.Fatal("Invalid flags don't trigger an error:", err)
-	}
+	return link, path
 }
 
 func mustCgroupFixtures(t *testing.T) (*os.File, *ebpf.Program) {

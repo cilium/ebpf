@@ -11,11 +11,6 @@ import (
 // that will be initialized in the kernel.
 type MapType uint32
 
-// Max returns the latest supported MapType.
-func (MapType) Max() MapType {
-	return maxMapType - 1
-}
-
 // All the various map types that can be created
 const (
 	UnspecifiedMap MapType = iota
@@ -134,11 +129,6 @@ func (mt MapType) hasBTF() bool {
 
 // ProgramType of the eBPF program
 type ProgramType uint32
-
-// Max return the latest supported ProgramType.
-func (ProgramType) Max() ProgramType {
-	return maxProgramType - 1
-}
 
 // eBPF program types
 const (

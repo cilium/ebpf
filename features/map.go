@@ -169,11 +169,11 @@ type MapFlags = sys.MapFlags
 
 // Flags which may be feature probed.
 const (
-	BPF_F_NO_PREALLOC MapFlags = unix.BPF_F_NO_PREALLOC
-	BPF_F_RDONLY_PROG MapFlags = unix.BPF_F_RDONLY_PROG
-	BPF_F_WRONLY_PROG MapFlags = unix.BPF_F_WRONLY_PROG
-	BPF_F_MMAPABLE    MapFlags = unix.BPF_F_MMAPABLE
-	BPF_F_INNER_MAP   MapFlags = unix.BPF_F_INNER_MAP
+	BPF_F_NO_PREALLOC = sys.BPF_F_NO_PREALLOC
+	BPF_F_RDONLY_PROG = sys.BPF_F_RDONLY_PROG
+	BPF_F_WRONLY_PROG = sys.BPF_F_WRONLY_PROG
+	BPF_F_MMAPABLE    = sys.BPF_F_MMAPABLE
+	BPF_F_INNER_MAP   = sys.BPF_F_INNER_MAP
 )
 
 // HaveMapFlag probes the running kernel for the availability of the specified map flag.

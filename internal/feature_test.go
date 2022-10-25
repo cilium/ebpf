@@ -9,7 +9,7 @@ import (
 func TestFeatureTest(t *testing.T) {
 	var called bool
 
-	fn := FeatureTest("foo", "1.0", func() error {
+	fn := NewFeatureTest("foo", "1.0", func() error {
 		called = true
 		return nil
 	})
@@ -27,7 +27,7 @@ func TestFeatureTest(t *testing.T) {
 		t.Error("Unexpected negative result:", err)
 	}
 
-	fn = FeatureTest("bar", "2.1.1", func() error {
+	fn = NewFeatureTest("bar", "2.1.1", func() error {
 		return ErrNotSupported
 	})
 
@@ -54,7 +54,7 @@ func TestFeatureTest(t *testing.T) {
 		t.Error("Didn't cache an error wrapping ErrNotSupported")
 	}
 
-	fn = FeatureTest("bar", "2.1.1", func() error {
+	fn = NewFeatureTest("bar", "2.1.1", func() error {
 		return errors.New("foo")
 	})
 

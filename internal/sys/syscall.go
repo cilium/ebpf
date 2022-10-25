@@ -120,6 +120,24 @@ type BTFID uint32
 // MapFlags control map behaviour.
 type MapFlags uint32
 
+//go:generate stringer -type MapFlags
+
+const (
+	BPF_F_NO_PREALLOC MapFlags = 1 << iota
+	BPF_F_NO_COMMON_LRU
+	BPF_F_NUMA_NODE
+	BPF_F_RDONLY
+	BPF_F_WRONLY
+	BPF_F_STACK_BUILD_ID
+	BPF_F_ZERO_SEED
+	BPF_F_RDONLY_PROG
+	BPF_F_WRONLY_PROG
+	BPF_F_CLONE
+	BPF_F_MMAPABLE
+	BPF_F_PRESERVE_ELEMS
+	BPF_F_INNER_MAP
+)
+
 // wrappedErrno wraps syscall.Errno to prevent direct comparisons with
 // syscall.E* or unix.E* constants.
 //

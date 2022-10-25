@@ -42,9 +42,9 @@ type FeatureTest struct {
 	// The feature test itself.
 	Fn FeatureTestFn
 
-	mu         sync.RWMutex
-	successful bool
-	result     error
+	mu     sync.RWMutex
+	done   bool
+	result error
 }
 
 // FeatureTestFn is used to determine whether the kernel supports
@@ -59,57 +59,63 @@ type FeatureTestFn func() error
 
 // NewFeatureTest is a convenient way to create a single [FeatureTest].
 func NewFeatureTest(name, version string, fn FeatureTestFn) func() error {
-	return (&FeatureTest{
+	ft := &FeatureTest{
 		Name:    name,
 		Version: version,
 		Fn:      fn,
-	}).Result
+	}
+
+	return ft.execute
 }
 
-// Result returns the outcome of a feature test, executing it if necessary.
+// execute the feature test.
+//
+// The result is cached if the test is conclusive.
 //
 // See [FeatureTestFn] for the meaning of the returned error.
-func (ft *FeatureTest) Result() error {
+func (ft *FeatureTest) execute() error {
 	ft.mu.RLock()
-	if ft.successful {
-		defer ft.mu.RUnlock()
-		return ft.result
-	}
+	result, done := ft.result, ft.done
 	ft.mu.RUnlock()
+
+	if done {
+		return result
+	}
+
 	ft.mu.Lock()
 	defer ft.mu.Unlock()
-	// check one more time on the off
-	// chance that two go routines
-	// were able to call into the write
-	// lock
-	if ft.successful {
+
+	// The test may have been executed by another caller while we were
+	// waiting to acquire ft.mu.
+	if ft.done {
 		return ft.result
 	}
+
 	err := ft.Fn()
-	switch {
-	case errors.Is(err, ErrNotSupported):
+	if err == nil {
+		ft.done = true
+		return nil
+	}
+
+	if errors.Is(err, ErrNotSupported) {
 		v, err := NewVersion(ft.Version)
 		if err != nil {
-			return err
+			return fmt.Errorf("feature %s: %w", ft.Name, err)
 		}
 
+		ft.done = true
 		ft.result = &UnsupportedFeatureError{
 			MinimumVersion: v,
 			Name:           ft.Name,
 		}
-		fallthrough
 
-	case err == nil:
-		ft.successful = true
-
-	default:
-		// We couldn't execute the feature test to a point
-		// where it could make a determination.
-		// Don't cache the result, just return it.
-		return fmt.Errorf("detect support for %s: %w", ft.Name, err)
+		return ft.result
 	}
 
-	return ft.result
+	// We couldn't execute the feature test to a point
+	// where it could make a determination.
+	// Don't cache the result, just return it.
+	return fmt.Errorf("detect support for %s: %w", ft.Name, err)
 }
 
 // FeatureMatrix groups multiple related feature tests into a map.
@@ -128,5 +134,5 @@ func (fm FeatureMatrix[K]) Result(key K) error {
 		return fmt.Errorf("no feature probe for %v", key)
 	}
 
-	return ft.Result()
+	return ft.execute()
 }

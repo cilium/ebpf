@@ -1,0 +1,1 @@
+GOGC=off go test -exec sudo -run xxx -bench "(BuildVmlinux|NewCollection)" -count 4 ./... | tee type-map.txt

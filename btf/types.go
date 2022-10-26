@@ -276,6 +276,21 @@ func (e *Enum) copy() Type {
 	return &cpy
 }
 
+// has64BitValues returns true if the Enum contains a value larger than 32 bits.
+// Kernels before 6.0 have enum values that overrun u32 replaced with zeroes.
+//
+// 64-bit enums have their Enum.Size attributes correctly set to 8, but if we
+// use the size attribute as a heuristic during BTF marshaling, we'll emit
+// ENUM64s to kernels that don't support them.
+func (e *Enum) has64BitValues() bool {
+	for _, v := range e.Values {
+		if v.Value > math.MaxUint32 {
+			return true
+		}
+	}
+	return false
+}
+
 // FwdKind is the type of forward declaration.
 type FwdKind int
 
@@ -981,6 +996,19 @@ func inflateRawTypes(rawTypes []rawType, baseTypes types, rawStrings *stringTabl
 			tt := &typeTag{nil, name}
 			fixup(raw.Type(), &tt.Type)
 			typ = tt
+
+		case kindEnum64:
+			rawvals := raw.data.([]btfEnum64)
+			vals := make([]EnumValue, 0, len(rawvals))
+			for i, btfVal := range rawvals {
+				name, err := rawStrings.Lookup(btfVal.NameOff)
+				if err != nil {
+					return nil, fmt.Errorf("get name for enum64 value %d: %s", i, err)
+				}
+				value := (uint64(btfVal.ValHi32) << 32) | uint64(btfVal.ValLo32)
+				vals = append(vals, EnumValue{name, value})
+			}
+			typ = &Enum{name, raw.Size(), raw.Signed(), vals}
 
 		default:
 			return nil, fmt.Errorf("type id %d: unknown kind: %v", id, raw.Kind())

@@ -200,11 +200,17 @@ func (e *encoder) deflateType(typ Type) (err error) {
 		raw.data, err = e.convertMembers(&raw.btfType, v.Members)
 
 	case *Enum:
-		raw.SetKind(kindEnum)
 		raw.SetSize(v.size())
 		raw.SetVlen(len(v.Values))
 		raw.SetSigned(v.Signed)
-		raw.data, err = e.deflateEnumValues(v.Values)
+
+		if v.has64BitValues() {
+			raw.SetKind(kindEnum64)
+			raw.data, err = e.deflateEnum64Values(v.Values)
+		} else {
+			raw.SetKind(kindEnum)
+			raw.data, err = e.deflateEnumValues(v.Values)
+		}
 
 	case *Fwd:
 		raw.SetKind(kindForward)
@@ -310,7 +316,7 @@ func (e *encoder) deflateEnumValues(values []EnumValue) ([]btfEnum, error) {
 		}
 
 		if value.Value > math.MaxUint32 {
-			return nil, fmt.Errorf("value of enum %q exceeds 32 bit", value.Name)
+			return nil, fmt.Errorf("value of enum %q exceeds 32 bits", value.Name)
 		}
 
 		bes = append(bes, btfEnum{
@@ -318,6 +324,25 @@ func (e *encoder) deflateEnumValues(values []EnumValue) ([]btfEnum, error) {
 			uint32(value.Value),
 		})
 	}
+
+	return bes, nil
+}
+
+func (e *encoder) deflateEnum64Values(values []EnumValue) ([]btfEnum64, error) {
+	bes := make([]btfEnum64, 0, len(values))
+	for _, value := range values {
+		nameOff, err := e.strings.Add(value.Name)
+		if err != nil {
+			return nil, err
+		}
+
+		bes = append(bes, btfEnum64{
+			nameOff,
+			uint32(value.Value),
+			uint32(value.Value >> 32),
+		})
+	}
+
 	return bes, nil
 }
 

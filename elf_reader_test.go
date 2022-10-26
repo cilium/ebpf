@@ -361,6 +361,19 @@ func TestLoadInitializedBTFMap(t *testing.T) {
 			t.Fatal(err)
 		}
 
+		t.Run("NewCollection", func(t *testing.T) {
+			if coll.ByteOrder != internal.NativeEndian {
+				t.Skipf("Skipping %s collection", coll.ByteOrder)
+			}
+
+			tmp, err := NewCollection(coll)
+			testutils.SkipIfNotSupported(t, err)
+			if err != nil {
+				t.Fatal("NewCollection failed:", err)
+			}
+			tmp.Close()
+		})
+
 		t.Run("prog_array", func(t *testing.T) {
 			m, ok := coll.Maps["prog_array_init"]
 			if !ok {
@@ -393,6 +406,22 @@ func TestLoadInitializedBTFMap(t *testing.T) {
 
 			if len(m.Contents) != 1 {
 				t.Error("expecting exactly 1 item in MapSpec contents")
+			}
+
+			if m.Key == nil {
+				t.Error("Expected non-nil key")
+			}
+
+			if m.Value == nil {
+				t.Error("Expected non-nil value")
+			}
+
+			if m.InnerMap.Key == nil {
+				t.Error("Expected non-nil InnerMap key")
+			}
+
+			if m.InnerMap.Value == nil {
+				t.Error("Expected non-nil InnerMap value")
 			}
 
 			p := m.Contents[0]

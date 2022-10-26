@@ -857,14 +857,14 @@ func inflateRawTypes(rawTypes []rawType, baseTypes types, rawStrings *stringTabl
 			typ = arr
 
 		case kindStruct:
-			members, err := convertMembers(raw.data.([]btfMember), raw.KindFlag())
+			members, err := convertMembers(raw.data.([]btfMember), raw.Bitfield())
 			if err != nil {
 				return nil, fmt.Errorf("struct %s (id %d): %w", name, id, err)
 			}
 			typ = &Struct{name, raw.Size(), members}
 
 		case kindUnion:
-			members, err := convertMembers(raw.data.([]btfMember), raw.KindFlag())
+			members, err := convertMembers(raw.data.([]btfMember), raw.Bitfield())
 			if err != nil {
 				return nil, fmt.Errorf("union %s (id %d): %w", name, id, err)
 			}
@@ -873,7 +873,7 @@ func inflateRawTypes(rawTypes []rawType, baseTypes types, rawStrings *stringTabl
 		case kindEnum:
 			rawvals := raw.data.([]btfEnum)
 			vals := make([]EnumValue, 0, len(rawvals))
-			signed := raw.KindFlag()
+			signed := raw.Signed()
 			for i, btfVal := range rawvals {
 				name, err := rawStrings.Lookup(btfVal.NameOff)
 				if err != nil {
@@ -889,11 +889,7 @@ func inflateRawTypes(rawTypes []rawType, baseTypes types, rawStrings *stringTabl
 			typ = &Enum{name, raw.Size(), signed, vals}
 
 		case kindForward:
-			if raw.KindFlag() {
-				typ = &Fwd{name, FwdUnion}
-			} else {
-				typ = &Fwd{name, FwdStruct}
-			}
+			typ = &Fwd{name, raw.FwdKind()}
 
 		case kindTypedef:
 			typedef := &Typedef{name, nil}
@@ -964,7 +960,7 @@ func inflateRawTypes(rawTypes []rawType, baseTypes types, rawStrings *stringTabl
 					return nil, err
 				}
 			}
-			typ = &Datasec{name, raw.SizeType, vars}
+			typ = &Datasec{name, raw.Size(), vars}
 
 		case kindFloat:
 			typ = &Float{name, raw.Size()}
@@ -975,12 +971,7 @@ func inflateRawTypes(rawTypes []rawType, baseTypes types, rawStrings *stringTabl
 				return nil, fmt.Errorf("type id %d: index exceeds int", id)
 			}
 
-			index := int(btfIndex)
-			if btfIndex == math.MaxUint32 {
-				index = -1
-			}
-
-			dt := &declTag{nil, name, index}
+			dt := &declTag{nil, name, int(int32(btfIndex))}
 			fixup(raw.Type(), &dt.Type)
 			typ = dt
 

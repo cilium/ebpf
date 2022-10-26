@@ -169,6 +169,9 @@ func TestType(t *testing.T) {
 			if diff := cmp.Diff(a, b, compareTypes); diff != "" {
 				t.Errorf("Walk mismatch (-want +got):\n%s", diff)
 			}
+
+			// Make sure nothing panics here.
+			_ = newTypeKey(typ)
 		})
 	}
 }

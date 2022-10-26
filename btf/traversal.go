@@ -20,7 +20,7 @@ type postorderIterator struct {
 	// Contains a boolean whether the type has been walked or not.
 	walked internal.Deque[bool]
 	// The set of types which has been pushed onto types.
-	pushed map[Type]struct{}
+	pushed typeMap[struct{}]
 
 	// The current type. Only valid after a call to Next().
 	Type Type
@@ -43,7 +43,7 @@ func postorderTraversal(root Type, skip func(Type) (skip bool)) postorderIterato
 }
 
 func (po *postorderIterator) push(t *Type) {
-	if _, ok := po.pushed[*t]; ok || *t == po.root {
+	if _, ok := po.pushed.Get(*t); ok || *t == po.root {
 		return
 	}
 
@@ -53,10 +53,10 @@ func (po *postorderIterator) push(t *Type) {
 
 	if po.pushed == nil {
 		// Lazily allocate pushed to avoid an allocation for Types without children.
-		po.pushed = make(map[Type]struct{})
+		po.pushed = make(typeMap[struct{}])
 	}
 
-	po.pushed[*t] = struct{}{}
+	po.pushed.Set(*t, struct{}{})
 	po.types.Push(t)
 	po.walked.Push(false)
 }

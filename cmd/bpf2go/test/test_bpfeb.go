@@ -129,5 +129,6 @@ func _TestClose(closers ...io.Closer) error {
 }
 
 // Do not access this directly.
+//
 //go:embed test_bpfeb.o
 var _TestBytes []byte

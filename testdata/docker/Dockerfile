@@ -22,3 +22,5 @@ RUN apt-get update && \
     clang-9 llvm-9 \
     clang-14 llvm-14 && \
     rm -rf /var/lib/apt/lists/*
+
+RUN GOBIN=/usr/local/bin go install golang.org/x/tools/cmd/stringer@latest && rm -rf /go/pkg

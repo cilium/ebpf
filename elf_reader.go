@@ -29,6 +29,12 @@ type elfCode struct {
 	extInfo  *btf.ExtInfos
 }
 
+// isBpfElf checks if the ELF file is for BPF data.
+// Old LLVM versions set e_machine to EM_NONE.
+func isBpfElf(f *elf.File) bool {
+	return f.Machine == unix.EM_NONE || f.Machine == elf.EM_BPF
+}
+
 // LoadCollectionSpec parses an ELF file into a CollectionSpec.
 func LoadCollectionSpec(file string) (*CollectionSpec, error) {
 	f, err := os.Open(file)
@@ -49,6 +55,10 @@ func LoadCollectionSpecFromReader(rd io.ReaderAt) (*CollectionSpec, error) {
 	f, err := internal.NewSafeELFFile(rd)
 	if err != nil {
 		return nil, err
+	}
+
+	if !isBpfElf(f.File) {
+		return nil, fmt.Errorf("unsupported ELF machine type %s", f.File.Machine)
 	}
 
 	var (

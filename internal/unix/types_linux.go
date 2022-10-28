@@ -75,6 +75,8 @@ const (
 	SIGPROF                   = linux.SIGPROF
 	SIG_BLOCK                 = linux.SIG_BLOCK
 	SIG_UNBLOCK               = linux.SIG_UNBLOCK
+	EM_NONE                   = linux.EM_NONE
+	EM_BPF                    = linux.EM_BPF
 )
 
 type Statfs_t = linux.Statfs_t

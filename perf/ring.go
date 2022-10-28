@@ -22,12 +22,12 @@ type perfEventRing struct {
 	*ringReader
 }
 
-func newPerfEventRing(cpu, perCPUBuffer, watermark int) (*perfEventRing, error) {
+func newPerfEventRing(cpu, perCPUBuffer, watermark int, attr *unix.PerfEventAttr) (*perfEventRing, error) {
 	if watermark >= perCPUBuffer {
 		return nil, errors.New("watermark must be smaller than perCPUBuffer")
 	}
 
-	fd, err := createPerfEvent(cpu, watermark)
+	fd, err := createPerfEvent(cpu, watermark, attr)
 	if err != nil {
 		return nil, err
 	}
@@ -86,21 +86,23 @@ func (ring *perfEventRing) Close() {
 	ring.mmap = nil
 }
 
-func createPerfEvent(cpu, watermark int) (int, error) {
-	if watermark == 0 {
-		watermark = 1
-	}
+func createPerfEvent(cpu, watermark int, attr *unix.PerfEventAttr) (int, error) {
+	if attr == nil {
+		if watermark == 0 {
+			watermark = 1
+		}
 
-	attr := unix.PerfEventAttr{
-		Type:        unix.PERF_TYPE_SOFTWARE,
-		Config:      unix.PERF_COUNT_SW_BPF_OUTPUT,
-		Bits:        unix.PerfBitWatermark,
-		Sample_type: unix.PERF_SAMPLE_RAW,
-		Wakeup:      uint32(watermark),
-	}
+		attr = &unix.PerfEventAttr{
+			Type:        unix.PERF_TYPE_SOFTWARE,
+			Config:      unix.PERF_COUNT_SW_BPF_OUTPUT,
+			Bits:        unix.PerfBitWatermark,
+			Sample_type: unix.PERF_SAMPLE_RAW,
+			Wakeup:      uint32(watermark),
+		}
 
-	attr.Size = uint32(unsafe.Sizeof(attr))
-	fd, err := unix.PerfEventOpen(&attr, -1, cpu, -1, unix.PERF_FLAG_FD_CLOEXEC)
+		attr.Size = uint32(unsafe.Sizeof(*attr))
+	}
+	fd, err := unix.PerfEventOpen(attr, -1, cpu, -1, unix.PERF_FLAG_FD_CLOEXEC)
 	if err != nil {
 		return -1, fmt.Errorf("can't create perf event: %w", err)
 	}

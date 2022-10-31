@@ -177,6 +177,19 @@ func TestInstructionsRewriteMapPtr(t *testing.T) {
 	}
 }
 
+func TestInstructionWithMetadata(t *testing.T) {
+	ins := LoadImm(R0, 123, DWord).WithSymbol("abc")
+	ins2 := LoadImm(R0, 567, DWord).WithMetadata(ins.Metadata)
+
+	if want, got := "abc", ins2.Symbol(); want != got {
+		t.Fatalf("unexpected Symbol value on ins2: want: %s, got: %s", want, got)
+	}
+
+	if want, got := ins.Metadata, ins2.Metadata; want != got {
+		t.Fatal("expected ins and isn2 Metadata to match")
+	}
+}
+
 // You can use format flags to change the way an eBPF
 // program is stringified.
 func ExampleInstructions_Format() {

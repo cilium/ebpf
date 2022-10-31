@@ -306,9 +306,7 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions) (*Program, er
 		opts.LogSize = DefaultVerifierLogSize
 	}
 
-	// The caller provided a specific verifier log level. Immediately load
-	// the program with the given log level and buffer size, and skip retrying
-	// with a different level / size later.
+	// The caller requested a specific verifier log level. Set up the log buffer.
 	var logBuf []byte
 	if !opts.LogDisabled && opts.LogLevel != 0 {
 		logBuf = make([]byte, opts.LogSize)
@@ -322,17 +320,19 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions) (*Program, er
 		return &Program{unix.ByteSliceToString(logBuf), fd, spec.Name, "", spec.Type}, nil
 	}
 
-	// A verifier error occurred, but the caller did not specify a log level.
-	// Re-run with branch-level verifier logs enabled to obtain more info.
-	var truncated bool
+	// An error occurred loading the program, but the caller did not explicitly
+	// enable the verifier log. Re-run with branch-level verifier logs enabled to
+	// obtain more info. Preserve the original error to return it to the caller.
+	// An undersized log buffer will result in ENOSPC regardless of the underlying
+	// cause.
+	var err2 error
 	if !opts.LogDisabled && opts.LogLevel == 0 {
 		logBuf = make([]byte, opts.LogSize)
 		attr.LogLevel = LogLevelBranch
 		attr.LogSize = uint32(len(logBuf))
 		attr.LogBuf = sys.NewSlicePointer(logBuf)
 
-		_, ve := sys.ProgLoad(attr)
-		truncated = errors.Is(ve, unix.ENOSPC)
+		_, err2 = sys.ProgLoad(attr)
 	}
 
 	switch {
@@ -357,6 +357,7 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions) (*Program, er
 		}
 	}
 
+	truncated := errors.Is(err, unix.ENOSPC) || errors.Is(err2, unix.ENOSPC)
 	err = internal.ErrorWithLog(err, logBuf, truncated)
 	if btfDisabled {
 		return nil, fmt.Errorf("load program: %w (kernel without BTF support)", err)

@@ -422,6 +422,96 @@ func TestProgramVerifierOutput(t *testing.T) {
 	}
 }
 
+// Test all scenarios where the VerifierError.Truncated flag is expected to be
+// true, marked with an x. LL means ProgramOption.LogLevel.
+//
+// |      | Valid | Invalid |
+// |------|-------|---------|
+// | LL=0 |       |    x    |
+// | LL>0 |   x   |    x    |
+func TestProgramVerifierLogTruncated(t *testing.T) {
+	// Make the buffer intentionally small to coerce ENOSPC.
+	// 128 bytes is the smallest the kernel will accept.
+	logSize := 128
+
+	check := func(t *testing.T, err error) {
+		if err == nil {
+			t.Fatal("Expected an error")
+		}
+		var ve *internal.VerifierError
+		if !errors.As(err, &ve) {
+			t.Error("Error is not a VerifierError")
+		}
+		if !ve.Truncated {
+			t.Errorf("VerifierError is not truncated: %+v", ve)
+		}
+	}
+
+	// Generate a base program of sufficient size whose verifier log does not fit
+	// a 128-byte buffer. This should always result in ENOSPC, setting the
+	// VerifierError.Truncated flag.
+	base := func() (out asm.Instructions) {
+		for i := 0; i < 32; i++ {
+			out = append(out, asm.Mov.Reg(asm.R0, asm.R1))
+		}
+		return
+	}()
+
+	invalid := func() (out asm.Instructions) {
+		out = base
+		// Touch R10 (read-only frame pointer) to reliably force a verifier error.
+		out = append(out, asm.Mov.Reg(asm.R10, asm.R0))
+		out = append(out, asm.Return())
+		return
+	}()
+
+	valid := func() (out asm.Instructions) {
+		out = base
+		out = append(out, asm.Return())
+		return
+	}()
+
+	// Start out with testing against the invalid program.
+	spec := &ProgramSpec{
+		Type:         SocketFilter,
+		License:      "MIT",
+		Instructions: invalid,
+	}
+
+	// Set an undersized log buffer without explicitly requesting a verifier log
+	// for an invalid program.
+	_, err := NewProgramWithOptions(spec, ProgramOptions{LogSize: logSize})
+	check(t, err)
+
+	// Explicitly request a verifier log for an invalid program.
+	_, err = NewProgramWithOptions(spec, ProgramOptions{
+		LogSize:  logSize,
+		LogLevel: LogLevelInstruction,
+	})
+	check(t, err)
+
+	// Run tests against a valid program from here on out.
+	spec.Instructions = valid
+
+	// Don't request a verifier log, only set LogSize. Expect the valid program to
+	// be created without errors.
+	prog, err := NewProgramWithOptions(spec, ProgramOptions{
+		LogSize: logSize,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	prog.Close()
+
+	// Explicitly request verifier log for a valid program. If a log is requested
+	// and the buffer is too small, ENOSPC occurs even for valid programs.
+	_, err = NewProgramWithOptions(spec, ProgramOptions{
+		LogSize:  logSize,
+		LogLevel: LogLevelInstruction,
+	})
+	check(t, err)
+}
+
 func TestProgramWithUnsatisfiedMap(t *testing.T) {
 	coll, err := LoadCollectionSpec("testdata/loader-el.elf")
 	if err != nil {

@@ -30,3 +30,7 @@ the command to add them is `apt install qemu-user-static binfmt-support`.
 After building, push the image to the Docker registry specified in `IMAGE` with:
 
 `make push`
+
+## CI
+
+Add github workflow

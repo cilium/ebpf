@@ -93,10 +93,7 @@ func LoadSpecFromReader(rd io.ReaderAt) (*Spec, error) {
 	file, err := internal.NewSafeELFFile(rd)
 	if err != nil {
 		if bo := guessRawBTFByteOrder(rd); bo != nil {
-			// Try to parse a naked BTF blob. This will return an error if
-			// we encounter a Datasec, since we can't fix it up.
-			spec, err := loadRawSpec(io.NewSectionReader(rd, 0, math.MaxInt64), bo, nil, nil)
-			return spec, err
+			return loadRawSpec(io.NewSectionReader(rd, 0, math.MaxInt64), bo, nil, nil)
 		}
 
 		return nil, err
@@ -200,17 +197,17 @@ func loadSpecFromELF(file *internal.SafeELFFile) (*Spec, error) {
 		return nil, fmt.Errorf("compressed BTF is not supported")
 	}
 
-	rawTypes, rawStrings, err := parseBTF(btfSection.ReaderAt, file.ByteOrder, nil)
+	spec, err := loadRawSpec(btfSection.ReaderAt, file.ByteOrder, nil, nil)
 	if err != nil {
 		return nil, err
 	}
 
-	err = fixupDatasec(rawTypes, rawStrings, sectionSizes, vars)
+	err = fixupDatasec(spec.types, sectionSizes, vars)
 	if err != nil {
 		return nil, err
 	}
 
-	return inflateSpec(rawTypes, rawStrings, file.ByteOrder, nil)
+	return spec, nil
 }
 
 func loadRawSpec(btf io.ReaderAt, bo binary.ByteOrder,
@@ -220,12 +217,6 @@ func loadRawSpec(btf io.ReaderAt, bo binary.ByteOrder,
 	if err != nil {
 		return nil, err
 	}
-
-	return inflateSpec(rawTypes, rawStrings, bo, baseTypes)
-}
-
-func inflateSpec(rawTypes []rawType, rawStrings *stringTable, bo binary.ByteOrder,
-	baseTypes types) (*Spec, error) {
 
 	types, err := inflateRawTypes(rawTypes, baseTypes, rawStrings)
 	if err != nil {
@@ -393,50 +384,33 @@ type variable struct {
 	name    string
 }
 
-func fixupDatasec(rawTypes []rawType, rawStrings *stringTable, sectionSizes map[string]uint32, variableOffsets map[variable]uint32) error {
-	for i, rawType := range rawTypes {
-		if rawType.Kind() != kindDatasec {
+func fixupDatasec(types []Type, sectionSizes map[string]uint32, variableOffsets map[variable]uint32) error {
+	for _, typ := range types {
+		ds, ok := typ.(*Datasec)
+		if !ok {
 			continue
 		}
 
-		name, err := rawStrings.Lookup(rawType.NameOff)
-		if err != nil {
-			return err
-		}
-
+		name := ds.Name
 		if name == ".kconfig" || name == ".ksyms" {
 			return fmt.Errorf("reference to %s: %w", name, ErrNotSupported)
 		}
 
-		if rawTypes[i].SizeType != 0 {
+		if ds.Size != 0 {
 			continue
 		}
 
-		size, ok := sectionSizes[name]
+		ds.Size, ok = sectionSizes[name]
 		if !ok {
 			return fmt.Errorf("data section %s: missing size", name)
 		}
 
-		rawTypes[i].SizeType = size
-
-		secinfos := rawType.data.([]btfVarSecinfo)
-		for j, secInfo := range secinfos {
-			id := int(secInfo.Type - 1)
-			if id >= len(rawTypes) {
-				return fmt.Errorf("data section %s: invalid type id %d for variable %d", name, id, j)
-			}
-
-			varName, err := rawStrings.Lookup(rawTypes[id].NameOff)
-			if err != nil {
-				return fmt.Errorf("data section %s: can't get name for type %d: %w", name, id, err)
-			}
-
-			offset, ok := variableOffsets[variable{name, varName}]
+		for i, secInfo := range ds.Vars {
+			varName := secInfo.Type.(*Var).Name
+			ds.Vars[i].Offset, ok = variableOffsets[variable{name, varName}]
 			if !ok {
 				return fmt.Errorf("data section %s: missing offset for variable %s", name, varName)
 			}
-
-			secinfos[j].Offset = offset
 		}
 	}
 

@@ -8,7 +8,7 @@ on:
 
 env:
   REGISTRY: ghcr.io/Frapschen
-  IMAGE_NAME: adservice
+  IMAGE_NAME: ebpf-builder
   REGISTRY_USER_NAME: ${{ github.actor }}
   REGISTRY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
 

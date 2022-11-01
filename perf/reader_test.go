@@ -299,7 +299,7 @@ func TestPerfReaderClose(t *testing.T) {
 }
 
 func TestCreatePerfEvent(t *testing.T) {
-	fd, err := createPerfEvent(0, 1)
+	fd, err := createPerfEvent(0, 1, nil)
 	if err != nil {
 		t.Fatal("Can't create perf event:", err)
 	}
@@ -315,7 +315,7 @@ func TestReadRecord(t *testing.T) {
 	}
 
 	var rec Record
-	err = readRecord(&buf, &rec, make([]byte, perfEventHeaderSize))
+	err = readRecord(&buf, &rec, make([]byte, perfEventHeaderSize), false)
 	if !IsUnknownEvent(err) {
 		t.Error("readRecord should return unknown event error, got", err)
 	}

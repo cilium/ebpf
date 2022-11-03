@@ -96,16 +96,22 @@ type TracingOptions struct {
 	// If empty (AttachNone), the legacy attach method via raw tracepoint
 	// open will be used.
 	AttachType ebpf.AttachType
+	// Arbitrary value that can be fetched from an eBPF program
+	// via `bpf_get_attach_cookie()`.
+	Cookie uint64
 }
 
 type LSMOptions struct {
 	// Program must be of type LSM with attach type
 	// AttachLSMMac.
 	Program *ebpf.Program
+	// Arbitrary value that can be fetched from an eBPF program
+	// via `bpf_get_attach_cookie()`.
+	Cookie uint64
 }
 
 // attachBTFID links all BPF program types (Tracing/LSM) that they attach to a btf_id.
-func attachBTFID(program *ebpf.Program, at ebpf.AttachType) (Link, error) {
+func attachBTFID(program *ebpf.Program, at ebpf.AttachType, cookie uint64) (Link, error) {
 	if program.FD() < 0 {
 		return nil, fmt.Errorf("invalid program %w", sys.ErrClosedFd)
 	}
@@ -121,6 +127,7 @@ func attachBTFID(program *ebpf.Program, at ebpf.AttachType) (Link, error) {
 		fd, err = sys.LinkCreateTracing(&sys.LinkCreateTracingAttr{
 			ProgFd:     uint32(program.FD()),
 			AttachType: sys.AttachType(at),
+			Cookie:     cookie,
 		})
 		if err == nil {
 			break
@@ -131,6 +138,10 @@ func attachBTFID(program *ebpf.Program, at ebpf.AttachType) (Link, error) {
 		fallthrough
 	case ebpf.AttachNone:
 		// Attach via RawTracepointOpen
+		if cookie > 0 {
+			return nil, fmt.Errorf("create raw tracepoint with cookie: %w", ErrNotSupported)
+		}
+
 		fd, err = sys.RawTracepointOpen(&sys.RawTracepointOpenAttr{
 			ProgFd: uint32(program.FD()),
 		})
@@ -168,7 +179,7 @@ func AttachTracing(opts TracingOptions) (Link, error) {
 		return nil, fmt.Errorf("invalid program type %s, expected Tracing", t)
 	}
 
-	return attachBTFID(opts.Program, opts.AttachType)
+	return attachBTFID(opts.Program, opts.AttachType, opts.Cookie)
 }
 
 // AttachLSM links a Linux security module (LSM) BPF Program to a BPF
@@ -178,5 +189,5 @@ func AttachLSM(opts LSMOptions) (Link, error) {
 		return nil, fmt.Errorf("invalid program type %s, expected LSM", t)
 	}
 
-	return attachBTFID(opts.Program, ebpf.AttachLSMMac)
+	return attachBTFID(opts.Program, ebpf.AttachLSMMac, opts.Cookie)
 }

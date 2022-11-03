@@ -1,7 +1,6 @@
 package link
 
 import (
-	"fmt"
 	"testing"
 
 	"github.com/cilium/ebpf"
@@ -85,30 +84,27 @@ func TestTracing(t *testing.T) {
 
 	test := func(
 		t *testing.T,
-		method string,
-		pt ebpf.ProgramType,
-		at ebpf.AttachType,
-		ato string,
-		atOpt ebpf.AttachType) {
-		prog := mustLoadProgram(t, pt, at, ato)
-		link, err := AttachTracing(TracingOptions{Program: prog, AttachType: atOpt})
-		err2 := fmt.Errorf("%s: %w", method, err)
-		testutils.SkipIfNotSupported(t, err2)
+		programType ebpf.ProgramType,
+		attachType ebpf.AttachType,
+		attachTo string,
+		attachTypeOpt ebpf.AttachType) {
+		prog := mustLoadProgram(t, programType, attachType, attachTo)
+
+		link, err := AttachTracing(TracingOptions{Program: prog, AttachType: attachTypeOpt})
+		testutils.SkipIfNotSupported(t, err)
 		if err != nil {
-			t.Fatal(err2)
-		}
-		testLink(t, link, prog)
-		if err = link.Close(); err != nil {
 			t.Fatal(err)
 		}
+		testLink(t, link, prog)
+		link.Close()
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// exercise attach via BPF link
-			test(t, "bpf_link", tt.programType, tt.attachType, tt.attachTo, tt.attachType)
+			test(t, tt.programType, tt.attachType, tt.attachTo, tt.attachType)
 			// exercise legacy attach via RawTracepointOpen
-			test(t, "raw_tracepoint_open", tt.programType, tt.attachType, tt.attachTo, ebpf.AttachNone)
+			test(t, tt.programType, tt.attachType, tt.attachTo, ebpf.AttachNone)
 		})
 	}
 }

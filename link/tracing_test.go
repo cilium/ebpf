@@ -110,3 +110,7 @@ func TestLSM(t *testing.T) {
 
 	testLink(t, link, prog)
 }
+
+func TestHaveBPFLinkTracing(t *testing.T) {
+	testutils.CheckFeatureTest(t, haveBPFLinkTracing)
+}

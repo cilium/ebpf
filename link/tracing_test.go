@@ -1,6 +1,7 @@
 package link
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/cilium/ebpf"
@@ -55,24 +56,28 @@ func TestTracing(t *testing.T) {
 		attachTo    string
 		programType ebpf.ProgramType
 		attachType  ebpf.AttachType
+		attachFunc  func(opts TracingOptions) (Link, error)
 	}{
 		{
 			name:        "AttachTraceFEntry",
 			attachTo:    "inet_dgram_connect",
 			programType: ebpf.Tracing,
 			attachType:  ebpf.AttachTraceFEntry,
+			attachFunc:  AttachFEntry,
 		},
 		{
 			name:        "AttachTraceFExit",
 			attachTo:    "inet_dgram_connect",
 			programType: ebpf.Tracing,
 			attachType:  ebpf.AttachTraceFExit,
+			attachFunc:  AttachFExit,
 		},
 		{
 			name:        "AttachModifyReturn",
 			attachTo:    "bpf_modify_return_test",
 			programType: ebpf.Tracing,
 			attachType:  ebpf.AttachModifyReturn,
+			attachFunc:  AttachModRet,
 		},
 		{
 			name:        "AttachTraceRawTp",
@@ -82,17 +87,35 @@ func TestTracing(t *testing.T) {
 		},
 	}
 
+	test := func(
+		t *testing.T,
+		method string,
+		f func(opts TracingOptions) (Link, error),
+		pt ebpf.ProgramType,
+		at ebpf.AttachType,
+		ato string) {
+		if f == nil {
+			t.Skip("no attachtype-specific attach func")
+		}
+		prog := mustLoadProgram(t, pt, at, ato)
+		link, err := f(TracingOptions{Program: prog})
+		err2 := fmt.Errorf("%s: %w", method, err)
+		testutils.SkipIfNotSupported(t, err2)
+		if err != nil {
+			t.Fatal(err2)
+		}
+		testLink(t, link, prog)
+		if err = link.Close(); err != nil {
+			t.Fatal(err)
+		}
+	}
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			prog := mustLoadProgram(t, tt.programType, tt.attachType, tt.attachTo)
-
-			link, err := AttachTracing(TracingOptions{Program: prog})
-			testutils.SkipIfNotSupported(t, err)
-			if err != nil {
-				t.Fatal(err)
-			}
-
-			testLink(t, link, prog)
+			// exercise attach via BPF link
+			test(t, "bpf_link", tt.attachFunc, tt.programType, tt.attachType, tt.attachTo)
+			// exercise legacy attach via RawTracepointOpen
+			test(t, "raw_tracepoint_open", AttachTracing, tt.programType, tt.attachType, tt.attachTo)
 		})
 	}
 }
@@ -109,4 +132,8 @@ func TestLSM(t *testing.T) {
 	}
 
 	testLink(t, link, prog)
+}
+
+func TestHaveBPFLinkTracing(t *testing.T) {
+	testutils.CheckFeatureTest(t, haveBPFLinkTracing)
 }

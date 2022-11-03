@@ -165,10 +165,11 @@ type Program struct {
 	// otherwise it is empty.
 	VerifierLog string
 
-	fd         *sys.FD
-	name       string
-	pinnedPath string
-	typ        ProgramType
+	fd                 *sys.FD
+	name               string
+	pinnedPath         string
+	typ                ProgramType
+	expectedAttachType AttachType
 }
 
 // NewProgram creates a new Program.
@@ -317,7 +318,14 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions) (*Program, er
 
 	fd, err := sys.ProgLoad(attr)
 	if err == nil {
-		return &Program{unix.ByteSliceToString(logBuf), fd, spec.Name, "", spec.Type}, nil
+		return &Program{
+			unix.ByteSliceToString(logBuf),
+			fd,
+			spec.Name,
+			"",
+			spec.Type,
+			spec.AttachType,
+		}, nil
 	}
 
 	// An error occurred loading the program, but the caller did not explicitly
@@ -400,7 +408,7 @@ func newProgramFromFD(fd *sys.FD) (*Program, error) {
 		return nil, fmt.Errorf("discover program type: %w", err)
 	}
 
-	return &Program{"", fd, "", "", info.Type}, nil
+	return &Program{"", fd, "", "", info.Type, AttachNone}, nil
 }
 
 func (p *Program) String() string {
@@ -413,6 +421,11 @@ func (p *Program) String() string {
 // Type returns the underlying type of the program.
 func (p *Program) Type() ProgramType {
 	return p.typ
+}
+
+// ExpectedAttachType returns the expected attach type of the program.
+func (p *Program) ExpectedAttachType() AttachType {
+	return p.expectedAttachType
 }
 
 // Info returns metadata about the program.
@@ -462,7 +475,7 @@ func (p *Program) Clone() (*Program, error) {
 		return nil, fmt.Errorf("can't clone program: %w", err)
 	}
 
-	return &Program{p.VerifierLog, dup, p.name, "", p.typ}, nil
+	return &Program{p.VerifierLog, dup, p.name, "", p.typ, p.expectedAttachType}, nil
 }
 
 // Pin persists the Program on the BPF virtual file system past the lifetime of
@@ -764,7 +777,7 @@ func LoadPinnedProgram(fileName string, opts *LoadPinOptions) (*Program, error) 
 		return nil, fmt.Errorf("info for %s: %w", fileName, err)
 	}
 
-	return &Program{"", fd, filepath.Base(fileName), fileName, info.Type}, nil
+	return &Program{"", fd, filepath.Base(fileName), fileName, info.Type, AttachNone}, nil
 }
 
 // SanitizeName replaces all invalid characters in name with replacement.

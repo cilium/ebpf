@@ -824,6 +824,11 @@ func TestProgramAttachToKernel(t *testing.T) {
 			if err != nil {
 				t.Fatal("Can't load program:", err)
 			}
+
+			if test.attachType != prog.ExpectedAttachType() {
+				t.Fatalf("prog's expectedAttachType: want %v, got %v", test.attachType, prog.ExpectedAttachType())
+			}
+
 			prog.Close()
 		})
 	}

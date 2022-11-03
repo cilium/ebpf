@@ -90,16 +90,22 @@ type TracingOptions struct {
 	// AttachTraceFEntry/AttachTraceFExit/AttachModifyReturn or
 	// AttachTraceRawTp.
 	Program *ebpf.Program
+	// Arbitrary value that can be fetched from an eBPF program
+	// via `bpf_get_attach_cookie()`.
+	Cookie uint64
 }
 
 type LSMOptions struct {
 	// Program must be of type LSM with attach type
 	// AttachLSMMac.
 	Program *ebpf.Program
+	// Arbitrary value that can be fetched from an eBPF program
+	// via `bpf_get_attach_cookie()`.
+	Cookie uint64
 }
 
 // attachBTFID links all BPF program types (Tracing/LSM) that they attach to a btf_id.
-func attachBTFID(program *ebpf.Program) (Link, error) {
+func attachBTFID(program *ebpf.Program, cookie uint64) (Link, error) {
 	if program.FD() < 0 {
 		return nil, fmt.Errorf("invalid program %w", sys.ErrClosedFd)
 	}
@@ -110,12 +116,17 @@ func attachBTFID(program *ebpf.Program) (Link, error) {
 		fd, err = sys.LinkCreateTracing(&sys.LinkCreateTracingAttr{
 			ProgFd:     uint32(program.FD()),
 			AttachType: sys.AttachType(program.ExpectedAttachType()),
+			Cookie:     cookie,
 		})
 		if err != nil {
 			return nil, fmt.Errorf("create tracing link: %w", err)
 		}
 	} else {
 		// Fallback to RawTracepointOpen
+		if cookie > 0 {
+			return nil, fmt.Errorf("attach BTF ID with cookie: %w", ErrNotSupported)
+		}
+
 		fd, err = sys.RawTracepointOpen(&sys.RawTracepointOpenAttr{
 			ProgFd: uint32(program.FD()),
 		})
@@ -162,7 +173,7 @@ func AttachTracing(opts TracingOptions) (Link, error) {
 		return nil, fmt.Errorf("invalid program expected attach type: %s", opts.Program.ExpectedAttachType())
 	}
 
-	return attachBTFID(opts.Program)
+	return attachBTFID(opts.Program, opts.Cookie)
 }
 
 // AttachLSM links a Linux security module (LSM) BPF Program to a BPF
@@ -176,7 +187,7 @@ func AttachLSM(opts LSMOptions) (Link, error) {
 		return nil, fmt.Errorf("invalid program expected attach type: %s", opts.Program.ExpectedAttachType())
 	}
 
-	return attachBTFID(opts.Program)
+	return attachBTFID(opts.Program, opts.Cookie)
 }
 
 // https://github.com/torvalds/linux/commit/2fcc82411e74e5e6aba336561cf56fb899bfae4e

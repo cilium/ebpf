@@ -55,6 +55,7 @@ func TestTracing(t *testing.T) {
 		attachTo                         string
 		programType                      ebpf.ProgramType
 		programAttachType, attachTypeOpt ebpf.AttachType
+		cookie                           uint64
 	}{
 		{
 			name:              "AttachTraceFEntry",
@@ -68,6 +69,7 @@ func TestTracing(t *testing.T) {
 			programType:       ebpf.Tracing,
 			programAttachType: ebpf.AttachTraceFEntry,
 			attachTypeOpt:     ebpf.AttachTraceFEntry,
+			cookie:            1,
 		},
 		{
 			name:              "AttachTraceFEntry",
@@ -98,7 +100,9 @@ func TestTracing(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			prog := mustLoadProgram(t, tt.programType, tt.programAttachType, tt.attachTo)
-			link, err := AttachTracing(TracingOptions{Program: prog, AttachType: tt.attachTypeOpt})
+
+			opts := TracingOptions{Program: prog, AttachType: tt.attachTypeOpt, Cookie: tt.cookie}
+			link, err := AttachTracing(opts)
 			testutils.SkipIfNotSupported(t, err)
 			if err != nil {
 				t.Fatal(err)

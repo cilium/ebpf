@@ -7,6 +7,7 @@ import (
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/btf"
 	"github.com/cilium/ebpf/internal/sys"
+	"github.com/cilium/ebpf/internal/unix"
 )
 
 type tracing struct {
@@ -87,6 +88,14 @@ type TracingOptions struct {
 	// AttachTraceFEntry/AttachTraceFExit/AttachModifyReturn or
 	// AttachTraceRawTp.
 	Program *ebpf.Program
+	// Program attach type. Can be one of:
+	// 	- AttachTraceFEntry
+	// 	- AttachTraceFExit
+	// 	- AttachModifyReturn
+	// 	- AttachTraceRawTp
+	// If empty (AttachNone), the legacy attach method via raw tracepoint
+	// open will be used.
+	AttachType ebpf.AttachType
 }
 
 type LSMOptions struct {
@@ -96,20 +105,44 @@ type LSMOptions struct {
 }
 
 // attachBTFID links all BPF program types (Tracing/LSM) that they attach to a btf_id.
-func attachBTFID(program *ebpf.Program) (Link, error) {
+func attachBTFID(program *ebpf.Program, at ebpf.AttachType) (Link, error) {
 	if program.FD() < 0 {
 		return nil, fmt.Errorf("invalid program %w", sys.ErrClosedFd)
 	}
 
-	fd, err := sys.RawTracepointOpen(&sys.RawTracepointOpenAttr{
-		ProgFd: uint32(program.FD()),
-	})
-	if errors.Is(err, sys.ENOTSUPP) {
-		// This may be returned by bpf_tracing_prog_attach via bpf_arch_text_poke.
-		return nil, fmt.Errorf("create raw tracepoint: %w", ErrNotSupported)
-	}
-	if err != nil {
-		return nil, fmt.Errorf("create raw tracepoint: %w", err)
+	var (
+		fd  *sys.FD
+		err error
+	)
+	switch at {
+	case ebpf.AttachTraceFEntry, ebpf.AttachTraceFExit, ebpf.AttachTraceRawTp,
+		ebpf.AttachModifyReturn, ebpf.AttachLSMMac:
+		// Attach via BPF link
+		fd, err = sys.LinkCreateTracing(&sys.LinkCreateTracingAttr{
+			ProgFd:     uint32(program.FD()),
+			AttachType: sys.AttachType(at),
+		})
+		if err == nil {
+			break
+		}
+		if !errors.Is(err, unix.EINVAL) {
+			return nil, fmt.Errorf("create tracing link: %w", err)
+		}
+		fallthrough
+	case ebpf.AttachNone:
+		// Attach via RawTracepointOpen
+		fd, err = sys.RawTracepointOpen(&sys.RawTracepointOpenAttr{
+			ProgFd: uint32(program.FD()),
+		})
+		if errors.Is(err, sys.ENOTSUPP) {
+			// This may be returned by bpf_tracing_prog_attach via bpf_arch_text_poke.
+			return nil, fmt.Errorf("create raw tracepoint: %w", ErrNotSupported)
+		}
+		if err != nil {
+			return nil, fmt.Errorf("create raw tracepoint: %w", err)
+		}
+	default:
+		return nil, fmt.Errorf("invalid attach type: %s", at.String())
 	}
 
 	raw := RawLink{fd: fd}
@@ -124,8 +157,7 @@ func attachBTFID(program *ebpf.Program) (Link, error) {
 		// a raw_tracepoint link. Other types return a tracing link.
 		return &rawTracepoint{raw}, nil
 	}
-
-	return &tracing{RawLink: RawLink{fd: fd}}, nil
+	return &tracing{raw}, nil
 }
 
 // AttachTracing links a tracing (fentry/fexit/fmod_ret) BPF program or
@@ -136,7 +168,7 @@ func AttachTracing(opts TracingOptions) (Link, error) {
 		return nil, fmt.Errorf("invalid program type %s, expected Tracing", t)
 	}
 
-	return attachBTFID(opts.Program)
+	return attachBTFID(opts.Program, opts.AttachType)
 }
 
 // AttachLSM links a Linux security module (LSM) BPF Program to a BPF
@@ -146,5 +178,5 @@ func AttachLSM(opts LSMOptions) (Link, error) {
 		return nil, fmt.Errorf("invalid program type %s, expected LSM", t)
 	}
 
-	return attachBTFID(opts.Program)
+	return attachBTFID(opts.Program, ebpf.AttachLSMMac)
 }

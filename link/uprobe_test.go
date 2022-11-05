@@ -242,6 +242,17 @@ func TestUprobeTraceFS(t *testing.T) {
 
 	// Compare the uprobes' tracefs IDs.
 	c.Assert(u1.tracefsID, qt.Not(qt.CmpEquals()), u2.tracefsID)
+
+	// Expect an error when supplying an invalid custom group name
+	args.group = "/"
+	_, err = tracefsUprobe(args)
+	c.Assert(err, qt.Not(qt.IsNil))
+
+	args.group = "customgroup"
+	u3, err := tracefsUprobe(args)
+	c.Assert(err, qt.IsNil)
+	defer u3.Close()
+	c.Assert(u3.group, qt.Matches, `customgroup_[a-f0-9]{16}`)
 }
 
 // Test u(ret)probe creation writing directly to <tracefs>/uprobe_events.

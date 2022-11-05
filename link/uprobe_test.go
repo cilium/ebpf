@@ -242,6 +242,31 @@ func TestUprobeTraceFS(t *testing.T) {
 
 	// Compare the uprobes' tracefs IDs.
 	c.Assert(u1.tracefsID, qt.Not(qt.CmpEquals()), u2.tracefsID)
+
+	// Expect an error when supplying a custom group name equal to existing probe
+	args.group = u2.group
+	_, err = tracefsUprobe(args)
+	c.Assert(err, qt.Not(qt.IsNil))
+
+	// Expect an error when supplying a custom group name that is too long
+	p := make([]byte, 64)
+	for i := range p {
+		p[i] = byte('a')
+	}
+	args.group = string(p)
+	_, err = tracefsUprobe(args)
+	c.Assert(err, qt.Not(qt.IsNil))
+
+	// Expect an error when supplying an invalid custom group name
+	args.group = "/"
+	_, err = tracefsUprobe(args)
+	c.Assert(err, qt.Not(qt.IsNil))
+
+	args.group = "customgroup"
+	u3, err := tracefsUprobe(args)
+	c.Assert(err, qt.IsNil)
+	defer u3.Close()
+	c.Assert(u3.group, qt.Equals, args.group)
 }
 
 // Test u(ret)probe creation writing directly to <tracefs>/uprobe_events.

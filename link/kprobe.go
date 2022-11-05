@@ -41,6 +41,10 @@ type KprobeOptions struct {
 	// Can be used to insert kprobes at arbitrary offsets in kernel functions,
 	// e.g. in places where functions have been inlined.
 	Offset uint64
+	// Prefix used for the event name if the kprobe must be attached using tracefs.
+	// It must be less than 63 characters in length.
+	// The default empty string will cause a random prefix to be used.
+	TraceFSGroup string
 }
 
 const (
@@ -178,6 +182,7 @@ func kprobe(symbol string, prog *ebpf.Program, opts *KprobeOptions, ret bool) (*
 	if opts != nil {
 		args.cookie = opts.Cookie
 		args.offset = opts.Offset
+		args.group = opts.TraceFSGroup
 	}
 
 	// Use kprobe PMU if the kernel has it available.
@@ -348,25 +353,34 @@ func tracefsKprobe(args probeArgs) (*perfEvent, error) {
 // the executable/library path on the filesystem and the offset where the probe is inserted.
 // A perf event is then opened on the newly-created trace event and returned to the caller.
 func tracefsProbe(typ probeType, args probeArgs) (_ *perfEvent, err error) {
-	// Generate a random string for each trace event we attempt to create.
-	// This value is used as the 'group' token in tracefs to allow creating
-	// multiple kprobe trace events with the same name.
-	group, err := randomGroup("ebpf")
-	if err != nil {
-		return nil, fmt.Errorf("randomizing group name: %w", err)
+	if args.group == "" {
+		// Generate a random string for each trace event we attempt to create.
+		// This value is used as the 'group' token in tracefs to allow creating
+		// multiple kprobe trace events with the same name.
+		group, err := randomGroup("ebpf")
+		if err != nil {
+			return nil, fmt.Errorf("randomizing group name: %w", err)
+		}
+		args.group = group
+	} else {
+		if !isValidTraceID(args.group) {
+			return nil, fmt.Errorf("group name '%s' must be alphanumeric or underscore: %w", args.group, errInvalidInput)
+		}
+		if err := validateGroup(args.group); err != nil {
+			return nil, fmt.Errorf("custom group name: %w", err)
+		}
 	}
-	args.group = group
 
 	// Before attempting to create a trace event through tracefs,
 	// check if an event with the same group and name already exists.
 	// Kernels 4.x and earlier don't return os.ErrExist on writing a duplicate
 	// entry, so we need to rely on reads for detecting uniqueness.
-	_, err = getTraceEventID(group, args.symbol)
+	_, err = getTraceEventID(args.group, args.symbol)
 	if err == nil {
-		return nil, fmt.Errorf("trace event already exists: %s/%s", group, args.symbol)
+		return nil, fmt.Errorf("trace event already exists: %s/%s", args.group, args.symbol)
 	}
 	if err != nil && !errors.Is(err, os.ErrNotExist) {
-		return nil, fmt.Errorf("checking trace event %s/%s: %w", group, args.symbol, err)
+		return nil, fmt.Errorf("checking trace event %s/%s: %w", args.group, args.symbol, err)
 	}
 
 	// Create the [k,u]probe trace event using tracefs.
@@ -384,7 +398,7 @@ func tracefsProbe(typ probeType, args probeArgs) (_ *perfEvent, err error) {
 	}()
 
 	// Get the newly-created trace event's id.
-	tid, err := getTraceEventID(group, args.symbol)
+	tid, err := getTraceEventID(args.group, args.symbol)
 	if err != nil {
 		return nil, fmt.Errorf("getting trace event id: %w", err)
 	}
@@ -397,7 +411,7 @@ func tracefsProbe(typ probeType, args probeArgs) (_ *perfEvent, err error) {
 
 	return &perfEvent{
 		typ:       typ.PerfEventType(args.ret),
-		group:     group,
+		group:     args.group,
 		name:      args.symbol,
 		tracefsID: tid,
 		cookie:    args.cookie,
@@ -510,11 +524,17 @@ func randomGroup(prefix string) (string, error) {
 	}
 
 	group := fmt.Sprintf("%s_%x", prefix, b)
-	if len(group) > 63 {
-		return "", fmt.Errorf("group name '%s' cannot be longer than 63 characters: %w", group, errInvalidInput)
+	if err := validateGroup(group); err != nil {
+		return "", err
 	}
-
 	return group, nil
+}
+
+func validateGroup(group string) error {
+	if len(group) > 63 {
+		return fmt.Errorf("group name '%s' cannot be longer than 63 characters: %w", group, errInvalidInput)
+	}
+	return nil
 }
 
 func probePrefix(ret bool) string {

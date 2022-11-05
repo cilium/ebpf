@@ -206,6 +206,28 @@ func TestKprobeTraceFS(t *testing.T) {
 	// Compare the kprobes' tracefs IDs.
 	c.Assert(k1.tracefsID, qt.Not(qt.CmpEquals()), k2.tracefsID)
 
+	// Expect an error when supplying a custom group name equal to existing probe
+	_, err = tracefsKprobe(probeArgs{symbol: ksym, group: k2.group})
+	c.Assert(err, qt.Not(qt.IsNil))
+
+	// Expect an error when supplying a custom group name that is too long
+	p := make([]byte, 64)
+	for i := range p {
+		p[i] = byte('a')
+	}
+	_, err = tracefsKprobe(probeArgs{symbol: ksym, group: string(p)})
+	c.Assert(err, qt.Not(qt.IsNil))
+
+	// Expect an error when supplying an invalid custom group name
+	_, err = tracefsKprobe(probeArgs{symbol: ksym, group: "/"})
+	c.Assert(err, qt.Not(qt.IsNil))
+
+	cg := "customgroup"
+	k3, err := tracefsKprobe(probeArgs{symbol: ksym, group: cg})
+	c.Assert(err, qt.IsNil)
+	defer k3.Close()
+	c.Assert(k3.group, qt.Equals, cg)
+
 	// Prepare probe args.
 	args := probeArgs{group: "testgroup", symbol: "symbol"}
 

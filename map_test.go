@@ -1745,6 +1745,7 @@ func BenchmarkMarshalling(b *testing.B) {
 	if err := m.Put(key, benchValue{}); err != nil {
 		b.Fatal(err)
 	}
+	b.Cleanup(func() { m.Close() })
 
 	b.Run("reflection", func(b *testing.B) {
 		b.ReportAllocs()
@@ -1810,6 +1811,7 @@ func BenchmarkPerCPUMarshalling(b *testing.B) {
 	if err := m.Put(key, val[0:]); err != nil {
 		b.Fatal(err)
 	}
+	b.Cleanup(func() { m.Close() })
 
 	b.Run("reflection", func(b *testing.B) {
 		b.ReportAllocs()
@@ -1836,6 +1838,7 @@ func BenchmarkMap(b *testing.B) {
 	if err != nil {
 		b.Fatal(err)
 	}
+	b.Cleanup(func() { m.Close() })
 
 	if err := m.Put(uint32(0), uint32(42)); err != nil {
 		b.Fatal(err)
@@ -1906,6 +1909,7 @@ func ExampleMap_perCPU() {
 	if err != nil {
 		panic(err)
 	}
+	defer arr.Close()
 
 	first := []uint32{4, 5}
 	if err := arr.Put(uint32(0), first); err != nil {

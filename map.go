@@ -8,6 +8,7 @@ import (
 	"math/rand"
 	"path/filepath"
 	"reflect"
+	"syscall"
 	"time"
 	"unsafe"
 
@@ -437,6 +438,24 @@ func (spec *MapSpec) createMap(inner *sys.FD, opts MapOptions) (_ *Map, err erro
 	}
 
 	fd, err := sys.MapCreate(&attr)
+
+	// Some map types (like ProgramArray on 4.19 kernels) do not support
+	// BTF and even though BTF could be still loaded properly in above code,
+	// the sys.MapCreate will fail with ENOTSUPP. Let's check for this case
+	// and try to load the map without BTF.
+	if err != nil && spec.Type == ProgramArray && attr.BtfFd != 0 &&
+		errors.Is(err, syscall.Errno(524)) {
+		attr.BtfFd = 0
+		attr.BtfKeyTypeId = 0
+		attr.BtfValueTypeId = 0
+
+		var err2 error
+
+		fd, err2 = sys.MapCreate(&attr)
+		if err2 == nil {
+			err = nil
+		}
+	}
 	if err != nil {
 		if errors.Is(err, unix.EPERM) {
 			return nil, fmt.Errorf("map create: %w (MEMLOCK may be too low, consider rlimit.RemoveMemlock)", err)

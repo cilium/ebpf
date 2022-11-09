@@ -400,7 +400,7 @@ func newProgramFromFD(fd *sys.FD) (*Program, error) {
 		return nil, fmt.Errorf("discover program type: %w", err)
 	}
 
-	return &Program{"", fd, "", "", info.Type}, nil
+	return &Program{"", fd, info.Name, "", info.Type}, nil
 }
 
 func (p *Program) String() string {

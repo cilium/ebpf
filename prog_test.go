@@ -617,6 +617,15 @@ func TestProgramFromFD(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	// Name and type are supposed to be copied from program info.
+	if haveObjName() == nil && prog2.name != "test" {
+		t.Errorf("Expected program to have name test, got '%s'", prog2.name)
+	}
+
+	if prog2.typ != SocketFilter {
+		t.Errorf("Expected program to have type SocketFilter, got '%s'", prog2.typ)
+	}
+
 	// Both programs refer to the same fd now. Closing either of them will
 	// release the fd to the OS, which then might re-use that fd for another
 	// test. Once we close the second map we might close the re-used fd

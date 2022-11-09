@@ -668,7 +668,7 @@ func newHandleFromRawBTF(btf []byte) (*Handle, error) {
 	// the BTF blob is correct, a log was requested, and the provided buffer
 	// is too small.
 	_, ve := sys.BtfLoad(attr)
-	return nil, internal.ErrorWithLog(err, logBuf, errors.Is(ve, unix.ENOSPC))
+	return nil, internal.ErrorWithLog("load btf", err, logBuf, errors.Is(ve, unix.ENOSPC))
 }
 
 // NewHandleFromID returns the BTF handle for a given id.

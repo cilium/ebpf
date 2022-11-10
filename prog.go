@@ -173,7 +173,7 @@ type Program struct {
 
 // NewProgram creates a new Program.
 //
-// See NewProgramWithOptions for details.
+// See [NewProgramWithOptions] for details.
 func NewProgram(spec *ProgramSpec) (*Program, error) {
 	return NewProgramWithOptions(spec, ProgramOptions{})
 }
@@ -183,7 +183,7 @@ func NewProgram(spec *ProgramSpec) (*Program, error) {
 // Loading a program for the first time will perform
 // feature detection by loading small, temporary programs.
 //
-// Returns a wrapped [VerifierError] if the program is rejected by the kernel.
+// Returns a [VerifierError] if the program is rejected by the kernel.
 func NewProgramWithOptions(spec *ProgramSpec, opts ProgramOptions) (*Program, error) {
 	if spec == nil {
 		return nil, errors.New("can't load a program from a nil spec")
@@ -242,8 +242,7 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions) (*Program, er
 	copy(insns, spec.Instructions)
 
 	handle, fib, lib, err := btf.MarshalExtInfos(insns)
-	btfDisabled := errors.Is(err, btf.ErrNotSupported)
-	if err != nil && !btfDisabled {
+	if err != nil && !errors.Is(err, btf.ErrNotSupported) {
 		return nil, fmt.Errorf("load ext_infos: %w", err)
 	}
 	if handle != nil {
@@ -358,11 +357,7 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions) (*Program, er
 	}
 
 	truncated := errors.Is(err, unix.ENOSPC) || errors.Is(err2, unix.ENOSPC)
-	err = internal.ErrorWithLog(err, logBuf, truncated)
-	if btfDisabled {
-		return nil, fmt.Errorf("load program: %w (kernel without BTF support)", err)
-	}
-	return nil, fmt.Errorf("load program: %w", err)
+	return nil, internal.ErrorWithLog("load program", err, logBuf, truncated)
 }
 
 // NewProgramFromFD creates a program from a raw fd.

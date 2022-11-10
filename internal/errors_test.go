@@ -21,33 +21,33 @@ func TestVerifierErrorWhitespace(t *testing.T) {
 		0, 0, // trailing NUL bytes
 	)
 
-	err := ErrorWithLog(errors.New("test"), b, false)
-	qt.Assert(t, err.Error(), qt.Equals, "test: unreachable insn 28")
+	err := ErrorWithLog("frob", errors.New("test"), b, false)
+	qt.Assert(t, err.Error(), qt.Equals, "frob: test: unreachable insn 28")
 
-	err = ErrorWithLog(errors.New("test"), nil, false)
-	qt.Assert(t, err.Error(), qt.Equals, "test")
-
-	err = ErrorWithLog(errors.New("test"), []byte("\x00"), false)
-	qt.Assert(t, err.Error(), qt.Equals, "test")
-
-	err = ErrorWithLog(errors.New("test"), []byte(" "), false)
-	qt.Assert(t, err.Error(), qt.Equals, "test")
+	for _, log := range [][]byte{
+		nil,
+		[]byte("\x00"),
+		[]byte(" "),
+	} {
+		err = ErrorWithLog("frob", errors.New("test"), log, false)
+		qt.Assert(t, err.Error(), qt.Equals, "frob: test", qt.Commentf("empty log %q has incorrect format", log))
+	}
 }
 
 func TestVerifierErrorWrapping(t *testing.T) {
-	ve := ErrorWithLog(unix.ENOENT, nil, false)
+	ve := ErrorWithLog("frob", unix.ENOENT, nil, false)
 	qt.Assert(t, ve, qt.ErrorIs, unix.ENOENT, qt.Commentf("should wrap provided error"))
 	qt.Assert(t, ve.Truncated, qt.IsFalse, qt.Commentf("verifier log should not be marked as truncated"))
 
-	ve = ErrorWithLog(unix.EINVAL, nil, true)
+	ve = ErrorWithLog("frob", unix.EINVAL, nil, true)
 	qt.Assert(t, ve, qt.ErrorIs, unix.EINVAL, qt.Commentf("should wrap provided error"))
 	qt.Assert(t, ve.Truncated, qt.IsTrue, qt.Commentf("verifier log should be marked as truncated"))
 
-	ve = ErrorWithLog(unix.EINVAL, []byte("foo"), false)
+	ve = ErrorWithLog("frob", unix.EINVAL, []byte("foo"), false)
 	qt.Assert(t, ve, qt.ErrorIs, unix.EINVAL, qt.Commentf("should wrap provided error"))
 	qt.Assert(t, ve.Error(), qt.Contains, "foo", qt.Commentf("verifier log should appear in error string"))
 
-	ve = ErrorWithLog(unix.ENOSPC, []byte("foo"), true)
+	ve = ErrorWithLog("frob", unix.ENOSPC, []byte("foo"), true)
 	qt.Assert(t, ve, qt.ErrorIs, unix.ENOSPC, qt.Commentf("should wrap provided error"))
 	qt.Assert(t, ve.Error(), qt.Contains, "foo", qt.Commentf("verifier log should appear in error string"))
 	qt.Assert(t, ve.Truncated, qt.IsTrue, qt.Commentf("verifier log should be marked truncated"))
@@ -79,9 +79,10 @@ func TestVerifierErrorSummary(t *testing.T) {
 
 func ExampleVerifierError() {
 	err := &VerifierError{
-		syscall.ENOSPC,
-		[]string{"first", "second", "third"},
-		false,
+		source:    "catastrophe",
+		Cause:     syscall.ENOSPC,
+		Log:       []string{"first", "second", "third"},
+		Truncated: false,
 	}
 
 	fmt.Printf("With %%s: %s\n", err)
@@ -91,18 +92,18 @@ func ExampleVerifierError() {
 	fmt.Printf("First line: %+1v\n", err)
 	fmt.Printf("Last two lines: %-2v\n", err)
 
-	// Output: With %s: no space left on device: third (2 line(s) omitted)
-	// With %v and a truncated log: no space left on device: second: third (truncated, 1 line(s) omitted)
-	// All log lines: no space left on device:
+	// Output: With %s: catastrophe: no space left on device: third (2 line(s) omitted)
+	// With %v and a truncated log: catastrophe: no space left on device: second: third (truncated, 1 line(s) omitted)
+	// All log lines: catastrophe: no space left on device:
 	// 	first
 	// 	second
 	// 	third
 	// 	(truncated)
-	// First line: no space left on device:
+	// First line: catastrophe: no space left on device:
 	// 	first
 	// 	(2 line(s) omitted)
 	// 	(truncated)
-	// Last two lines: no space left on device:
+	// Last two lines: catastrophe: no space left on device:
 	// 	(1 line(s) omitted)
 	// 	second
 	// 	third
@@ -117,5 +118,5 @@ func readErrorFromFile(tb testing.TB, file string) *VerifierError {
 		tb.Fatal("Read file:", err)
 	}
 
-	return ErrorWithLog(unix.EINVAL, contents, false)
+	return ErrorWithLog("file", unix.EINVAL, contents, false)
 }

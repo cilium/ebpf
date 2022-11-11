@@ -302,6 +302,13 @@ func TestCOREFindField(t *testing.T) {
 			coreAccessor{0, 0},
 			errImpossibleRelocation,
 		},
+		{
+			"unsized type",
+			bStruct, &Func{},
+			// non-zero accessor to force calculating the offset.
+			coreAccessor{1},
+			errImpossibleRelocation,
+		},
 	}
 
 	for _, test := range invalid {

@@ -395,7 +395,7 @@ func coreCalculateFixup(relo *CORERelocation, target Type, targetID TypeID, bo b
 			return poison()
 		}
 		if err != nil {
-			return zero, fmt.Errorf("target %s: %w", target, err)
+			return zero, fmt.Errorf("relocation %s: %w", relo.kind, err)
 		}
 
 		maybeSkipValidation := func(f COREFixup, err error) (COREFixup, error) {
@@ -552,6 +552,10 @@ type coreField struct {
 }
 
 func (cf *coreField) adjustOffsetToNthElement(n int) error {
+	if n == 0 {
+		return nil
+	}
+
 	size, err := Sizeof(cf.Type)
 	if err != nil {
 		return err
@@ -608,6 +612,10 @@ func coreFindField(localT Type, localAcc coreAccessor, targetT Type) (coreField,
 	local := coreField{Type: localT}
 	target := coreField{Type: targetT}
 
+	if err := coreAreMembersCompatible(local.Type, target.Type); err != nil {
+		return coreField{}, coreField{}, fmt.Errorf("fields: %w", err)
+	}
+
 	// The first index is used to offset a pointer of the base type like
 	// when accessing an array.
 	if err := local.adjustOffsetToNthElement(localAcc[0]); err != nil {
@@ -616,10 +624,6 @@ func coreFindField(localT Type, localAcc coreAccessor, targetT Type) (coreField,
 
 	if err := target.adjustOffsetToNthElement(localAcc[0]); err != nil {
 		return coreField{}, coreField{}, err
-	}
-
-	if err := coreAreMembersCompatible(local.Type, target.Type); err != nil {
-		return coreField{}, coreField{}, fmt.Errorf("fields: %w", err)
 	}
 
 	var localMaybeFlex, targetMaybeFlex bool

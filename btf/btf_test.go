@@ -7,31 +7,59 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"sync"
 	"testing"
 
 	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/testutils"
 )
 
-var vmlinux struct {
+// vmlinuxTestdata caches the result of reading and parsing a BTF blob from
+// testdata.
+var vmlinuxTestdata struct {
 	sync.Once
-	err error
-	raw []byte
+	raw  []byte
+	spec *Spec
+	err  error
 }
 
-func readVMLinux(tb testing.TB) *bytes.Reader {
+func doVMLinuxTestdata() {
+	b, err := internal.ReadAllCompressed("testdata/vmlinux.btf.gz")
+	if err != nil {
+		vmlinuxTestdata.err = fmt.Errorf("uncompressing vmlinux testdata: %w", err)
+		return
+	}
+	vmlinuxTestdata.raw = b
+
+	s, err := loadRawSpec(bytes.NewReader(b), binary.LittleEndian, nil, nil)
+	if err != nil {
+		vmlinuxTestdata.err = fmt.Errorf("parsing vmlinux testdata types: %w", err)
+		return
+	}
+	vmlinuxTestdata.spec = s
+}
+
+func vmlinuxTestdataReader(tb testing.TB) *bytes.Reader {
 	tb.Helper()
 
-	vmlinux.Do(func() {
-		vmlinux.raw, vmlinux.err = internal.ReadAllCompressed("testdata/vmlinux.btf.gz")
-	})
+	vmlinuxTestdata.Do(doVMLinuxTestdata)
 
-	if vmlinux.err != nil {
-		tb.Fatal(vmlinux.err)
+	if err := vmlinuxTestdata.err; err != nil {
+		tb.Fatal(err)
 	}
 
-	return bytes.NewReader(vmlinux.raw)
+	return bytes.NewReader(vmlinuxTestdata.raw)
+}
+
+func vmlinuxTestdataSpec(tb testing.TB) *Spec {
+	tb.Helper()
+
+	vmlinuxTestdata.Do(doVMLinuxTestdata)
+
+	if err := vmlinuxTestdata.err; err != nil {
+		tb.Fatal(err)
+	}
+
+	return vmlinuxTestdata.spec.Copy()
 }
 
 func parseELFBTF(tb testing.TB, file string) *Spec {
@@ -93,7 +121,7 @@ func TestTypeByNameAmbiguous(t *testing.T) {
 }
 
 func TestTypeByName(t *testing.T) {
-	spec, err := LoadSpecFromReader(readVMLinux(t))
+	spec, err := LoadSpecFromReader(vmlinuxTestdataReader(t))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -172,7 +200,7 @@ func TestTypeByName(t *testing.T) {
 }
 
 func BenchmarkParseVmlinux(b *testing.B) {
-	rd := readVMLinux(b)
+	rd := vmlinuxTestdataReader(b)
 	b.ReportAllocs()
 	b.ResetTimer()
 
@@ -311,7 +339,7 @@ func TestLoadKernelSpec(t *testing.T) {
 }
 
 func TestGuessBTFByteOrder(t *testing.T) {
-	bo := guessRawBTFByteOrder(readVMLinux(t))
+	bo := guessRawBTFByteOrder(vmlinuxTestdataReader(t))
 	if bo != binary.LittleEndian {
 		t.Fatalf("Guessed %s instead of %s", bo, binary.LittleEndian)
 	}
@@ -364,7 +392,7 @@ func ExampleSpec_TypeByName() {
 }
 
 func TestTypesIterator(t *testing.T) {
-	spec, err := LoadSpecFromReader(readVMLinux(t))
+	spec, err := LoadSpecFromReader(vmlinuxTestdataReader(t))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -399,7 +427,7 @@ func TestTypesIterator(t *testing.T) {
 }
 
 func TestLoadSplitSpecFromReader(t *testing.T) {
-	spec, err := LoadSpecFromReader(readVMLinux(t))
+	spec, err := LoadSpecFromReader(vmlinuxTestdataReader(t))
 	if err != nil {
 		t.Fatal(err)
 	}

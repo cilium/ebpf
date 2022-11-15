@@ -94,7 +94,7 @@ func TestBuildVmlinux(t *testing.T) {
 }
 
 func BenchmarkBuildVmlinux(b *testing.B) {
-	spec := parseVMLinuxTypes(b)
+	spec := vmlinuxTestdataSpec(b)
 
 	b.ReportAllocs()
 	b.ResetTimer()

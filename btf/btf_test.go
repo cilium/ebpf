@@ -7,11 +7,36 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"sync"
 	"testing"
 
 	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/testutils"
 )
+
+// vmlinux caches the result of parsing the running kernel's BTF.
+var vmlinux struct {
+	sync.Once
+	spec *Spec
+	err  error
+}
+
+func vmlinuxSpec(tb testing.TB) *Spec {
+	tb.Helper()
+
+	// /sys/kernel/btf was introduced in 341dfcf8d78e ("btf: expose BTF info
+	// through sysfs"), which shipped in Linux 5.4.
+	testutils.SkipOnOldKernel(tb, "5.4", "vmlinux BTF in sysfs")
+
+	vmlinux.Do(func() {
+		vmlinux.spec, vmlinux.err = LoadKernelSpec()
+	})
+	if vmlinux.err != nil {
+		tb.Fatal(vmlinux.err)
+	}
+
+	return vmlinux.spec.Copy()
+}
 
 // vmlinuxTestdata caches the result of reading and parsing a BTF blob from
 // testdata.
@@ -216,11 +241,7 @@ func BenchmarkParseVmlinux(b *testing.B) {
 }
 
 func TestParseCurrentKernelBTF(t *testing.T) {
-	spec, err := LoadKernelSpec()
-	testutils.SkipIfNotSupported(t, err)
-	if err != nil {
-		t.Fatal("Can't load BTF:", err)
-	}
+	spec := vmlinuxSpec(t)
 
 	if len(spec.namedTypes) == 0 {
 		t.Fatal("Empty kernel BTF")

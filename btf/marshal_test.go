@@ -40,21 +40,8 @@ func TestBuild(t *testing.T) {
 	qt.Assert(t, have, qt.DeepEquals, typ)
 }
 
-func TestBuildVmlinux(t *testing.T) {
-	spec := parseVMLinuxTypes(t)
-
-	noFloat := testutils.MustKernelVersion().Less(internal.Version{5, 13, 0})
-	types := make([]Type, 0, len(spec.types))
-	for _, typ := range spec.types {
-		if noFloat {
-			if _, ok := typ.(*Float); ok {
-				// Skip floats on pre-5.13 kernels.
-				continue
-			}
-		}
-
-		types = append(types, typ)
-	}
+func TestRoundtripVMlinux(t *testing.T) {
+	types := vmlinuxSpec(t).types
 
 	// Randomize the order to force different permutations of walking the type
 	// graph.
@@ -78,7 +65,7 @@ func TestBuildVmlinux(t *testing.T) {
 
 	nStr := len(b.strings.strings)
 	nTypes := len(types)
-	t.Log(len(b.strings.strings), "strings", nTypes, "types")
+	t.Log(nStr, "strings", nTypes, "types")
 	t.Log(float64(nStr)/float64(nTypes), "avg strings per type")
 
 	raw, err := b.Encode()

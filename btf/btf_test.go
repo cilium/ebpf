@@ -7,11 +7,37 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"sync"
 	"testing"
 
 	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/testutils"
 )
+
+// vmlinux caches the result of parsing the running kernel's BTF.
+var vmlinux struct {
+	sync.Once
+	spec *Spec
+	err  error
+}
+
+func vmlinuxSpec(tb testing.TB) *Spec {
+	tb.Helper()
+
+	vmlinux.Do(func() {
+		vmlinux.spec, vmlinux.err = LoadKernelSpec()
+	})
+	err := vmlinux.err
+
+	if errors.Is(err, ErrNotSupported) {
+		tb.Skip(err)
+	}
+	if err != nil {
+		tb.Fatal(err)
+	}
+
+	return vmlinux.spec.Copy()
+}
 
 // vmlinuxTestdata caches the result of reading and parsing a BTF blob from
 // testdata.

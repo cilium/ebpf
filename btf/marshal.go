@@ -400,5 +400,13 @@ func MarshalMapKV(key, value Type) (_ *Handle, keyID, valueID TypeID, _ error) {
 	}
 
 	handle, err := newHandleFromRawBTF(btf)
+	if err != nil {
+		// Check for 'full' map BTF support, since kernels between 4.18 and 5.2
+		// already support BTF blobs for maps without Var or Datasec just fine.
+		if err := haveMapBTF(); err != nil {
+			return nil, 0, 0, err
+		}
+	}
+
 	return handle, keyID, valueID, err
 }

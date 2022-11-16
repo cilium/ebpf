@@ -32,6 +32,7 @@ type MapOptions struct {
 	// Existing maps will be re-used if they are compatible, otherwise an
 	// error is returned.
 	PinPath        string
+	PinPathFinal   bool
 	LoadPinOptions LoadPinOptions
 }
 
@@ -257,6 +258,13 @@ func newMapWithOptions(spec *MapSpec, opts MapOptions) (_ *Map, err error) {
 		}
 	}
 
+	pinPath := func() string {
+		if opts.PinPathFinal {
+			return opts.PinPath
+		}
+		return filepath.Join(opts.PinPath, spec.Name)
+	}
+
 	switch spec.Pinning {
 	case PinByName:
 		if spec.Name == "" {
@@ -267,8 +275,7 @@ func newMapWithOptions(spec *MapSpec, opts MapOptions) (_ *Map, err error) {
 			return nil, fmt.Errorf("pin by name: missing MapOptions.PinPath")
 		}
 
-		path := filepath.Join(opts.PinPath, spec.Name)
-		m, err := LoadPinnedMap(path, &opts.LoadPinOptions)
+		m, err := LoadPinnedMap(pinPath(), &opts.LoadPinOptions)
 		if errors.Is(err, unix.ENOENT) {
 			break
 		}
@@ -319,8 +326,7 @@ func newMapWithOptions(spec *MapSpec, opts MapOptions) (_ *Map, err error) {
 	defer closeOnError(m)
 
 	if spec.Pinning == PinByName {
-		path := filepath.Join(opts.PinPath, spec.Name)
-		if err := m.Pin(path); err != nil {
+		if err := m.Pin(pinPath()); err != nil {
 			return nil, fmt.Errorf("pin map: %w", err)
 		}
 	}

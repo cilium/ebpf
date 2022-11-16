@@ -819,8 +819,42 @@ var haveMapBTF = internal.FeatureTest("Map BTF (Var/Datasec)", "5.2", func() err
 	return nil
 })
 
+// haveProgBTF attempts to load a BTF blob containing a Func and FuncProto. It
+// is used as a proxy for ext_info (func_info) support, which depends on
+// Func(Proto) by definition.
+var haveProgBTF = internal.FeatureTest("Program BTF (func/line_info)", "5.0", func() error {
+	var (
+		types struct {
+			FuncProto btfType
+			Func      btfType
+		}
+		strings = []byte{0, 'a', 0}
+	)
+
+	types.FuncProto.SetKind(kindFuncProto)
+	types.Func.SetKind(kindFunc)
+	types.Func.SizeType = 1 // aka FuncProto
+	types.Func.NameOff = 1
+
+	btf := marshalBTF(&types, strings, internal.NativeEndian)
+
+	fd, err := sys.BtfLoad(&sys.BtfLoadAttr{
+		Btf:     sys.NewSlicePointer(btf),
+		BtfSize: uint32(len(btf)),
+	})
+	if errors.Is(err, unix.EINVAL) || errors.Is(err, unix.EPERM) {
+		return internal.ErrNotSupported
+	}
+	if err != nil {
+		return err
+	}
+
+	fd.Close()
+	return nil
+})
+
 var haveFuncLinkage = internal.FeatureTest("BTF func linkage", "5.6", func() error {
-	if err := haveMapBTF(); err != nil {
+	if err := haveProgBTF(); err != nil {
 		return err
 	}
 

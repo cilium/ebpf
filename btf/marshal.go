@@ -3,6 +3,7 @@ package btf
 import (
 	"bytes"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"math"
 
@@ -73,6 +74,10 @@ func (e *encoder) reset(strings *stringTableBuilder) {
 //
 // Calling the method has undefined behaviour if it previously returned an error.
 func (e *encoder) Add(typ Type) (TypeID, error) {
+	if typ == nil {
+		return 0, errors.New("cannot Add a nil Type")
+	}
+
 	hasID := func(t Type) (skip bool) {
 		_, isVoid := t.(*Void)
 		_, alreadyEncoded := e.allocatedIDs[t]
@@ -379,19 +384,28 @@ func (e *encoder) deflateVarSecinfos(vars []VarSecinfo) []btfVarSecinfo {
 // The function is intended for the use of the ebpf package and may be removed
 // at any point in time.
 func MarshalMapKV(key, value Type) (_ *Handle, keyID, valueID TypeID, _ error) {
+	if key == nil && value == nil {
+		return nil, 0, 0, nil
+	}
+
 	enc := nativeEncoderPool.Get().(*encoder)
 	defer nativeEncoderPool.Put(enc)
 
 	enc.Reset()
 
-	keyID, err := enc.Add(key)
-	if err != nil {
-		return nil, 0, 0, err
+	var err error
+	if key != nil {
+		keyID, err = enc.Add(key)
+		if err != nil {
+			return nil, 0, 0, fmt.Errorf("adding map key to BTF encoder: %w", err)
+		}
 	}
 
-	valueID, err = enc.Add(value)
-	if err != nil {
-		return nil, 0, 0, err
+	if value != nil {
+		valueID, err = enc.Add(value)
+		if err != nil {
+			return nil, 0, 0, fmt.Errorf("adding map value to BTF encoder: %w", err)
+		}
 	}
 
 	btf, err := enc.Encode()

@@ -735,7 +735,7 @@ func TestLibBPFCompat(t *testing.T) {
 			// replicating some fixups done in the selftests or the test
 			// intentionally failing. This is expected, so skip the test
 			// instead of failing.
-			t.Skip("Skipping since the kernel rejected the program:", errno)
+			t.Skip("Skipping since the kernel rejected the program:", err)
 		}
 		if err == nil {
 			coll.Close()

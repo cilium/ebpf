@@ -786,19 +786,52 @@ func marshalBTF(types interface{}, strings []byte, bo binary.ByteOrder) []byte {
 	return buf.Bytes()
 }
 
-var haveBTF = internal.FeatureTest("BTF", "5.1", func() error {
+// haveBTF attempts to load a BTF blob containing an Int. It should pass on any
+// kernel that supports BPF_BTF_LOAD.
+var haveBTF = internal.FeatureTest("BTF", "4.18", func() error {
+	var (
+		types struct {
+			Integer btfType
+			btfInt
+		}
+		strings = []byte{0}
+	)
+	types.Integer.SetKind(kindInt) // 0-length anonymous integer
+
+	btf := marshalBTF(&types, strings, internal.NativeEndian)
+
+	fd, err := sys.BtfLoad(&sys.BtfLoadAttr{
+		Btf:     sys.NewSlicePointer(btf),
+		BtfSize: uint32(len(btf)),
+	})
+	if errors.Is(err, unix.EINVAL) || errors.Is(err, unix.EPERM) {
+		return internal.ErrNotSupported
+	}
+	if err != nil {
+		return err
+	}
+
+	fd.Close()
+	return nil
+})
+
+// haveMapBTF attempts to load a minimal BTF blob containing a Var. It is
+// used as a proxy for .bss, .data and .rodata map support, which generally
+// come with a Var and Datasec. These were introduced in Linux 5.2.
+var haveMapBTF = internal.FeatureTest("Map BTF (Var/Datasec)", "5.2", func() error {
+	if err := haveBTF(); err != nil {
+		return err
+	}
+
 	var (
 		types struct {
 			Integer btfType
 			Var     btfType
-			btfVar  struct{ Linkage uint32 }
+			btfVariable
 		}
 		strings = []byte{0, 'a', 0}
 	)
 
-	// We use a BTF_KIND_VAR here, to make sure that
-	// the kernel understands BTF at least as well as we
-	// do. BTF_KIND_VAR was introduced ~5.1.
 	types.Integer.SetKind(kindPointer)
 	types.Var.NameOff = 1
 	types.Var.SetKind(kindVar)
@@ -811,8 +844,8 @@ var haveBTF = internal.FeatureTest("BTF", "5.1", func() error {
 		BtfSize: uint32(len(btf)),
 	})
 	if errors.Is(err, unix.EINVAL) || errors.Is(err, unix.EPERM) {
-		// Treat both EINVAL and EPERM as not supported: loading the program
-		// might still succeed without BTF.
+		// Treat both EINVAL and EPERM as not supported: creating the map may still
+		// succeed without Btf* attrs.
 		return internal.ErrNotSupported
 	}
 	if err != nil {

@@ -329,8 +329,8 @@ func TestLoadSpecFromElf(t *testing.T) {
 		}
 
 		t.Run("Handle", func(t *testing.T) {
+			testutils.SkipIfNotSupported(t, haveMapBTF())
 			btf, err := NewHandle(spec)
-			testutils.SkipIfNotSupported(t, err)
 			if err != nil {
 				t.Fatal("Can't load BTF:", err)
 			}
@@ -393,8 +393,8 @@ func TestSpecCopy(t *testing.T) {
 	}
 }
 
-func TestHaveBTF(t *testing.T) {
-	testutils.CheckFeatureTest(t, haveBTF)
+func TestHaveMapBTF(t *testing.T) {
+	testutils.CheckFeatureTest(t, haveMapBTF)
 }
 
 func TestHaveFuncLinkage(t *testing.T) {

@@ -680,10 +680,6 @@ func newHandleFromRawBTF(btf []byte) (*Handle, error) {
 		return &Handle{fd, attr.BtfSize}, nil
 	}
 
-	if err := haveBTF(); err != nil {
-		return nil, err
-	}
-
 	logBuf := make([]byte, 64*1024)
 	attr.BtfLogBuf = sys.NewSlicePointer(logBuf)
 	attr.BtfLogSize = uint32(len(logBuf))
@@ -786,7 +782,10 @@ func marshalBTF(types interface{}, strings []byte, bo binary.ByteOrder) []byte {
 	return buf.Bytes()
 }
 
-var haveBTF = internal.FeatureTest("BTF", "5.1", func() error {
+// haveMapBTF attempts to load a minimal BTF blob containing a Var. It is
+// used as a proxy for .bss, .data and .rodata map support, which generally
+// come with a Var and Datasec. These were introduced in Linux 5.2.
+var haveMapBTF = internal.FeatureTest("Map BTF (Var/Datasec)", "5.2", func() error {
 	var (
 		types struct {
 			Integer btfType
@@ -796,9 +795,6 @@ var haveBTF = internal.FeatureTest("BTF", "5.1", func() error {
 		strings = []byte{0, 'a', 0}
 	)
 
-	// We use a BTF_KIND_VAR here, to make sure that
-	// the kernel understands BTF at least as well as we
-	// do. BTF_KIND_VAR was introduced ~5.1.
 	types.Integer.SetKind(kindPointer)
 	types.Var.NameOff = 1
 	types.Var.SetKind(kindVar)
@@ -811,8 +807,8 @@ var haveBTF = internal.FeatureTest("BTF", "5.1", func() error {
 		BtfSize: uint32(len(btf)),
 	})
 	if errors.Is(err, unix.EINVAL) || errors.Is(err, unix.EPERM) {
-		// Treat both EINVAL and EPERM as not supported: loading the program
-		// might still succeed without BTF.
+		// Treat both EINVAL and EPERM as not supported: creating the map may still
+		// succeed without Btf* attrs.
 		return internal.ErrNotSupported
 	}
 	if err != nil {
@@ -824,7 +820,7 @@ var haveBTF = internal.FeatureTest("BTF", "5.1", func() error {
 })
 
 var haveFuncLinkage = internal.FeatureTest("BTF func linkage", "5.6", func() error {
-	if err := haveBTF(); err != nil {
+	if err := haveMapBTF(); err != nil {
 		return err
 	}
 

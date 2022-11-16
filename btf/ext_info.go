@@ -139,7 +139,15 @@ var nativeEncoderPool = sync.Pool{
 
 // MarshalExtInfos encodes function and line info embedded in insns into kernel
 // wire format.
+//
+// Returns ErrNotSupported if the kernel doesn't support BTF-associated programs.
 func MarshalExtInfos(insns asm.Instructions) (_ *Handle, funcInfos, lineInfos []byte, _ error) {
+	// Bail out early if the kernel doesn't support Func(Proto). If this is the
+	// case, func_info will also be unsupported.
+	if err := haveProgBTF(); err != nil {
+		return nil, nil, nil, err
+	}
+
 	iter := insns.Iterate()
 	for iter.Next() {
 		_, ok := iter.Ins.Source().(*Line)

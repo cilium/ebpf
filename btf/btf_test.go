@@ -401,6 +401,10 @@ func TestHaveMapBTF(t *testing.T) {
 	testutils.CheckFeatureTest(t, haveMapBTF)
 }
 
+func TestHaveProgBTF(t *testing.T) {
+	testutils.CheckFeatureTest(t, haveProgBTF)
+}
+
 func TestHaveFuncLinkage(t *testing.T) {
 	testutils.CheckFeatureTest(t, haveFuncLinkage)
 }

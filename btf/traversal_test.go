@@ -1,10 +1,8 @@
 package btf
 
 import (
-	"encoding/binary"
 	"fmt"
 	"math/rand"
-	"sync"
 	"testing"
 	"time"
 
@@ -45,7 +43,7 @@ func TestPostorderTraversal(t *testing.T) {
 }
 
 func TestPostorderTraversalVmlinux(t *testing.T) {
-	spec := parseVMLinuxTypes(t)
+	spec := vmlinuxTestdataSpec(t)
 
 	typ, err := spec.AnyTypeByName("gov_update_cpu_data")
 	if err != nil {
@@ -76,7 +74,7 @@ func TestPostorderTraversalVmlinux(t *testing.T) {
 }
 
 func BenchmarkPostorderTraversal(b *testing.B) {
-	spec := parseVMLinuxTypes(b)
+	spec := vmlinuxTestdataSpec(b)
 
 	var fn *Func
 	err := spec.TypeByName("gov_update_cpu_data", &fn)
@@ -104,24 +102,4 @@ func BenchmarkPostorderTraversal(b *testing.B) {
 			}
 		})
 	}
-}
-
-var vmlinuxTypes struct {
-	sync.Once
-	spec *Spec
-	err  error
-}
-
-func parseVMLinuxTypes(tb testing.TB) *Spec {
-	tb.Helper()
-
-	vmlinuxTypes.Do(func() {
-		vmlinuxTypes.spec, vmlinuxTypes.err = loadRawSpec(readVMLinux(tb), binary.LittleEndian, nil, nil)
-	})
-
-	if err := vmlinuxTypes.err; err != nil {
-		tb.Fatal("Failed to parse vmlinux types:", err)
-	}
-
-	return vmlinuxTypes.spec.Copy()
 }

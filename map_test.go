@@ -644,6 +644,26 @@ func TestMapLoadPinnedUnpin(t *testing.T) {
 	c.Assert(err, qt.IsNil)
 }
 
+func TestMapPinFinal(t *testing.T) {
+	path := filepath.Join(testutils.TempBPFFS(t), "testMap")
+	c := qt.New(t)
+
+	spec := spec1.Copy()
+
+	m1, err := NewMapWithOptions(spec, MapOptions{PinPath: path, PinPathFinal: true})
+	c.Assert(err, qt.IsNil)
+	defer m1.Close()
+	pinned := m1.IsPinned()
+	c.Assert(pinned, qt.IsTrue)
+
+	m2, err := LoadPinnedMap(path, nil)
+	testutils.SkipIfNotSupported(t, err)
+	c.Assert(err, qt.IsNil)
+	defer m2.Close()
+	pinned = m2.IsPinned()
+	c.Assert(pinned, qt.IsTrue)
+}
+
 func TestMapLoadPinnedWithOptions(t *testing.T) {
 	// Introduced in commit 6e71b04a8224.
 	testutils.SkipOnOldKernel(t, "4.15", "file_flags in BPF_OBJ_GET")

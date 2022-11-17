@@ -14,24 +14,78 @@ import (
 	"github.com/cilium/ebpf/internal/testutils"
 )
 
+// vmlinux caches the result of parsing the running kernel's BTF.
 var vmlinux struct {
 	sync.Once
-	err error
-	raw []byte
+	spec *Spec
+	err  error
 }
 
-func readVMLinux(tb testing.TB) *bytes.Reader {
+func vmlinuxSpec(tb testing.TB) *Spec {
 	tb.Helper()
 
 	vmlinux.Do(func() {
-		vmlinux.raw, vmlinux.err = internal.ReadAllCompressed("testdata/vmlinux.btf.gz")
+		vmlinux.spec, vmlinux.err = LoadKernelSpec()
 	})
+	err := vmlinux.err
 
-	if vmlinux.err != nil {
-		tb.Fatal(vmlinux.err)
+	if errors.Is(err, ErrNotSupported) {
+		tb.Skip(err)
+	}
+	if err != nil {
+		tb.Fatal(err)
 	}
 
-	return bytes.NewReader(vmlinux.raw)
+	return vmlinux.spec.Copy()
+}
+
+// vmlinuxTestdata caches the result of reading and parsing a BTF blob from
+// testdata.
+var vmlinuxTestdata struct {
+	sync.Once
+	raw  []byte
+	spec *Spec
+	err  error
+}
+
+func doVMLinuxTestdata() {
+	b, err := internal.ReadAllCompressed("testdata/vmlinux.btf.gz")
+	if err != nil {
+		vmlinuxTestdata.err = fmt.Errorf("uncompressing vmlinux testdata: %w", err)
+		return
+	}
+	vmlinuxTestdata.raw = b
+
+	s, err := loadRawSpec(bytes.NewReader(b), binary.LittleEndian, nil, nil)
+	if err != nil {
+		vmlinuxTestdata.err = fmt.Errorf("parsing vmlinux testdata types: %w", err)
+		return
+	}
+	vmlinuxTestdata.spec = s
+}
+
+func vmlinuxTestdataReader(tb testing.TB) *bytes.Reader {
+	tb.Helper()
+
+	vmlinuxTestdata.Do(doVMLinuxTestdata)
+
+	if err := vmlinuxTestdata.err; err != nil {
+		tb.Fatal(err)
+	}
+
+	return bytes.NewReader(vmlinuxTestdata.raw)
+}
+
+func vmlinuxTestdataSpec(tb testing.TB) *Spec {
+	tb.Helper()
+
+	vmlinuxTestdata.Do(doVMLinuxTestdata)
+
+	if err := vmlinuxTestdata.err; err != nil {
+		tb.Fatal(err)
+	}
+
+	return vmlinuxTestdata.spec.Copy()
 }
 
 func parseELFBTF(tb testing.TB, file string) *Spec {
@@ -93,7 +147,7 @@ func TestTypeByNameAmbiguous(t *testing.T) {
 }
 
 func TestTypeByName(t *testing.T) {
-	spec, err := LoadSpecFromReader(readVMLinux(t))
+	spec, err := LoadSpecFromReader(vmlinuxTestdataReader(t))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -172,7 +226,7 @@ func TestTypeByName(t *testing.T) {
 }
 
 func BenchmarkParseVmlinux(b *testing.B) {
-	rd := readVMLinux(b)
+	rd := vmlinuxTestdataReader(b)
 	b.ReportAllocs()
 	b.ResetTimer()
 
@@ -275,8 +329,8 @@ func TestLoadSpecFromElf(t *testing.T) {
 		}
 
 		t.Run("Handle", func(t *testing.T) {
+			testutils.SkipIfNotSupported(t, haveMapBTF())
 			btf, err := NewHandle(spec)
-			testutils.SkipIfNotSupported(t, err)
 			if err != nil {
 				t.Fatal("Can't load BTF:", err)
 			}
@@ -311,7 +365,7 @@ func TestLoadKernelSpec(t *testing.T) {
 }
 
 func TestGuessBTFByteOrder(t *testing.T) {
-	bo := guessRawBTFByteOrder(readVMLinux(t))
+	bo := guessRawBTFByteOrder(vmlinuxTestdataReader(t))
 	if bo != binary.LittleEndian {
 		t.Fatalf("Guessed %s instead of %s", bo, binary.LittleEndian)
 	}
@@ -343,6 +397,14 @@ func TestHaveBTF(t *testing.T) {
 	testutils.CheckFeatureTest(t, haveBTF)
 }
 
+func TestHaveMapBTF(t *testing.T) {
+	testutils.CheckFeatureTest(t, haveMapBTF)
+}
+
+func TestHaveProgBTF(t *testing.T) {
+	testutils.CheckFeatureTest(t, haveProgBTF)
+}
+
 func TestHaveFuncLinkage(t *testing.T) {
 	testutils.CheckFeatureTest(t, haveFuncLinkage)
 }
@@ -364,7 +426,7 @@ func ExampleSpec_TypeByName() {
 }
 
 func TestTypesIterator(t *testing.T) {
-	spec, err := LoadSpecFromReader(readVMLinux(t))
+	spec, err := LoadSpecFromReader(vmlinuxTestdataReader(t))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -399,7 +461,7 @@ func TestTypesIterator(t *testing.T) {
 }
 
 func TestLoadSplitSpecFromReader(t *testing.T) {
-	spec, err := LoadSpecFromReader(readVMLinux(t))
+	spec, err := LoadSpecFromReader(vmlinuxTestdataReader(t))
 	if err != nil {
 		t.Fatal(err)
 	}

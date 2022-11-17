@@ -1261,6 +1261,10 @@ func (m *Map) unmarshalValue(value interface{}, buf []byte) error {
 	return unmarshalBytes(value, buf)
 }
 
+func (m *Map) IsCompatibleWith(spec *MapSpec) error {
+	return spec.checkCompatibility(m)
+}
+
 // LoadPinnedMap loads a Map from a BPF file.
 func LoadPinnedMap(fileName string, opts *LoadPinOptions) (*Map, error) {
 	fd, err := sys.ObjGet(&sys.ObjGetAttr{

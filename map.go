@@ -154,7 +154,7 @@ type MapKV struct {
 	Value interface{}
 }
 
-func (ms *MapSpec) checkCompatibility(m *Map) error {
+func (ms *MapSpec) Compatible(m *Map) error {
 	switch {
 	case m.typ != ms.Type:
 		return fmt.Errorf("expected type %v, got %v: %w", ms.Type, m.typ, ErrMapIncompatible)
@@ -277,7 +277,7 @@ func newMapWithOptions(spec *MapSpec, opts MapOptions) (_ *Map, err error) {
 		}
 		defer closeOnError(m)
 
-		if err := spec.checkCompatibility(m); err != nil {
+		if err := spec.Compatible(m); err != nil {
 			return nil, fmt.Errorf("use pinned map %s: %w", spec.Name, err)
 		}
 

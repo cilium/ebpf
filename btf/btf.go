@@ -11,6 +11,7 @@ import (
 	"math"
 	"os"
 	"reflect"
+	"sync"
 
 	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/sys"
@@ -263,24 +264,71 @@ func indexTypes(types []Type, typeIDOffset TypeID) (map[Type]TypeID, map[essenti
 // Defaults to /sys/kernel/btf/vmlinux and falls back to scanning the file system
 // for vmlinux ELFs. Returns an error wrapping ErrNotSupported if BTF is not enabled.
 func LoadKernelSpec() (*Spec, error) {
+	spec, _, err := loadKernelSpec()
+	return spec, err
+}
+
+var kernelBTF struct {
+	sync.RWMutex
+	spec *Spec
+	// True if the spec was read from an ELF instead of raw BTF in /sys.
+	fallback bool
+}
+
+// ClearCachedKernelSpec flushes any cached kernel type information.
+func ClearCachedKernelSpec() {
+	kernelBTF.Lock()
+	defer kernelBTF.Unlock()
+
+	kernelBTF.spec, kernelBTF.fallback = nil, false
+}
+
+func loadKernelSpec() (*Spec, bool, error) {
+	kernelBTF.RLock()
+	spec, fallback := kernelBTF.spec, kernelBTF.fallback
+	kernelBTF.RUnlock()
+
+	if spec == nil {
+		kernelBTF.Lock()
+		defer kernelBTF.Unlock()
+
+		spec, fallback = kernelBTF.spec, kernelBTF.fallback
+	}
+
+	if spec != nil {
+		return spec.Copy(), fallback, nil
+	}
+
+	spec, fallback, err := loadKernelSpecUncached()
+	if err != nil {
+		return nil, false, err
+	}
+
+	kernelBTF.spec, kernelBTF.fallback = spec, fallback
+	return spec.Copy(), fallback, nil
+}
+
+func loadKernelSpecUncached() (_ *Spec, fallback bool, _ error) {
 	fh, err := os.Open("/sys/kernel/btf/vmlinux")
 	if err == nil {
 		defer fh.Close()
 
-		return loadRawSpec(fh, internal.NativeEndian, nil, nil)
+		spec, err := loadRawSpec(fh, internal.NativeEndian, nil, nil)
+		return spec, false, err
 	}
 
-	file, err := findVMLinux()
+	file, err := findLinuxELF()
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	defer file.Close()
 
-	return loadSpecFromELF(file)
+	spec, err := loadSpecFromELF(file)
+	return spec, true, err
 }
 
-// findVMLinux scans multiple well-known paths for vmlinux kernel images.
-func findVMLinux() (*internal.SafeELFFile, error) {
+// findLinuxELF scans multiple well-known paths for vmlinux kernel images.
+func findLinuxELF() (*internal.SafeELFFile, error) {
 	release, err := internal.KernelRelease()
 	if err != nil {
 		return nil, err

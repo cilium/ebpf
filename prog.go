@@ -849,7 +849,7 @@ func findTargetInKernel(name string, progType ProgramType, attachType AttachType
 	// maybeLoadKernelBTF may return external BTF if /sys/... is not available.
 	// Ideally we shouldn't use external BTF here, since we might try to use
 	// it for parsing kmod split BTF later on. That seems unlikely to work.
-	spec, err := maybeLoadKernelBTF(nil)
+	spec, err := btf.LoadKernelSpec()
 	if err != nil {
 		return nil, 0, fmt.Errorf("load kernel spec: %w", err)
 	}

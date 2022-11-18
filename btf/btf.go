@@ -32,7 +32,7 @@ type ID = sys.BTFID
 
 // Spec represents decoded BTF.
 type Spec struct {
-	// Data from .BTF.
+	// String table from ELF used to decode split BTF, may be nil.
 	strings *stringTable
 
 	// All types contained by the spec, not including types from the base in
@@ -46,6 +46,7 @@ type Spec struct {
 	// Includes all struct flavors and types with the same name.
 	namedTypes map[essentialName][]Type
 
+	// Byte order of the ELF we decoded the spec from, may be nil.
 	byteOrder binary.ByteOrder
 }
 
@@ -94,7 +95,7 @@ func LoadSpecFromReader(rd io.ReaderAt) (*Spec, error) {
 	file, err := internal.NewSafeELFFile(rd)
 	if err != nil {
 		if bo := guessRawBTFByteOrder(rd); bo != nil {
-			return loadRawSpec(io.NewSectionReader(rd, 0, math.MaxInt64), bo, nil, nil)
+			return loadRawSpec(io.NewSectionReader(rd, 0, math.MaxInt64), bo, nil)
 		}
 
 		return nil, err
@@ -198,7 +199,7 @@ func loadSpecFromELF(file *internal.SafeELFFile) (*Spec, error) {
 		return nil, fmt.Errorf("compressed BTF is not supported")
 	}
 
-	spec, err := loadRawSpec(btfSection.ReaderAt, file.ByteOrder, nil, nil)
+	spec, err := loadRawSpec(btfSection.ReaderAt, file.ByteOrder, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -211,8 +212,17 @@ func loadSpecFromELF(file *internal.SafeELFFile) (*Spec, error) {
 	return spec, nil
 }
 
-func loadRawSpec(btf io.ReaderAt, bo binary.ByteOrder,
-	baseTypes types, baseStrings *stringTable) (*Spec, error) {
+func loadRawSpec(btf io.ReaderAt, bo binary.ByteOrder, base *Spec) (*Spec, error) {
+	var baseStrings *stringTable
+	var baseTypes types
+	if base != nil {
+		baseStrings = base.strings
+		baseTypes = base.types
+
+		if baseStrings == nil {
+			return nil, fmt.Errorf("can't parse split BTF from Spec without string table")
+		}
+	}
 
 	rawTypes, rawStrings, err := parseBTF(btf, bo, baseStrings)
 	if err != nil {
@@ -313,7 +323,7 @@ func loadKernelSpec() (_ *Spec, fallback bool, _ error) {
 	if err == nil {
 		defer fh.Close()
 
-		spec, err := loadRawSpec(fh, internal.NativeEndian, nil, nil)
+		spec, err := loadRawSpec(fh, internal.NativeEndian, nil)
 		return spec, false, err
 	}
 
@@ -638,7 +648,11 @@ func (s *Spec) firstTypeID() TypeID {
 // Types from base are used to resolve references in the split BTF.
 // The returned Spec only contains types from the split BTF, not from the base.
 func LoadSplitSpecFromReader(r io.ReaderAt, base *Spec) (*Spec, error) {
-	return loadRawSpec(r, internal.NativeEndian, base.types, base.strings)
+	if base == nil {
+		return nil, errors.New("load split spec: missing base")
+	}
+
+	return loadRawSpec(r, internal.NativeEndian, base)
 }
 
 // TypesIterator iterates over types of a given spec.

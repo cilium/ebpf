@@ -49,7 +49,7 @@ func doVMLinuxTestdata() {
 	}
 	vmlinuxTestdata.raw = b
 
-	s, err := loadRawSpec(bytes.NewReader(b), binary.LittleEndian, nil, nil)
+	s, err := loadRawSpec(bytes.NewReader(b), binary.LittleEndian, nil)
 	if err != nil {
 		vmlinuxTestdata.err = fmt.Errorf("parsing vmlinux testdata types: %w", err)
 		return
@@ -228,7 +228,7 @@ func BenchmarkParseVmlinux(b *testing.B) {
 			b.Fatal(err)
 		}
 
-		if _, err := loadRawSpec(rd, binary.LittleEndian, nil, nil); err != nil {
+		if _, err := loadRawSpec(rd, binary.LittleEndian, nil); err != nil {
 			b.Fatal("Can't load BTF:", err)
 		}
 	}

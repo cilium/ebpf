@@ -30,26 +30,21 @@ func NewHandle(spec *Spec) (*Handle, error) {
 		return nil, fmt.Errorf("can't load %s BTF on %s", spec.byteOrder, internal.NativeEndian)
 	}
 
-	var stb *stringTableBuilder
-	if spec.strings != nil {
-		stb = newStringTableBuilderFromTable(spec.strings)
+	if spec.firstTypeID() != 0 {
+		return nil, fmt.Errorf("kernel doesn't support loading split BTF")
 	}
 
-	enc := newEncoder(kernelEncoderOptions, stb)
+	buf := bufferPool.Get().(*bytes.Buffer)
+	defer bufferPool.Put(buf)
 
-	for _, typ := range spec.types {
-		_, err := enc.Add(typ)
-		if err != nil {
-			return nil, fmt.Errorf("add %s: %w", typ, err)
-		}
-	}
+	buf.Reset()
 
-	btf, err := enc.Encode()
+	err := marshalTypes(buf, spec, nil, kernelMarshalOptions)
 	if err != nil {
 		return nil, fmt.Errorf("marshal BTF: %w", err)
 	}
 
-	return newHandleFromRawBTF(btf)
+	return newHandleFromRawBTF(buf.Bytes())
 }
 
 func newHandleFromRawBTF(btf []byte) (*Handle, error) {

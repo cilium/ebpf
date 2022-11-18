@@ -31,7 +31,7 @@ type ID = sys.BTFID
 
 // Spec represents decoded BTF.
 type Spec struct {
-	// Data from .BTF.
+	// String table from ELF used to decode split BTF, may be nil.
 	strings *stringTable
 
 	// All types contained by the spec. For the base type, the position of
@@ -45,6 +45,7 @@ type Spec struct {
 	// Includes all struct flavors and types with the same name.
 	namedTypes map[essentialName][]Type
 
+	// Byte order of the ELF we decoded the spec from, may be nil.
 	byteOrder binary.ByteOrder
 }
 
@@ -93,7 +94,7 @@ func LoadSpecFromReader(rd io.ReaderAt) (*Spec, error) {
 	file, err := internal.NewSafeELFFile(rd)
 	if err != nil {
 		if bo := guessRawBTFByteOrder(rd); bo != nil {
-			return loadRawSpec(io.NewSectionReader(rd, 0, math.MaxInt64), bo, nil, nil)
+			return loadRawSpec(io.NewSectionReader(rd, 0, math.MaxInt64), bo, nil)
 		}
 
 		return nil, err
@@ -210,8 +211,17 @@ func loadSpecFromELF(file *internal.SafeELFFile) (*Spec, error) {
 	return spec, nil
 }
 
-func loadRawSpec(btf io.ReaderAt, bo binary.ByteOrder,
-	baseTypes types, baseStrings *stringTable) (*Spec, error) {
+func loadRawSpec(btf io.ReaderAt, bo binary.ByteOrder, base *Spec) (*Spec, error) {
+	var baseStrings *stringTable
+	var baseTypes types
+	if base != nil {
+		baseStrings = base.strings
+		baseTypes = base.types
+
+		if baseStrings == nil {
+			return nil, fmt.Errorf("can't parse split BTF from Spec without string table")
+		}
+	}
 
 	rawTypes, rawStrings, err := parseBTF(btf, bo, baseStrings)
 	if err != nil {
@@ -267,7 +277,7 @@ func LoadKernelSpec() (*Spec, error) {
 	if err == nil {
 		defer fh.Close()
 
-		return loadRawSpec(fh, internal.NativeEndian, nil, nil)
+		return loadRawSpec(fh, internal.NativeEndian, nil)
 	}
 
 	file, err := findVMLinux()
@@ -579,7 +589,11 @@ func (s *Spec) TypeByName(name string, typ interface{}) error {
 // Types from base are used to resolve references in the split BTF.
 // The returned Spec only contains types from the split BTF, not from the base.
 func LoadSplitSpecFromReader(r io.ReaderAt, base *Spec) (*Spec, error) {
-	return loadRawSpec(r, internal.NativeEndian, base.types, base.strings)
+	if base == nil {
+		return nil, errors.New("load split spec: missing base")
+	}
+
+	return loadRawSpec(r, internal.NativeEndian, base)
 }
 
 // TypesIterator iterates over types of a given spec.
@@ -622,7 +636,12 @@ func NewHandle(spec *Spec) (*Handle, error) {
 		return nil, fmt.Errorf("can't load %s BTF on %s", spec.byteOrder, internal.NativeEndian)
 	}
 
-	enc := newEncoder(kernelEncoderOptions, newStringTableBuilderFromTable(spec.strings))
+	var stb *stringTableBuilder
+	if spec.strings != nil {
+		stb = newStringTableBuilderFromTable(spec.strings)
+	}
+
+	enc := newEncoder(kernelEncoderOptions, stb)
 
 	for _, typ := range spec.types {
 		_, err := enc.Add(typ)
@@ -707,14 +726,7 @@ func (h *Handle) Spec(base *Spec) (*Spec, error) {
 		return nil, err
 	}
 
-	var baseTypes types
-	var baseStrings *stringTable
-	if base != nil {
-		baseTypes = base.types
-		baseStrings = base.strings
-	}
-
-	return loadRawSpec(bytes.NewReader(btfBuffer), internal.NativeEndian, baseTypes, baseStrings)
+	return loadRawSpec(bytes.NewReader(btfBuffer), internal.NativeEndian, base)
 }
 
 // Close destroys the handle.

@@ -582,7 +582,14 @@ func (s *Spec) Add(typ Type) (TypeID, error) {
 // Returns an error wrapping ErrNotFound if a Type with the given ID
 // does not exist in the Spec.
 func (s *Spec) TypeByID(id TypeID) (Type, error) {
-	return s.types.ByID(id)
+	firstID := s.firstTypeID()
+	i := int(id - firstID)
+
+	if id < firstID || i >= len(s.types) {
+		return nil, fmt.Errorf("type ID %d: %w", id, ErrNotFound)
+	}
+
+	return s.types[i], nil
 }
 
 // TypeID returns the ID for a given Type.

@@ -464,6 +464,11 @@ func TestLoadSplitSpecFromReader(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
+	typeByID, err := splitSpec.TypeByID(typeID)
+	qt.Assert(t, err, qt.IsNil)
+	qt.Assert(t, typeByID, qt.Equals, typ)
+
 	fnType := typ.(*Func)
 	fnProto := fnType.Type.(*FuncProto)
 

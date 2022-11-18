@@ -242,6 +242,10 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions) (*Program, er
 	copy(insns, spec.Instructions)
 
 	handle, fib, lib, err := btf.MarshalExtInfos(insns)
+	if err != nil {
+		return nil, fmt.Errorf("marshal ext_infos: %w", err)
+	}
+
 	btfDisabled := errors.Is(err, btf.ErrNotSupported)
 	if err != nil && !btfDisabled {
 		return nil, fmt.Errorf("load ext_infos: %w", err)

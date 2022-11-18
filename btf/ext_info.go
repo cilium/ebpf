@@ -8,7 +8,6 @@ import (
 	"io"
 	"math"
 	"sort"
-	"sync"
 
 	"github.com/cilium/ebpf/asm"
 	"github.com/cilium/ebpf/internal"
@@ -131,12 +130,6 @@ func (ei *ExtInfos) Assign(insns asm.Instructions, section string) {
 	}
 }
 
-var nativeEncoderPool = sync.Pool{
-	New: func() any {
-		return newEncoder(kernelEncoderOptions, nil)
-	},
-}
-
 // MarshalExtInfos encodes function and line info embedded in insns into kernel
 // wire format.
 func MarshalExtInfos(insns asm.Instructions) (_ *Handle, funcInfos, lineInfos []byte, _ error) {
@@ -149,15 +142,11 @@ func MarshalExtInfos(insns asm.Instructions) (_ *Handle, funcInfos, lineInfos []
 		}
 	}
 
-	// Avoid allocating encoder, etc. if there is no BTF at all.
 	return nil, nil, nil, nil
 
 marshal:
-	enc := nativeEncoderPool.Get().(*encoder)
-	defer nativeEncoderPool.Put(enc)
-
-	enc.Reset()
-
+	stb := newStringTableBuilder(0)
+	var spec Spec
 	var fiBuf, liBuf bytes.Buffer
 	for {
 		if fn := FuncMetadata(iter.Ins); fn != nil {
@@ -165,7 +154,7 @@ marshal:
 				fn:     fn,
 				offset: iter.Offset,
 			}
-			if err := fi.marshal(&fiBuf, enc); err != nil {
+			if err := fi.marshal(&fiBuf, &spec); err != nil {
 				return nil, nil, nil, fmt.Errorf("write func info: %w", err)
 			}
 		}
@@ -175,7 +164,7 @@ marshal:
 				line:   line,
 				offset: iter.Offset,
 			}
-			if err := li.marshal(&liBuf, enc.strings); err != nil {
+			if err := li.marshal(&liBuf, stb); err != nil {
 				return nil, nil, nil, fmt.Errorf("write line info: %w", err)
 			}
 		}
@@ -185,12 +174,17 @@ marshal:
 		}
 	}
 
-	btf, err := enc.Encode()
+	buf := bufferPool.Get().(*bytes.Buffer)
+	defer bufferPool.Put(buf)
+
+	buf.Reset()
+
+	err := marshalTypes(buf, &spec, stb, kernelMarshalOptions)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, fmt.Errorf("marshal BTF: %w", err)
 	}
 
-	handle, err := newHandleFromRawBTF(btf)
+	handle, err := newHandleFromRawBTF(buf.Bytes())
 	return handle, fiBuf.Bytes(), liBuf.Bytes(), err
 }
 
@@ -384,8 +378,8 @@ func newFuncInfos(bfis []bpfFuncInfo, ts types) ([]funcInfo, error) {
 }
 
 // marshal into the BTF wire format.
-func (fi *funcInfo) marshal(w *bytes.Buffer, enc *encoder) error {
-	id, err := enc.Add(fi.fn)
+func (fi *funcInfo) marshal(w *bytes.Buffer, spec *Spec) error {
+	id, err := spec.Add(fi.fn)
 	if err != nil {
 		return err
 	}
@@ -396,8 +390,8 @@ func (fi *funcInfo) marshal(w *bytes.Buffer, enc *encoder) error {
 	buf := make([]byte, FuncInfoSize)
 	internal.NativeEndian.PutUint32(buf, bfi.InsnOff)
 	internal.NativeEndian.PutUint32(buf[4:], uint32(bfi.TypeID))
-	_, err = w.Write(buf)
-	return err
+	w.Write(buf)
+	return nil
 }
 
 // parseLineInfos parses a func_info sub-section within .BTF.ext ito a map of
@@ -582,8 +576,8 @@ func (li *lineInfo) marshal(w *bytes.Buffer, stb *stringTableBuilder) error {
 	internal.NativeEndian.PutUint32(buf[4:], bli.FileNameOff)
 	internal.NativeEndian.PutUint32(buf[8:], bli.LineOff)
 	internal.NativeEndian.PutUint32(buf[12:], bli.LineCol)
-	_, err = w.Write(buf)
-	return err
+	w.Write(buf)
+	return nil
 }
 
 // parseLineInfos parses a line_info sub-section within .BTF.ext ito a map of

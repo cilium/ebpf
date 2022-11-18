@@ -30,11 +30,11 @@ var (
 // ID represents the unique ID of a BTF object.
 type ID = sys.BTFID
 
-// Spec represents decoded BTF.
+// Spec allows querying a set of Types and loading the set into the
+// kernel.
+//
+// A zero value represents an empty set.
 type Spec struct {
-	// String table from ELF used to decode split BTF, may be nil.
-	strings *stringTable
-
 	// All types contained by the spec. For the base type, the position of
 	// a type in the slice is its ID.
 	types types
@@ -42,9 +42,15 @@ type Spec struct {
 	// Type IDs indexed by type.
 	typeIDs map[Type]TypeID
 
+	// The last allocated type ID.
+	lastTypeID TypeID
+
 	// Types indexed by essential name.
 	// Includes all struct flavors and types with the same name.
 	namedTypes map[essentialName][]Type
+
+	// String table from ELF, may be nil.
+	strings *stringTable
 
 	// Byte order of the ELF we decoded the spec from, may be nil.
 	byteOrder binary.ByteOrder
@@ -240,18 +246,19 @@ func inflateSpec(rawTypes []rawType, rawStrings *stringTable, bo binary.ByteOrde
 		return nil, err
 	}
 
-	typeIDs, typesByName := indexTypes(types, TypeID(len(baseTypes)))
+	typeIDs, typesByName, lastTypeID := indexTypes(types, TypeID(len(baseTypes)))
 
 	return &Spec{
 		namedTypes: typesByName,
 		typeIDs:    typeIDs,
 		types:      types,
+		lastTypeID: lastTypeID,
 		strings:    rawStrings,
 		byteOrder:  bo,
 	}, nil
 }
 
-func indexTypes(types []Type, typeIDOffset TypeID) (map[Type]TypeID, map[essentialName][]Type) {
+func indexTypes(types []Type, typeIDOffset TypeID) (map[Type]TypeID, map[essentialName][]Type, TypeID) {
 	namedTypes := 0
 	for _, typ := range types {
 		if typ.TypeName() != "" {
@@ -265,14 +272,16 @@ func indexTypes(types []Type, typeIDOffset TypeID) (map[Type]TypeID, map[essenti
 	typeIDs := make(map[Type]TypeID, len(types))
 	typesByName := make(map[essentialName][]Type, namedTypes)
 
+	var lastTypeID TypeID
 	for i, typ := range types {
 		if name := newEssentialName(typ.TypeName()); name != "" {
 			typesByName[name] = append(typesByName[name], typ)
 		}
-		typeIDs[typ] = TypeID(i) + typeIDOffset
+		lastTypeID = TypeID(i) + typeIDOffset
+		typeIDs[typ] = lastTypeID
 	}
 
-	return typeIDs, typesByName
+	return typeIDs, typesByName, lastTypeID
 }
 
 // LoadKernelSpec returns the current kernel's BTF information.
@@ -503,19 +512,15 @@ func fixupDatasec(rawTypes []rawType, rawStrings *stringTable, sectionSizes map[
 // Copy creates a copy of Spec.
 func (s *Spec) Copy() *Spec {
 	types := copyTypes(s.types, nil)
-
-	typeIDOffset := TypeID(0)
-	if len(s.types) != 0 {
-		typeIDOffset = s.typeIDs[s.types[0]]
-	}
-	typeIDs, typesByName := indexTypes(types, typeIDOffset)
+	typeIDs, typesByName, lastTypeID := indexTypes(types, s.firstTypeID())
 
 	// NB: Other parts of spec are not copied since they are immutable.
 	return &Spec{
-		s.strings,
 		types,
 		typeIDs,
+		lastTypeID,
 		typesByName,
+		s.strings,
 		s.byteOrder,
 	}
 }
@@ -528,6 +533,48 @@ func (sw sliceWriter) Write(p []byte) (int, error) {
 	}
 
 	return copy(sw, p), nil
+}
+
+// Add a Type.
+//
+// Adding the same Type multiple times is valid and will return a stable ID.
+func (s *Spec) Add(typ Type) (TypeID, error) {
+	hasID := func(t Type) (skip bool) {
+		_, isVoid := t.(*Void)
+		_, alreadyEncoded := s.typeIDs[t]
+		return isVoid || alreadyEncoded
+	}
+
+	if s.typeIDs == nil {
+		s.typeIDs = make(map[Type]TypeID)
+	}
+
+	if s.types == nil {
+		s.types = []Type{(*Void)(nil)}
+		s.typeIDs[(*Void)(nil)] = 0
+	}
+
+	if s.namedTypes == nil {
+		s.namedTypes = make(map[essentialName][]Type)
+	}
+
+	iter := postorderTraversal(typ, hasID)
+	for iter.Next() {
+		id := s.lastTypeID + 1
+		if id < s.lastTypeID {
+			return 0, fmt.Errorf("type ID overflow")
+		}
+
+		s.typeIDs[iter.Type] = id
+		s.types = append(s.types, iter.Type)
+		s.lastTypeID = id
+
+		if name := newEssentialName(iter.Type.TypeName()); name != "" {
+			s.namedTypes[name] = append(s.namedTypes[name], iter.Type)
+		}
+	}
+
+	return s.TypeID(typ)
 }
 
 // TypeByID returns the BTF Type with the given type ID.
@@ -655,6 +702,14 @@ func (s *Spec) TypeByName(name string, typ interface{}) error {
 	typPtr.Set(reflect.ValueOf(candidate))
 
 	return nil
+}
+
+// firstTypeID returns the first type ID or zero.
+func (s *Spec) firstTypeID() TypeID {
+	if len(s.types) > 0 {
+		return s.typeIDs[s.types[0]]
+	}
+	return 0
 }
 
 // LoadSplitSpecFromReader loads split BTF from a reader.

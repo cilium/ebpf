@@ -12,6 +12,7 @@ import (
 
 	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/testutils"
+	qt "github.com/frankban/quicktest"
 )
 
 var vmlinux struct {
@@ -171,6 +172,41 @@ func TestTypeByName(t *testing.T) {
 	}
 }
 
+func TestSpecAdd(t *testing.T) {
+	i := &Int{
+		Name:     "foo",
+		Size:     2,
+		Encoding: Signed | Char,
+	}
+
+	var s Spec
+	id, err := s.Add(i)
+	qt.Assert(t, err, qt.IsNil)
+	qt.Assert(t, id, qt.Equals, TypeID(1), qt.Commentf("First non-void type doesn't get id 1"))
+	id, err = s.Add(i)
+	qt.Assert(t, err, qt.IsNil)
+	qt.Assert(t, id, qt.Equals, TypeID(1), qt.Commentf("Adding a type twice returns different ids"))
+
+	id, err = s.TypeID(i)
+	qt.Assert(t, err, qt.IsNil)
+	qt.Assert(t, id, qt.Equals, TypeID(1))
+
+	id, err = s.Add(&Pointer{i})
+	qt.Assert(t, err, qt.IsNil)
+	qt.Assert(t, id, qt.Equals, TypeID(2))
+
+	id, err = s.Add(&Typedef{"baz", i})
+	qt.Assert(t, err, qt.IsNil)
+	qt.Assert(t, id, qt.Equals, TypeID(3))
+
+	typ, err := s.AnyTypeByName("foo")
+	qt.Assert(t, err, qt.IsNil)
+	qt.Assert(t, typ, qt.Equals, i)
+
+	_, err = s.AnyTypeByName("baz")
+	qt.Assert(t, err, qt.IsNil)
+}
+
 func BenchmarkParseVmlinux(b *testing.B) {
 	rd := readVMLinux(b)
 	b.ReportAllocs()
@@ -286,8 +322,13 @@ func TestLoadSpecFromElf(t *testing.T) {
 }
 
 func TestVerifierError(t *testing.T) {
-	btf, _ := newEncoder(kernelEncoderOptions, nil).Encode()
-	_, err := newHandleFromRawBTF(btf)
+	var buf bytes.Buffer
+	err := marshalTypes(&buf, &Spec{}, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = newHandleFromRawBTF(buf.Bytes())
 	testutils.SkipIfNotSupported(t, err)
 	var ve *internal.VerifierError
 	if !errors.As(err, &ve) {

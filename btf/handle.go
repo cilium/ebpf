@@ -30,7 +30,12 @@ func NewHandle(spec *Spec) (*Handle, error) {
 		return nil, fmt.Errorf("can't load %s BTF on %s", spec.byteOrder, internal.NativeEndian)
 	}
 
-	enc := newEncoder(kernelEncoderOptions, newStringTableBuilderFromTable(spec.strings))
+	var stb *stringTableBuilder
+	if spec.strings != nil {
+		stb = newStringTableBuilderFromTable(spec.strings)
+	}
+
+	enc := newEncoder(kernelEncoderOptions, stb)
 
 	for _, typ := range spec.types {
 		_, err := enc.Add(typ)
@@ -114,7 +119,7 @@ func (h *Handle) Spec() (*Spec, error) {
 	}
 
 	if !h.needsKernelBase {
-		return loadRawSpec(bytes.NewReader(btfBuffer), internal.NativeEndian, nil, nil)
+		return loadRawSpec(bytes.NewReader(btfBuffer), internal.NativeEndian, nil)
 	}
 
 	base, fallback, err := kernelSpec()
@@ -126,7 +131,7 @@ func (h *Handle) Spec() (*Spec, error) {
 		return nil, fmt.Errorf("can't load split BTF without access to /sys")
 	}
 
-	return loadRawSpec(bytes.NewReader(btfBuffer), internal.NativeEndian, base.types, base.strings)
+	return loadRawSpec(bytes.NewReader(btfBuffer), internal.NativeEndian, base)
 }
 
 // Close destroys the handle.

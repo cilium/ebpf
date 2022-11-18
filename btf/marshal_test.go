@@ -32,7 +32,7 @@ func TestBuild(t *testing.T) {
 	raw, err := enc.Encode()
 	qt.Assert(t, err, qt.IsNil, qt.Commentf("Build returned an error"))
 
-	spec, err := loadRawSpec(bytes.NewReader(raw), internal.NativeEndian, nil, nil)
+	spec, err := loadRawSpec(bytes.NewReader(raw), internal.NativeEndian, nil)
 	qt.Assert(t, err, qt.IsNil, qt.Commentf("Couldn't parse BTF"))
 
 	have, err := spec.AnyTypeByName("foo")
@@ -71,7 +71,7 @@ func TestRoundtripVMlinux(t *testing.T) {
 	raw, err := b.Encode()
 	qt.Assert(t, err, qt.IsNil, qt.Commentf("build BTF"))
 
-	rebuilt, err := loadRawSpec(bytes.NewReader(raw), binary.LittleEndian, nil, nil)
+	rebuilt, err := loadRawSpec(bytes.NewReader(raw), binary.LittleEndian, nil)
 	qt.Assert(t, err, qt.IsNil, qt.Commentf("round tripping BTF failed"))
 
 	h, err := NewHandle(rebuilt)

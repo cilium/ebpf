@@ -33,7 +33,7 @@ type ID = sys.BTFID
 
 // Spec represents decoded BTF.
 type Spec struct {
-	// Data from .BTF.
+	// String table from ELF used to decode split BTF, may be nil.
 	strings *stringTable
 
 	// All types contained by the spec, not including types from the base in
@@ -47,6 +47,7 @@ type Spec struct {
 	// Includes all struct flavors and types with the same name.
 	namedTypes map[essentialName][]Type
 
+	// Byte order of the ELF we decoded the spec from, may be nil.
 	byteOrder binary.ByteOrder
 }
 
@@ -214,7 +215,6 @@ func loadSpecFromELF(file *internal.SafeELFFile) (*Spec, error) {
 
 func loadRawSpec(btf io.ReaderAt, bo binary.ByteOrder,
 	baseTypes types, baseStrings *stringTable) (*Spec, error) {
-
 	rawTypes, rawStrings, err := parseBTF(btf, bo, baseStrings)
 	if err != nil {
 		return nil, err
@@ -638,6 +638,10 @@ func (s *Spec) firstTypeID() TypeID {
 // Types from base are used to resolve references in the split BTF.
 // The returned Spec only contains types from the split BTF, not from the base.
 func LoadSplitSpecFromReader(r io.ReaderAt, base *Spec) (*Spec, error) {
+	if base.strings == nil {
+		return nil, fmt.Errorf("parse split BTF: base must be loaded from an ELF")
+	}
+
 	return loadRawSpec(r, internal.NativeEndian, base.types, base.strings)
 }
 

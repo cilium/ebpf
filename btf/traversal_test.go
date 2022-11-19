@@ -116,7 +116,7 @@ func parseVMLinuxTypes(tb testing.TB) *Spec {
 	tb.Helper()
 
 	vmlinuxTypes.Do(func() {
-		vmlinuxTypes.spec, vmlinuxTypes.err = loadRawSpec(readVMLinux(tb), binary.LittleEndian, nil, nil)
+		vmlinuxTypes.spec, vmlinuxTypes.err = loadRawSpec(readVMLinux(tb), binary.LittleEndian, nil)
 	})
 
 	if err := vmlinuxTypes.err; err != nil {

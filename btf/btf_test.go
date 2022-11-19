@@ -12,6 +12,7 @@ import (
 
 	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/testutils"
+	qt "github.com/frankban/quicktest"
 )
 
 var vmlinux struct {
@@ -171,6 +172,41 @@ func TestTypeByName(t *testing.T) {
 	}
 }
 
+func TestSpecAdd(t *testing.T) {
+	i := &Int{
+		Name:     "foo",
+		Size:     2,
+		Encoding: Signed | Char,
+	}
+
+	var s Spec
+	id, err := s.Add(i)
+	qt.Assert(t, err, qt.IsNil)
+	qt.Assert(t, id, qt.Equals, TypeID(1), qt.Commentf("First non-void type doesn't get id 1"))
+	id, err = s.Add(i)
+	qt.Assert(t, err, qt.IsNil)
+	qt.Assert(t, id, qt.Equals, TypeID(1), qt.Commentf("Adding a type twice returns different ids"))
+
+	id, err = s.TypeID(i)
+	qt.Assert(t, err, qt.IsNil)
+	qt.Assert(t, id, qt.Equals, TypeID(1))
+
+	id, err = s.Add(&Pointer{i})
+	qt.Assert(t, err, qt.IsNil)
+	qt.Assert(t, id, qt.Equals, TypeID(2))
+
+	id, err = s.Add(&Typedef{"baz", i})
+	qt.Assert(t, err, qt.IsNil)
+	qt.Assert(t, id, qt.Equals, TypeID(3))
+
+	typ, err := s.AnyTypeByName("foo")
+	qt.Assert(t, err, qt.IsNil)
+	qt.Assert(t, typ, qt.Equals, i)
+
+	_, err = s.AnyTypeByName("baz")
+	qt.Assert(t, err, qt.IsNil)
+}
+
 func BenchmarkParseVmlinux(b *testing.B) {
 	rd := readVMLinux(b)
 	b.ReportAllocs()
@@ -181,7 +217,7 @@ func BenchmarkParseVmlinux(b *testing.B) {
 			b.Fatal(err)
 		}
 
-		if _, err := loadRawSpec(rd, binary.LittleEndian, nil, nil); err != nil {
+		if _, err := loadRawSpec(rd, binary.LittleEndian, nil); err != nil {
 			b.Fatal("Can't load BTF:", err)
 		}
 	}
@@ -212,8 +248,8 @@ func TestParseCurrentKernelBTF(t *testing.T) {
 	t.Logf("Average string size: %.0f", float64(totalBytes)/float64(len(spec.strings.strings)))
 }
 
-func TestFindVMLinux(t *testing.T) {
-	file, err := findVMLinux()
+func TestFindLinuxELF(t *testing.T) {
+	file, err := findLinuxELF()
 	testutils.SkipIfNotSupported(t, err)
 	if err != nil {
 		t.Fatal("Can't find vmlinux:", err)
@@ -286,8 +322,13 @@ func TestLoadSpecFromElf(t *testing.T) {
 }
 
 func TestVerifierError(t *testing.T) {
-	btf, _ := newEncoder(kernelEncoderOptions, nil).Encode()
-	_, err := newHandleFromRawBTF(btf)
+	var buf bytes.Buffer
+	err := marshalTypes(&buf, &Spec{}, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = newHandleFromRawBTF(buf.Bytes())
 	testutils.SkipIfNotSupported(t, err)
 	var ve *internal.VerifierError
 	if !errors.As(err, &ve) {
@@ -423,6 +464,11 @@ func TestLoadSplitSpecFromReader(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
+	typeByID, err := splitSpec.TypeByID(typeID)
+	qt.Assert(t, err, qt.IsNil)
+	qt.Assert(t, typeByID, qt.Equals, typ)
+
 	fnType := typ.(*Func)
 	fnProto := fnType.Type.(*FuncProto)
 

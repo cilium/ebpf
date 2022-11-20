@@ -35,9 +35,9 @@ type Spec struct {
 	// Data from .BTF.
 	strings *stringTable
 
-	// All types contained by the spec. For the base type, the position of
-	// a type in the slice is its ID.
-	types types
+	// All types contained by the spec, not including types from the base in
+	// case the spec was parsed from split BTF.
+	types []Type
 
 	// Type IDs indexed by type.
 	typeIDs map[Type]TypeID
@@ -469,11 +469,7 @@ func fixupDatasec(types []Type, sectionSizes map[string]uint32, offsets map[symb
 func (s *Spec) Copy() *Spec {
 	types := copyTypes(s.types, nil)
 
-	typeIDOffset := TypeID(0)
-	if len(s.types) != 0 {
-		typeIDOffset = s.typeIDs[s.types[0]]
-	}
-	typeIDs, typesByName := indexTypes(types, typeIDOffset)
+	typeIDs, typesByName := indexTypes(types, s.firstTypeID())
 
 	// NB: Other parts of spec are not copied since they are immutable.
 	return &Spec{
@@ -500,7 +496,14 @@ func (sw sliceWriter) Write(p []byte) (int, error) {
 // Returns an error wrapping ErrNotFound if a Type with the given ID
 // does not exist in the Spec.
 func (s *Spec) TypeByID(id TypeID) (Type, error) {
-	return s.types.ByID(id)
+	firstID := s.firstTypeID()
+	lastID := firstID + TypeID(len(s.types))
+
+	if id < firstID || id >= lastID {
+		return nil, fmt.Errorf("expected type ID between %d and %d, got %d: %w", firstID, lastID, id, ErrNotFound)
+	}
+
+	return s.types[id-firstID], nil
 }
 
 // TypeID returns the ID for a given Type.
@@ -620,6 +623,14 @@ func (s *Spec) TypeByName(name string, typ interface{}) error {
 	typPtr.Set(reflect.ValueOf(candidate))
 
 	return nil
+}
+
+// firstTypeID returns the first type ID or zero.
+func (s *Spec) firstTypeID() TypeID {
+	if len(s.types) > 0 {
+		return s.typeIDs[s.types[0]]
+	}
+	return 0
 }
 
 // LoadSplitSpecFromReader loads split BTF from a reader.

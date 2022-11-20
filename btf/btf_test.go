@@ -12,6 +12,7 @@ import (
 
 	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/testutils"
+	qt "github.com/frankban/quicktest"
 )
 
 var vmlinux struct {
@@ -423,6 +424,11 @@ func TestLoadSplitSpecFromReader(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
+	typeByID, err := splitSpec.TypeByID(typeID)
+	qt.Assert(t, err, qt.IsNil)
+	qt.Assert(t, typeByID, qt.Equals, typ)
+
 	fnType := typ.(*Func)
 	fnProto := fnType.Type.(*FuncProto)
 

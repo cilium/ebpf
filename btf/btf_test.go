@@ -12,6 +12,7 @@ import (
 
 	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/testutils"
+	qt "github.com/frankban/quicktest"
 )
 
 var vmlinux struct {
@@ -212,8 +213,8 @@ func TestParseCurrentKernelBTF(t *testing.T) {
 	t.Logf("Average string size: %.0f", float64(totalBytes)/float64(len(spec.strings.strings)))
 }
 
-func TestFindVMLinux(t *testing.T) {
-	file, err := findVMLinux()
+func TestFindLinuxELF(t *testing.T) {
+	file, err := findLinuxELF()
 	testutils.SkipIfNotSupported(t, err)
 	if err != nil {
 		t.Fatal("Can't find vmlinux:", err)
@@ -423,6 +424,11 @@ func TestLoadSplitSpecFromReader(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
+	typeByID, err := splitSpec.TypeByID(typeID)
+	qt.Assert(t, err, qt.IsNil)
+	qt.Assert(t, typeByID, qt.Equals, typ)
+
 	fnType := typ.(*Func)
 	fnProto := fnType.Type.(*FuncProto)
 

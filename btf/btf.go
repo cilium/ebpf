@@ -128,40 +128,40 @@ func LoadSpecAndExtInfosFromReader(rd io.ReaderAt) (*Spec, *ExtInfos, error) {
 	return spec, extInfos, nil
 }
 
-// variableOffsets extracts all symbols offsets from an ELF and indexes them by
+// symbolOffsets extracts all symbols offsets from an ELF and indexes them by
 // section and variable name.
 //
 // References to variables in BTF data sections carry unsigned 32-bit offsets.
 // Some ELF symbols (e.g. in vmlinux) may point to virtual memory that is well
 // beyond this range. Since these symbols cannot be described by BTF info,
 // ignore them here.
-func variableOffsets(file *internal.SafeELFFile) (map[variable]uint32, error) {
+func symbolOffsets(file *internal.SafeELFFile) (map[symbol]uint32, error) {
 	symbols, err := file.Symbols()
 	if err != nil {
 		return nil, fmt.Errorf("can't read symbols: %v", err)
 	}
 
-	variableOffsets := make(map[variable]uint32)
-	for _, symbol := range symbols {
-		if idx := symbol.Section; idx >= elf.SHN_LORESERVE && idx <= elf.SHN_HIRESERVE {
+	offsets := make(map[symbol]uint32)
+	for _, sym := range symbols {
+		if idx := sym.Section; idx >= elf.SHN_LORESERVE && idx <= elf.SHN_HIRESERVE {
 			// Ignore things like SHN_ABS
 			continue
 		}
 
-		if symbol.Value > math.MaxUint32 {
+		if sym.Value > math.MaxUint32 {
 			// VarSecinfo offset is u32, cannot reference symbols in higher regions.
 			continue
 		}
 
-		if int(symbol.Section) >= len(file.Sections) {
-			return nil, fmt.Errorf("symbol %s: invalid section %d", symbol.Name, symbol.Section)
+		if int(sym.Section) >= len(file.Sections) {
+			return nil, fmt.Errorf("symbol %s: invalid section %d", sym.Name, sym.Section)
 		}
 
-		secName := file.Sections[symbol.Section].Name
-		variableOffsets[variable{secName, symbol.Name}] = uint32(symbol.Value)
+		secName := file.Sections[sym.Section].Name
+		offsets[symbol{secName, sym.Name}] = uint32(sym.Value)
 	}
 
-	return variableOffsets, nil
+	return offsets, nil
 }
 
 func loadSpecFromELF(file *internal.SafeELFFile) (*Spec, error) {
@@ -191,7 +191,7 @@ func loadSpecFromELF(file *internal.SafeELFFile) (*Spec, error) {
 		return nil, fmt.Errorf("btf: %w", ErrNotFound)
 	}
 
-	vars, err := variableOffsets(file)
+	offsets, err := symbolOffsets(file)
 	if err != nil {
 		return nil, err
 	}
@@ -205,7 +205,7 @@ func loadSpecFromELF(file *internal.SafeELFFile) (*Spec, error) {
 		return nil, err
 	}
 
-	err = fixupDatasec(rawTypes, rawStrings, sectionSizes, vars)
+	err = fixupDatasec(rawTypes, rawStrings, sectionSizes, offsets)
 	if err != nil {
 		return nil, err
 	}
@@ -388,12 +388,12 @@ func parseBTF(btf io.ReaderAt, bo binary.ByteOrder, baseStrings *stringTable) ([
 	return rawTypes, rawStrings, nil
 }
 
-type variable struct {
+type symbol struct {
 	section string
 	name    string
 }
 
-func fixupDatasec(rawTypes []rawType, rawStrings *stringTable, sectionSizes map[string]uint32, variableOffsets map[variable]uint32) error {
+func fixupDatasec(rawTypes []rawType, rawStrings *stringTable, sectionSizes map[string]uint32, offsets map[symbol]uint32) error {
 	for i, rawType := range rawTypes {
 		if rawType.Kind() != kindDatasec {
 			continue
@@ -431,9 +431,9 @@ func fixupDatasec(rawTypes []rawType, rawStrings *stringTable, sectionSizes map[
 				return fmt.Errorf("data section %s: can't get name for type %d: %w", name, id, err)
 			}
 
-			offset, ok := variableOffsets[variable{name, varName}]
+			offset, ok := offsets[symbol{name, varName}]
 			if !ok {
-				return fmt.Errorf("data section %s: missing offset for variable %s", name, varName)
+				return fmt.Errorf("data section %s: missing offset for symbol %s", name, varName)
 			}
 
 			secinfos[j].Offset = offset

@@ -487,6 +487,7 @@ func (ds *Datasec) copy() Type {
 //
 // It is not a valid Type.
 type VarSecinfo struct {
+	// Var or Func.
 	Type   Type
 	Offset uint32
 	Size   uint32
@@ -972,9 +973,7 @@ func inflateRawTypes(rawTypes []rawType, baseTypes types, rawStrings *stringTabl
 				})
 			}
 			for i := range vars {
-				if err := fixupAndAssert(btfVars[i].Type, &vars[i].Type, reflect.TypeOf((*Var)(nil))); err != nil {
-					return nil, err
-				}
+				fixup(btfVars[i].Type, &vars[i].Type)
 			}
 			typ = &Datasec{name, raw.Size(), vars}
 

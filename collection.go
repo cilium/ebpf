@@ -151,6 +151,10 @@ func (cs *CollectionSpec) RewriteConstants(consts map[string]interface{}) error 
 				continue
 			}
 
+			if _, ok := v.Type.(*btf.Var); !ok {
+				return fmt.Errorf("section %s: unexpected type %T for variable %s", name, v.Type, vname)
+			}
+
 			if replaced[vname] {
 				return fmt.Errorf("section %s: duplicate variable %s", name, vname)
 			}

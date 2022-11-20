@@ -18,6 +18,8 @@ type Handle struct {
 
 	// Size of the raw BTF in bytes.
 	size uint32
+
+	needsKernelBase bool
 }
 
 // NewHandle loads BTF into the kernel.
@@ -57,7 +59,7 @@ func newHandleFromRawBTF(btf []byte) (*Handle, error) {
 
 	fd, err := sys.BtfLoad(attr)
 	if err == nil {
-		return &Handle{fd, attr.BtfSize}, nil
+		return &Handle{fd, attr.BtfSize, false}, nil
 	}
 
 	if err := haveBTF(); err != nil {
@@ -98,13 +100,11 @@ func NewHandleFromID(id ID) (*Handle, error) {
 		return nil, err
 	}
 
-	return &Handle{fd, info.size}, nil
+	return &Handle{fd, info.size, info.IsModule()}, nil
 }
 
 // Spec parses the kernel BTF into Go types.
-//
-// base is used to decode split BTF and may be nil.
-func (h *Handle) Spec(base *Spec) (*Spec, error) {
+func (h *Handle) Spec() (*Spec, error) {
 	var btfInfo sys.BtfInfo
 	btfBuffer := make([]byte, h.size)
 	btfInfo.Btf, btfInfo.BtfSize = sys.NewSlicePointerLen(btfBuffer)
@@ -113,14 +113,20 @@ func (h *Handle) Spec(base *Spec) (*Spec, error) {
 		return nil, err
 	}
 
-	var baseTypes types
-	var baseStrings *stringTable
-	if base != nil {
-		baseTypes = base.types
-		baseStrings = base.strings
+	if !h.needsKernelBase {
+		return loadRawSpec(bytes.NewReader(btfBuffer), internal.NativeEndian, nil, nil)
 	}
 
-	return loadRawSpec(bytes.NewReader(btfBuffer), internal.NativeEndian, baseTypes, baseStrings)
+	base, fallback, err := kernelSpec()
+	if err != nil {
+		return nil, fmt.Errorf("load BTF base: %w", err)
+	}
+
+	if fallback {
+		return nil, fmt.Errorf("can't load split BTF without access to /sys")
+	}
+
+	return loadRawSpec(bytes.NewReader(btfBuffer), internal.NativeEndian, base.types, base.strings)
 }
 
 // Close destroys the handle.

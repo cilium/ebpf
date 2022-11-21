@@ -11,6 +11,9 @@ import (
 	"unsafe"
 
 	"github.com/cilium/ebpf/internal/unix"
+	gounix "golang.org/x/sys/unix"
+
+	log "github.com/sirupsen/logrus"
 )
 
 // perfEventRing is a page of metadata followed by
@@ -22,12 +25,19 @@ type perfEventRing struct {
 	*ringReader
 }
 
-func newPerfEventRing(cpu, perCPUBuffer, watermark int) (*perfEventRing, error) {
+
+// In C, struct perf_event_attr has a write_backward field which is a bit in a
+// 64-length bitfield.
+// In Golang, there is a Bits field which 64 bits long.
+// From C, we can deduce write_backward is the is the 27th bit.
+const perfBitWriteBackward = gounix.CBitFieldMaskBit27
+
+func newPerfEventRing(cpu, perCPUBuffer, watermark int, overWritable bool) (*perfEventRing, error) {
 	if watermark >= perCPUBuffer {
 		return nil, errors.New("watermark must be smaller than perCPUBuffer")
 	}
 
-	fd, err := createPerfEvent(cpu, watermark)
+	fd, err := createPerfEvent(cpu, watermark, overWritable)
 	if err != nil {
 		return nil, err
 	}
@@ -37,7 +47,12 @@ func newPerfEventRing(cpu, perCPUBuffer, watermark int) (*perfEventRing, error) 
 		return nil, err
 	}
 
-	mmap, err := unix.Mmap(fd, 0, perfBufferSize(perCPUBuffer), unix.PROT_READ|unix.PROT_WRITE, unix.MAP_SHARED)
+	protections := unix.PROT_READ
+	if !overWritable {
+		protections |= unix.PROT_WRITE
+	}
+
+	mmap, err := unix.Mmap(fd, 0, perfBufferSize(perCPUBuffer), protections, unix.MAP_SHARED)
 	if err != nil {
 		unix.Close(fd)
 		return nil, fmt.Errorf("can't mmap: %v", err)
@@ -86,15 +101,20 @@ func (ring *perfEventRing) Close() {
 	ring.mmap = nil
 }
 
-func createPerfEvent(cpu, watermark int) (int, error) {
+func createPerfEvent(cpu, watermark int, overWritable bool) (int, error) {
 	if watermark == 0 {
 		watermark = 1
+	}
+
+	bits := unix.PerfBitWatermark
+	if overWritable {
+		bits |= perfBitWriteBackward
 	}
 
 	attr := unix.PerfEventAttr{
 		Type:        unix.PERF_TYPE_SOFTWARE,
 		Config:      unix.PERF_COUNT_SW_BPF_OUTPUT,
-		Bits:        unix.PerfBitWatermark,
+		Bits:        uint64(bits),
 		Sample_type: unix.PERF_SAMPLE_RAW,
 		Wakeup:      uint32(watermark),
 	}
@@ -157,4 +177,144 @@ func (rr *ringReader) Read(p []byte) (int, error) {
 	}
 
 	return n, nil
+}
+
+func (rr *ringReader) ReadCallback(callback func(record Record, size uint32) error) error {
+	var err error
+	rr.loadHead()
+
+	data := make([]byte, len(rr.ring))
+	// We copy the buffer to avoid reading it while it is being written.
+	copy(data, rr.ring)
+
+	read := rr.head
+
+	// So, if between two calls to this function, the prod_pos did not move,
+	// it means there is no new data, so we can skip this CPU rather than
+	// dealing with data we already proceeded.
+	if rr.tail == rr.head {
+		log.Debugf("Nothing happened: rr.head = %d", rr.head)
+
+		return nil
+	}
+
+	// Backward read it playing with rr.head and rr.mask.
+	for read-rr.head < rr.mask {
+		header := (*perfEventHeader)(unsafe.Pointer(&data[read&rr.mask]))
+
+		// If size is 0, it means we read all the data
+		// available in the buffer and jump on 0 data:
+		//
+		// prod_pos                         read_pos
+		//     |                                |
+		//     V                                V
+		// +---+------+----------+-------+------+
+		// |   |D....D|C........C|B.....B|A....A|
+		// +---+------+----------+-------+------+
+		if header == nil || header.Size == 0 {
+			log.Debug("We read all data available!")
+
+			break
+		}
+
+		// If adding the event size to the current
+		// consumer position makes us wrap the buffer,
+		// it means we already did "one loop" around the
+		// buffer.
+		// So, the pointed data would not be usable:
+		//
+		//                               prod_pos
+		//                   read_pos----+   |
+		//                               |   |
+		//                               V   V
+		// +---+------+----------+-------+---+--+
+		// |..E|D....D|C........C|B.....B|A..|E.|
+		// +---+------+----------+-------+---+--+
+		if read-rr.head+uint64(header.Size) > rr.mask {
+			log.Debug("We wrapped the buffer!")
+
+			break
+		}
+
+		if header.Type != unix.PERF_RECORD_SAMPLE {
+			log.Warnf("received type %d while we only care of PERF_RECORD_SAMPLE (%d)", header.Type, unix.PERF_RECORD_SAMPLE)
+
+			read += uint64(header.Size)
+
+			// This prevents reading data we already processed.
+			if rr.tail != 0 && read >= rr.tail {
+				log.Debugf("We already read this!")
+
+				break
+			}
+		}
+
+		read += uint64(unsafe.Sizeof(*header))
+
+		sample := (*perfEventSample)(unsafe.Pointer(&data[read&rr.mask]))
+		if sample == nil {
+			err = fmt.Errorf("cannot get a sample event while event type is PERF_RECORD_SAMPLE")
+
+			break
+		}
+
+		size := sample.Size
+		record := Record{RawSample: make([]byte, size)}
+
+		read += uint64(unsafe.Sizeof(*sample))
+		previousReadMasked := read & rr.mask
+
+		read += uint64(size)
+
+		log.Debugf("rr.header: %v; read: %v; rr.head: %v; previousHeadPos: %v; previousReadMasked: %v", header, read&rr.mask, rr.head&rr.mask, rr.tail&rr.mask, previousReadMasked)
+
+		// If adding the event size to the current
+		// consumer position makes us going from end of the buffer toward the
+		// start, we need to copy the data in two times:
+		// 1. First from previous_read_pos until end of the buffer.
+		// 2. Second from start of the buffer until read_pos.
+		//
+		// read_pos                  previous_read_pos
+		//     |                             |
+		//     V                             V
+		// +---+------+----------+-------+---+--+
+		// |..E|D....D|C........C|B.....B|A..|E.|
+		// +---+------+----------+-------+---+--+
+		// This code snippet was highly inspired by gobpf:
+		// https://github.com/iovisor/gobpf/blob/16120a1bf4d4abc1f9cf37fecfb86009a1631b9f/elf/perf.go#L148
+		if (read & rr.mask) < previousReadMasked {
+			// Compute the number of bytes from the beginning of this sample until
+			// the end of the buffer.
+			length := uint32(rr.mask + 1 - previousReadMasked)
+
+			log.Debugf("length: %v", length)
+
+			// From previousRead until end of the buffer.
+			copy(record.RawSample[0:length-1], unsafe.Slice((*byte)(unsafe.Pointer(&data[previousReadMasked])), length))
+			// From beginning of the buffer until read.
+			copy(record.RawSample[length:], data[0:size-length])
+		} else {
+			// We are in the "middle" of the buffer, so no worries!
+			copy(record.RawSample, unsafe.Slice((*byte)(unsafe.Pointer(&data[previousReadMasked])), size))
+		}
+
+		err = callback(record, size)
+		if err != nil {
+			break
+		}
+
+		// This prevents reading data we already processed.
+		if rr.tail != 0 && read >= rr.tail {
+			log.Debug("We already read this!")
+
+			break
+		}
+	}
+
+	// With this kind of buffers, the tail is not used by the kernel.
+	// Then, we use this field to store the previous head position.
+	// So, we know if between two calls there are new data or no.
+	rr.tail = rr.head
+
+	return err
 }

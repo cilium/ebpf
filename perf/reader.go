@@ -155,6 +155,8 @@ type Reader struct {
 	// Read calls, which would otherwise need to be interrupted.
 	pauseMu  sync.Mutex
 	pauseFds []int
+
+	overWritable bool
 }
 
 // ReaderOptions control the behaviour of the user
@@ -163,7 +165,9 @@ type ReaderOptions struct {
 	// The number of written bytes required in any per CPU buffer before
 	// Read will process data. Must be smaller than PerCPUBuffer.
 	// The default is to start processing as soon as data is available.
-	Watermark int
+	Watermark     int
+	// This perf ring buffer will be written from backward and over writable.
+	OverWritable bool
 }
 
 // NewReader creates a new reader with default options.
@@ -211,7 +215,7 @@ func NewReaderWithOptions(array *ebpf.Map, perCPUBuffer int, opts ReaderOptions)
 	// but doesn't allow using a wildcard like -1 to specify "all CPUs".
 	// Hence we have to create a ring for each CPU.
 	for i := 0; i < nCPU; i++ {
-		ring, err := newPerfEventRing(i, perCPUBuffer, opts.Watermark)
+		ring, err := newPerfEventRing(i, perCPUBuffer, opts.Watermark, opts.OverWritable)
 		if errors.Is(err, unix.ENODEV) {
 			// The requested CPU is currently offline, skip it.
 			rings = append(rings, nil)
@@ -236,14 +240,15 @@ func NewReaderWithOptions(array *ebpf.Map, perCPUBuffer int, opts ReaderOptions)
 	}
 
 	pr = &Reader{
-		array:       array,
-		rings:       rings,
-		poller:      poller,
-		deadline:    time.Time{},
-		epollEvents: make([]unix.EpollEvent, len(rings)),
-		epollRings:  make([]*perfEventRing, 0, len(rings)),
-		eventHeader: make([]byte, perfEventHeaderSize),
-		pauseFds:    pauseFds,
+		array:        array,
+		rings:        rings,
+		poller:       poller,
+		deadline:     time.Time{},
+		epollEvents:  make([]unix.EpollEvent, len(rings)),
+		epollRings:   make([]*perfEventRing, 0, len(rings)),
+		eventHeader:  make([]byte, perfEventHeaderSize),
+		pauseFds:     pauseFds,
+		overWritable: opts.OverWritable,
 	}
 	if err = pr.Resume(); err != nil {
 		return nil, err
@@ -307,7 +312,47 @@ func (pr *Reader) SetDeadline(t time.Time) {
 // Returns os.ErrDeadlineExceeded if a deadline was set.
 func (pr *Reader) Read() (Record, error) {
 	var r Record
+
+	if pr.overWritable {
+		return r, errors.New("perf ringbuffer is overwritable: you should use ReadCallback")
+	}
+
 	return r, pr.ReadInto(&r)
+}
+
+// ReadCallback is the function to use to read data from over writable and
+// backward written perf buffer.
+//
+// This function will read as many data as available from each of the CPU
+// buffers.
+// To do so, it starts reading from the head until there is no more data or we
+// already read the size of the buffer.
+//
+// The Record read will be passed to the callback given as parameter.
+func (pr *Reader) ReadCallback(callback func(record Record, size uint32) error) error {
+	pr.mu.Lock()
+	defer pr.mu.Unlock()
+
+	if pr.rings == nil {
+		return fmt.Errorf("perf ringbuffer: %w", ErrClosed)
+	}
+
+	if !pr.overWritable {
+		return errors.New("perf ringbuffer must be overwritable to use ReadCallback")
+	}
+
+	for _, ring := range pr.rings {
+		if ring == nil {
+			continue
+		}
+
+		err := ring.ReadCallback(callback)
+		if err != nil {
+			return fmt.Errorf("perf ringbuffer: %w", err)
+		}
+	}
+
+	return nil
 }
 
 // ReadInto is like Read except that it allows reusing Record and associated buffers.

@@ -442,10 +442,6 @@ func (cl *collectionLoader) loadMap(mapName string) (*Map, error) {
 		return nil, fmt.Errorf("missing map %s", mapName)
 	}
 
-	if mapSpec.BTF != nil && cl.coll.Types != mapSpec.BTF {
-		return nil, fmt.Errorf("map %s: BTF doesn't match collection", mapName)
-	}
-
 	if replaceMap, ok := cl.opts.MapReplacements[mapName]; ok {
 		// Clone the map to avoid closing user's map later on.
 		m, err := replaceMap.Clone()

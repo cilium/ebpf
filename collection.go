@@ -409,7 +409,7 @@ func newCollectionLoader(coll *CollectionSpec, opts *CollectionOptions) (*collec
 			return nil, fmt.Errorf("replacement map %s not found in CollectionSpec", name)
 		}
 
-		if err := spec.checkCompatibility(m); err != nil {
+		if err := spec.Compatible(m); err != nil {
 			return nil, fmt.Errorf("using replacement map %s: %w", spec.Name, err)
 		}
 	}

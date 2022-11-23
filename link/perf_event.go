@@ -380,7 +380,7 @@ func readUint64FromFileOnce(format string, path ...string) (uint64, error) {
 //
 // https://elixir.bootlin.com/linux/v5.16.8/source/kernel/bpf/syscall.c#L4307
 // https://github.com/torvalds/linux/commit/b89fbfbb854c9afc3047e8273cc3a694650b802e
-var haveBPFLinkPerfEvent = internal.FeatureTest("bpf_link_perf_event", "5.15", func() error {
+var haveBPFLinkPerfEvent = internal.NewFeatureTest("bpf_link_perf_event", "5.15", func() error {
 	prog, err := ebpf.NewProgram(&ebpf.ProgramSpec{
 		Name: "probe_bpf_perf_link",
 		Type: ebpf.Kprobe,

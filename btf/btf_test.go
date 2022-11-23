@@ -12,14 +12,8 @@ import (
 
 	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/testutils"
+	qt "github.com/frankban/quicktest"
 )
-
-// vmlinux caches the result of parsing the running kernel's BTF.
-var vmlinux struct {
-	sync.Once
-	spec *Spec
-	err  error
-}
 
 func vmlinuxSpec(tb testing.TB) *Spec {
 	tb.Helper()
@@ -28,14 +22,14 @@ func vmlinuxSpec(tb testing.TB) *Spec {
 	// through sysfs"), which shipped in Linux 5.4.
 	testutils.SkipOnOldKernel(tb, "5.4", "vmlinux BTF in sysfs")
 
-	vmlinux.Do(func() {
-		vmlinux.spec, vmlinux.err = LoadKernelSpec()
-	})
-	if vmlinux.err != nil {
-		tb.Fatal(vmlinux.err)
+	spec, fallback, err := kernelSpec()
+	if err != nil {
+		tb.Fatal(err)
 	}
-
-	return vmlinux.spec.Copy()
+	if fallback {
+		tb.Fatal("/sys/kernel/btf/vmlinux is not available")
+	}
+	return spec
 }
 
 // vmlinuxTestdata caches the result of reading and parsing a BTF blob from
@@ -480,6 +474,11 @@ func TestLoadSplitSpecFromReader(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
+	typeByID, err := splitSpec.TypeByID(typeID)
+	qt.Assert(t, err, qt.IsNil)
+	qt.Assert(t, typeByID, qt.Equals, typ)
+
 	fnType := typ.(*Func)
 	fnProto := fnType.Type.(*FuncProto)
 

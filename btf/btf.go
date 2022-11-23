@@ -11,6 +11,7 @@ import (
 	"math"
 	"os"
 	"reflect"
+	"sync"
 
 	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/sys"
@@ -34,9 +35,9 @@ type Spec struct {
 	// Data from .BTF.
 	strings *stringTable
 
-	// All types contained by the spec. For the base type, the position of
-	// a type in the slice is its ID.
-	types types
+	// All types contained by the spec, not including types from the base in
+	// case the spec was parsed from split BTF.
+	types []Type
 
 	// Type IDs indexed by type.
 	typeIDs map[Type]TypeID
@@ -263,20 +264,67 @@ func indexTypes(types []Type, typeIDOffset TypeID) (map[Type]TypeID, map[essenti
 // Defaults to /sys/kernel/btf/vmlinux and falls back to scanning the file system
 // for vmlinux ELFs. Returns an error wrapping ErrNotSupported if BTF is not enabled.
 func LoadKernelSpec() (*Spec, error) {
+	spec, _, err := kernelSpec()
+	return spec, err
+}
+
+var kernelBTF struct {
+	sync.RWMutex
+	spec *Spec
+	// True if the spec was read from an ELF instead of raw BTF in /sys.
+	fallback bool
+}
+
+// FlushKernelSpec removes any cached kernel type information.
+func FlushKernelSpec() {
+	kernelBTF.Lock()
+	defer kernelBTF.Unlock()
+
+	kernelBTF.spec, kernelBTF.fallback = nil, false
+}
+
+func kernelSpec() (*Spec, bool, error) {
+	kernelBTF.RLock()
+	spec, fallback := kernelBTF.spec, kernelBTF.fallback
+	kernelBTF.RUnlock()
+
+	if spec == nil {
+		kernelBTF.Lock()
+		defer kernelBTF.Unlock()
+
+		spec, fallback = kernelBTF.spec, kernelBTF.fallback
+	}
+
+	if spec != nil {
+		return spec.Copy(), fallback, nil
+	}
+
+	spec, fallback, err := loadKernelSpec()
+	if err != nil {
+		return nil, false, err
+	}
+
+	kernelBTF.spec, kernelBTF.fallback = spec, fallback
+	return spec.Copy(), fallback, nil
+}
+
+func loadKernelSpec() (_ *Spec, fallback bool, _ error) {
 	fh, err := os.Open("/sys/kernel/btf/vmlinux")
 	if err == nil {
 		defer fh.Close()
 
-		return loadRawSpec(fh, internal.NativeEndian, nil, nil)
+		spec, err := loadRawSpec(fh, internal.NativeEndian, nil, nil)
+		return spec, false, err
 	}
 
 	file, err := findVMLinux()
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	defer file.Close()
 
-	return loadSpecFromELF(file)
+	spec, err := loadSpecFromELF(file)
+	return spec, true, err
 }
 
 // findVMLinux scans multiple well-known paths for vmlinux kernel images.
@@ -421,11 +469,7 @@ func fixupDatasec(types []Type, sectionSizes map[string]uint32, offsets map[symb
 func (s *Spec) Copy() *Spec {
 	types := copyTypes(s.types, nil)
 
-	typeIDOffset := TypeID(0)
-	if len(s.types) != 0 {
-		typeIDOffset = s.typeIDs[s.types[0]]
-	}
-	typeIDs, typesByName := indexTypes(types, typeIDOffset)
+	typeIDs, typesByName := indexTypes(types, s.firstTypeID())
 
 	// NB: Other parts of spec are not copied since they are immutable.
 	return &Spec{
@@ -452,7 +496,14 @@ func (sw sliceWriter) Write(p []byte) (int, error) {
 // Returns an error wrapping ErrNotFound if a Type with the given ID
 // does not exist in the Spec.
 func (s *Spec) TypeByID(id TypeID) (Type, error) {
-	return s.types.ByID(id)
+	firstID := s.firstTypeID()
+	lastID := firstID + TypeID(len(s.types))
+
+	if id < firstID || id >= lastID {
+		return nil, fmt.Errorf("expected type ID between %d and %d, got %d: %w", firstID, lastID, id, ErrNotFound)
+	}
+
+	return s.types[id-firstID], nil
 }
 
 // TypeID returns the ID for a given Type.
@@ -574,6 +625,14 @@ func (s *Spec) TypeByName(name string, typ interface{}) error {
 	return nil
 }
 
+// firstTypeID returns the first type ID or zero.
+func (s *Spec) firstTypeID() TypeID {
+	if len(s.types) > 0 {
+		return s.typeIDs[s.types[0]]
+	}
+	return 0
+}
+
 // LoadSplitSpecFromReader loads split BTF from a reader.
 //
 // Types from base are used to resolve references in the split BTF.
@@ -604,138 +663,6 @@ func (iter *TypesIterator) Next() bool {
 	iter.Type = iter.spec.types[iter.index]
 	iter.index++
 	return true
-}
-
-// Handle is a reference to BTF loaded into the kernel.
-type Handle struct {
-	fd *sys.FD
-
-	// Size of the raw BTF in bytes.
-	size uint32
-}
-
-// NewHandle loads BTF into the kernel.
-//
-// Returns ErrNotSupported if BTF is not supported.
-func NewHandle(spec *Spec) (*Handle, error) {
-	if spec.byteOrder != nil && spec.byteOrder != internal.NativeEndian {
-		return nil, fmt.Errorf("can't load %s BTF on %s", spec.byteOrder, internal.NativeEndian)
-	}
-
-	enc := newEncoder(kernelEncoderOptions, newStringTableBuilderFromTable(spec.strings))
-
-	for _, typ := range spec.types {
-		_, err := enc.Add(typ)
-		if err != nil {
-			return nil, fmt.Errorf("add %s: %w", typ, err)
-		}
-	}
-
-	btf, err := enc.Encode()
-	if err != nil {
-		return nil, fmt.Errorf("marshal BTF: %w", err)
-	}
-
-	return newHandleFromRawBTF(btf)
-}
-
-func newHandleFromRawBTF(btf []byte) (*Handle, error) {
-	if uint64(len(btf)) > math.MaxUint32 {
-		return nil, errors.New("BTF exceeds the maximum size")
-	}
-
-	attr := &sys.BtfLoadAttr{
-		Btf:     sys.NewSlicePointer(btf),
-		BtfSize: uint32(len(btf)),
-	}
-
-	fd, err := sys.BtfLoad(attr)
-	if err == nil {
-		return &Handle{fd, attr.BtfSize}, nil
-	}
-
-	if err := haveBTF(); err != nil {
-		return nil, err
-	}
-
-	logBuf := make([]byte, 64*1024)
-	attr.BtfLogBuf = sys.NewSlicePointer(logBuf)
-	attr.BtfLogSize = uint32(len(logBuf))
-	attr.BtfLogLevel = 1
-
-	// Up until at least kernel 6.0, the BTF verifier does not return ENOSPC
-	// if there are other verification errors. ENOSPC is only returned when
-	// the BTF blob is correct, a log was requested, and the provided buffer
-	// is too small.
-	_, ve := sys.BtfLoad(attr)
-	return nil, internal.ErrorWithLog("load btf", err, logBuf, errors.Is(ve, unix.ENOSPC))
-}
-
-// NewHandleFromID returns the BTF handle for a given id.
-//
-// Prefer calling [ebpf.Program.Handle] or [ebpf.Map.Handle] if possible.
-//
-// Returns ErrNotExist, if there is no BTF with the given id.
-//
-// Requires CAP_SYS_ADMIN.
-func NewHandleFromID(id ID) (*Handle, error) {
-	fd, err := sys.BtfGetFdById(&sys.BtfGetFdByIdAttr{
-		Id: uint32(id),
-	})
-	if err != nil {
-		return nil, fmt.Errorf("get FD for ID %d: %w", id, err)
-	}
-
-	info, err := newHandleInfoFromFD(fd)
-	if err != nil {
-		_ = fd.Close()
-		return nil, err
-	}
-
-	return &Handle{fd, info.size}, nil
-}
-
-// Spec parses the kernel BTF into Go types.
-//
-// base is used to decode split BTF and may be nil.
-func (h *Handle) Spec(base *Spec) (*Spec, error) {
-	var btfInfo sys.BtfInfo
-	btfBuffer := make([]byte, h.size)
-	btfInfo.Btf, btfInfo.BtfSize = sys.NewSlicePointerLen(btfBuffer)
-
-	if err := sys.ObjInfo(h.fd, &btfInfo); err != nil {
-		return nil, err
-	}
-
-	var baseTypes types
-	var baseStrings *stringTable
-	if base != nil {
-		baseTypes = base.types
-		baseStrings = base.strings
-	}
-
-	return loadRawSpec(bytes.NewReader(btfBuffer), internal.NativeEndian, baseTypes, baseStrings)
-}
-
-// Close destroys the handle.
-//
-// Subsequent calls to FD will return an invalid value.
-func (h *Handle) Close() error {
-	if h == nil {
-		return nil
-	}
-
-	return h.fd.Close()
-}
-
-// FD returns the file descriptor for the handle.
-func (h *Handle) FD() int {
-	return h.fd.Int()
-}
-
-// Info returns metadata about the handle.
-func (h *Handle) Info() (*HandleInfo, error) {
-	return newHandleInfoFromFD(h.fd)
 }
 
 func marshalBTF(types interface{}, strings []byte, bo binary.ByteOrder) []byte {

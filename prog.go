@@ -123,11 +123,6 @@ type ProgramSpec struct {
 	// detect this value automatically.
 	KernelVersion uint32
 
-	// The BTF associated with this program.
-	//
-	// Deprecated: use [CollectionSpec.Types] instead.
-	BTF *btf.Spec
-
 	// The byte order this program was compiled for, may be nil.
 	ByteOrder binary.ByteOrder
 }

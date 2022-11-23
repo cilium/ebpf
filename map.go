@@ -77,11 +77,6 @@ type MapSpec struct {
 
 	// The key and value type of this map. May be nil.
 	Key, Value btf.Type
-
-	// The BTF associated with this map.
-	//
-	// Deprecated: use [CollectionSpec.Types] instead.
-	BTF *btf.Spec
 }
 
 func (ms *MapSpec) String() string {

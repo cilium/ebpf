@@ -102,3 +102,22 @@ var haveBPFLink = internal.NewFeatureTest("bpf_link", "5.7", func() error {
 	}
 	return err
 })
+
+var haveProgQuery = internal.NewFeatureTest("BPF_PROG_QUERY", "4.15", func() error {
+	attr := sys.ProgQueryAttr{
+		// We rely on this being checked during the syscall.
+		// With an otherwise correct payload we expect EBADF here
+		// as an indication that the feature is present.
+		TargetFd:   ^uint32(0),
+		AttachType: sys.AttachType(ebpf.AttachCGroupInetIngress),
+	}
+
+	err := sys.ProgQuery(&attr)
+	if errors.Is(err, unix.EINVAL) {
+		return internal.ErrNotSupported
+	}
+	if errors.Is(err, unix.EBADF) {
+		return nil
+	}
+	return err
+})

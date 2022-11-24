@@ -1,0 +1,90 @@
+package link
+
+import (
+	"os"
+	"testing"
+
+	"github.com/cilium/ebpf"
+	"github.com/cilium/ebpf/internal/testutils"
+)
+
+func TestQueryPrograms(t *testing.T) {
+	for name, fn := range map[string]func(*testing.T) (*ebpf.Program, QueryOptions){
+		"cgroup": queryCgroupFixtures,
+		"netns":  queryNetNSFixtures,
+	} {
+		t.Run(name, func(t *testing.T) {
+			prog, opts := fn(t)
+			ids, err := QueryPrograms(opts)
+			testutils.SkipIfNotSupported(t, err)
+			if err != nil {
+				t.Fatal("Can't query programs:", err)
+			}
+
+			progInfo, err := prog.Info()
+			if err != nil {
+				t.Fatal("Can't get program info:", err)
+			}
+
+			progId, ok := progInfo.ID()
+			if !ok {
+				t.Skip("Program ID not supported")
+			}
+
+			for _, id := range ids {
+				if id == progId {
+					return
+				}
+			}
+			t.Fatal("Can't find program ID in query")
+		})
+	}
+}
+
+func queryCgroupFixtures(t *testing.T) (*ebpf.Program, QueryOptions) {
+	cgroup, prog := mustCgroupFixtures(t)
+
+	link, err := newProgAttachCgroup(cgroup, ebpf.AttachCGroupInetEgress, prog, 0)
+	if err != nil {
+		t.Fatal("Can't create link:", err)
+	}
+	t.Cleanup(func() {
+		link.Close()
+	})
+
+	return prog, QueryOptions{Path: cgroup.Name(), AttachType: ebpf.AttachCGroupInetEgress}
+}
+
+func queryNetNSFixtures(t *testing.T) (*ebpf.Program, QueryOptions) {
+	testutils.SkipOnOldKernel(t, "4.20", "flow_dissector program")
+
+	prog := mustLoadProgram(t, ebpf.FlowDissector, ebpf.AttachFlowDissector, "")
+
+	path := "/proc/self/ns/net"
+	netns, err := os.Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := RawAttachProgram(RawAttachProgramOptions{
+		Target:  0,
+		Program: prog,
+		Attach:  ebpf.AttachFlowDissector,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	t.Cleanup(func() {
+		err := RawDetachProgram(RawDetachProgramOptions{
+			Target:  0,
+			Program: prog,
+			Attach:  ebpf.AttachFlowDissector,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		netns.Close()
+	})
+
+	return prog, QueryOptions{Path: path, AttachType: ebpf.AttachFlowDissector}
+}

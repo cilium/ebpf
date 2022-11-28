@@ -31,6 +31,17 @@ func TestTypeMap(t *testing.T) {
 	}
 }
 
+func TestTypeMapVoid(t *testing.T) {
+	m := make(typeMap[int])
+
+	m.Set(&Void{}, 23)
+	if v, ok := m.Get((*Void)(nil)); !ok {
+		t.Fatal("(*Void)(nil) is not treated the same as &Void{}")
+	} else if v != 23 {
+		t.Fatal("Expected value 23, got", v)
+	}
+}
+
 func BenchmarkTypeMapGet(b *testing.B) {
 	types := make([]Type, 100000)
 	for i := range types {

@@ -44,7 +44,8 @@ func newTypeKey(t Type) typeKey {
 		// same pointer. Since Void is zero sized, we may end up with multiple
 		// entries for a void type.
 		//
-		// Instead, we use the pointer to the reflect.Type as the ID.
+		// Instead, we use the pointer to the reflect.Type as the ID. This also
+		// removes the distinction between Type((*Void)(nil)) and Type(&Void{}).
 		return voidTypeID
 	default:
 		// This assumes that all implementations of Type use pointer receivers.

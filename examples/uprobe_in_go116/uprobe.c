@@ -2,7 +2,7 @@
 
 #include "common.h"
 
-#define MAX_ARG_LEN 100
+#define MAX_ARG_LEN 128
 
 char __license[] SEC("license") = "Dual MIT/GPL";
 
@@ -12,6 +12,7 @@ struct event {
 	u64 pid_tgid;
 
 	u8 arg0[MAX_ARG_LEN];
+	u64 arg0_addr;
 	u8 arg0_length;
 };
 
@@ -30,12 +31,16 @@ int uprobe__main_print(struct pt_regs *ctx) {
 	struct event event = {};
 	event.pid_tgid     = bpf_get_current_pid_tgid();
 
+	// go1.16
 	SARG(ctx, 0, arg0_addr);
 	SARG(ctx, 1, arg0_len);
 	bpf_probe_read(&event.arg0, sizeof(event.arg0), (const void *)(arg0_addr));
+	event.arg0_addr   = arg0_addr;
 	event.arg0_length = arg0_len;
 
-	bpf_perf_event_output(ctx, &events, BPF_F_CURRENT_CPU, &event, sizeof(event));
+	if (arg0_len <= sizeof(event.arg0)) {
+		bpf_perf_event_output(ctx, &events, BPF_F_CURRENT_CPU, &event, sizeof(event));
+	}
 
 	return 0;
 }

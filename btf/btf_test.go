@@ -285,6 +285,12 @@ func TestLoadSpecFromElf(t *testing.T) {
 			t.Errorf("Expected Void for type id 0, but got: %T", vt)
 		}
 
+		if id, err := spec.TypeID(vt); err != nil {
+			t.Error("Error when looking up type id for Void:", err)
+		} else if id != 0 {
+			t.Error("Expected Void to have id 0, got", id)
+		}
+
 		var bpfMapDef *Struct
 		if err := spec.TypeByName("bpf_map_def", &bpfMapDef); err != nil {
 			t.Error("Can't find bpf_map_def:", err)
@@ -512,5 +518,4 @@ func TestLoadSplitSpecFromReader(t *testing.T) {
 		t.Fatalf("'bpf_testmod_init` type ID (%d) does not match copied spec's (%d)",
 			typeID, copyTypeID)
 	}
-
 }

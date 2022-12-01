@@ -320,7 +320,7 @@ func newMapWithOptions(spec *MapSpec, opts MapOptions) (_ *Map, err error) {
 	if spec.Pinning == PinByName {
 		path := filepath.Join(opts.PinPath, spec.Name)
 		if err := m.Pin(path); err != nil {
-			return nil, fmt.Errorf("pin map: %w", err)
+			return nil, fmt.Errorf("pin map to %s: %w", path, err)
 		}
 	}
 

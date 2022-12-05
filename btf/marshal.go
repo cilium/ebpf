@@ -32,7 +32,7 @@ type encoder struct {
 
 	buf          *bytes.Buffer
 	strings      *stringTableBuilder
-	allocatedIDs map[Type]TypeID
+	allocatedIDs typeMap[TypeID]
 	nextID       TypeID
 	// Temporary storage for Add.
 	pending internal.Deque[Type]
@@ -64,7 +64,8 @@ func (e *encoder) reset(strings *stringTableBuilder) {
 
 	e.buf.Truncate(btfHeaderLen)
 	e.strings = strings
-	e.allocatedIDs = make(map[Type]TypeID)
+	e.allocatedIDs = make(typeMap[TypeID])
+	e.allocatedIDs.Set(&Void{}, 0)
 	e.nextID = 1
 }
 
@@ -79,16 +80,15 @@ func (e *encoder) Add(typ Type) (TypeID, error) {
 	}
 
 	hasID := func(t Type) (skip bool) {
-		_, isVoid := t.(*Void)
-		_, alreadyEncoded := e.allocatedIDs[t]
-		return isVoid || alreadyEncoded
+		_, alreadyEncoded := e.allocatedIDs.Get(t)
+		return alreadyEncoded
 	}
 
 	e.pending.Reset()
 
 	allocateID := func(typ Type) {
 		e.pending.Push(typ)
-		e.allocatedIDs[typ] = e.nextID
+		e.allocatedIDs.Set(typ, e.nextID)
 		e.nextID++
 	}
 
@@ -121,7 +121,8 @@ func (e *encoder) Add(typ Type) (TypeID, error) {
 		}
 	}
 
-	return e.allocatedIDs[typ], nil
+	id, _ := e.allocatedIDs.Get(typ)
+	return id, nil
 }
 
 // Encode the raw BTF blob.
@@ -170,6 +171,11 @@ func (e *encoder) deflateType(typ Type) (err error) {
 		return err
 	}
 
+	id := func(t Type) TypeID {
+		id, _ := e.allocatedIDs.Get(t)
+		return id
+	}
+
 	switch v := typ.(type) {
 	case *Int:
 		raw.SetKind(kindInt)
@@ -184,13 +190,13 @@ func (e *encoder) deflateType(typ Type) (err error) {
 
 	case *Pointer:
 		raw.SetKind(kindPointer)
-		raw.SetType(e.allocatedIDs[v.Target])
+		raw.SetType(id(v.Target))
 
 	case *Array:
 		raw.SetKind(kindArray)
 		raw.data = &btfArray{
-			e.allocatedIDs[v.Type],
-			e.allocatedIDs[v.Index],
+			id(v.Type),
+			id(v.Index),
 			v.Nelems,
 		}
 
@@ -223,36 +229,36 @@ func (e *encoder) deflateType(typ Type) (err error) {
 
 	case *Typedef:
 		raw.SetKind(kindTypedef)
-		raw.SetType(e.allocatedIDs[v.Type])
+		raw.SetType(id(v.Type))
 
 	case *Volatile:
 		raw.SetKind(kindVolatile)
-		raw.SetType(e.allocatedIDs[v.Type])
+		raw.SetType(id(v.Type))
 
 	case *Const:
 		raw.SetKind(kindConst)
-		raw.SetType(e.allocatedIDs[v.Type])
+		raw.SetType(id(v.Type))
 
 	case *Restrict:
 		raw.SetKind(kindRestrict)
-		raw.SetType(e.allocatedIDs[v.Type])
+		raw.SetType(id(v.Type))
 
 	case *Func:
 		raw.SetKind(kindFunc)
-		raw.SetType(e.allocatedIDs[v.Type])
+		raw.SetType(id(v.Type))
 		if !e.opts.StripFuncLinkage {
 			raw.SetLinkage(v.Linkage)
 		}
 
 	case *FuncProto:
 		raw.SetKind(kindFuncProto)
-		raw.SetType(e.allocatedIDs[v.Return])
+		raw.SetType(id(v.Return))
 		raw.SetVlen(len(v.Params))
 		raw.data, err = e.deflateFuncParams(v.Params)
 
 	case *Var:
 		raw.SetKind(kindVar)
-		raw.SetType(e.allocatedIDs[v.Type])
+		raw.SetType(id(v.Type))
 		raw.data = btfVariable{uint32(v.Linkage)}
 
 	case *Datasec:
@@ -300,11 +306,8 @@ func (e *encoder) convertMembers(header *btfType, members []Member) ([]btfMember
 			return nil, err
 		}
 
-		bms = append(bms, btfMember{
-			nameOff,
-			e.allocatedIDs[member.Type],
-			uint32(offset),
-		})
+		id, _ := e.allocatedIDs.Get(member.Type)
+		bms = append(bms, btfMember{nameOff, id, uint32(offset)})
 	}
 
 	header.SetVlen(len(members))
@@ -359,10 +362,8 @@ func (e *encoder) deflateFuncParams(params []FuncParam) ([]btfParam, error) {
 			return nil, err
 		}
 
-		bps = append(bps, btfParam{
-			nameOff,
-			e.allocatedIDs[param.Type],
-		})
+		id, _ := e.allocatedIDs.Get(param.Type)
+		bps = append(bps, btfParam{nameOff, id})
 	}
 	return bps, nil
 }
@@ -370,11 +371,8 @@ func (e *encoder) deflateFuncParams(params []FuncParam) ([]btfParam, error) {
 func (e *encoder) deflateVarSecinfos(vars []VarSecinfo) []btfVarSecinfo {
 	vsis := make([]btfVarSecinfo, 0, len(vars))
 	for _, v := range vars {
-		vsis = append(vsis, btfVarSecinfo{
-			e.allocatedIDs[v.Type],
-			v.Offset,
-			v.Size,
-		})
+		id, _ := e.allocatedIDs.Get(v.Type)
+		vsis = append(vsis, btfVarSecinfo{id, v.Offset, v.Size})
 	}
 	return vsis
 }

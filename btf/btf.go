@@ -40,7 +40,7 @@ type Spec struct {
 	types []Type
 
 	// Type IDs indexed by type.
-	typeIDs map[Type]TypeID
+	typeIDs typeMap[TypeID]
 
 	// Types indexed by essential name.
 	// Includes all struct flavors and types with the same name.
@@ -235,7 +235,7 @@ func loadRawSpec(btf io.ReaderAt, bo binary.ByteOrder,
 	}, nil
 }
 
-func indexTypes(types []Type, typeIDOffset TypeID) (map[Type]TypeID, map[essentialName][]Type) {
+func indexTypes(types []Type, typeIDOffset TypeID) (typeMap[TypeID], map[essentialName][]Type) {
 	namedTypes := 0
 	for _, typ := range types {
 		if typ.TypeName() != "" {
@@ -246,14 +246,14 @@ func indexTypes(types []Type, typeIDOffset TypeID) (map[Type]TypeID, map[essenti
 		}
 	}
 
-	typeIDs := make(map[Type]TypeID, len(types))
+	typeIDs := make(typeMap[TypeID], len(types))
 	typesByName := make(map[essentialName][]Type, namedTypes)
 
 	for i, typ := range types {
 		if name := newEssentialName(typ.TypeName()); name != "" {
 			typesByName[name] = append(typesByName[name], typ)
 		}
-		typeIDs[typ] = TypeID(i) + typeIDOffset
+		typeIDs.Set(typ, TypeID(i)+typeIDOffset)
 	}
 
 	return typeIDs, typesByName
@@ -510,12 +510,7 @@ func (s *Spec) TypeByID(id TypeID) (Type, error) {
 //
 // Returns an error wrapping ErrNoFound if the type isn't part of the Spec.
 func (s *Spec) TypeID(typ Type) (TypeID, error) {
-	if _, ok := typ.(*Void); ok {
-		// Equality is weird for void, since it is a zero sized type.
-		return 0, nil
-	}
-
-	id, ok := s.typeIDs[typ]
+	id, ok := s.typeIDs.Get(typ)
 	if !ok {
 		return 0, fmt.Errorf("no ID for type %s: %w", typ, ErrNotFound)
 	}
@@ -628,7 +623,8 @@ func (s *Spec) TypeByName(name string, typ interface{}) error {
 // firstTypeID returns the first type ID or zero.
 func (s *Spec) firstTypeID() TypeID {
 	if len(s.types) > 0 {
-		return s.typeIDs[s.types[0]]
+		id, _ := s.typeIDs.Get(s.types[0])
+		return id
 	}
 	return 0
 }

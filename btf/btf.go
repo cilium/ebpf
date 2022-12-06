@@ -2,7 +2,6 @@ package btf
 
 import (
 	"bufio"
-	"bytes"
 	"debug/elf"
 	"encoding/binary"
 	"errors"
@@ -733,55 +732,15 @@ func (iter *TypesIterator) Next() bool {
 	return true
 }
 
-func marshalBTF(types interface{}, strings []byte, bo binary.ByteOrder) []byte {
-	const minHeaderLength = 24
-
-	typesLen := uint32(binary.Size(types))
-	header := btfHeader{
-		Magic:     btfMagic,
-		Version:   1,
-		HdrLen:    minHeaderLength,
-		TypeOff:   0,
-		TypeLen:   typesLen,
-		StringOff: typesLen,
-		StringLen: uint32(len(strings)),
-	}
-
-	buf := new(bytes.Buffer)
-	_ = binary.Write(buf, bo, &header)
-	_ = binary.Write(buf, bo, types)
-	buf.Write(strings)
-
-	return buf.Bytes()
-}
-
 // haveBTF attempts to load a BTF blob containing an Int. It should pass on any
 // kernel that supports BPF_BTF_LOAD.
 var haveBTF = internal.NewFeatureTest("BTF", "4.18", func() error {
-	var (
-		types struct {
-			Integer btfType
-			btfInt
-		}
-		strings = []byte{0}
-	)
-	types.Integer.SetKind(kindInt) // 0-length anonymous integer
-
-	btf := marshalBTF(&types, strings, internal.NativeEndian)
-
-	fd, err := sys.BtfLoad(&sys.BtfLoadAttr{
-		Btf:     sys.NewSlicePointer(btf),
-		BtfSize: uint32(len(btf)),
-	})
+	// 0-length anonymous integer
+	err := probeBTF(&Int{})
 	if errors.Is(err, unix.EINVAL) || errors.Is(err, unix.EPERM) {
 		return internal.ErrNotSupported
 	}
-	if err != nil {
-		return err
-	}
-
-	fd.Close()
-	return nil
+	return err
 })
 
 // haveMapBTF attempts to load a minimal BTF blob containing a Var. It is
@@ -792,37 +751,18 @@ var haveMapBTF = internal.NewFeatureTest("Map BTF (Var/Datasec)", "5.2", func() 
 		return err
 	}
 
-	var (
-		types struct {
-			Integer btfType
-			Var     btfType
-			btfVariable
-		}
-		strings = []byte{0, 'a', 0}
-	)
+	v := &Var{
+		Name: "a",
+		Type: &Pointer{(*Void)(nil)},
+	}
 
-	types.Integer.SetKind(kindPointer)
-	types.Var.NameOff = 1
-	types.Var.SetKind(kindVar)
-	types.Var.SizeType = 1
-
-	btf := marshalBTF(&types, strings, internal.NativeEndian)
-
-	fd, err := sys.BtfLoad(&sys.BtfLoadAttr{
-		Btf:     sys.NewSlicePointer(btf),
-		BtfSize: uint32(len(btf)),
-	})
+	err := probeBTF(v)
 	if errors.Is(err, unix.EINVAL) || errors.Is(err, unix.EPERM) {
 		// Treat both EINVAL and EPERM as not supported: creating the map may still
 		// succeed without Btf* attrs.
 		return internal.ErrNotSupported
 	}
-	if err != nil {
-		return err
-	}
-
-	fd.Close()
-	return nil
+	return err
 })
 
 // haveProgBTF attempts to load a BTF blob containing a Func and FuncProto. It
@@ -833,34 +773,16 @@ var haveProgBTF = internal.NewFeatureTest("Program BTF (func/line_info)", "5.0",
 		return err
 	}
 
-	var (
-		types struct {
-			FuncProto btfType
-			Func      btfType
-		}
-		strings = []byte{0, 'a', 0}
-	)
+	fn := &Func{
+		Name: "a",
+		Type: &FuncProto{Return: (*Void)(nil)},
+	}
 
-	types.FuncProto.SetKind(kindFuncProto)
-	types.Func.SetKind(kindFunc)
-	types.Func.SizeType = 1 // aka FuncProto
-	types.Func.NameOff = 1
-
-	btf := marshalBTF(&types, strings, internal.NativeEndian)
-
-	fd, err := sys.BtfLoad(&sys.BtfLoadAttr{
-		Btf:     sys.NewSlicePointer(btf),
-		BtfSize: uint32(len(btf)),
-	})
+	err := probeBTF(fn)
 	if errors.Is(err, unix.EINVAL) || errors.Is(err, unix.EPERM) {
 		return internal.ErrNotSupported
 	}
-	if err != nil {
-		return err
-	}
-
-	fd.Close()
-	return nil
+	return err
 })
 
 var haveFuncLinkage = internal.NewFeatureTest("BTF func linkage", "5.6", func() error {
@@ -868,33 +790,42 @@ var haveFuncLinkage = internal.NewFeatureTest("BTF func linkage", "5.6", func() 
 		return err
 	}
 
-	var (
-		types struct {
-			FuncProto btfType
-			Func      btfType
-		}
-		strings = []byte{0, 'a', 0}
-	)
+	fn := &Func{
+		Name:    "a",
+		Type:    &FuncProto{Return: (*Void)(nil)},
+		Linkage: GlobalFunc,
+	}
 
-	types.FuncProto.SetKind(kindFuncProto)
-	types.Func.SetKind(kindFunc)
-	types.Func.SizeType = 1 // aka FuncProto
-	types.Func.NameOff = 1
-	types.Func.SetLinkage(GlobalFunc)
-
-	btf := marshalBTF(&types, strings, internal.NativeEndian)
-
-	fd, err := sys.BtfLoad(&sys.BtfLoadAttr{
-		Btf:     sys.NewSlicePointer(btf),
-		BtfSize: uint32(len(btf)),
-	})
+	err := probeBTF(fn)
 	if errors.Is(err, unix.EINVAL) {
 		return internal.ErrNotSupported
 	}
-	if err != nil {
+	return err
+})
+
+func probeBTF(types ...Type) error {
+	s := NewSpec()
+	for _, typ := range types {
+		if _, err := s.Add(typ); err != nil {
+			return err
+		}
+	}
+
+	buf := getBuffer()
+	defer putBuffer(buf)
+
+	if err := marshalSpec(buf, s, nil, nil); err != nil {
 		return err
 	}
 
-	fd.Close()
-	return nil
-})
+	fd, err := sys.BtfLoad(&sys.BtfLoadAttr{
+		Btf:     sys.NewSlicePointer(buf.Bytes()),
+		BtfSize: uint32(buf.Len()),
+	})
+
+	if err == nil {
+		fd.Close()
+	}
+
+	return err
+}

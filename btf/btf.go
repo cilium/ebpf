@@ -30,11 +30,9 @@ var (
 // ID represents the unique ID of a BTF object.
 type ID = sys.BTFID
 
-// Spec represents decoded BTF.
+// Spec allows querying a set of Types and loading the set into the
+// kernel.
 type Spec struct {
-	// Data from .BTF.
-	strings *stringTable
-
 	// All types contained by the spec, not including types from the base in
 	// case the spec was parsed from split BTF.
 	types []Type
@@ -42,10 +40,17 @@ type Spec struct {
 	// Type IDs indexed by type.
 	typeIDs map[Type]TypeID
 
+	// The last allocated type ID.
+	lastTypeID TypeID
+
 	// Types indexed by essential name.
 	// Includes all struct flavors and types with the same name.
 	namedTypes map[essentialName][]Type
 
+	// String table from ELF, may be nil.
+	strings *stringTable
+
+	// Byte order of the ELF we decoded the spec from, may be nil.
 	byteOrder binary.ByteOrder
 }
 
@@ -75,6 +80,18 @@ func (h *btfHeader) stringStart() int64 {
 	return int64(h.HdrLen + h.StringOff)
 }
 
+// NewSpec creates a Spec containing only Void.
+func NewSpec() *Spec {
+	return &Spec{
+		[]Type{(*Void)(nil)},
+		map[Type]TypeID{(*Void)(nil): 0},
+		0,
+		make(map[essentialName][]Type),
+		nil,
+		nil,
+	}
+}
+
 // LoadSpec opens file and calls LoadSpecFromReader on it.
 func LoadSpec(file string) (*Spec, error) {
 	fh, err := os.Open(file)
@@ -94,7 +111,7 @@ func LoadSpecFromReader(rd io.ReaderAt) (*Spec, error) {
 	file, err := internal.NewSafeELFFile(rd)
 	if err != nil {
 		if bo := guessRawBTFByteOrder(rd); bo != nil {
-			return loadRawSpec(io.NewSectionReader(rd, 0, math.MaxInt64), bo, nil, nil)
+			return loadRawSpec(io.NewSectionReader(rd, 0, math.MaxInt64), bo, nil)
 		}
 
 		return nil, err
@@ -198,7 +215,7 @@ func loadSpecFromELF(file *internal.SafeELFFile) (*Spec, error) {
 		return nil, fmt.Errorf("compressed BTF is not supported")
 	}
 
-	spec, err := loadRawSpec(btfSection.ReaderAt, file.ByteOrder, nil, nil)
+	spec, err := loadRawSpec(btfSection.ReaderAt, file.ByteOrder, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -211,8 +228,17 @@ func loadSpecFromELF(file *internal.SafeELFFile) (*Spec, error) {
 	return spec, nil
 }
 
-func loadRawSpec(btf io.ReaderAt, bo binary.ByteOrder,
-	baseTypes types, baseStrings *stringTable) (*Spec, error) {
+func loadRawSpec(btf io.ReaderAt, bo binary.ByteOrder, base *Spec) (*Spec, error) {
+	var baseStrings *stringTable
+	var baseTypes types
+	if base != nil {
+		baseStrings = base.strings
+		baseTypes = base.types
+
+		if baseStrings == nil {
+			return nil, fmt.Errorf("can't parse split BTF from Spec without string table")
+		}
+	}
 
 	rawTypes, rawStrings, err := parseBTF(btf, bo, baseStrings)
 	if err != nil {
@@ -224,18 +250,19 @@ func loadRawSpec(btf io.ReaderAt, bo binary.ByteOrder,
 		return nil, err
 	}
 
-	typeIDs, typesByName := indexTypes(types, TypeID(len(baseTypes)))
+	typeIDs, typesByName, lastTypeID := indexTypes(types, TypeID(len(baseTypes)))
 
 	return &Spec{
 		namedTypes: typesByName,
 		typeIDs:    typeIDs,
 		types:      types,
+		lastTypeID: lastTypeID,
 		strings:    rawStrings,
 		byteOrder:  bo,
 	}, nil
 }
 
-func indexTypes(types []Type, typeIDOffset TypeID) (map[Type]TypeID, map[essentialName][]Type) {
+func indexTypes(types []Type, typeIDOffset TypeID) (map[Type]TypeID, map[essentialName][]Type, TypeID) {
 	namedTypes := 0
 	for _, typ := range types {
 		if typ.TypeName() != "" {
@@ -249,14 +276,16 @@ func indexTypes(types []Type, typeIDOffset TypeID) (map[Type]TypeID, map[essenti
 	typeIDs := make(map[Type]TypeID, len(types))
 	typesByName := make(map[essentialName][]Type, namedTypes)
 
+	var lastTypeID TypeID
 	for i, typ := range types {
 		if name := newEssentialName(typ.TypeName()); name != "" {
 			typesByName[name] = append(typesByName[name], typ)
 		}
-		typeIDs[typ] = TypeID(i) + typeIDOffset
+		lastTypeID = TypeID(i) + typeIDOffset
+		typeIDs[typ] = lastTypeID
 	}
 
-	return typeIDs, typesByName
+	return typeIDs, typesByName, lastTypeID
 }
 
 // LoadKernelSpec returns the current kernel's BTF information.
@@ -313,7 +342,7 @@ func loadKernelSpec() (_ *Spec, fallback bool, _ error) {
 	if err == nil {
 		defer fh.Close()
 
-		spec, err := loadRawSpec(fh, internal.NativeEndian, nil, nil)
+		spec, err := loadRawSpec(fh, internal.NativeEndian, nil)
 		return spec, false, err
 	}
 
@@ -468,15 +497,15 @@ func fixupDatasec(types []Type, sectionSizes map[string]uint32, offsets map[symb
 // Copy creates a copy of Spec.
 func (s *Spec) Copy() *Spec {
 	types := copyTypes(s.types, nil)
-
-	typeIDs, typesByName := indexTypes(types, s.firstTypeID())
+	typeIDs, typesByName, lastTypeID := indexTypes(types, s.firstTypeID())
 
 	// NB: Other parts of spec are not copied since they are immutable.
 	return &Spec{
-		s.strings,
 		types,
 		typeIDs,
+		lastTypeID,
 		typesByName,
+		s.strings,
 		s.byteOrder,
 	}
 }
@@ -489,6 +518,39 @@ func (sw sliceWriter) Write(p []byte) (int, error) {
 	}
 
 	return copy(sw, p), nil
+}
+
+// Add a Type.
+//
+// Adding the same Type multiple times is valid and will return a stable ID.
+func (s *Spec) Add(typ Type) (TypeID, error) {
+	if typ == nil {
+		return 0, fmt.Errorf("canot add nil Type")
+	}
+
+	hasID := func(t Type) (skip bool) {
+		_, isVoid := t.(*Void)
+		_, alreadyEncoded := s.typeIDs[t]
+		return isVoid || alreadyEncoded
+	}
+
+	iter := postorderTraversal(typ, hasID)
+	for iter.Next() {
+		id := s.lastTypeID + 1
+		if id < s.lastTypeID {
+			return 0, fmt.Errorf("type ID overflow")
+		}
+
+		s.typeIDs[iter.Type] = id
+		s.types = append(s.types, iter.Type)
+		s.lastTypeID = id
+
+		if name := newEssentialName(iter.Type.TypeName()); name != "" {
+			s.namedTypes[name] = append(s.namedTypes[name], iter.Type)
+		}
+	}
+
+	return s.TypeID(typ)
 }
 
 // TypeByID returns the BTF Type with the given type ID.
@@ -638,7 +700,11 @@ func (s *Spec) firstTypeID() TypeID {
 // Types from base are used to resolve references in the split BTF.
 // The returned Spec only contains types from the split BTF, not from the base.
 func LoadSplitSpecFromReader(r io.ReaderAt, base *Spec) (*Spec, error) {
-	return loadRawSpec(r, internal.NativeEndian, base.types, base.strings)
+	if base == nil {
+		return nil, errors.New("load split spec: missing base")
+	}
+
+	return loadRawSpec(r, internal.NativeEndian, base)
 }
 
 // TypesIterator iterates over types of a given spec.

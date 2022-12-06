@@ -98,9 +98,12 @@ func (ft *FeatureTest) execute() error {
 	}
 
 	if errors.Is(err, ErrNotSupported) {
-		v, err := NewVersion(ft.Version)
-		if err != nil {
-			return fmt.Errorf("feature %s: %w", ft.Name, err)
+		var v Version
+		if ft.Version != "" {
+			v, err = NewVersion(ft.Version)
+			if err != nil {
+				return fmt.Errorf("feature %s: %w", ft.Name, err)
+			}
 		}
 
 		ft.done = true
@@ -120,7 +123,8 @@ func (ft *FeatureTest) execute() error {
 
 // FeatureMatrix groups multiple related feature tests into a map.
 //
-// Useful when there is a small number of discrete features.
+// Useful when there is a small number of discrete features which are known
+// at compile time.
 //
 // It must not be modified concurrently with calling [FeatureMatrix.Result].
 type FeatureMatrix[K comparable] map[K]*FeatureTest
@@ -135,4 +139,46 @@ func (fm FeatureMatrix[K]) Result(key K) error {
 	}
 
 	return ft.execute()
+}
+
+// FeatureCache caches a potentially unlimited number of feature probes.
+//
+// Useful when there is a high cardinality for a feature test.
+type FeatureCache[K comparable] struct {
+	mu       sync.RWMutex
+	newTest  func(K) *FeatureTest
+	features map[K]*FeatureTest
+}
+
+func NewFeatureCache[K comparable](newTest func(K) *FeatureTest) *FeatureCache[K] {
+	return &FeatureCache[K]{
+		newTest:  newTest,
+		features: make(map[K]*FeatureTest),
+	}
+}
+
+func (fc *FeatureCache[K]) Result(key K) error {
+	// NB: Executing the feature test happens without fc.mu taken.
+	return fc.retrieve(key).execute()
+}
+
+func (fc *FeatureCache[K]) retrieve(key K) *FeatureTest {
+	fc.mu.RLock()
+	ft := fc.features[key]
+	fc.mu.RUnlock()
+
+	if ft != nil {
+		return ft
+	}
+
+	fc.mu.Lock()
+	defer fc.mu.Unlock()
+
+	if ft := fc.features[key]; ft != nil {
+		return ft
+	}
+
+	ft = fc.newTest(key)
+	fc.features[key] = ft
+	return ft
 }

@@ -11,11 +11,6 @@ import (
 // that will be initialized in the kernel.
 type MapType uint32
 
-// Max returns the latest supported MapType.
-func (MapType) Max() MapType {
-	return maxMapType - 1
-}
-
 // All the various map types that can be created
 const (
 	UnspecifiedMap MapType = iota
@@ -100,8 +95,6 @@ const (
 	InodeStorage
 	// TaskStorage - Specialized local storage map for task_struct.
 	TaskStorage
-	// maxMapType - Bound enum of MapTypes, has to be last in enum.
-	maxMapType
 )
 
 // hasPerCPUValue returns true if the Map stores a value per CPU.
@@ -123,11 +116,6 @@ func (mt MapType) canStoreProgram() bool {
 
 // ProgramType of the eBPF program
 type ProgramType uint32
-
-// Max return the latest supported ProgramType.
-func (ProgramType) Max() ProgramType {
-	return maxProgramType - 1
-}
 
 // eBPF program types
 const (
@@ -163,7 +151,6 @@ const (
 	LSM
 	SkLookup
 	Syscall
-	maxProgramType
 )
 
 // AttachType of the eBPF program, needed to differentiate allowed context accesses in

@@ -77,11 +77,3 @@ func TestHaveProgramHelper(t *testing.T) {
 
 	}
 }
-
-func TestHaveProgramHelperUnsupported(t *testing.T) {
-	testutils.SkipIfNotSupported(t, HaveProgramType(ebpf.SocketFilter))
-
-	if err := haveProgramHelper(ebpf.SocketFilter, asm.BuiltinFunc(math.MaxInt32)); !errors.Is(err, ebpf.ErrNotSupported) {
-		t.Fatalf("Expected ebpf.ErrNotSupported but was: %v", err)
-	}
-}

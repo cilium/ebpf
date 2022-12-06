@@ -2,8 +2,8 @@ package features
 
 import (
 	"errors"
+	"fmt"
 	"os"
-	"sync"
 
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/asm"
@@ -144,12 +144,14 @@ type helperKey struct {
 	helper asm.BuiltinFunc
 }
 
-var helperCache = struct {
-	sync.Mutex
-	results map[helperKey]error
-}{
-	results: make(map[helperKey]error),
-}
+var helperCache = internal.NewFeatureCache(func(key helperKey) *internal.FeatureTest {
+	return &internal.FeatureTest{
+		Name: fmt.Sprintf("%s for program type %s", key.helper, key.typ),
+		Fn: func() error {
+			return haveProgramHelper(key.typ, key.helper)
+		},
+	}
+})
 
 // HaveProgramHelper probes the running kernel for the availability of the specified helper
 // function to a specified program type.
@@ -164,28 +166,15 @@ var helperCache = struct {
 // Only `nil` and `ebpf.ErrNotSupported` are conclusive.
 //
 // Probe results are cached and persist throughout any process capability changes.
-func HaveProgramHelper(pt ebpf.ProgramType, helper asm.BuiltinFunc) (err error) {
-	defer func() {
-		// This closure modifies a named return variable.
-		err = wrapProbeErrors(err)
-	}()
-
+func HaveProgramHelper(pt ebpf.ProgramType, helper asm.BuiltinFunc) error {
 	if helper > helper.Max() {
 		return os.ErrInvalid
 	}
 
-	return haveProgramHelper(pt, helper)
+	return helperCache.Result(helperKey{pt, helper})
 }
 
 func haveProgramHelper(pt ebpf.ProgramType, helper asm.BuiltinFunc) error {
-	helperCache.Lock()
-	defer helperCache.Unlock()
-
-	key := helperKey{pt, helper}
-	if err, ok := helperCache.results[key]; ok {
-		return err
-	}
-
 	if err := HaveProgramType(pt); err != nil {
 		return err
 	}
@@ -211,7 +200,12 @@ func haveProgramHelper(pt ebpf.ProgramType, helper asm.BuiltinFunc) error {
 		spec.Flags = unix.BPF_F_SLEEPABLE
 	}
 
-	err := probeProgram(spec)
+	prog, err := ebpf.NewProgramWithOptions(spec, ebpf.ProgramOptions{
+		LogDisabled: true,
+	})
+	if err == nil {
+		prog.Close()
+	}
 
 	switch {
 	// EACCES occurs when attempting to create a program probe with a helper
@@ -228,6 +222,5 @@ func haveProgramHelper(pt ebpf.ProgramType, helper asm.BuiltinFunc) error {
 		err = ebpf.ErrNotSupported
 	}
 
-	helperCache.results[key] = err
 	return err
 }

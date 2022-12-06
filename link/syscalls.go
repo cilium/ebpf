@@ -2,6 +2,7 @@ package link
 
 import (
 	"errors"
+	"unsafe"
 
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/asm"
@@ -94,6 +95,26 @@ var haveBPFLink = internal.FeatureTest("bpf_link", "5.7", func() error {
 		AttachType: sys.AttachType(ebpf.AttachCGroupInetIngress),
 	}
 	_, err := sys.LinkCreate(&attr)
+	if errors.Is(err, unix.EINVAL) {
+		return internal.ErrNotSupported
+	}
+	if errors.Is(err, unix.EBADF) {
+		return nil
+	}
+	return err
+})
+
+var haveProgQuery = internal.FeatureTest("BPF_PROG_QUERY", "4.15", func() error {
+	ids := make([]uint32, 1)
+	attr := sys.ProgQueryAttr{
+		// We rely on this being checked during the syscall.
+		TargetFd:   ^uint32(0),
+		AttachType: sys.AttachType(ebpf.AttachCGroupInetIngress),
+		ProgIds:    sys.NewPointer(unsafe.Pointer(&ids[0])),
+		ProgCount:  uint32(len(ids)),
+	}
+
+	err := sys.ProgQuery(&attr)
 	if errors.Is(err, unix.EINVAL) {
 		return internal.ErrNotSupported
 	}

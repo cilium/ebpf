@@ -72,9 +72,9 @@ func TestStringTable(t *testing.T) {
 }
 
 func TestStringTableBuilder(t *testing.T) {
-	stb := newStringTableBuilder()
+	stb := newStringTableBuilder(0)
 
-	_, err := readStringTable(bytes.NewReader(stb.Marshal()), nil)
+	_, err := readStringTable(bytes.NewReader(stb.AppendEncoded(nil)), nil)
 	qt.Assert(t, err, qt.IsNil, qt.Commentf("Can't parse string table"))
 
 	_, err = stb.Add("foo\x00bar")
@@ -88,7 +88,7 @@ func TestStringTableBuilder(t *testing.T) {
 	foo2, _ := stb.Add("foo")
 	qt.Assert(t, foo1, qt.Equals, foo2, qt.Commentf("Adding the same string returns different offsets"))
 
-	table := stb.Marshal()
+	table := stb.AppendEncoded(nil)
 	if n := bytes.Count(table, []byte("foo")); n != 1 {
 		t.Fatalf("Marshalled string table contains foo %d times instead of once", n)
 	}

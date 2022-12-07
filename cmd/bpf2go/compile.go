@@ -72,7 +72,7 @@ func compile(args compileArgs) error {
 
 	var depFile *os.File
 	if args.dep != nil {
-		depFile, err = os.CreateTemp(os.TempDir(), "bpf2go")
+		depFile, err = os.CreateTemp("", "bpf2go")
 		if err != nil {
 			return err
 		}

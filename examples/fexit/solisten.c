@@ -1,7 +1,6 @@
 // +build ignore
 
 #include "common.h"
-#include "bpf_core_read.h"
 #include "bpf_endian.h"
 #include "bpf_tracing.h"
 
@@ -121,6 +120,7 @@ static void fill_event(struct event *event, struct socket *sock)
 	struct sock *sk;
 	struct inet_sock *inet;
 
+	/* 
 	sk = BPF_CORE_READ(sock, sk);
 	inet = (struct inet_sock *)sk;
 	family = BPF_CORE_READ(sk, __sk_common.skc_family);
@@ -131,21 +131,22 @@ static void fill_event(struct event *event, struct socket *sock)
 	if (family == AF_INET)
 		event->addr[0] = BPF_CORE_READ(sk, __sk_common.skc_rcv_saddr);
 	else if (family == AF_INET6)
-		BPF_CORE_READ_INTO(event->addr, sk, __sk_common.skc_v6_rcv_saddr.in6_u.u6_addr32);
+		BPF_CORE_READ_INTO(event->addr, sk, __sk_common.skc_v6_rcv_saddr.in6_u.u6_addr32); 
+	*/
 
-	/* sk = sock->sk;
-	inet = (struct inet_sock *)sock->sk;
+	sk = sock->sk;
+	inet = (struct inet_sock *)sk;
 	family = sk->__sk_common.skc_family;
 	type = sock->type;
 
 	event->proto = ((__u32)family << 16) | type;
-	// TODO There is a problem with inet->inet_sport pointer access. error: "access beyond struct sock at off 808 size 2"
-	event->port = bpf_ntohs(inet->inet_sport);  
+	bpf_probe_read_kernel(&event->port,sizeof(event->port),&inet->inet_sport);
+	event->port = bpf_ntohs(event->port);  
 	if (family == AF_INET)
 		event->addr[0] = sk->__sk_common.skc_rcv_saddr;
 	else if (family == AF_INET6)
 		bpf_probe_read_kernel(event->addr, sizeof(event->addr),
-                           sk->__sk_common.skc_v6_rcv_saddr.in6_u.u6_addr32); */
+                           sk->__sk_common.skc_v6_rcv_saddr.in6_u.u6_addr32);
 	bpf_get_current_comm(event->comm, sizeof(event->comm));
 }
 

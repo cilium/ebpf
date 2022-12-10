@@ -76,6 +76,7 @@ func compile(args compileArgs) error {
 		if err != nil {
 			return err
 		}
+		defer depFile.Close()
 		defer os.Remove(depFile.Name())
 
 		cmd.Args = append(cmd.Args,

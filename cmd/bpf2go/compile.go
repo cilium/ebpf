@@ -70,43 +70,34 @@ func compile(args compileArgs) error {
 	)
 	cmd.Dir = args.dir
 
-	var depRd, depWr *os.File
+	var depFile *os.File
 	if args.dep != nil {
-		depRd, depWr, err = os.Pipe()
+		depFile, err = os.CreateTemp("", "bpf2go")
 		if err != nil {
 			return err
 		}
-		defer depRd.Close()
-		defer depWr.Close()
+		defer depFile.Close()
+		defer os.Remove(depFile.Name())
 
-		// This becomes /dev/fd/3
-		cmd.ExtraFiles = append(cmd.ExtraFiles, depWr)
 		cmd.Args = append(cmd.Args,
 			// Output dependency information.
 			"-MD",
 			// Create phony targets so that deleting a dependency doesn't
 			// break the build.
 			"-MP",
-			// Write it to our pipe
-			"-MF/dev/fd/3",
+			// Write it to temporary file
+			"-MF"+depFile.Name(),
 		)
 	}
 
-	if err := cmd.Start(); err != nil {
+	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("can't execute %s: %s", args.cc, err)
 	}
 
-	if depRd != nil {
-		// Close our copy of the write end so that Copy will terminate
-		// when cc exits.
-		depWr.Close()
-		if _, err := io.Copy(args.dep, depRd); err != nil {
+	if depFile != nil {
+		if _, err := io.Copy(args.dep, depFile); err != nil {
 			return fmt.Errorf("error writing depfile: %w", err)
 		}
-	}
-
-	if err := cmd.Wait(); err != nil {
-		return fmt.Errorf("%s: %s", args.cc, err)
 	}
 
 	return nil

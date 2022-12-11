@@ -108,7 +108,17 @@ var haveProgramTypeMatrix = internal.FeatureMatrix[ebpf.ProgramType]{
 		},
 	},
 	// ebpf.Extension:             {Version: "5.6"},
-	// ebpf.LSM:                   {Version: "5.7"},
+	ebpf.LSM: {
+		Version: "5.7",
+		Fn: func() error {
+			return probeProgram((&ebpf.ProgramSpec{
+				Type:       ebpf.LSM,
+				AttachType: ebpf.AttachLSMMac,
+				AttachTo:   "file_mprotect",
+				License:    "GPL",
+			}))
+		},
+	},
 	ebpf.SkLookup: {
 		Version: "5.9",
 		Fn: func() error {

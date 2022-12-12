@@ -25,7 +25,7 @@ type probeType uint8
 type probeArgs struct {
 	symbol, group, path          string
 	offset, refCtrOffset, cookie uint64
-	pid                          int
+	pid, retprobeMaxActive       int
 	ret                          bool
 }
 
@@ -41,6 +41,12 @@ type KprobeOptions struct {
 	// Can be used to insert kprobes at arbitrary offsets in kernel functions,
 	// e.g. in places where functions have been inlined.
 	Offset uint64
+	// Increase the maximum number of concurrent invocations of a kretprobe.
+	// Required when tracing some long running functions in the kernel.
+	//
+	// Deprecated: this setting forces the use of an outdated kernel API and is not portable
+	// across kernel versions.
+	RetprobeMaxActive int
 }
 
 const (
@@ -176,6 +182,7 @@ func kprobe(symbol string, prog *ebpf.Program, opts *KprobeOptions, ret bool) (*
 	}
 
 	if opts != nil {
+		args.retprobeMaxActive = opts.RetprobeMaxActive
 		args.cookie = opts.Cookie
 		args.offset = opts.Offset
 	}
@@ -229,6 +236,11 @@ func pmuProbe(typ probeType, args probeArgs) (*perfEvent, error) {
 	}
 	if err != nil {
 		return nil, err
+	}
+
+	// Use tracefs if we want to set kretprobe's retprobeMaxActive.
+	if args.retprobeMaxActive != 0 {
+		return nil, fmt.Errorf("pmu probe: non-zero retprobeMaxActive: %w", ErrNotSupported)
 	}
 
 	var config uint64
@@ -379,12 +391,25 @@ func tracefsProbe(typ probeType, args probeArgs) (_ *perfEvent, err error) {
 			// If a livepatch handler is already active on the symbol, the write to
 			// tracefs will succeed, a trace event will show up, but creating the
 			// perf event will fail with EBUSY.
-			_ = closeTraceFSProbeEvent(typ, args.group, args.symbol)
+			_ = closeTraceFSProbeEvent(typ, args.group, args.symbol, false)
 		}
 	}()
 
 	// Get the newly-created trace event's id.
 	tid, err := getTraceEventID(group, args.symbol)
+	if errors.Is(err, os.ErrNotExist) {
+		if typ == kprobeType && args.ret == true && args.retprobeMaxActive != 0 {
+			// In kernels earlier than 4.12, if maxactive is used to create kretprobe events, 
+			// the event names created are not expected. We need to delete that event and
+			// create again without maxactive.
+			_ = closeTraceFSProbeEvent(typ, args.group, args.symbol, true)
+			args.retprobeMaxActive = 0
+			if err = createTraceFSProbeEvent(typ, args); err != nil {
+				return nil, fmt.Errorf("creating probe entry on tracefs: %w", err)
+			}
+			tid, err = getTraceEventID(group, args.symbol)
+		}
+	}
 	if err != nil {
 		return nil, fmt.Errorf("getting trace event id: %w", err)
 	}
@@ -408,8 +433,15 @@ func tracefsProbe(typ probeType, args probeArgs) (_ *perfEvent, err error) {
 // createTraceFSProbeEvent creates a new ephemeral trace event by writing to
 // <tracefs>/[k,u]probe_events. Returns os.ErrNotExist if symbol is not a valid
 // kernel symbol, or if it is not traceable with kprobes. Returns os.ErrExist
-// if a probe with the same group and symbol already exists.
+// if a probe with the same group and symbol already exists. Returns os.ErrInvalid
+// if maxactive is != 0 for anything but a kretprobe.
 func createTraceFSProbeEvent(typ probeType, args probeArgs) error {
+	if args.retprobeMaxActive != 0 {
+		if !args.ret || typ == uprobeType {
+			return fmt.Errorf("maxactive must be 0 except kretprobe: %w", os.ErrInvalid)
+		}
+	}
+
 	// Open the kprobe_events file in tracefs.
 	f, err := os.OpenFile(typ.EventsPath(), os.O_APPEND|os.O_WRONLY, 0666)
 	if err != nil {
@@ -435,7 +467,7 @@ func createTraceFSProbeEvent(typ probeType, args probeArgs) error {
 		// the eBPF program itself.
 		// See Documentation/kprobes.txt for more details.
 		token = kprobeToken(args)
-		pe = fmt.Sprintf("%s:%s/%s %s", probePrefix(args.ret), args.group, sanitizeSymbol(args.symbol), token)
+		pe = fmt.Sprintf("%s:%s/%s %s", probePrefix(args.ret, args.retprobeMaxActive), args.group, sanitizeSymbol(args.symbol), token)
 	case uprobeType:
 		// The uprobe_events syntax is as follows:
 		// p[:[GRP/]EVENT] PATH:OFFSET [FETCHARGS] : Set a probe
@@ -448,7 +480,7 @@ func createTraceFSProbeEvent(typ probeType, args probeArgs) error {
 		//
 		// See Documentation/trace/uprobetracer.txt for more details.
 		token = uprobeToken(args)
-		pe = fmt.Sprintf("%s:%s/%s %s", probePrefix(args.ret), args.group, args.symbol, token)
+		pe = fmt.Sprintf("%s:%s/%s %s", probePrefix(args.ret, 0), args.group, args.symbol, token)
 	}
 	_, err = f.WriteString(pe)
 
@@ -477,8 +509,9 @@ func createTraceFSProbeEvent(typ probeType, args probeArgs) error {
 }
 
 // closeTraceFSProbeEvent removes the [k,u]probe with the given type, group and symbol
-// from <tracefs>/[k,u]probe_events.
-func closeTraceFSProbeEvent(typ probeType, group, symbol string) error {
+// from <tracefs>/[k,u]probe_events. The lowkernel flag is used to delete kretprobe
+// events that use maxactive in low version kernels (kernel < 4.12)
+func closeTraceFSProbeEvent(typ probeType, group, symbol string, lowKernel bool) error {
 	f, err := os.OpenFile(typ.EventsPath(), os.O_APPEND|os.O_WRONLY, 0666)
 	if err != nil {
 		return fmt.Errorf("error opening %s: %w", typ.EventsPath(), err)
@@ -487,7 +520,12 @@ func closeTraceFSProbeEvent(typ probeType, group, symbol string) error {
 
 	// See [k,u]probe_events syntax above. The probe type does not need to be specified
 	// for removals.
-	pe := fmt.Sprintf("-:%s/%s", group, sanitizeSymbol(symbol))
+	var pe string
+	if lowKernel {
+		pe = fmt.Sprintf("-:kprobes/r_%s_0", symbol)
+	} else {
+		pe = fmt.Sprintf("-:%s/%s", group, sanitizeSymbol(symbol))
+	}
 	if _, err = f.WriteString(pe); err != nil {
 		return fmt.Errorf("writing '%s' to '%s': %w", pe, typ.EventsPath(), err)
 	}
@@ -517,8 +555,11 @@ func randomGroup(prefix string) (string, error) {
 	return group, nil
 }
 
-func probePrefix(ret bool) string {
+func probePrefix(ret bool, maxActive int) string {
 	if ret {
+		if maxActive > 0 {
+			return fmt.Sprintf("r%d", maxActive)
+		}
 		return "r"
 	}
 	return "p"

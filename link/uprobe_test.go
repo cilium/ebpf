@@ -265,8 +265,8 @@ func TestUprobeCreateTraceFS(t *testing.T) {
 
 	// Tee up cleanups in case any of the Asserts abort the function.
 	defer func() {
-		_ = closeTraceFSProbeEvent(uprobeType, pg, ssym)
-		_ = closeTraceFSProbeEvent(uprobeType, rg, ssym)
+		_ = closeTraceFSProbeEvent(uprobeType, pg, ssym, false)
+		_ = closeTraceFSProbeEvent(uprobeType, rg, ssym, false)
 	}()
 
 	// Prepare probe args.
@@ -288,7 +288,7 @@ func TestUprobeCreateTraceFS(t *testing.T) {
 		qt.Commentf("expected consecutive uprobe creation to contain os.ErrExist, got: %v", err))
 
 	// Expect a successful close of the kprobe.
-	c.Assert(closeTraceFSProbeEvent(uprobeType, pg, ssym), qt.IsNil)
+	c.Assert(closeTraceFSProbeEvent(uprobeType, pg, ssym, false), qt.IsNil)
 
 	args.group = rg
 	args.ret = true
@@ -302,7 +302,7 @@ func TestUprobeCreateTraceFS(t *testing.T) {
 		qt.Commentf("expected consecutive uretprobe creation to contain os.ErrExist, got: %v", err))
 
 	// Expect a successful close of the uretprobe.
-	c.Assert(closeTraceFSProbeEvent(uprobeType, rg, ssym), qt.IsNil)
+	c.Assert(closeTraceFSProbeEvent(uprobeType, rg, ssym, false), qt.IsNil)
 }
 
 func TestUprobeSanitizedSymbol(t *testing.T) {

@@ -230,7 +230,7 @@ func TestProgramTestRunInterrupt(t *testing.T) {
 				runtime.Goexit()
 			},
 		}
-		_, _, err := prog.testRun(&opts)
+		_, _, err := prog.run(&opts)
 
 		errs <- err
 	}()

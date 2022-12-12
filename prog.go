@@ -551,7 +551,7 @@ func (p *Program) Test(in []byte) (uint32, []byte, error) {
 		Repeat:  1,
 	}
 
-	ret, _, err := p.testRun(&opts)
+	ret, _, err := p.run(&opts)
 	if err != nil {
 		return ret, nil, fmt.Errorf("test program: %w", err)
 	}
@@ -562,7 +562,7 @@ func (p *Program) Test(in []byte) (uint32, []byte, error) {
 //
 // Note: the same restrictions from Test apply.
 func (p *Program) Run(opts *RunOptions) (uint32, error) {
-	ret, _, err := p.testRun(opts)
+	ret, _, err := p.run(opts)
 	if err != nil {
 		return ret, fmt.Errorf("run program: %w", err)
 	}
@@ -591,7 +591,7 @@ func (p *Program) Benchmark(in []byte, repeat int, reset func()) (uint32, time.D
 		Reset:  reset,
 	}
 
-	ret, total, err := p.testRun(&opts)
+	ret, total, err := p.run(&opts)
 	if err != nil {
 		return ret, total, fmt.Errorf("benchmark program: %w", err)
 	}
@@ -642,7 +642,7 @@ var haveProgRun = internal.NewFeatureTest("BPF_PROG_RUN", "4.12", func() error {
 	return err
 })
 
-func (p *Program) testRun(opts *RunOptions) (uint32, time.Duration, error) {
+func (p *Program) run(opts *RunOptions) (uint32, time.Duration, error) {
 	if uint(len(opts.Data)) > math.MaxUint32 {
 		return 0, 0, fmt.Errorf("input is too long")
 	}

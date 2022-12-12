@@ -230,7 +230,7 @@ func TestProgramTestRunInterrupt(t *testing.T) {
 				runtime.Goexit()
 			},
 		}
-		_, _, err := prog.testRun(&opts)
+		_, _, err := prog.run(&opts)
 
 		errs <- err
 	}()
@@ -636,7 +636,7 @@ func TestProgramFromFD(t *testing.T) {
 }
 
 func TestHaveProgTestRun(t *testing.T) {
-	testutils.CheckFeatureTest(t, haveProgTestRun)
+	testutils.CheckFeatureTest(t, haveProgRun)
 }
 
 func TestProgramGetNextID(t *testing.T) {

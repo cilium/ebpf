@@ -503,6 +503,9 @@ func (p *Program) Close() error {
 // Various options for Run'ing a Program
 type RunOptions struct {
 	// Program's data input. Required field.
+	//
+	// The kernel expects at least 14 bytes input for an ethernet header for
+	// XDP and SKB programs.
 	Data []byte
 	// Program's data after Program has run. Caller must allocate. Optional field.
 	DataOut []byte
@@ -510,7 +513,10 @@ type RunOptions struct {
 	Context interface{}
 	// Program's context after Program has run. Must be a pointer or slice. Optional field.
 	ContextOut interface{}
-	// Number of times to run Program. Optional field. Defaults to 1.
+	// Minimum number of times to run Program. Optional field. Defaults to 1.
+	//
+	// The program may be executed more often than this due to interruptions, e.g.
+	// when runtime.AllThreadsSyscall is invoked.
 	Repeat uint32
 	// Optional flags.
 	Flags uint32
@@ -519,14 +525,13 @@ type RunOptions struct {
 	CPU uint32
 	// Called whenever the syscall is interrupted, and should be set to testing.B.ResetTimer
 	// or similar. Typically used during benchmarking. Optional field.
+	//
+	// Deprecated: use [testing.B.ReportMetric] with unit "ns/op" instead.
 	Reset func()
 }
 
 // Test runs the Program in the kernel with the given input and returns the
 // value returned by the eBPF program. outLen may be zero.
-//
-// Note: the kernel expects at least 14 bytes input for an ethernet header for
-// XDP and SKB programs.
 //
 // This function requires at least Linux 4.12.
 func (p *Program) Test(in []byte) (uint32, []byte, error) {
@@ -546,9 +551,9 @@ func (p *Program) Test(in []byte) (uint32, []byte, error) {
 		Repeat:  1,
 	}
 
-	ret, _, err := p.testRun(&opts)
+	ret, _, err := p.run(&opts)
 	if err != nil {
-		return ret, nil, fmt.Errorf("can't test program: %w", err)
+		return ret, nil, fmt.Errorf("test program: %w", err)
 	}
 	return ret, opts.DataOut, nil
 }
@@ -557,9 +562,9 @@ func (p *Program) Test(in []byte) (uint32, []byte, error) {
 //
 // Note: the same restrictions from Test apply.
 func (p *Program) Run(opts *RunOptions) (uint32, error) {
-	ret, _, err := p.testRun(opts)
+	ret, _, err := p.run(opts)
 	if err != nil {
-		return ret, fmt.Errorf("can't test program: %w", err)
+		return ret, fmt.Errorf("run program: %w", err)
 	}
 	return ret, nil
 }
@@ -586,14 +591,14 @@ func (p *Program) Benchmark(in []byte, repeat int, reset func()) (uint32, time.D
 		Reset:  reset,
 	}
 
-	ret, total, err := p.testRun(&opts)
+	ret, total, err := p.run(&opts)
 	if err != nil {
-		return ret, total, fmt.Errorf("can't benchmark program: %w", err)
+		return ret, total, fmt.Errorf("benchmark program: %w", err)
 	}
 	return ret, total, nil
 }
 
-var haveProgTestRun = internal.NewFeatureTest("BPF_PROG_TEST_RUN", "4.12", func() error {
+var haveProgRun = internal.NewFeatureTest("BPF_PROG_RUN", "4.12", func() error {
 	prog, err := NewProgram(&ProgramSpec{
 		// SocketFilter does not require privileges on newer kernels.
 		Type: SocketFilter,
@@ -637,12 +642,12 @@ var haveProgTestRun = internal.NewFeatureTest("BPF_PROG_TEST_RUN", "4.12", func(
 	return err
 })
 
-func (p *Program) testRun(opts *RunOptions) (uint32, time.Duration, error) {
+func (p *Program) run(opts *RunOptions) (uint32, time.Duration, error) {
 	if uint(len(opts.Data)) > math.MaxUint32 {
 		return 0, 0, fmt.Errorf("input is too long")
 	}
 
-	if err := haveProgTestRun(); err != nil {
+	if err := haveProgRun(); err != nil {
 		return 0, 0, err
 	}
 
@@ -675,24 +680,37 @@ func (p *Program) testRun(opts *RunOptions) (uint32, time.Duration, error) {
 		Cpu:         opts.CPU,
 	}
 
+	if attr.Repeat == 0 {
+		attr.Repeat = 1
+	}
+
+retry:
 	for {
 		err := sys.ProgRun(&attr)
 		if err == nil {
-			break
+			break retry
 		}
 
 		if errors.Is(err, unix.EINTR) {
+			if attr.Repeat == 1 {
+				// Signal interruption is checked after each repetition on older
+				// kernels, hence we can get EINTR for repeat=1. Treat this as a
+				// successful run instead.
+				// "Fixed" in commit 607b9cc92bd7 ("bpf: Consolidate shared test timing code").
+				break retry
+			}
+
 			if opts.Reset != nil {
 				opts.Reset()
 			}
-			continue
+			continue retry
 		}
 
 		if errors.Is(err, sys.ENOTSUPP) {
-			return 0, 0, fmt.Errorf("kernel doesn't support testing program type %s: %w", p.Type(), ErrNotSupported)
+			return 0, 0, fmt.Errorf("kernel doesn't support running %s: %w", p.Type(), ErrNotSupported)
 		}
 
-		return 0, 0, fmt.Errorf("can't run test: %w", err)
+		return 0, 0, err
 	}
 
 	if opts.DataOut != nil {

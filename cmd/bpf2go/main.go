@@ -76,7 +76,7 @@ func run(stdout io.Writer, pkg, outputDir string, args []string) (err error) {
 	fs.StringVar(&b2g.strip, "strip", "", "`binary` used to strip DWARF from compiled BPF (default \"llvm-strip\")")
 	fs.BoolVar(&b2g.disableStripping, "no-strip", false, "disable stripping of DWARF")
 	flagCFlags := fs.String("cflags", "", "flags passed to the compiler, may contain quoted arguments")
-	fs.StringVar(&b2g.tags, "tags", "", "list of Go build tags to include in generated files")
+	fs.StringVar(&b2g.tags, "tags", "", "space-separated list of Go build tags to be ORed together in generated files")
 	flagTarget := fs.String("target", "bpfel,bpfeb", "clang target(s) to compile for (comma separated)")
 	fs.StringVar(&b2g.makeBase, "makebase", "", "write make compatible depinfo files relative to `directory`")
 	fs.Var(&b2g.cTypes, "type", "`Name` of a type to generate a Go declaration for, may be repeated")
@@ -261,7 +261,8 @@ type bpf2go struct {
 	skipGlobalTypes bool
 	// C types to include in the generatd output.
 	cTypes cTypes
-	// Go tags included in the .go
+	// Go tags included in the .go output. Must be space-separated and will be
+	// ORed together.
 	tags string
 	// Base directory of the Makefile. Enables outputting make-style dependencies
 	// in .d files.
@@ -292,12 +293,13 @@ func (b2g *bpf2go) convert(tgt target, arches []string) (err error) {
 		return err
 	}
 
-	var tags []string
+	// Strings in the inner slice will be ORed, all outer items will be ANDed.
+	var tags [][]string
 	if len(arches) > 0 {
-		tags = append(tags, strings.Join(arches, " "))
+		tags = append(tags, arches)
 	}
 	if b2g.tags != "" {
-		tags = append(tags, b2g.tags)
+		tags = append(tags, strings.Split(b2g.tags, " "))
 	}
 
 	cFlags := make([]string, len(b2g.cFlags))

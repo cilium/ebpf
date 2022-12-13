@@ -636,7 +636,7 @@ func TestProgramFromFD(t *testing.T) {
 }
 
 func TestHaveProgTestRun(t *testing.T) {
-	testutils.CheckFeatureTest(t, haveProgTestRun)
+	testutils.CheckFeatureTest(t, haveProgRun)
 }
 
 func TestProgramGetNextID(t *testing.T) {

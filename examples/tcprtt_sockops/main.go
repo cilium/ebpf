@@ -1,5 +1,4 @@
 //go:build linux
-// +build linux
 
 // This program demonstrates attaching an eBPF program to
 // a cgroupv2 path and using sockops to process TCP socket events.

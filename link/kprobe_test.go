@@ -70,6 +70,31 @@ func TestKprobeOffset(t *testing.T) {
 	t.Fatal("Can't attach with non-zero offset")
 }
 
+func TestKretprobeMaxActive(t *testing.T) {
+	// Requires at least 4.12
+	// 696ced4 "tracing/kprobes: expose maxactive for kretprobe in kprobe_events"
+	testutils.SkipOnOldKernel(t, "4.12", "kretprobe maxactive")
+
+	prog := mustLoadProgram(t, ebpf.Kprobe, 0, "")
+
+	k, err := Kprobe("do_sys_open", prog, &KprobeOptions{RetprobeMaxActive: 4096})
+	if !errors.Is(err, os.ErrInvalid) {
+		fmt.Printf("err:%v", err)
+		t.Fatal(err)
+	}
+	if k != nil {
+		k.Close()
+	}
+
+	k, err = Kretprobe("do_sys_open", prog, &KprobeOptions{RetprobeMaxActive: 4096})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if k != nil {
+		k.Close()
+	}
+}
+
 func TestKretprobe(t *testing.T) {
 	prog := mustLoadProgram(t, ebpf.Kprobe, 0, "")
 
@@ -251,8 +276,8 @@ func TestKprobeCreateTraceFS(t *testing.T) {
 
 	// Tee up cleanups in case any of the Asserts abort the function.
 	defer func() {
-		_ = closeTraceFSProbeEvent(kprobeType, pg, ksym)
-		_ = closeTraceFSProbeEvent(kprobeType, rg, ksym)
+		_ = closeTraceFSProbeEvent(kprobeType, pg, ksym, false)
+		_ = closeTraceFSProbeEvent(kprobeType, rg, ksym, false)
 	}()
 
 	// Prepare probe args.
@@ -269,7 +294,7 @@ func TestKprobeCreateTraceFS(t *testing.T) {
 		qt.Commentf("expected consecutive kprobe creation to contain os.ErrExist, got: %v", err))
 
 	// Expect a successful close of the kprobe.
-	c.Assert(closeTraceFSProbeEvent(kprobeType, pg, ksym), qt.IsNil)
+	c.Assert(closeTraceFSProbeEvent(kprobeType, pg, ksym, false), qt.IsNil)
 
 	args.group = rg
 	args.ret = true
@@ -283,7 +308,7 @@ func TestKprobeCreateTraceFS(t *testing.T) {
 		qt.Commentf("expected consecutive kretprobe creation to contain os.ErrExist, got: %v", err))
 
 	// Expect a successful close of the kretprobe.
-	c.Assert(closeTraceFSProbeEvent(kprobeType, rg, ksym), qt.IsNil)
+	c.Assert(closeTraceFSProbeEvent(kprobeType, rg, ksym, false), qt.IsNil)
 }
 
 func TestKprobeTraceFSGroup(t *testing.T) {

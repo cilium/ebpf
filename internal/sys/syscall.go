@@ -19,7 +19,7 @@ var ENOTSUPP = syscall.Errno(524)
 func BPF(cmd Cmd, attr unsafe.Pointer, size uintptr) (uintptr, error) {
 	// Prevent the Go profiler from repeatedly interrupting the verifier,
 	// which could otherwise lead to a livelock due to receiving EAGAIN.
-	if cmd == BPF_PROG_LOAD {
+	if cmd == BPF_PROG_LOAD || cmd == BPF_PROG_RUN {
 		maskProfilerSignal()
 		defer unmaskProfilerSignal()
 	}

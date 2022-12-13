@@ -1,4 +1,4 @@
-// +build ignore
+//go:build ignore
 
 #include "common.h"
 

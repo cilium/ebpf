@@ -403,7 +403,7 @@ func tracefsProbe(typ probeType, args probeArgs) (_ *perfEvent, err error) {
 			// If a livepatch handler is already active on the symbol, the write to
 			// tracefs will succeed, a trace event will show up, but creating the
 			// perf event will fail with EBUSY.
-			_ = closeTraceFSProbeEvent(typ, args.group, args.symbol, false)
+			_ = closeTraceFSProbeEvent(typ, args.group, args.symbol)
 		}
 	}()
 
@@ -414,7 +414,7 @@ func tracefsProbe(typ probeType, args probeArgs) (_ *perfEvent, err error) {
 			// In kernels earlier than 4.12, if maxactive is used to create kretprobe events,
 			// the event names created are not expected. We need to delete that event and
 			// create again without maxactive.
-			_ = closeTraceFSProbeEvent(typ, args.group, args.symbol, true)
+			_ = removeTraceFSProbeEvent(typ, fmt.Sprintf("-:kprobes/r_%s_0", sanitizeSymbol(args.symbol)))
 			args.retprobeMaxActive = 0
 			if err = createTraceFSProbeEvent(typ, args); err != nil {
 				return nil, fmt.Errorf("creating probe entry on tracefs: %w", err)
@@ -523,7 +523,12 @@ func createTraceFSProbeEvent(typ probeType, args probeArgs) error {
 // closeTraceFSProbeEvent removes the [k,u]probe with the given type, group and symbol
 // from <tracefs>/[k,u]probe_events. The lowkernel flag is used to delete kretprobe
 // events that use maxactive in low version kernels (kernel < 4.12)
-func closeTraceFSProbeEvent(typ probeType, group, symbol string, lowKernel bool) error {
+func closeTraceFSProbeEvent(typ probeType, group, symbol string) error {
+	pe := fmt.Sprintf("%s/%s", group, sanitizeSymbol(symbol))
+	return removeTraceFSProbeEvent(typ, pe)
+}
+
+func removeTraceFSProbeEvent(typ probeType, pe string) error {
 	f, err := os.OpenFile(typ.EventsPath(), os.O_APPEND|os.O_WRONLY, 0666)
 	if err != nil {
 		return fmt.Errorf("error opening %s: %w", typ.EventsPath(), err)
@@ -532,14 +537,8 @@ func closeTraceFSProbeEvent(typ probeType, group, symbol string, lowKernel bool)
 
 	// See [k,u]probe_events syntax above. The probe type does not need to be specified
 	// for removals.
-	var pe string
-	if lowKernel {
-		pe = fmt.Sprintf("-:kprobes/r_%s_0", symbol)
-	} else {
-		pe = fmt.Sprintf("-:%s/%s", group, sanitizeSymbol(symbol))
-	}
-	if _, err = f.WriteString(pe); err != nil {
-		return fmt.Errorf("writing '%s' to '%s': %w", pe, typ.EventsPath(), err)
+	if _, err = f.WriteString("-:" + pe); err != nil {
+		return fmt.Errorf("remove event %q from %s: %w", pe, typ.EventsPath(), err)
 	}
 
 	return nil

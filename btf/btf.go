@@ -105,7 +105,7 @@ func LoadSpecFromReader(rd io.ReaderAt) (*Spec, error) {
 
 // LoadSpecAndExtInfosFromReader reads from an ELF.
 //
-// ExtInfos may be nil if the ELF doesn't contain section metadta.
+// ExtInfos may be nil if the ELF doesn't contain section metadata.
 // Returns ErrNotFound if the ELF contains no BTF.
 func LoadSpecAndExtInfosFromReader(rd io.ReaderAt) (*Spec, *ExtInfos, error) {
 	file, err := internal.NewSafeELFFile(rd)

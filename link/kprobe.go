@@ -412,14 +412,9 @@ func tracefsProbe(typ probeType, args probeArgs) (_ *perfEvent, err error) {
 	if errors.Is(err, os.ErrNotExist) {
 		if typ == kprobeType && args.ret && args.retprobeMaxActive != 0 {
 			// In kernels earlier than 4.12, if maxactive is used to create kretprobe events,
-			// the event names created are not expected. We need to delete that event and
-			// create again without maxactive.
+			// the event names created are not expected.
 			_ = removeTraceFSProbeEvent(typ, fmt.Sprintf("-:kprobes/r_%s_0", sanitizeSymbol(args.symbol)))
-			args.retprobeMaxActive = 0
-			if err = createTraceFSProbeEvent(typ, args); err != nil {
-				return nil, fmt.Errorf("creating probe entry on tracefs: %w", err)
-			}
-			tid, err = getTraceEventID(group, args.symbol)
+			return nil, fmt.Errorf("create trace event with non-default maxactive: %w", ErrNotSupported)
 		}
 	}
 	if err != nil {

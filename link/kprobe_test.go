@@ -235,13 +235,13 @@ func TestKprobeTraceFS(t *testing.T) {
 	args := probeArgs{group: "testgroup", symbol: "symbol"}
 
 	// Write a k(ret)probe event for a non-existing symbol.
-	err = createTraceFSProbeEvent(kprobeType, args)
+	_, err = createTraceFSProbeEvent(kprobeType, args)
 	c.Assert(errors.Is(err, os.ErrNotExist), qt.IsTrue, qt.Commentf("got error: %s", err))
 
 	// A kernel bug was fixed in 97c753e62e6c where EINVAL was returned instead
 	// of ENOENT, but only for kretprobes.
 	args.ret = true
-	err = createTraceFSProbeEvent(kprobeType, args)
+	_, err = createTraceFSProbeEvent(kprobeType, args)
 	if !(errors.Is(err, os.ErrNotExist) || errors.Is(err, unix.EINVAL)) {
 		t.Fatal(err)
 	}
@@ -284,12 +284,12 @@ func TestKprobeCreateTraceFS(t *testing.T) {
 	args := probeArgs{group: pg, symbol: ksym}
 
 	// Create a kprobe.
-	err := createTraceFSProbeEvent(kprobeType, args)
+	_, err := createTraceFSProbeEvent(kprobeType, args)
 	c.Assert(err, qt.IsNil)
 
 	// Attempt to create an identical kprobe using tracefs,
 	// expect it to fail with os.ErrExist.
-	err = createTraceFSProbeEvent(kprobeType, args)
+	_, err = createTraceFSProbeEvent(kprobeType, args)
 	c.Assert(errors.Is(err, os.ErrExist), qt.IsTrue,
 		qt.Commentf("expected consecutive kprobe creation to contain os.ErrExist, got: %v", err))
 
@@ -300,10 +300,10 @@ func TestKprobeCreateTraceFS(t *testing.T) {
 	args.ret = true
 
 	// Same test for a kretprobe.
-	err = createTraceFSProbeEvent(kprobeType, args)
+	_, err = createTraceFSProbeEvent(kprobeType, args)
 	c.Assert(err, qt.IsNil)
 
-	err = createTraceFSProbeEvent(kprobeType, args)
+	_, err = createTraceFSProbeEvent(kprobeType, args)
 	c.Assert(os.IsExist(err), qt.IsFalse,
 		qt.Commentf("expected consecutive kretprobe creation to contain os.ErrExist, got: %v", err))
 

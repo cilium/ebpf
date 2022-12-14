@@ -419,6 +419,14 @@ import (
 			"IterCreate", retFd, "iter_create", "BPF_ITER_CREATE",
 			nil,
 		},
+		{
+			"ProgQuery", retError, "prog_query", "BPF_PROG_QUERY",
+			[]patch{
+				replace(enumTypes["AttachType"], "attach_type"),
+				replace(pointer, "prog_ids"),
+				rename("prog_cnt", "prog_count"),
+			},
+		},
 	}
 
 	sort.Slice(attrs, func(i, j int) bool {

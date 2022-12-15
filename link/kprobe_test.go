@@ -76,22 +76,20 @@ func TestKretprobeMaxActive(t *testing.T) {
 	prog := mustLoadProgram(t, ebpf.Kprobe, 0, "")
 
 	k, err := Kprobe("do_sys_open", prog, &KprobeOptions{RetprobeMaxActive: 4096})
-	if !strings.Contains(err.Error(), "can only set maxactive on kretprobes") {
-		t.Fatal(err)
+	if !errors.Is(err, errInvalidMaxActive) {
+		t.Fatal("Expected errInvalidMaxActive, got", err)
 	}
 	if k != nil {
 		k.Close()
 	}
 
 	k, err = Kretprobe("__put_task_struct", prog, &KprobeOptions{RetprobeMaxActive: 4096})
-	if err != nil {
-		if testutils.MustKernelVersion().Less(internal.Version{4, 12, 0}) {
-			if !errors.Is(err, ErrNotSupported) {
-				t.Fatal(err)
-			}
-		} else {
-			t.Fatal(err)
+	if testutils.MustKernelVersion().Less(internal.Version{4, 12, 0}) {
+		if !errors.Is(err, ErrNotSupported) {
+			t.Fatal("Expected ErrNotSupported, got", err)
 		}
+	} else if err != nil {
+		t.Fatal("Kretprobe with maxactive returned an error:", err)
 	}
 	if k != nil {
 		k.Close()

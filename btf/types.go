@@ -638,10 +638,10 @@ func Sizeof(typ Type) (int, error) {
 	return 0, fmt.Errorf("type %s: exceeded type depth", typ)
 }
 
-// alignof returns the alignment of a type.
+// Alignof returns the alignment of a type.
 //
 // Currently only supports the subset of types necessary for bitfield relocations.
-func alignof(typ Type) (int, error) {
+func Alignof(typ Type) (int, error) {
 	switch t := UnderlyingType(typ).(type) {
 	case *Enum:
 		return int(t.size()), nil

@@ -245,12 +245,7 @@ func TestUprobeTraceFS(t *testing.T) {
 }
 
 // Test u(ret)probe creation writing directly to <tracefs>/uprobe_events.
-// Only runs on 5.0 and over. Earlier versions ignored writes of duplicate
-// events, while 5.0 started returning -EEXIST when a uprobe event already
-// exists.
 func TestUprobeCreateTraceFS(t *testing.T) {
-	testutils.SkipOnOldKernel(t, "5.0", "<tracefs>/uprobe_events doesn't reject duplicate events")
-
 	c := qt.New(t)
 
 	// Fetch the offset from the /bin/bash Executable already defined.
@@ -278,26 +273,26 @@ func TestUprobeCreateTraceFS(t *testing.T) {
 	}
 
 	// Create a uprobe.
-	err = createTraceFSProbeEvent(uprobeType, args)
+	_, err = createTraceFSProbeEvent(uprobeType, args)
 	c.Assert(err, qt.IsNil)
 
 	// Attempt to create an identical uprobe using tracefs,
 	// expect it to fail with os.ErrExist.
-	err = createTraceFSProbeEvent(uprobeType, args)
+	_, err = createTraceFSProbeEvent(uprobeType, args)
 	c.Assert(errors.Is(err, os.ErrExist), qt.IsTrue,
 		qt.Commentf("expected consecutive uprobe creation to contain os.ErrExist, got: %v", err))
 
-	// Expect a successful close of the kprobe.
+	// Expect a successful close of the uprobe.
 	c.Assert(closeTraceFSProbeEvent(uprobeType, pg, ssym), qt.IsNil)
 
 	args.group = rg
 	args.ret = true
 
 	// Same test for a kretprobe.
-	err = createTraceFSProbeEvent(uprobeType, args)
+	_, err = createTraceFSProbeEvent(uprobeType, args)
 	c.Assert(err, qt.IsNil)
 
-	err = createTraceFSProbeEvent(uprobeType, args)
+	_, err = createTraceFSProbeEvent(uprobeType, args)
 	c.Assert(os.IsExist(err), qt.IsFalse,
 		qt.Commentf("expected consecutive uretprobe creation to contain os.ErrExist, got: %v", err))
 

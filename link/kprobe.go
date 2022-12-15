@@ -424,7 +424,7 @@ func createTraceFSProbeEvent(typ probeType, args probeArgs) (uint64, error) {
 	// entry, so we need to rely on reads for detecting uniqueness.
 	_, err := getTraceEventID(args.group, args.symbol)
 	if err == nil {
-		return 0, fmt.Errorf("trace event already exists: %s/%s", args.group, args.symbol)
+		return 0, fmt.Errorf("trace event %s/%s: %w", args.group, args.symbol, os.ErrExist)
 	}
 	if err != nil && !errors.Is(err, os.ErrNotExist) {
 		return 0, fmt.Errorf("checking trace event %s/%s: %w", args.group, args.symbol, err)

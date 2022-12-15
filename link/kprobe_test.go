@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"strings"
 	"testing"
 
 	qt "github.com/frankban/quicktest"
@@ -284,11 +283,10 @@ func TestKprobeCreateTraceFS(t *testing.T) {
 	c.Assert(err, qt.IsNil)
 
 	// Attempt to create an identical kprobe using tracefs,
-	// expect it to fail with 'trace event already exists:group/symbol'.
+	// expect it to fail with os.ErrExist.
 	_, err = createTraceFSProbeEvent(kprobeType, args)
-	errMsg := fmt.Sprintf("trace event already exists: %s/%s", args.group, args.symbol)
-	c.Assert(strings.Contains(err.Error(), errMsg), qt.IsTrue,
-		qt.Commentf("expected consecutive kprobe creation to contain: %s, got: %v", errMsg, err))
+	c.Assert(errors.Is(err, os.ErrExist), qt.IsTrue,
+		qt.Commentf("expected consecutive kprobe creation to contain os.ErrExist, got: %v", err))
 
 	// Expect a successful close of the kprobe.
 	c.Assert(closeTraceFSProbeEvent(kprobeType, pg, ksym), qt.IsNil)
@@ -301,9 +299,8 @@ func TestKprobeCreateTraceFS(t *testing.T) {
 	c.Assert(err, qt.IsNil)
 
 	_, err = createTraceFSProbeEvent(kprobeType, args)
-	errMsg = fmt.Sprintf("trace event already exists: %s/%s", args.group, args.symbol)
-	c.Assert(strings.Contains(err.Error(), errMsg), qt.IsTrue,
-		qt.Commentf("expected consecutive kretprobe creation to contain: %s, got: %v", errMsg, err))
+	c.Assert(os.IsExist(err), qt.IsFalse,
+		qt.Commentf("expected consecutive kretprobe creation to contain os.ErrExist, got: %v", err))
 
 	// Expect a successful close of the kretprobe.
 	c.Assert(closeTraceFSProbeEvent(kprobeType, rg, ksym), qt.IsNil)

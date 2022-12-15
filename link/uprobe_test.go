@@ -7,7 +7,6 @@ import (
 	"os"
 	"os/exec"
 	"path"
-	"strings"
 	"testing"
 
 	qt "github.com/frankban/quicktest"
@@ -278,11 +277,10 @@ func TestUprobeCreateTraceFS(t *testing.T) {
 	c.Assert(err, qt.IsNil)
 
 	// Attempt to create an identical uprobe using tracefs,
-	// expect it to fail with 'trace event already exists:group/symbol'.
+	// expect it to fail with os.ErrExist.
 	_, err = createTraceFSProbeEvent(uprobeType, args)
-	errMsg := fmt.Sprintf("trace event already exists: %s/%s", args.group, args.symbol)
-	c.Assert(strings.Contains(err.Error(), errMsg), qt.IsTrue,
-		qt.Commentf("expected consecutive uprobe creation to contain: %s, got: %v", errMsg, err))
+	c.Assert(errors.Is(err, os.ErrExist), qt.IsTrue,
+		qt.Commentf("expected consecutive uprobe creation to contain os.ErrExist, got: %v", err))
 
 	// Expect a successful close of the uprobe.
 	c.Assert(closeTraceFSProbeEvent(uprobeType, pg, ssym), qt.IsNil)
@@ -295,9 +293,8 @@ func TestUprobeCreateTraceFS(t *testing.T) {
 	c.Assert(err, qt.IsNil)
 
 	_, err = createTraceFSProbeEvent(uprobeType, args)
-	errMsg = fmt.Sprintf("trace event already exists: %s/%s", args.group, args.symbol)
-	c.Assert(strings.Contains(err.Error(), errMsg), qt.IsTrue,
-		qt.Commentf("expected consecutive uretprobe creation to contain: %s, got: %v", errMsg, err))
+	c.Assert(os.IsExist(err), qt.IsFalse,
+		qt.Commentf("expected consecutive uretprobe creation to contain os.ErrExist, got: %v", err))
 
 	// Expect a successful close of the uretprobe.
 	c.Assert(closeTraceFSProbeEvent(uprobeType, rg, ssym), qt.IsNil)

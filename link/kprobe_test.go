@@ -71,15 +71,11 @@ func TestKprobeOffset(t *testing.T) {
 }
 
 func TestKretprobeMaxActive(t *testing.T) {
-	// Requires at least 4.12
-	// 696ced4 "tracing/kprobes: expose maxactive for kretprobe in kprobe_events"
-	testutils.SkipOnOldKernel(t, "4.12", "kretprobe maxactive")
-
 	prog := mustLoadProgram(t, ebpf.Kprobe, 0, "")
 
 	k, err := Kprobe("do_sys_open", prog, &KprobeOptions{RetprobeMaxActive: 4096})
-	if !errors.Is(err, os.ErrInvalid) {
-		fmt.Printf("err:%v", err)
+	e := errors.New("can only set maxactive on kretprobes")
+	if !errors.As(err, &e) {
 		t.Fatal(err)
 	}
 	if k != nil {
@@ -88,7 +84,13 @@ func TestKretprobeMaxActive(t *testing.T) {
 
 	k, err = Kretprobe("do_sys_open", prog, &KprobeOptions{RetprobeMaxActive: 4096})
 	if err != nil {
-		t.Fatal(err)
+		if testutils.MustKernelVersion().Less(internal.Version{4, 12, 0}) {
+			if !errors.Is(err, ErrNotSupported) {
+				t.Fatal(err)
+			}
+		} else {
+			t.Fatal(err)
+		}
 	}
 	if k != nil {
 		k.Close()

@@ -83,7 +83,7 @@ func TestKretprobeMaxActive(t *testing.T) {
 		k.Close()
 	}
 
-	k, err = Kretprobe("do_sys_open", prog, &KprobeOptions{RetprobeMaxActive: 4096})
+	k, err = Kretprobe("__put_task_struct", prog, &KprobeOptions{RetprobeMaxActive: 4096})
 	if err != nil {
 		if testutils.MustKernelVersion().Less(internal.Version{4, 12, 0}) {
 			if !errors.Is(err, ErrNotSupported) {
@@ -286,7 +286,7 @@ func TestKprobeCreateTraceFS(t *testing.T) {
 	c.Assert(err, qt.IsNil)
 
 	// Attempt to create an identical kprobe using tracefs,
-	// expect it to fail with os.ErrExist.
+	// expect it to fail with 'trace event already exists:group/symbol'.
 	_, err = createTraceFSProbeEvent(kprobeType, args)
 	errMsg := fmt.Sprintf("trace event already exists: %s/%s", args.group, args.symbol)
 	c.Assert(strings.Contains(err.Error(), errMsg), qt.IsTrue,

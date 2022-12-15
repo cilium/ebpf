@@ -408,6 +408,8 @@ func tracefsProbe(typ probeType, args probeArgs) (*perfEvent, error) {
 	}, nil
 }
 
+var errInvalidMaxActive = errors.New("can only set maxactive on kretprobes")
+
 // createTraceFSProbeEvent creates a new ephemeral trace event.
 //
 // Returns os.ErrNotExist if symbol is not a valid
@@ -453,7 +455,7 @@ func createTraceFSProbeEvent(typ probeType, args probeArgs) (uint64, error) {
 		// the eBPF program itself.
 		// See Documentation/kprobes.txt for more details.
 		if args.retprobeMaxActive != 0 && !args.ret {
-			return 0, fmt.Errorf("can only set maxactive on kretprobes")
+			return 0, errInvalidMaxActive
 		}
 		token = kprobeToken(args)
 		pe = fmt.Sprintf("%s:%s/%s %s", probePrefix(args.ret, args.retprobeMaxActive), args.group, sanitizeSymbol(args.symbol), token)
@@ -469,7 +471,7 @@ func createTraceFSProbeEvent(typ probeType, args probeArgs) (uint64, error) {
 		//
 		// See Documentation/trace/uprobetracer.txt for more details.
 		if args.retprobeMaxActive != 0 {
-			return 0, fmt.Errorf("can only set maxactive on kretprobes")
+			return 0, errInvalidMaxActive
 		}
 		token = uprobeToken(args)
 		pe = fmt.Sprintf("%s:%s/%s %s", probePrefix(args.ret, 0), args.group, args.symbol, token)

@@ -276,7 +276,7 @@ func getTraceEventID(group, name string) (uint64, error) {
 	}
 	tid, err := readUint64FromFile("%d\n", path)
 	if errors.Is(err, os.ErrNotExist) {
-		return 0, fmt.Errorf("trace event %s/%s: %w", group, name, os.ErrNotExist)
+		return 0, err
 	}
 	if err != nil {
 		return 0, fmt.Errorf("reading trace event ID of %s/%s: %w", group, name, err)

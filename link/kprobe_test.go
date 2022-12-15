@@ -4,12 +4,14 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strings"
 	"testing"
 
 	qt "github.com/frankban/quicktest"
 
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/asm"
+	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/testutils"
 	"github.com/cilium/ebpf/internal/unix"
 )
@@ -71,15 +73,10 @@ func TestKprobeOffset(t *testing.T) {
 }
 
 func TestKretprobeMaxActive(t *testing.T) {
-	// Requires at least 4.12
-	// 696ced4 "tracing/kprobes: expose maxactive for kretprobe in kprobe_events"
-	testutils.SkipOnOldKernel(t, "4.12", "kretprobe maxactive")
-
 	prog := mustLoadProgram(t, ebpf.Kprobe, 0, "")
 
 	k, err := Kprobe("do_sys_open", prog, &KprobeOptions{RetprobeMaxActive: 4096})
-	if !errors.Is(err, os.ErrInvalid) {
-		fmt.Printf("err:%v", err)
+	if !strings.Contains(err.Error(), "can only set maxactive on kretprobes") {
 		t.Fatal(err)
 	}
 	if k != nil {
@@ -88,7 +85,13 @@ func TestKretprobeMaxActive(t *testing.T) {
 
 	k, err = Kretprobe("do_sys_open", prog, &KprobeOptions{RetprobeMaxActive: 4096})
 	if err != nil {
-		t.Fatal(err)
+		if testutils.MustKernelVersion().Less(internal.Version{4, 12, 0}) {
+			if !errors.Is(err, ErrNotSupported) {
+				t.Fatal(err)
+			}
+		} else {
+			t.Fatal(err)
+		}
 	}
 	if k != nil {
 		k.Close()

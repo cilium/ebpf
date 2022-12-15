@@ -500,11 +500,13 @@ func createTraceFSProbeEvent(typ probeType, args probeArgs) (uint64, error) {
 	// Get the newly-created trace event's id.
 	tid, err := getTraceEventID(args.group, args.symbol)
 	if args.retprobeMaxActive != 0 && errors.Is(err, os.ErrNotExist) {
-		// In kernels earlier than 4.12, if maxactive is used to create kretprobe events,
-		// the event names created are not expected.
-		removeErr := removeTraceFSProbeEvent(typ, fmt.Sprintf("kprobes/r_%s_0", args.symbol))
-		if removeErr != nil {
-			return 0, fmt.Errorf("failed to remove spurious maxactive event: %s", removeErr)
+		// Kernels < 4.12 don't support maxactive and therefore auto generate
+		// group and event names from the symbol and offset. The symbol is used
+		// without any sanitization.
+		// See https://elixir.bootlin.com/linux/v4.10/source/kernel/trace/trace_kprobe.c#L712
+		event := fmt.Sprintf("kprobes/r_%s_%d", args.symbol, args.offset)
+		if err := removeTraceFSProbeEvent(typ, event); err != nil {
+			return 0, fmt.Errorf("failed to remove spurious maxactive event: %s", err)
 		}
 		return 0, fmt.Errorf("create trace event with non-default maxactive: %w", ErrNotSupported)
 	}

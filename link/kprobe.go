@@ -502,7 +502,7 @@ func createTraceFSProbeEvent(typ probeType, args probeArgs) (uint64, error) {
 	if args.retprobeMaxActive != 0 && errors.Is(err, os.ErrNotExist) {
 		// In kernels earlier than 4.12, if maxactive is used to create kretprobe events,
 		// the event names created are not expected.
-		removeErr := removeTraceFSProbeEvent(typ, fmt.Sprintf("-:kprobes/r_%s_0", sanitizeSymbol(args.symbol)))
+		removeErr := removeTraceFSProbeEvent(typ, fmt.Sprintf("kprobes/r_%s_0", sanitizeSymbol(args.symbol)))
 		if removeErr != nil {
 			return 0, fmt.Errorf("failed to remove spurious maxactive event: %s", removeErr)
 		}

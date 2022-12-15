@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path"
+	"strings"
 	"testing"
 
 	qt "github.com/frankban/quicktest"
@@ -245,12 +246,7 @@ func TestUprobeTraceFS(t *testing.T) {
 }
 
 // Test u(ret)probe creation writing directly to <tracefs>/uprobe_events.
-// Only runs on 5.0 and over. Earlier versions ignored writes of duplicate
-// events, while 5.0 started returning -EEXIST when a uprobe event already
-// exists.
 func TestUprobeCreateTraceFS(t *testing.T) {
-	testutils.SkipOnOldKernel(t, "5.0", "<tracefs>/uprobe_events doesn't reject duplicate events")
-
 	c := qt.New(t)
 
 	// Fetch the offset from the /bin/bash Executable already defined.
@@ -282,12 +278,13 @@ func TestUprobeCreateTraceFS(t *testing.T) {
 	c.Assert(err, qt.IsNil)
 
 	// Attempt to create an identical uprobe using tracefs,
-	// expect it to fail with os.ErrExist.
+	// expect it to fail with 'trace event already exists:group/symbol'.
 	_, err = createTraceFSProbeEvent(uprobeType, args)
-	c.Assert(errors.Is(err, os.ErrExist), qt.IsTrue,
-		qt.Commentf("expected consecutive uprobe creation to contain os.ErrExist, got: %v", err))
+	errMsg := fmt.Sprintf("trace event already exists: %s/%s", args.group, args.symbol)
+	c.Assert(strings.Contains(err.Error(), errMsg), qt.IsTrue,
+		qt.Commentf("expected consecutive uprobe creation to contain: %s, got: %v", errMsg, err))
 
-	// Expect a successful close of the kprobe.
+	// Expect a successful close of the uprobe.
 	c.Assert(closeTraceFSProbeEvent(uprobeType, pg, ssym), qt.IsNil)
 
 	args.group = rg
@@ -298,8 +295,9 @@ func TestUprobeCreateTraceFS(t *testing.T) {
 	c.Assert(err, qt.IsNil)
 
 	_, err = createTraceFSProbeEvent(uprobeType, args)
-	c.Assert(os.IsExist(err), qt.IsFalse,
-		qt.Commentf("expected consecutive uretprobe creation to contain os.ErrExist, got: %v", err))
+	errMsg = fmt.Sprintf("trace event already exists: %s/%s", args.group, args.symbol)
+	c.Assert(strings.Contains(err.Error(), errMsg), qt.IsTrue,
+		qt.Commentf("expected consecutive uretprobe creation to contain: %s, got: %v", errMsg, err))
 
 	// Expect a successful close of the uretprobe.
 	c.Assert(closeTraceFSProbeEvent(uprobeType, rg, ssym), qt.IsNil)

@@ -7,6 +7,7 @@ import (
 
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/asm"
+	"github.com/cilium/ebpf/btf"
 	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/sys"
 	"github.com/cilium/ebpf/internal/unix"
@@ -92,7 +93,16 @@ var haveProgramTypeMatrix = internal.FeatureMatrix[ebpf.ProgramType]{
 			})
 		},
 	},
-	// ebpf.Tracing:               {Version: "5.5"},
+	ebpf.Tracing: {
+		Version: "5.5",
+		Fn: func() error {
+			return probeProgram(&ebpf.ProgramSpec{
+				Type:       ebpf.Tracing,
+				AttachType: ebpf.AttachTraceFEntry,
+				AttachTo:   "inet_dgram_connect",
+			})
+		},
+	},
 	ebpf.StructOps: {
 		Version: "5.6",
 		Fn: func() error {
@@ -107,16 +117,54 @@ var haveProgramTypeMatrix = internal.FeatureMatrix[ebpf.ProgramType]{
 			return err
 		},
 	},
-	// ebpf.Extension:             {Version: "5.6"},
+	ebpf.Extension: {
+		Version: "5.6",
+		Fn: func() error {
+			// create btf.Func to add to first ins of target and extension so both progs are btf powered
+			btfFn := btf.Func{Name: "global_func", Type: &btf.FuncProto{Return: &btf.Int{}}, Linkage: btf.GlobalFunc}
+			ins := asm.Mov.Imm(asm.R0, 0)
+			btf.SetFuncMetadata(&ins, &btfFn)
+
+			// create target prog
+			prog, err := ebpf.NewProgramWithOptions(
+				&ebpf.ProgramSpec{
+					Type: ebpf.XDP,
+					Instructions: asm.Instructions{
+						ins,
+						asm.Return(),
+					},
+				},
+				ebpf.ProgramOptions{
+					LogDisabled: false,
+				},
+			)
+			if err != nil {
+				return err
+			}
+			defer prog.Close()
+
+			// probe for Extension prog with target
+			return probeProgram(&ebpf.ProgramSpec{
+				Type: ebpf.Extension,
+				Instructions: asm.Instructions{
+					ins,
+					asm.Return(),
+				},
+				AttachType:   ebpf.AttachNone,
+				AttachTarget: prog,
+				AttachTo:     "global_func",
+			})
+		},
+	},
 	ebpf.LSM: {
 		Version: "5.7",
 		Fn: func() error {
-			return probeProgram((&ebpf.ProgramSpec{
+			return probeProgram(&ebpf.ProgramSpec{
 				Type:       ebpf.LSM,
 				AttachType: ebpf.AttachLSMMac,
 				AttachTo:   "file_mprotect",
 				License:    "GPL",
-			}))
+			})
 		},
 	},
 	ebpf.SkLookup: {

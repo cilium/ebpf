@@ -115,7 +115,7 @@ func (ei *ExtInfos) Assign(insns asm.Instructions, section string) {
 	iter := insns.Iterate()
 	for iter.Next() {
 		if len(funcInfos) > 0 && funcInfos[0].offset == iter.Offset {
-			iter.Ins.Metadata.Set(funcInfoMeta{}, funcInfos[0].fn)
+			SetFuncMetadata(iter.Ins, funcInfos[0].fn)
 			funcInfos = funcInfos[1:]
 		}
 

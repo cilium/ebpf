@@ -7,6 +7,7 @@ import (
 
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/asm"
+	"github.com/cilium/ebpf/btf"
 	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/sys"
 	"github.com/cilium/ebpf/internal/unix"
@@ -92,7 +93,16 @@ var haveProgramTypeMatrix = internal.FeatureMatrix[ebpf.ProgramType]{
 			})
 		},
 	},
-	// ebpf.Tracing:               {Version: "5.5"},
+	ebpf.Tracing: {
+		Version: "5.5",
+		Fn: func() error {
+			return probeProgram(&ebpf.ProgramSpec{
+				Type:       ebpf.Tracing,
+				AttachType: ebpf.AttachTraceFEntry,
+				AttachTo:   "inet_dgram_connect",
+			})
+		},
+	},
 	ebpf.StructOps: {
 		Version: "5.6",
 		Fn: func() error {
@@ -107,16 +117,55 @@ var haveProgramTypeMatrix = internal.FeatureMatrix[ebpf.ProgramType]{
 			return err
 		},
 	},
-	// ebpf.Extension:             {Version: "5.6"},
+	ebpf.Extension: {
+		Version: "5.6",
+		Fn: func() error {
+			// create btf.Func to add to first ins of target and extension so both progs are btf powered
+			btfFn := btf.Func{
+				Name: "a",
+				Type: &btf.FuncProto{
+					Return: &btf.Int{},
+				},
+				Linkage: btf.GlobalFunc,
+			}
+			insns := asm.Instructions{
+				btf.WithFuncMetadata(asm.Mov.Imm(asm.R0, 0), &btfFn),
+				asm.Return(),
+			}
+
+			// create target prog
+			prog, err := ebpf.NewProgramWithOptions(
+				&ebpf.ProgramSpec{
+					Type:         ebpf.XDP,
+					Instructions: insns,
+				},
+				ebpf.ProgramOptions{
+					LogDisabled: true,
+				},
+			)
+			if err != nil {
+				return err
+			}
+			defer prog.Close()
+
+			// probe for Extension prog with target
+			return probeProgram(&ebpf.ProgramSpec{
+				Type:         ebpf.Extension,
+				Instructions: insns,
+				AttachTarget: prog,
+				AttachTo:     btfFn.Name,
+			})
+		},
+	},
 	ebpf.LSM: {
 		Version: "5.7",
 		Fn: func() error {
-			return probeProgram((&ebpf.ProgramSpec{
+			return probeProgram(&ebpf.ProgramSpec{
 				Type:       ebpf.LSM,
 				AttachType: ebpf.AttachLSMMac,
 				AttachTo:   "file_mprotect",
 				License:    "GPL",
-			}))
+			})
 		},
 	},
 	ebpf.SkLookup: {

@@ -222,7 +222,7 @@ func TestLoadCollectionSpec(t *testing.T) {
 		}
 
 		if ret != 7 {
-			t.Error("Expected return value to be 5, got", ret)
+			t.Error("Expected return value to be 7, got", ret)
 		}
 	})
 }
@@ -568,6 +568,46 @@ func TestTailCall(t *testing.T) {
 		// Expect the tail_1 tail call to be taken, returning value 42.
 		if ret != 42 {
 			t.Fatalf("Expected tail call to return value 42, got %d", ret)
+		}
+	})
+}
+
+func TestLinuxKernelVersion(t *testing.T) {
+	testutils.Files(t, testutils.Glob(t, "testdata/linux_kernel_version-*.elf"), func(t *testing.T, file string) {
+		spec, err := LoadCollectionSpec(file)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if spec.ByteOrder != internal.NativeEndian {
+			return
+		}
+
+		var obj struct {
+			Main *Program `ebpf:"linux_kernel_version"`
+		}
+
+		err = spec.LoadAndAssign(&obj, nil)
+		testutils.SkipIfNotSupported(t, err)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer obj.Main.Close()
+
+		ret, _, err := obj.Main.Test(internal.EmptyBPFContext)
+		testutils.SkipIfNotSupported(t, err)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		v, err := internal.KernelVersion()
+		if err != nil {
+			t.Fatalf("getting kernel version: %s", err)
+		}
+
+		version := v.Kernel()
+		if ret != version {
+			t.Fatalf("Expected eBPF to return value %d, got %d", version, ret)
 		}
 	})
 }

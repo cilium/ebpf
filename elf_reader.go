@@ -11,7 +11,6 @@ import (
 	"math"
 	"os"
 	"strings"
-	"unsafe"
 
 	"github.com/cilium/ebpf/asm"
 	"github.com/cilium/ebpf/btf"
@@ -28,6 +27,7 @@ type elfCode struct {
 	version  uint32
 	btf      *btf.Spec
 	extInfo  *btf.ExtInfos
+	maps     *map[string]*MapSpec
 }
 
 // LoadCollectionSpec parses an ELF file into a CollectionSpec.
@@ -144,6 +144,8 @@ func LoadCollectionSpecFromReader(rd io.ReaderAt) (*CollectionSpec, error) {
 	if err := ec.populateDataSections(maps); err != nil {
 		return nil, fmt.Errorf("populate data sections: %w", err)
 	}
+
+	ec.maps = &maps
 
 	// Finally, collect programs and link them.
 	progs, err := ec.loadProgramSections()
@@ -580,24 +582,20 @@ func (ec *elfCode) relocateInstruction(ins *asm.Instruction, rel elf.Symbol) err
 			return fmt.Errorf("asm relocation: %s: unsupported type %s", name, typ)
 		}
 
-		if ec.btf != nil {
-			// If we arrive, it can possibly be because we are dealing with .kconfig.
-			t, err := ec.btf.AnyTypeByName(".kconfig")
-			if err == nil {
-				datasec, ok := t.(*btf.Datasec)
-				if ok {
-					for _, varSecInfo := range datasec.Vars {
-						variable, ok := varSecInfo.Type.(*btf.Var)
-						if !ok {
-							continue
-						}
+		// If we arrive, it can possibly be because we are dealing with .kconfig.
+		if mapSpec, ok := (*ec.maps)[".kconfig"]; ok {
+			if ds, ok := mapSpec.Value.(*btf.Datasec); ok {
+				for _, varSecInfo := range ds.Vars {
+					variable, ok := varSecInfo.Type.(*btf.Var)
+					if !ok {
+						continue
+					}
 
-						if variable.Name == rel.Name {
-							ins.Constant = int64(uint64(varSecInfo.Offset) << 32)
-							ins.Src = asm.PseudoMapValue
+					if variable.Name == rel.Name {
+						ins.Constant = int64(uint64(varSecInfo.Offset) << 32)
+						ins.Src = asm.PseudoMapValue
 
-							name = ".kconfig"
-						}
+						name = ".kconfig"
 					}
 				}
 			}
@@ -1105,9 +1103,12 @@ func (ec *elfCode) loadDataSections(maps map[string]*MapSpec) error {
 		maps[".kconfig"] = &MapSpec{
 			Name:       ".kconfig",
 			Type:       Array,
-			KeySize:    uint32(unsafe.Sizeof(ds.Size)),
+			KeySize:    uint32(4),
 			MaxEntries: 1,
 			Flags:      unix.BPF_F_RDONLY_PROG|unix.BPF_F_MMAPABLE,
+			Key:        &btf.Void{},
+			Value:      ds,
+			ValueSize:  ds.Size,
 		}
 	}
 
@@ -1119,16 +1120,21 @@ func (ec *elfCode) populateDataSections(maps map[string]*MapSpec) error {
 		return nil
 	}
 
-	return ec.populateKconfigSection(maps)
+	return populateKconfigSection(maps)
 }
 
-func (ec *elfCode) populateKconfigSection(maps map[string]*MapSpec) error {
-	var ds *btf.Datasec
-	if err := ec.btf.TypeByName(".kconfig", &ds); err != nil {
-		return err
+func populateKconfigSection(maps map[string]*MapSpec) error {
+	mapSpec, ok := maps[".kconfig"]
+	if !ok {
+		return fmt.Errorf(".kconfig map does not exist")
 	}
 
-	data := make([]byte, 0, ds.Size)
+	ds, ok := mapSpec.Value.(*btf.Datasec)
+	if !ok {
+		return fmt.Errorf(".kconfig value must be of type btf.Datasec")
+	}
+
+	data := make([]byte, 0, mapSpec.ValueSize)
 	for _, vsi := range ds.Vars {
 		v, ok := vsi.Type.(*btf.Var)
 		if !ok {

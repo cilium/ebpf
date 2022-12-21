@@ -566,7 +566,7 @@ func (cf *coreField) adjustOffsetToNthElement(n int) error {
 }
 
 func (cf *coreField) adjustOffsetBits(offset Bits) error {
-	align, err := alignof(cf.Type)
+	align, err := Alignof(cf.Type)
 	if err != nil {
 		return err
 	}

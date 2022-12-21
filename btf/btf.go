@@ -440,7 +440,7 @@ func fixupDatasec(types []Type, sectionSizes map[string]uint32, offsets map[symb
 		}
 
 		name := ds.Name
-		if name == ".kconfig" || name == ".ksyms" {
+		if name == ".ksyms" {
 			return fmt.Errorf("reference to %s: %w", name, ErrNotSupported)
 		}
 
@@ -449,7 +449,7 @@ func fixupDatasec(types []Type, sectionSizes map[string]uint32, offsets map[symb
 		}
 
 		ds.Size, ok = sectionSizes[name]
-		if !ok {
+		if !ok && name != ".kconfig" {
 			return fmt.Errorf("data section %s: missing size", name)
 		}
 
@@ -457,6 +457,9 @@ func fixupDatasec(types []Type, sectionSizes map[string]uint32, offsets map[symb
 			symName := ds.Vars[i].Type.TypeName()
 			ds.Vars[i].Offset, ok = offsets[symbol{name, symName}]
 			if !ok {
+				if name == ".kconfig" {
+					continue
+				}
 				return fmt.Errorf("data section %s: missing offset for symbol %s", name, symName)
 			}
 		}

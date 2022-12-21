@@ -29,6 +29,7 @@ TARGETS := \
 	testdata/loader-clang-9 \
 	testdata/loader-$(CLANG) \
 	testdata/btf_map_init \
+	testdata/linux_kernel_version \
 	testdata/invalid_map \
 	testdata/raw_tracepoint \
 	testdata/invalid_map_static \

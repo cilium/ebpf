@@ -27,6 +27,7 @@ type elfCode struct {
 	version  uint32
 	btf      *btf.Spec
 	extInfo  *btf.ExtInfos
+	maps     map[string]*MapSpec
 }
 
 // LoadCollectionSpec parses an ELF file into a CollectionSpec.
@@ -113,6 +114,7 @@ func LoadCollectionSpecFromReader(rd io.ReaderAt) (*CollectionSpec, error) {
 		version:     version,
 		btf:         btfSpec,
 		extInfo:     btfExtInfo,
+		maps:        make(map[string]*MapSpec),
 	}
 
 	symbols, err := f.Symbols()
@@ -126,18 +128,20 @@ func LoadCollectionSpecFromReader(rd io.ReaderAt) (*CollectionSpec, error) {
 		return nil, fmt.Errorf("load relocations: %w", err)
 	}
 
-	// Collect all the various ways to define maps.
-	maps := make(map[string]*MapSpec)
-	if err := ec.loadMaps(maps); err != nil {
+	if err := ec.loadMaps(); err != nil {
 		return nil, fmt.Errorf("load maps: %w", err)
 	}
 
-	if err := ec.loadBTFMaps(maps); err != nil {
+	if err := ec.loadBTFMaps(); err != nil {
 		return nil, fmt.Errorf("load BTF maps: %w", err)
 	}
 
-	if err := ec.loadDataSections(maps); err != nil {
+	if err := ec.loadDataSections(); err != nil {
 		return nil, fmt.Errorf("load data sections: %w", err)
+	}
+
+	if err := ec.populateDataSections(); err != nil {
+		return nil, fmt.Errorf("populate data sections: %w", err)
 	}
 
 	// Finally, collect programs and link them.
@@ -146,7 +150,7 @@ func LoadCollectionSpecFromReader(rd io.ReaderAt) (*CollectionSpec, error) {
 		return nil, fmt.Errorf("load programs: %w", err)
 	}
 
-	return &CollectionSpec{maps, progs, btfSpec, ec.ByteOrder}, nil
+	return &CollectionSpec{ec.maps, progs, btfSpec, ec.ByteOrder}, nil
 }
 
 func loadLicense(sec *elf.Section) (string, error) {
@@ -575,6 +579,19 @@ func (ec *elfCode) relocateInstruction(ins *asm.Instruction, rel elf.Symbol) err
 			return fmt.Errorf("asm relocation: %s: unsupported type %s", name, typ)
 		}
 
+		if m := ec.maps[".kconfig"]; m != nil {
+			for _, vsi := range m.Value.(*btf.Datasec).Vars {
+				variable := vsi.Type.(*btf.Var)
+
+				if variable.Name == rel.Name {
+					ins.Constant = int64(uint64(vsi.Offset) << 32)
+					ins.Src = asm.PseudoMapValue
+
+					name = ".kconfig"
+				}
+			}
+		}
+
 		// There is nothing to do here but set ins.Reference.
 
 	default:
@@ -585,7 +602,7 @@ func (ec *elfCode) relocateInstruction(ins *asm.Instruction, rel elf.Symbol) err
 	return nil
 }
 
-func (ec *elfCode) loadMaps(maps map[string]*MapSpec) error {
+func (ec *elfCode) loadMaps() error {
 	for _, sec := range ec.sections {
 		if sec.kind != mapSection {
 			continue
@@ -611,7 +628,7 @@ func (ec *elfCode) loadMaps(maps map[string]*MapSpec) error {
 			}
 
 			mapName := mapSym.Name
-			if maps[mapName] != nil {
+			if ec.maps[mapName] != nil {
 				return fmt.Errorf("section %v: map %v already exists", sec.Name, mapSym)
 			}
 
@@ -645,7 +662,7 @@ func (ec *elfCode) loadMaps(maps map[string]*MapSpec) error {
 				return fmt.Errorf("map %s: %w", mapName, err)
 			}
 
-			maps[mapName] = &spec
+			ec.maps[mapName] = &spec
 		}
 	}
 
@@ -655,7 +672,7 @@ func (ec *elfCode) loadMaps(maps map[string]*MapSpec) error {
 // loadBTFMaps iterates over all ELF sections marked as BTF map sections
 // (like .maps) and parses them into MapSpecs. Dump the .maps section and
 // any relocations with `readelf -x .maps -r <elf_file>`.
-func (ec *elfCode) loadBTFMaps(maps map[string]*MapSpec) error {
+func (ec *elfCode) loadBTFMaps() error {
 	for _, sec := range ec.sections {
 		if sec.kind != btfMapSection {
 			continue
@@ -694,7 +711,7 @@ func (ec *elfCode) loadBTFMaps(maps map[string]*MapSpec) error {
 				return fmt.Errorf("section %v: map %s: initializing BTF map definitions: %w", sec.Name, name, internal.ErrNotSupported)
 			}
 
-			if maps[name] != nil {
+			if ec.maps[name] != nil {
 				return fmt.Errorf("section %v: map %s already exists", sec.Name, name)
 			}
 
@@ -713,7 +730,7 @@ func (ec *elfCode) loadBTFMaps(maps map[string]*MapSpec) error {
 				return fmt.Errorf("map %v: %w", name, err)
 			}
 
-			maps[name] = mapSpec
+			ec.maps[name] = mapSpec
 		}
 
 		// Drain the ELF section reader to make sure all bytes are accounted for
@@ -1008,7 +1025,7 @@ func resolveBTFValuesContents(es *elfSection, vs *btf.VarSecinfo, member btf.Mem
 	return contents, nil
 }
 
-func (ec *elfCode) loadDataSections(maps map[string]*MapSpec) error {
+func (ec *elfCode) loadDataSections() error {
 	for _, sec := range ec.sections {
 		if sec.kind != dataSection {
 			continue
@@ -1065,8 +1082,88 @@ func (ec *elfCode) loadDataSections(maps map[string]*MapSpec) error {
 			mapSpec.Freeze = true
 		}
 
-		maps[sec.Name] = mapSpec
+		ec.maps[sec.Name] = mapSpec
 	}
+
+	if ec.btf != nil {
+		var ds *btf.Datasec
+		if err := ec.btf.TypeByName(".kconfig", &ds); err != nil {
+			if errors.Is(err, btf.ErrNotFound) {
+				return nil
+			}
+			return err
+		}
+
+		ec.maps[".kconfig"] = &MapSpec{
+			Name:       ".kconfig",
+			Type:       Array,
+			KeySize:    uint32(4),
+			MaxEntries: 1,
+			Flags:      unix.BPF_F_RDONLY_PROG | unix.BPF_F_MMAPABLE,
+			Key:        &btf.Void{},
+			Value:      ds,
+		}
+	}
+
+	return nil
+}
+
+func (ec *elfCode) populateDataSections() error {
+	if err := ec.populateKconfigSection(); err != nil {
+		return fmt.Errorf(".kconfig: %w", err)
+	}
+
+	return nil
+}
+
+func (ec *elfCode) populateKconfigSection() error {
+	m := ec.maps[".kconfig"]
+	if m == nil {
+		return nil
+	}
+
+	ds := m.Value.(*btf.Datasec)
+	data := make([]byte, 0, ds.Size)
+	for _, vsi := range ds.Vars {
+		v := vsi.Type.(*btf.Var)
+		s, err := btf.Alignof(v.Type)
+		if err != nil {
+			return fmt.Errorf("variable %s: getting size: %w", v.Name, err)
+		}
+
+		d := make([]byte, s)
+
+		switch n := v.TypeName(); n {
+		case "LINUX_KERNEL_VERSION":
+			if s < 4 {
+				return fmt.Errorf("variable %s must be at least u32, got %d", n, s)
+			}
+			kv, err := internal.KernelVersion()
+			if err != nil {
+				return fmt.Errorf("getting kernel version: %w", err)
+			}
+			internal.NativeEndian.PutUint32(d, kv.Kernel())
+
+		default:
+			return fmt.Errorf("unsupported variable: %s", n)
+		}
+
+		// We need to change Linkage for extern to global to avoid verifier error
+		// while marshaling the map value.
+		v.Linkage = btf.GlobalVar
+
+		data = append(data, d...)
+	}
+
+	length := uint32(len(data))
+
+	// We need to update DataSec size to avoid problems while marshaling the map
+	// value.
+	ds.Size = length
+
+	m.ValueSize = length
+	m.Contents = []MapKV{{uint32(0), data}}
+
 	return nil
 }
 

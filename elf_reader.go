@@ -27,6 +27,7 @@ type elfCode struct {
 	version  uint32
 	btf      *btf.Spec
 	extInfo  *btf.ExtInfos
+	maps     map[string]*MapSpec
 }
 
 // LoadCollectionSpec parses an ELF file into a CollectionSpec.
@@ -113,6 +114,7 @@ func LoadCollectionSpecFromReader(rd io.ReaderAt) (*CollectionSpec, error) {
 		version:     version,
 		btf:         btfSpec,
 		extInfo:     btfExtInfo,
+		maps:        make(map[string]*MapSpec),
 	}
 
 	symbols, err := f.Symbols()
@@ -126,17 +128,15 @@ func LoadCollectionSpecFromReader(rd io.ReaderAt) (*CollectionSpec, error) {
 		return nil, fmt.Errorf("load relocations: %w", err)
 	}
 
-	// Collect all the various ways to define maps.
-	maps := make(map[string]*MapSpec)
-	if err := ec.loadMaps(maps); err != nil {
+	if err := ec.loadMaps(); err != nil {
 		return nil, fmt.Errorf("load maps: %w", err)
 	}
 
-	if err := ec.loadBTFMaps(maps); err != nil {
+	if err := ec.loadBTFMaps(); err != nil {
 		return nil, fmt.Errorf("load BTF maps: %w", err)
 	}
 
-	if err := ec.loadDataSections(maps); err != nil {
+	if err := ec.loadDataSections(); err != nil {
 		return nil, fmt.Errorf("load data sections: %w", err)
 	}
 
@@ -146,7 +146,7 @@ func LoadCollectionSpecFromReader(rd io.ReaderAt) (*CollectionSpec, error) {
 		return nil, fmt.Errorf("load programs: %w", err)
 	}
 
-	return &CollectionSpec{maps, progs, btfSpec, ec.ByteOrder}, nil
+	return &CollectionSpec{ec.maps, progs, btfSpec, ec.ByteOrder}, nil
 }
 
 func loadLicense(sec *elf.Section) (string, error) {
@@ -585,7 +585,7 @@ func (ec *elfCode) relocateInstruction(ins *asm.Instruction, rel elf.Symbol) err
 	return nil
 }
 
-func (ec *elfCode) loadMaps(maps map[string]*MapSpec) error {
+func (ec *elfCode) loadMaps() error {
 	for _, sec := range ec.sections {
 		if sec.kind != mapSection {
 			continue
@@ -611,7 +611,7 @@ func (ec *elfCode) loadMaps(maps map[string]*MapSpec) error {
 			}
 
 			mapName := mapSym.Name
-			if maps[mapName] != nil {
+			if ec.maps[mapName] != nil {
 				return fmt.Errorf("section %v: map %v already exists", sec.Name, mapSym)
 			}
 
@@ -645,7 +645,7 @@ func (ec *elfCode) loadMaps(maps map[string]*MapSpec) error {
 				return fmt.Errorf("map %s: %w", mapName, err)
 			}
 
-			maps[mapName] = &spec
+			ec.maps[mapName] = &spec
 		}
 	}
 
@@ -655,7 +655,7 @@ func (ec *elfCode) loadMaps(maps map[string]*MapSpec) error {
 // loadBTFMaps iterates over all ELF sections marked as BTF map sections
 // (like .maps) and parses them into MapSpecs. Dump the .maps section and
 // any relocations with `readelf -x .maps -r <elf_file>`.
-func (ec *elfCode) loadBTFMaps(maps map[string]*MapSpec) error {
+func (ec *elfCode) loadBTFMaps() error {
 	for _, sec := range ec.sections {
 		if sec.kind != btfMapSection {
 			continue
@@ -694,7 +694,7 @@ func (ec *elfCode) loadBTFMaps(maps map[string]*MapSpec) error {
 				return fmt.Errorf("section %v: map %s: initializing BTF map definitions: %w", sec.Name, name, internal.ErrNotSupported)
 			}
 
-			if maps[name] != nil {
+			if ec.maps[name] != nil {
 				return fmt.Errorf("section %v: map %s already exists", sec.Name, name)
 			}
 
@@ -713,7 +713,7 @@ func (ec *elfCode) loadBTFMaps(maps map[string]*MapSpec) error {
 				return fmt.Errorf("map %v: %w", name, err)
 			}
 
-			maps[name] = mapSpec
+			ec.maps[name] = mapSpec
 		}
 
 		// Drain the ELF section reader to make sure all bytes are accounted for
@@ -1008,7 +1008,7 @@ func resolveBTFValuesContents(es *elfSection, vs *btf.VarSecinfo, member btf.Mem
 	return contents, nil
 }
 
-func (ec *elfCode) loadDataSections(maps map[string]*MapSpec) error {
+func (ec *elfCode) loadDataSections() error {
 	for _, sec := range ec.sections {
 		if sec.kind != dataSection {
 			continue
@@ -1065,7 +1065,7 @@ func (ec *elfCode) loadDataSections(maps map[string]*MapSpec) error {
 			mapSpec.Freeze = true
 		}
 
-		maps[sec.Name] = mapSpec
+		ec.maps[sec.Name] = mapSpec
 	}
 	return nil
 }

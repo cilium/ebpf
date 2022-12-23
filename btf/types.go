@@ -408,6 +408,12 @@ func FuncMetadata(ins *asm.Instruction) *Func {
 	return fn
 }
 
+// WithFuncMetadata adds a btf.Func to the Metadata of asm.Instruction.
+func WithFuncMetadata(ins asm.Instruction, fn *Func) asm.Instruction {
+	ins.Metadata.Set(funcInfoMeta{}, fn)
+	return ins
+}
+
 func (f *Func) Format(fs fmt.State, verb rune) {
 	formatType(fs, verb, f, f.Linkage, "proto=", f.Type)
 }

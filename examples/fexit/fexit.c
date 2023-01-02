@@ -19,10 +19,13 @@ char __license[] SEC("license") = "Dual MIT/GPL";
  * So here we don't need to include "vmlinux.h". Instead we only need to define
  * the kernel struct and their fields the eBPF program actually requires.
  *
+ * __attribute__((preserve_access_index)) can be added to struct or union definition.
+ * 
  * Also note that BTF-enabled programs like fentry, fexit, fmod_ret, tp_btf,
  * lsm, etc. declared using the BPF_PROG macro can read kernel memory without
  * needing to call bpf_probe_read*().
  */
+#define __reloc__ __attribute__((preserve_access_index))
 
 /**
  * struct in6_addr is the IPv6 address structure.
@@ -34,7 +37,7 @@ struct in6_addr {
 	union {
 		__be32 u6_addr32[4];
 	} in6_u;
-} __attribute__((preserve_access_index));
+} __reloc__;
 
 /**
  * struct sock_common is the minimal network layer representation of sockets.
@@ -45,16 +48,12 @@ struct in6_addr {
 struct sock_common {
 	union {
 		struct {
-			// skc_daddr is destination IP address
-			__be32 skc_daddr;
 			// skc_rcv_saddr is the source IP address
 			__be32 skc_rcv_saddr;
 		};
 	};
 	union {
 		struct {
-			// skc_dport is the destination TCP/UDP port
-			__be16 skc_dport;
 			// skc_num is the source TCP/UDP port
 			__u16 skc_num;
 		};
@@ -63,7 +62,7 @@ struct sock_common {
     struct in6_addr skc_v6_rcv_saddr;
 	// skc_family is the network address family (2 for IPV4)
 	short unsigned int skc_family;
-} __attribute__((preserve_access_index));
+} __reloc__;
 
 /**
  * struct sock is the network layer representation of sockets.
@@ -72,7 +71,7 @@ struct sock_common {
  */
 struct sock {
 	struct sock_common __sk_common;
-} __attribute__((preserve_access_index));
+} __reloc__;
 
 /**
  * struct socket - general BSD socket.
@@ -82,17 +81,7 @@ struct sock {
 struct socket {
     short int type;
     struct sock *sk;
-} __attribute__((preserve_access_index));
-
-/**
- * struct inet_sock - representation of INET sockets.
- * This is a simplified copy of the kernel's struct inet_sock.
- * This copy is needed only to access inet_sport.
- */
-struct inet_sock {
-    __be16 inet_sport;
-} __attribute__((preserve_access_index));
-
+} __reloc__;
 
 struct event {
 	__u32 pid;
@@ -107,7 +96,6 @@ struct event {
 // Force emitting struct event into the ELF.
 const struct event *unused_event __attribute__((unused));
 
-
 struct {
 	__uint(type, BPF_MAP_TYPE_PERF_EVENT_ARRAY);
 	__uint(key_size, sizeof(__u32));
@@ -118,30 +106,13 @@ static void fill_event(struct event *event, struct socket *sock)
 {
 	__u16 family, type;
 	struct sock *sk;
-	struct inet_sock *inet;
-
-	/* 
-	sk = BPF_CORE_READ(sock, sk);
-	inet = (struct inet_sock *)sk;
-	family = BPF_CORE_READ(sk, __sk_common.skc_family);
-	type = BPF_CORE_READ(sock, type);
-
-	event->proto = ((__u32)family << 16) | type;
-	event->port = bpf_ntohs(BPF_CORE_READ(inet, inet_sport));
-	if (family == AF_INET)
-		event->addr[0] = BPF_CORE_READ(sk, __sk_common.skc_rcv_saddr);
-	else if (family == AF_INET6)
-		BPF_CORE_READ_INTO(event->addr, sk, __sk_common.skc_v6_rcv_saddr.in6_u.u6_addr32); 
-	*/
 
 	sk = sock->sk;
-	inet = (struct inet_sock *)sk;
 	family = sk->__sk_common.skc_family;
 	type = sock->type;
 
 	event->proto = ((__u32)family << 16) | type;
-	bpf_probe_read_kernel(&event->port,sizeof(event->port),&inet->inet_sport);
-	event->port = bpf_ntohs(event->port);  
+	event->port = sk->__sk_common.skc_num;
 	if (family == AF_INET)
 		event->addr[0] = sk->__sk_common.skc_rcv_saddr;
 	else if (family == AF_INET6)

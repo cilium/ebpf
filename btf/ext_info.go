@@ -185,7 +185,7 @@ marshal:
 	buf := getBuffer()
 	defer putBuffer(buf)
 
-	if err := marshalSpec(buf, spec, stb, kernelMarshalOptions); err != nil {
+	if err := marshalTypes(buf, spec.types, stb, kernelMarshalOptions); err != nil {
 		return nil, nil, nil, fmt.Errorf("marshal BTF: %w", err)
 	}
 

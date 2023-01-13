@@ -5,6 +5,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"go/build/constraint"
 	"go/token"
 	"io"
 	"os"
@@ -76,7 +77,7 @@ func run(stdout io.Writer, pkg, outputDir string, args []string) (err error) {
 	fs.StringVar(&b2g.strip, "strip", "", "`binary` used to strip DWARF from compiled BPF (default \"llvm-strip\")")
 	fs.BoolVar(&b2g.disableStripping, "no-strip", false, "disable stripping of DWARF")
 	flagCFlags := fs.String("cflags", "", "flags passed to the compiler, may contain quoted arguments")
-	fs.StringVar(&b2g.tags, "tags", "", "list of Go build tags to include in generated files")
+	fs.Var(&b2g.constraints, "tags", "Comma-separated list of Go build tags to include in generated files")
 	flagTarget := fs.String("target", "bpfel,bpfeb", "clang target(s) to compile for (comma separated)")
 	fs.StringVar(&b2g.makeBase, "makebase", "", "write make compatible depinfo files relative to `directory`")
 	fs.Var(&b2g.cTypes, "type", "`Name` of a type to generate a Go declaration for, may be repeated")
@@ -157,10 +158,6 @@ func run(stdout io.Writer, pkg, outputDir string, args []string) (err error) {
 		return fmt.Errorf("-output-stem %q must not contain path separation characters", b2g.outputStem)
 	}
 
-	if strings.ContainsRune(b2g.tags, '\n') {
-		return fmt.Errorf("-tags mustn't contain new line characters")
-	}
-
 	targetArches := strings.Split(*flagTarget, ",")
 	if len(targetArches) == 0 {
 		return fmt.Errorf("no targets specified")
@@ -239,6 +236,33 @@ func (ct *cTypes) Set(value string) error {
 	return nil
 }
 
+// buildTags is a comma-separated list of build constraints.
+//
+// This is the pre-Go 1.17 syntax and is kept for compatibility reasons.
+type buildTags struct {
+	constraint.Expr
+}
+
+var _ flag.Value = (*buildTags)(nil)
+
+func (bt *buildTags) String() string {
+	if bt.Expr == nil {
+		return ""
+	}
+
+	return bt.Expr.String()
+}
+
+func (bt *buildTags) Set(value string) error {
+	ct, err := constraint.Parse("// +build " + value)
+	if err != nil {
+		return err
+	}
+
+	bt.Expr = ct
+	return nil
+}
+
 type bpf2go struct {
 	stdout io.Writer
 	// Absolute path to a .c file.
@@ -261,8 +285,8 @@ type bpf2go struct {
 	skipGlobalTypes bool
 	// C types to include in the generatd output.
 	cTypes cTypes
-	// Go tags included in the .go
-	tags string
+	// Build constraints to be included in the output.
+	constraints buildTags
 	// Base directory of the Makefile. Enables outputting make-style dependencies
 	// in .d files.
 	makeBase string
@@ -292,12 +316,28 @@ func (b2g *bpf2go) convert(tgt target, arches []string) (err error) {
 		return err
 	}
 
-	var tags []string
+	var archConstraint constraint.Expr
 	if len(arches) > 0 {
-		tags = append(tags, strings.Join(arches, " "))
+		archConstraint = &constraint.TagExpr{Tag: arches[0]}
+		for _, arch := range arches[1:] {
+			archConstraint = &constraint.OrExpr{
+				X: archConstraint,
+				Y: &constraint.TagExpr{Tag: arch},
+			}
+		}
 	}
-	if b2g.tags != "" {
-		tags = append(tags, b2g.tags)
+
+	var constraints constraint.Expr
+	switch {
+	case archConstraint != nil && b2g.constraints.Expr != nil:
+		constraints = &constraint.AndExpr{
+			X: b2g.constraints.Expr,
+			Y: archConstraint,
+		}
+	case archConstraint != nil:
+		constraints = archConstraint
+	case b2g.constraints.Expr != nil:
+		constraints = b2g.constraints.Expr
 	}
 
 	cFlags := make([]string, len(b2g.cFlags))
@@ -342,7 +382,7 @@ func (b2g *bpf2go) convert(tgt target, arches []string) (err error) {
 		ident:           b2g.ident,
 		cTypes:          b2g.cTypes,
 		skipGlobalTypes: b2g.skipGlobalTypes,
-		tags:            tags,
+		constraints:     constraints,
 		obj:             objFileName,
 		out:             goFile,
 	})

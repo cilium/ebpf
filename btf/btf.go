@@ -510,7 +510,7 @@ func (sw sliceWriter) Write(p []byte) (int, error) {
 	return copy(sw, p), nil
 }
 
-// Add a Type.
+// Add a Type to the Spec, making it queryable via [TypeByName], etc.
 //
 // Adding the identical Type multiple times is valid and will return a stable ID.
 //
@@ -520,29 +520,24 @@ func (s *Spec) Add(typ Type) (TypeID, error) {
 		return 0, fmt.Errorf("can't add nil Type")
 	}
 
-	hasID := func(t Type) (skip bool) {
-		_, isVoid := t.(*Void)
-		_, alreadyEncoded := s.typeIDs[t]
-		return isVoid || alreadyEncoded
+	if id, err := s.TypeID(typ); err == nil {
+		return id, nil
 	}
 
-	iter := postorderTraversal(typ, hasID)
-	for iter.Next() {
-		id := s.lastTypeID + 1
-		if id < s.lastTypeID {
-			return 0, fmt.Errorf("type ID overflow")
-		}
-
-		s.typeIDs[iter.Type] = id
-		s.types = append(s.types, iter.Type)
-		s.lastTypeID = id
-
-		if name := newEssentialName(iter.Type.TypeName()); name != "" {
-			s.namedTypes[name] = append(s.namedTypes[name], iter.Type)
-		}
+	id := s.lastTypeID + 1
+	if id < s.lastTypeID {
+		return 0, fmt.Errorf("type ID overflow")
 	}
 
-	return s.TypeID(typ)
+	s.typeIDs[typ] = id
+	s.types = append(s.types, typ)
+	s.lastTypeID = id
+
+	if name := newEssentialName(typ.TypeName()); name != "" {
+		s.namedTypes[name] = append(s.namedTypes[name], typ)
+	}
+
+	return id, nil
 }
 
 // TypeByID returns the BTF Type with the given type ID.

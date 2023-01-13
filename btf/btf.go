@@ -25,6 +25,7 @@ var (
 	ErrNotSupported   = internal.ErrNotSupported
 	ErrNotFound       = errors.New("not found")
 	ErrNoExtendedInfo = errors.New("no extended info")
+	ErrMultipleTypes  = errors.New("multiple type candidates")
 )
 
 // ID represents the unique ID of a BTF object.
@@ -564,16 +565,15 @@ func (s *Spec) AnyTypeByName(name string) (Type, error) {
 	return types[0], nil
 }
 
-// TypeByName searches for a Type with a specific name. Since multiple
-// Types with the same name can exist, the parameter typ is taken to
-// narrow down the search in case of a clash.
+// TypeByName searches for a Type with a specific name. Since multiple Types
+// with the same name can exist, the parameter typ is taken to narrow down the
+// search in case of a clash.
 //
-// typ must be a non-nil pointer to an implementation of a Type.
-// On success, the address of the found Type will be copied to typ.
+// typ must be a non-nil pointer to an implementation of a Type. On success, the
+// address of the found Type will be copied to typ.
 //
-// Returns an error wrapping ErrNotFound if no matching
-// Type exists in the Spec. If multiple candidates are found,
-// an error is returned.
+// Returns an error wrapping ErrNotFound if no matching Type exists in the Spec.
+// Returns an error wrapping ErrMultipleTypes if multiple candidates are found.
 func (s *Spec) TypeByName(name string, typ interface{}) error {
 	typeInterface := reflect.TypeOf((*Type)(nil)).Elem()
 
@@ -610,7 +610,7 @@ func (s *Spec) TypeByName(name string, typ interface{}) error {
 		}
 
 		if candidate != nil {
-			return fmt.Errorf("type %s: multiple candidates for %T", name, typ)
+			return fmt.Errorf("type %s(%T): %w", name, typ, ErrMultipleTypes)
 		}
 
 		candidate = typ

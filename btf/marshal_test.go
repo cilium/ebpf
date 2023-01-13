@@ -3,6 +3,7 @@ package btf
 import (
 	"bytes"
 	"encoding/binary"
+	"math"
 	"math/rand"
 	"testing"
 
@@ -19,60 +20,57 @@ func TestBuild(t *testing.T) {
 		Encoding: Signed | Char,
 	}
 
-	enc := newEncoder(encoderOptions{ByteOrder: internal.NativeEndian}, nil)
+	want := []Type{
+		(*Void)(nil),
+		typ,
+		&Pointer{typ},
+		&Typedef{"baz", typ},
+	}
 
-	id, err := enc.Add(typ)
-	qt.Assert(t, err, qt.IsNil)
-	qt.Assert(t, id, qt.Equals, TypeID(1), qt.Commentf("First non-void type doesn't get id 1"))
+	var buf bytes.Buffer
+	qt.Assert(t, marshalTypes(&buf, want, nil, nil), qt.IsNil)
 
-	id, err = enc.Add(typ)
-	qt.Assert(t, err, qt.IsNil)
-	qt.Assert(t, id, qt.Equals, TypeID(1), qt.Commentf("Adding a type twice returns different ids"))
-
-	raw, err := enc.Encode()
-	qt.Assert(t, err, qt.IsNil, qt.Commentf("Build returned an error"))
-
-	spec, err := loadRawSpec(bytes.NewReader(raw), internal.NativeEndian, nil, nil)
+	have, err := loadRawSpec(bytes.NewReader(buf.Bytes()), internal.NativeEndian, nil, nil)
 	qt.Assert(t, err, qt.IsNil, qt.Commentf("Couldn't parse BTF"))
-
-	have, err := spec.AnyTypeByName("foo")
-	qt.Assert(t, err, qt.IsNil)
-	qt.Assert(t, have, qt.DeepEquals, typ)
+	qt.Assert(t, have.types, qt.DeepEquals, want)
 }
 
 func TestRoundtripVMlinux(t *testing.T) {
 	types := vmlinuxSpec(t).types
 
 	// Randomize the order to force different permutations of walking the type
-	// graph.
-	rand.Shuffle(len(types), func(i, j int) {
-		types[i], types[j] = types[j], types[i]
+	// graph. Keep Void at index 0.
+	rand.Shuffle(len(types[1:]), func(i, j int) {
+		types[i+1], types[j+1] = types[j+1], types[i+1]
 	})
 
-	b := newEncoder(kernelEncoderOptions, nil)
-
+	seen := make(map[Type]bool)
+limitTypes:
 	for i, typ := range types {
-		_, err := b.Add(typ)
-		qt.Assert(t, err, qt.IsNil, qt.Commentf("add type #%d: %s", i, typ))
-
-		if b.nextID >= 65_000 {
+		iter := postorderTraversal(typ, func(t Type) (skip bool) {
+			return seen[t]
+		})
+		for iter.Next() {
+			seen[iter.Type] = true
+		}
+		if len(seen) >= math.MaxInt16 {
 			// IDs exceeding math.MaxUint16 can trigger a bug when loading BTF.
 			// This can be removed once the patch lands.
 			// See https://lore.kernel.org/bpf/20220909092107.3035-1-oss@lmb.io/
-			break
+			types = types[:i]
+			break limitTypes
 		}
 	}
 
-	nStr := len(b.strings.strings)
-	nTypes := len(types)
-	t.Log(nStr, "strings", nTypes, "types")
-	t.Log(float64(nStr)/float64(nTypes), "avg strings per type")
+	var buf bytes.Buffer
+	qt.Assert(t, marshalTypes(&buf, types, nil, nil), qt.IsNil)
 
-	raw, err := b.Encode()
-	qt.Assert(t, err, qt.IsNil, qt.Commentf("build BTF"))
-
-	rebuilt, err := loadRawSpec(bytes.NewReader(raw), binary.LittleEndian, nil, nil)
+	rebuilt, err := loadRawSpec(bytes.NewReader(buf.Bytes()), binary.LittleEndian, nil, nil)
 	qt.Assert(t, err, qt.IsNil, qt.Commentf("round tripping BTF failed"))
+
+	if n := len(rebuilt.types); n > math.MaxUint16 {
+		t.Logf("Rebuilt BTF contains %d types which exceeds uint16, test may fail on older kernels", n)
+	}
 
 	h, err := NewHandle(rebuilt)
 	testutils.SkipIfNotSupported(t, err)
@@ -81,25 +79,14 @@ func TestRoundtripVMlinux(t *testing.T) {
 }
 
 func BenchmarkBuildVmlinux(b *testing.B) {
-	spec := vmlinuxTestdataSpec(b)
+	types := vmlinuxTestdataSpec(b).types
 
 	b.ReportAllocs()
 	b.ResetTimer()
 
-	types := spec.types
-	strings := spec.strings
-
 	for i := 0; i < b.N; i++ {
-		enc := newEncoder(encoderOptions{ByteOrder: internal.NativeEndian}, newStringTableBuilderFromTable(strings))
-
-		for _, typ := range types {
-			if _, err := enc.Add(typ); err != nil {
-				b.Fatal(err)
-			}
-		}
-
-		_, err := enc.Encode()
-		if err != nil {
+		var buf bytes.Buffer
+		if err := marshalTypes(&buf, types, nil, nil); err != nil {
 			b.Fatal(err)
 		}
 	}

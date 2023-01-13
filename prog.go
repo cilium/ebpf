@@ -891,6 +891,12 @@ func findTargetInKernel(name string, progType ProgramType, attachType AttachType
 		}
 		return module, id, nil
 	}
+	// See cilium/ebpf#894. Until we can disambiguate between equally-named kernel
+	// symbols, we should explicitly refuse program loads. They will not reliably
+	// do what the caller intended.
+	if errors.Is(err, btf.ErrMultipleMatches) {
+		return nil, 0, fmt.Errorf("attaching to ambiguous kernel symbol is not supported: %w", err)
+	}
 	if err != nil {
 		return nil, 0, fmt.Errorf("find target for %s in vmlinux: %w", featureName, err)
 	}

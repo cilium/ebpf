@@ -26,7 +26,8 @@ blocks:
           - sem-version go 1.19.1
           - export PATH="$PATH:$(go env GOPATH)/bin"
           - checkout
-          - cache restore
+          # Disabled, see https://github.com/cilium/ebpf/issues/898
+          # - cache restore
           - go mod tidy
           - curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin v1.48.0
           - go install gotest.tools/gotestsum@v1.8.1

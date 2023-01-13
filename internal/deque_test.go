@@ -59,21 +59,21 @@ func TestDeque(t *testing.T) {
 		}
 	})
 
-	t.Run("linearise", func(t *testing.T) {
+	t.Run("grow", func(t *testing.T) {
 		var td Deque[int]
 		td.Push(1)
 		td.Push(2)
 
-		all := td.linearise(0)
-		if len(all) != 2 {
-			t.Fatal("Expected 2 elements, got", len(all))
+		td.Grow(0)
+		if len(td.elems) != 2 {
+			t.Fatal("Expected 2 elements, got", len(td.elems))
 		}
 
-		if cap(all)&(cap(all)-1) != 0 {
-			t.Fatalf("Capacity %d is not a power of two", cap(all))
+		if cap(td.elems)&(cap(td.elems)-1) != 0 {
+			t.Fatalf("Capacity %d is not a power of two", cap(td.elems))
 		}
 
-		if all[0] != 1 || all[1] != 2 {
+		if td.elems[0] != 1 || td.elems[1] != 2 {
 			t.Fatal("Elements don't match")
 		}
 	})

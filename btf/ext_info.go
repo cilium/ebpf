@@ -8,7 +8,6 @@ import (
 	"io"
 	"math"
 	"sort"
-	"sync"
 
 	"github.com/cilium/ebpf/asm"
 	"github.com/cilium/ebpf/internal"
@@ -131,12 +130,6 @@ func (ei *ExtInfos) Assign(insns asm.Instructions, section string) {
 	}
 }
 
-var nativeEncoderPool = sync.Pool{
-	New: func() any {
-		return newEncoder(kernelEncoderOptions, nil)
-	},
-}
-
 // MarshalExtInfos encodes function and line info embedded in insns into kernel
 // wire format.
 //
@@ -157,15 +150,11 @@ func MarshalExtInfos(insns asm.Instructions) (_ *Handle, funcInfos, lineInfos []
 		}
 	}
 
-	// Avoid allocating encoder, etc. if there is no BTF at all.
 	return nil, nil, nil, nil
 
 marshal:
-	enc := nativeEncoderPool.Get().(*encoder)
-	defer nativeEncoderPool.Put(enc)
-
-	enc.Reset()
-
+	stb := newStringTableBuilder(0)
+	spec := NewSpec()
 	var fiBuf, liBuf bytes.Buffer
 	for {
 		if fn := FuncMetadata(iter.Ins); fn != nil {
@@ -173,7 +162,7 @@ marshal:
 				fn:     fn,
 				offset: iter.Offset,
 			}
-			if err := fi.marshal(&fiBuf, enc); err != nil {
+			if err := fi.marshal(&fiBuf, spec); err != nil {
 				return nil, nil, nil, fmt.Errorf("write func info: %w", err)
 			}
 		}
@@ -183,7 +172,7 @@ marshal:
 				line:   line,
 				offset: iter.Offset,
 			}
-			if err := li.marshal(&liBuf, enc.strings); err != nil {
+			if err := li.marshal(&liBuf, stb); err != nil {
 				return nil, nil, nil, fmt.Errorf("write line info: %w", err)
 			}
 		}
@@ -193,12 +182,14 @@ marshal:
 		}
 	}
 
-	btf, err := enc.Encode()
-	if err != nil {
-		return nil, nil, nil, err
+	buf := getBuffer()
+	defer putBuffer(buf)
+
+	if err := marshalTypes(buf, spec.types, stb, kernelMarshalOptions); err != nil {
+		return nil, nil, nil, fmt.Errorf("marshal BTF: %w", err)
 	}
 
-	handle, err := newHandleFromRawBTF(btf)
+	handle, err := newHandleFromRawBTF(buf.Bytes())
 	return handle, fiBuf.Bytes(), liBuf.Bytes(), err
 }
 
@@ -392,8 +383,8 @@ func newFuncInfos(bfis []bpfFuncInfo, ts types) ([]funcInfo, error) {
 }
 
 // marshal into the BTF wire format.
-func (fi *funcInfo) marshal(w *bytes.Buffer, enc *encoder) error {
-	id, err := enc.Add(fi.fn)
+func (fi *funcInfo) marshal(w *bytes.Buffer, spec *Spec) error {
+	id, err := spec.Add(fi.fn)
 	if err != nil {
 		return err
 	}

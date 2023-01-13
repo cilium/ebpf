@@ -212,30 +212,35 @@ func TestSpecAdd(t *testing.T) {
 		Size:     2,
 		Encoding: Signed | Char,
 	}
+	pi := &Pointer{i}
 
 	s := NewSpec()
-	id, err := s.Add(i)
+	id, err := s.Add(pi)
 	qt.Assert(t, err, qt.IsNil)
 	qt.Assert(t, id, qt.Equals, TypeID(1), qt.Commentf("First non-void type doesn't get id 1"))
-	id, err = s.Add(i)
-	qt.Assert(t, err, qt.IsNil)
-	qt.Assert(t, id, qt.Equals, TypeID(1), qt.Commentf("Adding a type twice returns different ids"))
 
-	id, err = s.TypeID(i)
+	id, err = s.Add(pi)
 	qt.Assert(t, err, qt.IsNil)
 	qt.Assert(t, id, qt.Equals, TypeID(1))
 
-	id, err = s.Add(&Pointer{i})
+	_, err = s.TypeID(i)
+	qt.Assert(t, err, qt.IsNotNil, qt.Commentf("Children mustn't be added"))
+
+	id, err = s.Add(i)
 	qt.Assert(t, err, qt.IsNil)
-	qt.Assert(t, id, qt.Equals, TypeID(2))
+	qt.Assert(t, id, qt.Equals, TypeID(2), qt.Commentf("Second type doesn't get id 2"))
+
+	id, err = s.Add(i)
+	qt.Assert(t, err, qt.IsNil)
+	qt.Assert(t, id, qt.Equals, TypeID(2), qt.Commentf("Adding a type twice returns different ids"))
+
+	typ, err := s.AnyTypeByName("foo")
+	qt.Assert(t, err, qt.IsNil, qt.Commentf("Add doesn't make named type queryable"))
+	qt.Assert(t, typ, qt.Equals, i)
 
 	id, err = s.Add(&Typedef{"baz", i})
 	qt.Assert(t, err, qt.IsNil)
 	qt.Assert(t, id, qt.Equals, TypeID(3))
-
-	typ, err := s.AnyTypeByName("foo")
-	qt.Assert(t, err, qt.IsNil)
-	qt.Assert(t, typ, qt.Equals, i)
 
 	_, err = s.AnyTypeByName("baz")
 	qt.Assert(t, err, qt.IsNil)
@@ -353,7 +358,7 @@ func TestLoadSpecFromElf(t *testing.T) {
 
 func TestVerifierError(t *testing.T) {
 	var buf bytes.Buffer
-	if err := marshalSpec(&buf, NewSpec(), nil, nil); err != nil {
+	if err := marshalTypes(&buf, []Type{&Void{}}, nil, nil); err != nil {
 		t.Fatal(err)
 	}
 

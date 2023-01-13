@@ -45,7 +45,7 @@ func NewHandle(spec *Spec) (*Handle, error) {
 		stb = newStringTableBuilder(spec.strings.Num())
 	}
 
-	err := marshalSpec(buf, spec, stb, kernelMarshalOptions)
+	err := marshalTypes(buf, spec.types, stb, kernelMarshalOptions)
 	if err != nil {
 		return nil, fmt.Errorf("marshal BTF: %w", err)
 	}

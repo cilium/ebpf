@@ -3,6 +3,7 @@ package btf
 import (
 	"bytes"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"math"
 	"sync"
@@ -25,9 +26,11 @@ type encoder struct {
 	marshalOptions
 
 	byteOrder binary.ByteOrder
+	pending   internal.Deque[Type]
 	buf       *bytes.Buffer
 	strings   *stringTableBuilder
 	ids       map[Type]TypeID
+	lastID    TypeID
 }
 
 var emptyBTFHeader = make([]byte, btfHeaderLen)
@@ -48,26 +51,25 @@ func putBuffer(buf *bytes.Buffer) {
 	bufferPool.Put(buf)
 }
 
-// marshalSpec encodes a spec into BTF wire format.
+// marshalTypes encodes a slice of types into BTF wire format.
+//
+// types are guaranteed to be written in the order they are passed to this
+// function. The first type must always be Void.
 //
 // Doesn't support encoding split BTF since it's not possible to load
 // that into the kernel and we don't have a use case for writing BTF
 // out again.
 //
 // w should be retrieved from bufferPool. opts may be nil.
-func marshalSpec(w *bytes.Buffer, s *Spec, stb *stringTableBuilder, opts *marshalOptions) (err error) {
-	defer func() {
-		r := recover()
-		if r == nil {
-			return
-		}
+func marshalTypes(w *bytes.Buffer, types []Type, stb *stringTableBuilder, opts *marshalOptions) error {
+	if len(types) < 1 {
+		return errors.New("types must contain at least Void")
+	}
 
-		var ok bool
-		err, ok = r.(error)
-		if !ok {
-			panic(r)
-		}
-	}()
+	if _, ok := types[0].(*Void); !ok {
+		return fmt.Errorf("first type is %s, not Void", types[0])
+	}
+	types = types[1:]
 
 	if stb == nil {
 		stb = newStringTableBuilder(0)
@@ -77,20 +79,27 @@ func marshalSpec(w *bytes.Buffer, s *Spec, stb *stringTableBuilder, opts *marsha
 		byteOrder: internal.NativeEndian,
 		buf:       w,
 		strings:   stb,
-		ids:       s.typeIDs,
+		ids:       make(map[Type]TypeID, len(types)),
 	}
 
 	if opts != nil {
 		e.marshalOptions = *opts
 	}
 
+	// Ensure that passed types are marshaled in the exact order they were
+	// passed.
+	e.pending.Grow(len(types))
+	for _, typ := range types {
+		if err := e.allocateID(typ); err != nil {
+			return err
+		}
+	}
+
 	// Reserve space for the BTF header.
 	_, _ = e.buf.Write(emptyBTFHeader)
 
-	for _, typ := range s.types {
-		if err := e.deflateType(typ); err != nil {
-			return fmt.Errorf("deflate %s: %w", typ, err)
-		}
+	if err := e.deflatePending(); err != nil {
+		return err
 	}
 
 	length := e.buf.Len()
@@ -118,11 +127,23 @@ func marshalSpec(w *bytes.Buffer, s *Spec, stb *stringTableBuilder, opts *marsha
 		StringLen: uint32(stringLen),
 	}
 
-	err = binary.Write(sliceWriter(buf[:btfHeaderLen]), e.byteOrder, header)
+	err := binary.Write(sliceWriter(buf[:btfHeaderLen]), e.byteOrder, header)
 	if err != nil {
 		return fmt.Errorf("write header: %v", err)
 	}
 
+	return nil
+}
+
+func (e *encoder) allocateID(typ Type) error {
+	id := e.lastID + 1
+	if id < e.lastID {
+		return errors.New("type ID overflow")
+	}
+
+	e.pending.Push(typ)
+	e.ids[typ] = id
+	e.lastID = id
 	return nil
 }
 
@@ -134,13 +155,64 @@ func (e *encoder) id(typ Type) TypeID {
 
 	id, ok := e.ids[typ]
 	if !ok {
-		panic(fmt.Errorf("no ID for type %s", typ))
+		panic(fmt.Errorf("no ID for type %v", typ))
 	}
 
 	return id
 }
 
+func (e *encoder) deflatePending() error {
+	// Declare root outside of the loop to avoid repeated heap allocations.
+	var root Type
+	skip := func(t Type) (skip bool) {
+		if t == root {
+			// Force descending into the current root type even if it already
+			// has an ID. Otherwise we miss children of types that have their
+			// ID pre-allocated in marshalTypes.
+			return false
+		}
+
+		_, isVoid := t.(*Void)
+		_, alreadyEncoded := e.ids[t]
+		return isVoid || alreadyEncoded
+	}
+
+	for !e.pending.Empty() {
+		root = e.pending.Shift()
+
+		// Allocate IDs for all children of typ, including transitive dependencies.
+		iter := postorderTraversal(root, skip)
+		for iter.Next() {
+			if iter.Type == root {
+				// The iterator yields root at the end, do not allocate another ID.
+				break
+			}
+
+			if err := e.allocateID(iter.Type); err != nil {
+				return err
+			}
+		}
+
+		if err := e.deflateType(root); err != nil {
+			id := e.ids[root]
+			return fmt.Errorf("deflate %v with ID %d: %w", root, id, err)
+		}
+	}
+
+	return nil
+}
+
 func (e *encoder) deflateType(typ Type) (err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			var ok bool
+			err, ok = r.(error)
+			if !ok {
+				panic(r)
+			}
+		}
+	}()
+
 	var raw rawType
 	raw.NameOff, err = e.strings.Add(typ.TypeName())
 	if err != nil {
@@ -149,7 +221,7 @@ func (e *encoder) deflateType(typ Type) (err error) {
 
 	switch v := typ.(type) {
 	case *Void:
-		return nil
+		return errors.New("Void is implicit in BTF wire format")
 
 	case *Int:
 		raw.SetKind(kindInt)

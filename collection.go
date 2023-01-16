@@ -107,6 +107,8 @@ func (cs *CollectionSpec) RewriteMaps(maps map[string]*Map) error {
 	return nil
 }
 
+var ErrMissingConstants = errors.New("spec is missing one or more constants")
+
 // RewriteConstants replaces the value of multiple constants.
 //
 // The constant must be defined like so in the C program:
@@ -184,7 +186,7 @@ func (cs *CollectionSpec) RewriteConstants(consts map[string]interface{}) error 
 	}
 
 	if len(missing) != 0 {
-		return fmt.Errorf("spec is missing one or more constants: %s", strings.Join(missing, ","))
+		return fmt.Errorf("%w: %s", ErrMissingConstants, strings.Join(missing, ","))
 	}
 
 	return nil

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/cilium/ebpf/asm"
@@ -325,6 +326,57 @@ func TestCollectionSpecMapReplacements_SpecMismatch(t *testing.T) {
 	}
 	if !errors.Is(err, ErrMapIncompatible) {
 		t.Fatalf("Overriding a map with a mismatching spec failed with the wrong error")
+	}
+}
+
+func TestCollectionRewriteConstants(t *testing.T) {
+	cs := &CollectionSpec{
+		Maps: map[string]*MapSpec{
+			".rodata": {
+				Type:       Array,
+				KeySize:    4,
+				ValueSize:  4,
+				MaxEntries: 1,
+				Value: &btf.Datasec{
+					Vars: []btf.VarSecinfo{
+						{
+							Type: &btf.Var{
+								Name: "the_constant",
+								Type: &btf.Int{Size: 4},
+							},
+							Offset: 0,
+							Size:   4,
+						},
+					},
+				},
+				Contents: []MapKV{
+					MapKV{Key: uint32(0), Value: []byte{1, 1, 1, 1}},
+				},
+			},
+		},
+	}
+
+	err := cs.RewriteConstants(map[string]interface{}{
+		"fake_constant_one": uint32(1),
+		"fake_constant_two": uint32(2),
+	})
+	if err == nil {
+		t.Fatal("RewriteConstants did not fail")
+	}
+	if !strings.HasSuffix(err.Error(), "fake_constant_one,fake_constant_two") {
+		t.Fatalf("RewriteConstants error is not well explained: %q", err)
+	}
+	if !errors.Is(err, ErrMissingConstants) {
+		t.Fatal(err)
+	}
+	err = cs.RewriteConstants(map[string]interface{}{
+		"the_constant": uint32(0x42424242),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual([]byte{0x42, 0x42, 0x42, 0x42}, cs.Maps[".rodata"].Contents[0].Value) {
+		t.Fatalf("RewriteConstants did not rewrite correctly: %+v", cs.Maps[".rodata"].Contents[0].Value)
 	}
 }
 

@@ -107,6 +107,12 @@ func (cs *CollectionSpec) RewriteMaps(maps map[string]*Map) error {
 	return nil
 }
 
+type MissingConstantsError struct{ Constants []string }
+
+func (m *MissingConstantsError) Error() string {
+	return fmt.Sprintf("spec is missing one or more constants: %s", strings.Join(m.Constants, ", "))
+}
+
 // RewriteConstants replaces the value of multiple constants.
 //
 // The constant must be defined like so in the C program:
@@ -120,7 +126,7 @@ func (cs *CollectionSpec) RewriteMaps(maps map[string]*Map) error {
 //
 // From Linux 5.5 the verifier will use constants to eliminate dead code.
 //
-// Returns an error if a constant doesn't exist.
+// Returns an error of type MissingConstantsError if a constant doesn't exist.
 func (cs *CollectionSpec) RewriteConstants(consts map[string]interface{}) error {
 	replaced := make(map[string]bool)
 
@@ -184,7 +190,7 @@ func (cs *CollectionSpec) RewriteConstants(consts map[string]interface{}) error 
 	}
 
 	if len(missing) != 0 {
-		return fmt.Errorf("spec is missing one or more constants: %s", strings.Join(missing, ","))
+		return &MissingConstantsError{Constants: missing}
 	}
 
 	return nil

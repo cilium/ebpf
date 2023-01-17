@@ -8,14 +8,6 @@ import (
 	"github.com/cilium/ebpf/internal"
 )
 
-func MustKernelVersion() internal.Version {
-	v, err := internal.KernelVersion()
-	if err != nil {
-		panic(err)
-	}
-	return v
-}
-
 func CheckFeatureTest(t *testing.T, fn func() error) {
 	checkFeatureTestError(t, fn())
 }
@@ -65,11 +57,10 @@ func checkKernelVersion(tb testing.TB, ufe *internal.UnsupportedFeatureError) {
 		return
 	}
 
-	kernelVersion := MustKernelVersion()
-	if ufe.MinimumVersion.Less(kernelVersion) {
+	if !isKernelLessThan(tb, ufe.MinimumVersion) {
 		tb.Helper()
-		tb.Fatalf("Feature '%s' isn't supported even though kernel %s is newer than %s",
-			ufe.Name, kernelVersion, ufe.MinimumVersion)
+		tb.Fatalf("Feature '%s' isn't supported even though kernel is newer than %s",
+			ufe.Name, ufe.MinimumVersion)
 	}
 }
 
@@ -89,6 +80,12 @@ func IsKernelLessThan(tb testing.TB, minVersion string) bool {
 		tb.Fatalf("Invalid version %s: %s", minVersion, err)
 	}
 
+	return isKernelLessThan(tb, minv)
+}
+
+func isKernelLessThan(tb testing.TB, minv internal.Version) bool {
+	tb.Helper()
+
 	if max := os.Getenv("CI_MAX_KERNEL_VERSION"); max != "" {
 		maxv, err := internal.NewVersion(max)
 		if err != nil {
@@ -100,5 +97,15 @@ func IsKernelLessThan(tb testing.TB, minVersion string) bool {
 		}
 	}
 
-	return MustKernelVersion().Less(minv)
+	return kernelVersion(tb).Less(minv)
+}
+
+func kernelVersion(tb testing.TB) internal.Version {
+	tb.Helper()
+
+	v, err := internal.KernelVersion()
+	if err != nil {
+		tb.Fatal(err)
+	}
+	return v
 }

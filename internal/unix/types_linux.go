@@ -20,6 +20,7 @@ const (
 	ESRCH      = linux.ESRCH
 	ENODEV     = linux.ENODEV
 	EBADF      = linux.EBADF
+	EBADFD     = linux.EBADFD
 	E2BIG      = linux.E2BIG
 	EFAULT     = linux.EFAULT
 	EACCES     = linux.EACCES

@@ -12,6 +12,9 @@ import (
 
 var ErrClosedFd = unix.EBADF
 
+// InvalidFd is an invalid file descriptor.
+var InvalidFd = newFD(-1)
+
 type FD struct {
 	raw int
 }

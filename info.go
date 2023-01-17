@@ -130,6 +130,12 @@ func newProgramInfoFromFd(fd *sys.FD) (*ProgramInfo, error) {
 		pi.maps = make([]MapID, info.NrMapIds)
 		info2.NrMapIds = info.NrMapIds
 		info2.MapIds = sys.NewPointer(unsafe.Pointer(&pi.maps[0]))
+	} else if haveProgramInfoMapIDs() == nil {
+		// This program really has no associated maps.
+		pi.maps = make([]MapID, 0)
+	} else {
+		// The kernel doesn't report associated maps.
+		pi.maps = nil
 	}
 
 	if info.XlatedProgLen > 0 {
@@ -321,3 +327,30 @@ func EnableStats(which uint32) (io.Closer, error) {
 	}
 	return fd, nil
 }
+
+var haveProgramInfoMapIDs = internal.NewFeatureTest("map IDs in program info", "4.15", func() error {
+	prog, err := progLoad(asm.Instructions{
+		asm.LoadImm(asm.R0, 0, asm.DWord),
+		asm.Return(),
+	}, SocketFilter, "MIT")
+	if err != nil {
+		return err
+	}
+	defer prog.Close()
+
+	err = sys.ObjInfo(prog, &sys.ProgInfo{
+		// NB: Don't need to allocate MapIds since the program isn't using
+		// any maps.
+		NrMapIds: 1,
+	})
+	if errors.Is(err, unix.EINVAL) {
+		// Most likely the syscall doesn't exist.
+		return internal.ErrNotSupported
+	}
+	if errors.Is(err, unix.E2BIG) {
+		// We've hit check_uarg_tail_zero on older kernels.
+		return internal.ErrNotSupported
+	}
+
+	return err
+})

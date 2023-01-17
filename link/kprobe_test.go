@@ -10,7 +10,6 @@ import (
 
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/asm"
-	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/testutils"
 	"github.com/cilium/ebpf/internal/unix"
 )
@@ -83,7 +82,7 @@ func TestKretprobeMaxActive(t *testing.T) {
 	}
 
 	k, err = Kretprobe("__put_task_struct", prog, &KprobeOptions{RetprobeMaxActive: 4096})
-	if testutils.MustKernelVersion().Less(internal.Version{4, 12, 0}) {
+	if testutils.IsKernelLessThan(t, "4.12") {
 		if !errors.Is(err, ErrNotSupported) {
 			t.Fatal("Expected ErrNotSupported, got", err)
 		}

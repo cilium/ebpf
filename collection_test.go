@@ -10,6 +10,7 @@ import (
 	"github.com/cilium/ebpf/btf"
 	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/testutils"
+	qt "github.com/frankban/quicktest"
 )
 
 func TestCollectionSpecNotModified(t *testing.T) {
@@ -326,6 +327,52 @@ func TestCollectionSpecMapReplacements_SpecMismatch(t *testing.T) {
 	if !errors.Is(err, ErrMapIncompatible) {
 		t.Fatalf("Overriding a map with a mismatching spec failed with the wrong error")
 	}
+}
+
+func TestCollectionRewriteConstants(t *testing.T) {
+	cs := &CollectionSpec{
+		Maps: map[string]*MapSpec{
+			".rodata": {
+				Type:       Array,
+				KeySize:    4,
+				ValueSize:  4,
+				MaxEntries: 1,
+				Value: &btf.Datasec{
+					Vars: []btf.VarSecinfo{
+						{
+							Type: &btf.Var{
+								Name: "the_constant",
+								Type: &btf.Int{Size: 4},
+							},
+							Offset: 0,
+							Size:   4,
+						},
+					},
+				},
+				Contents: []MapKV{
+					{Key: uint32(0), Value: []byte{1, 1, 1, 1}},
+				},
+			},
+		},
+	}
+
+	err := cs.RewriteConstants(map[string]interface{}{
+		"fake_constant_one": uint32(1),
+		"fake_constant_two": uint32(2),
+	})
+	qt.Assert(t, err, qt.IsNotNil, qt.Commentf("RewriteConstants did not fail"))
+
+	var mErr *MissingConstantsError
+	if !errors.As(err, &mErr) {
+		t.Fatal("Error doesn't wrap MissingConstantsError:", err)
+	}
+	qt.Assert(t, mErr.Constants, qt.ContentEquals, []string{"fake_constant_one", "fake_constant_two"})
+
+	err = cs.RewriteConstants(map[string]interface{}{
+		"the_constant": uint32(0x42424242),
+	})
+	qt.Assert(t, err, qt.IsNil)
+	qt.Assert(t, cs.Maps[".rodata"].Contents[0].Value, qt.ContentEquals, []byte{0x42, 0x42, 0x42, 0x42})
 }
 
 func TestCollectionSpec_LoadAndAssign_LazyLoading(t *testing.T) {

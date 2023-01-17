@@ -149,7 +149,7 @@ func TestProgramInfoMapIDs(t *testing.T) {
 
 	ids, ok := info.MapIDs()
 	switch {
-	case testutils.MustKernelVersion().Less(internal.Version{4, 15, 0}):
+	case testutils.IsKernelLessThan(t, "4.15"):
 		qt.Assert(t, ok, qt.IsFalse)
 		qt.Assert(t, ids, qt.HasLen, 0)
 
@@ -183,7 +183,7 @@ func TestProgramInfoMapIDsNoMaps(t *testing.T) {
 
 	ids, ok := info.MapIDs()
 	switch {
-	case testutils.MustKernelVersion().Less(internal.Version{4, 15, 0}):
+	case testutils.IsKernelLessThan(t, "4.15"):
 		qt.Assert(t, ok, qt.IsFalse)
 		qt.Assert(t, ids, qt.HasLen, 0)
 

@@ -749,7 +749,7 @@ func TestProgramAttachToKernel(t *testing.T) {
 	testutils.SkipOnOldKernel(t, "5.5", "attach_btf_id")
 
 	haveTestmod := false
-	if !testutils.MustKernelVersion().Less(internal.Version{5, 11}) {
+	if !testutils.IsKernelLessThan(t, "5.11") {
 		// See https://github.com/torvalds/linux/commit/290248a5b7d829871b3ea3c62578613a580a1744
 		testmod, err := btf.FindHandle(func(info *btf.HandleInfo) bool {
 			return info.IsModule() && info.Name == "bpf_testmod"

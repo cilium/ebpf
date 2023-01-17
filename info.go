@@ -130,6 +130,12 @@ func newProgramInfoFromFd(fd *sys.FD) (*ProgramInfo, error) {
 		pi.maps = make([]MapID, info.NrMapIds)
 		info2.NrMapIds = info.NrMapIds
 		info2.MapIds = sys.NewPointer(unsafe.Pointer(&pi.maps[0]))
+	} else if haveProgramInfoMapIDs() == nil {
+		// This program really has no associated maps.
+		pi.maps = make([]MapID, 0)
+	} else {
+		// The kernel doesn't report associated maps.
+		pi.maps = nil
 	}
 
 	if info.XlatedProgLen > 0 {
@@ -321,3 +327,17 @@ func EnableStats(which uint32) (io.Closer, error) {
 	}
 	return fd, nil
 }
+
+var haveProgramInfoMapIDs = internal.NewFeatureTest("map IDs in program info", "4.15", func() error {
+	err := sys.ObjInfo(sys.InvalidFd, &sys.ProgInfo{
+		NrMapIds: 1,
+	})
+	if errors.Is(err, unix.EBADFD) {
+		// We know that the syscall accepts a non-zero value for NrMapIds
+		// because the check for the file descriptor happens after the zero-tail
+		// check.
+		return nil
+	}
+
+	return internal.ErrNotSupported
+})

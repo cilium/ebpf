@@ -13,7 +13,7 @@ import (
 )
 
 var (
-	uprobeEventsPath = filepath.Join(tracefsPath, "uprobe_events")
+	uprobeEventsPath = filepath.Join(getTracefsPath(), "uprobe_events")
 
 	uprobeRefCtrOffsetPMUPath = "/sys/bus/event_source/devices/uprobe/format/ref_ctr_offset"
 	// elixir.bootlin.com/linux/v5.15-rc7/source/kernel/events/core.c#L9799

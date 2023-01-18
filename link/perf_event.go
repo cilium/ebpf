@@ -42,7 +42,7 @@ import (
 //   stops any further invocations of the attached eBPF program.
 
 var (
-	tracefsPath = "/sys/kernel/debug/tracing"
+	tracefsPath = ""
 
 	errInvalidInput = errors.New("invalid input")
 )
@@ -270,7 +270,7 @@ func unsafeStringPtr(str string) (unsafe.Pointer, error) {
 // can pass a raw symbol name, e.g. a kernel symbol containing dots.
 func getTraceEventID(group, name string) (uint64, error) {
 	name = sanitizeSymbol(name)
-	path, err := sanitizePath(tracefsPath, "events", group, name, "id")
+	path, err := sanitizePath(getTracefsPath(), "events", group, name, "id")
 	if err != nil {
 		return 0, err
 	}
@@ -431,4 +431,18 @@ func isValidTraceID(s string) bool {
 	}
 
 	return true
+}
+
+// getTracefsPath will return a correct path to the tracefs mount point.
+// Since kernel 4.1 tracefs should be mounted by default at /sys/kernel/tracing,
+// but may be also be available at /sys/kernel/debug/tracing if debugfs is mounted.
+// The available tracefs paths will depends on distribution choices.
+func getTracefsPath() string {
+	if tracefsPath == "" {
+		if _, err := os.Stat("/sys/kernel/tracing/kprobe_events"); err == nil {
+			tracefsPath = "/sys/kernel/tracing"
+		}
+		tracefsPath = "/sys/kernel/debug/tracing"
+	}
+	return tracefsPath
 }

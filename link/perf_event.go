@@ -42,7 +42,8 @@ import (
 //   stops any further invocations of the attached eBPF program.
 
 var (
-	tracefsPath = ""
+	tracefsPathInitOnce sync.Once
+	tracefsPath         string
 
 	errInvalidInput = errors.New("invalid input")
 )
@@ -438,11 +439,11 @@ func isValidTraceID(s string) bool {
 // but may be also be available at /sys/kernel/debug/tracing if debugfs is mounted.
 // The available tracefs paths will depends on distribution choices.
 func getTracefsPath() string {
-	if tracefsPath == "" {
+	tracefsPathInitOnce.Do(func() {
 		if _, err := os.Stat("/sys/kernel/tracing/kprobe_events"); err == nil {
 			tracefsPath = "/sys/kernel/tracing"
 		}
 		tracefsPath = "/sys/kernel/debug/tracing"
-	}
+	})
 	return tracefsPath
 }

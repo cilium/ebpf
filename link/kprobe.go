@@ -17,7 +17,7 @@ import (
 )
 
 var (
-	kprobeEventsPath = filepath.Join(tracefsPath, "kprobe_events")
+	kprobeEventsPath = filepath.Join(getTracefsPath(), "kprobe_events")
 )
 
 type probeType uint8

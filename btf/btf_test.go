@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"sync"
 	"testing"
 
 	"github.com/cilium/ebpf/internal"
@@ -32,53 +31,45 @@ func vmlinuxSpec(tb testing.TB) *Spec {
 	return spec
 }
 
-// vmlinuxTestdata caches the result of reading and parsing a BTF blob from
-// testdata.
-var vmlinuxTestdata struct {
-	sync.Once
+type specAndRawBTF struct {
 	raw  []byte
 	spec *Spec
-	err  error
 }
 
-func doVMLinuxTestdata() {
+var vmlinuxTestdata = internal.Memoize(func() (specAndRawBTF, error) {
 	b, err := internal.ReadAllCompressed("testdata/vmlinux.btf.gz")
 	if err != nil {
-		vmlinuxTestdata.err = fmt.Errorf("uncompressing vmlinux testdata: %w", err)
-		return
+		return specAndRawBTF{}, err
 	}
-	vmlinuxTestdata.raw = b
 
-	s, err := loadRawSpec(bytes.NewReader(b), binary.LittleEndian, nil, nil)
+	spec, err := loadRawSpec(bytes.NewReader(b), binary.LittleEndian, nil, nil)
 	if err != nil {
-		vmlinuxTestdata.err = fmt.Errorf("parsing vmlinux testdata types: %w", err)
-		return
+		return specAndRawBTF{}, err
 	}
-	vmlinuxTestdata.spec = s
-}
+
+	return specAndRawBTF{b, spec}, nil
+})
 
 func vmlinuxTestdataReader(tb testing.TB) *bytes.Reader {
 	tb.Helper()
 
-	vmlinuxTestdata.Do(doVMLinuxTestdata)
-
-	if err := vmlinuxTestdata.err; err != nil {
+	td, err := vmlinuxTestdata()
+	if err != nil {
 		tb.Fatal(err)
 	}
 
-	return bytes.NewReader(vmlinuxTestdata.raw)
+	return bytes.NewReader(td.raw)
 }
 
 func vmlinuxTestdataSpec(tb testing.TB) *Spec {
 	tb.Helper()
 
-	vmlinuxTestdata.Do(doVMLinuxTestdata)
-
-	if err := vmlinuxTestdata.err; err != nil {
+	td, err := vmlinuxTestdata()
+	if err != nil {
 		tb.Fatal(err)
 	}
 
-	return vmlinuxTestdata.spec.Copy()
+	return td.spec.Copy()
 }
 
 func parseELFBTF(tb testing.TB, file string) *Spec {
@@ -140,10 +131,7 @@ func TestTypeByNameAmbiguous(t *testing.T) {
 }
 
 func TestTypeByName(t *testing.T) {
-	spec, err := LoadSpecFromReader(vmlinuxTestdataReader(t))
-	if err != nil {
-		t.Fatal(err)
-	}
+	spec := vmlinuxTestdataSpec(t)
 
 	for _, typ := range []interface{}{
 		nil,
@@ -415,17 +403,14 @@ func ExampleSpec_TypeByName() {
 }
 
 func TestTypesIterator(t *testing.T) {
-	spec, err := LoadSpecFromReader(vmlinuxTestdataReader(t))
-	if err != nil {
-		t.Fatal(err)
-	}
+	spec := vmlinuxTestdataSpec(t)
 
 	if len(spec.types) < 1 {
 		t.Fatal("Not enough types")
 	}
 
 	// Assertion that 'iphdr' type exists within the spec
-	_, err = spec.AnyTypeByName("iphdr")
+	_, err := spec.AnyTypeByName("iphdr")
 	if err != nil {
 		t.Fatalf("Failed to find 'iphdr' type by name: %s", err)
 	}
@@ -450,10 +435,7 @@ func TestTypesIterator(t *testing.T) {
 }
 
 func TestLoadSplitSpecFromReader(t *testing.T) {
-	spec, err := LoadSpecFromReader(vmlinuxTestdataReader(t))
-	if err != nil {
-		t.Fatal(err)
-	}
+	spec := vmlinuxTestdataSpec(t)
 
 	f, err := os.Open("testdata/btf_testmod.btf")
 	if err != nil {
@@ -512,5 +494,4 @@ func TestLoadSplitSpecFromReader(t *testing.T) {
 		t.Fatalf("'bpf_testmod_init` type ID (%d) does not match copied spec's (%d)",
 			typeID, copyTypeID)
 	}
-
 }

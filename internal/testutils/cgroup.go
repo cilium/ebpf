@@ -4,45 +4,29 @@ import (
 	"errors"
 	"os"
 	"strings"
-	"sync"
 	"testing"
 
+	"github.com/cilium/ebpf/internal"
 	"golang.org/x/sys/unix"
 )
 
-var cgroup2 = struct {
-	once sync.Once
-	path string
-	err  error
-}{}
-
-func cgroup2Path() (string, error) {
-	cgroup2.once.Do(func() {
-		mounts, err := os.ReadFile("/proc/mounts")
-		if err != nil {
-			cgroup2.err = err
-			return
-		}
-
-		for _, line := range strings.Split(string(mounts), "\n") {
-			mount := strings.SplitN(line, " ", 3)
-			if mount[0] == "cgroup2" {
-				cgroup2.path = mount[1]
-				return
-			}
-
-			continue
-		}
-
-		cgroup2.err = errors.New("cgroup2 not mounted")
-	})
-
-	if cgroup2.err != nil {
-		return "", cgroup2.err
+var cgroup2Path = internal.Memoize(func() (string, error) {
+	mounts, err := os.ReadFile("/proc/mounts")
+	if err != nil {
+		return "", err
 	}
 
-	return cgroup2.path, nil
-}
+	for _, line := range strings.Split(string(mounts), "\n") {
+		mount := strings.SplitN(line, " ", 3)
+		if mount[0] == "cgroup2" {
+			return mount[1], nil
+		}
+
+		continue
+	}
+
+	return "", errors.New("cgroup2 not mounted")
+})
 
 func CreateCgroup(tb testing.TB) *os.File {
 	tb.Helper()

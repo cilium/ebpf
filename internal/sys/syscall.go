@@ -85,7 +85,7 @@ func ObjInfo(fd *FD, info Info) error {
 	err := ObjGetInfoByFd(&ObjGetInfoByFdAttr{
 		BpfFd:   fd.Uint(),
 		InfoLen: len,
-		Info:    NewPointer(ptr),
+		Info:    UnsafePointer(ptr),
 	})
 	runtime.KeepAlive(fd)
 	return err

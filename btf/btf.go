@@ -702,8 +702,8 @@ var haveBTF = internal.NewFeatureTest("BTF", "4.18", func() error {
 	btf := marshalBTF(&types, strings, internal.NativeEndian)
 
 	fd, err := sys.BtfLoad(&sys.BtfLoadAttr{
-		Btf:     sys.NewSlicePointer(btf),
-		BtfSize: uint32(len(btf)),
+		Btf:     sys.SlicePointer(btf),
+		BtfSize: sys.SliceLen(btf),
 	})
 	if errors.Is(err, unix.EINVAL) || errors.Is(err, unix.EPERM) {
 		return internal.ErrNotSupported
@@ -741,8 +741,8 @@ var haveMapBTF = internal.NewFeatureTest("Map BTF (Var/Datasec)", "5.2", func() 
 	btf := marshalBTF(&types, strings, internal.NativeEndian)
 
 	fd, err := sys.BtfLoad(&sys.BtfLoadAttr{
-		Btf:     sys.NewSlicePointer(btf),
-		BtfSize: uint32(len(btf)),
+		Btf:     sys.SlicePointer(btf),
+		BtfSize: sys.SliceLen(btf),
 	})
 	if errors.Is(err, unix.EINVAL) || errors.Is(err, unix.EPERM) {
 		// Treat both EINVAL and EPERM as not supported: creating the map may still
@@ -781,8 +781,8 @@ var haveProgBTF = internal.NewFeatureTest("Program BTF (func/line_info)", "5.0",
 	btf := marshalBTF(&types, strings, internal.NativeEndian)
 
 	fd, err := sys.BtfLoad(&sys.BtfLoadAttr{
-		Btf:     sys.NewSlicePointer(btf),
-		BtfSize: uint32(len(btf)),
+		Btf:     sys.SlicePointer(btf),
+		BtfSize: sys.SliceLen(btf),
 	})
 	if errors.Is(err, unix.EINVAL) || errors.Is(err, unix.EPERM) {
 		return internal.ErrNotSupported
@@ -817,8 +817,8 @@ var haveFuncLinkage = internal.NewFeatureTest("BTF func linkage", "5.6", func() 
 	btf := marshalBTF(&types, strings, internal.NativeEndian)
 
 	fd, err := sys.BtfLoad(&sys.BtfLoadAttr{
-		Btf:     sys.NewSlicePointer(btf),
-		BtfSize: uint32(len(btf)),
+		Btf:     sys.SlicePointer(btf),
+		BtfSize: sys.SliceLen(btf),
 	})
 	if errors.Is(err, unix.EINVAL) {
 		return internal.ErrNotSupported

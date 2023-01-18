@@ -53,8 +53,8 @@ func newHandleFromRawBTF(btf []byte) (*Handle, error) {
 	}
 
 	attr := &sys.BtfLoadAttr{
-		Btf:     sys.NewSlicePointer(btf),
-		BtfSize: uint32(len(btf)),
+		Btf:     sys.SlicePointer(btf),
+		BtfSize: sys.SliceLen(btf),
 	}
 
 	fd, err := sys.BtfLoad(attr)
@@ -67,8 +67,8 @@ func newHandleFromRawBTF(btf []byte) (*Handle, error) {
 	}
 
 	logBuf := make([]byte, 64*1024)
-	attr.BtfLogBuf = sys.NewSlicePointer(logBuf)
-	attr.BtfLogSize = uint32(len(logBuf))
+	attr.BtfLogBuf = sys.SlicePointer(logBuf)
+	attr.BtfLogSize = sys.SliceLen(logBuf)
 	attr.BtfLogLevel = 1
 
 	// Up until at least kernel 6.0, the BTF verifier does not return ENOSPC
@@ -105,9 +105,11 @@ func NewHandleFromID(id ID) (*Handle, error) {
 
 // Spec parses the kernel BTF into Go types.
 func (h *Handle) Spec() (*Spec, error) {
-	var btfInfo sys.BtfInfo
 	btfBuffer := make([]byte, h.size)
-	btfInfo.Btf, btfInfo.BtfSize = sys.NewSlicePointerLen(btfBuffer)
+	btfInfo := sys.BtfInfo{
+		Btf:     sys.SlicePointer(btfBuffer),
+		BtfSize: sys.SliceLen(btfBuffer),
+	}
 
 	if err := sys.ObjInfo(h.fd, &btfInfo); err != nil {
 		return nil, err
@@ -187,7 +189,8 @@ func newHandleInfoFromFD(fd *sys.FD) (*HandleInfo, error) {
 	btfInfo.BtfSize = 0
 
 	nameBuffer := make([]byte, btfInfo.NameLen)
-	btfInfo.Name, btfInfo.NameLen = sys.NewSlicePointerLen(nameBuffer)
+	btfInfo.Name = sys.SlicePointer(nameBuffer)
+	btfInfo.NameLen = sys.SliceLen(nameBuffer)
 	if err := sys.ObjInfo(fd, &btfInfo); err != nil {
 		return nil, err
 	}

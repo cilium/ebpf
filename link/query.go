@@ -3,7 +3,6 @@ package link
 import (
 	"fmt"
 	"os"
-	"unsafe"
 
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/internal/sys"
@@ -52,8 +51,8 @@ func QueryPrograms(opts QueryOptions) ([]ebpf.ProgramID, error) {
 
 	// we have at least one prog, so we query again
 	progIds := make([]ebpf.ProgramID, attr.ProgCount)
-	attr.ProgIds = sys.NewPointer(unsafe.Pointer(&progIds[0]))
-	attr.ProgCount = uint32(len(progIds))
+	attr.ProgIds = sys.SlicePointer(progIds)
+	attr.ProgCount = sys.SliceLen(progIds)
 	if err := sys.ProgQuery(&attr); err != nil {
 		return nil, fmt.Errorf("can't query program IDs: %w", err)
 	}

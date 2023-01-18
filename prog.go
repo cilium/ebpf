@@ -246,12 +246,12 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions) (*Program, er
 		attr.ProgBtfFd = uint32(handle.FD())
 
 		attr.FuncInfoRecSize = btf.FuncInfoSize
-		attr.FuncInfoCnt = uint32(len(fib)) / btf.FuncInfoSize
-		attr.FuncInfo = sys.NewSlicePointer(fib)
+		attr.FuncInfoCnt = sys.SliceElems(fib, int(btf.FuncInfoSize))
+		attr.FuncInfo = sys.SlicePointer(fib)
 
 		attr.LineInfoRecSize = btf.LineInfoSize
-		attr.LineInfoCnt = uint32(len(lib)) / btf.LineInfoSize
-		attr.LineInfo = sys.NewSlicePointer(lib)
+		attr.LineInfoCnt = sys.SliceElems(lib, int(btf.LineInfoSize))
+		attr.LineInfo = sys.SlicePointer(lib)
 	}
 
 	if err := applyRelocations(insns, opts.KernelTypes, spec.ByteOrder); err != nil {
@@ -269,8 +269,8 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions) (*Program, er
 	}
 
 	bytecode := buf.Bytes()
-	attr.Insns = sys.NewSlicePointer(bytecode)
-	attr.InsnCnt = uint32(len(bytecode) / asm.InstructionSize)
+	attr.Insns = sys.SlicePointer(bytecode)
+	attr.InsnCnt = sys.SliceElems(bytecode, asm.InstructionSize)
 
 	if spec.AttachTarget != nil {
 		targetID, err := findTargetInProgram(spec.AttachTarget, spec.AttachTo, spec.Type, spec.AttachType)
@@ -305,8 +305,8 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions) (*Program, er
 	if !opts.LogDisabled && opts.LogLevel != 0 {
 		logBuf = make([]byte, opts.LogSize)
 		attr.LogLevel = opts.LogLevel
-		attr.LogSize = uint32(len(logBuf))
-		attr.LogBuf = sys.NewSlicePointer(logBuf)
+		attr.LogSize = sys.SliceLen(logBuf)
+		attr.LogBuf = sys.SlicePointer(logBuf)
 	}
 
 	fd, err := sys.ProgLoad(attr)
@@ -323,8 +323,8 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions) (*Program, er
 	if !opts.LogDisabled && opts.LogLevel == 0 {
 		logBuf = make([]byte, opts.LogSize)
 		attr.LogLevel = LogLevelBranch
-		attr.LogSize = uint32(len(logBuf))
-		attr.LogBuf = sys.NewSlicePointer(logBuf)
+		attr.LogSize = sys.SliceLen(logBuf)
+		attr.LogBuf = sys.SlicePointer(logBuf)
 
 		_, err2 = sys.ProgLoad(attr)
 	}
@@ -620,8 +620,8 @@ var haveProgRun = internal.NewFeatureTest("BPF_PROG_RUN", "4.12", func() error {
 	in := internal.EmptyBPFContext
 	attr := sys.ProgRunAttr{
 		ProgFd:     uint32(prog.FD()),
-		DataSizeIn: uint32(len(in)),
-		DataIn:     sys.NewSlicePointer(in),
+		DataSizeIn: sys.SliceLen(in),
+		DataIn:     sys.SlicePointer(in),
 	}
 
 	err = sys.ProgRun(&attr)
@@ -670,15 +670,15 @@ func (p *Program) run(opts *RunOptions) (uint32, time.Duration, error) {
 
 	attr := sys.ProgRunAttr{
 		ProgFd:      p.fd.Uint(),
-		DataSizeIn:  uint32(len(opts.Data)),
-		DataSizeOut: uint32(len(opts.DataOut)),
-		DataIn:      sys.NewSlicePointer(opts.Data),
-		DataOut:     sys.NewSlicePointer(opts.DataOut),
+		DataSizeIn:  sys.SliceLen(opts.Data),
+		DataSizeOut: sys.SliceLen(opts.DataOut),
+		DataIn:      sys.SlicePointer(opts.Data),
+		DataOut:     sys.SlicePointer(opts.DataOut),
 		Repeat:      uint32(opts.Repeat),
-		CtxSizeIn:   uint32(len(ctxBytes)),
-		CtxSizeOut:  uint32(len(ctxOut)),
-		CtxIn:       sys.NewSlicePointer(ctxBytes),
-		CtxOut:      sys.NewSlicePointer(ctxOut),
+		CtxSizeIn:   sys.SliceLen(ctxBytes),
+		CtxSizeOut:  sys.SliceLen(ctxOut),
+		CtxIn:       sys.SlicePointer(ctxBytes),
+		CtxOut:      sys.SlicePointer(ctxOut),
 		Flags:       opts.Flags,
 		Cpu:         opts.CPU,
 	}

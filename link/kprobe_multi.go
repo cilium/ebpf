@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"unsafe"
 
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/asm"
@@ -68,9 +67,9 @@ func kprobeMulti(prog *ebpf.Program, opts KprobeMultiOptions, flags uint32) (Lin
 		return nil, errors.New("cannot attach a nil program")
 	}
 
-	syms := uint32(len(opts.Symbols))
-	addrs := uint32(len(opts.Addresses))
-	cookies := uint32(len(opts.Cookies))
+	syms := sys.SliceLen(opts.Symbols)
+	addrs := sys.SliceLen(opts.Addresses)
+	cookies := sys.SliceLen(opts.Cookies)
 
 	if syms == 0 && addrs == 0 {
 		return nil, fmt.Errorf("one of Symbols or Addresses is required: %w", errInvalidInput)
@@ -99,11 +98,11 @@ func kprobeMulti(prog *ebpf.Program, opts KprobeMultiOptions, flags uint32) (Lin
 
 	case addrs != 0:
 		attr.Count = addrs
-		attr.Addrs = sys.NewPointer(unsafe.Pointer(&opts.Addresses[0]))
+		attr.Addrs = sys.SlicePointer(opts.Addresses)
 	}
 
 	if cookies != 0 {
-		attr.Cookies = sys.NewPointer(unsafe.Pointer(&opts.Cookies[0]))
+		attr.Cookies = sys.SlicePointer(opts.Cookies)
 	}
 
 	fd, err := sys.LinkCreateKprobeMulti(attr)

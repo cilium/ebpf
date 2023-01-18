@@ -11,7 +11,6 @@ import (
 	"strings"
 	"syscall"
 	"time"
-	"unsafe"
 
 	"github.com/cilium/ebpf/asm"
 	"github.com/cilium/ebpf/btf"
@@ -128,14 +127,14 @@ func newProgramInfoFromFd(fd *sys.FD) (*ProgramInfo, error) {
 
 	if info.NrMapIds > 0 {
 		pi.maps = make([]MapID, info.NrMapIds)
-		info2.NrMapIds = info.NrMapIds
-		info2.MapIds = sys.NewPointer(unsafe.Pointer(&pi.maps[0]))
+		info2.NrMapIds = sys.SliceLen(pi.maps)
+		info2.MapIds = sys.SlicePointer(pi.maps)
 	}
 
 	if info.XlatedProgLen > 0 {
 		pi.insns = make([]byte, info.XlatedProgLen)
-		info2.XlatedProgLen = info.XlatedProgLen
-		info2.XlatedProgInsns = sys.NewSlicePointer(pi.insns)
+		info2.XlatedProgLen = sys.SliceLen(pi.insns)
+		info2.XlatedProgInsns = sys.SlicePointer(pi.insns)
 	}
 
 	if info.NrMapIds > 0 || info.XlatedProgLen > 0 {

@@ -42,8 +42,8 @@ func progLoad(insns asm.Instructions, typ ProgramType, license string) (*sys.FD,
 	return sys.ProgLoad(&sys.ProgLoadAttr{
 		ProgType: sys.ProgType(typ),
 		License:  sys.NewStringPointer(license),
-		Insns:    sys.NewSlicePointer(bytecode),
-		InsnCnt:  uint32(len(bytecode) / asm.InstructionSize),
+		Insns:    sys.SlicePointer(bytecode),
+		InsnCnt:  sys.SliceElems(bytecode, asm.InstructionSize),
 	})
 }
 

@@ -245,7 +245,7 @@ func Tgkill(tgid int, tid int, sig syscall.Signal) (err error) {
 	return errNonLinux
 }
 
-func BytePtrFromString(s string) (*byte, error) {
+func ByteSliceFromString(s string) ([]byte, error) {
 	return nil, errNonLinux
 }
 

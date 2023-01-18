@@ -593,7 +593,7 @@ func (m *Map) LookupAndDeleteWithFlags(key, valueOut interface{}, flags MapLooku
 // Returns a nil value if a key doesn't exist.
 func (m *Map) LookupBytes(key interface{}) ([]byte, error) {
 	valueBytes := make([]byte, m.fullValueSize)
-	valuePtr := sys.NewSlicePointer(valueBytes)
+	valuePtr := sys.SlicePointer(valueBytes)
 
 	err := m.lookup(key, valuePtr, 0)
 	if errors.Is(err, ErrKeyNotExist) {
@@ -740,7 +740,7 @@ func (m *Map) NextKey(key, nextKeyOut interface{}) error {
 // Returns nil if there are no more keys.
 func (m *Map) NextKeyBytes(key interface{}) ([]byte, error) {
 	nextKey := make([]byte, m.keySize)
-	nextKeyPtr := sys.NewSlicePointer(nextKey)
+	nextKeyPtr := sys.SlicePointer(nextKey)
 
 	err := m.nextKey(key, nextKeyPtr)
 	if errors.Is(err, ErrKeyNotExist) {
@@ -780,7 +780,7 @@ func (m *Map) nextKey(key interface{}, nextKeyOut sys.Pointer) error {
 			}
 
 			// Retry the syscall with a valid non-existing key.
-			attr.Key = sys.NewSlicePointer(guessKey)
+			attr.Key = sys.SlicePointer(guessKey)
 			if err = sys.MapGetNextKey(&attr); err == nil {
 				return nil
 			}
@@ -797,7 +797,7 @@ func (m *Map) nextKey(key interface{}, nextKeyOut sys.Pointer) error {
 // iterating maps from the start by providing an invalid key pointer.
 func (m *Map) guessNonExistentKey() ([]byte, error) {
 	// Provide an invalid value pointer to prevent a copy on the kernel side.
-	valuePtr := sys.NewPointer(unsafe.Pointer(^uintptr(0)))
+	valuePtr := sys.UnsafePointer(unsafe.Pointer(^uintptr(0)))
 	randKey := make([]byte, int(m.keySize))
 
 	for i := 0; i < 4; i++ {
@@ -883,9 +883,9 @@ func (m *Map) batchLookup(cmd sys.Cmd, startKey, nextKeyOut, keysOut, valuesOut 
 		return 0, fmt.Errorf("keysOut and valuesOut must be the same length")
 	}
 	keyBuf := make([]byte, count*int(m.keySize))
-	keyPtr := sys.NewSlicePointer(keyBuf)
+	keyPtr := sys.SlicePointer(keyBuf)
 	valueBuf := make([]byte, count*int(m.fullValueSize))
-	valuePtr := sys.NewSlicePointer(valueBuf)
+	valuePtr := sys.SlicePointer(valueBuf)
 	nextPtr, nextBuf := makeBuffer(nextKeyOut, int(m.keySize))
 
 	attr := sys.MapLookupBatchAttr{
@@ -1157,7 +1157,7 @@ func (m *Map) marshalKey(data interface{}) (sys.Pointer, error) {
 	if data == nil {
 		if m.keySize == 0 {
 			// Queues have a key length of zero, so passing nil here is valid.
-			return sys.NewPointer(nil), nil
+			return sys.UnsafePointer(nil), nil
 		}
 		return sys.Pointer{}, errors.New("can't use nil as key of map")
 	}
@@ -1205,7 +1205,7 @@ func (m *Map) marshalValue(data interface{}) (sys.Pointer, error) {
 		return sys.Pointer{}, err
 	}
 
-	return sys.NewSlicePointer(buf), nil
+	return sys.SlicePointer(buf), nil
 }
 
 func (m *Map) unmarshalValue(value interface{}, buf []byte) error {

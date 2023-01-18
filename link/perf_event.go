@@ -256,11 +256,11 @@ func attachPerfEventLink(pe *perfEvent, prog *ebpf.Program) (*perfEventLink, err
 
 // unsafeStringPtr returns an unsafe.Pointer to a NUL-terminated copy of str.
 func unsafeStringPtr(str string) (unsafe.Pointer, error) {
-	p, err := unix.BytePtrFromString(str)
+	p, err := unix.ByteSliceFromString(str)
 	if err != nil {
 		return nil, err
 	}
-	return unsafe.Pointer(p), nil
+	return unsafe.Pointer(&p[0]), nil
 }
 
 // getTraceEventID reads a trace event's ID from tracefs given its group and name.

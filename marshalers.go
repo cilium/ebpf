@@ -22,7 +22,7 @@ import (
 // unsafe.Pointer.
 func marshalPtr(data interface{}, length int) (sys.Pointer, error) {
 	if ptr, ok := data.(unsafe.Pointer); ok {
-		return sys.NewPointer(ptr), nil
+		return sys.UnsafePointer(ptr), nil
 	}
 
 	buf, err := marshalBytes(data, length)
@@ -30,7 +30,7 @@ func marshalPtr(data interface{}, length int) (sys.Pointer, error) {
 		return sys.Pointer{}, err
 	}
 
-	return sys.NewSlicePointer(buf), nil
+	return sys.SlicePointer(buf), nil
 }
 
 // marshalBytes converts an arbitrary value into a byte buffer.
@@ -76,11 +76,11 @@ func marshalBytes(data interface{}, length int) (buf []byte, err error) {
 
 func makeBuffer(dst interface{}, length int) (sys.Pointer, []byte) {
 	if ptr, ok := dst.(unsafe.Pointer); ok {
-		return sys.NewPointer(ptr), nil
+		return sys.UnsafePointer(ptr), nil
 	}
 
 	buf := make([]byte, length)
-	return sys.NewSlicePointer(buf), buf
+	return sys.SlicePointer(buf), buf
 }
 
 var bytesReaderPool = sync.Pool{
@@ -189,7 +189,7 @@ func marshalPerCPUValue(slice interface{}, elemLength int) (sys.Pointer, error) 
 		copy(buf[offset:offset+elemLength], elemBytes)
 	}
 
-	return sys.NewSlicePointer(buf), nil
+	return sys.SlicePointer(buf), nil
 }
 
 // unmarshalPerCPUValue decodes a buffer into a slice containing one value per

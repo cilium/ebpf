@@ -20,12 +20,7 @@ import (
 //go:embed template.tpl
 var commonRaw string
 
-var (
-	tplFuncs = map[string]interface{}{
-		"tag": tag,
-	}
-	commonTemplate = template.Must(template.New("common").Funcs(tplFuncs).Parse(commonRaw))
-)
+var commonTemplate = template.Must(template.New("common").Parse(commonRaw))
 
 type templateName string
 
@@ -242,8 +237,4 @@ func sortTypes(typeNames map[btf.Type]string) ([]btf.Type, error) {
 	}
 
 	return types, nil
-}
-
-func tag(str string) string {
-	return "`ebpf:\"" + str + "\"`"
 }

@@ -63,7 +63,7 @@ type {{ .Name.Specs }} struct {
 // It can be passed ebpf.CollectionSpec.Assign.
 type {{ .Name.ProgramSpecs }} struct {
 {{- range $name, $id := .Programs }}
-	{{ $id }} *ebpf.ProgramSpec {{ tag $name }}
+	{{ $id }} *ebpf.ProgramSpec `ebpf:"{{ $name }}"`
 {{- end }}
 }
 
@@ -72,7 +72,7 @@ type {{ .Name.ProgramSpecs }} struct {
 // It can be passed ebpf.CollectionSpec.Assign.
 type {{ .Name.MapSpecs }} struct {
 {{- range $name, $id := .Maps }}
-	{{ $id }} *ebpf.MapSpec {{ tag $name }}
+	{{ $id }} *ebpf.MapSpec `ebpf:"{{ $name }}"`
 {{- end }}
 }
 
@@ -96,7 +96,7 @@ func (o *{{ .Name.Objects }}) Close() error {
 // It can be passed to {{ .Name.LoadObjects }} or ebpf.CollectionSpec.LoadAndAssign.
 type {{ .Name.Maps }} struct {
 {{- range $name, $id := .Maps }}
-	{{ $id }} *ebpf.Map {{ tag $name }}
+	{{ $id }} *ebpf.Map `ebpf:"{{ $name }}"`
 {{- end }}
 }
 
@@ -113,7 +113,7 @@ func (m *{{ .Name.Maps }}) Close() error {
 // It can be passed to {{ .Name.LoadObjects }} or ebpf.CollectionSpec.LoadAndAssign.
 type {{ .Name.Programs }} struct {
 {{- range $name, $id := .Programs }}
-	{{ $id }} *ebpf.Program {{ tag $name }}
+	{{ $id }} *ebpf.Program `ebpf:"{{ $name }}"`
 {{- end }}
 }
 

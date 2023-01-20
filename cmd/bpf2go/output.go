@@ -18,8 +18,6 @@ import (
 	"github.com/cilium/ebpf/internal"
 )
 
-const ebpfModule = "github.com/cilium/ebpf"
-
 //go:embed output.tpl
 var commonRaw string
 
@@ -148,6 +146,11 @@ func output(args outputArgs) error {
 		return err
 	}
 
+	module, err := currentModule()
+	if err != nil {
+		return err
+	}
+
 	gf := &btf.GoFormatter{
 		Names:      typeNames,
 		Identifier: internal.Identifier,
@@ -166,7 +169,7 @@ func output(args outputArgs) error {
 		File        string
 	}{
 		gf,
-		ebpfModule,
+		module,
 		args.pkg,
 		args.constraints,
 		templateName(args.ident),

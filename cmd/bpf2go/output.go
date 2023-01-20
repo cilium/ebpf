@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"go/token"
 	"io"
-	"os"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -83,13 +82,7 @@ type outputArgs struct {
 }
 
 func output(args outputArgs) error {
-	obj, err := os.ReadFile(args.obj)
-	if err != nil {
-		return fmt.Errorf("read object file contents: %s", err)
-	}
-
-	rd := bytes.NewReader(obj)
-	spec, err := ebpf.LoadCollectionSpecFromReader(rd)
+	spec, err := ebpf.LoadCollectionSpec(args.obj)
 	if err != nil {
 		return fmt.Errorf("can't load BPF from ELF: %s", err)
 	}

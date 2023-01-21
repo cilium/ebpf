@@ -234,7 +234,6 @@ func TestConvertGOARCH(t *testing.T) {
 
 	b2g := bpf2go{
 		pkg:              "test",
-		stdout:           io.Discard,
 		identStem:        "test",
 		cc:               clangBin(t),
 		disableStripping: true,
@@ -242,7 +241,7 @@ func TestConvertGOARCH(t *testing.T) {
 		outputDir:        tmp,
 	}
 
-	if err := b2g.convert(targetByGoArch["amd64"], nil); err != nil {
+	if err := b2g.convert(io.Discard, targetByGoArch["amd64"], nil); err != nil {
 		t.Fatal("Can't target GOARCH:", err)
 	}
 }

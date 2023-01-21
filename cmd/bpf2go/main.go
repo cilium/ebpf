@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"bytes"
 	"errors"
 	"flag"
@@ -17,6 +18,8 @@ import (
 	"strings"
 
 	"github.com/cilium/ebpf"
+
+	"golang.org/x/sync/errgroup"
 )
 
 const helpText = `Usage: %[1]s [options] <ident> <source file> [-- <C flags>]
@@ -70,7 +73,6 @@ var targetByGoArch = map[string]target{
 
 func run(stdout io.Writer, pkg, outputDir string, args []string) (err error) {
 	b2g := bpf2go{
-		stdout:    stdout,
 		pkg:       pkg,
 		outputDir: outputDir,
 	}
@@ -192,13 +194,22 @@ func run(stdout io.Writer, pkg, outputDir string, args []string) (err error) {
 		}
 	}
 
+	var g errgroup.Group
+	g.SetLimit(runtime.GOMAXPROCS(0))
+
 	for target, arches := range targets {
-		if err := b2g.convert(target, arches); err != nil {
-			return err
-		}
+		target, arches := target, arches // capture loop variables
+		g.Go(func() error {
+			// Do some light stdout buffering to avoid concurrent runs from
+			// trampling on each other in the happy case.
+			stdout := bufio.NewWriter(stdout)
+			defer stdout.Flush()
+
+			return b2g.convert(stdout, target, arches)
+		})
 	}
 
-	return nil
+	return g.Wait()
 }
 
 // cTypes collects the C type names a user wants to generate Go types for.
@@ -240,7 +251,6 @@ func (ct *cTypes) Set(value string) error {
 }
 
 type bpf2go struct {
-	stdout io.Writer
 	// Absolute path to a .c file.
 	sourceFile string
 	// Absolute path to a directory where .go are written
@@ -268,7 +278,7 @@ type bpf2go struct {
 	makeBase string
 }
 
-func (b2g *bpf2go) convert(tgt target, arches []string) (err error) {
+func (b2g *bpf2go) convert(stdout io.Writer, tgt target, arches []string) (err error) {
 	removeOnError := func(f *os.File) {
 		if err != nil {
 			os.Remove(f.Name())
@@ -320,13 +330,13 @@ func (b2g *bpf2go) convert(tgt target, arches []string) (err error) {
 		return err
 	}
 
-	fmt.Fprintln(b2g.stdout, "Compiled", objFileName)
+	fmt.Fprintln(stdout, "Compiled", objFileName)
 
 	if !b2g.disableStripping {
 		if err := strip(b2g.strip, objFileName); err != nil {
 			return err
 		}
-		fmt.Fprintln(b2g.stdout, "Stripped", objFileName)
+		fmt.Fprintln(stdout, "Stripped", objFileName)
 	}
 
 	spec, err := ebpf.LoadCollectionSpec(objFileName)
@@ -361,7 +371,7 @@ func (b2g *bpf2go) convert(tgt target, arches []string) (err error) {
 		return fmt.Errorf("can't write %s: %s", goFileName, err)
 	}
 
-	fmt.Fprintln(b2g.stdout, "Wrote", goFileName)
+	fmt.Fprintln(stdout, "Wrote", goFileName)
 
 	if b2g.makeBase == "" {
 		return
@@ -384,7 +394,7 @@ func (b2g *bpf2go) convert(tgt target, arches []string) (err error) {
 		return fmt.Errorf("can't write dependency file: %s", err)
 	}
 
-	fmt.Fprintln(b2g.stdout, "Wrote", depFileName)
+	fmt.Fprintln(stdout, "Wrote", depFileName)
 	return nil
 }
 

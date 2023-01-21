@@ -14,6 +14,9 @@ import (
 	"runtime"
 	"sort"
 	"strings"
+
+	"github.com/cilium/ebpf"
+	"github.com/cilium/ebpf/btf"
 )
 
 const helpText = `Usage: %[1]s [options] <ident> <source file> [-- <C flags>]
@@ -129,9 +132,9 @@ func run(stdout io.Writer, pkg, outputDir string, args []string) (err error) {
 		return errors.New("expected at least two arguments")
 	}
 
-	b2g.ident = args[0]
-	if !token.IsIdentifier(b2g.ident) {
-		return fmt.Errorf("%q is not a valid identifier", b2g.ident)
+	b2g.identStem = args[0]
+	if !token.IsIdentifier(b2g.identStem) {
+		return fmt.Errorf("%q is not a valid identifier", b2g.identStem)
 	}
 
 	input := args[1]
@@ -245,12 +248,12 @@ type bpf2go struct {
 	sourceFile string
 	// Absolute path to a directory where .go are written
 	outputDir string
-	// Alternative output stem. If empty, ident is used.
+	// Alternative output stem. If empty, identStem is used.
 	outputStem string
 	// Valid go package name.
 	pkg string
 	// Valid go identifier.
-	ident string
+	identStem string
 	// C compiler.
 	cc string
 	// Command used to strip DWARF.
@@ -278,7 +281,7 @@ func (b2g *bpf2go) convert(tgt target, arches []string) (err error) {
 
 	outputStem := b2g.outputStem
 	if outputStem == "" {
-		outputStem = strings.ToLower(b2g.ident)
+		outputStem = strings.ToLower(b2g.identStem)
 	}
 	stem := fmt.Sprintf("%s_%s", outputStem, tgt.clang)
 	if tgt.linux != "" {
@@ -329,6 +332,16 @@ func (b2g *bpf2go) convert(tgt target, arches []string) (err error) {
 		fmt.Fprintln(b2g.stdout, "Stripped", objFileName)
 	}
 
+	spec, err := ebpf.LoadCollectionSpec(objFileName)
+	if err != nil {
+		return fmt.Errorf("can't load BPF from ELF: %s", err)
+	}
+
+	maps, programs, types, err := collectFromSpec(spec, b2g.cTypes, b2g.skipGlobalTypes)
+	if err != nil {
+		return err
+	}
+
 	// Write out generated go
 	goFileName := filepath.Join(b2g.outputDir, stem+".go")
 	goFile, err := os.Create(goFileName)
@@ -338,13 +351,14 @@ func (b2g *bpf2go) convert(tgt target, arches []string) (err error) {
 	defer removeOnError(goFile)
 
 	err = output(outputArgs{
-		pkg:             b2g.pkg,
-		ident:           b2g.ident,
-		cTypes:          b2g.cTypes,
-		skipGlobalTypes: b2g.skipGlobalTypes,
-		tags:            tags,
-		obj:             objFileName,
-		out:             goFile,
+		pkg:      b2g.pkg,
+		stem:     b2g.identStem,
+		tags:     tags,
+		maps:     maps,
+		programs: programs,
+		types:    types,
+		obj:      filepath.Base(objFileName),
+		out:      goFile,
 	})
 	if err != nil {
 		return fmt.Errorf("can't write %s: %s", goFileName, err)
@@ -441,6 +455,46 @@ func collectTargets(targets []string) (map[target][]string, error) {
 	}
 
 	return result, nil
+}
+
+func collectFromSpec(spec *ebpf.CollectionSpec, cTypes []string, skipGlobalTypes bool) (maps, programs []string, types []btf.Type, _ error) {
+	for name := range spec.Maps {
+		// Skip .rodata, .data, .bss, etc. sections
+		if !strings.HasPrefix(name, ".") {
+			maps = append(maps, name)
+		}
+	}
+
+	for name := range spec.Programs {
+		programs = append(programs, name)
+	}
+
+	types, err := collectCTypes(spec.Types, cTypes)
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("collect C types: %w", err)
+	}
+
+	// Collect map key and value types, unless we've been asked not to.
+	if skipGlobalTypes {
+		return maps, programs, types, nil
+	}
+
+	for _, typ := range collectMapTypes(spec.Maps) {
+		switch btf.UnderlyingType(typ).(type) {
+		case *btf.Datasec:
+			// Avoid emitting .rodata, .bss, etc. for now. We might want to
+			// name these types differently, etc.
+			continue
+
+		case *btf.Int:
+			// Don't emit primitive types by default.
+			continue
+		}
+
+		types = append(types, typ)
+	}
+
+	return maps, programs, types, nil
 }
 
 func main() {

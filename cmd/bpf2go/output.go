@@ -16,7 +16,7 @@ import (
 	"github.com/cilium/ebpf/internal"
 )
 
-//go:embed template.tpl
+//go:embed output.tpl
 var commonRaw string
 
 var commonTemplate = template.Must(template.New("common").Parse(commonRaw))

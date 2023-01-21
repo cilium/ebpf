@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"fmt"
+	"runtime/debug"
 	"strings"
 	"unicode"
 	"unicode/utf8"
@@ -80,4 +81,13 @@ func splitArguments(in string) ([]string, error) {
 func toUpperFirst(str string) string {
 	first, n := utf8.DecodeRuneInString(str)
 	return string(unicode.ToUpper(first)) + str[n:]
+}
+
+func currentModule() (string, error) {
+	bi, ok := debug.ReadBuildInfo()
+	if !ok {
+		return "", fmt.Errorf("determine current module: missing build info")
+	}
+
+	return bi.Main.Path, nil
 }

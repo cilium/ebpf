@@ -2,7 +2,6 @@ package link
 
 import (
 	"errors"
-	"math"
 	"os"
 	"testing"
 
@@ -40,7 +39,7 @@ func TestKprobeMultiInput(t *testing.T) {
 	// Symbols and Addresses are mutually exclusive.
 	_, err = KprobeMulti(prog, KprobeMultiOptions{
 		Symbols:   []string{"foo"},
-		Addresses: []uint64{1},
+		Addresses: []uintptr{1},
 	})
 	if !errors.Is(err, errInvalidInput) {
 		t.Fatalf("expected errInvalidInput, got: %v", err)
@@ -70,7 +69,7 @@ func TestKprobeMultiErrors(t *testing.T) {
 	// Only have a negative test for addresses as it would be hard to maintain a
 	// proper one.
 	if _, err := KprobeMulti(prog, KprobeMultiOptions{
-		Addresses: []uint64{math.MaxUint64},
+		Addresses: []uintptr{^uintptr(0)},
 	}); !errors.Is(err, unix.EINVAL) {
 		t.Fatalf("expected EINVAL, got: %s", err)
 	}

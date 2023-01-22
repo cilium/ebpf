@@ -64,28 +64,20 @@ func generateTypes(spec *btf.Spec) ([]byte, error) {
 	objName := &btf.Array{Nelems: 16, Type: &btf.Int{Encoding: btf.Char, Size: 1}}
 	linkID := &btf.Int{Size: 4}
 	btfID := &btf.Int{Size: 4}
+	btfTypeID := &btf.Int{Size: 4}
 	pointer := &btf.Int{Size: 8}
 	logLevel := &btf.Int{Size: 4}
 	mapFlags := &btf.Int{Size: 4}
 
-	// Pre-declare handwritten types so that generated types can refer to them.
-	var (
-		_ sys.ObjName
-		_ sys.LinkID
-		_ sys.BTFID
-		_ sys.Pointer
-		_ sys.LogLevel
-		_ sys.MapFlags
-	)
-
 	gf := &btf.GoFormatter{
 		Names: map[btf.Type]string{
-			objName:  "ObjName",
-			linkID:   "LinkID",
-			btfID:    "BTFID",
-			pointer:  "Pointer",
-			logLevel: "LogLevel",
-			mapFlags: "MapFlags",
+			objName:   internal.GoTypeName(sys.ObjName{}),
+			linkID:    internal.GoTypeName(sys.LinkID(0)),
+			btfID:     internal.GoTypeName(sys.BTFID(0)),
+			btfTypeID: internal.GoTypeName(sys.BTFTypeID(0)),
+			pointer:   internal.GoTypeName(sys.Pointer{}),
+			logLevel:  internal.GoTypeName(sys.LogLevel(0)),
+			mapFlags:  internal.GoTypeName(sys.MapFlags(0)),
 		},
 		Identifier: internal.Identifier,
 		EnumIdentifier: func(name, element string) string {
@@ -166,6 +158,7 @@ import (
 				replace(objName, "name"),
 				replace(pointer, "xlated_prog_insns"),
 				replace(pointer, "map_ids"),
+				replace(btfID, "btf_id"),
 			},
 		},
 		{
@@ -173,6 +166,7 @@ import (
 			[]patch{
 				replace(objName, "name"),
 				replace(mapFlags, "map_flags"),
+				replace(btfTypeID, "btf_vmlinux_value_type_id", "btf_key_type_id", "btf_value_type_id"),
 			},
 		},
 		{
@@ -235,6 +229,7 @@ import (
 				replace(objName, "map_name"),
 				replace(enumTypes["MapType"], "map_type"),
 				replace(mapFlags, "map_flags"),
+				replace(btfTypeID, "btf_vmlinux_value_type_id", "btf_key_type_id", "btf_value_type_id"),
 			},
 		},
 		{
@@ -296,6 +291,7 @@ import (
 					"fd_array",
 					"core_relos",
 				),
+				replace(btfTypeID, "attach_btf_id"),
 				choose(20, "attach_btf_obj_fd"),
 			},
 		},
@@ -373,7 +369,11 @@ import (
 		},
 		{
 			"LinkCreate", retFd, "link_create", "BPF_LINK_CREATE",
-			[]patch{replace(enumTypes["AttachType"], "attach_type")},
+			[]patch{
+				replace(enumTypes["AttachType"], "attach_type"),
+				choose(4, "target_btf_id"),
+				replace(btfTypeID, "target_btf_id"),
+			},
 		},
 		{
 			"LinkCreateIter", retFd, "link_create", "BPF_LINK_CREATE",
@@ -494,7 +494,10 @@ import (
 		{"IterLinkInfo", "iter", []patch{replace(pointer, "target_name"), truncateAfter("target_name_len")}},
 		{"NetNsLinkInfo", "netns", []patch{replace(enumTypes["AttachType"], "attach_type")}},
 		{"RawTracepointLinkInfo", "raw_tracepoint", []patch{replace(pointer, "tp_name")}},
-		{"TracingLinkInfo", "tracing", []patch{replace(enumTypes["AttachType"], "attach_type")}},
+		{"TracingLinkInfo", "tracing", []patch{
+			replace(enumTypes["AttachType"], "attach_type"),
+			replace(btfTypeID, "target_btf_id")},
+		},
 		{"XDPLinkInfo", "xdp", nil},
 	}
 

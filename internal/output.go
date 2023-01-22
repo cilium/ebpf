@@ -6,6 +6,7 @@ import (
 	"go/format"
 	"go/scanner"
 	"io"
+	"reflect"
 	"strings"
 	"unicode"
 )
@@ -81,4 +82,15 @@ func WriteFormatted(src []byte, out io.Writer) error {
 	}
 
 	return nel
+}
+
+// GoTypeName is like %T, but elides the package name.
+//
+// Pointers to a type are peeled off.
+func GoTypeName(t any) string {
+	rT := reflect.TypeOf(t)
+	for rT.Kind() == reflect.Pointer {
+		rT = rT.Elem()
+	}
+	return rT.Name()
 }

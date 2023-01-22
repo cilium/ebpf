@@ -430,8 +430,8 @@ func (spec *MapSpec) createMap(inner *sys.FD, opts MapOptions) (_ *Map, err erro
 
 			// Use BTF k/v during map creation.
 			attr.BtfFd = uint32(handle.FD())
-			attr.BtfKeyTypeId = uint32(keyTypeID)
-			attr.BtfValueTypeId = uint32(valueTypeID)
+			attr.BtfKeyTypeId = keyTypeID
+			attr.BtfValueTypeId = valueTypeID
 		}
 	}
 

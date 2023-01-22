@@ -9,12 +9,13 @@ import (
 
 	"github.com/cilium/ebpf/asm"
 	"github.com/cilium/ebpf/internal"
+	"github.com/cilium/ebpf/internal/sys"
 )
 
 const maxTypeDepth = 32
 
 // TypeID identifies a type in a BTF section.
-type TypeID uint32
+type TypeID = sys.BTFTypeID
 
 // Type represents a type described by BTF.
 type Type interface {
@@ -1138,10 +1139,7 @@ func formatType(f fmt.State, verb rune, t formattableType, extra ...interface{})
 		return
 	}
 
-	// This is the same as %T, but elides the package name. Assumes that
-	// formattableType is implemented by a pointer receiver.
-	goTypeName := reflect.TypeOf(t).Elem().Name()
-	_, _ = io.WriteString(f, goTypeName)
+	_, _ = io.WriteString(f, internal.GoTypeName(t))
 
 	if name := t.TypeName(); name != "" {
 		// Output BTF type name if present.

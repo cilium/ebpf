@@ -193,7 +193,7 @@ func AttachRawLink(opts RawLinkOptions) (*RawLink, error) {
 		TargetFd:    uint32(opts.Target),
 		ProgFd:      uint32(progFd),
 		AttachType:  sys.AttachType(opts.Attach),
-		TargetBtfId: uint32(opts.BTF),
+		TargetBtfId: opts.BTF,
 		Flags:       opts.Flags,
 	}
 	fd, err := sys.LinkCreate(&attr)

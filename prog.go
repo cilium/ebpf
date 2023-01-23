@@ -278,7 +278,7 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions) (*Program, er
 			return nil, fmt.Errorf("attach %s/%s: %w", spec.Type, spec.AttachType, err)
 		}
 
-		attr.AttachBtfId = uint32(targetID)
+		attr.AttachBtfId = targetID
 		attr.AttachBtfObjFd = uint32(spec.AttachTarget.FD())
 		defer runtime.KeepAlive(spec.AttachTarget)
 	} else if spec.AttachTo != "" {
@@ -289,7 +289,7 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions) (*Program, er
 			return nil, fmt.Errorf("attach %s/%s: %w", spec.Type, spec.AttachType, err)
 		}
 
-		attr.AttachBtfId = uint32(targetID)
+		attr.AttachBtfId = targetID
 		if module != nil {
 			attr.AttachBtfObjFd = uint32(module.FD())
 			defer module.Close()

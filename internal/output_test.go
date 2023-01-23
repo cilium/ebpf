@@ -2,6 +2,8 @@ package internal
 
 import (
 	"testing"
+
+	qt "github.com/frankban/quicktest"
 )
 
 func TestIdentifier(t *testing.T) {
@@ -25,4 +27,15 @@ func TestIdentifier(t *testing.T) {
 			t.Errorf("Expected %q as output of %q, got %q", tc.out, tc.in, have)
 		}
 	}
+}
+
+func TestGoTypeName(t *testing.T) {
+	type foo struct{}
+	type bar[T any] struct{}
+	qt.Assert(t, GoTypeName(foo{}), qt.Equals, "foo")
+	qt.Assert(t, GoTypeName(new(foo)), qt.Equals, "foo")
+	qt.Assert(t, GoTypeName(new(*foo)), qt.Equals, "foo")
+	qt.Assert(t, GoTypeName(bar[int]{}), qt.Equals, "bar[int]")
+	// Broken in the stdlib, see GoTypeName for details.
+	// qt.Assert(t, GoTypeName(bar[qt.C]{}), qt.Equals, "bar[quicktest.C]")
 }

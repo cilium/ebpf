@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"math/rand"
+	"os"
 	"path/filepath"
 	"reflect"
 	"time"
@@ -792,12 +793,22 @@ func (m *Map) nextKey(key interface{}, nextKeyOut sys.Pointer) error {
 	return nil
 }
 
+var mmapProtectedPage = internal.Memoize(func() ([]byte, error) {
+	return unix.Mmap(-1, 0, os.Getpagesize(), unix.PROT_NONE, unix.MAP_ANON|unix.MAP_SHARED)
+})
+
 // guessNonExistentKey attempts to perform a map lookup that returns ENOENT.
 // This is necessary on kernels before 4.4.132, since those don't support
 // iterating maps from the start by providing an invalid key pointer.
 func (m *Map) guessNonExistentKey() ([]byte, error) {
-	// Provide an invalid value pointer to prevent a copy on the kernel side.
-	valuePtr := sys.NewPointer(unsafe.Pointer(^uintptr(0)))
+	// Map a protected page and use that as the value pointer. This saves some
+	// work copying out the value, which we're not interested in.
+	page, err := mmapProtectedPage()
+	if err != nil {
+		return nil, err
+	}
+	valuePtr := sys.NewPointer(unsafe.Pointer(&page[0]))
+
 	randKey := make([]byte, int(m.keySize))
 
 	for i := 0; i < 4; i++ {

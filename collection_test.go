@@ -619,6 +619,25 @@ func BenchmarkNewCollection(b *testing.B) {
 	}
 }
 
+func BenchmarkNewCollectionManyProgs(b *testing.B) {
+	file := fmt.Sprintf("testdata/manyprogs-%s.elf", internal.ClangEndian)
+	spec, err := LoadCollectionSpec(file)
+	if err != nil {
+		b.Fatal(err)
+	}
+
+	b.ReportAllocs()
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		coll, err := NewCollection(spec)
+		if err != nil {
+			b.Fatal(err)
+		}
+		coll.Close()
+	}
+}
+
 func ExampleCollectionSpec_Assign() {
 	spec := &CollectionSpec{
 		Maps: map[string]*MapSpec{

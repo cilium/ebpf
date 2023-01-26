@@ -23,7 +23,7 @@ blocks:
       prologue:
         commands:
           - sudo sh -c 'swapoff -a && fallocate -l 2G /swapfile && chmod 0600 /swapfile && mkswap /swapfile && swapon /swapfile'
-          - sem-version go 1.19.1
+          - sem-version go 1.19.5
           - export PATH="$PATH:$(go env GOPATH)/bin"
           - checkout
           # Disabled, see https://github.com/cilium/ebpf/issues/898

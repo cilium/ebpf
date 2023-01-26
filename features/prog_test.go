@@ -9,8 +9,13 @@ import (
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/asm"
 	"github.com/cilium/ebpf/internal"
+	"github.com/cilium/ebpf/internal/sys"
 	"github.com/cilium/ebpf/internal/testutils"
 )
+
+func TestMain(m *testing.M) {
+	sys.TraceTestMain(m)
+}
 
 func TestHaveProgramType(t *testing.T) {
 	testutils.CheckFeatureMatrix(t, haveProgramTypeMatrix)

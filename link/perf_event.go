@@ -136,10 +136,15 @@ func (pl *perfEventLink) Unpin() error {
 }
 
 func (pl *perfEventLink) Close() error {
-	if err := pl.pe.Close(); err != nil {
-		return fmt.Errorf("perf event link close: %w", err)
+	if err := pl.fd.Close(); err != nil {
+		return fmt.Errorf("perf link close: %w", err)
 	}
-	return pl.fd.Close()
+
+	// This will fail with EBUSY if the link above was a pinned bpf_link.
+	if err := pl.pe.Close(); err != nil {
+		return fmt.Errorf("perf event close: %w", err)
+	}
+	return nil
 }
 
 func (pl *perfEventLink) Update(prog *ebpf.Program) error {
@@ -297,12 +302,19 @@ func openTracepointPerfEvent(tid uint64, pid int) (*sys.FD, error) {
 		Wakeup:      1,
 	}
 
-	fd, err := unix.PerfEventOpen(&attr, pid, 0, -1, unix.PERF_FLAG_FD_CLOEXEC)
+	pfd, err := unix.PerfEventOpen(&attr, pid, 0, -1, unix.PERF_FLAG_FD_CLOEXEC)
 	if err != nil {
 		return nil, fmt.Errorf("opening tracepoint perf event: %w", err)
 	}
 
-	return sys.NewFD(fd)
+	fd, err := sys.NewFD(pfd)
+	if err != nil {
+		return nil, err
+	}
+
+	fd.SetName(fmt.Sprintf("tracepoint id(%d)", tid))
+
+	return fd, nil
 }
 
 func sanitizePath(base string, path ...string) (string, error) {

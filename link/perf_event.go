@@ -136,10 +136,14 @@ func (pl *perfEventLink) Unpin() error {
 }
 
 func (pl *perfEventLink) Close() error {
-	if err := pl.pe.Close(); err != nil {
-		return fmt.Errorf("perf event link close: %w", err)
+	if err := pl.fd.Close(); err != nil {
+		return fmt.Errorf("perf link close: %w", err)
 	}
-	return pl.fd.Close()
+
+	if err := pl.pe.Close(); err != nil {
+		return fmt.Errorf("perf event close: %w", err)
+	}
+	return nil
 }
 
 func (pl *perfEventLink) Update(prog *ebpf.Program) error {

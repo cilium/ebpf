@@ -127,6 +127,7 @@ func (h *Handle) Spec() (*Spec, error) {
 	if err != nil {
 		return nil, fmt.Errorf("load BTF base: %w", err)
 	}
+	base = base.Copy()
 
 	if fallback {
 		return nil, fmt.Errorf("can't load split BTF without access to /sys")

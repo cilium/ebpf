@@ -311,6 +311,7 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions) (*Program, er
 
 	fd, err := sys.ProgLoad(attr)
 	if err == nil {
+		fd.SetName(fmt.Sprintf("prog from spec:'%s'", spec.Name))
 		return &Program{unix.ByteSliceToString(logBuf), fd, spec.Name, "", spec.Type}, nil
 	}
 
@@ -389,6 +390,8 @@ func newProgramFromFD(fd *sys.FD) (*Program, error) {
 		fd.Close()
 		return nil, fmt.Errorf("discover program type: %w", err)
 	}
+
+	fd.SetName(fmt.Sprintf("prog from fd(%d):'%s'", fd.Int(), info.Name))
 
 	return &Program{"", fd, info.Name, "", info.Type}, nil
 }

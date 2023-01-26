@@ -165,6 +165,14 @@ func (k coreKind) String() string {
 // Fixups are returned in the order of relos, e.g. fixup[i] is the solution
 // for relos[i].
 func CORERelocate(relos []*CORERelocation, target *Spec, bo binary.ByteOrder) ([]COREFixup, error) {
+	if target == nil {
+		var err error
+		target, _, err = kernelSpec()
+		if err != nil {
+			return nil, fmt.Errorf("load kernel spec: %w", err)
+		}
+	}
+
 	if bo != target.byteOrder {
 		return nil, fmt.Errorf("can't relocate %s against %s", bo, target.byteOrder)
 	}

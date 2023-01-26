@@ -72,25 +72,22 @@ func TestKprobeOffset(t *testing.T) {
 
 func TestKretprobeMaxActive(t *testing.T) {
 	prog := mustLoadProgram(t, ebpf.Kprobe, 0, "")
+	defer prog.Close()
 
-	k, err := Kprobe("do_sys_open", prog, &KprobeOptions{RetprobeMaxActive: 4096})
+	_, err := Kprobe("do_sys_open", prog, &KprobeOptions{RetprobeMaxActive: 4096})
 	if !errors.Is(err, errInvalidMaxActive) {
 		t.Fatal("Expected errInvalidMaxActive, got", err)
 	}
-	if k != nil {
-		k.Close()
-	}
 
-	k, err = Kretprobe("__put_task_struct", prog, &KprobeOptions{RetprobeMaxActive: 4096})
-	if testutils.IsKernelLessThan(t, "4.12") {
-		if !errors.Is(err, ErrNotSupported) {
-			t.Fatal("Expected ErrNotSupported, got", err)
-		}
-	} else if err != nil {
+	k, err := Kretprobe("__put_task_struct", prog, &KprobeOptions{RetprobeMaxActive: 4096})
+	if testutils.IsKernelLessThan(t, "4.12") && errors.Is(err, ErrNotSupported) {
+		t.Skip("Kernel doesn't support maxactive")
+	}
+	if err != nil {
 		t.Fatal("Kretprobe with maxactive returned an error:", err)
 	}
-	if k != nil {
-		k.Close()
+	if err := k.Close(); err != nil {
+		t.Fatal("Closing kretprobe:", err)
 	}
 }
 

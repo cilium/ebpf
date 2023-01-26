@@ -87,14 +87,6 @@ func applyRelocations(insns asm.Instructions, target *btf.Spec, bo binary.ByteOr
 		bo = internal.NativeEndian
 	}
 
-	if target == nil {
-		var err error
-		target, err = btf.LoadKernelSpec()
-		if err != nil {
-			return fmt.Errorf("load kernel spec: %w", err)
-		}
-	}
-
 	fixups, err := btf.CORERelocate(relos, target, bo)
 	if err != nil {
 		return err

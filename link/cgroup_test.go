@@ -19,6 +19,7 @@ func TestAttachCgroup(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer link.Close()
 
 	if haveBPFLink() == nil {
 		if _, ok := link.(*linkCgroup); !ok {

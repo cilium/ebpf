@@ -28,7 +28,7 @@ func vmlinuxSpec(tb testing.TB) *Spec {
 	if fallback {
 		tb.Fatal("/sys/kernel/btf/vmlinux is not available")
 	}
-	return spec
+	return spec.Copy()
 }
 
 type specAndRawBTF struct {

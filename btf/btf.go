@@ -284,7 +284,10 @@ func indexTypes(types []Type, typeIDOffset TypeID) (map[Type]TypeID, map[essenti
 // for vmlinux ELFs. Returns an error wrapping ErrNotSupported if BTF is not enabled.
 func LoadKernelSpec() (*Spec, error) {
 	spec, _, err := kernelSpec()
-	return spec.Copy(), err
+	if err != nil {
+		return nil, err
+	}
+	return spec.Copy(), nil
 }
 
 var kernelBTF struct {

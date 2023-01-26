@@ -38,7 +38,7 @@ type Spec struct {
 	types []Type
 
 	// Type IDs indexed by type.
-	typeIDs map[Type]TypeID
+	typeIDs typeMap[TypeID]
 
 	// The last allocated type ID.
 	lastTypeID TypeID
@@ -82,14 +82,16 @@ func (h *btfHeader) stringStart() int64 {
 
 // NewSpec creates a Spec containing only Void.
 func NewSpec() *Spec {
-	return &Spec{
+	s := &Spec{
 		[]Type{(*Void)(nil)},
-		map[Type]TypeID{(*Void)(nil): 0},
+		make(typeMap[TypeID]),
 		0,
 		make(map[essentialName][]Type),
 		nil,
 		nil,
 	}
+	s.typeIDs.Set((*Void)(nil), 0)
+	return s
 }
 
 // LoadSpec opens file and calls LoadSpecFromReader on it.
@@ -252,7 +254,7 @@ func loadRawSpec(btf io.ReaderAt, bo binary.ByteOrder,
 	}, nil
 }
 
-func indexTypes(types []Type, typeIDOffset TypeID) (map[Type]TypeID, map[essentialName][]Type, TypeID) {
+func indexTypes(types []Type, typeIDOffset TypeID) (typeMap[TypeID], map[essentialName][]Type, TypeID) {
 	namedTypes := 0
 	for _, typ := range types {
 		if typ.TypeName() != "" {
@@ -263,7 +265,7 @@ func indexTypes(types []Type, typeIDOffset TypeID) (map[Type]TypeID, map[essenti
 		}
 	}
 
-	typeIDs := make(map[Type]TypeID, len(types))
+	typeIDs := make(typeMap[TypeID], len(types))
 	typesByName := make(map[essentialName][]Type, namedTypes)
 
 	var lastTypeID TypeID
@@ -272,7 +274,7 @@ func indexTypes(types []Type, typeIDOffset TypeID) (map[Type]TypeID, map[essenti
 			typesByName[name] = append(typesByName[name], typ)
 		}
 		lastTypeID = TypeID(i) + typeIDOffset
-		typeIDs[typ] = lastTypeID
+		typeIDs.Set(typ, lastTypeID)
 	}
 
 	return typeIDs, typesByName, lastTypeID
@@ -529,7 +531,7 @@ func (s *Spec) Add(typ Type) (TypeID, error) {
 		return 0, fmt.Errorf("type ID overflow")
 	}
 
-	s.typeIDs[typ] = id
+	s.typeIDs.Set(typ, id)
 	s.types = append(s.types, typ)
 	s.lastTypeID = id
 
@@ -559,12 +561,7 @@ func (s *Spec) TypeByID(id TypeID) (Type, error) {
 //
 // Returns an error wrapping ErrNoFound if the type isn't part of the Spec.
 func (s *Spec) TypeID(typ Type) (TypeID, error) {
-	if _, ok := typ.(*Void); ok {
-		// Equality is weird for void, since it is a zero sized type.
-		return 0, nil
-	}
-
-	id, ok := s.typeIDs[typ]
+	id, ok := s.typeIDs.Get(typ)
 	if !ok {
 		return 0, fmt.Errorf("no ID for type %s: %w", typ, ErrNotFound)
 	}
@@ -676,7 +673,8 @@ func (s *Spec) TypeByName(name string, typ interface{}) error {
 // firstTypeID returns the first type ID or zero.
 func (s *Spec) firstTypeID() TypeID {
 	if len(s.types) > 0 {
-		return s.typeIDs[s.types[0]]
+		id, _ := s.typeIDs.Get(s.types[0])
+		return id
 	}
 	return 0
 }

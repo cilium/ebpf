@@ -29,7 +29,7 @@ type encoder struct {
 	pending   internal.Deque[Type]
 	buf       *bytes.Buffer
 	strings   *stringTableBuilder
-	ids       map[Type]TypeID
+	ids       typeMap[TypeID]
 	lastID    TypeID
 }
 
@@ -79,7 +79,7 @@ func marshalTypes(w *bytes.Buffer, types []Type, stb *stringTableBuilder, opts *
 		byteOrder: internal.NativeEndian,
 		buf:       w,
 		strings:   stb,
-		ids:       make(map[Type]TypeID, len(types)),
+		ids:       make(typeMap[TypeID], len(types)),
 	}
 
 	if opts != nil {
@@ -142,7 +142,7 @@ func (e *encoder) allocateID(typ Type) error {
 	}
 
 	e.pending.Push(typ)
-	e.ids[typ] = id
+	e.ids.Set(typ, id)
 	e.lastID = id
 	return nil
 }
@@ -153,7 +153,7 @@ func (e *encoder) id(typ Type) TypeID {
 		return 0
 	}
 
-	id, ok := e.ids[typ]
+	id, ok := e.ids.Get(typ)
 	if !ok {
 		panic(fmt.Errorf("no ID for type %v", typ))
 	}
@@ -173,7 +173,7 @@ func (e *encoder) deflatePending() error {
 		}
 
 		_, isVoid := t.(*Void)
-		_, alreadyEncoded := e.ids[t]
+		_, alreadyEncoded := e.ids.Get(t)
 		return isVoid || alreadyEncoded
 	}
 
@@ -194,7 +194,7 @@ func (e *encoder) deflatePending() error {
 		}
 
 		if err := e.deflateType(root); err != nil {
-			id := e.ids[root]
+			id, _ := e.ids.Get(root)
 			return fmt.Errorf("deflate %v with ID %d: %w", root, id, err)
 		}
 	}

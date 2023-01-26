@@ -479,6 +479,7 @@ func TestStringSection(t *testing.T) {
 	if err != nil {
 		t.Fatalf("new collection: %s", err)
 	}
+	defer coll.Close()
 
 	prog := coll.Programs["filter"]
 	if prog == nil {

@@ -215,6 +215,8 @@ func newMapFromFD(fd *sys.FD) (*Map, error) {
 		return nil, fmt.Errorf("get map info: %w", err)
 	}
 
+	fd.SetName(fmt.Sprintf("map from fd(%d):'%s'", fd.Int(), info.Name))
+
 	return newMap(fd, info.Name, info.Type, info.KeySize, info.ValueSize, info.MaxEntries, info.Flags)
 }
 
@@ -456,6 +458,8 @@ func (spec *MapSpec) createMap(inner *sys.FD, opts MapOptions) (_ *Map, err erro
 		return nil, fmt.Errorf("map create: %w", err)
 	}
 	defer closeOnError(fd)
+
+	fd.SetName(fmt.Sprintf("map from spec:'%s'", spec.Name))
 
 	m, err := newMap(fd, spec.Name, spec.Type, spec.KeySize, spec.ValueSize, spec.MaxEntries, spec.Flags)
 	if err != nil {

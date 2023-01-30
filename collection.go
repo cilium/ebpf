@@ -9,6 +9,7 @@ import (
 
 	"github.com/cilium/ebpf/asm"
 	"github.com/cilium/ebpf/btf"
+	"github.com/cilium/ebpf/internal/unix"
 )
 
 // CollectionOptions control loading a collection into the kernel.
@@ -530,6 +531,10 @@ func (cl *collectionLoader) populateMaps() error {
 		mapSpec, ok := cl.coll.Maps[mapName]
 		if !ok {
 			return fmt.Errorf("missing map spec %s", mapName)
+		}
+
+		if mapSpec.Flags&unix.BPF_F_RDONLY_PROG > 0 {
+			continue
 		}
 
 		// MapSpecs that refer to inner maps or programs within the same

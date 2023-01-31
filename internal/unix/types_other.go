@@ -29,6 +29,10 @@ const (
 	EOPNOTSUPP
 )
 
+const (
+	PerfBitFreq = iota
+)
+
 // Constants are distinct to avoid breaking switch statements.
 const (
 	BPF_F_NO_PREALLOC = iota
@@ -62,6 +66,7 @@ const (
 	PERF_ATTR_SIZE_VER1
 	PERF_TYPE_SOFTWARE
 	PERF_TYPE_TRACEPOINT
+	PERF_COUNT_SW_CPU_CLOCK
 	PERF_COUNT_SW_BPF_OUTPUT
 	PERF_EVENT_IOC_DISABLE
 	PERF_EVENT_IOC_ENABLE

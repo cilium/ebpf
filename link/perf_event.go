@@ -59,6 +59,7 @@ const (
 	kretprobeEvent
 	uprobeEvent
 	uretprobeEvent
+	periodicEvent
 )
 
 // A perfEvent represents a perf event kernel object. Exactly one eBPF program
@@ -200,6 +201,10 @@ func attachPerfEvent(pe *perfEvent, prog *ebpf.Program) (Link, error) {
 		if t := prog.Type(); t != ebpf.TracePoint {
 			return nil, fmt.Errorf("invalid program type (expected %s): %s", ebpf.TracePoint, t)
 		}
+	case periodicEvent:
+		if t := prog.Type(); t != ebpf.PerfEvent {
+			return nil, fmt.Errorf("invalid program type (expected %s): %s", ebpf.PerfEvent, t)
+		}
 	default:
 		return nil, fmt.Errorf("unknown perf event type: %d", pe.typ)
 	}
@@ -300,6 +305,26 @@ func openTracepointPerfEvent(tid uint64, pid int) (*sys.FD, error) {
 	fd, err := unix.PerfEventOpen(&attr, pid, 0, -1, unix.PERF_FLAG_FD_CLOEXEC)
 	if err != nil {
 		return nil, fmt.Errorf("opening tracepoint perf event: %w", err)
+	}
+
+	return sys.NewFD(fd)
+}
+
+// openPeriodicPerfEvent opens a software event based on the CPU clock and
+// sampled at specified frequency.
+func openPeriodicPerfEvent(frequency uint64, cpu int) (*sys.FD, error) {
+	attr := unix.PerfEventAttr{
+		Type:        unix.PERF_TYPE_SOFTWARE,
+		Config:      unix.PERF_COUNT_SW_CPU_CLOCK,
+		Sample_type: unix.PERF_SAMPLE_RAW,
+		Bits:        unix.PerfBitFreq,
+		Sample:      frequency,
+		Wakeup:      1,
+	}
+
+	fd, err := unix.PerfEventOpen(&attr, -1, cpu, -1, unix.PERF_FLAG_FD_CLOEXEC)
+	if err != nil {
+		return nil, fmt.Errorf("opening periodic perf event: %w", err)
 	}
 
 	return sys.NewFD(fd)

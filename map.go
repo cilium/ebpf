@@ -169,7 +169,10 @@ func (ms *MapSpec) Compatible(m *Map) error {
 		m.maxEntries != ms.MaxEntries:
 		return fmt.Errorf("expected max entries %v, got %v: %w", ms.MaxEntries, m.maxEntries, ErrMapIncompatible)
 
-	case m.flags != ms.Flags:
+	// BPF_F_RDONLY_PROG is set unconditionally for devmaps. Explicitly allow
+	// this mismatch.
+	case !((ms.Type == DevMap || ms.Type == DevMapHash) && m.flags ^ ms.Flags == unix.BPF_F_RDONLY_PROG) &&
+		m.flags != ms.Flags:
 		return fmt.Errorf("expected flags %v, got %v: %w", ms.Flags, m.flags, ErrMapIncompatible)
 	}
 	return nil

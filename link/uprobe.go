@@ -70,6 +70,10 @@ type UprobeOptions struct {
 	//
 	// Needs kernel 5.15+.
 	Cookie uint64
+	// Prefix used for the event name if the uprobe must be attached using tracefs.
+	// The group name will be formatted as `<prefix>_<randomstr>`.
+	// The default empty string is equivalent to "ebpf" as the prefix.
+	TraceFSPrefix string
 }
 
 // To open a new Executable, use:
@@ -289,6 +293,7 @@ func (ex *Executable) uprobe(symbol string, prog *ebpf.Program, opts *UprobeOpti
 		refCtrOffset: opts.RefCtrOffset,
 		ret:          ret,
 		cookie:       opts.Cookie,
+		group:        opts.TraceFSPrefix,
 	}
 
 	// Use uprobe PMU if the kernel has it available.

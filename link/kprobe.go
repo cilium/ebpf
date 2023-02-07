@@ -47,6 +47,10 @@ type KprobeOptions struct {
 	// Deprecated: this setting forces the use of an outdated kernel API and is not portable
 	// across kernel versions.
 	RetprobeMaxActive int
+	// Prefix used for the event name if the kprobe must be attached using tracefs.
+	// The group name will be formatted as `<prefix>_<randomstr>`.
+	// The default empty string is equivalent to "ebpf" as the prefix.
+	TraceFSPrefix string
 }
 
 const (
@@ -185,6 +189,7 @@ func kprobe(symbol string, prog *ebpf.Program, opts *KprobeOptions, ret bool) (*
 		args.retprobeMaxActive = opts.RetprobeMaxActive
 		args.cookie = opts.Cookie
 		args.offset = opts.Offset
+		args.group = opts.TraceFSPrefix
 	}
 
 	// Use kprobe PMU if the kernel has it available.
@@ -360,10 +365,15 @@ func tracefsKprobe(args probeArgs) (*perfEvent, error) {
 // the executable/library path on the filesystem and the offset where the probe is inserted.
 // A perf event is then opened on the newly-created trace event and returned to the caller.
 func tracefsProbe(typ probeType, args probeArgs) (*perfEvent, error) {
+	groupPrefix := "ebpf"
+	if args.group != "" {
+		groupPrefix = args.group
+	}
+
 	// Generate a random string for each trace event we attempt to create.
 	// This value is used as the 'group' token in tracefs to allow creating
 	// multiple kprobe trace events with the same name.
-	group, err := randomGroup("ebpf")
+	group, err := randomGroup(groupPrefix)
 	if err != nil {
 		return nil, fmt.Errorf("randomizing group name: %w", err)
 	}

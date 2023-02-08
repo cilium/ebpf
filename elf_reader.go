@@ -1086,6 +1086,7 @@ func getProgType(sectionName string) (ProgramType, AttachType, uint32, string) {
 		{"uprobe/", Kprobe, AttachNone, 0},
 		{"kretprobe/", Kprobe, AttachNone, 0},
 		{"uretprobe/", Kprobe, AttachNone, 0},
+		{"usdt/", Kprobe, AttachNone, 0},
 		{"tc", SchedCLS, AttachNone, 0},
 		{"classifier", SchedCLS, AttachNone, 0},
 		{"action", SchedACT, AttachNone, 0},

@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"math"
-	"path/filepath"
 	"runtime"
 	"strings"
 	"time"
@@ -783,7 +782,7 @@ func LoadPinnedProgram(fileName string, opts *LoadPinOptions) (*Program, error) 
 		return nil, fmt.Errorf("info for %s: %w", fileName, err)
 	}
 
-	return &Program{"", fd, filepath.Base(fileName), fileName, info.Type}, nil
+	return &Program{"", fd, info.Name, fileName, info.Type}, nil
 }
 
 // SanitizeName replaces all invalid characters in name with replacement.

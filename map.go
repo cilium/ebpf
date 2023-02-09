@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"time"
 	"unsafe"
 
@@ -267,7 +268,7 @@ func newMapWithOptions(spec *MapSpec, opts MapOptions) (_ *Map, err error) {
 			return nil, fmt.Errorf("pin by name: missing MapOptions.PinPath")
 		}
 
-		path := filepath.Join(opts.PinPath, spec.Name)
+		path := filepath.Join(opts.PinPath, strings.Replace(spec.Name, ".", "_", -1))
 		m, err := LoadPinnedMap(path, &opts.LoadPinOptions)
 		if errors.Is(err, unix.ENOENT) {
 			break
@@ -319,7 +320,7 @@ func newMapWithOptions(spec *MapSpec, opts MapOptions) (_ *Map, err error) {
 	defer closeOnError(m)
 
 	if spec.Pinning == PinByName {
-		path := filepath.Join(opts.PinPath, spec.Name)
+		path := filepath.Join(opts.PinPath, strings.Replace(spec.Name, ".", "_", -1))
 		if err := m.Pin(path); err != nil {
 			return nil, fmt.Errorf("pin map to %s: %w", path, err)
 		}

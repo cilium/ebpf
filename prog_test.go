@@ -298,6 +298,16 @@ func TestProgramPin(t *testing.T) {
 		t.Error("Expected pinned program to have type SocketFilter, but got", prog.Type())
 	}
 
+	if haveObjName() == nil {
+		if prog.name != "test" {
+			t.Errorf("Expected program to have object name 'test', got '%s'", prog.name)
+		}
+	} else {
+		if prog.name != "program" {
+			t.Errorf("Expected program to have file name 'program', got '%s'", prog.name)
+		}
+	}
+
 	if !prog.IsPinned() {
 		t.Error("Expected IsPinned to be true")
 	}

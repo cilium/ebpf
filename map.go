@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"time"
 	"unsafe"
 
@@ -78,6 +79,9 @@ type MapSpec struct {
 
 	// The key and value type of this map. May be nil.
 	Key, Value btf.Type
+
+	// Whether to setting map's initial contents.
+	Unpopulate bool
 }
 
 func (ms *MapSpec) String() string {
@@ -267,7 +271,7 @@ func newMapWithOptions(spec *MapSpec, opts MapOptions) (_ *Map, err error) {
 			return nil, fmt.Errorf("pin by name: missing MapOptions.PinPath")
 		}
 
-		path := filepath.Join(opts.PinPath, spec.Name)
+		path := filepath.Join(opts.PinPath, strings.Replace(spec.Name, ".", "_", -1))
 		m, err := LoadPinnedMap(path, &opts.LoadPinOptions)
 		if errors.Is(err, unix.ENOENT) {
 			break
@@ -279,6 +283,10 @@ func newMapWithOptions(spec *MapSpec, opts MapOptions) (_ *Map, err error) {
 
 		if err := spec.Compatible(m); err != nil {
 			return nil, fmt.Errorf("use pinned map %s: %w", spec.Name, err)
+		}
+
+		if spec.Flags == unix.BPF_F_RDONLY_PROG {
+			spec.Unpopulate = true
 		}
 
 		return m, nil
@@ -319,7 +327,7 @@ func newMapWithOptions(spec *MapSpec, opts MapOptions) (_ *Map, err error) {
 	defer closeOnError(m)
 
 	if spec.Pinning == PinByName {
-		path := filepath.Join(opts.PinPath, spec.Name)
+		path := filepath.Join(opts.PinPath, strings.Replace(spec.Name, ".", "_", -1))
 		if err := m.Pin(path); err != nil {
 			return nil, fmt.Errorf("pin map to %s: %w", path, err)
 		}

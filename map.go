@@ -79,6 +79,9 @@ type MapSpec struct {
 
 	// The key and value type of this map. May be nil.
 	Key, Value btf.Type
+
+	// Whether to setting map's initial contents.
+	Unpopulate bool
 }
 
 func (ms *MapSpec) String() string {
@@ -280,6 +283,10 @@ func newMapWithOptions(spec *MapSpec, opts MapOptions) (_ *Map, err error) {
 
 		if err := spec.Compatible(m); err != nil {
 			return nil, fmt.Errorf("use pinned map %s: %w", spec.Name, err)
+		}
+
+		if spec.Flags == unix.BPF_F_RDONLY_PROG {
+			spec.Unpopulate = true
 		}
 
 		return m, nil

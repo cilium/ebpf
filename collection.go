@@ -532,6 +532,10 @@ func (cl *collectionLoader) populateMaps() error {
 			return fmt.Errorf("missing map spec %s", mapName)
 		}
 
+		if mapSpec.Unpopulate {
+			continue
+		}
+
 		// MapSpecs that refer to inner maps or programs within the same
 		// CollectionSpec do so using strings. These strings are used as the key
 		// to look up the respective object in the Maps or Programs fields.

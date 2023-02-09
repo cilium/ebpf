@@ -783,7 +783,14 @@ func LoadPinnedProgram(fileName string, opts *LoadPinOptions) (*Program, error) 
 		return nil, fmt.Errorf("info for %s: %w", fileName, err)
 	}
 
-	return &Program{"", fd, filepath.Base(fileName), fileName, info.Type}, nil
+	var progName string
+	if haveObjName() == nil {
+		progName = info.Name
+	} else {
+		progName = filepath.Base(fileName)
+	}
+
+	return &Program{"", fd, progName, fileName, info.Type}, nil
 }
 
 // SanitizeName replaces all invalid characters in name with replacement.

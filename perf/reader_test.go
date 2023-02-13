@@ -14,6 +14,7 @@ import (
 	"github.com/cilium/ebpf/asm"
 	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/testutils"
+	"github.com/cilium/ebpf/internal/testutils/fdtrace"
 	"github.com/cilium/ebpf/internal/unix"
 
 	qt "github.com/frankban/quicktest"
@@ -22,6 +23,10 @@ import (
 var (
 	readTimeout = 250 * time.Millisecond
 )
+
+func TestMain(m *testing.M) {
+	fdtrace.TestMain(m)
+}
 
 func TestPerfReader(t *testing.T) {
 	prog, events := mustOutputSamplesProg(t, 5)

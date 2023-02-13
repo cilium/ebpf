@@ -27,7 +27,15 @@ func (ce *customEncoding) UnmarshalBinary(buf []byte) error {
 
 // ExampleMarshaler shows how to use custom encoding with map methods.
 func Example_customMarshaler() {
-	hash := createHash()
+	hash, err := NewMap(&MapSpec{
+		Type:       Hash,
+		KeySize:    5,
+		ValueSize:  4,
+		MaxEntries: 10,
+	})
+	if err != nil {
+		panic(err)
+	}
 	defer hash.Close()
 
 	if err := hash.Put(&customEncoding{"hello"}, uint32(111)); err != nil {

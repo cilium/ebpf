@@ -621,6 +621,38 @@ func TestMapLoadPinned(t *testing.T) {
 	c.Assert(pinned, qt.IsTrue)
 }
 
+func TestMapLoadReusePinned(t *testing.T) {
+	c := qt.New(t)
+
+	for _, typ := range []MapType{Array, Hash, DevMap, DevMapHash} {
+		t.Run(typ.String(), func(t *testing.T) {
+			if typ == DevMap {
+				testutils.SkipOnOldKernel(t, "4.14", "devmap")
+			}
+			if typ == DevMapHash {
+				testutils.SkipOnOldKernel(t, "5.4", "devmap_hash")
+			}
+			tmp := testutils.TempBPFFS(t)
+			spec := &MapSpec{
+				Name:       "pinmap",
+				Type:       typ,
+				KeySize:    4,
+				ValueSize:  4,
+				MaxEntries: 1,
+				Pinning:    PinByName,
+			}
+
+			m1, err := NewMapWithOptions(spec, MapOptions{PinPath: tmp})
+			c.Assert(err, qt.IsNil)
+			defer m1.Close()
+
+			m2, err := NewMapWithOptions(spec, MapOptions{PinPath: tmp})
+			c.Assert(err, qt.IsNil)
+			defer m2.Close()
+		})
+	}
+}
+
 func TestMapLoadPinnedUnpin(t *testing.T) {
 	tmp := testutils.TempBPFFS(t)
 	c := qt.New(t)

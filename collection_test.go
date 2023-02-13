@@ -586,6 +586,10 @@ func TestIncompleteLoadAndAssign(t *testing.T) {
 		t.Fatal("expected error loading invalid ProgramSpec")
 	}
 
+	if s.Valid == nil {
+		t.Fatal("expected valid prog to be non-nil")
+	}
+
 	if fd := s.Valid.FD(); fd != -1 {
 		t.Fatal("expected valid prog to have closed fd -1, got:", fd)
 	}

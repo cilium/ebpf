@@ -17,9 +17,26 @@ type FD struct {
 }
 
 func newFD(value int) *FD {
+	if traceFDs() {
+		FDs.Put(value, FDTrace{
+			FD:    value,
+			Stack: callersFrames(),
+		})
+	}
+
 	fd := &FD{value}
-	runtime.SetFinalizer(fd, (*FD).Close)
+	runtime.SetFinalizer(fd, (*FD).finalize)
 	return fd
+}
+
+// finalize is set as the FD's runtime finalizer and
+// sends a leak trace before calling FD.Close().
+func (fd *FD) finalize() {
+	if fd.raw < 0 {
+		return
+	}
+	Finalize.do(fd)
+	_ = fd.Close()
 }
 
 // NewFD wraps a raw fd with a finalizer.
@@ -66,6 +83,8 @@ func (fd *FD) Close() error {
 
 	value := int(fd.raw)
 	fd.raw = -1
+
+	FDs.Delete(value)
 
 	fd.Forget()
 	return unix.Close(value)

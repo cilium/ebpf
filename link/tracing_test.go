@@ -82,17 +82,29 @@ func TestTracing(t *testing.T) {
 		},
 	}
 
+	test := func(
+		t *testing.T,
+		programType ebpf.ProgramType,
+		attachType ebpf.AttachType,
+		attachTo string,
+		attachTypeOpt ebpf.AttachType) {
+		prog := mustLoadProgram(t, programType, attachType, attachTo)
+
+		link, err := AttachTracing(TracingOptions{Program: prog, AttachType: attachTypeOpt})
+		testutils.SkipIfNotSupported(t, err)
+		if err != nil {
+			t.Fatal(err)
+		}
+		testLink(t, link, prog)
+		link.Close()
+	}
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			prog := mustLoadProgram(t, tt.programType, tt.attachType, tt.attachTo)
-
-			link, err := AttachTracing(TracingOptions{Program: prog})
-			testutils.SkipIfNotSupported(t, err)
-			if err != nil {
-				t.Fatal(err)
-			}
-
-			testLink(t, link, prog)
+			// exercise attach via BPF link
+			test(t, tt.programType, tt.attachType, tt.attachTo, tt.attachType)
+			// exercise legacy attach via RawTracepointOpen
+			test(t, tt.programType, tt.attachType, tt.attachTo, ebpf.AttachNone)
 		})
 	}
 }

@@ -12,10 +12,15 @@ import (
 	"github.com/cilium/ebpf/asm"
 	"github.com/cilium/ebpf/internal/sys"
 	"github.com/cilium/ebpf/internal/testutils"
+	"github.com/cilium/ebpf/internal/testutils/fdtrace"
 	"github.com/cilium/ebpf/internal/unix"
 
 	qt "github.com/frankban/quicktest"
 )
+
+func TestMain(m *testing.M) {
+	fdtrace.TestMain(m)
+}
 
 func TestRawLink(t *testing.T) {
 	cgroup, prog := mustCgroupFixtures(t)

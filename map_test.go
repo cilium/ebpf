@@ -31,6 +31,21 @@ var (
 	}
 )
 
+// newHash returns a new Map of type Hash. Cleanup is handled automatically.
+func newHash(t *testing.T) *Map {
+	hash, err := NewMap(&MapSpec{
+		Type:       Hash,
+		KeySize:    5,
+		ValueSize:  4,
+		MaxEntries: 10,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { hash.Close() })
+	return hash
+}
+
 func TestMap(t *testing.T) {
 	m := createArray(t)
 	defer m.Close()
@@ -1182,8 +1197,7 @@ func TestMapGuessNonExistentKey(t *testing.T) {
 }
 
 func TestNotExist(t *testing.T) {
-	hash := createHash()
-	defer hash.Close()
+	hash := newHash(t)
 
 	var tmp uint32
 	err := hash.Lookup("hello", &tmp)
@@ -1214,8 +1228,7 @@ func TestNotExist(t *testing.T) {
 }
 
 func TestExist(t *testing.T) {
-	hash := createHash()
-	defer hash.Close()
+	hash := newHash(t)
 
 	if err := hash.Put("hello", uint32(21)); err != nil {
 		t.Errorf("Failed to put key/value pair into hash: %v", err)
@@ -1579,8 +1592,8 @@ func TestMapGetNextID(t *testing.T) {
 	var next MapID
 	var err error
 
-	hash := createHash()
-	defer hash.Close()
+	// Ensure there is at least one map on the system.
+	_ = newHash(t)
 
 	if next, err = MapGetNextID(MapID(0)); err != nil {
 		t.Fatal("Can't get next ID:", err)
@@ -1606,8 +1619,7 @@ func TestMapGetNextID(t *testing.T) {
 }
 
 func TestNewMapFromID(t *testing.T) {
-	hash := createHash()
-	defer hash.Close()
+	hash := newHash(t)
 
 	info, err := hash.Info()
 	testutils.SkipIfNotSupported(t, err)
@@ -1953,7 +1965,15 @@ func ExampleMap_perCPU() {
 // Note that using unsafe.Pointer is only marginally faster than
 // implementing Marshaler on the type.
 func ExampleMap_zeroCopy() {
-	hash := createHash()
+	hash, err := NewMap(&MapSpec{
+		Type:       Hash,
+		KeySize:    5,
+		ValueSize:  4,
+		MaxEntries: 10,
+	})
+	if err != nil {
+		panic(err)
+	}
 	defer hash.Close()
 
 	key := [5]byte{'h', 'e', 'l', 'l', 'o'}
@@ -1972,7 +1992,7 @@ func ExampleMap_zeroCopy() {
 	// Output: The value is: 23
 }
 
-func createHash() *Map {
+func ExampleMap_NextKey() {
 	hash, err := NewMap(&MapSpec{
 		Type:       Hash,
 		KeySize:    5,
@@ -1982,11 +2002,6 @@ func createHash() *Map {
 	if err != nil {
 		panic(err)
 	}
-	return hash
-}
-
-func ExampleMap_NextKey() {
-	hash := createHash()
 	defer hash.Close()
 
 	if err := hash.Put("hello", uint32(21)); err != nil {
@@ -2013,7 +2028,15 @@ func ExampleMap_NextKey() {
 // ExampleMap_Iterate demonstrates how to iterate over all entries
 // in a map.
 func ExampleMap_Iterate() {
-	hash := createHash()
+	hash, err := NewMap(&MapSpec{
+		Type:       Hash,
+		KeySize:    5,
+		ValueSize:  4,
+		MaxEntries: 10,
+	})
+	if err != nil {
+		panic(err)
+	}
 	defer hash.Close()
 
 	if err := hash.Put("hello", uint32(21)); err != nil {

@@ -77,7 +77,7 @@ func TestTracepointProgramCall(t *testing.T) {
 
 	m, p := newUpdaterMapProg(t, ebpf.TracePoint, 0)
 
-	// Open Tracepoint at /sys/kernel/debug/tracing/events/syscalls/sys_enter_getpid
+	// Open Tracepoint at /sys/kernel/tracing/events/syscalls/sys_enter_getpid
 	// and attach it to the ebpf program created above.
 	tp, err := Tracepoint("syscalls", "sys_enter_getpid", p, nil)
 	if err != nil {

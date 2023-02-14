@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/cilium/ebpf"
@@ -13,8 +12,6 @@ import (
 )
 
 var (
-	uprobeEventsPath = filepath.Join(tracefsPath, "uprobe_events")
-
 	uprobeRefCtrOffsetPMUPath = "/sys/bus/event_source/devices/uprobe/format/ref_ctr_offset"
 	// elixir.bootlin.com/linux/v5.15-rc7/source/kernel/events/core.c#L9799
 	uprobeRefCtrOffsetShift = 32

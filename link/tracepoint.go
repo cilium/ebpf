@@ -17,7 +17,7 @@ type TracepointOptions struct {
 }
 
 // Tracepoint attaches the given eBPF program to the tracepoint with the given
-// group and name. See /sys/kernel/debug/tracing/events to find available
+// group and name. See /sys/kernel/tracing/events to find available
 // tracepoints. The top-level directory is the group, the event's subdirectory
 // is the name. Example:
 //

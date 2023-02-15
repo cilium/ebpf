@@ -55,11 +55,11 @@ func TestRawLink(t *testing.T) {
 func TestUnpinRawLink(t *testing.T) {
 	cgroup, prog := mustCgroupFixtures(t)
 	link, _ := newPinnedRawLink(t, cgroup, prog)
+	defer link.Close()
 
 	qt.Assert(t, link.IsPinned(), qt.IsTrue)
 
-	err := link.Unpin()
-	if err != nil {
+	if err := link.Unpin(); err != nil {
 		t.Fatal(err)
 	}
 
@@ -69,6 +69,7 @@ func TestUnpinRawLink(t *testing.T) {
 func TestRawLinkLoadPinnedWithOptions(t *testing.T) {
 	cgroup, prog := mustCgroupFixtures(t)
 	link, path := newPinnedRawLink(t, cgroup, prog)
+	defer link.Close()
 
 	qt.Assert(t, link.IsPinned(), qt.IsTrue)
 

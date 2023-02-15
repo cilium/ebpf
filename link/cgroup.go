@@ -41,6 +41,13 @@ func AttachCgroup(opts CgroupOptions) (Link, error) {
 
 	var cg Link
 	cg, err = newLinkCgroup(cgroup, opts.Attach, clone)
+	if err == nil {
+		cgroup.Close()
+		clone.Close()
+		return cg, nil
+	}
+
+	// cgroup and clone are retained by progAttachCgroup.
 	if errors.Is(err, ErrNotSupported) {
 		cg, err = newProgAttachCgroup(cgroup, opts.Attach, clone, flagAllowMulti)
 	}
@@ -67,6 +74,8 @@ var _ Link = (*progAttachCgroup)(nil)
 
 func (cg *progAttachCgroup) isLink() {}
 
+// newProgAttachCgroup attaches prog to cgroup using BPF_PROG_ATTACH.
+// cgroup and prog are retained by [progAttachCgroup].
 func newProgAttachCgroup(cgroup *os.File, attach ebpf.AttachType, prog *ebpf.Program, flags cgroupAttachFlags) (*progAttachCgroup, error) {
 	if flags&flagAllowMulti > 0 {
 		if err := haveProgAttachReplace(); err != nil {
@@ -151,6 +160,7 @@ type linkCgroup struct {
 
 var _ Link = (*linkCgroup)(nil)
 
+// newLinkCgroup attaches prog to cgroup using BPF_LINK_CREATE.
 func newLinkCgroup(cgroup *os.File, attach ebpf.AttachType, prog *ebpf.Program) (*linkCgroup, error) {
 	link, err := AttachRawLink(RawLinkOptions{
 		Target:  int(cgroup.Fd()),

@@ -80,12 +80,14 @@ func TestKprobeMultiCookie(t *testing.T) {
 
 	prog := mustLoadProgram(t, ebpf.Kprobe, ebpf.AttachTraceKprobeMulti, "")
 
-	if _, err := KprobeMulti(prog, KprobeMultiOptions{
+	km, err := KprobeMulti(prog, KprobeMultiOptions{
 		Symbols: kprobeMultiSyms,
 		Cookies: []uint64{0, 1},
-	}); err != nil {
+	})
+	if err != nil {
 		t.Fatal(err)
 	}
+	_ = km.Close()
 }
 
 func TestKprobeMultiProgramCall(t *testing.T) {

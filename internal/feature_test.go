@@ -4,7 +4,13 @@ import (
 	"errors"
 	"strings"
 	"testing"
+
+	"github.com/cilium/ebpf/internal/testutils/fdtrace"
 )
+
+func TestMain(m *testing.M) {
+	fdtrace.TestMain(m)
+}
 
 func TestFeatureTest(t *testing.T) {
 	var called bool

@@ -17,9 +17,31 @@ type FD struct {
 }
 
 func newFD(value int) *FD {
+	if onLeakFD != nil {
+		fds.Store(value, callersFrames())
+	}
+
 	fd := &FD{value}
-	runtime.SetFinalizer(fd, (*FD).Close)
+	runtime.SetFinalizer(fd, (*FD).finalize)
 	return fd
+}
+
+// finalize is set as the FD's runtime finalizer and
+// sends a leak trace before calling FD.Close().
+func (fd *FD) finalize() {
+	if fd.raw < 0 {
+		return
+	}
+
+	// Invoke the fd leak callback. Calls LoadAndDelete to guarantee the callback
+	// is invoked at most once for one sys.FD allocation, runtime.Frames can only
+	// be unwound once.
+	f, ok := fds.LoadAndDelete(fd.Int())
+	if ok && onLeakFD != nil {
+		onLeakFD(f.(*runtime.Frames))
+	}
+
+	_ = fd.Close()
 }
 
 // NewFD wraps a raw fd with a finalizer.
@@ -66,6 +88,8 @@ func (fd *FD) Close() error {
 
 	value := int(fd.raw)
 	fd.raw = -1
+
+	fds.Delete(value)
 
 	fd.Forget()
 	return unix.Close(value)

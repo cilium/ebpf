@@ -447,34 +447,40 @@ func ExampleSpec_TypeByName() {
 }
 
 func TestTypesIterator(t *testing.T) {
-	spec := vmlinuxTestdataSpec(t)
+	spec := NewSpec()
 
-	if len(spec.types) < 1 {
-		t.Fatal("Not enough types")
-	}
-
-	// Assertion that 'iphdr' type exists within the spec
-	_, err := spec.AnyTypeByName("iphdr")
-	if err != nil {
-		t.Fatalf("Failed to find 'iphdr' type by name: %s", err)
-	}
-
-	found := false
-	count := 0
+	types := []Type{(*Void)(nil), &Int{Size: 4}, &Int{Size: 2}}
+	mustSpecAdd(t, spec, types...)
 
 	iter := spec.Iterate()
-	for iter.Next() {
-		if !found && iter.Type.TypeName() == "iphdr" {
-			found = true
+
+	// Add a type after calling Iterate() to make sure the iteration
+	// below doesn't pick it up.
+	mustSpecAdd(t, spec, &Const{types[0]})
+
+	for i, typ := range types {
+		if !iter.Next() {
+			t.Fatal("Iterator ended early at item", i)
 		}
-		count += 1
+
+		if iter.Type != typ {
+			t.Fatalf("Expected %p to match %p (%[1]T)", iter.Type, typ)
+		}
 	}
 
-	if l := len(spec.types); l != count {
-		t.Fatalf("Failed to iterate over all types (%d vs %d)", l, count)
+	if iter.Next() {
+		t.Fatalf("Iterator yielded too many items: %p (%[1]T)", iter.Type)
 	}
-	if !found {
-		t.Fatal("Cannot find 'iphdr' type")
+}
+
+func mustSpecAdd(t *testing.T, s *Spec, types ...Type) {
+	t.Helper()
+
+	for _, typ := range types {
+		_, err := s.Add(typ)
+		if err != nil {
+			t.Fatal(err)
+		}
 	}
 }
 

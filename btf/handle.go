@@ -30,7 +30,7 @@ func NewHandle(spec *Spec) (*Handle, error) {
 		return nil, fmt.Errorf("can't load %s BTF on %s", spec.byteOrder, internal.NativeEndian)
 	}
 
-	if spec.firstTypeID() != 0 {
+	if spec.firstTypeID != 0 {
 		return nil, fmt.Errorf("split BTF can't be loaded into the kernel")
 	}
 

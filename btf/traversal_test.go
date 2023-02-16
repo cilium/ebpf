@@ -11,7 +11,7 @@ import (
 
 func init() {
 	seed := time.Now().UnixMicro()
-	fmt.Println("seed:", seed)
+	fmt.Println("Seed is", seed)
 	rand.Seed(seed)
 }
 

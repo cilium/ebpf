@@ -10,8 +10,13 @@ import (
 	"github.com/cilium/ebpf/btf"
 	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/testutils"
+	"github.com/cilium/ebpf/internal/testutils/fdtrace"
 	qt "github.com/frankban/quicktest"
 )
+
+func TestMain(m *testing.M) {
+	fdtrace.TestMain(m)
+}
 
 func TestCollectionSpecNotModified(t *testing.T) {
 	cs := CollectionSpec{
@@ -584,6 +589,10 @@ func TestIncompleteLoadAndAssign(t *testing.T) {
 
 	if err := spec.LoadAndAssign(&s, nil); err == nil {
 		t.Fatal("expected error loading invalid ProgramSpec")
+	}
+
+	if s.Valid == nil {
+		t.Fatal("expected valid prog to be non-nil")
 	}
 
 	if fd := s.Valid.FD(); fd != -1 {

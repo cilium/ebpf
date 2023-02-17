@@ -655,18 +655,32 @@ func Sizeof(typ Type) (int, error) {
 	return 0, fmt.Errorf("type %s: exceeded type depth", typ)
 }
 
-// alignof returns the alignment of a type.
+// alignof returns the alignment of a type. Returns an error if the Type can't
+// be aligned, e.g. an integer with an uneven size.
 //
 // Currently only supports the subset of types necessary for bitfield relocations.
 func alignof(typ Type) (int, error) {
+	var n int
+
 	switch t := UnderlyingType(typ).(type) {
 	case *Enum:
-		return int(t.size()), nil
+		n = int(t.size())
 	case *Int:
-		return int(t.Size), nil
+		n = int(t.Size)
 	default:
 		return 0, fmt.Errorf("can't calculate alignment of %T", t)
 	}
+
+	if !isPow(n) {
+		return 0, fmt.Errorf("alignment value %d is not a power of 2", n)
+	}
+
+	return n, nil
+}
+
+// isPow returns true if n is a power of two.
+func isPow(n int) bool {
+	return n != 0 && (n&(n-1)) == 0
 }
 
 // Transformer modifies a given Type and returns the result.

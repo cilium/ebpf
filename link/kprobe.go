@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"path/filepath"
 	"runtime"
 	"strings"
 	"syscall"
@@ -14,10 +13,6 @@ import (
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/internal/sys"
 	"github.com/cilium/ebpf/internal/unix"
-)
-
-var (
-	kprobeEventsPath = filepath.Join(tracefsPath, "kprobe_events")
 )
 
 type probeType uint8
@@ -61,11 +56,13 @@ func (pt probeType) String() string {
 	return "uprobe"
 }
 
-func (pt probeType) EventsPath() string {
-	if pt == kprobeType {
-		return kprobeEventsPath
+func (pt probeType) EventsFile() (*os.File, error) {
+	path, err := sanitizeTracefsPath(fmt.Sprintf("%s_events", pt.String()))
+	if err != nil {
+		return nil, err
 	}
-	return uprobeEventsPath
+
+	return os.OpenFile(path, os.O_APPEND|os.O_WRONLY, 0666)
 }
 
 func (pt probeType) PerfEventType(ret bool) perfEventType {
@@ -419,9 +416,9 @@ func createTraceFSProbeEvent(typ probeType, args probeArgs) (uint64, error) {
 	}
 
 	// Open the kprobe_events file in tracefs.
-	f, err := os.OpenFile(typ.EventsPath(), os.O_APPEND|os.O_WRONLY, 0666)
+	f, err := typ.EventsFile()
 	if err != nil {
-		return 0, fmt.Errorf("error opening '%s': %w", typ.EventsPath(), err)
+		return 0, err
 	}
 	defer f.Close()
 
@@ -515,16 +512,16 @@ func closeTraceFSProbeEvent(typ probeType, group, symbol string) error {
 }
 
 func removeTraceFSProbeEvent(typ probeType, pe string) error {
-	f, err := os.OpenFile(typ.EventsPath(), os.O_APPEND|os.O_WRONLY, 0666)
+	f, err := typ.EventsFile()
 	if err != nil {
-		return fmt.Errorf("error opening %s: %w", typ.EventsPath(), err)
+		return err
 	}
 	defer f.Close()
 
 	// See [k,u]probe_events syntax above. The probe type does not need to be specified
 	// for removals.
 	if _, err = f.WriteString("-:" + pe); err != nil {
-		return fmt.Errorf("remove event %q from %s: %w", pe, typ.EventsPath(), err)
+		return fmt.Errorf("remove event %q from %s: %w", pe, f.Name(), err)
 	}
 
 	return nil

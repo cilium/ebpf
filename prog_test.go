@@ -445,7 +445,7 @@ func TestProgramVerifierLogTruncated(t *testing.T) {
 		}
 		var ve *internal.VerifierError
 		if !errors.As(err, &ve) {
-			t.Error("Error is not a VerifierError")
+			t.Fatal("Error is not a VerifierError")
 		}
 		if !ve.Truncated {
 			t.Errorf("VerifierError is not truncated: %+v", ve)

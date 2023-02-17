@@ -1,4 +1,4 @@
-// +build ignore
+//go:build ignore
 
 #include "common.h"
 
@@ -12,7 +12,7 @@ struct bpf_map_def SEC("maps") counting_map = {
 };
 
 // This struct is defined according to the following format file:
-// /sys/kernel/debug/tracing/events/kmem/mm_page_alloc/format
+// /sys/kernel/tracing/events/kmem/mm_page_alloc/format
 struct alloc_info {
 	/* The first 8 bytes is not allowed to read */
 	unsigned long pad;
@@ -24,7 +24,7 @@ struct alloc_info {
 };
 
 // This tracepoint is defined in mm/page_alloc.c:__alloc_pages_nodemask()
-// Userspace pathname: /sys/kernel/debug/tracing/events/kmem/mm_page_alloc
+// Userspace pathname: /sys/kernel/tracing/events/kmem/mm_page_alloc
 SEC("tracepoint/kmem/mm_page_alloc")
 int mm_page_alloc(struct alloc_info *info) {
 	u32 key     = 0;

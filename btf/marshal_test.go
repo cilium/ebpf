@@ -32,11 +32,11 @@ func TestBuild(t *testing.T) {
 
 	have, err := loadRawSpec(bytes.NewReader(buf.Bytes()), internal.NativeEndian, nil, nil)
 	qt.Assert(t, err, qt.IsNil, qt.Commentf("Couldn't parse BTF"))
-	qt.Assert(t, have.types, qt.DeepEquals, want)
+	qt.Assert(t, have.types(), qt.DeepEquals, want)
 }
 
 func TestRoundtripVMlinux(t *testing.T) {
-	types := vmlinuxSpec(t).types
+	types := vmlinuxSpec(t).types()
 
 	// Randomize the order to force different permutations of walking the type
 	// graph. Keep Void at index 0.
@@ -77,7 +77,7 @@ limitTypes:
 	rebuilt, err := loadRawSpec(bytes.NewReader(buf.Bytes()), binary.LittleEndian, nil, nil)
 	qt.Assert(t, err, qt.IsNil, qt.Commentf("round tripping BTF failed"))
 
-	if n := len(rebuilt.types); n > math.MaxUint16 {
+	if n := len(rebuilt.types()); n > math.MaxUint16 {
 		t.Logf("Rebuilt BTF contains %d types which exceeds uint16, test may fail on older kernels", n)
 	}
 
@@ -88,7 +88,7 @@ limitTypes:
 }
 
 func BenchmarkBuildVmlinux(b *testing.B) {
-	types := vmlinuxTestdataSpec(b).types
+	types := vmlinuxTestdataSpec(b).types()
 
 	b.ReportAllocs()
 	b.ResetTimer()

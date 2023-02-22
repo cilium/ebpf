@@ -1104,7 +1104,7 @@ func (m *Map) Clone() (*Map, error) {
 // You can Clone a map to pin it to a different path.
 //
 // This requires bpffs to be mounted above fileName.
-// See https://docs.cilium.io/en/stable/concepts/kubernetes/configuration/#mounting-bpffs-with-systemd
+// See https://docs.cilium.io/en/stable/network/kubernetes/configuration/#mounting-bpffs-with-systemd
 func (m *Map) Pin(fileName string) error {
 	if err := internal.Pin(m.pinnedPath, fileName, m.fd); err != nil {
 		return err

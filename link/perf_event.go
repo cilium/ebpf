@@ -445,14 +445,13 @@ func isValidTraceID(s string) bool {
 // The available tracefs paths will depends on distribution choices.
 var getTracefsPath = internal.Memoize(func() (string, error) {
 	for _, p := range []struct {
-		file, path string
+		path   string
+		fsType int64
 	}{
-		// It's not enough to stat /sys/kernel/tracing, since some distros have
-		// a directory without a filesystem there.
-		{"/sys/kernel/tracing/kprobe_events", "/sys/kernel/tracing"},
-		{"/sys/kernel/debug/tracing", "/sys/kernel/debug/tracing"},
+		{"/sys/kernel/tracing", internal.TraceFSType},
+		{"/sys/kernel/debug/tracing", internal.DebugFSType},
 	} {
-		if _, err := os.Stat(p.file); err == nil {
+		if fsType, err := internal.FSType(p.path); err == nil && fsType == p.fsType {
 			return p.path, nil
 		}
 	}

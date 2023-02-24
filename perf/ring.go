@@ -19,15 +19,15 @@ type perfEventRing struct {
 	fd   int
 	cpu  int
 	mmap []byte
-	*ringReader
+	ringReader
 }
 
-func newPerfEventRing(cpu, perCPUBuffer, watermark int) (*perfEventRing, error) {
+func newPerfEventRing(cpu, perCPUBuffer, watermark int, overWritable bool) (*perfEventRing, error) {
 	if watermark >= perCPUBuffer {
 		return nil, errors.New("watermark must be smaller than perCPUBuffer")
 	}
 
-	fd, err := createPerfEvent(cpu, watermark)
+	fd, err := createPerfEvent(cpu, watermark, overWritable)
 	if err != nil {
 		return nil, err
 	}
@@ -37,7 +37,12 @@ func newPerfEventRing(cpu, perCPUBuffer, watermark int) (*perfEventRing, error) 
 		return nil, err
 	}
 
-	mmap, err := unix.Mmap(fd, 0, perfBufferSize(perCPUBuffer), unix.PROT_READ|unix.PROT_WRITE, unix.MAP_SHARED)
+	protections := unix.PROT_READ
+	if !overWritable {
+		protections |= unix.PROT_WRITE
+	}
+
+	mmap, err := unix.Mmap(fd, 0, perfBufferSize(perCPUBuffer), protections, unix.MAP_SHARED)
 	if err != nil {
 		unix.Close(fd)
 		return nil, fmt.Errorf("can't mmap: %v", err)
@@ -53,7 +58,7 @@ func newPerfEventRing(cpu, perCPUBuffer, watermark int) (*perfEventRing, error) 
 		fd:         fd,
 		cpu:        cpu,
 		mmap:       mmap,
-		ringReader: newRingReader(meta, mmap[meta.Data_offset:meta.Data_offset+meta.Data_size]),
+		ringReader: newRingReader(meta, mmap[meta.Data_offset:meta.Data_offset+meta.Data_size], overWritable),
 	}
 	runtime.SetFinalizer(ring, (*perfEventRing).Close)
 
@@ -86,15 +91,20 @@ func (ring *perfEventRing) Close() {
 	ring.mmap = nil
 }
 
-func createPerfEvent(cpu, watermark int) (int, error) {
+func createPerfEvent(cpu, watermark int, overWritable bool) (int, error) {
 	if watermark == 0 {
 		watermark = 1
+	}
+
+	bits := unix.PerfBitWatermark
+	if overWritable {
+		bits |= unix.PerfBitWriteBackward
 	}
 
 	attr := unix.PerfEventAttr{
 		Type:        unix.PERF_TYPE_SOFTWARE,
 		Config:      unix.PERF_COUNT_SW_BPF_OUTPUT,
-		Bits:        unix.PerfBitWatermark,
+		Bits:        uint64(bits),
 		Sample_type: unix.PERF_SAMPLE_RAW,
 		Wakeup:      uint32(watermark),
 	}
@@ -107,54 +117,172 @@ func createPerfEvent(cpu, watermark int) (int, error) {
 	return fd, nil
 }
 
-type ringReader struct {
-	meta       *unix.PerfEventMmapPage
-	head, tail uint64
-	mask       uint64
-	ring       []byte
+type ringReader interface {
+	loadHead()
+	getRing() []byte
+	writeTail()
+	Read(p []byte) (int, error)
 }
 
-func newRingReader(meta *unix.PerfEventMmapPage, ring []byte) *ringReader {
-	return &ringReader{
+type forwardReader struct{
+	meta         *unix.PerfEventMmapPage
+	head, tail   uint64
+	mask         uint64
+	ring         []byte
+}
+
+type reverseReader struct{
+	meta         *unix.PerfEventMmapPage
+	head, read   uint64
+	mask         uint64
+	ring         []byte
+}
+
+func newRingReader(meta *unix.PerfEventMmapPage, ring []byte, overWritable bool) ringReader {
+	if overWritable{
+		return &reverseReader{
+			meta: meta,
+			head: atomic.LoadUint64(&meta.Data_head),
+			// For overWritable buffer, we use read as previous read position.
+			// Since, we will start to read from head, we initialize read to head.
+			read: atomic.LoadUint64(&meta.Data_head),
+			mask:         uint64(cap(ring) - 1),
+			ring:         ring,
+		}
+	}
+
+	return &forwardReader{
 		meta: meta,
 		head: atomic.LoadUint64(&meta.Data_head),
 		tail: atomic.LoadUint64(&meta.Data_tail),
 		// cap is always a power of two
-		mask: uint64(cap(ring) - 1),
-		ring: ring,
+		mask:         uint64(cap(ring) - 1),
+		ring:         ring,
 	}
 }
 
-func (rr *ringReader) loadHead() {
-	rr.head = atomic.LoadUint64(&rr.meta.Data_head)
+func (fr *forwardReader) loadHead() {
+	fr.head = atomic.LoadUint64(&fr.meta.Data_head)
 }
 
-func (rr *ringReader) writeTail() {
+func (fr *forwardReader) getRing() []byte {
+	return fr.ring
+}
+
+func (fr *forwardReader) writeTail() {
 	// Commit the new tail. This lets the kernel know that
 	// the ring buffer has been consumed.
-	atomic.StoreUint64(&rr.meta.Data_tail, rr.tail)
+	atomic.StoreUint64(&fr.meta.Data_tail, fr.tail)
 }
 
-func (rr *ringReader) Read(p []byte) (int, error) {
-	start := int(rr.tail & rr.mask)
+func (fr *forwardReader) Read(p []byte) (int, error) {
+	start := int(fr.tail & fr.mask)
 
 	n := len(p)
 	// Truncate if the read wraps in the ring buffer
-	if remainder := cap(rr.ring) - start; n > remainder {
+	if remainder := cap(fr.ring) - start; n > remainder {
 		n = remainder
 	}
 
 	// Truncate if there isn't enough data
-	if remainder := int(rr.head - rr.tail); n > remainder {
+	if remainder := int(fr.head - fr.tail); n > remainder {
 		n = remainder
 	}
 
-	copy(p, rr.ring[start:start+n])
-	rr.tail += uint64(n)
+	copy(p, fr.ring[start:start+n])
+	fr.tail += uint64(n)
 
-	if rr.tail == rr.head {
+	if fr.tail == fr.head {
 		return n, io.EOF
 	}
 
 	return n, nil
+}
+
+func (rr *reverseReader) loadHead() {
+	rr.head = atomic.LoadUint64(&rr.meta.Data_head)
+	rr.read = atomic.LoadUint64(&rr.meta.Data_head)
+}
+
+func (rr *reverseReader) getRing() []byte {
+	return rr.ring
+}
+
+func (rr *reverseReader) writeTail() {
+	// We do not care about tail for over writable perf buffer.
+	// So, this function is noop.
+}
+
+func (rr *reverseReader) Read(p []byte) (int, error) {
+	read := rr.read
+
+	// If size is 0, it means we read all the data avaiable in the buffer and jump
+	// on 0 data:
+	//
+	//    head                             read
+	//     |                                |
+	//     V                                V
+	// +---+------+----------+-------+------+
+	// |   |D....D|C........C|B.....B|A....A|
+	// +---+------+----------+-------+------+
+	if len(p) == 0 {
+		rr.read = 0
+
+		return 0, io.EOF
+	}
+
+	// If adding the size to the current consumer position makes us wrap the
+	// buffer, it means we already did "one loop" around the buffer.
+	// So, the pointed data would not be usable:
+	//
+	//                                  head
+	//                       read----+   |
+	//                               |   |
+	//                               V   V
+	// +---+------+----------+-------+---+--+
+	// |..E|D....D|C........C|B.....B|A..|E.|
+	// +---+------+----------+-------+---+--+
+	if read-rr.head+uint64(len(p)) > rr.mask {
+		rr.read = 0
+
+		return 0, io.EOF
+	}
+
+	size := uint32(len(p))
+	previousReadMasked := read & rr.mask
+	read += uint64(size)
+
+	// If adding the event size to the current
+	// consumer position makes us going from end of the buffer toward the
+	// start, we need to copy the rr.ring in two times:
+	// 1. First from previous_read until end of the buffer.
+	// 2. Second from start of the buffer until read.
+	//
+	//    read                   previous_read
+	//     |                             |
+	//     V                             V
+	// +---+------+----------+-------+---+--+
+	// |..E|D....D|C........C|B.....B|A..|E.|
+	// +---+------+----------+-------+---+--+
+	// This code snippet was highly inspired by gobpf:
+	// https://github.com/iovisor/gobpf/blob/16120a1bf4d4abc1f9cf37fecfb86009a1631b9f/elf/perf.go#L148
+	if (read & rr.mask) < previousReadMasked {
+		// Compute the number of bytes from the beginning of this sample until
+		// the end of the buffer.
+		length := uint32(rr.mask + 1 - previousReadMasked)
+
+		// From previousRead until end of the buffer.
+		copy(p[0:length-1], rr.ring[previousReadMasked:previousReadMasked+uint64(length)])
+		// From beginning of the buffer until read.
+		copy(p[length:], rr.ring[0:size-length])
+	} else {
+		// We are in the "middle" of the buffer, so no worries!
+		copy(p, rr.ring[previousReadMasked:previousReadMasked+uint64(size)])
+	}
+
+	// We use this field to store the previous read position.
+	// So, we know where to start in next call to this function.
+	rr.read = read
+
+	return int(size), nil
 }

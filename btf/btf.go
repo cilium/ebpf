@@ -454,6 +454,32 @@ type symbol struct {
 	name    string
 }
 
+// padding returns the amount of padding that needs to be added at the given
+// (current) offset to append a data structure with the given alignment.
+//
+// For example, we want to push a 16-byte member onto a struct with one existing
+// member of 121 bytes. Let offset be 121 and align be 16:
+//
+// 121 mod 16 = 9 - chop the struct into 16-byte chunks; how many bytes of the
+// latest chunk are occupied?
+// 16 - 9 = 7 - how many bytes of the chunk remain?
+// 7 mod 16 = 7 - ensure 0 is returned if offset was already aligned
+//
+// 7 bytes of padding need to be added at the current offset before pushing the
+// new member.
+func padding(offset, align uint32) uint32 {
+	// 1-byte accesses are aligned by definition.
+	if align == 1 {
+		return 0
+	}
+	if !isPow(int(align)) {
+		panic(fmt.Sprintf("align value %d is not a power of two", align))
+	}
+	return (align - (offset % align)) % align
+}
+
+// fixupDatasec attempts to patch up missing info in Datasecs in types by
+// supplementing it with information from the ELF headers and symbol table.
 func fixupDatasec(types []Type, sectionSizes map[string]uint32, offsets map[symbol]uint32) error {
 	for _, typ := range types {
 		ds, ok := typ.(*Datasec)
@@ -462,8 +488,26 @@ func fixupDatasec(types []Type, sectionSizes map[string]uint32, offsets map[symb
 		}
 
 		name := ds.Name
-		if name == ".kconfig" || name == ".ksyms" {
-			return fmt.Errorf("reference to %s: %w", name, ErrNotSupported)
+
+		// Some Datasecs are virtual and don't have corresponding ELF sections.
+		switch name {
+		case ".ksyms":
+			// .ksyms describes forward declarations of kfunc signatures.
+			// Nothing to fix up, all sizes and offsets are 0.
+			continue
+		case ".kconfig":
+			// .kconfig has a size of 0 and has all members' offsets set to 0.
+			// Fix up all offsets and set the Datasec's size.
+			if err := fixupDatasecLayout(ds); err != nil {
+				return err
+			}
+
+			// Fix up extern to global linkage to avoid a BTF verifier error.
+			for _, vsi := range ds.Vars {
+				vsi.Type.(*Var).Linkage = GlobalVar
+			}
+
+			continue
 		}
 
 		if ds.Size != 0 {
@@ -483,6 +527,37 @@ func fixupDatasec(types []Type, sectionSizes map[string]uint32, offsets map[symb
 			}
 		}
 	}
+
+	return nil
+}
+
+// fixupDatasecLayout populates ds.Vars[].Offset according to var sizes and
+// alignment. Calculate and set ds.Size.
+func fixupDatasecLayout(ds *Datasec) error {
+	var off uint32
+
+	for i, vsi := range ds.Vars {
+		v := vsi.Type.(*Var)
+		size, err := Sizeof(v.Type)
+		if err != nil {
+			return fmt.Errorf("variable %s: getting size: %w", v.Name, err)
+		}
+		align, err := alignof(v.Type)
+		if err != nil {
+			return fmt.Errorf("variable %s: getting alignment: %w", v.Name, err)
+		}
+
+		// Calculate the padding (if any) between the end of the previous member
+		// and the start of the current member. Advance the offset, store it in vsi
+		// and increment by the current member's size.
+		off += padding(off, uint32(align))
+
+		ds.Vars[i].Offset = off
+
+		off += uint32(size)
+	}
+
+	ds.Size = uint32(off)
 
 	return nil
 }

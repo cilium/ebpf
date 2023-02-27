@@ -698,7 +698,7 @@ func LoadSplitSpecFromReader(r io.ReaderAt, base *Spec) (*Spec, error) {
 
 // TypesIterator iterates over types of a given spec.
 type TypesIterator struct {
-	spec  *Spec
+	types []Type
 	index int
 	// The last visited type in the spec.
 	Type Type
@@ -706,16 +706,18 @@ type TypesIterator struct {
 
 // Iterate returns the types iterator.
 func (s *Spec) Iterate() *TypesIterator {
-	return &TypesIterator{spec: s, index: 0}
+	// We share the backing array of types with the Spec. This is safe since
+	// we don't allow deletion or shuffling of types.
+	return &TypesIterator{types: s.types, index: 0}
 }
 
 // Next returns true as long as there are any remaining types.
 func (iter *TypesIterator) Next() bool {
-	if len(iter.spec.types) <= iter.index {
+	if len(iter.types) <= iter.index {
 		return false
 	}
 
-	iter.Type = iter.spec.types[iter.index]
+	iter.Type = iter.types[iter.index]
 	iter.index++
 	return true
 }

@@ -18,6 +18,8 @@
   * [tcp_close](tcprtt/) - Log RTT of IPv4 TCP connections using eBPF CO-RE helpers.
 * XDP - Attach a program to a network interface to process incoming packets.
   * [xdp](xdp/) - Print packet counts by IPv4 source address.
+* TC - Attach a program to a TC qdisc for both ingress and egress traffic packet processing
+  * [tc_egress](tc_egress/) - Print packet counts by IPv4 source address.
 * Add your use case(s) here!
 
 ## How to run

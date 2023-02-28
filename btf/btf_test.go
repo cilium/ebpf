@@ -545,3 +545,50 @@ func TestLoadSplitSpecFromReader(t *testing.T) {
 			typeID, copyTypeID)
 	}
 }
+
+func TestPadding(t *testing.T) {
+	tests := []struct {
+		off     uint32
+		align   uint32
+		padding uint32
+	}{
+		{0, 2, 0},
+		{0, 4, 0},
+		{0, 8, 0},
+		{0, 16, 0},
+		{7, 1, 0},
+		{123, 8, 5},
+		{64, 8, 0},
+		{121, 2, 1},
+	}
+	for _, tt := range tests {
+		name := fmt.Sprintf("off %d/align %d/padding %d", tt.off, tt.align, tt.padding)
+		t.Run(name, func(t *testing.T) {
+			if want, got := tt.padding, padding(tt.off, tt.align); want != got {
+				t.Errorf("want %d, got %d", want, got)
+			}
+		})
+	}
+}
+
+func TestFixupDatasecLayout(t *testing.T) {
+	ds := &Datasec{
+		Size: 0, // Populated by fixup.
+		Vars: []VarSecinfo{
+			{Type: &Var{Type: &Int{Size: 4}}},
+			{Type: &Var{Type: &Int{Size: 1}}},
+			{Type: &Var{Type: &Int{Size: 2}}},
+			{Type: &Var{Type: &Int{Size: 16}}},
+			{Type: &Var{Type: &Int{Size: 8}}},
+		},
+	}
+
+	qt.Assert(t, fixupDatasecLayout(ds), qt.IsNil)
+
+	qt.Assert(t, ds.Size, qt.Equals, uint32(40))
+	qt.Assert(t, ds.Vars[0].Offset, qt.Equals, uint32(0))
+	qt.Assert(t, ds.Vars[1].Offset, qt.Equals, uint32(4))
+	qt.Assert(t, ds.Vars[2].Offset, qt.Equals, uint32(6))
+	qt.Assert(t, ds.Vars[3].Offset, qt.Equals, uint32(16))
+	qt.Assert(t, ds.Vars[4].Offset, qt.Equals, uint32(32))
+}

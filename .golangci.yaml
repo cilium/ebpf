@@ -9,7 +9,6 @@ issues:
 linters:
   disable-all: true
   enable:
-    - deadcode
     - errcheck
     - goimports
     - gosimple
@@ -17,10 +16,8 @@ linters:
     - ineffassign
     - misspell
     - staticcheck
-    - structcheck
     - typecheck
     - unused
-    - varcheck
 
     # Could be enabled later:
     # - gocyclo

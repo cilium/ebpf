@@ -185,8 +185,49 @@ func fixupAndValidate(insns asm.Instructions) error {
 			return fmt.Errorf("instruction %d: map %s: %w", iter.Index, ins.Reference(), asm.ErrUnsatisfiedMapReference)
 		}
 
+		if err := fixupKfunc(ins); err != nil {
+			return fmt.Errorf("fixing up kfunc: %w", err) // should this return its own error type?
+		}
+
 		fixupProbeReadKernel(ins)
 	}
+
+	return nil
+}
+
+// fixupKfunc sets ins.Constant to the running kernels btf id of the btf.Func set
+// set to the instructions Metadata
+func fixupKfunc(ins *asm.Instruction) error {
+	if !ins.IsKfuncCall() {
+		return nil
+	}
+
+	// check meta, if no meta return err
+	kfm, _ := ins.Metadata.Get(kfuncMeta{}).(*btf.Func)
+	if kfm == nil {
+		return fmt.Errorf("kfunc call has no kfuncMeta")
+	}
+
+	s, err := btf.LoadKernelSpec()
+	if err != nil {
+		return fmt.Errorf("couldn't load kernel spec")
+	}
+
+	var f *btf.Func
+	if err := s.TypeByName(kfm.Name, &f); err != nil {
+		return fmt.Errorf("couldn't find kfunc in kernel spec")
+	}
+
+	// we should compare args and return type here
+	// coreAreTypesCompatible(kfm.Type, fn.Type) ?
+
+	id, err := s.TypeID(f)
+	if err != nil {
+		return fmt.Errorf("couldn't find type id")
+	}
+
+	ins.Constant = int64(id)
+	ins.Offset = int16(0) // currently always 0, no support for kmods
 
 	return nil
 }

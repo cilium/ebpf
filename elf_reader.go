@@ -20,6 +20,8 @@ import (
 
 const kconfigMap = ".kconfig"
 
+type kfuncMeta struct{}
+
 // elfCode is a convenience to reduce the amount of arguments that have to
 // be passed around explicitly. You should treat its contents as immutable.
 type elfCode struct {
@@ -583,6 +585,40 @@ func (ec *elfCode) relocateInstruction(ins *asm.Instruction, rel elf.Symbol) err
 
 		if typ != elf.STT_NOTYPE {
 			return fmt.Errorf("asm relocation: %s: unsupported type %s", name, typ)
+		}
+
+		// If a Call instruction is found and the datasec has a btf.Func with a Name
+		// that matches the symbol name we mark the instruction as a call to a kfunc.
+		if ins.OpCode.JumpOp() == asm.Call {
+			if ec.btf == nil {
+				break
+			}
+			var ds *btf.Datasec
+			if err := ec.btf.TypeByName(".ksyms", &ds); err != nil {
+				break
+			}
+
+			var found bool
+			for _, v := range ds.Vars {
+
+				// if func check if name matches
+				fn := v.Type.(*btf.Func)
+				if fn.Name != name {
+					continue
+				}
+				ins.Metadata.Set(kfuncMeta{}, fn)
+				ins.Src = asm.PseudoKfuncCall
+				ins.Constant = -1
+
+				found = true
+				break
+			}
+
+			if !found {
+				return fmt.Errorf("kfunc %s not found in %s", rel.Name, ".ksyms")
+			}
+
+			break
 		}
 
 		// If no kconfig map is found, this must be a symbol reference from inline

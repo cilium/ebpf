@@ -9,6 +9,7 @@ typedef unsigned long uint64_t;
 #define __array(name, val) typeof(val) *name[]
 
 #define __kconfig __attribute__((section(".kconfig")))
+#define __ksym __attribute__((section(".ksyms")))
 
 #define BPF_MAP_TYPE_HASH (1)
 #define BPF_MAP_TYPE_ARRAY (2)

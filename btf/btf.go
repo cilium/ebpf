@@ -470,8 +470,7 @@ func fixupDatasec(types []Type, sectionSizes map[string]uint32, offsets map[symb
 		case ".ksyms":
 			// .ksyms describes forward declarations of kfunc signatures.
 			// Nothing to fix up, all sizes and offsets are 0.
-			// Explicitly reject for now until we officially support kfuncs.
-			return fmt.Errorf("reference to %s: %w", name, ErrNotSupported)
+			continue
 		case ".kconfig":
 			// .kconfig has a size of 0 and has all members' offsets set to 0.
 			// Fix up all offsets and set the Datasec's size.

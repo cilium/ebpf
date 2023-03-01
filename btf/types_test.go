@@ -155,7 +155,7 @@ func TestType(t *testing.T) {
 			}
 
 			var a []*Type
-			walkType(typ, func(t *Type) { a = append(a, t) })
+			walkType(typ, func(t *Type) { a = append(a, t) }, false)
 
 			if _, ok := typ.(*cycle); !ok {
 				if n := countChildren(t, reflect.TypeOf(typ)); len(a) < n {
@@ -164,7 +164,7 @@ func TestType(t *testing.T) {
 			}
 
 			var b []*Type
-			walkType(typ, func(t *Type) { b = append(b, t) })
+			walkType(typ, func(t *Type) { b = append(b, t) }, false)
 
 			if diff := cmp.Diff(a, b, compareTypes); diff != "" {
 				t.Errorf("Walk mismatch (-want +got):\n%s", diff)
@@ -394,7 +394,7 @@ func BenchmarkWalk(b *testing.B) {
 
 			for i := 0; i < b.N; i++ {
 				var dq typeDeque
-				walkType(typ, dq.Push)
+				walkType(typ, dq.Push, false)
 			}
 		})
 	}

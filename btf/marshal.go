@@ -319,10 +319,13 @@ func (e *encoder) deflateType(typ Type) (err error) {
 
 	case *declTag:
 		raw.SetKind(kindDeclTag)
+		raw.SetType(e.id(v.Type))
 		raw.data = &btfDeclTag{uint32(v.Index)}
+		raw.NameOff, err = e.strings.Add(v.Value)
 
 	case *typeTag:
 		raw.SetKind(kindTypeTag)
+		raw.SetType(e.id(v.Type))
 		raw.NameOff, err = e.strings.Add(v.Value)
 
 	default:

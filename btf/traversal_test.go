@@ -40,6 +40,21 @@ func TestPostorderTraversal(t *testing.T) {
 	}
 	qt.Assert(t, seen[arr], qt.IsTrue)
 	qt.Assert(t, seen[i], qt.IsTrue)
+
+	t.Run("member order", func(t *testing.T) {
+		a := &Int{Name: "a"}
+		b := &Int{Name: "b"}
+		str := &Struct{
+			Members: []Member{{Type: a}, {Type: b}},
+		}
+
+		iter := postorderTraversal(str, nil)
+		for i, want := range []Type{a, b, str} {
+			qt.Assert(t, iter.Next(), qt.IsTrue, qt.Commentf("type %d", i))
+			qt.Assert(t, iter.Type, qt.Equals, want)
+		}
+	})
+
 }
 
 func TestPostorderTraversalVmlinux(t *testing.T) {
@@ -68,7 +83,7 @@ func TestPostorderTraversalVmlinux(t *testing.T) {
 
 			walkType(typ, func(child *Type) {
 				qt.Check(t, seen[*child], qt.IsTrue, qt.Commentf("missing child %s", *child))
-			})
+			}, false)
 		})
 	}
 }

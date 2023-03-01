@@ -1,9 +1,12 @@
 package btf
 
 import (
+	"bytes"
 	"fmt"
 	"reflect"
 	"testing"
+
+	"github.com/cilium/ebpf/internal"
 
 	qt "github.com/frankban/quicktest"
 	"github.com/google/go-cmp/cmp"
@@ -169,6 +172,27 @@ func TestType(t *testing.T) {
 			if diff := cmp.Diff(a, b, compareTypes); diff != "" {
 				t.Errorf("Walk mismatch (-want +got):\n%s", diff)
 			}
+		})
+	}
+}
+
+func TestTagMarshaling(t *testing.T) {
+	for _, typ := range []Type{
+		&declTag{&Struct{Members: []Member{}}, "foo", -1},
+		&typeTag{&Int{}, "foo"},
+	} {
+		t.Run(fmt.Sprint(typ), func(t *testing.T) {
+			var buf bytes.Buffer
+			err := marshalTypes(&buf, []Type{&Void{}, typ}, nil, nil)
+			qt.Assert(t, err, qt.IsNil)
+
+			s, err := loadRawSpec(bytes.NewReader(buf.Bytes()), internal.NativeEndian, nil, nil)
+			qt.Assert(t, err, qt.IsNil)
+
+			have, err := s.TypeByID(1)
+			qt.Assert(t, err, qt.IsNil)
+
+			qt.Assert(t, have, qt.DeepEquals, typ)
 		})
 	}
 }

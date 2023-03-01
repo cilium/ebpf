@@ -449,6 +449,12 @@ func MarshalMapKV(key, value Type) (_ *Handle, keyID, valueID TypeID, err error)
 	}
 
 	if value != nil {
+		if ds, ok := value.(*Datasec); ok {
+			if err := datasecResolveWorkaround(spec, ds); err != nil {
+				return nil, 0, 0, err
+			}
+		}
+
 		valueID, err = spec.Add(value)
 		if err != nil {
 			return nil, 0, 0, fmt.Errorf("add value type: %w", err)

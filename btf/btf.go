@@ -454,6 +454,8 @@ type symbol struct {
 	name    string
 }
 
+// fixupDatasec attempts to patch up missing info in Datasecs in types by
+// supplementing it with information from the ELF headers and symbol table.
 func fixupDatasec(types []Type, sectionSizes map[string]uint32, offsets map[symbol]uint32) error {
 	for _, typ := range types {
 		ds, ok := typ.(*Datasec)
@@ -462,8 +464,27 @@ func fixupDatasec(types []Type, sectionSizes map[string]uint32, offsets map[symb
 		}
 
 		name := ds.Name
-		if name == ".kconfig" || name == ".ksyms" {
+
+		// Some Datasecs are virtual and don't have corresponding ELF sections.
+		switch name {
+		case ".ksyms":
+			// .ksyms describes forward declarations of kfunc signatures.
+			// Nothing to fix up, all sizes and offsets are 0.
+			// Explicitly reject for now until we officially support kfuncs.
 			return fmt.Errorf("reference to %s: %w", name, ErrNotSupported)
+		case ".kconfig":
+			// .kconfig has a size of 0 and has all members' offsets set to 0.
+			// Fix up all offsets and set the Datasec's size.
+			if err := fixupDatasecLayout(ds); err != nil {
+				return err
+			}
+
+			// Fix up extern to global linkage to avoid a BTF verifier error.
+			for _, vsi := range ds.Vars {
+				vsi.Type.(*Var).Linkage = GlobalVar
+			}
+
+			continue
 		}
 
 		if ds.Size != 0 {
@@ -483,6 +504,40 @@ func fixupDatasec(types []Type, sectionSizes map[string]uint32, offsets map[symb
 			}
 		}
 	}
+
+	return nil
+}
+
+// fixupDatasecLayout populates ds.Vars[].Offset according to var sizes and
+// alignment. Calculate and set ds.Size.
+func fixupDatasecLayout(ds *Datasec) error {
+	var off uint32
+
+	for i, vsi := range ds.Vars {
+		v, ok := vsi.Type.(*Var)
+		if !ok {
+			return fmt.Errorf("member %d: unsupported type %T", i, vsi.Type)
+		}
+
+		size, err := Sizeof(v.Type)
+		if err != nil {
+			return fmt.Errorf("variable %s: getting size: %w", v.Name, err)
+		}
+		align, err := alignof(v.Type)
+		if err != nil {
+			return fmt.Errorf("variable %s: getting alignment: %w", v.Name, err)
+		}
+
+		// Align the current member based on the offset of the end of the previous
+		// member and the alignment of the current member.
+		off = internal.Align(off, uint32(align))
+
+		ds.Vars[i].Offset = off
+
+		off += uint32(size)
+	}
+
+	ds.Size = off
 
 	return nil
 }

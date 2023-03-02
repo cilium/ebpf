@@ -9,6 +9,7 @@ import (
 
 	"github.com/cilium/ebpf/asm"
 	"github.com/cilium/ebpf/btf"
+	"github.com/cilium/ebpf/internal"
 )
 
 // CollectionOptions control loading a collection into the kernel.
@@ -532,6 +533,12 @@ func (cl *collectionLoader) populateMaps() error {
 			return fmt.Errorf("missing map spec %s", mapName)
 		}
 
+		if mapName == kconfigMap {
+			if err := resolveKconfig(mapSpec); err != nil {
+				return fmt.Errorf("resolving kconfig: %w", err)
+			}
+		}
+
 		// MapSpecs that refer to inner maps or programs within the same
 		// CollectionSpec do so using strings. These strings are used as the key
 		// to look up the respective object in the Maps or Programs fields.
@@ -571,6 +578,49 @@ func (cl *collectionLoader) populateMaps() error {
 			return fmt.Errorf("populating map %s: %w", mapName, err)
 		}
 	}
+
+	return nil
+}
+
+// resolveKconfig resolves all variables declared in .kconfig and populates
+// m.Contents. Does nothing if the given m.Contents is non-empty.
+func resolveKconfig(m *MapSpec) error {
+	// Allow caller to manually populate .kconfig contents for testing purposes.
+	if len(m.Contents) != 0 {
+		return nil
+	}
+
+	ds, ok := m.Value.(*btf.Datasec)
+	if !ok {
+		return errors.New("map value is not a Datasec")
+	}
+
+	data := make([]byte, ds.Size)
+	for _, vsi := range ds.Vars {
+		v := vsi.Type.(*btf.Var)
+		s, err := btf.Sizeof(v.Type)
+		if err != nil {
+			return fmt.Errorf("variable %s: getting size: %w", v.Name, err)
+		}
+
+		switch n := v.TypeName(); n {
+		case "LINUX_KERNEL_VERSION":
+			if s != 4 {
+				return fmt.Errorf("variable %s must be u32, got %d", n, s)
+			}
+
+			kv, err := internal.KernelVersion()
+			if err != nil {
+				return fmt.Errorf("getting kernel version: %w", err)
+			}
+			internal.NativeEndian.PutUint32(data[vsi.Offset:], kv.Kernel())
+
+		default:
+			return fmt.Errorf("unsupported kconfig: %s", n)
+		}
+	}
+
+	m.Contents = []MapKV{{uint32(0), data}}
 
 	return nil
 }

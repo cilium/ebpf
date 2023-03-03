@@ -9,7 +9,6 @@ import (
 const (
 	BpfFSType   = 0xcafe4a11
 	TraceFSType = 0x74726163
-	DebugFSType = 0x64626720
 )
 
 func FSType(path string) (int64, error) {

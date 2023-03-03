@@ -63,6 +63,11 @@ const (
 	PERF_EVENT_IOC_ENABLE     = linux.PERF_EVENT_IOC_ENABLE
 	PERF_EVENT_IOC_SET_BPF    = linux.PERF_EVENT_IOC_SET_BPF
 	PerfBitWatermark          = linux.PerfBitWatermark
+	// In C, struct perf_event_attr has a write_backward field which is a bit in a
+	// 64-length bitfield.
+	// In Golang, there is a Bits field which 64 bits long.
+	// From C, we can deduce write_backward is the is the 27th bit.
+	PerfBitWriteBackward      = linux.CBitFieldMaskBit27
 	PERF_SAMPLE_RAW           = linux.PERF_SAMPLE_RAW
 	PERF_FLAG_FD_CLOEXEC      = linux.PERF_FLAG_FD_CLOEXEC
 	RLIM_INFINITY             = linux.RLIM_INFINITY

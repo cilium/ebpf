@@ -448,8 +448,8 @@ var getTracefsPath = internal.Memoize(func() (string, error) {
 		path   string
 		fsType int64
 	}{
-		{"/sys/kernel/tracing", internal.TraceFSType},
-		{"/sys/kernel/debug/tracing", internal.TraceFSType},
+		{"/sys/kernel/tracing", unix.TRACEFS_MAGIC},
+		{"/sys/kernel/debug/tracing", unix.TRACEFS_MAGIC},
 	} {
 		if fsType, err := internal.FSType(p.path); err == nil && fsType == p.fsType {
 			return p.path, nil

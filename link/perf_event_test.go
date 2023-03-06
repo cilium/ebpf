@@ -57,6 +57,11 @@ func TestTraceValidID(t *testing.T) {
 	}
 }
 
+func TestGetTracefsPath(t *testing.T) {
+	_, err := getTracefsPath()
+	qt.Assert(t, err, qt.IsNil)
+}
+
 func TestHaveBPFLinkPerfEvent(t *testing.T) {
 	testutils.CheckFeatureTest(t, haveBPFLinkPerfEvent)
 }

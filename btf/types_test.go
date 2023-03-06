@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"reflect"
+	"sort"
 	"testing"
 
 	"github.com/cilium/ebpf/internal"
@@ -181,7 +182,7 @@ func TestType(t *testing.T) {
 			}
 
 			var a []*Type
-			walkType(typ, func(t *Type) { a = append(a, t) })
+			walkType(typ, defaultOrder, func(t *Type) { a = append(a, t) })
 
 			if _, ok := typ.(*cycle); !ok {
 				if n := countChildren(t, reflect.TypeOf(typ)); len(a) < n {
@@ -190,9 +191,18 @@ func TestType(t *testing.T) {
 			}
 
 			var b []*Type
-			walkType(typ, func(t *Type) { b = append(b, t) })
+			walkType(typ, defaultOrder, func(t *Type) { b = append(b, t) })
 
 			if diff := cmp.Diff(a, b, compareTypes); diff != "" {
+				t.Errorf("Walk mismatch (-want +got):\n%s", diff)
+			}
+
+			var rev []*Type
+			walkType(typ, reverseOrder, func(t *Type) { rev = append(rev, t) })
+
+			sort.Slice(rev, func(i, j int) bool { return i > j })
+
+			if diff := cmp.Diff(a, rev, compareTypes); diff != "" {
 				t.Errorf("Walk mismatch (-want +got):\n%s", diff)
 			}
 		})
@@ -441,7 +451,7 @@ func BenchmarkWalk(b *testing.B) {
 
 			for i := 0; i < b.N; i++ {
 				var dq typeDeque
-				walkType(typ, dq.Push)
+				walkType(typ, defaultOrder, dq.Push)
 			}
 		})
 	}

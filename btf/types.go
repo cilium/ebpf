@@ -737,7 +737,7 @@ func (c copier) copy(typ *Type, transform Transformer) {
 		*t = cpy
 
 		// Mark any nested types for copying.
-		walkType(cpy, work.Push)
+		walkType(cpy, defaultOrder, work.Push)
 	}
 }
 

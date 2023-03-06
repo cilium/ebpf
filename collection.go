@@ -598,15 +598,11 @@ func resolveKconfig(m *MapSpec) error {
 	data := make([]byte, ds.Size)
 	for _, vsi := range ds.Vars {
 		v := vsi.Type.(*btf.Var)
-		s, err := btf.Sizeof(v.Type)
-		if err != nil {
-			return fmt.Errorf("variable %s: getting size: %w", v.Name, err)
-		}
 
 		switch n := v.TypeName(); n {
 		case "LINUX_KERNEL_VERSION":
-			if s != 4 {
-				return fmt.Errorf("variable %s must be u32, got %d", n, s)
+			if integer, ok := v.Type.(*btf.Int); !ok || integer.Size != 4 {
+				return fmt.Errorf("variable %s must be a 32 bits integer, got %s", n, v.Type)
 			}
 
 			kv, err := internal.KernelVersion()

@@ -6,11 +6,6 @@ import (
 	"github.com/cilium/ebpf/internal/unix"
 )
 
-const (
-	BpfFSType   = 0xcafe4a11
-	TraceFSType = 0x74726163
-)
-
 func FSType(path string) (int64, error) {
 	var statfs unix.Statfs_t
 	if err := unix.Statfs(path, &statfs); err != nil {

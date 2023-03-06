@@ -84,6 +84,8 @@ const (
 	SIG_UNBLOCK
 	EM_NONE
 	EM_BPF
+	BPF_FS_MAGIC
+	TRACEFS_MAGIC
 )
 
 type Statfs_t struct {

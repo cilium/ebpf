@@ -4,7 +4,11 @@ import (
 	"bufio"
 	"errors"
 	"fmt"
+	"os"
+	"strconv"
+	"strings"
 
+	"github.com/cilium/ebpf/btf"
 	"github.com/cilium/ebpf/internal"
 )
 
@@ -13,13 +17,15 @@ import (
 // corresponding value as map value.
 // If the kconfig file is not valid, error will be returned.
 func ParseKconfig(path string) (map[string]string, error) {
-	f, err := os.Open(p)
+	f, err := os.Open(path)
 	defer f.Close()
 	if err != nil {
 		return nil, err
 	}
 
 	ret := make(map[string]string)
+	s := bufio.NewScanner(f)
+
 	for s.Scan() {
 		line := s.Text()
 		err = processKconfigLine(line, ret)
@@ -42,12 +48,12 @@ func processKconfigLine(line string, m map[string]string) error {
 
 	key, value, found := strings.Cut(line, "=")
 	if !found {
-		return errors.New("line %q does not contain separator '='", line)
+		return fmt.Errorf("line %q does not contain separator '='", line)
 	}
 
 	value = strings.Trim(value, "\n")
 	if len(value) == 0 {
-		return errors.New("line %q has no value", line)
+		return fmt.Errorf("line %q has no value", line)
 	}
 
 	_, ok := m[key]
@@ -86,7 +92,11 @@ func putKconfigValueTri(data []byte, typ btf.Type, value string) error {
 	switch v := typ.(type) {
 	case *btf.Int:
 		if v.Encoding != btf.Bool {
-			return fmt.Errorf("cannot add tri value, expected btf.Bool, got: %v", integer.Encoding)
+			return fmt.Errorf("cannot add tri value, expected btf.Bool, got: %v", v.Encoding)
+		}
+
+		if v.Size != 1 {
+			return fmt.Errorf("cannot add tri value, expected size of 1 byte, got: %d", v.Size)
 		}
 
 		switch value {
@@ -99,7 +109,7 @@ func putKconfigValueTri(data []byte, typ btf.Type, value string) error {
 		}
 	case *btf.Enum:
 		if v.Name != "libbpf_tristate" {
-			return fmt.Errorf("cannot use enum %q, only libbpf_tristate is supported", enum.Name)
+			return fmt.Errorf("cannot use enum %q, only libbpf_tristate is supported", v.Name)
 		}
 
 		var tri triState
@@ -109,7 +119,7 @@ func putKconfigValueTri(data []byte, typ btf.Type, value string) error {
 		case "m":
 			tri = triModule
 		case "n":
-			tro = triNo
+			tri = triNo
 		default:
 			return fmt.Errorf("value %q is not support for libbpf_tristate", value)
 		}
@@ -134,8 +144,12 @@ func putKconfigValueString(data []byte, typ btf.Type, value string) error {
 	}
 
 	// Treat unsigned int8 as char.
-	if contentType.Encoding != btf.Char && contentType.Encoding != btf.Unsigned && contentType.Size != 8 {
+	if contentType.Encoding != btf.Char && contentType.Encoding != btf.Unsigned {
 		return fmt.Errorf("cannot add string value, expected array of btf.Char, got array of: %v", contentType.Encoding)
+	}
+
+	if contentType.Size != 1 {
+		return fmt.Errorf("cannot add string value, expected array of btf.Char of size 1, got array of btf.Char of size: %v", contentType.Size)
 	}
 
 	if !strings.HasPrefix(value, `"`) || !strings.HasSuffix(value, `"`) {
@@ -161,16 +175,21 @@ func putKconfigValueNumber(data []byte, typ btf.Type, value string) error {
 		return fmt.Errorf("cannot add number value, expected btf.Int, got: %T", integer)
 	}
 
-	size, err := typ.Size
-	if err != nil {
-		return fmt.Errorf("cannot get type size: %w", err)
-	}
+	size := integer.Size
+	sizeInBits := size * 8
 
 	var n int
+	var err error
 	if integer.Encoding == btf.Signed {
-		n, err = strconv.ParseInt(value, 0, size)
+		parsed, e := strconv.ParseInt(value, 0, int(sizeInBits))
+
+		n = int(parsed)
+		err = e
 	} else {
-		n, err = strconv.ParseUint(value, 0, size)
+		parsed, e := strconv.ParseUint(value, 0, int(sizeInBits))
+
+		n = int(parsed)
+		err = e
 	}
 
 	if err != nil {

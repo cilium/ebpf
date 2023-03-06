@@ -1156,6 +1156,9 @@ func (ec *elfCode) loadKconfigSection() error {
 		Value:      ds,
 	}
 
+	// TODO For test purpose only.
+	ec.maps[".kconfig"] = ec.kconfig
+
 	return nil
 }
 

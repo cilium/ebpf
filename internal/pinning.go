@@ -23,7 +23,7 @@ func Pin(currentPath, newPath string, fd *sys.FD) error {
 	if err != nil {
 		return err
 	}
-	if fsType != BpfFSType {
+	if fsType != unix.BPF_FS_MAGIC {
 		return fmt.Errorf("%s is not on a bpf filesystem", newPath)
 	}
 

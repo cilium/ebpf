@@ -305,7 +305,7 @@ func resolveKconfigReferences(insns asm.Instructions) (_ *Map, err error) {
 	}
 
 	cpy := spec.Copy()
-	if err := resolveKconfig(cpy); err != nil {
+	if err := resolveKconfig(cpy, spec.AdditionalKconfig); err != nil {
 		return nil, err
 	}
 

@@ -5,11 +5,15 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"strconv"
 	"strings"
+	"syscall"
 
 	"github.com/cilium/ebpf/asm"
 	"github.com/cilium/ebpf/btf"
 	"github.com/cilium/ebpf/internal"
+
+	"github.com/ti-mo/kconfig"
 )
 
 // CollectionOptions control loading a collection into the kernel.
@@ -582,6 +586,180 @@ func (cl *collectionLoader) populateMaps() error {
 	return nil
 }
 
+func getKernelRelease() (string, error) {
+	uts := syscall.Utsname{}
+	err := syscall.Uname(&uts)
+	if err != nil {
+		return "", fmt.Errorf("problem calling uname: %w", err)
+	}
+
+	// We need to translate int array to char array.
+	var bytes [65]byte
+	var length int
+	for ; uts.Release[length] != 0; length++ {
+		bytes[length] = byte(uts.Release[length])
+	}
+
+	return string(bytes[:length]), nil
+}
+
+func parseKconfig() (kconfig.Kconfig, error) {
+	kernelRelease, err := getKernelRelease()
+	if err != nil {
+		return kconfig.Kconfig{}, fmt.Errorf("cannot get kernel release: %w", err)
+	}
+
+	path := fmt.Sprintf("/boot/config-%s", kernelRelease)
+
+	ret := kconfig.New()
+	err = ret.Read(path)
+	if err != nil {
+		// TODO Add /proc/config.gz support.
+		// We would need to modify github.com/t-mo/kconfig to ungzip the file before
+		// parsing it.
+		return kconfig.Kconfig{}, fmt.Errorf("cannot read %q: %w", path, err)
+	}
+
+	return ret, nil
+}
+
+// We need to translate C enum to golang.
+type triState int
+
+const (
+	triNo     triState = 0
+	triYes    triState = 1
+	triModule triState = 2
+)
+
+func addKconfigValueTri(data []byte, typ btf.Type, value string) error {
+	switch typ.(type) {
+	case *btf.Int:
+		integer := typ.(*btf.Int)
+		if integer.Encoding == btf.Bool {
+			return fmt.Errorf("cannot add tri value, expected btf.Bool, got: %v", integer.Encoding)
+		}
+
+		if value == "m" {
+			return fmt.Errorf("cannot use %q for btf.Bool", value)
+		}
+
+		var byt byte
+		if value == "y" {
+			byt = 1
+		}
+
+		data[0] = byt
+	case *btf.Enum:
+		enum := typ.(*btf.Enum)
+		if enum.Name != "libbpf_tristate" {
+			return fmt.Errorf("cannot use enum %q, only libbpf_tristate is supported", enum.Name)
+		}
+
+		tri := triNo
+		switch value {
+		case "y":
+			tri = triYes
+		case "m":
+			tri = triModule
+		}
+
+		internal.NativeEndian.PutUint64(data, uint64(tri))
+	default:
+		return errors.New("cannot add number value, expected btf.Int or btf.Enum")
+	}
+
+	return nil
+}
+
+func addKconfigValueString(data []byte, typ btf.Type, value string) error {
+	array, ok := typ.(*btf.Array)
+	if !ok {
+		return fmt.Errorf("cannot add string value, expected btf.Array, got %T", array)
+	}
+
+	contentType, ok := array.Type.(*btf.Int)
+	if !ok {
+		return fmt.Errorf("cannot add string value, expected array of btf.Int, got %T", contentType)
+	}
+
+	if contentType.Encoding != btf.Char {
+		return fmt.Errorf("cannot add string value, expected array of btf.Char, got array of: %v", contentType.Encoding)
+	}
+
+	str := strings.Trim(value, `"`)
+
+	// We need to trim string if the bpf array is smaller.
+	if uint32(len(str)) >= array.Nelems{
+		str = str[:array.Nelems]
+	}
+
+	// Write the string content to .kconfig.
+	for i, c := range str {
+		data[i] = byte(c)
+	}
+
+	return nil
+}
+
+// I do not know if golang has an equivalent to CHAR_BIT, so let's hardcode
+// this.
+const bitsInByte = 8
+
+func addKconfigValueNumber(data []byte, typ btf.Type, value string) error {
+	integer, ok := typ.(*btf.Int)
+	if !ok {
+		return fmt.Errorf("cannot add number value, expected btf.Int, got: %T", integer)
+	}
+
+	base := 10
+	if strings.HasPrefix(value, "0x") {
+		base = 16
+	}
+
+	parseFunc := strconv.ParseUint
+// 	if integer.Encoding == btf.Signed {
+// 		parseFunc = strconv.ParseInt
+// 	}
+
+	size, err := btf.Sizeof(typ)
+	if err != nil {
+		return fmt.Errorf("cannot get type size: %w", err)
+	}
+
+	n, err := parseFunc(value, base, size * bitsInByte)
+	if err != nil {
+		return fmt.Errorf("cannot parse int value: %w", err)
+	}
+
+	switch size {
+	case 1:
+		data[0] = byte(n)
+	case 2:
+		internal.NativeEndian.PutUint16(data, uint16(n))
+	case 4:
+		internal.NativeEndian.PutUint32(data, uint32(n))
+	case 8:
+		internal.NativeEndian.PutUint64(data, n)
+	default:
+		return fmt.Errorf("size (%d) is not valid, expected: 1, 2, 4 or 8", size)
+	}
+
+	return nil
+}
+
+func addKconfigValue(data []byte, typ btf.Type, value string) error {
+	switch value {
+	case "y", "n", "m", "is not set":
+		return addKconfigValueTri(data, typ, value)
+	default:
+		if strings.HasPrefix(value, `"`) {
+			return addKconfigValueString(data, typ, value)
+		}
+		return addKconfigValueNumber(data, typ, value)
+	}
+}
+
 // resolveKconfig resolves all variables declared in .kconfig and populates
 // m.Contents. Does nothing if the given m.Contents is non-empty.
 func resolveKconfig(m *MapSpec) error {
@@ -593,6 +771,12 @@ func resolveKconfig(m *MapSpec) error {
 	ds, ok := m.Value.(*btf.Datasec)
 	if !ok {
 		return errors.New("map value is not a Datasec")
+	}
+
+	config, err := parseKconfig()
+	if err != nil {
+		// Maybe we should return if there is an error here.
+		return err
 	}
 
 	data := make([]byte, ds.Size)
@@ -616,7 +800,19 @@ func resolveKconfig(m *MapSpec) error {
 			internal.NativeEndian.PutUint32(data[vsi.Offset:], kv.Kernel())
 
 		default:
-			return fmt.Errorf("unsupported kconfig: %s", n)
+			c := reflect.ValueOf(config)
+			params := reflect.Indirect(c).FieldByName("params")
+			val := params.MapIndex(reflect.ValueOf(n))
+
+			if val.IsZero() {
+				return fmt.Errorf("config option %q does not exists for this kernel", n)
+			}
+
+			kconfigValue := val.String()
+			err := addKconfigValue(data[vsi.Offset:], v.Type, kconfigValue)
+			if err != nil {
+				return fmt.Errorf("problem adding value for %s: %w", n, err)
+			}
 		}
 	}
 

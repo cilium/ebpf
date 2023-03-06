@@ -1,7 +1,15 @@
 #pragma once
 
+typedef _Bool bool;
+typedef unsigned short uint16_t;
 typedef unsigned int uint32_t;
 typedef unsigned long uint64_t;
+
+enum libbpf_tristate {
+	TRI_NO = 0,
+	TRI_YES = 1,
+	TRI_MODULE = 2,
+};
 
 #define __section(NAME) __attribute__((section(NAME), used))
 #define __uint(name, val) int(*name)[val]

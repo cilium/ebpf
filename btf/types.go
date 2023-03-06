@@ -657,6 +657,8 @@ func alignof(typ Type) (int, error) {
 		n = int(t.size())
 	case *Int:
 		n = int(t.Size)
+	case *Array:
+		return alignof(t.Type)
 	default:
 		return 0, fmt.Errorf("can't calculate alignment of %T", t)
 	}

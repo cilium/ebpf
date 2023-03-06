@@ -605,8 +605,9 @@ func resolveKconfig(m *MapSpec) error {
 
 		switch n := v.TypeName(); n {
 		case "LINUX_KERNEL_VERSION":
-			if s != 4 {
-				return fmt.Errorf("variable %s must be u32, got %d", n, s)
+			integer, ok := v.Type.(*btf.Int)
+			if !ok || s != 4 {
+				return fmt.Errorf("variable %s must be a 32 bits integer, got %d bits %T", n, s, integer)
 			}
 
 			kv, err := internal.KernelVersion()

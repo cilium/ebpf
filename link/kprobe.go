@@ -199,7 +199,7 @@ func kprobe(symbol string, prog *ebpf.Program, opts *KprobeOptions, ret bool) (*
 		return tp, nil
 	}
 	if err != nil && !errors.Is(err, ErrNotSupported) {
-		return nil, fmt.Errorf("creating perf_kprobe PMU: %w", err)
+		return nil, fmt.Errorf("creating perf_kprobe PMU (tried '%s'): %w", symbol, err)
 	}
 
 	// Use tracefs if kprobe PMU is missing.
@@ -210,7 +210,7 @@ func kprobe(symbol string, prog *ebpf.Program, opts *KprobeOptions, ret bool) (*
 		tp, err = tracefsKprobe(args)
 	}
 	if err != nil {
-		return nil, fmt.Errorf("creating trace event '%s' in tracefs: %w", symbol, err)
+		return nil, fmt.Errorf("creating tracefs event (tried '%s'): %w", symbol, err)
 	}
 
 	return tp, nil

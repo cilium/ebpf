@@ -91,6 +91,10 @@ func (pt probeType) PerfEventType(ret bool) perfEventType {
 // Losing the reference to the resulting Link (kp) will close the Kprobe
 // and prevent further execution of prog. The Link must be Closed during
 // program shutdown to avoid leaking system resources.
+//
+// If attaching to symbol fails, automatically retries with the running
+// platform's syscall prefix (e.g. __x64_) to support attaching to syscalls
+// in a portable fashion.
 func Kprobe(symbol string, prog *ebpf.Program, opts *KprobeOptions) (Link, error) {
 	k, err := kprobe(symbol, prog, opts, false)
 	if err != nil {
@@ -115,6 +119,10 @@ func Kprobe(symbol string, prog *ebpf.Program, opts *KprobeOptions) (Link, error
 // Losing the reference to the resulting Link (kp) will close the Kretprobe
 // and prevent further execution of prog. The Link must be Closed during
 // program shutdown to avoid leaking system resources.
+//
+// If attaching to symbol fails, automatically retries with the running
+// platform's syscall prefix (e.g. __x64_) to support attaching to syscalls
+// in a portable fashion.
 //
 // On kernels 5.10 and earlier, setting a kretprobe on a nonexistent symbol
 // incorrectly returns unix.EINVAL instead of os.ErrNotExist.
@@ -199,7 +207,7 @@ func kprobe(symbol string, prog *ebpf.Program, opts *KprobeOptions, ret bool) (*
 		return tp, nil
 	}
 	if err != nil && !errors.Is(err, ErrNotSupported) {
-		return nil, fmt.Errorf("creating perf_kprobe PMU: %w", err)
+		return nil, fmt.Errorf("creating perf_kprobe PMU (arch-specific fallback for %q): %w", symbol, err)
 	}
 
 	// Use tracefs if kprobe PMU is missing.
@@ -210,7 +218,7 @@ func kprobe(symbol string, prog *ebpf.Program, opts *KprobeOptions, ret bool) (*
 		tp, err = tracefsKprobe(args)
 	}
 	if err != nil {
-		return nil, fmt.Errorf("creating trace event '%s' in tracefs: %w", symbol, err)
+		return nil, fmt.Errorf("creating tracefs event (arch-specific fallback for %q): %w", symbol, err)
 	}
 
 	return tp, nil

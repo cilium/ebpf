@@ -45,7 +45,7 @@ func NewHandle(spec *Spec) (*Handle, error) {
 		stb = newStringTableBuilder(spec.strings.Num())
 	}
 
-	err := marshalTypes(buf, spec.types, stb, kernelMarshalOptions)
+	err := marshalTypes(buf, spec.types(), stb, kernelMarshalOptions)
 	if err != nil {
 		return nil, fmt.Errorf("marshal BTF: %w", err)
 	}
@@ -133,7 +133,7 @@ func (h *Handle) Spec() (*Spec, error) {
 		return nil, fmt.Errorf("can't load split BTF without access to /sys")
 	}
 
-	return loadRawSpec(bytes.NewReader(btfBuffer), internal.NativeEndian, base.types, base.strings)
+	return loadRawSpec(bytes.NewReader(btfBuffer), internal.NativeEndian, base.types(), base.strings)
 }
 
 // Close destroys the handle.

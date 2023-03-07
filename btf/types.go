@@ -696,30 +696,14 @@ type Transformer func(Type) Type
 // to be copied type, and the returned value is copied instead.
 func Copy(typ Type, transform Transformer) Type {
 	copies := make(copier)
-	copies.copy(&typ, transform)
-	return typ
-}
-
-// copy a slice of Types recursively.
-//
-// See Copy for the semantics.
-func copyTypes(types []Type, transform Transformer) []Type {
-	result := make([]Type, len(types))
-	copy(result, types)
-
-	copies := make(copier)
-	for i := range result {
-		copies.copy(&result[i], transform)
-	}
-
-	return result
+	return copies.copy(typ, transform)
 }
 
 type copier map[Type]Type
 
-func (c copier) copy(typ *Type, transform Transformer) {
+func (c copier) copy(typ Type, transform Transformer) Type {
 	var work typeDeque
-	for t := typ; t != nil; t = work.Pop() {
+	for t := &typ; t != nil; t = work.Pop() {
 		// *t is the identity of the type.
 		if cpy := c[*t]; cpy != nil {
 			*t = cpy
@@ -739,6 +723,8 @@ func (c copier) copy(typ *Type, transform Transformer) {
 		// Mark any nested types for copying.
 		walkType(cpy, work.Push)
 	}
+
+	return typ
 }
 
 type typeDeque = internal.Deque[*Type]

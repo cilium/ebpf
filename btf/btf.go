@@ -34,14 +34,16 @@ type ID = sys.BTFID
 // kernel.
 type Spec struct {
 	// All types contained by the spec, not including types from the base in
-	// case the spec was parsed from split BTF.
-	types []Type
+	// case the spec was parsed from split BTF. Types are copied lazily, avoid
+	// accessing the slice directly.
+	_types []Type
+	copies copier
 
 	// Type IDs indexed by type.
 	typeIDs map[Type]TypeID
 
-	// The last allocated type ID.
-	lastTypeID TypeID
+	// The first and last allocated type ID.
+	firstTypeID, lastTypeID TypeID
 
 	// Types indexed by essential name.
 	// Includes all struct flavors and types with the same name.
@@ -84,7 +86,9 @@ func (h *btfHeader) stringStart() int64 {
 func NewSpec() *Spec {
 	return &Spec{
 		[]Type{(*Void)(nil)},
+		nil,
 		map[Type]TypeID{(*Void)(nil): 0},
+		0,
 		0,
 		make(map[essentialName][]Type),
 		nil,
@@ -135,7 +139,7 @@ func LoadSpecAndExtInfosFromReader(rd io.ReaderAt) (*Spec, *ExtInfos, error) {
 		return nil, nil, err
 	}
 
-	extInfos, err := loadExtInfosFromELF(file, spec.types, spec.strings)
+	extInfos, err := loadExtInfosFromELF(file, spec.types(), spec.strings)
 	if err != nil && !errors.Is(err, ErrNotFound) {
 		return nil, nil, err
 	}
@@ -220,7 +224,7 @@ func loadSpecFromELF(file *internal.SafeELFFile) (*Spec, error) {
 		return nil, err
 	}
 
-	err = fixupDatasec(spec.types, sectionSizes, offsets)
+	err = fixupDatasec(spec.types(), sectionSizes, offsets)
 	if err != nil {
 		return nil, err
 	}
@@ -243,16 +247,17 @@ func loadRawSpec(btf io.ReaderAt, bo binary.ByteOrder,
 	typeIDs, typesByName, lastTypeID := indexTypes(types, TypeID(len(baseTypes)))
 
 	return &Spec{
-		namedTypes: typesByName,
-		typeIDs:    typeIDs,
-		types:      types,
-		lastTypeID: lastTypeID,
-		strings:    rawStrings,
-		byteOrder:  bo,
+		namedTypes:  typesByName,
+		typeIDs:     typeIDs,
+		_types:      types,
+		firstTypeID: TypeID(len(baseTypes)),
+		lastTypeID:  lastTypeID,
+		strings:     rawStrings,
+		byteOrder:   bo,
 	}, nil
 }
 
-func indexTypes(types []Type, typeIDOffset TypeID) (map[Type]TypeID, map[essentialName][]Type, TypeID) {
+func indexTypes(types []Type, firstTypeID TypeID) (map[Type]TypeID, map[essentialName][]Type, TypeID) {
 	namedTypes := 0
 	for _, typ := range types {
 		if typ.TypeName() != "" {
@@ -271,7 +276,7 @@ func indexTypes(types []Type, typeIDOffset TypeID) (map[Type]TypeID, map[essenti
 		if name := newEssentialName(typ.TypeName()); name != "" {
 			typesByName[name] = append(typesByName[name], typ)
 		}
-		lastTypeID = TypeID(i) + typeIDOffset
+		lastTypeID = TypeID(i) + firstTypeID
 		typeIDs[typ] = lastTypeID
 	}
 
@@ -544,18 +549,69 @@ func fixupDatasecLayout(ds *Datasec) error {
 
 // Copy creates a copy of Spec.
 func (s *Spec) Copy() *Spec {
-	types := copyTypes(s.types, nil)
-	typeIDs, typesByName, lastTypeID := indexTypes(types, s.firstTypeID())
+	// This performs a very shallow copy of the spec. We rely on
+	// calling Spec.types below to perform a full copy at
+	// the right times.
+	cpy := *s
+	cpy.copies = make(copier)
+	return &cpy
+}
 
-	// NB: Other parts of spec are not copied since they are immutable.
-	return &Spec{
-		types,
-		typeIDs,
-		lastTypeID,
-		typesByName,
-		s.strings,
-		s.byteOrder,
+// makeWritable performs a deep copy of the spec if necessary.
+//
+// After the call, _types, typeIDs and namedTypes can be safely modified.
+func (s *Spec) makeWritable() {
+	if s.copies == nil {
+		return
 	}
+
+	types := make([]Type, len(s._types))
+	for i := range types {
+		types[i] = s.copies.copy(s._types[i], nil)
+	}
+
+	s.typeIDs, s.namedTypes, _ = indexTypes(types, s.firstTypeID)
+	s._types = types
+	s.copies = nil
+}
+
+// types returns the list of types contained in the spec.
+//
+// May perform a deep copy of the spec.
+func (s *Spec) types() []Type {
+	s.makeWritable()
+	return s._types
+}
+
+// copiedType copies typ if the Spec is a shallow copy.
+//
+// All Types returned via exported methods must pass through this function.
+// It is the inverse of [Spec.originalType].
+func (s *Spec) copiedType(typ Type) Type {
+	if s.copies == nil {
+		return typ
+	}
+
+	return s.copies.copy(typ, nil)
+}
+
+// originalType finds the original type if the Spec is a shallow copy.
+//
+// All Types accepted as parameters of exported methods must pass through this
+// method. It is the inverse of [Spec.copiedType].
+func (s *Spec) originalType(typ Type) (Type, error) {
+	if s.copies == nil {
+		return typ, nil
+	}
+
+	// NB: This is slow if there are many copies already.
+	for orig, cpy := range s.copies {
+		if typ == cpy {
+			return orig, nil
+		}
+	}
+
+	return nil, fmt.Errorf("type %s: %w", typ, ErrNotFound)
 }
 
 type sliceWriter []byte
@@ -587,8 +643,10 @@ func (s *Spec) Add(typ Type) (TypeID, error) {
 		return 0, fmt.Errorf("type ID overflow")
 	}
 
+	s.makeWritable()
+
 	s.typeIDs[typ] = id
-	s.types = append(s.types, typ)
+	s._types = append(s._types, typ)
 	s.lastTypeID = id
 
 	if name := newEssentialName(typ.TypeName()); name != "" {
@@ -603,14 +661,11 @@ func (s *Spec) Add(typ Type) (TypeID, error) {
 // Returns an error wrapping ErrNotFound if a Type with the given ID
 // does not exist in the Spec.
 func (s *Spec) TypeByID(id TypeID) (Type, error) {
-	firstID := s.firstTypeID()
-	lastID := firstID + TypeID(len(s.types))
-
-	if id < firstID || id >= lastID {
-		return nil, fmt.Errorf("expected type ID between %d and %d, got %d: %w", firstID, lastID, id, ErrNotFound)
+	if id < s.firstTypeID || id >= s.lastTypeID {
+		return nil, fmt.Errorf("expected type ID between %d and %d, got %d: %w", s.firstTypeID, s.lastTypeID, id, ErrNotFound)
 	}
 
-	return s.types[id-firstID], nil
+	return s.copiedType(s._types[id-s.firstTypeID]), nil
 }
 
 // TypeID returns the ID for a given Type.
@@ -620,6 +675,11 @@ func (s *Spec) TypeID(typ Type) (TypeID, error) {
 	if _, ok := typ.(*Void); ok {
 		// Equality is weird for void, since it is a zero sized type.
 		return 0, nil
+	}
+
+	typ, err := s.originalType(typ)
+	if err != nil {
+		return 0, err
 	}
 
 	id, ok := s.typeIDs[typ]
@@ -649,7 +709,7 @@ func (s *Spec) AnyTypesByName(name string) ([]Type, error) {
 		// Match against the full name, not just the essential one
 		// in case the type being looked up is a struct flavor.
 		if t.TypeName() == name {
-			result = append(result, t)
+			result = append(result, s.copiedType(t))
 		}
 	}
 	return result, nil
@@ -731,14 +791,6 @@ func (s *Spec) TypeByName(name string, typ interface{}) error {
 	return nil
 }
 
-// firstTypeID returns the first type ID or zero.
-func (s *Spec) firstTypeID() TypeID {
-	if len(s.types) > 0 {
-		return s.typeIDs[s.types[0]]
-	}
-	return 0
-}
-
 // LoadSplitSpecFromReader loads split BTF from a reader.
 //
 // Types from base are used to resolve references in the split BTF.
@@ -748,7 +800,7 @@ func LoadSplitSpecFromReader(r io.ReaderAt, base *Spec) (*Spec, error) {
 		return nil, fmt.Errorf("parse split BTF: base must be loaded from an ELF")
 	}
 
-	return loadRawSpec(r, internal.NativeEndian, base.types, base.strings)
+	return loadRawSpec(r, internal.NativeEndian, base.types(), base.strings)
 }
 
 // TypesIterator iterates over types of a given spec.
@@ -763,7 +815,7 @@ type TypesIterator struct {
 func (s *Spec) Iterate() *TypesIterator {
 	// We share the backing array of types with the Spec. This is safe since
 	// we don't allow deletion or shuffling of types.
-	return &TypesIterator{types: s.types, index: 0}
+	return &TypesIterator{types: s.types(), index: 0}
 }
 
 // Next returns true as long as there are any remaining types.

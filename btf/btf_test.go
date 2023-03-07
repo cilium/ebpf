@@ -395,21 +395,24 @@ func TestGuessBTFByteOrder(t *testing.T) {
 func TestSpecCopy(t *testing.T) {
 	spec := parseELFBTF(t, "../testdata/loader-el.elf")
 
-	if len(spec.types) < 1 {
+	if len(spec.types()) < 1 {
 		t.Fatal("Not enough types")
 	}
 
 	cpy := spec.Copy()
-	for i := range cpy.types {
-		if _, ok := cpy.types[i].(*Void); ok {
-			// Since Void is an empty struct, a Type interface value containing
-			// &Void{} stores (*Void, nil). Since interface equality first compares
-			// the type and then the concrete value, Void is always equal.
+	iter := spec.Iterate()
+	for iter.Next() {
+		if _, ok := iter.Type.(*Void); ok {
+			// Void is a zero sized type, which behave weirdly when comparing.
+			// Skip it.
 			continue
 		}
 
-		if cpy.types[i] == spec.types[i] {
-			t.Fatalf("Type at index %d is not a copy: %T == %T", i, cpy.types[i], spec.types[i])
+		id, _ := spec.TypeID(iter.Type)
+		typeCopy, _ := cpy.TypeByID(id)
+
+		if iter.Type == typeCopy {
+			t.Fatalf("Type with id %d is not a copy: %p == %p (%[2]T)", id, iter.Type, typeCopy)
 		}
 	}
 }
@@ -470,6 +473,20 @@ func TestTypesIterator(t *testing.T) {
 
 	if iter.Next() {
 		t.Fatalf("Iterator yielded too many items: %p (%[1]T)", iter.Type)
+	}
+
+	// Ensure that iterating a copy returns copies.
+	cpy := spec.Copy()
+	iter = cpy.Iterate()
+	iter.Next() // skip Void
+	for i, typ := range types[1:] {
+		if !iter.Next() {
+			t.Fatal("Iterator ended early at item", i+1)
+		}
+
+		if iter.Type == typ {
+			t.Fatalf("Type number %d at %p wasn't copied (%[2]T)", i+1, typ)
+		}
 	}
 }
 

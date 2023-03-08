@@ -41,6 +41,7 @@ TARGETS := \
 	testdata/subprog_reloc \
 	testdata/fwd_decl \
 	testdata/kconfig \
+	testdata/kfunc \
 	btf/testdata/relocs \
 	btf/testdata/relocs_read \
 	btf/testdata/relocs_read_tgt

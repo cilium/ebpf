@@ -188,6 +188,14 @@ func NewReaderWithOptions(array *ebpf.Map, perCPUBuffer int, opts ReaderOptions)
 		pauseFds = make([]int, 0, nCPU)
 	)
 
+	n, err := internal.PossibleCPUs()
+	if err != nil {
+		return nil, err
+	}
+	if n < nCPU {
+		nCPU = n
+	}
+
 	poller, err := epoll.New()
 	if err != nil {
 		return nil, err

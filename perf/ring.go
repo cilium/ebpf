@@ -136,10 +136,6 @@ type reverseReader struct {
 	// head is the position where the kernel last wrote data. Updated as we
 	// read data out of the ring.
 	head uint64
-	// previousHead is the head position during last read. We need to keep it to
-	// to read the elements between curent head and previousHead, then avoiding
-	// reading twice the same element.
-	previousHead uint64
 	// tail is the end of the ring buffer. No reads must be made past it.
 	tail uint64
 	mask uint64
@@ -148,11 +144,16 @@ type reverseReader struct {
 
 func newRingReader(meta *unix.PerfEventMmapPage, ring []byte, overwritable bool) ringReader {
 	if overwritable {
-		return &reverseReader{
+		rr := &reverseReader{
 			meta: meta,
+			// We've never read from the ring, rely on loadHead to move the
+			// tail if necessary.
+			tail: 0,
 			mask: uint64(cap(ring) - 1),
 			ring: ring,
 		}
+		rr.loadHead()
+		return rr
 	}
 
 	return &forwardReader{
@@ -204,14 +205,12 @@ func (fr *forwardReader) Read(p []byte) (int, error) {
 }
 
 func (rr *reverseReader) loadHead() {
-	rr.previousHead = rr.head
 	rr.head = atomic.LoadUint64(&rr.meta.Data_head)
-	rr.tail = rr.previousHead
 
-	if rr.head <= 0-uint64(cap(rr.ring)) {
-		// ring has been fully written, only permit at most cap(rr.ring)
-		// bytes to be read.
-		rr.tail = rr.head + uint64(cap(rr.ring))
+	if tail := rr.head + uint64(cap(rr.ring)); tail < rr.tail {
+		// The head has moved so far that we have to move the tail to avoid
+		// reading past the end of the ring buffer.
+		rr.tail = tail
 	}
 }
 

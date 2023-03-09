@@ -20,6 +20,8 @@ import (
 
 const kconfigMap = ".kconfig"
 
+type kfuncMeta struct{}
+
 // elfCode is a convenience to reduce the amount of arguments that have to
 // be passed around explicitly. You should treat its contents as immutable.
 type elfCode struct {
@@ -30,6 +32,7 @@ type elfCode struct {
 	btf      *btf.Spec
 	extInfo  *btf.ExtInfos
 	maps     map[string]*MapSpec
+	ksyms    map[string]btf.Type
 }
 
 // LoadCollectionSpec parses an ELF file into a CollectionSpec.
@@ -117,6 +120,7 @@ func LoadCollectionSpecFromReader(rd io.ReaderAt) (*CollectionSpec, error) {
 		btf:         btfSpec,
 		extInfo:     btfExtInfo,
 		maps:        make(map[string]*MapSpec),
+		ksyms:       make(map[string]btf.Type),
 	}
 
 	symbols, err := f.Symbols()
@@ -585,20 +589,31 @@ func (ec *elfCode) relocateInstruction(ins *asm.Instruction, rel elf.Symbol) err
 			return fmt.Errorf("asm relocation: %s: unsupported type %s", name, typ)
 		}
 
+		kc := ec.maps[kconfigMap]
+		ks := ec.ksyms[name]
+		switch {
+		// If a Call instruction is found and the datasec has a btf.Func with a Name
+		// that matches the symbol name we mark the instruction as a call to a kfunc.
+		case ks != nil && ins.OpCode.JumpOp() == asm.Call:
+			fn, ok := ks.(*btf.Func)
+			if !ok {
+				// I'd like to display which Type we found? %s displays a little more I think
+				return fmt.Errorf("wrong type %s, expected Func: %w", ks, ErrNotSupported)
+			}
+
+			ins.Metadata.Set(kfuncMeta{}, fn)
+			ins.Src = asm.PseudoKfuncCall
+			ins.Constant = -1
+
 		// If no kconfig map is found, this must be a symbol reference from inline
 		// asm (see testdata/loader.c:asm_relocation()) or a call to a forward
-		// function declaration (see testdata/fwd_decl.c). Don't interfere, these
+		// function declaration (see testdata/fwd_decl.c). Don't interfere, These
 		// remain standard symbol references.
-		kc := ec.maps[kconfigMap]
-		if kc == nil {
-			break
-		}
-
 		// extern __kconfig reads are represented as dword loads that need to be
 		// rewritten to pseudo map loads from .kconfig. If the map is present,
 		// require it to contain the symbol to disambiguate between inline asm
 		// relos and kconfigs.
-		if ins.OpCode.IsDWordLoad() {
+		case kc != nil && ins.OpCode.IsDWordLoad():
 			var found bool
 			for _, vsi := range kc.Value.(*btf.Datasec).Vars {
 				if vsi.Type.(*btf.Var).Name != rel.Name {
@@ -1120,6 +1135,18 @@ func (ec *elfCode) loadVirtualDataSections() error {
 		return nil
 	}
 
+	if err := ec.loadKconfigSection(); err != nil {
+		return err
+	}
+
+	if err := ec.loadKsymsSection(); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (ec *elfCode) loadKconfigSection() error {
 	var ds *btf.Datasec
 	err := ec.btf.TypeByName(kconfigMap, &ds)
 	if errors.Is(err, btf.ErrNotFound) {
@@ -1142,6 +1169,23 @@ func (ec *elfCode) loadVirtualDataSections() error {
 		Flags:      unix.BPF_F_RDONLY_PROG | unix.BPF_F_MMAPABLE,
 		Key:        &btf.Int{Size: 4},
 		Value:      ds,
+	}
+
+	return nil
+}
+
+func (ec *elfCode) loadKsymsSection() error {
+	var ds *btf.Datasec
+	err := ec.btf.TypeByName(".ksyms", &ds)
+	if errors.Is(err, btf.ErrNotFound) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+
+	for _, v := range ds.Vars {
+		ec.ksyms[v.Type.TypeName()] = v.Type
 	}
 
 	return nil

@@ -805,7 +805,12 @@ func TestLibBPFCompat(t *testing.T) {
 			t.Skip("Skipping since the test generates dynamic BTF")
 		case "test_static_linked.linked3.o":
 			t.Skip("Skipping since .text contains 'subprog' twice")
-		case "linked_maps.linked3.o", "linked_funcs.linked3.o":
+		case "linked_maps.linked3.o", "linked_funcs.linked3.o", "linked_vars.linked3.o",
+			"kprobe_multi.o", "kprobe_multi.linked3.o", "test_ksyms_weak.o",
+			"test_ksyms_weak.llinked3.o", "test_ksyms_weak.llinked2.o", "test_ksyms_weak.llinked1.o",
+			"test_ksyms_weak.linked3.o", "test_ksyms_module.o", "test_ksyms_module.llinked3.o",
+			"test_ksyms_module.llinked2.o", "test_ksyms_module.llinked1.o", "test_ksyms_module.linked3.o",
+			"test_ksyms.o", "test_ksyms.linked3.o":
 			t.Skip("Skipping since weak relocations are not supported")
 		case "bloom_filter_map.o", "bloom_filter_map.linked3.o",
 			"bloom_filter_bench.o", "bloom_filter_bench.linked3.o":
@@ -814,7 +819,7 @@ func TestLibBPFCompat(t *testing.T) {
 			t.Skip("Skipping due to possible bug in upstream CO-RE generation")
 		case "test_usdt.o", "test_usdt.linked3.o", "test_urandom_usdt.o", "test_urandom_usdt.linked3.o", "test_usdt_multispec.o":
 			t.Skip("Skipping due to missing support for usdt.bpf.h")
-		case "bpf_cubic.o", "bpf_iter_tcp6.o", "bpf_iter_tcp6.linked3.o", "bpf_iter_tcp4.o", "bpf_iter_tcp4.linked3.o", "bpf_iter_ipv6_route.o", "bpf_iter_ipv6_route.linked3.o", "test_subskeleton_lib.o", "test_skeleton.o", "test_skeleton.linked3.o", "test_subskeleton_lib.linked3.o", "test_subskeleton.o", "test_subskeleton.linked3.o", "test_core_extern.linked3.o", "test_core_extern.o", "profiler1.linked3.o", "profiler3.o", "profiler3.linked3.o", "profiler2.o", "profiler2.linked3.o", "profiler1.o":
+		case "bpf_cubic.o", "bpf_cubic.linked3.o", "bpf_iter_tcp6.o", "bpf_iter_tcp6.linked3.o", "bpf_iter_tcp4.o", "bpf_iter_tcp4.linked3.o", "bpf_iter_ipv6_route.o", "bpf_iter_ipv6_route.linked3.o", "test_subskeleton_lib.o", "test_skeleton.o", "test_skeleton.linked3.o", "test_subskeleton_lib.linked3.o", "test_subskeleton.o", "test_subskeleton.linked3.o", "test_core_extern.linked3.o", "test_core_extern.o", "profiler1.linked3.o", "profiler3.o", "profiler3.linked3.o", "profiler2.o", "profiler2.linked3.o", "profiler1.o":
 			t.Skip("Skipping due to using CONFIG_* variable which are not supported at the moment")
 		}
 

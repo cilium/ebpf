@@ -658,7 +658,7 @@ func (p *Program) run(opts *RunOptions) (uint32, time.Duration, error) {
 	if opts.Context != nil {
 		ctx := new(bytes.Buffer)
 		if err := binary.Write(ctx, internal.NativeEndian, opts.Context); err != nil {
-			return 0, 0, fmt.Errorf("cannot serialize context: %v", err)
+			return 0, 0, fmt.Errorf("cannot serialize context: %w", err)
 		}
 		ctxBytes = ctx.Bytes()
 	}
@@ -736,7 +736,7 @@ retry:
 	if len(ctxOut) != 0 {
 		b := bytes.NewReader(ctxOut)
 		if err := binary.Read(b, internal.NativeEndian, opts.ContextOut); err != nil {
-			return 0, 0, fmt.Errorf("failed to decode ContextOut: %v", err)
+			return 0, 0, fmt.Errorf("failed to decode ContextOut: %w", err)
 		}
 	}
 

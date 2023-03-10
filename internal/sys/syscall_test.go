@@ -23,7 +23,7 @@ func TestWrappedErrno(t *testing.T) {
 	a := error(wrappedErrno{unix.EINVAL})
 	b := error(unix.EINVAL)
 
-	if a == b {
+	if errors.Is(a, b) {
 		t.Error("wrappedErrno is comparable to plain errno")
 	}
 

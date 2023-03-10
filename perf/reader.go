@@ -60,7 +60,7 @@ func readRecord(rd io.Reader, rec *Record, buf []byte) error {
 	if errors.Is(err, io.EOF) {
 		return errEOR
 	} else if err != nil {
-		return fmt.Errorf("read perf event header: %v", err)
+		return fmt.Errorf("read perf event header: %w", err)
 	}
 
 	header := perfEventHeader{
@@ -95,7 +95,7 @@ func readLostRecords(rd io.Reader) (uint64, error) {
 
 	err := binary.Read(rd, internal.NativeEndian, &lostHeader)
 	if err != nil {
-		return 0, fmt.Errorf("can't read lost records header: %v", err)
+		return 0, fmt.Errorf("can't read lost records header: %w", err)
 	}
 
 	return lostHeader.Lost, nil
@@ -111,7 +111,7 @@ type perfEventSample struct {
 func readRawSample(rd io.Reader, buf, sampleBuf []byte) ([]byte, error) {
 	buf = buf[:perfEventSampleSize]
 	if _, err := io.ReadFull(rd, buf); err != nil {
-		return nil, fmt.Errorf("read sample size: %v", err)
+		return nil, fmt.Errorf("read sample size: %w", err)
 	}
 
 	sample := perfEventSample{
@@ -126,7 +126,7 @@ func readRawSample(rd io.Reader, buf, sampleBuf []byte) ([]byte, error) {
 	}
 
 	if _, err := io.ReadFull(rd, data); err != nil {
-		return nil, fmt.Errorf("read sample: %v", err)
+		return nil, fmt.Errorf("read sample: %w", err)
 	}
 	return data, nil
 }
@@ -220,7 +220,7 @@ func NewReaderWithOptions(array *ebpf.Map, perCPUBuffer int, opts ReaderOptions)
 		}
 
 		if err != nil {
-			return nil, fmt.Errorf("failed to create perf ring for CPU %d: %v", i, err)
+			return nil, fmt.Errorf("failed to create perf ring for CPU %d: %w", i, err)
 		}
 		rings = append(rings, ring)
 		pauseFds = append(pauseFds, ring.fd)
@@ -341,7 +341,7 @@ func (pr *Reader) ReadInto(rec *Record) error {
 		// process them doesn't matter, and starting at the back allows
 		// resizing epollRings to keep track of processed rings.
 		err := pr.readRecordFromRing(rec, pr.epollRings[len(pr.epollRings)-1])
-		if err == errEOR {
+		if errors.Is(err, errEOR) {
 			// We've emptied the current ring buffer, process
 			// the next one.
 			pr.epollRings = pr.epollRings[:len(pr.epollRings)-1]

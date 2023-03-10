@@ -10,6 +10,7 @@ linters:
   disable-all: true
   enable:
     - errcheck
+    - errorlint
     - gci
     - gofumpt
     - goimports

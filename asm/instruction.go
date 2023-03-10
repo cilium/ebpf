@@ -105,7 +105,7 @@ func (ins Instruction) Marshal(w io.Writer, bo binary.ByteOrder) (uint64, error)
 
 	regs, err := newBPFRegisters(ins.Dst, ins.Src, bo)
 	if err != nil {
-		return 0, fmt.Errorf("can't marshal registers: %s", err)
+		return 0, fmt.Errorf("can't marshal registers: %w", err)
 	}
 
 	data := make([]byte, InstructionSize)

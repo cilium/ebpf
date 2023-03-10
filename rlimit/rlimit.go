@@ -41,7 +41,7 @@ func detectMemcgAccounting() error {
 	// doing so is a permanent operation when running unprivileged.
 	var oldLimit unix.Rlimit
 	if err := unix.Prlimit(0, unix.RLIMIT_MEMLOCK, nil, &oldLimit); err != nil {
-		return fmt.Errorf("getting original memlock rlimit: %s", err)
+		return fmt.Errorf("getting original memlock rlimit: %w", err)
 	}
 
 	// Drop the current limit to zero, maintaining the old Max value.
@@ -50,7 +50,7 @@ func detectMemcgAccounting() error {
 	// of failing the restore operation below.
 	zeroLimit := unix.Rlimit{Cur: 0, Max: oldLimit.Max}
 	if err := unix.Prlimit(0, unix.RLIMIT_MEMLOCK, &zeroLimit, &oldLimit); err != nil {
-		return fmt.Errorf("lowering memlock rlimit: %s", err)
+		return fmt.Errorf("lowering memlock rlimit: %w", err)
 	}
 
 	attr := sys.MapCreateAttr{
@@ -68,7 +68,7 @@ func detectMemcgAccounting() error {
 
 	// Restore old limits regardless of what happened.
 	if err := unix.Prlimit(0, unix.RLIMIT_MEMLOCK, &oldLimit, nil); err != nil {
-		return fmt.Errorf("restoring old memlock rlimit: %s", err)
+		return fmt.Errorf("restoring old memlock rlimit: %w", err)
 	}
 
 	// Map creation successful, memcg accounting supported.
@@ -83,7 +83,7 @@ func detectMemcgAccounting() error {
 	}
 
 	// This shouldn't happen really.
-	return fmt.Errorf("unexpected error detecting memory cgroup accounting: %s", mapErr)
+	return fmt.Errorf("unexpected error detecting memory cgroup accounting: %w", mapErr)
 }
 
 // RemoveMemlock removes the limit on the amount of memory the current

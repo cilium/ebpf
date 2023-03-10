@@ -215,7 +215,7 @@ type btfExtHeader struct {
 func parseBTFExtHeader(r io.Reader, bo binary.ByteOrder) (*btfExtHeader, error) {
 	var header btfExtHeader
 	if err := binary.Read(r, bo, &header); err != nil {
-		return nil, fmt.Errorf("can't read header: %v", err)
+		return nil, fmt.Errorf("can't read header: %w", err)
 	}
 
 	if header.Magic != btfMagic {
@@ -275,7 +275,7 @@ func parseBTFExtCOREHeader(r io.Reader, bo binary.ByteOrder, extHeader *btfExtHe
 
 	var coreHeader btfExtCOREHeader
 	if err := binary.Read(r, bo, &coreHeader); err != nil {
-		return nil, fmt.Errorf("can't read header: %v", err)
+		return nil, fmt.Errorf("can't read header: %w", err)
 	}
 
 	return &coreHeader, nil
@@ -319,7 +319,7 @@ func parseExtInfoRecordSize(r io.Reader, bo binary.ByteOrder) (uint32, error) {
 
 	var recordSize uint32
 	if err := binary.Read(r, bo, &recordSize); err != nil {
-		return 0, fmt.Errorf("can't read record size: %v", err)
+		return 0, fmt.Errorf("can't read record size: %w", err)
 	}
 
 	if recordSize < 4 {
@@ -442,7 +442,7 @@ func parseFuncInfoRecords(r io.Reader, bo binary.ByteOrder, recordSize uint32, r
 
 	for i := uint32(0); i < recordNum; i++ {
 		if err := binary.Read(r, bo, &fi); err != nil {
-			return nil, fmt.Errorf("can't read function info: %v", err)
+			return nil, fmt.Errorf("can't read function info: %w", err)
 		}
 
 		if fi.InsnOff%asm.InstructionSize != 0 {
@@ -628,7 +628,7 @@ func parseLineInfoRecords(r io.Reader, bo binary.ByteOrder, recordSize uint32, r
 
 	for i := uint32(0); i < recordNum; i++ {
 		if err := binary.Read(r, bo, &li); err != nil {
-			return nil, fmt.Errorf("can't read line info: %v", err)
+			return nil, fmt.Errorf("can't read line info: %w", err)
 		}
 
 		if li.InsnOff%asm.InstructionSize != 0 {
@@ -685,7 +685,7 @@ func newRelocationInfo(relo bpfCORERelo, ts types, strings *stringTable) (*coreR
 
 	accessor, err := parseCOREAccessor(accessorStr)
 	if err != nil {
-		return nil, fmt.Errorf("accessor %q: %s", accessorStr, err)
+		return nil, fmt.Errorf("accessor %q: %w", accessorStr, err)
 	}
 
 	return &coreRelocationInfo{
@@ -756,7 +756,7 @@ func parseCOREReloRecords(r io.Reader, bo binary.ByteOrder, recordSize uint32, r
 	var relo bpfCORERelo
 	for i := uint32(0); i < recordNum; i++ {
 		if err := binary.Read(r, bo, &relo); err != nil {
-			return nil, fmt.Errorf("can't read CO-RE relocation: %v", err)
+			return nil, fmt.Errorf("can't read CO-RE relocation: %w", err)
 		}
 
 		if relo.InsnOff%asm.InstructionSize != 0 {

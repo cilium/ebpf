@@ -91,7 +91,7 @@ func compile(args compileArgs) error {
 	}
 
 	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("can't execute %s: %s", args.cc, err)
+		return fmt.Errorf("can't execute %s: %w", args.cc, err)
 	}
 
 	if depFile != nil {
@@ -204,7 +204,7 @@ func strip(exe, file string) error {
 	cmd := exec.Command(exe, "-g", file)
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("%s: %s", exe, err)
+		return fmt.Errorf("%s: %w", exe, err)
 	}
 	return nil
 }

@@ -1015,7 +1015,7 @@ func (m *Map) BatchDelete(keys interface{}, opts *BatchOptions) (int, error) {
 	count := keysValue.Len()
 	keyPtr, err := marshalPtr(keys, count*int(m.keySize))
 	if err != nil {
-		return 0, fmt.Errorf("cannot marshal keys: %v", err)
+		return 0, fmt.Errorf("cannot marshal keys: %w", err)
 	}
 
 	attr := sys.MapDeleteBatchAttr{

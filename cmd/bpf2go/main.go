@@ -139,7 +139,7 @@ func run(stdout io.Writer, pkg, outputDir string, args []string) (err error) {
 	if _, err := os.Stat(input); os.IsNotExist(err) {
 		return fmt.Errorf("file %s doesn't exist", input)
 	} else if err != nil {
-		return fmt.Errorf("state %s: %s", input, err)
+		return fmt.Errorf("state %s: %w", input, err)
 	}
 
 	b2g.sourceFile, err = filepath.Abs(input)
@@ -344,7 +344,7 @@ func (b2g *bpf2go) convert(tgt target, arches []string) (err error) {
 		out:             goFile,
 	})
 	if err != nil {
-		return fmt.Errorf("can't write %s: %s", goFileName, err)
+		return fmt.Errorf("can't write %s: %w", goFileName, err)
 	}
 
 	fmt.Fprintln(b2g.stdout, "Wrote", goFileName)
@@ -355,19 +355,19 @@ func (b2g *bpf2go) convert(tgt target, arches []string) (err error) {
 
 	deps, err := parseDependencies(cwd, &dep)
 	if err != nil {
-		return fmt.Errorf("can't read dependency information: %s", err)
+		return fmt.Errorf("can't read dependency information: %w", err)
 	}
 
 	// There is always at least a dependency for the main file.
 	deps[0].file = goFileName
 	depFile, err := adjustDependencies(b2g.makeBase, deps)
 	if err != nil {
-		return fmt.Errorf("can't adjust dependency information: %s", err)
+		return fmt.Errorf("can't adjust dependency information: %w", err)
 	}
 
 	depFileName := goFileName + ".d"
 	if err := os.WriteFile(depFileName, depFile, 0o666); err != nil {
-		return fmt.Errorf("can't write dependency file: %s", err)
+		return fmt.Errorf("can't write dependency file: %w", err)
 	}
 
 	fmt.Fprintln(b2g.stdout, "Wrote", depFileName)

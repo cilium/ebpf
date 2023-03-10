@@ -31,7 +31,7 @@ func AttachIter(opts IterOptions) (*Iter, error) {
 
 	progFd := opts.Program.FD()
 	if progFd < 0 {
-		return nil, fmt.Errorf("invalid program: %s", sys.ErrClosedFd)
+		return nil, fmt.Errorf("invalid program: %w", sys.ErrClosedFd)
 	}
 
 	var info bpfIterLinkInfoMap

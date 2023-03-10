@@ -229,13 +229,13 @@ type outputArgs struct {
 func output(args outputArgs) error {
 	obj, err := os.ReadFile(args.obj)
 	if err != nil {
-		return fmt.Errorf("read object file contents: %s", err)
+		return fmt.Errorf("read object file contents: %w", err)
 	}
 
 	rd := bytes.NewReader(obj)
 	spec, err := ebpf.LoadCollectionSpecFromReader(rd)
 	if err != nil {
-		return fmt.Errorf("can't load BPF from ELF: %s", err)
+		return fmt.Errorf("can't load BPF from ELF: %w", err)
 	}
 
 	maps := make(map[string]string)
@@ -320,7 +320,7 @@ func output(args outputArgs) error {
 
 	var buf bytes.Buffer
 	if err := commonTemplate.Execute(&buf, &ctx); err != nil {
-		return fmt.Errorf("can't generate types: %s", err)
+		return fmt.Errorf("can't generate types: %w", err)
 	}
 
 	return internal.WriteFormatted(buf.Bytes(), args.out)

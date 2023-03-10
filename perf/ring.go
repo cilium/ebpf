@@ -40,7 +40,7 @@ func newPerfEventRing(cpu, perCPUBuffer, watermark int) (*perfEventRing, error) 
 	mmap, err := unix.Mmap(fd, 0, perfBufferSize(perCPUBuffer), unix.PROT_READ|unix.PROT_WRITE, unix.MAP_SHARED)
 	if err != nil {
 		unix.Close(fd)
-		return nil, fmt.Errorf("can't mmap: %v", err)
+		return nil, fmt.Errorf("can't mmap: %w", err)
 	}
 
 	// This relies on the fact that we allocate an extra metadata page,

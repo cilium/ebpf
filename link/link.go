@@ -162,12 +162,12 @@ func AttachRawLink(opts RawLinkOptions) (*RawLink, error) {
 	}
 
 	if opts.Target < 0 {
-		return nil, fmt.Errorf("invalid target: %s", sys.ErrClosedFd)
+		return nil, fmt.Errorf("invalid target: %w", sys.ErrClosedFd)
 	}
 
 	progFd := opts.Program.FD()
 	if progFd < 0 {
-		return nil, fmt.Errorf("invalid program: %s", sys.ErrClosedFd)
+		return nil, fmt.Errorf("invalid program: %w", sys.ErrClosedFd)
 	}
 
 	attr := sys.LinkCreateAttr{
@@ -255,14 +255,14 @@ type RawLinkUpdateOptions struct {
 func (l *RawLink) UpdateArgs(opts RawLinkUpdateOptions) error {
 	newFd := opts.New.FD()
 	if newFd < 0 {
-		return fmt.Errorf("invalid program: %s", sys.ErrClosedFd)
+		return fmt.Errorf("invalid program: %w", sys.ErrClosedFd)
 	}
 
 	var oldFd int
 	if opts.Old != nil {
 		oldFd = opts.Old.FD()
 		if oldFd < 0 {
-			return fmt.Errorf("invalid replacement program: %s", sys.ErrClosedFd)
+			return fmt.Errorf("invalid replacement program: %w", sys.ErrClosedFd)
 		}
 	}
 
@@ -280,7 +280,7 @@ func (l *RawLink) Info() (*Info, error) {
 	var info sys.LinkInfo
 
 	if err := sys.ObjInfo(l.fd, &info); err != nil {
-		return nil, fmt.Errorf("link info: %s", err)
+		return nil, fmt.Errorf("link info: %w", err)
 	}
 
 	var extra interface{}

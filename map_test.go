@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"sort"
+	"strings"
 	"testing"
 	"unsafe"
 
@@ -2117,5 +2118,24 @@ func ExampleMap_Iterate_nestedMapsAndProgramArrays() {
 
 	if err := entries.Err(); err != nil {
 		panic(fmt.Sprint("Iterator encountered an error:", err))
+	}
+}
+
+func TestCreateUnspecifiedMap(t *testing.T) {
+	tmp := testutils.TempBPFFS(t)
+	_, err := NewMapWithOptions(&MapSpec{
+		Type:       UnspecifiedMap,
+		KeySize:    5,
+		ValueSize:  4,
+		MaxEntries: 10,
+		Pinning:    PinByName,
+		Name:       "foo",
+	}, MapOptions{
+		PinPath: tmp,
+	})
+	expected := "cannot use type UnspecifiedMap"
+	if err == nil || !strings.Contains(err.Error(), expected) {
+		t.Logf("expected error to contain %q, got %q", expected, err)
+		t.Fail()
 	}
 }

@@ -11,25 +11,23 @@ import (
 	"testing"
 	"unsafe"
 
+	qt "github.com/frankban/quicktest"
+
 	"github.com/cilium/ebpf/asm"
 	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/sys"
 	"github.com/cilium/ebpf/internal/testutils"
 	"github.com/cilium/ebpf/internal/unix"
-
-	qt "github.com/frankban/quicktest"
 )
 
-var (
-	spec1 = &MapSpec{
-		Name:       "foo",
-		Type:       Hash,
-		KeySize:    4,
-		ValueSize:  4,
-		MaxEntries: 1,
-		Pinning:    PinByName,
-	}
-)
+var spec1 = &MapSpec{
+	Name:       "foo",
+	Type:       Hash,
+	KeySize:    4,
+	ValueSize:  4,
+	MaxEntries: 1,
+	Pinning:    PinByName,
+}
 
 // newHash returns a new Map of type Hash. Cleanup is handled automatically.
 func newHash(t *testing.T) *Map {
@@ -1249,7 +1247,7 @@ func TestNotExist(t *testing.T) {
 		t.Error("Deleting unknown key doesn't return ErrKeyNotExist", err)
 	}
 
-	var k = []byte{1, 2, 3, 4, 5}
+	k := []byte{1, 2, 3, 4, 5}
 	if err := hash.NextKey(&k, &tmp); !errors.Is(err, ErrKeyNotExist) {
 		t.Error("Looking up next key in empty map doesn't return a non-existing error", err)
 	}
@@ -1353,7 +1351,6 @@ func TestPerCPUMarshaling(t *testing.T) {
 					t.Errorf("Put doesn't use BinaryMarshaler, expected %s but got %s", want, have)
 				}
 			}
-
 		})
 	}
 }
@@ -1427,7 +1424,7 @@ func TestCgroupPerCPUStorageMarshaling(t *testing.T) {
 		}
 	}()
 
-	var mapKey = &bpfCgroupStorageKey{
+	mapKey := &bpfCgroupStorageKey{
 		CgroupInodeId: testutils.GetCgroupIno(t, cgroup),
 		AttachType:    AttachCGroupInetEgress,
 	}

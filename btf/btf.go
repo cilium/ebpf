@@ -229,7 +229,8 @@ func loadSpecFromELF(file *internal.SafeELFFile) (*Spec, error) {
 }
 
 func loadRawSpec(btf io.ReaderAt, bo binary.ByteOrder,
-	baseTypes types, baseStrings *stringTable) (*Spec, error) {
+	baseTypes types, baseStrings *stringTable,
+) (*Spec, error) {
 	rawTypes, rawStrings, err := parseBTF(btf, bo, baseStrings)
 	if err != nil {
 		return nil, err

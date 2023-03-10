@@ -6,8 +6,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/cilium/ebpf/internal"
 	"golang.org/x/sys/unix"
+
+	"github.com/cilium/ebpf/internal"
 )
 
 var cgroup2Path = internal.Memoize(func() (string, error) {

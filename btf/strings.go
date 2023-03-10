@@ -185,7 +185,6 @@ func (stb *stringTableBuilder) Lookup(str string) (uint32, error) {
 	}
 
 	return offset, nil
-
 }
 
 // Length returns the length in bytes.

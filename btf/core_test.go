@@ -7,10 +7,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/cilium/ebpf/internal/testutils"
+	qt "github.com/frankban/quicktest"
 	"github.com/google/go-cmp/cmp"
 
-	qt "github.com/frankban/quicktest"
+	"github.com/cilium/ebpf/internal/testutils"
 )
 
 func TestCOREAreTypesCompatible(t *testing.T) {

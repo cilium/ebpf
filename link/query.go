@@ -59,5 +59,4 @@ func QueryPrograms(opts QueryOptions) ([]ebpf.ProgramID, error) {
 	}
 
 	return progIds, nil
-
 }

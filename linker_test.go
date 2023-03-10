@@ -4,12 +4,12 @@ import (
 	"errors"
 	"testing"
 
+	qt "github.com/frankban/quicktest"
+
 	"github.com/cilium/ebpf/asm"
 	"github.com/cilium/ebpf/btf"
 	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/testutils"
-
-	qt "github.com/frankban/quicktest"
 )
 
 func TestFindReferences(t *testing.T) {

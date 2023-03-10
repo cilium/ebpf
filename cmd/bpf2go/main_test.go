@@ -113,7 +113,6 @@ func TestDisableStripping(t *testing.T) {
 		"bar",
 		filepath.Join(dir, "test.c"),
 	})
-
 	if err != nil {
 		t.Fatal("Can't run with stripping disabled:", err)
 	}

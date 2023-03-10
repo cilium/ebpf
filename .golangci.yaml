@@ -10,6 +10,8 @@ linters:
   disable-all: true
   enable:
     - errcheck
+    - gci
+    - gofumpt
     - goimports
     - gosimple
     - govet
@@ -23,3 +25,10 @@ linters:
     # - gocyclo
     # - maligned
     # - gosec
+
+linters-settings:
+  gci:
+    sections:
+      - standard
+      - default
+      - prefix(github.com/cilium)

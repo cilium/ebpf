@@ -741,8 +741,8 @@ func ebpfFields(structVal reflect.Value, visited map[reflect.Type]bool) ([]struc
 // getValue is called for every tagged field of 'to' and must return the value
 // to be assigned to the field with the given typ and name.
 func assignValues(to interface{},
-	getValue func(typ reflect.Type, name string) (interface{}, error)) error {
-
+	getValue func(typ reflect.Type, name string) (interface{}, error),
+) error {
 	toValue := reflect.ValueOf(to)
 	if toValue.Type().Kind() != reflect.Ptr {
 		return fmt.Errorf("%T is not a pointer to struct", to)

@@ -107,10 +107,12 @@ type Info struct {
 	extra   interface{}
 }
 
-type TracingInfo sys.TracingLinkInfo
-type CgroupInfo sys.CgroupLinkInfo
-type NetNsInfo sys.NetNsLinkInfo
-type XDPInfo sys.XDPLinkInfo
+type (
+	TracingInfo sys.TracingLinkInfo
+	CgroupInfo  sys.CgroupLinkInfo
+	NetNsInfo   sys.NetNsLinkInfo
+	XDPInfo     sys.XDPLinkInfo
+)
 
 // Tracing returns tracing type-specific link info.
 //

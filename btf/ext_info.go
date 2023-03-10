@@ -102,8 +102,10 @@ func loadExtInfos(r io.ReaderAt, bo binary.ByteOrder, ts types, strings *stringT
 	return &ExtInfos{funcInfos, lineInfos, coreRelos}, nil
 }
 
-type funcInfoMeta struct{}
-type coreRelocationMeta struct{}
+type (
+	funcInfoMeta       struct{}
+	coreRelocationMeta struct{}
+)
 
 // Assign per-section metadata from BTF to a section's instructions.
 func (ei *ExtInfos) Assign(insns asm.Instructions, section string) {

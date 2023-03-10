@@ -41,9 +41,7 @@ import (
 //   events can be created from a single trace event. Closing a perf event
 //   stops any further invocations of the attached eBPF program.
 
-var (
-	errInvalidInput = errors.New("invalid input")
-)
+var errInvalidInput = errors.New("invalid input")
 
 const (
 	perfAllThreads = -1

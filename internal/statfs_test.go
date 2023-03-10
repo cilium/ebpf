@@ -3,9 +3,9 @@ package internal
 import (
 	"testing"
 
-	"github.com/cilium/ebpf/internal/unix"
-
 	qt "github.com/frankban/quicktest"
+
+	"github.com/cilium/ebpf/internal/unix"
 )
 
 func TestFSType(t *testing.T) {

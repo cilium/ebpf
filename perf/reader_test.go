@@ -10,19 +10,17 @@ import (
 	"testing"
 	"time"
 
+	qt "github.com/frankban/quicktest"
+
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/asm"
 	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/testutils"
 	"github.com/cilium/ebpf/internal/testutils/fdtrace"
 	"github.com/cilium/ebpf/internal/unix"
-
-	qt "github.com/frankban/quicktest"
 )
 
-var (
-	readTimeout = 250 * time.Millisecond
-)
+var readTimeout = 250 * time.Millisecond
 
 func TestMain(m *testing.M) {
 	fdtrace.TestMain(m)

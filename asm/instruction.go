@@ -21,9 +21,11 @@ const InstructionSize = 8
 // RawInstructionOffset is an offset in units of raw BPF instructions.
 type RawInstructionOffset uint64
 
-var ErrUnreferencedSymbol = errors.New("unreferenced symbol")
-var ErrUnsatisfiedMapReference = errors.New("unsatisfied map reference")
-var ErrUnsatisfiedProgramReference = errors.New("unsatisfied program reference")
+var (
+	ErrUnreferencedSymbol          = errors.New("unreferenced symbol")
+	ErrUnsatisfiedMapReference     = errors.New("unsatisfied map reference")
+	ErrUnsatisfiedProgramReference = errors.New("unsatisfied program reference")
+)
 
 // Bytes returns the offset of an instruction in bytes.
 func (rio RawInstructionOffset) Bytes() uint64 {

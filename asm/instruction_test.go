@@ -193,7 +193,6 @@ func TestInstructionWithMetadata(t *testing.T) {
 // You can use format flags to change the way an eBPF
 // program is stringified.
 func ExampleInstructions_Format() {
-
 	insns := Instructions{
 		FnMapLookupElem.Call().WithSymbol("my_func").WithSource(Comment("bpf_map_lookup_elem()")),
 		LoadImm(R0, 42, DWord).WithSource(Comment("abc = 42")),

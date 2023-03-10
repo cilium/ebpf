@@ -66,7 +66,7 @@ func (pt probeType) EventsFile() (*os.File, error) {
 		return nil, err
 	}
 
-	return os.OpenFile(path, os.O_APPEND|os.O_WRONLY, 0666)
+	return os.OpenFile(path, os.O_APPEND|os.O_WRONLY, 0o666)
 }
 
 func (pt probeType) PerfEventType(ret bool) perfEventType {

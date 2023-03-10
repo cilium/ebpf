@@ -334,6 +334,9 @@ func newMapWithOptions(spec *MapSpec, opts MapOptions) (_ *Map, err error) {
 // createMap validates the spec's properties and creates the map in the kernel
 // using the given opts. It does not populate or freeze the map.
 func (spec *MapSpec) createMap(inner *sys.FD, opts MapOptions) (_ *Map, err error) {
+	if spec.Type == UnspecifiedMap {
+		return nil, fmt.Errorf("cannot use type %s", UnspecifiedMap)
+	}
 	closeOnError := func(closer io.Closer) {
 		if err != nil {
 			closer.Close()

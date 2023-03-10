@@ -454,6 +454,9 @@ func (spec *MapSpec) createMap(inner *sys.FD, opts MapOptions) (_ *Map, err erro
 		if errors.Is(err, unix.EINVAL) && attr.MaxEntries == 0 {
 			return nil, fmt.Errorf("map create: %w (MaxEntries may be incorrectly set to zero)", err)
 		}
+		if errors.Is(err, unix.EINVAL) && spec.Type == UnspecifiedMap {
+			return nil, fmt.Errorf("map create: cannot use type %s", UnspecifiedMap)
+		}
 		if attr.BtfFd == 0 {
 			return nil, fmt.Errorf("map create: %w (without BTF k/v)", err)
 		}

@@ -77,8 +77,6 @@ func TestHaveProgramHelper(t *testing.T) {
 			if !errors.Is(err, tc.expected) {
 				t.Fatalf("%s/%s: %v", tc.prog.String(), tc.helper.String(), err)
 			}
-
 		})
-
 	}
 }

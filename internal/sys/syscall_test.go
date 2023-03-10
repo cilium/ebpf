@@ -4,9 +4,9 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/cilium/ebpf/internal/unix"
-
 	qt "github.com/frankban/quicktest"
+
+	"github.com/cilium/ebpf/internal/unix"
 )
 
 func TestObjName(t *testing.T) {

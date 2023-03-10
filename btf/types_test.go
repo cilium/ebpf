@@ -6,10 +6,10 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/cilium/ebpf/internal"
-
 	qt "github.com/frankban/quicktest"
 	"github.com/google/go-cmp/cmp"
+
+	"github.com/cilium/ebpf/internal"
 )
 
 func TestSizeof(t *testing.T) {

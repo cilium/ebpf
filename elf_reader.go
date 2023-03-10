@@ -287,7 +287,6 @@ func (ec *elfCode) loadRelocations(relSections map[elf.SectionIndex]*elf.Section
 //
 // The resulting map is indexed by function name.
 func (ec *elfCode) loadProgramSections() (map[string]*ProgramSpec, error) {
-
 	progs := make(map[string]*ProgramSpec)
 
 	// Generate a ProgramSpec for each function found in each program section.

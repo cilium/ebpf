@@ -5,8 +5,9 @@ import (
 	"syscall"
 	"testing"
 
-	"github.com/cilium/ebpf/internal/unix"
 	qt "github.com/frankban/quicktest"
+
+	"github.com/cilium/ebpf/internal/unix"
 )
 
 func init() {

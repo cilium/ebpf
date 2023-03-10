@@ -3,8 +3,9 @@ package main
 import (
 	"testing"
 
-	"github.com/cilium/ebpf/btf"
 	qt "github.com/frankban/quicktest"
+
+	"github.com/cilium/ebpf/btf"
 )
 
 func TestOrderTypes(t *testing.T) {

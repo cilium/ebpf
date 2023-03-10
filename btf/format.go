@@ -251,7 +251,6 @@ func (gf *GoFormatter) writeStructField(m Member, depth int) error {
 		union, ok := m.Type.(*Union)
 		if !ok {
 			return fmt.Errorf("anonymous fields are not supported")
-
 		}
 
 		if len(union.Members) == 0 {

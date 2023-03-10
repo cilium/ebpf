@@ -84,15 +84,17 @@ const (
 	TRACEFS_MAGIC             = linux.TRACEFS_MAGIC
 )
 
-type Statfs_t = linux.Statfs_t
-type Stat_t = linux.Stat_t
-type Rlimit = linux.Rlimit
-type Signal = linux.Signal
-type Sigset_t = linux.Sigset_t
-type PerfEventMmapPage = linux.PerfEventMmapPage
-type EpollEvent = linux.EpollEvent
-type PerfEventAttr = linux.PerfEventAttr
-type Utsname = linux.Utsname
+type (
+	Statfs_t          = linux.Statfs_t
+	Stat_t            = linux.Stat_t
+	Rlimit            = linux.Rlimit
+	Signal            = linux.Signal
+	Sigset_t          = linux.Sigset_t
+	PerfEventMmapPage = linux.PerfEventMmapPage
+	EpollEvent        = linux.EpollEvent
+	PerfEventAttr     = linux.PerfEventAttr
+	Utsname           = linux.Utsname
+)
 
 func Syscall(trap, a1, a2, a3 uintptr) (r1, r2 uintptr, err syscall.Errno) {
 	return linux.Syscall(trap, a1, a2, a3)

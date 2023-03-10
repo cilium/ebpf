@@ -235,8 +235,10 @@ func CORERelocate(relos []*CORERelocation, target *Spec, bo binary.ByteOrder) ([
 	return result, nil
 }
 
-var errAmbiguousRelocation = errors.New("ambiguous relocation")
-var errImpossibleRelocation = errors.New("impossible relocation")
+var (
+	errAmbiguousRelocation  = errors.New("ambiguous relocation")
+	errImpossibleRelocation = errors.New("impossible relocation")
+)
 
 // coreCalculateFixups finds the target type that best matches all relocations.
 //

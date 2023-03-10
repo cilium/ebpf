@@ -12,9 +12,7 @@ import (
 	"github.com/cilium/ebpf/internal/unix"
 )
 
-var (
-	errAuxvNoVDSO = errors.New("no vdso address found in auxv")
-)
+var errAuxvNoVDSO = errors.New("no vdso address found in auxv")
 
 // vdsoVersion returns the LINUX_VERSION_CODE embedded in the vDSO library
 // linked into the current process image.

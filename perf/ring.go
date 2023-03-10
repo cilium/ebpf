@@ -60,7 +60,7 @@ func newPerfEventRing(cpu, perCPUBuffer, watermark int) (*perfEventRing, error) 
 	return ring, nil
 }
 
-// mmapBufferSize returns a valid mmap buffer size for use with perf_event_open (1+2^n pages)
+// perfBufferSize returns a valid mmap buffer size for use with perf_event_open (1+2^n pages)
 func perfBufferSize(perCPUBuffer int) int {
 	pageSize := os.Getpagesize()
 

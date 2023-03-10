@@ -399,7 +399,7 @@ func (fi *funcInfo) marshal(w *bytes.Buffer, spec *Spec) error {
 	return err
 }
 
-// parseLineInfos parses a func_info sub-section within .BTF.ext ito a map of
+// parseFuncInfos parses a func_info sub-section within .BTF.ext ito a map of
 // func infos indexed by section name.
 func parseFuncInfos(r io.Reader, bo binary.ByteOrder, strings *stringTable) (map[string][]bpfFuncInfo, error) {
 	recordSize, err := parseExtInfoRecordSize(r, bo)

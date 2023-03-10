@@ -207,7 +207,7 @@ func newHandleInfoFromFD(fd *sys.FD) (*HandleInfo, error) {
 	}, nil
 }
 
-// IsModule returns true if the BTF is for the kernel itself.
+// IsVmlinux returns true if the BTF is for the kernel itself.
 func (i *HandleInfo) IsVmlinux() bool {
 	return i.IsKernel && i.Name == "vmlinux"
 }

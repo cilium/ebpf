@@ -42,8 +42,8 @@ func TestFeatureTest(t *testing.T) {
 		t.Fatal("Unexpected positive result")
 	}
 
-	fte, ok := err.(*UnsupportedFeatureError)
-	if !ok {
+	var fte *UnsupportedFeatureError
+	if !errors.As(err, &fte) {
 		t.Fatal("Result is not a *UnsupportedFeatureError")
 	}
 
@@ -56,7 +56,7 @@ func TestFeatureTest(t *testing.T) {
 	}
 
 	err2 := fn()
-	if err != err2 {
+	if !errors.Is(err, err2) {
 		t.Error("Didn't cache an error wrapping ErrNotSupported")
 	}
 
@@ -65,7 +65,7 @@ func TestFeatureTest(t *testing.T) {
 	})
 
 	err1, err2 := fn(), fn()
-	if err1 == err2 {
+	if errors.Is(err1, err2) {
 		t.Error("Cached result of unsuccessful execution")
 	}
 }

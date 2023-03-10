@@ -121,7 +121,6 @@ func (ms *MapSpec) clampPerfEventArraySize() error {
 
 // dataSection returns the contents and BTF Datasec descriptor of the spec.
 func (ms *MapSpec) dataSection() ([]byte, *btf.Datasec, error) {
-
 	if ms.Value == nil {
 		return nil, nil, errMapNoBTFValue
 	}
@@ -1016,7 +1015,7 @@ func (m *Map) BatchDelete(keys interface{}, opts *BatchOptions) (int, error) {
 	count := keysValue.Len()
 	keyPtr, err := marshalPtr(keys, count*int(m.keySize))
 	if err != nil {
-		return 0, fmt.Errorf("cannot marshal keys: %v", err)
+		return 0, fmt.Errorf("cannot marshal keys: %w", err)
 	}
 
 	attr := sys.MapDeleteBatchAttr{

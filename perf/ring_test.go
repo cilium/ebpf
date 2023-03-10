@@ -2,6 +2,7 @@ package perf
 
 import (
 	"bytes"
+	"errors"
 	"io"
 	"os"
 	"testing"
@@ -14,7 +15,7 @@ func TestRingBufferReader(t *testing.T) {
 
 	ring := makeRing(2, 0)
 	n, err := ring.Read(buf)
-	if err != io.EOF {
+	if !errors.Is(err, io.EOF) {
 		t.Error("Expected io.EOF, got", err)
 	}
 	if n != 2 {
@@ -24,7 +25,7 @@ func TestRingBufferReader(t *testing.T) {
 		t.Error("Expected [0, 1], got", buf)
 	}
 	n, err = ring.Read(buf)
-	if err != io.EOF {
+	if !errors.Is(err, io.EOF) {
 		t.Error("Expected io.EOF, got", err)
 	}
 	if n != 0 {

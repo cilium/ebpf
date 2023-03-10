@@ -3,10 +3,10 @@ package rlimit
 import (
 	"testing"
 
+	qt "github.com/frankban/quicktest"
+
 	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/unix"
-
-	qt "github.com/frankban/quicktest"
 )
 
 func TestRemoveMemlock(t *testing.T) {

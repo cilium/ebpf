@@ -108,7 +108,7 @@ func (fd *FD) Dup() (*FD, error) {
 	// as "no argument provided".
 	dup, err := unix.FcntlInt(uintptr(fd.raw), unix.F_DUPFD_CLOEXEC, 1)
 	if err != nil {
-		return nil, fmt.Errorf("can't dup fd: %v", err)
+		return nil, fmt.Errorf("can't dup fd: %w", err)
 	}
 
 	return newFD(dup), nil

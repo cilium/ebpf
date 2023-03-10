@@ -66,7 +66,7 @@ func (pt probeType) EventsFile() (*os.File, error) {
 		return nil, err
 	}
 
-	return os.OpenFile(path, os.O_APPEND|os.O_WRONLY, 0666)
+	return os.OpenFile(path, os.O_APPEND|os.O_WRONLY, 0o666)
 }
 
 func (pt probeType) PerfEventType(ret bool) perfEventType {
@@ -511,7 +511,7 @@ func createTraceFSProbeEvent(typ probeType, args probeArgs) (uint64, error) {
 		// See https://elixir.bootlin.com/linux/v4.10/source/kernel/trace/trace_kprobe.c#L712
 		event := fmt.Sprintf("kprobes/r_%s_%d", args.symbol, args.offset)
 		if err := removeTraceFSProbeEvent(typ, event); err != nil {
-			return 0, fmt.Errorf("failed to remove spurious maxactive event: %s", err)
+			return 0, fmt.Errorf("failed to remove spurious maxactive event: %w", err)
 		}
 		return 0, fmt.Errorf("create trace event with non-default maxactive: %w", ErrNotSupported)
 	}

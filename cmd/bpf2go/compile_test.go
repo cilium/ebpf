@@ -158,7 +158,7 @@ func mustWriteTempFile(t *testing.T, name, contents string) string {
 	t.Cleanup(func() { os.RemoveAll(tmp) })
 
 	tmpFile := filepath.Join(tmp, name)
-	if err := os.WriteFile(tmpFile, []byte(contents), 0660); err != nil {
+	if err := os.WriteFile(tmpFile, []byte(contents), 0o660); err != nil {
 		t.Fatal(err)
 	}
 

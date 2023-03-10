@@ -6,12 +6,13 @@ import (
 	"reflect"
 	"testing"
 
+	qt "github.com/frankban/quicktest"
+
 	"github.com/cilium/ebpf/asm"
 	"github.com/cilium/ebpf/btf"
 	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/testutils"
 	"github.com/cilium/ebpf/internal/testutils/fdtrace"
-	qt "github.com/frankban/quicktest"
 )
 
 func TestMain(m *testing.M) {
@@ -265,6 +266,7 @@ func TestCollectionSpecMapReplacements(t *testing.T) {
 		t.Fatalf("failed to update replaced map: %s", err)
 	}
 }
+
 func TestCollectionSpecMapReplacements_NonExistingMap(t *testing.T) {
 	cs := &CollectionSpec{
 		Maps: map[string]*MapSpec{
@@ -556,7 +558,6 @@ func TestAssignValues(t *testing.T) {
 			}
 		})
 	}
-
 }
 
 func TestIncompleteLoadAndAssign(t *testing.T) {

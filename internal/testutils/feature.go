@@ -38,7 +38,7 @@ func CheckFeatureMatrix[K comparable](t *testing.T, fm internal.FeatureMatrix[K]
 func SkipIfNotSupported(tb testing.TB, err error) {
 	tb.Helper()
 
-	if err == internal.ErrNotSupported {
+	if errors.Is(err, internal.ErrNotSupported) {
 		tb.Fatal("Unwrapped ErrNotSupported")
 	}
 

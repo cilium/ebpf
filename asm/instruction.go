@@ -21,9 +21,11 @@ const InstructionSize = 8
 // RawInstructionOffset is an offset in units of raw BPF instructions.
 type RawInstructionOffset uint64
 
-var ErrUnreferencedSymbol = errors.New("unreferenced symbol")
-var ErrUnsatisfiedMapReference = errors.New("unsatisfied map reference")
-var ErrUnsatisfiedProgramReference = errors.New("unsatisfied program reference")
+var (
+	ErrUnreferencedSymbol          = errors.New("unreferenced symbol")
+	ErrUnsatisfiedMapReference     = errors.New("unsatisfied map reference")
+	ErrUnsatisfiedProgramReference = errors.New("unsatisfied program reference")
+)
 
 // Bytes returns the offset of an instruction in bytes.
 func (rio RawInstructionOffset) Bytes() uint64 {
@@ -103,7 +105,7 @@ func (ins Instruction) Marshal(w io.Writer, bo binary.ByteOrder) (uint64, error)
 
 	regs, err := newBPFRegisters(ins.Dst, ins.Src, bo)
 	if err != nil {
-		return 0, fmt.Errorf("can't marshal registers: %s", err)
+		return 0, fmt.Errorf("can't marshal registers: %w", err)
 	}
 
 	data := make([]byte, InstructionSize)

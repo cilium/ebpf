@@ -129,7 +129,7 @@ func marshalTypes(w *bytes.Buffer, types []Type, stb *stringTableBuilder, opts *
 
 	err := binary.Write(sliceWriter(buf[:btfHeaderLen]), e.byteOrder, header)
 	if err != nil {
-		return fmt.Errorf("write header: %v", err)
+		return fmt.Errorf("write header: %w", err)
 	}
 
 	return nil

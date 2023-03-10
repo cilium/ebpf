@@ -235,8 +235,10 @@ func CORERelocate(relos []*CORERelocation, target *Spec, bo binary.ByteOrder) ([
 	return result, nil
 }
 
-var errAmbiguousRelocation = errors.New("ambiguous relocation")
-var errImpossibleRelocation = errors.New("impossible relocation")
+var (
+	errAmbiguousRelocation  = errors.New("ambiguous relocation")
+	errImpossibleRelocation = errors.New("impossible relocation")
+)
 
 // coreCalculateFixups finds the target type that best matches all relocations.
 //
@@ -503,7 +505,7 @@ func parseCOREAccessor(accessor string) (coreAccessor, error) {
 		// 31 bits to avoid overflowing int on 32 bit platforms.
 		index, err := strconv.ParseUint(part, 10, 31)
 		if err != nil {
-			return nil, fmt.Errorf("accessor index %q: %s", part, err)
+			return nil, fmt.Errorf("accessor index %q: %w", part, err)
 		}
 
 		result = append(result, int(index))
@@ -649,7 +651,7 @@ func coreFindField(localT Type, localAcc coreAccessor, targetT Type) (coreField,
 			if localMember.Name == "" {
 				_, ok := localMember.Type.(composite)
 				if !ok {
-					return coreField{}, coreField{}, fmt.Errorf("unnamed field with type %s: %s", localMember.Type, ErrNotSupported)
+					return coreField{}, coreField{}, fmt.Errorf("unnamed field with type %s: %w", localMember.Type, ErrNotSupported)
 				}
 
 				// This is an anonymous struct or union, ignore it.

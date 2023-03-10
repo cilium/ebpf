@@ -1,6 +1,7 @@
 package epoll
 
 import (
+	"errors"
 	"fmt"
 	"math"
 	"os"
@@ -28,7 +29,7 @@ type Poller struct {
 func New() (*Poller, error) {
 	epollFd, err := unix.EpollCreate1(unix.EPOLL_CLOEXEC)
 	if err != nil {
-		return nil, fmt.Errorf("create epoll fd: %v", err)
+		return nil, fmt.Errorf("create epoll fd: %w", err)
 	}
 
 	p := &Poller{epollFd: epollFd}
@@ -110,7 +111,7 @@ func (p *Poller) Add(fd int, id int) error {
 	}
 
 	if err := unix.EpollCtl(p.epollFd, unix.EPOLL_CTL_ADD, fd, &event); err != nil {
-		return fmt.Errorf("add fd to epoll: %v", err)
+		return fmt.Errorf("add fd to epoll: %w", err)
 	}
 
 	return nil
@@ -143,7 +144,8 @@ func (p *Poller) Wait(events []unix.EpollEvent, deadline time.Time) (int, error)
 		}
 
 		n, err := unix.EpollWait(p.epollFd, events, timeout)
-		if temp, ok := err.(temporaryError); ok && temp.Temporary() {
+		var temp temporaryError
+		if errors.As(err, &temp) && temp.Temporary() {
 			// Retry the syscall if we were interrupted, see https://github.com/golang/go/issues/20400
 			continue
 		}

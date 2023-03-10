@@ -31,7 +31,7 @@ func QueryPrograms(opts QueryOptions) ([]ebpf.ProgramID, error) {
 
 	f, err := os.Open(opts.Path)
 	if err != nil {
-		return nil, fmt.Errorf("can't open file: %s", err)
+		return nil, fmt.Errorf("can't open file: %w", err)
 	}
 	defer f.Close()
 
@@ -59,5 +59,4 @@ func QueryPrograms(opts QueryOptions) ([]ebpf.ProgramID, error) {
 	}
 
 	return progIds, nil
-
 }

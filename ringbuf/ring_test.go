@@ -2,6 +2,7 @@ package ringbuf
 
 import (
 	"bytes"
+	"errors"
 	"io"
 	"testing"
 )
@@ -11,7 +12,7 @@ func TestRingBufferReader(t *testing.T) {
 
 	ring := makeRing(2, 0)
 	n, err := ring.Read(buf)
-	if err != io.EOF {
+	if !errors.Is(err, io.EOF) {
 		t.Error("Expected io.EOF, got", err)
 	}
 	if n != 2 {
@@ -21,7 +22,7 @@ func TestRingBufferReader(t *testing.T) {
 		t.Error("Expected [0, 1], got", buf)
 	}
 	n, err = ring.Read(buf)
-	if err != io.EOF {
+	if !errors.Is(err, io.EOF) {
 		t.Error("Expected io.EOF, got", err)
 	}
 	if n != 0 {
@@ -42,7 +43,7 @@ func TestRingBufferReader(t *testing.T) {
 		t.Error("Expected [0, 1, 2, 3], got", buf)
 	}
 	n, err = ring.Read(buf)
-	if err != io.EOF {
+	if !errors.Is(err, io.EOF) {
 		t.Error("Expected io.EOF, got", err)
 	}
 	if n != 0 {

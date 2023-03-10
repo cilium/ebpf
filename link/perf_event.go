@@ -41,9 +41,7 @@ import (
 //   events can be created from a single trace event. Closing a perf event
 //   stops any further invocations of the attached eBPF program.
 
-var (
-	errInvalidInput = errors.New("invalid input")
-)
+var errInvalidInput = errors.New("invalid input")
 
 const (
 	perfAllThreads = -1
@@ -225,7 +223,7 @@ func attachPerfEventIoctl(pe *perfEvent, prog *ebpf.Program) (*perfEventIoctl, e
 
 	// PERF_EVENT_IOC_ENABLE and _DISABLE ignore their given values.
 	if err := unix.IoctlSetInt(pe.fd.Int(), unix.PERF_EVENT_IOC_ENABLE, 0); err != nil {
-		return nil, fmt.Errorf("enable perf event: %s", err)
+		return nil, fmt.Errorf("enable perf event: %w", err)
 	}
 
 	pi := &perfEventIoctl{pe}
@@ -246,7 +244,7 @@ func attachPerfEventLink(pe *perfEvent, prog *ebpf.Program) (*perfEventLink, err
 		BpfCookie:  pe.cookie,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("cannot create bpf perf link: %v", err)
+		return nil, fmt.Errorf("cannot create bpf perf link: %w", err)
 	}
 
 	pl := &perfEventLink{RawLink{fd: fd}, pe}

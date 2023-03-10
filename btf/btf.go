@@ -153,7 +153,7 @@ func LoadSpecAndExtInfosFromReader(rd io.ReaderAt) (*Spec, *ExtInfos, error) {
 func symbolOffsets(file *internal.SafeELFFile) (map[symbol]uint32, error) {
 	symbols, err := file.Symbols()
 	if err != nil {
-		return nil, fmt.Errorf("can't read symbols: %v", err)
+		return nil, fmt.Errorf("can't read symbols: %w", err)
 	}
 
 	offsets := make(map[symbol]uint32)
@@ -229,7 +229,8 @@ func loadSpecFromELF(file *internal.SafeELFFile) (*Spec, error) {
 }
 
 func loadRawSpec(btf io.ReaderAt, bo binary.ByteOrder,
-	baseTypes types, baseStrings *stringTable) (*Spec, error) {
+	baseTypes types, baseStrings *stringTable,
+) (*Spec, error) {
 	rawTypes, rawStrings, err := parseBTF(btf, bo, baseStrings)
 	if err != nil {
 		return nil, err
@@ -383,7 +384,7 @@ func findVMLinux() (*internal.SafeELFFile, error) {
 func parseBTFHeader(r io.Reader, bo binary.ByteOrder) (*btfHeader, error) {
 	var header btfHeader
 	if err := binary.Read(r, bo, &header); err != nil {
-		return nil, fmt.Errorf("can't read header: %v", err)
+		return nil, fmt.Errorf("can't read header: %w", err)
 	}
 
 	if header.Magic != btfMagic {
@@ -404,7 +405,7 @@ func parseBTFHeader(r io.Reader, bo binary.ByteOrder) (*btfHeader, error) {
 	}
 
 	if _, err := io.CopyN(internal.DiscardZeroes{}, r, remainder); err != nil {
-		return nil, fmt.Errorf("header padding: %v", err)
+		return nil, fmt.Errorf("header padding: %w", err)
 	}
 
 	return &header, nil
@@ -431,7 +432,7 @@ func parseBTF(btf io.ReaderAt, bo binary.ByteOrder, baseStrings *stringTable) ([
 	buf := internal.NewBufferedSectionReader(btf, 0, math.MaxInt64)
 	header, err := parseBTFHeader(buf, bo)
 	if err != nil {
-		return nil, nil, fmt.Errorf("parsing .BTF header: %v", err)
+		return nil, nil, fmt.Errorf("parsing .BTF header: %w", err)
 	}
 
 	rawStrings, err := readStringTable(io.NewSectionReader(btf, header.stringStart(), int64(header.StringLen)),

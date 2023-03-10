@@ -928,7 +928,7 @@ func inflateRawTypes(rawTypes []rawType, baseTypes types, rawStrings *stringTabl
 			for i, btfVal := range rawvals {
 				name, err := rawStrings.Lookup(btfVal.NameOff)
 				if err != nil {
-					return nil, fmt.Errorf("get name for enum value %d: %s", i, err)
+					return nil, fmt.Errorf("get name for enum value %d: %w", i, err)
 				}
 				value := uint64(btfVal.Val)
 				if signed {
@@ -975,7 +975,7 @@ func inflateRawTypes(rawTypes []rawType, baseTypes types, rawStrings *stringTabl
 			for i, param := range rawparams {
 				name, err := rawStrings.Lookup(param.NameOff)
 				if err != nil {
-					return nil, fmt.Errorf("get name for func proto parameter %d: %s", i, err)
+					return nil, fmt.Errorf("get name for func proto parameter %d: %w", i, err)
 				}
 				params = append(params, FuncParam{
 					Name: name,
@@ -1035,7 +1035,7 @@ func inflateRawTypes(rawTypes []rawType, baseTypes types, rawStrings *stringTabl
 			for i, btfVal := range rawvals {
 				name, err := rawStrings.Lookup(btfVal.NameOff)
 				if err != nil {
-					return nil, fmt.Errorf("get name for enum64 value %d: %s", i, err)
+					return nil, fmt.Errorf("get name for enum64 value %d: %w", i, err)
 				}
 				value := (uint64(btfVal.ValHi32) << 32) | uint64(btfVal.ValLo32)
 				vals = append(vals, EnumValue{name, value})

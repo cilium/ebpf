@@ -371,8 +371,8 @@ func TestProgramVerifierOutputOnError(t *testing.T) {
 		t.Fatal("Expected program to be invalid")
 	}
 
-	ve, ok := err.(*VerifierError)
-	if !ok {
+	var ve *VerifierError
+	if !errors.As(err, &ve) {
 		t.Fatal("NewProgram does return an unwrapped VerifierError")
 	}
 

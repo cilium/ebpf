@@ -9,9 +9,10 @@ import (
 	"os"
 	"testing"
 
+	qt "github.com/frankban/quicktest"
+
 	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/testutils"
-	qt "github.com/frankban/quicktest"
 )
 
 func vmlinuxSpec(tb testing.TB) *Spec {

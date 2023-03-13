@@ -82,6 +82,7 @@ const (
 	EM_BPF                    = linux.EM_BPF
 	BPF_FS_MAGIC              = linux.BPF_FS_MAGIC
 	TRACEFS_MAGIC             = linux.TRACEFS_MAGIC
+	DEBUGFS_MAGIC             = linux.DEBUGFS_MAGIC
 )
 
 type Statfs_t = linux.Statfs_t

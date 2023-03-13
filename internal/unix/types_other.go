@@ -86,6 +86,7 @@ const (
 	EM_BPF
 	BPF_FS_MAGIC
 	TRACEFS_MAGIC
+	DEBUGFS_MAGIC
 )
 
 type Statfs_t struct {

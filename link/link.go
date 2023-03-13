@@ -46,6 +46,18 @@ type Link interface {
 	isLink()
 }
 
+// NewLinkFromFD creates a link from a raw fd.
+//
+// You should not use fd after calling this function.
+func NewLinkFromFD(fd int) (Link, error) {
+	sysFD, err := sys.NewFD(fd)
+	if err != nil {
+		return nil, err
+	}
+
+	return wrapRawLink(&RawLink{fd: sysFD})
+}
+
 // LoadPinnedLink loads a link that was persisted into a bpffs.
 func LoadPinnedLink(fileName string, opts *ebpf.LoadPinOptions) (Link, error) {
 	raw, err := loadPinnedRawLink(fileName, opts)

@@ -71,10 +71,15 @@ func LoadPinnedLink(fileName string, opts *ebpf.LoadPinOptions) (Link, error) {
 // wrap a RawLink in a more specific type if possible.
 //
 // The function takes ownership of raw and closes it on error.
-func wrapRawLink(raw *RawLink) (Link, error) {
+func wrapRawLink(raw *RawLink) (_ Link, err error) {
+	defer func() {
+		if err != nil {
+			raw.Close()
+		}
+	}()
+
 	info, err := raw.Info()
 	if err != nil {
-		raw.Close()
 		return nil, err
 	}
 
@@ -89,6 +94,10 @@ func wrapRawLink(raw *RawLink) (Link, error) {
 		return &Iter{*raw}, nil
 	case NetNsType:
 		return &NetNsLink{*raw}, nil
+	case KprobeMultiType:
+		return &kprobeMultiLink{*raw}, nil
+	case PerfEventType:
+		return nil, fmt.Errorf("recovering perf event fd: %w", ErrNotSupported)
 	default:
 		return raw, nil
 	}

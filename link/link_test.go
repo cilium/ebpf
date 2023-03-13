@@ -207,6 +207,36 @@ func testLink(t *testing.T, link Link, prog *ebpf.Program) {
 		}
 	})
 
+	type FDer interface {
+		FD() int
+	}
+
+	t.Run("from fd", func(t *testing.T) {
+		fder, ok := link.(FDer)
+		if !ok {
+			t.Skip("Link doesn't allow retrieving FD")
+		}
+
+		// We need to dup the FD since NewLinkFromFD takes
+		// ownership.
+		dupFD, err := unix.FcntlInt(uintptr(fder.FD()), unix.F_DUPFD_CLOEXEC, 1)
+		if err != nil {
+			t.Fatal("Can't dup link FD:", err)
+		}
+		defer unix.Close(dupFD)
+
+		newLink, err := NewLinkFromFD(dupFD)
+		testutils.SkipIfNotSupported(t, err)
+		if err != nil {
+			t.Fatal("Can't create new link from dup link FD:", err)
+		}
+		defer newLink.Close()
+
+		if reflect.TypeOf(newLink) != reflect.TypeOf(link) {
+			t.Fatalf("Expected type %T, got %T", link, newLink)
+		}
+	})
+
 	if err := link.Close(); err != nil {
 		t.Fatalf("%T.Close returns an error: %s", link, err)
 	}

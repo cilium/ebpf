@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"syscall"
 	"testing"
 
 	"github.com/cilium/ebpf"
@@ -55,6 +56,54 @@ func TestRawLink(t *testing.T) {
 	}
 
 	testLink(t, &linkCgroup{*link}, prog)
+}
+
+func TestNewLinkFromFD(t *testing.T) {
+	cgroup, prog := mustCgroupFixtures(t)
+
+	link, err := AttachRawLink(RawLinkOptions{
+		Target:  int(cgroup.Fd()),
+		Program: prog,
+		Attach:  ebpf.AttachCGroupInetEgress,
+	})
+	testutils.SkipIfNotSupported(t, err)
+	if err != nil {
+		t.Fatal("Can't create raw link:", err)
+	}
+	t.Cleanup(func() {
+		_ = link.Close()
+	})
+
+	dupFD, err := unix.FcntlInt(uintptr(link.FD()), unix.F_DUPFD_CLOEXEC, 1)
+	if err != nil {
+		t.Fatal("Can't dup link FD:", err)
+	}
+
+	newLink, err := NewLinkFromFD(dupFD)
+	if err != nil {
+		_ = syscall.Close(dupFD)
+		t.Fatal("Can't new link from dup link FD:", err)
+	}
+	t.Cleanup(func() {
+		_ = newLink.Close()
+	})
+
+	// Note: Creating a link with a duplicate file descriptor would not break
+	// the original link.
+
+	oldInfo, err := link.Info()
+	if err != nil {
+		t.Fatal("Can't get original link info:", err)
+	}
+
+	newInfo, err := newLink.Info()
+	if err != nil {
+		t.Fatal("Can't get new link info:", err)
+	}
+
+	if oldInfo.ID != newInfo.ID {
+		t.Fatal("New link ID doesn't match original link ID")
+	}
 }
 
 func TestUnpinRawLink(t *testing.T) {

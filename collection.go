@@ -46,7 +46,12 @@ type CollectionSpec struct {
 
 	// ExtraKConfigs specifies extra kconfig constants to load, in
 	// addition to `LINUX_KERNEL_VERSION`.
-	ExtraKConfigs map[string]uint32
+	ExtraKConfigs map[string]KConfigEntry
+}
+
+type KConfigEntry struct {
+	Value    uint64
+	ByteSize int
 }
 
 // Copy returns a recursive copy of the spec.
@@ -588,7 +593,7 @@ func (cl *collectionLoader) populateMaps() error {
 
 // resolveKconfig resolves all variables declared in .kconfig and populates
 // m.Contents. Does nothing if the given m.Contents is non-empty.
-func resolveKconfig(m *MapSpec, extraKConfigs map[string]uint32) error {
+func resolveKconfig(m *MapSpec, extraKConfigs map[string]KConfigEntry) error {
 	// Allow caller to manually populate .kconfig contents for testing purposes.
 	if len(m.Contents) != 0 {
 		return nil
@@ -616,11 +621,22 @@ func resolveKconfig(m *MapSpec, extraKConfigs map[string]uint32) error {
 			internal.NativeEndian.PutUint32(data[vsi.Offset:], kv.Kernel())
 
 		default:
-			if value, ok := extraKConfigs[v.TypeName()]; ok {
-				if integer, ok := v.Type.(*btf.Int); !ok || integer.Size != 4 {
-					return fmt.Errorf("variable %s must be a 32 bits integer, got %s", n, v.Type)
+			if entry, ok := extraKConfigs[v.TypeName()]; ok {
+				if integer, ok := v.Type.(*btf.Int); !ok || integer.Size != uint32(entry.ByteSize) {
+					return fmt.Errorf("variable %s must be a %d bits integer, got %s", n, 8*entry.ByteSize, v.Type)
 				}
-				internal.NativeEndian.PutUint32(data[vsi.Offset:], value)
+				switch entry.ByteSize {
+				case 4:
+					internal.NativeEndian.PutUint64(data[vsi.Offset:], entry.Value)
+				case 3:
+					internal.NativeEndian.PutUint32(data[vsi.Offset:], uint32(entry.Value))
+				case 2:
+					internal.NativeEndian.PutUint16(data[vsi.Offset:], uint16(entry.Value))
+				case 1:
+					data[vsi.Offset] = uint8(entry.Value)
+				default:
+					return fmt.Errorf("variable %s must be a 8, 16, 32 or 64 bits integer, got %d", 8*entry.ByteSize)
+				}
 			} else {
 				return fmt.Errorf("unsupported kconfig: %s", n)
 			}

@@ -152,7 +152,12 @@ func LoadCollectionSpecFromReader(rd io.ReaderAt) (*CollectionSpec, error) {
 		return nil, fmt.Errorf("load programs: %w", err)
 	}
 
-	return &CollectionSpec{ec.maps, progs, btfSpec, ec.ByteOrder}, nil
+	return &CollectionSpec{
+		Maps:      ec.maps,
+		Programs:  progs,
+		Types:     btfSpec,
+		ByteOrder: ec.ByteOrder,
+	}, nil
 }
 
 func loadLicense(sec *elf.Section) (string, error) {

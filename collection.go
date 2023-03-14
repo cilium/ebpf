@@ -43,6 +43,10 @@ type CollectionSpec struct {
 	// ByteOrder specifies whether the ELF was compiled for
 	// big-endian or little-endian architectures.
 	ByteOrder binary.ByteOrder
+
+	// ExtraKConfigs specifies extra kconfig constants to load, in
+	// addition to `LINUX_KERNEL_VERSION`.
+	ExtraKConfigs map[string]uint32
 }
 
 // Copy returns a recursive copy of the spec.
@@ -534,7 +538,7 @@ func (cl *collectionLoader) populateMaps() error {
 		}
 
 		if mapName == kconfigMap {
-			if err := resolveKconfig(mapSpec); err != nil {
+			if err := resolveKconfig(mapSpec, cl.coll.ExtraKConfigs); err != nil {
 				return fmt.Errorf("resolving kconfig: %w", err)
 			}
 		}
@@ -584,7 +588,7 @@ func (cl *collectionLoader) populateMaps() error {
 
 // resolveKconfig resolves all variables declared in .kconfig and populates
 // m.Contents. Does nothing if the given m.Contents is non-empty.
-func resolveKconfig(m *MapSpec) error {
+func resolveKconfig(m *MapSpec, extraKConfigs map[string]uint32) error {
 	// Allow caller to manually populate .kconfig contents for testing purposes.
 	if len(m.Contents) != 0 {
 		return nil
@@ -612,7 +616,14 @@ func resolveKconfig(m *MapSpec) error {
 			internal.NativeEndian.PutUint32(data[vsi.Offset:], kv.Kernel())
 
 		default:
-			return fmt.Errorf("unsupported kconfig: %s", n)
+			if value, ok := extraKConfigs[v.TypeName()]; ok {
+				if integer, ok := v.Type.(*btf.Int); !ok || integer.Size != 4 {
+					return fmt.Errorf("variable %s must be a 32 bits integer, got %s", n, v.Type)
+				}
+				internal.NativeEndian.PutUint32(data[vsi.Offset:], value)
+			} else {
+				return fmt.Errorf("unsupported kconfig: %s", n)
+			}
 		}
 	}
 

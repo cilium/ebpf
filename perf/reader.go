@@ -166,7 +166,7 @@ type ReaderOptions struct {
 	// The number of written bytes required in any per CPU buffer before
 	// Read will process data. Must be smaller than PerCPUBuffer.
 	// The default is to start processing as soon as data is available.
-	Watermark     int
+	Watermark int
 	// This perf ring buffer is overwritable, once full the oldest event will be
 	// overwritten by newest.
 	Overwritable bool
@@ -318,13 +318,18 @@ func (pr *Reader) Read() (Record, error) {
 	return r, pr.ReadInto(&r)
 }
 
+var errMustBePaused = fmt.Errorf("perf ringbuffer: must have been paused before reading overwritable buffer")
+
 // ReadInto is like Read except that it allows reusing Record and associated buffers.
 func (pr *Reader) ReadInto(rec *Record) error {
 	pr.mu.Lock()
 	defer pr.mu.Unlock()
 
+	pr.pauseMu.Lock()
+	defer pr.pauseMu.Unlock()
+
 	if pr.overwritable && !pr.paused {
-		return fmt.Errorf("perf ringbuffer: must have been paused before reading overwritable buffer")
+		return errMustBePaused
 	}
 
 	if pr.rings == nil {
@@ -333,9 +338,18 @@ func (pr *Reader) ReadInto(rec *Record) error {
 
 	for {
 		if len(pr.epollRings) == 0 {
+			// NB: The deferred pauseMu.Unlock will panic if Wait panics, which
+			// might obscure the original panic.
+			pr.pauseMu.Unlock()
 			nEvents, err := pr.poller.Wait(pr.epollEvents, pr.deadline)
+			pr.pauseMu.Lock()
 			if err != nil {
 				return err
+			}
+
+			// Re-validate pr.paused since we dropped pauseMu.
+			if pr.overwritable && !pr.paused {
+				return errMustBePaused
 			}
 
 			for _, event := range pr.epollEvents[:nEvents] {

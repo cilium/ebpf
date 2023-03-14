@@ -584,8 +584,17 @@ func TestKconfig(t *testing.T) {
 			return
 		}
 
+		const extraConfigValue = 42
+		spec.ExtraKConfigs = map[string]KConfigEntry{
+			"LINUX_EXTRA_CONFIG": KConfigEntry{
+				Value:    extraConfigValue,
+				ByteSize: 4,
+			},
+		}
+
 		var obj struct {
-			Main *Program `ebpf:"kconfig"`
+			Main  *Program `ebpf:"kconfig"`
+			Extra *Program `ebpf:"extra"`
 		}
 
 		err = spec.LoadAndAssign(&obj, nil)
@@ -594,6 +603,7 @@ func TestKconfig(t *testing.T) {
 			t.Fatal(err)
 		}
 		defer obj.Main.Close()
+		defer obj.Extra.Close()
 
 		ret, _, err := obj.Main.Test(internal.EmptyBPFContext)
 		testutils.SkipIfNotSupported(t, err)
@@ -609,6 +619,16 @@ func TestKconfig(t *testing.T) {
 		version := v.Kernel()
 		if ret != version {
 			t.Fatalf("Expected eBPF to return value %d, got %d", version, ret)
+		}
+
+		ret, _, err = obj.Extra.Test(internal.EmptyBPFContext)
+		testutils.SkipIfNotSupported(t, err)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if ret != extraConfigValue {
+			t.Fatalf("Expected eBPF to return value %d, got %d", extraConfigValue, ret)
 		}
 	})
 }

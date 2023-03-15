@@ -2,9 +2,10 @@ package btf
 
 import (
 	"fmt"
+	"testing"
+
 	"github.com/cilium/ebpf/internal/testutils"
 	qt "github.com/frankban/quicktest"
-	"testing"
 )
 
 func init() {

@@ -32,31 +32,22 @@ func AttachCgroup(opts CgroupOptions) (Link, error) {
 	if err != nil {
 		return nil, fmt.Errorf("can't open cgroup: %s", err)
 	}
-
-	clone, err := opts.Program.Clone()
-	if err != nil {
-		cgroup.Close()
-		return nil, err
-	}
+	defer cgroup.Close()
 
 	var cg Link
-	cg, err = newLinkCgroup(cgroup, opts.Attach, clone)
+	cg, err = newLinkCgroup(cgroup, opts.Attach, opts.Program)
 	if err == nil {
-		cgroup.Close()
-		clone.Close()
 		return cg, nil
 	}
 
 	// cgroup and clone are retained by progAttachCgroup.
 	if errors.Is(err, ErrNotSupported) {
-		cg, err = newProgAttachCgroup(cgroup, opts.Attach, clone, flagAllowMulti)
+		cg, err = newProgAttachCgroup(cgroup, opts.Attach, opts.Program, flagAllowMulti)
 	}
 	if errors.Is(err, ErrNotSupported) {
-		cg, err = newProgAttachCgroup(cgroup, opts.Attach, clone, flagAllowOverride)
+		cg, err = newProgAttachCgroup(cgroup, opts.Attach, opts.Program, flagAllowOverride)
 	}
 	if err != nil {
-		cgroup.Close()
-		clone.Close()
 		return nil, err
 	}
 
@@ -93,7 +84,17 @@ func newProgAttachCgroup(cgroup *os.File, attach ebpf.AttachType, prog *ebpf.Pro
 		return nil, fmt.Errorf("cgroup: %w", err)
 	}
 
-	return &progAttachCgroup{cgroup, prog, attach, flags}, nil
+	// Retain cgroup and program handles we own to support Update().
+	clone, err := prog.Clone()
+	if err != nil {
+		return nil, err
+	}
+	cgroup, err = os.Open(cgroup.Name())
+	if err != nil {
+		return nil, fmt.Errorf("can't reopen cgroup: %w", err)
+	}
+
+	return &progAttachCgroup{cgroup, clone, attach, flags}, nil
 }
 
 func (cg *progAttachCgroup) Close() error {

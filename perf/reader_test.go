@@ -9,7 +9,6 @@ import (
 	"syscall"
 	"testing"
 	"time"
-	"unsafe"
 
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/asm"
@@ -367,8 +366,8 @@ func readBuffer(t *testing.T, rd *Reader) []int32 {
 				t.Fatal(err)
 			}
 		}
-		value := *(*int32)(unsafe.Pointer(&record.RawSample[0]))
-		readSamples = append(readSamples, value)
+		value := internal.NativeEndian.Uint32(record.RawSample)
+		readSamples = append(readSamples, int32(value))
 	}
 
 	err = rd.Resume()

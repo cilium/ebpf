@@ -5,7 +5,6 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"io"
 	"os"
 	"syscall"
 	"testing"
@@ -356,11 +355,13 @@ func readBuffer(t *testing.T, rd *Reader) []int32 {
 		t.Fatal(err)
 	}
 
+	rd.SetDeadline(time.Now())
+
 	readSamples := make([]int32, 0)
 	for {
 		record, err := rd.Read()
 		if err != nil {
-			if errors.Is(err, io.EOF) {
+			if errors.Is(err, os.ErrDeadlineExceeded) {
 				break
 			} else {
 				t.Fatal(err)
@@ -528,7 +529,6 @@ func TestPerfReaderOverwritableOverWritten(t *testing.T) {
 			t.Fatalf("Expected value %d got %d", expected, value)
 		}
 	}
-
 
 }
 

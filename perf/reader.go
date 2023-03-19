@@ -292,7 +292,8 @@ func (pr *Reader) Close() error {
 
 // SetDeadline controls how long Read and ReadInto will block waiting for samples.
 //
-// Passing a zero time.Time will remove the deadline.
+// Passing a zero time.Time will remove the deadline. Passing a deadline in the
+// past will prevent the reader from blocking if there are no records to be read.
 func (pr *Reader) SetDeadline(t time.Time) {
 	pr.mu.Lock()
 	defer pr.mu.Unlock()
@@ -371,11 +372,6 @@ func (pr *Reader) ReadInto(rec *Record) error {
 			// We've emptied the current ring buffer, process
 			// the next one.
 			pr.epollRings = pr.epollRings[:len(pr.epollRings)-1]
-
-			if pr.overwritable && len(pr.epollRings) == 0 {
-				return io.EOF
-			}
-
 			continue
 		}
 

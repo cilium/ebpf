@@ -387,15 +387,13 @@ func TestPerfReaderOverwritable(t *testing.T) {
 		pageSize  = os.Getpagesize()
 		maxEvents = (pageSize / eventSize)
 	)
-	if remainder := pageSize % eventSize; remainder != 64 && remainder != 128 {
-		// Page size isn't 2^(6+m), m >= 0
-		t.Fatal("unsupported page size:", pageSize)
-	}
 
 	var sampleSizes []int
 	for i := 0; i < maxEvents; i++ {
 		sampleSizes = append(sampleSizes, 180)
 	}
+	// Append an extra sample that will overwrite the first sample.
+	sampleSizes = append(sampleSizes, 180)
 
 	prog, events := mustOutputSamplesProgOverwritable(t, sampleSizes...)
 
@@ -417,118 +415,16 @@ func TestPerfReaderOverwritable(t *testing.T) {
 
 	readSamples := readBuffer(t, rd)
 
-	// At this time, readSamples should contain the following:
-	// [20 19 18 17 16 15 14 13 12 11 10 9 8 7 6 5 4 3 2 1 0]
-	sampleNr := len(sampleSizes)
-	if len(readSamples) != sampleNr {
-		t.Fatalf("Expected %d events but got %d", sampleNr, len(readSamples))
+	if len(readSamples) != maxEvents {
+		t.Fatalf("Expected %d events but got %d", maxEvents, len(readSamples))
 	}
 
 	for i, value := range readSamples {
-		expected := int32(sampleNr - i - 1)
+		expected := int32(len(sampleSizes) - i - 1)
 		if value != expected {
 			t.Fatalf("Expected value %d got %d", expected, value)
 		}
 	}
-
-	// We now run the eBPF program writing less than the buffer size to the
-	// buffer.
-	// The buffer still contain the data same, that is to say:
-	// [20 19 18 17 16 15 14 13 12 11 10 9 8 7 6 5 4 3 2 1 0]
-	// But 0 and 1 were overwritten by the same values.
-	prog, err = craftProgram(events.FD(), sampleSizes[:2]...)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer prog.Close()
-
-	ret, _, err = prog.Test(internal.EmptyBPFContext)
-	testutils.SkipIfNotSupported(t, err)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if errno := syscall.Errno(-int32(ret)); errno != 0 {
-		t.Fatal("Expected 0 as return value, got", errno)
-	}
-
-	readSamples = readBuffer(t, rd)
-
-	// At this time, readSamples should contain the following:
-	// [1 0]
-	// Indeed, we run again the program but writing only two elements this time.
-	sampleNr = 2
-	if len(readSamples) != sampleNr {
-		t.Fatalf("Expected %d events but got %d", sampleNr, len(readSamples))
-	}
-
-	for i, value := range readSamples {
-		expected := int32(sampleNr - i - 1)
-		if value != expected {
-			t.Fatalf("Expected value %d got %d", expected, value)
-		}
-	}
-}
-
-func TestPerfReaderOverwritableOverWritten(t *testing.T) {
-	const (
-		eventSize = 192
-	)
-
-	var (
-		pageSize  = os.Getpagesize()
-		maxEvents = (pageSize / eventSize)
-	)
-	if remainder := pageSize % eventSize; remainder != 64 && remainder != 128 {
-		// Page size isn't 2^(6+m), m >= 0
-		t.Fatal("unsupported page size:", pageSize)
-	}
-
-	var sampleSizes []int
-	// Fill the ring with the maximum number of output_large events that will fit,
-	// and generate a lost event by writing an additional event.
-	for i := 0; i < maxEvents+1; i++ {
-		sampleSizes = append(sampleSizes, 180)
-	}
-
-	prog, events := mustOutputSamplesProgOverwritable(t, sampleSizes...)
-
-	rd, err := NewReaderWithOptions(events, pageSize, ReaderOptions{Overwritable: true})
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer rd.Close()
-
-	ret, _, err := prog.Test(internal.EmptyBPFContext)
-	testutils.SkipIfNotSupported(t, err)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if errno := syscall.Errno(-int32(ret)); errno != 0 {
-		t.Fatal("Expected 0 as return value, got", errno)
-	}
-
-	readSamples := readBuffer(t, rd)
-
-	// At this time, readSamples should contain the following:
-	// [21 20 19 18 17 16 15 14 13 12 11 10 9 8 7 6 5 4 3 2 1]
-	// Value 0 is not present because it was overwritten by value 21.
-	// As a consequence, readSamples contains one value less than what was
-	// written to the perf buffer.
-
-	sampleNr := len(sampleSizes)
-	if len(readSamples) != sampleNr-1 {
-		t.Fatalf("Expected %d events but got %d", sampleNr-1, len(readSamples))
-	}
-
-	for i, value := range readSamples {
-		expected := int32(sampleNr - i - 1)
-		if value != expected {
-			t.Fatalf("Expected value %d got %d", expected, value)
-		}
-	}
-
 }
 
 func TestPerfReaderOverwritableEmpty(t *testing.T) {

@@ -46,31 +46,24 @@ func TestRingBufferReader(t *testing.T) {
 }
 
 func TestRingBufferReverseReader(t *testing.T) {
-	buf := make([]byte, 256)
-	expectedBuf := make([]byte, 256)
+	buf := make([]byte, 4)
+	expectedBuf := make([]byte, 4)
 	for i := range expectedBuf {
 		expectedBuf[i] = byte(i)
 	}
 
-	r := makeOverwritableRing(256)
-	ring, ok := r.(*reverseReader)
-	if !ok {
-		t.Errorf("ring should have type reverseReader and has %T", ring)
-	}
-
-	// First case: read 256, starting from head equals 2.
+	// First case: read 4, starting from offset 2.
 	// The buffer should contain the following:
 	//
-	// [0 1 2 3 ... 255]
+	// [0 1 2 3]
 	//      ^
 	//      |
 	//     head
 	//
-	// As we read from position 2, we should get [2, ..., 255].
+	// As we read from position 2, we should get [2, 3].
 	// Then, when we read it for the second time, we should get [0, 1] as we would
 	// have looped around the buffer.
-	ring.meta.Data_head = 2
-	ring.loadHead()
+	ring := makeOverwritableRing(4, 2)
 	n, err := ring.Read(buf)
 	if err != nil {
 		t.Error("Expected nil, got", err)
@@ -80,7 +73,7 @@ func TestRingBufferReverseReader(t *testing.T) {
 		t.Errorf("Expected to read %d bytes, got %d", expectedLength, n)
 	}
 	if !bytes.Equal(buf[:n], expectedBuf[2:]) {
-		t.Error("Expected [2 ... 255], got", buf)
+		t.Error("Expected [2 ... 4], got", buf)
 	}
 	n, err = ring.Read(buf)
 	if err != io.EOF {
@@ -95,17 +88,15 @@ func TestRingBufferReverseReader(t *testing.T) {
 	}
 
 	// Complicated case: read bytes until previous_head.
-	// We move head from 2 to 0, so previous_head should be 2.
-	// The buffer content is the same as above, that is to say:
 	//
-	// [0 1 2 3 ... 255]
+	// [0 1 2 3]
 	//  ^   ^
 	//  |   |
 	//  |   +---previous_head
 	// head
 	//
 	// So, we should read [0, 1].
-	ring.meta.Data_head = 0
+	ring.meta.Data_head -= 2
 	ring.loadHead()
 	n, err = ring.Read(buf)
 	if err != io.EOF {
@@ -119,19 +110,17 @@ func TestRingBufferReverseReader(t *testing.T) {
 	}
 
 	// Complicated case: read the whole buffer because it was "overwritten".
-	// We move head from previous_head plus the buffer size.
-	// So, we will limit reading the buffer size to avoid reading elements we
-	// already read
 	//
-	// [0 1 2 3 ... 255]
+	// [0 1 2 3]
 	//      ^
 	//      |
 	//      +---previous_head
 	//      |
-	//     head
+	//     head (= previous_head - len(buf))
 	//
 	// So, we should first read [2, ..., 255] then [0, 1].
-	ring.meta.Data_head = ring.previousHead + uint64(len(buf))
+	ring = makeOverwritableRing(4, 2)
+	ring.meta.Data_head -= uint64(len(buf))
 	ring.loadHead()
 	n, err = ring.Read(buf)
 	if err != nil {
@@ -157,7 +146,7 @@ func TestRingBufferReverseReader(t *testing.T) {
 	}
 }
 
-func makeOverwritableRing(size int) ringReader {
+func makeOverwritableRing(size, offset int) *reverseReader {
 	if size != 0 && (size&(size-1)) != 0 {
 		panic("size must be power of two")
 	}
@@ -168,13 +157,15 @@ func makeOverwritableRing(size int) ringReader {
 	}
 
 	meta := unix.PerfEventMmapPage{
+		Data_head: 0 - uint64(size) - uint64(offset),
+		Data_tail: 0, // never written by the kernel
 		Data_size: uint64(len(ring)),
 	}
 
-	return newRingReader(&meta, ring, true)
+	return newReverseReader(&meta, ring)
 }
 
-func makeRing(size, offset int) ringReader {
+func makeRing(size, offset int) *forwardReader {
 	if size != 0 && (size&(size-1)) != 0 {
 		panic("size must be power of two")
 	}
@@ -190,7 +181,7 @@ func makeRing(size, offset int) ringReader {
 		Data_size: uint64(len(ring)),
 	}
 
-	return newRingReader(&meta, ring, false)
+	return newForwardReader(&meta, ring)
 }
 
 func TestPerfEventRing(t *testing.T) {

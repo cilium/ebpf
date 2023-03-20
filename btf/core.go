@@ -237,6 +237,7 @@ func CORERelocate(relos []*CORERelocation, target *Spec, bo binary.ByteOrder) ([
 
 var errAmbiguousRelocation = errors.New("ambiguous relocation")
 var errImpossibleRelocation = errors.New("impossible relocation")
+var errIncompatibleTypes = errors.New("incompatible types")
 
 // coreCalculateFixups finds the target type that best matches all relocations.
 //
@@ -331,8 +332,8 @@ func coreCalculateFixup(relo *CORERelocation, target Type, targetID TypeID, bo b
 			return zero, fmt.Errorf("unexpected accessor %v", relo.accessor)
 		}
 
-		err := coreAreTypesCompatible(local, target)
-		if errors.Is(err, errImpossibleRelocation) {
+		err := CheckTypeCompatibility(local, target)
+		if errors.Is(err, errIncompatibleTypes) {
 			return poison()
 		}
 		if err != nil {
@@ -837,30 +838,35 @@ func coreFindEnumValue(local Type, localAcc coreAccessor, target Type) (localVal
 	return nil, nil, errImpossibleRelocation
 }
 
-/* The comment below is from bpf_core_types_are_compat in libbpf.c:
- *
- * Check local and target types for compatibility. This check is used for
- * type-based CO-RE relocations and follow slightly different rules than
- * field-based relocations. This function assumes that root types were already
- * checked for name match. Beyond that initial root-level name check, names
- * are completely ignored. Compatibility rules are as follows:
- *   - any two STRUCTs/UNIONs/FWDs/ENUMs/INTs are considered compatible, but
- *     kind should match for local and target types (i.e., STRUCT is not
- *     compatible with UNION);
- *   - for ENUMs, the size is ignored;
- *   - for INT, size and signedness are ignored;
- *   - for ARRAY, dimensionality is ignored, element types are checked for
- *     compatibility recursively;
- *   - CONST/VOLATILE/RESTRICT modifiers are ignored;
- *   - TYPEDEFs/PTRs are compatible if types they pointing to are compatible;
- *   - FUNC_PROTOs are compatible if they have compatible signature: same
- *     number of input args and compatible return and argument types.
- * These rules are not set in stone and probably will be adjusted as we get
- * more experience with using BPF CO-RE relocations.
- *
- * Returns errImpossibleRelocation if types are not compatible.
- */
-func coreAreTypesCompatible(localType Type, targetType Type) error {
+// CheckTypeCompatibility checks local and target types for compatibility.
+// Only layout compatibility is checked, ignoring names of the root type.
+//
+// Returns ErrIncompatibleTypes if local and target type are not compatible.
+func CheckTypeCompatibility(localType Type, targetType Type) error {
+	/* The comment below is from bpf_core_types_are_compat in libbpf.c:
+	 *
+	 * Check local and target types for compatibility. This check is used for
+	 * type-based CO-RE relocations and follow slightly different rules than
+	 * field-based relocations. This function assumes that root types were already
+	 * checked for name match. Beyond that initial root-level name check, names
+	 * are completely ignored. Compatibility rules are as follows:
+	 *   - any two STRUCTs/UNIONs/FWDs/ENUMs/INTs are considered compatible, but
+	 *     kind should match for local and target types (i.e., STRUCT is not
+	 *     compatible with UNION);
+	 *   - for ENUMs, the size is ignored;
+	 *   - for INT, size and signedness are ignored;
+	 *   - for ARRAY, dimensionality is ignored, element types are checked for
+	 *     compatibility recursively;
+	 *   - CONST/VOLATILE/RESTRICT modifiers are ignored;
+	 *   - TYPEDEFs/PTRs are compatible if types they pointing to are compatible;
+	 *   - FUNC_PROTOs are compatible if they have compatible signature: same
+	 *     number of input args and compatible return and argument types.
+	 * These rules are not set in stone and probably will be adjusted as we get
+	 * more experience with using BPF CO-RE relocations.
+	 *
+	 * Returns errIncompatibleTypes if types are not compatible.
+	 */
+
 	var (
 		localTs, targetTs typeDeque
 		l, t              = &localType, &targetType
@@ -876,7 +882,7 @@ func coreAreTypesCompatible(localType Type, targetType Type) error {
 		targetType = *t
 
 		if reflect.TypeOf(localType) != reflect.TypeOf(targetType) {
-			return fmt.Errorf("type mismatch: %w", errImpossibleRelocation)
+			return fmt.Errorf("type mismatch: %w", errIncompatibleTypes)
 		}
 
 		switch lv := (localType).(type) {
@@ -891,7 +897,7 @@ func coreAreTypesCompatible(localType Type, targetType Type) error {
 		case *FuncProto:
 			tv := targetType.(*FuncProto)
 			if len(lv.Params) != len(tv.Params) {
-				return fmt.Errorf("function param mismatch: %w", errImpossibleRelocation)
+				return fmt.Errorf("function param mismatch: %w", errIncompatibleTypes)
 			}
 
 			depth++

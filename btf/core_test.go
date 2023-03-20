@@ -13,7 +13,7 @@ import (
 	qt "github.com/frankban/quicktest"
 )
 
-func TestCOREAreTypesCompatible(t *testing.T) {
+func TestCheckTypeCompatibility(t *testing.T) {
 	tests := []struct {
 		a, b       Type
 		compatible bool
@@ -48,35 +48,35 @@ func TestCOREAreTypesCompatible(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		err := coreAreTypesCompatible(test.a, test.b)
+		err := CheckTypeCompatibility(test.a, test.b)
 		if test.compatible {
 			if err != nil {
 				t.Errorf("Expected types to be compatible: %s\na = %#v\nb = %#v", err, test.a, test.b)
 				continue
 			}
 		} else {
-			if !errors.Is(err, errImpossibleRelocation) {
+			if !errors.Is(err, errIncompatibleTypes) {
 				t.Errorf("Expected types to be incompatible: %s\na = %#v\nb = %#v", err, test.a, test.b)
 				continue
 			}
 		}
 
-		err = coreAreTypesCompatible(test.b, test.a)
+		err = CheckTypeCompatibility(test.b, test.a)
 		if test.compatible {
 			if err != nil {
 				t.Errorf("Expected reversed types to be compatible: %s\na = %#v\nb = %#v", err, test.a, test.b)
 			}
 		} else {
-			if !errors.Is(err, errImpossibleRelocation) {
+			if !errors.Is(err, errIncompatibleTypes) {
 				t.Errorf("Expected reversed types to be incompatible: %s\na = %#v\nb = %#v", err, test.a, test.b)
 			}
 		}
 	}
 
 	for _, invalid := range []Type{&Var{}, &Datasec{}} {
-		err := coreAreTypesCompatible(invalid, invalid)
-		if errors.Is(err, errImpossibleRelocation) {
-			t.Errorf("Expected an error for %T, not errImpossibleRelocation", invalid)
+		err := CheckTypeCompatibility(invalid, invalid)
+		if errors.Is(err, errIncompatibleTypes) {
+			t.Errorf("Expected an error for %T, not errIncompatibleTypes", invalid)
 		} else if err == nil {
 			t.Errorf("Expected an error for %T", invalid)
 		}

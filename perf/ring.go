@@ -19,7 +19,7 @@ type perfEventRing struct {
 	fd   int
 	cpu  int
 	mmap []byte
-	*ringReader
+	*forwardReader
 }
 
 func newPerfEventRing(cpu, perCPUBuffer, watermark int) (*perfEventRing, error) {
@@ -50,10 +50,10 @@ func newPerfEventRing(cpu, perCPUBuffer, watermark int) (*perfEventRing, error) 
 	meta := (*unix.PerfEventMmapPage)(unsafe.Pointer(&mmap[0]))
 
 	ring := &perfEventRing{
-		fd:         fd,
-		cpu:        cpu,
-		mmap:       mmap,
-		ringReader: newRingReader(meta, mmap[meta.Data_offset:meta.Data_offset+meta.Data_size]),
+		fd:            fd,
+		cpu:           cpu,
+		mmap:          mmap,
+		forwardReader: newForwardReader(meta, mmap[meta.Data_offset:meta.Data_offset+meta.Data_size]),
 	}
 	runtime.SetFinalizer(ring, (*perfEventRing).Close)
 
@@ -107,15 +107,15 @@ func createPerfEvent(cpu, watermark int) (int, error) {
 	return fd, nil
 }
 
-type ringReader struct {
+type forwardReader struct {
 	meta       *unix.PerfEventMmapPage
 	head, tail uint64
 	mask       uint64
 	ring       []byte
 }
 
-func newRingReader(meta *unix.PerfEventMmapPage, ring []byte) *ringReader {
-	return &ringReader{
+func newForwardReader(meta *unix.PerfEventMmapPage, ring []byte) *forwardReader {
+	return &forwardReader{
 		meta: meta,
 		head: atomic.LoadUint64(&meta.Data_head),
 		tail: atomic.LoadUint64(&meta.Data_tail),
@@ -125,34 +125,34 @@ func newRingReader(meta *unix.PerfEventMmapPage, ring []byte) *ringReader {
 	}
 }
 
-func (rr *ringReader) loadHead() {
-	rr.head = atomic.LoadUint64(&rr.meta.Data_head)
+func (fr *forwardReader) loadHead() {
+	fr.head = atomic.LoadUint64(&fr.meta.Data_head)
 }
 
-func (rr *ringReader) writeTail() {
+func (fr *forwardReader) writeTail() {
 	// Commit the new tail. This lets the kernel know that
 	// the ring buffer has been consumed.
-	atomic.StoreUint64(&rr.meta.Data_tail, rr.tail)
+	atomic.StoreUint64(&fr.meta.Data_tail, fr.tail)
 }
 
-func (rr *ringReader) Read(p []byte) (int, error) {
-	start := int(rr.tail & rr.mask)
+func (fr *forwardReader) Read(p []byte) (int, error) {
+	start := int(fr.tail & fr.mask)
 
 	n := len(p)
 	// Truncate if the read wraps in the ring buffer
-	if remainder := cap(rr.ring) - start; n > remainder {
+	if remainder := cap(fr.ring) - start; n > remainder {
 		n = remainder
 	}
 
 	// Truncate if there isn't enough data
-	if remainder := int(rr.head - rr.tail); n > remainder {
+	if remainder := int(fr.head - fr.tail); n > remainder {
 		n = remainder
 	}
 
-	copy(p, rr.ring[start:start+n])
-	rr.tail += uint64(n)
+	copy(p, fr.ring[start:start+n])
+	fr.tail += uint64(n)
 
-	if rr.tail == rr.head {
+	if fr.tail == fr.head {
 		return n, io.EOF
 	}
 

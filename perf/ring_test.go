@@ -45,7 +45,7 @@ func TestRingBufferReader(t *testing.T) {
 	}
 }
 
-func makeRing(size, offset int) *ringReader {
+func makeRing(size, offset int) *forwardReader {
 	if size != 0 && (size&(size-1)) != 0 {
 		panic("size must be power of two")
 	}
@@ -61,7 +61,7 @@ func makeRing(size, offset int) *ringReader {
 		Data_size: uint64(len(ring)),
 	}
 
-	return newRingReader(&meta, ring)
+	return newForwardReader(&meta, ring)
 }
 
 func TestPerfEventRing(t *testing.T) {
@@ -71,7 +71,7 @@ func TestPerfEventRing(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		size := len(ring.ringReader.ring)
+		size := len(ring.forwardReader.ring)
 
 		// Ring size should be at least as big as buffer
 		if size < buffer {

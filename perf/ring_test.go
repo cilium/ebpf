@@ -1,57 +1,27 @@
 package perf
 
 import (
-	"bytes"
 	"io"
 	"os"
 	"testing"
 
 	"github.com/cilium/ebpf/internal/unix"
+	qt "github.com/frankban/quicktest"
 )
 
 func TestRingBufferReader(t *testing.T) {
-	buf := make([]byte, 2)
-
-	ring := makeRing(2, 0)
-	n, err := ring.Read(buf)
-	if err != io.EOF {
-		t.Error("Expected io.EOF, got", err)
-	}
-	if n != 2 {
-		t.Errorf("Expected to read 2 bytes, got %d", n)
-	}
-	if !bytes.Equal(buf, []byte{0, 1}) {
-		t.Error("Expected [0, 1], got", buf)
-	}
-	n, err = ring.Read(buf)
-	if err != io.EOF {
-		t.Error("Expected io.EOF, got", err)
-	}
-	if n != 0 {
-		t.Error("Expected to read 0 bytes, got", n)
-	}
+	ring := makeForwardRing(2, 0)
+	checkRead(t, ring, []byte{0, 1}, io.EOF)
+	checkRead(t, ring, []byte{}, io.EOF)
 
 	// Wrapping read
-	ring = makeRing(2, 1)
-	n, err = io.ReadFull(ring, buf)
-	if err != nil {
-		t.Error("Error while reading:", err)
-	}
-	if n != 2 {
-		t.Errorf("Expected to read 2 byte, got %d", n)
-	}
-	if !bytes.Equal(buf, []byte{1, 0}) {
-		t.Error("Expected [1, 0], got", buf)
-	}
+	ring = makeForwardRing(2, 1)
+	checkRead(t, ring, []byte{1}, nil)
+	checkRead(t, ring, []byte{0}, io.EOF)
+	checkRead(t, ring, []byte{}, io.EOF)
 }
 
 func TestRingBufferReverseReader(t *testing.T) {
-	buf := make([]byte, 4)
-	expectedBuf := make([]byte, 4)
-	for i := range expectedBuf {
-		expectedBuf[i] = byte(i)
-	}
-
 	// First case: read 4, starting from offset 2.
 	// The buffer should contain the following:
 	//
@@ -63,29 +33,10 @@ func TestRingBufferReverseReader(t *testing.T) {
 	// As we read from position 2, we should get [2, 3].
 	// Then, when we read it for the second time, we should get [0, 1] as we would
 	// have looped around the buffer.
-	ring := makeOverwritableRing(4, 2)
-	n, err := ring.Read(buf)
-	if err != nil {
-		t.Error("Expected nil, got", err)
-	}
-	expectedLength := len(buf) - 2
-	if n != expectedLength {
-		t.Errorf("Expected to read %d bytes, got %d", expectedLength, n)
-	}
-	if !bytes.Equal(buf[:n], expectedBuf[2:]) {
-		t.Error("Expected [2 ... 4], got", buf)
-	}
-	n, err = ring.Read(buf)
-	if err != io.EOF {
-		t.Error("Expected io.EOF, got", err)
-	}
-	expectedLength = 2
-	if n != expectedLength {
-		t.Errorf("Expected to read %d bytes, got %d", expectedLength, n)
-	}
-	if !bytes.Equal(buf[:n], expectedBuf[:expectedLength]) {
-		t.Error("Expected [0 1], got", buf)
-	}
+	ring := makeReverseRing(4, 2)
+	checkRead(t, ring, []byte{2, 3}, nil)
+	checkRead(t, ring, []byte{0, 1}, io.EOF)
+	checkRead(t, ring, []byte{}, io.EOF)
 
 	// Complicated case: read bytes until previous_head.
 	//
@@ -94,20 +45,16 @@ func TestRingBufferReverseReader(t *testing.T) {
 	//  |   |
 	//  |   +---previous_head
 	// head
-	//
-	// So, we should read [0, 1].
+	ring = makeReverseRing(4, 2)
+	checkReadBuffer(t, ring, []byte{2}, nil, make([]byte, 1))
+	// Next read would be {3}, but we don't consume it.
+
+	// Pretend the kernel wrote another 2 bytes.
 	ring.meta.Data_head -= 2
 	ring.loadHead()
-	n, err = ring.Read(buf)
-	if err != io.EOF {
-		t.Error("Expected io.EOF, got", err)
-	}
-	if n != 2 {
-		t.Error("Expected to read 2 bytes, got", n)
-	}
-	if !bytes.Equal(buf[:2], []byte{0, 1}) {
-		t.Error("Expected [0, 1], got", buf)
-	}
+
+	// {3} is discarded.
+	checkRead(t, ring, []byte{0, 1}, io.EOF)
 
 	// Complicated case: read the whole buffer because it was "overwritten".
 	//
@@ -116,72 +63,69 @@ func TestRingBufferReverseReader(t *testing.T) {
 	//      |
 	//      +---previous_head
 	//      |
-	//     head (= previous_head - len(buf))
+	//     head
 	//
-	// So, we should first read [2, ..., 255] then [0, 1].
-	ring = makeOverwritableRing(4, 2)
-	ring.meta.Data_head -= uint64(len(buf))
+	// So, we should first read [2, 3] then [0, 1].
+	ring = makeReverseRing(4, 2)
+	ring.meta.Data_head -= ring.meta.Data_size
 	ring.loadHead()
-	n, err = ring.Read(buf)
-	if err != nil {
-		t.Error("Expected nil, got", err)
-	}
-	expectedLength = len(buf) - 2
-	if n != expectedLength {
-		t.Errorf("Expected to read %d bytes, got %d", expectedLength, n)
-	}
-	if !bytes.Equal(buf[:n], expectedBuf[2:]) {
-		t.Error("Expected [2 ... 255], got", buf)
-	}
-	n, err = ring.Read(buf)
-	if err != io.EOF {
-		t.Error("Expected io.EOF, got", err)
-	}
-	expectedLength = 2
-	if n != expectedLength {
-		t.Errorf("Expected to read %d bytes, got %d", expectedLength, n)
-	}
-	if !bytes.Equal(buf[:n], expectedBuf[:n]) {
-		t.Error("Expected [0 1], got", buf)
-	}
+
+	checkRead(t, ring, []byte{2, 3}, nil)
+	checkRead(t, ring, []byte{0, 1}, io.EOF)
 }
 
-func makeOverwritableRing(size, offset int) *reverseReader {
+// ensure that the next call to Read() yields the correct result.
+//
+// Read is called with a buffer that is larger than want so
+// that corner cases around wrapping can be checked. Use
+// checkReadBuffer if that is not desired.
+func checkRead(t *testing.T, r io.Reader, want []byte, wantErr error) {
+	checkReadBuffer(t, r, want, wantErr, make([]byte, len(want)+1))
+}
+
+func checkReadBuffer(t *testing.T, r io.Reader, want []byte, wantErr error, buf []byte) {
+	t.Helper()
+
+	n, err := r.Read(buf)
+	buf = buf[:n]
+	qt.Assert(t, err, qt.Equals, wantErr)
+	qt.Assert(t, buf, qt.DeepEquals, want)
+}
+
+func makeBuffer(size int) []byte {
+	buf := make([]byte, size)
+	for i := range buf {
+		buf[i] = byte(i)
+	}
+	return buf
+}
+
+func makeReverseRing(size, offset int) *reverseReader {
 	if size != 0 && (size&(size-1)) != 0 {
 		panic("size must be power of two")
-	}
-
-	ring := make([]byte, size)
-	for i := range ring {
-		ring[i] = byte(i)
 	}
 
 	meta := unix.PerfEventMmapPage{
 		Data_head: 0 - uint64(size) - uint64(offset),
 		Data_tail: 0, // never written by the kernel
-		Data_size: uint64(len(ring)),
+		Data_size: uint64(size),
 	}
 
-	return newReverseReader(&meta, ring)
+	return newReverseReader(&meta, makeBuffer(size))
 }
 
-func makeRing(size, offset int) *forwardReader {
+func makeForwardRing(size, offset int) *forwardReader {
 	if size != 0 && (size&(size-1)) != 0 {
 		panic("size must be power of two")
 	}
 
-	ring := make([]byte, size)
-	for i := range ring {
-		ring[i] = byte(i)
-	}
-
 	meta := unix.PerfEventMmapPage{
-		Data_head: uint64(len(ring) + offset),
+		Data_head: uint64(size + offset),
 		Data_tail: uint64(offset),
-		Data_size: uint64(len(ring)),
+		Data_size: uint64(size),
 	}
 
-	return newForwardReader(&meta, ring)
+	return newForwardReader(&meta, makeBuffer(size))
 }
 
 func TestPerfEventRing(t *testing.T) {

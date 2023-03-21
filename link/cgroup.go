@@ -10,10 +10,15 @@ import (
 
 type cgroupAttachFlags uint32
 
-// cgroup attach flags
 const (
+	// Allow programs attached to sub-cgroups to override the verdict of this
+	// program.
 	flagAllowOverride cgroupAttachFlags = 1 << iota
+	// Allow attaching multiple programs to the cgroup. Only works if the cgroup
+	// has zero or more programs attached using the Multi flag. Implies override.
 	flagAllowMulti
+	// Set automatically by progAttachCgroup.Update(). Used for updating a
+	// specific given program attached in multi-mode.
 	flagReplace
 )
 
@@ -27,6 +32,13 @@ type CgroupOptions struct {
 }
 
 // AttachCgroup links a BPF program to a cgroup.
+//
+// If the running kernel doesn't support bpf_link, attempts to emulate its
+// semantics using the legacy PROG_ATTACH mechanism. If bpf_link is not
+// available, the returned [Link] will not support pinning to bpffs.
+//
+// If you need more control over attachment flags or the attachment mechanism
+// used, look at [RawAttachProgram] and [AttachRawLink] instead.
 func AttachCgroup(opts CgroupOptions) (Link, error) {
 	cgroup, err := os.Open(opts.Path)
 	if err != nil {
@@ -40,7 +52,6 @@ func AttachCgroup(opts CgroupOptions) (Link, error) {
 		return cg, nil
 	}
 
-	// cgroup and clone are retained by progAttachCgroup.
 	if errors.Is(err, ErrNotSupported) {
 		cg, err = newProgAttachCgroup(cgroup, opts.Attach, opts.Program, flagAllowMulti)
 	}

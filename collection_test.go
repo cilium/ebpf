@@ -1,6 +1,7 @@
 package ebpf
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"reflect"
@@ -12,44 +13,12 @@ import (
 	"github.com/cilium/ebpf/internal/testutils"
 	"github.com/cilium/ebpf/internal/testutils/fdtrace"
 	qt "github.com/frankban/quicktest"
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 )
 
 func TestMain(m *testing.M) {
 	fdtrace.TestMain(m)
-}
-
-func TestCollectionSpecNotModified(t *testing.T) {
-	cs := CollectionSpec{
-		Maps: map[string]*MapSpec{
-			"my-map": {
-				Type:       Array,
-				KeySize:    4,
-				ValueSize:  4,
-				MaxEntries: 1,
-			},
-		},
-		Programs: map[string]*ProgramSpec{
-			"test": {
-				Type: SocketFilter,
-				Instructions: asm.Instructions{
-					asm.LoadImm(asm.R1, 0, asm.DWord).WithReference("my-map"),
-					asm.LoadImm(asm.R0, 0, asm.DWord),
-					asm.Return(),
-				},
-				License: "MIT",
-			},
-		},
-	}
-
-	coll, err := NewCollection(&cs)
-	if err != nil {
-		t.Fatal(err)
-	}
-	coll.Close()
-
-	if cs.Programs["test"].Instructions[0].Constant != 0 {
-		t.Error("Creating a collection modifies input spec")
-	}
 }
 
 func TestCollectionSpecCopy(t *testing.T) {
@@ -76,22 +45,7 @@ func TestCollectionSpecCopy(t *testing.T) {
 		Types: &btf.Spec{},
 	}
 	cpy := cs.Copy()
-
-	if cpy == cs {
-		t.Error("Copy returned the same pointner")
-	}
-
-	if cpy.Maps["my-map"] == cs.Maps["my-map"] {
-		t.Error("Copy returned same Maps")
-	}
-
-	if cpy.Programs["test"] == cs.Programs["test"] {
-		t.Error("Copy returned same Programs")
-	}
-
-	if cpy.Types != cs.Types {
-		t.Error("Copy returned different Types")
-	}
+	qt.Assert(t, cpy, qt.Not(collectionSpecEquals), cs)
 }
 
 func TestCollectionSpecLoadCopy(t *testing.T) {
@@ -176,11 +130,7 @@ func TestCollectionSpecRewriteMaps(t *testing.T) {
 		t.Error("RewriteMaps doesn't remove map from CollectionSpec.Maps")
 	}
 
-	coll, err := NewCollection(cs)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer coll.Close()
+	coll := mustNewCollection(t, cs, nil)
 
 	ret, _, err := coll.Programs["test-prog"].Test(internal.EmptyBPFContext)
 	testutils.SkipIfNotSupported(t, err)
@@ -238,15 +188,11 @@ func TestCollectionSpecMapReplacements(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	coll, err := NewCollectionWithOptions(cs, CollectionOptions{
+	coll := mustNewCollection(t, cs, &CollectionOptions{
 		MapReplacements: map[string]*Map{
 			"test-map": newMap,
 		},
 	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer coll.Close()
 
 	ret, _, err := coll.Programs["test-prog"].Test(internal.EmptyBPFContext)
 	testutils.SkipIfNotSupported(t, err)
@@ -265,6 +211,7 @@ func TestCollectionSpecMapReplacements(t *testing.T) {
 		t.Fatalf("failed to update replaced map: %s", err)
 	}
 }
+
 func TestCollectionSpecMapReplacements_NonExistingMap(t *testing.T) {
 	cs := &CollectionSpec{
 		Maps: map[string]*MapSpec{
@@ -284,13 +231,12 @@ func TestCollectionSpecMapReplacements_NonExistingMap(t *testing.T) {
 	}
 	defer newMap.Close()
 
-	coll, err := NewCollectionWithOptions(cs, CollectionOptions{
+	_, err = newCollection(t, cs, &CollectionOptions{
 		MapReplacements: map[string]*Map{
 			"non-existing-map": newMap,
 		},
 	})
 	if err == nil {
-		coll.Close()
 		t.Fatal("Overriding a non existing map did not fail")
 	}
 }
@@ -320,13 +266,12 @@ func TestCollectionSpecMapReplacements_SpecMismatch(t *testing.T) {
 	// Map fd is duplicated by MapReplacements, this one can be safely closed.
 	defer newMap.Close()
 
-	coll, err := NewCollectionWithOptions(cs, CollectionOptions{
+	_, err = newCollection(t, cs, &CollectionOptions{
 		MapReplacements: map[string]*Map{
 			"test-map": newMap,
 		},
 	})
 	if err == nil {
-		coll.Close()
 		t.Fatal("Overriding a map with a mismatching spec did not fail")
 	}
 	if !errors.Is(err, ErrMapIncompatible) {
@@ -727,4 +672,77 @@ func ExampleCollectionSpec_LoadAndAssign() {
 
 	// Output: SocketFilter
 	// Array
+}
+
+var collectionSpecCmpOptions = cmp.Options{
+	cmp.Comparer(func(a, b asm.Metadata) bool {
+		return a == b
+	}),
+	cmp.Comparer(func(a, b *Program) bool {
+		return a == b
+	}),
+	cmp.Comparer(func(a, b *btf.Spec) bool {
+		// No way to compare a btf.Spec at the moment, this is enough for now.
+		return a == b
+	}),
+	// Empty MapSpec.Extra are equal.
+	cmp.Comparer(func(a, b bytes.Reader) bool {
+		if a.Len() == 0 && b.Len() == 0 {
+			return true
+		}
+		return false
+	}),
+	// For []MapKV
+	cmpopts.EquateEmpty(),
+}
+
+var collectionSpecEquals = qt.CmpEquals(collectionSpecCmpOptions...)
+
+func mustNewCollection(t *testing.T, spec *CollectionSpec, opts *CollectionOptions) *Collection {
+	t.Helper()
+
+	coll, err := newCollection(t, spec, opts)
+	if err != nil {
+		t.Fatal("Load collection:", err)
+	}
+
+	return coll
+}
+
+func mustNewCollectionSkipUnsupported(t *testing.T, spec *CollectionSpec, opts *CollectionOptions) *Collection {
+	t.Helper()
+
+	if spec.ByteOrder != internal.NativeEndian {
+		t.Skip("Spec has foreign byte order", spec.ByteOrder)
+	}
+
+	coll, err := newCollection(t, spec, opts)
+	testutils.SkipIfNotSupported(t, err)
+	if err != nil {
+		t.Fatal("Load collection:", err)
+	}
+
+	return coll
+}
+
+func newCollection(t *testing.T, spec *CollectionSpec, opts *CollectionOptions) (*Collection, error) {
+	t.Helper()
+
+	if opts == nil {
+		opts = new(CollectionOptions)
+	}
+
+	cpy := spec.Copy()
+	coll, err := NewCollectionWithOptions(spec, *opts)
+	if coll != nil {
+		t.Cleanup(func() { coll.Close() })
+	}
+
+	qt.Assert(t, spec, collectionSpecEquals, cpy)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return coll, nil
 }

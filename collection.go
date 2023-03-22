@@ -534,6 +534,7 @@ func (cl *collectionLoader) populateMaps() error {
 		}
 
 		if mapName == kconfigMap {
+			mapSpec = mapSpec.Copy()
 			if err := resolveKconfig(mapSpec); err != nil {
 				return fmt.Errorf("resolving kconfig: %w", err)
 			}

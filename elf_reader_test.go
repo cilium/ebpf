@@ -1,7 +1,6 @@
 package ebpf
 
 import (
-	"bytes"
 	"encoding/binary"
 	"errors"
 	"flag"
@@ -16,6 +15,7 @@ import (
 	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/testutils"
 	"github.com/cilium/ebpf/internal/unix"
+	qt "github.com/frankban/quicktest"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
@@ -140,26 +140,17 @@ func TestLoadCollectionSpec(t *testing.T) {
 		},
 	}
 
-	defaultOpts := cmp.Options{
-		// Dummy Comparer that works with empty readers to support test cases.
-		cmp.Comparer(func(a, b bytes.Reader) bool {
-			if a.Len() == 0 && b.Len() == 0 {
-				return true
-			}
-			return false
-		}),
-		cmpopts.IgnoreTypes(new(btf.Spec)),
+	defaultOpts := append(collectionSpecCmpOptions,
 		cmpopts.IgnoreFields(CollectionSpec{}, "ByteOrder", "Types"),
 		cmpopts.IgnoreFields(ProgramSpec{}, "Instructions", "ByteOrder"),
 		cmpopts.IgnoreFields(MapSpec{}, "Key", "Value"),
-		cmpopts.IgnoreUnexported(ProgramSpec{}),
 		cmpopts.IgnoreMapEntries(func(key string, _ *MapSpec) bool {
 			if key == ".bss" || key == ".data" || strings.HasPrefix(key, ".rodata") {
 				return true
 			}
 			return false
 		}),
-	}
+	)
 
 	ignoreBTFOpts := append(defaultOpts,
 		cmpopts.IgnoreMapEntries(func(key string, _ *MapSpec) bool {
@@ -193,16 +184,14 @@ func TestLoadCollectionSpec(t *testing.T) {
 			opts = ignoreBTFOpts
 		}
 
-		if diff := cmp.Diff(coll, have, opts...); diff != "" {
-			t.Errorf("MapSpec mismatch (-want +got):\n%s", diff)
-		}
+		qt.Assert(t, have, qt.CmpEquals(opts...), coll)
 
 		if have.ByteOrder != internal.NativeEndian {
 			return
 		}
 
 		have.Maps["array_of_hash_map"].InnerMap = have.Maps["hash_map"]
-		coll, err := NewCollectionWithOptions(have, CollectionOptions{
+		coll := mustNewCollectionSkipUnsupported(t, have, &CollectionOptions{
 			Maps: MapOptions{
 				PinPath: testutils.TempBPFFS(t),
 			},
@@ -210,11 +199,6 @@ func TestLoadCollectionSpec(t *testing.T) {
 				LogLevel: LogLevelBranch,
 			},
 		})
-		testutils.SkipIfNotSupported(t, err)
-		if err != nil {
-			t.Fatal(err)
-		}
-		defer coll.Close()
 
 		ret, _, err := coll.Programs["xdp_prog"].Test(internal.EmptyBPFContext)
 		if err != nil {
@@ -366,12 +350,7 @@ func TestLoadInitializedBTFMap(t *testing.T) {
 				t.Skipf("Skipping %s collection", coll.ByteOrder)
 			}
 
-			tmp, err := NewCollection(coll)
-			testutils.SkipIfNotSupported(t, err)
-			if err != nil {
-				t.Fatal("NewCollection failed:", err)
-			}
-			tmp.Close()
+			mustNewCollectionSkipUnsupported(t, coll, nil)
 		})
 
 		t.Run("prog_array", func(t *testing.T) {
@@ -474,12 +453,7 @@ func TestStringSection(t *testing.T) {
 		t.Fatal("Read only data maps should have the prog-read-only flag set")
 	}
 
-	coll, err := NewCollection(spec)
-	testutils.SkipIfNotSupported(t, err)
-	if err != nil {
-		t.Fatalf("new collection: %s", err)
-	}
-	defer coll.Close()
+	coll := mustNewCollectionSkipUnsupported(t, spec, nil)
 
 	prog := coll.Programs["filter"]
 	if prog == nil {
@@ -518,21 +492,11 @@ func TestLoadRawTracepoint(t *testing.T) {
 			t.Fatal("Can't parse ELF:", err)
 		}
 
-		if spec.ByteOrder != internal.NativeEndian {
-			return
-		}
-
-		coll, err := NewCollectionWithOptions(spec, CollectionOptions{
+		mustNewCollectionSkipUnsupported(t, spec, &CollectionOptions{
 			Programs: ProgramOptions{
 				LogLevel: LogLevelBranch,
 			},
 		})
-		testutils.SkipIfNotSupported(t, err)
-		if err != nil {
-			t.Fatal("Can't create collection:", err)
-		}
-
-		coll.Close()
 	})
 }
 
@@ -543,24 +507,10 @@ func TestTailCall(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		if spec.ByteOrder != internal.NativeEndian {
-			return
-		}
+		coll := mustNewCollectionSkipUnsupported(t, spec, nil)
+		prog := coll.Programs["tail_main"]
 
-		var obj struct {
-			TailMain  *Program `ebpf:"tail_main"`
-			ProgArray *Map     `ebpf:"prog_array_init"`
-		}
-
-		err = spec.LoadAndAssign(&obj, nil)
-		testutils.SkipIfNotSupported(t, err)
-		if err != nil {
-			t.Fatal(err)
-		}
-		defer obj.TailMain.Close()
-		defer obj.ProgArray.Close()
-
-		ret, _, err := obj.TailMain.Test(internal.EmptyBPFContext)
+		ret, _, err := prog.Test(internal.EmptyBPFContext)
 		testutils.SkipIfNotSupported(t, err)
 		if err != nil {
 			t.Fatal(err)
@@ -580,22 +530,10 @@ func TestKconfig(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		if spec.ByteOrder != internal.NativeEndian {
-			return
-		}
+		coll := mustNewCollectionSkipUnsupported(t, spec, nil)
+		prog := coll.Programs["kconfig"]
 
-		var obj struct {
-			Main *Program `ebpf:"kconfig"`
-		}
-
-		err = spec.LoadAndAssign(&obj, nil)
-		testutils.SkipIfNotSupported(t, err)
-		if err != nil {
-			t.Fatal(err)
-		}
-		defer obj.Main.Close()
-
-		ret, _, err := obj.Main.Test(internal.EmptyBPFContext)
+		ret, _, err := prog.Test(internal.EmptyBPFContext)
 		testutils.SkipIfNotSupported(t, err)
 		if err != nil {
 			t.Fatal(err)
@@ -622,24 +560,10 @@ func TestSubprogRelocation(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		if spec.ByteOrder != internal.NativeEndian {
-			return
-		}
+		coll := mustNewCollectionSkipUnsupported(t, spec, nil)
+		prog := coll.Programs["fp_relocation"]
 
-		var obj struct {
-			Main    *Program `ebpf:"fp_relocation"`
-			HashMap *Map     `ebpf:"hash_map"`
-		}
-
-		err = spec.LoadAndAssign(&obj, nil)
-		testutils.SkipIfNotSupported(t, err)
-		if err != nil {
-			t.Fatal(err)
-		}
-		defer obj.Main.Close()
-		defer obj.HashMap.Close()
-
-		ret, _, err := obj.Main.Test(internal.EmptyBPFContext)
+		ret, _, err := prog.Test(internal.EmptyBPFContext)
 		testutils.SkipIfNotSupported(t, err)
 		if err != nil {
 			t.Fatal(err)
@@ -687,10 +611,6 @@ func TestIPRoute2Compat(t *testing.T) {
 			t.Fatal("Can't parse ELF:", err)
 		}
 
-		if spec.ByteOrder != internal.NativeEndian {
-			return
-		}
-
 		ms, ok := spec.Maps["hash_map"]
 		if !ok {
 			t.Fatal("Map hash_map not found")
@@ -726,17 +646,11 @@ func TestIPRoute2Compat(t *testing.T) {
 		// For the sake of the test, we use a tempdir on bpffs below.
 		ms.Pinning = PinByName
 
-		coll, err := NewCollectionWithOptions(spec, CollectionOptions{
+		mustNewCollectionSkipUnsupported(t, spec, &CollectionOptions{
 			Maps: MapOptions{
 				PinPath: testutils.TempBPFFS(t),
 			},
 		})
-		testutils.SkipIfNotSupported(t, err)
-		if err != nil {
-			t.Fatal("Can't create collection:", err)
-		}
-
-		coll.Close()
 	})
 }
 
@@ -768,7 +682,7 @@ func TestLibBPFCompat(t *testing.T) {
 			p.AttachTarget = targetProg
 		}
 
-		coll, err := NewCollectionWithOptions(spec, opts)
+		coll, err := newCollection(t, spec, &opts)
 		testutils.SkipIfNotSupported(t, err)
 		var errno syscall.Errno
 		if errors.As(err, &errno) {
@@ -907,7 +821,7 @@ func TestLibBPFCompat(t *testing.T) {
 	})
 }
 
-func loadTargetProgram(tb testing.TB, name string, opts CollectionOptions) (*Program, *Collection) {
+func loadTargetProgram(t *testing.T, name string, opts CollectionOptions) (*Program, *Collection) {
 	file := "test_pkt_access.o"
 	program := "test_pkt_access"
 	switch name {
@@ -931,14 +845,10 @@ func loadTargetProgram(tb testing.TB, name string, opts CollectionOptions) (*Pro
 
 	spec, err := LoadCollectionSpec(filepath.Join(*elfPath, file))
 	if err != nil {
-		tb.Fatalf("Can't read %s: %s", file, err)
+		t.Fatalf("Can't read %s: %s", file, err)
 	}
 
-	coll, err := NewCollectionWithOptions(spec, opts)
-	if err != nil {
-		tb.Fatalf("Can't load target: %s", err)
-	}
-
+	coll := mustNewCollection(t, spec, &opts)
 	return coll.Programs[program], coll
 }
 

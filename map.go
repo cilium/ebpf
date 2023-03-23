@@ -16,6 +16,8 @@ import (
 	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/sys"
 	"github.com/cilium/ebpf/internal/unix"
+
+	"golang.org/x/exp/slices"
 )
 
 // Errors returned by Map and MapIterator methods.
@@ -94,9 +96,7 @@ func (ms *MapSpec) Copy() *MapSpec {
 
 	cpy := *ms
 
-	cpy.Contents = make([]MapKV, len(ms.Contents))
-	copy(cpy.Contents, ms.Contents)
-
+	cpy.Contents = slices.Clone(ms.Contents)
 	cpy.InnerMap = ms.InnerMap.Copy()
 
 	return &cpy

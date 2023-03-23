@@ -14,7 +14,6 @@ import (
 	"github.com/cilium/ebpf/internal/testutils/fdtrace"
 	qt "github.com/frankban/quicktest"
 	"github.com/google/go-cmp/cmp"
-	"github.com/google/go-cmp/cmp/cmpopts"
 )
 
 func TestMain(m *testing.M) {
@@ -46,21 +45,25 @@ func TestCollectionSpecCopy(t *testing.T) {
 	}
 	cpy := cs.Copy()
 
-	if cpy == cs {
-		t.Error("Copy returned the same pointner")
-	}
+	referencesAreEqual := qt.CmpEquals(
+		cmp.FilterPath(func(p cmp.Path) bool {
+			switch p.Last().Type().Kind() {
+			case reflect.Pointer, reflect.Slice, reflect.Map:
+				return true
+			default:
+				return false
+			}
+		}, cmp.Comparer(func(a, b any) bool {
+			va, vb := reflect.ValueOf(a), reflect.ValueOf(b)
+			return va.Type() != vb.Type() && va.UnsafePointer() == vb.UnsafePointer()
+		})),
+	)
 
-	if cpy.Maps["my-map"] == cs.Maps["my-map"] {
-		t.Error("Copy returned same Maps")
-	}
+	// Ensure that reference types have distinct addresses.
+	qt.Assert(t, cpy, qt.Not(referencesAreEqual), cs)
 
-	if cpy.Programs["test"] == cs.Programs["test"] {
-		t.Error("Copy returned same Programs")
-	}
-
-	if cpy.Types != cs.Types {
-		t.Error("Copy returned different Types")
-	}
+	// Ensure that the contents of the spec match.
+	qt.Assert(t, cpy, collectionSpecIsEqual, cs)
 }
 
 func TestCollectionSpecLoadCopy(t *testing.T) {
@@ -707,8 +710,6 @@ var collectionSpecCmpOptions = cmp.Options{
 		}
 		return false
 	}),
-	// For MapSpec.Contents.
-	cmpopts.EquateEmpty(),
 }
 
 var collectionSpecIsEqual = qt.CmpEquals(collectionSpecCmpOptions...)

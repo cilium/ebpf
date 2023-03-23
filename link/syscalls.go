@@ -123,7 +123,10 @@ var haveProgQuery = internal.NewFeatureTest("BPF_PROG_QUERY", "4.15", func() err
 })
 
 var haveSyscallWrapper = internal.NewFeatureTest("syscall wrapper", "4.17", func() error {
-	testSyscallName := platformPrefix("sys_bpf")
+	testSyscallName, ok := platformPrefix("sys_bpf")
+	if !ok {
+		return internal.ErrNotSupported
+	}
 
 	pe, err := kprobe(testSyscallName, nil, nil, false, false)
 	if err != nil {

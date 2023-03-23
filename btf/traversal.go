@@ -37,7 +37,7 @@ func postorderTraversal(root Type, skip func(Type) (skip bool)) postorderIterato
 	}
 
 	po := postorderIterator{root: root, skip: skip}
-	walkType(root, po.push)
+	walkType(root, reverseOrder, po.push)
 
 	return po
 }
@@ -73,7 +73,7 @@ func (po *postorderIterator) Next() bool {
 			po.walked.Push(true)
 
 			// Add all direct children to todo.
-			walkType(*t, po.push)
+			walkType(*t, reverseOrder, po.push)
 		} else {
 			// We've walked this type previously, so we now know that all
 			// children have been handled.
@@ -87,8 +87,17 @@ func (po *postorderIterator) Next() bool {
 	return po.Type != nil
 }
 
+type walkMode int
+
+const (
+	// Walk children in default (forward) order.
+	defaultOrder walkMode = iota
+	// Walk children in reverse order.
+	reverseOrder
+)
+
 // walkType calls fn on each child of typ.
-func walkType(typ Type, fn func(*Type)) {
+func walkType(typ Type, mode walkMode, fn func(*Type)) {
 	// Explicitly type switch on the most common types to allow the inliner to
 	// do its work. This avoids allocating intermediate slices from walk() on
 	// the heap.
@@ -98,16 +107,17 @@ func walkType(typ Type, fn func(*Type)) {
 	case *Pointer:
 		fn(&v.Target)
 	case *Array:
-		fn(&v.Index)
-		fn(&v.Type)
+		if mode == reverseOrder {
+			fn(&v.Type)
+			fn(&v.Index)
+		} else {
+			fn(&v.Index)
+			fn(&v.Type)
+		}
 	case *Struct:
-		for i := range v.Members {
-			fn(&v.Members[i].Type)
-		}
+		walkMembers(v.Members, mode, fn)
 	case *Union:
-		for i := range v.Members {
-			fn(&v.Members[i].Type)
-		}
+		walkMembers(v.Members, mode, fn)
 	case *Typedef:
 		fn(&v.Type)
 	case *Volatile:
@@ -119,15 +129,28 @@ func walkType(typ Type, fn func(*Type)) {
 	case *Func:
 		fn(&v.Type)
 	case *FuncProto:
-		fn(&v.Return)
-		for i := range v.Params {
-			fn(&v.Params[i].Type)
+		if mode == reverseOrder {
+			for i := len(v.Params) - 1; i >= 0; i-- {
+				fn(&v.Params[i].Type)
+			}
+			fn(&v.Return)
+		} else {
+			fn(&v.Return)
+			for i := range v.Params {
+				fn(&v.Params[i].Type)
+			}
 		}
 	case *Var:
 		fn(&v.Type)
 	case *Datasec:
-		for i := range v.Vars {
-			fn(&v.Vars[i].Type)
+		if mode == reverseOrder {
+			for i := len(v.Vars) - 1; i >= 0; i-- {
+				fn(&v.Vars[i].Type)
+			}
+		} else {
+			for i := range v.Vars {
+				fn(&v.Vars[i].Type)
+			}
 		}
 	case *declTag:
 		fn(&v.Type)
@@ -137,5 +160,17 @@ func walkType(typ Type, fn func(*Type)) {
 		// cycle has children, but we ignore them deliberately.
 	default:
 		panic(fmt.Sprintf("don't know how to walk Type %T", v))
+	}
+}
+
+func walkMembers(members []Member, mode walkMode, fn func(*Type)) {
+	if mode == reverseOrder {
+		for i := len(members) - 1; i >= 0; i-- {
+			fn(&members[i].Type)
+		}
+	} else {
+		for i := range members {
+			fn(&members[i].Type)
+		}
 	}
 }

@@ -303,11 +303,7 @@ func TestBatchMapWithLock(t *testing.T) {
 			return
 		}
 
-		coll, err := NewCollection(spec)
-		if err != nil {
-			t.Fatal("Can't parse ELF:", err)
-		}
-		defer coll.Close()
+		coll := mustNewCollectionSkipUnsupported(t, spec, nil)
 
 		type spinLockValue struct {
 			Cnt     uint32
@@ -364,11 +360,7 @@ func TestMapWithLock(t *testing.T) {
 			return
 		}
 
-		coll, err := NewCollection(spec)
-		if err != nil {
-			t.Fatal("Can't parse ELF:", err)
-		}
-		defer coll.Close()
+		coll := mustNewCollectionSkipUnsupported(t, spec, nil)
 
 		type spinLockValue struct {
 			Cnt     uint32

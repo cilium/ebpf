@@ -10,6 +10,8 @@ import (
 	"github.com/cilium/ebpf/asm"
 	"github.com/cilium/ebpf/btf"
 	"github.com/cilium/ebpf/internal"
+
+	"golang.org/x/exp/maps"
 )
 
 // CollectionOptions control loading a collection into the kernel.
@@ -52,8 +54,8 @@ func (cs *CollectionSpec) Copy() *CollectionSpec {
 	}
 
 	cpy := CollectionSpec{
-		Maps:      make(map[string]*MapSpec, len(cs.Maps)),
-		Programs:  make(map[string]*ProgramSpec, len(cs.Programs)),
+		Maps:      maps.Clone(cs.Maps),
+		Programs:  maps.Clone(cs.Programs),
 		ByteOrder: cs.ByteOrder,
 		Types:     cs.Types,
 	}
@@ -534,6 +536,7 @@ func (cl *collectionLoader) populateMaps() error {
 		}
 
 		if mapName == kconfigMap {
+			mapSpec = mapSpec.Copy()
 			if err := resolveKconfig(mapSpec); err != nil {
 				return fmt.Errorf("resolving kconfig: %w", err)
 			}

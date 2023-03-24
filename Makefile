@@ -98,7 +98,7 @@ testdata/loader-%-eb.elf: testdata/loader.c
 	$(STRIP) -g $@
 
 .PHONY: generate-btf
-generate-btf: KERNEL_VERSION?=5.18
+generate-btf: KERNEL_VERSION?=5.19
 generate-btf:
 	$(eval TMP := $(shell mktemp -d))
 	curl -fL "$(CI_KERNEL_URL)/linux-$(KERNEL_VERSION).bz" -o "$(TMP)/bzImage"

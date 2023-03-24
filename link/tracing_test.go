@@ -51,48 +51,66 @@ func TestTracing(t *testing.T) {
 	testutils.SkipOnOldKernel(t, "5.11", "BPF_LINK_TYPE_TRACING")
 
 	tests := []struct {
-		name        string
-		attachTo    string
-		programType ebpf.ProgramType
-		attachType  ebpf.AttachType
+		name                             string
+		attachTo                         string
+		programType                      ebpf.ProgramType
+		programAttachType, attachTypeOpt ebpf.AttachType
+		cookie                           uint64
 	}{
 		{
-			name:        "AttachTraceFEntry",
-			attachTo:    "inet_dgram_connect",
-			programType: ebpf.Tracing,
-			attachType:  ebpf.AttachTraceFEntry,
+			name:              "AttachTraceFEntry",
+			attachTo:          "inet_dgram_connect",
+			programType:       ebpf.Tracing,
+			programAttachType: ebpf.AttachTraceFEntry,
 		},
 		{
-			name:        "AttachTraceFExit",
-			attachTo:    "inet_dgram_connect",
-			programType: ebpf.Tracing,
-			attachType:  ebpf.AttachTraceFExit,
+			name:              "AttachTraceFEntry",
+			attachTo:          "inet_dgram_connect",
+			programType:       ebpf.Tracing,
+			programAttachType: ebpf.AttachTraceFEntry,
+			attachTypeOpt:     ebpf.AttachTraceFEntry,
+			cookie:            1,
 		},
 		{
-			name:        "AttachModifyReturn",
-			attachTo:    "bpf_modify_return_test",
-			programType: ebpf.Tracing,
-			attachType:  ebpf.AttachModifyReturn,
+			name:              "AttachTraceFEntry",
+			attachTo:          "inet_dgram_connect",
+			programType:       ebpf.Tracing,
+			programAttachType: ebpf.AttachTraceFEntry,
 		},
 		{
-			name:        "AttachTraceRawTp",
-			attachTo:    "kfree_skb",
-			programType: ebpf.Tracing,
-			attachType:  ebpf.AttachTraceRawTp,
+			name:              "AttachTraceFExit",
+			attachTo:          "inet_dgram_connect",
+			programType:       ebpf.Tracing,
+			programAttachType: ebpf.AttachTraceFExit,
+		},
+		{
+			name:              "AttachModifyReturn",
+			attachTo:          "bpf_modify_return_test",
+			programType:       ebpf.Tracing,
+			programAttachType: ebpf.AttachModifyReturn,
+		},
+		{
+			name:              "AttachTraceRawTp",
+			attachTo:          "kfree_skb",
+			programType:       ebpf.Tracing,
+			programAttachType: ebpf.AttachTraceRawTp,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			prog := mustLoadProgram(t, tt.programType, tt.attachType, tt.attachTo)
+			prog := mustLoadProgram(t, tt.programType, tt.programAttachType, tt.attachTo)
 
-			link, err := AttachTracing(TracingOptions{Program: prog})
+			opts := TracingOptions{Program: prog, AttachType: tt.attachTypeOpt, Cookie: tt.cookie}
+			link, err := AttachTracing(opts)
 			testutils.SkipIfNotSupported(t, err)
 			if err != nil {
 				t.Fatal(err)
 			}
-
 			testLink(t, link, prog)
+			if err = link.Close(); err != nil {
+				t.Fatal(err)
+			}
 		})
 	}
 }

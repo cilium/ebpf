@@ -408,6 +408,15 @@ import (
 			},
 		},
 		{
+			"LinkCreateTracing", retFd, "link_create", "BPF_LINK_CREATE",
+			[]patch{
+				chooseNth(4, 4),
+				replace(enumTypes["AttachType"], "attach_type"),
+				flattenAnon,
+				replace(btfID, "target_btf_id"),
+			},
+		},
+		{
 			"LinkUpdate", retError, "link_update", "BPF_LINK_UPDATE",
 			nil,
 		},

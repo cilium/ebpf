@@ -7,7 +7,6 @@ import (
 	"go/build/constraint"
 	"go/token"
 	"io"
-	"path/filepath"
 	"sort"
 	"strings"
 	"text/template"
@@ -73,63 +72,37 @@ func (n templateName) CloseHelper() string {
 }
 
 type outputArgs struct {
-	pkg             string
-	ident           string
-	constraints     constraint.Expr
-	cTypes          []string
-	skipGlobalTypes bool
-	obj             string
-	out             io.Writer
+	// Package of the resulting file.
+	pkg string
+	// The prefix of all names declared at the top-level.
+	stem string
+	// Build constraints included in the resulting file.
+	constraints constraint.Expr
+	// Maps to be emitted.
+	maps []string
+	// Programs to be emitted.
+	programs []string
+	// Types to be emitted.
+	types []btf.Type
+	// Filename of the ELF object to embed.
+	obj string
+	out io.Writer
 }
 
 func output(args outputArgs) error {
-	spec, err := ebpf.LoadCollectionSpec(args.obj)
-	if err != nil {
-		return fmt.Errorf("can't load BPF from ELF: %s", err)
-	}
-
 	maps := make(map[string]string)
-	for name := range spec.Maps {
-		if strings.HasPrefix(name, ".") {
-			// Skip .rodata, .data, .bss, etc. sections
-			continue
-		}
-
+	for _, name := range args.maps {
 		maps[name] = internal.Identifier(name)
 	}
 
 	programs := make(map[string]string)
-	for name := range spec.Programs {
+	for _, name := range args.programs {
 		programs[name] = internal.Identifier(name)
 	}
 
-	// Collect any types which we've been asked for explicitly.
-	cTypes, err := collectCTypes(spec.Types, args.cTypes)
-	if err != nil {
-		return err
-	}
-
 	typeNames := make(map[btf.Type]string)
-	for _, cType := range cTypes {
-		typeNames[cType] = args.ident + internal.Identifier(cType.TypeName())
-	}
-
-	// Collect map key and value types, unless we've been asked not to.
-	if !args.skipGlobalTypes {
-		for _, typ := range collectMapTypes(spec.Maps) {
-			switch btf.UnderlyingType(typ).(type) {
-			case *btf.Datasec:
-				// Avoid emitting .rodata, .bss, etc. for now. We might want to
-				// name these types differently, etc.
-				continue
-
-			case *btf.Int:
-				// Don't emit primitive types by default.
-				continue
-			}
-
-			typeNames[typ] = args.ident + internal.Identifier(typ.TypeName())
-		}
+	for _, typ := range args.types {
+		typeNames[typ] = args.stem + internal.Identifier(typ.TypeName())
 	}
 
 	// Ensure we don't have conflicting names and generate a sorted list of
@@ -165,12 +138,12 @@ func output(args outputArgs) error {
 		module,
 		args.pkg,
 		args.constraints,
-		templateName(args.ident),
+		templateName(args.stem),
 		maps,
 		programs,
 		types,
 		typeNames,
-		filepath.Base(args.obj),
+		args.obj,
 	}
 
 	var buf bytes.Buffer
@@ -179,6 +152,46 @@ func output(args outputArgs) error {
 	}
 
 	return internal.WriteFormatted(buf.Bytes(), args.out)
+}
+
+func collectFromSpec(spec *ebpf.CollectionSpec, cTypes []string, skipGlobalTypes bool) (maps, programs []string, types []btf.Type, _ error) {
+	for name := range spec.Maps {
+		// Skip .rodata, .data, .bss, etc. sections
+		if !strings.HasPrefix(name, ".") {
+			maps = append(maps, name)
+		}
+	}
+
+	for name := range spec.Programs {
+		programs = append(programs, name)
+	}
+
+	types, err := collectCTypes(spec.Types, cTypes)
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("collect C types: %w", err)
+	}
+
+	// Collect map key and value types, unless we've been asked not to.
+	if skipGlobalTypes {
+		return maps, programs, types, nil
+	}
+
+	for _, typ := range collectMapTypes(spec.Maps) {
+		switch btf.UnderlyingType(typ).(type) {
+		case *btf.Datasec:
+			// Avoid emitting .rodata, .bss, etc. for now. We might want to
+			// name these types differently, etc.
+			continue
+
+		case *btf.Int:
+			// Don't emit primitive types by default.
+			continue
+		}
+
+		types = append(types, typ)
+	}
+
+	return maps, programs, types, nil
 }
 
 func collectCTypes(types *btf.Spec, names []string) ([]btf.Type, error) {

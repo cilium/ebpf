@@ -1,10 +1,14 @@
 package main
 
 import (
+	"fmt"
 	"testing"
 
+	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/btf"
+	"github.com/cilium/ebpf/internal"
 	qt "github.com/frankban/quicktest"
+	"github.com/google/go-cmp/cmp"
 )
 
 func TestOrderTypes(t *testing.T) {
@@ -57,4 +61,37 @@ func TestOrderTypes(t *testing.T) {
 			qt.Assert(t, result, qt.IsNil)
 		})
 	}
+}
+
+var typesEqual = qt.CmpEquals(cmp.Comparer(func(a, b btf.Type) bool {
+	return a == b
+}))
+
+func TestCollectFromSpec(t *testing.T) {
+	spec, err := ebpf.LoadCollectionSpec(fmt.Sprintf("testdata/minimal-%s.elf", internal.ClangEndian))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	map1 := spec.Maps["map1"]
+
+	maps, programs, types, err := collectFromSpec(spec, nil, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	qt.Assert(t, maps, qt.ContentEquals, []string{"map1"})
+	qt.Assert(t, programs, qt.ContentEquals, []string{"filter"})
+	qt.Assert(t, types, typesEqual, []btf.Type{map1.Key, map1.Value})
+
+	_, _, types, err = collectFromSpec(spec, nil, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	qt.Assert(t, types, typesEqual, ([]btf.Type)(nil))
+
+	_, _, types, err = collectFromSpec(spec, []string{"barfoo"}, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	qt.Assert(t, types, typesEqual, []btf.Type{map1.Value})
 }

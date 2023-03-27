@@ -235,7 +235,7 @@ func TestConvertGOARCH(t *testing.T) {
 	b2g := bpf2go{
 		pkg:              "test",
 		stdout:           io.Discard,
-		ident:            "test",
+		identStem:        "test",
 		cc:               clangBin(t),
 		disableStripping: true,
 		sourceFile:       tmp + "/test.c",

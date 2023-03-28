@@ -696,7 +696,7 @@ func copyTypes(types []Type, transform Transformer) []Type {
 	result := make([]Type, len(types))
 	copy(result, types)
 
-	copies := make(copier)
+	copies := make(copier, len(types))
 	for i := range result {
 		copies.copy(&result[i], transform)
 	}

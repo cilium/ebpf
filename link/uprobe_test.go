@@ -69,6 +69,33 @@ func TestExecutableOffset(t *testing.T) {
 	c.Assert(offset, qt.Equals, uint64(0x1+0x2))
 }
 
+func TestExecutableLazyLoadSymbols(t *testing.T) {
+	c := qt.New(t)
+
+	ex, err := OpenExecutable("/bin/bash")
+	c.Assert(err, qt.IsNil)
+	// Addresses must be empty, will be lazy loaded.
+	c.Assert(ex.loaded, qt.IsFalse)
+	c.Assert(ex.addresses, qt.CmpEquals(), map[string]uint64{})
+
+	prog := mustLoadProgram(t, ebpf.Kprobe, 0, "")
+	up, err := ex.Uprobe(bashSym, prog, &UprobeOptions{Address: 123})
+	c.Assert(err, qt.IsNil)
+	up.Close()
+
+	// Addresses must still be empty as Address has been provided via options.
+	c.Assert(ex.loaded, qt.IsFalse)
+	c.Assert(ex.addresses, qt.CmpEquals(), map[string]uint64{})
+
+	up, err = ex.Uprobe(bashSym, prog, nil)
+	c.Assert(err, qt.IsNil)
+	up.Close()
+
+	// Symbol table should be loaded.
+	c.Assert(ex.loaded, qt.IsTrue)
+	c.Assert(len(ex.addresses), qt.Not(qt.Equals), 0)
+}
+
 func TestUprobe(t *testing.T) {
 	c := qt.New(t)
 

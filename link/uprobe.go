@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"sync"
 
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/internal"
@@ -34,6 +35,9 @@ type Executable struct {
 	path string
 	// Parsed ELF and dynamic symbols' addresses.
 	addresses map[string]uint64
+	// Keep track of symbol table lazy load.
+	loaded bool
+	sync.Mutex
 }
 
 // UprobeOptions defines additional parameters that will be used
@@ -83,41 +87,35 @@ func OpenExecutable(path string) (*Executable, error) {
 		return nil, fmt.Errorf("path cannot be empty")
 	}
 
-	f, err := os.Open(path)
+	return &Executable{
+		path:      path,
+		addresses: make(map[string]uint64),
+	}, nil
+}
+
+func (ex *Executable) load() error {
+	f, err := os.Open(ex.path)
 	if err != nil {
-		return nil, fmt.Errorf("open file '%s': %w", path, err)
+		return fmt.Errorf("open file '%s': %w", ex.path, err)
 	}
 	defer f.Close()
 
 	se, err := internal.NewSafeELFFile(f)
 	if err != nil {
-		return nil, fmt.Errorf("parse ELF file: %w", err)
+		return fmt.Errorf("parse ELF file: %w", err)
 	}
 
 	if se.Type != elf.ET_EXEC && se.Type != elf.ET_DYN {
 		// ELF is not an executable or a shared object.
-		return nil, errors.New("the given file is not an executable or a shared object")
+		return errors.New("the given file is not an executable or a shared object")
 	}
 
-	ex := Executable{
-		path:      path,
-		addresses: make(map[string]uint64),
-	}
-
-	if err := ex.load(se); err != nil {
-		return nil, err
-	}
-
-	return &ex, nil
-}
-
-func (ex *Executable) load(f *internal.SafeELFFile) error {
-	syms, err := f.Symbols()
+	syms, err := se.Symbols()
 	if err != nil && !errors.Is(err, elf.ErrNoSymbols) {
 		return err
 	}
 
-	dynsyms, err := f.DynamicSymbols()
+	dynsyms, err := se.DynamicSymbols()
 	if err != nil && !errors.Is(err, elf.ErrNoSymbols) {
 		return err
 	}
@@ -133,7 +131,7 @@ func (ex *Executable) load(f *internal.SafeELFFile) error {
 		address := s.Value
 
 		// Loop over ELF segments.
-		for _, prog := range f.Progs {
+		for _, prog := range se.Progs {
 			// Skip uninteresting segments.
 			if prog.Type != elf.PT_LOAD || (prog.Flags&elf.PF_X) == 0 {
 				continue
@@ -164,6 +162,15 @@ func (ex *Executable) address(symbol string, opts *UprobeOptions) (uint64, error
 	if opts.Address > 0 {
 		return opts.Address + opts.Offset, nil
 	}
+
+	ex.Lock()
+	if !ex.loaded {
+		if err := ex.load(); err != nil {
+			return 0, fmt.Errorf("lazy load symbol table: %w", err)
+		}
+		ex.loaded = true
+	}
+	ex.Unlock()
 
 	address, ok := ex.addresses[symbol]
 	if !ok {

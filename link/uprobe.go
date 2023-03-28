@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"sync"
 
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/internal"
@@ -34,6 +35,9 @@ type Executable struct {
 	path string
 	// Parsed ELF and dynamic symbols' addresses.
 	addresses map[string]uint64
+	// Keep track of symbol table lazy load.
+	loaded bool
+	sync.Mutex
 }
 
 // UprobeOptions defines additional parameters that will be used
@@ -83,32 +87,10 @@ func OpenExecutable(path string) (*Executable, error) {
 		return nil, fmt.Errorf("path cannot be empty")
 	}
 
-	f, err := os.Open(path)
-	if err != nil {
-		return nil, fmt.Errorf("open file '%s': %w", path, err)
-	}
-	defer f.Close()
-
-	se, err := internal.NewSafeELFFile(f)
-	if err != nil {
-		return nil, fmt.Errorf("parse ELF file: %w", err)
-	}
-
-	if se.Type != elf.ET_EXEC && se.Type != elf.ET_DYN {
-		// ELF is not an executable or a shared object.
-		return nil, errors.New("the given file is not an executable or a shared object")
-	}
-
-	ex := Executable{
+	return &Executable{
 		path:      path,
 		addresses: make(map[string]uint64),
-	}
-
-	if err := ex.load(se); err != nil {
-		return nil, err
-	}
-
-	return &ex, nil
+	}, nil
 }
 
 func (ex *Executable) load(f *internal.SafeELFFile) error {
@@ -164,6 +146,30 @@ func (ex *Executable) address(symbol string, opts *UprobeOptions) (uint64, error
 	if opts.Address > 0 {
 		return opts.Address + opts.Offset, nil
 	}
+
+	ex.Lock()
+	if !ex.loaded {
+		f, err := os.Open(ex.path)
+		if err != nil {
+			return 0, fmt.Errorf("lazy load symbols: open file '%s': %w", ex.path, err)
+		}
+		defer f.Close()
+
+		se, err := internal.NewSafeELFFile(f)
+		if err != nil {
+			return 0, fmt.Errorf("lazy load symbols: parse ELF file: %w", err)
+		}
+
+		if se.Type != elf.ET_EXEC && se.Type != elf.ET_DYN {
+			// ELF is not an executable or a shared object.
+			return 0, errors.New("lazy load symbols: the given file is not an executable or a shared object")
+		}
+		if err := ex.load(se); err != nil {
+			return 0, fmt.Errorf("lazy load symbols: %w", err)
+		}
+		ex.loaded = true
+	}
+	ex.Unlock()
 
 	address, ok := ex.addresses[symbol]
 	if !ok {

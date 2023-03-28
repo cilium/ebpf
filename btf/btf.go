@@ -111,7 +111,7 @@ func LoadSpecFromReader(rd io.ReaderAt) (*Spec, error) {
 	file, err := internal.NewSafeELFFile(rd)
 	if err != nil {
 		if bo := guessRawBTFByteOrder(rd); bo != nil {
-			return loadRawSpec(io.NewSectionReader(rd, 0, math.MaxInt64), bo, nil, nil)
+			return loadRawSpec(io.NewSectionReader(rd, 0, math.MaxInt64), bo, nil)
 		}
 
 		return nil, err
@@ -135,7 +135,7 @@ func LoadSpecAndExtInfosFromReader(rd io.ReaderAt) (*Spec, *ExtInfos, error) {
 		return nil, nil, err
 	}
 
-	extInfos, err := loadExtInfosFromELF(file, spec.types, spec.strings)
+	extInfos, err := loadExtInfosFromELF(file, spec)
 	if err != nil && !errors.Is(err, ErrNotFound) {
 		return nil, nil, err
 	}
@@ -215,7 +215,7 @@ func loadSpecFromELF(file *internal.SafeELFFile) (*Spec, error) {
 		return nil, fmt.Errorf("compressed BTF is not supported")
 	}
 
-	spec, err := loadRawSpec(btfSection.ReaderAt, file.ByteOrder, nil, nil)
+	spec, err := loadRawSpec(btfSection.ReaderAt, file.ByteOrder, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -228,8 +228,19 @@ func loadSpecFromELF(file *internal.SafeELFFile) (*Spec, error) {
 	return spec, nil
 }
 
-func loadRawSpec(btf io.ReaderAt, bo binary.ByteOrder,
-	baseTypes types, baseStrings *stringTable) (*Spec, error) {
+func loadRawSpec(btf io.ReaderAt, bo binary.ByteOrder, base *Spec) (*Spec, error) {
+	var (
+		baseStrings *stringTable
+		baseTypes   []Type
+		firstTypeID TypeID
+	)
+
+	if base != nil {
+		baseStrings = base.strings
+		baseTypes = base.types
+		firstTypeID = base.lastTypeID + 1
+	}
+
 	rawTypes, rawStrings, err := parseBTF(btf, bo, baseStrings)
 	if err != nil {
 		return nil, err
@@ -240,7 +251,7 @@ func loadRawSpec(btf io.ReaderAt, bo binary.ByteOrder,
 		return nil, err
 	}
 
-	typeIDs, typesByName, lastTypeID := indexTypes(types, TypeID(len(baseTypes)))
+	typeIDs, typesByName, lastTypeID := indexTypes(types, firstTypeID)
 
 	return &Spec{
 		namedTypes: typesByName,
@@ -335,7 +346,7 @@ func loadKernelSpec() (_ *Spec, fallback bool, _ error) {
 	if err == nil {
 		defer fh.Close()
 
-		spec, err := loadRawSpec(fh, internal.NativeEndian, nil, nil)
+		spec, err := loadRawSpec(fh, internal.NativeEndian, nil)
 		return spec, false, err
 	}
 
@@ -748,7 +759,7 @@ func LoadSplitSpecFromReader(r io.ReaderAt, base *Spec) (*Spec, error) {
 		return nil, fmt.Errorf("parse split BTF: base must be loaded from an ELF")
 	}
 
-	return loadRawSpec(r, internal.NativeEndian, base.types, base.strings)
+	return loadRawSpec(r, internal.NativeEndian, base)
 }
 
 // TypesIterator iterates over types of a given spec.

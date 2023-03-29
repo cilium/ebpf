@@ -30,7 +30,7 @@ func TestBuild(t *testing.T) {
 	var buf bytes.Buffer
 	qt.Assert(t, marshalTypes(&buf, want, nil, nil), qt.IsNil)
 
-	have, err := loadRawSpec(bytes.NewReader(buf.Bytes()), internal.NativeEndian, nil, nil)
+	have, err := loadRawSpec(bytes.NewReader(buf.Bytes()), internal.NativeEndian, nil)
 	qt.Assert(t, err, qt.IsNil, qt.Commentf("Couldn't parse BTF"))
 	qt.Assert(t, have.types, qt.DeepEquals, want)
 }
@@ -74,7 +74,7 @@ limitTypes:
 	var buf bytes.Buffer
 	qt.Assert(t, marshalTypes(&buf, types, nil, nil), qt.IsNil)
 
-	rebuilt, err := loadRawSpec(bytes.NewReader(buf.Bytes()), binary.LittleEndian, nil, nil)
+	rebuilt, err := loadRawSpec(bytes.NewReader(buf.Bytes()), binary.LittleEndian, nil)
 	qt.Assert(t, err, qt.IsNil, qt.Commentf("round tripping BTF failed"))
 
 	if n := len(rebuilt.types); n > math.MaxUint16 {

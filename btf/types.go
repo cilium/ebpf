@@ -66,18 +66,6 @@ var (
 	_ Type = (*cycle)(nil)
 )
 
-// types is a list of Type.
-//
-// The order determines the ID of a type.
-type types []Type
-
-func (ts types) ByID(id TypeID) (Type, error) {
-	if int(id) > len(ts) {
-		return nil, fmt.Errorf("type ID %d: %w", id, ErrNotFound)
-	}
-	return ts[id], nil
-}
-
 // Void is the unit type of BTF.
 type Void struct{}
 
@@ -752,7 +740,7 @@ type typeDeque = internal.Deque[*Type]
 // Returns  a slice of types indexed by TypeID. Since BTF ignores compilation
 // units, multiple types may share the same name. A Type may form a cyclic graph
 // by pointing at itself.
-func inflateRawTypes(rawTypes []rawType, baseTypes types, rawStrings *stringTable) ([]Type, error) {
+func inflateRawTypes(rawTypes []rawType, baseTypes []Type, rawStrings *stringTable) ([]Type, error) {
 	types := make([]Type, 0, len(rawTypes)+1) // +1 for Void added to base types
 
 	typeIDOffset := TypeID(1) // Void is TypeID(0), so the rest starts from TypeID(1)

@@ -219,6 +219,10 @@ func TestSpecAdd(t *testing.T) {
 	qt.Assert(t, err, qt.IsNil)
 	qt.Assert(t, id, qt.Equals, TypeID(1), qt.Commentf("First non-void type doesn't get id 1"))
 
+	got, err := s.TypeByID(id)
+	qt.Assert(t, err, qt.IsNil)
+	qt.Assert(t, got, qt.Equals, pi)
+
 	id, err = s.Add(pi)
 	qt.Assert(t, err, qt.IsNil)
 	qt.Assert(t, id, qt.Equals, TypeID(1))
@@ -412,6 +416,14 @@ func TestSpecCopy(t *testing.T) {
 			t.Fatalf("Type at index %d is not a copy: %T == %T", i, cpy.types[i], spec.types[i])
 		}
 	}
+}
+
+func TestSpecTypeByID(t *testing.T) {
+	_, err := NewSpec().TypeByID(0)
+	qt.Assert(t, err, qt.IsNil)
+
+	_, err = NewSpec().TypeByID(1)
+	qt.Assert(t, err, qt.ErrorIs, ErrNotFound)
 }
 
 func TestHaveBTF(t *testing.T) {

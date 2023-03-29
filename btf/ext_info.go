@@ -24,7 +24,7 @@ type ExtInfos struct {
 // loadExtInfosFromELF parses ext infos from the .BTF.ext section in an ELF.
 //
 // Returns an error wrapping ErrNotFound if no ext infos are present.
-func loadExtInfosFromELF(file *internal.SafeELFFile, ts types, strings *stringTable) (*ExtInfos, error) {
+func loadExtInfosFromELF(file *internal.SafeELFFile, spec *Spec) (*ExtInfos, error) {
 	section := file.Section(".BTF.ext")
 	if section == nil {
 		return nil, fmt.Errorf("btf ext infos: %w", ErrNotFound)
@@ -34,11 +34,11 @@ func loadExtInfosFromELF(file *internal.SafeELFFile, ts types, strings *stringTa
 		return nil, fmt.Errorf("compressed ext_info is not supported")
 	}
 
-	return loadExtInfos(section.ReaderAt, file.ByteOrder, ts, strings)
+	return loadExtInfos(section.ReaderAt, file.ByteOrder, spec, spec.strings)
 }
 
 // loadExtInfos parses bare ext infos.
-func loadExtInfos(r io.ReaderAt, bo binary.ByteOrder, ts types, strings *stringTable) (*ExtInfos, error) {
+func loadExtInfos(r io.ReaderAt, bo binary.ByteOrder, spec *Spec, strings *stringTable) (*ExtInfos, error) {
 	// Open unbuffered section reader. binary.Read() calls io.ReadFull on
 	// the header structs, resulting in one syscall per header.
 	headerRd := io.NewSectionReader(r, 0, math.MaxInt64)
@@ -60,7 +60,7 @@ func loadExtInfos(r io.ReaderAt, bo binary.ByteOrder, ts types, strings *stringT
 
 	funcInfos := make(map[string][]funcInfo, len(btfFuncInfos))
 	for section, bfis := range btfFuncInfos {
-		funcInfos[section], err = newFuncInfos(bfis, ts)
+		funcInfos[section], err = newFuncInfos(bfis, spec)
 		if err != nil {
 			return nil, fmt.Errorf("section %s: func infos: %w", section, err)
 		}
@@ -93,7 +93,7 @@ func loadExtInfos(r io.ReaderAt, bo binary.ByteOrder, ts types, strings *stringT
 
 	coreRelos := make(map[string][]coreRelocationInfo, len(btfCORERelos))
 	for section, brs := range btfCORERelos {
-		coreRelos[section], err = newRelocationInfos(brs, ts, strings)
+		coreRelos[section], err = newRelocationInfos(brs, spec, strings)
 		if err != nil {
 			return nil, fmt.Errorf("section %s: CO-RE relocations: %w", section, err)
 		}
@@ -345,8 +345,8 @@ type bpfFuncInfo struct {
 	TypeID  TypeID
 }
 
-func newFuncInfo(fi bpfFuncInfo, ts types) (*funcInfo, error) {
-	typ, err := ts.ByID(fi.TypeID)
+func newFuncInfo(fi bpfFuncInfo, spec *Spec) (*funcInfo, error) {
+	typ, err := spec.TypeByID(fi.TypeID)
 	if err != nil {
 		return nil, err
 	}
@@ -367,10 +367,10 @@ func newFuncInfo(fi bpfFuncInfo, ts types) (*funcInfo, error) {
 	}, nil
 }
 
-func newFuncInfos(bfis []bpfFuncInfo, ts types) ([]funcInfo, error) {
+func newFuncInfos(bfis []bpfFuncInfo, spec *Spec) ([]funcInfo, error) {
 	fis := make([]funcInfo, 0, len(bfis))
 	for _, bfi := range bfis {
-		fi, err := newFuncInfo(bfi, ts)
+		fi, err := newFuncInfo(bfi, spec)
 		if err != nil {
 			return nil, fmt.Errorf("offset %d: %w", bfi.InsnOff, err)
 		}
@@ -670,8 +670,8 @@ type coreRelocationInfo struct {
 	offset asm.RawInstructionOffset
 }
 
-func newRelocationInfo(relo bpfCORERelo, ts types, strings *stringTable) (*coreRelocationInfo, error) {
-	typ, err := ts.ByID(relo.TypeID)
+func newRelocationInfo(relo bpfCORERelo, spec *Spec, strings *stringTable) (*coreRelocationInfo, error) {
+	typ, err := spec.TypeByID(relo.TypeID)
 	if err != nil {
 		return nil, err
 	}
@@ -697,10 +697,10 @@ func newRelocationInfo(relo bpfCORERelo, ts types, strings *stringTable) (*coreR
 	}, nil
 }
 
-func newRelocationInfos(brs []bpfCORERelo, ts types, strings *stringTable) ([]coreRelocationInfo, error) {
+func newRelocationInfos(brs []bpfCORERelo, spec *Spec, strings *stringTable) ([]coreRelocationInfo, error) {
 	rs := make([]coreRelocationInfo, 0, len(brs))
 	for _, br := range brs {
-		relo, err := newRelocationInfo(br, ts, strings)
+		relo, err := newRelocationInfo(br, spec, strings)
 		if err != nil {
 			return nil, fmt.Errorf("offset %d: %w", br.InsnOff, err)
 		}

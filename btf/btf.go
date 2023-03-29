@@ -40,8 +40,8 @@ type Spec struct {
 	// Type IDs indexed by type.
 	typeIDs map[Type]TypeID
 
-	// The first and last allocated type ID.
-	firstTypeID, lastTypeID TypeID
+	// The ID of the first type in types.
+	firstTypeID TypeID
 
 	// Types indexed by essential name.
 	// Includes all struct flavors and types with the same name.
@@ -85,7 +85,6 @@ func NewSpec() *Spec {
 	return &Spec{
 		[]Type{(*Void)(nil)},
 		map[Type]TypeID{(*Void)(nil): 0},
-		0,
 		0,
 		make(map[essentialName][]Type),
 		nil,
@@ -241,20 +240,19 @@ func loadRawSpec(btf io.ReaderAt, bo binary.ByteOrder,
 		return nil, err
 	}
 
-	typeIDs, typesByName, lastTypeID := indexTypes(types, TypeID(len(baseTypes)))
+	typeIDs, typesByName := indexTypes(types, TypeID(len(baseTypes)))
 
 	return &Spec{
 		namedTypes:  typesByName,
 		typeIDs:     typeIDs,
 		types:       types,
 		firstTypeID: TypeID(len(baseTypes)),
-		lastTypeID:  lastTypeID,
 		strings:     rawStrings,
 		byteOrder:   bo,
 	}, nil
 }
 
-func indexTypes(types []Type, firstTypeID TypeID) (map[Type]TypeID, map[essentialName][]Type, TypeID) {
+func indexTypes(types []Type, firstTypeID TypeID) (map[Type]TypeID, map[essentialName][]Type) {
 	namedTypes := 0
 	for _, typ := range types {
 		if typ.TypeName() != "" {
@@ -268,16 +266,14 @@ func indexTypes(types []Type, firstTypeID TypeID) (map[Type]TypeID, map[essentia
 	typeIDs := make(map[Type]TypeID, len(types))
 	typesByName := make(map[essentialName][]Type, namedTypes)
 
-	var lastTypeID TypeID
 	for i, typ := range types {
 		if name := newEssentialName(typ.TypeName()); name != "" {
 			typesByName[name] = append(typesByName[name], typ)
 		}
-		lastTypeID = firstTypeID + TypeID(i)
-		typeIDs[typ] = lastTypeID
+		typeIDs[typ] = firstTypeID + TypeID(i)
 	}
 
-	return typeIDs, typesByName, lastTypeID
+	return typeIDs, typesByName
 }
 
 // LoadKernelSpec returns the current kernel's BTF information.
@@ -554,14 +550,13 @@ func fixupDatasecLayout(ds *Datasec) error {
 // Copy creates a copy of Spec.
 func (s *Spec) Copy() *Spec {
 	types := copyTypes(s.types, nil)
-	typeIDs, typesByName, lastTypeID := indexTypes(types, s.firstTypeID)
+	typeIDs, typesByName := indexTypes(types, s.firstTypeID)
 
 	// NB: Other parts of spec are not copied since they are immutable.
 	return &Spec{
 		types,
 		typeIDs,
 		s.firstTypeID,
-		lastTypeID,
 		typesByName,
 		s.strings,
 		s.byteOrder,
@@ -592,14 +587,13 @@ func (s *Spec) Add(typ Type) (TypeID, error) {
 		return id, nil
 	}
 
-	id := s.lastTypeID + 1
-	if id < s.lastTypeID {
+	id := s.firstTypeID + TypeID(len(s.types))
+	if id < s.firstTypeID {
 		return 0, fmt.Errorf("type ID overflow")
 	}
 
 	s.typeIDs[typ] = id
 	s.types = append(s.types, typ)
-	s.lastTypeID = id
 
 	if name := newEssentialName(typ.TypeName()); name != "" {
 		s.namedTypes[name] = append(s.namedTypes[name], typ)
@@ -613,11 +607,16 @@ func (s *Spec) Add(typ Type) (TypeID, error) {
 // Returns an error wrapping ErrNotFound if a Type with the given ID
 // does not exist in the Spec.
 func (s *Spec) TypeByID(id TypeID) (Type, error) {
-	if id < s.firstTypeID || id >= s.lastTypeID {
-		return nil, fmt.Errorf("expected type ID between %d and %d, got %d: %w", s.firstTypeID, s.lastTypeID, id, ErrNotFound)
+	if id < s.firstTypeID {
+		return nil, fmt.Errorf("look up type with ID %d (first ID is %d): %w", id, s.firstTypeID, ErrNotFound)
 	}
 
-	return s.types[id-s.firstTypeID], nil
+	index := int(id - s.firstTypeID)
+	if index >= len(s.types) {
+		return nil, fmt.Errorf("look up type with ID %d: %w", id, ErrNotFound)
+	}
+
+	return s.types[index], nil
 }
 
 // TypeID returns the ID for a given Type.

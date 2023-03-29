@@ -233,12 +233,21 @@ func loadRawSpec(btf io.ReaderAt, bo binary.ByteOrder, base *Spec) (*Spec, error
 		baseStrings *stringTable
 		baseTypes   []Type
 		firstTypeID TypeID
+		err         error
 	)
 
 	if base != nil {
+		if base.firstTypeID != 0 {
+			return nil, fmt.Errorf("can't use split BTF as base")
+		}
+
 		baseStrings = base.strings
 		baseTypes = base.types
-		firstTypeID = TypeID(len(baseTypes))
+
+		firstTypeID, err = base.nextTypeID()
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	rawTypes, rawStrings, err := parseBTF(btf, bo, baseStrings)
@@ -257,7 +266,7 @@ func loadRawSpec(btf io.ReaderAt, bo binary.ByteOrder, base *Spec) (*Spec, error
 		namedTypes:  typesByName,
 		typeIDs:     typeIDs,
 		types:       types,
-		firstTypeID: TypeID(len(baseTypes)),
+		firstTypeID: firstTypeID,
 		strings:     rawStrings,
 		byteOrder:   bo,
 	}, nil
@@ -598,9 +607,9 @@ func (s *Spec) Add(typ Type) (TypeID, error) {
 		return id, nil
 	}
 
-	id := s.firstTypeID + TypeID(len(s.types))
-	if id < s.firstTypeID {
-		return 0, fmt.Errorf("type ID overflow")
+	id, err := s.nextTypeID()
+	if err != nil {
+		return 0, err
 	}
 
 	s.typeIDs[typ] = id
@@ -610,6 +619,16 @@ func (s *Spec) Add(typ Type) (TypeID, error) {
 		s.namedTypes[name] = append(s.namedTypes[name], typ)
 	}
 
+	return id, nil
+}
+
+// nextTypeID returns the next unallocated type ID or an error if there are no
+// more type IDs.
+func (s *Spec) nextTypeID() (TypeID, error) {
+	id := s.firstTypeID + TypeID(len(s.types))
+	if id < s.firstTypeID {
+		return 0, fmt.Errorf("no more type IDs")
+	}
 	return id, nil
 }
 

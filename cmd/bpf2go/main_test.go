@@ -49,14 +49,19 @@ func TestRun(t *testing.T) {
 		}
 	}
 
+	module, err := currentModule()
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	execInModule("go", "mod", "init", "bpf2go-test")
 
 	execInModule("go", "mod", "edit",
 		// Require the module. The version doesn't matter due to the replace
 		// below.
-		fmt.Sprintf("-require=%s@v0.0.0", ebpfModule),
+		fmt.Sprintf("-require=%s@v0.0.0", module),
 		// Replace the module with the current version.
-		fmt.Sprintf("-replace=%s=%s", ebpfModule, modRoot),
+		fmt.Sprintf("-replace=%s=%s", module, modRoot),
 	)
 
 	err = run(io.Discard, "foo", tmpDir, []string{
@@ -230,7 +235,7 @@ func TestConvertGOARCH(t *testing.T) {
 	b2g := bpf2go{
 		pkg:              "test",
 		stdout:           io.Discard,
-		ident:            "test",
+		identStem:        "test",
 		cc:               clangBin(t),
 		disableStripping: true,
 		sourceFile:       tmp + "/test.c",

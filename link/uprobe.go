@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"sync"
 
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/internal"
@@ -34,6 +35,8 @@ type Executable struct {
 	path string
 	// Parsed ELF and dynamic symbols' addresses.
 	addresses map[string]uint64
+	// Keep track of symbol table lazy load.
+	addressesOnce sync.Once
 }
 
 // UprobeOptions defines additional parameters that will be used
@@ -83,32 +86,21 @@ func OpenExecutable(path string) (*Executable, error) {
 		return nil, fmt.Errorf("path cannot be empty")
 	}
 
-	f, err := os.Open(path)
-	if err != nil {
-		return nil, fmt.Errorf("open file '%s': %w", path, err)
-	}
-	defer f.Close()
-
-	se, err := internal.NewSafeELFFile(f)
+	f, err := internal.OpenSafeELFFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("parse ELF file: %w", err)
 	}
+	defer f.Close()
 
-	if se.Type != elf.ET_EXEC && se.Type != elf.ET_DYN {
+	if f.Type != elf.ET_EXEC && f.Type != elf.ET_DYN {
 		// ELF is not an executable or a shared object.
 		return nil, errors.New("the given file is not an executable or a shared object")
 	}
 
-	ex := Executable{
+	return &Executable{
 		path:      path,
 		addresses: make(map[string]uint64),
-	}
-
-	if err := ex.load(se); err != nil {
-		return nil, err
-	}
-
-	return &ex, nil
+	}, nil
 }
 
 func (ex *Executable) load(f *internal.SafeELFFile) error {
@@ -163,6 +155,22 @@ func (ex *Executable) load(f *internal.SafeELFFile) error {
 func (ex *Executable) address(symbol string, opts *UprobeOptions) (uint64, error) {
 	if opts.Address > 0 {
 		return opts.Address + opts.Offset, nil
+	}
+
+	var err error
+	ex.addressesOnce.Do(func() {
+		var f *internal.SafeELFFile
+		f, err = internal.OpenSafeELFFile(ex.path)
+		if err != nil {
+			err = fmt.Errorf("parse ELF file: %w", err)
+			return
+		}
+		defer f.Close()
+
+		err = ex.load(f)
+	})
+	if err != nil {
+		return 0, fmt.Errorf("lazy load symbols: %w", err)
 	}
 
 	address, ok := ex.addresses[symbol]

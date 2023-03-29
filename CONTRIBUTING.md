@@ -35,3 +35,41 @@ Examples:
 ./run-tests.sh 5.4 ./link
 ```
 
+# Contributor ladder
+
+If you'd like to contribute to the library more regularly, one of the
+[maintainers][ebpf-lib-maintainers] can add you to the appropriate team or mark
+you as a code owner.
+Just create an issue in the repository.
+
+## [ebpf-lib-contributors]
+
+Contributors support the development of the library by writing code, diagnosing
+bugs, triaging issues, answering questions, etc.
+
+* Have ["Triage"][roles] role
+* May be asked to review certain parts of code
+* May be asked to help with certain issues
+
+## [ebpf-lib-reviewers]
+
+Code owners have contributed a certain feature or are domain experts. They support
+development by helping to review code.
+
+* Have ["Write"][roles] role
+* Can't merge to protected branches
+* Can't create releases
+* May be asked to become CODEOWNERS
+
+## [ebpf-lib-maintainers]
+
+Code owners of last resort and responsible for the overall direction of the
+library.
+
+* Have ["Admin"][roles] role
+* Can re-run failed CI tasks
+* May be asked to add others to [ebpf-lib-contributors] or CODEOWNERS
+
+[permissions]: https://docs.github.com/en/organizations/managing-user-access-to-your-organizations-repositories/repository-roles-for-an-organization#permissions-for-each-role
+[ebpf-lib-contributors]: https://github.com/orgs/cilium/teams/ebpf-lib-contributors/members
+[ebpf-lib-maintainers]: https://github.com/orgs/cilium/teams/ebpf-lib-maintainers/members

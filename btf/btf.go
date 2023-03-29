@@ -237,9 +237,13 @@ func loadRawSpec(btf io.ReaderAt, bo binary.ByteOrder, base *Spec) (*Spec, error
 	)
 
 	if base != nil {
+		if base.firstTypeID != 0 {
+			return nil, fmt.Errorf("can't use split BTF as base")
+		}
+
 		baseStrings = base.strings
 		baseTypes = base.types
-		firstTypeID = TypeID(len(baseTypes))
+		firstTypeID = base.lastTypeID + 1
 	}
 
 	rawTypes, rawStrings, err := parseBTF(btf, bo, baseStrings)

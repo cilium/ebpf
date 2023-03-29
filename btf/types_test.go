@@ -209,7 +209,7 @@ func TestTagMarshaling(t *testing.T) {
 			err := marshalTypes(&buf, []Type{&Void{}, typ}, nil, nil)
 			qt.Assert(t, err, qt.IsNil)
 
-			s, err := loadRawSpec(bytes.NewReader(buf.Bytes()), internal.NativeEndian, nil, nil)
+			s, err := loadRawSpec(bytes.NewReader(buf.Bytes()), internal.NativeEndian, nil)
 			qt.Assert(t, err, qt.IsNil)
 
 			have, err := s.TypeByID(1)

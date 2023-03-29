@@ -18,6 +18,7 @@ linters:
     - staticcheck
     - typecheck
     - unused
+    - gofmt
 
     # Could be enabled later:
     # - gocyclo

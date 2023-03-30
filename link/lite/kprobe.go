@@ -185,3 +185,14 @@ func kprobeEventsFile() (*os.File, error) {
 
 	return os.OpenFile(path, os.O_APPEND|os.O_WRONLY, 0666)
 }
+
+// kprobeToken creates the SYM[+offs] token for the tracefs api.
+func kprobeToken(args probeArgs) string {
+	po := args.symbol
+
+	if args.offset != 0 {
+		po += fmt.Sprintf("+%#x", args.offset)
+	}
+
+	return po
+}

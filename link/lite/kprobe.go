@@ -13,12 +13,15 @@ import (
 
 type probeArgs struct {
 	symbol, group string
-	offset        uint64
 	pid           int
-	ret           bool
 }
 
-func KprobeLite(symbol string, args probeArgs) error {
+func KprobeLite(symbol string, pid int) error {
+	args := probeArgs{
+		symbol: symbol,
+		pid:    pid,
+	}
+
 	// Use kprobe PMU if the kernel has it available.
 	err := pmuKprobe(args)
 	if err == nil {
@@ -29,7 +32,6 @@ func KprobeLite(symbol string, args probeArgs) error {
 	}
 
 	// Use tracefs if kprobe PMU is missing.
-	args.symbol = symbol
 	if err := tracefsKprobe(args); err != nil {
 		return err
 	}
@@ -47,18 +49,10 @@ func pmuKprobe(args probeArgs) error {
 		return err
 	}
 
-	var config uint64
-	if args.ret {
-		bit, err := internal.ReadUint64FromFileOnce("config:%d\n", "/sys/bus/event_source/devices/kprobe/format/retprobe")
-		if err != nil {
-			return err
-		}
-		config |= 1 << bit
-	}
-
 	var (
-		attr unix.PerfEventAttr
-		sp   unsafe.Pointer
+		config uint64
+		attr   unix.PerfEventAttr
+		sp     unsafe.Pointer
 	)
 	// Create a pointer to a NUL-terminated string for the kernel.
 	sp, err = internal.UnsafeStringPtr(args.symbol)
@@ -72,7 +66,6 @@ func pmuKprobe(args probeArgs) error {
 		Size:   unix.PERF_ATTR_SIZE_VER1,
 		Type:   uint32(et),          // PMU event type read from sysfs
 		Ext1:   uint64(uintptr(sp)), // Kernel symbol to trace
-		Ext2:   args.offset,         // Kernel symbol offset
 		Config: config,              // Retprobe flag
 	}
 
@@ -142,8 +135,8 @@ func createTraceFSKProbeEvent(args probeArgs) (uint64, error) {
 	}
 	defer f.Close()
 
-	token := kprobeToken(args)
-	pe := fmt.Sprintf("%s:%s/%s %s", internal.ProbePrefix(args.ret, 0), args.group, internal.SanitizeSymbol(args.symbol), token)
+	token := args.symbol
+	pe := fmt.Sprintf("%s:%s/%s %s", internal.ProbePrefix(false, 0), args.group, internal.SanitizeSymbol(args.symbol), token)
 	_, err = f.WriteString(pe)
 	if err != nil {
 		return 0, err
@@ -184,15 +177,4 @@ func kprobeEventsFile() (*os.File, error) {
 	}
 
 	return os.OpenFile(path, os.O_APPEND|os.O_WRONLY, 0666)
-}
-
-// kprobeToken creates the SYM[+offs] token for the tracefs api.
-func kprobeToken(args probeArgs) string {
-	po := args.symbol
-
-	if args.offset != 0 {
-		po += fmt.Sprintf("+%#x", args.offset)
-	}
-
-	return po
 }

@@ -9,6 +9,7 @@ import (
 	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/sys"
 	"github.com/cilium/ebpf/internal/unix"
+	"github.com/cilium/ebpf/link/lite"
 )
 
 // invalidBPFObjNameChar returns true if char may not appear in
@@ -260,5 +261,17 @@ var haveBPFToBPFCalls = internal.NewFeatureTest("bpf2bpf calls", "4.16", func() 
 		return err
 	}
 	_ = fd.Close()
+	return nil
+})
+
+var haveSyscallWrapper = internal.NewFeatureTest("syscall wrapper", "4.17", func() error {
+	testSyscallName, ok := internal.PlatformPrefix("sys_bpf")
+	if !ok {
+		return internal.ErrNotSupported
+	}
+
+	if err := lite.KprobeCheckLite(testSyscallName, -1); err != nil {
+		return internal.ErrNotSupported
+	}
 	return nil
 })

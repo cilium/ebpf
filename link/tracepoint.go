@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/cilium/ebpf"
+	"github.com/cilium/ebpf/internal"
 )
 
 // TracepointOptions defines additional parameters that will be used
@@ -36,19 +37,19 @@ func Tracepoint(group, name string, prog *ebpf.Program, opts *TracepointOptions)
 	if prog == nil {
 		return nil, fmt.Errorf("prog cannot be nil: %w", errInvalidInput)
 	}
-	if !isValidTraceID(group) || !isValidTraceID(name) {
+	if !internal.IsValidTraceID(group) || !internal.IsValidTraceID(name) {
 		return nil, fmt.Errorf("group and name '%s/%s' must be alphanumeric or underscore: %w", group, name, errInvalidInput)
 	}
 	if prog.Type() != ebpf.TracePoint {
 		return nil, fmt.Errorf("eBPF program type %s is not a Tracepoint: %w", prog.Type(), errInvalidInput)
 	}
 
-	tid, err := getTraceEventID(group, name)
+	tid, err := internal.GetTraceEventID(group, name)
 	if err != nil {
 		return nil, err
 	}
 
-	fd, err := openTracepointPerfEvent(tid, perfAllThreads)
+	fd, err := internal.OpenTracepointPerfEvent(tid, perfAllThreads)
 	if err != nil {
 		return nil, err
 	}

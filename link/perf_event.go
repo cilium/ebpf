@@ -340,31 +340,6 @@ var haveBPFLinkPerfEvent = internal.NewFeatureTest("bpf_link_perf_event", "5.15"
 	return err
 })
 
-// isValidTraceID implements the equivalent of a regex match
-// against "^[a-zA-Z_][0-9a-zA-Z_]*$".
-//
-// Trace event groups, names and kernel symbols must adhere to this set
-// of characters. Non-empty, first character must not be a number, all
-// characters must be alphanumeric or underscore.
-func isValidTraceID(s string) bool {
-	if len(s) < 1 {
-		return false
-	}
-	for i, c := range []byte(s) {
-		switch {
-		case c >= 'a' && c <= 'z':
-		case c >= 'A' && c <= 'Z':
-		case c == '_':
-		case i > 0 && c >= '0' && c <= '9':
-
-		default:
-			return false
-		}
-	}
-
-	return true
-}
-
 // getTracefsPath will return a correct path to the tracefs mount point.
 // Since kernel 4.1 tracefs should be mounted by default at /sys/kernel/tracing,
 // but may be also be available at /sys/kernel/debug/tracing if debugfs is mounted.

@@ -8,9 +8,9 @@ import (
 // RandomTraceFSGroup generates a pseudorandom string for use as a tracefs group name.
 // Returns an error when the output string would exceed 63 characters (kernel
 // limitation), when rand.Read() fails or when prefix contains characters not
-// allowed by isValidTraceID.
+// allowed by IsValidTraceID.
 func RandomTraceFSGroup(prefix string) (string, error) {
-	if !isValidTraceID(prefix) {
+	if !IsValidTraceID(prefix) {
 		return "", fmt.Errorf("prefix '%s' must be alphanumeric or underscore: %w", prefix, errInvalidInput)
 	}
 
@@ -25,4 +25,29 @@ func RandomTraceFSGroup(prefix string) (string, error) {
 	}
 
 	return group, nil
+}
+
+// IsValidTraceID implements the equivalent of a regex match
+// against "^[a-zA-Z_][0-9a-zA-Z_]*$".
+//
+// Trace event groups, names and kernel symbols must adhere to this set
+// of characters. Non-empty, first character must not be a number, all
+// characters must be alphanumeric or underscore.
+func IsValidTraceID(s string) bool {
+	if len(s) < 1 {
+		return false
+	}
+	for i, c := range []byte(s) {
+		switch {
+		case c >= 'a' && c <= 'z':
+		case c >= 'A' && c <= 'Z':
+		case c == '_':
+		case i > 0 && c >= '0' && c <= '9':
+
+		default:
+			return false
+		}
+	}
+
+	return true
 }

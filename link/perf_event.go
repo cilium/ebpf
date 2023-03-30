@@ -1,15 +1,12 @@
 package link
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
-	"sync"
-	"unsafe"
 
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/asm"
@@ -256,15 +253,6 @@ func attachPerfEventLink(pe *perfEvent, prog *ebpf.Program) (*perfEventLink, err
 	return pl, nil
 }
 
-// unsafeStringPtr returns an unsafe.Pointer to a NUL-terminated copy of str.
-func unsafeStringPtr(str string) (unsafe.Pointer, error) {
-	p, err := unix.BytePtrFromString(str)
-	if err != nil {
-		return nil, err
-	}
-	return unsafe.Pointer(p), nil
-}
-
 // getTraceEventID reads a trace event's ID from tracefs given its group and name.
 // The kernel requires group and name to be alphanumeric or underscore.
 //
@@ -276,7 +264,7 @@ func getTraceEventID(group, name string) (uint64, error) {
 	if err != nil {
 		return 0, err
 	}
-	tid, err := readUint64FromFile("%d\n", path)
+	tid, err := internal.ReadUint64FromFile("%d\n", path)
 	if errors.Is(err, os.ErrNotExist) {
 		return 0, err
 	}
@@ -318,68 +306,6 @@ func sanitizeTracefsPath(path ...string) (string, error) {
 		return "", fmt.Errorf("path '%s' attempts to escape base path '%s': %w", l, base, errInvalidInput)
 	}
 	return p, nil
-}
-
-// readUint64FromFile reads a uint64 from a file.
-//
-// format specifies the contents of the file in fmt.Scanf syntax.
-func readUint64FromFile(format string, path ...string) (uint64, error) {
-	filename := filepath.Join(path...)
-	data, err := os.ReadFile(filename)
-	if err != nil {
-		return 0, fmt.Errorf("reading file %q: %w", filename, err)
-	}
-
-	var value uint64
-	n, err := fmt.Fscanf(bytes.NewReader(data), format, &value)
-	if err != nil {
-		return 0, fmt.Errorf("parsing file %q: %w", filename, err)
-	}
-	if n != 1 {
-		return 0, fmt.Errorf("parsing file %q: expected 1 item, got %d", filename, n)
-	}
-
-	return value, nil
-}
-
-type uint64FromFileKey struct {
-	format, path string
-}
-
-var uint64FromFileCache = struct {
-	sync.RWMutex
-	values map[uint64FromFileKey]uint64
-}{
-	values: map[uint64FromFileKey]uint64{},
-}
-
-// readUint64FromFileOnce is like readUint64FromFile but memoizes the result.
-func readUint64FromFileOnce(format string, path ...string) (uint64, error) {
-	filename := filepath.Join(path...)
-	key := uint64FromFileKey{format, filename}
-
-	uint64FromFileCache.RLock()
-	if value, ok := uint64FromFileCache.values[key]; ok {
-		uint64FromFileCache.RUnlock()
-		return value, nil
-	}
-	uint64FromFileCache.RUnlock()
-
-	value, err := readUint64FromFile(format, filename)
-	if err != nil {
-		return 0, err
-	}
-
-	uint64FromFileCache.Lock()
-	defer uint64FromFileCache.Unlock()
-
-	if value, ok := uint64FromFileCache.values[key]; ok {
-		// Someone else got here before us, use what is cached.
-		return value, nil
-	}
-
-	uint64FromFileCache.values[key] = value
-	return value, nil
 }
 
 // Probe BPF perf link.

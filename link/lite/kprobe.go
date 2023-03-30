@@ -2,7 +2,6 @@ package lite
 
 import (
 	"errors"
-	"fmt"
 	"runtime"
 	"unsafe"
 
@@ -19,22 +18,22 @@ type probeArgs struct {
 
 func KprobeLite(symbol string, args probeArgs) error {
 	// Use kprobe PMU if the kernel has it available.
-	tp, err := pmuKprobe(args)
+	err := pmuKprobe(args)
 	if err == nil {
 		return nil
 	}
 	if err != nil && !errors.Is(err, internal.ErrNotSupported) {
-		return fmt.Errorf("creating perf_kprobe PMU (arch-specific fallback for %q): %w", symbol, err)
+		return err
 	}
 
 	// Use tracefs if kprobe PMU is missing.
 	args.symbol = symbol
-	tp, err = tracefsKprobe(args)
+	tp, err := tracefsKprobe(args)
 	if err != nil {
-		return nil, fmt.Errorf("creating tracefs event (arch-specific fallback for %q): %w", symbol, err)
+		return err
 	}
 
-	return tp, nil
+	return nil
 }
 
 // pmuKprobe opens a perf event based on the kprobe PMU.
@@ -42,16 +41,16 @@ func KprobeLite(symbol string, args probeArgs) error {
 func pmuKprobe(args probeArgs) error {
 	// Getting the PMU type will fail if the kernel doesn't support
 	// the perf_[k,u]probe PMU.
-	et, err := readUint64FromFileOnce("%d\n", "/sys/bus/event_source/devices", typ.String(), "type")
+	et, err := internal.ReadUint64FromFileOnce("%d\n", "/sys/bus/event_source/devices/kprobe/type")
 	if err != nil {
 		return err
 	}
 
 	var config uint64
 	if args.ret {
-		bit, err := readUint64FromFileOnce("config:%d\n", "/sys/bus/event_source/devices", typ.String(), "/format/retprobe")
+		bit, err := internal.ReadUint64FromFileOnce("config:%d\n", "/sys/bus/event_source/devices/kprobe/format/retprobe")
 		if err != nil {
-			return nil, err
+			return err
 		}
 		config |= 1 << bit
 	}
@@ -61,9 +60,9 @@ func pmuKprobe(args probeArgs) error {
 		sp   unsafe.Pointer
 	)
 	// Create a pointer to a NUL-terminated string for the kernel.
-	sp, err = unsafeStringPtr(args.symbol)
+	sp, err = internal.UnsafeStringPtr(args.symbol)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	attr = unix.PerfEventAttr{

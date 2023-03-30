@@ -140,3 +140,13 @@ func GetTraceEventID(group, name string) (uint64, error) {
 
 	return tid, nil
 }
+
+func ProbePrefix(ret bool, maxActive int) string {
+	if ret {
+		if maxActive > 0 {
+			return fmt.Sprintf("r%d", maxActive)
+		}
+		return "r"
+	}
+	return "p"
+}

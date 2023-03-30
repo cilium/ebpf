@@ -10,6 +10,7 @@ import (
 
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/asm"
+	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/testutils"
 	"github.com/cilium/ebpf/internal/unix"
 )
@@ -272,8 +273,8 @@ func BenchmarkKprobeCreateTraceFS(b *testing.B) {
 func TestKprobeCreateTraceFS(t *testing.T) {
 	c := qt.New(t)
 
-	pg, _ := randomGroup("ebpftest")
-	rg, _ := randomGroup("ebpftest")
+	pg, _ := internal.RandomTraceFSGroup("ebpftest")
+	rg, _ := internal.RandomTraceFSGroup("ebpftest")
 
 	// Tee up cleanups in case any of the Asserts abort the function.
 	defer func() {
@@ -316,7 +317,7 @@ func TestKprobeTraceFSGroup(t *testing.T) {
 	c := qt.New(t)
 
 	// Expect <prefix>_<16 random hex chars>.
-	g, err := randomGroup("ebpftest")
+	g, err := internal.RandomTraceFSGroup("ebpftest")
 	c.Assert(err, qt.IsNil)
 	c.Assert(g, qt.Matches, `ebpftest_[a-f0-9]{16}`)
 
@@ -325,11 +326,11 @@ func TestKprobeTraceFSGroup(t *testing.T) {
 	for i := range p {
 		p[i] = byte('a')
 	}
-	_, err = randomGroup(string(p))
+	_, err = internal.RandomTraceFSGroup(string(p))
 	c.Assert(err, qt.Not(qt.IsNil))
 
 	// Reject non-alphanumeric characters.
-	_, err = randomGroup("/")
+	_, err = internal.RandomTraceFSGroup("/")
 	c.Assert(err, qt.Not(qt.IsNil))
 }
 

@@ -465,7 +465,7 @@ func createTraceFSProbeEvent(typ probeType, args probeArgs) (uint64, error) {
 			return 0, errInvalidMaxActive
 		}
 		token = kprobeToken(args)
-		pe = fmt.Sprintf("%s:%s/%s %s", probePrefix(args.ret, args.retprobeMaxActive), args.group, sanitizeSymbol(args.symbol), token)
+		pe = fmt.Sprintf("%s:%s/%s %s", probePrefix(args.ret, args.retprobeMaxActive), args.group, internal.SanitizeSymbol(args.symbol), token)
 	case uprobeType:
 		// The uprobe_events syntax is as follows:
 		// p[:[GRP/]EVENT] PATH:OFFSET [FETCHARGS] : Set a probe
@@ -529,7 +529,7 @@ func createTraceFSProbeEvent(typ probeType, args probeArgs) (uint64, error) {
 // closeTraceFSProbeEvent removes the [k,u]probe with the given type, group and symbol
 // from <tracefs>/[k,u]probe_events.
 func closeTraceFSProbeEvent(typ probeType, group, symbol string) error {
-	pe := fmt.Sprintf("%s/%s", group, sanitizeSymbol(symbol))
+	pe := fmt.Sprintf("%s/%s", group, internal.SanitizeSymbol(symbol))
 	return removeTraceFSProbeEvent(typ, pe)
 }
 

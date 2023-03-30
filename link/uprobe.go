@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"strings"
 	"sync"
 
 	"github.com/cilium/ebpf"
@@ -311,7 +310,7 @@ func (ex *Executable) uprobe(symbol string, prog *ebpf.Program, opts *UprobeOpti
 	}
 
 	// Use tracefs if uprobe PMU is missing.
-	args.symbol = sanitizeSymbol(symbol)
+	args.symbol = internal.SanitizeSymbol(symbol)
 	tp, err = tracefsUprobe(args)
 	if err != nil {
 		return nil, fmt.Errorf("creating trace event '%s:%s' in tracefs: %w", ex.path, symbol, err)
@@ -328,28 +327,6 @@ func pmuUprobe(args probeArgs) (*perfEvent, error) {
 // tracefsUprobe creates a Uprobe tracefs entry.
 func tracefsUprobe(args probeArgs) (*perfEvent, error) {
 	return tracefsProbe(uprobeType, args)
-}
-
-// sanitizeSymbol replaces every invalid character for the tracefs api with an underscore.
-// It is equivalent to calling regexp.MustCompile("[^a-zA-Z0-9]+").ReplaceAllString("_").
-func sanitizeSymbol(s string) string {
-	var skip bool
-	return strings.Map(func(c rune) rune {
-		switch {
-		case c >= 'a' && c <= 'z',
-			c >= 'A' && c <= 'Z',
-			c >= '0' && c <= '9':
-			skip = false
-			return c
-
-		case skip:
-			return -1
-
-		default:
-			skip = true
-			return '_'
-		}
-	}, s)
 }
 
 // uprobeToken creates the PATH:OFFSET(REF_CTR_OFFSET) token for the tracefs api.

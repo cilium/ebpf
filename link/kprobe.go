@@ -96,7 +96,7 @@ func (pt probeType) PerfEventType(ret bool) perfEventType {
 // platform's syscall prefix (e.g. __x64_) to support attaching to syscalls
 // in a portable fashion.
 func Kprobe(symbol string, prog *ebpf.Program, opts *KprobeOptions) (Link, error) {
-	k, err := kprobe(symbol, prog, opts, false, true)
+	k, err := kprobe(symbol, prog, opts, false)
 	if err != nil {
 		return nil, err
 	}
@@ -127,7 +127,7 @@ func Kprobe(symbol string, prog *ebpf.Program, opts *KprobeOptions) (Link, error
 // On kernels 5.10 and earlier, setting a kretprobe on a nonexistent symbol
 // incorrectly returns unix.EINVAL instead of os.ErrNotExist.
 func Kretprobe(symbol string, prog *ebpf.Program, opts *KprobeOptions) (Link, error) {
-	k, err := kprobe(symbol, prog, opts, true, true)
+	k, err := kprobe(symbol, prog, opts, true)
 	if err != nil {
 		return nil, err
 	}
@@ -170,7 +170,7 @@ func isValidKprobeSymbol(s string) bool {
 
 // kprobe opens a perf event on the given symbol and attaches prog to it.
 // If ret is true, create a kretprobe.
-func kprobe(symbol string, prog *ebpf.Program, opts *KprobeOptions, ret bool, retryWithPlatformPrefix bool) (*perfEvent, error) {
+func kprobe(symbol string, prog *ebpf.Program, opts *KprobeOptions, ret bool) (*perfEvent, error) {
 	if symbol == "" {
 		return nil, fmt.Errorf("symbol name cannot be empty: %w", errInvalidInput)
 	}
@@ -199,7 +199,7 @@ func kprobe(symbol string, prog *ebpf.Program, opts *KprobeOptions, ret bool, re
 
 	// Use kprobe PMU if the kernel has it available.
 	tp, err := pmuKprobe(args)
-	if (errors.Is(err, os.ErrNotExist) || errors.Is(err, unix.EINVAL)) && retryWithPlatformPrefix {
+	if errors.Is(err, os.ErrNotExist) || errors.Is(err, unix.EINVAL) {
 		if prefixedSymbol, ok := internal.PlatformPrefix(symbol); ok {
 			args.symbol = prefixedSymbol
 			tp, err = pmuKprobe(args)
@@ -215,7 +215,7 @@ func kprobe(symbol string, prog *ebpf.Program, opts *KprobeOptions, ret bool, re
 	// Use tracefs if kprobe PMU is missing.
 	args.symbol = symbol
 	tp, err = tracefsKprobe(args)
-	if (errors.Is(err, os.ErrNotExist) || errors.Is(err, unix.EINVAL)) && retryWithPlatformPrefix {
+	if errors.Is(err, os.ErrNotExist) || errors.Is(err, unix.EINVAL) {
 		if prefixedSymbol, ok := internal.PlatformPrefix(symbol); ok {
 			args.symbol = prefixedSymbol
 			tp, err = tracefsKprobe(args)

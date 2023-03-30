@@ -143,7 +143,7 @@ func createTraceFSKProbeEvent(args probeArgs) (uint64, error) {
 	defer f.Close()
 
 	token := kprobeToken(args)
-	pe := fmt.Sprintf("%s:%s/%s %s", probePrefix(args.ret, 0), args.group, sanitizeSymbol(args.symbol), token)
+	pe := fmt.Sprintf("%s:%s/%s %s", probePrefix(args.ret, 0), args.group, internal.SanitizeSymbol(args.symbol), token)
 	_, err = f.WriteString(pe)
 	if err != nil {
 		return 0, err
@@ -159,7 +159,7 @@ func createTraceFSKProbeEvent(args probeArgs) (uint64, error) {
 }
 
 func closeTraceFSKProbeEvent(group, symbol string) error {
-	pe := fmt.Sprintf("%s/%s", group, sanitizeSymbol(symbol))
+	pe := fmt.Sprintf("%s/%s", group, internal.SanitizeSymbol(symbol))
 	return removeTraceFSKProbeEvent(pe)
 }
 

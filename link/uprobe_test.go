@@ -12,6 +12,7 @@ import (
 	qt "github.com/frankban/quicktest"
 
 	"github.com/cilium/ebpf"
+	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/testutils"
 	"github.com/cilium/ebpf/internal/unix"
 )
@@ -290,8 +291,8 @@ func TestUprobeCreateTraceFS(t *testing.T) {
 	// Sanitize the symbol in order to be used in tracefs API.
 	ssym := sanitizeSymbol(bashSym)
 
-	pg, _ := randomGroup("ebpftest")
-	rg, _ := randomGroup("ebpftest")
+	pg, _ := internal.RandomTraceFSGroup("ebpftest")
+	rg, _ := internal.RandomTraceFSGroup("ebpftest")
 
 	// Tee up cleanups in case any of the Asserts abort the function.
 	defer func() {

@@ -8,6 +8,7 @@ import (
 	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/sys"
 	"github.com/cilium/ebpf/internal/unix"
+	"github.com/cilium/ebpf/link/lite"
 )
 
 // Type is the kind of link.
@@ -128,10 +129,8 @@ var haveSyscallWrapper = internal.NewFeatureTest("syscall wrapper", "4.17", func
 		return internal.ErrNotSupported
 	}
 
-	pe, err := kprobe(testSyscallName, nil, nil, false, false)
-	if err != nil {
+	if err := lite.KprobeCheckLite(testSyscallName, perfAllThreads); err != nil {
 		return internal.ErrNotSupported
 	}
-	defer pe.Close()
 	return nil
 })

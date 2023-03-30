@@ -387,7 +387,7 @@ func TestInflateLegacyBitfield(t *testing.T) {
 		{"struct after int", []rawType{rawInt, afterInt}},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			types, err := inflateRawTypes(test.raw, nil, emptyStrings)
+			types, err := inflateRawTypes(test.raw, emptyStrings, nil)
 			if err != nil {
 				t.Fatal(err)
 			}

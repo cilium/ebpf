@@ -8,7 +8,6 @@ import (
 	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/sys"
 	"github.com/cilium/ebpf/internal/unix"
-	"github.com/cilium/ebpf/link/lite"
 )
 
 // Type is the kind of link.
@@ -121,16 +120,4 @@ var haveProgQuery = internal.NewFeatureTest("BPF_PROG_QUERY", "4.15", func() err
 		return nil
 	}
 	return err
-})
-
-var haveSyscallWrapper = internal.NewFeatureTest("syscall wrapper", "4.17", func() error {
-	testSyscallName, ok := platformPrefix("sys_bpf")
-	if !ok {
-		return internal.ErrNotSupported
-	}
-
-	if err := lite.KprobeCheckLite(testSyscallName, perfAllThreads); err != nil {
-		return internal.ErrNotSupported
-	}
-	return nil
 })

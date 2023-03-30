@@ -600,6 +600,17 @@ func resolveKconfig(m *MapSpec) error {
 			}
 			internal.NativeEndian.PutUint32(data[vsi.Offset:], kv.Kernel())
 
+		case "LINUX_HAS_SYSCALL_WRAPPER":
+			if integer, ok := v.Type.(*btf.Int); !ok || integer.Size != 4 {
+				return fmt.Errorf("variable %s must be a 32 bits integer, got %s", n, v.Type)
+			}
+			var value uint32
+			if haveSyscallWrapper() == nil {
+				value = 1
+			}
+
+			internal.NativeEndian.PutUint32(data[vsi.Offset:], value)
+
 		default:
 			return fmt.Errorf("unsupported kconfig: %s", n)
 		}

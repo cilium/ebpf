@@ -2,6 +2,8 @@ package lite
 
 import (
 	"errors"
+	"fmt"
+	"os"
 	"runtime"
 	"unsafe"
 
@@ -101,7 +103,7 @@ func tracefsKprobe(args probeArgs) error {
 	args.group = group
 
 	// Create the [k,u]probe trace event using tracefs.
-	tid, err := createTraceFSProbeEvent(typ, args)
+	tid, err := createTraceFSKProbeEvent(args)
 	if err != nil {
 		return err
 	}
@@ -114,15 +116,72 @@ func tracefsKprobe(args probeArgs) error {
 		// tracefs will succeed, a trace event will show up, but creating the
 		// perf event will fail with EBUSY.
 		_ = closeTraceFSProbeEvent(typ, args.group, args.symbol)
+		return err
+	}
+
+	return nil
+}
+
+func createTraceFSKProbeEvent(args probeArgs) (uint64, error) {
+	// Before attempting to create a trace event through tracefs,
+	// check if an event with the same group and name already exists.
+	// Kernels 4.x and earlier don't return os.ErrExist on writing a duplicate
+	// entry, so we need to rely on reads for detecting uniqueness.
+	_, err := getTraceEventID(args.group, args.symbol)
+	if err == nil {
+		return 0, fmt.Errorf("trace event %s/%s: %w", args.group, args.symbol, os.ErrExist)
+	}
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return 0, fmt.Errorf("checking trace event %s/%s: %w", args.group, args.symbol, err)
+	}
+
+	// Open the kprobe_events file in tracefs.
+	f, err := kprobeEventsFile()
+	if err != nil {
+		return 0, err
+	}
+	defer f.Close()
+
+	token := kprobeToken(args)
+	pe := fmt.Sprintf("%s:%s/%s %s", probePrefix(args.ret, 0), args.group, sanitizeSymbol(args.symbol), token)
+	_, err = f.WriteString(pe)
+	if err != nil {
+		return 0, err
+	}
+
+	// Get the newly-created trace event's id.
+	tid, err := getTraceEventID(args.group, args.symbol)
+	if err != nil {
+		return 0, fmt.Errorf("get trace event id: %w", err)
+	}
+
+	return tid, nil
+}
+
+func closeTraceFSKProbeEvent(group, symbol string) error {
+	pe := fmt.Sprintf("%s/%s", group, sanitizeSymbol(symbol))
+	return removeTraceFSKProbeEvent(pe)
+}
+
+func removeTraceFSKProbeEvent(pe string) error {
+	f, err := kprobeEventsFile()
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	if _, err = f.WriteString("-:" + pe); err != nil {
+		return fmt.Errorf("remove event %q from %s: %w", pe, f.Name(), err)
+	}
+
+	return nil
+}
+
+func kprobeEventsFile() (*os.File, error) {
+	path, err := internal.SanitizeTracefsPath("kprobe_events")
+	if err != nil {
 		return nil, err
 	}
 
-	return &perfEvent{
-		typ:       typ.PerfEventType(args.ret),
-		group:     group,
-		name:      args.symbol,
-		tracefsID: tid,
-		cookie:    args.cookie,
-		fd:        fd,
-	}, nil
+	return os.OpenFile(path, os.O_APPEND|os.O_WRONLY, 0666)
 }

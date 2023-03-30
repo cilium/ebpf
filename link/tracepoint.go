@@ -44,7 +44,7 @@ func Tracepoint(group, name string, prog *ebpf.Program, opts *TracepointOptions)
 		return nil, fmt.Errorf("eBPF program type %s is not a Tracepoint: %w", prog.Type(), errInvalidInput)
 	}
 
-	tid, err := getTraceEventID(group, name)
+	tid, err := internal.GetTraceEventID(group, name)
 	if err != nil {
 		return nil, err
 	}

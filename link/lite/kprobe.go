@@ -115,7 +115,7 @@ func tracefsKprobe(args probeArgs) error {
 		// If a livepatch handler is already active on the symbol, the write to
 		// tracefs will succeed, a trace event will show up, but creating the
 		// perf event will fail with EBUSY.
-		_ = closeTraceFSProbeEvent(typ, args.group, args.symbol)
+		_ = closeTraceFSKProbeEvent(args.group, args.symbol)
 		return err
 	}
 
@@ -127,7 +127,7 @@ func createTraceFSKProbeEvent(args probeArgs) (uint64, error) {
 	// check if an event with the same group and name already exists.
 	// Kernels 4.x and earlier don't return os.ErrExist on writing a duplicate
 	// entry, so we need to rely on reads for detecting uniqueness.
-	_, err := getTraceEventID(args.group, args.symbol)
+	_, err := internal.GetTraceEventID(args.group, args.symbol)
 	if err == nil {
 		return 0, fmt.Errorf("trace event %s/%s: %w", args.group, args.symbol, os.ErrExist)
 	}
@@ -150,7 +150,7 @@ func createTraceFSKProbeEvent(args probeArgs) (uint64, error) {
 	}
 
 	// Get the newly-created trace event's id.
-	tid, err := getTraceEventID(args.group, args.symbol)
+	tid, err := internal.GetTraceEventID(args.group, args.symbol)
 	if err != nil {
 		return 0, fmt.Errorf("get trace event id: %w", err)
 	}

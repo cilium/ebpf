@@ -429,7 +429,7 @@ func createTraceFSProbeEvent(typ probeType, args probeArgs) (uint64, error) {
 	// check if an event with the same group and name already exists.
 	// Kernels 4.x and earlier don't return os.ErrExist on writing a duplicate
 	// entry, so we need to rely on reads for detecting uniqueness.
-	_, err := getTraceEventID(args.group, args.symbol)
+	_, err := internal.GetTraceEventID(args.group, args.symbol)
 	if err == nil {
 		return 0, fmt.Errorf("trace event %s/%s: %w", args.group, args.symbol, os.ErrExist)
 	}
@@ -507,7 +507,7 @@ func createTraceFSProbeEvent(typ probeType, args probeArgs) (uint64, error) {
 	}
 
 	// Get the newly-created trace event's id.
-	tid, err := getTraceEventID(args.group, args.symbol)
+	tid, err := internal.GetTraceEventID(args.group, args.symbol)
 	if args.retprobeMaxActive != 0 && errors.Is(err, os.ErrNotExist) {
 		// Kernels < 4.12 don't support maxactive and therefore auto generate
 		// group and event names from the symbol and offset. The symbol is used

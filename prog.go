@@ -258,6 +258,12 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions) (*Program, er
 		return nil, fmt.Errorf("apply CO-RE relocations: %w", err)
 	}
 
+	kconfig, err := resolveKconfigReferences(insns)
+	if err != nil {
+		return nil, fmt.Errorf("resolve .kconfig: %w", err)
+	}
+	defer kconfig.Close()
+
 	if err := fixupAndValidate(insns); err != nil {
 		return nil, err
 	}

@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/cilium/ebpf/internal/sys"
 	"github.com/cilium/ebpf/internal/unix"
 )
 
@@ -149,4 +150,24 @@ func ProbePrefix(ret bool, maxActive int) string {
 		return "r"
 	}
 	return "p"
+}
+
+// OpenTracepointPerfEvent opens a tracepoint-type perf event. System-wide
+// [k,u]probes created by writing to <tracefs>/[k,u]probe_events are tracepoints
+// behind the scenes, and can be attached to using these perf events.
+func OpenTracepointPerfEvent(tid uint64, pid int) (*sys.FD, error) {
+	attr := unix.PerfEventAttr{
+		Type:        unix.PERF_TYPE_TRACEPOINT,
+		Config:      tid,
+		Sample_type: unix.PERF_SAMPLE_RAW,
+		Sample:      1,
+		Wakeup:      1,
+	}
+
+	fd, err := unix.PerfEventOpen(&attr, pid, 0, -1, unix.PERF_FLAG_FD_CLOEXEC)
+	if err != nil {
+		return nil, fmt.Errorf("opening tracepoint perf event: %w", err)
+	}
+
+	return sys.NewFD(fd)
 }

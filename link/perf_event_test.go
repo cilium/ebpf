@@ -4,6 +4,7 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/testutils"
 	qt "github.com/frankban/quicktest"
 )
@@ -50,7 +51,7 @@ func TestTraceValidID(t *testing.T) {
 				exp = "fail"
 			}
 
-			if isValidTraceID(tt.in) == tt.fail {
+			if internal.IsValidTraceID(tt.in) == tt.fail {
 				t.Errorf("expected string '%s' to %s valid ID check", tt.in, exp)
 			}
 		})

@@ -257,7 +257,7 @@ func attachPerfEventLink(pe *perfEvent, prog *ebpf.Program) (*perfEventLink, err
 // name automatically has its invalid symbols converted to underscores so the caller
 // can pass a raw symbol name, e.g. a kernel symbol containing dots.
 func getTraceEventID(group, name string) (uint64, error) {
-	name = sanitizeSymbol(name)
+	name = internal.SanitizeSymbol(name)
 	path, err := internal.SanitizeTracefsPath("events", group, name, "id")
 	if err != nil {
 		return 0, err

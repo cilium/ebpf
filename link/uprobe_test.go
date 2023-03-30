@@ -235,7 +235,7 @@ func TestUprobeTraceFS(t *testing.T) {
 
 	// Prepare probe args.
 	args := probeArgs{
-		symbol: sanitizeSymbol(bashSym),
+		symbol: internal.SanitizeSymbol(bashSym),
 		path:   bashEx.path,
 		offset: off,
 		pid:    perfAllThreads,
@@ -289,7 +289,7 @@ func TestUprobeCreateTraceFS(t *testing.T) {
 	c.Assert(err, qt.IsNil)
 
 	// Sanitize the symbol in order to be used in tracefs API.
-	ssym := sanitizeSymbol(bashSym)
+	ssym := internal.SanitizeSymbol(bashSym)
 
 	pg, _ := internal.RandomTraceFSGroup("ebpftest")
 	rg, _ := internal.RandomTraceFSGroup("ebpftest")
@@ -351,7 +351,7 @@ func TestUprobeSanitizedSymbol(t *testing.T) {
 
 	for i, tt := range tests {
 		t.Run(fmt.Sprint(i), func(t *testing.T) {
-			sanitized := sanitizeSymbol(tt.symbol)
+			sanitized := internal.SanitizeSymbol(tt.symbol)
 			if tt.expected != sanitized {
 				t.Errorf("Expected sanitized symbol to be '%s', got '%s'", tt.expected, sanitized)
 			}

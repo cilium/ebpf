@@ -95,3 +95,25 @@ var GetTracefsPath = Memoize(func() (string, error) {
 
 	return "", errors.New("neither debugfs nor tracefs are mounted")
 })
+
+// SanitizeSymbol replaces every invalid character for the tracefs api with an underscore.
+// It is equivalent to calling regexp.MustCompile("[^a-zA-Z0-9]+").ReplaceAllString("_").
+func SanitizeSymbol(s string) string {
+	var skip bool
+	return strings.Map(func(c rune) rune {
+		switch {
+		case c >= 'a' && c <= 'z',
+			c >= 'A' && c <= 'Z',
+			c >= '0' && c <= '9':
+			skip = false
+			return c
+
+		case skip:
+			return -1
+
+		default:
+			skip = true
+			return '_'
+		}
+	}, s)
+}

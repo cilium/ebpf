@@ -11,6 +11,7 @@ import (
 	"unsafe"
 
 	"github.com/cilium/ebpf"
+	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/sys"
 	"github.com/cilium/ebpf/internal/unix"
 )
@@ -244,7 +245,7 @@ func pmuKprobe(args probeArgs) (*perfEvent, error) {
 func pmuProbe(typ probeType, args probeArgs) (*perfEvent, error) {
 	// Getting the PMU type will fail if the kernel doesn't support
 	// the perf_[k,u]probe PMU.
-	et, err := readUint64FromFileOnce("%d\n", "/sys/bus/event_source/devices", typ.String(), "type")
+	et, err := internal.ReadUint64FromFileOnce("%d\n", "/sys/bus/event_source/devices", typ.String(), "type")
 	if errors.Is(err, os.ErrNotExist) {
 		return nil, fmt.Errorf("%s: %w", typ, ErrNotSupported)
 	}
@@ -259,7 +260,7 @@ func pmuProbe(typ probeType, args probeArgs) (*perfEvent, error) {
 
 	var config uint64
 	if args.ret {
-		bit, err := readUint64FromFileOnce("config:%d\n", "/sys/bus/event_source/devices", typ.String(), "/format/retprobe")
+		bit, err := internal.ReadUint64FromFileOnce("config:%d\n", "/sys/bus/event_source/devices", typ.String(), "/format/retprobe")
 		if err != nil {
 			return nil, err
 		}
@@ -274,7 +275,7 @@ func pmuProbe(typ probeType, args probeArgs) (*perfEvent, error) {
 	switch typ {
 	case kprobeType:
 		// Create a pointer to a NUL-terminated string for the kernel.
-		sp, err = unsafeStringPtr(args.symbol)
+		sp, err = internal.UnsafeStringPtr(args.symbol)
 		if err != nil {
 			return nil, err
 		}
@@ -291,7 +292,7 @@ func pmuProbe(typ probeType, args probeArgs) (*perfEvent, error) {
 			Config: config,              // Retprobe flag
 		}
 	case uprobeType:
-		sp, err = unsafeStringPtr(args.path)
+		sp, err = internal.UnsafeStringPtr(args.path)
 		if err != nil {
 			return nil, err
 		}

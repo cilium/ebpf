@@ -28,8 +28,7 @@ func KprobeLite(symbol string, args probeArgs) error {
 
 	// Use tracefs if kprobe PMU is missing.
 	args.symbol = symbol
-	tp, err := tracefsKprobe(args)
-	if err != nil {
+	if err := tracefsKprobe(args); err != nil {
 		return err
 	}
 
@@ -83,4 +82,47 @@ func pmuKprobe(args probeArgs) error {
 	runtime.KeepAlive(sp)
 
 	return nil
+}
+
+// tracefsKprobe creates a Kprobe tracefs entry.
+func tracefsKprobe(args probeArgs) error {
+	groupPrefix := "ebpf"
+	if args.group != "" {
+		groupPrefix = args.group
+	}
+
+	// Generate a random string for each trace event we attempt to create.
+	// This value is used as the 'group' token in tracefs to allow creating
+	// multiple kprobe trace events with the same name.
+	group, err := randomGroup(groupPrefix)
+	if err != nil {
+		return err
+	}
+	args.group = group
+
+	// Create the [k,u]probe trace event using tracefs.
+	tid, err := createTraceFSProbeEvent(typ, args)
+	if err != nil {
+		return err
+	}
+
+	// Kprobes are ephemeral tracepoints and share the same perf event type.
+	fd, err := openTracepointPerfEvent(tid, args.pid)
+	if err != nil {
+		// Make sure we clean up the created tracefs event when we return error.
+		// If a livepatch handler is already active on the symbol, the write to
+		// tracefs will succeed, a trace event will show up, but creating the
+		// perf event will fail with EBUSY.
+		_ = closeTraceFSProbeEvent(typ, args.group, args.symbol)
+		return nil, err
+	}
+
+	return &perfEvent{
+		typ:       typ.PerfEventType(args.ret),
+		group:     group,
+		name:      args.symbol,
+		tracefsID: tid,
+		cookie:    args.cookie,
+		fd:        fd,
+	}, nil
 }

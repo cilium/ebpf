@@ -17,7 +17,3 @@ func TestHaveProgAttachReplace(t *testing.T) {
 func TestHaveBPFLink(t *testing.T) {
 	testutils.CheckFeatureTest(t, haveBPFLink)
 }
-
-func TestHaveSyscallWrapper(t *testing.T) {
-	testutils.CheckFeatureTest(t, haveSyscallWrapper)
-}

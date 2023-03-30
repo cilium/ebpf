@@ -200,7 +200,7 @@ func kprobe(symbol string, prog *ebpf.Program, opts *KprobeOptions, ret bool, re
 	// Use kprobe PMU if the kernel has it available.
 	tp, err := pmuKprobe(args)
 	if (errors.Is(err, os.ErrNotExist) || errors.Is(err, unix.EINVAL)) && retryWithPlatformPrefix {
-		if prefixedSymbol, ok := platformPrefix(symbol); ok {
+		if prefixedSymbol, ok := internal.PlatformPrefix(symbol); ok {
 			args.symbol = prefixedSymbol
 			tp, err = pmuKprobe(args)
 		}
@@ -216,7 +216,7 @@ func kprobe(symbol string, prog *ebpf.Program, opts *KprobeOptions, ret bool, re
 	args.symbol = symbol
 	tp, err = tracefsKprobe(args)
 	if (errors.Is(err, os.ErrNotExist) || errors.Is(err, unix.EINVAL)) && retryWithPlatformPrefix {
-		if prefixedSymbol, ok := platformPrefix(symbol); ok {
+		if prefixedSymbol, ok := internal.PlatformPrefix(symbol); ok {
 			args.symbol = prefixedSymbol
 			tp, err = tracefsKprobe(args)
 		}

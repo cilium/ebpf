@@ -3,7 +3,6 @@ package link
 import (
 	"errors"
 	"fmt"
-	"os"
 	"runtime"
 
 	"github.com/cilium/ebpf"
@@ -249,28 +248,6 @@ func attachPerfEventLink(pe *perfEvent, prog *ebpf.Program) (*perfEventLink, err
 	// Close the perf event when its reference is lost to avoid leaking system resources.
 	runtime.SetFinalizer(pl, (*perfEventLink).Close)
 	return pl, nil
-}
-
-// getTraceEventID reads a trace event's ID from tracefs given its group and name.
-// The kernel requires group and name to be alphanumeric or underscore.
-//
-// name automatically has its invalid symbols converted to underscores so the caller
-// can pass a raw symbol name, e.g. a kernel symbol containing dots.
-func getTraceEventID(group, name string) (uint64, error) {
-	name = internal.SanitizeSymbol(name)
-	path, err := internal.SanitizeTracefsPath("events", group, name, "id")
-	if err != nil {
-		return 0, err
-	}
-	tid, err := internal.ReadUint64FromFile("%d\n", path)
-	if errors.Is(err, os.ErrNotExist) {
-		return 0, err
-	}
-	if err != nil {
-		return 0, fmt.Errorf("reading trace event ID of %s/%s: %w", group, name, err)
-	}
-
-	return tid, nil
 }
 
 // openTracepointPerfEvent opens a tracepoint-type perf event. System-wide

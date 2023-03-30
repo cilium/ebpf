@@ -12,7 +12,7 @@ import (
 func TestTraceEventID(t *testing.T) {
 	c := qt.New(t)
 
-	eid, err := getTraceEventID("syscalls", "sys_enter_mmap")
+	eid, err := internal.GetTraceEventID("syscalls", "sys_enter_mmap")
 	c.Assert(err, qt.IsNil)
 	c.Assert(eid, qt.Not(qt.Equals), 0)
 }

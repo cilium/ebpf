@@ -250,26 +250,6 @@ func attachPerfEventLink(pe *perfEvent, prog *ebpf.Program) (*perfEventLink, err
 	return pl, nil
 }
 
-// openTracepointPerfEvent opens a tracepoint-type perf event. System-wide
-// [k,u]probes created by writing to <tracefs>/[k,u]probe_events are tracepoints
-// behind the scenes, and can be attached to using these perf events.
-func openTracepointPerfEvent(tid uint64, pid int) (*sys.FD, error) {
-	attr := unix.PerfEventAttr{
-		Type:        unix.PERF_TYPE_TRACEPOINT,
-		Config:      tid,
-		Sample_type: unix.PERF_SAMPLE_RAW,
-		Sample:      1,
-		Wakeup:      1,
-	}
-
-	fd, err := unix.PerfEventOpen(&attr, pid, 0, -1, unix.PERF_FLAG_FD_CLOEXEC)
-	if err != nil {
-		return nil, fmt.Errorf("opening tracepoint perf event: %w", err)
-	}
-
-	return sys.NewFD(fd)
-}
-
 // Probe BPF perf link.
 //
 // https://elixir.bootlin.com/linux/v5.16.8/source/kernel/bpf/syscall.c#L4307

@@ -93,6 +93,8 @@ type ProgramInfo struct {
 	Tag string
 	// Name as supplied by user space at load time. Available from 4.15.
 	Name string
+	// CreatedByUid specifies the uid of the process that loaded the program.
+	CreatedByUid uint32
 
 	btf   btf.ID
 	stats *programStats
@@ -116,6 +118,7 @@ func newProgramInfoFromFd(fd *sys.FD) (*ProgramInfo, error) {
 		id:   ProgramID(info.Id),
 		Tag:  hex.EncodeToString(info.Tag[:]),
 		Name: unix.ByteSliceToString(info.Name[:]),
+		CreatedByUid: info.CreatedByUid,
 		btf:  btf.ID(info.BtfId),
 		stats: &programStats{
 			runtime:  time.Duration(info.RunTimeNs),

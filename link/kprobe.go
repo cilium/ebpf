@@ -1,7 +1,6 @@
 package link
 
 import (
-	"crypto/rand"
 	"errors"
 	"fmt"
 	"os"
@@ -62,7 +61,7 @@ func (pt probeType) String() string {
 }
 
 func (pt probeType) EventsFile() (*os.File, error) {
-	path, err := sanitizeTracefsPath(fmt.Sprintf("%s_events", pt.String()))
+	path, err := internal.SanitizeTracefsPath(fmt.Sprintf("%s_events", pt.String()))
 	if err != nil {
 		return nil, err
 	}
@@ -383,7 +382,7 @@ func tracefsProbe(typ probeType, args probeArgs) (*perfEvent, error) {
 	// Generate a random string for each trace event we attempt to create.
 	// This value is used as the 'group' token in tracefs to allow creating
 	// multiple kprobe trace events with the same name.
-	group, err := randomGroup(groupPrefix)
+	group, err := internal.RandomTraceFSGroup(groupPrefix)
 	if err != nil {
 		return nil, fmt.Errorf("randomizing group name: %w", err)
 	}
@@ -396,7 +395,7 @@ func tracefsProbe(typ probeType, args probeArgs) (*perfEvent, error) {
 	}
 
 	// Kprobes are ephemeral tracepoints and share the same perf event type.
-	fd, err := openTracepointPerfEvent(tid, args.pid)
+	fd, err := internal.OpenTracepointPerfEvent(tid, args.pid)
 	if err != nil {
 		// Make sure we clean up the created tracefs event when we return error.
 		// If a livepatch handler is already active on the symbol, the write to
@@ -430,7 +429,7 @@ func createTraceFSProbeEvent(typ probeType, args probeArgs) (uint64, error) {
 	// check if an event with the same group and name already exists.
 	// Kernels 4.x and earlier don't return os.ErrExist on writing a duplicate
 	// entry, so we need to rely on reads for detecting uniqueness.
-	_, err := getTraceEventID(args.group, args.symbol)
+	_, err := internal.GetTraceEventID(args.group, args.symbol)
 	if err == nil {
 		return 0, fmt.Errorf("trace event %s/%s: %w", args.group, args.symbol, os.ErrExist)
 	}
@@ -466,7 +465,7 @@ func createTraceFSProbeEvent(typ probeType, args probeArgs) (uint64, error) {
 			return 0, errInvalidMaxActive
 		}
 		token = kprobeToken(args)
-		pe = fmt.Sprintf("%s:%s/%s %s", probePrefix(args.ret, args.retprobeMaxActive), args.group, sanitizeSymbol(args.symbol), token)
+		pe = fmt.Sprintf("%s:%s/%s %s", internal.ProbePrefix(args.ret, args.retprobeMaxActive), args.group, internal.SanitizeSymbol(args.symbol), token)
 	case uprobeType:
 		// The uprobe_events syntax is as follows:
 		// p[:[GRP/]EVENT] PATH:OFFSET [FETCHARGS] : Set a probe
@@ -482,7 +481,7 @@ func createTraceFSProbeEvent(typ probeType, args probeArgs) (uint64, error) {
 			return 0, errInvalidMaxActive
 		}
 		token = uprobeToken(args)
-		pe = fmt.Sprintf("%s:%s/%s %s", probePrefix(args.ret, 0), args.group, args.symbol, token)
+		pe = fmt.Sprintf("%s:%s/%s %s", internal.ProbePrefix(args.ret, 0), args.group, args.symbol, token)
 	}
 	_, err = f.WriteString(pe)
 
@@ -508,7 +507,7 @@ func createTraceFSProbeEvent(typ probeType, args probeArgs) (uint64, error) {
 	}
 
 	// Get the newly-created trace event's id.
-	tid, err := getTraceEventID(args.group, args.symbol)
+	tid, err := internal.GetTraceEventID(args.group, args.symbol)
 	if args.retprobeMaxActive != 0 && errors.Is(err, os.ErrNotExist) {
 		// Kernels < 4.12 don't support maxactive and therefore auto generate
 		// group and event names from the symbol and offset. The symbol is used
@@ -530,7 +529,7 @@ func createTraceFSProbeEvent(typ probeType, args probeArgs) (uint64, error) {
 // closeTraceFSProbeEvent removes the [k,u]probe with the given type, group and symbol
 // from <tracefs>/[k,u]probe_events.
 func closeTraceFSProbeEvent(typ probeType, group, symbol string) error {
-	pe := fmt.Sprintf("%s/%s", group, sanitizeSymbol(symbol))
+	pe := fmt.Sprintf("%s/%s", group, internal.SanitizeSymbol(symbol))
 	return removeTraceFSProbeEvent(typ, pe)
 }
 
@@ -548,38 +547,6 @@ func removeTraceFSProbeEvent(typ probeType, pe string) error {
 	}
 
 	return nil
-}
-
-// randomGroup generates a pseudorandom string for use as a tracefs group name.
-// Returns an error when the output string would exceed 63 characters (kernel
-// limitation), when rand.Read() fails or when prefix contains characters not
-// allowed by isValidTraceID.
-func randomGroup(prefix string) (string, error) {
-	if !isValidTraceID(prefix) {
-		return "", fmt.Errorf("prefix '%s' must be alphanumeric or underscore: %w", prefix, errInvalidInput)
-	}
-
-	b := make([]byte, 8)
-	if _, err := rand.Read(b); err != nil {
-		return "", fmt.Errorf("reading random bytes: %w", err)
-	}
-
-	group := fmt.Sprintf("%s_%x", prefix, b)
-	if len(group) > 63 {
-		return "", fmt.Errorf("group name '%s' cannot be longer than 63 characters: %w", group, errInvalidInput)
-	}
-
-	return group, nil
-}
-
-func probePrefix(ret bool, maxActive int) string {
-	if ret {
-		if maxActive > 0 {
-			return fmt.Sprintf("r%d", maxActive)
-		}
-		return "r"
-	}
-	return "p"
 }
 
 // kprobeToken creates the SYM[+offs] token for the tracefs api.

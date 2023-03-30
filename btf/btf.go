@@ -231,7 +231,6 @@ func loadSpecFromELF(file *internal.SafeELFFile) (*Spec, error) {
 func loadRawSpec(btf io.ReaderAt, bo binary.ByteOrder, base *Spec) (*Spec, error) {
 	var (
 		baseStrings *stringTable
-		baseTypes   []Type
 		firstTypeID TypeID
 		err         error
 	)
@@ -242,7 +241,6 @@ func loadRawSpec(btf io.ReaderAt, bo binary.ByteOrder, base *Spec) (*Spec, error
 		}
 
 		baseStrings = base.strings
-		baseTypes = base.types
 
 		firstTypeID, err = base.nextTypeID()
 		if err != nil {
@@ -255,7 +253,7 @@ func loadRawSpec(btf io.ReaderAt, bo binary.ByteOrder, base *Spec) (*Spec, error
 		return nil, err
 	}
 
-	types, err := inflateRawTypes(rawTypes, baseTypes, rawStrings)
+	types, err := inflateRawTypes(rawTypes, rawStrings, base)
 	if err != nil {
 		return nil, err
 	}

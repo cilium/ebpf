@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -116,4 +117,26 @@ func SanitizeSymbol(s string) string {
 			return '_'
 		}
 	}, s)
+}
+
+// GetTraceEventID reads a trace event's ID from tracefs given its group and name.
+// The kernel requires group and name to be alphanumeric or underscore.
+//
+// name automatically has its invalid symbols converted to underscores so the caller
+// can pass a raw symbol name, e.g. a kernel symbol containing dots.
+func GetTraceEventID(group, name string) (uint64, error) {
+	name = SanitizeSymbol(name)
+	path, err := SanitizeTracefsPath("events", group, name, "id")
+	if err != nil {
+		return 0, err
+	}
+	tid, err := ReadUint64FromFile("%d\n", path)
+	if errors.Is(err, os.ErrNotExist) {
+		return 0, err
+	}
+	if err != nil {
+		return 0, fmt.Errorf("reading trace event ID of %s/%s: %w", group, name, err)
+	}
+
+	return tid, nil
 }

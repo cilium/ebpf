@@ -129,7 +129,7 @@ var haveSyscallWrapper = internal.NewFeatureTest("syscall wrapper", "4.17", func
 		return internal.ErrNotSupported
 	}
 
-	if err := lite.KprobeLite(testSyscallName, perfAllThreads); err != nil {
+	if err := lite.KprobeCheckLite(testSyscallName, perfAllThreads); err != nil {
 		return internal.ErrNotSupported
 	}
 	return nil

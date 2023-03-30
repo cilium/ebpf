@@ -181,8 +181,9 @@ func fixupAndValidate(insns asm.Instructions) error {
 		ins := iter.Ins
 
 		// Map load was tagged with a Reference, but does not contain a Map pointer.
-		if ins.IsLoadFromMap() && ins.Reference() != "" && ins.Map() == nil {
-			return fmt.Errorf("instruction %d: map %s: %w", iter.Index, ins.Reference(), asm.ErrUnsatisfiedMapReference)
+		needsMap := ins.Reference() != "" || ins.Metadata.Get(kconfigMeta{}) != nil
+		if ins.IsLoadFromMap() && needsMap && ins.Map() == nil {
+			return fmt.Errorf("instruction %d: %w", iter.Index, asm.ErrUnsatisfiedMapReference)
 		}
 
 		fixupProbeReadKernel(ins)
@@ -276,4 +277,61 @@ func fixupProbeReadKernel(ins *asm.Instruction) {
 	case asm.FnProbeReadKernelStr, asm.FnProbeReadUserStr:
 		ins.Constant = int64(asm.FnProbeReadStr)
 	}
+}
+
+// resolveKconfigReferences creates and populates a .kconfig map if necessary.
+//
+// Returns a nil Map and no error if no references exist.
+func resolveKconfigReferences(insns asm.Instructions) (*Map, error) {
+	var spec *MapSpec
+	iter := insns.Iterate()
+	for iter.Next() {
+		ins := iter.Ins
+
+		spec, _ = ins.Metadata.Get(kconfigMeta{}).(*MapSpec)
+		if spec == nil {
+			continue
+		}
+
+		goto populate
+	}
+
+	return nil, nil
+
+populate:
+	cpy := spec.Copy()
+	if err := resolveKconfig(cpy); err != nil {
+		return nil, err
+	}
+
+	kconfig, err := NewMap(cpy)
+	if err != nil {
+		return nil, err
+	}
+
+	for {
+		insSpec, _ := iter.Ins.Metadata.Get(kconfigMeta{}).(*MapSpec)
+		if insSpec == nil {
+			goto next
+		}
+
+		if insSpec != spec {
+			kconfig.Close()
+			return nil, fmt.Errorf("instruction %d: reference to multiple .kconfig maps is not allowed", iter.Index)
+		}
+
+		if err := iter.Ins.AssociateMap(kconfig); err != nil {
+			kconfig.Close()
+			return nil, fmt.Errorf("instruction %d: %w", iter.Index, err)
+		}
+
+		iter.Ins.Metadata.Set(kconfigMeta{}, nil)
+
+	next:
+		if !iter.Next() {
+			break
+		}
+	}
+
+	return kconfig, nil
 }

@@ -61,7 +61,7 @@ func (pt probeType) String() string {
 }
 
 func (pt probeType) EventsFile() (*os.File, error) {
-	path, err := sanitizeTracefsPath(fmt.Sprintf("%s_events", pt.String()))
+	path, err := internal.SanitizeTracefsPath(fmt.Sprintf("%s_events", pt.String()))
 	if err != nil {
 		return nil, err
 	}

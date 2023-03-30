@@ -4,9 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"path/filepath"
 	"runtime"
-	"strings"
 
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/asm"
@@ -260,7 +258,7 @@ func attachPerfEventLink(pe *perfEvent, prog *ebpf.Program) (*perfEventLink, err
 // can pass a raw symbol name, e.g. a kernel symbol containing dots.
 func getTraceEventID(group, name string) (uint64, error) {
 	name = sanitizeSymbol(name)
-	path, err := sanitizeTracefsPath("events", group, name, "id")
+	path, err := internal.SanitizeTracefsPath("events", group, name, "id")
 	if err != nil {
 		return 0, err
 	}
@@ -295,19 +293,6 @@ func openTracepointPerfEvent(tid uint64, pid int) (*sys.FD, error) {
 	return sys.NewFD(fd)
 }
 
-func sanitizeTracefsPath(path ...string) (string, error) {
-	base, err := getTracefsPath()
-	if err != nil {
-		return "", err
-	}
-	l := filepath.Join(path...)
-	p := filepath.Join(base, l)
-	if !strings.HasPrefix(p, base) {
-		return "", fmt.Errorf("path '%s' attempts to escape base path '%s': %w", l, base, errInvalidInput)
-	}
-	return p, nil
-}
-
 // Probe BPF perf link.
 //
 // https://elixir.bootlin.com/linux/v5.16.8/source/kernel/bpf/syscall.c#L4307
@@ -338,26 +323,4 @@ var haveBPFLinkPerfEvent = internal.NewFeatureTest("bpf_link_perf_event", "5.15"
 		return nil
 	}
 	return err
-})
-
-// getTracefsPath will return a correct path to the tracefs mount point.
-// Since kernel 4.1 tracefs should be mounted by default at /sys/kernel/tracing,
-// but may be also be available at /sys/kernel/debug/tracing if debugfs is mounted.
-// The available tracefs paths will depends on distribution choices.
-var getTracefsPath = internal.Memoize(func() (string, error) {
-	for _, p := range []struct {
-		path   string
-		fsType int64
-	}{
-		{"/sys/kernel/tracing", unix.TRACEFS_MAGIC},
-		{"/sys/kernel/debug/tracing", unix.TRACEFS_MAGIC},
-		// RHEL/CentOS
-		{"/sys/kernel/debug/tracing", unix.DEBUGFS_MAGIC},
-	} {
-		if fsType, err := internal.FSType(p.path); err == nil && fsType == p.fsType {
-			return p.path, nil
-		}
-	}
-
-	return "", errors.New("neither debugfs nor tracefs are mounted")
 })

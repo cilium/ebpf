@@ -4,6 +4,10 @@ import (
 	"crypto/rand"
 	"errors"
 	"fmt"
+	"path/filepath"
+	"strings"
+
+	"github.com/cilium/ebpf/internal/unix"
 )
 
 var (
@@ -56,3 +60,38 @@ func IsValidTraceID(s string) bool {
 
 	return true
 }
+
+func SanitizeTracefsPath(path ...string) (string, error) {
+	base, err := GetTracefsPath()
+	if err != nil {
+		return "", err
+	}
+	l := filepath.Join(path...)
+	p := filepath.Join(base, l)
+	if !strings.HasPrefix(p, base) {
+		return "", fmt.Errorf("path '%s' attempts to escape base path '%s': %w", l, base, ErrInvalidInput)
+	}
+	return p, nil
+}
+
+// GetTracefsPath will return a correct path to the tracefs mount point.
+// Since kernel 4.1 tracefs should be mounted by default at /sys/kernel/tracing,
+// but may be also be available at /sys/kernel/debug/tracing if debugfs is mounted.
+// The available tracefs paths will depends on distribution choices.
+var GetTracefsPath = Memoize(func() (string, error) {
+	for _, p := range []struct {
+		path   string
+		fsType int64
+	}{
+		{"/sys/kernel/tracing", unix.TRACEFS_MAGIC},
+		{"/sys/kernel/debug/tracing", unix.TRACEFS_MAGIC},
+		// RHEL/CentOS
+		{"/sys/kernel/debug/tracing", unix.DEBUGFS_MAGIC},
+	} {
+		if fsType, err := FSType(p.path); err == nil && fsType == p.fsType {
+			return p.path, nil
+		}
+	}
+
+	return "", errors.New("neither debugfs nor tracefs are mounted")
+})

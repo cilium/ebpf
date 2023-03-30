@@ -18,12 +18,12 @@ func TestTraceEventID(t *testing.T) {
 }
 
 func TestSanitizePath(t *testing.T) {
-	_, err := sanitizeTracefsPath("../escaped")
+	_, err := internal.SanitizeTracefsPath("../escaped")
 	if !errors.Is(err, errInvalidInput) {
 		t.Errorf("expected error %s, got: %s", errInvalidInput, err)
 	}
 
-	_, err = sanitizeTracefsPath("./not/escaped")
+	_, err = internal.SanitizeTracefsPath("./not/escaped")
 	if err != nil {
 		t.Errorf("expected no error, got: %s", err)
 	}
@@ -59,7 +59,7 @@ func TestTraceValidID(t *testing.T) {
 }
 
 func TestGetTracefsPath(t *testing.T) {
-	_, err := getTracefsPath()
+	_, err := internal.GetTracefsPath()
 	qt.Assert(t, err, qt.IsNil)
 }
 

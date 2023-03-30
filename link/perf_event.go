@@ -39,7 +39,7 @@ import (
 //   stops any further invocations of the attached eBPF program.
 
 var (
-	errInvalidInput = errors.New("invalid input")
+	errInvalidInput = internal.ErrInvalidInput
 )
 
 const (

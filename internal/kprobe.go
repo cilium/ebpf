@@ -2,7 +2,12 @@ package internal
 
 import (
 	"crypto/rand"
+	"errors"
 	"fmt"
+)
+
+var (
+	ErrInvalidInput = errors.New("invalid input")
 )
 
 // RandomTraceFSGroup generates a pseudorandom string for use as a tracefs group name.
@@ -11,7 +16,7 @@ import (
 // allowed by IsValidTraceID.
 func RandomTraceFSGroup(prefix string) (string, error) {
 	if !IsValidTraceID(prefix) {
-		return "", fmt.Errorf("prefix '%s' must be alphanumeric or underscore: %w", prefix, errInvalidInput)
+		return "", fmt.Errorf("prefix '%s' must be alphanumeric or underscore: %w", prefix, ErrInvalidInput)
 	}
 
 	b := make([]byte, 8)
@@ -21,7 +26,7 @@ func RandomTraceFSGroup(prefix string) (string, error) {
 
 	group := fmt.Sprintf("%s_%x", prefix, b)
 	if len(group) > 63 {
-		return "", fmt.Errorf("group name '%s' cannot be longer than 63 characters: %w", group, errInvalidInput)
+		return "", fmt.Errorf("group name '%s' cannot be longer than 63 characters: %w", group, ErrInvalidInput)
 	}
 
 	return group, nil

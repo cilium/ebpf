@@ -49,7 +49,7 @@ func Tracepoint(group, name string, prog *ebpf.Program, opts *TracepointOptions)
 		return nil, err
 	}
 
-	fd, err := openTracepointPerfEvent(tid, perfAllThreads)
+	fd, err := internal.OpenTracepointPerfEvent(tid, perfAllThreads)
 	if err != nil {
 		return nil, err
 	}

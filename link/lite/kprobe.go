@@ -12,10 +12,10 @@ import (
 )
 
 type probeArgs struct {
-	symbol, group, path          string
-	offset, refCtrOffset, cookie uint64
-	pid                          int
-	ret                          bool
+	symbol, group string
+	offset        uint64
+	pid           int
+	ret           bool
 }
 
 func KprobeLite(symbol string, args probeArgs) error {
@@ -109,8 +109,8 @@ func tracefsKprobe(args probeArgs) error {
 	}
 
 	// Kprobes are ephemeral tracepoints and share the same perf event type.
-	fd, err := openTracepointPerfEvent(tid, args.pid)
-	if err != nil {
+
+	if _, err := internal.OpenTracepointPerfEvent(tid, args.pid); err != nil {
 		// Make sure we clean up the created tracefs event when we return error.
 		// If a livepatch handler is already active on the symbol, the write to
 		// tracefs will succeed, a trace event will show up, but creating the

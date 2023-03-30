@@ -395,7 +395,7 @@ func tracefsProbe(typ probeType, args probeArgs) (*perfEvent, error) {
 	}
 
 	// Kprobes are ephemeral tracepoints and share the same perf event type.
-	fd, err := openTracepointPerfEvent(tid, args.pid)
+	fd, err := internal.OpenTracepointPerfEvent(tid, args.pid)
 	if err != nil {
 		// Make sure we clean up the created tracefs event when we return error.
 		// If a livepatch handler is already active on the symbol, the write to

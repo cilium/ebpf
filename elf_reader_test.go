@@ -615,6 +615,23 @@ func TestKconfig(t *testing.T) {
 
 func TestKfunc(t *testing.T) {
 	testutils.SkipOnOldKernel(t, "5.18", "bpf_kfunc_call_test_mem_len_pass1")
+
+	haveTestmod := false
+	if !testutils.IsKernelLessThan(t, "5.11") {
+		// See https://github.com/torvalds/linux/commit/290248a5b7d829871b3ea3c62578613a580a1744
+		testmod, err := btf.FindHandle(func(info *btf.HandleInfo) bool {
+			return info.IsModule() && info.Name == "bpf_testmod"
+		})
+		if err != nil && !errors.Is(err, btf.ErrNotFound) {
+			t.Fatal(err)
+		}
+		haveTestmod = testmod != nil
+		testmod.Close()
+	}
+	if !haveTestmod {
+		t.Skip("bpf_testmod not loaded")
+	}
+
 	testutils.Files(t, testutils.Glob(t, "testdata/kfunc-*.elf"), func(t *testing.T, file string) {
 		spec, err := LoadCollectionSpec(file)
 		if err != nil {
@@ -645,7 +662,6 @@ func TestKfunc(t *testing.T) {
 		if ret != 1 {
 			t.Fatalf("Expected kfunc to return value 1, got %d", ret)
 		}
-
 	})
 }
 

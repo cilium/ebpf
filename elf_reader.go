@@ -10,6 +10,8 @@ import (
 	"io"
 	"math"
 	"os"
+	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/cilium/ebpf/asm"
@@ -22,17 +24,33 @@ const kconfigMap = ".kconfig"
 
 type kfuncMeta struct{}
 
+type kfuncDesc struct {
+	ksym_name   string
+	ksym_type   *btf.Func
+	ksym_btf_id int64
+	btf_fd_idx  int16
+}
+
+type moduleBtf struct {
+	name   string
+	handle *btf.Handle
+	spec   *btf.Spec
+}
+
 // elfCode is a convenience to reduce the amount of arguments that have to
 // be passed around explicitly. You should treat its contents as immutable.
 type elfCode struct {
 	*internal.SafeELFFile
-	sections map[elf.SectionIndex]*elfSection
-	license  string
-	version  uint32
-	btf      *btf.Spec
-	extInfo  *btf.ExtInfos
-	maps     map[string]*MapSpec
-	kfuncs   map[string]*btf.Func
+	sections    map[elf.SectionIndex]*elfSection
+	license     string
+	version     uint32
+	btf         *btf.Spec
+	extInfo     *btf.ExtInfos
+	maps        map[string]*MapSpec
+	kfuncs      map[string]*btf.Func
+	kallsyms    map[string]string
+	modHandlers []moduleBtf
+	kfuncDescs  map[string]*kfuncDesc
 }
 
 // LoadCollectionSpec parses an ELF file into a CollectionSpec.
@@ -121,6 +139,9 @@ func LoadCollectionSpecFromReader(rd io.ReaderAt) (*CollectionSpec, error) {
 		extInfo:     btfExtInfo,
 		maps:        make(map[string]*MapSpec),
 		kfuncs:      make(map[string]*btf.Func),
+		kallsyms:    make(map[string]string),
+		modHandlers: make([]moduleBtf, 0),
+		kfuncDescs:  make(map[string]*kfuncDesc),
 	}
 
 	symbols, err := f.Symbols()
@@ -152,6 +173,14 @@ func LoadCollectionSpecFromReader(rd io.ReaderAt) (*CollectionSpec, error) {
 
 	if err := ec.loadKsymsSection(); err != nil {
 		return nil, fmt.Errorf("load virtual .ksyms section: %w", err)
+	}
+
+	if err := ec.loadModuleBtfs(); err != nil {
+		return nil, fmt.Errorf("load module_btfs: %w", err)
+	}
+
+	if err := ec.resolveKfuncDesc(); err != nil {
+		return nil, fmt.Errorf("resolve kfunc desc: %w", err)
 	}
 
 	// Finally, collect programs and link them.
@@ -316,6 +345,15 @@ func (ec *elfCode) loadProgramSections() (map[string]*ProgramSpec, error) {
 
 		progType, attachType, progFlags, attachTo := getProgType(sec.Name)
 
+		var mod_btf_handlers *[]*btf.Handle
+		if len(ec.modHandlers) > 0 {
+			mod_btf_handlers = &[]*btf.Handle{}
+		}
+
+		for _, handler := range ec.modHandlers {
+			*mod_btf_handlers = append(*mod_btf_handlers, handler.handle)
+		}
+
 		for name, insns := range funcs {
 			spec := &ProgramSpec{
 				Name:          name,
@@ -328,6 +366,7 @@ func (ec *elfCode) loadProgramSections() (map[string]*ProgramSpec, error) {
 				KernelVersion: ec.version,
 				Instructions:  insns,
 				ByteOrder:     ec.ByteOrder,
+				BtfHandles:    mod_btf_handlers,
 			}
 
 			// Function names must be unique within a single ELF blob.
@@ -594,12 +633,12 @@ func (ec *elfCode) relocateInstruction(ins *asm.Instruction, rel elf.Symbol) err
 		}
 
 		kc := ec.maps[kconfigMap]
-		kf := ec.kfuncs[name]
+		kd := ec.kfuncDescs[name]
 		switch {
 		// If a Call instruction is found and the datasec has a btf.Func with a Name
 		// that matches the symbol name we mark the instruction as a call to a kfunc.
-		case kf != nil && ins.OpCode.JumpOp() == asm.Call:
-			ins.Metadata.Set(kfuncMeta{}, kf)
+		case kd != nil && ins.OpCode.JumpOp() == asm.Call:
+			ins.Metadata.Set(kfuncMeta{}, kd)
 			ins.Src = asm.PseudoKfuncCall
 			ins.Constant = -1
 
@@ -1182,6 +1221,168 @@ func (ec *elfCode) loadKsymsSection() error {
 	}
 
 	return nil
+}
+
+const (
+	// https://www.kernel.org/doc/Documentation/x86/x86_64/mm.txt
+	kernel_addr_space = 0x00ffffffffffffff
+	ullong_max        = 0xffffffffffffffff
+)
+
+func (ec *elfCode) loadModuleBtfs() error {
+	if len(ec.kfuncs) < 1 {
+		return nil
+	}
+
+	if err := ec.loadKallsyms(); err != nil {
+		return err
+	}
+
+	if err := ec.loadModuleBtfHandler(); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// loadKallsyms() takes a map with pairs of symbol and module name.
+func (ec *elfCode) loadKallsyms() error {
+	kallsyms := "/proc/kallsyms"
+	match := regexp.MustCompile(`[\[\]]`)
+
+	fh, err := os.Open(kallsyms)
+	if err != nil {
+		return err
+	}
+	defer fh.Close()
+
+	scanner := bufio.NewScanner(fh)
+	for scanner.Scan() {
+		line := scanner.Text()
+
+		var a, typ, name, module string
+		fmt.Sscanf(line, "%s %s %s %s", &a, &typ, &name, &module)
+
+		addr, _ := strconv.ParseUint(a, 16, 64)
+		if addr == 0 ||
+			addr == ullong_max ||
+			addr < kernel_addr_space {
+			continue
+		}
+
+		if typ != "t" && typ != "T" {
+			continue
+		}
+
+		ec.kallsyms[name] = "vmlinux"
+		if module != "" {
+			mod_name := match.ReplaceAllString(module, "")
+			ec.kallsyms[name] = mod_name
+		}
+	}
+
+	return nil
+}
+
+func (ec *elfCode) loadModuleBtfHandler() error {
+	required_mod_btf := make(map[string]bool)
+
+	// takes a set of names of module BTF.
+	for ksym := range ec.kfuncs {
+		if kmod_name, ok := ec.kallsyms[ksym]; !ok {
+			return fmt.Errorf("ksym: %s doesn't exist in kallsyms", ksym)
+		} else if kmod_name != "vmlinux" {
+			required_mod_btf[kmod_name] = true
+		}
+	}
+
+	for mod_name := range required_mod_btf {
+		handler, err := btf.LoadModuleHandler(mod_name)
+		if err != nil {
+			return err
+		}
+
+		spec, err := handler.Spec()
+		if err != nil {
+			return err
+		}
+
+		mod_btf := moduleBtf{mod_name, handler, spec}
+		ec.modHandlers = append(ec.modHandlers, mod_btf)
+	}
+
+	return nil
+}
+
+func (ec *elfCode) resolveKfuncDesc() error {
+	for ksym, ksym_type := range ec.kfuncs {
+		kmod_name, ok := ec.kallsyms[ksym]
+		if !ok {
+			return fmt.Errorf("ksym: %s doesn't exist in kallsyms", ksym)
+		}
+
+		kfunc_desc := kfuncDesc{}
+		kfunc_desc.ksym_name = ksym
+		kfunc_desc.ksym_type = ksym_type
+		kfunc_desc.btf_fd_idx = 0
+
+		// First, find the BTF ID from vmlinux BTF
+		spec, err := btf.LoadKernelSpec()
+		if err != nil {
+			return err
+		}
+
+		btf_id, err := resolveKfuncBtfID(spec, ksym_type)
+		if err != nil && !errors.Is(err, btf.ErrNotFound) {
+			return err
+		}
+
+		if err == nil {
+			kfunc_desc.ksym_btf_id = btf_id
+		}
+
+		// If the BTF ID is not present in vmlinux, find the BTF ID from module BTFs
+		if err != nil {
+			for idx, kmod_btf := range ec.modHandlers {
+				spec := kmod_btf.spec
+
+				if kmod_btf.name != kmod_name {
+					continue
+				}
+
+				btf_id, err := resolveKfuncBtfID(spec, ksym_type)
+				if err != nil {
+					return fmt.Errorf("couldn't resolve %s in kernel spec: %v: %w", ksym, err, ErrNotSupported)
+				}
+
+				kfunc_desc.btf_fd_idx = int16(idx) + 2
+				kfunc_desc.ksym_btf_id = int64(btf_id)
+				break
+			}
+		}
+
+		ec.kfuncDescs[ksym] = &kfunc_desc
+	}
+
+	return nil
+}
+
+func resolveKfuncBtfID(spec *btf.Spec, kfunc *btf.Func) (int64, error) {
+	var fn *btf.Func
+	if err := spec.TypeByName(kfunc.Name, &fn); err != nil {
+		return -1, btf.ErrNotFound
+	}
+
+	if err := btf.CheckTypeCompatibility(kfunc.Type, fn.Type); err != nil {
+		return -1, err
+	}
+
+	id, err := spec.TypeID(fn)
+	if err != nil {
+		return -1, err
+	}
+
+	return int64(id), nil
 }
 
 func getProgType(sectionName string) (ProgramType, AttachType, uint32, string) {

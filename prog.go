@@ -10,6 +10,7 @@ import (
 	"runtime"
 	"strings"
 	"time"
+	"unsafe"
 
 	"github.com/cilium/ebpf/asm"
 	"github.com/cilium/ebpf/btf"
@@ -125,6 +126,9 @@ type ProgramSpec struct {
 
 	// The byte order this program was compiled for, may be nil.
 	ByteOrder binary.ByteOrder
+
+	// The array of BTF Handler
+	BtfHandles *[]*btf.Handle
 }
 
 // Copy returns a copy of the spec.
@@ -252,6 +256,11 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions) (*Program, er
 		attr.LineInfoRecSize = btf.LineInfoSize
 		attr.LineInfoCnt = uint32(len(lib)) / btf.LineInfoSize
 		attr.LineInfo = sys.NewSlicePointer(lib)
+
+		if spec.BtfHandles != nil {
+			fd_array := fdArrayFromHandle(spec.BtfHandles)
+			attr.FdArray = sys.NewPointer(unsafe.Pointer(&fd_array[0]))
+		}
 	}
 
 	if err := applyRelocations(insns, opts.KernelTypes, spec.ByteOrder); err != nil {
@@ -993,4 +1002,13 @@ func findTargetInProgram(prog *Program, name string, progType ProgramType, attac
 	}
 
 	return spec.TypeID(targetFunc)
+}
+
+func fdArrayFromHandle(handlers *[]*btf.Handle) []int {
+	fd_array := []int{0}
+	for _, handle := range *handlers {
+		fd_array = append(fd_array, handle.FD())
+	}
+	fmt.Println(fd_array)
+	return fd_array
 }

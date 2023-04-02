@@ -645,7 +645,58 @@ func TestKfunc(t *testing.T) {
 		if ret != 1 {
 			t.Fatalf("Expected kfunc to return value 1, got %d", ret)
 		}
+	})
+}
 
+func TestKfuncKmod(t *testing.T) {
+	testutils.SkipOnOldKernel(t, "5.18", "Kernel module function calls")
+
+	haveTestmod := false
+	if !testutils.IsKernelLessThan(t, "5.18") {
+		// See https://github.com/torvalds/linux/commit/290248a5b7d829871b3ea3c62578613a580a1744
+		testmod, err := btf.FindHandle(func(info *btf.HandleInfo) bool {
+			return info.IsModule() && info.Name == "bpf_testmod"
+		})
+		if err != nil && !errors.Is(err, btf.ErrNotFound) {
+			t.Fatal(err)
+		}
+		haveTestmod = testmod != nil
+		testmod.Close()
+	}
+	if !haveTestmod {
+		t.Skip("bpf_testmod not loaded")
+	}
+
+	testutils.Files(t, testutils.Glob(t, "testdata/kfunc-kmod-*.elf"), func(t *testing.T, file string) {
+		spec, err := LoadCollectionSpec(file)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if spec.ByteOrder != internal.NativeEndian {
+			return
+		}
+
+		var obj struct {
+			Main *Program `ebpf:"call_kfunc"`
+		}
+
+		err = spec.LoadAndAssign(&obj, nil)
+		testutils.SkipIfNotSupported(t, err)
+		if err != nil {
+			t.Fatalf("%v+", err)
+		}
+		defer obj.Main.Close()
+
+		ret, _, err := obj.Main.Test(internal.EmptyBPFContext)
+		testutils.SkipIfNotSupported(t, err)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if ret != 1 {
+			t.Fatalf("Expected kfunc to return value 1, got %d", ret)
+		}
 	})
 }
 

@@ -306,6 +306,32 @@ var kernelBTF struct {
 	fallback bool
 }
 
+type ModuleSpec struct {
+	*Spec
+	*Handle
+	Name string
+}
+
+func LoadModuleHandler(name string) (*Handle, error) {
+	it := new(HandleIterator)
+	defer it.Handle.Close()
+
+	for it.Next() {
+		info, err := it.Handle.Info()
+		if err != nil {
+			return nil, fmt.Errorf("get info for BTF ID %d: %w", it.ID, err)
+		}
+
+		if info.IsVmlinux() || info.Name != name {
+			continue
+		}
+
+		return it.Take(), nil
+	}
+
+	return nil, ErrNotFound
+}
+
 // FlushKernelSpec removes any cached kernel type information.
 func FlushKernelSpec() {
 	kernelBTF.Lock()

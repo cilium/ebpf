@@ -210,12 +210,6 @@ func fixupKfuncs(insns asm.Instructions) error {
 	return nil
 
 fixups:
-	// only load the kernel spec if we found at least one kfunc call
-	s, err := btf.LoadKernelSpec()
-	if err != nil {
-		return err
-	}
-
 	for {
 		ins := iter.Ins
 
@@ -228,27 +222,13 @@ fixups:
 		}
 
 		// check meta, if no meta return err
-		kfm, _ := ins.Metadata.Get(kfuncMeta{}).(*btf.Func)
+		kfm, _ := ins.Metadata.Get(kfuncMeta{}).(*kfuncDesc)
 		if kfm == nil {
 			return fmt.Errorf("kfunc call has no kfuncMeta")
 		}
 
-		var fn *btf.Func
-		if err := s.TypeByName(kfm.Name, &fn); err != nil {
-			return fmt.Errorf("couldn't resolve %s in kernel spec: %v: %w", kfm.Name, err, ErrNotSupported)
-		}
-
-		if err := btf.CheckTypeCompatibility(kfm.Type, fn.Type); err != nil {
-			return err
-		}
-
-		id, err := s.TypeID(fn)
-		if err != nil {
-			return err
-		}
-
-		ins.Constant = int64(id)
-		ins.Offset = int16(0) // currently always 0, no support for kmods
+		ins.Constant = kfm.ksym_btf_id
+		ins.Offset = kfm.btf_fd_idx
 
 		if !iter.Next() {
 			break

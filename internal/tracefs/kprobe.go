@@ -186,7 +186,7 @@ func IsValidTraceID(s string) bool {
 }
 
 func SanitizeTracefsPath(path ...string) (string, error) {
-	base, err := GetTracefsPath()
+	base, err := getTracefsPath()
 	if err != nil {
 		return "", err
 	}
@@ -198,11 +198,11 @@ func SanitizeTracefsPath(path ...string) (string, error) {
 	return p, nil
 }
 
-// GetTracefsPath will return a correct path to the tracefs mount point.
+// getTracefsPath will return a correct path to the tracefs mount point.
 // Since kernel 4.1 tracefs should be mounted by default at /sys/kernel/tracing,
 // but may be also be available at /sys/kernel/debug/tracing if debugfs is mounted.
 // The available tracefs paths will depends on distribution choices.
-var GetTracefsPath = internal.Memoize(func() (string, error) {
+var getTracefsPath = internal.Memoize(func() (string, error) {
 	for _, p := range []struct {
 		path   string
 		fsType int64

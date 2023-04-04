@@ -57,6 +57,6 @@ func TestTraceValidID(t *testing.T) {
 }
 
 func TestGetTracefsPath(t *testing.T) {
-	_, err := GetTracefsPath()
+	_, err := getTracefsPath()
 	qt.Assert(t, err, qt.IsNil)
 }

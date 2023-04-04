@@ -649,6 +649,43 @@ func TestKfunc(t *testing.T) {
 	})
 }
 
+func TestKmodKfunc(t *testing.T) {
+	testutils.SkipOnOldKernel(t, "5.18", "bpf_testmod_test_mod_kfunc")
+	testutils.SkipOnOldKernel(t, "5.18", "bpf_kfunc_call_test_mem_len_pass1")
+	testutils.Files(t, testutils.Glob(t, "testdata/kmod_kfunc-*.elf"), func(t *testing.T, file string) {
+		spec, err := LoadCollectionSpec(file)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if spec.ByteOrder != internal.NativeEndian {
+			return
+		}
+
+		var obj struct {
+			Main *Program `ebpf:"call_kmod_kfunc"`
+		}
+
+		err = spec.LoadAndAssign(&obj, nil)
+		testutils.SkipIfNotSupported(t, err)
+		if err != nil {
+			t.Fatalf("%v+", err)
+		}
+		defer obj.Main.Close()
+
+		ret, _, err := obj.Main.Test(internal.EmptyBPFContext)
+		testutils.SkipIfNotSupported(t, err)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if ret != 1 {
+			t.Fatalf("Expected kmod kfunc to return value 1, got %d", ret)
+		}
+
+	})
+}
+
 func TestSubprogRelocation(t *testing.T) {
 	testutils.SkipOnOldKernel(t, "5.13", "bpf_for_each_map_elem")
 

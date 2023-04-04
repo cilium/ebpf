@@ -8,8 +8,8 @@ import (
 	"github.com/cilium/ebpf/asm"
 	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/sys"
+	"github.com/cilium/ebpf/internal/tracefs"
 	"github.com/cilium/ebpf/internal/unix"
-	"github.com/cilium/ebpf/link/lite"
 )
 
 // invalidBPFObjNameChar returns true if char may not appear in
@@ -270,7 +270,7 @@ var haveSyscallWrapper = internal.NewFeatureTest("syscall wrapper", "4.17", func
 		return internal.ErrNotSupported
 	}
 
-	if err := lite.KprobeCheckLite(testSyscallName, -1); err != nil {
+	if err := tracefs.KprobeCheckLite(testSyscallName, -1); err != nil {
 		return internal.ErrNotSupported
 	}
 	return nil

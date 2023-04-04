@@ -4,11 +4,13 @@ import (
 	"errors"
 	"fmt"
 	"runtime"
+	"unsafe"
 
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/asm"
 	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/sys"
+	"github.com/cilium/ebpf/internal/tracefs"
 	"github.com/cilium/ebpf/internal/unix"
 )
 
@@ -36,7 +38,7 @@ import (
 //   stops any further invocations of the attached eBPF program.
 
 var (
-	errInvalidInput = internal.ErrInvalidInput
+	errInvalidInput = tracefs.ErrInvalidInput
 )
 
 const (
@@ -85,12 +87,12 @@ func (pe *perfEvent) Close() error {
 	case kprobeEvent, kretprobeEvent:
 		// Clean up kprobe tracefs entry.
 		if pe.tracefsID != 0 {
-			return closeTraceFSProbeEvent(kprobeType, pe.group, pe.name)
+			return tracefs.CloseTraceFSProbeEvent(tracefs.KprobeType, pe.group, pe.name)
 		}
 	case uprobeEvent, uretprobeEvent:
 		// Clean up uprobe tracefs entry.
 		if pe.tracefsID != 0 {
-			return closeTraceFSProbeEvent(uprobeType, pe.group, pe.name)
+			return tracefs.CloseTraceFSProbeEvent(tracefs.UprobeType, pe.group, pe.name)
 		}
 	case tracepointEvent:
 		// Tracepoint trace events don't hold any extra resources.
@@ -248,6 +250,15 @@ func attachPerfEventLink(pe *perfEvent, prog *ebpf.Program) (*perfEventLink, err
 	// Close the perf event when its reference is lost to avoid leaking system resources.
 	runtime.SetFinalizer(pl, (*perfEventLink).Close)
 	return pl, nil
+}
+
+// unsafeStringPtr returns an unsafe.Pointer to a NUL-terminated copy of str.
+func unsafeStringPtr(str string) (unsafe.Pointer, error) {
+	p, err := unix.BytePtrFromString(str)
+	if err != nil {
+		return nil, err
+	}
+	return unsafe.Pointer(p), nil
 }
 
 // Probe BPF perf link.

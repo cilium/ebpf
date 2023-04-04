@@ -10,9 +10,6 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
-	"unsafe"
-
-	"github.com/cilium/ebpf/internal/unix"
 )
 
 // NewBufferedSectionReader wraps an io.ReaderAt in an appropriately-sized
@@ -128,13 +125,4 @@ func ReadUint64FromFileOnce(format string, path ...string) (uint64, error) {
 
 	uint64FromFileCache.values[key] = value
 	return value, nil
-}
-
-// UnsafeStringPtr returns an unsafe.Pointer to a NUL-terminated copy of str.
-func UnsafeStringPtr(str string) (unsafe.Pointer, error) {
-	p, err := unix.BytePtrFromString(str)
-	if err != nil {
-		return nil, err
-	}
-	return unsafe.Pointer(p), nil
 }

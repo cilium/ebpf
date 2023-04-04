@@ -4,12 +4,9 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"runtime"
-	"unsafe"
 
 	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/sys"
-	"github.com/cilium/ebpf/internal/unix"
 )
 
 type probeArgs struct {
@@ -32,62 +29,8 @@ func tryAttach(symbol string, pid int) (*sys.FD, error) {
 		pid:    pid,
 	}
 
-	// Use kprobe PMU if the kernel has it available.
-	fd, err := pmuKprobe(args)
-	if err == nil {
-		return fd, nil
-	}
-	if err != nil && !errors.Is(err, internal.ErrNotSupported) {
-		return nil, err
-	}
-
 	// Use tracefs if kprobe PMU is missing.
 	return tracefsKprobe(args)
-}
-
-// pmuKprobe opens a perf event based on the kprobe PMU.
-// Returns os.ErrNotExist if the given symbol does not exist in the kernel.
-func pmuKprobe(args probeArgs) (*sys.FD, error) {
-	// Getting the PMU type will fail if the kernel doesn't support
-	// the perf_[k,u]probe PMU.
-	et, err := internal.ReadUint64FromFileOnce("%d\n", "/sys/bus/event_source/devices/kprobe/type")
-	if err != nil {
-		return nil, err
-	}
-
-	var (
-		config uint64
-		attr   unix.PerfEventAttr
-		sp     unsafe.Pointer
-	)
-	// Create a pointer to a NUL-terminated string for the kernel.
-	sp, err = internal.UnsafeStringPtr(args.symbol)
-	if err != nil {
-		return nil, err
-	}
-
-	attr = unix.PerfEventAttr{
-		// The minimum size required for PMU kprobes is PERF_ATTR_SIZE_VER1,
-		// since it added the config2 (Ext2) field. Use Ext2 as probe_offset.
-		Size:   unix.PERF_ATTR_SIZE_VER1,
-		Type:   uint32(et),          // PMU event type read from sysfs
-		Ext1:   uint64(uintptr(sp)), // Kernel symbol to trace
-		Config: config,              // Retprobe flag
-	}
-	rawFd, err := unix.PerfEventOpen(&attr, args.pid, 0, -1, unix.PERF_FLAG_FD_CLOEXEC)
-	if err != nil {
-		return nil, err
-	}
-
-	// Ensure the string pointer is not collected before PerfEventOpen returns.
-	runtime.KeepAlive(sp)
-
-	fd, err := sys.NewFD(rawFd)
-	if err != nil {
-		return nil, err
-	}
-
-	return fd, nil
 }
 
 // tracefsKprobe creates a Kprobe tracefs entry.

@@ -9,6 +9,7 @@ import (
 	"github.com/cilium/ebpf/asm"
 	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/sys"
+	"github.com/cilium/ebpf/internal/tracefs"
 	"github.com/cilium/ebpf/internal/unix"
 )
 
@@ -36,7 +37,7 @@ import (
 //   stops any further invocations of the attached eBPF program.
 
 var (
-	errInvalidInput = internal.ErrInvalidInput
+	errInvalidInput = tracefs.ErrInvalidInput
 )
 
 const (

@@ -533,12 +533,6 @@ func (cl *collectionLoader) populateMaps() error {
 			return fmt.Errorf("missing map spec %s", mapName)
 		}
 
-		if mapName == kconfigMap {
-			if err := resolveKconfig(mapSpec); err != nil {
-				return fmt.Errorf("resolving kconfig: %w", err)
-			}
-		}
-
 		// MapSpecs that refer to inner maps or programs within the same
 		// CollectionSpec do so using strings. These strings are used as the key
 		// to look up the respective object in the Maps or Programs fields.
@@ -585,11 +579,6 @@ func (cl *collectionLoader) populateMaps() error {
 // resolveKconfig resolves all variables declared in .kconfig and populates
 // m.Contents. Does nothing if the given m.Contents is non-empty.
 func resolveKconfig(m *MapSpec) error {
-	// Allow caller to manually populate .kconfig contents for testing purposes.
-	if len(m.Contents) != 0 {
-		return nil
-	}
-
 	ds, ok := m.Value.(*btf.Datasec)
 	if !ok {
 		return errors.New("map value is not a Datasec")

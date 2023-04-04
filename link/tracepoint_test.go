@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	"github.com/cilium/ebpf"
-	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/testutils"
 	"github.com/cilium/ebpf/internal/unix"
 
@@ -58,18 +57,6 @@ func TestTracepointErrors(t *testing.T) {
 
 	_, err = Tracepoint("foo", "bar", &ebpf.Program{}, nil) // wrong prog type
 	c.Assert(errors.Is(err, errInvalidInput), qt.IsTrue)
-}
-
-func TestTraceGetEventID(t *testing.T) {
-	_, err := internal.GetTraceEventID("syscalls", "sys_enter_openat")
-	if err != nil {
-		t.Fatal("Can't read trace event ID:", err)
-	}
-
-	_, err = internal.GetTraceEventID("totally", "bogus")
-	if !errors.Is(err, os.ErrNotExist) {
-		t.Fatal("Expected os.ErrNotExist, got", err)
-	}
 }
 
 func TestTracepointProgramCall(t *testing.T) {

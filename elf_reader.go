@@ -1153,6 +1153,7 @@ func (ec *elfCode) loadKconfigSection() error {
 		ValueSize:  ds.Size,
 		MaxEntries: 1,
 		Flags:      unix.BPF_F_RDONLY_PROG | unix.BPF_F_MMAPABLE,
+		Freeze:     true,
 		Key:        &btf.Int{Size: 4},
 		Value:      ds,
 	}

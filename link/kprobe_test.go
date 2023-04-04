@@ -10,8 +10,8 @@ import (
 
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/asm"
-	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/testutils"
+	"github.com/cilium/ebpf/internal/tracefs"
 	"github.com/cilium/ebpf/internal/unix"
 )
 
@@ -273,8 +273,8 @@ func BenchmarkKprobeCreateTraceFS(b *testing.B) {
 func TestKprobeCreateTraceFS(t *testing.T) {
 	c := qt.New(t)
 
-	pg, _ := internal.RandomTraceFSGroup("ebpftest")
-	rg, _ := internal.RandomTraceFSGroup("ebpftest")
+	pg, _ := tracefs.RandomTraceFSGroup("ebpftest")
+	rg, _ := tracefs.RandomTraceFSGroup("ebpftest")
 
 	// Tee up cleanups in case any of the Asserts abort the function.
 	defer func() {
@@ -311,27 +311,6 @@ func TestKprobeCreateTraceFS(t *testing.T) {
 
 	// Expect a successful close of the kretprobe.
 	c.Assert(closeTraceFSProbeEvent(kprobeType, rg, ksym), qt.IsNil)
-}
-
-func TestKprobeTraceFSGroup(t *testing.T) {
-	c := qt.New(t)
-
-	// Expect <prefix>_<16 random hex chars>.
-	g, err := internal.RandomTraceFSGroup("ebpftest")
-	c.Assert(err, qt.IsNil)
-	c.Assert(g, qt.Matches, `ebpftest_[a-f0-9]{16}`)
-
-	// Expect error when the generator's output exceeds 63 characters.
-	p := make([]byte, 47) // 63 - 17 (length of the random suffix and underscore) + 1
-	for i := range p {
-		p[i] = byte('a')
-	}
-	_, err = internal.RandomTraceFSGroup(string(p))
-	c.Assert(err, qt.Not(qt.IsNil))
-
-	// Reject non-alphanumeric characters.
-	_, err = internal.RandomTraceFSGroup("/")
-	c.Assert(err, qt.Not(qt.IsNil))
 }
 
 func TestKprobeProgramCall(t *testing.T) {

@@ -9,6 +9,7 @@ import (
 
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/internal"
+	"github.com/cilium/ebpf/internal/tracefs"
 )
 
 var (
@@ -310,7 +311,7 @@ func (ex *Executable) uprobe(symbol string, prog *ebpf.Program, opts *UprobeOpti
 	}
 
 	// Use tracefs if uprobe PMU is missing.
-	args.symbol = internal.SanitizeSymbol(symbol)
+	args.symbol = tracefs.SanitizeSymbol(symbol)
 	tp, err = tracefsUprobe(args)
 	if err != nil {
 		return nil, fmt.Errorf("creating trace event '%s:%s' in tracefs: %w", ex.path, symbol, err)

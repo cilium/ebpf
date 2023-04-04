@@ -18,7 +18,7 @@ import (
 	"github.com/cilium/ebpf/internal/unix"
 )
 
-const kconfigMap = ".kconfig"
+type kconfigMeta struct{}
 
 type kfuncMeta struct{}
 
@@ -33,6 +33,7 @@ type elfCode struct {
 	extInfo  *btf.ExtInfos
 	maps     map[string]*MapSpec
 	kfuncs   map[string]*btf.Func
+	kconfig  *MapSpec
 }
 
 // LoadCollectionSpec parses an ELF file into a CollectionSpec.
@@ -593,7 +594,6 @@ func (ec *elfCode) relocateInstruction(ins *asm.Instruction, rel elf.Symbol) err
 			return fmt.Errorf("asm relocation: %s: unsupported type %s", name, typ)
 		}
 
-		kc := ec.maps[kconfigMap]
 		kf := ec.kfuncs[name]
 		switch {
 		// If a Call instruction is found and the datasec has a btf.Func with a Name
@@ -611,9 +611,8 @@ func (ec *elfCode) relocateInstruction(ins *asm.Instruction, rel elf.Symbol) err
 		// rewritten to pseudo map loads from .kconfig. If the map is present,
 		// require it to contain the symbol to disambiguate between inline asm
 		// relos and kconfigs.
-		case kc != nil && ins.OpCode.IsDWordLoad():
-			var found bool
-			for _, vsi := range kc.Value.(*btf.Datasec).Vars {
+		case ec.kconfig != nil && ins.OpCode.IsDWordLoad():
+			for _, vsi := range ec.kconfig.Value.(*btf.Datasec).Vars {
 				if vsi.Type.(*btf.Var).Name != rel.Name {
 					continue
 				}
@@ -621,15 +620,11 @@ func (ec *elfCode) relocateInstruction(ins *asm.Instruction, rel elf.Symbol) err
 				// Encode a map read at the offset of the var in the datasec.
 				ins.Constant = int64(uint64(vsi.Offset) << 32)
 				ins.Src = asm.PseudoMapValue
-				name = kconfigMap
-
-				found = true
-				break
+				ins.Metadata.Set(kconfigMeta{}, ec.kconfig)
+				return nil
 			}
 
-			if !found {
-				return fmt.Errorf("kconfig %s not found in %s", rel.Name, kconfigMap)
-			}
+			return fmt.Errorf("kconfig %s not found in .kconfig", rel.Name)
 		}
 
 	default:
@@ -1134,7 +1129,7 @@ func (ec *elfCode) loadKconfigSection() error {
 	}
 
 	var ds *btf.Datasec
-	err := ec.btf.TypeByName(kconfigMap, &ds)
+	err := ec.btf.TypeByName(".kconfig", &ds)
 	if errors.Is(err, btf.ErrNotFound) {
 		return nil
 	}
@@ -1146,13 +1141,14 @@ func (ec *elfCode) loadKconfigSection() error {
 		return errors.New("zero-length .kconfig")
 	}
 
-	ec.maps[kconfigMap] = &MapSpec{
-		Name:       kconfigMap,
+	ec.kconfig = &MapSpec{
+		Name:       ".kconfig",
 		Type:       Array,
 		KeySize:    uint32(4),
 		ValueSize:  ds.Size,
 		MaxEntries: 1,
 		Flags:      unix.BPF_F_RDONLY_PROG | unix.BPF_F_MMAPABLE,
+		Freeze:     true,
 		Key:        &btf.Int{Size: 4},
 		Value:      ds,
 	}

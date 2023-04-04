@@ -4,6 +4,7 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/testutils"
 	qt "github.com/frankban/quicktest"
 )
@@ -11,18 +12,18 @@ import (
 func TestTraceEventID(t *testing.T) {
 	c := qt.New(t)
 
-	eid, err := getTraceEventID("syscalls", "sys_enter_mmap")
+	eid, err := internal.GetTraceEventID("syscalls", "sys_enter_mmap")
 	c.Assert(err, qt.IsNil)
 	c.Assert(eid, qt.Not(qt.Equals), 0)
 }
 
 func TestSanitizePath(t *testing.T) {
-	_, err := sanitizeTracefsPath("../escaped")
+	_, err := internal.SanitizeTracefsPath("../escaped")
 	if !errors.Is(err, errInvalidInput) {
 		t.Errorf("expected error %s, got: %s", errInvalidInput, err)
 	}
 
-	_, err = sanitizeTracefsPath("./not/escaped")
+	_, err = internal.SanitizeTracefsPath("./not/escaped")
 	if err != nil {
 		t.Errorf("expected no error, got: %s", err)
 	}
@@ -50,7 +51,7 @@ func TestTraceValidID(t *testing.T) {
 				exp = "fail"
 			}
 
-			if isValidTraceID(tt.in) == tt.fail {
+			if internal.IsValidTraceID(tt.in) == tt.fail {
 				t.Errorf("expected string '%s' to %s valid ID check", tt.in, exp)
 			}
 		})
@@ -58,7 +59,7 @@ func TestTraceValidID(t *testing.T) {
 }
 
 func TestGetTracefsPath(t *testing.T) {
-	_, err := getTracefsPath()
+	_, err := internal.GetTracefsPath()
 	qt.Assert(t, err, qt.IsNil)
 }
 

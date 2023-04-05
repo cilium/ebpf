@@ -2,7 +2,6 @@ package link
 
 import (
 	"errors"
-	"fmt"
 	"go/build"
 	"os"
 	"os/exec"
@@ -334,29 +333,6 @@ func TestUprobeCreateTraceFS(t *testing.T) {
 
 	// Expect a successful close of the uretprobe.
 	c.Assert(tracefs.CloseTraceFSProbeEvent(tracefs.UprobeType, rg, ssym), qt.IsNil)
-}
-
-func TestUprobeSanitizedSymbol(t *testing.T) {
-	tests := []struct {
-		symbol   string
-		expected string
-	}{
-		{"readline", "readline"},
-		{"main.Func123", "main_Func123"},
-		{"a.....a", "a_a"},
-		{"./;'{}[]a", "_a"},
-		{"***xx**xx###", "_xx_xx_"},
-		{`@P#r$i%v^3*+t)i&k++--`, "_P_r_i_v_3_t_i_k_"},
-	}
-
-	for i, tt := range tests {
-		t.Run(fmt.Sprint(i), func(t *testing.T) {
-			sanitized := tracefs.SanitizeSymbol(tt.symbol)
-			if tt.expected != sanitized {
-				t.Errorf("Expected sanitized symbol to be '%s', got '%s'", tt.expected, sanitized)
-			}
-		})
-	}
 }
 
 func TestUprobeProgramCall(t *testing.T) {

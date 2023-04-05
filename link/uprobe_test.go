@@ -13,6 +13,7 @@ import (
 
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/internal/testutils"
+	"github.com/cilium/ebpf/internal/tracefs"
 	"github.com/cilium/ebpf/internal/unix"
 )
 
@@ -234,7 +235,7 @@ func TestUprobeTraceFS(t *testing.T) {
 
 	// Prepare probe args.
 	args := probeArgs{
-		symbol: sanitizeSymbol(bashSym),
+		symbol: tracefs.SanitizeSymbol(bashSym),
 		path:   bashEx.path,
 		offset: off,
 		pid:    perfAllThreads,
@@ -288,10 +289,10 @@ func TestUprobeCreateTraceFS(t *testing.T) {
 	c.Assert(err, qt.IsNil)
 
 	// Sanitize the symbol in order to be used in tracefs API.
-	ssym := sanitizeSymbol(bashSym)
+	ssym := tracefs.SanitizeSymbol(bashSym)
 
-	pg, _ := randomGroup("ebpftest")
-	rg, _ := randomGroup("ebpftest")
+	pg, _ := tracefs.RandomGroup("ebpftest")
+	rg, _ := tracefs.RandomGroup("ebpftest")
 
 	// Tee up cleanups in case any of the Asserts abort the function.
 	defer func() {
@@ -350,7 +351,7 @@ func TestUprobeSanitizedSymbol(t *testing.T) {
 
 	for i, tt := range tests {
 		t.Run(fmt.Sprint(i), func(t *testing.T) {
-			sanitized := sanitizeSymbol(tt.symbol)
+			sanitized := tracefs.SanitizeSymbol(tt.symbol)
 			if tt.expected != sanitized {
 				t.Errorf("Expected sanitized symbol to be '%s', got '%s'", tt.expected, sanitized)
 			}

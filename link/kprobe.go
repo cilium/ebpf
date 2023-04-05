@@ -1,7 +1,6 @@
 package link
 
 import (
-	"crypto/rand"
 	"errors"
 	"fmt"
 	"os"
@@ -11,7 +10,9 @@ import (
 	"unsafe"
 
 	"github.com/cilium/ebpf"
+	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/sys"
+	"github.com/cilium/ebpf/internal/tracefs"
 	"github.com/cilium/ebpf/internal/unix"
 )
 
@@ -61,7 +62,7 @@ func (pt probeType) String() string {
 }
 
 func (pt probeType) EventsFile() (*os.File, error) {
-	path, err := sanitizeTracefsPath(fmt.Sprintf("%s_events", pt.String()))
+	path, err := tracefs.SanitizeTracefsPath(fmt.Sprintf("%s_events", pt.String()))
 	if err != nil {
 		return nil, err
 	}
@@ -200,8 +201,10 @@ func kprobe(symbol string, prog *ebpf.Program, opts *KprobeOptions, ret bool) (*
 	// Use kprobe PMU if the kernel has it available.
 	tp, err := pmuKprobe(args)
 	if errors.Is(err, os.ErrNotExist) || errors.Is(err, unix.EINVAL) {
-		args.symbol = platformPrefix(symbol)
-		tp, err = pmuKprobe(args)
+		if prefixedSymbol, ok := internal.PlatformPrefix(symbol); ok {
+			args.symbol = prefixedSymbol
+			tp, err = pmuKprobe(args)
+		}
 	}
 	if err == nil {
 		return tp, nil
@@ -214,8 +217,10 @@ func kprobe(symbol string, prog *ebpf.Program, opts *KprobeOptions, ret bool) (*
 	args.symbol = symbol
 	tp, err = tracefsKprobe(args)
 	if errors.Is(err, os.ErrNotExist) || errors.Is(err, unix.EINVAL) {
-		args.symbol = platformPrefix(symbol)
-		tp, err = tracefsKprobe(args)
+		if prefixedSymbol, ok := internal.PlatformPrefix(symbol); ok {
+			args.symbol = prefixedSymbol
+			tp, err = tracefsKprobe(args)
+		}
 	}
 	if err != nil {
 		return nil, fmt.Errorf("creating tracefs event (arch-specific fallback for %q): %w", symbol, err)
@@ -240,7 +245,7 @@ func pmuKprobe(args probeArgs) (*perfEvent, error) {
 func pmuProbe(typ probeType, args probeArgs) (*perfEvent, error) {
 	// Getting the PMU type will fail if the kernel doesn't support
 	// the perf_[k,u]probe PMU.
-	et, err := readUint64FromFileOnce("%d\n", "/sys/bus/event_source/devices", typ.String(), "type")
+	et, err := internal.ReadUint64FromFileOnce("%d\n", "/sys/bus/event_source/devices", typ.String(), "type")
 	if errors.Is(err, os.ErrNotExist) {
 		return nil, fmt.Errorf("%s: %w", typ, ErrNotSupported)
 	}
@@ -255,7 +260,7 @@ func pmuProbe(typ probeType, args probeArgs) (*perfEvent, error) {
 
 	var config uint64
 	if args.ret {
-		bit, err := readUint64FromFileOnce("config:%d\n", "/sys/bus/event_source/devices", typ.String(), "/format/retprobe")
+		bit, err := internal.ReadUint64FromFileOnce("config:%d\n", "/sys/bus/event_source/devices", typ.String(), "/format/retprobe")
 		if err != nil {
 			return nil, err
 		}
@@ -270,7 +275,7 @@ func pmuProbe(typ probeType, args probeArgs) (*perfEvent, error) {
 	switch typ {
 	case kprobeType:
 		// Create a pointer to a NUL-terminated string for the kernel.
-		sp, err = unsafeStringPtr(args.symbol)
+		sp, err = internal.UnsafeStringPtr(args.symbol)
 		if err != nil {
 			return nil, err
 		}
@@ -287,7 +292,7 @@ func pmuProbe(typ probeType, args probeArgs) (*perfEvent, error) {
 			Config: config,              // Retprobe flag
 		}
 	case uprobeType:
-		sp, err = unsafeStringPtr(args.path)
+		sp, err = internal.UnsafeStringPtr(args.path)
 		if err != nil {
 			return nil, err
 		}
@@ -378,7 +383,7 @@ func tracefsProbe(typ probeType, args probeArgs) (*perfEvent, error) {
 	// Generate a random string for each trace event we attempt to create.
 	// This value is used as the 'group' token in tracefs to allow creating
 	// multiple kprobe trace events with the same name.
-	group, err := randomGroup(groupPrefix)
+	group, err := tracefs.RandomGroup(groupPrefix)
 	if err != nil {
 		return nil, fmt.Errorf("randomizing group name: %w", err)
 	}
@@ -391,7 +396,7 @@ func tracefsProbe(typ probeType, args probeArgs) (*perfEvent, error) {
 	}
 
 	// Kprobes are ephemeral tracepoints and share the same perf event type.
-	fd, err := openTracepointPerfEvent(tid, args.pid)
+	fd, err := tracefs.OpenTracepointPerfEvent(tid, args.pid)
 	if err != nil {
 		// Make sure we clean up the created tracefs event when we return error.
 		// If a livepatch handler is already active on the symbol, the write to
@@ -425,7 +430,7 @@ func createTraceFSProbeEvent(typ probeType, args probeArgs) (uint64, error) {
 	// check if an event with the same group and name already exists.
 	// Kernels 4.x and earlier don't return os.ErrExist on writing a duplicate
 	// entry, so we need to rely on reads for detecting uniqueness.
-	_, err := getTraceEventID(args.group, args.symbol)
+	_, err := tracefs.GetTraceEventID(args.group, args.symbol)
 	if err == nil {
 		return 0, fmt.Errorf("trace event %s/%s: %w", args.group, args.symbol, os.ErrExist)
 	}
@@ -461,7 +466,7 @@ func createTraceFSProbeEvent(typ probeType, args probeArgs) (uint64, error) {
 			return 0, errInvalidMaxActive
 		}
 		token = kprobeToken(args)
-		pe = fmt.Sprintf("%s:%s/%s %s", probePrefix(args.ret, args.retprobeMaxActive), args.group, sanitizeSymbol(args.symbol), token)
+		pe = fmt.Sprintf("%s:%s/%s %s", tracefs.ProbePrefix(args.ret, args.retprobeMaxActive), args.group, tracefs.SanitizeSymbol(args.symbol), token)
 	case uprobeType:
 		// The uprobe_events syntax is as follows:
 		// p[:[GRP/]EVENT] PATH:OFFSET [FETCHARGS] : Set a probe
@@ -477,7 +482,7 @@ func createTraceFSProbeEvent(typ probeType, args probeArgs) (uint64, error) {
 			return 0, errInvalidMaxActive
 		}
 		token = uprobeToken(args)
-		pe = fmt.Sprintf("%s:%s/%s %s", probePrefix(args.ret, 0), args.group, args.symbol, token)
+		pe = fmt.Sprintf("%s:%s/%s %s", tracefs.ProbePrefix(args.ret, 0), args.group, args.symbol, token)
 	}
 	_, err = f.WriteString(pe)
 
@@ -503,7 +508,7 @@ func createTraceFSProbeEvent(typ probeType, args probeArgs) (uint64, error) {
 	}
 
 	// Get the newly-created trace event's id.
-	tid, err := getTraceEventID(args.group, args.symbol)
+	tid, err := tracefs.GetTraceEventID(args.group, args.symbol)
 	if args.retprobeMaxActive != 0 && errors.Is(err, os.ErrNotExist) {
 		// Kernels < 4.12 don't support maxactive and therefore auto generate
 		// group and event names from the symbol and offset. The symbol is used
@@ -525,7 +530,7 @@ func createTraceFSProbeEvent(typ probeType, args probeArgs) (uint64, error) {
 // closeTraceFSProbeEvent removes the [k,u]probe with the given type, group and symbol
 // from <tracefs>/[k,u]probe_events.
 func closeTraceFSProbeEvent(typ probeType, group, symbol string) error {
-	pe := fmt.Sprintf("%s/%s", group, sanitizeSymbol(symbol))
+	pe := fmt.Sprintf("%s/%s", group, tracefs.SanitizeSymbol(symbol))
 	return removeTraceFSProbeEvent(typ, pe)
 }
 
@@ -543,38 +548,6 @@ func removeTraceFSProbeEvent(typ probeType, pe string) error {
 	}
 
 	return nil
-}
-
-// randomGroup generates a pseudorandom string for use as a tracefs group name.
-// Returns an error when the output string would exceed 63 characters (kernel
-// limitation), when rand.Read() fails or when prefix contains characters not
-// allowed by isValidTraceID.
-func randomGroup(prefix string) (string, error) {
-	if !isValidTraceID(prefix) {
-		return "", fmt.Errorf("prefix '%s' must be alphanumeric or underscore: %w", prefix, errInvalidInput)
-	}
-
-	b := make([]byte, 8)
-	if _, err := rand.Read(b); err != nil {
-		return "", fmt.Errorf("reading random bytes: %w", err)
-	}
-
-	group := fmt.Sprintf("%s_%x", prefix, b)
-	if len(group) > 63 {
-		return "", fmt.Errorf("group name '%s' cannot be longer than 63 characters: %w", group, errInvalidInput)
-	}
-
-	return group, nil
-}
-
-func probePrefix(ret bool, maxActive int) string {
-	if ret {
-		if maxActive > 0 {
-			return fmt.Sprintf("r%d", maxActive)
-		}
-		return "r"
-	}
-	return "p"
 }
 
 // kprobeToken creates the SYM[+offs] token for the tracefs api.

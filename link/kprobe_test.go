@@ -75,8 +75,8 @@ func TestKretprobeMaxActive(t *testing.T) {
 	defer prog.Close()
 
 	_, err := Kprobe("do_sys_open", prog, &KprobeOptions{RetprobeMaxActive: 4096})
-	if !errors.Is(err, errInvalidMaxActive) {
-		t.Fatal("Expected errInvalidMaxActive, got", err)
+	if !errors.Is(err, tracefs.ErrInvalidMaxActive) {
+		t.Fatal("Expected ErrInvalidMaxActive, got", err)
 	}
 
 	k, err := Kretprobe("__put_task_struct", prog, &KprobeOptions{RetprobeMaxActive: 4096})
@@ -241,13 +241,13 @@ func TestKprobeTraceFS(t *testing.T) {
 	args := tracefs.ProbeArgs{Group: "testgroup", Symbol: "symbol"}
 
 	// Write a k(ret)probe event for a non-existing symbol.
-	_, err = createTraceFSProbeEvent(tracefs.KprobeType, args)
+	_, err = tracefs.CreateTraceFSProbeEvent(tracefs.KprobeType, args)
 	c.Assert(errors.Is(err, os.ErrNotExist), qt.IsTrue, qt.Commentf("got error: %s", err))
 
 	// A kernel bug was fixed in 97c753e62e6c where EINVAL was returned instead
 	// of ENOENT, but only for kretprobes.
 	args.Ret = true
-	_, err = createTraceFSProbeEvent(tracefs.KprobeType, args)
+	_, err = tracefs.CreateTraceFSProbeEvent(tracefs.KprobeType, args)
 	if !(errors.Is(err, os.ErrNotExist) || errors.Is(err, unix.EINVAL)) {
 		t.Fatal(err)
 	}
@@ -285,12 +285,12 @@ func TestKprobeCreateTraceFS(t *testing.T) {
 	args := tracefs.ProbeArgs{Group: pg, Symbol: ksym}
 
 	// Create a kprobe.
-	_, err := createTraceFSProbeEvent(tracefs.KprobeType, args)
+	_, err := tracefs.CreateTraceFSProbeEvent(tracefs.KprobeType, args)
 	c.Assert(err, qt.IsNil)
 
 	// Attempt to create an identical kprobe using tracefs,
 	// expect it to fail with os.ErrExist.
-	_, err = createTraceFSProbeEvent(tracefs.KprobeType, args)
+	_, err = tracefs.CreateTraceFSProbeEvent(tracefs.KprobeType, args)
 	c.Assert(errors.Is(err, os.ErrExist), qt.IsTrue,
 		qt.Commentf("expected consecutive kprobe creation to contain os.ErrExist, got: %v", err))
 
@@ -301,10 +301,10 @@ func TestKprobeCreateTraceFS(t *testing.T) {
 	args.Ret = true
 
 	// Same test for a kretprobe.
-	_, err = createTraceFSProbeEvent(tracefs.KprobeType, args)
+	_, err = tracefs.CreateTraceFSProbeEvent(tracefs.KprobeType, args)
 	c.Assert(err, qt.IsNil)
 
-	_, err = createTraceFSProbeEvent(tracefs.KprobeType, args)
+	_, err = tracefs.CreateTraceFSProbeEvent(tracefs.KprobeType, args)
 	c.Assert(os.IsExist(err), qt.IsFalse,
 		qt.Commentf("expected consecutive kretprobe creation to contain os.ErrExist, got: %v", err))
 

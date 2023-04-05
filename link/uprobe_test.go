@@ -309,12 +309,12 @@ func TestUprobeCreateTraceFS(t *testing.T) {
 	}
 
 	// Create a uprobe.
-	_, err = createTraceFSProbeEvent(tracefs.UprobeType, args)
+	_, err = tracefs.CreateTraceFSProbeEvent(tracefs.UprobeType, args)
 	c.Assert(err, qt.IsNil)
 
 	// Attempt to create an identical uprobe using tracefs,
 	// expect it to fail with os.ErrExist.
-	_, err = createTraceFSProbeEvent(tracefs.UprobeType, args)
+	_, err = tracefs.CreateTraceFSProbeEvent(tracefs.UprobeType, args)
 	c.Assert(errors.Is(err, os.ErrExist), qt.IsTrue,
 		qt.Commentf("expected consecutive uprobe creation to contain os.ErrExist, got: %v", err))
 
@@ -325,10 +325,10 @@ func TestUprobeCreateTraceFS(t *testing.T) {
 	args.Ret = true
 
 	// Same test for a kretprobe.
-	_, err = createTraceFSProbeEvent(tracefs.UprobeType, args)
+	_, err = tracefs.CreateTraceFSProbeEvent(tracefs.UprobeType, args)
 	c.Assert(err, qt.IsNil)
 
-	_, err = createTraceFSProbeEvent(tracefs.UprobeType, args)
+	_, err = tracefs.CreateTraceFSProbeEvent(tracefs.UprobeType, args)
 	c.Assert(os.IsExist(err), qt.IsFalse,
 		qt.Commentf("expected consecutive uretprobe creation to contain os.ErrExist, got: %v", err))
 

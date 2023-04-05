@@ -322,12 +322,12 @@ func (ex *Executable) uprobe(symbol string, prog *ebpf.Program, opts *UprobeOpti
 
 // pmuUprobe opens a perf event based on the uprobe PMU.
 func pmuUprobe(args probeArgs) (*perfEvent, error) {
-	return pmuProbe(uprobeType, args)
+	return pmuProbe(tracefs.UprobeType, args)
 }
 
 // tracefsUprobe creates a Uprobe tracefs entry.
 func tracefsUprobe(args probeArgs) (*perfEvent, error) {
-	return tracefsProbe(uprobeType, args)
+	return tracefsProbe(tracefs.UprobeType, args)
 }
 
 // uprobeToken creates the PATH:OFFSET(REF_CTR_OFFSET) token for the tracefs api.

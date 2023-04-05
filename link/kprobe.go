@@ -16,8 +16,6 @@ import (
 	"github.com/cilium/ebpf/internal/unix"
 )
 
-type probeType uint8
-
 type probeArgs struct {
 	symbol, group, path          string
 	offset, refCtrOffset, cookie uint64
@@ -49,29 +47,8 @@ type KprobeOptions struct {
 	TraceFSPrefix string
 }
 
-const (
-	kprobeType probeType = iota
-	uprobeType
-)
-
-func (pt probeType) String() string {
-	if pt == kprobeType {
-		return "kprobe"
-	}
-	return "uprobe"
-}
-
-func (pt probeType) EventsFile() (*os.File, error) {
-	path, err := tracefs.SanitizeTracefsPath(fmt.Sprintf("%s_events", pt.String()))
-	if err != nil {
-		return nil, err
-	}
-
-	return os.OpenFile(path, os.O_APPEND|os.O_WRONLY, 0666)
-}
-
-func (pt probeType) PerfEventType(ret bool) perfEventType {
-	if pt == kprobeType {
+func PerfEventTypeFromProbeType(pt tracefs.ProbeType, ret bool) perfEventType {
+	if pt == tracefs.KprobeType {
 		if ret {
 			return kretprobeEvent
 		}
@@ -232,7 +209,7 @@ func kprobe(symbol string, prog *ebpf.Program, opts *KprobeOptions, ret bool) (*
 // pmuKprobe opens a perf event based on the kprobe PMU.
 // Returns os.ErrNotExist if the given symbol does not exist in the kernel.
 func pmuKprobe(args probeArgs) (*perfEvent, error) {
-	return pmuProbe(kprobeType, args)
+	return pmuProbe(tracefs.KprobeType, args)
 }
 
 // pmuProbe opens a perf event based on a Performance Monitoring Unit.
@@ -242,7 +219,7 @@ func pmuKprobe(args probeArgs) (*perfEvent, error) {
 // 33ea4b24277b "perf/core: Implement the 'perf_uprobe' PMU"
 //
 // Returns ErrNotSupported if the kernel doesn't support perf_[k,u]probe PMU
-func pmuProbe(typ probeType, args probeArgs) (*perfEvent, error) {
+func pmuProbe(typ tracefs.ProbeType, args probeArgs) (*perfEvent, error) {
 	// Getting the PMU type will fail if the kernel doesn't support
 	// the perf_[k,u]probe PMU.
 	et, err := internal.ReadUint64FromFileOnce("%d\n", "/sys/bus/event_source/devices", typ.String(), "type")
@@ -273,7 +250,7 @@ func pmuProbe(typ probeType, args probeArgs) (*perfEvent, error) {
 		token string
 	)
 	switch typ {
-	case kprobeType:
+	case tracefs.KprobeType:
 		// Create a pointer to a NUL-terminated string for the kernel.
 		sp, err = internal.UnsafeStringPtr(args.symbol)
 		if err != nil {
@@ -291,7 +268,7 @@ func pmuProbe(typ probeType, args probeArgs) (*perfEvent, error) {
 			Ext2:   args.offset,         // Kernel symbol offset
 			Config: config,              // Retprobe flag
 		}
-	case uprobeType:
+	case tracefs.UprobeType:
 		sp, err = internal.UnsafeStringPtr(args.path)
 		if err != nil {
 			return nil, err
@@ -355,7 +332,7 @@ func pmuProbe(typ probeType, args probeArgs) (*perfEvent, error) {
 
 	// Kernel has perf_[k,u]probe PMU available, initialize perf event.
 	return &perfEvent{
-		typ:    typ.PerfEventType(args.ret),
+		typ:    PerfEventTypeFromProbeType(typ, args.ret),
 		name:   args.symbol,
 		pmuID:  et,
 		cookie: args.cookie,
@@ -365,7 +342,7 @@ func pmuProbe(typ probeType, args probeArgs) (*perfEvent, error) {
 
 // tracefsKprobe creates a Kprobe tracefs entry.
 func tracefsKprobe(args probeArgs) (*perfEvent, error) {
-	return tracefsProbe(kprobeType, args)
+	return tracefsProbe(tracefs.KprobeType, args)
 }
 
 // tracefsProbe creates a trace event by writing an entry to <tracefs>/[k,u]probe_events.
@@ -374,7 +351,7 @@ func tracefsKprobe(args probeArgs) (*perfEvent, error) {
 // Path and offset are only set in the case of uprobe(s) and are used to set
 // the executable/library path on the filesystem and the offset where the probe is inserted.
 // A perf event is then opened on the newly-created trace event and returned to the caller.
-func tracefsProbe(typ probeType, args probeArgs) (*perfEvent, error) {
+func tracefsProbe(typ tracefs.ProbeType, args probeArgs) (*perfEvent, error) {
 	groupPrefix := "ebpf"
 	if args.group != "" {
 		groupPrefix = args.group
@@ -407,7 +384,7 @@ func tracefsProbe(typ probeType, args probeArgs) (*perfEvent, error) {
 	}
 
 	return &perfEvent{
-		typ:       typ.PerfEventType(args.ret),
+		typ:       PerfEventTypeFromProbeType(typ, args.ret),
 		group:     group,
 		name:      args.symbol,
 		tracefsID: tid,
@@ -425,7 +402,7 @@ var errInvalidMaxActive = errors.New("can only set maxactive on kretprobes")
 // if a probe with the same group and symbol already exists. Returns an error if
 // args.retprobeMaxActive is used on non kprobe types. Returns ErrNotSupported if
 // the kernel is too old to support kretprobe maxactive.
-func createTraceFSProbeEvent(typ probeType, args probeArgs) (uint64, error) {
+func createTraceFSProbeEvent(typ tracefs.ProbeType, args probeArgs) (uint64, error) {
 	// Before attempting to create a trace event through tracefs,
 	// check if an event with the same group and name already exists.
 	// Kernels 4.x and earlier don't return os.ErrExist on writing a duplicate
@@ -447,7 +424,7 @@ func createTraceFSProbeEvent(typ probeType, args probeArgs) (uint64, error) {
 
 	var pe, token string
 	switch typ {
-	case kprobeType:
+	case tracefs.KprobeType:
 		// The kprobe_events syntax is as follows (see Documentation/trace/kprobetrace.txt):
 		// p[:[GRP/]EVENT] [MOD:]SYM[+offs]|MEMADDR [FETCHARGS] : Set a probe
 		// r[MAXACTIVE][:[GRP/]EVENT] [MOD:]SYM[+0] [FETCHARGS] : Set a return probe
@@ -467,7 +444,7 @@ func createTraceFSProbeEvent(typ probeType, args probeArgs) (uint64, error) {
 		}
 		token = kprobeToken(args)
 		pe = fmt.Sprintf("%s:%s/%s %s", tracefs.ProbePrefix(args.ret, args.retprobeMaxActive), args.group, tracefs.SanitizeSymbol(args.symbol), token)
-	case uprobeType:
+	case tracefs.UprobeType:
 		// The uprobe_events syntax is as follows:
 		// p[:[GRP/]EVENT] PATH:OFFSET [FETCHARGS] : Set a probe
 		// r[:[GRP/]EVENT] PATH:OFFSET [FETCHARGS] : Set a return probe
@@ -529,12 +506,12 @@ func createTraceFSProbeEvent(typ probeType, args probeArgs) (uint64, error) {
 
 // closeTraceFSProbeEvent removes the [k,u]probe with the given type, group and symbol
 // from <tracefs>/[k,u]probe_events.
-func closeTraceFSProbeEvent(typ probeType, group, symbol string) error {
+func closeTraceFSProbeEvent(typ tracefs.ProbeType, group, symbol string) error {
 	pe := fmt.Sprintf("%s/%s", group, tracefs.SanitizeSymbol(symbol))
 	return removeTraceFSProbeEvent(typ, pe)
 }
 
-func removeTraceFSProbeEvent(typ probeType, pe string) error {
+func removeTraceFSProbeEvent(typ tracefs.ProbeType, pe string) error {
 	f, err := typ.EventsFile()
 	if err != nil {
 		return err

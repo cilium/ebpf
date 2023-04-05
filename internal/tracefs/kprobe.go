@@ -36,11 +36,17 @@ func tryAttach(symbol string, pid int) (*sys.FD, error) {
 	}
 
 	// Use tracefs if kprobe PMU is missing.
-	return tracefsKprobe(args)
+	fd, _, _, err := TracefsProbe(KprobeType, args)
+	return fd, err
 }
 
-// tracefsKprobe creates a Kprobe tracefs entry.
-func tracefsKprobe(args ProbeArgs) (*sys.FD, error) {
+// TracefsProbe creates a trace event by writing an entry to <tracefs>/[k,u]probe_events.
+// A new trace event group name is generated on every call to support creating
+// multiple trace events for the same kernel or userspace symbol.
+// Path and offset are only set in the case of uprobe(s) and are used to set
+// the executable/library path on the filesystem and the offset where the probe is inserted.
+// A perf event is then opened on the newly-created trace event and returned to the caller.
+func TracefsProbe(typ ProbeType, args ProbeArgs) (*sys.FD, uint64, string, error) {
 	groupPrefix := "ebpf"
 	if args.Group != "" {
 		groupPrefix = args.Group
@@ -51,89 +57,28 @@ func tracefsKprobe(args ProbeArgs) (*sys.FD, error) {
 	// multiple kprobe trace events with the same name.
 	group, err := RandomGroup(groupPrefix)
 	if err != nil {
-		return nil, err
+		return nil, 0, "", fmt.Errorf("randomizing group name: %w", err)
 	}
 	args.Group = group
 
 	// Create the [k,u]probe trace event using tracefs.
-	tid, err := createTraceFSKProbeEvent(args)
+	tid, err := CreateTraceFSProbeEvent(typ, args)
 	if err != nil {
-		return nil, err
+		return nil, 0, "", fmt.Errorf("creating probe entry on tracefs: %w", err)
 	}
 
 	// Kprobes are ephemeral tracepoints and share the same perf event type.
 	fd, err := OpenTracepointPerfEvent(tid, args.Pid)
-
-	// Make sure we clean up the created tracefs event when we return error.
-	// If a livepatch handler is already active on the symbol, the write to
-	// tracefs will succeed, a trace event will show up, but creating the
-	// perf event will fail with EBUSY.
-	_ = closeTraceFSKProbeEvent(args.Group, args.Symbol)
-	return fd, err
-}
-
-func createTraceFSKProbeEvent(args ProbeArgs) (uint64, error) {
-	// Before attempting to create a trace event through tracefs,
-	// check if an event with the same group and name already exists.
-	// Kernels 4.x and earlier don't return os.ErrExist on writing a duplicate
-	// entry, so we need to rely on reads for detecting uniqueness.
-	_, err := GetTraceEventID(args.Group, args.Symbol)
-	if err == nil {
-		return 0, fmt.Errorf("trace event %s/%s: %w", args.Group, args.Symbol, os.ErrExist)
-	}
-	if err != nil && !errors.Is(err, os.ErrNotExist) {
-		return 0, fmt.Errorf("checking trace event %s/%s: %w", args.Group, args.Symbol, err)
-	}
-
-	// Open the kprobe_events file in tracefs.
-	f, err := kprobeEventsFile()
 	if err != nil {
-		return 0, err
-	}
-	defer f.Close()
-
-	token := args.Symbol
-	pe := fmt.Sprintf("%s:%s/%s %s", ProbePrefix(false, 0), args.Group, SanitizeSymbol(args.Symbol), token)
-	_, err = f.WriteString(pe)
-	if err != nil {
-		return 0, err
+		// Make sure we clean up the created tracefs event when we return error.
+		// If a livepatch handler is already active on the symbol, the write to
+		// tracefs will succeed, a trace event will show up, but creating the
+		// perf event will fail with EBUSY.
+		_ = CloseTraceFSProbeEvent(typ, args.Group, args.Symbol)
+		return nil, 0, "", err
 	}
 
-	// Get the newly-created trace event's id.
-	tid, err := GetTraceEventID(args.Group, args.Symbol)
-	if err != nil {
-		return 0, fmt.Errorf("get trace event id: %w", err)
-	}
-
-	return tid, nil
-}
-
-func closeTraceFSKProbeEvent(group, symbol string) error {
-	pe := fmt.Sprintf("%s/%s", group, SanitizeSymbol(symbol))
-	return removeTraceFSKProbeEvent(pe)
-}
-
-func removeTraceFSKProbeEvent(pe string) error {
-	f, err := kprobeEventsFile()
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-
-	if _, err = f.WriteString("-:" + pe); err != nil {
-		return fmt.Errorf("remove event %q from %s: %w", pe, f.Name(), err)
-	}
-
-	return nil
-}
-
-func kprobeEventsFile() (*os.File, error) {
-	path, err := SanitizeTracefsPath("kprobe_events")
-	if err != nil {
-		return nil, err
-	}
-
-	return os.OpenFile(path, os.O_APPEND|os.O_WRONLY, 0666)
+	return fd, tid, group, nil
 }
 
 // RandomGroup generates a pseudorandom string for use as a tracefs group name.

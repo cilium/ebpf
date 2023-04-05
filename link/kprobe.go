@@ -372,7 +372,7 @@ func tracefsProbe(typ tracefs.ProbeType, args tracefs.ProbeArgs) (*perfEvent, er
 		// If a livepatch handler is already active on the symbol, the write to
 		// tracefs will succeed, a trace event will show up, but creating the
 		// perf event will fail with EBUSY.
-		_ = closeTraceFSProbeEvent(typ, args.Group, args.Symbol)
+		_ = tracefs.CloseTraceFSProbeEvent(typ, args.Group, args.Symbol)
 		return nil, err
 	}
 
@@ -485,7 +485,7 @@ func createTraceFSProbeEvent(typ tracefs.ProbeType, args tracefs.ProbeArgs) (uin
 		// without any sanitization.
 		// See https://elixir.bootlin.com/linux/v4.10/source/kernel/trace/trace_kprobe.c#L712
 		event := fmt.Sprintf("kprobes/r_%s_%d", args.Symbol, args.Offset)
-		if err := removeTraceFSProbeEvent(typ, event); err != nil {
+		if err := tracefs.RemoveTraceFSProbeEvent(typ, event); err != nil {
 			return 0, fmt.Errorf("failed to remove spurious maxactive event: %s", err)
 		}
 		return 0, fmt.Errorf("create trace event with non-default maxactive: %w", ErrNotSupported)
@@ -495,27 +495,4 @@ func createTraceFSProbeEvent(typ tracefs.ProbeType, args tracefs.ProbeArgs) (uin
 	}
 
 	return tid, nil
-}
-
-// closeTraceFSProbeEvent removes the [k,u]probe with the given type, group and symbol
-// from <tracefs>/[k,u]probe_events.
-func closeTraceFSProbeEvent(typ tracefs.ProbeType, group, symbol string) error {
-	pe := fmt.Sprintf("%s/%s", group, tracefs.SanitizeSymbol(symbol))
-	return removeTraceFSProbeEvent(typ, pe)
-}
-
-func removeTraceFSProbeEvent(typ tracefs.ProbeType, pe string) error {
-	f, err := typ.EventsFile()
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-
-	// See [k,u]probe_events syntax above. The probe type does not need to be specified
-	// for removals.
-	if _, err = f.WriteString("-:" + pe); err != nil {
-		return fmt.Errorf("remove event %q from %s: %w", pe, f.Name(), err)
-	}
-
-	return nil
 }

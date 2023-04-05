@@ -86,12 +86,12 @@ func (pe *perfEvent) Close() error {
 	case kprobeEvent, kretprobeEvent:
 		// Clean up kprobe tracefs entry.
 		if pe.tracefsID != 0 {
-			return closeTraceFSProbeEvent(tracefs.KprobeType, pe.group, pe.name)
+			return tracefs.CloseTraceFSProbeEvent(tracefs.KprobeType, pe.group, pe.name)
 		}
 	case uprobeEvent, uretprobeEvent:
 		// Clean up uprobe tracefs entry.
 		if pe.tracefsID != 0 {
-			return closeTraceFSProbeEvent(tracefs.UprobeType, pe.group, pe.name)
+			return tracefs.CloseTraceFSProbeEvent(tracefs.UprobeType, pe.group, pe.name)
 		}
 	case tracepointEvent:
 		// Tracepoint trace events don't hold any extra resources.

@@ -27,3 +27,10 @@ func (pt ProbeType) EventsFile() (*os.File, error) {
 
 	return os.OpenFile(path, os.O_APPEND|os.O_WRONLY, 0666)
 }
+
+type ProbeArgs struct {
+	Symbol, Group, Path          string
+	Offset, RefCtrOffset, Cookie uint64
+	Pid, RetprobeMaxActive       int
+	Ret                          bool
+}

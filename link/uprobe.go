@@ -290,15 +290,15 @@ func (ex *Executable) uprobe(symbol string, prog *ebpf.Program, opts *UprobeOpti
 		}
 	}
 
-	args := probeArgs{
-		symbol:       symbol,
-		path:         ex.path,
-		offset:       offset,
-		pid:          pid,
-		refCtrOffset: opts.RefCtrOffset,
-		ret:          ret,
-		cookie:       opts.Cookie,
-		group:        opts.TraceFSPrefix,
+	args := tracefs.ProbeArgs{
+		Symbol:       symbol,
+		Path:         ex.path,
+		Offset:       offset,
+		Pid:          pid,
+		RefCtrOffset: opts.RefCtrOffset,
+		Ret:          ret,
+		Cookie:       opts.Cookie,
+		Group:        opts.TraceFSPrefix,
 	}
 
 	// Use uprobe PMU if the kernel has it available.
@@ -311,7 +311,7 @@ func (ex *Executable) uprobe(symbol string, prog *ebpf.Program, opts *UprobeOpti
 	}
 
 	// Use tracefs if uprobe PMU is missing.
-	args.symbol = tracefs.SanitizeSymbol(symbol)
+	args.Symbol = tracefs.SanitizeSymbol(symbol)
 	tp, err = tracefsUprobe(args)
 	if err != nil {
 		return nil, fmt.Errorf("creating trace event '%s:%s' in tracefs: %w", ex.path, symbol, err)
@@ -321,23 +321,23 @@ func (ex *Executable) uprobe(symbol string, prog *ebpf.Program, opts *UprobeOpti
 }
 
 // pmuUprobe opens a perf event based on the uprobe PMU.
-func pmuUprobe(args probeArgs) (*perfEvent, error) {
+func pmuUprobe(args tracefs.ProbeArgs) (*perfEvent, error) {
 	return pmuProbe(tracefs.UprobeType, args)
 }
 
 // tracefsUprobe creates a Uprobe tracefs entry.
-func tracefsUprobe(args probeArgs) (*perfEvent, error) {
+func tracefsUprobe(args tracefs.ProbeArgs) (*perfEvent, error) {
 	return tracefsProbe(tracefs.UprobeType, args)
 }
 
 // uprobeToken creates the PATH:OFFSET(REF_CTR_OFFSET) token for the tracefs api.
-func uprobeToken(args probeArgs) string {
-	po := fmt.Sprintf("%s:%#x", args.path, args.offset)
+func uprobeToken(args tracefs.ProbeArgs) string {
+	po := fmt.Sprintf("%s:%#x", args.Path, args.Offset)
 
-	if args.refCtrOffset != 0 {
+	if args.RefCtrOffset != 0 {
 		// This is not documented in Documentation/trace/uprobetracer.txt.
 		// elixir.bootlin.com/linux/v5.15-rc7/source/kernel/trace/trace.c#L5564
-		po += fmt.Sprintf("(%#x)", args.refCtrOffset)
+		po += fmt.Sprintf("(%#x)", args.RefCtrOffset)
 	}
 
 	return po

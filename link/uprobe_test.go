@@ -176,11 +176,11 @@ func TestUprobeCreatePMU(t *testing.T) {
 	c.Assert(err, qt.IsNil)
 
 	// Prepare probe args.
-	args := probeArgs{
-		symbol: bashSym,
-		path:   bashEx.path,
-		offset: off,
-		pid:    perfAllThreads,
+	args := tracefs.ProbeArgs{
+		Symbol: bashSym,
+		Path:   bashEx.path,
+		Offset: off,
+		Pid:    perfAllThreads,
 	}
 
 	// uprobe PMU
@@ -191,7 +191,7 @@ func TestUprobeCreatePMU(t *testing.T) {
 	c.Assert(pu.typ, qt.Equals, uprobeEvent)
 
 	// uretprobe PMU
-	args.ret = true
+	args.Ret = true
 	pr, err := pmuUprobe(args)
 	c.Assert(err, qt.IsNil)
 	defer pr.Close()
@@ -208,11 +208,11 @@ func TestUprobePMUUnavailable(t *testing.T) {
 	c.Assert(err, qt.IsNil)
 
 	// Prepare probe args.
-	args := probeArgs{
-		symbol: bashSym,
-		path:   bashEx.path,
-		offset: off,
-		pid:    perfAllThreads,
+	args := tracefs.ProbeArgs{
+		Symbol: bashSym,
+		Path:   bashEx.path,
+		Offset: off,
+		Pid:    perfAllThreads,
 	}
 
 	pk, err := pmuUprobe(args)
@@ -234,11 +234,11 @@ func TestUprobeTraceFS(t *testing.T) {
 	c.Assert(err, qt.IsNil)
 
 	// Prepare probe args.
-	args := probeArgs{
-		symbol: tracefs.SanitizeSymbol(bashSym),
-		path:   bashEx.path,
-		offset: off,
-		pid:    perfAllThreads,
+	args := tracefs.ProbeArgs{
+		Symbol: tracefs.SanitizeSymbol(bashSym),
+		Path:   bashEx.path,
+		Offset: off,
+		Pid:    perfAllThreads,
 	}
 
 	// Open and close tracefs u(ret)probes, checking all errors.
@@ -247,14 +247,14 @@ func TestUprobeTraceFS(t *testing.T) {
 	c.Assert(up.Close(), qt.IsNil)
 	c.Assert(up.typ, qt.Equals, uprobeEvent)
 
-	args.ret = true
+	args.Ret = true
 	up, err = tracefsUprobe(args)
 	c.Assert(err, qt.IsNil)
 	c.Assert(up.Close(), qt.IsNil)
 	c.Assert(up.typ, qt.Equals, uretprobeEvent)
 
 	// Create two identical trace events, ensure their IDs differ.
-	args.ret = false
+	args.Ret = false
 	u1, err := tracefsUprobe(args)
 	c.Assert(err, qt.IsNil)
 	defer u1.Close()
@@ -269,11 +269,11 @@ func TestUprobeTraceFS(t *testing.T) {
 	c.Assert(u1.tracefsID, qt.Not(qt.CmpEquals()), u2.tracefsID)
 
 	// Expect an error when supplying an invalid custom group name
-	args.group = "/"
+	args.Group = "/"
 	_, err = tracefsUprobe(args)
 	c.Assert(err, qt.Not(qt.IsNil))
 
-	args.group = "customgroup"
+	args.Group = "customgroup"
 	u3, err := tracefsUprobe(args)
 	c.Assert(err, qt.IsNil)
 	defer u3.Close()
@@ -301,11 +301,11 @@ func TestUprobeCreateTraceFS(t *testing.T) {
 	}()
 
 	// Prepare probe args.
-	args := probeArgs{
-		group:  pg,
-		symbol: ssym,
-		path:   bashEx.path,
-		offset: off,
+	args := tracefs.ProbeArgs{
+		Group:  pg,
+		Symbol: ssym,
+		Path:   bashEx.path,
+		Offset: off,
 	}
 
 	// Create a uprobe.
@@ -321,8 +321,8 @@ func TestUprobeCreateTraceFS(t *testing.T) {
 	// Expect a successful close of the uprobe.
 	c.Assert(closeTraceFSProbeEvent(tracefs.UprobeType, pg, ssym), qt.IsNil)
 
-	args.group = rg
-	args.ret = true
+	args.Group = rg
+	args.Ret = true
 
 	// Same test for a kretprobe.
 	_, err = createTraceFSProbeEvent(tracefs.UprobeType, args)
@@ -361,15 +361,15 @@ func TestUprobeSanitizedSymbol(t *testing.T) {
 
 func TestUprobeToken(t *testing.T) {
 	tests := []struct {
-		args     probeArgs
+		args     tracefs.ProbeArgs
 		expected string
 	}{
-		{probeArgs{path: "/bin/bash"}, "/bin/bash:0x0"},
-		{probeArgs{path: "/bin/bash", offset: 1}, "/bin/bash:0x1"},
-		{probeArgs{path: "/bin/bash", offset: 65535}, "/bin/bash:0xffff"},
-		{probeArgs{path: "/bin/bash", offset: 65536}, "/bin/bash:0x10000"},
-		{probeArgs{path: "/bin/bash", offset: 1, refCtrOffset: 1}, "/bin/bash:0x1(0x1)"},
-		{probeArgs{path: "/bin/bash", offset: 1, refCtrOffset: 65535}, "/bin/bash:0x1(0xffff)"},
+		{tracefs.ProbeArgs{Path: "/bin/bash"}, "/bin/bash:0x0"},
+		{tracefs.ProbeArgs{Path: "/bin/bash", Offset: 1}, "/bin/bash:0x1"},
+		{tracefs.ProbeArgs{Path: "/bin/bash", Offset: 65535}, "/bin/bash:0xffff"},
+		{tracefs.ProbeArgs{Path: "/bin/bash", Offset: 65536}, "/bin/bash:0x10000"},
+		{tracefs.ProbeArgs{Path: "/bin/bash", Offset: 1, RefCtrOffset: 1}, "/bin/bash:0x1(0x1)"},
+		{tracefs.ProbeArgs{Path: "/bin/bash", Offset: 1, RefCtrOffset: 65535}, "/bin/bash:0x1(0xffff)"},
 	}
 
 	for i, tt := range tests {

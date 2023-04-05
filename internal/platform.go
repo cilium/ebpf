@@ -1,11 +1,11 @@
-package link
+package internal
 
 import (
 	"fmt"
 	"runtime"
 )
 
-func platformPrefix(symbol string) string {
+func PlatformPrefix(symbol string) (string, bool) {
 	// per https://github.com/golang/go/blob/master/src/go/build/syslist.go
 	// and https://github.com/libbpf/libbpf/blob/master/src/libbpf.c#L10047
 	var prefix string
@@ -37,8 +37,8 @@ func platformPrefix(symbol string) string {
 		prefix = "powerpc64"
 
 	default:
-		return symbol
+		return "", false
 	}
 
-	return fmt.Sprintf("__%s_%s", prefix, symbol)
+	return fmt.Sprintf("__%s_%s", prefix, symbol), true
 }

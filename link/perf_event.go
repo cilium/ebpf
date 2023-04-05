@@ -1,20 +1,15 @@
 package link
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
-	"os"
-	"path/filepath"
 	"runtime"
-	"strings"
-	"sync"
-	"unsafe"
 
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/asm"
 	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/sys"
+	"github.com/cilium/ebpf/internal/tracefs"
 	"github.com/cilium/ebpf/internal/unix"
 )
 
@@ -42,7 +37,7 @@ import (
 //   stops any further invocations of the attached eBPF program.
 
 var (
-	errInvalidInput = errors.New("invalid input")
+	errInvalidInput = tracefs.ErrInvalidInput
 )
 
 const (
@@ -91,12 +86,12 @@ func (pe *perfEvent) Close() error {
 	case kprobeEvent, kretprobeEvent:
 		// Clean up kprobe tracefs entry.
 		if pe.tracefsID != 0 {
-			return closeTraceFSProbeEvent(kprobeType, pe.group, pe.name)
+			return tracefs.CloseTraceFSProbeEvent(tracefs.KprobeType, pe.group, pe.name)
 		}
 	case uprobeEvent, uretprobeEvent:
 		// Clean up uprobe tracefs entry.
 		if pe.tracefsID != 0 {
-			return closeTraceFSProbeEvent(uprobeType, pe.group, pe.name)
+			return tracefs.CloseTraceFSProbeEvent(tracefs.UprobeType, pe.group, pe.name)
 		}
 	case tracepointEvent:
 		// Tracepoint trace events don't hold any extra resources.
@@ -256,132 +251,6 @@ func attachPerfEventLink(pe *perfEvent, prog *ebpf.Program) (*perfEventLink, err
 	return pl, nil
 }
 
-// unsafeStringPtr returns an unsafe.Pointer to a NUL-terminated copy of str.
-func unsafeStringPtr(str string) (unsafe.Pointer, error) {
-	p, err := unix.BytePtrFromString(str)
-	if err != nil {
-		return nil, err
-	}
-	return unsafe.Pointer(p), nil
-}
-
-// getTraceEventID reads a trace event's ID from tracefs given its group and name.
-// The kernel requires group and name to be alphanumeric or underscore.
-//
-// name automatically has its invalid symbols converted to underscores so the caller
-// can pass a raw symbol name, e.g. a kernel symbol containing dots.
-func getTraceEventID(group, name string) (uint64, error) {
-	name = sanitizeSymbol(name)
-	path, err := sanitizeTracefsPath("events", group, name, "id")
-	if err != nil {
-		return 0, err
-	}
-	tid, err := readUint64FromFile("%d\n", path)
-	if errors.Is(err, os.ErrNotExist) {
-		return 0, err
-	}
-	if err != nil {
-		return 0, fmt.Errorf("reading trace event ID of %s/%s: %w", group, name, err)
-	}
-
-	return tid, nil
-}
-
-// openTracepointPerfEvent opens a tracepoint-type perf event. System-wide
-// [k,u]probes created by writing to <tracefs>/[k,u]probe_events are tracepoints
-// behind the scenes, and can be attached to using these perf events.
-func openTracepointPerfEvent(tid uint64, pid int) (*sys.FD, error) {
-	attr := unix.PerfEventAttr{
-		Type:        unix.PERF_TYPE_TRACEPOINT,
-		Config:      tid,
-		Sample_type: unix.PERF_SAMPLE_RAW,
-		Sample:      1,
-		Wakeup:      1,
-	}
-
-	fd, err := unix.PerfEventOpen(&attr, pid, 0, -1, unix.PERF_FLAG_FD_CLOEXEC)
-	if err != nil {
-		return nil, fmt.Errorf("opening tracepoint perf event: %w", err)
-	}
-
-	return sys.NewFD(fd)
-}
-
-func sanitizeTracefsPath(path ...string) (string, error) {
-	base, err := getTracefsPath()
-	if err != nil {
-		return "", err
-	}
-	l := filepath.Join(path...)
-	p := filepath.Join(base, l)
-	if !strings.HasPrefix(p, base) {
-		return "", fmt.Errorf("path '%s' attempts to escape base path '%s': %w", l, base, errInvalidInput)
-	}
-	return p, nil
-}
-
-// readUint64FromFile reads a uint64 from a file.
-//
-// format specifies the contents of the file in fmt.Scanf syntax.
-func readUint64FromFile(format string, path ...string) (uint64, error) {
-	filename := filepath.Join(path...)
-	data, err := os.ReadFile(filename)
-	if err != nil {
-		return 0, fmt.Errorf("reading file %q: %w", filename, err)
-	}
-
-	var value uint64
-	n, err := fmt.Fscanf(bytes.NewReader(data), format, &value)
-	if err != nil {
-		return 0, fmt.Errorf("parsing file %q: %w", filename, err)
-	}
-	if n != 1 {
-		return 0, fmt.Errorf("parsing file %q: expected 1 item, got %d", filename, n)
-	}
-
-	return value, nil
-}
-
-type uint64FromFileKey struct {
-	format, path string
-}
-
-var uint64FromFileCache = struct {
-	sync.RWMutex
-	values map[uint64FromFileKey]uint64
-}{
-	values: map[uint64FromFileKey]uint64{},
-}
-
-// readUint64FromFileOnce is like readUint64FromFile but memoizes the result.
-func readUint64FromFileOnce(format string, path ...string) (uint64, error) {
-	filename := filepath.Join(path...)
-	key := uint64FromFileKey{format, filename}
-
-	uint64FromFileCache.RLock()
-	if value, ok := uint64FromFileCache.values[key]; ok {
-		uint64FromFileCache.RUnlock()
-		return value, nil
-	}
-	uint64FromFileCache.RUnlock()
-
-	value, err := readUint64FromFile(format, filename)
-	if err != nil {
-		return 0, err
-	}
-
-	uint64FromFileCache.Lock()
-	defer uint64FromFileCache.Unlock()
-
-	if value, ok := uint64FromFileCache.values[key]; ok {
-		// Someone else got here before us, use what is cached.
-		return value, nil
-	}
-
-	uint64FromFileCache.values[key] = value
-	return value, nil
-}
-
 // Probe BPF perf link.
 //
 // https://elixir.bootlin.com/linux/v5.16.8/source/kernel/bpf/syscall.c#L4307
@@ -412,51 +281,4 @@ var haveBPFLinkPerfEvent = internal.NewFeatureTest("bpf_link_perf_event", "5.15"
 		return nil
 	}
 	return err
-})
-
-// isValidTraceID implements the equivalent of a regex match
-// against "^[a-zA-Z_][0-9a-zA-Z_]*$".
-//
-// Trace event groups, names and kernel symbols must adhere to this set
-// of characters. Non-empty, first character must not be a number, all
-// characters must be alphanumeric or underscore.
-func isValidTraceID(s string) bool {
-	if len(s) < 1 {
-		return false
-	}
-	for i, c := range []byte(s) {
-		switch {
-		case c >= 'a' && c <= 'z':
-		case c >= 'A' && c <= 'Z':
-		case c == '_':
-		case i > 0 && c >= '0' && c <= '9':
-
-		default:
-			return false
-		}
-	}
-
-	return true
-}
-
-// getTracefsPath will return a correct path to the tracefs mount point.
-// Since kernel 4.1 tracefs should be mounted by default at /sys/kernel/tracing,
-// but may be also be available at /sys/kernel/debug/tracing if debugfs is mounted.
-// The available tracefs paths will depends on distribution choices.
-var getTracefsPath = internal.Memoize(func() (string, error) {
-	for _, p := range []struct {
-		path   string
-		fsType int64
-	}{
-		{"/sys/kernel/tracing", unix.TRACEFS_MAGIC},
-		{"/sys/kernel/debug/tracing", unix.TRACEFS_MAGIC},
-		// RHEL/CentOS
-		{"/sys/kernel/debug/tracing", unix.DEBUGFS_MAGIC},
-	} {
-		if fsType, err := internal.FSType(p.path); err == nil && fsType == p.fsType {
-			return p.path, nil
-		}
-	}
-
-	return "", errors.New("neither debugfs nor tracefs are mounted")
 })

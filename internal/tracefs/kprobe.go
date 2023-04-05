@@ -17,11 +17,6 @@ var (
 	ErrInvalidInput = errors.New("invalid input")
 )
 
-type probeArgs struct {
-	symbol, group string
-	pid           int
-}
-
 func KprobeCheckLite(symbol string, pid int) error {
 	fd, err := tryAttach(symbol, pid)
 	if err != nil {
@@ -32,9 +27,9 @@ func KprobeCheckLite(symbol string, pid int) error {
 }
 
 func tryAttach(symbol string, pid int) (*sys.FD, error) {
-	args := probeArgs{
-		symbol: symbol,
-		pid:    pid,
+	args := ProbeArgs{
+		Symbol: symbol,
+		Pid:    pid,
 	}
 
 	// Use tracefs if kprobe PMU is missing.
@@ -42,10 +37,10 @@ func tryAttach(symbol string, pid int) (*sys.FD, error) {
 }
 
 // tracefsKprobe creates a Kprobe tracefs entry.
-func tracefsKprobe(args probeArgs) (*sys.FD, error) {
+func tracefsKprobe(args ProbeArgs) (*sys.FD, error) {
 	groupPrefix := "ebpf"
-	if args.group != "" {
-		groupPrefix = args.group
+	if args.Group != "" {
+		groupPrefix = args.Group
 	}
 
 	// Generate a random string for each trace event we attempt to create.
@@ -55,7 +50,7 @@ func tracefsKprobe(args probeArgs) (*sys.FD, error) {
 	if err != nil {
 		return nil, err
 	}
-	args.group = group
+	args.Group = group
 
 	// Create the [k,u]probe trace event using tracefs.
 	tid, err := createTraceFSKProbeEvent(args)
@@ -64,27 +59,27 @@ func tracefsKprobe(args probeArgs) (*sys.FD, error) {
 	}
 
 	// Kprobes are ephemeral tracepoints and share the same perf event type.
-	fd, err := OpenTracepointPerfEvent(tid, args.pid)
+	fd, err := OpenTracepointPerfEvent(tid, args.Pid)
 
 	// Make sure we clean up the created tracefs event when we return error.
 	// If a livepatch handler is already active on the symbol, the write to
 	// tracefs will succeed, a trace event will show up, but creating the
 	// perf event will fail with EBUSY.
-	_ = closeTraceFSKProbeEvent(args.group, args.symbol)
+	_ = closeTraceFSKProbeEvent(args.Group, args.Symbol)
 	return fd, err
 }
 
-func createTraceFSKProbeEvent(args probeArgs) (uint64, error) {
+func createTraceFSKProbeEvent(args ProbeArgs) (uint64, error) {
 	// Before attempting to create a trace event through tracefs,
 	// check if an event with the same group and name already exists.
 	// Kernels 4.x and earlier don't return os.ErrExist on writing a duplicate
 	// entry, so we need to rely on reads for detecting uniqueness.
-	_, err := GetTraceEventID(args.group, args.symbol)
+	_, err := GetTraceEventID(args.Group, args.Symbol)
 	if err == nil {
-		return 0, fmt.Errorf("trace event %s/%s: %w", args.group, args.symbol, os.ErrExist)
+		return 0, fmt.Errorf("trace event %s/%s: %w", args.Group, args.Symbol, os.ErrExist)
 	}
 	if err != nil && !errors.Is(err, os.ErrNotExist) {
-		return 0, fmt.Errorf("checking trace event %s/%s: %w", args.group, args.symbol, err)
+		return 0, fmt.Errorf("checking trace event %s/%s: %w", args.Group, args.Symbol, err)
 	}
 
 	// Open the kprobe_events file in tracefs.
@@ -94,15 +89,15 @@ func createTraceFSKProbeEvent(args probeArgs) (uint64, error) {
 	}
 	defer f.Close()
 
-	token := args.symbol
-	pe := fmt.Sprintf("%s:%s/%s %s", ProbePrefix(false, 0), args.group, SanitizeSymbol(args.symbol), token)
+	token := args.Symbol
+	pe := fmt.Sprintf("%s:%s/%s %s", ProbePrefix(false, 0), args.Group, SanitizeSymbol(args.Symbol), token)
 	_, err = f.WriteString(pe)
 	if err != nil {
 		return 0, err
 	}
 
 	// Get the newly-created trace event's id.
-	tid, err := GetTraceEventID(args.group, args.symbol)
+	tid, err := GetTraceEventID(args.Group, args.Symbol)
 	if err != nil {
 		return 0, fmt.Errorf("get trace event id: %w", err)
 	}

@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 
 	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/sys"
@@ -15,6 +16,8 @@ import (
 
 var (
 	ErrInvalidInput = errors.New("invalid input")
+
+	ErrInvalidMaxActive = errors.New("can only set maxactive on kretprobes")
 )
 
 func KprobeCheckLite(symbol string, pid int) error {
@@ -287,6 +290,115 @@ func OpenTracepointPerfEvent(tid uint64, pid int) (*sys.FD, error) {
 	}
 
 	return sys.NewFD(fd)
+}
+
+// CreateTraceFSProbeEvent creates a new ephemeral trace event.
+//
+// Returns os.ErrNotExist if symbol is not a valid
+// kernel symbol, or if it is not traceable with kprobes. Returns os.ErrExist
+// if a probe with the same group and symbol already exists. Returns an error if
+// args.RetprobeMaxActive is used on non kprobe types. Returns ErrNotSupported if
+// the kernel is too old to support kretprobe maxactive.
+func CreateTraceFSProbeEvent(typ ProbeType, args ProbeArgs) (uint64, error) {
+	// Before attempting to create a trace event through tracefs,
+	// check if an event with the same group and name already exists.
+	// Kernels 4.x and earlier don't return os.ErrExist on writing a duplicate
+	// entry, so we need to rely on reads for detecting uniqueness.
+	_, err := GetTraceEventID(args.Group, args.Symbol)
+	if err == nil {
+		return 0, fmt.Errorf("trace event %s/%s: %w", args.Group, args.Symbol, os.ErrExist)
+	}
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return 0, fmt.Errorf("checking trace event %s/%s: %w", args.Group, args.Symbol, err)
+	}
+
+	// Open the kprobe_events file in tracefs.
+	f, err := typ.EventsFile()
+	if err != nil {
+		return 0, err
+	}
+	defer f.Close()
+
+	var pe, token string
+	switch typ {
+	case KprobeType:
+		// The kprobe_events syntax is as follows (see Documentation/trace/kprobetrace.txt):
+		// p[:[GRP/]EVENT] [MOD:]SYM[+offs]|MEMADDR [FETCHARGS] : Set a probe
+		// r[MAXACTIVE][:[GRP/]EVENT] [MOD:]SYM[+0] [FETCHARGS] : Set a return probe
+		// -:[GRP/]EVENT                                        : Clear a probe
+		//
+		// Some examples:
+		// r:ebpf_1234/r_my_kretprobe nf_conntrack_destroy
+		// p:ebpf_5678/p_my_kprobe __x64_sys_execve
+		//
+		// Leaving the kretprobe's MAXACTIVE set to 0 (or absent) will make the
+		// kernel default to NR_CPUS. This is desired in most eBPF cases since
+		// subsampling or rate limiting logic can be more accurately implemented in
+		// the eBPF program itself.
+		// See Documentation/kprobes.txt for more details.
+		if args.RetprobeMaxActive != 0 && !args.Ret {
+			return 0, ErrInvalidMaxActive
+		}
+		token = KprobeToken(args)
+		pe = fmt.Sprintf("%s:%s/%s %s", ProbePrefix(args.Ret, args.RetprobeMaxActive), args.Group, SanitizeSymbol(args.Symbol), token)
+	case UprobeType:
+		// The uprobe_events syntax is as follows:
+		// p[:[GRP/]EVENT] PATH:OFFSET [FETCHARGS] : Set a probe
+		// r[:[GRP/]EVENT] PATH:OFFSET [FETCHARGS] : Set a return probe
+		// -:[GRP/]EVENT                           : Clear a probe
+		//
+		// Some examples:
+		// r:ebpf_1234/readline /bin/bash:0x12345
+		// p:ebpf_5678/main_mySymbol /bin/mybin:0x12345(0x123)
+		//
+		// See Documentation/trace/uprobetracer.txt for more details.
+		if args.RetprobeMaxActive != 0 {
+			return 0, ErrInvalidMaxActive
+		}
+		token = UprobeToken(args)
+		pe = fmt.Sprintf("%s:%s/%s %s", ProbePrefix(args.Ret, 0), args.Group, args.Symbol, token)
+	}
+	_, err = f.WriteString(pe)
+
+	// Since commit 97c753e62e6c, ENOENT is correctly returned instead of EINVAL
+	// when trying to create a retprobe for a missing symbol.
+	if errors.Is(err, os.ErrNotExist) {
+		return 0, fmt.Errorf("token %s: not found: %w", token, err)
+	}
+	// Since commit ab105a4fb894, EILSEQ is returned when a kprobe sym+offset is resolved
+	// to an invalid insn boundary. The exact conditions that trigger this error are
+	// arch specific however.
+	if errors.Is(err, syscall.EILSEQ) {
+		return 0, fmt.Errorf("token %s: bad insn boundary: %w", token, os.ErrNotExist)
+	}
+	// ERANGE is returned when the `SYM[+offs]` token is too big and cannot
+	// be resolved.
+	if errors.Is(err, syscall.ERANGE) {
+		return 0, fmt.Errorf("token %s: offset too big: %w", token, os.ErrNotExist)
+	}
+
+	if err != nil {
+		return 0, fmt.Errorf("token %s: writing '%s': %w", token, pe, err)
+	}
+
+	// Get the newly-created trace event's id.
+	tid, err := GetTraceEventID(args.Group, args.Symbol)
+	if args.RetprobeMaxActive != 0 && errors.Is(err, os.ErrNotExist) {
+		// Kernels < 4.12 don't support maxactive and therefore auto generate
+		// group and event names from the symbol and offset. The symbol is used
+		// without any sanitization.
+		// See https://elixir.bootlin.com/linux/v4.10/source/kernel/trace/trace_kprobe.c#L712
+		event := fmt.Sprintf("kprobes/r_%s_%d", args.Symbol, args.Offset)
+		if err := RemoveTraceFSProbeEvent(typ, event); err != nil {
+			return 0, fmt.Errorf("failed to remove spurious maxactive event: %s", err)
+		}
+		return 0, fmt.Errorf("create trace event with non-default maxactive: %w", internal.ErrNotSupported)
+	}
+	if err != nil {
+		return 0, fmt.Errorf("get trace event id: %w", err)
+	}
+
+	return tid, nil
 }
 
 // CloseTraceFSProbeEvent removes the [k,u]probe with the given type, group and symbol

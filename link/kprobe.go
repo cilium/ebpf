@@ -344,34 +344,8 @@ func tracefsKprobe(args tracefs.ProbeArgs) (*perfEvent, error) {
 // the executable/library path on the filesystem and the offset where the probe is inserted.
 // A perf event is then opened on the newly-created trace event and returned to the caller.
 func tracefsProbe(typ tracefs.ProbeType, args tracefs.ProbeArgs) (*perfEvent, error) {
-	groupPrefix := "ebpf"
-	if args.Group != "" {
-		groupPrefix = args.Group
-	}
-
-	// Generate a random string for each trace event we attempt to create.
-	// This value is used as the 'group' token in tracefs to allow creating
-	// multiple kprobe trace events with the same name.
-	group, err := tracefs.RandomGroup(groupPrefix)
+	fd, tid, group, err := tracefs.TracefsProbe(typ, args)
 	if err != nil {
-		return nil, fmt.Errorf("randomizing group name: %w", err)
-	}
-	args.Group = group
-
-	// Create the [k,u]probe trace event using tracefs.
-	tid, err := tracefs.CreateTraceFSProbeEvent(typ, args)
-	if err != nil {
-		return nil, fmt.Errorf("creating probe entry on tracefs: %w", err)
-	}
-
-	// Kprobes are ephemeral tracepoints and share the same perf event type.
-	fd, err := tracefs.OpenTracepointPerfEvent(tid, args.Pid)
-	if err != nil {
-		// Make sure we clean up the created tracefs event when we return error.
-		// If a livepatch handler is already active on the symbol, the write to
-		// tracefs will succeed, a trace event will show up, but creating the
-		// perf event will fail with EBUSY.
-		_ = tracefs.CloseTraceFSProbeEvent(typ, args.Group, args.Symbol)
 		return nil, err
 	}
 

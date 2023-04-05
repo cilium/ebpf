@@ -250,7 +250,7 @@ func pmuProbe(typ tracefs.ProbeType, args tracefs.ProbeArgs) (*perfEvent, error)
 			return nil, err
 		}
 
-		token = kprobeToken(args)
+		token = tracefs.KprobeToken(args)
 
 		attr = unix.PerfEventAttr{
 			// The minimum size required for PMU kprobes is PERF_ATTR_SIZE_VER1,
@@ -271,7 +271,7 @@ func pmuProbe(typ tracefs.ProbeType, args tracefs.ProbeArgs) (*perfEvent, error)
 			config |= args.RefCtrOffset << uprobeRefCtrOffsetShift
 		}
 
-		token = uprobeToken(args)
+		token = tracefs.UprobeToken(args)
 
 		attr = unix.PerfEventAttr{
 			// The minimum size required for PMU uprobes is PERF_ATTR_SIZE_VER1,
@@ -435,7 +435,7 @@ func createTraceFSProbeEvent(typ tracefs.ProbeType, args tracefs.ProbeArgs) (uin
 		if args.RetprobeMaxActive != 0 && !args.Ret {
 			return 0, errInvalidMaxActive
 		}
-		token = kprobeToken(args)
+		token = tracefs.KprobeToken(args)
 		pe = fmt.Sprintf("%s:%s/%s %s", tracefs.ProbePrefix(args.Ret, args.RetprobeMaxActive), args.Group, tracefs.SanitizeSymbol(args.Symbol), token)
 	case tracefs.UprobeType:
 		// The uprobe_events syntax is as follows:
@@ -451,7 +451,7 @@ func createTraceFSProbeEvent(typ tracefs.ProbeType, args tracefs.ProbeArgs) (uin
 		if args.RetprobeMaxActive != 0 {
 			return 0, errInvalidMaxActive
 		}
-		token = uprobeToken(args)
+		token = tracefs.UprobeToken(args)
 		pe = fmt.Sprintf("%s:%s/%s %s", tracefs.ProbePrefix(args.Ret, 0), args.Group, args.Symbol, token)
 	}
 	_, err = f.WriteString(pe)
@@ -518,15 +518,4 @@ func removeTraceFSProbeEvent(typ tracefs.ProbeType, pe string) error {
 	}
 
 	return nil
-}
-
-// kprobeToken creates the SYM[+offs] token for the tracefs api.
-func kprobeToken(args tracefs.ProbeArgs) string {
-	po := args.Symbol
-
-	if args.Offset != 0 {
-		po += fmt.Sprintf("+%#x", args.Offset)
-	}
-
-	return po
 }

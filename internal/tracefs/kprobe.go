@@ -288,3 +288,14 @@ func OpenTracepointPerfEvent(tid uint64, pid int) (*sys.FD, error) {
 
 	return sys.NewFD(fd)
 }
+
+// KprobeToken creates the SYM[+offs] token for the tracefs api.
+func KprobeToken(args ProbeArgs) string {
+	po := args.Symbol
+
+	if args.Offset != 0 {
+		po += fmt.Sprintf("+%#x", args.Offset)
+	}
+
+	return po
+}

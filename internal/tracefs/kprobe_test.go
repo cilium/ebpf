@@ -1,6 +1,7 @@
 package tracefs
 
 import (
+	"fmt"
 	"testing"
 
 	qt "github.com/frankban/quicktest"
@@ -25,4 +26,25 @@ func TestKprobeTraceFSGroup(t *testing.T) {
 	// Reject non-alphanumeric characters.
 	_, err = RandomGroup("/")
 	c.Assert(err, qt.Not(qt.IsNil))
+}
+
+func TestKprobeToken(t *testing.T) {
+	tests := []struct {
+		args     ProbeArgs
+		expected string
+	}{
+		{ProbeArgs{Symbol: "symbol"}, "symbol"},
+		{ProbeArgs{Symbol: "symbol", Offset: 1}, "symbol+0x1"},
+		{ProbeArgs{Symbol: "symbol", Offset: 65535}, "symbol+0xffff"},
+		{ProbeArgs{Symbol: "symbol", Offset: 65536}, "symbol+0x10000"},
+	}
+
+	for i, tt := range tests {
+		t.Run(fmt.Sprint(i), func(t *testing.T) {
+			po := KprobeToken(tt.args)
+			if tt.expected != po {
+				t.Errorf("Expected symbol+offset to be '%s', got '%s'", tt.expected, po)
+			}
+		})
+	}
 }

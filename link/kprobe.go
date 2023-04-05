@@ -383,7 +383,7 @@ func tracefsProbe(typ probeType, args probeArgs) (*perfEvent, error) {
 	// Generate a random string for each trace event we attempt to create.
 	// This value is used as the 'group' token in tracefs to allow creating
 	// multiple kprobe trace events with the same name.
-	group, err := tracefs.RandomTraceFSGroup(groupPrefix)
+	group, err := tracefs.RandomGroup(groupPrefix)
 	if err != nil {
 		return nil, fmt.Errorf("randomizing group name: %w", err)
 	}

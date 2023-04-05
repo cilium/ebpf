@@ -51,7 +51,7 @@ func tracefsKprobe(args probeArgs) (*sys.FD, error) {
 	// Generate a random string for each trace event we attempt to create.
 	// This value is used as the 'group' token in tracefs to allow creating
 	// multiple kprobe trace events with the same name.
-	group, err := RandomTraceFSGroup(groupPrefix)
+	group, err := RandomGroup(groupPrefix)
 	if err != nil {
 		return nil, err
 	}
@@ -138,11 +138,11 @@ func kprobeEventsFile() (*os.File, error) {
 	return os.OpenFile(path, os.O_APPEND|os.O_WRONLY, 0666)
 }
 
-// RandomTraceFSGroup generates a pseudorandom string for use as a tracefs group name.
+// RandomGroup generates a pseudorandom string for use as a tracefs group name.
 // Returns an error when the output string would exceed 63 characters (kernel
 // limitation), when rand.Read() fails or when prefix contains characters not
 // allowed by IsValidTraceID.
-func RandomTraceFSGroup(prefix string) (string, error) {
+func RandomGroup(prefix string) (string, error) {
 	if !IsValidTraceID(prefix) {
 		return "", fmt.Errorf("prefix '%s' must be alphanumeric or underscore: %w", prefix, ErrInvalidInput)
 	}

@@ -16,12 +16,12 @@ func TestTraceEventID(t *testing.T) {
 }
 
 func TestSanitizePath(t *testing.T) {
-	_, err := SanitizeTracefsPath("../escaped")
+	_, err := sanitizeTracefsPath("../escaped")
 	if !errors.Is(err, ErrInvalidInput) {
 		t.Errorf("expected error %s, got: %s", ErrInvalidInput, err)
 	}
 
-	_, err = SanitizeTracefsPath("./not/escaped")
+	_, err = sanitizeTracefsPath("./not/escaped")
 	if err != nil {
 		t.Errorf("expected no error, got: %s", err)
 	}

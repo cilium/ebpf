@@ -277,8 +277,8 @@ func TestKprobeCreateTraceFS(t *testing.T) {
 
 	// Tee up cleanups in case any of the Asserts abort the function.
 	defer func() {
-		_ = closeTraceFSProbeEvent(tracefs.KprobeType, pg, ksym)
-		_ = closeTraceFSProbeEvent(tracefs.KprobeType, rg, ksym)
+		_ = tracefs.CloseTraceFSProbeEvent(tracefs.KprobeType, pg, ksym)
+		_ = tracefs.CloseTraceFSProbeEvent(tracefs.KprobeType, rg, ksym)
 	}()
 
 	// Prepare probe args.
@@ -295,7 +295,7 @@ func TestKprobeCreateTraceFS(t *testing.T) {
 		qt.Commentf("expected consecutive kprobe creation to contain os.ErrExist, got: %v", err))
 
 	// Expect a successful close of the kprobe.
-	c.Assert(closeTraceFSProbeEvent(tracefs.KprobeType, pg, ksym), qt.IsNil)
+	c.Assert(tracefs.CloseTraceFSProbeEvent(tracefs.KprobeType, pg, ksym), qt.IsNil)
 
 	args.Group = rg
 	args.Ret = true
@@ -309,7 +309,7 @@ func TestKprobeCreateTraceFS(t *testing.T) {
 		qt.Commentf("expected consecutive kretprobe creation to contain os.ErrExist, got: %v", err))
 
 	// Expect a successful close of the kretprobe.
-	c.Assert(closeTraceFSProbeEvent(tracefs.KprobeType, rg, ksym), qt.IsNil)
+	c.Assert(tracefs.CloseTraceFSProbeEvent(tracefs.KprobeType, rg, ksym), qt.IsNil)
 }
 
 func TestKprobeProgramCall(t *testing.T) {

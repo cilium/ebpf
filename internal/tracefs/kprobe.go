@@ -289,6 +289,29 @@ func OpenTracepointPerfEvent(tid uint64, pid int) (*sys.FD, error) {
 	return sys.NewFD(fd)
 }
 
+// CloseTraceFSProbeEvent removes the [k,u]probe with the given type, group and symbol
+// from <tracefs>/[k,u]probe_events.
+func CloseTraceFSProbeEvent(typ ProbeType, group, symbol string) error {
+	pe := fmt.Sprintf("%s/%s", group, SanitizeSymbol(symbol))
+	return RemoveTraceFSProbeEvent(typ, pe)
+}
+
+func RemoveTraceFSProbeEvent(typ ProbeType, pe string) error {
+	f, err := typ.EventsFile()
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	// See [k,u]probe_events syntax above. The probe type does not need to be specified
+	// for removals.
+	if _, err = f.WriteString("-:" + pe); err != nil {
+		return fmt.Errorf("remove event %q from %s: %w", pe, f.Name(), err)
+	}
+
+	return nil
+}
+
 // KprobeToken creates the SYM[+offs] token for the tracefs api.
 func KprobeToken(args ProbeArgs) string {
 	po := args.Symbol

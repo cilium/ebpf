@@ -291,8 +291,8 @@ func TestUprobeCreateTraceFS(t *testing.T) {
 	// Sanitize the symbol in order to be used in tracefs API.
 	ssym := tracefs.SanitizeSymbol(bashSym)
 
-	pg, _ := tracefs.RandomTraceFSGroup("ebpftest")
-	rg, _ := tracefs.RandomTraceFSGroup("ebpftest")
+	pg, _ := tracefs.RandomGroup("ebpftest")
+	rg, _ := tracefs.RandomGroup("ebpftest")
 
 	// Tee up cleanups in case any of the Asserts abort the function.
 	defer func() {

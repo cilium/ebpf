@@ -273,8 +273,8 @@ func BenchmarkKprobeCreateTraceFS(b *testing.B) {
 func TestKprobeCreateTraceFS(t *testing.T) {
 	c := qt.New(t)
 
-	pg, _ := tracefs.RandomTraceFSGroup("ebpftest")
-	rg, _ := tracefs.RandomTraceFSGroup("ebpftest")
+	pg, _ := tracefs.RandomGroup("ebpftest")
+	rg, _ := tracefs.RandomGroup("ebpftest")
 
 	// Tee up cleanups in case any of the Asserts abort the function.
 	defer func() {

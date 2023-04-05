@@ -128,7 +128,7 @@ func IsValidTraceID(s string) bool {
 	return true
 }
 
-func SanitizeTracefsPath(path ...string) (string, error) {
+func sanitizeTracefsPath(path ...string) (string, error) {
 	base, err := getTracefsPath()
 	if err != nil {
 		return "", err
@@ -192,7 +192,7 @@ func SanitizeSymbol(s string) string {
 // can pass a raw symbol name, e.g. a kernel symbol containing dots.
 func GetTraceEventID(group, name string) (uint64, error) {
 	name = SanitizeSymbol(name)
-	path, err := SanitizeTracefsPath("events", group, name, "id")
+	path, err := sanitizeTracefsPath("events", group, name, "id")
 	if err != nil {
 		return 0, err
 	}
@@ -207,7 +207,7 @@ func GetTraceEventID(group, name string) (uint64, error) {
 	return tid, nil
 }
 
-func ProbePrefix(ret bool, maxActive int) string {
+func probePrefix(ret bool, maxActive int) string {
 	if ret {
 		if maxActive > 0 {
 			return fmt.Sprintf("r%d", maxActive)
@@ -285,7 +285,7 @@ func CreateTraceFSProbeEvent(typ ProbeType, args ProbeArgs) (uint64, error) {
 			return 0, ErrInvalidMaxActive
 		}
 		token = KprobeToken(args)
-		pe = fmt.Sprintf("%s:%s/%s %s", ProbePrefix(args.Ret, args.RetprobeMaxActive), args.Group, SanitizeSymbol(args.Symbol), token)
+		pe = fmt.Sprintf("%s:%s/%s %s", probePrefix(args.Ret, args.RetprobeMaxActive), args.Group, SanitizeSymbol(args.Symbol), token)
 	case UprobeType:
 		// The uprobe_events syntax is as follows:
 		// p[:[GRP/]EVENT] PATH:OFFSET [FETCHARGS] : Set a probe
@@ -301,7 +301,7 @@ func CreateTraceFSProbeEvent(typ ProbeType, args ProbeArgs) (uint64, error) {
 			return 0, ErrInvalidMaxActive
 		}
 		token = UprobeToken(args)
-		pe = fmt.Sprintf("%s:%s/%s %s", ProbePrefix(args.Ret, 0), args.Group, args.Symbol, token)
+		pe = fmt.Sprintf("%s:%s/%s %s", probePrefix(args.Ret, 0), args.Group, args.Symbol, token)
 	}
 	_, err = f.WriteString(pe)
 
@@ -334,7 +334,7 @@ func CreateTraceFSProbeEvent(typ ProbeType, args ProbeArgs) (uint64, error) {
 		// without any sanitization.
 		// See https://elixir.bootlin.com/linux/v4.10/source/kernel/trace/trace_kprobe.c#L712
 		event := fmt.Sprintf("kprobes/r_%s_%d", args.Symbol, args.Offset)
-		if err := RemoveTraceFSProbeEvent(typ, event); err != nil {
+		if err := removeTraceFSProbeEvent(typ, event); err != nil {
 			return 0, fmt.Errorf("failed to remove spurious maxactive event: %s", err)
 		}
 		return 0, fmt.Errorf("create trace event with non-default maxactive: %w", internal.ErrNotSupported)
@@ -350,10 +350,10 @@ func CreateTraceFSProbeEvent(typ ProbeType, args ProbeArgs) (uint64, error) {
 // from <tracefs>/[k,u]probe_events.
 func CloseTraceFSProbeEvent(typ ProbeType, group, symbol string) error {
 	pe := fmt.Sprintf("%s/%s", group, SanitizeSymbol(symbol))
-	return RemoveTraceFSProbeEvent(typ, pe)
+	return removeTraceFSProbeEvent(typ, pe)
 }
 
-func RemoveTraceFSProbeEvent(typ ProbeType, pe string) error {
+func removeTraceFSProbeEvent(typ ProbeType, pe string) error {
 	f, err := typ.EventsFile()
 	if err != nil {
 		return err

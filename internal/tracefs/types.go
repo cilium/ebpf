@@ -20,7 +20,7 @@ func (pt ProbeType) String() string {
 }
 
 func (pt ProbeType) EventsFile() (*os.File, error) {
-	path, err := SanitizeTracefsPath(fmt.Sprintf("%s_events", pt.String()))
+	path, err := sanitizeTracefsPath(fmt.Sprintf("%s_events", pt.String()))
 	if err != nil {
 		return nil, err
 	}

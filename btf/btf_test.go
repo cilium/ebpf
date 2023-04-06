@@ -581,3 +581,12 @@ func TestFixupDatasecLayout(t *testing.T) {
 	qt.Assert(t, ds.Vars[4].Offset, qt.Equals, uint32(16))
 	qt.Assert(t, ds.Vars[5].Offset, qt.Equals, uint32(32))
 }
+
+func BenchmarkSpecCopy(b *testing.B) {
+	spec := vmlinuxTestdataSpec(b)
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		spec.Copy()
+	}
+}

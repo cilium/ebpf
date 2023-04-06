@@ -684,7 +684,7 @@ type Transformer func(Type) Type
 // typ may form a cycle. If transform is not nil, it is called with the
 // to be copied type, and the returned value is copied instead.
 func Copy(typ Type, transform Transformer) Type {
-	copies := make(copier)
+	copies := copier{copies: make(map[Type]Type)}
 	copies.copy(&typ, transform)
 	return typ
 }
@@ -696,7 +696,7 @@ func copyTypes(types []Type, transform Transformer) []Type {
 	result := make([]Type, len(types))
 	copy(result, types)
 
-	copies := make(copier)
+	copies := copier{copies: make(map[Type]Type, len(types))}
 	for i := range result {
 		copies.copy(&result[i], transform)
 	}
@@ -704,13 +704,15 @@ func copyTypes(types []Type, transform Transformer) []Type {
 	return result
 }
 
-type copier map[Type]Type
+type copier struct {
+	copies map[Type]Type
+	work   typeDeque
+}
 
-func (c copier) copy(typ *Type, transform Transformer) {
-	var work typeDeque
-	for t := typ; t != nil; t = work.Pop() {
+func (c *copier) copy(typ *Type, transform Transformer) {
+	for t := typ; t != nil; t = c.work.Pop() {
 		// *t is the identity of the type.
-		if cpy := c[*t]; cpy != nil {
+		if cpy := c.copies[*t]; cpy != nil {
 			*t = cpy
 			continue
 		}
@@ -722,11 +724,11 @@ func (c copier) copy(typ *Type, transform Transformer) {
 			cpy = (*t).copy()
 		}
 
-		c[*t] = cpy
+		c.copies[*t] = cpy
 		*t = cpy
 
 		// Mark any nested types for copying.
-		walkType(cpy, work.Push)
+		walkType(cpy, c.work.Push)
 	}
 }
 

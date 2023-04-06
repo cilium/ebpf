@@ -70,7 +70,12 @@ func TestParseModuleSplitSpec(t *testing.T) {
 	}
 	defer vmlinux.Close()
 
-	_, err = module.Spec()
+	base, err := vmlinux.Spec(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = module.Spec(base)
 	if err != nil {
 		t.Fatal("Parse module BTF:", err)
 	}

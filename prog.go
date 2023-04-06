@@ -895,7 +895,7 @@ func findTargetInKernel(name string, progType ProgramType, attachType AttachType
 
 	err = spec.TypeByName(typeName, &target)
 	if errors.Is(err, btf.ErrNotFound) {
-		module, id, err := findTargetInModule(typeName, target)
+		module, id, err := findTargetInModule(spec, typeName, target)
 		if errors.Is(err, btf.ErrNotFound) {
 			return nil, 0, &internal.UnsupportedFeatureError{Name: featureName}
 		}
@@ -923,7 +923,7 @@ func findTargetInKernel(name string, progType ProgramType, attachType AttachType
 // vmlinux must contain the kernel's types and is used to parse kmod BTF.
 //
 // Returns btf.ErrNotFound if the target can't be found in any module.
-func findTargetInModule(typeName string, target btf.Type) (*btf.Handle, btf.TypeID, error) {
+func findTargetInModule(base *btf.Spec, typeName string, target btf.Type) (*btf.Handle, btf.TypeID, error) {
 	it := new(btf.HandleIterator)
 	defer it.Handle.Close()
 
@@ -937,7 +937,7 @@ func findTargetInModule(typeName string, target btf.Type) (*btf.Handle, btf.Type
 			continue
 		}
 
-		spec, err := it.Handle.Spec()
+		spec, err := it.Handle.Spec(base)
 		if err != nil {
 			return nil, 0, fmt.Errorf("parse types for module %s: %w", info.Name, err)
 		}
@@ -987,7 +987,7 @@ func findTargetInProgram(prog *Program, name string, progType ProgramType, attac
 	}
 	defer btfHandle.Close()
 
-	spec, err := btfHandle.Spec()
+	spec, err := btfHandle.Spec(nil)
 	if err != nil {
 		return 0, err
 	}

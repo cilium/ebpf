@@ -240,6 +240,10 @@ func loadRawSpec(btf io.ReaderAt, bo binary.ByteOrder, base *Spec) (*Spec, error
 			return nil, fmt.Errorf("can't use split BTF as base")
 		}
 
+		if base.strings == nil {
+			return nil, fmt.Errorf("parse split BTF: base must be loaded from an ELF")
+		}
+
 		baseStrings = base.strings
 
 		firstTypeID, err = base.nextTypeID()
@@ -770,10 +774,6 @@ func (s *Spec) TypeByName(name string, typ interface{}) error {
 // Types from base are used to resolve references in the split BTF.
 // The returned Spec only contains types from the split BTF, not from the base.
 func LoadSplitSpecFromReader(r io.ReaderAt, base *Spec) (*Spec, error) {
-	if base.strings == nil {
-		return nil, fmt.Errorf("parse split BTF: base must be loaded from an ELF")
-	}
-
 	return loadRawSpec(r, internal.NativeEndian, base)
 }
 

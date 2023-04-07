@@ -49,10 +49,7 @@ func TestRun(t *testing.T) {
 		}
 	}
 
-	module, err := currentModule()
-	if err != nil {
-		t.Fatal(err)
-	}
+	module := currentModule()
 
 	execInModule("go", "mod", "init", "bpf2go-test")
 

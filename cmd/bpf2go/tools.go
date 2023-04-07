@@ -9,6 +9,8 @@ import (
 	"unicode/utf8"
 )
 
+const defaultModule = "github.com/cilium/ebpf"
+
 func splitCFlagsFromArgs(in []string) (args, cflags []string) {
 	for i, arg := range in {
 		if arg == "--" {
@@ -83,11 +85,11 @@ func toUpperFirst(str string) string {
 	return string(unicode.ToUpper(first)) + str[n:]
 }
 
-func currentModule() (string, error) {
+func currentModule() string {
 	bi, ok := debug.ReadBuildInfo()
 	if !ok {
-		return "", fmt.Errorf("determine current module: missing build info")
+		return defaultModule
 	}
 
-	return bi.Main.Path, nil
+	return bi.Main.Path
 }

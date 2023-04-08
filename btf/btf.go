@@ -893,3 +893,25 @@ func probeBTF(typ Type) error {
 
 	return err
 }
+
+// LoadModuleHandle returns a list of module BTF handle.
+func LoadModuleHandle() ([]*Handle, error) {
+	handles := []*Handle{}
+
+	it := new(HandleIterator)
+	defer it.Handle.Close()
+
+	for it.Next() {
+		info, err := it.Handle.Info()
+		if err != nil {
+			return handles, fmt.Errorf("get info for BTF ID %d: %w", it.ID, err)
+		}
+
+		if info.IsVmlinux() || info.Name == "" {
+			continue
+		}
+		handles = append(handles, it.Take())
+	}
+
+	return handles, nil
+}

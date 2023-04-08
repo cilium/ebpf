@@ -165,6 +165,7 @@ type Program struct {
 	name       string
 	pinnedPath string
 	typ        ProgramType
+	fdArray    []int32
 }
 
 // NewProgram creates a new Program.
@@ -327,7 +328,7 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions) (*Program, er
 
 	fd, err := sys.ProgLoad(attr)
 	if err == nil {
-		return &Program{unix.ByteSliceToString(logBuf), fd, spec.Name, "", spec.Type}, nil
+		return &Program{unix.ByteSliceToString(logBuf), fd, spec.Name, "", spec.Type, fdArray}, nil
 	}
 
 	// An error occurred loading the program, but the caller did not explicitly
@@ -406,7 +407,7 @@ func newProgramFromFD(fd *sys.FD) (*Program, error) {
 		return nil, fmt.Errorf("discover program type: %w", err)
 	}
 
-	return &Program{"", fd, info.Name, "", info.Type}, nil
+	return &Program{"", fd, info.Name, "", info.Type, []int32{}}, nil
 }
 
 func (p *Program) String() string {
@@ -468,7 +469,7 @@ func (p *Program) Clone() (*Program, error) {
 		return nil, fmt.Errorf("can't clone program: %w", err)
 	}
 
-	return &Program{p.VerifierLog, dup, p.name, "", p.typ}, nil
+	return &Program{p.VerifierLog, dup, p.name, "", p.typ, []int32{}}, nil
 }
 
 // Pin persists the Program on the BPF virtual file system past the lifetime of
@@ -511,6 +512,18 @@ func (p *Program) IsPinned() bool {
 func (p *Program) Close() error {
 	if p == nil {
 		return nil
+	}
+
+	for _, fd := range p.fdArray {
+		if fd == 0 {
+			continue
+		}
+
+		f, err := sys.NewFD(int(fd))
+		if err != nil {
+			return err
+		}
+		f.Close()
 	}
 
 	return p.fd.Close()
@@ -806,7 +819,7 @@ func LoadPinnedProgram(fileName string, opts *LoadPinOptions) (*Program, error) 
 		progName = filepath.Base(fileName)
 	}
 
-	return &Program{"", fd, progName, fileName, info.Type}, nil
+	return &Program{"", fd, progName, fileName, info.Type, []int32{}}, nil
 }
 
 // SanitizeName replaces all invalid characters in name with replacement.

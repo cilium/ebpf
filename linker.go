@@ -285,7 +285,6 @@ fixups:
 			fdArray[idx] = int32(modHandle.FD())
 			continue
 		}
-
 		// We close unnecessary module Handle
 		modHandle.Close()
 	}

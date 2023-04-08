@@ -10,6 +10,7 @@ import (
 	"math"
 	"os"
 	"reflect"
+	"runtime"
 	"sync"
 
 	"github.com/cilium/ebpf/internal"
@@ -904,14 +905,17 @@ func LoadModuleHandle() ([]*Handle, error) {
 	for it.Next() {
 		info, err := it.Handle.Info()
 		if err != nil {
-			return []*Handle{}, fmt.Errorf("get info for BTF ID %d: %w", it.ID, err)
+			return handles, fmt.Errorf("get info for BTF ID %d: %w", it.ID, err)
 		}
 
 		if info.IsVmlinux() || info.Name == "" {
 			continue
 		}
-
 		handles = append(handles, it.Take())
+	}
+
+	for _, handle := range handles {
+		runtime.KeepAlive(handle.fd)
 	}
 
 	return handles, nil

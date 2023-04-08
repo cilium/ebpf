@@ -196,8 +196,8 @@ func fixupAndValidate(insns asm.Instructions) error {
 // fixupKfuncs loops over all instructions in search for kfunc calls.
 // If at least one is found, the current kernels BTF is loaded to set Instruction.Constant
 // to the running kernels btf id of the btf.Func in the instructions Metadata for all kfunc call instructions.
-func fixupKfuncs(insns asm.Instructions) ([]int32, error) {
-	fdArray := []int32{}
+func fixupKfuncs(insns asm.Instructions) ([]*btf.Handle, error) {
+	fdArray := []*btf.Handle{}
 
 	modHandles, err := btf.LoadModuleHandle()
 	if err != nil {
@@ -274,7 +274,7 @@ fixups:
 		}
 	}
 
-	fdArray = make([]int32, len(fdIndex))
+	fdArray = make([]*btf.Handle, len(fdIndex))
 	for _, modHandle := range modHandles {
 		modInfo, err := modHandle.Info()
 		if err != nil {
@@ -282,10 +282,9 @@ fixups:
 		}
 
 		if idx, ok := fdIndex[modInfo.Name]; ok {
-			fdArray[idx] = int32(modHandle.FD())
+			fdArray[idx] = modHandle
 			continue
 		}
-
 		// We close unnecessary module Handle
 		modHandle.Close()
 	}

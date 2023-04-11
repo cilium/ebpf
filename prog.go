@@ -278,9 +278,6 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions) (*Program, er
 	if len(modBtfHandles) > 0 {
 		fdarray := []int32{0}
 		for _, handle := range modBtfHandles {
-			if handle == nil {
-				continue
-			}
 			fdarray = append(fdarray, int32(handle.FD()))
 		}
 		attr.FdArray = sys.NewPointer(unsafe.Pointer(&fdarray[0]))
@@ -522,9 +519,6 @@ func (p *Program) Close() error {
 	}
 
 	for _, handle := range p.modBtfHandles {
-		if handle == nil {
-			continue
-		}
 		handle.Close()
 	}
 

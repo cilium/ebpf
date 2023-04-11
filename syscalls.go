@@ -265,8 +265,8 @@ var haveBPFToBPFCalls = internal.NewFeatureTest("bpf2bpf calls", "4.16", func() 
 })
 
 var haveSyscallWrapper = internal.NewFeatureTest("syscall wrapper", "4.17", func() error {
-	testSyscallName, ok := internal.PlatformPrefix("sys_bpf")
-	if !ok {
+	testSyscallName := internal.PlatformPrefix("sys_bpf")
+	if testSyscallName == "" {
 		return internal.ErrNotSupported
 	}
 

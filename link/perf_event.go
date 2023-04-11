@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"runtime"
+	"unsafe"
 
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/asm"
@@ -249,6 +250,15 @@ func attachPerfEventLink(pe *perfEvent, prog *ebpf.Program) (*perfEventLink, err
 	// Close the perf event when its reference is lost to avoid leaking system resources.
 	runtime.SetFinalizer(pl, (*perfEventLink).Close)
 	return pl, nil
+}
+
+// unsafeStringPtr returns an unsafe.Pointer to a NUL-terminated copy of str.
+func unsafeStringPtr(str string) (unsafe.Pointer, error) {
+	p, err := unix.BytePtrFromString(str)
+	if err != nil {
+		return nil, err
+	}
+	return unsafe.Pointer(p), nil
 }
 
 // Probe BPF perf link.

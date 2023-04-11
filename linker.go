@@ -190,17 +190,15 @@ func fixupAndValidate(insns asm.Instructions) error {
 		fixupProbeReadKernel(ins)
 	}
 
-	if err := fixupKfuncs(insns); err != nil {
-		return fmt.Errorf("fixing up kfuncs: %w", err)
-	}
-
 	return nil
 }
 
 // fixupKfuncs loops over all instructions in search for kfunc calls.
 // If at least one is found, the current kernels BTF is loaded to set Instruction.Constant
 // to the running kernels btf id of the btf.Func in the instructions Metadata for all kfunc call instructions.
-func fixupKfuncs(insns asm.Instructions) error {
+func fixupKfuncs(insns asm.Instructions) ([]*btf.Handle, error) {
+	fdArray := []*btf.Handle{}
+
 	iter := insns.Iterate()
 	for iter.Next() {
 		ins := iter.Ins
@@ -209,14 +207,18 @@ func fixupKfuncs(insns asm.Instructions) error {
 		}
 	}
 
-	return nil
+	return fdArray, nil
 
 fixups:
 	// only load the kernel spec if we found at least one kfunc call
-	s, err := btf.LoadKernelSpec()
+	kernelSpec, err := btf.LoadKernelSpec()
 	if err != nil {
-		return err
+		return fdArray, err
 	}
+
+	fdIndex := make(map[string]int)
+	//0 for vmlinux BTF
+	btfFdIdx := 1
 
 	for {
 		ins := iter.Ins
@@ -232,32 +234,53 @@ fixups:
 		// check meta, if no meta return err
 		kfm, _ := ins.Metadata.Get(kfuncMeta{}).(*btf.Func)
 		if kfm == nil {
-			return fmt.Errorf("kfunc call has no kfuncMeta")
+			return fdArray, fmt.Errorf("kfunc call has no kfuncMeta")
 		}
 
-		var fn *btf.Func
-		if err := s.TypeByName(kfm.Name, &fn); err != nil {
-			return fmt.Errorf("couldn't resolve %s in kernel spec: %v: %w", kfm.Name, err, ErrNotSupported)
-		}
+		idx := 0
+		kfuncHandle, id, err := findKfuncInKernel(kernelSpec, kfm)
+		if kfuncHandle != nil {
+			defer kfuncHandle.Close()
 
-		if err := btf.CheckTypeCompatibility(kfm.Type, fn.Type); err != nil {
-			return err
-		}
+			if err != nil {
+				return fdArray, err
+			}
 
-		id, err := s.TypeID(fn)
-		if err != nil {
-			return err
+			kfuncInfo, err := kfuncHandle.Info()
+			if err != nil {
+				return fdArray, err
+			}
+
+			if _, ok := fdIndex[kfuncInfo.Name]; !ok {
+				// we assume module BTF FD is always >0
+				fdIndex[kfuncInfo.Name] = btfFdIdx
+				btfFdIdx++
+			}
+			idx = fdIndex[kfuncInfo.Name]
 		}
 
 		ins.Constant = int64(id)
-		ins.Offset = int16(0) // currently always 0, no support for kmods
+		ins.Offset = int16(idx)
 
 		if !iter.Next() {
 			break
 		}
 	}
 
-	return nil
+	// Filter module BTF by name
+	fdArray = make([]*btf.Handle, len(fdIndex))
+	for modName, idx := range fdIndex {
+		filterFn := func(info *btf.HandleInfo) bool { return modName == info.Name && !info.IsVmlinux() }
+		h, err := btf.FindHandle(filterFn)
+		if errors.Is(err, btf.ErrNotFound) {
+			continue
+		} else if err != nil {
+			return fdArray, err
+		}
+		fdArray[idx-1] = h
+	}
+
+	return fdArray, nil
 }
 
 // fixupProbeReadKernel replaces calls to bpf_probe_read_{kernel,user}(_str)

@@ -1052,10 +1052,5 @@ func findKfuncInKernel(kernelSpec *btf.Spec, kfunc *btf.Func) (*btf.Handle, btf.
 		return nil, 0, err
 	}
 
-	module, err := btf.FindHandle(func(info *btf.HandleInfo) bool { return info.IsVmlinux() })
-	if err != nil {
-		return nil, 0, err
-	}
-
-	return module, id, nil
+	return nil, id, nil
 }

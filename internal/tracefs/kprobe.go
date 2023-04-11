@@ -34,7 +34,7 @@ func (pt ProbeType) String() string {
 	return "uprobe"
 }
 
-func (pt ProbeType) EventsFile() (*os.File, error) {
+func (pt ProbeType) eventsFile() (*os.File, error) {
 	path, err := sanitizeTracefsPath(fmt.Sprintf("%s_events", pt.String()))
 	if err != nil {
 		return nil, err
@@ -288,7 +288,7 @@ func CreateTraceFSProbeEvent(typ ProbeType, args ProbeArgs) (uint64, error) {
 	}
 
 	// Open the kprobe_events file in tracefs.
-	f, err := typ.EventsFile()
+	f, err := typ.eventsFile()
 	if err != nil {
 		return 0, err
 	}
@@ -384,7 +384,7 @@ func CloseTraceFSProbeEvent(typ ProbeType, group, symbol string) error {
 }
 
 func removeTraceFSProbeEvent(typ ProbeType, pe string) error {
-	f, err := typ.EventsFile()
+	f, err := typ.eventsFile()
 	if err != nil {
 		return err
 	}

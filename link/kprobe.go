@@ -39,7 +39,7 @@ type KprobeOptions struct {
 	TraceFSPrefix string
 }
 
-func PerfEventTypeFromProbeType(pt tracefs.ProbeType, ret bool) perfEventType {
+func perfEventTypeFromProbeType(pt tracefs.ProbeType, ret bool) perfEventType {
 	if pt == tracefs.KprobeType {
 		if ret {
 			return kretprobeEvent
@@ -324,7 +324,7 @@ func pmuProbe(typ tracefs.ProbeType, args tracefs.ProbeArgs) (*perfEvent, error)
 
 	// Kernel has perf_[k,u]probe PMU available, initialize perf event.
 	return &perfEvent{
-		typ:    PerfEventTypeFromProbeType(typ, args.Ret),
+		typ:    perfEventTypeFromProbeType(typ, args.Ret),
 		name:   args.Symbol,
 		pmuID:  et,
 		cookie: args.Cookie,
@@ -350,7 +350,7 @@ func tracefsProbe(typ tracefs.ProbeType, args tracefs.ProbeArgs) (*perfEvent, er
 	}
 
 	return &perfEvent{
-		typ:       PerfEventTypeFromProbeType(typ, args.Ret),
+		typ:       perfEventTypeFromProbeType(typ, args.Ret),
 		group:     group,
 		name:      args.Symbol,
 		tracefsID: tid,

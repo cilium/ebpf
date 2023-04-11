@@ -244,7 +244,7 @@ func pmuProbe(typ tracefs.ProbeType, args tracefs.ProbeArgs) (*perfEvent, error)
 	switch typ {
 	case tracefs.KprobeType:
 		// Create a pointer to a NUL-terminated string for the kernel.
-		sp, err = internal.UnsafeStringPtr(args.Symbol)
+		sp, err = unsafeStringPtr(args.Symbol)
 		if err != nil {
 			return nil, err
 		}
@@ -261,7 +261,7 @@ func pmuProbe(typ tracefs.ProbeType, args tracefs.ProbeArgs) (*perfEvent, error)
 			Config: config,              // Retprobe flag
 		}
 	case tracefs.UprobeType:
-		sp, err = internal.UnsafeStringPtr(args.Path)
+		sp, err = unsafeStringPtr(args.Path)
 		if err != nil {
 			return nil, err
 		}

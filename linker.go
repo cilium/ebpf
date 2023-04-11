@@ -218,7 +218,6 @@ fixups:
 
 	fdIndex := make(map[string]int)
 	//0 for vmlinux BTF
-	fdIndex["vmlinux"] = 0
 	btfFdIdx := 1
 
 	for {
@@ -238,26 +237,30 @@ fixups:
 			return fdArray, fmt.Errorf("kfunc call has no kfuncMeta")
 		}
 
+		idx := 0
 		kfuncHandle, id, err := findKfuncInKernel(kernelSpec, kfm)
-		defer kfuncHandle.Close()
+		if kfuncHandle != nil {
+			defer kfuncHandle.Close()
 
-		if err != nil {
-			return fdArray, err
-		}
+			if err != nil {
+				return fdArray, err
+			}
 
-		kfuncInfo, err := kfuncHandle.Info()
-		if err != nil {
-			return fdArray, err
-		}
+			kfuncInfo, err := kfuncHandle.Info()
+			if err != nil {
+				return fdArray, err
+			}
 
-		if _, ok := fdIndex[kfuncInfo.Name]; !ok {
-			// we assume module BTF FD is always >0
-			fdIndex[kfuncInfo.Name] = btfFdIdx
-			btfFdIdx++
+			if _, ok := fdIndex[kfuncInfo.Name]; !ok {
+				// we assume module BTF FD is always >0
+				fdIndex[kfuncInfo.Name] = btfFdIdx
+				btfFdIdx++
+			}
+			idx = fdIndex[kfuncInfo.Name]
 		}
 
 		ins.Constant = int64(id)
-		ins.Offset = int16(fdIndex[kfuncInfo.Name])
+		ins.Offset = int16(idx)
 
 		if !iter.Next() {
 			break
@@ -265,7 +268,7 @@ fixups:
 	}
 
 	// Filter module BTF by name
-	fdArray = make([]*btf.Handle, len(fdIndex)-1)
+	fdArray = make([]*btf.Handle, len(fdIndex))
 	for modName, idx := range fdIndex {
 		filterFn := func(info *btf.HandleInfo) bool { return modName == info.Name && !info.IsVmlinux() }
 		h, err := btf.FindHandle(filterFn)

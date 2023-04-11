@@ -199,22 +199,12 @@ func fixupAndValidate(insns asm.Instructions) error {
 func fixupKfuncs(insns asm.Instructions) ([]*btf.Handle, error) {
 	fdArray := []*btf.Handle{}
 
-	modHandles, err := btf.LoadModuleHandle()
-	if err != nil {
-		return fdArray, err
-	}
-
 	iter := insns.Iterate()
 	for iter.Next() {
 		ins := iter.Ins
 		if ins.IsKfuncCall() {
 			goto fixups
 		}
-	}
-
-	// Close all handles if the insns doesn't contain kfunc call
-	for _, handle := range modHandles {
-		handle.Close()
 	}
 
 	return fdArray, nil
@@ -227,7 +217,7 @@ fixups:
 	}
 
 	fdIndex := make(map[string]int)
-	// 0 for vmlinux BTF
+	//0 for vmlinux BTF
 	fdIndex["vmlinux"] = 0
 	btfFdIdx := 1
 
@@ -274,19 +264,17 @@ fixups:
 		}
 	}
 
-	fdArray = make([]*btf.Handle, len(fdIndex))
-	for _, modHandle := range modHandles {
-		modInfo, err := modHandle.Info()
-		if err != nil {
+	// Filter module BTF by name
+	fdArray = make([]*btf.Handle, len(fdIndex)-1)
+	for modName, idx := range fdIndex {
+		filterFn := func(info *btf.HandleInfo) bool { return modName == info.Name && !info.IsVmlinux() }
+		h, err := btf.FindHandle(filterFn)
+		if errors.Is(err, btf.ErrNotFound) {
+			continue
+		} else if err != nil {
 			return fdArray, err
 		}
-
-		if idx, ok := fdIndex[modInfo.Name]; ok {
-			fdArray[idx] = modHandle
-			continue
-		}
-		// We close unnecessary module Handle
-		modHandle.Close()
+		fdArray[idx-1] = h
 	}
 
 	return fdArray, nil

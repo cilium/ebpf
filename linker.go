@@ -5,11 +5,46 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 
 	"github.com/cilium/ebpf/asm"
 	"github.com/cilium/ebpf/btf"
 	"github.com/cilium/ebpf/internal"
 )
+
+// handles stores handle objects to avoid gc cleanup
+type handles []*btf.Handle
+
+func (hs *handles) add(h *btf.Handle) (int, error) {
+	if h == nil {
+		return 0, nil
+	}
+
+	if len(*hs) == math.MaxInt16 {
+		return 0, fmt.Errorf("can't add more than %d module FDs to fdArray", math.MaxInt16)
+	}
+
+	*hs = append(*hs, h)
+
+	// return length of slice so that indexes start at 1
+	return len(*hs), nil
+}
+
+func (hs handles) fdArray() []int32 {
+	// first element of fda is reserved as no module can be indexed with 0
+	fda := []int32{0}
+	for _, h := range hs {
+		fda = append(fda, int32(h.FD()))
+	}
+
+	return fda
+}
+
+func (hs handles) close() {
+	for _, h := range hs {
+		h.Close()
+	}
+}
 
 // splitSymbols splits insns into subsections delimited by Symbol Instructions.
 // insns cannot be empty and must start with a Symbol Instruction.
@@ -196,8 +231,8 @@ func fixupAndValidate(insns asm.Instructions) error {
 // fixupKfuncs loops over all instructions in search for kfunc calls.
 // If at least one is found, the current kernels BTF is loaded to set Instruction.Constant
 // to the running kernels btf id of the btf.Func in the instructions Metadata for all kfunc call instructions.
-func fixupKfuncs(insns asm.Instructions) ([]*btf.Handle, error) {
-	fdArray := []*btf.Handle{}
+func fixupKfuncs(insns asm.Instructions) (*handles, error) {
+	fdArray := &handles{}
 
 	iter := insns.Iterate()
 	for iter.Next() {
@@ -215,10 +250,6 @@ fixups:
 	if err != nil {
 		return fdArray, err
 	}
-
-	fdIndex := make(map[string]int)
-	//0 for vmlinux BTF
-	btfFdIdx := 1
 
 	for {
 		ins := iter.Ins
@@ -240,23 +271,14 @@ fixups:
 		idx := 0
 		kfuncHandle, id, err := findKfuncInKernel(kernelSpec, kfm)
 		if kfuncHandle != nil {
-			defer kfuncHandle.Close()
-
 			if err != nil {
 				return fdArray, err
 			}
 
-			kfuncInfo, err := kfuncHandle.Info()
+			idx, err = fdArray.add(kfuncHandle)
 			if err != nil {
 				return fdArray, err
 			}
-
-			if _, ok := fdIndex[kfuncInfo.Name]; !ok {
-				// we assume module BTF FD is always >0
-				fdIndex[kfuncInfo.Name] = btfFdIdx
-				btfFdIdx++
-			}
-			idx = fdIndex[kfuncInfo.Name]
 		}
 
 		ins.Constant = int64(id)
@@ -265,19 +287,6 @@ fixups:
 		if !iter.Next() {
 			break
 		}
-	}
-
-	// Filter module BTF by name
-	fdArray = make([]*btf.Handle, len(fdIndex))
-	for modName, idx := range fdIndex {
-		filterFn := func(info *btf.HandleInfo) bool { return modName == info.Name && !info.IsVmlinux() }
-		h, err := btf.FindHandle(filterFn)
-		if errors.Is(err, btf.ErrNotFound) {
-			continue
-		} else if err != nil {
-			return fdArray, err
-		}
-		fdArray[idx-1] = h
 	}
 
 	return fdArray, nil

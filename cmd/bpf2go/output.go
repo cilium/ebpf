@@ -112,10 +112,7 @@ func output(args outputArgs) error {
 		return err
 	}
 
-	module, err := currentModule()
-	if err != nil {
-		return err
-	}
+	module := currentModule()
 
 	gf := &btf.GoFormatter{
 		Names:      typeNames,

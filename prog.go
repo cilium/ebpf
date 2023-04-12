@@ -165,7 +165,7 @@ type Program struct {
 	name       string
 	pinnedPath string
 	typ        ProgramType
-	handles    *handles
+	handles    *handlesMap
 }
 
 // NewProgram creates a new Program.
@@ -270,13 +270,13 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions) (*Program, er
 		return nil, err
 	}
 
-	handles, err := fixupKfuncs(insns)
+	hm, err := fixupKfuncs(insns)
 	if err != nil {
 		return nil, fmt.Errorf("fixing up kfuncs: %w", err)
 	}
 
-	if len(*handles) > 0 {
-		fdArray := handles.fdArray()
+	if len(hm.handles) > 0 {
+		fdArray := hm.fdArray()
 		attr.FdArray = sys.NewPointer(unsafe.Pointer(&fdArray[0]))
 	}
 
@@ -329,7 +329,7 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions) (*Program, er
 
 	fd, err := sys.ProgLoad(attr)
 	if err == nil {
-		return &Program{unix.ByteSliceToString(logBuf), fd, spec.Name, "", spec.Type, handles}, nil
+		return &Program{unix.ByteSliceToString(logBuf), fd, spec.Name, "", spec.Type, hm}, nil
 	}
 
 	// An error occurred loading the program, but the caller did not explicitly
@@ -408,7 +408,7 @@ func newProgramFromFD(fd *sys.FD) (*Program, error) {
 		return nil, fmt.Errorf("discover program type: %w", err)
 	}
 
-	return &Program{"", fd, info.Name, "", info.Type, &handles{}}, nil
+	return &Program{"", fd, info.Name, "", info.Type, &handlesMap{}}, nil
 }
 
 func (p *Program) String() string {
@@ -470,7 +470,7 @@ func (p *Program) Clone() (*Program, error) {
 		return nil, fmt.Errorf("can't clone program: %w", err)
 	}
 
-	return &Program{p.VerifierLog, dup, p.name, "", p.typ, &handles{}}, nil
+	return &Program{p.VerifierLog, dup, p.name, "", p.typ, &handlesMap{}}, nil
 }
 
 // Pin persists the Program on the BPF virtual file system past the lifetime of
@@ -810,7 +810,7 @@ func LoadPinnedProgram(fileName string, opts *LoadPinOptions) (*Program, error) 
 		progName = filepath.Base(fileName)
 	}
 
-	return &Program{"", fd, progName, fileName, info.Type, &handles{}}, nil
+	return &Program{"", fd, progName, fileName, info.Type, &handlesMap{}}, nil
 }
 
 // SanitizeName replaces all invalid characters in name with replacement.

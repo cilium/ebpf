@@ -13,35 +13,52 @@ import (
 )
 
 // handles stores handle objects to avoid gc cleanup
-type handles []*btf.Handle
+type handlesMap struct {
+	idx     map[string]int
+	handles []*btf.Handle
+}
 
-func (hs *handles) add(h *btf.Handle) (int, error) {
+func newHandlesMap() *handlesMap {
+	return &handlesMap{map[string]int{}, []*btf.Handle{}}
+}
+
+func (hm *handlesMap) add(h *btf.Handle) (int, error) {
 	if h == nil {
 		return 0, nil
 	}
 
-	if len(*hs) == math.MaxInt16 {
+	if len(hm.handles) == math.MaxInt16 {
 		return 0, fmt.Errorf("can't add more than %d module FDs to fdArray", math.MaxInt16)
 	}
 
-	*hs = append(*hs, h)
+	info, err := h.Info()
+	if err != nil {
+		return 0, err
+	}
 
-	// return length of slice so that indexes start at 1
-	return len(*hs), nil
+	idx, exists := hm.idx[info.Name]
+	if !exists {
+		hm.handles = append(hm.handles, h)
+		fdIdx := len(hm.handles)
+		hm.idx[info.Name] = fdIdx
+		return fdIdx, nil
+	}
+
+	return idx, nil
 }
 
-func (hs handles) fdArray() []int32 {
+func (hm handlesMap) fdArray() []int32 {
 	// first element of fda is reserved as no module can be indexed with 0
 	fda := []int32{0}
-	for _, h := range hs {
+	for _, h := range hm.handles {
 		fda = append(fda, int32(h.FD()))
 	}
 
 	return fda
 }
 
-func (hs handles) close() {
-	for _, h := range hs {
+func (hm handlesMap) close() {
+	for _, h := range hm.handles {
 		h.Close()
 	}
 }
@@ -231,8 +248,8 @@ func fixupAndValidate(insns asm.Instructions) error {
 // fixupKfuncs loops over all instructions in search for kfunc calls.
 // If at least one is found, the current kernels BTF is loaded to set Instruction.Constant
 // to the running kernels btf id of the btf.Func in the instructions Metadata for all kfunc call instructions.
-func fixupKfuncs(insns asm.Instructions) (*handles, error) {
-	fdArray := &handles{}
+func fixupKfuncs(insns asm.Instructions) (*handlesMap, error) {
+	fdArray := newHandlesMap()
 
 	iter := insns.Iterate()
 	for iter.Next() {

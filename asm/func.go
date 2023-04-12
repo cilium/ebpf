@@ -229,6 +229,14 @@ const (
 	FnDynptrRead
 	FnDynptrWrite
 	FnDynptrData
+	FnTcpRawGenSyncookieIpv4
+	FnTcpRawGenSyncookieIpv6
+	FnTcpRawCheckSyncookieIpv4
+	FnTcpRawCheckSyncookieIpv6
+	FnKtimeGetTaiNs
+	FnUserRingbufDrain
+	FnCgrpStorageGet
+	FnCgrpStorageDelete
 
 	maxBuiltinFunc
 )

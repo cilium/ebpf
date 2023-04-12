@@ -83,11 +83,12 @@ func toUpperFirst(str string) string {
 	return string(unicode.ToUpper(first)) + str[n:]
 }
 
-func currentModule() (string, error) {
+func currentModule() string {
 	bi, ok := debug.ReadBuildInfo()
 	if !ok {
-		return "", fmt.Errorf("determine current module: missing build info")
+		// Fall back to constant since bazel doesn't support BuildInfo.
+		return "github.com/cilium/ebpf"
 	}
 
-	return bi.Main.Path, nil
+	return bi.Main.Path
 }

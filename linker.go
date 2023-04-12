@@ -5,11 +5,63 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 
 	"github.com/cilium/ebpf/asm"
 	"github.com/cilium/ebpf/btf"
 	"github.com/cilium/ebpf/internal"
 )
+
+// handles stores handle objects to avoid gc cleanup
+type handlesMap struct {
+	idx     map[string]int
+	handles []*btf.Handle
+}
+
+func newHandlesMap() *handlesMap {
+	return &handlesMap{map[string]int{}, []*btf.Handle{}}
+}
+
+func (hm *handlesMap) add(h *btf.Handle) (int, error) {
+	if h == nil {
+		return 0, nil
+	}
+
+	if len(hm.handles) == math.MaxInt16 {
+		return 0, fmt.Errorf("can't add more than %d module FDs to fdArray", math.MaxInt16)
+	}
+
+	info, err := h.Info()
+	if err != nil {
+		return 0, err
+	}
+
+	idx, exists := hm.idx[info.Name]
+	if !exists {
+		hm.handles = append(hm.handles, h)
+		fdIdx := len(hm.handles)
+		hm.idx[info.Name] = fdIdx
+		return fdIdx, nil
+	}
+
+	return idx, nil
+}
+
+func (hm handlesMap) fdArray() []int32 {
+	// first element of fda is reserved as no module can be indexed with 0
+	fda := []int32{0}
+	for _, h := range hm.handles {
+		fda = append(fda, int32(h.FD()))
+	}
+
+	return fda
+}
+
+func (hm handlesMap) close() {
+	for _, h := range hm.handles {
+		h.Close()
+	}
+}
 
 // splitSymbols splits insns into subsections delimited by Symbol Instructions.
 // insns cannot be empty and must start with a Symbol Instruction.
@@ -190,17 +242,15 @@ func fixupAndValidate(insns asm.Instructions) error {
 		fixupProbeReadKernel(ins)
 	}
 
-	if err := fixupKfuncs(insns); err != nil {
-		return fmt.Errorf("fixing up kfuncs: %w", err)
-	}
-
 	return nil
 }
 
 // fixupKfuncs loops over all instructions in search for kfunc calls.
 // If at least one is found, the current kernels BTF is loaded to set Instruction.Constant
 // to the running kernels btf id of the btf.Func in the instructions Metadata for all kfunc call instructions.
-func fixupKfuncs(insns asm.Instructions) error {
+func fixupKfuncs(insns asm.Instructions) (*handlesMap, error) {
+	fdArray := newHandlesMap()
+
 	iter := insns.Iterate()
 	for iter.Next() {
 		ins := iter.Ins
@@ -209,13 +259,13 @@ func fixupKfuncs(insns asm.Instructions) error {
 		}
 	}
 
-	return nil
+	return fdArray, nil
 
 fixups:
 	// only load the kernel spec if we found at least one kfunc call
-	s, err := btf.LoadKernelSpec()
+	kernelSpec, err := btf.LoadKernelSpec()
 	if err != nil {
-		return err
+		return fdArray, err
 	}
 
 	for {
@@ -232,32 +282,31 @@ fixups:
 		// check meta, if no meta return err
 		kfm, _ := ins.Metadata.Get(kfuncMeta{}).(*btf.Func)
 		if kfm == nil {
-			return fmt.Errorf("kfunc call has no kfuncMeta")
+			return fdArray, fmt.Errorf("kfunc call has no kfuncMeta")
 		}
 
-		var fn *btf.Func
-		if err := s.TypeByName(kfm.Name, &fn); err != nil {
-			return fmt.Errorf("couldn't resolve %s in kernel spec: %v: %w", kfm.Name, err, ErrNotSupported)
-		}
+		idx := 0
+		kfuncHandle, id, err := findKfuncInKernel(kernelSpec, kfm)
+		if kfuncHandle != nil {
+			if err != nil {
+				return fdArray, err
+			}
 
-		if err := btf.CheckTypeCompatibility(kfm.Type, fn.Type); err != nil {
-			return err
-		}
-
-		id, err := s.TypeID(fn)
-		if err != nil {
-			return err
+			idx, err = fdArray.add(kfuncHandle)
+			if err != nil {
+				return fdArray, err
+			}
 		}
 
 		ins.Constant = int64(id)
-		ins.Offset = int16(0) // currently always 0, no support for kmods
+		ins.Offset = int16(idx)
 
 		if !iter.Next() {
 			break
 		}
 	}
 
-	return nil
+	return fdArray, nil
 }
 
 // fixupProbeReadKernel replaces calls to bpf_probe_read_{kernel,user}(_str)

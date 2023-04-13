@@ -14,7 +14,7 @@ func (_ BuiltinFunc) Max() BuiltinFunc {
 // You can regenerate this list using the following gawk script:
 //
 //	/FN\(.+\),/ {
-//	  match($1, /\((.+)\)/, r)
+//	  match($1, /\(([a-z_0-9]+),/, r)
 //	  split(r[1], p, "_")
 //	  printf "Fn"
 //	  for (i in p) {

@@ -50,27 +50,6 @@ type ProbeArgs struct {
 	Ret                          bool
 }
 
-func KprobeCheckLite(symbol string, pid int) error {
-	fd, group, err := tryAttach(symbol, pid)
-	if err != nil {
-		return err
-	}
-	_ = fd.Close()
-	_ = CloseTraceFSProbeEvent(KprobeType, group, symbol)
-	return nil
-}
-
-func tryAttach(symbol string, pid int) (*sys.FD, string, error) {
-	args := ProbeArgs{
-		Symbol: symbol,
-		Pid:    pid,
-	}
-
-	// Use tracefs if kprobe PMU is missing.
-	fd, _, group, err := TracefsProbe(KprobeType, args)
-	return fd, group, err
-}
-
 // TracefsProbe creates a trace event by writing an entry to <tracefs>/[k,u]probe_events.
 // A new trace event group name is generated on every call to support creating
 // multiple trace events for the same kernel or userspace symbol.

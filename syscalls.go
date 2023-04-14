@@ -8,6 +8,7 @@ import (
 	"github.com/cilium/ebpf/asm"
 	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/sys"
+	"github.com/cilium/ebpf/internal/tracefs"
 	"github.com/cilium/ebpf/internal/unix"
 )
 
@@ -260,5 +261,26 @@ var haveBPFToBPFCalls = internal.NewFeatureTest("bpf2bpf calls", "4.16", func() 
 		return err
 	}
 	_ = fd.Close()
+	return nil
+})
+
+var haveSyscallWrapper = internal.NewFeatureTest("syscall wrapper", "4.17", func() error {
+	testSyscallName := internal.PlatformPrefix("sys_bpf")
+	if testSyscallName == "" {
+		return internal.ErrNotSupported
+	}
+
+	args := tracefs.ProbeArgs{
+		Symbol: testSyscallName,
+		Pid:    -1,
+	}
+
+	fd, _, group, err := tracefs.TracefsProbe(tracefs.KprobeType, args)
+	if err != nil {
+		return internal.ErrNotSupported
+	}
+
+	_ = fd.Close()
+	_ = tracefs.CloseTraceFSProbeEvent(tracefs.KprobeType, group, testSyscallName)
 	return nil
 })

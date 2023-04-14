@@ -117,6 +117,13 @@ func TestProgramInfo(t *testing.T) {
 			} else if name == "proc" && ok {
 				t.Error("Expected ID to not be available")
 			}
+
+			if uid, ok := info.CreatedByUid(); !ok {
+				t.Error("Expected a valid UID:", uid)
+			} else if name == "proc" && ok {
+				t.Error("Expected UID to not be available")
+			}
+
 		})
 	}
 }

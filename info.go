@@ -94,6 +94,8 @@ type ProgramInfo struct {
 	// Name as supplied by user space at load time. Available from 4.15.
 	Name string
 
+  createdByUid uint32
+  haveCreatedByUid bool
 	btf   btf.ID
 	stats *programStats
 
@@ -112,11 +114,11 @@ func newProgramInfoFromFd(fd *sys.FD) (*ProgramInfo, error) {
 	}
 
 	pi := ProgramInfo{
-		Type: ProgramType(info.Type),
-		id:   ProgramID(info.Id),
-		Tag:  hex.EncodeToString(info.Tag[:]),
-		Name: unix.ByteSliceToString(info.Name[:]),
-		btf:  btf.ID(info.BtfId),
+		Type:         ProgramType(info.Type),
+		id:           ProgramID(info.Id),
+		Tag:          hex.EncodeToString(info.Tag[:]),
+		Name:         unix.ByteSliceToString(info.Name[:]),
+		btf:          btf.ID(info.BtfId),
 		stats: &programStats{
 			runtime:  time.Duration(info.RunTimeNs),
 			runCount: info.RunCnt,
@@ -137,6 +139,12 @@ func newProgramInfoFromFd(fd *sys.FD) (*ProgramInfo, error) {
 		// The kernel doesn't report associated maps.
 		pi.maps = nil
 	}
+
+  // createdByUID and NrMapIds were introduced in the same kernel version.
+  if pi.maps != nil {
+    pi.createdByUid = info.CreatedByUid
+    pi.haveCreatedByUid = true
+  }
 
 	if info.XlatedProgLen > 0 {
 		pi.insns = make([]byte, info.XlatedProgLen)
@@ -179,6 +187,15 @@ func newProgramInfoFromProc(fd *sys.FD) (*ProgramInfo, error) {
 // The bool return value indicates whether this optional field is available.
 func (pi *ProgramInfo) ID() (ProgramID, bool) {
 	return pi.id, pi.id > 0
+}
+
+// CreatedByUid returns the Uid that created the program.
+//
+// Available from 4.15.
+//
+// The bool return value indicates whether this optional field is available.
+func (pi *ProgramInfo) CreatedByUid() (uint32, bool) {
+	return pi.createdByUid, pi.haveCreatedByUid
 }
 
 // BTFID returns the BTF ID associated with the program.

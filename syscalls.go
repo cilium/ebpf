@@ -270,8 +270,17 @@ var haveSyscallWrapper = internal.NewFeatureTest("syscall wrapper", "4.17", func
 		return internal.ErrNotSupported
 	}
 
-	if err := tracefs.KprobeCheckLite(testSyscallName, -1); err != nil {
+	args := tracefs.ProbeArgs{
+		Symbol: testSyscallName,
+		Pid:    -1,
+	}
+
+	fd, _, group, err := tracefs.TracefsProbe(tracefs.KprobeType, args)
+	if err != nil {
 		return internal.ErrNotSupported
 	}
+
+	_ = fd.Close()
+	_ = tracefs.CloseTraceFSProbeEvent(tracefs.KprobeType, group, testSyscallName)
 	return nil
 })

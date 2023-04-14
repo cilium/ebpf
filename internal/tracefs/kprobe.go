@@ -94,9 +94,9 @@ func TracefsProbe(typ ProbeType, args ProbeArgs) (*sys.FD, uint64, string, error
 // RandomGroup generates a pseudorandom string for use as a tracefs group name.
 // Returns an error when the output string would exceed 63 characters (kernel
 // limitation), when rand.Read() fails or when prefix contains characters not
-// allowed by IsValidTraceID.
+// allowed by isValidTraceID.
 func RandomGroup(prefix string) (string, error) {
-	if !IsValidTraceID(prefix) {
+	if !isValidTraceID(prefix) {
 		return "", fmt.Errorf("prefix '%s' must be alphanumeric or underscore: %w", prefix, ErrInvalidInput)
 	}
 
@@ -113,13 +113,13 @@ func RandomGroup(prefix string) (string, error) {
 	return group, nil
 }
 
-// IsValidTraceID implements the equivalent of a regex match
+// isValidTraceID implements the equivalent of a regex match
 // against "^[a-zA-Z_][0-9a-zA-Z_]*$".
 //
 // Trace event groups, names and kernel symbols must adhere to this set
 // of characters. Non-empty, first character must not be a number, all
 // characters must be alphanumeric or underscore.
-func IsValidTraceID(s string) bool {
+func isValidTraceID(s string) bool {
 	if len(s) < 1 {
 		return false
 	}
@@ -201,6 +201,10 @@ func SanitizeSymbol(s string) string {
 // name automatically has its invalid symbols converted to underscores so the caller
 // can pass a raw symbol name, e.g. a kernel symbol containing dots.
 func GetTraceEventID(group, name string) (uint64, error) {
+	if !isValidTraceID(group) || !isValidTraceID(name) {
+		return 0, fmt.Errorf("group and name '%s/%s' must be alphanumeric or underscore: %w", group, name, ErrInvalidInput)
+	}
+
 	name = SanitizeSymbol(name)
 	path, err := sanitizeTracefsPath("events", group, name, "id")
 	if err != nil {

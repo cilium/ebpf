@@ -49,7 +49,7 @@ func TestTraceValidID(t *testing.T) {
 				exp = "fail"
 			}
 
-			if IsValidTraceID(tt.in) == tt.fail {
+			if isValidTraceID(tt.in) == tt.fail {
 				t.Errorf("expected string '%s' to %s valid ID check", tt.in, exp)
 			}
 		})

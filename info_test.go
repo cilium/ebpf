@@ -3,6 +3,7 @@ package ebpf
 import (
 	"errors"
 	"fmt"
+	"os"
 	"strings"
 	"testing"
 
@@ -116,6 +117,19 @@ func TestProgramInfo(t *testing.T) {
 				t.Error("Expected a valid ID:", id)
 			} else if name == "proc" && ok {
 				t.Error("Expected ID to not be available")
+			}
+
+			if name == "proc" {
+				_, ok := info.CreatedByUID()
+				qt.Assert(t, ok, qt.IsFalse)
+			} else {
+				uid, ok := info.CreatedByUID()
+				if testutils.IsKernelLessThan(t, "4.15") {
+					qt.Assert(t, ok, qt.IsFalse)
+				} else {
+					qt.Assert(t, ok, qt.IsTrue)
+					qt.Assert(t, uid, qt.Equals, uint32(os.Getuid()))
+				}
 			}
 		})
 	}

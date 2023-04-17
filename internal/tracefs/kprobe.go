@@ -57,25 +57,11 @@ type ProbeArgs struct {
 // the executable/library path on the filesystem and the offset where the probe is inserted.
 // A perf event is then opened on the newly-created trace event and returned to the caller.
 func TracefsProbe(typ ProbeType, args ProbeArgs) (*sys.FD, uint64, string, error) {
-	groupPrefix := "ebpf"
-	if args.Group != "" {
-		groupPrefix = args.Group
-	}
-
-	// Generate a random string for each trace event we attempt to create.
-	// This value is used as the 'group' token in tracefs to allow creating
-	// multiple kprobe trace events with the same name.
-	group, err := RandomGroup(groupPrefix)
+	tid, group, err := NewProbe(typ, args)
 	if err != nil {
-		return nil, 0, "", fmt.Errorf("randomizing group name: %w", err)
+		return nil, 0, "", err
 	}
 	args.Group = group
-
-	// Create the [k,u]probe trace event using tracefs.
-	tid, err := CreateTraceFSProbeEvent(typ, args)
-	if err != nil {
-		return nil, 0, "", fmt.Errorf("creating probe entry on tracefs: %w", err)
-	}
 
 	// Kprobes are ephemeral tracepoints and share the same perf event type.
 	fd, err := OpenTracepointPerfEvent(tid, args.Pid)
@@ -89,6 +75,30 @@ func TracefsProbe(typ ProbeType, args ProbeArgs) (*sys.FD, uint64, string, error
 	}
 
 	return fd, tid, group, nil
+}
+
+func NewProbe(typ ProbeType, args ProbeArgs) (uint64, string, error) {
+	groupPrefix := "ebpf"
+	if args.Group != "" {
+		groupPrefix = args.Group
+	}
+
+	// Generate a random string for each trace event we attempt to create.
+	// This value is used as the 'group' token in tracefs to allow creating
+	// multiple kprobe trace events with the same name.
+	group, err := RandomGroup(groupPrefix)
+	if err != nil {
+		return 0, "", fmt.Errorf("randomizing group name: %w", err)
+	}
+	args.Group = group
+
+	// Create the [k,u]probe trace event using tracefs.
+	tid, err := CreateTraceFSProbeEvent(typ, args)
+	if err != nil {
+		return 0, "", fmt.Errorf("creating probe entry on tracefs: %w", err)
+	}
+
+	return tid, args.Group, nil
 }
 
 // RandomGroup generates a pseudorandom string for use as a tracefs group name.

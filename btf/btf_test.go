@@ -21,12 +21,9 @@ func vmlinuxSpec(tb testing.TB) *Spec {
 	// through sysfs"), which shipped in Linux 5.4.
 	testutils.SkipOnOldKernel(tb, "5.4", "vmlinux BTF in sysfs")
 
-	spec, fallback, err := kernelSpec()
+	spec, err := LoadSpec("/sys/kernel/btf/vmlinux")
 	if err != nil {
 		tb.Fatal(err)
-	}
-	if fallback {
-		tb.Fatal("/sys/kernel/btf/vmlinux is not available")
 	}
 	return spec.Copy()
 }
@@ -287,24 +284,6 @@ func TestParseCurrentKernelBTF(t *testing.T) {
 	t.Logf("Average string size: %.0f", float64(totalBytes)/float64(len(spec.strings.strings)))
 }
 
-func TestFindVMLinux(t *testing.T) {
-	file, err := findVMLinux()
-	testutils.SkipIfNotSupported(t, err)
-	if err != nil {
-		t.Fatal("Can't find vmlinux:", err)
-	}
-	defer file.Close()
-
-	spec, err := loadSpecFromELF(file)
-	if err != nil {
-		t.Fatal("Can't load BTF:", err)
-	}
-
-	if len(spec.namedTypes) == 0 {
-		t.Fatal("Empty kernel BTF")
-	}
-}
-
 func TestLoadSpecFromElf(t *testing.T) {
 	testutils.Files(t, testutils.Glob(t, "../testdata/loader-e*.elf"), func(t *testing.T, file string) {
 		spec := parseELFBTF(t, file)
@@ -375,17 +354,6 @@ func TestVerifierError(t *testing.T) {
 
 	if ve.Truncated {
 		t.Fatalf("expected non-truncated verifier log: %v", err)
-	}
-}
-
-func TestLoadKernelSpec(t *testing.T) {
-	if _, err := os.Stat("/sys/kernel/btf/vmlinux"); os.IsNotExist(err) {
-		t.Skip("/sys/kernel/btf/vmlinux not present")
-	}
-
-	_, err := LoadKernelSpec()
-	if err != nil {
-		t.Fatal("Can't load kernel spec:", err)
 	}
 }
 

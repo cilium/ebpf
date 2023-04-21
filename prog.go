@@ -10,6 +10,7 @@ import (
 	"runtime"
 	"strings"
 	"time"
+	"unsafe"
 
 	"github.com/cilium/ebpf/asm"
 	"github.com/cilium/ebpf/btf"
@@ -164,6 +165,7 @@ type Program struct {
 	name       string
 	pinnedPath string
 	typ        ProgramType
+	handles    *handles
 }
 
 // NewProgram creates a new Program.
@@ -268,6 +270,17 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions) (*Program, er
 		return nil, err
 	}
 
+	handles, err := fixupKfuncs(insns)
+	if err != nil {
+		return nil, fmt.Errorf("fixing up kfuncs: %w", err)
+	}
+	defer handles.close()
+
+	if len(*handles) > 0 {
+		fdArray := handles.fdArray()
+		attr.FdArray = sys.NewPointer(unsafe.Pointer(&fdArray[0]))
+	}
+
 	buf := bytes.NewBuffer(make([]byte, 0, insns.Size()))
 	err = insns.Marshal(buf, internal.NativeEndian)
 	if err != nil {
@@ -317,7 +330,7 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions) (*Program, er
 
 	fd, err := sys.ProgLoad(attr)
 	if err == nil {
-		return &Program{unix.ByteSliceToString(logBuf), fd, spec.Name, "", spec.Type}, nil
+		return &Program{unix.ByteSliceToString(logBuf), fd, spec.Name, "", spec.Type, handles}, nil
 	}
 
 	// An error occurred loading the program, but the caller did not explicitly
@@ -396,7 +409,7 @@ func newProgramFromFD(fd *sys.FD) (*Program, error) {
 		return nil, fmt.Errorf("discover program type: %w", err)
 	}
 
-	return &Program{"", fd, info.Name, "", info.Type}, nil
+	return &Program{"", fd, info.Name, "", info.Type, &handles{}}, nil
 }
 
 func (p *Program) String() string {
@@ -458,7 +471,7 @@ func (p *Program) Clone() (*Program, error) {
 		return nil, fmt.Errorf("can't clone program: %w", err)
 	}
 
-	return &Program{p.VerifierLog, dup, p.name, "", p.typ}, nil
+	return &Program{p.VerifierLog, dup, p.name, "", p.typ, &handles{}}, nil
 }
 
 // Pin persists the Program on the BPF virtual file system past the lifetime of
@@ -502,6 +515,8 @@ func (p *Program) Close() error {
 	if p == nil {
 		return nil
 	}
+
+	p.handles.close()
 
 	return p.fd.Close()
 }
@@ -796,7 +811,7 @@ func LoadPinnedProgram(fileName string, opts *LoadPinOptions) (*Program, error) 
 		progName = filepath.Base(fileName)
 	}
 
-	return &Program{"", fd, progName, fileName, info.Type}, nil
+	return &Program{"", fd, progName, fileName, info.Type, &handles{}}, nil
 }
 
 // SanitizeName replaces all invalid characters in name with replacement.
@@ -999,4 +1014,39 @@ func findTargetInProgram(prog *Program, name string, progType ProgramType, attac
 	}
 
 	return spec.TypeID(targetFunc)
+}
+
+// find an attach target type in a kernel module and the vmlinux
+// Returns btf.ErrNotFound if the target can't be found in vmlinux and any kernel module.
+func findKfuncInKernel(kernelSpec *btf.Spec, kfunc *btf.Func) (*btf.Handle, btf.TypeID, error) {
+	var fn *btf.Func
+	err := kernelSpec.TypeByName(kfunc.Name, &fn)
+	if errors.Is(err, btf.ErrNotFound) {
+		// couldn't find kfunc in vmlinux, searching modules.
+		module, id, err := findTargetInModule(kernelSpec, kfunc.Name, kfunc)
+		if err != nil {
+			return nil, 0, fmt.Errorf("couldn't find kfunc '%s' in modules: %v: %w", kfunc.Name, err, ErrNotSupported)
+		}
+
+		if err := btf.CheckTypeCompatibility(kfunc.Type, kfunc.Type); err != nil {
+			return nil, 0, err
+		}
+
+		return module, id, nil
+	}
+	if err != nil {
+		return nil, 0, fmt.Errorf("couldn't find kfunc '%s' in kernel spec: %v: %w", kfunc.Name, err, ErrNotSupported)
+	}
+
+	// we found the kfunc in vmlinux
+	if err := btf.CheckTypeCompatibility(kfunc.Type, fn.Type); err != nil {
+		return nil, 0, err
+	}
+
+	id, err := kernelSpec.TypeID(fn)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	return nil, id, nil
 }

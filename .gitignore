@@ -12,3 +12,10 @@
 
 # Output of the go coverage tool, specifically when used with LiteIDE
 *.out
+
+# Python
+__pycache__
+
+# Documentation
+docs/build
+docs/site

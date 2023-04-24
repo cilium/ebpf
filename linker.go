@@ -9,6 +9,7 @@ import (
 	"github.com/cilium/ebpf/asm"
 	"github.com/cilium/ebpf/btf"
 	"github.com/cilium/ebpf/internal"
+	"github.com/cilium/ebpf/internal/linuxint"
 )
 
 // splitSymbols splits insns into subsections delimited by Symbol Instructions.
@@ -86,6 +87,14 @@ func applyRelocations(insns asm.Instructions, target *btf.Spec, bo binary.ByteOr
 
 	if bo == nil {
 		bo = internal.NativeEndian
+	}
+
+	if target == nil {
+		var err error
+		target, err = linuxint.TypesNoCopy()
+		if err != nil {
+			return err
+		}
 	}
 
 	fixups, err := btf.CORERelocate(relos, target, bo)
@@ -213,7 +222,7 @@ func fixupKfuncs(insns asm.Instructions) error {
 
 fixups:
 	// only load the kernel spec if we found at least one kfunc call
-	s, err := btf.LoadKernelSpec()
+	s, err := linuxint.TypesNoCopy()
 	if err != nil {
 		return err
 	}

@@ -977,6 +977,10 @@ func findTargetInProgram(prog *Program, name string, progType ProgramType, attac
 	switch (match{progType, attachType}) {
 	case match{Extension, AttachNone}:
 		typeName = name
+	case match{Tracing, AttachTraceFEntry}:
+		typeName = name
+	case match{Tracing, AttachTraceFExit}:
+		typeName = name
 	default:
 		return 0, errUnrecognizedAttachType
 	}

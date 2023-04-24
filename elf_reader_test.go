@@ -573,7 +573,7 @@ func TestTailCall(t *testing.T) {
 	})
 }
 
-func TestKconfig(t *testing.T) {
+func TestKconfigKernelVersion(t *testing.T) {
 	testutils.Files(t, testutils.Glob(t, "testdata/kconfig-*.elf"), func(t *testing.T, file string) {
 		spec, err := LoadCollectionSpec(file)
 		if err != nil {
@@ -585,7 +585,7 @@ func TestKconfig(t *testing.T) {
 		}
 
 		var obj struct {
-			Main *Program `ebpf:"kconfig"`
+			Main *Program `ebpf:"kernel_version"`
 		}
 
 		err = spec.LoadAndAssign(&obj, nil)
@@ -609,6 +609,47 @@ func TestKconfig(t *testing.T) {
 		version := v.Kernel()
 		if ret != version {
 			t.Fatalf("Expected eBPF to return value %d, got %d", version, ret)
+		}
+	})
+}
+
+func TestKconfigSyscallWrapper(t *testing.T) {
+	testutils.Files(t, testutils.Glob(t, "testdata/kconfig-*.elf"), func(t *testing.T, file string) {
+		spec, err := LoadCollectionSpec(file)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if spec.ByteOrder != internal.NativeEndian {
+			return
+		}
+
+		var obj struct {
+			Main *Program `ebpf:"syscall_wrapper"`
+		}
+
+		err = spec.LoadAndAssign(&obj, nil)
+		testutils.SkipIfNotSupported(t, err)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer obj.Main.Close()
+
+		ret, _, err := obj.Main.Test(internal.EmptyBPFContext)
+		testutils.SkipIfNotSupported(t, err)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		var expected uint32
+		if testutils.IsKernelLessThan(t, "4.17") {
+			expected = 0
+		} else {
+			expected = 1
+		}
+
+		if ret != expected {
+			t.Fatalf("Expected eBPF to return value %d, got %d", expected, ret)
 		}
 	})
 }

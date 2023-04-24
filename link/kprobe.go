@@ -11,6 +11,7 @@ import (
 	"unsafe"
 
 	"github.com/cilium/ebpf"
+	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/sys"
 	"github.com/cilium/ebpf/internal/unix"
 )
@@ -200,8 +201,10 @@ func kprobe(symbol string, prog *ebpf.Program, opts *KprobeOptions, ret bool) (*
 	// Use kprobe PMU if the kernel has it available.
 	tp, err := pmuKprobe(args)
 	if errors.Is(err, os.ErrNotExist) || errors.Is(err, unix.EINVAL) {
-		args.symbol = platformPrefix(symbol)
-		tp, err = pmuKprobe(args)
+		if prefixedSymbol := internal.PlatformPrefix(symbol); prefixedSymbol != "" {
+			args.symbol = prefixedSymbol
+			tp, err = pmuKprobe(args)
+		}
 	}
 	if err == nil {
 		return tp, nil
@@ -214,8 +217,10 @@ func kprobe(symbol string, prog *ebpf.Program, opts *KprobeOptions, ret bool) (*
 	args.symbol = symbol
 	tp, err = tracefsKprobe(args)
 	if errors.Is(err, os.ErrNotExist) || errors.Is(err, unix.EINVAL) {
-		args.symbol = platformPrefix(symbol)
-		tp, err = tracefsKprobe(args)
+		if prefixedSymbol := internal.PlatformPrefix(symbol); prefixedSymbol != "" {
+			args.symbol = prefixedSymbol
+			tp, err = tracefsKprobe(args)
+		}
 	}
 	if err != nil {
 		return nil, fmt.Errorf("creating tracefs event (arch-specific fallback for %q): %w", symbol, err)

@@ -49,6 +49,35 @@ type ProbeArgs struct {
 	Ret                          bool
 }
 
+// NewProbe creates a trace event by writing an entry to <tracefs>/[k,u]probe_events.
+// A new trace event group name is generated on every call to support creating
+// multiple trace events for the same kernel or userspace symbol.
+// Path and offset are only set in the case of uprobe(s) and are used to set
+// the executable/library path on the filesystem and the offset where the probe is inserted.
+func NewProbe(typ ProbeType, args ProbeArgs) (uint64, string, error) {
+	groupPrefix := "ebpf"
+	if args.Group != "" {
+		groupPrefix = args.Group
+	}
+
+	// Generate a random string for each trace event we attempt to create.
+	// This value is used as the 'group' token in tracefs to allow creating
+	// multiple kprobe trace events with the same name.
+	group, err := RandomGroup(groupPrefix)
+	if err != nil {
+		return 0, "", fmt.Errorf("randomizing group name: %w", err)
+	}
+	args.Group = group
+
+	// Create the [k,u]probe trace event using tracefs.
+	tid, err := CreateTraceFSProbeEvent(typ, args)
+	if err != nil {
+		return 0, "", fmt.Errorf("creating probe entry on tracefs: %w", err)
+	}
+
+	return tid, args.Group, nil
+}
+
 // RandomGroup generates a pseudorandom string for use as a tracefs group name.
 // Returns an error when the output string would exceed 63 characters (kernel
 // limitation), when rand.Read() fails or when prefix contains characters not

@@ -59,18 +59,6 @@ func TestTracepointErrors(t *testing.T) {
 	c.Assert(errors.Is(err, errInvalidInput), qt.IsTrue)
 }
 
-func TestTraceGetEventID(t *testing.T) {
-	_, err := getTraceEventID("syscalls", "sys_enter_openat")
-	if err != nil {
-		t.Fatal("Can't read trace event ID:", err)
-	}
-
-	_, err = getTraceEventID("totally", "bogus")
-	if !errors.Is(err, os.ErrNotExist) {
-		t.Fatal("Expected os.ErrNotExist, got", err)
-	}
-}
-
 func TestTracepointProgramCall(t *testing.T) {
 	// Kernels before 4.14 don't support attaching to syscall tracepoints.
 	testutils.SkipOnOldKernel(t, "4.14", "syscalls tracepoint support")

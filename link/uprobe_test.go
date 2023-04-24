@@ -2,7 +2,6 @@ package link
 
 import (
 	"errors"
-	"fmt"
 	"go/build"
 	"os"
 	"os/exec"
@@ -13,6 +12,7 @@ import (
 
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/internal/testutils"
+	"github.com/cilium/ebpf/internal/tracefs"
 	"github.com/cilium/ebpf/internal/unix"
 )
 
@@ -175,11 +175,11 @@ func TestUprobeCreatePMU(t *testing.T) {
 	c.Assert(err, qt.IsNil)
 
 	// Prepare probe args.
-	args := probeArgs{
-		symbol: bashSym,
-		path:   bashEx.path,
-		offset: off,
-		pid:    perfAllThreads,
+	args := tracefs.ProbeArgs{
+		Symbol: bashSym,
+		Path:   bashEx.path,
+		Offset: off,
+		Pid:    perfAllThreads,
 	}
 
 	// uprobe PMU
@@ -190,7 +190,7 @@ func TestUprobeCreatePMU(t *testing.T) {
 	c.Assert(pu.typ, qt.Equals, uprobeEvent)
 
 	// uretprobe PMU
-	args.ret = true
+	args.Ret = true
 	pr, err := pmuUprobe(args)
 	c.Assert(err, qt.IsNil)
 	defer pr.Close()
@@ -207,11 +207,11 @@ func TestUprobePMUUnavailable(t *testing.T) {
 	c.Assert(err, qt.IsNil)
 
 	// Prepare probe args.
-	args := probeArgs{
-		symbol: bashSym,
-		path:   bashEx.path,
-		offset: off,
-		pid:    perfAllThreads,
+	args := tracefs.ProbeArgs{
+		Symbol: bashSym,
+		Path:   bashEx.path,
+		Offset: off,
+		Pid:    perfAllThreads,
 	}
 
 	pk, err := pmuUprobe(args)
@@ -233,11 +233,11 @@ func TestUprobeTraceFS(t *testing.T) {
 	c.Assert(err, qt.IsNil)
 
 	// Prepare probe args.
-	args := probeArgs{
-		symbol: sanitizeSymbol(bashSym),
-		path:   bashEx.path,
-		offset: off,
-		pid:    perfAllThreads,
+	args := tracefs.ProbeArgs{
+		Symbol: tracefs.SanitizeSymbol(bashSym),
+		Path:   bashEx.path,
+		Offset: off,
+		Pid:    perfAllThreads,
 	}
 
 	// Open and close tracefs u(ret)probes, checking all errors.
@@ -246,14 +246,14 @@ func TestUprobeTraceFS(t *testing.T) {
 	c.Assert(up.Close(), qt.IsNil)
 	c.Assert(up.typ, qt.Equals, uprobeEvent)
 
-	args.ret = true
+	args.Ret = true
 	up, err = tracefsUprobe(args)
 	c.Assert(err, qt.IsNil)
 	c.Assert(up.Close(), qt.IsNil)
 	c.Assert(up.typ, qt.Equals, uretprobeEvent)
 
 	// Create two identical trace events, ensure their IDs differ.
-	args.ret = false
+	args.Ret = false
 	u1, err := tracefsUprobe(args)
 	c.Assert(err, qt.IsNil)
 	defer u1.Close()
@@ -268,11 +268,11 @@ func TestUprobeTraceFS(t *testing.T) {
 	c.Assert(u1.tracefsID, qt.Not(qt.CmpEquals()), u2.tracefsID)
 
 	// Expect an error when supplying an invalid custom group name
-	args.group = "/"
+	args.Group = "/"
 	_, err = tracefsUprobe(args)
 	c.Assert(err, qt.Not(qt.IsNil))
 
-	args.group = "customgroup"
+	args.Group = "customgroup"
 	u3, err := tracefsUprobe(args)
 	c.Assert(err, qt.IsNil)
 	defer u3.Close()
@@ -288,97 +288,51 @@ func TestUprobeCreateTraceFS(t *testing.T) {
 	c.Assert(err, qt.IsNil)
 
 	// Sanitize the symbol in order to be used in tracefs API.
-	ssym := sanitizeSymbol(bashSym)
+	ssym := tracefs.SanitizeSymbol(bashSym)
 
-	pg, _ := randomGroup("ebpftest")
-	rg, _ := randomGroup("ebpftest")
+	pg, _ := tracefs.RandomGroup("ebpftest")
+	rg, _ := tracefs.RandomGroup("ebpftest")
 
 	// Tee up cleanups in case any of the Asserts abort the function.
 	defer func() {
-		_ = closeTraceFSProbeEvent(uprobeType, pg, ssym)
-		_ = closeTraceFSProbeEvent(uprobeType, rg, ssym)
+		_ = tracefs.CloseTraceFSProbeEvent(tracefs.UprobeType, pg, ssym)
+		_ = tracefs.CloseTraceFSProbeEvent(tracefs.UprobeType, rg, ssym)
 	}()
 
 	// Prepare probe args.
-	args := probeArgs{
-		group:  pg,
-		symbol: ssym,
-		path:   bashEx.path,
-		offset: off,
+	args := tracefs.ProbeArgs{
+		Group:  pg,
+		Symbol: ssym,
+		Path:   bashEx.path,
+		Offset: off,
 	}
 
 	// Create a uprobe.
-	_, err = createTraceFSProbeEvent(uprobeType, args)
+	_, err = tracefs.CreateTraceFSProbeEvent(tracefs.UprobeType, args)
 	c.Assert(err, qt.IsNil)
 
 	// Attempt to create an identical uprobe using tracefs,
 	// expect it to fail with os.ErrExist.
-	_, err = createTraceFSProbeEvent(uprobeType, args)
+	_, err = tracefs.CreateTraceFSProbeEvent(tracefs.UprobeType, args)
 	c.Assert(errors.Is(err, os.ErrExist), qt.IsTrue,
 		qt.Commentf("expected consecutive uprobe creation to contain os.ErrExist, got: %v", err))
 
 	// Expect a successful close of the uprobe.
-	c.Assert(closeTraceFSProbeEvent(uprobeType, pg, ssym), qt.IsNil)
+	c.Assert(tracefs.CloseTraceFSProbeEvent(tracefs.UprobeType, pg, ssym), qt.IsNil)
 
-	args.group = rg
-	args.ret = true
+	args.Group = rg
+	args.Ret = true
 
 	// Same test for a kretprobe.
-	_, err = createTraceFSProbeEvent(uprobeType, args)
+	_, err = tracefs.CreateTraceFSProbeEvent(tracefs.UprobeType, args)
 	c.Assert(err, qt.IsNil)
 
-	_, err = createTraceFSProbeEvent(uprobeType, args)
+	_, err = tracefs.CreateTraceFSProbeEvent(tracefs.UprobeType, args)
 	c.Assert(os.IsExist(err), qt.IsFalse,
 		qt.Commentf("expected consecutive uretprobe creation to contain os.ErrExist, got: %v", err))
 
 	// Expect a successful close of the uretprobe.
-	c.Assert(closeTraceFSProbeEvent(uprobeType, rg, ssym), qt.IsNil)
-}
-
-func TestUprobeSanitizedSymbol(t *testing.T) {
-	tests := []struct {
-		symbol   string
-		expected string
-	}{
-		{"readline", "readline"},
-		{"main.Func123", "main_Func123"},
-		{"a.....a", "a_a"},
-		{"./;'{}[]a", "_a"},
-		{"***xx**xx###", "_xx_xx_"},
-		{`@P#r$i%v^3*+t)i&k++--`, "_P_r_i_v_3_t_i_k_"},
-	}
-
-	for i, tt := range tests {
-		t.Run(fmt.Sprint(i), func(t *testing.T) {
-			sanitized := sanitizeSymbol(tt.symbol)
-			if tt.expected != sanitized {
-				t.Errorf("Expected sanitized symbol to be '%s', got '%s'", tt.expected, sanitized)
-			}
-		})
-	}
-}
-
-func TestUprobeToken(t *testing.T) {
-	tests := []struct {
-		args     probeArgs
-		expected string
-	}{
-		{probeArgs{path: "/bin/bash"}, "/bin/bash:0x0"},
-		{probeArgs{path: "/bin/bash", offset: 1}, "/bin/bash:0x1"},
-		{probeArgs{path: "/bin/bash", offset: 65535}, "/bin/bash:0xffff"},
-		{probeArgs{path: "/bin/bash", offset: 65536}, "/bin/bash:0x10000"},
-		{probeArgs{path: "/bin/bash", offset: 1, refCtrOffset: 1}, "/bin/bash:0x1(0x1)"},
-		{probeArgs{path: "/bin/bash", offset: 1, refCtrOffset: 65535}, "/bin/bash:0x1(0xffff)"},
-	}
-
-	for i, tt := range tests {
-		t.Run(fmt.Sprint(i), func(t *testing.T) {
-			po := uprobeToken(tt.args)
-			if tt.expected != po {
-				t.Errorf("Expected path:offset to be '%s', got '%s'", tt.expected, po)
-			}
-		})
-	}
+	c.Assert(tracefs.CloseTraceFSProbeEvent(tracefs.UprobeType, rg, ssym), qt.IsNil)
 }
 
 func TestUprobeProgramCall(t *testing.T) {

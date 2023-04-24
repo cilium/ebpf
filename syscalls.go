@@ -4,10 +4,13 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"os"
+	"runtime"
 
 	"github.com/cilium/ebpf/asm"
 	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/sys"
+	"github.com/cilium/ebpf/internal/tracefs"
 	"github.com/cilium/ebpf/internal/unix"
 )
 
@@ -260,5 +263,31 @@ var haveBPFToBPFCalls = internal.NewFeatureTest("bpf2bpf calls", "4.16", func() 
 		return err
 	}
 	_ = fd.Close()
+	return nil
+})
+
+var haveSyscallWrapper = internal.NewFeatureTest("syscall wrapper", "4.17", func() error {
+	testSyscallName := internal.PlatformPrefix("sys_bpf")
+	if testSyscallName == "" {
+		return fmt.Errorf("unable to find the platform prefix for (%s)", runtime.GOARCH)
+	}
+
+	args := tracefs.ProbeArgs{
+		Symbol: testSyscallName,
+		Pid:    -1,
+	}
+
+	var err error
+	args.Group, err = tracefs.RandomGroup("ebpf-probe")
+	if err != nil {
+		return err
+	}
+
+	_, err = tracefs.CreateTraceFSProbeEvent(tracefs.KprobeType, args)
+	if errors.Is(err, os.ErrNotExist) {
+		return internal.ErrNotSupported
+	}
+
+	_ = tracefs.CloseTraceFSProbeEvent(tracefs.KprobeType, args.Group, testSyscallName)
 	return nil
 })

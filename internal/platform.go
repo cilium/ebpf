@@ -1,13 +1,16 @@
-package link
+package internal
 
 import (
 	"fmt"
 	"runtime"
 )
 
-func platformPrefix(symbol string) string {
-	// per https://github.com/golang/go/blob/master/src/go/build/syslist.go
-	// and https://github.com/libbpf/libbpf/blob/master/src/libbpf.c#L10047
+// PlatformPrefix returns the platform-dependent syscall wrapper prefix used by
+// the linux kernel.
+//
+// Based on https://github.com/golang/go/blob/master/src/go/build/syslist.go
+// and https://github.com/libbpf/libbpf/blob/master/src/libbpf.c#L10047
+func PlatformPrefix(symbol string) string {
 	var prefix string
 	switch runtime.GOARCH {
 	case "386":
@@ -37,7 +40,7 @@ func platformPrefix(symbol string) string {
 		prefix = "powerpc64"
 
 	default:
-		return symbol
+		return ""
 	}
 
 	return fmt.Sprintf("__%s_%s", prefix, symbol)

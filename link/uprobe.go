@@ -5,11 +5,11 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"strings"
 	"sync"
 
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/internal"
+	"github.com/cilium/ebpf/internal/tracefs"
 )
 
 var (
@@ -290,15 +290,15 @@ func (ex *Executable) uprobe(symbol string, prog *ebpf.Program, opts *UprobeOpti
 		}
 	}
 
-	args := probeArgs{
-		symbol:       symbol,
-		path:         ex.path,
-		offset:       offset,
-		pid:          pid,
-		refCtrOffset: opts.RefCtrOffset,
-		ret:          ret,
-		cookie:       opts.Cookie,
-		group:        opts.TraceFSPrefix,
+	args := tracefs.ProbeArgs{
+		Symbol:       symbol,
+		Path:         ex.path,
+		Offset:       offset,
+		Pid:          pid,
+		RefCtrOffset: opts.RefCtrOffset,
+		Ret:          ret,
+		Cookie:       opts.Cookie,
+		Group:        opts.TraceFSPrefix,
 	}
 
 	// Use uprobe PMU if the kernel has it available.
@@ -311,7 +311,7 @@ func (ex *Executable) uprobe(symbol string, prog *ebpf.Program, opts *UprobeOpti
 	}
 
 	// Use tracefs if uprobe PMU is missing.
-	args.symbol = sanitizeSymbol(symbol)
+	args.Symbol = tracefs.SanitizeSymbol(symbol)
 	tp, err = tracefsUprobe(args)
 	if err != nil {
 		return nil, fmt.Errorf("creating trace event '%s:%s' in tracefs: %w", ex.path, symbol, err)
@@ -321,46 +321,11 @@ func (ex *Executable) uprobe(symbol string, prog *ebpf.Program, opts *UprobeOpti
 }
 
 // pmuUprobe opens a perf event based on the uprobe PMU.
-func pmuUprobe(args probeArgs) (*perfEvent, error) {
-	return pmuProbe(uprobeType, args)
+func pmuUprobe(args tracefs.ProbeArgs) (*perfEvent, error) {
+	return pmuProbe(tracefs.UprobeType, args)
 }
 
 // tracefsUprobe creates a Uprobe tracefs entry.
-func tracefsUprobe(args probeArgs) (*perfEvent, error) {
-	return tracefsProbe(uprobeType, args)
-}
-
-// sanitizeSymbol replaces every invalid character for the tracefs api with an underscore.
-// It is equivalent to calling regexp.MustCompile("[^a-zA-Z0-9]+").ReplaceAllString("_").
-func sanitizeSymbol(s string) string {
-	var skip bool
-	return strings.Map(func(c rune) rune {
-		switch {
-		case c >= 'a' && c <= 'z',
-			c >= 'A' && c <= 'Z',
-			c >= '0' && c <= '9':
-			skip = false
-			return c
-
-		case skip:
-			return -1
-
-		default:
-			skip = true
-			return '_'
-		}
-	}, s)
-}
-
-// uprobeToken creates the PATH:OFFSET(REF_CTR_OFFSET) token for the tracefs api.
-func uprobeToken(args probeArgs) string {
-	po := fmt.Sprintf("%s:%#x", args.path, args.offset)
-
-	if args.refCtrOffset != 0 {
-		// This is not documented in Documentation/trace/uprobetracer.txt.
-		// elixir.bootlin.com/linux/v5.15-rc7/source/kernel/trace/trace.c#L5564
-		po += fmt.Sprintf("(%#x)", args.refCtrOffset)
-	}
-
-	return po
+func tracefsUprobe(args tracefs.ProbeArgs) (*perfEvent, error) {
+	return tracefsProbe(tracefs.UprobeType, args)
 }

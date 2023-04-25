@@ -66,10 +66,8 @@ type perfEvent struct {
 	group string
 	name  string
 
-	// PMU event ID read from sysfs. Valid IDs are non-zero.
-	pmuID uint64
-	// ID of the trace event read from tracefs. Valid IDs are non-zero.
-	tracefsID uint64
+	// Trace event backing this perfEvent. May be nil.
+	tracefsEvent *tracefs.Event
 
 	// User provided arbitrary value.
 	cookie uint64
@@ -83,20 +81,8 @@ func (pe *perfEvent) Close() error {
 		return fmt.Errorf("closing perf event fd: %w", err)
 	}
 
-	switch pe.typ {
-	case kprobeEvent, kretprobeEvent:
-		// Clean up kprobe tracefs entry.
-		if pe.tracefsID != 0 {
-			return tracefs.CloseTraceFSProbeEvent(tracefs.KprobeType, pe.group, pe.name)
-		}
-	case uprobeEvent, uretprobeEvent:
-		// Clean up uprobe tracefs entry.
-		if pe.tracefsID != 0 {
-			return tracefs.CloseTraceFSProbeEvent(tracefs.UprobeType, pe.group, pe.name)
-		}
-	case tracepointEvent:
-		// Tracepoint trace events don't hold any extra resources.
-		return nil
+	if pe.tracefsEvent != nil {
+		return pe.tracefsEvent.Close()
 	}
 
 	return nil

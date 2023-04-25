@@ -235,7 +235,7 @@ func TestKprobeTraceFS(t *testing.T) {
 	k3, err := tracefsProbe(tracefs.ProbeArgs{Type: tracefs.Kprobe, Symbol: ksym, Group: cg})
 	c.Assert(err, qt.IsNil)
 	defer k3.Close()
-	c.Assert(k3.group, qt.Matches, `customgroup_[a-f0-9]{16}`)
+	c.Assert(k3.tracefsEvent.Group(), qt.Matches, `customgroup_[a-f0-9]{16}`)
 
 	// Prepare probe args.
 	args := tracefs.ProbeArgs{Type: tracefs.Kprobe, Group: "testgroup", Symbol: "symbol"}

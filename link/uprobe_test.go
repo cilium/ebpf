@@ -279,7 +279,7 @@ func TestUprobeTraceFS(t *testing.T) {
 	u3, err := tracefsProbe(args)
 	c.Assert(err, qt.IsNil)
 	defer u3.Close()
-	c.Assert(u3.group, qt.Matches, `customgroup_[a-f0-9]{16}`)
+	c.Assert(u3.tracefsEvent.Group(), qt.Matches, `customgroup_[a-f0-9]{16}`)
 }
 
 func TestUprobeProgramCall(t *testing.T) {

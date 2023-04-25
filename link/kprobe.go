@@ -320,7 +320,6 @@ func pmuProbe(args tracefs.ProbeArgs) (*perfEvent, error) {
 	// Kernel has perf_[k,u]probe PMU available, initialize perf event.
 	return &perfEvent{
 		typ:    perfEventTypeFromProbeType(args.Type, args.Ret),
-		name:   args.Symbol,
 		cookie: args.Cookie,
 		fd:     fd,
 	}, nil
@@ -366,8 +365,6 @@ func tracefsProbe(args tracefs.ProbeArgs) (*perfEvent, error) {
 
 	return &perfEvent{
 		typ:          perfEventTypeFromProbeType(args.Type, args.Ret),
-		group:        group,
-		name:         args.Symbol,
 		tracefsEvent: evt,
 		cookie:       args.Cookie,
 		fd:           fd,

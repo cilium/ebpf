@@ -347,6 +347,11 @@ func (evt *Event) ID() uint64 {
 	return evt.id
 }
 
+// Group returns the tracefs group used by the event.
+func (evt *Event) Group() string {
+	return evt.group
+}
+
 // KprobeToken creates the SYM[+offs] token for the tracefs api.
 func KprobeToken(args ProbeArgs) string {
 	po := args.Symbol

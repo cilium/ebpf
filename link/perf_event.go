@@ -62,10 +62,6 @@ type perfEvent struct {
 	// The event type determines the types of programs that can be attached.
 	typ perfEventType
 
-	// Group and name of the tracepoint/kprobe/uprobe.
-	group string
-	name  string
-
 	// Trace event backing this perfEvent. May be nil.
 	tracefsEvent *tracefs.Event
 

@@ -147,14 +147,14 @@ func TestKprobeCreatePMU(t *testing.T) {
 	c := qt.New(t)
 
 	// kprobe happy path. printk is always present.
-	pk, err := pmuKprobe(tracefs.ProbeArgs{Symbol: ksym})
+	pk, err := pmuProbe(tracefs.ProbeArgs{Type: tracefs.Kprobe, Symbol: ksym})
 	c.Assert(err, qt.IsNil)
 	defer pk.Close()
 
 	c.Assert(pk.typ, qt.Equals, kprobeEvent)
 
 	// kretprobe happy path.
-	pr, err := pmuKprobe(tracefs.ProbeArgs{Symbol: ksym, Ret: true})
+	pr, err := pmuProbe(tracefs.ProbeArgs{Type: tracefs.Kprobe, Symbol: ksym, Ret: true})
 	c.Assert(err, qt.IsNil)
 	defer pr.Close()
 
@@ -162,12 +162,12 @@ func TestKprobeCreatePMU(t *testing.T) {
 
 	// Expect os.ErrNotExist when specifying a non-existent kernel symbol
 	// on kernels 4.17 and up.
-	_, err = pmuKprobe(tracefs.ProbeArgs{Symbol: "bogus"})
+	_, err = pmuProbe(tracefs.ProbeArgs{Type: tracefs.Kprobe, Symbol: "bogus"})
 	c.Assert(errors.Is(err, os.ErrNotExist), qt.IsTrue, qt.Commentf("got error: %s", err))
 
 	// A kernel bug was fixed in 97c753e62e6c where EINVAL was returned instead
 	// of ENOENT, but only for kretprobes.
-	_, err = pmuKprobe(tracefs.ProbeArgs{Symbol: "bogus", Ret: true})
+	_, err = pmuProbe(tracefs.ProbeArgs{Type: tracefs.Kprobe, Symbol: "bogus", Ret: true})
 	c.Assert(errors.Is(err, os.ErrNotExist), qt.IsTrue, qt.Commentf("got error: %s", err))
 }
 
@@ -175,7 +175,7 @@ func TestKprobeCreatePMU(t *testing.T) {
 func TestKprobePMUUnavailable(t *testing.T) {
 	c := qt.New(t)
 
-	pk, err := pmuKprobe(tracefs.ProbeArgs{Symbol: ksym})
+	pk, err := pmuProbe(tracefs.ProbeArgs{Type: tracefs.Kprobe, Symbol: ksym})
 	if err == nil {
 		pk.Close()
 		t.Skipf("Kernel supports perf_kprobe PMU, not asserting error.")
@@ -187,7 +187,7 @@ func TestKprobePMUUnavailable(t *testing.T) {
 
 func BenchmarkKprobeCreatePMU(b *testing.B) {
 	for n := 0; n < b.N; n++ {
-		pr, err := pmuKprobe(tracefs.ProbeArgs{Symbol: ksym})
+		pr, err := pmuProbe(tracefs.ProbeArgs{Type: tracefs.Kprobe, Symbol: ksym})
 		if err != nil {
 			b.Error("error creating perf_kprobe PMU:", err)
 		}
@@ -203,51 +203,51 @@ func TestKprobeTraceFS(t *testing.T) {
 	c := qt.New(t)
 
 	// Open and close tracefs k(ret)probes, checking all errors.
-	kp, err := tracefsKprobe(tracefs.ProbeArgs{Symbol: ksym})
+	kp, err := tracefsProbe(tracefs.ProbeArgs{Type: tracefs.Kprobe, Symbol: ksym})
 	c.Assert(err, qt.IsNil)
 	c.Assert(kp.Close(), qt.IsNil)
 	c.Assert(kp.typ, qt.Equals, kprobeEvent)
 
-	kp, err = tracefsKprobe(tracefs.ProbeArgs{Symbol: ksym, Ret: true})
+	kp, err = tracefsProbe(tracefs.ProbeArgs{Type: tracefs.Kprobe, Symbol: ksym, Ret: true})
 	c.Assert(err, qt.IsNil)
 	c.Assert(kp.Close(), qt.IsNil)
 	c.Assert(kp.typ, qt.Equals, kretprobeEvent)
 
 	// Create two identical trace events, ensure their IDs differ.
-	k1, err := tracefsKprobe(tracefs.ProbeArgs{Symbol: ksym})
+	k1, err := tracefsProbe(tracefs.ProbeArgs{Type: tracefs.Kprobe, Symbol: ksym})
 	c.Assert(err, qt.IsNil)
 	defer k1.Close()
-	c.Assert(k1.tracefsID, qt.Not(qt.Equals), 0)
+	c.Assert(k1.tracefsEvent, qt.IsNotNil)
 
-	k2, err := tracefsKprobe(tracefs.ProbeArgs{Symbol: ksym})
+	k2, err := tracefsProbe(tracefs.ProbeArgs{Type: tracefs.Kprobe, Symbol: ksym})
 	c.Assert(err, qt.IsNil)
 	defer k2.Close()
-	c.Assert(k2.tracefsID, qt.Not(qt.Equals), 0)
+	c.Assert(k2.tracefsEvent, qt.IsNotNil)
 
 	// Compare the kprobes' tracefs IDs.
-	c.Assert(k1.tracefsID, qt.Not(qt.CmpEquals()), k2.tracefsID)
+	c.Assert(k1.tracefsEvent.ID(), qt.Not(qt.Equals), k2.tracefsEvent.ID())
 
 	// Expect an error when supplying an invalid custom group name
-	_, err = tracefsKprobe(tracefs.ProbeArgs{Symbol: ksym, Group: "/"})
+	_, err = tracefsProbe(tracefs.ProbeArgs{Type: tracefs.Kprobe, Symbol: ksym, Group: "/"})
 	c.Assert(err, qt.Not(qt.IsNil))
 
 	cg := "customgroup"
-	k3, err := tracefsKprobe(tracefs.ProbeArgs{Symbol: ksym, Group: cg})
+	k3, err := tracefsProbe(tracefs.ProbeArgs{Type: tracefs.Kprobe, Symbol: ksym, Group: cg})
 	c.Assert(err, qt.IsNil)
 	defer k3.Close()
 	c.Assert(k3.group, qt.Matches, `customgroup_[a-f0-9]{16}`)
 
 	// Prepare probe args.
-	args := tracefs.ProbeArgs{Group: "testgroup", Symbol: "symbol"}
+	args := tracefs.ProbeArgs{Type: tracefs.Kprobe, Group: "testgroup", Symbol: "symbol"}
 
 	// Write a k(ret)probe event for a non-existing symbol.
-	_, err = tracefs.CreateTraceFSProbeEvent(tracefs.KprobeType, args)
+	_, err = tracefs.NewEvent(args)
 	c.Assert(errors.Is(err, os.ErrNotExist), qt.IsTrue, qt.Commentf("got error: %s", err))
 
 	// A kernel bug was fixed in 97c753e62e6c where EINVAL was returned instead
 	// of ENOENT, but only for kretprobes.
 	args.Ret = true
-	_, err = tracefs.CreateTraceFSProbeEvent(tracefs.KprobeType, args)
+	_, err = tracefs.NewEvent(args)
 	if !(errors.Is(err, os.ErrNotExist) || errors.Is(err, unix.EINVAL)) {
 		t.Fatal(err)
 	}
@@ -257,7 +257,7 @@ func BenchmarkKprobeCreateTraceFS(b *testing.B) {
 	for n := 0; n < b.N; n++ {
 		// Include <tracefs>/kprobe_events operations in the benchmark loop
 		// because we create one per perf event.
-		pr, err := tracefsKprobe(tracefs.ProbeArgs{Symbol: ksym})
+		pr, err := tracefsProbe(tracefs.ProbeArgs{Symbol: ksym})
 		if err != nil {
 			b.Error("error creating tracefs perf event:", err)
 		}

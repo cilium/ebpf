@@ -291,6 +291,7 @@ func (ex *Executable) uprobe(symbol string, prog *ebpf.Program, opts *UprobeOpti
 	}
 
 	args := tracefs.ProbeArgs{
+		Type:         tracefs.Uprobe,
 		Symbol:       symbol,
 		Path:         ex.path,
 		Offset:       offset,
@@ -302,7 +303,7 @@ func (ex *Executable) uprobe(symbol string, prog *ebpf.Program, opts *UprobeOpti
 	}
 
 	// Use uprobe PMU if the kernel has it available.
-	tp, err := pmuUprobe(args)
+	tp, err := pmuProbe(args)
 	if err == nil {
 		return tp, nil
 	}
@@ -311,21 +312,10 @@ func (ex *Executable) uprobe(symbol string, prog *ebpf.Program, opts *UprobeOpti
 	}
 
 	// Use tracefs if uprobe PMU is missing.
-	args.Symbol = tracefs.SanitizeSymbol(symbol)
-	tp, err = tracefsUprobe(args)
+	tp, err = tracefsProbe(args)
 	if err != nil {
 		return nil, fmt.Errorf("creating trace event '%s:%s' in tracefs: %w", ex.path, symbol, err)
 	}
 
 	return tp, nil
-}
-
-// pmuUprobe opens a perf event based on the uprobe PMU.
-func pmuUprobe(args tracefs.ProbeArgs) (*perfEvent, error) {
-	return pmuProbe(tracefs.UprobeType, args)
-}
-
-// tracefsUprobe creates a Uprobe tracefs entry.
-func tracefsUprobe(args tracefs.ProbeArgs) (*perfEvent, error) {
-	return tracefsProbe(tracefs.UprobeType, args)
 }

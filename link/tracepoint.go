@@ -37,14 +37,11 @@ func Tracepoint(group, name string, prog *ebpf.Program, opts *TracepointOptions)
 	if prog == nil {
 		return nil, fmt.Errorf("prog cannot be nil: %w", errInvalidInput)
 	}
-	if !tracefs.IsValidTraceID(group) || !tracefs.IsValidTraceID(name) {
-		return nil, fmt.Errorf("group and name '%s/%s' must be alphanumeric or underscore: %w", group, name, errInvalidInput)
-	}
 	if prog.Type() != ebpf.TracePoint {
 		return nil, fmt.Errorf("eBPF program type %s is not a Tracepoint: %w", prog.Type(), errInvalidInput)
 	}
 
-	tid, err := tracefs.GetTraceEventID(group, name)
+	tid, err := tracefs.EventID(group, name)
 	if err != nil {
 		return nil, err
 	}
@@ -60,12 +57,11 @@ func Tracepoint(group, name string, prog *ebpf.Program, opts *TracepointOptions)
 	}
 
 	pe := &perfEvent{
-		typ:       tracepointEvent,
-		group:     group,
-		name:      name,
-		tracefsID: tid,
-		cookie:    cookie,
-		fd:        fd,
+		typ:    tracepointEvent,
+		group:  group,
+		name:   name,
+		cookie: cookie,
+		fd:     fd,
 	}
 
 	lnk, err := attachPerfEvent(pe, prog)

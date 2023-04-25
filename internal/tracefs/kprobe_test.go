@@ -1,7 +1,6 @@
 package tracefs
 
 import (
-	"errors"
 	"fmt"
 	"os"
 	"testing"
@@ -54,46 +53,27 @@ func TestKprobeToken(t *testing.T) {
 	}
 }
 
-// Test k(ret)probe creation writing directly to <tracefs>/kprobe_events.
-func TestKprobeCreateTraceFS(t *testing.T) {
-	c := qt.New(t)
+func TestNewEvent(t *testing.T) {
+	for _, args := range []ProbeArgs{
+		{Type: Kprobe, Symbol: ksym},
+		{Type: Kprobe, Symbol: ksym, Ret: true},
+		{Type: Uprobe, Path: "/bin/bash", Symbol: "main"},
+		{Type: Uprobe, Path: "/bin/bash", Symbol: "main", Ret: true},
+	} {
+		name := fmt.Sprintf("%s ret=%v", args.Type, args.Ret)
+		t.Run(name, func(t *testing.T) {
+			args.Group, _ = RandomGroup("ebpftest")
 
-	pg, _ := RandomGroup("ebpftest")
-	rg, _ := RandomGroup("ebpftest")
+			evt, err := NewEvent(args)
+			qt.Assert(t, err, qt.IsNil)
+			defer evt.Close()
 
-	// Tee up cleanups in case any of the Asserts abort the function.
-	defer func() {
-		_ = CloseTraceFSProbeEvent(KprobeType, pg, ksym)
-		_ = CloseTraceFSProbeEvent(KprobeType, rg, ksym)
-	}()
+			_, err = NewEvent(args)
+			qt.Assert(t, err, qt.ErrorIs, os.ErrExist,
+				qt.Commentf("expected consecutive event creation to contain os.ErrExist"))
 
-	// Prepare probe args.
-	args := ProbeArgs{Group: pg, Symbol: ksym}
-
-	// Create a kprobe.
-	_, err := CreateTraceFSProbeEvent(KprobeType, args)
-	c.Assert(err, qt.IsNil)
-
-	// Attempt to create an identical kprobe using tracefs,
-	// expect it to fail with os.ErrExist.
-	_, err = CreateTraceFSProbeEvent(KprobeType, args)
-	c.Assert(errors.Is(err, os.ErrExist), qt.IsTrue,
-		qt.Commentf("expected consecutive kprobe creation to contain os.ErrExist, got: %v", err))
-
-	// Expect a successful close of the kprobe.
-	c.Assert(CloseTraceFSProbeEvent(KprobeType, pg, ksym), qt.IsNil)
-
-	args.Group = rg
-	args.Ret = true
-
-	// Same test for a kretprobe.
-	_, err = CreateTraceFSProbeEvent(KprobeType, args)
-	c.Assert(err, qt.IsNil)
-
-	_, err = CreateTraceFSProbeEvent(KprobeType, args)
-	c.Assert(os.IsExist(err), qt.IsFalse,
-		qt.Commentf("expected consecutive kretprobe creation to contain os.ErrExist, got: %v", err))
-
-	// Expect a successful close of the kretprobe.
-	c.Assert(CloseTraceFSProbeEvent(KprobeType, rg, ksym), qt.IsNil)
+			qt.Assert(t, evt.Close(), qt.IsNil)
+			qt.Assert(t, evt.Close(), qt.ErrorIs, os.ErrClosed)
+		})
+	}
 }

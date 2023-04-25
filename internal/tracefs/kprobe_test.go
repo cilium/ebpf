@@ -61,15 +61,15 @@ func TestKprobeCreateTraceFS(t *testing.T) {
 	rg, _ := RandomGroup("ebpftest")
 
 	// Prepare probe args.
-	args := ProbeArgs{Group: pg, Symbol: ksym}
+	args := ProbeArgs{Type: Kprobe, Group: pg, Symbol: ksym}
 
 	// Create a kprobe.
-	kp, err := NewEvent(KprobeType, args)
+	kp, err := NewEvent(args)
 	c.Assert(err, qt.IsNil)
 
 	// Attempt to create an identical kprobe using tracefs,
 	// expect it to fail with os.ErrExist.
-	_, err = NewEvent(KprobeType, args)
+	_, err = NewEvent(args)
 	c.Assert(err, qt.ErrorIs, os.ErrExist,
 		qt.Commentf("expected consecutive kprobe creation to contain os.ErrExist, got: %v", err))
 
@@ -80,10 +80,10 @@ func TestKprobeCreateTraceFS(t *testing.T) {
 	args.Ret = true
 
 	// Same test for a kretprobe.
-	krp, err := NewEvent(KprobeType, args)
+	krp, err := NewEvent(args)
 	c.Assert(err, qt.IsNil)
 
-	_, err = NewEvent(KprobeType, args)
+	_, err = NewEvent(args)
 	c.Assert(err, qt.ErrorIs, os.ErrExist,
 		qt.Commentf("expected consecutive kretprobe creation to contain os.ErrExist, got: %v", err))
 

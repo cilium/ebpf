@@ -53,12 +53,12 @@ TARGETS := \
 
 # Build all ELF binaries using a containerized LLVM toolchain.
 container-all:
-	${CONTAINER_ENGINE} run --rm ${CONTAINER_RUN_ARGS} \
+	+${CONTAINER_ENGINE} run --rm ${CONTAINER_RUN_ARGS} \
 		-v "${REPODIR}":/ebpf -w /ebpf --env MAKEFLAGS \
 		--env CFLAGS="-fdebug-prefix-map=/ebpf=." \
 		--env HOME="/tmp" \
 		"${IMAGE}:${VERSION}" \
-		$(MAKE) all
+		make all
 
 # (debug) Drop the user into a shell inside the container as root.
 container-shell:

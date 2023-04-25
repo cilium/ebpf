@@ -209,7 +209,7 @@ func kprobe(symbol string, prog *ebpf.Program, opts *KprobeOptions, ret bool) (*
 func pmuProbe(args tracefs.ProbeArgs) (*perfEvent, error) {
 	// Getting the PMU type will fail if the kernel doesn't support
 	// the perf_[k,u]probe PMU.
-	et, err := internal.ReadUint64FromFileOnce("%d\n", "/sys/bus/event_source/devices", args.Type.String(), "type")
+	eventType, err := internal.ReadUint64FromFileOnce("%d\n", "/sys/bus/event_source/devices", args.Type.String(), "type")
 	if errors.Is(err, os.ErrNotExist) {
 		return nil, fmt.Errorf("%s: %w", args.Type, ErrNotSupported)
 	}
@@ -250,7 +250,7 @@ func pmuProbe(args tracefs.ProbeArgs) (*perfEvent, error) {
 			// The minimum size required for PMU kprobes is PERF_ATTR_SIZE_VER1,
 			// since it added the config2 (Ext2) field. Use Ext2 as probe_offset.
 			Size:   unix.PERF_ATTR_SIZE_VER1,
-			Type:   uint32(et),          // PMU event type read from sysfs
+			Type:   uint32(eventType),   // PMU event type read from sysfs
 			Ext1:   uint64(uintptr(sp)), // Kernel symbol to trace
 			Ext2:   args.Offset,         // Kernel symbol offset
 			Config: config,              // Retprobe flag
@@ -273,7 +273,7 @@ func pmuProbe(args tracefs.ProbeArgs) (*perfEvent, error) {
 			// size of the internal buffer the kernel allocates for reading the
 			// perf_event_attr argument from userspace.
 			Size:   unix.PERF_ATTR_SIZE_VER1,
-			Type:   uint32(et),          // PMU event type read from sysfs
+			Type:   uint32(eventType),   // PMU event type read from sysfs
 			Ext1:   uint64(uintptr(sp)), // Uprobe path
 			Ext2:   args.Offset,         // Uprobe offset
 			Config: config,              // RefCtrOffset, Retprobe flag
@@ -321,7 +321,6 @@ func pmuProbe(args tracefs.ProbeArgs) (*perfEvent, error) {
 	return &perfEvent{
 		typ:    perfEventTypeFromProbeType(args.Type, args.Ret),
 		name:   args.Symbol,
-		pmuID:  et,
 		cookie: args.Cookie,
 		fd:     fd,
 	}, nil

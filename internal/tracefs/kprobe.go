@@ -23,12 +23,12 @@ var (
 type ProbeType uint8
 
 const (
-	KprobeType ProbeType = iota
-	UprobeType
+	Kprobe ProbeType = iota
+	Uprobe
 )
 
 func (pt ProbeType) String() string {
-	if pt == KprobeType {
+	if pt == Kprobe {
 		return "kprobe"
 	}
 	return "uprobe"
@@ -44,6 +44,7 @@ func (pt ProbeType) eventsFile() (*os.File, error) {
 }
 
 type ProbeArgs struct {
+	Type                         ProbeType
 	Symbol, Group, Path          string
 	Offset, RefCtrOffset, Cookie uint64
 	Pid, RetprobeMaxActive       int
@@ -206,7 +207,7 @@ type Event struct {
 // if a probe with the same group and symbol already exists. Returns an error if
 // args.RetprobeMaxActive is used on non kprobe types. Returns ErrNotSupported if
 // the kernel is too old to support kretprobe maxactive.
-func NewEvent(typ ProbeType, args ProbeArgs) (*Event, error) {
+func NewEvent(args ProbeArgs) (*Event, error) {
 	// Before attempting to create a trace event through tracefs,
 	// check if an event with the same group and name already exists.
 	// Kernels 4.x and earlier don't return os.ErrExist on writing a duplicate
@@ -221,15 +222,15 @@ func NewEvent(typ ProbeType, args ProbeArgs) (*Event, error) {
 	}
 
 	// Open the kprobe_events file in tracefs.
-	f, err := typ.eventsFile()
+	f, err := args.Type.eventsFile()
 	if err != nil {
 		return nil, err
 	}
 	defer f.Close()
 
 	var pe, token string
-	switch typ {
-	case KprobeType:
+	switch args.Type {
+	case Kprobe:
 		// The kprobe_events syntax is as follows (see Documentation/trace/kprobetrace.txt):
 		// p[:[GRP/]EVENT] [MOD:]SYM[+offs]|MEMADDR [FETCHARGS] : Set a probe
 		// r[MAXACTIVE][:[GRP/]EVENT] [MOD:]SYM[+0] [FETCHARGS] : Set a return probe
@@ -249,7 +250,7 @@ func NewEvent(typ ProbeType, args ProbeArgs) (*Event, error) {
 		}
 		token = KprobeToken(args)
 		pe = fmt.Sprintf("%s:%s/%s %s", probePrefix(args.Ret, args.RetprobeMaxActive), args.Group, eventName, token)
-	case UprobeType:
+	case Uprobe:
 		// The uprobe_events syntax is as follows:
 		// p[:[GRP/]EVENT] PATH:OFFSET [FETCHARGS] : Set a probe
 		// r[:[GRP/]EVENT] PATH:OFFSET [FETCHARGS] : Set a return probe
@@ -297,7 +298,7 @@ func NewEvent(typ ProbeType, args ProbeArgs) (*Event, error) {
 		// without any sanitization.
 		// See https://elixir.bootlin.com/linux/v4.10/source/kernel/trace/trace_kprobe.c#L712
 		event := fmt.Sprintf("kprobes/r_%s_%d", args.Symbol, args.Offset)
-		if err := removeEvent(typ, event); err != nil {
+		if err := removeEvent(args.Type, event); err != nil {
 			return nil, fmt.Errorf("failed to remove spurious maxactive event: %s", err)
 		}
 		return nil, fmt.Errorf("create trace event with non-default maxactive: %w", internal.ErrNotSupported)
@@ -306,7 +307,7 @@ func NewEvent(typ ProbeType, args ProbeArgs) (*Event, error) {
 		return nil, fmt.Errorf("get trace event id: %w", err)
 	}
 
-	evt := &Event{typ, args.Group, eventName, tid}
+	evt := &Event{args.Type, args.Group, eventName, tid}
 	runtime.SetFinalizer(evt, (*Event).Close)
 	return evt, nil
 }

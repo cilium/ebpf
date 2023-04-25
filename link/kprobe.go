@@ -359,28 +359,28 @@ func tracefsProbe(typ tracefs.ProbeType, args tracefs.ProbeArgs) (*perfEvent, er
 	args.Group = group
 
 	// Create the [k,u]probe trace event using tracefs.
-	tid, err := tracefs.CreateTraceFSProbeEvent(typ, args)
+	evt, err := tracefs.NewEvent(typ, args)
 	if err != nil {
 		return nil, fmt.Errorf("creating probe entry on tracefs: %w", err)
 	}
 
 	// Kprobes are ephemeral tracepoints and share the same perf event type.
-	fd, err := openTracepointPerfEvent(tid, args.Pid)
+	fd, err := openTracepointPerfEvent(evt.ID(), args.Pid)
 	if err != nil {
 		// Make sure we clean up the created tracefs event when we return error.
 		// If a livepatch handler is already active on the symbol, the write to
 		// tracefs will succeed, a trace event will show up, but creating the
 		// perf event will fail with EBUSY.
-		_ = tracefs.CloseTraceFSProbeEvent(typ, args.Group, args.Symbol)
+		_ = evt.Close()
 		return nil, err
 	}
 
 	return &perfEvent{
-		typ:       perfEventTypeFromProbeType(typ, args.Ret),
-		group:     group,
-		name:      args.Symbol,
-		tracefsID: tid,
-		cookie:    args.Cookie,
-		fd:        fd,
+		typ:          perfEventTypeFromProbeType(typ, args.Ret),
+		group:        group,
+		name:         args.Symbol,
+		tracefsEvent: evt,
+		cookie:       args.Cookie,
+		fd:           fd,
 	}, nil
 }

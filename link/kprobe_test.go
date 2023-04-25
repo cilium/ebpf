@@ -217,15 +217,15 @@ func TestKprobeTraceFS(t *testing.T) {
 	k1, err := tracefsKprobe(tracefs.ProbeArgs{Symbol: ksym})
 	c.Assert(err, qt.IsNil)
 	defer k1.Close()
-	c.Assert(k1.tracefsID, qt.Not(qt.Equals), 0)
+	c.Assert(k1.tracefsEvent, qt.IsNotNil)
 
 	k2, err := tracefsKprobe(tracefs.ProbeArgs{Symbol: ksym})
 	c.Assert(err, qt.IsNil)
 	defer k2.Close()
-	c.Assert(k2.tracefsID, qt.Not(qt.Equals), 0)
+	c.Assert(k2.tracefsEvent, qt.IsNotNil)
 
 	// Compare the kprobes' tracefs IDs.
-	c.Assert(k1.tracefsID, qt.Not(qt.CmpEquals()), k2.tracefsID)
+	c.Assert(k1.tracefsEvent.ID(), qt.Not(qt.Equals), k2.tracefsEvent.ID())
 
 	// Expect an error when supplying an invalid custom group name
 	_, err = tracefsKprobe(tracefs.ProbeArgs{Symbol: ksym, Group: "/"})
@@ -241,13 +241,13 @@ func TestKprobeTraceFS(t *testing.T) {
 	args := tracefs.ProbeArgs{Group: "testgroup", Symbol: "symbol"}
 
 	// Write a k(ret)probe event for a non-existing symbol.
-	_, err = tracefs.CreateTraceFSProbeEvent(tracefs.KprobeType, args)
+	_, err = tracefs.NewEvent(tracefs.KprobeType, args)
 	c.Assert(errors.Is(err, os.ErrNotExist), qt.IsTrue, qt.Commentf("got error: %s", err))
 
 	// A kernel bug was fixed in 97c753e62e6c where EINVAL was returned instead
 	// of ENOENT, but only for kretprobes.
 	args.Ret = true
-	_, err = tracefs.CreateTraceFSProbeEvent(tracefs.KprobeType, args)
+	_, err = tracefs.NewEvent(tracefs.KprobeType, args)
 	if !(errors.Is(err, os.ErrNotExist) || errors.Is(err, unix.EINVAL)) {
 		t.Fatal(err)
 	}

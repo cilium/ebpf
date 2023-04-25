@@ -66,8 +66,6 @@ type perfEvent struct {
 	group string
 	name  string
 
-	// PMU event ID read from sysfs. Valid IDs are non-zero.
-	pmuID uint64
 	// Trace event backing this perfEvent. May be nil.
 	tracefsEvent *tracefs.Event
 

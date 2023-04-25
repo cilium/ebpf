@@ -282,54 +282,6 @@ func TestUprobeTraceFS(t *testing.T) {
 	c.Assert(u3.group, qt.Matches, `customgroup_[a-f0-9]{16}`)
 }
 
-// Test u(ret)probe creation writing directly to <tracefs>/uprobe_events.
-func TestUprobeCreateTraceFS(t *testing.T) {
-	c := qt.New(t)
-
-	// Fetch the offset from the /bin/bash Executable already defined.
-	off, err := bashEx.address(bashSym, &UprobeOptions{})
-	c.Assert(err, qt.IsNil)
-
-	pg, _ := tracefs.RandomGroup("ebpftest")
-	rg, _ := tracefs.RandomGroup("ebpftest")
-
-	// Prepare probe args.
-	args := tracefs.ProbeArgs{
-		Type:   tracefs.Uprobe,
-		Group:  pg,
-		Symbol: bashSym,
-		Path:   bashEx.path,
-		Offset: off,
-	}
-
-	// Create a uprobe.
-	up, err := tracefs.NewEvent(args)
-	c.Assert(err, qt.IsNil)
-
-	// Attempt to create an identical uprobe using tracefs,
-	// expect it to fail with os.ErrExist.
-	_, err = tracefs.NewEvent(args)
-	c.Assert(err, qt.ErrorIs, os.ErrExist,
-		qt.Commentf("expected consecutive uprobe creation to contain os.ErrExist, got: %v", err))
-
-	// Expect a successful close of the uprobe.
-	c.Assert(up.Close(), qt.IsNil)
-
-	args.Group = rg
-	args.Ret = true
-
-	// Same test for a uretprobe.
-	urp, err := tracefs.NewEvent(args)
-	c.Assert(err, qt.IsNil)
-
-	_, err = tracefs.NewEvent(args)
-	c.Assert(err, qt.ErrorIs, os.ErrExist,
-		qt.Commentf("expected consecutive uretprobe creation to contain os.ErrExist, got: %v", err))
-
-	// Expect a successful close of the uretprobe.
-	c.Assert(urp.Close(), qt.IsNil)
-}
-
 func TestUprobeProgramCall(t *testing.T) {
 	tests := []struct {
 		name string

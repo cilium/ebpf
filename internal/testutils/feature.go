@@ -3,9 +3,14 @@ package testutils
 import (
 	"errors"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/cilium/ebpf/internal"
+)
+
+const (
+	ignoreKernelVersionEnvVar = "EBPF_TEST_IGNORE_KERNEL_VERSION"
 )
 
 func CheckFeatureTest(t *testing.T, fn func() error) {
@@ -19,7 +24,11 @@ func checkFeatureTestError(t *testing.T, err error) {
 
 	var ufe *internal.UnsupportedFeatureError
 	if errors.As(err, &ufe) {
-		checkKernelVersion(t, ufe)
+		if ignoreKernelVersionCheck(t) {
+			t.Skip(ufe.Error())
+		} else {
+			checkKernelVersion(t, ufe)
+		}
 	} else {
 		t.Error("Feature test failed:", err)
 	}
@@ -108,4 +117,16 @@ func kernelVersion(tb testing.TB) internal.Version {
 		tb.Fatal(err)
 	}
 	return v
+}
+
+func ignoreKernelVersionCheck(tb testing.TB) bool {
+	if tNames := os.Getenv(ignoreKernelVersionEnvVar); tNames != "" {
+		ignored := strings.Split(os.Getenv(ignoreKernelVersionEnvVar), ",")
+		for _, n := range ignored {
+			if n == tb.Name() {
+				return true
+			}
+		}
+	}
+	return false
 }

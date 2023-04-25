@@ -47,7 +47,7 @@ func main() {
 		},
 	}
 
-	rand.Seed(time.Now().UnixNano())
+	r := rand.New(rand.NewSource(time.Now().UnixNano()))
 
 	// For each entry we want to create in the outer map...
 	for i := uint32(0); i < outerMapSpec.MaxEntries; i++ {
@@ -55,7 +55,7 @@ func main() {
 		innerMapSpec := outerMapSpec.InnerMap.Copy()
 
 		// Randomly generate inner map length
-		innerMapSpec.MaxEntries = uint32(rand.Intn(50) + 1) // Can't be zero.
+		innerMapSpec.MaxEntries = uint32(r.Intn(50) + 1) // Can't be zero.
 
 		// populate the inner map contents
 		innerMapSpec.Contents = make([]ebpf.MapKV, innerMapSpec.MaxEntries)

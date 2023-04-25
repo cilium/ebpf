@@ -7,19 +7,15 @@ import (
 	"time"
 )
 
-type lockedCustomSource struct {
-	lk sync.Mutex
-	s  rand.Source
+var randSeed struct {
+	value int64
+	once  sync.Once
 }
 
-func Seed() {
-	src := lockedCustomSource{
-		lk: sync.Mutex{},
-		s:  rand.NewSource(time.Now().UnixMicro()),
-	}
-
-	src.lk.Lock()
-	src.s.Seed(time.Now().UnixMicro())
-	src.lk.Unlock()
-	fmt.Println("Seed is", src.s)
+func Seed() rand.Source {
+	randSeed.once.Do(func() {
+		randSeed.value = time.Now().UnixMicro()
+		fmt.Println(fmt.Sprintf("Seed is %d", randSeed.value))
+	})
+	return rand.NewSource(randSeed.value)
 }

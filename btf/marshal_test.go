@@ -40,7 +40,7 @@ func TestRoundtripVMlinux(t *testing.T) {
 
 	// Randomize the order to force different permutations of walking the type
 	// graph. Keep Void at index 0.
-	rand.Shuffle(len(types[1:]), func(i, j int) {
+	rand.New(testutils.Seed()).Shuffle(len(types[1:]), func(i, j int) {
 		types[i+1], types[j+1] = types[j+1], types[i+1]
 	})
 

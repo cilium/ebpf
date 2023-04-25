@@ -2,17 +2,14 @@ package btf
 
 import (
 	"fmt"
-	"math/rand"
 	"testing"
-	"time"
 
+	"github.com/cilium/ebpf/internal/testutils"
 	qt "github.com/frankban/quicktest"
 )
 
 func init() {
-	seed := time.Now().UnixMicro()
-	fmt.Println("Seed is", seed)
-	rand.Seed(seed)
+	testutils.Seed()
 }
 
 func TestPostorderTraversal(t *testing.T) {

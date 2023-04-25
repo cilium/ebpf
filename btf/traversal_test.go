@@ -4,13 +4,8 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/cilium/ebpf/internal/testutils"
 	qt "github.com/frankban/quicktest"
 )
-
-func init() {
-	testutils.Seed()
-}
 
 func TestPostorderTraversal(t *testing.T) {
 	ptr := newCyclicalType(2).(*Pointer)

@@ -24,8 +24,8 @@ func checkFeatureTestError(t *testing.T, err error) {
 
 	var ufe *internal.UnsupportedFeatureError
 	if errors.As(err, &ufe) {
-		if ignoreKernelVersionCheck(t) {
-			t.Skip(ufe.Error())
+		if ignoreKernelVersionCheck(t.Name()) {
+			t.Skipf("Ignoring error due to %s: %s", ignoreKernelVersionEnvVar, ufe.Error())
 		} else {
 			checkKernelVersion(t, ufe)
 		}
@@ -119,13 +119,20 @@ func kernelVersion(tb testing.TB) internal.Version {
 	return v
 }
 
-func ignoreKernelVersionCheck(tb testing.TB) bool {
-	if tNames := os.Getenv(ignoreKernelVersionEnvVar); tNames != "" {
-		ignored := strings.Split(os.Getenv(ignoreKernelVersionEnvVar), ",")
-		for _, n := range ignored {
-			if n == tb.Name() {
-				return true
-			}
+// ignoreKernelVersionCheck checks if test name should be ignored for kernel version check by checking against environment var EBPF_TEST_IGNORE_KERNEL_VERSION.
+// EBPF_TEST_IGNORE_KERNEL_VERSION is a comma (,) separated list of test names for which kernel version check should be ignored.
+//
+// eg: EBPF_TEST_IGNORE_KERNEL_VERSION=TestABC,TestXYZ
+func ignoreKernelVersionCheck(tName string) bool {
+	tNames := os.Getenv(ignoreKernelVersionEnvVar)
+	if tNames == "" {
+		return false
+	}
+
+	ignored := strings.Split(tNames, ",")
+	for _, n := range ignored {
+		if strings.TrimSpace(n) == tName {
+			return true
 		}
 	}
 	return false

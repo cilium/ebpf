@@ -57,11 +57,10 @@ func Tracepoint(group, name string, prog *ebpf.Program, opts *TracepointOptions)
 	}
 
 	pe := &perfEvent{
-		cookie: cookie,
-		fd:     fd,
+		fd: fd,
 	}
 
-	lnk, err := attachPerfEvent(pe, prog)
+	lnk, err := attachPerfEvent(pe, prog, cookie)
 	if err != nil {
 		pe.Close()
 		return nil, err

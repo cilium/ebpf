@@ -57,7 +57,6 @@ func Tracepoint(group, name string, prog *ebpf.Program, opts *TracepointOptions)
 	}
 
 	pe := &perfEvent{
-		typ:    tracepointEvent,
 		cookie: cookie,
 		fd:     fd,
 	}

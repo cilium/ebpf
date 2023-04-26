@@ -45,23 +45,10 @@ const (
 	perfAllThreads = -1
 )
 
-type perfEventType uint8
-
-const (
-	tracepointEvent perfEventType = iota
-	kprobeEvent
-	kretprobeEvent
-	uprobeEvent
-	uretprobeEvent
-)
-
 // A perfEvent represents a perf event kernel object. Exactly one eBPF program
 // can be attached to it. It is created based on a tracefs trace event or a
 // Performance Monitoring Unit (PMU).
 type perfEvent struct {
-	// The event type determines the types of programs that can be attached.
-	typ perfEventType
-
 	// Trace event backing this perfEvent. May be nil.
 	tracefsEvent *tracefs.Event
 
@@ -169,19 +156,6 @@ func attachPerfEvent(pe *perfEvent, prog *ebpf.Program) (Link, error) {
 	}
 	if prog.FD() < 0 {
 		return nil, fmt.Errorf("invalid program: %w", sys.ErrClosedFd)
-	}
-
-	switch pe.typ {
-	case kprobeEvent, kretprobeEvent, uprobeEvent, uretprobeEvent:
-		if t := prog.Type(); t != ebpf.Kprobe {
-			return nil, fmt.Errorf("invalid program type (expected %s): %s", ebpf.Kprobe, t)
-		}
-	case tracepointEvent:
-		if t := prog.Type(); t != ebpf.TracePoint {
-			return nil, fmt.Errorf("invalid program type (expected %s): %s", ebpf.TracePoint, t)
-		}
-	default:
-		return nil, fmt.Errorf("unknown perf event type: %d", pe.typ)
 	}
 
 	if err := haveBPFLinkPerfEvent(); err == nil {

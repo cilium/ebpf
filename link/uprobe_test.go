@@ -188,15 +188,11 @@ func TestUprobeCreatePMU(t *testing.T) {
 	c.Assert(err, qt.IsNil)
 	defer pu.Close()
 
-	c.Assert(pu.typ, qt.Equals, uprobeEvent)
-
 	// uretprobe PMU
 	args.Ret = true
 	pr, err := pmuProbe(args)
 	c.Assert(err, qt.IsNil)
 	defer pr.Close()
-
-	c.Assert(pr.typ, qt.Equals, uretprobeEvent)
 }
 
 // Test fallback behaviour on kernels without perf_uprobe PMU available.
@@ -247,13 +243,11 @@ func TestUprobeTraceFS(t *testing.T) {
 	up, err := tracefsProbe(args)
 	c.Assert(err, qt.IsNil)
 	c.Assert(up.Close(), qt.IsNil)
-	c.Assert(up.typ, qt.Equals, uprobeEvent)
 
 	args.Ret = true
 	up, err = tracefsProbe(args)
 	c.Assert(err, qt.IsNil)
 	c.Assert(up.Close(), qt.IsNil)
-	c.Assert(up.typ, qt.Equals, uretprobeEvent)
 
 	// Create two identical trace events, ensure their IDs differ.
 	args.Ret = false

@@ -39,19 +39,6 @@ type KprobeOptions struct {
 	TraceFSPrefix string
 }
 
-func perfEventTypeFromProbeType(pt tracefs.ProbeType, ret bool) perfEventType {
-	if pt == tracefs.Kprobe {
-		if ret {
-			return kretprobeEvent
-		}
-		return kprobeEvent
-	}
-	if ret {
-		return uretprobeEvent
-	}
-	return uprobeEvent
-}
-
 // Kprobe attaches the given eBPF program to a perf event that fires when the
 // given kernel symbol starts executing. See /proc/kallsyms for available
 // symbols. For example, printk():
@@ -319,7 +306,6 @@ func pmuProbe(args tracefs.ProbeArgs) (*perfEvent, error) {
 
 	// Kernel has perf_[k,u]probe PMU available, initialize perf event.
 	return &perfEvent{
-		typ:    perfEventTypeFromProbeType(args.Type, args.Ret),
 		cookie: args.Cookie,
 		fd:     fd,
 	}, nil
@@ -364,7 +350,6 @@ func tracefsProbe(args tracefs.ProbeArgs) (*perfEvent, error) {
 	}
 
 	return &perfEvent{
-		typ:          perfEventTypeFromProbeType(args.Type, args.Ret),
 		tracefsEvent: evt,
 		cookie:       args.Cookie,
 		fd:           fd,

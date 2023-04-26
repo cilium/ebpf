@@ -56,7 +56,17 @@ type perfEvent struct {
 	fd *sys.FD
 }
 
+func newPerfEvent(fd *sys.FD, event *tracefs.Event) *perfEvent {
+	pe := &perfEvent{event, fd}
+	// Both event and fd have their own finalizer, but we want to
+	// guarantee that they are closed in a certain order.
+	runtime.SetFinalizer(pe, (*perfEvent).Close)
+	return pe
+}
+
 func (pe *perfEvent) Close() error {
+	runtime.SetFinalizer(pe, nil)
+
 	if err := pe.fd.Close(); err != nil {
 		return fmt.Errorf("closing perf event fd: %w", err)
 	}
@@ -178,11 +188,7 @@ func attachPerfEventIoctl(pe *perfEvent, prog *ebpf.Program) (*perfEventIoctl, e
 		return nil, fmt.Errorf("enable perf event: %s", err)
 	}
 
-	pi := &perfEventIoctl{pe}
-
-	// Close the perf event when its reference is lost to avoid leaking system resources.
-	runtime.SetFinalizer(pi, (*perfEventIoctl).Close)
-	return pi, nil
+	return &perfEventIoctl{pe}, nil
 }
 
 // Use the bpf api to attach the perf event (BPF_LINK_TYPE_PERF_EVENT, 5.15+).
@@ -199,11 +205,7 @@ func attachPerfEventLink(pe *perfEvent, prog *ebpf.Program, cookie uint64) (*per
 		return nil, fmt.Errorf("cannot create bpf perf link: %v", err)
 	}
 
-	pl := &perfEventLink{RawLink{fd: fd}, pe}
-
-	// Close the perf event when its reference is lost to avoid leaking system resources.
-	runtime.SetFinalizer(pl, (*perfEventLink).Close)
-	return pl, nil
+	return &perfEventLink{RawLink{fd: fd}, pe}, nil
 }
 
 // unsafeStringPtr returns an unsafe.Pointer to a NUL-terminated copy of str.

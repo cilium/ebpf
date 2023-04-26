@@ -20,19 +20,14 @@ var (
 	ErrInvalidMaxActive = errors.New("can only set maxactive on kretprobes")
 )
 
+//go:generate stringer -type=ProbeType -linecomment
+
 type ProbeType uint8
 
 const (
-	Kprobe ProbeType = iota
-	Uprobe
+	Kprobe ProbeType = iota // kprobe
+	Uprobe                  // uprobe
 )
-
-func (pt ProbeType) String() string {
-	if pt == Kprobe {
-		return "kprobe"
-	}
-	return "uprobe"
-}
 
 func (pt ProbeType) eventsFile() (*os.File, error) {
 	path, err := sanitizeTracefsPath(fmt.Sprintf("%s_events", pt.String()))
@@ -345,6 +340,11 @@ func removeEvent(typ ProbeType, pe string) error {
 // ID returns the tracefs ID associated with the event.
 func (evt *Event) ID() uint64 {
 	return evt.id
+}
+
+// Group returns the tracefs group used by the event.
+func (evt *Event) Group() string {
+	return evt.group
 }
 
 // KprobeToken creates the SYM[+offs] token for the tracefs api.

@@ -76,6 +76,13 @@ type UprobeOptions struct {
 	TraceFSPrefix string
 }
 
+func (uo *UprobeOptions) cookie() uint64 {
+	if uo == nil {
+		return 0
+	}
+	return uo.Cookie
+}
+
 // To open a new Executable, use:
 //
 //	OpenExecutable("/bin/bash")
@@ -218,7 +225,7 @@ func (ex *Executable) Uprobe(symbol string, prog *ebpf.Program, opts *UprobeOpti
 		return nil, err
 	}
 
-	lnk, err := attachPerfEvent(u, prog)
+	lnk, err := attachPerfEvent(u, prog, opts.cookie())
 	if err != nil {
 		u.Close()
 		return nil, err
@@ -252,7 +259,7 @@ func (ex *Executable) Uretprobe(symbol string, prog *ebpf.Program, opts *UprobeO
 		return nil, err
 	}
 
-	lnk, err := attachPerfEvent(u, prog)
+	lnk, err := attachPerfEvent(u, prog, opts.cookie())
 	if err != nil {
 		u.Close()
 		return nil, err

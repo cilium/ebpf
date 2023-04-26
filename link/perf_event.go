@@ -45,38 +45,28 @@ const (
 	perfAllThreads = -1
 )
 
-type perfEventType uint8
-
-const (
-	tracepointEvent perfEventType = iota
-	kprobeEvent
-	kretprobeEvent
-	uprobeEvent
-	uretprobeEvent
-)
-
 // A perfEvent represents a perf event kernel object. Exactly one eBPF program
 // can be attached to it. It is created based on a tracefs trace event or a
 // Performance Monitoring Unit (PMU).
 type perfEvent struct {
-	// The event type determines the types of programs that can be attached.
-	typ perfEventType
-
-	// Group and name of the tracepoint/kprobe/uprobe.
-	group string
-	name  string
-
 	// Trace event backing this perfEvent. May be nil.
 	tracefsEvent *tracefs.Event
-
-	// User provided arbitrary value.
-	cookie uint64
 
 	// This is the perf event FD.
 	fd *sys.FD
 }
 
+func newPerfEvent(fd *sys.FD, event *tracefs.Event) *perfEvent {
+	pe := &perfEvent{event, fd}
+	// Both event and fd have their own finalizer, but we want to
+	// guarantee that they are closed in a certain order.
+	runtime.SetFinalizer(pe, (*perfEvent).Close)
+	return pe
+}
+
 func (pe *perfEvent) Close() error {
+	runtime.SetFinalizer(pe, nil)
+
 	if err := pe.fd.Close(); err != nil {
 		return fmt.Errorf("closing perf event fd: %w", err)
 	}
@@ -167,7 +157,7 @@ func (pi *perfEventIoctl) Info() (*Info, error) {
 // attach the given eBPF prog to the perf event stored in pe.
 // pe must contain a valid perf event fd.
 // prog's type must match the program type stored in pe.
-func attachPerfEvent(pe *perfEvent, prog *ebpf.Program) (Link, error) {
+func attachPerfEvent(pe *perfEvent, prog *ebpf.Program, cookie uint64) (Link, error) {
 	if prog == nil {
 		return nil, errors.New("cannot attach a nil program")
 	}
@@ -175,30 +165,18 @@ func attachPerfEvent(pe *perfEvent, prog *ebpf.Program) (Link, error) {
 		return nil, fmt.Errorf("invalid program: %w", sys.ErrClosedFd)
 	}
 
-	switch pe.typ {
-	case kprobeEvent, kretprobeEvent, uprobeEvent, uretprobeEvent:
-		if t := prog.Type(); t != ebpf.Kprobe {
-			return nil, fmt.Errorf("invalid program type (expected %s): %s", ebpf.Kprobe, t)
-		}
-	case tracepointEvent:
-		if t := prog.Type(); t != ebpf.TracePoint {
-			return nil, fmt.Errorf("invalid program type (expected %s): %s", ebpf.TracePoint, t)
-		}
-	default:
-		return nil, fmt.Errorf("unknown perf event type: %d", pe.typ)
+	if err := haveBPFLinkPerfEvent(); err == nil {
+		return attachPerfEventLink(pe, prog, cookie)
 	}
 
-	if err := haveBPFLinkPerfEvent(); err == nil {
-		return attachPerfEventLink(pe, prog)
+	if cookie != 0 {
+		return nil, fmt.Errorf("cookies are not supported: %w", ErrNotSupported)
 	}
+
 	return attachPerfEventIoctl(pe, prog)
 }
 
 func attachPerfEventIoctl(pe *perfEvent, prog *ebpf.Program) (*perfEventIoctl, error) {
-	if pe.cookie != 0 {
-		return nil, fmt.Errorf("cookies are not supported: %w", ErrNotSupported)
-	}
-
 	// Assign the eBPF program to the perf event.
 	err := unix.IoctlSetInt(pe.fd.Int(), unix.PERF_EVENT_IOC_SET_BPF, prog.FD())
 	if err != nil {
@@ -210,32 +188,24 @@ func attachPerfEventIoctl(pe *perfEvent, prog *ebpf.Program) (*perfEventIoctl, e
 		return nil, fmt.Errorf("enable perf event: %s", err)
 	}
 
-	pi := &perfEventIoctl{pe}
-
-	// Close the perf event when its reference is lost to avoid leaking system resources.
-	runtime.SetFinalizer(pi, (*perfEventIoctl).Close)
-	return pi, nil
+	return &perfEventIoctl{pe}, nil
 }
 
 // Use the bpf api to attach the perf event (BPF_LINK_TYPE_PERF_EVENT, 5.15+).
 //
 // https://github.com/torvalds/linux/commit/b89fbfbb854c9afc3047e8273cc3a694650b802e
-func attachPerfEventLink(pe *perfEvent, prog *ebpf.Program) (*perfEventLink, error) {
+func attachPerfEventLink(pe *perfEvent, prog *ebpf.Program, cookie uint64) (*perfEventLink, error) {
 	fd, err := sys.LinkCreatePerfEvent(&sys.LinkCreatePerfEventAttr{
 		ProgFd:     uint32(prog.FD()),
 		TargetFd:   pe.fd.Uint(),
 		AttachType: sys.BPF_PERF_EVENT,
-		BpfCookie:  pe.cookie,
+		BpfCookie:  cookie,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("cannot create bpf perf link: %v", err)
 	}
 
-	pl := &perfEventLink{RawLink{fd: fd}, pe}
-
-	// Close the perf event when its reference is lost to avoid leaking system resources.
-	runtime.SetFinalizer(pl, (*perfEventLink).Close)
-	return pl, nil
+	return &perfEventLink{RawLink{fd: fd}, pe}, nil
 }
 
 // unsafeStringPtr returns an unsafe.Pointer to a NUL-terminated copy of str.

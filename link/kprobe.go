@@ -39,17 +39,11 @@ type KprobeOptions struct {
 	TraceFSPrefix string
 }
 
-func perfEventTypeFromProbeType(pt tracefs.ProbeType, ret bool) perfEventType {
-	if pt == tracefs.Kprobe {
-		if ret {
-			return kretprobeEvent
-		}
-		return kprobeEvent
+func (ko *KprobeOptions) cookie() uint64 {
+	if ko == nil {
+		return 0
 	}
-	if ret {
-		return uretprobeEvent
-	}
-	return uprobeEvent
+	return ko.Cookie
 }
 
 // Kprobe attaches the given eBPF program to a perf event that fires when the
@@ -71,7 +65,7 @@ func Kprobe(symbol string, prog *ebpf.Program, opts *KprobeOptions) (Link, error
 		return nil, err
 	}
 
-	lnk, err := attachPerfEvent(k, prog)
+	lnk, err := attachPerfEvent(k, prog, opts.cookie())
 	if err != nil {
 		k.Close()
 		return nil, err
@@ -102,7 +96,7 @@ func Kretprobe(symbol string, prog *ebpf.Program, opts *KprobeOptions) (Link, er
 		return nil, err
 	}
 
-	lnk, err := attachPerfEvent(k, prog)
+	lnk, err := attachPerfEvent(k, prog, opts.cookie())
 	if err != nil {
 		k.Close()
 		return nil, err
@@ -171,8 +165,8 @@ func kprobe(symbol string, prog *ebpf.Program, opts *KprobeOptions, ret bool) (*
 	// Use kprobe PMU if the kernel has it available.
 	tp, err := pmuProbe(args)
 	if errors.Is(err, os.ErrNotExist) || errors.Is(err, unix.EINVAL) {
-		if prefixedSymbol := internal.PlatformPrefix(symbol); prefixedSymbol != "" {
-			args.Symbol = prefixedSymbol
+		if prefix := internal.PlatformPrefix(); prefix != "" {
+			args.Symbol = prefix + symbol
 			tp, err = pmuProbe(args)
 		}
 	}
@@ -187,8 +181,8 @@ func kprobe(symbol string, prog *ebpf.Program, opts *KprobeOptions, ret bool) (*
 	args.Symbol = symbol
 	tp, err = tracefsProbe(args)
 	if errors.Is(err, os.ErrNotExist) || errors.Is(err, unix.EINVAL) {
-		if prefixedSymbol := internal.PlatformPrefix(symbol); prefixedSymbol != "" {
-			args.Symbol = prefixedSymbol
+		if prefix := internal.PlatformPrefix(); prefix != "" {
+			args.Symbol = prefix + symbol
 			tp, err = tracefsProbe(args)
 		}
 	}
@@ -318,12 +312,7 @@ func pmuProbe(args tracefs.ProbeArgs) (*perfEvent, error) {
 	}
 
 	// Kernel has perf_[k,u]probe PMU available, initialize perf event.
-	return &perfEvent{
-		typ:    perfEventTypeFromProbeType(args.Type, args.Ret),
-		name:   args.Symbol,
-		cookie: args.Cookie,
-		fd:     fd,
-	}, nil
+	return newPerfEvent(fd, nil), nil
 }
 
 // tracefsProbe creates a trace event by writing an entry to <tracefs>/[k,u]probe_events.
@@ -364,12 +353,5 @@ func tracefsProbe(args tracefs.ProbeArgs) (*perfEvent, error) {
 		return nil, err
 	}
 
-	return &perfEvent{
-		typ:          perfEventTypeFromProbeType(args.Type, args.Ret),
-		group:        group,
-		name:         args.Symbol,
-		tracefsEvent: evt,
-		cookie:       args.Cookie,
-		fd:           fd,
-	}, nil
+	return newPerfEvent(fd, evt), nil
 }

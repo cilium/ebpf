@@ -758,19 +758,6 @@ func TestProgramAttachToKernel(t *testing.T) {
 	// See https://github.com/torvalds/linux/commit/290248a5b7d829871b3ea3c62578613a580a1744
 	testutils.SkipOnOldKernel(t, "5.5", "attach_btf_id")
 
-	haveTestmod := false
-	if !testutils.IsKernelLessThan(t, "5.11") {
-		// See https://github.com/torvalds/linux/commit/290248a5b7d829871b3ea3c62578613a580a1744
-		testmod, err := btf.FindHandle(func(info *btf.HandleInfo) bool {
-			return info.IsModule() && info.Name == "bpf_testmod"
-		})
-		if err != nil && !errors.Is(err, btf.ErrNotFound) {
-			t.Fatal(err)
-		}
-		haveTestmod = testmod != nil
-		testmod.Close()
-	}
-
 	tests := []struct {
 		attachTo    string
 		programType ProgramType
@@ -826,7 +813,7 @@ func TestProgramAttachToKernel(t *testing.T) {
 	for _, test := range tests {
 		name := fmt.Sprintf("%s:%s", test.attachType, test.attachTo)
 		t.Run(name, func(t *testing.T) {
-			if strings.HasPrefix(test.attachTo, "bpf_testmod_") && !haveTestmod {
+			if strings.HasPrefix(test.attachTo, "bpf_testmod_") && !haveTestmod(t, "5.11") {
 				t.Skip("bpf_testmod not loaded")
 			}
 

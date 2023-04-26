@@ -1054,7 +1054,7 @@ func resolveBTFValuesContents(es *elfSection, vs *btf.VarSecinfo, member btf.Mem
 		case elf.STT_OBJECT:
 			contents = append(contents, MapKV{uint32(k), r.Name})
 		default:
-			return nil, fmt.Errorf("unknown relocation type %v", t)
+			return nil, fmt.Errorf("unknown relocation %s type %v", r.Name, t)
 		}
 	}
 

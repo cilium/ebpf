@@ -20,19 +20,14 @@ var (
 	ErrInvalidMaxActive = errors.New("can only set maxactive on kretprobes")
 )
 
+//go:generate stringer -type=ProbeType -linecomment
+
 type ProbeType uint8
 
 const (
-	Kprobe ProbeType = iota
-	Uprobe
+	Kprobe ProbeType = iota // kprobe
+	Uprobe                  // uprobe
 )
-
-func (pt ProbeType) String() string {
-	if pt == Kprobe {
-		return "kprobe"
-	}
-	return "uprobe"
-}
 
 func (pt ProbeType) eventsFile() (*os.File, error) {
 	path, err := sanitizeTracefsPath(fmt.Sprintf("%s_events", pt.String()))

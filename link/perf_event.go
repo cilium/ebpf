@@ -52,9 +52,6 @@ type perfEvent struct {
 	// Trace event backing this perfEvent. May be nil.
 	tracefsEvent *tracefs.Event
 
-	// User provided arbitrary value.
-	cookie uint64
-
 	// This is the perf event FD.
 	fd *sys.FD
 }
@@ -150,7 +147,7 @@ func (pi *perfEventIoctl) Info() (*Info, error) {
 // attach the given eBPF prog to the perf event stored in pe.
 // pe must contain a valid perf event fd.
 // prog's type must match the program type stored in pe.
-func attachPerfEvent(pe *perfEvent, prog *ebpf.Program) (Link, error) {
+func attachPerfEvent(pe *perfEvent, prog *ebpf.Program, cookie uint64) (Link, error) {
 	if prog == nil {
 		return nil, errors.New("cannot attach a nil program")
 	}
@@ -159,16 +156,17 @@ func attachPerfEvent(pe *perfEvent, prog *ebpf.Program) (Link, error) {
 	}
 
 	if err := haveBPFLinkPerfEvent(); err == nil {
-		return attachPerfEventLink(pe, prog)
+		return attachPerfEventLink(pe, prog, cookie)
 	}
+
+	if cookie != 0 {
+		return nil, fmt.Errorf("cookies are not supported: %w", ErrNotSupported)
+	}
+
 	return attachPerfEventIoctl(pe, prog)
 }
 
 func attachPerfEventIoctl(pe *perfEvent, prog *ebpf.Program) (*perfEventIoctl, error) {
-	if pe.cookie != 0 {
-		return nil, fmt.Errorf("cookies are not supported: %w", ErrNotSupported)
-	}
-
 	// Assign the eBPF program to the perf event.
 	err := unix.IoctlSetInt(pe.fd.Int(), unix.PERF_EVENT_IOC_SET_BPF, prog.FD())
 	if err != nil {
@@ -190,12 +188,12 @@ func attachPerfEventIoctl(pe *perfEvent, prog *ebpf.Program) (*perfEventIoctl, e
 // Use the bpf api to attach the perf event (BPF_LINK_TYPE_PERF_EVENT, 5.15+).
 //
 // https://github.com/torvalds/linux/commit/b89fbfbb854c9afc3047e8273cc3a694650b802e
-func attachPerfEventLink(pe *perfEvent, prog *ebpf.Program) (*perfEventLink, error) {
+func attachPerfEventLink(pe *perfEvent, prog *ebpf.Program, cookie uint64) (*perfEventLink, error) {
 	fd, err := sys.LinkCreatePerfEvent(&sys.LinkCreatePerfEventAttr{
 		ProgFd:     uint32(prog.FD()),
 		TargetFd:   pe.fd.Uint(),
 		AttachType: sys.BPF_PERF_EVENT,
-		BpfCookie:  pe.cookie,
+		BpfCookie:  cookie,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("cannot create bpf perf link: %v", err)

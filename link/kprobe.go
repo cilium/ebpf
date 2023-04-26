@@ -312,9 +312,7 @@ func pmuProbe(args tracefs.ProbeArgs) (*perfEvent, error) {
 	}
 
 	// Kernel has perf_[k,u]probe PMU available, initialize perf event.
-	return &perfEvent{
-		fd: fd,
-	}, nil
+	return newPerfEvent(fd, nil), nil
 }
 
 // tracefsProbe creates a trace event by writing an entry to <tracefs>/[k,u]probe_events.
@@ -355,8 +353,5 @@ func tracefsProbe(args tracefs.ProbeArgs) (*perfEvent, error) {
 		return nil, err
 	}
 
-	return &perfEvent{
-		tracefsEvent: evt,
-		fd:           fd,
-	}, nil
+	return newPerfEvent(fd, evt), nil
 }

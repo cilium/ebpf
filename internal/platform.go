@@ -1,7 +1,6 @@
 package internal
 
 import (
-	"fmt"
 	"runtime"
 )
 
@@ -10,38 +9,35 @@ import (
 //
 // Based on https://github.com/golang/go/blob/master/src/go/build/syslist.go
 // and https://github.com/libbpf/libbpf/blob/master/src/libbpf.c#L10047
-func PlatformPrefix(symbol string) string {
-	var prefix string
+func PlatformPrefix() string {
 	switch runtime.GOARCH {
 	case "386":
-		prefix = "ia32"
+		return "__ia32_"
 	case "amd64", "amd64p32":
-		prefix = "x64"
+		return "__x64_"
 
 	case "arm", "armbe":
-		prefix = "arm"
+		return "__arm_"
 	case "arm64", "arm64be":
-		prefix = "arm64"
+		return "__arm64_"
 
 	case "mips", "mipsle", "mips64", "mips64le", "mips64p32", "mips64p32le":
-		prefix = "mips"
+		return "__mips_"
 
 	case "s390":
-		prefix = "s390"
+		return "__s390_"
 	case "s390x":
-		prefix = "s390x"
+		return "__s390x_"
 
 	case "riscv", "riscv64":
-		prefix = "riscv"
+		return "__riscv_"
 
 	case "ppc":
-		prefix = "powerpc"
+		return "__powerpc_"
 	case "ppc64", "ppc64le":
-		prefix = "powerpc64"
+		return "__powerpc64_"
 
 	default:
 		return ""
 	}
-
-	return fmt.Sprintf("__%s_%s", prefix, symbol)
 }

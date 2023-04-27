@@ -10,6 +10,7 @@ import (
 	"github.com/cilium/ebpf/asm"
 	"github.com/cilium/ebpf/btf"
 	"github.com/cilium/ebpf/internal"
+	"github.com/cilium/ebpf/internal/kconfig"
 )
 
 // CollectionOptions control loading a collection into the kernel.
@@ -578,17 +579,55 @@ func (cl *collectionLoader) populateMaps() error {
 
 // resolveKconfig resolves all variables declared in .kconfig and populates
 // m.Contents. Does nothing if the given m.Contents is non-empty.
-func resolveKconfig(m *MapSpec) error {
+func resolveKconfig(m *MapSpec, additionalKconfig string) error {
 	ds, ok := m.Value.(*btf.Datasec)
 	if !ok {
 		return errors.New("map value is not a Datasec")
 	}
 
+	kernelRelease, err := internal.KernelRelease()
+	if err != nil {
+		return fmt.Errorf("cannot get kernel release: %w", err)
+	}
+
+	path := fmt.Sprintf("/boot/config-%s", kernelRelease)
+
+	config, err := kconfig.ParseKconfig(path, false)
+	if err != nil {
+		config, err = kconfig.ParseKconfig("/proc/config.gz", true)
+		if err != nil {
+			// If there is no file providing kconfig, we just default to empty one.
+			config = make(map[string]string)
+		}
+	}
+
+	if len(additionalKconfig) > 0 {
+		err := kconfig.PatchKconfig(config, additionalKconfig)
+		if err != nil {
+			return fmt.Errorf("cannot add kconfig patch: %w", err)
+		}
+	}
+
 	data := make([]byte, ds.Size)
 	for _, vsi := range ds.Vars {
 		v := vsi.Type.(*btf.Var)
+		n := v.TypeName()
 
-		switch n := v.TypeName(); n {
+		if strings.HasPrefix(n, "CONFIG_") {
+			value, ok := config[n]
+			if !ok {
+				return fmt.Errorf("config option %q does not exists for this kernel", n)
+			}
+
+			err := kconfig.PutKconfigValue(data[vsi.Offset:], v.Type, value)
+			if err != nil {
+				return fmt.Errorf("problem adding value for %s: %w", n, err)
+			}
+
+			continue
+		}
+
+		switch n {
 		case "LINUX_KERNEL_VERSION":
 			if integer, ok := v.Type.(*btf.Int); !ok || integer.Size != 4 {
 				return fmt.Errorf("variable %s must be a 32 bits integer, got %s", n, v.Type)

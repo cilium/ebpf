@@ -21,7 +21,6 @@ CONTAINER_RUN_ARGS ?= $(if $(filter ${CONTAINER_ENGINE}, podman), --log-driver=n
 IMAGE := $(shell cat ${REPODIR}/testdata/docker/IMAGE)
 VERSION := $(shell cat ${REPODIR}/testdata/docker/VERSION)
 
-
 # clang <8 doesn't tag relocs properly (STT_NOTYPE)
 # clang 9 is the first version emitting BTF
 TARGETS := \

@@ -10,6 +10,7 @@ import (
 	"runtime"
 	"strings"
 	"time"
+	"unsafe"
 
 	"github.com/cilium/ebpf/asm"
 	"github.com/cilium/ebpf/btf"
@@ -266,6 +267,18 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions) (*Program, er
 
 	if err := fixupAndValidate(insns); err != nil {
 		return nil, err
+	}
+
+	handles, err := fixupKfuncs(insns)
+	if err != nil {
+		return nil, fmt.Errorf("fixing up kfuncs: %w", err)
+	}
+
+	if len(handles) > 0 {
+		defer handles.close()
+
+		fdArray := handles.fdArray()
+		attr.FdArray = sys.NewPointer(unsafe.Pointer(&fdArray[0]))
 	}
 
 	buf := bytes.NewBuffer(make([]byte, 0, insns.Size()))
@@ -999,4 +1012,32 @@ func findTargetInProgram(prog *Program, name string, progType ProgramType, attac
 	}
 
 	return spec.TypeID(targetFunc)
+}
+
+// find a kfunc in a kernel module or vmlinux.
+func findKfuncInKernel(kernelSpec *btf.Spec, name string) (*btf.Handle, *btf.Func, btf.TypeID, error) {
+	var fn *btf.Func
+	err := kernelSpec.TypeByName(name, &fn)
+	if errors.Is(err, btf.ErrNotFound) {
+		// couldn't find kfunc in vmlinux, searching modules.
+		module, id, err := findTargetInModule(kernelSpec, name, fn)
+		if errors.Is(err, btf.ErrNotFound) {
+			return nil, nil, 0, fmt.Errorf("find kfunc '%s' in vmlinux or modules: %v: %w", name, err, ErrNotSupported)
+		}
+		if err != nil {
+			return nil, nil, 0, fmt.Errorf("find kfunc '%s' in modules: %v", name, err)
+		}
+
+		return module, fn, id, nil
+	}
+	if err != nil {
+		return nil, nil, 0, fmt.Errorf("find kfunc '%s' in kernel: %v", name, err)
+	}
+
+	id, err := kernelSpec.TypeID(fn)
+	if err != nil {
+		return nil, nil, 0, err
+	}
+
+	return nil, fn, id, nil
 }

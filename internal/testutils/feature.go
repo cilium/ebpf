@@ -3,9 +3,14 @@ package testutils
 import (
 	"errors"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/cilium/ebpf/internal"
+)
+
+const (
+	ignoreKernelVersionEnvVar = "EBPF_TEST_IGNORE_KERNEL_VERSION"
 )
 
 func CheckFeatureTest(t *testing.T, fn func() error) {
@@ -19,7 +24,11 @@ func checkFeatureTestError(t *testing.T, err error) {
 
 	var ufe *internal.UnsupportedFeatureError
 	if errors.As(err, &ufe) {
-		checkKernelVersion(t, ufe)
+		if ignoreKernelVersionCheck(t.Name()) {
+			t.Skipf("Ignoring error due to %s: %s", ignoreKernelVersionEnvVar, ufe.Error())
+		} else {
+			checkKernelVersion(t, ufe)
+		}
 	} else {
 		t.Error("Feature test failed:", err)
 	}
@@ -108,4 +117,23 @@ func kernelVersion(tb testing.TB) internal.Version {
 		tb.Fatal(err)
 	}
 	return v
+}
+
+// ignoreKernelVersionCheck checks if test name should be ignored for kernel version check by checking against environment var EBPF_TEST_IGNORE_KERNEL_VERSION.
+// EBPF_TEST_IGNORE_KERNEL_VERSION is a comma (,) separated list of test names for which kernel version check should be ignored.
+//
+// eg: EBPF_TEST_IGNORE_KERNEL_VERSION=TestABC,TestXYZ
+func ignoreKernelVersionCheck(tName string) bool {
+	tNames := os.Getenv(ignoreKernelVersionEnvVar)
+	if tNames == "" {
+		return false
+	}
+
+	ignored := strings.Split(tNames, ",")
+	for _, n := range ignored {
+		if strings.TrimSpace(n) == tName {
+			return true
+		}
+	}
+	return false
 }

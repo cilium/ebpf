@@ -12,10 +12,10 @@ var randSeed struct {
 	once  sync.Once
 }
 
-func Seed() rand.Source {
+func Rand() *rand.Rand {
 	randSeed.once.Do(func() {
 		randSeed.value = time.Now().UnixMicro()
-		fmt.Printf("Seed is %d", randSeed.value)
+		fmt.Printf("Rand is %d", randSeed.value)
 	})
-	return rand.NewSource(randSeed.value)
+	return rand.New(rand.NewSource(randSeed.value))
 }

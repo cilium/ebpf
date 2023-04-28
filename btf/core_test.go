@@ -2,7 +2,6 @@ package btf
 
 import (
 	"errors"
-	"math/rand"
 	"os"
 	"strings"
 	"testing"
@@ -651,7 +650,7 @@ func TestCORECopyWithoutQualifiers(t *testing.T) {
 		root := &Int{Name: "abc"}
 		v := Type(root)
 		for i := 0; i < maxTypeDepth; i++ {
-			q := qualifiers[rand.New(testutils.Seed()).Intn(len(qualifiers))]
+			q := qualifiers[testutils.Rand().Intn(len(qualifiers))]
 			v = q.fn(v)
 			t.Log(q.name)
 		}

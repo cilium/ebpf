@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/binary"
 	"math"
-	"math/rand"
 	"testing"
 
 	"github.com/cilium/ebpf/internal"
@@ -40,7 +39,7 @@ func TestRoundtripVMlinux(t *testing.T) {
 
 	// Randomize the order to force different permutations of walking the type
 	// graph. Keep Void at index 0.
-	rand.Shuffle(len(types[1:]), func(i, j int) {
+	testutils.Rand().Shuffle(len(types[1:]), func(i, j int) {
 		types[i+1], types[j+1] = types[j+1], types[i+1]
 	})
 

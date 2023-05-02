@@ -267,29 +267,25 @@ fixups:
 			return nil, fmt.Errorf("kfunc call has no kfuncMeta")
 		}
 
-		kfuncHandle, id, err := findKfuncInKernel(kernelSpec, kfm.Name)
+		target := btf.Type((*btf.Func)(nil))
+		spec, module, err := findTargetInKernel(kernelSpec, kfm.Name, &target)
+		if errors.Is(err, btf.ErrNotFound) {
+			return nil, fmt.Errorf("kfunc %q: %w", kfm.Name, ErrNotSupported)
+		}
 		if err != nil {
 			return nil, err
 		}
 
-		// to avoid doing compatibility checks in findKfuncInKernel
-		// we need to retrieve the btf.Type again by its ID.
-		spec := kernelSpec
-		if kfuncHandle != nil {
-			spec, err = kfuncHandle.Spec(kernelSpec)
-			if err != nil {
-				return nil, err
-			}
+		if err := btf.CheckTypeCompatibility(kfm.Type, target.(*btf.Func).Type); err != nil {
+			return nil, &incompatibleKfuncError{kfm.Name, err}
 		}
-		typ, err := spec.TypeByID(id)
+
+		id, err := spec.TypeID(target)
 		if err != nil {
 			return nil, err
 		}
-		if err := btf.CheckTypeCompatibility(kfm.Type, typ.(*btf.Func).Type); err != nil {
-			return nil, err
-		}
 
-		idx, err := fdArray.add(kfuncHandle)
+		idx, err := fdArray.add(module)
 		if err != nil {
 			return nil, err
 		}
@@ -303,6 +299,15 @@ fixups:
 	}
 
 	return fdArray, nil
+}
+
+type incompatibleKfuncError struct {
+	name string
+	err  error
+}
+
+func (ike *incompatibleKfuncError) Error() string {
+	return fmt.Sprintf("kfunc %q: %s", ike.name, ike.err)
 }
 
 // fixupProbeReadKernel replaces calls to bpf_probe_read_{kernel,user}(_str)

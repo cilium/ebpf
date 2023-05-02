@@ -273,11 +273,11 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions) (*Program, er
 	if err != nil {
 		return nil, fmt.Errorf("fixing up kfuncs: %w", err)
 	}
+	defer handles.close()
 
 	if len(handles) > 0 {
 		fdArray := handles.fdArray()
 		attr.FdArray = sys.NewPointer(unsafe.Pointer(&fdArray[0]))
-		defer handles.close()
 	}
 
 	buf := bytes.NewBuffer(make([]byte, 0, insns.Size()))
@@ -300,7 +300,7 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions) (*Program, er
 		attr.AttachBtfObjFd = uint32(spec.AttachTarget.FD())
 		defer runtime.KeepAlive(spec.AttachTarget)
 	} else if spec.AttachTo != "" {
-		module, targetID, err := findTargetInKernel(spec.AttachTo, spec.Type, spec.AttachType)
+		module, targetID, err := findProgramTargetInKernel(spec.AttachTo, spec.Type, spec.AttachType)
 		if err != nil && !errors.Is(err, errUnrecognizedAttachType) {
 			// We ignore errUnrecognizedAttachType since AttachTo may be non-empty
 			// for programs that don't attach anywhere.
@@ -860,7 +860,7 @@ var errUnrecognizedAttachType = errors.New("unrecognized attach type")
 //
 // Returns errUnrecognizedAttachType if the combination of progType and attachType
 // is not recognised.
-func findTargetInKernel(name string, progType ProgramType, attachType AttachType) (*btf.Handle, btf.TypeID, error) {
+func findProgramTargetInKernel(name string, progType ProgramType, attachType AttachType) (*btf.Handle, btf.TypeID, error) {
 	type match struct {
 		p ProgramType
 		a AttachType
@@ -905,16 +905,9 @@ func findTargetInKernel(name string, progType ProgramType, attachType AttachType
 		return nil, 0, fmt.Errorf("load kernel spec: %w", err)
 	}
 
-	err = spec.TypeByName(typeName, &target)
+	spec, module, err := findTargetInKernel(spec, typeName, &target)
 	if errors.Is(err, btf.ErrNotFound) {
-		module, id, err := findTargetInModule(spec, typeName, target)
-		if errors.Is(err, btf.ErrNotFound) {
-			return nil, 0, &internal.UnsupportedFeatureError{Name: featureName}
-		}
-		if err != nil {
-			return nil, 0, fmt.Errorf("find target for %s in modules: %w", featureName, err)
-		}
-		return module, id, nil
+		return nil, 0, &internal.UnsupportedFeatureError{Name: featureName}
 	}
 	// See cilium/ebpf#894. Until we can disambiguate between equally-named kernel
 	// symbols, we should explicitly refuse program loads. They will not reliably
@@ -923,26 +916,49 @@ func findTargetInKernel(name string, progType ProgramType, attachType AttachType
 		return nil, 0, fmt.Errorf("attaching to ambiguous kernel symbol is not supported: %w", err)
 	}
 	if err != nil {
-		return nil, 0, fmt.Errorf("find target for %s in vmlinux: %w", featureName, err)
+		return nil, 0, fmt.Errorf("find target for %s: %w", featureName, err)
 	}
 
 	id, err := spec.TypeID(target)
-	return nil, id, err
+	return module, id, err
 }
 
-// find an attach target type in a kernel module.
+// findTargetInKernel attempts to find a named type in the current kernel.
 //
-// vmlinux must contain the kernel's types and is used to parse kmod BTF.
+// target will point at the found type after a successful call. Searches both
+// vmlinux and any loaded modules.
+//
+// Returns a non-nil handle if the type was found in a module, or btf.ErrNotFound
+// if the type wasn't found at all.
+func findTargetInKernel(kernelSpec *btf.Spec, typeName string, target *btf.Type) (*btf.Spec, *btf.Handle, error) {
+	err := kernelSpec.TypeByName(typeName, target)
+	if errors.Is(err, btf.ErrNotFound) {
+		spec, module, err := findTargetInModule(kernelSpec, typeName, target)
+		if err != nil {
+			return nil, nil, fmt.Errorf("find target in modules: %w", err)
+		}
+		return spec, module, nil
+	}
+	if err != nil {
+		return nil, nil, fmt.Errorf("find target in vmlinux: %w", err)
+	}
+	return kernelSpec, nil, err
+}
+
+// findTargetInModule attempts to find a named type in any loaded module.
+//
+// base must contain the kernel's types and is used to parse kmod BTF. Modules
+// are searched in the order they were loaded.
 //
 // Returns btf.ErrNotFound if the target can't be found in any module.
-func findTargetInModule(base *btf.Spec, typeName string, target btf.Type) (*btf.Handle, btf.TypeID, error) {
+func findTargetInModule(base *btf.Spec, typeName string, target *btf.Type) (*btf.Spec, *btf.Handle, error) {
 	it := new(btf.HandleIterator)
 	defer it.Handle.Close()
 
 	for it.Next() {
 		info, err := it.Handle.Info()
 		if err != nil {
-			return nil, 0, fmt.Errorf("get info for BTF ID %d: %w", it.ID, err)
+			return nil, nil, fmt.Errorf("get info for BTF ID %d: %w", it.ID, err)
 		}
 
 		if !info.IsModule() {
@@ -951,29 +967,24 @@ func findTargetInModule(base *btf.Spec, typeName string, target btf.Type) (*btf.
 
 		spec, err := it.Handle.Spec(base)
 		if err != nil {
-			return nil, 0, fmt.Errorf("parse types for module %s: %w", info.Name, err)
+			return nil, nil, fmt.Errorf("parse types for module %s: %w", info.Name, err)
 		}
 
-		err = spec.TypeByName(typeName, &target)
+		err = spec.TypeByName(typeName, target)
 		if errors.Is(err, btf.ErrNotFound) {
 			continue
 		}
 		if err != nil {
-			return nil, 0, fmt.Errorf("lookup type in module %s: %w", info.Name, err)
+			return nil, nil, fmt.Errorf("lookup type in module %s: %w", info.Name, err)
 		}
 
-		id, err := spec.TypeID(target)
-		if err != nil {
-			return nil, 0, fmt.Errorf("lookup type id in module %s: %w", info.Name, err)
-		}
-
-		return it.Take(), id, nil
+		return spec, it.Take(), nil
 	}
 	if err := it.Err(); err != nil {
-		return nil, 0, fmt.Errorf("iterate modules: %w", err)
+		return nil, nil, fmt.Errorf("iterate modules: %w", err)
 	}
 
-	return nil, 0, btf.ErrNotFound
+	return nil, nil, btf.ErrNotFound
 }
 
 // find an attach target type in a program.
@@ -1011,32 +1022,4 @@ func findTargetInProgram(prog *Program, name string, progType ProgramType, attac
 	}
 
 	return spec.TypeID(targetFunc)
-}
-
-// find a kfunc in a kernel module or vmlinux.
-func findKfuncInKernel(kernelSpec *btf.Spec, name string) (*btf.Handle, btf.TypeID, error) {
-	var fn *btf.Func
-	err := kernelSpec.TypeByName(name, &fn)
-	if errors.Is(err, btf.ErrNotFound) {
-		// couldn't find kfunc in vmlinux, searching modules.
-		module, id, err := findTargetInModule(kernelSpec, name, fn)
-		if errors.Is(err, btf.ErrNotFound) {
-			return nil, 0, fmt.Errorf("find kfunc '%s' in vmlinux or modules: %v: %w", name, err, ErrNotSupported)
-		}
-		if err != nil {
-			return nil, 0, fmt.Errorf("find kfunc '%s' in modules: %v", name, err)
-		}
-
-		return module, id, nil
-	}
-	if err != nil {
-		return nil, 0, fmt.Errorf("find kfunc '%s' in kernel: %v", name, err)
-	}
-
-	id, err := kernelSpec.TypeID(fn)
-	if err != nil {
-		return nil, 0, err
-	}
-
-	return nil, id, nil
 }

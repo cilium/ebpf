@@ -42,6 +42,8 @@ TARGETS := \
 	testdata/fwd_decl \
 	testdata/kconfig \
 	testdata/kfunc \
+	testdata/invalid-kfunc \
+	testdata/kfunc-kmod \
 	btf/testdata/relocs \
 	btf/testdata/relocs_read \
 	btf/testdata/relocs_read_tgt \

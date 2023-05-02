@@ -656,7 +656,7 @@ func TestKconfigSyscallWrapper(t *testing.T) {
 
 func TestKfunc(t *testing.T) {
 	testutils.SkipOnOldKernel(t, "5.18", "bpf_kfunc_call_test_mem_len_pass1")
-	testutils.Files(t, testutils.Glob(t, "testdata/kfunc-*.elf"), func(t *testing.T, file string) {
+	testutils.Files(t, testutils.Glob(t, "testdata/kfunc-e*.elf"), func(t *testing.T, file string) {
 		spec, err := LoadCollectionSpec(file)
 		if err != nil {
 			t.Fatal(err)
@@ -686,7 +686,62 @@ func TestKfunc(t *testing.T) {
 		if ret != 1 {
 			t.Fatalf("Expected kfunc to return value 1, got %d", ret)
 		}
+	})
+}
 
+func TestInvalidKfunc(t *testing.T) {
+	testutils.SkipOnOldKernel(t, "5.18", "bpf_kfunc_call_test_mem_len_pass1")
+
+	file := fmt.Sprintf("testdata/invalid-kfunc-%s.elf", internal.ClangEndian)
+	coll, err := LoadCollection(file)
+	if err == nil {
+		coll.Close()
+		t.Fatal("Expected an error")
+	}
+
+	var ike *incompatibleKfuncError
+	if !errors.As(err, &ike) {
+		t.Fatalf("Expected an error wrapping incompatibleKfuncError, got %T", err)
+	}
+}
+
+func TestKfuncKmod(t *testing.T) {
+	testutils.SkipOnOldKernel(t, "5.18", "Kernel module function calls")
+
+	if !haveTestmod(t) {
+		t.Skip("bpf_testmod not loaded")
+	}
+
+	testutils.Files(t, testutils.Glob(t, "testdata/kfunc-kmod-*.elf"), func(t *testing.T, file string) {
+		spec, err := LoadCollectionSpec(file)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if spec.ByteOrder != internal.NativeEndian {
+			return
+		}
+
+		var obj struct {
+			Main *Program `ebpf:"call_kfunc"`
+		}
+
+		err = spec.LoadAndAssign(&obj, nil)
+		testutils.SkipIfNotSupported(t, err)
+		if err != nil {
+			t.Fatalf("%v+", err)
+		}
+		defer obj.Main.Close()
+
+		ret, _, err := obj.Main.Test(internal.EmptyBPFContext)
+		testutils.SkipIfNotSupported(t, err)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if ret != 1 {
+			t.Fatalf("Expected kfunc to return value 1, got %d", ret)
+		}
 	})
 }
 

@@ -689,6 +689,20 @@ func TestKfunc(t *testing.T) {
 	})
 }
 
+func TestInvalidKfunc(t *testing.T) {
+	file := fmt.Sprintf("testdata/invalid-kfunc-%s.elf", internal.ClangEndian)
+	coll, err := LoadCollection(file)
+	if err == nil {
+		coll.Close()
+		t.Fatal("Expected an error")
+	}
+
+	var ike *incompatibleKfuncError
+	if !errors.As(err, &ike) {
+		t.Fatalf("Expected an error wrapping incompatibleKfuncError, got %T", err)
+	}
+}
+
 func TestKfuncKmod(t *testing.T) {
 	testutils.SkipOnOldKernel(t, "5.18", "Kernel module function calls")
 

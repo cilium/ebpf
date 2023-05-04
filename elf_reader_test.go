@@ -14,11 +14,14 @@ import (
 
 	"github.com/cilium/ebpf/btf"
 	"github.com/cilium/ebpf/internal"
+	"github.com/cilium/ebpf/internal/kconfig"
 	"github.com/cilium/ebpf/internal/testutils"
 	"github.com/cilium/ebpf/internal/unix"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
+
+	qt "github.com/frankban/quicktest"
 )
 
 func TestLoadCollectionSpec(t *testing.T) {
@@ -651,6 +654,77 @@ func TestKconfigSyscallWrapper(t *testing.T) {
 		if ret != expected {
 			t.Fatalf("Expected eBPF to return value %d, got %d", expected, ret)
 		}
+	})
+}
+
+func TestKconfigConfig(t *testing.T) {
+	testutils.Files(t, testutils.Glob(t, "testdata/kconfig_config-*.elf"), func(t *testing.T, file string) {
+		spec, err := LoadCollectionSpec(file)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if spec.ByteOrder != internal.NativeEndian {
+			return
+		}
+
+		config, ok := spec.Maps[".kconfig"]
+		if !ok {
+			t.Fatal("no .kconfig map for this program")
+		}
+		config.AdditionalKconfig = `
+CONFIG_TRISTATE=m
+CONFIG_BOOL=y
+CONFIG_CHAR=100
+CONFIG_USHORT=30000
+CONFIG_INT=123456
+CONFIG_ULONG=0xDEADCAFEC0DE
+CONFIG_STR="abracad"
+`
+
+		var obj struct {
+			Main     *Program `ebpf:"kconfig"`
+			ArrayMap *Map     `ebpf:"array_map"`
+		}
+
+		err = spec.LoadAndAssign(&obj, nil)
+		testutils.SkipIfNotSupported(t, err)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer obj.Main.Close()
+		defer obj.ArrayMap.Close()
+
+		_, _, err = obj.Main.Test(internal.EmptyBPFContext)
+		testutils.SkipIfNotSupported(t, err)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		array := make([]uint64, 7)
+		i := 0
+
+		var value uint64
+		var key uint32
+
+		iter := obj.ArrayMap.Iterate()
+		for iter.Next(&key, &value) {
+			array[i] = value
+			i++
+		}
+
+		expected := []uint64{
+			uint64(kconfig.TriModule),
+			1,
+			100,
+			30000,
+			123456,
+			0xDEADCAFEC0DE,
+			// We need to append the 0 byte.
+			internal.NativeEndian.Uint64(append([]byte("abracad"), 0)),
+		}
+
+		qt.Assert(t, array, qt.DeepEquals, expected)
 	})
 }
 

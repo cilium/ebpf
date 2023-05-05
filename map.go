@@ -78,6 +78,8 @@ type MapSpec struct {
 
 	// The key and value type of this map. May be nil.
 	Key, Value btf.Type
+
+	AdditionalKconfig string
 }
 
 func (ms *MapSpec) String() string {

@@ -31,17 +31,17 @@ func Find() (*bufio.Scanner, error) {
 		if err != nil {
 			return nil, fmt.Errorf("neither %s nor /proc/config.gz provide a kconfig", path)
 		}
-		defer f.Close()
+// 		defer f.Close()
 
 		zr, err := gzip.NewReader(f)
 		if err != nil {
 			return nil, err
 		}
-		defer zr.Close()
+// 		defer zr.Close()
 
 		s = bufio.NewScanner(zr)
 	} else {
-		defer f.Close()
+// 		defer f.Close()
 
 		s = bufio.NewScanner(f)
 	}

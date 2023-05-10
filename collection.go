@@ -626,12 +626,12 @@ func resolveKconfig(m *MapSpec) error {
 			internal.NativeEndian.PutUint32(data[vsi.Offset:], value)
 
 		default: // Catch CONFIG_*.
-			value, ok := config[n]
-			if !ok {
-				return fmt.Errorf("config option %q does not exists for this kernel", n)
+			value, err := kconfig.Lookup(config, n)
+			if err != nil {
+				return fmt.Errorf("config option %q does not exists for this kernel: %w", n, err)
 			}
 
-			err := kconfig.PutValue(data[vsi.Offset:], v.Type, value)
+			err = kconfig.PutValue(data[vsi.Offset:], v.Type, value)
 			if err != nil {
 				return fmt.Errorf("problem adding value for %s: %w", n, err)
 			}

@@ -90,12 +90,24 @@ func processKconfigLine(line string, m map[string]string) error {
 		return fmt.Errorf("line %q has no value", line)
 	}
 
-	_, ok := m[key]
+	// Remove CONFIG_ to keep some bytes.
+	k := strings.TrimPrefix(key, "CONFIG_")
+
+	_, ok := m[k]
 	if !ok {
-		m[key] = value
+		m[k] = value
 	}
 
 	return nil
+}
+
+func Lookup(m map[string]string, key string) (string, error) {
+	val, ok := m[strings.TrimPrefix(key, "CONFIG_")]
+	if !ok {
+		return "", fmt.Errorf("no value for key %q", key)
+	}
+
+	return val, nil
 }
 
 // PutValue translates the value given as parameter depending on the BTF

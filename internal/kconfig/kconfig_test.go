@@ -18,14 +18,14 @@ func TestParse(t *testing.T) {
 	t.Parallel()
 
 	expected := map[string]string{
-		"CONFIG_TRISTATE": "m",
-		"CONFIG_BOOL":     "y",
-		"CONFIG_CHAR":     "100",
-		"CONFIG_USHORT":   "30000",
-		"CONFIG_INT":      "123456",
-		"CONFIG_ULONG":    "0xDEADBEEFC0DE",
-		"CONFIG_STR":      `"abracad"`,
-		"CONFIG_FOO":      `"foo"`,
+		"TRISTATE": "m",
+		"BOOL":     "y",
+		"CHAR":     "100",
+		"USHORT":   "30000",
+		"INT":      "123456",
+		"ULONG":    "0xDEADBEEFC0DE",
+		"STR":      `"abracad"`,
+		"FOO":      `"foo"`,
 	}
 
 	f, err := os.Open("testdata/test.kconfig")
@@ -63,14 +63,14 @@ func TestParseGziped(t *testing.T) {
 	t.Parallel()
 
 	expected := map[string]string{
-		"CONFIG_TRISTATE": "m",
-		"CONFIG_BOOL":     "y",
-		"CONFIG_CHAR":     "100",
-		"CONFIG_USHORT":   "30000",
-		"CONFIG_INT":      "123456",
-		"CONFIG_ULONG":    "0xDEADBEEFC0DE",
-		"CONFIG_STR":      `"abracad"`,
-		"CONFIG_FOO":      `"foo"`,
+		"TRISTATE": "m",
+		"BOOL":     "y",
+		"CHAR":     "100",
+		"USHORT":   "30000",
+		"INT":      "123456",
+		"ULONG":    "0xDEADBEEFC0DE",
+		"STR":      `"abracad"`,
+		"FOO":      `"foo"`,
 	}
 
 	content, err := os.ReadFile("testdata/test.kconfig")
@@ -128,6 +128,25 @@ func TestProcessKconfigBadLine(t *testing.T) {
 
 	err = processKconfigLine("CONFIG_FOO=", m)
 	qt.Assert(t, err, qt.IsNotNil, qt.Commentf("line has no value"))
+}
+
+func TestLookup(t *testing.T) {
+	t.Parallel()
+
+	m := map[string]string{
+		"FOO": "BAR",
+	}
+
+	val, err := Lookup(m, "CONFIG_FOO")
+	qt.Assert(t, err, qt.IsNil)
+	qt.Assert(t, val, qt.Equals, m["FOO"])
+
+	val, err = Lookup(m, "FOO")
+	qt.Assert(t, err, qt.IsNil)
+	qt.Assert(t, val, qt.Equals, m["FOO"])
+
+	_, err = Lookup(m, "QUUX")
+	qt.Assert(t, err, qt.IsNotNil, qt.Commentf("there is no value for key QUUX"))
 }
 
 func TestPutValue(t *testing.T) {

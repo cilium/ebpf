@@ -56,16 +56,16 @@ func Parse(source io.ReaderAt) (map[string]string, error) {
 
 	s := bufio.NewScanner(r)
 	for s.Scan() {
-		err := s.Err()
-		if err != nil {
-			return nil, fmt.Errorf("cannot parse: %w", err)
-		}
 
 		line := s.Text()
 		err = processKconfigLine(line, ret)
 		if err != nil {
 			return nil, fmt.Errorf("cannot parse line: %w", err)
 		}
+	}
+
+	if err := s.Err(); err != nil {
+		return nil, fmt.Errorf("cannot parse: %w", err)
 	}
 
 	if zr != nil {

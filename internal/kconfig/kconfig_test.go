@@ -1,7 +1,6 @@
 package kconfig
 
 import (
-	"bufio"
 	"bytes"
 	"compress/gzip"
 	"encoding/binary"
@@ -34,8 +33,7 @@ func TestParse(t *testing.T) {
 	}
 	defer f.Close()
 
-	scanner := bufio.NewScanner(f)
-	config, err := Parse(scanner)
+	config, err := Parse(f)
 	if err != nil {
 		t.Fatal("Error parsing kconfig: ", err)
 	}
@@ -50,9 +48,8 @@ func BenchmarkParse(b *testing.B) {
 	}
 	defer f.Close()
 
-	scanner := bufio.NewScanner(f)
 	for n := 0; n < b.N; n++ {
-		_, err := Parse(scanner)
+		_, err := Parse(f)
 		if err != nil {
 			b.Fatal(err)
 		}
@@ -85,14 +82,13 @@ func TestParseGziped(t *testing.T) {
 	defer os.Remove(fout.Name())
 
 	zw := gzip.NewWriter(fout)
-	defer zw.Close()
 
 	_, err = zw.Write(content)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	err = zw.Flush()
+	err = zw.Close()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -103,14 +99,7 @@ func TestParseGziped(t *testing.T) {
 	}
 	defer f.Close()
 
-	zr, err := gzip.NewReader(f)
-	if err != nil {
-		t.Fatal("Error reading /tmp/test.kconfig.gz: ", err)
-	}
-	defer zr.Close()
-
-	scanner := bufio.NewScanner(zr)
-	config, err := Parse(scanner)
+	config, err := Parse(f)
 	if err != nil {
 		t.Fatal("Error parsing gziped kconfig: ", err)
 	}

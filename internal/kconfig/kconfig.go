@@ -4,6 +4,8 @@ import (
 	"bufio"
 	"compress/gzip"
 	"fmt"
+	"io"
+	"math"
 	"os"
 	"strconv"
 	"strings"
@@ -16,46 +18,43 @@ import (
 // It first reads from /boot/config- of the current running kernel and tries
 // /proc/config.gz if nothing was found in /boot.
 // If none of the file provide a kconfig, it returns an error.
-func Find() (*bufio.Scanner, error) {
-	var s *bufio.Scanner
-
+func Find() (*os.File, error) {
 	kernelRelease, err := internal.KernelRelease()
 	if err != nil {
 		return nil, fmt.Errorf("cannot get kernel release: %w", err)
 	}
 
-	path := fmt.Sprintf("/boot/config-%s", kernelRelease)
+	path := "/boot/config-" + kernelRelease
 	f, err := os.Open(path)
-	if err != nil {
-		f, err = os.Open("/proc/config.gz")
-		if err != nil {
-			return nil, fmt.Errorf("neither %s nor /proc/config.gz provide a kconfig", path)
-		}
-// 		defer f.Close()
-
-		zr, err := gzip.NewReader(f)
-		if err != nil {
-			return nil, err
-		}
-// 		defer zr.Close()
-
-		s = bufio.NewScanner(zr)
-	} else {
-// 		defer f.Close()
-
-		s = bufio.NewScanner(f)
+	if err == nil {
+		return f, nil
 	}
 
-	return s, nil
+	f, err = os.Open("/proc/config.gz")
+	if err == nil {
+		return f, nil
+	}
+
+	return nil, fmt.Errorf("neither %s nor /proc/config.gz provide a kconfig", path)
 }
 
 // Parse parses the kconfig file for which a reader is given.
 // All the CONFIG_* set will be put in the returned map as key with their
 // corresponding value as map value.
 // If the kconfig file is not valid, error will be returned.
-func Parse(s *bufio.Scanner) (map[string]string, error) {
+func Parse(source io.ReaderAt) (map[string]string, error) {
+	var r io.Reader
+	zr, err := gzip.NewReader(io.NewSectionReader(source, 0, math.MaxInt64))
+	if err != nil {
+		r = io.NewSectionReader(source, 0, math.MaxInt64)
+	} else {
+		// Source is gzip compressed, transparently decompress.
+		r = zr
+	}
+
 	ret := make(map[string]string)
 
+	s := bufio.NewScanner(r)
 	for s.Scan() {
 		err := s.Err()
 		if err != nil {
@@ -67,6 +66,10 @@ func Parse(s *bufio.Scanner) (map[string]string, error) {
 		if err != nil {
 			return nil, fmt.Errorf("cannot parse line: %w", err)
 		}
+	}
+
+	if zr != nil {
+		return ret, zr.Close()
 	}
 
 	return ret, nil

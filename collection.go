@@ -19,6 +19,9 @@ type CollectionOptions struct {
 	Maps     MapOptions
 	Programs ProgramOptions
 
+	// if VerboseLog is true, the verifier log lines won't be omitted
+	VerboseLog bool
+
 	// MapReplacements takes a set of Maps that will be used instead of
 	// creating new ones when loading the CollectionSpec.
 	//
@@ -509,6 +512,9 @@ func (cl *collectionLoader) loadProgram(progName string) (*Program, error) {
 
 		m, err := cl.loadMap(ins.Reference())
 		if err != nil {
+			if cl.opts.VerboseLog {
+				return nil, fmt.Errorf("program %s: %+w", progName, err)
+			}
 			return nil, fmt.Errorf("program %s: %w", progName, err)
 		}
 

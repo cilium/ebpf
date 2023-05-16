@@ -1121,10 +1121,22 @@ func TestGetProgType(t *testing.T) {
 			At: AttachNone,
 			To: "",
 		},
+		"xdp.frags/foo": {
+			Pt: XDP,
+			At: AttachNone,
+			To: "",
+			Fl: unix.BPF_F_XDP_HAS_FRAGS,
+		},
 		"xdp_devmap/foo": {
 			Pt: XDP,
 			At: AttachXDPDevMap,
 			To: "foo",
+		},
+		"xdp.frags_devmap/foo": {
+			Pt: XDP,
+			At: AttachXDPDevMap,
+			To: "foo",
+			Fl: unix.BPF_F_XDP_HAS_FRAGS,
 		},
 		"cgroup_skb/ingress": {
 			Pt: CGroupSKB,

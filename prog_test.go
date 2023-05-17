@@ -973,7 +973,7 @@ func mustSocketFilter(tb testing.TB) *Program {
 }
 
 // Print the full verifier log when loading a program fails.
-func ExampleProgram_verboseVerifierError() {
+func ExampleVerifierError_retrieveFullLog() {
 	_, err := NewProgram(&ProgramSpec{
 		Type: SocketFilter,
 		Instructions: asm.Instructions{
@@ -989,6 +989,40 @@ func ExampleProgram_verboseVerifierError() {
 		// few lines.
 		fmt.Printf("Verifier error: %+v\n", ve)
 	}
+}
+
+// VerifierLog understands a variety of formatting flags.
+func ExampleVerifierError() {
+	err := internal.ErrorWithLog(
+		"catastrophe",
+		syscall.ENOSPC,
+		[]byte("first\nsecond\nthird"),
+		false,
+	)
+
+	fmt.Printf("With %%s: %s\n", err)
+	err.Truncated = true
+	fmt.Printf("With %%v and a truncated log: %v\n", err)
+	fmt.Printf("All log lines: %+v\n", err)
+	fmt.Printf("First line: %+1v\n", err)
+	fmt.Printf("Last two lines: %-2v\n", err)
+
+	// Output: With %s: catastrophe: no space left on device: third (2 line(s) omitted)
+	// With %v and a truncated log: catastrophe: no space left on device: second: third (truncated, 1 line(s) omitted)
+	// All log lines: catastrophe: no space left on device:
+	// 	first
+	// 	second
+	// 	third
+	// 	(truncated)
+	// First line: catastrophe: no space left on device:
+	// 	first
+	// 	(2 line(s) omitted)
+	// 	(truncated)
+	// Last two lines: catastrophe: no space left on device:
+	// 	(1 line(s) omitted)
+	// 	second
+	// 	third
+	// 	(truncated)
 }
 
 // Use NewProgramWithOptions if you'd like to get the verifier output

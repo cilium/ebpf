@@ -170,6 +170,9 @@ type Program struct {
 // NewProgram creates a new Program.
 //
 // See [NewProgramWithOptions] for details.
+//
+// Returns a [VerifierError] containing the full verifier log if the program is
+// rejected by the kernel.
 func NewProgram(spec *ProgramSpec) (*Program, error) {
 	return NewProgramWithOptions(spec, ProgramOptions{})
 }
@@ -179,7 +182,8 @@ func NewProgram(spec *ProgramSpec) (*Program, error) {
 // Loading a program for the first time will perform
 // feature detection by loading small, temporary programs.
 //
-// Returns a [VerifierError] if the program is rejected by the kernel.
+// Returns a [VerifierError] containing the full verifier log if the program is
+// rejected by the kernel.
 func NewProgramWithOptions(spec *ProgramSpec, opts ProgramOptions) (*Program, error) {
 	if spec == nil {
 		return nil, errors.New("can't load a program from a nil spec")

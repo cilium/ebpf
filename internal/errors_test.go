@@ -2,9 +2,7 @@ package internal
 
 import (
 	"errors"
-	"fmt"
 	"os"
-	"syscall"
 	"testing"
 
 	"github.com/cilium/ebpf/internal/unix"
@@ -75,39 +73,6 @@ func TestVerifierErrorSummary(t *testing.T) {
 	// Include symbol that doesn't match context type.
 	invalidCtx := readErrorFromFile(t, "testdata/invalid-ctx-access.log")
 	qt.Assert(t, invalidCtx.Error(), qt.Contains, "func '__x64_sys_recvfrom' arg0 type FWD is not a struct: invalid bpf_context access off=0 size=8")
-}
-
-func ExampleVerifierError() {
-	err := &VerifierError{
-		source:    "catastrophe",
-		Cause:     syscall.ENOSPC,
-		Log:       []string{"first", "second", "third"},
-		Truncated: false,
-	}
-
-	fmt.Printf("With %%s: %s\n", err)
-	err.Truncated = true
-	fmt.Printf("With %%v and a truncated log: %v\n", err)
-	fmt.Printf("All log lines: %+v\n", err)
-	fmt.Printf("First line: %+1v\n", err)
-	fmt.Printf("Last two lines: %-2v\n", err)
-
-	// Output: With %s: catastrophe: no space left on device: third (2 line(s) omitted)
-	// With %v and a truncated log: catastrophe: no space left on device: second: third (truncated, 1 line(s) omitted)
-	// All log lines: catastrophe: no space left on device:
-	// 	first
-	// 	second
-	// 	third
-	// 	(truncated)
-	// First line: catastrophe: no space left on device:
-	// 	first
-	// 	(2 line(s) omitted)
-	// 	(truncated)
-	// Last two lines: catastrophe: no space left on device:
-	// 	(1 line(s) omitted)
-	// 	second
-	// 	third
-	// 	(truncated)
 }
 
 func readErrorFromFile(tb testing.TB, file string) *VerifierError {

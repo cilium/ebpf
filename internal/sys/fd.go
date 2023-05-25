@@ -86,16 +86,15 @@ func (fd *FD) Close() error {
 		return nil
 	}
 
+	fd.Forget()
 	value := int(fd.raw)
 	fd.raw = -1
 
-	fds.Delete(value)
-
-	fd.Forget()
 	return unix.Close(value)
 }
 
 func (fd *FD) Forget() {
+	fds.Delete(int(fd.raw))
 	runtime.SetFinalizer(fd, nil)
 }
 

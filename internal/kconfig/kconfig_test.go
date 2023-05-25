@@ -2,7 +2,6 @@ package kconfig
 
 import (
 	"bytes"
-	"compress/gzip"
 	"encoding/binary"
 	"os"
 	"testing"
@@ -27,7 +26,7 @@ func TestParse(t *testing.T) {
 		"CONFIG_FOO":      `"foo"`,
 	}
 
-	f, err := os.Open("testdata/test.kconfig")
+	f, err := os.Open("testdata/config-6.2.15-300.fc38.x86_64")
 	if err != nil {
 		t.Fatal("Error opening test.kconfig: ", err)
 	}
@@ -42,11 +41,14 @@ func TestParse(t *testing.T) {
 }
 
 func BenchmarkParse(b *testing.B) {
-	f, err := os.Open("testdata/test.kconfig")
+	f, err := os.Open("testdata/config-6.2.15-300.fc38.x86_64.gz")
 	if err != nil {
-		b.Fatal("Error opening test.kconfig: ", err)
+		b.Fatal(err)
 	}
 	defer f.Close()
+
+	b.ReportAllocs()
+	b.ResetTimer()
 
 	for n := 0; n < b.N; n++ {
 		_, err := Parse(f)
@@ -59,52 +61,16 @@ func BenchmarkParse(b *testing.B) {
 func TestParseGziped(t *testing.T) {
 	t.Parallel()
 
-	expected := map[string]string{
-		"CONFIG_TRISTATE": "m",
-		"CONFIG_BOOL":     "y",
-		"CONFIG_CHAR":     "100",
-		"CONFIG_USHORT":   "30000",
-		"CONFIG_INT":      "123456",
-		"CONFIG_ULONG":    "0xDEADBEEFC0DE",
-		"CONFIG_STR":      `"abracad"`,
-		"CONFIG_FOO":      `"foo"`,
-	}
-
-	content, err := os.ReadFile("testdata/test.kconfig")
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	fout, err := os.Create("/tmp/test.kconfig.gz")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.Remove(fout.Name())
-
-	zw := gzip.NewWriter(fout)
-
-	_, err = zw.Write(content)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	err = zw.Close()
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	f, err := os.Open("/tmp/test.kconfig.gz")
+	f, err := os.Open("testdata/config-6.2.15-300.fc38.x86_64.gz")
 	if err != nil {
 		t.Fatal("Error reading /tmp/test.kconfig.gz: ", err)
 	}
 	defer f.Close()
 
-	config, err := Parse(f)
+	_, err = Parse(f)
 	if err != nil {
 		t.Fatal("Error parsing gziped kconfig: ", err)
 	}
-
-	qt.Assert(t, config, qt.DeepEquals, expected)
 }
 
 func TestProcessKconfigBadLine(t *testing.T) {

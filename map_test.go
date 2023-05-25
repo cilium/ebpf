@@ -908,7 +908,7 @@ func TestNewMapInMapFromFD(t *testing.T) {
 	defer nested.Close()
 
 	// Do not copy this, use Clone instead.
-	another, err := NewMapFromFD(nested.FD())
+	another, err := NewMapFromFD(dupFD(t, nested.FD()))
 	if err != nil {
 		t.Fatal("Can't create a new nested map from an FD")
 	}
@@ -1539,18 +1539,12 @@ func TestMapFromFD(t *testing.T) {
 
 	// If you're thinking about copying this, don't. Use
 	// Clone() instead.
-	m2, err := NewMapFromFD(m.FD())
+	m2, err := NewMapFromFD(dupFD(t, m.FD()))
 	testutils.SkipIfNotSupported(t, err)
 	if err != nil {
 		t.Fatal(err)
 	}
-
-	// Both m and m2 refer to the same fd now. Closing either of them will
-	// release the fd to the OS, which then might re-use that fd for another
-	// test. Once we close the second map we might close the re-used fd
-	// inadvertently, leading to spurious test failures.
-	// To avoid this we have to "leak" one of the maps.
-	m2.fd.Forget()
+	defer m2.Close()
 
 	var val uint32
 	if err := m2.Lookup(uint32(0), &val); err != nil {

@@ -47,17 +47,12 @@ func TestDatasecResolveWorkaround(t *testing.T) {
 				},
 			}
 
-			var b Builder
-			if err := datasecResolveWorkaround(&b, ds); err != nil {
-				t.Fatal(err)
-			}
-
-			_, err := b.Add(ds)
+			b, err := NewBuilder([]Type{ds})
 			if err != nil {
 				t.Fatal(err)
 			}
 
-			h, err := NewHandle(&b)
+			h, err := NewHandle(b)
 			var ve *internal.VerifierError
 			if errors.As(err, &ve) {
 				t.Fatalf("%+v\n", ve)

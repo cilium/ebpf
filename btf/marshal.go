@@ -105,6 +105,12 @@ func (m *Builder) Add(typ Type) (TypeID, error) {
 		return 0, nil
 	}
 
+	if ds, ok := typ.(*Datasec); ok {
+		if err := datasecResolveWorkaround(m, ds); err != nil {
+			return 0, err
+		}
+	}
+
 	id, ok := m.stableIDs[typ]
 	if ok {
 		return id, nil

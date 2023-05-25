@@ -18,7 +18,13 @@ type FD struct {
 
 func newFD(value int) *FD {
 	if onLeakFD != nil {
-		fds.Store(value, callersFrames())
+		// Attempt to store the caller's stack for the given fd value.
+		// Panic if fds contains an existing stack for the fd.
+		old, exist := fds.LoadOrStore(value, callersFrames())
+		if exist {
+			f := old.(*runtime.Frames)
+			panic(fmt.Sprintf("found existing stack for fd %d:\n%s", value, FormatFrames(f)))
+		}
 	}
 
 	fd := &FD{value}
@@ -86,16 +92,15 @@ func (fd *FD) Close() error {
 		return nil
 	}
 
+	fd.Forget()
 	value := int(fd.raw)
 	fd.raw = -1
 
-	fds.Delete(value)
-
-	fd.Forget()
 	return unix.Close(value)
 }
 
 func (fd *FD) Forget() {
+	fds.Delete(int(fd.raw))
 	runtime.SetFinalizer(fd, nil)
 }
 

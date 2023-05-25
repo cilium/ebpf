@@ -1,7 +1,6 @@
 package fdtrace
 
 import (
-	"bytes"
 	"fmt"
 	"os"
 	"runtime"
@@ -19,7 +18,7 @@ func TestMain(m *testing.M) {
 	var leak bool
 	sys.OnLeakFD(func(fs *runtime.Frames) {
 		fmt.Fprintln(os.Stderr, "leaked fd created at:")
-		fmt.Fprintln(os.Stderr, formatFrames(fs))
+		fmt.Fprintln(os.Stderr, sys.FormatFrames(fs))
 		leak = true
 	})
 
@@ -32,16 +31,4 @@ func TestMain(m *testing.M) {
 	}
 
 	os.Exit(ret)
-}
-
-func formatFrames(fs *runtime.Frames) string {
-	var b bytes.Buffer
-	for {
-		f, more := fs.Next()
-		b.WriteString(fmt.Sprintf("\t%s+%#x\n\t\t%s:%d\n", f.Function, f.PC-f.Entry, f.File, f.Line))
-		if !more {
-			break
-		}
-	}
-	return b.String()
 }

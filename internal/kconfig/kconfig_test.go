@@ -27,7 +27,7 @@ func TestParse(t *testing.T) {
 		"CONFIG_FOO":      `"foo"`,
 	}
 
-	f, err := os.Open("testdata/test.kconfig")
+	f, err := os.Open("testdata/config-6.2.15-300.fc38.x86_64")
 	if err != nil {
 		t.Fatal("Error opening test.kconfig: ", err)
 	}
@@ -42,11 +42,14 @@ func TestParse(t *testing.T) {
 }
 
 func BenchmarkParse(b *testing.B) {
-	f, err := os.Open("testdata/test.kconfig")
+	f, err := os.Open("testdata/config-6.2.15-300.fc38.x86_64")
 	if err != nil {
-		b.Fatal("Error opening test.kconfig: ", err)
+		b.Fatal(err)
 	}
 	defer f.Close()
+
+	b.ReportAllocs()
+	b.ResetTimer()
 
 	for n := 0; n < b.N; n++ {
 		_, err := Parse(f)
@@ -70,7 +73,7 @@ func TestParseGziped(t *testing.T) {
 		"CONFIG_FOO":      `"foo"`,
 	}
 
-	content, err := os.ReadFile("testdata/test.kconfig")
+	content, err := os.ReadFile("testdata/config-6.2.15-300.fc38.x86_64")
 	if err != nil {
 		t.Fatal(err)
 	}

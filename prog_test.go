@@ -622,11 +622,12 @@ func TestProgramFromFD(t *testing.T) {
 
 	// If you're thinking about copying this, don't. Use
 	// Clone() instead.
-	prog2, err := NewProgramFromFD(prog.FD())
+	prog2, err := NewProgramFromFD(dupFD(t, prog.FD()))
 	testutils.SkipIfNotSupported(t, err)
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer prog2.Close()
 
 	// Name and type are supposed to be copied from program info.
 	if haveObjName() == nil && prog2.name != "test" {
@@ -636,13 +637,6 @@ func TestProgramFromFD(t *testing.T) {
 	if prog2.typ != SocketFilter {
 		t.Errorf("Expected program to have type SocketFilter, got '%s'", prog2.typ)
 	}
-
-	// Both programs refer to the same fd now. Closing either of them will
-	// release the fd to the OS, which then might re-use that fd for another
-	// test. Once we close the second map we might close the re-used fd
-	// inadvertently, leading to spurious test failures.
-	// To avoid this we have to "leak" one of the programs.
-	prog2.fd.Forget()
 }
 
 func TestHaveProgTestRun(t *testing.T) {
@@ -1102,4 +1096,15 @@ func ExampleProgramSpec_Tag() {
 	} else {
 		fmt.Println("The programs are identical, tag is", tag)
 	}
+}
+
+func dupFD(tb testing.TB, fd int) int {
+	tb.Helper()
+
+	dup, err := unix.FcntlInt(uintptr(fd), unix.F_DUPFD_CLOEXEC, 1)
+	if err != nil {
+		tb.Fatal("Can't dup fd:", err)
+	}
+
+	return dup
 }

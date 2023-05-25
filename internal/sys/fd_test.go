@@ -47,3 +47,20 @@ func TestFD(t *testing.T) {
 
 	reserveFdZero()
 }
+
+func TestFDFile(t *testing.T) {
+	fd := newFD(openFd(t))
+	file := fd.File("test")
+	qt.Assert(t, file, qt.IsNotNil)
+	qt.Assert(t, file.Close(), qt.IsNil)
+	qt.Assert(t, fd.File("closed"), qt.IsNil)
+
+	_, err := fd.Dup()
+	qt.Assert(t, err, qt.ErrorIs, ErrClosedFd)
+}
+
+func openFd(tb testing.TB) int {
+	fd, err := unix.Open(os.DevNull, syscall.O_RDONLY, 0)
+	qt.Assert(tb, err, qt.IsNil)
+	return fd
+}

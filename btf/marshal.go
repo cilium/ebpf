@@ -17,8 +17,10 @@ type marshalOptions struct {
 }
 
 // kernelMarshalOptions will generate BTF suitable for the current kernel.
-var kernelMarshalOptions = &marshalOptions{
-	StripFuncLinkage: haveFuncLinkage() != nil,
+func kernelMarshalOptions() *marshalOptions {
+	return &marshalOptions{
+		StripFuncLinkage: haveFuncLinkage() != nil,
+	}
 }
 
 // encoder turns Types into raw BTF.

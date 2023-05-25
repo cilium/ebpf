@@ -583,6 +583,41 @@ func (p *Program) Test(in []byte) (uint32, []byte, error) {
 	return ret, opts.DataOut, nil
 }
 
+// TestWithContext runs the Program in the kernel with the given data and
+// context, and gives back the data and context returned by eBPF program.
+// outLen may be zero.
+//
+// Note: the kernel expects at least 14 bytes input for an ethernet header for
+// XDP and SKB programs.
+//
+// This function requires at least Linux 4.12.
+func (p *Program) TestWithContext(data, ctx []byte) (uint32, []byte, []byte, error) {
+	// Older kernels ignore the dataSizeOut argument when copying to user space.
+	// Combined with things like bpf_xdp_adjust_head() we don't really know what the final
+	// size will be. Hence we allocate an output buffer which we hope will always be large
+	// enough, and panic if the kernel wrote past the end of the allocation.
+	// See https://patchwork.ozlabs.org/cover/1006822/
+	var dataOut []byte
+	if len(data) > 0 {
+		dataOut = make([]byte, len(data)+outputPad)
+	}
+
+	ctxOut := make([]byte, len(ctx))
+	opts := RunOptions{
+		Data:       data,
+		DataOut:    dataOut,
+		Context:    ctx,
+		ContextOut: ctxOut,
+		Repeat:     1,
+	}
+
+	ret, _, err := p.run(&opts)
+	if err != nil {
+		return ret, nil, nil, fmt.Errorf("test program: %w", err)
+	}
+	return ret, opts.DataOut, ctxOut, nil
+}
+
 // Run runs the Program in kernel with given RunOptions.
 //
 // Note: the same restrictions from Test apply.

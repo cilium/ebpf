@@ -19,6 +19,8 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
+
+	qt "github.com/frankban/quicktest"
 )
 
 func TestLoadCollectionSpec(t *testing.T) {
@@ -651,6 +653,44 @@ func TestKconfigSyscallWrapper(t *testing.T) {
 		if ret != expected {
 			t.Fatalf("Expected eBPF to return value %d, got %d", expected, ret)
 		}
+	})
+}
+
+func TestKconfigConfig(t *testing.T) {
+	testutils.Files(t, testutils.Glob(t, "testdata/kconfig_config-*.elf"), func(t *testing.T, file string) {
+		spec, err := LoadCollectionSpec(file)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if spec.ByteOrder != internal.NativeEndian {
+			return
+		}
+
+		var obj struct {
+			Main     *Program `ebpf:"kconfig"`
+			ArrayMap *Map     `ebpf:"array_map"`
+		}
+
+		err = spec.LoadAndAssign(&obj, nil)
+		testutils.SkipIfNotSupported(t, err)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer obj.Main.Close()
+		defer obj.ArrayMap.Close()
+
+		_, _, err = obj.Main.Test(internal.EmptyBPFContext)
+		testutils.SkipIfNotSupported(t, err)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		var value uint64
+		obj.ArrayMap.Lookup(uint32(0), &value)
+
+		// CONFIG_HZ must have a value.
+		qt.Assert(t, value, qt.Not(qt.Equals), 0)
 	})
 }
 

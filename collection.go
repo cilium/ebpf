@@ -10,6 +10,7 @@ import (
 	"github.com/cilium/ebpf/asm"
 	"github.com/cilium/ebpf/btf"
 	"github.com/cilium/ebpf/internal"
+	"github.com/cilium/ebpf/internal/kconfig"
 )
 
 // CollectionOptions control loading a collection into the kernel.
@@ -584,11 +585,19 @@ func resolveKconfig(m *MapSpec) error {
 		return errors.New("map value is not a Datasec")
 	}
 
+	type configInfo struct {
+		offset uint32
+		typ    btf.Type
+	}
+
+	configs := make(map[string]configInfo)
+
 	data := make([]byte, ds.Size)
 	for _, vsi := range ds.Vars {
 		v := vsi.Type.(*btf.Var)
+		n := v.TypeName()
 
-		switch n := v.TypeName(); n {
+		switch n {
 		case "LINUX_KERNEL_VERSION":
 			if integer, ok := v.Type.(*btf.Int); !ok || integer.Size != 4 {
 				return fmt.Errorf("variable %s must be a 32 bits integer, got %s", n, v.Type)
@@ -613,8 +622,39 @@ func resolveKconfig(m *MapSpec) error {
 
 			internal.NativeEndian.PutUint32(data[vsi.Offset:], value)
 
-		default:
-			return fmt.Errorf("unsupported kconfig: %s", n)
+		default: // Catch CONFIG_*.
+			configs[n] = configInfo{
+				offset: vsi.Offset,
+				typ:    v.Type,
+			}
+		}
+	}
+
+	// We only parse kconfig file if a CONFIG_* variable was found.
+	if len(configs) > 0 {
+		scanner, err := kconfig.Find()
+		if err != nil {
+			return fmt.Errorf("cannot find a kconfig file: %w", err)
+		}
+		defer scanner.Close()
+
+		kernelConfig, err := kconfig.Parse(scanner)
+		if err != nil {
+			return fmt.Errorf("cannot parse kconfig file: %w", err)
+		}
+
+		for n := range configs {
+			info := configs[n]
+
+			value, ok := kernelConfig[n]
+			if !ok {
+				return fmt.Errorf("config option %q does not exists for this kernel", n)
+			}
+
+			err := kconfig.PutValue(data[info.offset:], info.typ, value)
+			if err != nil {
+				return fmt.Errorf("problem adding value for %s: %w", n, err)
+			}
 		}
 	}
 

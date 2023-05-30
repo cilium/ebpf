@@ -82,7 +82,8 @@ func run(stdout io.Writer, pkg, outputDir string, args []string) (err error) {
 	flagCFlags := fs.String("cflags", "", "flags passed to the compiler, may contain quoted arguments")
 	fs.Var(&b2g.tags, "tags", "Comma-separated list of Go build tags to include in generated files")
 	flagTarget := fs.String("target", "bpfel,bpfeb", "clang target(s) to compile for (comma separated)")
-	fs.StringVar(&b2g.makeBase, "makebase", "", "write make compatible depinfo files relative to `directory`")
+	const makeBaseHelp = "write make compatible depinfo files relative to `directory`\nalso enabled by BPF2GO_MAKEBASE in the environment"
+	fs.StringVar(&b2g.makeBase, "makebase", os.Getenv("BPF2GO_MAKEBASE"), makeBaseHelp)
 	fs.Var(&b2g.cTypes, "type", "`Name` of a type to generate a Go declaration for, may be repeated")
 	fs.BoolVar(&b2g.skipGlobalTypes, "no-global-types", false, "Skip generating types for map keys and values, etc.")
 	fs.StringVar(&b2g.outputStem, "output-stem", "", "alternative stem for names of generated files (defaults to ident)")

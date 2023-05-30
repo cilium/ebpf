@@ -166,11 +166,8 @@ func (k coreKind) String() string {
 // for relos[i].
 func CORERelocate(relos []*CORERelocation, target *Spec, bo binary.ByteOrder) ([]COREFixup, error) {
 	if target == nil {
-		var err error
-		target, _, err = kernelSpec()
-		if err != nil {
-			return nil, fmt.Errorf("load kernel spec: %w", err)
-		}
+		// Explicitly check for nil here since the argument used to be optional.
+		return nil, fmt.Errorf("target must be provided")
 	}
 
 	if bo != target.byteOrder {

@@ -601,9 +601,6 @@ func (p *Program) Run(opts *RunOptions) (uint32, error) {
 // run or an error. reset is called whenever the benchmark syscall is
 // interrupted, and should be set to testing.B.ResetTimer or similar.
 //
-// Note: profiling a call to this function will skew its results, see
-// https://github.com/cilium/ebpf/issues/24
-//
 // This function requires at least Linux 4.12.
 func (p *Program) Benchmark(in []byte, repeat int, reset func()) (uint32, time.Duration, error) {
 	if uint(repeat) > math.MaxUint32 {

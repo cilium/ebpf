@@ -23,7 +23,7 @@ func BenchmarkParse(b *testing.B) {
 	b.ResetTimer()
 
 	for n := 0; n < b.N; n++ {
-		_, err := Parse(f)
+		_, err := Parse(f, nil)
 		if err != nil {
 			b.Fatal(err)
 		}
@@ -39,10 +39,30 @@ func TestParseGziped(t *testing.T) {
 	}
 	defer f.Close()
 
-	_, err = Parse(f)
+	_, err = Parse(f, nil)
 	if err != nil {
 		t.Fatal("Error parsing gziped kconfig: ", err)
 	}
+}
+
+func TestParseGzipedFiltered(t *testing.T) {
+	t.Parallel()
+
+	f, err := os.Open("testdata/config-6.2.15-300.fc38.x86_64.gz")
+	if err != nil {
+		t.Fatal("Error reading /testdata/config-6.2.15-300.fc38.x86_64.gz: ", err)
+	}
+	defer f.Close()
+
+	filter := map[string]interface{}{"CONFIG_HZ": true}
+
+	config, err := Parse(f, filter)
+	if err != nil {
+		t.Fatal("Error parsing gziped kconfig: ", err)
+	}
+
+	expected := map[string]string{"CONFIG_HZ": "1000"}
+	qt.Assert(t, config, qt.DeepEquals, expected)
 }
 
 func TestProcessKconfigBadLine(t *testing.T) {
@@ -50,10 +70,10 @@ func TestProcessKconfigBadLine(t *testing.T) {
 
 	m := make(map[string]string)
 
-	err := processKconfigLine("CONFIG_FOO", m)
+	err := processKconfigLine("CONFIG_FOO", m, nil)
 	qt.Assert(t, err, qt.IsNotNil, qt.Commentf("line has no '='"))
 
-	err = processKconfigLine("CONFIG_FOO=", m)
+	err = processKconfigLine("CONFIG_FOO=", m, nil)
 	qt.Assert(t, err, qt.IsNotNil, qt.Commentf("line has no value"))
 }
 

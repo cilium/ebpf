@@ -590,7 +590,7 @@ func resolveKconfig(m *MapSpec) error {
 		typ    btf.Type
 	}
 
-	configs := make(map[string]configInfo)
+	configs := make(map[string]any)
 
 	data := make([]byte, ds.Size)
 	for _, vsi := range ds.Vars {
@@ -638,12 +638,14 @@ func resolveKconfig(m *MapSpec) error {
 		}
 		defer f.Close()
 
-		kernelConfig, err := kconfig.Parse(f)
+		kernelConfig, err := kconfig.Parse(f, configs)
 		if err != nil {
 			return fmt.Errorf("cannot parse kconfig file: %w", err)
 		}
 
-		for n, info := range configs {
+		for n := range configs {
+			info := configs[n].(configInfo)
+
 			value, ok := kernelConfig[n]
 			if !ok {
 				return fmt.Errorf("config option %q does not exists for this kernel", n)

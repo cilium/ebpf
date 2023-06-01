@@ -39,10 +39,10 @@ func Find() (*os.File, error) {
 }
 
 // Parse parses the kconfig file for which a reader is given.
-// All the CONFIG_* set will be put in the returned map as key with their
-// corresponding value as map value.
+// All the CONFIG_* which are in filteredConfigs and which are set set will be
+// put in the returned map as key with their corresponding value as map value.
 // If the kconfig file is not valid, error will be returned.
-func Parse(source io.ReaderAt) (map[string]string, error) {
+func Parse(source io.ReaderAt, filteredConfigs map[string]any) (map[string]string, error) {
 	var r io.Reader
 	zr, err := gzip.NewReader(io.NewSectionReader(source, 0, math.MaxInt64))
 	if err != nil {
@@ -58,7 +58,7 @@ func Parse(source io.ReaderAt) (map[string]string, error) {
 	for s.Scan() {
 
 		line := s.Text()
-		err = processKconfigLine(line, ret)
+		err = processKconfigLine(line, ret, filteredConfigs)
 		if err != nil {
 			return nil, fmt.Errorf("cannot parse line: %w", err)
 		}
@@ -78,7 +78,7 @@ func Parse(source io.ReaderAt) (map[string]string, error) {
 // Golang translation of libbpf bpf_object__process_kconfig_line():
 // https://github.com/libbpf/libbpf/blob/fbd60dbff51c870f5e80a17c4f2fd639eb80af90/src/libbpf.c#L1874
 // It does the same checks but does not put the data inside the BPF map.
-func processKconfigLine(line string, m map[string]string) error {
+func processKconfigLine(line string, m map[string]string, filteredConfigs map[string]any) error {
 	// Ignore empty lines and "# CONFIG_* is not set".
 	if !strings.HasPrefix(line, "CONFIG_") {
 		return nil
@@ -91,6 +91,13 @@ func processKconfigLine(line string, m map[string]string) error {
 
 	if len(value) == 0 {
 		return fmt.Errorf("line %q has no value", line)
+	}
+
+	if filteredConfigs != nil {
+		_, ok := filteredConfigs[key]
+		if !ok {
+			return nil
+		}
 	}
 
 	// This can seem odd, but libbpf only sets the value the first type the key is

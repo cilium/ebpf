@@ -14,6 +14,15 @@ import (
 	"github.com/cilium/ebpf/internal/unix"
 )
 
+var (
+	// pre-allocating these here since they may
+	// get called in hot code paths and cause
+	// unnecessary memory allocations
+	sysErrKeyNotExist  = sys.Error(ErrKeyNotExist, unix.ENOENT)
+	sysErrKeyExist     = sys.Error(ErrKeyExist, unix.EEXIST)
+	sysErrNotSupported = sys.Error(ErrNotSupported, sys.ENOTSUPP)
+)
+
 // invalidBPFObjNameChar returns true if char may not appear in
 // a BPF object name.
 func invalidBPFObjNameChar(char rune) bool {
@@ -139,15 +148,15 @@ func wrapMapError(err error) error {
 	}
 
 	if errors.Is(err, unix.ENOENT) {
-		return sys.Error(ErrKeyNotExist, unix.ENOENT)
+		return sysErrKeyNotExist
 	}
 
 	if errors.Is(err, unix.EEXIST) {
-		return sys.Error(ErrKeyExist, unix.EEXIST)
+		return sysErrKeyExist
 	}
 
 	if errors.Is(err, sys.ENOTSUPP) {
-		return sys.Error(ErrNotSupported, sys.ENOTSUPP)
+		return sysErrNotSupported
 	}
 
 	if errors.Is(err, unix.E2BIG) {

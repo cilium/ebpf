@@ -638,12 +638,19 @@ func resolveKconfig(m *MapSpec) error {
 		}
 		defer f.Close()
 
-		kernelConfig, err := kconfig.Parse(f)
+		filter := make(map[string]bool, len(configs))
+		for config := range configs {
+			filter[config] = true
+		}
+
+		kernelConfig, err := kconfig.Parse(f, filter)
 		if err != nil {
 			return fmt.Errorf("cannot parse kconfig file: %w", err)
 		}
 
-		for n, info := range configs {
+		for n := range configs {
+			info := configs[n]
+
 			value, ok := kernelConfig[n]
 			if !ok {
 				return fmt.Errorf("config option %q does not exists for this kernel", n)

@@ -50,6 +50,53 @@ func BenchmarkParseFiltered(b *testing.B) {
 	}
 }
 
+func TestParse(t *testing.T) {
+	t.Parallel()
+
+	f, err := os.Open("testdata/test.kconfig")
+	if err != nil {
+		t.Fatal("Error reading /testdata/test.kconfig: ", err)
+	}
+	defer f.Close()
+
+	config, err := Parse(f, nil)
+	if err != nil {
+		t.Fatal("Error parsing kconfig: ", err)
+	}
+
+	expected := map[string]string{
+		"CONFIG_TRISTATE": "m",
+		"CONFIG_BOOL":     "y",
+		"CONFIG_CHAR":     "100",
+		"CONFIG_USHORT":   "30000",
+		"CONFIG_INT":      "123456",
+		"CONFIG_ULONG":    "0xDEADBEEFC0DE",
+		"CONFIG_STR":      `"abracad"`,
+		"CONFIG_FOO":      `"foo"`,
+	}
+	qt.Assert(t, config, qt.DeepEquals, expected)
+}
+
+func TestParseFiltered(t *testing.T) {
+	t.Parallel()
+
+	f, err := os.Open("testdata/test.kconfig")
+	if err != nil {
+		t.Fatal("Error reading /testdata/test.kconfig: ", err)
+	}
+	defer f.Close()
+
+	filter := map[string]bool{"CONFIG_FOO": true}
+
+	config, err := Parse(f, filter)
+	if err != nil {
+		t.Fatal("Error parsing gziped kconfig: ", err)
+	}
+
+	expected := map[string]string{"CONFIG_FOO": `"foo"`}
+	qt.Assert(t, config, qt.DeepEquals, expected)
+}
+
 func TestParseGziped(t *testing.T) {
 	t.Parallel()
 

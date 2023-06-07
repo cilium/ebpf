@@ -9,10 +9,6 @@ agent:
 execution_time_limit:
   minutes: 10
 
-global_job_config:
-  secrets:
-    - name: Coveralls
-
 auto_cancel:
   running:
     when: "branch != 'master'"

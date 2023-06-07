@@ -278,6 +278,71 @@ func TestCTypes(t *testing.T) {
 	qt.Assert(t, ct.Set("foo"), qt.IsNotNil)
 }
 
+func TestParseArgs(t *testing.T) {
+	b2g := bpf2go{pkg: "eee", stdout: &bytes.Buffer{}}
+	const (
+		csource = "testdata/minimal.c"
+		stem    = "a"
+	)
+
+	t.Run("makebase", func(t *testing.T) {
+		basePath, _ := filepath.Abs("barfoo")
+		b2g := b2g
+		err := b2g.parseArgs([]string{"-makebase", basePath, stem, csource})
+		qt.Assert(t, err, qt.IsNil)
+		qt.Assert(t, b2g.makeBase, qt.Equals, basePath)
+	})
+
+	t.Run("cc", func(t *testing.T) {
+		b2g := b2g
+		err := b2g.parseArgs([]string{"-cc", "barfoo", stem, csource})
+		qt.Assert(t, err, qt.IsNil)
+		qt.Assert(t, b2g.cc, qt.Equals, "barfoo")
+	})
+
+	t.Run("strip", func(t *testing.T) {
+		b2g := b2g
+		err := b2g.parseArgs([]string{"-strip", "barfoo", stem, csource})
+		qt.Assert(t, err, qt.IsNil)
+		qt.Assert(t, b2g.strip, qt.Equals, "barfoo")
+	})
+
+	t.Run("no strip defaults to false", func(t *testing.T) {
+		b2g := b2g
+		err := b2g.parseArgs([]string{stem, csource})
+		qt.Assert(t, err, qt.IsNil)
+		qt.Assert(t, b2g.disableStripping, qt.IsFalse)
+	})
+
+	t.Run("no strip", func(t *testing.T) {
+		b2g := b2g
+		err := b2g.parseArgs([]string{"-no-strip", stem, csource})
+		qt.Assert(t, err, qt.IsNil)
+		qt.Assert(t, b2g.disableStripping, qt.IsTrue)
+	})
+
+	t.Run("cflags flag", func(t *testing.T) {
+		b2g := b2g
+		err := b2g.parseArgs([]string{"-cflags", "x y z", stem, csource})
+		qt.Assert(t, err, qt.IsNil)
+		qt.Assert(t, b2g.cFlags, qt.DeepEquals, []string{"x", "y", "z"})
+	})
+
+	t.Run("cflags multi flag", func(t *testing.T) {
+		b2g := b2g
+		err := b2g.parseArgs([]string{"-cflags", "x y z", "-cflags", "u v", stem, csource})
+		qt.Assert(t, err, qt.IsNil)
+		qt.Assert(t, b2g.cFlags, qt.DeepEquals, []string{"u", "v"})
+	})
+
+	t.Run("cflags flag and args", func(t *testing.T) {
+		b2g := b2g
+		err := b2g.parseArgs([]string{"-cflags", "x y z", "stem", csource, "--", "u", "v"})
+		qt.Assert(t, err, qt.IsNil)
+		qt.Assert(t, b2g.cFlags, qt.DeepEquals, []string{"x", "y", "z", "u", "v"})
+	})
+}
+
 func clangBin(t *testing.T) string {
 	t.Helper()
 

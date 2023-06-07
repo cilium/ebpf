@@ -1763,7 +1763,7 @@ func (cbv *customBenchValue) MarshalBinary() ([]byte, error) {
 	return buf, nil
 }
 
-func BenchmarkMarshalling(b *testing.B) {
+func BenchmarkMarshaling(b *testing.B) {
 	newMap := func(valueSize uint32) *Map {
 		m, err := NewMap(&MapSpec{
 			Type:       Hash,
@@ -1785,7 +1785,7 @@ func BenchmarkMarshalling(b *testing.B) {
 	}
 	b.Cleanup(func() { m.Close() })
 
-	b.Run("reflection", func(b *testing.B) {
+	b.Run("ValueUnmarshalReflect", func(b *testing.B) {
 		b.ReportAllocs()
 		b.ResetTimer()
 
@@ -1799,7 +1799,21 @@ func BenchmarkMarshalling(b *testing.B) {
 		}
 	})
 
-	b.Run("custom", func(b *testing.B) {
+	b.Run("KeyMarshalReflect", func(b *testing.B) {
+		b.ReportAllocs()
+		b.ResetTimer()
+
+		var value benchValue
+
+		for i := 0; i < b.N; i++ {
+			err := m.Lookup(&key, unsafe.Pointer(&value))
+			if err != nil {
+				b.Fatal("Can't get key:", err)
+			}
+		}
+	})
+
+	b.Run("ValueBinaryUnmarshaler", func(b *testing.B) {
 		b.ReportAllocs()
 		b.ResetTimer()
 
@@ -1813,7 +1827,21 @@ func BenchmarkMarshalling(b *testing.B) {
 		}
 	})
 
-	b.Run("unsafe", func(b *testing.B) {
+	b.Run("KeyBinaryMarshaler", func(b *testing.B) {
+		b.ReportAllocs()
+		b.ResetTimer()
+
+		var value customBenchValue
+
+		for i := 0; i < b.N; i++ {
+			err := m.Lookup(unsafe.Pointer(&key), &value)
+			if err != nil {
+				b.Fatal("Can't get key:", err)
+			}
+		}
+	})
+
+	b.Run("KeyValueUnsafe", func(b *testing.B) {
 		b.ReportAllocs()
 		b.ResetTimer()
 

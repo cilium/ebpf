@@ -99,9 +99,10 @@ func processKconfigLine(line []byte, m map[string]string, filteredConfigs map[st
 		return fmt.Errorf("line %q has no value", line)
 	}
 
-	k := string(key)
 	if filteredConfigs != nil {
-		_, ok := filteredConfigs[k]
+		// NB: map[string(key)] gets special optimisation help from the compiler
+		// and doesn't allocate. Don't turn this into a variable.
+		_, ok := filteredConfigs[string(key)]
 		if !ok {
 			return nil
 		}
@@ -110,9 +111,9 @@ func processKconfigLine(line []byte, m map[string]string, filteredConfigs map[st
 	// This can seem odd, but libbpf only sets the value the first type the key is
 	// met:
 	// https://github.com/torvalds/linux/blob/0d85b27b0cc6/tools/lib/bpf/libbpf.c#L1906-L1908
-	_, ok := m[k]
+	_, ok := m[string(key)]
 	if !ok {
-		m[k] = string(value)
+		m[string(key)] = string(value)
 	}
 
 	return nil

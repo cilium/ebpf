@@ -36,6 +36,9 @@ compiler as two arguments "foo" and "bar baz".
 The program expects GOPACKAGE to be set in the environment, and should be invoked
 via go generate. The generated files are written to the current directory.
 
+Some options take defaults from the environment. Variable name is mentioned
+next to the respective option.
+
 Options:
 
 `
@@ -119,13 +122,17 @@ func newB2G(stdout io.Writer, pkg, outputDir string, args []string) (*bpf2go, er
 	}
 
 	fs := flag.NewFlagSet("bpf2go", flag.ContinueOnError)
-	fs.StringVar(&b2g.cc, "cc", "clang", "`binary` used to compile C to BPF")
-	fs.StringVar(&b2g.strip, "strip", "", "`binary` used to strip DWARF from compiled BPF (default \"llvm-strip\")")
+	fs.StringVar(&b2g.cc, "cc", getEnv("BPF2GO_CC", "clang"),
+		"`binary` used to compile C to BPF ($BPF2GO_CC)")
+	fs.StringVar(&b2g.strip, "strip", getEnv("BPF2GO_STRIP", ""),
+		"`binary` used to strip DWARF from compiled BPF ($BPF2GO_STRIP)")
 	fs.BoolVar(&b2g.disableStripping, "no-strip", false, "disable stripping of DWARF")
-	flagCFlags := fs.String("cflags", "", "flags passed to the compiler, may contain quoted arguments")
+	flagCFlags := fs.String("cflags", getEnv("BPF2GO_CFLAGS", ""),
+		"flags passed to the compiler, may contain quoted arguments ($BPF2GO_CFLAGS)")
 	fs.Var(&b2g.tags, "tags", "Comma-separated list of Go build tags to include in generated files")
 	flagTarget := fs.String("target", "bpfel,bpfeb", "clang target(s) to compile for (comma separated)")
-	fs.StringVar(&b2g.makeBase, "makebase", "", "write make compatible depinfo files relative to `directory`")
+	fs.StringVar(&b2g.makeBase, "makebase", getEnv("BPF2GO_MAKEBASE", ""),
+		"write make compatible depinfo files relative to `directory` ($BPF2GO_MAKEBASE)")
 	fs.Var(&b2g.cTypes, "type", "`Name` of a type to generate a Go declaration for, may be repeated")
 	fs.BoolVar(&b2g.skipGlobalTypes, "no-global-types", false, "Skip generating types for map keys and values, etc.")
 	fs.StringVar(&b2g.outputStem, "output-stem", "", "alternative stem for names of generated files (defaults to ident)")
@@ -259,6 +266,13 @@ func (ct *cTypes) Set(value string) error {
 
 	*ct = append((*ct)[:i], append([]string{value}, (*ct)[i:]...)...)
 	return nil
+}
+
+func getEnv(key, defaultVal string) string {
+	if val, ok := os.LookupEnv(key); ok {
+		return val
+	}
+	return defaultVal
 }
 
 func (b2g *bpf2go) convertAll() (err error) {

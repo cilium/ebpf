@@ -69,7 +69,50 @@ var targetByGoArch = map[string]target{
 }
 
 func run(stdout io.Writer, pkg, outputDir string, args []string) (err error) {
-	b2g := bpf2go{
+	b2g, err := newB2G(stdout, pkg, outputDir, args)
+	switch {
+	case err == nil:
+		return b2g.convertAll()
+	case errors.Is(err, flag.ErrHelp):
+		return nil
+	default:
+		return err
+	}
+}
+
+type bpf2go struct {
+	stdout io.Writer
+	// Absolute path to a .c file.
+	sourceFile string
+	// Absolute path to a directory where .go are written
+	outputDir string
+	// Alternative output stem. If empty, identStem is used.
+	outputStem string
+	// Valid go package name.
+	pkg string
+	// Valid go identifier.
+	identStem string
+	// Targets to build for.
+	targetArches map[target][]string
+	// C compiler.
+	cc string
+	// Command used to strip DWARF.
+	strip            string
+	disableStripping bool
+	// C flags passed to the compiler.
+	cFlags          []string
+	skipGlobalTypes bool
+	// C types to include in the generatd output.
+	cTypes cTypes
+	// Build tags to be included in the output.
+	tags buildTags
+	// Base directory of the Makefile. Enables outputting make-style dependencies
+	// in .d files.
+	makeBase string
+}
+
+func newB2G(stdout io.Writer, pkg, outputDir string, args []string) (*bpf2go, error) {
+	b2g := &bpf2go{
 		stdout:    stdout,
 		pkg:       pkg,
 		outputDir: outputDir,
@@ -87,25 +130,23 @@ func run(stdout io.Writer, pkg, outputDir string, args []string) (err error) {
 	fs.BoolVar(&b2g.skipGlobalTypes, "no-global-types", false, "Skip generating types for map keys and values, etc.")
 	fs.StringVar(&b2g.outputStem, "output-stem", "", "alternative stem for names of generated files (defaults to ident)")
 
-	fs.SetOutput(stdout)
+	fs.SetOutput(b2g.stdout)
 	fs.Usage = func() {
 		fmt.Fprintf(fs.Output(), helpText, fs.Name())
 		fs.PrintDefaults()
 		fmt.Fprintln(fs.Output())
 		printTargets(fs.Output())
 	}
-	if err := fs.Parse(args); errors.Is(err, flag.ErrHelp) {
-		return nil
-	} else if err != nil {
-		return err
+	if err := fs.Parse(args); err != nil {
+		return nil, err
 	}
 
 	if b2g.pkg == "" {
-		return errors.New("missing package, are you running via go generate?")
+		return nil, errors.New("missing package, are you running via go generate?")
 	}
 
 	if b2g.cc == "" {
-		return errors.New("no compiler specified")
+		return nil, errors.New("no compiler specified")
 	}
 
 	args, cFlags := splitCFlagsFromArgs(fs.Args())
@@ -113,7 +154,7 @@ func run(stdout io.Writer, pkg, outputDir string, args []string) (err error) {
 	if *flagCFlags != "" {
 		splitCFlags, err := splitArguments(*flagCFlags)
 		if err != nil {
-			return err
+			return nil, err
 		}
 
 		// Command line arguments take precedence over C flags
@@ -123,82 +164,63 @@ func run(stdout io.Writer, pkg, outputDir string, args []string) (err error) {
 
 	for _, cFlag := range cFlags {
 		if strings.HasPrefix(cFlag, "-M") {
-			return fmt.Errorf("use -makebase instead of %q", cFlag)
+			return nil, fmt.Errorf("use -makebase instead of %q", cFlag)
 		}
 	}
 
 	b2g.cFlags = cFlags[:len(cFlags):len(cFlags)]
 
 	if len(args) < 2 {
-		return errors.New("expected at least two arguments")
+		return nil, errors.New("expected at least two arguments")
 	}
 
 	b2g.identStem = args[0]
 	if !token.IsIdentifier(b2g.identStem) {
-		return fmt.Errorf("%q is not a valid identifier", b2g.identStem)
+		return nil, fmt.Errorf("%q is not a valid identifier", b2g.identStem)
 	}
 
-	input := args[1]
-	if _, err := os.Stat(input); os.IsNotExist(err) {
-		return fmt.Errorf("file %s doesn't exist", input)
-	} else if err != nil {
-		return fmt.Errorf("state %s: %s", input, err)
-	}
-
-	b2g.sourceFile, err = filepath.Abs(input)
+	sourceFile, err := filepath.Abs(args[1])
 	if err != nil {
-		return err
+		return nil, err
 	}
+	b2g.sourceFile = sourceFile
 
 	if b2g.makeBase != "" {
 		b2g.makeBase, err = filepath.Abs(b2g.makeBase)
 		if err != nil {
-			return err
+			return nil, err
 		}
 	}
 
 	if b2g.outputStem != "" && strings.ContainsRune(b2g.outputStem, filepath.Separator) {
-		return fmt.Errorf("-output-stem %q must not contain path separation characters", b2g.outputStem)
+		return nil, fmt.Errorf("-output-stem %q must not contain path separation characters", b2g.outputStem)
 	}
 
-	targetArches := strings.Split(*flagTarget, ",")
-	if len(targetArches) == 0 {
-		return fmt.Errorf("no targets specified")
-	}
-
-	targets, err := collectTargets(targetArches)
+	targetArches, err := collectTargets(strings.Split(*flagTarget, ","))
 	if errors.Is(err, errInvalidTarget) {
-		printTargets(stdout)
-		fmt.Fprintln(stdout)
-		return err
+		printTargets(b2g.stdout)
+		fmt.Fprintln(b2g.stdout)
+		return nil, err
 	}
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	if !b2g.disableStripping {
-		// Try to find a suitable llvm-strip, possibly with a version suffix derived
-		// from the clang binary.
-		if b2g.strip == "" {
-			b2g.strip = "llvm-strip"
-			if strings.HasPrefix(b2g.cc, "clang") {
-				b2g.strip += strings.TrimPrefix(b2g.cc, "clang")
-			}
-		}
+	if len(targetArches) == 0 {
+		return nil, fmt.Errorf("no targets specified")
+	}
+	b2g.targetArches = targetArches
 
-		b2g.strip, err = exec.LookPath(b2g.strip)
-		if err != nil {
-			return err
+	// Try to find a suitable llvm-strip, possibly with a version suffix derived
+	// from the clang binary.
+	if b2g.strip == "" {
+		b2g.strip = "llvm-strip"
+		if strings.HasPrefix(b2g.cc, "clang") {
+			b2g.strip += strings.TrimPrefix(b2g.cc, "clang")
 		}
 	}
 
-	for target, arches := range targets {
-		if err := b2g.convert(target, arches); err != nil {
-			return err
-		}
-	}
-
-	return nil
+	return b2g, nil
 }
 
 // cTypes collects the C type names a user wants to generate Go types for.
@@ -239,33 +261,27 @@ func (ct *cTypes) Set(value string) error {
 	return nil
 }
 
-type bpf2go struct {
-	stdout io.Writer
-	// Absolute path to a .c file.
-	sourceFile string
-	// Absolute path to a directory where .go are written
-	outputDir string
-	// Alternative output stem. If empty, identStem is used.
-	outputStem string
-	// Valid go package name.
-	pkg string
-	// Valid go identifier.
-	identStem string
-	// C compiler.
-	cc string
-	// Command used to strip DWARF.
-	strip            string
-	disableStripping bool
-	// C flags passed to the compiler.
-	cFlags          []string
-	skipGlobalTypes bool
-	// C types to include in the generatd output.
-	cTypes cTypes
-	// Build tags to be included in the output.
-	tags buildTags
-	// Base directory of the Makefile. Enables outputting make-style dependencies
-	// in .d files.
-	makeBase string
+func (b2g *bpf2go) convertAll() (err error) {
+	if _, err := os.Stat(b2g.sourceFile); os.IsNotExist(err) {
+		return fmt.Errorf("file %s doesn't exist", b2g.sourceFile)
+	} else if err != nil {
+		return fmt.Errorf("state %s: %s", b2g.sourceFile, err)
+	}
+
+	if !b2g.disableStripping {
+		b2g.strip, err = exec.LookPath(b2g.strip)
+		if err != nil {
+			return err
+		}
+	}
+
+	for target, arches := range b2g.targetArches {
+		if err := b2g.convert(target, arches); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 func (b2g *bpf2go) convert(tgt target, arches []string) (err error) {

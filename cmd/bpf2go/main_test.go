@@ -278,6 +278,72 @@ func TestCTypes(t *testing.T) {
 	qt.Assert(t, ct.Set("foo"), qt.IsNotNil)
 }
 
+func TestParseArgs(t *testing.T) {
+	const (
+		pkg       = "eee"
+		outputDir = "."
+		csource   = "testdata/minimal.c"
+		stem      = "a"
+	)
+
+	t.Run("makebase", func(t *testing.T) {
+		basePath, _ := filepath.Abs("barfoo")
+		args := []string{"-makebase", basePath, stem, csource}
+		b2g, err := newB2G(&bytes.Buffer{}, pkg, outputDir, args)
+		qt.Assert(t, err, qt.IsNil)
+		qt.Assert(t, b2g.makeBase, qt.Equals, basePath)
+	})
+
+	t.Run("cc", func(t *testing.T) {
+		args := []string{"-cc", "barfoo", stem, csource}
+		b2g, err := newB2G(&bytes.Buffer{}, pkg, outputDir, args)
+		qt.Assert(t, err, qt.IsNil)
+		qt.Assert(t, b2g.cc, qt.Equals, "barfoo")
+	})
+
+	t.Run("strip", func(t *testing.T) {
+		args := []string{"-strip", "barfoo", stem, csource}
+		b2g, err := newB2G(&bytes.Buffer{}, pkg, outputDir, args)
+		qt.Assert(t, err, qt.IsNil)
+		qt.Assert(t, b2g.strip, qt.Equals, "barfoo")
+	})
+
+	t.Run("no strip defaults to false", func(t *testing.T) {
+		args := []string{stem, csource}
+		b2g, err := newB2G(&bytes.Buffer{}, pkg, outputDir, args)
+		qt.Assert(t, err, qt.IsNil)
+		qt.Assert(t, b2g.disableStripping, qt.IsFalse)
+	})
+
+	t.Run("no strip", func(t *testing.T) {
+		args := []string{"-no-strip", stem, csource}
+		b2g, err := newB2G(&bytes.Buffer{}, pkg, outputDir, args)
+		qt.Assert(t, err, qt.IsNil)
+		qt.Assert(t, b2g.disableStripping, qt.IsTrue)
+	})
+
+	t.Run("cflags flag", func(t *testing.T) {
+		args := []string{"-cflags", "x y z", stem, csource}
+		b2g, err := newB2G(&bytes.Buffer{}, pkg, outputDir, args)
+		qt.Assert(t, err, qt.IsNil)
+		qt.Assert(t, b2g.cFlags, qt.DeepEquals, []string{"x", "y", "z"})
+	})
+
+	t.Run("cflags multi flag", func(t *testing.T) {
+		args := []string{"-cflags", "x y z", "-cflags", "u v", stem, csource}
+		b2g, err := newB2G(&bytes.Buffer{}, pkg, outputDir, args)
+		qt.Assert(t, err, qt.IsNil)
+		qt.Assert(t, b2g.cFlags, qt.DeepEquals, []string{"u", "v"})
+	})
+
+	t.Run("cflags flag and args", func(t *testing.T) {
+		args := []string{"-cflags", "x y z", "stem", csource, "--", "u", "v"}
+		b2g, err := newB2G(&bytes.Buffer{}, pkg, outputDir, args)
+		qt.Assert(t, err, qt.IsNil)
+		qt.Assert(t, b2g.cFlags, qt.DeepEquals, []string{"x", "y", "z", "u", "v"})
+	})
+}
+
 func clangBin(t *testing.T) string {
 	t.Helper()
 

@@ -1,11 +1,26 @@
 //go:build ignore
 
-#include "bpf_endian.h"
-#include "common.h"
+// #define BPF_NO_PRESERVE_ACCESS_INDEX
+#include "vmlinux.h"
+typedef __u8 u8;
+typedef __u16 u16;
+typedef __u32 u32;
+typedef __u64 u64;
+#include "bpf_helpers.h"
+char _license[] SEC("license") = "Dual MIT/GPL";
 
-char __license[] SEC("license") = "Dual MIT/GPL";
+#if defined(__BYTE_ORDER__) && defined(__ORDER_LITTLE_ENDIAN__) && __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
+#define bpf_ntohs(x) __builtin_bswap16(x)
+#define bpf_htons(x) __builtin_bswap16(x)
+#elif defined(__BYTE_ORDER__) && defined(__ORDER_BIG_ENDIAN__) && __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
+#define bpf_ntohs(x) (x)
+#define bpf_htons(x) (x)
+#else
+#error "Endianness detection needs to be set up for your compiler?!"
+#endif
 
 #define MAX_MAP_ENTRIES 16
+#define ETH_P_IP 0x0800
 
 /* Define an LRU hash map for storing packet count by source IPv4 address */
 struct {

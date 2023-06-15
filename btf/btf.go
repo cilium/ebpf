@@ -79,8 +79,8 @@ func (h *btfHeader) stringStart() int64 {
 	return int64(h.HdrLen + h.StringOff)
 }
 
-// NewSpec creates a Spec containing only Void.
-func NewSpec() *Spec {
+// newSpec creates a Spec containing only Void.
+func newSpec() *Spec {
 	return &Spec{
 		[]Type{(*Void)(nil)},
 		map[Type]TypeID{(*Void)(nil): 0},

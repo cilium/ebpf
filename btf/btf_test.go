@@ -325,10 +325,10 @@ func TestSpecCopy(t *testing.T) {
 }
 
 func TestSpecTypeByID(t *testing.T) {
-	_, err := NewSpec().TypeByID(0)
+	_, err := newSpec().TypeByID(0)
 	qt.Assert(t, err, qt.IsNil)
 
-	_, err = NewSpec().TypeByID(1)
+	_, err = newSpec().TypeByID(1)
 	qt.Assert(t, err, qt.ErrorIs, ErrNotFound)
 }
 

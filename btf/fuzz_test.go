@@ -56,7 +56,7 @@ func FuzzExtInfo(f *testing.F) {
 	}
 	f.Add(buf.Bytes(), []byte("\x00foo\x00barfoo\x00"))
 
-	emptySpec := NewSpec()
+	emptySpec := newSpec()
 
 	f.Fuzz(func(t *testing.T, data, strings []byte) {
 		if len(data) < binary.Size(btfExtHeader{}) {

@@ -37,15 +37,7 @@ func NewHandle(spec *Spec) (*Handle, error) {
 	buf := getBuffer()
 	defer putBuffer(buf)
 
-	var stb *stringTableBuilder
-	if spec.strings != nil {
-		// Use the ELF string table as an estimate of the final
-		// string table size. We don't use the ELF string
-		// table since the types may have been changed in the meantime.
-		stb = newStringTableBuilder(spec.strings.Num())
-	}
-
-	err := marshalTypes(buf, spec.types, stb, kernelMarshalOptions())
+	err := marshalTypes(buf, spec.types, nil, kernelMarshalOptions())
 	if err != nil {
 		return nil, fmt.Errorf("marshal BTF: %w", err)
 	}

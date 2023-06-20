@@ -75,7 +75,9 @@ func marshalTypes(w *bytes.Buffer, types []Type, stb *stringTableBuilder, opts *
 	types = types[1:]
 
 	if stb == nil {
-		stb = newStringTableBuilder(0)
+		// Assume that most types are named. This makes encoding large BTF like
+		// vmlinux a lot cheaper.
+		stb = newStringTableBuilder(len(types))
 	}
 
 	if opts == nil {

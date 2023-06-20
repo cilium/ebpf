@@ -12,6 +12,8 @@ import (
 )
 
 type marshalOptions struct {
+	// Target byte order. Defaults to the system's native endianness.
+	Order binary.ByteOrder
 	// Remove function linkage information for compatibility with <5.6 kernels.
 	StripFuncLinkage bool
 }
@@ -27,12 +29,11 @@ func kernelMarshalOptions() *marshalOptions {
 type encoder struct {
 	marshalOptions
 
-	byteOrder binary.ByteOrder
-	pending   internal.Deque[Type]
-	buf       *bytes.Buffer
-	strings   *stringTableBuilder
-	ids       map[Type]TypeID
-	lastID    TypeID
+	pending internal.Deque[Type]
+	buf     *bytes.Buffer
+	strings *stringTableBuilder
+	ids     map[Type]TypeID
+	lastID  TypeID
 }
 
 var emptyBTFHeader = make([]byte, btfHeaderLen)
@@ -77,15 +78,15 @@ func marshalTypes(w *bytes.Buffer, types []Type, stb *stringTableBuilder, opts *
 		stb = newStringTableBuilder(0)
 	}
 
-	e := encoder{
-		byteOrder: internal.NativeEndian,
-		buf:       w,
-		strings:   stb,
-		ids:       make(map[Type]TypeID, len(types)),
+	if opts == nil {
+		opts = &marshalOptions{Order: internal.NativeEndian}
 	}
 
-	if opts != nil {
-		e.marshalOptions = *opts
+	e := encoder{
+		marshalOptions: *opts,
+		buf:            w,
+		strings:        stb,
+		ids:            make(map[Type]TypeID, len(types)),
 	}
 
 	// Ensure that passed types are marshaled in the exact order they were
@@ -129,7 +130,7 @@ func marshalTypes(w *bytes.Buffer, types []Type, stb *stringTableBuilder, opts *
 		StringLen: uint32(stringLen),
 	}
 
-	err := binary.Write(sliceWriter(buf[:btfHeaderLen]), e.byteOrder, header)
+	err := binary.Write(sliceWriter(buf[:btfHeaderLen]), e.Order, header)
 	if err != nil {
 		return fmt.Errorf("write header: %v", err)
 	}
@@ -338,7 +339,7 @@ func (e *encoder) deflateType(typ Type) (err error) {
 		return err
 	}
 
-	return raw.Marshal(e.buf, e.byteOrder)
+	return raw.Marshal(e.buf, e.Order)
 }
 
 func (e *encoder) convertMembers(header *btfType, members []Member) ([]btfMember, error) {

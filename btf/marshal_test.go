@@ -8,11 +8,12 @@ import (
 
 	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/testutils"
+	"github.com/google/go-cmp/cmp"
 
 	qt "github.com/frankban/quicktest"
 )
 
-func TestBuild(t *testing.T) {
+func TestBuilderMarshal(t *testing.T) {
 	typ := &Int{
 		Name:     "foo",
 		Size:     2,
@@ -26,12 +27,47 @@ func TestBuild(t *testing.T) {
 		&Typedef{"baz", typ},
 	}
 
-	var buf bytes.Buffer
-	qt.Assert(t, marshalTypes(&buf, want, nil, nil), qt.IsNil)
+	m, err := NewBuilder(want)
+	qt.Assert(t, err, qt.IsNil)
 
-	have, err := loadRawSpec(bytes.NewReader(buf.Bytes()), internal.NativeEndian, nil)
+	cpy := *m
+	buf, err := m.Marshal(nil, &MarshalOptions{Order: internal.NativeEndian})
+	qt.Assert(t, err, qt.IsNil)
+	qt.Assert(t, m, qt.CmpEquals(cmp.AllowUnexported(*m)), &cpy, qt.Commentf("Marshaling should not change Builder state"))
+
+	have, err := loadRawSpec(bytes.NewReader(buf), internal.NativeEndian, nil)
 	qt.Assert(t, err, qt.IsNil, qt.Commentf("Couldn't parse BTF"))
 	qt.Assert(t, have.types, qt.DeepEquals, want)
+}
+
+func TestBuilderAdd(t *testing.T) {
+	i := &Int{
+		Name:     "foo",
+		Size:     2,
+		Encoding: Signed | Char,
+	}
+	pi := &Pointer{i}
+
+	var b Builder
+	id, err := b.Add(pi)
+	qt.Assert(t, err, qt.IsNil)
+	qt.Assert(t, id, qt.Equals, TypeID(1), qt.Commentf("First non-void type doesn't get id 1"))
+
+	id, err = b.Add(pi)
+	qt.Assert(t, err, qt.IsNil)
+	qt.Assert(t, id, qt.Equals, TypeID(1))
+
+	id, err = b.Add(i)
+	qt.Assert(t, err, qt.IsNil)
+	qt.Assert(t, id, qt.Equals, TypeID(2), qt.Commentf("Second type doesn't get id 2"))
+
+	id, err = b.Add(i)
+	qt.Assert(t, err, qt.IsNil)
+	qt.Assert(t, id, qt.Equals, TypeID(2), qt.Commentf("Adding a type twice returns different ids"))
+
+	id, err = b.Add(&Typedef{"baz", i})
+	qt.Assert(t, err, qt.IsNil)
+	qt.Assert(t, id, qt.Equals, TypeID(3))
 }
 
 func TestRoundtripVMlinux(t *testing.T) {
@@ -70,20 +106,35 @@ limitTypes:
 		}
 	}
 
-	var buf bytes.Buffer
-	qt.Assert(t, marshalTypes(&buf, types, nil, nil), qt.IsNil)
+	buf := marshalNativeEndian(t, types)
 
-	rebuilt, err := loadRawSpec(bytes.NewReader(buf.Bytes()), binary.LittleEndian, nil)
+	rebuilt, err := loadRawSpec(bytes.NewReader(buf), binary.LittleEndian, nil)
 	qt.Assert(t, err, qt.IsNil, qt.Commentf("round tripping BTF failed"))
 
 	if n := len(rebuilt.types); n > math.MaxUint16 {
 		t.Logf("Rebuilt BTF contains %d types which exceeds uint16, test may fail on older kernels", n)
 	}
 
-	h, err := NewHandle(rebuilt)
+	h, err := NewHandleFromRawBTF(buf)
 	testutils.SkipIfNotSupported(t, err)
 	qt.Assert(t, err, qt.IsNil, qt.Commentf("loading rebuilt BTF failed"))
 	h.Close()
+}
+
+func BenchmarkMarshaler(b *testing.B) {
+	spec := vmlinuxTestdataSpec(b)
+	types := spec.types[:100]
+
+	b.ReportAllocs()
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		var b Builder
+		for _, typ := range types {
+			_, _ = b.Add(typ)
+		}
+		_, _ = b.Marshal(nil, nil)
+	}
 }
 
 func BenchmarkBuildVmlinux(b *testing.B) {
@@ -93,9 +144,20 @@ func BenchmarkBuildVmlinux(b *testing.B) {
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-		var buf bytes.Buffer
-		if err := marshalTypes(&buf, types, nil, nil); err != nil {
-			b.Fatal(err)
+		var b Builder
+		for _, typ := range types {
+			_, _ = b.Add(typ)
 		}
+		_, _ = b.Marshal(nil, nil)
 	}
+}
+
+func marshalNativeEndian(tb testing.TB, types []Type) []byte {
+	tb.Helper()
+
+	m, err := NewBuilder(types)
+	qt.Assert(tb, err, qt.IsNil)
+	buf, err := m.Marshal(nil, nil)
+	qt.Assert(tb, err, qt.IsNil)
+	return buf
 }

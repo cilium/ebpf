@@ -17,6 +17,7 @@ import (
 	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/linux"
 	"github.com/cilium/ebpf/internal/sys"
+	"github.com/cilium/ebpf/internal/sysenc"
 	"github.com/cilium/ebpf/internal/unix"
 )
 
@@ -764,14 +765,14 @@ retry:
 	return attr.Retval, total, nil
 }
 
-func unmarshalProgram(buf []byte) (*Program, error) {
-	if len(buf) != 4 {
-		return nil, errors.New("program id requires 4 byte value")
+func unmarshalProgram(buf sysenc.Buffer) (*Program, error) {
+	var id uint32
+	if err := buf.Unmarshal(&id); err != nil {
+		return nil, err
 	}
 
 	// Looking up an entry in a nested map or prog array returns an id,
 	// not an fd.
-	id := internal.NativeEndian.Uint32(buf)
 	return NewProgramFromID(ProgramID(id))
 }
 

@@ -16,14 +16,14 @@ blocks:
       prologue:
         commands:
           - sudo sh -c 'swapoff -a && fallocate -l 2G /swapfile && chmod 0600 /swapfile && mkswap /swapfile && swapon /swapfile'
-          - sem-version go 1.20.1
+          - sem-version go 1.20.5
           - export PATH="$PATH:$(go env GOPATH)/bin"
           - checkout
           # Disabled, see https://github.com/cilium/ebpf/issues/898
           # - cache restore
           - go mod tidy
-          - curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b "$(go env GOPATH)/bin" v1.51.2
-          - go install gotest.tools/gotestsum@v1.8.1
+          - curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b "$(go env GOPATH)/bin" v1.53.3
+          - go install gotest.tools/gotestsum@v1.10.0
           - sudo pip3 install https://github.com/amluto/virtme/archive/beb85146cd91de37ae455eccb6ab67c393e6e290.zip
           - sudo apt-get update
           - sudo apt-get install -y --no-install-recommends qemu-system-x86 clang-9 llvm-9
@@ -32,7 +32,7 @@ blocks:
         always:
           commands:
             - sudo dmesg
-            - test-results publish junit.xml
+            - test -f junit.xml && test-results publish junit.xml
       env_vars:
         - name: TMPDIR
           value: /tmp
@@ -60,7 +60,7 @@ blocks:
         execution_time_limit:
           minutes: 10
         commands:
-          - sem-version go 1.19.6
+          - sem-version go 1.19.10
           - go test -v ./cmd/bpf2go
           - gotestsum --raw-command --ignore-non-json-output-lines --junitfile junit.xml -- ./run-tests.sh $CI_MAX_KERNEL_VERSION -short -count 1 -json ./...
       - name: Run unit tests

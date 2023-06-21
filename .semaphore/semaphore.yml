@@ -62,7 +62,7 @@ blocks:
         commands:
           - sem-version go 1.19.9
           - go test -v ./cmd/bpf2go
-          - gotestsum --raw-command --ignore-non-json-output-lines --junitfile junit.xml -- ./run-tests.sh $CI_MAX_KERNEL_VERSION -short -count 1 -json ./...
+          - gotestsum --raw-command --ignore-non-json-output-lines --junitfile junit.xml -- ./run-tests.sh $CI_MAX_KERNEL_VERSION -short -count 1 -timeout 5m -json ./...
       - name: Run unit tests
         execution_time_limit:
           minutes: 10
@@ -70,4 +70,4 @@ blocks:
           - env_var: KERNEL_VERSION
             values: ["5.19", "5.15", "5.10", "5.4", "4.19", "4.14", "4.9"]
         commands:
-          - gotestsum --raw-command --ignore-non-json-output-lines --junitfile junit.xml -- ./run-tests.sh $KERNEL_VERSION -short -count 1 -json ./...
+          - gotestsum --raw-command --ignore-non-json-output-lines --junitfile junit.xml -- ./run-tests.sh $KERNEL_VERSION -short -count 1 -timeout 5m -json ./...

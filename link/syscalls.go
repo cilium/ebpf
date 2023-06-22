@@ -47,10 +47,6 @@ var haveProgAttach = internal.NewFeatureTest("BPF_PROG_ATTACH", "4.10", func() e
 })
 
 var haveProgAttachReplace = internal.NewFeatureTest("BPF_PROG_ATTACH atomic replacement of MULTI progs", "5.5", func() error {
-	if err := haveProgAttach(); err != nil {
-		return err
-	}
-
 	prog, err := ebpf.NewProgram(&ebpf.ProgramSpec{
 		Type:       ebpf.CGroupSKB,
 		AttachType: ebpf.AttachCGroupInetIngress,
@@ -61,7 +57,10 @@ var haveProgAttachReplace = internal.NewFeatureTest("BPF_PROG_ATTACH atomic repl
 		},
 	})
 	if err != nil {
-		return internal.ErrNotSupported
+		if errors.Is(err, unix.EINVAL) {
+			return internal.ErrNotSupported
+		}
+		return err
 	}
 	defer prog.Close()
 
@@ -77,11 +76,19 @@ var haveProgAttachReplace = internal.NewFeatureTest("BPF_PROG_ATTACH atomic repl
 	}
 
 	err = sys.ProgAttach(&attr)
-	if errors.Is(err, unix.EINVAL) {
-		return internal.ErrNotSupported
-	}
-	if errors.Is(err, unix.EBADF) {
-		return nil
+	if err != nil {
+
+		if errors.Is(err, unix.EINVAL) {
+			return internal.ErrNotSupported
+		}
+
+		if errors.Is(err, unix.EBADF) {
+			return nil
+		}
+
+		if haveFeatErr := haveProgAttach(); haveFeatErr != nil {
+			return haveFeatErr
+		}
 	}
 	return err
 })

@@ -119,6 +119,7 @@ var haveInnerMaps = internal.NewFeatureTest("inner maps", "5.10", func() error {
 		MaxEntries: 1,
 		MapFlags:   unix.BPF_F_INNER_MAP,
 	})
+
 	if err != nil {
 		return internal.ErrNotSupported
 	}
@@ -135,6 +136,7 @@ var haveNoPreallocMaps = internal.NewFeatureTest("prealloc maps", "4.6", func() 
 		MaxEntries: 1,
 		MapFlags:   unix.BPF_F_NO_PREALLOC,
 	})
+
 	if err != nil {
 		return internal.ErrNotSupported
 	}
@@ -265,11 +267,8 @@ var haveBPFToBPFCalls = internal.NewFeatureTest("bpf2bpf calls", "4.16", func() 
 	}
 
 	fd, err := progLoad(insns, SocketFilter, "MIT")
-	if errors.Is(err, unix.EINVAL) {
-		return internal.ErrNotSupported
-	}
 	if err != nil {
-		return err
+		return internal.ErrNotSupported
 	}
 	_ = fd.Close()
 	return nil

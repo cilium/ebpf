@@ -205,11 +205,9 @@ func TestTagMarshaling(t *testing.T) {
 		&typeTag{&Int{}, "foo"},
 	} {
 		t.Run(fmt.Sprint(typ), func(t *testing.T) {
-			var buf bytes.Buffer
-			err := marshalTypes(&buf, []Type{&Void{}, typ}, nil, nil)
-			qt.Assert(t, err, qt.IsNil)
+			buf := marshalNativeEndian(t, []Type{typ})
 
-			s, err := loadRawSpec(bytes.NewReader(buf.Bytes()), internal.NativeEndian, nil)
+			s, err := loadRawSpec(bytes.NewReader(buf), internal.NativeEndian, nil)
 			qt.Assert(t, err, qt.IsNil)
 
 			have, err := s.TypeByID(1)

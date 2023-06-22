@@ -203,50 +203,6 @@ func TestTypeByName(t *testing.T) {
 	}
 }
 
-func TestSpecAdd(t *testing.T) {
-	i := &Int{
-		Name:     "foo",
-		Size:     2,
-		Encoding: Signed | Char,
-	}
-	pi := &Pointer{i}
-
-	s := NewSpec()
-	id, err := s.Add(pi)
-	qt.Assert(t, err, qt.IsNil)
-	qt.Assert(t, id, qt.Equals, TypeID(1), qt.Commentf("First non-void type doesn't get id 1"))
-
-	got, err := s.TypeByID(id)
-	qt.Assert(t, err, qt.IsNil)
-	qt.Assert(t, got, qt.Equals, pi)
-
-	id, err = s.Add(pi)
-	qt.Assert(t, err, qt.IsNil)
-	qt.Assert(t, id, qt.Equals, TypeID(1))
-
-	_, err = s.TypeID(i)
-	qt.Assert(t, err, qt.IsNotNil, qt.Commentf("Children mustn't be added"))
-
-	id, err = s.Add(i)
-	qt.Assert(t, err, qt.IsNil)
-	qt.Assert(t, id, qt.Equals, TypeID(2), qt.Commentf("Second type doesn't get id 2"))
-
-	id, err = s.Add(i)
-	qt.Assert(t, err, qt.IsNil)
-	qt.Assert(t, id, qt.Equals, TypeID(2), qt.Commentf("Adding a type twice returns different ids"))
-
-	typ, err := s.AnyTypeByName("foo")
-	qt.Assert(t, err, qt.IsNil, qt.Commentf("Add doesn't make named type queryable"))
-	qt.Assert(t, typ, qt.Equals, i)
-
-	id, err = s.Add(&Typedef{"baz", i})
-	qt.Assert(t, err, qt.IsNil)
-	qt.Assert(t, id, qt.Equals, TypeID(3))
-
-	_, err = s.AnyTypeByName("baz")
-	qt.Assert(t, err, qt.IsNil)
-}
-
 func BenchmarkParseVmlinux(b *testing.B) {
 	rd := vmlinuxTestdataReader(b)
 	b.ReportAllocs()
@@ -323,29 +279,11 @@ func TestLoadSpecFromElf(t *testing.T) {
 				t.Error("Expected global linkage:", v)
 			}
 		}
-
-		if spec.byteOrder != internal.NativeEndian {
-			return
-		}
-
-		t.Run("Handle", func(t *testing.T) {
-			testutils.SkipIfNotSupported(t, haveMapBTF())
-			btf, err := NewHandle(spec)
-			if err != nil {
-				t.Fatal("Can't load BTF:", err)
-			}
-			defer btf.Close()
-		})
 	})
 }
 
 func TestVerifierError(t *testing.T) {
-	var buf bytes.Buffer
-	if err := marshalTypes(&buf, []Type{&Void{}}, nil, nil); err != nil {
-		t.Fatal(err)
-	}
-
-	_, err := newHandleFromRawBTF(buf.Bytes())
+	_, err := NewHandle(&Builder{})
 	testutils.SkipIfNotSupported(t, err)
 	var ve *internal.VerifierError
 	if !errors.As(err, &ve) {
@@ -427,40 +365,35 @@ func ExampleSpec_TypeByName() {
 }
 
 func TestTypesIterator(t *testing.T) {
-	spec := NewSpec()
-
 	types := []Type{(*Void)(nil), &Int{Size: 4}, &Int{Size: 2}}
-	mustSpecAdd(t, spec, types...)
+
+	b, err := NewBuilder(types[1:])
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	raw, err := b.Marshal(nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	spec, err := LoadSpecFromReader(bytes.NewReader(raw))
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	iter := spec.Iterate()
-
-	// Add a type after calling Iterate() to make sure the iteration
-	// below doesn't pick it up.
-	mustSpecAdd(t, spec, &Const{types[0]})
 
 	for i, typ := range types {
 		if !iter.Next() {
 			t.Fatal("Iterator ended early at item", i)
 		}
 
-		if iter.Type != typ {
-			t.Fatalf("Expected %p to match %p (%[1]T)", iter.Type, typ)
-		}
+		qt.Assert(t, iter.Type, qt.DeepEquals, typ)
 	}
 
 	if iter.Next() {
 		t.Fatalf("Iterator yielded too many items: %p (%[1]T)", iter.Type)
-	}
-}
-
-func mustSpecAdd(t *testing.T, s *Spec, types ...Type) {
-	t.Helper()
-
-	for _, typ := range types {
-		_, err := s.Add(typ)
-		if err != nil {
-			t.Fatal(err)
-		}
 	}
 }
 

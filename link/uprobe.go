@@ -4,6 +4,7 @@ import (
 	"debug/elf"
 	"errors"
 	"fmt"
+	"github.com/cilium/ebpf/internal/unix"
 	"os"
 	"sync"
 
@@ -19,7 +20,10 @@ var (
 	haveRefCtrOffsetPMU     = internal.NewFeatureTest("RefCtrOffsetPMU", "4.20", func() error {
 		_, err := os.Stat(uprobeRefCtrOffsetPMUPath)
 		if err != nil {
-			return internal.ErrNotSupported
+			if errors.Is(err, unix.EINVAL) {
+				return internal.ErrNotSupported
+			}
+			return err
 		}
 		return nil
 	})

@@ -105,6 +105,12 @@ func (b *Builder) Add(typ Type) (TypeID, error) {
 		return 0, nil
 	}
 
+	if ds, ok := typ.(*Datasec); ok {
+		if err := datasecResolveWorkaround(b, ds); err != nil {
+			return 0, err
+		}
+	}
+
 	id, ok := b.stableIDs[typ]
 	if ok {
 		return id, nil
@@ -519,12 +525,6 @@ func MarshalMapKV(key, value Type) (_ *Handle, keyID, valueID TypeID, err error)
 	}
 
 	if value != nil {
-		if ds, ok := value.(*Datasec); ok {
-			if err := datasecResolveWorkaround(spec, ds); err != nil {
-				return nil, 0, 0, err
-			}
-		}
-
 		valueID, err = b.Add(value)
 		if err != nil {
 			return nil, 0, 0, fmt.Errorf("add value type: %w", err)

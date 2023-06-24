@@ -71,8 +71,8 @@ var targetByGoArch = map[string]target{
 	"sparc64":     {"bpfeb", "sparc"},
 }
 
-func run(stdout io.Writer, pkg, outputDir string, args []string) (err error) {
-	b2g, err := newB2G(stdout, pkg, outputDir, args)
+func run(stdout io.Writer, pkg string, args []string) (err error) {
+	b2g, err := newB2G(stdout, pkg, args)
 	switch {
 	case err == nil:
 		return b2g.convertAll()
@@ -114,11 +114,10 @@ type bpf2go struct {
 	makeBase string
 }
 
-func newB2G(stdout io.Writer, pkg, outputDir string, args []string) (*bpf2go, error) {
+func newB2G(stdout io.Writer, pkg string, args []string) (*bpf2go, error) {
 	b2g := &bpf2go{
-		stdout:    stdout,
-		pkg:       pkg,
-		outputDir: outputDir,
+		stdout: stdout,
+		pkg:    pkg,
 	}
 
 	fs := flag.NewFlagSet("bpf2go", flag.ContinueOnError)
@@ -136,6 +135,7 @@ func newB2G(stdout io.Writer, pkg, outputDir string, args []string) (*bpf2go, er
 	fs.Var(&b2g.cTypes, "type", "`Name` of a type to generate a Go declaration for, may be repeated")
 	fs.BoolVar(&b2g.skipGlobalTypes, "no-global-types", false, "Skip generating types for map keys and values, etc.")
 	fs.StringVar(&b2g.outputStem, "output-stem", "", "alternative stem for names of generated files (defaults to ident)")
+	fs.StringVar(&b2g.outputDir, "output", "", "Output directory in which to write Go files (defaults to pwd)")
 
 	fs.SetOutput(b2g.stdout)
 	fs.Usage = func() {
@@ -146,6 +146,14 @@ func newB2G(stdout io.Writer, pkg, outputDir string, args []string) (*bpf2go, er
 	}
 	if err := fs.Parse(args); err != nil {
 		return nil, err
+	}
+
+	if b2g.outputDir == "" {
+		outputDir, err := os.Getwd()
+		if err != nil {
+			return nil, fmt.Errorf("unable to get current working dir: %w", err)
+		}
+		b2g.outputDir = outputDir
 	}
 
 	if b2g.pkg == "" {
@@ -485,13 +493,7 @@ func collectTargets(targets []string) (map[target][]string, error) {
 }
 
 func main() {
-	outputDir, err := os.Getwd()
-	if err != nil {
-		fmt.Fprintln(os.Stderr, "Error:", err)
-		os.Exit(1)
-	}
-
-	if err := run(os.Stdout, os.Getenv("GOPACKAGE"), outputDir, os.Args[1:]); err != nil {
+	if err := run(os.Stdout, os.Getenv("GOPACKAGE"), os.Args[1:]); err != nil {
 		fmt.Fprintln(os.Stderr, "Error:", err)
 		os.Exit(1)
 	}

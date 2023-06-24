@@ -151,7 +151,7 @@ func newB2G(stdout io.Writer, pkg string, args []string) (*bpf2go, error) {
 	if b2g.outputDir == "" {
 		outputDir, err := os.Getwd()
 		if err != nil {
-			return nil, fmt.Errorf("error getting current working dir: %w", err)
+			return nil, fmt.Errorf("unable to get current working dir: %w", err)
 		}
 		b2g.outputDir = outputDir
 	}

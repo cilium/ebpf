@@ -151,11 +151,7 @@ nothing:
 func mustWriteTempFile(t *testing.T, name, contents string) string {
 	t.Helper()
 
-	tmp, err := os.MkdirTemp("", "bpf2go")
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { os.RemoveAll(tmp) })
+	tmp := t.TempDir()
 
 	tmpFile := filepath.Join(tmp, name)
 	if err := os.WriteFile(tmpFile, []byte(contents), 0660); err != nil {

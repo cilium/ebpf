@@ -18,6 +18,11 @@ type testcase struct {
 	zeroAllocs bool
 }
 
+type struc struct {
+	A uint64
+	B uint32
+}
+
 type explicitPad struct {
 	_ uint32
 }
@@ -193,10 +198,11 @@ func TestUnsafeBackingMemory(t *testing.T) {
 			"nil",
 			nil,
 		},
-		{
-			"nil pointer",
-			(*uint64)(nil),
-		},
+		// Currently crashes binary.Size. See https://github.com/golang/go/issues/60892
+		// {
+		// 	"nil pointer",
+		// 	(*uint64)(nil),
+		// },
 		{
 			"nil slice",
 			([]byte)(nil),

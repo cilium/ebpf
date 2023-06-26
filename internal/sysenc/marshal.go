@@ -106,8 +106,12 @@ func unsafeBackingMemory(data any) []byte {
 		return nil
 	}
 
-	size := sizeOf(data)
+	size := binary.Size(data)
 	if size == -1 {
+		return nil
+	}
+
+	if hasUnexportedFields(reflect.TypeOf(data)) {
 		return nil
 	}
 

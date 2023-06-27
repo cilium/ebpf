@@ -79,18 +79,6 @@ func (h *btfHeader) stringStart() int64 {
 	return int64(h.HdrLen + h.StringOff)
 }
 
-// newSpec creates a Spec containing only Void.
-func newSpec() *Spec {
-	return &Spec{
-		[]Type{(*Void)(nil)},
-		map[Type]TypeID{(*Void)(nil): 0},
-		0,
-		make(map[essentialName][]Type),
-		nil,
-		nil,
-	}
-}
-
 // LoadSpec opens file and calls LoadSpecFromReader on it.
 func LoadSpec(file string) (*Spec, error) {
 	fh, err := os.Open(file)

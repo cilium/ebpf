@@ -201,3 +201,13 @@ func marshalNativeEndian(tb testing.TB, types []Type) []byte {
 	qt.Assert(tb, err, qt.IsNil)
 	return buf
 }
+
+func specFromTypes(tb testing.TB, types []Type) *Spec {
+	tb.Helper()
+
+	btf := marshalNativeEndian(tb, types)
+	spec, err := loadRawSpec(bytes.NewReader(btf), internal.NativeEndian, nil)
+	qt.Assert(tb, err, qt.IsNil)
+
+	return spec
+}

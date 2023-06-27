@@ -34,11 +34,11 @@ func loadExtInfosFromELF(file *internal.SafeELFFile, spec *Spec) (*ExtInfos, err
 		return nil, fmt.Errorf("compressed ext_info is not supported")
 	}
 
-	return loadExtInfos(section.ReaderAt, file.ByteOrder, spec, spec.strings)
+	return loadExtInfos(section.ReaderAt, file.ByteOrder, spec)
 }
 
 // loadExtInfos parses bare ext infos.
-func loadExtInfos(r io.ReaderAt, bo binary.ByteOrder, spec *Spec, strings *stringTable) (*ExtInfos, error) {
+func loadExtInfos(r io.ReaderAt, bo binary.ByteOrder, spec *Spec) (*ExtInfos, error) {
 	// Open unbuffered section reader. binary.Read() calls io.ReadFull on
 	// the header structs, resulting in one syscall per header.
 	headerRd := io.NewSectionReader(r, 0, math.MaxInt64)
@@ -53,7 +53,7 @@ func loadExtInfos(r io.ReaderAt, bo binary.ByteOrder, spec *Spec, strings *strin
 	}
 
 	buf := internal.NewBufferedSectionReader(r, extHeader.funcInfoStart(), int64(extHeader.FuncInfoLen))
-	btfFuncInfos, err := parseFuncInfos(buf, bo, strings)
+	btfFuncInfos, err := parseFuncInfos(buf, bo, spec.strings)
 	if err != nil {
 		return nil, fmt.Errorf("parsing BTF function info: %w", err)
 	}
@@ -67,14 +67,14 @@ func loadExtInfos(r io.ReaderAt, bo binary.ByteOrder, spec *Spec, strings *strin
 	}
 
 	buf = internal.NewBufferedSectionReader(r, extHeader.lineInfoStart(), int64(extHeader.LineInfoLen))
-	btfLineInfos, err := parseLineInfos(buf, bo, strings)
+	btfLineInfos, err := parseLineInfos(buf, bo, spec.strings)
 	if err != nil {
 		return nil, fmt.Errorf("parsing BTF line info: %w", err)
 	}
 
 	lineInfos := make(map[string]LineInfos, len(btfLineInfos))
 	for section, blis := range btfLineInfos {
-		lineInfos[section], err = newLineInfos(blis, strings)
+		lineInfos[section], err = newLineInfos(blis, spec.strings)
 		if err != nil {
 			return nil, fmt.Errorf("section %s: line infos: %w", section, err)
 		}
@@ -86,14 +86,14 @@ func loadExtInfos(r io.ReaderAt, bo binary.ByteOrder, spec *Spec, strings *strin
 
 	var btfCORERelos map[string][]bpfCORERelo
 	buf = internal.NewBufferedSectionReader(r, extHeader.coreReloStart(coreHeader), int64(coreHeader.COREReloLen))
-	btfCORERelos, err = parseCORERelos(buf, bo, strings)
+	btfCORERelos, err = parseCORERelos(buf, bo, spec.strings)
 	if err != nil {
 		return nil, fmt.Errorf("parsing CO-RE relocation info: %w", err)
 	}
 
 	coreRelos := make(map[string]CORERelocationInfos, len(btfCORERelos))
 	for section, brs := range btfCORERelos {
-		coreRelos[section], err = newRelocationInfos(brs, spec, strings)
+		coreRelos[section], err = newRelocationInfos(brs, spec, spec.strings)
 		if err != nil {
 			return nil, fmt.Errorf("section %s: CO-RE relocations: %w", section, err)
 		}

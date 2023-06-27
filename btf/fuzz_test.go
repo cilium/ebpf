@@ -56,8 +56,6 @@ func FuzzExtInfo(f *testing.F) {
 	}
 	f.Add(buf.Bytes(), []byte("\x00foo\x00barfoo\x00"))
 
-	emptySpec := specFromTypes(f, nil)
-
 	f.Fuzz(func(t *testing.T, data, strings []byte) {
 		if len(data) < binary.Size(btfExtHeader{}) {
 			t.Skip("data is too short")
@@ -68,7 +66,10 @@ func FuzzExtInfo(f *testing.F) {
 			t.Skip("invalid string table")
 		}
 
-		info, err := loadExtInfos(bytes.NewReader(data), internal.NativeEndian, emptySpec, table)
+		emptySpec := specFromTypes(t, nil)
+		emptySpec.strings = table
+
+		info, err := loadExtInfos(bytes.NewReader(data), internal.NativeEndian, emptySpec)
 		if err != nil {
 			if info != nil {
 				t.Fatal("info is not nil")

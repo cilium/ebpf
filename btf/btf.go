@@ -46,7 +46,7 @@ type Spec struct {
 	// Includes all struct flavors and types with the same name.
 	namedTypes map[essentialName][]Type
 
-	// String table from ELF, may be nil.
+	// String table from ELF.
 	strings *stringTable
 
 	// Byte order of the ELF we decoded the spec from, may be nil.
@@ -225,10 +225,6 @@ func loadRawSpec(btf io.ReaderAt, bo binary.ByteOrder, base *Spec) (*Spec, error
 	if base != nil {
 		if base.firstTypeID != 0 {
 			return nil, fmt.Errorf("can't use split BTF as base")
-		}
-
-		if base.strings == nil {
-			return nil, fmt.Errorf("parse split BTF: base must be loaded from an ELF")
 		}
 
 		baseStrings = base.strings

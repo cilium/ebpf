@@ -336,22 +336,24 @@ func TestGuessBTFByteOrder(t *testing.T) {
 
 func TestSpecCopy(t *testing.T) {
 	spec := parseELFBTF(t, "../testdata/loader-el.elf")
-
-	if len(spec.types) < 1 {
-		t.Fatal("Not enough types")
-	}
-
 	cpy := spec.Copy()
-	for i := range cpy.types {
-		if _, ok := cpy.types[i].(*Void); ok {
+
+	have := typesFromSpec(t, spec)
+	qt.Assert(t, len(spec.types) > 0, qt.IsTrue)
+
+	want := typesFromSpec(t, cpy)
+	qt.Assert(t, want, qt.HasLen, len(have))
+
+	for i := range want {
+		if _, ok := have[i].(*Void); ok {
 			// Since Void is an empty struct, a Type interface value containing
 			// &Void{} stores (*Void, nil). Since interface equality first compares
 			// the type and then the concrete value, Void is always equal.
 			continue
 		}
 
-		if cpy.types[i] == spec.types[i] {
-			t.Fatalf("Type at index %d is not a copy: %T == %T", i, cpy.types[i], spec.types[i])
+		if have[i] == want[i] {
+			t.Fatalf("Type at index %d is not a copy: %T == %T", i, have[i], want[i])
 		}
 	}
 }

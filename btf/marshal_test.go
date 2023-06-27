@@ -71,7 +71,7 @@ func TestBuilderAdd(t *testing.T) {
 }
 
 func TestRoundtripVMlinux(t *testing.T) {
-	types := vmlinuxSpec(t).types
+	types := typesFromSpec(t, vmlinuxSpec(t))
 
 	// Randomize the order to force different permutations of walking the type
 	// graph. Keep Void at index 0.
@@ -153,8 +153,7 @@ func TestMarshalEnum64(t *testing.T) {
 }
 
 func BenchmarkMarshaler(b *testing.B) {
-	spec := vmlinuxTestdataSpec(b)
-	types := spec.types[:100]
+	types := typesFromSpec(b, vmlinuxTestdataSpec(b))[:100]
 
 	b.ReportAllocs()
 	b.ResetTimer()
@@ -169,7 +168,7 @@ func BenchmarkMarshaler(b *testing.B) {
 }
 
 func BenchmarkBuildVmlinux(b *testing.B) {
-	types := vmlinuxTestdataSpec(b).types
+	types := typesFromSpec(b, vmlinuxTestdataSpec(b))
 
 	b.ReportAllocs()
 	b.ResetTimer()
@@ -201,4 +200,16 @@ func specFromTypes(tb testing.TB, types []Type) *Spec {
 	qt.Assert(tb, err, qt.IsNil)
 
 	return spec
+}
+
+func typesFromSpec(tb testing.TB, spec *Spec) []Type {
+	tb.Helper()
+
+	var types []Type
+	iter := spec.Iterate()
+	for iter.Next() {
+		types = append(types, iter.Type)
+	}
+
+	return types
 }

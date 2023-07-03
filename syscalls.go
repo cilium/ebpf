@@ -87,9 +87,11 @@ var haveMapMutabilityModifiers = internal.NewFeatureTest("read- and write-only m
 		MaxEntries: 1,
 		MapFlags:   unix.BPF_F_RDONLY_PROG,
 	})
+
 	if err != nil {
 		return internal.ErrNotSupported
 	}
+
 	_ = m.Close()
 	return nil
 })
@@ -119,8 +121,12 @@ var haveInnerMaps = internal.NewFeatureTest("inner maps", "5.10", func() error {
 		MaxEntries: 1,
 		MapFlags:   unix.BPF_F_INNER_MAP,
 	})
+
 	if err != nil {
-		return internal.ErrNotSupported
+		if errors.Is(err, unix.EINVAL) {
+			return internal.ErrNotSupported
+		}
+		return err
 	}
 	_ = m.Close()
 	return nil
@@ -135,6 +141,7 @@ var haveNoPreallocMaps = internal.NewFeatureTest("prealloc maps", "4.6", func() 
 		MaxEntries: 1,
 		MapFlags:   unix.BPF_F_NO_PREALLOC,
 	})
+
 	if err != nil {
 		return internal.ErrNotSupported
 	}
@@ -176,6 +183,7 @@ var haveObjName = internal.NewFeatureTest("object names", "4.15", func() error {
 	}
 
 	fd, err := sys.MapCreate(&attr)
+
 	if err != nil {
 		return internal.ErrNotSupported
 	}
@@ -216,6 +224,7 @@ var haveBatchAPI = internal.NewFeatureTest("map batch api", "5.6", func() error 
 	}
 
 	fd, err := sys.MapCreate(&attr)
+
 	if err != nil {
 		return internal.ErrNotSupported
 	}
@@ -250,7 +259,10 @@ var haveProbeReadKernel = internal.NewFeatureTest("bpf_probe_read_kernel", "5.5"
 
 	fd, err := progLoad(insns, Kprobe, "GPL")
 	if err != nil {
-		return internal.ErrNotSupported
+		if errors.Is(err, unix.EINVAL) {
+			return internal.ErrNotSupported
+		}
+		return err
 	}
 	_ = fd.Close()
 	return nil

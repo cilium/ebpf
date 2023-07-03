@@ -436,14 +436,15 @@ func (spec *MapSpec) createMap(inner *sys.FD, opts MapOptions) (_ *Map, err erro
 		if errors.Is(err, unix.EINVAL) && spec.Type == UnspecifiedMap {
 			return nil, fmt.Errorf("map create: cannot use type %s", UnspecifiedMap)
 		}
-		if attr.BtfFd == 0 {
-			return nil, fmt.Errorf("map create: %w (without BTF k/v)", err)
-		}
 
 		if spec.Flags&(unix.BPF_F_RDONLY_PROG|unix.BPF_F_WRONLY_PROG) > 0 || spec.Freeze {
 			if haveFeatErr := haveMapMutabilityModifiers(); err != nil {
 				return nil, fmt.Errorf("map create: %w", haveFeatErr)
 			}
+		}
+
+		if attr.BtfFd == 0 {
+			return nil, fmt.Errorf("map create: %w (without BTF k/v)", err)
 		}
 
 		if spec.Flags&unix.BPF_F_MMAPABLE > 0 {

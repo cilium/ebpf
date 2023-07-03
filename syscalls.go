@@ -87,12 +87,11 @@ var haveMapMutabilityModifiers = internal.NewFeatureTest("read- and write-only m
 		MaxEntries: 1,
 		MapFlags:   unix.BPF_F_RDONLY_PROG,
 	})
+
 	if err != nil {
-		if errors.Is(err, unix.EINVAL) {
-			return internal.ErrNotSupported
-		}
-		return err
+		return internal.ErrNotSupported
 	}
+
 	_ = m.Close()
 	return nil
 })
@@ -107,10 +106,7 @@ var haveMmapableMaps = internal.NewFeatureTest("mmapable maps", "5.5", func() er
 		MapFlags:   unix.BPF_F_MMAPABLE,
 	})
 	if err != nil {
-		if errors.Is(err, unix.EINVAL) {
-			return internal.ErrNotSupported
-		}
-		return err
+		return internal.ErrNotSupported
 	}
 	_ = m.Close()
 	return nil
@@ -145,11 +141,9 @@ var haveNoPreallocMaps = internal.NewFeatureTest("prealloc maps", "4.6", func() 
 		MaxEntries: 1,
 		MapFlags:   unix.BPF_F_NO_PREALLOC,
 	})
+
 	if err != nil {
-		if errors.Is(err, unix.EINVAL) {
-			return internal.ErrNotSupported
-		}
-		return err
+		return internal.ErrNotSupported
 	}
 	_ = m.Close()
 	return nil
@@ -191,10 +185,7 @@ var haveObjName = internal.NewFeatureTest("object names", "4.15", func() error {
 	fd, err := sys.MapCreate(&attr)
 
 	if err != nil {
-		if errors.Is(err, unix.EINVAL) {
-			return internal.ErrNotSupported
-		}
-		return err
+		return internal.ErrNotSupported
 	}
 
 	_ = fd.Close()
@@ -216,10 +207,7 @@ var objNameAllowsDot = internal.NewFeatureTest("dot in object names", "5.2", fun
 
 	fd, err := sys.MapCreate(&attr)
 	if err != nil {
-		if errors.Is(err, unix.EINVAL) {
-			return internal.ErrNotSupported
-		}
-		return err
+		return internal.ErrNotSupported
 	}
 
 	_ = fd.Close()
@@ -238,10 +226,7 @@ var haveBatchAPI = internal.NewFeatureTest("map batch api", "5.6", func() error 
 	fd, err := sys.MapCreate(&attr)
 
 	if err != nil {
-		if errors.Is(err, unix.EINVAL) {
-			return internal.ErrNotSupported
-		}
-		return err
+		return internal.ErrNotSupported
 	}
 	defer fd.Close()
 

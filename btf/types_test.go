@@ -91,6 +91,41 @@ func TestCopy(t *testing.T) {
 	})
 }
 
+func TestAs(t *testing.T) {
+	i := &Int{}
+	ptr := &Pointer{i}
+	td := &Typedef{Type: ptr}
+	cst := &Const{td}
+	vol := &Volatile{cst}
+
+	// It's possible to retrieve qualifiers and Typedefs.
+	haveVol, ok := as[*Volatile](vol)
+	qt.Assert(t, ok, qt.IsTrue)
+	qt.Assert(t, haveVol, qt.Equals, vol)
+
+	haveTd, ok := as[*Typedef](vol)
+	qt.Assert(t, ok, qt.IsTrue)
+	qt.Assert(t, haveTd, qt.Equals, td)
+
+	haveCst, ok := as[*Const](vol)
+	qt.Assert(t, ok, qt.IsTrue)
+	qt.Assert(t, haveCst, qt.Equals, cst)
+
+	// Make sure we don't skip Pointer.
+	haveI, ok := as[*Int](vol)
+	qt.Assert(t, ok, qt.IsFalse)
+	qt.Assert(t, haveI, qt.IsNil)
+
+	// Make sure we can always retrieve Pointer.
+	for _, typ := range []Type{
+		td, cst, vol, ptr,
+	} {
+		have, ok := as[*Pointer](typ)
+		qt.Assert(t, ok, qt.IsTrue)
+		qt.Assert(t, have, qt.Equals, ptr)
+	}
+}
+
 func BenchmarkCopy(b *testing.B) {
 	typ := newCyclicalType(10)
 

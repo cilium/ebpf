@@ -659,3 +659,47 @@ func TestCORECopyWithoutQualifiers(t *testing.T) {
 		qt.Assert(t, got, qt.DeepEquals, root)
 	})
 }
+
+func BenchmarkCORESkBuff(b *testing.B) {
+	spec := vmlinuxTestdataSpec(b)
+
+	var skb *Struct
+	err := spec.TypeByName("sk_buff", &skb)
+	qt.Assert(b, err, qt.IsNil)
+
+	skbID, err := spec.TypeID(skb)
+	qt.Assert(b, err, qt.IsNil)
+
+	var pktHashTypes *Enum
+	err = spec.TypeByName("pkt_hash_types", &pktHashTypes)
+	qt.Assert(b, err, qt.IsNil)
+
+	pktHashTypesID, err := spec.TypeID(pktHashTypes)
+	qt.Assert(b, err, qt.IsNil)
+
+	for _, relo := range []*CORERelocation{
+		{skb, coreAccessor{0, 0}, reloFieldByteOffset, skbID},
+		{skb, coreAccessor{0, 0}, reloFieldByteSize, skbID},
+		{skb, coreAccessor{0, 0}, reloFieldExists, skbID},
+		{skb, coreAccessor{0, 0}, reloFieldSigned, skbID},
+		{skb, coreAccessor{0, 0}, reloFieldLShiftU64, skbID},
+		{skb, coreAccessor{0, 0}, reloFieldRShiftU64, skbID},
+		{skb, coreAccessor{0}, reloTypeIDLocal, skbID},
+		{skb, coreAccessor{0}, reloTypeIDTarget, skbID},
+		{skb, coreAccessor{0}, reloTypeExists, skbID},
+		{skb, coreAccessor{0}, reloTypeSize, skbID},
+		{pktHashTypes, coreAccessor{0}, reloEnumvalExists, pktHashTypesID},
+		{pktHashTypes, coreAccessor{0}, reloEnumvalValue, pktHashTypesID},
+	} {
+		b.Run(relo.kind.String(), func(b *testing.B) {
+			b.ReportAllocs()
+
+			for i := 0; i < b.N; i++ {
+				_, err = CORERelocate([]*CORERelocation{relo}, spec, spec.byteOrder)
+				if err != nil {
+					b.Fatal(err)
+				}
+			}
+		})
+	}
+}

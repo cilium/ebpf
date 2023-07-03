@@ -1,6 +1,7 @@
 package btf
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"math"
@@ -593,6 +594,8 @@ var (
 	_ qualifier = (*typeTag)(nil)
 )
 
+var errUnsizedType = errors.New("type is unsized")
+
 // Sizeof returns the size of a type in bytes.
 //
 // Returns an error if the size can't be computed.
@@ -627,7 +630,7 @@ func Sizeof(typ Type) (int, error) {
 			continue
 
 		default:
-			return 0, fmt.Errorf("unsized type %T", typ)
+			return 0, fmt.Errorf("type %T: %w", typ, errUnsizedType)
 		}
 
 		if n > 0 && elem > math.MaxInt64/n {

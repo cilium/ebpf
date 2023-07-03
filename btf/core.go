@@ -620,7 +620,7 @@ func (cf *coreField) sizeBits() (Bits, error) {
 	// between kernel versions. Synthesise the size to make the shifts work.
 	size, err := Sizeof(cf.Type)
 	if err != nil {
-		return 0, nil
+		return 0, err
 	}
 	return Bits(size * 8), nil
 }

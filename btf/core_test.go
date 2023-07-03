@@ -675,6 +675,24 @@ func TestCOREReloFieldSigned(t *testing.T) {
 	}
 }
 
+func TestCOREReloFieldShiftU64(t *testing.T) {
+	typ := &Struct{
+		Members: []Member{
+			{Name: "A", Type: &Fwd{}},
+		},
+	}
+
+	for _, relo := range []*CORERelocation{
+		{typ, coreAccessor{0, 0}, reloFieldRShiftU64, 1},
+		{typ, coreAccessor{0, 0}, reloFieldLShiftU64, 1},
+	} {
+		t.Run(relo.kind.String(), func(t *testing.T) {
+			_, err := coreCalculateFixup(relo, typ, 1, internal.NativeEndian)
+			qt.Assert(t, err, qt.ErrorIs, errUnsizedType)
+		})
+	}
+}
+
 func BenchmarkCORESkBuff(b *testing.B) {
 	spec := vmlinuxTestdataSpec(b)
 

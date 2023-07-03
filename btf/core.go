@@ -303,6 +303,8 @@ func coreCalculateFixups(relos []*CORERelocation, targetSpec *Spec, targets []Ty
 	return bestFixups, nil
 }
 
+var errNoSignedness = errors.New("no signedness")
+
 // coreCalculateFixup calculates the fixup for a single local type, target type
 // and relocation.
 func coreCalculateFixup(relo *CORERelocation, target Type, targetID TypeID, bo binary.ByteOrder) (COREFixup, error) {
@@ -461,7 +463,7 @@ func coreCalculateFixup(relo *CORERelocation, target Type, targetID TypeID, bo b
 					uint32(target.Encoding&Signed),
 				)
 			default:
-				return fixupWithoutValidation(0, 0)
+				return zero, fmt.Errorf("type %T: %w", local, errNoSignedness)
 			}
 		}
 	}

@@ -218,6 +218,7 @@ func copyMembers(orig []Member) []Member {
 }
 
 type composite interface {
+	Type
 	members() []Member
 }
 
@@ -1143,6 +1144,29 @@ func UnderlyingType(typ Type) Type {
 		}
 	}
 	return &cycle{typ}
+}
+
+// as returns typ if is of type T. Otherwise it peels qualifiers and Typedefs
+// until it finds a T.
+//
+// Returns the zero value and false if there is no T or if the type is nested
+// too deeply.
+func as[T Type](typ Type) (T, bool) {
+	for depth := 0; depth <= maxTypeDepth; depth++ {
+		switch v := (typ).(type) {
+		case T:
+			return v, true
+		case qualifier:
+			typ = v.qualify()
+		case *Typedef:
+			typ = v.Type
+		default:
+			goto notFound
+		}
+	}
+notFound:
+	var zero T
+	return zero, false
 }
 
 type formatState struct {

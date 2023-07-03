@@ -79,16 +79,15 @@ var haveProgAttachReplace = internal.NewFeatureTest("BPF_PROG_ATTACH atomic repl
 	}
 
 	err = sys.ProgAttach(&attr)
-	if err != nil {
 
-		if errors.Is(err, unix.EINVAL) {
-			return internal.ErrNotSupported
-		}
-
-		if errors.Is(err, unix.EBADF) {
-			return nil
-		}
+	if errors.Is(err, unix.EINVAL) {
+		return internal.ErrNotSupported
 	}
+
+	if errors.Is(err, unix.EBADF) {
+		return nil
+	}
+	
 	return err
 })
 

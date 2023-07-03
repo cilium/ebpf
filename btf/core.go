@@ -245,12 +245,11 @@ var errIncompatibleTypes = errors.New("incompatible types")
 func coreCalculateFixups(relos []*CORERelocation, targetSpec *Spec, targets []Type, bo binary.ByteOrder) ([]COREFixup, error) {
 	bestScore := len(relos)
 	var bestFixups []COREFixup
-	for i := range targets {
-		targetID, err := targetSpec.TypeID(targets[i])
+	for _, target := range targets {
+		targetID, err := targetSpec.TypeID(target)
 		if err != nil {
 			return nil, fmt.Errorf("target type ID: %w", err)
 		}
-		target := Copy(targets[i], UnderlyingType)
 
 		score := 0 // lower is better
 		fixups := make([]COREFixup, 0, len(relos))
@@ -321,7 +320,7 @@ func coreCalculateFixup(relo *CORERelocation, target Type, targetID TypeID, bo b
 	}
 	zero := COREFixup{}
 
-	local := Copy(relo.typ, UnderlyingType)
+	local := relo.typ
 
 	switch relo.kind {
 	case reloTypeIDTarget, reloTypeSize, reloTypeExists:
@@ -376,12 +375,12 @@ func coreCalculateFixup(relo *CORERelocation, target Type, targetID TypeID, bo b
 		}
 
 	case reloFieldSigned:
-		switch local.(type) {
+		switch l := UnderlyingType(local).(type) {
 		case *Enum:
 			return fixup(1, 1)
 		case *Int:
 			return fixup(
-				uint32(local.(*Int).Encoding&Signed),
+				uint32(l.Encoding&Signed),
 				uint32(target.(*Int).Encoding&Signed),
 			)
 		default:
@@ -389,7 +388,7 @@ func coreCalculateFixup(relo *CORERelocation, target Type, targetID TypeID, bo b
 		}
 
 	case reloFieldByteOffset, reloFieldByteSize, reloFieldExists, reloFieldLShiftU64, reloFieldRShiftU64:
-		if _, ok := target.(*Fwd); ok {
+		if _, ok := as[*Fwd](target); ok {
 			// We can't relocate fields using a forward declaration, so
 			// skip it. If a non-forward declaration is present in the BTF
 			// we'll find it in one of the other iterations.
@@ -519,7 +518,7 @@ func (ca coreAccessor) String() string {
 }
 
 func (ca coreAccessor) enumValue(t Type) (*EnumValue, error) {
-	e, ok := t.(*Enum)
+	e, ok := as[*Enum](t)
 	if !ok {
 		return nil, fmt.Errorf("not an enum: %s", t)
 	}
@@ -604,7 +603,7 @@ func (cf *coreField) sizeBits() (Bits, error) {
 	// between kernel versions. Synthesise the size to make the shifts work.
 	size, err := Sizeof(cf.Type)
 	if err != nil {
-		return 0, nil
+		return 0, nil // TODO: Bug?
 	}
 	return Bits(size * 8), nil
 }
@@ -634,7 +633,7 @@ func coreFindField(localT Type, localAcc coreAccessor, targetT Type) (coreField,
 
 	var localMaybeFlex, targetMaybeFlex bool
 	for i, acc := range localAcc[1:] {
-		switch localType := local.Type.(type) {
+		switch localType := UnderlyingType(local.Type).(type) {
 		case composite:
 			// For composite types acc is used to find the field in the local type,
 			// and then we try to find a field in target with the same name.
@@ -645,21 +644,21 @@ func coreFindField(localT Type, localAcc coreAccessor, targetT Type) (coreField,
 
 			localMember := localMembers[acc]
 			if localMember.Name == "" {
-				_, ok := localMember.Type.(composite)
+				localMemberType, ok := as[composite](localMember.Type)
 				if !ok {
 					return coreField{}, coreField{}, fmt.Errorf("unnamed field with type %s: %s", localMember.Type, ErrNotSupported)
 				}
 
 				// This is an anonymous struct or union, ignore it.
 				local = coreField{
-					Type:   localMember.Type,
+					Type:   localMemberType,
 					offset: local.offset + localMember.Offset.Bytes(),
 				}
 				localMaybeFlex = false
 				continue
 			}
 
-			targetType, ok := target.Type.(composite)
+			targetType, ok := as[composite](target.Type)
 			if !ok {
 				return coreField{}, coreField{}, fmt.Errorf("target not composite: %w", errImpossibleRelocation)
 			}
@@ -705,7 +704,7 @@ func coreFindField(localT Type, localAcc coreAccessor, targetT Type) (coreField,
 
 		case *Array:
 			// For arrays, acc is the index in the target.
-			targetType, ok := target.Type.(*Array)
+			targetType, ok := as[*Array](target.Type)
 			if !ok {
 				return coreField{}, coreField{}, fmt.Errorf("target not array: %w", errImpossibleRelocation)
 			}
@@ -768,6 +767,7 @@ func coreFindMember(typ composite, name string) (Member, bool, error) {
 		offset Bits
 	}
 
+	// TODO: Why is targets needed at all?
 	targets := []offsetTarget{{typ, 0}}
 	visited := make(map[composite]bool)
 
@@ -799,7 +799,7 @@ func coreFindMember(typ composite, name string) (Member, bool, error) {
 				continue
 			}
 
-			comp, ok := member.Type.(composite)
+			comp, ok := as[composite](member.Type)
 			if !ok {
 				return Member{}, false, fmt.Errorf("anonymous non-composite type %T not allowed", member.Type)
 			}
@@ -818,7 +818,7 @@ func coreFindEnumValue(local Type, localAcc coreAccessor, target Type) (localVal
 		return nil, nil, err
 	}
 
-	targetEnum, ok := target.(*Enum)
+	targetEnum, ok := as[*Enum](target)
 	if !ok {
 		return nil, nil, errImpossibleRelocation
 	}
@@ -839,10 +839,7 @@ func coreFindEnumValue(local Type, localAcc coreAccessor, target Type) (localVal
 //
 // Only layout compatibility is checked, ignoring names of the root type.
 func CheckTypeCompatibility(localType Type, targetType Type) error {
-	l := Copy(localType, UnderlyingType)
-	t := Copy(targetType, UnderlyingType)
-
-	return coreAreTypesCompatible(l, t)
+	return coreAreTypesCompatible(localType, targetType)
 }
 
 /* The comment below is from bpf_core_types_are_compat in libbpf.c:
@@ -881,8 +878,8 @@ func coreAreTypesCompatible(localType Type, targetType Type) error {
 			return errors.New("types are nested too deep")
 		}
 
-		localType = *l
-		targetType = *t
+		localType = UnderlyingType(*l)
+		targetType = UnderlyingType(*t)
 
 		if reflect.TypeOf(localType) != reflect.TypeOf(targetType) {
 			return fmt.Errorf("type mismatch: %w", errIncompatibleTypes)
@@ -949,6 +946,9 @@ func coreAreTypesCompatible(localType Type, targetType Type) error {
  * Returns errImpossibleRelocation if the members are not compatible.
  */
 func coreAreMembersCompatible(localType Type, targetType Type) error {
+	localType = UnderlyingType(localType)
+	targetType = UnderlyingType(targetType)
+
 	doNamesMatch := func(a, b string) error {
 		if a == "" || b == "" {
 			// allow anonymous and named type to match

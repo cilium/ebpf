@@ -673,6 +673,14 @@ func TestCOREReloFieldSigned(t *testing.T) {
 			qt.Assert(t, err, qt.IsNil)
 		})
 	}
+
+	t.Run("type without signedness", func(t *testing.T) {
+		relo := &CORERelocation{
+			&Array{}, coreAccessor{0}, reloFieldSigned, 0,
+		}
+		_, err := coreCalculateFixup(relo, &Array{}, 0, internal.NativeEndian)
+		qt.Assert(t, err, qt.ErrorIs, errNoSignedness)
+	})
 }
 
 func TestCOREReloFieldShiftU64(t *testing.T) {

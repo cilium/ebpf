@@ -90,6 +90,7 @@ var haveMapMutabilityModifiers = internal.NewFeatureTest("read- and write-only m
 	if err != nil {
 		return internal.ErrNotSupported
 	}
+
 	_ = m.Close()
 	return nil
 })
@@ -119,6 +120,7 @@ var haveInnerMaps = internal.NewFeatureTest("inner maps", "5.10", func() error {
 		MaxEntries: 1,
 		MapFlags:   unix.BPF_F_INNER_MAP,
 	})
+
 	if err != nil {
 		return internal.ErrNotSupported
 	}
@@ -135,6 +137,7 @@ var haveNoPreallocMaps = internal.NewFeatureTest("prealloc maps", "4.6", func() 
 		MaxEntries: 1,
 		MapFlags:   unix.BPF_F_NO_PREALLOC,
 	})
+
 	if err != nil {
 		return internal.ErrNotSupported
 	}
@@ -176,6 +179,7 @@ var haveObjName = internal.NewFeatureTest("object names", "4.15", func() error {
 	}
 
 	fd, err := sys.MapCreate(&attr)
+
 	if err != nil {
 		return internal.ErrNotSupported
 	}
@@ -216,6 +220,7 @@ var haveBatchAPI = internal.NewFeatureTest("map batch api", "5.6", func() error 
 	}
 
 	fd, err := sys.MapCreate(&attr)
+
 	if err != nil {
 		return internal.ErrNotSupported
 	}
@@ -265,11 +270,9 @@ var haveBPFToBPFCalls = internal.NewFeatureTest("bpf2bpf calls", "4.16", func() 
 	}
 
 	fd, err := progLoad(insns, SocketFilter, "MIT")
-	if errors.Is(err, unix.EINVAL) {
-		return internal.ErrNotSupported
-	}
+
 	if err != nil {
-		return err
+		return internal.ErrNotSupported
 	}
 	_ = fd.Close()
 	return nil

@@ -60,9 +60,11 @@ var haveProgAttachReplace = internal.NewFeatureTest("BPF_PROG_ATTACH atomic repl
 			asm.Return(),
 		},
 	})
+
 	if err != nil {
-		return internal.ErrNotSupported
+		return err
 	}
+
 	defer prog.Close()
 
 	// We know that we have BPF_PROG_ATTACH since we can load CGroupSKB programs.
@@ -77,9 +79,11 @@ var haveProgAttachReplace = internal.NewFeatureTest("BPF_PROG_ATTACH atomic repl
 	}
 
 	err = sys.ProgAttach(&attr)
+
 	if errors.Is(err, unix.EINVAL) {
 		return internal.ErrNotSupported
 	}
+
 	if errors.Is(err, unix.EBADF) {
 		return nil
 	}
@@ -113,9 +117,7 @@ var haveProgQuery = internal.NewFeatureTest("BPF_PROG_QUERY", "4.15", func() err
 	}
 
 	err := sys.ProgQuery(&attr)
-	if errors.Is(err, unix.EINVAL) {
-		return internal.ErrNotSupported
-	}
+
 	if errors.Is(err, unix.EBADF) {
 		return nil
 	}

@@ -90,7 +90,6 @@ var haveMapMutabilityModifiers = internal.NewFeatureTest("read- and write-only m
 	if err != nil {
 		return internal.ErrNotSupported
 	}
-
 	_ = m.Close()
 	return nil
 })
@@ -179,7 +178,6 @@ var haveObjName = internal.NewFeatureTest("object names", "4.15", func() error {
 	}
 
 	fd, err := sys.MapCreate(&attr)
-
 	if err != nil {
 		return internal.ErrNotSupported
 	}
@@ -220,7 +218,6 @@ var haveBatchAPI = internal.NewFeatureTest("map batch api", "5.6", func() error 
 	}
 
 	fd, err := sys.MapCreate(&attr)
-
 	if err != nil {
 		return internal.ErrNotSupported
 	}
@@ -270,7 +267,6 @@ var haveBPFToBPFCalls = internal.NewFeatureTest("bpf2bpf calls", "4.16", func() 
 	}
 
 	fd, err := progLoad(insns, SocketFilter, "MIT")
-
 	if err != nil {
 		return internal.ErrNotSupported
 	}

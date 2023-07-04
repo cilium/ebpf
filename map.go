@@ -996,7 +996,6 @@ func (m *Map) batchLookup(cmd sys.Cmd, startKey, nextKeyOut, keysOut, valuesOut 
 // "keys" and "values" must be of type slice, a pointer
 // to a slice or buffer will not work.
 func (m *Map) BatchUpdate(keys, values interface{}, opts *BatchOptions) (int, error) {
-
 	if m.typ.hasPerCPUValue() {
 		return 0, ErrNotSupported
 	}

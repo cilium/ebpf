@@ -80,3 +80,15 @@ func TestHaveProgramHelper(t *testing.T) {
 
 	}
 }
+
+func TestHelperProbeNotImplemented(t *testing.T) {
+	// Currently we don't support probing helpers for Tracing, Extension, LSM and StructOps programs.
+	// For each of those test the availability of the FnMapLookupElem helper and expect it to fail.
+	for _, pt := range []ebpf.ProgramType{ebpf.Tracing, ebpf.Extension, ebpf.LSM, ebpf.StructOps} {
+		t.Run(pt.String(), func(t *testing.T) {
+			if err := HaveProgramHelper(pt, asm.FnMapLookupElem); err == nil {
+				t.Fatal("Expected an error")
+			}
+		})
+	}
+}

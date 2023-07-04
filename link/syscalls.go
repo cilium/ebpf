@@ -61,8 +61,8 @@ var haveProgAttachReplace = internal.NewFeatureTest("BPF_PROG_ATTACH atomic repl
 		},
 	})
 
-	if errors.Is(err, unix.EINVAL) {
-		return internal.ErrNotSupported
+	if err != nil {
+		return err
 	}
 
 	defer prog.Close()
@@ -117,9 +117,7 @@ var haveProgQuery = internal.NewFeatureTest("BPF_PROG_QUERY", "4.15", func() err
 	}
 
 	err := sys.ProgQuery(&attr)
-	if errors.Is(err, unix.EINVAL) {
-		return internal.ErrNotSupported
-	}
+
 	if errors.Is(err, unix.EBADF) {
 		return nil
 	}

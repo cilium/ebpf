@@ -87,7 +87,6 @@ var haveMapMutabilityModifiers = internal.NewFeatureTest("read- and write-only m
 		MaxEntries: 1,
 		MapFlags:   unix.BPF_F_RDONLY_PROG,
 	})
-
 	if err != nil {
 		return internal.ErrNotSupported
 	}
@@ -123,10 +122,7 @@ var haveInnerMaps = internal.NewFeatureTest("inner maps", "5.10", func() error {
 	})
 
 	if err != nil {
-		if errors.Is(err, unix.EINVAL) {
-			return internal.ErrNotSupported
-		}
-		return err
+		return internal.ErrNotSupported
 	}
 	_ = m.Close()
 	return nil
@@ -259,10 +255,7 @@ var haveProbeReadKernel = internal.NewFeatureTest("bpf_probe_read_kernel", "5.5"
 
 	fd, err := progLoad(insns, Kprobe, "GPL")
 	if err != nil {
-		if errors.Is(err, unix.EINVAL) {
-			return internal.ErrNotSupported
-		}
-		return err
+		return internal.ErrNotSupported
 	}
 	_ = fd.Close()
 	return nil
@@ -277,11 +270,9 @@ var haveBPFToBPFCalls = internal.NewFeatureTest("bpf2bpf calls", "4.16", func() 
 	}
 
 	fd, err := progLoad(insns, SocketFilter, "MIT")
-	if errors.Is(err, unix.EINVAL) {
-		return internal.ErrNotSupported
-	}
+
 	if err != nil {
-		return err
+		return internal.ErrNotSupported
 	}
 	_ = fd.Close()
 	return nil

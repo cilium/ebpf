@@ -13,6 +13,7 @@ typedef enum e e_t;
 struct s {
 	int _1;
 	char _2;
+	unsigned int _3;
 };
 
 typedef struct s s_t;
@@ -20,6 +21,7 @@ typedef struct s s_t;
 union u {
 	int *_1;
 	char *_2;
+	unsigned int *_3;
 };
 
 typedef union u u_t;
@@ -176,11 +178,31 @@ __section("socket_filter/enums") int enums() {
 		} \
 	})
 
+#define field_is_signed(f) \
+	({ \
+		if (!__builtin_preserve_field_info(f, BPF_FIELD_SIGNED)) { \
+			return __LINE__; \
+		} \
+	})
+
+#define field_is_unsigned(f) \
+	({ \
+		if (__builtin_preserve_field_info(f, BPF_FIELD_SIGNED)) { \
+			return __LINE__; \
+		} \
+	})
+
 __section("socket_filter/fields") int fields() {
 	field_exists((struct s){}._1);
 	field_exists((s_t){}._2);
 	field_exists((union u){}._1);
 	field_exists((u_t){}._2);
+
+	field_is_signed((struct s){}._1);
+	field_is_unsigned((struct s){}._3);
+	// unions crash clang-14.
+	// field_is_signed((union u){}._1);
+	// field_is_unsigned((union u){}._3);
 
 	field_size_matches((struct s){}._1);
 	field_size_matches((s_t){}._2);
@@ -206,6 +228,12 @@ __section("socket_filter/fields") int fields() {
 	field_exists(bar.u._1);
 	field_exists(bar.u._2);
 	field_exists(barp[1].u._2);
+
+	field_is_signed(bar.s[2]._1);
+	field_is_unsigned(bar.s[2]._3);
+	// unions crash clang-14.
+	// field_is_signed(bar.u._1);
+	// field_is_signed(bar.u._3);
 
 	field_size_matches(bar.s[2]._1);
 	field_size_matches(bar.s[1]._2);

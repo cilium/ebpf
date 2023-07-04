@@ -303,6 +303,8 @@ func coreCalculateFixups(relos []*CORERelocation, targetSpec *Spec, targets []Ty
 	return bestFixups, nil
 }
 
+var errNoSignedness = errors.New("no signedness")
+
 // coreCalculateFixup calculates the fixup for a single local type, target type
 // and relocation.
 func coreCalculateFixup(relo *CORERelocation, target Type, targetID TypeID, bo binary.ByteOrder) (COREFixup, error) {
@@ -374,20 +376,7 @@ func coreCalculateFixup(relo *CORERelocation, target Type, targetID TypeID, bo b
 			return fixup(uint32(localValue.Value), uint32(targetValue.Value))
 		}
 
-	case reloFieldSigned:
-		switch l := UnderlyingType(local).(type) {
-		case *Enum:
-			return fixup(1, 1)
-		case *Int:
-			return fixup(
-				uint32(l.Encoding&Signed),
-				uint32(target.(*Int).Encoding&Signed),
-			)
-		default:
-			return fixupWithoutValidation(0, 0)
-		}
-
-	case reloFieldByteOffset, reloFieldByteSize, reloFieldExists, reloFieldLShiftU64, reloFieldRShiftU64:
+	case reloFieldByteOffset, reloFieldByteSize, reloFieldExists, reloFieldLShiftU64, reloFieldRShiftU64, reloFieldSigned:
 		if _, ok := as[*Fwd](target); ok {
 			// We can't relocate fields using a forward declaration, so
 			// skip it. If a non-forward declaration is present in the BTF
@@ -453,10 +442,40 @@ func coreCalculateFixup(relo *CORERelocation, target Type, targetID TypeID, bo b
 			}
 
 			return fixupWithoutValidation(0, uint32(64-targetSize))
+
+		case reloFieldSigned:
+			switch local := UnderlyingType(localField.Type).(type) {
+			case *Enum:
+				target, ok := as[*Enum](targetField.Type)
+				if !ok {
+					return zero, fmt.Errorf("target isn't *Enum but %T", targetField.Type)
+				}
+
+				return fixup(boolToUint32(local.Signed), boolToUint32(target.Signed))
+			case *Int:
+				target, ok := as[*Int](targetField.Type)
+				if !ok {
+					return zero, fmt.Errorf("target isn't *Int but %T", targetField.Type)
+				}
+
+				return fixup(
+					uint32(local.Encoding&Signed),
+					uint32(target.Encoding&Signed),
+				)
+			default:
+				return zero, fmt.Errorf("type %T: %w", local, errNoSignedness)
+			}
 		}
 	}
 
 	return zero, ErrNotSupported
+}
+
+func boolToUint32(val bool) uint32 {
+	if val {
+		return 1
+	}
+	return 0
 }
 
 /* coreAccessor contains a path through a struct. It contains at least one index.
@@ -603,7 +622,7 @@ func (cf *coreField) sizeBits() (Bits, error) {
 	// between kernel versions. Synthesise the size to make the shifts work.
 	size, err := Sizeof(cf.Type)
 	if err != nil {
-		return 0, nil
+		return 0, err
 	}
 	return Bits(size * 8), nil
 }

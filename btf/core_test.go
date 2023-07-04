@@ -2,10 +2,12 @@ package btf
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"strings"
 	"testing"
 
+	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/testutils"
 	"github.com/google/go-cmp/cmp"
 
@@ -658,6 +660,45 @@ func TestCORECopyWithoutQualifiers(t *testing.T) {
 		got := Copy(v, UnderlyingType)
 		qt.Assert(t, got, qt.DeepEquals, root)
 	})
+}
+
+func TestCOREReloFieldSigned(t *testing.T) {
+	for _, typ := range []Type{&Int{}, &Enum{}} {
+		t.Run(fmt.Sprintf("%T with invalid target", typ), func(t *testing.T) {
+			relo := &CORERelocation{
+				typ, coreAccessor{0}, reloFieldSigned, 0,
+			}
+			fixup, err := coreCalculateFixup(relo, &Void{}, 0, internal.NativeEndian)
+			qt.Assert(t, fixup.poison, qt.IsTrue)
+			qt.Assert(t, err, qt.IsNil)
+		})
+	}
+
+	t.Run("type without signedness", func(t *testing.T) {
+		relo := &CORERelocation{
+			&Array{}, coreAccessor{0}, reloFieldSigned, 0,
+		}
+		_, err := coreCalculateFixup(relo, &Array{}, 0, internal.NativeEndian)
+		qt.Assert(t, err, qt.ErrorIs, errNoSignedness)
+	})
+}
+
+func TestCOREReloFieldShiftU64(t *testing.T) {
+	typ := &Struct{
+		Members: []Member{
+			{Name: "A", Type: &Fwd{}},
+		},
+	}
+
+	for _, relo := range []*CORERelocation{
+		{typ, coreAccessor{0, 0}, reloFieldRShiftU64, 1},
+		{typ, coreAccessor{0, 0}, reloFieldLShiftU64, 1},
+	} {
+		t.Run(relo.kind.String(), func(t *testing.T) {
+			_, err := coreCalculateFixup(relo, typ, 1, internal.NativeEndian)
+			qt.Assert(t, err, qt.ErrorIs, errUnsizedType)
+		})
+	}
 }
 
 func BenchmarkCORESkBuff(b *testing.B) {

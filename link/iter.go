@@ -48,7 +48,7 @@ func AttachIter(opts IterOptions) (*Iter, error) {
 
 	fd, err := sys.LinkCreateIter(&attr)
 	if err != nil {
-		if haveFeatErr := haveBPFLink(); err != nil {
+		if haveFeatErr := haveBPFLink(); haveFeatErr != nil {
 			return nil, haveFeatErr
 		}
 		return nil, fmt.Errorf("can't link iterator: %w", err)

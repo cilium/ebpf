@@ -111,7 +111,7 @@ func kprobeMulti(prog *ebpf.Program, opts KprobeMultiOptions, flags uint32) (Lin
 	}
 
 	if err != nil {
-		if haveFeatErr := haveBPFLinkKprobeMulti(); err != nil {
+		if haveFeatErr := haveBPFLinkKprobeMulti(); haveFeatErr != nil {
 			return nil, haveFeatErr
 		}
 		return nil, err

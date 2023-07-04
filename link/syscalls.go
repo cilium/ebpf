@@ -87,7 +87,6 @@ var haveProgAttachReplace = internal.NewFeatureTest("BPF_PROG_ATTACH atomic repl
 	if errors.Is(err, unix.EBADF) {
 		return nil
 	}
-	
 	return err
 })
 

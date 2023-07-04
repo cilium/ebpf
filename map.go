@@ -438,13 +438,13 @@ func (spec *MapSpec) createMap(inner *sys.FD, opts MapOptions) (_ *Map, err erro
 		}
 
 		if spec.Flags&(unix.BPF_F_RDONLY_PROG|unix.BPF_F_WRONLY_PROG) > 0 || spec.Freeze {
-			if haveFeatErr := haveMapMutabilityModifiers(); err != nil {
+			if haveFeatErr := haveMapMutabilityModifiers(); haveFeatErr != nil {
 				return nil, fmt.Errorf("map create: %w", haveFeatErr)
 			}
 		}
 
 		if spec.Flags&unix.BPF_F_MMAPABLE > 0 {
-			if haveFeatErr := haveMmapableMaps(); err != nil {
+			if haveFeatErr := haveMmapableMaps(); haveFeatErr != nil {
 				return nil, fmt.Errorf("map create: %w", haveFeatErr)
 			}
 		}
@@ -1038,7 +1038,7 @@ func (m *Map) BatchUpdate(keys, values interface{}, opts *BatchOptions) (int, er
 
 	err = sys.MapUpdateBatch(&attr)
 	if err != nil {
-		if haveFeatErr := haveBatchAPI(); err != nil {
+		if haveFeatErr := haveBatchAPI(); haveFeatErr != nil {
 			return 0, haveFeatErr
 		}
 		return int(attr.Count), fmt.Errorf("batch update: %w", wrapMapError(err))
@@ -1075,7 +1075,7 @@ func (m *Map) BatchDelete(keys interface{}, opts *BatchOptions) (int, error) {
 	}
 
 	if err = sys.MapDeleteBatch(&attr); err != nil {
-		if haveFeatErr := haveBatchAPI(); err != nil {
+		if haveFeatErr := haveBatchAPI(); haveFeatErr != nil {
 			return 0, haveFeatErr
 		}
 		return int(attr.Count), fmt.Errorf("batch delete: %w", wrapMapError(err))
@@ -1187,7 +1187,7 @@ func (m *Map) Freeze() error {
 	}
 
 	if err := sys.MapFreeze(&attr); err != nil {
-		if haveFeatErr := haveMapMutabilityModifiers(); err != nil {
+		if haveFeatErr := haveMapMutabilityModifiers(); haveFeatErr != nil {
 			return fmt.Errorf("can't freeze map: %w", haveFeatErr)
 		}
 		return fmt.Errorf("can't freeze map: %w", err)

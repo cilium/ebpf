@@ -39,7 +39,7 @@ func RawAttachProgram(opts RawAttachProgramOptions) error {
 	}
 
 	if err := sys.ProgAttach(&attr); err != nil {
-		if haveFeatErr := haveProgAttach(); err != nil {
+		if haveFeatErr := haveProgAttach(); haveFeatErr != nil {
 			return haveFeatErr
 		}
 		return fmt.Errorf("can't attach program: %w", err)
@@ -65,7 +65,7 @@ func RawDetachProgram(opts RawDetachProgramOptions) error {
 		AttachType:  uint32(opts.Attach),
 	}
 	if err := sys.ProgDetach(&attr); err != nil {
-		if haveFeatErr := haveProgAttach(); err != nil {
+		if haveFeatErr := haveProgAttach(); haveFeatErr != nil {
 			return haveFeatErr
 		}
 		return fmt.Errorf("can't detach program: %w", err)

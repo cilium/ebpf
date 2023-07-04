@@ -2,10 +2,12 @@ package btf
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"strings"
 	"testing"
 
+	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/testutils"
 	"github.com/google/go-cmp/cmp"
 
@@ -658,6 +660,19 @@ func TestCORECopyWithoutQualifiers(t *testing.T) {
 		got := Copy(v, UnderlyingType)
 		qt.Assert(t, got, qt.DeepEquals, root)
 	})
+}
+
+func TestCOREReloFieldSigned(t *testing.T) {
+	for _, typ := range []Type{&Int{}, &Enum{}} {
+		t.Run(fmt.Sprintf("%T with invalid target", typ), func(t *testing.T) {
+			relo := &CORERelocation{
+				typ, coreAccessor{0}, reloFieldSigned, 0,
+			}
+			fixup, err := coreCalculateFixup(relo, &Void{}, 0, internal.NativeEndian)
+			qt.Assert(t, fixup.poison, qt.IsTrue)
+			qt.Assert(t, err, qt.IsNil)
+		})
+	}
 }
 
 func BenchmarkCORESkBuff(b *testing.B) {

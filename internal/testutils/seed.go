@@ -15,7 +15,7 @@ var randSeed struct {
 func Rand() *rand.Rand {
 	randSeed.once.Do(func() {
 		randSeed.value = time.Now().UnixMicro()
-		fmt.Printf("Rand is %d", randSeed.value)
+		fmt.Printf("Random seed is %d\n", randSeed.value)
 	})
 	return rand.New(rand.NewSource(randSeed.value))
 }

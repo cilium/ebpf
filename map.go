@@ -385,27 +385,6 @@ func (spec *MapSpec) createMap(inner *sys.FD, opts MapOptions) (_ *Map, err erro
 		}
 	}
 
-	if spec.Flags&(unix.BPF_F_RDONLY_PROG|unix.BPF_F_WRONLY_PROG) > 0 || spec.Freeze {
-		if err := haveMapMutabilityModifiers(); err != nil {
-			return nil, fmt.Errorf("map create: %w", err)
-		}
-	}
-	if spec.Flags&unix.BPF_F_MMAPABLE > 0 {
-		if err := haveMmapableMaps(); err != nil {
-			return nil, fmt.Errorf("map create: %w", err)
-		}
-	}
-	if spec.Flags&unix.BPF_F_INNER_MAP > 0 {
-		if err := haveInnerMaps(); err != nil {
-			return nil, fmt.Errorf("map create: %w", err)
-		}
-	}
-	if spec.Flags&unix.BPF_F_NO_PREALLOC > 0 {
-		if err := haveNoPreallocMaps(); err != nil {
-			return nil, fmt.Errorf("map create: %w", err)
-		}
-	}
-
 	attr := sys.MapCreateAttr{
 		MapType:    sys.MapType(spec.Type),
 		KeySize:    spec.KeySize,
@@ -457,9 +436,35 @@ func (spec *MapSpec) createMap(inner *sys.FD, opts MapOptions) (_ *Map, err erro
 		if errors.Is(err, unix.EINVAL) && spec.Type == UnspecifiedMap {
 			return nil, fmt.Errorf("map create: cannot use type %s", UnspecifiedMap)
 		}
+
+		if spec.Flags&(unix.BPF_F_RDONLY_PROG|unix.BPF_F_WRONLY_PROG) > 0 || spec.Freeze {
+			if haveFeatErr := haveMapMutabilityModifiers(); haveFeatErr != nil {
+				return nil, fmt.Errorf("map create: %w", haveFeatErr)
+			}
+		}
+
+		if spec.Flags&unix.BPF_F_MMAPABLE > 0 {
+			if haveFeatErr := haveMmapableMaps(); haveFeatErr != nil {
+				return nil, fmt.Errorf("map create: %w", haveFeatErr)
+			}
+		}
+
+		if spec.Flags&unix.BPF_F_INNER_MAP > 0 {
+			if haveFeatErr := haveInnerMaps(); haveFeatErr != nil {
+				return nil, fmt.Errorf("map create: %w", haveFeatErr)
+			}
+		}
+
+		if spec.Flags&unix.BPF_F_NO_PREALLOC > 0 {
+			if haveFeatErr := haveNoPreallocMaps(); haveFeatErr != nil {
+				return nil, fmt.Errorf("map create: %w", haveFeatErr)
+			}
+		}
+
 		if attr.BtfFd == 0 {
 			return nil, fmt.Errorf("map create: %w (without BTF k/v)", err)
 		}
+
 		return nil, fmt.Errorf("map create: %w", err)
 	}
 	defer closeOnError(fd)
@@ -991,9 +996,7 @@ func (m *Map) batchLookup(cmd sys.Cmd, startKey, nextKeyOut, keysOut, valuesOut 
 // "keys" and "values" must be of type slice, a pointer
 // to a slice or buffer will not work.
 func (m *Map) BatchUpdate(keys, values interface{}, opts *BatchOptions) (int, error) {
-	if err := haveBatchAPI(); err != nil {
-		return 0, err
-	}
+
 	if m.typ.hasPerCPUValue() {
 		return 0, ErrNotSupported
 	}
@@ -1035,6 +1038,9 @@ func (m *Map) BatchUpdate(keys, values interface{}, opts *BatchOptions) (int, er
 
 	err = sys.MapUpdateBatch(&attr)
 	if err != nil {
+		if haveFeatErr := haveBatchAPI(); haveFeatErr != nil {
+			return 0, haveFeatErr
+		}
 		return int(attr.Count), fmt.Errorf("batch update: %w", wrapMapError(err))
 	}
 
@@ -1044,9 +1050,6 @@ func (m *Map) BatchUpdate(keys, values interface{}, opts *BatchOptions) (int, er
 // BatchDelete batch deletes entries in the map by keys.
 // "keys" must be of type slice, a pointer to a slice or buffer will not work.
 func (m *Map) BatchDelete(keys interface{}, opts *BatchOptions) (int, error) {
-	if err := haveBatchAPI(); err != nil {
-		return 0, err
-	}
 	if m.typ.hasPerCPUValue() {
 		return 0, ErrNotSupported
 	}
@@ -1072,6 +1075,9 @@ func (m *Map) BatchDelete(keys interface{}, opts *BatchOptions) (int, error) {
 	}
 
 	if err = sys.MapDeleteBatch(&attr); err != nil {
+		if haveFeatErr := haveBatchAPI(); haveFeatErr != nil {
+			return 0, haveFeatErr
+		}
 		return int(attr.Count), fmt.Errorf("batch delete: %w", wrapMapError(err))
 	}
 
@@ -1176,15 +1182,14 @@ func (m *Map) IsPinned() bool {
 //
 // It makes no changes to kernel-side restrictions.
 func (m *Map) Freeze() error {
-	if err := haveMapMutabilityModifiers(); err != nil {
-		return fmt.Errorf("can't freeze map: %w", err)
-	}
-
 	attr := sys.MapFreezeAttr{
 		MapFd: m.fd.Uint(),
 	}
 
 	if err := sys.MapFreeze(&attr); err != nil {
+		if haveFeatErr := haveMapMutabilityModifiers(); haveFeatErr != nil {
+			return fmt.Errorf("can't freeze map: %w", haveFeatErr)
+		}
 		return fmt.Errorf("can't freeze map: %w", err)
 	}
 	return nil

@@ -40,31 +40,29 @@ func TestHaveProgramHelper(t *testing.T) {
 	// Referencing linux kernel commits to track the kernel version required to pass these test cases.
 	// They cases are derived from libbpf's selftests and helper/prog combinations that are
 	// probed for in cilium/cilium.
-	// Still missing since those helpers are not available in the lib yet, are:
-	// - Kprobe, GetBranchSnapshot
-	// - SchedCLS, SkbSetTstamp
-	// These two test cases depend on CI kernels supporting those:
-	// {ebpf.Kprobe, asm.FnKtimeGetCoarseNs, ebpf.ErrNotSupported, "5.16"}, // 5e0bc3082e2e
-	// {ebpf.CGroupSockAddr, asm.FnGetCgroupClassid, nil, "5.10"},    // b426ce83baa7
 	testCases := []testCase{
-		{ebpf.Kprobe, asm.FnMapLookupElem, nil, "3.19"},               // d0003ec01c66
-		{ebpf.SocketFilter, asm.FnKtimeGetCoarseNs, nil, "5.11"},      // d05512618056
-		{ebpf.SchedCLS, asm.FnSkbVlanPush, nil, "4.3"},                // 4e10df9a60d9
-		{ebpf.Kprobe, asm.FnSkbVlanPush, ebpf.ErrNotSupported, "4.3"}, // 4e10df9a60d9
-		{ebpf.Kprobe, asm.FnSysBpf, ebpf.ErrNotSupported, "5.14"},     // 79a7f8bdb159
-		{ebpf.Syscall, asm.FnSysBpf, nil, "5.14"},                     // 79a7f8bdb159
-		{ebpf.XDP, asm.FnJiffies64, nil, "5.5"},                       // 5576b991e9c1
-		{ebpf.XDP, asm.FnKtimeGetBootNs, nil, "5.7"},                  // 71d19214776e
-		{ebpf.SchedCLS, asm.FnSkbChangeHead, nil, "5.8"},              // 6f3f65d80dac
-		{ebpf.SchedCLS, asm.FnRedirectNeigh, nil, "5.10"},             // b4ab31414970
-		{ebpf.SchedCLS, asm.FnSkbEcnSetCe, nil, "5.1"},                // f7c917ba11a6
-		{ebpf.SchedACT, asm.FnSkAssign, nil, "5.6"},                   // cf7fbe660f2d
-		{ebpf.SchedACT, asm.FnFibLookup, nil, "4.18"},                 // 87f5fc7e48dd
-		{ebpf.Kprobe, asm.FnFibLookup, ebpf.ErrNotSupported, "4.18"},  // 87f5fc7e48dd
-		{ebpf.CGroupSockAddr, asm.FnGetsockopt, nil, "5.8"},           // beecf11bc218
-		{ebpf.CGroupSockAddr, asm.FnSkLookupTcp, nil, "4.20"},         // 6acc9b432e67
-		{ebpf.CGroupSockAddr, asm.FnGetNetnsCookie, nil, "5.7"},       // f318903c0bf4
-		{ebpf.CGroupSock, asm.FnGetNetnsCookie, nil, "5.7"},           // f318903c0bf4
+		{ebpf.Kprobe, asm.FnMapLookupElem, nil, "3.19"},                     // d0003ec01c66
+		{ebpf.SocketFilter, asm.FnKtimeGetCoarseNs, nil, "5.11"},            // d05512618056
+		{ebpf.SchedCLS, asm.FnSkbVlanPush, nil, "4.3"},                      // 4e10df9a60d9
+		{ebpf.Kprobe, asm.FnSkbVlanPush, ebpf.ErrNotSupported, "4.3"},       // 4e10df9a60d9
+		{ebpf.Kprobe, asm.FnSysBpf, ebpf.ErrNotSupported, "5.14"},           // 79a7f8bdb159
+		{ebpf.Syscall, asm.FnSysBpf, nil, "5.14"},                           // 79a7f8bdb159
+		{ebpf.XDP, asm.FnJiffies64, nil, "5.5"},                             // 5576b991e9c1
+		{ebpf.XDP, asm.FnKtimeGetBootNs, nil, "5.7"},                        // 71d19214776e
+		{ebpf.SchedCLS, asm.FnSkbChangeHead, nil, "5.8"},                    // 6f3f65d80dac
+		{ebpf.SchedCLS, asm.FnRedirectNeigh, nil, "5.10"},                   // b4ab31414970
+		{ebpf.SchedCLS, asm.FnSkbEcnSetCe, nil, "5.1"},                      // f7c917ba11a6
+		{ebpf.SchedACT, asm.FnSkAssign, nil, "5.6"},                         // cf7fbe660f2d
+		{ebpf.SchedACT, asm.FnFibLookup, nil, "4.18"},                       // 87f5fc7e48dd
+		{ebpf.Kprobe, asm.FnFibLookup, ebpf.ErrNotSupported, "4.18"},        // 87f5fc7e48dd
+		{ebpf.CGroupSockAddr, asm.FnGetsockopt, nil, "5.8"},                 // beecf11bc218
+		{ebpf.CGroupSockAddr, asm.FnSkLookupTcp, nil, "4.20"},               // 6acc9b432e67
+		{ebpf.CGroupSockAddr, asm.FnGetNetnsCookie, nil, "5.7"},             // f318903c0bf4
+		{ebpf.CGroupSock, asm.FnGetNetnsCookie, nil, "5.7"},                 // f318903c0bf4
+		{ebpf.Kprobe, asm.FnKtimeGetCoarseNs, ebpf.ErrNotSupported, "5.16"}, // 5e0bc3082e2e
+		{ebpf.CGroupSockAddr, asm.FnGetCgroupClassid, nil, "5.7"},           // 5a52ae4e32a6
+		{ebpf.Kprobe, asm.FnGetBranchSnapshot, nil, "5.16"},                 // 856c02dbce4f
+		{ebpf.SchedCLS, asm.FnSkbSetTstamp, nil, "5.18"},                    // 9bb984f28d5b
 	}
 
 	for _, tc := range testCases {
@@ -80,5 +78,33 @@ func TestHaveProgramHelper(t *testing.T) {
 
 		})
 
+	}
+}
+
+func TestHelperProbeNotImplemented(t *testing.T) {
+	type testCase struct {
+		prog    ebpf.ProgramType
+		version string
+	}
+
+	// Currently we don't support probing helpers for Tracing, Extension, LSM and StructOps programs.
+	// For each of those test the availability of the FnMapLookupElem helper and expect it to fail.
+	testCases := []testCase{
+		{ebpf.Tracing, "5.5"},
+		{ebpf.LSM, "5.7"},
+		{ebpf.Extension, "5.6"},
+		{ebpf.StructOps, "5.6"},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.prog.String(), func(t *testing.T) {
+			feature := fmt.Sprintf("helpers for program type %s", tc.prog.String())
+
+			testutils.SkipOnOldKernel(t, tc.version, feature)
+
+			if err := HaveProgramHelper(tc.prog, asm.FnMapLookupElem); err == nil {
+				t.Fatal("Expected an error")
+			}
+		})
 	}
 }

@@ -119,7 +119,7 @@ var haveProgQuery = internal.NewFeatureTest("BPF_PROG_QUERY", "4.15", func() err
 	if errors.Is(err, unix.EBADF) {
 		return nil
 	}
-	if err != nil{
+	if err != nil {
 		return ErrNotSupported
 	}
 	return errors.New("syscall succeeded unexpectedly")

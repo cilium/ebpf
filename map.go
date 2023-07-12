@@ -20,11 +20,28 @@ import (
 
 // Errors returned by Map and MapIterator methods.
 var (
-	ErrKeyNotExist      = errors.New("key does not exist")
-	ErrKeyExist         = errors.New("key already exists")
-	ErrIterationAborted = errors.New("iteration aborted")
-	ErrMapIncompatible  = errors.New("map spec is incompatible with existing map")
-	errMapNoBTFValue    = errors.New("map spec does not contain a BTF Value")
+	ErrKeyNotExist                = errors.New("key does not exist")
+	ErrKeyExist                   = errors.New("key already exists")
+	ErrIterationAborted           = errors.New("iteration aborted")
+	ErrMapIncompatible            = errors.New("map spec is incompatible with existing map")
+	errMapIncompatibleDetailsFunc = func(ms *MapSpec, m *Map) error {
+		return fmt.Errorf(
+			"%w at path : %s, old : (Type:%s KeySize:%d ValueSize:%d MaxEntries:%d, Flags:%d), new : (Type:%s KeySize:%d ValueSize:%d MaxEntries:%d, Flags:%d))",
+			ErrMapIncompatible,
+			m.pinnedPath,
+			ms.Type,
+			ms.KeySize,
+			ms.ValueSize,
+			ms.MaxEntries,
+			ms.Flags,
+			m.Type(),
+			m.KeySize(),
+			m.ValueSize(),
+			m.MaxEntries(),
+			m.Flags(),
+		)
+	}
+	errMapNoBTFValue = errors.New("map spec does not contain a BTF Value")
 )
 
 // MapOptions control loading a map into the kernel.
@@ -121,7 +138,6 @@ func (ms *MapSpec) clampPerfEventArraySize() error {
 
 // dataSection returns the contents and BTF Datasec descriptor of the spec.
 func (ms *MapSpec) dataSection() ([]byte, *btf.Datasec, error) {
-
 	if ms.Value == nil {
 		return nil, nil, errMapNoBTFValue
 	}
@@ -157,23 +173,23 @@ type MapKV struct {
 func (ms *MapSpec) Compatible(m *Map) error {
 	switch {
 	case m.typ != ms.Type:
-		return fmt.Errorf("expected type %v, got %v: %w", ms.Type, m.typ, ErrMapIncompatible)
+		return fmt.Errorf("expected type %v, got %v: %w", ms.Type, m.typ, errMapIncompatibleDetailsFunc(ms, m))
 
 	case m.keySize != ms.KeySize:
-		return fmt.Errorf("expected key size %v, got %v: %w", ms.KeySize, m.keySize, ErrMapIncompatible)
+		return fmt.Errorf("expected key size %v, got %v: %w", ms.KeySize, m.keySize, errMapIncompatibleDetailsFunc(ms, m))
 
 	case m.valueSize != ms.ValueSize:
-		return fmt.Errorf("expected value size %v, got %v: %w", ms.ValueSize, m.valueSize, ErrMapIncompatible)
+		return fmt.Errorf("expected value size %v, got %v: %w", ms.ValueSize, m.valueSize, errMapIncompatibleDetailsFunc(ms, m))
 
 	case !(ms.Type == PerfEventArray && ms.MaxEntries == 0) &&
 		m.maxEntries != ms.MaxEntries:
-		return fmt.Errorf("expected max entries %v, got %v: %w", ms.MaxEntries, m.maxEntries, ErrMapIncompatible)
+		return fmt.Errorf("expected max entries %v, got %v: %w", ms.MaxEntries, m.maxEntries, errMapIncompatibleDetailsFunc(ms, m))
 
 	// BPF_F_RDONLY_PROG is set unconditionally for devmaps. Explicitly allow
 	// this mismatch.
 	case !((ms.Type == DevMap || ms.Type == DevMapHash) && m.flags^ms.Flags == unix.BPF_F_RDONLY_PROG) &&
 		m.flags != ms.Flags:
-		return fmt.Errorf("expected flags %v, got %v: %w", ms.Flags, m.flags, ErrMapIncompatible)
+		return fmt.Errorf("expected flags %v, got %v: %w", ms.Flags, m.flags, errMapIncompatibleDetailsFunc(ms, m))
 	}
 	return nil
 }

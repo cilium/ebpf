@@ -212,6 +212,7 @@ func TestLoadCollectionSpec(t *testing.T) {
 				LogLevel: LogLevelBranch,
 			},
 		})
+
 		testutils.SkipIfNotSupported(t, err)
 		if err != nil {
 			t.Fatal(err)

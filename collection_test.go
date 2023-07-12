@@ -296,6 +296,7 @@ func TestCollectionSpecMapReplacements_NonExistingMap(t *testing.T) {
 }
 
 func TestCollectionSpecMapReplacements_SpecMismatch(t *testing.T) {
+	c := qt.New(t)
 	cs := &CollectionSpec{
 		Maps: map[string]*MapSpec{
 			"test-map": {
@@ -332,6 +333,12 @@ func TestCollectionSpecMapReplacements_SpecMismatch(t *testing.T) {
 	if !errors.Is(err, ErrMapIncompatible) {
 		t.Fatalf("Overriding a map with a mismatching spec failed with the wrong error")
 	}
+	var mErr *IncompatibleMapErr
+	if !errors.As(err, &mErr) {
+		t.Fatal("Overriding a map with a mismatching spec failed to provide error details")
+	}
+	c.Assert(mErr.Existing.ValueSize, qt.Equals, uint32(8))
+	c.Assert(mErr.Incoming.ValueSize, qt.Equals, uint32(4))
 }
 
 func TestCollectionRewriteConstants(t *testing.T) {

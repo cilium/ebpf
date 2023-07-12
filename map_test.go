@@ -1730,6 +1730,12 @@ func TestMapPinning(t *testing.T) {
 	if !errors.Is(err, ErrMapIncompatible) {
 		t.Fatalf("Opening a pinned map with a mismatching spec failed with the wrong error")
 	}
+	var merr *IncompatibleMapErr
+	if !errors.As(err, &merr) {
+		t.Fatal("Opening a pinned map with a mismatch spec failed to provide additional details")
+	}
+	c.Assert(merr.Existing.KeySize, qt.Equals, uint32(4))
+	c.Assert(merr.Incoming.KeySize, qt.Equals, uint32(8))
 }
 
 func TestPerfEventArrayCompatible(t *testing.T) {

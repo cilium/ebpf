@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"time"
 	"unsafe"
 
@@ -26,6 +27,42 @@ var (
 	ErrMapIncompatible  = errors.New("map spec is incompatible with existing map")
 	errMapNoBTFValue    = errors.New("map spec does not contain a BTF Value")
 )
+
+type IncompatibleMapErr struct {
+	Existing *MapInfo
+	Incoming *MapSpec
+}
+
+func NewErrIncompatibleMap(existing *MapInfo, incoming *MapSpec) *IncompatibleMapErr {
+	return &IncompatibleMapErr{
+		Existing: existing,
+		Incoming: incoming,
+	}
+}
+
+func (e *IncompatibleMapErr) Error() string {
+	return fmt.Sprintf("details(existing -> incoming) : %s", e.diff())
+}
+
+func (e *IncompatibleMapErr) diff() string {
+	diffs := []string{}
+	if e.Existing.Type != e.Incoming.Type {
+		diffs = append(diffs, fmt.Sprintf("type : %s -> %s", e.Existing.Type, e.Incoming.Type))
+	}
+	if e.Existing.Flags != e.Incoming.Flags {
+		diffs = append(diffs, fmt.Sprintf("flags : %d -> %d", e.Existing.Flags, e.Incoming.Flags))
+	}
+	if e.Existing.KeySize != e.Incoming.KeySize {
+		diffs = append(diffs, fmt.Sprintf("keySize : %d -> %d", e.Existing.KeySize, e.Incoming.KeySize))
+	}
+	if e.Existing.ValueSize != e.Incoming.ValueSize {
+		diffs = append(diffs, fmt.Sprintf("valueSize : %d -> %d", e.Existing.ValueSize, e.Incoming.ValueSize))
+	}
+	if e.Existing.MaxEntries != e.Incoming.MaxEntries {
+		diffs = append(diffs, fmt.Sprintf("maxEntries : %d -> %d", e.Existing.MaxEntries, e.Incoming.MaxEntries))
+	}
+	return strings.Join(diffs, ", ")
+}
 
 // MapOptions control loading a map into the kernel.
 type MapOptions struct {
@@ -121,7 +158,6 @@ func (ms *MapSpec) clampPerfEventArraySize() error {
 
 // dataSection returns the contents and BTF Datasec descriptor of the spec.
 func (ms *MapSpec) dataSection() ([]byte, *btf.Datasec, error) {
-
 	if ms.Value == nil {
 		return nil, nil, errMapNoBTFValue
 	}
@@ -155,25 +191,35 @@ type MapKV struct {
 //
 // Returns an error wrapping [ErrMapIncompatible] otherwise.
 func (ms *MapSpec) Compatible(m *Map) error {
+	asInfo := func(m *Map) *MapInfo {
+		return &MapInfo{
+			Type:       m.typ,
+			KeySize:    m.keySize,
+			ValueSize:  m.valueSize,
+			MaxEntries: m.maxEntries,
+			Flags:      m.flags,
+			Name:       m.name,
+		}
+	}
 	switch {
 	case m.typ != ms.Type:
-		return fmt.Errorf("expected type %v, got %v: %w", ms.Type, m.typ, ErrMapIncompatible)
+		return fmt.Errorf("%w: %w", ErrMapIncompatible, NewErrIncompatibleMap(asInfo(m), ms))
 
 	case m.keySize != ms.KeySize:
-		return fmt.Errorf("expected key size %v, got %v: %w", ms.KeySize, m.keySize, ErrMapIncompatible)
+		return fmt.Errorf("%w : %w", ErrMapIncompatible, NewErrIncompatibleMap(asInfo(m), ms))
 
 	case m.valueSize != ms.ValueSize:
-		return fmt.Errorf("expected value size %v, got %v: %w", ms.ValueSize, m.valueSize, ErrMapIncompatible)
+		return fmt.Errorf("%w %w", ErrMapIncompatible, NewErrIncompatibleMap(asInfo(m), ms))
 
 	case !(ms.Type == PerfEventArray && ms.MaxEntries == 0) &&
 		m.maxEntries != ms.MaxEntries:
-		return fmt.Errorf("expected max entries %v, got %v: %w", ms.MaxEntries, m.maxEntries, ErrMapIncompatible)
+		return fmt.Errorf("%w : %w", ErrMapIncompatible, NewErrIncompatibleMap(asInfo(m), ms))
 
 	// BPF_F_RDONLY_PROG is set unconditionally for devmaps. Explicitly allow
 	// this mismatch.
 	case !((ms.Type == DevMap || ms.Type == DevMapHash) && m.flags^ms.Flags == unix.BPF_F_RDONLY_PROG) &&
 		m.flags != ms.Flags:
-		return fmt.Errorf("expected flags %v, got %v: %w", ms.Flags, m.flags, ErrMapIncompatible)
+		return fmt.Errorf("%w : %w", ErrMapIncompatible, NewErrIncompatibleMap(asInfo(m), ms))
 	}
 	return nil
 }

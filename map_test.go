@@ -1734,6 +1734,23 @@ func TestMapPinning(t *testing.T) {
 	}
 }
 
+func TestPerfEventArrayCompatible(t *testing.T) {
+	ms := &MapSpec{
+		Type:      PerfEventArray,
+		KeySize:   4,
+		ValueSize: 4,
+	}
+
+	m, err := NewMap(ms)
+	qt.Assert(t, err, qt.IsNil)
+	defer m.Close()
+
+	qt.Assert(t, ms.Compatible(m), qt.IsNil)
+
+	ms.MaxEntries = m.MaxEntries() - 1
+	qt.Assert(t, ms.Compatible(m), qt.IsNotNil)
+}
+
 type benchValue struct {
 	ID      uint32
 	Val16   uint16

@@ -694,10 +694,6 @@ func (ec *elfCode) loadMaps() error {
 				spec.Extra = bytes.NewReader(extra)
 			}
 
-			if err := spec.clampPerfEventArraySize(); err != nil {
-				return fmt.Errorf("map %s: %w", mapName, err)
-			}
-
 			ec.maps[mapName] = &spec
 		}
 	}
@@ -759,10 +755,6 @@ func (ec *elfCode) loadBTFMaps() error {
 
 			mapSpec, err := mapSpecFromBTF(sec, &vs, mapStruct, ec.btf, name, false)
 			if err != nil {
-				return fmt.Errorf("map %v: %w", name, err)
-			}
-
-			if err := mapSpec.clampPerfEventArraySize(); err != nil {
 				return fmt.Errorf("map %v: %w", name, err)
 			}
 

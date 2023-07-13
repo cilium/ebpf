@@ -162,6 +162,12 @@ func (ms *MapSpec) Compatible(m *Map) error {
 		}
 	}
 
+	flags := ms.Flags
+	if ms.Type == DevMap || ms.Type == DevMapHash {
+		// The kernel sets BPF_F_RDONLY_PROG unconditionally for devmaps.
+		flags |= unix.BPF_F_RDONLY_PROG
+	}
+
 	switch {
 	case m.typ != ms.Type:
 		return fmt.Errorf("expected type %v, got %v: %w", ms.Type, m.typ, ErrMapIncompatible)
@@ -175,11 +181,8 @@ func (ms *MapSpec) Compatible(m *Map) error {
 	case maxEntries != ms.MaxEntries:
 		return fmt.Errorf("expected max entries %v, got %v: %w", maxEntries, m.maxEntries, ErrMapIncompatible)
 
-	// BPF_F_RDONLY_PROG is set unconditionally for devmaps. Explicitly allow
-	// this mismatch.
-	case !((ms.Type == DevMap || ms.Type == DevMapHash) && m.flags^ms.Flags == unix.BPF_F_RDONLY_PROG) &&
-		m.flags != ms.Flags:
-		return fmt.Errorf("expected flags %v, got %v: %w", ms.Flags, m.flags, ErrMapIncompatible)
+	case flags != ms.Flags:
+		return fmt.Errorf("expected flags %v, got %v: %w", flags, m.flags, ErrMapIncompatible)
 	}
 	return nil
 }

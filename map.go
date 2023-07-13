@@ -102,26 +102,26 @@ func (ms *MapSpec) Copy() *MapSpec {
 	return &cpy
 }
 
-func (ms *MapSpec) clampPerfEventArraySize() error {
-	if ms.Type != PerfEventArray {
-		return nil
-	}
-
+func fixupPerfEventArraySize(maxEntries uint32) (uint32, error) {
 	n, err := internal.PossibleCPUs()
 	if err != nil {
-		return fmt.Errorf("perf event array: %w", err)
+		return 0, fmt.Errorf("fixup perf event array: %w", err)
 	}
 
-	if n := uint32(n); ms.MaxEntries > n {
-		ms.MaxEntries = n
+	if n := uint32(n); maxEntries == 0 || maxEntries > n {
+		// MaxEntries should be zero most of the time, but there is code
+		// out there which hardcodes large constants. Clamp the number
+		// of entries to the number of CPUs at most. Allow creating maps with
+		// less than n items since some kernel selftests relied on this
+		// behaviour in the past.
+		return n, nil
 	}
 
-	return nil
+	return maxEntries, nil
 }
 
 // dataSection returns the contents and BTF Datasec descriptor of the spec.
 func (ms *MapSpec) dataSection() ([]byte, *btf.Datasec, error) {
-
 	if ms.Value == nil {
 		return nil, nil, errMapNoBTFValue
 	}
@@ -155,6 +155,15 @@ type MapKV struct {
 //
 // Returns an error wrapping [ErrMapIncompatible] otherwise.
 func (ms *MapSpec) Compatible(m *Map) error {
+	maxEntries := ms.MaxEntries
+	if ms.Type == PerfEventArray {
+		var err error
+		maxEntries, err = fixupPerfEventArraySize(maxEntries)
+		if err != nil {
+			return err
+		}
+	}
+
 	switch {
 	case m.typ != ms.Type:
 		return fmt.Errorf("expected type %v, got %v: %w", ms.Type, m.typ, ErrMapIncompatible)
@@ -165,9 +174,8 @@ func (ms *MapSpec) Compatible(m *Map) error {
 	case m.valueSize != ms.ValueSize:
 		return fmt.Errorf("expected value size %v, got %v: %w", ms.ValueSize, m.valueSize, ErrMapIncompatible)
 
-	case !(ms.Type == PerfEventArray && ms.MaxEntries == 0) &&
-		m.maxEntries != ms.MaxEntries:
-		return fmt.Errorf("expected max entries %v, got %v: %w", ms.MaxEntries, m.maxEntries, ErrMapIncompatible)
+	case m.maxEntries != maxEntries:
+		return fmt.Errorf("expected max entries %v, got %v: %w", maxEntries, m.maxEntries, ErrMapIncompatible)
 
 	// BPF_F_RDONLY_PROG is set unconditionally for devmaps. Explicitly allow
 	// this mismatch.
@@ -376,12 +384,9 @@ func (spec *MapSpec) createMap(inner *sys.FD, opts MapOptions) (_ *Map, err erro
 		spec.KeySize = 4
 		spec.ValueSize = 4
 
-		if spec.MaxEntries == 0 {
-			n, err := internal.PossibleCPUs()
-			if err != nil {
-				return nil, fmt.Errorf("perf event array: %w", err)
-			}
-			spec.MaxEntries = uint32(n)
+		spec.MaxEntries, err = fixupPerfEventArraySize(spec.MaxEntries)
+		if err != nil {
+			return nil, fmt.Errorf("perf event array: %w", err)
 		}
 	}
 

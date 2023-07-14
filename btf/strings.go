@@ -7,8 +7,6 @@ import (
 	"fmt"
 	"io"
 	"strings"
-
-	"golang.org/x/exp/maps"
 )
 
 type stringTable struct {
@@ -207,8 +205,15 @@ func (stb *stringTableBuilder) AppendEncoded(buf []byte) []byte {
 
 // Copy the string table builder.
 func (stb *stringTableBuilder) Copy() *stringTableBuilder {
+	var stringsCopy map[string]uint32
+	if stb.strings != nil {
+		stringsCopy = make(map[string]uint32, len(stb.strings))
+		for k, v := range stb.strings {
+			stringsCopy[k] = v
+		}
+	}
 	return &stringTableBuilder{
 		stb.length,
-		maps.Clone(stb.strings),
+		stringsCopy,
 	}
 }

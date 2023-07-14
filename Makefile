@@ -36,6 +36,8 @@ TARGETS := \
 	testdata/invalid_btf_map_init \
 	testdata/strings \
 	testdata/freplace \
+	testdata/fentry \
+	testdata/fexit \
 	testdata/iproute2_map_compat \
 	testdata/map_spin_lock \
 	testdata/subprog_reloc \

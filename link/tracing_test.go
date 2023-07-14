@@ -1,6 +1,7 @@
 package link
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/cilium/ebpf"
@@ -45,6 +46,46 @@ func TestFreplace(t *testing.T) {
 
 		testLink(t, freplace, replacement)
 	})
+}
+
+func TestFentryFexit(t *testing.T) {
+	testutils.SkipOnOldKernel(t, "5.5", "fentry")
+
+	spec, err := ebpf.LoadCollectionSpec(fmt.Sprintf("../testdata/fentry_fexit-%s.elf", internal.ClangEndian))
+	if err != nil {
+		t.Fatal("Can't parse ELF:", err)
+	}
+
+	target, err := ebpf.NewProgram(spec.Programs["target"])
+	testutils.SkipIfNotSupported(t, err)
+	if err != nil {
+		t.Fatal("Can't create target program:", err)
+	}
+	defer target.Close()
+
+	test := func(prog *ebpf.ProgramSpec, target *ebpf.Program) {
+		prog.AttachTarget = target
+
+		traceOnEvent, err := ebpf.NewProgram(prog)
+		testutils.SkipIfNotSupported(t, err)
+		if err != nil {
+			t.Fatalf("Can't create %s program: %v\n", prog.Name, err)
+		}
+		defer traceOnEvent.Close()
+
+		tracingLink, err := AttachTracing(TracingOptions{
+			Program: traceOnEvent,
+		})
+		if err != nil {
+			t.Fatal("Can't attach tracing:", err)
+		}
+		defer tracingLink.Close()
+
+		testLink(t, tracingLink, traceOnEvent)
+	}
+
+	test(spec.Programs["trace_on_entry"], target)
+	test(spec.Programs["trace_on_exit"], target)
 }
 
 func TestTracing(t *testing.T) {

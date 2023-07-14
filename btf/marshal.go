@@ -9,8 +9,6 @@ import (
 	"sync"
 
 	"github.com/cilium/ebpf/internal"
-
-	"golang.org/x/exp/slices"
 )
 
 type MarshalOptions struct {
@@ -146,7 +144,13 @@ func (b *Builder) Marshal(buf []byte, opts *MarshalOptions) ([]byte, error) {
 	}
 
 	// Reserve space for the BTF header.
-	buf = slices.Grow(buf, btfHeaderLen)[:btfHeaderLen]
+	if available := cap(buf) - len(buf); available < btfHeaderLen {
+		// grow by allocating
+		buf = append(buf[:cap(buf)], make([]byte, btfHeaderLen-available)...)
+	} else {
+		// grow using existing capacity
+		buf = buf[:btfHeaderLen]
+	}
 
 	w := internal.NewBuffer(buf)
 	defer internal.PutBuffer(w)

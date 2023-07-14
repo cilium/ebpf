@@ -47,6 +47,58 @@ func TestFreplace(t *testing.T) {
 	})
 }
 
+func TestFentryFexit(t *testing.T) {
+	testutils.SkipOnOldKernel(t, "5.5", "fentry")
+
+	testutils.Files(t, testutils.Glob(t, "../testdata/fentry_fexit-*.elf"), func(t *testing.T, file string) {
+		spec, err := ebpf.LoadCollectionSpec(file)
+		if err != nil {
+			t.Fatal("Can't parse ELF:", err)
+		}
+
+		if spec.ByteOrder != internal.NativeEndian {
+			return
+		}
+
+		target, err := ebpf.NewProgram(spec.Programs["target"])
+		testutils.SkipIfNotSupported(t, err)
+		if err != nil {
+			t.Fatal("Can't create target program:", err)
+		}
+		defer target.Close()
+
+		targetInfo, err := target.Info()
+		if err != nil {
+			t.Fatal("Can't get target program info:", err)
+		}
+
+		test := func(prog *ebpf.ProgramSpec, target *ebpf.Program) {
+			prog.AttachTarget = target
+			prog.AttachTo = targetInfo.Name
+
+			trace_on_event, err := ebpf.NewProgram(prog)
+			testutils.SkipIfNotSupported(t, err)
+			if err != nil {
+				t.Fatalf("Can't create %s program: %v\n", prog.Name, err)
+			}
+			defer trace_on_event.Close()
+
+			tracingLink, err := AttachTracing(TracingOptions{
+				Program: trace_on_event,
+			})
+			if err != nil {
+				t.Fatal("Can't attach tracing:", err)
+			}
+			defer tracingLink.Close()
+
+			testLink(t, tracingLink, trace_on_event)
+		}
+
+		test(spec.Programs["trace_on_entry"], target)
+		test(spec.Programs["trace_on_exit"], target)
+	})
+}
+
 func TestTracing(t *testing.T) {
 	testutils.SkipOnOldKernel(t, "5.11", "BPF_LINK_TYPE_TRACING")
 

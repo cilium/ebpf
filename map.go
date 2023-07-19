@@ -102,22 +102,51 @@ func (ms *MapSpec) Copy() *MapSpec {
 	return &cpy
 }
 
-func fixupPerfEventArraySize(maxEntries uint32) (uint32, error) {
-	n, err := internal.PossibleCPUs()
-	if err != nil {
-		return 0, fmt.Errorf("fixup perf event array: %w", err)
+// fixupMagicFields fills fields of MapSpec which are usually
+// left empty in ELF or which depend on runtime information.
+//
+// The method doesn't modify Spec, instead returning a copy.
+// The copy is only performed if fixups are necessary, so callers mustn't mutate
+// the returned spec.
+func (spec *MapSpec) fixupMagicFields() (*MapSpec, error) {
+	switch spec.Type {
+	case ArrayOfMaps, HashOfMaps:
+		if spec.ValueSize != 0 && spec.ValueSize != 4 {
+			return nil, errors.New("ValueSize must be zero or four for map of map")
+		}
+
+		spec = spec.Copy()
+		spec.ValueSize = 4
+
+	case PerfEventArray:
+		if spec.KeySize != 0 && spec.KeySize != 4 {
+			return nil, errors.New("KeySize must be zero or four for perf event array")
+		}
+
+		if spec.ValueSize != 0 && spec.ValueSize != 4 {
+			return nil, errors.New("ValueSize must be zero or four for perf event array")
+		}
+
+		spec = spec.Copy()
+		spec.KeySize = 4
+		spec.ValueSize = 4
+
+		n, err := internal.PossibleCPUs()
+		if err != nil {
+			return nil, fmt.Errorf("fixup perf event array: %w", err)
+		}
+
+		if n := uint32(n); spec.MaxEntries == 0 || spec.MaxEntries > n {
+			// MaxEntries should be zero most of the time, but there is code
+			// out there which hardcodes large constants. Clamp the number
+			// of entries to the number of CPUs at most. Allow creating maps with
+			// less than n items since some kernel selftests relied on this
+			// behaviour in the past.
+			spec.MaxEntries = n
+		}
 	}
 
-	if n := uint32(n); maxEntries == 0 || maxEntries > n {
-		// MaxEntries should be zero most of the time, but there is code
-		// out there which hardcodes large constants. Clamp the number
-		// of entries to the number of CPUs at most. Allow creating maps with
-		// less than n items since some kernel selftests relied on this
-		// behaviour in the past.
-		return n, nil
-	}
-
-	return maxEntries, nil
+	return spec, nil
 }
 
 // dataSection returns the contents and BTF Datasec descriptor of the spec.
@@ -155,13 +184,9 @@ type MapKV struct {
 //
 // Returns an error wrapping [ErrMapIncompatible] otherwise.
 func (ms *MapSpec) Compatible(m *Map) error {
-	maxEntries := ms.MaxEntries
-	if ms.Type == PerfEventArray {
-		var err error
-		maxEntries, err = fixupPerfEventArraySize(maxEntries)
-		if err != nil {
-			return err
-		}
+	ms, err := ms.fixupMagicFields()
+	if err != nil {
+		return err
 	}
 
 	switch {
@@ -174,8 +199,8 @@ func (ms *MapSpec) Compatible(m *Map) error {
 	case m.valueSize != ms.ValueSize:
 		return fmt.Errorf("expected value size %v, got %v: %w", ms.ValueSize, m.valueSize, ErrMapIncompatible)
 
-	case m.maxEntries != maxEntries:
-		return fmt.Errorf("expected max entries %v, got %v: %w", maxEntries, m.maxEntries, ErrMapIncompatible)
+	case m.maxEntries != ms.MaxEntries:
+		return fmt.Errorf("expected max entries %v, got %v: %w", ms.MaxEntries, m.maxEntries, ErrMapIncompatible)
 
 	// BPF_F_RDONLY_PROG is set unconditionally for devmaps. Explicitly allow
 	// this mismatch.
@@ -358,36 +383,9 @@ func (spec *MapSpec) createMap(inner *sys.FD, opts MapOptions) (_ *Map, err erro
 		}
 	}
 
-	switch spec.Type {
-	case ArrayOfMaps, HashOfMaps:
-		if err := haveNestedMaps(); err != nil {
-			return nil, err
-		}
-
-		if spec.ValueSize != 0 && spec.ValueSize != 4 {
-			return nil, errors.New("ValueSize must be zero or four for map of map")
-		}
-
-		spec = spec.Copy()
-		spec.ValueSize = 4
-
-	case PerfEventArray:
-		if spec.KeySize != 0 && spec.KeySize != 4 {
-			return nil, errors.New("KeySize must be zero or four for perf event array")
-		}
-
-		if spec.ValueSize != 0 && spec.ValueSize != 4 {
-			return nil, errors.New("ValueSize must be zero or four for perf event array")
-		}
-
-		spec = spec.Copy()
-		spec.KeySize = 4
-		spec.ValueSize = 4
-
-		spec.MaxEntries, err = fixupPerfEventArraySize(spec.MaxEntries)
-		if err != nil {
-			return nil, fmt.Errorf("perf event array: %w", err)
-		}
+	spec, err = spec.fixupMagicFields()
+	if err != nil {
+		return nil, err
 	}
 
 	attr := sys.MapCreateAttr{
@@ -440,6 +438,13 @@ func (spec *MapSpec) createMap(inner *sys.FD, opts MapOptions) (_ *Map, err erro
 		}
 		if errors.Is(err, unix.EINVAL) && spec.Type == UnspecifiedMap {
 			return nil, fmt.Errorf("map create: cannot use type %s", UnspecifiedMap)
+		}
+
+		switch spec.Type {
+		case ArrayOfMaps, HashOfMaps:
+			if haveFeatErr := haveNestedMaps(); haveFeatErr != nil {
+				return nil, fmt.Errorf("map create: %w", haveFeatErr)
+			}
 		}
 
 		if spec.Flags&(unix.BPF_F_RDONLY_PROG|unix.BPF_F_WRONLY_PROG) > 0 || spec.Freeze {

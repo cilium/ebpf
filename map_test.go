@@ -1736,9 +1736,7 @@ func TestMapPinning(t *testing.T) {
 
 func TestPerfEventArrayCompatible(t *testing.T) {
 	ms := &MapSpec{
-		Type:      PerfEventArray,
-		KeySize:   4,
-		ValueSize: 4,
+		Type: PerfEventArray,
 	}
 
 	m, err := NewMap(ms)

@@ -102,26 +102,55 @@ func (ms *MapSpec) Copy() *MapSpec {
 	return &cpy
 }
 
-func (ms *MapSpec) clampPerfEventArraySize() error {
-	if ms.Type != PerfEventArray {
-		return nil
+// fixupMagicFields fills fields of MapSpec which are usually
+// left empty in ELF or which depend on runtime information.
+//
+// The method doesn't modify Spec, instead returning a copy.
+// The copy is only performed if fixups are necessary, so callers mustn't mutate
+// the returned spec.
+func (spec *MapSpec) fixupMagicFields() (*MapSpec, error) {
+	switch spec.Type {
+	case ArrayOfMaps, HashOfMaps:
+		if spec.ValueSize != 0 && spec.ValueSize != 4 {
+			return nil, errors.New("ValueSize must be zero or four for map of map")
+		}
+
+		spec = spec.Copy()
+		spec.ValueSize = 4
+
+	case PerfEventArray:
+		if spec.KeySize != 0 && spec.KeySize != 4 {
+			return nil, errors.New("KeySize must be zero or four for perf event array")
+		}
+
+		if spec.ValueSize != 0 && spec.ValueSize != 4 {
+			return nil, errors.New("ValueSize must be zero or four for perf event array")
+		}
+
+		spec = spec.Copy()
+		spec.KeySize = 4
+		spec.ValueSize = 4
+
+		n, err := internal.PossibleCPUs()
+		if err != nil {
+			return nil, fmt.Errorf("fixup perf event array: %w", err)
+		}
+
+		if n := uint32(n); spec.MaxEntries == 0 || spec.MaxEntries > n {
+			// MaxEntries should be zero most of the time, but there is code
+			// out there which hardcodes large constants. Clamp the number
+			// of entries to the number of CPUs at most. Allow creating maps with
+			// less than n items since some kernel selftests relied on this
+			// behaviour in the past.
+			spec.MaxEntries = n
+		}
 	}
 
-	n, err := internal.PossibleCPUs()
-	if err != nil {
-		return fmt.Errorf("perf event array: %w", err)
-	}
-
-	if n := uint32(n); ms.MaxEntries > n {
-		ms.MaxEntries = n
-	}
-
-	return nil
+	return spec, nil
 }
 
 // dataSection returns the contents and BTF Datasec descriptor of the spec.
 func (ms *MapSpec) dataSection() ([]byte, *btf.Datasec, error) {
-
 	if ms.Value == nil {
 		return nil, nil, errMapNoBTFValue
 	}
@@ -155,6 +184,11 @@ type MapKV struct {
 //
 // Returns an error wrapping [ErrMapIncompatible] otherwise.
 func (ms *MapSpec) Compatible(m *Map) error {
+	ms, err := ms.fixupMagicFields()
+	if err != nil {
+		return err
+	}
+
 	switch {
 	case m.typ != ms.Type:
 		return fmt.Errorf("expected type %v, got %v: %w", ms.Type, m.typ, ErrMapIncompatible)
@@ -165,8 +199,7 @@ func (ms *MapSpec) Compatible(m *Map) error {
 	case m.valueSize != ms.ValueSize:
 		return fmt.Errorf("expected value size %v, got %v: %w", ms.ValueSize, m.valueSize, ErrMapIncompatible)
 
-	case !(ms.Type == PerfEventArray && ms.MaxEntries == 0) &&
-		m.maxEntries != ms.MaxEntries:
+	case m.maxEntries != ms.MaxEntries:
 		return fmt.Errorf("expected max entries %v, got %v: %w", ms.MaxEntries, m.maxEntries, ErrMapIncompatible)
 
 	// BPF_F_RDONLY_PROG is set unconditionally for devmaps. Explicitly allow
@@ -350,39 +383,9 @@ func (spec *MapSpec) createMap(inner *sys.FD, opts MapOptions) (_ *Map, err erro
 		}
 	}
 
-	switch spec.Type {
-	case ArrayOfMaps, HashOfMaps:
-		if err := haveNestedMaps(); err != nil {
-			return nil, err
-		}
-
-		if spec.ValueSize != 0 && spec.ValueSize != 4 {
-			return nil, errors.New("ValueSize must be zero or four for map of map")
-		}
-
-		spec = spec.Copy()
-		spec.ValueSize = 4
-
-	case PerfEventArray:
-		if spec.KeySize != 0 && spec.KeySize != 4 {
-			return nil, errors.New("KeySize must be zero or four for perf event array")
-		}
-
-		if spec.ValueSize != 0 && spec.ValueSize != 4 {
-			return nil, errors.New("ValueSize must be zero or four for perf event array")
-		}
-
-		spec = spec.Copy()
-		spec.KeySize = 4
-		spec.ValueSize = 4
-
-		if spec.MaxEntries == 0 {
-			n, err := internal.PossibleCPUs()
-			if err != nil {
-				return nil, fmt.Errorf("perf event array: %w", err)
-			}
-			spec.MaxEntries = uint32(n)
-		}
+	spec, err = spec.fixupMagicFields()
+	if err != nil {
+		return nil, err
 	}
 
 	attr := sys.MapCreateAttr{
@@ -435,6 +438,13 @@ func (spec *MapSpec) createMap(inner *sys.FD, opts MapOptions) (_ *Map, err erro
 		}
 		if errors.Is(err, unix.EINVAL) && spec.Type == UnspecifiedMap {
 			return nil, fmt.Errorf("map create: cannot use type %s", UnspecifiedMap)
+		}
+
+		switch spec.Type {
+		case ArrayOfMaps, HashOfMaps:
+			if haveFeatErr := haveNestedMaps(); haveFeatErr != nil {
+				return nil, fmt.Errorf("map create: %w", haveFeatErr)
+			}
 		}
 
 		if spec.Flags&(unix.BPF_F_RDONLY_PROG|unix.BPF_F_WRONLY_PROG) > 0 || spec.Freeze {

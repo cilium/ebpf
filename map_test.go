@@ -637,8 +637,6 @@ func TestMapLoadPinned(t *testing.T) {
 }
 
 func TestMapLoadReusePinned(t *testing.T) {
-	c := qt.New(t)
-
 	for _, typ := range []MapType{Array, Hash, DevMap, DevMapHash} {
 		t.Run(typ.String(), func(t *testing.T) {
 			if typ == DevMap {
@@ -658,11 +656,11 @@ func TestMapLoadReusePinned(t *testing.T) {
 			}
 
 			m1, err := NewMapWithOptions(spec, MapOptions{PinPath: tmp})
-			c.Assert(err, qt.IsNil)
+			qt.Assert(t, err, qt.IsNil)
 			defer m1.Close()
 
 			m2, err := NewMapWithOptions(spec, MapOptions{PinPath: tmp})
-			c.Assert(err, qt.IsNil)
+			qt.Assert(t, err, qt.IsNil)
 			defer m2.Close()
 		})
 	}
@@ -1732,6 +1730,21 @@ func TestMapPinning(t *testing.T) {
 	if !errors.Is(err, ErrMapIncompatible) {
 		t.Fatalf("Opening a pinned map with a mismatching spec failed with the wrong error")
 	}
+}
+
+func TestPerfEventArrayCompatible(t *testing.T) {
+	ms := &MapSpec{
+		Type: PerfEventArray,
+	}
+
+	m, err := NewMap(ms)
+	qt.Assert(t, err, qt.IsNil)
+	defer m.Close()
+
+	qt.Assert(t, ms.Compatible(m), qt.IsNil)
+
+	ms.MaxEntries = m.MaxEntries() + 1
+	qt.Assert(t, ms.Compatible(m), qt.IsNotNil)
 }
 
 type benchValue struct {

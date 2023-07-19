@@ -49,6 +49,7 @@ type Type interface {
 	// Make a copy of the type, without copying Type members.
 	copy() Type
 
+	kind() btfKind
 	// New implementations must update walkType.
 }
 
@@ -75,6 +76,7 @@ func (v *Void) Format(fs fmt.State, verb rune) { formatType(fs, verb, v) }
 func (v *Void) TypeName() string               { return "" }
 func (v *Void) size() uint32                   { return 0 }
 func (v *Void) copy() Type                     { return (*Void)(nil) }
+func (v *Void) kind() btfKind                  { return kindUnknown }
 
 type IntEncoding byte
 
@@ -125,6 +127,7 @@ func (i *Int) copy() Type {
 	cpy := *i
 	return &cpy
 }
+func (i *Int) kind() btfKind { return kindInt }
 
 // Pointer is a pointer to another type.
 type Pointer struct {
@@ -141,6 +144,7 @@ func (p *Pointer) copy() Type {
 	cpy := *p
 	return &cpy
 }
+func (p *Pointer) kind() btfKind { return kindPointer }
 
 // Array is an array with a fixed number of elements.
 type Array struct {
@@ -159,6 +163,8 @@ func (arr *Array) copy() Type {
 	cpy := *arr
 	return &cpy
 }
+
+func (arr *Array) kind() btfKind { return kindArray }
 
 // Struct is a compound type of consecutive members.
 type Struct struct {
@@ -181,6 +187,8 @@ func (s *Struct) copy() Type {
 	cpy.Members = copyMembers(s.Members)
 	return &cpy
 }
+
+func (s *Struct) kind() btfKind { return kindStruct }
 
 func (s *Struct) members() []Member {
 	return s.Members
@@ -207,6 +215,8 @@ func (u *Union) copy() Type {
 	cpy.Members = copyMembers(u.Members)
 	return &cpy
 }
+
+func (u *Union) kind() btfKind { return kindUnion }
 
 func (u *Union) members() []Member {
 	return u.Members
@@ -278,6 +288,8 @@ func (e *Enum) copy() Type {
 	return &cpy
 }
 
+func (e *Enum) kind() btfKind { return kindEnum }
+
 // has64BitValues returns true if the Enum contains a value larger than 32 bits.
 // Kernels before 6.0 have enum values that overrun u32 replaced with zeroes.
 //
@@ -330,6 +342,8 @@ func (f *Fwd) copy() Type {
 	return &cpy
 }
 
+func (f *Fwd) kind() btfKind { return kindForward }
+
 // Typedef is an alias of a Type.
 type Typedef struct {
 	Name string
@@ -346,6 +360,8 @@ func (td *Typedef) copy() Type {
 	cpy := *td
 	return &cpy
 }
+
+func (td *Typedef) kind() btfKind { return kindTypedef }
 
 // Volatile is a qualifier.
 type Volatile struct {
@@ -364,6 +380,8 @@ func (v *Volatile) copy() Type {
 	return &cpy
 }
 
+func (v *Volatile) kind() btfKind { return kindVolatile }
+
 // Const is a qualifier.
 type Const struct {
 	Type Type
@@ -381,6 +399,8 @@ func (c *Const) copy() Type {
 	return &cpy
 }
 
+func (v *Const) kind() btfKind { return kindConst }
+
 // Restrict is a qualifier.
 type Restrict struct {
 	Type Type
@@ -397,6 +417,8 @@ func (r *Restrict) copy() Type {
 	cpy := *r
 	return &cpy
 }
+
+func (v *Restrict) kind() btfKind { return kindRestrict }
 
 // Func is a function definition.
 type Func struct {
@@ -427,6 +449,8 @@ func (f *Func) copy() Type {
 	return &cpy
 }
 
+func (v *Func) kind() btfKind { return kindFunc }
+
 // FuncProto is a function declaration.
 type FuncProto struct {
 	Return Type
@@ -445,6 +469,8 @@ func (fp *FuncProto) copy() Type {
 	copy(cpy.Params, fp.Params)
 	return &cpy
 }
+
+func (v *FuncProto) kind() btfKind { return kindFuncProto }
 
 type FuncParam struct {
 	Name string
@@ -469,6 +495,8 @@ func (v *Var) copy() Type {
 	return &cpy
 }
 
+func (v *Var) kind() btfKind { return kindVar }
+
 // Datasec is a global program section containing data.
 type Datasec struct {
 	Name string
@@ -490,6 +518,8 @@ func (ds *Datasec) copy() Type {
 	copy(cpy.Vars, ds.Vars)
 	return &cpy
 }
+
+func (v *Datasec) kind() btfKind { return kindDatasec }
 
 // VarSecinfo describes variable in a Datasec.
 //
@@ -520,6 +550,8 @@ func (f *Float) copy() Type {
 	return &cpy
 }
 
+func (v *Float) kind() btfKind { return kindFloat }
+
 // declTag associates metadata with a declaration.
 type declTag struct {
 	Type  Type
@@ -540,6 +572,8 @@ func (dt *declTag) copy() Type {
 	return &cpy
 }
 
+func (v *declTag) kind() btfKind { return kindDeclTag }
+
 // typeTag associates metadata with a type.
 type typeTag struct {
 	Type  Type
@@ -557,6 +591,8 @@ func (tt *typeTag) copy() Type {
 	return &cpy
 }
 
+func (v *typeTag) kind() btfKind { return kindTypeTag }
+
 // cycle is a type which had to be elided since it exceeded maxTypeDepth.
 type cycle struct {
 	root Type
@@ -569,6 +605,8 @@ func (c *cycle) copy() Type {
 	cpy := *c
 	return &cpy
 }
+
+func (v *cycle) kind() btfKind { return math.MaxUint8 }
 
 type sizer interface {
 	size() uint32

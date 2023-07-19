@@ -637,8 +637,6 @@ func TestMapLoadPinned(t *testing.T) {
 }
 
 func TestMapLoadReusePinned(t *testing.T) {
-	c := qt.New(t)
-
 	for _, typ := range []MapType{Array, Hash, DevMap, DevMapHash} {
 		t.Run(typ.String(), func(t *testing.T) {
 			if typ == DevMap {
@@ -658,11 +656,11 @@ func TestMapLoadReusePinned(t *testing.T) {
 			}
 
 			m1, err := NewMapWithOptions(spec, MapOptions{PinPath: tmp})
-			c.Assert(err, qt.IsNil)
+			qt.Assert(t, err, qt.IsNil)
 			defer m1.Close()
 
 			m2, err := NewMapWithOptions(spec, MapOptions{PinPath: tmp})
-			c.Assert(err, qt.IsNil)
+			qt.Assert(t, err, qt.IsNil)
 			defer m2.Close()
 		})
 	}

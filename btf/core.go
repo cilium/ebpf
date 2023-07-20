@@ -902,6 +902,24 @@ func coreAreTypesCompatible(localType Type, targetType Type) error {
 		localType = UnderlyingType(*l)
 		targetType = UnderlyingType(*t)
 
+		/* For forward declarations, kflag dictates
+		 * whether the target is a struct or union.
+		 */
+		switch (localType).(type) {
+		case *Fwd:
+			localKind := localType.(*Fwd).Kind
+			switch (targetType).(type) {
+			case *Struct:
+				if localKind == FwdStruct {
+					return nil
+				}
+			case *Union:
+				if localKind == FwdUnion {
+					return nil
+				}
+			}
+		}
+
 		if reflect.TypeOf(localType) != reflect.TypeOf(targetType) {
 			return fmt.Errorf("type mismatch: %w", errIncompatibleTypes)
 		}

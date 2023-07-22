@@ -999,7 +999,7 @@ func findTargetInProgram(prog *Program, name string, progType ProgramType, attac
 
 	var typeName string
 	switch (match{progType, attachType}) {
-	case match{Extension, AttachNone}:
+	case match{Extension, AttachNone}, match{Tracing, AttachTraceFEntry}, match{Tracing, AttachTraceFExit}:
 		typeName = name
 	default:
 		return 0, errUnrecognizedAttachType

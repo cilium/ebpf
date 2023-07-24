@@ -1,0 +1,19 @@
+# This defines the name of the workflow as it will appear in the "Actions" tab of the GitHub repository.
+name: 'Link Checker: All English'
+
+# The `on` key lets you define the events that trigger when the workflow is run. You can define multiple events here. For more information, see "[AUTOTITLE](/actions/using-workflows/triggering-a-workflow#using-events-to-trigger-workflows)."
+on:
+  pull_request:
+# The `jobs` key groups together all the jobs that run in the workflow file.
+jobs:
+  ort:
+    runs-on: ubuntu
+    name: ort
+    steps:
+    - uses: actions/checkout@v2
+    - uses: actions/setup-java@v1
+      with:
+        java-version: '11.0.1'
+    - name: Analyze licensing 
+      id: ort-action
+      uses: edulix/ort-action@v0.1.2

@@ -383,9 +383,60 @@ func (spec *MapSpec) createMap(inner *sys.FD, opts MapOptions) (_ *Map, err erro
 		}
 	}
 
-	spec, err = spec.fixupMagicFields()
-	if err != nil {
-		return nil, err
+	switch spec.Type {
+	case ArrayOfMaps, HashOfMaps:
+		if err := haveNestedMaps(); err != nil {
+			return nil, err
+		}
+
+		if spec.ValueSize != 0 && spec.ValueSize != 4 {
+			return nil, errors.New("ValueSize must be zero or four for map of map")
+		}
+
+		spec = spec.Copy()
+		spec.ValueSize = 4
+
+	case PerfEventArray:
+		if spec.KeySize != 0 && spec.KeySize != 4 {
+			return nil, errors.New("KeySize must be zero or four for perf event array")
+		}
+
+		if spec.ValueSize != 0 && spec.ValueSize != 4 {
+			return nil, errors.New("ValueSize must be zero or four for perf event array")
+		}
+
+		spec = spec.Copy()
+		spec.KeySize = 4
+		spec.ValueSize = 4
+
+		if spec.MaxEntries == 0 {
+			n, err := internal.PossibleCPUs()
+			if err != nil {
+				return nil, fmt.Errorf("perf event array: %w", err)
+			}
+			spec.MaxEntries = uint32(n)
+		}
+	}
+
+	if spec.Flags&(unix.BPF_F_RDONLY_PROG|unix.BPF_F_WRONLY_PROG) > 0 || spec.Freeze {
+		if err := haveMapMutabilityModifiers(); err != nil {
+			return nil, fmt.Errorf("map create: %w", err)
+		}
+	}
+	if spec.Flags&unix.BPF_F_MMAPABLE > 0 {
+		if err := haveMmapableMaps(); err != nil {
+			return nil, fmt.Errorf("map create: %w", err)
+		}
+	}
+	if spec.Flags&unix.BPF_F_INNER_MAP > 0 {
+		if err := haveInnerMaps(); err != nil {
+			return nil, fmt.Errorf("map create: %w", err)
+		}
+	}
+	if spec.Flags&unix.BPF_F_NO_PREALLOC > 0 {
+		if err := haveNoPreallocMaps(); err != nil {
+			return nil, fmt.Errorf("map create: %w", err)
+		}
 	}
 
 	attr := sys.MapCreateAttr{
@@ -430,55 +481,10 @@ func (spec *MapSpec) createMap(inner *sys.FD, opts MapOptions) (_ *Map, err erro
 	}
 
 	if err != nil {
-		if errors.Is(err, unix.EPERM) {
-			return nil, fmt.Errorf("map create: %w (MEMLOCK may be too low, consider rlimit.RemoveMemlock)", err)
-		}
-		if errors.Is(err, unix.EINVAL) && attr.MaxEntries == 0 {
-			return nil, fmt.Errorf("map create: %w (MaxEntries may be incorrectly set to zero)", err)
-		}
-		if errors.Is(err, unix.EINVAL) && spec.Type == UnspecifiedMap {
-			return nil, fmt.Errorf("map create: cannot use type %s", UnspecifiedMap)
-		}
-
-		switch spec.Type {
-		case ArrayOfMaps, HashOfMaps:
-			if haveFeatErr := haveNestedMaps(); haveFeatErr != nil {
-				return nil, fmt.Errorf("map create: %w", haveFeatErr)
-			}
-		}
-
-		if spec.Flags&(unix.BPF_F_RDONLY_PROG|unix.BPF_F_WRONLY_PROG) > 0 || spec.Freeze {
-			if haveFeatErr := haveMapMutabilityModifiers(); haveFeatErr != nil {
-				return nil, fmt.Errorf("map create: %w", haveFeatErr)
-			}
-		}
-
-		if spec.Flags&unix.BPF_F_MMAPABLE > 0 {
-			if haveFeatErr := haveMmapableMaps(); haveFeatErr != nil {
-				return nil, fmt.Errorf("map create: %w", haveFeatErr)
-			}
-		}
-
-		if spec.Flags&unix.BPF_F_INNER_MAP > 0 {
-			if haveFeatErr := haveInnerMaps(); haveFeatErr != nil {
-				return nil, fmt.Errorf("map create: %w", haveFeatErr)
-			}
-		}
-
-		if spec.Flags&unix.BPF_F_NO_PREALLOC > 0 {
-			if haveFeatErr := haveNoPreallocMaps(); haveFeatErr != nil {
-				return nil, fmt.Errorf("map create: %w", haveFeatErr)
-			}
-		}
-
-		if attr.BtfFd == 0 {
-			return nil, fmt.Errorf("map create: %w (without BTF k/v)", err)
-		}
-
-		return nil, fmt.Errorf("map create: %w", err)
+		return nil, handleMapCreateError(attr, spec, err)
 	}
-	defer closeOnError(fd)
 
+	defer closeOnError(fd)
 	m, err := newMap(fd, spec.Name, spec.Type, spec.KeySize, spec.ValueSize, spec.MaxEntries, spec.Flags)
 	if err != nil {
 		return nil, fmt.Errorf("map create: %w", err)
@@ -1489,4 +1495,51 @@ func NewMapFromID(id MapID) (*Map, error) {
 	}
 
 	return newMapFromFD(fd)
+}
+
+func handleMapCreateError(attr MapCreateAttr, spec *MapSpec, err error) error {
+	if errors.Is(err, unix.EPERM) {
+		return fmt.Errorf("map create: %w (MEMLOCK may be too low, consider rlimit.RemoveMemlock)", err)
+	}
+	if errors.Is(err, unix.EINVAL) && spec.MaxEntries == 0 {
+		return fmt.Errorf("map create: %w (MaxEntries may be incorrectly set to zero)", err)
+	}
+	if errors.Is(err, unix.EINVAL) && spec.Type == UnspecifiedMap {
+		return fmt.Errorf("map create: cannot use type %s", UnspecifiedMap)
+	}
+	if errors.Is(err, unix.EINVAL) && spec.Flags&unix.BPF_F_NO_PREALLOC > 0 {
+		return fmt.Errorf("map create: %w (noPrealloc flag may be incompatible with map type %s)", err, spec.Type)
+	}
+
+	switch spec.Type {
+	case ArrayOfMaps, HashOfMaps:
+		if haveFeatErr := haveNestedMaps(); haveFeatErr != nil {
+			return fmt.Errorf("map create: %w", haveFeatErr)
+		}
+	}
+	if spec.Flags&(unix.BPF_F_RDONLY_PROG|unix.BPF_F_WRONLY_PROG) > 0 || spec.Freeze {
+		if haveFeatErr := haveMapMutabilityModifiers(); haveFeatErr != nil {
+			return fmt.Errorf("map create: %w", haveFeatErr)
+		}
+	}
+	if spec.Flags&unix.BPF_F_MMAPABLE > 0 {
+		if haveFeatErr := haveMmapableMaps(); haveFeatErr != nil {
+			return fmt.Errorf("map create: %w", haveFeatErr)
+		}
+	}
+	if spec.Flags&unix.BPF_F_INNER_MAP > 0 {
+		if haveFeatErr := haveInnerMaps(); haveFeatErr != nil {
+			return fmt.Errorf("map create: %w", haveFeatErr)
+		}
+	}
+	if spec.Flags&unix.BPF_F_NO_PREALLOC > 0 {
+		if haveFeatErr := haveNoPreallocMaps(); haveFeatErr != nil {
+			return fmt.Errorf("map create: %w", haveFeatErr)
+		}
+	}
+	if attr.BtfFd == 0 {
+		return fmt.Errorf("map create: %w (without BTF k/v)", err)
+	}
+
+	return fmt.Errorf("map create: %w", err)
 }

@@ -3,6 +3,7 @@ package ebpf
 import (
 	"errors"
 	"fmt"
+	"path"
 	"reflect"
 	"testing"
 
@@ -727,4 +728,69 @@ func ExampleCollectionSpec_LoadAndAssign() {
 
 	// Output: SocketFilter
 	// Array
+}
+
+func TestCollectionPinUnpin(t *testing.T) {
+	spec := &CollectionSpec{
+		Maps: map[string]*MapSpec{
+			"pinmap1": {
+				Type:       Array,
+				KeySize:    4,
+				ValueSize:  4,
+				MaxEntries: 1,
+			},
+			"pinmap2": {
+				Type:       Array,
+				KeySize:    4,
+				ValueSize:  4,
+				MaxEntries: 1,
+			},
+		},
+		Programs: map[string]*ProgramSpec{
+			"pinprog1": {
+				Type: SocketFilter,
+				Instructions: asm.Instructions{
+					asm.LoadImm(asm.R0, 0, asm.DWord),
+					asm.Return(),
+				},
+				License: "MIT",
+			},
+			"pinprog2": {
+				Type: SocketFilter,
+				Instructions: asm.Instructions{
+					asm.LoadImm(asm.R0, 0, asm.DWord),
+					asm.Return(),
+				},
+				License: "MIT",
+			},
+		},
+		Types: &btf.Spec{},
+	}
+
+	coll, err := NewCollection(spec)
+	qt.Assert(t, err, qt.IsNil)
+	defer coll.Close()
+
+	bpffs := testutils.TempBPFFS(t)
+	pinPath := path.Join(bpffs, "myobj")
+
+	// Nothing is pinned yet
+	before := testutils.Glob(t, path.Join(pinPath, "*"))
+	qt.Assert(t, before, qt.HasLen, 0)
+
+	// Pin all maps and objects
+	qt.Assert(t, coll.Pin(pinPath), qt.IsNil)
+	defer coll.Unpin()
+
+	after := testutils.Glob(t, path.Join(pinPath, "*"))
+	qt.Assert(t, after, qt.HasLen, 4)
+	qt.Assert(t, after, qt.Contains, path.Join(pinPath, "pinmap1"))
+	qt.Assert(t, after, qt.Contains, path.Join(pinPath, "pinmap2"))
+	qt.Assert(t, after, qt.Contains, path.Join(pinPath, "pinprog1"))
+	qt.Assert(t, after, qt.Contains, path.Join(pinPath, "pinprog2"))
+
+	// Now check that Unpin() also works
+	qt.Assert(t, coll.Unpin(), qt.IsNil)
+	after2 := testutils.Glob(t, path.Join(pinPath, "*"))
+	qt.Assert(t, after2, qt.HasLen, 0)
 }

@@ -4,6 +4,8 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"os"
+	"path"
 	"reflect"
 	"strings"
 
@@ -677,6 +679,152 @@ func LoadCollection(file string) (*Collection, error) {
 		return nil, err
 	}
 	return NewCollection(spec)
+}
+
+// Assign the contents of a Collection to a struct.
+//
+// This function bridges functionality between bpf2go generated
+// code and any functionality better implemented in Collection.
+//
+// 'to' must be a pointer to a struct. A field of the
+// struct is updated with values from Programs or Maps if it
+// has an `ebpf` tag and its type is *Program or *Map.
+// The tag's value specifies the name of the program or map as
+// found in the CollectionSpec.
+//
+//	struct {
+//	    Foo     *ebpf.Program `ebpf:"xdp_foo"`
+//	    Bar     *ebpf.Map     `ebpf:"bar_map"`
+//	    Ignored int
+//	}
+//
+// Returns an error if any of the eBPF objects can't be found, or
+// if the same Map or Program is assigned multiple times.
+//
+// Ownership and Close()ing responsibility is transferred to `to`
+// for any successful assigns.
+func (coll *Collection) Assign(to interface{}) error {
+	// Assign() only transfers already-loaded Maps and Programs. No extra
+	// loading is done.
+	getValue := func(typ reflect.Type, name string) (interface{}, error) {
+		switch typ {
+
+		case reflect.TypeOf((*Program)(nil)):
+			if p := coll.Programs[name]; p != nil {
+				delete(coll.Programs, name)
+				return p, nil
+			}
+			return nil, fmt.Errorf("missing program %q", name)
+
+		case reflect.TypeOf((*Map)(nil)):
+			if m := coll.Maps[name]; m != nil {
+				delete(coll.Maps, name)
+				return m, nil
+			}
+			return nil, fmt.Errorf("missing map %q", name)
+
+		default:
+			return nil, fmt.Errorf("unsupported type %s", typ)
+		}
+	}
+
+	return assignValues(to, getValue)
+}
+
+func (coll *Collection) pinMaps(objPath string) error {
+	var err error
+
+	for name, m := range coll.Maps {
+		// Skip .rodata, .data, .bss, etc.
+		if strings.HasPrefix(name, ".") {
+			continue
+		}
+
+		// bpffs does not allow "."s
+		name = strings.ReplaceAll(name, ".", "_")
+		mapPath := path.Join(objPath, name)
+		if err = m.Pin(mapPath); err != nil {
+			err = fmt.Errorf("failed to pin map %s: %w", name, err)
+			break
+		}
+	}
+
+	if err != nil {
+		for _, m := range coll.Maps {
+			m.Unpin() //nolint:errcheck
+		}
+		return err
+	}
+
+	return nil
+}
+
+func (coll *Collection) pinProgs(objPath string) error {
+	var err error
+
+	for name, prog := range coll.Programs {
+		progPath := path.Join(objPath, name)
+		if err = prog.Pin(progPath); err != nil {
+			err = fmt.Errorf("failed to pin program %s: %w", name, err)
+			break
+		}
+	}
+
+	if err != nil {
+		for _, prog := range coll.Programs {
+			prog.Unpin() //nolint:errcheck
+		}
+		return err
+	}
+
+	return nil
+}
+
+// Pin persists the Maps and Programs in the Collection on the BPF virtual file
+// system past the lifetime of the process that created it.
+//
+// Calling Pin on a previously pinned Collection will overwrite the paths, except when
+// the new path already exists. Re-pinning across filesystems is not supported.
+//
+// This requires bpffs to be mounted above path. See
+// https://docs.cilium.io/en/stable/network/kubernetes/configuration/#mounting-bpffs-with-systemd
+func (coll *Collection) Pin(path string) error {
+	if err := os.MkdirAll(path, 0700); err != nil {
+		return err
+	}
+
+	if err := coll.pinMaps(path); err != nil {
+		return err
+	}
+
+	if err := coll.pinProgs(path); err != nil {
+		for _, m := range coll.Maps {
+			m.Unpin() //nolint:errcheck
+		}
+		return err
+	}
+
+	return nil
+}
+
+// Unpin removes the persisted state for the Collection from the BPF virtual
+// filesystem.
+//
+// Unpinning an unpinned Collection returns nil.
+func (coll *Collection) Unpin() error {
+	for name, m := range coll.Maps {
+		if err := m.Unpin(); err != nil {
+			return fmt.Errorf("failed to unpin map %s: %w", name, err)
+		}
+	}
+
+	for name, prog := range coll.Programs {
+		if err := prog.Unpin(); err != nil {
+			return fmt.Errorf("failed to unpin program %s: %w", name, err)
+		}
+	}
+
+	return nil
 }
 
 // Close frees all maps and programs associated with the collection.

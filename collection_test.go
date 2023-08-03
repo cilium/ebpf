@@ -3,6 +3,7 @@ package ebpf
 import (
 	"errors"
 	"fmt"
+	"path"
 	"reflect"
 	"testing"
 
@@ -434,7 +435,7 @@ func TestCollectionSpec_LoadAndAssign_LazyLoading(t *testing.T) {
 	}
 }
 
-func TestCollectionAssign(t *testing.T) {
+func TestCollectionSpecAssign(t *testing.T) {
 	var specs struct {
 		Program *ProgramSpec `ebpf:"prog1"`
 		Map     *MapSpec     `ebpf:"map1"`
@@ -557,6 +558,50 @@ func TestAssignValues(t *testing.T) {
 		})
 	}
 
+}
+
+func TestCollectionAssign(t *testing.T) {
+	var objs struct {
+		Program *Program `ebpf:"prog1"`
+		Map     *Map     `ebpf:"map1"`
+	}
+
+	cs := &CollectionSpec{
+		Maps: map[string]*MapSpec{
+			"map1": &MapSpec{
+				Type:       Array,
+				KeySize:    4,
+				ValueSize:  4,
+				MaxEntries: 1,
+			},
+		},
+		Programs: map[string]*ProgramSpec{
+			"prog1": &ProgramSpec{
+				Type: SocketFilter,
+				Instructions: asm.Instructions{
+					asm.LoadImm(asm.R0, 0, asm.DWord),
+					asm.Return(),
+				},
+				License: "MIT",
+			},
+		},
+	}
+
+	coll, err := NewCollection(cs)
+	qt.Assert(t, err, qt.IsNil)
+	defer coll.Close()
+
+	qt.Assert(t, coll.Assign(&objs), qt.IsNil)
+	defer objs.Program.Close()
+	defer objs.Map.Close()
+
+	// Check that objs has received ownership of map and prog
+	qt.Assert(t, objs.Program.FD() >= 0, qt.IsTrue)
+	qt.Assert(t, objs.Map.FD() >= 0, qt.IsTrue)
+
+	// Check that the collection has lost ownership
+	qt.Assert(t, coll.Programs, qt.Not(qt.Contains), "prog1")
+	qt.Assert(t, coll.Maps, qt.Not(qt.Contains), "map1")
 }
 
 func TestIncompleteLoadAndAssign(t *testing.T) {
@@ -727,4 +772,69 @@ func ExampleCollectionSpec_LoadAndAssign() {
 
 	// Output: SocketFilter
 	// Array
+}
+
+func TestCollectionPinUnpin(t *testing.T) {
+	spec := &CollectionSpec{
+		Maps: map[string]*MapSpec{
+			"pinmap1": {
+				Type:       Array,
+				KeySize:    4,
+				ValueSize:  4,
+				MaxEntries: 1,
+			},
+			"pinmap2": {
+				Type:       Array,
+				KeySize:    4,
+				ValueSize:  4,
+				MaxEntries: 1,
+			},
+		},
+		Programs: map[string]*ProgramSpec{
+			"pinprog1": {
+				Type: SocketFilter,
+				Instructions: asm.Instructions{
+					asm.LoadImm(asm.R0, 0, asm.DWord),
+					asm.Return(),
+				},
+				License: "MIT",
+			},
+			"pinprog2": {
+				Type: SocketFilter,
+				Instructions: asm.Instructions{
+					asm.LoadImm(asm.R0, 0, asm.DWord),
+					asm.Return(),
+				},
+				License: "MIT",
+			},
+		},
+		Types: &btf.Spec{},
+	}
+
+	coll, err := NewCollection(spec)
+	qt.Assert(t, err, qt.IsNil)
+	defer coll.Close()
+
+	bpffs := testutils.TempBPFFS(t)
+	pinPath := path.Join(bpffs, "myobj")
+
+	// Nothing is pinned yet
+	before := testutils.Glob(t, path.Join(pinPath, "*"))
+	qt.Assert(t, before, qt.HasLen, 0)
+
+	// Pin all maps and objects
+	qt.Assert(t, coll.Pin(pinPath), qt.IsNil)
+	defer coll.Unpin()
+
+	after := testutils.Glob(t, path.Join(pinPath, "*"))
+	qt.Assert(t, after, qt.HasLen, 4)
+	qt.Assert(t, after, qt.Contains, path.Join(pinPath, "pinmap1"))
+	qt.Assert(t, after, qt.Contains, path.Join(pinPath, "pinmap2"))
+	qt.Assert(t, after, qt.Contains, path.Join(pinPath, "pinprog1"))
+	qt.Assert(t, after, qt.Contains, path.Join(pinPath, "pinprog2"))
+
+	// Now check that Unpin() also works
+	qt.Assert(t, coll.Unpin(), qt.IsNil)
+	after2 := testutils.Glob(t, path.Join(pinPath, "*"))
+	qt.Assert(t, after2, qt.HasLen, 0)
 }

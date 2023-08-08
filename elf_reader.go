@@ -777,7 +777,7 @@ func (ec *elfCode) loadBTFMaps() error {
 
 // mapSpecFromBTF produces a MapSpec based on a btf.Struct def representing
 // a BTF map definition. The name and spec arguments will be copied to the
-// resulting MapSpec, and inner must be true on any resursive invocations.
+// resulting MapSpec, and inner must be true on any recursive invocations.
 func mapSpecFromBTF(es *elfSection, vs *btf.VarSecinfo, def *btf.Struct, spec *btf.Spec, name string, inner bool) (*MapSpec, error) {
 	var (
 		key, value         btf.Type

@@ -75,7 +75,7 @@ const (
 	Xor ALUOp = 0xa0
 	// Mov - move value from one place to another
 	Mov ALUOp = 0xb0
-	// ArSh - arithmatic shift
+	// ArSh - arithmetic shift
 	ArSh ALUOp = 0xc0
 	// Swap - endian conversions
 	Swap ALUOp = 0xd0

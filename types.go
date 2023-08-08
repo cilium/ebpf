@@ -44,7 +44,7 @@ const (
 	// if an skb is from a socket belonging to a specific cgroup
 	CGroupArray
 	// LRUHash - This allows you to create a small hash structure that will purge the
-	// least recently used items rather than thow an error when you run out of memory
+	// least recently used items rather than throw an error when you run out of memory
 	LRUHash
 	// LRUCPUHash - This is NOT like PerCPUHash, this structure is shared among the CPUs,
 	// it has more to do with including the CPU id with the LRU calculation so that if a

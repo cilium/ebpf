@@ -294,7 +294,7 @@ func TestLoadSpecFromElf(t *testing.T) {
 
 		var v *Var
 		if err := spec.TypeByName("key3", &v); err != nil {
-			t.Error("Cant find key3:", err)
+			t.Error("Can't find key3:", err)
 		} else {
 			if v.Linkage != GlobalVar {
 				t.Error("Expected global linkage:", v)

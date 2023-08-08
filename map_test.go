@@ -2159,7 +2159,7 @@ func ExampleMap_perCPU() {
 }
 
 // It is possible to use unsafe.Pointer to avoid marshalling
-// and copy overhead. It is the resposibility of the caller to ensure
+// and copy overhead. It is the responsibility of the caller to ensure
 // the correct size of unsafe.Pointers.
 //
 // Note that using unsafe.Pointer is only marginally faster than

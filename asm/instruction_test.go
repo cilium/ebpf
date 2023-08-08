@@ -146,7 +146,7 @@ func TestInstructionLoadMapValue(t *testing.T) {
 		t.Error("Expected map fd to be 1, got", fd)
 	}
 	if off := ins.mapOffset(); off != 123 {
-		t.Fatal("Expected map offset to be 123 after changin the pointer, got", off)
+		t.Fatal("Expected map offset to be 123 after changing the pointer, got", off)
 	}
 }
 

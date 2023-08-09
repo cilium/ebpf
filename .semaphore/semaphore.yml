@@ -22,7 +22,7 @@ blocks:
           # Disabled, see https://github.com/cilium/ebpf/issues/898
           # - cache restore
           - go mod tidy
-          - curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b "$(go env GOPATH)/bin" v1.51.2
+          - curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b "$(go env GOPATH)/bin" v1.54.0
           - go install gotest.tools/gotestsum@v1.8.1
           - sudo pip3 install https://github.com/amluto/virtme/archive/beb85146cd91de37ae455eccb6ab67c393e6e290.zip
           - sudo apt-get update

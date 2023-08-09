@@ -264,7 +264,7 @@ func TestReaderNoWakeup(t *testing.T) {
 		t.Fatal("Expected 0 as return value, got", errno)
 	}
 
-	rd.SetDeadline(time.Now().Add(100*time.Millisecond))
+	rd.SetDeadline(time.Now().Add(100 * time.Millisecond))
 
 	record, err := rd.Read()
 	if !errors.Is(err, os.ErrDeadlineExceeded) {

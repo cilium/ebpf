@@ -194,6 +194,7 @@ func (r *Reader) Read() (Record, error) {
 
 // ReadInto is like Read except that it allows reusing Record and associated buffers.
 func (r *Reader) ReadInto(rec *Record) error {
+	var err error
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
@@ -203,23 +204,29 @@ func (r *Reader) ReadInto(rec *Record) error {
 
 	for {
 		if !r.haveData {
-			_, err := r.poller.Wait(r.epollEvents[:cap(r.epollEvents)], r.deadline)
-			if err != nil {
-				return err
+			_, err = r.poller.Wait(r.epollEvents[:cap(r.epollEvents)], r.deadline)
+			if errors.Is(err, os.ErrDeadlineExceeded) {
+				r.haveData = !r.ring.isEmpty()
+				if !r.haveData {
+					return err
+				}
+			} else {
+				if err != nil {
+					return err
+				}
+				r.haveData = true
 			}
-			r.haveData = true
 		}
 
 		for {
-			err := readRecord(r.ring, rec, r.header)
-			if err == errBusy || err == errDiscard {
+			err := errors.Join(err, readRecord(r.ring, rec, r.header))
+			if errors.Is(err, errBusy) || errors.Is(err, errDiscard) {
 				continue
 			}
-			if err == errEOR {
+			if errors.Is(err, errEOR) {
 				r.haveData = false
 				break
 			}
-
 			return err
 		}
 	}

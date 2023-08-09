@@ -12,8 +12,14 @@ import (
 	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/testutils"
 	"github.com/cilium/ebpf/internal/testutils/fdtrace"
+	"github.com/cilium/ebpf/internal/unix"
 	"github.com/google/go-cmp/cmp"
 )
+
+type sampleMessage struct {
+	size  int
+	flags int32
+}
 
 func TestMain(m *testing.M) {
 	fdtrace.TestMain(m)
@@ -24,19 +30,19 @@ func TestRingbufReader(t *testing.T) {
 
 	readerTests := []struct {
 		name     string
-		messages []int
+		messages []sampleMessage
 		want     map[int][]byte
 	}{
 		{
 			name:     "send one short sample",
-			messages: []int{5},
+			messages: []sampleMessage{{size: 5}},
 			want: map[int][]byte{
 				5: {1, 2, 3, 4, 4},
 			},
 		},
 		{
 			name:     "send three short samples, the second is discarded",
-			messages: []int{5, 10, 15},
+			messages: []sampleMessage{{size: 5}, {size: 10}, {size: 15}},
 			want: map[int][]byte{
 				5:  {1, 2, 3, 4, 4},
 				15: {1, 2, 3, 4, 4, 3, 2, 1, 1, 2, 3, 4, 4, 3, 2},
@@ -45,7 +51,7 @@ func TestRingbufReader(t *testing.T) {
 	}
 	for _, tt := range readerTests {
 		t.Run(tt.name, func(t *testing.T) {
-			prog, events := mustOutputSamplesProg(t, 0, tt.messages...)
+			prog, events := mustOutputSamplesProg(t, tt.messages...)
 
 			rd, err := NewReader(events)
 			if err != nil {
@@ -80,7 +86,7 @@ func TestRingbufReader(t *testing.T) {
 	}
 }
 
-func outputSamplesProg(flags int32, sampleSizes ...int) (*ebpf.Program, *ebpf.Map, error) {
+func outputSamplesProg(sampleMessages ...sampleMessage) (*ebpf.Program, *ebpf.Map, error) {
 	events, err := ebpf.NewMap(&ebpf.MapSpec{
 		Type:       ebpf.RingBuf,
 		MaxEntries: 4096,
@@ -90,9 +96,9 @@ func outputSamplesProg(flags int32, sampleSizes ...int) (*ebpf.Program, *ebpf.Ma
 	}
 
 	var maxSampleSize int
-	for _, sampleSize := range sampleSizes {
-		if sampleSize > maxSampleSize {
-			maxSampleSize = sampleSize
+	for _, sampleMessage := range sampleMessages {
+		if sampleMessage.size > maxSampleSize {
+			maxSampleSize = sampleMessage.size
 		}
 	}
 
@@ -108,16 +114,16 @@ func outputSamplesProg(flags int32, sampleSizes ...int) (*ebpf.Program, *ebpf.Ma
 		)
 	}
 
-	for sampleIdx, sampleSize := range sampleSizes {
+	for sampleIdx, sampleMessage := range sampleMessages {
 		insns = append(insns,
 			asm.LoadMapPtr(asm.R1, events.FD()),
-			asm.Mov.Imm(asm.R2, int32(sampleSize)),
+			asm.Mov.Imm(asm.R2, int32(sampleMessage.size)),
 			asm.Mov.Imm(asm.R3, int32(0)),
 			asm.FnRingbufReserve.Call(),
 			asm.JEq.Imm(asm.R0, 0, "exit"),
 			asm.Mov.Reg(asm.R5, asm.R0),
 		)
-		for i := 0; i < sampleSize; i++ {
+		for i := 0; i < sampleMessage.size; i++ {
 			insns = append(insns,
 				asm.LoadMem(asm.R4, asm.RFP, int16(i+1)*-1, asm.Byte),
 				asm.StoreMem(asm.R5, int16(i), asm.R4, asm.Byte),
@@ -128,13 +134,13 @@ func outputSamplesProg(flags int32, sampleSizes ...int) (*ebpf.Program, *ebpf.Ma
 		if sampleIdx&1 != 0 {
 			insns = append(insns,
 				asm.Mov.Reg(asm.R1, asm.R5),
-				asm.Mov.Imm(asm.R2, flags),
+				asm.Mov.Imm(asm.R2, sampleMessage.flags),
 				asm.FnRingbufDiscard.Call(),
 			)
 		} else {
 			insns = append(insns,
 				asm.Mov.Reg(asm.R1, asm.R5),
-				asm.Mov.Imm(asm.R2, flags),
+				asm.Mov.Imm(asm.R2, sampleMessage.flags),
 				asm.FnRingbufSubmit.Call(),
 			)
 		}
@@ -158,10 +164,10 @@ func outputSamplesProg(flags int32, sampleSizes ...int) (*ebpf.Program, *ebpf.Ma
 	return prog, events, nil
 }
 
-func mustOutputSamplesProg(tb testing.TB, flags int32, sampleSizes ...int) (*ebpf.Program, *ebpf.Map) {
+func mustOutputSamplesProg(tb testing.TB, sampleMessages ...sampleMessage) (*ebpf.Program, *ebpf.Map) {
 	tb.Helper()
 
-	prog, events, err := outputSamplesProg(flags, sampleSizes...)
+	prog, events, err := outputSamplesProg(sampleMessages...)
 	if err != nil {
 		tb.Fatal(err)
 	}
@@ -177,7 +183,7 @@ func mustOutputSamplesProg(tb testing.TB, flags int32, sampleSizes ...int) (*ebp
 func TestReaderBlocking(t *testing.T) {
 	testutils.SkipOnOldKernel(t, "5.8", "BPF ring buffer")
 
-	prog, events := mustOutputSamplesProg(t, 0, 5)
+	prog, events := mustOutputSamplesProg(t, sampleMessage{size: 5, flags: 0})
 	ret, _, err := prog.Test(internal.EmptyBPFContext)
 	testutils.SkipIfNotSupported(t, err)
 	if err != nil {
@@ -234,10 +240,53 @@ func TestReaderBlocking(t *testing.T) {
 	}
 }
 
+func TestReaderNoWakeup(t *testing.T) {
+	testutils.SkipOnOldKernel(t, "5.8", "BPF ring buffer")
+
+	prog, events := mustOutputSamplesProg(t,
+		sampleMessage{size: 5, flags: unix.BPF_RB_NO_WAKEUP}, // Read after timeout
+		sampleMessage{size: 6, flags: unix.BPF_RB_NO_WAKEUP}, // Discard
+		sampleMessage{size: 7, flags: unix.BPF_RB_NO_WAKEUP}) // Read won't block
+
+	rd, err := NewReader(events)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rd.Close()
+
+	ret, _, err := prog.Test(internal.EmptyBPFContext)
+	testutils.SkipIfNotSupported(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if errno := syscall.Errno(-int32(ret)); errno != 0 {
+		t.Fatal("Expected 0 as return value, got", errno)
+	}
+
+	rd.SetDeadline(time.Now().Add(100 * time.Millisecond))
+
+	record, err := rd.Read()
+	if !errors.Is(err, os.ErrDeadlineExceeded) {
+		t.Error("Expected os.ErrDeadlineExceeded from first Read, got:", err)
+	}
+	if len(record.RawSample) != 5 {
+		t.Errorf("Expected to read 5 bytes bot got %d", len(record.RawSample))
+	}
+
+	record, err = rd.Read()
+	if err != nil {
+		t.Error("Expected no error from second Read, got:", err)
+	}
+	if len(record.RawSample) != 7 {
+		t.Errorf("Expected to read 7 bytes bot got %d", len(record.RawSample))
+	}
+}
+
 func TestReaderSetDeadline(t *testing.T) {
 	testutils.SkipOnOldKernel(t, "5.8", "BPF ring buffer")
 
-	_, events := mustOutputSamplesProg(t, 0, 5)
+	_, events := mustOutputSamplesProg(t, sampleMessage{size: 5, flags: 0})
 	rd, err := NewReader(events)
 	if err != nil {
 		t.Fatal(err)
@@ -267,7 +316,7 @@ func BenchmarkReader(b *testing.B) {
 
 	for _, bm := range readerBenchmarks {
 		b.Run(bm.name, func(b *testing.B) {
-			prog, events := mustOutputSamplesProg(b, bm.flags, 80)
+			prog, events := mustOutputSamplesProg(b, sampleMessage{size: 80, flags: bm.flags})
 
 			rd, err := NewReader(events)
 			if err != nil {
@@ -299,7 +348,7 @@ func BenchmarkReader(b *testing.B) {
 func BenchmarkReadInto(b *testing.B) {
 	testutils.SkipOnOldKernel(b, "5.8", "BPF ring buffer")
 
-	prog, events := mustOutputSamplesProg(b, 0, 80)
+	prog, events := mustOutputSamplesProg(b, sampleMessage{size: 80, flags: 0})
 
 	rd, err := NewReader(events)
 	if err != nil {

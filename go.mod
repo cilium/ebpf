@@ -1,6 +1,6 @@
 module github.com/cilium/ebpf
 
-go 1.19
+go 1.20
 
 require (
 	github.com/frankban/quicktest v1.14.5

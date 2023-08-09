@@ -91,7 +91,7 @@ func (rr *ringReader) skipRead(skipBytes uint64) {
 	rr.cons += clamp(rr.cons, atomic.LoadUint64(rr.prod_pos), skipBytes)
 }
 
-func (rr *ringReader) isEmpty() (bool) {
+func (rr *ringReader) isEmpty() bool {
 	cons := atomic.LoadUint64(rr.cons_pos)
 	prod := atomic.LoadUint64(rr.prod_pos)
 

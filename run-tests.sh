@@ -51,7 +51,7 @@ if [[ "${1:-}" = "--exec-vm" ]]; then
   fi
 
   for ((i = 0; i < 3; i++)); do
-    if ! $sudo virtme-run --kimg "${input}/bzImage" --memory 768M --pwd \
+    if ! $sudo virtme-run --kimg "${input}/boot/vmlinuz" --memory 768M --pwd \
       --rwdir="${testdir}=${testdir}" \
       --rodir=/run/input="${input}" \
       --rwdir=/run/output="${output}" \
@@ -85,8 +85,8 @@ elif [[ "${1:-}" = "--exec-test" ]]; then
     export KERNEL_SELFTESTS="/run/input/bpf"
   fi
 
-  if [[ -f "/run/input/bpf/bpf_testmod/bpf_testmod.ko" ]]; then
-    insmod "/run/input/bpf/bpf_testmod/bpf_testmod.ko"
+  if [[ -d "/run/input/lib/modules" ]]; then
+    find /run/input/lib/modules -type f -name bpf_testmod.ko -exec insmod {} \;
   fi
 
   dmesg --clear
@@ -114,6 +114,9 @@ fetch() {
     return $ret
 }
 
+machine="$(uname -m)"
+readonly machine
+
 if [[ -f "${1}" ]]; then
   readonly kernel="${1}"
   cp "${1}" "${input}/bzImage"
@@ -121,16 +124,24 @@ else
 # LINUX_VERSION_CODE test compares this to discovered value.
   export KERNEL_VERSION="${1}"
 
-  readonly kernel="linux-${1}.bz"
-  readonly selftests="linux-${1}-selftests-bpf.tgz"
+  if [ "${machine}" = "x86_64" ]; then
+    readonly kernel="linux-${1}-amd64.tgz"
+    readonly selftests="linux-${1}-amd64-selftests-bpf.tgz"
+  elif [ "${machine}" = "aarch64" ]; then
+    readonly kernel="linux-${1}-arm64.tgz"
+    readonly selftests=""
+  else
+    echo "Arch ${machine} is not supported"
+    exit 1
+  fi
 
   fetch "${kernel}"
-  cp "${tmp_dir}/${kernel}" "${input}/bzImage"
+  tar xf "${tmp_dir}/${kernel}" -C "${input}"
 
-  if fetch "${selftests}"; then
+  if [ -n "${selftests}" ] && fetch "${selftests}"; then
     echo "Decompressing selftests"
     mkdir "${input}/bpf"
-    tar --strip-components=4 -xf "${tmp_dir}/${selftests}" -C "${input}/bpf"
+    tar --strip-components=5 -xf "${tmp_dir}/${selftests}" -C "${input}/bpf"
   else
     echo "No selftests found, disabling"
   fi

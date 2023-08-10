@@ -649,10 +649,11 @@ func TestCORECopyWithoutQualifiers(t *testing.T) {
 	}
 
 	t.Run("long chain", func(t *testing.T) {
+		rng := testutils.Rand(t)
 		root := &Int{Name: "abc"}
 		v := Type(root)
 		for i := 0; i < maxTypeDepth; i++ {
-			q := qualifiers[testutils.Rand().Intn(len(qualifiers))]
+			q := qualifiers[rng.Intn(len(qualifiers))]
 			v = q.fn(v)
 			t.Log(q.name)
 		}

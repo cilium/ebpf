@@ -14,6 +14,20 @@ set -euo pipefail
 script="$(realpath "$0")"
 readonly script
 
+quote_env() {
+  for var in "$@"; do
+    if [ -v "$var" ]; then
+      printf "%s=%q " "$var" "${!var}"
+    fi
+  done
+}
+
+declare -a preserved_env=(
+  PATH
+  CI_MAX_KERNEL_VERSION
+  TEST_SEED
+)
+
 # This script is a bit like a Matryoshka doll since it keeps re-executing itself
 # in various different contexts:
 #
@@ -55,7 +69,7 @@ if [[ "${1:-}" = "--exec-vm" ]]; then
       --rwdir="${testdir}=${testdir}" \
       --rodir=/run/input="${input}" \
       --rwdir=/run/output="${output}" \
-      --script-sh "PATH=\"$PATH\" CI_MAX_KERNEL_VERSION="${CI_MAX_KERNEL_VERSION:-}" \"$script\" --exec-test $cmd" \
+      --script-sh "$(quote_env "${preserved_env[@]}") \"$script\" --exec-test $cmd" \
       --kopt possible_cpus=2; then # need at least two CPUs for some tests
       exit 23
     fi

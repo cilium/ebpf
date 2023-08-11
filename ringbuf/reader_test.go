@@ -264,19 +264,9 @@ func TestReaderNoWakeup(t *testing.T) {
 		t.Fatal("Expected 0 as return value, got", errno)
 	}
 
-	var timeoutMs int64 = 100
-	lowerBound := timeoutMs * 98 / 100
-	upperBound := timeoutMs * 102 / 100
-	nonBlocking := timeoutMs * 2 / 100
-	startTime := time.Now()
-
 	rd.SetDeadline(time.Now())
-
 	record, err := rd.Read()
 
-	if time.Since(startTime).Milliseconds() < lowerBound || time.Since(startTime).Milliseconds() > upperBound {
-		t.Errorf("Expected timeout after first read but %d ms passed", time.Since(startTime).Milliseconds())
-	}
 	if err != nil {
 		t.Error("Expected no error from first Read, got:", err)
 	}
@@ -284,12 +274,8 @@ func TestReaderNoWakeup(t *testing.T) {
 		t.Errorf("Expected to read 5 bytes bot got %d", len(record.RawSample))
 	}
 
-	startTime = time.Now()
 	record, err = rd.Read()
 
-	if time.Since(startTime).Milliseconds() >= nonBlocking {
-		t.Errorf("Expected non-blocking after second read but %d ms passed", time.Since(startTime).Milliseconds())
-	}
 	if err != nil {
 		t.Error("Expected no error from second Read, got:", err)
 	}

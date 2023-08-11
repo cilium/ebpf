@@ -364,22 +364,6 @@ func TestSpecTypeByID(t *testing.T) {
 	qt.Assert(t, err, qt.ErrorIs, ErrNotFound)
 }
 
-func TestHaveBTF(t *testing.T) {
-	testutils.CheckFeatureTest(t, haveBTF)
-}
-
-func TestHaveMapBTF(t *testing.T) {
-	testutils.CheckFeatureTest(t, haveMapBTF)
-}
-
-func TestHaveProgBTF(t *testing.T) {
-	testutils.CheckFeatureTest(t, haveProgBTF)
-}
-
-func TestHaveFuncLinkage(t *testing.T) {
-	testutils.CheckFeatureTest(t, haveFuncLinkage)
-}
-
 func ExampleSpec_TypeByName() {
 	// Acquire a Spec via one of its constructors.
 	spec := new(Spec)

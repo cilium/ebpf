@@ -21,3 +21,7 @@ func TestHaveProgBTF(t *testing.T) {
 func TestHaveFuncLinkage(t *testing.T) {
 	testutils.CheckFeatureTest(t, haveFuncLinkage)
 }
+
+func TestHaveEnum64(t *testing.T) {
+	testutils.CheckFeatureTest(t, haveEnum64)
+}

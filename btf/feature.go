@@ -2,6 +2,8 @@ package btf
 
 import (
 	"errors"
+	"fmt"
+	"math"
 
 	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/sys"
@@ -73,6 +75,26 @@ var haveFuncLinkage = internal.NewFeatureTest("BTF func linkage", "5.6", func() 
 	}
 
 	err := probeBTF(fn)
+	if errors.Is(err, unix.EINVAL) {
+		return internal.ErrNotSupported
+	}
+	return err
+})
+
+var haveEnum64 = internal.NewFeatureTest("ENUM64", "6.0", func() error {
+	if err := haveBTF(); err != nil {
+		return err
+	}
+
+	enum := &Enum{
+		Size: 8,
+		Values: []EnumValue{
+			{"Test", math.MaxUint32 + 1},
+		},
+	}
+
+	err := probeBTF(enum)
+	fmt.Println(err)
 	if errors.Is(err, unix.EINVAL) {
 		return internal.ErrNotSupported
 	}

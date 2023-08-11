@@ -130,7 +130,7 @@ else
   if fetch "${selftests}"; then
     echo "Decompressing selftests"
     mkdir "${input}/bpf"
-    tar --strip-components=4 -xf "${tmp_dir}/${selftests}" -C "${input}/bpf"
+    tar --strip-components=5 -xf "${tmp_dir}/${selftests}" -C "${input}/bpf"
   else
     echo "No selftests found, disabling"
   fi

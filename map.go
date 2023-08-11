@@ -422,69 +422,71 @@ func (spec *MapSpec) createMap(inner *sys.FD, opts MapOptions) (_ *Map, err erro
 	}
 
 	fd, err := sys.MapCreate(&attr)
+
 	// Some map types don't support BTF k/v in earlier kernel versions.
 	// Remove BTF metadata and retry map creation.
 	if (errors.Is(err, sys.ENOTSUPP) || errors.Is(err, unix.EINVAL)) && attr.BtfFd != 0 {
 		attr.BtfFd, attr.BtfKeyTypeId, attr.BtfValueTypeId = 0, 0, 0
 		fd, err = sys.MapCreate(&attr)
 	}
-
 	if err != nil {
-		if errors.Is(err, unix.EPERM) {
-			return nil, fmt.Errorf("map create: %w (MEMLOCK may be too low, consider rlimit.RemoveMemlock)", err)
-		}
-		if errors.Is(err, unix.EINVAL) && attr.MaxEntries == 0 {
-			return nil, fmt.Errorf("map create: %w (MaxEntries may be incorrectly set to zero)", err)
-		}
-		if errors.Is(err, unix.EINVAL) && spec.Type == UnspecifiedMap {
-			return nil, fmt.Errorf("map create: cannot use type %s", UnspecifiedMap)
-		}
-
-		switch spec.Type {
-		case ArrayOfMaps, HashOfMaps:
-			if haveFeatErr := haveNestedMaps(); haveFeatErr != nil {
-				return nil, fmt.Errorf("map create: %w", haveFeatErr)
-			}
-		}
-
-		if spec.Flags&(unix.BPF_F_RDONLY_PROG|unix.BPF_F_WRONLY_PROG) > 0 || spec.Freeze {
-			if haveFeatErr := haveMapMutabilityModifiers(); haveFeatErr != nil {
-				return nil, fmt.Errorf("map create: %w", haveFeatErr)
-			}
-		}
-
-		if spec.Flags&unix.BPF_F_MMAPABLE > 0 {
-			if haveFeatErr := haveMmapableMaps(); haveFeatErr != nil {
-				return nil, fmt.Errorf("map create: %w", haveFeatErr)
-			}
-		}
-
-		if spec.Flags&unix.BPF_F_INNER_MAP > 0 {
-			if haveFeatErr := haveInnerMaps(); haveFeatErr != nil {
-				return nil, fmt.Errorf("map create: %w", haveFeatErr)
-			}
-		}
-
-		if spec.Flags&unix.BPF_F_NO_PREALLOC > 0 {
-			if haveFeatErr := haveNoPreallocMaps(); haveFeatErr != nil {
-				return nil, fmt.Errorf("map create: %w", haveFeatErr)
-			}
-		}
-
-		if attr.BtfFd == 0 {
-			return nil, fmt.Errorf("map create: %w (without BTF k/v)", err)
-		}
-
-		return nil, fmt.Errorf("map create: %w", err)
+		return nil, handleMapCreateError(attr, spec, err)
 	}
-	defer closeOnError(fd)
 
+	defer closeOnError(fd)
 	m, err := newMap(fd, spec.Name, spec.Type, spec.KeySize, spec.ValueSize, spec.MaxEntries, spec.Flags)
 	if err != nil {
 		return nil, fmt.Errorf("map create: %w", err)
 	}
 
 	return m, nil
+}
+
+func handleMapCreateError(attr sys.MapCreateAttr, spec *MapSpec, err error) error {
+	if errors.Is(err, unix.EPERM) {
+		return fmt.Errorf("map create: %w (MEMLOCK may be too low, consider rlimit.RemoveMemlock)", err)
+	}
+	if errors.Is(err, unix.EINVAL) && spec.MaxEntries == 0 {
+		return fmt.Errorf("map create: %w (MaxEntries may be incorrectly set to zero)", err)
+	}
+	if errors.Is(err, unix.EINVAL) && spec.Type == UnspecifiedMap {
+		return fmt.Errorf("map create: cannot use type %s", UnspecifiedMap)
+	}
+	if errors.Is(err, unix.EINVAL) && spec.Flags&unix.BPF_F_NO_PREALLOC > 0 {
+		return fmt.Errorf("map create: %w (noPrealloc flag may be incompatible with map type %s)", err, spec.Type)
+	}
+
+	switch spec.Type {
+	case ArrayOfMaps, HashOfMaps:
+		if haveFeatErr := haveNestedMaps(); haveFeatErr != nil {
+			return fmt.Errorf("map create: %w", haveFeatErr)
+		}
+	}
+	if spec.Flags&(unix.BPF_F_RDONLY_PROG|unix.BPF_F_WRONLY_PROG) > 0 || spec.Freeze {
+		if haveFeatErr := haveMapMutabilityModifiers(); haveFeatErr != nil {
+			return fmt.Errorf("map create: %w", haveFeatErr)
+		}
+	}
+	if spec.Flags&unix.BPF_F_MMAPABLE > 0 {
+		if haveFeatErr := haveMmapableMaps(); haveFeatErr != nil {
+			return fmt.Errorf("map create: %w", haveFeatErr)
+		}
+	}
+	if spec.Flags&unix.BPF_F_INNER_MAP > 0 {
+		if haveFeatErr := haveInnerMaps(); haveFeatErr != nil {
+			return fmt.Errorf("map create: %w", haveFeatErr)
+		}
+	}
+	if spec.Flags&unix.BPF_F_NO_PREALLOC > 0 {
+		if haveFeatErr := haveNoPreallocMaps(); haveFeatErr != nil {
+			return fmt.Errorf("map create: %w", haveFeatErr)
+		}
+	}
+	if attr.BtfFd == 0 {
+		return fmt.Errorf("map create: %w (without BTF k/v)", err)
+	}
+
+	return fmt.Errorf("map create: %w", err)
 }
 
 // newMap allocates and returns a new Map structure.

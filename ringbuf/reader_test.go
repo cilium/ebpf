@@ -270,7 +270,7 @@ func TestReaderNoWakeup(t *testing.T) {
 	nonBlocking := timeoutMs * 2 / 100
 	startTime := time.Now()
 
-	rd.SetDeadline(startTime.Add(time.Duration(timeoutMs) * time.Millisecond))
+	rd.SetDeadline(time.Now())
 
 	record, err := rd.Read()
 

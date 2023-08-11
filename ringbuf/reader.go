@@ -204,7 +204,11 @@ func (r *Reader) ReadInto(rec *Record) error {
 	for {
 		if !r.haveData {
 			_, err := r.poller.Wait(r.epollEvents[:cap(r.epollEvents)], r.deadline)
-			if errors.Is(err, os.ErrClosed) || (errors.Is(err, os.ErrDeadlineExceeded) && r.ring.isEmpty()) {
+			if errors.Is(err, os.ErrDeadlineExceeded) && !r.ring.isEmpty() {
+				// TODO: Explain why we're ignoring this
+				err = nil
+			}
+			if err != nil {
 				return err
 			}
 			r.haveData = true

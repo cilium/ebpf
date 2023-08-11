@@ -204,6 +204,10 @@ func (r *Reader) ReadInto(rec *Record) error {
 	for {
 		if !r.haveData {
 			_, err := r.poller.Wait(r.epollEvents[:cap(r.epollEvents)], r.deadline)
+			if errors.Is(err, os.ErrDeadlineExceeded) && !r.ring.isEmpty() {
+				// TODO: Explain why we're ignoring this
+				err = nil
+			}
 			if err != nil {
 				return err
 			}
@@ -212,14 +216,13 @@ func (r *Reader) ReadInto(rec *Record) error {
 
 		for {
 			err := readRecord(r.ring, rec, r.header)
-			if err == errBusy || err == errDiscard {
+			if errors.Is(err, errBusy) || errors.Is(err, errDiscard) {
 				continue
 			}
-			if err == errEOR {
+			if errors.Is(err, errEOR) {
 				r.haveData = false
 				break
 			}
-
 			return err
 		}
 	}

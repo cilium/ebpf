@@ -3,6 +3,7 @@ package btf
 import (
 	"bytes"
 	"encoding/binary"
+	"errors"
 	"math"
 	"testing"
 
@@ -79,12 +80,22 @@ func TestRoundtripVMlinux(t *testing.T) {
 		types[i+1], types[j+1] = types[j+1], types[i+1]
 	})
 
-	// Skip per CPU datasec, see https://github.com/cilium/ebpf/issues/921
+	skipEnum64 := errors.Is(haveEnum64(), ErrNotSupported)
 	for i, typ := range types {
+		// Skip per CPU datasec, see https://github.com/cilium/ebpf/issues/921
 		if ds, ok := typ.(*Datasec); ok && ds.Name == ".data..percpu" {
 			types[i] = types[len(types)-1]
 			types = types[:len(types)-1]
-			break
+			continue
+		}
+
+		// Skip enum64 if it's not supported, see https://github.com/cilium/ebpf/issues/1116
+		if skipEnum64 {
+			if e, ok := typ.(*Enum); ok && e.has64BitValues() || e.Signed {
+				types[i] = types[len(types)-1]
+				types = types[:len(types)-1]
+				continue
+			}
 		}
 	}
 
@@ -114,6 +125,12 @@ limitTypes:
 	if n := len(rebuilt.types); n > math.MaxUint16 {
 		t.Logf("Rebuilt BTF contains %d types which exceeds uint16, test may fail on older kernels", n)
 	}
+
+	e := rebuilt.types[159].(*Enum)
+	for _, v := range e.Values {
+		t.Log(v.Name, v.Value)
+	}
+	t.Fatal("out")
 
 	h, err := NewHandleFromRawBTF(buf)
 	testutils.SkipIfNotSupported(t, err)

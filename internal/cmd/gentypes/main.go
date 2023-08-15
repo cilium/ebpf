@@ -158,6 +158,8 @@ import (
 				replace(objName, "name"),
 				replace(pointer, "xlated_prog_insns"),
 				replace(pointer, "map_ids"),
+				replace(pointer, "line_info"),
+				replace(pointer, "func_info"),
 				replace(btfID, "btf_id", "attach_btf_obj_id"),
 				replace(typeID, "attach_btf_id"),
 			},

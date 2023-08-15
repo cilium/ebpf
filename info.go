@@ -101,6 +101,9 @@ type ProgramInfo struct {
 
 	maps  []MapID
 	insns []byte
+
+	lineInfo []byte
+	funcInfo []byte
 }
 
 func newProgramInfoFromFd(fd *sys.FD) (*ProgramInfo, error) {
@@ -125,13 +128,18 @@ func newProgramInfoFromFd(fd *sys.FD) (*ProgramInfo, error) {
 		},
 	}
 
+	fmt.Println("From fd bpfid: ", pi.btf, ", name: ", pi.Name)
+
 	// Start with a clean struct for the second call, otherwise we may get EFAULT.
 	var info2 sys.ProgInfo
+
+	makeSecondCall := false
 
 	if info.NrMapIds > 0 {
 		pi.maps = make([]MapID, info.NrMapIds)
 		info2.NrMapIds = info.NrMapIds
 		info2.MapIds = sys.NewPointer(unsafe.Pointer(&pi.maps[0]))
+		makeSecondCall = true
 	} else if haveProgramInfoMapIDs() == nil {
 		// This program really has no associated maps.
 		pi.maps = make([]MapID, 0)
@@ -150,9 +158,26 @@ func newProgramInfoFromFd(fd *sys.FD) (*ProgramInfo, error) {
 		pi.insns = make([]byte, info.XlatedProgLen)
 		info2.XlatedProgLen = info.XlatedProgLen
 		info2.XlatedProgInsns = sys.NewSlicePointer(pi.insns)
+		makeSecondCall = true
 	}
 
-	if info.NrMapIds > 0 || info.XlatedProgLen > 0 {
+	if info.NrLineInfo > 0 {
+		pi.lineInfo = make([]byte, btf.LineInfoSize*info.NrLineInfo)
+		info2.LineInfo = sys.NewSlicePointer(pi.lineInfo)
+		info2.LineInfoRecSize = btf.LineInfoSize
+		info2.NrLineInfo = info.NrLineInfo
+		makeSecondCall = true
+	}
+
+	if info.NrFuncInfo > 0 {
+		pi.funcInfo = make([]byte, btf.FuncInfoSize*info.NrFuncInfo)
+		info2.FuncInfo = sys.NewSlicePointer(pi.funcInfo)
+		info2.FuncInfoRecSize = btf.FuncInfoSize
+		info2.NrFuncInfo = info.NrFuncInfo
+		makeSecondCall = true
+	}
+
+	if makeSecondCall {
 		if err := sys.ObjInfo(fd, &info2); err != nil {
 			return nil, err
 		}
@@ -259,8 +284,36 @@ func (pi *ProgramInfo) Instructions() (asm.Instructions, error) {
 		return nil, fmt.Errorf("unmarshaling instructions: %w", err)
 	}
 
-	// Tag the first instruction with the name of the program, if available.
-	insns[0] = insns[0].WithSymbol(pi.Name)
+	if pi.btf != 0 {
+		btfh, err := btf.NewHandleFromID(pi.btf)
+		if err != nil {
+			return nil, fmt.Errorf("unable to get BTF handle: %w", err)
+		}
+		defer btfh.Close()
+
+		spec, err := btfh.Spec(nil)
+		if err != nil {
+			return nil, fmt.Errorf("unable to get BTF spec: %w", err)
+		}
+
+		b := btf.NewExtInfosBuilder(spec)
+		err = b.AddLineInfos(pi.Name, pi.lineInfo)
+		if err != nil {
+			return nil, fmt.Errorf("unable to add line infos: %w", err)
+		}
+		err = b.AddFuncInfos(pi.Name, pi.funcInfo)
+		if err != nil {
+			return nil, fmt.Errorf("unable to add func infos: %w", err)
+		}
+		b.Build().Assign(insns, pi.Name)
+	}
+
+	fn := btf.FuncMetadata(&insns[0])
+	if fn != nil {
+		insns[0] = insns[0].WithSymbol(fn.Name)
+	} else {
+		insns[0] = insns[0].WithSymbol(pi.Name)
+	}
 
 	return insns, nil
 }

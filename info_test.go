@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/cilium/ebpf/asm"
+	"github.com/cilium/ebpf/btf"
 	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/sys"
 	"github.com/cilium/ebpf/internal/testutils"
@@ -364,4 +365,45 @@ func testStats(prog *Program) error {
 
 func TestHaveProgramInfoMapIDs(t *testing.T) {
 	testutils.CheckFeatureTest(t, haveProgramInfoMapIDs)
+}
+
+func TestProgInfoExtBTF(t *testing.T) {
+	testutils.SkipOnOldKernel(t, "5.0", "Program BTF (func/line_info)")
+
+	spec, err := LoadCollectionSpec("testdata/raw_tracepoint-el.elf")
+	if err != nil {
+		panic(err)
+	}
+
+	fmt.Println(spec.Programs["sched_process_exec"].Instructions)
+
+	coll, err := NewCollection(spec)
+	if err != nil {
+		panic(err)
+	}
+	defer coll.Close()
+
+	info, err := coll.Programs["sched_process_exec"].Info()
+	if err != nil {
+		panic(err)
+	}
+
+	inst, err := info.Instructions()
+	if err != nil {
+		panic(err)
+	}
+
+	const expectedSource = "\treturn 0;"
+	if inst[0].Source().String() != expectedSource {
+		t.Fatalf("Source of first instruction incorrect. Got '%s', expected: '%s'", inst[0].Source().String(), expectedSource)
+	}
+
+	fn := btf.FuncMetadata(&inst[0])
+	if fn == nil {
+		t.Fatal("Func metadata missing")
+	}
+
+	if fn.Name != "sched_process_exec" {
+		t.Fatalf("Func metadata incorrect. Got '%s', expected: 'sched_process_exec'", fn.Name)
+	}
 }

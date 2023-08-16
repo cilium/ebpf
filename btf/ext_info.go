@@ -130,6 +130,95 @@ func (ei *ExtInfos) Assign(insns asm.Instructions, section string) {
 	}
 }
 
+// ExtInfoBuilder is a builder for ExtInfos.
+type ExtInfoBuilder struct {
+	infos ExtInfos
+	spec  *Spec
+}
+
+// NewExtInfosBuilder creates a builder to construct ExtInfos.
+func NewExtInfosBuilder(spec *Spec) *ExtInfoBuilder {
+	return &ExtInfoBuilder{
+		infos: ExtInfos{
+			funcInfos:       make(map[string][]funcInfo),
+			lineInfos:       make(map[string][]lineInfo),
+			relocationInfos: make(map[string][]coreRelocationInfo),
+		},
+		spec: spec,
+	}
+}
+
+// AddFuncInfos adds function info for a section to the builder.
+// The funcInfo should be in BTF wire format and native endianness.
+func (ei *ExtInfoBuilder) AddFuncInfos(section string, funcInfo []byte) error {
+	bfi, err := parseFuncInfoRecords(
+		bytes.NewReader(funcInfo),
+		internal.NativeEndian,
+		FuncInfoSize,
+		uint32(len(funcInfo))/FuncInfoSize,
+	)
+	if err != nil {
+		return fmt.Errorf("parsing BTF function info: %w", err)
+	}
+
+	fis, err := newFuncInfos(bfi, ei.spec)
+	if err != nil {
+		return fmt.Errorf("new func infos: %w", err)
+	}
+
+	ei.infos.funcInfos[section] = fis
+	return nil
+}
+
+// AddLineInfos adds line info for a section to the builder.
+// The lineInfo should be in BTF wire format and native endianness.
+func (ei *ExtInfoBuilder) AddLineInfos(section string, lineInfo []byte) error {
+	bli, err := parseLineInfoRecords(
+		bytes.NewReader(lineInfo),
+		internal.NativeEndian,
+		LineInfoSize,
+		uint32(len(lineInfo))/LineInfoSize,
+	)
+	if err != nil {
+		return fmt.Errorf("parsing BTF line info: %w", err)
+	}
+
+	lis, err := newLineInfos(bli, ei.spec.strings)
+	if err != nil {
+		return fmt.Errorf("new line infos: %w", err)
+	}
+
+	ei.infos.lineInfos[section] = lis
+	return nil
+}
+
+// AddRelocationInfos adds CO:RE relocation info for a section to the builder.
+// The relocationInfos should be in BTF wire format and native endianness.
+func (ei *ExtInfoBuilder) AddRelocationInfos(section string, relocationInfos []byte) error {
+	bre, err := parseCOREReloRecords(
+		bytes.NewReader(relocationInfos),
+		internal.NativeEndian,
+		uint32(binary.Size(bpfCORERelo{})),
+		uint32(len(relocationInfos)/binary.Size(bpfCORERelo{})),
+	)
+	if err != nil {
+		return fmt.Errorf("parsing BTF CO:RE relocation info: %w", err)
+	}
+
+	res, err := newRelocationInfos(bre, ei.spec, ei.spec.strings)
+	if err != nil {
+		return fmt.Errorf("new relo infos: %w", err)
+	}
+
+	ei.infos.relocationInfos[section] = res
+	return nil
+}
+
+// Build returns the built ExtInfos.
+func (ei *ExtInfoBuilder) Build() *ExtInfos {
+	return &ei.infos
+}
+
 // MarshalExtInfos encodes function and line info embedded in insns into kernel
 // wire format.
 //

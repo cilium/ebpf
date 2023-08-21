@@ -530,10 +530,10 @@ type ProgInfo struct {
 	JitedFuncLens        uint64
 	BtfId                BTFID
 	FuncInfoRecSize      uint32
-	FuncInfo             uint64
+	FuncInfo             Pointer
 	NrFuncInfo           uint32
 	NrLineInfo           uint32
-	LineInfo             uint64
+	LineInfo             Pointer
 	JitedLineInfo        uint64
 	NrJitedLineInfo      uint32
 	LineInfoRecSize      uint32

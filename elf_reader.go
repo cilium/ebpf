@@ -750,7 +750,12 @@ func (ec *elfCode) loadBTFMaps() error {
 			// Each Var representing a BTF map definition contains a Struct.
 			mapStruct, ok := v.Type.(*btf.Struct)
 			if !ok {
-				return fmt.Errorf("expected struct, got %s", v.Type)
+				if mapTypedef, isTypeDef := v.Type.(*btf.Typedef); isTypeDef {
+					mapStruct, ok = mapTypedef.Type.(*btf.Struct)
+				}
+				if !ok {
+					return fmt.Errorf("expected struct, got %s", v.Type)
+				}
 			}
 
 			mapSpec, err := mapSpecFromBTF(sec, &vs, mapStruct, ec.btf, name, false)

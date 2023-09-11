@@ -586,8 +586,9 @@ func TestKconfigKernelVersion(t *testing.T) {
 			Main *Program `ebpf:"kernel_version"`
 		}
 
+		testutils.SkipOnOldKernel(t, "5.2", "readonly maps")
+
 		err = spec.LoadAndAssign(&obj, nil)
-		testutils.SkipIfNotSupported(t, err)
 		if err != nil {
 			t.Fatal(err)
 		}

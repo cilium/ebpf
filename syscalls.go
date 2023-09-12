@@ -225,8 +225,8 @@ var haveBatchAPI = internal.NewFeatureTest("map batch api", "5.6", func() error 
 
 	keys := []uint32{1, 2}
 	values := []uint32{3, 4}
-	kp, _ := marshalPtr(keys, 8)
-	vp, _ := marshalPtr(values, 8)
+	kp, _ := marshalMapSyscallInput(keys, 8)
+	vp, _ := marshalMapSyscallInput(values, 8)
 
 	err = sys.MapUpdateBatch(&sys.MapUpdateBatchAttr{
 		MapFd:  fd.Uint(),

@@ -15,6 +15,7 @@ import (
 	"github.com/cilium/ebpf/btf"
 	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/sys"
+	"github.com/cilium/ebpf/internal/sysenc"
 	"github.com/cilium/ebpf/internal/unix"
 )
 
@@ -584,8 +585,8 @@ func (m *Map) LookupWithFlags(key, valueOut interface{}, flags MapLookupFlags) e
 		return m.lookupPerCPU(key, valueOut, flags)
 	}
 
-	valuePtr, valueBytes := makeBuffer(valueOut, m.fullValueSize)
-	if err := m.lookup(key, valuePtr, flags); err != nil {
+	valueBytes := makeMapSyscallOutput(valueOut, m.fullValueSize)
+	if err := m.lookup(key, valueBytes.Pointer(), flags); err != nil {
 		return err
 	}
 
@@ -611,8 +612,8 @@ func (m *Map) LookupAndDeleteWithFlags(key, valueOut interface{}, flags MapLooku
 		return m.lookupAndDeletePerCPU(key, valueOut, flags)
 	}
 
-	valuePtr, valueBytes := makeBuffer(valueOut, m.fullValueSize)
-	if err := m.lookupAndDelete(key, valuePtr, flags); err != nil {
+	valueBytes := makeMapSyscallOutput(valueOut, m.fullValueSize)
+	if err := m.lookupAndDelete(key, valueBytes.Pointer(), flags); err != nil {
 		return err
 	}
 	return m.unmarshalValue(valueOut, valueBytes)
@@ -780,13 +781,13 @@ func (m *Map) Delete(key interface{}) error {
 //
 // Returns ErrKeyNotExist if there is no next key.
 func (m *Map) NextKey(key, nextKeyOut interface{}) error {
-	nextKeyPtr, nextKeyBytes := makeBuffer(nextKeyOut, int(m.keySize))
+	nextKeyBytes := makeMapSyscallOutput(nextKeyOut, int(m.keySize))
 
-	if err := m.nextKey(key, nextKeyPtr); err != nil {
+	if err := m.nextKey(key, nextKeyBytes.Pointer()); err != nil {
 		return err
 	}
 
-	if err := m.unmarshalKey(nextKeyOut, nextKeyBytes); err != nil {
+	if err := nextKeyBytes.Unmarshal(nextKeyOut); err != nil {
 		return fmt.Errorf("can't unmarshal next key: %w", err)
 	}
 	return nil
@@ -957,14 +958,14 @@ func (m *Map) batchLookup(cmd sys.Cmd, startKey, nextKeyOut, keysOut, valuesOut 
 	keyPtr := sys.NewSlicePointer(keyBuf)
 	valueBuf := make([]byte, count*int(m.fullValueSize))
 	valuePtr := sys.NewSlicePointer(valueBuf)
-	nextPtr, nextBuf := makeBuffer(nextKeyOut, int(m.keySize))
+	nextBuf := makeMapSyscallOutput(nextKeyOut, int(m.keySize))
 
 	attr := sys.MapLookupBatchAttr{
 		MapFd:    m.fd.Uint(),
 		Keys:     keyPtr,
 		Values:   valuePtr,
 		Count:    uint32(count),
-		OutBatch: nextPtr,
+		OutBatch: nextBuf.Pointer(),
 	}
 
 	if opts != nil {
@@ -974,7 +975,7 @@ func (m *Map) batchLookup(cmd sys.Cmd, startKey, nextKeyOut, keysOut, valuesOut 
 
 	var err error
 	if startKey != nil {
-		attr.InBatch, err = marshalPtr(startKey, int(m.keySize))
+		attr.InBatch, err = marshalMapSyscallInput(startKey, int(m.keySize))
 		if err != nil {
 			return 0, err
 		}
@@ -986,15 +987,15 @@ func (m *Map) batchLookup(cmd sys.Cmd, startKey, nextKeyOut, keysOut, valuesOut 
 		return 0, sysErr
 	}
 
-	err = m.unmarshalKey(nextKeyOut, nextBuf)
+	err = nextBuf.Unmarshal(nextKeyOut)
 	if err != nil {
 		return 0, err
 	}
-	err = unmarshalBytes(keysOut, keyBuf)
+	err = sysenc.Unmarshal(keysOut, keyBuf)
 	if err != nil {
 		return 0, err
 	}
-	err = unmarshalBytes(valuesOut, valueBuf)
+	err = sysenc.Unmarshal(valuesOut, valueBuf)
 	if err != nil {
 		return 0, err
 	}
@@ -1026,11 +1027,11 @@ func (m *Map) BatchUpdate(keys, values interface{}, opts *BatchOptions) (int, er
 	if count != valuesValue.Len() {
 		return 0, fmt.Errorf("keys and values must be the same length")
 	}
-	keyPtr, err := marshalPtr(keys, count*int(m.keySize))
+	keyPtr, err := marshalMapSyscallInput(keys, count*int(m.keySize))
 	if err != nil {
 		return 0, err
 	}
-	valuePtr, err = marshalPtr(values, count*int(m.valueSize))
+	valuePtr, err = marshalMapSyscallInput(values, count*int(m.valueSize))
 	if err != nil {
 		return 0, err
 	}
@@ -1068,7 +1069,7 @@ func (m *Map) BatchDelete(keys interface{}, opts *BatchOptions) (int, error) {
 		return 0, fmt.Errorf("keys must be a slice")
 	}
 	count := keysValue.Len()
-	keyPtr, err := marshalPtr(keys, count*int(m.keySize))
+	keyPtr, err := marshalMapSyscallInput(keys, count*int(m.keySize))
 	if err != nil {
 		return 0, fmt.Errorf("cannot marshal keys: %v", err)
 	}
@@ -1232,16 +1233,7 @@ func (m *Map) marshalKey(data interface{}) (sys.Pointer, error) {
 		return sys.Pointer{}, errors.New("can't use nil as key of map")
 	}
 
-	return marshalPtr(data, int(m.keySize))
-}
-
-func (m *Map) unmarshalKey(data interface{}, buf []byte) error {
-	if buf == nil {
-		// This is from a makeBuffer call, nothing do do here.
-		return nil
-	}
-
-	return unmarshalBytes(data, buf)
+	return marshalMapSyscallInput(data, int(m.keySize))
 }
 
 func (m *Map) marshalValue(data interface{}) (sys.Pointer, error) {
@@ -1264,7 +1256,7 @@ func (m *Map) marshalValue(data interface{}) (sys.Pointer, error) {
 		buf, err = marshalProgram(value, int(m.valueSize))
 
 	default:
-		return marshalPtr(data, int(m.valueSize))
+		return marshalMapSyscallInput(data, int(m.valueSize))
 	}
 
 	if err != nil {
@@ -1274,16 +1266,7 @@ func (m *Map) marshalValue(data interface{}) (sys.Pointer, error) {
 	return sys.NewSlicePointer(buf), nil
 }
 
-func (m *Map) unmarshalValue(value interface{}, buf []byte) error {
-	if buf == nil {
-		// This is from a makeBuffer call, nothing do do here.
-		return nil
-	}
-
-	if m.typ.hasPerCPUValue() {
-		return unmarshalPerCPUValue(value, int(m.valueSize), buf)
-	}
-
+func (m *Map) unmarshalValue(value any, buf sysenc.Buffer) error {
 	switch value := value.(type) {
 	case **Map:
 		if !m.typ.canStoreMap() {
@@ -1330,7 +1313,7 @@ func (m *Map) unmarshalValue(value interface{}, buf []byte) error {
 		return errors.New("require pointer to *Program")
 	}
 
-	return unmarshalBytes(value, buf)
+	return buf.Unmarshal(value)
 }
 
 // LoadPinnedMap loads a Map from a BPF file.
@@ -1352,12 +1335,11 @@ func LoadPinnedMap(fileName string, opts *LoadPinOptions) (*Map, error) {
 }
 
 // unmarshalMap creates a map from a map ID encoded in host endianness.
-func unmarshalMap(buf []byte) (*Map, error) {
-	if len(buf) != 4 {
-		return nil, errors.New("map id requires 4 byte value")
+func unmarshalMap(buf sysenc.Buffer) (*Map, error) {
+	var id uint32
+	if err := buf.Unmarshal(&id); err != nil {
+		return nil, err
 	}
-
-	id := internal.NativeEndian.Uint32(buf)
 	return NewMapFromID(MapID(id))
 }
 
@@ -1453,7 +1435,12 @@ func (mi *MapIterator) Next(keyOut, valueOut interface{}) bool {
 			return false
 		}
 
-		mi.err = mi.target.unmarshalKey(keyOut, nextKey)
+		if ptr, ok := keyOut.(unsafe.Pointer); ok {
+			copy(unsafe.Slice((*byte)(ptr), len(nextKey)), nextKey)
+		} else {
+			mi.err = sysenc.Unmarshal(keyOut, nextKey)
+		}
+
 		return mi.err == nil
 	}
 

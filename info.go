@@ -92,7 +92,8 @@ type ProgramInfo struct {
 	// Truncated hash of the BPF bytecode. Available from 4.13.
 	Tag string
 	// Name as supplied by user space at load time. Available from 4.15.
-	Name string
+	Name     string
+	FuncInfo FuncInfo
 
 	createdByUID     uint32
 	haveCreatedByUID bool
@@ -103,8 +104,17 @@ type ProgramInfo struct {
 	insns []byte
 }
 
+type FuncInfo struct {
+	InsnOff uint32
+	TypeID  uint32
+}
+
 func newProgramInfoFromFd(fd *sys.FD) (*ProgramInfo, error) {
 	var info sys.ProgInfo
+	funcInfo := FuncInfo{}
+	info.NrFuncInfo = 1
+	info.FuncInfo = uint64(uintptr(unsafe.Pointer(&funcInfo)))
+	info.FuncInfoRecSize = uint32(unsafe.Sizeof(funcInfo))
 	err := sys.ObjInfo(fd, &info)
 	if errors.Is(err, syscall.EINVAL) {
 		return newProgramInfoFromProc(fd)
@@ -115,10 +125,12 @@ func newProgramInfoFromFd(fd *sys.FD) (*ProgramInfo, error) {
 
 	pi := ProgramInfo{
 		Type: ProgramType(info.Type),
-		id:   ProgramID(info.Id),
-		Tag:  hex.EncodeToString(info.Tag[:]),
-		Name: unix.ByteSliceToString(info.Name[:]),
-		btf:  btf.ID(info.BtfId),
+
+		id:       ProgramID(info.Id),
+		Tag:      hex.EncodeToString(info.Tag[:]),
+		FuncInfo: funcInfo,
+		Name:     unix.ByteSliceToString(info.Name[:]),
+		btf:      btf.ID(info.BtfId),
 		stats: &programStats{
 			runtime:  time.Duration(info.RunTimeNs),
 			runCount: info.RunCnt,
@@ -272,6 +284,30 @@ func (pi *ProgramInfo) Instructions() (asm.Instructions, error) {
 // The bool return value indicates whether this optional field is available.
 func (pi *ProgramInfo) MapIDs() ([]MapID, bool) {
 	return pi.maps, pi.maps != nil
+}
+
+func (pi *ProgramInfo) Fullname() (string, error) {
+	btfID, ok := pi.BTFID()
+	if !ok {
+		return "", fmt.Errorf("BTF ID not available")
+	}
+	handle, err := btf.NewHandleFromID(btfID)
+	if err != nil {
+		return "", err
+	}
+	btfSpec, err := handle.Spec(nil)
+	if err != nil {
+		return "", err
+	}
+	ty, err := btfSpec.TypeByID(btf.TypeID(pi.FuncInfo.TypeID))
+	if err != nil {
+		return "", err
+	}
+	funcType, ok := ty.(*btf.Func)
+	if !ok {
+		return "", fmt.Errorf("Not a function: %+v", ty)
+	}
+	return funcType.Name, nil
 }
 
 func scanFdInfo(fd *sys.FD, fields map[string]interface{}) error {

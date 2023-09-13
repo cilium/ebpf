@@ -121,6 +121,36 @@ limitTypes:
 	h.Close()
 }
 
+func TestMarshalEnum64(t *testing.T) {
+	enum := &Enum{
+		Name:   "enum64",
+		Size:   8,
+		Signed: true,
+		Values: []EnumValue{{"MAX", math.MaxUint64}},
+	}
+
+	b, err := NewBuilder([]Type{enum})
+	qt.Assert(t, err, qt.IsNil)
+	buf, err := b.Marshal(nil, &MarshalOptions{
+		Order:         internal.NativeEndian,
+		ReplaceEnum64: true,
+	})
+	qt.Assert(t, err, qt.IsNil)
+
+	spec, err := loadRawSpec(bytes.NewReader(buf), internal.NativeEndian, nil)
+	qt.Assert(t, err, qt.IsNil)
+
+	var have *Int
+	err = spec.TypeByName("enum64", &have)
+	qt.Assert(t, err, qt.IsNil)
+
+	qt.Assert(t, have, qt.DeepEquals, &Int{
+		Name:     "enum64",
+		Size:     8,
+		Encoding: Signed,
+	})
+}
+
 func BenchmarkMarshaler(b *testing.B) {
 	spec := vmlinuxTestdataSpec(b)
 	types := spec.types[:100]

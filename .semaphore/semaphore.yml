@@ -16,8 +16,8 @@ blocks:
       prologue:
         commands:
           - sudo sh -c 'swapoff -a && fallocate -l 2G /swapfile && chmod 0600 /swapfile && mkswap /swapfile && swapon /swapfile'
-          - sudo mkdir -p /usr/local/golang/1.21.0 && curl -fL "https://go.dev/dl/go1.21.0.linux-amd64.tar.gz" | sudo tar -xz -C /usr/local/golang/1.21.0
-          - sem-version go 1.21.0
+          - sudo mkdir -p /usr/local/golang/1.21.1 && curl -fL "https://go.dev/dl/go1.21.1.linux-amd64.tar.gz" | sudo tar -xz -C /usr/local/golang/1.21.1
+          - sem-version go 1.21.1
           - export PATH="$PATH:$(go env GOPATH)/bin"
           - checkout
           # Disabled, see https://github.com/cilium/ebpf/issues/898
@@ -61,7 +61,7 @@ blocks:
         execution_time_limit:
           minutes: 10
         commands:
-          - sem-version go 1.20.6
+          - sem-version go 1.20.8
           - go test -v ./cmd/bpf2go
           - gotestsum --raw-command --ignore-non-json-output-lines --junitfile junit.xml -- ./run-tests.sh $CI_MAX_KERNEL_VERSION -short -count 1 -json ./...
       - name: Run unit tests

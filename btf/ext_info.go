@@ -111,6 +111,16 @@ func (ei *ExtInfos) Assign(insns asm.Instructions, section string) {
 	lineInfos := ei.lineInfos[section]
 	reloInfos := ei.relocationInfos[section]
 
+	AssignMetadataToInstructions(insns, funcInfos, lineInfos, reloInfos)
+}
+
+// Assign per-instruction metadata to the instructions in insns.
+func AssignMetadataToInstructions(
+	insns asm.Instructions,
+	funcInfos FuncInfos,
+	lineInfos LineInfos,
+	reloInfos CORERelocationInfos,
+) {
 	iter := insns.Iterate()
 	for iter.Next() {
 		if len(funcInfos.infos) > 0 && funcInfos.infos[0].offset == iter.Offset {
@@ -381,6 +391,21 @@ func newFuncInfos(bfis []bpfFuncInfo, spec *Spec) (FuncInfos, error) {
 	return fis, nil
 }
 
+// LoadFuncInfos parses btf func info in wire format.
+func LoadFuncInfos(reader io.Reader, bo binary.ByteOrder, recordNum uint32, spec *Spec) (FuncInfos, error) {
+	fis, err := parseFuncInfoRecords(
+		reader,
+		bo,
+		FuncInfoSize,
+		recordNum,
+	)
+	if err != nil {
+		return FuncInfos{}, fmt.Errorf("parsing BTF func info: %w", err)
+	}
+
+	return newFuncInfos(fis, spec)
+}
+
 // marshal into the BTF wire format.
 func (fi *funcInfo) marshal(w *bytes.Buffer, b *Builder) error {
 	id, err := b.Add(fi.fn)
@@ -510,6 +535,21 @@ type bpfLineInfo struct {
 	FileNameOff uint32
 	LineOff     uint32
 	LineCol     uint32
+}
+
+// LoadLineInfos parses btf line info in wire format.
+func LoadLineInfos(reader io.Reader, bo binary.ByteOrder, recordNum uint32, spec *Spec) (LineInfos, error) {
+	lis, err := parseLineInfoRecords(
+		reader,
+		bo,
+		LineInfoSize,
+		recordNum,
+	)
+	if err != nil {
+		return LineInfos{}, fmt.Errorf("parsing BTF line info: %w", err)
+	}
+
+	return newLineInfos(lis, spec.strings)
 }
 
 func newLineInfo(li bpfLineInfo, strings *stringTable) (*lineInfo, error) {

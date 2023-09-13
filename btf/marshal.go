@@ -18,6 +18,8 @@ type MarshalOptions struct {
 	Order binary.ByteOrder
 	// Remove function linkage information for compatibility with <5.6 kernels.
 	StripFuncLinkage bool
+	// Replace Enum64 with a placeholder for compatibility with <6.0 kernels.
+	ReplaceEnum64 bool
 }
 
 // KernelMarshalOptions will generate BTF suitable for the current kernel.
@@ -25,6 +27,7 @@ func KernelMarshalOptions() *MarshalOptions {
 	return &MarshalOptions{
 		Order:            internal.NativeEndian,
 		StripFuncLinkage: haveFuncLinkage() != nil,
+		ReplaceEnum64:    haveEnum64() != nil,
 	}
 }
 
@@ -333,16 +336,10 @@ func (e *encoder) deflateType(typ Type) (err error) {
 		raw.data, err = e.convertMembers(&raw.btfType, v.Members)
 
 	case *Enum:
-		raw.SetSize(v.size())
-		raw.SetVlen(len(v.Values))
-		raw.SetSigned(v.Signed)
-
-		if v.has64BitValues() {
-			raw.SetKind(kindEnum64)
-			raw.data, err = e.deflateEnum64Values(v.Values)
+		if v.Size == 8 {
+			err = e.deflateEnum64(&raw, v)
 		} else {
-			raw.SetKind(kindEnum)
-			raw.data, err = e.deflateEnumValues(v.Values)
+			err = e.deflateEnum(&raw, v)
 		}
 
 	case *Fwd:
@@ -443,16 +440,33 @@ func (e *encoder) convertMembers(header *btfType, members []Member) ([]btfMember
 	return bms, nil
 }
 
-func (e *encoder) deflateEnumValues(values []EnumValue) ([]btfEnum, error) {
-	bes := make([]btfEnum, 0, len(values))
-	for _, value := range values {
+func (e *encoder) deflateEnum(raw *rawType, enum *Enum) (err error) {
+	raw.SetKind(kindEnum)
+	raw.SetSize(enum.Size)
+	raw.SetVlen(len(enum.Values))
+	// Signedness appeared together with ENUM64 support.
+	raw.SetSigned(enum.Signed && !e.ReplaceEnum64)
+	raw.data, err = e.deflateEnumValues(enum)
+	return
+}
+
+func (e *encoder) deflateEnumValues(enum *Enum) ([]btfEnum, error) {
+	bes := make([]btfEnum, 0, len(enum.Values))
+	for _, value := range enum.Values {
 		nameOff, err := e.strings.Add(value.Name)
 		if err != nil {
 			return nil, err
 		}
 
-		if value.Value > math.MaxUint32 {
-			return nil, fmt.Errorf("value of enum %q exceeds 32 bits", value.Name)
+		if enum.Signed {
+			signedValue := int64(value.Value)
+			if signedValue != int64(int32(uint32(value.Value))) {
+				return nil, fmt.Errorf("value %d of enum %q exceeds 32 bits", signedValue, value.Name)
+			}
+		} else {
+			if value.Value > math.MaxUint32 {
+				return nil, fmt.Errorf("value %d of enum %q exceeds 32 bits", value.Value, value.Name)
+			}
 		}
 
 		bes = append(bes, btfEnum{
@@ -462,6 +476,33 @@ func (e *encoder) deflateEnumValues(values []EnumValue) ([]btfEnum, error) {
 	}
 
 	return bes, nil
+}
+
+func (e *encoder) deflateEnum64(raw *rawType, enum *Enum) (err error) {
+	if e.ReplaceEnum64 {
+		// Replace an ENUM64 with an integer of the appropriate size. libbpf
+		// instead uses a union of (u)int64 which allows preserving the
+		// enum names (but not their values). Using the integer is simpler for
+		// us.
+		raw.SetKind(kindInt)
+		raw.SetSize(enum.Size)
+
+		var bi btfInt
+		if enum.Signed {
+			bi.SetEncoding(Signed)
+		}
+		bi.SetBits(byte(enum.Size) * 8)
+
+		raw.data = bi
+		return
+	}
+
+	raw.SetKind(kindEnum64)
+	raw.SetSize(enum.Size)
+	raw.SetVlen(len(enum.Values))
+	raw.SetSigned(enum.Signed)
+	raw.data, err = e.deflateEnum64Values(enum.Values)
+	return
 }
 
 func (e *encoder) deflateEnum64Values(values []EnumValue) ([]btfEnum64, error) {

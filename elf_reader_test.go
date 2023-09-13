@@ -985,14 +985,11 @@ func TestLibBPFCompat(t *testing.T) {
 			t.Skip("Skipping due to possible bug in upstream CO-RE generation")
 		case "test_usdt", "test_urandom_usdt", "test_usdt_multispec":
 			t.Skip("Skipping due to missing support for usdt.bpf.h")
-		case "bpf_cubic", "bpf_iter_tcp6", "bpf_iter_tcp4",
-			"bpf_iter_ipv6_route", "test_subskeleton_lib", "test_skeleton",
-			"test_subskeleton", "test_core_extern",
+		case "lsm_cgroup", "bpf_iter_ipv6_route", "test_core_extern",
 			"profiler1", "profiler2", "profiler3":
-			t.Skip("Skipping due to using CONFIG_* variable which are not supported at the moment")
-		case "lsm_cgroup":
 			t.Skip("Skipping due to using weak CONFIG_* variables")
-		case "linked_maps1", "linked_maps2", "linked_funcs1", "linked_funcs2":
+		case "linked_maps1", "linked_maps2", "linked_funcs1", "linked_funcs2",
+			"test_subskeleton", "test_subskeleton_lib":
 			t.Skip("Skipping due to relying on cross ELF linking")
 		}
 

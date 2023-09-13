@@ -14,6 +14,21 @@ set -euo pipefail
 script="$(realpath "$0")"
 readonly script
 
+quote_env() {
+  for var in "$@"; do
+    if [ -v "$var" ]; then
+      printf "%s=%q " "$var" "${!var}"
+    fi
+  done
+}
+
+declare -a preserved_env=(
+  PATH
+  CI_MAX_KERNEL_VERSION
+  TEST_SEED
+  KERNEL_VERSION
+)
+
 # This script is a bit like a Matryoshka doll since it keeps re-executing itself
 # in various different contexts:
 #
@@ -55,7 +70,7 @@ if [[ "${1:-}" = "--exec-vm" ]]; then
       --rwdir="${testdir}=${testdir}" \
       --rodir=/run/input="${input}" \
       --rwdir=/run/output="${output}" \
-      --script-sh "PATH=\"$PATH\" CI_MAX_KERNEL_VERSION="${CI_MAX_KERNEL_VERSION:-}" \"$script\" --exec-test $cmd" \
+      --script-sh "$(quote_env "${preserved_env[@]}") \"$script\" --exec-test $cmd" \
       --kopt possible_cpus=2; then # need at least two CPUs for some tests
       exit 23
     fi
@@ -108,7 +123,7 @@ readonly tmp_dir="${TMPDIR:-/tmp}"
 fetch() {
     echo Fetching "${1}"
     pushd "${tmp_dir}" > /dev/null
-    curl --no-progress-meter -L -O --fail --etag-compare "${1}.etag" --etag-save "${1}.etag" "https://github.com/cilium/ci-kernels/raw/${BRANCH:-master}/${1}"
+    curl --no-progress-meter -L -O --fail --etag-compare "${1}.etag" --etag-save "${1}.etag" "https://github.com/cilium/ci-kernels/raw/${BRANCH:-aee5230ac201d85744ffd685f99f13b8377895cc}/${1}"
     local ret=$?
     popd > /dev/null
     return $ret

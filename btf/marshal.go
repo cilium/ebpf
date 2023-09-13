@@ -18,6 +18,8 @@ type MarshalOptions struct {
 	Order binary.ByteOrder
 	// Remove function linkage information for compatibility with <5.6 kernels.
 	StripFuncLinkage bool
+	// Replace Enum64 with a placeholder for compatibility with <6.0 kernels.
+	ReplaceEnum64 bool
 }
 
 // KernelMarshalOptions will generate BTF suitable for the current kernel.
@@ -25,6 +27,7 @@ func KernelMarshalOptions() *MarshalOptions {
 	return &MarshalOptions{
 		Order:            internal.NativeEndian,
 		StripFuncLinkage: haveFuncLinkage() != nil,
+		ReplaceEnum64:    haveEnum64() != nil,
 	}
 }
 
@@ -333,16 +336,10 @@ func (e *encoder) deflateType(typ Type) (err error) {
 		raw.data, err = e.convertMembers(&raw.btfType, v.Members)
 
 	case *Enum:
-		raw.SetSize(v.size())
-		raw.SetVlen(len(v.Values))
-		raw.SetSigned(v.Signed)
-
-		if v.has64BitValues() {
-			raw.SetKind(kindEnum64)
-			raw.data, err = e.deflateEnum64Values(v.Values)
+		if v.Size == 8 {
+			err = e.deflateEnum64(&raw, v)
 		} else {
-			raw.SetKind(kindEnum)
-			raw.data, err = e.deflateEnumValues(v.Values)
+			err = e.deflateEnum(&raw, v)
 		}
 
 	case *Fwd:
@@ -443,6 +440,19 @@ func (e *encoder) convertMembers(header *btfType, members []Member) ([]btfMember
 	return bms, nil
 }
 
+func (e *encoder) deflateEnum(raw *rawType, value *Enum) (err error) {
+	raw.SetKind(kindEnum)
+	raw.SetSize(value.Size)
+	raw.SetVlen(len(value.Values))
+	if !e.ReplaceEnum64 {
+		// Signedness appeared together with ENUM64 support.
+		raw.SetSigned(value.Signed)
+	}
+
+	raw.data, err = e.deflateEnumValues(value.Values)
+	return
+}
+
 func (e *encoder) deflateEnumValues(values []EnumValue) ([]btfEnum, error) {
 	bes := make([]btfEnum, 0, len(values))
 	for _, value := range values {
@@ -462,6 +472,31 @@ func (e *encoder) deflateEnumValues(values []EnumValue) ([]btfEnum, error) {
 	}
 
 	return bes, nil
+}
+
+func (e *encoder) deflateEnum64(raw *rawType, value *Enum) (err error) {
+	if e.ReplaceEnum64 {
+		// Replace an ENUM64 with an integer of the appropriate size. libbpf
+		// instead uses a union of (u)int64 which allows preserving the
+		// enum names (but not their values). Using the integer is simpler for
+		// us.
+		raw.SetKind(kindInt)
+		raw.SetSize(value.Size)
+
+		var bi btfInt
+		if value.Signed {
+			bi.SetEncoding(Signed)
+		}
+		bi.SetBits(byte(value.Size) * 8)
+
+		raw.data = bi
+		return
+	}
+
+	raw.SetKind(kindEnum64)
+	raw.SetSigned(value.Signed)
+	raw.data, err = e.deflateEnum64Values(value.Values)
+	return
 }
 
 func (e *encoder) deflateEnum64Values(values []EnumValue) ([]btfEnum64, error) {

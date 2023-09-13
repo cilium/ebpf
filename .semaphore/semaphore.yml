@@ -38,7 +38,7 @@ blocks:
         - name: TMPDIR
           value: /tmp
         - name: CI_MAX_KERNEL_VERSION
-          value: "5.19"
+          value: "6.1"
         - name: CI_MIN_CLANG_VERSION
           value: "9"
       jobs:
@@ -69,6 +69,6 @@ blocks:
           minutes: 10
         matrix:
           - env_var: KERNEL_VERSION
-            values: ["5.19", "5.15", "5.10", "5.4", "4.19", "4.14", "4.9"]
+            values: ["6.1", "5.15", "5.10", "5.4", "4.19", "4.14", "4.9"]
         commands:
           - gotestsum --raw-command --ignore-non-json-output-lines --junitfile junit.xml -- ./run-tests.sh $KERNEL_VERSION -short -count 1 -json ./...

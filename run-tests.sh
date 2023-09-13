@@ -123,7 +123,7 @@ readonly tmp_dir="${TMPDIR:-/tmp}"
 fetch() {
     echo Fetching "${1}"
     pushd "${tmp_dir}" > /dev/null
-    curl --no-progress-meter -L -O --fail --etag-compare "${1}.etag" --etag-save "${1}.etag" "https://github.com/cilium/ci-kernels/raw/${BRANCH:-master}/${1}"
+    curl --no-progress-meter -L -O --fail --etag-compare "${1}.etag" --etag-save "${1}.etag" "https://github.com/cilium/ci-kernels/raw/${BRANCH:-563349d880ae3137d3de39d95c51bd1814953b08}/${1}"
     local ret=$?
     popd > /dev/null
     return $ret

@@ -63,29 +63,33 @@ func TestFentryFexit(t *testing.T) {
 	}
 	defer target.Close()
 
-	test := func(prog *ebpf.ProgramSpec, target *ebpf.Program) {
-		prog.AttachTarget = target
+	for _, name := range []string{"trace_on_entry", "trace_on_exit"} {
+		progSpec := spec.Programs[name]
+		t.Run(name, func(t *testing.T) {
+			progSpec.AttachTarget = target
 
-		traceOnEvent, err := ebpf.NewProgram(prog)
-		testutils.SkipIfNotSupported(t, err)
-		if err != nil {
-			t.Fatalf("Can't create %s program: %v\n", prog.Name, err)
-		}
-		defer traceOnEvent.Close()
+			prog, err := ebpf.NewProgram(progSpec)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer prog.Close()
 
-		tracingLink, err := AttachTracing(TracingOptions{
-			Program: traceOnEvent,
+			t.Run("link", func(t *testing.T) {
+				testutils.SkipOnOldKernel(t, "5.11", "BPF_LINK_TYPE_TRACING")
+
+				tracingLink, err := AttachTracing(TracingOptions{
+					Program: prog,
+				})
+				if err != nil {
+					t.Fatal("Can't attach tracing:", err)
+				}
+				defer tracingLink.Close()
+
+				testLink(t, tracingLink, prog)
+			})
+
 		})
-		if err != nil {
-			t.Fatal("Can't attach tracing:", err)
-		}
-		defer tracingLink.Close()
-
-		testLink(t, tracingLink, traceOnEvent)
 	}
-
-	test(spec.Programs["trace_on_entry"], target)
-	test(spec.Programs["trace_on_exit"], target)
 }
 
 func TestTracing(t *testing.T) {

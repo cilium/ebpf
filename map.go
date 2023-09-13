@@ -219,7 +219,8 @@ type MapKV struct {
 // Compatible returns nil if an existing map may be used instead of creating
 // one from the spec.
 //
-// Returns an error wrapping [ErrMapIncompatible] otherwise.
+// Returns an error wrapping [ErrMapIncompatible] otherwise. The error also wraps [IncompatibleMapErr]
+// which contains useful information about the incompatibility.
 func (ms *MapSpec) Compatible(m *Map) error {
 	ms, err := ms.fixupMagicFields()
 	if err != nil {
@@ -238,22 +239,22 @@ func (ms *MapSpec) Compatible(m *Map) error {
 	}
 	switch {
 	case m.typ != ms.Type:
-		return fmt.Errorf("%w: %w", ErrMapIncompatible, NewErrIncompatibleMap(asInfo(m), ms))
+		return errors.Join(ErrMapIncompatible, NewErrIncompatibleMap(asInfo(m), ms))
 
 	case m.keySize != ms.KeySize:
-		return fmt.Errorf("%w : %w", ErrMapIncompatible, NewErrIncompatibleMap(asInfo(m), ms))
+		return errors.Join(ErrMapIncompatible, NewErrIncompatibleMap(asInfo(m), ms))
 
 	case m.valueSize != ms.ValueSize:
-		return fmt.Errorf("%w %w", ErrMapIncompatible, NewErrIncompatibleMap(asInfo(m), ms))
+		return errors.Join(ErrMapIncompatible, NewErrIncompatibleMap(asInfo(m), ms))
 
 	case m.maxEntries != ms.MaxEntries:
-		return fmt.Errorf("%w : %w", ErrMapIncompatible, NewErrIncompatibleMap(asInfo(m), ms))
+		return errors.Join(ErrMapIncompatible, NewErrIncompatibleMap(asInfo(m), ms))
 
 	// BPF_F_RDONLY_PROG is set unconditionally for devmaps. Explicitly allow
 	// this mismatch.
 	case !((ms.Type == DevMap || ms.Type == DevMapHash) && m.flags^ms.Flags == unix.BPF_F_RDONLY_PROG) &&
 		m.flags != ms.Flags:
-		return fmt.Errorf("%w : %w", ErrMapIncompatible, NewErrIncompatibleMap(asInfo(m), ms))
+		return errors.Join(ErrMapIncompatible, NewErrIncompatibleMap(asInfo(m), ms))
 	}
 	return nil
 }

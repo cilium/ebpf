@@ -968,31 +968,32 @@ func TestLibBPFCompat(t *testing.T) {
 	)
 
 	testutils.Files(t, files, func(t *testing.T, path string) {
-		file := filepath.Base(path)
-		switch file {
-		case "test_map_in_map.o", "test_map_in_map.linked3.o",
-			"test_select_reuseport_kern.o", "test_select_reuseport_kern.linked3.o":
+		name := selftestName(path)
+		switch name {
+		case "test_map_in_map", "test_select_reuseport_kern":
 			t.Skip("Skipping due to missing InnerMap in map definition")
-		case "test_core_autosize.o":
+		case "test_core_autosize":
 			t.Skip("Skipping since the test generates dynamic BTF")
-		case "test_static_linked.linked3.o":
+		case "test_static_linked":
 			t.Skip("Skipping since .text contains 'subprog' twice")
-		case "linked_maps.linked3.o", "linked_funcs.linked3.o", "linked_vars.linked3.o",
-			"kprobe_multi.o", "kprobe_multi.linked3.o", "test_ksyms_weak.o",
-			"test_ksyms_weak.llinked3.o", "test_ksyms_weak.llinked2.o", "test_ksyms_weak.llinked1.o",
-			"test_ksyms_weak.linked3.o", "test_ksyms_module.o", "test_ksyms_module.llinked3.o",
-			"test_ksyms_module.llinked2.o", "test_ksyms_module.llinked1.o", "test_ksyms_module.linked3.o",
-			"test_ksyms.o", "test_ksyms.linked3.o":
+		case "linked_maps", "linked_funcs", "linked_vars", "kprobe_multi",
+			"test_ksyms_weak", "test_ksyms_module", "test_ksyms":
 			t.Skip("Skipping since weak relocations are not supported")
-		case "bloom_filter_map.o", "bloom_filter_map.linked3.o",
-			"bloom_filter_bench.o", "bloom_filter_bench.linked3.o":
+		case "bloom_filter_map", "bloom_filter_bench":
 			t.Skip("Skipping due to missing MapExtra field in MapSpec")
-		case "netif_receive_skb.linked3.o":
+		case "netif_receive_skb":
 			t.Skip("Skipping due to possible bug in upstream CO-RE generation")
-		case "test_usdt.o", "test_usdt.linked3.o", "test_urandom_usdt.o", "test_urandom_usdt.linked3.o", "test_usdt_multispec.o":
+		case "test_usdt", "test_urandom_usdt", "test_usdt_multispec":
 			t.Skip("Skipping due to missing support for usdt.bpf.h")
-		case "bpf_cubic.o", "bpf_cubic.linked3.o", "bpf_iter_tcp6.o", "bpf_iter_tcp6.linked3.o", "bpf_iter_tcp4.o", "bpf_iter_tcp4.linked3.o", "bpf_iter_ipv6_route.o", "bpf_iter_ipv6_route.linked3.o", "test_subskeleton_lib.o", "test_skeleton.o", "test_skeleton.linked3.o", "test_subskeleton_lib.linked3.o", "test_subskeleton.o", "test_subskeleton.linked3.o", "test_core_extern.linked3.o", "test_core_extern.o", "profiler1.linked3.o", "profiler3.o", "profiler3.linked3.o", "profiler2.o", "profiler2.linked3.o", "profiler1.o":
+		case "bpf_cubic", "bpf_iter_tcp6", "bpf_iter_tcp4",
+			"bpf_iter_ipv6_route", "test_subskeleton_lib", "test_skeleton",
+			"test_subskeleton", "test_core_extern",
+			"profiler1", "profiler2", "profiler3":
 			t.Skip("Skipping due to using CONFIG_* variable which are not supported at the moment")
+		case "lsm_cgroup":
+			t.Skip("Skipping due to using weak CONFIG_* variables")
+		case "linked_maps1", "linked_maps2", "linked_funcs1", "linked_funcs2":
+			t.Skip("Skipping due to relying on cross ELF linking")
 		}
 
 		t.Parallel()
@@ -1000,11 +1001,11 @@ func TestLibBPFCompat(t *testing.T) {
 		spec, err := LoadCollectionSpec(path)
 		testutils.SkipIfNotSupported(t, err)
 		if err != nil {
-			t.Fatalf("Can't read %s: %s", file, err)
+			t.Fatal(err)
 		}
 
-		switch file {
-		case "test_sk_assign.o":
+		switch name {
+		case "test_sk_assign":
 			// Test contains a legacy iproute2 bpf_elf_map definition.
 			for _, m := range spec.Maps {
 				if m.Extra == nil || m.Extra.Len() == 0 {
@@ -1031,34 +1032,34 @@ func TestLibBPFCompat(t *testing.T) {
 		}
 
 		for _, coreFile := range coreFiles {
-			name := filepath.Base(coreFile)
+			name := selftestName(coreFile)
 			t.Run(name, func(t *testing.T) {
 				// Some files like btf__core_reloc_arrays___err_too_small.o
 				// trigger an error on purpose. Use the name to infer whether
 				// the test should succeed.
 				var valid bool
 				switch name {
-				case "btf__core_reloc_existence___err_wrong_arr_kind.o",
-					"btf__core_reloc_existence___err_wrong_arr_value_type.o",
-					"btf__core_reloc_existence___err_wrong_int_kind.o",
-					"btf__core_reloc_existence___err_wrong_int_sz.o",
-					"btf__core_reloc_existence___err_wrong_int_type.o",
-					"btf__core_reloc_existence___err_wrong_struct_type.o":
+				case "btf__core_reloc_existence___err_wrong_arr_kind",
+					"btf__core_reloc_existence___err_wrong_arr_value_type",
+					"btf__core_reloc_existence___err_wrong_int_kind",
+					"btf__core_reloc_existence___err_wrong_int_sz",
+					"btf__core_reloc_existence___err_wrong_int_type",
+					"btf__core_reloc_existence___err_wrong_struct_type":
 					// These tests are buggy upstream, see https://lore.kernel.org/bpf/20210420111639.155580-1-lmb@cloudflare.com/
 					valid = true
-				case "btf__core_reloc_ints___err_wrong_sz_16.o",
-					"btf__core_reloc_ints___err_wrong_sz_32.o",
-					"btf__core_reloc_ints___err_wrong_sz_64.o",
-					"btf__core_reloc_ints___err_wrong_sz_8.o",
-					"btf__core_reloc_arrays___err_wrong_val_type1.o",
-					"btf__core_reloc_arrays___err_wrong_val_type2.o":
+				case "btf__core_reloc_ints___err_wrong_sz_16",
+					"btf__core_reloc_ints___err_wrong_sz_32",
+					"btf__core_reloc_ints___err_wrong_sz_64",
+					"btf__core_reloc_ints___err_wrong_sz_8",
+					"btf__core_reloc_arrays___err_wrong_val_type1",
+					"btf__core_reloc_arrays___err_wrong_val_type2":
 					// These tests are valid according to current libbpf behaviour,
 					// see commit 42765ede5c54ca915de5bfeab83be97207e46f68.
 					valid = true
-				case "btf__core_reloc_type_id___missing_targets.o",
-					"btf__core_reloc_flavors__err_wrong_name.o":
+				case "btf__core_reloc_type_id___missing_targets",
+					"btf__core_reloc_flavors__err_wrong_name":
 					valid = false
-				case "btf__core_reloc_ints___err_bitfield.o":
+				case "btf__core_reloc_ints___err_bitfield":
 					// Bitfields are now valid.
 					valid = true
 				default:
@@ -1085,28 +1086,33 @@ func TestLibBPFCompat(t *testing.T) {
 }
 
 func loadTargetProgram(tb testing.TB, name string, opts CollectionOptions) (*Program, *Collection) {
-	file := "test_pkt_access.o"
+	file := "test_pkt_access.bpf.o"
 	program := "test_pkt_access"
 	switch name {
 	case "new_connect_v4_prog":
-		file = "connect4_prog.o"
+		file = "connect4_prog.bpf.o"
 		program = "connect_v4_prog"
 	case "new_do_bind":
-		file = "connect4_prog.o"
+		file = "connect4_prog.bpf.o"
 		program = "connect_v4_prog"
 	case "freplace_cls_redirect_test":
-		file = "test_cls_redirect.o"
+		file = "test_cls_redirect.bpf.o"
 		program = "cls_redirect"
 	case "new_handle_kprobe":
-		file = "test_attach_probe.o"
+		file = "test_attach_probe.bpf.o"
 		program = "handle_kprobe"
 	case "test_pkt_md_access_new":
-		file = "test_pkt_md_access.o"
+		file = "test_pkt_md_access.bpf.o"
 		program = "test_pkt_md_access"
 	default:
 	}
 
 	spec, err := LoadCollectionSpec(filepath.Join(*elfPath, file))
+	if errors.Is(err, os.ErrNotExist) && strings.HasSuffix(file, ".bpf.o") {
+		// Prior to v6.1 BPF ELF used a plain .o suffix.
+		file = strings.TrimSuffix(file, ".bpf.o") + ".o"
+		spec, err = LoadCollectionSpec(filepath.Join(*elfPath, file))
+	}
 	if err != nil {
 		tb.Fatalf("Can't read %s: %s", file, err)
 	}
@@ -1218,4 +1224,23 @@ func TestGetProgType(t *testing.T) {
 			t.Errorf("getProgType mismatch (-want +got):\n%s", diff)
 		}
 	}
+}
+
+// selftestName takes a path to a file and derives a canonical name from it.
+//
+// It strips various suffixes used by the selftest build system.
+func selftestName(path string) string {
+	file := filepath.Base(path)
+
+	name := strings.TrimSuffix(file, ".o")
+	// Strip various suffixes.
+	// Various linking suffixes.
+	name = strings.TrimSuffix(name, ".linked3")
+	name = strings.TrimSuffix(name, ".llinked1")
+	name = strings.TrimSuffix(name, ".llinked2")
+	name = strings.TrimSuffix(name, ".llinked3")
+	// v6.1 started adding .bpf to all BPF ELF.
+	name = strings.TrimSuffix(name, ".bpf")
+
+	return name
 }

@@ -586,7 +586,7 @@ func TestCORERelocation(t *testing.T) {
 			name := strings.TrimPrefix(section, "socket_filter/")
 			t.Run(name, func(t *testing.T) {
 				var relos []*CORERelocation
-				for _, reloInfo := range extInfos.relocationInfos[section] {
+				for _, reloInfo := range extInfos.relocationInfos[section].infos {
 					relos = append(relos, reloInfo.relo)
 				}
 

@@ -106,7 +106,10 @@ limitTypes:
 		}
 	}
 
-	buf := marshalNativeEndian(t, types)
+	b, err := NewBuilder(types)
+	qt.Assert(t, err, qt.IsNil)
+	buf, err := b.Marshal(nil, KernelMarshalOptions())
+	qt.Assert(t, err, qt.IsNil)
 
 	rebuilt, err := loadRawSpec(bytes.NewReader(buf), binary.LittleEndian, nil)
 	qt.Assert(t, err, qt.IsNil, qt.Commentf("round tripping BTF failed"))
@@ -119,6 +122,43 @@ limitTypes:
 	testutils.SkipIfNotSupported(t, err)
 	qt.Assert(t, err, qt.IsNil, qt.Commentf("loading rebuilt BTF failed"))
 	h.Close()
+}
+
+func TestMarshalEnum64(t *testing.T) {
+	enum := &Enum{
+		Name:   "enum64",
+		Size:   8,
+		Signed: true,
+		Values: []EnumValue{
+			{"A", 0},
+			{"B", 1},
+		},
+	}
+
+	b, err := NewBuilder([]Type{enum})
+	qt.Assert(t, err, qt.IsNil)
+	buf, err := b.Marshal(nil, &MarshalOptions{
+		Order:         internal.NativeEndian,
+		ReplaceEnum64: true,
+	})
+	qt.Assert(t, err, qt.IsNil)
+
+	spec, err := loadRawSpec(bytes.NewReader(buf), internal.NativeEndian, nil)
+	qt.Assert(t, err, qt.IsNil)
+
+	var have *Union
+	err = spec.TypeByName("enum64", &have)
+	qt.Assert(t, err, qt.IsNil)
+
+	placeholder := &Int{Name: "enum64_placeholder", Size: 8, Encoding: Signed}
+	qt.Assert(t, have, qt.DeepEquals, &Union{
+		Name: "enum64",
+		Size: 8,
+		Members: []Member{
+			{Name: "A", Type: placeholder},
+			{Name: "B", Type: placeholder},
+		},
+	})
 }
 
 func BenchmarkMarshaler(b *testing.B) {

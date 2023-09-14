@@ -11,6 +11,7 @@ import (
 	"github.com/cilium/ebpf/btf"
 	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/kconfig"
+	"github.com/cilium/ebpf/internal/sysenc"
 )
 
 // CollectionOptions control loading a collection into the kernel.
@@ -175,12 +176,12 @@ func (cs *CollectionSpec) RewriteConstants(consts map[string]interface{}) error 
 				return fmt.Errorf("section %s: offset %d(+%d) for variable %s is out of bounds", name, v.Offset, v.Size, vname)
 			}
 
-			b, err := marshalBytes(replacement, int(v.Size))
+			b, err := sysenc.Marshal(replacement, int(v.Size))
 			if err != nil {
 				return fmt.Errorf("marshaling constant replacement %s: %w", vname, err)
 			}
 
-			copy(cpy[v.Offset:v.Offset+v.Size], b)
+			b.CopyTo(cpy[v.Offset : v.Offset+v.Size])
 
 			replaced[vname] = true
 		}

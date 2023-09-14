@@ -1,0 +1,130 @@
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+env:
+  TMPDIR: /tmp
+  CI_MAX_KERNEL_VERSION: '6.1'
+  CI_MIN_CLANG_VERSION: '9'
+  go_version: '~1.21'
+  prev_go_version: '~1.20'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-lint:
+    name: Build and Lint
+    runs-on: ubuntu-20.04 # for clang-9
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '${{ env.go_version }}'
+
+      - name: Run golangci-lint
+        uses: golangci/golangci-lint-action@v3.7.0
+
+      - name: Generate and format code
+        run: |
+          make clean && make container-all
+          if ! git diff --exit-code; then
+            echo "found unformatted source files, or generated files are not up to date, run 'make'" >&2
+            exit 1
+          fi
+
+      - name: Test bpf2go
+        run: |
+          sudo apt-get install clang-9 llvm-9
+          go test -v ./cmd/bpf2go
+
+      - name: Build examples
+        run: go build -v -o "$(mktemp -d)" ./...
+        working-directory: ./examples
+
+      - name: Cross build darwin
+        env:
+          GOOS: darwin
+        run: |
+          go build ./...
+          for p in $(go list ./...) ; do go test -c $p || exit ; done
+
+      - name: Cross build arm32
+        env:
+          GOARCH: arm
+          GOARM: 6
+        run: |
+          go build ./...
+          for p in $(go list ./...) ; do go test -c $p || exit ; done
+
+      - name: Cross build arm64
+        env:
+          GOARCH: arm64
+        run: |
+          go build ./...
+          for p in $(go list ./...) ; do go test -c $p || exit ; done
+
+  test-on-prev-go:
+    name: Run tests on previous stable Go
+    runs-on: ubuntu-latest-4cores-16gb
+    needs: build-and-lint
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '${{ env.prev_go_version }}'
+
+      - run: go install gotest.tools/gotestsum@v1.8.1
+      - run: sudo pip3 install https://github.com/amluto/virtme/archive/beb85146cd91de37ae455eccb6ab67c393e6e290.zip
+      - run: sudo apt-get install -y --no-install-recommends qemu-system-x86
+
+      - name: Test
+        run: gotestsum --raw-command --ignore-non-json-output-lines --junitfile junit.xml -- ./run-tests.sh $CI_MAX_KERNEL_VERSION -short -count 1 -json ./...
+
+      - name: Upload Test Results
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: Test Results (previous stable Go)
+          path: junit.xml
+
+  vm-test:
+    name: Run tests on pre-built kernel
+    runs-on: ubuntu-latest-4cores-16gb
+    needs: build-and-lint
+    timeout-minutes: 10
+    strategy:
+      matrix:
+        version: ["6.1", "5.15", "5.10", "5.4", "4.19", "4.14", "4.9"]
+    env:
+      KERNEL_VERSION: "${{ matrix.version }}"
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '${{ env.prev_go_version }}'
+
+      - run: go install gotest.tools/gotestsum@v1.8.1
+      - run: sudo pip3 install https://github.com/amluto/virtme/archive/beb85146cd91de37ae455eccb6ab67c393e6e290.zip
+      - run: sudo apt-get install -y --no-install-recommends qemu-system-x86
+
+      - name: Test
+        run: gotestsum --raw-command --ignore-non-json-output-lines --junitfile junit.xml -- ./run-tests.sh $KERNEL_VERSION -short -count 1 -json ./...
+
+      - name: Upload Test Results
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: Test Results (${{ matrix.version }})
+          path: junit.xml

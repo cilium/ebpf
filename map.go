@@ -28,42 +28,6 @@ var (
 	errMapNoBTFValue    = errors.New("map spec does not contain a BTF Value")
 )
 
-type IncompatibleMapErr struct {
-	Existing *MapInfo
-	Incoming *MapSpec
-}
-
-func NewErrIncompatibleMap(existing *MapInfo, incoming *MapSpec) *IncompatibleMapErr {
-	return &IncompatibleMapErr{
-		Existing: existing,
-		Incoming: incoming,
-	}
-}
-
-func (e *IncompatibleMapErr) Error() string {
-	return fmt.Sprintf("details(existing -> incoming) : %s", e.diff())
-}
-
-func (e *IncompatibleMapErr) diff() string {
-	diffs := []string{}
-	if e.Existing.Type != e.Incoming.Type {
-		diffs = append(diffs, fmt.Sprintf("type : %s -> %s", e.Existing.Type, e.Incoming.Type))
-	}
-	if e.Existing.Flags != e.Incoming.Flags {
-		diffs = append(diffs, fmt.Sprintf("flags : %d -> %d", e.Existing.Flags, e.Incoming.Flags))
-	}
-	if e.Existing.KeySize != e.Incoming.KeySize {
-		diffs = append(diffs, fmt.Sprintf("keySize : %d -> %d", e.Existing.KeySize, e.Incoming.KeySize))
-	}
-	if e.Existing.ValueSize != e.Incoming.ValueSize {
-		diffs = append(diffs, fmt.Sprintf("valueSize : %d -> %d", e.Existing.ValueSize, e.Incoming.ValueSize))
-	}
-	if e.Existing.MaxEntries != e.Incoming.MaxEntries {
-		diffs = append(diffs, fmt.Sprintf("maxEntries : %d -> %d", e.Existing.MaxEntries, e.Incoming.MaxEntries))
-	}
-	return strings.Join(diffs, ", ")
-}
-
 // MapOptions control loading a map into the kernel.
 type MapOptions struct {
 	// The base path to pin maps in if requested via PinByName.
@@ -216,47 +180,81 @@ type MapKV struct {
 	Value interface{}
 }
 
+type mapInfo struct {
+	Type       MapType
+	KeySize    uint32
+	ValueSize  uint32
+	MaxEntries uint32
+	Flags      uint32
+}
+
+type IncompatibleMapError struct {
+	Existing mapInfo
+	Incoming mapInfo
+	diff     string
+}
+
+func (err *IncompatibleMapError) Error() string {
+	return err.diff
+}
+
 // Compatible returns nil if an existing map may be used instead of creating
 // one from the spec.
 //
-// Returns an error wrapping [ErrMapIncompatible] otherwise. The error also wraps [IncompatibleMapErr]
-// which contains useful information about the incompatibility.
+// If the Map is not compatible, returns an [IncompatibleMapError] wrapping
+// [ErrMapIncompatible]. The [IncompatibleMapError] contains the relevant fields
+// of the existing and incoming maps and can be inspected for error handling
+// using errors.As.
 func (ms *MapSpec) Compatible(m *Map) error {
 	ms, err := ms.fixupMagicFields()
 	if err != nil {
 		return err
 	}
 
-	asInfo := func(m *Map) *MapInfo {
-		return &MapInfo{
+	diffs := []string{}
+	if m.typ != ms.Type {
+		diffs = append(diffs, fmt.Sprintf("Type: %s -> %s", m.typ, ms.Type))
+	}
+	if m.keySize != ms.KeySize {
+		diffs = append(diffs, fmt.Sprintf("KeySize: %d -> %d", m.keySize, ms.KeySize))
+	}
+	if m.valueSize != ms.ValueSize {
+		diffs = append(diffs, fmt.Sprintf("ValueSize: %d -> %d", m.valueSize, ms.ValueSize))
+	}
+	if m.maxEntries != ms.MaxEntries {
+		diffs = append(diffs, fmt.Sprintf("MaxEntries: %d -> %d", m.maxEntries, ms.MaxEntries))
+	}
+
+	// BPF_F_RDONLY_PROG is set unconditionally for devmaps. Explicitly allow
+	// this mismatch.
+	if !((ms.Type == DevMap || ms.Type == DevMapHash) && m.flags^ms.Flags == unix.BPF_F_RDONLY_PROG) &&
+		m.flags != ms.Flags {
+		diffs = append(diffs, fmt.Sprintf("Flags: %d -> %d", m.flags, ms.Flags))
+	}
+
+	if len(diffs) == 0 {
+		return nil
+	}
+
+	err = &IncompatibleMapError{
+		Existing: mapInfo{
 			Type:       m.typ,
 			KeySize:    m.keySize,
 			ValueSize:  m.valueSize,
 			MaxEntries: m.maxEntries,
 			Flags:      m.flags,
-			Name:       m.name,
-		}
+		},
+		Incoming: mapInfo{
+			Type:       ms.Type,
+			KeySize:    ms.KeySize,
+			ValueSize:  ms.ValueSize,
+			MaxEntries: ms.MaxEntries,
+			Flags:      ms.Flags,
+		},
+		diff: strings.Join(diffs, ", "),
 	}
-	switch {
-	case m.typ != ms.Type:
-		return errors.Join(ErrMapIncompatible, NewErrIncompatibleMap(asInfo(m), ms))
 
-	case m.keySize != ms.KeySize:
-		return errors.Join(ErrMapIncompatible, NewErrIncompatibleMap(asInfo(m), ms))
-
-	case m.valueSize != ms.ValueSize:
-		return errors.Join(ErrMapIncompatible, NewErrIncompatibleMap(asInfo(m), ms))
-
-	case m.maxEntries != ms.MaxEntries:
-		return errors.Join(ErrMapIncompatible, NewErrIncompatibleMap(asInfo(m), ms))
-
-	// BPF_F_RDONLY_PROG is set unconditionally for devmaps. Explicitly allow
-	// this mismatch.
-	case !((ms.Type == DevMap || ms.Type == DevMapHash) && m.flags^ms.Flags == unix.BPF_F_RDONLY_PROG) &&
-		m.flags != ms.Flags:
-		return errors.Join(ErrMapIncompatible, NewErrIncompatibleMap(asInfo(m), ms))
-	}
-	return nil
+	return fmt.Errorf("%w: %w", err, ErrMapIncompatible)
 }
 
 // Map represents a Map file descriptor.

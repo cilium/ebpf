@@ -732,6 +732,10 @@ func TestKfunc(t *testing.T) {
 func TestInvalidKfunc(t *testing.T) {
 	testutils.SkipOnOldKernel(t, "5.18", "bpf_kfunc_call_test_mem_len_pass1")
 
+	if !haveTestmod(t) {
+		t.Skip("bpf_testmod not loaded")
+	}
+
 	file := fmt.Sprintf("testdata/invalid-kfunc-%s.elf", internal.ClangEndian)
 	coll, err := LoadCollection(file)
 	if err == nil {
@@ -741,7 +745,7 @@ func TestInvalidKfunc(t *testing.T) {
 
 	var ike *incompatibleKfuncError
 	if !errors.As(err, &ike) {
-		t.Fatalf("Expected an error wrapping incompatibleKfuncError, got %T", err)
+		t.Fatalf("Expected an error wrapping incompatibleKfuncError, got %s", err)
 	}
 }
 

@@ -1724,9 +1724,8 @@ func TestMapPinning(t *testing.T) {
 
 func TestMapPinningIncompatible(t *testing.T) {
 	tmp := testutils.TempBPFFS(t)
-	c := qt.New(t)
 
-	spec := &MapSpec{
+	base := MapSpec{
 		Name:       "test",
 		Type:       Hash,
 		KeySize:    4,
@@ -1735,60 +1734,79 @@ func TestMapPinningIncompatible(t *testing.T) {
 		Pinning:    PinByName,
 	}
 
-	m1, err := NewMapWithOptions(spec, MapOptions{PinPath: tmp})
+	m1, err := NewMapWithOptions(&base, MapOptions{PinPath: tmp})
 	if err != nil {
 		t.Fatal("Can't create map:", err)
 	}
 	defer m1.Close()
-	pinned := m1.IsPinned()
-	c.Assert(pinned, qt.IsTrue)
 
-	_, err = m1.Info()
-	c.Assert(err, qt.IsNil)
+	tests := []struct {
+		name string
+		spec func(*MapSpec)
+		test func(*qt.C, *IncompatibleMapError)
+	}{
+		{
+			"Type",
+			func(spec *MapSpec) { spec.Type = Array },
+			func(c *qt.C, merr *IncompatibleMapError) {
+				c.Assert(merr.Existing.Type, qt.Equals, Hash)
+				c.Assert(merr.Incoming.Type, qt.Equals, Array)
+			},
+		},
+		{
+			"KeySize",
+			func(spec *MapSpec) { spec.KeySize = 8 },
+			func(c *qt.C, merr *IncompatibleMapError) {
+				c.Assert(merr.Existing.KeySize, qt.Equals, uint32(4))
+				c.Assert(merr.Incoming.KeySize, qt.Equals, uint32(8))
+			},
+		},
+		{
+			"ValueSize",
+			func(spec *MapSpec) { spec.ValueSize = 8 },
+			func(c *qt.C, merr *IncompatibleMapError) {
+				c.Assert(merr.Existing.ValueSize, qt.Equals, uint32(4))
+				c.Assert(merr.Incoming.ValueSize, qt.Equals, uint32(8))
+			},
+		},
+		{
+			"MaxEntries",
+			func(spec *MapSpec) { spec.MaxEntries = 2 },
+			func(c *qt.C, merr *IncompatibleMapError) {
+				c.Assert(merr.Existing.MaxEntries, qt.Equals, uint32(1))
+				c.Assert(merr.Incoming.MaxEntries, qt.Equals, uint32(2))
+			},
+		},
+		{
+			"Flags",
+			func(spec *MapSpec) { spec.Flags = unix.BPF_F_RDONLY_PROG },
+			func(c *qt.C, merr *IncompatibleMapError) {
+				c.Assert(merr.Existing.Flags, qt.Equals, uint32(0))
+				c.Assert(merr.Incoming.Flags, qt.Equals, uint32(unix.BPF_F_RDONLY_PROG))
+			},
+		},
+	}
 
-	if err := m1.Put(uint32(0), uint32(42)); err != nil {
-		t.Fatal("Can't write value:", err)
-	}
-	spec.KeySize = 8
-	tc := map[string]*MapSpec{
-		"KeySize":    {Name: spec.Name, Type: spec.Type, KeySize: 8, ValueSize: spec.ValueSize, MaxEntries: spec.MaxEntries, Pinning: spec.Pinning},
-		"ValueSize":  {Name: spec.Name, Type: spec.Type, KeySize: spec.ValueSize, ValueSize: 8, MaxEntries: spec.MaxEntries, Pinning: spec.Pinning},
-		"Type":       {Name: spec.Name, Type: Array, KeySize: spec.ValueSize, ValueSize: spec.ValueSize, MaxEntries: spec.MaxEntries, Pinning: spec.Pinning},
-		"MaxEntries": {Name: spec.Name, Type: spec.Type, KeySize: spec.ValueSize, ValueSize: spec.ValueSize, MaxEntries: 2, Pinning: spec.Pinning},
-		"Flags":      {Name: spec.Name, Type: spec.Type, KeySize: spec.ValueSize, ValueSize: spec.ValueSize, MaxEntries: spec.MaxEntries, Pinning: spec.Pinning, Flags: unix.BPF_F_RDONLY_PROG},
-	}
-	for name, spec := range tc {
-		m3, err := NewMapWithOptions(spec, MapOptions{PinPath: tmp})
-		if err == nil {
-			m3.Close()
-			t.Fatalf("Opening a pinned map with a mismatching spec did not fail")
-		}
-		if !errors.Is(err, ErrMapIncompatible) {
-			t.Fatalf("Opening a pinned map with a mismatching spec failed with the wrong error")
-		}
-		var merr *IncompatibleMapErr
-		if !errors.As(err, &merr) {
-			t.Fatal("Opening a pinned map with a mismatch spec failed to provide additional details")
-		}
-		switch name {
-		case "KeySize":
-			c.Assert(merr.Existing.KeySize, qt.Equals, uint32(4))
-			c.Assert(merr.Incoming.KeySize, qt.Equals, uint32(8))
-		case "ValueSize":
-			c.Assert(merr.Existing.ValueSize, qt.Equals, uint32(4))
-			c.Assert(merr.Incoming.ValueSize, qt.Equals, uint32(8))
-		case "Type":
-			c.Assert(merr.Existing.Type, qt.Equals, Hash)
-			c.Assert(merr.Incoming.Type, qt.Equals, Array)
-		case "MaxEntries":
-			c.Assert(merr.Existing.MaxEntries, qt.Equals, uint32(1))
-			c.Assert(merr.Incoming.MaxEntries, qt.Equals, uint32(2))
-		case "Flags":
-			c.Assert(merr.Existing.Flags, qt.Equals, uint32(0))
-			c.Assert(merr.Incoming.Flags, qt.Equals, uint32(unix.BPF_F_RDONLY_PROG))
-		default:
-			t.Fatalf("unhandled incompatible map pinning testcase %s", name)
-		}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			spec := base.Copy()
+			tt.spec(spec)
+
+			m3, err := NewMapWithOptions(spec, MapOptions{PinPath: tmp})
+			if err == nil {
+				m3.Close()
+				t.Fatalf("Opening a pinned map with a mismatching spec did not fail")
+			}
+			if !errors.Is(err, ErrMapIncompatible) {
+				t.Fatalf("Error did not wrap ErrMapIncompatible: %s", err)
+			}
+			var merr *IncompatibleMapError
+			if !errors.As(err, &merr) {
+				t.Fatalf("Error didn't contain an IncompatibleMapError: %s", err)
+			}
+
+			tt.test(qt.New(t), merr)
+		})
 	}
 }
 

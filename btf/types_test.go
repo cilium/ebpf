@@ -473,7 +473,7 @@ func BenchmarkWalk(b *testing.B) {
 			b.ReportAllocs()
 
 			for i := 0; i < b.N; i++ {
-				var dq typeDeque
+				var dq typeDequeue
 				walkType(typ, dq.Push)
 			}
 		})

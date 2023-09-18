@@ -16,9 +16,9 @@ type postorderIterator struct {
 	root Type
 
 	// Contains types which need to be either walked or yielded.
-	types typeDeque
+	types typeDequeue
 	// Contains a boolean whether the type has been walked or not.
-	walked internal.Deque[bool]
+	walked internal.Dequeue[bool]
 	// The set of types which has been pushed onto types.
 	pushed map[Type]struct{}
 

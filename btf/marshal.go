@@ -32,7 +32,7 @@ func KernelMarshalOptions() *MarshalOptions {
 type encoder struct {
 	MarshalOptions
 
-	pending internal.Deque[Type]
+	pending internal.Dequeue[Type]
 	buf     *bytes.Buffer
 	strings *stringTableBuilder
 	ids     map[Type]TypeID

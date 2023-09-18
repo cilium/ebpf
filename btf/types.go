@@ -712,7 +712,7 @@ func copyTypes(types []Type, transform Transformer) []Type {
 
 type copier struct {
 	copies map[Type]Type
-	work   typeDeque
+	work   typeDequeue
 }
 
 func (c *copier) copy(typ *Type, transform Transformer) {
@@ -738,7 +738,7 @@ func (c *copier) copy(typ *Type, transform Transformer) {
 	}
 }
 
-type typeDeque = internal.Deque[*Type]
+type typeDequeue = internal.Dequeue[*Type]
 
 // inflateRawTypes takes a list of raw btf types linked via type IDs, and turns
 // it into a graph of Types connected via pointers.

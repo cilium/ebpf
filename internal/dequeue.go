@@ -2,15 +2,15 @@ package internal
 
 import "math/bits"
 
-// Deque implements a double ended queue.
-type Deque[T any] struct {
+// Dequeue implements a double ended queue.
+type Dequeue[T any] struct {
 	elems       []T
 	read, write uint64
 	mask        uint64
 }
 
-// Reset clears the contents of the deque while retaining the backing buffer.
-func (dq *Deque[T]) Reset() {
+// Reset clears the contents of the dequeue while retaining the backing buffer.
+func (dq *Dequeue[T]) Reset() {
 	var zero T
 
 	for i := dq.read; i < dq.write; i++ {
@@ -20,19 +20,19 @@ func (dq *Deque[T]) Reset() {
 	dq.read, dq.write = 0, 0
 }
 
-func (dq *Deque[T]) Empty() bool {
+func (dq *Dequeue[T]) Empty() bool {
 	return dq.read == dq.write
 }
 
 // Push adds an element to the end.
-func (dq *Deque[T]) Push(e T) {
+func (dq *Dequeue[T]) Push(e T) {
 	dq.Grow(1)
 	dq.elems[dq.write&dq.mask] = e
 	dq.write++
 }
 
 // Shift returns the first element or the zero value.
-func (dq *Deque[T]) Shift() T {
+func (dq *Dequeue[T]) Shift() T {
 	var zero T
 
 	if dq.Empty() {
@@ -47,7 +47,7 @@ func (dq *Deque[T]) Shift() T {
 }
 
 // Pop returns the last element or the zero value.
-func (dq *Deque[T]) Pop() T {
+func (dq *Dequeue[T]) Pop() T {
 	var zero T
 
 	if dq.Empty() {
@@ -61,9 +61,9 @@ func (dq *Deque[T]) Pop() T {
 	return t
 }
 
-// Grow the deque's capacity, if necessary, to guarantee space for another n
+// Grow the dequeue's capacity, if necessary, to guarantee space for another n
 // elements.
-func (dq *Deque[T]) Grow(n int) {
+func (dq *Dequeue[T]) Grow(n int) {
 	have := dq.write - dq.read
 	need := have + uint64(n)
 	if need < have {

@@ -889,7 +889,7 @@ func CheckTypeCompatibility(localType Type, targetType Type) error {
 func coreAreTypesCompatible(localType Type, targetType Type) error {
 
 	var (
-		localTs, targetTs typeDeque
+		localTs, targetTs typeDequeue
 		l, t              = &localType, &targetType
 		depth             = 0
 	)

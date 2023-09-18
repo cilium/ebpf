@@ -2,9 +2,9 @@ package internal
 
 import "testing"
 
-func TestDeque(t *testing.T) {
+func TestDequeue(t *testing.T) {
 	t.Run("pop", func(t *testing.T) {
-		var dq Deque[int]
+		var dq Dequeue[int]
 		dq.Push(1)
 		dq.Push(2)
 
@@ -22,7 +22,7 @@ func TestDeque(t *testing.T) {
 	})
 
 	t.Run("shift", func(t *testing.T) {
-		var td Deque[int]
+		var td Dequeue[int]
 		td.Push(1)
 		td.Push(2)
 
@@ -40,7 +40,7 @@ func TestDeque(t *testing.T) {
 	})
 
 	t.Run("push", func(t *testing.T) {
-		var td Deque[int]
+		var td Dequeue[int]
 		td.Push(1)
 		td.Push(2)
 		td.Shift()
@@ -60,7 +60,7 @@ func TestDeque(t *testing.T) {
 	})
 
 	t.Run("grow", func(t *testing.T) {
-		var td Deque[int]
+		var td Dequeue[int]
 		td.Push(1)
 		td.Push(2)
 		td.Push(3)

@@ -105,7 +105,7 @@ type bpf2go struct {
 	// C flags passed to the compiler.
 	cFlags          []string
 	skipGlobalTypes bool
-	// C types to include in the generatd output.
+	// C types to include in the generated output.
 	cTypes cTypes
 	// Build tags to be included in the output.
 	tags buildTags

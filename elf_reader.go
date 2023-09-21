@@ -81,6 +81,8 @@ func LoadCollectionSpecFromReader(rd io.ReaderAt) (*CollectionSpec, error) {
 
 	// Collect all the sections we're interested in. This includes relocations
 	// which we parse later.
+	//
+	// Keep the documentation at docs/ebpf/loading/elf-sections.md up-to-date.
 	for i, sec := range f.Sections {
 		idx := elf.SectionIndex(i)
 
@@ -1184,6 +1186,8 @@ func getProgType(sectionName string) (ProgramType, AttachType, uint32, string) {
 	}{
 		// Please update the types from libbpf.c and follow the order of it.
 		// https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/tools/lib/bpf/libbpf.c
+		//
+		// Document all prefixes in docs/ebpf/loading/elf-sections.md.
 		{"socket", SocketFilter, AttachNone, 0},
 		{"sk_reuseport/migrate", SkReuseport, AttachSkReuseportSelectOrMigrate, 0},
 		{"sk_reuseport", SkReuseport, AttachSkReuseportSelect, 0},

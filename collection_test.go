@@ -78,7 +78,7 @@ func TestCollectionSpecCopy(t *testing.T) {
 	cpy := cs.Copy()
 
 	if cpy == cs {
-		t.Error("Copy returned the same pointner")
+		t.Error("Copy returned the same pointer")
 	}
 
 	if cpy.Maps["my-map"] == cs.Maps["my-map"] {

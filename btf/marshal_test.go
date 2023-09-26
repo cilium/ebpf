@@ -79,15 +79,6 @@ func TestRoundtripVMlinux(t *testing.T) {
 		types[i+1], types[j+1] = types[j+1], types[i+1]
 	})
 
-	// Skip per CPU datasec, see https://github.com/cilium/ebpf/issues/921
-	for i, typ := range types {
-		if ds, ok := typ.(*Datasec); ok && ds.Name == ".data..percpu" {
-			types[i] = types[len(types)-1]
-			types = types[:len(types)-1]
-			break
-		}
-	}
-
 	seen := make(map[Type]bool)
 limitTypes:
 	for i, typ := range types {
@@ -200,4 +191,14 @@ func marshalNativeEndian(tb testing.TB, types []Type) []byte {
 	buf, err := b.Marshal(nil, nil)
 	qt.Assert(tb, err, qt.IsNil)
 	return buf
+}
+
+func specFromTypes(tb testing.TB, types []Type) *Spec {
+	tb.Helper()
+
+	btf := marshalNativeEndian(tb, types)
+	spec, err := loadRawSpec(bytes.NewReader(btf), internal.NativeEndian, nil)
+	qt.Assert(tb, err, qt.IsNil)
+
+	return spec
 }

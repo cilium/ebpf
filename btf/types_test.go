@@ -1,12 +1,9 @@
 package btf
 
 import (
-	"bytes"
 	"fmt"
 	"reflect"
 	"testing"
-
-	"github.com/cilium/ebpf/internal"
 
 	qt "github.com/frankban/quicktest"
 	"github.com/google/go-cmp/cmp"
@@ -240,10 +237,7 @@ func TestTagMarshaling(t *testing.T) {
 		&typeTag{&Int{}, "foo"},
 	} {
 		t.Run(fmt.Sprint(typ), func(t *testing.T) {
-			buf := marshalNativeEndian(t, []Type{typ})
-
-			s, err := loadRawSpec(bytes.NewReader(buf), internal.NativeEndian, nil)
-			qt.Assert(t, err, qt.IsNil)
+			s := specFromTypes(t, []Type{typ})
 
 			have, err := s.TypeByID(1)
 			qt.Assert(t, err, qt.IsNil)

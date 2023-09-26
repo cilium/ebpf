@@ -46,49 +46,11 @@ type Spec struct {
 	// Includes all struct flavors and types with the same name.
 	namedTypes map[essentialName][]Type
 
-	// String table from ELF, may be nil.
+	// String table from ELF.
 	strings *stringTable
 
 	// Byte order of the ELF we decoded the spec from, may be nil.
 	byteOrder binary.ByteOrder
-}
-
-var btfHeaderLen = binary.Size(&btfHeader{})
-
-type btfHeader struct {
-	Magic   uint16
-	Version uint8
-	Flags   uint8
-	HdrLen  uint32
-
-	TypeOff   uint32
-	TypeLen   uint32
-	StringOff uint32
-	StringLen uint32
-}
-
-// typeStart returns the offset from the beginning of the .BTF section
-// to the start of its type entries.
-func (h *btfHeader) typeStart() int64 {
-	return int64(h.HdrLen + h.TypeOff)
-}
-
-// stringStart returns the offset from the beginning of the .BTF section
-// to the start of its string table.
-func (h *btfHeader) stringStart() int64 {
-	return int64(h.HdrLen + h.StringOff)
-}
-
-// newSpec creates a Spec containing only Void.
-func newSpec() *Spec {
-	return &Spec{
-		[]Type{(*Void)(nil)},
-		map[Type]TypeID{(*Void)(nil): 0},
-		0,
-		make(map[essentialName][]Type),
-		nil,
-		nil,
-	}
 }
 
 // LoadSpec opens file and calls LoadSpecFromReader on it.
@@ -237,10 +199,6 @@ func loadRawSpec(btf io.ReaderAt, bo binary.ByteOrder, base *Spec) (*Spec, error
 	if base != nil {
 		if base.firstTypeID != 0 {
 			return nil, fmt.Errorf("can't use split BTF as base")
-		}
-
-		if base.strings == nil {
-			return nil, fmt.Errorf("parse split BTF: base must be loaded from an ELF")
 		}
 
 		baseStrings = base.strings
@@ -396,37 +354,6 @@ func findVMLinux() (*internal.SafeELFFile, error) {
 	}
 
 	return nil, fmt.Errorf("no BTF found for kernel version %s: %w", release, internal.ErrNotSupported)
-}
-
-// parseBTFHeader parses the header of the .BTF section.
-func parseBTFHeader(r io.Reader, bo binary.ByteOrder) (*btfHeader, error) {
-	var header btfHeader
-	if err := binary.Read(r, bo, &header); err != nil {
-		return nil, fmt.Errorf("can't read header: %v", err)
-	}
-
-	if header.Magic != btfMagic {
-		return nil, fmt.Errorf("incorrect magic value %v", header.Magic)
-	}
-
-	if header.Version != 1 {
-		return nil, fmt.Errorf("unexpected version %v", header.Version)
-	}
-
-	if header.Flags != 0 {
-		return nil, fmt.Errorf("unsupported flags %v", header.Flags)
-	}
-
-	remainder := int64(header.HdrLen) - int64(binary.Size(&header))
-	if remainder < 0 {
-		return nil, errors.New("header length shorter than btfHeader size")
-	}
-
-	if _, err := io.CopyN(internal.DiscardZeroes{}, r, remainder); err != nil {
-		return nil, fmt.Errorf("header padding: %v", err)
-	}
-
-	return &header, nil
 }
 
 func guessRawBTFByteOrder(r io.ReaderAt) binary.ByteOrder {

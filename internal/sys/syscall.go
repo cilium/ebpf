@@ -123,7 +123,7 @@ type TypeID uint32
 // MapFlags control map behaviour.
 type MapFlags uint32
 
-//go:generate stringer -type MapFlags
+//go:generate go run golang.org/x/tools/cmd/stringer@latest -type MapFlags
 
 const (
 	BPF_F_NO_PREALLOC MapFlags = 1 << iota

@@ -62,7 +62,7 @@ container-all:
 		--env CFLAGS="-fdebug-prefix-map=/ebpf=." \
 		--env HOME="/tmp" \
 		"${IMAGE}:${VERSION}" \
-		make all
+		make BPF2GO_CC="$(CLANG)" BPF2GO_FLAGS="$(CFLAGS)" all
 
 # (debug) Drop the user into a shell inside the container as root.
 container-shell:
@@ -81,9 +81,6 @@ all: format $(addsuffix -el.elf,$(TARGETS)) $(addsuffix -eb.elf,$(TARGETS)) gene
 	ln -srf testdata/loader-$(CLANG)-el.elf testdata/loader-el.elf
 	ln -srf testdata/loader-$(CLANG)-eb.elf testdata/loader-eb.elf
 
-# $BPF_CLANG is used in go:generate invocations.
-generate: export BPF_CLANG := $(CLANG)
-generate: export BPF_CFLAGS := $(CFLAGS)
 generate:
 	go generate ./...
 

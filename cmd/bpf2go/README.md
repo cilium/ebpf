@@ -15,13 +15,18 @@ This will emit `foo_bpfel.go` and `foo_bpfeb.go`, with types using `foo`
 as a stem. The two files contain compiled BPF for little and big
 endian systems, respectively.
 
+## Environment Variables
+
 You can use environment variables to affect all bpf2go invocations
 across a project, e.g. to set specific C flags:
 
-    //go:generate go run github.com/cilium/ebpf/cmd/bpf2go -cflags "$BPF_CFLAGS" foo path/to/src.c
+    BPF2GO_FLAGS="-O2 -g -Wall -Werror $(CFLAGS)" go generate ./...
 
-By exporting `$BPF_CFLAGS` from your build system you can then control
-all builds from a single location.
+Alternatively, by exporting `$BPF2GO_FLAGS` from your build system, you can
+control all builds from a single location.
+
+Most bpf2go arguments can be controlled this way. See `bpf2go -h` for an
+up-to-date list.
 
 ## Generated types
 

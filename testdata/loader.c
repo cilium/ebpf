@@ -112,7 +112,7 @@ int __attribute__((noinline)) global_fn(uint32_t arg) {
 static volatile unsigned int key1 = 0; // .bss
 static volatile unsigned int key2 = 1; // .data
 volatile const unsigned int key3  = 2; // .rodata
-static volatile const uint32_t arg;    // .rodata, populated by loader
+static volatile const uint32_t arg; // .rodata, populated by loader
 // custom .rodata section, populated by loader
 static volatile const uint32_t arg2 __section(".rodata.test");
 #endif

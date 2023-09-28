@@ -7,7 +7,7 @@ on:
 env:
   TMPDIR: /tmp
   CI_MAX_KERNEL_VERSION: '6.1'
-  CI_MIN_CLANG_VERSION: '9'
+  CI_MIN_CLANG_VERSION: '11'
   go_version: '~1.21'
   prev_go_version: '~1.20'
 
@@ -18,7 +18,7 @@ concurrency:
 jobs:
   build-and-lint:
     name: Build and Lint
-    runs-on: ubuntu-20.04 # for clang-9
+    runs-on: ubuntu-22.04
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v3
@@ -41,7 +41,7 @@ jobs:
 
       - name: Test bpf2go
         run: |
-          sudo apt-get install clang-9 llvm-9
+          sudo apt-get install clang-11 llvm-11
           go test -v ./cmd/bpf2go
 
       - name: Build examples

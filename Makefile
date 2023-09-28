@@ -1,9 +1,9 @@
 # The development version of clang is distributed as the 'clang' binary,
 # while stable/released versions have a version number attached.
 # Pin the default clang to a stable version.
-CLANG ?= clang-14
-STRIP ?= llvm-strip-14
-OBJCOPY ?= llvm-objcopy-14
+CLANG ?= clang-17
+STRIP ?= llvm-strip-17
+OBJCOPY ?= llvm-objcopy-17
 CFLAGS := -O2 -g -Wall -Werror $(CFLAGS)
 
 CI_KERNEL_URL ?= https://github.com/cilium/ci-kernels/raw/master/
@@ -21,12 +21,9 @@ CONTAINER_RUN_ARGS ?= $(if $(filter ${CONTAINER_ENGINE}, podman), --log-driver=n
 IMAGE := $(shell cat ${REPODIR}/testdata/docker/IMAGE)
 VERSION := $(shell cat ${REPODIR}/testdata/docker/VERSION)
 
-
-# clang <8 doesn't tag relocs properly (STT_NOTYPE)
-# clang 9 is the first version emitting BTF
 TARGETS := \
-	testdata/loader-clang-7 \
-	testdata/loader-clang-9 \
+	testdata/loader-clang-11 \
+	testdata/loader-clang-14 \
 	testdata/loader-$(CLANG) \
 	testdata/manyprogs \
 	testdata/btf_map_init \

@@ -59,20 +59,24 @@ TARGETS := \
 container-all:
 	+${CONTAINER_ENGINE} run --rm -t ${CONTAINER_RUN_ARGS} \
 		-v "${REPODIR}":/ebpf -w /ebpf --env MAKEFLAGS \
-		--env CFLAGS="-fdebug-prefix-map=/ebpf=." \
 		--env HOME="/tmp" \
+		--env BPF2GO_CC="$(CLANG)" \
+		--env BPF2GO_FLAGS="-fdebug-prefix-map=/ebpf=. $(CFLAGS)" \
 		"${IMAGE}:${VERSION}" \
-		make BPF2GO_CC="$(CLANG)" BPF2GO_FLAGS="$(CFLAGS)" all
+		make all
 
 # (debug) Drop the user into a shell inside the container as root.
+# Set BPF2GO_ envs to make 'make generate' just work.
 container-shell:
 	${CONTAINER_ENGINE} run --rm -ti \
 		-v "${REPODIR}":/ebpf -w /ebpf \
+		--env BPF2GO_CC="$(CLANG)" \
+		--env BPF2GO_FLAGS="-fdebug-prefix-map=/ebpf=. $(CFLAGS)" \
 		"${IMAGE}:${VERSION}"
 
 clean:
-	-$(RM) testdata/*.elf
-	-$(RM) btf/testdata/*.elf
+	find "$(CURDIR)" -name "*.elf" -delete
+	find "$(CURDIR)" -name "*.o" -delete
 
 format:
 	find . -type f -name "*.c" | xargs clang-format -i

@@ -11,7 +11,7 @@ char __license[] SEC("license") = "Dual MIT/GPL";
 struct {
 	__uint(type, BPF_MAP_TYPE_LRU_HASH);
 	__uint(max_entries, MAX_MAP_ENTRIES);
-	__type(key, __u32);   // source IPv4 address
+	__type(key, __u32); // source IPv4 address
 	__type(value, __u32); // packet count
 } xdp_stats_map SEC(".maps");
 

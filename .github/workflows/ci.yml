@@ -45,30 +45,30 @@ jobs:
           go test -v ./cmd/bpf2go
 
       - name: Build examples
-        run: go build -v -o "$(mktemp -d)" ./...
+        run: go build -v ./...
         working-directory: ./examples
 
       - name: Cross build darwin
         env:
           GOOS: darwin
         run: |
-          go build ./...
-          for p in $(go list ./...) ; do go test -c $p || exit ; done
+          go build -v ./...
+          go test -c -o /dev/null ./... >/dev/null
 
       - name: Cross build arm32
         env:
           GOARCH: arm
           GOARM: 6
         run: |
-          go build ./...
-          for p in $(go list ./...) ; do go test -c $p || exit ; done
+          go build -v ./...
+          go test -c -o /dev/null ./... >/dev/null
 
       - name: Cross build arm64
         env:
           GOARCH: arm64
         run: |
-          go build ./...
-          for p in $(go list ./...) ; do go test -c $p || exit ; done
+          go build -v ./...
+          go test -c -o /dev/null ./... >/dev/null
 
   test-on-prev-go:
     name: Run tests on previous stable Go

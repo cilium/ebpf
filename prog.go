@@ -922,7 +922,12 @@ func findProgramTargetInKernel(name string, progType ProgramType, attachType Att
 	}
 
 	id, err := spec.TypeID(target)
-	return module, id, err
+	if err != nil {
+		module.Close()
+		return nil, 0, err
+	}
+
+	return module, id, nil
 }
 
 // findTargetInKernel attempts to find a named type in the current kernel.

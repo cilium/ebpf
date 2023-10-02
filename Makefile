@@ -105,10 +105,9 @@ testdata/loader-%-eb.elf: testdata/loader.c
 generate-btf: KERNEL_VERSION?=6.1.29
 generate-btf:
 	$(eval TMP := $(shell mktemp -d))
-	curl -fL "$(CI_KERNEL_URL)/linux-$(KERNEL_VERSION).bz" -o "$(TMP)/bzImage"
-	/lib/modules/$(uname -r)/build/scripts/extract-vmlinux "$(TMP)/bzImage" > "$(TMP)/vmlinux"
+	curl -fL "$(CI_KERNEL_URL)/linux-$(KERNEL_VERSION)-amd64.tgz" -o "$(TMP)/linux.tgz"
+	tar xvf "$(TMP)/linux.tgz" -C "$(TMP)" --strip-components=2 ./boot/vmlinuz ./lib/modules
+	/lib/modules/$(shell uname -r)/build/scripts/extract-vmlinux "$(TMP)/vmlinuz" > "$(TMP)/vmlinux"
 	$(OBJCOPY) --dump-section .BTF=/dev/stdout "$(TMP)/vmlinux" /dev/null | gzip > "btf/testdata/vmlinux.btf.gz"
-	curl -fL "$(CI_KERNEL_URL)/linux-$(KERNEL_VERSION)-selftests-bpf.tgz" -o "$(TMP)/selftests.tgz"
-	tar -xf "$(TMP)/selftests.tgz" --to-stdout tools/testing/selftests/bpf/bpf_testmod/bpf_testmod.ko | \
-		$(OBJCOPY) --dump-section .BTF="btf/testdata/btf_testmod.btf" - /dev/null
+	find "$(TMP)/modules" -type f -name bpf_testmod.ko -exec $(OBJCOPY) --dump-section .BTF="btf/testdata/btf_testmod.btf" {} /dev/null \;
 	$(RM) -r "$(TMP)"

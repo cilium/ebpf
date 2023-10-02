@@ -85,7 +85,7 @@ jobs:
 
       - run: go install gotest.tools/gotestsum@v1.8.1
       - run: sudo pip3 install https://github.com/amluto/virtme/archive/beb85146cd91de37ae455eccb6ab67c393e6e290.zip
-      - run: sudo apt-get install -y --no-install-recommends qemu-system-x86
+      - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends qemu-system-x86
 
       - name: Test
         run: gotestsum --raw-command --ignore-non-json-output-lines --junitfile junit.xml -- ./run-tests.sh $CI_MAX_KERNEL_VERSION -short -count 1 -json ./...
@@ -117,7 +117,7 @@ jobs:
 
       - run: go install gotest.tools/gotestsum@v1.8.1
       - run: sudo pip3 install https://github.com/amluto/virtme/archive/beb85146cd91de37ae455eccb6ab67c393e6e290.zip
-      - run: sudo apt-get install -y --no-install-recommends qemu-system-x86
+      - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends qemu-system-x86
 
       - name: Test
         run: gotestsum --raw-command --ignore-non-json-output-lines --junitfile junit.xml -- ./run-tests.sh $KERNEL_VERSION -short -count 1 -json ./...

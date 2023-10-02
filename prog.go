@@ -278,7 +278,7 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions) (*Program, er
 	if err != nil {
 		return nil, fmt.Errorf("fixing up kfuncs: %w", err)
 	}
-	defer handles.close()
+	defer handles.Close()
 
 	if len(handles) > 0 {
 		fdArray := handles.fdArray()

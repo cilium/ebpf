@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"go/format"
+	"math"
 	"strings"
 	"testing"
 )
@@ -22,7 +23,17 @@ func TestGoTypeDeclaration(t *testing.T) {
 		{&Typedef{Name: "frob", Type: &Int{Size: 8}}, "type t uint64"},
 		{&Int{Size: 16}, "type t [16]byte /* uint128 */"},
 		{&Enum{Values: []EnumValue{{"FOO", 32}}, Size: 4}, "type t uint32; const ( tFOO t = 32; )"},
-		{&Enum{Values: []EnumValue{{"BAR", 1}}, Size: 1, Signed: true}, "type t int8; const ( tBAR t = 1; )"},
+		{
+			&Enum{
+				Values: []EnumValue{
+					{"MINUS_ONE", math.MaxUint64},
+					{"MINUS_TWO", math.MaxUint64 - 1},
+				},
+				Size:   1,
+				Signed: true,
+			},
+			"type t int8; const ( tMINUS_ONE t = -1; tMINUS_TWO t = -2; )",
+		},
 		{
 			&Struct{
 				Name: "enum literals",

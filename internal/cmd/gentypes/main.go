@@ -47,6 +47,13 @@ func run(args []string) error {
 	}
 
 	output, err := generateTypes(spec)
+	var fpe *failedPatchError
+	if errors.As(err, &fpe) {
+		fmt.Fprintf(os.Stderr, "  %v\n", fpe.Type)
+		for _, member := range fpe.Type.Members {
+			fmt.Fprintf(os.Stderr, "    %q %v\n", member.Name, member.Type)
+		}
+	}
 	if err != nil {
 		return err
 	}
@@ -550,12 +557,26 @@ import (
 	return w.Bytes(), nil
 }
 
+type failedPatchError struct {
+	Type   *btf.Struct
+	number int
+	err    error
+}
+
+func (fpe *failedPatchError) Unwrap() error {
+	return fpe.err
+}
+
+func (fpe *failedPatchError) Error() string {
+	return fmt.Sprintf("patch %d: %v", fpe.number, fpe.err)
+}
+
 func outputPatchedStruct(gf *btf.GoFormatter, w *bytes.Buffer, id string, s *btf.Struct, patches []patch) error {
 	s = btf.Copy(s, nil).(*btf.Struct)
 
 	for i, p := range patches {
 		if err := p(s); err != nil {
-			return fmt.Errorf("patch %d: %w", i, err)
+			return &failedPatchError{s, i, err}
 		}
 	}
 

@@ -10,6 +10,9 @@ env:
   CI_MIN_CLANG_VERSION: '11'
   go_version: '~1.21'
   prev_go_version: '~1.20'
+  # This needs to match whatever Netlify supports.
+  # Also defined in Pipfile.
+  python_version: '~3.8'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -69,6 +72,39 @@ jobs:
         run: |
           go build -v ./...
           go test -c -o /dev/null ./... >/dev/null
+
+  build-docs:
+    name: Build Documentation
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          # The mkdocs git-authors plugin needs access to the full revision
+          # history to correctly generate its statistics.
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '${{ env.go_version }}'
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '${{ env.python_version }}'
+          cache: 'pipenv'
+
+      - name: Install pipenv
+        run: pip3 install pipenv
+
+      - name: Install Dependencies
+        run: pipenv install
+        working-directory: ./docs
+
+      - name: Build Documentation
+        run: make build
+        working-directory: ./docs
 
   test-on-prev-go:
     name: Run tests on previous stable Go

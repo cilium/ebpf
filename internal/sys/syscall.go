@@ -11,7 +11,7 @@ import (
 // ENOTSUPP is a Linux internal error code that has leaked into UAPI.
 //
 // It is not the same as ENOTSUP or EOPNOTSUPP.
-var ENOTSUPP = syscall.Errno(524)
+const ENOTSUPP = syscall.Errno(524)
 
 // BPF wraps SYS_BPF.
 //

@@ -1,8 +1,8 @@
----
-hide:
-  # Allow specifying our own tagline. Relies on custom overrides/content.html.
-  - title
----
+<style>
+  .md-content .md-typeset h1 {
+    display: none;
+  }
+</style>
 
 <p align="center" class="tagline">The eBPF Library for Go</p>
 

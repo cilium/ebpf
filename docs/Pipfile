@@ -6,7 +6,7 @@ name = "pypi"
 [packages]
 mkdocs = "*"
 pymdown-extensions = "*"
-mkdocs-material = "9.3.2"
+mkdocs-material = "9.4.3"
 mkdocs-macros-plugin = "*"
 mkdocs-git-revision-date-localized-plugin = "*"
 mkdocs-git-authors-plugin = "*"

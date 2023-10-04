@@ -5,8 +5,6 @@
 
 char __license[] __section("license") = "MIT";
 
-#if __clang_major__ >= 9
-// Clang < 9 doesn't emit the necessary BTF for this to work.
 struct {
 	__uint(type, BPF_MAP_TYPE_HASH);
 	__type(key, uint32_t);
@@ -64,27 +62,6 @@ struct {
 	__uint(type, BPF_MAP_TYPE_PERF_EVENT_ARRAY);
 	__uint(max_entries, 4096);
 } perf_event_array __section(".maps");
-#else
-struct bpf_map_def hash_map __section("maps") = {
-	.type        = BPF_MAP_TYPE_HASH,
-	.key_size    = sizeof(uint32_t),
-	.value_size  = sizeof(uint64_t),
-	.max_entries = 1,
-	.map_flags   = BPF_F_NO_PREALLOC,
-};
-
-struct bpf_map_def hash_map2 __section("maps") = {
-	.type        = BPF_MAP_TYPE_HASH,
-	.key_size    = sizeof(uint32_t),
-	.value_size  = sizeof(uint64_t),
-	.max_entries = 2,
-};
-
-struct bpf_map_def perf_event_array __section("maps") = {
-	.type        = BPF_MAP_TYPE_PERF_EVENT_ARRAY,
-	.max_entries = 4096,
-};
-#endif
 
 struct bpf_map_def array_of_hash_map __section("maps") = {
 	.type        = BPF_MAP_TYPE_ARRAY_OF_MAPS,
@@ -108,23 +85,14 @@ int __attribute__((noinline)) global_fn(uint32_t arg) {
 	return static_fn(arg) + global_fn2(arg) + global_fn3(arg);
 }
 
-#if __clang_major__ >= 9
 static volatile unsigned int key1 = 0; // .bss
 static volatile unsigned int key2 = 1; // .data
 volatile const unsigned int key3  = 2; // .rodata
 static volatile const uint32_t arg; // .rodata, populated by loader
 // custom .rodata section, populated by loader
 static volatile const uint32_t arg2 __section(".rodata.test");
-#endif
 
 __section("xdp") int xdp_prog() {
-#if __clang_major__ < 9
-	unsigned int key1 = 0;
-	unsigned int key2 = 1;
-	unsigned int key3 = 2;
-	uint32_t arg      = 1;
-	uint32_t arg2     = 2;
-#endif
 	map_lookup_elem(&hash_map, (void *)&key1);
 	map_lookup_elem(&hash_map2, (void *)&key2);
 	map_lookup_elem(&hash_map2, (void *)&key3);
@@ -143,7 +111,6 @@ __section("socket/2") int asm_relocation() {
 	return my_const;
 }
 
-#if __clang_major__ >= 9
 volatile const unsigned int uneg               = -1;
 volatile const int neg                         = -2;
 static volatile const unsigned int static_uneg = -3;
@@ -164,11 +131,6 @@ __section("socket/3") int data_sections() {
 
 	return 0;
 }
-#else
-__section("socket/3") int data_sections() {
-	return 0;
-}
-#endif
 
 /*
  * Up until LLVM 14, this program results in an .rodata.cst32 section

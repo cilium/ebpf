@@ -2,8 +2,6 @@
 
 #include "common.h"
 
-#if __clang_major__ >= 9
-
 int __section("socket/tail") tail_1() {
 	return 42;
 }
@@ -54,7 +52,3 @@ struct {
 			[1] = &inner_map,
 		},
 };
-
-#else
-#error This file has to be compiled with clang >= 9
-#endif

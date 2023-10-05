@@ -15,6 +15,8 @@ import (
 	"github.com/cilium/ebpf/btf"
 	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/sys"
+
+	"golang.org/x/exp/slices"
 )
 
 type syscallRetval int
@@ -120,6 +122,7 @@ import (
 		{"HdrStartOff", "bpf_hdr_start_off"},
 		{"RetCode", "bpf_ret_code"},
 		{"XdpAction", "xdp_action"},
+		{"TcxActionBase", "tcx_action_base"},
 	}
 
 	sort.Slice(enums, func(i, j int) bool {
@@ -319,11 +322,21 @@ import (
 		},
 		{
 			"ProgAttach", retError, "prog_attach", "BPF_PROG_ATTACH",
-			nil,
+			[]patch{
+				flattenAnon,
+				rename("target_fd", "target_fd_or_ifindex"),
+				rename("relative_fd", "relative_fd_or_id"),
+			},
 		},
 		{
 			"ProgDetach", retError, "prog_attach", "BPF_PROG_DETACH",
-			[]patch{truncateAfter("attach_type")},
+			[]patch{
+				flattenAnon,
+				rename("target_fd", "target_fd_or_ifindex"),
+				truncateAfter("expected_revision"),
+				rename("relative_fd", "relative_fd_or_id"),
+				remove("replace_bpf_fd"),
+			},
 		},
 		{
 			"ProgRun", retError, "prog_run", "BPF_PROG_TEST_RUN",
@@ -427,6 +440,17 @@ import (
 			},
 		},
 		{
+			"LinkCreateTcx", retFd, "link_create", "BPF_LINK_CREATE",
+			[]patch{
+				choose(1, "target_ifindex"),
+				choose(4, "tcx"),
+				replace(enumTypes["AttachType"], "attach_type"),
+				flattenAnon,
+				flattenAnon, // flatten tcx member
+				rename("relative_fd", "relative_fd_or_id"),
+			},
+		},
+		{
 			"LinkUpdate", retError, "link_update", "BPF_LINK_UPDATE",
 			nil,
 		},
@@ -442,9 +466,11 @@ import (
 			"ProgQuery", retError, "prog_query", "BPF_PROG_QUERY",
 			[]patch{
 				replace(enumTypes["AttachType"], "attach_type"),
-				replace(pointer, "prog_ids", "prog_attach_flags", "link_ids", "link_attach_flags"),
-				choose(5, "prog_cnt"),
-				rename("prog_cnt", "prog_count"),
+				replace(pointer, "prog_ids", "prog_attach_flags"),
+				replace(pointer, "link_ids", "link_attach_flags"),
+				flattenAnon,
+				rename("prog_cnt", "count"),
+				rename("target_fd", "target_fd_or_ifindex"),
 			},
 		},
 	}
@@ -519,6 +545,9 @@ import (
 			replace(typeID, "target_btf_id")},
 		},
 		{"XDPLinkInfo", "xdp", nil},
+		{"TcxLinkInfo", "tcx", []patch{
+			replace(enumTypes["AttachType"], "attach_type"),
+		}},
 	}
 
 	sort.Slice(linkInfoExtraTypes, func(i, j int) bool {
@@ -543,6 +572,11 @@ import (
 		{"iter", "iter"},
 		{"netns", "netns"},
 		{"xdp", "xdp"},
+		{"struct_ops", "struct_ops"},
+		{"netfilter", "netfilter"},
+		{"kprobe_multi", "kprobe_multi"},
+		{"perf_event", "perf_event"},
+		{"tcx", "tcx"},
 	})
 	if err != nil {
 		return nil, fmt.Errorf("splitting linkInfo: %w", err)
@@ -550,6 +584,9 @@ import (
 
 	for _, s := range linkInfoExtraTypes {
 		t := linkInfoTypes[s.cType]
+		if t == nil {
+			return nil, fmt.Errorf("link info: no C type named %q", s.cType)
+		}
 		if err := outputPatchedStruct(gf, w, s.goType, t, s.patches); err != nil {
 			return nil, fmt.Errorf("output %q: %w", s.goType, err)
 		}
@@ -716,21 +753,27 @@ func flattenAnon(s *btf.Struct) error {
 	for i := range s.Members {
 		m := &s.Members[i]
 
-		cs, ok := m.Type.(*btf.Struct)
-		if !ok || cs.TypeName() != "" {
+		if m.Type.TypeName() != "" {
 			continue
 		}
 
-		for j := range cs.Members {
-			cs.Members[j].Offset += m.Offset
+		var newMembers []btf.Member
+		switch cs := m.Type.(type) {
+		case *btf.Struct:
+			for j := range cs.Members {
+				cs.Members[j].Offset += m.Offset
+			}
+			newMembers = cs.Members
+
+		case *btf.Union:
+			cs.Members[0].Offset += m.Offset
+			newMembers = []btf.Member{cs.Members[0]}
+
+		default:
+			continue
 		}
 
-		newMembers := make([]btf.Member, 0, len(s.Members)+len(cs.Members)-1)
-		newMembers = append(newMembers, s.Members[:i]...)
-		newMembers = append(newMembers, cs.Members...)
-		newMembers = append(newMembers, s.Members[i+1:]...)
-
-		s.Members = newMembers
+		s.Members = slices.Replace(s.Members, i, i+1, newMembers...)
 	}
 
 	return nil
@@ -798,4 +841,16 @@ func replaceWithBytes(members ...string) patch {
 
 		return nil
 	}, members...)
+}
+
+func remove(member string) patch {
+	return func(s *btf.Struct) error {
+		for i, m := range s.Members {
+			if m.Name == member {
+				s.Members = slices.Delete(s.Members, i, i+1)
+				return nil
+			}
+		}
+		return fmt.Errorf("member %q not found", member)
+	}
 }

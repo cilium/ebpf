@@ -31,11 +31,11 @@ func RawAttachProgram(opts RawAttachProgramOptions) error {
 	}
 
 	attr := sys.ProgAttachAttr{
-		TargetFd:     uint32(opts.Target),
-		AttachBpfFd:  uint32(opts.Program.FD()),
-		ReplaceBpfFd: replaceFd,
-		AttachType:   uint32(opts.Attach),
-		AttachFlags:  uint32(opts.Flags),
+		TargetFdOrIfindex: uint32(opts.Target),
+		AttachBpfFd:       uint32(opts.Program.FD()),
+		ReplaceBpfFd:      replaceFd,
+		AttachType:        uint32(opts.Attach),
+		AttachFlags:       uint32(opts.Flags),
 	}
 
 	if err := sys.ProgAttach(&attr); err != nil {
@@ -60,9 +60,9 @@ type RawDetachProgramOptions struct {
 // package if possible.
 func RawDetachProgram(opts RawDetachProgramOptions) error {
 	attr := sys.ProgDetachAttr{
-		TargetFd:    uint32(opts.Target),
-		AttachBpfFd: uint32(opts.Program.FD()),
-		AttachType:  uint32(opts.Attach),
+		TargetFdOrIfindex: uint32(opts.Target),
+		AttachBpfFd:       uint32(opts.Program.FD()),
+		AttachType:        uint32(opts.Attach),
 	}
 	if err := sys.ProgDetach(&attr); err != nil {
 		if haveFeatErr := haveProgAttach(); haveFeatErr != nil {

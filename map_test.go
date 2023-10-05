@@ -1407,11 +1407,11 @@ func TestCgroupPerCPUStorageMarshaling(t *testing.T) {
 	defer prog.Close()
 
 	progAttachAttrs := sys.ProgAttachAttr{
-		TargetFd:     uint32(cgroup.Fd()),
-		AttachBpfFd:  uint32(prog.FD()),
-		AttachType:   uint32(AttachCGroupInetEgress),
-		AttachFlags:  0,
-		ReplaceBpfFd: 0,
+		TargetFdOrIfindex: uint32(cgroup.Fd()),
+		AttachBpfFd:       uint32(prog.FD()),
+		AttachType:        uint32(AttachCGroupInetEgress),
+		AttachFlags:       0,
+		ReplaceBpfFd:      0,
 	}
 	err = sys.ProgAttach(&progAttachAttrs)
 	if err != nil {
@@ -1419,9 +1419,9 @@ func TestCgroupPerCPUStorageMarshaling(t *testing.T) {
 	}
 	defer func() {
 		attr := sys.ProgDetachAttr{
-			TargetFd:    uint32(cgroup.Fd()),
-			AttachBpfFd: uint32(prog.FD()),
-			AttachType:  uint32(AttachCGroupInetEgress),
+			TargetFdOrIfindex: uint32(cgroup.Fd()),
+			AttachBpfFd:       uint32(prog.FD()),
+			AttachType:        uint32(AttachCGroupInetEgress),
 		}
 		if err := sys.ProgDetach(&attr); err != nil {
 			t.Fatal(err)

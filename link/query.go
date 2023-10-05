@@ -37,23 +37,23 @@ func QueryPrograms(opts QueryOptions) ([]ebpf.ProgramID, error) {
 
 	// query the number of programs to allocate correct slice size
 	attr := sys.ProgQueryAttr{
-		TargetFd:   uint32(f.Fd()),
-		AttachType: sys.AttachType(opts.Attach),
-		QueryFlags: opts.QueryFlags,
+		TargetFdOrIfindex: uint32(f.Fd()),
+		AttachType:        sys.AttachType(opts.Attach),
+		QueryFlags:        opts.QueryFlags,
 	}
 	if err := sys.ProgQuery(&attr); err != nil {
 		return nil, fmt.Errorf("can't query program count: %w", err)
 	}
 
 	// return nil if no progs are attached
-	if attr.ProgCount == 0 {
+	if attr.Count == 0 {
 		return nil, nil
 	}
 
 	// we have at least one prog, so we query again
-	progIds := make([]ebpf.ProgramID, attr.ProgCount)
+	progIds := make([]ebpf.ProgramID, attr.Count)
 	attr.ProgIds = sys.NewPointer(unsafe.Pointer(&progIds[0]))
-	attr.ProgCount = uint32(len(progIds))
+	attr.TargetFdOrIfindex = uint32(len(progIds))
 	if err := sys.ProgQuery(&attr); err != nil {
 		return nil, fmt.Errorf("can't query program IDs: %w", err)
 	}

@@ -79,6 +79,8 @@ type MapSpec struct {
 
 	// The key and value type of this map. May be nil.
 	Key, Value btf.Type
+
+	freezed bool
 }
 
 func (ms *MapSpec) String() string {
@@ -1209,6 +1211,10 @@ func (m *Map) Freeze() error {
 // finalize populates the Map according to the Contents specified
 // in spec and freezes the Map if requested by spec.
 func (m *Map) finalize(spec *MapSpec) error {
+	if spec.freezed {
+		return nil
+	}
+
 	for _, kv := range spec.Contents {
 		if err := m.Put(kv.Key, kv.Value); err != nil {
 			return fmt.Errorf("putting value: key %v: %w", kv.Key, err)
@@ -1219,6 +1225,7 @@ func (m *Map) finalize(spec *MapSpec) error {
 		if err := m.Freeze(); err != nil {
 			return fmt.Errorf("freezing map: %w", err)
 		}
+		spec.freezed = true
 	}
 
 	return nil

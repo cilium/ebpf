@@ -517,6 +517,13 @@ func (cl *collectionLoader) loadProgram(progName string) (*Program, error) {
 		if err := ins.AssociateMap(m); err != nil {
 			return nil, fmt.Errorf("program %s: map %s: %w", progName, ins.Reference(), err)
 		}
+
+		mapSpec := cl.coll.Maps[m.name]
+		if mapSpec.Freeze {
+			if err := m.finalize(mapSpec); err != nil {
+				return nil, fmt.Errorf("populating map %s: %w", m.name, err)
+			}
+		}
 	}
 
 	prog, err := newProgramWithOptions(progSpec, cl.opts.Programs)

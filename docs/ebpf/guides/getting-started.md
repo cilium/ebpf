@@ -137,7 +137,7 @@ write to get up and running.
 Before using the Go toolchain, Go wants us to declare a Go module. This command
 should take care of that:
 
-```shell-session
+```{ .shell-session data-copy="go mod init ebpf-test && go mod tidy" }
 % go mod init ebpf-test
 go: creating new go.mod: module ebpf-test
 go: to add module requirements and sums:
@@ -148,7 +148,7 @@ go: to add module requirements and sums:
 We also need to manually add a dependency on `bpf2go` since it's not explicitly
 imported by a `.go` source file:
 
-```shell-session
+```{ .shell-session data-copy="go get github.com/cilium/ebpf/cmd/bpf2go" }
 % go get github.com/cilium/ebpf/cmd/bpf2go
 go: added github.com/cilium/ebpf v0.11.0
 go: added golang.org/x/exp v0.0.0-20230224173230-c95f2b4c22f2
@@ -157,7 +157,7 @@ go: added golang.org/x/sys v0.6.0
 
 Now we're ready to run `go generate`: 
 
-```shell-session
+```{ .shell-session data-copy="go generate" }
 % go generate
 Compiled /home/timo/getting_started/counter_bpfel.o
 Stripped /home/timo/getting_started/counter_bpfel.o
@@ -231,7 +231,7 @@ Save this file as `main.go` in the same directory alongside `counter.c` and
 
 Now `main.go` is in place, we can finally compile and run our Go application!
 
-```shell-session
+```{ .shell-session data-copy="go build && sudo ./ebpf-test" }
 % go build && sudo ./ebpf-test
 2023/09/20 17:18:43 Counting incoming packets on eth0..
 2023/09/20 17:18:47 Received 0 packets
@@ -248,7 +248,7 @@ When iterating on the C code, make sure to keep generated files up-to-date.
 Without re-running bpf2go, the eBPF C won't be recompiled, and any changes made
 to the C program structure won't be reflected in the Go scaffolding.
 
-```shell-session
+```{ .shell-session data-copy="go generate && go build && sudo ./ebpf-test" }
 % go generate && go build && sudo ./ebpf-test
 ```
 

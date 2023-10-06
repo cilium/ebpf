@@ -102,6 +102,12 @@ func (mt MapType) hasPerCPUValue() bool {
 	return mt == PerCPUHash || mt == PerCPUArray || mt == LRUCPUHash || mt == PerCPUCGroupStorage
 }
 
+// canStoreMapOrProgram returns true if the Map stores references to another Map
+// or Program.
+func (mt MapType) canStoreMapOrProgram() bool {
+	return mt.canStoreMap() || mt.canStoreProgram()
+}
+
 // canStoreMap returns true if the map type accepts a map fd
 // for update and returns a map id for lookup.
 func (mt MapType) canStoreMap() bool {

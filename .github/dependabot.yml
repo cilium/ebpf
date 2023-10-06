@@ -4,7 +4,7 @@ updates:
   - package-ecosystem: "pip"
     directory: "/docs"
     schedule:
-      interval: "weekly"
+      interval: "monthly"
     allow:
       # Only manage direct dependencies in Pipfile, ignore transient
       # dependencies only appearing in Pipfile.lock.

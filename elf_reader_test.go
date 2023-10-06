@@ -292,6 +292,33 @@ func TestInlineASMConstant(t *testing.T) {
 	obj.Program.Close()
 }
 
+func TestFreezeRodata(t *testing.T) {
+	testutils.SkipOnOldKernel(t, "5.9", "sk_lookup program type")
+
+	file := fmt.Sprintf("testdata/constants-%s.elf", internal.ClangEndian)
+	spec, err := LoadCollectionSpec(file)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var obj struct {
+		Program *Program `ebpf:"freeze_rodata"`
+	}
+
+	if err := spec.RewriteConstants(map[string]interface{}{
+		"ret": uint32(1),
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	err = spec.LoadAndAssign(&obj, nil)
+	testutils.SkipIfNotSupported(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer obj.Program.Close()
+}
+
 func TestCollectionSpecDetach(t *testing.T) {
 	coll := Collection{
 		Maps: map[string]*Map{

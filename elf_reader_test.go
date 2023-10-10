@@ -52,8 +52,6 @@ func TestLoadCollectionSpec(t *testing.T) {
 				Type:       PerfEventArray,
 				MaxEntries: 4096,
 			},
-			// Maps prefixed by btf_ are ignored when testing ELFs
-			// that don't have BTF info embedded. (clang<9)
 			"btf_pin": {
 				Name:       "btf_pin",
 				Type:       Hash,
@@ -137,7 +135,7 @@ func TestLoadCollectionSpec(t *testing.T) {
 		},
 	}
 
-	defaultOpts := cmp.Options{
+	cmpOpts := cmp.Options{
 		// Dummy Comparer that works with empty readers to support test cases.
 		cmp.Comparer(func(a, b bytes.Reader) bool {
 			if a.Len() == 0 && b.Len() == 0 {
@@ -158,39 +156,28 @@ func TestLoadCollectionSpec(t *testing.T) {
 		}),
 	}
 
-	ignoreBTFOpts := append(defaultOpts,
-		cmpopts.IgnoreMapEntries(func(key string, _ *MapSpec) bool {
-			return strings.HasPrefix(key, "btf_")
-		}),
-	)
-
 	testutils.Files(t, testutils.Glob(t, "testdata/loader-*.elf"), func(t *testing.T, file string) {
 		have, err := LoadCollectionSpec(file)
 		if err != nil {
 			t.Fatal("Can't parse ELF:", err)
 		}
 
-		opts := defaultOpts
-		if have.Types != nil {
-			err := have.RewriteConstants(map[string]interface{}{
-				"arg":  uint32(1),
-				"arg2": uint32(2),
-			})
-			if err != nil {
-				t.Fatal("Can't rewrite constant:", err)
-			}
-
-			err = have.RewriteConstants(map[string]interface{}{
-				"totallyBogus": uint32(1),
-			})
-			if err == nil {
-				t.Error("Rewriting a bogus constant doesn't fail")
-			}
-		} else {
-			opts = ignoreBTFOpts
+		err = have.RewriteConstants(map[string]interface{}{
+			"arg":  uint32(1),
+			"arg2": uint32(2),
+		})
+		if err != nil {
+			t.Fatal("Can't rewrite constant:", err)
 		}
 
-		if diff := cmp.Diff(coll, have, opts...); diff != "" {
+		err = have.RewriteConstants(map[string]interface{}{
+			"totallyBogus": uint32(1),
+		})
+		if err == nil {
+			t.Error("Rewriting a bogus constant doesn't fail")
+		}
+
+		if diff := cmp.Diff(coll, have, cmpOpts...); diff != "" {
 			t.Errorf("MapSpec mismatch (-want +got):\n%s", diff)
 		}
 

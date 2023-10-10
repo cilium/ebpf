@@ -69,6 +69,16 @@ struct bpf_map_def array_of_hash_map __section("maps") = {
 	.max_entries = 2,
 };
 
+typedef struct {
+	__uint(type, BPF_MAP_TYPE_ARRAY);
+	__uint(key_size, sizeof(uint32_t));
+	__uint(value_size, sizeof(uint64_t));
+	__uint(max_entries, 1);
+} array_map_t;
+
+// Map definition behind a typedef.
+array_map_t btf_typedef_map __section(".maps");
+
 static int __attribute__((noinline)) __section("static") static_fn(uint32_t arg) {
 	return arg - 1;
 }

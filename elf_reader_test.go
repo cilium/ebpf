@@ -88,6 +88,13 @@ func TestLoadCollectionSpec(t *testing.T) {
 					MaxEntries: 1,
 				},
 			},
+			"btf_typedef_map": {
+				Name:       "btf_typedef_map",
+				Type:       Array,
+				KeySize:    4,
+				ValueSize:  8,
+				MaxEntries: 1,
+			},
 		},
 		Programs: map[string]*ProgramSpec{
 			"xdp_prog": {

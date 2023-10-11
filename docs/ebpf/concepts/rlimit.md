@@ -38,7 +38,7 @@ Include this in your application:
 {{ go_example('DocRlimit', title="Remove RLIMIT_MEMLOCK if kernel lacks memcg accounting") }}
 
 !!! note ""
-    You can call `RemoveMemlock()` multiple times it your program has
+    You can call `RemoveMemlock()` multiple times if your program has
     multiple entry points or CLI subcommands. The rlimit operation will only
     execute once.
 

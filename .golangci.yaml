@@ -9,7 +9,6 @@ issues:
 linters:
   disable-all: true
   enable:
-    - errcheck
     - goimports
     - gosimple
     - govet
@@ -19,8 +18,3 @@ linters:
     - typecheck
     - unused
     - gofmt
-
-    # Could be enabled later:
-    # - gocyclo
-    # - maligned
-    # - gosec

@@ -38,9 +38,15 @@ func TestPerfReader(t *testing.T) {
 	}
 	defer rd.Close()
 
-	outputSamples(t, events, 5)
+	qt.Assert(t, rd.BufferSize(), qt.Equals, 4096)
 
-	checkRecord(t, rd)
+	outputSamples(t, events, 5, 5)
+
+	_, rem := checkRecord(t, rd)
+	qt.Assert(t, rem >= 5, qt.IsTrue, qt.Commentf("expected at least 5 Remaining"))
+
+	_, rem = checkRecord(t, rd)
+	qt.Assert(t, rem, qt.Equals, 0, qt.Commentf("expected zero Remaining"))
 
 	rd.SetDeadline(time.Now().Add(4 * time.Millisecond))
 	_, err = rd.Read()
@@ -155,7 +161,7 @@ func outputSamplesProg(tb testing.TB, events *ebpf.Map, sampleSizes ...byte) *eb
 	return prog
 }
 
-func checkRecord(tb testing.TB, rd *Reader) (id int) {
+func checkRecord(tb testing.TB, rd *Reader) (id int, remaining int) {
 	tb.Helper()
 
 	rec, err := rd.Read()
@@ -172,7 +178,7 @@ func checkRecord(tb testing.TB, rd *Reader) (id int) {
 
 	// padding is ignored since it's value is undefined.
 
-	return int(rec.RawSample[1])
+	return int(rec.RawSample[1]), rec.Remaining
 }
 
 func TestPerfReaderLostSample(t *testing.T) {
@@ -305,8 +311,9 @@ func TestPerfReaderOverwritable(t *testing.T) {
 
 	nextID := maxEvents
 	for i := 0; i < maxEvents; i++ {
-		id := checkRecord(t, rd)
+		id, rem := checkRecord(t, rd)
 		qt.Assert(t, id, qt.Equals, nextID)
+		qt.Assert(t, rem, qt.Equals, -1)
 		nextID--
 	}
 }

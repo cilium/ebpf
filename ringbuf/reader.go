@@ -44,6 +44,9 @@ func (rh *ringbufHeader) dataLen() int {
 
 type Record struct {
 	RawSample []byte
+
+	// The minimum number of bytes remaining in the ring buffer after this Record has been read.
+	Remaining int
 }
 
 // Read a record from an event ring.
@@ -98,6 +101,7 @@ func readRecord(rd *ringbufEventRing, rec *Record, buf []byte) error {
 
 	rd.storeConsumer()
 	rec.RawSample = rec.RawSample[:header.dataLen()]
+	rec.Remaining = rd.remaining()
 	return nil
 }
 
@@ -230,4 +234,9 @@ func (r *Reader) ReadInto(rec *Record) error {
 			return err
 		}
 	}
+}
+
+// BufferSize returns the size in bytes of the ring buffer
+func (r *Reader) BufferSize() int {
+	return r.ring.size()
 }

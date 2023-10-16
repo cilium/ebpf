@@ -59,6 +59,10 @@ func TestRingbufReader(t *testing.T) {
 			}
 			defer rd.Close()
 
+			if uint32(rd.BufferSize()) != 2*events.MaxEntries() {
+				t.Errorf("expected %d BufferSize, got %d", events.MaxEntries(), rd.BufferSize())
+			}
+
 			ret, _, err := prog.Test(internal.EmptyBPFContext)
 			testutils.SkipIfNotSupported(t, err)
 			if err != nil {
@@ -77,6 +81,15 @@ func TestRingbufReader(t *testing.T) {
 					t.Fatal("Can't read samples:", err)
 				}
 				raw[len(record.RawSample)] = record.RawSample
+				if len(raw) == len(tt.want) {
+					if record.Remaining != 0 {
+						t.Errorf("expected 0 Remaining, got %d", record.Remaining)
+					}
+				} else {
+					if record.Remaining == 0 {
+						t.Error("expected non-zero Remaining, got 0")
+					}
+				}
 			}
 
 			if diff := cmp.Diff(tt.want, raw); diff != "" {

@@ -370,18 +370,23 @@ func TestHaveProgramInfoMapIDs(t *testing.T) {
 func TestProgInfoExtBTF(t *testing.T) {
 	testutils.SkipOnOldKernel(t, "5.0", "Program BTF (func/line_info)")
 
-	spec, err := LoadCollectionSpec("testdata/raw_tracepoint-el.elf")
+	spec, err := LoadCollectionSpec(fmt.Sprintf("testdata/loader-%s.elf", internal.ClangEndian))
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	coll, err := NewCollection(spec)
+	var obj struct {
+		Main *Program `ebpf:"xdp_prog"`
+	}
+
+	err = spec.LoadAndAssign(&obj, nil)
+	testutils.SkipIfNotSupported(t, err)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer coll.Close()
+	defer obj.Main.Close()
 
-	info, err := coll.Programs["sched_process_exec"].Info()
+	info, err := obj.Main.Info()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -391,17 +396,34 @@ func TestProgInfoExtBTF(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	const expectedSource = "\treturn 0;"
-	if inst[0].Source().String() != expectedSource {
-		t.Fatalf("Source of first instruction incorrect. Got '%s', expected: '%s'", inst[0].Source().String(), expectedSource)
+	expectedLineInfoCount := 26
+	expectedFuncInfo := map[string]bool{
+		"xdp_prog":   false,
+		"static_fn":  false,
+		"global_fn2": false,
+		"global_fn3": false,
 	}
 
-	fn := btf.FuncMetadata(&inst[0])
-	if fn == nil {
-		t.Fatal("Func metadata missing")
+	lineInfoCount := 0
+
+	for _, ins := range inst {
+		if ins.Source() != nil {
+			lineInfoCount++
+		}
+
+		fn := btf.FuncMetadata(&ins)
+		if fn != nil {
+			expectedFuncInfo[fn.Name] = true
+		}
 	}
 
-	if fn.Name != "sched_process_exec" {
-		t.Fatalf("Func metadata incorrect. Got '%s', expected: 'sched_process_exec'", fn.Name)
+	if lineInfoCount != expectedLineInfoCount {
+		t.Errorf("expected %d line info entries, got %d", expectedLineInfoCount, lineInfoCount)
+	}
+
+	for fn, found := range expectedFuncInfo {
+		if !found {
+			t.Errorf("func %q not found", fn)
+		}
 	}
 }

@@ -12,7 +12,9 @@ import (
 	"github.com/cilium/ebpf/internal/sys"
 )
 
-const maxTypeDepth = 32
+// Mirrors MAX_RESOLVE_DEPTH in libbpf.
+// https://github.com/libbpf/libbpf/blob/e26b84dc330c9644c07428c271ab491b0f01f4e1/src/btf.c#L761
+const maxResolveDepth = 32
 
 // TypeID identifies a type in a BTF section.
 type TypeID = sys.TypeID
@@ -589,7 +591,7 @@ func Sizeof(typ Type) (int, error) {
 		elem int64
 	)
 
-	for i := 0; i < maxTypeDepth; i++ {
+	for i := 0; i < maxResolveDepth; i++ {
 		switch v := typ.(type) {
 		case *Array:
 			if n > 0 && int64(v.Nelems) > math.MaxInt64/n {
@@ -1096,7 +1098,7 @@ func newEssentialName(name string) essentialName {
 // UnderlyingType skips qualifiers and Typedefs.
 func UnderlyingType(typ Type) Type {
 	result := typ
-	for depth := 0; depth <= maxTypeDepth; depth++ {
+	for depth := 0; depth <= maxResolveDepth; depth++ {
 		switch v := (result).(type) {
 		case qualifier:
 			result = v.qualify()
@@ -1115,7 +1117,7 @@ func UnderlyingType(typ Type) Type {
 // Returns the zero value and false if there is no T or if the type is nested
 // too deeply.
 func as[T Type](typ Type) (T, bool) {
-	for depth := 0; depth <= maxTypeDepth; depth++ {
+	for depth := 0; depth <= maxResolveDepth; depth++ {
 		switch v := (typ).(type) {
 		case T:
 			return v, true

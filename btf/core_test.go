@@ -652,7 +652,7 @@ func TestCORECopyWithoutQualifiers(t *testing.T) {
 		rng := testutils.Rand(t)
 		root := &Int{Name: "abc"}
 		v := Type(root)
-		for i := 0; i < maxTypeDepth; i++ {
+		for i := 0; i < maxResolveDepth; i++ {
 			q := qualifiers[rng.Intn(len(qualifiers))]
 			v = q.fn(v)
 			t.Log(q.name)

@@ -251,7 +251,7 @@ func TestFindVMLinux(t *testing.T) {
 	}
 	defer file.Close()
 
-	spec, err := loadSpecFromELF(file)
+	spec, err := LoadSpecFromReader(file)
 	if err != nil {
 		t.Fatal("Can't load BTF:", err)
 	}

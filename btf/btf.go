@@ -322,12 +322,12 @@ func loadKernelSpec() (_ *Spec, fallback bool, _ error) {
 	}
 	defer file.Close()
 
-	spec, err := loadSpecFromELF(file)
+	spec, err := LoadSpecFromReader(file)
 	return spec, true, err
 }
 
 // findVMLinux scans multiple well-known paths for vmlinux kernel images.
-func findVMLinux() (*internal.SafeELFFile, error) {
+func findVMLinux() (*os.File, error) {
 	release, err := internal.KernelRelease()
 	if err != nil {
 		return nil, err
@@ -346,7 +346,7 @@ func findVMLinux() (*internal.SafeELFFile, error) {
 	}
 
 	for _, loc := range locations {
-		file, err := internal.OpenSafeELFFile(fmt.Sprintf(loc, release))
+		file, err := os.Open(fmt.Sprintf(loc, release))
 		if errors.Is(err, os.ErrNotExist) {
 			continue
 		}

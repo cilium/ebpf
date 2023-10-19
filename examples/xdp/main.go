@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/cilium/ebpf"
+	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/link"
 )
 
@@ -70,12 +71,14 @@ func main() {
 func formatMapContents(m *ebpf.Map) (string, error) {
 	var (
 		sb  strings.Builder
-		key []byte
+		key uint32
 		val uint32
 	)
 	iter := m.Iterate()
 	for iter.Next(&key, &val) {
-		sourceIP := net.IP(key) // IPv4 source address in network byte order.
+		b := make([]byte, 4)
+		internal.NativeEndian.PutUint32(b, key)
+		sourceIP := net.IP(b) // IPv4 source address in network byte order.
 		packetCount := val
 		sb.WriteString(fmt.Sprintf("\t%s => %d\n", sourceIP, packetCount))
 	}

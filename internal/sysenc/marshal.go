@@ -106,7 +106,15 @@ func Unmarshal(data interface{}, buf []byte) error {
 
 		rd.Reset(buf)
 
-		return binary.Read(rd, internal.NativeEndian, value)
+		if err := binary.Read(rd, internal.NativeEndian, value); err != nil {
+			return err
+		}
+
+		if rd.Len() != 0 {
+			return fmt.Errorf("unmarshaling %T doesn't consume all data", data)
+		}
+
+		return nil
 	}
 }
 

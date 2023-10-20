@@ -713,7 +713,6 @@ func TestProgramRejectIncorrectByteOrder(t *testing.T) {
 
 func TestProgramSpecTag(t *testing.T) {
 	arr := createArray(t)
-	defer arr.Close()
 
 	spec := &ProgramSpec{
 		Type: SocketFilter,

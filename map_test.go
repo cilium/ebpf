@@ -48,7 +48,6 @@ func newHash(t *testing.T) *Map {
 
 func TestMap(t *testing.T) {
 	m := createArray(t)
-	defer m.Close()
 
 	t.Log(m)
 
@@ -430,7 +429,6 @@ func TestMapCloneNil(t *testing.T) {
 func TestMapPin(t *testing.T) {
 	m := createArray(t)
 	c := qt.New(t)
-	defer m.Close()
 
 	if err := m.Put(uint32(0), uint32(42)); err != nil {
 		t.Fatal("Can't put:", err)
@@ -557,7 +555,6 @@ func TestMapPinMultiple(t *testing.T) {
 func TestMapPinWithEmptyPath(t *testing.T) {
 	m := createArray(t)
 	c := qt.New(t)
-	defer m.Close()
 
 	err := m.Pin("")
 
@@ -694,7 +691,6 @@ func TestMapLoadPinnedWithOptions(t *testing.T) {
 	testutils.SkipOnOldKernel(t, "4.15", "file_flags in BPF_OBJ_GET")
 
 	array := createArray(t)
-	defer array.Close()
 
 	tmp := testutils.TempBPFFS(t)
 
@@ -780,6 +776,7 @@ func createArray(t *testing.T) *Map {
 	if err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(func() { m.Close() })
 	return m
 }
 
@@ -1276,7 +1273,6 @@ func TestIterateMapInMap(t *testing.T) {
 	defer parent.Close()
 
 	a := createArray(t)
-	defer a.Close()
 
 	if err := parent.Put(idx, a); err != nil {
 		t.Fatal(err)
@@ -1529,7 +1525,6 @@ func TestMapName(t *testing.T) {
 
 func TestMapFromFD(t *testing.T) {
 	m := createArray(t)
-	defer m.Close()
 
 	if err := m.Put(uint32(0), uint32(123)); err != nil {
 		t.Fatal(err)
@@ -1597,7 +1592,6 @@ func TestMapContents(t *testing.T) {
 
 func TestMapFreeze(t *testing.T) {
 	arr := createArray(t)
-	defer arr.Close()
 
 	err := arr.Freeze()
 	testutils.SkipIfNotSupported(t, err)

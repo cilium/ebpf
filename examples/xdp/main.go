@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"net/netip"
 	"os"
 	"strings"
 	"time"
@@ -70,12 +71,12 @@ func main() {
 func formatMapContents(m *ebpf.Map) (string, error) {
 	var (
 		sb  strings.Builder
-		key []byte
+		key netip.Addr
 		val uint32
 	)
 	iter := m.Iterate()
 	for iter.Next(&key, &val) {
-		sourceIP := net.IP(key) // IPv4 source address in network byte order.
+		sourceIP := key // IPv4 source address in network byte order.
 		packetCount := val
 		sb.WriteString(fmt.Sprintf("\t%s => %d\n", sourceIP, packetCount))
 	}

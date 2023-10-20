@@ -75,6 +75,10 @@ func TestMap(t *testing.T) {
 		t.Error("Want value 42, got", v)
 	}
 
+	var slice []byte
+	qt.Assert(t, m.Lookup(uint32(0), &slice), qt.IsNil)
+	qt.Assert(t, slice, qt.DeepEquals, internal.NativeEndian.AppendUint32(nil, 42))
+
 	var k uint32
 	if err := m.NextKey(uint32(0), &k); err != nil {
 		t.Fatal("Can't get:", err)

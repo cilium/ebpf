@@ -11,6 +11,8 @@ import (
 	"unsafe"
 
 	"github.com/cilium/ebpf/internal"
+
+	"golang.org/x/exp/slices"
 )
 
 // Marshal turns data into a byte slice using the system's native endianness.
@@ -86,6 +88,11 @@ func Unmarshal(data interface{}, buf []byte) error {
 
 	case *string:
 		*value = string(buf)
+		return nil
+
+	case *[]byte:
+		// Backwards compat: unmarshaling into a slice replaces the whole slice.
+		*value = slices.Clone(buf)
 		return nil
 
 	default:

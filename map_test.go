@@ -227,6 +227,15 @@ func TestBatchAPIHash(t *testing.T) {
 	}
 }
 
+func TestMapLookupKeyTooSmall(t *testing.T) {
+	m := createArray(t)
+	defer m.Close()
+
+	var small uint16
+	qt.Assert(t, m.Put(uint32(0), uint32(1234)), qt.IsNil)
+	qt.Assert(t, m.Lookup(uint32(0), &small), qt.IsNotNil)
+}
+
 func TestBatchAPIMapDelete(t *testing.T) {
 	if err := haveBatchAPI(); err != nil {
 		t.Skipf("batch api not available: %v", err)
@@ -1014,7 +1023,7 @@ func TestIterateEmptyMap(t *testing.T) {
 			entries := m.Iterate()
 
 			var key string
-			var value uint32
+			var value uint64
 			if entries.Next(&key, &value) != false {
 				t.Error("Empty hash should not be iterable")
 			}
@@ -1032,7 +1041,7 @@ func TestIterateEmptyMap(t *testing.T) {
 			m := makeMap(t, mapType)
 			entries := m.Iterate()
 			var key string
-			var value uint32
+			var value uint64
 			for entries.Next(&key, &value) {
 				// Some empty arrays like sockmap don't return any keys.
 			}

@@ -502,5 +502,5 @@ func ExampleCopy_stripQualifiers() {
 	b := Copy(a, UnderlyingType)
 	// b has Volatile and Typedef removed.
 	fmt.Printf("%3v\n", b)
-	// Output: Pointer[target=Int[unsigned size=16]]
+	// Output: Pointer[target=Int[unsigned size=2]]
 }

@@ -117,7 +117,7 @@ type Int struct {
 }
 
 func (i *Int) Format(fs fmt.State, verb rune) {
-	formatType(fs, verb, i, i.Encoding, "size=", i.Size*8)
+	formatType(fs, verb, i, i.Encoding, "size=", i.Size)
 }
 
 func (i *Int) TypeName() string { return i.Name }

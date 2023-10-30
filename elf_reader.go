@@ -467,8 +467,12 @@ func (ec *elfCode) relocateInstruction(ins *asm.Instruction, rel elf.Symbol) err
 
 	switch target.kind {
 	case mapSection, btfMapSection:
-		if bind != elf.STB_GLOBAL {
+		if bind == elf.STB_LOCAL {
 			return fmt.Errorf("possible erroneous static qualifier on map definition: found reference to %q", name)
+		}
+
+		if bind != elf.STB_GLOBAL {
+			return fmt.Errorf("map %q: unsupported relocation %s", name, bind)
 		}
 
 		if typ != elf.STT_OBJECT && typ != elf.STT_NOTYPE {

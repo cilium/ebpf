@@ -2,10 +2,13 @@
 #include "bpf_core_read.h"
 
 enum e {
-	// clang-12 doesn't allow enum relocations with zero value.
-	// See https://reviews.llvm.org/D97659
-	ONE = 1,
+	ZERO = 0,
+	ONE,
 	TWO,
+};
+
+enum e64 {
+	LARGE = 0x1ffffffff,
 };
 
 typedef enum e e_t;
@@ -147,12 +150,15 @@ __section("socket_filter/enums") int enums() {
 	enum_value_exists(volatile enum e, ONE);
 	enum_value_exists(const enum e, ONE);
 	enum_value_exists(e_t, TWO);
+	enum_value_exists(enum e64, LARGE);
 	// TODO: Check non-existence.
 
+	enum_value_matches(enum e, ZERO);
 	enum_value_matches(enum e, TWO);
 	enum_value_matches(e_t, ONE);
 	enum_value_matches(volatile e_t, ONE);
 	enum_value_matches(const e_t, ONE);
+	enum_value_matches(enum e64, LARGE);
 
 	return 0;
 }

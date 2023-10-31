@@ -974,7 +974,8 @@ func (m *Map) batchLookup(cmd sys.Cmd, startKey, nextKeyOut, keysOut, valuesOut 
 	}
 
 	var err error
-	if startKey != nil {
+	startKeyValue := reflect.ValueOf(startKey)
+	if startKey != nil && (startKeyValue != reflect.Value{} && !startKeyValue.IsNil()) {
 		attr.InBatch, err = marshalMapSyscallInput(startKey, int(m.keySize))
 		if err != nil {
 			return 0, err

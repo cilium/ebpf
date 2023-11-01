@@ -1025,7 +1025,7 @@ func TestLibBPFCompat(t *testing.T) {
 			t.Skip("Skipping since weak relocations are not supported")
 		case "bloom_filter_map", "bloom_filter_bench":
 			t.Skip("Skipping due to missing MapExtra field in MapSpec")
-		case "netif_receive_skb", "local_kptr_stash":
+		case "netif_receive_skb", "local_kptr_stash", "local_kptr_stash_fail":
 			t.Skip("Skipping due to possible bug in upstream CO-RE generation")
 		case "test_usdt", "test_urandom_usdt", "test_usdt_multispec":
 			t.Skip("Skipping due to missing support for usdt.bpf.h")

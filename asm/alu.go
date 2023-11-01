@@ -4,23 +4,23 @@ package asm
 
 // Source of ALU / ALU64 / Branch operations
 //
-//	msb      lsb
-//	+----+-+---+
-//	|op  |S|cls|
-//	+----+-+---+
-type Source uint8
+//	msb              lsb
+//	+------------+-+---+
+//	|     op     |S|cls|
+//	+------------+-+---+
+type Source uint16
 
-const sourceMask OpCode = 0x08
+const sourceMask OpCode = 0x0008
 
 // Source bitmask
 const (
 	// InvalidSource is returned by getters when invoked
 	// on non ALU / branch OpCodes.
-	InvalidSource Source = 0xff
+	InvalidSource Source = 0xffff
 	// ImmSource src is from constant
-	ImmSource Source = 0x00
+	ImmSource Source = 0x0000
 	// RegSource src is from register
-	RegSource Source = 0x08
+	RegSource Source = 0x0008
 )
 
 // The Endianness of a byte swap instruction.
@@ -39,46 +39,50 @@ const (
 
 // ALUOp are ALU / ALU64 operations
 //
-//	msb      lsb
-//	+----+-+---+
-//	|OP  |s|cls|
-//	+----+-+---+
-type ALUOp uint8
+//	msb              lsb
+//	+-------+----+-+---+
+//	|  EXT  | OP |s|cls|
+//	+-------+----+-+---+
+type ALUOp uint16
 
-const aluMask OpCode = 0xf0
+const aluMask OpCode = 0xfff0
 
 const (
 	// InvalidALUOp is returned by getters when invoked
 	// on non ALU OpCodes
 	InvalidALUOp ALUOp = 0xff
 	// Add - addition
-	Add ALUOp = 0x00
+	Add ALUOp = 0x0000
 	// Sub - subtraction
-	Sub ALUOp = 0x10
+	Sub ALUOp = 0x0010
 	// Mul - multiplication
-	Mul ALUOp = 0x20
+	Mul ALUOp = 0x0020
 	// Div - division
-	Div ALUOp = 0x30
+	Div ALUOp = 0x0030
+	// SDiv - signed division
+	SDiv ALUOp = 0x0130
 	// Or - bitwise or
-	Or ALUOp = 0x40
+	Or ALUOp = 0x0040
 	// And - bitwise and
-	And ALUOp = 0x50
+	And ALUOp = 0x0050
 	// LSh - bitwise shift left
-	LSh ALUOp = 0x60
+	LSh ALUOp = 0x0060
 	// RSh - bitwise shift right
-	RSh ALUOp = 0x70
+	RSh ALUOp = 0x0070
 	// Neg - sign/unsign signing bit
-	Neg ALUOp = 0x80
+	Neg ALUOp = 0x0080
 	// Mod - modulo
-	Mod ALUOp = 0x90
+	Mod ALUOp = 0x0090
+	// SMod - signed modulo
+	SMod ALUOp = 0x0190
 	// Xor - bitwise xor
-	Xor ALUOp = 0xa0
+	Xor ALUOp = 0x00a0
 	// Mov - move value from one place to another
-	Mov ALUOp = 0xb0
+	Mov ALUOp = 0x00b0
 	// ArSh - arithmetic shift
-	ArSh ALUOp = 0xc0
+	ArSh ALUOp = 0x00c0
 	// Swap - endian conversions
-	Swap ALUOp = 0xd0
+	Swap ALUOp = 0x00d0
 )
 
 // HostTo converts from host to another endianness.

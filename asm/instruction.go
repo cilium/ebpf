@@ -60,6 +60,22 @@ func (ins *Instruction) Unmarshal(r io.Reader, bo binary.ByteOrder) (uint64, err
 	}
 
 	ins.Offset = int16(bo.Uint16(data[2:4]))
+
+	if ins.OpCode.Class().IsALU() {
+		switch ins.OpCode.ALUOp() {
+		case Div:
+			if ins.Offset == 1 {
+				ins.OpCode = ins.OpCode.SetALUOp(SDiv)
+				ins.Offset = 0
+			}
+		case Mod:
+			if ins.Offset == 1 {
+				ins.OpCode = ins.OpCode.SetALUOp(SMod)
+				ins.Offset = 0
+			}
+		}
+	}
+
 	// Convert to int32 before widening to int64
 	// to ensure the signed bit is carried over.
 	ins.Constant = int64(int32(bo.Uint32(data[4:8])))
@@ -104,6 +120,17 @@ func (ins Instruction) Marshal(w io.Writer, bo binary.ByteOrder) (uint64, error)
 	regs, err := newBPFRegisters(ins.Dst, ins.Src, bo)
 	if err != nil {
 		return 0, fmt.Errorf("can't marshal registers: %s", err)
+	}
+
+	if ins.OpCode.Class().IsALU() {
+		switch ins.OpCode.ALUOp() {
+		case SDiv:
+			ins.OpCode = ins.OpCode.SetALUOp(Div)
+			ins.Offset = 1
+		case SMod:
+			ins.OpCode = ins.OpCode.SetALUOp(Mod)
+			ins.Offset = 1
+		}
 	}
 
 	data := make([]byte, InstructionSize)

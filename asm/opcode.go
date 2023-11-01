@@ -66,18 +66,32 @@ func (cls Class) isJumpOrALU() bool {
 	return cls.IsJump() || cls.IsALU()
 }
 
-// OpCode is a packed eBPF opcode.
+// OpCode represents a single operation.
+// It is not a 1:1 mapping to real eBPF opcodes.
 //
-// Its encoding is defined by a Class value:
+// The encoding varies based on a 3-bit Class:
 //
-//	msb      lsb
-//	+----+-+---+
-//	| ???? |CLS|
-//	+----+-+---+
-type OpCode uint8
+//	7 6 5 4 3 2 1 0 7 6 5 4 3 2 1 0
+//	            ???           | CLS
+//
+// For ALUClass and ALUCLass32:
+//
+//	7 6 5 4 3 2 1 0 7 6 5 4 3 2 1 0
+//	           OPC          |S| CLS
+//
+// For LdClass, LdXclass, StClass and StXClass:
+//
+//	7 6 5 4 3 2 1 0 7 6 5 4 3 2 1 0
+//	        0       | MDE |SIZ| CLS
+//
+// For JumpClass, Jump32Class:
+//
+//	7 6 5 4 3 2 1 0 7 6 5 4 3 2 1 0
+//	        0       |  OPC  |S| CLS
+type OpCode uint16
 
 // InvalidOpCode is returned by setters on OpCode
-const InvalidOpCode OpCode = 0xff
+const InvalidOpCode OpCode = 0xffff
 
 // rawInstructions returns the number of BPF instructions required
 // to encode this opcode.

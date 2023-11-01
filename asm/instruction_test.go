@@ -339,3 +339,44 @@ type testFDer int
 func (t testFDer) FD() int {
 	return int(t)
 }
+
+func TestISAv4(t *testing.T) {
+	rawInsns := []byte{
+		0x3f, 0x31, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, // r1 s/= r3
+		0x9f, 0x42, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, // r2 s%= r4
+
+		0x3c, 0x31, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, // w1 s/= w3
+		0x9c, 0x42, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, // w2 s%= w4
+	}
+
+	var insns Instructions
+	err := insns.Unmarshal(bytes.NewReader(rawInsns), binary.LittleEndian)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	lines := []string{
+		"SDivReg dst: r1 src: r3",
+		"SModReg dst: r2 src: r4",
+		"SDiv32Reg dst: r1 src: r3",
+		"SMod32Reg dst: r2 src: r4",
+	}
+
+	for i, ins := range insns {
+		if want, got := lines[i], fmt.Sprint(ins); want != got {
+			t.Errorf("Expected %q, got %q", want, got)
+		}
+	}
+
+	// Marshal and unmarshal again to make sure the instructions are
+	// still valid.
+	var buf bytes.Buffer
+	err = insns.Marshal(&buf, binary.LittleEndian)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if !bytes.Equal(buf.Bytes(), rawInsns) {
+		t.Error("Expected instructions to be equal after marshalling")
+	}
+}

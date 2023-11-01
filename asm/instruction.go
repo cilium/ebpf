@@ -325,9 +325,9 @@ func (ins Instruction) Format(f fmt.State, c rune) {
 		goto ref
 	}
 
-	fmt.Fprintf(f, "%v ", op)
 	switch cls := op.Class(); {
 	case cls.isLoadOrStore():
+		fmt.Fprintf(f, "%v ", op)
 		switch op.Mode() {
 		case ImmMode:
 			fmt.Fprintf(f, "dst: %s imm: %d", ins.Dst, ins.Constant)
@@ -342,14 +342,23 @@ func (ins Instruction) Format(f fmt.State, c rune) {
 		}
 
 	case cls.IsALU():
-		fmt.Fprintf(f, "dst: %s ", ins.Dst)
-		if op.ALUOp() == Swap || op.Source() == ImmSource {
+		fmt.Fprintf(f, "%v", op)
+		if op == Swap.Op(ImmSource) {
+			fmt.Fprintf(f, "%d", ins.Constant)
+		}
+
+		fmt.Fprintf(f, " dst: %s ", ins.Dst)
+		switch {
+		case op.ALUOp() == Swap:
+			break
+		case op.Source() == ImmSource:
 			fmt.Fprintf(f, "imm: %d", ins.Constant)
-		} else {
+		default:
 			fmt.Fprintf(f, "src: %s", ins.Src)
 		}
 
 	case cls.IsJump():
+		fmt.Fprintf(f, "%v ", op)
 		switch jop := op.JumpOp(); jop {
 		case Call:
 			switch ins.Src {
@@ -371,6 +380,8 @@ func (ins Instruction) Format(f fmt.State, c rune) {
 				fmt.Fprintf(f, "src: %s", ins.Src)
 			}
 		}
+	default:
+		fmt.Fprintf(f, "%v ", op)
 	}
 
 ref:

@@ -248,11 +248,18 @@ func (op OpCode) String() string {
 		}
 
 	case class.IsALU():
+		if op.ALUOp() == Swap && op.Class() == ALU64Class {
+			// B to make BSwap, uncontitional byte swap
+			f.WriteString("B")
+		}
+
 		f.WriteString(op.ALUOp().String())
 
 		if op.ALUOp() == Swap {
-			// Width for Endian is controlled by Constant
-			f.WriteString(op.Endianness().String())
+			if op.Class() == ALUClass {
+				// Width for Endian is controlled by Constant
+				f.WriteString(op.Endianness().String())
+			}
 		} else {
 			if class == ALUClass {
 				f.WriteString("32")

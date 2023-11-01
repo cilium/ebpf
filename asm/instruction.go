@@ -356,7 +356,7 @@ func (ins Instruction) Format(f fmt.State, c rune) {
 			fmt.Fprintf(f, "imm: %d", ins.Constant)
 		case IndMode:
 			fmt.Fprintf(f, "dst: %s src: %s imm: %d", ins.Dst, ins.Src, ins.Constant)
-		case MemMode:
+		case MemMode, MemSXMode:
 			fmt.Fprintf(f, "dst: %s src: %s off: %d imm: %d", ins.Dst, ins.Src, ins.Offset, ins.Constant)
 		case XAddMode:
 			fmt.Fprintf(f, "dst: %s src: %s", ins.Dst, ins.Src)

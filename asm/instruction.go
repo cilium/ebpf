@@ -393,6 +393,13 @@ func (ins Instruction) Format(f fmt.State, c rune) {
 				fmt.Fprint(f, BuiltinFunc(ins.Constant))
 			}
 
+		case Ja:
+			if ins.OpCode.Class() == Jump32Class {
+				fmt.Fprintf(f, "imm: %d", ins.Constant)
+			} else {
+				fmt.Fprintf(f, "off: %d", ins.Offset)
+			}
+
 		default:
 			fmt.Fprintf(f, "dst: %s off: %d ", ins.Dst, ins.Offset)
 			if op.Source() == ImmSource {
@@ -831,7 +838,8 @@ func (insns Instructions) encodeFunctionReferences() error {
 		}
 
 		switch {
-		case ins.IsFunctionReference() && ins.Constant == -1:
+		case ins.IsFunctionReference() && ins.Constant == -1,
+			ins.OpCode == Ja.opCode(Jump32Class, ImmSource) && ins.Constant == -1:
 			symOffset, ok := symbolOffsets[ins.Reference()]
 			if !ok {
 				return fmt.Errorf("%s at insn %d: symbol %q: %w", ins.OpCode, i, ins.Reference(), ErrUnsatisfiedProgramReference)

@@ -22,18 +22,17 @@ func TestGetSetJumpOp(t *testing.T) {
 		})
 	}
 
-	// Exit, call and JA aren't allowed with Jump32
+	// Exit and call aren't allowed with Jump32
 	test(Jump32Class, Exit, false)
 	test(Jump32Class, Call, false)
-	test(Jump32Class, Ja, false)
 
 	// But are with Jump
 	test(JumpClass, Exit, true)
 	test(JumpClass, Call, true)
-	test(JumpClass, Ja, true)
 
 	// All other ops work
 	for _, op := range []JumpOp{
+		Ja,
 		JEq,
 		JGT,
 		JGE,

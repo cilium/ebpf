@@ -353,6 +353,8 @@ func TestISAv4(t *testing.T) {
 		0xbc, 0x31, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, // w1 = (s8)w3
 		0xbc, 0x42, 0x10, 0x00, 0x00, 0x00, 0x00, 0x00, // w2 = (s16)w4
 
+		0x06, 0x00, 0x03, 0x00, 0x03, 0x00, 0x00, 0x00, // gotol +3
+
 		0x3f, 0x31, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, // r1 s/= r3
 		0x9f, 0x42, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, // r2 s%= r4
 
@@ -375,6 +377,7 @@ func TestISAv4(t *testing.T) {
 		"SMov32Reg dst: r3 src: r6",
 		"SMov8Reg32 dst: r1 src: r3",
 		"SMov16Reg32 dst: r2 src: r4",
+		"Ja32 imm: 3",
 		"SDivReg dst: r1 src: r3",
 		"SModReg dst: r2 src: r4",
 		"SDivReg32 dst: r1 src: r3",
@@ -397,5 +400,24 @@ func TestISAv4(t *testing.T) {
 
 	if !bytes.Equal(buf.Bytes(), rawInsns) {
 		t.Error("Expected instructions to be equal after marshalling")
+	}
+}
+
+func TestLongJumpPatching(t *testing.T) {
+	insns := Instructions{
+		LongJump("exit"),
+		Xor.Reg(R0, R0),
+		Xor.Reg(R0, R0),
+		Xor.Reg(R0, R0),
+		Return().WithSymbol("exit"),
+	}
+
+	err := insns.encodeFunctionReferences()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if insns[0].Constant != 3 {
+		t.Errorf("Expected offset to be 3, got %d", insns[1].Constant)
 	}
 }

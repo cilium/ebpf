@@ -161,7 +161,7 @@ func (op OpCode) JumpOp() JumpOp {
 	jumpOp := JumpOp(op & jumpMask)
 
 	// Some JumpOps are only supported by JumpClass, not Jump32Class.
-	if op.Class() == Jump32Class && (jumpOp == Exit || jumpOp == Call || jumpOp == Ja) {
+	if op.Class() == Jump32Class && (jumpOp == Exit || jumpOp == Call) {
 		return InvalidJumpOp
 	}
 
@@ -275,7 +275,7 @@ func (op OpCode) String() string {
 			f.WriteString("32")
 		}
 
-		if jop := op.JumpOp(); jop != Exit && jop != Call {
+		if jop := op.JumpOp(); jop != Exit && jop != Call && jop != Ja {
 			f.WriteString(strings.TrimSuffix(op.Source().String(), "Source"))
 		}
 

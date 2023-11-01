@@ -73,6 +73,18 @@ func (ins *Instruction) Unmarshal(r io.Reader, bo binary.ByteOrder) (uint64, err
 				ins.OpCode = ins.OpCode.SetALUOp(SMod)
 				ins.Offset = 0
 			}
+		case Mov:
+			switch ins.Offset {
+			case 8:
+				ins.OpCode = ins.OpCode.SetALUOp(SMov8)
+				ins.Offset = 0
+			case 16:
+				ins.OpCode = ins.OpCode.SetALUOp(SMov16)
+				ins.Offset = 0
+			case 32:
+				ins.OpCode = ins.OpCode.SetALUOp(SMov32)
+				ins.Offset = 0
+			}
 		}
 	}
 
@@ -130,6 +142,15 @@ func (ins Instruction) Marshal(w io.Writer, bo binary.ByteOrder) (uint64, error)
 		case SMod:
 			ins.OpCode = ins.OpCode.SetALUOp(Mod)
 			ins.Offset = 1
+		case SMov8:
+			ins.OpCode = ins.OpCode.SetALUOp(Mov)
+			ins.Offset = 8
+		case SMov16:
+			ins.OpCode = ins.OpCode.SetALUOp(Mov)
+			ins.Offset = 16
+		case SMov32:
+			ins.OpCode = ins.OpCode.SetALUOp(Mov)
+			ins.Offset = 32
 		}
 	}
 

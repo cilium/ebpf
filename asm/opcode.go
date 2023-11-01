@@ -261,11 +261,11 @@ func (op OpCode) String() string {
 				f.WriteString(op.Endianness().String())
 			}
 		} else {
+			f.WriteString(strings.TrimSuffix(op.Source().String(), "Source"))
+
 			if class == ALUClass {
 				f.WriteString("32")
 			}
-
-			f.WriteString(strings.TrimSuffix(op.Source().String(), "Source"))
 		}
 
 	case class.IsJump():

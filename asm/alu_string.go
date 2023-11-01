@@ -77,30 +77,36 @@ func _() {
 	_ = x[SMod-400]
 	_ = x[Xor-160]
 	_ = x[Mov-176]
+	_ = x[SMov8-2224]
+	_ = x[SMov16-4272]
+	_ = x[SMov32-8368]
 	_ = x[ArSh-192]
 	_ = x[Swap-208]
 }
 
-const _ALUOp_name = "AddSubMulDivOrAndLShRShNegModXorMovArShSwapInvalidALUOpSDivSMod"
+const _ALUOp_name = "AddSubMulDivOrAndLShRShNegModXorMovArShSwapInvalidALUOpSDivSModSMov8SMov16SMov32"
 
 var _ALUOp_map = map[ALUOp]string{
-	0:   _ALUOp_name[0:3],
-	16:  _ALUOp_name[3:6],
-	32:  _ALUOp_name[6:9],
-	48:  _ALUOp_name[9:12],
-	64:  _ALUOp_name[12:14],
-	80:  _ALUOp_name[14:17],
-	96:  _ALUOp_name[17:20],
-	112: _ALUOp_name[20:23],
-	128: _ALUOp_name[23:26],
-	144: _ALUOp_name[26:29],
-	160: _ALUOp_name[29:32],
-	176: _ALUOp_name[32:35],
-	192: _ALUOp_name[35:39],
-	208: _ALUOp_name[39:43],
-	255: _ALUOp_name[43:55],
-	304: _ALUOp_name[55:59],
-	400: _ALUOp_name[59:63],
+	0:    _ALUOp_name[0:3],
+	16:   _ALUOp_name[3:6],
+	32:   _ALUOp_name[6:9],
+	48:   _ALUOp_name[9:12],
+	64:   _ALUOp_name[12:14],
+	80:   _ALUOp_name[14:17],
+	96:   _ALUOp_name[17:20],
+	112:  _ALUOp_name[20:23],
+	128:  _ALUOp_name[23:26],
+	144:  _ALUOp_name[26:29],
+	160:  _ALUOp_name[29:32],
+	176:  _ALUOp_name[32:35],
+	192:  _ALUOp_name[35:39],
+	208:  _ALUOp_name[39:43],
+	255:  _ALUOp_name[43:55],
+	304:  _ALUOp_name[55:59],
+	400:  _ALUOp_name[59:63],
+	2224: _ALUOp_name[63:68],
+	4272: _ALUOp_name[68:74],
+	8368: _ALUOp_name[74:80],
 }
 
 func (i ALUOp) String() string {

@@ -8,7 +8,7 @@ func _() {
 	// An "invalid array index" compiler error signifies that the constant values have changed.
 	// Re-run the stringer command to generate them again.
 	var x [1]struct{}
-	_ = x[InvalidSource-255]
+	_ = x[InvalidSource-65535]
 	_ = x[ImmSource-0]
 	_ = x[RegSource-8]
 }
@@ -25,7 +25,7 @@ func (i Source) String() string {
 		return _Source_name_0
 	case i == 8:
 		return _Source_name_1
-	case i == 255:
+	case i == 65535:
 		return _Source_name_2
 	default:
 		return "Source(" + strconv.FormatInt(int64(i), 10) + ")"
@@ -67,19 +67,21 @@ func _() {
 	_ = x[Sub-16]
 	_ = x[Mul-32]
 	_ = x[Div-48]
+	_ = x[SDiv-304]
 	_ = x[Or-64]
 	_ = x[And-80]
 	_ = x[LSh-96]
 	_ = x[RSh-112]
 	_ = x[Neg-128]
 	_ = x[Mod-144]
+	_ = x[SMod-400]
 	_ = x[Xor-160]
 	_ = x[Mov-176]
 	_ = x[ArSh-192]
 	_ = x[Swap-208]
 }
 
-const _ALUOp_name = "AddSubMulDivOrAndLShRShNegModXorMovArShSwapInvalidALUOp"
+const _ALUOp_name = "AddSubMulDivOrAndLShRShNegModXorMovArShSwapInvalidALUOpSDivSMod"
 
 var _ALUOp_map = map[ALUOp]string{
 	0:   _ALUOp_name[0:3],
@@ -97,6 +99,8 @@ var _ALUOp_map = map[ALUOp]string{
 	192: _ALUOp_name[35:39],
 	208: _ALUOp_name[39:43],
 	255: _ALUOp_name[43:55],
+	304: _ALUOp_name[55:59],
+	400: _ALUOp_name[59:63],
 }
 
 func (i ALUOp) String() string {

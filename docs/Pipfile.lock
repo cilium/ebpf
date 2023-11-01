@@ -302,12 +302,12 @@
         },
         "mkdocs-macros-plugin": {
             "hashes": [
-                "sha256:c8169443d17212e32df5ad68b562d901acc936d6e87f6b41139dcf13d6659890",
-                "sha256:fc601f142b89cf98743b6b3608d5f93f24daf69b88cfa2320d503c83723c3c6d"
+                "sha256:f60e26f711f5a830ddf1e7980865bf5c0f1180db56109803cdd280073c1a050a",
+                "sha256:fe348d75f01c911f362b6d998c57b3d85b505876dde69db924f2c512c395c328"
             ],
             "index": "pypi",
             "markers": "python_version >= '3.8'",
-            "version": "==1.0.4"
+            "version": "==1.0.5"
         },
         "mkdocs-material": {
             "hashes": [

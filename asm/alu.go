@@ -106,6 +106,27 @@ func HostTo(endian Endianness, dst Register, size Size) Instruction {
 	}
 }
 
+// BSwap unconditionally reverses the order of bytes in a register.
+func BSwap(dst Register, size Size) Instruction {
+	var imm int64
+	switch size {
+	case Half:
+		imm = 16
+	case Word:
+		imm = 32
+	case DWord:
+		imm = 64
+	default:
+		return Instruction{OpCode: InvalidOpCode}
+	}
+
+	return Instruction{
+		OpCode:   OpCode(ALU64Class).SetALUOp(Swap),
+		Dst:      dst,
+		Constant: imm,
+	}
+}
+
 // Op returns the OpCode for an ALU operation with a given source.
 func (op ALUOp) Op(source Source) OpCode {
 	return OpCode(ALU64Class).SetALUOp(op).SetSource(source)

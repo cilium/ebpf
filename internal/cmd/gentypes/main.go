@@ -442,7 +442,8 @@ import (
 			"ProgQuery", retError, "prog_query", "BPF_PROG_QUERY",
 			[]patch{
 				replace(enumTypes["AttachType"], "attach_type"),
-				replace(pointer, "prog_ids"),
+				replace(pointer, "prog_ids", "prog_attach_flags", "link_ids", "link_attach_flags"),
+				choose(5, "prog_cnt"),
 				rename("prog_cnt", "prog_count"),
 			},
 		},
@@ -462,7 +463,7 @@ import (
 		{"map_elem_batch", "batch"},
 		{"prog_load", "prog_type"},
 		{"obj_pin", "pathname"},
-		{"prog_attach", "target_fd"},
+		{"prog_attach", ""},
 		{"prog_run", "test"},
 		{"obj_next_id", ""},
 		{"info_by_fd", "info"},
@@ -478,7 +479,7 @@ import (
 		{"prog_bind_map", "prog_bind_map"},
 	})
 	if err != nil {
-		return nil, fmt.Errorf("splitting bpf_attr: %w", err)
+		return nil, fmt.Errorf("split bpf_attr: %w", err)
 	}
 
 	for _, s := range attrs {

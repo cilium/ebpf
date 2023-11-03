@@ -92,20 +92,6 @@ func (st *stringTable) lookup(offset uint32) (string, error) {
 	return st.strings[i], nil
 }
 
-func (st *stringTable) Marshal(w io.Writer) error {
-	for _, str := range st.strings {
-		_, err := io.WriteString(w, str)
-		if err != nil {
-			return err
-		}
-		_, err = w.Write([]byte{0})
-		if err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
 // Num returns the number of strings in the table.
 func (st *stringTable) Num() int {
 	return len(st.strings)

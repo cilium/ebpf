@@ -88,6 +88,21 @@ func TestStringTableBuilder(t *testing.T) {
 	qt.Assert(t, err, qt.IsNil, qt.Commentf("Can't parse string table"))
 }
 
+func BenchmarkStringTableZeroLookup(b *testing.B) {
+	strings := vmlinuxTestdataSpec(b).strings
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		s, err := strings.Lookup(0)
+		if err != nil {
+			b.Fatal(err)
+		}
+		if s != "" {
+			b.Fatal("0 is not the empty string")
+		}
+	}
+}
+
 func newStringTable(strings ...string) *stringTable {
 	offsets := make([]uint32, len(strings))
 

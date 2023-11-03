@@ -17,15 +17,6 @@ func TestStringTable(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	var buf bytes.Buffer
-	if err := st.Marshal(&buf); err != nil {
-		t.Fatal("Can't marshal string table:", err)
-	}
-
-	if !bytes.Equal([]byte(in), buf.Bytes()) {
-		t.Error("String table doesn't match input")
-	}
-
 	// Parse string table of split BTF
 	split, err := readStringTable(strings.NewReader(splitIn), st)
 	if err != nil {

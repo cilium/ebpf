@@ -84,6 +84,10 @@ func (st *stringTable) Lookup(offset uint32) (string, error) {
 }
 
 func (st *stringTable) lookup(offset uint32) (string, error) {
+	if offset == 0 && st.base == nil {
+		return "", nil
+	}
+
 	i, found := slices.BinarySearch(st.offsets, offset)
 	if !found {
 		return "", fmt.Errorf("offset %d isn't start of a string", offset)

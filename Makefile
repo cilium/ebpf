@@ -103,7 +103,7 @@ testdata/loader-%-eb.elf: testdata/loader.c
 	$(STRIP) -g $@
 
 .PHONY: generate-btf
-generate-btf: KERNEL_VERSION?=6.1.29
+generate-btf: KERNEL_VERSION?=6.6
 generate-btf:
 	$(eval TMP := $(shell mktemp -d))
 	curl -fL "$(CI_KERNEL_URL)/linux-$(KERNEL_VERSION)-amd64.tgz" -o "$(TMP)/linux.tgz"

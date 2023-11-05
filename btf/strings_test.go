@@ -112,5 +112,5 @@ func newStringTable(strings ...string) *stringTable {
 		offset += uint32(len(str)) + 1 // account for NUL
 	}
 
-	return &stringTable{nil, offsets, strings}
+	return &stringTable{nil, offsets, 0, strings}
 }

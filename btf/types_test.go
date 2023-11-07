@@ -1,7 +1,10 @@
 package btf
 
 import (
+	"bytes"
+	"encoding/binary"
 	"fmt"
+	"io"
 	"reflect"
 	"testing"
 
@@ -396,26 +399,46 @@ func TestInflateLegacyBitfield(t *testing.T) {
 	data.SetBits(size)
 	rawInt.data = &data
 
+	var (
+		before bytes.Buffer
+		after  bytes.Buffer
+	)
+
 	var beforeInt rawType
 	beforeInt.SetKind(kindStruct)
 	beforeInt.SetVlen(1)
 	beforeInt.data = []btfMember{{Type: 2}}
 
+	if err := beforeInt.Marshal(&before, binary.LittleEndian); err != nil {
+		t.Fatal(err)
+	}
+	if err := rawInt.Marshal(&before, binary.LittleEndian); err != nil {
+		t.Fatal(err)
+	}
+
 	afterInt := beforeInt
 	afterInt.data = []btfMember{{Type: 1}}
+
+	if err := rawInt.Marshal(&after, binary.LittleEndian); err != nil {
+		t.Fatal(err)
+	}
+	if err := afterInt.Marshal(&after, binary.LittleEndian); err != nil {
+		t.Fatal(err)
+	}
 
 	emptyStrings := newStringTable("")
 
 	for _, test := range []struct {
-		name string
-		raw  []rawType
+		name   string
+		reader io.Reader
 	}{
-		{"struct before int", []rawType{beforeInt, rawInt}},
-		{"struct after int", []rawType{rawInt, afterInt}},
+		{"struct before int", &before},
+		{"struct after int", &after},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			types, err := inflateRawTypes(test.raw, emptyStrings, nil)
+			types, err := readAndInflateTypes(test.reader, binary.LittleEndian, 2, emptyStrings, nil)
 			if err != nil {
+				fmt.Println(before.Bytes())
 				t.Fatal(err)
 			}
 

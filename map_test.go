@@ -1729,6 +1729,7 @@ func TestMapPinning(t *testing.T) {
 	}
 
 	spec.KeySize = 8
+	spec.ValueSize = 8
 	m3, err := NewMapWithOptions(spec, MapOptions{PinPath: tmp})
 	if err == nil {
 		m3.Close()
@@ -1737,6 +1738,10 @@ func TestMapPinning(t *testing.T) {
 	if !errors.Is(err, ErrMapIncompatible) {
 		t.Fatalf("Opening a pinned map with a mismatching spec failed with the wrong error")
 	}
+
+	// Check if error string mentions both KeySize and ValueSize.
+	c.Assert(err.Error(), qt.Contains, "KeySize")
+	c.Assert(err.Error(), qt.Contains, "ValueSize")
 }
 
 func TestPerfEventArrayCompatible(t *testing.T) {

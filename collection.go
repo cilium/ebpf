@@ -630,24 +630,15 @@ func resolveKconfig(m *MapSpec) error {
 			if !ok {
 				return fmt.Errorf("variable %s must be an integer, got %s", n, v.Type)
 			}
-			var value uint8 = 1
+			var value uint64 = 1
 			if err := haveSyscallWrapper(); errors.Is(err, ErrNotSupported) {
 				value = 0
 			} else if err != nil {
 				return fmt.Errorf("unable to derive a value for LINUX_HAS_SYSCALL_WRAPPER: %w", err)
 			}
 
-			switch integer.Size {
-			case 1:
-				data[vsi.Offset] = value
-			case 2:
-				internal.NativeEndian.PutUint16(data[vsi.Offset:], uint16(value))
-			case 4:
-				internal.NativeEndian.PutUint32(data[vsi.Offset:], uint32(value))
-			case 8:
-				internal.NativeEndian.PutUint64(data[vsi.Offset:], uint64(value))
-			default:
-				return fmt.Errorf("variable %s must be a 8, 16, 32, or 64 bits integer, got %s", n, v.Type)
+			if err := kconfig.PutInteger(data[vsi.Offset:], integer, value); err != nil {
+				return fmt.Errorf("set LINUX_HAS_SYSCALL_WRAPPER: %w", err)
 			}
 
 		default: // Catch CONFIG_*.

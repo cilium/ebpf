@@ -11,6 +11,7 @@ import (
 	"github.com/cilium/ebpf/asm"
 	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/sys"
+	"golang.org/x/exp/slices"
 )
 
 // Mirrors MAX_RESOLVE_DEPTH in libbpf.
@@ -848,6 +849,7 @@ func readAndInflateTypes(r io.Reader, bo binary.ByteOrder, typeLen uint32, rawSt
 	}
 
 	var (
+		buf       = make([]byte, 1024)
 		header    btfType
 		bInt      btfInt
 		bArr      btfArray
@@ -867,10 +869,14 @@ func readAndInflateTypes(r io.Reader, bo binary.ByteOrder, typeLen uint32, rawSt
 			typ Type
 		)
 
-		if err := binary.Read(r, bo, &header); err == io.EOF {
+		if _, err := io.ReadFull(r, buf[:btfTypeLen]); err == io.EOF {
 			break
 		} else if err != nil {
 			return nil, fmt.Errorf("can't read type info for id %v: %v", id, err)
+		}
+
+		if _, err := unmarshalBtfType(&header, buf[:btfTypeLen], bo); err != nil {
+			return nil, fmt.Errorf("can't unmarshal type info for id %v: %v", id, err)
 		}
 
 		if id < firstTypeID {
@@ -885,8 +891,12 @@ func readAndInflateTypes(r io.Reader, bo binary.ByteOrder, typeLen uint32, rawSt
 		switch header.Kind() {
 		case kindInt:
 			size := header.Size()
-			if err := binary.Read(r, bo, &bInt); err != nil {
+			buf = buf[:btfIntLen]
+			if _, err := io.ReadFull(r, buf); err != nil {
 				return nil, fmt.Errorf("can't read btfInt, id: %d: %w", id, err)
+			}
+			if _, err := unmarshalBtfInt(&bInt, buf, bo); err != nil {
+				return nil, fmt.Errorf("can't unmarshal btfInt, id: %d: %w", id, err)
 			}
 			if bInt.Offset() > 0 || bInt.Bits().Bytes() != size {
 				legacyBitfields[id] = [2]Bits{bInt.Offset(), bInt.Bits()}
@@ -899,8 +909,12 @@ func readAndInflateTypes(r io.Reader, bo binary.ByteOrder, typeLen uint32, rawSt
 			typ = ptr
 
 		case kindArray:
-			if err := binary.Read(r, bo, &bArr); err != nil {
+			buf = buf[:btfArrayLen]
+			if _, err := io.ReadFull(r, buf); err != nil {
 				return nil, fmt.Errorf("can't read btfArray, id: %d: %w", id, err)
+			}
+			if _, err := unmarshalBtfArray(&bArr, buf, bo); err != nil {
+				return nil, fmt.Errorf("can't unmarshal btfArray, id: %d: %w", id, err)
 			}
 
 			arr := &Array{nil, nil, bArr.Nelems}
@@ -910,15 +924,16 @@ func readAndInflateTypes(r io.Reader, bo binary.ByteOrder, typeLen uint32, rawSt
 
 		case kindStruct:
 			vlen := header.Vlen()
-			if len(bMembers) < vlen {
-				bMembers = append(bMembers, make([]btfMember, vlen-len(bMembers))...)
-			}
-
-			if err := binary.Read(r, bo, bMembers[:vlen]); err != nil {
+			bMembers = slices.Grow(bMembers[:0], vlen)[:vlen]
+			buf = slices.Grow(buf[:0], vlen*btfMemberLen)[:vlen*btfMemberLen]
+			if _, err := io.ReadFull(r, buf); err != nil {
 				return nil, fmt.Errorf("can't read btfMembers, id: %d: %w", id, err)
 			}
+			if _, err := unmarshalBtfMembers(bMembers, buf, bo); err != nil {
+				return nil, fmt.Errorf("can't unmarshal btfMembers, id: %d: %w", id, err)
+			}
 
-			members, err := convertMembers(bMembers[:vlen], header.Bitfield())
+			members, err := convertMembers(bMembers, header.Bitfield())
 			if err != nil {
 				return nil, fmt.Errorf("struct %s (id %d): %w", name, id, err)
 			}
@@ -926,15 +941,16 @@ func readAndInflateTypes(r io.Reader, bo binary.ByteOrder, typeLen uint32, rawSt
 
 		case kindUnion:
 			vlen := header.Vlen()
-			if len(bMembers) < vlen {
-				bMembers = append(bMembers, make([]btfMember, vlen-len(bMembers))...)
-			}
-
-			if err := binary.Read(r, bo, bMembers[:vlen]); err != nil {
+			bMembers = slices.Grow(bMembers[:0], vlen)[:vlen]
+			buf = slices.Grow(buf[:0], vlen*btfMemberLen)[:vlen*btfMemberLen]
+			if _, err := io.ReadFull(r, buf); err != nil {
 				return nil, fmt.Errorf("can't read btfMembers, id: %d: %w", id, err)
 			}
+			if _, err := unmarshalBtfMembers(bMembers, buf, bo); err != nil {
+				return nil, fmt.Errorf("can't unmarshal btfMembers, id: %d: %w", id, err)
+			}
 
-			members, err := convertMembers(bMembers[:vlen], header.Bitfield())
+			members, err := convertMembers(bMembers, header.Bitfield())
 			if err != nil {
 				return nil, fmt.Errorf("union %s (id %d): %w", name, id, err)
 			}
@@ -942,17 +958,18 @@ func readAndInflateTypes(r io.Reader, bo binary.ByteOrder, typeLen uint32, rawSt
 
 		case kindEnum:
 			vlen := header.Vlen()
-			if len(bEnums) < vlen {
-				bEnums = append(bEnums, make([]btfEnum, vlen-len(bEnums))...)
+			bEnums = slices.Grow(bEnums[:0], vlen)[:vlen]
+			buf = slices.Grow(buf[:0], vlen*btfEnumLen)[:vlen*btfEnumLen]
+			if _, err := io.ReadFull(r, buf); err != nil {
+				return nil, fmt.Errorf("can't read btfEnums, id: %d: %w", id, err)
 			}
-
-			if err := binary.Read(r, bo, bEnums[:vlen]); err != nil {
-				return nil, fmt.Errorf("can't read btfEnum, id: %d: %w", id, err)
+			if _, err := unmarshalBtfEnums(bEnums, buf, bo); err != nil {
+				return nil, fmt.Errorf("can't unmarshal btfEnums, id: %d: %w", id, err)
 			}
 
 			vals := make([]EnumValue, 0, vlen)
 			signed := header.Signed()
-			for i, btfVal := range bEnums[:vlen] {
+			for i, btfVal := range bEnums {
 				name, err := rawStrings.Lookup(btfVal.NameOff)
 				if err != nil {
 					return nil, fmt.Errorf("get name for enum value %d: %s", i, err)
@@ -996,16 +1013,17 @@ func readAndInflateTypes(r io.Reader, bo binary.ByteOrder, typeLen uint32, rawSt
 
 		case kindFuncProto:
 			vlen := header.Vlen()
-			if len(bParams) < vlen {
-				bParams = append(bParams, make([]btfParam, vlen-len(bParams))...)
+			bParams = slices.Grow(bParams[:0], vlen)[:vlen]
+			buf = slices.Grow(buf[:0], vlen*btfParamLen)[:vlen*btfParamLen]
+			if _, err := io.ReadFull(r, buf); err != nil {
+				return nil, fmt.Errorf("can't read btfParams, id: %d: %w", id, err)
 			}
-
-			if err := binary.Read(r, bo, bParams[:vlen]); err != nil {
-				return nil, fmt.Errorf("can't read btfParam, id: %d: %w", id, err)
+			if _, err := unmarshalBtfParams(bParams, buf, bo); err != nil {
+				return nil, fmt.Errorf("can't unmarshal btfParams, id: %d: %w", id, err)
 			}
 
 			params := make([]FuncParam, 0, vlen)
-			for i, param := range bParams[:vlen] {
+			for i, param := range bParams {
 				name, err := rawStrings.Lookup(param.NameOff)
 				if err != nil {
 					return nil, fmt.Errorf("get name for func proto parameter %d: %s", i, err)
@@ -1023,7 +1041,11 @@ func readAndInflateTypes(r io.Reader, bo binary.ByteOrder, typeLen uint32, rawSt
 			typ = fp
 
 		case kindVar:
-			if err := binary.Read(r, bo, &bVariable); err != nil {
+			buf = buf[:btfVariableLen]
+			if _, err := io.ReadFull(r, buf); err != nil {
+				return nil, fmt.Errorf("can't read btfVariable, id: %d: %w", id, err)
+			}
+			if _, err := unmarshalBtfVariable(&bVariable, buf, bo); err != nil {
 				return nil, fmt.Errorf("can't read btfVariable, id: %d: %w", id, err)
 			}
 
@@ -1033,16 +1055,17 @@ func readAndInflateTypes(r io.Reader, bo binary.ByteOrder, typeLen uint32, rawSt
 
 		case kindDatasec:
 			vlen := header.Vlen()
-			if len(bSecInfos) < vlen {
-				bSecInfos = append(bSecInfos, make([]btfVarSecinfo, vlen-len(bSecInfos))...)
+			bSecInfos = slices.Grow(bSecInfos[:0], vlen)[:vlen]
+			buf = slices.Grow(buf[:0], vlen*btfVarSecinfoLen)[:vlen*btfVarSecinfoLen]
+			if _, err := io.ReadFull(r, buf); err != nil {
+				return nil, fmt.Errorf("can't read btfVarSecInfos, id: %d: %w", id, err)
 			}
-
-			if err := binary.Read(r, bo, bSecInfos[:vlen]); err != nil {
-				return nil, fmt.Errorf("can't read btfVarSecinfo, id: %d: %w", id, err)
+			if _, err := unmarshalBtfVarSecInfos(bSecInfos, buf, bo); err != nil {
+				return nil, fmt.Errorf("can't unmarshal btfVarSecInfos, id: %d: %w", id, err)
 			}
 
 			vars := make([]VarSecinfo, 0, vlen)
-			for _, btfVar := range bSecInfos[:vlen] {
+			for _, btfVar := range bSecInfos {
 				vars = append(vars, VarSecinfo{
 					Offset: btfVar.Offset,
 					Size:   btfVar.Size,
@@ -1057,7 +1080,11 @@ func readAndInflateTypes(r io.Reader, bo binary.ByteOrder, typeLen uint32, rawSt
 			typ = &Float{name, header.Size()}
 
 		case kindDeclTag:
-			if err := binary.Read(r, bo, &bDeclTag); err != nil {
+			buf = buf[:btfDeclTagLen]
+			if _, err := io.ReadFull(r, buf); err != nil {
+				return nil, fmt.Errorf("can't read btfDeclTag, id: %d: %w", id, err)
+			}
+			if _, err := unmarshalBtfDeclTag(&bDeclTag, buf, bo); err != nil {
 				return nil, fmt.Errorf("can't read btfDeclTag, id: %d: %w", id, err)
 			}
 
@@ -1079,16 +1106,17 @@ func readAndInflateTypes(r io.Reader, bo binary.ByteOrder, typeLen uint32, rawSt
 
 		case kindEnum64:
 			vlen := header.Vlen()
-			if len(bEnums64) < vlen {
-				bEnums64 = append(bEnums64, make([]btfEnum64, vlen-len(bEnums64))...)
+			bEnums64 = slices.Grow(bEnums64[:0], vlen)[:vlen]
+			buf = slices.Grow(buf[:0], vlen*btfEnum64Len)[:vlen*btfEnum64Len]
+			if _, err := io.ReadFull(r, buf); err != nil {
+				return nil, fmt.Errorf("can't read btfEnum64s, id: %d: %w", id, err)
 			}
-
-			if err := binary.Read(r, bo, bEnums64[:vlen]); err != nil {
-				return nil, fmt.Errorf("can't read btfEnum64, id: %d: %w", id, err)
+			if _, err := unmarshalBtfEnums64(bEnums64, buf, bo); err != nil {
+				return nil, fmt.Errorf("can't unmarshal btfEnum64s, id: %d: %w", id, err)
 			}
 
 			vals := make([]EnumValue, 0, vlen)
-			for i, btfVal := range bEnums64[:vlen] {
+			for i, btfVal := range bEnums64 {
 				name, err := rawStrings.Lookup(btfVal.NameOff)
 				if err != nil {
 					return nil, fmt.Errorf("get name for enum64 value %d: %s", i, err)

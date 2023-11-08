@@ -72,22 +72,22 @@ func (cls Class) isJumpOrALU() bool {
 // The encoding varies based on a 3-bit Class:
 //
 //	7 6 5 4 3 2 1 0 7 6 5 4 3 2 1 0
-//	            ???           | CLS
+//	           ???           | CLS
 //
 // For ALUClass and ALUCLass32:
 //
 //	7 6 5 4 3 2 1 0 7 6 5 4 3 2 1 0
-//	           OPC          |S| CLS
+//	           OPC         |S| CLS
 //
 // For LdClass, LdXclass, StClass and StXClass:
 //
 //	7 6 5 4 3 2 1 0 7 6 5 4 3 2 1 0
-//	        0       | MDE |SIZ| CLS
+//	        0      | MDE |SIZ| CLS
 //
 // For JumpClass, Jump32Class:
 //
 //	7 6 5 4 3 2 1 0 7 6 5 4 3 2 1 0
-//	        0       |  OPC  |S| CLS
+//	        0      |  OPC  |S| CLS
 type OpCode uint16
 
 // InvalidOpCode is returned by setters on OpCode

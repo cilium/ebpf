@@ -556,21 +556,21 @@ func LoadLineInfos(reader io.Reader, bo binary.ByteOrder, recordNum uint32, spec
 	return newLineInfos(lis, spec.strings)
 }
 
-func newLineInfo(li bpfLineInfo, strings *stringTable) (*lineInfo, error) {
+func newLineInfo(li bpfLineInfo, strings *stringTable) (lineInfo, error) {
 	line, err := strings.Lookup(li.LineOff)
 	if err != nil {
-		return nil, fmt.Errorf("lookup of line: %w", err)
+		return lineInfo{}, fmt.Errorf("lookup of line: %w", err)
 	}
 
 	fileName, err := strings.Lookup(li.FileNameOff)
 	if err != nil {
-		return nil, fmt.Errorf("lookup of filename: %w", err)
+		return lineInfo{}, fmt.Errorf("lookup of filename: %w", err)
 	}
 
 	lineNumber := li.LineCol >> bpfLineShift
 	lineColumn := li.LineCol & bpfColumnMax
 
-	return &lineInfo{
+	return lineInfo{
 		&Line{
 			fileName,
 			line,
@@ -590,7 +590,7 @@ func newLineInfos(blis []bpfLineInfo, strings *stringTable) (LineInfos, error) {
 		if err != nil {
 			return LineInfos{}, fmt.Errorf("offset %d: %w", bli.InsnOff, err)
 		}
-		lis.infos = append(lis.infos, *li)
+		lis.infos = append(lis.infos, li)
 	}
 	sort.Slice(lis.infos, func(i, j int) bool {
 		return lis.infos[i].offset <= lis.infos[j].offset

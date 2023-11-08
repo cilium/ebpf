@@ -39,6 +39,7 @@ func TestCORERelocationLoad(t *testing.T) {
 				prog, err := ebpf.NewProgramWithOptions(progSpec, ebpf.ProgramOptions{
 					KernelTypes: spec.Types,
 				})
+				testutils.SkipIfNotSupported(t, err)
 
 				if strings.HasPrefix(progSpec.Name, "err_") {
 					if err == nil {

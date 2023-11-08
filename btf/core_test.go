@@ -590,7 +590,7 @@ func TestCORERelocation(t *testing.T) {
 					relos = append(relos, reloInfo.relo)
 				}
 
-				fixups, err := CORERelocate(relos, spec, spec.byteOrder)
+				fixups, err := CORERelocate(relos, spec, spec.byteOrder, spec.TypeID)
 				if want := errs[name]; want != nil {
 					if !errors.Is(err, want) {
 						t.Fatal("Expected", want, "got", err)
@@ -737,7 +737,7 @@ func BenchmarkCORESkBuff(b *testing.B) {
 			b.ReportAllocs()
 
 			for i := 0; i < b.N; i++ {
-				_, err = CORERelocate([]*CORERelocation{relo}, spec, spec.byteOrder)
+				_, err = CORERelocate([]*CORERelocation{relo}, spec, spec.byteOrder, spec.TypeID)
 				if err != nil {
 					b.Fatal(err)
 				}

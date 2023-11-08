@@ -10,7 +10,7 @@ package asm
 //	+----+-+---+
 type JumpOp uint8
 
-const jumpMask OpCode = aluMask
+const jumpMask OpCode = 0xf0
 
 const (
 	// InvalidJumpOp is returned by getters when invoked

@@ -135,23 +135,28 @@ func (ins Instruction) Marshal(w io.Writer, bo binary.ByteOrder) (uint64, error)
 	}
 
 	if ins.OpCode.Class().IsALU() {
+		newOffset := int16(0)
 		switch ins.OpCode.ALUOp() {
 		case SDiv:
 			ins.OpCode = ins.OpCode.SetALUOp(Div)
-			ins.Offset = 1
+			newOffset = 1
 		case SMod:
 			ins.OpCode = ins.OpCode.SetALUOp(Mod)
-			ins.Offset = 1
+			newOffset = 1
 		case MovSX8:
 			ins.OpCode = ins.OpCode.SetALUOp(Mov)
-			ins.Offset = 8
+			newOffset = 8
 		case MovSX16:
 			ins.OpCode = ins.OpCode.SetALUOp(Mov)
-			ins.Offset = 16
+			newOffset = 16
 		case MovSX32:
 			ins.OpCode = ins.OpCode.SetALUOp(Mov)
-			ins.Offset = 32
+			newOffset = 32
 		}
+		if newOffset != 0 && ins.Offset != 0 {
+			return 0, fmt.Errorf("extended ALU opcodes should have an .Offset of 0: %s", ins)
+		}
+		ins.Offset = newOffset
 	}
 
 	data := make([]byte, InstructionSize)

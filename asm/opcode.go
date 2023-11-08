@@ -93,6 +93,17 @@ type OpCode uint16
 // InvalidOpCode is returned by setters on OpCode
 const InvalidOpCode OpCode = 0xffff
 
+// bpfOpCode returns the actual BPF opcode.
+func (op OpCode) bpfOpCode() (byte, error) {
+	const opCodeMask = 0xff
+
+	if !valid(op, opCodeMask) {
+		return 0, fmt.Errorf("invalid opcode %x", op)
+	}
+
+	return byte(op & opCodeMask), nil
+}
+
 // rawInstructions returns the number of BPF instructions required
 // to encode this opcode.
 func (op OpCode) rawInstructions() int {

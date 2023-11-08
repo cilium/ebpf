@@ -159,8 +159,13 @@ func (ins Instruction) Marshal(w io.Writer, bo binary.ByteOrder) (uint64, error)
 		ins.Offset = newOffset
 	}
 
+	op, err := ins.OpCode.bpfOpCode()
+	if err != nil {
+		return 0, err
+	}
+
 	data := make([]byte, InstructionSize)
-	data[0] = byte(ins.OpCode)
+	data[0] = op
 	data[1] = byte(regs)
 	bo.PutUint16(data[2:4], uint16(ins.Offset))
 	bo.PutUint32(data[4:8], uint32(cons))

@@ -666,7 +666,6 @@ func parseLineInfos(r io.Reader, bo binary.ByteOrder, strings *stringTable) (map
 // These records appear after a btf_ext_info_sec header in the line_info
 // sub-section of .BTF.ext.
 func parseLineInfoRecords(r io.Reader, bo binary.ByteOrder, recordSize uint32, recordNum uint32, offsetInBytes bool) ([]bpfLineInfo, error) {
-	var out []bpfLineInfo
 	var li bpfLineInfo
 
 	if exp, got := uint32(binary.Size(li)), recordSize; exp != got {
@@ -674,6 +673,7 @@ func parseLineInfoRecords(r io.Reader, bo binary.ByteOrder, recordSize uint32, r
 		return nil, fmt.Errorf("expected LineInfo record size %d, but BTF blob contains %d", exp, got)
 	}
 
+	out := make([]bpfLineInfo, 0, recordNum)
 	for i := uint32(0); i < recordNum; i++ {
 		if err := binary.Read(r, bo, &li); err != nil {
 			return nil, fmt.Errorf("can't read line info: %v", err)

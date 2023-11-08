@@ -373,7 +373,7 @@ func (ec *elfCode) loadFunctions(section *elfSection) (map[string]asm.Instructio
 	r := bufio.NewReader(section.Open())
 
 	// Decode the section's instruction stream.
-	var insns asm.Instructions
+	insns := make(asm.Instructions, 0, section.Size/asm.InstructionSize)
 	if err := insns.Unmarshal(r, ec.ByteOrder); err != nil {
 		return nil, fmt.Errorf("decoding instructions for section %s: %w", section.Name, err)
 	}

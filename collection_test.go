@@ -3,6 +3,8 @@ package ebpf
 import (
 	"errors"
 	"fmt"
+	"io"
+	"os"
 	"reflect"
 	"testing"
 
@@ -727,6 +729,27 @@ func BenchmarkNewCollectionManyProgs(b *testing.B) {
 			b.Fatal(err)
 		}
 		coll.Close()
+	}
+}
+
+func BenchmarkLoadCollectionManyProgs(b *testing.B) {
+	file, err := os.Open(fmt.Sprintf("testdata/manyprogs-%s.elf", internal.ClangEndian))
+	qt.Assert(b, err, qt.IsNil)
+	defer file.Close()
+
+	b.ReportAllocs()
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		_, err := file.Seek(0, io.SeekStart)
+		if err != nil {
+			b.Fatal(err)
+		}
+
+		_, err = LoadCollectionSpecFromReader(file)
+		if err != nil {
+			b.Fatal(err)
+		}
 	}
 }
 

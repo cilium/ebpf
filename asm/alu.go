@@ -79,12 +79,12 @@ const (
 	Xor ALUOp = 0x00a0
 	// Mov - move value from one place to another
 	Mov ALUOp = 0x00b0
-	// SMov8 - move lower 8 bits, sign extended upper bits of target
-	SMov8 ALUOp = 0x08b0
-	// SMov16 - move lower 16 bits, sign extended upper bits of target
-	SMov16 ALUOp = 0x10b0
-	// SMov32 - move lower 32 bits, sign extended upper bits of target
-	SMov32 ALUOp = 0x20b0
+	// MovSX8 - move lower 8 bits, sign extended upper bits of target
+	MovSX8 ALUOp = 0x08b0
+	// MovSX16 - move lower 16 bits, sign extended upper bits of target
+	MovSX16 ALUOp = 0x10b0
+	// MovSX32 - move lower 32 bits, sign extended upper bits of target
+	MovSX32 ALUOp = 0x20b0
 	// ArSh - arithmetic shift
 	ArSh ALUOp = 0x00c0
 	// Swap - endian conversions

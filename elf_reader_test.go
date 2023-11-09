@@ -955,16 +955,6 @@ func TestLibBPFCompat(t *testing.T) {
 		// to OOM kills.
 		opts.Programs.LogDisabled = true
 
-		for name, p := range spec.Programs {
-			if p.Type != Extension {
-				continue
-			}
-
-			targetProg, targetColl := loadTargetProgram(t, name, opts)
-			defer targetColl.Close()
-			p.AttachTarget = targetProg
-		}
-
 		coll, err := NewCollectionWithOptions(spec, opts)
 		testutils.SkipIfNotSupported(t, err)
 		var errno syscall.Errno
@@ -1025,7 +1015,10 @@ func TestLibBPFCompat(t *testing.T) {
 			t.Skip("Skipping since weak relocations are not supported")
 		case "bloom_filter_map", "bloom_filter_bench":
 			t.Skip("Skipping due to missing MapExtra field in MapSpec")
-		case "netif_receive_skb", "local_kptr_stash", "local_kptr_stash_fail":
+		case "netif_receive_skb",
+			"local_kptr_stash",
+			"local_kptr_stash_fail",
+			"type_cast":
 			t.Skip("Skipping due to possible bug in upstream CO-RE generation")
 		case "test_usdt", "test_urandom_usdt", "test_usdt_multispec":
 			t.Skip("Skipping due to missing support for usdt.bpf.h")
@@ -1054,6 +1047,28 @@ func TestLibBPFCompat(t *testing.T) {
 				}
 				m.Extra = nil
 			}
+
+		case "fexit_bpf2bpf",
+			"freplace_get_constant",
+			"freplace_global_func":
+			loadTargetProgram(t, spec, "test_pkt_access.bpf.o", "test_pkt_access")
+
+		case "freplace_cls_redirect":
+			loadTargetProgram(t, spec, "test_cls_redirect.bpf.o", "cls_redirect")
+
+		case "test_trace_ext":
+			loadTargetProgram(t, spec, "test_pkt_md_access.bpf.o", "test_pkt_md_access")
+
+		case "freplace_progmap":
+			loadTargetProgram(t, spec, "xdp_dummy.bpf.o", "xdp_dummy_prog")
+
+			if prog := spec.Programs["xdp_cpumap_prog"]; prog.AttachTo == "" {
+				prog.AttachTo = "xdp_dummy_prog"
+			}
+
+		case "freplace_attach_probe":
+			// Looks like the test should have a target, but 6.6 selftests don't
+			// seem to be using it.
 		}
 
 		var opts CollectionOptions
@@ -1126,44 +1141,42 @@ func TestLibBPFCompat(t *testing.T) {
 	})
 }
 
-func loadTargetProgram(tb testing.TB, name string, opts CollectionOptions) (*Program, *Collection) {
-	file := "test_pkt_access.bpf.o"
-	program := "test_pkt_access"
-	switch name {
-	case "new_connect_v4_prog":
-		file = "connect4_prog.bpf.o"
-		program = "connect_v4_prog"
-	case "new_do_bind":
-		file = "connect4_prog.bpf.o"
-		program = "connect_v4_prog"
-	case "freplace_cls_redirect_test":
-		file = "test_cls_redirect.bpf.o"
-		program = "cls_redirect"
-	case "new_handle_kprobe":
-		file = "test_attach_probe.bpf.o"
-		program = "handle_kprobe"
-	case "test_pkt_md_access_new":
-		file = "test_pkt_md_access.bpf.o"
-		program = "test_pkt_md_access"
-	default:
-	}
-
-	spec, err := LoadCollectionSpec(filepath.Join(*elfPath, file))
+func loadTargetProgram(tb testing.TB, spec *CollectionSpec, file, program string) {
+	targetSpec, err := LoadCollectionSpec(filepath.Join(*elfPath, file))
 	if errors.Is(err, os.ErrNotExist) && strings.HasSuffix(file, ".bpf.o") {
 		// Prior to v6.1 BPF ELF used a plain .o suffix.
 		file = strings.TrimSuffix(file, ".bpf.o") + ".o"
-		spec, err = LoadCollectionSpec(filepath.Join(*elfPath, file))
+		targetSpec, err = LoadCollectionSpec(filepath.Join(*elfPath, file))
 	}
 	if err != nil {
 		tb.Fatalf("Can't read %s: %s", file, err)
 	}
 
-	coll, err := NewCollectionWithOptions(spec, opts)
+	qt.Assert(tb, targetSpec.Programs[program], qt.IsNotNil)
+
+	coll, err := NewCollectionWithOptions(targetSpec, CollectionOptions{
+		Programs: ProgramOptions{LogDisabled: true},
+	})
 	if err != nil {
 		tb.Fatalf("Can't load target: %s", err)
 	}
+	tb.Cleanup(func() { coll.Close() })
 
-	return coll.Programs[program], coll
+	target := coll.Programs[program]
+	for _, prog := range spec.Programs {
+		if prog.Type == Extension && prog.AttachType == AttachNone {
+			prog.AttachTarget = target
+			continue
+		}
+
+		if prog.Type == Tracing {
+			switch prog.AttachType {
+			case AttachTraceFEntry, AttachTraceFExit, AttachModifyReturn:
+				prog.AttachTarget = target
+				continue
+			}
+		}
+	}
 }
 
 func sourceOfBTF(tb testing.TB, path string) []string {
@@ -1184,86 +1197,143 @@ func sourceOfBTF(tb testing.TB, path string) []string {
 	return testutils.Glob(tb, filepath.Join(dir, btfPrefix+base+"*.o"))
 }
 
-func TestGetProgType(t *testing.T) {
-	type progTypeTestData struct {
-		Pt ProgramType
-		At AttachType
-		Fl uint32
-		To string
+func TestELFSectionProgramTypes(t *testing.T) {
+	type testcase struct {
+		Section     string
+		ProgramType ProgramType
+		AttachType  AttachType
+		Flags       uint32
+		Extra       string
 	}
 
-	testcases := map[string]progTypeTestData{
-		"socket/garbage": {
-			Pt: SocketFilter,
-			At: AttachNone,
-			To: "",
-		},
-		"kprobe/func": {
-			Pt: Kprobe,
-			At: AttachNone,
-			To: "func",
-		},
-		"xdp/foo": {
-			Pt: XDP,
-			At: AttachNone,
-			To: "",
-		},
-		"xdp.frags/foo": {
-			Pt: XDP,
-			At: AttachNone,
-			To: "",
-			Fl: unix.BPF_F_XDP_HAS_FRAGS,
-		},
-		"xdp_devmap/foo": {
-			Pt: XDP,
-			At: AttachXDPDevMap,
-			To: "foo",
-		},
-		"xdp.frags_devmap/foo": {
-			Pt: XDP,
-			At: AttachXDPDevMap,
-			To: "foo",
-			Fl: unix.BPF_F_XDP_HAS_FRAGS,
-		},
-		"cgroup_skb/ingress": {
-			Pt: CGroupSKB,
-			At: AttachCGroupInetIngress,
-			To: "",
-		},
-		"iter/bpf_map": {
-			Pt: Tracing,
-			At: AttachTraceIter,
-			To: "bpf_map",
-		},
-		"lsm.s/file_ioctl_sleepable": {
-			Pt: LSM,
-			At: AttachLSMMac,
-			To: "file_ioctl_sleepable",
-			Fl: unix.BPF_F_SLEEPABLE,
-		},
-		"lsm/file_ioctl": {
-			Pt: LSM,
-			At: AttachLSMMac,
-			To: "file_ioctl",
-		},
-		"sk_skb/stream_verdict/foo": {
-			Pt: SkSKB,
-			At: AttachSkSKBStreamVerdict,
-			To: "",
-		},
-		"sk_skb/bar": {
-			Pt: SkSKB,
-			At: AttachNone,
-			To: "",
-		},
+	testcases := []testcase{
+		{"socket", SocketFilter, AttachNone, 0, ""},
+		{"socket/garbage", SocketFilter, AttachNone, 0, ""},
+		{"sk_reuseport/migrate", SkReuseport, AttachSkReuseportSelectOrMigrate, 0, ""},
+		{"sk_reuseport", SkReuseport, AttachSkReuseportSelect, 0, ""},
+		{"kprobe/", Kprobe, AttachNone, 0, ""},
+		{"kprobe/func", Kprobe, AttachNone, 0, "func"},
+		{"uprobe/", Kprobe, AttachNone, 0, ""},
+		{"kretprobe/", Kprobe, AttachNone, 0, ""},
+		{"uretprobe/", Kprobe, AttachNone, 0, ""},
+		{"tc", SchedCLS, AttachNone, 0, ""},
+		{"classifier", SchedCLS, AttachNone, 0, ""},
+		{"action", SchedACT, AttachNone, 0, ""},
+		{"tracepoint/", TracePoint, AttachNone, 0, ""},
+		{"tp/", TracePoint, AttachNone, 0, ""},
+		{"raw_tracepoint/", RawTracepoint, AttachNone, 0, ""},
+		{"raw_tp/", RawTracepoint, AttachNone, 0, ""},
+		{"raw_tracepoint.w/", RawTracepointWritable, AttachNone, 0, ""},
+		{"raw_tp.w/", RawTracepointWritable, AttachNone, 0, ""},
+		{"tp_btf/", Tracing, AttachTraceRawTp, 0, ""},
+		{"fentry/", Tracing, AttachTraceFEntry, 0, ""},
+		{"fmod_ret/", Tracing, AttachModifyReturn, 0, ""},
+		{"fexit/", Tracing, AttachTraceFExit, 0, ""},
+		{"fentry.s/", Tracing, AttachTraceFEntry, unix.BPF_F_SLEEPABLE, ""},
+		{"fmod_ret.s/", Tracing, AttachModifyReturn, unix.BPF_F_SLEEPABLE, ""},
+		{"fexit.s/", Tracing, AttachTraceFExit, unix.BPF_F_SLEEPABLE, ""},
+		{"freplace/", Extension, AttachNone, 0, ""},
+		{"lsm/foo", LSM, AttachLSMMac, 0, "foo"},
+		{"lsm.s/foo", LSM, AttachLSMMac, unix.BPF_F_SLEEPABLE, "foo"},
+		{"iter/bpf_map", Tracing, AttachTraceIter, 0, "bpf_map"},
+		{"iter.s/", Tracing, AttachTraceIter, unix.BPF_F_SLEEPABLE, ""},
+		// Was missing sleepable.
+		{"syscall", Syscall, AttachNone, unix.BPF_F_SLEEPABLE, ""},
+		{"xdp.frags_devmap/foo", XDP, AttachXDPDevMap, unix.BPF_F_XDP_HAS_FRAGS, "foo"},
+		{"xdp_devmap/foo", XDP, AttachXDPDevMap, 0, "foo"},
+		{"xdp.frags_cpumap/", XDP, AttachXDPCPUMap, unix.BPF_F_XDP_HAS_FRAGS, ""},
+		{"xdp_cpumap/", XDP, AttachXDPCPUMap, 0, ""},
+		// Used incorrect attach type.
+		{"xdp.frags/foo", XDP, AttachXDP, unix.BPF_F_XDP_HAS_FRAGS, ""},
+		{"xdp/foo", XDP, AttachNone, 0, ""},
+		{"perf_event", PerfEvent, AttachNone, 0, ""},
+		{"lwt_in", LWTIn, AttachNone, 0, ""},
+		{"lwt_out", LWTOut, AttachNone, 0, ""},
+		{"lwt_xmit", LWTXmit, AttachNone, 0, ""},
+		{"lwt_seg6local", LWTSeg6Local, AttachNone, 0, ""},
+		{"cgroup_skb/ingress", CGroupSKB, AttachCGroupInetIngress, 0, ""},
+		{"cgroup_skb/egress", CGroupSKB, AttachCGroupInetEgress, 0, ""},
+		{"cgroup/skb", CGroupSKB, AttachNone, 0, ""},
+		{"cgroup/sock_create", CGroupSock, AttachCGroupInetSockCreate, 0, ""},
+		{"cgroup/sock_release", CGroupSock, AttachCgroupInetSockRelease, 0, ""},
+		{"cgroup/sock", CGroupSock, AttachCGroupInetSockCreate, 0, ""},
+		{"cgroup/post_bind4", CGroupSock, AttachCGroupInet4PostBind, 0, ""},
+		{"cgroup/post_bind6", CGroupSock, AttachCGroupInet6PostBind, 0, ""},
+		{"cgroup/dev", CGroupDevice, AttachCGroupDevice, 0, ""},
+		{"sockops", SockOps, AttachCGroupSockOps, 0, ""},
+		{"sk_skb/stream_parser", SkSKB, AttachSkSKBStreamParser, 0, ""},
+		{"sk_skb/stream_verdict", SkSKB, AttachSkSKBStreamVerdict, 0, ""},
+		{"sk_skb/stream_verdict/foo", SkSKB, AttachSkSKBStreamVerdict, 0, ""},
+		{"sk_skb", SkSKB, AttachNone, 0, ""},
+		{"sk_skb/bar", SkSKB, AttachNone, 0, ""},
+		{"sk_msg", SkMsg, AttachSkMsgVerdict, 0, ""},
+		{"lirc_mode2", LircMode2, AttachLircMode2, 0, ""},
+		{"flow_dissector", FlowDissector, AttachFlowDissector, 0, ""},
+		{"cgroup/bind4", CGroupSockAddr, AttachCGroupInet4Bind, 0, ""},
+		{"cgroup/bind6", CGroupSockAddr, AttachCGroupInet6Bind, 0, ""},
+		{"cgroup/connect4", CGroupSockAddr, AttachCGroupInet4Connect, 0, ""},
+		{"cgroup/connect6", CGroupSockAddr, AttachCGroupInet6Connect, 0, ""},
+		{"cgroup/sendmsg4", CGroupSockAddr, AttachCGroupUDP4Sendmsg, 0, ""},
+		{"cgroup/sendmsg6", CGroupSockAddr, AttachCGroupUDP6Sendmsg, 0, ""},
+		{"cgroup/recvmsg4", CGroupSockAddr, AttachCGroupUDP4Recvmsg, 0, ""},
+		{"cgroup/recvmsg6", CGroupSockAddr, AttachCGroupUDP6Recvmsg, 0, ""},
+		{"cgroup/getpeername4", CGroupSockAddr, AttachCgroupInet4GetPeername, 0, ""},
+		{"cgroup/getpeername6", CGroupSockAddr, AttachCgroupInet6GetPeername, 0, ""},
+		{"cgroup/getsockname4", CGroupSockAddr, AttachCgroupInet4GetSockname, 0, ""},
+		{"cgroup/getsockname6", CGroupSockAddr, AttachCgroupInet6GetSockname, 0, ""},
+		{"cgroup/sysctl", CGroupSysctl, AttachCGroupSysctl, 0, ""},
+		{"cgroup/getsockopt", CGroupSockopt, AttachCGroupGetsockopt, 0, ""},
+		{"cgroup/setsockopt", CGroupSockopt, AttachCGroupSetsockopt, 0, ""},
+		// Bogus pattern means it never matched anything.
+		// {"struct_ops+", StructOps, AttachNone, 0, ""},
+		{"sk_lookup/", SkLookup, AttachSkLookup, 0, ""},
+		{"seccomp", SocketFilter, AttachNone, 0, ""},
+		{"kprobe.multi", Kprobe, AttachTraceKprobeMulti, 0, ""},
+		{"kretprobe.multi", Kprobe, AttachTraceKprobeMulti, 0, ""},
 	}
 
-	for section, want := range testcases {
-		pt, at, fl, to := getProgType(section)
+	for _, tc := range testcases {
+		t.Run(tc.Section, func(t *testing.T) {
+			pt, at, fl, extra := getProgType(tc.Section)
+			have := testcase{tc.Section, pt, at, fl, extra}
+			qt.Assert(t, have, qt.DeepEquals, tc)
+		})
+	}
+}
 
-		if diff := cmp.Diff(want, progTypeTestData{Pt: pt, At: at, Fl: fl, To: to}); diff != "" {
-			t.Errorf("getProgType mismatch (-want +got):\n%s", diff)
-		}
+func TestMatchSectionName(t *testing.T) {
+	for _, testcase := range []struct {
+		pattern string
+		input   string
+		matches bool
+		extra   string
+	}{
+		{"prefix/", "prefix/", true, ""},
+		{"prefix/", "prefix/a", true, "a"},
+		{"prefix/", "prefix/b", true, "b"},
+		{"prefix/", "prefix", false, ""},
+		{"prefix/", "junk", false, ""},
+
+		{"prefix+", "prefix/", true, ""},
+		{"prefix+", "prefix/a", true, "a"},
+		{"prefix+", "prefix/b", true, "b"},
+		{"prefix+", "prefix", true, ""},
+		{"prefix+", "junk", false, ""},
+
+		{"exact", "exact", true, ""},
+		{"exact", "exact/", true, ""},
+		{"exact", "exact/a", true, ""},
+		{"exact", "exactement", true, ""},
+		{"exact", "junk", false, ""},
+	} {
+		name := fmt.Sprintf("%s:%s", testcase.pattern, testcase.input)
+		t.Run(name, func(t *testing.T) {
+			extra, matches := matchSectionName(testcase.input, testcase.pattern)
+			qt.Assert(t, matches, qt.Equals, testcase.matches)
+			if testcase.matches {
+				qt.Assert(t, extra, qt.Equals, testcase.extra)
+			}
+		})
 	}
 }
 

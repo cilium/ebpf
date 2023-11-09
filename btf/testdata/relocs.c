@@ -43,7 +43,7 @@ typedef union u u_t;
 		} \
 	})
 
-__section("socket_filter/type_ids") int type_ids() {
+__section("socket/type_ids") int type_ids() {
 	local_id_not_zero(int);
 	local_id_not_zero(struct { int frob; });
 	local_id_not_zero(enum {FRAP});
@@ -97,7 +97,7 @@ __section("socket_filter/type_ids") int type_ids() {
 		} \
 	})
 
-__section("socket_filter/types") int types() {
+__section("socket/types") int types() {
 	type_exists(struct s);
 	type_exists(s_t);
 	type_exists(const s_t);
@@ -142,7 +142,7 @@ __section("socket_filter/types") int types() {
 		} \
 	})
 
-__section("socket_filter/enums") int enums() {
+__section("socket/enums") int enums() {
 	enum_value_exists(enum e, ONE);
 	enum_value_exists(volatile enum e, ONE);
 	enum_value_exists(const enum e, ONE);
@@ -195,7 +195,7 @@ __section("socket_filter/enums") int enums() {
 		} \
 	})
 
-__section("socket_filter/fields") int fields() {
+__section("socket/fields") int fields() {
 	field_exists((struct s){}._1);
 	field_exists((s_t){}._2);
 	field_exists((union u){}._1);
@@ -262,10 +262,10 @@ struct ambiguous___flavour {
 	int _2;
 };
 
-__section("socket_filter/err_ambiguous") int err_ambiguous() {
+__section("socket/err_ambiguous") int err_ambiguous() {
 	return bpf_core_type_id_kernel(struct ambiguous);
 }
 
-__section("socket_filter/err_ambiguous_flavour") int err_ambiguous_flavour() {
+__section("socket/err_ambiguous_flavour") int err_ambiguous_flavour() {
 	return bpf_core_type_id_kernel(struct ambiguous___flavour);
 }

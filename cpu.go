@@ -1,16 +1,28 @@
-package internal
+package ebpf
 
 import (
 	"fmt"
 	"os"
 	"strings"
+
+	"github.com/cilium/ebpf/internal"
 )
 
 // PossibleCPUs returns the max number of CPUs a system may possibly have
 // Logical CPU numbers must be of the form 0-n
-var PossibleCPUs = Memoize(func() (int, error) {
+var PossibleCPUs = internal.Memoize(func() (int, error) {
 	return parseCPUsFromFile("/sys/devices/system/cpu/possible")
 })
+
+// MustPossibleCPUs is a helper that wraps a call to PossibleCPUs and panics if
+// the error is non-nil.
+func MustPossibleCPUs() int {
+	cpus, err := PossibleCPUs()
+	if err != nil {
+		panic(err)
+	}
+	return cpus
+}
 
 func parseCPUsFromFile(path string) (int, error) {
 	spec, err := os.ReadFile(path)

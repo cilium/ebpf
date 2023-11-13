@@ -53,7 +53,7 @@ func marshalPerCPUValue(slice any, elemLength int) (sys.Pointer, error) {
 		return sys.Pointer{}, errors.New("per-CPU value requires slice")
 	}
 
-	possibleCPUs, err := internal.PossibleCPUs()
+	possibleCPUs, err := PossibleCPUs()
 	if err != nil {
 		return sys.Pointer{}, err
 	}
@@ -91,7 +91,7 @@ func unmarshalPerCPUValue(slicePtr any, elemLength int, buf []byte) error {
 		return fmt.Errorf("per-cpu value requires pointer to slice")
 	}
 
-	possibleCPUs, err := internal.PossibleCPUs()
+	possibleCPUs, err := PossibleCPUs()
 	if err != nil {
 		return err
 	}

@@ -75,6 +75,10 @@ func TestMap(t *testing.T) {
 		t.Error("Want value 42, got", v)
 	}
 
+	sliceVal := make([]uint32, 1)
+	qt.Assert(t, m.Lookup(uint32(0), sliceVal), qt.IsNil)
+	qt.Assert(t, sliceVal, qt.DeepEquals, []uint32{42})
+
 	var slice []byte
 	qt.Assert(t, m.Lookup(uint32(0), &slice), qt.IsNil)
 	qt.Assert(t, slice, qt.DeepEquals, internal.NativeEndian.AppendUint32(nil, 42))
@@ -1345,6 +1349,16 @@ func TestPerCPUMarshaling(t *testing.T) {
 			}
 
 			// Make sure unmarshaling works on slices containing pointers
+			retrievedVal := make([]*customEncoding, numCPU)
+			if err := arr.Lookup(uint32(0), retrievedVal); err == nil {
+				t.Fatal("Slices with nil values should generate error")
+			}
+			for i := range retrievedVal {
+				retrievedVal[i] = &customEncoding{}
+			}
+			if err := arr.Lookup(uint32(0), retrievedVal); err != nil {
+				t.Fatal("Can't retrieve key 0:", err)
+			}
 			var retrieved []*customEncoding
 			if err := arr.Lookup(uint32(0), &retrieved); err != nil {
 				t.Fatal("Can't retrieve key 0:", err)

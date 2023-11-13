@@ -642,11 +642,15 @@ func (m *Map) LookupBytes(key interface{}) ([]byte, error) {
 }
 
 func (m *Map) lookupPerCPU(key, valueOut any, flags MapLookupFlags) error {
+	slice, err := ensurePerCPUSlice(valueOut, int(m.valueSize))
+	if err != nil {
+		return err
+	}
 	valueBytes := make([]byte, m.fullValueSize)
 	if err := m.lookup(key, sys.NewSlicePointer(valueBytes), flags); err != nil {
 		return err
 	}
-	return unmarshalPerCPUValue(valueOut, int(m.valueSize), valueBytes)
+	return unmarshalPerCPUValue(slice, int(m.valueSize), valueBytes)
 }
 
 func (m *Map) lookup(key interface{}, valueOut sys.Pointer, flags MapLookupFlags) error {
@@ -669,11 +673,62 @@ func (m *Map) lookup(key interface{}, valueOut sys.Pointer, flags MapLookupFlags
 }
 
 func (m *Map) lookupAndDeletePerCPU(key, valueOut any, flags MapLookupFlags) error {
+	slice, err := ensurePerCPUSlice(valueOut, int(m.valueSize))
+	if err != nil {
+		return err
+	}
 	valueBytes := make([]byte, m.fullValueSize)
 	if err := m.lookupAndDelete(key, sys.NewSlicePointer(valueBytes), flags); err != nil {
 		return err
 	}
-	return unmarshalPerCPUValue(valueOut, int(m.valueSize), valueBytes)
+	return unmarshalPerCPUValue(slice, int(m.valueSize), valueBytes)
+}
+
+func ensurePerCPUSlice(sliceOrPtr any, elemLength int) (any, error) {
+	possibleCPUs, err := PossibleCPU()
+	if err != nil {
+		return nil, err
+	}
+
+	sliceOrPtrType := reflect.TypeOf(sliceOrPtr)
+	if sliceOrPtrType.Kind() == reflect.Slice {
+		sliceValue := reflect.ValueOf(sliceOrPtr)
+		if sliceValue.Len() != possibleCPUs {
+			return nil, fmt.Errorf("per-cpu slice is incorrect length, expected %d, got %d",
+				possibleCPUs, sliceValue.Len())
+		}
+		if sliceOrPtrType.Elem().Kind() == reflect.Pointer {
+			for i := 0; i < sliceValue.Len(); i++ {
+				if !sliceValue.Index(i).Elem().CanAddr() {
+					return nil, fmt.Errorf("per-cpu slice elements cannot be nil")
+				}
+			}
+		}
+		return sliceValue.Interface(), nil
+	}
+
+	slicePtrType := sliceOrPtrType
+	if slicePtrType.Kind() != reflect.Ptr || slicePtrType.Elem().Kind() != reflect.Slice {
+		return nil, fmt.Errorf("per-cpu value requires a slice or a pointer to slice")
+	}
+
+	sliceType := slicePtrType.Elem()
+	slice := reflect.MakeSlice(sliceType, possibleCPUs, possibleCPUs)
+
+	sliceElemType := sliceType.Elem()
+	sliceElemIsPointer := sliceElemType.Kind() == reflect.Ptr
+	reflect.ValueOf(sliceOrPtr).Elem().Set(slice)
+	if !sliceElemIsPointer {
+		return slice.Interface(), nil
+	}
+	sliceElemType = sliceElemType.Elem()
+
+	for i := 0; i < possibleCPUs; i++ {
+		newElem := reflect.New(sliceElemType)
+		slice.Index(i).Set(newElem)
+	}
+
+	return slice.Interface(), nil
 }
 
 func (m *Map) lookupAndDelete(key any, valuePtr sys.Pointer, flags MapLookupFlags) error {

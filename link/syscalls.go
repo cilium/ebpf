@@ -24,6 +24,7 @@ const (
 	XDPType           = sys.BPF_LINK_TYPE_XDP
 	PerfEventType     = sys.BPF_LINK_TYPE_PERF_EVENT
 	KprobeMultiType   = sys.BPF_LINK_TYPE_KPROBE_MULTI
+	TCXType           = sys.BPF_LINK_TYPE_TCX
 )
 
 var haveProgAttach = internal.NewFeatureTest("BPF_PROG_ATTACH", "4.10", func() error {

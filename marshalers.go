@@ -84,11 +84,11 @@ func marshalPerCPUValue(slice any, elemLength int) (sys.Pointer, error) {
 // unmarshalPerCPUValue decodes a buffer into a slice containing one value per
 // possible CPU.
 //
-// slicePtr must be a pointer to a slice.
-func unmarshalPerCPUValue(slicePtr any, elemLength int, buf []byte) error {
-	slicePtrType := reflect.TypeOf(slicePtr)
-	if slicePtrType.Kind() != reflect.Ptr || slicePtrType.Elem().Kind() != reflect.Slice {
-		return fmt.Errorf("per-cpu value requires pointer to slice")
+// slice must be a literal slice and not a pointer.
+func unmarshalPerCPUValue(slice any, elemLength int, buf []byte) error {
+	sliceType := reflect.TypeOf(slice)
+	if sliceType.Kind() != reflect.Slice {
+		return fmt.Errorf("per-cpu value requires a slice")
 	}
 
 	possibleCPUs, err := PossibleCPU()
@@ -96,26 +96,24 @@ func unmarshalPerCPUValue(slicePtr any, elemLength int, buf []byte) error {
 		return err
 	}
 
-	sliceType := slicePtrType.Elem()
-	slice := reflect.MakeSlice(sliceType, possibleCPUs, possibleCPUs)
-
+	sliceValue := reflect.ValueOf(slice)
+	if sliceValue.Len() < possibleCPUs {
+		// Should be impossible here from ensurePerCPUSlice(),
+		// but avoid a panic in the loop.
+		return fmt.Errorf("per-cpu value slice len %d is less than possibleCPU %d",
+			sliceValue.Len(), possibleCPUs)
+	}
 	sliceElemType := sliceType.Elem()
 	sliceElemIsPointer := sliceElemType.Kind() == reflect.Ptr
-	if sliceElemIsPointer {
-		sliceElemType = sliceElemType.Elem()
-	}
-
 	stride := internal.Align(elemLength, 8)
 	for i := 0; i < possibleCPUs; i++ {
 		var elem any
+		v := sliceValue.Index(i)
 		if sliceElemIsPointer {
-			newElem := reflect.New(sliceElemType)
-			slice.Index(i).Set(newElem)
-			elem = newElem.Interface()
+			elem = v.Elem().Addr().Interface()
 		} else {
-			elem = slice.Index(i).Addr().Interface()
+			elem = v.Addr().Interface()
 		}
-
 		err := sysenc.Unmarshal(elem, buf[:elemLength])
 		if err != nil {
 			return fmt.Errorf("cpu %d: %w", i, err)
@@ -124,6 +122,5 @@ func unmarshalPerCPUValue(slicePtr any, elemLength int, buf []byte) error {
 		buf = buf[stride:]
 	}
 
-	reflect.ValueOf(slicePtr).Elem().Set(slice)
 	return nil
 }

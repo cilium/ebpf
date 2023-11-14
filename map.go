@@ -133,7 +133,7 @@ func (spec *MapSpec) fixupMagicFields() (*MapSpec, error) {
 		spec.KeySize = 4
 		spec.ValueSize = 4
 
-		n, err := PossibleCPUs()
+		n, err := PossibleCPU()
 		if err != nil {
 			return nil, fmt.Errorf("fixup perf event array: %w", err)
 		}
@@ -515,7 +515,7 @@ func newMap(fd *sys.FD, name string, typ MapType, keySize, valueSize, maxEntries
 		return m, nil
 	}
 
-	possibleCPUs, err := PossibleCPUs()
+	possibleCPUs, err := PossibleCPU()
 	if err != nil {
 		return nil, err
 	}

@@ -1314,10 +1314,7 @@ func TestIterateMapInMap(t *testing.T) {
 func TestPerCPUMarshaling(t *testing.T) {
 	for _, typ := range []MapType{PerCPUHash, PerCPUArray, LRUCPUHash} {
 		t.Run(typ.String(), func(t *testing.T) {
-			numCPU, err := internal.PossibleCPUs()
-			if err != nil {
-				t.Fatal(err)
-			}
+			numCPU := MustPossibleCPU()
 			if numCPU < 2 {
 				t.Skip("Test requires at least two CPUs")
 			}
@@ -1372,10 +1369,7 @@ type bpfCgroupStorageKey struct {
 }
 
 func TestCgroupPerCPUStorageMarshaling(t *testing.T) {
-	numCPU, err := internal.PossibleCPUs()
-	if err != nil {
-		t.Fatal(err)
-	}
+	numCPU := MustPossibleCPU()
 	if numCPU < 2 {
 		t.Skip("Test requires at least two CPUs")
 	}

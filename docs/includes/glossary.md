@@ -13,3 +13,4 @@
 *[XDP]: eXpress Data Path, a high-performance eBPF-powered data path. Only has a receive hook.
 *[bpf2go]: Convenience utility to compile eBPF C using clang and generate a Go skeleton.
 *[libbpf]: A library for writing kernel- and user space BPF programs in C, developed by the upstream Linux project.
+*[qemu]: A popular virtual machine manager.

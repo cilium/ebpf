@@ -1,5 +1,5 @@
 site_name: "ebpf-go Documentation"
-site_description: Pure-Go library to read, modify and load eBPF programs and attach them to various hooks in the Linux kernel. 
+site_description: Pure-Go library to read, modify and load eBPF programs and attach them to various hooks in the Linux kernel.
 site_author: Cilium Community
 
 # Rendered in header.
@@ -74,6 +74,10 @@ nav:
     - 'Index': bpf2go/index.md
   - 'BTF':
     - btf/index.md
+  - 'Contributing':
+    - contributing/index.md
+    - contributing/architecture.md
+    - contributing/new-feature.md
   - 'Users': users.md
   - 'Go Reference': https://pkg.go.dev/github.com/cilium/ebpf
   - 'GitHub':
@@ -145,7 +149,7 @@ markdown_extensions:
           format: !!python/name:pymdownx.superfences.fence_code_format
   # Content tabs for code snippets, checklists, etc.
   - pymdownx.tabbed:
-      alternate_style: true 
+      alternate_style: true
   # Emoji and icons like :fontawesome-brands-golang:
   - pymdownx.emoji:
       emoji_index: !!python/name:material.extensions.emoji.twemoji

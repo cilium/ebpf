@@ -1,6 +1,12 @@
 Architecture of the library
 ===
 
+The bulk of the functionality of the library split across the `ebpf`, `btf` and
+`link` packages.
+Below is a diagram how the most important types relate to each other.
+The graph is in dependecy order, so an arrow from `Links` to `Map` can be read
+as "Link depends on Map".
+
 ```mermaid
 graph RL
     Program --> ProgramSpec --> ELF
@@ -25,10 +31,10 @@ an ELF file which contains program byte code (aka BPF), but also metadata for
 maps used by the program. The metadata follows the conventions set by libbpf
 shipped with the kernel. Certain ELF sections have special meaning
 and contain structures defined by libbpf. Newer versions of clang emit
-additional metadata in [BPF Type Format](#BTF).
+additional metadata in [BPF Type Format](../btf/index.md).
 
 The library aims to be compatible with libbpf so that moving from a C toolchain
-to a Go one creates little friction. To that end, the [ELF reader](elf_reader.go)
+to a Go one creates little friction. To that end, the ELF reader
 is tested against the Linux selftests and avoids introducing custom behaviour
 if possible.
 
@@ -37,7 +43,7 @@ all of the information contained in the ELF in a form that is easy to work with
 in Go. The returned `CollectionSpec` should be deterministic: reading the same ELF
 file on different systems must produce the same output.
 As a corollary, any changes that depend on the runtime environment like the
-current kernel version must happen when creating [Objects](#Objects).
+current kernel version must happen when creating [Objects](#objects).
 
 Specifications
 ---
@@ -50,7 +56,7 @@ objects and contain everything necessary to execute the relevant `bpf(2)`
 syscalls. They refer to `btf.Spec` for type information such as `Map` key and
 value types.
 
-The [asm](asm/) package provides an assembler that can be used to generate
+The {{ godoc("asm") }} package provides an assembler that can be used to generate
 `ProgramSpec` on the fly.
 
 Objects

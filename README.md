@@ -16,7 +16,7 @@ ecosystem.
 A small collection of Go and eBPF programs that serve as examples for building
 your own tools can be found under [examples/](examples/).
 
-[Contributions](CONTRIBUTING.md) are highly encouraged, as they highlight certain use cases of
+[Contributions](https://ebpf-go.dev/contributing) are highly encouraged, as they highlight certain use cases of
 eBPF and the library, and help shape the future of the project.
 
 ## Getting Help
@@ -61,17 +61,6 @@ This library includes the following packages:
   upstream](https://golang.org/doc/devel/release.html#policy)
 * Linux >= 4.9. CI is run against kernel.org LTS releases. 4.4 should work but is
   not tested against.
-
-## Regenerating Testdata
-
-Run `make` in the root of this repository to rebuild testdata in all
-subpackages. This requires Docker, as it relies on a standardized build
-environment to keep the build output stable.
-
-It is possible to regenerate data using Podman by overriding the `CONTAINER_*`
-variables: `CONTAINER_ENGINE=podman CONTAINER_RUN_ARGS= make`.
-
-The toolchain image build files are kept in [testdata/docker/](testdata/docker/).
 
 ## License
 

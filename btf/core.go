@@ -909,7 +909,7 @@ func coreAreTypesCompatible(localType Type, targetType Type) error {
 		targetType = UnderlyingType(*t)
 
 		if reflect.TypeOf(localType) != reflect.TypeOf(targetType) {
-			return fmt.Errorf("type mismatch: %w", errIncompatibleTypes)
+			return fmt.Errorf("type mismatch between %v and %v: %w", localType, targetType, errIncompatibleTypes)
 		}
 
 		switch lv := (localType).(type) {

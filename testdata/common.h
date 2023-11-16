@@ -1,13 +1,15 @@
 #pragma once
 
 typedef _Bool bool;
+typedef unsigned char uint8_t;
 typedef unsigned short uint16_t;
 typedef unsigned int uint32_t;
+typedef signed int int32_t;
 typedef unsigned long uint64_t;
 
 enum libbpf_tristate {
-	TRI_NO = 0,
-	TRI_YES = 1,
+	TRI_NO     = 0,
+	TRI_YES    = 1,
 	TRI_MODULE = 2,
 };
 

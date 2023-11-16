@@ -716,7 +716,7 @@ func TestKconfigConfig(t *testing.T) {
 }
 
 func TestKfunc(t *testing.T) {
-	testutils.SkipOnOldKernel(t, "5.18", "bpf_kfunc_call_test_mem_len_pass1")
+	testutils.SkipOnOldKernel(t, "5.18", "kfunc support")
 	testutils.Files(t, testutils.Glob(t, "testdata/kfunc-e*.elf"), func(t *testing.T, file string) {
 		spec, err := LoadCollectionSpec(file)
 		if err != nil {
@@ -734,7 +734,7 @@ func TestKfunc(t *testing.T) {
 		err = spec.LoadAndAssign(&obj, nil)
 		testutils.SkipIfNotSupported(t, err)
 		if err != nil {
-			t.Fatalf("%v+", err)
+			t.Fatalf("%+v", err)
 		}
 		defer obj.Main.Close()
 
@@ -751,7 +751,7 @@ func TestKfunc(t *testing.T) {
 }
 
 func TestInvalidKfunc(t *testing.T) {
-	testutils.SkipOnOldKernel(t, "5.18", "bpf_kfunc_call_test_mem_len_pass1")
+	testutils.SkipOnOldKernel(t, "5.18", "kfunc support")
 
 	if !haveTestmod(t) {
 		t.Skip("bpf_testmod not loaded")

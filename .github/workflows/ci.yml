@@ -167,3 +167,19 @@ jobs:
         with:
           name: Test Results (${{ matrix.version }})
           path: junit.xml
+
+  go-apidiff:
+    name: go-apidiff
+    on: [ pull_request ]
+    jobs:
+      go-apidiff:
+        if: github.event_name == 'pull_request'
+        runs-on: ubuntu-latest
+        steps:
+        - uses: actions/checkout@v3
+          with:
+            fetch-depth: 0
+        - uses: actions/setup-go@v4
+          with:
+            go-version-file: go.mod
+        - uses: joelanford/go-apidiff@main

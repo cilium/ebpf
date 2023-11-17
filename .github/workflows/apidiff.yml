@@ -1,0 +1,20 @@
+name: apidiff
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  go-apidiff:
+    name: go-apidiff
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        fetch-depth: 0
+    - uses: actions/setup-go@v4
+      with:
+        go-version-file: go.mod
+    - uses: joelanford/go-apidiff@main

@@ -1,0 +1,34 @@
+on:
+  workflow_run:
+    workflows: ["apidiff"]
+    types:
+      - completed
+
+permissions:
+  issues: write
+
+jobs:
+  tag-breaking-change:
+    name: Tag breaking changes
+    runs-on: ubuntu-latest
+    if: >
+      github.event.workflow_run.event == 'pull_request' &&
+      github.event.workflow_run.conclusion == 'failure'
+    steps:
+      - name: Get PR ID
+        id: pr_id
+        run: |
+          PR_ID=$(gh pr view -R "${{ github.repository }}" "${{ github.event.workflow_run.head_repository.owner.login }}:${{ github.event.workflow_run.head_branch }}" --json "number" --jq ".number")
+          echo "pr_id=${PR_ID}" >> $GITHUB_OUTPUT
+      - name: Add breaking-change label
+        uses: actions/github-script@v3
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const issue_number = ${{ steps.pr_id.outputs.pr_id }};
+            await github.issues.addLabels({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: issue_number,
+              labels: ['breaking-change']
+            });

@@ -5,8 +5,7 @@ on:
       - completed
 
 permissions:
-  issues: write
-  pull-requests: read
+  pull-requests: write
 
 jobs:
   tag-breaking-change:

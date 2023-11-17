@@ -88,7 +88,7 @@ func marshalPerCPUValue(slice any, elemLength int) (sys.Pointer, error) {
 func unmarshalPerCPUValue(slice any, elemLength int, buf []byte) error {
 	sliceType := reflect.TypeOf(slice)
 	if sliceType.Kind() != reflect.Slice {
-		return fmt.Errorf("per-cpu value requires a slice")
+		return fmt.Errorf("per-CPU value requires a slice")
 	}
 
 	possibleCPUs, err := PossibleCPU()
@@ -97,12 +97,11 @@ func unmarshalPerCPUValue(slice any, elemLength int, buf []byte) error {
 	}
 
 	sliceValue := reflect.ValueOf(slice)
-	if sliceValue.Len() < possibleCPUs {
-		// Should be impossible here from ensurePerCPUSlice(),
-		// but avoid a panic in the loop.
-		return fmt.Errorf("per-cpu value slice len %d is less than possibleCPU %d",
-			sliceValue.Len(), possibleCPUs)
+	if sliceValue.Len() != possibleCPUs {
+		return fmt.Errorf("per-CPU slice has incorrect length, expected %d, got %d",
+			possibleCPUs, sliceValue.Len())
 	}
+
 	sliceElemType := sliceType.Elem()
 	sliceElemIsPointer := sliceElemType.Kind() == reflect.Ptr
 	stride := internal.Align(elemLength, 8)
@@ -110,6 +109,9 @@ func unmarshalPerCPUValue(slice any, elemLength int, buf []byte) error {
 		var elem any
 		v := sliceValue.Index(i)
 		if sliceElemIsPointer {
+			if !v.Elem().CanAddr() {
+				return fmt.Errorf("per-CPU slice elements cannot be nil")
+			}
 			elem = v.Elem().Addr().Interface()
 		} else {
 			elem = v.Addr().Interface()

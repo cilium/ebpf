@@ -684,32 +684,23 @@ func (m *Map) lookupAndDeletePerCPU(key, valueOut any, flags MapLookupFlags) err
 	return unmarshalPerCPUValue(slice, int(m.valueSize), valueBytes)
 }
 
+// ensurePerCPUSlice allocates a slice for a per-CPU value if necessary.
 func ensurePerCPUSlice(sliceOrPtr any, elemLength int) (any, error) {
-	possibleCPUs, err := PossibleCPU()
-	if err != nil {
-		return nil, err
-	}
-
 	sliceOrPtrType := reflect.TypeOf(sliceOrPtr)
 	if sliceOrPtrType.Kind() == reflect.Slice {
-		sliceValue := reflect.ValueOf(sliceOrPtr)
-		if sliceValue.Len() != possibleCPUs {
-			return nil, fmt.Errorf("per-cpu slice is incorrect length, expected %d, got %d",
-				possibleCPUs, sliceValue.Len())
-		}
-		if sliceOrPtrType.Elem().Kind() == reflect.Pointer {
-			for i := 0; i < sliceValue.Len(); i++ {
-				if !sliceValue.Index(i).Elem().CanAddr() {
-					return nil, fmt.Errorf("per-cpu slice elements cannot be nil")
-				}
-			}
-		}
-		return sliceValue.Interface(), nil
+		// The target is a slice, the caller is responsible for ensuring that
+		// size is correct.
+		return sliceOrPtr, nil
 	}
 
 	slicePtrType := sliceOrPtrType
 	if slicePtrType.Kind() != reflect.Ptr || slicePtrType.Elem().Kind() != reflect.Slice {
 		return nil, fmt.Errorf("per-cpu value requires a slice or a pointer to slice")
+	}
+
+	possibleCPUs, err := PossibleCPU()
+	if err != nil {
+		return nil, err
 	}
 
 	sliceType := slicePtrType.Elem()

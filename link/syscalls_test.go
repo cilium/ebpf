@@ -17,3 +17,7 @@ func TestHaveProgAttachReplace(t *testing.T) {
 func TestHaveBPFLink(t *testing.T) {
 	testutils.CheckFeatureTest(t, haveBPFLink)
 }
+
+func TestHaveProgQuery(t *testing.T) {
+	testutils.CheckFeatureTest(t, haveProgQuery)
+}

@@ -918,7 +918,10 @@ func (m *Map) guessNonExistentKey() ([]byte, error) {
 // "keysOut" and "valuesOut" must be of type slice, a pointer
 // to a slice or buffer will not work.
 // "prevKey" is the key to start the batch lookup from, it will
-// *not* be included in the results. Use nil to start at the first key.
+// *not* be included in the results. It is an opaque handle. Use
+// nil to start at the first key. For subsequent lookups,
+// "nextKeyOut" should be passed as "prevKey" to continue the
+// batch operation.
 //
 // ErrKeyNotExist is returned when the batch lookup has reached
 // the end of all possible results, even when partial results

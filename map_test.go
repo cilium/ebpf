@@ -146,6 +146,38 @@ func TestBatchAPIArray(t *testing.T) {
 		t.Errorf("BatchUpdate and BatchLookup values disagree: %v %v", values, lookupValues)
 	}
 
+	// Test chunking of the batch lookup. The important bit is that prevKey
+	// must be set to nextKey to lookup the next chunk.
+	nextKey = 0
+	lookupKeys = make([]uint32, 1) // cut the buffer in half.
+	lookupValues = make([]uint32, 1)
+	count, err = m.BatchLookup(nil, &nextKey, lookupKeys, lookupValues, nil)
+	if err != nil {
+		t.Errorf("BatchLookup: %v", err)
+	}
+	if count != 1 {
+		t.Errorf("BatchLookup: returned %d results, expected %d", count, 1)
+	}
+	if k := []uint32(keys[:1]); !reflect.DeepEqual(k, lookupKeys) {
+		t.Errorf("BatchUpdate and BatchLookup keys disagree on first chunk: %v %v", k, lookupKeys)
+	}
+	if v := []uint32(values[:1]); !reflect.DeepEqual(v, lookupValues) {
+		t.Errorf("BatchUpdate and BatchLookup values disagree on first chunk: %v %v", v, lookupValues)
+	}
+	count, err = m.BatchLookup(&nextKey, &nextKey, lookupKeys, lookupValues, nil)
+	if err != nil {
+		t.Errorf("BatchLookup: %v", err)
+	}
+	if count != 1 {
+		t.Errorf("BatchLookup: returned %d results, expected %d", count, 1)
+	}
+	if k := []uint32(keys[1:]); !reflect.DeepEqual(k, lookupKeys) {
+		t.Errorf("BatchUpdate and BatchLookup keys disagree on second chunk: %v %v", k, lookupKeys)
+	}
+	if v := []uint32(values[1:]); !reflect.DeepEqual(v, lookupValues) {
+		t.Errorf("BatchUpdate and BatchLookup values disagree on second chunk: %v %v", v, lookupValues)
+	}
+
 	_, err = m.BatchLookupAndDelete(nil, &nextKey, deleteKeys, deleteValues, nil)
 	if !errors.Is(err, ErrNotSupported) {
 		t.Fatalf("BatchLookUpDelete: expected error %v, but got %v", ErrNotSupported, err)

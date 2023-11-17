@@ -6,6 +6,7 @@ on:
 
 permissions:
   issues: write
+  pull-requests: read
 
 jobs:
   tag-breaking-change:
@@ -17,6 +18,8 @@ jobs:
     steps:
       - name: Get PR ID
         id: pr_id
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           PR_ID=$(gh pr view -R "${{ github.repository }}" "${{ github.event.workflow_run.head_repository.owner.login }}:${{ github.event.workflow_run.head_branch }}" --json "number" --jq ".number")
           echo "pr_id=${PR_ID}" >> $GITHUB_OUTPUT

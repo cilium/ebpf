@@ -3,6 +3,7 @@
 package sys
 
 import (
+	"runtime"
 	"unsafe"
 )
 
@@ -10,4 +11,10 @@ import (
 // conform to the syscall specification.
 type Pointer struct {
 	ptr unsafe.Pointer
+}
+
+func (p Pointer) Pin(pinner *runtime.Pinner) {
+	if p.ptr != nil {
+		pinner.Pin(p.ptr)
+	}
 }

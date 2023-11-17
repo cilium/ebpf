@@ -101,6 +101,7 @@ package sys
 
 import (
 	"unsafe"
+	"runtime"
 )
 
 `)
@@ -222,9 +223,20 @@ import (
 			return nil, err
 		}
 
-		if err := outputPatchedStruct(gf, w, s.goType, t, s.patches); err != nil {
+		patchedStruct, pointerTypes, err := patchStruct(gf, w, t, s.patches)
+		if err != nil {
+			return nil, fmt.Errorf("patch %q: %w", s.goType, err)
+		}
+
+		if err := outputStruct(w, patchedStruct, gf, s.goType); err != nil {
 			return nil, fmt.Errorf("output %q: %w", s.goType, err)
 		}
+
+		fmt.Fprintf(w, `func (s *%s) Pin(p *runtime.Pinner){ 
+			p.Pin(s)
+			%s }
+			
+			`, s.goType, generatePinnedPointerTypes(pointerTypes))
 	}
 
 	// Attrs
@@ -517,15 +529,42 @@ import (
 		}
 
 		goAttrType := s.goType + "Attr"
-		if err := outputPatchedStruct(gf, w, goAttrType, t, s.patches); err != nil {
-			return nil, fmt.Errorf("output %q: %w", goAttrType, err)
+		patchedStruct, pointerTypes, err := patchStruct(gf, w, t, s.patches)
+		if err != nil {
+			return nil, fmt.Errorf("patch %q: %w", s.goType, err)
 		}
+
+		if err := outputStruct(w, patchedStruct, gf, goAttrType); err != nil {
+			return nil, fmt.Errorf("output %q: %w", s.goType, err)
+		}
+
+		fmt.Fprintf(w, `func (s *%s) Pin(p *runtime.Pinner){ 
+			p.Pin(s)
+			%s }
+			
+			`, goAttrType, generatePinnedPointerTypes(pointerTypes))
 
 		switch s.ret {
 		case retError:
-			fmt.Fprintf(w, "func %s(attr *%s) error { _, err := BPF(%s, unsafe.Pointer(attr), unsafe.Sizeof(*attr)); return err }\n\n", s.goType, goAttrType, s.cmd)
+			fmt.Fprintf(w,
+				`func %s(attr *%s) error {
+				var pinner runtime.Pinner
+				attr.Pin(&pinner)
+				defer pinner.Unpin()
+				_, err := BPF(%s, unsafe.Pointer(attr), unsafe.Sizeof(*attr))
+				return err }
+
+				`, s.goType, goAttrType, s.cmd)
 		case retFd:
-			fmt.Fprintf(w, "func %s(attr *%s) (*FD, error) { fd, err := BPF(%s, unsafe.Pointer(attr), unsafe.Sizeof(*attr)); if err != nil { return nil, err }; return NewFD(int(fd)) }\n\n", s.goType, goAttrType, s.cmd)
+			fmt.Fprintf(w,
+				`func %s(attr *%s) (*FD, error) {
+				var pinner runtime.Pinner
+				attr.Pin(&pinner)
+				defer pinner.Unpin()
+				fd, err := BPF(%s, unsafe.Pointer(attr), unsafe.Sizeof(*attr)); if err != nil { return nil, err };
+				return NewFD(int(fd))}
+
+				`, s.goType, goAttrType, s.cmd)
 		}
 	}
 
@@ -587,11 +626,22 @@ import (
 		if t == nil {
 			return nil, fmt.Errorf("link info: no C type named %q", s.cType)
 		}
-		if err := outputPatchedStruct(gf, w, s.goType, t, s.patches); err != nil {
+
+		patchedStruct, pointerTypes, err := patchStruct(gf, w, t, s.patches)
+		if err != nil {
+			return nil, fmt.Errorf("patch %q: %w", s.goType, err)
+		}
+
+		if err := outputStruct(w, patchedStruct, gf, s.goType); err != nil {
 			return nil, fmt.Errorf("output %q: %w", s.goType, err)
 		}
-	}
 
+		fmt.Fprintf(w, `func (s *%s) Pin(p *runtime.Pinner){ 
+			p.Pin(s)
+			%s }
+			
+			`, s.goType, generatePinnedPointerTypes(pointerTypes))
+	}
 	return w.Bytes(), nil
 }
 
@@ -609,20 +659,21 @@ func (fpe *failedPatchError) Error() string {
 	return fmt.Sprintf("patch %d: %v", fpe.number, fpe.err)
 }
 
-func outputPatchedStruct(gf *btf.GoFormatter, w *bytes.Buffer, id string, s *btf.Struct, patches []patch) error {
+func patchStruct(gf *btf.GoFormatter, w *bytes.Buffer, s *btf.Struct, patches []patch) (*btf.Struct, []string, error) {
 	s = btf.Copy(s, nil).(*btf.Struct)
-
 	for i, p := range patches {
 		if err := p(s); err != nil {
-			return &failedPatchError{s, i, err}
+			return nil, nil, &failedPatchError{s, i, err}
 		}
 	}
+	return s, findPointerTypes(gf, s), nil
+}
 
+func outputStruct(w *bytes.Buffer, s *btf.Struct, gf *btf.GoFormatter, id string) error {
 	decl, err := gf.TypeDeclaration(id, s)
 	if err != nil {
 		return err
 	}
-
 	w.WriteString(decl)
 	w.WriteString("\n\n")
 	return nil
@@ -853,4 +904,25 @@ func remove(member string) patch {
 		}
 		return fmt.Errorf("member %q not found", member)
 	}
+}
+
+func findPointerTypes(gf *btf.GoFormatter, s *btf.Struct) []string {
+	var pointerTypes []string
+	for _, member := range s.Members {
+		t, ok := member.Type.(*btf.Int)
+		if ok {
+			if t.Size == 8 {
+				pointerTypes = append(pointerTypes, gf.Identifier(member.Name))
+			}
+		}
+	}
+	return pointerTypes
+}
+
+func generatePinnedPointerTypes(pointerTypes []string) string {
+	var result string
+	for _, element := range pointerTypes {
+		result += fmt.Sprintf("s.%s.Pin(p)\n", element)
+	}
+	return result
 }

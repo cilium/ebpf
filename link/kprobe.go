@@ -230,6 +230,12 @@ func pmuProbe(args tracefs.ProbeArgs) (*perfEvent, error) {
 		sp    unsafe.Pointer
 		token string
 	)
+
+	// Ensure the string pointer is not collected nor moved before PerfEventOpen returns.
+	var pinner runtime.Pinner
+	pinner.Pin(sp)
+	defer pinner.Unpin()
+
 	switch args.Type {
 	case tracefs.Kprobe:
 		// Create a pointer to a NUL-terminated string for the kernel.
@@ -302,9 +308,6 @@ func pmuProbe(args tracefs.ProbeArgs) (*perfEvent, error) {
 	if err != nil {
 		return nil, fmt.Errorf("token %s: opening perf event: %w", token, err)
 	}
-
-	// Ensure the string pointer is not collected before PerfEventOpen returns.
-	runtime.KeepAlive(sp)
 
 	fd, err := sys.NewFD(rawFd)
 	if err != nil {

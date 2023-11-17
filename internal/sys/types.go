@@ -3,6 +3,7 @@
 package sys
 
 import (
+	"runtime"
 	"unsafe"
 )
 
@@ -490,9 +491,19 @@ type BtfInfo struct {
 	KernelBtf uint32
 }
 
+func (s *BtfInfo) Pin(p *runtime.Pinner) {
+	p.Pin(s)
+	s.Btf.Pin(p)
+	s.Name.Pin(p)
+}
+
 type FuncInfo struct {
 	InsnOff uint32
 	TypeId  uint32
+}
+
+func (s *FuncInfo) Pin(p *runtime.Pinner) {
+	p.Pin(s)
 }
 
 type LineInfo struct {
@@ -502,12 +513,20 @@ type LineInfo struct {
 	LineCol     uint32
 }
 
+func (s *LineInfo) Pin(p *runtime.Pinner) {
+	p.Pin(s)
+}
+
 type LinkInfo struct {
 	Type   LinkType
 	Id     LinkID
 	ProgId uint32
 	_      [4]byte
 	Extra  [32]uint8
+}
+
+func (s *LinkInfo) Pin(p *runtime.Pinner) {
+	p.Pin(s)
 }
 
 type MapInfo struct {
@@ -527,6 +546,10 @@ type MapInfo struct {
 	BtfValueTypeId        TypeID
 	_                     [4]byte
 	MapExtra              uint64
+}
+
+func (s *MapInfo) Pin(p *runtime.Pinner) {
+	p.Pin(s)
 }
 
 type ProgInfo struct {
@@ -571,6 +594,14 @@ type ProgInfo struct {
 	_                    [4]byte
 }
 
+func (s *ProgInfo) Pin(p *runtime.Pinner) {
+	p.Pin(s)
+	s.XlatedProgInsns.Pin(p)
+	s.MapIds.Pin(p)
+	s.FuncInfo.Pin(p)
+	s.LineInfo.Pin(p)
+}
+
 type SkLookup struct {
 	Cookie         uint64
 	Family         uint32
@@ -586,6 +617,10 @@ type SkLookup struct {
 	_              [4]byte
 }
 
+func (s *SkLookup) Pin(p *runtime.Pinner) {
+	p.Pin(s)
+}
+
 type XdpMd struct {
 	Data           uint32
 	DataEnd        uint32
@@ -595,9 +630,20 @@ type XdpMd struct {
 	EgressIfindex  uint32
 }
 
+func (s *XdpMd) Pin(p *runtime.Pinner) {
+	p.Pin(s)
+}
+
 type BtfGetFdByIdAttr struct{ Id uint32 }
 
+func (s *BtfGetFdByIdAttr) Pin(p *runtime.Pinner) {
+	p.Pin(s)
+}
+
 func BtfGetFdById(attr *BtfGetFdByIdAttr) (*FD, error) {
+	var pinner runtime.Pinner
+	attr.Pin(&pinner)
+	defer pinner.Unpin()
 	fd, err := BPF(BPF_BTF_GET_FD_BY_ID, unsafe.Pointer(attr), unsafe.Sizeof(*attr))
 	if err != nil {
 		return nil, err
@@ -610,7 +656,14 @@ type BtfGetNextIdAttr struct {
 	NextId BTFID
 }
 
+func (s *BtfGetNextIdAttr) Pin(p *runtime.Pinner) {
+	p.Pin(s)
+}
+
 func BtfGetNextId(attr *BtfGetNextIdAttr) error {
+	var pinner runtime.Pinner
+	attr.Pin(&pinner)
+	defer pinner.Unpin()
 	_, err := BPF(BPF_BTF_GET_NEXT_ID, unsafe.Pointer(attr), unsafe.Sizeof(*attr))
 	return err
 }
@@ -624,7 +677,16 @@ type BtfLoadAttr struct {
 	BtfLogTrueSize uint32
 }
 
+func (s *BtfLoadAttr) Pin(p *runtime.Pinner) {
+	p.Pin(s)
+	s.Btf.Pin(p)
+	s.BtfLogBuf.Pin(p)
+}
+
 func BtfLoad(attr *BtfLoadAttr) (*FD, error) {
+	var pinner runtime.Pinner
+	attr.Pin(&pinner)
+	defer pinner.Unpin()
 	fd, err := BPF(BPF_BTF_LOAD, unsafe.Pointer(attr), unsafe.Sizeof(*attr))
 	if err != nil {
 		return nil, err
@@ -634,7 +696,14 @@ func BtfLoad(attr *BtfLoadAttr) (*FD, error) {
 
 type EnableStatsAttr struct{ Type uint32 }
 
+func (s *EnableStatsAttr) Pin(p *runtime.Pinner) {
+	p.Pin(s)
+}
+
 func EnableStats(attr *EnableStatsAttr) (*FD, error) {
+	var pinner runtime.Pinner
+	attr.Pin(&pinner)
+	defer pinner.Unpin()
 	fd, err := BPF(BPF_ENABLE_STATS, unsafe.Pointer(attr), unsafe.Sizeof(*attr))
 	if err != nil {
 		return nil, err
@@ -647,7 +716,14 @@ type IterCreateAttr struct {
 	Flags  uint32
 }
 
+func (s *IterCreateAttr) Pin(p *runtime.Pinner) {
+	p.Pin(s)
+}
+
 func IterCreate(attr *IterCreateAttr) (*FD, error) {
+	var pinner runtime.Pinner
+	attr.Pin(&pinner)
+	defer pinner.Unpin()
 	fd, err := BPF(BPF_ITER_CREATE, unsafe.Pointer(attr), unsafe.Sizeof(*attr))
 	if err != nil {
 		return nil, err
@@ -664,7 +740,14 @@ type LinkCreateAttr struct {
 	_           [44]byte
 }
 
+func (s *LinkCreateAttr) Pin(p *runtime.Pinner) {
+	p.Pin(s)
+}
+
 func LinkCreate(attr *LinkCreateAttr) (*FD, error) {
+	var pinner runtime.Pinner
+	attr.Pin(&pinner)
+	defer pinner.Unpin()
 	fd, err := BPF(BPF_LINK_CREATE, unsafe.Pointer(attr), unsafe.Sizeof(*attr))
 	if err != nil {
 		return nil, err
@@ -682,7 +765,15 @@ type LinkCreateIterAttr struct {
 	_           [36]byte
 }
 
+func (s *LinkCreateIterAttr) Pin(p *runtime.Pinner) {
+	p.Pin(s)
+	s.IterInfo.Pin(p)
+}
+
 func LinkCreateIter(attr *LinkCreateIterAttr) (*FD, error) {
+	var pinner runtime.Pinner
+	attr.Pin(&pinner)
+	defer pinner.Unpin()
 	fd, err := BPF(BPF_LINK_CREATE, unsafe.Pointer(attr), unsafe.Sizeof(*attr))
 	if err != nil {
 		return nil, err
@@ -703,7 +794,17 @@ type LinkCreateKprobeMultiAttr struct {
 	_                [16]byte
 }
 
+func (s *LinkCreateKprobeMultiAttr) Pin(p *runtime.Pinner) {
+	p.Pin(s)
+	s.Syms.Pin(p)
+	s.Addrs.Pin(p)
+	s.Cookies.Pin(p)
+}
+
 func LinkCreateKprobeMulti(attr *LinkCreateKprobeMultiAttr) (*FD, error) {
+	var pinner runtime.Pinner
+	attr.Pin(&pinner)
+	defer pinner.Unpin()
 	fd, err := BPF(BPF_LINK_CREATE, unsafe.Pointer(attr), unsafe.Sizeof(*attr))
 	if err != nil {
 		return nil, err
@@ -720,7 +821,14 @@ type LinkCreatePerfEventAttr struct {
 	_          [40]byte
 }
 
+func (s *LinkCreatePerfEventAttr) Pin(p *runtime.Pinner) {
+	p.Pin(s)
+}
+
 func LinkCreatePerfEvent(attr *LinkCreatePerfEventAttr) (*FD, error) {
+	var pinner runtime.Pinner
+	attr.Pin(&pinner)
+	defer pinner.Unpin()
 	fd, err := BPF(BPF_LINK_CREATE, unsafe.Pointer(attr), unsafe.Sizeof(*attr))
 	if err != nil {
 		return nil, err
@@ -739,7 +847,14 @@ type LinkCreateTcxAttr struct {
 	_                [32]byte
 }
 
+func (s *LinkCreateTcxAttr) Pin(p *runtime.Pinner) {
+	p.Pin(s)
+}
+
 func LinkCreateTcx(attr *LinkCreateTcxAttr) (*FD, error) {
+	var pinner runtime.Pinner
+	attr.Pin(&pinner)
+	defer pinner.Unpin()
 	fd, err := BPF(BPF_LINK_CREATE, unsafe.Pointer(attr), unsafe.Sizeof(*attr))
 	if err != nil {
 		return nil, err
@@ -758,7 +873,14 @@ type LinkCreateTracingAttr struct {
 	_           [32]byte
 }
 
+func (s *LinkCreateTracingAttr) Pin(p *runtime.Pinner) {
+	p.Pin(s)
+}
+
 func LinkCreateTracing(attr *LinkCreateTracingAttr) (*FD, error) {
+	var pinner runtime.Pinner
+	attr.Pin(&pinner)
+	defer pinner.Unpin()
 	fd, err := BPF(BPF_LINK_CREATE, unsafe.Pointer(attr), unsafe.Sizeof(*attr))
 	if err != nil {
 		return nil, err
@@ -773,7 +895,14 @@ type LinkUpdateAttr struct {
 	OldProgFd uint32
 }
 
+func (s *LinkUpdateAttr) Pin(p *runtime.Pinner) {
+	p.Pin(s)
+}
+
 func LinkUpdate(attr *LinkUpdateAttr) error {
+	var pinner runtime.Pinner
+	attr.Pin(&pinner)
+	defer pinner.Unpin()
 	_, err := BPF(BPF_LINK_UPDATE, unsafe.Pointer(attr), unsafe.Sizeof(*attr))
 	return err
 }
@@ -795,7 +924,14 @@ type MapCreateAttr struct {
 	MapExtra              uint64
 }
 
+func (s *MapCreateAttr) Pin(p *runtime.Pinner) {
+	p.Pin(s)
+}
+
 func MapCreate(attr *MapCreateAttr) (*FD, error) {
+	var pinner runtime.Pinner
+	attr.Pin(&pinner)
+	defer pinner.Unpin()
 	fd, err := BPF(BPF_MAP_CREATE, unsafe.Pointer(attr), unsafe.Sizeof(*attr))
 	if err != nil {
 		return nil, err
@@ -814,7 +950,18 @@ type MapDeleteBatchAttr struct {
 	Flags     uint64
 }
 
+func (s *MapDeleteBatchAttr) Pin(p *runtime.Pinner) {
+	p.Pin(s)
+	s.InBatch.Pin(p)
+	s.OutBatch.Pin(p)
+	s.Keys.Pin(p)
+	s.Values.Pin(p)
+}
+
 func MapDeleteBatch(attr *MapDeleteBatchAttr) error {
+	var pinner runtime.Pinner
+	attr.Pin(&pinner)
+	defer pinner.Unpin()
 	_, err := BPF(BPF_MAP_DELETE_BATCH, unsafe.Pointer(attr), unsafe.Sizeof(*attr))
 	return err
 }
@@ -827,21 +974,44 @@ type MapDeleteElemAttr struct {
 	Flags uint64
 }
 
+func (s *MapDeleteElemAttr) Pin(p *runtime.Pinner) {
+	p.Pin(s)
+	s.Key.Pin(p)
+	s.Value.Pin(p)
+}
+
 func MapDeleteElem(attr *MapDeleteElemAttr) error {
+	var pinner runtime.Pinner
+	attr.Pin(&pinner)
+	defer pinner.Unpin()
 	_, err := BPF(BPF_MAP_DELETE_ELEM, unsafe.Pointer(attr), unsafe.Sizeof(*attr))
 	return err
 }
 
 type MapFreezeAttr struct{ MapFd uint32 }
 
+func (s *MapFreezeAttr) Pin(p *runtime.Pinner) {
+	p.Pin(s)
+}
+
 func MapFreeze(attr *MapFreezeAttr) error {
+	var pinner runtime.Pinner
+	attr.Pin(&pinner)
+	defer pinner.Unpin()
 	_, err := BPF(BPF_MAP_FREEZE, unsafe.Pointer(attr), unsafe.Sizeof(*attr))
 	return err
 }
 
 type MapGetFdByIdAttr struct{ Id uint32 }
 
+func (s *MapGetFdByIdAttr) Pin(p *runtime.Pinner) {
+	p.Pin(s)
+}
+
 func MapGetFdById(attr *MapGetFdByIdAttr) (*FD, error) {
+	var pinner runtime.Pinner
+	attr.Pin(&pinner)
+	defer pinner.Unpin()
 	fd, err := BPF(BPF_MAP_GET_FD_BY_ID, unsafe.Pointer(attr), unsafe.Sizeof(*attr))
 	if err != nil {
 		return nil, err
@@ -854,7 +1024,14 @@ type MapGetNextIdAttr struct {
 	NextId uint32
 }
 
+func (s *MapGetNextIdAttr) Pin(p *runtime.Pinner) {
+	p.Pin(s)
+}
+
 func MapGetNextId(attr *MapGetNextIdAttr) error {
+	var pinner runtime.Pinner
+	attr.Pin(&pinner)
+	defer pinner.Unpin()
 	_, err := BPF(BPF_MAP_GET_NEXT_ID, unsafe.Pointer(attr), unsafe.Sizeof(*attr))
 	return err
 }
@@ -866,7 +1043,16 @@ type MapGetNextKeyAttr struct {
 	NextKey Pointer
 }
 
+func (s *MapGetNextKeyAttr) Pin(p *runtime.Pinner) {
+	p.Pin(s)
+	s.Key.Pin(p)
+	s.NextKey.Pin(p)
+}
+
 func MapGetNextKey(attr *MapGetNextKeyAttr) error {
+	var pinner runtime.Pinner
+	attr.Pin(&pinner)
+	defer pinner.Unpin()
 	_, err := BPF(BPF_MAP_GET_NEXT_KEY, unsafe.Pointer(attr), unsafe.Sizeof(*attr))
 	return err
 }
@@ -882,7 +1068,18 @@ type MapLookupAndDeleteBatchAttr struct {
 	Flags     uint64
 }
 
+func (s *MapLookupAndDeleteBatchAttr) Pin(p *runtime.Pinner) {
+	p.Pin(s)
+	s.InBatch.Pin(p)
+	s.OutBatch.Pin(p)
+	s.Keys.Pin(p)
+	s.Values.Pin(p)
+}
+
 func MapLookupAndDeleteBatch(attr *MapLookupAndDeleteBatchAttr) error {
+	var pinner runtime.Pinner
+	attr.Pin(&pinner)
+	defer pinner.Unpin()
 	_, err := BPF(BPF_MAP_LOOKUP_AND_DELETE_BATCH, unsafe.Pointer(attr), unsafe.Sizeof(*attr))
 	return err
 }
@@ -895,7 +1092,16 @@ type MapLookupAndDeleteElemAttr struct {
 	Flags uint64
 }
 
+func (s *MapLookupAndDeleteElemAttr) Pin(p *runtime.Pinner) {
+	p.Pin(s)
+	s.Key.Pin(p)
+	s.Value.Pin(p)
+}
+
 func MapLookupAndDeleteElem(attr *MapLookupAndDeleteElemAttr) error {
+	var pinner runtime.Pinner
+	attr.Pin(&pinner)
+	defer pinner.Unpin()
 	_, err := BPF(BPF_MAP_LOOKUP_AND_DELETE_ELEM, unsafe.Pointer(attr), unsafe.Sizeof(*attr))
 	return err
 }
@@ -911,7 +1117,18 @@ type MapLookupBatchAttr struct {
 	Flags     uint64
 }
 
+func (s *MapLookupBatchAttr) Pin(p *runtime.Pinner) {
+	p.Pin(s)
+	s.InBatch.Pin(p)
+	s.OutBatch.Pin(p)
+	s.Keys.Pin(p)
+	s.Values.Pin(p)
+}
+
 func MapLookupBatch(attr *MapLookupBatchAttr) error {
+	var pinner runtime.Pinner
+	attr.Pin(&pinner)
+	defer pinner.Unpin()
 	_, err := BPF(BPF_MAP_LOOKUP_BATCH, unsafe.Pointer(attr), unsafe.Sizeof(*attr))
 	return err
 }
@@ -924,7 +1141,16 @@ type MapLookupElemAttr struct {
 	Flags uint64
 }
 
+func (s *MapLookupElemAttr) Pin(p *runtime.Pinner) {
+	p.Pin(s)
+	s.Key.Pin(p)
+	s.Value.Pin(p)
+}
+
 func MapLookupElem(attr *MapLookupElemAttr) error {
+	var pinner runtime.Pinner
+	attr.Pin(&pinner)
+	defer pinner.Unpin()
 	_, err := BPF(BPF_MAP_LOOKUP_ELEM, unsafe.Pointer(attr), unsafe.Sizeof(*attr))
 	return err
 }
@@ -940,7 +1166,18 @@ type MapUpdateBatchAttr struct {
 	Flags     uint64
 }
 
+func (s *MapUpdateBatchAttr) Pin(p *runtime.Pinner) {
+	p.Pin(s)
+	s.InBatch.Pin(p)
+	s.OutBatch.Pin(p)
+	s.Keys.Pin(p)
+	s.Values.Pin(p)
+}
+
 func MapUpdateBatch(attr *MapUpdateBatchAttr) error {
+	var pinner runtime.Pinner
+	attr.Pin(&pinner)
+	defer pinner.Unpin()
 	_, err := BPF(BPF_MAP_UPDATE_BATCH, unsafe.Pointer(attr), unsafe.Sizeof(*attr))
 	return err
 }
@@ -953,7 +1190,16 @@ type MapUpdateElemAttr struct {
 	Flags uint64
 }
 
+func (s *MapUpdateElemAttr) Pin(p *runtime.Pinner) {
+	p.Pin(s)
+	s.Key.Pin(p)
+	s.Value.Pin(p)
+}
+
 func MapUpdateElem(attr *MapUpdateElemAttr) error {
+	var pinner runtime.Pinner
+	attr.Pin(&pinner)
+	defer pinner.Unpin()
 	_, err := BPF(BPF_MAP_UPDATE_ELEM, unsafe.Pointer(attr), unsafe.Sizeof(*attr))
 	return err
 }
@@ -966,7 +1212,15 @@ type ObjGetAttr struct {
 	_         [4]byte
 }
 
+func (s *ObjGetAttr) Pin(p *runtime.Pinner) {
+	p.Pin(s)
+	s.Pathname.Pin(p)
+}
+
 func ObjGet(attr *ObjGetAttr) (*FD, error) {
+	var pinner runtime.Pinner
+	attr.Pin(&pinner)
+	defer pinner.Unpin()
 	fd, err := BPF(BPF_OBJ_GET, unsafe.Pointer(attr), unsafe.Sizeof(*attr))
 	if err != nil {
 		return nil, err
@@ -980,7 +1234,15 @@ type ObjGetInfoByFdAttr struct {
 	Info    Pointer
 }
 
+func (s *ObjGetInfoByFdAttr) Pin(p *runtime.Pinner) {
+	p.Pin(s)
+	s.Info.Pin(p)
+}
+
 func ObjGetInfoByFd(attr *ObjGetInfoByFdAttr) error {
+	var pinner runtime.Pinner
+	attr.Pin(&pinner)
+	defer pinner.Unpin()
 	_, err := BPF(BPF_OBJ_GET_INFO_BY_FD, unsafe.Pointer(attr), unsafe.Sizeof(*attr))
 	return err
 }
@@ -993,7 +1255,15 @@ type ObjPinAttr struct {
 	_         [4]byte
 }
 
+func (s *ObjPinAttr) Pin(p *runtime.Pinner) {
+	p.Pin(s)
+	s.Pathname.Pin(p)
+}
+
 func ObjPin(attr *ObjPinAttr) error {
+	var pinner runtime.Pinner
+	attr.Pin(&pinner)
+	defer pinner.Unpin()
 	_, err := BPF(BPF_OBJ_PIN, unsafe.Pointer(attr), unsafe.Sizeof(*attr))
 	return err
 }
@@ -1008,7 +1278,14 @@ type ProgAttachAttr struct {
 	ExpectedRevision  uint64
 }
 
+func (s *ProgAttachAttr) Pin(p *runtime.Pinner) {
+	p.Pin(s)
+}
+
 func ProgAttach(attr *ProgAttachAttr) error {
+	var pinner runtime.Pinner
+	attr.Pin(&pinner)
+	defer pinner.Unpin()
 	_, err := BPF(BPF_PROG_ATTACH, unsafe.Pointer(attr), unsafe.Sizeof(*attr))
 	return err
 }
@@ -1019,7 +1296,14 @@ type ProgBindMapAttr struct {
 	Flags  uint32
 }
 
+func (s *ProgBindMapAttr) Pin(p *runtime.Pinner) {
+	p.Pin(s)
+}
+
 func ProgBindMap(attr *ProgBindMapAttr) error {
+	var pinner runtime.Pinner
+	attr.Pin(&pinner)
+	defer pinner.Unpin()
 	_, err := BPF(BPF_PROG_BIND_MAP, unsafe.Pointer(attr), unsafe.Sizeof(*attr))
 	return err
 }
@@ -1034,14 +1318,28 @@ type ProgDetachAttr struct {
 	ExpectedRevision  uint64
 }
 
+func (s *ProgDetachAttr) Pin(p *runtime.Pinner) {
+	p.Pin(s)
+}
+
 func ProgDetach(attr *ProgDetachAttr) error {
+	var pinner runtime.Pinner
+	attr.Pin(&pinner)
+	defer pinner.Unpin()
 	_, err := BPF(BPF_PROG_DETACH, unsafe.Pointer(attr), unsafe.Sizeof(*attr))
 	return err
 }
 
 type ProgGetFdByIdAttr struct{ Id uint32 }
 
+func (s *ProgGetFdByIdAttr) Pin(p *runtime.Pinner) {
+	p.Pin(s)
+}
+
 func ProgGetFdById(attr *ProgGetFdByIdAttr) (*FD, error) {
+	var pinner runtime.Pinner
+	attr.Pin(&pinner)
+	defer pinner.Unpin()
 	fd, err := BPF(BPF_PROG_GET_FD_BY_ID, unsafe.Pointer(attr), unsafe.Sizeof(*attr))
 	if err != nil {
 		return nil, err
@@ -1054,7 +1352,14 @@ type ProgGetNextIdAttr struct {
 	NextId uint32
 }
 
+func (s *ProgGetNextIdAttr) Pin(p *runtime.Pinner) {
+	p.Pin(s)
+}
+
 func ProgGetNextId(attr *ProgGetNextIdAttr) error {
+	var pinner runtime.Pinner
+	attr.Pin(&pinner)
+	defer pinner.Unpin()
 	_, err := BPF(BPF_PROG_GET_NEXT_ID, unsafe.Pointer(attr), unsafe.Sizeof(*attr))
 	return err
 }
@@ -1088,7 +1393,21 @@ type ProgLoadAttr struct {
 	LogTrueSize        uint32
 }
 
+func (s *ProgLoadAttr) Pin(p *runtime.Pinner) {
+	p.Pin(s)
+	s.Insns.Pin(p)
+	s.License.Pin(p)
+	s.LogBuf.Pin(p)
+	s.FuncInfo.Pin(p)
+	s.LineInfo.Pin(p)
+	s.FdArray.Pin(p)
+	s.CoreRelos.Pin(p)
+}
+
 func ProgLoad(attr *ProgLoadAttr) (*FD, error) {
+	var pinner runtime.Pinner
+	attr.Pin(&pinner)
+	defer pinner.Unpin()
 	fd, err := BPF(BPF_PROG_LOAD, unsafe.Pointer(attr), unsafe.Sizeof(*attr))
 	if err != nil {
 		return nil, err
@@ -1110,7 +1429,18 @@ type ProgQueryAttr struct {
 	Revision          uint64
 }
 
+func (s *ProgQueryAttr) Pin(p *runtime.Pinner) {
+	p.Pin(s)
+	s.ProgIds.Pin(p)
+	s.ProgAttachFlags.Pin(p)
+	s.LinkIds.Pin(p)
+	s.LinkAttachFlags.Pin(p)
+}
+
 func ProgQuery(attr *ProgQueryAttr) error {
+	var pinner runtime.Pinner
+	attr.Pin(&pinner)
+	defer pinner.Unpin()
 	_, err := BPF(BPF_PROG_QUERY, unsafe.Pointer(attr), unsafe.Sizeof(*attr))
 	return err
 }
@@ -1134,7 +1464,18 @@ type ProgRunAttr struct {
 	_           [4]byte
 }
 
+func (s *ProgRunAttr) Pin(p *runtime.Pinner) {
+	p.Pin(s)
+	s.DataIn.Pin(p)
+	s.DataOut.Pin(p)
+	s.CtxIn.Pin(p)
+	s.CtxOut.Pin(p)
+}
+
 func ProgRun(attr *ProgRunAttr) error {
+	var pinner runtime.Pinner
+	attr.Pin(&pinner)
+	defer pinner.Unpin()
 	_, err := BPF(BPF_PROG_TEST_RUN, unsafe.Pointer(attr), unsafe.Sizeof(*attr))
 	return err
 }
@@ -1145,7 +1486,15 @@ type RawTracepointOpenAttr struct {
 	_      [4]byte
 }
 
+func (s *RawTracepointOpenAttr) Pin(p *runtime.Pinner) {
+	p.Pin(s)
+	s.Name.Pin(p)
+}
+
 func RawTracepointOpen(attr *RawTracepointOpenAttr) (*FD, error) {
+	var pinner runtime.Pinner
+	attr.Pin(&pinner)
+	defer pinner.Unpin()
 	fd, err := BPF(BPF_RAW_TRACEPOINT_OPEN, unsafe.Pointer(attr), unsafe.Sizeof(*attr))
 	if err != nil {
 		return nil, err
@@ -1159,14 +1508,27 @@ type CgroupLinkInfo struct {
 	_          [4]byte
 }
 
+func (s *CgroupLinkInfo) Pin(p *runtime.Pinner) {
+	p.Pin(s)
+}
+
 type IterLinkInfo struct {
 	TargetName    Pointer
 	TargetNameLen uint32
 }
 
+func (s *IterLinkInfo) Pin(p *runtime.Pinner) {
+	p.Pin(s)
+	s.TargetName.Pin(p)
+}
+
 type NetNsLinkInfo struct {
 	NetnsIno   uint32
 	AttachType AttachType
+}
+
+func (s *NetNsLinkInfo) Pin(p *runtime.Pinner) {
+	p.Pin(s)
 }
 
 type RawTracepointLinkInfo struct {
@@ -1175,9 +1537,18 @@ type RawTracepointLinkInfo struct {
 	_         [4]byte
 }
 
+func (s *RawTracepointLinkInfo) Pin(p *runtime.Pinner) {
+	p.Pin(s)
+	s.TpName.Pin(p)
+}
+
 type TcxLinkInfo struct {
 	Ifindex    uint32
 	AttachType AttachType
+}
+
+func (s *TcxLinkInfo) Pin(p *runtime.Pinner) {
+	p.Pin(s)
 }
 
 type TracingLinkInfo struct {
@@ -1186,4 +1557,12 @@ type TracingLinkInfo struct {
 	TargetBtfId TypeID
 }
 
+func (s *TracingLinkInfo) Pin(p *runtime.Pinner) {
+	p.Pin(s)
+}
+
 type XDPLinkInfo struct{ Ifindex uint32 }
+
+func (s *XDPLinkInfo) Pin(p *runtime.Pinner) {
+	p.Pin(s)
+}

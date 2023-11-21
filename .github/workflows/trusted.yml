@@ -11,26 +11,58 @@ jobs:
   tag-breaking-change:
     name: Tag breaking changes
     runs-on: ubuntu-latest
-    if: >
-      github.event.workflow_run.event == 'pull_request' &&
-      github.event.workflow_run.conclusion == 'failure'
+    if: github.event.workflow_run.event == 'pull_request'
     steps:
-      - name: Get PR ID
-        id: pr_id
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          PR_ID=$(gh pr view -R "${{ github.repository }}" "${{ github.event.workflow_run.head_repository.owner.login }}:${{ github.event.workflow_run.head_branch }}" --json "number" --jq ".number")
-          echo "pr_id=${PR_ID}" >> $GITHUB_OUTPUT
-      - name: Add breaking-change label
+      - name: 'Download artifact'
+        uses: actions/github-script@v3
+        with:
+          script: |
+            var artifacts = await github.actions.listWorkflowRunArtifacts({
+               owner: context.repo.owner,
+               repo: context.repo.repo,
+               run_id: ${{github.event.workflow_run.id }},
+            });
+            var matchArtifact = artifacts.data.artifacts.filter((artifact) => {
+              return artifact.name == "apidiff"
+            })[0];
+            var download = await github.actions.downloadArtifact({
+               owner: context.repo.owner,
+               repo: context.repo.repo,
+               artifact_id: matchArtifact.id,
+               archive_format: 'zip',
+            });
+            var fs = require('fs');
+            fs.writeFileSync('${{github.workspace}}/apidiff.zip', Buffer.from(download.data));
+      - run: unzip apidiff.zip
+      - name: 'Add or remove label'
         uses: actions/github-script@v3
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
-            const issue_number = ${{ steps.pr_id.outputs.pr_id }};
-            await github.issues.addLabels({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: issue_number,
-              labels: ['breaking-change']
-            });
+            var fs = require('fs');
+            var jsonData = JSON.parse(fs.readFileSync('apidiff.json', 'utf8'));
+
+            var issueNumber = jsonData.id;
+            var semverType = jsonData["semver-type"];
+
+            if (semverType === 'major') {
+              // Add 'breaking-change' label
+              await github.issues.addLabels({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issueNumber,
+                labels: ['breaking-change']
+              });
+            } else {
+              // Remove 'breaking-change' label if it exists
+              try {
+                await github.issues.removeLabel({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: issueNumber,
+                  name: 'breaking-change'
+                });
+              } catch (error) {
+                console.log('Label breaking-change not found or already removed');
+              }
+            }

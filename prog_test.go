@@ -928,6 +928,22 @@ func TestProgramInstructions(t *testing.T) {
 	}
 }
 
+func BenchmarkNewProgram(b *testing.B) {
+	testutils.SkipOnOldKernel(b, "5.18", "kfunc support")
+	spec, err := LoadCollectionSpec(fmt.Sprintf("testdata/kfunc-%s.elf", internal.ClangEndian))
+	qt.Assert(b, err, qt.IsNil)
+
+	b.ReportAllocs()
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		_, err := NewProgram(spec.Programs["benchmark"])
+		if !errors.Is(err, unix.EACCES) {
+			b.Fatal("Unexpected error:", err)
+		}
+	}
+}
+
 func createProgramArray(t *testing.T) *Map {
 	t.Helper()
 

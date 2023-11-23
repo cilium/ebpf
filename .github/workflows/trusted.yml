@@ -14,7 +14,7 @@ jobs:
     if: github.event.workflow_run.event == 'pull_request'
     steps:
       - name: 'Download artifact'
-        uses: actions/github-script@v7
+        uses: actions/github-script@v3
         with:
           script: |
             var artifacts = await github.actions.listWorkflowRunArtifacts({
@@ -35,10 +35,9 @@ jobs:
             fs.writeFileSync('${{github.workspace}}/apidiff.zip', Buffer.from(download.data));
       - run: unzip apidiff.zip
       - name: 'Add or remove label'
-        uses: actions/github-script@v7
+        uses: actions/github-script@v3
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
-          debug: true
           script: |
             var fs = require('fs');
             var jsonData = JSON.parse(fs.readFileSync('apidiff.json', 'utf8'));
@@ -46,8 +45,6 @@ jobs:
             var issueNumber = jsonData.id;
             var semverType = jsonData["semver-type"];
 
-            console.log('pr is ' + issueNumber);
-            console.log('semver-type is ' + semverType);
             if (semverType === 'major') {
               // Add 'breaking-change' label
               await github.issues.addLabels({

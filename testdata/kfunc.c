@@ -20,3 +20,12 @@ __section("tc") int call_kfunc(void *ctx) {
 	}
 	return 1;
 }
+
+extern int bpf_fentry_test1(int) __ksym;
+
+__section("fentry/bpf_fentry_test2") int benchmark() {
+	// bpf_fentry_test1 is a valid kfunc but not allowed to be called from
+	// TC context. We use this to avoid loading a gajillion programs into
+	// the kernel when benchmarking the loader.
+	return bpf_fentry_test1(0);
+}

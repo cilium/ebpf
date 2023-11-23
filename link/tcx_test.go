@@ -39,8 +39,8 @@ func TestTCXAnchor(t *testing.T) {
 	linkID := linkInfo.ID
 
 	for _, anchor := range []Anchor{
-		First(),
-		Last(),
+		Head(),
+		Tail(),
 		BeforeProgram(a),
 		BeforeProgramByID(programID),
 		AfterLink(linkA),

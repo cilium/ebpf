@@ -35,7 +35,8 @@ func (firstAnchor) anchor() (fdOrID, flags uint32, _ error) {
 	return 0, sys.BPF_F_BEFORE, nil
 }
 
-func First() Anchor {
+// Head is the position before all other programs or links.
+func Head() Anchor {
 	return firstAnchor{}
 }
 
@@ -45,7 +46,8 @@ func (lastAnchor) anchor() (fdOrID, flags uint32, _ error) {
 	return 0, sys.BPF_F_AFTER, nil
 }
 
-func Last() Anchor {
+// Tail is the position after all other programs or links.
+func Tail() Anchor {
 	return lastAnchor{}
 }
 

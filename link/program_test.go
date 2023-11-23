@@ -84,8 +84,8 @@ func TestRawAttachProgramAnchor(t *testing.T) {
 	b := mustLoadProgram(t, ebpf.SchedCLS, 0, "")
 
 	for _, anchor := range []Anchor{
-		First(),
-		Last(),
+		Head(),
+		Tail(),
 		AfterProgram(a),
 		AfterProgramByID(aID),
 		AfterLink(link),

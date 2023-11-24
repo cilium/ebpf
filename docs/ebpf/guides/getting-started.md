@@ -2,7 +2,7 @@
 
 In this guide, we'll walk you through building a new eBPF-powered Go application
 from scratch. We'll introduce the toolchain, write a minimal eBPF C example and
-compile it using [bpf2go](../bpf2go/index.md). Then, we'll put together a Go
+compile it using bpf2go. Then, we'll put together a Go
 application that loads the eBPF program into the kernel and periodically
 displays its output.
 
@@ -17,7 +17,7 @@ more.
 
 !!! abstract "Dependencies"
     To follow along with the example, you'll need:
-    
+
     * Linux kernel version 5.7 or later, for bpf_link support
     * LLVM 11 or later [^1] (`clang` and `llvm-strip`)
     * libbpf headers [^2]
@@ -37,7 +37,7 @@ more.
 [^3]:
     On AMD64 Debian/Ubuntu, install `linux-headers-amd64`. On Fedora, install
     `kernel-devel`.
-    
+
     On Debian, you may also need `ln -sf /usr/include/asm-generic/
     /usr/include/asm` since the example expects to find `<asm/types.h>`.
 
@@ -155,7 +155,7 @@ go: added golang.org/x/exp v0.0.0-20230224173230-c95f2b4c22f2
 go: added golang.org/x/sys v0.6.0
 ```
 
-Now we're ready to run `go generate`: 
+Now we're ready to run `go generate`:
 
 ```{ .shell-session data-copy="go generate" }
 % go generate
@@ -214,8 +214,7 @@ standard library here.
 
 1. Associate the `count_packets` (stylized in the Go scaffolding as
    `CountPackets`) eBPF program with `eth0`. This returns a {{
-   godoc('link/Link') }} abstraction. See [Attaching](../programs/attaching.md)
-   for a deep dive.
+   godoc('link/Link') }} abstraction.
 
 1. Close the file descriptor of the Program-to-interface association. Note that
    this will stop the Program from executing on incoming packets if the Link was

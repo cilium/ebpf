@@ -54,8 +54,7 @@ map dump pinned /sys/fs/bpf/my_map`.
 ### Attaching
 
 Attaching a Program to a hook acts as a reference to a Program, since the kernel
-needs to be able to execute the program's instructions at any point. More on
-that in [the section on attaching programs](../programs/attaching.md).
+needs to be able to execute the program's instructions at any point.
 
 For legacy reasons, some {{ godoc('link/Link') }} types don't support pinning.
 It is generally safe to assume these links will persist beyond the lifetime of

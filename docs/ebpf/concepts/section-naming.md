@@ -80,8 +80,7 @@ called `kprobe/slub_flush`.
 
 `.maps`
 
-:   This section is dedicated to [BTF-style Map
-    definitions](../maps/declaring.md).
+:   This section is dedicated to BTF-style Map definitions.
 
 `maps`
 

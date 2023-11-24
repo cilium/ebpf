@@ -78,7 +78,7 @@ easier.
 {{ go_example('DocLoadAndAssignObjs', title='Declare a custom struct myObjs') }}
 
 !!! note ""
-    Use [bpf2go](../bpf2go/index.md) if the preceding code snippet looks
+    Use bpf2go if the preceding code snippet looks
     tedious. bpf2go can generate this kind of boilerplate code automatically
     and will make sure it stays in sync with your C code.
 

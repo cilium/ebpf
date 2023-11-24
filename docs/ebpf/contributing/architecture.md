@@ -31,7 +31,7 @@ an ELF file which contains program byte code (aka BPF), but also metadata for
 maps used by the program. The metadata follows the conventions set by libbpf
 shipped with the kernel. Certain ELF sections have special meaning
 and contain structures defined by libbpf. Newer versions of clang emit
-additional metadata in [BPF Type Format](../btf/index.md).
+additional metadata in BPF Type Format.
 
 The library aims to be compatible with libbpf so that moving from a C toolchain
 to a Go one creates little friction. To that end, the ELF reader

@@ -13,8 +13,7 @@ ecosystem.
 
 ## Getting Started
 
-A small collection of Go and eBPF programs that serve as examples for building
-your own tools can be found under [examples/](examples/).
+Please take a look at our [Getting Started] guide.
 
 [Contributions](https://ebpf-go.dev/contributing) are highly encouraged, as they highlight certain use cases of
 eBPF and the library, and help shape the future of the project.
@@ -69,3 +68,5 @@ MIT
 ### eBPF Gopher
 
 The eBPF honeygopher is based on the Go gopher designed by Renee French.
+
+[Getting Started]: https://ebpf-go.dev/guides/getting-started/

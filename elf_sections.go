@@ -33,6 +33,8 @@ var elfSectionDefs = []libbpfElfSectionDef{
 	{"tc", sys.BPF_PROG_TYPE_SCHED_CLS, 0, _SEC_NONE},
 	{"classifier", sys.BPF_PROG_TYPE_SCHED_CLS, 0, _SEC_NONE},
 	{"action", sys.BPF_PROG_TYPE_SCHED_ACT, 0, _SEC_NONE},
+	{"netkit/primary", sys.BPF_PROG_TYPE_SCHED_CLS, sys.BPF_NETKIT_PRIMARY, _SEC_NONE},
+	{"netkit/peer", sys.BPF_PROG_TYPE_SCHED_CLS, sys.BPF_NETKIT_PEER, _SEC_NONE},
 	{"tracepoint+", sys.BPF_PROG_TYPE_TRACEPOINT, 0, _SEC_NONE},
 	{"tp+", sys.BPF_PROG_TYPE_TRACEPOINT, 0, _SEC_NONE},
 	{"raw_tracepoint+", sys.BPF_PROG_TYPE_RAW_TRACEPOINT, 0, _SEC_NONE},

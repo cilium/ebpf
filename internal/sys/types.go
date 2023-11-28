@@ -65,7 +65,14 @@ const (
 	BPF_TCX_INGRESS                    AttachType = 46
 	BPF_TCX_EGRESS                     AttachType = 47
 	BPF_TRACE_UPROBE_MULTI             AttachType = 48
-	__MAX_BPF_ATTACH_TYPE              AttachType = 49
+	BPF_CGROUP_UNIX_CONNECT            AttachType = 49
+	BPF_CGROUP_UNIX_SENDMSG            AttachType = 50
+	BPF_CGROUP_UNIX_RECVMSG            AttachType = 51
+	BPF_CGROUP_UNIX_GETPEERNAME        AttachType = 52
+	BPF_CGROUP_UNIX_GETSOCKNAME        AttachType = 53
+	BPF_NETKIT_PRIMARY                 AttachType = 54
+	BPF_NETKIT_PEER                    AttachType = 55
+	__MAX_BPF_ATTACH_TYPE              AttachType = 56
 )
 
 type Cmd uint32

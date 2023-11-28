@@ -4,13 +4,13 @@ import (
 	"errors"
 	"os"
 	"strings"
+	"sync"
 	"testing"
 
-	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/unix"
 )
 
-var cgroup2Path = internal.Memoize(func() (string, error) {
+var cgroup2Path = sync.OnceValues(func() (string, error) {
 	mounts, err := os.ReadFile("/proc/mounts")
 	if err != nil {
 		return "", err

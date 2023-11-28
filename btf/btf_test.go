@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"sync"
 	"testing"
 
 	"github.com/go-quicktest/qt"
@@ -37,7 +38,7 @@ type specAndRawBTF struct {
 	spec *Spec
 }
 
-var vmlinuxTestdata = internal.Memoize(func() (specAndRawBTF, error) {
+var vmlinuxTestdata = sync.OnceValues(func() (specAndRawBTF, error) {
 	b, err := internal.ReadAllCompressed("testdata/vmlinux.btf.gz")
 	if err != nil {
 		return specAndRawBTF{}, err

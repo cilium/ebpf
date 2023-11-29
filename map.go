@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"math/rand"
 	"os"
 	"path/filepath"
@@ -963,14 +964,15 @@ func (m *Map) guessNonExistentKey() ([]byte, error) {
 //
 // "keysOut" and "valuesOut" must be of type slice, a pointer
 // to a slice or buffer will not work.
-// "prevKey" is the key to start the batch lookup from, it will
-// *not* be included in the results. Use nil to start at the first key.
+// "cursor" is an pointer to an opaque handle. It must be non-nil. Pass
+// "cursor" to subsequent calls of this function to continue the batching
+// operation in the case of chunking.
 //
 // ErrKeyNotExist is returned when the batch lookup has reached
 // the end of all possible results, even when partial results
 // are returned. It should be used to evaluate when lookup is "done".
-func (m *Map) BatchLookup(prevKey, nextKeyOut, keysOut, valuesOut interface{}, opts *BatchOptions) (int, error) {
-	return m.batchLookup(sys.BPF_MAP_LOOKUP_BATCH, prevKey, nextKeyOut, keysOut, valuesOut, opts)
+func (m *Map) BatchLookup(cursor *BatchCursor, keysOut, valuesOut interface{}, opts *BatchOptions) (int, error) {
+	return m.batchLookup(sys.BPF_MAP_LOOKUP_BATCH, cursor, keysOut, valuesOut, opts)
 }
 
 // BatchLookupAndDelete looks up many elements in a map at once,
@@ -978,17 +980,35 @@ func (m *Map) BatchLookup(prevKey, nextKeyOut, keysOut, valuesOut interface{}, o
 // It then deletes all those elements.
 // "keysOut" and "valuesOut" must be of type slice, a pointer
 // to a slice or buffer will not work.
-// "prevKey" is the key to start the batch lookup from, it will
-// *not* be included in the results. Use nil to start at the first key.
+// "cursor" is an pointer to an opaque handle. It must be non-nil. Pass
+// "cursor" to subsequent calls of this function to continue the batching
+// operation in the case of chunking.
 //
 // ErrKeyNotExist is returned when the batch lookup has reached
 // the end of all possible results, even when partial results
 // are returned. It should be used to evaluate when lookup is "done".
-func (m *Map) BatchLookupAndDelete(prevKey, nextKeyOut, keysOut, valuesOut interface{}, opts *BatchOptions) (int, error) {
-	return m.batchLookup(sys.BPF_MAP_LOOKUP_AND_DELETE_BATCH, prevKey, nextKeyOut, keysOut, valuesOut, opts)
+func (m *Map) BatchLookupAndDelete(cursor *BatchCursor, keysOut, valuesOut interface{}, opts *BatchOptions) (int, error) {
+	return m.batchLookup(sys.BPF_MAP_LOOKUP_AND_DELETE_BATCH, cursor, keysOut, valuesOut, opts)
 }
 
-func (m *Map) batchLookup(cmd sys.Cmd, startKey, nextKeyOut, keysOut, valuesOut interface{}, opts *BatchOptions) (int, error) {
+// BatchCursor represents a starting point for a batch operation.
+type BatchCursor struct {
+	opaque []byte // len() is max(key_size, 4) to be on the safe side
+}
+
+func (m *Map) batchLookup(cmd sys.Cmd, cursor *BatchCursor, keysOut, valuesOut interface{}, opts *BatchOptions) (int, error) {
+	var inBatch []byte
+	if cursor.opaque == nil {
+		// * generic_map_lookup_batch requires that batch_out is key_size bytes.
+		//   This is used by array and LPM maps.
+		//
+		// * __htab_map_lookup_and_delete_batch requires u32. This is used by the
+		//   various hash maps.
+		cursor.opaque = make([]byte, int(math.Max(float64(m.keySize), 4)))
+	} else {
+		inBatch = cursor.opaque
+	}
+
 	if err := haveBatchAPI(); err != nil {
 		return 0, err
 	}
@@ -1011,27 +1031,19 @@ func (m *Map) batchLookup(cmd sys.Cmd, startKey, nextKeyOut, keysOut, valuesOut 
 	keyPtr := sys.NewSlicePointer(keyBuf)
 	valueBuf := make([]byte, count*int(m.fullValueSize))
 	valuePtr := sys.NewSlicePointer(valueBuf)
-	nextBuf := makeMapSyscallOutput(nextKeyOut, int(m.keySize))
 
 	attr := sys.MapLookupBatchAttr{
 		MapFd:    m.fd.Uint(),
 		Keys:     keyPtr,
 		Values:   valuePtr,
 		Count:    uint32(count),
-		OutBatch: nextBuf.Pointer(),
+		InBatch:  sys.NewSlicePointer(inBatch),
+		OutBatch: sys.NewSlicePointer(cursor.opaque),
 	}
 
 	if opts != nil {
 		attr.ElemFlags = opts.ElemFlags
 		attr.Flags = opts.Flags
-	}
-
-	var err error
-	if startKey != nil {
-		attr.InBatch, err = marshalMapSyscallInput(startKey, int(m.keySize))
-		if err != nil {
-			return 0, err
-		}
 	}
 
 	_, sysErr := sys.BPF(cmd, unsafe.Pointer(&attr), unsafe.Sizeof(attr))
@@ -1040,11 +1052,7 @@ func (m *Map) batchLookup(cmd sys.Cmd, startKey, nextKeyOut, keysOut, valuesOut 
 		return 0, sysErr
 	}
 
-	err = nextBuf.Unmarshal(nextKeyOut)
-	if err != nil {
-		return 0, err
-	}
-	err = sysenc.Unmarshal(keysOut, keyBuf)
+	err := sysenc.Unmarshal(keysOut, keyBuf)
 	if err != nil {
 		return 0, err
 	}

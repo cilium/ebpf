@@ -108,7 +108,6 @@ func TestBatchAPIArray(t *testing.T) {
 	defer m.Close()
 
 	var (
-		nextKey      uint32
 		keys         = []uint32{0, 1}
 		values       = []uint32{42, 4242}
 		lookupKeys   = make([]uint32, 2)
@@ -133,15 +132,13 @@ func TestBatchAPIArray(t *testing.T) {
 		t.Error("Want value 42, got", v)
 	}
 
-	count, err = m.BatchLookup(nil, &nextKey, lookupKeys, lookupValues, nil)
+	var cursor BatchCursor
+	count, err = m.BatchLookup(&cursor, lookupKeys, lookupValues, nil)
 	if err != nil {
 		t.Fatalf("BatchLookup: %v", err)
 	}
 	if count != len(lookupKeys) {
 		t.Fatalf("BatchLookup: returned %d results, expected %d", count, len(lookupKeys))
-	}
-	if nextKey != lookupKeys[1] {
-		t.Fatalf("BatchLookup: expected nextKey, %d, to be the same as the lastKey returned, %d", nextKey, lookupKeys[1])
 	}
 	if !reflect.DeepEqual(keys, lookupKeys) {
 		t.Errorf("BatchUpdate and BatchLookup keys disagree: %v %v", keys, lookupKeys)
@@ -150,7 +147,8 @@ func TestBatchAPIArray(t *testing.T) {
 		t.Errorf("BatchUpdate and BatchLookup values disagree: %v %v", values, lookupValues)
 	}
 
-	_, err = m.BatchLookupAndDelete(nil, &nextKey, deleteKeys, deleteValues, nil)
+	cursor = BatchCursor{}
+	_, err = m.BatchLookupAndDelete(&cursor, deleteKeys, deleteValues, nil)
 	if !errors.Is(err, ErrNotSupported) {
 		t.Fatalf("BatchLookUpDelete: expected error %v, but got %v", ErrNotSupported, err)
 	}
@@ -172,7 +170,6 @@ func TestBatchAPIHash(t *testing.T) {
 	defer m.Close()
 
 	var (
-		nextKey      uint32
 		keys         = []uint32{0, 1}
 		values       = []uint32{42, 4242}
 		lookupKeys   = make([]uint32, 2)
@@ -197,7 +194,8 @@ func TestBatchAPIHash(t *testing.T) {
 		t.Error("Want value 42, got", v)
 	}
 
-	count, err = m.BatchLookup(nil, &nextKey, lookupKeys, lookupValues, nil)
+	var cursor BatchCursor
+	count, err = m.BatchLookup(&cursor, lookupKeys, lookupValues, nil)
 	if !errors.Is(err, ErrKeyNotExist) {
 		t.Fatalf("BatchLookup: expected %v got %v", ErrKeyNotExist, err)
 	}
@@ -213,7 +211,8 @@ func TestBatchAPIHash(t *testing.T) {
 		t.Errorf("BatchUpdate and BatchLookup values disagree: %v %v", values, lookupValues)
 	}
 
-	count, err = m.BatchLookupAndDelete(nil, &nextKey, deleteKeys, deleteValues, nil)
+	cursor = BatchCursor{}
+	count, err = m.BatchLookupAndDelete(&cursor, deleteKeys, deleteValues, nil)
 	if !errors.Is(err, ErrKeyNotExist) {
 		t.Fatalf("BatchLookupAndDelete: expected %v got %v", ErrKeyNotExist, err)
 	}
@@ -345,10 +344,10 @@ func TestBatchMapWithLock(t *testing.T) {
 			t.Fatalf("BatchUpdate: expected count, %d, to be %d", count, len(keys))
 		}
 
-		nextKey := uint32(0)
+		var cursor BatchCursor
 		lookupKeys := make([]uint32, 2)
 		lookupValues := make([]spinLockValue, 2)
-		count, err = m.BatchLookup(nil, &nextKey, lookupKeys, lookupValues, &BatchOptions{ElemFlags: uint64(LookupLock)})
+		count, err = m.BatchLookup(&cursor, lookupKeys, lookupValues, &BatchOptions{ElemFlags: uint64(LookupLock)})
 		if !errors.Is(err, ErrKeyNotExist) {
 			t.Fatalf("BatchLookup: %v", err)
 		}
@@ -356,10 +355,10 @@ func TestBatchMapWithLock(t *testing.T) {
 			t.Fatalf("BatchLookup: expected two keys, got %d", count)
 		}
 
-		nextKey = uint32(0)
+		cursor = BatchCursor{}
 		deleteKeys := []uint32{0, 1}
 		deleteValues := make([]spinLockValue, 2)
-		count, err = m.BatchLookupAndDelete(nil, &nextKey, deleteKeys, deleteValues, nil)
+		count, err = m.BatchLookupAndDelete(&cursor, deleteKeys, deleteValues, nil)
 		if !errors.Is(err, ErrKeyNotExist) {
 			t.Fatalf("BatchLookupAndDelete: %v", err)
 		}
@@ -2082,9 +2081,9 @@ func BenchmarkIterate(b *testing.B) {
 
 		b.ReportAllocs()
 
+		var cursor BatchCursor
 		for i := 0; i < b.N; i++ {
-			var next uint32
-			_, err := m.BatchLookup(nil, &next, k, v, nil)
+			_, err := m.BatchLookup(&cursor, k, v, nil)
 			if err != nil && !errors.Is(err, ErrKeyNotExist) {
 				b.Fatal(err)
 			}
@@ -2104,8 +2103,8 @@ func BenchmarkIterate(b *testing.B) {
 			}
 			b.StartTimer()
 
-			var next uint32
-			_, err := m.BatchLookupAndDelete(nil, &next, k, v, nil)
+			var cursor BatchCursor
+			_, err := m.BatchLookupAndDelete(&cursor, k, v, nil)
 			if err != nil && !errors.Is(err, ErrKeyNotExist) {
 				b.Fatal(err)
 			}

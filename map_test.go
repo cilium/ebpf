@@ -16,6 +16,7 @@ import (
 	"github.com/cilium/ebpf/internal/sys"
 	"github.com/cilium/ebpf/internal/testutils"
 	"github.com/cilium/ebpf/internal/unix"
+	"golang.org/x/exp/maps"
 
 	qt "github.com/frankban/quicktest"
 )
@@ -182,6 +183,114 @@ func TestBatchAPIArray(t *testing.T) {
 	if !errors.Is(err, ErrNotSupported) {
 		t.Fatalf("BatchLookUpDelete: expected error %v, but got %v", ErrNotSupported, err)
 	}
+}
+
+func TestBatchAPIHash2(t *testing.T) {
+	if err := haveBatchAPI(); err != nil {
+		t.Skipf("batch api not available: %v", err)
+	}
+	m, err := NewMap(&MapSpec{
+		Type:       LRUHash,
+		KeySize:    4,
+		ValueSize:  4,
+		MaxEntries: 1024,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer m.Close()
+
+	var (
+		nextKey      uint32
+		keys         = []uint32{1, 2, 3, 4, 5, 6, 7, 8, 9}
+		values       = []uint32{11, 22, 33, 44, 55, 66, 77, 88, 99}
+		lookupKeys   = make([]uint32, len(keys))
+		lookupValues = make([]uint32, len(values))
+	)
+
+	count, err := m.BatchUpdate(keys, values, nil)
+	if err != nil {
+		t.Fatalf("BatchUpdate: %v", err)
+	}
+	if count != len(keys) {
+		t.Fatalf("BatchUpdate: expected count, %d, to be %d", count, len(keys))
+	}
+
+	var v uint32
+	if err := m.Lookup(uint32(6), &v); err != nil {
+		t.Fatal("Can't lookup 6:", err)
+	}
+	if v != 66 {
+		t.Error("Want value 66, got", v)
+	}
+
+	count, err = m.BatchLookup(nil, &nextKey, lookupKeys, lookupValues, nil)
+	fmt.Println(count)
+	qt.Assert(t, err, qt.ErrorIs, ErrKeyNotExist)
+	if count != len(lookupKeys) {
+		t.Fatalf("BatchLookup: returned %d results, expected %d", count, len(lookupKeys))
+	}
+
+	var start uint32 = 9
+	count, err = m.BatchLookup(&start, &nextKey, lookupKeys, lookupValues, nil)
+	fmt.Println(count)
+	qt.Assert(t, err, qt.ErrorIs, ErrKeyNotExist)
+	if count != len(lookupKeys) {
+		t.Fatalf("BatchLookup: returned %d results, expected %d", count, len(lookupKeys))
+	}
+
+	count, err = countBatch(m, nil, &nextKey)
+	fmt.Println(count)
+	qt.Assert(t, err, qt.IsNil)
+	if count != len(lookupKeys) {
+		t.Fatalf("BatchLookup: returned %d results, expected %d", count, len(lookupKeys))
+	}
+
+	count, err = countBatch(m, &start, &nextKey)
+	fmt.Println(count)
+	qt.Assert(t, err, qt.IsNil)
+	if count != len(lookupKeys) {
+		t.Fatalf("BatchLookup: returned %d results, expected %d", count, len(lookupKeys))
+	}
+
+	mk := make(map[*uint32]struct{}, len(keys))
+	for _, k := range keys {
+		k := k
+		mk[&k] = struct{}{}
+	}
+	for _, k := range maps.Keys(mk) {
+		qt.Assert(t, m.Delete(k), qt.IsNil)
+		count, err = countBatch(m, k, &nextKey)
+		fmt.Println(count)
+		qt.Assert(t, err, qt.IsNil)
+	}
+}
+
+func countBatch[T any](m *Map, prev interface{}, k *T) (count int, err error) {
+	mx := m.MaxEntries()
+	const chunkSize uint32 = 1
+	chunks := int(mx / chunkSize)
+	if chunks == 0 {
+		chunks = 1
+	}
+
+	kout := make([]T, chunkSize)
+	vout := make([]T, chunkSize)
+
+	for i := 0; i < chunks; i++ {
+		c, batchErr := m.BatchLookup(prev, k, kout, vout, nil)
+		count += c
+		if batchErr != nil {
+			if errors.Is(batchErr, ErrKeyNotExist) {
+				return count, nil // end of map, we're done iterating
+			}
+			return count, batchErr
+		} else {
+			prev = k
+		}
+	}
+
+	return
 }
 
 func TestBatchAPIHash(t *testing.T) {

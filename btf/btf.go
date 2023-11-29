@@ -531,16 +531,25 @@ func (s *Spec) nextTypeID() (TypeID, error) {
 // Returns an error wrapping ErrNotFound if a Type with the given ID
 // does not exist in the Spec.
 func (s *Spec) TypeByID(id TypeID) (Type, error) {
-	if id < s.firstTypeID {
+	typ, ok := s.typeByID(id)
+	if !ok {
 		return nil, fmt.Errorf("look up type with ID %d (first ID is %d): %w", id, s.firstTypeID, ErrNotFound)
+	}
+
+	return typ, nil
+}
+
+func (s *Spec) typeByID(id TypeID) (Type, bool) {
+	if id < s.firstTypeID {
+		return nil, false
 	}
 
 	index := int(id - s.firstTypeID)
 	if index >= len(s.types) {
-		return nil, fmt.Errorf("look up type with ID %d: %w", id, ErrNotFound)
+		return nil, false
 	}
 
-	return s.types[index], nil
+	return s.types[index], true
 }
 
 // TypeID returns the ID for a given Type.
@@ -671,26 +680,27 @@ func LoadSplitSpecFromReader(r io.ReaderAt, base *Spec) (*Spec, error) {
 
 // TypesIterator iterates over types of a given spec.
 type TypesIterator struct {
-	types []Type
-	index int
+	spec *Spec
+	id   TypeID
+	done bool
 	// The last visited type in the spec.
 	Type Type
 }
 
 // Iterate returns the types iterator.
 func (s *Spec) Iterate() *TypesIterator {
-	// We share the backing array of types with the Spec. This is safe since
-	// we don't allow deletion or shuffling of types.
-	return &TypesIterator{types: s.types, index: 0}
+	return &TypesIterator{spec: s, id: s.firstTypeID}
 }
 
 // Next returns true as long as there are any remaining types.
 func (iter *TypesIterator) Next() bool {
-	if len(iter.types) <= iter.index {
+	if iter.done {
 		return false
 	}
 
-	iter.Type = iter.types[iter.index]
-	iter.index++
-	return true
+	var ok bool
+	iter.Type, ok = iter.spec.typeByID(iter.id)
+	iter.id++
+	iter.done = !ok
+	return !iter.done
 }

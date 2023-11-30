@@ -968,6 +968,10 @@ func (m *Map) guessNonExistentKey() ([]byte, error) {
 // "cursor" to subsequent calls of this function to continue the batching
 // operation in the case of chunking.
 //
+// Warning: This API is not very safe to use as the kernel implementation for
+// batching relies on the user to be aware of subtle details with regarding to
+// different map type implementations.
+//
 // ErrKeyNotExist is returned when the batch lookup has reached
 // the end of all possible results, even when partial results
 // are returned. It should be used to evaluate when lookup is "done".
@@ -983,6 +987,10 @@ func (m *Map) BatchLookup(cursor *BatchCursor, keysOut, valuesOut interface{}, o
 // "cursor" is an pointer to an opaque handle. It must be non-nil. Pass
 // "cursor" to subsequent calls of this function to continue the batching
 // operation in the case of chunking.
+//
+// Warning: This API is not very safe to use as the kernel implementation for
+// batching relies on the user to be aware of subtle details with regarding to
+// different map type implementations.
 //
 // ErrKeyNotExist is returned when the batch lookup has reached
 // the end of all possible results, even when partial results

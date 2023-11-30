@@ -1411,8 +1411,10 @@ func marshalMap(m *Map, length int) ([]byte, error) {
 //
 // See Map.Iterate.
 type MapIterator struct {
-	target            *Map
-	curKey            []byte
+	target *Map
+	// Temporary storage to avoid allocations in Next(). This is any instead
+	// of []byte to avoid allocations.
+	cursor            any
 	count, maxEntries uint32
 	done              bool
 	err               error
@@ -1440,34 +1442,30 @@ func (mi *MapIterator) Next(keyOut, valueOut interface{}) bool {
 		return false
 	}
 
-	// For array-like maps NextKeyBytes returns nil only on after maxEntries
+	// For array-like maps NextKey returns nil only after maxEntries
 	// iterations.
 	for mi.count <= mi.maxEntries {
-		var nextKey []byte
-		if mi.curKey == nil {
-			// Pass nil interface to NextKeyBytes to make sure the Map's first key
+		if mi.cursor == nil {
+			// Pass nil interface to NextKey to make sure the Map's first key
 			// is returned. If we pass an uninitialized []byte instead, it'll see a
 			// non-nil interface and try to marshal it.
-			nextKey, mi.err = mi.target.NextKeyBytes(nil)
-
-			mi.curKey = make([]byte, mi.target.keySize)
+			mi.cursor = make([]byte, mi.target.keySize)
+			mi.err = mi.target.NextKey(nil, mi.cursor)
 		} else {
-			nextKey, mi.err = mi.target.NextKeyBytes(mi.curKey)
+			mi.err = mi.target.NextKey(mi.cursor, mi.cursor)
 		}
-		if mi.err != nil {
+
+		if errors.Is(mi.err, ErrKeyNotExist) {
+			mi.done = true
+			mi.err = nil
+			return false
+		} else if mi.err != nil {
 			mi.err = fmt.Errorf("get next key: %w", mi.err)
 			return false
 		}
 
-		if nextKey == nil {
-			mi.done = true
-			return false
-		}
-
-		mi.curKey = nextKey
-
 		mi.count++
-		mi.err = mi.target.Lookup(nextKey, valueOut)
+		mi.err = mi.target.Lookup(mi.cursor, valueOut)
 		if errors.Is(mi.err, ErrKeyNotExist) {
 			// Even though the key should be valid, we couldn't look up
 			// its value. If we're iterating a hash map this is probably
@@ -1484,10 +1482,11 @@ func (mi *MapIterator) Next(keyOut, valueOut interface{}) bool {
 			return false
 		}
 
+		buf := mi.cursor.([]byte)
 		if ptr, ok := keyOut.(unsafe.Pointer); ok {
-			copy(unsafe.Slice((*byte)(ptr), len(nextKey)), nextKey)
+			copy(unsafe.Slice((*byte)(ptr), len(buf)), buf)
 		} else {
-			mi.err = sysenc.Unmarshal(keyOut, nextKey)
+			mi.err = sysenc.Unmarshal(keyOut, buf)
 		}
 
 		return mi.err == nil

@@ -154,6 +154,77 @@ func TestBatchAPIArray(t *testing.T) {
 	}
 }
 
+// TestBatchAPIArrayChunk tests chunking of the batch lookup. The important bit
+// is that prevKey must be set to nextKey to lookup the next chunk.
+func TestBatchAPIArrayChunk(t *testing.T) {
+	if err := haveBatchAPI(); err != nil {
+		t.Skipf("batch api not available: %v", err)
+	}
+	m, err := NewMap(&MapSpec{
+		Type:       Array,
+		KeySize:    4,
+		ValueSize:  4,
+		MaxEntries: 2,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer m.Close()
+
+	var (
+		keys         = []uint32{0, 1}
+		values       = []uint32{42, 4242}
+		lookupKeys   []uint32
+		lookupValues []uint32
+	)
+
+	count, err := m.BatchUpdate(keys, values, nil)
+	if err != nil {
+		t.Fatalf("BatchUpdate: %v", err)
+	}
+	if count != len(keys) {
+		t.Fatalf("BatchUpdate: expected count, %d, to be %d", count, len(keys))
+	}
+
+	var v uint32
+	if err := m.Lookup(uint32(0), &v); err != nil {
+		t.Fatal("Can't lookup 0:", err)
+	}
+	if v != 42 {
+		t.Error("Want value 42, got", v)
+	}
+
+	var cursor BatchCursor
+	lookupKeys = make([]uint32, 1) // cut the buffer in half.
+	lookupValues = make([]uint32, 1)
+	count, err = m.BatchLookup(&cursor, lookupKeys, lookupValues, nil)
+	if err != nil {
+		t.Errorf("BatchLookup: %v", err)
+	}
+	if count != 1 {
+		t.Errorf("BatchLookup: returned %d results, expected %d", count, 1)
+	}
+	if k := []uint32(keys[:1]); !reflect.DeepEqual(k, lookupKeys) {
+		t.Errorf("BatchUpdate and BatchLookup keys disagree on first chunk: %v %v", k, lookupKeys)
+	}
+	if v := []uint32(values[:1]); !reflect.DeepEqual(v, lookupValues) {
+		t.Errorf("BatchUpdate and BatchLookup values disagree on first chunk: %v %v", v, lookupValues)
+	}
+	count, err = m.BatchLookup(&cursor, lookupKeys, lookupValues, nil)
+	if err != nil {
+		t.Errorf("BatchLookup: %v", err)
+	}
+	if count != 1 {
+		t.Errorf("BatchLookup: returned %d results, expected %d", count, 1)
+	}
+	if k := []uint32(keys[1:]); !reflect.DeepEqual(k, lookupKeys) {
+		t.Errorf("BatchUpdate and BatchLookup keys disagree on second chunk: %v %v", k, lookupKeys)
+	}
+	if v := []uint32(values[1:]); !reflect.DeepEqual(v, lookupValues) {
+		t.Errorf("BatchUpdate and BatchLookup values disagree on second chunk: %v %v", v, lookupValues)
+	}
+}
+
 func TestBatchAPIHash(t *testing.T) {
 	if err := haveBatchAPI(); err != nil {
 		t.Skipf("batch api not available: %v", err)

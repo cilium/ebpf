@@ -1103,6 +1103,32 @@ func TestMapIterate(t *testing.T) {
 	}
 }
 
+func TestMapIteratorAllocations(t *testing.T) {
+	arr, err := NewMap(&MapSpec{
+		Type:       Array,
+		KeySize:    4,
+		ValueSize:  4,
+		MaxEntries: 10,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer arr.Close()
+
+	var k, v uint32
+	iter := arr.Iterate()
+	// Allocate any necessary temporary buffers.
+	qt.Assert(t, iter.Next(&k, &v), qt.IsTrue)
+
+	allocs := testing.AllocsPerRun(1, func() {
+		if !iter.Next(&k, &v) {
+			t.Fatal("Next failed")
+		}
+	})
+
+	qt.Assert(t, allocs, qt.Equals, float64(0))
+}
+
 func TestMapIterateHashKeyOneByteFull(t *testing.T) {
 	hash, err := NewMap(&MapSpec{
 		Type:       Hash,

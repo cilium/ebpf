@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"math"
 	"math/rand"
 	"os"
 	"path/filepath"
@@ -1001,20 +1000,34 @@ func (m *Map) BatchLookupAndDelete(cursor *BatchCursor, keysOut, valuesOut inter
 
 // BatchCursor represents a starting point for a batch operation.
 type BatchCursor struct {
-	opaque []byte // len() is max(key_size, 4) to be on the safe side
+	m      *Map
+	opaque []byte
 }
 
 func (m *Map) batchLookup(cmd sys.Cmd, cursor *BatchCursor, keysOut, valuesOut interface{}, opts *BatchOptions) (int, error) {
-	var inBatch []byte
-	if cursor.opaque == nil {
+	cursorLen := int(m.keySize)
+	if cursorLen < 4 {
 		// * generic_map_lookup_batch requires that batch_out is key_size bytes.
 		//   This is used by array and LPM maps.
 		//
 		// * __htab_map_lookup_and_delete_batch requires u32. This is used by the
 		//   various hash maps.
-		cursor.opaque = make([]byte, int(math.Max(float64(m.keySize), 4)))
-	} else {
-		inBatch = cursor.opaque
+		//
+		// Use a minimum of 4 bytes to avoid having to distinguish between the two.
+		cursorLen = 4
+	}
+
+	inBatch := cursor.opaque
+	if inBatch == nil {
+		// This is the first lookup, allocate a buffer to hold the cursor.
+		cursor.opaque = make([]byte, cursorLen)
+		cursor.m = m
+	} else if cursor.m != m {
+		// Prevent reuse of a cursor across maps. First, it's unlikely to work.
+		// Second, the maps may require different cursorLen and cursor.opaque
+		// may therefore be too short. This could lead to the kernel clobbering
+		// user space memory.
+		return 0, errors.New("a cursor may not be reused across maps")
 	}
 
 	if err := haveBatchAPI(); err != nil {

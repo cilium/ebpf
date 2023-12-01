@@ -186,6 +186,37 @@ func TestMapBatch(t *testing.T) {
 	}
 }
 
+func TestMapBatchCursorReuse(t *testing.T) {
+	spec := &MapSpec{
+		Type:       Array,
+		KeySize:    4,
+		ValueSize:  4,
+		MaxEntries: 4,
+	}
+
+	arr1, err := NewMap(spec)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer arr1.Close()
+
+	arr2, err := NewMap(spec)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer arr2.Close()
+
+	tmp := make([]uint32, 2)
+
+	var cursor BatchCursor
+	_, err = arr1.BatchLookup(&cursor, tmp, tmp, nil)
+	testutils.SkipIfNotSupported(t, err)
+	qt.Assert(t, err, qt.IsNil)
+
+	_, err = arr2.BatchLookup(&cursor, tmp, tmp, nil)
+	qt.Assert(t, err, qt.IsNotNil)
+}
+
 func TestMapLookupKeyTooSmall(t *testing.T) {
 	m := createArray(t)
 	defer m.Close()

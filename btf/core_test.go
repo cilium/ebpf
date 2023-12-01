@@ -12,6 +12,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 
 	qt "github.com/frankban/quicktest"
+	"golang.org/x/exp/slices"
 )
 
 func TestCheckTypeCompatibility(t *testing.T) {
@@ -712,6 +713,11 @@ func BenchmarkCORESkBuff(b *testing.B) {
 	skbID, err := spec.TypeID(skb)
 	qt.Assert(b, err, qt.IsNil)
 
+	lenIndex := slices.IndexFunc(skb.Members, func(m Member) bool {
+		return m.Name == "len"
+	})
+	qt.Assert(b, lenIndex, qt.Not(qt.Equals), -1)
+
 	var pktHashTypes *Enum
 	err = spec.TypeByName("pkt_hash_types", &pktHashTypes)
 	qt.Assert(b, err, qt.IsNil)
@@ -720,12 +726,12 @@ func BenchmarkCORESkBuff(b *testing.B) {
 	qt.Assert(b, err, qt.IsNil)
 
 	for _, relo := range []*CORERelocation{
-		{skb, coreAccessor{0, 0}, reloFieldByteOffset, skbID},
-		{skb, coreAccessor{0, 0}, reloFieldByteSize, skbID},
-		{skb, coreAccessor{0, 0}, reloFieldExists, skbID},
-		{skb, coreAccessor{0, 0}, reloFieldSigned, skbID},
-		{skb, coreAccessor{0, 0}, reloFieldLShiftU64, skbID},
-		{skb, coreAccessor{0, 0}, reloFieldRShiftU64, skbID},
+		{skb, coreAccessor{0, lenIndex}, reloFieldByteOffset, skbID},
+		{skb, coreAccessor{0, lenIndex}, reloFieldByteSize, skbID},
+		{skb, coreAccessor{0, lenIndex}, reloFieldExists, skbID},
+		{skb, coreAccessor{0, lenIndex}, reloFieldSigned, skbID},
+		{skb, coreAccessor{0, lenIndex}, reloFieldLShiftU64, skbID},
+		{skb, coreAccessor{0, lenIndex}, reloFieldRShiftU64, skbID},
 		{skb, coreAccessor{0}, reloTypeIDLocal, skbID},
 		{skb, coreAccessor{0}, reloTypeIDTarget, skbID},
 		{skb, coreAccessor{0}, reloTypeExists, skbID},

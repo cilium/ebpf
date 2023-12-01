@@ -1910,27 +1910,26 @@ func BenchmarkMarshaling(b *testing.B) {
 }
 
 func BenchmarkPerCPUMarshalling(b *testing.B) {
-	newMap := func(valueSize uint32) *Map {
-		m, err := NewMap(&MapSpec{
-			Type:       PerCPUHash,
-			KeySize:    8,
-			ValueSize:  valueSize,
-			MaxEntries: 1,
-		})
-		if err != nil {
-			b.Fatal(err)
-		}
-		return m
+	key := uint64(1)
+	val := make([]uint64, MustPossibleCPU())
+	for i := range val {
+		val[i] = uint64(i)
 	}
 
-	key := uint64(1)
-	val := []uint64{1, 2, 3, 4, 5, 6, 7, 8}
+	m, err := NewMap(&MapSpec{
+		Type:       PerCPUHash,
+		KeySize:    8,
+		ValueSize:  8,
+		MaxEntries: 1,
+	})
+	if err != nil {
+		b.Fatal(err)
+	}
 
-	m := newMap(8)
+	b.Cleanup(func() { m.Close() })
 	if err := m.Put(key, val[0:]); err != nil {
 		b.Fatal(err)
 	}
-	b.Cleanup(func() { m.Close() })
 
 	b.Run("reflection", func(b *testing.B) {
 		b.ReportAllocs()
@@ -2041,9 +2040,9 @@ func BenchmarkIterate(b *testing.B) {
 		values[i] = uint64(i)
 	}
 
-	if _, err := m.BatchUpdate(keys, values, nil); err != nil {
-		b.Fatal(err)
-	}
+	_, err = m.BatchUpdate(keys, values, nil)
+	testutils.SkipIfNotSupported(b, err)
+	qt.Assert(b, err, qt.IsNil)
 
 	b.Run("MapIterator", func(b *testing.B) {
 		var k, v uint64

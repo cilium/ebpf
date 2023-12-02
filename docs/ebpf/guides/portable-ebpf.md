@@ -20,7 +20,7 @@ You may have noticed bpf2go generating two sets of files:
 
 - `*_bpfel.o` and `*_bpfel.go` for little-endian architectures like amd64,
   arm64, riscv64 and loong64
-- `*_bpfel.o` and `*_bpfel.go` for big-endian architectures like s390(x), mips
+- `*_bpfeb.o` and `*_bpfeb.go` for big-endian architectures like s390(x), mips
   and sparc
 
 Both sets of .go files contain a `//go:embed` statement that slurps the contents

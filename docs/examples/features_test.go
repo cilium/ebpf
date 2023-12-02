@@ -24,5 +24,5 @@ func DocDetectXDP() {
 		panic(err)
 	}
 
-	fmt.Println("XDP program type is not supported")
+	fmt.Println("XDP program type is supported")
 }

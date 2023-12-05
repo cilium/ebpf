@@ -2040,6 +2040,7 @@ func BenchmarkIterate(b *testing.B) {
 		var k, v uint64
 
 		b.ReportAllocs()
+		b.ResetTimer()
 
 		for i := 0; i < b.N; i++ {
 			iter := m.Iterate()
@@ -2056,6 +2057,7 @@ func BenchmarkIterate(b *testing.B) {
 		var k, v uint64
 
 		b.ReportAllocs()
+		b.ResetTimer()
 
 		for i := 0; i < b.N; i++ {
 			b.StopTimer()
@@ -2081,6 +2083,7 @@ func BenchmarkIterate(b *testing.B) {
 		v := make([]uint64, m.MaxEntries())
 
 		b.ReportAllocs()
+		b.ResetTimer()
 
 		var cursor BatchCursor
 		for i := 0; i < b.N; i++ {
@@ -2096,6 +2099,7 @@ func BenchmarkIterate(b *testing.B) {
 		v := make([]uint64, m.MaxEntries())
 
 		b.ReportAllocs()
+		b.ResetTimer()
 
 		for i := 0; i < b.N; i++ {
 			b.StopTimer()
@@ -2114,6 +2118,7 @@ func BenchmarkIterate(b *testing.B) {
 
 	b.Run("BatchDelete", func(b *testing.B) {
 		b.ReportAllocs()
+		b.ResetTimer()
 
 		for i := 0; i < b.N; i++ {
 			b.StopTimer()

@@ -4,10 +4,9 @@ Below is a non-comprehensive list of open-source software built with {{ proj }},
 just for inspiration or to gain a better understanding of how to tackle certain
 problems using eBPF.
 
-A live list of package importers can be found at [:fontawesome-brands-golang: {{
-proj }} package
-importers](https://pkg.go.dev/github.com/cilium/ebpf?tab=importedby). If you'd
-like to include a project on this page, feel free to open a pull request.
+A list of :fontawesome-brands-golang: {{ proj }} importers can be found on
+[Sourcegraph].
+If you'd like to include a project on this page, feel free to open a pull request.
 
 [`Cilium`](https://github.com/cilium/cilium)
 
@@ -43,7 +42,7 @@ like to include a project on this page, feel free to open a pull request.
 
 :   A collection of tools to debug and inspect Kubernetes resources and
     applications. Reimplements many of the BCC tools for easy deployment onto a
-    Kubernetes cluster. 
+    Kubernetes cluster.
 
 [`Istio`](https://github.com/istio/istio)
 
@@ -84,3 +83,5 @@ like to include a project on this page, feel free to open a pull request.
     blog
     post](https://blog.cloudflare.com/tubular-fixing-the-socket-api-with-ebpf/)
     for a deep dive into why it was created and how it works.
+
+[Sourcegraph]: https://sourcegraph.com/search?q=context:global+lang:Go+type:file+github.com/cilium/ebpf+-repo:%5Egithub%5C.com/cilium/ebpf%24+-path:%5Evendor/+select:repo+&patternType=standard&sm=1&groupBy=repo

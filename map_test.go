@@ -2085,11 +2085,16 @@ func BenchmarkIterate(b *testing.B) {
 		b.ReportAllocs()
 		b.ResetTimer()
 
-		var cursor BatchCursor
 		for i := 0; i < b.N; i++ {
-			_, err := m.BatchLookup(&cursor, k, v, nil)
-			if err != nil && !errors.Is(err, ErrKeyNotExist) {
-				b.Fatal(err)
+			var cursor BatchCursor
+			for {
+				_, err := m.BatchLookup(&cursor, k, v, nil)
+				if errors.Is(err, ErrKeyNotExist) {
+					break
+				}
+				if err != nil {
+					b.Fatal(err)
+				}
 			}
 		}
 	})
@@ -2109,9 +2114,14 @@ func BenchmarkIterate(b *testing.B) {
 			b.StartTimer()
 
 			var cursor BatchCursor
-			_, err := m.BatchLookupAndDelete(&cursor, k, v, nil)
-			if err != nil && !errors.Is(err, ErrKeyNotExist) {
-				b.Fatal(err)
+			for {
+				_, err := m.BatchLookupAndDelete(&cursor, k, v, nil)
+				if errors.Is(err, ErrKeyNotExist) {
+					break
+				}
+				if err != nil {
+					b.Fatal(err)
+				}
 			}
 		}
 	})

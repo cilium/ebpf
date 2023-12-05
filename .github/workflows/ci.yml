@@ -129,6 +129,9 @@ jobs:
       - name: Test
         run: gotestsum --raw-command --ignore-non-json-output-lines --junitfile junit.xml -- ./run-tests.sh $CI_MAX_KERNEL_VERSION -short -count 1 -json ./...
 
+      - name: Benchmark
+        run: go test -exec sudo -short -run '^$' -bench . -benchtime=1x ./...
+
       - name: Upload Test Results
         if: always()
         uses: actions/upload-artifact@v3

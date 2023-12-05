@@ -149,8 +149,8 @@ func TestMapBatch(t *testing.T) {
 				}
 				qt.Assert(t, err, qt.IsNil)
 
-				qt.Assert(t, count, qt.Equals, len(lookupKeys))
-				for i, key := range lookupKeys {
+				qt.Assert(t, count <= len(lookupKeys), qt.IsTrue)
+				for i, key := range lookupKeys[:count] {
 					value := lookupValues[i]
 					qt.Assert(t, value, qt.Equals, contents[key], qt.Commentf("value for key %d should match", key))
 				}

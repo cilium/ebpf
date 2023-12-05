@@ -477,6 +477,17 @@ import (
 			},
 		},
 		{
+			"LinkCreateNetkit", retFd, "link_create", "BPF_LINK_CREATE",
+			[]patch{
+				choose(1, "target_ifindex"),
+				choose(4, "netkit"),
+				replace(enumTypes["AttachType"], "attach_type"),
+				flattenAnon,
+				flattenAnon,
+				rename("relative_fd", "relative_fd_or_id"),
+			},
+		},
+		{
 			"LinkUpdate", retError, "link_update", "BPF_LINK_UPDATE",
 			nil,
 		},
@@ -575,6 +586,9 @@ import (
 			replace(enumTypes["AttachType"], "attach_type"),
 		}},
 		{"NetfilterLinkInfo", "netfilter", nil},
+		{"NetkitLinkInfo", "netkit", []patch{
+			replace(enumTypes["AttachType"], "attach_type"),
+		}},
 	}
 
 	sort.Slice(linkInfoExtraTypes, func(i, j int) bool {
@@ -604,6 +618,7 @@ import (
 		{"kprobe_multi", "kprobe_multi"},
 		{"perf_event", "perf_event"},
 		{"tcx", "tcx"},
+		{"netkit", "netkit"},
 	})
 	if err != nil {
 		return nil, fmt.Errorf("splitting linkInfo: %w", err)

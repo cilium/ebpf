@@ -25,3 +25,7 @@ func TestHaveProgQuery(t *testing.T) {
 func TestHaveTCX(t *testing.T) {
 	testutils.CheckFeatureTest(t, haveTCX)
 }
+
+func TestHaveNetkit(t *testing.T) {
+	testutils.CheckFeatureTest(t, haveNetkit)
+}

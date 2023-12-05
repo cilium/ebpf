@@ -1048,15 +1048,14 @@ func (m *Map) batchLookup(cmd sys.Cmd, cursor *BatchCursor, keysOut, valuesOut i
 	if count != valuesValue.Len() {
 		return 0, fmt.Errorf("keysOut and valuesOut must be the same length")
 	}
-	keyBuf := make([]byte, count*int(m.keySize))
-	keyPtr := sys.NewSlicePointer(keyBuf)
-	valueBuf := make([]byte, count*int(m.fullValueSize))
-	valuePtr := sys.NewSlicePointer(valueBuf)
+
+	keyBuf := sysenc.SyscallOutput(keysOut, count*int(m.keySize))
+	valueBuf := sysenc.SyscallOutput(valuesOut, count*int(m.fullValueSize))
 
 	attr := sys.MapLookupBatchAttr{
 		MapFd:    m.fd.Uint(),
-		Keys:     keyPtr,
-		Values:   valuePtr,
+		Keys:     keyBuf.Pointer(),
+		Values:   valueBuf.Pointer(),
 		Count:    uint32(count),
 		InBatch:  sys.NewSlicePointer(inBatch),
 		OutBatch: sys.NewSlicePointer(cursor.opaque),
@@ -1073,12 +1072,10 @@ func (m *Map) batchLookup(cmd sys.Cmd, cursor *BatchCursor, keysOut, valuesOut i
 		return 0, sysErr
 	}
 
-	err := sysenc.Unmarshal(keysOut, keyBuf)
-	if err != nil {
+	if err := keyBuf.Unmarshal(keysOut); err != nil {
 		return 0, err
 	}
-	err = sysenc.Unmarshal(valuesOut, valueBuf)
-	if err != nil {
+	if err := valueBuf.Unmarshal(valuesOut); err != nil {
 		return 0, err
 	}
 

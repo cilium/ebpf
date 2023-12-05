@@ -1093,9 +1093,8 @@ func TestMapIteratorAllocations(t *testing.T) {
 
 	var k, v uint32
 	iter := arr.Iterate()
-	// Allocate any necessary temporary buffers.
-	qt.Assert(t, qt.IsTrue(iter.Next(&k, &v)))
 
+	// AllocsPerRun warms up the function for us.
 	allocs := testing.AllocsPerRun(1, func() {
 		if !iter.Next(&k, &v) {
 			t.Fatal("Next failed")
@@ -1103,6 +1102,35 @@ func TestMapIteratorAllocations(t *testing.T) {
 	})
 
 	qt.Assert(t, qt.Equals(allocs, float64(0)))
+}
+
+func TestMapBatchLookupAllocations(t *testing.T) {
+	testutils.SkipIfNotSupported(t, haveBatchAPI())
+
+	arr, err := NewMap(&MapSpec{
+		Type:       Array,
+		KeySize:    4,
+		ValueSize:  4,
+		MaxEntries: 10,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer arr.Close()
+
+	var cursor BatchCursor
+	tmp := make([]uint32, 2)
+	input := any(tmp)
+
+	// AllocsPerRun warms up the function for us.
+	allocs := testing.AllocsPerRun(1, func() {
+		_, err := arr.BatchLookup(&cursor, input, input, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+	})
+
+	qt.Assert(t, qt.Equals(allocs, 0))
 }
 
 func TestMapIterateHashKeyOneByteFull(t *testing.T) {

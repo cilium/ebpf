@@ -71,15 +71,17 @@ func TestExecutableLazyLoadSymbols(t *testing.T) {
 	ex, err := OpenExecutable("/bin/bash")
 	qt.Assert(t, qt.IsNil(err))
 	// Addresses must be empty, will be lazy loaded.
-	qt.Assert(t, qt.DeepEquals(ex.addresses, map[string]uint64{}))
+	qt.Assert(t, qt.HasLen(ex.addresses, 0))
 
 	prog := mustLoadProgram(t, ebpf.Kprobe, 0, "")
-	up, err := ex.Uprobe(bashSym, prog, &UprobeOptions{Address: 123})
+	// Address must be a multiple of 4 on arm64, see
+	// https://elixir.bootlin.com/linux/v6.6.4/source/arch/arm64/kernel/probes/uprobes.c#L42
+	up, err := ex.Uprobe(bashSym, prog, &UprobeOptions{Address: 124})
 	qt.Assert(t, qt.IsNil(err))
 	up.Close()
 
 	// Addresses must still be empty as Address has been provided via options.
-	qt.Assert(t, qt.DeepEquals(ex.addresses, map[string]uint64{}))
+	qt.Assert(t, qt.HasLen(ex.addresses, 0))
 
 	up, err = ex.Uprobe(bashSym, prog, nil)
 	qt.Assert(t, qt.IsNil(err))

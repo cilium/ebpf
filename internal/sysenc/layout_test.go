@@ -5,7 +5,7 @@ import (
 	"reflect"
 	"testing"
 
-	qt "github.com/frankban/quicktest"
+	"github.com/go-quicktest/qt"
 )
 
 func TestHasUnexportedFields(t *testing.T) {
@@ -31,7 +31,7 @@ func TestHasUnexportedFields(t *testing.T) {
 	} {
 		t.Run(fmt.Sprintf("%T", test.value), func(t *testing.T) {
 			have := hasUnexportedFields(reflect.TypeOf(test.value))
-			qt.Assert(t, have, qt.Equals, test.result)
+			qt.Assert(t, qt.Equals(have, test.result))
 		})
 	}
 }

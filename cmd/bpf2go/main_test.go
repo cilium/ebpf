@@ -12,7 +12,7 @@ import (
 	"strings"
 	"testing"
 
-	qt "github.com/frankban/quicktest"
+	"github.com/go-quicktest/qt"
 	"github.com/google/go-cmp/cmp"
 )
 
@@ -255,7 +255,7 @@ func TestCTypes(t *testing.T) {
 			t.Fatalf("Set returned an error for %q: %s", value, err)
 		}
 	}
-	qt.Assert(t, ct, qt.ContentEquals, cTypes(valid))
+	qt.Assert(t, qt.ContentEquals(ct, valid))
 
 	for _, value := range []string{
 		"",
@@ -274,8 +274,8 @@ func TestCTypes(t *testing.T) {
 	}
 
 	ct = nil
-	qt.Assert(t, ct.Set("foo"), qt.IsNil)
-	qt.Assert(t, ct.Set("foo"), qt.IsNotNil)
+	qt.Assert(t, qt.IsNil(ct.Set("foo")))
+	qt.Assert(t, qt.IsNotNil(ct.Set("foo")))
 }
 
 func TestParseArgs(t *testing.T) {
@@ -290,8 +290,8 @@ func TestParseArgs(t *testing.T) {
 		basePath, _ := filepath.Abs("barfoo")
 		args := []string{"-makebase", basePath, stem, csource}
 		b2g, err := newB2G(&bytes.Buffer{}, pkg, outputDir, args)
-		qt.Assert(t, err, qt.IsNil)
-		qt.Assert(t, b2g.makeBase, qt.Equals, basePath)
+		qt.Assert(t, qt.IsNil(err))
+		qt.Assert(t, qt.Equals(b2g.makeBase, basePath))
 	})
 
 	t.Run("makebase from env", func(t *testing.T) {
@@ -299,8 +299,8 @@ func TestParseArgs(t *testing.T) {
 		args := []string{stem, csource}
 		t.Setenv("BPF2GO_MAKEBASE", basePath)
 		b2g, err := newB2G(&bytes.Buffer{}, pkg, outputDir, args)
-		qt.Assert(t, err, qt.IsNil)
-		qt.Assert(t, b2g.makeBase, qt.Equals, basePath)
+		qt.Assert(t, qt.IsNil(err))
+		qt.Assert(t, qt.Equals(b2g.makeBase, basePath))
 	})
 
 	t.Run("makebase flag overrides env", func(t *testing.T) {
@@ -309,119 +309,119 @@ func TestParseArgs(t *testing.T) {
 		args := []string{"-makebase", basePathFlag, stem, csource}
 		t.Setenv("BPF2GO_MAKEBASE", basePathEnv)
 		b2g, err := newB2G(&bytes.Buffer{}, pkg, outputDir, args)
-		qt.Assert(t, err, qt.IsNil)
-		qt.Assert(t, b2g.makeBase, qt.Equals, basePathFlag)
+		qt.Assert(t, qt.IsNil(err))
+		qt.Assert(t, qt.Equals(b2g.makeBase, basePathFlag))
 	})
 
 	t.Run("cc defaults to clang", func(t *testing.T) {
 		args := []string{stem, csource}
 		b2g, err := newB2G(&bytes.Buffer{}, pkg, outputDir, args)
-		qt.Assert(t, err, qt.IsNil)
-		qt.Assert(t, b2g.cc, qt.Equals, "clang")
+		qt.Assert(t, qt.IsNil(err))
+		qt.Assert(t, qt.Equals(b2g.cc, "clang"))
 	})
 
 	t.Run("cc", func(t *testing.T) {
 		args := []string{"-cc", "barfoo", stem, csource}
 		b2g, err := newB2G(&bytes.Buffer{}, pkg, outputDir, args)
-		qt.Assert(t, err, qt.IsNil)
-		qt.Assert(t, b2g.cc, qt.Equals, "barfoo")
+		qt.Assert(t, qt.IsNil(err))
+		qt.Assert(t, qt.Equals(b2g.cc, "barfoo"))
 	})
 
 	t.Run("cc from env", func(t *testing.T) {
 		args := []string{stem, csource}
 		t.Setenv("BPF2GO_CC", "barfoo")
 		b2g, err := newB2G(&bytes.Buffer{}, pkg, outputDir, args)
-		qt.Assert(t, err, qt.IsNil)
-		qt.Assert(t, b2g.cc, qt.Equals, "barfoo")
+		qt.Assert(t, qt.IsNil(err))
+		qt.Assert(t, qt.Equals(b2g.cc, "barfoo"))
 	})
 
 	t.Run("cc flag overrides env", func(t *testing.T) {
 		args := []string{"-cc", "barfoo", stem, csource}
 		t.Setenv("BPF2GO_CC", "foobar")
 		b2g, err := newB2G(&bytes.Buffer{}, pkg, outputDir, args)
-		qt.Assert(t, err, qt.IsNil)
-		qt.Assert(t, b2g.cc, qt.Equals, "barfoo")
+		qt.Assert(t, qt.IsNil(err))
+		qt.Assert(t, qt.Equals(b2g.cc, "barfoo"))
 	})
 
 	t.Run("strip defaults to llvm-strip", func(t *testing.T) {
 		args := []string{stem, csource}
 		b2g, err := newB2G(&bytes.Buffer{}, pkg, outputDir, args)
-		qt.Assert(t, err, qt.IsNil)
-		qt.Assert(t, b2g.strip, qt.Equals, "llvm-strip")
+		qt.Assert(t, qt.IsNil(err))
+		qt.Assert(t, qt.Equals(b2g.strip, "llvm-strip"))
 	})
 
 	t.Run("strip", func(t *testing.T) {
 		args := []string{"-strip", "barfoo", stem, csource}
 		b2g, err := newB2G(&bytes.Buffer{}, pkg, outputDir, args)
-		qt.Assert(t, err, qt.IsNil)
-		qt.Assert(t, b2g.strip, qt.Equals, "barfoo")
+		qt.Assert(t, qt.IsNil(err))
+		qt.Assert(t, qt.Equals(b2g.strip, "barfoo"))
 	})
 
 	t.Run("strip from env", func(t *testing.T) {
 		args := []string{stem, csource}
 		t.Setenv("BPF2GO_STRIP", "barfoo")
 		b2g, err := newB2G(&bytes.Buffer{}, pkg, outputDir, args)
-		qt.Assert(t, err, qt.IsNil)
-		qt.Assert(t, b2g.strip, qt.Equals, "barfoo")
+		qt.Assert(t, qt.IsNil(err))
+		qt.Assert(t, qt.Equals(b2g.strip, "barfoo"))
 	})
 
 	t.Run("strip flag overrides env", func(t *testing.T) {
 		args := []string{"-strip", "barfoo", stem, csource}
 		t.Setenv("BPF2GO_STRIP", "foobar")
 		b2g, err := newB2G(&bytes.Buffer{}, pkg, outputDir, args)
-		qt.Assert(t, err, qt.IsNil)
-		qt.Assert(t, b2g.strip, qt.Equals, "barfoo")
+		qt.Assert(t, qt.IsNil(err))
+		qt.Assert(t, qt.Equals(b2g.strip, "barfoo"))
 	})
 
 	t.Run("no strip defaults to false", func(t *testing.T) {
 		args := []string{stem, csource}
 		b2g, err := newB2G(&bytes.Buffer{}, pkg, outputDir, args)
-		qt.Assert(t, err, qt.IsNil)
-		qt.Assert(t, b2g.disableStripping, qt.IsFalse)
+		qt.Assert(t, qt.IsNil(err))
+		qt.Assert(t, qt.IsFalse(b2g.disableStripping))
 	})
 
 	t.Run("no strip", func(t *testing.T) {
 		args := []string{"-no-strip", stem, csource}
 		b2g, err := newB2G(&bytes.Buffer{}, pkg, outputDir, args)
-		qt.Assert(t, err, qt.IsNil)
-		qt.Assert(t, b2g.disableStripping, qt.IsTrue)
+		qt.Assert(t, qt.IsNil(err))
+		qt.Assert(t, qt.IsTrue(b2g.disableStripping))
 	})
 
 	t.Run("cflags flag", func(t *testing.T) {
 		args := []string{"-cflags", "x y z", stem, csource}
 		b2g, err := newB2G(&bytes.Buffer{}, pkg, outputDir, args)
-		qt.Assert(t, err, qt.IsNil)
-		qt.Assert(t, b2g.cFlags, qt.DeepEquals, []string{"x", "y", "z"})
+		qt.Assert(t, qt.IsNil(err))
+		qt.Assert(t, qt.DeepEquals(b2g.cFlags, []string{"x", "y", "z"}))
 	})
 
 	t.Run("cflags multi flag", func(t *testing.T) {
 		args := []string{"-cflags", "x y z", "-cflags", "u v", stem, csource}
 		b2g, err := newB2G(&bytes.Buffer{}, pkg, outputDir, args)
-		qt.Assert(t, err, qt.IsNil)
-		qt.Assert(t, b2g.cFlags, qt.DeepEquals, []string{"u", "v"})
+		qt.Assert(t, qt.IsNil(err))
+		qt.Assert(t, qt.DeepEquals(b2g.cFlags, []string{"u", "v"}))
 	})
 
 	t.Run("cflags flag and args", func(t *testing.T) {
 		args := []string{"-cflags", "x y z", "stem", csource, "--", "u", "v"}
 		b2g, err := newB2G(&bytes.Buffer{}, pkg, outputDir, args)
-		qt.Assert(t, err, qt.IsNil)
-		qt.Assert(t, b2g.cFlags, qt.DeepEquals, []string{"x", "y", "z", "u", "v"})
+		qt.Assert(t, qt.IsNil(err))
+		qt.Assert(t, qt.DeepEquals(b2g.cFlags, []string{"x", "y", "z", "u", "v"}))
 	})
 
 	t.Run("cflags from env", func(t *testing.T) {
 		args := []string{stem, csource}
 		t.Setenv("BPF2GO_CFLAGS", "x y z")
 		b2g, err := newB2G(&bytes.Buffer{}, pkg, outputDir, args)
-		qt.Assert(t, err, qt.IsNil)
-		qt.Assert(t, b2g.cFlags, qt.DeepEquals, []string{"x", "y", "z"})
+		qt.Assert(t, qt.IsNil(err))
+		qt.Assert(t, qt.DeepEquals(b2g.cFlags, []string{"x", "y", "z"}))
 	})
 
 	t.Run("cflags flag overrides env", func(t *testing.T) {
 		args := []string{"-cflags", "u v", stem, csource}
 		t.Setenv("BPF2GO_CFLAGS", "x y z")
 		b2g, err := newB2G(&bytes.Buffer{}, pkg, outputDir, args)
-		qt.Assert(t, err, qt.IsNil)
-		qt.Assert(t, b2g.cFlags, qt.DeepEquals, []string{"u", "v"})
+		qt.Assert(t, qt.IsNil(err))
+		qt.Assert(t, qt.DeepEquals(b2g.cFlags, []string{"u", "v"}))
 	})
 }
 

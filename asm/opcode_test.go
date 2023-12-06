@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"testing"
 
-	qt "github.com/frankban/quicktest"
+	"github.com/go-quicktest/qt"
 )
 
 func TestGetSetJumpOp(t *testing.T) {
@@ -13,11 +13,11 @@ func TestGetSetJumpOp(t *testing.T) {
 			opcode := OpCode(class).SetJumpOp(op)
 
 			if valid {
-				qt.Assert(t, opcode, qt.Not(qt.Equals), InvalidOpCode)
-				qt.Assert(t, opcode.JumpOp(), qt.Equals, op)
+				qt.Assert(t, qt.Not(qt.Equals(opcode, InvalidOpCode)))
+				qt.Assert(t, qt.Equals(opcode.JumpOp(), op))
 			} else {
-				qt.Assert(t, opcode, qt.Equals, InvalidOpCode)
-				qt.Assert(t, opcode.JumpOp(), qt.Equals, InvalidJumpOp)
+				qt.Assert(t, qt.Equals(opcode, InvalidOpCode))
+				qt.Assert(t, qt.Equals(opcode.JumpOp(), InvalidJumpOp))
 			}
 		})
 	}

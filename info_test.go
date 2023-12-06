@@ -7,13 +7,14 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/go-quicktest/qt"
+
 	"github.com/cilium/ebpf/asm"
 	"github.com/cilium/ebpf/btf"
 	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/sys"
 	"github.com/cilium/ebpf/internal/testutils"
 	"github.com/cilium/ebpf/internal/unix"
-	qt "github.com/frankban/quicktest"
 )
 
 func TestMapInfoFromProc(t *testing.T) {
@@ -122,14 +123,14 @@ func TestProgramInfo(t *testing.T) {
 
 			if name == "proc" {
 				_, ok := info.CreatedByUID()
-				qt.Assert(t, ok, qt.IsFalse)
+				qt.Assert(t, qt.IsFalse(ok))
 			} else {
 				uid, ok := info.CreatedByUID()
 				if testutils.IsKernelLessThan(t, "4.15") {
-					qt.Assert(t, ok, qt.IsFalse)
+					qt.Assert(t, qt.IsFalse(ok))
 				} else {
-					qt.Assert(t, ok, qt.IsTrue)
-					qt.Assert(t, uid, qt.Equals, uint32(os.Getuid()))
+					qt.Assert(t, qt.IsTrue(ok))
+					qt.Assert(t, qt.Equals(uid, uint32(os.Getuid())))
 				}
 			}
 		})
@@ -143,7 +144,7 @@ func TestProgramInfoMapIDs(t *testing.T) {
 		ValueSize:  4,
 		MaxEntries: 1,
 	})
-	qt.Assert(t, err, qt.IsNil)
+	qt.Assert(t, qt.IsNil(err))
 	defer arr.Close()
 
 	prog, err := NewProgram(&ProgramSpec{
@@ -155,28 +156,28 @@ func TestProgramInfoMapIDs(t *testing.T) {
 		},
 		License: "MIT",
 	})
-	qt.Assert(t, err, qt.IsNil)
+	qt.Assert(t, qt.IsNil(err))
 	defer prog.Close()
 
 	info, err := prog.Info()
 	testutils.SkipIfNotSupported(t, err)
-	qt.Assert(t, err, qt.IsNil)
+	qt.Assert(t, qt.IsNil(err))
 
 	ids, ok := info.MapIDs()
 	switch {
 	case testutils.IsKernelLessThan(t, "4.15"):
-		qt.Assert(t, ok, qt.IsFalse)
-		qt.Assert(t, ids, qt.HasLen, 0)
+		qt.Assert(t, qt.IsFalse(ok))
+		qt.Assert(t, qt.HasLen(ids, 0))
 
 	default:
-		qt.Assert(t, ok, qt.IsTrue)
+		qt.Assert(t, qt.IsTrue(ok))
 
 		mapInfo, err := arr.Info()
-		qt.Assert(t, err, qt.IsNil)
+		qt.Assert(t, qt.IsNil(err))
 
 		mapID, ok := mapInfo.ID()
-		qt.Assert(t, ok, qt.IsTrue)
-		qt.Assert(t, ids, qt.ContentEquals, []MapID{mapID})
+		qt.Assert(t, qt.IsTrue(ok))
+		qt.Assert(t, qt.ContentEquals(ids, []MapID{mapID}))
 	}
 }
 
@@ -189,22 +190,22 @@ func TestProgramInfoMapIDsNoMaps(t *testing.T) {
 		},
 		License: "MIT",
 	})
-	qt.Assert(t, err, qt.IsNil)
+	qt.Assert(t, qt.IsNil(err))
 	defer prog.Close()
 
 	info, err := prog.Info()
 	testutils.SkipIfNotSupported(t, err)
-	qt.Assert(t, err, qt.IsNil)
+	qt.Assert(t, qt.IsNil(err))
 
 	ids, ok := info.MapIDs()
 	switch {
 	case testutils.IsKernelLessThan(t, "4.15"):
-		qt.Assert(t, ok, qt.IsFalse)
-		qt.Assert(t, ids, qt.HasLen, 0)
+		qt.Assert(t, qt.IsFalse(ok))
+		qt.Assert(t, qt.HasLen(ids, 0))
 
 	default:
-		qt.Assert(t, ok, qt.IsTrue)
-		qt.Assert(t, ids, qt.HasLen, 0)
+		qt.Assert(t, qt.IsTrue(ok))
+		qt.Assert(t, qt.HasLen(ids, 0))
 	}
 }
 

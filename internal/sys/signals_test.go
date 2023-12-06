@@ -7,7 +7,7 @@ import (
 
 	"github.com/cilium/ebpf/internal/unix"
 
-	qt "github.com/frankban/quicktest"
+	"github.com/go-quicktest/qt"
 )
 
 func TestSigset(t *testing.T) {
@@ -65,8 +65,8 @@ func TestProfilerSignal(t *testing.T) {
 	}
 
 	want := have
-	qt.Assert(t, sigsetAdd(&want, unix.SIGPROF), qt.IsNil)
-	qt.Assert(t, have, qt.Equals, want)
+	qt.Assert(t, qt.IsNil(sigsetAdd(&want, unix.SIGPROF)))
+	qt.Assert(t, qt.Equals(have, want))
 
 	unmaskProfilerSignal()
 
@@ -74,5 +74,5 @@ func TestProfilerSignal(t *testing.T) {
 		t.Fatal("get sigmask:", err)
 	}
 
-	qt.Assert(t, have, qt.Equals, old)
+	qt.Assert(t, qt.Equals(have, old))
 }

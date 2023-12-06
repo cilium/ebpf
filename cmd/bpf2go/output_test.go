@@ -4,11 +4,12 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/go-quicktest/qt"
+	"github.com/google/go-cmp/cmp"
+
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/btf"
 	"github.com/cilium/ebpf/internal"
-	qt "github.com/frankban/quicktest"
-	"github.com/google/go-cmp/cmp"
 )
 
 func TestOrderTypes(t *testing.T) {
@@ -33,8 +34,8 @@ func TestOrderTypes(t *testing.T) {
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			result, err := sortTypes(test.in)
-			qt.Assert(t, err, qt.IsNil)
-			qt.Assert(t, len(result), qt.Equals, len(test.out))
+			qt.Assert(t, qt.IsNil(err))
+			qt.Assert(t, qt.Equals(len(result), len(test.out)))
 			for i, o := range test.out {
 				if result[i] != o {
 					t.Fatalf("Index %d: expected %p got %p", i, o, result[i])
@@ -57,15 +58,15 @@ func TestOrderTypes(t *testing.T) {
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			result, err := sortTypes(test.in)
-			qt.Assert(t, err, qt.IsNotNil)
-			qt.Assert(t, result, qt.IsNil)
+			qt.Assert(t, qt.IsNotNil(err))
+			qt.Assert(t, qt.IsNil(result))
 		})
 	}
 }
 
-var typesEqual = qt.CmpEquals(cmp.Comparer(func(a, b btf.Type) bool {
+var typesEqualComparer = cmp.Comparer(func(a, b btf.Type) bool {
 	return a == b
-}))
+})
 
 func TestCollectFromSpec(t *testing.T) {
 	spec, err := ebpf.LoadCollectionSpec(fmt.Sprintf("testdata/minimal-%s.elf", internal.ClangEndian))
@@ -79,19 +80,19 @@ func TestCollectFromSpec(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	qt.Assert(t, maps, qt.ContentEquals, []string{"map1"})
-	qt.Assert(t, programs, qt.ContentEquals, []string{"filter"})
-	qt.Assert(t, types, typesEqual, []btf.Type{map1.Key, map1.Value})
+	qt.Assert(t, qt.ContentEquals(maps, []string{"map1"}))
+	qt.Assert(t, qt.ContentEquals(programs, []string{"filter"}))
+	qt.Assert(t, qt.CmpEquals(types, []btf.Type{map1.Key, map1.Value}, typesEqualComparer))
 
 	_, _, types, err = collectFromSpec(spec, nil, true)
 	if err != nil {
 		t.Fatal(err)
 	}
-	qt.Assert(t, types, typesEqual, ([]btf.Type)(nil))
+	qt.Assert(t, qt.CmpEquals[[]btf.Type](types, nil, typesEqualComparer))
 
 	_, _, types, err = collectFromSpec(spec, []string{"barfoo"}, true)
 	if err != nil {
 		t.Fatal(err)
 	}
-	qt.Assert(t, types, typesEqual, []btf.Type{map1.Value})
+	qt.Assert(t, qt.CmpEquals(types, []btf.Type{map1.Value}, typesEqualComparer))
 }

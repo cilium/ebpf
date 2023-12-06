@@ -7,7 +7,7 @@ import (
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/internal/testutils"
 
-	qt "github.com/frankban/quicktest"
+	"github.com/go-quicktest/qt"
 	"golang.org/x/exp/slices"
 )
 
@@ -22,29 +22,29 @@ func TestQueryPrograms(t *testing.T) {
 			prog, link, opts := fn(t)
 			result, err := QueryPrograms(opts)
 			testutils.SkipIfNotSupported(t, err)
-			qt.Assert(t, err, qt.IsNil)
+			qt.Assert(t, qt.IsNil(err))
 
 			progInfo, err := prog.Info()
-			qt.Assert(t, err, qt.IsNil)
+			qt.Assert(t, qt.IsNil(err))
 			progID, _ := progInfo.ID()
 
 			i := slices.IndexFunc(result.Programs, func(ap AttachedProgram) bool {
 				return ap.ID == progID
 			})
-			qt.Assert(t, i, qt.Not(qt.Equals), -1)
+			qt.Assert(t, qt.Not(qt.Equals(i, -1)))
 
 			if name == "tcx" {
-				qt.Assert(t, result.Revision, qt.Not(qt.Equals), uint64(0))
+				qt.Assert(t, qt.Not(qt.Equals(result.Revision, 0)))
 			}
 
 			if result.HaveLinkInfo() {
 				ap := result.Programs[i]
 				linkInfo, err := link.Info()
-				qt.Assert(t, err, qt.IsNil)
+				qt.Assert(t, qt.IsNil(err))
 
 				linkID, ok := ap.LinkID()
-				qt.Assert(t, ok, qt.IsTrue)
-				qt.Assert(t, linkID, qt.Equals, linkInfo.ID)
+				qt.Assert(t, qt.IsTrue(ok))
+				qt.Assert(t, qt.Equals(linkID, linkInfo.ID))
 			}
 		})
 	}
@@ -58,7 +58,7 @@ func queryCgroupProgAttachFixtures(t *testing.T) (*ebpf.Program, Link, QueryOpti
 		t.Fatal("Can't create link:", err)
 	}
 	t.Cleanup(func() {
-		qt.Assert(t, link.Close(), qt.IsNil)
+		qt.Assert(t, qt.IsNil(link.Close()))
 	})
 
 	return prog, nil, QueryOptions{
@@ -76,7 +76,7 @@ func queryCgroupLinkFixtures(t *testing.T) (*ebpf.Program, Link, QueryOptions) {
 		t.Fatal("Can't create link:", err)
 	}
 	t.Cleanup(func() {
-		qt.Assert(t, link.Close(), qt.IsNil)
+		qt.Assert(t, qt.IsNil(link.Close()))
 	})
 
 	return prog, nil, QueryOptions{
@@ -112,7 +112,7 @@ func queryNetNSFixtures(t *testing.T) (*ebpf.Program, Link, QueryOptions) {
 	})
 
 	netns, err := os.Open("/proc/self/ns/net")
-	qt.Assert(t, err, qt.IsNil)
+	qt.Assert(t, qt.IsNil(err))
 	t.Cleanup(func() { netns.Close() })
 
 	return prog, nil, QueryOptions{

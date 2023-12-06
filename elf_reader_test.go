@@ -20,7 +20,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 
-	qt "github.com/frankban/quicktest"
+	"github.com/go-quicktest/qt"
 )
 
 func TestLoadCollectionSpec(t *testing.T) {
@@ -711,7 +711,7 @@ func TestKconfigConfig(t *testing.T) {
 		}
 
 		// CONFIG_HZ must have a value.
-		qt.Assert(t, value, qt.Not(qt.Equals), 0)
+		qt.Assert(t, qt.Not(qt.Equals(value, 0)))
 	})
 }
 
@@ -1152,7 +1152,7 @@ func loadTargetProgram(tb testing.TB, spec *CollectionSpec, file, program string
 		tb.Fatalf("Can't read %s: %s", file, err)
 	}
 
-	qt.Assert(tb, targetSpec.Programs[program], qt.IsNotNil)
+	qt.Assert(tb, qt.IsNotNil(targetSpec.Programs[program]))
 
 	coll, err := NewCollectionWithOptions(targetSpec, CollectionOptions{
 		Programs: ProgramOptions{LogDisabled: true},
@@ -1296,7 +1296,7 @@ func TestELFSectionProgramTypes(t *testing.T) {
 		t.Run(tc.Section, func(t *testing.T) {
 			pt, at, fl, extra := getProgType(tc.Section)
 			have := testcase{tc.Section, pt, at, fl, extra}
-			qt.Assert(t, have, qt.DeepEquals, tc)
+			qt.Assert(t, qt.DeepEquals(have, tc))
 		})
 	}
 }
@@ -1329,9 +1329,9 @@ func TestMatchSectionName(t *testing.T) {
 		name := fmt.Sprintf("%s:%s", testcase.pattern, testcase.input)
 		t.Run(name, func(t *testing.T) {
 			extra, matches := matchSectionName(testcase.input, testcase.pattern)
-			qt.Assert(t, matches, qt.Equals, testcase.matches)
+			qt.Assert(t, qt.Equals(matches, testcase.matches))
 			if testcase.matches {
-				qt.Assert(t, extra, qt.Equals, testcase.extra)
+				qt.Assert(t, qt.Equals(extra, testcase.extra))
 			}
 		})
 	}

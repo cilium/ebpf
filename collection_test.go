@@ -8,12 +8,13 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/go-quicktest/qt"
+
 	"github.com/cilium/ebpf/asm"
 	"github.com/cilium/ebpf/btf"
 	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/testutils"
 	"github.com/cilium/ebpf/internal/testutils/fdtrace"
-	qt "github.com/frankban/quicktest"
 )
 
 func TestMain(m *testing.M) {
@@ -367,19 +368,19 @@ func TestCollectionRewriteConstants(t *testing.T) {
 		"fake_constant_one": uint32(1),
 		"fake_constant_two": uint32(2),
 	})
-	qt.Assert(t, err, qt.IsNotNil, qt.Commentf("RewriteConstants did not fail"))
+	qt.Assert(t, qt.IsNotNil(err), qt.Commentf("RewriteConstants did not fail"))
 
 	var mErr *MissingConstantsError
 	if !errors.As(err, &mErr) {
 		t.Fatal("Error doesn't wrap MissingConstantsError:", err)
 	}
-	qt.Assert(t, mErr.Constants, qt.ContentEquals, []string{"fake_constant_one", "fake_constant_two"})
+	qt.Assert(t, qt.ContentEquals(mErr.Constants, []string{"fake_constant_one", "fake_constant_two"}))
 
 	err = cs.RewriteConstants(map[string]interface{}{
 		"the_constant": uint32(0x42424242),
 	})
-	qt.Assert(t, err, qt.IsNil)
-	qt.Assert(t, cs.Maps[".rodata"].Contents[0].Value, qt.ContentEquals, []byte{0x42, 0x42, 0x42, 0x42})
+	qt.Assert(t, qt.IsNil(err))
+	qt.Assert(t, qt.ContentEquals(cs.Maps[".rodata"].Contents[0].Value.([]byte), []byte{0x42, 0x42, 0x42, 0x42}))
 }
 
 func TestCollectionSpec_LoadAndAssign_LazyLoading(t *testing.T) {
@@ -589,20 +590,20 @@ func TestCollectionAssign(t *testing.T) {
 	}
 
 	coll, err := NewCollection(cs)
-	qt.Assert(t, err, qt.IsNil)
+	qt.Assert(t, qt.IsNil(err))
 	defer coll.Close()
 
-	qt.Assert(t, coll.Assign(&objs), qt.IsNil)
+	qt.Assert(t, qt.IsNil(coll.Assign(&objs)))
 	defer objs.Program.Close()
 	defer objs.Map.Close()
 
 	// Check that objs has received ownership of map and prog
-	qt.Assert(t, objs.Program.FD() >= 0, qt.IsTrue)
-	qt.Assert(t, objs.Map.FD() >= 0, qt.IsTrue)
+	qt.Assert(t, qt.IsTrue(objs.Program.FD() >= 0))
+	qt.Assert(t, qt.IsTrue(objs.Map.FD() >= 0))
 
 	// Check that the collection has lost ownership
-	qt.Assert(t, coll.Programs["prog1"], qt.IsNil)
-	qt.Assert(t, coll.Maps["map1"], qt.IsNil)
+	qt.Assert(t, qt.IsNil(coll.Programs["prog1"]))
+	qt.Assert(t, qt.IsNil(coll.Maps["map1"]))
 }
 
 func TestCollectionAssignFail(t *testing.T) {
@@ -634,14 +635,14 @@ func TestCollectionAssignFail(t *testing.T) {
 	}
 
 	coll, err := NewCollection(cs)
-	qt.Assert(t, err, qt.IsNil)
+	qt.Assert(t, qt.IsNil(err))
 	defer coll.Close()
 
-	qt.Assert(t, coll.Assign(&objs), qt.IsNotNil)
+	qt.Assert(t, qt.IsNotNil(coll.Assign(&objs)))
 
 	// Check that the collection has retained ownership
-	qt.Assert(t, coll.Programs["prog1"], qt.IsNotNil)
-	qt.Assert(t, coll.Maps["map1"], qt.IsNotNil)
+	qt.Assert(t, qt.IsNotNil(coll.Programs["prog1"]))
+	qt.Assert(t, qt.IsNotNil(coll.Maps["map1"]))
 }
 
 func TestIncompleteLoadAndAssign(t *testing.T) {
@@ -734,7 +735,7 @@ func BenchmarkNewCollectionManyProgs(b *testing.B) {
 
 func BenchmarkLoadCollectionManyProgs(b *testing.B) {
 	file, err := os.Open(fmt.Sprintf("testdata/manyprogs-%s.elf", internal.ClangEndian))
-	qt.Assert(b, err, qt.IsNil)
+	qt.Assert(b, qt.IsNil(err))
 	defer file.Close()
 
 	b.ReportAllocs()

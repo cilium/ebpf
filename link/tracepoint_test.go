@@ -9,7 +9,7 @@ import (
 	"github.com/cilium/ebpf/internal/testutils"
 	"github.com/cilium/ebpf/internal/unix"
 
-	qt "github.com/frankban/quicktest"
+	"github.com/go-quicktest/qt"
 )
 
 func TestTracepoint(t *testing.T) {
@@ -43,20 +43,18 @@ func TestTracepointMissing(t *testing.T) {
 }
 
 func TestTracepointErrors(t *testing.T) {
-	c := qt.New(t)
-
 	// Invalid Tracepoint incantations.
 	_, err := Tracepoint("", "", nil, nil) // empty names
-	c.Assert(errors.Is(err, errInvalidInput), qt.IsTrue)
+	qt.Assert(t, qt.ErrorIs(err, errInvalidInput))
 
 	_, err = Tracepoint("_", "_", nil, nil) // empty prog
-	c.Assert(errors.Is(err, errInvalidInput), qt.IsTrue)
+	qt.Assert(t, qt.ErrorIs(err, errInvalidInput))
 
 	_, err = Tracepoint(".", "+", &ebpf.Program{}, nil) // illegal chars in group/name
-	c.Assert(errors.Is(err, errInvalidInput), qt.IsTrue)
+	qt.Assert(t, qt.ErrorIs(err, errInvalidInput))
 
 	_, err = Tracepoint("foo", "bar", &ebpf.Program{}, nil) // wrong prog type
-	c.Assert(errors.Is(err, errInvalidInput), qt.IsTrue)
+	qt.Assert(t, qt.ErrorIs(err, errInvalidInput))
 }
 
 func TestTracepointProgramCall(t *testing.T) {

@@ -6,7 +6,7 @@ import (
 	"os"
 	"testing"
 
-	qt "github.com/frankban/quicktest"
+	"github.com/go-quicktest/qt"
 )
 
 func TestAuxvVDSOMemoryAddress(t *testing.T) {
@@ -53,7 +53,7 @@ func TestAuxvNoVDSO(t *testing.T) {
 
 func TestVDSOVersion(t *testing.T) {
 	_, err := vdsoVersion()
-	qt.Assert(t, err, qt.IsNil)
+	qt.Assert(t, qt.IsNil(err))
 }
 
 func TestLinuxVersionCodeEmbedded(t *testing.T) {

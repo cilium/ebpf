@@ -8,7 +8,7 @@ import (
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/internal/testutils"
 
-	qt "github.com/frankban/quicktest"
+	"github.com/go-quicktest/qt"
 )
 
 func TestProgramAlter(t *testing.T) {
@@ -51,11 +51,11 @@ func TestRawAttachProgramAnchor(t *testing.T) {
 	testutils.SkipOnOldKernel(t, "6.6", "attach anchor")
 
 	iface, err := net.InterfaceByName("lo")
-	qt.Assert(t, err, qt.IsNil)
+	qt.Assert(t, qt.IsNil(err))
 
 	a := mustLoadProgram(t, ebpf.SchedCLS, 0, "")
 	info, err := a.Info()
-	qt.Assert(t, err, qt.IsNil)
+	qt.Assert(t, qt.IsNil(err))
 	aID, _ := info.ID()
 
 	err = RawAttachProgram(RawAttachProgramOptions{
@@ -63,7 +63,7 @@ func TestRawAttachProgramAnchor(t *testing.T) {
 		Program: a,
 		Attach:  ebpf.AttachTCXIngress,
 	})
-	qt.Assert(t, err, qt.IsNil)
+	qt.Assert(t, qt.IsNil(err))
 	defer RawDetachProgram(RawDetachProgramOptions{
 		Target:  iface.Index,
 		Program: a,
@@ -75,11 +75,11 @@ func TestRawAttachProgramAnchor(t *testing.T) {
 		Program:   mustLoadProgram(t, ebpf.SchedCLS, 0, ""),
 		Attach:    ebpf.AttachTCXIngress,
 	})
-	qt.Assert(t, err, qt.IsNil)
+	qt.Assert(t, qt.IsNil(err))
 	defer link.Close()
 
 	linkInfo, err := link.Info()
-	qt.Assert(t, err, qt.IsNil)
+	qt.Assert(t, qt.IsNil(err))
 
 	b := mustLoadProgram(t, ebpf.SchedCLS, 0, "")
 
@@ -98,7 +98,7 @@ func TestRawAttachProgramAnchor(t *testing.T) {
 				Attach:  ebpf.AttachTCXIngress,
 				Anchor:  anchor,
 			})
-			qt.Assert(t, err, qt.IsNil)
+			qt.Assert(t, qt.IsNil(err))
 
 			// Detach doesn't allow first or last anchor.
 			if _, ok := anchor.(firstAnchor); ok {
@@ -113,7 +113,7 @@ func TestRawAttachProgramAnchor(t *testing.T) {
 				Attach:  ebpf.AttachTCXIngress,
 				Anchor:  anchor,
 			})
-			qt.Assert(t, err, qt.IsNil)
+			qt.Assert(t, qt.IsNil(err))
 		})
 	}
 
@@ -124,12 +124,12 @@ func TestRawAttachProgramAnchor(t *testing.T) {
 		Attach:  ebpf.AttachTCXIngress,
 		Anchor:  ReplaceProgram(a),
 	})
-	qt.Assert(t, err, qt.IsNil)
+	qt.Assert(t, qt.IsNil(err))
 
 	err = RawDetachProgram(RawDetachProgramOptions{
 		Target:  iface.Index,
 		Program: b,
 		Attach:  ebpf.AttachTCXIngress,
 	})
-	qt.Assert(t, err, qt.IsNil)
+	qt.Assert(t, qt.IsNil(err))
 }

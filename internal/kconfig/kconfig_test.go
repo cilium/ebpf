@@ -9,7 +9,7 @@ import (
 	"github.com/cilium/ebpf/btf"
 	"github.com/cilium/ebpf/internal"
 
-	qt "github.com/frankban/quicktest"
+	"github.com/go-quicktest/qt"
 )
 
 func BenchmarkParse(b *testing.B) {
@@ -77,7 +77,7 @@ func TestParse(t *testing.T) {
 		"CONFIG_STR":      `"abracad"`,
 		"CONFIG_FOO":      `"foo"`,
 	}
-	qt.Assert(t, config, qt.DeepEquals, expected)
+	qt.Assert(t, qt.DeepEquals(config, expected))
 }
 
 func TestParseFiltered(t *testing.T) {
@@ -97,7 +97,7 @@ func TestParseFiltered(t *testing.T) {
 	}
 
 	expected := map[string]string{"CONFIG_FOO": `"foo"`}
-	qt.Assert(t, config, qt.DeepEquals, expected)
+	qt.Assert(t, qt.DeepEquals(config, expected))
 }
 
 func TestParseGzipped(t *testing.T) {
@@ -132,7 +132,7 @@ func TestParseGzippedFiltered(t *testing.T) {
 	}
 
 	expected := map[string]string{"CONFIG_HZ": "1000"}
-	qt.Assert(t, config, qt.DeepEquals, expected)
+	qt.Assert(t, qt.DeepEquals(config, expected))
 }
 
 func TestProcessKconfigBadLine(t *testing.T) {
@@ -141,10 +141,10 @@ func TestProcessKconfigBadLine(t *testing.T) {
 	m := make(map[string]string)
 
 	err := processKconfigLine([]byte("CONFIG_FOO"), m, nil)
-	qt.Assert(t, err, qt.IsNotNil, qt.Commentf("line has no '='"))
+	qt.Assert(t, qt.IsNotNil(err), qt.Commentf("line has no '='"))
 
 	err = processKconfigLine([]byte("CONFIG_FOO="), m, nil)
-	qt.Assert(t, err, qt.IsNotNil, qt.Commentf("line has no value"))
+	qt.Assert(t, qt.IsNotNil(err), qt.Commentf("line has no value"))
 }
 
 func TestPutValue(t *testing.T) {
@@ -396,7 +396,7 @@ func TestPutValue(t *testing.T) {
 		if len(c.comment) > 0 {
 			err := PutValue(make([]byte, 0), c.typ, c.value)
 
-			qt.Assert(t, err, qt.IsNotNil, qt.Commentf(c.comment))
+			qt.Assert(t, qt.IsNotNil(err), qt.Commentf(c.comment))
 
 			continue
 		}
@@ -411,8 +411,8 @@ func TestPutValue(t *testing.T) {
 		data := make([]byte, len(expected))
 		err = PutValue(data, c.typ, c.value)
 
-		qt.Assert(t, err, qt.IsNil)
+		qt.Assert(t, qt.IsNil(err))
 
-		qt.Assert(t, data, qt.DeepEquals, expected)
+		qt.Assert(t, qt.DeepEquals(data, expected))
 	}
 }

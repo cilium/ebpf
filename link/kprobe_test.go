@@ -5,7 +5,7 @@ import (
 	"os"
 	"testing"
 
-	qt "github.com/frankban/quicktest"
+	"github.com/go-quicktest/qt"
 
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/asm"
@@ -38,16 +38,14 @@ func TestKprobe(t *testing.T) {
 		})
 	}
 
-	c := qt.New(t)
-
 	k, err := Kprobe("bogus", prog, nil)
-	c.Assert(err, qt.ErrorIs, os.ErrNotExist, qt.Commentf("got error: %s", err))
+	qt.Assert(t, qt.ErrorIs(err, os.ErrNotExist), qt.Commentf("got error: %s", err))
 	if k != nil {
 		k.Close()
 	}
 
 	k, err = Kprobe(ksym, prog, nil)
-	c.Assert(err, qt.IsNil)
+	qt.Assert(t, qt.IsNil(err))
 	defer k.Close()
 
 	testLink(t, k, prog)
@@ -104,8 +102,6 @@ func TestKretprobe(t *testing.T) {
 		})
 	}
 
-	c := qt.New(t)
-
 	k, err := Kretprobe("bogus", prog, nil)
 	if !(errors.Is(err, os.ErrNotExist) || errors.Is(err, unix.EINVAL)) {
 		t.Fatal(err)
@@ -115,28 +111,26 @@ func TestKretprobe(t *testing.T) {
 	}
 
 	k, err = Kretprobe(ksym, prog, nil)
-	c.Assert(err, qt.IsNil)
+	qt.Assert(t, qt.IsNil(err))
 	defer k.Close()
 
 	testLink(t, k, prog)
 }
 
 func TestKprobeErrors(t *testing.T) {
-	c := qt.New(t)
-
 	// Invalid Kprobe incantations. Kretprobe uses the same code paths
 	// with a different ret flag.
 	_, err := Kprobe("", nil, nil) // empty symbol
-	c.Assert(errors.Is(err, errInvalidInput), qt.IsTrue)
+	qt.Assert(t, qt.ErrorIs(err, errInvalidInput))
 
 	_, err = Kprobe("_", nil, nil) // empty prog
-	c.Assert(errors.Is(err, errInvalidInput), qt.IsTrue)
+	qt.Assert(t, qt.ErrorIs(err, errInvalidInput))
 
 	_, err = Kprobe(".", &ebpf.Program{}, nil) // illegal chars in symbol
-	c.Assert(errors.Is(err, errInvalidInput), qt.IsTrue)
+	qt.Assert(t, qt.ErrorIs(err, errInvalidInput))
 
 	_, err = Kprobe("foo", &ebpf.Program{}, nil) // wrong prog type
-	c.Assert(errors.Is(err, errInvalidInput), qt.IsTrue)
+	qt.Assert(t, qt.ErrorIs(err, errInvalidInput))
 }
 
 // Test k(ret)probe creation using perf_kprobe PMU.
@@ -144,33 +138,29 @@ func TestKprobeCreatePMU(t *testing.T) {
 	// Requires at least 4.17 (e12f03d7031a "perf/core: Implement the 'perf_kprobe' PMU")
 	testutils.SkipOnOldKernel(t, "4.17", "perf_kprobe PMU")
 
-	c := qt.New(t)
-
 	// kprobe happy path. printk is always present.
 	pk, err := pmuProbe(tracefs.ProbeArgs{Type: tracefs.Kprobe, Symbol: ksym})
-	c.Assert(err, qt.IsNil)
+	qt.Assert(t, qt.IsNil(err))
 	defer pk.Close()
 
 	// kretprobe happy path.
 	pr, err := pmuProbe(tracefs.ProbeArgs{Type: tracefs.Kprobe, Symbol: ksym, Ret: true})
-	c.Assert(err, qt.IsNil)
+	qt.Assert(t, qt.IsNil(err))
 	defer pr.Close()
 
 	// Expect os.ErrNotExist when specifying a non-existent kernel symbol
 	// on kernels 4.17 and up.
 	_, err = pmuProbe(tracefs.ProbeArgs{Type: tracefs.Kprobe, Symbol: "bogus"})
-	c.Assert(errors.Is(err, os.ErrNotExist), qt.IsTrue, qt.Commentf("got error: %s", err))
+	qt.Assert(t, qt.ErrorIs(err, os.ErrNotExist), qt.Commentf("got error: %s", err))
 
 	// A kernel bug was fixed in 97c753e62e6c where EINVAL was returned instead
 	// of ENOENT, but only for kretprobes.
 	_, err = pmuProbe(tracefs.ProbeArgs{Type: tracefs.Kprobe, Symbol: "bogus", Ret: true})
-	c.Assert(errors.Is(err, os.ErrNotExist), qt.IsTrue, qt.Commentf("got error: %s", err))
+	qt.Assert(t, qt.ErrorIs(err, os.ErrNotExist), qt.Commentf("got error: %s", err))
 }
 
 // Test fallback behaviour on kernels without perf_kprobe PMU available.
 func TestKprobePMUUnavailable(t *testing.T) {
-	c := qt.New(t)
-
 	pk, err := pmuProbe(tracefs.ProbeArgs{Type: tracefs.Kprobe, Symbol: ksym})
 	if err == nil {
 		pk.Close()
@@ -178,7 +168,7 @@ func TestKprobePMUUnavailable(t *testing.T) {
 	}
 
 	// Only allow a PMU creation with a valid kernel symbol to fail with ErrNotSupported.
-	c.Assert(errors.Is(err, ErrNotSupported), qt.IsTrue, qt.Commentf("got error: %s", err))
+	qt.Assert(t, qt.ErrorIs(err, ErrNotSupported), qt.Commentf("got error: %s", err))
 }
 
 func BenchmarkKprobeCreatePMU(b *testing.B) {
@@ -196,47 +186,45 @@ func BenchmarkKprobeCreatePMU(b *testing.B) {
 
 // Test tracefs k(ret)probe creation on all kernel versions.
 func TestKprobeTraceFS(t *testing.T) {
-	c := qt.New(t)
-
 	// Open and close tracefs k(ret)probes, checking all errors.
 	kp, err := tracefsProbe(tracefs.ProbeArgs{Type: tracefs.Kprobe, Symbol: ksym})
-	c.Assert(err, qt.IsNil)
-	c.Assert(kp.Close(), qt.IsNil)
+	qt.Assert(t, qt.IsNil(err))
+	qt.Assert(t, qt.IsNil(kp.Close()))
 
 	kp, err = tracefsProbe(tracefs.ProbeArgs{Type: tracefs.Kprobe, Symbol: ksym, Ret: true})
-	c.Assert(err, qt.IsNil)
-	c.Assert(kp.Close(), qt.IsNil)
+	qt.Assert(t, qt.IsNil(err))
+	qt.Assert(t, qt.IsNil(kp.Close()))
 
 	// Create two identical trace events, ensure their IDs differ.
 	k1, err := tracefsProbe(tracefs.ProbeArgs{Type: tracefs.Kprobe, Symbol: ksym})
-	c.Assert(err, qt.IsNil)
+	qt.Assert(t, qt.IsNil(err))
 	defer k1.Close()
-	c.Assert(k1.tracefsEvent, qt.IsNotNil)
+	qt.Assert(t, qt.IsNotNil(k1.tracefsEvent))
 
 	k2, err := tracefsProbe(tracefs.ProbeArgs{Type: tracefs.Kprobe, Symbol: ksym})
-	c.Assert(err, qt.IsNil)
+	qt.Assert(t, qt.IsNil(err))
 	defer k2.Close()
-	c.Assert(k2.tracefsEvent, qt.IsNotNil)
+	qt.Assert(t, qt.IsNotNil(k2.tracefsEvent))
 
 	// Compare the kprobes' tracefs IDs.
-	c.Assert(k1.tracefsEvent.ID(), qt.Not(qt.Equals), k2.tracefsEvent.ID())
+	qt.Assert(t, qt.Not(qt.Equals(k1.tracefsEvent.ID(), k2.tracefsEvent.ID())))
 
 	// Expect an error when supplying an invalid custom group name
 	_, err = tracefsProbe(tracefs.ProbeArgs{Type: tracefs.Kprobe, Symbol: ksym, Group: "/"})
-	c.Assert(err, qt.Not(qt.IsNil))
+	qt.Assert(t, qt.Not(qt.IsNil(err)))
 
 	cg := "customgroup"
 	k3, err := tracefsProbe(tracefs.ProbeArgs{Type: tracefs.Kprobe, Symbol: ksym, Group: cg})
-	c.Assert(err, qt.IsNil)
+	qt.Assert(t, qt.IsNil(err))
 	defer k3.Close()
-	c.Assert(k3.tracefsEvent.Group(), qt.Matches, `customgroup_[a-f0-9]{16}`)
+	qt.Assert(t, qt.Matches(k3.tracefsEvent.Group(), `customgroup_[a-f0-9]{16}`))
 
 	// Prepare probe args.
 	args := tracefs.ProbeArgs{Type: tracefs.Kprobe, Group: "testgroup", Symbol: "symbol"}
 
 	// Write a k(ret)probe event for a non-existing symbol.
 	_, err = tracefs.NewEvent(args)
-	c.Assert(errors.Is(err, os.ErrNotExist), qt.IsTrue, qt.Commentf("got error: %s", err))
+	qt.Assert(t, qt.ErrorIs(err, os.ErrNotExist), qt.Commentf("got error: %s", err))
 
 	// A kernel bug was fixed in 97c753e62e6c where EINVAL was returned instead
 	// of ENOENT, but only for kretprobes.

@@ -16,7 +16,7 @@ import (
 	"github.com/cilium/ebpf/internal/testutils"
 	"github.com/cilium/ebpf/internal/unix"
 
-	qt "github.com/frankban/quicktest"
+	"github.com/go-quicktest/qt"
 )
 
 var (
@@ -75,12 +75,12 @@ func TestMap(t *testing.T) {
 	}
 
 	sliceVal := make([]uint32, 1)
-	qt.Assert(t, m.Lookup(uint32(0), sliceVal), qt.IsNil)
-	qt.Assert(t, sliceVal, qt.DeepEquals, []uint32{42})
+	qt.Assert(t, qt.IsNil(m.Lookup(uint32(0), sliceVal)))
+	qt.Assert(t, qt.DeepEquals(sliceVal, []uint32{42}))
 
 	var slice []byte
-	qt.Assert(t, m.Lookup(uint32(0), &slice), qt.IsNil)
-	qt.Assert(t, slice, qt.DeepEquals, internal.NativeEndian.AppendUint32(nil, 42))
+	qt.Assert(t, qt.IsNil(m.Lookup(uint32(0), &slice)))
+	qt.Assert(t, qt.DeepEquals(slice, internal.NativeEndian.AppendUint32(nil, 42)))
 
 	var k uint32
 	if err := m.NextKey(uint32(0), &k); err != nil {
@@ -132,8 +132,8 @@ func TestMapBatch(t *testing.T) {
 	for _, m := range []*Map{array, hash} {
 		t.Run(m.Type().String(), func(t *testing.T) {
 			count, err := m.BatchUpdate(keys, values, nil)
-			qt.Assert(t, err, qt.IsNil)
-			qt.Assert(t, count, qt.Equals, len(contents))
+			qt.Assert(t, qt.IsNil(err))
+			qt.Assert(t, qt.Equals(count, len(contents)))
 
 			n := len(contents) / 2 // cut buffer in half
 			lookupKeys := make([]uint32, n)
@@ -147,15 +147,15 @@ func TestMapBatch(t *testing.T) {
 				if errors.Is(err, ErrKeyNotExist) {
 					break
 				}
-				qt.Assert(t, err, qt.IsNil)
+				qt.Assert(t, qt.IsNil(err))
 
-				qt.Assert(t, count <= len(lookupKeys), qt.IsTrue)
+				qt.Assert(t, qt.IsTrue(count <= len(lookupKeys)))
 				for i, key := range lookupKeys[:count] {
 					value := lookupValues[i]
-					qt.Assert(t, value, qt.Equals, contents[key], qt.Commentf("value for key %d should match", key))
+					qt.Assert(t, qt.Equals(value, contents[key]), qt.Commentf("value for key %d should match", key))
 				}
 			}
-			qt.Assert(t, total, qt.Equals, len(contents))
+			qt.Assert(t, qt.Equals(total, len(contents)))
 
 			if m.Type() == Array {
 				// Array doesn't support batch delete
@@ -170,18 +170,18 @@ func TestMapBatch(t *testing.T) {
 				if errors.Is(err, ErrKeyNotExist) {
 					break
 				}
-				qt.Assert(t, err, qt.IsNil)
+				qt.Assert(t, qt.IsNil(err))
 
-				qt.Assert(t, count, qt.Equals, len(lookupKeys))
+				qt.Assert(t, qt.Equals(count, len(lookupKeys)))
 				for i, key := range lookupKeys {
 					value := lookupValues[i]
-					qt.Assert(t, value, qt.Equals, contents[key], qt.Commentf("value for key %d should match", key))
+					qt.Assert(t, qt.Equals(value, contents[key]), qt.Commentf("value for key %d should match", key))
 				}
 			}
-			qt.Assert(t, total, qt.Equals, len(contents))
+			qt.Assert(t, qt.Equals(total, len(contents)))
 
 			var v uint32
-			qt.Assert(t, m.Lookup(uint32(0), &v), qt.ErrorIs, ErrKeyNotExist)
+			qt.Assert(t, qt.ErrorIs(m.Lookup(uint32(0), &v), ErrKeyNotExist))
 		})
 	}
 }
@@ -211,10 +211,10 @@ func TestMapBatchCursorReuse(t *testing.T) {
 	var cursor BatchCursor
 	_, err = arr1.BatchLookup(&cursor, tmp, tmp, nil)
 	testutils.SkipIfNotSupported(t, err)
-	qt.Assert(t, err, qt.IsNil)
+	qt.Assert(t, qt.IsNil(err))
 
 	_, err = arr2.BatchLookup(&cursor, tmp, tmp, nil)
-	qt.Assert(t, err, qt.IsNotNil)
+	qt.Assert(t, qt.IsNotNil(err))
 }
 
 func TestMapLookupKeyTooSmall(t *testing.T) {
@@ -222,8 +222,8 @@ func TestMapLookupKeyTooSmall(t *testing.T) {
 	defer m.Close()
 
 	var small uint16
-	qt.Assert(t, m.Put(uint32(0), uint32(1234)), qt.IsNil)
-	qt.Assert(t, m.Lookup(uint32(0), &small), qt.IsNotNil)
+	qt.Assert(t, qt.IsNil(m.Put(uint32(0), uint32(1234))))
+	qt.Assert(t, qt.IsNotNil(m.Lookup(uint32(0), &small)))
 }
 
 func TestBatchAPIMapDelete(t *testing.T) {
@@ -428,7 +428,6 @@ func TestMapCloneNil(t *testing.T) {
 
 func TestMapPin(t *testing.T) {
 	m := createArray(t)
-	c := qt.New(t)
 
 	if err := m.Put(uint32(0), uint32(42)); err != nil {
 		t.Fatal("Can't put:", err)
@@ -443,7 +442,7 @@ func TestMapPin(t *testing.T) {
 	}
 
 	pinned := m.IsPinned()
-	c.Assert(pinned, qt.IsTrue)
+	qt.Assert(t, qt.IsTrue(pinned))
 
 	m.Close()
 
@@ -525,7 +524,6 @@ func TestMapPinMultiple(t *testing.T) {
 	testutils.SkipOnOldKernel(t, "4.9", "atomic re-pinning was introduced in 4.9 series")
 
 	tmp := testutils.TempBPFFS(t)
-	c := qt.New(t)
 
 	spec := spec1.Copy()
 
@@ -535,35 +533,33 @@ func TestMapPinMultiple(t *testing.T) {
 	}
 	defer m1.Close()
 	pinned := m1.IsPinned()
-	c.Assert(pinned, qt.IsTrue)
+	qt.Assert(t, qt.IsTrue(pinned))
 
 	newPath := filepath.Join(tmp, "bar")
 	err = m1.Pin(newPath)
 	testutils.SkipIfNotSupported(t, err)
-	c.Assert(err, qt.IsNil)
+	qt.Assert(t, qt.IsNil(err))
 	oldPath := filepath.Join(tmp, spec.Name)
 	if _, err := os.Stat(oldPath); err == nil {
 		t.Fatal("Previous pinned map path still exists:", err)
 	}
 	m2, err := LoadPinnedMap(newPath, nil)
-	c.Assert(err, qt.IsNil)
+	qt.Assert(t, qt.IsNil(err))
 	pinned = m2.IsPinned()
-	c.Assert(pinned, qt.IsTrue)
+	qt.Assert(t, qt.IsTrue(pinned))
 	defer m2.Close()
 }
 
 func TestMapPinWithEmptyPath(t *testing.T) {
 	m := createArray(t)
-	c := qt.New(t)
 
 	err := m.Pin("")
 
-	c.Assert(err, qt.Not(qt.IsNil))
+	qt.Assert(t, qt.Not(qt.IsNil(err)))
 }
 
 func TestMapPinFailReplace(t *testing.T) {
 	tmp := testutils.TempBPFFS(t)
-	c := qt.New(t)
 	spec := spec1.Copy()
 	spec2 := spec1.Copy()
 	spec2.Name = spec1.Name + "bar"
@@ -578,16 +574,15 @@ func TestMapPinFailReplace(t *testing.T) {
 		t.Fatal("Failed to create map2:", err)
 	}
 	defer m2.Close()
-	c.Assert(m.IsPinned(), qt.IsTrue)
+	qt.Assert(t, qt.IsTrue(m.IsPinned()))
 	newPath := filepath.Join(tmp, spec2.Name)
 
-	c.Assert(m.Pin(newPath), qt.Not(qt.IsNil), qt.Commentf("Pin didn't"+
+	qt.Assert(t, qt.Not(qt.IsNil(m.Pin(newPath))), qt.Commentf("Pin didn't"+
 		" fail new path from replacing an existing path"))
 }
 
 func TestMapUnpin(t *testing.T) {
 	tmp := testutils.TempBPFFS(t)
-	c := qt.New(t)
 	spec := spec1.Copy()
 
 	m, err := NewMapWithOptions(spec, MapOptions{PinPath: tmp})
@@ -597,11 +592,11 @@ func TestMapUnpin(t *testing.T) {
 	defer m.Close()
 
 	pinned := m.IsPinned()
-	c.Assert(pinned, qt.IsTrue)
+	qt.Assert(t, qt.IsTrue(pinned))
 	path := filepath.Join(tmp, spec.Name)
 	m2, err := LoadPinnedMap(path, nil)
 	testutils.SkipIfNotSupported(t, err)
-	c.Assert(err, qt.IsNil)
+	qt.Assert(t, qt.IsNil(err))
 	defer m2.Close()
 
 	if err = m.Unpin(); err != nil {
@@ -614,23 +609,22 @@ func TestMapUnpin(t *testing.T) {
 
 func TestMapLoadPinned(t *testing.T) {
 	tmp := testutils.TempBPFFS(t)
-	c := qt.New(t)
 
 	spec := spec1.Copy()
 
 	m1, err := NewMapWithOptions(spec, MapOptions{PinPath: tmp})
-	c.Assert(err, qt.IsNil)
+	qt.Assert(t, qt.IsNil(err))
 	defer m1.Close()
 	pinned := m1.IsPinned()
-	c.Assert(pinned, qt.IsTrue)
+	qt.Assert(t, qt.IsTrue(pinned))
 
 	path := filepath.Join(tmp, spec.Name)
 	m2, err := LoadPinnedMap(path, nil)
 	testutils.SkipIfNotSupported(t, err)
-	c.Assert(err, qt.IsNil)
+	qt.Assert(t, qt.IsNil(err))
 	defer m2.Close()
 	pinned = m2.IsPinned()
-	c.Assert(pinned, qt.IsTrue)
+	qt.Assert(t, qt.IsTrue(pinned))
 }
 
 func TestMapLoadReusePinned(t *testing.T) {
@@ -653,11 +647,11 @@ func TestMapLoadReusePinned(t *testing.T) {
 			}
 
 			m1, err := NewMapWithOptions(spec, MapOptions{PinPath: tmp})
-			qt.Assert(t, err, qt.IsNil)
+			qt.Assert(t, qt.IsNil(err))
 			defer m1.Close()
 
 			m2, err := NewMapWithOptions(spec, MapOptions{PinPath: tmp})
-			qt.Assert(t, err, qt.IsNil)
+			qt.Assert(t, qt.IsNil(err))
 			defer m2.Close()
 		})
 	}
@@ -665,25 +659,24 @@ func TestMapLoadReusePinned(t *testing.T) {
 
 func TestMapLoadPinnedUnpin(t *testing.T) {
 	tmp := testutils.TempBPFFS(t)
-	c := qt.New(t)
 
 	spec := spec1.Copy()
 
 	m1, err := NewMapWithOptions(spec, MapOptions{PinPath: tmp})
-	c.Assert(err, qt.IsNil)
+	qt.Assert(t, qt.IsNil(err))
 	defer m1.Close()
 	pinned := m1.IsPinned()
-	c.Assert(pinned, qt.IsTrue)
+	qt.Assert(t, qt.IsTrue(pinned))
 
 	path := filepath.Join(tmp, spec.Name)
 	m2, err := LoadPinnedMap(path, nil)
 	testutils.SkipIfNotSupported(t, err)
-	c.Assert(err, qt.IsNil)
+	qt.Assert(t, qt.IsNil(err))
 	defer m2.Close()
 	err = m1.Unpin()
-	c.Assert(err, qt.IsNil)
+	qt.Assert(t, qt.IsNil(err))
 	err = m2.Unpin()
-	c.Assert(err, qt.IsNil)
+	qt.Assert(t, qt.IsNil(err))
 }
 
 func TestMapLoadPinnedWithOptions(t *testing.T) {
@@ -750,7 +743,7 @@ func TestMapPinFlags(t *testing.T) {
 	m, err := NewMapWithOptions(spec, MapOptions{
 		PinPath: tmp,
 	})
-	qt.Assert(t, err, qt.IsNil)
+	qt.Assert(t, qt.IsNil(err))
 	m.Close()
 
 	_, err = NewMapWithOptions(spec, MapOptions{
@@ -1101,7 +1094,7 @@ func TestMapIteratorAllocations(t *testing.T) {
 	var k, v uint32
 	iter := arr.Iterate()
 	// Allocate any necessary temporary buffers.
-	qt.Assert(t, iter.Next(&k, &v), qt.IsTrue)
+	qt.Assert(t, qt.IsTrue(iter.Next(&k, &v)))
 
 	allocs := testing.AllocsPerRun(1, func() {
 		if !iter.Next(&k, &v) {
@@ -1109,7 +1102,7 @@ func TestMapIteratorAllocations(t *testing.T) {
 		}
 	})
 
-	qt.Assert(t, allocs, qt.Equals, float64(0))
+	qt.Assert(t, qt.Equals(allocs, float64(0)))
 }
 
 func TestMapIterateHashKeyOneByteFull(t *testing.T) {
@@ -1695,7 +1688,6 @@ func TestNewMapFromID(t *testing.T) {
 
 func TestMapPinning(t *testing.T) {
 	tmp := testutils.TempBPFFS(t)
-	c := qt.New(t)
 
 	spec := &MapSpec{
 		Name:       "test",
@@ -1712,10 +1704,10 @@ func TestMapPinning(t *testing.T) {
 	}
 	defer m1.Close()
 	pinned := m1.IsPinned()
-	c.Assert(pinned, qt.IsTrue)
+	qt.Assert(t, qt.IsTrue(pinned))
 
 	m1Info, err := m1.Info()
-	c.Assert(err, qt.IsNil)
+	qt.Assert(t, qt.IsNil(err))
 
 	if err := m1.Put(uint32(0), uint32(42)); err != nil {
 		t.Fatal("Can't write value:", err)
@@ -1729,11 +1721,11 @@ func TestMapPinning(t *testing.T) {
 	defer m2.Close()
 
 	m2Info, err := m2.Info()
-	c.Assert(err, qt.IsNil)
+	qt.Assert(t, qt.IsNil(err))
 
 	if m1ID, ok := m1Info.ID(); ok {
 		m2ID, _ := m2Info.ID()
-		c.Assert(m2ID, qt.Equals, m1ID)
+		qt.Assert(t, qt.Equals(m2ID, m1ID))
 	}
 
 	var value uint32
@@ -1757,8 +1749,8 @@ func TestMapPinning(t *testing.T) {
 	}
 
 	// Check if error string mentions both KeySize and ValueSize.
-	c.Assert(err.Error(), qt.Contains, "KeySize")
-	c.Assert(err.Error(), qt.Contains, "ValueSize")
+	qt.Assert(t, qt.StringContains(err.Error(), "KeySize"))
+	qt.Assert(t, qt.StringContains(err.Error(), "ValueSize"))
 }
 
 func TestPerfEventArrayCompatible(t *testing.T) {
@@ -1767,13 +1759,13 @@ func TestPerfEventArrayCompatible(t *testing.T) {
 	}
 
 	m, err := NewMap(ms)
-	qt.Assert(t, err, qt.IsNil)
+	qt.Assert(t, qt.IsNil(err))
 	defer m.Close()
 
-	qt.Assert(t, ms.Compatible(m), qt.IsNil)
+	qt.Assert(t, qt.IsNil(ms.Compatible(m)))
 
 	ms.MaxEntries = m.MaxEntries() - 1
-	qt.Assert(t, ms.Compatible(m), qt.IsNotNil)
+	qt.Assert(t, qt.IsNotNil(ms.Compatible(m)))
 }
 
 type benchValue struct {
@@ -2042,7 +2034,7 @@ func BenchmarkIterate(b *testing.B) {
 
 	_, err = m.BatchUpdate(keys, values, nil)
 	testutils.SkipIfNotSupported(b, err)
-	qt.Assert(b, err, qt.IsNil)
+	qt.Assert(b, qt.IsNil(err))
 
 	b.Run("MapIterator", func(b *testing.B) {
 		var k, v uint64

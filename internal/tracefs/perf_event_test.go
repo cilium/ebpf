@@ -5,15 +5,14 @@ import (
 	"fmt"
 	"testing"
 
-	qt "github.com/frankban/quicktest"
+	"github.com/go-quicktest/qt"
 )
 
 func TestEventID(t *testing.T) {
-	c := qt.New(t)
 
 	eid, err := EventID("syscalls", "sys_enter_mmap")
-	c.Assert(err, qt.IsNil)
-	c.Assert(eid, qt.Not(qt.Equals), 0)
+	qt.Assert(t, qt.IsNil(err))
+	qt.Assert(t, qt.Not(qt.Equals(eid, 0)))
 }
 
 func TestSanitizePath(t *testing.T) {
@@ -82,5 +81,5 @@ func TestSanitizeIdentifier(t *testing.T) {
 
 func TestGetTracefsPath(t *testing.T) {
 	_, err := getTracefsPath()
-	qt.Assert(t, err, qt.IsNil)
+	qt.Assert(t, qt.IsNil(err))
 }

@@ -6,7 +6,7 @@ import (
 	"net"
 	"testing"
 
-	qt "github.com/frankban/quicktest"
+	"github.com/go-quicktest/qt"
 
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/internal/testutils"
@@ -31,11 +31,11 @@ func TestTCXAnchor(t *testing.T) {
 	linkA, iface := mustAttachTCX(t, a, ebpf.AttachTCXEgress)
 
 	programInfo, err := a.Info()
-	qt.Assert(t, err, qt.IsNil)
+	qt.Assert(t, qt.IsNil(err))
 	programID, _ := programInfo.ID()
 
 	linkInfo, err := linkA.Info()
-	qt.Assert(t, err, qt.IsNil)
+	qt.Assert(t, qt.IsNil(err))
 	linkID := linkInfo.ID
 
 	for _, anchor := range []Anchor{
@@ -53,8 +53,8 @@ func TestTCXAnchor(t *testing.T) {
 				Interface: iface,
 				Anchor:    anchor,
 			})
-			qt.Assert(t, err, qt.IsNil)
-			qt.Assert(t, linkB.Close(), qt.IsNil)
+			qt.Assert(t, qt.IsNil(err))
+			qt.Assert(t, qt.IsNil(linkB.Close()))
 		})
 	}
 }
@@ -63,7 +63,7 @@ func TestTCXExpectedRevision(t *testing.T) {
 	testutils.SkipOnOldKernel(t, "6.6", "TCX link")
 
 	iface, err := net.InterfaceByName("lo")
-	qt.Assert(t, err, qt.IsNil)
+	qt.Assert(t, qt.IsNil(err))
 
 	_, err = AttachTCX(TCXOptions{
 		Program:          mustLoadProgram(t, ebpf.SchedCLS, ebpf.AttachNone, ""),
@@ -71,20 +71,20 @@ func TestTCXExpectedRevision(t *testing.T) {
 		Interface:        iface.Index,
 		ExpectedRevision: math.MaxUint64,
 	})
-	qt.Assert(t, err, qt.ErrorIs, unix.ESTALE)
+	qt.Assert(t, qt.ErrorIs(err, unix.ESTALE))
 }
 
 func mustAttachTCX(tb testing.TB, prog *ebpf.Program, attachType ebpf.AttachType) (Link, int) {
 	iface, err := net.InterfaceByName("lo")
-	qt.Assert(tb, err, qt.IsNil)
+	qt.Assert(tb, qt.IsNil(err))
 
 	link, err := AttachTCX(TCXOptions{
 		Program:   prog,
 		Attach:    attachType,
 		Interface: iface.Index,
 	})
-	qt.Assert(tb, err, qt.IsNil)
-	tb.Cleanup(func() { qt.Assert(tb, link.Close(), qt.IsNil) })
+	qt.Assert(tb, qt.IsNil(err))
+	tb.Cleanup(func() { qt.Assert(tb, qt.IsNil(link.Close())) })
 
 	return link, iface.Index
 }

@@ -10,7 +10,7 @@ import (
 	"math"
 	"testing"
 
-	qt "github.com/frankban/quicktest"
+	"github.com/go-quicktest/qt"
 )
 
 var test64bitImmProg = []byte{
@@ -110,23 +110,23 @@ func TestSignedJump(t *testing.T) {
 func TestInstructionRewriteMapConstant(t *testing.T) {
 	ins := LoadMapValue(R0, 123, 321)
 
-	qt.Assert(t, ins.MapPtr(), qt.Equals, 123)
-	qt.Assert(t, ins.mapOffset(), qt.Equals, uint32(321))
+	qt.Assert(t, qt.Equals(ins.MapPtr(), 123))
+	qt.Assert(t, qt.Equals(ins.mapOffset(), 321))
 
-	qt.Assert(t, ins.RewriteMapPtr(-1), qt.IsNil)
-	qt.Assert(t, ins.MapPtr(), qt.Equals, -1)
+	qt.Assert(t, qt.IsNil(ins.RewriteMapPtr(-1)))
+	qt.Assert(t, qt.Equals(ins.MapPtr(), -1))
 
-	qt.Assert(t, ins.RewriteMapPtr(1), qt.IsNil)
-	qt.Assert(t, ins.MapPtr(), qt.Equals, 1)
+	qt.Assert(t, qt.IsNil(ins.RewriteMapPtr(1)))
+	qt.Assert(t, qt.Equals(ins.MapPtr(), 1))
 
 	// mapOffset should be unchanged after rewriting the pointer.
-	qt.Assert(t, ins.mapOffset(), qt.Equals, uint32(321))
+	qt.Assert(t, qt.Equals(ins.mapOffset(), 321))
 
-	qt.Assert(t, ins.RewriteMapOffset(123), qt.IsNil)
-	qt.Assert(t, ins.mapOffset(), qt.Equals, uint32(123))
+	qt.Assert(t, qt.IsNil(ins.RewriteMapOffset(123)))
+	qt.Assert(t, qt.Equals(ins.mapOffset(), 123))
 
 	// MapPtr should be unchanged.
-	qt.Assert(t, ins.MapPtr(), qt.Equals, 1)
+	qt.Assert(t, qt.Equals(ins.MapPtr(), 1))
 
 	ins = Mov.Imm(R1, 32)
 	if err := ins.RewriteMapPtr(1); err == nil {
@@ -304,8 +304,6 @@ func TestInstructionIterator(t *testing.T) {
 }
 
 func TestMetadataCopyOnWrite(t *testing.T) {
-	c := qt.New(t)
-
 	// Setting metadata should copy Instruction and modify the metadata pointer
 	// of the new object without touching the old Instruction.
 
@@ -313,25 +311,25 @@ func TestMetadataCopyOnWrite(t *testing.T) {
 	ins := Ja.Label("my_func")
 	ins2 := ins.WithReference("my_func2")
 
-	c.Assert(ins.Reference(), qt.Equals, "my_func", qt.Commentf("WithReference updated ins"))
-	c.Assert(ins2.Reference(), qt.Equals, "my_func2", qt.Commentf("WithReference didn't update ins2"))
+	qt.Assert(t, qt.Equals(ins.Reference(), "my_func"), qt.Commentf("WithReference updated ins"))
+	qt.Assert(t, qt.Equals(ins2.Reference(), "my_func2"), qt.Commentf("WithReference didn't update ins2"))
 
 	// Symbol
 	ins = Ja.Label("").WithSymbol("my_sym")
 	ins2 = ins.WithSymbol("my_sym2")
 
-	c.Assert(ins.Symbol(), qt.Equals, "my_sym", qt.Commentf("WithSymbol updated ins"))
-	c.Assert(ins2.Symbol(), qt.Equals, "my_sym2", qt.Commentf("WithSymbol didn't update ins2"))
+	qt.Assert(t, qt.Equals(ins.Symbol(), "my_sym"), qt.Commentf("WithSymbol updated ins"))
+	qt.Assert(t, qt.Equals(ins2.Symbol(), "my_sym2"), qt.Commentf("WithSymbol didn't update ins2"))
 
 	// Map
 	ins = LoadMapPtr(R1, 0)
 	ins2 = ins
 
 	testMap := testFDer(1)
-	c.Assert(ins2.AssociateMap(testMap), qt.IsNil, qt.Commentf("failed to associate map with ins2"))
+	qt.Assert(t, qt.IsNil(ins2.AssociateMap(testMap)), qt.Commentf("failed to associate map with ins2"))
 
-	c.Assert(ins.Map(), qt.IsNil, qt.Commentf("AssociateMap updated ins"))
-	c.Assert(ins2.Map(), qt.Equals, testMap, qt.Commentf("AssociateMap didn't update ins2"))
+	qt.Assert(t, qt.IsNil(ins.Map()), qt.Commentf("AssociateMap updated ins"))
+	qt.Assert(t, qt.Equals[FDer](ins2.Map(), testMap), qt.Commentf("AssociateMap didn't update ins2"))
 }
 
 type testFDer int

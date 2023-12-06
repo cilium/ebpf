@@ -14,7 +14,7 @@ import (
 	"testing"
 	"time"
 
-	qt "github.com/frankban/quicktest"
+	"github.com/go-quicktest/qt"
 
 	"github.com/cilium/ebpf/asm"
 	"github.com/cilium/ebpf/btf"
@@ -273,7 +273,6 @@ func TestProgramClose(t *testing.T) {
 
 func TestProgramPin(t *testing.T) {
 	prog := mustSocketFilter(t)
-	c := qt.New(t)
 
 	tmp := testutils.TempBPFFS(t)
 
@@ -283,7 +282,7 @@ func TestProgramPin(t *testing.T) {
 	}
 
 	pinned := prog.IsPinned()
-	c.Assert(pinned, qt.IsTrue)
+	qt.Assert(t, qt.IsTrue(pinned))
 
 	prog.Close()
 
@@ -315,7 +314,6 @@ func TestProgramPin(t *testing.T) {
 
 func TestProgramUnpin(t *testing.T) {
 	prog := mustSocketFilter(t)
-	c := qt.New(t)
 
 	tmp := testutils.TempBPFFS(t)
 
@@ -325,7 +323,7 @@ func TestProgramUnpin(t *testing.T) {
 	}
 
 	pinned := prog.IsPinned()
-	c.Assert(pinned, qt.IsTrue)
+	qt.Assert(t, qt.IsTrue(pinned))
 
 	if err := prog.Unpin(); err != nil {
 		t.Fatal("Failed to unpin program:", err)
@@ -931,7 +929,7 @@ func TestProgramInstructions(t *testing.T) {
 func BenchmarkNewProgram(b *testing.B) {
 	testutils.SkipOnOldKernel(b, "5.18", "kfunc support")
 	spec, err := LoadCollectionSpec(fmt.Sprintf("testdata/kfunc-%s.elf", internal.ClangEndian))
-	qt.Assert(b, err, qt.IsNil)
+	qt.Assert(b, qt.IsNil(err))
 
 	b.ReportAllocs()
 	b.ResetTimer()

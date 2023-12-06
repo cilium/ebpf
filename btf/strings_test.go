@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	qt "github.com/frankban/quicktest"
+	"github.com/go-quicktest/qt"
 )
 
 func TestStringTable(t *testing.T) {
@@ -66,18 +66,18 @@ func TestStringTableBuilder(t *testing.T) {
 	stb := newStringTableBuilder(0)
 
 	_, err := readStringTable(bytes.NewReader(stb.AppendEncoded(nil)), nil)
-	qt.Assert(t, err, qt.IsNil, qt.Commentf("Can't parse string table"))
+	qt.Assert(t, qt.IsNil(err), qt.Commentf("Can't parse string table"))
 
 	_, err = stb.Add("foo\x00bar")
-	qt.Assert(t, err, qt.IsNotNil)
+	qt.Assert(t, qt.IsNotNil(err))
 
 	empty, err := stb.Add("")
-	qt.Assert(t, err, qt.IsNil)
-	qt.Assert(t, empty, qt.Equals, uint32(0), qt.Commentf("The empty string is not at index 0"))
+	qt.Assert(t, qt.IsNil(err))
+	qt.Assert(t, qt.Equals(empty, 0), qt.Commentf("The empty string is not at index 0"))
 
 	foo1, _ := stb.Add("foo")
 	foo2, _ := stb.Add("foo")
-	qt.Assert(t, foo1, qt.Equals, foo2, qt.Commentf("Adding the same string returns different offsets"))
+	qt.Assert(t, qt.Equals(foo1, foo2), qt.Commentf("Adding the same string returns different offsets"))
 
 	table := stb.AppendEncoded(nil)
 	if n := bytes.Count(table, []byte("foo")); n != 1 {
@@ -85,7 +85,7 @@ func TestStringTableBuilder(t *testing.T) {
 	}
 
 	_, err = readStringTable(bytes.NewReader(table), nil)
-	qt.Assert(t, err, qt.IsNil, qt.Commentf("Can't parse string table"))
+	qt.Assert(t, qt.IsNil(err), qt.Commentf("Can't parse string table"))
 }
 
 func BenchmarkStringTableZeroLookup(b *testing.B) {

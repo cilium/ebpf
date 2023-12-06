@@ -4,44 +4,44 @@ import (
 	"testing"
 	"unsafe"
 
-	qt "github.com/frankban/quicktest"
+	"github.com/go-quicktest/qt"
 )
 
 func TestMetadata(t *testing.T) {
 	var m Metadata
 
 	// Metadata should be the size of a pointer.
-	qt.Assert(t, unsafe.Sizeof(m), qt.Equals, unsafe.Sizeof(uintptr(0)))
+	qt.Assert(t, qt.Equals(unsafe.Sizeof(m), unsafe.Sizeof(uintptr(0))))
 
 	// A lookup in a nil meta should return nil.
-	qt.Assert(t, m.Get(bool(false)), qt.IsNil)
+	qt.Assert(t, qt.IsNil(m.Get(bool(false))))
 
 	// We can look up anything we inserted.
 	m.Set(bool(false), int(0))
 	m.Set(int(1), int(1))
-	qt.Assert(t, m.Get(bool(false)), qt.Equals, int(0))
-	qt.Assert(t, m.Get(int(1)), qt.Equals, int(1))
+	qt.Assert(t, qt.Equals(m.Get(bool(false)), 0))
+	qt.Assert(t, qt.Equals(m.Get(1), 1))
 
 	// We have copy on write semantics
 	old := m
 	m.Set(bool(false), int(1))
-	qt.Assert(t, m.Get(bool(false)), qt.Equals, int(1))
-	qt.Assert(t, m.Get(int(1)), qt.Equals, int(1))
-	qt.Assert(t, old.Get(bool(false)), qt.Equals, int(0))
-	qt.Assert(t, old.Get(int(1)), qt.Equals, int(1))
+	qt.Assert(t, qt.Equals(m.Get(bool(false)), 1))
+	qt.Assert(t, qt.Equals(m.Get(int(1)), 1))
+	qt.Assert(t, qt.Equals(old.Get(bool(false)), 0))
+	qt.Assert(t, qt.Equals(old.Get(int(1)), 1))
 
 	// Newtypes are handled distinctly.
 	type b bool
 	m.Set(b(false), int(42))
-	qt.Assert(t, m.Get(bool(false)), qt.Equals, int(1))
-	qt.Assert(t, m.Get(int(1)), qt.Equals, int(1))
-	qt.Assert(t, m.Get(b(false)), qt.Equals, int(42))
+	qt.Assert(t, qt.Equals(m.Get(bool(false)), 1))
+	qt.Assert(t, qt.Equals(m.Get(int(1)), 1))
+	qt.Assert(t, qt.Equals(m.Get(b(false)), 42))
 
 	// Setting nil removes a key.
 	m.Set(bool(false), nil)
-	qt.Assert(t, m.Get(bool(false)), qt.IsNil)
-	qt.Assert(t, m.Get(int(1)), qt.Equals, int(1))
-	qt.Assert(t, m.Get(b(false)), qt.Equals, int(42))
+	qt.Assert(t, qt.IsNil(m.Get(bool(false))))
+	qt.Assert(t, qt.Equals(m.Get(int(1)), 1))
+	qt.Assert(t, qt.Equals(m.Get(b(false)), 42))
 }
 
 func BenchmarkMetadata(b *testing.B) {

@@ -5,7 +5,7 @@ import (
 
 	"github.com/cilium/ebpf/internal"
 
-	qt "github.com/frankban/quicktest"
+	"github.com/go-quicktest/qt"
 )
 
 func TestUnmarshalPerCPUValue(t *testing.T) {
@@ -27,11 +27,11 @@ func TestUnmarshalPerCPUValue(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	qt.Assert(t, slice, qt.DeepEquals, expected)
+	qt.Assert(t, qt.DeepEquals(slice, expected))
 
 	smallSlice := make([]uint32, possibleCPUs-1)
-	qt.Assert(t, unmarshalPerCPUValue(smallSlice, elemLength, buf), qt.IsNotNil)
+	qt.Assert(t, qt.IsNotNil(unmarshalPerCPUValue(smallSlice, elemLength, buf)))
 
 	nilElemSlice := make([]*uint32, possibleCPUs)
-	qt.Assert(t, unmarshalPerCPUValue(nilElemSlice, elemLength, buf), qt.IsNotNil)
+	qt.Assert(t, qt.IsNotNil(unmarshalPerCPUValue(nilElemSlice, elemLength, buf)))
 }

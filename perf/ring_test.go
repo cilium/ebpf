@@ -5,8 +5,9 @@ import (
 	"os"
 	"testing"
 
+	"github.com/go-quicktest/qt"
+
 	"github.com/cilium/ebpf/internal/unix"
-	qt "github.com/frankban/quicktest"
 )
 
 func TestRingBufferReader(t *testing.T) {
@@ -88,8 +89,8 @@ func checkReadBuffer(t *testing.T, r io.Reader, want []byte, wantErr error, buf 
 
 	n, err := r.Read(buf)
 	buf = buf[:n]
-	qt.Assert(t, err, qt.Equals, wantErr)
-	qt.Assert(t, buf, qt.DeepEquals, want)
+	qt.Assert(t, qt.Equals(err, wantErr))
+	qt.Assert(t, qt.DeepEquals(buf, want))
 }
 
 func makeBuffer(size int) []byte {

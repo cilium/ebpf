@@ -8,9 +8,10 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/cilium/ebpf/internal"
-	qt "github.com/frankban/quicktest"
+	"github.com/go-quicktest/qt"
 	"github.com/google/go-cmp/cmp/cmpopts"
+
+	"github.com/cilium/ebpf/internal"
 )
 
 type testcase struct {
@@ -69,8 +70,8 @@ func TestMarshal(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			qt.Assert(t, buf.CopyTo(have), qt.Equals, want.Len())
-			qt.Assert(t, have, qt.CmpEquals(cmpopts.EquateEmpty()), want.Bytes())
+			qt.Assert(t, qt.Equals(buf.CopyTo(have), want.Len()))
+			qt.Assert(t, qt.CmpEquals(have, want.Bytes(), cmpopts.EquateEmpty()))
 		})
 	}
 }
@@ -93,7 +94,7 @@ func TestMarshalAllocations(t *testing.T) {
 
 		value := test.new()
 		t.Run(fmt.Sprintf("%T", value), func(t *testing.T) {
-			qt.Assert(t, allocationsPerMarshal(t, value), qt.Equals, float64(0))
+			qt.Assert(t, qt.Equals(allocationsPerMarshal(t, value), 0))
 		})
 	}
 }
@@ -109,8 +110,8 @@ func TestUnmarshal(t *testing.T) {
 			want := test.new()
 			buf := randomiseValue(t, want)
 
-			qt.Assert(t, Unmarshal(value, buf), qt.IsNil)
-			qt.Assert(t, value, qt.DeepEquals, want)
+			qt.Assert(t, qt.IsNil(Unmarshal(value, buf)))
+			qt.Assert(t, qt.DeepEquals(value, want))
 		})
 	}
 }
@@ -137,7 +138,7 @@ func TestUnmarshalAllocations(t *testing.T) {
 
 		t.Run(fmt.Sprintf("%T", value), func(t *testing.T) {
 			buf := make([]byte, binary.Size(value))
-			qt.Assert(t, allocationsPerUnmarshal(t, value, buf), qt.Equals, float64(0))
+			qt.Assert(t, qt.Equals(allocationsPerUnmarshal(t, value, buf), 0))
 		})
 	}
 }
@@ -147,7 +148,7 @@ func TestUnsafeBackingMemory(t *testing.T) {
 		t.Helper()
 
 		var buf bytes.Buffer
-		qt.Assert(t, binary.Write(&buf, internal.NativeEndian, data), qt.IsNil)
+		qt.Assert(t, qt.IsNil(binary.Write(&buf, internal.NativeEndian, data)))
 		return buf.Bytes()
 	}
 
@@ -186,7 +187,7 @@ func TestUnsafeBackingMemory(t *testing.T) {
 		t.Run("valid: "+test.name, func(t *testing.T) {
 			want := marshalNative(t, test.value)
 			have := unsafeBackingMemory(test.value)
-			qt.Assert(t, have, qt.DeepEquals, want)
+			qt.Assert(t, qt.DeepEquals(have, want))
 		})
 	}
 
@@ -243,7 +244,7 @@ func TestUnsafeBackingMemory(t *testing.T) {
 		},
 	} {
 		t.Run("invalid: "+test.name, func(t *testing.T) {
-			qt.Assert(t, unsafeBackingMemory(test.value), qt.IsNil)
+			qt.Assert(t, qt.IsNil(unsafeBackingMemory(test.value)))
 		})
 	}
 }
@@ -295,7 +296,7 @@ func randomiseValue(tb testing.TB, value any) []byte {
 	}
 
 	err := binary.Read(bytes.NewReader(buf), internal.NativeEndian, value)
-	qt.Assert(tb, err, qt.IsNil)
+	qt.Assert(tb, qt.IsNil(err))
 
 	return buf
 }

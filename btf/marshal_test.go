@@ -6,11 +6,11 @@ import (
 	"math"
 	"testing"
 
-	"github.com/cilium/ebpf/internal"
-	"github.com/cilium/ebpf/internal/testutils"
+	"github.com/go-quicktest/qt"
 	"github.com/google/go-cmp/cmp"
 
-	qt "github.com/frankban/quicktest"
+	"github.com/cilium/ebpf/internal"
+	"github.com/cilium/ebpf/internal/testutils"
 )
 
 func TestBuilderMarshal(t *testing.T) {
@@ -28,16 +28,16 @@ func TestBuilderMarshal(t *testing.T) {
 	}
 
 	b, err := NewBuilder(want)
-	qt.Assert(t, err, qt.IsNil)
+	qt.Assert(t, qt.IsNil(err))
 
 	cpy := *b
 	buf, err := b.Marshal(nil, &MarshalOptions{Order: internal.NativeEndian})
-	qt.Assert(t, err, qt.IsNil)
-	qt.Assert(t, b, qt.CmpEquals(cmp.AllowUnexported(*b)), &cpy, qt.Commentf("Marshaling should not change Builder state"))
+	qt.Assert(t, qt.IsNil(err))
+	qt.Assert(t, qt.CmpEquals(b, &cpy, cmp.AllowUnexported(*b)), qt.Commentf("Marshaling should not change Builder state"))
 
 	have, err := loadRawSpec(bytes.NewReader(buf), internal.NativeEndian, nil)
-	qt.Assert(t, err, qt.IsNil, qt.Commentf("Couldn't parse BTF"))
-	qt.Assert(t, have.types, qt.DeepEquals, want)
+	qt.Assert(t, qt.IsNil(err), qt.Commentf("Couldn't parse BTF"))
+	qt.Assert(t, qt.DeepEquals(have.types, want))
 }
 
 func TestBuilderAdd(t *testing.T) {
@@ -50,24 +50,24 @@ func TestBuilderAdd(t *testing.T) {
 
 	var b Builder
 	id, err := b.Add(pi)
-	qt.Assert(t, err, qt.IsNil)
-	qt.Assert(t, id, qt.Equals, TypeID(1), qt.Commentf("First non-void type doesn't get id 1"))
+	qt.Assert(t, qt.IsNil(err))
+	qt.Assert(t, qt.Equals(id, TypeID(1)), qt.Commentf("First non-void type doesn't get id 1"))
 
 	id, err = b.Add(pi)
-	qt.Assert(t, err, qt.IsNil)
-	qt.Assert(t, id, qt.Equals, TypeID(1))
+	qt.Assert(t, qt.IsNil(err))
+	qt.Assert(t, qt.Equals(id, TypeID(1)))
 
 	id, err = b.Add(i)
-	qt.Assert(t, err, qt.IsNil)
-	qt.Assert(t, id, qt.Equals, TypeID(2), qt.Commentf("Second type doesn't get id 2"))
+	qt.Assert(t, qt.IsNil(err))
+	qt.Assert(t, qt.Equals(id, TypeID(2)), qt.Commentf("Second type doesn't get id 2"))
 
 	id, err = b.Add(i)
-	qt.Assert(t, err, qt.IsNil)
-	qt.Assert(t, id, qt.Equals, TypeID(2), qt.Commentf("Adding a type twice returns different ids"))
+	qt.Assert(t, qt.IsNil(err))
+	qt.Assert(t, qt.Equals(id, TypeID(2)), qt.Commentf("Adding a type twice returns different ids"))
 
 	id, err = b.Add(&Typedef{"baz", i})
-	qt.Assert(t, err, qt.IsNil)
-	qt.Assert(t, id, qt.Equals, TypeID(3))
+	qt.Assert(t, qt.IsNil(err))
+	qt.Assert(t, qt.Equals(id, TypeID(3)))
 }
 
 func TestRoundtripVMlinux(t *testing.T) {
@@ -98,12 +98,12 @@ limitTypes:
 	}
 
 	b, err := NewBuilder(types)
-	qt.Assert(t, err, qt.IsNil)
+	qt.Assert(t, qt.IsNil(err))
 	buf, err := b.Marshal(nil, KernelMarshalOptions())
-	qt.Assert(t, err, qt.IsNil)
+	qt.Assert(t, qt.IsNil(err))
 
 	rebuilt, err := loadRawSpec(bytes.NewReader(buf), binary.LittleEndian, nil)
-	qt.Assert(t, err, qt.IsNil, qt.Commentf("round tripping BTF failed"))
+	qt.Assert(t, qt.IsNil(err), qt.Commentf("round tripping BTF failed"))
 
 	if n := len(rebuilt.types); n > math.MaxUint16 {
 		t.Logf("Rebuilt BTF contains %d types which exceeds uint16, test may fail on older kernels", n)
@@ -111,7 +111,7 @@ limitTypes:
 
 	h, err := NewHandleFromRawBTF(buf)
 	testutils.SkipIfNotSupported(t, err)
-	qt.Assert(t, err, qt.IsNil, qt.Commentf("loading rebuilt BTF failed"))
+	qt.Assert(t, qt.IsNil(err), qt.Commentf("loading rebuilt BTF failed"))
 	h.Close()
 }
 
@@ -127,29 +127,29 @@ func TestMarshalEnum64(t *testing.T) {
 	}
 
 	b, err := NewBuilder([]Type{enum})
-	qt.Assert(t, err, qt.IsNil)
+	qt.Assert(t, qt.IsNil(err))
 	buf, err := b.Marshal(nil, &MarshalOptions{
 		Order:         internal.NativeEndian,
 		ReplaceEnum64: true,
 	})
-	qt.Assert(t, err, qt.IsNil)
+	qt.Assert(t, qt.IsNil(err))
 
 	spec, err := loadRawSpec(bytes.NewReader(buf), internal.NativeEndian, nil)
-	qt.Assert(t, err, qt.IsNil)
+	qt.Assert(t, qt.IsNil(err))
 
 	var have *Union
 	err = spec.TypeByName("enum64", &have)
-	qt.Assert(t, err, qt.IsNil)
+	qt.Assert(t, qt.IsNil(err))
 
 	placeholder := &Int{Name: "enum64_placeholder", Size: 8, Encoding: Signed}
-	qt.Assert(t, have, qt.DeepEquals, &Union{
+	qt.Assert(t, qt.DeepEquals(have, &Union{
 		Name: "enum64",
 		Size: 8,
 		Members: []Member{
 			{Name: "A", Type: placeholder},
 			{Name: "B", Type: placeholder},
 		},
-	})
+	}))
 }
 
 func BenchmarkMarshaler(b *testing.B) {
@@ -186,9 +186,9 @@ func marshalNativeEndian(tb testing.TB, types []Type) []byte {
 	tb.Helper()
 
 	b, err := NewBuilder(types)
-	qt.Assert(tb, err, qt.IsNil)
+	qt.Assert(tb, qt.IsNil(err))
 	buf, err := b.Marshal(nil, nil)
-	qt.Assert(tb, err, qt.IsNil)
+	qt.Assert(tb, qt.IsNil(err))
 	return buf
 }
 
@@ -197,7 +197,7 @@ func specFromTypes(tb testing.TB, types []Type) *Spec {
 
 	btf := marshalNativeEndian(tb, types)
 	spec, err := loadRawSpec(bytes.NewReader(btf), internal.NativeEndian, nil)
-	qt.Assert(tb, err, qt.IsNil)
+	qt.Assert(tb, qt.IsNil(err))
 
 	return spec
 }

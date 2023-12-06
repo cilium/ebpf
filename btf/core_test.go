@@ -7,11 +7,12 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/cilium/ebpf/internal"
-	"github.com/cilium/ebpf/internal/testutils"
 	"github.com/google/go-cmp/cmp"
 
-	qt "github.com/frankban/quicktest"
+	"github.com/cilium/ebpf/internal"
+	"github.com/cilium/ebpf/internal/testutils"
+
+	"github.com/go-quicktest/qt"
 	"golang.org/x/exp/slices"
 )
 
@@ -256,9 +257,9 @@ func TestCOREFindEnumValue(t *testing.T) {
 	for _, test := range valid {
 		t.Run(test.name, func(t *testing.T) {
 			local, target, err := coreFindEnumValue(test.local, test.acc, test.target)
-			qt.Assert(t, err, qt.IsNil)
-			qt.Check(t, local.Value, qt.Equals, test.localValue)
-			qt.Check(t, target.Value, qt.Equals, test.targetValue)
+			qt.Assert(t, qt.IsNil(err))
+			qt.Check(t, qt.Equals(local.Value, test.localValue))
+			qt.Check(t, qt.Equals(target.Value, test.targetValue))
 		})
 	}
 }
@@ -523,7 +524,7 @@ func TestCOREFindField(t *testing.T) {
 	for _, test := range valid {
 		t.Run(test.name, func(t *testing.T) {
 			localField, targetField, err := coreFindField(test.local, test.acc, test.target)
-			qt.Assert(t, err, qt.IsNil)
+			qt.Assert(t, qt.IsNil(err))
 			checkCOREField(t, "local", localField, test.localField)
 			checkCOREField(t, "target", targetField, test.targetField)
 		})
@@ -632,8 +633,8 @@ func TestCORECopyWithoutQualifiers(t *testing.T) {
 			root.Type = test.fn(root)
 
 			cycle, ok := Copy(root, UnderlyingType).(*cycle)
-			qt.Assert(t, ok, qt.IsTrue)
-			qt.Assert(t, cycle.root, qt.Equals, root)
+			qt.Assert(t, qt.IsTrue(ok))
+			qt.Assert(t, qt.Equals[Type](cycle.root, root))
 		})
 	}
 
@@ -644,7 +645,7 @@ func TestCORECopyWithoutQualifiers(t *testing.T) {
 				want := &Pointer{Target: &Int{Name: "z"}}
 
 				got := Copy(v, UnderlyingType)
-				qt.Assert(t, got, qt.DeepEquals, want)
+				qt.Assert(t, qt.DeepEquals[Type](got, want))
 			})
 		}
 	}
@@ -660,7 +661,7 @@ func TestCORECopyWithoutQualifiers(t *testing.T) {
 		}
 
 		got := Copy(v, UnderlyingType)
-		qt.Assert(t, got, qt.DeepEquals, root)
+		qt.Assert(t, qt.DeepEquals[Type](got, root))
 	})
 }
 
@@ -671,8 +672,8 @@ func TestCOREReloFieldSigned(t *testing.T) {
 				typ, coreAccessor{0}, reloFieldSigned, 0,
 			}
 			fixup, err := coreCalculateFixup(relo, &Void{}, 0, internal.NativeEndian)
-			qt.Assert(t, fixup.poison, qt.IsTrue)
-			qt.Assert(t, err, qt.IsNil)
+			qt.Assert(t, qt.IsTrue(fixup.poison))
+			qt.Assert(t, qt.IsNil(err))
 		})
 	}
 
@@ -681,7 +682,7 @@ func TestCOREReloFieldSigned(t *testing.T) {
 			&Array{}, coreAccessor{0}, reloFieldSigned, 0,
 		}
 		_, err := coreCalculateFixup(relo, &Array{}, 0, internal.NativeEndian)
-		qt.Assert(t, err, qt.ErrorIs, errNoSignedness)
+		qt.Assert(t, qt.ErrorIs(err, errNoSignedness))
 	})
 }
 
@@ -698,7 +699,7 @@ func TestCOREReloFieldShiftU64(t *testing.T) {
 	} {
 		t.Run(relo.kind.String(), func(t *testing.T) {
 			_, err := coreCalculateFixup(relo, typ, 1, internal.NativeEndian)
-			qt.Assert(t, err, qt.ErrorIs, errUnsizedType)
+			qt.Assert(t, qt.ErrorIs(err, errUnsizedType))
 		})
 	}
 }
@@ -708,22 +709,22 @@ func BenchmarkCORESkBuff(b *testing.B) {
 
 	var skb *Struct
 	err := spec.TypeByName("sk_buff", &skb)
-	qt.Assert(b, err, qt.IsNil)
+	qt.Assert(b, qt.IsNil(err))
 
 	skbID, err := spec.TypeID(skb)
-	qt.Assert(b, err, qt.IsNil)
+	qt.Assert(b, qt.IsNil(err))
 
 	lenIndex := slices.IndexFunc(skb.Members, func(m Member) bool {
 		return m.Name == "len"
 	})
-	qt.Assert(b, lenIndex, qt.Not(qt.Equals), -1)
+	qt.Assert(b, qt.Not(qt.Equals(lenIndex, -1)))
 
 	var pktHashTypes *Enum
 	err = spec.TypeByName("pkt_hash_types", &pktHashTypes)
-	qt.Assert(b, err, qt.IsNil)
+	qt.Assert(b, qt.IsNil(err))
 
 	pktHashTypesID, err := spec.TypeID(pktHashTypes)
-	qt.Assert(b, err, qt.IsNil)
+	qt.Assert(b, qt.IsNil(err))
 
 	for _, relo := range []*CORERelocation{
 		{skb, coreAccessor{0, lenIndex}, reloFieldByteOffset, skbID},

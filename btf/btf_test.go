@@ -9,9 +9,10 @@ import (
 	"os"
 	"testing"
 
+	"github.com/go-quicktest/qt"
+
 	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/testutils"
-	qt "github.com/frankban/quicktest"
 )
 
 func vmlinuxSpec(tb testing.TB) *Spec {
@@ -339,10 +340,10 @@ func TestSpecCopy(t *testing.T) {
 	cpy := spec.Copy()
 
 	have := typesFromSpec(t, spec)
-	qt.Assert(t, len(spec.types) > 0, qt.IsTrue)
+	qt.Assert(t, qt.IsTrue(len(spec.types) > 0))
 
 	want := typesFromSpec(t, cpy)
-	qt.Assert(t, want, qt.HasLen, len(have))
+	qt.Assert(t, qt.HasLen(want, len(have)))
 
 	for i := range want {
 		if _, ok := have[i].(*Void); ok {
@@ -362,10 +363,10 @@ func TestSpecTypeByID(t *testing.T) {
 	spec := specFromTypes(t, nil)
 
 	_, err := spec.TypeByID(0)
-	qt.Assert(t, err, qt.IsNil)
+	qt.Assert(t, qt.IsNil(err))
 
 	_, err = spec.TypeByID(1)
-	qt.Assert(t, err, qt.ErrorIs, ErrNotFound)
+	qt.Assert(t, qt.ErrorIs(err, ErrNotFound))
 }
 
 func ExampleSpec_TypeByName() {
@@ -409,7 +410,7 @@ func TestTypesIterator(t *testing.T) {
 			t.Fatal("Iterator ended early at item", i)
 		}
 
-		qt.Assert(t, iter.Type, qt.DeepEquals, typ)
+		qt.Assert(t, qt.DeepEquals(iter.Type, typ))
 	}
 
 	if iter.Next() {
@@ -441,8 +442,8 @@ func TestLoadSplitSpecFromReader(t *testing.T) {
 	}
 
 	typeByID, err := splitSpec.TypeByID(typeID)
-	qt.Assert(t, err, qt.IsNil)
-	qt.Assert(t, typeByID, qt.Equals, typ)
+	qt.Assert(t, qt.IsNil(err))
+	qt.Assert(t, qt.Equals(typeByID, typ))
 
 	fnType := typ.(*Func)
 	fnProto := fnType.Type.(*FuncProto)
@@ -492,15 +493,15 @@ func TestFixupDatasecLayout(t *testing.T) {
 		},
 	}
 
-	qt.Assert(t, fixupDatasecLayout(ds), qt.IsNil)
+	qt.Assert(t, qt.IsNil(fixupDatasecLayout(ds)))
 
-	qt.Assert(t, ds.Size, qt.Equals, uint32(40))
-	qt.Assert(t, ds.Vars[0].Offset, qt.Equals, uint32(0))
-	qt.Assert(t, ds.Vars[1].Offset, qt.Equals, uint32(4))
-	qt.Assert(t, ds.Vars[2].Offset, qt.Equals, uint32(5))
-	qt.Assert(t, ds.Vars[3].Offset, qt.Equals, uint32(6))
-	qt.Assert(t, ds.Vars[4].Offset, qt.Equals, uint32(16))
-	qt.Assert(t, ds.Vars[5].Offset, qt.Equals, uint32(32))
+	qt.Assert(t, qt.Equals(ds.Size, 40))
+	qt.Assert(t, qt.Equals(ds.Vars[0].Offset, 0))
+	qt.Assert(t, qt.Equals(ds.Vars[1].Offset, 4))
+	qt.Assert(t, qt.Equals(ds.Vars[2].Offset, 5))
+	qt.Assert(t, qt.Equals(ds.Vars[3].Offset, 6))
+	qt.Assert(t, qt.Equals(ds.Vars[4].Offset, 16))
+	qt.Assert(t, qt.Equals(ds.Vars[5].Offset, 32))
 }
 
 func BenchmarkSpecCopy(b *testing.B) {

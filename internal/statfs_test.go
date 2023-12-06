@@ -5,7 +5,7 @@ import (
 
 	"github.com/cilium/ebpf/internal/unix"
 
-	qt "github.com/frankban/quicktest"
+	"github.com/go-quicktest/qt"
 )
 
 func TestFSType(t *testing.T) {
@@ -17,7 +17,7 @@ func TestFSType(t *testing.T) {
 		{"/sys/fs/bpf", unix.BPF_FS_MAGIC},
 	} {
 		fst, err := FSType(fs.path)
-		qt.Assert(t, err, qt.IsNil)
-		qt.Assert(t, fst, qt.Equals, fs.magic)
+		qt.Assert(t, qt.IsNil(err))
+		qt.Assert(t, qt.Equals(fst, fs.magic))
 	}
 }

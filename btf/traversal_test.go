@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"testing"
 
-	qt "github.com/frankban/quicktest"
+	"github.com/go-quicktest/qt"
 )
 
 func TestPostorderTraversal(t *testing.T) {
@@ -16,10 +16,10 @@ func TestPostorderTraversal(t *testing.T) {
 	pending := []Type{str, cst, ptr}
 	iter := postorderTraversal(ptr, nil)
 	for iter.Next() {
-		qt.Assert(t, iter.Type, qt.Equals, pending[0])
+		qt.Assert(t, qt.Equals(iter.Type, pending[0]))
 		pending = pending[1:]
 	}
-	qt.Assert(t, pending, qt.HasLen, 0)
+	qt.Assert(t, qt.HasLen(pending, 0))
 
 	i := &Int{Name: "foo"}
 	// i appears twice at the same nesting depth.
@@ -27,11 +27,11 @@ func TestPostorderTraversal(t *testing.T) {
 	seen := make(map[Type]bool)
 	iter = postorderTraversal(arr, nil)
 	for iter.Next() {
-		qt.Assert(t, seen[iter.Type], qt.IsFalse)
+		qt.Assert(t, qt.IsFalse(seen[iter.Type]))
 		seen[iter.Type] = true
 	}
-	qt.Assert(t, seen[arr], qt.IsTrue)
-	qt.Assert(t, seen[i], qt.IsTrue)
+	qt.Assert(t, qt.IsTrue(seen[arr]))
+	qt.Assert(t, qt.IsTrue(seen[i]))
 }
 
 func TestPostorderTraversalVmlinux(t *testing.T) {
@@ -59,7 +59,7 @@ func TestPostorderTraversalVmlinux(t *testing.T) {
 			}
 
 			walkType(typ, func(child *Type) {
-				qt.Check(t, seen[*child], qt.IsTrue, qt.Commentf("missing child %s", *child))
+				qt.Check(t, qt.IsTrue(seen[*child]), qt.Commentf("missing child %s", *child))
 			})
 		})
 	}

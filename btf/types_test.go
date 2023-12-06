@@ -8,7 +8,7 @@ import (
 	"reflect"
 	"testing"
 
-	qt "github.com/frankban/quicktest"
+	"github.com/go-quicktest/qt"
 	"github.com/google/go-cmp/cmp"
 )
 
@@ -87,7 +87,7 @@ func TestCopy(t *testing.T) {
 		}, nil)
 
 		outStruct := out.(*Struct)
-		qt.Assert(t, outStruct.Members[0].Type, qt.Equals, outStruct.Members[1].Type)
+		qt.Assert(t, qt.Equals(outStruct.Members[0].Type, outStruct.Members[1].Type))
 	})
 }
 
@@ -100,29 +100,29 @@ func TestAs(t *testing.T) {
 
 	// It's possible to retrieve qualifiers and Typedefs.
 	haveVol, ok := as[*Volatile](vol)
-	qt.Assert(t, ok, qt.IsTrue)
-	qt.Assert(t, haveVol, qt.Equals, vol)
+	qt.Assert(t, qt.IsTrue(ok))
+	qt.Assert(t, qt.Equals(haveVol, vol))
 
 	haveTd, ok := as[*Typedef](vol)
-	qt.Assert(t, ok, qt.IsTrue)
-	qt.Assert(t, haveTd, qt.Equals, td)
+	qt.Assert(t, qt.IsTrue(ok))
+	qt.Assert(t, qt.Equals(haveTd, td))
 
 	haveCst, ok := as[*Const](vol)
-	qt.Assert(t, ok, qt.IsTrue)
-	qt.Assert(t, haveCst, qt.Equals, cst)
+	qt.Assert(t, qt.IsTrue(ok))
+	qt.Assert(t, qt.Equals(haveCst, cst))
 
 	// Make sure we don't skip Pointer.
 	haveI, ok := as[*Int](vol)
-	qt.Assert(t, ok, qt.IsFalse)
-	qt.Assert(t, haveI, qt.IsNil)
+	qt.Assert(t, qt.IsFalse(ok))
+	qt.Assert(t, qt.IsNil(haveI))
 
 	// Make sure we can always retrieve Pointer.
 	for _, typ := range []Type{
 		td, cst, vol, ptr,
 	} {
 		have, ok := as[*Pointer](typ)
-		qt.Assert(t, ok, qt.IsTrue)
-		qt.Assert(t, have, qt.Equals, ptr)
+		qt.Assert(t, qt.IsTrue(ok))
+		qt.Assert(t, qt.Equals(have, ptr))
 	}
 }
 
@@ -243,9 +243,9 @@ func TestTagMarshaling(t *testing.T) {
 			s := specFromTypes(t, []Type{typ})
 
 			have, err := s.TypeByID(1)
-			qt.Assert(t, err, qt.IsNil)
+			qt.Assert(t, qt.IsNil(err))
 
-			qt.Assert(t, have, qt.DeepEquals, typ)
+			qt.Assert(t, qt.DeepEquals(have, typ))
 		})
 	}
 }
@@ -319,11 +319,11 @@ func TestFormatType(t *testing.T) {
 			t.Log(str)
 
 			for _, want := range test.contains {
-				qt.Assert(t, str, qt.Contains, want)
+				qt.Assert(t, qt.StringContains(str, want))
 			}
 
 			for _, notWant := range test.omits {
-				qt.Assert(t, str, qt.Not(qt.Contains), notWant)
+				qt.Assert(t, qt.Not(qt.StringContains(str, notWant)))
 			}
 		})
 	}
@@ -373,8 +373,8 @@ func TestUnderlyingType(t *testing.T) {
 			root.Type = test.fn(root)
 
 			got, ok := UnderlyingType(root).(*cycle)
-			qt.Assert(t, ok, qt.IsTrue)
-			qt.Assert(t, got.root, qt.Equals, root)
+			qt.Assert(t, qt.IsTrue(ok))
+			qt.Assert(t, qt.Equals[Type](got.root, root))
 		})
 	}
 
@@ -382,7 +382,7 @@ func TestUnderlyingType(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			want := &Int{}
 			got := UnderlyingType(test.fn(want))
-			qt.Assert(t, got, qt.Equals, want)
+			qt.Assert(t, qt.Equals[Type](got, want))
 		})
 	}
 }

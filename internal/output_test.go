@@ -3,7 +3,7 @@ package internal
 import (
 	"testing"
 
-	qt "github.com/frankban/quicktest"
+	"github.com/go-quicktest/qt"
 )
 
 func TestIdentifier(t *testing.T) {
@@ -32,10 +32,10 @@ func TestIdentifier(t *testing.T) {
 func TestGoTypeName(t *testing.T) {
 	type foo struct{}
 	type bar[T any] struct{}
-	qt.Assert(t, GoTypeName(foo{}), qt.Equals, "foo")
-	qt.Assert(t, GoTypeName(new(foo)), qt.Equals, "foo")
-	qt.Assert(t, GoTypeName(new(*foo)), qt.Equals, "foo")
-	qt.Assert(t, GoTypeName(bar[int]{}), qt.Equals, "bar[int]")
+	qt.Assert(t, qt.Equals(GoTypeName(foo{}), "foo"))
+	qt.Assert(t, qt.Equals(GoTypeName(new(foo)), "foo"))
+	qt.Assert(t, qt.Equals(GoTypeName(new(*foo)), "foo"))
+	qt.Assert(t, qt.Equals(GoTypeName(bar[int]{}), "bar[int]"))
 	// Broken in the stdlib, see GoTypeName for details.
 	// qt.Assert(t, GoTypeName(bar[qt.C]{}), qt.Equals, "bar[quicktest.C]")
 }

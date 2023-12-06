@@ -6,7 +6,7 @@ import (
 
 	"github.com/cilium/ebpf/internal/unix"
 
-	qt "github.com/frankban/quicktest"
+	"github.com/go-quicktest/qt"
 )
 
 func TestObjName(t *testing.T) {
@@ -36,7 +36,7 @@ func TestWrappedErrno(t *testing.T) {
 	}
 
 	notsupp := wrappedErrno{ENOTSUPP}
-	qt.Assert(t, notsupp.Error(), qt.Contains, "operation not supported")
+	qt.Assert(t, qt.StringContains(notsupp.Error(), "operation not supported"))
 }
 
 func TestSyscallError(t *testing.T) {

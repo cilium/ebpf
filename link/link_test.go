@@ -15,7 +15,7 @@ import (
 	"github.com/cilium/ebpf/internal/testutils/fdtrace"
 	"github.com/cilium/ebpf/internal/unix"
 
-	qt "github.com/frankban/quicktest"
+	"github.com/go-quicktest/qt"
 )
 
 func TestMain(m *testing.M) {
@@ -62,13 +62,13 @@ func TestUnpinRawLink(t *testing.T) {
 	link, _ := newPinnedRawLink(t, cgroup, prog)
 	defer link.Close()
 
-	qt.Assert(t, link.IsPinned(), qt.IsTrue)
+	qt.Assert(t, qt.IsTrue(link.IsPinned()))
 
 	if err := link.Unpin(); err != nil {
 		t.Fatal(err)
 	}
 
-	qt.Assert(t, link.IsPinned(), qt.IsFalse)
+	qt.Assert(t, qt.IsFalse(link.IsPinned()))
 }
 
 func TestRawLinkLoadPinnedWithOptions(t *testing.T) {
@@ -76,7 +76,7 @@ func TestRawLinkLoadPinnedWithOptions(t *testing.T) {
 	link, path := newPinnedRawLink(t, cgroup, prog)
 	defer link.Close()
 
-	qt.Assert(t, link.IsPinned(), qt.IsTrue)
+	qt.Assert(t, qt.IsTrue(link.IsPinned()))
 
 	// It seems like the kernel ignores BPF_F_RDONLY when updating a link,
 	// so we can't test this.

@@ -18,7 +18,7 @@ import (
 	"github.com/cilium/ebpf/internal/testutils/fdtrace"
 	"github.com/cilium/ebpf/internal/unix"
 
-	qt "github.com/frankban/quicktest"
+	"github.com/go-quicktest/qt"
 )
 
 var (
@@ -38,19 +38,19 @@ func TestPerfReader(t *testing.T) {
 	}
 	defer rd.Close()
 
-	qt.Assert(t, rd.BufferSize(), qt.Equals, 4096)
+	qt.Assert(t, qt.Equals(rd.BufferSize(), 4096))
 
 	outputSamples(t, events, 5, 5)
 
 	_, rem := checkRecord(t, rd)
-	qt.Assert(t, rem >= 5, qt.IsTrue, qt.Commentf("expected at least 5 Remaining"))
+	qt.Assert(t, qt.IsTrue(rem >= 5), qt.Commentf("expected at least 5 Remaining"))
 
 	_, rem = checkRecord(t, rd)
-	qt.Assert(t, rem, qt.Equals, 0, qt.Commentf("expected zero Remaining"))
+	qt.Assert(t, qt.Equals(rem, 0), qt.Commentf("expected zero Remaining"))
 
 	rd.SetDeadline(time.Now().Add(4 * time.Millisecond))
 	_, err = rd.Read()
-	qt.Assert(t, errors.Is(err, os.ErrDeadlineExceeded), qt.IsTrue, qt.Commentf("expected os.ErrDeadlineExceeded"))
+	qt.Assert(t, qt.ErrorIs(err, os.ErrDeadlineExceeded), qt.Commentf("expected os.ErrDeadlineExceeded"))
 }
 
 func TestReaderSetDeadline(t *testing.T) {
@@ -165,15 +165,15 @@ func checkRecord(tb testing.TB, rd *Reader) (id int, remaining int) {
 	tb.Helper()
 
 	rec, err := rd.Read()
-	qt.Assert(tb, err, qt.IsNil)
+	qt.Assert(tb, qt.IsNil(err))
 
-	qt.Assert(tb, rec.CPU >= 0, qt.IsTrue, qt.Commentf("Record has invalid CPU number"))
+	qt.Assert(tb, qt.IsTrue(rec.CPU >= 0), qt.Commentf("Record has invalid CPU number"))
 
 	size := int(rec.RawSample[0])
-	qt.Assert(tb, len(rec.RawSample) >= size, qt.IsTrue, qt.Commentf("RawSample is at least size bytes"))
+	qt.Assert(tb, qt.IsTrue(len(rec.RawSample) >= size), qt.Commentf("RawSample is at least size bytes"))
 
 	for i, v := range rec.RawSample[2:size] {
-		qt.Assert(tb, v, qt.Equals, byte(0xff), qt.Commentf("filler at position %d should match", i+2))
+		qt.Assert(tb, qt.Equals(v, 0xff), qt.Commentf("filler at position %d should match", i+2))
 	}
 
 	// padding is ignored since it's value is undefined.
@@ -302,18 +302,18 @@ func TestPerfReaderOverwritable(t *testing.T) {
 	defer rd.Close()
 
 	_, err = rd.Read()
-	qt.Assert(t, err, qt.ErrorIs, errMustBePaused)
+	qt.Assert(t, qt.ErrorIs(err, errMustBePaused))
 
 	outputSamples(t, events, sampleSizes...)
 
-	qt.Assert(t, rd.Pause(), qt.IsNil)
+	qt.Assert(t, qt.IsNil(rd.Pause()))
 	rd.SetDeadline(time.Now())
 
 	nextID := maxEvents
 	for i := 0; i < maxEvents; i++ {
 		id, rem := checkRecord(t, rd)
-		qt.Assert(t, id, qt.Equals, nextID)
-		qt.Assert(t, rem, qt.Equals, -1)
+		qt.Assert(t, qt.Equals(id, nextID))
+		qt.Assert(t, qt.Equals(rem, -1))
 		nextID--
 	}
 }
@@ -333,7 +333,7 @@ func TestPerfReaderOverwritableEmpty(t *testing.T) {
 
 	rd.SetDeadline(time.Now().Add(4 * time.Millisecond))
 	_, err = rd.Read()
-	qt.Assert(t, errors.Is(err, os.ErrDeadlineExceeded), qt.IsTrue, qt.Commentf("expected os.ErrDeadlineExceeded"))
+	qt.Assert(t, qt.ErrorIs(err, os.ErrDeadlineExceeded), qt.Commentf("expected os.ErrDeadlineExceeded"))
 
 	err = rd.Resume()
 	if err != nil {
@@ -481,12 +481,12 @@ func TestPause(t *testing.T) {
 
 	// Pause/Resume after close should be no-op.
 	err = rd.Pause()
-	qt.Assert(t, err, qt.Not(qt.Equals), ErrClosed, qt.Commentf("returns unwrapped ErrClosed"))
-	qt.Assert(t, errors.Is(err, ErrClosed), qt.IsTrue, qt.Commentf("doesn't wrap ErrClosed"))
+	qt.Assert(t, qt.Not(qt.Equals(err, ErrClosed)), qt.Commentf("returns unwrapped ErrClosed"))
+	qt.Assert(t, qt.ErrorIs(err, ErrClosed), qt.Commentf("doesn't wrap ErrClosed"))
 
 	err = rd.Resume()
-	qt.Assert(t, err, qt.Not(qt.Equals), ErrClosed, qt.Commentf("returns unwrapped ErrClosed"))
-	qt.Assert(t, errors.Is(err, ErrClosed), qt.IsTrue, qt.Commentf("doesn't wrap ErrClosed"))
+	qt.Assert(t, qt.Not(qt.Equals(err, ErrClosed)), qt.Commentf("returns unwrapped ErrClosed"))
+	qt.Assert(t, qt.ErrorIs(err, ErrClosed), qt.Commentf("doesn't wrap ErrClosed"))
 }
 
 func BenchmarkReader(b *testing.B) {

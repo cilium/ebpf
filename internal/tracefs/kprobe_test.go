@@ -5,19 +5,17 @@ import (
 	"os"
 	"testing"
 
-	qt "github.com/frankban/quicktest"
+	"github.com/go-quicktest/qt"
 )
 
 // Global symbol, present on all tested kernels.
 const ksym = "vprintk"
 
 func TestKprobeTraceFSGroup(t *testing.T) {
-	c := qt.New(t)
-
 	// Expect <prefix>_<16 random hex chars>.
 	g, err := RandomGroup("ebpftest")
-	c.Assert(err, qt.IsNil)
-	c.Assert(g, qt.Matches, `ebpftest_[a-f0-9]{16}`)
+	qt.Assert(t, qt.IsNil(err))
+	qt.Assert(t, qt.Matches(g, `ebpftest_[a-f0-9]{16}`))
 
 	// Expect error when the generator's output exceeds 63 characters.
 	p := make([]byte, 47) // 63 - 17 (length of the random suffix and underscore) + 1
@@ -25,11 +23,11 @@ func TestKprobeTraceFSGroup(t *testing.T) {
 		p[i] = byte('a')
 	}
 	_, err = RandomGroup(string(p))
-	c.Assert(err, qt.Not(qt.IsNil))
+	qt.Assert(t, qt.Not(qt.IsNil(err)))
 
 	// Reject non-alphanumeric characters.
 	_, err = RandomGroup("/")
-	c.Assert(err, qt.Not(qt.IsNil))
+	qt.Assert(t, qt.Not(qt.IsNil(err)))
 }
 
 func TestKprobeToken(t *testing.T) {
@@ -65,15 +63,15 @@ func TestNewEvent(t *testing.T) {
 			args.Group, _ = RandomGroup("ebpftest")
 
 			evt, err := NewEvent(args)
-			qt.Assert(t, err, qt.IsNil)
+			qt.Assert(t, qt.IsNil(err))
 			defer evt.Close()
 
 			_, err = NewEvent(args)
-			qt.Assert(t, err, qt.ErrorIs, os.ErrExist,
+			qt.Assert(t, qt.ErrorIs(err, os.ErrExist),
 				qt.Commentf("expected consecutive event creation to contain os.ErrExist"))
 
-			qt.Assert(t, evt.Close(), qt.IsNil)
-			qt.Assert(t, evt.Close(), qt.ErrorIs, os.ErrClosed)
+			qt.Assert(t, qt.IsNil(evt.Close()))
+			qt.Assert(t, qt.ErrorIs(evt.Close(), os.ErrClosed))
 		})
 	}
 }

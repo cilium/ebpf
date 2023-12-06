@@ -8,7 +8,7 @@ import (
 	"path"
 	"testing"
 
-	qt "github.com/frankban/quicktest"
+	"github.com/go-quicktest/qt"
 
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/internal/testutils"
@@ -43,8 +43,6 @@ func TestExecutable(t *testing.T) {
 }
 
 func TestExecutableOffset(t *testing.T) {
-	c := qt.New(t)
-
 	symbolOffset, err := bashEx.address(bashSym, &UprobeOptions{})
 	if err != nil {
 		t.Fatal(err)
@@ -54,52 +52,48 @@ func TestExecutableOffset(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	c.Assert(offset, qt.Equals, uint64(0x1))
+	qt.Assert(t, qt.Equals(offset, 0x1))
 
 	offset, err = bashEx.address(bashSym, &UprobeOptions{Offset: 0x2})
 	if err != nil {
 		t.Fatal(err)
 	}
-	c.Assert(offset, qt.Equals, symbolOffset+0x2)
+	qt.Assert(t, qt.Equals(offset, symbolOffset+0x2))
 
 	offset, err = bashEx.address(bashSym, &UprobeOptions{Address: 0x1, Offset: 0x2})
 	if err != nil {
 		t.Fatal(err)
 	}
-	c.Assert(offset, qt.Equals, uint64(0x1+0x2))
+	qt.Assert(t, qt.Equals(offset, 0x1+0x2))
 }
 
 func TestExecutableLazyLoadSymbols(t *testing.T) {
-	c := qt.New(t)
-
 	ex, err := OpenExecutable("/bin/bash")
-	c.Assert(err, qt.IsNil)
+	qt.Assert(t, qt.IsNil(err))
 	// Addresses must be empty, will be lazy loaded.
-	c.Assert(ex.addresses, qt.DeepEquals, map[string]uint64{})
+	qt.Assert(t, qt.DeepEquals(ex.addresses, map[string]uint64{}))
 
 	prog := mustLoadProgram(t, ebpf.Kprobe, 0, "")
 	up, err := ex.Uprobe(bashSym, prog, &UprobeOptions{Address: 123})
-	c.Assert(err, qt.IsNil)
+	qt.Assert(t, qt.IsNil(err))
 	up.Close()
 
 	// Addresses must still be empty as Address has been provided via options.
-	c.Assert(ex.addresses, qt.DeepEquals, map[string]uint64{})
+	qt.Assert(t, qt.DeepEquals(ex.addresses, map[string]uint64{}))
 
 	up, err = ex.Uprobe(bashSym, prog, nil)
-	c.Assert(err, qt.IsNil)
+	qt.Assert(t, qt.IsNil(err))
 	up.Close()
 
 	// Symbol table should be loaded.
-	c.Assert(len(ex.addresses), qt.Not(qt.Equals), 0)
+	qt.Assert(t, qt.Not(qt.HasLen(ex.addresses, 0)))
 }
 
 func TestUprobe(t *testing.T) {
-	c := qt.New(t)
-
 	prog := mustLoadProgram(t, ebpf.Kprobe, 0, "")
 
 	up, err := bashEx.Uprobe(bashSym, prog, nil)
-	c.Assert(err, qt.IsNil)
+	qt.Assert(t, qt.IsNil(err))
 	defer up.Close()
 
 	testLink(t, up, prog)
@@ -152,12 +146,10 @@ func TestUprobeWithNonExistentPID(t *testing.T) {
 }
 
 func TestUretprobe(t *testing.T) {
-	c := qt.New(t)
-
 	prog := mustLoadProgram(t, ebpf.Kprobe, 0, "")
 
 	up, err := bashEx.Uretprobe(bashSym, prog, nil)
-	c.Assert(err, qt.IsNil)
+	qt.Assert(t, qt.IsNil(err))
 	defer up.Close()
 
 	testLink(t, up, prog)
@@ -168,11 +160,9 @@ func TestUprobeCreatePMU(t *testing.T) {
 	// Requires at least 4.17 (e12f03d7031a "perf/core: Implement the 'perf_kprobe' PMU")
 	testutils.SkipOnOldKernel(t, "4.17", "perf_kprobe PMU")
 
-	c := qt.New(t)
-
 	// Fetch the offset from the /bin/bash Executable already defined.
 	off, err := bashEx.address(bashSym, &UprobeOptions{})
-	c.Assert(err, qt.IsNil)
+	qt.Assert(t, qt.IsNil(err))
 
 	// Prepare probe args.
 	args := tracefs.ProbeArgs{
@@ -185,23 +175,21 @@ func TestUprobeCreatePMU(t *testing.T) {
 
 	// uprobe PMU
 	pu, err := pmuProbe(args)
-	c.Assert(err, qt.IsNil)
+	qt.Assert(t, qt.IsNil(err))
 	defer pu.Close()
 
 	// uretprobe PMU
 	args.Ret = true
 	pr, err := pmuProbe(args)
-	c.Assert(err, qt.IsNil)
+	qt.Assert(t, qt.IsNil(err))
 	defer pr.Close()
 }
 
 // Test fallback behaviour on kernels without perf_uprobe PMU available.
 func TestUprobePMUUnavailable(t *testing.T) {
-	c := qt.New(t)
-
 	// Fetch the offset from the /bin/bash Executable already defined.
 	off, err := bashEx.address(bashSym, &UprobeOptions{})
-	c.Assert(err, qt.IsNil)
+	qt.Assert(t, qt.IsNil(err))
 
 	// Prepare probe args.
 	args := tracefs.ProbeArgs{
@@ -219,16 +207,14 @@ func TestUprobePMUUnavailable(t *testing.T) {
 	}
 
 	// Expect ErrNotSupported.
-	c.Assert(errors.Is(err, ErrNotSupported), qt.IsTrue, qt.Commentf("got error: %s", err))
+	qt.Assert(t, qt.ErrorIs(err, ErrNotSupported), qt.Commentf("got error: %s", err))
 }
 
 // Test tracefs u(ret)probe creation on all kernel versions.
 func TestUprobeTraceFS(t *testing.T) {
-	c := qt.New(t)
-
 	// Fetch the offset from the /bin/bash Executable already defined.
 	off, err := bashEx.address(bashSym, &UprobeOptions{})
-	c.Assert(err, qt.IsNil)
+	qt.Assert(t, qt.IsNil(err))
 
 	// Prepare probe args.
 	args := tracefs.ProbeArgs{
@@ -241,39 +227,39 @@ func TestUprobeTraceFS(t *testing.T) {
 
 	// Open and close tracefs u(ret)probes, checking all errors.
 	up, err := tracefsProbe(args)
-	c.Assert(err, qt.IsNil)
-	c.Assert(up.Close(), qt.IsNil)
+	qt.Assert(t, qt.IsNil(err))
+	qt.Assert(t, qt.IsNil(up.Close()))
 
 	args.Ret = true
 	up, err = tracefsProbe(args)
-	c.Assert(err, qt.IsNil)
-	c.Assert(up.Close(), qt.IsNil)
+	qt.Assert(t, qt.IsNil(err))
+	qt.Assert(t, qt.IsNil(up.Close()))
 
 	// Create two identical trace events, ensure their IDs differ.
 	args.Ret = false
 	u1, err := tracefsProbe(args)
-	c.Assert(err, qt.IsNil)
+	qt.Assert(t, qt.IsNil(err))
 	defer u1.Close()
-	c.Assert(u1.tracefsEvent, qt.IsNotNil)
+	qt.Assert(t, qt.IsNotNil(u1.tracefsEvent))
 
 	u2, err := tracefsProbe(args)
-	c.Assert(err, qt.IsNil)
+	qt.Assert(t, qt.IsNil(err))
 	defer u2.Close()
-	c.Assert(u2.tracefsEvent, qt.IsNotNil)
+	qt.Assert(t, qt.IsNotNil(u2.tracefsEvent))
 
 	// Compare the uprobes' tracefs IDs.
-	c.Assert(u1.tracefsEvent.ID(), qt.Not(qt.Equals), u2.tracefsEvent.ID())
+	qt.Assert(t, qt.Not(qt.Equals(u1.tracefsEvent.ID(), u2.tracefsEvent.ID())))
 
 	// Expect an error when supplying an invalid custom group name
 	args.Group = "/"
 	_, err = tracefsProbe(args)
-	c.Assert(err, qt.Not(qt.IsNil))
+	qt.Assert(t, qt.Not(qt.IsNil(err)))
 
 	args.Group = "customgroup"
 	u3, err := tracefsProbe(args)
-	c.Assert(err, qt.IsNil)
+	qt.Assert(t, qt.IsNil(err))
 	defer u3.Close()
-	c.Assert(u3.tracefsEvent.Group(), qt.Matches, `customgroup_[a-f0-9]{16}`)
+	qt.Assert(t, qt.Matches(u3.tracefsEvent.Group(), `customgroup_[a-f0-9]{16}`))
 }
 
 func TestUprobeProgramCall(t *testing.T) {

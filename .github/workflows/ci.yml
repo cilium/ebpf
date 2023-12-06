@@ -1,3 +1,4 @@
+name: ci
 on:
   push:
     branches: [ "main" ]
@@ -69,13 +70,6 @@ jobs:
           go build -v ./...
           go test -c -o /dev/null ./... >/dev/null
 
-      - name: Cross build arm64
-        env:
-          GOARCH: arm64
-        run: |
-          go build -v ./...
-          go test -c -o /dev/null ./... >/dev/null
-
   build-docs:
     name: Build Documentation
     runs-on: ubuntu-22.04
@@ -138,6 +132,39 @@ jobs:
         with:
           name: Test Results (previous stable Go)
           path: junit.xml
+
+  test-on-arm64:
+    name: Run tests on arm64
+    runs-on: actuated-arm64-2cpu-8gb
+    needs: build-and-lint
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '${{ env.prev_go_version }}'
+
+      - run: go install gotest.tools/gotestsum@v1.8.1
+
+      - name: Test
+        run: gotestsum --ignore-non-json-output-lines --junitfile junit.xml -- -exec sudo -short -count 1 -json ./...
+
+      - name: Benchmark
+        run: go test -exec sudo -short -run '^$' -bench . -benchtime=1x ./...
+
+      - name: Upload Test Results
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: Test Results (arm64)
+          path: junit.xml
+
+      - name: Show dmesg
+        if: failure()
+        run: |
+          sudo dmesg
 
   vm-test:
     name: Run tests on pre-built kernel

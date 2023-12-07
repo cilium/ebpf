@@ -1,0 +1,18 @@
+[[source]]
+url = "https://pypi.org/simple"
+verify_ssl = true
+name = "pypi"
+
+[packages]
+mkdocs = "*"
+pymdown-extensions = "*"
+mkdocs-material = "*"
+mkdocs-macros-plugin = "*"
+mkdocs-git-revision-date-localized-plugin = "*"
+mkdocs-git-authors-plugin = "*"
+
+[dev-packages]
+
+[requires]
+# Whatever Netlify's Ubuntu version uses.
+python_version = "3.8"

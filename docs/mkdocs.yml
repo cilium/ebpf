@@ -1,0 +1,152 @@
+site_name: "ebpf-go Documentation"
+site_description: Pure-Go library to read, modify and load eBPF programs and attach them to various hooks in the Linux kernel.
+site_author: Cilium Community
+
+# Rendered in header.
+repo_url: https://github.com/cilium/ebpf
+repo_name: cilium/ebpf
+edit_uri: edit/master/docs/ebpf/
+
+# Directory to look for Markdown files within docs/.
+docs_dir: ebpf
+
+theme:
+  logo: ebpf-go.png
+  favicon: ebpf-go.png
+  name: material
+
+  icon:
+    # GitHub link in the header.
+    repo: fontawesome/brands/github-alt
+    # Edit button at the top of each page.
+    edit: material/pencil-ruler
+
+  features:
+    # Display sections in the navbar.
+    - navigation.sections
+    # Anchor tracking, updates the address bar with the active anchor.
+    - navigation.tracking
+    # Use XHR instead of fully reloading the page when navigating around.
+    - nagivation.instant
+    # Clipboard button in code blocks.
+    - content.code.copy
+    # Enable annotations in code blocks.
+    - content.code.annotate
+    # Button to edit page on GitHub.
+    - content.action.edit
+
+  palette:
+    # Palette toggle for light mode
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      toggle:
+        icon: material/lightbulb-off
+        name: Switch to dark mode
+
+    # Palette toggle for dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      toggle:
+        icon: material/lightbulb-on
+        name: Switch to light mode
+
+  # Template overrides.
+  custom_dir: overrides
+
+nav:
+  - 'Home': index.md
+  - 'Guides':
+    - 'Getting Started': guides/getting-started.md
+    - 'Portable eBPF': guides/portable-ebpf.md
+  - 'Concepts':
+    - 'Loading eBPF Programs': concepts/loader.md
+    - 'Resource Limits': concepts/rlimit.md
+    - 'Section Naming': concepts/section-naming.md
+    - 'Feature Detection': concepts/features.md
+    - 'Object Lifecycle': concepts/object-lifecycle.md
+  - 'Contributing':
+    - contributing/index.md
+    - contributing/architecture.md
+    - contributing/new-feature.md
+  - 'Users': users.md
+  - 'Go Reference': https://pkg.go.dev/github.com/cilium/ebpf
+  - 'GitHub':
+    - 'Repository': https://github.com/cilium/ebpf
+    - 'Issue Tracker': https://github.com/cilium/ebpf/issues
+    - 'Discussions': https://github.com/cilium/ebpf/discussions
+  - 'About': about.md
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/cilium/ebpf
+
+extra_css:
+  - stylesheets/extra.css
+
+watch:
+- examples/
+- includes/
+- overrides/
+- macros.py
+
+plugins:
+  - search
+  - macros:
+      # This opens macros.py in docs/.
+      module_name: macros
+      # Make the mkdocs build fail if any errors occur.
+      # Otherwise, any errors would be rendered to the build output.
+      on_error_fail: true
+      include_yaml:
+        - vars.yml
+  # Updated/authors displayed in footer.
+  # Layout is customized in overrides/partials/source-file.html.
+  - git-revision-date-localized:
+      type: timeago
+  - git-authors:
+      show_email_address: false
+      authorship_threshold_percent: 10
+      exclude:
+        - index.md
+
+# Enable syntax highlighting in mkdocs-material.
+markdown_extensions:
+  # Automatic tooltips for abbreviations/glossary.
+  - abbr
+  # Setting attributes on code fences (e.g. ``` go linenums='1')
+  - attr_list
+  # Special content blocks like '!!! note'
+  - admonition
+  # Definition lists using indented descriptions
+  - def_list
+  - footnotes
+  # Collapsible admonitions
+  - pymdownx.details
+  # Syntax highlighting in code blocks
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  # Glossary
+  - pymdownx.snippets:
+      auto_append:
+        - includes/glossary.md
+  # Superfences enables nested and tabbed code blocks and Mermaid support
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  # Content tabs for code snippets, checklists, etc.
+  - pymdownx.tabbed:
+      alternate_style: true
+  # Emoji and icons like :fontawesome-brands-golang:
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+      options:
+        custom_icons:
+          - overrides/.icons
+  # Table of Contents
+  - toc:
+      permalink: true

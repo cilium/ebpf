@@ -1,0 +1,35 @@
+name: apidiff
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  go-apidiff:
+    name: go-apidiff
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v4
+        with:
+          go-version-file: go.mod
+
+      - name: Run go-apidiff
+        id: apidiff
+        continue-on-error: true
+        uses: joelanford/go-apidiff@main
+
+      - name: Create apidiff.json
+        run: |
+          echo '{"id": ${{ github.event.pull_request.number }}, "semver-type": "${{ steps.apidiff.outputs.semver-type }}"}' > apidiff.json
+
+      - name: Upload apidiff.json
+        uses: actions/upload-artifact@v3
+        with:
+          name: apidiff
+          path: apidiff.json

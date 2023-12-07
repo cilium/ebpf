@@ -1,0 +1,199 @@
+name: ci
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+env:
+  TMPDIR: /tmp
+  CI_MAX_KERNEL_VERSION: '6.6'
+  CI_MIN_CLANG_VERSION: '11'
+  go_version: '~1.21'
+  prev_go_version: '~1.20'
+  # This needs to match whatever Netlify supports.
+  # Also defined in Pipfile.
+  python_version: '~3.8'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-lint:
+    name: Build and Lint
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '${{ env.go_version }}'
+
+      - name: Run golangci-lint
+        uses: golangci/golangci-lint-action@v3.7.0
+        with:
+          args: "--out-format colored-line-number"
+          skip-pkg-cache: true
+
+      - name: Generate and format code
+        run: |
+          make clean && make container-all
+          if ! git diff --exit-code; then
+            echo "found unformatted source files, or generated files are not up to date, run 'make'" >&2
+            exit 1
+          fi
+
+      - name: Test bpf2go
+        run: |
+          sudo apt-get install clang-11 llvm-11
+          go test -v ./cmd/bpf2go
+
+      - name: Build examples
+        run: go build -v ./...
+        working-directory: ./examples
+
+      - name: Cross build darwin
+        env:
+          GOOS: darwin
+        run: |
+          go build -v ./...
+          go test -c -o /dev/null ./... >/dev/null
+
+      - name: Cross build arm32
+        env:
+          GOARCH: arm
+          GOARM: 6
+        run: |
+          go build -v ./...
+          go test -c -o /dev/null ./... >/dev/null
+
+  build-docs:
+    name: Build Documentation
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          # The mkdocs git-authors plugin needs access to the full revision
+          # history to correctly generate its statistics.
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '${{ env.go_version }}'
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '${{ env.python_version }}'
+          cache: 'pipenv'
+
+      - name: Install pipenv
+        run: pip3 install pipenv
+
+      - name: Install Dependencies
+        run: pipenv install
+        working-directory: ./docs
+
+      - name: Build Documentation
+        run: make build
+        working-directory: ./docs
+
+  test-on-prev-go:
+    name: Run tests on previous stable Go
+    runs-on: ubuntu-latest-4cores-16gb
+    needs: build-and-lint
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '${{ env.prev_go_version }}'
+
+      - run: go install gotest.tools/gotestsum@v1.8.1
+      - run: sudo pip3 install https://github.com/amluto/virtme/archive/beb85146cd91de37ae455eccb6ab67c393e6e290.zip
+      - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends qemu-system-x86
+
+      - name: Test
+        run: gotestsum --raw-command --ignore-non-json-output-lines --junitfile junit.xml -- ./run-tests.sh $CI_MAX_KERNEL_VERSION -short -count 1 -json ./...
+
+      - name: Benchmark
+        run: go test -exec sudo -short -run '^$' -bench . -benchtime=1x ./...
+
+      - name: Upload Test Results
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: Test Results (previous stable Go)
+          path: junit.xml
+
+  test-on-arm64:
+    name: Run tests on arm64
+    runs-on: actuated-arm64-2cpu-8gb
+    needs: build-and-lint
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '${{ env.prev_go_version }}'
+
+      - run: go install gotest.tools/gotestsum@v1.8.1
+
+      - name: Test
+        run: gotestsum --ignore-non-json-output-lines --junitfile junit.xml -- -exec sudo -short -count 1 -json ./...
+
+      - name: Benchmark
+        run: go test -exec sudo -short -run '^$' -bench . -benchtime=1x ./...
+
+      - name: Upload Test Results
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: Test Results (arm64)
+          path: junit.xml
+
+      - name: Show dmesg
+        if: failure()
+        run: |
+          sudo dmesg
+
+  vm-test:
+    name: Run tests on pre-built kernel
+    runs-on: ubuntu-latest-4cores-16gb
+    needs: build-and-lint
+    timeout-minutes: 10
+    strategy:
+      matrix:
+        version: ["6.6", "6.1", "5.15", "5.10", "5.4", "4.19", "4.14", "4.9"]
+    env:
+      KERNEL_VERSION: "${{ matrix.version }}"
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '${{ env.prev_go_version }}'
+
+      - run: go install gotest.tools/gotestsum@v1.8.1
+      - run: sudo pip3 install https://github.com/amluto/virtme/archive/beb85146cd91de37ae455eccb6ab67c393e6e290.zip
+      - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends qemu-system-x86
+
+      - name: Test
+        run: gotestsum --raw-command --ignore-non-json-output-lines --junitfile junit.xml -- ./run-tests.sh $KERNEL_VERSION -short -count 1 -json ./...
+
+      - name: Upload Test Results
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: Test Results (${{ matrix.version }})
+          path: junit.xml

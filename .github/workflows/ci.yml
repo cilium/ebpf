@@ -116,22 +116,24 @@ jobs:
         with:
           go-version: '${{ env.prev_go_version }}'
 
-      - run: go install gotest.tools/gotestsum@v1.8.1
-      - run: sudo pip3 install https://github.com/amluto/virtme/archive/beb85146cd91de37ae455eccb6ab67c393e6e290.zip
-      - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends qemu-system-x86
-
       - name: Test
-        run: gotestsum --raw-command --ignore-non-json-output-lines --junitfile junit.xml -- ./run-tests.sh $CI_MAX_KERNEL_VERSION -short -count 1 -json ./...
-
-      - name: Benchmark
-        run: go test -exec sudo -short -run '^$' -bench . -benchtime=1x ./...
+        run: go test -exec sudo -run 'TestKfunc$' -timeout 30s -v .
 
       - name: Upload Test Results
-        if: always()
+        if: failure()
+        run: |
+          mkdir bug && cd bug
+          uname -a > uname-a.log
+          sudo dmesg > dmesg.log
+          sudo lspci -vvnn > lspci-vvnn.log
+          cat /proc/version_signature > version.log
+
+      - name: Upload Test Results
+        if: failure()
         uses: actions/upload-artifact@v3
         with:
-          name: Test Results (previous stable Go)
-          path: junit.xml
+          name: Crash log
+          path: bug/
 
   test-on-arm64:
     name: Run tests on arm64

@@ -18,7 +18,8 @@ import (
 
 var (
 	bashEx, _ = OpenExecutable("/bin/bash")
-	bashSym   = "main"
+	bashSyms  = []string{"main", "_start", "check_dev_tty"}
+	bashSym   = bashSyms[0]
 )
 
 func TestExecutable(t *testing.T) {

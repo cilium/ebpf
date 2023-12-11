@@ -99,6 +99,87 @@ func TestRingbufReader(t *testing.T) {
 	}
 }
 
+func TestRingbufPool(t *testing.T) {
+	testutils.SkipOnOldKernel(t, "5.8", "BPF ring buffer")
+
+	readerTests := []struct {
+		name     string
+		messages []sampleMessage
+		want     map[int][]byte
+	}{
+		{
+			name:     "send one short sample",
+			messages: []sampleMessage{{size: 5}},
+			want: map[int][]byte{
+				5: {1, 2, 3, 4, 4},
+			},
+		},
+		{
+			name:     "send three short samples, the second is discarded",
+			messages: []sampleMessage{{size: 5}, {size: 10}, {size: 15}},
+			want: map[int][]byte{
+				5:  {1, 2, 3, 4, 4},
+				15: {1, 2, 3, 4, 4, 3, 2, 1, 1, 2, 3, 4, 4, 3, 2},
+			},
+		},
+	}
+	for _, tt := range readerTests {
+		t.Run(tt.name, func(t *testing.T) {
+			prog, events := mustOutputSamplesProg(t, tt.messages...)
+
+			raw := make(map[int][]byte)
+			callback := func(b []byte, remaining int) {
+				raw[len(b)] = b
+				if len(raw) == len(tt.want) {
+					if remaining != 0 {
+						t.Errorf("expected 0 Remaining, got %d", remaining)
+					}
+				} else {
+					if remaining == 0 {
+						t.Errorf("expected non-zero Remaining, got 0")
+					}
+				}
+			}
+
+			rd, err := NewReader(events, WithCallback(callback))
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer rd.Close()
+
+			if uint32(rd.BufferSize()) != 2*events.MaxEntries() {
+				t.Errorf("expected %d BufferSize, got %d", events.MaxEntries(), rd.BufferSize())
+			}
+
+			count, err := rd.Poll(0)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if count != 0 {
+				t.Error("Expected number of records as 0, got", count)
+			}
+
+			ret, _, err := prog.Test(internal.EmptyBPFContext)
+			testutils.SkipIfNotSupported(t, err)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			if errno := syscall.Errno(-int32(ret)); errno != 0 {
+				t.Fatal("Expected 0 as return value, got", errno)
+			}
+
+			if _, err = rd.Poll(0); err != nil {
+				t.Fatal(err)
+			}
+
+			if diff := cmp.Diff(tt.want, raw); diff != "" {
+				t.Errorf("Read samples mismatch (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
 func outputSamplesProg(sampleMessages ...sampleMessage) (*ebpf.Program, *ebpf.Map, error) {
 	events, err := ebpf.NewMap(&ebpf.MapSpec{
 		Type:       ebpf.RingBuf,
@@ -279,7 +360,6 @@ func TestReaderNoWakeup(t *testing.T) {
 
 	rd.SetDeadline(time.Now())
 	record, err := rd.Read()
-
 	if err != nil {
 		t.Error("Expected no error from first Read, got:", err)
 	}

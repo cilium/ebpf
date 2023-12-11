@@ -118,10 +118,11 @@ type Reader struct {
 	haveData    bool
 	deadline    time.Time
 	bufferSize  int
+	callback    Callback
 }
 
 // NewReader creates a new BPF ringbuf reader.
-func NewReader(ringbufMap *ebpf.Map) (*Reader, error) {
+func NewReader(ringbufMap *ebpf.Map, opt ...Option) (*Reader, error) {
 	if ringbufMap.Type() != ebpf.RingBuf {
 		return nil, fmt.Errorf("invalid Map type: %s", ringbufMap.Type())
 	}
@@ -147,12 +148,18 @@ func NewReader(ringbufMap *ebpf.Map) (*Reader, error) {
 		return nil, fmt.Errorf("failed to create ringbuf ring: %w", err)
 	}
 
+	opts := defaultOpts()
+	for _, o := range opt {
+		o(opts)
+	}
+
 	return &Reader{
 		poller:      poller,
 		ring:        ring,
 		epollEvents: make([]unix.EpollEvent, 1),
 		header:      make([]byte, ringbufHeaderSize),
 		bufferSize:  ring.size(),
+		callback:    opts.cb,
 	}, nil
 }
 
@@ -235,6 +242,36 @@ func (r *Reader) ReadInto(rec *Record) error {
 			}
 			return err
 		}
+	}
+}
+
+// Poll records with the specified timeout. The input timeout has a similar effect to
+// the epoll_wait syscall.
+// NOTE:
+//   - This function has a side effect, as it will reset the Reader's deadline every time
+//     this function is called.
+func (r *Reader) Poll(timeout time.Duration) (int, error) {
+	var count int
+
+	var t time.Time
+	if timeout == 0 {
+		t = time.Now().Add(-10 * time.Minute)
+	} else if timeout > 0 {
+		t = time.Now().Add(timeout)
+	}
+
+	r.deadline = t
+
+	for {
+		reader, err := r.Read()
+		if err != nil {
+			if errors.Is(err, os.ErrDeadlineExceeded) || errors.Is(err, ErrClosed) {
+				return count, nil
+			}
+			return -1, err
+		}
+		r.callback(reader.RawSample, reader.Remaining)
+		count++
 	}
 }
 

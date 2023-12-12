@@ -99,45 +99,62 @@ func TestMapBatch(t *testing.T) {
 	contents := map[uint32]uint32{
 		0: 42, 1: 4242, 2: 23, 3: 2323,
 	}
-
-	hash, err := NewMap(&MapSpec{
-		Type:      Hash,
-		KeySize:   4,
-		ValueSize: 4,
-		// Make the map large enough to avoid ENOSPC.
-		MaxEntries: uint32(len(contents)) * 10,
-	})
-	if err != nil {
-		t.Fatal(err)
+	mustNewMap := func(mapType MapType, max uint32) *Map {
+		m, err := NewMap(&MapSpec{
+			Type:       mapType,
+			KeySize:    4,
+			ValueSize:  4,
+			MaxEntries: max,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return m
 	}
+
+	var (
+		// Make the map large enough to avoid ENOSPC.
+		hashMax  uint32 = uint32(len(contents)) * 10
+		arrayMax uint32 = 4
+	)
+
+	hash := mustNewMap(Hash, hashMax)
 	defer hash.Close()
 
-	array, err := NewMap(&MapSpec{
-		Type:       Array,
-		KeySize:    4,
-		ValueSize:  4,
-		MaxEntries: 4,
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
+	array := mustNewMap(Array, arrayMax)
 	defer array.Close()
 
-	var keys, values []uint32
-	for key, value := range contents {
-		keys = append(keys, key)
-		values = append(values, value)
-	}
+	hashPerCpu := mustNewMap(PerCPUHash, hashMax)
+	defer hashPerCpu.Close()
 
-	for _, m := range []*Map{array, hash} {
+	arrayPerCpu := mustNewMap(PerCPUArray, arrayMax)
+	defer arrayPerCpu.Close()
+
+	for _, m := range []*Map{array, hash, arrayPerCpu, hashPerCpu} {
 		t.Run(m.Type().String(), func(t *testing.T) {
+			if m.Type() == PerCPUArray {
+				// https://lore.kernel.org/bpf/20210424214510.806627-2-pctammela@mojatatu.com/
+				testutils.SkipOnOldKernel(t, "5.13", "batched ops support for percpu array")
+			}
+			possibleCPU := 1
+			if m.Type().hasPerCPUValue() {
+				possibleCPU = MustPossibleCPU()
+			}
+			var keys, values []uint32
+			for key, value := range contents {
+				keys = append(keys, key)
+				for i := 0; i < possibleCPU; i++ {
+					values = append(values, value*uint32((i+1)))
+				}
+			}
+
 			count, err := m.BatchUpdate(keys, values, nil)
 			qt.Assert(t, qt.IsNil(err))
 			qt.Assert(t, qt.Equals(count, len(contents)))
 
 			n := len(contents) / 2 // cut buffer in half
 			lookupKeys := make([]uint32, n)
-			lookupValues := make([]uint32, n)
+			lookupValues := make([]uint32, n*possibleCPU)
 
 			var cursor BatchCursor
 			var total int
@@ -151,14 +168,17 @@ func TestMapBatch(t *testing.T) {
 
 				qt.Assert(t, qt.IsTrue(count <= len(lookupKeys)))
 				for i, key := range lookupKeys[:count] {
-					value := lookupValues[i]
-					qt.Assert(t, qt.Equals(value, contents[key]), qt.Commentf("value for key %d should match", key))
+					for j := 0; j < possibleCPU; j++ {
+						value := lookupValues[i*possibleCPU+j]
+						expected := contents[key] * uint32(j+1)
+						qt.Assert(t, qt.Equals(value, expected), qt.Commentf("value for key %d should match", key))
+					}
 				}
 			}
 			qt.Assert(t, qt.Equals(total, len(contents)))
 
-			if m.Type() == Array {
-				// Array doesn't support batch delete
+			if m.Type() == Array || m.Type() == PerCPUArray {
+				// Arrays don't support batch delete
 				return
 			}
 
@@ -174,14 +194,22 @@ func TestMapBatch(t *testing.T) {
 
 				qt.Assert(t, qt.IsTrue(count <= len(lookupKeys)))
 				for i, key := range lookupKeys[:count] {
-					value := lookupValues[i]
-					qt.Assert(t, qt.Equals(value, contents[key]), qt.Commentf("value for key %d should match", key))
+					for j := 0; j < possibleCPU; j++ {
+						value := lookupValues[i*possibleCPU+j]
+						expected := contents[key] * uint32(j+1)
+						qt.Assert(t, qt.Equals(value, expected), qt.Commentf("value for key %d should match", key))
+					}
 				}
 			}
 			qt.Assert(t, qt.Equals(total, len(contents)))
 
-			var v uint32
-			qt.Assert(t, qt.ErrorIs(m.Lookup(uint32(0), &v), ErrKeyNotExist))
+			if possibleCPU > 1 {
+				values := make([]uint32, possibleCPU)
+				qt.Assert(t, qt.ErrorIs(m.Lookup(uint32(0), values), ErrKeyNotExist))
+			} else {
+				var v uint32
+				qt.Assert(t, qt.ErrorIs(m.Lookup(uint32(0), &v), ErrKeyNotExist))
+			}
 		})
 	}
 }
@@ -2036,140 +2064,151 @@ func BenchmarkMap(b *testing.B) {
 }
 
 func BenchmarkIterate(b *testing.B) {
-	m, err := NewMap(&MapSpec{
-		Type:       Hash,
-		KeySize:    8,
-		ValueSize:  8,
-		MaxEntries: 1000,
-	})
-	if err != nil {
-		b.Fatal(err)
+	for _, mt := range []MapType{Hash, PerCPUHash} {
+		m, err := NewMap(&MapSpec{
+			Type:       mt,
+			KeySize:    8,
+			ValueSize:  8,
+			MaxEntries: 1000,
+		})
+		if err != nil {
+			b.Fatal(err)
+		}
+		b.Cleanup(func() {
+			m.Close()
+		})
+		possibleCPU := 1
+		if m.Type().hasPerCPUValue() {
+			possibleCPU = MustPossibleCPU()
+		}
+		var (
+			n      = m.MaxEntries()
+			keys   = make([]uint64, n)
+			values = make([]uint64, n*uint32(possibleCPU))
+		)
+
+		for i := 0; uint32(i) < n; i++ {
+			keys[i] = uint64(i)
+			for j := 0; j < possibleCPU; j++ {
+				values[i] = uint64((i * possibleCPU) + j)
+			}
+		}
+
+		_, err = m.BatchUpdate(keys, values, nil)
+		testutils.SkipIfNotSupported(b, err)
+		qt.Assert(b, qt.IsNil(err))
+
+		b.Run(m.Type().String(), func(b *testing.B) {
+			b.Run("MapIterator", func(b *testing.B) {
+				var k uint64
+				v := make([]uint64, possibleCPU)
+
+				b.ReportAllocs()
+				b.ResetTimer()
+
+				for i := 0; i < b.N; i++ {
+					iter := m.Iterate()
+					for iter.Next(&k, v) {
+						continue
+					}
+					if err := iter.Err(); err != nil {
+						b.Fatal(err)
+					}
+				}
+			})
+
+			b.Run("MapIteratorDelete", func(b *testing.B) {
+				var k uint64
+				v := make([]uint64, possibleCPU)
+
+				b.ReportAllocs()
+				b.ResetTimer()
+
+				for i := 0; i < b.N; i++ {
+					b.StopTimer()
+					if _, err := m.BatchUpdate(keys, values, nil); err != nil {
+						b.Fatal(err)
+					}
+					b.StartTimer()
+
+					iter := m.Iterate()
+					for iter.Next(&k, &v) {
+						if err := m.Delete(&k); err != nil {
+							b.Fatal(err)
+						}
+					}
+					if err := iter.Err(); err != nil {
+						b.Fatal(err)
+					}
+				}
+			})
+
+			b.Run("BatchLookup", func(b *testing.B) {
+				k := make([]uint64, m.MaxEntries())
+				v := make([]uint64, m.MaxEntries()*uint32(possibleCPU))
+
+				b.ReportAllocs()
+				b.ResetTimer()
+
+				for i := 0; i < b.N; i++ {
+					var cursor BatchCursor
+					for {
+						_, err := m.BatchLookup(&cursor, k, v, nil)
+						if errors.Is(err, ErrKeyNotExist) {
+							break
+						}
+						if err != nil {
+							b.Fatal(err)
+						}
+					}
+				}
+			})
+
+			b.Run("BatchLookupAndDelete", func(b *testing.B) {
+				k := make([]uint64, m.MaxEntries())
+				v := make([]uint64, m.MaxEntries()*uint32(possibleCPU))
+
+				b.ReportAllocs()
+				b.ResetTimer()
+
+				for i := 0; i < b.N; i++ {
+					b.StopTimer()
+					if _, err := m.BatchUpdate(keys, values, nil); err != nil {
+						b.Fatal(err)
+					}
+					b.StartTimer()
+
+					var cursor BatchCursor
+					for {
+						_, err := m.BatchLookupAndDelete(&cursor, k, v, nil)
+						if errors.Is(err, ErrKeyNotExist) {
+							break
+						}
+						if err != nil {
+							b.Fatal(err)
+						}
+					}
+				}
+			})
+
+			b.Run("BatchDelete", func(b *testing.B) {
+				b.ReportAllocs()
+				b.ResetTimer()
+
+				for i := 0; i < b.N; i++ {
+					b.StopTimer()
+					if _, err := m.BatchUpdate(keys, values, nil); err != nil {
+						b.Fatal(err)
+					}
+					b.StartTimer()
+
+					if _, err := m.BatchDelete(keys, nil); err != nil {
+						b.Fatal(err)
+					}
+				}
+			})
+		})
 	}
-	b.Cleanup(func() {
-		m.Close()
-	})
-
-	var (
-		n      = m.MaxEntries()
-		keys   = make([]uint64, n)
-		values = make([]uint64, n)
-	)
-
-	for i := 0; uint32(i) < n; i++ {
-		keys[i] = uint64(i)
-		values[i] = uint64(i)
-	}
-
-	_, err = m.BatchUpdate(keys, values, nil)
-	testutils.SkipIfNotSupported(b, err)
-	qt.Assert(b, qt.IsNil(err))
-
-	b.Run("MapIterator", func(b *testing.B) {
-		var k, v uint64
-
-		b.ReportAllocs()
-		b.ResetTimer()
-
-		for i := 0; i < b.N; i++ {
-			iter := m.Iterate()
-			for iter.Next(&k, &v) {
-				continue
-			}
-			if err := iter.Err(); err != nil {
-				b.Fatal(err)
-			}
-		}
-	})
-
-	b.Run("MapIteratorDelete", func(b *testing.B) {
-		var k, v uint64
-
-		b.ReportAllocs()
-		b.ResetTimer()
-
-		for i := 0; i < b.N; i++ {
-			b.StopTimer()
-			if _, err := m.BatchUpdate(keys, values, nil); err != nil {
-				b.Fatal(err)
-			}
-			b.StartTimer()
-
-			iter := m.Iterate()
-			for iter.Next(&k, &v) {
-				if err := m.Delete(&k); err != nil {
-					b.Fatal(err)
-				}
-			}
-			if err := iter.Err(); err != nil {
-				b.Fatal(err)
-			}
-		}
-	})
-
-	b.Run("BatchLookup", func(b *testing.B) {
-		k := make([]uint64, m.MaxEntries())
-		v := make([]uint64, m.MaxEntries())
-
-		b.ReportAllocs()
-		b.ResetTimer()
-
-		for i := 0; i < b.N; i++ {
-			var cursor BatchCursor
-			for {
-				_, err := m.BatchLookup(&cursor, k, v, nil)
-				if errors.Is(err, ErrKeyNotExist) {
-					break
-				}
-				if err != nil {
-					b.Fatal(err)
-				}
-			}
-		}
-	})
-
-	b.Run("BatchLookupAndDelete", func(b *testing.B) {
-		k := make([]uint64, m.MaxEntries())
-		v := make([]uint64, m.MaxEntries())
-
-		b.ReportAllocs()
-		b.ResetTimer()
-
-		for i := 0; i < b.N; i++ {
-			b.StopTimer()
-			if _, err := m.BatchUpdate(keys, values, nil); err != nil {
-				b.Fatal(err)
-			}
-			b.StartTimer()
-
-			var cursor BatchCursor
-			for {
-				_, err := m.BatchLookupAndDelete(&cursor, k, v, nil)
-				if errors.Is(err, ErrKeyNotExist) {
-					break
-				}
-				if err != nil {
-					b.Fatal(err)
-				}
-			}
-		}
-	})
-
-	b.Run("BatchDelete", func(b *testing.B) {
-		b.ReportAllocs()
-		b.ResetTimer()
-
-		for i := 0; i < b.N; i++ {
-			b.StopTimer()
-			if _, err := m.BatchUpdate(keys, values, nil); err != nil {
-				b.Fatal(err)
-			}
-			b.StartTimer()
-
-			if _, err := m.BatchDelete(keys, nil); err != nil {
-				b.Fatal(err)
-			}
-		}
-	})
 }
 
 // Per CPU maps store a distinct value for each CPU. They are useful

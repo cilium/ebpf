@@ -149,7 +149,7 @@ func newB2G(stdout io.Writer, pkg, outputDir string, args []string) (*bpf2go, er
 	}
 
 	if b2g.pkg == "" {
-		return nil, errors.New("missing package, are you running via go generate?")
+		return nil, errors.New("missing package, have you set GOPACKAGE?")
 	}
 
 	if b2g.cc == "" {
@@ -484,6 +484,8 @@ func collectTargets(targets []string) (map[target][]string, error) {
 	return result, nil
 }
 
+const gopackageEnv = "GOPACKAGE"
+
 func main() {
 	outputDir, err := os.Getwd()
 	if err != nil {
@@ -491,7 +493,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err := run(os.Stdout, os.Getenv("GOPACKAGE"), outputDir, os.Args[1:]); err != nil {
+	if err := run(os.Stdout, os.Getenv(gopackageEnv), outputDir, os.Args[1:]); err != nil {
 		fmt.Fprintln(os.Stderr, "Error:", err)
 		os.Exit(1)
 	}

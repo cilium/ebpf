@@ -71,8 +71,8 @@ var targetByGoArch = map[string]target{
 	"sparc64":     {"bpfeb", "sparc"},
 }
 
-func run(stdout io.Writer, pkg, outputDir string, args []string) (err error) {
-	b2g, err := newB2G(stdout, pkg, outputDir, args)
+func run(stdout io.Writer, pkg, defaultOutDir string, args []string) (err error) {
+	b2g, err := newB2G(stdout, pkg, defaultOutDir, args)
 	switch {
 	case err == nil:
 		return b2g.convertAll()
@@ -114,11 +114,11 @@ type bpf2go struct {
 	makeBase string
 }
 
-func newB2G(stdout io.Writer, pkg, outputDir string, args []string) (*bpf2go, error) {
+func newB2G(stdout io.Writer, pkg, defaultOutDir string, args []string) (*bpf2go, error) {
 	b2g := &bpf2go{
 		stdout:    stdout,
 		pkg:       pkg,
-		outputDir: outputDir,
+		outputDir: defaultOutDir,
 	}
 
 	fs := flag.NewFlagSet("bpf2go", flag.ContinueOnError)
@@ -136,7 +136,8 @@ func newB2G(stdout io.Writer, pkg, outputDir string, args []string) (*bpf2go, er
 	fs.Var(&b2g.cTypes, "type", "`Name` of a type to generate a Go declaration for, may be repeated")
 	fs.BoolVar(&b2g.skipGlobalTypes, "no-global-types", false, "Skip generating types for map keys and values, etc.")
 	fs.StringVar(&b2g.outputStem, "output-stem", "", "alternative stem for names of generated files (defaults to ident)")
-
+	outDir := fs.String("output-dir", "", "target directory of generated files (defaults to current directory)")
+	outPkg := fs.String("go-package", "", "package for output go file, be CAUTIOUS to set it as it will OVERWRITE the default package from go generate")
 	fs.SetOutput(b2g.stdout)
 	fs.Usage = func() {
 		fmt.Fprintf(fs.Output(), helpText, fs.Name())
@@ -147,9 +148,15 @@ func newB2G(stdout io.Writer, pkg, outputDir string, args []string) (*bpf2go, er
 	if err := fs.Parse(args); err != nil {
 		return nil, err
 	}
+	if *outDir != "" {
+		b2g.outputDir = *outDir
+	}
+	if *outPkg != "" {
+		b2g.pkg = *outPkg
+	}
 
 	if b2g.pkg == "" {
-		return nil, errors.New("missing package, are you running via go generate?")
+		return nil, errors.New("missing package, you should ether run via go generate or set the go-package flag")
 	}
 
 	if b2g.cc == "" {
@@ -315,7 +322,17 @@ func (b2g *bpf2go) convert(tgt target, arches []string) (err error) {
 		stem = fmt.Sprintf("%s_%s_%s", outputStem, tgt.clang, tgt.linux)
 	}
 
-	objFileName := filepath.Join(b2g.outputDir, stem+".o")
+	absOutPath, err := filepath.Abs(b2g.outputDir)
+	if err != nil {
+		return err
+	}
+
+	_, err = os.Stat(absOutPath)
+	if err != nil {
+		return err
+	}
+
+	objFileName := filepath.Join(absOutPath, stem+".o")
 
 	cwd, err := os.Getwd()
 	if err != nil {
@@ -370,7 +387,7 @@ func (b2g *bpf2go) convert(tgt target, arches []string) (err error) {
 	}
 
 	// Write out generated go
-	goFileName := filepath.Join(b2g.outputDir, stem+".go")
+	goFileName := filepath.Join(absOutPath, stem+".go")
 	goFile, err := os.Create(goFileName)
 	if err != nil {
 		return err
@@ -485,13 +502,13 @@ func collectTargets(targets []string) (map[target][]string, error) {
 }
 
 func main() {
-	outputDir, err := os.Getwd()
+	defaultOutDir, err := os.Getwd()
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "Error:", err)
 		os.Exit(1)
 	}
 
-	if err := run(os.Stdout, os.Getenv("GOPACKAGE"), outputDir, os.Args[1:]); err != nil {
+	if err := run(os.Stdout, os.Getenv("GOPACKAGE"), defaultOutDir, os.Args[1:]); err != nil {
 		fmt.Fprintln(os.Stderr, "Error:", err)
 		os.Exit(1)
 	}

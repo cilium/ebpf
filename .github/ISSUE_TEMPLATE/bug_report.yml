@@ -1,0 +1,36 @@
+name: Bug report
+description: Create a report to help us improve
+labels: ["bug"]
+assignees: []
+
+body:
+  - type: markdown
+    attributes:
+      value: "Thank you for reporting a bug. Please fill out the fields below."
+
+  - type: textarea
+    attributes:
+      label: Describe the bug
+      description: |
+        A clear and concise description of what the bug is.
+        Include what you expected to happen instead.
+      render: markdown
+    validations:
+        required: true
+
+  - type: textarea
+    attributes:
+      label: How to reproduce
+      description: "Steps to reproduce the behavior."
+      render: shell
+    validations:
+        required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Version information
+      description: The output of `go list -m github.com/cilium/ebpf`.
+      placeholder: github.com/cilium/ebpf vX.Y.Z
+    validations:
+        required: true

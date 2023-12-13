@@ -70,14 +70,13 @@ func appendPerCPUSlice(buf []byte, slice any, possibleCPUs, elemLength, alignedE
 			return nil, err
 		}
 
-		elemBytes.CopyTo(buf[len(buf) : len(buf)+elemLength]) // Only copies elemLength
-		buf = buf[:len(buf)+alignedElemLength]
+		buf = elemBytes.AppendTo(buf)
+		buf = append(buf, make([]byte, alignedElemLength-elemLength)...)
 	}
+
 	// Ensure buf is zero-padded full size.
-	for i := 0; i < possibleCPUs-sliceLen; i++ {
-		b := make([]byte, alignedElemLength)
-		buf = append(buf, b...)
-	}
+	buf = append(buf, make([]byte, (possibleCPUs-sliceLen)*alignedElemLength)...)
+
 	return buf, nil
 }
 

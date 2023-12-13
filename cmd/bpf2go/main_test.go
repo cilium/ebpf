@@ -61,7 +61,9 @@ func TestRun(t *testing.T) {
 		"s390x", // big-endian
 	}
 
-	err = run(io.Discard, "main", modDir, []string{
+	err = run(io.Discard, []string{
+		"-go-package", "main",
+		"-output-dir", modDir,
 		"-cc", clangBin,
 		"-target", strings.Join(goarches, ","),
 		"bar",
@@ -102,7 +104,7 @@ func main() {
 
 func TestHelp(t *testing.T) {
 	var stdout bytes.Buffer
-	err := run(&stdout, "", "", []string{"-help"})
+	err := run(&stdout, []string{"-help"})
 	if err != nil {
 		t.Fatal("Can't execute -help")
 	}
@@ -113,7 +115,7 @@ func TestHelp(t *testing.T) {
 }
 
 func TestErrorMentionsEnvVar(t *testing.T) {
-	err := run(io.Discard, "", "", nil)
+	err := run(io.Discard, nil)
 	qt.Assert(t, qt.StringContains(err.Error(), gopackageEnv), qt.Commentf("Error should include name of environment variable"))
 }
 
@@ -121,7 +123,9 @@ func TestDisableStripping(t *testing.T) {
 	dir := t.TempDir()
 	mustWriteFile(t, dir, "test.c", minimalSocketFilter)
 
-	err := run(io.Discard, "foo", dir, []string{
+	err := run(io.Discard, []string{
+		"-go-package", "foo",
+		"-output-dir", dir,
 		"-cc", clangBin(t),
 		"-strip", "binary-that-certainly-doesnt-exist",
 		"-no-strip",
@@ -299,143 +303,176 @@ func TestParseArgs(t *testing.T) {
 		csource   = "testdata/minimal.c"
 		stem      = "a"
 	)
-
 	t.Run("makebase", func(t *testing.T) {
+		t.Setenv(gopackageEnv, pkg)
 		basePath, _ := filepath.Abs("barfoo")
 		args := []string{"-makebase", basePath, stem, csource}
-		b2g, err := newB2G(&bytes.Buffer{}, pkg, outputDir, args)
+		b2g, err := newB2G(&bytes.Buffer{}, args)
 		qt.Assert(t, qt.IsNil(err))
 		qt.Assert(t, qt.Equals(b2g.makeBase, basePath))
 	})
 
 	t.Run("makebase from env", func(t *testing.T) {
+		t.Setenv(gopackageEnv, pkg)
 		basePath, _ := filepath.Abs("barfoo")
 		args := []string{stem, csource}
 		t.Setenv("BPF2GO_MAKEBASE", basePath)
-		b2g, err := newB2G(&bytes.Buffer{}, pkg, outputDir, args)
+		b2g, err := newB2G(&bytes.Buffer{}, args)
 		qt.Assert(t, qt.IsNil(err))
 		qt.Assert(t, qt.Equals(b2g.makeBase, basePath))
 	})
 
 	t.Run("makebase flag overrides env", func(t *testing.T) {
+		t.Setenv(gopackageEnv, pkg)
 		basePathFlag, _ := filepath.Abs("barfoo")
 		basePathEnv, _ := filepath.Abs("foobar")
 		args := []string{"-makebase", basePathFlag, stem, csource}
 		t.Setenv("BPF2GO_MAKEBASE", basePathEnv)
-		b2g, err := newB2G(&bytes.Buffer{}, pkg, outputDir, args)
+		b2g, err := newB2G(&bytes.Buffer{}, args)
 		qt.Assert(t, qt.IsNil(err))
 		qt.Assert(t, qt.Equals(b2g.makeBase, basePathFlag))
 	})
 
 	t.Run("cc defaults to clang", func(t *testing.T) {
+		t.Setenv(gopackageEnv, pkg)
 		args := []string{stem, csource}
-		b2g, err := newB2G(&bytes.Buffer{}, pkg, outputDir, args)
+		b2g, err := newB2G(&bytes.Buffer{}, args)
 		qt.Assert(t, qt.IsNil(err))
 		qt.Assert(t, qt.Equals(b2g.cc, "clang"))
 	})
 
 	t.Run("cc", func(t *testing.T) {
+		t.Setenv(gopackageEnv, pkg)
 		args := []string{"-cc", "barfoo", stem, csource}
-		b2g, err := newB2G(&bytes.Buffer{}, pkg, outputDir, args)
+		b2g, err := newB2G(&bytes.Buffer{}, args)
 		qt.Assert(t, qt.IsNil(err))
 		qt.Assert(t, qt.Equals(b2g.cc, "barfoo"))
 	})
 
 	t.Run("cc from env", func(t *testing.T) {
+		t.Setenv(gopackageEnv, pkg)
 		args := []string{stem, csource}
 		t.Setenv("BPF2GO_CC", "barfoo")
-		b2g, err := newB2G(&bytes.Buffer{}, pkg, outputDir, args)
+		b2g, err := newB2G(&bytes.Buffer{}, args)
 		qt.Assert(t, qt.IsNil(err))
 		qt.Assert(t, qt.Equals(b2g.cc, "barfoo"))
 	})
 
 	t.Run("cc flag overrides env", func(t *testing.T) {
+		t.Setenv(gopackageEnv, pkg)
 		args := []string{"-cc", "barfoo", stem, csource}
 		t.Setenv("BPF2GO_CC", "foobar")
-		b2g, err := newB2G(&bytes.Buffer{}, pkg, outputDir, args)
+		b2g, err := newB2G(&bytes.Buffer{}, args)
 		qt.Assert(t, qt.IsNil(err))
 		qt.Assert(t, qt.Equals(b2g.cc, "barfoo"))
 	})
 
 	t.Run("strip defaults to llvm-strip", func(t *testing.T) {
+		t.Setenv(gopackageEnv, pkg)
 		args := []string{stem, csource}
-		b2g, err := newB2G(&bytes.Buffer{}, pkg, outputDir, args)
+		b2g, err := newB2G(&bytes.Buffer{}, args)
 		qt.Assert(t, qt.IsNil(err))
 		qt.Assert(t, qt.Equals(b2g.strip, "llvm-strip"))
 	})
 
 	t.Run("strip", func(t *testing.T) {
+		t.Setenv(gopackageEnv, pkg)
 		args := []string{"-strip", "barfoo", stem, csource}
-		b2g, err := newB2G(&bytes.Buffer{}, pkg, outputDir, args)
+		b2g, err := newB2G(&bytes.Buffer{}, args)
 		qt.Assert(t, qt.IsNil(err))
 		qt.Assert(t, qt.Equals(b2g.strip, "barfoo"))
 	})
 
 	t.Run("strip from env", func(t *testing.T) {
+		t.Setenv(gopackageEnv, pkg)
 		args := []string{stem, csource}
 		t.Setenv("BPF2GO_STRIP", "barfoo")
-		b2g, err := newB2G(&bytes.Buffer{}, pkg, outputDir, args)
+		b2g, err := newB2G(&bytes.Buffer{}, args)
 		qt.Assert(t, qt.IsNil(err))
 		qt.Assert(t, qt.Equals(b2g.strip, "barfoo"))
 	})
 
 	t.Run("strip flag overrides env", func(t *testing.T) {
+		t.Setenv(gopackageEnv, pkg)
 		args := []string{"-strip", "barfoo", stem, csource}
 		t.Setenv("BPF2GO_STRIP", "foobar")
-		b2g, err := newB2G(&bytes.Buffer{}, pkg, outputDir, args)
+		b2g, err := newB2G(&bytes.Buffer{}, args)
 		qt.Assert(t, qt.IsNil(err))
 		qt.Assert(t, qt.Equals(b2g.strip, "barfoo"))
 	})
 
 	t.Run("no strip defaults to false", func(t *testing.T) {
+		t.Setenv(gopackageEnv, pkg)
 		args := []string{stem, csource}
-		b2g, err := newB2G(&bytes.Buffer{}, pkg, outputDir, args)
+		b2g, err := newB2G(&bytes.Buffer{}, args)
 		qt.Assert(t, qt.IsNil(err))
 		qt.Assert(t, qt.IsFalse(b2g.disableStripping))
 	})
 
 	t.Run("no strip", func(t *testing.T) {
+		t.Setenv(gopackageEnv, pkg)
 		args := []string{"-no-strip", stem, csource}
-		b2g, err := newB2G(&bytes.Buffer{}, pkg, outputDir, args)
+		b2g, err := newB2G(&bytes.Buffer{}, args)
 		qt.Assert(t, qt.IsNil(err))
 		qt.Assert(t, qt.IsTrue(b2g.disableStripping))
 	})
 
 	t.Run("cflags flag", func(t *testing.T) {
+		t.Setenv(gopackageEnv, pkg)
 		args := []string{"-cflags", "x y z", stem, csource}
-		b2g, err := newB2G(&bytes.Buffer{}, pkg, outputDir, args)
+		b2g, err := newB2G(&bytes.Buffer{}, args)
 		qt.Assert(t, qt.IsNil(err))
 		qt.Assert(t, qt.DeepEquals(b2g.cFlags, []string{"x", "y", "z"}))
 	})
 
 	t.Run("cflags multi flag", func(t *testing.T) {
+		t.Setenv(gopackageEnv, pkg)
 		args := []string{"-cflags", "x y z", "-cflags", "u v", stem, csource}
-		b2g, err := newB2G(&bytes.Buffer{}, pkg, outputDir, args)
+		b2g, err := newB2G(&bytes.Buffer{}, args)
 		qt.Assert(t, qt.IsNil(err))
 		qt.Assert(t, qt.DeepEquals(b2g.cFlags, []string{"u", "v"}))
 	})
 
 	t.Run("cflags flag and args", func(t *testing.T) {
+		t.Setenv(gopackageEnv, pkg)
 		args := []string{"-cflags", "x y z", "stem", csource, "--", "u", "v"}
-		b2g, err := newB2G(&bytes.Buffer{}, pkg, outputDir, args)
+		b2g, err := newB2G(&bytes.Buffer{}, args)
 		qt.Assert(t, qt.IsNil(err))
 		qt.Assert(t, qt.DeepEquals(b2g.cFlags, []string{"x", "y", "z", "u", "v"}))
 	})
 
 	t.Run("cflags from env", func(t *testing.T) {
+		t.Setenv(gopackageEnv, pkg)
 		args := []string{stem, csource}
 		t.Setenv("BPF2GO_CFLAGS", "x y z")
-		b2g, err := newB2G(&bytes.Buffer{}, pkg, outputDir, args)
+		b2g, err := newB2G(&bytes.Buffer{}, args)
 		qt.Assert(t, qt.IsNil(err))
 		qt.Assert(t, qt.DeepEquals(b2g.cFlags, []string{"x", "y", "z"}))
 	})
 
 	t.Run("cflags flag overrides env", func(t *testing.T) {
+		t.Setenv(gopackageEnv, pkg)
 		args := []string{"-cflags", "u v", stem, csource}
 		t.Setenv("BPF2GO_CFLAGS", "x y z")
-		b2g, err := newB2G(&bytes.Buffer{}, pkg, outputDir, args)
+		b2g, err := newB2G(&bytes.Buffer{}, args)
 		qt.Assert(t, qt.IsNil(err))
 		qt.Assert(t, qt.DeepEquals(b2g.cFlags, []string{"u", "v"}))
+	})
+
+	t.Run("go package overrides env", func(t *testing.T) {
+		t.Setenv(gopackageEnv, pkg)
+		args := []string{"-go-package", "aaa", stem, csource}
+		b2g, err := newB2G(&bytes.Buffer{}, args)
+		qt.Assert(t, qt.IsNil(err))
+		qt.Assert(t, qt.Equals(b2g.pkg, "aaa"))
+	})
+
+	t.Run("output dir", func(t *testing.T) {
+		t.Setenv(gopackageEnv, pkg)
+		args := []string{"-output-dir", outputDir, stem, csource}
+		b2g, err := newB2G(&bytes.Buffer{}, args)
+		qt.Assert(t, qt.IsNil(err))
+		qt.Assert(t, qt.Equals(b2g.outputDir, outputDir))
 	})
 }
 

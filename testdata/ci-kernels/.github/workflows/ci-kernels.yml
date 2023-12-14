@@ -1,0 +1,165 @@
+name: Build Kernels
+
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+    branches:
+      - master
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  read-config:
+    runs-on: ubuntu-latest
+    outputs:
+      kernel: ${{ steps.kernel.outputs.config }}
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Read versions.json
+      id: kernel
+      run: |
+        {
+          echo "config<<EOF"
+          cat versions.json
+          echo -e "\nEOF"
+        } | tee -a "$GITHUB_OUTPUT"
+
+  build-and-push:
+    runs-on: ubuntu-latest
+    needs: read-config
+    strategy:
+      matrix:
+        kernel_version: ${{ fromJSON(needs.read-config.outputs.kernel).versions }}
+    env:
+      latest_stable: ${{ fromJSON(needs.read-config.outputs.kernel).latest_stable }}
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Cache ccache output
+      uses: actions/cache@v3
+      with:
+        path: ccache
+        key: ccache-${{ matrix.kernel_version }}-amd64-${{ hashFiles('config') }}
+
+    - name: Inject ccache into builder
+      uses: reproducible-containers/buildkit-cache-dance@v2.1.3
+      with:
+        cache-source: ccache
+        cache-target: /root/.ccache
+
+    - name: Kernel metadata
+      id: meta
+      uses: docker/metadata-action@v5
+      with:
+        images: ghcr.io/${{ github.repository_owner }}/ci-kernels
+        flavor: latest=false
+        tags: |
+          type=raw,value=${{ matrix.kernel_version }}
+          type=match,pattern=^\d+\.\d+,group=0,value=${{ matrix.kernel_version }}
+
+    - name: Selftests metadata
+      id: selftests-meta
+      uses: docker/metadata-action@v5
+      with:
+        images: ghcr.io/${{ github.repository_owner }}/ci-kernels
+        flavor: latest=false
+        tags: |
+          type=raw,value=${{ matrix.kernel_version }},suffix=-selftests
+          type=match,pattern=^\d+\.\d+,group=0,value=${{ matrix.kernel_version }},suffix=-selftests
+
+    - name: Log in to GitHub Container Registry
+      if: github.ref == 'refs/heads/master'
+      uses: docker/login-action@v3
+      with:
+        registry: ghcr.io
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Build kernel
+      uses: docker/build-push-action@v5
+      with:
+        target: vmlinux
+        platforms: |
+          linux/amd64
+        build-args: |
+          KERNEL_VERSION=${{ matrix.kernel_version }}
+        tags: ${{ steps.meta.outputs.tags }}
+        labels: ${{ steps.meta.outputs.labels }}
+        push: ${{ github.ref == 'refs/heads/master' }}
+
+    - name: Build selftests
+      if: matrix.kernel_version == env.latest_stable
+      uses: docker/build-push-action@v5
+      with:
+        target: selftests-bpf
+        platforms: |
+          linux/amd64
+        build-args: |
+          KERNEL_VERSION=${{ matrix.kernel_version }}
+        tags: ${{ steps.selftests-meta.outputs.tags }}
+        labels: ${{ steps.selftests-meta.outputs.labels }}
+        push: ${{ github.ref == 'refs/heads/master' }}
+
+  build-arm64:
+    runs-on: ubuntu-latest
+    needs: read-config
+    env:
+      latest_version: ${{ fromJSON(needs.read-config.outputs.kernel).versions[0] }}
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Cache ccache output
+      uses: actions/cache@v3
+      with:
+        path: ccache
+        key: ccache-${{ env.latest_version }}-arm64-${{ hashFiles('config') }}
+
+    - name: Inject ccache into builder
+      uses: reproducible-containers/buildkit-cache-dance@v2.1.3
+      with:
+        cache-source: ccache
+        cache-target: /root/.ccache
+
+    - name: Build
+      uses: docker/build-push-action@v5
+      with:
+        target: vmlinux
+        platforms: linux/arm64
+        build-args: |
+          KERNEL_VERSION=${{ env.latest_version }}
+
+  results:
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    name: Final Results
+    needs:
+    - build-and-push
+    - build-arm64
+    steps:
+    - run: exit 1
+      if: >-
+        ${{
+              contains(needs.*.result, 'failure')
+          || contains(needs.*.result, 'cancelled')
+        }}

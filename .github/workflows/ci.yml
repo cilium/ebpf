@@ -7,7 +7,6 @@ on:
 
 env:
   TMPDIR: /tmp
-  CI_MAX_KERNEL_VERSION: '6.6'
   CI_MIN_CLANG_VERSION: '11'
   go_version: '~1.21'
   prev_go_version: '~1.20'
@@ -20,6 +19,31 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  read-config:
+    name: Read configuration
+    runs-on: ubuntu-latest
+    outputs:
+      kernel: ${{ steps.kernel.outputs.config }}
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        # Get config from the base branch if we are in a PR. Otherwise check out
+        # the branch that triggered the event.
+        # This avoids problems when changing testdata/ci-kernels/versions.json
+        # in a PR.
+        ref: ${{ github.event_name == 'push' && github.base_ref || github.ref }}
+
+    - name: Read versions.json
+      id: kernel
+      run: |
+        {
+          echo "config<<EOF"
+          cat testdata/ci-kernels/versions.json
+          echo -e "\nEOF"
+        } | tee -a "$GITHUB_OUTPUT"
+
   build-and-lint:
     name: Build and Lint
     runs-on: ubuntu-22.04
@@ -106,8 +130,10 @@ jobs:
   test-on-prev-go:
     name: Run tests on previous stable Go
     runs-on: ubuntu-latest-4cores-16gb
-    needs: build-and-lint
+    needs: [read-config, build-and-lint]
     timeout-minutes: 10
+    env:
+      KERNEL_VERSION: ${{ fromJSON(needs.read-config.outputs.kernel).latest_stable }}
     steps:
       - uses: actions/checkout@v3
 
@@ -121,7 +147,7 @@ jobs:
       - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends qemu-system-x86
 
       - name: Test
-        run: gotestsum --raw-command --ignore-non-json-output-lines --junitfile junit.xml -- ./run-tests.sh $CI_MAX_KERNEL_VERSION -short -count 1 -json ./...
+        run: gotestsum --raw-command --ignore-non-json-output-lines --junitfile junit.xml -- ./run-tests.sh $KERNEL_VERSION -short -count 1 -json ./...
 
       - name: Benchmark
         run: go test -exec sudo -short -run '^$' -bench . -benchtime=1x ./...
@@ -169,12 +195,13 @@ jobs:
   vm-test:
     name: Run tests on pre-built kernel
     runs-on: ubuntu-latest-4cores-16gb
-    needs: build-and-lint
+    needs: [read-config, build-and-lint]
     timeout-minutes: 10
     strategy:
       matrix:
-        version: ["6.6", "6.1", "5.15", "5.10", "5.4", "4.19", "4.14", "4.9"]
+        version: ${{ fromJSON(needs.read-config.outputs.kernel).versions }}
     env:
+      CI_MAX_KERNEL_VERSION: ${{ fromJSON(needs.read-config.outputs.kernel).versions[0] }}
       KERNEL_VERSION: "${{ matrix.version }}"
     steps:
       - uses: actions/checkout@v3

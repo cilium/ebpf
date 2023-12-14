@@ -15,7 +15,7 @@ go test -exec sudo ./...
 ```
 
 To test the current package with a different kernel version you can use the [run-tests.sh] script.
-It requires [virtme] and qemu to be installed.
+It requires [virtme], qemu and docker to be installed.
 Unfortunately virtme is not well maintained at the moment, so we recommend installing
 a known working version:
 

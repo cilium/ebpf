@@ -1,6 +1,6 @@
 # ci-kernels
 
-A collection of kernels used for CI builds.
+A Dockerfile used to build kernels for CI.
 
 1. Update kernel versions in [versions.json](versions.json)
 2. Commit and make a PR.

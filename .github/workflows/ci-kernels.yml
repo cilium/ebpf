@@ -1,12 +1,12 @@
-name: Build Kernels
+name: ci-kernels
 
 on:
   push:
-    branches:
-      - master
+    branches: [ "main" ]
+    paths: [ "testdata/ci-kernels/**" ]
   pull_request:
-    branches:
-      - master
+    branches: [ "main" ]
+    paths: [ "testdata/ci-kernels/**" ]
 
 permissions:
   contents: read
@@ -18,6 +18,7 @@ concurrency:
 
 jobs:
   read-config:
+    name: Read configuration
     runs-on: ubuntu-latest
     outputs:
       kernel: ${{ steps.kernel.outputs.config }}
@@ -31,11 +32,12 @@ jobs:
       run: |
         {
           echo "config<<EOF"
-          cat versions.json
+          cat testdata/ci-kernels/versions.json
           echo -e "\nEOF"
         } | tee -a "$GITHUB_OUTPUT"
 
   build-and-push:
+    name: Build and Push
     runs-on: ubuntu-latest
     needs: read-config
     strategy:
@@ -94,6 +96,7 @@ jobs:
     - name: Build kernel
       uses: docker/build-push-action@v5
       with:
+        context: "{{defaultContext}}:testdata/ci-kernels"
         target: vmlinux
         platforms: |
           linux/amd64
@@ -107,6 +110,7 @@ jobs:
       if: matrix.kernel_version == env.latest_stable
       uses: docker/build-push-action@v5
       with:
+        context: "{{defaultContext}}:testdata/ci-kernels"
         target: selftests-bpf
         platforms: |
           linux/amd64
@@ -117,6 +121,7 @@ jobs:
         push: ${{ github.ref == 'refs/heads/master' }}
 
   build-arm64:
+    name: Build arm64
     runs-on: ubuntu-latest
     needs: read-config
     env:
@@ -144,6 +149,7 @@ jobs:
     - name: Build
       uses: docker/build-push-action@v5
       with:
+        context: "{{defaultContext}}:testdata/ci-kernels"
         target: vmlinux
         platforms: linux/arm64
         build-args: |
@@ -152,7 +158,7 @@ jobs:
   results:
     if: ${{ always() }}
     runs-on: ubuntu-latest
-    name: Final Results
+    name: Results
     needs:
     - build-and-push
     - build-arm64

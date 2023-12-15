@@ -136,6 +136,37 @@ func TestProgramRunWithOptions(t *testing.T) {
 	}
 }
 
+func TestProgramRunRawTracepoint(t *testing.T) {
+	testutils.SkipOnOldKernel(t, "5.10", "RawTracepoint test run")
+
+	ins := asm.Instructions{
+		// Return 0
+		asm.LoadImm(asm.R0, 0, asm.DWord),
+		asm.Return(),
+	}
+
+	prog, err := NewProgram(&ProgramSpec{
+		Name:         "test",
+		Type:         RawTracepoint,
+		Instructions: ins,
+		License:      "MIT",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer prog.Close()
+
+	ret, err := prog.Run(&RunOptions{})
+	testutils.SkipIfNotSupported(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if ret != 0 {
+		t.Error("Expected return value to be 0, got", ret)
+	}
+}
+
 func TestProgramRunEmptyData(t *testing.T) {
 	testutils.SkipOnOldKernel(t, "5.13", "sk_lookup BPF_PROG_RUN")
 

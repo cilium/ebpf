@@ -263,8 +263,9 @@ func TestKprobeProgramCall(t *testing.T) {
 	// Trigger ebpf program call.
 	unix.Getpid()
 
-	// Assert that the value at index 0 has been updated to 1.
-	assertMapValue(t, m, 0, 1)
+	// Assert that the value got incremented to at least 1, while allowing
+	// for bigger values, because we could race with other getpid callers.
+	assertMapValueGE(t, m, 0, 1)
 
 	// Detach the Kprobe.
 	if err := k.Close(); err != nil {
@@ -295,18 +296,31 @@ func newUpdaterMapProg(t *testing.T, typ ebpf.ProgramType, attach ebpf.AttachTyp
 		t.Fatal(err)
 	}
 
-	// Create ebpf program. When called, will set the value of key 0 in
-	// the map created above to 1.
+	// Create ebpf program. When called, will increase the value of key 0 by 1
+	// in the map created above.
 	p, err := ebpf.NewProgram(&ebpf.ProgramSpec{
 		Type: typ,
 		Instructions: asm.Instructions{
+			// R1 map
+			asm.LoadMapPtr(asm.R1, m.FD()),
+
+			// R2 key
+			asm.Mov.Reg(asm.R2, asm.R10),
+			asm.Add.Imm(asm.R2, -4),
+			asm.StoreImm(asm.R2, 0, 0, asm.Word),
+
+			// Lookup map[0]
+			asm.FnMapLookupElem.Call(),
+			asm.JEq.Imm(asm.R0, 0, "ret"),
+
+			// u32 val = R0++
+			asm.LoadMem(asm.R1, asm.R0, 0, asm.Word),
+			asm.Add.Imm(asm.R1, 1),
+			asm.StoreMem(asm.RFP, -8, asm.R1, asm.Word),
+
 			// u32 key = 0
 			asm.Mov.Imm(asm.R1, 0),
 			asm.StoreMem(asm.RFP, -4, asm.R1, asm.Word),
-
-			// u32 val = 1
-			asm.Mov.Imm(asm.R1, 1),
-			asm.StoreMem(asm.RFP, -8, asm.R1, asm.Word),
 
 			// bpf_map_update_elem(...)
 			asm.Mov.Reg(asm.R2, asm.RFP),
@@ -319,7 +333,7 @@ func newUpdaterMapProg(t *testing.T, typ ebpf.ProgramType, attach ebpf.AttachTyp
 
 			// exit 0
 			asm.Mov.Imm(asm.R0, 0),
-			asm.Return(),
+			asm.Return().WithSymbol("ret"),
 		},
 		AttachType: attach,
 		License:    "Dual MIT/GPL",
@@ -344,6 +358,16 @@ func assertMapValue(t *testing.T, m *ebpf.Map, k, v uint32) {
 	}
 	if val != v {
 		t.Fatalf("unexpected value: want '%d', got '%d'", v, val)
+	}
+}
+
+func assertMapValueGE(t *testing.T, m *ebpf.Map, k, v uint32) {
+	var val uint32
+	if err := m.Lookup(k, &val); err != nil {
+		t.Fatal(err)
+	}
+	if val < v {
+		t.Fatalf("unexpected value: want >= '%d', got '%d'", v, val)
 	}
 }
 

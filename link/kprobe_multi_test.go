@@ -107,8 +107,9 @@ func TestKprobeMultiProgramCall(t *testing.T) {
 	// Trigger ebpf program call.
 	unix.Getpid()
 
-	// Assert that the value at index 0 has been updated to 1.
-	assertMapValue(t, m, 0, 1)
+	// Assert that the value got incremented to at least 1, while allowing
+	// for bigger values, because we could race with other getpid callers.
+	assertMapValueGE(t, m, 0, 1)
 
 	// Close the link.
 	if err := km.Close(); err != nil {

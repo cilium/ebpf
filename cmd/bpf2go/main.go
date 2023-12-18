@@ -501,6 +501,8 @@ func collectTargets(targets []string) (map[target][]string, error) {
 	return result, nil
 }
 
+const gopackageEnv = "GOPACKAGE"
+
 func main() {
 	defaultOutDir, err := os.Getwd()
 	if err != nil {
@@ -508,7 +510,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err := run(os.Stdout, os.Getenv("GOPACKAGE"), defaultOutDir, os.Args[1:]); err != nil {
+	if err := run(os.Stdout, os.Getenv(gopackageEnv), defaultOutDir, os.Args[1:]); err != nil {
 		fmt.Fprintln(os.Stderr, "Error:", err)
 		os.Exit(1)
 	}

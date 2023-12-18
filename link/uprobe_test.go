@@ -117,9 +117,8 @@ func TestUprobeExtWithOpts(t *testing.T) {
 	// NB: It's not possible to invoke the uprobe since we use an arbitrary
 	// address.
 	up, err := bashEx.Uprobe("open", prog, &UprobeOptions{
-		// arm64 doesn't seem to allow addresses on the first page. Use
-		// the first byte of the second page.
-		Address: uint64(os.Getpagesize()),
+		// arm64 requires the addresses to be aligned (a multiple of 4)
+		Address: 0x4,
 	})
 	if err != nil {
 		t.Fatal(err)

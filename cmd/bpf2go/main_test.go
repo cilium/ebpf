@@ -105,6 +105,11 @@ func TestHelp(t *testing.T) {
 	}
 }
 
+func TestErrorMentionsEnvVar(t *testing.T) {
+	err := run(io.Discard, "", "", nil)
+	qt.Assert(t, qt.StringContains(err.Error(), gopackageEnv), qt.Commentf("Error should include name of environment variable"))
+}
+
 func TestDisableStripping(t *testing.T) {
 	dir := mustWriteTempFile(t, "test.c", minimalSocketFilter)
 

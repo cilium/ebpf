@@ -263,6 +263,21 @@ func PutInteger(data []byte, integer *btf.Int, n uint64) error {
 		return fmt.Errorf("invalid boolean value: %d", n)
 	}
 
+	if len(data) < int(integer.Size) {
+		return fmt.Errorf("byte array size %d is less than the integer size %d", len(data), integer.Size)
+	}
+
+	upperBound := uint64(1<<(8*integer.Size) - 1)
+	lowerBound := uint64(math.MaxUint64)
+	if integer.Encoding == btf.Signed {
+		upperBound = uint64(1<<(8*integer.Size-1) - 1)
+		lowerBound = lowerBound - upperBound - 1
+	}
+
+	if !(n <= upperBound || lowerBound < n) {
+		return fmt.Errorf("%d exceeded the given byte range %d bytes size", n, integer.Size)
+	}
+
 	switch integer.Size {
 	case 1:
 		data[0] = byte(n)

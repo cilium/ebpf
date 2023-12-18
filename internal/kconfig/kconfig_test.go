@@ -416,3 +416,206 @@ func TestPutValue(t *testing.T) {
 		qt.Assert(t, qt.DeepEquals(data, expected))
 	}
 }
+
+func TestPutInteger(t *testing.T) {
+	t.Parallel()
+
+	type expected struct {
+		err  string
+		data []byte
+	}
+
+	type testCase struct {
+		data     []byte
+		integer  *btf.Int
+		n        uint64
+		expected expected
+		comment  string
+	}
+
+	cases := []testCase{
+		{
+			data: make([]byte, 1),
+			integer: &btf.Int{
+				Size:     1,
+				Encoding: btf.Unsigned,
+			},
+			n: 0x01,
+			expected: expected{
+				data: []byte{0x01},
+			},
+		},
+		{
+			data: make([]byte, 2),
+			integer: &btf.Int{
+				Size:     2,
+				Encoding: btf.Unsigned,
+			},
+			n: 0x902a,
+			expected: expected{
+				data: []byte{0x2a, 0x90},
+			},
+		},
+		{
+			data: make([]byte, 4),
+			integer: &btf.Int{
+				Size:     4,
+				Encoding: btf.Unsigned,
+			},
+			n: 0x01234567,
+			expected: expected{
+				data: []byte{0x67, 0x45, 0x23, 0x01},
+			},
+		},
+		{
+			data: make([]byte, 8),
+			integer: &btf.Int{
+				Size:     1,
+				Encoding: btf.Unsigned,
+			},
+			n: 0x03,
+			expected: expected{
+				data: []byte{0x03, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},
+			},
+		},
+		{
+			data: make([]byte, 2),
+			integer: &btf.Int{
+				Size:     8,
+				Encoding: btf.Unsigned,
+			},
+			n: 0x01,
+			expected: expected{
+				err: "byte array size 2 is less than the integer size 8",
+			},
+		},
+		{
+			data: make([]byte, 0),
+			integer: &btf.Int{
+				Size:     1,
+				Encoding: btf.Unsigned,
+			},
+			n: 0x00,
+			expected: expected{
+				err: "byte array size 0 is less than the integer size 1",
+			},
+		},
+		{
+			data: make([]byte, 2),
+			integer: &btf.Int{
+				Size:     1,
+				Encoding: btf.Signed,
+			},
+			n: 0x80,
+			expected: expected{
+				err: "128 exceeded the given byte range 1 bytes size",
+			},
+			comment: "outside of range int8 -128 ~ 127",
+		},
+		{
+			data: make([]byte, 4),
+			integer: &btf.Int{
+				Size:     2,
+				Encoding: btf.Signed,
+			},
+			n: 0xabcdabcd,
+			expected: expected{
+				err: "2882382797 exceeded the given byte range 2 bytes size",
+			},
+			comment: "outside of range int16 -32768 ~ 32767",
+		},
+		{
+			data: make([]byte, 8),
+			integer: &btf.Int{
+				Size:     4,
+				Encoding: btf.Signed,
+			},
+			n: 0x1234567890,
+			expected: expected{
+				err: "78187493520 exceeded the given byte range 4 bytes size",
+			},
+			comment: "outside of range int32 ~2147483648 ~ 2147483647",
+		},
+		{
+			data: make([]byte, 2),
+			integer: &btf.Int{
+				Size:     2,
+				Encoding: btf.Unsigned,
+			},
+			n: 0xffff + 0x01,
+			expected: expected{
+				err: "65536 exceeded the given byte range 2 bytes size",
+			},
+			comment: "outside of range uint16 0 ~ 65535",
+		},
+		{
+			data: make([]byte, 4),
+			integer: &btf.Int{
+				Size:     2,
+				Encoding: btf.Signed,
+			},
+			n: 0xffffffffffffffff,
+			expected: expected{
+				data: []byte{0xff, 0xff, 0x00, 0x00},
+			},
+			comment: "n means -1",
+		},
+		{
+			data: make([]byte, 2),
+			integer: &btf.Int{
+				Size:     2,
+				Encoding: btf.Signed,
+			},
+			n: 0xffffffffffffffff - 0x010000,
+			expected: expected{
+				err: "18446744073709486079 exceeded the given byte range 2 bytes size",
+			},
+			comment: "n means -32768 - 1 in signed value",
+		},
+		{
+			data: make([]byte, 2),
+			integer: &btf.Int{
+				Size:     2,
+				Encoding: btf.Signed,
+			},
+			n: 0x7fff,
+			expected: expected{
+				data: []byte{0xff, 0x7f},
+			},
+			comment: "maximum value of int16",
+		},
+		{
+			data: make([]byte, 4),
+			integer: &btf.Int{
+				Size:     4,
+				Encoding: btf.Unsigned,
+			},
+			n: 0xffffffff + 1,
+			expected: expected{
+				err: "4294967296 exceeded the given byte range 4 bytes size",
+			},
+			comment: "outside of range uint32 0 ~ 4294967295",
+		},
+		{
+			data: make([]byte, 8),
+			integer: &btf.Int{
+				Size:     8,
+				Encoding: btf.Unsigned,
+			},
+			n: 0xffffffffffffffff,
+			expected: expected{
+				data: []byte{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff},
+			},
+		},
+	}
+
+	for _, c := range cases {
+		err := PutInteger(c.data, c.integer, c.n)
+		if c.expected.err != "" {
+			qt.Assert(t, qt.DeepEquals(err.Error(), c.expected.err))
+		} else {
+			qt.Assert(t, qt.IsNil(err))
+			qt.Assert(t, qt.IsTrue(bytes.Equal(c.expected.data, c.data)))
+		}
+	}
+}

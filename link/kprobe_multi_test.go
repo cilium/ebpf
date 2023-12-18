@@ -97,7 +97,7 @@ func TestKprobeMultiProgramCall(t *testing.T) {
 
 	// For simplicity, just assert the increment happens with any symbol in the array.
 	opts := KprobeMultiOptions{
-		Symbols: []string{"__do_sys_getpid"},
+		Symbols: []string{"__do_sys_getpid", "__do_sys_gettid"},
 	}
 	km, err := KprobeMulti(p, opts)
 	if err != nil {
@@ -106,10 +106,12 @@ func TestKprobeMultiProgramCall(t *testing.T) {
 
 	// Trigger ebpf program call.
 	unix.Getpid()
+	unix.Gettid()
 
-	// Assert that the value got incremented to at least 1, while allowing
-	// for bigger values, because we could race with other getpid callers.
-	assertMapValueGE(t, m, 0, 1)
+	// Assert that the value got incremented to at least 2, while allowing
+	// for bigger values, because we could race with other getpid/gettid
+	// callers.
+	assertMapValueGE(t, m, 0, 2)
 
 	// Close the link.
 	if err := km.Close(); err != nil {
@@ -123,6 +125,7 @@ func TestKprobeMultiProgramCall(t *testing.T) {
 
 	// Retrigger the ebpf program call.
 	unix.Getpid()
+	unix.Gettid()
 
 	// Assert that this time the value has not been updated.
 	assertMapValue(t, m, 0, 0)

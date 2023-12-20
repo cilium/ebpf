@@ -264,26 +264,24 @@ func PutInteger(data []byte, integer *btf.Int, n uint64) error {
 	}
 
 	if len(data) < int(integer.Size) {
-		return fmt.Errorf("byte array size %d is less than the integer size %d", len(data), integer.Size)
-	}
-
-	upperBound := uint64(1<<(8*integer.Size) - 1)
-	lowerBound := uint64(math.MaxUint64)
-	if integer.Encoding == btf.Signed {
-		upperBound = uint64(1<<(8*integer.Size-1) - 1)
-		lowerBound = lowerBound - upperBound - 1
-	}
-
-	if !(n <= upperBound || lowerBound < n) {
-		return fmt.Errorf("%d exceeded the given byte range %d bytes size", n, integer.Size)
+		return fmt.Errorf("can't fit an integer of size %d into a byte slice of length %d", integer.Size, len(data))
 	}
 
 	switch integer.Size {
 	case 1:
+		if integer.Encoding == btf.Signed && (n > math.MaxInt8 && n < math.MaxUint64-math.MaxInt8) {
+			return fmt.Errorf("can't represent %d as a signed integer of size %d", n, integer.Size)
+		}
 		data[0] = byte(n)
 	case 2:
+		if integer.Encoding == btf.Signed && (n > math.MaxInt16 && n < math.MaxUint64-math.MaxInt16) {
+			return fmt.Errorf("can't represent %d as a signed integer of size %d", n, integer.Size)
+		}
 		internal.NativeEndian.PutUint16(data, uint16(n))
 	case 4:
+		if integer.Encoding == btf.Signed && (n > math.MaxInt32 && n < math.MaxUint64-math.MaxInt32) {
+			return fmt.Errorf("can't represent %d as a signed integer of size %d", n, integer.Size)
+		}
 		internal.NativeEndian.PutUint32(data, uint32(n))
 	case 8:
 		internal.NativeEndian.PutUint64(data, uint64(n))

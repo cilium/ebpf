@@ -486,7 +486,7 @@ func TestPutInteger(t *testing.T) {
 			},
 			n: 0x01,
 			expected: expected{
-				err: "byte array size 2 is less than the integer size 8",
+				err: "can't fit an integer of size 8 into a byte slice of length 2",
 			},
 		},
 		{
@@ -497,7 +497,7 @@ func TestPutInteger(t *testing.T) {
 			},
 			n: 0x00,
 			expected: expected{
-				err: "byte array size 0 is less than the integer size 1",
+				err: "can't fit an integer of size 1 into a byte slice of length 0",
 			},
 		},
 		{
@@ -537,18 +537,6 @@ func TestPutInteger(t *testing.T) {
 			comment: "outside of range int32 ~2147483648 ~ 2147483647",
 		},
 		{
-			data: make([]byte, 2),
-			integer: &btf.Int{
-				Size:     2,
-				Encoding: btf.Unsigned,
-			},
-			n: 0xffff + 0x01,
-			expected: expected{
-				err: "65536 exceeded the given byte range 2 bytes size",
-			},
-			comment: "outside of range uint16 0 ~ 65535",
-		},
-		{
 			data: make([]byte, 4),
 			integer: &btf.Int{
 				Size:     2,
@@ -585,16 +573,26 @@ func TestPutInteger(t *testing.T) {
 			comment: "maximum value of int16",
 		},
 		{
+			data: make([]byte, 2),
+			integer: &btf.Int{
+				Size:     2,
+				Encoding: btf.Unsigned,
+			},
+			n: 0xffff,
+			expected: expected{
+				data: []byte{0xff, 0xff},
+			},
+		},
+		{
 			data: make([]byte, 4),
 			integer: &btf.Int{
 				Size:     4,
 				Encoding: btf.Unsigned,
 			},
-			n: 0xffffffff + 1,
+			n: 0xffffffff,
 			expected: expected{
-				err: "4294967296 exceeded the given byte range 4 bytes size",
+				data: []byte{0xff, 0xff, 0xff, 0xff},
 			},
-			comment: "outside of range uint32 0 ~ 4294967295",
 		},
 		{
 			data: make([]byte, 8),
@@ -612,6 +610,7 @@ func TestPutInteger(t *testing.T) {
 	for _, c := range cases {
 		err := PutInteger(c.data, c.integer, c.n)
 		if c.expected.err != "" {
+			qt.Assert(t, qt.IsNotNil(err))
 			qt.Assert(t, qt.DeepEquals(err.Error(), c.expected.err))
 		} else {
 			qt.Assert(t, qt.IsNil(err))

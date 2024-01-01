@@ -293,12 +293,12 @@
         },
         "mkdocs-git-revision-date-localized-plugin": {
             "hashes": [
-                "sha256:d57dc99d67af917899e69c392f1ebccd1779fa243d641255469b03f8a3596b96",
-                "sha256:fc5b23a9d572cbba0114e9e17152001d01724990cb308830e58291fa614faf73"
+                "sha256:0c43a9aac1fa69df99a823f833cc223bac9967b60d5261a857761c7c6e3b30de",
+                "sha256:85c7fe9ab06e7a63c4e522c26fee8b51d357cb8cbe605064501ad80f4f31cb94"
             ],
             "index": "pypi",
             "markers": "python_version >= '3.6'",
-            "version": "==1.2.1"
+            "version": "==1.2.2"
         },
         "mkdocs-macros-plugin": {
             "hashes": [

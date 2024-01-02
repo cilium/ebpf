@@ -122,6 +122,7 @@ import (
 		{"RetCode", "bpf_ret_code"},
 		{"XdpAction", "xdp_action"},
 		{"TcxActionBase", "tcx_action_base"},
+		{"PerfEventType", "bpf_perf_event_type"},
 	}
 
 	sort.Slice(enums, func(i, j int) bool {
@@ -643,6 +644,33 @@ import (
 				replace(enumTypes["AttachType"], "attach_type"),
 			},
 		},
+		{"KprobeMultiLinkInfo",
+			[]patch{
+				choose(3, "kprobe_multi"),
+				flattenAnon,
+				replace(pointer, "addrs"),
+			},
+		},
+		{"PerfEventLinkInfo",
+			[]patch{
+				choose(3, "perf_event"),
+				flattenAnon,
+				renameNth(3, "perf_event_type"),
+				replace(enumTypes["PerfEventType"], "perf_event_type"),
+				truncateAfter("perf_event_type"),
+			},
+		},
+		{"KprobeLinkInfo",
+			[]patch{
+				choose(3, "perf_event"),
+				flattenAnon,
+				renameNth(3, "perf_event_type"),
+				replace(enumTypes["PerfEventType"], "perf_event_type"),
+				choose(4, "kprobe"),
+				flattenAnon,
+				replace(pointer, "func_name"),
+			},
+		},
 	}
 
 	sort.Slice(linkInfoExtraTypes, func(i, j int) bool {
@@ -882,6 +910,16 @@ func rename(from, to string) patch {
 			}
 		}
 		return fmt.Errorf("no member named %q", from)
+	}
+}
+
+func renameNth(idx int, to string) patch {
+	return func(s *btf.Struct) error {
+		if idx >= len(s.Members) {
+			return fmt.Errorf("index %d is out of bounds", idx)
+		}
+		s.Members[idx].Name = to
+		return nil
 	}
 }
 

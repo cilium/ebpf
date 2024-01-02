@@ -105,6 +105,10 @@ func (i *BtfInfo) info() (unsafe.Pointer, uint32) {
 	return unsafe.Pointer(i), uint32(unsafe.Sizeof(*i))
 }
 
+func (i *PerfEventLinkInfo) info() (unsafe.Pointer, uint32) {
+	return unsafe.Pointer(i), uint32(unsafe.Sizeof(*i))
+}
+
 // ObjInfo retrieves information about a BPF Fd.
 //
 // info may be one of MapInfo, ProgInfo, LinkInfo and BtfInfo.

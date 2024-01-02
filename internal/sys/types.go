@@ -402,6 +402,18 @@ const (
 	BPF_MAP_TYPE_CGRP_STORAGE                     MapType = 32
 )
 
+type PerfEventType uint32
+
+const (
+	BPF_PERF_EVENT_UNSPEC     PerfEventType = 0
+	BPF_PERF_EVENT_UPROBE     PerfEventType = 1
+	BPF_PERF_EVENT_URETPROBE  PerfEventType = 2
+	BPF_PERF_EVENT_KPROBE     PerfEventType = 3
+	BPF_PERF_EVENT_KRETPROBE  PerfEventType = 4
+	BPF_PERF_EVENT_TRACEPOINT PerfEventType = 5
+	BPF_PERF_EVENT_EVENT      PerfEventType = 6
+)
+
 type ProgType uint32
 
 const (

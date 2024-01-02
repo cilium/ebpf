@@ -122,6 +122,7 @@ import (
 		{"RetCode", "bpf_ret_code"},
 		{"XdpAction", "xdp_action"},
 		{"TcxActionBase", "tcx_action_base"},
+		{"PerfEventType", "bpf_perf_event_type"},
 	}
 
 	sort.Slice(enums, func(i, j int) bool {

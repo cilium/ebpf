@@ -9,10 +9,12 @@ import (
 	"io"
 	"math"
 	"os"
+	"path/filepath"
 	"reflect"
 	"sync"
 
 	"github.com/cilium/ebpf/internal"
+	"github.com/cilium/ebpf/internal/kallsyms"
 	"github.com/cilium/ebpf/internal/sys"
 )
 
@@ -192,6 +194,10 @@ type Spec struct {
 
 	// String table from ELF.
 	strings *stringTable
+}
+
+func init() {
+	kernelModuleBTF.spec = make(map[string]*Spec)
 }
 
 // LoadSpec opens file and calls LoadSpecFromReader on it.
@@ -412,6 +418,22 @@ func LoadKernelSpec() (*Spec, error) {
 	return spec.Copy(), nil
 }
 
+// LoadKernelModuleSpec returns the BTF information for the named kernel module.
+//
+// Defaults to /sys/kernel/btf/<module>.
+// Returns an error wrapping ErrNotSupported if BTF is not enabled.
+func LoadKernelModuleSpec(module string) (*Spec, error) {
+	dir, file := filepath.Split(module)
+	if dir != "" || filepath.Ext(file) != "" {
+		return nil, fmt.Errorf("invalid module name %q", module)
+	}
+	spec, err := kernelModuleSpec(module)
+	if err != nil {
+		return nil, err
+	}
+	return spec.Copy(), nil
+}
+
 var kernelBTF struct {
 	sync.RWMutex
 	spec *Spec
@@ -419,12 +441,22 @@ var kernelBTF struct {
 	fallback bool
 }
 
+var kernelModuleBTF struct {
+	sync.RWMutex
+	spec map[string]*Spec
+}
+
 // FlushKernelSpec removes any cached kernel type information.
 func FlushKernelSpec() {
+	kernelModuleBTF.Lock()
+	defer kernelModuleBTF.Unlock()
 	kernelBTF.Lock()
 	defer kernelBTF.Unlock()
 
 	kernelBTF.spec, kernelBTF.fallback = nil, false
+	kernelModuleBTF.spec = make(map[string]*Spec)
+
+	kallsyms.FlushKernelModuleCache()
 }
 
 func kernelSpec() (*Spec, bool, error) {
@@ -452,6 +484,31 @@ func kernelSpec() (*Spec, bool, error) {
 	return spec, fallback, nil
 }
 
+func kernelModuleSpec(module string) (*Spec, error) {
+	kernelModuleBTF.RLock()
+	spec := kernelModuleBTF.spec[module]
+	kernelModuleBTF.RUnlock()
+
+	if spec == nil {
+		kernelModuleBTF.Lock()
+		defer kernelModuleBTF.Unlock()
+
+		spec = kernelModuleBTF.spec[module]
+	}
+
+	if spec != nil {
+		return spec, nil
+	}
+
+	spec, err := loadKernelModuleSpec(module)
+	if err != nil {
+		return nil, err
+	}
+
+	kernelModuleBTF.spec[module] = spec
+	return spec, nil
+}
+
 func loadKernelSpec() (_ *Spec, fallback bool, _ error) {
 	fh, err := os.Open("/sys/kernel/btf/vmlinux")
 	if err == nil {
@@ -469,6 +526,21 @@ func loadKernelSpec() (_ *Spec, fallback bool, _ error) {
 
 	spec, err := LoadSpecFromReader(file)
 	return spec, true, err
+}
+
+func loadKernelModuleSpec(module string) (*Spec, error) {
+	base, _, err := kernelSpec()
+	if err != nil {
+		return nil, err
+	}
+
+	fh, err := os.Open(filepath.Join("/sys/kernel/btf", module))
+	if err != nil {
+		return nil, err
+	}
+	defer fh.Close()
+
+	return loadRawSpec(fh, internal.NativeEndian, base)
 }
 
 // findVMLinux scans multiple well-known paths for vmlinux kernel images.

@@ -168,6 +168,14 @@ func (r Info) XDP() *XDPInfo {
 	return e
 }
 
+// TCX returns TCX type-specific link info.
+//
+// Returns nil if the type-specific link info isn't available.
+func (r Info) TCX() *TCXInfo {
+	e, _ := r.extra.(*TCXInfo)
+	return e
+}
+
 // RawLink is the low-level API to bpf_link.
 //
 // You should consider using the higher level interfaces in this

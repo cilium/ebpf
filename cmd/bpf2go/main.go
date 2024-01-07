@@ -53,7 +53,7 @@ var targetByGoArch = map[string]target{
 	"amd64p32":    {"bpfel", ""},
 	"arm":         {"bpfel", "arm"},
 	"arm64":       {"bpfel", "arm64"},
-	"loong64":     {"bpfel", ""},
+	"loong64":     {"bpfel", "loongarch"},
 	"mipsle":      {"bpfel", ""},
 	"mips64le":    {"bpfel", ""},
 	"mips64p32le": {"bpfel", ""},

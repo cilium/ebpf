@@ -85,7 +85,8 @@ func toUpperFirst(str string) string {
 
 func currentModule() string {
 	bi, ok := debug.ReadBuildInfo()
-	if !ok {
+	// In go 1.18, buildInfo.Main will not be set if the bpf2go is built with file arguments
+	if !ok || bi.Main.Path == "" {
 		// Fall back to constant since bazel doesn't support BuildInfo.
 		return "github.com/cilium/ebpf"
 	}

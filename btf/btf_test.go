@@ -512,3 +512,16 @@ func BenchmarkSpecCopy(b *testing.B) {
 		spec.Copy()
 	}
 }
+
+func BenchmarkSpecTypeByID(b *testing.B) {
+	spec := vmlinuxTestdataSpec(b)
+
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, err := spec.TypeByID(1)
+		if err != nil {
+			b.Fatal(err)
+		}
+	}
+}

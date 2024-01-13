@@ -67,6 +67,16 @@ from upstream kernel versions. You can update them to the latest version by:
 
 Finally, bump the tested kernels in `.github/workflows/ci.yml`
 
+Note it's possible to set `KERNEL_VERSION` to location of kernel build artifacts
+and update the kernel dependencies to your local kernel build, like:
+
+  ```shell-session
+  $ ls ../data/
+  bpf_testmod.ko  libbpf.c  vmlinux
+
+  $ make update-kernel-deps KERNEL_VERSION=../data
+  ```
+
 ## Project permissions
 
 If you'd like to contribute to the library more regularly, one of the

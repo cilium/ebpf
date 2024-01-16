@@ -309,7 +309,12 @@ func (b2g *bpf2go) convert(tgt target, goarches []goarch) (err error) {
 	}
 	stem := fmt.Sprintf("%s_%s", outputStem, tgt.clang)
 	if tgt.linux != "" {
-		stem = fmt.Sprintf("%s_%s_%s", outputStem, tgt.clang, tgt.linux)
+		// for s390 target GOARCH has to be s390x
+		if tgt.linux == "390" {
+			stem = fmt.Sprintf("%s_%s_%s", outputStem, tgt.clang, "s390x")
+		} else {
+			stem = fmt.Sprintf("%s_%s_%s", outputStem, tgt.clang, tgt.linux)
+		}
 	}
 
 	objFileName := filepath.Join(b2g.outputDir, stem+".o")

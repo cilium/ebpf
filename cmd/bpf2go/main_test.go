@@ -187,6 +187,12 @@ func TestCollectTargets(t *testing.T) {
 			},
 		},
 		{
+			[]string{"s390x"},
+			map[target][]goarch{
+				{"bpfeb", "s390"}: linuxArchesBE["s390"],
+			},
+		},
+		{
 			[]string{"native"},
 			nativeTarget,
 		},

@@ -8,12 +8,12 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
-	"sort"
 	"strings"
 	"testing"
 
 	"github.com/go-quicktest/qt"
 	"github.com/google/go-cmp/cmp"
+	"golang.org/x/exp/slices"
 )
 
 func TestRun(t *testing.T) {
@@ -127,9 +127,9 @@ func TestDisableStripping(t *testing.T) {
 }
 
 func TestCollectTargets(t *testing.T) {
-	clangArches := make(map[string][]string)
-	linuxArchesLE := make(map[string][]string)
-	linuxArchesBE := make(map[string][]string)
+	clangArches := make(map[string][]goarch)
+	linuxArchesLE := make(map[string][]goarch)
+	linuxArchesBE := make(map[string][]goarch)
 	for arch, archTarget := range targetByGoArch {
 		clangArches[archTarget.clang] = append(clangArches[archTarget.clang], arch)
 		if archTarget.clang == "bpfel" {
@@ -139,18 +139,18 @@ func TestCollectTargets(t *testing.T) {
 		linuxArchesBE[archTarget.linux] = append(linuxArchesBE[archTarget.linux], arch)
 	}
 	for i := range clangArches {
-		sort.Strings(clangArches[i])
+		slices.Sort(clangArches[i])
 	}
 	for i := range linuxArchesLE {
-		sort.Strings(linuxArchesLE[i])
+		slices.Sort(linuxArchesLE[i])
 	}
 	for i := range linuxArchesBE {
-		sort.Strings(linuxArchesBE[i])
+		slices.Sort(linuxArchesBE[i])
 	}
 
-	nativeTarget := make(map[target][]string)
+	nativeTarget := make(map[target][]goarch)
 	for arch, archTarget := range targetByGoArch {
-		if arch == runtime.GOARCH {
+		if arch == goarch(runtime.GOARCH) {
 			if archTarget.clang == "bpfel" {
 				nativeTarget[archTarget] = linuxArchesLE[archTarget.linux]
 			} else {
@@ -162,11 +162,11 @@ func TestCollectTargets(t *testing.T) {
 
 	tests := []struct {
 		targets []string
-		want    map[target][]string
+		want    map[target][]goarch
 	}{
 		{
 			[]string{"bpf", "bpfel", "bpfeb"},
-			map[target][]string{
+			map[target][]goarch{
 				{"bpf", ""}:   nil,
 				{"bpfel", ""}: clangArches["bpfel"],
 				{"bpfeb", ""}: clangArches["bpfeb"],
@@ -174,13 +174,13 @@ func TestCollectTargets(t *testing.T) {
 		},
 		{
 			[]string{"amd64", "386"},
-			map[target][]string{
+			map[target][]goarch{
 				{"bpfel", "x86"}: linuxArchesLE["x86"],
 			},
 		},
 		{
 			[]string{"amd64", "arm64be"},
-			map[target][]string{
+			map[target][]goarch{
 				{"bpfeb", "arm64"}: linuxArchesBE["arm64"],
 				{"bpfel", "x86"}:   linuxArchesLE["x86"],
 			},

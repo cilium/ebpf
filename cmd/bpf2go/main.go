@@ -16,6 +16,8 @@ import (
 	"sort"
 	"strings"
 
+	"golang.org/x/exp/slices"
+
 	"github.com/cilium/ebpf"
 )
 
@@ -47,7 +49,7 @@ Options:
 //
 // Targets without a Linux string can't be used directly and are only included
 // for the generic bpf, bpfel, bpfeb targets.
-var targetByGoArch = map[string]target{
+var targetByGoArch = map[goarch]target{
 	"386":         {"bpfel", "x86"},
 	"amd64":       {"bpfel", "x86"},
 	"amd64p32":    {"bpfel", ""},
@@ -96,7 +98,7 @@ type bpf2go struct {
 	// Valid go identifier.
 	identStem string
 	// Targets to build for.
-	targetArches map[target][]string
+	targetArches map[target][]goarch
 	// C compiler.
 	cc string
 	// Command used to strip DWARF.
@@ -298,7 +300,7 @@ func (b2g *bpf2go) convertAll() (err error) {
 	return nil
 }
 
-func (b2g *bpf2go) convert(tgt target, arches []string) (err error) {
+func (b2g *bpf2go) convert(tgt target, goarches []goarch) (err error) {
 	removeOnError := func(f *os.File) {
 		if err != nil {
 			os.Remove(f.Name())
@@ -323,8 +325,8 @@ func (b2g *bpf2go) convert(tgt target, arches []string) (err error) {
 	}
 
 	var archConstraint constraint.Expr
-	for _, arch := range arches {
-		tag := &constraint.TagExpr{Tag: arch}
+	for _, goarch := range goarches {
+		tag := &constraint.TagExpr{Tag: string(goarch)}
 		archConstraint = orConstraints(archConstraint, tag)
 	}
 
@@ -419,17 +421,23 @@ func (b2g *bpf2go) convert(tgt target, arches []string) (err error) {
 }
 
 type target struct {
+	// Clang arch string, used to define the clang -target flag, as per
+	// "clang -print-targets".
 	clang string
+	// Linux arch string, used to define __TARGET_ARCH_xzy macros used by
+	// https://github.com/libbpf/libbpf/blob/master/src/bpf_tracing.h
 	linux string
 }
 
+type goarch string
+
 func printTargets(w io.Writer) {
 	var arches []string
-	for arch, archTarget := range targetByGoArch {
+	for goarch, archTarget := range targetByGoArch {
 		if archTarget.linux == "" {
 			continue
 		}
-		arches = append(arches, arch)
+		arches = append(arches, string(goarch))
 	}
 	sort.Strings(arches)
 
@@ -442,19 +450,19 @@ func printTargets(w io.Writer) {
 
 var errInvalidTarget = errors.New("unsupported target")
 
-func collectTargets(targets []string) (map[target][]string, error) {
-	result := make(map[target][]string)
+func collectTargets(targets []string) (map[target][]goarch, error) {
+	result := make(map[target][]goarch)
 	for _, tgt := range targets {
 		switch tgt {
 		case "bpf", "bpfel", "bpfeb":
-			var goarches []string
+			var goarches []goarch
 			for arch, archTarget := range targetByGoArch {
 				if archTarget.clang == tgt {
 					// Include tags for all goarches that have the same endianness.
 					goarches = append(goarches, arch)
 				}
 			}
-			sort.Strings(goarches)
+			slices.Sort(goarches)
 			result[target{tgt, ""}] = goarches
 
 		case "native":
@@ -462,12 +470,12 @@ func collectTargets(targets []string) (map[target][]string, error) {
 			fallthrough
 
 		default:
-			archTarget, ok := targetByGoArch[tgt]
+			archTarget, ok := targetByGoArch[goarch(tgt)]
 			if !ok || archTarget.linux == "" {
 				return nil, fmt.Errorf("%q: %w", tgt, errInvalidTarget)
 			}
 
-			var goarches []string
+			var goarches []goarch
 			for goarch, lt := range targetByGoArch {
 				if lt == archTarget {
 					// Include tags for all goarches that have the same
@@ -476,7 +484,7 @@ func collectTargets(targets []string) (map[target][]string, error) {
 				}
 			}
 
-			sort.Strings(goarches)
+			slices.Sort(goarches)
 			result[archTarget] = goarches
 		}
 	}

@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -179,10 +180,10 @@ func TestCollectTargets(t *testing.T) {
 			},
 		},
 		{
-			[]string{"amd64", "arm64be"},
+			[]string{"amd64", "ppc64"},
 			map[target][]goarch{
-				{"bpfeb", "arm64"}: linuxArchesBE["arm64"],
-				{"bpfel", "x86"}:   linuxArchesLE["x86"],
+				{"bpfeb", "powerpc"}: linuxArchesBE["powerpc"],
+				{"bpfel", "x86"}:     linuxArchesLE["x86"],
 			},
 		},
 		{
@@ -428,6 +429,23 @@ func TestParseArgs(t *testing.T) {
 		qt.Assert(t, qt.IsNil(err))
 		qt.Assert(t, qt.DeepEquals(b2g.cFlags, []string{"u", "v"}))
 	})
+}
+
+func TestGoarches(t *testing.T) {
+	exe, err := exec.LookPath("go")
+	if errors.Is(err, exec.ErrNotFound) {
+		t.Skip("go binary is not in PATH")
+	}
+	qt.Assert(t, qt.IsNil(err))
+
+	for goarch := range targetByGoArch {
+		t.Run(string(goarch), func(t *testing.T) {
+			goEnv := exec.Command(exe, "env")
+			goEnv.Env = []string{"GOOS=linux", "GOARCH=" + string(goarch)}
+			output, err := goEnv.CombinedOutput()
+			qt.Assert(t, qt.IsNil(err), qt.Commentf("go output is:\n%s", string(output)))
+		})
+	}
 }
 
 func clangBin(t *testing.T) string {

@@ -49,28 +49,23 @@ Options:
 //
 // Targets without a Linux string can't be used directly and are only included
 // for the generic bpf, bpfel, bpfeb targets.
+//
+// See https://go.dev/doc/install/source#environment for valid GOARCHes when
+// GOOS=linux.
 var targetByGoArch = map[goarch]target{
-	"386":         {"bpfel", "x86"},
-	"amd64":       {"bpfel", "x86"},
-	"amd64p32":    {"bpfel", ""},
-	"arm":         {"bpfel", "arm"},
-	"arm64":       {"bpfel", "arm64"},
-	"loong64":     {"bpfel", "loongarch"},
-	"mipsle":      {"bpfel", ""},
-	"mips64le":    {"bpfel", ""},
-	"mips64p32le": {"bpfel", ""},
-	"ppc64le":     {"bpfel", "powerpc"},
-	"riscv64":     {"bpfel", "riscv"},
-	"armbe":       {"bpfeb", "arm"},
-	"arm64be":     {"bpfeb", "arm64"},
-	"mips":        {"bpfeb", ""},
-	"mips64":      {"bpfeb", ""},
-	"mips64p32":   {"bpfeb", ""},
-	"ppc64":       {"bpfeb", "powerpc"},
-	"s390":        {"bpfeb", "s390"},
-	"s390x":       {"bpfeb", "s390"},
-	"sparc":       {"bpfeb", "sparc"},
-	"sparc64":     {"bpfeb", "sparc"},
+	"386":      {"bpfel", "x86"},
+	"amd64":    {"bpfel", "x86"},
+	"arm":      {"bpfel", "arm"},
+	"arm64":    {"bpfel", "arm64"},
+	"loong64":  {"bpfel", "loongarch"},
+	"mips":     {"bpfeb", "mips"},
+	"mipsle":   {"bpfel", ""},
+	"mips64":   {"bpfeb", ""},
+	"mips64le": {"bpfel", ""},
+	"ppc64":    {"bpfeb", "powerpc"},
+	"ppc64le":  {"bpfel", "powerpc"},
+	"riscv64":  {"bpfel", "riscv"},
+	"s390x":    {"bpfeb", "s390"},
 }
 
 func run(stdout io.Writer, pkg, outputDir string, args []string) (err error) {

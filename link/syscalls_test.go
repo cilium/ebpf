@@ -21,3 +21,7 @@ func TestHaveBPFLink(t *testing.T) {
 func TestHaveProgQuery(t *testing.T) {
 	testutils.CheckFeatureTest(t, haveProgQuery)
 }
+
+func TestHaveTCX(t *testing.T) {
+	testutils.CheckFeatureTest(t, haveTCX)
+}

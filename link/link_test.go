@@ -204,6 +204,11 @@ func testLink(t *testing.T, link Link, prog *ebpf.Program) {
 			if xdp.Ifindex == 0 {
 				t.Fatalf("Failed to get link XDP extra info")
 			}
+		case sys.BPF_LINK_TYPE_TCX:
+			tcx := info.TCX()
+			if tcx.Ifindex == 0 {
+				t.Fatalf("Failed to get link TCX extra info")
+			}
 		}
 	})
 

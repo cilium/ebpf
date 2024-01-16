@@ -162,9 +162,9 @@ func (ex *Executable) load(f *internal.SafeELFFile) error {
 // address calculates the address of a symbol in the executable.
 //
 // opts must not be nil.
-func (ex *Executable) address(symbol string, opts *UprobeOptions) (uint64, error) {
-	if opts.Address > 0 {
-		return opts.Address + opts.Offset, nil
+func (ex *Executable) address(symbol string, address, offset uint64) (uint64, error) {
+	if address > 0 {
+		return address + offset, nil
 	}
 
 	var err error
@@ -199,7 +199,7 @@ func (ex *Executable) address(symbol string, opts *UprobeOptions) (uint64, error
 			"(consider providing UprobeOptions.Address)", ex.path, symbol, ErrNotSupported)
 	}
 
-	return address + opts.Offset, nil
+	return address + offset, nil
 }
 
 // Uprobe attaches the given eBPF program to a perf event that fires when the
@@ -284,7 +284,7 @@ func (ex *Executable) uprobe(symbol string, prog *ebpf.Program, opts *UprobeOpti
 		opts = &UprobeOptions{}
 	}
 
-	offset, err := ex.address(symbol, opts)
+	offset, err := ex.address(symbol, opts.Address, opts.Offset)
 	if err != nil {
 		return nil, err
 	}

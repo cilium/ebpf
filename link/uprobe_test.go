@@ -31,36 +31,36 @@ func TestExecutable(t *testing.T) {
 		t.Fatalf("create executable: unexpected path '%s'", bashEx.path)
 	}
 
-	_, err = bashEx.address(bashSym, &UprobeOptions{})
+	_, err = bashEx.address(bashSym, 0, 0)
 	if err != nil {
 		t.Fatalf("find offset: %v", err)
 	}
 
-	_, err = bashEx.address("bogus", &UprobeOptions{})
+	_, err = bashEx.address("bogus", 0, 0)
 	if err == nil {
 		t.Fatal("find symbol: expected error")
 	}
 }
 
 func TestExecutableOffset(t *testing.T) {
-	symbolOffset, err := bashEx.address(bashSym, &UprobeOptions{})
+	symbolOffset, err := bashEx.address(bashSym, 0, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	offset, err := bashEx.address(bashSym, &UprobeOptions{Address: 0x1})
+	offset, err := bashEx.address(bashSym, 0x1, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
 	qt.Assert(t, qt.Equals(offset, 0x1))
 
-	offset, err = bashEx.address(bashSym, &UprobeOptions{Offset: 0x2})
+	offset, err = bashEx.address(bashSym, 0, 0x2)
 	if err != nil {
 		t.Fatal(err)
 	}
 	qt.Assert(t, qt.Equals(offset, symbolOffset+0x2))
 
-	offset, err = bashEx.address(bashSym, &UprobeOptions{Address: 0x1, Offset: 0x2})
+	offset, err = bashEx.address(bashSym, 0x1, 0x2)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -162,7 +162,7 @@ func TestUprobeCreatePMU(t *testing.T) {
 	testutils.SkipOnOldKernel(t, "4.17", "perf_kprobe PMU")
 
 	// Fetch the offset from the /bin/bash Executable already defined.
-	off, err := bashEx.address(bashSym, &UprobeOptions{})
+	off, err := bashEx.address(bashSym, 0, 0)
 	qt.Assert(t, qt.IsNil(err))
 
 	// Prepare probe args.
@@ -189,7 +189,7 @@ func TestUprobeCreatePMU(t *testing.T) {
 // Test fallback behaviour on kernels without perf_uprobe PMU available.
 func TestUprobePMUUnavailable(t *testing.T) {
 	// Fetch the offset from the /bin/bash Executable already defined.
-	off, err := bashEx.address(bashSym, &UprobeOptions{})
+	off, err := bashEx.address(bashSym, 0, 0)
 	qt.Assert(t, qt.IsNil(err))
 
 	// Prepare probe args.
@@ -214,7 +214,7 @@ func TestUprobePMUUnavailable(t *testing.T) {
 // Test tracefs u(ret)probe creation on all kernel versions.
 func TestUprobeTraceFS(t *testing.T) {
 	// Fetch the offset from the /bin/bash Executable already defined.
-	off, err := bashEx.address(bashSym, &UprobeOptions{})
+	off, err := bashEx.address(bashSym, 0, 0)
 	qt.Assert(t, qt.IsNil(err))
 
 	// Prepare probe args.

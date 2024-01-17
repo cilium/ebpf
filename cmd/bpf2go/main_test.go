@@ -393,6 +393,30 @@ func TestParseArgs(t *testing.T) {
 		qt.Assert(t, qt.IsTrue(b2g.disableStripping))
 	})
 
+	t.Run("no strip from env", func(t *testing.T) {
+		args := []string{stem, csource}
+		t.Setenv("BPF2GO_NO_STRIP", "true")
+		b2g, err := newB2G(&bytes.Buffer{}, pkg, outputDir, args)
+		qt.Assert(t, qt.IsNil(err))
+		qt.Assert(t, qt.IsTrue(b2g.disableStripping))
+	})
+
+	t.Run("no strip flag overrides env", func(t *testing.T) {
+		args := []string{"-no-strip", stem, csource}
+		t.Setenv("BPF2GO_NO_STRIP", "false")
+		b2g, err := newB2G(&bytes.Buffer{}, pkg, outputDir, args)
+		qt.Assert(t, qt.IsNil(err))
+		qt.Assert(t, qt.IsTrue(b2g.disableStripping))
+	})
+
+	t.Run("no strip env not in the list", func(t *testing.T) {
+		args := []string{stem, csource}
+		t.Setenv("BPF2GO_NO_STRIP", "barfoo")
+		b2g, err := newB2G(&bytes.Buffer{}, pkg, outputDir, args)
+		qt.Assert(t, qt.IsNil(err))
+		qt.Assert(t, qt.IsFalse(b2g.disableStripping))
+	})
+
 	t.Run("cflags flag", func(t *testing.T) {
 		args := []string{"-cflags", "x y z", stem, csource}
 		b2g, err := newB2G(&bytes.Buffer{}, pkg, outputDir, args)

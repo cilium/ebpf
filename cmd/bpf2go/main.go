@@ -14,6 +14,7 @@ import (
 	"regexp"
 	"runtime"
 	"sort"
+	"strconv"
 	"strings"
 
 	"golang.org/x/exp/slices"
@@ -123,11 +124,13 @@ func newB2G(stdout io.Writer, pkg, outputDir string, args []string) (*bpf2go, er
 		"`binary` used to compile C to BPF ($BPF2GO_CC)")
 	fs.StringVar(&b2g.strip, "strip", getEnv("BPF2GO_STRIP", ""),
 		"`binary` used to strip DWARF from compiled BPF ($BPF2GO_STRIP)")
-	fs.BoolVar(&b2g.disableStripping, "no-strip", false, "disable stripping of DWARF")
+	fs.BoolVar(&b2g.disableStripping, "no-strip", getBoolEnv("BPF2GO_NO_STRIP", false),
+		"disable stripping of DWARF ($BPF2GO_NOSTRIP)")
 	flagCFlags := fs.String("cflags", getEnv("BPF2GO_CFLAGS", ""),
 		"flags passed to the compiler, may contain quoted arguments ($BPF2GO_CFLAGS)")
 	fs.Var(&b2g.tags, "tags", "Comma-separated list of Go build tags to include in generated files")
-	flagTarget := fs.String("target", "bpfel,bpfeb", "clang target(s) to compile for (comma separated)")
+	flagTarget := fs.String("target", getEnv("BPF2GO_TARGET", "bpfel,bpfeb"),
+		"clang target(s) to compile for (comma separated) ($BPF2GO_TARGET)")
 	fs.StringVar(&b2g.makeBase, "makebase", getEnv("BPF2GO_MAKEBASE", ""),
 		"write make compatible depinfo files relative to `directory` ($BPF2GO_MAKEBASE)")
 	fs.Var(&b2g.cTypes, "type", "`Name` of a type to generate a Go declaration for, may be repeated")
@@ -272,6 +275,15 @@ func getEnv(key, defaultVal string) string {
 	return defaultVal
 }
 
+func getBoolEnv(key string, defaultVal bool) bool {
+	val, ok := os.LookupEnv(key)
+	if !ok {
+		return defaultVal
+	}
+	result, _ := strconv.ParseBool(val)
+	return result
+}
+
 func (b2g *bpf2go) convertAll() (err error) {
 	if _, err := os.Stat(b2g.sourceFile); os.IsNotExist(err) {
 		return fmt.Errorf("file %s doesn't exist", b2g.sourceFile)
@@ -280,8 +292,7 @@ func (b2g *bpf2go) convertAll() (err error) {
 	}
 
 	if !b2g.disableStripping {
-		b2g.strip, err = exec.LookPath(b2g.strip)
-		if err != nil {
+		if b2g.strip, err = exec.LookPath(b2g.strip); err != nil {
 			return err
 		}
 	}

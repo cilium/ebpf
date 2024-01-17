@@ -19,29 +19,22 @@ import (
 
 func TestRun(t *testing.T) {
 	clangBin := clangBin(t)
-	dir := mustWriteTempFile(t, "test.c", minimalSocketFilter)
+	dir := t.TempDir()
+	mustWriteFile(t, dir, "test.c", minimalSocketFilter)
 
-	cwd, err := os.Getwd()
-	if err != nil {
-		t.Fatal(err)
-	}
+	modRoot, err := filepath.Abs("../..")
+	qt.Assert(t, qt.IsNil(err))
 
-	modRoot := filepath.Clean(filepath.Join(cwd, "../.."))
 	if _, err := os.Stat(filepath.Join(modRoot, "go.mod")); os.IsNotExist(err) {
 		t.Fatal("No go.mod file in", modRoot)
 	}
 
-	tmpDir, err := os.MkdirTemp("", "bpf2go-module-*")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(tmpDir)
-
+	modDir := t.TempDir()
 	execInModule := func(name string, args ...string) {
 		t.Helper()
 
 		cmd := exec.Command(name, args...)
-		cmd.Dir = tmpDir
+		cmd.Dir = modDir
 		if out, err := cmd.CombinedOutput(); err != nil {
 			if out := string(out); out != "" {
 				t.Log(out)
@@ -62,8 +55,15 @@ func TestRun(t *testing.T) {
 		fmt.Sprintf("-replace=%s=%s", module, modRoot),
 	)
 
-	err = run(io.Discard, "foo", tmpDir, []string{
+	goarches := []string{
+		"amd64", // little-endian
+		"arm64",
+		"s390x", // big-endian
+	}
+
+	err = run(io.Discard, "main", modDir, []string{
 		"-cc", clangBin,
+		"-target", strings.Join(goarches, ","),
 		"bar",
 		filepath.Join(dir, "test.c"),
 	})
@@ -72,18 +72,24 @@ func TestRun(t *testing.T) {
 		t.Fatal("Can't run:", err)
 	}
 
-	for _, arch := range []string{
-		"amd64", // little-endian
-		"s390x", // big-endian
-	} {
+	mustWriteFile(t, modDir, "main.go",
+		`
+package main
+
+func main() {
+	var obj barObjects
+	println(obj.Main)
+}`)
+
+	for _, arch := range goarches {
 		t.Run(arch, func(t *testing.T) {
-			goBin := exec.Command("go", "build", "-mod=mod")
-			goBin.Dir = tmpDir
-			goBin.Env = append(os.Environ(),
+			goBuild := exec.Command("go", "build", "-mod=mod", "-o", "/dev/null")
+			goBuild.Dir = modDir
+			goBuild.Env = append(os.Environ(),
 				"GOOS=linux",
 				"GOARCH="+arch,
 			)
-			out, err := goBin.CombinedOutput()
+			out, err := goBuild.CombinedOutput()
 			if err != nil {
 				if out := string(out); out != "" {
 					t.Log(out)
@@ -112,7 +118,8 @@ func TestErrorMentionsEnvVar(t *testing.T) {
 }
 
 func TestDisableStripping(t *testing.T) {
-	dir := mustWriteTempFile(t, "test.c", minimalSocketFilter)
+	dir := t.TempDir()
+	mustWriteFile(t, dir, "test.c", minimalSocketFilter)
 
 	err := run(io.Discard, "foo", dir, []string{
 		"-cc", clangBin(t),
@@ -213,7 +220,7 @@ func TestCollectTargetsErrors(t *testing.T) {
 		target string
 	}{
 		{"unknown", "frood"},
-		{"no linux target", "mips64p32le"},
+		{"no linux target", "mipsle"},
 	}
 
 	for _, test := range tests {
@@ -228,7 +235,8 @@ func TestCollectTargetsErrors(t *testing.T) {
 }
 
 func TestConvertGOARCH(t *testing.T) {
-	tmp := mustWriteTempFile(t, "test.c",
+	tmp := t.TempDir()
+	mustWriteFile(t, tmp, "test.c",
 		`
 #ifndef __TARGET_ARCH_x86
 #error __TARGET_ARCH_x86 is not defined
@@ -432,19 +440,38 @@ func TestParseArgs(t *testing.T) {
 }
 
 func TestGoarches(t *testing.T) {
-	exe, err := exec.LookPath("go")
-	if errors.Is(err, exec.ErrNotFound) {
-		t.Skip("go binary is not in PATH")
-	}
-	qt.Assert(t, qt.IsNil(err))
+	exe := goBin(t)
 
 	for goarch := range targetByGoArch {
 		t.Run(string(goarch), func(t *testing.T) {
 			goEnv := exec.Command(exe, "env")
-			goEnv.Env = []string{"GOOS=linux", "GOARCH=" + string(goarch)}
+			goEnv.Env = []string{"GOROOT=/", "GOOS=linux", "GOARCH=" + string(goarch)}
 			output, err := goEnv.CombinedOutput()
 			qt.Assert(t, qt.IsNil(err), qt.Commentf("go output is:\n%s", string(output)))
 		})
+	}
+}
+
+func TestClangTargets(t *testing.T) {
+	exe := goBin(t)
+
+	clangTargets := map[string]struct{}{}
+	for _, tgt := range targetByGoArch {
+		clangTargets[tgt.clang] = struct{}{}
+	}
+
+	for target := range clangTargets {
+		for _, env := range []string{"GOOS", "GOARCH"} {
+			env += "=" + target
+			t.Run(env, func(t *testing.T) {
+				goEnv := exec.Command(exe, "env")
+				goEnv.Env = []string{"GOROOT=/", env}
+				output, err := goEnv.CombinedOutput()
+				t.Log("go output is:", string(output))
+				qt.Assert(t, qt.IsNotNil(err), qt.Commentf("No clang target should be a valid build constraint"))
+			})
+		}
+
 	}
 }
 
@@ -464,4 +491,16 @@ func clangBin(t *testing.T) string {
 
 	t.Log("Testing against", clang)
 	return clang
+}
+
+func goBin(t *testing.T) string {
+	t.Helper()
+
+	exe, err := exec.LookPath("go")
+	if errors.Is(err, exec.ErrNotFound) {
+		t.Skip("go binary is not in PATH")
+	}
+	qt.Assert(t, qt.IsNil(err))
+
+	return exe
 }

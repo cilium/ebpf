@@ -12,7 +12,8 @@ import (
 const minimalSocketFilter = `__attribute__((section("socket"), used)) int main() { return 0; }`
 
 func TestCompile(t *testing.T) {
-	dir := mustWriteTempFile(t, "test.c", minimalSocketFilter)
+	dir := t.TempDir()
+	mustWriteFile(t, dir, "test.c", minimalSocketFilter)
 
 	var dep bytes.Buffer
 	err := compile(compileArgs{
@@ -46,7 +47,8 @@ func TestCompile(t *testing.T) {
 
 func TestReproducibleCompile(t *testing.T) {
 	clangBin := clangBin(t)
-	dir := mustWriteTempFile(t, "test.c", minimalSocketFilter)
+	dir := t.TempDir()
+	mustWriteFile(t, dir, "test.c", minimalSocketFilter)
 
 	err := compile(compileArgs{
 		cc:     clangBin,
@@ -84,7 +86,8 @@ func TestReproducibleCompile(t *testing.T) {
 }
 
 func TestTriggerMissingTarget(t *testing.T) {
-	dir := mustWriteTempFile(t, "test.c", `_Pragma(__BPF_TARGET_MISSING);`)
+	dir := t.TempDir()
+	mustWriteFile(t, dir, "test.c", `_Pragma(__BPF_TARGET_MISSING);`)
 
 	err := compile(compileArgs{
 		cc:     clangBin(t),
@@ -148,19 +151,10 @@ nothing:
 	}
 }
 
-func mustWriteTempFile(t *testing.T, name, contents string) string {
-	t.Helper()
-
-	tmp, err := os.MkdirTemp("", "bpf2go")
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { os.RemoveAll(tmp) })
-
-	tmpFile := filepath.Join(tmp, name)
+func mustWriteFile(tb testing.TB, dir, name, contents string) {
+	tb.Helper()
+	tmpFile := filepath.Join(dir, name)
 	if err := os.WriteFile(tmpFile, []byte(contents), 0660); err != nil {
-		t.Fatal(err)
+		tb.Fatal(err)
 	}
-
-	return tmp
 }

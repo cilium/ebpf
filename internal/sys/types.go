@@ -720,6 +720,26 @@ func LinkCreateKprobeMulti(attr *LinkCreateKprobeMultiAttr) (*FD, error) {
 	return NewFD(int(fd))
 }
 
+type LinkCreateNetfilterAttr struct {
+	ProgFd         uint32
+	TargetFd       uint32
+	AttachType     AttachType
+	Flags          uint32
+	Pf             uint32
+	Hooknum        uint32
+	Priority       int32
+	NetfilterFlags uint32
+	_              [32]byte
+}
+
+func LinkCreateNetfilter(attr *LinkCreateNetfilterAttr) (*FD, error) {
+	fd, err := BPF(BPF_LINK_CREATE, unsafe.Pointer(attr), unsafe.Sizeof(*attr))
+	if err != nil {
+		return nil, err
+	}
+	return NewFD(int(fd))
+}
+
 type LinkCreatePerfEventAttr struct {
 	ProgFd     uint32
 	TargetFd   uint32
@@ -1199,6 +1219,13 @@ type IterLinkInfo struct {
 type NetNsLinkInfo struct {
 	NetnsIno   uint32
 	AttachType AttachType
+}
+
+type NetfilterLinkInfo struct {
+	Pf       uint32
+	Hooknum  uint32
+	Priority int32
+	Flags    uint32
 }
 
 type RawTracepointLinkInfo struct {

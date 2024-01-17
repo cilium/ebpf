@@ -209,6 +209,11 @@ func testLink(t *testing.T, link Link, prog *ebpf.Program) {
 			if tcx.Ifindex == 0 {
 				t.Fatalf("Failed to get link TCX extra info")
 			}
+		case sys.BPF_LINK_TYPE_NETFILTER:
+			nf := info.Netfilter()
+			if nf.Priority == 0 {
+				t.Fatalf("Failed to get link Netfilter extra info")
+			}
 		}
 	})
 

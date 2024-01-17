@@ -431,6 +431,17 @@ import (
 			},
 		},
 		{
+			"LinkCreateNetfilter", retFd, "link_create", "BPF_LINK_CREATE",
+			[]patch{
+				chooseNth(4, 5),
+				replace(enumTypes["AttachType"], "attach_type"),
+				modify(func(m *btf.Member) error {
+					return rename("flags", "netfilter_flags")(m.Type.(*btf.Struct))
+				}, "netfilter"),
+				flattenAnon,
+			},
+		},
+		{
 			"LinkCreateTracing", retFd, "link_create", "BPF_LINK_CREATE",
 			[]patch{
 				chooseNth(4, 4),
@@ -564,6 +575,7 @@ import (
 		{"TcxLinkInfo", "tcx", []patch{
 			replace(enumTypes["AttachType"], "attach_type"),
 		}},
+		{"NetfilterLinkInfo", "netfilter", nil},
 	}
 
 	sort.Slice(linkInfoExtraTypes, func(i, j int) bool {

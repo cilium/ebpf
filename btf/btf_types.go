@@ -74,18 +74,6 @@ const (
 
 var btfHeaderLen = binary.Size(&btfHeader{})
 
-type btfHeader struct {
-	Magic   uint16
-	Version uint8
-	Flags   uint8
-	HdrLen  uint32
-
-	TypeOff   uint32
-	TypeLen   uint32
-	StringOff uint32
-	StringLen uint32
-}
-
 // typeStart returns the offset from the beginning of the .BTF section
 // to the start of its type entries.
 func (h *btfHeader) typeStart() int64 {
@@ -130,28 +118,6 @@ func parseBTFHeader(r io.Reader, bo binary.ByteOrder) (*btfHeader, error) {
 }
 
 var btfTypeLen = binary.Size(btfType{})
-
-// btfType is equivalent to struct btf_type in Documentation/bpf/btf.rst.
-type btfType struct {
-	NameOff uint32
-	/* "info" bits arrangement
-	 * bits  0-15: vlen (e.g. # of struct's members), linkage
-	 * bits 16-23: unused
-	 * bits 24-28: kind (e.g. int, ptr, array...etc)
-	 * bits 29-30: unused
-	 * bit     31: kind_flag, currently used by
-	 *             struct, union and fwd
-	 */
-	Info uint32
-	/* "size" is used by INT, ENUM, STRUCT and UNION.
-	 * "size" tells the size of the type it is describing.
-	 *
-	 * "type" is used by PTR, TYPEDEF, VOLATILE, CONST, RESTRICT,
-	 * FUNC and FUNC_PROTO.
-	 * "type" is a type_id referring to another type.
-	 */
-	SizeType uint32
-}
 
 var btfTypeSize = int(unsafe.Sizeof(btfType{}))
 
@@ -348,12 +314,6 @@ func (bi *btfInt) SetBits(bits byte) {
 	bi.Raw = writeBits(bi.Raw, btfIntBitsLen, btfIntBitsShift, uint32(bits))
 }
 
-type btfArray struct {
-	Type      TypeID
-	IndexType TypeID
-	Nelems    uint32
-}
-
 var btfArrayLen = int(unsafe.Sizeof(btfArray{}))
 
 func unmarshalBtfArray(ba *btfArray, b []byte, bo binary.ByteOrder) (int, error) {
@@ -365,12 +325,6 @@ func unmarshalBtfArray(ba *btfArray, b []byte, bo binary.ByteOrder) (int, error)
 	ba.IndexType = TypeID(bo.Uint32(b[4:]))
 	ba.Nelems = bo.Uint32(b[8:])
 	return btfArrayLen, nil
-}
-
-type btfMember struct {
-	NameOff uint32
-	Type    TypeID
-	Offset  uint32
 }
 
 var btfMemberLen = int(unsafe.Sizeof(btfMember{}))
@@ -392,12 +346,6 @@ func unmarshalBtfMembers(members []btfMember, b []byte, bo binary.ByteOrder) (in
 	return off, nil
 }
 
-type btfVarSecinfo struct {
-	Type   TypeID
-	Offset uint32
-	Size   uint32
-}
-
 var btfVarSecinfoLen = int(unsafe.Sizeof(btfVarSecinfo{}))
 
 func unmarshalBtfVarSecInfos(secinfos []btfVarSecinfo, b []byte, bo binary.ByteOrder) (int, error) {
@@ -417,10 +365,6 @@ func unmarshalBtfVarSecInfos(secinfos []btfVarSecinfo, b []byte, bo binary.ByteO
 	return off, nil
 }
 
-type btfVariable struct {
-	Linkage uint32
-}
-
 var btfVariableLen = int(unsafe.Sizeof(btfVariable{}))
 
 func unmarshalBtfVariable(bv *btfVariable, b []byte, bo binary.ByteOrder) (int, error) {
@@ -430,11 +374,6 @@ func unmarshalBtfVariable(bv *btfVariable, b []byte, bo binary.ByteOrder) (int, 
 
 	bv.Linkage = bo.Uint32(b[0:])
 	return btfVariableLen, nil
-}
-
-type btfEnum struct {
-	NameOff uint32
-	Val     uint32
 }
 
 var btfEnumLen = int(unsafe.Sizeof(btfEnum{}))
@@ -453,12 +392,6 @@ func unmarshalBtfEnums(enums []btfEnum, b []byte, bo binary.ByteOrder) (int, err
 	}
 
 	return off, nil
-}
-
-type btfEnum64 struct {
-	NameOff uint32
-	ValLo32 uint32
-	ValHi32 uint32
 }
 
 var btfEnum64Len = int(unsafe.Sizeof(btfEnum64{}))
@@ -480,11 +413,6 @@ func unmarshalBtfEnums64(enums []btfEnum64, b []byte, bo binary.ByteOrder) (int,
 	return off, nil
 }
 
-type btfParam struct {
-	NameOff uint32
-	Type    TypeID
-}
-
 var btfParamLen = int(unsafe.Sizeof(btfParam{}))
 
 func unmarshalBtfParams(params []btfParam, b []byte, bo binary.ByteOrder) (int, error) {
@@ -501,10 +429,6 @@ func unmarshalBtfParams(params []btfParam, b []byte, bo binary.ByteOrder) (int, 
 	}
 
 	return off, nil
-}
-
-type btfDeclTag struct {
-	ComponentIdx uint32
 }
 
 var btfDeclTagLen = int(unsafe.Sizeof(btfDeclTag{}))

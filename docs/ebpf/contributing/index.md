@@ -64,7 +64,8 @@ from upstream kernel versions. You can update them to the latest version by:
     ```shell-session
     make update-kernel-deps
     ```
-3. [Regenerating testdata and source code](#regenerating-testdata-and-source-code)
+
+Finally, bump the tested kernels in `.github/workflows/ci.yml`
 
 ## Project permissions
 

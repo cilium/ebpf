@@ -173,7 +173,7 @@ jobs:
     timeout-minutes: 10
     strategy:
       matrix:
-        version: ["6.6", "6.1", "5.15", "5.10", "5.4", "4.19", "4.14", "4.9"]
+        version: ["6.7", "6.1", "5.15", "5.10", "5.4", "4.19", "4.14", "4.9"]
     env:
       KERNEL_VERSION: "${{ matrix.version }}"
     steps:

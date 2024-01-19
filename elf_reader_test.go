@@ -996,14 +996,20 @@ func TestLibBPFCompat(t *testing.T) {
 		case "netif_receive_skb",
 			"local_kptr_stash",
 			"local_kptr_stash_fail",
-			"type_cast":
-			t.Skip("Skipping due to possible bug in upstream CO-RE generation")
+			"type_cast",
+			"preempted_bpf_ma_op",
+			"percpu_alloc_fail":
+			// Error message like
+			//    fixup for CORERelocation(local_type_id, Struct:"bin_data"[0],
+			//    local_id=27): invalid immediate 31, expected 27 (fixup: local_type_id=27->1)
+			// See https://github.com/cilium/ebpf/issues/739
+			t.Skip("Skipping due to bug in libbpf type deduplication")
 		case "test_usdt", "test_urandom_usdt", "test_usdt_multispec":
 			t.Skip("Skipping due to missing support for usdt.bpf.h")
 		case "lsm_cgroup", "bpf_iter_ipv6_route", "test_core_extern",
 			"profiler1", "profiler2", "profiler3":
 			t.Skip("Skipping due to using weak CONFIG_* variables")
-		case "linked_maps1", "linked_maps2", "linked_funcs1", "linked_funcs2",
+		case "linked_maps", "linked_maps1", "linked_maps2", "linked_funcs1", "linked_funcs2",
 			"test_subskeleton", "test_subskeleton_lib":
 			t.Skip("Skipping due to relying on cross ELF linking")
 		}

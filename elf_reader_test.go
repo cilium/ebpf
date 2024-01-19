@@ -991,28 +991,6 @@ func TestLibBPFCompat(t *testing.T) {
 			t.Skip("Skipping since the test generates dynamic BTF")
 		case "test_static_linked":
 			t.Skip("Skipping since .text contains 'subprog' twice")
-		case "linked_maps",
-			"linked_funcs",
-			"linked_vars",
-			"kprobe_multi",
-			"test_ksyms_weak",
-			"test_ksyms_module",
-			"test_ksyms",
-			"xdp_metadata2",
-			"uprobe_multi_usdt",
-			"test_log_fixup",
-			"test_global_func_ctx_args",
-			"test_fill_link_info",
-			"task_storage_nodeadlock",
-			"task_kfunc_success",
-			"pyperf600_iter",
-			"iters_state_safety",
-			"iters_num",
-			"iters_looping",
-			"freplace_connect_v4_prog",
-			"freplace_connect4",
-			"connect4_prog":
-			t.Skip("Skipping since weak relocations are not supported")
 		case "bloom_filter_map", "bloom_filter_bench":
 			t.Skip("Skipping due to missing MapExtra field in MapSpec")
 		case "netif_receive_skb",
@@ -1034,6 +1012,9 @@ func TestLibBPFCompat(t *testing.T) {
 
 		spec, err := LoadCollectionSpec(path)
 		testutils.SkipIfNotSupported(t, err)
+		if errors.Is(err, errUnsupportedBinding) {
+			t.Skip(err)
+		}
 		if err != nil {
 			t.Fatal(err)
 		}

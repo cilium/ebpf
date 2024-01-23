@@ -37,7 +37,7 @@ func TestBuilderMarshal(t *testing.T) {
 
 	have, err := loadRawSpec(bytes.NewReader(buf), internal.NativeEndian, nil)
 	qt.Assert(t, qt.IsNil(err), qt.Commentf("Couldn't parse BTF"))
-	qt.Assert(t, qt.DeepEquals(have.types, want))
+	qt.Assert(t, qt.DeepEquals(have.imm.types, want))
 }
 
 func TestBuilderAdd(t *testing.T) {
@@ -71,7 +71,7 @@ func TestBuilderAdd(t *testing.T) {
 }
 
 func TestRoundtripVMlinux(t *testing.T) {
-	types := typesFromSpec(t, vmlinuxSpec(t))
+	types := typesFromSpec(vmlinuxSpec(t))
 
 	// Randomize the order to force different permutations of walking the type
 	// graph. Keep Void at index 0.
@@ -105,7 +105,7 @@ limitTypes:
 	rebuilt, err := loadRawSpec(bytes.NewReader(buf), binary.LittleEndian, nil)
 	qt.Assert(t, qt.IsNil(err), qt.Commentf("round tripping BTF failed"))
 
-	if n := len(rebuilt.types); n > math.MaxUint16 {
+	if n := len(rebuilt.imm.types); n > math.MaxUint16 {
 		t.Logf("Rebuilt BTF contains %d types which exceeds uint16, test may fail on older kernels", n)
 	}
 
@@ -153,7 +153,7 @@ func TestMarshalEnum64(t *testing.T) {
 }
 
 func BenchmarkMarshaler(b *testing.B) {
-	types := typesFromSpec(b, vmlinuxTestdataSpec(b))[:100]
+	types := typesFromSpec(vmlinuxTestdataSpec(b))[:100]
 
 	b.ReportAllocs()
 	b.ResetTimer()
@@ -168,7 +168,7 @@ func BenchmarkMarshaler(b *testing.B) {
 }
 
 func BenchmarkBuildVmlinux(b *testing.B) {
-	types := typesFromSpec(b, vmlinuxTestdataSpec(b))
+	types := typesFromSpec(vmlinuxTestdataSpec(b))
 
 	b.ReportAllocs()
 	b.ResetTimer()
@@ -202,9 +202,7 @@ func specFromTypes(tb testing.TB, types []Type) *Spec {
 	return spec
 }
 
-func typesFromSpec(tb testing.TB, spec *Spec) []Type {
-	tb.Helper()
-
+func typesFromSpec(spec *Spec) []Type {
 	var types []Type
 	iter := spec.Iterate()
 	for iter.Next() {

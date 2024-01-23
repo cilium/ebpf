@@ -38,8 +38,9 @@ func FuzzSpec(f *testing.F) {
 			t.Fatal("spec is nil")
 		}
 
-		for _, typ := range spec.types {
-			fmt.Fprintf(io.Discard, "%+10v", typ)
+		iter := spec.Iterate()
+		for iter.Next() {
+			fmt.Fprintf(io.Discard, "%+10v", iter.Type)
 		}
 	})
 }

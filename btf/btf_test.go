@@ -226,7 +226,7 @@ func BenchmarkParseVmlinux(b *testing.B) {
 func TestParseCurrentKernelBTF(t *testing.T) {
 	spec := vmlinuxSpec(t)
 
-	if len(spec.namedTypes) == 0 {
+	if len(spec.imm.namedTypes) == 0 {
 		t.Fatal("Empty kernel BTF")
 	}
 
@@ -257,7 +257,7 @@ func TestFindVMLinux(t *testing.T) {
 		t.Fatal("Can't load BTF:", err)
 	}
 
-	if len(spec.namedTypes) == 0 {
+	if len(spec.imm.namedTypes) == 0 {
 		t.Fatal("Empty kernel BTF")
 	}
 }
@@ -339,10 +339,10 @@ func TestSpecCopy(t *testing.T) {
 	spec := parseELFBTF(t, "../testdata/loader-el.elf")
 	cpy := spec.Copy()
 
-	have := typesFromSpec(t, spec)
-	qt.Assert(t, qt.IsTrue(len(spec.types) > 0))
+	have := typesFromSpec(spec)
+	qt.Assert(t, qt.IsTrue(len(have) > 0))
 
-	want := typesFromSpec(t, cpy)
+	want := typesFromSpec(cpy)
 	qt.Assert(t, qt.HasLen(want, len(have)))
 
 	for i := range want {
@@ -357,6 +357,28 @@ func TestSpecCopy(t *testing.T) {
 			t.Fatalf("Type at index %d is not a copy: %T == %T", i, have[i], want[i])
 		}
 	}
+}
+
+func TestSpecCopyModifications(t *testing.T) {
+	spec := specFromTypes(t, []Type{&Int{Name: "a", Size: 4}})
+
+	typ, err := spec.TypeByID(1)
+	qt.Assert(t, qt.IsNil(err))
+
+	i := typ.(*Int)
+	i.Name = "b"
+	i.Size = 2
+
+	cpy := spec.Copy()
+	typ2, err := cpy.TypeByID(1)
+	qt.Assert(t, qt.IsNil(err))
+	i2 := typ2.(*Int)
+
+	qt.Assert(t, qt.Not(qt.Equals(i2, i)), qt.Commentf("Types are distinct"))
+	qt.Assert(t, qt.DeepEquals(i2, i), qt.Commentf("Modifications are preserved"))
+
+	i.Name = "bar"
+	qt.Assert(t, qt.Equals(i2.Name, "b"))
 }
 
 func TestSpecTypeByID(t *testing.T) {
@@ -459,10 +481,8 @@ func TestLoadSplitSpecFromReader(t *testing.T) {
 		t.Fatal("'int' is not supposed to be found in the split BTF")
 	}
 
-	if fnProto.Return != intType {
-		t.Fatalf("Return type of 'bpf_testmod_init()' (%s) does not match 'int' type (%s)",
-			fnProto.Return, intType)
-	}
+	qt.Assert(t, qt.Not(qt.Equals(fnProto.Return, intType)),
+		qt.Commentf("types found in base of split spec should be copies"))
 
 	// Check that copied split-BTF's spec has correct type indexing
 	splitSpecCopy := splitSpec.Copy()

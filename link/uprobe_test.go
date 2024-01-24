@@ -71,7 +71,7 @@ func TestExecutableLazyLoadSymbols(t *testing.T) {
 	ex, err := OpenExecutable("/bin/bash")
 	qt.Assert(t, qt.IsNil(err))
 	// Addresses must be empty, will be lazy loaded.
-	qt.Assert(t, qt.HasLen(ex.addresses, 0))
+	qt.Assert(t, qt.HasLen(ex.cachedAddresses, 0))
 
 	prog := mustLoadProgram(t, ebpf.Kprobe, 0, "")
 	// Address must be a multiple of 4 on arm64, see
@@ -81,14 +81,14 @@ func TestExecutableLazyLoadSymbols(t *testing.T) {
 	up.Close()
 
 	// Addresses must still be empty as Address has been provided via options.
-	qt.Assert(t, qt.HasLen(ex.addresses, 0))
+	qt.Assert(t, qt.HasLen(ex.cachedAddresses, 0))
 
 	up, err = ex.Uprobe(bashSym, prog, nil)
 	qt.Assert(t, qt.IsNil(err))
 	up.Close()
 
 	// Symbol table should be loaded.
-	qt.Assert(t, qt.Not(qt.HasLen(ex.addresses, 0)))
+	qt.Assert(t, qt.Not(qt.HasLen(ex.cachedAddresses, 0)))
 }
 
 func TestUprobe(t *testing.T) {

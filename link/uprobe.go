@@ -36,10 +36,10 @@ var (
 type Executable struct {
 	// Path of the executable on the filesystem.
 	path string
-	// Parsed ELF and dynamic symbols' addresses.
-	addresses map[string]uint64
+	// Parsed ELF and dynamic symbols' cachedAddresses.
+	cachedAddresses map[string]uint64
 	// Keep track of symbol table lazy load.
-	addressesOnce sync.Once
+	cacheAddressesOnce sync.Once
 }
 
 // UprobeOptions defines additional parameters that will be used
@@ -108,8 +108,8 @@ func OpenExecutable(path string) (*Executable, error) {
 	}
 
 	return &Executable{
-		path:      path,
-		addresses: make(map[string]uint64),
+		path:            path,
+		cachedAddresses: make(map[string]uint64),
 	}, nil
 }
 
@@ -153,7 +153,7 @@ func (ex *Executable) load(f *internal.SafeELFFile) error {
 			}
 		}
 
-		ex.addresses[s.Name] = address
+		ex.cachedAddresses[s.Name] = address
 	}
 
 	return nil
@@ -168,7 +168,7 @@ func (ex *Executable) address(symbol string, address, offset uint64) (uint64, er
 	}
 
 	var err error
-	ex.addressesOnce.Do(func() {
+	ex.cacheAddressesOnce.Do(func() {
 		var f *internal.SafeELFFile
 		f, err = internal.OpenSafeELFFile(ex.path)
 		if err != nil {
@@ -183,7 +183,7 @@ func (ex *Executable) address(symbol string, address, offset uint64) (uint64, er
 		return 0, fmt.Errorf("lazy load symbols: %w", err)
 	}
 
-	address, ok := ex.addresses[symbol]
+	address, ok := ex.cachedAddresses[symbol]
 	if !ok {
 		return 0, fmt.Errorf("symbol %s: %w", symbol, ErrNoSymbol)
 	}

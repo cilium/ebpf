@@ -197,9 +197,9 @@ jobs:
         with:
           name: Test Results (${{ matrix.version }})
           path: junit.xml
-          
+
   coverge-test:
-    name: Run test on pre-built kernel
+    name: Generate code coverage
     runs-on: ubuntu-latest
     needs: build-and-lint
     timeout-minutes: 10   

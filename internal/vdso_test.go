@@ -19,13 +19,13 @@ func TestAuxvVDSOMemoryAddress(t *testing.T) {
 		{"auxv32le.bin", true, 0xb7fc3000},
 	} {
 		t.Run(testcase.source, func(t *testing.T) {
-			av, err := os.Open("testdata/" + testcase.source)
+			av, err := newAuxFileReader("testdata/"+testcase.source, binary.LittleEndian, testcase.is32bit)
 			if err != nil {
 				t.Fatal(err)
 			}
 			t.Cleanup(func() { av.Close() })
 
-			addr, err := vdsoMemoryAddress(av, binary.LittleEndian, testcase.is32bit)
+			addr, err := vdsoMemoryAddress(av)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -39,13 +39,13 @@ func TestAuxvVDSOMemoryAddress(t *testing.T) {
 
 func TestAuxvNoVDSO(t *testing.T) {
 	// Copy of auxv.bin with the vDSO pointer removed.
-	av, err := os.Open("testdata/auxv64le_no_vdso.bin")
+	av, err := newAuxFileReader("testdata/auxv64le_no_vdso.bin", binary.LittleEndian, false)
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { av.Close() })
 
-	_, err = vdsoMemoryAddress(av, binary.LittleEndian, false)
+	_, err = vdsoMemoryAddress(av)
 	if want, got := errAuxvNoVDSO, err; !errors.Is(got, want) {
 		t.Fatalf("expected error '%v', got: %v", want, got)
 	}

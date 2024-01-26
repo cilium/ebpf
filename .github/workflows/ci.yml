@@ -197,3 +197,31 @@ jobs:
         with:
           name: Test Results (${{ matrix.version }})
           path: junit.xml
+          
+  coverge-test:
+    name: Run test on pre-built kernel
+    runs-on: ubuntu-latest
+    needs: build-and-lint
+    timeout-minutes: 10   
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+
+      - name: Run Tests
+        run: ./run-tests.sh 6.1
+
+      - name: Merge Coverage
+        run: go tool covdata merge -o merged-coverage.out
+      - name: Upload Merged Coverage
+        uses: actions/upload-artifact@v3
+        with:
+          name: merged-coverage
+          path: merged-coverage.out
+      
+      - name: Generate HTML Report
+        run: go tool cover -html=merged-coverage.out -o coverage.html
+      - name: Upload HTML coverage report
+        uses: actions/upload-artifact@v3
+        with:
+          name: coverage-report
+          path: coverage.html

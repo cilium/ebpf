@@ -22,7 +22,7 @@ func TestCompile(t *testing.T) {
 		source: filepath.Join(dir, "test.c"),
 		dest:   filepath.Join(dir, "test.o"),
 		dep:    &dep,
-	})
+	}, &CustomisationsBase{})
 	if err != nil {
 		t.Fatal("Can't compile:", err)
 	}
@@ -55,7 +55,7 @@ func TestReproducibleCompile(t *testing.T) {
 		dir:    dir,
 		source: filepath.Join(dir, "test.c"),
 		dest:   filepath.Join(dir, "a.o"),
-	})
+	}, &CustomisationsBase{})
 	if err != nil {
 		t.Fatal("Can't compile:", err)
 	}
@@ -65,7 +65,7 @@ func TestReproducibleCompile(t *testing.T) {
 		dir:    dir,
 		source: filepath.Join(dir, "test.c"),
 		dest:   filepath.Join(dir, "b.o"),
-	})
+	}, &CustomisationsBase{})
 	if err != nil {
 		t.Fatal("Can't compile:", err)
 	}
@@ -94,7 +94,7 @@ func TestTriggerMissingTarget(t *testing.T) {
 		dir:    dir,
 		source: filepath.Join(dir, "test.c"),
 		dest:   filepath.Join(dir, "a.o"),
-	})
+	}, &CustomisationsBase{})
 
 	if err == nil {
 		t.Fatal("No error when compiling __BPF_TARGET_MISSING")

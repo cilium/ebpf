@@ -68,8 +68,8 @@ var targetByGoArch = map[goarch]target{
 	"s390x":    {"bpfeb", "s390"},
 }
 
-func run(stdout io.Writer, pkg, outputDir string, args []string) (err error) {
-	b2g, err := newB2G(stdout, pkg, outputDir, args)
+func run(stdout io.Writer, pkg, outputDir string, args []string, c Customisations) (err error) {
+	b2g, err := newB2G(stdout, pkg, outputDir, args, c)
 	switch {
 	case err == nil:
 		return b2g.convertAll()
@@ -109,13 +109,17 @@ type bpf2go struct {
 	// Base directory of the Makefile. Enables outputting make-style dependencies
 	// in .d files.
 	makeBase string
+
+	customisations Customisations
 }
 
-func newB2G(stdout io.Writer, pkg, outputDir string, args []string) (*bpf2go, error) {
+func newB2G(stdout io.Writer, pkg, outputDir string, args []string, c Customisations) (*bpf2go, error) {
 	b2g := &bpf2go{
 		stdout:    stdout,
 		pkg:       pkg,
 		outputDir: outputDir,
+
+		customisations: c,
 	}
 
 	fs := flag.NewFlagSet("bpf2go", flag.ContinueOnError)
@@ -141,6 +145,7 @@ func newB2G(stdout io.Writer, pkg, outputDir string, args []string) (*bpf2go, er
 		fmt.Fprintln(fs.Output())
 		printTargets(fs.Output())
 	}
+	c.ModifyFlags(fs)
 	if err := fs.Parse(args); err != nil {
 		return nil, err
 	}
@@ -345,6 +350,8 @@ func (b2g *bpf2go) convert(tgt target, goarches []goarch) (err error) {
 		return fmt.Errorf("remove obsolete output: %w", err)
 	}
 
+	tc := b2g.customisations.NewTarget(tgt)
+
 	var dep bytes.Buffer
 	err = compile(compileArgs{
 		cc:     b2g.cc,
@@ -354,7 +361,7 @@ func (b2g *bpf2go) convert(tgt target, goarches []goarch) (err error) {
 		source: b2g.sourceFile,
 		dest:   objFileName,
 		dep:    &dep,
-	})
+	}, tc)
 	if err != nil {
 		return err
 	}
@@ -362,7 +369,7 @@ func (b2g *bpf2go) convert(tgt target, goarches []goarch) (err error) {
 	fmt.Fprintln(b2g.stdout, "Compiled", objFileName)
 
 	if !b2g.disableStripping {
-		if err := strip(b2g.strip, objFileName); err != nil {
+		if err := strip(b2g.strip, objFileName, tc); err != nil {
 			return err
 		}
 		fmt.Fprintln(b2g.stdout, "Stripped", objFileName)
@@ -371,6 +378,11 @@ func (b2g *bpf2go) convert(tgt target, goarches []goarch) (err error) {
 	spec, err := ebpf.LoadCollectionSpec(objFileName)
 	if err != nil {
 		return fmt.Errorf("can't load BPF from ELF: %s", err)
+	}
+
+	err = tc.AugmentSpec(spec)
+	if err != nil {
+		return err
 	}
 
 	maps, programs, types, err := collectFromSpec(spec, b2g.cTypes, b2g.skipGlobalTypes)
@@ -533,7 +545,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err := run(os.Stdout, os.Getenv(gopackageEnv), outputDir, os.Args[1:]); err != nil {
+	if err := run(os.Stdout, os.Getenv(gopackageEnv), outputDir, os.Args[1:], &CustomisationsBase{}); err != nil {
 		fmt.Fprintln(os.Stderr, "Error:", err)
 		os.Exit(1)
 	}

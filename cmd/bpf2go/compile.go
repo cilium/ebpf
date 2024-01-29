@@ -28,7 +28,7 @@ type compileArgs struct {
 	dep io.Writer
 }
 
-func compile(args compileArgs) error {
+func compile(args compileArgs, tc TargetCustomisations) error {
 	// Default cflags that can be overridden by args.cFlags
 	overrideFlags := []string{
 		// Code needs to be optimized, otherwise the verifier will often fail
@@ -90,7 +90,7 @@ func compile(args compileArgs) error {
 		)
 	}
 
-	if err := cmd.Run(); err != nil {
+	if err := tc.Compile(cmd); err != nil {
 		return fmt.Errorf("can't execute %s: %s", args.cc, err)
 	}
 
@@ -200,10 +200,10 @@ func parseDependencies(baseDir string, in io.Reader) ([]dependency, error) {
 }
 
 // strip DWARF debug info from file by executing exe.
-func strip(exe, file string) error {
+func strip(exe, file string, tc TargetCustomisations) error {
 	cmd := exec.Command(exe, "-g", file)
 	cmd.Stderr = os.Stderr
-	if err := cmd.Run(); err != nil {
+	if err := tc.Strip(cmd); err != nil {
 		return fmt.Errorf("%s: %s", exe, err)
 	}
 	return nil

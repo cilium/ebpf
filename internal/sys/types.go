@@ -775,6 +775,29 @@ func LinkCreateTracing(attr *LinkCreateTracingAttr) (*FD, error) {
 	return NewFD(int(fd))
 }
 
+type LinkCreateUprobeMultiAttr struct {
+	ProgFd           uint32
+	TargetFd         uint32
+	AttachType       AttachType
+	Flags            uint32
+	Path             Pointer
+	Offsets          Pointer
+	RefCtrOffsets    Pointer
+	Cookies          Pointer
+	Count            uint32
+	UprobeMultiFlags uint32
+	Pid              uint32
+	_                [4]byte
+}
+
+func LinkCreateUprobeMulti(attr *LinkCreateUprobeMultiAttr) (*FD, error) {
+	fd, err := BPF(BPF_LINK_CREATE, unsafe.Pointer(attr), unsafe.Sizeof(*attr))
+	if err != nil {
+		return nil, err
+	}
+	return NewFD(int(fd))
+}
+
 type LinkUpdateAttr struct {
 	LinkFd    uint32
 	NewProgFd uint32

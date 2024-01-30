@@ -18,7 +18,8 @@ import (
 
 var (
 	bashEx, _ = OpenExecutable("/bin/bash")
-	bashSym   = "main"
+	bashSyms  = []string{"main", "_start", "check_dev_tty"}
+	bashSym   = bashSyms[0]
 )
 
 func TestExecutable(t *testing.T) {
@@ -31,36 +32,36 @@ func TestExecutable(t *testing.T) {
 		t.Fatalf("create executable: unexpected path '%s'", bashEx.path)
 	}
 
-	_, err = bashEx.address(bashSym, &UprobeOptions{})
+	_, err = bashEx.address(bashSym, 0, 0)
 	if err != nil {
 		t.Fatalf("find offset: %v", err)
 	}
 
-	_, err = bashEx.address("bogus", &UprobeOptions{})
+	_, err = bashEx.address("bogus", 0, 0)
 	if err == nil {
 		t.Fatal("find symbol: expected error")
 	}
 }
 
 func TestExecutableOffset(t *testing.T) {
-	symbolOffset, err := bashEx.address(bashSym, &UprobeOptions{})
+	symbolOffset, err := bashEx.address(bashSym, 0, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	offset, err := bashEx.address(bashSym, &UprobeOptions{Address: 0x1})
+	offset, err := bashEx.address(bashSym, 0x1, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
 	qt.Assert(t, qt.Equals(offset, 0x1))
 
-	offset, err = bashEx.address(bashSym, &UprobeOptions{Offset: 0x2})
+	offset, err = bashEx.address(bashSym, 0, 0x2)
 	if err != nil {
 		t.Fatal(err)
 	}
 	qt.Assert(t, qt.Equals(offset, symbolOffset+0x2))
 
-	offset, err = bashEx.address(bashSym, &UprobeOptions{Address: 0x1, Offset: 0x2})
+	offset, err = bashEx.address(bashSym, 0x1, 0x2)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -71,7 +72,7 @@ func TestExecutableLazyLoadSymbols(t *testing.T) {
 	ex, err := OpenExecutable("/bin/bash")
 	qt.Assert(t, qt.IsNil(err))
 	// Addresses must be empty, will be lazy loaded.
-	qt.Assert(t, qt.HasLen(ex.addresses, 0))
+	qt.Assert(t, qt.HasLen(ex.cachedAddresses, 0))
 
 	prog := mustLoadProgram(t, ebpf.Kprobe, 0, "")
 	// Address must be a multiple of 4 on arm64, see
@@ -81,14 +82,14 @@ func TestExecutableLazyLoadSymbols(t *testing.T) {
 	up.Close()
 
 	// Addresses must still be empty as Address has been provided via options.
-	qt.Assert(t, qt.HasLen(ex.addresses, 0))
+	qt.Assert(t, qt.HasLen(ex.cachedAddresses, 0))
 
 	up, err = ex.Uprobe(bashSym, prog, nil)
 	qt.Assert(t, qt.IsNil(err))
 	up.Close()
 
 	// Symbol table should be loaded.
-	qt.Assert(t, qt.Not(qt.HasLen(ex.addresses, 0)))
+	qt.Assert(t, qt.Not(qt.HasLen(ex.cachedAddresses, 0)))
 }
 
 func TestUprobe(t *testing.T) {
@@ -162,7 +163,7 @@ func TestUprobeCreatePMU(t *testing.T) {
 	testutils.SkipOnOldKernel(t, "4.17", "perf_kprobe PMU")
 
 	// Fetch the offset from the /bin/bash Executable already defined.
-	off, err := bashEx.address(bashSym, &UprobeOptions{})
+	off, err := bashEx.address(bashSym, 0, 0)
 	qt.Assert(t, qt.IsNil(err))
 
 	// Prepare probe args.
@@ -189,7 +190,7 @@ func TestUprobeCreatePMU(t *testing.T) {
 // Test fallback behaviour on kernels without perf_uprobe PMU available.
 func TestUprobePMUUnavailable(t *testing.T) {
 	// Fetch the offset from the /bin/bash Executable already defined.
-	off, err := bashEx.address(bashSym, &UprobeOptions{})
+	off, err := bashEx.address(bashSym, 0, 0)
 	qt.Assert(t, qt.IsNil(err))
 
 	// Prepare probe args.
@@ -214,7 +215,7 @@ func TestUprobePMUUnavailable(t *testing.T) {
 // Test tracefs u(ret)probe creation on all kernel versions.
 func TestUprobeTraceFS(t *testing.T) {
 	// Fetch the offset from the /bin/bash Executable already defined.
-	off, err := bashEx.address(bashSym, &UprobeOptions{})
+	off, err := bashEx.address(bashSym, 0, 0)
 	qt.Assert(t, qt.IsNil(err))
 
 	// Prepare probe args.
@@ -320,8 +321,9 @@ func TestUprobeProgramCall(t *testing.T) {
 			}
 			trigger(t)
 
-			// Assert that the value at index 0 has been updated to 1.
-			assertMapValue(t, m, 0, 1)
+			// Assert that the value got incremented to at least 1, while allowing
+			// for bigger values, because we could race with other bash execution.
+			assertMapValueGE(t, m, 0, 1)
 
 			// Detach the Uprobe.
 			if err := u.Close(); err != nil {

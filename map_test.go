@@ -2225,39 +2225,58 @@ func ExampleMap_perCPU() {
 	}
 	defer arr.Close()
 
-	first := []uint32{4, 5}
-	if err := arr.Put(uint32(0), first); err != nil {
-		panic(err)
+	possibleCPUs := MustPossibleCPU()
+	perCPUValues := map[uint32]uint32{
+		0: 4,
+		1: 5,
 	}
 
-	second := []uint32{2, 8}
-	if err := arr.Put(uint32(1), second); err != nil {
-		panic(err)
+	for k, v := range perCPUValues {
+		// We set each perCPU slots to the same value.
+		values := make([]uint32, possibleCPUs)
+		for i := range values {
+			values[i] = v
+		}
+		if err := arr.Put(k, values); err != nil {
+			panic(err)
+		}
 	}
 
-	var values []uint32
-	if err := arr.Lookup(uint32(0), &values); err != nil {
-		panic(err)
+	for k := 0; k < 2; k++ {
+		var values []uint32
+		if err := arr.Lookup(uint32(k), &values); err != nil {
+			panic(err)
+		}
+		// Note we will print an unexpected message if this is not true.
+		fmt.Printf("Value of key %v on all CPUs: %v\n", k, values[0])
 	}
-	fmt.Println("First two values:", values[:2])
-
 	var (
 		key     uint32
 		entries = arr.Iterate()
 	)
 
+	var values []uint32
 	for entries.Next(&key, &values) {
-		// NB: sum can overflow, real code should check for this
-		var sum uint32
-		for _, n := range values {
-			sum += n
+		expected, ok := perCPUValues[key]
+		if !ok {
+			fmt.Printf("Unexpected key %v\n", key)
+			continue
 		}
-		fmt.Printf("Sum of %d: %d\n", key, sum)
+
+		for i, n := range values {
+			if n != expected {
+				fmt.Printf("Key %v, Value for cpu %v is %v not %v\n",
+					key, i, n, expected)
+			}
+		}
 	}
 
 	if err := entries.Err(); err != nil {
 		panic(err)
 	}
+	// Output:
+	// Value of key 0 on all CPUs: 4
+	// Value of key 1 on all CPUs: 5
 }
 
 // It is possible to use unsafe.Pointer to avoid marshalling
@@ -2300,31 +2319,34 @@ func ExampleMap_NextKey() {
 		KeySize:    5,
 		ValueSize:  4,
 		MaxEntries: 10,
+		Contents: []MapKV{
+			{"hello", uint32(21)},
+			{"world", uint32(42)},
+		},
 	})
 	if err != nil {
 		panic(err)
 	}
 	defer hash.Close()
 
-	if err := hash.Put("hello", uint32(21)); err != nil {
-		panic(err)
-	}
+	var cur, next string
+	var keys []string
 
-	if err := hash.Put("world", uint32(42)); err != nil {
-		panic(err)
-	}
-
-	var firstKey string
-	if err := hash.NextKey(nil, &firstKey); err != nil {
-		panic(err)
-	}
-
-	var nextKey string
-	if err := hash.NextKey(firstKey, &nextKey); err != nil {
-		panic(err)
+	for err = hash.NextKey(nil, &next); ; err = hash.NextKey(cur, &next) {
+		if errors.Is(err, ErrKeyNotExist) {
+			break
+		}
+		if err != nil {
+			panic(err)
+		}
+		keys = append(keys, next)
+		cur = next
 	}
 
 	// Order of keys is non-deterministic due to randomized map seed
+	sort.Strings(keys)
+	fmt.Printf("Keys are %v\n", keys)
+	// Output: Keys are [hello world]
 }
 
 // ExampleMap_Iterate demonstrates how to iterate over all entries
@@ -2335,19 +2357,15 @@ func ExampleMap_Iterate() {
 		KeySize:    5,
 		ValueSize:  4,
 		MaxEntries: 10,
+		Contents: []MapKV{
+			{"hello", uint32(21)},
+			{"world", uint32(42)},
+		},
 	})
 	if err != nil {
 		panic(err)
 	}
 	defer hash.Close()
-
-	if err := hash.Put("hello", uint32(21)); err != nil {
-		panic(err)
-	}
-
-	if err := hash.Put("world", uint32(42)); err != nil {
-		panic(err)
-	}
 
 	var (
 		key     string
@@ -2355,37 +2373,95 @@ func ExampleMap_Iterate() {
 		entries = hash.Iterate()
 	)
 
+	values := make(map[string]uint32)
 	for entries.Next(&key, &value) {
 		// Order of keys is non-deterministic due to randomized map seed
-		fmt.Printf("key: %s, value: %d\n", key, value)
+		values[key] = value
 	}
 
 	if err := entries.Err(); err != nil {
 		panic(fmt.Sprint("Iterator encountered an error:", err))
 	}
+
+	for k, v := range values {
+		fmt.Printf("key: %s, value: %d\n", k, v)
+	}
+
+	// Unordered output:
+	// key: hello, value: 21
+	// key: world, value: 42
 }
 
 // It is possible to iterate nested maps and program arrays by
 // unmarshaling into a *Map or *Program.
 func ExampleMap_Iterate_nestedMapsAndProgramArrays() {
-	var arrayOfMaps *Map // Set this up somehow
+	inner := &MapSpec{
+		Type:       Array,
+		KeySize:    4,
+		ValueSize:  4,
+		MaxEntries: 2,
+		Contents: []MapKV{
+			{uint32(0), uint32(1)},
+			{uint32(1), uint32(2)},
+		},
+	}
+	im, err := NewMap(inner)
+	if err != nil {
+		panic(err)
+	}
+	defer im.Close()
+
+	outer := &MapSpec{
+		Type:       ArrayOfMaps,
+		InnerMap:   inner,
+		KeySize:    4,
+		ValueSize:  4,
+		MaxEntries: 10,
+		Contents: []MapKV{
+			{uint32(0), im},
+		},
+	}
+	arrayOfMaps, err := NewMap(outer)
+	if errors.Is(err, internal.ErrNotSupported) {
+		// Fake the output if on very old kernel.
+		fmt.Println("outerKey: 0")
+		fmt.Println("\tinnerKey 0 innerValue 1")
+		fmt.Println("\tinnerKey 1 innerValue 2")
+		return
+	}
+	if err != nil {
+		panic(err)
+	}
+	defer arrayOfMaps.Close()
 
 	var (
 		key     uint32
 		m       *Map
 		entries = arrayOfMaps.Iterate()
 	)
-
-	// Make sure that the iterated map is closed after
-	// we are done.
-	defer m.Close()
-
 	for entries.Next(&key, &m) {
+		// Make sure that the iterated map is closed after
+		// we are done.
+		defer m.Close()
+
 		// Order of keys is non-deterministic due to randomized map seed
-		fmt.Printf("key: %v, map: %v\n", key, m)
+		fmt.Printf("outerKey: %v\n", key)
+
+		var innerKey, innerValue uint32
+		items := m.Iterate()
+		for items.Next(&innerKey, &innerValue) {
+			fmt.Printf("\tinnerKey %v innerValue %v\n", innerKey, innerValue)
+		}
+		if err := items.Err(); err != nil {
+			panic(fmt.Sprint("Inner Iterator encountered an error:", err))
+		}
 	}
 
 	if err := entries.Err(); err != nil {
 		panic(fmt.Sprint("Iterator encountered an error:", err))
 	}
+	// Output:
+	// outerKey: 0
+	//	innerKey 0 innerValue 1
+	// 	innerKey 1 innerValue 2
 }

@@ -451,6 +451,22 @@ import (
 			},
 		},
 		{
+			"LinkCreateUprobeMulti", retFd, "link_create", "BPF_LINK_CREATE",
+			[]patch{
+				chooseNth(4, 7),
+				replace(enumTypes["AttachType"], "attach_type"),
+				modify(func(m *btf.Member) error {
+					return rename("flags", "uprobe_multi_flags")(m.Type.(*btf.Struct))
+				}, "uprobe_multi"),
+				flattenAnon,
+				replace(pointer, "path"),
+				replace(pointer, "offsets"),
+				replace(pointer, "ref_ctr_offsets"),
+				replace(pointer, "cookies"),
+				rename("cnt", "count"),
+			},
+		},
+		{
 			"LinkUpdate", retError, "link_update", "BPF_LINK_UPDATE",
 			nil,
 		},

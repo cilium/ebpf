@@ -10,3 +10,7 @@ updates:
       # dependencies only appearing in Pipfile.lock.
       - dependency-name: "*"
         dependency-type: "direct"
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "monthly"

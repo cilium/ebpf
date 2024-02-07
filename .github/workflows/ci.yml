@@ -9,8 +9,8 @@ env:
   TMPDIR: /tmp
   CI_MAX_KERNEL_VERSION: '6.6'
   CI_MIN_CLANG_VERSION: '11'
-  go_version: '~1.21'
-  prev_go_version: '~1.20'
+  go_version: '~1.22'
+  prev_go_version: '~1.21'
   # This needs to match whatever Netlify supports.
   # Also defined in Pipfile.
   python_version: '~3.8'

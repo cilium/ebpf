@@ -2,13 +2,13 @@ package link
 
 import (
 	"os"
+	"slices"
 	"testing"
 
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/internal/testutils"
 
 	"github.com/go-quicktest/qt"
-	"golang.org/x/exp/slices"
 )
 
 func TestQueryPrograms(t *testing.T) {

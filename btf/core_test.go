@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"slices"
 	"strings"
 	"testing"
 
@@ -13,7 +14,6 @@ import (
 	"github.com/cilium/ebpf/internal/testutils"
 
 	"github.com/go-quicktest/qt"
-	"golang.org/x/exp/slices"
 )
 
 func TestCheckTypeCompatibility(t *testing.T) {

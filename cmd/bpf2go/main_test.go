@@ -9,12 +9,12 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"testing"
 
 	"github.com/go-quicktest/qt"
 	"github.com/google/go-cmp/cmp"
-	"golang.org/x/exp/slices"
 )
 
 func TestRun(t *testing.T) {

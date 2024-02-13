@@ -1,6 +1,7 @@
 package ebpf
 
 import (
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"math"
@@ -2207,6 +2208,147 @@ func BenchmarkIterate(b *testing.B) {
 					}
 				}
 			})
+		})
+	}
+}
+
+type customKey struct {
+	EthProtocol       uint16
+	Direction         uint8
+	SrcMac            [6]uint8
+	DstMac            [6]uint8
+	SrcIp             [16]uint8
+	DstIp             [16]uint8
+	SrcPort           uint16
+	DstPort           uint16
+	TransportProtocol uint8
+	IcmpType          uint8
+	IcmpCode          uint8
+	Index             uint32
+}
+
+type BpfDnsRecordT struct {
+	Id      uint16
+	Flags   uint16
+	Latency uint64
+	Errno   uint8
+}
+
+type BpfPktDropsT struct {
+	Packets         uint32
+	Bytes           uint64
+	LatestFlags     uint16
+	LatestState     uint8
+	LatestDropCause uint32
+}
+
+type customValue struct {
+	Packets         uint32
+	Bytes           uint64
+	StartMonoTimeTs uint64
+	EndMonoTimeTs   uint64
+	Flags           uint16
+	Errno           uint8
+	Dscp            uint8
+	PktDrops        BpfPktDropsT
+	DnsRecord       BpfDnsRecordT
+	FlowRtt         uint64
+}
+
+func BenchmarkCustomIterate(b *testing.B) {
+	var k customKey
+	var v customValue
+	for _, mt := range []MapType{PerCPUHash} {
+		m, err := NewMap(&MapSpec{
+			Type:       mt,
+			KeySize:    uint32(binary.Size(k)),
+			ValueSize:  uint32(binary.Size(v)),
+			MaxEntries: 10000,
+		})
+		if err != nil {
+			b.Fatal(err)
+		}
+		b.Cleanup(func() {
+			m.Close()
+		})
+		possibleCPU := MustPossibleCPU()
+
+		var (
+			n      = m.MaxEntries()
+			keys   = make([]customKey, n)
+			values = make([]customValue, n*uint32(possibleCPU))
+		)
+
+		for i := 0; uint32(i) < n; i++ {
+			keys[i] = customKey{
+				Index: uint32(i),
+			}
+			for j := 0; j < possibleCPU; j++ {
+				values[i*possibleCPU+j] = customValue{
+					Bytes:   uint64(10 * (i + j)),
+					Packets: uint32(i + j),
+				}
+			}
+		}
+
+		_, err = m.BatchUpdate(keys, values, nil)
+		testutils.SkipIfNotSupported(b, err)
+		qt.Assert(b, qt.IsNil(err))
+
+		b.Run(m.Type().String(), func(b *testing.B) {
+			b.Run("MapIteratorDelete", func(b *testing.B) {
+				var k customKey
+				v := make([]customValue, possibleCPU)
+
+				b.ReportAllocs()
+				b.ResetTimer()
+
+				for i := 0; i < b.N; i++ {
+					b.StopTimer()
+					if _, err := m.BatchUpdate(keys, values, nil); err != nil {
+						b.Fatal(err)
+					}
+					b.StartTimer()
+
+					iter := m.Iterate()
+					for iter.Next(&k, &v) {
+						if err := m.Delete(&k); err != nil {
+							b.Fatal(err)
+						}
+					}
+					if err := iter.Err(); err != nil {
+						b.Fatal(err)
+					}
+				}
+			})
+
+			b.Run("BatchLookupAndDelete", func(b *testing.B) {
+				k := make([]customKey, m.MaxEntries())
+				v := make([]customValue, m.MaxEntries()*uint32(possibleCPU))
+
+				b.ReportAllocs()
+				b.ResetTimer()
+
+				for i := 0; i < b.N; i++ {
+					b.StopTimer()
+					if _, err := m.BatchUpdate(keys, values, nil); err != nil {
+						b.Fatal(err)
+					}
+					b.StartTimer()
+
+					var cursor BatchCursor
+					for {
+						_, err := m.BatchLookupAndDelete(&cursor, k, v, nil)
+						if err == nil || errors.Is(err, ErrKeyNotExist) {
+							break
+						}
+						if err != nil {
+							b.Fatal(err)
+						}
+					}
+				}
+			})
+
 		})
 	}
 }

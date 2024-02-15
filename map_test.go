@@ -156,7 +156,7 @@ func TestMapBatch(t *testing.T) {
 			lookupKeys := make([]uint32, n)
 			lookupValues := make([]uint32, n*possibleCPU)
 
-			var cursor BatchCursor
+			var cursor MapBatchCursor
 			var total int
 			for {
 				count, err = m.BatchLookup(&cursor, lookupKeys, lookupValues, nil)
@@ -182,7 +182,7 @@ func TestMapBatch(t *testing.T) {
 				return
 			}
 
-			cursor = BatchCursor{}
+			cursor = MapBatchCursor{}
 			total = 0
 			for {
 				count, err = m.BatchLookupAndDelete(&cursor, lookupKeys, lookupValues, nil)
@@ -236,7 +236,7 @@ func TestMapBatchCursorReuse(t *testing.T) {
 
 	tmp := make([]uint32, 2)
 
-	var cursor BatchCursor
+	var cursor MapBatchCursor
 	_, err = arr1.BatchLookup(&cursor, tmp, tmp, nil)
 	testutils.SkipIfNotSupported(t, err)
 	qt.Assert(t, qt.IsNil(err))
@@ -356,7 +356,7 @@ func TestBatchMapWithLock(t *testing.T) {
 			t.Fatalf("BatchUpdate: expected count, %d, to be %d", count, len(keys))
 		}
 
-		var cursor BatchCursor
+		var cursor MapBatchCursor
 		lookupKeys := make([]uint32, 2)
 		lookupValues := make([]spinLockValue, 2)
 		count, err = m.BatchLookup(&cursor, lookupKeys, lookupValues, &BatchOptions{ElemFlags: uint64(LookupLock)})
@@ -367,7 +367,7 @@ func TestBatchMapWithLock(t *testing.T) {
 			t.Fatalf("BatchLookup: expected two keys, got %d", count)
 		}
 
-		cursor = BatchCursor{}
+		cursor = MapBatchCursor{}
 		deleteKeys := []uint32{0, 1}
 		deleteValues := make([]spinLockValue, 2)
 		count, err = m.BatchLookupAndDelete(&cursor, deleteKeys, deleteValues, nil)
@@ -1146,7 +1146,7 @@ func TestMapBatchLookupAllocations(t *testing.T) {
 	}
 	defer arr.Close()
 
-	var cursor BatchCursor
+	var cursor MapBatchCursor
 	tmp := make([]uint32, 2)
 	input := any(tmp)
 
@@ -2151,7 +2151,7 @@ func BenchmarkIterate(b *testing.B) {
 				b.ResetTimer()
 
 				for i := 0; i < b.N; i++ {
-					var cursor BatchCursor
+					var cursor MapBatchCursor
 					for {
 						_, err := m.BatchLookup(&cursor, k, v, nil)
 						if errors.Is(err, ErrKeyNotExist) {
@@ -2178,7 +2178,7 @@ func BenchmarkIterate(b *testing.B) {
 					}
 					b.StartTimer()
 
-					var cursor BatchCursor
+					var cursor MapBatchCursor
 					for {
 						_, err := m.BatchLookupAndDelete(&cursor, k, v, nil)
 						if errors.Is(err, ErrKeyNotExist) {

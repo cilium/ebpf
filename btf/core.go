@@ -204,22 +204,12 @@ func (s mergedSpec) NamedTypes(name essentialName) []TypeID {
 //
 // Fixups are returned in the order of relos, e.g. fixup[i] is the solution
 // for relos[i].
-func CORERelocate(relos []*CORERelocation, targets []*Spec, kmodName string, bo binary.ByteOrder, resolveLocalTypeID func(Type) (TypeID, error)) ([]COREFixup, error) {
+func CORERelocate(relos []*CORERelocation, targets []*Spec, bo binary.ByteOrder, resolveLocalTypeID func(Type) (TypeID, error)) ([]COREFixup, error) {
 	if len(targets) == 0 {
-		kernelTarget, _, err := kernelSpec()
-		if err != nil {
-			return nil, fmt.Errorf("load kernel spec: %w", err)
-		}
-		targets = append(targets, kernelTarget)
-
-		if kmodName != "" {
-			kmodTarget, err := kernelModuleSpec(kmodName)
-			if err != nil {
-				return nil, fmt.Errorf("load kernel module spec: %w", err)
-			}
-			targets = append(targets, kmodTarget)
-		}
+		// Explicitly check for nil here since the argument used to be optional.
+		return nil, fmt.Errorf("targets must be provided")
 	}
+
 	for _, target := range targets {
 		if bo != target.imm.byteOrder {
 			return nil, fmt.Errorf("can't relocate %s against %s", bo, target.imm.byteOrder)

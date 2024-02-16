@@ -138,7 +138,23 @@ func applyRelocations(insns asm.Instructions, targets []*btf.Spec, kmodName stri
 		bo = internal.NativeEndian
 	}
 
-	fixups, err := btf.CORERelocate(relos, targets, kmodName, bo, b.Add)
+	if len(targets) == 0 {
+		kernelTarget, err := btf.LoadKernelSpec()
+		if err != nil {
+			return fmt.Errorf("load kernel spec: %w", err)
+		}
+		targets = append(targets, kernelTarget)
+
+		if kmodName != "" {
+			kmodTarget, err := btf.LoadKernelModuleSpec(kmodName)
+			if err != nil {
+				return fmt.Errorf("load kernel module spec: %w", err)
+			}
+			targets = append(targets, kmodTarget)
+		}
+	}
+
+	fixups, err := btf.CORERelocate(relos, targets, bo, b.Add)
 	if err != nil {
 		return err
 	}

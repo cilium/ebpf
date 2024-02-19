@@ -24,6 +24,15 @@ typedef __u32 __wsum;
 
 #include "bpf_helpers.h"
 
+// compatibility with kernel definitions
+#if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
+# define __LITTLE_ENDIAN_BITFIELD
+#elif __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
+# define __BIG_ENDIAN_BITFIELD
+#else
+# error "Fix your compiler's __BYTE_ORDER__?!"
+#endif
+
 enum bpf_map_type {
 	BPF_MAP_TYPE_UNSPEC                = 0,
 	BPF_MAP_TYPE_HASH                  = 1,
@@ -75,7 +84,10 @@ struct xdp_md {
 
 typedef __u16 __sum16;
 
-#define ETH_P_IP 0x0800
+#define ETH_P_IP 	 0x0800
+#define IPPROTO_ICMP 1
+#define IPPROTO_TCP  6
+#define IPPROTO_UDP  17
 
 struct ethhdr {
 	unsigned char h_dest[6];
@@ -95,6 +107,128 @@ struct iphdr {
 	__sum16 check;
 	__be32 saddr;
 	__be32 daddr;
+};
+
+/*struct __sk_buff https://github.com/torvalds/linux/blob/master/include/uapi/linux/bpf.h */
+#define __bpf_md_ptr(type, name)	\
+union {					\
+	type name;			\
+	__u64 :64;			\
+} __attribute__((aligned(8)))
+
+struct __sk_buff {
+	__u32 len;
+	__u32 pkt_type;
+	__u32 mark;
+	__u32 queue_mapping;
+	__u32 protocol;
+	__u32 vlan_present;
+	__u32 vlan_tci;
+	__u32 vlan_proto;
+	__u32 priority;
+	__u32 ingress_ifindex;
+	__u32 ifindex;
+	__u32 tc_index;
+	__u32 cb[5];
+	__u32 hash;
+	__u32 tc_classid;
+	__u32 data;
+	__u32 data_end;
+	__u32 napi_id;
+
+	/* Accessed by BPF_PROG_TYPE_sk_skb types from here to ... */
+	__u32 family;
+	__u32 remote_ip4;	/* Stored in network byte order */
+	__u32 local_ip4;	/* Stored in network byte order */
+	__u32 remote_ip6[4];	/* Stored in network byte order */
+	__u32 local_ip6[4];	/* Stored in network byte order */
+	__u32 remote_port;	/* Stored in network byte order */
+	__u32 local_port;	/* stored in host byte order */
+	/* ... here. */
+
+	__u32 data_meta;
+	__bpf_md_ptr(struct bpf_flow_keys *, flow_keys);
+	__u64 tstamp;
+	__u32 wire_len;
+	__u32 gso_segs;
+	__bpf_md_ptr(struct bpf_sock *, sk);
+	__u32 gso_size;
+};
+
+/*TCP Header https://github.com/torvalds/linux/blob/master/include/uapi/linux/tcp.h */
+struct tcphdr {
+    __be16 source;
+    __be16 dest;
+    __be32 seq;
+    __be32 ack_seq;
+#if defined(__LITTLE_ENDIAN_BITFIELD)
+	__u16	res1:4,
+		doff:4,
+		fin:1,
+		syn:1,
+		rst:1,
+		psh:1,
+		ack:1,
+		urg:1,
+		ece:1,
+		cwr:1;
+#elif defined(__BIG_ENDIAN_BITFIELD)
+	__u16	doff:4,
+		res1:4,
+		cwr:1,
+		ece:1,
+		urg:1,
+		ack:1,
+		psh:1,
+		rst:1,
+		syn:1,
+		fin:1;
+#else
+#error	"Adjust your <asm/byteorder.h> defines"
+#endif
+    __be16 window;
+    __sum16 check;
+    __be16 urg_ptr;
+};
+
+/*UDP Header https://github.com/torvalds/linux/blob/master/include/uapi/linux/udp.h */
+struct udphdr {
+    __be16 source;
+    __be16 dest;
+    __be16 len;
+    __sum16 check;
+};
+
+/*ICMP Header https://github.com/torvalds/linux/blob/master/include/uapi/linux/icmp.h */
+struct icmphdr {
+    __u8 type;
+    __u8 code;
+    __sum16 checksum;
+    union {
+        struct {
+            __be16 id;
+            __be16 sequence;
+        } echo;
+        __be32 gateway;
+        struct {
+            __be16 __unused;
+            __be16 mtu;
+        } frag;
+        __u8 reserved[4];
+    } un;
+};
+
+enum tc_action {
+	TC_ACT_UNSPEC 		= -1,
+	TC_ACT_OK 			= 0,
+	TC_ACT_RECLASSIFY 	= 1,
+	TC_ACT_SHOT 		= 2,
+	TC_ACT_PIPE 		= 3,
+	TC_ACT_STOLEN 		= 4,
+	TC_ACT_QUEUED 		= 5,
+	TC_ACT_REPEAT 		= 6,
+	TC_ACT_REDIRECT 	= 7,
+	TC_ACT_JUMP 		= 0x10000000
 };
 
 enum {

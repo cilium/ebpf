@@ -820,7 +820,27 @@ func TestMapQueue(t *testing.T) {
 		}
 	}
 
-	var v uint32
+	var (
+		v  uint32
+		v2 uint32
+	)
+	if err := m.Lookup(nil, &v); err != nil {
+		t.Fatal("Lookup (Peek) on Queue:", err)
+	}
+
+	if err := m.Lookup(nil, &v2); err != nil {
+		t.Fatal("Lookup (Peek) consecutive on Queue:", err)
+	}
+
+	if v != v2 {
+		t.Fatal("Lookup (Peek) value removal from Queue:")
+	}
+
+	if v != 42 {
+		t.Error("Want value 42, got", v)
+	}
+	v = 0
+
 	if err := m.LookupAndDelete(nil, &v); err != nil {
 		t.Fatal("Can't lookup and delete element:", err)
 	}
@@ -838,6 +858,74 @@ func TestMapQueue(t *testing.T) {
 
 	if err := m.LookupAndDelete(nil, &v); !errors.Is(err, ErrKeyNotExist) {
 		t.Fatal("Lookup and delete on empty Queue:", err)
+	}
+
+	if err := m.Lookup(nil, &v); !errors.Is(err, ErrKeyNotExist) {
+		t.Fatal("Lookup (Peek) on empty Queue:", err)
+	}
+}
+
+func TestMapStack(t *testing.T) {
+	testutils.SkipOnOldKernel(t, "4.20", "map type stack")
+
+	m, err := NewMap(&MapSpec{
+		Type:       Stack,
+		ValueSize:  4,
+		MaxEntries: 2,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer m.Close()
+
+	for _, v := range []uint32{42, 4242} {
+		if err := m.Put(nil, v); err != nil {
+			t.Fatalf("Can't put %d: %s", v, err)
+		}
+	}
+
+	var (
+		v  uint32
+		v2 uint32
+	)
+	if err := m.Lookup(nil, &v); err != nil {
+		t.Fatal("Lookup (Peek) on Stack:", err)
+	}
+
+	if err := m.Lookup(nil, &v2); err != nil {
+		t.Fatal("Lookup (Peek) consecutive on Stack:", err)
+	}
+
+	if v != v2 {
+		t.Fatal("Lookup (Peek) value removal from Stack:")
+	}
+
+	if v != 4242 {
+		t.Error("Want value 4242, got", v)
+	}
+	v = 0
+
+	if err := m.LookupAndDelete(nil, &v); err != nil {
+		t.Fatal("Can't lookup and delete element:", err)
+	}
+	if v != 4242 {
+		t.Error("Want value 4242, got", v)
+	}
+
+	v = 0
+	if err := m.LookupAndDelete(nil, unsafe.Pointer(&v)); err != nil {
+		t.Fatal("Can't lookup and delete element using unsafe.Pointer:", err)
+	}
+	if v != 42 {
+		t.Error("Want value 42, got", v)
+	}
+
+	if err := m.LookupAndDelete(nil, &v); !errors.Is(err, ErrKeyNotExist) {
+		t.Fatal("Lookup and delete on empty Stack:", err)
+	}
+
+	if err := m.Lookup(nil, &v); !errors.Is(err, ErrKeyNotExist) {
+		t.Fatal("Lookup (Peek) on empty Stack:", err)
 	}
 }
 

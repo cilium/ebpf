@@ -1506,17 +1506,42 @@ func newMapIterator(target *Map) *MapIterator {
 	}
 }
 
-// Next decodes the next key and value.
-//
-// Iterating a hash map from which keys are being deleted is not
-// safe. You may see the same key multiple times. Iteration may
-// also abort with an error, see IsIterationAborted.
+// nextQueueMap decodes the next value from a map of type
+// Queue or Stack.
 //
 // Returns false if there are no more entries. You must check
 // the result of Err afterwards.
+func (mi *MapIterator) nextQueueMap(valueOut interface{}) bool {
+	if mi.err != nil || mi.done {
+		return false
+	}
+
+	// For Queue/Stack map block the iteration after maxEntries
+	// to avoid potential infinite loops
+	// (values can be pushed to map while doing pop)
+	if mi.count == mi.maxEntries {
+		mi.err = fmt.Errorf("%w", ErrIterationAborted)
+		return false
+	}
+
+	mi.count++
+	err := mi.target.LookupAndDelete(nil, valueOut)
+	if errors.Is(err, ErrKeyNotExist) {
+		return false
+	}
+	if err != nil {
+		mi.err = fmt.Errorf("look up next value: %w", err)
+		return false
+	}
+	return true
+}
+
+// next decodes the next key and value from a map with key-value pair
+// (except Queue and Stack).
 //
-// See Map.Get for further caveats around valueOut.
-func (mi *MapIterator) Next(keyOut, valueOut interface{}) bool {
+// Returns false if there are no more entries. You must check
+// the result of Err afterwards.
+func (mi *MapIterator) next(keyOut, valueOut interface{}) bool {
 	if mi.err != nil || mi.done {
 		return false
 	}
@@ -1573,6 +1598,26 @@ func (mi *MapIterator) Next(keyOut, valueOut interface{}) bool {
 
 	mi.err = fmt.Errorf("%w", ErrIterationAborted)
 	return false
+}
+
+// Next decodes the next key and value.
+//
+// Iterating a hash map from which keys are being deleted is not
+// safe. You may see the same key multiple times. Iteration may
+// also abort with an error, see IsIterationAborted.
+//
+// Iterating a Queue/Stack will lookup only the value, as those
+// maps do not use a key.
+//
+// Returns false if there are no more entries. You must check
+// the result of Err afterwards.
+//
+// See Map.Get for further caveats around valueOut.
+func (mi *MapIterator) Next(keyOut, valueOut interface{}) bool {
+	if mi.target.typ.isQueueStack() {
+		return mi.nextQueueMap(valueOut)
+	}
+	return mi.next(keyOut, valueOut)
 }
 
 // Err returns any encountered error.

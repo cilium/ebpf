@@ -1344,8 +1344,29 @@ func batchCount(keys, values any) (int, error) {
 //
 // It's not possible to guarantee that all keys in a map will be
 // returned if there are concurrent modifications to the map.
+//
+// Iterating a hash map from which keys are being deleted is not
+// safe. You may see the same key multiple times. Iteration may
+// also abort with an error, see IsIterationAborted.
+//
+// Iterating a queue/stack map returns an error (NextKey invalid
+// argument): [Map.Drain] API should be used instead.
 func (m *Map) Iterate() *MapIterator {
 	return newMapIterator(m)
+}
+
+// Drain traverses a map while also removing entries.
+//
+// It's safe to create multiple drainers at the same time,
+// but their respective outputs will differ.
+//
+// Draining a map that does not support entry removal such as
+// an array return an error (LookupAndDelete not supported):
+// [Map.Iterate] API should be used instead.
+func (m *Map) Drain() *MapIterator {
+	it := newMapIterator(m)
+	it.drain = true
+	return it
 }
 
 // Close the Map's underlying file descriptor, which could unload the
@@ -1602,6 +1623,12 @@ func marshalMap(m *Map, length int) ([]byte, error) {
 	return buf, nil
 }
 
+// isKeyValueMap returns true if map supports key-value pairs (ex. hash)
+// and false in case of value-only maps (ex. queue).
+func isKeyValueMap(m *Map) bool {
+	return m.keySize != 0
+}
+
 // MapIterator iterates a Map.
 //
 // See Map.Iterate.
@@ -1611,7 +1638,7 @@ type MapIterator struct {
 	// of []byte to avoid allocations.
 	cursor            any
 	count, maxEntries uint32
-	done              bool
+	done, drain       bool
 	err               error
 }
 
@@ -1622,11 +1649,55 @@ func newMapIterator(target *Map) *MapIterator {
 	}
 }
 
+// cursorToKeyOut copies the current value held in the cursor to the
+// provided argument. In case of errors, returns false and sets a
+// non-nil error in the MapIterator.
+func (mi *MapIterator) cursorToKeyOut(keyOut interface{}) bool {
+	buf := mi.cursor.([]byte)
+	if ptr, ok := keyOut.(unsafe.Pointer); ok {
+		copy(unsafe.Slice((*byte)(ptr), len(buf)), buf)
+	} else {
+		mi.err = sysenc.Unmarshal(keyOut, buf)
+	}
+	return mi.err == nil
+}
+
+// fetchNextKey loads into the cursor the key following the provided one.
+func (mi *MapIterator) fetchNextKey(key interface{}) bool {
+	mi.err = mi.target.NextKey(key, mi.cursor)
+	if mi.err == nil {
+		return true
+	}
+
+	if errors.Is(mi.err, ErrKeyNotExist) {
+		mi.done = true
+		mi.err = nil
+	} else {
+		mi.err = fmt.Errorf("get next key: %w", mi.err)
+	}
+
+	return false
+}
+
+// drainMapEntry removes and returns the key held in the cursor
+// from the underlying map.
+func (mi *MapIterator) drainMapEntry(valueOut interface{}) bool {
+	mi.err = mi.target.LookupAndDelete(mi.cursor, valueOut)
+	if mi.err == nil {
+		mi.count++
+		return true
+	}
+
+	if errors.Is(mi.err, ErrKeyNotExist) {
+		mi.err = nil
+	} else {
+		mi.err = fmt.Errorf("lookup_and_delete key: %w", mi.err)
+	}
+
+	return false
+}
+
 // Next decodes the next key and value.
-//
-// Iterating a hash map from which keys are being deleted is not
-// safe. You may see the same key multiple times. Iteration may
-// also abort with an error, see IsIterationAborted.
 //
 // Returns false if there are no more entries. You must check
 // the result of Err afterwards.
@@ -1636,6 +1707,38 @@ func (mi *MapIterator) Next(keyOut, valueOut interface{}) bool {
 	if mi.err != nil || mi.done {
 		return false
 	}
+	if mi.drain {
+		return mi.nextDrain(keyOut, valueOut)
+	}
+	return mi.nextIterate(keyOut, valueOut)
+}
+
+func (mi *MapIterator) nextDrain(keyOut, valueOut interface{}) bool {
+	// Handle value-only maps (ex. queue).
+	if !isKeyValueMap(mi.target) {
+		if keyOut != nil {
+			mi.err = fmt.Errorf("non-nil keyOut provided for map without a key, must be nil instead")
+			return false
+		}
+		return mi.drainMapEntry(valueOut)
+	}
+
+	if mi.cursor == nil {
+		mi.cursor = make([]byte, mi.target.keySize)
+	}
+
+	// Always retrieve first key in the map. This should ensure that the whole map
+	// is traversed, despite concurrent operations (ordering of items might differ).
+	for mi.err == nil && mi.fetchNextKey(nil) {
+		if mi.drainMapEntry(valueOut) {
+			return mi.cursorToKeyOut(keyOut)
+		}
+	}
+	return false
+}
+
+func (mi *MapIterator) nextIterate(keyOut, valueOut interface{}) bool {
+	var key interface{}
 
 	// For array-like maps NextKey returns nil only after maxEntries
 	// iterations.
@@ -1645,17 +1748,12 @@ func (mi *MapIterator) Next(keyOut, valueOut interface{}) bool {
 			// is returned. If we pass an uninitialized []byte instead, it'll see a
 			// non-nil interface and try to marshal it.
 			mi.cursor = make([]byte, mi.target.keySize)
-			mi.err = mi.target.NextKey(nil, mi.cursor)
+			key = nil
 		} else {
-			mi.err = mi.target.NextKey(mi.cursor, mi.cursor)
+			key = mi.cursor
 		}
 
-		if errors.Is(mi.err, ErrKeyNotExist) {
-			mi.done = true
-			mi.err = nil
-			return false
-		} else if mi.err != nil {
-			mi.err = fmt.Errorf("get next key: %w", mi.err)
+		if !mi.fetchNextKey(key) {
 			return false
 		}
 
@@ -1677,14 +1775,7 @@ func (mi *MapIterator) Next(keyOut, valueOut interface{}) bool {
 			return false
 		}
 
-		buf := mi.cursor.([]byte)
-		if ptr, ok := keyOut.(unsafe.Pointer); ok {
-			copy(unsafe.Slice((*byte)(ptr), len(buf)), buf)
-		} else {
-			mi.err = sysenc.Unmarshal(keyOut, buf)
-		}
-
-		return mi.err == nil
+		return mi.cursorToKeyOut(keyOut)
 	}
 
 	mi.err = fmt.Errorf("%w", ErrIterationAborted)

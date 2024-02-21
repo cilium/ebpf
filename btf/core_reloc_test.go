@@ -110,3 +110,30 @@ func TestCORERelocationRead(t *testing.T) {
 		}
 	})
 }
+
+func TestLD64IMMReloc(t *testing.T) {
+	testutils.SkipOnOldKernel(t, "5.4", "vmlinux BTF in sysfs")
+
+	testutils.Files(t, testutils.Glob(t, "testdata/relocs_enum-*.elf"), func(t *testing.T, file string) {
+		fh, err := os.Open(file)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer fh.Close()
+
+		spec, err := ebpf.LoadCollectionSpecFromReader(fh)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if spec.ByteOrder != internal.NativeEndian {
+			return
+		}
+
+		coll, err := ebpf.NewCollection(spec)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer coll.Close()
+	})
+}

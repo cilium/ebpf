@@ -7,7 +7,9 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"runtime"
 	"sync"
+	"sync/atomic"
 	"testing"
 
 	"github.com/go-quicktest/qt"
@@ -523,6 +525,35 @@ func TestFixupDatasecLayout(t *testing.T) {
 	qt.Assert(t, qt.Equals(ds.Vars[3].Offset, 6))
 	qt.Assert(t, qt.Equals(ds.Vars[4].Offset, 16))
 	qt.Assert(t, qt.Equals(ds.Vars[5].Offset, 32))
+}
+
+func TestSpecConcurrentAccess(t *testing.T) {
+	spec := vmlinuxTestdataSpec(t)
+
+	maxprocs := runtime.GOMAXPROCS(0)
+	if maxprocs < 2 {
+		t.Error("GOMAXPROCS is lower than 2:", maxprocs)
+	}
+
+	var cond atomic.Int64
+	var wg sync.WaitGroup
+	for i := 0; i < maxprocs; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+
+			cond.Add(1)
+			for cond.Load() != int64(maxprocs) {
+				// Spin to increase the chances of a race.
+			}
+
+			_, _ = spec.AnyTypeByName("gov_update_cpu_data")
+		}()
+
+		// Try to get the Goroutines scheduled and spinning.
+		runtime.Gosched()
+	}
+	wg.Wait()
 }
 
 func BenchmarkSpecCopy(b *testing.B) {

@@ -35,9 +35,5 @@ func TestKernelModule(t *testing.T) {
 		t.Errorf("expected %q got %q", "", kmod)
 	}
 
-	// not present
-	kmod = kmods["asdfasdf"]
-	if kmod != "" {
-		t.Errorf("expected %q got %q", "", kmod)
-	}
+	qt.Assert(t, qt.Equals(kmods["nft_counter_seq"], ""))
 }

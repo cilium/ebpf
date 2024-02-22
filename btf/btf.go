@@ -118,6 +118,10 @@ func (mt *mutableTypes) copy() mutableTypes {
 		make(map[Type]TypeID, len(mt.copiedTypeIDs)),
 	}
 
+	// Prevent concurrent modification of mt.copiedTypeIDs.
+	mt.mu.RLock()
+	defer mt.mu.RUnlock()
+
 	copies := make(map[Type]Type, len(mt.copies))
 	for orig, copy := range mt.copies {
 		// NB: We make a copy of copy, not orig, so that changes to mutable types

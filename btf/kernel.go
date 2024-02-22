@@ -16,7 +16,7 @@ import (
 // Defaults to /sys/kernel/btf/vmlinux and falls back to scanning the file system
 // for vmlinux ELFs. Returns an error wrapping ErrNotSupported if BTF is not enabled.
 func LoadKernelSpec() (*Spec, error) {
-	spec, _, err := kernelSpec()
+	spec, err := kernelSpec()
 	if err != nil {
 		return nil, err
 	}
@@ -42,8 +42,6 @@ func LoadKernelModuleSpec(module string) (*Spec, error) {
 var kernelBTF struct {
 	sync.RWMutex
 	spec *Spec
-	// True if the spec was read from an ELF instead of raw BTF in /sys.
-	fallback bool
 }
 
 var kernelModuleBTF = struct {
@@ -60,35 +58,35 @@ func FlushKernelSpec() {
 	kernelBTF.Lock()
 	defer kernelBTF.Unlock()
 
-	kernelBTF.spec, kernelBTF.fallback = nil, false
+	kernelBTF.spec = nil
 	kernelModuleBTF.spec = make(map[string]*Spec)
 
 	kallsyms.FlushKernelModuleCache()
 }
 
-func kernelSpec() (*Spec, bool, error) {
+func kernelSpec() (*Spec, error) {
 	kernelBTF.RLock()
-	spec, fallback := kernelBTF.spec, kernelBTF.fallback
+	spec := kernelBTF.spec
 	kernelBTF.RUnlock()
 
 	if spec == nil {
 		kernelBTF.Lock()
 		defer kernelBTF.Unlock()
 
-		spec, fallback = kernelBTF.spec, kernelBTF.fallback
+		spec = kernelBTF.spec
 	}
 
 	if spec != nil {
-		return spec, fallback, nil
+		return spec, nil
 	}
 
-	spec, fallback, err := loadKernelSpec()
+	spec, _, err := loadKernelSpec()
 	if err != nil {
-		return nil, false, err
+		return nil, err
 	}
 
-	kernelBTF.spec, kernelBTF.fallback = spec, fallback
-	return spec, fallback, nil
+	kernelBTF.spec = spec
+	return spec, nil
 }
 
 func kernelModuleSpec(module string) (*Spec, error) {
@@ -136,7 +134,7 @@ func loadKernelSpec() (_ *Spec, fallback bool, _ error) {
 }
 
 func loadKernelModuleSpec(module string) (*Spec, error) {
-	base, _, err := kernelSpec()
+	base, err := kernelSpec()
 	if err != nil {
 		return nil, err
 	}

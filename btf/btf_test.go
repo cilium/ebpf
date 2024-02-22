@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"runtime"
 	"sync"
@@ -23,16 +24,15 @@ func vmlinuxSpec(tb testing.TB) *Spec {
 
 	// /sys/kernel/btf was introduced in 341dfcf8d78e ("btf: expose BTF info
 	// through sysfs"), which shipped in Linux 5.4.
-	testutils.SkipOnOldKernel(tb, "5.4", "vmlinux BTF in sysfs")
+	if _, err := os.Stat("/sys/kernel/btf/vmlinux"); errors.Is(err, fs.ErrNotExist) {
+		tb.Skip("No /sys/kernel/btf/vmlinux")
+	}
 
-	spec, fallback, err := kernelSpec()
+	spec, err := LoadKernelSpec()
 	if err != nil {
 		tb.Fatal(err)
 	}
-	if fallback {
-		tb.Fatal("/sys/kernel/btf/vmlinux is not available")
-	}
-	return spec.Copy()
+	return spec
 }
 
 type specAndRawBTF struct {

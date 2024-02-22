@@ -11,15 +11,51 @@ import (
 	"github.com/cilium/ebpf/internal/kallsyms"
 )
 
+var kernelBTF = struct {
+	sync.RWMutex
+	kernel  *Spec
+	modules map[string]*Spec
+}{
+	modules: make(map[string]*Spec),
+}
+
+// FlushKernelSpec removes any cached kernel type information.
+func FlushKernelSpec() {
+	kallsyms.FlushKernelModuleCache()
+
+	kernelBTF.Lock()
+	defer kernelBTF.Unlock()
+
+	kernelBTF.kernel = nil
+	kernelBTF.modules = make(map[string]*Spec)
+}
+
 // LoadKernelSpec returns the current kernel's BTF information.
 //
 // Defaults to /sys/kernel/btf/vmlinux and falls back to scanning the file system
 // for vmlinux ELFs. Returns an error wrapping ErrNotSupported if BTF is not enabled.
 func LoadKernelSpec() (*Spec, error) {
-	spec, err := kernelSpec()
+	kernelBTF.RLock()
+	spec := kernelBTF.kernel
+	kernelBTF.RUnlock()
+
+	if spec == nil {
+		kernelBTF.Lock()
+		defer kernelBTF.Unlock()
+
+		spec = kernelBTF.kernel
+	}
+
+	if spec != nil {
+		return spec.Copy(), nil
+	}
+
+	spec, _, err := loadKernelSpec()
 	if err != nil {
 		return nil, err
 	}
+
+	kernelBTF.kernel = spec
 	return spec.Copy(), nil
 }
 
@@ -28,90 +64,33 @@ func LoadKernelSpec() (*Spec, error) {
 // Defaults to /sys/kernel/btf/<module>.
 // Returns an error wrapping ErrNotSupported if BTF is not enabled.
 func LoadKernelModuleSpec(module string) (*Spec, error) {
-	dir, file := filepath.Split(module)
-	if dir != "" || filepath.Ext(file) != "" {
-		return nil, fmt.Errorf("invalid module name %q", module)
+	kernelBTF.RLock()
+	spec := kernelBTF.modules[module]
+	kernelBTF.RUnlock()
+
+	if spec != nil {
+		return spec.Copy(), nil
 	}
-	spec, err := kernelModuleSpec(module)
+
+	base, err := LoadKernelSpec()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("load kernel spec: %w", err)
 	}
-	return spec.Copy(), nil
-}
 
-var kernelBTF struct {
-	sync.RWMutex
-	spec *Spec
-}
-
-var kernelModuleBTF = struct {
-	sync.RWMutex
-	spec map[string]*Spec
-}{
-	spec: make(map[string]*Spec),
-}
-
-// FlushKernelSpec removes any cached kernel type information.
-func FlushKernelSpec() {
-	kernelModuleBTF.Lock()
-	defer kernelModuleBTF.Unlock()
 	kernelBTF.Lock()
 	defer kernelBTF.Unlock()
 
-	kernelBTF.spec = nil
-	kernelModuleBTF.spec = make(map[string]*Spec)
-
-	kallsyms.FlushKernelModuleCache()
-}
-
-func kernelSpec() (*Spec, error) {
-	kernelBTF.RLock()
-	spec := kernelBTF.spec
-	kernelBTF.RUnlock()
-
-	if spec == nil {
-		kernelBTF.Lock()
-		defer kernelBTF.Unlock()
-
-		spec = kernelBTF.spec
+	if spec = kernelBTF.modules[module]; spec != nil {
+		return spec.Copy(), nil
 	}
 
-	if spec != nil {
-		return spec, nil
-	}
-
-	spec, _, err := loadKernelSpec()
+	spec, err = loadKernelModuleSpec(module, base)
 	if err != nil {
 		return nil, err
 	}
 
-	kernelBTF.spec = spec
-	return spec, nil
-}
-
-func kernelModuleSpec(module string) (*Spec, error) {
-	kernelModuleBTF.RLock()
-	spec := kernelModuleBTF.spec[module]
-	kernelModuleBTF.RUnlock()
-
-	if spec == nil {
-		kernelModuleBTF.Lock()
-		defer kernelModuleBTF.Unlock()
-
-		spec = kernelModuleBTF.spec[module]
-	}
-
-	if spec != nil {
-		return spec, nil
-	}
-
-	spec, err := loadKernelModuleSpec(module)
-	if err != nil {
-		return nil, err
-	}
-
-	kernelModuleBTF.spec[module] = spec
-	return spec, nil
+	kernelBTF.modules[module] = spec
+	return spec.Copy(), nil
 }
 
 func loadKernelSpec() (_ *Spec, fallback bool, _ error) {
@@ -133,10 +112,10 @@ func loadKernelSpec() (_ *Spec, fallback bool, _ error) {
 	return spec, true, err
 }
 
-func loadKernelModuleSpec(module string) (*Spec, error) {
-	base, err := kernelSpec()
-	if err != nil {
-		return nil, err
+func loadKernelModuleSpec(module string, base *Spec) (*Spec, error) {
+	dir, file := filepath.Split(module)
+	if dir != "" || filepath.Ext(file) != "" {
+		return nil, fmt.Errorf("invalid module name %q", module)
 	}
 
 	fh, err := os.Open(filepath.Join("/sys/kernel/btf", module))

@@ -542,12 +542,16 @@ func TestSpecConcurrentAccess(t *testing.T) {
 		go func() {
 			defer wg.Done()
 
-			cond.Add(1)
+			n := cond.Add(1)
 			for cond.Load() != int64(maxprocs) {
 				// Spin to increase the chances of a race.
 			}
 
-			_, _ = spec.AnyTypeByName("gov_update_cpu_data")
+			if n%2 == 0 {
+				_, _ = spec.AnyTypeByName("gov_update_cpu_data")
+			} else {
+				_ = spec.Copy()
+			}
 		}()
 
 		// Try to get the Goroutines scheduled and spinning.

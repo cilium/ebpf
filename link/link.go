@@ -136,13 +136,43 @@ type Info struct {
 	extra   interface{}
 }
 
-type TracingInfo sys.TracingLinkInfo
-type CgroupInfo sys.CgroupLinkInfo
-type NetNsInfo sys.NetNsLinkInfo
-type XDPInfo sys.XDPLinkInfo
-type TCXInfo sys.TcxLinkInfo
-type NetfilterInfo sys.NetfilterLinkInfo
-type NetkitInfo sys.NetkitLinkInfo
+type TracingInfo struct {
+	AttachType  sys.AttachType
+	TargetObjId uint32
+	TargetBtfId sys.TypeID
+}
+
+type CgroupInfo struct {
+	CgroupId   uint64
+	AttachType sys.AttachType
+	_          [4]byte
+}
+
+type NetNsInfo struct {
+	NetnsIno   uint32
+	AttachType sys.AttachType
+}
+
+type TCXInfo struct {
+	Ifindex    uint32
+	AttachType sys.AttachType
+}
+
+type XDPInfo struct {
+	Ifindex uint32
+}
+
+type NetfilterInfo struct {
+	Pf       uint32
+	Hooknum  uint32
+	Priority int32
+	Flags    uint32
+}
+
+type NetkitInfo struct {
+	Ifindex    uint32
+	AttachType sys.AttachType
+}
 
 // Tracing returns tracing type-specific link info.
 //

@@ -1225,48 +1225,92 @@ func RawTracepointOpen(attr *RawTracepointOpenAttr) (*FD, error) {
 }
 
 type CgroupLinkInfo struct {
+	Type       LinkType
+	Id         LinkID
+	ProgId     uint32
+	_          [4]byte
 	CgroupId   uint64
 	AttachType AttachType
-	_          [4]byte
+	_          [28]byte
 }
 
 type IterLinkInfo struct {
+	Type          LinkType
+	Id            LinkID
+	ProgId        uint32
+	_             [4]byte
 	TargetName    Pointer
 	TargetNameLen uint32
 }
 
 type NetNsLinkInfo struct {
+	Type       LinkType
+	Id         LinkID
+	ProgId     uint32
+	_          [4]byte
 	NetnsIno   uint32
 	AttachType AttachType
+	_          [32]byte
 }
 
 type NetfilterLinkInfo struct {
+	Type     LinkType
+	Id       LinkID
+	ProgId   uint32
+	_        [4]byte
 	Pf       uint32
 	Hooknum  uint32
 	Priority int32
 	Flags    uint32
+	_        [24]byte
 }
 
 type NetkitLinkInfo struct {
+	Type       LinkType
+	Id         LinkID
+	ProgId     uint32
+	_          [4]byte
 	Ifindex    uint32
 	AttachType AttachType
+	_          [32]byte
 }
 
 type RawTracepointLinkInfo struct {
+	Type      LinkType
+	Id        LinkID
+	ProgId    uint32
+	_         [4]byte
 	TpName    Pointer
 	TpNameLen uint32
-	_         [4]byte
+	_         [28]byte
 }
 
 type TcxLinkInfo struct {
+	Type       LinkType
+	Id         LinkID
+	ProgId     uint32
+	_          [4]byte
 	Ifindex    uint32
 	AttachType AttachType
+	_          [32]byte
 }
 
 type TracingLinkInfo struct {
+	Type        LinkType
+	Id          LinkID
+	ProgId      uint32
+	_           [4]byte
 	AttachType  AttachType
 	TargetObjId uint32
 	TargetBtfId TypeID
+	_           [28]byte
 }
 
-type XDPLinkInfo struct{ Ifindex uint32 }
+type XDPLinkInfo struct {
+	Type    LinkType
+	Id      LinkID
+	ProgId  uint32
+	_       [4]byte
+	Ifindex uint32
+	_       [36]byte
+}

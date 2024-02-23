@@ -567,28 +567,70 @@ import (
 	}
 
 	// Link info type specific
-
 	linkInfoExtraTypes := []struct {
 		goType  string
-		cType   string
 		patches []patch
 	}{
-		{"CgroupLinkInfo", "cgroup", []patch{replace(enumTypes["AttachType"], "attach_type")}},
-		{"IterLinkInfo", "iter", []patch{replace(pointer, "target_name"), truncateAfter("target_name_len")}},
-		{"NetNsLinkInfo", "netns", []patch{replace(enumTypes["AttachType"], "attach_type")}},
-		{"RawTracepointLinkInfo", "raw_tracepoint", []patch{replace(pointer, "tp_name")}},
-		{"TracingLinkInfo", "tracing", []patch{
-			replace(enumTypes["AttachType"], "attach_type"),
-			replace(typeID, "target_btf_id")},
+		{"CgroupLinkInfo",
+			[]patch{
+				choose(3, "cgroup"),
+				flattenAnon,
+				replace(enumTypes["AttachType"], "attach_type"),
+			},
 		},
-		{"XDPLinkInfo", "xdp", nil},
-		{"TcxLinkInfo", "tcx", []patch{
-			replace(enumTypes["AttachType"], "attach_type"),
-		}},
-		{"NetfilterLinkInfo", "netfilter", nil},
-		{"NetkitLinkInfo", "netkit", []patch{
-			replace(enumTypes["AttachType"], "attach_type"),
-		}},
+		{"IterLinkInfo",
+			[]patch{
+				choose(3, "iter"),
+				flattenAnon,
+				replace(pointer, "target_name"),
+				truncateAfter("target_name_len"),
+			},
+		},
+		{"NetNsLinkInfo",
+			[]patch{choose(3, "netns"),
+				flattenAnon,
+				replace(enumTypes["AttachType"], "attach_type"),
+			},
+		},
+		{"RawTracepointLinkInfo",
+			[]patch{choose(3, "raw_tracepoint"),
+				flattenAnon,
+				replace(pointer, "tp_name"),
+			},
+		},
+		{"TracingLinkInfo",
+			[]patch{
+				choose(3, "tracing"),
+				flattenAnon,
+				replace(enumTypes["AttachType"], "attach_type"),
+				replace(typeID, "target_btf_id"),
+			},
+		},
+		{"XDPLinkInfo",
+			[]patch{choose(3, "xdp"),
+				flattenAnon,
+			},
+		},
+		{"TcxLinkInfo",
+			[]patch{
+				choose(3, "tcx"),
+				flattenAnon,
+				replace(enumTypes["AttachType"], "attach_type"),
+			},
+		},
+		{"NetfilterLinkInfo",
+			[]patch{
+				choose(3, "netfilter"),
+				flattenAnon,
+			},
+		},
+		{"NetkitLinkInfo",
+			[]patch{
+				choose(3, "netkit"),
+				flattenAnon,
+				replace(enumTypes["AttachType"], "attach_type"),
+			},
+		},
 	}
 
 	sort.Slice(linkInfoExtraTypes, func(i, j int) bool {
@@ -600,36 +642,13 @@ import (
 		return nil, err
 	}
 
-	member := bpfLinkInfo.Members[len(bpfLinkInfo.Members)-1]
-	bpfLinkInfoUnion, ok := member.Type.(*btf.Union)
-	if !ok {
-		return nil, fmt.Errorf("there is not type-specific union")
-	}
-
-	linkInfoTypes, err := splitUnion(bpfLinkInfoUnion, types{
-		{"raw_tracepoint", "raw_tracepoint"},
-		{"tracing", "tracing"},
-		{"cgroup", "cgroup"},
-		{"iter", "iter"},
-		{"netns", "netns"},
-		{"xdp", "xdp"},
-		{"struct_ops", "struct_ops"},
-		{"netfilter", "netfilter"},
-		{"kprobe_multi", "kprobe_multi"},
-		{"perf_event", "perf_event"},
-		{"tcx", "tcx"},
-		{"netkit", "netkit"},
-	})
-	if err != nil {
-		return nil, fmt.Errorf("splitting linkInfo: %w", err)
+	patches := []patch{
+		replace(enumTypes["LinkType"], "type"),
+		replace(linkID, "id"),
 	}
 
 	for _, s := range linkInfoExtraTypes {
-		t := linkInfoTypes[s.cType]
-		if t == nil {
-			return nil, fmt.Errorf("link info: no C type named %q", s.cType)
-		}
-		if err := outputPatchedStruct(gf, w, s.goType, t, s.patches); err != nil {
+		if err := outputPatchedStruct(gf, w, s.goType, bpfLinkInfo, append(patches, s.patches...)); err != nil {
 			return nil, fmt.Errorf("output %q: %w", s.goType, err)
 		}
 	}

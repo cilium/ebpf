@@ -1,8 +1,6 @@
 package link
 
 import (
-	"bytes"
-	"encoding/binary"
 	"fmt"
 
 	"github.com/cilium/ebpf"
@@ -362,32 +360,75 @@ func (l *RawLink) Info() (*Info, error) {
 	var extra interface{}
 	switch info.Type {
 	case CgroupType:
-		extra = &CgroupInfo{}
+		var cgroupInfo sys.CgroupLinkInfo
+		if err := sys.ObjInfo(l.fd, &cgroupInfo); err != nil {
+			return nil, fmt.Errorf("cgroup link info: %s", err)
+		}
+		extra = &CgroupInfo{
+			CgroupId:   cgroupInfo.CgroupId,
+			AttachType: cgroupInfo.AttachType,
+		}
 	case NetNsType:
-		extra = &NetNsInfo{}
+		var netnsInfo sys.NetNsLinkInfo
+		if err := sys.ObjInfo(l.fd, &netnsInfo); err != nil {
+			return nil, fmt.Errorf("netns link info: %s", err)
+		}
+		extra = &NetNsInfo{
+			NetnsIno:   netnsInfo.NetnsIno,
+			AttachType: netnsInfo.AttachType,
+		}
 	case TracingType:
-		extra = &TracingInfo{}
+		var tracingInfo sys.TracingLinkInfo
+		if err := sys.ObjInfo(l.fd, &tracingInfo); err != nil {
+			return nil, fmt.Errorf("tracing link info: %s", err)
+		}
+		extra = &TracingInfo{
+			TargetObjId: tracingInfo.TargetObjId,
+			TargetBtfId: tracingInfo.TargetBtfId,
+			AttachType:  tracingInfo.AttachType,
+		}
 	case XDPType:
-		extra = &XDPInfo{}
+		var xdpInfo sys.XDPLinkInfo
+		if err := sys.ObjInfo(l.fd, &xdpInfo); err != nil {
+			return nil, fmt.Errorf("xdp link info: %s", err)
+		}
+		extra = &XDPInfo{
+			Ifindex: xdpInfo.Ifindex,
+		}
 	case RawTracepointType, IterType,
 		PerfEventType, KprobeMultiType, UprobeMultiType:
 		// Extra metadata not supported.
 	case TCXType:
-		extra = &TCXInfo{}
+		var tcxInfo sys.TcxLinkInfo
+		if err := sys.ObjInfo(l.fd, &tcxInfo); err != nil {
+			return nil, fmt.Errorf("tcx link info: %s", err)
+		}
+		extra = &TCXInfo{
+			Ifindex:    tcxInfo.Ifindex,
+			AttachType: tcxInfo.AttachType,
+		}
 	case NetfilterType:
-		extra = &NetfilterInfo{}
+		var netfilterInfo sys.NetfilterLinkInfo
+		if err := sys.ObjInfo(l.fd, &netfilterInfo); err != nil {
+			return nil, fmt.Errorf("netfilter link info: %s", err)
+		}
+		extra = &NetfilterInfo{
+			Pf:       netfilterInfo.Pf,
+			Hooknum:  netfilterInfo.Hooknum,
+			Priority: netfilterInfo.Priority,
+			Flags:    netfilterInfo.Flags,
+		}
 	case NetkitType:
-		extra = &NetkitInfo{}
+		var netkitInfo sys.NetkitLinkInfo
+		if err := sys.ObjInfo(l.fd, &netkitInfo); err != nil {
+			return nil, fmt.Errorf("tcx link info: %s", err)
+		}
+		extra = &NetkitInfo{
+			Ifindex:    netkitInfo.Ifindex,
+			AttachType: netkitInfo.AttachType,
+		}
 	default:
 		return nil, fmt.Errorf("unknown link info type: %d", info.Type)
-	}
-
-	if extra != nil {
-		buf := bytes.NewReader(info.Extra[:])
-		err := binary.Read(buf, internal.NativeEndian, extra)
-		if err != nil {
-			return nil, fmt.Errorf("cannot read extra link info: %w", err)
-		}
 	}
 
 	return &Info{

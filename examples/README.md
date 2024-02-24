@@ -19,8 +19,8 @@ Please see our [guide on what makes a good example](https://ebpf-go.dev/contribu
   Like kprobes, but with better performance and usability, for kernels 5.5 and later.
   * [tcp_connect](fentry/) - Trace outgoing IPv4 TCP connections.
   * [tcp_close](tcprtt/) - Log RTT of IPv4 TCP connections using eBPF CO-RE helpers.
-* TC and XDP - Attach a program to a network interface to process incoming (XDP) and outgoing (TC) packets.
-  * [shared_xdp_tc](./shared_xdp_tc/) - monitor and periodically reset the number of incoming and outgoing packets for each network flow identified with the traditional 5-tuple session identifier (IP addresses, L4 Ports, IP protocol).
+* TCx - Attach a program to Linux TC (Traffic Control) to process incoming and outgoing packets.
+  * [tcx](./tcx/) - monitor the number of incoming and outgoing packets for each network flow identified with the traditional 5-tuple session identifier (IP addresses, L4 Ports, IP protocol).
 * XDP - Attach a program to a network interface to process incoming packets.
   * [xdp](xdp/) - Print packet counts by IPv4 source address.
 

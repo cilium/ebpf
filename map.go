@@ -1233,7 +1233,11 @@ func batchCount(keys, values any) (int, error) {
 //
 // It's not possible to guarantee that all keys in a map will be
 // returned if there are concurrent modifications to the map.
-func (m *Map) Iterate() *MapIterator {
+//
+// For value-only maps (Queue and Stack), multiple iterators will
+// never lookup the same entry, as it is removed from the buffer by design
+// (pop operation).
+func (m *Map) Iterate() MapIterator {
 	return newMapIterator(m)
 }
 
@@ -1486,10 +1490,34 @@ func marshalMap(m *Map, length int) ([]byte, error) {
 	return buf, nil
 }
 
-// MapIterator iterates a Map.
+// MapIterator is the interface defining methods to iterate
+// through the content of the target map.
 //
 // See Map.Iterate.
-type MapIterator struct {
+type MapIterator interface {
+	// Err returns any encountered error.
+	//
+	// The method must be called after Next returns nil.
+	//
+	// For key-value maps, returns ErrIterationAborted if
+	// it wasn't possible to do a full iteration.
+	Err() error
+
+	// Next decodes the next key and value.
+	//
+	// In case of a value-only map (Queue and Stack), the key
+	// parameter is set to nil in case of no errors.
+	//
+	// Returns false if there are no more entries. You must check
+	// the result of Err afterwards.
+	Next(keyOut, valueOut interface{}) bool
+}
+
+// keyValueMapIterator iterates a Map defined by key-value pairs.
+// (all except Queue and Stack)
+//
+// See Map.Iterate.
+type keyValueMapIterator struct {
 	target *Map
 	// Temporary storage to avoid allocations in Next(). This is any instead
 	// of []byte to avoid allocations.
@@ -1499,37 +1527,47 @@ type MapIterator struct {
 	err               error
 }
 
-func newMapIterator(target *Map) *MapIterator {
-	return &MapIterator{
+// keylessMapIterator iterates a Map defined with only values.
+// (Queue and Stack)
+//
+// See Map.Iterate.
+type keylessMapIterator struct {
+	target *Map
+	err    error
+}
+
+// newMapIterator return the correct MapIterator implementation
+// based on the underlying map type.
+func newMapIterator(target *Map) MapIterator {
+	if target.typ.isQueueStack() {
+		return &keylessMapIterator{
+			target: target,
+		}
+	}
+	return &keyValueMapIterator{
 		target:     target,
 		maxEntries: target.maxEntries,
 	}
 }
 
-// nextQueueMap decodes the next value from a map of type
-// Queue or Stack.
+// next decodes the next value from a map of type Queue or Stack.
 //
 // Returns false if there are no more entries. You must check
 // the result of Err afterwards.
-func (mi *MapIterator) nextQueueMap(valueOut interface{}) bool {
-	if mi.err != nil || mi.done {
+func (mi *keylessMapIterator) next(_, valueOut interface{}) bool {
+	// Check whether there was a previous error
+	if mi.err != nil {
 		return false
 	}
 
-	// For Queue/Stack map block the iteration after maxEntries
-	// to avoid potential infinite loops
-	// (values can be pushed to map while doing pop)
-	if mi.count == mi.maxEntries {
-		mi.err = fmt.Errorf("%w", ErrIterationAborted)
-		return false
-	}
-
-	mi.count++
 	err := mi.target.LookupAndDelete(nil, valueOut)
 	if errors.Is(err, ErrKeyNotExist) {
+		// For these maps this error indicates that the map is empty.
+		// Return false instead of the error.
 		return false
 	}
 	if err != nil {
+		// Whether any other error rather than ErrKeyNotExist occurred
 		mi.err = fmt.Errorf("look up next value: %w", err)
 		return false
 	}
@@ -1537,11 +1575,11 @@ func (mi *MapIterator) nextQueueMap(valueOut interface{}) bool {
 }
 
 // next decodes the next key and value from a map with key-value pair
-// (except Queue and Stack).
+// (all except Queue and Stack).
 //
 // Returns false if there are no more entries. You must check
 // the result of Err afterwards.
-func (mi *MapIterator) next(keyOut, valueOut interface{}) bool {
+func (mi *keyValueMapIterator) next(keyOut, valueOut interface{}) bool {
 	if mi.err != nil || mi.done {
 		return false
 	}
@@ -1606,17 +1644,19 @@ func (mi *MapIterator) next(keyOut, valueOut interface{}) bool {
 // safe. You may see the same key multiple times. Iteration may
 // also abort with an error, see IsIterationAborted.
 //
-// Iterating a Queue/Stack will lookup only the value, as those
-// maps do not use a key.
-//
 // Returns false if there are no more entries. You must check
 // the result of Err afterwards.
 //
 // See Map.Get for further caveats around valueOut.
-func (mi *MapIterator) Next(keyOut, valueOut interface{}) bool {
-	if mi.target.typ.isQueueStack() {
-		return mi.nextQueueMap(valueOut)
-	}
+func (mi *keyValueMapIterator) Next(keyOut, valueOut interface{}) bool {
+	return mi.next(keyOut, valueOut)
+}
+
+// Next decodes the next value in the Queue/Stack, ignoring the keyOut parameter.
+//
+// Returns false if there are no more entries (ErrKeyNotExist).
+// You must check the result of Err afterwards.
+func (mi *keylessMapIterator) Next(keyOut, valueOut interface{}) bool {
 	return mi.next(keyOut, valueOut)
 }
 
@@ -1625,7 +1665,14 @@ func (mi *MapIterator) Next(keyOut, valueOut interface{}) bool {
 // The method must be called after Next returns nil.
 //
 // Returns ErrIterationAborted if it wasn't possible to do a full iteration.
-func (mi *MapIterator) Err() error {
+func (mi *keyValueMapIterator) Err() error {
+	return mi.err
+}
+
+// Err returns any encountered error.
+//
+// The method must be called after Next returns nil.
+func (mi *keylessMapIterator) Err() error {
 	return mi.err
 }
 

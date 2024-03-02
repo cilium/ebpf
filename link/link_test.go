@@ -275,6 +275,12 @@ func testLink(t *testing.T, link Link, prog *ebpf.Program) {
 			if nf.Priority == 0 {
 				t.Fatalf("Failed to get link Netfilter extra info")
 			}
+		case sys.BPF_LINK_TYPE_KPROBE_MULTI:
+			// test default Info data
+			kmulti := info.KprobeMulti()
+			if kmulti.Count == 0 {
+				t.Fatalf("Failed to get link KprobeMulti extra info")
+			}
 		}
 	})
 

@@ -194,6 +194,12 @@ type NetkitInfo struct {
 	AttachType sys.AttachType
 }
 
+type KprobeMultiInfo struct {
+	Count  uint32
+	Flags  uint32
+	Missed uint64
+}
+
 // Tracing returns tracing type-specific link info.
 //
 // Returns nil if the type-specific link info isn't available.
@@ -247,6 +253,14 @@ func (r Info) Netfilter() *NetfilterInfo {
 // Returns nil if the type-specific link info isn't available.
 func (r Info) Netkit() *NetkitInfo {
 	e, _ := r.extra.(*NetkitInfo)
+	return e
+}
+
+// KprobeMulti returns kprobe-multi type-specific link info.
+//
+// Returns nil if the type-specific link info isn't available.
+func (r Info) KprobeMulti() *KprobeMultiInfo {
+	e, _ := r.extra.(*KprobeMultiInfo)
 	return e
 }
 
@@ -426,7 +440,7 @@ func (l *RawLink) Info() (*Info, error) {
 			Ifindex: xdpInfo.Ifindex,
 		}
 	case RawTracepointType, IterType,
-		PerfEventType, KprobeMultiType, UprobeMultiType:
+		PerfEventType, UprobeMultiType:
 		// Extra metadata not supported.
 	case TCXType:
 		var tcxInfo sys.TcxLinkInfo
@@ -456,6 +470,22 @@ func (l *RawLink) Info() (*Info, error) {
 		extra = &NetkitInfo{
 			Ifindex:    netkitInfo.Ifindex,
 			AttachType: netkitInfo.AttachType,
+		}
+	case KprobeMultiType:
+		var kprobeMultiInfo sys.KprobeMultiLinkInfo
+		if err := sys.ObjInfo(l.fd, &kprobeMultiInfo); err != nil {
+			return nil, fmt.Errorf("kprobe multi link info: %s", err)
+		}
+		// There's a gap between when kprobe multi got introduced
+		// and when it supported link info interface. We can detect
+		// that with kprobe multi specific Count field being zero.
+		if kprobeMultiInfo.Count == 0 {
+			return nil, fmt.Errorf("kprobe multi link info: %w", ErrNotSupported)
+		}
+		extra = &KprobeMultiInfo{
+			Count:  kprobeMultiInfo.Count,
+			Flags:  kprobeMultiInfo.Flags,
+			Missed: kprobeMultiInfo.Missed,
 		}
 	default:
 		return nil, fmt.Errorf("unknown link info type: %d", info.Type)

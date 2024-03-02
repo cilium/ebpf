@@ -275,6 +275,17 @@ func testLink(t *testing.T, link Link, prog *ebpf.Program) {
 			if nf.Priority == 0 {
 				t.Fatalf("Failed to get link Netfilter extra info")
 			}
+		case sys.BPF_LINK_TYPE_KPROBE_MULTI:
+			// test default Info data
+			kmulti := info.KprobeMulti()
+			if count, ok := kmulti.AddressCount(); ok {
+				qt.Assert(t, qt.Not(qt.Equals(count, 0)))
+
+				_, ok = kmulti.Missed()
+				qt.Assert(t, qt.IsTrue(ok))
+				// NB: We don't check that missed is actually correct
+				// since it's not easy to trigger from tests.
+			}
 		}
 	})
 

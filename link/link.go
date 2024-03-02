@@ -194,6 +194,25 @@ type NetkitInfo struct {
 	AttachType sys.AttachType
 }
 
+type KprobeMultiInfo struct {
+	count  uint32
+	flags  uint32
+	missed uint64
+}
+
+// AddressCount is the number of addresses hooked by the kprobe.
+func (kpm *KprobeMultiInfo) AddressCount() (uint32, bool) {
+	return kpm.count, kpm.count > 0
+}
+
+func (kpm *KprobeMultiInfo) Flags() (uint32, bool) {
+	return kpm.flags, kpm.count > 0
+}
+
+func (kpm *KprobeMultiInfo) Missed() (uint64, bool) {
+	return kpm.missed, kpm.count > 0
+}
+
 // Tracing returns tracing type-specific link info.
 //
 // Returns nil if the type-specific link info isn't available.
@@ -247,6 +266,14 @@ func (r Info) Netfilter() *NetfilterInfo {
 // Returns nil if the type-specific link info isn't available.
 func (r Info) Netkit() *NetkitInfo {
 	e, _ := r.extra.(*NetkitInfo)
+	return e
+}
+
+// KprobeMulti returns kprobe-multi type-specific link info.
+//
+// Returns nil if the type-specific link info isn't available.
+func (r Info) KprobeMulti() *KprobeMultiInfo {
+	e, _ := r.extra.(*KprobeMultiInfo)
 	return e
 }
 
@@ -426,7 +453,7 @@ func (l *RawLink) Info() (*Info, error) {
 			Ifindex: xdpInfo.Ifindex,
 		}
 	case RawTracepointType, IterType,
-		PerfEventType, KprobeMultiType, UprobeMultiType:
+		PerfEventType, UprobeMultiType:
 		// Extra metadata not supported.
 	case TCXType:
 		var tcxInfo sys.TcxLinkInfo
@@ -456,6 +483,16 @@ func (l *RawLink) Info() (*Info, error) {
 		extra = &NetkitInfo{
 			Ifindex:    netkitInfo.Ifindex,
 			AttachType: netkitInfo.AttachType,
+		}
+	case KprobeMultiType:
+		var kprobeMultiInfo sys.KprobeMultiLinkInfo
+		if err := sys.ObjInfo(l.fd, &kprobeMultiInfo); err != nil {
+			return nil, fmt.Errorf("kprobe multi link info: %s", err)
+		}
+		extra = &KprobeMultiInfo{
+			count:  kprobeMultiInfo.Count,
+			flags:  kprobeMultiInfo.Flags,
+			missed: kprobeMultiInfo.Missed,
 		}
 	default:
 		return nil, fmt.Errorf("unknown link info type: %d", info.Type)

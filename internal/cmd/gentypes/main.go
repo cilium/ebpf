@@ -644,6 +644,12 @@ import (
 				replace(enumTypes["AttachType"], "attach_type"),
 			},
 		},
+		{"KprobeMultiLinkInfo",
+			[]patch{
+				choose(3, "kprobe_multi"),
+				flattenAnon,
+			},
+		},
 	}
 
 	sort.Slice(linkInfoExtraTypes, func(i, j int) bool {

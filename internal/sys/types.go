@@ -1275,6 +1275,18 @@ type IterLinkInfo struct {
 	TargetNameLen uint32
 }
 
+type KprobeMultiLinkInfo struct {
+	Type   LinkType
+	Id     LinkID
+	ProgId uint32
+	_      [4]byte
+	Addrs  uint64
+	Count  uint32
+	Flags  uint32
+	Missed uint64
+	_      [16]byte
+}
+
 type NetNsLinkInfo struct {
 	Type       LinkType
 	Id         LinkID

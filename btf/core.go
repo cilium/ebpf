@@ -138,10 +138,11 @@ const (
 	reloTypeSize                        /* type size in bytes */
 	reloEnumvalExists                   /* enum value existence in target kernel */
 	reloEnumvalValue                    /* enum value integer value */
+	reloTypeMatches                     /* type matches kernel type */
 )
 
 func (k coreKind) checksForExistence() bool {
-	return k == reloEnumvalExists || k == reloTypeExists || k == reloFieldExists
+	return k == reloEnumvalExists || k == reloTypeExists || k == reloFieldExists || k == reloTypeMatches
 }
 
 func (k coreKind) String() string {
@@ -170,8 +171,10 @@ func (k coreKind) String() string {
 		return "enumval_exists"
 	case reloEnumvalValue:
 		return "enumval_value"
+	case reloTypeMatches:
+		return "type_matches"
 	default:
-		return "unknown"
+		return fmt.Sprintf("unknown (%d)", k)
 	}
 }
 
@@ -368,6 +371,21 @@ func coreCalculateFixup(relo *CORERelocation, target Type, bo binary.ByteOrder, 
 	local := relo.typ
 
 	switch relo.kind {
+	case reloTypeMatches:
+		if len(relo.accessor) > 1 || relo.accessor[0] != 0 {
+			return zero, fmt.Errorf("unexpected accessor %v", relo.accessor)
+		}
+
+		err := coreTypesMatch(local, target, nil)
+		if errors.Is(err, errIncompatibleTypes) {
+			return poison()
+		}
+		if err != nil {
+			return zero, err
+		}
+
+		return fixup(1, 1)
+
 	case reloTypeIDTarget, reloTypeSize, reloTypeExists:
 		if len(relo.accessor) > 1 || relo.accessor[0] != 0 {
 			return zero, fmt.Errorf("unexpected accessor %v", relo.accessor)
@@ -1024,19 +1042,6 @@ func coreAreMembersCompatible(localType Type, targetType Type) error {
 	localType = UnderlyingType(localType)
 	targetType = UnderlyingType(targetType)
 
-	doNamesMatch := func(a, b string) error {
-		if a == "" || b == "" {
-			// allow anonymous and named type to match
-			return nil
-		}
-
-		if newEssentialName(a) == newEssentialName(b) {
-			return nil
-		}
-
-		return fmt.Errorf("names don't match: %w", errImpossibleRelocation)
-	}
-
 	_, lok := localType.(composite)
 	_, tok := targetType.(composite)
 	if lok && tok {
@@ -1053,13 +1058,204 @@ func coreAreMembersCompatible(localType Type, targetType Type) error {
 
 	case *Enum:
 		tv := targetType.(*Enum)
-		return doNamesMatch(lv.Name, tv.Name)
+		if !coreEssentialNamesMatch(lv.Name, tv.Name) {
+			return fmt.Errorf("names %q and %q don't match: %w", lv.Name, tv.Name, errImpossibleRelocation)
+		}
+
+		return nil
 
 	case *Fwd:
 		tv := targetType.(*Fwd)
-		return doNamesMatch(lv.Name, tv.Name)
+		if !coreEssentialNamesMatch(lv.Name, tv.Name) {
+			return fmt.Errorf("names %q and %q don't match: %w", lv.Name, tv.Name, errImpossibleRelocation)
+		}
+
+		return nil
 
 	default:
 		return fmt.Errorf("type %s: %w", localType, ErrNotSupported)
 	}
+}
+
+// coreEssentialNamesMatch compares two names while ignoring their flavour suffix.
+//
+// This should only be used on names which are in the global scope, like struct
+// names, typedefs or enum values.
+func coreEssentialNamesMatch(a, b string) bool {
+	if a == "" || b == "" {
+		// allow anonymous and named type to match
+		return true
+	}
+
+	return newEssentialName(a) == newEssentialName(b)
+}
+
+/* The comment below is from __bpf_core_types_match in relo_core.c:
+ *
+ * Check that two types "match". This function assumes that root types were
+ * already checked for name match.
+ *
+ * The matching relation is defined as follows:
+ * - modifiers and typedefs are stripped (and, hence, effectively ignored)
+ * - generally speaking types need to be of same kind (struct vs. struct, union
+ *   vs. union, etc.)
+ *   - exceptions are struct/union behind a pointer which could also match a
+ *     forward declaration of a struct or union, respectively, and enum vs.
+ *     enum64 (see below)
+ * Then, depending on type:
+ * - integers:
+ *   - match if size and signedness match
+ * - arrays & pointers:
+ *   - target types are recursively matched
+ * - structs & unions:
+ *   - local members need to exist in target with the same name
+ *   - for each member we recursively check match unless it is already behind a
+ *     pointer, in which case we only check matching names and compatible kind
+ * - enums:
+ *   - local variants have to have a match in target by symbolic name (but not
+ *     numeric value)
+ *   - size has to match (but enum may match enum64 and vice versa)
+ * - function pointers:
+ *   - number and position of arguments in local type has to match target
+ *   - for each argument and the return value we recursively check match
+ */
+func coreTypesMatch(localType Type, targetType Type, visited map[pair]struct{}) error {
+	localType = UnderlyingType(localType)
+	targetType = UnderlyingType(targetType)
+
+	if !coreEssentialNamesMatch(localType.TypeName(), targetType.TypeName()) {
+		return fmt.Errorf("type name %q don't match %q: %w", localType.TypeName(), targetType.TypeName(), errIncompatibleTypes)
+	}
+
+	if reflect.TypeOf(localType) != reflect.TypeOf(targetType) {
+		return fmt.Errorf("type mismatch between %v and %v: %w", localType, targetType, errIncompatibleTypes)
+	}
+
+	if _, ok := visited[pair{localType, targetType}]; ok {
+		return nil
+	}
+	if visited == nil {
+		visited = make(map[pair]struct{})
+	}
+	visited[pair{localType, targetType}] = struct{}{}
+
+	switch lv := (localType).(type) {
+	case *Void:
+
+	case *Fwd:
+		if targetType.(*Fwd).Kind != lv.Kind {
+			return fmt.Errorf("fwd kind mismatch between %v and %v: %w", localType, targetType, errIncompatibleTypes)
+		}
+
+	case *Enum:
+		return coreEnumsMatch(lv, targetType.(*Enum))
+
+	case composite:
+		tv := targetType.(composite)
+
+		if len(lv.members()) > len(tv.members()) {
+			return errIncompatibleTypes
+		}
+
+		localMembers := lv.members()
+		targetMembers := map[string]Member{}
+		for _, member := range tv.members() {
+			targetMembers[member.Name] = member
+		}
+
+		for _, localMember := range localMembers {
+			targetMember, found := targetMembers[localMember.Name]
+			if !found {
+				return fmt.Errorf("no field %q in %v: %w", localMember.Name, targetType, errIncompatibleTypes)
+			}
+
+			err := coreTypesMatch(localMember.Type, targetMember.Type, visited)
+			if err != nil {
+				return err
+			}
+		}
+
+	case *Int:
+		if !coreEncodingMatches(lv, targetType.(*Int)) {
+			return fmt.Errorf("int mismatch between %v and %v: %w", localType, targetType, errIncompatibleTypes)
+		}
+
+	case *Pointer:
+		tv := targetType.(*Pointer)
+
+		// Allow a pointer to a forward declaration to match a struct
+		// or union.
+		if fwd, ok := As[*Fwd](lv.Target); ok && fwd.matches(tv.Target) {
+			return nil
+		}
+
+		if fwd, ok := As[*Fwd](tv.Target); ok && fwd.matches(lv.Target) {
+			return nil
+		}
+
+		return coreTypesMatch(lv.Target, tv.Target, visited)
+
+	case *Array:
+		tv := targetType.(*Array)
+
+		if lv.Nelems != tv.Nelems {
+			return fmt.Errorf("array mismatch between %v and %v: %w", localType, targetType, errIncompatibleTypes)
+		}
+
+		return coreTypesMatch(lv.Type, tv.Type, visited)
+
+	case *FuncProto:
+		tv := targetType.(*FuncProto)
+
+		if len(lv.Params) != len(tv.Params) {
+			return fmt.Errorf("function param mismatch: %w", errIncompatibleTypes)
+		}
+
+		for i, lparam := range lv.Params {
+			if err := coreTypesMatch(lparam.Type, tv.Params[i].Type, visited); err != nil {
+				return err
+			}
+		}
+
+		return coreTypesMatch(lv.Return, tv.Return, visited)
+
+	default:
+		return fmt.Errorf("unsupported type %T", localType)
+	}
+
+	return nil
+}
+
+// coreEncodingMatches returns true if both ints have the same size and signedness.
+// All encodings other than `Signed` are considered unsigned.
+func coreEncodingMatches(local, target *Int) bool {
+	return local.Size == target.Size && (local.Encoding == Signed) == (target.Encoding == Signed)
+}
+
+// coreEnumsMatch checks two enums match, which is considered to be the case if the following is true:
+// - size has to match (but enum may match enum64 and vice versa)
+// - local variants have to have a match in target by symbolic name (but not numeric value)
+func coreEnumsMatch(local *Enum, target *Enum) error {
+	if local.Size != target.Size {
+		return fmt.Errorf("size mismatch between %v and %v: %w", local, target, errIncompatibleTypes)
+	}
+
+	// If there are more values in the local than the target, there must be at least one value in the local
+	// that isn't in the target, and therefor the types are incompatible.
+	if len(local.Values) > len(target.Values) {
+		return fmt.Errorf("local has more values than target: %w", errIncompatibleTypes)
+	}
+
+outer:
+	for _, lv := range local.Values {
+		for _, rv := range target.Values {
+			if coreEssentialNamesMatch(lv.Name, rv.Name) {
+				continue outer
+			}
+		}
+
+		return fmt.Errorf("no match for %v in %v: %w", lv, target, errIncompatibleTypes)
+	}
+
+	return nil
 }

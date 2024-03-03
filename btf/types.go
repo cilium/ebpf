@@ -318,6 +318,18 @@ func (f *Fwd) copy() Type {
 	return &cpy
 }
 
+func (f *Fwd) matches(typ Type) bool {
+	if _, ok := As[*Struct](typ); ok && f.Kind == FwdStruct {
+		return true
+	}
+
+	if _, ok := As[*Union](typ); ok && f.Kind == FwdUnion {
+		return true
+	}
+
+	return false
+}
+
 // Typedef is an alias of a Type.
 type Typedef struct {
 	Name string

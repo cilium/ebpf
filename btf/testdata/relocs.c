@@ -97,6 +97,13 @@ __section("socket/type_ids") int type_ids() {
 		} \
 	})
 
+#define type_matches(expr) \
+	({ \
+		if (!bpf_core_type_matches(expr)) { \
+			return __LINE__; \
+		} \
+	})
+
 __section("socket/types") int types() {
 	type_exists(struct s);
 	type_exists(s_t);
@@ -124,6 +131,19 @@ __section("socket/types") int types() {
 	type_size_matches(u_t);
 	type_size_matches(const u_t);
 	type_size_matches(volatile u_t);
+
+	type_matches(struct s);
+	type_matches(s_t);
+	type_matches(const s_t);
+	type_matches(volatile s_t);
+	type_matches(enum e);
+	type_matches(e_t);
+	type_matches(const e_t);
+	type_matches(volatile e_t);
+	type_matches(union u);
+	type_matches(u_t);
+	type_matches(const u_t);
+	type_matches(volatile u_t);
 
 	return 0;
 }

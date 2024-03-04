@@ -69,6 +69,8 @@ func TestExecutableOffset(t *testing.T) {
 }
 
 func TestExecutableLazyLoadSymbols(t *testing.T) {
+	testutils.SkipOnOldKernel(t, "4.14", "uprobe on v4.9 returns EIO on vimto")
+
 	ex, err := OpenExecutable("/bin/bash")
 	qt.Assert(t, qt.IsNil(err))
 	// Addresses must be empty, will be lazy loaded.
@@ -93,6 +95,8 @@ func TestExecutableLazyLoadSymbols(t *testing.T) {
 }
 
 func TestUprobe(t *testing.T) {
+	testutils.SkipOnOldKernel(t, "4.14", "uprobe on v4.9 returns EIO on vimto")
+
 	prog := mustLoadProgram(t, ebpf.Kprobe, 0, "")
 
 	up, err := bashEx.Uprobe(bashSym, prog, nil)
@@ -113,6 +117,8 @@ func TestUprobeExtNotFound(t *testing.T) {
 }
 
 func TestUprobeExtWithOpts(t *testing.T) {
+	testutils.SkipOnOldKernel(t, "4.14", "uprobe on v4.9 returns EIO on vimto")
+
 	prog := mustLoadProgram(t, ebpf.Kprobe, 0, "")
 
 	// NB: It's not possible to invoke the uprobe since we use an arbitrary
@@ -128,6 +134,8 @@ func TestUprobeExtWithOpts(t *testing.T) {
 }
 
 func TestUprobeWithPID(t *testing.T) {
+	testutils.SkipOnOldKernel(t, "4.14", "uprobe on v4.9 returns EIO on vimto")
+
 	prog := mustLoadProgram(t, ebpf.Kprobe, 0, "")
 
 	up, err := bashEx.Uprobe(bashSym, prog, &UprobeOptions{PID: os.Getpid()})
@@ -148,6 +156,8 @@ func TestUprobeWithNonExistentPID(t *testing.T) {
 }
 
 func TestUretprobe(t *testing.T) {
+	testutils.SkipOnOldKernel(t, "4.14", "uprobe on v4.9 returns EIO on vimto")
+
 	prog := mustLoadProgram(t, ebpf.Kprobe, 0, "")
 
 	up, err := bashEx.Uretprobe(bashSym, prog, nil)
@@ -214,6 +224,8 @@ func TestUprobePMUUnavailable(t *testing.T) {
 
 // Test tracefs u(ret)probe creation on all kernel versions.
 func TestUprobeTraceFS(t *testing.T) {
+	testutils.SkipOnOldKernel(t, "4.14", "uprobe on v4.9 returns EIO on vimto")
+
 	// Fetch the offset from the /bin/bash Executable already defined.
 	off, err := bashEx.address(bashSym, 0, 0)
 	qt.Assert(t, qt.IsNil(err))
@@ -265,6 +277,8 @@ func TestUprobeTraceFS(t *testing.T) {
 }
 
 func TestUprobeProgramCall(t *testing.T) {
+	testutils.SkipOnOldKernel(t, "4.14", "uprobe on v4.9 returns EIO on vimto")
+
 	tests := []struct {
 		name string
 		elf  string
@@ -345,6 +359,8 @@ func TestUprobeProgramCall(t *testing.T) {
 }
 
 func TestUprobeProgramWrongPID(t *testing.T) {
+	testutils.SkipOnOldKernel(t, "4.14", "uprobe on v4.9 returns EIO on vimto")
+
 	m, p := newUpdaterMapProg(t, ebpf.Kprobe, 0)
 
 	// Load the '/bin/bash' executable.

@@ -90,6 +90,8 @@ func main() {
 			goBuild.Env = append(os.Environ(),
 				"GOOS=linux",
 				"GOARCH="+arch,
+				"GOPROXY=off",
+				"GOSUMDB=off",
 			)
 			out, err := goBuild.CombinedOutput()
 			if err != nil {

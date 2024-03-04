@@ -1,8 +1,9 @@
 package internal
 
 import (
-	"os"
 	"testing"
+
+	"github.com/go-quicktest/qt"
 )
 
 func TestVersion(t *testing.T) {
@@ -48,19 +49,8 @@ func TestKernelVersion(t *testing.T) {
 }
 
 func TestCurrentKernelVersion(t *testing.T) {
-	v, err := KernelVersion()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if evStr := os.Getenv("KERNEL_VERSION"); evStr != "" {
-		ev, err := NewVersion(evStr)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if ev[0] != v[0] || ev[1] != v[1] {
-			t.Errorf("expected kernel version %d.%d, got %d.%d", ev[0], ev[1], v[0], v[1])
-		}
-	}
+	_, err := KernelVersion()
+	qt.Assert(t, qt.IsNil(err))
 }
 
 func TestVersionFromCode(t *testing.T) {

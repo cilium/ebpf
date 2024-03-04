@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"syscall"
 	"testing"
@@ -475,6 +476,8 @@ func TestProgramVerifierLogTruncated(t *testing.T) {
 	logSize := 128
 
 	check := func(t *testing.T, err error) {
+		t.Helper()
+
 		if err == nil {
 			t.Fatal("Expected an error")
 		}
@@ -490,26 +493,18 @@ func TestProgramVerifierLogTruncated(t *testing.T) {
 	// Generate a base program of sufficient size whose verifier log does not fit
 	// a 128-byte buffer. This should always result in ENOSPC, setting the
 	// VerifierError.Truncated flag.
-	base := func() (out asm.Instructions) {
-		for i := 0; i < 32; i++ {
-			out = append(out, asm.Mov.Reg(asm.R0, asm.R1))
-		}
-		return
-	}()
+	var base asm.Instructions
+	for i := 0; i < 32; i++ {
+		base = append(base, asm.Mov.Reg(asm.R0, asm.R1))
+	}
 
-	invalid := func() (out asm.Instructions) {
-		out = base
-		// Touch R10 (read-only frame pointer) to reliably force a verifier error.
-		out = append(out, asm.Mov.Reg(asm.R10, asm.R0))
-		out = append(out, asm.Return())
-		return
-	}()
+	// Touch R10 (read-only frame pointer) to reliably force a verifier error.
+	invalid := slices.Clone(base)
+	invalid = append(invalid, asm.Mov.Reg(asm.R10, asm.R0))
+	invalid = append(invalid, asm.Return())
 
-	valid := func() (out asm.Instructions) {
-		out = base
-		out = append(out, asm.Return())
-		return
-	}()
+	valid := slices.Clone(base)
+	valid = append(valid, asm.Return())
 
 	// Start out with testing against the invalid program.
 	spec := &ProgramSpec{

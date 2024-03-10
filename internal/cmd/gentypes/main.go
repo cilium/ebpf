@@ -650,6 +650,16 @@ import (
 				flattenAnon,
 			},
 		},
+		{"KprobeLinkInfo",
+			[]patch{
+				choose(3, "perf_event"),
+				flattenAnon,
+				renameNth(3, "perf_event_type"),
+				replace(enumTypes["PerfEventType"], "perf_event_type"),
+				choose(4, "kprobe"),
+				flattenAnon,
+			},
+		},
 	}
 
 	sort.Slice(linkInfoExtraTypes, func(i, j int) bool {
@@ -889,6 +899,16 @@ func rename(from, to string) patch {
 			}
 		}
 		return fmt.Errorf("no member named %q", from)
+	}
+}
+
+func renameNth(idx int, to string) patch {
+	return func(s *btf.Struct) error {
+		if idx >= len(s.Members) {
+			return fmt.Errorf("index %d is out of bounds", idx)
+		}
+		s.Members[idx].Name = to
+		return nil
 	}
 }
 

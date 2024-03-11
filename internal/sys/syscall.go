@@ -103,6 +103,10 @@ func (i *KprobeMultiLinkInfo) info() (unsafe.Pointer, uint32) {
 	return unsafe.Pointer(i), uint32(unsafe.Sizeof(*i))
 }
 
+func (i *KprobeLinkInfo) info() (unsafe.Pointer, uint32) {
+	return unsafe.Pointer(i), uint32(unsafe.Sizeof(*i))
+}
+
 var _ Info = (*BtfInfo)(nil)
 
 func (i *BtfInfo) info() (unsafe.Pointer, uint32) {

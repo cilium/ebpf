@@ -213,6 +213,29 @@ func (kpm *KprobeMultiInfo) Missed() (uint64, bool) {
 	return kpm.missed, kpm.count > 0
 }
 
+type PerfEventInfo struct {
+	Type  sys.PerfEventType
+	extra interface{}
+}
+
+func (r *PerfEventInfo) Kprobe() *KprobeInfo {
+	e, _ := r.extra.(*KprobeInfo)
+	return e
+}
+
+type KprobeInfo struct {
+	address uint64
+	missed  uint64
+}
+
+func (kp *KprobeInfo) Address() (uint64, bool) {
+	return kp.address, kp.address > 0
+}
+
+func (kp *KprobeInfo) Missed() (uint64, bool) {
+	return kp.missed, kp.address > 0
+}
+
 // Tracing returns tracing type-specific link info.
 //
 // Returns nil if the type-specific link info isn't available.
@@ -274,6 +297,14 @@ func (r Info) Netkit() *NetkitInfo {
 // Returns nil if the type-specific link info isn't available.
 func (r Info) KprobeMulti() *KprobeMultiInfo {
 	e, _ := r.extra.(*KprobeMultiInfo)
+	return e
+}
+
+// PerfEvent returns perf-event type-specific link info.
+//
+// Returns nil if the type-specific link info isn't available.
+func (r Info) PerfEvent() *PerfEventInfo {
+	e, _ := r.extra.(*PerfEventInfo)
 	return e
 }
 
@@ -452,8 +483,7 @@ func (l *RawLink) Info() (*Info, error) {
 		extra = &XDPInfo{
 			Ifindex: xdpInfo.Ifindex,
 		}
-	case RawTracepointType, IterType,
-		PerfEventType, UprobeMultiType:
+	case RawTracepointType, IterType, UprobeMultiType:
 		// Extra metadata not supported.
 	case TCXType:
 		var tcxInfo sys.TcxLinkInfo
@@ -493,6 +523,29 @@ func (l *RawLink) Info() (*Info, error) {
 			count:  kprobeMultiInfo.Count,
 			flags:  kprobeMultiInfo.Flags,
 			missed: kprobeMultiInfo.Missed,
+		}
+	case PerfEventType:
+		var perfEventInfo sys.PerfEventLinkInfo
+		if err := sys.ObjInfo(l.fd, &perfEventInfo); err != nil {
+			return nil, fmt.Errorf("perf event link info: %s", err)
+		}
+
+		var extra2 interface{}
+		switch perfEventInfo.PerfEventType {
+		case sys.BPF_PERF_EVENT_KPROBE, sys.BPF_PERF_EVENT_KRETPROBE:
+			var kprobeInfo sys.KprobeLinkInfo
+			if err := sys.ObjInfo(l.fd, &kprobeInfo); err != nil {
+				return nil, fmt.Errorf("kprobe multi link info: %s", err)
+			}
+			extra2 = &KprobeInfo{
+				address: kprobeInfo.Addr,
+				missed:  kprobeInfo.Missed,
+			}
+		}
+
+		extra = &PerfEventInfo{
+			Type:  perfEventInfo.PerfEventType,
+			extra: extra2,
 		}
 	default:
 		return nil, fmt.Errorf("unknown link info type: %d", info.Type)

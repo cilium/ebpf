@@ -3,14 +3,13 @@ package sysenc
 import (
 	"bytes"
 	"encoding"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"reflect"
 	"slices"
 	"sync"
 	"unsafe"
-
-	"github.com/cilium/ebpf/internal/sysenc/binary"
 
 	"github.com/cilium/ebpf/internal"
 )

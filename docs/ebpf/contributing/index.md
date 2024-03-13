@@ -79,13 +79,15 @@ you as a code owner. Please create an issue in the repository.
     * May be asked to help with certain issues
 * [ebpf-go-reviewers]
     * Have ["Write"][permissions] role
-    * Can re-run failed CI tasks
-    * Can't merge to protected branches
-    * Can't create releases
-    * May be asked to become CODEOWNERS
+    * CODEOWNER of a part of the code base
+    * In-depth review of code, escalates to maintainers if necessary
 * [ebpf-lib-maintainers]
     * Have ["Admin"][permissions] role
-    * CODEOWNERS of last resort
+    * Manage releases
+    * Triage incoming issues and discussions
+    * Maintain CI & project permissions
+    * Maintain roadmap and encourage contributions towards it
+    * Merge approved PRs
 
 [virtme]: https://github.com/amluto/virtme
 [run-tests.sh]: https://github.com/cilium/ebpf/blob/main/run-tests.sh

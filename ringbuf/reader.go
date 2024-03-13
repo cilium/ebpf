@@ -1,7 +1,6 @@
 package ringbuf
 
 import (
-	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
@@ -21,8 +20,6 @@ var (
 	errDiscard = errors.New("sample discarded")
 	errBusy    = errors.New("sample not committed yet")
 )
-
-var ringbufHeaderSize = binary.Size(ringbufHeader{})
 
 // ringbufHeader from 'struct bpf_ringbuf_hdr' in kernel/bpf/ringbuf.c
 type ringbufHeader struct {
@@ -51,11 +48,11 @@ type Record struct {
 
 // Read a record from an event ring.
 //
-// buf must be at least ringbufHeaderSize bytes long.
+// buf must be at least BPF_RINGBUF_HDR_SZ bytes long.
 func readRecord(rd *ringbufEventRing, rec *Record, buf []byte) error {
 	rd.loadConsumer()
 
-	buf = buf[:ringbufHeaderSize]
+	buf = buf[:unix.BPF_RINGBUF_HDR_SZ]
 	if _, err := io.ReadFull(rd, buf); err == io.EOF {
 		return errEOR
 	} else if err != nil {
@@ -151,7 +148,7 @@ func NewReader(ringbufMap *ebpf.Map) (*Reader, error) {
 		poller:      poller,
 		ring:        ring,
 		epollEvents: make([]unix.EpollEvent, 1),
-		header:      make([]byte, ringbufHeaderSize),
+		header:      make([]byte, unix.BPF_RINGBUF_HDR_SZ),
 		bufferSize:  ring.size(),
 	}, nil
 }

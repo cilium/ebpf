@@ -79,16 +79,9 @@ func (rr *ringReader) storeConsumer() {
 	atomic.StoreUint64(rr.cons_pos, rr.cons)
 }
 
-// clamp delta to 'end' if 'start+delta' is beyond 'end'
-func clamp(start, end, delta uint64) uint64 {
-	if remainder := end - start; delta > remainder {
-		return remainder
-	}
-	return delta
-}
-
 func (rr *ringReader) skipRead(skipBytes uint64) {
-	rr.cons += clamp(rr.cons, atomic.LoadUint64(rr.prod_pos), skipBytes)
+	prod := atomic.LoadUint64(rr.prod_pos)
+	rr.cons += min(prod-rr.cons, skipBytes)
 }
 
 func (rr *ringReader) isEmpty() bool {
@@ -111,8 +104,7 @@ func (rr *ringReader) remaining() int {
 
 func (rr *ringReader) Read(p []byte) (int, error) {
 	prod := atomic.LoadUint64(rr.prod_pos)
-
-	n := clamp(rr.cons, prod, uint64(len(p)))
+	n := min(prod-rr.cons, uint64(len(p)))
 
 	start := rr.cons & rr.mask
 

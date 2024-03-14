@@ -102,6 +102,26 @@ func (rr *ringReader) remaining() int {
 	return int((prod - cons) & rr.mask)
 }
 
+func (rr *ringReader) readHeader() (ringbufHeader, error) {
+	prod := atomic.LoadUint64(rr.prod_pos)
+
+	if remaining := prod - rr.cons; remaining == 0 {
+		return ringbufHeader{}, io.EOF
+	} else if remaining < unix.BPF_RINGBUF_HDR_SZ {
+		return ringbufHeader{}, io.ErrUnexpectedEOF
+	}
+
+	// read the len field of the header atomically to ensure a happens before
+	// relationship with the xchg in the kernel. Without this we may see len
+	// without BPF_RINGBUF_BUSY_BIT before the written data is visible.
+	// See https://github.com/torvalds/linux/blob/v6.8/kernel/bpf/ringbuf.c#L484
+	len := atomic.LoadUint32((*uint32)((unsafe.Pointer)(&rr.ring[rr.cons&rr.mask])))
+	header := ringbufHeader{Len: len}
+
+	rr.cons += unix.BPF_RINGBUF_HDR_SZ
+	return header, nil
+}
+
 func (rr *ringReader) Read(p []byte) (int, error) {
 	prod := atomic.LoadUint64(rr.prod_pos)
 	n := min(prod-rr.cons, uint64(len(p)))

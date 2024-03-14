@@ -3,22 +3,19 @@ package ringbuf
 import (
 	"errors"
 	"fmt"
-	"io"
 	"os"
 	"sync"
 	"time"
 
 	"github.com/cilium/ebpf"
-	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/epoll"
 	"github.com/cilium/ebpf/internal/unix"
 )
 
 var (
-	ErrClosed  = os.ErrClosed
-	errEOR     = errors.New("end of ring")
-	errDiscard = errors.New("sample discarded")
-	errBusy    = errors.New("sample not committed yet")
+	ErrClosed = os.ErrClosed
+	errEOR    = errors.New("end of ring")
+	errBusy   = errors.New("sample not committed yet")
 )
 
 // ringbufHeader from 'struct bpf_ringbuf_hdr' in kernel/bpf/ringbuf.c
@@ -44,55 +41,6 @@ type Record struct {
 
 	// The minimum number of bytes remaining in the ring buffer after this Record has been read.
 	Remaining int
-}
-
-// Read a record from an event ring.
-func readRecord(rd *ringbufEventRing, rec *Record) error {
-	rd.loadConsumer()
-
-	header, err := rd.readHeader()
-	if err == io.EOF {
-		return errEOR
-	} else if err != nil {
-		return fmt.Errorf("read event header: %w", err)
-	}
-
-	if header.isBusy() {
-		// the next sample in the ring is not committed yet so we
-		// exit without storing the reader/consumer position
-		// and start again from the same position.
-		return errBusy
-	}
-
-	/* read up to 8 byte alignment */
-	dataLenAligned := uint64(internal.Align(header.dataLen(), 8))
-
-	if header.isDiscard() {
-		// when the record header indicates that the data should be
-		// discarded, we skip it by just updating the consumer position
-		// to the next record instead of normal Read() to avoid allocating data
-		// and reading/copying from the ring (which normally keeps track of the
-		// consumer position).
-		rd.skipRead(dataLenAligned)
-		rd.storeConsumer()
-
-		return errDiscard
-	}
-
-	if cap(rec.RawSample) < int(dataLenAligned) {
-		rec.RawSample = make([]byte, dataLenAligned)
-	} else {
-		rec.RawSample = rec.RawSample[:dataLenAligned]
-	}
-
-	if _, err := io.ReadFull(rd, rec.RawSample); err != nil {
-		return fmt.Errorf("read sample: %w", err)
-	}
-
-	rd.storeConsumer()
-	rec.RawSample = rec.RawSample[:header.dataLen()]
-	rec.Remaining = rd.remaining()
-	return nil
 }
 
 // Reader allows reading bpf_ringbuf_output
@@ -211,10 +159,10 @@ func (r *Reader) ReadInto(rec *Record) error {
 		}
 
 		for {
-			err := readRecord(r.ring, rec)
+			err := r.ring.readRecord(rec)
 			// Not using errors.Is which is quite a bit slower
 			// For a tight loop it might make a difference
-			if err == errBusy || err == errDiscard {
+			if err == errBusy {
 				continue
 			}
 			if err == errEOR {

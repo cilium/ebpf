@@ -23,8 +23,8 @@ var (
 
 // ringbufHeader from 'struct bpf_ringbuf_hdr' in kernel/bpf/ringbuf.c
 type ringbufHeader struct {
-	Len   uint32
-	PgOff uint32
+	Len uint32
+	_   uint32 // pg_off, only used by kernel internals
 }
 
 func (rh *ringbufHeader) isBusy() bool {
@@ -47,21 +47,14 @@ type Record struct {
 }
 
 // Read a record from an event ring.
-//
-// buf must be at least BPF_RINGBUF_HDR_SZ bytes long.
-func readRecord(rd *ringbufEventRing, rec *Record, buf []byte) error {
+func readRecord(rd *ringbufEventRing, rec *Record) error {
 	rd.loadConsumer()
 
-	buf = buf[:unix.BPF_RINGBUF_HDR_SZ]
-	if _, err := io.ReadFull(rd, buf); err == io.EOF {
+	header, err := rd.readHeader()
+	if err == io.EOF {
 		return errEOR
 	} else if err != nil {
 		return fmt.Errorf("read event header: %w", err)
-	}
-
-	header := ringbufHeader{
-		internal.NativeEndian.Uint32(buf[0:4]),
-		internal.NativeEndian.Uint32(buf[4:8]),
 	}
 
 	if header.isBusy() {
@@ -111,7 +104,6 @@ type Reader struct {
 	mu          sync.Mutex
 	ring        *ringbufEventRing
 	epollEvents []unix.EpollEvent
-	header      []byte
 	haveData    bool
 	deadline    time.Time
 	bufferSize  int
@@ -148,7 +140,6 @@ func NewReader(ringbufMap *ebpf.Map) (*Reader, error) {
 		poller:      poller,
 		ring:        ring,
 		epollEvents: make([]unix.EpollEvent, 1),
-		header:      make([]byte, unix.BPF_RINGBUF_HDR_SZ),
 		bufferSize:  ring.size(),
 	}, nil
 }
@@ -220,7 +211,7 @@ func (r *Reader) ReadInto(rec *Record) error {
 		}
 
 		for {
-			err := readRecord(r.ring, rec, r.header)
+			err := readRecord(r.ring, rec)
 			// Not using errors.Is which is quite a bit slower
 			// For a tight loop it might make a difference
 			if err == errBusy || err == errDiscard {

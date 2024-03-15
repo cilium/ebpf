@@ -750,6 +750,33 @@ func TestKfunc(t *testing.T) {
 	})
 }
 
+func TestWeakKfunc(t *testing.T) {
+	testutils.SkipOnOldKernel(t, "5.18", "kfunc support")
+	testutils.Files(t, testutils.Glob(t, "testdata/kfunc-e*.elf"), func(t *testing.T, file string) {
+		spec, err := LoadCollectionSpec(file)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if spec.ByteOrder != internal.NativeEndian {
+			return
+		}
+
+		var obj struct {
+			Missing *Program `ebpf:"weak_kfunc_missing"`
+			Calling *Program `ebpf:"call_weak_kfunc"`
+		}
+
+		err = spec.LoadAndAssign(&obj, nil)
+		testutils.SkipIfNotSupported(t, err)
+		if err != nil {
+			t.Fatalf("%+v", err)
+		}
+		defer obj.Missing.Close()
+		defer obj.Calling.Close()
+	})
+}
+
 func TestInvalidKfunc(t *testing.T) {
 	testutils.SkipOnOldKernel(t, "5.18", "kfunc support")
 

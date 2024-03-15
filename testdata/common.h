@@ -20,6 +20,15 @@ enum libbpf_tristate {
 
 #define __kconfig __attribute__((section(".kconfig")))
 #define __ksym __attribute__((section(".ksyms")))
+#ifndef __weak
+#define __weak __attribute__((weak))
+#endif
+
+#define bpf_ksym_exists(sym) \
+	({ \
+		_Static_assert(!__builtin_constant_p(!!sym), #sym " should be marked as __weak"); \
+		!!sym; \
+	})
 
 #define BPF_MAP_TYPE_HASH (1)
 #define BPF_MAP_TYPE_ARRAY (2)

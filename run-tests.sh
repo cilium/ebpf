@@ -67,7 +67,7 @@ if [[ "${1:-}" = "--exec-vm" ]]; then
     rm "${output}/fake-stdin"
   fi
 
-  if ! $sudo virtme-run --kimg "${input}/boot/vmlinuz" --cpus 2 --memory 768M --pwd \
+  if ! $sudo virtme-run --kimg "${input}/boot/vmlinuz" --cpus 2 --memory 1G --pwd \
     --rwdir="${testdir}=${testdir}" \
     --rodir=/run/input="${input}" \
     --rwdir=/run/output="${output}" \

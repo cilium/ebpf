@@ -62,10 +62,10 @@ func TestPow(t *testing.T) {
 }
 
 func TestCopy(t *testing.T) {
-	_ = Copy((*Void)(nil), nil)
+	_ = Copy((*Void)(nil))
 
 	in := &Int{Size: 4}
-	out := Copy(in, nil)
+	out := Copy(in)
 
 	in.Size = 8
 	if size := out.(*Int).Size; size != 4 {
@@ -73,7 +73,7 @@ func TestCopy(t *testing.T) {
 	}
 
 	t.Run("cyclical", func(t *testing.T) {
-		_ = Copy(newCyclicalType(2), nil)
+		_ = Copy(newCyclicalType(2))
 	})
 
 	t.Run("identity", func(t *testing.T) {
@@ -84,7 +84,7 @@ func TestCopy(t *testing.T) {
 				{Name: "a", Type: u16},
 				{Name: "b", Type: u16},
 			},
-		}, nil)
+		})
 
 		outStruct := out.(*Struct)
 		qt.Assert(t, qt.Equals(outStruct.Members[0].Type, outStruct.Members[1].Type))
@@ -99,20 +99,20 @@ func TestAs(t *testing.T) {
 	vol := &Volatile{cst}
 
 	// It's possible to retrieve qualifiers and Typedefs.
-	haveVol, ok := as[*Volatile](vol)
+	haveVol, ok := As[*Volatile](vol)
 	qt.Assert(t, qt.IsTrue(ok))
 	qt.Assert(t, qt.Equals(haveVol, vol))
 
-	haveTd, ok := as[*Typedef](vol)
+	haveTd, ok := As[*Typedef](vol)
 	qt.Assert(t, qt.IsTrue(ok))
 	qt.Assert(t, qt.Equals(haveTd, td))
 
-	haveCst, ok := as[*Const](vol)
+	haveCst, ok := As[*Const](vol)
 	qt.Assert(t, qt.IsTrue(ok))
 	qt.Assert(t, qt.Equals(haveCst, cst))
 
 	// Make sure we don't skip Pointer.
-	haveI, ok := as[*Int](vol)
+	haveI, ok := As[*Int](vol)
 	qt.Assert(t, qt.IsFalse(ok))
 	qt.Assert(t, qt.IsNil(haveI))
 
@@ -120,7 +120,7 @@ func TestAs(t *testing.T) {
 	for _, typ := range []Type{
 		td, cst, vol, ptr,
 	} {
-		have, ok := as[*Pointer](typ)
+		have, ok := As[*Pointer](typ)
 		qt.Assert(t, qt.IsTrue(ok))
 		qt.Assert(t, qt.Equals(have, ptr))
 	}
@@ -133,7 +133,7 @@ func BenchmarkCopy(b *testing.B) {
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-		Copy(typ, nil)
+		Copy(typ)
 	}
 }
 
@@ -519,11 +519,9 @@ func BenchmarkUnderlyingType(b *testing.B) {
 	})
 }
 
-// Copy can be used with UnderlyingType to strip qualifiers from a type graph.
-func ExampleCopy_stripQualifiers() {
+// As can be used to strip qualifiers from a Type.
+func ExampleAs() {
 	a := &Volatile{Type: &Pointer{Target: &Typedef{Name: "foo", Type: &Int{Size: 2}}}}
-	b := Copy(a, UnderlyingType)
-	// b has Volatile and Typedef removed.
-	fmt.Printf("%3v\n", b)
-	// Output: Pointer[target=Int[unsigned size=2]]
+	fmt.Println(As[*Pointer](a))
+	// Output: Pointer[target=Typedef:"foo"] true
 }

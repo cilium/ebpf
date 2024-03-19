@@ -582,55 +582,6 @@ func TestCORERelocation(t *testing.T) {
 	})
 }
 
-func TestCORECopyWithoutQualifiers(t *testing.T) {
-	qualifiers := []struct {
-		name string
-		fn   func(Type) Type
-	}{
-		{"const", func(t Type) Type { return &Const{Type: t} }},
-		{"volatile", func(t Type) Type { return &Volatile{Type: t} }},
-		{"restrict", func(t Type) Type { return &Restrict{Type: t} }},
-		{"typedef", func(t Type) Type { return &Typedef{Type: t} }},
-	}
-
-	for _, test := range qualifiers {
-		t.Run(test.name+" cycle", func(t *testing.T) {
-			root := &Volatile{}
-			root.Type = test.fn(root)
-
-			cycle, ok := Copy(root, UnderlyingType).(*cycle)
-			qt.Assert(t, qt.IsTrue(ok))
-			qt.Assert(t, qt.Equals[Type](cycle.root, root))
-		})
-	}
-
-	for _, a := range qualifiers {
-		for _, b := range qualifiers {
-			t.Run(a.name+" "+b.name, func(t *testing.T) {
-				v := a.fn(&Pointer{Target: b.fn(&Int{Name: "z"})})
-				want := &Pointer{Target: &Int{Name: "z"}}
-
-				got := Copy(v, UnderlyingType)
-				qt.Assert(t, qt.DeepEquals[Type](got, want))
-			})
-		}
-	}
-
-	t.Run("long chain", func(t *testing.T) {
-		rng := testutils.Rand(t)
-		root := &Int{Name: "abc"}
-		v := Type(root)
-		for i := 0; i < maxResolveDepth; i++ {
-			q := qualifiers[rng.Intn(len(qualifiers))]
-			v = q.fn(v)
-			t.Log(q.name)
-		}
-
-		got := Copy(v, UnderlyingType)
-		qt.Assert(t, qt.DeepEquals[Type](got, root))
-	})
-}
-
 func TestCOREReloFieldSigned(t *testing.T) {
 	for _, typ := range []Type{&Int{}, &Enum{}} {
 		t.Run(fmt.Sprintf("%T with invalid target", typ), func(t *testing.T) {

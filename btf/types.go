@@ -667,25 +667,18 @@ func pow(n int) bool {
 	return n != 0 && (n&(n-1)) == 0
 }
 
-// Transformer modifies a given Type and returns the result.
-//
-// For example, UnderlyingType removes any qualifiers or typedefs from a type.
-// See the example on Copy for how to use a transform.
-type Transformer func(Type) Type
-
 // Copy a Type recursively.
 //
-// typ may form a cycle. If transform is not nil, it is called with the
-// to be copied type, and the returned value is copied instead.
-func Copy(typ Type, transform Transformer) Type {
+// typ may form a cycle.
+func Copy(typ Type) Type {
 	copies := make(copier)
-	return copies.copy(typ, transform)
+	return copies.copy(typ)
 }
 
 // A map of a type to its copy.
 type copier map[Type]Type
 
-func (c copier) copy(typ Type, transform Transformer) Type {
+func (c copier) copy(typ Type) Type {
 	return modifyGraphPreorder(typ, func(t Type) (Type, bool) {
 		cpy, ok := c[t]
 		if ok {
@@ -693,11 +686,7 @@ func (c copier) copy(typ Type, transform Transformer) Type {
 			return cpy, false
 		}
 
-		if transform != nil {
-			cpy = transform(t).copy()
-		} else {
-			cpy = t.copy()
-		}
+		cpy = t.copy()
 		c[t] = cpy
 
 		// This is a new copy, keep copying children.
@@ -1205,12 +1194,15 @@ func UnderlyingType(typ Type) Type {
 	return &cycle{typ}
 }
 
-// as returns typ if is of type T. Otherwise it peels qualifiers and Typedefs
+// As returns typ if is of type T. Otherwise it peels qualifiers and Typedefs
 // until it finds a T.
 //
 // Returns the zero value and false if there is no T or if the type is nested
 // too deeply.
-func as[T Type](typ Type) (T, bool) {
+func As[T Type](typ Type) (T, bool) {
+	// NB: We can't make this function return (*T) since then
+	// we can't assert that a type matches an interface which
+	// embeds Type: as[composite](T).
 	for depth := 0; depth <= maxResolveDepth; depth++ {
 		switch v := (typ).(type) {
 		case T:

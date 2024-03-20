@@ -67,7 +67,7 @@ from upstream kernel versions. You can update them to the latest version by:
 
 Finally, bump the tested kernels in `.github/workflows/ci.yml`
 
-## Project permissions
+## Project Roles
 
 If you'd like to contribute to the library more regularly, one of the
 [maintainers][ebpf-lib-maintainers] can add you to the appropriate team or mark
@@ -81,10 +81,13 @@ you as a code owner. Please create an issue in the repository.
     * Have ["Write"][permissions] role
     * CODEOWNER of a part of the code base
     * In-depth review of code, escalates to maintainers if necessary
+        * For bugfixes: review within 1-2 days
+        * Otherwise: review within a work week
+        * When lacking time: escalate to maintainers, but don’t ignore
 * [ebpf-lib-maintainers]
     * Have ["Admin"][permissions] role
     * Manage releases
-    * Triage incoming issues and discussions
+    * Triage incoming issues and discussions and pull in CODEOWNERS if needed
     * Maintain CI & project permissions
     * Maintain roadmap and encourage contributions towards it
     * Merge approved PRs

@@ -671,27 +671,28 @@ func pow(n int) bool {
 //
 // typ may form a cycle.
 func Copy(typ Type) Type {
-	copies := make(copier)
-	return copies.copy(typ)
+	return copyType(typ, nil, make(map[Type]Type), nil)
 }
 
-// A map of a type to its copy.
-type copier map[Type]Type
+func copyType(typ Type, ids map[Type]TypeID, copies map[Type]Type, copiedIDs map[Type]TypeID) Type {
+	cpy, ok := copies[typ]
+	if ok {
+		// This has been copied previously, no need to continue.
+		return cpy
+	}
 
-func (c copier) copy(typ Type) Type {
-	return modifyGraphPreorder(typ, func(t Type) (Type, bool) {
-		cpy, ok := c[t]
-		if ok {
-			// This has been copied previously, no need to continue.
-			return cpy, false
-		}
+	cpy = typ.copy()
+	copies[typ] = cpy
 
-		cpy = t.copy()
-		c[t] = cpy
+	if id, ok := ids[typ]; ok {
+		copiedIDs[cpy] = id
+	}
 
-		// This is a new copy, keep copying children.
-		return cpy, true
+	children(cpy, func(child *Type) {
+		*child = copyType(*child, ids, copies, copiedIDs)
 	})
+
+	return cpy
 }
 
 type typeDeque = internal.Deque[*Type]

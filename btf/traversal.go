@@ -37,7 +37,7 @@ func postorderTraversal(root Type, skip func(Type) (skip bool)) postorderIterato
 	}
 
 	po := postorderIterator{root: root, skip: skip}
-	walkType(root, po.push)
+	children(root, po.push)
 
 	return po
 }
@@ -73,7 +73,7 @@ func (po *postorderIterator) Next() bool {
 			po.walked.Push(true)
 
 			// Add all direct children to todo.
-			walkType(*t, po.push)
+			children(*t, po.push)
 		} else {
 			// We've walked this type previously, so we now know that all
 			// children have been handled.
@@ -114,18 +114,20 @@ func modifyGraphPreorder(root Type, fn func(node Type) (replacement Type, cont b
 		*node = sub
 
 		if cont {
-			walkType(*node, walk)
+			children(*node, walk)
 		}
 	}
 
 	if cont {
-		walkType(sub, walk)
+		children(sub, walk)
 	}
 	return sub
 }
 
-// walkType calls fn on each child of typ.
-func walkType(typ Type, fn func(*Type)) {
+// children calls fn on each child of typ.
+//
+// Iteration stops early if fn returns false.
+func children(typ Type, fn func(child *Type)) {
 	// Explicitly type switch on the most common types to allow the inliner to
 	// do its work. This avoids allocating intermediate slices from walk() on
 	// the heap.

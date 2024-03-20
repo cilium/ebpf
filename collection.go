@@ -623,7 +623,7 @@ func resolveKconfig(m *MapSpec) error {
 			if err != nil {
 				return fmt.Errorf("getting kernel version: %w", err)
 			}
-			internal.NativeEndian.PutUint32(data[vsi.Offset:], kv.Kernel())
+			binary.NativeEndian.PutUint32(data[vsi.Offset:], kv.Kernel())
 
 		case "LINUX_HAS_SYSCALL_WRAPPER":
 			integer, ok := v.Type.(*btf.Int)

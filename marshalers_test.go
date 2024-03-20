@@ -1,6 +1,7 @@
 package ebpf
 
 import (
+	"encoding/binary"
 	"testing"
 
 	"github.com/cilium/ebpf/internal"
@@ -39,7 +40,7 @@ func TestMarshalBatchPerCPUValue(t *testing.T) {
 	expected := make([]byte, sliceLen*internal.Align(elemLength, 8))
 	b := expected
 	for _, elem := range slice {
-		internal.NativeEndian.PutUint32(b, elem)
+		binary.NativeEndian.PutUint32(b, elem)
 		b = b[8:]
 	}
 	buf, err := marshalBatchPerCPUValue(slice, batchLen, elemLength)
@@ -70,7 +71,7 @@ func TestUnmarshalBatchPerCPUValue(t *testing.T) {
 	buf := make([]byte, batchLen*possibleCPU*internal.Align(elemLength, 8))
 	b := buf
 	for _, elem := range expected {
-		internal.NativeEndian.PutUint32(b, elem)
+		binary.NativeEndian.PutUint32(b, elem)
 		b = b[8:]
 	}
 	err := unmarshalBatchPerCPUValue(output, batchLen, elemLength, buf)
@@ -106,7 +107,7 @@ func TestUnmarshalPerCPUValue(t *testing.T) {
 	buf := make([]byte, possibleCPUs*internal.Align(elemLength, 8))
 	b := buf
 	for _, elem := range expected {
-		internal.NativeEndian.PutUint32(b, elem)
+		binary.NativeEndian.PutUint32(b, elem)
 		b = b[8:]
 	}
 	slice := make([]uint32, possibleCPUs)

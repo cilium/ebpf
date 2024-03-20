@@ -11,7 +11,6 @@ import (
 
 	"github.com/cilium/ebpf/asm"
 	"github.com/cilium/ebpf/btf"
-	"github.com/cilium/ebpf/internal"
 )
 
 // handles stores handle objects to avoid gc cleanup
@@ -136,7 +135,7 @@ func applyRelocations(insns asm.Instructions, targets []*btf.Spec, kmodName stri
 	}
 
 	if bo == nil {
-		bo = internal.NativeEndian
+		bo = binary.NativeEndian
 	}
 
 	if len(targets) == 0 {

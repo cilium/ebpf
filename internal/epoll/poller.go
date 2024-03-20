@@ -1,6 +1,7 @@
 package epoll
 
 import (
+	"encoding/binary"
 	"fmt"
 	"math"
 	"os"
@@ -8,7 +9,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/unix"
 )
 
@@ -213,7 +213,7 @@ func (efd *eventFd) close() error {
 
 func (efd *eventFd) add(n uint64) error {
 	var buf [8]byte
-	internal.NativeEndian.PutUint64(buf[:], 1)
+	binary.NativeEndian.PutUint64(buf[:], 1)
 	_, err := efd.file.Write(buf[:])
 	return err
 }
@@ -221,5 +221,5 @@ func (efd *eventFd) add(n uint64) error {
 func (efd *eventFd) read() (uint64, error) {
 	var buf [8]byte
 	_, err := efd.file.Read(buf[:])
-	return internal.NativeEndian.Uint64(buf[:]), err
+	return binary.NativeEndian.Uint64(buf[:]), err
 }

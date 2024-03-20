@@ -3,6 +3,7 @@ package ebpf
 import (
 	"bufio"
 	"bytes"
+	"encoding/binary"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -288,7 +289,7 @@ func (pi *ProgramInfo) Instructions() (asm.Instructions, error) {
 
 	r := bytes.NewReader(pi.insns)
 	var insns asm.Instructions
-	if err := insns.Unmarshal(r, internal.NativeEndian); err != nil {
+	if err := insns.Unmarshal(r, binary.NativeEndian); err != nil {
 		return nil, fmt.Errorf("unmarshaling instructions: %w", err)
 	}
 
@@ -313,7 +314,7 @@ func (pi *ProgramInfo) Instructions() (asm.Instructions, error) {
 
 			lineInfos, err := btf.LoadLineInfos(
 				bytes.NewReader(pi.lineInfos),
-				internal.NativeEndian,
+				binary.NativeEndian,
 				pi.numLineInfos,
 				spec,
 			)
@@ -323,7 +324,7 @@ func (pi *ProgramInfo) Instructions() (asm.Instructions, error) {
 
 			funcInfos, err := btf.LoadFuncInfos(
 				bytes.NewReader(pi.funcInfos),
-				internal.NativeEndian,
+				binary.NativeEndian,
 				pi.numFuncInfos,
 				spec,
 			)

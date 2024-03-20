@@ -26,7 +26,7 @@ func TestCORERelocationLoad(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		if spec.ByteOrder != internal.NativeEndian {
+		if !internal.IsNativeEndian(spec.ByteOrder) {
 			return
 		}
 
@@ -76,7 +76,7 @@ func TestCORERelocationRead(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		if spec.ByteOrder != internal.NativeEndian {
+		if !internal.IsNativeEndian(spec.ByteOrder) {
 			return
 		}
 
@@ -126,7 +126,7 @@ func TestLD64IMMReloc(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		if spec.ByteOrder != internal.NativeEndian {
+		if !internal.IsNativeEndian(spec.ByteOrder) {
 			return
 		}
 

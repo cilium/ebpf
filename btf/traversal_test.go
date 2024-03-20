@@ -65,41 +65,6 @@ func TestPostorderTraversalVmlinux(t *testing.T) {
 	}
 }
 
-func TestModifyGraph(t *testing.T) {
-	a := &Int{}
-	b := &Int{}
-	skipped := &Int{}
-	c := &Pointer{skipped}
-	root := &Struct{
-		Members: []Member{
-			{Type: a},
-			{Type: a},
-			{Type: b},
-			{Type: c},
-		},
-	}
-
-	counts := make(map[Type]int)
-	modifyGraphPreorder(root, func(node Type) (Type, bool) {
-		counts[node]++
-		if node == c {
-			return nil, false
-		}
-		return node, true
-	})
-
-	qt.Assert(t, qt.Equals(counts[root], 1))
-	qt.Assert(t, qt.Equals(counts[a], 1))
-	qt.Assert(t, qt.Equals(counts[b], 1))
-	qt.Assert(t, qt.Equals(counts[c], 1))
-	qt.Assert(t, qt.Equals(counts[skipped], 0))
-
-	qt.Assert(t, qt.Equals[Type](root.Members[0].Type, a))
-	qt.Assert(t, qt.Equals[Type](root.Members[1].Type, a))
-	qt.Assert(t, qt.Equals[Type](root.Members[2].Type, b))
-	qt.Assert(t, qt.IsNil(root.Members[3].Type))
-}
-
 func BenchmarkPostorderTraversal(b *testing.B) {
 	spec := vmlinuxTestdataSpec(b)
 
@@ -126,35 +91,6 @@ func BenchmarkPostorderTraversal(b *testing.B) {
 				iter := postorderTraversal(test.typ, nil)
 				for iter.Next() {
 				}
-			}
-		})
-	}
-}
-
-func BenchmarkPreorderTraversal(b *testing.B) {
-	spec := vmlinuxTestdataSpec(b)
-
-	var fn *Func
-	err := spec.TypeByName("gov_update_cpu_data", &fn)
-	if err != nil {
-		b.Fatal(err)
-	}
-
-	for _, test := range []struct {
-		name string
-		typ  Type
-	}{
-		{"single type", &Int{}},
-		{"cycle(1)", newCyclicalType(1)},
-		{"cycle(10)", newCyclicalType(10)},
-		{"gov_update_cpu_data", fn},
-	} {
-		b.Logf("%10v", test.typ)
-
-		b.Run(test.name, func(b *testing.B) {
-			b.ReportAllocs()
-			for i := 0; i < b.N; i++ {
-				modifyGraphPreorder(test.typ, func(t Type) (Type, bool) { return t, true })
 			}
 		})
 	}

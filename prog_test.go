@@ -954,7 +954,7 @@ func TestProgramInstructions(t *testing.T) {
 
 func BenchmarkNewProgram(b *testing.B) {
 	testutils.SkipOnOldKernel(b, "5.18", "kfunc support")
-	spec, err := LoadCollectionSpec(fmt.Sprintf("testdata/kfunc-%s.elf", internal.ClangEndian))
+	spec, err := LoadCollectionSpec(testutils.NativeFile(b, "testdata/kfunc-%s.elf"))
 	qt.Assert(b, qt.IsNil(err))
 
 	b.ReportAllocs()

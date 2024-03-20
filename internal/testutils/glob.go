@@ -1,8 +1,12 @@
 package testutils
 
 import (
+	"fmt"
 	"path/filepath"
+	"strings"
 	"testing"
+
+	"golang.org/x/sys/cpu"
 )
 
 // Files calls fn for each given file.
@@ -55,4 +59,19 @@ nextFile:
 	}
 
 	return filtered
+}
+
+// NativeFile substitutes %s with an abbreviation of the host endianness.
+func NativeFile(tb testing.TB, path string) string {
+	tb.Helper()
+
+	if !strings.Contains(path, "%s") {
+		tb.Fatalf("File %q doesn't contain %%s", path)
+	}
+
+	if cpu.IsBigEndian {
+		return fmt.Sprintf(path, "eb")
+	}
+
+	return fmt.Sprintf(path, "el")
 }

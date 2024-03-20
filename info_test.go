@@ -371,7 +371,7 @@ func TestHaveProgramInfoMapIDs(t *testing.T) {
 func TestProgInfoExtBTF(t *testing.T) {
 	testutils.SkipOnOldKernel(t, "5.0", "Program BTF (func/line_info)")
 
-	spec, err := LoadCollectionSpec(fmt.Sprintf("testdata/loader-%s.elf", internal.ClangEndian))
+	spec, err := LoadCollectionSpec(testutils.NativeFile(t, "testdata/loader-%s.elf"))
 	if err != nil {
 		t.Fatal(err)
 	}

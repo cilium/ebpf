@@ -98,7 +98,7 @@ func TestCollectionSpecCopy(t *testing.T) {
 }
 
 func TestCollectionSpecLoadCopy(t *testing.T) {
-	file := fmt.Sprintf("testdata/loader-%s.elf", internal.ClangEndian)
+	file := testutils.NativeFile(t, "testdata/loader-%s.elf")
 	spec, err := LoadCollectionSpec(file)
 	if err != nil {
 		t.Fatal(err)
@@ -691,7 +691,7 @@ func TestIncompleteLoadAndAssign(t *testing.T) {
 }
 
 func BenchmarkNewCollection(b *testing.B) {
-	file := fmt.Sprintf("testdata/loader-%s.elf", internal.ClangEndian)
+	file := testutils.NativeFile(b, "testdata/loader-%s.elf")
 	spec, err := LoadCollectionSpec(file)
 	if err != nil {
 		b.Fatal(err)
@@ -715,7 +715,7 @@ func BenchmarkNewCollection(b *testing.B) {
 }
 
 func BenchmarkNewCollectionManyProgs(b *testing.B) {
-	file := fmt.Sprintf("testdata/manyprogs-%s.elf", internal.ClangEndian)
+	file := testutils.NativeFile(b, "testdata/manyprogs-%s.elf")
 	spec, err := LoadCollectionSpec(file)
 	if err != nil {
 		b.Fatal(err)
@@ -734,7 +734,7 @@ func BenchmarkNewCollectionManyProgs(b *testing.B) {
 }
 
 func BenchmarkLoadCollectionManyProgs(b *testing.B) {
-	file, err := os.Open(fmt.Sprintf("testdata/manyprogs-%s.elf", internal.ClangEndian))
+	file, err := os.Open(testutils.NativeFile(b, "testdata/manyprogs-%s.elf"))
 	qt.Assert(b, qt.IsNil(err))
 	defer file.Close()
 

@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"testing"
 
 	"github.com/go-quicktest/qt"
@@ -9,7 +8,7 @@ import (
 
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/btf"
-	"github.com/cilium/ebpf/internal"
+	"github.com/cilium/ebpf/internal/testutils"
 )
 
 func TestOrderTypes(t *testing.T) {
@@ -69,7 +68,7 @@ var typesEqualComparer = cmp.Comparer(func(a, b btf.Type) bool {
 })
 
 func TestCollectFromSpec(t *testing.T) {
-	spec, err := ebpf.LoadCollectionSpec(fmt.Sprintf("testdata/minimal-%s.elf", internal.ClangEndian))
+	spec, err := ebpf.LoadCollectionSpec(testutils.NativeFile(t, "testdata/minimal-%s.elf"))
 	if err != nil {
 		t.Fatal(err)
 	}

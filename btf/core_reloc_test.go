@@ -1,7 +1,6 @@
 package btf_test
 
 import (
-	"fmt"
 	"io"
 	"os"
 	"strings"
@@ -80,7 +79,7 @@ func TestCORERelocationRead(t *testing.T) {
 			return
 		}
 
-		targetFile := fmt.Sprintf("testdata/relocs_read_tgt-%s.elf", internal.ClangEndian)
+		targetFile := testutils.NativeFile(t, "testdata/relocs_read_tgt-%s.elf")
 		targetSpec, err := btf.LoadSpec(targetFile)
 		if err != nil {
 			t.Fatal(err)

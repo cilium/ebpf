@@ -1,7 +1,6 @@
 package link
 
 import (
-	"fmt"
 	"testing"
 
 	"github.com/cilium/ebpf"
@@ -51,7 +50,7 @@ func TestFreplace(t *testing.T) {
 func TestFentryFexit(t *testing.T) {
 	testutils.SkipOnOldKernel(t, "5.5", "fentry")
 
-	spec, err := ebpf.LoadCollectionSpec(fmt.Sprintf("../testdata/fentry_fexit-%s.elf", internal.ClangEndian))
+	spec, err := ebpf.LoadCollectionSpec(testutils.NativeFile(t, "../testdata/fentry_fexit-%s.elf"))
 	if err != nil {
 		t.Fatal("Can't parse ELF:", err)
 	}

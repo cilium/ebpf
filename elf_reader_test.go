@@ -228,7 +228,7 @@ func BenchmarkELFLoader(b *testing.B) {
 }
 
 func TestDataSections(t *testing.T) {
-	file := fmt.Sprintf("testdata/loader-%s.elf", internal.ClangEndian)
+	file := testutils.NativeFile(t, "testdata/loader-%s.elf")
 	coll, err := LoadCollectionSpec(file)
 	if err != nil {
 		t.Fatal(err)
@@ -258,7 +258,7 @@ func TestDataSections(t *testing.T) {
 }
 
 func TestInlineASMConstant(t *testing.T) {
-	file := fmt.Sprintf("testdata/loader-%s.elf", internal.ClangEndian)
+	file := testutils.NativeFile(t, "testdata/loader-%s.elf")
 	coll, err := LoadCollectionSpec(file)
 	if err != nil {
 		t.Fatal(err)
@@ -289,7 +289,7 @@ func TestInlineASMConstant(t *testing.T) {
 func TestFreezeRodata(t *testing.T) {
 	testutils.SkipOnOldKernel(t, "5.9", "sk_lookup program type")
 
-	file := fmt.Sprintf("testdata/constants-%s.elf", internal.ClangEndian)
+	file := testutils.NativeFile(t, "testdata/constants-%s.elf")
 	spec, err := LoadCollectionSpec(file)
 	if err != nil {
 		t.Fatal(err)
@@ -470,7 +470,7 @@ func TestLoadInvalidInitializedBTFMap(t *testing.T) {
 }
 
 func TestStringSection(t *testing.T) {
-	file := fmt.Sprintf("testdata/strings-%s.elf", internal.ClangEndian)
+	file := testutils.NativeFile(t, "testdata/strings-%s.elf")
 	spec, err := LoadCollectionSpec(file)
 	if err != nil {
 		t.Fatalf("load collection spec: %s", err)
@@ -784,7 +784,7 @@ func TestInvalidKfunc(t *testing.T) {
 		t.Skip("bpf_testmod not loaded")
 	}
 
-	file := fmt.Sprintf("testdata/invalid-kfunc-%s.elf", internal.ClangEndian)
+	file := testutils.NativeFile(t, "testdata/invalid-kfunc-%s.elf")
 	coll, err := LoadCollection(file)
 	if err == nil {
 		coll.Close()

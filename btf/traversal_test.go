@@ -58,7 +58,7 @@ func TestPostorderTraversalVmlinux(t *testing.T) {
 				t.Fatalf("Expected %s got %s as last type", typ, last)
 			}
 
-			walkType(typ, func(child *Type) {
+			children(typ, func(child *Type) {
 				qt.Check(t, qt.IsTrue(seen[*child]), qt.Commentf("missing child %s", *child))
 			})
 		})

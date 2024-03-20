@@ -21,42 +21,6 @@ func TestCheckTypeCompatibility(t *testing.T) {
 		a, b       Type
 		compatible bool
 	}{
-		{&FuncProto{Return: &Typedef{Type: &Int{}}}, &FuncProto{Return: &Int{}}, true},
-		{&FuncProto{Return: &Typedef{Type: &Int{}}}, &FuncProto{Return: &Void{}}, false},
-	}
-	for _, test := range tests {
-		err := CheckTypeCompatibility(test.a, test.b)
-		if test.compatible {
-			if err != nil {
-				t.Errorf("Expected types to be compatible: %s\na = %#v\nb = %#v", err, test.a, test.b)
-				continue
-			}
-		} else {
-			if !errors.Is(err, errIncompatibleTypes) {
-				t.Errorf("Expected types to be incompatible: %s\na = %#v\nb = %#v", err, test.a, test.b)
-				continue
-			}
-		}
-
-		err = CheckTypeCompatibility(test.b, test.a)
-		if test.compatible {
-			if err != nil {
-				t.Errorf("Expected reversed types to be compatible: %s\na = %#v\nb = %#v", err, test.a, test.b)
-			}
-		} else {
-			if !errors.Is(err, errIncompatibleTypes) {
-				t.Errorf("Expected reversed types to be incompatible: %s\na = %#v\nb = %#v", err, test.a, test.b)
-			}
-		}
-	}
-
-}
-
-func TestCOREAreTypesCompatible(t *testing.T) {
-	tests := []struct {
-		a, b       Type
-		compatible bool
-	}{
 		{&Void{}, &Void{}, true},
 		{&Struct{Name: "a"}, &Struct{Name: "b"}, true},
 		{&Union{Name: "a"}, &Union{Name: "b"}, true},
@@ -84,10 +48,12 @@ func TestCOREAreTypesCompatible(t *testing.T) {
 			&FuncProto{Return: &Void{}, Params: []FuncParam{{Type: &Void{}}}},
 			false,
 		},
+		{&FuncProto{Return: &Typedef{Type: &Int{}}}, &FuncProto{Return: &Int{}}, true},
+		{&FuncProto{Return: &Typedef{Type: &Int{}}}, &FuncProto{Return: &Void{}}, false},
 	}
 
 	for _, test := range tests {
-		err := coreAreTypesCompatible(test.a, test.b)
+		err := CheckTypeCompatibility(test.a, test.b)
 		if test.compatible {
 			if err != nil {
 				t.Errorf("Expected types to be compatible: %s\na = %#v\nb = %#v", err, test.a, test.b)
@@ -100,7 +66,7 @@ func TestCOREAreTypesCompatible(t *testing.T) {
 			}
 		}
 
-		err = coreAreTypesCompatible(test.b, test.a)
+		err = CheckTypeCompatibility(test.b, test.a)
 		if test.compatible {
 			if err != nil {
 				t.Errorf("Expected reversed types to be compatible: %s\na = %#v\nb = %#v", err, test.a, test.b)
@@ -113,7 +79,7 @@ func TestCOREAreTypesCompatible(t *testing.T) {
 	}
 
 	for _, invalid := range []Type{&Var{}, &Datasec{}} {
-		err := coreAreTypesCompatible(invalid, invalid)
+		err := CheckTypeCompatibility(invalid, invalid)
 		if errors.Is(err, errIncompatibleTypes) {
 			t.Errorf("Expected an error for %T, not errIncompatibleTypes", invalid)
 		} else if err == nil {

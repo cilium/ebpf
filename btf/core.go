@@ -374,7 +374,7 @@ func coreCalculateFixup(relo *CORERelocation, target Type, targetID TypeID, bo b
 			return zero, fmt.Errorf("unexpected accessor %v", relo.accessor)
 		}
 
-		err := coreAreTypesCompatible(local, target)
+		err := CheckTypeCompatibility(local, target)
 		if errors.Is(err, errIncompatibleTypes) {
 			return poison()
 		}
@@ -901,7 +901,11 @@ func coreFindEnumValue(local Type, localAcc coreAccessor, target Type) (localVal
 //
 // Only layout compatibility is checked, ignoring names of the root type.
 func CheckTypeCompatibility(localType Type, targetType Type) error {
-	return coreAreTypesCompatible(localType, targetType)
+	return coreAreTypesCompatible(localType, targetType, nil)
+}
+
+type pair struct {
+	A, B Type
 }
 
 /* The comment below is from bpf_core_types_are_compat in libbpf.c:
@@ -927,59 +931,60 @@ func CheckTypeCompatibility(localType Type, targetType Type) error {
  *
  * Returns errIncompatibleTypes if types are not compatible.
  */
-func coreAreTypesCompatible(localType Type, targetType Type) error {
+func coreAreTypesCompatible(localType Type, targetType Type, visited map[pair]struct{}) error {
+	localType = UnderlyingType(localType)
+	targetType = UnderlyingType(targetType)
 
-	var (
-		localTs, targetTs typeDeque
-		l, t              = &localType, &targetType
-		depth             = 0
-	)
+	if reflect.TypeOf(localType) != reflect.TypeOf(targetType) {
+		return fmt.Errorf("type mismatch between %v and %v: %w", localType, targetType, errIncompatibleTypes)
+	}
 
-	for ; l != nil && t != nil; l, t = localTs.Shift(), targetTs.Shift() {
-		if depth >= maxResolveDepth {
-			return errors.New("types are nested too deep")
+	if _, ok := visited[pair{localType, targetType}]; ok {
+		return nil
+	}
+	if visited == nil {
+		visited = make(map[pair]struct{})
+	}
+	visited[pair{localType, targetType}] = struct{}{}
+
+	switch lv := localType.(type) {
+	case *Void, *Struct, *Union, *Enum, *Fwd, *Int:
+		return nil
+
+	case *Pointer:
+		tv := targetType.(*Pointer)
+		return coreAreTypesCompatible(lv.Target, tv.Target, visited)
+
+	case *Array:
+		tv := targetType.(*Array)
+		if err := coreAreTypesCompatible(lv.Index, tv.Index, visited); err != nil {
+			return err
 		}
 
-		localType = UnderlyingType(*l)
-		targetType = UnderlyingType(*t)
+		return coreAreTypesCompatible(lv.Type, tv.Type, visited)
 
-		if reflect.TypeOf(localType) != reflect.TypeOf(targetType) {
-			return fmt.Errorf("type mismatch between %v and %v: %w", localType, targetType, errIncompatibleTypes)
+	case *FuncProto:
+		tv := targetType.(*FuncProto)
+		if err := coreAreTypesCompatible(lv.Return, tv.Return, visited); err != nil {
+			return err
 		}
 
-		switch lv := (localType).(type) {
-		case *Void, *Struct, *Union, *Enum, *Fwd, *Int:
-			// Nothing to do here
+		if len(lv.Params) != len(tv.Params) {
+			return fmt.Errorf("function param mismatch: %w", errIncompatibleTypes)
+		}
 
-		case *Pointer, *Array:
-			depth++
-			walkType(localType, localTs.Push)
-			walkType(targetType, targetTs.Push)
-
-		case *FuncProto:
-			tv := targetType.(*FuncProto)
-			if len(lv.Params) != len(tv.Params) {
-				return fmt.Errorf("function param mismatch: %w", errIncompatibleTypes)
+		for i, localParam := range lv.Params {
+			targetParam := tv.Params[i]
+			if err := coreAreTypesCompatible(localParam.Type, targetParam.Type, visited); err != nil {
+				return err
 			}
-
-			depth++
-			walkType(localType, localTs.Push)
-			walkType(targetType, targetTs.Push)
-
-		default:
-			return fmt.Errorf("unsupported type %T", localType)
 		}
-	}
 
-	if l != nil {
-		return fmt.Errorf("dangling local type %T", *l)
-	}
+		return nil
 
-	if t != nil {
-		return fmt.Errorf("dangling target type %T", *t)
+	default:
+		return fmt.Errorf("unsupported type %T", localType)
 	}
-
-	return nil
 }
 
 /* coreAreMembersCompatible checks two types for field-based relocation compatibility.

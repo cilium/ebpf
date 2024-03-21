@@ -1039,6 +1039,8 @@ func TestLibBPFCompat(t *testing.T) {
 		case "linked_maps", "linked_maps1", "linked_maps2", "linked_funcs1", "linked_funcs2",
 			"test_subskeleton", "test_subskeleton_lib":
 			t.Skip("Skipping due to relying on cross ELF linking")
+		case "test_log_fixup":
+			t.Skip("Skipping due to intentionally broken CO-RE relocations")
 		}
 
 		t.Parallel()

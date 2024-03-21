@@ -220,6 +220,14 @@ func (r Info) Netfilter() *NetfilterInfo {
 	return e
 }
 
+// Netkit returns netkit type-specific link info.
+//
+// Returns nil if the type-specific link info isn't available.
+func (r Info) Netkit() *NetkitInfo {
+	e, _ := r.extra.(*NetkitInfo)
+	return e
+}
+
 // RawLink is the low-level API to bpf_link.
 //
 // You should consider using the higher level interfaces in this

@@ -132,6 +132,17 @@ jobs:
         with:
           name: Test Results (previous stable Go)
           path: junit.xml
+          
+      - run: go tool covdata merge -o coverage-merged.out
+      - run: go tool cover -html=coverage-merged.out -o coverage.html
+
+      - name: Upload Coverage Report
+        uses: actions/upload-artifact@v3
+        with:
+          name: coverage-report
+          path: |
+            ./coverage-merged.out
+            ./coverage.html    
 
   test-on-arm64:
     name: Run tests on arm64
@@ -160,6 +171,17 @@ jobs:
         with:
           name: Test Results (arm64)
           path: junit.xml
+      
+      - run: go tool covdata merge -o coverage-merged.out
+      - run: go tool cover -html=coverage-merged.out -o coverage.html
+
+      - name: Upload Coverage Report
+        uses: actions/upload-artifact@v3
+        with:
+          name: coverage-report
+          path: |
+            ./coverage-merged.out
+            ./coverage.html
 
       - name: Show dmesg
         if: failure()
@@ -197,3 +219,15 @@ jobs:
         with:
           name: Test Results (${{ matrix.version }})
           path: junit.xml
+
+      - run: go tool covdata merge -o coverage-merged.out
+      - run: go tool cover -html=coverage-merged.out -o coverage.html
+
+      - name: Upload Coverage Report
+        uses: actions/upload-artifact@v3
+        with:
+          name: coverage-report
+          path: |
+            ./coverage-merged.out
+            ./coverage.html  
+

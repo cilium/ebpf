@@ -37,17 +37,17 @@ func Marshal(data any, size int) (Buffer, error) {
 	case []byte:
 		buf = value
 	case int16:
-		buf = internal.NativeEndian.AppendUint16(make([]byte, 0, 2), uint16(value))
+		buf = binary.NativeEndian.AppendUint16(make([]byte, 0, 2), uint16(value))
 	case uint16:
-		buf = internal.NativeEndian.AppendUint16(make([]byte, 0, 2), value)
+		buf = binary.NativeEndian.AppendUint16(make([]byte, 0, 2), value)
 	case int32:
-		buf = internal.NativeEndian.AppendUint32(make([]byte, 0, 4), uint32(value))
+		buf = binary.NativeEndian.AppendUint32(make([]byte, 0, 4), uint32(value))
 	case uint32:
-		buf = internal.NativeEndian.AppendUint32(make([]byte, 0, 4), value)
+		buf = binary.NativeEndian.AppendUint32(make([]byte, 0, 4), value)
 	case int64:
-		buf = internal.NativeEndian.AppendUint64(make([]byte, 0, 8), uint64(value))
+		buf = binary.NativeEndian.AppendUint64(make([]byte, 0, 8), uint64(value))
 	case uint64:
-		buf = internal.NativeEndian.AppendUint64(make([]byte, 0, 8), value)
+		buf = binary.NativeEndian.AppendUint64(make([]byte, 0, 8), value)
 	default:
 		if buf := unsafeBackingMemory(data); len(buf) == size {
 			return newBuffer(buf), nil
@@ -56,7 +56,7 @@ func Marshal(data any, size int) (Buffer, error) {
 		wr := internal.NewBuffer(make([]byte, 0, size))
 		defer internal.PutBuffer(wr)
 
-		err = binary.Write(wr, internal.NativeEndian, value)
+		err = binary.Write(wr, binary.NativeEndian, value)
 		buf = wr.Bytes()
 	}
 	if err != nil {
@@ -105,7 +105,7 @@ func Unmarshal(data interface{}, buf []byte) error {
 
 		rd.Reset(buf)
 
-		if err := binary.Read(rd, internal.NativeEndian, value); err != nil {
+		if err := binary.Read(rd, binary.NativeEndian, value); err != nil {
 			return err
 		}
 

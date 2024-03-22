@@ -9,7 +9,6 @@ import (
 	"github.com/go-quicktest/qt"
 	"github.com/google/go-cmp/cmp"
 
-	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/testutils"
 )
 
@@ -31,11 +30,11 @@ func TestBuilderMarshal(t *testing.T) {
 	qt.Assert(t, qt.IsNil(err))
 
 	cpy := *b
-	buf, err := b.Marshal(nil, &MarshalOptions{Order: internal.NativeEndian})
+	buf, err := b.Marshal(nil, &MarshalOptions{Order: binary.NativeEndian})
 	qt.Assert(t, qt.IsNil(err))
 	qt.Assert(t, qt.CmpEquals(b, &cpy, cmp.AllowUnexported(*b)), qt.Commentf("Marshaling should not change Builder state"))
 
-	have, err := loadRawSpec(bytes.NewReader(buf), internal.NativeEndian, nil)
+	have, err := loadRawSpec(bytes.NewReader(buf), binary.NativeEndian, nil)
 	qt.Assert(t, qt.IsNil(err), qt.Commentf("Couldn't parse BTF"))
 	qt.Assert(t, qt.DeepEquals(have.imm.types, want))
 }
@@ -129,12 +128,12 @@ func TestMarshalEnum64(t *testing.T) {
 	b, err := NewBuilder([]Type{enum})
 	qt.Assert(t, qt.IsNil(err))
 	buf, err := b.Marshal(nil, &MarshalOptions{
-		Order:         internal.NativeEndian,
+		Order:         binary.NativeEndian,
 		ReplaceEnum64: true,
 	})
 	qt.Assert(t, qt.IsNil(err))
 
-	spec, err := loadRawSpec(bytes.NewReader(buf), internal.NativeEndian, nil)
+	spec, err := loadRawSpec(bytes.NewReader(buf), binary.NativeEndian, nil)
 	qt.Assert(t, qt.IsNil(err))
 
 	var have *Union
@@ -196,7 +195,7 @@ func specFromTypes(tb testing.TB, types []Type) *Spec {
 	tb.Helper()
 
 	btf := marshalNativeEndian(tb, types)
-	spec, err := loadRawSpec(bytes.NewReader(btf), internal.NativeEndian, nil)
+	spec, err := loadRawSpec(bytes.NewReader(btf), binary.NativeEndian, nil)
 	qt.Assert(tb, qt.IsNil(err))
 
 	return spec

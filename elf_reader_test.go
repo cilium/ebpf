@@ -188,7 +188,7 @@ func TestLoadCollectionSpec(t *testing.T) {
 			t.Errorf("MapSpec mismatch (-want +got):\n%s", diff)
 		}
 
-		if have.ByteOrder != internal.NativeEndian {
+		if !internal.IsNativeEndian(have.ByteOrder) {
 			return
 		}
 
@@ -381,7 +381,7 @@ func TestLoadInitializedBTFMap(t *testing.T) {
 		}
 
 		t.Run("NewCollection", func(t *testing.T) {
-			if coll.ByteOrder != internal.NativeEndian {
+			if !internal.IsNativeEndian(coll.ByteOrder) {
 				t.Skipf("Skipping %s collection", coll.ByteOrder)
 			}
 
@@ -537,7 +537,7 @@ func TestLoadRawTracepoint(t *testing.T) {
 			t.Fatal("Can't parse ELF:", err)
 		}
 
-		if spec.ByteOrder != internal.NativeEndian {
+		if !internal.IsNativeEndian(spec.ByteOrder) {
 			return
 		}
 
@@ -562,7 +562,7 @@ func TestTailCall(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		if spec.ByteOrder != internal.NativeEndian {
+		if !internal.IsNativeEndian(spec.ByteOrder) {
 			return
 		}
 
@@ -599,7 +599,7 @@ func TestKconfigKernelVersion(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		if spec.ByteOrder != internal.NativeEndian {
+		if !internal.IsNativeEndian(spec.ByteOrder) {
 			return
 		}
 
@@ -640,7 +640,7 @@ func TestKconfigSyscallWrapper(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		if spec.ByteOrder != internal.NativeEndian {
+		if !internal.IsNativeEndian(spec.ByteOrder) {
 			return
 		}
 
@@ -681,7 +681,7 @@ func TestKconfigConfig(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		if spec.ByteOrder != internal.NativeEndian {
+		if !internal.IsNativeEndian(spec.ByteOrder) {
 			return
 		}
 
@@ -723,7 +723,7 @@ func TestKfunc(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		if spec.ByteOrder != internal.NativeEndian {
+		if !internal.IsNativeEndian(spec.ByteOrder) {
 			return
 		}
 
@@ -758,7 +758,7 @@ func TestWeakKfunc(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		if spec.ByteOrder != internal.NativeEndian {
+		if !internal.IsNativeEndian(spec.ByteOrder) {
 			return
 		}
 
@@ -810,7 +810,7 @@ func TestKfuncKmod(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		if spec.ByteOrder != internal.NativeEndian {
+		if !internal.IsNativeEndian(spec.ByteOrder) {
 			return
 		}
 
@@ -846,7 +846,7 @@ func TestSubprogRelocation(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		if spec.ByteOrder != internal.NativeEndian {
+		if !internal.IsNativeEndian(spec.ByteOrder) {
 			return
 		}
 
@@ -882,7 +882,7 @@ func TestUnassignedProgArray(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		if spec.ByteOrder != internal.NativeEndian {
+		if !internal.IsNativeEndian(spec.ByteOrder) {
 			return
 		}
 
@@ -911,7 +911,7 @@ func TestIPRoute2Compat(t *testing.T) {
 			t.Fatal("Can't parse ELF:", err)
 		}
 
-		if spec.ByteOrder != internal.NativeEndian {
+		if !internal.IsNativeEndian(spec.ByteOrder) {
 			return
 		}
 

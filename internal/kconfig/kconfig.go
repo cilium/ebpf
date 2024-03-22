@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"compress/gzip"
+	"encoding/binary"
 	"fmt"
 	"io"
 	"math"
@@ -181,7 +182,7 @@ func putValueTri(data []byte, typ btf.Type, value string) error {
 			return fmt.Errorf("value %q is not support for libbpf_tristate", value)
 		}
 
-		internal.NativeEndian.PutUint64(data, uint64(tri))
+		binary.NativeEndian.PutUint64(data, uint64(tri))
 	default:
 		return fmt.Errorf("cannot add number value, expected btf.Int or btf.Enum, got: %T", v)
 	}
@@ -277,14 +278,14 @@ func PutInteger(data []byte, integer *btf.Int, n uint64) error {
 		if integer.Encoding == btf.Signed && (int64(n) > math.MaxInt16 || int64(n) < math.MinInt16) {
 			return fmt.Errorf("can't represent %d as a signed integer of size %d", int64(n), integer.Size)
 		}
-		internal.NativeEndian.PutUint16(data, uint16(n))
+		binary.NativeEndian.PutUint16(data, uint16(n))
 	case 4:
 		if integer.Encoding == btf.Signed && (int64(n) > math.MaxInt32 || int64(n) < math.MinInt32) {
 			return fmt.Errorf("can't represent %d as a signed integer of size %d", int64(n), integer.Size)
 		}
-		internal.NativeEndian.PutUint32(data, uint32(n))
+		binary.NativeEndian.PutUint32(data, uint32(n))
 	case 8:
-		internal.NativeEndian.PutUint64(data, uint64(n))
+		binary.NativeEndian.PutUint64(data, uint64(n))
 	default:
 		return fmt.Errorf("size (%d) is not valid, expected: 1, 2, 4 or 8", integer.Size)
 	}

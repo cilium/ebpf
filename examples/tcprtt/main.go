@@ -24,7 +24,6 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/link"
 	"github.com/cilium/ebpf/ringbuf"
 	"github.com/cilium/ebpf/rlimit"
@@ -90,7 +89,7 @@ func readLoop(rd *ringbuf.Reader) {
 		}
 
 		// Parse the ringbuf event entry into a bpfEvent structure.
-		if err := binary.Read(bytes.NewBuffer(record.RawSample), internal.NativeEndian, &event); err != nil {
+		if err := binary.Read(bytes.NewBuffer(record.RawSample), binary.NativeEndian, &event); err != nil {
 			log.Printf("parsing ringbuf event: %s", err)
 			continue
 		}
@@ -108,6 +107,6 @@ func readLoop(rd *ringbuf.Reader) {
 // intToIP converts IPv4 number to net.IP
 func intToIP(ipNum uint32) net.IP {
 	ip := make(net.IP, 4)
-	internal.NativeEndian.PutUint32(ip, ipNum)
+	binary.NativeEndian.PutUint32(ip, ipNum)
 	return ip
 }

@@ -935,14 +935,19 @@ func (iter *InstructionIterator) Next() bool {
 type bpfRegisters uint8
 
 func newBPFRegisters(dst, src Register, bo binary.ByteOrder) (bpfRegisters, error) {
+	buf := make([]byte, 2)
+	val := uint16(dst&0x0F)<<8 | uint16(src&0x0F)
 	switch bo {
 	case binary.LittleEndian:
-		return bpfRegisters((src << 4) | (dst & 0xF)), nil
+		binary.LittleEndian.PutUint16(buf, val)
 	case binary.BigEndian:
-		return bpfRegisters((dst << 4) | (src & 0xF)), nil
+		binary.BigEndian.PutUint16(buf, val)
+	case binary.NativeEndian:
+		binary.NativeEndian.PutUint16(buf, val)
 	default:
 		return 0, fmt.Errorf("unrecognized ByteOrder %T", bo)
 	}
+	return bpfRegisters(buf[0]<<4 | buf[1]), nil
 }
 
 // IsUnreferencedSymbol returns true if err was caused by

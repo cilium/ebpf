@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/cilium/ebpf/asm"
+	"github.com/cilium/ebpf/internal"
 )
 
 // Code in this file is derived from libbpf, which is available under a BSD
@@ -211,7 +212,7 @@ func CORERelocate(relos []*CORERelocation, targets []*Spec, bo binary.ByteOrder,
 	}
 
 	for _, target := range targets {
-		if bo != target.imm.byteOrder {
+		if !internal.ByteOrderEqual(bo, target.imm.byteOrder) {
 			return nil, fmt.Errorf("can't relocate %s against %s", bo, target.imm.byteOrder)
 		}
 	}

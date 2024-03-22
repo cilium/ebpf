@@ -2,6 +2,7 @@ package ebpf
 
 import (
 	"bytes"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"math"
@@ -47,7 +48,7 @@ func invalidBPFObjNameChar(char rune) bool {
 
 func progLoad(insns asm.Instructions, typ ProgramType, license string) (*sys.FD, error) {
 	buf := bytes.NewBuffer(make([]byte, 0, insns.Size()))
-	if err := insns.Marshal(buf, internal.NativeEndian); err != nil {
+	if err := insns.Marshal(buf, binary.NativeEndian); err != nil {
 		return nil, err
 	}
 	bytecode := buf.Bytes()
@@ -311,7 +312,7 @@ var haveProgramExtInfos = internal.NewFeatureTest("program ext_infos", "5.0", fu
 	}
 
 	buf := bytes.NewBuffer(make([]byte, 0, insns.Size()))
-	if err := insns.Marshal(buf, internal.NativeEndian); err != nil {
+	if err := insns.Marshal(buf, binary.NativeEndian); err != nil {
 		return err
 	}
 	bytecode := buf.Bytes()

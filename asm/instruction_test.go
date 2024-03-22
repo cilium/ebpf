@@ -431,3 +431,34 @@ func TestLongJumpPatching(t *testing.T) {
 		t.Errorf("Expected offset to be 3, got %d", insns[1].Constant)
 	}
 }
+
+func TestNewBPFRegisters(t *testing.T) {
+	for _, test := range []struct {
+		src, dst Register
+		order    binary.ByteOrder
+		result   bpfRegisters
+	}{
+		{
+			R1, R2,
+			binary.LittleEndian,
+			0x12,
+		},
+		{
+			RFP, R2,
+			binary.BigEndian,
+			0x2a,
+		},
+	} {
+		t.Run(fmt.Sprintf("%s %s:%s", test.order, test.src, test.dst), func(t *testing.T) {
+			have, err := newBPFRegisters(test.dst, test.src, test.order)
+			qt.Assert(t, qt.IsNil(err))
+			qt.Assert(t, qt.Equals(have, test.result))
+		})
+	}
+
+	allocs := testing.AllocsPerRun(1, func() {
+		newBPFRegisters(R1, RFP, binary.NativeEndian)
+	})
+
+	qt.Assert(t, qt.Equals(allocs, 0))
+}

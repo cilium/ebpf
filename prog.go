@@ -154,7 +154,7 @@ func (ps *ProgramSpec) Copy() *ProgramSpec {
 //
 // Use asm.Instructions.Tag if you need to calculate for non-native endianness.
 func (ps *ProgramSpec) Tag() (string, error) {
-	return ps.Instructions.Tag(internal.NativeEndian)
+	return ps.Instructions.Tag(binary.NativeEndian)
 }
 
 // KernelModule returns the kernel module, if any, the AttachTo function is contained in.
@@ -237,8 +237,8 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions) (*Program, er
 		return nil, errors.New("can't load program of unspecified type")
 	}
 
-	if spec.ByteOrder != nil && spec.ByteOrder != internal.NativeEndian {
-		return nil, fmt.Errorf("can't load %s program on %s", spec.ByteOrder, internal.NativeEndian)
+	if spec.ByteOrder != nil && !internal.IsNativeEndian(spec.ByteOrder) {
+		return nil, fmt.Errorf("wrong byte order: %s", spec.ByteOrder)
 	}
 
 	if opts.LogSize < 0 {
@@ -350,7 +350,7 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions) (*Program, er
 	}
 
 	buf := bytes.NewBuffer(make([]byte, 0, insns.Size()))
-	err = insns.Marshal(buf, internal.NativeEndian)
+	err = insns.Marshal(buf, binary.NativeEndian)
 	if err != nil {
 		return nil, err
 	}
@@ -741,7 +741,7 @@ func (p *Program) run(opts *RunOptions) (uint32, time.Duration, error) {
 	var ctxBytes []byte
 	if opts.Context != nil {
 		ctx := new(bytes.Buffer)
-		if err := binary.Write(ctx, internal.NativeEndian, opts.Context); err != nil {
+		if err := binary.Write(ctx, binary.NativeEndian, opts.Context); err != nil {
 			return 0, 0, fmt.Errorf("cannot serialize context: %v", err)
 		}
 		ctxBytes = ctx.Bytes()
@@ -815,7 +815,7 @@ retry:
 
 	if len(ctxOut) != 0 {
 		b := bytes.NewReader(ctxOut)
-		if err := binary.Read(b, internal.NativeEndian, opts.ContextOut); err != nil {
+		if err := binary.Read(b, binary.NativeEndian, opts.ContextOut); err != nil {
 			return 0, 0, fmt.Errorf("failed to decode ContextOut: %v", err)
 		}
 	}
@@ -841,7 +841,7 @@ func marshalProgram(p *Program, length int) ([]byte, error) {
 	}
 
 	buf := make([]byte, 4)
-	internal.NativeEndian.PutUint32(buf, p.fd.Uint())
+	binary.NativeEndian.PutUint32(buf, p.fd.Uint())
 	return buf, nil
 }
 

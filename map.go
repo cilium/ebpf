@@ -2,6 +2,7 @@ package ebpf
 
 import (
 	"bytes"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
@@ -1482,7 +1483,7 @@ func marshalMap(m *Map, length int) ([]byte, error) {
 	}
 
 	buf := make([]byte, 4)
-	internal.NativeEndian.PutUint32(buf, m.fd.Uint())
+	binary.NativeEndian.PutUint32(buf, m.fd.Uint())
 	return buf, nil
 }
 

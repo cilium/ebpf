@@ -65,7 +65,7 @@ func TestForwardFunctionDeclaration(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		if coll.ByteOrder != internal.NativeEndian {
+		if !internal.IsNativeEndian(coll.ByteOrder) {
 			return
 		}
 

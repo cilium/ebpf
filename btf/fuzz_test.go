@@ -6,13 +6,11 @@ import (
 	"fmt"
 	"io"
 	"testing"
-
-	"github.com/cilium/ebpf/internal"
 )
 
 func FuzzSpec(f *testing.F) {
 	var buf bytes.Buffer
-	err := binary.Write(&buf, internal.NativeEndian, &btfHeader{
+	err := binary.Write(&buf, binary.NativeEndian, &btfHeader{
 		Magic:   btfMagic,
 		Version: 1,
 		HdrLen:  uint32(binary.Size(btfHeader{})),
@@ -26,7 +24,7 @@ func FuzzSpec(f *testing.F) {
 			t.Skip("data is too short")
 		}
 
-		spec, err := loadRawSpec(bytes.NewReader(data), internal.NativeEndian, nil)
+		spec, err := loadRawSpec(bytes.NewReader(data), binary.NativeEndian, nil)
 		if err != nil {
 			if spec != nil {
 				t.Fatal("spec is not nil")
@@ -47,7 +45,7 @@ func FuzzSpec(f *testing.F) {
 
 func FuzzExtInfo(f *testing.F) {
 	var buf bytes.Buffer
-	err := binary.Write(&buf, internal.NativeEndian, &btfExtHeader{
+	err := binary.Write(&buf, binary.NativeEndian, &btfExtHeader{
 		Magic:   btfMagic,
 		Version: 1,
 		HdrLen:  uint32(binary.Size(btfExtHeader{})),
@@ -70,7 +68,7 @@ func FuzzExtInfo(f *testing.F) {
 		emptySpec := specFromTypes(t, nil)
 		emptySpec.strings = table
 
-		info, err := loadExtInfos(bytes.NewReader(data), internal.NativeEndian, emptySpec)
+		info, err := loadExtInfos(bytes.NewReader(data), binary.NativeEndian, emptySpec)
 		if err != nil {
 			if info != nil {
 				t.Fatal("info is not nil")

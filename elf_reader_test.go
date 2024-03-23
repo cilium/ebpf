@@ -889,7 +889,7 @@ func TestIPRoute2Compat(t *testing.T) {
 	}
 
 	// iproute2 (tc) pins maps in /sys/fs/bpf/tc/globals with PIN_GLOBAL_NS,
-	// which needs to be be configured in this library using MapOptions.PinPath.
+	// which needs to be configured in this library using MapOptions.PinPath.
 	// For the sake of the test, we use a tempdir on bpffs below.
 	ms.Pinning = PinByName
 

@@ -11,7 +11,7 @@ If you'd like to include a project on this page, feel free to open a pull reques
 [`Cilium`](https://github.com/cilium/cilium)
 
 :   Kubernetes-oriented Container Networking Interface implementation providing
-    network policy and and observability.
+    network policy and observability.
 
 [`containerd`](https://github.com/containerd/cgroups) & [`runc`](https://github.com/opencontainers/runc)
 

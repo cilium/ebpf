@@ -5,7 +5,7 @@ site_author: Cilium Community
 # Rendered in header.
 repo_url: https://github.com/cilium/ebpf
 repo_name: cilium/ebpf
-edit_uri: edit/master/docs/ebpf/
+edit_uri: edit/main/docs/ebpf/
 
 # Directory to look for Markdown files within docs/.
 docs_dir: ebpf

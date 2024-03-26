@@ -2,13 +2,15 @@ package internal
 
 import (
 	"fmt"
+	"strconv"
+	"strings"
 	"sync"
 
 	"github.com/cilium/ebpf/internal/unix"
 )
 
 const (
-	// Version constant used in ELF binaries indicating that the loader needs to
+	// MagicKernelVersion constant used in ELF binaries indicating that the loader needs to
 	// substitute the eBPF program's version with the value of the kernel's
 	// KERNEL_VERSION compile-time macro. Used for compatibility with BCC, gobpf
 	// and RedSift.
@@ -18,7 +20,7 @@ const (
 // A Version in the form Major.Minor.Patch.
 type Version [3]uint16
 
-// NewVersion creates a version from a string like "Major.Minor.Patch".
+// NewVersion creates a version from a string like "KernelVersion.Major.Minor".
 //
 // Patch is optional.
 func NewVersion(ver string) (Version, error) {
@@ -37,6 +39,25 @@ func NewVersionFromCode(code uint32) Version {
 		uint16(uint8(code >> 8)),
 		uint16(uint8(code)),
 	}
+}
+
+// NewVersionFromKernelRelease creates a version from a kernel release string.
+func NewVersionFromKernelRelease(release string) (Version, error) {
+	verStr := strings.Split(release, "-")[0]
+	ver := strings.Split(verStr, ".")
+	if len(ver) != 3 {
+		return Version{}, fmt.Errorf("invalid version: %s", verStr)
+	}
+
+	var v Version
+	for i, s := range ver {
+		num, err := strconv.ParseUint(s, 10, 16)
+		if err != nil {
+			return Version{}, fmt.Errorf("failed to parse version: %w", err)
+		}
+		v[i] = uint16(num)
+	}
+	return v, nil
 }
 
 func (v Version) String() string {
@@ -87,10 +108,16 @@ var KernelVersion = sync.OnceValues(func() (Version, error) {
 // detectKernelVersion returns the version of the running kernel.
 func detectKernelVersion() (Version, error) {
 	vc, err := vdsoVersion()
-	if err != nil {
-		return Version{}, err
+	if err == nil {
+		return NewVersionFromCode(vc), nil
 	}
-	return NewVersionFromCode(vc), nil
+
+	kernelRel, err := KernelRelease()
+	if err != nil {
+		return Version{}, fmt.Errorf("failed to detect kernel version: %w", err)
+	}
+
+	return NewVersionFromKernelRelease(kernelRel)
 }
 
 // KernelRelease returns the release string of the running kernel.

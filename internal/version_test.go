@@ -3,6 +3,8 @@ package internal
 import (
 	"os"
 	"testing"
+
+	"github.com/go-quicktest/qt"
 )
 
 func TestVersion(t *testing.T) {
@@ -81,6 +83,30 @@ func TestVersionFromCode(t *testing.T) {
 			if v != tt.v {
 				t.Errorf("unexpected version for code '%d'. got: %v, want: %v", tt.code, v, tt.v)
 			}
+		})
+	}
+}
+
+func TestNewVersionFromKernelRelease(t *testing.T) {
+	tests := []struct {
+		release string
+		version Version
+		err     string
+	}{
+		{"6.7.9-200.fc39.x86_64", Version{6, 7, 9}, ""},
+		{"5.4.0-65-generic", Version{5, 4, 0}, ""},
+		{"5.4", Version{}, "invalid version: 5.4"},
+	}
+
+	for _, test := range tests {
+		t.Run(test.release, func(t *testing.T) {
+			v, err := NewVersionFromKernelRelease(test.release)
+			if test.err != "" {
+				qt.Assert(t, qt.ErrorMatches(err, test.err))
+				return
+			}
+			qt.Assert(t, qt.IsNil(err))
+			qt.Assert(t, qt.DeepEquals(v, test.version))
 		})
 	}
 }

@@ -4,6 +4,19 @@ Development happens on [GitHub](https://github.com/cilium/ebpf) and contribution
 all forms are welcome. Please take a look at [the architecture](architecture.md) to get
 a better understanding of the high-level goals.
 
+## Developer Certificate of Origin
+
+The Cilium project requires that all contributions to project repositories carry the
+[Developer Certificate of Origin][DCO]. This is as simple as appending a footer
+to your commits:
+
+```
+Signed-off-by: Your Name <name@example.org>
+```
+
+Signing off your contributions this way means that you've read and understood
+the contents of the DCO.
+
 ## Running the tests
 
 Many of the tests require privileges to set resource limits and load eBPF code.
@@ -98,3 +111,4 @@ you as a code owner. Please create an issue in the repository.
 [ebpf-go-contributors]: https://github.com/orgs/cilium/teams/ebpf-go-contributors/members
 [ebpf-go-reviewers]: https://github.com/orgs/cilium/teams/ebpf-go-reviewers/members
 [ebpf-lib-maintainers]: https://github.com/orgs/cilium/teams/ebpf-lib-maintainers/members
+[DCO]: https://developercertificate.org/

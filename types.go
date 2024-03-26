@@ -102,6 +102,12 @@ func (mt MapType) hasPerCPUValue() bool {
 	return mt == PerCPUHash || mt == PerCPUArray || mt == LRUCPUHash || mt == PerCPUCGroupStorage
 }
 
+// isQueueStack returns true if the Map is a Queue (BPF_MAP_TYPE_QUEUE)
+// or Stack (BPF_MAP_TYPE_STACK)
+func (mt MapType) isQueueStack() bool {
+	return mt == Queue || mt == Stack
+}
+
 // canStoreMapOrProgram returns true if the Map stores references to another Map
 // or Program.
 func (mt MapType) canStoreMapOrProgram() bool {

@@ -1,7 +1,9 @@
 package link
 
 import (
+	"errors"
 	"fmt"
+	"os"
 
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/btf"
@@ -46,14 +48,34 @@ type Link interface {
 
 // NewLinkFromFD creates a link from a raw fd.
 //
-// You should not use fd after calling this function.
+// Deprecated: use [NewFromFD] instead.
 func NewLinkFromFD(fd int) (Link, error) {
+	return NewFromFD(fd)
+}
+
+// NewFromFD creates a link from a raw fd.
+//
+// You should not use fd after calling this function.
+func NewFromFD(fd int) (Link, error) {
 	sysFD, err := sys.NewFD(fd)
 	if err != nil {
 		return nil, err
 	}
 
 	return wrapRawLink(&RawLink{fd: sysFD})
+}
+
+// NewFromID returns the link associated with the given id.
+//
+// Returns ErrNotExist if there is no link with the given id.
+func NewFromID(id ID) (Link, error) {
+	getFdAttr := &sys.LinkGetFdByIdAttr{Id: id}
+	fd, err := sys.LinkGetFdById(getFdAttr)
+	if err != nil {
+		return nil, fmt.Errorf("get link fd from ID %d: %w", id, err)
+	}
+
+	return wrapRawLink(&RawLink{fd, ""})
 }
 
 // LoadPinnedLink loads a link that was persisted into a bpffs.
@@ -445,4 +467,75 @@ func (l *RawLink) Info() (*Info, error) {
 		ebpf.ProgramID(info.ProgId),
 		extra,
 	}, nil
+}
+
+// Iterator allows iterating over links attached into the kernel.
+type Iterator struct {
+	// The ID of the current link. Only valid after a call to Next
+	ID ID
+	// The current link. Only valid until a call to Next.
+	// See Take if you want to retain the link.
+	Link Link
+	err  error
+}
+
+// Next retrieves the next link.
+//
+// Returns true if another link was found. Call [Iterator.Err] after the function returns false.
+func (it *Iterator) Next() bool {
+	id := it.ID
+	for {
+		getIdAttr := &sys.LinkGetNextIdAttr{Id: id}
+		err := sys.LinkGetNextId(getIdAttr)
+		if errors.Is(err, os.ErrNotExist) {
+			// There are no more links.
+			break
+		} else if err != nil {
+			it.err = fmt.Errorf("get next link ID: %w", err)
+			break
+		}
+
+		id = getIdAttr.NextId
+		l, err := NewFromID(id)
+		if errors.Is(err, os.ErrNotExist) {
+			// Couldn't load the link fast enough. Try next ID.
+			continue
+		} else if err != nil {
+			it.err = fmt.Errorf("get link for ID %d: %w", id, err)
+			break
+		}
+
+		if it.Link != nil {
+			it.Link.Close()
+		}
+		it.ID, it.Link = id, l
+		return true
+	}
+
+	// No more links or we encountered an error.
+	if it.Link != nil {
+		it.Link.Close()
+	}
+	it.Link = nil
+	return false
+}
+
+// Take the ownership of the current link.
+//
+// It's the callers responsibility to close the link.
+func (it *Iterator) Take() Link {
+	l := it.Link
+	it.Link = nil
+	return l
+}
+
+// Err returns an error if iteration failed for some reason.
+func (it *Iterator) Err() error {
+	return it.err
+}
+
+func (it *Iterator) Close() {
+	if it.Link != nil {
+		it.Link.Close()
+	}
 }

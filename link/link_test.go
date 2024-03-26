@@ -88,6 +88,67 @@ func TestRawLinkLoadPinnedWithOptions(t *testing.T) {
 	}
 }
 
+func TestIterator(t *testing.T) {
+	cgroup, prog := mustCgroupFixtures(t)
+
+	tLink, err := AttachRawLink(RawLinkOptions{
+		Target:  int(cgroup.Fd()),
+		Program: prog,
+		Attach:  ebpf.AttachCGroupInetEgress,
+	})
+	testutils.SkipIfNotSupported(t, err)
+	if err != nil {
+		t.Fatal("Can't create original raw link:", err)
+	}
+	defer tLink.Close()
+	tLinkInfo, err := tLink.Info()
+	testutils.SkipIfNotSupported(t, err)
+	if err != nil {
+		t.Fatal("Can't get original link info:", err)
+	}
+
+	it := new(Iterator)
+	defer it.Close()
+
+	prev := it.ID
+	var foundLink Link
+	for it.Next() {
+		// Iterate all loaded links.
+		if it.Link == nil {
+			t.Fatal("Next doesn't assign link")
+		}
+		if it.ID == prev {
+			t.Fatal("Iterator doesn't advance ID")
+		}
+		prev = it.ID
+		if it.ID == tLinkInfo.ID {
+			foundLink = it.Take()
+		}
+	}
+	if err := it.Err(); err != nil {
+		t.Fatal("Iteration returned an error:", err)
+	}
+	if it.Link != nil {
+		t.Fatal("Next doesn't clean up link on last iteration")
+	}
+	if prev != it.ID {
+		t.Fatal("Next changes ID on last iteration")
+	}
+	if foundLink == nil {
+		t.Fatal("Original link not found")
+	}
+	defer foundLink.Close()
+	// Confirm that we found the original link.
+	info, err := foundLink.Info()
+	if err != nil {
+		t.Fatal("Can't get link info:", err)
+	}
+	if info.ID != tLinkInfo.ID {
+		t.Fatal("Found link has wrong ID")
+	}
+
+}
+
 func newPinnedRawLink(t *testing.T, cgroup *os.File, prog *ebpf.Program) (*RawLink, string) {
 	t.Helper()
 
@@ -235,7 +296,7 @@ func testLink(t *testing.T, link Link, prog *ebpf.Program) {
 		}
 		defer unix.Close(dupFD)
 
-		newLink, err := NewLinkFromFD(dupFD)
+		newLink, err := NewFromFD(dupFD)
 		testutils.SkipIfNotSupported(t, err)
 		if err != nil {
 			t.Fatal("Can't create new link from dup link FD:", err)

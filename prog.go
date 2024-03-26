@@ -424,17 +424,17 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions) (*Program, er
 			return nil, fmt.Errorf("load program: %w (MEMLOCK may be too low, consider rlimit.RemoveMemlock)", err)
 		}
 
-		fallthrough
-
 	case errors.Is(err, unix.EINVAL):
-		if hasFunctionReferences(spec.Instructions) {
-			if err := haveBPFToBPFCalls(); err != nil {
-				return nil, fmt.Errorf("load program: %w", err)
-			}
-		}
-
 		if opts.LogSize > maxVerifierLogSize {
 			return nil, fmt.Errorf("load program: %w (ProgramOptions.LogSize exceeds maximum value of %d)", err, maxVerifierLogSize)
+		}
+	}
+
+	// hasFunctionReferences may be expensive, so check it last.
+	if (errors.Is(err, unix.EINVAL) || errors.Is(err, unix.EPERM)) &&
+		hasFunctionReferences(spec.Instructions) {
+		if err := haveBPFToBPFCalls(); err != nil {
+			return nil, fmt.Errorf("load program: %w", err)
 		}
 	}
 

@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"maps"
 	"math"
 	"slices"
 	"sync"
@@ -38,6 +39,7 @@ type encoder struct {
 	buf     *bytes.Buffer
 	strings *stringTableBuilder
 	ids     map[Type]TypeID
+	visited map[Type]struct{}
 	lastID  TypeID
 }
 
@@ -163,7 +165,8 @@ func (b *Builder) Marshal(buf []byte, opts *MarshalOptions) ([]byte, error) {
 		buf:            w,
 		strings:        stb,
 		lastID:         TypeID(len(b.types)),
-		ids:            make(map[Type]TypeID, len(b.types)),
+		visited:        make(map[Type]struct{}, len(b.types)),
+		ids:            maps.Clone(b.stableIDs),
 	}
 
 	// Ensure that types are marshaled in the exact order they were Add()ed.
@@ -171,7 +174,6 @@ func (b *Builder) Marshal(buf []byte, opts *MarshalOptions) ([]byte, error) {
 	e.pending.Grow(len(b.types))
 	for _, typ := range b.types {
 		e.pending.Push(typ)
-		e.ids[typ] = b.stableIDs[typ]
 	}
 
 	if err := e.deflatePending(); err != nil {
@@ -218,16 +220,28 @@ func (b *Builder) addString(str string) (uint32, error) {
 	return b.strings.Add(str)
 }
 
-func (e *encoder) allocateID(typ Type) error {
-	id := e.lastID + 1
-	if id < e.lastID {
-		return errors.New("type ID overflow")
-	}
+func (e *encoder) allocateIDs(root Type) (err error) {
+	visitInPostorder(root, e.visited, func(typ Type) bool {
+		if _, ok := typ.(*Void); ok {
+			return true
+		}
 
-	e.pending.Push(typ)
-	e.ids[typ] = id
-	e.lastID = id
-	return nil
+		if _, ok := e.ids[typ]; ok {
+			return true
+		}
+
+		id := e.lastID + 1
+		if id < e.lastID {
+			err = errors.New("type ID overflow")
+			return false
+		}
+
+		e.pending.Push(typ)
+		e.ids[typ] = id
+		e.lastID = id
+		return true
+	})
+	return
 }
 
 // id returns the ID for the given type or panics with an error.
@@ -247,33 +261,13 @@ func (e *encoder) id(typ Type) TypeID {
 func (e *encoder) deflatePending() error {
 	// Declare root outside of the loop to avoid repeated heap allocations.
 	var root Type
-	skip := func(t Type) (skip bool) {
-		if t == root {
-			// Force descending into the current root type even if it already
-			// has an ID. Otherwise we miss children of types that have their
-			// ID pre-allocated via Add.
-			return false
-		}
-
-		_, isVoid := t.(*Void)
-		_, alreadyEncoded := e.ids[t]
-		return isVoid || alreadyEncoded
-	}
 
 	for !e.pending.Empty() {
 		root = e.pending.Shift()
 
 		// Allocate IDs for all children of typ, including transitive dependencies.
-		iter := postorderTraversal(root, skip)
-		for iter.Next() {
-			if iter.Type == root {
-				// The iterator yields root at the end, do not allocate another ID.
-				break
-			}
-
-			if err := e.allocateID(iter.Type); err != nil {
-				return err
-			}
+		if err := e.allocateIDs(root); err != nil {
+			return err
 		}
 
 		if err := e.deflateType(root); err != nil {
@@ -498,7 +492,7 @@ func (e *encoder) deflateEnum64(raw *rawType, enum *Enum) (err error) {
 		if enum.Signed {
 			placeholder.Encoding = Signed
 		}
-		if err := e.allocateID(placeholder); err != nil {
+		if err := e.allocateIDs(placeholder); err != nil {
 			return fmt.Errorf("add enum64 placeholder: %w", err)
 		}
 

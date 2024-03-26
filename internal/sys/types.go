@@ -837,6 +837,26 @@ func LinkCreateUprobeMulti(attr *LinkCreateUprobeMultiAttr) (*FD, error) {
 	return NewFD(int(fd))
 }
 
+type LinkGetFdByIdAttr struct{ Id LinkID }
+
+func LinkGetFdById(attr *LinkGetFdByIdAttr) (*FD, error) {
+	fd, err := BPF(BPF_LINK_GET_FD_BY_ID, unsafe.Pointer(attr), unsafe.Sizeof(*attr))
+	if err != nil {
+		return nil, err
+	}
+	return NewFD(int(fd))
+}
+
+type LinkGetNextIdAttr struct {
+	Id     LinkID
+	NextId LinkID
+}
+
+func LinkGetNextId(attr *LinkGetNextIdAttr) error {
+	_, err := BPF(BPF_LINK_GET_NEXT_ID, unsafe.Pointer(attr), unsafe.Sizeof(*attr))
+	return err
+}
+
 type LinkUpdateAttr struct {
 	LinkFd    uint32
 	NewProgFd uint32

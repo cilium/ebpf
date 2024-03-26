@@ -363,6 +363,14 @@ import (
 				truncateAfter("next_id"),
 			},
 		},
+		{
+			"LinkGetNextId", retError, "obj_next_id", "BPF_LINK_GET_NEXT_ID",
+			[]patch{
+				choose(0, "start_id"), rename("start_id", "id"),
+				replace(linkID, "id", "next_id"),
+				truncateAfter("next_id"),
+			},
+		},
 		// These piggy back on the obj_next_id decl, but only support the
 		// first field...
 		{
@@ -376,6 +384,10 @@ import (
 		{
 			"ProgGetFdById", retFd, "obj_next_id", "BPF_PROG_GET_FD_BY_ID",
 			[]patch{choose(0, "start_id"), rename("start_id", "id"), truncateAfter("id")},
+		},
+		{
+			"LinkGetFdById", retFd, "obj_next_id", "BPF_LINK_GET_FD_BY_ID",
+			[]patch{choose(0, "start_id"), rename("start_id", "id"), replace(linkID, "id"), truncateAfter("id")},
 		},
 		{
 			"ObjGetInfoByFd", retError, "info_by_fd", "BPF_OBJ_GET_INFO_BY_FD",

@@ -1,8 +1,6 @@
 #include "../../testdata/common.h"
 #include "bpf_core_read.h"
 
-#define core_access __builtin_preserve_access_index
-
 // Struct with the members declared in the wrong order. Accesses need
 // a successful CO-RE relocation against the type in relocs_read_tgt.c
 // for the test below to pass.

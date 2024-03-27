@@ -952,6 +952,45 @@ func TestProgramInstructions(t *testing.T) {
 	}
 }
 
+func TestProgramLoadErrors(t *testing.T) {
+	testutils.SkipOnOldKernel(t, "4.10", "stable verifier log output")
+
+	spec, err := LoadCollectionSpec(testutils.NativeFile(t, "testdata/errors-%s.elf"))
+	qt.Assert(t, qt.IsNil(err))
+
+	var b btf.Builder
+	raw, err := b.Marshal(nil, nil)
+	qt.Assert(t, qt.IsNil(err))
+	empty, err := btf.LoadSpecFromReader(bytes.NewReader(raw))
+	qt.Assert(t, qt.IsNil(err))
+
+	for _, test := range []struct {
+		name string
+		want error
+	}{
+		{"poisoned_single", errBadRelocation},
+		{"poisoned_double", errBadRelocation},
+		{"poisoned_kfunc", errUnknownKfunc},
+	} {
+		progSpec := spec.Programs[test.name]
+		qt.Assert(t, qt.IsNotNil(progSpec))
+
+		t.Run(test.name, func(t *testing.T) {
+			t.Log(progSpec.Instructions)
+			_, err := NewProgramWithOptions(progSpec, ProgramOptions{
+				KernelTypes: empty,
+			})
+			testutils.SkipIfNotSupported(t, err)
+
+			qt.Assert(t, qt.ErrorIs(err, test.want))
+
+			var ve *VerifierError
+			qt.Assert(t, qt.ErrorAs(err, &ve))
+			t.Logf("%-5v", ve)
+		})
+	}
+}
+
 func BenchmarkNewProgram(b *testing.B) {
 	testutils.SkipOnOldKernel(b, "5.18", "kfunc support")
 	spec, err := LoadCollectionSpec(testutils.NativeFile(b, "testdata/kfunc-%s.elf"))

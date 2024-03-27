@@ -30,6 +30,8 @@ enum libbpf_tristate {
 		!!sym; \
 	})
 
+#define core_access __builtin_preserve_access_index
+
 #define BPF_MAP_TYPE_HASH (1)
 #define BPF_MAP_TYPE_ARRAY (2)
 #define BPF_MAP_TYPE_PROG_ARRAY (3)

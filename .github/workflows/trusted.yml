@@ -47,7 +47,7 @@ jobs:
 
             if (semverType === 'major') {
               // Add 'breaking-change' label
-              await github.issues.addLabels({
+              await github.rest.issues.addLabels({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 issue_number: issueNumber,
@@ -56,7 +56,7 @@ jobs:
             } else {
               // Remove 'breaking-change' label if it exists
               try {
-                await github.issues.removeLabel({
+                await github.rest.issues.removeLabel({
                   owner: context.repo.owner,
                   repo: context.repo.repo,
                   issue_number: issueNumber,

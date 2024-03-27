@@ -15,6 +15,11 @@ import (
 // Code in this file is derived from libbpf, which is available under a BSD
 // 2-Clause license.
 
+// A constant used when CO-RE relocation has to remove instructions.
+//
+// Taken from libbpf.
+const COREBadRelocationSentinel = 0xbad2310
+
 // COREFixup is the result of computing a CO-RE relocation for a target.
 type COREFixup struct {
 	kind   coreKind
@@ -41,16 +46,13 @@ func (f *COREFixup) String() string {
 
 func (f *COREFixup) Apply(ins *asm.Instruction) error {
 	if f.poison {
-		const badRelo = 0xbad2310
-
 		// Relocation is poisoned, replace the instruction with an invalid one.
-
 		if ins.OpCode.IsDWordLoad() {
 			// Replace a dword load with a invalid dword load to preserve instruction size.
-			*ins = asm.LoadImm(asm.R10, badRelo, asm.DWord)
+			*ins = asm.LoadImm(asm.R10, COREBadRelocationSentinel, asm.DWord)
 		} else {
 			// Replace all single size instruction with a invalid call instruction.
-			*ins = asm.BuiltinFunc(badRelo).Call()
+			*ins = asm.BuiltinFunc(COREBadRelocationSentinel).Call()
 		}
 		return nil
 	}

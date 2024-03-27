@@ -54,6 +54,18 @@ func (f *COREFixup) Apply(ins *asm.Instruction) error {
 			// Replace all single size instruction with a invalid call instruction.
 			*ins = asm.BuiltinFunc(COREBadRelocationSentinel).Call()
 		}
+
+		// Add context to the kernel verifier output.
+		if source := ins.Source(); source != nil {
+			*ins = ins.WithSource(&Line{
+				line: fmt.Sprintf("instruction poisoned by CO-RE: %s", source),
+			})
+		} else {
+			*ins = ins.WithSource(&Line{
+				line: "instruction poisoned by CO-RE",
+			})
+		}
+
 		return nil
 	}
 

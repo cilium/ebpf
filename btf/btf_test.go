@@ -308,7 +308,9 @@ func TestLoadSpecFromElf(t *testing.T) {
 }
 
 func TestVerifierError(t *testing.T) {
-	_, err := NewHandle(&Builder{})
+	b, err := NewBuilder([]Type{&Int{Encoding: 255}})
+	qt.Assert(t, qt.IsNil(err))
+	_, err = NewHandle(b)
 	testutils.SkipIfNotSupported(t, err)
 	var ve *internal.VerifierError
 	if !errors.As(err, &ve) {

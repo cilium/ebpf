@@ -20,14 +20,17 @@ type MarshalOptions struct {
 	StripFuncLinkage bool
 	// Replace Enum64 with a placeholder for compatibility with <6.0 kernels.
 	ReplaceEnum64 bool
+	// Prevent the "No type found" error when loading BTF without any types.
+	PreventNoTypeFound bool
 }
 
 // KernelMarshalOptions will generate BTF suitable for the current kernel.
 func KernelMarshalOptions() *MarshalOptions {
 	return &MarshalOptions{
-		Order:            internal.NativeEndian,
-		StripFuncLinkage: haveFuncLinkage() != nil,
-		ReplaceEnum64:    haveEnum64() != nil,
+		Order:              internal.NativeEndian,
+		StripFuncLinkage:   haveFuncLinkage() != nil,
+		ReplaceEnum64:      haveEnum64() != nil,
+		PreventNoTypeFound: true, // All current kernels require this.
 	}
 }
 
@@ -94,9 +97,9 @@ func NewBuilder(types []Type) (*Builder, error) {
 	return b, nil
 }
 
-// Empty returns true if [Add] has not been invoked on the builder.
+// Empty returns true if neither types nor strings have been added.
 func (b *Builder) Empty() bool {
-	return len(b.types) == 0
+	return len(b.types) == 0 && (b.strings == nil || b.strings.Length() == 0)
 }
 
 // Add a Type and allocate a stable ID for it.
@@ -169,10 +172,24 @@ func (b *Builder) Marshal(buf []byte, opts *MarshalOptions) ([]byte, error) {
 		ids:            maps.Clone(b.stableIDs),
 	}
 
+	if e.ids == nil {
+		e.ids = make(map[Type]TypeID)
+	}
+
+	types := b.types
+	if len(types) == 0 && stb.Length() > 0 && opts.PreventNoTypeFound {
+		// We have strings that need to be written out,
+		// but no types (besides the implicit Void).
+		// Kernels as recent as v6.7 refuse to load such BTF
+		// with a "No type found" error in the log.
+		// Fix this by adding a dummy type.
+		types = []Type{&Int{Size: 0}}
+	}
+
 	// Ensure that types are marshaled in the exact order they were Add()ed.
 	// Otherwise the ID returned from Add() won't match.
-	e.pending.Grow(len(b.types))
-	for _, typ := range b.types {
+	e.pending.Grow(len(types))
+	for _, typ := range types {
 		e.pending.Push(typ)
 	}
 

@@ -1,8 +1,10 @@
 package btf_test
 
 import (
+	"bytes"
 	"io"
 	"os"
+	"slices"
 	"strings"
 	"testing"
 
@@ -10,6 +12,8 @@ import (
 	"github.com/cilium/ebpf/btf"
 	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/testutils"
+
+	"github.com/go-quicktest/qt"
 )
 
 func TestCORERelocationLoad(t *testing.T) {
@@ -120,4 +124,43 @@ func TestLD64IMMReloc(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer coll.Close()
+}
+
+func TestCOREPoisonLineInfo(t *testing.T) {
+	testutils.SkipOnOldKernel(t, "5.0", "program ext_infos")
+
+	spec, err := ebpf.LoadCollectionSpec(testutils.NativeFile(t, "../testdata/errors-%s.elf"))
+	qt.Assert(t, qt.IsNil(err))
+
+	var b btf.Builder
+	raw, err := b.Marshal(nil, nil)
+	qt.Assert(t, qt.IsNil(err))
+	empty, err := btf.LoadSpecFromReader(bytes.NewReader(raw))
+	qt.Assert(t, qt.IsNil(err))
+
+	for _, test := range []struct {
+		name string
+	}{
+		{"poisoned_single"},
+		{"poisoned_double"},
+	} {
+		progSpec := spec.Programs[test.name]
+		qt.Assert(t, qt.IsNotNil(progSpec))
+
+		t.Run(test.name, func(t *testing.T) {
+			t.Log(progSpec.Instructions)
+			_, err := ebpf.NewProgramWithOptions(progSpec, ebpf.ProgramOptions{
+				KernelTypes: empty,
+			})
+			testutils.SkipIfNotSupported(t, err)
+
+			var ve *ebpf.VerifierError
+			qt.Assert(t, qt.ErrorAs(err, &ve))
+			found := slices.ContainsFunc(ve.Log, func(line string) bool {
+				return strings.HasPrefix(line, "; instruction poisoned by CO-RE")
+			})
+			qt.Assert(t, qt.IsTrue(found))
+			t.Logf("%-5v", ve)
+		})
+	}
 }

@@ -7,6 +7,8 @@ import (
 
 	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/testutils"
+
+	"github.com/go-quicktest/qt"
 )
 
 func TestDatasecResolveWorkaround(t *testing.T) {
@@ -63,4 +65,16 @@ func TestDatasecResolveWorkaround(t *testing.T) {
 			h.Close()
 		})
 	}
+}
+
+func TestEmptyBTFWithStringTableWorkaround(t *testing.T) {
+	var b Builder
+
+	_, err := b.addString("foo")
+	qt.Assert(t, qt.IsNil(err))
+
+	h, err := NewHandle(&b)
+	testutils.SkipIfNotSupported(t, err)
+	qt.Assert(t, qt.IsNil(err))
+	qt.Assert(t, qt.IsNil(h.Close()))
 }

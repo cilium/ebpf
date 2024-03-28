@@ -20,7 +20,8 @@ func PlatformPrefix() string {
 		return "__arm_"
 	case "arm64", "arm64be":
 		return "__arm64_"
-
+	case "loong64":
+		return "__loongarch64_"
 	case "mips", "mipsle", "mips64", "mips64le", "mips64p32", "mips64p32le":
 		return "__mips_"
 

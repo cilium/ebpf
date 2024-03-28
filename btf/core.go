@@ -377,7 +377,7 @@ func coreCalculateFixup(relo *CORERelocation, target Type, targetID TypeID, bo b
 			return zero, fmt.Errorf("unexpected accessor %v", relo.accessor)
 		}
 
-		err := coreTypesMatch(local, target, false, nil)
+		err := coreTypesMatch(local, target, nil)
 		if errors.Is(err, errIncompatibleTypes) {
 			return poison()
 		}
@@ -1111,12 +1111,16 @@ func coreEssentialNamesMatch(a, b string) bool {
  *   - number and position of arguments in local type has to match target
  *   - for each argument and the return value we recursively check match
  */
-func coreTypesMatch(localType Type, targetType Type, behindPtr bool, visited map[pair]struct{}) error {
+func coreTypesMatch(localType Type, targetType Type, visited map[pair]struct{}) error {
 	localType = UnderlyingType(localType)
 	targetType = UnderlyingType(targetType)
 
 	if !coreEssentialNamesMatch(localType.TypeName(), targetType.TypeName()) {
 		return fmt.Errorf("type name %q don't match %q: %w", localType.TypeName(), targetType.TypeName(), errIncompatibleTypes)
+	}
+
+	if reflect.TypeOf(localType) != reflect.TypeOf(targetType) {
+		return fmt.Errorf("type mismatch between %v and %v: %w", localType, targetType, errIncompatibleTypes)
 	}
 
 	if _, ok := visited[pair{localType, targetType}]; ok {
@@ -1129,128 +1133,83 @@ func coreTypesMatch(localType Type, targetType Type, behindPtr bool, visited map
 
 	switch lv := (localType).(type) {
 	case *Void:
-		if _, ok := targetType.(*Void); !ok {
-			return fmt.Errorf("type mismatch between %v and %v: %w", localType, targetType, errIncompatibleTypes)
-		}
 
 	case *Fwd:
-		if behindPtr {
-			if tv, ok := targetType.(*Fwd); ok {
-				if lv.Kind != tv.Kind {
-					return fmt.Errorf("fwd kind mismatch between %v and %v: %w", localType, targetType, errIncompatibleTypes)
-				}
-
-				return nil
-			}
-
-			if _, ok := targetType.(*Struct); ok && lv.Kind == FwdStruct {
-				return nil
-			}
-
-			if _, ok := targetType.(*Union); ok && lv.Kind == FwdUnion {
-				return nil
-			}
-
+		if targetType.(*Fwd).Kind != lv.Kind {
 			return fmt.Errorf("fwd kind mismatch between %v and %v: %w", localType, targetType, errIncompatibleTypes)
 		}
-
-		if tv, ok := targetType.(*Fwd); ok && tv.Kind == lv.Kind {
-			return nil
-		}
-
-		return fmt.Errorf("fwd kind mismatch between %v and %v: %w", localType, targetType, errIncompatibleTypes)
 
 	case *Enum:
-		tv, ok := targetType.(*Enum)
-		if !ok {
-			return fmt.Errorf("type mismatch between %v and %v: %w", localType, targetType, errIncompatibleTypes)
-		}
-
-		if err := coreEnumsMatch(lv, tv); err != nil {
-			return err
-		}
+		return coreEnumsMatch(lv, targetType.(*Enum))
 
 	case composite:
-		if behindPtr {
-			if reflect.TypeOf(localType) == reflect.TypeOf(targetType) {
-				return nil
-			}
+		tv := targetType.(composite)
 
-			tv, ok := targetType.(*Fwd)
-			if !ok {
-				return fmt.Errorf("type mismatch between %v and %v: %w", localType, targetType, errIncompatibleTypes)
-			}
-
-			if _, ok := lv.(*Struct); ok && tv.Kind == FwdStruct {
-				return nil
-			}
-
-			if _, ok := lv.(*Union); ok && tv.Kind == FwdUnion {
-				return nil
-			}
-
-			return fmt.Errorf("fwd kind mismatch between %v and %v: %w", localType, targetType, errIncompatibleTypes)
+		if len(lv.members()) > len(tv.members()) {
+			return errImpossibleRelocation
 		}
 
-		if reflect.TypeOf(localType) != reflect.TypeOf(targetType) {
-			return fmt.Errorf("type mismatch between %v and %v: %w", localType, targetType, errIncompatibleTypes)
-		}
-		tComp, ok := targetType.(composite)
-		if !ok {
-			return fmt.Errorf("expected composite type, got %T", targetType)
+		localMembers := lv.members()
+		targetMembers := map[string]Member{}
+		for _, member := range tv.members() {
+			targetMembers[member.Name] = member
 		}
 
-		if err := coreCompositesMatch(lv, tComp, visited); err != nil {
-			return err
+		for _, localMember := range localMembers {
+			targetMember, found := targetMembers[localMember.Name]
+			if !found {
+				return fmt.Errorf("no field %q in %v: %w", localMember.Name, targetType, errIncompatibleTypes)
+			}
+
+			err := coreTypesMatch(localMember.Type, targetMember.Type, visited)
+			if err != nil {
+				return err
+			}
 		}
 
 	case *Int:
-		tv, ok := targetType.(*Int)
-		if !ok {
-			return fmt.Errorf("type mismatch between %v and %v: %w", localType, targetType, errIncompatibleTypes)
-		}
-
-		if !coreEncodingMatches(lv, tv) {
+		if !coreEncodingMatches(lv, targetType.(*Int)) {
 			return fmt.Errorf("int mismatch between %v and %v: %w", localType, targetType, errIncompatibleTypes)
 		}
 
 	case *Pointer:
-		tv, ok := targetType.(*Pointer)
-		if !ok {
-			return fmt.Errorf("type mismatch between %v and %v: %w", localType, targetType, errIncompatibleTypes)
+		tv := targetType.(*Pointer)
+
+		// Allow a pointer to a forward declaration to match a struct
+		// or union.
+		if fwd, ok := as[*Fwd](lv.Target); ok && fwd.matches(tv.Target) {
+			return nil
 		}
 
-		return coreTypesMatch(lv.Target, tv.Target, true, visited)
+		if fwd, ok := as[*Fwd](tv.Target); ok && fwd.matches(lv.Target) {
+			return nil
+		}
+
+		return coreTypesMatch(lv.Target, tv.Target, visited)
 
 	case *Array:
-		tv, ok := targetType.(*Array)
-		if !ok {
-			return fmt.Errorf("type mismatch between %v and %v: %w", localType, targetType, errIncompatibleTypes)
-		}
+		tv := targetType.(*Array)
 
 		if lv.Nelems != tv.Nelems {
 			return fmt.Errorf("array mismatch between %v and %v: %w", localType, targetType, errIncompatibleTypes)
 		}
 
-		return coreTypesMatch(lv.Type, tv.Type, false, visited)
+		return coreTypesMatch(lv.Type, tv.Type, visited)
 
 	case *FuncProto:
-		tv, ok := targetType.(*FuncProto)
-		if !ok {
-			return fmt.Errorf("type mismatch between %v and %v: %w", localType, targetType, errIncompatibleTypes)
-		}
+		tv := targetType.(*FuncProto)
 
 		if len(lv.Params) != len(tv.Params) {
 			return fmt.Errorf("function param mismatch: %w", errIncompatibleTypes)
 		}
 
 		for i, lparam := range lv.Params {
-			if err := coreTypesMatch(lparam.Type, tv.Params[i].Type, false, visited); err != nil {
+			if err := coreTypesMatch(lparam.Type, tv.Params[i].Type, visited); err != nil {
 				return err
 			}
 		}
 
-		return coreTypesMatch(lv.Return, tv.Return, false, visited)
+		return coreTypesMatch(lv.Return, tv.Return, visited)
 
 	default:
 		return fmt.Errorf("unsupported type %T", localType)
@@ -1288,32 +1247,6 @@ outer:
 		}
 
 		return fmt.Errorf("no match for %v in %v: %w", lv, target, errIncompatibleTypes)
-	}
-
-	return nil
-}
-
-func coreCompositesMatch(localType, targetType composite, visited map[pair]struct{}) error {
-	if reflect.TypeOf(localType) != reflect.TypeOf(targetType) {
-		return fmt.Errorf("type mismatch between %v and %v: %w", localType, targetType, errIncompatibleTypes)
-	}
-
-	localMembers := localType.members()
-	targetMembers := map[string]Member{}
-	for _, member := range targetType.members() {
-		targetMembers[member.Name] = member
-	}
-
-	for _, localMember := range localMembers {
-		targetMember, found := targetMembers[localMember.Name]
-		if !found {
-			return fmt.Errorf("no field %q in %v: %w", localMember.Name, targetType, errIncompatibleTypes)
-		}
-
-		err := coreTypesMatch(localMember.Type, targetMember.Type, false, visited)
-		if err != nil {
-			return err
-		}
 	}
 
 	return nil

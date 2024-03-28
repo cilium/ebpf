@@ -30,6 +30,19 @@ const (
 	NetkitType        = sys.BPF_LINK_TYPE_NETKIT
 )
 
+type PerfEventInfoType = sys.PerfEventType
+
+// Valid perf event link info types.
+const (
+	UnspecifiedPerfEventInfoType = sys.BPF_PERF_EVENT_UNSPEC
+	KprobePerfEventInfoType      = sys.BPF_PERF_EVENT_KPROBE
+	KretprobePerfEventInfoType   = sys.BPF_PERF_EVENT_KRETPROBE
+	UprobePerfEventInfoType      = sys.BPF_PERF_EVENT_UPROBE
+	UretprobePerfEventInfoType   = sys.BPF_PERF_EVENT_URETPROBE
+	TracepointPerfEventInfoType  = sys.BPF_PERF_EVENT_TRACEPOINT
+	EventPerfEventInfoType       = sys.BPF_PERF_EVENT_EVENT
+)
+
 var haveProgAttach = internal.NewFeatureTest("BPF_PROG_ATTACH", "4.10", func() error {
 	prog, err := ebpf.NewProgram(&ebpf.ProgramSpec{
 		Type:    ebpf.CGroupSKB,

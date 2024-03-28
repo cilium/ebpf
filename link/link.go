@@ -194,6 +194,22 @@ type NetkitInfo struct {
 	AttachType sys.AttachType
 }
 
+type KprobeMultiInfo struct {
+	Count  uint32
+	Flags  uint32
+	Missed uint64
+}
+
+type PerfEventInfo struct {
+	PerfEventType sys.PerfEventType
+	extra         interface{}
+}
+
+type KprobeInfo struct {
+	Addr   uint64
+	Missed uint64
+}
+
 // Tracing returns tracing type-specific link info.
 //
 // Returns nil if the type-specific link info isn't available.
@@ -247,6 +263,27 @@ func (r Info) Netfilter() *NetfilterInfo {
 // Returns nil if the type-specific link info isn't available.
 func (r Info) Netkit() *NetkitInfo {
 	e, _ := r.extra.(*NetkitInfo)
+	return e
+}
+
+// KprobeMulti returns kprobe-multi type-specific link info.
+//
+// Returns nil if the type-specific link info isn't available.
+func (r Info) KprobeMulti() *KprobeMultiInfo {
+	e, _ := r.extra.(*KprobeMultiInfo)
+	return e
+}
+
+// PerfEvent returns perf-event type-specific link info.
+//
+// Returns nil if the type-specific link info isn't available.
+func (r Info) PerfEvent() *PerfEventInfo {
+	e, _ := r.extra.(*PerfEventInfo)
+	return e
+}
+
+func (r *PerfEventInfo) Kprobe() *KprobeInfo {
+	e, _ := r.extra.(*KprobeInfo)
 	return e
 }
 
@@ -425,8 +462,7 @@ func (l *RawLink) Info() (*Info, error) {
 		extra = &XDPInfo{
 			Ifindex: xdpInfo.Ifindex,
 		}
-	case RawTracepointType, IterType,
-		PerfEventType, KprobeMultiType, UprobeMultiType:
+	case RawTracepointType, IterType, UprobeMultiType:
 		// Extra metadata not supported.
 	case TCXType:
 		var tcxInfo sys.TcxLinkInfo
@@ -456,6 +492,46 @@ func (l *RawLink) Info() (*Info, error) {
 		extra = &NetkitInfo{
 			Ifindex:    netkitInfo.Ifindex,
 			AttachType: netkitInfo.AttachType,
+		}
+	case KprobeMultiType:
+		var kprobeMultiInfo sys.KprobeMultiLinkInfo
+		if err := sys.ObjInfo(l.fd, &kprobeMultiInfo); err != nil {
+			return nil, fmt.Errorf("kprobe multi link info: %s", err)
+		}
+		// There's a gap between when kprobe multi got introduced
+		// and when it supported link info interface. We can detect
+		// that with kprobe multi specific Count field being zero.
+		if kprobeMultiInfo.Count == 0 {
+			return nil, fmt.Errorf("kprobe multi link info: %w", ErrNotSupported)
+		}
+		extra = &KprobeMultiInfo{
+			Count:  kprobeMultiInfo.Count,
+			Flags:  kprobeMultiInfo.Flags,
+			Missed: kprobeMultiInfo.Missed,
+		}
+	case PerfEventType:
+		var kprobeInfo sys.KprobeLinkInfo
+		if err := sys.ObjInfo(l.fd, &kprobeInfo); err != nil {
+			return nil, fmt.Errorf("kprobe multi link info: %s", err)
+		}
+		var extra2 interface{}
+
+		switch kprobeInfo.PerfEventType {
+		case KprobePerfEventInfoType, KretprobePerfEventInfoType:
+			// There's a gap between when perf link got introduced and
+			// when it supported link info interface. We can detect that
+			// with kprobe specific Addr field being zero.
+			if kprobeInfo.Addr == 0 {
+				return nil, fmt.Errorf("perf event link info: %w", ErrNotSupported)
+			}
+			extra2 = &KprobeInfo{
+				Addr:   kprobeInfo.Addr,
+				Missed: kprobeInfo.Missed,
+			}
+		}
+		extra = &PerfEventInfo{
+			PerfEventType: kprobeInfo.PerfEventType,
+			extra:         extra2,
 		}
 	default:
 		return nil, fmt.Errorf("unknown link info type: %d", info.Type)

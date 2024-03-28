@@ -402,6 +402,18 @@ const (
 	BPF_MAP_TYPE_CGRP_STORAGE                     MapType = 32
 )
 
+type PerfEventType uint32
+
+const (
+	BPF_PERF_EVENT_UNSPEC     PerfEventType = 0
+	BPF_PERF_EVENT_UPROBE     PerfEventType = 1
+	BPF_PERF_EVENT_URETPROBE  PerfEventType = 2
+	BPF_PERF_EVENT_KPROBE     PerfEventType = 3
+	BPF_PERF_EVENT_KRETPROBE  PerfEventType = 4
+	BPF_PERF_EVENT_TRACEPOINT PerfEventType = 5
+	BPF_PERF_EVENT_EVENT      PerfEventType = 6
+)
+
 type ProgType uint32
 
 const (
@@ -1261,6 +1273,32 @@ type IterLinkInfo struct {
 	_             [4]byte
 	TargetName    Pointer
 	TargetNameLen uint32
+}
+
+type KprobeLinkInfo struct {
+	Type          LinkType
+	Id            LinkID
+	ProgId        uint32
+	_             [4]byte
+	PerfEventType PerfEventType
+	_             [4]byte
+	FuncName      uint64
+	NameLen       uint32
+	Offset        uint32
+	Addr          uint64
+	Missed        uint64
+}
+
+type KprobeMultiLinkInfo struct {
+	Type   LinkType
+	Id     LinkID
+	ProgId uint32
+	_      [4]byte
+	Addrs  uint64
+	Count  uint32
+	Flags  uint32
+	Missed uint64
+	_      [16]byte
 }
 
 type NetNsLinkInfo struct {

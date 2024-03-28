@@ -382,7 +382,7 @@ func TestPerfReaderClose(t *testing.T) {
 }
 
 func TestCreatePerfEvent(t *testing.T) {
-	fd, err := createPerfEvent(0, 1, false)
+	fd, err := createPerfEvent(0, ReaderOptions{Watermark: 1, Overwritable: false})
 	if err != nil {
 		t.Fatal("Can't create perf event:", err)
 	}
@@ -487,6 +487,46 @@ func TestPause(t *testing.T) {
 	err = rd.Resume()
 	qt.Assert(t, qt.Not(qt.Equals(err, ErrClosed)), qt.Commentf("returns unwrapped ErrClosed"))
 	qt.Assert(t, qt.ErrorIs(err, ErrClosed), qt.Commentf("doesn't wrap ErrClosed"))
+}
+
+func TestPerfReaderWakeupEvents(t *testing.T) {
+	events := perfEventArray(t)
+
+	numEvents := 2
+	rd, err := NewReaderWithOptions(events, 4096, ReaderOptions{WakeupEvents: numEvents})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rd.Close()
+
+	// Write a sample. The reader should read it.
+	prog := outputSamplesProg(t, events, 5)
+	ret, _, err := prog.Test(internal.EmptyBPFContext)
+	testutils.SkipIfNotSupported(t, err)
+	if err != nil || ret != 0 {
+		t.Fatal("Can't write sample")
+	}
+
+	if errno := syscall.Errno(-int32(ret)); errno != 0 {
+		t.Fatal("Expected 0 as return value, got", errno)
+	}
+
+	rd.SetDeadline(time.Now().Add(10 * time.Millisecond))
+	_, err = rd.Read()
+	qt.Assert(t, qt.ErrorIs(err, os.ErrDeadlineExceeded), qt.Commentf("expected os.ErrDeadlineExceeded"))
+
+	// send followup events
+	for i := 1; i < numEvents; i++ {
+		_, _, err = prog.Test(internal.EmptyBPFContext)
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	rd.SetDeadline(time.Time{})
+	for i := 0; i < numEvents; i++ {
+		checkRecord(t, rd)
+	}
 }
 
 func BenchmarkReader(b *testing.B) {

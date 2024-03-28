@@ -1050,7 +1050,7 @@ func coreAreMembersCompatible(localType Type, targetType Type) error {
 
 	case *Enum:
 		tv := targetType.(*Enum)
-		if !coreNamesMatch(lv.Name, tv.Name) {
+		if !coreEssentialNamesMatch(lv.Name, tv.Name) {
 			return fmt.Errorf("names %q and %q don't match: %w", lv.Name, tv.Name, errImpossibleRelocation)
 		}
 
@@ -1058,7 +1058,7 @@ func coreAreMembersCompatible(localType Type, targetType Type) error {
 
 	case *Fwd:
 		tv := targetType.(*Fwd)
-		if !coreNamesMatch(lv.Name, tv.Name) {
+		if !coreEssentialNamesMatch(lv.Name, tv.Name) {
 			return fmt.Errorf("names %q and %q don't match: %w", lv.Name, tv.Name, errImpossibleRelocation)
 		}
 
@@ -1069,7 +1069,11 @@ func coreAreMembersCompatible(localType Type, targetType Type) error {
 	}
 }
 
-func coreNamesMatch(a, b string) bool {
+// coreEssentialNamesMatch compares two names while ignoring their flavour suffix.
+//
+// This should only be used on names which are in the global scope, like struct
+// names, typedefs or enum values.
+func coreEssentialNamesMatch(a, b string) bool {
 	if a == "" || b == "" {
 		// allow anonymous and named type to match
 		return true
@@ -1111,7 +1115,7 @@ func coreTypesMatch(localType Type, targetType Type, behindPtr bool, visited map
 	localType = UnderlyingType(localType)
 	targetType = UnderlyingType(targetType)
 
-	if !coreNamesMatch(localType.TypeName(), targetType.TypeName()) {
+	if !coreEssentialNamesMatch(localType.TypeName(), targetType.TypeName()) {
 		return fmt.Errorf("type name %q don't match %q: %w", localType.TypeName(), targetType.TypeName(), errIncompatibleTypes)
 	}
 
@@ -1196,7 +1200,7 @@ func coreTypesMatch(localType Type, targetType Type, behindPtr bool, visited map
 			return fmt.Errorf("expected composite type, got %T", targetType)
 		}
 
-		if err := coreCompositesMatch(lv, tComp, false, visited); err != nil {
+		if err := coreCompositesMatch(lv, tComp, visited); err != nil {
 			return err
 		}
 
@@ -1278,7 +1282,7 @@ func coreEnumsMatch(local *Enum, target *Enum) error {
 outer:
 	for _, lv := range local.Values {
 		for _, rv := range target.Values {
-			if coreNamesMatch(lv.Name, rv.Name) {
+			if coreEssentialNamesMatch(lv.Name, rv.Name) {
 				continue outer
 			}
 		}
@@ -1289,7 +1293,7 @@ outer:
 	return nil
 }
 
-func coreCompositesMatch(localType, targetType composite, behindPtr bool, visited map[pair]struct{}) error {
+func coreCompositesMatch(localType, targetType composite, visited map[pair]struct{}) error {
 	if reflect.TypeOf(localType) != reflect.TypeOf(targetType) {
 		return fmt.Errorf("type mismatch between %v and %v: %w", localType, targetType, errIncompatibleTypes)
 	}
@@ -1306,7 +1310,7 @@ func coreCompositesMatch(localType, targetType composite, behindPtr bool, visite
 			return fmt.Errorf("no field %q in %v: %w", localMember.Name, targetType, errIncompatibleTypes)
 		}
 
-		err := coreTypesMatch(localMember.Type, targetMember.Type, behindPtr, visited)
+		err := coreTypesMatch(localMember.Type, targetMember.Type, false, visited)
 		if err != nil {
 			return err
 		}

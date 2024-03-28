@@ -669,3 +669,268 @@ func BenchmarkCORESkBuff(b *testing.B) {
 		})
 	}
 }
+
+func TestCORETypesMatch(t *testing.T) {
+	tests := []struct {
+		a, b       Type
+		match      bool
+		reversible bool
+	}{
+		{&Void{}, &Void{}, true, true},
+		{&Int{Size: 32}, &Int{Size: 32}, true, true},
+		{&Int{Size: 64}, &Int{Size: 32}, false, true},
+		{&Int{Size: 32}, &Int{Size: 32, Encoding: Signed}, false, true},
+		{&Fwd{Name: "a"}, &Fwd{Name: "a"}, true, true},
+		{&Fwd{Name: "a"}, &Fwd{Name: "b___new"}, false, true},
+		{&Fwd{Name: "a"}, &Fwd{Name: "a___new"}, true, true},
+		{&Fwd{Name: "a"}, &Struct{Name: "a___new"}, false, true},
+		{&Fwd{Name: "a"}, &Union{Name: "a___new"}, false, true},
+		{&Pointer{&Fwd{Name: "a", Kind: FwdStruct}}, &Pointer{&Struct{Name: "a___new"}}, true, true},
+		{&Pointer{&Fwd{Name: "a", Kind: FwdUnion}}, &Pointer{&Union{Name: "a___new"}}, true, true},
+		{&Pointer{&Fwd{Name: "a", Kind: FwdStruct}}, &Pointer{&Union{Name: "a___new"}}, false, true},
+		{&Struct{Name: "a___new"}, &Union{Name: "a___new"}, false, true},
+		{&Pointer{&Struct{Name: "a"}}, &Pointer{&Union{Name: "a___new"}}, false, true},
+		{
+			&Struct{Name: "a", Members: []Member{
+				{Name: "foo", Type: &Int{}},
+			}},
+			&Struct{Name: "a___new", Members: []Member{
+				{Name: "foo", Type: &Int{}},
+			}},
+			true,
+			true,
+		},
+		{
+			&Struct{Name: "a", Members: []Member{
+				{Name: "foo", Type: &Int{}},
+			}},
+			&Struct{Name: "a___new", Members: []Member{
+				{Name: "foo", Type: &Int{}},
+				{Name: "bar", Type: &Int{}},
+			}},
+			true,
+			false,
+		},
+		{
+			&Struct{Name: "a", Members: []Member{
+				{Name: "foo", Type: &Int{}},
+				{Name: "bar", Type: &Int{}},
+			}},
+			&Struct{Name: "a___new", Members: []Member{
+				{Name: "foo", Type: &Int{}},
+			}},
+			false,
+			false,
+		},
+		{
+			&Enum{Name: "a", Values: []EnumValue{
+				{"foo", 1},
+			}},
+			&Enum{Name: "a___new", Values: []EnumValue{
+				{"foo", 1},
+			}},
+			true,
+			true,
+		},
+		{
+			&Enum{Name: "a", Values: []EnumValue{
+				{"foo", 1},
+			}},
+			&Enum{Name: "a___new", Values: []EnumValue{
+				{"foo", 1},
+				{"bar", 2},
+			}},
+			true,
+			false,
+		},
+		{
+			&Enum{Name: "a", Values: []EnumValue{
+				{"foo", 1},
+				{"bar", 2},
+			}},
+			&Enum{Name: "a___new", Values: []EnumValue{
+				{"foo", 1},
+			}},
+			false,
+			false,
+		},
+		{
+			&Array{Type: &Int{}, Nelems: 2},
+			&Array{Type: &Int{}, Nelems: 2},
+			true,
+			true,
+		},
+		{
+			&Array{Type: &Int{}, Nelems: 3},
+			&Array{Type: &Int{}, Nelems: 2},
+			false,
+			true,
+		},
+		{
+			&Array{Type: &Void{}, Nelems: 2},
+			&Array{Type: &Int{}, Nelems: 2},
+			false,
+			true,
+		},
+		{
+			&FuncProto{Return: &Int{}, Params: []FuncParam{
+				{Name: "foo", Type: &Int{}},
+			}},
+			&FuncProto{Return: &Int{}, Params: []FuncParam{
+				{Name: "bar", Type: &Int{}},
+			}},
+			true,
+			true,
+		},
+		{
+			&FuncProto{Return: &Int{}, Params: []FuncParam{
+				{Name: "foo", Type: &Int{}},
+			}},
+			&FuncProto{Return: &Int{}, Params: []FuncParam{
+				{Name: "bar", Type: &Int{}},
+				{Name: "baz", Type: &Int{}},
+			}},
+			false,
+			true,
+		},
+		{
+			&FuncProto{Return: &Void{}, Params: []FuncParam{
+				{Name: "foo", Type: &Int{}},
+			}},
+			&FuncProto{Return: &Int{}, Params: []FuncParam{
+				{Name: "bar", Type: &Int{}},
+			}},
+			false,
+			true,
+		},
+	}
+
+	for _, test := range tests {
+		err := coreTypesMatch(test.a, test.b, nil)
+		if test.match {
+			if err != nil {
+				t.Errorf("Expected types to match: %s\na = %#v\nb = %#v", err, test.a, test.b)
+				continue
+			}
+		} else {
+			if !errors.Is(err, errIncompatibleTypes) {
+				t.Errorf("Expected types to be incompatible: \na = %#v\nb = %#v", test.a, test.b)
+				continue
+			}
+		}
+
+		if test.reversible {
+			err = coreTypesMatch(test.b, test.a, nil)
+			if test.match {
+				if err != nil {
+					t.Errorf("Expected reversed types to match: %s\na = %#v\nb = %#v", err, test.a, test.b)
+				}
+			} else {
+				if !errors.Is(err, errIncompatibleTypes) {
+					t.Errorf("Expected reversed types to be incompatible: %s\na = %#v\nb = %#v", err, test.a, test.b)
+				}
+			}
+		}
+	}
+
+	for _, invalid := range []Type{&Var{}, &Datasec{}} {
+		err := coreTypesMatch(invalid, invalid, nil)
+		if errors.Is(err, errIncompatibleTypes) {
+			t.Errorf("Expected an error for %T, not errIncompatibleTypes", invalid)
+		} else if err == nil {
+			t.Errorf("Expected an error for %T", invalid)
+		}
+	}
+}
+
+func TestCORETypesMatchSelftest(t *testing.T) {
+	testutils.Files(t, testutils.Glob(t, "testdata/core_reloc_types-el.elf"), func(t *testing.T, file string) {
+		spec, err := LoadSpec(file)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		base, _ := spec.AnyTypeByName("core_reloc_type_based")
+		// diff, _ := spec.AnyTypeByName("core_reloc_type_based___diff")
+		diffSz, _ := spec.AnyTypeByName("core_reloc_type_based___diff_sz")
+		// incomp, _ := spec.AnyTypeByName("core_reloc_type_based___incompat")
+
+		matrix := []struct {
+			t        Type
+			expected map[string]bool
+		}{
+			// {diff, map[string]bool{
+			// 	"f1":  true,
+			// 	"f2":  true,
+			// 	"f3":  true,
+			// 	"f4":  true,
+			// 	"f5":  true,
+			// 	"f6":  true,
+			// 	"f7":  true,
+			// 	"f8":  false,
+			// 	"f9":  true,
+			// 	"f10": true,
+			// 	"f11": false,
+			// 	"f12": false,
+			// 	"f13": false,
+			// }},
+			{diffSz, map[string]bool{
+				"f1":  false,
+				"f2":  false,
+				"f3":  false,
+				"f4":  false,
+				"f5":  false,
+				"f6":  false,
+				"f7":  true,
+				"f8":  false,
+				"f9":  false,
+				"f10": true,
+				"f11": false,
+				"f12": false,
+				"f13": false,
+			}},
+			// {incomp, map[string]bool{
+			// 	"f1":  false,
+			// 	"f2":  false,
+			// 	"f3":  false,
+			// 	"f4":  true,
+			// 	"f5":  false,
+			// 	"f6":  false,
+			// 	"f7":  false,
+			// 	"f8":  false,
+			// 	"f9":  false,
+			// 	"f10": false,
+			// 	"f11": false,
+			// 	"f12": false,
+			// 	"f13": false,
+			// }},
+		}
+
+		local := base.(*Struct)
+		for _, test := range matrix {
+			t.Run(test.t.TypeName(), func(t *testing.T) {
+				target := make(map[string]Type)
+				for _, member := range test.t.(*Struct).Members {
+					target[member.Name] = member.Type
+				}
+				for _, localField := range local.Members {
+					targetField, ok := target[localField.Name]
+					if !ok {
+						continue
+					}
+
+					err := coreTypesMatch(localField.Type, targetField, nil)
+					if test.expected[localField.Name] {
+						if err != nil {
+							t.Errorf("Expected types for field %q to match: %s\na = %#v\nb = %#v", localField.Name, err, localField.Type, targetField)
+						}
+					} else {
+						if !errors.Is(err, errIncompatibleTypes) {
+							t.Errorf("Expected types for field %q to be incompatible: \na = %#v\nb = %#v", localField.Name, localField.Type, targetField)
+						}
+					}
+				}
+			})
+		}
+	})
+}

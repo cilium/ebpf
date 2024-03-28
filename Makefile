@@ -48,6 +48,7 @@ TARGETS := \
 	btf/testdata/relocs_read \
 	btf/testdata/relocs_read_tgt \
 	btf/testdata/relocs_enum \
+	btf/testdata/core_reloc_types \
 	cmd/bpf2go/testdata/minimal
 
 .PHONY: all clean container-all container-shell generate

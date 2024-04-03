@@ -57,13 +57,9 @@ func (f *COREFixup) Apply(ins *asm.Instruction) error {
 
 		// Add context to the kernel verifier output.
 		if source := ins.Source(); source != nil {
-			*ins = ins.WithSource(&Line{
-				line: fmt.Sprintf("instruction poisoned by CO-RE: %s", source),
-			})
+			*ins = ins.WithSource(asm.Comment(fmt.Sprintf("instruction poisoned by CO-RE: %s", source)))
 		} else {
-			*ins = ins.WithSource(&Line{
-				line: "instruction poisoned by CO-RE",
-			})
+			*ins = ins.WithSource(asm.Comment("instruction poisoned by CO-RE"))
 		}
 
 		return nil

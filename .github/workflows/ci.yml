@@ -107,7 +107,7 @@ jobs:
     name: Run tests on previous stable Go
     runs-on: ubuntu-latest-4cores-16gb
     needs: build-and-lint
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
 
@@ -137,7 +137,7 @@ jobs:
     name: Run tests on arm64
     runs-on: actuated-arm64-2cpu-8gb
     needs: build-and-lint
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
 
@@ -170,7 +170,7 @@ jobs:
     name: Run tests on pre-built kernel
     runs-on: ubuntu-latest-4cores-16gb
     needs: build-and-lint
-    timeout-minutes: 10
+    timeout-minutes: 15
     strategy:
       matrix:
         version: ["6.7", "6.1", "5.15", "5.10", "5.4", "4.19", "4.14", "4.9"]

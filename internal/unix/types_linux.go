@@ -100,6 +100,7 @@ type PerfEventMmapPage = linux.PerfEventMmapPage
 type EpollEvent = linux.EpollEvent
 type PerfEventAttr = linux.PerfEventAttr
 type Utsname = linux.Utsname
+type CPUSet = linux.CPUSet
 
 func Syscall(trap, a1, a2, a3 uintptr) (r1, r2 uintptr, err syscall.Errno) {
 	return linux.Syscall(trap, a1, a2, a3)
@@ -203,4 +204,12 @@ func Fstat(fd int, stat *Stat_t) error {
 
 func SetsockoptInt(fd, level, opt, value int) error {
 	return linux.SetsockoptInt(fd, level, opt, value)
+}
+
+func SchedSetaffinity(pid int, set *CPUSet) error {
+	return linux.SchedSetaffinity(pid, set)
+}
+
+func SchedGetaffinity(pid int, set *CPUSet) error {
+	return linux.SchedGetaffinity(pid, set)
 }

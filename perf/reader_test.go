@@ -490,6 +490,8 @@ func TestPause(t *testing.T) {
 }
 
 func TestPerfReaderWakeupEvents(t *testing.T) {
+	testutils.LockOSThreadToSingleCPU(t)
+
 	events := perfEventArray(t)
 
 	numEvents := 2

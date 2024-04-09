@@ -563,7 +563,7 @@ func (s *Spec) TypeByID(id TypeID) (Type, error) {
 
 // TypeID returns the ID for a given Type.
 //
-// Returns an error wrapping ErrNoFound if the type isn't part of the Spec.
+// Returns an error wrapping [ErrNotFound] if the type isn't part of the Spec.
 func (s *Spec) TypeID(typ Type) (TypeID, error) {
 	return s.mutableTypes.typeID(typ)
 }

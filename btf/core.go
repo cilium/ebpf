@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math"
 	"reflect"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -174,35 +175,11 @@ func (k coreKind) String() string {
 	}
 }
 
-type mergedSpec []*Spec
-
-func (s mergedSpec) TypeByID(id TypeID) (Type, error) {
-	for _, sp := range s {
-		t, err := sp.TypeByID(id)
-		if err != nil {
-			if errors.Is(err, ErrNotFound) {
-				continue
-			}
-			return nil, err
-		}
-		return t, nil
-	}
-	return nil, fmt.Errorf("look up type with ID %d (first ID is %d): %w", id, s[0].imm.firstTypeID, ErrNotFound)
-}
-
-func (s mergedSpec) NamedTypes(name essentialName) []TypeID {
-	var typeIDs []TypeID
-	for _, sp := range s {
-		namedTypes := sp.imm.namedTypes[name]
-		if len(namedTypes) > 0 {
-			typeIDs = append(typeIDs, namedTypes...)
-		}
-	}
-	return typeIDs
-}
-
 // CORERelocate calculates changes needed to adjust eBPF instructions for differences
 // in types.
+//
+// targets forms the set of types to relocate against. The first element has to be
+// BTF for vmlinux, the following must be types for kernel modules.
 //
 // resolveLocalTypeID is called for each local type which requires a stable TypeID.
 // Calling the function with the same type multiple times must produce the same
@@ -219,6 +196,10 @@ func CORERelocate(relos []*CORERelocation, targets []*Spec, bo binary.ByteOrder,
 		// Explicitly check for nil here since the argument used to be optional.
 		return nil, fmt.Errorf("targets must be provided")
 	}
+
+	// We can't encode type IDs that aren't for vmlinux into instructions at the
+	// moment.
+	resolveTargetTypeID := targets[0].TypeID
 
 	for _, target := range targets {
 		if bo != target.imm.byteOrder {
@@ -265,15 +246,29 @@ func CORERelocate(relos []*CORERelocation, targets []*Spec, bo binary.ByteOrder,
 		group.indices = append(group.indices, i)
 	}
 
-	mergeTarget := mergedSpec(targets)
 	for localType, group := range relosByType {
 		localTypeName := localType.TypeName()
 		if localTypeName == "" {
 			return nil, fmt.Errorf("relocate unnamed or anonymous type %s: %w", localType, ErrNotSupported)
 		}
 
-		targets := mergeTarget.NamedTypes(newEssentialName(localTypeName))
-		fixups, err := coreCalculateFixups(group.relos, &mergeTarget, targets, bo)
+		essentialName := newEssentialName(localTypeName)
+
+		var targetTypes []Type
+		for _, target := range targets {
+			namedTypeIDs := target.imm.namedTypes[essentialName]
+			targetTypes = slices.Grow(targetTypes, len(namedTypeIDs))
+			for _, id := range namedTypeIDs {
+				typ, err := target.TypeByID(id)
+				if err != nil {
+					return nil, err
+				}
+
+				targetTypes = append(targetTypes, typ)
+			}
+		}
+
+		fixups, err := coreCalculateFixups(group.relos, targetTypes, bo, resolveTargetTypeID)
 		if err != nil {
 			return nil, fmt.Errorf("relocate %s: %w", localType, err)
 		}
@@ -296,19 +291,14 @@ var errIncompatibleTypes = errors.New("incompatible types")
 //
 // The best target is determined by scoring: the less poisoning we have to do
 // the better the target is.
-func coreCalculateFixups(relos []*CORERelocation, targetSpec *mergedSpec, targets []TypeID, bo binary.ByteOrder) ([]COREFixup, error) {
+func coreCalculateFixups(relos []*CORERelocation, targets []Type, bo binary.ByteOrder, resolveTargetTypeID func(Type) (TypeID, error)) ([]COREFixup, error) {
 	bestScore := len(relos)
 	var bestFixups []COREFixup
-	for _, targetID := range targets {
-		target, err := targetSpec.TypeByID(targetID)
-		if err != nil {
-			return nil, fmt.Errorf("look up target: %w", err)
-		}
-
+	for _, target := range targets {
 		score := 0 // lower is better
 		fixups := make([]COREFixup, 0, len(relos))
 		for _, relo := range relos {
-			fixup, err := coreCalculateFixup(relo, target, targetID, bo)
+			fixup, err := coreCalculateFixup(relo, target, bo, resolveTargetTypeID)
 			if err != nil {
 				return nil, fmt.Errorf("target %s: %s: %w", target, relo.kind, err)
 			}
@@ -359,9 +349,8 @@ func coreCalculateFixups(relos []*CORERelocation, targetSpec *mergedSpec, target
 
 var errNoSignedness = errors.New("no signedness")
 
-// coreCalculateFixup calculates the fixup for a single local type, target type
-// and relocation.
-func coreCalculateFixup(relo *CORERelocation, target Type, targetID TypeID, bo binary.ByteOrder) (COREFixup, error) {
+// coreCalculateFixup calculates the fixup given a relocation and a target type.
+func coreCalculateFixup(relo *CORERelocation, target Type, bo binary.ByteOrder, resolveTargetTypeID func(Type) (TypeID, error)) (COREFixup, error) {
 	fixup := func(local, target uint64) (COREFixup, error) {
 		return COREFixup{kind: relo.kind, local: local, target: target}, nil
 	}
@@ -397,6 +386,15 @@ func coreCalculateFixup(relo *CORERelocation, target Type, targetID TypeID, bo b
 			return fixup(1, 1)
 
 		case reloTypeIDTarget:
+			targetID, err := resolveTargetTypeID(target)
+			if errors.Is(err, ErrNotFound) {
+				// Probably a relocation trying to get the ID
+				// of a type from a kmod.
+				return poison()
+			}
+			if err != nil {
+				return zero, err
+			}
 			return fixup(uint64(relo.id), uint64(targetID))
 
 		case reloTypeSize:

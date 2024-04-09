@@ -588,7 +588,7 @@ func TestCOREReloFieldSigned(t *testing.T) {
 			relo := &CORERelocation{
 				typ, coreAccessor{0}, reloFieldSigned, 0,
 			}
-			fixup, err := coreCalculateFixup(relo, &Void{}, 0, internal.NativeEndian)
+			fixup, err := coreCalculateFixup(relo, &Void{}, internal.NativeEndian, dummyTypeID)
 			qt.Assert(t, qt.IsTrue(fixup.poison))
 			qt.Assert(t, qt.IsNil(err))
 		})
@@ -598,7 +598,7 @@ func TestCOREReloFieldSigned(t *testing.T) {
 		relo := &CORERelocation{
 			&Array{}, coreAccessor{0}, reloFieldSigned, 0,
 		}
-		_, err := coreCalculateFixup(relo, &Array{}, 0, internal.NativeEndian)
+		_, err := coreCalculateFixup(relo, &Array{}, internal.NativeEndian, dummyTypeID)
 		qt.Assert(t, qt.ErrorIs(err, errNoSignedness))
 	})
 }
@@ -615,10 +615,45 @@ func TestCOREReloFieldShiftU64(t *testing.T) {
 		{typ, coreAccessor{0, 0}, reloFieldLShiftU64, 1},
 	} {
 		t.Run(relo.kind.String(), func(t *testing.T) {
-			_, err := coreCalculateFixup(relo, typ, 1, internal.NativeEndian)
+			_, err := coreCalculateFixup(relo, typ, internal.NativeEndian, dummyTypeID)
 			qt.Assert(t, qt.ErrorIs(err, errUnsizedType))
 		})
 	}
+}
+
+func TestCORERelosKmodTypeID(t *testing.T) {
+	a := &Int{Name: "a"}
+	b := &Int{Name: "b"}
+
+	relos := []*CORERelocation{
+		{&Int{}, coreAccessor{0}, reloTypeIDTarget, 0},
+	}
+
+	typeID := func(t Type) (TypeID, error) {
+		if t == a {
+			return 42, nil
+		}
+		return 0, ErrNotFound
+	}
+
+	fixups, err := coreCalculateFixups(
+		relos,
+		[]Type{a, b},
+		internal.NativeEndian,
+		typeID,
+	)
+	qt.Assert(t, qt.IsNil(err))
+	qt.Assert(t, qt.IsFalse(fixups[0].poison))
+	qt.Assert(t, qt.Equals(fixups[0].target, 42))
+
+	fixups, err = coreCalculateFixups(
+		relos,
+		[]Type{b},
+		internal.NativeEndian,
+		typeID,
+	)
+	qt.Assert(t, qt.IsNil(err))
+	qt.Assert(t, qt.IsTrue(fixups[0].poison))
 }
 
 func BenchmarkCORESkBuff(b *testing.B) {
@@ -668,4 +703,9 @@ func BenchmarkCORESkBuff(b *testing.B) {
 			}
 		})
 	}
+}
+
+// dummyTypeID returns 0, nil for any passed type.
+func dummyTypeID(Type) (TypeID, error) {
+	return 0, nil
 }

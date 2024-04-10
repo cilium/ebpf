@@ -575,7 +575,7 @@ func (m *Map) Info() (*MapInfo, error) {
 type MapLookupFlags uint64
 
 // LookupLock look up the value of a spin-locked map.
-const LookupLock MapLookupFlags = 4
+const LookupLock MapLookupFlags = unix.BPF_F_LOCK
 
 // Lookup retrieves a value from a Map.
 //

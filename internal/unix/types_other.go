@@ -93,6 +93,7 @@ const (
 	DEBUGFS_MAGIC
 	BPF_RB_NO_WAKEUP
 	BPF_RB_FORCE_WAKEUP
+	BPF_F_LOCK
 )
 
 type Statfs_t struct {

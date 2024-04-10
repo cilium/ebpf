@@ -596,7 +596,7 @@ func bpfPerfEventOutputProgram() (*ebpf.Program, *ebpf.Map) {
 	return nil, nil
 }
 
-// ExamplePerfReader submits a perf event using BPF,
+// ExampleReader submits a perf event using BPF,
 // and then reads it in user space.
 //
 // The BPF will look something like this:

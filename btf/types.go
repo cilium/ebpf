@@ -655,16 +655,11 @@ func alignof(typ Type) (int, error) {
 		return 0, fmt.Errorf("can't calculate alignment of %T", t)
 	}
 
-	if !pow(n) {
+	if !internal.IsPow(n) {
 		return 0, fmt.Errorf("alignment value %d is not a power of two", n)
 	}
 
 	return n, nil
-}
-
-// pow returns true if n is a power of two.
-func pow(n int) bool {
-	return n != 0 && (n&(n-1)) == 0
 }
 
 // Copy a Type recursively.

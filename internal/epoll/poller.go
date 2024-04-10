@@ -132,13 +132,11 @@ func (p *Poller) Wait(events []unix.EpollEvent, deadline time.Time) (int, error)
 		timeout := int(-1)
 		if !deadline.IsZero() {
 			msec := time.Until(deadline).Milliseconds()
-			if msec < 0 {
-				// Deadline is in the past.
-				msec = 0
-			} else if msec > math.MaxInt {
-				// Deadline is too far in the future.
-				msec = math.MaxInt
-			}
+			// Deadline is in the past, don't block.
+			msec = max(msec, 0)
+			// Deadline is too far in the future.
+			msec = min(msec, math.MaxInt)
+
 			timeout = int(msec)
 		}
 

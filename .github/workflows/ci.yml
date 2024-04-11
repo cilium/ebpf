@@ -144,7 +144,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '${{ env.prev_go_version }}'
+          go-version: '${{ env.go_version }}'
 
       - run: go install gotest.tools/gotestsum@v1.8.1
 
@@ -182,7 +182,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '${{ env.prev_go_version }}'
+          go-version: '${{ env.go_version }}'
 
       - run: go install gotest.tools/gotestsum@v1.8.1
       - run: sudo pip3 install https://github.com/amluto/virtme/archive/beb85146cd91de37ae455eccb6ab67c393e6e290.zip

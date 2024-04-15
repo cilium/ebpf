@@ -144,6 +144,38 @@ func (pl *perfEventLink) PerfEvent() (*os.File, error) {
 	return fd.File("perf-event"), nil
 }
 
+func (pl *perfEventLink) Info() (*Info, error) {
+	var info sys.PerfEventLinkInfo
+	if err := sys.ObjInfo(pl.fd, &info); err != nil {
+		return nil, fmt.Errorf("perf event link info: %s", err)
+	}
+
+	var extra2 interface{}
+	switch info.PerfEventType {
+	case sys.BPF_PERF_EVENT_KPROBE, sys.BPF_PERF_EVENT_KRETPROBE:
+		var kprobeInfo sys.KprobeLinkInfo
+		if err := sys.ObjInfo(pl.fd, &kprobeInfo); err != nil {
+			return nil, fmt.Errorf("kprobe link info: %s", err)
+		}
+		extra2 = &KprobeInfo{
+			address: kprobeInfo.Addr,
+			missed:  kprobeInfo.Missed,
+		}
+	}
+
+	extra := &PerfEventInfo{
+		Type:  info.PerfEventType,
+		extra: extra2,
+	}
+
+	return &Info{
+		info.Type,
+		info.Id,
+		ebpf.ProgramID(info.ProgId),
+		extra,
+	}, nil
+}
+
 // perfEventIoctl implements Link and handles the perf event lifecycle
 // via ioctl().
 type perfEventIoctl struct {

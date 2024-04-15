@@ -138,6 +138,25 @@ func (kml *kprobeMultiLink) Unpin() error {
 	return fmt.Errorf("unpin kprobe_multi: %w", ErrNotSupported)
 }
 
+func (kml *kprobeMultiLink) Info() (*Info, error) {
+	var info sys.KprobeMultiLinkInfo
+	if err := sys.ObjInfo(kml.fd, &info); err != nil {
+		return nil, fmt.Errorf("kprobe multi link info: %s", err)
+	}
+	extra := &KprobeMultiInfo{
+		count:  info.Count,
+		flags:  info.Flags,
+		missed: info.Missed,
+	}
+
+	return &Info{
+		info.Type,
+		info.Id,
+		ebpf.ProgramID(info.ProgId),
+		extra,
+	}, nil
+}
+
 var haveBPFLinkKprobeMulti = internal.NewFeatureTest("bpf_link_kprobe_multi", "5.18", func() error {
 	prog, err := ebpf.NewProgram(&ebpf.ProgramSpec{
 		Name: "probe_kpm_link",

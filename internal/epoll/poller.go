@@ -211,7 +211,7 @@ func (efd *eventFd) close() error {
 
 func (efd *eventFd) add(n uint64) error {
 	var buf [8]byte
-	internal.NativeEndian.PutUint64(buf[:], 1)
+	internal.NativeEndian.PutUint64(buf[:], n)
 	_, err := efd.file.Write(buf[:])
 	return err
 }

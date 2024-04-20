@@ -231,23 +231,24 @@ func NewReaderWithOptions(array *ebpf.Map, perCPUBuffer int, opts ReaderOptions)
 	// Hence we have to create a ring for each CPU.
 	bufferSize := 0
 	for i := 0; i < nCPU; i++ {
-		ring, err := newPerfEventRing(i, perCPUBuffer, opts)
-		if errors.Is(err, unix.ENODEV) {
+		ring, ringErr := newPerfEventRing(i, perCPUBuffer, opts)
+		if errors.Is(ringErr, unix.ENODEV) {
 			// The requested CPU is currently offline, skip it.
 			rings = append(rings, nil)
 			pauseFds = append(pauseFds, -1)
 			continue
 		}
 
-		if err != nil {
-			return nil, fmt.Errorf("failed to create perf ring for CPU %d: %v", i, err)
+		if ringErr != nil {
+			err = ringErr
+			return nil, fmt.Errorf("failed to create perf ring for CPU %d: %v", i, ringErr)
 		}
 
 		bufferSize = ring.size()
 		rings = append(rings, ring)
 		pauseFds = append(pauseFds, ring.fd)
 
-		if err := poller.Add(ring.fd, i); err != nil {
+		if err = poller.Add(ring.fd, i); err != nil {
 			return nil, err
 		}
 	}

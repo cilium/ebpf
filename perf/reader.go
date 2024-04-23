@@ -13,6 +13,7 @@ import (
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/epoll"
+	"github.com/cilium/ebpf/internal/sys"
 	"github.com/cilium/ebpf/internal/unix"
 )
 
@@ -154,11 +155,10 @@ type Reader struct {
 	epollRings  []*perfEventRing
 	eventHeader []byte
 
-	// pauseFds are a copy of the fds in 'rings', protected by 'pauseMu'.
-	// These allow Pause/Resume to be executed independently of any ongoing
-	// Read calls, which would otherwise need to be interrupted.
+	// pauseMu protects eventFds so that Pause / Resume can be invoked while
+	// Read is blocked.
 	pauseMu  sync.Mutex
-	pauseFds []int
+	eventFds []*sys.FD
 
 	paused       bool
 	overwritable bool
@@ -193,6 +193,12 @@ func NewReader(array *ebpf.Map, perCPUBuffer int) (*Reader, error) {
 
 // NewReaderWithOptions creates a new reader with the given options.
 func NewReaderWithOptions(array *ebpf.Map, perCPUBuffer int, opts ReaderOptions) (pr *Reader, err error) {
+	closeOnError := func(c io.Closer) {
+		if err != nil {
+			c.Close()
+		}
+	}
+
 	if perCPUBuffer < 1 {
 		return nil, errors.New("perCPUBuffer must be larger than 0")
 	}
@@ -201,53 +207,41 @@ func NewReaderWithOptions(array *ebpf.Map, perCPUBuffer int, opts ReaderOptions)
 	}
 
 	var (
-		fds      []int
 		nCPU     = int(array.MaxEntries())
 		rings    = make([]*perfEventRing, 0, nCPU)
-		pauseFds = make([]int, 0, nCPU)
+		eventFds = make([]*sys.FD, 0, nCPU)
 	)
 
 	poller, err := epoll.New()
 	if err != nil {
 		return nil, err
 	}
-
-	defer func() {
-		if err != nil {
-			poller.Close()
-			for _, fd := range fds {
-				unix.Close(fd)
-			}
-			for _, ring := range rings {
-				if ring != nil {
-					ring.Close()
-				}
-			}
-		}
-	}()
+	defer closeOnError(poller)
 
 	// bpf_perf_event_output checks which CPU an event is enabled on,
 	// but doesn't allow using a wildcard like -1 to specify "all CPUs".
 	// Hence we have to create a ring for each CPU.
 	bufferSize := 0
 	for i := 0; i < nCPU; i++ {
-		ring, err := newPerfEventRing(i, perCPUBuffer, opts)
+		event, ring, err := newPerfEventRing(i, perCPUBuffer, opts)
 		if errors.Is(err, unix.ENODEV) {
 			// The requested CPU is currently offline, skip it.
 			rings = append(rings, nil)
-			pauseFds = append(pauseFds, -1)
+			eventFds = append(eventFds, nil)
 			continue
 		}
 
 		if err != nil {
 			return nil, fmt.Errorf("failed to create perf ring for CPU %d: %v", i, err)
 		}
+		defer closeOnError(event)
+		defer closeOnError(ring)
 
 		bufferSize = ring.size()
 		rings = append(rings, ring)
-		pauseFds = append(pauseFds, ring.fd)
+		eventFds = append(eventFds, event)
 
-		if err := poller.Add(ring.fd, i); err != nil {
+		if err := poller.Add(event.Int(), i); err != nil {
 			return nil, err
 		}
 	}
@@ -265,7 +259,7 @@ func NewReaderWithOptions(array *ebpf.Map, perCPUBuffer int, opts ReaderOptions)
 		epollEvents:  make([]unix.EpollEvent, len(rings)),
 		epollRings:   make([]*perfEventRing, 0, len(rings)),
 		eventHeader:  make([]byte, perfEventHeaderSize),
-		pauseFds:     pauseFds,
+		eventFds:     eventFds,
 		overwritable: opts.Overwritable,
 		bufferSize:   bufferSize,
 	}
@@ -291,17 +285,25 @@ func (pr *Reader) Close() error {
 	}
 
 	// Trying to poll will now fail, so Read() can't block anymore. Acquire the
-	// lock so that we can clean up.
+	// locks so that we can clean up.
 	pr.mu.Lock()
 	defer pr.mu.Unlock()
+
+	pr.pauseMu.Lock()
+	defer pr.pauseMu.Unlock()
 
 	for _, ring := range pr.rings {
 		if ring != nil {
 			ring.Close()
 		}
 	}
+	for _, event := range pr.eventFds {
+		if event != nil {
+			event.Close()
+		}
+	}
 	pr.rings = nil
-	pr.pauseFds = nil
+	pr.eventFds = nil
 	pr.array.Close()
 
 	return nil
@@ -406,11 +408,11 @@ func (pr *Reader) Pause() error {
 	pr.pauseMu.Lock()
 	defer pr.pauseMu.Unlock()
 
-	if pr.pauseFds == nil {
+	if pr.eventFds == nil {
 		return fmt.Errorf("%w", ErrClosed)
 	}
 
-	for i := range pr.pauseFds {
+	for i := range pr.eventFds {
 		if err := pr.array.Delete(uint32(i)); err != nil && !errors.Is(err, ebpf.ErrKeyNotExist) {
 			return fmt.Errorf("could't delete event fd for CPU %d: %w", i, err)
 		}
@@ -428,16 +430,16 @@ func (pr *Reader) Resume() error {
 	pr.pauseMu.Lock()
 	defer pr.pauseMu.Unlock()
 
-	if pr.pauseFds == nil {
+	if pr.eventFds == nil {
 		return fmt.Errorf("%w", ErrClosed)
 	}
 
-	for i, fd := range pr.pauseFds {
-		if fd == -1 {
+	for i, fd := range pr.eventFds {
+		if fd == nil {
 			continue
 		}
 
-		if err := pr.array.Put(uint32(i), uint32(fd)); err != nil {
+		if err := pr.array.Put(uint32(i), fd.Uint()); err != nil {
 			return fmt.Errorf("couldn't put event fd %d for CPU %d: %w", fd, i, err)
 		}
 	}

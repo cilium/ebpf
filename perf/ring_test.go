@@ -131,10 +131,12 @@ func makeForwardRing(size, offset int) *forwardReader {
 
 func TestPerfEventRing(t *testing.T) {
 	check := func(buffer, watermark int, overwritable bool) {
-		ring, err := newPerfEventRing(0, buffer, ReaderOptions{Watermark: watermark, Overwritable: overwritable})
+		event, ring, err := newPerfEventRing(0, buffer, ReaderOptions{Watermark: watermark, Overwritable: overwritable})
 		if err != nil {
 			t.Fatal(err)
 		}
+		defer event.Close()
+		defer ring.Close()
 
 		size := ring.size()
 
@@ -154,21 +156,21 @@ func TestPerfEventRing(t *testing.T) {
 	}
 
 	// watermark > buffer
-	_, err := newPerfEventRing(0, 8192, ReaderOptions{Watermark: 8193, Overwritable: false})
+	_, _, err := newPerfEventRing(0, 8192, ReaderOptions{Watermark: 8193, Overwritable: false})
 	if err == nil {
 		t.Fatal("watermark > buffer allowed")
 	}
-	_, err = newPerfEventRing(0, 8192, ReaderOptions{Watermark: 8193, Overwritable: true})
+	_, _, err = newPerfEventRing(0, 8192, ReaderOptions{Watermark: 8193, Overwritable: true})
 	if err == nil {
 		t.Fatal("watermark > buffer allowed")
 	}
 
 	// watermark == buffer
-	_, err = newPerfEventRing(0, 8192, ReaderOptions{Watermark: 8192, Overwritable: false})
+	_, _, err = newPerfEventRing(0, 8192, ReaderOptions{Watermark: 8192, Overwritable: false})
 	if err == nil {
 		t.Fatal("watermark == buffer allowed")
 	}
-	_, err = newPerfEventRing(0, 8192, ReaderOptions{Watermark: 8193, Overwritable: true})
+	_, _, err = newPerfEventRing(0, 8192, ReaderOptions{Watermark: 8193, Overwritable: true})
 	if err == nil {
 		t.Fatal("watermark == buffer allowed")
 	}

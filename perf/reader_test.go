@@ -16,7 +16,6 @@ import (
 	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/testutils"
 	"github.com/cilium/ebpf/internal/testutils/fdtrace"
-	"github.com/cilium/ebpf/internal/unix"
 
 	"github.com/go-quicktest/qt"
 )
@@ -386,7 +385,7 @@ func TestCreatePerfEvent(t *testing.T) {
 	if err != nil {
 		t.Fatal("Can't create perf event:", err)
 	}
-	unix.Close(fd)
+	fd.Close()
 }
 
 func TestReadRecord(t *testing.T) {

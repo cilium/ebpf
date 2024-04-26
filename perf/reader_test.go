@@ -500,34 +500,44 @@ func TestPerfReaderWakeupEvents(t *testing.T) {
 	}
 	defer rd.Close()
 
-	// Write a sample. The reader should read it.
 	prog := outputSamplesProg(t, events, 5)
-	ret, _, err := prog.Test(internal.EmptyBPFContext)
-	testutils.SkipIfNotSupported(t, err)
-	if err != nil || ret != 0 {
-		t.Fatal("Can't write sample")
-	}
 
-	if errno := syscall.Errno(-int32(ret)); errno != 0 {
-		t.Fatal("Expected 0 as return value, got", errno)
-	}
-
-	rd.SetDeadline(time.Now().Add(10 * time.Millisecond))
-	_, err = rd.Read()
-	qt.Assert(t, qt.ErrorIs(err, os.ErrDeadlineExceeded), qt.Commentf("expected os.ErrDeadlineExceeded"))
-
-	// send followup events
-	for i := 1; i < numEvents; i++ {
+	// Send enough events to trigger WakeupEvents.
+	for i := 0; i < numEvents; i++ {
 		_, _, err = prog.Test(internal.EmptyBPFContext)
-		if err != nil {
-			t.Fatal(err)
-		}
+		testutils.SkipIfNotSupported(t, err)
+		qt.Assert(t, qt.IsNil(err))
 	}
 
-	rd.SetDeadline(time.Time{})
+	time.AfterFunc(5*time.Second, func() {
+		// Interrupt Read() in case the implementation is buggy.
+		rd.Close()
+	})
+
 	for i := 0; i < numEvents; i++ {
 		checkRecord(t, rd)
 	}
+}
+
+func TestReadWithoutWakeup(t *testing.T) {
+	t.Parallel()
+
+	events := perfEventArray(t)
+
+	rd, err := NewReaderWithOptions(events, 1, ReaderOptions{WakeupEvents: 2})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rd.Close()
+
+	prog := outputSamplesProg(t, events, 5)
+	ret, _, err := prog.Test(internal.EmptyBPFContext)
+	testutils.SkipIfNotSupported(t, err)
+	qt.Assert(t, qt.IsNil(err))
+	qt.Assert(t, qt.Equals(ret, 0))
+
+	rd.SetDeadline(time.Now())
+	checkRecord(t, rd)
 }
 
 func BenchmarkReader(b *testing.B) {

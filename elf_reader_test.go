@@ -907,7 +907,7 @@ func TestIPRoute2Compat(t *testing.T) {
 }
 
 var (
-	elfPath    = flag.String("elfs", os.Getenv("KERNEL_SELFTESTS"), "`Path` containing libbpf-compatible ELFs (defaults to $KERNEL_SELFTESTS)")
+	elfPath    = flag.String("elfs", os.Getenv("CI_KERNEL_SELFTESTS"), "`Path` containing libbpf-compatible ELFs (defaults to $CI_KERNEL_SELFTESTS)")
 	elfPattern = flag.String("elf-pattern", "*.o", "Glob `pattern` for object files that should be tested")
 )
 

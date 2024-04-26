@@ -22,30 +22,24 @@ the contents of the DCO.
 Many of the tests require privileges to set resource limits and load eBPF code.
 The easiest way to obtain these is to run the tests with `sudo`.
 
-To test the current package with your local kernel you can simply run:
-```
+Run all tests with the following command:
+
+```shell-session
 go test -exec sudo ./...
 ```
 
-To test the current package with a different kernel version you can use the [run-tests.sh] script.
-It requires [virtme], qemu and docker to be installed.
-Unfortunately virtme is not well maintained at the moment, so we recommend installing
-a known working version:
+To test the current package with a different kernel version you can use [vimto].
+Once you have installed `vimto` and its dependencies you can run all tests on a
+different kernel:
 
 ```shell-session
-pip3 install https://github.com/amluto/virtme/archive/beb85146cd91de37ae455eccb6ab67c393e6e290.zip
+vimto -- go test ./...
 ```
 
-Once you have the dependencies you can run all tests on a different kernel:
+Use one of the [precompiled kernels](https://github.com/cilium/ci-kernels/pkgs/container/ci-kernels/versions) like so:
 
 ```shell-session
-./run-tests.sh 5.4
-```
-
-Or run a subset of tests:
-
-```shell-session
-./run-tests.sh 5.4 -run TCX ./link
+vimto -kernel :mainline -- go test ./...
 ```
 
 ## Regenerating testdata and source code
@@ -105,8 +99,7 @@ you as a code owner. Please create an issue in the repository.
     * Maintain roadmap and encourage contributions towards it
     * Merge approved PRs
 
-[virtme]: https://github.com/amluto/virtme
-[run-tests.sh]: https://github.com/cilium/ebpf/blob/main/run-tests.sh
+[vimto]: https://github.com/lmb/vimto
 [permissions]: https://docs.github.com/en/organizations/managing-user-access-to-your-organizations-repositories/repository-roles-for-an-organization#permissions-for-each-role
 [ebpf-go-contributors]: https://github.com/orgs/cilium/teams/ebpf-go-contributors/members
 [ebpf-go-reviewers]: https://github.com/orgs/cilium/teams/ebpf-go-reviewers/members

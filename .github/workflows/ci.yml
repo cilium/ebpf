@@ -7,7 +7,7 @@ on:
 
 env:
   TMPDIR: /tmp
-  CI_MAX_KERNEL_VERSION: '6.7'
+  CI_MAX_KERNEL_VERSION: '6.8'
   CI_MIN_CLANG_VERSION: '11'
   go_version: '~1.22'
   prev_go_version: '~1.21'
@@ -173,7 +173,7 @@ jobs:
     timeout-minutes: 15
     strategy:
       matrix:
-        version: ["6.7", "6.1", "5.15", "5.10", "5.4", "4.19", "4.14", "4.9"]
+        version: ["6.8", "6.6", "6.1", "5.15", "5.10", "5.4", "4.19", "4.14", "4.9"]
     env:
       KERNEL_VERSION: "${{ matrix.version }}"
     steps:

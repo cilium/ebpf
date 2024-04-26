@@ -71,7 +71,7 @@ func (n templateName) CloseHelper() string {
 	return "_" + toUpperFirst(string(n)) + "Close"
 }
 
-type outputArgs struct {
+type OutputArgs struct {
 	// Package of the resulting file.
 	pkg string
 	// The prefix of all names declared at the top-level.
@@ -89,7 +89,7 @@ type outputArgs struct {
 	out io.Writer
 }
 
-func output(args outputArgs) error {
+func Output(args OutputArgs) error {
 	maps := make(map[string]string)
 	for _, name := range args.maps {
 		maps[name] = internal.Identifier(name)
@@ -151,7 +151,7 @@ func output(args outputArgs) error {
 	return internal.WriteFormatted(buf.Bytes(), args.out)
 }
 
-func collectFromSpec(spec *ebpf.CollectionSpec, cTypes []string, skipGlobalTypes bool) (maps, programs []string, types []btf.Type, _ error) {
+func CollectFromSpec(spec *ebpf.CollectionSpec, cTypes []string, skipGlobalTypes bool) (maps, programs []string, types []btf.Type, _ error) {
 	for name := range spec.Maps {
 		// Skip .rodata, .data, .bss, etc. sections
 		if !strings.HasPrefix(name, ".") {

@@ -389,7 +389,7 @@ func (b2g *bpf2go) convert(tgt target, goarches []goarch) (err error) {
 		return fmt.Errorf("can't load BPF from ELF: %s", err)
 	}
 
-	maps, programs, types, err := collectFromSpec(spec, b2g.cTypes, b2g.skipGlobalTypes)
+	maps, programs, types, err := CollectFromSpec(spec, b2g.cTypes, b2g.skipGlobalTypes)
 	if err != nil {
 		return err
 	}
@@ -402,7 +402,7 @@ func (b2g *bpf2go) convert(tgt target, goarches []goarch) (err error) {
 	}
 	defer removeOnError(goFile)
 
-	err = output(outputArgs{
+	err = Output(OutputArgs{
 		pkg:         b2g.pkg,
 		stem:        b2g.identStem,
 		constraints: constraints,

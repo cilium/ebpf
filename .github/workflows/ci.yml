@@ -178,7 +178,8 @@ jobs:
     strategy:
       matrix:
         tag:
-          - "6.8"
+          - "mainline"
+          - "stable"
           - "6.6"
           - "6.1"
           - "5.15"

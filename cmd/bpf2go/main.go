@@ -18,6 +18,7 @@ import (
 	"strings"
 
 	"github.com/cilium/ebpf"
+	bpf2golib "github.com/cilium/ebpf/internal/bpf2go"
 )
 
 const helpText = `Usage: %[1]s [options] <ident> <source file> [-- <C flags>]
@@ -164,10 +165,10 @@ func newB2G(stdout io.Writer, args []string) (*bpf2go, error) {
 		return nil, errors.New("no compiler specified")
 	}
 
-	args, cFlags := splitCFlagsFromArgs(fs.Args())
+	args, cFlags := bpf2golib.SplitCFlagsFromArgs(fs.Args())
 
 	if *flagCFlags != "" {
-		splitCFlags, err := splitArguments(*flagCFlags)
+		splitCFlags, err := bpf2golib.SplitArguments(*flagCFlags)
 		if err != nil {
 			return nil, err
 		}
@@ -389,7 +390,7 @@ func (b2g *bpf2go) convert(tgt target, goarches []goarch) (err error) {
 		return fmt.Errorf("can't load BPF from ELF: %s", err)
 	}
 
-	maps, programs, types, err := CollectFromSpec(spec, b2g.cTypes, b2g.skipGlobalTypes)
+	maps, programs, types, err := bpf2golib.CollectFromSpec(spec, b2g.cTypes, b2g.skipGlobalTypes)
 	if err != nil {
 		return err
 	}
@@ -402,15 +403,15 @@ func (b2g *bpf2go) convert(tgt target, goarches []goarch) (err error) {
 	}
 	defer removeOnError(goFile)
 
-	err = Output(OutputArgs{
-		pkg:         b2g.pkg,
-		stem:        b2g.identStem,
-		constraints: constraints,
-		maps:        maps,
-		programs:    programs,
-		types:       types,
-		obj:         filepath.Base(objFileName),
-		out:         goFile,
+	err = bpf2golib.Output(bpf2golib.OutputArgs{
+		Pkg:         b2g.pkg,
+		Stem:        b2g.identStem,
+		Constraints: constraints,
+		Maps:        maps,
+		Programs:    programs,
+		Types:       types,
+		Obj:         filepath.Base(objFileName),
+		Out:         goFile,
 	})
 	if err != nil {
 		return fmt.Errorf("can't write %s: %s", goFileName, err)

@@ -1,4 +1,4 @@
-package main
+package bpf2go
 
 import (
 	"testing"

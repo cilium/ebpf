@@ -1,4 +1,4 @@
-package main
+package bpf2go
 
 import (
 	"reflect"
@@ -26,7 +26,7 @@ func TestSplitArguments(t *testing.T) {
 	}
 
 	for _, testcase := range testcases {
-		have, err := splitArguments(testcase.in)
+		have, err := SplitArguments(testcase.in)
 		if testcase.out == nil {
 			if err == nil {
 				t.Errorf("Test should fail for: %s", testcase.in)

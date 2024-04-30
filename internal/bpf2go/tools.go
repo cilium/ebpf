@@ -1,4 +1,4 @@
-package main
+package bpf2go
 
 import (
 	"errors"
@@ -9,7 +9,7 @@ import (
 	"unicode/utf8"
 )
 
-func splitCFlagsFromArgs(in []string) (args, cflags []string) {
+func SplitCFlagsFromArgs(in []string) (args, cflags []string) {
 	for i, arg := range in {
 		if arg == "--" {
 			return in[:i], in[i+1:]
@@ -19,7 +19,7 @@ func splitCFlagsFromArgs(in []string) (args, cflags []string) {
 	return in, nil
 }
 
-func splitArguments(in string) ([]string, error) {
+func SplitArguments(in string) ([]string, error) {
 	var (
 		result  []string
 		builder strings.Builder

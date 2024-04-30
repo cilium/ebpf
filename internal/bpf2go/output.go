@@ -1,4 +1,4 @@
-package main
+package bpf2go
 
 import (
 	"bytes"
@@ -73,36 +73,36 @@ func (n templateName) CloseHelper() string {
 
 type OutputArgs struct {
 	// Package of the resulting file.
-	pkg string
+	Pkg string
 	// The prefix of all names declared at the top-level.
-	stem string
-	// Build constraints included in the resulting file.
-	constraints constraint.Expr
+	Stem string
+	// Build Constraints included in the resulting file.
+	Constraints constraint.Expr
 	// Maps to be emitted.
-	maps []string
+	Maps []string
 	// Programs to be emitted.
-	programs []string
+	Programs []string
 	// Types to be emitted.
-	types []btf.Type
+	Types []btf.Type
 	// Filename of the ELF object to embed.
-	obj string
-	out io.Writer
+	Obj string
+	Out io.Writer
 }
 
 func Output(args OutputArgs) error {
 	maps := make(map[string]string)
-	for _, name := range args.maps {
+	for _, name := range args.Maps {
 		maps[name] = internal.Identifier(name)
 	}
 
 	programs := make(map[string]string)
-	for _, name := range args.programs {
+	for _, name := range args.Programs {
 		programs[name] = internal.Identifier(name)
 	}
 
 	typeNames := make(map[btf.Type]string)
-	for _, typ := range args.types {
-		typeNames[typ] = args.stem + internal.Identifier(typ.TypeName())
+	for _, typ := range args.Types {
+		typeNames[typ] = args.Stem + internal.Identifier(typ.TypeName())
 	}
 
 	// Ensure we don't have conflicting names and generate a sorted list of
@@ -133,14 +133,14 @@ func Output(args OutputArgs) error {
 	}{
 		gf,
 		module,
-		args.pkg,
-		args.constraints,
-		templateName(args.stem),
+		args.Pkg,
+		args.Constraints,
+		templateName(args.Stem),
 		maps,
 		programs,
 		types,
 		typeNames,
-		args.obj,
+		args.Obj,
 	}
 
 	var buf bytes.Buffer
@@ -148,7 +148,7 @@ func Output(args OutputArgs) error {
 		return fmt.Errorf("can't generate types: %s", err)
 	}
 
-	return internal.WriteFormatted(buf.Bytes(), args.out)
+	return internal.WriteFormatted(buf.Bytes(), args.Out)
 }
 
 func CollectFromSpec(spec *ebpf.CollectionSpec, cTypes []string, skipGlobalTypes bool) (maps, programs []string, types []btf.Type, _ error) {

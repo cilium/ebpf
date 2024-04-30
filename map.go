@@ -541,6 +541,11 @@ func (m *Map) String() string {
 	return fmt.Sprintf("%s#%v", m.typ, m.fd)
 }
 
+// Name returns the name of the map.
+func (m *Map) Name() string {
+	return m.name
+}
+
 // Type returns the underlying type of the map.
 func (m *Map) Type() MapType {
 	return m.typ

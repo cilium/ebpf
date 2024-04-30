@@ -528,6 +528,11 @@ func (p *Program) String() string {
 	return fmt.Sprintf("%s(%v)", p.typ, p.fd)
 }
 
+// Name returns the name of the program.
+func (p *Program) Name() string {
+	return p.name
+}
+
 // Type returns the underlying type of the program.
 func (p *Program) Type() ProgramType {
 	return p.typ

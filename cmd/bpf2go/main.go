@@ -18,7 +18,7 @@ import (
 	"strings"
 
 	"github.com/cilium/ebpf"
-	bpf2golib "github.com/cilium/ebpf/internal/bpf2go"
+	bpf2golib "github.com/cilium/ebpf/bpf2go"
 )
 
 const helpText = `Usage: %[1]s [options] <ident> <source file> [-- <C flags>]

@@ -85,7 +85,7 @@ func toUpperFirst(str string) string {
 
 func currentModule() string {
 	bi, ok := debug.ReadBuildInfo()
-	if !ok {
+	if !ok || bi.Main.Path == "" {
 		// Fall back to constant since bazel doesn't support BuildInfo.
 		return "github.com/cilium/ebpf"
 	}

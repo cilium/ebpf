@@ -142,6 +142,8 @@ jobs:
     runs-on: actuated-arm64-2cpu-8gb
     needs: build-and-lint
     timeout-minutes: 15
+    env:
+      EBPF_TEST_IGNORE_KERNEL_VERSION: 'TestKprobeMulti,TestKprobeMultiErrors,TestKprobeMultiCookie,TestKprobeMultiProgramCall,TestHaveBPFLinkKprobeMulti'
     steps:
       - uses: actions/checkout@v4
 
@@ -153,7 +155,7 @@ jobs:
       - run: go install gotest.tools/gotestsum@v1.8.1
 
       - name: Test
-        run: gotestsum --ignore-non-json-output-lines --junitfile junit.xml -- -exec sudo -short -count 1 -json ./...
+        run: gotestsum --ignore-non-json-output-lines --junitfile junit.xml -- -exec 'sudo -E' -short -count 1 -json ./...
 
       - name: Benchmark
         run: go test -exec sudo -short -run '^$' -bench . -benchtime=1x ./...

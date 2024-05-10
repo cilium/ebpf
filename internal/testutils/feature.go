@@ -24,11 +24,7 @@ func checkFeatureTestError(t *testing.T, err error) {
 
 	var ufe *internal.UnsupportedFeatureError
 	if errors.As(err, &ufe) {
-		if ignoreKernelVersionCheck(t.Name()) {
-			t.Skipf("Ignoring error due to %s: %s", ignoreKernelVersionEnvVar, ufe.Error())
-		} else {
-			checkKernelVersion(t, ufe)
-		}
+		checkKernelVersion(t, ufe)
 	} else {
 		t.Error("Feature test failed:", err)
 	}
@@ -66,8 +62,13 @@ func checkKernelVersion(tb testing.TB, ufe *internal.UnsupportedFeatureError) {
 		return
 	}
 
+	tb.Helper()
+
+	if ignoreKernelVersionCheck(tb.Name()) {
+		tb.Skipf("Ignoring error due to %s: %s", ignoreKernelVersionEnvVar, ufe.Error())
+	}
+
 	if !isKernelLessThan(tb, ufe.MinimumVersion) {
-		tb.Helper()
 		tb.Fatalf("Feature '%s' isn't supported even though kernel is newer than %s",
 			ufe.Name, ufe.MinimumVersion)
 	}

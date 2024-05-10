@@ -53,6 +53,16 @@ func BenchmarkParseFiltered(b *testing.B) {
 	}
 }
 
+func TestConfigFprobe(t *testing.T) {
+	f, err := Find()
+	qt.Assert(t, qt.IsNil(err))
+	defer f.Close()
+
+	cfg, err := Parse(f, nil)
+	qt.Assert(t, qt.IsNil(err))
+	qt.Assert(t, qt.Equals(cfg["CONFIG_FPROBE"], "y"))
+}
+
 func TestParse(t *testing.T) {
 	t.Parallel()
 

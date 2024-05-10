@@ -274,7 +274,11 @@ func pmuProbe(args tracefs.ProbeArgs) (*perfEvent, error) {
 		}
 	}
 
-	rawFd, err := unix.PerfEventOpen(&attr, args.Pid, 0, -1, unix.PERF_FLAG_FD_CLOEXEC)
+	cpu := 0
+	if args.Pid != perfAllThreads {
+		cpu = -1
+	}
+	rawFd, err := unix.PerfEventOpen(&attr, args.Pid, cpu, -1, unix.PERF_FLAG_FD_CLOEXEC)
 
 	// On some old kernels, kprobe PMU doesn't allow `.` in symbol names and
 	// return -EINVAL. Return ErrNotSupported to allow falling back to tracefs.

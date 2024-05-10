@@ -264,7 +264,11 @@ func openTracepointPerfEvent(tid uint64, pid int) (*sys.FD, error) {
 		Wakeup:      1,
 	}
 
-	fd, err := unix.PerfEventOpen(&attr, pid, 0, -1, unix.PERF_FLAG_FD_CLOEXEC)
+	cpu := 0
+	if pid != perfAllThreads {
+		cpu = -1
+	}
+	fd, err := unix.PerfEventOpen(&attr, pid, cpu, -1, unix.PERF_FLAG_FD_CLOEXEC)
 	if err != nil {
 		return nil, fmt.Errorf("opening tracepoint perf event: %w", err)
 	}

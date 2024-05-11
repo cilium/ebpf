@@ -262,6 +262,14 @@ func TestStats(t *testing.T) {
 		t.Errorf("expected a runtime of 0ns but got %v", rt)
 	}
 
+	rm, ok := pi.RecursionMisses()
+	if !ok {
+		t.Errorf("expected recursion misses info to be available")
+	}
+	if rm != 0 {
+		t.Errorf("expected a recursion misses of 0 but got %v", rm)
+	}
+
 	if err := testStats(prog); err != nil {
 		t.Error(err)
 	}

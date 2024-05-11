@@ -83,6 +83,9 @@ type programStats struct {
 	runtime time.Duration
 	// Total number of times the program was called.
 	runCount uint64
+	// Total number of times the programm was NOT called.
+	// Added in commit 9ed9e9ba2337 ("bpf: Count the number of times recursion was prevented").
+	recursionMisses uint64
 }
 
 // ProgramInfo describes a program.
@@ -125,8 +128,9 @@ func newProgramInfoFromFd(fd *sys.FD) (*ProgramInfo, error) {
 		Name: unix.ByteSliceToString(info.Name[:]),
 		btf:  btf.ID(info.BtfId),
 		stats: &programStats{
-			runtime:  time.Duration(info.RunTimeNs),
-			runCount: info.RunCnt,
+			runtime:         time.Duration(info.RunTimeNs),
+			runCount:        info.RunCnt,
+			recursionMisses: info.RecursionMisses,
 		},
 	}
 
@@ -257,6 +261,16 @@ func (pi *ProgramInfo) Runtime() (time.Duration, bool) {
 		return pi.stats.runtime, true
 	}
 	return time.Duration(0), false
+}
+
+// RecursionMisses returns the total number of times the program was NOT called.
+// This can happen when another bpf program is already running on the cpu, which
+// is likely to happen for example when you interrupt bpf program execution.
+func (pi *ProgramInfo) RecursionMisses() (uint64, bool) {
+	if pi.stats != nil {
+		return pi.stats.recursionMisses, true
+	}
+	return 0, false
 }
 
 // Instructions returns the 'xlated' instruction stream of the program

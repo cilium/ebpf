@@ -59,6 +59,8 @@ func (ko *KprobeOptions) cookie() uint64 {
 // If attaching to symbol fails, automatically retries with the running
 // platform's syscall prefix (e.g. __x64_) to support attaching to syscalls
 // in a portable fashion.
+//
+// The returned Link may implement [PerfEvent].
 func Kprobe(symbol string, prog *ebpf.Program, opts *KprobeOptions) (Link, error) {
 	k, err := kprobe(symbol, prog, opts, false)
 	if err != nil {
@@ -90,6 +92,8 @@ func Kprobe(symbol string, prog *ebpf.Program, opts *KprobeOptions) (Link, error
 //
 // On kernels 5.10 and earlier, setting a kretprobe on a nonexistent symbol
 // incorrectly returns unix.EINVAL instead of os.ErrNotExist.
+//
+// The returned Link may implement [PerfEvent].
 func Kretprobe(symbol string, prog *ebpf.Program, opts *KprobeOptions) (Link, error) {
 	k, err := kprobe(symbol, prog, opts, true)
 	if err != nil {

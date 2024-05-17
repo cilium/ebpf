@@ -125,10 +125,23 @@ jobs:
       - run: sudo chmod 0666 /dev/kvm
 
       - name: Test
-        run: gotestsum --raw-command --ignore-non-json-output-lines --junitfile junit.xml -- vimto -kernel :${CI_MAX_KERNEL_VERSION}-selftests -- go test -short -count 1 -json ./...
+        env:
+          GOTRACEBACK: crash
+        run: |
+          gotestsum --raw-command --ignore-non-json-output-lines --junitfile junit.xml -- vimto -kernel :${CI_MAX_KERNEL_VERSION}-selftests -- go test -timeout 5m -short -count 1 -json ./...
 
       - name: Benchmark
         run: vimto -kernel :${CI_MAX_KERNEL_VERSION}-selftests -- go test -short -run '^$' -bench . -benchtime=1x ./...
+
+      - name: Upload coredumps
+        uses: actions/upload-artifact@v4
+        if: ${{ failure() }}
+        with:
+          name: cores
+          if-no-files-found: ignore
+          path: |
+            **/core-*
+            **/*.test
 
       - name: Upload Test Results
         if: always()

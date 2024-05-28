@@ -26,6 +26,8 @@ type compileArgs struct {
 	target string
 	// Depfile will be written here if depName is not empty
 	dep io.Writer
+	// LLVM vfsoverlay file path
+	vfsoverlay string
 }
 
 func compile(args compileArgs) error {
@@ -38,6 +40,10 @@ func compile(args compileArgs) error {
 		// compiling on. This isn't appropriate for ahead of time
 		// compiled code so force the most compatible version.
 		"-mcpu=v1",
+	}
+
+	if args.vfsoverlay != "" {
+		overrideFlags = append(overrideFlags, "-ivfsoverlay", args.vfsoverlay, "-iquote", vfsRootDir)
 	}
 
 	cmd := exec.Command(args.cc, append(overrideFlags, args.cFlags...)...)

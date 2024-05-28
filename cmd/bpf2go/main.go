@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"errors"
 	"flag"
 	"fmt"
@@ -108,6 +109,10 @@ type bpf2go struct {
 	// Base directory of the Makefile. Enables outputting make-style dependencies
 	// in .d files.
 	makeBase string
+	// Recognise go package paths in C #include-s.
+	gopkgIncludes bool
+	// LLVM vfsoverlay file path (generated when gopkgIncludes is true).
+	vfsoverlay string
 }
 
 func newB2G(stdout io.Writer, args []string) (*bpf2go, error) {
@@ -132,6 +137,7 @@ func newB2G(stdout io.Writer, args []string) (*bpf2go, error) {
 	fs.StringVar(&b2g.outputStem, "output-stem", "", "alternative stem for names of generated files (defaults to ident)")
 	outDir := fs.String("output-dir", "", "target directory of generated files (defaults to current directory)")
 	outPkg := fs.String("go-package", "", "package for output go file (default as ENV GOPACKAGE)")
+	fs.BoolVar(&b2g.gopkgIncludes, "gopkg-includes", false, "recognise go package paths in C #include-s")
 	fs.SetOutput(b2g.stdout)
 	fs.Usage = func() {
 		fmt.Fprintf(fs.Output(), helpText, fs.Name())
@@ -297,6 +303,29 @@ func (b2g *bpf2go) convertAll() (err error) {
 		}
 	}
 
+	if b2g.gopkgIncludes {
+		mods, err := listMods(b2g.outputDir, "all")
+		if err != nil {
+			return fmt.Errorf("listing go modules: %w", err)
+		}
+		var mainModAndDirectDeps []mod
+		for _, m := range mods {
+			if m.Indirect {
+				continue
+			}
+			mainModAndDirectDeps = append(mainModAndDirectDeps, m)
+		}
+		vfs, err := createVfs(mainModAndDirectDeps)
+		if err != nil {
+			return fmt.Errorf("creating LLVM vfsoverlay: %w", err)
+		}
+		vfsID := sha256.Sum256([]byte(b2g.outputDir))
+		b2g.vfsoverlay, err = persistVfs(vfsID, vfs)
+		if err != nil {
+			return fmt.Errorf("persisting LLVM vfsoverlay: %w", err)
+		}
+	}
+
 	for target, arches := range b2g.targetArches {
 		if err := b2g.convert(target, arches); err != nil {
 			return err
@@ -363,13 +392,14 @@ func (b2g *bpf2go) convert(tgt target, goarches []goarch) (err error) {
 
 	var dep bytes.Buffer
 	err = compile(compileArgs{
-		cc:     b2g.cc,
-		cFlags: cFlags,
-		target: tgt.clang,
-		dir:    cwd,
-		source: b2g.sourceFile,
-		dest:   objFileName,
-		dep:    &dep,
+		cc:         b2g.cc,
+		cFlags:     cFlags,
+		target:     tgt.clang,
+		dir:        cwd,
+		source:     b2g.sourceFile,
+		dest:       objFileName,
+		dep:        &dep,
+		vfsoverlay: b2g.vfsoverlay,
 	})
 	if err != nil {
 		return err

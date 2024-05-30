@@ -1,4 +1,4 @@
-package main
+package bindings
 
 import (
 	"testing"
@@ -75,7 +75,7 @@ func TestCollectFromSpec(t *testing.T) {
 
 	map1 := spec.Maps["map1"]
 
-	maps, programs, types, err := collectFromSpec(spec, nil, false)
+	maps, programs, types, err := CollectFromSpec(spec, nil, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -83,13 +83,13 @@ func TestCollectFromSpec(t *testing.T) {
 	qt.Assert(t, qt.ContentEquals(programs, []string{"filter"}))
 	qt.Assert(t, qt.CmpEquals(types, []btf.Type{map1.Key, map1.Value}, typesEqualComparer))
 
-	_, _, types, err = collectFromSpec(spec, nil, true)
+	_, _, types, err = CollectFromSpec(spec, nil, true)
 	if err != nil {
 		t.Fatal(err)
 	}
 	qt.Assert(t, qt.CmpEquals[[]btf.Type](types, nil, typesEqualComparer))
 
-	_, _, types, err = collectFromSpec(spec, []string{"barfoo"}, true)
+	_, _, types, err = CollectFromSpec(spec, []string{"barfoo"}, true)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -18,6 +18,7 @@ import (
 	"strings"
 
 	"github.com/cilium/ebpf"
+	"github.com/cilium/ebpf/bindings"
 )
 
 const helpText = `Usage: %[1]s [options] <ident> <source file> [-- <C flags>]
@@ -389,7 +390,7 @@ func (b2g *bpf2go) convert(tgt target, goarches []goarch) (err error) {
 		return fmt.Errorf("can't load BPF from ELF: %s", err)
 	}
 
-	maps, programs, types, err := collectFromSpec(spec, b2g.cTypes, b2g.skipGlobalTypes)
+	maps, programs, types, err := bindings.CollectFromSpec(spec, b2g.cTypes, b2g.skipGlobalTypes)
 	if err != nil {
 		return err
 	}
@@ -402,15 +403,16 @@ func (b2g *bpf2go) convert(tgt target, goarches []goarch) (err error) {
 	}
 	defer removeOnError(goFile)
 
-	err = output(outputArgs{
-		pkg:         b2g.pkg,
-		stem:        b2g.identStem,
-		constraints: constraints,
-		maps:        maps,
-		programs:    programs,
-		types:       types,
-		obj:         filepath.Base(objFileName),
-		out:         goFile,
+	err = bindings.Generate(bindings.GenerateArgs{
+		Module:      currentModule(),
+		Pkg:         b2g.pkg,
+		Stem:        b2g.identStem,
+		Constraints: constraints,
+		Maps:        maps,
+		Programs:    programs,
+		Types:       types,
+		Obj:         filepath.Base(objFileName),
+		Out:         goFile,
 	})
 	if err != nil {
 		return fmt.Errorf("can't write %s: %s", goFileName, err)

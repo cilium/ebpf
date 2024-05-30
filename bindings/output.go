@@ -1,4 +1,4 @@
-package main
+package bindings
 
 import (
 	"bytes"
@@ -71,38 +71,48 @@ func (n templateName) CloseHelper() string {
 	return "_" + toUpperFirst(string(n)) + "Close"
 }
 
-type outputArgs struct {
+type GenerateArgs struct {
+	// The package containing the go ebpf code. "github.com/cilium/ebpf" if left empty
+	Module string
 	// Package of the resulting file.
-	pkg string
+	Pkg string
 	// The prefix of all names declared at the top-level.
-	stem string
-	// Build constraints included in the resulting file.
-	constraints constraint.Expr
+	Stem string
+	// Build Constraints included in the resulting file.
+	Constraints constraint.Expr
 	// Maps to be emitted.
-	maps []string
+	Maps []string
 	// Programs to be emitted.
-	programs []string
+	Programs []string
 	// Types to be emitted.
-	types []btf.Type
+	Types []btf.Type
 	// Filename of the ELF object to embed.
-	obj string
-	out io.Writer
+	Obj string
+	// Function which transforms the input into a valid go identifier (internal.Identifier if left nil)
+	Identifier func(string) string
+	Out        io.Writer
 }
 
-func output(args outputArgs) error {
+func Generate(args GenerateArgs) error {
+	if args.Module == "" {
+		args.Module = "github.com/cilium/ebpf"
+	}
+	if args.Identifier == nil {
+		args.Identifier = internal.Identifier
+	}
 	maps := make(map[string]string)
-	for _, name := range args.maps {
-		maps[name] = internal.Identifier(name)
+	for _, name := range args.Maps {
+		maps[name] = args.Identifier(name)
 	}
 
 	programs := make(map[string]string)
-	for _, name := range args.programs {
-		programs[name] = internal.Identifier(name)
+	for _, name := range args.Programs {
+		programs[name] = args.Identifier(name)
 	}
 
 	typeNames := make(map[btf.Type]string)
-	for _, typ := range args.types {
-		typeNames[typ] = args.stem + internal.Identifier(typ.TypeName())
+	for _, typ := range args.Types {
+		typeNames[typ] = args.Stem + args.Identifier(typ.TypeName())
 	}
 
 	// Ensure we don't have conflicting names and generate a sorted list of
@@ -112,11 +122,9 @@ func output(args outputArgs) error {
 		return err
 	}
 
-	module := currentModule()
-
 	gf := &btf.GoFormatter{
 		Names:      typeNames,
-		Identifier: internal.Identifier,
+		Identifier: args.Identifier,
 	}
 
 	ctx := struct {
@@ -132,15 +140,15 @@ func output(args outputArgs) error {
 		File        string
 	}{
 		gf,
-		module,
-		args.pkg,
-		args.constraints,
-		templateName(args.stem),
+		args.Module,
+		args.Pkg,
+		args.Constraints,
+		templateName(args.Stem),
 		maps,
 		programs,
 		types,
 		typeNames,
-		args.obj,
+		args.Obj,
 	}
 
 	var buf bytes.Buffer
@@ -148,10 +156,10 @@ func output(args outputArgs) error {
 		return fmt.Errorf("can't generate types: %s", err)
 	}
 
-	return internal.WriteFormatted(buf.Bytes(), args.out)
+	return internal.WriteFormatted(buf.Bytes(), args.Out)
 }
 
-func collectFromSpec(spec *ebpf.CollectionSpec, cTypes []string, skipGlobalTypes bool) (maps, programs []string, types []btf.Type, _ error) {
+func CollectFromSpec(spec *ebpf.CollectionSpec, cTypes []string, skipGlobalTypes bool) (maps, programs []string, types []btf.Type, _ error) {
 	for name := range spec.Maps {
 		// Skip .rodata, .data, .bss, etc. sections
 		if !strings.HasPrefix(name, ".") {

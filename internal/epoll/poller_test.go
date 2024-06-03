@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/cilium/ebpf/internal/unix"
+	"github.com/go-quicktest/qt"
 )
 
 func TestPoller(t *testing.T) {
@@ -101,9 +102,30 @@ func TestPollerDeadline(t *testing.T) {
 	}()
 
 	// Wait for the goroutine to enter the syscall.
-	time.Sleep(time.Second)
+	time.Sleep(500 * time.Microsecond)
 
 	poller.Close()
+	<-done
+}
+
+func TestPollerFlush(t *testing.T) {
+	t.Parallel()
+
+	_, poller := mustNewPoller(t)
+	events := make([]unix.EpollEvent, 1)
+
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+
+		_, err := poller.Wait(events, time.Time{})
+		qt.Check(t, qt.ErrorIs(err, ErrFlushed))
+	}()
+
+	// Wait for the goroutine to enter the syscall.
+	time.Sleep(500 * time.Microsecond)
+
+	poller.Flush()
 	<-done
 }
 

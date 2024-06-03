@@ -13,9 +13,10 @@ import (
 )
 
 var (
-	ErrClosed = os.ErrClosed
-	errEOR    = errors.New("end of ring")
-	errBusy   = errors.New("sample not committed yet")
+	ErrClosed  = os.ErrClosed
+	ErrFlushed = epoll.ErrFlushed
+	errEOR     = errors.New("end of ring")
+	errBusy    = errors.New("sample not committed yet")
 )
 
 // ringbufHeader from 'struct bpf_ringbuf_hdr' in kernel/bpf/ringbuf.c
@@ -55,6 +56,7 @@ type Reader struct {
 	haveData    bool
 	deadline    time.Time
 	bufferSize  int
+	pendingErr  error
 }
 
 // NewReader creates a new BPF ringbuf reader.
@@ -127,9 +129,13 @@ func (r *Reader) SetDeadline(t time.Time) {
 
 // Read the next record from the BPF ringbuf.
 //
-// Returns os.ErrClosed if Close is called on the Reader, or os.ErrDeadlineExceeded
-// if a deadline was set and no valid entry was present. A producer might use BPF_RB_NO_WAKEUP
-// which may cause the deadline to expire but a valid entry will be present.
+// Calling [Close] interrupts the method with [os.ErrClosed]. Calling [Flush]
+// makes it return all records currently in the ring buffer, followed by [ErrFlushed].
+//
+// Returns [os.ErrDeadlineExceeded] if a deadline was set and after all records
+// have been read from the ring.
+//
+// See [ReadInto] for a more efficient version of this method.
 func (r *Reader) Read() (Record, error) {
 	var rec Record
 	return rec, r.ReadInto(&rec)
@@ -146,13 +152,18 @@ func (r *Reader) ReadInto(rec *Record) error {
 
 	for {
 		if !r.haveData {
-			_, err := r.poller.Wait(r.epollEvents[:cap(r.epollEvents)], r.deadline)
-			if errors.Is(err, os.ErrDeadlineExceeded) && !r.ring.isEmpty() {
-				// Ignoring this for reading a valid entry after timeout
-				// This can occur if the producer submitted to the ring buffer with BPF_RB_NO_WAKEUP
-				err = nil
+			if pe := r.pendingErr; pe != nil {
+				r.pendingErr = nil
+				return pe
 			}
-			if err != nil {
+
+			_, err := r.poller.Wait(r.epollEvents[:cap(r.epollEvents)], r.deadline)
+			if errors.Is(err, os.ErrDeadlineExceeded) || errors.Is(err, ErrFlushed) {
+				// Ignoring this for reading a valid entry after timeout or flush.
+				// This can occur if the producer submitted to the ring buffer
+				// with BPF_RB_NO_WAKEUP.
+				r.pendingErr = err
+			} else if err != nil {
 				return err
 			}
 			r.haveData = true
@@ -177,4 +188,10 @@ func (r *Reader) ReadInto(rec *Record) error {
 // BufferSize returns the size in bytes of the ring buffer
 func (r *Reader) BufferSize() int {
 	return r.bufferSize
+}
+
+// Flush unblocks Read/ReadInto and successive Read/ReadInto calls will return pending samples at this point,
+// until you receive a ErrFlushed error.
+func (r *Reader) Flush() error {
+	return r.poller.Flush()
 }

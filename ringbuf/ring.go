@@ -70,13 +70,6 @@ func newRingReader(cons_ptr, prod_ptr *uint64, ring []byte) *ringReader {
 	}
 }
 
-func (rr *ringReader) isEmpty() bool {
-	cons := atomic.LoadUint64(rr.cons_pos)
-	prod := atomic.LoadUint64(rr.prod_pos)
-
-	return prod == cons
-}
-
 // To be able to wrap around data, data pages in ring buffers are mapped twice in
 // a single contiguous virtual region.
 // Therefore the returned usable size is half the size of the mmaped region.

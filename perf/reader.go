@@ -18,8 +18,9 @@ import (
 )
 
 var (
-	ErrClosed = os.ErrClosed
-	errEOR    = errors.New("end of ring")
+	ErrClosed  = os.ErrClosed
+	ErrFlushed = epoll.ErrFlushed
+	errEOR     = errors.New("end of ring")
 )
 
 var perfEventHeaderSize = binary.Size(perfEventHeader{})
@@ -160,6 +161,8 @@ type Reader struct {
 	overwritable bool
 
 	bufferSize int
+
+	pendingErr error
 }
 
 // ReaderOptions control the behaviour of the user
@@ -318,18 +321,18 @@ func (pr *Reader) SetDeadline(t time.Time) {
 
 // Read the next record from the perf ring buffer.
 //
-// The function blocks until there are at least Watermark bytes in one
+// The method blocks until there are at least Watermark bytes in one
 // of the per CPU buffers. Records from buffers below the Watermark
 // are not returned.
 //
 // Records can contain between 0 and 7 bytes of trailing garbage from the ring
 // depending on the input sample's length.
 //
-// Calling Close interrupts the function.
+// Calling [Close] interrupts the method with [os.ErrClosed]. Calling [Flush]
+// makes it return all records currently in the ring buffer, followed by [ErrFlushed].
 //
-// Returns [os.ErrDeadlineExceeded] if a deadline was set and the perf ring buffer
-// was empty. Otherwise returns a record and no error, even if the deadline was
-// exceeded.
+// Returns [os.ErrDeadlineExceeded] if a deadline was set and after all records
+// have been read from the ring.
 //
 // See [Reader.ReadInto] for a more efficient version of this method.
 func (pr *Reader) Read() (Record, error) {
@@ -356,13 +359,13 @@ func (pr *Reader) ReadInto(rec *Record) error {
 		return fmt.Errorf("perf ringbuffer: %w", ErrClosed)
 	}
 
-	deadlineWasExceeded := false
 	for {
 		if len(pr.epollRings) == 0 {
-			if deadlineWasExceeded {
-				// All rings were empty when the deadline expired, return
+			if pe := pr.pendingErr; pe != nil {
+				// All rings have been emptied since the error occurred, return
 				// appropriate error.
-				return os.ErrDeadlineExceeded
+				pr.pendingErr = nil
+				return pe
 			}
 
 			// NB: The deferred pauseMu.Unlock will panic if Wait panics, which
@@ -371,10 +374,10 @@ func (pr *Reader) ReadInto(rec *Record) error {
 			_, err := pr.poller.Wait(pr.epollEvents, pr.deadline)
 			pr.pauseMu.Lock()
 
-			if errors.Is(err, os.ErrDeadlineExceeded) {
+			if errors.Is(err, os.ErrDeadlineExceeded) || errors.Is(err, ErrFlushed) {
 				// We've hit the deadline, check whether there is any data in
 				// the rings that we've not been woken up for.
-				deadlineWasExceeded = true
+				pr.pendingErr = err
 			} else if err != nil {
 				return err
 			}
@@ -461,6 +464,12 @@ func (pr *Reader) Resume() error {
 // BufferSize is the size in bytes of each per-CPU buffer
 func (pr *Reader) BufferSize() int {
 	return pr.bufferSize
+}
+
+// Flush unblocks Read/ReadInto and successive Read/ReadInto calls will return pending samples at this point,
+// until you receive a [ErrFlushed] error.
+func (pr *Reader) Flush() error {
+	return pr.poller.Flush()
 }
 
 // NB: Has to be preceded by a call to ring.loadHead.

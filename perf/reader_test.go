@@ -68,6 +68,77 @@ func TestReaderSetDeadline(t *testing.T) {
 	if _, err := rd.Read(); !errors.Is(err, os.ErrDeadlineExceeded) {
 		t.Error("Expected os.ErrDeadlineExceeded from second Read, got:", err)
 	}
+
+	rd.SetDeadline(time.Now().Add(10 * time.Millisecond))
+	if _, err := rd.Read(); !errors.Is(err, os.ErrDeadlineExceeded) {
+		t.Error("Expected os.ErrDeadlineExceeded from third Read, got:", err)
+	}
+}
+
+func TestReaderSetDeadlinePendingEvents(t *testing.T) {
+	events := perfEventArray(t)
+
+	rd, err := NewReaderWithOptions(events, 4096, ReaderOptions{WakeupEvents: 2})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rd.Close()
+
+	outputSamples(t, events, 5)
+
+	rd.SetDeadline(time.Now().Add(-time.Second))
+	_, rem := checkRecord(t, rd)
+	qt.Assert(t, qt.Equals(rem, 0), qt.Commentf("expected zero Remaining"))
+
+	outputSamples(t, events, 5)
+
+	// another sample should not be returned before we get ErrFlushed to indicate initial set of samples read
+	_, err = rd.Read()
+	if !errors.Is(err, os.ErrDeadlineExceeded) {
+		t.Error("Expected os.ErrDeadlineExceeded from second Read, got:", err)
+	}
+
+	// the second sample should now be read
+	_, _ = checkRecord(t, rd)
+}
+
+func TestReaderFlushPendingEvents(t *testing.T) {
+	testutils.LockOSThreadToSingleCPU(t)
+	events := perfEventArray(t)
+
+	rd, err := NewReaderWithOptions(events, 4096, ReaderOptions{WakeupEvents: 2})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rd.Close()
+
+	outputSamples(t, events, 5)
+
+	wait := make(chan int)
+	go func() {
+		wait <- 0
+		_, rem := checkRecord(t, rd)
+		wait <- rem
+	}()
+
+	<-wait
+	time.Sleep(10 * time.Millisecond)
+	err = rd.Flush()
+	qt.Assert(t, qt.IsNil(err))
+
+	rem := <-wait
+	qt.Assert(t, qt.Equals(rem, 0), qt.Commentf("expected zero Remaining"))
+
+	outputSamples(t, events, 5)
+
+	// another sample should not be returned before we get ErrFlushed to indicate initial set of samples read
+	_, err = rd.Read()
+	if !errors.Is(err, ErrFlushed) {
+		t.Error("Expected ErrFlushed from second Read, got:", err)
+	}
+
+	// the second sample should now be read
+	_, _ = checkRecord(t, rd)
 }
 
 func outputSamples(tb testing.TB, events *ebpf.Map, sampleSizes ...byte) {

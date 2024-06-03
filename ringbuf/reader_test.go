@@ -7,13 +7,15 @@ import (
 	"testing"
 	"time"
 
+	"github.com/go-quicktest/qt"
+	"github.com/google/go-cmp/cmp"
+
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/asm"
 	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/testutils"
 	"github.com/cilium/ebpf/internal/testutils/fdtrace"
 	"github.com/cilium/ebpf/internal/unix"
-	"github.com/google/go-cmp/cmp"
 )
 
 type sampleMessage struct {
@@ -284,7 +286,7 @@ func TestReaderNoWakeup(t *testing.T) {
 		t.Error("Expected no error from first Read, got:", err)
 	}
 	if len(record.RawSample) != 5 {
-		t.Errorf("Expected to read 5 bytes bot got %d", len(record.RawSample))
+		t.Errorf("Expected to read 5 bytes but got %d", len(record.RawSample))
 	}
 
 	record, err = rd.Read()
@@ -293,7 +295,72 @@ func TestReaderNoWakeup(t *testing.T) {
 		t.Error("Expected no error from second Read, got:", err)
 	}
 	if len(record.RawSample) != 7 {
-		t.Errorf("Expected to read 7 bytes bot got %d", len(record.RawSample))
+		t.Errorf("Expected to read 7 bytes but got %d", len(record.RawSample))
+	}
+
+	_, err = rd.Read()
+	if !errors.Is(err, os.ErrDeadlineExceeded) {
+		t.Errorf("Expected os.ErrDeadlineExceeded from third Read but got %v", err)
+	}
+}
+
+func TestReaderFlushPendingEvents(t *testing.T) {
+	testutils.SkipOnOldKernel(t, "5.8", "BPF ring buffer")
+
+	prog, events := mustOutputSamplesProg(t,
+		sampleMessage{size: 5, flags: unix.BPF_RB_NO_WAKEUP}, // Read after Flush
+		sampleMessage{size: 6, flags: unix.BPF_RB_NO_WAKEUP}, // Discard
+		sampleMessage{size: 7, flags: unix.BPF_RB_NO_WAKEUP}) // Read won't block
+
+	rd, err := NewReader(events)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rd.Close()
+
+	ret, _, err := prog.Test(internal.EmptyBPFContext)
+	testutils.SkipIfNotSupported(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if errno := syscall.Errno(-int32(ret)); errno != 0 {
+		t.Fatal("Expected 0 as return value, got", errno)
+	}
+
+	wait := make(chan *Record)
+	go func() {
+		wait <- nil
+		record, err := rd.Read()
+		qt.Assert(t, qt.IsNil(err))
+		wait <- &record
+	}()
+
+	<-wait
+	time.Sleep(10 * time.Millisecond)
+	err = rd.Flush()
+	qt.Assert(t, qt.IsNil(err))
+
+	waitRec := <-wait
+	if waitRec == nil {
+		t.Error("Expected to read record but got nil")
+	}
+	if waitRec != nil && len(waitRec.RawSample) != 5 {
+		t.Errorf("Expected to read 5 bytes but got %d", len(waitRec.RawSample))
+	}
+
+	record, err := rd.Read()
+
+	if err != nil {
+		t.Error("Expected no error from second Read, got:", err)
+	}
+	if len(record.RawSample) != 7 {
+		t.Errorf("Expected to read 7 bytes but got %d", len(record.RawSample))
+	}
+
+	_, err = rd.Read()
+	if !errors.Is(err, ErrFlushed) {
+		t.Errorf("Expected ErrFlushed from third Read but got %v", err)
 	}
 }
 

@@ -1,4 +1,7 @@
-# eBPF Examples
+# Examples
+
+A collection of programs showing how to use the library.
+Please see our [guide on what makes a good example](https://ebpf-go.dev/contributing/new-example/) if you think something is missing.
 
 * Kprobe - Attach a program to the entry or exit of an arbitrary kernel symbol (function).
   * [kprobe](kprobe/) - Kprobe using bpf2go.
@@ -18,7 +21,6 @@
   * [tcp_close](tcprtt/) - Log RTT of IPv4 TCP connections using eBPF CO-RE helpers.
 * XDP - Attach a program to a network interface to process incoming packets.
   * [xdp](xdp/) - Print packet counts by IPv4 source address.
-* Add your use case(s) here!
 
 ## How to run
 

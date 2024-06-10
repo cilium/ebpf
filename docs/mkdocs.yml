@@ -68,6 +68,7 @@ nav:
     - contributing/index.md
     - contributing/architecture.md
     - contributing/new-feature.md
+    - contributing/new-example.md
   - 'Users': users.md
   - 'Go Reference': https://pkg.go.dev/github.com/cilium/ebpf
   - 'GitHub':

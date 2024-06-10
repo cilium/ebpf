@@ -96,10 +96,11 @@ func TestMapBatch(t *testing.T) {
 		t.Skipf("batch api not available: %v", err)
 	}
 
-	contents := map[uint32]uint32{
-		0: 42, 1: 4242, 2: 23, 3: 2323,
+	contents := []uint32{
+		42, 4242, 23, 2323,
 	}
-	mustNewMap := func(mapType MapType, max uint32) *Map {
+
+	mustNewMap := func(t *testing.T, mapType MapType, max uint32) *Map {
 		m, err := NewMap(&MapSpec{
 			Type:       mapType,
 			KeySize:    4,
@@ -109,102 +110,91 @@ func TestMapBatch(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
+		t.Cleanup(func() { m.Close() })
 		return m
 	}
 
-	var (
-		// Make the map large enough to avoid ENOSPC.
-		hashMax  uint32 = uint32(len(contents)) * 10
-		arrayMax uint32 = 4
-	)
+	keysAndValuesForMap := func(m *Map, contents []uint32) (keys, values []uint32, stride int) {
+		possibleCPU := 1
+		if m.Type().hasPerCPUValue() {
+			possibleCPU = MustPossibleCPU()
+		}
 
-	hash := mustNewMap(Hash, hashMax)
-	defer hash.Close()
+		keys = make([]uint32, 0, len(contents))
+		values = make([]uint32, 0, len(contents)*possibleCPU)
+		for key, value := range contents {
+			keys = append(keys, uint32(key))
+			for i := 0; i < possibleCPU; i++ {
+				values = append(values, value*uint32((i+1)))
+			}
+		}
 
-	array := mustNewMap(Array, arrayMax)
-	defer array.Close()
+		return keys, values, possibleCPU
+	}
 
-	hashPerCpu := mustNewMap(PerCPUHash, hashMax)
-	defer hashPerCpu.Close()
-
-	arrayPerCpu := mustNewMap(PerCPUArray, arrayMax)
-	defer arrayPerCpu.Close()
-
-	for _, m := range []*Map{array, hash, arrayPerCpu, hashPerCpu} {
-		t.Run(m.Type().String(), func(t *testing.T) {
-			if m.Type() == PerCPUArray {
+	for _, typ := range []MapType{Array, PerCPUArray} {
+		t.Run(typ.String(), func(t *testing.T) {
+			if typ == PerCPUArray {
 				// https://lore.kernel.org/bpf/20210424214510.806627-2-pctammela@mojatatu.com/
 				testutils.SkipOnOldKernel(t, "5.13", "batched ops support for percpu array")
 			}
-			possibleCPU := 1
-			if m.Type().hasPerCPUValue() {
-				possibleCPU = MustPossibleCPU()
-			}
-			var keys, values []uint32
-			for key, value := range contents {
-				keys = append(keys, key)
-				for i := 0; i < possibleCPU; i++ {
-					values = append(values, value*uint32((i+1)))
-				}
-			}
 
+			m := mustNewMap(t, typ, uint32(len(contents)))
+			keys, values, _ := keysAndValuesForMap(m, contents)
 			count, err := m.BatchUpdate(keys, values, nil)
 			qt.Assert(t, qt.IsNil(err))
 			qt.Assert(t, qt.Equals(count, len(contents)))
 
-			n := len(contents) / 2 // cut buffer in half
-			lookupKeys := make([]uint32, n)
-			lookupValues := make([]uint32, n*possibleCPU)
+			lookupKeys := make([]uint32, len(keys))
+			lookupValues := make([]uint32, len(values))
 
 			var cursor MapBatchCursor
-			var total int
-			for {
-				count, err = m.BatchLookup(&cursor, lookupKeys, lookupValues, nil)
-				total += count
-				if errors.Is(err, ErrKeyNotExist) {
-					break
-				}
-				qt.Assert(t, qt.IsNil(err))
+			count, err = m.BatchLookup(&cursor, lookupKeys, lookupValues, nil)
+			qt.Assert(t, qt.IsNil(err))
+			qt.Assert(t, qt.Equals(count, len(contents)))
+			qt.Assert(t, qt.ContentEquals(lookupKeys, keys))
+			qt.Assert(t, qt.ContentEquals(lookupValues, values))
 
-				qt.Assert(t, qt.IsTrue(count <= len(lookupKeys)))
-				for i, key := range lookupKeys[:count] {
-					for j := 0; j < possibleCPU; j++ {
-						value := lookupValues[i*possibleCPU+j]
-						expected := contents[key] * uint32(j+1)
-						qt.Assert(t, qt.Equals(value, expected), qt.Commentf("value for key %d should match", key))
-					}
-				}
-			}
-			qt.Assert(t, qt.Equals(total, len(contents)))
+			count, err = m.BatchLookup(&cursor, lookupKeys, lookupValues, nil)
+			qt.Assert(t, qt.ErrorIs(err, ErrKeyNotExist))
+			qt.Assert(t, qt.Equals(count, 0))
+		})
+	}
 
-			if m.Type() == Array || m.Type() == PerCPUArray {
-				// Arrays don't support batch delete
-				return
-			}
+	for _, typ := range []MapType{Hash, PerCPUHash} {
+		t.Run(typ.String(), func(t *testing.T) {
+			m := mustNewMap(t, typ, uint32(len(contents)))
+			keys, values, stride := keysAndValuesForMap(m, contents)
+			count, err := m.BatchUpdate(keys, values, nil)
+			qt.Assert(t, qt.IsNil(err))
+			qt.Assert(t, qt.Equals(count, len(contents)))
+
+			// BPF hash tables seem to have lots of collisions when keys
+			// are following a sequence.
+			// This causes ENOSPC since a single large bucket may be larger
+			// than the batch size. We work around this by making the batch size
+			// equal to the map size.
+			lookupKeys := make([]uint32, len(keys))
+			lookupValues := make([]uint32, len(values))
+
+			var cursor MapBatchCursor
+			count, err = m.BatchLookup(&cursor, lookupKeys, lookupValues, nil)
+			qt.Assert(t, qt.ErrorIs(err, ErrKeyNotExist))
+			qt.Assert(t, qt.Equals(count, len(contents)))
+
+			qt.Assert(t, qt.ContentEquals(lookupKeys, keys))
+			qt.Assert(t, qt.ContentEquals(lookupValues, values))
 
 			cursor = MapBatchCursor{}
-			total = 0
-			for {
-				count, err = m.BatchLookupAndDelete(&cursor, lookupKeys, lookupValues, nil)
-				total += count
-				if errors.Is(err, ErrKeyNotExist) {
-					break
-				}
-				qt.Assert(t, qt.IsNil(err))
+			count, err = m.BatchLookupAndDelete(&cursor, lookupKeys, lookupValues, nil)
+			qt.Assert(t, qt.ErrorIs(err, ErrKeyNotExist))
+			qt.Assert(t, qt.Equals(count, len(contents)))
 
-				qt.Assert(t, qt.IsTrue(count <= len(lookupKeys)))
-				for i, key := range lookupKeys[:count] {
-					for j := 0; j < possibleCPU; j++ {
-						value := lookupValues[i*possibleCPU+j]
-						expected := contents[key] * uint32(j+1)
-						qt.Assert(t, qt.Equals(value, expected), qt.Commentf("value for key %d should match", key))
-					}
-				}
-			}
-			qt.Assert(t, qt.Equals(total, len(contents)))
+			qt.Assert(t, qt.ContentEquals(lookupKeys, keys))
+			qt.Assert(t, qt.ContentEquals(lookupValues, values))
 
-			if possibleCPU > 1 {
-				values := make([]uint32, possibleCPU)
+			if stride > 1 {
+				values := make([]uint32, stride)
 				qt.Assert(t, qt.ErrorIs(m.Lookup(uint32(0), values), ErrKeyNotExist))
 			} else {
 				var v uint32

@@ -571,6 +571,24 @@ func (m *Map) Info() (*MapInfo, error) {
 	return newMapInfoFromFd(m.fd)
 }
 
+// Handle returns a reference to the Map's type information in the kernel.
+//
+// Returns ErrNotSupported if the kernel has no BTF support, or if there is no
+// BTF associated with the Map.
+func (m *Map) Handle() (*btf.Handle, error) {
+	info, err := m.Info()
+	if err != nil {
+		return nil, err
+	}
+
+	id, ok := info.BTFID()
+	if !ok {
+		return nil, fmt.Errorf("map %s: retrieve BTF ID: %w", m, ErrNotSupported)
+	}
+
+	return btf.NewHandleFromID(id)
+}
+
 // MapLookupFlags controls the behaviour of the map lookup calls.
 type MapLookupFlags uint64
 

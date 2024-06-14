@@ -11,6 +11,7 @@ import (
 	"unsafe"
 
 	"github.com/cilium/ebpf/asm"
+	"github.com/cilium/ebpf/btf"
 	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/sys"
 	"github.com/cilium/ebpf/internal/testutils"
@@ -1789,6 +1790,34 @@ func TestMapPinning(t *testing.T) {
 	// Check if error string mentions both KeySize and ValueSize.
 	qt.Assert(t, qt.StringContains(err.Error(), "KeySize"))
 	qt.Assert(t, qt.StringContains(err.Error(), "ValueSize"))
+}
+
+func TestMapHandle(t *testing.T) {
+	testutils.SkipOnOldKernel(t, "4.18", "btf_id in map info")
+
+	kv := &btf.Int{Size: 4}
+	m, err := NewMap(&MapSpec{
+		Type:       Hash,
+		KeySize:    kv.Size,
+		ValueSize:  kv.Size,
+		Key:        kv,
+		Value:      kv,
+		MaxEntries: 1,
+	})
+	qt.Assert(t, qt.IsNil(err))
+	defer m.Close()
+
+	h, err := m.Handle()
+	qt.Assert(t, qt.IsNil(err))
+	qt.Assert(t, qt.IsNotNil(h))
+	defer h.Close()
+
+	spec, err := h.Spec(nil)
+	qt.Assert(t, qt.IsNil(err))
+
+	typ, err := spec.TypeByID(1)
+	qt.Assert(t, qt.IsNil(err))
+	qt.Assert(t, qt.ContentEquals(typ, btf.Type(kv)))
 }
 
 func TestPerfEventArrayCompatible(t *testing.T) {

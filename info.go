@@ -30,6 +30,8 @@ type MapInfo struct {
 	Flags      uint32
 	// Name as supplied by user space at load time. Available from 4.15.
 	Name string
+
+	btf btf.ID
 }
 
 func newMapInfoFromFd(fd *sys.FD) (*MapInfo, error) {
@@ -50,6 +52,7 @@ func newMapInfoFromFd(fd *sys.FD) (*MapInfo, error) {
 		info.MaxEntries,
 		uint32(info.MapFlags),
 		unix.ByteSliceToString(info.Name[:]),
+		btf.ID(info.BtfId),
 	}, nil
 }
 
@@ -75,6 +78,18 @@ func newMapInfoFromProc(fd *sys.FD) (*MapInfo, error) {
 // The bool return value indicates whether this optional field is available.
 func (mi *MapInfo) ID() (MapID, bool) {
 	return mi.id, mi.id > 0
+}
+
+// BTFID returns the BTF ID associated with the Map.
+//
+// The ID is only valid as long as the associated Map is kept alive.
+// Available from 4.18.
+//
+// The bool return value indicates whether this optional field is available and
+// populated. (The field may be available but not populated if the kernel
+// supports the field but the Map was loaded without BTF information.)
+func (mi *MapInfo) BTFID() (btf.ID, bool) {
+	return mi.btf, mi.btf > 0
 }
 
 // programStats holds statistics of a program.

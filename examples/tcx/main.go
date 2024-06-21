@@ -1,29 +1,21 @@
 // This program demonstrates attaching an eBPF program to a network interface
-// with Linux TC. The program parses the IPv4 source address
-// from packets and writes the Ingress and Egress packet count to an Hash map.
-// The userspace program (Go code in this file) prints the content of the map to stdout.
+// with Linux TC (Traffic Control). The program counts ingress and egress
+// packets using two ARRAY maps.
+// The userspace program (Go code in this file) prints the contents
+// of the two maps to stdout every second.
+// This example depends on tcx bpf_link, available in Linux kernel version 6.6 or newer.
 package main
 
 import (
-	"encoding/binary"
 	"fmt"
 	"log"
 	"net"
-	"net/netip"
 	"os"
-	"strings"
 	"time"
 
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/link"
 )
-
-// mapping between integer value and L4 protocol string
-var protoMap = map[uint8]string{
-	1:  "ICMP",
-	6:  "TCP",
-	17: "UDP",
-}
 
 //go:generate go run github.com/cilium/ebpf/cmd/bpf2go bpf tcx.c -- -I../headers
 func main() {
@@ -72,49 +64,36 @@ func main() {
 	log.Printf("Attached TCx program to EGRESS iface %q (index %d)", iface.Name, iface.Index)
 	log.Printf("Press Ctrl-C to exit and remove the program")
 
-	// Print the contents of the BPF hash map.
+	// Print the contents of the counters maps.
 	ticker := time.NewTicker(1 * time.Second)
 	defer ticker.Stop()
 	for range ticker.C {
-		s, err := formatMapContent(objs.StatsMap)
+		s, err := formatCounters(objs.IngressPktCount, objs.EgressPktCount)
 		if err != nil {
 			log.Printf("Error reading map: %s", err)
 			continue
 		}
 
-		log.Printf("Map contents:\n%s", s)
+		log.Printf("Packet Count: %s\n", s)
 	}
 }
 
-// formatMapContent prints the content of the map into a string.
-func formatMapContent(m *ebpf.Map) (string, error) {
+func formatCounters(ingressMap, egressMap *ebpf.Map) (string, error) {
 	var (
-		sb  strings.Builder
-		key bpfSessionKey
-		val bpfSessionValue
+		ingressPacketCount uint64
+		egressPacketCount  uint64
+		key                int32
 	)
 
-	iter := m.Iterate()
-	for iter.Next(&key, &val) {
-		sb.WriteString(fmt.Sprintf("\t%15s:%5d - %15s:%5d Proto:%4s => Ingress:%10d Egress:%10d\n",
-			intToIp(key.Saddr), portToLittleEndian(key.Sport),
-			intToIp(key.Daddr), portToLittleEndian(key.Dport),
-			protoMap[key.Proto], val.InCount, val.EgCount))
+	// retrieve value from the ingress map
+	if err := ingressMap.Lookup(&key, &ingressPacketCount); err != nil {
+		return "", err
 	}
 
-	return sb.String(), iter.Err()
-}
+	// retrieve value from the egress map
+	if err := egressMap.Lookup(&key, &egressPacketCount); err != nil {
+		return "", err
+	}
 
-// intToIp convert an int32 value retrieved from the network traffic (big endian) into a netip.Addr
-func intToIp(val uint32) netip.Addr {
-	a4 := [4]byte{}
-	binary.LittleEndian.PutUint32(a4[:], val)
-	return netip.AddrFrom4(a4)
-}
-
-// portToLittleEndian convert a uint16 value retrieved from the network traffic (big endian) into a little endian
-func portToLittleEndian(val uint16) uint16 {
-	p2 := [2]byte{}
-	binary.LittleEndian.PutUint16(p2[:], val)
-	return binary.LittleEndian.Uint16(p2[:])
+	return fmt.Sprintf("%10v Ingress, %10v Egress", ingressPacketCount, egressPacketCount), nil
 }

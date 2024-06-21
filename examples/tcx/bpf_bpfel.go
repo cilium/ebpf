@@ -12,20 +12,6 @@ import (
 	"github.com/cilium/ebpf"
 )
 
-type bpfSessionKey struct {
-	Saddr uint32
-	Daddr uint32
-	Sport uint16
-	Dport uint16
-	Proto uint8
-	_     [3]byte
-}
-
-type bpfSessionValue struct {
-	InCount uint32
-	EgCount uint32
-}
-
 // loadBpf returns the embedded CollectionSpec for bpf.
 func loadBpf() (*ebpf.CollectionSpec, error) {
 	reader := bytes.NewReader(_BpfBytes)
@@ -75,7 +61,8 @@ type bpfProgramSpecs struct {
 //
 // It can be passed ebpf.CollectionSpec.Assign.
 type bpfMapSpecs struct {
-	StatsMap *ebpf.MapSpec `ebpf:"stats_map"`
+	EgressPktCount  *ebpf.MapSpec `ebpf:"egress_pkt_count"`
+	IngressPktCount *ebpf.MapSpec `ebpf:"ingress_pkt_count"`
 }
 
 // bpfObjects contains all objects after they have been loaded into the kernel.
@@ -97,12 +84,14 @@ func (o *bpfObjects) Close() error {
 //
 // It can be passed to loadBpfObjects or ebpf.CollectionSpec.LoadAndAssign.
 type bpfMaps struct {
-	StatsMap *ebpf.Map `ebpf:"stats_map"`
+	EgressPktCount  *ebpf.Map `ebpf:"egress_pkt_count"`
+	IngressPktCount *ebpf.Map `ebpf:"ingress_pkt_count"`
 }
 
 func (m *bpfMaps) Close() error {
 	return _BpfClose(
-		m.StatsMap,
+		m.EgressPktCount,
+		m.IngressPktCount,
 	)
 }
 

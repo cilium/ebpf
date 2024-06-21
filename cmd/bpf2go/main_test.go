@@ -14,12 +14,15 @@ import (
 	"testing"
 
 	"github.com/cilium/ebpf/cmd/bpf2go/internal"
+	"github.com/cilium/ebpf/internal/testutils"
 	"github.com/go-quicktest/qt"
 	"github.com/google/go-cmp/cmp"
 )
 
+const minimalSocketFilter = `__attribute__((section("socket"), used)) int main() { return 0; }`
+
 func TestRun(t *testing.T) {
-	clangBin := clangBin(t)
+	clangBin := testutils.ClangBin(t)
 	dir := t.TempDir()
 	mustWriteFile(t, dir, "test.c", minimalSocketFilter)
 
@@ -129,7 +132,7 @@ func TestDisableStripping(t *testing.T) {
 	err := run(io.Discard, []string{
 		"-go-package", "foo",
 		"-output-dir", dir,
-		"-cc", clangBin(t),
+		"-cc", testutils.ClangBin(t),
 		"-strip", "binary-that-certainly-doesnt-exist",
 		"-no-strip",
 		"bar",
@@ -254,7 +257,7 @@ func TestConvertGOARCH(t *testing.T) {
 		pkg:              "test",
 		stdout:           io.Discard,
 		identStem:        "test",
-		cc:               clangBin(t),
+		cc:               testutils.ClangBin(t),
 		disableStripping: true,
 		sourceFile:       tmp + "/test.c",
 		outputDir:        tmp,
@@ -515,24 +518,6 @@ func TestClangTargets(t *testing.T) {
 	}
 }
 
-func clangBin(t *testing.T) string {
-	t.Helper()
-
-	if testing.Short() {
-		t.Skip("Not compiling with -short")
-	}
-
-	// Use a floating clang version for local development, but allow CI to run
-	// against oldest supported clang.
-	clang := "clang"
-	if minVersion := os.Getenv("CI_MIN_CLANG_VERSION"); minVersion != "" {
-		clang = fmt.Sprintf("clang-%s", minVersion)
-	}
-
-	t.Log("Testing against", clang)
-	return clang
-}
-
 func goBin(t *testing.T) string {
 	t.Helper()
 
@@ -543,4 +528,12 @@ func goBin(t *testing.T) string {
 	qt.Assert(t, qt.IsNil(err))
 
 	return exe
+}
+
+func mustWriteFile(tb testing.TB, dir, name, contents string) {
+	tb.Helper()
+	tmpFile := filepath.Join(dir, name)
+	if err := os.WriteFile(tmpFile, []byte(contents), 0660); err != nil {
+		tb.Fatal(err)
+	}
 }

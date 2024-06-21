@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"errors"
 	"flag"
 	"fmt"
@@ -359,26 +358,43 @@ func (b2g *bpf2go) convert(tgt target, goarches []goarch) (err error) {
 		return fmt.Errorf("remove obsolete output: %w", err)
 	}
 
-	var dep bytes.Buffer
-	err = compile(compileArgs{
-		cc:     b2g.cc,
-		cFlags: cFlags,
-		target: tgt.clang,
-		dir:    cwd,
-		source: b2g.sourceFile,
-		dest:   objFileName,
-		dep:    &dep,
+	var depInput *os.File
+	if b2g.makeBase != "" {
+		depInput, err = os.CreateTemp("", "bpf2go")
+		if err != nil {
+			return err
+		}
+		defer depInput.Close()
+		defer os.Remove(depInput.Name())
+
+		cFlags = append(cFlags,
+			// Output dependency information.
+			"-MD",
+			// Create phony targets so that deleting a dependency doesn't
+			// break the build.
+			"-MP",
+			// Write it to temporary file
+			"-MF"+depInput.Name(),
+		)
+	}
+
+	err = gen.Compile(gen.CompileArgs{
+		CC:               b2g.cc,
+		Strip:            b2g.strip,
+		DisableStripping: b2g.disableStripping,
+		Flags:            cFlags,
+		Target:           tgt.clang,
+		Workdir:          cwd,
+		Source:           b2g.sourceFile,
+		Dest:             objFileName,
 	})
 	if err != nil {
-		return err
+		return fmt.Errorf("compile: %w", err)
 	}
 
 	fmt.Fprintln(b2g.stdout, "Compiled", objFileName)
 
 	if !b2g.disableStripping {
-		if err := strip(b2g.strip, objFileName); err != nil {
-			return err
-		}
 		fmt.Fprintln(b2g.stdout, "Stripped", objFileName)
 	}
 
@@ -437,21 +453,22 @@ func (b2g *bpf2go) convert(tgt target, goarches []goarch) (err error) {
 		return
 	}
 
-	deps, err := parseDependencies(cwd, &dep)
+	deps, err := parseDependencies(cwd, depInput)
 	if err != nil {
 		return fmt.Errorf("can't read dependency information: %s", err)
 	}
 
+	depFileName := goFileName + ".d"
+	depOutput, err := os.Create(depFileName)
+	if err != nil {
+		return fmt.Errorf("write make dependencies: %w", err)
+	}
+	defer depOutput.Close()
+
 	// There is always at least a dependency for the main file.
 	deps[0].file = goFileName
-	depFile, err := adjustDependencies(b2g.makeBase, deps)
-	if err != nil {
+	if err := adjustDependencies(depOutput, b2g.makeBase, deps); err != nil {
 		return fmt.Errorf("can't adjust dependency information: %s", err)
-	}
-
-	depFileName := goFileName + ".d"
-	if err := os.WriteFile(depFileName, depFile, 0666); err != nil {
-		return fmt.Errorf("can't write dependency file: %s", err)
 	}
 
 	fmt.Fprintln(b2g.stdout, "Wrote", depFileName)

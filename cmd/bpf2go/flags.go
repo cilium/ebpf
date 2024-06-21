@@ -43,15 +43,3 @@ func andConstraints(x, y constraint.Expr) constraint.Expr {
 
 	return &constraint.AndExpr{X: x, Y: y}
 }
-
-func orConstraints(x, y constraint.Expr) constraint.Expr {
-	if x == nil {
-		return y
-	}
-
-	if y == nil {
-		return x
-	}
-
-	return &constraint.OrExpr{X: x, Y: y}
-}

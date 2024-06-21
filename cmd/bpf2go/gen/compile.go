@@ -20,8 +20,8 @@ type CompileArgs struct {
 	Source string
 	// Absolute output file name
 	Dest string
-	// Target to compile for, defaults to "bpf".
-	Target           string
+	// Target to compile for, defaults to compiling generic BPF in host endianness.
+	Target           Target
 	DisableStripping bool
 }
 
@@ -48,13 +48,18 @@ func Compile(args CompileArgs) error {
 	}
 
 	target := args.Target
-	if target == "" {
-		target = "bpf"
+	if target == (Target{}) {
+		target.clang = "bpf"
 	}
 
 	// C flags that can't be overridden.
+	if linux := target.linux; linux != "" {
+		cmd.Args = append(cmd.Args, "-D__TARGET_ARCH_"+linux)
+	}
+
 	cmd.Args = append(cmd.Args,
-		"-target", target,
+		"-Wunused-command-line-argument",
+		"-target", target.clang,
 		"-c", args.Source,
 		"-o", args.Dest,
 		// Don't include clang version

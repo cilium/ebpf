@@ -77,8 +77,9 @@ func (rr *ringReader) isEmpty() bool {
 	return prod == cons
 }
 
-// The data pages in ring buffers are mapped twice in a single contiguous virtual region
-// Therefore the true size is half the size of the mmaped region
+// To be able to wrap around data, data pages in ring buffers are mapped twice in
+// a single contiguous virtual region.
+// Therefore the returned usable size is half the size of the mmaped region.
 func (rr *ringReader) size() int {
 	return cap(rr.ring) / 2
 }

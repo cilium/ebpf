@@ -130,14 +130,6 @@ func (kml *kprobeMultiLink) Update(prog *ebpf.Program) error {
 	return fmt.Errorf("update kprobe_multi: %w", ErrNotSupported)
 }
 
-func (kml *kprobeMultiLink) Pin(string) error {
-	return fmt.Errorf("pin kprobe_multi: %w", ErrNotSupported)
-}
-
-func (kml *kprobeMultiLink) Unpin() error {
-	return fmt.Errorf("unpin kprobe_multi: %w", ErrNotSupported)
-}
-
 func (kml *kprobeMultiLink) Info() (*Info, error) {
 	var info sys.KprobeMultiLinkInfo
 	if err := sys.ObjInfo(kml.fd, &info); err != nil {

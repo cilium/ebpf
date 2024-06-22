@@ -99,28 +99,14 @@ type perfEventLink struct {
 
 func (pl *perfEventLink) isLink() {}
 
-// Pinning requires the underlying perf event FD to stay open.
-//
-// | PerfEvent FD | BpfLink FD | Works |
-// |--------------|------------|-------|
-// | Open         | Open       | Yes   |
-// | Closed       | Open       | No    |
-// | Open         | Closed     | No (Pin() -> EINVAL) |
-// | Closed       | Closed     | No (Pin() -> EINVAL) |
-//
-// There is currently no pretty way to recover the perf event FD
-// when loading a pinned link, so leave as not supported for now.
-func (pl *perfEventLink) Pin(string) error {
-	return fmt.Errorf("perf event link pin: %w", ErrNotSupported)
-}
-
-func (pl *perfEventLink) Unpin() error {
-	return fmt.Errorf("perf event link unpin: %w", ErrNotSupported)
-}
-
 func (pl *perfEventLink) Close() error {
 	if err := pl.fd.Close(); err != nil {
 		return fmt.Errorf("perf link close: %w", err)
+	}
+
+	// when created from pinned link
+	if pl.pe == nil {
+		return nil
 	}
 
 	if err := pl.pe.Close(); err != nil {
@@ -136,6 +122,11 @@ func (pl *perfEventLink) Update(prog *ebpf.Program) error {
 var _ PerfEvent = (*perfEventLink)(nil)
 
 func (pl *perfEventLink) PerfEvent() (*os.File, error) {
+	// when created from pinned link
+	if pl.pe == nil {
+		return nil, ErrNotSupported
+	}
+
 	fd, err := pl.pe.fd.Dup()
 	if err != nil {
 		return nil, err

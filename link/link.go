@@ -119,7 +119,7 @@ func wrapRawLink(raw *RawLink) (_ Link, err error) {
 	case UprobeMultiType:
 		return &uprobeMultiLink{*raw}, nil
 	case PerfEventType:
-		return nil, fmt.Errorf("recovering perf event fd: %w", ErrNotSupported)
+		return &perfEventLink{*raw, nil}, nil
 	case TCXType:
 		return &tcxLink{*raw}, nil
 	case NetfilterType:

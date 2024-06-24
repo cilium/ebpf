@@ -6,7 +6,6 @@ import (
 	"flag"
 	"fmt"
 	"go/build/constraint"
-	"go/token"
 	"io"
 	"os"
 	"os/exec"
@@ -18,6 +17,8 @@ import (
 	"strings"
 
 	"github.com/cilium/ebpf"
+	"github.com/cilium/ebpf/btf"
+	"github.com/cilium/ebpf/cmd/bpf2go/gen"
 )
 
 const helpText = `Usage: %[1]s [options] <ident> <source file> [-- <C flags>]
@@ -190,9 +191,6 @@ func newB2G(stdout io.Writer, args []string) (*bpf2go, error) {
 	}
 
 	b2g.identStem = args[0]
-	if !token.IsIdentifier(b2g.identStem) {
-		return nil, fmt.Errorf("%q is not a valid identifier", b2g.identStem)
-	}
 
 	sourceFile, err := filepath.Abs(args[1])
 	if err != nil {
@@ -389,9 +387,26 @@ func (b2g *bpf2go) convert(tgt target, goarches []goarch) (err error) {
 		return fmt.Errorf("can't load BPF from ELF: %s", err)
 	}
 
-	maps, programs, types, err := collectFromSpec(spec, b2g.cTypes, b2g.skipGlobalTypes)
+	var maps []string
+	for name := range spec.Maps {
+		// Skip .rodata, .data, .bss, etc. sections
+		if !strings.HasPrefix(name, ".") {
+			maps = append(maps, name)
+		}
+	}
+
+	var programs []string
+	for name := range spec.Programs {
+		programs = append(programs, name)
+	}
+
+	types, err := collectCTypes(spec.Types, b2g.cTypes)
 	if err != nil {
-		return err
+		return fmt.Errorf("collect C types: %w", err)
+	}
+
+	if !b2g.skipGlobalTypes {
+		types = append(types, gen.CollectGlobalTypes(spec)...)
 	}
 
 	// Write out generated go
@@ -402,15 +417,15 @@ func (b2g *bpf2go) convert(tgt target, goarches []goarch) (err error) {
 	}
 	defer removeOnError(goFile)
 
-	err = output(outputArgs{
-		pkg:         b2g.pkg,
-		stem:        b2g.identStem,
-		constraints: constraints,
-		maps:        maps,
-		programs:    programs,
-		types:       types,
-		obj:         filepath.Base(objFileName),
-		out:         goFile,
+	err = gen.Generate(gen.GenerateArgs{
+		Package:     b2g.pkg,
+		Stem:        b2g.identStem,
+		Constraints: constraints,
+		Maps:        maps,
+		Programs:    programs,
+		Types:       types,
+		ObjectFile:  filepath.Base(objFileName),
+		Output:      goFile,
 	})
 	if err != nil {
 		return fmt.Errorf("can't write %s: %s", goFileName, err)
@@ -537,6 +552,18 @@ func collectTargets(targets []string) (map[target][]goarch, error) {
 		}
 	}
 
+	return result, nil
+}
+
+func collectCTypes(types *btf.Spec, names []string) ([]btf.Type, error) {
+	var result []btf.Type
+	for _, cType := range names {
+		typ, err := types.AnyTypeByName(cType)
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, typ)
+	}
 	return result, nil
 }
 

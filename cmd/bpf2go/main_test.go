@@ -13,6 +13,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/cilium/ebpf/cmd/bpf2go/internal"
 	"github.com/go-quicktest/qt"
 	"github.com/google/go-cmp/cmp"
 )
@@ -43,7 +44,7 @@ func TestRun(t *testing.T) {
 		}
 	}
 
-	module := currentModule()
+	module := internal.CurrentModule
 
 	execInModule("go", "mod", "init", "bpf2go-test")
 

@@ -3,10 +3,7 @@ package main
 import (
 	"errors"
 	"fmt"
-	"runtime/debug"
 	"strings"
-	"unicode"
-	"unicode/utf8"
 )
 
 func splitCFlagsFromArgs(in []string) (args, cflags []string) {
@@ -76,19 +73,4 @@ func splitArguments(in string) ([]string, error) {
 	}
 
 	return result, nil
-}
-
-func toUpperFirst(str string) string {
-	first, n := utf8.DecodeRuneInString(str)
-	return string(unicode.ToUpper(first)) + str[n:]
-}
-
-func currentModule() string {
-	bi, ok := debug.ReadBuildInfo()
-	if !ok {
-		// Fall back to constant since bazel doesn't support BuildInfo.
-		return "github.com/cilium/ebpf"
-	}
-
-	return bi.Main.Path
 }

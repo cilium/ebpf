@@ -136,33 +136,27 @@ func readRawSample(rd io.Reader, buf, sampleBuf []byte) ([]byte, error) {
 // Reader allows reading bpf_perf_event_output
 // from user space.
 type Reader struct {
-	poller   *epoll.Poller
-	deadline time.Time
+	poller *epoll.Poller
 
 	// mu protects read/write access to the Reader structure with the
-	// exception of 'pauseFds', which is protected by 'pauseMu'.
+	// exception fields protected by 'pauseMu'.
 	// If locking both 'mu' and 'pauseMu', 'mu' must be locked first.
-	mu sync.Mutex
-
-	// Closing a PERF_EVENT_ARRAY removes all event fds
-	// stored in it, so we keep a reference alive.
-	array       *ebpf.Map
-	rings       []*perfEventRing
-	epollEvents []unix.EpollEvent
-	epollRings  []*perfEventRing
-	eventHeader []byte
+	mu           sync.Mutex
+	array        *ebpf.Map
+	rings        []*perfEventRing
+	epollEvents  []unix.EpollEvent
+	epollRings   []*perfEventRing
+	eventHeader  []byte
+	deadline     time.Time
+	overwritable bool
+	bufferSize   int
+	pendingErr   error
 
 	// pauseMu protects eventFds so that Pause / Resume can be invoked while
 	// Read is blocked.
 	pauseMu  sync.Mutex
 	eventFds []*sys.FD
-
-	paused       bool
-	overwritable bool
-
-	bufferSize int
-
-	pendingErr error
+	paused   bool
 }
 
 // ReaderOptions control the behaviour of the user
@@ -245,6 +239,8 @@ func NewReaderWithOptions(array *ebpf.Map, perCPUBuffer int, opts ReaderOptions)
 		}
 	}
 
+	// Closing a PERF_EVENT_ARRAY removes all event fds
+	// stored in it, so we keep a reference alive.
 	array, err = array.Clone()
 	if err != nil {
 		return nil, err

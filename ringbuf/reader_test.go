@@ -59,7 +59,7 @@ func TestRingbufReader(t *testing.T) {
 			}
 			defer rd.Close()
 
-			if uint32(rd.BufferSize()) != 2*events.MaxEntries() {
+			if uint32(rd.BufferSize()) != events.MaxEntries() {
 				t.Errorf("expected %d BufferSize, got %d", events.MaxEntries(), rd.BufferSize())
 			}
 

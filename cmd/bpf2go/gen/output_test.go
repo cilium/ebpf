@@ -1,14 +1,15 @@
-package main
+package gen
 
 import (
+	"bytes"
+	"fmt"
 	"testing"
 
 	"github.com/go-quicktest/qt"
 	"github.com/google/go-cmp/cmp"
 
-	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/btf"
-	"github.com/cilium/ebpf/internal/testutils"
+	"github.com/cilium/ebpf/cmd/bpf2go/internal"
 )
 
 func TestOrderTypes(t *testing.T) {
@@ -63,35 +64,20 @@ func TestOrderTypes(t *testing.T) {
 	}
 }
 
+func TestPackageImport(t *testing.T) {
+	var buf bytes.Buffer
+	err := Generate(GenerateArgs{
+		Package:    "foo",
+		Stem:       "bar",
+		ObjectFile: "frob.o",
+		Output:     &buf,
+	})
+	qt.Assert(t, qt.IsNil(err))
+	// NB: It'd be great to test that this is the case for callers outside of
+	// this module, but that is kind of tricky.
+	qt.Assert(t, qt.StringContains(buf.String(), fmt.Sprintf(`"%s"`, internal.CurrentModule)))
+}
+
 var typesEqualComparer = cmp.Comparer(func(a, b btf.Type) bool {
 	return a == b
 })
-
-func TestCollectFromSpec(t *testing.T) {
-	spec, err := ebpf.LoadCollectionSpec(testutils.NativeFile(t, "testdata/minimal-%s.elf"))
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	map1 := spec.Maps["map1"]
-
-	maps, programs, types, err := collectFromSpec(spec, nil, false)
-	if err != nil {
-		t.Fatal(err)
-	}
-	qt.Assert(t, qt.ContentEquals(maps, []string{"map1"}))
-	qt.Assert(t, qt.ContentEquals(programs, []string{"filter"}))
-	qt.Assert(t, qt.CmpEquals(types, []btf.Type{map1.Key, map1.Value}, typesEqualComparer))
-
-	_, _, types, err = collectFromSpec(spec, nil, true)
-	if err != nil {
-		t.Fatal(err)
-	}
-	qt.Assert(t, qt.CmpEquals[[]btf.Type](types, nil, typesEqualComparer))
-
-	_, _, types, err = collectFromSpec(spec, []string{"barfoo"}, true)
-	if err != nil {
-		t.Fatal(err)
-	}
-	qt.Assert(t, qt.CmpEquals(types, []btf.Type{map1.Value}, typesEqualComparer))
-}

@@ -37,7 +37,6 @@ jobs:
         uses: golangci/golangci-lint-action@v6.0.1
         with:
           args: "--out-format colored-line-number"
-          skip-pkg-cache: true
 
       - name: Generate and format code
         run: |

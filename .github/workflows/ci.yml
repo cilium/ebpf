@@ -33,11 +33,11 @@ jobs:
         with:
           go-version: '${{ env.go_version }}'
 
-      - name: Run golangci-lint
-        uses: golangci/golangci-lint-action@v6.0.1
+      - name: Run staticcheck
+        uses: dominikh/staticcheck-action@v1
         with:
-          args: "--out-format colored-line-number"
-          skip-pkg-cache: true
+          version: "latest"
+          install: false
 
       - name: Generate and format code
         run: |

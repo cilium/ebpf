@@ -20,7 +20,7 @@ func TestVerifierErrorWhitespace(t *testing.T) {
 		0, 0, // trailing NUL bytes
 	)
 
-	err := ErrorWithLog("frob", errors.New("test"), b, false)
+	err := ErrorWithLog("frob", errors.New("test"), b)
 	qt.Assert(t, qt.Equals(err.Error(), "frob: test: unreachable insn 28"))
 
 	for _, log := range [][]byte{
@@ -28,28 +28,25 @@ func TestVerifierErrorWhitespace(t *testing.T) {
 		[]byte("\x00"),
 		[]byte(" "),
 	} {
-		err = ErrorWithLog("frob", errors.New("test"), log, false)
+		err = ErrorWithLog("frob", errors.New("test"), log)
 		qt.Assert(t, qt.Equals(err.Error(), "frob: test"), qt.Commentf("empty log %q has incorrect format", log))
 	}
 }
 
 func TestVerifierErrorWrapping(t *testing.T) {
-	ve := ErrorWithLog("frob", unix.ENOENT, nil, false)
+	ve := ErrorWithLog("frob", unix.ENOENT, nil)
 	qt.Assert(t, qt.ErrorIs(ve, unix.ENOENT), qt.Commentf("should wrap provided error"))
-	qt.Assert(t, qt.IsFalse(ve.Truncated), qt.Commentf("verifier log should not be marked as truncated"))
 
-	ve = ErrorWithLog("frob", unix.EINVAL, nil, true)
+	ve = ErrorWithLog("frob", unix.EINVAL, nil)
 	qt.Assert(t, qt.ErrorIs(ve, unix.EINVAL), qt.Commentf("should wrap provided error"))
-	qt.Assert(t, qt.IsTrue(ve.Truncated), qt.Commentf("verifier log should be marked as truncated"))
 
-	ve = ErrorWithLog("frob", unix.EINVAL, []byte("foo"), false)
+	ve = ErrorWithLog("frob", unix.EINVAL, []byte("foo"))
 	qt.Assert(t, qt.ErrorIs(ve, unix.EINVAL), qt.Commentf("should wrap provided error"))
 	qt.Assert(t, qt.StringContains(ve.Error(), "foo"), qt.Commentf("verifier log should appear in error string"))
 
-	ve = ErrorWithLog("frob", unix.ENOSPC, []byte("foo"), true)
+	ve = ErrorWithLog("frob", unix.ENOSPC, []byte("foo"))
 	qt.Assert(t, qt.ErrorIs(ve, unix.ENOSPC), qt.Commentf("should wrap provided error"))
 	qt.Assert(t, qt.StringContains(ve.Error(), "foo"), qt.Commentf("verifier log should appear in error string"))
-	qt.Assert(t, qt.IsTrue(ve.Truncated), qt.Commentf("verifier log should be marked truncated"))
 }
 
 func TestVerifierErrorSummary(t *testing.T) {
@@ -84,5 +81,5 @@ func readErrorFromFile(tb testing.TB, file string) *VerifierError {
 		tb.Fatal("Read file:", err)
 	}
 
-	return ErrorWithLog("file", unix.EINVAL, contents, false)
+	return ErrorWithLog("file", unix.EINVAL, contents)
 }

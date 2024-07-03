@@ -463,31 +463,12 @@ func TestProgramVerifierOutput(t *testing.T) {
 	}
 }
 
-// Test all scenarios where the VerifierError.Truncated flag is expected to be
-// true, marked with an x. LL means ProgramOption.LogLevel.
-//
-// |      | Valid | Invalid |
-// |------|-------|---------|
-// | LL=0 |       |    x    |
-// | LL>0 |   x   |    x    |
-func TestProgramVerifierLogTruncated(t *testing.T) {
-	// Make the buffer intentionally small to coerce ENOSPC.
-	// 128 bytes is the smallest the kernel will accept.
-	logSize := 128
-
+func TestProgramVerifierLog(t *testing.T) {
 	check := func(t *testing.T, err error) {
 		t.Helper()
 
-		if err == nil {
-			t.Fatal("Expected an error")
-		}
 		var ve *internal.VerifierError
-		if !errors.As(err, &ve) {
-			t.Fatal("Error is not a VerifierError")
-		}
-		if !ve.Truncated {
-			t.Errorf("VerifierError is not truncated: %+v", ve)
-		}
+		qt.Assert(t, qt.ErrorAs(err, &ve))
 	}
 
 	// Generate a base program of sufficient size whose verifier log does not fit
@@ -515,12 +496,11 @@ func TestProgramVerifierLogTruncated(t *testing.T) {
 
 	// Set an undersized log buffer without explicitly requesting a verifier log
 	// for an invalid program.
-	_, err := NewProgramWithOptions(spec, ProgramOptions{LogSize: logSize})
+	_, err := NewProgramWithOptions(spec, ProgramOptions{})
 	check(t, err)
 
 	// Explicitly request a verifier log for an invalid program.
 	_, err = NewProgramWithOptions(spec, ProgramOptions{
-		LogSize:  logSize,
 		LogLevel: LogLevelInstruction,
 	})
 	check(t, err)
@@ -530,21 +510,17 @@ func TestProgramVerifierLogTruncated(t *testing.T) {
 
 	// Don't request a verifier log, only set LogSize. Expect the valid program to
 	// be created without errors.
-	prog, err := NewProgramWithOptions(spec, ProgramOptions{
-		LogSize: logSize,
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
+	prog, err := NewProgramWithOptions(spec, ProgramOptions{})
+	qt.Assert(t, qt.IsNil(err))
 	prog.Close()
 
 	// Explicitly request verifier log for a valid program. If a log is requested
 	// and the buffer is too small, ENOSPC occurs even for valid programs.
-	_, err = NewProgramWithOptions(spec, ProgramOptions{
-		LogSize:  logSize,
+	prog, err = NewProgramWithOptions(spec, ProgramOptions{
 		LogLevel: LogLevelInstruction,
 	})
-	check(t, err)
+	qt.Assert(t, qt.IsNil(err))
+	prog.Close()
 }
 
 func TestProgramWithUnsatisfiedMap(t *testing.T) {
@@ -982,11 +958,11 @@ func TestProgramLoadErrors(t *testing.T) {
 			})
 			testutils.SkipIfNotSupported(t, err)
 
-			qt.Assert(t, qt.ErrorIs(err, test.want))
-
 			var ve *VerifierError
 			qt.Assert(t, qt.ErrorAs(err, &ve))
 			t.Logf("%-5v", ve)
+
+			qt.Assert(t, qt.ErrorIs(err, test.want))
 		})
 	}
 }
@@ -1069,32 +1045,25 @@ func ExampleVerifierError() {
 		"catastrophe",
 		syscall.ENOSPC,
 		[]byte("first\nsecond\nthird"),
-		false,
 	)
 
 	fmt.Printf("With %%s: %s\n", err)
-	err.Truncated = true
-	fmt.Printf("With %%v and a truncated log: %v\n", err)
 	fmt.Printf("All log lines: %+v\n", err)
 	fmt.Printf("First line: %+1v\n", err)
 	fmt.Printf("Last two lines: %-2v\n", err)
 
 	// Output: With %s: catastrophe: no space left on device: third (2 line(s) omitted)
-	// With %v and a truncated log: catastrophe: no space left on device: second: third (truncated, 1 line(s) omitted)
 	// All log lines: catastrophe: no space left on device:
 	// 	first
 	// 	second
 	// 	third
-	// 	(truncated)
 	// First line: catastrophe: no space left on device:
 	// 	first
 	// 	(2 line(s) omitted)
-	// 	(truncated)
 	// Last two lines: catastrophe: no space left on device:
 	// 	(1 line(s) omitted)
 	// 	second
 	// 	third
-	// 	(truncated)
 }
 
 // Use NewProgramWithOptions if you'd like to get the verifier output
@@ -1112,7 +1081,6 @@ func ExampleProgram_retrieveVerifierLog() {
 
 	prog, err := NewProgramWithOptions(spec, ProgramOptions{
 		LogLevel: LogLevelInstruction,
-		LogSize:  1024,
 	})
 	if err != nil {
 		panic(err)

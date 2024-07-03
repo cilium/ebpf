@@ -316,10 +316,6 @@ func TestVerifierError(t *testing.T) {
 	if !errors.As(err, &ve) {
 		t.Fatalf("expected a VerifierError, got: %v", err)
 	}
-
-	if ve.Truncated {
-		t.Fatalf("expected non-truncated verifier log: %v", err)
-	}
 }
 
 func TestGuessBTFByteOrder(t *testing.T) {

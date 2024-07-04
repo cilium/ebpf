@@ -386,6 +386,11 @@ func (pr *Reader) ReadInto(rec *Record) error {
 			// Waking up userspace is expensive, make the most of it by checking
 			// all rings.
 			for _, ring := range pr.rings {
+				// Skip rings that are not currently enabled.
+				if ring == nil {
+					continue
+				}
+
 				ring.loadHead()
 				pr.epollRings = append(pr.epollRings, ring)
 			}

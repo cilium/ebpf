@@ -10,6 +10,13 @@ import (
 	"io"
 
 	"{{ .Module }}"
+{{- if .BuildDeps }}
+
+	// Build dependencies:
+{{- range $dep := .BuildDeps }}
+	_ "{{ $dep }}"
+{{- end }}
+{{- end }}
 )
 
 {{- if .Types }}

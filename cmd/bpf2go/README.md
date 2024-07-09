@@ -34,6 +34,15 @@ up-to-date list.
 disable this behaviour using `-no-global-types`. You can add to the set of
 types by specifying `-type foo` for each type you'd like to generate.
 
+## eBPF packages
+
+`bpf2go` can pull header files from other Go packages. List packages you
+wish to pull headers from using `-import` command line option, e.g.:
+`-import example.org/foo`.
+```
+
+Write `#include "example.org/foo/foo.h"` to include `foo.h` from `example.org/foo`.
+
 ## Examples
 
 See [examples/kprobe](../../examples/kprobe/main.go) for a fully worked out example.

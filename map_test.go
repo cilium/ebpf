@@ -1106,7 +1106,7 @@ func TestMapIteratorAllocations(t *testing.T) {
 	iter := arr.Iterate()
 
 	// AllocsPerRun warms up the function for us.
-	allocs := testing.AllocsPerRun(1, func() {
+	allocs := testing.AllocsPerRun(int(arr.MaxEntries()-1), func() {
 		if !iter.Next(&k, &v) {
 			t.Fatal("Next failed")
 		}

@@ -4,6 +4,9 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"go/build"
+	"go/parser"
+	"go/token"
 	"io"
 	"os"
 	"os/exec"
@@ -11,6 +14,7 @@ import (
 	"regexp"
 	"slices"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/cilium/ebpf"
@@ -273,6 +277,10 @@ func (b2g *bpf2go) convertAll() (err error) {
 		}
 	}
 
+	if err := b2g.addHeaders(); err != nil {
+		return fmt.Errorf("adding headers: %w", err)
+	}
+
 	for target, arches := range b2g.targetArches {
 		if err := b2g.convert(target, arches); err != nil {
 			return err
@@ -280,6 +288,79 @@ func (b2g *bpf2go) convertAll() (err error) {
 	}
 
 	return nil
+}
+
+// addHeaders exposes header files from packages listed in
+// $OUTPUT_DIR/bpf2go.hfiles.go to clang. C consumes them by giving a
+// golang package path in include, e.g.
+// #include "github.com/cilium/ebpf/foo/bar.h".
+func (b2g *bpf2go) addHeaders() error {
+	f, err := os.Open(filepath.Join(b2g.outputDir, "bpf2go.hfiles.go"))
+	if os.IsNotExist(err) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	fmt.Fprintf(b2g.stdout, "Processing packages listed in %s\n", f.Name())
+
+	fset := token.NewFileSet()
+	ast, err := parser.ParseFile(fset, f.Name(), f, parser.ImportsOnly)
+	if err != nil {
+		return err
+	}
+
+	var pkgs []*build.Package
+	buildCtx := build.Default
+	buildCtx.Dir = b2g.outputDir
+	for _, s := range ast.Imports {
+		path, _ := strconv.Unquote(s.Path.Value)
+		if build.IsLocalImport(path) {
+			return fmt.Errorf("local imports are not supported: %s", path)
+		}
+		pkg, err := buildCtx.Import(path, b2g.outputDir, 0)
+		if err != nil {
+			return err
+		}
+		if pkg.Dir == "" {
+			return fmt.Errorf("%s is missing locally: consider 'go mod download'", path)
+		}
+		if len(hfiles(pkg)) == 0 {
+			fmt.Fprintf(b2g.stdout, "Package doesn't contain .h files: %s\n", path)
+			continue
+		}
+		pkgs = append(pkgs, pkg)
+	}
+
+	if len(pkgs) == 0 {
+		return nil
+	}
+
+	vfs, err := createVfs(pkgs)
+	if err != nil {
+		return err
+	}
+
+	path, err := persistVfs(vfs)
+	if err != nil {
+		return err
+	}
+
+	b2g.cFlags = append([]string{"-ivfsoverlay", path, "-iquote", vfsRootDir}, b2g.cFlags...)
+	return nil
+}
+
+// hfiles lists .h files in a package
+func hfiles(pkg *build.Package) []string {
+	var res []string
+	for _, h := range pkg.HFiles { // includes .hpp, etc
+		if strings.HasSuffix(h, ".h") {
+			res = append(res, h)
+		}
+	}
+	return res
 }
 
 func (b2g *bpf2go) convert(tgt gen.Target, goarches gen.GoArches) (err error) {

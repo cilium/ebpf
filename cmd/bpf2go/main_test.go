@@ -32,24 +32,12 @@ func TestRun(t *testing.T) {
 	}
 
 	modDir := t.TempDir()
-	execInModule := func(name string, args ...string) {
-		t.Helper()
-
-		cmd := exec.Command(name, args...)
-		cmd.Dir = modDir
-		if out, err := cmd.CombinedOutput(); err != nil {
-			if out := string(out); out != "" {
-				t.Log(out)
-			}
-			t.Fatalf("Can't execute %s: %v", name, args)
-		}
-	}
 
 	module := internal.CurrentModule
 
-	execInModule("go", "mod", "init", "bpf2go-test")
+	execInDir(t, modDir, "go", "mod", "init", "bpf2go-test")
 
-	execInModule("go", "mod", "edit",
+	execInDir(t, modDir, "go", "mod", "edit",
 		// Require the module. The version doesn't matter due to the replace
 		// below.
 		fmt.Sprintf("-require=%s@v0.0.0", module),
@@ -103,6 +91,70 @@ func main() {
 				t.Error("Can't compile package:", err)
 			}
 		})
+	}
+}
+
+func execInDir(t *testing.T, dir, name string, args ...string) {
+	t.Helper()
+
+	cmd := exec.Command(name, args...)
+	cmd.Dir = dir
+	if out, err := cmd.CombinedOutput(); err != nil {
+		if out := string(out); out != "" {
+			t.Log(out)
+		}
+		t.Fatalf("Can't execute %s: %v", name, args)
+	}
+}
+
+func TestImports(t *testing.T) {
+	dir := t.TempDir()
+	mustWriteFile(t, dir, "foo/foo.go", "package foo")
+	mustWriteFile(t, dir, "foo/foo.h", "#define EXAMPLE_ORG__FOO__FOO_H 1")
+	mustWriteFile(t, dir, "bar/nested/nested.go", "package nested")
+	mustWriteFile(t, dir, "bar/nested/nested.h", "#define EXAMPLE_ORG__BAR__NESTED__NESTED_H 1")
+	mustWriteFile(t, dir, "bar/bpf2go.hfiles.go", `
+package bar
+import (
+	_ "example.org/bar/nested"
+	_ "example.org/foo"
+)`)
+	mustWriteFile(t, dir, "bar/bar.c", `
+//go:build ignore
+
+// include from current module, package listed in bpf2go.hfiles.go
+#include "example.org/bar/nested/nested.h"
+#ifndef EXAMPLE_ORG__BAR__NESTED__NESTED_H
+#error "example.org/bar/nested/nested.h: unexpected file contents"
+#endif
+
+// include from external module, package listed in bpf2go.hfiles.go
+#include "example.org/foo/foo.h"
+#ifndef EXAMPLE_ORG__FOO__FOO_H
+#error "example.org/foo/foo.h: unexpected file contents"
+#endif`)
+
+	fooModDir := filepath.Join(dir, "foo")
+	execInDir(t, fooModDir, "go", "mod", "init", "example.org/foo")
+
+	barModDir := filepath.Join(dir, "bar")
+	execInDir(t, barModDir, "go", "mod", "init", "example.org/bar")
+	execInDir(t, barModDir, "go", "mod", "edit", "-require=example.org/foo@v0.0.0")
+
+	execInDir(t, dir, "go", "work", "init")
+	execInDir(t, dir, "go", "work", "use", fooModDir)
+	execInDir(t, dir, "go", "work", "use", barModDir)
+
+	err := run(io.Discard, []string{
+		"-go-package", "bar",
+		"-output-dir", barModDir,
+		"-cc", testutils.ClangBin(t),
+		"bar",
+		filepath.Join(barModDir, "bar.c"),
+	})
+
+	if err != nil {
+		t.Fatal("Can't run:", err)
 	}
 }
 
@@ -383,6 +435,9 @@ func TestParseArgs(t *testing.T) {
 func mustWriteFile(tb testing.TB, dir, name, contents string) {
 	tb.Helper()
 	tmpFile := filepath.Join(dir, name)
+	if err := os.MkdirAll(filepath.Dir(tmpFile), 0770); err != nil {
+		tb.Fatal(err)
+	}
 	if err := os.WriteFile(tmpFile, []byte(contents), 0660); err != nil {
 		tb.Fatal(err)
 	}

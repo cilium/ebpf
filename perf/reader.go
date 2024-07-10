@@ -219,8 +219,6 @@ func NewReaderWithOptions(array *ebpf.Map, perCPUBuffer int, opts ReaderOptions)
 		event, ring, err := newPerfEventRing(i, perCPUBuffer, opts)
 		if errors.Is(err, unix.ENODEV) {
 			// The requested CPU is currently offline, skip it.
-			rings = append(rings, nil)
-			eventFds = append(eventFds, nil)
 			continue
 		}
 
@@ -288,14 +286,10 @@ func (pr *Reader) Close() error {
 	defer pr.pauseMu.Unlock()
 
 	for _, ring := range pr.rings {
-		if ring != nil {
-			ring.Close()
-		}
+		ring.Close()
 	}
 	for _, event := range pr.eventFds {
-		if event != nil {
-			event.Close()
-		}
+		event.Close()
 	}
 	pr.rings = nil
 	pr.eventFds = nil
@@ -386,11 +380,6 @@ func (pr *Reader) ReadInto(rec *Record) error {
 			// Waking up userspace is expensive, make the most of it by checking
 			// all rings.
 			for _, ring := range pr.rings {
-				// Skip rings that are not currently enabled.
-				if ring == nil {
-					continue
-				}
-
 				ring.loadHead()
 				pr.epollRings = append(pr.epollRings, ring)
 			}

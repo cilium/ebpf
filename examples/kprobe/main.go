@@ -6,6 +6,7 @@ package main
 
 import (
 	"log"
+	"strings"
 	"time"
 
 	"github.com/cilium/ebpf/link"
@@ -14,7 +15,28 @@ import (
 
 //go:generate go run github.com/cilium/ebpf/cmd/bpf2go bpf kprobe.c -- -I../headers
 
-const mapKey uint32 = 0
+const (
+	mapKey    uint32 = 0
+	Kprobe    string = "kprobe"
+	Kretprobe string = "kretprobe"
+)
+
+// getKprobeKind returns the kind of kprobe based on the sectionName.
+func getKprobeKind(sectionName string) string {
+	split := strings.Split(sectionName, "/")
+	if len(split) != 2 {
+		return ""
+	}
+
+	switch split[0] {
+	case Kprobe:
+		return Kprobe
+	case Kretprobe:
+		return Kretprobe
+	default:
+		return ""
+	}
+}
 
 func main() {
 
@@ -28,19 +50,58 @@ func main() {
 
 	// Load pre-compiled programs and maps into the kernel.
 	objs := bpfObjects{}
-	if err := loadBpfObjects(&objs, nil); err != nil {
+	spec, err := loadBpf()
+	if err != nil {
+		log.Fatalf("loading bpf: %v", err)
+	}
+
+	if err = spec.LoadAndAssign(&objs, nil); err != nil {
 		log.Fatalf("loading objects: %v", err)
 	}
+
 	defer objs.Close()
 
-	// Open a Kprobe at the entry point of the kernel function and attach the
-	// pre-compiled program. Each time the kernel function enters, the program
-	// will increment the execution counter by 1. The read loop below polls this
-	// map value once per second.
-	kp, err := link.Kprobe(fn, objs.KprobeExecve, nil)
+	// Get kprobe ProgramInfo
+	info, err := objs.KprobeExecve.Info()
 	if err != nil {
-		log.Fatalf("opening kprobe: %s", err)
+		log.Fatalf("getting kprobe info: %v", err)
 	}
+
+	var kp link.Link
+	var count int
+	for _, programSpec := range spec.Programs {
+		// Skip if the program name is not the same as the kprobe name
+		if programSpec.Name != info.Name {
+			continue
+		}
+
+		kind := getKprobeKind(programSpec.SectionName)
+		switch kind {
+		case Kprobe:
+			// Open a Kprobe at the entry point of the kernel function and attach the
+			// pre-compiled program. Each time the kernel function enters, the program
+			// will increment the execution counter by 1. The read loop below polls this
+			// map value once per second.
+			kp, err = link.Kprobe(fn, objs.KprobeExecve, nil)
+			if err != nil {
+				log.Fatalf("opening kprobe: %s", err)
+			}
+		case Kretprobe:
+			kp, err = link.Kretprobe(fn, objs.KprobeExecve, nil)
+			if err != nil {
+				log.Fatalf("opening kretprobe: %s", err)
+			}
+		default:
+			log.Fatalf("invalid kprobe kind: %s", programSpec.SectionName)
+		}
+
+		count++
+	}
+
+	if count == 0 {
+		log.Fatalf("no kprobe found for %s", fn)
+	}
+
 	defer kp.Close()
 
 	// Read loop reporting the total amount of times the kernel

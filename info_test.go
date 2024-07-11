@@ -122,15 +122,54 @@ func TestProgramInfo(t *testing.T) {
 			}
 
 			if name == "proc" {
+				_, err := info.JitedSize()
+				qt.Assert(t, qt.IsNotNil(err))
+
+				_, err = info.TranslatedSize()
+				qt.Assert(t, qt.IsNotNil(err))
+
 				_, ok := info.CreatedByUID()
 				qt.Assert(t, qt.IsFalse(ok))
+
+				_, ok = info.LoadTime()
+				qt.Assert(t, qt.IsFalse(ok))
+
+				_, ok = info.VerifiedInstructions()
+				qt.Assert(t, qt.IsFalse(ok))
 			} else {
-				uid, ok := info.CreatedByUID()
-				if testutils.IsKernelLessThan(t, "4.15") {
+				if jitedSize, err := info.JitedSize(); testutils.IsKernelLessThan(t, "4.13") {
+					qt.Assert(t, qt.IsNotNil(err))
+				} else {
+					qt.Assert(t, qt.IsNil(err))
+					qt.Assert(t, qt.IsTrue(jitedSize > 0))
+				}
+
+				if xlatedSize, err := info.TranslatedSize(); testutils.IsKernelLessThan(t, "4.13") {
+					qt.Assert(t, qt.IsNotNil(err))
+				} else {
+					qt.Assert(t, qt.IsNil(err))
+					qt.Assert(t, qt.IsTrue(xlatedSize > 0))
+				}
+
+				if uid, ok := info.CreatedByUID(); testutils.IsKernelLessThan(t, "4.15") {
 					qt.Assert(t, qt.IsFalse(ok))
 				} else {
 					qt.Assert(t, qt.IsTrue(ok))
 					qt.Assert(t, qt.Equals(uid, uint32(os.Getuid())))
+				}
+
+				if loadTime, ok := info.LoadTime(); testutils.IsKernelLessThan(t, "4.15") {
+					qt.Assert(t, qt.IsFalse(ok))
+				} else {
+					qt.Assert(t, qt.IsTrue(ok))
+					qt.Assert(t, qt.IsTrue(loadTime > 0))
+				}
+
+				if verifiedInsns, ok := info.VerifiedInstructions(); testutils.IsKernelLessThan(t, "5.16") {
+					qt.Assert(t, qt.IsFalse(ok))
+				} else {
+					qt.Assert(t, qt.IsTrue(ok))
+					qt.Assert(t, qt.IsTrue(verifiedInsns > 0))
 				}
 			}
 		})

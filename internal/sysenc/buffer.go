@@ -68,10 +68,17 @@ func (b Buffer) Pointer() sys.Pointer {
 
 // Unmarshal the buffer into the provided value.
 func (b Buffer) Unmarshal(data any) error {
+	return b.UnmarshalWithLimit(data, b.size)
+}
+
+// UnmarshalWithLimit unmarshals the buffer up to limit into the provided value.
+func (b Buffer) UnmarshalWithLimit(data any, limit int) error {
 	if b.size == syscallPointerOnly {
 		return nil
 	}
-
+	if b.size != limit {
+		return Unmarshal(data, b.unsafeBytes()[:limit])
+	}
 	return Unmarshal(data, b.unsafeBytes())
 }
 

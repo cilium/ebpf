@@ -1155,7 +1155,7 @@ func (m *Map) batchLookupCmd(cmd sys.Cmd, cursor *MapBatchCursor, count int, key
 		return int(attr.Count), sysErr
 	}
 
-	if err := keyBuf.Unmarshal(keysOut); err != nil {
+	if err := keyBuf.UnmarshalWithLimit(keysOut, int(attr.Count)*int(m.keySize)); err != nil {
 		return 0, err
 	}
 

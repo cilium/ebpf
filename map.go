@@ -1061,6 +1061,10 @@ func (m *Map) batchLookup(cmd sys.Cmd, cursor *MapBatchCursor, keysOut, valuesOu
 		return n, err
 	}
 
+	if n == 0 {
+		return n, nil
+	}
+
 	err = valueBuf.Unmarshal(valuesOut)
 	if err != nil {
 		return 0, err
@@ -1081,6 +1085,10 @@ func (m *Map) batchLookupPerCPU(cmd sys.Cmd, cursor *MapBatchCursor, keysOut, va
 	n, sysErr := m.batchLookupCmd(cmd, cursor, count, keysOut, valuePtr, opts)
 	if sysErr != nil && !errors.Is(sysErr, unix.ENOENT) {
 		return 0, err
+	}
+
+	if n == 0 {
+		return n, sysErr
 	}
 
 	err = unmarshalBatchPerCPUValue(valuesOut, count, int(m.valueSize), valueBuf)
@@ -1141,6 +1149,10 @@ func (m *Map) batchLookupCmd(cmd sys.Cmd, cursor *MapBatchCursor, count int, key
 	sysErr = wrapMapError(sysErr)
 	if sysErr != nil && !errors.Is(sysErr, unix.ENOENT) {
 		return 0, sysErr
+	}
+
+	if attr.Count == 0 {
+		return int(attr.Count), sysErr
 	}
 
 	if err := keyBuf.Unmarshal(keysOut); err != nil {

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -435,4 +436,36 @@ func TestProgInfoExtBTF(t *testing.T) {
 			t.Errorf("func %q not found", fn)
 		}
 	}
+}
+
+func TestInfoExportedFields(t *testing.T) {
+	// It is highly unlikely that you should be adjusting the asserts below.
+	// See the comment at the top of info.go for more information.
+
+	var names []string
+	for _, field := range reflect.VisibleFields(reflect.TypeOf(MapInfo{})) {
+		if field.IsExported() {
+			names = append(names, field.Name)
+		}
+	}
+	qt.Assert(t, qt.ContentEquals(names, []string{
+		"Type",
+		"KeySize",
+		"ValueSize",
+		"MaxEntries",
+		"Flags",
+		"Name",
+	}))
+
+	names = nil
+	for _, field := range reflect.VisibleFields(reflect.TypeOf(ProgramInfo{})) {
+		if field.IsExported() {
+			names = append(names, field.Name)
+		}
+	}
+	qt.Assert(t, qt.ContentEquals(names, []string{
+		"Type",
+		"Tag",
+		"Name",
+	}))
 }

@@ -20,6 +20,23 @@ import (
 	"github.com/cilium/ebpf/internal/unix"
 )
 
+// The *Info structs expose metadata about a program or map. Most
+// fields are exposed via a getter:
+//
+//     func (*MapInfo) ID() (MapID, bool)
+//
+// This is because the metadata available changes based on kernel version.
+// The second boolean return value indicates whether a particular field is
+// available on the current kernel.
+//
+// Always add new metadata as such a getter, unless you can somehow get the
+// value of the field on all supported kernels. Also document which version
+// a particular field first appeared in.
+//
+// Some metadata is a buffer which needs additional parsing. In this case,
+// store the undecoded data in the Info struct and provide a getter which
+// decodes it when necessary. See ProgramInfo.Instructions for an example.
+
 // MapInfo describes a map.
 type MapInfo struct {
 	Type       MapType

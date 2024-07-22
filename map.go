@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -96,11 +97,26 @@ func (ms *MapSpec) Copy() *MapSpec {
 	}
 
 	cpy := *ms
+	cpy.Contents = slices.Clone(cpy.Contents)
 
-	cpy.Contents = make([]MapKV, len(ms.Contents))
-	copy(cpy.Contents, ms.Contents)
+	if cpy.InnerMap == ms {
+		cpy.InnerMap = &cpy
+	} else {
+		cpy.InnerMap = ms.InnerMap.Copy()
+	}
 
-	cpy.InnerMap = ms.InnerMap.Copy()
+	if cpy.Extra != nil {
+		extra := *cpy.Extra
+		cpy.Extra = &extra
+	}
+
+	if cpy.Key != nil {
+		cpy.Key = btf.Copy(cpy.Key)
+	}
+
+	if cpy.Value != nil {
+		cpy.Value = btf.Copy(cpy.Value)
+	}
 
 	return &cpy
 }

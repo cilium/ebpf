@@ -326,6 +326,8 @@ func TestGuessBTFByteOrder(t *testing.T) {
 }
 
 func TestSpecCopy(t *testing.T) {
+	qt.Check(t, qt.IsNil((*Spec)(nil).Copy()))
+
 	spec := parseELFBTF(t, "../testdata/loader-el.elf")
 	cpy := spec.Copy()
 

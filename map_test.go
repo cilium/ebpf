@@ -1,6 +1,7 @@
 package ebpf
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"math"
@@ -90,6 +91,29 @@ func TestMap(t *testing.T) {
 	if k != 1 {
 		t.Error("Want key 1, got", k)
 	}
+}
+
+func TestMapSpecCopy(t *testing.T) {
+	a := &MapSpec{
+		"foo",
+		Hash,
+		4,
+		4,
+		1,
+		1,
+		PinByName,
+		1,
+		[]MapKV{{1, 2}}, // Can't copy Contents, use value types
+		true,
+		nil, // InnerMap
+		bytes.NewReader(nil),
+		&btf.Int{},
+		&btf.Int{},
+	}
+	a.InnerMap = a
+
+	qt.Check(t, qt.IsNil((*MapSpec)(nil).Copy()))
+	qt.Assert(t, testutils.IsDeepCopy(a.Copy(), a))
 }
 
 func TestMapBatch(t *testing.T) {

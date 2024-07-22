@@ -711,6 +711,27 @@ func TestProgramRejectIncorrectByteOrder(t *testing.T) {
 	}
 }
 
+func TestProgramSpecCopy(t *testing.T) {
+	a := &ProgramSpec{
+		"test",
+		1,
+		1,
+		"attach",
+		nil, // Can't copy Program
+		"section",
+		asm.Instructions{
+			asm.Return(),
+		},
+		1,
+		"license",
+		1,
+		binary.LittleEndian,
+	}
+
+	qt.Check(t, qt.IsNil((*ProgramSpec)(nil).Copy()))
+	qt.Assert(t, testutils.IsDeepCopy(a.Copy(), a))
+}
+
 func TestProgramSpecTag(t *testing.T) {
 	arr := createArray(t)
 

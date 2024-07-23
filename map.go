@@ -102,6 +102,8 @@ func (ms *MapSpec) Copy() *MapSpec {
 
 	cpy := *ms
 	cpy.Contents = slices.Clone(cpy.Contents)
+	cpy.Key = btf.Copy(cpy.Key)
+	cpy.Value = btf.Copy(cpy.Value)
 
 	if cpy.InnerMap == ms {
 		cpy.InnerMap = &cpy
@@ -112,14 +114,6 @@ func (ms *MapSpec) Copy() *MapSpec {
 	if cpy.Extra != nil {
 		extra := *cpy.Extra
 		cpy.Extra = &extra
-	}
-
-	if cpy.Key != nil {
-		cpy.Key = btf.Copy(cpy.Key)
-	}
-
-	if cpy.Value != nil {
-		cpy.Value = btf.Copy(cpy.Value)
 	}
 
 	return &cpy

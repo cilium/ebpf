@@ -462,7 +462,7 @@ func TestCreatePerfEvent(t *testing.T) {
 func TestReadRecord(t *testing.T) {
 	var buf bytes.Buffer
 
-	err := binary.Write(&buf, internal.NativeEndian, &perfEventHeader{})
+	err := binary.Write(&buf, binary.NativeEndian, &perfEventHeader{})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -10,8 +10,6 @@ import (
 
 	"github.com/go-quicktest/qt"
 	"github.com/google/go-cmp/cmp/cmpopts"
-
-	"github.com/cilium/ebpf/internal"
 )
 
 type testcase struct {
@@ -61,7 +59,7 @@ func TestMarshal(t *testing.T) {
 		value := test.new()
 		t.Run(fmt.Sprintf("%T", value), func(t *testing.T) {
 			var want bytes.Buffer
-			if err := binary.Write(&want, internal.NativeEndian, value); err != nil {
+			if err := binary.Write(&want, binary.NativeEndian, value); err != nil {
 				t.Fatal(err)
 			}
 
@@ -148,7 +146,7 @@ func TestUnsafeBackingMemory(t *testing.T) {
 		t.Helper()
 
 		var buf bytes.Buffer
-		qt.Assert(t, qt.IsNil(binary.Write(&buf, internal.NativeEndian, data)))
+		qt.Assert(t, qt.IsNil(binary.Write(&buf, binary.NativeEndian, data)))
 		return buf.Bytes()
 	}
 
@@ -295,7 +293,7 @@ func randomiseValue(tb testing.TB, value any) []byte {
 		buf[i] = byte(i)
 	}
 
-	err := binary.Read(bytes.NewReader(buf), internal.NativeEndian, value)
+	err := binary.Read(bytes.NewReader(buf), binary.NativeEndian, value)
 	qt.Assert(tb, qt.IsNil(err))
 
 	return buf

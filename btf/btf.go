@@ -668,7 +668,7 @@ func (s *Spec) TypeByName(name string, typ interface{}) error {
 // Types from base are used to resolve references in the split BTF.
 // The returned Spec only contains types from the split BTF, not from the base.
 func LoadSplitSpecFromReader(r io.ReaderAt, base *Spec) (*Spec, error) {
-	return loadRawSpec(r, internal.NativeEndian, base)
+	return loadRawSpec(r, binary.NativeEndian, base)
 }
 
 // TypesIterator iterates over types of a given spec.

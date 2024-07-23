@@ -27,7 +27,7 @@ type MarshalOptions struct {
 // KernelMarshalOptions will generate BTF suitable for the current kernel.
 func KernelMarshalOptions() *MarshalOptions {
 	return &MarshalOptions{
-		Order:              internal.NativeEndian,
+		Order:              binary.NativeEndian,
 		StripFuncLinkage:   haveFuncLinkage() != nil,
 		ReplaceEnum64:      haveEnum64() != nil,
 		PreventNoTypeFound: true, // All current kernels require this.
@@ -154,7 +154,7 @@ func (b *Builder) Marshal(buf []byte, opts *MarshalOptions) ([]byte, error) {
 	}
 
 	if opts == nil {
-		opts = &MarshalOptions{Order: internal.NativeEndian}
+		opts = &MarshalOptions{Order: binary.NativeEndian}
 	}
 
 	// Reserve space for the BTF header.

@@ -1,6 +1,7 @@
 package btf
 
 import (
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"os"
@@ -99,7 +100,7 @@ func loadKernelSpec() (_ *Spec, fallback bool, _ error) {
 	if err == nil {
 		defer fh.Close()
 
-		spec, err := loadRawSpec(fh, internal.NativeEndian, nil)
+		spec, err := loadRawSpec(fh, binary.NativeEndian, nil)
 		return spec, false, err
 	}
 
@@ -125,7 +126,7 @@ func loadKernelModuleSpec(module string, base *Spec) (*Spec, error) {
 	}
 	defer fh.Close()
 
-	return loadRawSpec(fh, internal.NativeEndian, base)
+	return loadRawSpec(fh, binary.NativeEndian, base)
 }
 
 // findVMLinux scans multiple well-known paths for vmlinux kernel images.

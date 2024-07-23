@@ -2,6 +2,7 @@ package ebpf
 
 import (
 	"bytes"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"math"
@@ -82,7 +83,7 @@ func TestMap(t *testing.T) {
 
 	var slice []byte
 	qt.Assert(t, qt.IsNil(m.Lookup(uint32(0), &slice)))
-	qt.Assert(t, qt.DeepEquals(slice, internal.NativeEndian.AppendUint32(nil, 42)))
+	qt.Assert(t, qt.DeepEquals(slice, binary.NativeEndian.AppendUint32(nil, 42)))
 
 	var k uint32
 	if err := m.NextKey(uint32(0), &k); err != nil {
@@ -1881,21 +1882,21 @@ type benchValue struct {
 type customBenchValue benchValue
 
 func (cbv *customBenchValue) UnmarshalBinary(buf []byte) error {
-	cbv.ID = internal.NativeEndian.Uint32(buf)
-	cbv.Val16 = internal.NativeEndian.Uint16(buf[4:])
-	cbv.Val16_2 = internal.NativeEndian.Uint16(buf[6:])
+	cbv.ID = binary.NativeEndian.Uint32(buf)
+	cbv.Val16 = binary.NativeEndian.Uint16(buf[4:])
+	cbv.Val16_2 = binary.NativeEndian.Uint16(buf[6:])
 	copy(cbv.Name[:], buf[8:])
-	cbv.LID = internal.NativeEndian.Uint64(buf[16:])
+	cbv.LID = binary.NativeEndian.Uint64(buf[16:])
 	return nil
 }
 
 func (cbv *customBenchValue) MarshalBinary() ([]byte, error) {
 	buf := make([]byte, 24)
-	internal.NativeEndian.PutUint32(buf, cbv.ID)
-	internal.NativeEndian.PutUint16(buf[4:], cbv.Val16)
-	internal.NativeEndian.PutUint16(buf[6:], cbv.Val16_2)
+	binary.NativeEndian.PutUint32(buf, cbv.ID)
+	binary.NativeEndian.PutUint16(buf[4:], cbv.Val16)
+	binary.NativeEndian.PutUint16(buf[6:], cbv.Val16_2)
 	copy(buf[8:], cbv.Name[:])
-	internal.NativeEndian.PutUint64(buf[16:], cbv.LID)
+	binary.NativeEndian.PutUint64(buf[16:], cbv.LID)
 	return buf, nil
 }
 
@@ -1905,7 +1906,7 @@ type benchKey struct {
 
 func (bk *benchKey) MarshalBinary() ([]byte, error) {
 	buf := make([]byte, 8)
-	internal.NativeEndian.PutUint64(buf, bk.id)
+	binary.NativeEndian.PutUint64(buf, bk.id)
 	return buf, nil
 }
 

@@ -1,6 +1,7 @@
 package btf
 
 import (
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"os"
@@ -10,7 +11,6 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 
-	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/testutils"
 
 	"github.com/go-quicktest/qt"
@@ -588,7 +588,7 @@ func TestCOREReloFieldSigned(t *testing.T) {
 			relo := &CORERelocation{
 				typ, coreAccessor{0}, reloFieldSigned, 0,
 			}
-			fixup, err := coreCalculateFixup(relo, &Void{}, internal.NativeEndian, dummyTypeID)
+			fixup, err := coreCalculateFixup(relo, &Void{}, binary.NativeEndian, dummyTypeID)
 			qt.Assert(t, qt.IsTrue(fixup.poison))
 			qt.Assert(t, qt.IsNil(err))
 		})
@@ -598,7 +598,7 @@ func TestCOREReloFieldSigned(t *testing.T) {
 		relo := &CORERelocation{
 			&Array{}, coreAccessor{0}, reloFieldSigned, 0,
 		}
-		_, err := coreCalculateFixup(relo, &Array{}, internal.NativeEndian, dummyTypeID)
+		_, err := coreCalculateFixup(relo, &Array{}, binary.NativeEndian, dummyTypeID)
 		qt.Assert(t, qt.ErrorIs(err, errNoSignedness))
 	})
 }
@@ -615,7 +615,7 @@ func TestCOREReloFieldShiftU64(t *testing.T) {
 		{typ, coreAccessor{0, 0}, reloFieldLShiftU64, 1},
 	} {
 		t.Run(relo.kind.String(), func(t *testing.T) {
-			_, err := coreCalculateFixup(relo, typ, internal.NativeEndian, dummyTypeID)
+			_, err := coreCalculateFixup(relo, typ, binary.NativeEndian, dummyTypeID)
 			qt.Assert(t, qt.ErrorIs(err, errUnsizedType))
 		})
 	}
@@ -639,7 +639,7 @@ func TestCORERelosKmodTypeID(t *testing.T) {
 	fixups, err := coreCalculateFixups(
 		relos,
 		[]Type{a, b},
-		internal.NativeEndian,
+		binary.NativeEndian,
 		typeID,
 	)
 	qt.Assert(t, qt.IsNil(err))
@@ -649,7 +649,7 @@ func TestCORERelosKmodTypeID(t *testing.T) {
 	fixups, err = coreCalculateFixups(
 		relos,
 		[]Type{b},
-		internal.NativeEndian,
+		binary.NativeEndian,
 		typeID,
 	)
 	qt.Assert(t, qt.IsNil(err))

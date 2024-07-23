@@ -7,7 +7,6 @@ import (
 	"testing"
 
 	"github.com/cilium/ebpf/btf"
-	"github.com/cilium/ebpf/internal"
 
 	"github.com/go-quicktest/qt"
 )
@@ -402,7 +401,7 @@ func TestPutValue(t *testing.T) {
 		}
 
 		var buf bytes.Buffer
-		err := binary.Write(&buf, internal.NativeEndian, c.expected)
+		err := binary.Write(&buf, binary.NativeEndian, c.expected)
 		if err != nil {
 			t.Fatal(err)
 		}

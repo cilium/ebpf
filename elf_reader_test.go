@@ -188,7 +188,7 @@ func TestLoadCollectionSpec(t *testing.T) {
 			t.Errorf("MapSpec mismatch (-want +got):\n%s", diff)
 		}
 
-		if have.ByteOrder != internal.NativeEndian {
+		if have.ByteOrder != binary.NativeEndian {
 			return
 		}
 
@@ -379,7 +379,7 @@ func TestLoadInitializedBTFMap(t *testing.T) {
 		}
 
 		t.Run("NewCollection", func(t *testing.T) {
-			if coll.ByteOrder != internal.NativeEndian {
+			if coll.ByteOrder != binary.NativeEndian {
 				t.Skipf("Skipping %s collection", coll.ByteOrder)
 			}
 

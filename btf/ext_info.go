@@ -418,8 +418,8 @@ func (fi *funcInfo) marshal(w *bytes.Buffer, b *Builder) error {
 		TypeID:  id,
 	}
 	buf := make([]byte, FuncInfoSize)
-	internal.NativeEndian.PutUint32(buf, bfi.InsnOff)
-	internal.NativeEndian.PutUint32(buf[4:], uint32(bfi.TypeID))
+	binary.NativeEndian.PutUint32(buf, bfi.InsnOff)
+	binary.NativeEndian.PutUint32(buf[4:], uint32(bfi.TypeID))
 	_, err = w.Write(buf)
 	return err
 }
@@ -627,10 +627,10 @@ func (li *lineInfo) marshal(w *bytes.Buffer, b *Builder) error {
 	}
 
 	buf := make([]byte, LineInfoSize)
-	internal.NativeEndian.PutUint32(buf, bli.InsnOff)
-	internal.NativeEndian.PutUint32(buf[4:], bli.FileNameOff)
-	internal.NativeEndian.PutUint32(buf[8:], bli.LineOff)
-	internal.NativeEndian.PutUint32(buf[12:], bli.LineCol)
+	binary.NativeEndian.PutUint32(buf, bli.InsnOff)
+	binary.NativeEndian.PutUint32(buf[4:], bli.FileNameOff)
+	binary.NativeEndian.PutUint32(buf[8:], bli.LineOff)
+	binary.NativeEndian.PutUint32(buf[12:], bli.LineCol)
 	_, err = w.Write(buf)
 	return err
 }

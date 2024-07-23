@@ -701,7 +701,7 @@ func TestProgramRejectIncorrectByteOrder(t *testing.T) {
 	spec := socketFilterSpec.Copy()
 
 	spec.ByteOrder = binary.BigEndian
-	if spec.ByteOrder == internal.NativeEndian {
+	if spec.ByteOrder == binary.NativeEndian {
 		spec.ByteOrder = binary.LittleEndian
 	}
 
@@ -939,7 +939,7 @@ func TestProgramInstructions(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	tagXlated, err := insns.Tag(internal.NativeEndian)
+	tagXlated, err := insns.Tag(binary.NativeEndian)
 	if err != nil {
 		t.Fatal(err)
 	}

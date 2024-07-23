@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/cilium/ebpf"
-	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/epoll"
 	"github.com/cilium/ebpf/internal/sys"
 	"github.com/cilium/ebpf/internal/unix"
@@ -66,9 +65,9 @@ func readRecord(rd io.Reader, rec *Record, buf []byte, overwritable bool) error 
 	}
 
 	header := perfEventHeader{
-		internal.NativeEndian.Uint32(buf[0:4]),
-		internal.NativeEndian.Uint16(buf[4:6]),
-		internal.NativeEndian.Uint16(buf[6:8]),
+		binary.NativeEndian.Uint32(buf[0:4]),
+		binary.NativeEndian.Uint16(buf[4:6]),
+		binary.NativeEndian.Uint16(buf[6:8]),
 	}
 
 	switch header.Type {
@@ -95,7 +94,7 @@ func readLostRecords(rd io.Reader) (uint64, error) {
 		Lost uint64
 	}
 
-	err := binary.Read(rd, internal.NativeEndian, &lostHeader)
+	err := binary.Read(rd, binary.NativeEndian, &lostHeader)
 	if err != nil {
 		return 0, fmt.Errorf("can't read lost records header: %v", err)
 	}
@@ -117,7 +116,7 @@ func readRawSample(rd io.Reader, buf, sampleBuf []byte) ([]byte, error) {
 	}
 
 	sample := perfEventSample{
-		internal.NativeEndian.Uint32(buf),
+		binary.NativeEndian.Uint32(buf),
 	}
 
 	var data []byte

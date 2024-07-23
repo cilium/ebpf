@@ -29,6 +29,10 @@ var (
 	ErrIterationAborted = errors.New("iteration aborted")
 	ErrMapIncompatible  = errors.New("map spec is incompatible with existing map")
 	errMapNoBTFValue    = errors.New("map spec does not contain a BTF Value")
+
+	// pre-allocating these errors here since they may get called in hot code paths
+	// and cause unnecessary memory allocations
+	errMapLookupKeyNotExist = fmt.Errorf("lookup: %w", sysErrKeyNotExist)
 )
 
 // MapOptions control loading a map into the kernel.
@@ -711,6 +715,9 @@ func (m *Map) lookup(key interface{}, valueOut sys.Pointer, flags MapLookupFlags
 	}
 
 	if err = sys.MapLookupElem(&attr); err != nil {
+		if errors.Is(err, unix.ENOENT) {
+			return errMapLookupKeyNotExist
+		}
 		return fmt.Errorf("lookup: %w", wrapMapError(err))
 	}
 	return nil

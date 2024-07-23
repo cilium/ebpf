@@ -269,6 +269,17 @@ func TestMapLookupKeyTooSmall(t *testing.T) {
 	qt.Assert(t, qt.IsNotNil(m.Lookup(uint32(0), &small)))
 }
 
+func TestMapLookupKeyNotFoundAllocations(t *testing.T) {
+	m := createArray(t)
+	defer m.Close()
+	var key, out uint32 = 3, 0
+
+	allocs := testing.AllocsPerRun(5, func() {
+		_ = m.Lookup(&key, &out)
+	})
+	qt.Assert(t, qt.Equals(allocs, float64(0)))
+}
+
 func TestBatchAPIMapDelete(t *testing.T) {
 	if err := haveBatchAPI(); err != nil {
 		t.Skipf("batch api not available: %v", err)

@@ -8,6 +8,7 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/cilium/ebpf/internal/testutils"
 	"github.com/go-quicktest/qt"
 	"github.com/google/go-cmp/cmp"
 )
@@ -39,33 +40,31 @@ func TestSizeof(t *testing.T) {
 }
 
 func TestCopy(t *testing.T) {
-	_ = Copy((*Void)(nil))
+	i := &Int{Size: 4}
 
-	in := &Int{Size: 4}
-	out := Copy(in)
-
-	in.Size = 8
-	if size := out.(*Int).Size; size != 4 {
-		t.Error("Copy doesn't make a copy, expected size 4, got", size)
-	}
-
-	t.Run("cyclical", func(t *testing.T) {
-		_ = Copy(newCyclicalType(2))
+	got := Copy(&Struct{
+		Members: []Member{
+			{Name: "a", Type: i},
+			{Name: "b", Type: i},
+		},
 	})
+	members := got.(*Struct).Members
+	qt.Check(t, qt.Equals(members[0].Type.(*Int), members[1].Type.(*Int)), qt.Commentf("identity should be preserved"))
 
-	t.Run("identity", func(t *testing.T) {
-		u16 := &Int{Size: 2}
-
-		out := Copy(&Struct{
-			Members: []Member{
-				{Name: "a", Type: u16},
-				{Name: "b", Type: u16},
-			},
+	for _, test := range []struct {
+		name string
+		typ  Type
+	}{
+		{"nil", nil},
+		{"void", (*Void)(nil)},
+		{"int", i},
+		{"cyclical", newCyclicalType(2)},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			cpy := Copy(test.typ)
+			qt.Assert(t, testutils.IsDeepCopy(cpy, test.typ))
 		})
-
-		outStruct := out.(*Struct)
-		qt.Assert(t, qt.Equals(outStruct.Members[0].Type, outStruct.Members[1].Type))
-	})
+	}
 }
 
 func TestAs(t *testing.T) {

@@ -46,10 +46,6 @@ const (
 	outputPad = 256 + 2
 )
 
-// Deprecated: the correct log size is now detected automatically and this
-// constant is unused.
-const DefaultVerifierLogSize = 64 * 1024
-
 // minVerifierLogSize is the default number of bytes allocated for the
 // verifier log.
 const minVerifierLogSize = 64 * 1024
@@ -72,10 +68,6 @@ type ProgramOptions struct {
 	// will always allocate an output buffer, but will result in only a single
 	// attempt at loading the program.
 	LogLevel LogLevel
-
-	// Deprecated: the correct log buffer size is determined automatically
-	// and this field is ignored.
-	LogSize int
 
 	// Disables the verifier log completely, regardless of other options.
 	LogDisabled bool

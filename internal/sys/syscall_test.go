@@ -4,7 +4,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/cilium/ebpf/internal/testutils/fdtrace"
+	"github.com/cilium/ebpf/internal/testutils/testmain"
 	"github.com/cilium/ebpf/internal/unix"
 
 	"github.com/go-quicktest/qt"
@@ -62,5 +62,5 @@ func TestSyscallError(t *testing.T) {
 }
 
 func TestMain(m *testing.M) {
-	fdtrace.TestMain(m)
+	testmain.Run(m)
 }

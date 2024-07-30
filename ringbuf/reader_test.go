@@ -17,7 +17,7 @@ import (
 	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/sys"
 	"github.com/cilium/ebpf/internal/testutils"
-	"github.com/cilium/ebpf/internal/testutils/fdtrace"
+	"github.com/cilium/ebpf/internal/testutils/testmain"
 )
 
 type sampleMessage struct {
@@ -26,7 +26,7 @@ type sampleMessage struct {
 }
 
 func TestMain(m *testing.M) {
-	fdtrace.TestMain(m)
+	testmain.Run(m)
 }
 
 func TestRingbufReader(t *testing.T) {

@@ -6,13 +6,13 @@ import (
 
 	"github.com/cilium/ebpf/btf"
 	"github.com/cilium/ebpf/internal/testutils"
+	"github.com/go-quicktest/qt"
 )
 
 func TestHandleIterator(t *testing.T) {
-	// There is no guarantee that there is a BTF ID allocated, but loading a module
-	// triggers loading vmlinux.
-	// See https://github.com/torvalds/linux/commit/5329722057d41aebc31e391907a501feaa42f7d9
-	testutils.SkipOnOldKernel(t, "5.11", "vmlinux BTF ID")
+	// There is no guarantee that there is a BTF ID allocated, so let's load a
+	// small dummy blob.
+	loadBTF(t)
 
 	it := new(btf.HandleIterator)
 	defer it.Handle.Close()
@@ -48,7 +48,7 @@ func TestHandleIterator(t *testing.T) {
 
 func TestParseModuleSplitSpec(t *testing.T) {
 	// See TestNewHandleFromID for reasoning.
-	testutils.SkipOnOldKernel(t, "5.11", "vmlinux BTF ID")
+	loadBTF(t)
 
 	module, err := btf.FindHandle(func(info *btf.HandleInfo) bool {
 		if info.IsModule() {
@@ -96,4 +96,16 @@ func ExampleHandleIterator() {
 	if err := it.Err(); err != nil {
 		panic(err)
 	}
+}
+
+func loadBTF(tb testing.TB) *btf.Handle {
+	var b btf.Builder
+	_, err := b.Add(&btf.Int{Size: 1})
+	qt.Assert(tb, qt.IsNil(err))
+
+	h, err := btf.NewHandle(&b)
+	testutils.SkipIfNotSupported(tb, err)
+	qt.Assert(tb, qt.IsNil(err))
+	tb.Cleanup(func() { h.Close() })
+	return h
 }

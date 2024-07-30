@@ -3,15 +3,24 @@ package internal
 import (
 	"errors"
 	"fmt"
+	"runtime"
 	"sync"
 )
 
-// ErrNotSupported indicates that a feature is not supported by the current kernel.
+// ErrNotSupported indicates that a feature is not supported.
 var ErrNotSupported = errors.New("not supported")
+
+// ErrNotSupportedOnOS indicates that a feature is not supported on the current
+// operating system.
+var ErrNotSupportedOnOS = fmt.Errorf("%w on %s", ErrNotSupported, runtime.GOOS)
 
 // UnsupportedFeatureError is returned by FeatureTest() functions.
 type UnsupportedFeatureError struct {
-	// The minimum Linux mainline version required for this feature.
+	// The minimum version required for this feature.
+	//
+	// On Linux this refers to the mainline kernel vesion, on Windows to a stable
+	// eBPF for Windows release.
+	//
 	// Used for the error string, and for sanity checking during testing.
 	MinimumVersion Version
 
@@ -58,11 +67,45 @@ type FeatureTest struct {
 type FeatureTestFn func() error
 
 // NewFeatureTest is a convenient way to create a single [FeatureTest].
+//
+// This function can only be used for feature tests targeting Linux. On Windows
+// all tests will return [ErrNotSupportedOnOS].
 func NewFeatureTest(name, version string, fn FeatureTestFn) func() error {
+	if runtime.GOOS != "linux" {
+		// We don't return an UnsupportedFeatureError here, since that will
+		// trigger version checks which don't make sense.
+		return func() error {
+			return fmt.Errorf("%s: %w", name, ErrNotSupportedOnOS)
+		}
+	}
+
 	ft := &FeatureTest{
 		Name:    name,
 		Version: version,
 		Fn:      fn,
+	}
+
+	return ft.execute
+}
+
+func NewPortableFeatureTest(name string, linuxVersion string, linuxFn FeatureTestFn, windowsVersion string, windowsFn FeatureTestFn) func() error {
+	ft := &FeatureTest{
+		Name: name,
+	}
+
+	switch runtime.GOOS {
+	case "linux":
+		ft.Version = linuxVersion
+		ft.Fn = linuxFn
+
+	case "windows":
+		ft.Version = windowsVersion
+		ft.Fn = windowsFn
+
+	default:
+		return func() error {
+			return fmt.Errorf("%s: %w", name, ErrNotSupportedOnOS)
+		}
 	}
 
 	return ft.execute

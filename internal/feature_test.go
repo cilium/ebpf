@@ -5,6 +5,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/go-quicktest/qt"
+
 	"github.com/cilium/ebpf/internal/testutils/testmain"
 )
 
@@ -25,9 +27,12 @@ func TestFeatureTest(t *testing.T) {
 	}
 
 	err := fn()
-	if !called {
-		t.Error("Function wasn't called")
+	if errors.Is(err, ErrNotSupportedOnOS) {
+		qt.Assert(t, qt.IsFalse(called))
+		return
 	}
+
+	qt.Assert(t, qt.IsTrue(called), qt.Commentf("function should be invoked"))
 
 	if err != nil {
 		t.Error("Unexpected negative result:", err)

@@ -12,11 +12,6 @@ import (
 	"github.com/cilium/ebpf"
 )
 
-type bpfKeyT struct {
-	Pid  uint32
-	Comm [16]uint8
-}
-
 // loadBpf returns the embedded CollectionSpec for bpf.
 func loadBpf() (*ebpf.CollectionSpec, error) {
 	reader := bytes.NewReader(_BpfBytes)

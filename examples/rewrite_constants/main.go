@@ -6,16 +6,19 @@ import (
 	"time"
 
 	"github.com/cilium/ebpf"
-	"github.com/cilium/ebpf/internal/unix"
 	"github.com/cilium/ebpf/link"
 	"github.com/cilium/ebpf/rlimit"
 )
 
-//go:generate go run github.com/cilium/ebpf/cmd/bpf2go -type key_t bpf bpf.c -- -I../headers
+//go:generate go run github.com/cilium/ebpf/cmd/bpf2go bpf bpf.c -- -I../headers
+
+const (
+	target_syscall_name string = "execve"
+	mapKey              uint32 = 0
+)
 
 var (
-	target_syscall_name string = "execve"
-	target_syscall_id   int64  = -1
+	target_syscall_id int64 = -1
 )
 
 func init() {
@@ -66,26 +69,13 @@ func main() {
 	ticker := time.NewTicker(1 * time.Second)
 	defer ticker.Stop()
 
+	log.Println("Waiting for events..")
+
 	for range ticker.C {
-		var (
-			key   bpfKeyT
-			count uint64
-			pids  []bpfKeyT
-		)
-
-		// clear console && print header
-		log.Printf("\033[H\033[2J")
-		log.Printf("Monitoring syscall_%v\n", target_syscall_name)
-
-		iter := objs.SyscallCountMap.Iterate()
-		for iter.Next(&key, &count) {
-			log.Printf("comm: %v(pid: %v) called syscall_%v %v times\n", unix.ByteSliceToString(key.Comm[:]), key.Pid, target_syscall_name, count)
-			pids = append(pids, key)
+		var value uint64
+		if err := objs.SyscallCountMap.Lookup(mapKey, &value); err != nil {
+			log.Fatalf("reading map: %v", err)
 		}
-
-		// clear the map
-		for _, pid := range pids {
-			objs.SyscallCountMap.Delete(&pid)
-		}
+		log.Printf("sys_%s called %d times\n", target_syscall_name, value)
 	}
 }

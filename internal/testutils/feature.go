@@ -7,7 +7,6 @@ import (
 	"testing"
 
 	"github.com/cilium/ebpf/internal"
-	"github.com/cilium/ebpf/internal/linux"
 )
 
 const (
@@ -21,6 +20,10 @@ func CheckFeatureTest(t *testing.T, fn func() error) {
 func checkFeatureTestError(t *testing.T, err error) {
 	if err == nil {
 		return
+	}
+
+	if errors.Is(err, internal.ErrNotSupportedOnOS) {
+		t.Skip(err)
 	}
 
 	var ufe *internal.UnsupportedFeatureError
@@ -70,56 +73,27 @@ func checkVersion(tb testing.TB, ufe *internal.UnsupportedFeatureError) {
 		return
 	}
 
-	if !isKernelLessThan(tb, ufe.MinimumVersion) {
+	if !isRuntimeVersionLessThan(tb, ufe.MinimumVersion, runtimeVersion(tb)) {
 		tb.Fatalf("Feature '%s' isn't supported even though kernel is newer than %s",
 			ufe.Name, ufe.MinimumVersion)
 	}
 }
 
-func SkipOnOldKernel(tb testing.TB, minVersion, feature string) {
+func isRuntimeVersionLessThan(tb testing.TB, minv, runv internal.Version) bool {
 	tb.Helper()
 
-	if IsKernelLessThan(tb, minVersion) {
-		tb.Skipf("Test requires at least kernel %s (due to missing %s)", minVersion, feature)
-	}
-}
-
-func IsKernelLessThan(tb testing.TB, minVersion string) bool {
-	tb.Helper()
-
-	minv, err := internal.NewVersion(minVersion)
-	if err != nil {
-		tb.Fatalf("Invalid version %s: %s", minVersion, err)
-	}
-
-	return isKernelLessThan(tb, minv)
-}
-
-func isKernelLessThan(tb testing.TB, minv internal.Version) bool {
-	tb.Helper()
-
-	if max := os.Getenv("CI_MAX_KERNEL_VERSION"); max != "" {
+	if max := os.Getenv("CI_MAX_RUNTIME_VERSION"); max != "" {
 		maxv, err := internal.NewVersion(max)
 		if err != nil {
-			tb.Fatalf("Invalid version %q in CI_MAX_KERNEL_VERSION: %s", max, err)
+			tb.Fatalf("Invalid version %q in CI_MAX_RUNTIME_VERSION: %s", max, err)
 		}
 
 		if maxv.Less(minv) {
-			tb.Fatalf("Test for %s will never execute on CI since %s is the most recent kernel", minv, maxv)
+			tb.Fatalf("Test for %s will never execute on CI since %s is the most recent runtime", minv, maxv)
 		}
 	}
 
-	return kernelVersion(tb).Less(minv)
-}
-
-func kernelVersion(tb testing.TB) internal.Version {
-	tb.Helper()
-
-	v, err := linux.KernelVersion()
-	if err != nil {
-		tb.Fatal(err)
-	}
-	return v
+	return runv.Less(minv)
 }
 
 // ignoreVersionCheck checks whether to omit the version check for a test.

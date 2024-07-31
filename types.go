@@ -2,7 +2,6 @@ package ebpf
 
 import (
 	"github.com/cilium/ebpf/internal/sys"
-	"github.com/cilium/ebpf/internal/unix"
 )
 
 //go:generate go run golang.org/x/tools/cmd/stringer@latest -output types_string.go -type=MapType,ProgramType,PinType
@@ -263,10 +262,10 @@ func (lpo *LoadPinOptions) Marshal() uint32 {
 
 	flags := lpo.Flags
 	if lpo.ReadOnly {
-		flags |= unix.BPF_F_RDONLY
+		flags |= sys.BPF_F_RDONLY
 	}
 	if lpo.WriteOnly {
-		flags |= unix.BPF_F_WRONLY
+		flags |= sys.BPF_F_WRONLY
 	}
 	return flags
 }

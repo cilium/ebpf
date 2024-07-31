@@ -86,7 +86,7 @@ var haveMapMutabilityModifiers = internal.NewFeatureTest("read- and write-only m
 		KeySize:    4,
 		ValueSize:  4,
 		MaxEntries: 1,
-		MapFlags:   unix.BPF_F_RDONLY_PROG,
+		MapFlags:   sys.BPF_F_RDONLY_PROG,
 	})
 	if err != nil {
 		return internal.ErrNotSupported
@@ -102,7 +102,7 @@ var haveMmapableMaps = internal.NewFeatureTest("mmapable maps", "5.5", func() er
 		KeySize:    4,
 		ValueSize:  4,
 		MaxEntries: 1,
-		MapFlags:   unix.BPF_F_MMAPABLE,
+		MapFlags:   sys.BPF_F_MMAPABLE,
 	})
 	if err != nil {
 		return internal.ErrNotSupported
@@ -118,7 +118,7 @@ var haveInnerMaps = internal.NewFeatureTest("inner maps", "5.10", func() error {
 		KeySize:    4,
 		ValueSize:  4,
 		MaxEntries: 1,
-		MapFlags:   unix.BPF_F_INNER_MAP,
+		MapFlags:   sys.BPF_F_INNER_MAP,
 	})
 
 	if err != nil {
@@ -135,7 +135,7 @@ var haveNoPreallocMaps = internal.NewFeatureTest("prealloc maps", "4.6", func() 
 		KeySize:    4,
 		ValueSize:  4,
 		MaxEntries: 1,
-		MapFlags:   unix.BPF_F_NO_PREALLOC,
+		MapFlags:   sys.BPF_F_NO_PREALLOC,
 	})
 
 	if err != nil {

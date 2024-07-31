@@ -1139,7 +1139,7 @@ func (ec *elfCode) loadDataSections() error {
 		}
 
 		if strings.HasPrefix(sec.Name, ".rodata") {
-			mapSpec.Flags = unix.BPF_F_RDONLY_PROG
+			mapSpec.Flags = sys.BPF_F_RDONLY_PROG
 			mapSpec.Freeze = true
 		}
 
@@ -1175,7 +1175,7 @@ func (ec *elfCode) loadKconfigSection() error {
 		KeySize:    uint32(4),
 		ValueSize:  ds.Size,
 		MaxEntries: 1,
-		Flags:      unix.BPF_F_RDONLY_PROG,
+		Flags:      sys.BPF_F_RDONLY_PROG,
 		Freeze:     true,
 		Key:        &btf.Int{Size: 4},
 		Value:      ds,

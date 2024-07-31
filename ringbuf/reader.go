@@ -9,6 +9,7 @@ import (
 
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/internal/epoll"
+	"github.com/cilium/ebpf/internal/sys"
 	"github.com/cilium/ebpf/internal/unix"
 )
 
@@ -26,15 +27,15 @@ type ringbufHeader struct {
 }
 
 func (rh *ringbufHeader) isBusy() bool {
-	return rh.Len&unix.BPF_RINGBUF_BUSY_BIT != 0
+	return rh.Len&sys.BPF_RINGBUF_BUSY_BIT != 0
 }
 
 func (rh *ringbufHeader) isDiscard() bool {
-	return rh.Len&unix.BPF_RINGBUF_DISCARD_BIT != 0
+	return rh.Len&sys.BPF_RINGBUF_DISCARD_BIT != 0
 }
 
 func (rh *ringbufHeader) dataLen() int {
-	return int(rh.Len & ^uint32(unix.BPF_RINGBUF_BUSY_BIT|unix.BPF_RINGBUF_DISCARD_BIT))
+	return int(rh.Len & ^uint32(sys.BPF_RINGBUF_BUSY_BIT|sys.BPF_RINGBUF_DISCARD_BIT))
 }
 
 type Record struct {

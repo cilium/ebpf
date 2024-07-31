@@ -9,6 +9,7 @@ import (
 	"unsafe"
 
 	"github.com/cilium/ebpf/internal"
+	"github.com/cilium/ebpf/internal/sys"
 	"github.com/cilium/ebpf/internal/unix"
 )
 
@@ -85,7 +86,7 @@ func (rr *ringReader) readRecord(rec *Record) error {
 	for {
 		if remaining := prod - cons; remaining == 0 {
 			return errEOR
-		} else if remaining < unix.BPF_RINGBUF_HDR_SZ {
+		} else if remaining < sys.BPF_RINGBUF_HDR_SZ {
 			return fmt.Errorf("read record header: %w", io.ErrUnexpectedEOF)
 		}
 
@@ -104,7 +105,7 @@ func (rr *ringReader) readRecord(rec *Record) error {
 			return errBusy
 		}
 
-		cons += unix.BPF_RINGBUF_HDR_SZ
+		cons += sys.BPF_RINGBUF_HDR_SZ
 
 		// Data is always padded to 8 byte alignment.
 		dataLenAligned := uint64(internal.Align(header.dataLen(), 8))

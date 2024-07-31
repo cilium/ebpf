@@ -75,7 +75,6 @@ func generateTypes(spec *btf.Spec) ([]byte, error) {
 	typeID := &btf.Int{Size: 4}
 	pointer := &btf.Int{Size: 8}
 	logLevel := &btf.Int{Size: 4}
-	mapFlags := &btf.Int{Size: 4}
 
 	gf := &btf.GoFormatter{
 		Names: map[btf.Type]string{
@@ -85,7 +84,6 @@ func generateTypes(spec *btf.Spec) ([]byte, error) {
 			typeID:   internal.GoTypeName(sys.TypeID(0)),
 			pointer:  internal.GoTypeName(sys.Pointer{}),
 			logLevel: internal.GoTypeName(sys.LogLevel(0)),
-			mapFlags: internal.GoTypeName(sys.MapFlags(0)),
 		},
 		Identifier: internal.Identifier,
 		EnumIdentifier: func(name, element string) string {
@@ -104,6 +102,39 @@ import (
 
 `)
 
+	// Constants (aka unnamed enums)
+	var consts []btf.EnumValue
+	iter := spec.Iterate()
+	for iter.Next() {
+		e, ok := iter.Type.(*btf.Enum)
+		if !ok {
+			continue
+		}
+
+		if e.Name != "" {
+			continue
+		}
+
+		for _, value := range e.Values {
+			if strings.HasPrefix(value.Name, "BPF_") {
+				// Greedily take all values which start with BPF_
+				consts = append(consts, value)
+			}
+		}
+	}
+
+	sort.Slice(consts, func(i, j int) bool {
+		return consts[i].Name < consts[j].Name
+	})
+
+	w.WriteString("const (\n")
+	for _, c := range consts {
+		fmt.Println("const", c.Name)
+		fmt.Fprintf(w, "\t%s = %v\n", c.Name, c.Value)
+	}
+	w.WriteString(")\n")
+
+	// Typed constants (aka named enums)
 	enums := []struct {
 		goType string
 		cType  string
@@ -178,7 +209,6 @@ import (
 			"MapInfo", "bpf_map_info",
 			[]patch{
 				replace(objName, "name"),
-				replace(mapFlags, "map_flags"),
 				replace(typeID, "btf_vmlinux_value_type_id", "btf_key_type_id", "btf_value_type_id"),
 			},
 		},
@@ -241,7 +271,6 @@ import (
 			[]patch{
 				replace(objName, "map_name"),
 				replace(enumTypes["MapType"], "map_type"),
-				replace(mapFlags, "map_flags"),
 				replace(typeID, "btf_vmlinux_value_type_id", "btf_key_type_id", "btf_value_type_id"),
 			},
 		},

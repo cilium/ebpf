@@ -66,7 +66,7 @@ type MapSpec struct {
 	Pinning PinType
 
 	// Specify numa node during map creation
-	// (effective only if unix.BPF_F_NUMA_NODE flag is set,
+	// (effective only if sys.BPF_F_NUMA_NODE flag is set,
 	// which can be imported from golang.org/x/sys/unix)
 	NumaNode uint32
 
@@ -222,7 +222,7 @@ func (ms *MapSpec) Compatible(m *Map) error {
 
 	// BPF_F_RDONLY_PROG is set unconditionally for devmaps. Explicitly allow this
 	// mismatch.
-	if !((ms.Type == DevMap || ms.Type == DevMapHash) && m.flags^ms.Flags == unix.BPF_F_RDONLY_PROG) &&
+	if !((ms.Type == DevMap || ms.Type == DevMapHash) && m.flags^ms.Flags == sys.BPF_F_RDONLY_PROG) &&
 		m.flags != ms.Flags {
 		diffs = append(diffs, fmt.Sprintf("Flags: %d changed to %d", m.flags, ms.Flags))
 	}
@@ -416,7 +416,7 @@ func (spec *MapSpec) createMap(inner *sys.FD, opts MapOptions) (_ *Map, err erro
 		KeySize:    spec.KeySize,
 		ValueSize:  spec.ValueSize,
 		MaxEntries: spec.MaxEntries,
-		MapFlags:   sys.MapFlags(spec.Flags),
+		MapFlags:   spec.Flags,
 		NumaNode:   spec.NumaNode,
 	}
 
@@ -474,7 +474,7 @@ func handleMapCreateError(attr sys.MapCreateAttr, spec *MapSpec, err error) erro
 	if errors.Is(err, unix.EINVAL) && spec.Type == UnspecifiedMap {
 		return fmt.Errorf("map create: cannot use type %s", UnspecifiedMap)
 	}
-	if errors.Is(err, unix.EINVAL) && spec.Flags&unix.BPF_F_NO_PREALLOC > 0 {
+	if errors.Is(err, unix.EINVAL) && spec.Flags&sys.BPF_F_NO_PREALLOC > 0 {
 		return fmt.Errorf("map create: %w (noPrealloc flag may be incompatible with map type %s)", err, spec.Type)
 	}
 
@@ -484,22 +484,22 @@ func handleMapCreateError(attr sys.MapCreateAttr, spec *MapSpec, err error) erro
 			return fmt.Errorf("map create: %w", haveFeatErr)
 		}
 	}
-	if spec.Flags&(unix.BPF_F_RDONLY_PROG|unix.BPF_F_WRONLY_PROG) > 0 || spec.Freeze {
+	if spec.Flags&(sys.BPF_F_RDONLY_PROG|sys.BPF_F_WRONLY_PROG) > 0 || spec.Freeze {
 		if haveFeatErr := haveMapMutabilityModifiers(); haveFeatErr != nil {
 			return fmt.Errorf("map create: %w", haveFeatErr)
 		}
 	}
-	if spec.Flags&unix.BPF_F_MMAPABLE > 0 {
+	if spec.Flags&sys.BPF_F_MMAPABLE > 0 {
 		if haveFeatErr := haveMmapableMaps(); haveFeatErr != nil {
 			return fmt.Errorf("map create: %w", haveFeatErr)
 		}
 	}
-	if spec.Flags&unix.BPF_F_INNER_MAP > 0 {
+	if spec.Flags&sys.BPF_F_INNER_MAP > 0 {
 		if haveFeatErr := haveInnerMaps(); haveFeatErr != nil {
 			return fmt.Errorf("map create: %w", haveFeatErr)
 		}
 	}
-	if spec.Flags&unix.BPF_F_NO_PREALLOC > 0 {
+	if spec.Flags&sys.BPF_F_NO_PREALLOC > 0 {
 		if haveFeatErr := haveNoPreallocMaps(); haveFeatErr != nil {
 			return fmt.Errorf("map create: %w", haveFeatErr)
 		}
@@ -604,7 +604,7 @@ func (m *Map) Handle() (*btf.Handle, error) {
 type MapLookupFlags uint64
 
 // LookupLock look up the value of a spin-locked map.
-const LookupLock MapLookupFlags = unix.BPF_F_LOCK
+const LookupLock MapLookupFlags = sys.BPF_F_LOCK
 
 // Lookup retrieves a value from a Map.
 //

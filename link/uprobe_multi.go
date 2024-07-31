@@ -47,7 +47,7 @@ func (ex *Executable) UretprobeMulti(symbols []string, prog *ebpf.Program, opts 
 	// The return probe is not limited for symbols entry, so there's no special
 	// setup for return uprobes (other than the extra flag). The symbols, opts.Offsets
 	// and opts.Addresses arrays follow the same logic as for entry uprobes.
-	return ex.uprobeMulti(symbols, prog, opts, unix.BPF_F_UPROBE_MULTI_RETURN)
+	return ex.uprobeMulti(symbols, prog, opts, sys.BPF_F_UPROBE_MULTI_RETURN)
 }
 
 func (ex *Executable) uprobeMulti(symbols []string, prog *ebpf.Program, opts *UprobeMultiOptions, flags uint32) (Link, error) {

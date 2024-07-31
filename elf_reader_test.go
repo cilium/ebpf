@@ -14,6 +14,7 @@ import (
 
 	"github.com/cilium/ebpf/btf"
 	"github.com/cilium/ebpf/internal"
+	"github.com/cilium/ebpf/internal/sys"
 	"github.com/cilium/ebpf/internal/testutils"
 	"github.com/cilium/ebpf/internal/unix"
 
@@ -32,7 +33,7 @@ func TestLoadCollectionSpec(t *testing.T) {
 				KeySize:    4,
 				ValueSize:  8,
 				MaxEntries: 1,
-				Flags:      unix.BPF_F_NO_PREALLOC,
+				Flags:      sys.BPF_F_NO_PREALLOC,
 			},
 			"hash_map2": {
 				Name:       "hash_map2",
@@ -486,7 +487,7 @@ func TestStringSection(t *testing.T) {
 		t.Fatal("Read only data maps should be frozen")
 	}
 
-	if strMap.Flags != unix.BPF_F_RDONLY_PROG {
+	if strMap.Flags != sys.BPF_F_RDONLY_PROG {
 		t.Fatal("Read only data maps should have the prog-read-only flag set")
 	}
 

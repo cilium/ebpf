@@ -60,7 +60,7 @@ func KprobeMulti(prog *ebpf.Program, opts KprobeMultiOptions) (Link, error) {
 //
 // Requires at least Linux 5.18.
 func KretprobeMulti(prog *ebpf.Program, opts KprobeMultiOptions) (Link, error) {
-	return kprobeMulti(prog, opts, unix.BPF_F_KPROBE_MULTI_RETURN)
+	return kprobeMulti(prog, opts, sys.BPF_F_KPROBE_MULTI_RETURN)
 }
 
 func kprobeMulti(prog *ebpf.Program, opts KprobeMultiOptions, flags uint32) (Link, error) {

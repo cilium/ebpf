@@ -25,7 +25,7 @@ func TestMapInfoFromProc(t *testing.T) {
 		KeySize:    4,
 		ValueSize:  5,
 		MaxEntries: 2,
-		Flags:      unix.BPF_F_NO_PREALLOC,
+		Flags:      sys.BPF_F_NO_PREALLOC,
 	})
 	testutils.SkipIfNotSupported(t, err)
 	if err != nil {
@@ -55,8 +55,8 @@ func TestMapInfoFromProc(t *testing.T) {
 		t.Error("Expected MaxEntries of 2, got", info.MaxEntries)
 	}
 
-	if info.Flags != unix.BPF_F_NO_PREALLOC {
-		t.Errorf("Expected Flags to be %d, got %d", unix.BPF_F_NO_PREALLOC, info.Flags)
+	if info.Flags != sys.BPF_F_NO_PREALLOC {
+		t.Errorf("Expected Flags to be %d, got %d", sys.BPF_F_NO_PREALLOC, info.Flags)
 	}
 
 	if info.Name != "" && info.Name != "testing" {

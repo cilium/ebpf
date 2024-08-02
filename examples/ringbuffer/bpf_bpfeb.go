@@ -14,7 +14,7 @@ import (
 
 type bpfEvent struct {
 	Pid  uint32
-	Comm [80]uint8
+	Comm [16]uint8
 }
 
 // loadBpf returns the embedded CollectionSpec for bpf.

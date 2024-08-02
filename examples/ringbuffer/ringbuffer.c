@@ -2,11 +2,15 @@
 
 #include "common.h"
 
+#ifndef TASK_COMM_LEN
+#define TASK_COMM_LEN 16
+#endif
+
 char __license[] SEC("license") = "Dual MIT/GPL";
 
 struct event {
 	u32 pid;
-	u8 comm[80];
+	u8 comm[TASK_COMM_LEN];
 };
 
 struct {
@@ -29,7 +33,7 @@ int kprobe_execve(struct pt_regs *ctx) {
 	}
 
 	task_info->pid = tgid;
-	bpf_get_current_comm(&task_info->comm, 80);
+	bpf_get_current_comm(&task_info->comm, TASK_COMM_LEN);
 
 	bpf_ringbuf_submit(task_info, 0);
 

@@ -11,6 +11,7 @@ import (
 
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/asm"
+	"github.com/cilium/ebpf/internal/sys"
 	"github.com/cilium/ebpf/internal/testutils"
 	"github.com/cilium/ebpf/internal/tracefs"
 	"github.com/cilium/ebpf/internal/unix"
@@ -105,7 +106,7 @@ func TestKretprobe(t *testing.T) {
 	}
 
 	k, err := Kretprobe("bogus", prog, nil)
-	if !(errors.Is(err, os.ErrNotExist) || errors.Is(err, unix.EINVAL)) {
+	if !(errors.Is(err, os.ErrNotExist) || errors.Is(err, sys.EINVAL)) {
 		t.Fatal(err)
 	}
 	if k != nil {
@@ -232,7 +233,7 @@ func TestKprobeTraceFS(t *testing.T) {
 	// of ENOENT, but only for kretprobes.
 	args.Ret = true
 	_, err = tracefs.NewEvent(args)
-	if !(errors.Is(err, os.ErrNotExist) || errors.Is(err, unix.EINVAL)) {
+	if !(errors.Is(err, os.ErrNotExist) || errors.Is(err, sys.EINVAL)) {
 		t.Fatal(err)
 	}
 }

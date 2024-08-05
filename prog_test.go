@@ -384,7 +384,7 @@ func TestProgramLoadPinnedWithFlags(t *testing.T) {
 		Flags: math.MaxUint32,
 	})
 	testutils.SkipIfNotSupported(t, err)
-	if !errors.Is(err, unix.EINVAL) {
+	if !errors.Is(err, sys.EINVAL) {
 		t.Fatal("Invalid flags don't trigger an error:", err)
 	}
 }
@@ -998,7 +998,7 @@ func BenchmarkNewProgram(b *testing.B) {
 
 	for i := 0; i < b.N; i++ {
 		_, err := NewProgram(spec.Programs["benchmark"])
-		if !errors.Is(err, unix.EACCES) {
+		if !errors.Is(err, sys.EACCES) {
 			b.Fatal("Unexpected error:", err)
 		}
 	}

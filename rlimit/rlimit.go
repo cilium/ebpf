@@ -80,7 +80,7 @@ func detectMemcgAccounting() error {
 	}
 
 	// EPERM shows up when map creation would exceed the memory budget.
-	if errors.Is(mapErr, unix.EPERM) {
+	if errors.Is(mapErr, sys.EPERM) {
 		return unsupportedMemcgAccounting
 	}
 

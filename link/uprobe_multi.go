@@ -12,7 +12,6 @@ import (
 	"github.com/cilium/ebpf/asm"
 	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/sys"
-	"github.com/cilium/ebpf/internal/unix"
 )
 
 // UprobeMultiOptions defines additional parameters that will be used
@@ -98,10 +97,10 @@ func (ex *Executable) uprobeMulti(symbols []string, prog *ebpf.Program, opts *Up
 	}
 
 	fd, err := sys.LinkCreateUprobeMulti(attr)
-	if errors.Is(err, unix.ESRCH) {
+	if errors.Is(err, sys.ESRCH) {
 		return nil, fmt.Errorf("%w (specified pid not found?)", os.ErrNotExist)
 	}
-	if errors.Is(err, unix.EINVAL) {
+	if errors.Is(err, sys.EINVAL) {
 		return nil, fmt.Errorf("%w (missing symbol or prog's AttachType not AttachTraceUprobeMulti?)", err)
 	}
 
@@ -185,7 +184,7 @@ var haveBPFLinkUprobeMulti = internal.NewFeatureTest("bpf_link_uprobe_multi", "6
 		AttachType: ebpf.AttachTraceUprobeMulti,
 		License:    "MIT",
 	})
-	if errors.Is(err, unix.E2BIG) {
+	if errors.Is(err, sys.E2BIG) {
 		// Kernel doesn't support AttachType field.
 		return internal.ErrNotSupported
 	}
@@ -204,9 +203,9 @@ var haveBPFLinkUprobeMulti = internal.NewFeatureTest("bpf_link_uprobe_multi", "6
 		Count:      1,
 	})
 	switch {
-	case errors.Is(err, unix.EBADF):
+	case errors.Is(err, sys.EBADF):
 		return nil
-	case errors.Is(err, unix.EINVAL):
+	case errors.Is(err, sys.EINVAL):
 		return internal.ErrNotSupported
 	case err != nil:
 		return err

@@ -17,7 +17,6 @@ import (
 	"github.com/cilium/ebpf/btf"
 	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/sys"
-	"github.com/cilium/ebpf/internal/unix"
 )
 
 // The *Info structs expose metadata about a program or map. Most
@@ -349,7 +348,7 @@ func (pi *ProgramInfo) Instructions() (asm.Instructions, error) {
 		if err != nil {
 			// Getting a BTF handle requires CAP_SYS_ADMIN, if not available we get an -EPERM.
 			// Ignore it and fall back to instructions without metadata.
-			if !errors.Is(err, unix.EPERM) {
+			if !errors.Is(err, sys.EPERM) {
 				return nil, fmt.Errorf("unable to get BTF handle: %w", err)
 			}
 		}
@@ -534,11 +533,11 @@ var haveProgramInfoMapIDs = internal.NewFeatureTest("map IDs in program info", "
 		// any maps.
 		NrMapIds: 1,
 	})
-	if errors.Is(err, unix.EINVAL) {
+	if errors.Is(err, sys.EINVAL) {
 		// Most likely the syscall doesn't exist.
 		return internal.ErrNotSupported
 	}
-	if errors.Is(err, unix.E2BIG) {
+	if errors.Is(err, sys.E2BIG) {
 		// We've hit check_uarg_tail_zero on older kernels.
 		return internal.ErrNotSupported
 	}

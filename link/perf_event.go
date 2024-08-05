@@ -324,10 +324,10 @@ var haveBPFLinkPerfEvent = internal.NewFeatureTest("bpf_link_perf_event", "5.15"
 		ProgFd:     uint32(prog.FD()),
 		AttachType: sys.BPF_PERF_EVENT,
 	})
-	if errors.Is(err, unix.EINVAL) {
+	if errors.Is(err, sys.EINVAL) {
 		return internal.ErrNotSupported
 	}
-	if errors.Is(err, unix.EBADF) {
+	if errors.Is(err, sys.EBADF) {
 		return nil
 	}
 	return err

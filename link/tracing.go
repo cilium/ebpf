@@ -9,7 +9,6 @@ import (
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/btf"
 	"github.com/cilium/ebpf/internal/sys"
-	"github.com/cilium/ebpf/internal/unix"
 )
 
 type tracing struct {
@@ -152,7 +151,7 @@ func attachBTFID(program *ebpf.Program, at ebpf.AttachType, cookie uint64) (Link
 		if err == nil {
 			break
 		}
-		if !errors.Is(err, unix.EINVAL) && !errors.Is(err, sys.ENOTSUPP) {
+		if !errors.Is(err, sys.EINVAL) && !errors.Is(err, sys.ENOTSUPP) {
 			return nil, fmt.Errorf("create tracing link: %w", err)
 		}
 		fallthrough

@@ -19,7 +19,6 @@ import (
 	"github.com/cilium/ebpf/internal/linux"
 	"github.com/cilium/ebpf/internal/sys"
 	"github.com/cilium/ebpf/internal/sysenc"
-	"github.com/cilium/ebpf/internal/unix"
 )
 
 // ErrNotSupported is returned whenever the kernel doesn't support a feature.
@@ -412,7 +411,7 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions) (*Program, er
 			break
 		}
 
-		if attr.LogSize != 0 && !errors.Is(err, unix.ENOSPC) {
+		if attr.LogSize != 0 && !errors.Is(err, sys.ENOSPC) {
 			// Logging is enabled and the error is not ENOSPC, so we can infer
 			// that the log buffer is large enough.
 			break
@@ -448,14 +447,14 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions) (*Program, er
 
 	tail := logBuf[max(end-256, 0):end]
 	switch {
-	case errors.Is(err, unix.EPERM):
+	case errors.Is(err, sys.EPERM):
 		if len(logBuf) > 0 && logBuf[0] == 0 {
 			// EPERM due to RLIMIT_MEMLOCK happens before the verifier, so we can
 			// check that the log is empty to reduce false positives.
 			return nil, fmt.Errorf("load program: %w (MEMLOCK may be too low, consider rlimit.RemoveMemlock)", err)
 		}
 
-	case errors.Is(err, unix.EINVAL):
+	case errors.Is(err, sys.EINVAL):
 		if bytes.Contains(tail, coreBadCall) {
 			err = errBadRelocation
 			break
@@ -464,7 +463,7 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions) (*Program, er
 			break
 		}
 
-	case errors.Is(err, unix.EACCES):
+	case errors.Is(err, sys.EACCES):
 		if bytes.Contains(tail, coreBadLoad) {
 			err = errBadRelocation
 			break
@@ -472,7 +471,7 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions) (*Program, er
 	}
 
 	// hasFunctionReferences may be expensive, so check it last.
-	if (errors.Is(err, unix.EINVAL) || errors.Is(err, unix.EPERM)) &&
+	if (errors.Is(err, sys.EINVAL) || errors.Is(err, sys.EPERM)) &&
 		hasFunctionReferences(spec.Instructions) {
 		if err := haveBPFToBPFCalls(); err != nil {
 			return nil, fmt.Errorf("load program: %w", err)
@@ -750,12 +749,12 @@ var haveProgRun = internal.NewFeatureTest("BPF_PROG_RUN", "4.12", func() error {
 
 	err = sys.ProgRun(&attr)
 	switch {
-	case errors.Is(err, unix.EINVAL):
+	case errors.Is(err, sys.EINVAL):
 		// Check for EINVAL specifically, rather than err != nil since we
 		// otherwise misdetect due to insufficient permissions.
 		return internal.ErrNotSupported
 
-	case errors.Is(err, unix.EINTR):
+	case errors.Is(err, sys.EINTR):
 		// We know that PROG_TEST_RUN is supported if we get EINTR.
 		return nil
 
@@ -814,7 +813,7 @@ retry:
 			break retry
 		}
 
-		if errors.Is(err, unix.EINTR) {
+		if errors.Is(err, sys.EINTR) {
 			if attr.Repeat <= 1 {
 				// Older kernels check whether enough repetitions have been
 				// executed only after checking for pending signals.

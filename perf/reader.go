@@ -219,7 +219,7 @@ func NewReaderWithOptions(array *ebpf.Map, perCPUBuffer int, opts ReaderOptions)
 	bufferSize := 0
 	for i := 0; i < nCPU; i++ {
 		event, ring, err := newPerfEventRing(i, perCPUBuffer, opts)
-		if errors.Is(err, unix.ENODEV) {
+		if errors.Is(err, sys.ENODEV) {
 			// The requested CPU is currently offline, skip it.
 			continue
 		}

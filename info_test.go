@@ -90,7 +90,7 @@ func TestMapInfoFromProc(t *testing.T) {
 }
 
 func TestProgramInfo(t *testing.T) {
-	prog := mustSocketFilter(t)
+	prog := mustBasicProgram(t)
 
 	for name, fn := range map[string]func(*sys.FD) (*ProgramInfo, error){
 		"generic": newProgramInfoFromFd,
@@ -103,8 +103,8 @@ func TestProgramInfo(t *testing.T) {
 				t.Fatal("Can't get program info:", err)
 			}
 
-			if info.Type != SocketFilter {
-				t.Error("Expected Type to be SocketFilter, got", info.Type)
+			if info.Type != basicProgramType {
+				t.Errorf("Expected Type to be %s, got %s", basicProgramType, info.Type)
 			}
 
 			if info.Name != "" && info.Name != "test" {
@@ -221,16 +221,7 @@ func TestProgramInfoMapIDs(t *testing.T) {
 }
 
 func TestProgramInfoMapIDsNoMaps(t *testing.T) {
-	prog, err := NewProgram(&ProgramSpec{
-		Type: SocketFilter,
-		Instructions: asm.Instructions{
-			asm.LoadImm(asm.R0, 0, asm.DWord),
-			asm.Return(),
-		},
-		License: "MIT",
-	})
-	qt.Assert(t, qt.IsNil(err))
-	defer prog.Close()
+	prog := mustBasicProgram(t)
 
 	info, err := prog.Info()
 	testutils.SkipIfNotSupported(t, err)
@@ -278,7 +269,7 @@ func TestScanFdInfoReader(t *testing.T) {
 func TestStats(t *testing.T) {
 	testutils.SkipOnOldKernel(t, "5.8", "BPF_ENABLE_STATS")
 
-	prog := mustSocketFilter(t)
+	prog := mustBasicProgram(t)
 
 	pi, err := prog.Info()
 	if err != nil {
@@ -318,7 +309,7 @@ func TestStats(t *testing.T) {
 func BenchmarkStats(b *testing.B) {
 	testutils.SkipOnOldKernel(b, "5.8", "BPF_ENABLE_STATS")
 
-	prog := mustSocketFilter(b)
+	prog := mustBasicProgram(b)
 
 	for n := 0; n < b.N; n++ {
 		if err := testStats(prog); err != nil {

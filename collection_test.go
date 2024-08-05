@@ -34,7 +34,7 @@ func TestCollectionSpecNotModified(t *testing.T) {
 		},
 		Programs: map[string]*ProgramSpec{
 			"test": {
-				Type: SocketFilter,
+				Type: basicProgramType,
 				Instructions: asm.Instructions{
 					asm.LoadImm(asm.R1, 0, asm.DWord).WithReference("my-map"),
 					asm.LoadImm(asm.R0, 0, asm.DWord),
@@ -68,7 +68,7 @@ func TestCollectionSpecCopy(t *testing.T) {
 		},
 		map[string]*ProgramSpec{
 			"test": {
-				Type: SocketFilter,
+				Type: basicProgramType,
 				Instructions: asm.Instructions{
 					asm.LoadMapPtr(asm.R1, 0),
 					asm.LoadImm(asm.R0, 0, asm.DWord),
@@ -137,7 +137,7 @@ func TestCollectionSpecRewriteMaps(t *testing.T) {
 		},
 		Programs: map[string]*ProgramSpec{
 			"test-prog": {
-				Type:         SocketFilter,
+				Type:         basicProgramType,
 				Instructions: insns,
 				License:      "MIT",
 			},
@@ -210,7 +210,7 @@ func TestCollectionSpecMapReplacements(t *testing.T) {
 		},
 		Programs: map[string]*ProgramSpec{
 			"test-prog": {
-				Type:         SocketFilter,
+				Type:         basicProgramType,
 				Instructions: insns,
 				License:      "MIT",
 			},
@@ -387,7 +387,7 @@ func TestCollectionSpec_LoadAndAssign_LazyLoading(t *testing.T) {
 		},
 		Programs: map[string]*ProgramSpec{
 			"valid": {
-				Type: SocketFilter,
+				Type: basicProgramType,
 				Instructions: asm.Instructions{
 					asm.LoadImm(asm.R0, 0, asm.DWord),
 					asm.Return(),
@@ -395,7 +395,7 @@ func TestCollectionSpec_LoadAndAssign_LazyLoading(t *testing.T) {
 				License: "MIT",
 			},
 			"bogus": {
-				Type: SocketFilter,
+				Type: basicProgramType,
 				Instructions: asm.Instructions{
 					// Undefined return value is rejected
 					asm.Return(),
@@ -438,7 +438,7 @@ func TestCollectionSpecAssign(t *testing.T) {
 		MaxEntries: 1,
 	}
 	progSpec := &ProgramSpec{
-		Type: SocketFilter,
+		Type: basicProgramType,
 		Instructions: asm.Instructions{
 			asm.LoadImm(asm.R0, 0, asm.DWord),
 			asm.Return(),
@@ -567,7 +567,7 @@ func TestCollectionAssign(t *testing.T) {
 		},
 		Programs: map[string]*ProgramSpec{
 			"prog1": {
-				Type: SocketFilter,
+				Type: basicProgramType,
 				Instructions: asm.Instructions{
 					asm.LoadImm(asm.R0, 0, asm.DWord),
 					asm.Return(),
@@ -612,7 +612,7 @@ func TestCollectionAssignFail(t *testing.T) {
 		},
 		Programs: map[string]*ProgramSpec{
 			"prog1": {
-				Type: SocketFilter,
+				Type: basicProgramType,
 				Instructions: asm.Instructions{
 					asm.LoadImm(asm.R0, 0, asm.DWord),
 					asm.Return(),
@@ -637,7 +637,7 @@ func TestIncompleteLoadAndAssign(t *testing.T) {
 	spec := &CollectionSpec{
 		Programs: map[string]*ProgramSpec{
 			"valid": {
-				Type: SocketFilter,
+				Type: basicProgramType,
 				Instructions: asm.Instructions{
 					asm.LoadImm(asm.R0, 0, asm.DWord),
 					asm.Return(),
@@ -645,7 +645,7 @@ func TestIncompleteLoadAndAssign(t *testing.T) {
 				License: "MIT",
 			},
 			"invalid": {
-				Type: SocketFilter,
+				Type: basicProgramType,
 				Instructions: asm.Instructions{
 					asm.Return(),
 				},
@@ -754,7 +754,7 @@ func ExampleCollectionSpec_Assign() {
 		},
 		Programs: map[string]*ProgramSpec{
 			"prog1": {
-				Type: SocketFilter,
+				Type: basicProgramType,
 				Instructions: asm.Instructions{
 					asm.LoadImm(asm.R0, 0, asm.DWord),
 					asm.Return(),
@@ -796,7 +796,7 @@ func ExampleCollectionSpec_LoadAndAssign() {
 		},
 		Programs: map[string]*ProgramSpec{
 			"prog1": {
-				Type: SocketFilter,
+				Type: basicProgramType,
 				Instructions: asm.Instructions{
 					asm.LoadImm(asm.R0, 0, asm.DWord),
 					asm.Return(),

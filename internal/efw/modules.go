@@ -65,3 +65,15 @@ func CallFd(proc *windows.LazyProc, args ...uintptr) (FD, error) {
 	res, _, _ := proc.Call(args...)
 	return FD(res), nil
 }
+
+// Call a function which returns a pointer to C managed memory.
+//
+//go:uintptrescapes
+func CallPointer(proc *windows.LazyProc, args ...uintptr) (uintptr, error) {
+	if err := proc.Find(); err != nil {
+		return 0, fmt.Errorf("%s: %w", proc.Name, err)
+	}
+
+	res, _, _ := proc.Call(args...)
+	return res, nil
+}

@@ -59,10 +59,6 @@ func TestHaveBPFToBPFCalls(t *testing.T) {
 	testutils.CheckFeatureTest(t, haveBPFToBPFCalls)
 }
 
-func TestHaveSyscallWrapper(t *testing.T) {
-	testutils.CheckFeatureTest(t, haveSyscallWrapper)
-}
-
 func TestHaveProgramExtInfos(t *testing.T) {
 	testutils.CheckFeatureTest(t, haveProgramExtInfos)
 }

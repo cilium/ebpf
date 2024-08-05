@@ -2,6 +2,7 @@ package ebpf
 
 import (
 	"errors"
+	"runtime"
 	"testing"
 
 	"github.com/cilium/ebpf/btf"
@@ -10,6 +11,11 @@ import (
 
 func haveTestmod(tb testing.TB) bool {
 	haveTestmod := false
+
+	if runtime.GOOS == "windows" {
+		return false
+	}
+
 	if !testutils.IsKernelLessThan(tb, "5.11") {
 		// See https://github.com/torvalds/linux/commit/290248a5b7d829871b3ea3c62578613a580a1744
 		testmod, err := btf.FindHandle(func(info *btf.HandleInfo) bool {

@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"runtime"
 	"strings"
 	"syscall"
 	"time"
@@ -53,7 +54,7 @@ type MapInfo struct {
 func newMapInfoFromFd(fd *sys.FD) (*MapInfo, error) {
 	var info sys.MapInfo
 	err := sys.ObjInfo(fd, &info)
-	if errors.Is(err, syscall.EINVAL) {
+	if errors.Is(err, syscall.EINVAL) && runtime.GOOS == "linux" {
 		return newMapInfoFromProc(fd)
 	}
 	if err != nil {

@@ -18,6 +18,8 @@ import (
 	"github.com/cilium/ebpf/internal/unix"
 )
 
+const ringbufHeaderSize = 8
+
 type sampleMessage struct {
 	size  int
 	flags int32
@@ -50,6 +52,15 @@ func TestRingbufReader(t *testing.T) {
 				15: {1, 2, 3, 4, 4, 3, 2, 1, 1, 2, 3, 4, 4, 3, 2},
 			},
 		},
+		{
+			name:     "send five samples, every even is discarded",
+			messages: []sampleMessage{{size: 5}, {size: 10}, {size: 15}, {size: 20}, {size: 25}},
+			want: map[int][]byte{
+				5:  {1, 2, 3, 4, 4},
+				15: {1, 2, 3, 4, 4, 3, 2, 1, 1, 2, 3, 4, 4, 3, 2},
+				25: {1, 2, 3, 4, 4, 3, 2, 1, 1, 2, 3, 4, 4, 3, 2, 1, 1, 2, 3, 4, 4, 3, 2, 1, 1},
+			},
+		},
 	}
 	for _, tt := range readerTests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -60,6 +71,8 @@ func TestRingbufReader(t *testing.T) {
 				t.Fatal(err)
 			}
 			defer rd.Close()
+
+			qt.Assert(t, qt.Equals(rd.AvailableData(), 0))
 
 			if uint32(rd.BufferSize()) != events.MaxEntries() {
 				t.Errorf("expected %d BufferSize, got %d", events.MaxEntries(), rd.BufferSize())
@@ -74,6 +87,12 @@ func TestRingbufReader(t *testing.T) {
 			if errno := syscall.Errno(-int32(ret)); errno != 0 {
 				t.Fatal("Expected 0 as return value, got", errno)
 			}
+
+			var availableData int
+			for _, m := range tt.messages {
+				availableData += internal.Align(m.size, 8) + ringbufHeaderSize
+			}
+			qt.Assert(t, qt.Equals(rd.AvailableData(), availableData))
 
 			raw := make(map[int][]byte)
 
@@ -269,11 +288,15 @@ func TestReaderNoWakeup(t *testing.T) {
 	}
 	defer rd.Close()
 
+	qt.Assert(t, qt.Equals(rd.AvailableData(), 0))
+
 	ret, _, err := prog.Test(internal.EmptyBPFContext)
 	testutils.SkipIfNotSupported(t, err)
 	if err != nil {
 		t.Fatal(err)
 	}
+
+	qt.Assert(t, qt.Equals(rd.AvailableData(), 3*16))
 
 	if errno := syscall.Errno(-int32(ret)); errno != 0 {
 		t.Fatal("Expected 0 as return value, got", errno)
@@ -289,6 +312,8 @@ func TestReaderNoWakeup(t *testing.T) {
 		t.Errorf("Expected to read 5 bytes but got %d", len(record.RawSample))
 	}
 
+	qt.Assert(t, qt.Equals(rd.AvailableData(), 2*16))
+
 	record, err = rd.Read()
 
 	if err != nil {
@@ -297,6 +322,8 @@ func TestReaderNoWakeup(t *testing.T) {
 	if len(record.RawSample) != 7 {
 		t.Errorf("Expected to read 7 bytes but got %d", len(record.RawSample))
 	}
+
+	qt.Assert(t, qt.Equals(rd.AvailableData(), 0))
 
 	_, err = rd.Read()
 	if !errors.Is(err, os.ErrDeadlineExceeded) {

@@ -77,6 +77,13 @@ func (rr *ringReader) size() int {
 	return cap(rr.ring) / 2
 }
 
+// The amount of data available to read in the ring buffer.
+func (rr *ringReader) availableData() uint64 {
+	prod := atomic.LoadUint64(rr.prod_pos)
+	cons := atomic.LoadUint64(rr.cons_pos)
+	return prod - cons
+}
+
 // Read a record from an event ring.
 func (rr *ringReader) readRecord(rec *Record) error {
 	prod := atomic.LoadUint64(rr.prod_pos)

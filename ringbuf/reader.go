@@ -6,6 +6,7 @@ import (
 	"os"
 	"sync"
 	"time"
+	"unsafe"
 
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/internal/epoll"
@@ -25,6 +26,8 @@ type ringbufHeader struct {
 	Len uint32
 	_   uint32 // pg_off, only used by kernel internals
 }
+
+const ringbufHeaderSize = int(unsafe.Sizeof(ringbufHeader{}))
 
 func (rh *ringbufHeader) isBusy() bool {
 	return rh.Len&sys.BPF_RINGBUF_BUSY_BIT != 0
@@ -195,4 +198,11 @@ func (r *Reader) BufferSize() int {
 // until you receive a ErrFlushed error.
 func (r *Reader) Flush() error {
 	return r.poller.Flush()
+}
+
+// AvailableBytes returns the amount of data available to read in the ring buffer in bytes.
+func (r *Reader) AvailableBytes() int {
+	// Don't need to acquire the lock here since the implementation of AvailableBytes
+	// performs atomic loads on the producer and consumer positions.
+	return int(r.ring.AvailableBytes())
 }

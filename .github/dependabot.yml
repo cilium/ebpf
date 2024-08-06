@@ -12,6 +12,7 @@ updates:
         dependency-type: "direct"
     groups:
       docs:
+        dependency-type: production
         applies-to: version-updates
   - package-ecosystem: "github-actions"
     directory: "/"

@@ -1,3 +1,5 @@
+//go:build linux
+
 // This program demonstrates attaching an eBPF program to a control group.
 // The eBPF program will be attached as an egress filter,
 // receiving an `__sk_buff` pointer for each outgoing packet.
@@ -17,7 +19,7 @@ import (
 	"github.com/cilium/ebpf/rlimit"
 )
 
-//go:generate go run github.com/cilium/ebpf/cmd/bpf2go bpf cgroup_skb.c -- -I../headers
+//go:generate go run github.com/cilium/ebpf/cmd/bpf2go -tags linux bpf cgroup_skb.c -- -I../headers
 
 func main() {
 	// Allow the current process to lock memory for eBPF resources.

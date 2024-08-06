@@ -1,3 +1,5 @@
+//go:build linux
+
 // This program demonstrates how to attach an eBPF program to a tracepoint.
 // The program is attached to the syscall/sys_enter_openat tracepoint and
 // prints out the integer 123 every time the syscall is entered.

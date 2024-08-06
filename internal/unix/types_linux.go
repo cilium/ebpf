@@ -81,6 +81,7 @@ const (
 	SO_DETACH_BPF             = linux.SO_DETACH_BPF
 	SOL_SOCKET                = linux.SOL_SOCKET
 	SIGPROF                   = linux.SIGPROF
+	SIGUSR1                   = linux.SIGUSR1
 	SIG_BLOCK                 = linux.SIG_BLOCK
 	SIG_UNBLOCK               = linux.SIG_UNBLOCK
 	BPF_FS_MAGIC              = linux.BPF_FS_MAGIC

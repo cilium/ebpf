@@ -133,12 +133,12 @@ func ObjInfo(fd *FD, info Info) error {
 
 // BPFObjName is a null-terminated string made up of
 // 'A-Za-z0-9_' characters.
-type ObjName [unix.BPF_OBJ_NAME_LEN]byte
+type ObjName [BPF_OBJ_NAME_LEN]byte
 
 // NewObjName truncates the result if it is too long.
 func NewObjName(name string) ObjName {
 	var result ObjName
-	copy(result[:unix.BPF_OBJ_NAME_LEN-1], name)
+	copy(result[:BPF_OBJ_NAME_LEN-1], name)
 	return result
 }
 
@@ -168,6 +168,16 @@ const (
 	BPF_F_ID
 	BPF_F_LINK_MPROG = 1 << 13 // aka BPF_F_LINK
 )
+
+// Flags used by BPF_PROG_LOAD.
+const (
+	BPF_F_SLEEPABLE          = 1 << 4
+	BPF_F_XDP_HAS_FRAGS      = 1 << 5
+	BPF_F_XDP_DEV_BOUND_ONLY = 1 << 6
+)
+
+const BPF_TAG_SIZE = 8
+const BPF_OBJ_NAME_LEN = 16
 
 // wrappedErrno wraps syscall.Errno to prevent direct comparisons with
 // syscall.E* or unix.E* constants.

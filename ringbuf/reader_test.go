@@ -13,9 +13,9 @@ import (
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/asm"
 	"github.com/cilium/ebpf/internal"
+	"github.com/cilium/ebpf/internal/sys"
 	"github.com/cilium/ebpf/internal/testutils"
 	"github.com/cilium/ebpf/internal/testutils/fdtrace"
-	"github.com/cilium/ebpf/internal/unix"
 )
 
 type sampleMessage struct {
@@ -259,9 +259,9 @@ func TestReaderNoWakeup(t *testing.T) {
 	testutils.SkipOnOldKernel(t, "5.8", "BPF ring buffer")
 
 	prog, events := mustOutputSamplesProg(t,
-		sampleMessage{size: 5, flags: unix.BPF_RB_NO_WAKEUP}, // Read after timeout
-		sampleMessage{size: 6, flags: unix.BPF_RB_NO_WAKEUP}, // Discard
-		sampleMessage{size: 7, flags: unix.BPF_RB_NO_WAKEUP}) // Read won't block
+		sampleMessage{size: 5, flags: sys.BPF_RB_NO_WAKEUP}, // Read after timeout
+		sampleMessage{size: 6, flags: sys.BPF_RB_NO_WAKEUP}, // Discard
+		sampleMessage{size: 7, flags: sys.BPF_RB_NO_WAKEUP}) // Read won't block
 
 	rd, err := NewReader(events)
 	if err != nil {
@@ -308,9 +308,9 @@ func TestReaderFlushPendingEvents(t *testing.T) {
 	testutils.SkipOnOldKernel(t, "5.8", "BPF ring buffer")
 
 	prog, events := mustOutputSamplesProg(t,
-		sampleMessage{size: 5, flags: unix.BPF_RB_NO_WAKEUP}, // Read after Flush
-		sampleMessage{size: 6, flags: unix.BPF_RB_NO_WAKEUP}, // Discard
-		sampleMessage{size: 7, flags: unix.BPF_RB_NO_WAKEUP}) // Read won't block
+		sampleMessage{size: 5, flags: sys.BPF_RB_NO_WAKEUP}, // Read after Flush
+		sampleMessage{size: 6, flags: sys.BPF_RB_NO_WAKEUP}, // Discard
+		sampleMessage{size: 7, flags: sys.BPF_RB_NO_WAKEUP}) // Read won't block
 
 	rd, err := NewReader(events)
 	if err != nil {

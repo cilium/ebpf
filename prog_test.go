@@ -269,7 +269,7 @@ func TestProgramTestRunInterrupt(t *testing.T) {
 
 	tid := <-tidChan
 	for {
-		err := unix.Tgkill(tgid, tid, syscall.SIGUSR1)
+		err := unix.Tgkill(tgid, tid, unix.SIGUSR1)
 		if err != nil {
 			t.Fatal("Can't send signal to goroutine thread:", err)
 		}

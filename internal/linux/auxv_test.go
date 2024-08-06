@@ -1,4 +1,4 @@
-package internal
+package linux
 
 import (
 	"encoding/binary"
@@ -8,6 +8,7 @@ import (
 	"testing"
 	"unsafe"
 
+	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/unix"
 )
 
@@ -66,7 +67,7 @@ func newAuxFileReader(path string, order binary.ByteOrder, uintptrIs32bits bool)
 
 func newDefaultAuxvFileReader() (auxvPairReader, error) {
 	const uintptrIs32bits = unsafe.Sizeof((uintptr)(0)) == 4
-	return newAuxFileReader("/proc/self/auxv", NativeEndian, uintptrIs32bits)
+	return newAuxFileReader("/proc/self/auxv", internal.NativeEndian, uintptrIs32bits)
 }
 
 func TestAuxvBothSourcesEqual(t *testing.T) {

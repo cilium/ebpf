@@ -9,6 +9,7 @@ import (
 
 	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/kallsyms"
+	"github.com/cilium/ebpf/internal/linux"
 )
 
 var kernelBTF = struct {
@@ -130,7 +131,7 @@ func loadKernelModuleSpec(module string, base *Spec) (*Spec, error) {
 
 // findVMLinux scans multiple well-known paths for vmlinux kernel images.
 func findVMLinux() (*os.File, error) {
-	release, err := internal.KernelRelease()
+	release, err := linux.KernelRelease()
 	if err != nil {
 		return nil, err
 	}

@@ -2,8 +2,6 @@ package internal
 
 import (
 	"testing"
-
-	"github.com/go-quicktest/qt"
 )
 
 func TestVersion(t *testing.T) {
@@ -48,11 +46,6 @@ func TestKernelVersion(t *testing.T) {
 	}
 }
 
-func TestCurrentKernelVersion(t *testing.T) {
-	_, err := KernelVersion()
-	qt.Assert(t, qt.IsNil(err))
-}
-
 func TestVersionFromCode(t *testing.T) {
 	var tests = []struct {
 		name string
@@ -72,16 +65,5 @@ func TestVersionFromCode(t *testing.T) {
 				t.Errorf("unexpected version for code '%d'. got: %v, want: %v", tt.code, v, tt.v)
 			}
 		})
-	}
-}
-
-func TestKernelRelease(t *testing.T) {
-	r, err := KernelRelease()
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if r == "" {
-		t.Fatal("unexpected empty kernel release")
 	}
 }

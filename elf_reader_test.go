@@ -14,6 +14,7 @@ import (
 
 	"github.com/cilium/ebpf/btf"
 	"github.com/cilium/ebpf/internal"
+	"github.com/cilium/ebpf/internal/linux"
 	"github.com/cilium/ebpf/internal/sys"
 	"github.com/cilium/ebpf/internal/testutils"
 
@@ -604,7 +605,7 @@ func TestKconfigKernelVersion(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	v, err := internal.KernelVersion()
+	v, err := linux.KernelVersion()
 	if err != nil {
 		t.Fatalf("getting kernel version: %s", err)
 	}

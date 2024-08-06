@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/cilium/ebpf/internal"
+	"github.com/cilium/ebpf/internal/linux"
 )
 
 const (
@@ -113,7 +114,7 @@ func isKernelLessThan(tb testing.TB, minv internal.Version) bool {
 func kernelVersion(tb testing.TB) internal.Version {
 	tb.Helper()
 
-	v, err := internal.KernelVersion()
+	v, err := linux.KernelVersion()
 	if err != nil {
 		tb.Fatal(err)
 	}

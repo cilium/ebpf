@@ -13,6 +13,7 @@ import (
 
 	"github.com/cilium/ebpf/btf"
 	"github.com/cilium/ebpf/internal"
+	"github.com/cilium/ebpf/internal/linux"
 )
 
 // Find find a kconfig file on the host.
@@ -20,7 +21,7 @@ import (
 // /proc/config.gz if nothing was found in /boot.
 // If none of the file provide a kconfig, it returns an error.
 func Find() (*os.File, error) {
-	kernelRelease, err := internal.KernelRelease()
+	kernelRelease, err := linux.KernelRelease()
 	if err != nil {
 		return nil, fmt.Errorf("cannot get kernel release: %w", err)
 	}

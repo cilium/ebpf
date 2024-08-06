@@ -1,3 +1,5 @@
+//go:build linux
+
 // This program demonstrates attaching a fentry eBPF program to
 // tcp_connect. It prints the command/IPs/ports information
 // once the host sent a TCP SYN packet to a destination.
@@ -10,7 +12,6 @@
 // 2021/11/06 17:51:25 wget   10.0.2.15     49850  -> 142.250.72.228   443
 // 2021/11/06 17:51:46 ssh    10.0.2.15     58854  -> 10.0.2.1         22
 // 2021/11/06 18:13:15 curl   10.0.2.15     54268  -> 104.21.1.217     80
-
 package main
 
 import (
@@ -28,7 +29,7 @@ import (
 	"github.com/cilium/ebpf/rlimit"
 )
 
-//go:generate go run github.com/cilium/ebpf/cmd/bpf2go -type event bpf fentry.c -- -I../headers
+//go:generate go run github.com/cilium/ebpf/cmd/bpf2go -tags linux -type event bpf fentry.c -- -I../headers
 
 func main() {
 	stopper := make(chan os.Signal, 1)

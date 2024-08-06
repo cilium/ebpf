@@ -1,3 +1,5 @@
+//go:build linux
+
 // This program demonstrates attaching an eBPF program to a kernel symbol.
 // The eBPF program will be attached to the start of the sys_execve
 // kernel function and prints out the number of times it has been called
@@ -15,7 +17,7 @@ import (
 	"github.com/cilium/ebpf/rlimit"
 )
 
-//go:generate go run github.com/cilium/ebpf/cmd/bpf2go bpf kprobe_pin.c -- -I../headers
+//go:generate go run github.com/cilium/ebpf/cmd/bpf2go -tags linux bpf kprobe_pin.c -- -I../headers
 
 const (
 	mapKey    uint32 = 0

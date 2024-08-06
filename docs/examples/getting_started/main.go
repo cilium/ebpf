@@ -1,3 +1,5 @@
+//go:build linux
+
 // getting_started_main {
 package main
 

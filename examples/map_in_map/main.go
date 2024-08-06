@@ -1,3 +1,5 @@
+//go:build linux
+
 // An example of using maps within maps. This example demonstrates a few
 // features. Firstly, creating eBPF map specifications in pure Go
 // (typically you'd see them being generated from a loaded ELF).

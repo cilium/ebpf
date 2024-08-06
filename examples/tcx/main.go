@@ -1,3 +1,5 @@
+//go:build linux
+
 // This program demonstrates attaching an eBPF program to a network interface
 // with Linux TCX (Traffic Control with eBPF). The program counts ingress and egress
 // packets using two variables. The userspace program (Go code in this file)
@@ -16,7 +18,7 @@ import (
 	"github.com/cilium/ebpf/link"
 )
 
-//go:generate go run github.com/cilium/ebpf/cmd/bpf2go bpf tcx.c -- -I../headers
+//go:generate go run github.com/cilium/ebpf/cmd/bpf2go -tags linux bpf tcx.c -- -I../headers
 func main() {
 	if len(os.Args) < 2 {
 		log.Fatalf("Please specify a network interface")

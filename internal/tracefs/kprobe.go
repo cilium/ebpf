@@ -1,3 +1,5 @@
+//go:build linux
+
 package tracefs
 
 import (
@@ -22,7 +24,7 @@ var (
 	ErrInvalidMaxActive = errors.New("can only set maxactive on kretprobes")
 )
 
-//go:generate go run golang.org/x/tools/cmd/stringer@latest -type=ProbeType -linecomment
+//go:generate go run golang.org/x/tools/cmd/stringer@latest -type=ProbeType -tags linux -output probetype_string_linux.go -linecomment
 
 type ProbeType uint8
 

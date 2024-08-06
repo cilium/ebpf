@@ -4,6 +4,7 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/cilium/ebpf/internal/testutils/fdtrace"
 	"github.com/cilium/ebpf/internal/unix"
 
 	"github.com/go-quicktest/qt"
@@ -58,4 +59,8 @@ func TestSyscallError(t *testing.T) {
 	if errors.Is(err, foo) {
 		t.Error("Error is the SyscallError")
 	}
+}
+
+func TestMain(m *testing.M) {
+	fdtrace.TestMain(m)
 }

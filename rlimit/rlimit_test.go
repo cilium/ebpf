@@ -3,7 +3,7 @@ package rlimit
 import (
 	"testing"
 
-	"github.com/cilium/ebpf/internal"
+	"github.com/cilium/ebpf/internal/linux"
 	"github.com/cilium/ebpf/internal/unix"
 
 	"github.com/go-quicktest/qt"
@@ -20,7 +20,7 @@ func TestRemoveMemlock(t *testing.T) {
 	qt.Assert(t, qt.IsNil(unix.Prlimit(0, unix.RLIMIT_MEMLOCK, nil, &after)))
 
 	// We can't use testutils here due to an import cycle.
-	version, err := internal.KernelVersion()
+	version, err := linux.KernelVersion()
 	qt.Assert(t, qt.IsNil(err))
 
 	if version.Less(unsupportedMemcgAccounting.MinimumVersion) {

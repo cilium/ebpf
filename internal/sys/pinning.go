@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"runtime"
 
-	"github.com/cilium/ebpf/internal"
+	"github.com/cilium/ebpf/internal/linux"
 	"github.com/cilium/ebpf/internal/unix"
 )
 
@@ -19,7 +19,7 @@ func Pin(currentPath, newPath string, fd *FD) error {
 		return nil
 	}
 
-	fsType, err := internal.FSType(filepath.Dir(newPath))
+	fsType, err := linux.FSType(filepath.Dir(newPath))
 	if err != nil {
 		return err
 	}

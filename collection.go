@@ -11,6 +11,7 @@ import (
 	"github.com/cilium/ebpf/btf"
 	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/kconfig"
+	"github.com/cilium/ebpf/internal/linux"
 	"github.com/cilium/ebpf/internal/sysenc"
 )
 
@@ -619,7 +620,7 @@ func resolveKconfig(m *MapSpec) error {
 				return fmt.Errorf("variable %s must be a 32 bits integer, got %s", n, v.Type)
 			}
 
-			kv, err := internal.KernelVersion()
+			kv, err := linux.KernelVersion()
 			if err != nil {
 				return fmt.Errorf("getting kernel version: %w", err)
 			}

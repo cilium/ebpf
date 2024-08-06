@@ -5,12 +5,13 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"github.com/cilium/ebpf"
-	"github.com/cilium/ebpf/internal/testutils"
 	"github.com/go-quicktest/qt"
 	"github.com/jsimonetti/rtnetlink/v2"
 	"github.com/jsimonetti/rtnetlink/v2/driver"
-	"golang.org/x/sys/unix"
+
+	"github.com/cilium/ebpf"
+	"github.com/cilium/ebpf/internal/testutils"
+	"github.com/cilium/ebpf/internal/unix"
 )
 
 func TestAttachNetkit(t *testing.T) {

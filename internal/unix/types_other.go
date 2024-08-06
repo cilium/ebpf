@@ -93,6 +93,8 @@ const (
 	BPF_RB_NO_WAKEUP
 	BPF_RB_FORCE_WAKEUP
 	BPF_F_LOCK
+	AF_UNSPEC
+	IFF_UP
 )
 
 type Statfs_t struct {

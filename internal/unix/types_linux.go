@@ -89,6 +89,8 @@ const (
 	DEBUGFS_MAGIC             = linux.DEBUGFS_MAGIC
 	BPF_RB_NO_WAKEUP          = linux.BPF_RB_NO_WAKEUP
 	BPF_RB_FORCE_WAKEUP       = linux.BPF_RB_FORCE_WAKEUP
+	AF_UNSPEC                 = linux.AF_UNSPEC
+	IFF_UP                    = linux.IFF_UP
 )
 
 type Statfs_t = linux.Statfs_t

@@ -652,7 +652,7 @@ func resolveKconfig(m *MapSpec) error {
 
 	// We only parse kconfig file if a CONFIG_* variable was found.
 	if len(configs) > 0 {
-		f, err := kconfig.Find()
+		f, err := linux.FindKConfig()
 		if err != nil {
 			return fmt.Errorf("cannot find a kconfig file: %w", err)
 		}

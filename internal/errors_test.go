@@ -6,8 +6,6 @@ import (
 	"testing"
 
 	"github.com/go-quicktest/qt"
-
-	"github.com/cilium/ebpf/internal/unix"
 )
 
 func TestVerifierErrorWhitespace(t *testing.T) {
@@ -34,18 +32,13 @@ func TestVerifierErrorWhitespace(t *testing.T) {
 }
 
 func TestVerifierErrorWrapping(t *testing.T) {
-	ve := ErrorWithLog("frob", unix.ENOENT, nil)
-	qt.Assert(t, qt.ErrorIs(ve, unix.ENOENT), qt.Commentf("should wrap provided error"))
+	sentinel := errors.New("bad")
 
-	ve = ErrorWithLog("frob", unix.EINVAL, nil)
-	qt.Assert(t, qt.ErrorIs(ve, unix.EINVAL), qt.Commentf("should wrap provided error"))
+	ve := ErrorWithLog("frob", sentinel, nil)
+	qt.Assert(t, qt.ErrorIs(ve, sentinel), qt.Commentf("should wrap provided error"))
 
-	ve = ErrorWithLog("frob", unix.EINVAL, []byte("foo"))
-	qt.Assert(t, qt.ErrorIs(ve, unix.EINVAL), qt.Commentf("should wrap provided error"))
-	qt.Assert(t, qt.StringContains(ve.Error(), "foo"), qt.Commentf("verifier log should appear in error string"))
-
-	ve = ErrorWithLog("frob", unix.ENOSPC, []byte("foo"))
-	qt.Assert(t, qt.ErrorIs(ve, unix.ENOSPC), qt.Commentf("should wrap provided error"))
+	ve = ErrorWithLog("frob", sentinel, []byte("foo"))
+	qt.Assert(t, qt.ErrorIs(ve, sentinel), qt.Commentf("should wrap provided error"))
 	qt.Assert(t, qt.StringContains(ve.Error(), "foo"), qt.Commentf("verifier log should appear in error string"))
 }
 
@@ -81,5 +74,5 @@ func readErrorFromFile(tb testing.TB, file string) *VerifierError {
 		tb.Fatal("Read file:", err)
 	}
 
-	return ErrorWithLog("file", unix.EINVAL, contents)
+	return ErrorWithLog("file", errors.New("error"), contents)
 }

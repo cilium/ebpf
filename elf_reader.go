@@ -16,7 +16,6 @@ import (
 	"github.com/cilium/ebpf/btf"
 	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/sys"
-	"github.com/cilium/ebpf/internal/unix"
 )
 
 type kconfigMetaKey struct{}
@@ -1266,10 +1265,10 @@ func getProgType(sectionName string) (ProgramType, AttachType, uint32, string) {
 
 		var flags uint32
 		if t.flags&_SEC_SLEEPABLE > 0 {
-			flags |= unix.BPF_F_SLEEPABLE
+			flags |= sys.BPF_F_SLEEPABLE
 		}
 		if t.flags&_SEC_XDP_FRAGS > 0 {
-			flags |= unix.BPF_F_XDP_HAS_FRAGS
+			flags |= sys.BPF_F_XDP_HAS_FRAGS
 		}
 		if t.flags&_SEC_EXP_ATTACH_OPT > 0 {
 			if programType == XDP {

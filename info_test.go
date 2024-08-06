@@ -15,7 +15,6 @@ import (
 	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/sys"
 	"github.com/cilium/ebpf/internal/testutils"
-	"github.com/cilium/ebpf/internal/unix"
 )
 
 func TestMapInfoFromProc(t *testing.T) {
@@ -302,7 +301,7 @@ func BenchmarkStats(b *testing.B) {
 func testStats(prog *Program) error {
 	in := internal.EmptyBPFContext
 
-	stats, err := EnableStats(uint32(unix.BPF_STATS_RUN_TIME))
+	stats, err := EnableStats(uint32(sys.BPF_STATS_RUN_TIME))
 	if err != nil {
 		return fmt.Errorf("failed to enable stats: %v", err)
 	}

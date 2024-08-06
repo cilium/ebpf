@@ -71,7 +71,7 @@ func LoadCollectionSpecFromReader(rd io.ReaderAt) (*CollectionSpec, error) {
 
 	// Checks if the ELF file is for BPF data.
 	// Old LLVM versions set e_machine to EM_NONE.
-	if f.File.Machine != unix.EM_NONE && f.File.Machine != elf.EM_BPF {
+	if f.File.Machine != elf.EM_NONE && f.File.Machine != elf.EM_BPF {
 		return nil, fmt.Errorf("unexpected machine type for BPF ELF: %s", f.File.Machine)
 	}
 

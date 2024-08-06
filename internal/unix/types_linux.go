@@ -83,8 +83,6 @@ const (
 	SIGPROF                   = linux.SIGPROF
 	SIG_BLOCK                 = linux.SIG_BLOCK
 	SIG_UNBLOCK               = linux.SIG_UNBLOCK
-	EM_NONE                   = linux.EM_NONE
-	EM_BPF                    = linux.EM_BPF
 	BPF_FS_MAGIC              = linux.BPF_FS_MAGIC
 	TRACEFS_MAGIC             = linux.TRACEFS_MAGIC
 	DEBUGFS_MAGIC             = linux.DEBUGFS_MAGIC

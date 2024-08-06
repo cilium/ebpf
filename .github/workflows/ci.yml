@@ -55,9 +55,9 @@ jobs:
         run: go build -v ./...
         working-directory: ./examples
 
-      - name: Cross build darwin
+      - name: Cross build windows
         env:
-          GOOS: darwin
+          GOOS: windows
         run: |
           go build -v ./...
           go test -c -o /dev/null ./... >/dev/null

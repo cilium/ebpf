@@ -10,10 +10,11 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/go-quicktest/qt"
+
 	"github.com/cilium/ebpf/cmd/bpf2go/gen"
 	"github.com/cilium/ebpf/cmd/bpf2go/internal"
 	"github.com/cilium/ebpf/internal/testutils"
-	"github.com/go-quicktest/qt"
 )
 
 const minimalSocketFilter = `__attribute__((section("socket"), used)) int main() { return 0; }`

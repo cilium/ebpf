@@ -4,9 +4,10 @@ import (
 	"math"
 	"testing"
 
+	"github.com/go-quicktest/qt"
+
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/internal/testutils"
-	"github.com/go-quicktest/qt"
 )
 
 const IfIndexLO = 1

@@ -8,9 +8,10 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/cilium/ebpf/internal/testutils"
 	"github.com/go-quicktest/qt"
 	"github.com/google/go-cmp/cmp"
+
+	"github.com/cilium/ebpf/internal/testutils"
 )
 
 func TestSizeof(t *testing.T) {

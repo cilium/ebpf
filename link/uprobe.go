@@ -131,27 +131,7 @@ func (ex *Executable) load(f *internal.SafeELFFile) error {
 			// Symbol not associated with a function or other executable code.
 			continue
 		}
-
-		address := s.Value
-
-		// Loop over ELF segments.
-		for _, prog := range f.Progs {
-			// Skip uninteresting segments.
-			if prog.Type != elf.PT_LOAD || (prog.Flags&elf.PF_X) == 0 {
-				continue
-			}
-
-			if prog.Vaddr <= s.Value && s.Value < (prog.Vaddr+prog.Memsz) {
-				// If the symbol value is contained in the segment, calculate
-				// the symbol offset.
-				//
-				// fn symbol offset = fn symbol VA - .text VA + .text offset
-				//
-				// stackoverflow.com/a/40249502
-				address = s.Value - prog.Vaddr + prog.Off
-				break
-			}
-		}
+		address := ex.calcSymbolAddress(s, f)
 
 		ex.cachedAddresses[s.Name] = address
 	}
@@ -159,12 +139,42 @@ func (ex *Executable) load(f *internal.SafeELFFile) error {
 	return nil
 }
 
+func (*Executable) calcSymbolAddress(s elf.Symbol, f *internal.SafeELFFile) uint64 {
+	address := s.Value
+
+	// Loop over ELF segments.
+	for _, prog := range f.Progs {
+		// Skip uninteresting segments.
+		if prog.Type != elf.PT_LOAD || (prog.Flags&elf.PF_X) == 0 {
+			continue
+		}
+
+		if prog.Vaddr <= s.Value && s.Value < (prog.Vaddr+prog.Memsz) {
+			// If the symbol value is contained in the segment, calculate
+			// the symbol offset.
+			//
+			// fn symbol offset = fn symbol VA - .text VA + .text offset
+			//
+			// stackoverflow.com/a/40249502
+			address = s.Value - prog.Vaddr + prog.Off
+			break
+		}
+	}
+	return address
+}
+
 // address calculates the address of a symbol in the executable.
 //
 // opts must not be nil.
 func (ex *Executable) address(symbol string, address, offset uint64) (uint64, error) {
 	if address > 0 {
-		return address + offset, nil
+		var f *internal.SafeELFFile
+		f, err := internal.OpenSafeELFFile(ex.path)
+		if err != nil {
+			err = fmt.Errorf("parse ELF file: %w", err)
+		}
+		defer f.Close()
+		return ex.calcSymbolAddress(elf.Symbol{Name: symbol, Value: address}, f) + offset, nil
 	}
 
 	var err error

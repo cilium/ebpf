@@ -54,6 +54,7 @@ func {{ .Name.LoadObjects }}(obj interface{}, opts *ebpf.CollectionOptions) (err
 type {{ .Name.Specs }} struct {
 	{{ .Name.ProgramSpecs }}
 	{{ .Name.MapSpecs }}
+	{{ .Name.VariableSpecs }}
 }
 
 // {{ .Name.Specs }} contains programs before they are loaded into the kernel.
@@ -80,12 +81,14 @@ type {{ .Name.MapSpecs }} struct {
 type {{ .Name.Objects }} struct {
 	{{ .Name.Programs }}
 	{{ .Name.Maps }}
+	{{ .Name.Variables }}
 }
 
 func (o *{{ .Name.Objects }}) Close() error {
 	return {{ .Name.CloseHelper }}(
 		&o.{{ .Name.Programs }},
 		&o.{{ .Name.Maps }},
+		&o.{{ .Name.Variables }},
 	)
 }
 
@@ -101,6 +104,32 @@ type {{ .Name.Maps }} struct {
 func (m *{{ .Name.Maps }}) Close() error {
 	return {{ .Name.CloseHelper }}(
 {{- range $id := .Maps }}
+		m.{{ $id }},
+{{- end }}
+	)
+}
+
+// {{ .Name.VariableSpecs }} contains variables before they are loaded into the kernel.
+//
+// It can be passed ebpf.CollectionSpec.Assign.
+type {{ .Name.VariableSpecs }} struct {
+{{- range $name, $id := .Variables }}
+	{{ $id }} *ebpf.VariableSpec `ebpf:"{{ $name }}"`
+{{- end }}
+}
+
+// {{ .Name.Variables }} contains all variables after they have been loaded into the kernel.
+//
+// It can be passed to {{ .Name.LoadObjects }} or ebpf.CollectionSpec.LoadAndAssign.
+type {{ .Name.Variables }} struct {
+{{- range $name, $id := .Variables }}
+	{{ $id }} *ebpf.Variable `ebpf:"{{ $name }}"`
+{{- end }}
+}
+
+func (m *{{ .Name.Variables }}) Close() error {
+	return {{ .Name.CloseHelper }}(
+{{- range $id := .Variables }}
 		m.{{ $id }},
 {{- end }}
 	)

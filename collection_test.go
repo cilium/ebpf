@@ -66,6 +66,14 @@ func TestCollectionSpecCopy(t *testing.T) {
 				MaxEntries: 1,
 			},
 		},
+		map[string]*VariableSpec{
+			"test": {
+				Name:    "test",
+				MapName: ".rodata",
+				Offset:  0,
+				Size:    4,
+			},
+		},
 		map[string]*ProgramSpec{
 			"test": {
 				Type: SocketFilter,

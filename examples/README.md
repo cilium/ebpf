@@ -23,6 +23,7 @@ Please see our [guide on what makes a good example](https://ebpf-go.dev/contribu
   * [tcx](./tcx/) - Print packet counts for ingress and egress.
 * XDP - Attach a program to a network interface to process incoming packets.
   * [xdp](xdp/) - Print packet counts by IPv4 source address.
+  * [globals](globals/) - Read and manipulate global variables from an XDP program while processing packets.
 
 ## How to run
 

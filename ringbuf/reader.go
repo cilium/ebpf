@@ -196,3 +196,10 @@ func (r *Reader) BufferSize() int {
 func (r *Reader) Flush() error {
 	return r.poller.Flush()
 }
+
+// AvailableData returns the amount of data available to read in the ring buffer in bytes.
+func (r *Reader) AvailableData() int {
+	// Don't need to acquire the lock here since the implementation of availableData
+	// performs atomic loads on the producer and consumer positions.
+	return int(r.ring.availableData())
+}

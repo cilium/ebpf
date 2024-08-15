@@ -400,7 +400,7 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions) (*Program, er
 		var fd *sys.FD
 		fd, err = sys.ProgLoad(attr)
 		if err == nil {
-			return &Program{unix.ByteSliceToString(logBuf), fd, spec.Name, "", spec.Type}, nil
+			return &Program{sys.ByteSliceToString(logBuf), fd, spec.Name, "", spec.Type}, nil
 		}
 
 		if opts.LogDisabled {

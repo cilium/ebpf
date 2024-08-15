@@ -228,7 +228,7 @@ func newHandleInfoFromFD(fd *sys.FD) (*HandleInfo, error) {
 
 	return &HandleInfo{
 		ID:       ID(btfInfo.Id),
-		Name:     unix.ByteSliceToString(nameBuffer),
+		Name:     sys.ByteSliceToString(nameBuffer),
 		IsKernel: btfInfo.KernelBtf != 0,
 		size:     btfSize,
 	}, nil

@@ -19,8 +19,8 @@ var (
 	// pre-allocating these here since they may
 	// get called in hot code paths and cause
 	// unnecessary memory allocations
-	sysErrKeyNotExist  = sys.Error(ErrKeyNotExist, unix.ENOENT)
-	sysErrKeyExist     = sys.Error(ErrKeyExist, unix.EEXIST)
+	sysErrKeyNotExist  = sys.Error(ErrKeyNotExist, sys.ENOENT)
+	sysErrKeyExist     = sys.Error(ErrKeyExist, sys.EEXIST)
 	sysErrNotSupported = sys.Error(ErrNotSupported, sys.ENOTSUPP)
 )
 

@@ -7,10 +7,11 @@ import (
 	"os"
 	"testing"
 
+	"golang.org/x/sys/unix"
+
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/internal/sys"
 	"github.com/cilium/ebpf/internal/testutils"
-	"github.com/cilium/ebpf/internal/unix"
 )
 
 var kprobeMultiSyms = []string{"vprintk", "inet6_release"}

@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	"github.com/go-quicktest/qt"
-
 	"golang.org/x/sys/unix"
 )
 

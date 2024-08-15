@@ -6,9 +6,8 @@ import (
 	"runtime"
 	"testing"
 
-	"github.com/cilium/ebpf/internal/unix"
-
 	"github.com/go-quicktest/qt"
+	"golang.org/x/sys/unix"
 )
 
 // LockOSThreadToSingleCPU force the current goroutine to run on a single CPU.

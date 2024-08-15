@@ -7,9 +7,8 @@ import (
 	"testing"
 	"unsafe"
 
-	"golang.org/x/sys/unix"
-
 	"github.com/go-quicktest/qt"
+	"golang.org/x/sys/unix"
 )
 
 func TestSigset(t *testing.T) {

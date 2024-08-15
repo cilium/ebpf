@@ -7,11 +7,11 @@ import (
 	"os"
 	"testing"
 
+	"github.com/go-quicktest/qt"
+	"golang.org/x/sys/unix"
+
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/internal/testutils"
-	"github.com/cilium/ebpf/internal/unix"
-
-	"github.com/go-quicktest/qt"
 )
 
 func TestTracepoint(t *testing.T) {

@@ -9,7 +9,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/cilium/ebpf/internal/unix"
+	"golang.org/x/sys/unix"
 )
 
 var cgroup2Path = sync.OnceValues(func() (string, error) {

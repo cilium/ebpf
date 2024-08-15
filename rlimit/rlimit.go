@@ -8,9 +8,10 @@ import (
 	"fmt"
 	"sync"
 
+	"golang.org/x/sys/unix"
+
 	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/sys"
-	"github.com/cilium/ebpf/internal/unix"
 )
 
 var (

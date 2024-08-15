@@ -5,7 +5,7 @@ package linux
 import (
 	"unsafe"
 
-	"github.com/cilium/ebpf/internal/unix"
+	"golang.org/x/sys/unix"
 )
 
 func FSType(path string) (int64, error) {

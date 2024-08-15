@@ -7,9 +7,9 @@ import (
 	"path/filepath"
 	"runtime"
 
-	"github.com/cilium/ebpf/internal/linux"
-
 	"golang.org/x/sys/unix"
+
+	"github.com/cilium/ebpf/internal/linux"
 )
 
 func Pin(currentPath, newPath string, fd *FD) error {

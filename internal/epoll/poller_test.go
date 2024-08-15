@@ -11,7 +11,7 @@ import (
 
 	"github.com/go-quicktest/qt"
 
-	"github.com/cilium/ebpf/internal/unix"
+	"golang.org/x/sys/unix"
 )
 
 func TestPoller(t *testing.T) {

@@ -12,8 +12,9 @@ import (
 	"sync/atomic"
 	"unsafe"
 
+	"golang.org/x/sys/unix"
+
 	"github.com/cilium/ebpf/internal/sys"
-	"github.com/cilium/ebpf/internal/unix"
 )
 
 // perfEventRing is a page of metadata followed by

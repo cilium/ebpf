@@ -9,12 +9,13 @@ import (
 	"runtime"
 	"unsafe"
 
+	"golang.org/x/sys/unix"
+
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/asm"
 	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/sys"
 	"github.com/cilium/ebpf/internal/tracefs"
-	"github.com/cilium/ebpf/internal/unix"
 )
 
 // Getting the terminology right is usually the hardest part. For posterity and

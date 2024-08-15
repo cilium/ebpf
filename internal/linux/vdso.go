@@ -11,8 +11,9 @@ import (
 	"math"
 	"os"
 
+	"golang.org/x/sys/unix"
+
 	"github.com/cilium/ebpf/internal"
-	"github.com/cilium/ebpf/internal/unix"
 )
 
 var (

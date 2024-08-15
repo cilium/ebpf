@@ -13,9 +13,10 @@ import (
 	"sync"
 	"syscall"
 
+	"golang.org/x/sys/unix"
+
 	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/linux"
-	"github.com/cilium/ebpf/internal/unix"
 )
 
 var (

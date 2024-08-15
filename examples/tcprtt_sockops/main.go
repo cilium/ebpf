@@ -31,12 +31,12 @@ import (
 	"path/filepath"
 	"syscall"
 
+	"golang.org/x/sys/unix"
+
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/link"
 	"github.com/cilium/ebpf/ringbuf"
 	"github.com/cilium/ebpf/rlimit"
-
-	"golang.org/x/sys/unix"
 )
 
 //go:generate go run github.com/cilium/ebpf/cmd/bpf2go -tags linux -tags "linux" -type rtt_event bpf tcprtt_sockops.c -- -I../headers

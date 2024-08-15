@@ -10,8 +10,9 @@ import (
 	"testing"
 	"unsafe"
 
+	"golang.org/x/sys/unix"
+
 	"github.com/cilium/ebpf/internal"
-	"github.com/cilium/ebpf/internal/unix"
 )
 
 type auxvFileReader struct {

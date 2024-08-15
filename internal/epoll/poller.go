@@ -12,8 +12,9 @@ import (
 	"sync"
 	"time"
 
+	"golang.org/x/sys/unix"
+
 	"github.com/cilium/ebpf/internal"
-	"github.com/cilium/ebpf/internal/unix"
 )
 
 var ErrFlushed = errors.New("data was flushed")

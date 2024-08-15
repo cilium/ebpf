@@ -10,11 +10,12 @@ import (
 	"strings"
 	"unsafe"
 
+	"golang.org/x/sys/unix"
+
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/sys"
 	"github.com/cilium/ebpf/internal/tracefs"
-	"github.com/cilium/ebpf/internal/unix"
 )
 
 // KprobeOptions defines additional parameters that will be used

@@ -6,8 +6,9 @@ import (
 	"fmt"
 	"sync"
 
+	"golang.org/x/sys/unix"
+
 	"github.com/cilium/ebpf/internal"
-	"github.com/cilium/ebpf/internal/unix"
 )
 
 // KernelVersion returns the version of the currently running kernel.

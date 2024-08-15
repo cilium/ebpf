@@ -68,7 +68,7 @@ func newMapInfoFromFd(fd *sys.FD) (*MapInfo, error) {
 		info.ValueSize,
 		info.MaxEntries,
 		uint32(info.MapFlags),
-		unix.ByteSliceToString(info.Name[:]),
+		sys.ByteSliceToString(info.Name[:]),
 		btf.ID(info.BtfId),
 	}, nil
 }
@@ -160,7 +160,7 @@ func newProgramInfoFromFd(fd *sys.FD) (*ProgramInfo, error) {
 		Type: ProgramType(info.Type),
 		id:   ProgramID(info.Id),
 		Tag:  hex.EncodeToString(info.Tag[:]),
-		Name: unix.ByteSliceToString(info.Name[:]),
+		Name: sys.ByteSliceToString(info.Name[:]),
 		btf:  btf.ID(info.BtfId),
 		stats: &programStats{
 			runtime:         time.Duration(info.RunTimeNs),

@@ -405,7 +405,7 @@ func TestProgInfoExtBTF(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	expectedLineInfoCount := 26
+	expectedLineInfoCount := 28
 	expectedFuncInfo := map[string]bool{
 		"xdp_prog":   false,
 		"static_fn":  false,

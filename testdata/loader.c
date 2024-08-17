@@ -101,12 +101,14 @@ volatile const unsigned int key3  = 2; // .rodata
 static volatile const uint32_t arg; // .rodata, populated by loader
 // custom .rodata section, populated by loader
 static volatile const uint32_t arg2 __section(".rodata.test");
+// custom .data section
+static volatile uint32_t arg3 __section(".data.custom");
 
 __section("xdp") int xdp_prog() {
 	map_lookup_elem(&hash_map, (void *)&key1);
 	map_lookup_elem(&hash_map2, (void *)&key2);
 	map_lookup_elem(&hash_map2, (void *)&key3);
-	return static_fn(arg) + global_fn(arg) + arg2;
+	return static_fn(arg) + global_fn(arg) + arg2 + arg3;
 }
 
 // This function has no relocations, and is thus parsed differently.

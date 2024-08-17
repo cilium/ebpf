@@ -96,6 +96,14 @@ func TestLoadCollectionSpec(t *testing.T) {
 				ValueSize:  8,
 				MaxEntries: 1,
 			},
+			".data.custom": {
+				Name:       SanitizeName(".data.custom", -1),
+				Type:       Array,
+				KeySize:    4,
+				ValueSize:  4,
+				MaxEntries: 1,
+				Contents:   []MapKV{{Key: uint32(0), Value: make([]uint8, 4)}},
+			},
 		},
 		Programs: map[string]*ProgramSpec{
 			"xdp_prog": {

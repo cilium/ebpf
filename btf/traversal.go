@@ -109,7 +109,7 @@ func children(typ Type, yield func(child *Type) bool) bool {
 		if !yield(&v.Type) {
 			return false
 		}
-	case *typeTag:
+	case *TypeTag:
 		if !yield(&v.Type) {
 			return false
 		}

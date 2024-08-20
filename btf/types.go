@@ -67,7 +67,7 @@ var (
 	_ Type = (*Datasec)(nil)
 	_ Type = (*Float)(nil)
 	_ Type = (*declTag)(nil)
-	_ Type = (*typeTag)(nil)
+	_ Type = (*TypeTag)(nil)
 	_ Type = (*cycle)(nil)
 )
 
@@ -540,19 +540,25 @@ func (dt *declTag) copy() Type {
 	return &cpy
 }
 
-// typeTag associates metadata with a type.
-type typeTag struct {
+// TypeTag associates metadata with a pointer type. Tag types act as a custom
+// modifier(const, restrict, volatile) for the target type. Unlike declTags,
+// TypeTags are ordered so the order in which they are added matters.
+//
+// One of their uses is to mark pointers as `__kptr` meaning a pointer points
+// to kernel memory. Adding a `__kptr` to pointers in map values allows you
+// to store pointers to kernel memory in maps.
+type TypeTag struct {
 	Type  Type
 	Value string
 }
 
-func (tt *typeTag) Format(fs fmt.State, verb rune) {
+func (tt *TypeTag) Format(fs fmt.State, verb rune) {
 	formatType(fs, verb, tt, "type=", tt.Type, "value=", tt.Value)
 }
 
-func (tt *typeTag) TypeName() string { return "" }
-func (tt *typeTag) qualify() Type    { return tt.Type }
-func (tt *typeTag) copy() Type {
+func (tt *TypeTag) TypeName() string { return "" }
+func (tt *TypeTag) qualify() Type    { return tt.Type }
+func (tt *TypeTag) copy() Type {
 	cpy := *tt
 	return &cpy
 }
@@ -591,7 +597,7 @@ var (
 	_ qualifier = (*Const)(nil)
 	_ qualifier = (*Restrict)(nil)
 	_ qualifier = (*Volatile)(nil)
-	_ qualifier = (*typeTag)(nil)
+	_ qualifier = (*TypeTag)(nil)
 )
 
 var errUnsizedType = errors.New("type is unsized")
@@ -1081,7 +1087,7 @@ func readAndInflateTypes(r io.Reader, bo binary.ByteOrder, typeLen uint32, rawSt
 			declTags = append(declTags, dt)
 
 		case kindTypeTag:
-			tt := &typeTag{nil, name}
+			tt := &TypeTag{nil, name}
 			fixup(header.Type(), &tt.Type)
 			typ = tt
 

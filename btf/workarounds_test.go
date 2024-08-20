@@ -21,10 +21,10 @@ func TestDatasecResolveWorkaround(t *testing.T) {
 		&Volatile{i},
 		&Const{i},
 		&Restrict{i},
-		&typeTag{i, "foo"},
+		&TypeTag{i, "foo"},
 	} {
 		t.Run(fmt.Sprint(typ), func(t *testing.T) {
-			if _, ok := typ.(*typeTag); ok {
+			if _, ok := typ.(*TypeTag); ok {
 				testutils.SkipOnOldKernel(t, "5.17", "BTF_KIND_TYPE_TAG")
 			}
 

@@ -175,7 +175,7 @@ func TestType(t *testing.T) {
 		},
 		func() Type { return &Float{} },
 		func() Type { return &declTag{Type: &Void{}} },
-		func() Type { return &typeTag{Type: &Void{}} },
+		func() Type { return &TypeTag{Type: &Void{}} },
 		func() Type { return &cycle{&Void{}} },
 	}
 
@@ -214,7 +214,7 @@ func TestType(t *testing.T) {
 func TestTagMarshaling(t *testing.T) {
 	for _, typ := range []Type{
 		&declTag{&Struct{Members: []Member{}}, "foo", -1},
-		&typeTag{&Int{}, "foo"},
+		&TypeTag{&Int{}, "foo"},
 	} {
 		t.Run(fmt.Sprint(typ), func(t *testing.T) {
 			s := specFromTypes(t, []Type{typ})
@@ -341,7 +341,7 @@ func TestUnderlyingType(t *testing.T) {
 		{"volatile", func(t Type) Type { return &Volatile{Type: t} }},
 		{"restrict", func(t Type) Type { return &Restrict{Type: t} }},
 		{"typedef", func(t Type) Type { return &Typedef{Type: t} }},
-		{"type tag", func(t Type) Type { return &typeTag{Type: t} }},
+		{"type tag", func(t Type) Type { return &TypeTag{Type: t} }},
 	}
 
 	for _, test := range wrappers {

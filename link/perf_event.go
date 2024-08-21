@@ -115,7 +115,7 @@ func (pl *perfEventLink) Close() error {
 	return nil
 }
 
-func (pl *perfEventLink) Update(prog *ebpf.Program) error {
+func (pl *perfEventLink) Update(_ *ebpf.Program) error {
 	return fmt.Errorf("perf event link update: %w", ErrNotSupported)
 }
 
@@ -185,7 +185,7 @@ func (pi *perfEventIoctl) isLink() {}
 //
 // Detaching a program from a perf event is currently not possible, so a
 // program replacement mechanism cannot be implemented for perf events.
-func (pi *perfEventIoctl) Update(prog *ebpf.Program) error {
+func (pi *perfEventIoctl) Update(_ *ebpf.Program) error {
 	return fmt.Errorf("perf event ioctl update: %w", ErrNotSupported)
 }
 

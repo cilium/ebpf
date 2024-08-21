@@ -359,7 +359,7 @@ func newMapWithOptions(spec *MapSpec, opts MapOptions) (_ *Map, err error) {
 			return nil, errors.New("inner maps cannot be pinned")
 		}
 
-		template, err := spec.InnerMap.createMap(nil, opts)
+		template, err := spec.InnerMap.createMap(nil)
 		if err != nil {
 			return nil, fmt.Errorf("inner map: %w", err)
 		}
@@ -371,7 +371,7 @@ func newMapWithOptions(spec *MapSpec, opts MapOptions) (_ *Map, err error) {
 		innerFd = template.fd
 	}
 
-	m, err := spec.createMap(innerFd, opts)
+	m, err := spec.createMap(innerFd)
 	if err != nil {
 		return nil, err
 	}
@@ -389,7 +389,7 @@ func newMapWithOptions(spec *MapSpec, opts MapOptions) (_ *Map, err error) {
 
 // createMap validates the spec's properties and creates the map in the kernel
 // using the given opts. It does not populate or freeze the map.
-func (spec *MapSpec) createMap(inner *sys.FD, opts MapOptions) (_ *Map, err error) {
+func (spec *MapSpec) createMap(inner *sys.FD) (_ *Map, err error) {
 	closeOnError := func(closer io.Closer) {
 		if err != nil {
 			closer.Close()

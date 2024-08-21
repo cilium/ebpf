@@ -168,7 +168,7 @@ type uprobeMultiLink struct {
 
 var _ Link = (*uprobeMultiLink)(nil)
 
-func (kml *uprobeMultiLink) Update(prog *ebpf.Program) error {
+func (kml *uprobeMultiLink) Update(_ *ebpf.Program) error {
 	return fmt.Errorf("update uprobe_multi: %w", ErrNotSupported)
 }
 

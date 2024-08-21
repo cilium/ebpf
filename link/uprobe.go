@@ -321,7 +321,7 @@ func (ex *Executable) uprobe(symbol string, prog *ebpf.Program, opts *UprobeOpti
 	if err == nil {
 		return tp, nil
 	}
-	if err != nil && !errors.Is(err, ErrNotSupported) {
+	if !errors.Is(err, ErrNotSupported) {
 		return nil, fmt.Errorf("creating perf_uprobe PMU: %w", err)
 	}
 

@@ -799,7 +799,7 @@ func parseCORERelos(r io.Reader, bo binary.ByteOrder, strings *stringTable) (map
 			return nil, err
 		}
 
-		records, err := parseCOREReloRecords(r, bo, recordSize, infoHeader.NumInfo)
+		records, err := parseCOREReloRecords(r, bo, infoHeader.NumInfo)
 		if err != nil {
 			return nil, fmt.Errorf("section %v: %w", secName, err)
 		}
@@ -811,7 +811,7 @@ func parseCORERelos(r io.Reader, bo binary.ByteOrder, strings *stringTable) (map
 // parseCOREReloRecords parses a stream of CO-RE relocation entries into a
 // coreRelos. These records appear after a btf_ext_info_sec header in the
 // core_relos sub-section of .BTF.ext.
-func parseCOREReloRecords(r io.Reader, bo binary.ByteOrder, recordSize uint32, recordNum uint32) ([]bpfCORERelo, error) {
+func parseCOREReloRecords(r io.Reader, bo binary.ByteOrder, recordNum uint32) ([]bpfCORERelo, error) {
 	var out []bpfCORERelo
 
 	var relo bpfCORERelo

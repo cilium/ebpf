@@ -126,7 +126,7 @@ type kprobeMultiLink struct {
 
 var _ Link = (*kprobeMultiLink)(nil)
 
-func (kml *kprobeMultiLink) Update(prog *ebpf.Program) error {
+func (kml *kprobeMultiLink) Update(_ *ebpf.Program) error {
 	return fmt.Errorf("update kprobe_multi: %w", ErrNotSupported)
 }
 

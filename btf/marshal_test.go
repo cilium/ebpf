@@ -82,7 +82,7 @@ func TestRoundtripVMlinux(t *testing.T) {
 	visited := make(map[Type]struct{})
 limitTypes:
 	for i, typ := range types {
-		visitInPostorder(typ, visited, func(t Type) bool { return true })
+		visitInPostorder(typ, visited, func(_ Type) bool { return true })
 		if len(visited) >= math.MaxInt16 {
 			// IDs exceeding math.MaxUint16 can trigger a bug when loading BTF.
 			// This can be removed once the patch lands.

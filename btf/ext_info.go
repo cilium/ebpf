@@ -145,7 +145,7 @@ func AssignMetadataToInstructions(
 //
 // If an instruction has an [asm.Comment], it will be synthesized into a mostly
 // empty line info.
-func MarshalExtInfos(insns asm.Instructions, b *Builder) (funcInfos, lineInfos []byte, _ error) {
+func MarshalExtInfos(insns asm.Instructions, b *Builder, types *Spec) (funcInfos, lineInfos []byte, _ error) {
 	iter := insns.Iterate()
 	for iter.Next() {
 		if iter.Ins.Source() != nil || FuncMetadata(iter.Ins) != nil {
@@ -165,6 +165,24 @@ marshal:
 			}
 			if err := fi.marshal(&fiBuf, b); err != nil {
 				return nil, nil, fmt.Errorf("write func info: %w", err)
+			}
+			if types != nil {
+				iter := types.Iterate()
+				for iter.Next() {
+					if t, ok := iter.Type.(*declTag); ok {
+						tfn, ok := t.Type.(*Func)
+						if !ok {
+							continue
+						}
+						if fn.Name != tfn.Name {
+							continue
+						}
+						_, err := b.Add(&declTag{fn, t.Value, t.Index})
+						if err != nil {
+							return nil, nil, fmt.Errorf("write decl tag: %w", err)
+						}
+					}
+				}
 			}
 		}
 

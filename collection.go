@@ -529,7 +529,7 @@ func (cl *collectionLoader) loadProgram(progName string) (*Program, error) {
 		}
 	}
 
-	prog, err := newProgramWithOptions(progSpec, cl.opts.Programs)
+	prog, err := newProgramWithOptions(progSpec, cl.opts.Programs, cl.coll.Types)
 	if err != nil {
 		return nil, fmt.Errorf("program %s: %w", progName, err)
 	}

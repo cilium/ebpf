@@ -219,7 +219,7 @@ func NewProgramWithOptions(spec *ProgramSpec, opts ProgramOptions) (*Program, er
 		return nil, errors.New("can't load a program from a nil spec")
 	}
 
-	prog, err := newProgramWithOptions(spec, opts)
+	prog, err := newProgramWithOptions(spec, opts, nil)
 	if errors.Is(err, asm.ErrUnsatisfiedMapReference) {
 		return nil, fmt.Errorf("cannot load program without loading its whole collection: %w", err)
 	}
@@ -235,7 +235,7 @@ var (
 	kfuncBadCall = []byte(fmt.Sprintf("invalid func unknown#%d\n", kfuncCallPoisonBase))
 )
 
-func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions) (*Program, error) {
+func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions, types *btf.Spec) (*Program, error) {
 	if len(spec.Instructions) == 0 {
 		return nil, errors.New("instructions cannot be empty")
 	}
@@ -307,7 +307,7 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions) (*Program, er
 	if errExtInfos == nil {
 		// Only add func and line info if the kernel supports it. This allows
 		// BPF compiled with modern toolchains to work on old kernels.
-		fib, lib, err := btf.MarshalExtInfos(insns, &b)
+		fib, lib, err := btf.MarshalExtInfos(insns, &b, types)
 		if err != nil {
 			return nil, fmt.Errorf("marshal ext_infos: %w", err)
 		}

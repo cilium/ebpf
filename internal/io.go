@@ -28,7 +28,7 @@ func NewBufferedSectionReader(ra io.ReaderAt, off, n int64) *bufio.Reader {
 	// of 4096. Allow arches with larger pages to allocate more, but don't
 	// allocate a fixed 4k buffer if we only need to read a small segment.
 	buf := n
-	if ps := int64(os.Getpagesize()); n > ps {
+	if ps := int64(Getpagesize()); n > ps {
 		buf = ps
 	}
 

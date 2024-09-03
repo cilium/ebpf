@@ -73,9 +73,6 @@ type MapSpec struct {
 	// The initial contents of the map. May be nil.
 	Contents []MapKV
 
-	// Whether to freeze a map after setting its initial contents.
-	Freeze bool
-
 	// InnerMap is used as a template for ArrayOfMaps and HashOfMaps
 	InnerMap *MapSpec
 
@@ -188,6 +185,10 @@ func (ms *MapSpec) dataSection() ([]byte, *btf.Datasec, error) {
 	}
 
 	return value, ds, nil
+}
+
+func (ms *MapSpec) readOnly() bool {
+	return (ms.Flags & sys.BPF_F_RDONLY_PROG) > 0
 }
 
 // MapKV is used to initialize the contents of a Map.
@@ -484,7 +485,7 @@ func handleMapCreateError(attr sys.MapCreateAttr, spec *MapSpec, err error) erro
 			return fmt.Errorf("map create: %w", haveFeatErr)
 		}
 	}
-	if spec.Flags&(sys.BPF_F_RDONLY_PROG|sys.BPF_F_WRONLY_PROG) > 0 || spec.Freeze {
+	if spec.Flags&(sys.BPF_F_RDONLY_PROG|sys.BPF_F_WRONLY_PROG) > 0 {
 		if haveFeatErr := haveMapMutabilityModifiers(); haveFeatErr != nil {
 			return fmt.Errorf("map create: %w", haveFeatErr)
 		}
@@ -1400,7 +1401,7 @@ func (m *Map) finalize(spec *MapSpec) error {
 		}
 	}
 
-	if spec.Freeze {
+	if spec.readOnly() {
 		if err := m.Freeze(); err != nil {
 			return fmt.Errorf("freezing map: %w", err)
 		}

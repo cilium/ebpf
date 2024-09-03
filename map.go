@@ -457,6 +457,11 @@ func (spec *MapSpec) createMap(inner *sys.FD) (_ *Map, err error) {
 		return nil, err
 	}
 
+	// TODO: Do this properly.
+	if haveMmapableMaps() == nil && isDataSection(spec.Name) {
+		spec.Flags |= sys.BPF_F_MMAPABLE
+	}
+
 	attr := sys.MapCreateAttr{
 		MapType:    sys.MapType(spec.Type),
 		KeySize:    spec.KeySize,

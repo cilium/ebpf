@@ -838,6 +838,14 @@ func TestMapQueue(t *testing.T) {
 	}
 
 	var v uint32
+	if err := m.Lookup(nil, &v); err != nil {
+		t.Fatal("Lookup (Peek) on Queue:", err)
+	}
+	if v != 42 {
+		t.Error("Want value 42, got", v)
+	}
+	v = 0
+
 	if err := m.LookupAndDelete(nil, &v); err != nil {
 		t.Fatal("Can't lookup and delete element:", err)
 	}
@@ -855,6 +863,10 @@ func TestMapQueue(t *testing.T) {
 
 	if err := m.LookupAndDelete(nil, &v); !errors.Is(err, ErrKeyNotExist) {
 		t.Fatal("Lookup and delete on empty Queue:", err)
+	}
+
+	if err := m.Lookup(nil, &v); !errors.Is(err, ErrKeyNotExist) {
+		t.Fatal("Lookup (Peek) on empty Queue:", err)
 	}
 }
 

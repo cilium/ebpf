@@ -1123,6 +1123,28 @@ func TestMapIterate(t *testing.T) {
 	qt.Assert(t, qt.DeepEquals(keys, data))
 }
 
+func TestIterateWrongMap(t *testing.T) {
+	testutils.SkipOnOldKernel(t, "4.20", "map type queue")
+
+	m, err := NewMap(&MapSpec{
+		Type:       Queue,
+		ValueSize:  4,
+		MaxEntries: 2,
+		Contents: []MapKV{
+			{nil, uint32(0)},
+			{nil, uint32(1)},
+		},
+	})
+	qt.Assert(t, qt.IsNil(err))
+	defer m.Close()
+
+	var value uint32
+	entries := m.Iterate()
+
+	qt.Assert(t, qt.IsFalse(entries.Next(nil, &value)))
+	qt.Assert(t, qt.IsNotNil(entries.Err()))
+}
+
 func TestMapIteratorAllocations(t *testing.T) {
 	arr, err := NewMap(&MapSpec{
 		Type:       Array,

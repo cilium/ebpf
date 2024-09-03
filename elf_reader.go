@@ -200,6 +200,10 @@ func loadVersion(sec *elf.Section, bo binary.ByteOrder) (uint32, error) {
 	return version, nil
 }
 
+func isConstantDataSection(name string) bool {
+	return strings.HasPrefix(name, ".rodata")
+}
+
 type elfSectionKind int
 
 const (
@@ -1137,9 +1141,8 @@ func (ec *elfCode) loadDataSections() error {
 			}
 		}
 
-		if strings.HasPrefix(sec.Name, ".rodata") {
+		if isConstantDataSection(sec.Name) {
 			mapSpec.Flags = sys.BPF_F_RDONLY_PROG
-			mapSpec.Freeze = true
 		}
 
 		ec.maps[sec.Name] = mapSpec
@@ -1175,7 +1178,6 @@ func (ec *elfCode) loadKconfigSection() error {
 		ValueSize:  ds.Size,
 		MaxEntries: 1,
 		Flags:      sys.BPF_F_RDONLY_PROG,
-		Freeze:     true,
 		Key:        &btf.Int{Size: 4},
 		Value:      ds,
 	}

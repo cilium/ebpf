@@ -104,8 +104,7 @@ func TestMapSpecCopy(t *testing.T) {
 		PinByName,
 		1,
 		[]MapKV{{1, 2}}, // Can't copy Contents, use value types
-		true,
-		nil, // InnerMap
+		nil,             // InnerMap
 		bytes.NewReader(nil),
 		&btf.Int{},
 		&btf.Int{},

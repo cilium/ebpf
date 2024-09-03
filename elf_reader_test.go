@@ -491,7 +491,7 @@ func TestStringSection(t *testing.T) {
 		t.Fatal("Unable to find map '.rodata.str1.1' in loaded collection")
 	}
 
-	if !strMap.Freeze {
+	if !strMap.readOnly() {
 		t.Fatal("Read only data maps should be frozen")
 	}
 

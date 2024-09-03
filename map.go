@@ -191,6 +191,10 @@ func (ms *MapSpec) readOnly() bool {
 	return (ms.Flags & sys.BPF_F_RDONLY_PROG) > 0
 }
 
+func (ms *MapSpec) writeOnly() bool {
+	return (ms.Flags & sys.BPF_F_WRONLY_PROG) > 0
+}
+
 // MapKV is used to initialize the contents of a Map.
 type MapKV struct {
 	Key   interface{}
@@ -479,13 +483,13 @@ func handleMapCreateError(attr sys.MapCreateAttr, spec *MapSpec, err error) erro
 		return fmt.Errorf("map create: %w (noPrealloc flag may be incompatible with map type %s)", err, spec.Type)
 	}
 
-	switch spec.Type {
-	case ArrayOfMaps, HashOfMaps:
+	if spec.Type.canStoreMap() {
 		if haveFeatErr := haveNestedMaps(); haveFeatErr != nil {
 			return fmt.Errorf("map create: %w", haveFeatErr)
 		}
 	}
-	if spec.Flags&(sys.BPF_F_RDONLY_PROG|sys.BPF_F_WRONLY_PROG) > 0 {
+
+	if spec.readOnly() || spec.writeOnly() {
 		if haveFeatErr := haveMapMutabilityModifiers(); haveFeatErr != nil {
 			return fmt.Errorf("map create: %w", haveFeatErr)
 		}

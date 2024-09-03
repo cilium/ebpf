@@ -1062,7 +1062,7 @@ func TestIterateEmptyMap(t *testing.T) {
 
 			var key string
 			var value uint64
-			if entries.Next(&key, &value) != false {
+			if entries.Next(&key, &value) {
 				t.Error("Empty hash should not be iterable")
 			}
 			if err := entries.Err(); err != nil {
@@ -1102,12 +1102,11 @@ func TestMapIterate(t *testing.T) {
 	}
 	defer hash.Close()
 
-	if err := hash.Put("hello", uint32(21)); err != nil {
-		t.Fatal(err)
-	}
-
-	if err := hash.Put("world", uint32(42)); err != nil {
-		t.Fatal(err)
+	data := []string{"hello", "world"}
+	for i, k := range data {
+		if err := hash.Put(k, uint32(i)); err != nil {
+			t.Fatal(err)
+		}
 	}
 
 	var key string
@@ -1118,22 +1117,10 @@ func TestMapIterate(t *testing.T) {
 	for entries.Next(&key, &value) {
 		keys = append(keys, key)
 	}
-
-	if err := entries.Err(); err != nil {
-		t.Fatal(err)
-	}
+	qt.Assert(t, qt.IsNil(entries.Err()))
 
 	sort.Strings(keys)
-
-	if n := len(keys); n != 2 {
-		t.Fatal("Expected to get 2 keys, have", n)
-	}
-	if keys[0] != "hello" {
-		t.Error("Expected index 0 to be hello, got", keys[0])
-	}
-	if keys[1] != "world" {
-		t.Error("Expected index 1 to be hello, got", keys[1])
-	}
+	qt.Assert(t, qt.DeepEquals(keys, data))
 }
 
 func TestMapIteratorAllocations(t *testing.T) {
@@ -1154,7 +1141,7 @@ func TestMapIteratorAllocations(t *testing.T) {
 	// AllocsPerRun warms up the function for us.
 	allocs := testing.AllocsPerRun(int(arr.MaxEntries()-1), func() {
 		if !iter.Next(&k, &v) {
-			t.Fatal("Next failed")
+			t.Fatal("Next failed while iterating: %w", iter.Err())
 		}
 	})
 

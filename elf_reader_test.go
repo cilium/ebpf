@@ -249,11 +249,18 @@ func TestLoadCollectionSpec(t *testing.T) {
 		}
 
 		err = have.RewriteConstants(map[string]interface{}{
-			"totallyBogus": uint32(1),
+			"totallyBogus":  uint32(1),
+			"totallyBogus2": uint32(2),
 		})
 		if err == nil {
 			t.Error("Rewriting a bogus constant doesn't fail")
 		}
+
+		var mErr *MissingConstantsError
+		if !errors.As(err, &mErr) {
+			t.Fatal("Error doesn't wrap MissingConstantsError:", err)
+		}
+		qt.Assert(t, qt.ContentEquals(mErr.Constants, []string{"totallyBogus", "totallyBogus2"}))
 
 		if diff := cmp.Diff(coll, have, cmpOpts...); diff != "" {
 			t.Errorf("MapSpec mismatch (-want +got):\n%s", diff)

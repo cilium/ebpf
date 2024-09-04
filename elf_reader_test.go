@@ -96,13 +96,64 @@ func TestLoadCollectionSpec(t *testing.T) {
 				ValueSize:  8,
 				MaxEntries: 1,
 			},
-			".data.custom": {
-				Name:       SanitizeName(".data.custom", -1),
+			".bss": {
+				Name:       SanitizeName(".bss", -1),
 				Type:       Array,
 				KeySize:    4,
 				ValueSize:  4,
 				MaxEntries: 1,
-				Contents:   []MapKV{{Key: uint32(0), Value: make([]uint8, 4)}},
+			},
+			".data": {
+				Name:       SanitizeName(".data", -1),
+				Type:       Array,
+				KeySize:    4,
+				ValueSize:  4,
+				MaxEntries: 1,
+			},
+			".data.test": {
+				Name:       SanitizeName(".data.test", -1),
+				Type:       Array,
+				KeySize:    4,
+				ValueSize:  4,
+				MaxEntries: 1,
+			},
+			".data.hidden": {
+				Name:       SanitizeName(".data.hidden", -1),
+				Type:       Array,
+				KeySize:    4,
+				ValueSize:  4,
+				MaxEntries: 1,
+			},
+			".data.struct": {
+				Name:       SanitizeName(".data.struct", -1),
+				Type:       Array,
+				KeySize:    4,
+				ValueSize:  16,
+				MaxEntries: 1,
+			},
+			".rodata": {
+				Name:       SanitizeName(".rodata", -1),
+				Type:       Array,
+				KeySize:    4,
+				ValueSize:  24,
+				MaxEntries: 1,
+				Flags:      sys.BPF_F_RDONLY_PROG,
+			},
+			".rodata.test": {
+				Name:       SanitizeName(".rodata.test", -1),
+				Type:       Array,
+				KeySize:    4,
+				ValueSize:  4,
+				MaxEntries: 1,
+				Flags:      sys.BPF_F_RDONLY_PROG,
+			},
+			".rodata.cst32": {
+				Name:       SanitizeName(".rodata.cst32", -1),
+				Type:       Array,
+				KeySize:    4,
+				ValueSize:  32,
+				MaxEntries: 1,
+				Flags:      sys.BPF_F_RDONLY_PROG,
 			},
 		},
 		Programs: map[string]*ProgramSpec{
@@ -148,6 +199,25 @@ func TestLoadCollectionSpec(t *testing.T) {
 				SectionName: "socket/4",
 				License:     "MIT",
 			},
+			"set_vars": {
+				Name:        "set_vars",
+				Type:        SocketFilter,
+				SectionName: "socket",
+				License:     "MIT",
+			},
+		},
+		Variables: map[string]*VariableSpec{
+			"arg":         {name: "arg", offset: 4, size: 4},
+			"arg2":        {name: "arg2", offset: 0, size: 4},
+			"arg3":        {name: "arg3", offset: 0, size: 4},
+			"key1":        {name: "key1", offset: 0, size: 4},
+			"key2":        {name: "key2", offset: 0, size: 4},
+			"key3":        {name: "key3", offset: 0, size: 4},
+			"neg":         {name: "neg", offset: 12, size: 4},
+			"static_neg":  {name: "static_neg", offset: 20, size: 4},
+			"static_uneg": {name: "static_uneg", offset: 16, size: 4},
+			"struct_var":  {name: "struct_var", offset: 0, size: 16},
+			"uneg":        {name: "uneg", offset: 8, size: 4},
 		},
 	}
 
@@ -159,17 +229,17 @@ func TestLoadCollectionSpec(t *testing.T) {
 			}
 			return false
 		}),
+		cmp.Comparer(func(a, b *VariableSpec) bool {
+			if a.name != b.name || a.offset != b.offset || a.size != b.size {
+				return false
+			}
+			return true
+		}),
 		cmpopts.IgnoreTypes(new(btf.Spec)),
 		cmpopts.IgnoreFields(CollectionSpec{}, "ByteOrder", "Types"),
 		cmpopts.IgnoreFields(ProgramSpec{}, "Instructions", "ByteOrder"),
-		cmpopts.IgnoreFields(MapSpec{}, "Key", "Value"),
+		cmpopts.IgnoreFields(MapSpec{}, "Key", "Value", "Contents"),
 		cmpopts.IgnoreUnexported(ProgramSpec{}),
-		cmpopts.IgnoreMapEntries(func(key string, _ *MapSpec) bool {
-			if key == ".bss" || key == ".data" || strings.HasPrefix(key, ".rodata") {
-				return true
-			}
-			return false
-		}),
 	}
 
 	testutils.Files(t, testutils.Glob(t, "testdata/loader-*.elf"), func(t *testing.T, file string) {
@@ -187,11 +257,18 @@ func TestLoadCollectionSpec(t *testing.T) {
 		}
 
 		err = have.RewriteConstants(map[string]interface{}{
-			"totallyBogus": uint32(1),
+			"totallyBogus":  uint32(1),
+			"totallyBogus2": uint32(2),
 		})
 		if err == nil {
 			t.Error("Rewriting a bogus constant doesn't fail")
 		}
+
+		var mErr *MissingConstantsError
+		if !errors.As(err, &mErr) {
+			t.Fatal("Error doesn't wrap MissingConstantsError:", err)
+		}
+		qt.Assert(t, qt.ContentEquals(mErr.Constants, []string{"totallyBogus", "totallyBogus2"}))
 
 		if diff := cmp.Diff(coll, have, cmpOpts...); diff != "" {
 			t.Errorf("MapSpec mismatch (-want +got):\n%s", diff)

@@ -42,6 +42,7 @@ type elfCode struct {
 	btf      *btf.Spec
 	extInfo  *btf.ExtInfos
 	maps     map[string]*MapSpec
+	vars     map[string]*VariableSpec
 	kfuncs   map[string]*btf.Func
 	kconfig  *MapSpec
 }
@@ -100,7 +101,7 @@ func LoadCollectionSpecFromReader(rd io.ReaderAt) (*CollectionSpec, error) {
 			sections[idx] = newElfSection(sec, mapSection)
 		case sec.Name == ".maps":
 			sections[idx] = newElfSection(sec, btfMapSection)
-		case sec.Name == ".bss" || strings.HasPrefix(sec.Name, ".data") || strings.HasPrefix(sec.Name, ".rodata"):
+		case isDataSection(sec.Name):
 			sections[idx] = newElfSection(sec, dataSection)
 		case sec.Type == elf.SHT_REL:
 			// Store relocations under the section index of the target
@@ -133,6 +134,7 @@ func LoadCollectionSpecFromReader(rd io.ReaderAt) (*CollectionSpec, error) {
 		btf:         btfSpec,
 		extInfo:     btfExtInfo,
 		maps:        make(map[string]*MapSpec),
+		vars:        make(map[string]*VariableSpec),
 		kfuncs:      make(map[string]*btf.Func),
 	}
 
@@ -173,7 +175,7 @@ func LoadCollectionSpecFromReader(rd io.ReaderAt) (*CollectionSpec, error) {
 		return nil, fmt.Errorf("load programs: %w", err)
 	}
 
-	return &CollectionSpec{ec.maps, progs, btfSpec, ec.ByteOrder}, nil
+	return &CollectionSpec{ec.maps, progs, ec.vars, btfSpec, ec.ByteOrder}, nil
 }
 
 func loadLicense(sec *elf.Section) (string, error) {
@@ -198,6 +200,10 @@ func loadVersion(sec *elf.Section, bo binary.ByteOrder) (uint32, error) {
 		return 0, fmt.Errorf("section %s: %v", sec.Name, err)
 	}
 	return version, nil
+}
+
+func isDataSection(name string) bool {
+	return name == ".bss" || strings.HasPrefix(name, ".data") || strings.HasPrefix(name, ".rodata")
 }
 
 func isConstantDataSection(name string) bool {
@@ -1101,6 +1107,10 @@ func (ec *elfCode) loadDataSections() error {
 			continue
 		}
 
+		if sec.Size > math.MaxUint32 {
+			return fmt.Errorf("data section %s: contents exceed maximum size", sec.Name)
+		}
+
 		mapSpec := &MapSpec{
 			Name:       SanitizeName(sec.Name, -1),
 			Type:       Array,
@@ -1116,18 +1126,45 @@ func (ec *elfCode) loadDataSections() error {
 			if err != nil {
 				return fmt.Errorf("data section %s: can't get contents: %w", sec.Name, err)
 			}
-
-			if uint64(len(data)) > math.MaxUint32 {
-				return fmt.Errorf("data section %s: contents exceed maximum size", sec.Name)
-			}
 			mapSpec.Contents = []MapKV{{uint32(0), data}}
 
 		case elf.SHT_NOBITS:
-			// NOBITS sections like .bss contain only zeroes, and since data sections
-			// are Arrays, the kernel already preallocates them. Skip reading zeroes
-			// from the ELF.
+			// NOBITS sections like .bss contain only zeroes and are not allocated in
+			// the ELF. Since data sections are Arrays, the kernel can preallocate
+			// them. Don't attempt reading zeroes from the ELF, instead allocate the
+			// zeroed memory to support getting and setting VariableSpecs for sections
+			// like .bss.
+			mapSpec.Contents = []MapKV{{uint32(0), make([]byte, sec.Size)}}
+
 		default:
 			return fmt.Errorf("data section %s: unknown section type %s", sec.Name, sec.Type)
+		}
+
+		for off, sym := range sec.symbols {
+			// Skip symbols marked with the 'hidden' attribute.
+			if elf.ST_VISIBILITY(sym.Other) == elf.STV_HIDDEN {
+				continue
+			}
+
+			if ec.vars[sym.Name] != nil {
+				return fmt.Errorf("data section %s: duplicate variable %s", sec.Name, sym.Name)
+			}
+
+			// Skip symbols starting with a dot, they are compiler-internal symbols
+			// emitted by clang 11 and earlier and are not cleaned up by the bpf
+			// compiler backend (e.g. symbols named .Lconstinit.1 in sections like
+			// .rodata.cst32). Variables in C cannot start with a dot, so filter these
+			// out.
+			if strings.HasPrefix(sym.Name, ".") {
+				continue
+			}
+
+			ec.vars[sym.Name] = &VariableSpec{
+				name:   sym.Name,
+				offset: off,
+				size:   sym.Size,
+				m:      mapSpec,
+			}
 		}
 
 		// It is possible for a data section to exist without a corresponding BTF Datasec
@@ -1138,6 +1175,34 @@ func (ec *elfCode) loadDataSections() error {
 				// Assign the spec's key and BTF only if the Datasec lookup was successful.
 				mapSpec.Key = &btf.Void{}
 				mapSpec.Value = ds
+
+				// Populate VariableSpecs with type information, if available.
+				for _, v := range ds.Vars {
+					name := v.Type.TypeName()
+					if name == "" {
+						return fmt.Errorf("data section %s: anonymous variable %v", sec.Name, v)
+					}
+
+					if _, ok := v.Type.(*btf.Var); !ok {
+						return fmt.Errorf("data section %s: unexpected type %T for variable %s", sec.Name, v.Type, name)
+					}
+
+					ev := ec.vars[name]
+					if ev == nil {
+						// Hidden symbols appear in the BTF Datasec but don't receive a VariableSpec.
+						continue
+					}
+
+					if uint64(v.Offset) != ev.offset {
+						return fmt.Errorf("data section %s: variable %s datasec offset (%d) doesn't match ELF symbol offset (%d)", sec.Name, name, v.Offset, ev.offset)
+					}
+
+					if uint64(v.Size) != ev.size {
+						return fmt.Errorf("data section %s: variable %s size in datasec (%d) doesn't match ELF symbol size (%d)", sec.Name, name, v.Size, ev.size)
+					}
+
+					ev.t = v.Type
+				}
 			}
 		}
 

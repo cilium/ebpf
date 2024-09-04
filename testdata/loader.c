@@ -102,7 +102,7 @@ static volatile const uint32_t arg; // .rodata, populated by loader
 // custom .rodata section, populated by loader
 static volatile const uint32_t arg2 __section(".rodata.test");
 // custom .data section
-static volatile uint32_t arg3 __section(".data.custom");
+static volatile uint32_t arg3 __section(".data.test");
 
 __section("xdp") int xdp_prog() {
 	map_lookup_elem(&hash_map, (void *)&key1);
@@ -141,6 +141,22 @@ __section("socket/3") int data_sections() {
 	if (static_neg != -4)
 		return __LINE__;
 
+	return 0;
+}
+
+// Should not appear in CollectionSpec.Variables.
+__hidden volatile uint32_t hidden __section(".data.hidden");
+
+struct struct_var_t {
+	uint64_t a;
+	uint64_t b;
+};
+static volatile struct struct_var_t struct_var __section(".data.struct");
+
+__section("socket") int set_vars() {
+	hidden       = 0xbeef1;
+	struct_var.a = 0xbeef2;
+	struct_var.b = 0xbeef3;
 	return 0;
 }
 

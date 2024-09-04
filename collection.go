@@ -12,7 +12,6 @@ import (
 	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/kconfig"
 	"github.com/cilium/ebpf/internal/linux"
-	"github.com/cilium/ebpf/internal/sysenc"
 )
 
 // CollectionOptions control loading a collection into the kernel.
@@ -36,8 +35,9 @@ type CollectionOptions struct {
 
 // CollectionSpec describes a collection.
 type CollectionSpec struct {
-	Maps     map[string]*MapSpec
-	Programs map[string]*ProgramSpec
+	Maps      map[string]*MapSpec
+	Programs  map[string]*ProgramSpec
+	Variables map[string]*VariableSpec
 
 	// Types holds type information about Maps and Programs.
 	// Modifications to Types are currently undefined behaviour.
@@ -57,6 +57,7 @@ func (cs *CollectionSpec) Copy() *CollectionSpec {
 	cpy := CollectionSpec{
 		Maps:      make(map[string]*MapSpec, len(cs.Maps)),
 		Programs:  make(map[string]*ProgramSpec, len(cs.Programs)),
+		Variables: make(map[string]*VariableSpec, len(cs.Variables)),
 		ByteOrder: cs.ByteOrder,
 		Types:     cs.Types.Copy(),
 	}
@@ -67,6 +68,10 @@ func (cs *CollectionSpec) Copy() *CollectionSpec {
 
 	for name, spec := range cs.Programs {
 		cpy.Programs[name] = spec.Copy()
+	}
+
+	for name, spec := range cs.Variables {
+		cpy.Variables[name] = spec.copy(&cpy)
 	}
 
 	return &cpy

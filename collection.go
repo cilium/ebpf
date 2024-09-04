@@ -12,7 +12,6 @@ import (
 	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/kconfig"
 	"github.com/cilium/ebpf/internal/linux"
-	"github.com/cilium/ebpf/internal/sysenc"
 )
 
 // CollectionOptions control loading a collection into the kernel.
@@ -145,65 +144,24 @@ func (m *MissingConstantsError) Error() string {
 // From Linux 5.5 the verifier will use constants to eliminate dead code.
 //
 // Returns an error wrapping [MissingConstantsError] if a constant doesn't exist.
+//
+// Deprecated: Use [CollectionSpec.Variables] to interact with constants instead.
+// RewriteConstants is now a wrapper around the VariableSpec API.
 func (cs *CollectionSpec) RewriteConstants(consts map[string]interface{}) error {
-	replaced := make(map[string]bool)
-
-	for name, spec := range cs.Maps {
-		if !strings.HasPrefix(name, ".rodata") {
-			continue
-		}
-
-		b, ds, err := spec.dataSection()
-		if errors.Is(err, errMapNoBTFValue) {
-			// Data sections without a BTF Datasec are valid, but don't support
-			// constant replacements.
-			continue
-		}
-		if err != nil {
-			return fmt.Errorf("map %s: %w", name, err)
-		}
-
-		// MapSpec.Copy() performs a shallow copy. Fully copy the byte slice
-		// to avoid any changes affecting other copies of the MapSpec.
-		cpy := make([]byte, len(b))
-		copy(cpy, b)
-
-		for _, v := range ds.Vars {
-			vname := v.Type.TypeName()
-			replacement, ok := consts[vname]
-			if !ok {
-				continue
-			}
-
-			if _, ok := v.Type.(*btf.Var); !ok {
-				return fmt.Errorf("section %s: unexpected type %T for variable %s", name, v.Type, vname)
-			}
-
-			if replaced[vname] {
-				return fmt.Errorf("section %s: duplicate variable %s", name, vname)
-			}
-
-			if int(v.Offset+v.Size) > len(cpy) {
-				return fmt.Errorf("section %s: offset %d(+%d) for variable %s is out of bounds", name, v.Offset, v.Size, vname)
-			}
-
-			b, err := sysenc.Marshal(replacement, int(v.Size))
-			if err != nil {
-				return fmt.Errorf("marshaling constant replacement %s: %w", vname, err)
-			}
-
-			b.CopyTo(cpy[v.Offset : v.Offset+v.Size])
-
-			replaced[vname] = true
-		}
-
-		spec.Contents[0] = MapKV{Key: uint32(0), Value: cpy}
-	}
-
 	var missing []string
-	for c := range consts {
-		if !replaced[c] {
-			missing = append(missing, c)
+	for n, c := range consts {
+		v, ok := cs.Variables[n]
+		if !ok {
+			missing = append(missing, n)
+			continue
+		}
+
+		if !v.Constant() {
+			return fmt.Errorf("variable %s is not a constant", n)
+		}
+
+		if err := v.Set(c); err != nil {
+			return fmt.Errorf("rewriting constant %s: %w", n, err)
 		}
 	}
 

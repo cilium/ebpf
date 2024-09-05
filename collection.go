@@ -189,8 +189,8 @@ func (cs *CollectionSpec) RewriteConstants(consts map[string]interface{}) error 
 // Returns an error if any of the eBPF objects can't be found, or
 // if the same MapSpec or ProgramSpec is assigned multiple times.
 func (cs *CollectionSpec) Assign(to interface{}) error {
-	// Assign() only supports assigning ProgramSpecs and MapSpecs,
-	// so doesn't load any resources into the kernel.
+	// Assign() only supports assigning ProgramSpecs, MapSpecs
+	// and VariableSpecs, so doesn't load any resources into the kernel.
 	getValue := func(typ reflect.Type, name string) (interface{}, error) {
 		switch typ {
 
@@ -205,6 +205,12 @@ func (cs *CollectionSpec) Assign(to interface{}) error {
 				return m, nil
 			}
 			return nil, fmt.Errorf("missing map %q", name)
+
+		case reflect.TypeOf((*VariableSpec)(nil)):
+			if m := cs.Variables[name]; m != nil {
+				return m, nil
+			}
+			return nil, fmt.Errorf("missing variable %q", name)
 
 		default:
 			return nil, fmt.Errorf("unsupported type %s", typ)
@@ -254,6 +260,11 @@ func (cs *CollectionSpec) LoadAndAssign(to interface{}, opts *CollectionOptions)
 	assignedVars := make(map[string]bool)
 
 	getValue := func(typ reflect.Type, name string) (interface{}, error) {
+		handleVar := func() (*Variable, error) {
+			assignedVars[name] = true
+			return loader.loadVariable(name)
+		}
+
 		switch typ {
 
 		case reflect.TypeOf((*Program)(nil)):
@@ -265,10 +276,12 @@ func (cs *CollectionSpec) LoadAndAssign(to interface{}, opts *CollectionOptions)
 			return loader.loadMap(name)
 
 		case reflect.TypeOf((*Variable)(nil)):
-			assignedVars[name] = true
-			return loader.loadVariable(name)
+			return handleVar()
 
 		default:
+			if reflect.TypeOf((*Variable)(nil)).ConvertibleTo(typ) {
+				return handleVar()
+			}
 			return nil, fmt.Errorf("unsupported type %s", typ)
 		}
 	}
@@ -756,9 +769,17 @@ func (coll *Collection) Assign(to interface{}) error {
 	assignedProgs := make(map[string]bool)
 	assignedVars := make(map[string]bool)
 
-	// Assign() only transfers already-loaded Maps and Programs. No extra
-	// loading is done.
+	// Assign() only transfers already-loaded Maps, Programs and Variablees.
+	// No extra loading is done.
 	getValue := func(typ reflect.Type, name string) (interface{}, error) {
+		handleVar := func() (*Variable, error) {
+			if v := coll.Variables[name]; v != nil {
+				assignedVars[name] = true
+				return v, nil
+			}
+			return nil, fmt.Errorf("missing variable %q", name)
+		}
+
 		switch typ {
 
 		case reflect.TypeOf((*Program)(nil)):
@@ -776,13 +797,13 @@ func (coll *Collection) Assign(to interface{}) error {
 			return nil, fmt.Errorf("missing map %q", name)
 
 		case reflect.TypeOf((*Variable)(nil)):
-			if v := coll.Variables[name]; v != nil {
-				assignedVars[name] = true
-				return v, nil
-			}
-			return nil, fmt.Errorf("missing variable %q", name)
+			return handleVar()
 
 		default:
+			if reflect.TypeOf((*Variable)(nil)).ConvertibleTo(typ) {
+				handleVar()
+			}
+
 			return nil, fmt.Errorf("unsupported type %s", typ)
 		}
 	}
@@ -958,9 +979,23 @@ func assignValues(to interface{},
 		if !field.value.CanSet() {
 			return fmt.Errorf("field %s: can't set value", field.Name)
 		}
-		field.value.Set(reflect.ValueOf(value))
 
-		assigned[e] = field.Name
+		// Match equal variables assignments.
+		if field.Type == reflect.TypeOf(value) {
+			field.value.Set(reflect.ValueOf(value))
+			assigned[e] = field.Name
+			continue
+		}
+
+		// Match all wrappers around `value` that still can convert to `field.Type`.
+		// Example: having an `int` variable assigned to `type MyType int`.
+		if reflect.TypeOf(value).ConvertibleTo(field.Type) {
+			field.value.Set(reflect.ValueOf(value).Convert(field.Type))
+			assigned[e] = field.Name
+			continue
+		}
+
+		panic(fmt.Sprintf("unable to assign type %v to type %v", reflect.TypeOf(value), field.Type))
 	}
 
 	return nil

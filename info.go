@@ -133,9 +133,12 @@ type ProgramInfo struct {
 	haveCreatedByUID bool
 	btf              btf.ID
 	stats            *programStats
+	loadTime         time.Duration
 
-	maps  []MapID
-	insns []byte
+	maps                 []MapID
+	insns                []byte
+	jitedSize            uint32
+	verifiedInstructions uint32
 
 	lineInfos    []byte
 	numLineInfos uint32
@@ -164,6 +167,9 @@ func newProgramInfoFromFd(fd *sys.FD) (*ProgramInfo, error) {
 			runCount:        info.RunCnt,
 			recursionMisses: info.RecursionMisses,
 		},
+		jitedSize:            info.JitedProgLen,
+		loadTime:             time.Duration(info.LoadTime),
+		verifiedInstructions: info.VerifiedInsns,
 	}
 
 	// Start with a clean struct for the second call, otherwise we may get EFAULT.
@@ -391,6 +397,29 @@ func (pi *ProgramInfo) Instructions() (asm.Instructions, error) {
 	return insns, nil
 }
 
+// JitedSize returns the size of the program's JIT-compiled machine code in bytes, which is the
+// actual code executed on the host's CPU. This field requires the BPF JIT compiler to be enabled.
+//
+// Available from 4.13. Reading this metadata requires CAP_BPF or equivalent.
+func (pi *ProgramInfo) JitedSize() (uint32, error) {
+	if pi.jitedSize == 0 {
+		return 0, fmt.Errorf("insufficient permissions, unsupported kernel, or JIT compiler disabled: %w", ErrNotSupported)
+	}
+	return pi.jitedSize, nil
+}
+
+// TranslatedSize returns the size of the program's translated instructions in bytes, after it has
+// been verified and rewritten by the kernel.
+//
+// Available from 4.13. Reading this metadata requires CAP_BPF or equivalent.
+func (pi *ProgramInfo) TranslatedSize() (int, error) {
+	insns := len(pi.insns)
+	if insns == 0 {
+		return 0, fmt.Errorf("insufficient permissions or unsupported kernel: %w", ErrNotSupported)
+	}
+	return insns, nil
+}
+
 // MapIDs returns the maps related to the program.
 //
 // Available from 4.15.
@@ -398,6 +427,25 @@ func (pi *ProgramInfo) Instructions() (asm.Instructions, error) {
 // The bool return value indicates whether this optional field is available.
 func (pi *ProgramInfo) MapIDs() ([]MapID, bool) {
 	return pi.maps, pi.maps != nil
+}
+
+// LoadTime returns when the program was loaded since boot time.
+//
+// Available from 4.15.
+//
+// The bool return value indicates whether this optional field is available.
+func (pi *ProgramInfo) LoadTime() (time.Duration, bool) {
+	// loadTime and NrMapIds were introduced in the same kernel version.
+	return pi.loadTime, pi.loadTime > 0
+}
+
+// VerifiedInstructions returns the number verified instructions in the program.
+//
+// Available from 5.16.
+//
+// The bool return value indicates whether this optional field is available.
+func (pi *ProgramInfo) VerifiedInstructions() (uint32, bool) {
+	return pi.verifiedInstructions, pi.verifiedInstructions > 0
 }
 
 func scanFdInfo(fd *sys.FD, fields map[string]interface{}) error {

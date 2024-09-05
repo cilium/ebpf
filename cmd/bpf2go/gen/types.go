@@ -12,10 +12,6 @@ func CollectGlobalTypes(spec *ebpf.CollectionSpec) []btf.Type {
 	var types []btf.Type
 	for _, typ := range collectMapTypes(spec.Maps) {
 		switch btf.UnderlyingType(typ).(type) {
-		case *btf.Datasec:
-			// Avoid emitting .rodata, .bss, etc. for now. We might want to
-			// name these types differently, etc.
-			continue
 
 		case *btf.Int:
 			// Don't emit primitive types by default.

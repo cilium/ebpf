@@ -4,9 +4,44 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"text/template"
+
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
 )
 
 var errNestedTooDeep = errors.New("nested too deep")
+
+var tplVars = `
+
+type {{ .Name }} ebpf.Variable
+
+func(v *{{ .Name }}) Get() ({{ .Type }}, error) {
+	var ret  {{ .Type }}
+	return ret, (*ebpf.Variable)(v).Get(&ret)
+}
+
+{{- if not .ReadOnly }}
+func(v *{{ .Name }}) Set(val {{ .Type }}) error {
+	return (*ebpf.Variable)(v).Set(val)
+}
+
+{{ if .CanAtomic }}
+func(v *{{ .Name }}) AtomicRef() *ebpf.{{ .CapitalizedType }} {
+	ret, _ := (*ebpf.Variable)(v).Atomic{{ .CapitalizedType }}()
+	return ret
+}
+{{ end }}
+{{- end }}
+`
+
+type TplVarsData struct {
+	Name            string
+	Type            string
+	CapitalizedType string
+	ReadOnly        bool
+	CanAtomic       bool
+}
 
 // GoFormatter converts a Type to Go syntax.
 //
@@ -64,7 +99,12 @@ func (gf *GoFormatter) writeTypeDecl(name string, typ Type) error {
 	}
 
 	typ = skipQualifiers(typ)
-	fmt.Fprintf(&gf.w, "type %s ", name)
+	// custom handling Datasec types in writeDatasecLit
+	_, ok := typ.(*Datasec)
+	if !ok {
+		fmt.Fprintf(&gf.w, "type %s ", name)
+	}
+
 	if err := gf.writeTypeLit(typ, 0); err != nil {
 		return err
 	}
@@ -295,41 +335,82 @@ func (gf *GoFormatter) writeStructField(m Member, depth int) error {
 }
 
 func (gf *GoFormatter) writeDatasecLit(ds *Datasec, depth int) error {
-	gf.w.WriteString("struct { ")
+	tmpl, err := template.New("varsHelpers").Parse(tplVars)
+	if err != nil {
+		return fmt.Errorf("failed to parse template: %w", err)
+	}
 
-	prevOffset := uint32(0)
 	for i, vsi := range ds.Vars {
 		v, ok := vsi.Type.(*Var)
 		if !ok {
 			return fmt.Errorf("can't format %s as part of data section", vsi.Type)
 		}
 
-		if v.Linkage != GlobalVar {
-			// Ignore static, extern, etc. for now.
-			continue
+		id := gf.identifier(v.Name)
+		va := getSuppAtomicType(v.Type)
+		tplArgs := TplVarsData{
+			Name:            id,
+			Type:            id + "Type",
+			CapitalizedType: cases.Title(language.Und, cases.NoLower).String(va),
+			ReadOnly:        strings.HasPrefix(ds.Name, ".ro"),
+			CanAtomic:       va != "",
 		}
 
-		if v.Name == "" {
-			return fmt.Errorf("variable %d: empty name", i)
-		}
-
-		gf.writePadding(vsi.Offset - prevOffset)
-		prevOffset = vsi.Offset + vsi.Size
-
-		fmt.Fprintf(&gf.w, "%s ", gf.identifier(v.Name))
+		fmt.Fprintf(&gf.w, "type %s =", tplArgs.Type)
 
 		if err := gf.writeType(v.Type, depth); err != nil {
 			return fmt.Errorf("variable %d: %w", i, err)
 		}
 
-		gf.w.WriteString("; ")
+		if err := tmpl.Execute(&gf.w, tplArgs); err != nil {
+			return fmt.Errorf("failed to execute template for variable %s: %w", tplArgs.Name, err)
+		}
 	}
 
-	gf.writePadding(ds.Size - prevOffset)
-	gf.w.WriteString("}")
 	return nil
 }
 
+// getSuppAtomicType returns the corresponding Go type for the
+// provided argument if it supports package atomic primitives.
+// Current support for int32, uint32, int64, uint64.
+func getSuppAtomicType(t Type) string {
+	checkInt := func(t *Int) string {
+		ret := ""
+		switch t.Size {
+		// uint32/int32 and uint64/int64
+		case 4:
+			ret = "int32"
+		case 8:
+			ret = "int64"
+		default:
+			return ""
+		}
+		if t.Encoding == Unsigned {
+			ret = "u" + ret
+		}
+		return ret
+	}
+
+	switch v := skipQualifiers(t).(type) {
+	case *Int:
+		return checkInt(v)
+	case *Typedef:
+		if vv, ok := v.Type.(*Int); ok {
+			return checkInt(vv)
+		}
+	case *Enum:
+		i := &Int{
+			Name:     v.Name,
+			Size:     v.Size,
+			Encoding: Unsigned,
+		}
+		if v.Signed {
+			i.Encoding = Signed
+		}
+		return checkInt(i)
+	}
+	return ""
+}
 func (gf *GoFormatter) writePadding(bytes uint32) {
 	if bytes > 0 {
 		fmt.Fprintf(&gf.w, "_ [%d]byte; ", bytes)

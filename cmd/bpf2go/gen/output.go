@@ -49,6 +49,10 @@ func (n templateName) MapSpecs() string {
 	return string(n) + "MapSpecs"
 }
 
+func (n templateName) VariableSpecs() string {
+	return string(n) + "VariableSpecs"
+}
+
 func (n templateName) Load() string {
 	return n.maybeExport("load" + toUpperFirst(string(n)))
 }
@@ -63,6 +67,10 @@ func (n templateName) Objects() string {
 
 func (n templateName) Maps() string {
 	return string(n) + "Maps"
+}
+
+func (n templateName) Variables() string {
+	return string(n) + "Variables"
 }
 
 func (n templateName) Programs() string {
@@ -82,6 +90,8 @@ type GenerateArgs struct {
 	Constraints constraint.Expr
 	// Maps to be emitted.
 	Maps []string
+	// Variables to be emitted.
+	Variables []string
 	// Programs to be emitted.
 	Programs []string
 	// Types to be emitted.
@@ -103,17 +113,14 @@ func Generate(args GenerateArgs) error {
 		return fmt.Errorf("file %q contains an invalid character", args.ObjectFile)
 	}
 
-	for _, typ := range args.Types {
-		if _, ok := btf.As[*btf.Datasec](typ); ok {
-			// Avoid emitting .rodata, .bss, etc. for now. We might want to
-			// name these types differently, etc.
-			return fmt.Errorf("can't output btf.Datasec: %s", typ)
-		}
-	}
-
 	maps := make(map[string]string)
 	for _, name := range args.Maps {
 		maps[name] = internal.Identifier(name)
+	}
+
+	vars := make(map[string]string)
+	for _, name := range args.Variables {
+		vars[name] = internal.Identifier(name)
 	}
 
 	programs := make(map[string]string)
@@ -146,6 +153,7 @@ func Generate(args GenerateArgs) error {
 		Constraints constraint.Expr
 		Name        templateName
 		Maps        map[string]string
+		Variables   map[string]string
 		Programs    map[string]string
 		Types       []btf.Type
 		TypeNames   map[btf.Type]string
@@ -157,6 +165,7 @@ func Generate(args GenerateArgs) error {
 		args.Constraints,
 		templateName(args.Stem),
 		maps,
+		vars,
 		programs,
 		types,
 		typeNames,

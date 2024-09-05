@@ -370,6 +370,11 @@ func (b2g *bpf2go) convert(tgt gen.Target, goarches gen.GoArches) (err error) {
 		}
 	}
 
+	var vars []string
+	for name := range spec.Variables {
+		vars = append(vars, name)
+	}
+
 	var programs []string
 	for name := range spec.Programs {
 		programs = append(programs, name)
@@ -397,6 +402,7 @@ func (b2g *bpf2go) convert(tgt gen.Target, goarches gen.GoArches) (err error) {
 		Stem:        b2g.identStem,
 		Constraints: constraints,
 		Maps:        maps,
+		Variables:   vars,
 		Programs:    programs,
 		Types:       types,
 		ObjectFile:  filepath.Base(objFileName),

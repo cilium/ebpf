@@ -90,10 +90,15 @@ type GenerateArgs struct {
 	ObjectFile string
 	// Output to write template to.
 	Output io.Writer
+	// Function which transforms the input into a valid go identifier. Uses the default behaviour if nil
+	Identifier func(string) string
 }
 
 // Generate bindings for a BPF ELF file.
 func Generate(args GenerateArgs) error {
+	if args.Identifier == nil {
+		args.Identifier = internal.Identifier
+	}
 	if !token.IsIdentifier(args.Stem) {
 		return fmt.Errorf("%q is not a valid identifier", args.Stem)
 	}
@@ -113,18 +118,18 @@ func Generate(args GenerateArgs) error {
 
 	maps := make(map[string]string)
 	for _, name := range args.Maps {
-		maps[name] = internal.Identifier(name)
+		maps[name] = args.Identifier(name)
 	}
 
 	programs := make(map[string]string)
 	for _, name := range args.Programs {
-		programs[name] = internal.Identifier(name)
+		programs[name] = args.Identifier(name)
 	}
 
 	typeNames := make(map[btf.Type]string)
 	for _, typ := range args.Types {
 		// NB: This also deduplicates types.
-		typeNames[typ] = args.Stem + internal.Identifier(typ.TypeName())
+		typeNames[typ] = args.Stem + args.Identifier(typ.TypeName())
 	}
 
 	// Ensure we don't have conflicting names and generate a sorted list of
@@ -136,7 +141,7 @@ func Generate(args GenerateArgs) error {
 
 	gf := &btf.GoFormatter{
 		Names:      typeNames,
-		Identifier: internal.Identifier,
+		Identifier: args.Identifier,
 	}
 
 	ctx := struct {

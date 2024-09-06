@@ -3,6 +3,7 @@ package gen
 import (
 	"bytes"
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/go-quicktest/qt"
@@ -81,3 +82,18 @@ func TestPackageImport(t *testing.T) {
 var typesEqualComparer = cmp.Comparer(func(a, b btf.Type) bool {
 	return a == b
 })
+
+func TestCustomIdentifier(t *testing.T) {
+	var buf bytes.Buffer
+	args := GenerateArgs{
+		Package:    "foo",
+		Stem:       "bar",
+		ObjectFile: "frob.o",
+		Output:     &buf,
+		Programs:   []string{"do_thing"},
+		Identifier: strings.ToUpper,
+	}
+	err := Generate(args)
+	qt.Assert(t, qt.IsNil(err))
+	qt.Assert(t, qt.StringContains(buf.String(), "DO_THING"))
+}

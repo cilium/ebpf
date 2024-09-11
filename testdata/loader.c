@@ -95,14 +95,16 @@ int __attribute__((noinline)) global_fn(uint32_t arg) {
 	return static_fn(arg) + global_fn2(arg) + global_fn3(arg);
 }
 
-static volatile unsigned int key1 = 0; // .bss
-static volatile unsigned int key2 = 1; // .data
-volatile const unsigned int key3  = 2; // .rodata
-static volatile const uint32_t arg; // .rodata, populated by loader
+volatile unsigned int key1       = 0; // .bss
+volatile unsigned int key2       = 1; // .data
+volatile const unsigned int key3 = 2; // .rodata
+
+// .rodata, populated by loader
+volatile const uint32_t arg;
 // custom .rodata section, populated by loader
-static volatile const uint32_t arg2 __section(".rodata.test");
+volatile const uint32_t arg2 __section(".rodata.test");
 // custom .data section
-static volatile uint32_t arg3 __section(".data.custom");
+volatile uint32_t arg3 __section(".data.test");
 
 __section("xdp") int xdp_prog() {
 	map_lookup_elem(&hash_map, (void *)&key1);
@@ -141,6 +143,26 @@ __section("socket/3") int data_sections() {
 	if (static_neg != -4)
 		return __LINE__;
 
+	return 0;
+}
+
+// Should not appear in CollectionSpec.Variables.
+__hidden volatile uint32_t hidden;
+
+// Weak variables can be overridden by non-weak symbols when linking BPF
+// programs using bpftool. Make sure they appear in CollectionSpec.Variables.
+__weak volatile uint32_t weak;
+
+struct struct_var_t {
+	uint64_t a;
+	uint64_t b;
+};
+volatile struct struct_var_t struct_var __section(".data.struct");
+
+__section("socket") int set_vars() {
+	hidden       = 0xbeef1;
+	struct_var.a = 0xbeef2;
+	struct_var.b = 0xbeef3;
 	return 0;
 }
 

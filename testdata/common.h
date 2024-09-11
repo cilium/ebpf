@@ -24,6 +24,8 @@ enum libbpf_tristate {
 #define __weak __attribute__((weak))
 #endif
 
+#define __hidden __attribute__((visibility("hidden")))
+
 #define bpf_ksym_exists(sym) \
 	({ \
 		_Static_assert(!__builtin_constant_p(!!sym), #sym " should be marked as __weak"); \

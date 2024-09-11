@@ -39,6 +39,11 @@ type CollectionSpec struct {
 	Maps     map[string]*MapSpec
 	Programs map[string]*ProgramSpec
 
+	// Variables refer to global variables declared in the ELF. They can be read
+	// and modified freely before loading the Collection. Modifying them after
+	// loading has no effect on a running eBPF program.
+	Variables map[string]*VariableSpec
+
 	// Types holds type information about Maps and Programs.
 	// Modifications to Types are currently undefined behaviour.
 	Types *btf.Spec
@@ -57,6 +62,7 @@ func (cs *CollectionSpec) Copy() *CollectionSpec {
 	cpy := CollectionSpec{
 		Maps:      make(map[string]*MapSpec, len(cs.Maps)),
 		Programs:  make(map[string]*ProgramSpec, len(cs.Programs)),
+		Variables: make(map[string]*VariableSpec, len(cs.Variables)),
 		ByteOrder: cs.ByteOrder,
 		Types:     cs.Types.Copy(),
 	}
@@ -67,6 +73,10 @@ func (cs *CollectionSpec) Copy() *CollectionSpec {
 
 	for name, spec := range cs.Programs {
 		cpy.Programs[name] = spec.Copy()
+	}
+
+	for name, spec := range cs.Variables {
+		cpy.Variables[name] = spec.copy(&cpy)
 	}
 
 	return &cpy
@@ -211,25 +221,23 @@ func (cs *CollectionSpec) RewriteConstants(consts map[string]interface{}) error 
 // if this sounds useful.
 //
 // 'to' must be a pointer to a struct. A field of the
-// struct is updated with values from Programs or Maps if it
-// has an `ebpf` tag and its type is *ProgramSpec or *MapSpec.
+// struct is updated with values from Programs, Maps or Variables if it
+// has an `ebpf` tag and its type is *ProgramSpec, *MapSpec or *VariableSpec.
 // The tag's value specifies the name of the program or map as
 // found in the CollectionSpec.
 //
 //	struct {
-//	    Foo     *ebpf.ProgramSpec `ebpf:"xdp_foo"`
-//	    Bar     *ebpf.MapSpec     `ebpf:"bar_map"`
+//	    Foo     *ebpf.ProgramSpec  `ebpf:"xdp_foo"`
+//	    Bar     *ebpf.MapSpec      `ebpf:"bar_map"`
+//	    Var     *ebpf.VariableSpec `ebpf:"some_var"`
 //	    Ignored int
 //	}
 //
 // Returns an error if any of the eBPF objects can't be found, or
-// if the same MapSpec or ProgramSpec is assigned multiple times.
+// if the same Spec is assigned multiple times.
 func (cs *CollectionSpec) Assign(to interface{}) error {
-	// Assign() only supports assigning ProgramSpecs and MapSpecs,
-	// so doesn't load any resources into the kernel.
 	getValue := func(typ reflect.Type, name string) (interface{}, error) {
 		switch typ {
-
 		case reflect.TypeOf((*ProgramSpec)(nil)):
 			if p := cs.Programs[name]; p != nil {
 				return p, nil
@@ -241,6 +249,12 @@ func (cs *CollectionSpec) Assign(to interface{}) error {
 				return m, nil
 			}
 			return nil, fmt.Errorf("missing map %q", name)
+
+		case reflect.TypeOf((*VariableSpec)(nil)):
+			if v := cs.Variables[name]; v != nil {
+				return v, nil
+			}
+			return nil, fmt.Errorf("missing variable %q", name)
 
 		default:
 			return nil, fmt.Errorf("unsupported type %s", typ)

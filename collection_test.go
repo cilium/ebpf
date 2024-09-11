@@ -57,15 +57,15 @@ func TestCollectionSpecNotModified(t *testing.T) {
 }
 
 func TestCollectionSpecCopy(t *testing.T) {
+	ms := &MapSpec{
+		Type:       Array,
+		KeySize:    4,
+		ValueSize:  4,
+		MaxEntries: 1,
+	}
+
 	cs := &CollectionSpec{
-		map[string]*MapSpec{
-			"my-map": {
-				Type:       Array,
-				KeySize:    4,
-				ValueSize:  4,
-				MaxEntries: 1,
-			},
-		},
+		map[string]*MapSpec{"my-map": ms},
 		map[string]*ProgramSpec{
 			"test": {
 				Type: SocketFilter,
@@ -75,6 +75,14 @@ func TestCollectionSpecCopy(t *testing.T) {
 					asm.Return(),
 				},
 				License: "MIT",
+			},
+		},
+		map[string]*VariableSpec{
+			"my-var": {
+				name:   "my-var",
+				offset: 0,
+				size:   4,
+				m:      ms,
 			},
 		},
 		&btf.Spec{},
@@ -427,8 +435,9 @@ func TestCollectionSpec_LoadAndAssign_LazyLoading(t *testing.T) {
 
 func TestCollectionSpecAssign(t *testing.T) {
 	var specs struct {
-		Program *ProgramSpec `ebpf:"prog1"`
-		Map     *MapSpec     `ebpf:"map1"`
+		Program  *ProgramSpec  `ebpf:"prog1"`
+		Map      *MapSpec      `ebpf:"map1"`
+		Variable *VariableSpec `ebpf:"var1"`
 	}
 
 	mapSpec := &MapSpec{
@@ -452,6 +461,9 @@ func TestCollectionSpecAssign(t *testing.T) {
 		},
 		Programs: map[string]*ProgramSpec{
 			"prog1": progSpec,
+		},
+		Variables: map[string]*VariableSpec{
+			"var1": {},
 		},
 	}
 

@@ -62,6 +62,7 @@ nav:
     - 'Portable eBPF': guides/portable-ebpf.md
   - 'Concepts':
     - 'Loading eBPF Programs': concepts/loader.md
+    - 'Global Variables': concepts/global-variables.md
     - 'Resource Limits': concepts/rlimit.md
     - 'Section Naming': concepts/section-naming.md
     - 'Feature Detection': concepts/features.md

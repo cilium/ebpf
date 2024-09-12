@@ -41,3 +41,28 @@
 .highlight .go {
   user-select: none;
 }
+
+.md-typeset {
+  .md-badge {
+    font-size: 0.85em;
+
+    .md-badge__icon {
+      padding: 0.4em;
+      background: var(--md-accent-fg-color--transparent);
+      border-start-start-radius: 0.1em;
+      border-end-start-radius: 0.1em;
+    }
+
+    .md-badge__text {
+      padding: 0.4em 0.8em;
+      border-start-end-radius: 0.1em;
+      border-end-end-radius: 0.1em;
+      box-shadow: 0 0 0 1px inset var(--md-accent-fg-color--transparent);
+    }
+  }
+
+  .md-badge--right {
+    float: right;
+    margin-left: 0.35em;
+  }
+}

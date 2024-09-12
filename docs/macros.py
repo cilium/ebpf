@@ -98,6 +98,19 @@ def define_env(env: MacrosPlugin):
             *args, **kwargs, language="c", path=c_examples_path
         )
 
+    @env.macro
+    def linux_version(version: str, why: str = ''):
+        """
+        Render a badge with the Linux logo and a version number denoting the
+        minimum kernel version needed to use a feature. Optional string to
+        explain why the feature won't work on older versions.
+        """
+        return ('<span class="md-badge md-badge--right">'
+                # TODO: Make the icon link to some docs about handling kernel
+                # versions, once those are written.
+                '<span class="md-badge__icon">:simple-linux:</span>'
+                f'<span class="md-badge__text">[{version}](# "{why}")</span>'
+                '</span>')
 
 def code_example(
     symbol: str,

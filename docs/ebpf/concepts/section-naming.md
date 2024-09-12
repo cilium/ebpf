@@ -93,36 +93,35 @@ called `kprobe/slub_flush`.
 
 #### :material-head-cog: Advanced: Special Map Sections
 
-`.data`
+`.data*`
 
 :   The LLVM BPF backend implements accesses to mutable global variables as
     direct Array Map accesses. Since a single BPF program can be executed
     concurrently as a result of the kernel processing packets and other events
-    asynchronously, `.data` and the global variables it represents are
+    asynchronously, a data section and the global variables it represents are
     considered shared memory.
 
-    This section is exposed by {{ godoc('CollectionSpec.Maps') }} as a
-    single-element BPF array and its contents are accessible through {{
-    godoc('MapSpec.Contents') }}. Its layout is described by its {{
-    godoc('MapSpec.Value') }}, a {{ godoc('btf/Datasec') }} containing all
-    global variables in the compilation unit.
+    Variables can be emitted to specific sections, like
+    `#!c SEC(".data.foo") my_var = 123;`, as long as they match the `.data*`
+    prefix. This can prove useful for isolating certain variables to well-known
+    sections for Go code generation or custom variable rewriting logic.
 
-    The contents of the Map may be modified to control the default values
-    used for the eBPF program's global variables.
+    Global, non-hidden variables are emitted to
+    {{ godoc('CollectionSpec.Variables') }}, where they can be modified before
+    loading the CollectionSpec into the kernel. See
+    [Global Variables](../concepts/global-variables.md) for instructions.
 
 `.rodata*`
 
-:   Like `.data`, but for constants. This is a prefix and matches sections like
-    `.rodata.foo`. Constants can be emitted to different sections using e.g.
-    `#!c SEC(".rodata.foo") volatile const foobar = 123;`. This can prove useful
-    for isolating certain constants to well-known sections for Go code
-    generation or custom constant rewriting logic.
+:   Like `.data*`, but for constants. These become read-only after loading the
+    CollectionSpec into the kernel, and are also exposed through
+    {{ godoc('CollectionSpec.Variables') }}.
 
 `.bss`
 
 :   Section emitted by the compiler when zero-initialized globals are present in
-    the ELF. Is typically zero-length. Exposed by {{
-    godoc('CollectionSpec.Maps') }}, but not really useful.
+    the ELF. Is typically zero-length in the ELF, and initialized by {{ proj }}
+    after loading. Also exposed through {{ godoc('CollectionSpec.Variables') }}.
 
 `.rel*`
 

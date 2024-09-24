@@ -1405,7 +1405,7 @@ func (m *Map) finalize(spec *MapSpec) error {
 		}
 	}
 
-	if spec.readOnly() {
+	if isConstantDataSection(spec.Name) || isKconfigSection(spec.Name) {
 		if err := m.Freeze(); err != nil {
 			return fmt.Errorf("freezing map: %w", err)
 		}

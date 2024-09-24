@@ -210,6 +210,10 @@ func isConstantDataSection(name string) bool {
 	return strings.HasPrefix(name, ".rodata")
 }
 
+func isKconfigSection(name string) bool {
+	return name == ".kconfig"
+}
+
 type elfSectionKind int
 
 const (
@@ -1119,6 +1123,10 @@ func (ec *elfCode) loadDataSections() error {
 			MaxEntries: 1,
 		}
 
+		if isConstantDataSection(sec.Name) {
+			mapSpec.Flags = sys.BPF_F_RDONLY_PROG
+		}
+
 		switch sec.Type {
 		// Only open the section if we know there's actual data to be read.
 		case elf.SHT_PROGBITS:
@@ -1213,10 +1221,6 @@ func (ec *elfCode) loadDataSections() error {
 					ev.t = v.Type
 				}
 			}
-		}
-
-		if isConstantDataSection(sec.Name) {
-			mapSpec.Flags = sys.BPF_F_RDONLY_PROG
 		}
 
 		ec.maps[sec.Name] = mapSpec

@@ -57,7 +57,7 @@ TARGETS := \
 
 # Build all ELF binaries using a containerized LLVM toolchain.
 container-all:
-	+${CONTAINER_ENGINE} run --rm -t ${CONTAINER_RUN_ARGS} \
+	+${CONTAINER_ENGINE} run --rm -ti ${CONTAINER_RUN_ARGS} \
 		-v "${REPODIR}":/ebpf -w /ebpf --env MAKEFLAGS \
 		--env HOME="/tmp" \
 		--env BPF2GO_CC="$(CLANG)" \

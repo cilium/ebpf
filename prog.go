@@ -692,6 +692,10 @@ func (p *Program) Test(in []byte) (uint32, []byte, error) {
 //
 // Note: the same restrictions from Test apply.
 func (p *Program) Run(opts *RunOptions) (uint32, error) {
+	if opts == nil {
+		opts = &RunOptions{}
+	}
+
 	ret, _, err := p.run(opts)
 	if err != nil {
 		return ret, fmt.Errorf("run program: %w", err)

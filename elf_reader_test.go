@@ -100,7 +100,7 @@ func TestLoadCollectionSpec(t *testing.T) {
 				Name:       SanitizeName(".bss", -1),
 				Type:       Array,
 				KeySize:    4,
-				ValueSize:  12,
+				ValueSize:  8,
 				MaxEntries: 1,
 			},
 			".data": {
@@ -112,6 +112,13 @@ func TestLoadCollectionSpec(t *testing.T) {
 			},
 			".data.test": {
 				Name:       SanitizeName(".data.test", -1),
+				Type:       Array,
+				KeySize:    4,
+				ValueSize:  4,
+				MaxEntries: 1,
+			},
+			".data.weak": {
+				Name:       SanitizeName(".data.weak", -1),
 				Type:       Array,
 				KeySize:    4,
 				ValueSize:  4,
@@ -209,7 +216,7 @@ func TestLoadCollectionSpec(t *testing.T) {
 			"neg":        {name: "neg", offset: 12, size: 4},
 			"struct_var": {name: "struct_var", offset: 0, size: 16},
 			"uneg":       {name: "uneg", offset: 8, size: 4},
-			"weak":       {name: "weak", offset: 8, size: 4},
+			"weak":       {name: "weak", offset: 0, size: 4},
 		},
 	}
 

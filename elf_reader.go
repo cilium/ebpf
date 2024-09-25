@@ -519,7 +519,7 @@ func (ec *elfCode) relocateInstruction(ins *asm.Instruction, rel elf.Symbol) err
 
 		case elf.STT_OBJECT:
 			// LLVM 9 emits OBJECT-LOCAL symbols for anonymous constants.
-			if bind != elf.STB_GLOBAL && bind != elf.STB_LOCAL {
+			if bind != elf.STB_GLOBAL && bind != elf.STB_LOCAL && bind != elf.STB_WEAK {
 				return fmt.Errorf("direct load: %s: %w: %s", name, errUnsupportedBinding, bind)
 			}
 

@@ -94,6 +94,14 @@ const (
 	InodeStorage
 	// TaskStorage - Specialized local storage map for task_struct.
 	TaskStorage
+	// BloomFilter - Space-efficient data structure to quickly test whether an element exists in a set.
+	BloomFilter
+	// UserRingbuf - The reverse of RingBuf, used to send messages from user space to BPF programs.
+	UserRingbuf
+	// CgroupStorage - Store data keyed on a cgroup. If the cgroup disappears, the key is automatically removed.
+	CgroupStorage
+	// Arena - Sparse shared memory region between a BPF program and user space.
+	Arena
 )
 
 // hasPerCPUValue returns true if the Map stores a value per CPU.

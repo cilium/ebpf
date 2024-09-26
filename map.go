@@ -582,7 +582,12 @@ func (m *Map) Flags() uint32 {
 	return m.flags
 }
 
-// Info returns metadata about the map.
+// Info returns metadata about the map. This was first introduced in Linux 4.5,
+// but newer kernels support more MapInfo fields with the introduction of more
+// features. See [MapInfo] and its methods for more details.
+//
+// Returns an error wrapping ErrNotSupported if the kernel supports neither
+// BPF_OBJ_GET_INFO_BY_FD nor reading map information from /proc/self/fdinfo.
 func (m *Map) Info() (*MapInfo, error) {
 	return newMapInfoFromFd(m.fd)
 }

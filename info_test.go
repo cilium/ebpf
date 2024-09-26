@@ -19,7 +19,6 @@ import (
 
 func TestMapInfoFromProc(t *testing.T) {
 	hash, err := NewMap(&MapSpec{
-		Name:       "testing",
 		Type:       Hash,
 		KeySize:    4,
 		ValueSize:  5,
@@ -32,41 +31,20 @@ func TestMapInfoFromProc(t *testing.T) {
 	}
 	defer hash.Close()
 
-	info, err := newMapInfoFromProc(hash.fd)
+	var info MapInfo
+	err = readMapInfoFromProc(hash.fd, &info)
 	testutils.SkipIfNotSupported(t, err)
-	if err != nil {
-		t.Fatal("Can't get map info:", err)
-	}
 
-	if info.Type != Hash {
-		t.Error("Expected Hash, got", info.Type)
-	}
+	qt.Assert(t, qt.IsNil(err))
+	qt.Assert(t, qt.Equals(info.Type, Hash))
+	qt.Assert(t, qt.Equals(info.KeySize, 4))
+	qt.Assert(t, qt.Equals(info.ValueSize, 5))
+	qt.Assert(t, qt.Equals(info.MaxEntries, 2))
+	qt.Assert(t, qt.Equals(info.Flags, sys.BPF_F_NO_PREALLOC))
+}
 
-	if info.KeySize != 4 {
-		t.Error("Expected KeySize of 4, got", info.KeySize)
-	}
-
-	if info.ValueSize != 5 {
-		t.Error("Expected ValueSize of 5, got", info.ValueSize)
-	}
-
-	if info.MaxEntries != 2 {
-		t.Error("Expected MaxEntries of 2, got", info.MaxEntries)
-	}
-
-	if info.Flags != sys.BPF_F_NO_PREALLOC {
-		t.Errorf("Expected Flags to be %d, got %d", sys.BPF_F_NO_PREALLOC, info.Flags)
-	}
-
-	if info.Name != "" && info.Name != "testing" {
-		t.Error("Expected name to be testing, got", info.Name)
-	}
-
-	if _, ok := info.ID(); ok {
-		t.Error("Expected ID to not be available")
-	}
-
-	nested, err := NewMap(&MapSpec{
+func TestMapInfoFromProcOuterMap(t *testing.T) {
+	outer, err := NewMap(&MapSpec{
 		Type:       ArrayOfMaps,
 		KeySize:    4,
 		MaxEntries: 2,
@@ -81,12 +59,15 @@ func TestMapInfoFromProc(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer nested.Close()
+	defer outer.Close()
 
-	_, err = newMapInfoFromProc(nested.fd)
-	if err != nil {
-		t.Fatal("Can't get nested map info from /proc:", err)
-	}
+	var info MapInfo
+	err = readMapInfoFromProc(outer.fd, &info)
+	testutils.SkipIfNotSupported(t, err)
+
+	qt.Assert(t, qt.IsNil(err))
+	qt.Assert(t, qt.Equals(info.KeySize, 4))
+	qt.Assert(t, qt.Equals(info.MaxEntries, 2))
 }
 
 func TestProgramInfo(t *testing.T) {
@@ -506,4 +487,26 @@ func TestInfoExportedFields(t *testing.T) {
 		"Tag",
 		"Name",
 	}))
+}
+
+func TestZero(t *testing.T) {
+	var (
+		nul uint32 = 0
+		one uint32 = 1
+
+		inul any = uint32(0)
+		ione any = uint32(1)
+	)
+
+	qt.Assert(t, qt.IsTrue(zero(nul)))
+	qt.Assert(t, qt.IsFalse(zero(one)))
+
+	qt.Assert(t, qt.IsTrue(zero(&nul)))
+	qt.Assert(t, qt.IsFalse(zero(&one)))
+
+	qt.Assert(t, qt.IsTrue(zero(inul)))
+	qt.Assert(t, qt.IsFalse(zero(ione)))
+
+	qt.Assert(t, qt.IsTrue(zero(&inul)))
+	qt.Assert(t, qt.IsFalse(zero(&ione)))
 }

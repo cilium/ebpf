@@ -2,6 +2,7 @@ package ebpf
 
 import (
 	"fmt"
+	"io"
 
 	"github.com/cilium/ebpf/btf"
 	"github.com/cilium/ebpf/internal/sysenc"
@@ -106,6 +107,103 @@ func (s *VariableSpec) copy(cpy *CollectionSpec) *VariableSpec {
 			out.m = m
 			return out
 		}
+	}
+
+	return nil
+}
+
+// Variable is a convenience wrapper for modifying global variables of a
+// Collection after loading it into the kernel. Operations on a Variable are
+// performed using direct memory access, bypassing the BPF map syscall API.
+//
+// On kernels older than 5.5, most interactions with Variable return
+// [ErrNotSupported].
+type Variable struct {
+	name   string
+	offset uint64
+	size   uint64
+	t      btf.Type
+
+	mm *Memory
+}
+
+func newVariable(name string, offset, size uint64, t btf.Type, mm *Memory) (*Variable, error) {
+	if mm != nil {
+		if int(offset+size) > mm.Size() {
+			return nil, fmt.Errorf("offset %d(+%d) is out of bounds", offset, size)
+		}
+	}
+
+	return &Variable{
+		name:   name,
+		offset: offset,
+		size:   size,
+		t:      t,
+		mm:     mm,
+	}, nil
+}
+
+// Size returns the size of the variable.
+func (v *Variable) Size() uint64 {
+	return v.size
+}
+
+// ReadOnly returns true if the Variable represents a variable that is read-only
+// after loading the Collection into the kernel.
+//
+// On systems without BPF_F_MMAPABLE support, ReadOnly always returns true.
+func (v *Variable) ReadOnly() bool {
+	if v.mm == nil {
+		return true
+	}
+	return v.mm.ReadOnly()
+}
+
+// Type returns the BTF Type of the variable.
+func (v *Variable) Type() btf.Type {
+	return v.t
+}
+
+func (v *Variable) String() string {
+	return fmt.Sprintf("%s (type=%v)", v.name, v.t)
+}
+
+// Set the value of the Variable to the provided input. The input must marshal
+// to the same length as the size of the Variable.
+func (v *Variable) Set(in any) error {
+	if v.mm == nil {
+		return fmt.Errorf("variable %s: direct access requires Linux 5.5 or later: %w", v.name, ErrNotSupported)
+	}
+
+	if v.ReadOnly() {
+		return fmt.Errorf("variable %s: %w", v.name, ErrReadOnly)
+	}
+
+	buf, err := sysenc.Marshal(in, int(v.size))
+	if err != nil {
+		return fmt.Errorf("marshaling value %s: %w", v.name, err)
+	}
+
+	if _, err := v.mm.WriteAt(buf.Bytes(), int64(v.offset)); err != nil {
+		return fmt.Errorf("writing value to %s: %w", v.name, err)
+	}
+
+	return nil
+}
+
+// Get writes the value of the Variable to the provided output. The output must
+// be a pointer to a value whose size matches the Variable.
+func (v *Variable) Get(out any) error {
+	if v.mm == nil {
+		return fmt.Errorf("variable %s: direct access requires Linux 5.5 or later: %w", v.name, ErrNotSupported)
+	}
+
+	if !v.mm.bounds(v.offset, v.size) {
+		return fmt.Errorf("variable %s: access out of bounds: %w", v.name, io.EOF)
+	}
+
+	if err := sysenc.Unmarshal(out, v.mm.b[v.offset:v.offset+v.size]); err != nil {
+		return fmt.Errorf("unmarshaling value %s: %w", v.name, err)
 	}
 
 	return nil

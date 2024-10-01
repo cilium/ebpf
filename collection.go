@@ -13,6 +13,7 @@ import (
 	"github.com/cilium/ebpf/internal/kallsyms"
 	"github.com/cilium/ebpf/internal/kconfig"
 	"github.com/cilium/ebpf/internal/linux"
+	"github.com/cilium/ebpf/internal/sys"
 )
 
 // CollectionOptions control loading a collection into the kernel.
@@ -260,6 +261,7 @@ func (cs *CollectionSpec) LoadAndAssign(to interface{}, opts *CollectionOptions)
 	// Support assigning Programs and Maps, lazy-loading the required objects.
 	assignedMaps := make(map[string]bool)
 	assignedProgs := make(map[string]bool)
+	assignedVars := make(map[string]bool)
 
 	getValue := func(typ reflect.Type, name string) (interface{}, error) {
 		switch typ {
@@ -271,6 +273,10 @@ func (cs *CollectionSpec) LoadAndAssign(to interface{}, opts *CollectionOptions)
 		case reflect.TypeOf((*Map)(nil)):
 			assignedMaps[name] = true
 			return loader.loadMap(name)
+
+		case reflect.TypeOf((*Variable)(nil)):
+			assignedVars[name] = true
+			return loader.loadVariable(name)
 
 		default:
 			return nil, fmt.Errorf("unsupported type %s", typ)
@@ -312,15 +318,22 @@ func (cs *CollectionSpec) LoadAndAssign(to interface{}, opts *CollectionOptions)
 	for p := range assignedProgs {
 		delete(loader.programs, p)
 	}
+	for p := range assignedVars {
+		delete(loader.vars, p)
+	}
 
 	return nil
 }
 
-// Collection is a collection of Programs and Maps associated
-// with their symbols
+// Collection is a collection of live BPF resources present in the kernel.
 type Collection struct {
 	Programs map[string]*Program
 	Maps     map[string]*Map
+
+	// Variables contains global variables used by the Collection's program(s). On
+	// kernels older than 5.5, most interactions with Variables return
+	// [ErrNotSupported].
+	Variables map[string]*Variable
 }
 
 // NewCollection creates a Collection from the given spec, creating and
@@ -361,19 +374,26 @@ func NewCollectionWithOptions(spec *CollectionSpec, opts CollectionOptions) (*Co
 		}
 	}
 
+	for varName := range spec.Variables {
+		if _, err := loader.loadVariable(varName); err != nil {
+			return nil, err
+		}
+	}
+
 	// Maps can contain Program and Map stubs, so populate them after
 	// all Maps and Programs have been successfully loaded.
 	if err := loader.populateDeferredMaps(); err != nil {
 		return nil, err
 	}
 
-	// Prevent loader.cleanup from closing maps and programs.
-	maps, progs := loader.maps, loader.programs
-	loader.maps, loader.programs = nil, nil
+	// Prevent loader.cleanup from closing maps, programs and vars.
+	maps, progs, vars := loader.maps, loader.programs, loader.vars
+	loader.maps, loader.programs, loader.vars = nil, nil, nil
 
 	return &Collection{
 		progs,
 		maps,
+		vars,
 	}, nil
 }
 
@@ -382,6 +402,7 @@ type collectionLoader struct {
 	opts     *CollectionOptions
 	maps     map[string]*Map
 	programs map[string]*Program
+	vars     map[string]*Variable
 }
 
 func newCollectionLoader(coll *CollectionSpec, opts *CollectionOptions) (*collectionLoader, error) {
@@ -410,6 +431,7 @@ func newCollectionLoader(coll *CollectionSpec, opts *CollectionOptions) (*collec
 		opts,
 		make(map[string]*Map),
 		make(map[string]*Program),
+		make(map[string]*Variable),
 	}, nil
 }
 
@@ -483,6 +505,13 @@ func (cl *collectionLoader) loadMap(mapName string) (*Map, error) {
 		return m, nil
 	}
 
+	// Defer setting the mmapable flag on maps until load time. This avoids the
+	// MapSpec having different flags on some kernel versions. Also avoid running
+	// syscalls during ELF loading, so platforms like wasm can also parse an ELF.
+	if isDataSection(mapSpec.Name) && haveMmapableMaps() == nil {
+		mapSpec.Flags |= sys.BPF_F_MMAPABLE
+	}
+
 	m, err := newMapWithOptions(mapSpec, cl.opts.Maps)
 	if err != nil {
 		return nil, fmt.Errorf("map %s: %w", mapName, err)
@@ -552,6 +581,58 @@ func (cl *collectionLoader) loadProgram(progName string) (*Program, error) {
 
 	cl.programs[progName] = prog
 	return prog, nil
+}
+
+func (cl *collectionLoader) loadVariable(varName string) (*Variable, error) {
+	if v := cl.vars[varName]; v != nil {
+		return v, nil
+	}
+
+	varSpec := cl.coll.Variables[varName]
+	if varSpec == nil {
+		return nil, fmt.Errorf("unknown variable %s", varName)
+	}
+
+	// Get the key of the VariableSpec's MapSpec in the CollectionSpec.
+	var mapName string
+	for n, ms := range cl.coll.Maps {
+		if ms == varSpec.m {
+			mapName = n
+			break
+		}
+	}
+	if mapName == "" {
+		return nil, fmt.Errorf("variable %s: underlying MapSpec %s was removed from CollectionSpec", varName, varSpec.m.Name)
+	}
+
+	m, err := cl.loadMap(mapName)
+	if err != nil {
+		return nil, fmt.Errorf("variable %s: %w", varName, err)
+	}
+
+	// If the kernel is too old or the underlying map was created without
+	// BPF_F_MMAPABLE, [Map.Memory] will return ErrNotSupported. In this case,
+	// emit a Variable with a nil Memory. This keeps Collection{Spec}.Variables
+	// consistent across systems with different feature sets without breaking
+	// LoadAndAssign.
+	mm, err := m.Memory()
+	if err != nil && !errors.Is(err, ErrNotSupported) {
+		return nil, fmt.Errorf("variable %s: getting memory for map %s: %w", varName, mapName, err)
+	}
+
+	v, err := newVariable(
+		varSpec.name,
+		varSpec.offset,
+		varSpec.size,
+		varSpec.t,
+		mm,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("variable %s: %w", varName, err)
+	}
+
+	cl.vars[varName] = v
+	return v, nil
 }
 
 // populateDeferredMaps iterates maps holding programs or other maps and loads
@@ -740,6 +821,7 @@ func LoadCollection(file string) (*Collection, error) {
 func (coll *Collection) Assign(to interface{}) error {
 	assignedMaps := make(map[string]bool)
 	assignedProgs := make(map[string]bool)
+	assignedVars := make(map[string]bool)
 
 	// Assign() only transfers already-loaded Maps and Programs. No extra
 	// loading is done.
@@ -760,6 +842,13 @@ func (coll *Collection) Assign(to interface{}) error {
 			}
 			return nil, fmt.Errorf("missing map %q", name)
 
+		case reflect.TypeOf((*Variable)(nil)):
+			if v := coll.Variables[name]; v != nil {
+				assignedVars[name] = true
+				return v, nil
+			}
+			return nil, fmt.Errorf("missing variable %q", name)
+
 		default:
 			return nil, fmt.Errorf("unsupported type %s", typ)
 		}
@@ -775,6 +864,9 @@ func (coll *Collection) Assign(to interface{}) error {
 	}
 	for m := range assignedMaps {
 		delete(coll.Maps, m)
+	}
+	for s := range assignedVars {
+		delete(coll.Variables, s)
 	}
 
 	return nil

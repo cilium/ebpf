@@ -439,6 +439,38 @@ func (m *Map) Memory() (*Memory, error) {
 	return mm, nil
 }
 
+// unsafeMemory returns a heap-mapped memory region for the Map. The Map must
+// have been created with the BPF_F_MMAPABLE flag. Repeated calls to Memory
+// return the same mapping. Callers are responsible for coordinating access to
+// Memory.
+func (m *Map) unsafeMemory() (*Memory, error) {
+	if m.memory != nil {
+		if !m.memory.heap {
+			return nil, errors.New("unsafeMemory would return existing non-heap memory")
+		}
+
+		return m.memory, nil
+	}
+
+	if m.flags&sys.BPF_F_MMAPABLE == 0 {
+		return nil, fmt.Errorf("Map was not created with the BPF_F_MMAPABLE flag: %w", ErrNotSupported)
+	}
+
+	size, err := m.memorySize()
+	if err != nil {
+		return nil, err
+	}
+
+	mm, err := newUnsafeMemory(m.FD(), size)
+	if err != nil {
+		return nil, fmt.Errorf("creating new Memory: %w", err)
+	}
+
+	m.memory = mm
+
+	return mm, nil
+}
+
 func (m *Map) memorySize() (int, error) {
 	switch m.Type() {
 	case Array:

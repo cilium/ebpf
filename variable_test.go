@@ -1,6 +1,9 @@
 package ebpf
 
 import (
+	"runtime"
+	"structs"
+	"sync/atomic"
 	"testing"
 
 	"github.com/go-quicktest/qt"
@@ -181,4 +184,114 @@ func TestVariableFallback(t *testing.T) {
 	if err := obj.Data.Set(&u32); err != nil {
 		qt.Assert(t, qt.ErrorIs(err, ErrNotSupported))
 	}
+}
+
+func TestVariablePointer(t *testing.T) {
+	testutils.SkipIfNotSupported(t, haveMmapableMaps())
+
+	file := testutils.NativeFile(t, "testdata/variables-%s.elf")
+	spec, err := LoadCollectionSpec(file)
+	qt.Assert(t, qt.IsNil(err))
+
+	obj := struct {
+		AddAtomic   *Program `ebpf:"add_atomic"`
+		CheckStruct *Program `ebpf:"check_struct"`
+		CheckArray  *Program `ebpf:"check_array"`
+
+		Atomic *Variable `ebpf:"var_atomic"`
+		Struct *Variable `ebpf:"var_struct"`
+		Array  *Variable `ebpf:"var_array"`
+	}{}
+
+	qt.Assert(t, qt.IsNil(spec.LoadAndAssign(&obj, &CollectionOptions{UnsafeVariableExperiment: true})))
+	t.Cleanup(func() {
+		obj.AddAtomic.Close()
+		obj.CheckStruct.Close()
+		obj.CheckArray.Close()
+	})
+
+	// Bump the value by 1 using a bpf program.
+	want := uint32(1338)
+	a32, err := VariablePointer[atomic.Uint32](obj.Atomic)
+	qt.Assert(t, qt.IsNil(err))
+	a32.Store(want - 1)
+
+	mustReturn(t, obj.AddAtomic, 0)
+	qt.Assert(t, qt.Equals(a32.Load(), want))
+
+	_, err = VariablePointer[*uint32](obj.Atomic)
+	qt.Assert(t, qt.ErrorIs(err, ErrInvalidType))
+
+	_, err = VariablePointer[struct{ A, B *uint64 }](obj.Struct)
+	qt.Assert(t, qt.ErrorIs(err, ErrInvalidType))
+
+	type S struct {
+		_    structs.HostLayout
+		A, B uint64
+	}
+
+	s, err := VariablePointer[S](obj.Struct)
+	qt.Assert(t, qt.IsNil(err))
+	*s = S{A: 0xa, B: 0xb}
+	mustReturn(t, obj.CheckStruct, 1)
+
+	a, err := VariablePointer[[8192]byte](obj.Array)
+	qt.Assert(t, qt.IsNil(err))
+	a[len(a)-1] = 0xff
+	mustReturn(t, obj.CheckArray, 1)
+}
+
+func TestVariablePointerError(t *testing.T) {
+	testutils.SkipIfNotSupported(t, haveMmapableMaps())
+
+	file := testutils.NativeFile(t, "testdata/variables-%s.elf")
+	spec, err := LoadCollectionSpec(file)
+	qt.Assert(t, qt.IsNil(err))
+
+	obj := struct {
+		Atomic *Variable `ebpf:"var_atomic"`
+	}{}
+
+	qt.Assert(t, qt.IsNil(spec.LoadAndAssign(&obj, nil)))
+
+	_, err = VariablePointer[atomic.Uint32](obj.Atomic)
+	qt.Assert(t, qt.ErrorIs(err, ErrNotSupported))
+}
+
+func TestVariablePointerGC(t *testing.T) {
+	testutils.SkipIfNotSupported(t, haveMmapableMaps())
+
+	file := testutils.NativeFile(t, "testdata/variables-%s.elf")
+	spec, err := LoadCollectionSpec(file)
+	qt.Assert(t, qt.IsNil(err))
+
+	obj := struct {
+		AddAtomic *Program  `ebpf:"add_atomic"`
+		Atomic    *Variable `ebpf:"var_atomic"`
+	}{}
+	qt.Assert(t, qt.IsNil(spec.LoadAndAssign(&obj, &CollectionOptions{UnsafeVariableExperiment: true})))
+
+	// Pull out Program handle and Variable pointer so obj reference is dropped.
+	prog := obj.AddAtomic
+	t.Cleanup(func() {
+		prog.Close()
+	})
+
+	a32, err := VariablePointer[atomic.Uint32](obj.Atomic)
+	qt.Assert(t, qt.IsNil(err))
+
+	// No obj references past this point. Trigger multiple GC cycles to ensure
+	// obj is collected.
+	runtime.GC()
+	runtime.GC()
+	runtime.GC()
+
+	// Trigger prog and read memory multiple times to ensure reference is still
+	// valid.
+	mustReturn(t, prog, 0)
+	qt.Assert(t, qt.Equals(a32.Load(), 1))
+	mustReturn(t, prog, 0)
+	qt.Assert(t, qt.Equals(a32.Load(), 2))
+	mustReturn(t, prog, 0)
+	qt.Assert(t, qt.Equals(a32.Load(), 3))
 }

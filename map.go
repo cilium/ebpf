@@ -259,6 +259,8 @@ type Map struct {
 	pinnedPath string
 	// Per CPU maps return values larger than the size in the spec
 	fullValueSize int
+
+	memory *Memory
 }
 
 // NewMapFromFD creates a map from a raw fd.
@@ -390,6 +392,51 @@ func newMapWithOptions(spec *MapSpec, opts MapOptions) (_ *Map, err error) {
 	}
 
 	return m, nil
+}
+
+// Memory returns a memory-mapped region for the Map. The Map must have been
+// created with the BPF_F_MMAPABLE flag. Repeated calls to Memory return the
+// same mapping. Callers are responsible for coordinating access to Memory.
+func (m *Map) Memory() (*Memory, error) {
+	if m.memory != nil {
+		return m.memory, nil
+	}
+
+	if m.flags&sys.BPF_F_MMAPABLE == 0 {
+		return nil, fmt.Errorf("Map was not created with the BPF_F_MMAPABLE flag: %w", ErrNotSupported)
+	}
+
+	size, err := m.memorySize()
+	if err != nil {
+		return nil, err
+	}
+
+	mm, err := newMemory(m.FD(), size)
+	if err != nil {
+		return nil, fmt.Errorf("creating new Memory: %w", err)
+	}
+
+	m.memory = mm
+
+	return mm, nil
+}
+
+func (m *Map) memorySize() (int, error) {
+	switch m.Type() {
+	case Array:
+		// In Arrays, values are always laid out on 8-byte boundaries regardless of
+		// architecture. Multiply by MaxEntries and align the result to the host's
+		// page size.
+		size := int(internal.Align(m.ValueSize(), 8) * m.MaxEntries())
+		size = internal.Align(size, os.Getpagesize())
+		return size, nil
+	case Arena:
+		// For Arenas, MaxEntries denotes the maximum number of pages available to
+		// the arena.
+		return int(m.MaxEntries()) * os.Getpagesize(), nil
+	}
+
+	return 0, fmt.Errorf("determine memory size of map type %s: %w", m.Type(), ErrNotSupported)
 }
 
 // createMap validates the spec's properties and creates the map in the kernel
@@ -535,6 +582,7 @@ func newMap(fd *sys.FD, name string, typ MapType, keySize, valueSize, maxEntries
 		flags,
 		"",
 		int(valueSize),
+		nil,
 	}
 
 	if !typ.hasPerCPUValue() {
@@ -1346,6 +1394,7 @@ func (m *Map) Clone() (*Map, error) {
 		m.flags,
 		"",
 		m.fullValueSize,
+		nil,
 	}, nil
 }
 

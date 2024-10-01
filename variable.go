@@ -111,3 +111,80 @@ func (s *VariableSpec) copy(cpy *CollectionSpec) *VariableSpec {
 
 	return nil
 }
+
+// Variable is a convenience wrapper for modifying global variables of a
+// Collection after loading it into the kernel. Operations on a Variable are
+// performed using direct memory access, bypassing the BPF map syscall API.
+//
+// Requires Linux 5.5 and later, or a kernel supporting BPF_F_MMAPABLE.
+type Variable struct {
+	name   string
+	offset uint64
+	size   uint64
+	t      btf.Type
+
+	mm *Memory
+}
+
+// Size returns the size of the variable.
+func (v *Variable) Size() uint64 {
+	return v.size
+}
+
+// Constant returns true if the Variable represents a variable that is read-only
+// after loading the Collection into the kernel.
+func (v *Variable) Constant() bool {
+	return v.mm.Readonly()
+}
+
+// Type returns the BTF type of the variable. It contains the [btf.Var] wrapping
+// the underlying variable's type.
+func (v *Variable) Type() btf.Type {
+	return v.t
+}
+
+func (v *Variable) String() string {
+	return fmt.Sprintf("%s (type=%v)", v.name, v.t)
+}
+
+// Set the value of the Variable to the provided input. The input must marshal
+// to the same length as the size of the Variable.
+func (v *Variable) Set(in any) error {
+	if v.Constant() {
+		return fmt.Errorf("variable %s: %w", v.name, ErrReadOnly)
+	}
+
+	buf, err := sysenc.Marshal(in, int(v.size))
+	if err != nil {
+		return fmt.Errorf("marshaling value %s: %w", v.name, err)
+	}
+
+	if int(v.offset+v.size) > v.mm.Size() {
+		return fmt.Errorf("offset %d(+%d) for variable %s is out of bounds", v.offset, v.size, v.name)
+	}
+
+	if _, err := v.mm.WriteAt(buf.Bytes(), int64(v.offset)); err != nil {
+		return fmt.Errorf("writing value to %s: %w", v.name, err)
+	}
+
+	return nil
+}
+
+// Get writes the value of the Variable to the provided output. The output must
+// be a pointer to a value whose size matches the Variable.
+func (v *Variable) Get(out any) error {
+	if int(v.offset+v.size) > v.mm.Size() {
+		return fmt.Errorf("offset %d(+%d) for variable %s is out of bounds", v.offset, v.size, v.name)
+	}
+
+	b := make([]byte, v.size)
+	if _, err := v.mm.ReadAt(b, int64(v.offset)); err != nil {
+		return fmt.Errorf("reading value from %s: %w", v.name, err)
+	}
+
+	if err := sysenc.Unmarshal(out, b); err != nil {
+		return fmt.Errorf("unmarshaling value: %w", err)
+	}
+
+	return nil
+}

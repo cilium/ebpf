@@ -1,7 +1,11 @@
 package ebpf
 
 import (
+	"runtime"
+	"structs"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/go-quicktest/qt"
 
@@ -98,7 +102,7 @@ func TestVariable(t *testing.T) {
 		Array  *Variable `ebpf:"var_array"`
 	}{}
 
-	qt.Assert(t, qt.IsNil(spec.LoadAndAssign(&obj, nil)))
+	qt.Assert(t, qt.IsNil(loadAndAssign(t, spec, &obj, nil)))
 	t.Cleanup(func() {
 		obj.GetBSS.Close()
 		obj.GetData.Close()
@@ -147,7 +151,7 @@ func TestVariableConst(t *testing.T) {
 		Rodata    *Variable `ebpf:"var_rodata"`
 	}{}
 
-	qt.Assert(t, qt.IsNil(spec.LoadAndAssign(&obj, nil)))
+	qt.Assert(t, qt.IsNil(loadAndAssign(t, spec, &obj, nil)))
 	t.Cleanup(func() {
 		obj.GetRodata.Close()
 	})
@@ -182,4 +186,165 @@ func TestVariableFallback(t *testing.T) {
 	if err := obj.Data.Set(&u32); err != nil {
 		qt.Assert(t, qt.ErrorIs(err, ErrNotSupported))
 	}
+}
+
+func TestVariablePointer(t *testing.T) {
+	testutils.SkipIfNotSupported(t, haveMmapableMaps())
+
+	file := testutils.NativeFile(t, "testdata/variables-%s.elf")
+	spec, err := LoadCollectionSpec(file)
+	qt.Assert(t, qt.IsNil(err))
+
+	obj := struct {
+		AddAtomic      *Program `ebpf:"add_atomic"`
+		CheckStructPad *Program `ebpf:"check_struct_pad"`
+		CheckArray     *Program `ebpf:"check_array"`
+
+		Atomic    *Variable `ebpf:"var_atomic"`
+		StructPad *Variable `ebpf:"var_struct_pad"`
+		Array     *Variable `ebpf:"var_array"`
+	}{}
+
+	unsafeMemory = true
+	t.Cleanup(func() {
+		unsafeMemory = false
+	})
+
+	qt.Assert(t, qt.IsNil(loadAndAssign(t, spec, &obj, nil)))
+	t.Cleanup(func() {
+		obj.AddAtomic.Close()
+		obj.CheckStructPad.Close()
+		obj.CheckArray.Close()
+	})
+
+	// Bump the value by 1 using a bpf program.
+	want := uint32(1338)
+	a32, err := VariablePointer[atomic.Uint32](obj.Atomic)
+	qt.Assert(t, qt.IsNil(err))
+	a32.Store(want - 1)
+
+	mustReturn(t, obj.AddAtomic, 0)
+	qt.Assert(t, qt.Equals(a32.Load(), want))
+
+	_, err = VariablePointer[*uint32](obj.Atomic)
+	qt.Assert(t, qt.ErrorIs(err, ErrInvalidType))
+
+	_, err = VariablePointer[struct{ _ *uint64 }](obj.StructPad)
+	qt.Assert(t, qt.ErrorIs(err, ErrInvalidType))
+
+	type S struct {
+		_ structs.HostLayout
+		A uint32
+		B uint64
+		C uint16
+		D [5]byte
+		E uint64
+	}
+
+	s, err := VariablePointer[S](obj.StructPad)
+	qt.Assert(t, qt.IsNil(err))
+	*s = S{A: 0xa, B: 0xb, C: 0xc, D: [5]byte{0xd, 0, 0, 0, 0}, E: 0xe}
+	mustReturn(t, obj.CheckStructPad, 1)
+
+	a, err := VariablePointer[[8192]byte](obj.Array)
+	qt.Assert(t, qt.IsNil(err))
+	a[len(a)-1] = 0xff
+	mustReturn(t, obj.CheckArray, 1)
+}
+
+func TestVariablePointerError(t *testing.T) {
+	testutils.SkipIfNotSupported(t, haveMmapableMaps())
+
+	file := testutils.NativeFile(t, "testdata/variables-%s.elf")
+	spec, err := LoadCollectionSpec(file)
+	qt.Assert(t, qt.IsNil(err))
+
+	obj := struct {
+		Atomic *Variable `ebpf:"var_atomic"`
+	}{}
+
+	qt.Assert(t, qt.IsNil(loadAndAssign(t, spec, &obj, nil)))
+
+	_, err = VariablePointer[atomic.Uint32](obj.Atomic)
+	qt.Assert(t, qt.ErrorIs(err, ErrNotSupported))
+}
+
+func TestVariablePointerGC(t *testing.T) {
+	testutils.SkipIfNotSupported(t, haveMmapableMaps())
+
+	file := testutils.NativeFile(t, "testdata/variables-%s.elf")
+	spec, err := LoadCollectionSpec(file)
+	qt.Assert(t, qt.IsNil(err))
+
+	cancel := make(chan struct{})
+
+	type obj_s struct {
+		AddAtomic *Program  `ebpf:"add_atomic"`
+		Atomic    *Variable `ebpf:"var_atomic"`
+		AtomicMap *Map      `ebpf:".data.atomic"`
+	}
+
+	unsafeMemory = true
+	t.Cleanup(func() {
+		unsafeMemory = false
+	})
+	var obj obj_s
+	qt.Assert(t, qt.IsNil(loadAndAssign(t, spec, &obj, nil)))
+
+	// Set finalizer on obj to get notified when it is collected.
+	ogc := make(chan struct{})
+	runtime.SetFinalizer(&obj, func(*obj_s) {
+		close(ogc)
+	})
+
+	// Set finalizer on the last byte of the Memory to get notified when it is
+	// collected.
+	mem, err := obj.AtomicMap.unsafeMemory()
+	qt.Assert(t, qt.IsNil(err))
+	obj.AtomicMap.Close()
+
+	// Start a goroutine that panics if the finalizer runs before we expect it to.
+	mgc := make(chan struct{})
+	go func() {
+		select {
+		case <-mgc:
+			panic("memory finalizer ran unexpectedly")
+		case <-cancel:
+			return
+		}
+	}()
+	runtime.SetFinalizer(&mem.b[len(mem.b)-1], func(p *byte) {
+		close(mgc)
+	})
+
+	// Pull out Program handle and Variable pointer so reference to obj is
+	// dropped.
+	prog := obj.AddAtomic
+	t.Cleanup(func() {
+		prog.Close()
+	})
+
+	a32, err := VariablePointer[atomic.Uint32](obj.Atomic)
+	qt.Assert(t, qt.IsNil(err))
+
+	// No references to obj past this point. Trigger GC and wait for the obj
+	// finalizer to complete.
+	runtime.GC()
+	testutils.WaitChan(t, ogc, time.Second)
+
+	// Trigger prog and read memory to ensure variable reference is still valid.
+	mustReturn(t, prog, 0)
+	qt.Assert(t, qt.Equals(a32.Load(), 1))
+
+	// Close the cancel channel while holding a backing array reference to avoid
+	// false-positive panics in case we get a GC cycle before the manual call to
+	// runtime.GC below.
+	close(cancel)
+	runtime.KeepAlive(a32)
+
+	// Another GC cycle to trigger collecting the backing array.
+	runtime.GC()
+
+	// Wait for backing array to be finalized.
+	testutils.WaitChan(t, mgc, time.Second)
 }

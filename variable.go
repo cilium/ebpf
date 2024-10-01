@@ -1,6 +1,7 @@
 package ebpf
 
 import (
+	"encoding/binary"
 	"fmt"
 	"io"
 
@@ -231,4 +232,38 @@ func (v *Variable) Get(out any) error {
 	}
 
 	return nil
+}
+
+func checkVariable[T any](v *Variable) error {
+	if v.ReadOnly() {
+		return ErrReadOnly
+	}
+
+	var t T
+	size := binary.Size(t)
+	if size < 0 {
+		return fmt.Errorf("can't determine size of type %T: %w", t, ErrInvalidType)
+	}
+
+	if v.size != uint64(size) {
+		return fmt.Errorf("can't create %d-byte accessor to %d-byte variable", size, v.size)
+	}
+	return nil
+}
+
+// VariablePointer returns a pointer to a variable of type T backed by memory
+// shared with the BPF program. Requires
+// [CollectionOptions.UnsafeVariableExperiment] to be true.
+//
+// Taking a pointer to a read-only Variable is not supported. T must be a
+// fixed-size type according to [binary.Size]. Types containing Go pointers are
+// not valid. [ErrInvalidType] is returned if T is not a valid type.
+//
+// When accessing structs, embedding [structs.HostLayout] may help ensure the
+// layout of the Go struct matches the one in the BPF C program.
+func VariablePointer[T any](v *Variable) (*T, error) {
+	if err := checkVariable[T](v); err != nil {
+		return nil, fmt.Errorf("variable pointer %s: %w", v.name, err)
+	}
+	return memoryPointer[T](v.mm, v.offset)
 }

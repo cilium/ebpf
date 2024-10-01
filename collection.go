@@ -33,6 +33,15 @@ type CollectionOptions struct {
 	// The given Maps are Clone()d before being used in the Collection, so the
 	// caller can Close() them freely when they are no longer needed.
 	MapReplacements map[string]*Map
+
+	// UnsafeVariableExperiment enables the unsafe variable experiment, allowing
+	// the use of [VariablePointer] for direct memory access and atomic operations
+	// on global bpf variables.
+	//
+	// Experimental: enabling this may cause segfaults or compromise the memory
+	// integrity of your Go application or the bpf maps representing Variables.
+	// Use at your own risk.
+	UnsafeVariableExperiment bool
 }
 
 // CollectionSpec describes a collection.
@@ -618,7 +627,12 @@ func (cl *collectionLoader) loadVariable(varName string) (*Variable, error) {
 	// emit a Variable with a nil Memory. This keeps Collection{Spec}.Variables
 	// consistent across systems with different feature sets without breaking
 	// LoadAndAssign.
-	mm, err := m.Memory()
+	var mm *Memory
+	if cl.opts.UnsafeVariableExperiment {
+		mm, err = m.unsafeMemory()
+	} else {
+		mm, err = m.Memory()
+	}
 	if err != nil && !errors.Is(err, ErrNotSupported) {
 		return nil, fmt.Errorf("variable %s: getting memory for map %s: %w", varName, mapName, err)
 	}

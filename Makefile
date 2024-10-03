@@ -40,6 +40,7 @@ TARGETS := \
 	testdata/fwd_decl \
 	testdata/kconfig \
 	testdata/kconfig_config \
+	testdata/ksym \
 	testdata/kfunc \
 	testdata/invalid-kfunc \
 	testdata/kfunc-kmod \

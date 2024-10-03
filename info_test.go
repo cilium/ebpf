@@ -535,3 +535,30 @@ func TestProgInfoKsym(t *testing.T) {
 		qt.Assert(t, qt.Not(qt.Equals(addr, 0)))
 	}
 }
+
+func TestProgInfoFuncInfos(t *testing.T) {
+	testutils.SkipOnOldKernel(t, "5.0", "Program func info")
+
+	spec, err := LoadCollectionSpec(testutils.NativeFile(t, "testdata/loader-%s.elf"))
+	qt.Assert(t, qt.IsNil(err))
+
+	var obj struct {
+		Prog *Program `ebpf:"xdp_prog"`
+	}
+	err = spec.LoadAndAssign(&obj, nil)
+	testutils.SkipIfNotSupported(t, err)
+	qt.Assert(t, qt.IsNil(err))
+	defer obj.Prog.Close()
+
+	info, err := obj.Prog.Info()
+	qt.Assert(t, qt.IsNil(err))
+
+	funcs, err := info.FuncInfos()
+	qt.Assert(t, qt.IsNil(err))
+
+	qt.Assert(t, qt.HasLen(funcs, 5))
+	for _, fo := range funcs {
+		qt.Assert(t, qt.IsNotNil(fo.Func))
+		qt.Assert(t, qt.Not(qt.Equals(fo.Func.Name, "")))
+	}
+}

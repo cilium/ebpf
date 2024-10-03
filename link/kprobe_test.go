@@ -224,15 +224,15 @@ func TestKprobeTraceFS(t *testing.T) {
 
 	// Write a k(ret)probe event for a non-existing symbol.
 	_, err = tracefs.NewEvent(args)
-	qt.Assert(t, qt.ErrorIs(err, os.ErrNotExist), qt.Commentf("got error: %s", err))
+	// A kernel bug was introduced in 9d8616034f16 that causes EINVAL to be returned
+	// instead of ENOENT when trying to attach kprobes to non-existing symbols.
+	qt.Assert(t, qt.IsTrue(errors.Is(err, os.ErrNotExist) || errors.Is(err, unix.EINVAL)), qt.Commentf("got error: %s", err))
 
 	// A kernel bug was fixed in 97c753e62e6c where EINVAL was returned instead
 	// of ENOENT, but only for kretprobes.
 	args.Ret = true
 	_, err = tracefs.NewEvent(args)
-	if !(errors.Is(err, os.ErrNotExist) || errors.Is(err, unix.EINVAL)) {
-		t.Fatal(err)
-	}
+	qt.Assert(t, qt.IsTrue(errors.Is(err, os.ErrNotExist) || errors.Is(err, unix.EINVAL)), qt.Commentf("got error: %s", err))
 }
 
 func BenchmarkKprobeCreateTraceFS(b *testing.B) {

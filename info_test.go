@@ -510,3 +510,28 @@ func TestZero(t *testing.T) {
 	qt.Assert(t, qt.IsTrue(zero(&inul)))
 	qt.Assert(t, qt.IsFalse(zero(&ione)))
 }
+
+func TestProgInfoKsym(t *testing.T) {
+	testutils.SkipOnOldKernel(t, "4.18", "Program ksym addresses")
+
+	spec, err := LoadCollectionSpec(testutils.NativeFile(t, "testdata/loader-%s.elf"))
+	qt.Assert(t, qt.IsNil(err))
+
+	var obj struct {
+		Prog *Program `ebpf:"xdp_prog"`
+	}
+	err = spec.LoadAndAssign(&obj, nil)
+	testutils.SkipIfNotSupported(t, err)
+	qt.Assert(t, qt.IsNil(err))
+	defer obj.Prog.Close()
+
+	info, err := obj.Prog.Info()
+	qt.Assert(t, qt.IsNil(err))
+
+	addrs, ok := info.KsymAddrs()
+	qt.Assert(t, qt.IsTrue(ok))
+	qt.Assert(t, qt.HasLen(addrs, 5))
+	for _, addr := range addrs {
+		qt.Assert(t, qt.Not(qt.Equals(addr, 0)))
+	}
+}

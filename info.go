@@ -203,6 +203,8 @@ type ProgramInfo struct {
 	numLineInfos uint32
 	funcInfos    []byte
 	numFuncInfos uint32
+	ksymInfos    []uint64
+	numKsymInfos uint32
 }
 
 func newProgramInfoFromFd(fd *sys.FD) (*ProgramInfo, error) {
@@ -277,6 +279,14 @@ func newProgramInfoFromFd(fd *sys.FD) (*ProgramInfo, error) {
 		info2.FuncInfoRecSize = btf.FuncInfoSize
 		info2.NrFuncInfo = info.NrFuncInfo
 		pi.numFuncInfos = info.NrFuncInfo
+		makeSecondCall = true
+	}
+
+	if info.NrJitedKsyms > 0 {
+		pi.ksymInfos = make([]uint64, info.NrJitedKsyms)
+		info2.JitedKsyms = sys.NewSlicePointer(pi.ksymInfos)
+		info2.NrJitedKsyms = info.NrJitedKsyms
+		pi.numKsymInfos = info.NrJitedKsyms
 		makeSecondCall = true
 	}
 
@@ -505,6 +515,20 @@ func (pi *ProgramInfo) LoadTime() (time.Duration, bool) {
 // The bool return value indicates whether this optional field is available.
 func (pi *ProgramInfo) VerifiedInstructions() (uint32, bool) {
 	return pi.verifiedInstructions, pi.verifiedInstructions > 0
+}
+
+// KsymAddrs returns the ksym addresses of the BPF program, including its
+// subprograms. The addresses correspond to their symbols in /proc/kallsyms.
+//
+// Available from 4.18.
+//
+// The bool return value indicates whether this optional field is available.
+func (pi *ProgramInfo) KsymAddrs() ([]uintptr, bool) {
+	addrs := make([]uintptr, 0, len(pi.ksymInfos))
+	for _, addr := range pi.ksymInfos {
+		addrs = append(addrs, uintptr(addr))
+	}
+	return addrs, pi.numKsymInfos > 0
 }
 
 func scanFdInfo(fd *sys.FD, fields map[string]interface{}) error {

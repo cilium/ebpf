@@ -733,7 +733,7 @@ type ProgInfo struct {
 	NetnsIno             uint64
 	NrJitedKsyms         uint32
 	NrJitedFuncLens      uint32
-	JitedKsyms           uint64
+	JitedKsyms           Pointer
 	JitedFuncLens        uint64
 	BtfId                BTFID
 	FuncInfoRecSize      uint32

@@ -14,6 +14,7 @@ import (
 
 	"github.com/cilium/ebpf/btf"
 	"github.com/cilium/ebpf/internal"
+	"github.com/cilium/ebpf/internal/kallsyms"
 	"github.com/cilium/ebpf/internal/linux"
 	"github.com/cilium/ebpf/internal/sys"
 	"github.com/cilium/ebpf/internal/testutils"
@@ -770,6 +771,62 @@ func TestKconfigConfig(t *testing.T) {
 
 	// CONFIG_HZ must have a value.
 	qt.Assert(t, qt.Not(qt.Equals(value, 0)))
+}
+
+func TestKsym(t *testing.T) {
+	file := testutils.NativeFile(t, "testdata/ksym-%s.elf")
+	spec, err := LoadCollectionSpec(file)
+	qt.Assert(t, qt.IsNil(err))
+
+	var obj struct {
+		Main     *Program `ebpf:"ksym_test"`
+		ArrayMap *Map     `ebpf:"array_map"`
+	}
+
+	err = spec.LoadAndAssign(&obj, nil)
+	testutils.SkipIfNotSupported(t, err)
+	qt.Assert(t, qt.IsNil(err))
+	defer obj.Main.Close()
+	defer obj.ArrayMap.Close()
+
+	_, _, err = obj.Main.Test(internal.EmptyBPFContext)
+	testutils.SkipIfNotSupported(t, err)
+	qt.Assert(t, qt.IsNil(err))
+
+	ksyms := map[string]uint64{
+		"socket_file_ops": 0,
+		"tty_fops":        0,
+	}
+
+	qt.Assert(t, qt.IsNil(kallsyms.LoadSymbolAddresses(ksyms)))
+
+	var value uint64
+	qt.Assert(t, qt.IsNil(obj.ArrayMap.Lookup(uint32(0), &value)))
+	qt.Assert(t, qt.Equals(value, ksyms["socket_file_ops"]))
+
+	err = obj.ArrayMap.Lookup(uint32(1), &value)
+	qt.Assert(t, qt.IsNil(err))
+	qt.Assert(t, qt.Equals(value, ksyms["tty_fops"]))
+}
+
+func TestKsymWeakMissing(t *testing.T) {
+	file := testutils.NativeFile(t, "testdata/ksym-%s.elf")
+	spec, err := LoadCollectionSpec(file)
+	qt.Assert(t, qt.IsNil(err))
+
+	var obj struct {
+		Main *Program `ebpf:"ksym_missing_test"`
+	}
+
+	err = spec.LoadAndAssign(&obj, nil)
+	testutils.SkipIfNotSupported(t, err)
+	qt.Assert(t, qt.IsNil(err))
+	defer obj.Main.Close()
+
+	res, _, err := obj.Main.Test(internal.EmptyBPFContext)
+	testutils.SkipIfNotSupported(t, err)
+	qt.Assert(t, qt.IsNil(err))
+	qt.Assert(t, qt.Equals(res, 1))
 }
 
 func TestKfunc(t *testing.T) {

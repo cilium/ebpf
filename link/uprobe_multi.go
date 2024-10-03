@@ -99,8 +99,11 @@ func (ex *Executable) uprobeMulti(symbols []string, prog *ebpf.Program, opts *Up
 	if errors.Is(err, unix.ESRCH) {
 		return nil, fmt.Errorf("%w (specified pid not found?)", os.ErrNotExist)
 	}
+	// Since Linux commit 46ba0e49b642 ("bpf: fix multi-uprobe PID filtering
+	// logic"), if the provided pid overflows MaxInt32 (turning it negative), the
+	// kernel will return EINVAL instead of ESRCH.
 	if errors.Is(err, unix.EINVAL) {
-		return nil, fmt.Errorf("%w (missing symbol or prog's AttachType not AttachTraceUprobeMulti?)", err)
+		return nil, fmt.Errorf("%w (invalid pid, missing symbol or prog's AttachType not AttachTraceUprobeMulti?)", err)
 	}
 
 	if err != nil {

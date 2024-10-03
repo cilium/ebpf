@@ -531,6 +531,39 @@ func (pi *ProgramInfo) KsymAddrs() ([]uintptr, bool) {
 	return addrs, pi.numKsymInfos > 0
 }
 
+// FuncInfos returns the offset and function information of all (sub)programs in
+// a BPF program.
+//
+// Available from 5.0.
+//
+// Requires CAP_SYS_ADMIN or equivalent for reading BTF information. Returns
+// ErrNotSupported if the program was created without BTF or if the kernel
+// doesn't support the field.
+func (pi *ProgramInfo) FuncInfos() (btf.FuncOffsets, error) {
+	id, ok := pi.BTFID()
+	if pi.numFuncInfos == 0 || !ok {
+		return nil, fmt.Errorf("program created without BTF or unsupported kernel: %w", ErrNotSupported)
+	}
+
+	h, err := btf.NewHandleFromID(id)
+	if err != nil {
+		return nil, fmt.Errorf("get BTF handle: %w", err)
+	}
+	defer h.Close()
+
+	spec, err := h.Spec(nil)
+	if err != nil {
+		return nil, fmt.Errorf("get BTF spec: %w", err)
+	}
+
+	return btf.LoadFuncInfos(
+		bytes.NewReader(pi.funcInfos),
+		internal.NativeEndian,
+		pi.numFuncInfos,
+		spec,
+	)
+}
+
 func scanFdInfo(fd *sys.FD, fields map[string]interface{}) error {
 	fh, err := os.Open(fmt.Sprintf("/proc/self/fdinfo/%d", fd.Int()))
 	if err != nil {

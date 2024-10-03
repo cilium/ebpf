@@ -337,6 +337,10 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions) (*Program, er
 	}
 	defer kconfig.Close()
 
+	if err := resolveKsymReferences(insns); err != nil {
+		return nil, fmt.Errorf("resolve .ksyms: %w", err)
+	}
+
 	if err := fixupAndValidate(insns); err != nil {
 		return nil, err
 	}

@@ -7,18 +7,21 @@ import (
 	"github.com/go-quicktest/qt"
 )
 
+var kallsyms = []byte(`0000000000000000 t hid_generic_probe	[hid_generic]
+00000000000000EA t writenote
+00000000000000A0 T tcp_connect
+00000000000000B0 B empty_zero_page
+00000000000000C0 D kimage_vaddr
+00000000000000D0 R __start_pci_fixups_early
+00000000000000E0 V hv_root_partition
+00000000000000F0 W calibrate_delay_is_known
+A0000000000000AA a nft_counter_seq	[nft_counter]
+A0000000000000BA b bootconfig_found
+A0000000000000CA d __func__.10
+A0000000000000DA r __ksymtab_LZ4_decompress_fast
+A0000000000000EA t writenote`)
+
 func TestKernelModule(t *testing.T) {
-	kallsyms := []byte(`0000000000000000 t hid_generic_probe	[hid_generic]
-0000000000000000 T tcp_connect
-0000000000000000 B empty_zero_page
-0000000000000000 D kimage_vaddr
-0000000000000000 R __start_pci_fixups_early
-0000000000000000 V hv_root_partition
-0000000000000000 W calibrate_delay_is_known
-0000000000000000 a nft_counter_seq	[nft_counter]
-0000000000000000 b bootconfig_found
-0000000000000000 d __func__.10
-0000000000000000 r __ksymtab_LZ4_decompress_fast`)
 	krdr := bytes.NewBuffer(kallsyms)
 	kmods, err := loadKernelModuleMapping(krdr)
 	qt.Assert(t, qt.IsNil(err))
@@ -36,4 +39,26 @@ func TestKernelModule(t *testing.T) {
 	}
 
 	qt.Assert(t, qt.Equals(kmods["nft_counter_seq"], ""))
+}
+
+func TestLoadSymbolAddresses(t *testing.T) {
+	b := bytes.NewBuffer(kallsyms)
+	ksyms := map[string]uint64{
+		"hid_generic_probe": 0,
+		"tcp_connect":       0,
+		"bootconfig_found":  0,
+	}
+	qt.Assert(t, qt.IsNil(loadSymbolAddresses(b, ksyms)))
+
+	qt.Assert(t, qt.Equals(ksyms["hid_generic_probe"], 0))
+	qt.Assert(t, qt.Equals(ksyms["tcp_connect"], 0xA0))
+	qt.Assert(t, qt.Equals(ksyms["bootconfig_found"], 0xA0000000000000BA))
+
+	b = bytes.NewBuffer(kallsyms)
+	ksyms = map[string]uint64{
+		"hid_generic_probe": 0,
+		"writenote":         0,
+	}
+	err := loadSymbolAddresses(b, ksyms)
+	qt.Assert(t, qt.ErrorIs(err, errKsymIsAmbiguous))
 }

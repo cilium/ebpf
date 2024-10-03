@@ -695,5 +695,13 @@ func (iter *TypesIterator) Next() bool {
 	iter.Type, ok = iter.spec.typeByID(iter.id)
 	iter.id++
 	iter.done = !ok
+	if !iter.done {
+		// Skip declTags, during unmarshaling declTags become `Tags` fields of other types.
+		// We keep them in the spec to avoid holes in the ID space, but for the purposes of
+		// iteration, they are not useful to the user.
+		if _, ok := iter.Type.(*declTag); ok {
+			return iter.Next()
+		}
+	}
 	return !iter.done
 }

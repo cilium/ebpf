@@ -521,7 +521,7 @@ func (e *encoder) deflateEnum64(raw *rawType, enum *Enum) (err error) {
 			})
 		}
 
-		return e.deflateUnion(raw, &Union{enum.Name, enum.Size, members})
+		return e.deflateUnion(raw, &Union{enum.Name, enum.Size, members, nil})
 	}
 
 	raw.SetKind(kindEnum64)

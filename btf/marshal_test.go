@@ -24,7 +24,7 @@ func TestBuilderMarshal(t *testing.T) {
 		(*Void)(nil),
 		typ,
 		&Pointer{typ},
-		&Typedef{"baz", typ},
+		&Typedef{"baz", typ, nil},
 	}
 
 	b, err := NewBuilder(want)
@@ -65,7 +65,7 @@ func TestBuilderAdd(t *testing.T) {
 	qt.Assert(t, qt.IsNil(err))
 	qt.Assert(t, qt.Equals(id, TypeID(2)), qt.Commentf("Adding a type twice returns different ids"))
 
-	id, err = b.Add(&Typedef{"baz", i})
+	id, err = b.Add(&Typedef{"baz", i, nil})
 	qt.Assert(t, qt.IsNil(err))
 	qt.Assert(t, qt.Equals(id, TypeID(3)))
 }

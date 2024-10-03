@@ -192,7 +192,8 @@ jobs:
     strategy:
       matrix:
         tag:
-          - "mainline"
+          # Re-enable when https://github.com/lmb/vimto/issues/19 is fixed.
+          # - "mainline"
           - "stable"
           - "6.6"
           - "6.1"

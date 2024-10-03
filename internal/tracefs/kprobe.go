@@ -214,7 +214,10 @@ func NewEvent(args ProbeArgs) (*Event, error) {
 	if err == nil {
 		return nil, fmt.Errorf("trace event %s/%s: %w", args.Group, eventName, os.ErrExist)
 	}
-	if err != nil && !errors.Is(err, os.ErrNotExist) {
+	if errors.Is(err, unix.EINVAL) {
+		return nil, fmt.Errorf("trace event %s/%s: %w (unknown symbol?)", args.Group, eventName, err)
+	}
+	if !errors.Is(err, os.ErrNotExist) {
 		return nil, fmt.Errorf("checking trace event %s/%s: %w", args.Group, eventName, err)
 	}
 

@@ -13,11 +13,6 @@ struct bpf_map_def __section("maps") kprobe_map = {
 	.max_entries = 128,
 };
 
-static void *(*bpf_map_lookup_elem)(void *map, const void *key)                                   = (void *)1;
-static long (*bpf_map_update_elem)(void *map, const void *key, const void *value, uint64_t flags) = (void *)2;
-static void *(*bpf_get_current_task)()                                                            = (void *)35;
-static long (*bpf_probe_read_kernel)(void *dst, uint32_t size, const void *unsafe_ptr)            = (void *)113;
-
 #pragma clang attribute push(__attribute__((preserve_access_index)), apply_to = record)
 struct ns_common {
 	unsigned int inum;

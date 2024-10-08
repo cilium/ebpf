@@ -21,6 +21,6 @@ static struct bpf_map_def hash_map __section("maps") = {
 
 __section("xdp") int xdp_prog() {
 	uint32_t key = 0;
-	void *p      = map_lookup_elem(&hash_map, &key);
+	void *p      = bpf_map_lookup_elem(&hash_map, &key);
 	return !!p;
 }

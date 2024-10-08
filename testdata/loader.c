@@ -107,9 +107,9 @@ volatile const uint32_t arg2 __section(".rodata.test");
 volatile uint32_t arg3 __section(".data.test");
 
 __section("xdp") int xdp_prog() {
-	map_lookup_elem(&hash_map, (void *)&key1);
-	map_lookup_elem(&hash_map2, (void *)&key2);
-	map_lookup_elem(&hash_map2, (void *)&key3);
+	bpf_map_lookup_elem(&hash_map, (void *)&key1);
+	bpf_map_lookup_elem(&hash_map2, (void *)&key2);
+	bpf_map_lookup_elem(&hash_map2, (void *)&key3);
 	return static_fn(arg) + global_fn(arg) + arg2 + arg3;
 }
 

@@ -53,16 +53,20 @@ struct bpf_map_def {
 	unsigned int map_flags;
 };
 
-static void *(*map_lookup_elem)(const void *map, const void *key) = (void *)1;
+static void *(*bpf_map_lookup_elem)(const void *map, const void *key) = (void *)1;
 
-static long (*map_update_elem)(const void *map, const void *key, const void *value, uint64_t flags) = (void *)2;
+static long (*bpf_map_update_elem)(const void *map, const void *key, const void *value, uint64_t flags) = (void *)2;
 
-static long (*trace_printk)(const char *fmt, uint32_t fmt_size, ...) = (void *)6;
+static long (*bpf_trace_printk)(const char *fmt, uint32_t fmt_size, ...) = (void *)6;
 
-static long (*tail_call)(void *ctx, void *prog_array_map, uint32_t index) = (void *)12;
+static uint32_t (*bpf_get_smp_processor_id)(void) = (void *)8;
 
-static int (*perf_event_output)(const void *ctx, const void *map, uint64_t index, const void *data, uint64_t size) = (void *)25;
+static long (*bpf_tail_call)(void *ctx, void *prog_array_map, uint32_t index) = (void *)12;
 
-static uint32_t (*get_smp_processor_id)(void) = (void *)8;
+static int (*bpf_perf_event_output)(const void *ctx, const void *map, uint64_t index, const void *data, uint64_t size) = (void *)25;
 
-static long (*for_each_map_elem)(const void *map, void *callback_fn, void *callback_ctx, uint64_t flags) = (void *)164;
+static void *(*bpf_get_current_task)() = (void *)35;
+
+static long (*bpf_probe_read_kernel)(void *dst, uint32_t size, const void *unsafe_ptr) = (void *)113;
+
+static long (*bpf_for_each_map_elem)(const void *map, void *callback_fn, void *callback_ctx, uint64_t flags) = (void *)164;

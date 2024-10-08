@@ -25,7 +25,7 @@ int __section("socket/main") tail_main(void *ctx) {
 	// If prog_array_init is correctly populated, the tail call
 	// will succeed and the program will continue in tail_1 and
 	// not return here.
-	tail_call(ctx, &prog_array_init, 1);
+	bpf_tail_call(ctx, &prog_array_init, 1);
 
 	return 0;
 }

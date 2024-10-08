@@ -11,8 +11,6 @@ struct {
 	__type(value, uint64_t);
 } array_map __section(".maps");
 
-static long (*bpf_map_update_elem)(void *map, const void *key, const void *value, uint64_t flags) = (void *)2;
-
 __section("socket") int kconfig() {
 	uint32_t i;
 	uint64_t val;

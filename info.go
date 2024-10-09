@@ -12,7 +12,6 @@ import (
 	"strings"
 	"syscall"
 	"time"
-	"unsafe"
 
 	"github.com/cilium/ebpf/asm"
 	"github.com/cilium/ebpf/btf"
@@ -240,7 +239,7 @@ func newProgramInfoFromFd(fd *sys.FD) (*ProgramInfo, error) {
 	if info.NrMapIds > 0 {
 		pi.maps = make([]MapID, info.NrMapIds)
 		info2.NrMapIds = info.NrMapIds
-		info2.MapIds = sys.NewPointer(unsafe.Pointer(&pi.maps[0]))
+		info2.MapIds = sys.NewSlicePointer(pi.maps)
 		makeSecondCall = true
 	} else if haveProgramInfoMapIDs() == nil {
 		// This program really has no associated maps.

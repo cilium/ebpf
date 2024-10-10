@@ -58,6 +58,8 @@ const (
 	PROT_WRITE                = linux.PROT_WRITE
 	MAP_ANON                  = linux.MAP_ANON
 	MAP_SHARED                = linux.MAP_SHARED
+	MAP_FIXED                 = linux.MAP_FIXED
+	MAP_ANONYMOUS             = linux.MAP_ANONYMOUS
 	MAP_PRIVATE               = linux.MAP_PRIVATE
 	PERF_ATTR_SIZE_VER1       = linux.PERF_ATTR_SIZE_VER1
 	PERF_TYPE_SOFTWARE        = linux.PERF_TYPE_SOFTWARE

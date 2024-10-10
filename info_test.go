@@ -562,3 +562,40 @@ func TestProgInfoFuncInfos(t *testing.T) {
 		qt.Assert(t, qt.Not(qt.Equals(fo.Func.Name, "")))
 	}
 }
+
+func TestObjectInfoWrongType(t *testing.T) {
+	t.Run("program", func(t *testing.T) {
+		hash, err := NewMap(&MapSpec{
+			Type:       Hash,
+			KeySize:    4,
+			ValueSize:  5,
+			MaxEntries: 2,
+			Flags:      sys.BPF_F_NO_PREALLOC,
+		})
+		testutils.SkipIfNotSupported(t, err)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer hash.Close()
+
+		info, err := newProgramInfoFromFd(hash.fd)
+		if !errors.Is(err, ErrWrongObjectType) {
+			t.Error("Expected error to be ErrWrongObjectType, got", err)
+		}
+		if info != nil {
+			t.Error("Expected info to be nil, got", info)
+		}
+	})
+
+	t.Run("map", func(t *testing.T) {
+		prog := mustSocketFilter(t)
+
+		info, err := newMapInfoFromFd(prog.fd)
+		if !errors.Is(err, ErrWrongObjectType) {
+			t.Error("Expected error to be ErrWrongObjectType, got", err)
+		}
+		if info != nil {
+			t.Error("Expected info to be nil, got", info)
+		}
+	})
+}

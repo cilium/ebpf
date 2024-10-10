@@ -472,8 +472,7 @@ func TestProgramVerifierLog(t *testing.T) {
 	}
 
 	// Generate a base program of sufficient size whose verifier log does not fit
-	// a 128-byte buffer. This should always result in ENOSPC, setting the
-	// VerifierError.Truncated flag.
+	// a 128-byte buffer. This should always result in ENOSPC.
 	var base asm.Instructions
 	for i := 0; i < 32; i++ {
 		base = append(base, asm.Mov.Reg(asm.R0, asm.R1))
@@ -505,13 +504,22 @@ func TestProgramVerifierLog(t *testing.T) {
 	})
 	check(t, err)
 
+	// Disabling the verifier log should result in a VerifierError without a log.
+	_, err = NewProgramWithOptions(spec, ProgramOptions{
+		LogDisabled: true,
+	})
+	var ve *internal.VerifierError
+	qt.Assert(t, qt.ErrorAs(err, &ve))
+	qt.Assert(t, qt.HasLen(ve.Log, 0))
+
 	// Run tests against a valid program from here on out.
 	spec.Instructions = valid
 
-	// Don't request a verifier log, only set LogSize. Expect the valid program to
-	// be created without errors.
+	// Don't request a verifier log, expect the valid program to be created
+	// without errors.
 	prog, err := NewProgramWithOptions(spec, ProgramOptions{})
 	qt.Assert(t, qt.IsNil(err))
+	qt.Assert(t, qt.HasLen(prog.VerifierLog, 0))
 	prog.Close()
 
 	// Explicitly request verifier log for a valid program. If a log is requested

@@ -42,6 +42,7 @@ func TestSizeof(t *testing.T) {
 
 func TestCopy(t *testing.T) {
 	i := &Int{Size: 4}
+	tags := []string{"bar:foo"}
 
 	got := Copy(&Struct{
 		Members: []Member{
@@ -60,6 +61,11 @@ func TestCopy(t *testing.T) {
 		{"void", (*Void)(nil)},
 		{"int", i},
 		{"cyclical", newCyclicalType(2)},
+		{"struct tags", &Struct{Tags: tags, Members: []Member{{Tags: tags}}}},
+		{"union tags", &Union{Tags: tags, Members: []Member{{Tags: tags}}}},
+		{"typedef tags", &Typedef{Type: i, Tags: tags}},
+		{"var tags", &Var{Type: i, Tags: tags}},
+		{"func tags", &Func{Tags: tags, ParamTags: [][]string{tags}}},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			cpy := Copy(test.typ)

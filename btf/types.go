@@ -183,6 +183,7 @@ func (s *Struct) size() uint32 { return s.Size }
 func (s *Struct) copy() Type {
 	cpy := *s
 	cpy.Members = copyMembers(s.Members)
+	cpy.Tags = copyTags(cpy.Tags)
 	return &cpy
 }
 
@@ -210,6 +211,7 @@ func (u *Union) size() uint32 { return u.Size }
 func (u *Union) copy() Type {
 	cpy := *u
 	cpy.Members = copyMembers(u.Members)
+	cpy.Tags = copyTags(cpy.Tags)
 	return &cpy
 }
 
@@ -219,6 +221,18 @@ func (u *Union) members() []Member {
 
 func copyMembers(orig []Member) []Member {
 	cpy := make([]Member, len(orig))
+	copy(cpy, orig)
+	for i, member := range cpy {
+		cpy[i].Tags = copyTags(member.Tags)
+	}
+	return cpy
+}
+
+func copyTags(orig []string) []string {
+	if orig == nil { // preserve nil vs zero-len slice distinction
+		return nil
+	}
+	cpy := make([]string, len(orig))
 	copy(cpy, orig)
 	return cpy
 }
@@ -348,6 +362,7 @@ func (td *Typedef) TypeName() string { return td.Name }
 
 func (td *Typedef) copy() Type {
 	cpy := *td
+	cpy.Tags = copyTags(td.Tags)
 	return &cpy
 }
 
@@ -434,6 +449,14 @@ func (f *Func) TypeName() string { return f.Name }
 
 func (f *Func) copy() Type {
 	cpy := *f
+	cpy.Tags = copyTags(f.Tags)
+	if f.ParamTags != nil { // preserve nil vs zero-len slice distinction
+		ptCopy := make([][]string, len(f.ParamTags))
+		for i, tags := range f.ParamTags {
+			ptCopy[i] = copyTags(tags)
+		}
+		cpy.ParamTags = ptCopy
+	}
 	return &cpy
 }
 
@@ -477,6 +500,7 @@ func (v *Var) TypeName() string { return v.Name }
 
 func (v *Var) copy() Type {
 	cpy := *v
+	cpy.Tags = copyTags(v.Tags)
 	return &cpy
 }
 

@@ -9,6 +9,7 @@ import (
 	"io/fs"
 	"math"
 	"slices"
+	"strings"
 
 	"github.com/cilium/ebpf/asm"
 	"github.com/cilium/ebpf/btf"
@@ -456,4 +457,38 @@ func resolveKconfigReferences(insns asm.Instructions) (_ *Map, err error) {
 	}
 
 	return kconfig, nil
+}
+
+func resolveKsymReferences(insns asm.Instructions) error {
+	var missing []string
+
+	iter := insns.Iterate()
+	for iter.Next() {
+		ins := iter.Ins
+		meta, _ := ins.Metadata.Get(ksymMetaKey{}).(*ksymMeta)
+		if meta == nil {
+			continue
+		}
+
+		if meta.Addr != 0 {
+			ins.Constant = int64(meta.Addr)
+			continue
+		}
+
+		if meta.Binding == elf.STB_WEAK {
+			// In case we could not find the symbol for a weak binded variable, fall back to 0.
+			ins.Constant = 0
+			continue
+		}
+
+		if !slices.Contains(missing, meta.Name) {
+			missing = append(missing, meta.Name)
+		}
+	}
+
+	if len(missing) > 0 {
+		return fmt.Errorf("missing ksyms: %s", strings.Join(missing, ","))
+	}
+
+	return nil
 }

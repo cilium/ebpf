@@ -15,6 +15,7 @@ import (
 	"github.com/cilium/ebpf/asm"
 	"github.com/cilium/ebpf/btf"
 	"github.com/cilium/ebpf/internal"
+	"github.com/cilium/ebpf/internal/kallsyms"
 	"github.com/cilium/ebpf/internal/sys"
 )
 
@@ -32,6 +33,14 @@ type kfuncMeta struct {
 	Func    *btf.Func
 }
 
+type ksymMetaKey struct{}
+
+type ksymMeta struct {
+	Binding elf.SymBind
+	Addr    uint64
+	Name    string
+}
+
 // elfCode is a convenience to reduce the amount of arguments that have to
 // be passed around explicitly. You should treat its contents as immutable.
 type elfCode struct {
@@ -44,6 +53,7 @@ type elfCode struct {
 	maps     map[string]*MapSpec
 	vars     map[string]*VariableSpec
 	kfuncs   map[string]*btf.Func
+	ksyms    map[string]uint64
 	kconfig  *MapSpec
 }
 
@@ -136,6 +146,7 @@ func LoadCollectionSpecFromReader(rd io.ReaderAt) (*CollectionSpec, error) {
 		maps:        make(map[string]*MapSpec),
 		vars:        make(map[string]*VariableSpec),
 		kfuncs:      make(map[string]*btf.Func),
+		ksyms:       make(map[string]uint64),
 	}
 
 	symbols, err := f.Symbols()
@@ -627,6 +638,8 @@ func (ec *elfCode) relocateInstruction(ins *asm.Instruction, rel elf.Symbol) err
 		}
 
 		kf := ec.kfuncs[name]
+		ksymAddr := ec.ksyms[name]
+
 		switch {
 		// If a Call / DWordLoad instruction is found and the datasec has a btf.Func with a Name
 		// that matches the symbol name we mark the instruction as a referencing a kfunc.
@@ -646,6 +659,16 @@ func (ec *elfCode) relocateInstruction(ins *asm.Instruction, rel elf.Symbol) err
 			})
 
 			ins.Constant = 0
+
+		case ksymAddr != 0 && ins.OpCode.IsDWordLoad():
+			if bind != elf.STB_GLOBAL && bind != elf.STB_WEAK {
+				return fmt.Errorf("asm relocation: %s: %w: %s", name, errUnsupportedBinding, bind)
+			}
+			ins.Metadata.Set(ksymMetaKey{}, &ksymMeta{
+				Binding: bind,
+				Name:    name,
+				Addr:    ksymAddr,
+			})
 
 		// If no kconfig map is found, this must be a symbol reference from inline
 		// asm (see testdata/loader.c:asm_relocation()) or a call to a forward
@@ -1280,8 +1303,18 @@ func (ec *elfCode) loadKsymsSection() error {
 	}
 
 	for _, v := range ds.Vars {
-		// we have already checked the .ksyms Datasec to only contain Func Vars.
-		ec.kfuncs[v.Type.TypeName()] = v.Type.(*btf.Func)
+		switch t := v.Type.(type) {
+		case *btf.Func:
+			ec.kfuncs[t.TypeName()] = t
+		case *btf.Var:
+			ec.ksyms[t.TypeName()] = 0
+		default:
+			return fmt.Errorf("unexpected variable type in .ksysm: %T", v)
+		}
+	}
+
+	if err := kallsyms.LoadSymbolAddresses(ec.ksyms); err != nil {
+		return fmt.Errorf("error while loading ksym addresses: %w", err)
 	}
 
 	return nil

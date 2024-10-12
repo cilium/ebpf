@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"runtime"
 	"strings"
 	"syscall"
 	"time"
@@ -53,7 +54,7 @@ type MapInfo struct {
 func newMapInfoFromFd(fd *sys.FD) (*MapInfo, error) {
 	var info sys.MapInfo
 	err := sys.ObjInfo(fd, &info)
-	if errors.Is(err, syscall.EINVAL) {
+	if errors.Is(err, syscall.EINVAL) && runtime.GOOS == "linux" {
 		return newMapInfoFromProc(fd)
 	}
 	if err != nil {
@@ -207,7 +208,7 @@ func newProgramInfoFromFd(fd *sys.FD) (*ProgramInfo, error) {
 	}
 
 	// createdByUID and NrMapIds were introduced in the same kernel version.
-	if pi.maps != nil {
+	if pi.maps != nil && runtime.GOOS != "windows" {
 		pi.createdByUID = info.CreatedByUid
 		pi.haveCreatedByUID = true
 	}
@@ -471,6 +472,10 @@ func (pi *ProgramInfo) VerifiedInstructions() (uint32, bool) {
 }
 
 func scanFdInfo(fd *sys.FD, fields map[string]interface{}) error {
+	if runtime.GOOS == "windows" {
+		return fmt.Errorf("read fdinfo: %w", internal.ErrNotSupportedOnOS)
+	}
+
 	fh, err := os.Open(fmt.Sprintf("/proc/self/fdinfo/%d", fd.Int()))
 	if err != nil {
 		return err
@@ -532,6 +537,10 @@ func scanFdInfoReader(r io.Reader, fields map[string]interface{}) error {
 //
 // Requires at least 5.8.
 func EnableStats(which uint32) (io.Closer, error) {
+	if runtime.GOOS == "windows" {
+		return nil, fmt.Errorf("enable stats: %w", internal.ErrNotSupportedOnOS)
+	}
+
 	fd, err := sys.EnableStats(&sys.EnableStatsAttr{
 		Type: which,
 	})
@@ -541,29 +550,32 @@ func EnableStats(which uint32) (io.Closer, error) {
 	return fd, nil
 }
 
-var haveProgramInfoMapIDs = internal.NewFeatureTest("map IDs in program info", "4.15", func() error {
-	prog, err := progLoad(asm.Instructions{
-		asm.LoadImm(asm.R0, 0, asm.DWord),
-		asm.Return(),
-	}, SocketFilter, "MIT")
-	if err != nil {
+var haveProgramInfoMapIDs = internal.NewPortableFeatureTest("map IDs in program info",
+	"4.15", func() error {
+		prog, err := progLoad(asm.Instructions{
+			asm.LoadImm(asm.R0, 0, asm.DWord),
+			asm.Return(),
+		}, SocketFilter, "MIT")
+		if err != nil {
+			return err
+		}
+		defer prog.Close()
+
+		err = sys.ObjInfo(prog, &sys.ProgInfo{
+			// NB: Don't need to allocate MapIds since the program isn't using
+			// any maps.
+			NrMapIds: 1,
+		})
+		if errors.Is(err, sys.EINVAL) {
+			// Most likely the syscall doesn't exist.
+			return internal.ErrNotSupported
+		}
+		if errors.Is(err, sys.E2BIG) {
+			// We've hit check_uarg_tail_zero on older kernels.
+			return internal.ErrNotSupported
+		}
+
 		return err
-	}
-	defer prog.Close()
-
-	err = sys.ObjInfo(prog, &sys.ProgInfo{
-		// NB: Don't need to allocate MapIds since the program isn't using
-		// any maps.
-		NrMapIds: 1,
-	})
-	if errors.Is(err, sys.EINVAL) {
-		// Most likely the syscall doesn't exist.
-		return internal.ErrNotSupported
-	}
-	if errors.Is(err, sys.E2BIG) {
-		// We've hit check_uarg_tail_zero on older kernels.
-		return internal.ErrNotSupported
-	}
-
-	return err
-})
+	},
+	"0.20.0", func() error { return nil },
+)

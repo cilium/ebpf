@@ -6,7 +6,7 @@ package ebpf
 
 import "github.com/cilium/ebpf/internal/sys"
 
-var elfSectionDefs = []libbpfElfSectionDef{
+var linuxElfSectionDefs = []libbpfElfSectionDef{
 	{"socket", sys.BPF_PROG_TYPE_SOCKET_FILTER, 0, _SEC_NONE},
 	{"sk_reuseport/migrate", sys.BPF_PROG_TYPE_SK_REUSEPORT, sys.BPF_SK_REUSEPORT_SELECT_OR_MIGRATE, _SEC_ATTACHABLE},
 	{"sk_reuseport", sys.BPF_PROG_TYPE_SK_REUSEPORT, sys.BPF_SK_REUSEPORT_SELECT, _SEC_ATTACHABLE},

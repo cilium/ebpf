@@ -10,6 +10,7 @@ import (
 	"io"
 	"math"
 	"os"
+	"runtime"
 	"strings"
 
 	"github.com/cilium/ebpf/asm"
@@ -44,17 +45,22 @@ type elfCode struct {
 	maps     map[string]*MapSpec
 	kfuncs   map[string]*btf.Func
 	kconfig  *MapSpec
+	platform Platform
 }
 
 // LoadCollectionSpec parses an ELF file into a CollectionSpec.
 func LoadCollectionSpec(file string) (*CollectionSpec, error) {
+	return LoadCollectionSpecWithOptions(file, CollectionSpecOptions{})
+}
+
+func LoadCollectionSpecWithOptions(file string, opts CollectionSpecOptions) (*CollectionSpec, error) {
 	f, err := os.Open(file)
 	if err != nil {
 		return nil, err
 	}
 	defer f.Close()
 
-	spec, err := LoadCollectionSpecFromReader(f)
+	spec, err := LoadCollectionSpecFromReaderWithOptions(f, opts)
 	if err != nil {
 		return nil, fmt.Errorf("file %s: %w", file, err)
 	}
@@ -63,6 +69,20 @@ func LoadCollectionSpec(file string) (*CollectionSpec, error) {
 
 // LoadCollectionSpecFromReader parses an ELF file into a CollectionSpec.
 func LoadCollectionSpecFromReader(rd io.ReaderAt) (*CollectionSpec, error) {
+	return LoadCollectionSpecFromReaderWithOptions(rd, CollectionSpecOptions{})
+}
+
+// CollectionSpecOptions control how an ELF is parsed.
+type CollectionSpecOptions struct {
+	// The Platform targeted by the ELF. Defaults to the current platform.
+	Platform Platform
+}
+
+func LoadCollectionSpecFromReaderWithOptions(rd io.ReaderAt, opts CollectionSpecOptions) (*CollectionSpec, error) {
+	if opts.Platform == UnspecifiedPlatform {
+		opts.Platform = nativePlatform
+	}
+
 	f, err := internal.NewSafeELFFile(rd)
 	if err != nil {
 		return nil, err
@@ -134,6 +154,7 @@ func LoadCollectionSpecFromReader(rd io.ReaderAt) (*CollectionSpec, error) {
 		extInfo:     btfExtInfo,
 		maps:        make(map[string]*MapSpec),
 		kfuncs:      make(map[string]*btf.Func),
+		platform:    Linux,
 	}
 
 	symbols, err := f.Symbols()
@@ -337,7 +358,23 @@ func (ec *elfCode) loadProgramSections() (map[string]*ProgramSpec, error) {
 			return nil, fmt.Errorf("section %v: %w", sec.Name, err)
 		}
 
-		progType, attachType, progFlags, attachTo := getProgType(sec.Name)
+		var (
+			progType   ProgramType
+			attachType AttachType
+			progFlags  uint32
+			attachTo   string
+		)
+		switch ec.platform {
+		case Linux:
+			progType, attachType, progFlags, attachTo, err = getLinuxProgramType(sec.Name)
+		case Windows:
+			progType, attachType, progFlags, attachTo, err = getWindowsProgramType(sec.Name)
+		default:
+			return nil, fmt.Errorf("unsupported platform %s", ec.platform)
+		}
+		if err != nil {
+			return nil, fmt.Errorf("section %v: %w", sec.Name, err)
+		}
 
 		for name, insns := range funcs {
 			spec := &ProgramSpec{
@@ -946,7 +983,7 @@ func mapSpecFromBTF(es *elfSection, vs *btf.VarSecinfo, def *btf.Struct, spec *b
 			case *btf.Struct:
 				// The values member pointing to an array of structs means we're expecting
 				// a map-in-map declaration.
-				if mapType != ArrayOfMaps && mapType != HashOfMaps {
+				if runtime.GOOS != "windows" && (mapType != ArrayOfMaps && mapType != HashOfMaps) {
 					return nil, errors.New("outer map needs to be an array or a hash of maps")
 				}
 				if inner {
@@ -1246,7 +1283,7 @@ func init() {
 	// Compatibility with older versions of the library.
 	// We prepend libbpf definitions since they contain a prefix match
 	// for "xdp".
-	elfSectionDefs = append([]libbpfElfSectionDef{
+	linuxElfSectionDefs = append([]libbpfElfSectionDef{
 		{"xdp.frags/", sys.BPF_PROG_TYPE_XDP, sys.BPF_XDP, _SEC_XDP_FRAGS | ignoreExtra},
 		{"xdp.frags_devmap/", sys.BPF_PROG_TYPE_XDP, sys.BPF_XDP_DEVMAP, _SEC_XDP_FRAGS},
 		{"xdp_devmap/", sys.BPF_PROG_TYPE_XDP, sys.BPF_XDP_DEVMAP, 0},
@@ -1255,21 +1292,28 @@ func init() {
 		// This has been in the library since the beginning of time. Not sure
 		// where it came from.
 		{"seccomp", sys.BPF_PROG_TYPE_SOCKET_FILTER, 0, _SEC_NONE},
-	}, elfSectionDefs...)
+	}, linuxElfSectionDefs...)
 }
 
-func getProgType(sectionName string) (ProgramType, AttachType, uint32, string) {
+func getLinuxProgramType(sectionName string) (ProgramType, AttachType, uint32, string, error) {
 	// Skip optional program marking for now.
 	sectionName = strings.TrimPrefix(sectionName, "?")
 
-	for _, t := range elfSectionDefs {
+	for _, t := range linuxElfSectionDefs {
 		extra, ok := matchSectionName(sectionName, t.pattern)
 		if !ok {
 			continue
 		}
 
-		programType := ProgramType(t.programType)
-		attachType := AttachType(t.attachType)
+		programType, err := ProgramTypeForPlatform(Linux, uint32(t.programType))
+		if err != nil {
+			return 0, 0, 0, "", err
+		}
+
+		attachType, err := AttachTypeForPlatform(Linux, uint32(t.attachType))
+		if err != nil {
+			return 0, 0, 0, "", err
+		}
 
 		var flags uint32
 		if t.flags&_SEC_SLEEPABLE > 0 {
@@ -1290,10 +1334,36 @@ func getProgType(sectionName string) (ProgramType, AttachType, uint32, string) {
 			extra = ""
 		}
 
-		return programType, attachType, flags, extra
+		return programType, attachType, flags, extra, nil
 	}
 
-	return UnspecifiedProgram, AttachNone, 0, ""
+	return UnspecifiedProgram, AttachNone, 0, "", nil
+}
+
+func getWindowsProgramType(sectionName string) (ProgramType, AttachType, uint32, string, error) {
+	// Skip optional program marking for now.
+	sectionName = strings.TrimPrefix(sectionName, "?")
+
+	for _, t := range windowsElfSectionDefs {
+		extra, ok := matchSectionName(sectionName, t.pattern)
+		if !ok {
+			continue
+		}
+
+		programType, err := ProgramTypeForPlatform(Windows, uint32(t.programType))
+		if err != nil {
+			return 0, 0, 0, "", err
+		}
+
+		attachType, err := AttachTypeForPlatform(Windows, uint32(t.attachType))
+		if err != nil {
+			return 0, 0, 0, "", err
+		}
+
+		return programType, attachType, 0, extra, nil
+	}
+
+	return UnspecifiedProgram, AttachNone, 0, "", nil
 }
 
 // matchSectionName checks a section name against a pattern.

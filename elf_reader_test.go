@@ -8,13 +8,13 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"syscall"
 	"testing"
 
 	"github.com/cilium/ebpf/btf"
 	"github.com/cilium/ebpf/internal"
-	"github.com/cilium/ebpf/internal/linux"
 	"github.com/cilium/ebpf/internal/sys"
 	"github.com/cilium/ebpf/internal/testutils"
 
@@ -392,6 +392,9 @@ func TestLoadInitializedBTFMap(t *testing.T) {
 			if coll.ByteOrder != internal.NativeEndian {
 				t.Skipf("Skipping %s collection", coll.ByteOrder)
 			}
+			if runtime.GOOS == "windows" {
+				t.Skip("Windows made a mess of MapType")
+			}
 
 			tmp, err := NewCollection(coll)
 			testutils.SkipIfNotSupported(t, err)
@@ -586,42 +589,6 @@ func TestTailCall(t *testing.T) {
 	// Expect the tail_1 tail call to be taken, returning value 42.
 	if ret != 42 {
 		t.Fatalf("Expected tail call to return value 42, got %d", ret)
-	}
-}
-
-func TestKconfigKernelVersion(t *testing.T) {
-	file := testutils.NativeFile(t, "testdata/kconfig-%s.elf")
-	spec, err := LoadCollectionSpec(file)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	var obj struct {
-		Main *Program `ebpf:"kernel_version"`
-	}
-
-	testutils.SkipOnOldKernel(t, "5.2", "readonly maps")
-
-	err = spec.LoadAndAssign(&obj, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer obj.Main.Close()
-
-	ret, _, err := obj.Main.Test(internal.EmptyBPFContext)
-	testutils.SkipIfNotSupported(t, err)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	v, err := linux.KernelVersion()
-	if err != nil {
-		t.Fatalf("getting kernel version: %s", err)
-	}
-
-	version := v.Kernel()
-	if ret != version {
-		t.Fatalf("Expected eBPF to return value %d, got %d", version, ret)
 	}
 }
 
@@ -1262,7 +1229,8 @@ func TestELFSectionProgramTypes(t *testing.T) {
 
 	for _, tc := range testcases {
 		t.Run(tc.Section, func(t *testing.T) {
-			pt, at, fl, extra := getProgType(tc.Section)
+			pt, at, fl, extra, err := getLinuxProgramType(tc.Section)
+			qt.Assert(t, qt.IsNil(err))
 			have := testcase{tc.Section, pt, at, fl, extra}
 			qt.Assert(t, qt.DeepEquals(have, tc))
 		})

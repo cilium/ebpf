@@ -2,6 +2,7 @@ package kallsyms
 
 import (
 	"bytes"
+	"runtime"
 	"testing"
 
 	"github.com/go-quicktest/qt"
@@ -61,4 +62,16 @@ func TestLoadSymbolAddresses(t *testing.T) {
 	}
 	err := loadSymbolAddresses(b, ksyms)
 	qt.Assert(t, qt.ErrorIs(err, errKsymIsAmbiguous))
+}
+
+func BenchmarkKernelModuleMemory(b *testing.B) {
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		b.StopTimer()
+		FlushKernelModuleCache()
+		runtime.GC()
+
+		b.StartTimer()
+		KernelModule("foo")
+	}
 }

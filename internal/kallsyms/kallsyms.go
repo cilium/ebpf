@@ -60,7 +60,12 @@ func loadKernelModuleMapping(f io.Reader) (map[string]string, error) {
 	mods := make(map[string]string)
 	scanner := bufio.NewScanner(f)
 	for scanner.Scan() {
-		fields := bytes.Fields(scanner.Bytes())
+		line := scanner.Bytes()
+		// bytes.Fields is expensive, so filter for '[' first
+		if !bytes.ContainsRune(line, '[') {
+			continue
+		}
+		fields := bytes.Fields(line)
 		if len(fields) < 4 {
 			continue
 		}

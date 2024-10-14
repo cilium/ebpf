@@ -276,9 +276,15 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions) (*Program, er
 	insns := make(asm.Instructions, len(spec.Instructions))
 	copy(insns, spec.Instructions)
 
-	kmodName, err := spec.KernelModule()
-	if err != nil {
-		return nil, fmt.Errorf("kernel module search: %w", err)
+	var kmodName string
+	var err error
+
+	// applyRelocations() only uses kmodName if len(targets) == 0
+	if opts.KernelTypes == nil || len(opts.KernelModuleTypes) != 0 {
+		kmodName, err = spec.KernelModule()
+		if err != nil {
+			return nil, fmt.Errorf("kernel module search: %w", err)
+		}
 	}
 
 	var targets []*btf.Spec

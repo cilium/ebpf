@@ -1,10 +1,50 @@
 package ebpf
 
 import (
+	"fmt"
+
 	"github.com/cilium/ebpf/internal/sys"
 )
 
-//go:generate go run golang.org/x/tools/cmd/stringer@latest -output types_string.go -type=MapType,ProgramType,PinType
+//go:generate go run golang.org/x/tools/cmd/stringer@latest -output types_string.go -type=MapType,ProgramType,PinType,Platform
+
+// Platform identifies a supported eBPF runtime.
+type Platform int
+
+const (
+	UnspecifiedPlatform Platform = iota
+	Linux
+	Windows
+)
+
+const (
+	platformMax   = 0xf
+	platformShift = 24
+	platformMask  = platformMax << platformShift
+)
+
+// Encode a [Platform] and a value into a tagged constant.
+//
+// The platform tag is stored in the 4 most significant bits. The tags value is
+// one less than the platform constant so that Linux constants remain the same.
+//
+// Returns an error if either p or c are out of bounds.
+func encodePlatformConstant[T ~uint32](p Platform, c uint32) (T, error) {
+	if p == UnspecifiedPlatform || p > platformMax {
+		return 0, fmt.Errorf("invalid platform %d", p)
+	}
+	if c>>platformShift > 0 {
+		return 0, fmt.Errorf("invalid constant 0x%x", c)
+	}
+	return T(uint32((p-1)<<platformShift) | c), nil
+}
+
+// Decode a [Platform] and a value from a tagged constant.
+func decodePlatformConstant[T ~uint32](c T) (Platform, uint32) {
+	p := Platform(((c & platformMask) >> platformShift) + 1)
+	v := uint32(c) & ^uint32(platformMask)
+	return p, v
+}
 
 // MapType indicates the type map structure
 // that will be initialized in the kernel.
@@ -12,7 +52,7 @@ type MapType uint32
 
 // All the various map types that can be created
 const (
-	UnspecifiedMap MapType = iota
+	UnspecifiedMap MapType = MapType((Linux-1)<<platformShift | iota)
 	// Hash is a hash map
 	Hash
 	// Array is an array map
@@ -96,9 +136,43 @@ const (
 	TaskStorage
 )
 
+// Map types (Windows).
+const (
+	WindowsHash MapType = MapType((Windows-1)<<platformShift | iota + 1)
+	WindowsArray
+	WindowsProgramArray
+	WindowsPerCPUHash
+	WindowsPerCPUArray
+	WindowsHashOfMaps
+	WindowsArrayOfMaps
+	WindowsLRUHash
+	WindowsLPMTrie
+	WindowsQueue
+	WindowsLRUCPUHash
+	WindowsStack
+	WindowsRingBuf
+)
+
+// MapTypeForPlatform returns a platform specific map type.
+func MapTypeForPlatform(r Platform, typ uint32) (MapType, error) {
+	return encodePlatformConstant[MapType](r, typ)
+}
+
+// Platform returns the [Platform] this map type belongs to.
+func (mt MapType) Decode() (Platform, uint32) {
+	return decodePlatformConstant(mt)
+}
+
 // hasPerCPUValue returns true if the Map stores a value per CPU.
 func (mt MapType) hasPerCPUValue() bool {
-	return mt == PerCPUHash || mt == PerCPUArray || mt == LRUCPUHash || mt == PerCPUCGroupStorage
+	switch mt {
+	case PerCPUHash, PerCPUArray, LRUCPUHash, PerCPUCGroupStorage:
+		return true
+	case WindowsPerCPUHash, WindowsPerCPUArray, WindowsLRUCPUHash:
+		return true
+	default:
+		return false
+	}
 }
 
 // canStoreMapOrProgram returns true if the Map stores references to another Map
@@ -110,19 +184,19 @@ func (mt MapType) canStoreMapOrProgram() bool {
 // canStoreMap returns true if the map type accepts a map fd
 // for update and returns a map id for lookup.
 func (mt MapType) canStoreMap() bool {
-	return mt == ArrayOfMaps || mt == HashOfMaps
+	return mt == ArrayOfMaps || mt == HashOfMaps || mt == WindowsArrayOfMaps || mt == WindowsHashOfMaps
 }
 
 // canStoreProgram returns true if the map type accepts a program fd
 // for update and returns a program id for lookup.
 func (mt MapType) canStoreProgram() bool {
-	return mt == ProgramArray
+	return mt == ProgramArray || mt == WindowsProgramArray
 }
 
 // ProgramType of the eBPF program
 type ProgramType uint32
 
-// eBPF program types
+// eBPF program types (Linux).
 const (
 	UnspecifiedProgram    = ProgramType(sys.BPF_PROG_TYPE_UNSPEC)
 	SocketFilter          = ProgramType(sys.BPF_PROG_TYPE_SOCKET_FILTER)
@@ -158,6 +232,24 @@ const (
 	Syscall               = ProgramType(sys.BPF_PROG_TYPE_SYSCALL)
 	Netfilter             = ProgramType(sys.BPF_PROG_TYPE_NETFILTER)
 )
+
+// See https://github.com/microsoft/ebpf-for-windows/blob/main/include/ebpf_structs.h#L170
+const (
+	WindowsXDP ProgramType = ProgramType((Windows-1)<<platformShift) | (iota + 1)
+	WindowsBind
+	WindowsCGroupSockAddr
+	WindowsSockOps
+	WindowsXDPTest ProgramType = ProgramType((Windows-1)<<platformShift) | 998
+	WindowsSample  ProgramType = ProgramType((Windows-1)<<platformShift) | 999
+)
+
+func ProgramTypeForPlatform(p Platform, value uint32) (ProgramType, error) {
+	return encodePlatformConstant[ProgramType](p, value)
+}
+
+func (pt ProgramType) Decode() (Platform, uint32) {
+	return decodePlatformConstant(pt)
+}
 
 // AttachType of the eBPF program, needed to differentiate allowed context accesses in
 // some newer program types like CGroupSockAddr. Should be set to AttachNone if not required.
@@ -227,6 +319,27 @@ const (
 	AttachNetkitPrimary              = AttachType(sys.BPF_NETKIT_PRIMARY)
 	AttachNetkitPeer                 = AttachType(sys.BPF_NETKIT_PEER)
 )
+
+// See https://github.com/microsoft/ebpf-for-windows/blob/main/include/ebpf_structs.h#L260
+const (
+	AttachWindowsXDP = AttachType((Windows-1)<<platformShift | iota + 1)
+	AttachWindowsBind
+	AttachWindowsCGroupInet4Connect
+	AttachWindowsCGroupInet6Connect
+	AttachWindowsCgroupInet4RecvAccept
+	AttachWindowsCgroupInet6RecvAccept
+	AttachWindowsCGroupSockOps
+	AttachWindowsSample
+	AttachWindowsXDPTest
+)
+
+func AttachTypeForPlatform(p Platform, value uint32) (AttachType, error) {
+	return encodePlatformConstant[AttachType](p, value)
+}
+
+func (at AttachType) Decode() (Platform, uint32) {
+	return decodePlatformConstant(at)
+}
 
 // AttachFlags of the eBPF program used in BPF_PROG_ATTACH command
 type AttachFlags uint32

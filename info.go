@@ -60,8 +60,13 @@ func newMapInfoFromFd(fd *sys.FD) (*MapInfo, error) {
 		return nil, err
 	}
 
+	typ, err := MapTypeForPlatform(nativePlatform, info.Type)
+	if err != nil {
+		return nil, fmt.Errorf("map type: %w", err)
+	}
+
 	return &MapInfo{
-		MapType(info.Type),
+		typ,
 		MapID(info.Id),
 		info.KeySize,
 		info.ValueSize,
@@ -74,8 +79,9 @@ func newMapInfoFromFd(fd *sys.FD) (*MapInfo, error) {
 
 func newMapInfoFromProc(fd *sys.FD) (*MapInfo, error) {
 	var mi MapInfo
+	var mapType uint32
 	err := scanFdInfo(fd, map[string]interface{}{
-		"map_type":    &mi.Type,
+		"map_type":    &mapType,
 		"key_size":    &mi.KeySize,
 		"value_size":  &mi.ValueSize,
 		"max_entries": &mi.MaxEntries,
@@ -84,6 +90,12 @@ func newMapInfoFromProc(fd *sys.FD) (*MapInfo, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	mi.Type, err = MapTypeForPlatform(Linux, mapType)
+	if err != nil {
+		return nil, fmt.Errorf("map type: %w", err)
+	}
+
 	return &mi, nil
 }
 
@@ -155,8 +167,13 @@ func newProgramInfoFromFd(fd *sys.FD) (*ProgramInfo, error) {
 		return nil, err
 	}
 
+	typ, err := ProgramTypeForPlatform(nativePlatform, info.Type)
+	if err != nil {
+		return nil, fmt.Errorf("program type: %w", err)
+	}
+
 	pi := ProgramInfo{
-		Type: ProgramType(info.Type),
+		Type: typ,
 		id:   ProgramID(info.Id),
 		Tag:  hex.EncodeToString(info.Tag[:]),
 		Name: sys.ByteSliceToString(info.Name[:]),
@@ -231,8 +248,9 @@ func newProgramInfoFromFd(fd *sys.FD) (*ProgramInfo, error) {
 
 func newProgramInfoFromProc(fd *sys.FD) (*ProgramInfo, error) {
 	var info ProgramInfo
+	var progType uint32
 	err := scanFdInfo(fd, map[string]interface{}{
-		"prog_type": &info.Type,
+		"prog_type": &progType,
 		"prog_tag":  &info.Tag,
 	})
 	if errors.Is(err, errMissingFields) {
@@ -243,6 +261,11 @@ func newProgramInfoFromProc(fd *sys.FD) (*ProgramInfo, error) {
 	}
 	if err != nil {
 		return nil, err
+	}
+
+	info.Type, err = ProgramTypeForPlatform(Linux, progType)
+	if err != nil {
+		return nil, fmt.Errorf("program type: %w", err)
 	}
 
 	return &info, nil

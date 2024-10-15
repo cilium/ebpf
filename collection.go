@@ -46,6 +46,9 @@ type CollectionSpec struct {
 	// ByteOrder specifies whether the ELF was compiled for
 	// big-endian or little-endian architectures.
 	ByteOrder binary.ByteOrder
+
+	// Platform indicates which platform the ELF was compiled for.
+	Platform Platform
 }
 
 // Copy returns a recursive copy of the spec.
@@ -59,6 +62,7 @@ func (cs *CollectionSpec) Copy() *CollectionSpec {
 		Programs:  make(map[string]*ProgramSpec, len(cs.Programs)),
 		ByteOrder: cs.ByteOrder,
 		Types:     cs.Types.Copy(),
+		Platform:  cs.Platform,
 	}
 
 	for name, spec := range cs.Maps {
@@ -412,6 +416,10 @@ type collectionLoader struct {
 }
 
 func newCollectionLoader(coll *CollectionSpec, opts *CollectionOptions) (*collectionLoader, error) {
+	if coll.Platform != UnspecifiedPlatform && coll.Platform != nativePlatform {
+		return nil, fmt.Errorf("platform %s: %w", coll.Platform, internal.ErrNotSupportedOnOS)
+	}
+
 	if opts == nil {
 		opts = &CollectionOptions{}
 	}

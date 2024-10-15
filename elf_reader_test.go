@@ -149,6 +149,7 @@ func TestLoadCollectionSpec(t *testing.T) {
 				License:     "MIT",
 			},
 		},
+		Platform: Linux,
 	}
 
 	cmpOpts := cmp.Options{

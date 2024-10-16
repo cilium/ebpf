@@ -638,7 +638,7 @@ func (ec *elfCode) relocateInstruction(ins *asm.Instruction, rel elf.Symbol) err
 		}
 
 		kf := ec.kfuncs[name]
-		ksymAddr := ec.ksyms[name]
+		ksymAddr, ksymAddrFound := ec.ksyms[name]
 
 		switch {
 		// If a Call / DWordLoad instruction is found and the datasec has a btf.Func with a Name
@@ -660,7 +660,7 @@ func (ec *elfCode) relocateInstruction(ins *asm.Instruction, rel elf.Symbol) err
 
 			ins.Constant = 0
 
-		case ksymAddr != 0 && ins.OpCode.IsDWordLoad():
+		case ksymAddrFound && ins.OpCode.IsDWordLoad():
 			if bind != elf.STB_GLOBAL && bind != elf.STB_WEAK {
 				return fmt.Errorf("asm relocation: %s: %w: %s", name, errUnsupportedBinding, bind)
 			}

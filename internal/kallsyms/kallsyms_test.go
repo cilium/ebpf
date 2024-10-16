@@ -2,6 +2,7 @@ package kallsyms
 
 import (
 	"bytes"
+	"os"
 	"testing"
 
 	"github.com/go-quicktest/qt"
@@ -61,4 +62,44 @@ func TestLoadSymbolAddresses(t *testing.T) {
 	}
 	err := loadSymbolAddresses(b, ksyms)
 	qt.Assert(t, qt.ErrorIs(err, errKsymIsAmbiguous))
+}
+
+func BenchmarkSymbolKmods(b *testing.B) {
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		b.StopTimer()
+		f, err := os.Open("/proc/kallsyms")
+		qt.Assert(b, qt.IsNil(err))
+		b.StartTimer()
+
+		if _, err := loadKernelModuleMapping(f); err != nil {
+			b.Fatal(err)
+		}
+
+		f.Close()
+	}
+}
+
+// Benchmark getting 5 kernel symbols from /proc/kallsyms.
+func BenchmarkAssignAddresses(b *testing.B) {
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		b.StopTimer()
+		f, err := os.Open("/proc/kallsyms")
+		qt.Assert(b, qt.IsNil(err))
+		want := map[string]uint64{
+			"bpf_trace_vprintk":     0,
+			"bpf_send_signal":       0,
+			"bpf_event_notify":      0,
+			"bpf_trace_printk":      0,
+			"bpf_perf_event_output": 0,
+		}
+		b.StartTimer()
+
+		if err := loadSymbolAddresses(f, want); err != nil {
+			b.Fatal(err)
+		}
+
+		f.Close()
+	}
 }

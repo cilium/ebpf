@@ -66,6 +66,14 @@ type MapInfo struct {
 // from reading fdinfo (indicating the file exists, but no fields of interest
 // were found). If both fail, an error is always returned.
 func newMapInfoFromFd(fd *sys.FD) (*MapInfo, error) {
+	ok, err := isMap(fd)
+	if err != nil {
+		return nil, fmt.Errorf("can't check BPF object type: %w", err)
+	}
+	if !ok {
+		return nil, ErrWrongObjectType
+	}
+
 	var info sys.MapInfo
 	err1 := sys.ObjInfo(fd, &info)
 	// EINVAL means the kernel doesn't support BPF_OBJ_GET_INFO_BY_FD. Continue
@@ -208,8 +216,16 @@ type ProgramInfo struct {
 }
 
 func newProgramInfoFromFd(fd *sys.FD) (*ProgramInfo, error) {
+	ok, err := isProg(fd)
+	if err != nil {
+		return nil, fmt.Errorf("can't check BPF object type: %w", err)
+	}
+	if !ok {
+		return nil, ErrWrongObjectType
+	}
+
 	var info sys.ProgInfo
-	err := sys.ObjInfo(fd, &info)
+	err = sys.ObjInfo(fd, &info)
 	if errors.Is(err, syscall.EINVAL) {
 		return newProgramInfoFromProc(fd)
 	}
@@ -670,3 +686,21 @@ var haveProgramInfoMapIDs = internal.NewFeatureTest("map IDs in program info", "
 
 	return err
 })
+
+var ErrWrongObjectType = errors.New("wrong BPF object type")
+
+func isProg(fd *sys.FD) (bool, error) {
+	return isBPFObject("prog", fd)
+}
+
+func isMap(fd *sys.FD) (bool, error) {
+	return isBPFObject("map", fd)
+}
+
+func isBPFObject(object string, fd *sys.FD) (bool, error) {
+	readlink, err := os.Readlink(fmt.Sprintf("/proc/self/fd/%d", fd.Int()))
+	if err != nil {
+		return false, fmt.Errorf("failed to readlink the fd %d: %w", fd, err)
+	}
+	return readlink == fmt.Sprintf("anon_inode:bpf-%s", object), nil
+}

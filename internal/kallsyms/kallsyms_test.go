@@ -52,14 +52,43 @@ func TestParseProcKallsyms(t *testing.T) {
 	qt.Assert(t, qt.IsNil(r.Err()))
 }
 
-func TestSymbolKmods(t *testing.T) {
-	b := bytes.NewBuffer(syms)
-	kmods, err := symbolKmods(b)
-	qt.Assert(t, qt.IsNil(err))
+func TestAssignModulesCaching(t *testing.T) {
+	qt.Assert(t, qt.IsNil(AssignModules(
+		map[string]string{
+			"bpf_perf_event_output": "",
+			"foo":                   "",
+		},
+	)))
 
-	qt.Assert(t, qt.Equals(kmods["hid_generic_probe"], "hid_generic"))
-	qt.Assert(t, qt.Equals(kmods["tcp_connect"], ""))
-	qt.Assert(t, qt.Equals(kmods["nft_counter_seq"], ""))
+	// Can't assume any kernel modules are loaded, but this symbol should at least
+	// exist in the kernel. There is no semantic difference between a missing
+	// symbol and a symbol that doesn't belong to a module.
+	v, ok := symModules.Load("bpf_perf_event_output")
+	qt.Assert(t, qt.IsTrue(ok))
+	qt.Assert(t, qt.Equals(v, ""))
+
+	v, ok = symModules.Load("foo")
+	qt.Assert(t, qt.IsTrue(ok))
+	qt.Assert(t, qt.Equals(v, ""))
+}
+
+func TestAssignModules(t *testing.T) {
+	mods := map[string]string{
+		"hid_generic_probe": "",
+		"nft_counter_seq":   "",
+		"tcp_connect":       "",
+		"foo":               "",
+	}
+	qt.Assert(t, qt.IsNil(assignModules(bytes.NewBuffer(syms), mods)))
+	qt.Assert(t, qt.DeepEquals(mods, map[string]string{
+		"hid_generic_probe": "hid_generic",
+		"nft_counter_seq":   "", // wrong symbol type
+		"tcp_connect":       "",
+		"foo":               "",
+	}))
+
+	qt.Assert(t, qt.ErrorIs(assignModules(bytes.NewBuffer(syms),
+		map[string]string{"writenote": ""}), errAmbiguousKsym))
 }
 
 func TestAssignAddressesCaching(t *testing.T) {
@@ -106,9 +135,16 @@ func BenchmarkSymbolKmods(b *testing.B) {
 		b.StopTimer()
 		f, err := os.Open("/proc/kallsyms")
 		qt.Assert(b, qt.IsNil(err))
+		want := map[string]string{
+			"bpf_trace_vprintk":     "",
+			"bpf_send_signal":       "",
+			"bpf_event_notify":      "",
+			"bpf_trace_printk":      "",
+			"bpf_perf_event_output": "",
+		}
 		b.StartTimer()
 
-		if _, err := symbolKmods(f); err != nil {
+		if err := assignModules(f, want); err != nil {
 			b.Fatal(err)
 		}
 

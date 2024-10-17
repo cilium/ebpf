@@ -8,86 +8,127 @@ import (
 	"slices"
 	"strconv"
 	"strings"
-	"sync"
 )
 
 var errAmbiguousKsym = errors.New("multiple kernel symbols with the same name")
 
 var symAddrs cache[string, uint64]
+var symModules cache[string, string]
 
-var kernelModules struct {
-	sync.RWMutex
-	// function to kernel module mapping
-	kmods map[string]string
-}
-
-// SymbolModule returns the kernel module providing a given symbol, if any.
-func SymbolModule(name string) (string, error) {
-	kernelModules.RLock()
-	kmods := kernelModules.kmods
-	kernelModules.RUnlock()
-
-	if kmods == nil {
-		kernelModules.Lock()
-		defer kernelModules.Unlock()
-		kmods = kernelModules.kmods
+// Module returns the kernel module providing the given symbol in the kernel, if
+// any. Returns an empty string and no error if the symbol is not present in the
+// kernel. Only function symbols are considered. Returns an error if multiple
+// symbols with the same name were found.
+//
+// Consider [AssignModules] if you need to resolve multiple symbols, as it will
+// only perform one iteration over /proc/kallsyms.
+func Module(name string) (string, error) {
+	if name == "" {
+		return "", nil
 	}
 
-	if kmods != nil {
-		return kmods[name], nil
+	if mod, ok := symModules.Load(name); ok {
+		return mod, nil
+	}
+
+	request := map[string]string{name: ""}
+	if err := AssignModules(request); err != nil {
+		return "", err
+	}
+
+	return request[name], nil
+}
+
+// AssignModules looks up the kernel module providing each given symbol, if any,
+// and assigns them to their corresponding values in the symbols map. Only
+// function symbols are considered. Results of all lookups are cached,
+// successful or otherwise.
+//
+// Any symbols missing in the kernel are ignored. Returns an error if multiple
+// symbols with a given name were found.
+func AssignModules(symbols map[string]string) error {
+	if len(symbols) == 0 {
+		return nil
+	}
+
+	// Attempt to fetch symbols from cache.
+	request := make(map[string]string)
+	for name := range symbols {
+		if mod, ok := symModules.Load(name); ok {
+			symbols[name] = mod
+			continue
+		}
+
+		// Mark the symbol to be read from /proc/kallsyms.
+		request[name] = ""
+	}
+	if len(request) == 0 {
+		// All symbols satisfied from cache.
+		return nil
 	}
 
 	f, err := os.Open("/proc/kallsyms")
 	if err != nil {
-		return "", err
-	}
-	defer f.Close()
-
-	kmods, err = symbolKmods(f)
-	if err != nil {
-		return "", err
+		return err
 	}
 
-	kernelModules.kmods = kmods
-	return kmods[name], nil
+	if err := assignModules(f, request); err != nil {
+		return fmt.Errorf("assigning symbol modules: %w", err)
+	}
+
+	// Update the cache with the new symbols. Cache all requested symbols, even if
+	// they're missing or don't belong to a module.
+	for name, mod := range request {
+		symModules.Store(name, mod)
+		symbols[name] = mod
+	}
+
+	return nil
 }
 
-// FlushKernelModuleCache removes any cached information about function to kernel module mapping.
-func FlushKernelModuleCache() {
-	kernelModules.Lock()
-	defer kernelModules.Unlock()
+// assignModules assigns kernel symbol modules read from f to values requested
+// by symbols. Always scans the whole input to make sure the user didn't request
+// an ambiguous symbol.
+func assignModules(f io.Reader, symbols map[string]string) error {
+	if len(symbols) == 0 {
+		return nil
+	}
 
-	kernelModules.kmods = nil
-}
-
-// symbolKmods parses f into a map of function names to kernel module names.
-// Only function symbols (tT) provided by a kernel module are included in the
-// output.
-func symbolKmods(f io.Reader) (map[string]string, error) {
-	mods := make(map[string]string)
+	found := make(map[string]struct{})
 	r := newReader(f)
 	for r.Line() {
+		// Only look for function symbols in the kernel's text section (tT).
 		s, err, skip := parseSymbol(r, []rune{'t', 'T'})
 		if err != nil {
-			return nil, fmt.Errorf("parsing kallsyms line: %w", err)
+			return fmt.Errorf("parsing kallsyms line: %w", err)
 		}
 		if skip {
 			continue
 		}
 
-		// Lines without a module will have an empty mod field. Avoid inserting
-		// these into the map to prevent garbage.
-		if s.mod == "" {
+		if _, requested := symbols[s.name]; !requested {
 			continue
 		}
 
-		mods[s.name] = s.mod
+		if _, ok := found[s.name]; ok {
+			// We've already seen this symbol. Return an error to avoid silently
+			// attaching to a symbol in the wrong module. libbpf also rejects
+			// referring to ambiguous symbols.
+			//
+			// We can't simply check if we already have a value for the given symbol,
+			// since many won't have an associated kernel module.
+			return fmt.Errorf("symbol %s: duplicate found at address 0x%x (module %q): %w",
+				s.name, s.addr, s.mod, errAmbiguousKsym)
+		}
+
+		symbols[s.name] = s.mod
+		found[s.name] = struct{}{}
 	}
 	if err := r.Err(); err != nil {
-		return nil, fmt.Errorf("reading kallsyms: %w", err)
+		return fmt.Errorf("reading kallsyms: %w", err)
 	}
 
-	return mods, nil
+	return nil
 }
 
 // AssignAddresses looks up the addresses of the requested symbols in the kernel
@@ -137,9 +178,8 @@ func AssignAddresses(symbols map[string]uint64) error {
 }
 
 // assignAddresses assigns kernel symbol addresses read from f to values
-// requested by symbols. Don't return when all symbols have been assigned, we
-// need to scan the whole thing to make sure the user didn't request an
-// ambiguous symbol.
+// requested by symbols. Always scans the whole input to make sure the user
+// didn't request an ambiguous symbol.
 func assignAddresses(f io.Reader, symbols map[string]uint64) error {
 	if len(symbols) == 0 {
 		return nil

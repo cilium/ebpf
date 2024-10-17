@@ -1313,8 +1313,10 @@ func (ec *elfCode) loadKsymsSection() error {
 		}
 	}
 
-	if err := kallsyms.AssignAddresses(ec.ksyms); err != nil {
-		return fmt.Errorf("error while loading ksym addresses: %w", err)
+	if runtime.GOOS == "linux" {
+		if err := kallsyms.AssignAddresses(ec.ksyms); err != nil {
+			return fmt.Errorf("error while loading ksym addresses: %w", err)
+		}
 	}
 
 	return nil

@@ -10,6 +10,7 @@ import (
 	"github.com/cilium/ebpf/asm"
 	"github.com/cilium/ebpf/btf"
 	"github.com/cilium/ebpf/internal"
+	"github.com/cilium/ebpf/internal/kallsyms"
 	"github.com/cilium/ebpf/internal/kconfig"
 	"github.com/cilium/ebpf/internal/linux"
 )
@@ -400,12 +401,55 @@ func newCollectionLoader(coll *CollectionSpec, opts *CollectionOptions) (*collec
 		}
 	}
 
+	if err := populateKallsyms(coll.Programs); err != nil {
+		return nil, fmt.Errorf("populating kallsyms caches: %w", err)
+	}
+
 	return &collectionLoader{
 		coll,
 		opts,
 		make(map[string]*Map),
 		make(map[string]*Program),
 	}, nil
+}
+
+// populateKallsyms populates kallsyms caches, making lookups cheaper later on
+// during individual program loading. Since we have less context available
+// at those stages, we batch the lookups here instead to avoid redundant work.
+func populateKallsyms(progs map[string]*ProgramSpec) error {
+	// Look up associated kernel modules for all symbols referenced by
+	// ProgramSpec.AttachTo for program types that support attaching to kmods.
+	mods := make(map[string]string)
+	for _, p := range progs {
+		if p.AttachTo != "" && p.targetsKernelModule() {
+			mods[p.AttachTo] = ""
+		}
+	}
+	if len(mods) != 0 {
+		if err := kallsyms.AssignModules(mods); err != nil {
+			return fmt.Errorf("getting modules from kallsyms: %w", err)
+		}
+	}
+
+	// Look up addresses of all kernel symbols referenced by all programs.
+	addrs := make(map[string]uint64)
+	for _, p := range progs {
+		iter := p.Instructions.Iterate()
+		for iter.Next() {
+			ins := iter.Ins
+			meta, _ := ins.Metadata.Get(ksymMetaKey{}).(*ksymMeta)
+			if meta != nil {
+				addrs[meta.Name] = 0
+			}
+		}
+	}
+	if len(addrs) != 0 {
+		if err := kallsyms.AssignAddresses(addrs); err != nil {
+			return fmt.Errorf("getting addresses from kallsyms: %w", err)
+		}
+	}
+
+	return nil
 }
 
 // close all resources left over in the collectionLoader.

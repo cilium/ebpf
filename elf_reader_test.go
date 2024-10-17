@@ -799,6 +799,8 @@ func TestKsym(t *testing.T) {
 	}
 
 	qt.Assert(t, qt.IsNil(kallsyms.AssignAddresses(ksyms)))
+	qt.Assert(t, qt.Not(qt.Equals(ksyms["socket_file_ops"], 0)))
+	qt.Assert(t, qt.Not(qt.Equals(ksyms["tty_fops"], 0)))
 
 	var value uint64
 	qt.Assert(t, qt.IsNil(obj.ArrayMap.Lookup(uint32(0), &value)))

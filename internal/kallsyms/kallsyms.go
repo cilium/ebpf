@@ -13,6 +13,8 @@ import (
 
 var errAmbiguousKsym = errors.New("multiple kernel symbols with the same name")
 
+var symAddrs cache[string, uint64]
+
 var kernelModules struct {
 	sync.RWMutex
 	// function to kernel module mapping
@@ -89,7 +91,8 @@ func symbolKmods(f io.Reader) (map[string]string, error) {
 }
 
 // AssignAddresses looks up the addresses of the requested symbols in the kernel
-// and assigns them to their corresponding values in the symbols map.
+// and assigns them to their corresponding values in the symbols map. Results
+// of all lookups are cached, successful or otherwise.
 //
 // Any symbols missing in the kernel are ignored. Returns an error if multiple
 // addresses were found for a symbol.
@@ -98,13 +101,36 @@ func AssignAddresses(symbols map[string]uint64) error {
 		return nil
 	}
 
+	// Attempt to fetch symbols from cache.
+	request := make(map[string]uint64)
+	for name := range symbols {
+		if addr, ok := symAddrs.Load(name); ok {
+			symbols[name] = addr
+			continue
+		}
+
+		// Mark the symbol to be read from /proc/kallsyms.
+		request[name] = 0
+	}
+	if len(request) == 0 {
+		// All symbols satisfied from cache.
+		return nil
+	}
+
 	f, err := os.Open("/proc/kallsyms")
 	if err != nil {
 		return err
 	}
 
-	if err := assignAddresses(f, symbols); err != nil {
-		return fmt.Errorf("error loading symbol addresses: %w", err)
+	if err := assignAddresses(f, request); err != nil {
+		return fmt.Errorf("loading symbol addresses: %w", err)
+	}
+
+	// Update the cache with the new symbols. Cache all requested symbols even if
+	// they weren't found, to avoid repeated lookups.
+	for name, addr := range request {
+		symAddrs.Store(name, addr)
+		symbols[name] = addr
 	}
 
 	return nil
@@ -115,6 +141,9 @@ func AssignAddresses(symbols map[string]uint64) error {
 // need to scan the whole thing to make sure the user didn't request an
 // ambiguous symbol.
 func assignAddresses(f io.Reader, symbols map[string]uint64) error {
+	if len(symbols) == 0 {
+		return nil
+	}
 	r := newReader(f)
 	for r.Line() {
 		s, err, skip := parseSymbol(r, nil)

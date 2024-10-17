@@ -62,6 +62,23 @@ func TestSymbolKmods(t *testing.T) {
 	qt.Assert(t, qt.Equals(kmods["nft_counter_seq"], ""))
 }
 
+func TestAssignAddressesCaching(t *testing.T) {
+	qt.Assert(t, qt.IsNil(AssignAddresses(
+		map[string]uint64{
+			"bpf_perf_event_output": 0,
+			"foo":                   0,
+		},
+	)))
+
+	v, ok := symAddrs.Load("bpf_perf_event_output")
+	qt.Assert(t, qt.IsTrue(ok))
+	qt.Assert(t, qt.Not(qt.Equals(v, 0)))
+
+	v, ok = symAddrs.Load("foo")
+	qt.Assert(t, qt.IsTrue(ok))
+	qt.Assert(t, qt.Equals(v, 0))
+}
+
 func TestAssignAddresses(t *testing.T) {
 	b := bytes.NewBuffer(syms)
 	ksyms := map[string]uint64{

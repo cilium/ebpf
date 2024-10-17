@@ -15,7 +15,6 @@ import (
 	"github.com/cilium/ebpf/asm"
 	"github.com/cilium/ebpf/btf"
 	"github.com/cilium/ebpf/internal"
-	"github.com/cilium/ebpf/internal/kallsyms"
 	"github.com/cilium/ebpf/internal/sys"
 )
 
@@ -37,7 +36,6 @@ type ksymMetaKey struct{}
 
 type ksymMeta struct {
 	Binding elf.SymBind
-	Addr    uint64
 	Name    string
 }
 
@@ -53,7 +51,7 @@ type elfCode struct {
 	maps     map[string]*MapSpec
 	vars     map[string]*VariableSpec
 	kfuncs   map[string]*btf.Func
-	ksyms    map[string]uint64
+	ksyms    map[string]struct{}
 	kconfig  *MapSpec
 }
 
@@ -146,7 +144,7 @@ func LoadCollectionSpecFromReader(rd io.ReaderAt) (*CollectionSpec, error) {
 		maps:        make(map[string]*MapSpec),
 		vars:        make(map[string]*VariableSpec),
 		kfuncs:      make(map[string]*btf.Func),
-		ksyms:       make(map[string]uint64),
+		ksyms:       make(map[string]struct{}),
 	}
 
 	symbols, err := f.Symbols()
@@ -638,7 +636,7 @@ func (ec *elfCode) relocateInstruction(ins *asm.Instruction, rel elf.Symbol) err
 		}
 
 		kf := ec.kfuncs[name]
-		ksymAddr := ec.ksyms[name]
+		_, ks := ec.ksyms[name]
 
 		switch {
 		// If a Call / DWordLoad instruction is found and the datasec has a btf.Func with a Name
@@ -660,14 +658,13 @@ func (ec *elfCode) relocateInstruction(ins *asm.Instruction, rel elf.Symbol) err
 
 			ins.Constant = 0
 
-		case ksymAddr != 0 && ins.OpCode.IsDWordLoad():
+		case ks && ins.OpCode.IsDWordLoad():
 			if bind != elf.STB_GLOBAL && bind != elf.STB_WEAK {
 				return fmt.Errorf("asm relocation: %s: %w: %s", name, errUnsupportedBinding, bind)
 			}
 			ins.Metadata.Set(ksymMetaKey{}, &ksymMeta{
 				Binding: bind,
 				Name:    name,
-				Addr:    ksymAddr,
 			})
 
 		// If no kconfig map is found, this must be a symbol reference from inline
@@ -1307,14 +1304,10 @@ func (ec *elfCode) loadKsymsSection() error {
 		case *btf.Func:
 			ec.kfuncs[t.TypeName()] = t
 		case *btf.Var:
-			ec.ksyms[t.TypeName()] = 0
+			ec.ksyms[t.TypeName()] = struct{}{}
 		default:
-			return fmt.Errorf("unexpected variable type in .ksysm: %T", v)
+			return fmt.Errorf("unexpected variable type in .ksyms: %T", v)
 		}
-	}
-
-	if err := kallsyms.AssignAddresses(ec.ksyms); err != nil {
-		return fmt.Errorf("error while loading ksym addresses: %w", err)
 	}
 
 	return nil

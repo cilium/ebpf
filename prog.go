@@ -155,26 +155,35 @@ func (ps *ProgramSpec) Tag() (string, error) {
 	return ps.Instructions.Tag(internal.NativeEndian)
 }
 
-// KernelModule returns the kernel module, if any, the AttachTo function is contained in.
-func (ps *ProgramSpec) KernelModule() (string, error) {
+// kernelModule returns the kernel module providing the symbol in
+// ProgramSpec.AttachTo, if any. Returns an empty string if the symbol is not
+// present or not part of a kernel module.
+func (ps *ProgramSpec) kernelModule() (string, error) {
+	if ps.AttachTo == "" && ps.targetsKernelModule() {
+		return kallsyms.Module(ps.AttachTo)
+	}
+
+	return "", nil
+}
+
+// targetsKernelModule returns true if the program supports being attached to a
+// symbol provided by a kernel module.
+func (ps *ProgramSpec) targetsKernelModule() bool {
 	if ps.AttachTo == "" {
-		return "", nil
+		return false
 	}
 
 	switch ps.Type {
-	default:
-		return "", nil
 	case Tracing:
 		switch ps.AttachType {
-		default:
-			return "", nil
-		case AttachTraceFEntry:
-		case AttachTraceFExit:
+		case AttachTraceFEntry, AttachTraceFExit:
+			return true
 		}
-		fallthrough
 	case Kprobe:
-		return kallsyms.SymbolModule(ps.AttachTo)
+		return true
 	}
+
+	return false
 }
 
 // VerifierError is returned by [NewProgram] and [NewProgramWithOptions] if a
@@ -276,7 +285,7 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions) (*Program, er
 	insns := make(asm.Instructions, len(spec.Instructions))
 	copy(insns, spec.Instructions)
 
-	kmodName, err := spec.KernelModule()
+	kmodName, err := spec.kernelModule()
 	if err != nil {
 		return nil, fmt.Errorf("kernel module search: %w", err)
 	}

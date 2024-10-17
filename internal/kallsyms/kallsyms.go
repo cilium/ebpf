@@ -131,6 +131,29 @@ func assignModules(f io.Reader, symbols map[string]string) error {
 	return nil
 }
 
+// Address returns the address of the given symbol in the kernel. Returns 0 and
+// no error if the symbol is not present. Returns an error if multiple addresses
+// were found for a symbol.
+//
+// Consider [AssignAddresses] if you need to resolve multiple symbols, as it
+// will only perform one iteration over /proc/kallsyms.
+func Address(symbol string) (uint64, error) {
+	if symbol == "" {
+		return 0, nil
+	}
+
+	if addr, ok := symAddrs.Load(symbol); ok {
+		return addr, nil
+	}
+
+	request := map[string]uint64{symbol: 0}
+	if err := AssignAddresses(request); err != nil {
+		return 0, err
+	}
+
+	return request[symbol], nil
+}
+
 // AssignAddresses looks up the addresses of the requested symbols in the kernel
 // and assigns them to their corresponding values in the symbols map. Results
 // of all lookups are cached, successful or otherwise.

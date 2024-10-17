@@ -14,6 +14,7 @@ import (
 	"github.com/cilium/ebpf/asm"
 	"github.com/cilium/ebpf/btf"
 	"github.com/cilium/ebpf/internal"
+	"github.com/cilium/ebpf/internal/kallsyms"
 )
 
 // handles stores handle objects to avoid gc cleanup
@@ -470,8 +471,12 @@ func resolveKsymReferences(insns asm.Instructions) error {
 			continue
 		}
 
-		if meta.Addr != 0 {
-			ins.Constant = int64(meta.Addr)
+		addr, err := kallsyms.Address(meta.Name)
+		if err != nil {
+			return fmt.Errorf("resolve ksym %s: %w", meta.Name, err)
+		}
+		if addr != 0 {
+			ins.Constant = int64(addr)
 			continue
 		}
 
@@ -488,7 +493,7 @@ func resolveKsymReferences(insns asm.Instructions) error {
 	}
 
 	if len(missing) > 0 {
-		return fmt.Errorf("missing ksyms: %s", strings.Join(missing, ","))
+		return fmt.Errorf("kernel is missing symbol: %s", strings.Join(missing, ","))
 	}
 
 	return nil

@@ -1313,7 +1313,7 @@ func (ec *elfCode) loadKsymsSection() error {
 		}
 	}
 
-	if err := kallsyms.LoadSymbolAddresses(ec.ksyms); err != nil {
+	if err := kallsyms.AssignAddresses(ec.ksyms); err != nil {
 		return fmt.Errorf("error while loading ksym addresses: %w", err)
 	}
 

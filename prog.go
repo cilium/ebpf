@@ -173,7 +173,7 @@ func (ps *ProgramSpec) KernelModule() (string, error) {
 		}
 		fallthrough
 	case Kprobe:
-		return kallsyms.KernelModule(ps.AttachTo)
+		return kallsyms.SymbolModule(ps.AttachTo)
 	}
 }
 

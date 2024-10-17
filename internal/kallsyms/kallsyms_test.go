@@ -8,7 +8,7 @@ import (
 	"github.com/go-quicktest/qt"
 )
 
-var kallsyms = []byte(`0000000000000000 t hid_generic_probe	[hid_generic]
+var syms = []byte(`0000000000000001 t hid_generic_probe	[hid_generic]
 00000000000000EA t writenote
 00000000000000A0 T tcp_connect
 00000000000000B0 B empty_zero_page
@@ -22,46 +22,65 @@ A0000000000000CA d __func__.10
 A0000000000000DA r __ksymtab_LZ4_decompress_fast
 A0000000000000EA t writenote`)
 
-func TestKernelModule(t *testing.T) {
-	krdr := bytes.NewBuffer(kallsyms)
-	kmods, err := loadKernelModuleMapping(krdr)
+func TestParseSyms(t *testing.T) {
+	r := newReader(bytes.NewReader(syms))
+	i := 0
+	for ; r.Line(); i++ {
+		s, err, skip := parseSymbol(r, nil)
+		qt.Assert(t, qt.IsNil(err))
+		qt.Assert(t, qt.IsFalse(skip))
+		qt.Assert(t, qt.Not(qt.Equals(s.addr, 0)))
+		qt.Assert(t, qt.Not(qt.Equals(s.name, "")))
+	}
+	qt.Assert(t, qt.IsNil(r.Err()))
+	qt.Assert(t, qt.Equals(i, 13))
+}
+
+func TestParseProcKallsyms(t *testing.T) {
+	f, err := os.Open("/proc/kallsyms")
+	qt.Assert(t, qt.IsNil(err))
+	defer f.Close()
+
+	// Read up to 50k symbols from kallsyms to avoid a slow test.
+	r := newReader(f)
+	for i := 0; r.Line() && i < 50_000; i++ {
+		s, err, skip := parseSymbol(r, nil)
+		qt.Assert(t, qt.IsNil(err))
+		qt.Assert(t, qt.IsFalse(skip))
+		qt.Assert(t, qt.Not(qt.Equals(s.name, "")))
+	}
+	qt.Assert(t, qt.IsNil(r.Err()))
+}
+
+func TestSymbolKmods(t *testing.T) {
+	b := bytes.NewBuffer(syms)
+	kmods, err := symbolKmods(b)
 	qt.Assert(t, qt.IsNil(err))
 
-	// present and in module
-	kmod := kmods["hid_generic_probe"]
-	if kmod != "hid_generic" {
-		t.Errorf("expected %q got %q", "hid_generic", kmod)
-	}
-
-	// present but not kernel module
-	kmod = kmods["tcp_connect"]
-	if kmod != "" {
-		t.Errorf("expected %q got %q", "", kmod)
-	}
-
+	qt.Assert(t, qt.Equals(kmods["hid_generic_probe"], "hid_generic"))
+	qt.Assert(t, qt.Equals(kmods["tcp_connect"], ""))
 	qt.Assert(t, qt.Equals(kmods["nft_counter_seq"], ""))
 }
 
-func TestLoadSymbolAddresses(t *testing.T) {
-	b := bytes.NewBuffer(kallsyms)
+func TestAssignAddresses(t *testing.T) {
+	b := bytes.NewBuffer(syms)
 	ksyms := map[string]uint64{
 		"hid_generic_probe": 0,
 		"tcp_connect":       0,
 		"bootconfig_found":  0,
 	}
-	qt.Assert(t, qt.IsNil(loadSymbolAddresses(b, ksyms)))
+	qt.Assert(t, qt.IsNil(assignAddresses(b, ksyms)))
 
-	qt.Assert(t, qt.Equals(ksyms["hid_generic_probe"], 0))
+	qt.Assert(t, qt.Equals(ksyms["hid_generic_probe"], 0x1))
 	qt.Assert(t, qt.Equals(ksyms["tcp_connect"], 0xA0))
 	qt.Assert(t, qt.Equals(ksyms["bootconfig_found"], 0xA0000000000000BA))
 
-	b = bytes.NewBuffer(kallsyms)
+	b = bytes.NewBuffer(syms)
 	ksyms = map[string]uint64{
 		"hid_generic_probe": 0,
 		"writenote":         0,
 	}
-	err := loadSymbolAddresses(b, ksyms)
-	qt.Assert(t, qt.ErrorIs(err, errKsymIsAmbiguous))
+	qt.Assert(t, qt.ErrorIs(assignAddresses(b, ksyms), errAmbiguousKsym))
 }
 
 func BenchmarkSymbolKmods(b *testing.B) {
@@ -72,7 +91,7 @@ func BenchmarkSymbolKmods(b *testing.B) {
 		qt.Assert(b, qt.IsNil(err))
 		b.StartTimer()
 
-		if _, err := loadKernelModuleMapping(f); err != nil {
+		if _, err := symbolKmods(f); err != nil {
 			b.Fatal(err)
 		}
 
@@ -96,7 +115,7 @@ func BenchmarkAssignAddresses(b *testing.B) {
 		}
 		b.StartTimer()
 
-		if err := loadSymbolAddresses(f, want); err != nil {
+		if err := assignAddresses(f, want); err != nil {
 			b.Fatal(err)
 		}
 

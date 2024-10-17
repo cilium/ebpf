@@ -798,7 +798,7 @@ func TestKsym(t *testing.T) {
 		"tty_fops":        0,
 	}
 
-	qt.Assert(t, qt.IsNil(kallsyms.LoadSymbolAddresses(ksyms)))
+	qt.Assert(t, qt.IsNil(kallsyms.AssignAddresses(ksyms)))
 
 	var value uint64
 	qt.Assert(t, qt.IsNil(obj.ArrayMap.Lookup(uint32(0), &value)))

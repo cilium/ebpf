@@ -794,21 +794,20 @@ func TestKsym(t *testing.T) {
 	qt.Assert(t, qt.IsNil(err))
 
 	ksyms := map[string]uint64{
-		"socket_file_ops": 0,
-		"tty_fops":        0,
+		"bpf_init":       0,
+		"bpf_trace_run1": 0,
 	}
 
 	qt.Assert(t, qt.IsNil(kallsyms.AssignAddresses(ksyms)))
-	qt.Assert(t, qt.Not(qt.Equals(ksyms["socket_file_ops"], 0)))
-	qt.Assert(t, qt.Not(qt.Equals(ksyms["tty_fops"], 0)))
+	qt.Assert(t, qt.Not(qt.Equals(ksyms["bpf_init"], 0)))
+	qt.Assert(t, qt.Not(qt.Equals(ksyms["bpf_trace_run1"], 0)))
 
 	var value uint64
 	qt.Assert(t, qt.IsNil(obj.ArrayMap.Lookup(uint32(0), &value)))
-	qt.Assert(t, qt.Equals(value, ksyms["socket_file_ops"]))
+	qt.Assert(t, qt.Equals(value, ksyms["bpf_init"]))
 
-	err = obj.ArrayMap.Lookup(uint32(1), &value)
-	qt.Assert(t, qt.IsNil(err))
-	qt.Assert(t, qt.Equals(value, ksyms["tty_fops"]))
+	qt.Assert(t, qt.IsNil(obj.ArrayMap.Lookup(uint32(1), &value)))
+	qt.Assert(t, qt.Equals(value, ksyms["bpf_trace_run1"]))
 }
 
 func TestKsymWeakMissing(t *testing.T) {

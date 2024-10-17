@@ -8,7 +8,6 @@ import (
 	"sync"
 
 	"github.com/cilium/ebpf/internal"
-	"github.com/cilium/ebpf/internal/kallsyms"
 	"github.com/cilium/ebpf/internal/linux"
 )
 
@@ -22,8 +21,6 @@ var kernelBTF = struct {
 
 // FlushKernelSpec removes any cached kernel type information.
 func FlushKernelSpec() {
-	kallsyms.FlushKernelModuleCache()
-
 	kernelBTF.Lock()
 	defer kernelBTF.Unlock()
 

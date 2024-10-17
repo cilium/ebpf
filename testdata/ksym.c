@@ -9,19 +9,21 @@ struct {
 	__type(value, uint64_t);
 } array_map __section(".maps");
 
-extern void socket_file_ops __ksym;
-extern void tty_fops __ksym __weak;
+// Non-weak ksyms must be present in the kernel.
+extern void bpf_init __ksym;
+// Weak ksyms are potentially zero at runtime.
+extern void bpf_trace_run1 __ksym __weak;
 
 __section("socket") int ksym_test() {
 	uint32_t i;
 	uint64_t val;
 
 	i   = 0;
-	val = (uint64_t)&socket_file_ops;
+	val = (uint64_t)&bpf_init;
 	bpf_map_update_elem(&array_map, &i, &val, 0);
 
 	i   = 1;
-	val = (uint64_t)&tty_fops;
+	val = (uint64_t)&bpf_trace_run1;
 	bpf_map_update_elem(&array_map, &i, &val, 0);
 
 	return 0;

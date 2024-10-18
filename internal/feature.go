@@ -3,15 +3,25 @@ package internal
 import (
 	"errors"
 	"fmt"
+	"runtime"
+	"strings"
 	"sync"
 )
 
-// ErrNotSupported indicates that a feature is not supported by the current kernel.
+// ErrNotSupported indicates that a feature is not supported.
 var ErrNotSupported = errors.New("not supported")
+
+// ErrNotSupportedOnOS indicates that a feature is not supported on the current
+// operating system.
+var ErrNotSupportedOnOS = fmt.Errorf("%w on %s", ErrNotSupported, runtime.GOOS)
 
 // UnsupportedFeatureError is returned by FeatureTest() functions.
 type UnsupportedFeatureError struct {
-	// The minimum Linux mainline version required for this feature.
+	// The minimum version required for this feature.
+	//
+	// On Linux this refers to the mainline kernel version, on other platforms
+	// to the version of the runtime.
+	//
 	// Used for the error string, and for sanity checking during testing.
 	MinimumVersion Version
 
@@ -58,11 +68,49 @@ type FeatureTest struct {
 type FeatureTestFn func() error
 
 // NewFeatureTest is a convenient way to create a single [FeatureTest].
+//
+// This function can only be used for feature tests targeting Linux. The
+// feature test returns [ErrNotSupportedOnOS] on other platforms.
 func NewFeatureTest(name, version string, fn FeatureTestFn) func() error {
+	if runtime.GOOS != "linux" {
+		// We don't return an UnsupportedFeatureError here, since that will
+		// trigger version checks which don't make sense.
+		return func() error {
+			return fmt.Errorf("%s: %w", name, ErrNotSupportedOnOS)
+		}
+	}
+
 	ft := &FeatureTest{
 		Name:    name,
 		Version: version,
 		Fn:      fn,
+	}
+
+	return ft.execute
+}
+
+// NewPortableFeatureTest creates a cross-platform [FeatureTest].
+//
+// versions are in the format "GOOS:Major.Minor[.Patch]"
+func NewPortableFeatureTest(name string, fn FeatureTestFn, versions ...string) func() error {
+	const nativePrefix = runtime.GOOS + ":"
+
+	ft := &FeatureTest{
+		Name: name,
+		Fn:   fn,
+	}
+
+	for _, version := range versions {
+		if strings.HasPrefix(version, nativePrefix) {
+			ft.Version = strings.TrimPrefix(version, nativePrefix)
+			break
+		}
+	}
+
+	if ft.Version == "" {
+		return func() error {
+			return fmt.Errorf("%s: %w", name, ErrNotSupportedOnOS)
+		}
 	}
 
 	return ft.execute

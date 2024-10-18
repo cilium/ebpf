@@ -121,12 +121,16 @@ func _() {
 	_ = x[WindowsSockOps-16777220]
 	_ = x[WindowsXDPTest-16778214]
 	_ = x[WindowsSample-16778215]
+	_ = x[WindowsNetEvent-16877117]
+	_ = x[WindowsProcess-16877215]
 }
 
 const (
 	_ProgramType_name_0 = "UnspecifiedProgramSocketFilterKprobeSchedCLSSchedACTTracePointXDPPerfEventCGroupSKBCGroupSockLWTInLWTOutLWTXmitSockOpsSkSKBCGroupDeviceSkMsgRawTracepointCGroupSockAddrLWTSeg6LocalLircMode2SkReuseportFlowDissectorCGroupSysctlRawTracepointWritableCGroupSockoptTracingStructOpsExtensionLSMSkLookupSyscallNetfilter"
 	_ProgramType_name_1 = "WindowsXDPWindowsBindWindowsCGroupSockAddrWindowsSockOps"
 	_ProgramType_name_2 = "WindowsXDPTestWindowsSample"
+	_ProgramType_name_3 = "WindowsNetEvent"
+	_ProgramType_name_4 = "WindowsProcess"
 )
 
 var (
@@ -145,6 +149,10 @@ func (i ProgramType) String() string {
 	case 16778214 <= i && i <= 16778215:
 		i -= 16778214
 		return _ProgramType_name_2[_ProgramType_index_2[i]:_ProgramType_index_2[i+1]]
+	case i == 16877117:
+		return _ProgramType_name_3
+	case i == 16877215:
+		return _ProgramType_name_4
 	default:
 		return "ProgramType(" + strconv.FormatInt(int64(i), 10) + ")"
 	}

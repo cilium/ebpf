@@ -74,11 +74,15 @@ func _() {
 	_ = x[AttachWindowsCGroupSockOps-16777223]
 	_ = x[AttachWindowsSample-16777224]
 	_ = x[AttachWindowsXDPTest-16777225]
+	_ = x[AttachWindowsNetEvent-16877116]
+	_ = x[AttachWindowsProcess-16877215]
 }
 
 const (
 	_AttachType_name_0 = "NoneCGroupInetEgressCGroupInetSockCreateCGroupSockOpsSkSKBStreamParserSkSKBStreamVerdictCGroupDeviceSkMsgVerdictCGroupInet4BindCGroupInet6BindCGroupInet4ConnectCGroupInet6ConnectCGroupInet4PostBindCGroupInet6PostBindCGroupUDP4SendmsgCGroupUDP6SendmsgLircMode2FlowDissectorCGroupSysctlCGroupUDP4RecvmsgCGroupUDP6RecvmsgCGroupGetsockoptCGroupSetsockoptTraceRawTpTraceFEntryTraceFExitModifyReturnLSMMacTraceIterCgroupInet4GetPeernameCgroupInet6GetPeernameCgroupInet4GetSocknameCgroupInet6GetSocknameXDPDevMapCgroupInetSockReleaseXDPCPUMapSkLookupXDPSkSKBVerdictSkReuseportSelectSkReuseportSelectOrMigratePerfEventTraceKprobeMultiLSMCgroupStructOpsNetfilterTCXIngressTCXEgressTraceUprobeMultiCgroupUnixConnectCgroupUnixSendmsgCgroupUnixRecvmsgCgroupUnixGetpeernameCgroupUnixGetsocknameNetkitPrimaryNetkitPeer"
 	_AttachType_name_1 = "WindowsXDPWindowsBindWindowsCGroupInet4ConnectWindowsCGroupInet6ConnectWindowsCgroupInet4RecvAcceptWindowsCgroupInet6RecvAcceptWindowsCGroupSockOpsWindowsSampleWindowsXDPTest"
+	_AttachType_name_2 = "WindowsNetEvent"
+	_AttachType_name_3 = "WindowsProcess"
 )
 
 var (
@@ -93,6 +97,10 @@ func (i AttachType) String() string {
 	case 16777217 <= i && i <= 16777225:
 		i -= 16777217
 		return _AttachType_name_1[_AttachType_index_1[i]:_AttachType_index_1[i+1]]
+	case i == 16877116:
+		return _AttachType_name_2
+	case i == 16877215:
+		return _AttachType_name_3
 	default:
 		return "AttachType(" + strconv.FormatInt(int64(i), 10) + ")"
 	}

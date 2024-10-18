@@ -7,11 +7,12 @@ import (
 	"runtime"
 	"strconv"
 
+	"github.com/cilium/ebpf/internal/errno"
 	"github.com/cilium/ebpf/internal/testutils/testmain"
 	"github.com/cilium/ebpf/internal/unix"
 )
 
-var ErrClosedFd = unix.EBADF
+var ErrClosedFd = errno.EBADF
 
 type FD struct {
 	raw int

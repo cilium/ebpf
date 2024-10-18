@@ -7,6 +7,7 @@ import (
 
 	"github.com/go-quicktest/qt"
 
+	"github.com/cilium/ebpf/internal/errno"
 	"github.com/cilium/ebpf/internal/unix"
 )
 
@@ -45,7 +46,7 @@ func TestFD(t *testing.T) {
 
 	var stat unix.Stat_t
 	err = unix.Fstat(0, &stat)
-	qt.Assert(t, qt.ErrorIs(err, unix.EBADF), qt.Commentf("zero fd should be closed"))
+	qt.Assert(t, qt.ErrorIs(err, errno.EBADF), qt.Commentf("zero fd should be closed"))
 
 	reserveFdZero()
 }

@@ -9,7 +9,7 @@ import (
 	"unsafe"
 
 	"github.com/cilium/ebpf/internal"
-	"github.com/cilium/ebpf/internal/unix"
+	"github.com/cilium/ebpf/internal/errno"
 )
 
 type auxvFileReader struct {
@@ -51,7 +51,7 @@ func newAuxFileReader(path string, order binary.ByteOrder, uintptrIs32bits bool)
 	// to the process. Go does not expose that data before go 1.21, so we must read it from procfs.
 	// https://man7.org/linux/man-pages/man3/getauxval.3.html
 	av, err := os.Open(path)
-	if errors.Is(err, unix.EACCES) {
+	if errors.Is(err, errno.EACCES) {
 		return nil, fmt.Errorf("opening auxv: %w (process may not be dumpable due to file capabilities)", err)
 	}
 	if err != nil {

@@ -14,6 +14,7 @@ import (
 	"github.com/cilium/ebpf/asm"
 	"github.com/cilium/ebpf/btf"
 	"github.com/cilium/ebpf/internal"
+	"github.com/cilium/ebpf/internal/errno"
 	"github.com/cilium/ebpf/internal/sys"
 	"github.com/cilium/ebpf/internal/testutils"
 	"github.com/cilium/ebpf/internal/unix"
@@ -751,7 +752,7 @@ func TestMapLoadPinnedWithOptions(t *testing.T) {
 		}
 		defer array.Close()
 
-		if err := array.Put(uint32(0), uint32(1)); !errors.Is(err, unix.EPERM) {
+		if err := array.Put(uint32(0), uint32(1)); !errors.Is(err, errno.EPERM) {
 			t.Fatal("Expected EPERM from Put, got", err)
 		}
 	})
@@ -767,7 +768,7 @@ func TestMapLoadPinnedWithOptions(t *testing.T) {
 		defer array.Close()
 
 		var value uint32
-		if err := array.Lookup(uint32(0), &value); !errors.Is(err, unix.EPERM) {
+		if err := array.Lookup(uint32(0), &value); !errors.Is(err, errno.EPERM) {
 			t.Fatal("Expected EPERM from Lookup, got", err)
 		}
 	})
@@ -797,7 +798,7 @@ func TestMapPinFlags(t *testing.T) {
 			Flags: math.MaxUint32,
 		},
 	})
-	if !errors.Is(err, unix.EINVAL) {
+	if !errors.Is(err, errno.EINVAL) {
 		t.Fatal("Invalid flags should trigger EINVAL:", err)
 	}
 }
@@ -1042,7 +1043,7 @@ func TestIterateEmptyMap(t *testing.T) {
 			ValueSize:  8,
 			MaxEntries: 2,
 		})
-		if errors.Is(err, unix.EINVAL) {
+		if errors.Is(err, errno.EINVAL) {
 			t.Skip(mapType, "is not supported")
 		}
 		if err != nil {
@@ -1303,7 +1304,7 @@ func TestMapGuessNonExistentKey(t *testing.T) {
 			}
 
 			var value uint32
-			if err := m.Lookup(guess, &value); !errors.Is(err, unix.ENOENT) {
+			if err := m.Lookup(guess, &value); !errors.Is(err, errno.ENOENT) {
 				t.Fatal("Doesn't return ENOENT:", err)
 			}
 		})

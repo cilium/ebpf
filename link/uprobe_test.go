@@ -11,9 +11,9 @@ import (
 	"github.com/go-quicktest/qt"
 
 	"github.com/cilium/ebpf"
+	"github.com/cilium/ebpf/internal/errno"
 	"github.com/cilium/ebpf/internal/testutils"
 	"github.com/cilium/ebpf/internal/tracefs"
-	"github.com/cilium/ebpf/internal/unix"
 )
 
 var (
@@ -150,7 +150,7 @@ func TestUprobeWithNonExistentPID(t *testing.T) {
 
 	// trying to open a perf event on a non-existent PID will return ESRCH.
 	_, err := bashEx.Uprobe(bashSym, prog, &UprobeOptions{PID: -2})
-	if !errors.Is(err, unix.ESRCH) {
+	if !errors.Is(err, errno.ESRCH) {
 		t.Fatalf("expected ESRCH, got %v", err)
 	}
 }

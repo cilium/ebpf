@@ -4,8 +4,8 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/cilium/ebpf/internal/errno"
 	"github.com/cilium/ebpf/internal/testutils/testmain"
-	"github.com/cilium/ebpf/internal/unix"
 
 	"github.com/go-quicktest/qt"
 )
@@ -21,8 +21,8 @@ func TestObjName(t *testing.T) {
 }
 
 func TestWrappedErrno(t *testing.T) {
-	a := error(wrappedErrno{unix.EINVAL})
-	b := error(unix.EINVAL)
+	a := error(wrappedErrno{errno.EINVAL})
+	b := error(errno.EINVAL)
 
 	if a == b {
 		t.Error("wrappedErrno is comparable to plain errno")
@@ -32,19 +32,19 @@ func TestWrappedErrno(t *testing.T) {
 		t.Error("errors.Is(wrappedErrno, errno) returns false")
 	}
 
-	if errors.Is(a, unix.EAGAIN) {
+	if errors.Is(a, errno.EAGAIN) {
 		t.Error("errors.Is(wrappedErrno, EAGAIN) returns true")
 	}
 
-	notsupp := wrappedErrno{ENOTSUPP}
+	notsupp := wrappedErrno{errno.ENOTSUPP}
 	qt.Assert(t, qt.StringContains(notsupp.Error(), "operation not supported"))
 }
 
 func TestSyscallError(t *testing.T) {
 	err := errors.New("foo")
-	foo := Error(err, unix.EINVAL)
+	foo := Error(err, errno.EINVAL)
 
-	if !errors.Is(foo, unix.EINVAL) {
+	if !errors.Is(foo, errno.EINVAL) {
 		t.Error("SyscallError is not the wrapped errno")
 	}
 
@@ -52,7 +52,7 @@ func TestSyscallError(t *testing.T) {
 		t.Error("SyscallError is not the wrapped error")
 	}
 
-	if errors.Is(unix.EINVAL, foo) {
+	if errors.Is(errno.EINVAL, foo) {
 		t.Error("Errno is the SyscallError")
 	}
 

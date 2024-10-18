@@ -9,8 +9,8 @@ import (
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/asm"
 	"github.com/cilium/ebpf/internal"
+	"github.com/cilium/ebpf/internal/errno"
 	"github.com/cilium/ebpf/internal/sys"
-	"github.com/cilium/ebpf/internal/unix"
 )
 
 // UprobeMultiOptions defines additional parameters that will be used
@@ -96,13 +96,13 @@ func (ex *Executable) uprobeMulti(symbols []string, prog *ebpf.Program, opts *Up
 	}
 
 	fd, err := sys.LinkCreateUprobeMulti(attr)
-	if errors.Is(err, unix.ESRCH) {
+	if errors.Is(err, errno.ESRCH) {
 		return nil, fmt.Errorf("%w (specified pid not found?)", os.ErrNotExist)
 	}
 	// Since Linux commit 46ba0e49b642 ("bpf: fix multi-uprobe PID filtering
 	// logic"), if the provided pid overflows MaxInt32 (turning it negative), the
 	// kernel will return EINVAL instead of ESRCH.
-	if errors.Is(err, unix.EINVAL) {
+	if errors.Is(err, errno.EINVAL) {
 		return nil, fmt.Errorf("%w (invalid pid, missing symbol or prog's AttachType not AttachTraceUprobeMulti?)", err)
 	}
 
@@ -186,7 +186,7 @@ var haveBPFLinkUprobeMulti = internal.NewFeatureTest("bpf_link_uprobe_multi", fu
 		AttachType: ebpf.AttachTraceUprobeMulti,
 		License:    "MIT",
 	})
-	if errors.Is(err, unix.E2BIG) {
+	if errors.Is(err, errno.E2BIG) {
 		// Kernel doesn't support AttachType field.
 		return internal.ErrNotSupported
 	}
@@ -205,9 +205,9 @@ var haveBPFLinkUprobeMulti = internal.NewFeatureTest("bpf_link_uprobe_multi", fu
 		Count:      1,
 	})
 	switch {
-	case errors.Is(err, unix.EBADF):
+	case errors.Is(err, errno.EBADF):
 		return nil
-	case errors.Is(err, unix.EINVAL):
+	case errors.Is(err, errno.EINVAL):
 		return internal.ErrNotSupported
 	case err != nil:
 		return err

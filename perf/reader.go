@@ -15,6 +15,7 @@ import (
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/epoll"
+	"github.com/cilium/ebpf/internal/errno"
 	"github.com/cilium/ebpf/internal/sys"
 	"github.com/cilium/ebpf/internal/unix"
 )
@@ -219,7 +220,7 @@ func NewReaderWithOptions(array *ebpf.Map, perCPUBuffer int, opts ReaderOptions)
 	bufferSize := 0
 	for i := 0; i < nCPU; i++ {
 		event, ring, err := newPerfEventRing(i, perCPUBuffer, opts)
-		if errors.Is(err, unix.ENODEV) {
+		if errors.Is(err, errno.ENODEV) {
 			// The requested CPU is currently offline, skip it.
 			continue
 		}

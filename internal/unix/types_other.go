@@ -10,26 +10,6 @@ import (
 
 var errNonLinux = fmt.Errorf("unsupported platform %s/%s", runtime.GOOS, runtime.GOARCH)
 
-// Errnos are distinct and non-zero.
-const (
-	ENOENT syscall.Errno = iota + 1
-	EEXIST
-	EAGAIN
-	ENOSPC
-	EINVAL
-	EINTR
-	EPERM
-	ESRCH
-	ENODEV
-	EBADF
-	E2BIG
-	EFAULT
-	EACCES
-	EILSEQ
-	EOPNOTSUPP
-	ESTALE
-)
-
 // Constants are distinct to avoid breaking switch statements.
 const (
 	BPF_F_NO_PREALLOC = iota

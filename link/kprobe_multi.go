@@ -9,8 +9,8 @@ import (
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/asm"
 	"github.com/cilium/ebpf/internal"
+	"github.com/cilium/ebpf/internal/errno"
 	"github.com/cilium/ebpf/internal/sys"
-	"github.com/cilium/ebpf/internal/unix"
 )
 
 // KprobeMultiOptions defines additional parameters that will be used
@@ -103,10 +103,10 @@ func kprobeMulti(prog *ebpf.Program, opts KprobeMultiOptions, flags uint32) (Lin
 	}
 
 	fd, err := sys.LinkCreateKprobeMulti(attr)
-	if errors.Is(err, unix.ESRCH) {
+	if errors.Is(err, errno.ESRCH) {
 		return nil, fmt.Errorf("couldn't find one or more symbols: %w", os.ErrNotExist)
 	}
-	if errors.Is(err, unix.EINVAL) {
+	if errors.Is(err, errno.EINVAL) {
 		return nil, fmt.Errorf("%w (missing kernel symbol or prog's AttachType not AttachTraceKprobeMulti?)", err)
 	}
 
@@ -160,7 +160,7 @@ var haveBPFLinkKprobeMulti = internal.NewFeatureTest("bpf_link_kprobe_multi", fu
 		AttachType: ebpf.AttachTraceKprobeMulti,
 		License:    "MIT",
 	})
-	if errors.Is(err, unix.E2BIG) {
+	if errors.Is(err, errno.E2BIG) {
 		// Kernel doesn't support AttachType field.
 		return internal.ErrNotSupported
 	}
@@ -176,10 +176,10 @@ var haveBPFLinkKprobeMulti = internal.NewFeatureTest("bpf_link_kprobe_multi", fu
 		Syms:       sys.NewStringSlicePointer([]string{"vprintk"}),
 	})
 	switch {
-	case errors.Is(err, unix.EINVAL):
+	case errors.Is(err, errno.EINVAL):
 		return internal.ErrNotSupported
 	// If CONFIG_FPROBE isn't set.
-	case errors.Is(err, unix.EOPNOTSUPP):
+	case errors.Is(err, errno.EOPNOTSUPP):
 		return internal.ErrNotSupported
 	case err != nil:
 		return err

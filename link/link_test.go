@@ -10,6 +10,7 @@ import (
 
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/asm"
+	"github.com/cilium/ebpf/internal/errno"
 	"github.com/cilium/ebpf/internal/sys"
 	"github.com/cilium/ebpf/internal/testutils"
 	"github.com/cilium/ebpf/internal/testutils/testmain"
@@ -83,7 +84,7 @@ func TestRawLinkLoadPinnedWithOptions(t *testing.T) {
 	_, err := loadPinnedRawLink(path, &ebpf.LoadPinOptions{
 		Flags: math.MaxUint32,
 	})
-	if !errors.Is(err, unix.EINVAL) {
+	if !errors.Is(err, errno.EINVAL) {
 		t.Fatal("Invalid flags don't trigger an error:", err)
 	}
 }
@@ -212,7 +213,7 @@ func testLink(t *testing.T, link Link, prog *ebpf.Program) {
 		_, err = LoadPinnedLink(path, &ebpf.LoadPinOptions{
 			Flags: math.MaxUint32,
 		})
-		if !errors.Is(err, unix.EINVAL) {
+		if !errors.Is(err, errno.EINVAL) {
 			t.Errorf("Loading a pinned %T doesn't respect flags", link)
 		}
 	})

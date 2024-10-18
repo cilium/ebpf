@@ -10,19 +10,19 @@ import (
 
 	"github.com/cilium/ebpf/asm"
 	"github.com/cilium/ebpf/internal"
+	"github.com/cilium/ebpf/internal/errno"
 	"github.com/cilium/ebpf/internal/linux"
 	"github.com/cilium/ebpf/internal/sys"
 	"github.com/cilium/ebpf/internal/tracefs"
-	"github.com/cilium/ebpf/internal/unix"
 )
 
 var (
 	// pre-allocating these here since they may
 	// get called in hot code paths and cause
 	// unnecessary memory allocations
-	sysErrKeyNotExist  = sys.Error(ErrKeyNotExist, unix.ENOENT)
-	sysErrKeyExist     = sys.Error(ErrKeyExist, unix.EEXIST)
-	sysErrNotSupported = sys.Error(ErrNotSupported, sys.ENOTSUPP)
+	sysErrKeyNotExist  = sys.Error(ErrKeyNotExist, errno.ENOENT)
+	sysErrKeyExist     = sys.Error(ErrKeyExist, errno.EEXIST)
+	sysErrNotSupported = sys.Error(ErrNotSupported, errno.ENOTSUPP)
 )
 
 // invalidBPFObjNameChar returns true if char may not appear in
@@ -70,10 +70,10 @@ var haveNestedMaps = internal.NewFeatureTest("nested maps", func() error {
 		// Invalid file descriptor.
 		InnerMapFd: ^uint32(0),
 	})
-	if errors.Is(err, unix.EINVAL) {
+	if errors.Is(err, errno.EINVAL) {
 		return internal.ErrNotSupported
 	}
-	if errors.Is(err, unix.EBADF) {
+	if errors.Is(err, errno.EBADF) {
 		return nil
 	}
 	return err
@@ -151,19 +151,19 @@ func wrapMapError(err error) error {
 		return nil
 	}
 
-	if errors.Is(err, unix.ENOENT) {
+	if errors.Is(err, errno.ENOENT) {
 		return sysErrKeyNotExist
 	}
 
-	if errors.Is(err, unix.EEXIST) {
+	if errors.Is(err, errno.EEXIST) {
 		return sysErrKeyExist
 	}
 
-	if errors.Is(err, sys.ENOTSUPP) {
+	if errors.Is(err, errno.ENOTSUPP) {
 		return sysErrNotSupported
 	}
 
-	if errors.Is(err, unix.E2BIG) {
+	if errors.Is(err, errno.E2BIG) {
 		return fmt.Errorf("key too big for map: %w", err)
 	}
 
@@ -326,11 +326,11 @@ var haveProgramExtInfos = internal.NewFeatureTest("program ext_infos", func() er
 		ProgBtfFd:   math.MaxUint32,
 	})
 
-	if errors.Is(err, unix.EBADF) {
+	if errors.Is(err, errno.EBADF) {
 		return nil
 	}
 
-	if errors.Is(err, unix.E2BIG) {
+	if errors.Is(err, errno.E2BIG) {
 		return ErrNotSupported
 	}
 

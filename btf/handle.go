@@ -8,6 +8,7 @@ import (
 	"os"
 
 	"github.com/cilium/ebpf/internal"
+	"github.com/cilium/ebpf/internal/errno"
 	"github.com/cilium/ebpf/internal/sys"
 	"github.com/cilium/ebpf/internal/unix"
 )
@@ -68,7 +69,7 @@ func NewHandleFromRawBTF(btf []byte) (*Handle, error) {
 			break
 		}
 
-		if attr.BtfLogSize != 0 && !errors.Is(err, unix.ENOSPC) {
+		if attr.BtfLogSize != 0 && !errors.Is(err, errno.ENOSPC) {
 			// Up until at least kernel 6.0, the BTF verifier does not return ENOSPC
 			// if there are other verification errors. ENOSPC is only returned when
 			// the BTF blob is correct, a log was requested, and the provided buffer

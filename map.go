@@ -18,6 +18,7 @@ import (
 
 	"github.com/cilium/ebpf/btf"
 	"github.com/cilium/ebpf/internal"
+	"github.com/cilium/ebpf/internal/errno"
 	"github.com/cilium/ebpf/internal/sys"
 	"github.com/cilium/ebpf/internal/sysenc"
 	"github.com/cilium/ebpf/internal/unix"
@@ -340,7 +341,7 @@ func newMapWithOptions(spec *MapSpec, opts MapOptions) (_ *Map, err error) {
 
 		path := filepath.Join(opts.PinPath, spec.Name)
 		m, err := LoadPinnedMap(path, &opts.LoadPinOptions)
-		if errors.Is(err, unix.ENOENT) {
+		if errors.Is(err, errno.ENOENT) {
 			break
 		}
 		if err != nil {
@@ -465,7 +466,7 @@ func (spec *MapSpec) createMap(inner *sys.FD) (_ *Map, err error) {
 
 	// Some map types don't support BTF k/v in earlier kernel versions.
 	// Remove BTF metadata and retry map creation.
-	if (errors.Is(err, sys.ENOTSUPP) || errors.Is(err, unix.EINVAL)) && attr.BtfFd != 0 {
+	if (errors.Is(err, errno.ENOTSUPP) || errors.Is(err, errno.EINVAL)) && attr.BtfFd != 0 {
 		attr.BtfFd, attr.BtfKeyTypeId, attr.BtfValueTypeId = 0, 0, 0
 		fd, err = sys.MapCreate(&attr)
 	}
@@ -482,16 +483,16 @@ func (spec *MapSpec) createMap(inner *sys.FD) (_ *Map, err error) {
 }
 
 func handleMapCreateError(attr sys.MapCreateAttr, spec *MapSpec, err error) error {
-	if errors.Is(err, unix.EPERM) {
+	if errors.Is(err, errno.EPERM) {
 		return fmt.Errorf("map create: %w (MEMLOCK may be too low, consider rlimit.RemoveMemlock)", err)
 	}
-	if errors.Is(err, unix.EINVAL) && spec.MaxEntries == 0 {
+	if errors.Is(err, errno.EINVAL) && spec.MaxEntries == 0 {
 		return fmt.Errorf("map create: %w (MaxEntries may be incorrectly set to zero)", err)
 	}
-	if errors.Is(err, unix.EINVAL) && spec.Type == UnspecifiedMap {
+	if errors.Is(err, errno.EINVAL) && spec.Type == UnspecifiedMap {
 		return fmt.Errorf("map create: cannot use type %s", UnspecifiedMap)
 	}
-	if errors.Is(err, unix.EINVAL) && spec.Flags&sys.BPF_F_NO_PREALLOC > 0 {
+	if errors.Is(err, errno.EINVAL) && spec.Flags&sys.BPF_F_NO_PREALLOC > 0 {
 		return fmt.Errorf("map create: %w (noPrealloc flag may be incompatible with map type %s)", err, spec.Type)
 	}
 
@@ -522,7 +523,7 @@ func handleMapCreateError(attr sys.MapCreateAttr, spec *MapSpec, err error) erro
 		}
 	}
 	// BPF_MAP_TYPE_RINGBUF's max_entries must be a power-of-2 multiple of kernel's page size.
-	if errors.Is(err, unix.EINVAL) &&
+	if errors.Is(err, errno.EINVAL) &&
 		(attr.MapType == sys.BPF_MAP_TYPE_RINGBUF || attr.MapType == sys.BPF_MAP_TYPE_USER_RINGBUF) {
 		pageSize := uint32(os.Getpagesize())
 		maxEntries := attr.MaxEntries
@@ -728,7 +729,7 @@ func (m *Map) lookup(key interface{}, valueOut sys.Pointer, flags MapLookupFlags
 	}
 
 	if err = sys.MapLookupElem(&attr); err != nil {
-		if errors.Is(err, unix.ENOENT) {
+		if errors.Is(err, errno.ENOENT) {
 			return errMapLookupKeyNotExist
 		}
 		return fmt.Errorf("lookup: %w", wrapMapError(err))
@@ -951,7 +952,7 @@ func (m *Map) nextKey(key interface{}, nextKeyOut sys.Pointer) error {
 	if err = sys.MapGetNextKey(&attr); err != nil {
 		// Kernels 4.4.131 and earlier return EFAULT instead of a pointer to the
 		// first map element when a nil key pointer is specified.
-		if key == nil && errors.Is(err, unix.EFAULT) {
+		if key == nil && errors.Is(err, errno.EFAULT) {
 			var guessKey []byte
 			guessKey, err = m.guessNonExistentKey()
 			if err != nil {
@@ -1089,7 +1090,7 @@ func (m *Map) batchLookup(cmd sys.Cmd, cursor *MapBatchCursor, keysOut, valuesOu
 	valueBuf := sysenc.SyscallOutput(valuesOut, count*int(m.fullValueSize))
 
 	n, err := m.batchLookupCmd(cmd, cursor, count, keysOut, valueBuf.Pointer(), opts)
-	if errors.Is(err, unix.ENOSPC) {
+	if errors.Is(err, errno.ENOSPC) {
 		// Hash tables return ENOSPC when the size of the batch is smaller than
 		// any bucket.
 		return n, fmt.Errorf("%w (batch size too small?)", err)
@@ -1115,7 +1116,7 @@ func (m *Map) batchLookupPerCPU(cmd sys.Cmd, cursor *MapBatchCursor, keysOut, va
 	valuePtr := sys.NewSlicePointer(valueBuf)
 
 	n, sysErr := m.batchLookupCmd(cmd, cursor, count, keysOut, valuePtr, opts)
-	if sysErr != nil && !errors.Is(sysErr, unix.ENOENT) {
+	if sysErr != nil && !errors.Is(sysErr, errno.ENOENT) {
 		return 0, err
 	}
 
@@ -1175,7 +1176,7 @@ func (m *Map) batchLookupCmd(cmd sys.Cmd, cursor *MapBatchCursor, count int, key
 
 	_, sysErr := sys.BPF(cmd, unsafe.Pointer(&attr), unsafe.Sizeof(attr))
 	sysErr = wrapMapError(sysErr)
-	if sysErr != nil && !errors.Is(sysErr, unix.ENOENT) {
+	if sysErr != nil && !errors.Is(sysErr, errno.ENOENT) {
 		return 0, sysErr
 	}
 

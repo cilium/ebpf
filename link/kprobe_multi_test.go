@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/cilium/ebpf"
+	"github.com/cilium/ebpf/internal/errno"
 	"github.com/cilium/ebpf/internal/testutils"
 	"github.com/cilium/ebpf/internal/unix"
 )
@@ -62,7 +63,7 @@ func TestKprobeMultiErrors(t *testing.T) {
 
 	// Nonexistent kernel symbol.
 	_, err := KprobeMulti(prog, KprobeMultiOptions{Symbols: []string{"bogus"}})
-	if !errors.Is(err, os.ErrNotExist) && !errors.Is(err, unix.EINVAL) {
+	if !errors.Is(err, os.ErrNotExist) && !errors.Is(err, errno.EINVAL) {
 		t.Fatalf("expected ErrNotExist or EINVAL, got: %s", err)
 	}
 
@@ -70,7 +71,7 @@ func TestKprobeMultiErrors(t *testing.T) {
 	// proper one.
 	if _, err := KprobeMulti(prog, KprobeMultiOptions{
 		Addresses: []uintptr{^uintptr(0)},
-	}); !errors.Is(err, unix.EINVAL) {
+	}); !errors.Is(err, errno.EINVAL) {
 		t.Fatalf("expected EINVAL, got: %s", err)
 	}
 }

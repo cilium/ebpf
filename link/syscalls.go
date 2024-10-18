@@ -6,8 +6,8 @@ import (
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/asm"
 	"github.com/cilium/ebpf/internal"
+	"github.com/cilium/ebpf/internal/errno"
 	"github.com/cilium/ebpf/internal/sys"
-	"github.com/cilium/ebpf/internal/unix"
 )
 
 // Type is the kind of link.
@@ -83,10 +83,10 @@ var haveProgAttachReplace = internal.NewFeatureTest("BPF_PROG_ATTACH atomic repl
 	}
 
 	err = sys.ProgAttach(&attr)
-	if errors.Is(err, unix.EINVAL) {
+	if errors.Is(err, errno.EINVAL) {
 		return internal.ErrNotSupported
 	}
-	if errors.Is(err, unix.EBADF) {
+	if errors.Is(err, errno.EBADF) {
 		return nil
 	}
 	return err
@@ -100,10 +100,10 @@ var haveBPFLink = internal.NewFeatureTest("bpf_link", func() error {
 		AttachType: sys.AttachType(ebpf.AttachCGroupInetIngress),
 	}
 	_, err := sys.LinkCreate(&attr)
-	if errors.Is(err, unix.EINVAL) {
+	if errors.Is(err, errno.EINVAL) {
 		return internal.ErrNotSupported
 	}
-	if errors.Is(err, unix.EBADF) {
+	if errors.Is(err, errno.EBADF) {
 		return nil
 	}
 	return err
@@ -120,7 +120,7 @@ var haveProgQuery = internal.NewFeatureTest("BPF_PROG_QUERY", func() error {
 
 	err := sys.ProgQuery(&attr)
 
-	if errors.Is(err, unix.EBADF) {
+	if errors.Is(err, errno.EBADF) {
 		return nil
 	}
 	if err != nil {
@@ -155,7 +155,7 @@ var haveTCX = internal.NewFeatureTest("tcx", func() error {
 
 	_, err = sys.LinkCreateTcx(&attr)
 
-	if errors.Is(err, unix.ENODEV) {
+	if errors.Is(err, errno.ENODEV) {
 		return nil
 	}
 	if err != nil {
@@ -190,7 +190,7 @@ var haveNetkit = internal.NewFeatureTest("netkit", func() error {
 
 	_, err = sys.LinkCreateNetkit(&attr)
 
-	if errors.Is(err, unix.ENODEV) {
+	if errors.Is(err, errno.ENODEV) {
 		return nil
 	}
 	if err != nil {

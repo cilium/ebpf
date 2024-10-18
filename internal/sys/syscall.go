@@ -5,13 +5,9 @@ import (
 	"syscall"
 	"unsafe"
 
+	"github.com/cilium/ebpf/internal/errno"
 	"github.com/cilium/ebpf/internal/unix"
 )
-
-// ENOTSUPP is a Linux internal error code that has leaked into UAPI.
-//
-// It is not the same as ENOTSUP or EOPNOTSUPP.
-const ENOTSUPP = syscall.Errno(524)
 
 // BPF wraps SYS_BPF.
 //
@@ -30,7 +26,7 @@ func BPF(cmd Cmd, attr unsafe.Pointer, size uintptr) (uintptr, error) {
 
 		// As of ~4.20 the verifier can be interrupted by a signal,
 		// and returns EAGAIN in that case.
-		if errNo == unix.EAGAIN && cmd == BPF_PROG_LOAD {
+		if errNo == errno.EAGAIN && cmd == BPF_PROG_LOAD {
 			continue
 		}
 
@@ -192,7 +188,7 @@ func (we wrappedErrno) Unwrap() error {
 }
 
 func (we wrappedErrno) Error() string {
-	if we.Errno == ENOTSUPP {
+	if we.Errno == errno.ENOTSUPP {
 		return "operation not supported"
 	}
 	return we.Errno.Error()
@@ -200,10 +196,10 @@ func (we wrappedErrno) Error() string {
 
 type syscallError struct {
 	error
-	errno syscall.Errno
+	errno errno.Errno
 }
 
-func Error(err error, errno syscall.Errno) error {
+func Error(err error, errno errno.Errno) error {
 	return &syscallError{err, errno}
 }
 

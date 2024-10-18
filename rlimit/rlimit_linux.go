@@ -6,6 +6,7 @@ import (
 	"sync"
 
 	"github.com/cilium/ebpf/internal"
+	"github.com/cilium/ebpf/internal/errno"
 	"github.com/cilium/ebpf/internal/sys"
 	"github.com/cilium/ebpf/internal/unix"
 )
@@ -77,7 +78,7 @@ func detectMemcgAccounting() error {
 	}
 
 	// EPERM shows up when map creation would exceed the memory budget.
-	if errors.Is(mapErr, unix.EPERM) {
+	if errors.Is(mapErr, errno.EPERM) {
 		return unsupportedMemcgAccounting
 	}
 

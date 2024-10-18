@@ -10,6 +10,7 @@ import (
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/asm"
 	"github.com/cilium/ebpf/internal"
+	"github.com/cilium/ebpf/internal/errno"
 	"github.com/cilium/ebpf/internal/sys"
 	"github.com/cilium/ebpf/internal/tracefs"
 	"github.com/cilium/ebpf/internal/unix"
@@ -322,10 +323,10 @@ var haveBPFLinkPerfEvent = internal.NewFeatureTest("bpf_link_perf_event", func()
 		ProgFd:     uint32(prog.FD()),
 		AttachType: sys.BPF_PERF_EVENT,
 	})
-	if errors.Is(err, unix.EINVAL) {
+	if errors.Is(err, errno.EINVAL) {
 		return internal.ErrNotSupported
 	}
-	if errors.Is(err, unix.EBADF) {
+	if errors.Is(err, errno.EBADF) {
 		return nil
 	}
 	return err

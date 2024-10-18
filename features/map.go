@@ -10,8 +10,8 @@ import (
 
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/internal"
+	"github.com/cilium/ebpf/internal/errno"
 	"github.com/cilium/ebpf/internal/sys"
-	"github.com/cilium/ebpf/internal/unix"
 )
 
 // HaveMapType probes the running kernel for the availability of the specified map type.
@@ -47,7 +47,7 @@ func probeStorageMap(mt sys.MapType) error {
 		BtfValueTypeId: 1,
 		BtfFd:          ^uint32(0),
 	})
-	if errors.Is(err, unix.EBADF) {
+	if errors.Is(err, errno.EBADF) {
 		// Triggered by BtfFd.
 		return nil
 	}
@@ -61,7 +61,7 @@ func probeNestedMap(mt sys.MapType) error {
 		MapType:    mt,
 		InnerMapFd: ^uint32(0),
 	})
-	if errors.Is(err, unix.EBADF) {
+	if errors.Is(err, errno.EBADF) {
 		return nil
 	}
 	return err
@@ -90,7 +90,7 @@ func createMap(attr *sys.MapCreateAttr) error {
 	// E2BIG occurs when MapCreateAttr contains non-zero bytes past the end
 	// of the struct known by the running kernel, meaning the kernel is too old
 	// to support the given map type.
-	case errors.Is(err, unix.EINVAL), errors.Is(err, unix.E2BIG):
+	case errors.Is(err, errno.EINVAL), errors.Is(err, errno.E2BIG):
 		return ebpf.ErrNotSupported
 	}
 
@@ -187,7 +187,7 @@ var haveMapTypeMatrix = internal.FeatureMatrix[ebpf.MapType]{
 				MapType:               sys.BPF_MAP_TYPE_STRUCT_OPS,
 				BtfVmlinuxValueTypeId: 1,
 			})
-			if errors.Is(err, sys.ENOTSUPP) {
+			if errors.Is(err, errno.ENOTSUPP) {
 				// ENOTSUPP means the map type is at least known to the kernel.
 				return nil
 			}
@@ -264,7 +264,7 @@ func probeMapFlag(attr *sys.MapCreateAttr) error {
 	fd, err := sys.MapCreate(attr)
 	if err == nil {
 		fd.Close()
-	} else if errors.Is(err, unix.EINVAL) {
+	} else if errors.Is(err, errno.EINVAL) {
 		// EINVAL occurs when attempting to create a map with an unknown type or an unknown flag.
 		err = ebpf.ErrNotSupported
 	}

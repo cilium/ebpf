@@ -10,6 +10,7 @@ import (
 
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/internal"
+	"github.com/cilium/ebpf/internal/errno"
 	"github.com/cilium/ebpf/internal/linux"
 	"github.com/cilium/ebpf/internal/sys"
 	"github.com/cilium/ebpf/internal/tracefs"
@@ -62,7 +63,7 @@ func (ko *KprobeOptions) cookie() uint64 {
 // in a portable fashion.
 //
 // On kernels 6.11 and later, setting a kprobe on a nonexistent symbol using
-// tracefs incorrectly returns [unix.EINVAL] instead of [os.ErrNotExist].
+// tracefs incorrectly returns [errno.EINVAL] instead of [os.ErrNotExist].
 //
 // The returned Link may implement [PerfEvent].
 func Kprobe(symbol string, prog *ebpf.Program, opts *KprobeOptions) (Link, error) {
@@ -95,7 +96,7 @@ func Kprobe(symbol string, prog *ebpf.Program, opts *KprobeOptions) (Link, error
 // in a portable fashion.
 //
 // On kernels 5.10 and earlier, setting a kretprobe on a nonexistent symbol
-// incorrectly returns [unix.EINVAL] instead of [os.ErrNotExist].
+// incorrectly returns [errno.EINVAL] instead of [os.ErrNotExist].
 //
 // The returned Link may implement [PerfEvent].
 func Kretprobe(symbol string, prog *ebpf.Program, opts *KprobeOptions) (Link, error) {
@@ -172,7 +173,7 @@ func kprobe(symbol string, prog *ebpf.Program, opts *KprobeOptions, ret bool) (*
 
 	// Use kprobe PMU if the kernel has it available.
 	tp, err := pmuProbe(args)
-	if errors.Is(err, os.ErrNotExist) || errors.Is(err, unix.EINVAL) {
+	if errors.Is(err, os.ErrNotExist) || errors.Is(err, errno.EINVAL) {
 		if prefix := linux.PlatformPrefix(); prefix != "" {
 			args.Symbol = prefix + symbol
 			tp, err = pmuProbe(args)
@@ -188,7 +189,7 @@ func kprobe(symbol string, prog *ebpf.Program, opts *KprobeOptions, ret bool) (*
 	// Use tracefs if kprobe PMU is missing.
 	args.Symbol = symbol
 	tp, err = tracefsProbe(args)
-	if errors.Is(err, os.ErrNotExist) || errors.Is(err, unix.EINVAL) {
+	if errors.Is(err, os.ErrNotExist) || errors.Is(err, errno.EINVAL) {
 		if prefix := linux.PlatformPrefix(); prefix != "" {
 			args.Symbol = prefix + symbol
 			tp, err = tracefsProbe(args)
@@ -291,7 +292,7 @@ func pmuProbe(args tracefs.ProbeArgs) (*perfEvent, error) {
 	// On some old kernels, kprobe PMU doesn't allow `.` in symbol names and
 	// return -EINVAL. Return ErrNotSupported to allow falling back to tracefs.
 	// https://github.com/torvalds/linux/blob/94710cac0ef4/kernel/trace/trace_kprobe.c#L340-L343
-	if errors.Is(err, unix.EINVAL) && strings.Contains(args.Symbol, ".") {
+	if errors.Is(err, errno.EINVAL) && strings.Contains(args.Symbol, ".") {
 		return nil, fmt.Errorf("token %s: older kernels don't accept dots: %w", token, ErrNotSupported)
 	}
 	// Since commit 97c753e62e6c, ENOENT is correctly returned instead of EINVAL
@@ -302,12 +303,12 @@ func pmuProbe(args tracefs.ProbeArgs) (*perfEvent, error) {
 	// Since commit ab105a4fb894, EILSEQ is returned when a kprobe sym+offset is resolved
 	// to an invalid insn boundary. The exact conditions that trigger this error are
 	// arch specific however.
-	if errors.Is(err, unix.EILSEQ) {
+	if errors.Is(err, errno.EILSEQ) {
 		return nil, fmt.Errorf("token %s: bad insn boundary: %w", token, os.ErrNotExist)
 	}
 	// Since at least commit cb9a19fe4aa51, ENOTSUPP is returned
 	// when attempting to set a uprobe on a trap instruction.
-	if errors.Is(err, sys.ENOTSUPP) {
+	if errors.Is(err, errno.ENOTSUPP) {
 		return nil, fmt.Errorf("token %s: failed setting uprobe on offset %#x (possible trap insn): %w", token, args.Offset, err)
 	}
 

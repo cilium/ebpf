@@ -9,8 +9,8 @@ import (
 	"github.com/go-quicktest/qt"
 
 	"github.com/cilium/ebpf"
+	"github.com/cilium/ebpf/internal/errno"
 	"github.com/cilium/ebpf/internal/testutils"
-	"github.com/cilium/ebpf/internal/unix"
 )
 
 func TestAttachTCX(t *testing.T) {
@@ -71,7 +71,7 @@ func TestTCXExpectedRevision(t *testing.T) {
 		Interface:        iface.Index,
 		ExpectedRevision: math.MaxUint64,
 	})
-	qt.Assert(t, qt.ErrorIs(err, unix.ESTALE))
+	qt.Assert(t, qt.ErrorIs(err, errno.ESTALE))
 }
 
 func mustAttachTCX(tb testing.TB, prog *ebpf.Program, attachType ebpf.AttachType) (Link, int) {

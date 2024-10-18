@@ -9,6 +9,7 @@ import (
 
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/asm"
+	"github.com/cilium/ebpf/internal/errno"
 	"github.com/cilium/ebpf/internal/testutils"
 	"github.com/cilium/ebpf/internal/tracefs"
 	"github.com/cilium/ebpf/internal/unix"
@@ -103,7 +104,7 @@ func TestKretprobe(t *testing.T) {
 	}
 
 	k, err := Kretprobe("bogus", prog, nil)
-	if !(errors.Is(err, os.ErrNotExist) || errors.Is(err, unix.EINVAL)) {
+	if !(errors.Is(err, os.ErrNotExist) || errors.Is(err, errno.EINVAL)) {
 		t.Fatal(err)
 	}
 	if k != nil {
@@ -226,13 +227,13 @@ func TestKprobeTraceFS(t *testing.T) {
 	_, err = tracefs.NewEvent(args)
 	// A kernel bug was introduced in 9d8616034f16 that causes EINVAL to be returned
 	// instead of ENOENT when trying to attach kprobes to non-existing symbols.
-	qt.Assert(t, qt.IsTrue(errors.Is(err, os.ErrNotExist) || errors.Is(err, unix.EINVAL)), qt.Commentf("got error: %s", err))
+	qt.Assert(t, qt.IsTrue(errors.Is(err, os.ErrNotExist) || errors.Is(err, errno.EINVAL)), qt.Commentf("got error: %s", err))
 
 	// A kernel bug was fixed in 97c753e62e6c where EINVAL was returned instead
 	// of ENOENT, but only for kretprobes.
 	args.Ret = true
 	_, err = tracefs.NewEvent(args)
-	qt.Assert(t, qt.IsTrue(errors.Is(err, os.ErrNotExist) || errors.Is(err, unix.EINVAL)), qt.Commentf("got error: %s", err))
+	qt.Assert(t, qt.IsTrue(errors.Is(err, os.ErrNotExist) || errors.Is(err, errno.EINVAL)), qt.Commentf("got error: %s", err))
 }
 
 func BenchmarkKprobeCreateTraceFS(b *testing.B) {

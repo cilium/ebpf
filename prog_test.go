@@ -20,6 +20,7 @@ import (
 	"github.com/cilium/ebpf/asm"
 	"github.com/cilium/ebpf/btf"
 	"github.com/cilium/ebpf/internal"
+	"github.com/cilium/ebpf/internal/errno"
 	"github.com/cilium/ebpf/internal/sys"
 	"github.com/cilium/ebpf/internal/testutils"
 	"github.com/cilium/ebpf/internal/unix"
@@ -384,7 +385,7 @@ func TestProgramLoadPinnedWithFlags(t *testing.T) {
 		Flags: math.MaxUint32,
 	})
 	testutils.SkipIfNotSupported(t, err)
-	if !errors.Is(err, unix.EINVAL) {
+	if !errors.Is(err, errno.EINVAL) {
 		t.Fatal("Invalid flags don't trigger an error:", err)
 	}
 }
@@ -1006,7 +1007,7 @@ func BenchmarkNewProgram(b *testing.B) {
 
 	for i := 0; i < b.N; i++ {
 		_, err := NewProgram(spec.Programs["benchmark"])
-		if !errors.Is(err, unix.EACCES) {
+		if !errors.Is(err, errno.EACCES) {
 			b.Fatal("Unexpected error:", err)
 		}
 	}

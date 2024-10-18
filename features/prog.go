@@ -11,8 +11,8 @@ import (
 	"github.com/cilium/ebpf/asm"
 	"github.com/cilium/ebpf/btf"
 	"github.com/cilium/ebpf/internal"
+	"github.com/cilium/ebpf/internal/errno"
 	"github.com/cilium/ebpf/internal/sys"
-	"github.com/cilium/ebpf/internal/unix"
 )
 
 // HaveProgType probes the running kernel for the availability of the specified program type.
@@ -46,7 +46,7 @@ func probeProgram(spec *ebpf.ProgramSpec) error {
 	// E2BIG occurs when ProgLoadAttr contains non-zero bytes past the end
 	// of the struct known by the running kernel, meaning the kernel is too old
 	// to support the given prog type.
-	case errors.Is(err, unix.EINVAL), errors.Is(err, unix.E2BIG):
+	case errors.Is(err, errno.EINVAL), errors.Is(err, errno.E2BIG):
 		err = ebpf.ErrNotSupported
 	}
 
@@ -112,7 +112,7 @@ var haveProgramTypeMatrix = internal.FeatureMatrix[ebpf.ProgramType]{
 				Type:    ebpf.StructOps,
 				License: "GPL",
 			})
-			if errors.Is(err, sys.ENOTSUPP) {
+			if errors.Is(err, errno.ENOTSUPP) {
 				// ENOTSUPP means the program type is at least known to the kernel.
 				return nil
 			}
@@ -280,12 +280,12 @@ func haveProgramHelper(pt ebpf.ProgramType, helper asm.BuiltinFunc) error {
 	// while the register args when calling this helper aren't set up properly.
 	// We interpret this as the helper being available, because the verifier
 	// returns EINVAL if the helper is not supported by the running kernel.
-	case errors.Is(err, unix.EACCES):
+	case errors.Is(err, errno.EACCES):
 		// TODO: possibly we need to check verifier output here to be sure
 		err = nil
 
 	// EINVAL occurs when attempting to create a program with an unknown helper.
-	case errors.Is(err, unix.EINVAL):
+	case errors.Is(err, errno.EINVAL):
 		// TODO: possibly we need to check verifier output here to be sure
 		err = ebpf.ErrNotSupported
 	}

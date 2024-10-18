@@ -5,8 +5,8 @@ import (
 	"math"
 
 	"github.com/cilium/ebpf/internal"
+	"github.com/cilium/ebpf/internal/errno"
 	"github.com/cilium/ebpf/internal/sys"
-	"github.com/cilium/ebpf/internal/unix"
 )
 
 // haveBTF attempts to load a BTF blob containing an Int. It should pass on any
@@ -14,7 +14,7 @@ import (
 var haveBTF = internal.NewFeatureTest("BTF", func() error {
 	// 0-length anonymous integer
 	err := probeBTF(&Int{})
-	if errors.Is(err, unix.EINVAL) || errors.Is(err, unix.EPERM) {
+	if errors.Is(err, errno.EINVAL) || errors.Is(err, errno.EPERM) {
 		return internal.ErrNotSupported
 	}
 	return err
@@ -34,7 +34,7 @@ var haveMapBTF = internal.NewFeatureTest("Map BTF (Var/Datasec)", func() error {
 	}
 
 	err := probeBTF(v)
-	if errors.Is(err, unix.EINVAL) || errors.Is(err, unix.EPERM) {
+	if errors.Is(err, errno.EINVAL) || errors.Is(err, errno.EPERM) {
 		// Treat both EINVAL and EPERM as not supported: creating the map may still
 		// succeed without Btf* attrs.
 		return internal.ErrNotSupported
@@ -56,7 +56,7 @@ var haveProgBTF = internal.NewFeatureTest("Program BTF (func/line_info)", func()
 	}
 
 	err := probeBTF(fn)
-	if errors.Is(err, unix.EINVAL) || errors.Is(err, unix.EPERM) {
+	if errors.Is(err, errno.EINVAL) || errors.Is(err, errno.EPERM) {
 		return internal.ErrNotSupported
 	}
 	return err
@@ -74,7 +74,7 @@ var haveFuncLinkage = internal.NewFeatureTest("BTF func linkage", func() error {
 	}
 
 	err := probeBTF(fn)
-	if errors.Is(err, unix.EINVAL) {
+	if errors.Is(err, errno.EINVAL) {
 		return internal.ErrNotSupported
 	}
 	return err
@@ -93,7 +93,7 @@ var haveEnum64 = internal.NewFeatureTest("ENUM64", func() error {
 	}
 
 	err := probeBTF(enum)
-	if errors.Is(err, unix.EINVAL) {
+	if errors.Is(err, errno.EINVAL) {
 		return internal.ErrNotSupported
 	}
 	return err

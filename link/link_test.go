@@ -12,14 +12,14 @@ import (
 	"github.com/cilium/ebpf/asm"
 	"github.com/cilium/ebpf/internal/sys"
 	"github.com/cilium/ebpf/internal/testutils"
-	"github.com/cilium/ebpf/internal/testutils/fdtrace"
+	"github.com/cilium/ebpf/internal/testutils/testmain"
 	"github.com/cilium/ebpf/internal/unix"
 
 	"github.com/go-quicktest/qt"
 )
 
 func TestMain(m *testing.M) {
-	fdtrace.TestMain(m)
+	testmain.Run(m)
 }
 
 func TestRawLink(t *testing.T) {

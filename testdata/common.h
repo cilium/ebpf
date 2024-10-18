@@ -44,6 +44,11 @@ enum libbpf_tristate {
 #define BPF_F_NO_PREALLOC (1U << 0)
 #define BPF_F_CURRENT_CPU (0xffffffffULL)
 
+/* TODO(windows): Replace this library specific hack with something generic
+ * once upstream has figured out what to do.
+ */
+char __ebpf_go_platform[] __section(".ebpf_go_platform") = "linux";
+
 /* From tools/lib/bpf/libbpf.h */
 struct bpf_map_def {
 	unsigned int type;

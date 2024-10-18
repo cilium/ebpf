@@ -218,6 +218,10 @@ const (
 	WindowsSockOps
 	WindowsXDPTest ProgramType = ProgramType((Windows-1)<<internal.PlatformShift) | 998
 	WindowsSample  ProgramType = ProgramType((Windows-1)<<internal.PlatformShift) | 999
+
+	// TODO(windows): "provisional" according to ntosebpfext.
+	WindowsNetEvent ProgramType = ProgramType((Windows-1)<<internal.PlatformShift) | 99901
+	WindowsProcess  ProgramType = ProgramType((Windows-1)<<internal.PlatformShift) | 99999
 )
 
 func ProgramTypeForPlatform(p Platform, value uint32) (ProgramType, error) {
@@ -308,6 +312,10 @@ const (
 	AttachWindowsCGroupSockOps
 	AttachWindowsSample
 	AttachWindowsXDPTest
+
+	// TODO(windows): this is provisional according to ntosebpfext.
+	AttachWindowsNetEvent = AttachType((Windows-1)<<internal.PlatformShift | 99900)
+	AttachWindowsProcess  = AttachType((Windows-1)<<internal.PlatformShift | 99999)
 )
 
 func AttachTypeForPlatform(p Platform, value uint32) (AttachType, error) {

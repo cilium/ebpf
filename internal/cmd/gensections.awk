@@ -15,7 +15,7 @@ BEGIN {
 	print ""
 	print "import \"github.com/cilium/ebpf/internal/sys\""
 	print ""
-	print "var elfSectionDefs = []libbpfElfSectionDef{"
+	print "var linuxElfSectionDefs = []libbpfElfSectionDef{"
 
 	FS=","
 }

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sync"
 
 	"github.com/cilium/ebpf/internal"
@@ -36,6 +37,10 @@ func FlushKernelSpec() {
 // Defaults to /sys/kernel/btf/vmlinux and falls back to scanning the file system
 // for vmlinux ELFs. Returns an error wrapping ErrNotSupported if BTF is not enabled.
 func LoadKernelSpec() (*Spec, error) {
+	if runtime.GOOS != "linux" {
+		return nil, internal.ErrNotSupportedOnOS
+	}
+
 	kernelBTF.RLock()
 	spec := kernelBTF.kernel
 	kernelBTF.RUnlock()
@@ -66,6 +71,10 @@ func LoadKernelSpec() (*Spec, error) {
 // Returns an error wrapping ErrNotSupported if BTF is not enabled.
 // Returns an error wrapping fs.ErrNotExist if BTF for the specific module doesn't exist.
 func LoadKernelModuleSpec(module string) (*Spec, error) {
+	if runtime.GOOS != "linux" {
+		return nil, internal.ErrNotSupportedOnOS
+	}
+
 	kernelBTF.RLock()
 	spec := kernelBTF.modules[module]
 	kernelBTF.RUnlock()

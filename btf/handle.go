@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math"
 	"os"
+	"runtime"
 
 	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/errno"
@@ -43,6 +44,10 @@ func NewHandle(b *Builder) (*Handle, error) {
 // Returns an error wrapping ErrNotSupported if the kernel doesn't support BTF.
 func NewHandleFromRawBTF(btf []byte) (*Handle, error) {
 	const minLogSize = 64 * 1024
+
+	if runtime.GOOS != "linux" {
+		return nil, fmt.Errorf("btf: handle: %w", internal.ErrNotSupportedOnOS)
+	}
 
 	if uint64(len(btf)) > math.MaxUint32 {
 		return nil, errors.New("BTF exceeds the maximum size")
@@ -111,6 +116,10 @@ func NewHandleFromRawBTF(btf []byte) (*Handle, error) {
 //
 // Requires CAP_SYS_ADMIN.
 func NewHandleFromID(id ID) (*Handle, error) {
+	if runtime.GOOS != "linux" {
+		return nil, fmt.Errorf("btf: handle: %w", internal.ErrNotSupportedOnOS)
+	}
+
 	fd, err := sys.BtfGetFdById(&sys.BtfGetFdByIdAttr{
 		Id: uint32(id),
 	})
@@ -132,6 +141,10 @@ func NewHandleFromID(id ID) (*Handle, error) {
 // base must contain type information for vmlinux if the handle is for
 // a kernel module. It may be nil otherwise.
 func (h *Handle) Spec(base *Spec) (*Spec, error) {
+	if runtime.GOOS != "linux" {
+		return nil, fmt.Errorf("btf: handle: %w", internal.ErrNotSupportedOnOS)
+	}
+
 	var btfInfo sys.BtfInfo
 	btfBuffer := make([]byte, h.size)
 	btfInfo.Btf, btfInfo.BtfSize = sys.NewSlicePointerLen(btfBuffer)
@@ -165,6 +178,10 @@ func (h *Handle) FD() int {
 
 // Info returns metadata about the handle.
 func (h *Handle) Info() (*HandleInfo, error) {
+	if runtime.GOOS != "linux" {
+		return nil, fmt.Errorf("btf: handle: %w", internal.ErrNotSupportedOnOS)
+	}
+
 	return newHandleInfoFromFD(h.fd)
 }
 
@@ -243,6 +260,11 @@ type HandleIterator struct {
 // Returns true if another BTF object was found. Call [HandleIterator.Err] after
 // the function returns false.
 func (it *HandleIterator) Next() bool {
+	if runtime.GOOS != "linux" {
+		it.err = internal.ErrNotSupportedOnOS
+		return false
+	}
+
 	id := it.ID
 	for {
 		attr := &sys.BtfGetNextIdAttr{Id: id}

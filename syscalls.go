@@ -5,14 +5,12 @@ import (
 	"errors"
 	"fmt"
 	"math"
-	"os"
 	"runtime"
 
 	"github.com/cilium/ebpf/asm"
 	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/errno"
 	"github.com/cilium/ebpf/internal/sys"
-	"github.com/cilium/ebpf/internal/tracefs"
 )
 
 var (
@@ -60,7 +58,11 @@ func progLoad(insns asm.Instructions, typ ProgramType, license string) (*sys.FD,
 	})
 }
 
-var haveNestedMaps = internal.NewFeatureTest("nested maps", "4.12", func() error {
+var haveNestedMaps = internal.NewPortableFeatureTest("nested maps", func() error {
+	if runtime.GOOS == "windows" {
+		return nil
+	}
+
 	_, err := sys.MapCreate(&sys.MapCreateAttr{
 		MapType:    sys.MapType(ArrayOfMaps),
 		KeySize:    4,
@@ -76,7 +78,7 @@ var haveNestedMaps = internal.NewFeatureTest("nested maps", "4.12", func() error
 		return nil
 	}
 	return err
-})
+}, "linux:4.12", "windows:0.20.0")
 
 var haveMapMutabilityModifiers = internal.NewFeatureTest("read- and write-only maps", "5.2", func() error {
 	// This checks BPF_F_RDONLY_PROG and BPF_F_WRONLY_PROG. Since
@@ -169,7 +171,11 @@ func wrapMapError(err error) error {
 	return err
 }
 
-var haveObjName = internal.NewFeatureTest("object names", "4.15", func() error {
+var haveObjName = internal.NewPortableFeatureTest("object names", func() error {
+	if runtime.GOOS == "windows" {
+		return nil
+	}
+
 	attr := sys.MapCreateAttr{
 		MapType:    sys.MapType(Array),
 		KeySize:    4,
@@ -185,9 +191,13 @@ var haveObjName = internal.NewFeatureTest("object names", "4.15", func() error {
 
 	_ = fd.Close()
 	return nil
-})
+}, "linux:4.15", "windows:0.20.0")
 
-var objNameAllowsDot = internal.NewFeatureTest("dot in object names", "5.2", func() error {
+var objNameAllowsDot = internal.NewPortableFeatureTest("dot in object names", func() error {
+	if runtime.GOOS == "windows" {
+		return nil
+	}
+
 	if err := haveObjName(); err != nil {
 		return err
 	}
@@ -207,7 +217,7 @@ var objNameAllowsDot = internal.NewFeatureTest("dot in object names", "5.2", fun
 
 	_ = fd.Close()
 	return nil
-})
+}, "linux:5.2", "windows:0.20.0")
 
 var haveBatchAPI = internal.NewFeatureTest("map batch api", "5.6", func() error {
 	var maxEntries uint32 = 2
@@ -273,35 +283,6 @@ var haveBPFToBPFCalls = internal.NewFeatureTest("bpf2bpf calls", "4.16", func() 
 	}
 	_ = fd.Close()
 	return nil
-})
-
-var haveSyscallWrapper = internal.NewFeatureTest("syscall wrapper", "4.17", func() error {
-	prefix := internal.PlatformPrefix()
-	if prefix == "" {
-		return fmt.Errorf("unable to find the platform prefix for (%s)", runtime.GOARCH)
-	}
-
-	args := tracefs.ProbeArgs{
-		Type:   tracefs.Kprobe,
-		Symbol: prefix + "sys_bpf",
-		Pid:    -1,
-	}
-
-	var err error
-	args.Group, err = tracefs.RandomGroup("ebpf_probe")
-	if err != nil {
-		return err
-	}
-
-	evt, err := tracefs.NewEvent(args)
-	if errors.Is(err, os.ErrNotExist) {
-		return internal.ErrNotSupported
-	}
-	if err != nil {
-		return err
-	}
-
-	return evt.Close()
 })
 
 var haveProgramExtInfos = internal.NewFeatureTest("program ext_infos", "5.0", func() error {

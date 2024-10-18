@@ -69,6 +69,7 @@ func TestForwardFunctionDeclaration(t *testing.T) {
 
 	// This program calls an unimplemented forward function declaration.
 	_, err = NewProgram(spec)
+	testutils.SkipIfNotSupportedOnOS(t, err)
 	if !errors.Is(err, asm.ErrUnsatisfiedProgramReference) {
 		t.Fatal("Expected an error wrapping ErrUnsatisfiedProgramReference, got:", err)
 	}

@@ -9,6 +9,7 @@ import (
 	"io"
 	"os"
 	"reflect"
+	"runtime"
 	"strings"
 	"syscall"
 	"time"
@@ -274,43 +275,48 @@ func newProgramInfoFromFd(fd *sys.FD) (*ProgramInfo, error) {
 		pi.maps = nil
 	}
 
-	// createdByUID and NrMapIds were introduced in the same kernel version.
-	if pi.maps != nil {
-		pi.createdByUID = info.CreatedByUid
-		pi.haveCreatedByUID = true
-	}
+	// TODO(windows): efW appends it's own fields to the end of the info structs.
+	// There is no simple way to fix this on the efW side because OBJ_INFO is overloaded for map, link, program.
+	// This means we can't just hide the extra fields in the bpf() wrapper.
+	if runtime.GOOS != "windows" {
+		// createdByUID and NrMapIds were introduced in the same kernel version.
+		if pi.maps != nil {
+			pi.createdByUID = info.CreatedByUid
+			pi.haveCreatedByUID = true
+		}
 
-	if info.XlatedProgLen > 0 {
-		pi.insns = make([]byte, info.XlatedProgLen)
-		info2.XlatedProgLen = info.XlatedProgLen
-		info2.XlatedProgInsns = sys.NewSlicePointer(pi.insns)
-		makeSecondCall = true
-	}
+		if info.XlatedProgLen > 0 {
+			pi.insns = make([]byte, info.XlatedProgLen)
+			info2.XlatedProgLen = info.XlatedProgLen
+			info2.XlatedProgInsns = sys.NewSlicePointer(pi.insns)
+			makeSecondCall = true
+		}
 
-	if info.NrLineInfo > 0 {
-		pi.lineInfos = make([]byte, btf.LineInfoSize*info.NrLineInfo)
-		info2.LineInfo = sys.NewSlicePointer(pi.lineInfos)
-		info2.LineInfoRecSize = btf.LineInfoSize
-		info2.NrLineInfo = info.NrLineInfo
-		pi.numLineInfos = info.NrLineInfo
-		makeSecondCall = true
-	}
+		if info.NrLineInfo > 0 {
+			pi.lineInfos = make([]byte, btf.LineInfoSize*info.NrLineInfo)
+			info2.LineInfo = sys.NewSlicePointer(pi.lineInfos)
+			info2.LineInfoRecSize = btf.LineInfoSize
+			info2.NrLineInfo = info.NrLineInfo
+			pi.numLineInfos = info.NrLineInfo
+			makeSecondCall = true
+		}
 
-	if info.NrFuncInfo > 0 {
-		pi.funcInfos = make([]byte, btf.FuncInfoSize*info.NrFuncInfo)
-		info2.FuncInfo = sys.NewSlicePointer(pi.funcInfos)
-		info2.FuncInfoRecSize = btf.FuncInfoSize
-		info2.NrFuncInfo = info.NrFuncInfo
-		pi.numFuncInfos = info.NrFuncInfo
-		makeSecondCall = true
-	}
+		if info.NrFuncInfo > 0 {
+			pi.funcInfos = make([]byte, btf.FuncInfoSize*info.NrFuncInfo)
+			info2.FuncInfo = sys.NewSlicePointer(pi.funcInfos)
+			info2.FuncInfoRecSize = btf.FuncInfoSize
+			info2.NrFuncInfo = info.NrFuncInfo
+			pi.numFuncInfos = info.NrFuncInfo
+			makeSecondCall = true
+		}
 
-	if info.NrJitedKsyms > 0 {
-		pi.ksymInfos = make([]uint64, info.NrJitedKsyms)
-		info2.JitedKsyms = sys.NewSlicePointer(pi.ksymInfos)
-		info2.NrJitedKsyms = info.NrJitedKsyms
-		pi.numKsymInfos = info.NrJitedKsyms
-		makeSecondCall = true
+		if info.NrJitedKsyms > 0 {
+			pi.ksymInfos = make([]uint64, info.NrJitedKsyms)
+			info2.JitedKsyms = sys.NewSlicePointer(pi.ksymInfos)
+			info2.NrJitedKsyms = info.NrJitedKsyms
+			pi.numKsymInfos = info.NrJitedKsyms
+			makeSecondCall = true
+		}
 	}
 
 	if makeSecondCall {
@@ -329,7 +335,7 @@ func newProgramInfoFromProc(fd *sys.FD) (*ProgramInfo, error) {
 		"prog_type": &progType,
 		"prog_tag":  &info.Tag,
 	})
-	if errors.Is(err, ErrNotSupported) {
+	if errors.Is(err, ErrNotSupported) && !errors.Is(err, internal.ErrNotSupportedOnOS) {
 		return nil, &internal.UnsupportedFeatureError{
 			Name:           "reading program info from /proc/self/fdinfo",
 			MinimumVersion: internal.Version{4, 10, 0},
@@ -594,6 +600,10 @@ func (pi *ProgramInfo) FuncInfos() (btf.FuncOffsets, error) {
 }
 
 func scanFdInfo(fd *sys.FD, fields map[string]interface{}) error {
+	if runtime.GOOS == "windows" {
+		return fmt.Errorf("read fdinfo: %w", internal.ErrNotSupportedOnOS)
+	}
+
 	fh, err := os.Open(fmt.Sprintf("/proc/self/fdinfo/%d", fd.Int()))
 	if err != nil {
 		return err
@@ -664,6 +674,10 @@ func zero(arg any) bool {
 //
 // Requires at least 5.8.
 func EnableStats(which uint32) (io.Closer, error) {
+	if runtime.GOOS == "windows" {
+		return nil, fmt.Errorf("enable stats: %w", internal.ErrNotSupportedOnOS)
+	}
+
 	fd, err := sys.EnableStats(&sys.EnableStatsAttr{
 		Type: which,
 	})
@@ -673,7 +687,11 @@ func EnableStats(which uint32) (io.Closer, error) {
 	return fd, nil
 }
 
-var haveProgramInfoMapIDs = internal.NewFeatureTest("map IDs in program info", "4.15", func() error {
+var haveProgramInfoMapIDs = internal.NewPortableFeatureTest("map IDs in program info", func() error {
+	if runtime.GOOS == "windows" {
+		return nil
+	}
+
 	prog, err := progLoad(asm.Instructions{
 		asm.LoadImm(asm.R0, 0, asm.DWord),
 		asm.Return(),
@@ -698,4 +716,4 @@ var haveProgramInfoMapIDs = internal.NewFeatureTest("map IDs in program info", "
 	}
 
 	return err
-})
+}, "linux:4.15", "windows:0.20.0")

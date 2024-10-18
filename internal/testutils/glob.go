@@ -12,7 +12,7 @@ import (
 // Files calls fn for each given file.
 //
 // The function errors out if the pattern matches no files.
-func Files(t *testing.T, files []string, fn func(*testing.T, string)) {
+func Files(t *testing.T, files []string, fn func(t *testing.T, file string)) {
 	t.Helper()
 
 	if len(files) == 0 {

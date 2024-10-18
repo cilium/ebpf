@@ -31,13 +31,13 @@ func reserveFdZero() {
 		panic(err)
 	}
 	if fd != 0 {
-		panic(err)
+		panic("couldn't reserve fd 0")
 	}
 }
 
 func TestFD(t *testing.T) {
 	_, err := NewFD(-1)
-	qt.Assert(t, qt.IsNotNil(err), qt.Commentf("negative fd should be rejected"))
+	qt.Assert(t, qt.IsNotNil(err), qt.Commentf("invalid fd should be rejected"))
 
 	fd, err := NewFD(0)
 	qt.Assert(t, qt.IsNil(err))

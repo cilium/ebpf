@@ -18,7 +18,6 @@ import (
 	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/errno"
 	"github.com/cilium/ebpf/internal/sys"
-	"github.com/cilium/ebpf/internal/unix"
 )
 
 // The *Info structs expose metadata about a program or map. Most
@@ -86,7 +85,7 @@ func newMapInfoFromFd(fd *sys.FD) (*MapInfo, error) {
 		info.ValueSize,
 		info.MaxEntries,
 		uint32(info.MapFlags),
-		unix.ByteSliceToString(info.Name[:]),
+		sys.ByteSliceToString(info.Name[:]),
 		MapID(info.Id),
 		btf.ID(info.BtfId),
 		info.MapExtra,
@@ -245,7 +244,7 @@ func newProgramInfoFromFd(fd *sys.FD) (*ProgramInfo, error) {
 		Type: typ,
 		id:   ProgramID(info.Id),
 		Tag:  hex.EncodeToString(info.Tag[:]),
-		Name: unix.ByteSliceToString(info.Name[:]),
+		Name: sys.ByteSliceToString(info.Name[:]),
 		btf:  btf.ID(info.BtfId),
 		stats: &programStats{
 			runtime:         time.Duration(info.RunTimeNs),

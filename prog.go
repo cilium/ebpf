@@ -20,7 +20,6 @@ import (
 	"github.com/cilium/ebpf/internal/linux"
 	"github.com/cilium/ebpf/internal/sys"
 	"github.com/cilium/ebpf/internal/sysenc"
-	"github.com/cilium/ebpf/internal/unix"
 )
 
 // ErrNotSupported is returned whenever the kernel doesn't support a feature.
@@ -419,7 +418,7 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions) (*Program, er
 		var fd *sys.FD
 		fd, err = sys.ProgLoad(attr)
 		if err == nil {
-			return &Program{unix.ByteSliceToString(logBuf), fd, spec.Name, "", spec.Type}, nil
+			return &Program{sys.ByteSliceToString(logBuf), fd, spec.Name, "", spec.Type}, nil
 		}
 
 		if opts.LogDisabled {

@@ -562,7 +562,7 @@ func TestProgramName(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if name := unix.ByteSliceToString(info.Name[:]); name != "test" {
+	if name := sys.ByteSliceToString(info.Name[:]); name != "test" {
 		t.Errorf("Name is not test, got '%s'", name)
 	}
 }

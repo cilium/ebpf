@@ -1,3 +1,5 @@
+//go:build linux
+
 package sys
 
 import (
@@ -5,7 +7,7 @@ import (
 	"testing"
 	"unsafe"
 
-	"github.com/cilium/ebpf/internal/unix"
+	"golang.org/x/sys/unix"
 
 	"github.com/go-quicktest/qt"
 )

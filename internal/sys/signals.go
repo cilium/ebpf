@@ -1,3 +1,5 @@
+//go:build linux
+
 package sys
 
 import (
@@ -5,7 +7,7 @@ import (
 	"runtime"
 	"unsafe"
 
-	"github.com/cilium/ebpf/internal/unix"
+	"golang.org/x/sys/unix"
 )
 
 // A sigset containing only SIGPROF.

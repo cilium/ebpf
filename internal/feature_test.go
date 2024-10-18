@@ -2,8 +2,11 @@ package internal
 
 import (
 	"errors"
+	"runtime"
 	"strings"
 	"testing"
+
+	"github.com/go-quicktest/qt"
 
 	"github.com/cilium/ebpf/internal/testutils/fdtrace"
 )
@@ -25,9 +28,12 @@ func TestFeatureTest(t *testing.T) {
 	}
 
 	err := fn()
-	if !called {
-		t.Error("Function wasn't called")
+	if errors.Is(err, ErrNotSupportedOnOS) {
+		qt.Assert(t, qt.IsFalse(called))
+		return
 	}
+
+	qt.Assert(t, qt.IsTrue(called), qt.Commentf("function should be invoked"))
 
 	if err != nil {
 		t.Error("Unexpected negative result:", err)
@@ -68,4 +74,14 @@ func TestFeatureTest(t *testing.T) {
 	if err1 == err2 {
 		t.Error("Cached result of unsuccessful execution")
 	}
+}
+
+func TestPortableFeatureTest(t *testing.T) {
+	sentinel := errors.New("quux")
+	fn := func() error { return sentinel }
+
+	qt.Assert(t, qt.ErrorIs(NewPortableFeatureTest("foo", fn)(), ErrNotSupportedOnOS))
+	qt.Assert(t, qt.ErrorIs(NewPortableFeatureTest("foo", fn, "froz:1.0.0")(), ErrNotSupportedOnOS))
+	qt.Assert(t, qt.ErrorIs(NewPortableFeatureTest("foo", fn, runtime.GOOS+":1.0")(), sentinel))
+
 }

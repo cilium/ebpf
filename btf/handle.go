@@ -11,7 +11,6 @@ import (
 	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/errno"
 	"github.com/cilium/ebpf/internal/sys"
-	"github.com/cilium/ebpf/internal/unix"
 )
 
 // Handle is a reference to BTF loaded into the kernel.
@@ -229,7 +228,7 @@ func newHandleInfoFromFD(fd *sys.FD) (*HandleInfo, error) {
 
 	return &HandleInfo{
 		ID:       ID(btfInfo.Id),
-		Name:     unix.ByteSliceToString(nameBuffer),
+		Name:     sys.ByteSliceToString(nameBuffer),
 		IsKernel: btfInfo.KernelBtf != 0,
 		size:     btfSize,
 	}, nil

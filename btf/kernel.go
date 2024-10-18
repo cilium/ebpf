@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sync"
 
 	"github.com/cilium/ebpf/internal"
@@ -85,7 +86,7 @@ func LoadKernelModuleSpec(module string) (*Spec, error) {
 
 	spec, err = loadKernelModuleSpec(module, base)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("load kernel module: %w", err)
 	}
 
 	kernelBTF.modules[module] = spec
@@ -93,6 +94,10 @@ func LoadKernelModuleSpec(module string) (*Spec, error) {
 }
 
 func loadKernelSpec() (_ *Spec, fallback bool, _ error) {
+	if runtime.GOOS != "linux" {
+		return nil, false, internal.ErrNotSupportedOnOS
+	}
+
 	fh, err := os.Open("/sys/kernel/btf/vmlinux")
 	if err == nil {
 		defer fh.Close()
@@ -112,6 +117,10 @@ func loadKernelSpec() (_ *Spec, fallback bool, _ error) {
 }
 
 func loadKernelModuleSpec(module string, base *Spec) (*Spec, error) {
+	if runtime.GOOS != "linux" {
+		return nil, internal.ErrNotSupportedOnOS
+	}
+
 	dir, file := filepath.Split(module)
 	if dir != "" || filepath.Ext(file) != "" {
 		return nil, fmt.Errorf("invalid module name %q", module)
@@ -128,6 +137,10 @@ func loadKernelModuleSpec(module string, base *Spec) (*Spec, error) {
 
 // findVMLinux scans multiple well-known paths for vmlinux kernel images.
 func findVMLinux() (*os.File, error) {
+	if runtime.GOOS != "linux" {
+		return nil, fmt.Errorf("find vmlinux: %w", internal.ErrNotSupportedOnOS)
+	}
+
 	release, err := linux.KernelRelease()
 	if err != nil {
 		return nil, err

@@ -2,6 +2,7 @@ package btf_test
 
 import (
 	"fmt"
+	"runtime"
 	"testing"
 
 	"github.com/cilium/ebpf/btf"
@@ -13,6 +14,10 @@ func TestHandleIterator(t *testing.T) {
 	// triggers loading vmlinux.
 	// See https://github.com/torvalds/linux/commit/5329722057d41aebc31e391907a501feaa42f7d9
 	testutils.SkipOnOldKernel(t, "5.11", "vmlinux BTF ID")
+
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows doesn't support BTF")
+	}
 
 	it := new(btf.HandleIterator)
 	defer it.Handle.Close()
@@ -49,6 +54,10 @@ func TestHandleIterator(t *testing.T) {
 func TestParseModuleSplitSpec(t *testing.T) {
 	// See TestNewHandleFromID for reasoning.
 	testutils.SkipOnOldKernel(t, "5.11", "vmlinux BTF ID")
+
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows doesn't support BTF")
+	}
 
 	module, err := btf.FindHandle(func(info *btf.HandleInfo) bool {
 		if info.IsModule() {

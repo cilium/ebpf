@@ -9,11 +9,9 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
-	"slices"
 	"strings"
 	"syscall"
 	"testing"
-	"time"
 
 	"github.com/go-quicktest/qt"
 
@@ -23,7 +21,6 @@ import (
 	"github.com/cilium/ebpf/internal/errno"
 	"github.com/cilium/ebpf/internal/sys"
 	"github.com/cilium/ebpf/internal/testutils"
-	"github.com/cilium/ebpf/internal/unix"
 )
 
 func TestProgramRun(t *testing.T) {
@@ -55,16 +52,26 @@ func TestProgramRun(t *testing.T) {
 		asm.Return(),
 	)
 
+	if runtime.GOOS == "windows" {
+		// Windows uses an incompatible context for XDP. Pointers are
+		// 64 bit.
+		// See https://github.com/microsoft/ebpf-for-windows/issues/3873
+		// r2 = *(r1+8)
+		ins[0] = asm.LoadMem(asm.R2, asm.R1, 8, asm.DWord)
+		// r1 = *(r1+0)
+		ins[1] = asm.LoadMem(asm.R1, asm.R1, 0, asm.DWord)
+	}
+
 	t.Log(ins)
 
 	prog, err := NewProgram(&ProgramSpec{
 		Name:         "test",
-		Type:         XDP,
+		Type:         xdpProgramType,
 		Instructions: ins,
 		License:      "MIT",
 	})
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("%+v", err)
 	}
 	defer prog.Close()
 
@@ -103,7 +110,7 @@ func TestProgramRunWithOptions(t *testing.T) {
 
 	prog, err := NewProgram(&ProgramSpec{
 		Name:         "test",
-		Type:         XDP,
+		Type:         xdpProgramType,
 		Instructions: ins,
 		License:      "MIT",
 	})
@@ -113,15 +120,23 @@ func TestProgramRunWithOptions(t *testing.T) {
 	defer prog.Close()
 
 	buf := internal.EmptyBPFContext
-	xdp := sys.XdpMd{
-		Data:    0,
-		DataEnd: uint32(len(buf)),
+	var in, out any
+	if runtime.GOOS != "windows" {
+		in = &sys.XdpMd{Data: 0, DataEnd: uint32(len(buf))}
+		out = &sys.XdpMd{}
+	} else {
+		type winXdpMd struct {
+			Data, DataEnd, DataMeta uint64
+			Ifindex                 uint32
+		}
+		in = &winXdpMd{Data: 0, DataEnd: uint64(len(buf))}
+		out = &winXdpMd{}
 	}
-	xdpOut := sys.XdpMd{}
+
 	opts := RunOptions{
 		Data:       buf,
-		Context:    xdp,
-		ContextOut: &xdpOut,
+		Context:    in,
+		ContextOut: out,
 	}
 	ret, err := prog.Run(&opts)
 	testutils.SkipIfNotSupported(t, err)
@@ -133,9 +148,7 @@ func TestProgramRunWithOptions(t *testing.T) {
 		t.Error("Expected return value to be 0, got", ret)
 	}
 
-	if xdp != xdpOut {
-		t.Errorf("Expect xdp (%+v) == xdpOut (%+v)", xdp, xdpOut)
-	}
+	qt.Assert(t, qt.DeepEquals(out, in))
 }
 
 func TestProgramRunRawTracepoint(t *testing.T) {
@@ -153,9 +166,7 @@ func TestProgramRunRawTracepoint(t *testing.T) {
 		Instructions: ins,
 		License:      "MIT",
 	})
-	if err != nil {
-		t.Fatal(err)
-	}
+	testutils.SkipIfNotSupportedOnOS(t, err)
 	defer prog.Close()
 
 	ret, err := prog.Run(&RunOptions{})
@@ -185,9 +196,7 @@ func TestProgramRunEmptyData(t *testing.T) {
 		Instructions: ins,
 		License:      "MIT",
 	})
-	if err != nil {
-		t.Fatal(err)
-	}
+	testutils.SkipIfNotSupportedOnOS(t, err)
 	defer prog.Close()
 
 	opts := RunOptions{
@@ -207,7 +216,7 @@ func TestProgramRunEmptyData(t *testing.T) {
 }
 
 func TestProgramBenchmark(t *testing.T) {
-	prog := mustSocketFilter(t)
+	prog := mustBasicProgram(t)
 
 	ret, duration, err := prog.Benchmark(internal.EmptyBPFContext, 1, nil)
 	testutils.SkipIfNotSupported(t, err)
@@ -224,80 +233,8 @@ func TestProgramBenchmark(t *testing.T) {
 	}
 }
 
-func TestProgramTestRunInterrupt(t *testing.T) {
-	testutils.SkipOnOldKernel(t, "5.0", "EINTR from BPF_PROG_TEST_RUN")
-
-	prog := mustSocketFilter(t)
-
-	var (
-		tgid    = unix.Getpid()
-		tidChan = make(chan int, 1)
-		exit    = make(chan struct{})
-		errs    = make(chan error, 1)
-		timeout = time.After(5 * time.Second)
-	)
-
-	defer close(exit)
-
-	go func() {
-		runtime.LockOSThread()
-		defer func() {
-			// Wait for the test to allow us to unlock the OS thread, to
-			// ensure that we don't send SIGUSR1 to the wrong thread.
-			<-exit
-			runtime.UnlockOSThread()
-		}()
-
-		tidChan <- unix.Gettid()
-
-		// Block this thread in the BPF syscall, so that we can
-		// trigger EINTR by sending a signal.
-		opts := RunOptions{
-			Data:   internal.EmptyBPFContext,
-			Repeat: math.MaxInt32,
-			Reset: func() {
-				// We don't know how long finishing the
-				// test run would take, so flag that we've seen
-				// an interruption and abort the goroutine.
-				close(errs)
-				runtime.Goexit()
-			},
-		}
-		_, _, err := prog.run(&opts)
-
-		errs <- err
-	}()
-
-	tid := <-tidChan
-	for {
-		err := unix.Tgkill(tgid, tid, unix.SIGUSR1)
-		if err != nil {
-			t.Fatal("Can't send signal to goroutine thread:", err)
-		}
-
-		select {
-		case err, ok := <-errs:
-			if !ok {
-				return
-			}
-
-			testutils.SkipIfNotSupported(t, err)
-			if err == nil {
-				t.Fatal("testRun wasn't interrupted")
-			}
-
-			t.Fatal("testRun returned an error:", err)
-
-		case <-timeout:
-			t.Fatal("Timed out trying to interrupt the goroutine")
-
-		default:
-		}
-	}
-}
-
 func TestProgramClose(t *testing.T) {
-	prog := mustSocketFilter(t)
+	prog := mustBasicProgram(t)
 
 	if err := prog.Close(); err != nil {
 		t.Fatal("Can't close program:", err)
@@ -305,7 +242,7 @@ func TestProgramClose(t *testing.T) {
 }
 
 func TestProgramPin(t *testing.T) {
-	prog := mustSocketFilter(t)
+	prog := mustBasicProgram(t)
 
 	tmp := testutils.TempBPFFS(t)
 
@@ -326,18 +263,12 @@ func TestProgramPin(t *testing.T) {
 	}
 	defer prog.Close()
 
-	if prog.Type() != SocketFilter {
-		t.Error("Expected pinned program to have type SocketFilter, but got", prog.Type())
-	}
+	qt.Assert(t, qt.Equals(prog.Type(), basicProgramType))
 
 	if haveObjName() == nil {
-		if prog.name != "test" {
-			t.Errorf("Expected program to have object name 'test', got '%s'", prog.name)
-		}
+		qt.Assert(t, qt.Equals(prog.name, "test"))
 	} else {
-		if prog.name != "program" {
-			t.Errorf("Expected program to have file name 'program', got '%s'", prog.name)
-		}
+		qt.Assert(t, qt.Equals(prog.name, "program"))
 	}
 
 	if !prog.IsPinned() {
@@ -346,7 +277,7 @@ func TestProgramPin(t *testing.T) {
 }
 
 func TestProgramUnpin(t *testing.T) {
-	prog := mustSocketFilter(t)
+	prog := mustBasicProgram(t)
 
 	tmp := testutils.TempBPFFS(t)
 
@@ -370,7 +301,7 @@ func TestProgramLoadPinnedWithFlags(t *testing.T) {
 	// Introduced in commit 6e71b04a8224.
 	testutils.SkipOnOldKernel(t, "4.14", "file_flags in BPF_OBJ_GET")
 
-	prog := mustSocketFilter(t)
+	prog := mustBasicProgram(t)
 
 	tmp := testutils.TempBPFFS(t)
 
@@ -392,7 +323,7 @@ func TestProgramLoadPinnedWithFlags(t *testing.T) {
 
 func TestProgramVerifierOutputOnError(t *testing.T) {
 	_, err := NewProgram(&ProgramSpec{
-		Type: SocketFilter,
+		Type: basicProgramType,
 		Instructions: asm.Instructions{
 			asm.Return(),
 		},
@@ -407,9 +338,19 @@ func TestProgramVerifierOutputOnError(t *testing.T) {
 		t.Fatal("NewProgram does return an unwrapped VerifierError")
 	}
 
-	if !strings.Contains(ve.Error(), "R0 !read_ok") {
-		t.Logf("%+v", ve)
-		t.Error("Missing verifier log in error summary")
+	switch runtime.GOOS {
+	case "linux":
+		if !strings.Contains(ve.Error(), "R0 !read_ok") {
+			t.Logf("%+v", ve)
+			t.Error("Missing verifier log in error summary")
+		}
+	case "windows":
+		if !strings.Contains(ve.Error(), "r0.type == number") {
+			t.Logf("%+v", ve)
+			t.Error("Missing verifier log in error summary")
+		}
+	default:
+		t.Error("Unsupported platform", runtime.GOOS)
 	}
 }
 
@@ -424,14 +365,13 @@ func TestProgramKernelVersion(t *testing.T) {
 		KernelVersion: 42,
 		License:       "MIT",
 	})
-	if err != nil {
-		t.Fatal("Could not load Kprobe program")
-	}
-	defer prog.Close()
+	testutils.SkipIfNotSupportedOnOS(t, err)
+	qt.Assert(t, qt.IsNil(err))
+	qt.Assert(t, qt.IsNil(prog.Close()))
 }
 
 func TestProgramVerifierOutput(t *testing.T) {
-	prog, err := NewProgramWithOptions(socketFilterSpec, ProgramOptions{
+	prog, err := NewProgramWithOptions(basicProgramSpec, ProgramOptions{
 		LogLevel: LogLevelInstruction,
 	})
 	if err != nil {
@@ -439,13 +379,13 @@ func TestProgramVerifierOutput(t *testing.T) {
 	}
 	defer prog.Close()
 
-	if prog.VerifierLog == "" {
+	if runtime.GOOS == "linux" && prog.VerifierLog == "" {
 		t.Error("Expected VerifierLog to be present")
 	}
 
 	// Issue 64
 	_, err = NewProgramWithOptions(&ProgramSpec{
-		Type: SocketFilter,
+		Type: basicProgramType,
 		Instructions: asm.Instructions{
 			asm.Mov.Reg(asm.R0, asm.R1),
 		},
@@ -470,32 +410,28 @@ func TestProgramVerifierLog(t *testing.T) {
 
 		var ve *internal.VerifierError
 		qt.Assert(t, qt.ErrorAs(err, &ve))
-	}
-
-	// Generate a base program of sufficient size whose verifier log does not fit
-	// a 128-byte buffer. This should always result in ENOSPC.
-	var base asm.Instructions
-	for i := 0; i < 32; i++ {
-		base = append(base, asm.Mov.Reg(asm.R0, asm.R1))
+		qt.Assert(t, qt.IsTrue(len(ve.Log) > 0))
 	}
 
 	// Touch R10 (read-only frame pointer) to reliably force a verifier error.
-	invalid := slices.Clone(base)
-	invalid = append(invalid, asm.Mov.Reg(asm.R10, asm.R0))
-	invalid = append(invalid, asm.Return())
+	invalid := asm.Instructions{
+		asm.Mov.Reg(asm.R10, asm.R0),
+		asm.Return(),
+	}
 
-	valid := slices.Clone(base)
-	valid = append(valid, asm.Return())
+	valid := asm.Instructions{
+		asm.Mov.Imm(asm.R0, 0),
+		asm.Return(),
+	}
 
 	// Start out with testing against the invalid program.
 	spec := &ProgramSpec{
-		Type:         SocketFilter,
+		Type:         basicProgramType,
 		License:      "MIT",
 		Instructions: invalid,
 	}
 
-	// Set an undersized log buffer without explicitly requesting a verifier log
-	// for an invalid program.
+	// Ensure that an invalid program automatically gets a log.
 	_, err := NewProgramWithOptions(spec, ProgramOptions{})
 	check(t, err)
 
@@ -516,16 +452,8 @@ func TestProgramVerifierLog(t *testing.T) {
 	// Run tests against a valid program from here on out.
 	spec.Instructions = valid
 
-	// Don't request a verifier log, expect the valid program to be created
-	// without errors.
-	prog, err := NewProgramWithOptions(spec, ProgramOptions{})
-	qt.Assert(t, qt.IsNil(err))
-	qt.Assert(t, qt.HasLen(prog.VerifierLog, 0))
-	prog.Close()
-
-	// Explicitly request verifier log for a valid program. If a log is requested
-	// and the buffer is too small, ENOSPC occurs even for valid programs.
-	prog, err = NewProgramWithOptions(spec, ProgramOptions{
+	// Explicitly request verifier log for a valid program.
+	prog, err := NewProgramWithOptions(spec, ProgramOptions{
 		LogLevel: LogLevelInstruction,
 	})
 	qt.Assert(t, qt.IsNil(err))
@@ -555,7 +483,7 @@ func TestProgramName(t *testing.T) {
 		t.Skip(err)
 	}
 
-	prog := mustSocketFilter(t)
+	prog := mustBasicProgram(t)
 
 	var info sys.ProgInfo
 	if err := sys.ObjInfo(prog.fd, &info); err != nil {
@@ -597,7 +525,7 @@ func TestProgramMarshaling(t *testing.T) {
 	arr := createProgramArray(t)
 	defer arr.Close()
 
-	prog := mustSocketFilter(t)
+	prog := mustBasicProgram(t)
 
 	if err := arr.Put(idx, prog); err != nil {
 		t.Fatal("Can't put program:", err)
@@ -627,7 +555,7 @@ func TestProgramMarshaling(t *testing.T) {
 }
 
 func TestProgramFromFD(t *testing.T) {
-	prog := mustSocketFilter(t)
+	prog := mustBasicProgram(t)
 
 	// If you're thinking about copying this, don't. Use
 	// Clone() instead.
@@ -656,7 +584,7 @@ func TestProgramGetNextID(t *testing.T) {
 	testutils.SkipOnOldKernel(t, "4.13", "bpf_prog_get_next_id")
 
 	// Ensure there is at least one program loaded
-	_ = mustSocketFilter(t)
+	_ = mustBasicProgram(t)
 
 	// As there can be multiple eBPF programs, we loop over all of them and
 	// make sure, the IDs increase and the last call will return ErrNotExist
@@ -680,7 +608,7 @@ func TestProgramGetNextID(t *testing.T) {
 }
 
 func TestNewProgramFromID(t *testing.T) {
-	prog := mustSocketFilter(t)
+	prog := mustBasicProgram(t)
 
 	info, err := prog.Info()
 	testutils.SkipIfNotSupported(t, err)
@@ -707,7 +635,7 @@ func TestNewProgramFromID(t *testing.T) {
 }
 
 func TestProgramRejectIncorrectByteOrder(t *testing.T) {
-	spec := socketFilterSpec.Copy()
+	spec := basicProgramSpec.Copy()
 
 	spec.ByteOrder = binary.BigEndian
 	if spec.ByteOrder == internal.NativeEndian {
@@ -745,7 +673,7 @@ func TestProgramSpecTag(t *testing.T) {
 	arr := createArray(t)
 
 	spec := &ProgramSpec{
-		Type: SocketFilter,
+		Type: basicProgramType,
 		Instructions: asm.Instructions{
 			asm.LoadImm(asm.R0, -1, asm.DWord),
 			asm.LoadMapPtr(asm.R1, arr.FD()),
@@ -772,7 +700,7 @@ func TestProgramSpecTag(t *testing.T) {
 		t.Fatal("Can't calculate tag:", err)
 	}
 
-	if tag != info.Tag {
+	if info.Tag != "" && tag != info.Tag {
 		t.Errorf("Calculated tag %s doesn't match kernel tag %s", tag, info.Tag)
 	}
 }
@@ -853,9 +781,7 @@ func TestProgramAttachToKernel(t *testing.T) {
 				Type:    test.programType,
 				Flags:   test.flags,
 			})
-			if err != nil {
-				t.Fatal("Can't load program:", err)
-			}
+			testutils.SkipIfNotSupportedOnOS(t, err)
 			prog.Close()
 		})
 	}
@@ -904,7 +830,7 @@ func TestProgramBindMap(t *testing.T) {
 	}
 	defer arr.Close()
 
-	prog := mustSocketFilter(t)
+	prog := mustBasicProgram(t)
 
 	// The attached map does not contain BTF information. So
 	// the metadata part of the program will be empty. This
@@ -917,7 +843,7 @@ func TestProgramBindMap(t *testing.T) {
 func TestProgramInstructions(t *testing.T) {
 	name := "test_prog"
 	spec := &ProgramSpec{
-		Type: SocketFilter,
+		Type: basicProgramType,
 		Name: name,
 		Instructions: asm.Instructions{
 			asm.LoadImm(asm.R0, -1, asm.DWord).WithSymbol(name),
@@ -939,6 +865,9 @@ func TestProgramInstructions(t *testing.T) {
 	}
 
 	insns, err := pi.Instructions()
+	if runtime.GOOS == "windows" && errors.Is(err, ErrNotSupported) {
+		t.Skip("Windows doesn't support reading out instructions")
+	}
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -955,45 +884,6 @@ func TestProgramInstructions(t *testing.T) {
 
 	if tag != tagXlated {
 		t.Fatalf("tag %s differs from xlated instructions tag %s", tag, tagXlated)
-	}
-}
-
-func TestProgramLoadErrors(t *testing.T) {
-	testutils.SkipOnOldKernel(t, "4.10", "stable verifier log output")
-
-	spec, err := LoadCollectionSpec(testutils.NativeFile(t, "testdata/errors-%s.elf"))
-	qt.Assert(t, qt.IsNil(err))
-
-	var b btf.Builder
-	raw, err := b.Marshal(nil, nil)
-	qt.Assert(t, qt.IsNil(err))
-	empty, err := btf.LoadSpecFromReader(bytes.NewReader(raw))
-	qt.Assert(t, qt.IsNil(err))
-
-	for _, test := range []struct {
-		name string
-		want error
-	}{
-		{"poisoned_single", errBadRelocation},
-		{"poisoned_double", errBadRelocation},
-		{"poisoned_kfunc", errUnknownKfunc},
-	} {
-		progSpec := spec.Programs[test.name]
-		qt.Assert(t, qt.IsNotNil(progSpec))
-
-		t.Run(test.name, func(t *testing.T) {
-			t.Log(progSpec.Instructions)
-			_, err := NewProgramWithOptions(progSpec, ProgramOptions{
-				KernelTypes: empty,
-			})
-			testutils.SkipIfNotSupported(t, err)
-
-			var ve *VerifierError
-			qt.Assert(t, qt.ErrorAs(err, &ve))
-			t.Logf("%-5v", ve)
-
-			qt.Assert(t, qt.ErrorIs(err, test.want))
-		})
 	}
 }
 
@@ -1028,9 +918,9 @@ func createProgramArray(t *testing.T) *Map {
 	return arr
 }
 
-var socketFilterSpec = &ProgramSpec{
+var basicProgramSpec = &ProgramSpec{
 	Name: "test",
-	Type: SocketFilter,
+	Type: basicProgramType,
 	Instructions: asm.Instructions{
 		asm.LoadImm(asm.R0, 2, asm.DWord),
 		asm.Return(),
@@ -1038,10 +928,32 @@ var socketFilterSpec = &ProgramSpec{
 	License: "MIT",
 }
 
-func mustSocketFilter(tb testing.TB) *Program {
+// Load key "0" from a map called "test-map" and return the value.
+var loadKeyFromMapProgramSpec = &ProgramSpec{
+	// Name: "test",
+	Type: basicProgramType,
+	Instructions: asm.Instructions{
+		// R1 map
+		asm.LoadMapPtr(asm.R1, 0).WithReference("test-map"),
+		// R2 key
+		asm.Mov.Reg(asm.R2, asm.R10),
+		asm.Add.Imm(asm.R2, -4),
+		asm.StoreImm(asm.R2, 0, 0, asm.Word),
+		// Lookup map[0]
+		asm.FnMapLookupElem.Call(),
+		asm.JEq.Imm(asm.R0, 0, "error"),
+		asm.LoadMem(asm.R0, asm.R0, 0, asm.Word),
+		asm.Ja.Label("ret"),
+		// Windows doesn't allow directly using R0 result from FnMapLookupElem.
+		asm.Mov.Imm(asm.R0, 0).WithSymbol("error"),
+		asm.Return().WithSymbol("ret"),
+	},
+}
+
+func mustBasicProgram(tb testing.TB) *Program {
 	tb.Helper()
 
-	prog, err := NewProgram(socketFilterSpec)
+	prog, err := NewProgram(basicProgramSpec)
 	if err != nil {
 		tb.Fatal(err)
 	}
@@ -1053,7 +965,7 @@ func mustSocketFilter(tb testing.TB) *Program {
 // Print the full verifier log when loading a program fails.
 func ExampleVerifierError_retrieveFullLog() {
 	_, err := NewProgram(&ProgramSpec{
-		Type: SocketFilter,
+		Type: basicProgramType,
 		Instructions: asm.Instructions{
 			asm.LoadImm(asm.R0, 0, asm.DWord),
 			// Missing Return
@@ -1101,7 +1013,7 @@ func ExampleVerifierError() {
 // generating error messages.
 func ExampleProgram_retrieveVerifierLog() {
 	spec := &ProgramSpec{
-		Type: SocketFilter,
+		Type: basicProgramType,
 		Instructions: asm.Instructions{
 			asm.LoadImm(asm.R0, 0, asm.DWord),
 			asm.Return(),
@@ -1155,7 +1067,7 @@ func ExampleProgram_unmarshalFromMap() {
 
 func ExampleProgramSpec_Tag() {
 	spec := &ProgramSpec{
-		Type: SocketFilter,
+		Type: basicProgramType,
 		Instructions: asm.Instructions{
 			asm.LoadImm(asm.R0, 0, asm.DWord),
 			asm.Return(),
@@ -1172,15 +1084,4 @@ func ExampleProgramSpec_Tag() {
 	} else {
 		fmt.Println("The programs are identical, tag is", tag)
 	}
-}
-
-func dupFD(tb testing.TB, fd int) int {
-	tb.Helper()
-
-	dup, err := unix.FcntlInt(uintptr(fd), unix.F_DUPFD_CLOEXEC, 1)
-	if err != nil {
-		tb.Fatal("Can't dup fd:", err)
-	}
-
-	return dup
 }

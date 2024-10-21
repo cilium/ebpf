@@ -62,6 +62,10 @@ func progLoad(insns asm.Instructions, typ ProgramType, license string) (*sys.FD,
 }
 
 var haveNestedMaps = internal.NewFeatureTest("nested maps", func() error {
+	if runtime.GOOS == "windows" {
+		return nil
+	}
+
 	_, err := sys.MapCreate(&sys.MapCreateAttr{
 		MapType:    sys.MapType(ArrayOfMaps),
 		KeySize:    4,
@@ -77,7 +81,7 @@ var haveNestedMaps = internal.NewFeatureTest("nested maps", func() error {
 		return nil
 	}
 	return err
-}, "4.12")
+}, "4.12", "windows:0.20.0")
 
 var haveMapMutabilityModifiers = internal.NewFeatureTest("read- and write-only maps", func() error {
 	// This checks BPF_F_RDONLY_PROG and BPF_F_WRONLY_PROG. Since
@@ -171,6 +175,10 @@ func wrapMapError(err error) error {
 }
 
 var haveObjName = internal.NewFeatureTest("object names", func() error {
+	if runtime.GOOS == "windows" {
+		return nil
+	}
+
 	attr := sys.MapCreateAttr{
 		MapType:    sys.MapType(Array),
 		KeySize:    4,
@@ -186,9 +194,13 @@ var haveObjName = internal.NewFeatureTest("object names", func() error {
 
 	_ = fd.Close()
 	return nil
-}, "4.15")
+}, "4.15", "windows:0.20.0")
 
 var objNameAllowsDot = internal.NewFeatureTest("dot in object names", func() error {
+	if runtime.GOOS == "windows" {
+		return nil
+	}
+
 	if err := haveObjName(); err != nil {
 		return err
 	}
@@ -208,7 +220,7 @@ var objNameAllowsDot = internal.NewFeatureTest("dot in object names", func() err
 
 	_ = fd.Close()
 	return nil
-}, "5.2")
+}, "5.2", "windows:0.20.0")
 
 var haveBatchAPI = internal.NewFeatureTest("map batch api", func() error {
 	var maxEntries uint32 = 2

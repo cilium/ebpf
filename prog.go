@@ -262,7 +262,7 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions) (*Program, er
 	// macro for kprobe-type programs.
 	// Overwrite Kprobe program version if set to zero or the magic version constant.
 	kv := spec.KernelVersion
-	if spec.Type == Kprobe && (kv == 0 || kv == internal.MagicKernelVersion) {
+	if runtime.GOOS == "linux" && spec.Type == Kprobe && (kv == 0 || kv == internal.MagicKernelVersion) {
 		v, err := linux.KernelVersion()
 		if err != nil {
 			return nil, fmt.Errorf("detecting kernel version: %w", err)
@@ -504,8 +504,14 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions) (*Program, er
 //
 // You should not use fd after calling this function.
 //
-// Requires at least Linux 4.10.
+// Requires at least Linux 4.10. Returns an error on Windows.
 func NewProgramFromFD(fd int) (*Program, error) {
+	if runtime.GOOS == "windows" {
+		// Obtaining an fd that is compatible with this function requires calling
+		// into the efW runtime.
+		return nil, fmt.Errorf("new program from fd: %w", internal.ErrNotSupportedOnOS)
+	}
+
 	f, err := sys.NewFD(fd)
 	if err != nil {
 		return nil, err
@@ -562,6 +568,10 @@ func (p *Program) Info() (*ProgramInfo, error) {
 // Returns ErrNotSupported if the kernel has no BTF support, or if there is no
 // BTF associated with the program.
 func (p *Program) Handle() (*btf.Handle, error) {
+	if runtime.GOOS == "windows" {
+		return nil, fmt.Errorf("map handle: %w", internal.ErrNotSupportedOnOS)
+	}
+
 	info, err := p.Info()
 	if err != nil {
 		return nil, err
@@ -748,6 +758,10 @@ func (p *Program) Benchmark(in []byte, repeat int, reset func()) (uint32, time.D
 }
 
 var haveProgRun = internal.NewFeatureTest("BPF_PROG_RUN", func() error {
+	if runtime.GOOS == "windows" {
+		return nil
+	}
+
 	prog, err := NewProgram(&ProgramSpec{
 		// SocketFilter does not require privileges on newer kernels.
 		Type: SocketFilter,
@@ -789,7 +803,7 @@ var haveProgRun = internal.NewFeatureTest("BPF_PROG_RUN", func() error {
 	}
 
 	return err
-}, "4.12")
+}, "4.12", "windows:0.20")
 
 func (p *Program) run(opts *RunOptions) (uint32, time.Duration, error) {
 	if uint(len(opts.Data)) > math.MaxUint32 {

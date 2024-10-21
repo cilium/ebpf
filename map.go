@@ -233,11 +233,13 @@ func (ms *MapSpec) Compatible(m *Map) error {
 		diffs = append(diffs, fmt.Sprintf("MaxEntries: %d changed to %d", m.maxEntries, ms.MaxEntries))
 	}
 
-	// BPF_F_RDONLY_PROG is set unconditionally for devmaps. Explicitly allow this
-	// mismatch.
-	if !((ms.Type == DevMap || ms.Type == DevMapHash) && m.flags^ms.Flags == sys.BPF_F_RDONLY_PROG) &&
-		m.flags != ms.Flags {
-		diffs = append(diffs, fmt.Sprintf("Flags: %d changed to %d", m.flags, ms.Flags))
+	if runtime.GOOS == "linux" {
+		// BPF_F_RDONLY_PROG is set unconditionally for devmaps. Explicitly allow this
+		// mismatch.
+		if !((ms.Type == DevMap || ms.Type == DevMapHash) && m.flags^ms.Flags == sys.BPF_F_RDONLY_PROG) &&
+			m.flags != ms.Flags {
+			diffs = append(diffs, fmt.Sprintf("Flags: %d changed to %d", m.flags, ms.Flags))
+		}
 	}
 
 	if len(diffs) == 0 {
@@ -273,6 +275,12 @@ type Map struct {
 //
 // You should not use fd after calling this function.
 func NewMapFromFD(fd int) (*Map, error) {
+	if runtime.GOOS == "windows" {
+		// Obtaining an fd that is compatible with this function requires calling
+		// into the efW runtime.
+		return nil, fmt.Errorf("new map from fd: %w", internal.ErrNotSupportedOnOS)
+	}
+
 	f, err := sys.NewFD(fd)
 	if err != nil {
 		return nil, err
@@ -610,6 +618,10 @@ func (m *Map) Info() (*MapInfo, error) {
 // Returns ErrNotSupported if the kernel has no BTF support, or if there is no
 // BTF associated with the Map.
 func (m *Map) Handle() (*btf.Handle, error) {
+	if runtime.GOOS == "windows" {
+		return nil, fmt.Errorf("map handle: %w", internal.ErrNotSupportedOnOS)
+	}
+
 	info, err := m.Info()
 	if err != nil {
 		return nil, err
@@ -952,7 +964,7 @@ func (m *Map) nextKey(key interface{}, nextKeyOut sys.Pointer) error {
 	if err = sys.MapGetNextKey(&attr); err != nil {
 		// Kernels 4.4.131 and earlier return EFAULT instead of a pointer to the
 		// first map element when a nil key pointer is specified.
-		if key == nil && errors.Is(err, errno.EFAULT) {
+		if runtime.GOOS == "linux" && key == nil && errors.Is(err, errno.EFAULT) {
 			var guessKey []byte
 			guessKey, err = m.guessNonExistentKey()
 			if err != nil {
@@ -980,6 +992,10 @@ var mmapProtectedPage = sync.OnceValues(func() ([]byte, error) {
 // This is necessary on kernels before 4.4.132, since those don't support
 // iterating maps from the start by providing an invalid key pointer.
 func (m *Map) guessNonExistentKey() ([]byte, error) {
+	if runtime.GOOS == "windows" {
+		return nil, fmt.Errorf("guess non-existent key: %w", internal.ErrNotSupportedOnOS)
+	}
+
 	// Map a protected page and use that as the value pointer. This saves some
 	// work copying out the value, which we're not interested in.
 	page, err := mmapProtectedPage()

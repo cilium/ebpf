@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"reflect"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -18,6 +19,10 @@ import (
 )
 
 func TestMapInfoFromProc(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows doesn't support /proc.")
+	}
+
 	hash, err := NewMap(&MapSpec{
 		Type:       Hash,
 		KeySize:    4,
@@ -71,7 +76,7 @@ func TestMapInfoFromProcOuterMap(t *testing.T) {
 }
 
 func TestProgramInfo(t *testing.T) {
-	prog := mustSocketFilter(t)
+	prog := mustBasicProgram(t)
 
 	for name, fn := range map[string]func(*sys.FD) (*ProgramInfo, error){
 		"generic": newProgramInfoFromFd,
@@ -84,16 +89,16 @@ func TestProgramInfo(t *testing.T) {
 				t.Fatal("Can't get program info:", err)
 			}
 
-			if info.Type != SocketFilter {
-				t.Error("Expected Type to be SocketFilter, got", info.Type)
+			if info.Type != basicProgramType {
+				t.Errorf("Expected Type to be %s, got %s", basicProgramType, info.Type)
 			}
 
 			if info.Name != "" && info.Name != "test" {
 				t.Error("Expected Name to be test, got", info.Name)
 			}
 
-			if want := "d7edec644f05498d"; info.Tag != want {
-				t.Errorf("Expected Tag to be %s, got %s", want, info.Tag)
+			if info.Tag != "" {
+				qt.Assert(t, qt.Equals("d7edec644f05498d", info.Tag))
 			}
 
 			if id, ok := info.ID(); ok && id == 0 {
@@ -118,35 +123,35 @@ func TestProgramInfo(t *testing.T) {
 				_, ok = info.VerifiedInstructions()
 				qt.Assert(t, qt.IsFalse(ok))
 			} else {
-				if jitedSize, err := info.JitedSize(); testutils.IsKernelLessThan(t, "4.13") {
+				if jitedSize, err := info.JitedSize(); testutils.IsKernelLessThan(t, "4.13") || runtime.GOOS == "windows" {
 					qt.Assert(t, qt.IsNotNil(err))
 				} else {
 					qt.Assert(t, qt.IsNil(err))
 					qt.Assert(t, qt.IsTrue(jitedSize > 0))
 				}
 
-				if xlatedSize, err := info.TranslatedSize(); testutils.IsKernelLessThan(t, "4.13") {
+				if xlatedSize, err := info.TranslatedSize(); testutils.IsKernelLessThan(t, "4.13") || runtime.GOOS == "windows" {
 					qt.Assert(t, qt.IsNotNil(err))
 				} else {
 					qt.Assert(t, qt.IsNil(err))
 					qt.Assert(t, qt.IsTrue(xlatedSize > 0))
 				}
 
-				if uid, ok := info.CreatedByUID(); testutils.IsKernelLessThan(t, "4.15") {
+				if uid, ok := info.CreatedByUID(); testutils.IsKernelLessThan(t, "4.15") || runtime.GOOS == "windows" {
 					qt.Assert(t, qt.IsFalse(ok))
 				} else {
 					qt.Assert(t, qt.IsTrue(ok))
 					qt.Assert(t, qt.Equals(uid, uint32(os.Getuid())))
 				}
 
-				if loadTime, ok := info.LoadTime(); testutils.IsKernelLessThan(t, "4.15") {
+				if loadTime, ok := info.LoadTime(); testutils.IsKernelLessThan(t, "4.15") || runtime.GOOS == "windows" {
 					qt.Assert(t, qt.IsFalse(ok))
 				} else {
 					qt.Assert(t, qt.IsTrue(ok))
 					qt.Assert(t, qt.IsTrue(loadTime > 0))
 				}
 
-				if verifiedInsns, ok := info.VerifiedInstructions(); testutils.IsKernelLessThan(t, "5.16") {
+				if verifiedInsns, ok := info.VerifiedInstructions(); testutils.IsKernelLessThan(t, "5.16") || runtime.GOOS == "windows" {
 					qt.Assert(t, qt.IsFalse(ok))
 				} else {
 					qt.Assert(t, qt.IsTrue(ok))
@@ -168,7 +173,7 @@ func TestProgramInfoMapIDs(t *testing.T) {
 	defer arr.Close()
 
 	prog, err := NewProgram(&ProgramSpec{
-		Type: SocketFilter,
+		Type: basicProgramType,
 		Instructions: asm.Instructions{
 			asm.LoadMapPtr(asm.R0, arr.FD()),
 			asm.LoadImm(asm.R0, 2, asm.DWord),
@@ -202,16 +207,7 @@ func TestProgramInfoMapIDs(t *testing.T) {
 }
 
 func TestProgramInfoMapIDsNoMaps(t *testing.T) {
-	prog, err := NewProgram(&ProgramSpec{
-		Type: SocketFilter,
-		Instructions: asm.Instructions{
-			asm.LoadImm(asm.R0, 0, asm.DWord),
-			asm.Return(),
-		},
-		License: "MIT",
-	})
-	qt.Assert(t, qt.IsNil(err))
-	defer prog.Close()
+	prog := mustBasicProgram(t)
 
 	info, err := prog.Info()
 	testutils.SkipIfNotSupported(t, err)
@@ -259,7 +255,7 @@ func TestScanFdInfoReader(t *testing.T) {
 func TestStats(t *testing.T) {
 	testutils.SkipOnOldKernel(t, "5.8", "BPF_ENABLE_STATS")
 
-	prog := mustSocketFilter(t)
+	prog := mustBasicProgram(t)
 
 	pi, err := prog.Info()
 	if err != nil {
@@ -291,6 +287,7 @@ func TestStats(t *testing.T) {
 	}
 
 	if err := testStats(prog); err != nil {
+		testutils.SkipIfNotSupportedOnOS(t, err)
 		t.Error(err)
 	}
 }
@@ -299,10 +296,11 @@ func TestStats(t *testing.T) {
 func BenchmarkStats(b *testing.B) {
 	testutils.SkipOnOldKernel(b, "5.8", "BPF_ENABLE_STATS")
 
-	prog := mustSocketFilter(b)
+	prog := mustBasicProgram(b)
 
 	for n := 0; n < b.N; n++ {
 		if err := testStats(prog); err != nil {
+			testutils.SkipIfNotSupportedOnOS(b, err)
 			b.Fatal(fmt.Errorf("iter %d: %w", n, err))
 		}
 	}
@@ -323,19 +321,19 @@ func testStats(prog *Program) error {
 
 	stats, err := EnableStats(uint32(sys.BPF_STATS_RUN_TIME))
 	if err != nil {
-		return fmt.Errorf("failed to enable stats: %v", err)
+		return fmt.Errorf("failed to enable stats: %w", err)
 	}
 	defer stats.Close()
 
 	// Program execution with runtime statistics enabled.
 	// Should increase both runtime and run counter.
 	if _, _, err := prog.Test(in); err != nil {
-		return fmt.Errorf("failed to trigger program: %v", err)
+		return fmt.Errorf("failed to trigger program: %w", err)
 	}
 
 	pi, err := prog.Info()
 	if err != nil {
-		return fmt.Errorf("failed to get ProgramInfo: %v", err)
+		return fmt.Errorf("failed to get ProgramInfo: %w", err)
 	}
 
 	rc, ok := pi.RunCount()
@@ -359,18 +357,18 @@ func testStats(prog *Program) error {
 	lt := rt
 
 	if err := stats.Close(); err != nil {
-		return fmt.Errorf("failed to disable statistics: %v", err)
+		return fmt.Errorf("failed to disable statistics: %w", err)
 	}
 
 	// Second program execution, with runtime statistics gathering disabled.
 	// Total runtime and run counters are not expected to increase.
 	if _, _, err := prog.Test(in); err != nil {
-		return fmt.Errorf("failed to trigger program: %v", err)
+		return fmt.Errorf("failed to trigger program: %w", err)
 	}
 
 	pi, err = prog.Info()
 	if err != nil {
-		return fmt.Errorf("failed to get ProgramInfo: %v", err)
+		return fmt.Errorf("failed to get ProgramInfo: %w", err)
 	}
 
 	rc, ok = pi.RunCount()

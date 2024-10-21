@@ -74,8 +74,13 @@ func newMapInfoFromFd(fd *sys.FD) (*MapInfo, error) {
 		return nil, fmt.Errorf("getting object info: %w", err1)
 	}
 
+	typ, err := MapTypeForPlatform(internal.NativePlatform, info.Type)
+	if err != nil {
+		return nil, fmt.Errorf("map type: %w", err)
+	}
+
 	mi := &MapInfo{
-		MapType(info.Type),
+		typ,
 		info.KeySize,
 		info.ValueSize,
 		info.MaxEntries,
@@ -105,8 +110,9 @@ func newMapInfoFromFd(fd *sys.FD) (*MapInfo, error) {
 // readMapInfoFromProc queries map information about the given fd from
 // /proc/self/fdinfo. It only writes data into fields that have a zero value.
 func readMapInfoFromProc(fd *sys.FD, mi *MapInfo) error {
-	return scanFdInfo(fd, map[string]interface{}{
-		"map_type":    &mi.Type,
+	var mapType uint32
+	err := scanFdInfo(fd, map[string]interface{}{
+		"map_type":    &mapType,
 		"map_id":      &mi.id,
 		"key_size":    &mi.KeySize,
 		"value_size":  &mi.ValueSize,
@@ -116,6 +122,18 @@ func readMapInfoFromProc(fd *sys.FD, mi *MapInfo) error {
 		"memlock":     &mi.memlock,
 		"frozen":      &mi.frozen,
 	})
+	if err != nil {
+		return err
+	}
+
+	if mi.Type == 0 {
+		mi.Type, err = MapTypeForPlatform(Linux, mapType)
+		if err != nil {
+			return fmt.Errorf("map type: %w", err)
+		}
+	}
+
+	return nil
 }
 
 // ID returns the map ID.
@@ -217,8 +235,13 @@ func newProgramInfoFromFd(fd *sys.FD) (*ProgramInfo, error) {
 		return nil, err
 	}
 
+	typ, err := ProgramTypeForPlatform(internal.NativePlatform, info.Type)
+	if err != nil {
+		return nil, fmt.Errorf("program type: %w", err)
+	}
+
 	pi := ProgramInfo{
-		Type: ProgramType(info.Type),
+		Type: typ,
 		id:   ProgramID(info.Id),
 		Tag:  hex.EncodeToString(info.Tag[:]),
 		Name: unix.ByteSliceToString(info.Name[:]),
@@ -301,8 +324,9 @@ func newProgramInfoFromFd(fd *sys.FD) (*ProgramInfo, error) {
 
 func newProgramInfoFromProc(fd *sys.FD) (*ProgramInfo, error) {
 	var info ProgramInfo
+	var progType uint32
 	err := scanFdInfo(fd, map[string]interface{}{
-		"prog_type": &info.Type,
+		"prog_type": &progType,
 		"prog_tag":  &info.Tag,
 	})
 	if errors.Is(err, ErrNotSupported) {
@@ -313,6 +337,11 @@ func newProgramInfoFromProc(fd *sys.FD) (*ProgramInfo, error) {
 	}
 	if err != nil {
 		return nil, err
+	}
+
+	info.Type, err = ProgramTypeForPlatform(Linux, progType)
+	if err != nil {
+		return nil, fmt.Errorf("program type: %w", err)
 	}
 
 	return &info, nil

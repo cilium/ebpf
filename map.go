@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"slices"
 	"strings"
 	"sync"
@@ -118,13 +119,14 @@ func (ms *MapSpec) Copy() *MapSpec {
 
 // fixupMagicFields fills fields of MapSpec which are usually
 // left empty in ELF or which depend on runtime information.
+// It may also change Type on Windows.
 //
 // The method doesn't modify Spec, instead returning a copy.
 // The copy is only performed if fixups are necessary, so callers mustn't mutate
 // the returned spec.
 func (spec *MapSpec) fixupMagicFields() (*MapSpec, error) {
 	switch spec.Type {
-	case ArrayOfMaps, HashOfMaps:
+	case ArrayOfMaps, HashOfMaps, WindowsArrayOfMaps, WindowsHashOfMaps:
 		if spec.ValueSize != 0 && spec.ValueSize != 4 {
 			return nil, errors.New("ValueSize must be zero or four for map of map")
 		}
@@ -158,6 +160,11 @@ func (spec *MapSpec) fixupMagicFields() (*MapSpec, error) {
 			// behaviour in the past.
 			spec.MaxEntries = n
 		}
+	}
+
+	if p, _ := spec.Type.Decode(); runtime.GOOS == "windows" && p == Linux {
+		spec = spec.Copy()
+		spec.Type = fixupWindowsMapTypes(spec.Type)
 	}
 
 	return spec, nil
@@ -355,7 +362,7 @@ func newMapWithOptions(spec *MapSpec, opts MapOptions) (_ *Map, err error) {
 	}
 
 	var innerFd *sys.FD
-	if spec.Type == ArrayOfMaps || spec.Type == HashOfMaps {
+	if spec.Type.canStoreMap() {
 		if spec.InnerMap == nil {
 			return nil, fmt.Errorf("%s requires InnerMap", spec.Type)
 		}
@@ -416,8 +423,13 @@ func (spec *MapSpec) createMap(inner *sys.FD) (_ *Map, err error) {
 		return nil, err
 	}
 
+	p, sysMapType := spec.Type.Decode()
+	if p != internal.NativePlatform {
+		return nil, fmt.Errorf("map type %s: %w", spec.Type, internal.ErrNotSupportedOnOS)
+	}
+
 	attr := sys.MapCreateAttr{
-		MapType:    sys.MapType(spec.Type),
+		MapType:    sys.MapType(sysMapType),
 		KeySize:    spec.KeySize,
 		ValueSize:  spec.ValueSize,
 		MaxEntries: spec.MaxEntries,
@@ -1676,4 +1688,38 @@ func sliceLen(slice any) (int, error) {
 		return 0, fmt.Errorf("%T is not a slice", slice)
 	}
 	return sliceValue.Len(), nil
+}
+
+// Map Linux-specific map types to their Windows equivalents.
+func fixupWindowsMapTypes(mt MapType) MapType {
+	switch mt {
+	case Array:
+		return WindowsArray
+	case Hash:
+		return WindowsHash
+	case ProgramArray:
+		return WindowsProgramArray
+	case PerCPUHash:
+		return WindowsPerCPUHash
+	case PerCPUArray:
+		return WindowsPerCPUArray
+	case LRUHash:
+		return WindowsLRUHash
+	case LRUCPUHash:
+		return WindowsLRUCPUHash
+	case ArrayOfMaps:
+		return WindowsArrayOfMaps
+	case HashOfMaps:
+		return WindowsHashOfMaps
+	case LPMTrie:
+		return WindowsLPMTrie
+	case Queue:
+		return WindowsQueue
+	case Stack:
+		return WindowsStack
+	case RingBuf:
+		return WindowsRingBuf
+	default:
+		return mt
+	}
 }

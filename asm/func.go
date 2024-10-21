@@ -2,6 +2,8 @@ package asm
 
 //go:generate go run golang.org/x/tools/cmd/stringer@latest -output func_string.go -type=BuiltinFunc
 
+// TODO(windows): constants for builtin functions don't match.
+
 // BuiltinFunc is a built-in eBPF function.
 type BuiltinFunc int32
 

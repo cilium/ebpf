@@ -219,6 +219,7 @@ func TestLoadCollectionSpec(t *testing.T) {
 			"uneg":       {name: "uneg", offset: 8, size: 4},
 			"weak":       {name: "weak", offset: 0, size: 4},
 		},
+		Platform: Linux,
 	}
 
 	cmpOpts := cmp.Options{

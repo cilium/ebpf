@@ -54,7 +54,7 @@ func TestRawLink(t *testing.T) {
 		t.Error("Link program ID doesn't match program ID")
 	}
 
-	testLink(t, &linkCgroup{*link}, prog)
+	testLink(t, link, prog)
 }
 
 func TestUnpinRawLink(t *testing.T) {
@@ -189,6 +189,8 @@ func testLink(t *testing.T, link Link, prog *ebpf.Program) {
 	}
 	defer os.RemoveAll(tmp)
 
+	_, isRawLink := link.(*RawLink)
+
 	t.Run("link/pinning", func(t *testing.T) {
 		path := filepath.Join(tmp, "link")
 		err = link.Pin(path)
@@ -203,7 +205,7 @@ func testLink(t *testing.T, link Link, prog *ebpf.Program) {
 		}
 		link2.Close()
 
-		if reflect.TypeOf(link) != reflect.TypeOf(link2) {
+		if !isRawLink && reflect.TypeOf(link) != reflect.TypeOf(link2) {
 			t.Errorf("Loading a pinned %T returns a %T", link, link2)
 		}
 
@@ -245,37 +247,37 @@ func testLink(t *testing.T, link Link, prog *ebpf.Program) {
 			t.Fatal("Failed to get link info type")
 		}
 
-		switch info.Type {
-		case sys.BPF_LINK_TYPE_TRACING:
+		switch link.(type) {
+		case *tracing:
 			if info.Tracing() == nil {
 				t.Fatalf("Failed to get link tracing extra info")
 			}
-		case sys.BPF_LINK_TYPE_CGROUP:
+		case *linkCgroup:
 			cg := info.Cgroup()
 			if cg.CgroupId == 0 {
 				t.Fatalf("Failed to get link Cgroup extra info")
 			}
-		case sys.BPF_LINK_TYPE_NETNS:
+		case *NetNsLink:
 			netns := info.NetNs()
 			if netns.AttachType == 0 {
 				t.Fatalf("Failed to get link NetNs extra info")
 			}
-		case sys.BPF_LINK_TYPE_XDP:
+		case *xdpLink:
 			xdp := info.XDP()
 			if xdp.Ifindex == 0 {
 				t.Fatalf("Failed to get link XDP extra info")
 			}
-		case sys.BPF_LINK_TYPE_TCX:
+		case *tcxLink:
 			tcx := info.TCX()
 			if tcx.Ifindex == 0 {
 				t.Fatalf("Failed to get link TCX extra info")
 			}
-		case sys.BPF_LINK_TYPE_NETFILTER:
+		case *netfilterLink:
 			nf := info.Netfilter()
 			if nf.Priority == 0 {
 				t.Fatalf("Failed to get link Netfilter extra info")
 			}
-		case sys.BPF_LINK_TYPE_KPROBE_MULTI:
+		case *kprobeMultiLink:
 			// test default Info data
 			kmulti := info.KprobeMulti()
 			if count, ok := kmulti.AddressCount(); ok {
@@ -286,7 +288,7 @@ func testLink(t *testing.T, link Link, prog *ebpf.Program) {
 				// NB: We don't check that missed is actually correct
 				// since it's not easy to trigger from tests.
 			}
-		case sys.BPF_LINK_TYPE_PERF_EVENT:
+		case *perfEventLink:
 			// test default Info data
 			pevent := info.PerfEvent()
 			switch pevent.Type {
@@ -329,7 +331,7 @@ func testLink(t *testing.T, link Link, prog *ebpf.Program) {
 		}
 		defer newLink.Close()
 
-		if reflect.TypeOf(newLink) != reflect.TypeOf(link) {
+		if !isRawLink && reflect.TypeOf(newLink) != reflect.TypeOf(link) {
 			t.Fatalf("Expected type %T, got %T", link, newLink)
 		}
 	})

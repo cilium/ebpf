@@ -102,8 +102,10 @@ func loadExtInfos(r io.ReaderAt, bo binary.ByteOrder, spec *Spec) (*ExtInfos, er
 	return &ExtInfos{funcInfos, lineInfos, coreRelos}, nil
 }
 
-type funcInfoMeta struct{}
-type coreRelocationMeta struct{}
+type (
+	funcInfoMeta       struct{}
+	coreRelocationMeta struct{}
+)
 
 // Assign per-section metadata from BTF to a section's instructions.
 func (ei *ExtInfos) Assign(insns asm.Instructions, section string) {
@@ -128,8 +130,8 @@ func AssignMetadataToInstructions(
 			funcInfos = funcInfos[1:]
 		}
 
-		if len(lineInfos.infos) > 0 && lineInfos.infos[0].offset == iter.Offset {
-			*iter.Ins = iter.Ins.WithSource(lineInfos.infos[0].line)
+		if len(lineInfos.infos) > 0 && lineInfos.infos[0].Offset == iter.Offset {
+			*iter.Ins = iter.Ins.WithSource(lineInfos.infos[0].Line)
 			lineInfos.infos = lineInfos.infos[1:]
 		}
 
@@ -178,9 +180,9 @@ marshal:
 				}
 			}
 
-			li := &lineInfo{
-				line:   line,
-				offset: iter.Offset,
+			li := &LineInfo{
+				Line:   line,
+				Offset: iter.Offset,
 			}
 			if err := li.marshal(&liBuf, b); err != nil {
 				return nil, nil, fmt.Errorf("write line info: %w", err)
@@ -518,12 +520,18 @@ func (li *Line) String() string {
 
 // LineInfos contains a sorted list of line infos.
 type LineInfos struct {
-	infos []lineInfo
+	infos []LineInfo
 }
 
-type lineInfo struct {
-	line   *Line
-	offset asm.RawInstructionOffset
+// Lines returns the sorted list of line infos.
+func (li *LineInfos) Lines() []LineInfo {
+	return li.infos
+}
+
+// LineInfo represents a line info and its raw instruction offset.
+type LineInfo struct {
+	Line   *Line
+	Offset asm.RawInstructionOffset
 }
 
 // Constants for the format of bpfLineInfo.LineCol.
@@ -557,21 +565,21 @@ func LoadLineInfos(reader io.Reader, bo binary.ByteOrder, recordNum uint32, spec
 	return newLineInfos(lis, spec.strings)
 }
 
-func newLineInfo(li bpfLineInfo, strings *stringTable) (lineInfo, error) {
+func newLineInfo(li bpfLineInfo, strings *stringTable) (LineInfo, error) {
 	line, err := strings.Lookup(li.LineOff)
 	if err != nil {
-		return lineInfo{}, fmt.Errorf("lookup of line: %w", err)
+		return LineInfo{}, fmt.Errorf("lookup of line: %w", err)
 	}
 
 	fileName, err := strings.Lookup(li.FileNameOff)
 	if err != nil {
-		return lineInfo{}, fmt.Errorf("lookup of filename: %w", err)
+		return LineInfo{}, fmt.Errorf("lookup of filename: %w", err)
 	}
 
 	lineNumber := li.LineCol >> bpfLineShift
 	lineColumn := li.LineCol & bpfColumnMax
 
-	return lineInfo{
+	return LineInfo{
 		&Line{
 			fileName,
 			line,
@@ -584,7 +592,7 @@ func newLineInfo(li bpfLineInfo, strings *stringTable) (lineInfo, error) {
 
 func newLineInfos(blis []bpfLineInfo, strings *stringTable) (LineInfos, error) {
 	lis := LineInfos{
-		infos: make([]lineInfo, 0, len(blis)),
+		infos: make([]LineInfo, 0, len(blis)),
 	}
 	for _, bli := range blis {
 		li, err := newLineInfo(bli, strings)
@@ -594,14 +602,14 @@ func newLineInfos(blis []bpfLineInfo, strings *stringTable) (LineInfos, error) {
 		lis.infos = append(lis.infos, li)
 	}
 	sort.Slice(lis.infos, func(i, j int) bool {
-		return lis.infos[i].offset <= lis.infos[j].offset
+		return lis.infos[i].Offset <= lis.infos[j].Offset
 	})
 	return lis, nil
 }
 
 // marshal writes the binary representation of the LineInfo to w.
-func (li *lineInfo) marshal(w *bytes.Buffer, b *Builder) error {
-	line := li.line
+func (li *LineInfo) marshal(w *bytes.Buffer, b *Builder) error {
+	line := li.Line
 	if line.lineNumber > bpfLineMax {
 		return fmt.Errorf("line %d exceeds %d", line.lineNumber, bpfLineMax)
 	}
@@ -621,7 +629,7 @@ func (li *lineInfo) marshal(w *bytes.Buffer, b *Builder) error {
 	}
 
 	bli := bpfLineInfo{
-		uint32(li.offset),
+		uint32(li.Offset),
 		fileNameOff,
 		lineOff,
 		(line.lineNumber << bpfLineShift) | line.lineColumn,

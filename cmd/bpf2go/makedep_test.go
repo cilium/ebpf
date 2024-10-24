@@ -2,9 +2,13 @@ package main
 
 import (
 	"bytes"
-	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/go-quicktest/qt"
+	"github.com/google/go-cmp/cmp"
+
+	"github.com/cilium/ebpf/internal/testutils"
 )
 
 func TestParseDependencies(t *testing.T) {
@@ -17,6 +21,7 @@ nothing:
 `
 
 	have, err := parseDependencies("/foo", strings.NewReader(input))
+	testutils.SkipIfNotSupportedOnOS(t, err)
 	if err != nil {
 		t.Fatal("Can't parse dependencies:", err)
 	}
@@ -27,11 +32,7 @@ nothing:
 		{"/foo/nothing", nil},
 	}
 
-	if !reflect.DeepEqual(have, want) {
-		t.Logf("Have: %#v", have)
-		t.Logf("Want: %#v", want)
-		t.Error("Result doesn't match")
-	}
+	qt.Assert(t, qt.CmpEquals(have, want, cmp.AllowUnexported(dependency{})))
 
 	var output bytes.Buffer
 	err = adjustDependencies(&output, "/foo", want)
@@ -51,9 +52,5 @@ nothing:
 
 `
 
-	if have := output.String(); have != wantOutput {
-		t.Logf("Have:\n%s", have)
-		t.Logf("Want:\n%s", wantOutput)
-		t.Error("Output doesn't match")
-	}
+	qt.Assert(t, qt.Equals(output.String(), wantOutput))
 }

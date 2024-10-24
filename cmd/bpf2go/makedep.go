@@ -7,10 +7,17 @@ import (
 	"fmt"
 	"io"
 	"path/filepath"
+	"runtime"
 	"strings"
+
+	"github.com/cilium/ebpf/internal"
 )
 
 func adjustDependencies(w io.Writer, baseDir string, deps []dependency) error {
+	if runtime.GOOS == "windows" {
+		return fmt.Errorf("adjust dependencies: %w", internal.ErrNotSupportedOnOS)
+	}
+
 	for _, dep := range deps {
 		relativeFile, err := filepath.Rel(baseDir, dep.file)
 		if err != nil {
@@ -49,6 +56,10 @@ type dependency struct {
 }
 
 func parseDependencies(baseDir string, in io.Reader) ([]dependency, error) {
+	if runtime.GOOS == "windows" {
+		return nil, fmt.Errorf("path handling: %w", internal.ErrNotSupportedOnOS)
+	}
+
 	abs := func(path string) string {
 		if filepath.IsAbs(path) {
 			return path

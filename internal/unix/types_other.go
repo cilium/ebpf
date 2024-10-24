@@ -267,14 +267,6 @@ func Tgkill(tgid int, tid int, sig syscall.Signal) (err error) {
 	return errNonLinux()
 }
 
-func BytePtrFromString(s string) (*byte, error) {
-	return nil, errNonLinux()
-}
-
-func ByteSliceToString(s []byte) string {
-	return ""
-}
-
 func Renameat2(olddirfd int, oldpath string, newdirfd int, newpath string, flags uint) error {
 	return errNonLinux()
 }

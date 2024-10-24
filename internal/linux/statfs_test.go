@@ -17,6 +17,7 @@ func TestFSType(t *testing.T) {
 		{"/sys/fs/bpf", unix.BPF_FS_MAGIC},
 	} {
 		fst, err := FSType(fs.path)
+		skipIfNotSupportedOnOS(t, err)
 		qt.Assert(t, qt.IsNil(err))
 		qt.Assert(t, qt.Equals(fst, fs.magic))
 	}

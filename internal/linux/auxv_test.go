@@ -72,6 +72,7 @@ func newDefaultAuxvFileReader() (auxvPairReader, error) {
 
 func TestAuxvBothSourcesEqual(t *testing.T) {
 	runtimeBased, err := newAuxvRuntimeReader()
+	skipIfNotSupportedOnOS(t, err)
 	if err != nil {
 		t.Fatal(err)
 	}

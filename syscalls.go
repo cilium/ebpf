@@ -10,6 +10,7 @@ import (
 
 	"github.com/cilium/ebpf/asm"
 	"github.com/cilium/ebpf/internal"
+	"github.com/cilium/ebpf/internal/linux"
 	"github.com/cilium/ebpf/internal/sys"
 	"github.com/cilium/ebpf/internal/tracefs"
 	"github.com/cilium/ebpf/internal/unix"
@@ -276,7 +277,7 @@ var haveBPFToBPFCalls = internal.NewFeatureTest("bpf2bpf calls", func() error {
 }, "4.16")
 
 var haveSyscallWrapper = internal.NewFeatureTest("syscall wrapper", func() error {
-	prefix := internal.PlatformPrefix()
+	prefix := linux.PlatformPrefix()
 	if prefix == "" {
 		return fmt.Errorf("unable to find the platform prefix for (%s)", runtime.GOARCH)
 	}

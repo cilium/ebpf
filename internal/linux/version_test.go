@@ -8,11 +8,13 @@ import (
 
 func TestCurrentKernelVersion(t *testing.T) {
 	_, err := KernelVersion()
+	skipIfNotSupportedOnOS(t, err)
 	qt.Assert(t, qt.IsNil(err))
 }
 
 func TestKernelRelease(t *testing.T) {
 	r, err := KernelRelease()
+	skipIfNotSupportedOnOS(t, err)
 	if err != nil {
 		t.Fatal(err)
 	}

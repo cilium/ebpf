@@ -53,6 +53,7 @@ func TestAuxvNoVDSO(t *testing.T) {
 
 func TestVDSOVersion(t *testing.T) {
 	_, err := vdsoVersion()
+	skipIfNotSupportedOnOS(t, err)
 	qt.Assert(t, qt.IsNil(err))
 }
 

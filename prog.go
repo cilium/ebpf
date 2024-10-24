@@ -742,7 +742,7 @@ func (p *Program) Benchmark(in []byte, repeat int, reset func()) (uint32, time.D
 	return ret, total, nil
 }
 
-var haveProgRun = internal.NewFeatureTest("BPF_PROG_RUN", "4.12", func() error {
+var haveProgRun = internal.NewFeatureTest("BPF_PROG_RUN", func() error {
 	prog, err := NewProgram(&ProgramSpec{
 		// SocketFilter does not require privileges on newer kernels.
 		Type: SocketFilter,
@@ -784,7 +784,7 @@ var haveProgRun = internal.NewFeatureTest("BPF_PROG_RUN", "4.12", func() error {
 	}
 
 	return err
-})
+}, "4.12")
 
 func (p *Program) run(opts *RunOptions) (uint32, time.Duration, error) {
 	if uint(len(opts.Data)) > math.MaxUint32 {

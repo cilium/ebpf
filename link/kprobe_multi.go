@@ -149,7 +149,7 @@ func (kml *kprobeMultiLink) Info() (*Info, error) {
 	}, nil
 }
 
-var haveBPFLinkKprobeMulti = internal.NewFeatureTest("bpf_link_kprobe_multi", "5.18", func() error {
+var haveBPFLinkKprobeMulti = internal.NewFeatureTest("bpf_link_kprobe_multi", func() error {
 	prog, err := ebpf.NewProgram(&ebpf.ProgramSpec{
 		Name: "probe_kpm_link",
 		Type: ebpf.Kprobe,
@@ -188,4 +188,4 @@ var haveBPFLinkKprobeMulti = internal.NewFeatureTest("bpf_link_kprobe_multi", "5
 	fd.Close()
 
 	return nil
-})
+}, "5.18")

@@ -92,14 +92,39 @@ as the user space application. More on that in a future section.
     its value is actually provided by user space. The `volatile` qualifier
     doesn't change the variable's semantics.
 
-:simple-go: Next, in user space, initialize `global_u16` to 9000:
+### Before Loading: Using VariableSpec
+
+For interacting with global variables before loading the BPF program into the
+kernel, use the methods on its {{ godoc('VariableSpec') }} found in {{
+godoc('CollectionSpec.Variables') }} or injected using {{ godoc('LoadAndAssign')
+}}. This ensures the variable is populated before the BPF program has a chance
+to execute.
+
+:simple-go: In user space, initialize `global_u16` to 9000:
 
 {{ go_example('DocVariablesSetGlobalU16') }}
 
-Dry-running `global_example()` a few times results in our value increasing on
+Dry-running `global_example()` a few times results in the value increasing on
 every invocation:
 
 {{ go_example('DocVariablesSetGlobalRun') }}
+
+Once a CollectionSpec has been loaded into the kernel, further modifications
+to a VariableSpec are ineffectual.
+
+### After Loading: Using Variable
+
+After loading the BPF program into the kernel, accessing global variables from
+user space can be done through the {{ godoc('Variable') }} abstraction. These
+can be injected into an object using {{ godoc('LoadAndAssign') }}, or found in
+the {{ godoc('Collection.Variables') }} field.
+
+:simple-go: Building on the previous example, read the incremented variable
+using {{ godoc('Variable.Get') }}:
+
+{{ go_example('DocVariablesGetGlobalU16') }}
+
+Modify the Variable at runtime using {{ godoc('Variable.Set') }}.
 
 ## Internal/Hidden Global Variables
 

@@ -1,6 +1,10 @@
 package main
 
-import "fmt"
+import (
+	"fmt"
+
+	"github.com/cilium/ebpf"
+)
 
 func main() {
 	DocVariablesSetConst()
@@ -62,8 +66,8 @@ func DocVariablesSetGlobal() {
 	}
 	// }
 
-	var obj variablesPrograms
-	if err := spec.LoadAndAssign(&obj, nil); err != nil {
+	coll, err := ebpf.NewCollection(spec)
+	if err != nil {
 		panicf("loading BPF program: %s", err)
 	}
 
@@ -71,7 +75,7 @@ func DocVariablesSetGlobal() {
 
 	// DocVariablesSetGlobalRun {
 	for range 3 {
-		ret, _, err := obj.GlobalExample.Test(make([]byte, 15))
+		ret, _, err := coll.Programs["global_example"].Test(make([]byte, 15))
 		if err != nil {
 			panicf("running BPF program: %s", err)
 		}
@@ -83,6 +87,17 @@ func DocVariablesSetGlobal() {
 	// BPF program returned 9000
 	// BPF program returned 9001
 	// BPF program returned 9002
+	// }
+
+	// DocVariablesGetGlobalU16 {
+	var global_u16 uint16
+	if err := coll.Variables["global_u16"].Get(&global_u16); err != nil {
+		panicf("getting variable: %s", err)
+	}
+	fmt.Println("Variable global_u16 is now", global_u16)
+
+	// Output:
+	// Variable global_u16 is now 9003
 	// }
 }
 

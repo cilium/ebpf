@@ -3,20 +3,24 @@ package tracefs
 import (
 	"errors"
 	"fmt"
+	"os"
 	"testing"
 
 	"github.com/go-quicktest/qt"
+
+	"github.com/cilium/ebpf/internal/testutils"
 )
 
 func TestEventID(t *testing.T) {
-
 	eid, err := EventID("syscalls", "sys_enter_mmap")
+	testutils.SkipIfNotSupportedOnOS(t, err)
 	qt.Assert(t, qt.IsNil(err))
 	qt.Assert(t, qt.Not(qt.Equals(eid, 0)))
 }
 
 func TestSanitizePath(t *testing.T) {
 	_, err := sanitizeTracefsPath("../escaped")
+	testutils.SkipIfNotSupportedOnOS(t, err)
 	if !errors.Is(err, ErrInvalidInput) {
 		t.Errorf("expected error %s, got: %s", ErrInvalidInput, err)
 	}
@@ -80,6 +84,9 @@ func TestSanitizeIdentifier(t *testing.T) {
 }
 
 func TestGetTracefsPath(t *testing.T) {
-	_, err := getTracefsPath()
+	path, err := getTracefsPath()
+	testutils.SkipIfNotSupportedOnOS(t, err)
+	qt.Assert(t, qt.IsNil(err))
+	_, err = os.Stat(path)
 	qt.Assert(t, qt.IsNil(err))
 }

@@ -175,7 +175,7 @@ func (kml *uprobeMultiLink) Update(_ *ebpf.Program) error {
 	return fmt.Errorf("update uprobe_multi: %w", ErrNotSupported)
 }
 
-var haveBPFLinkUprobeMulti = internal.NewFeatureTest("bpf_link_uprobe_multi", "6.6", func() error {
+var haveBPFLinkUprobeMulti = internal.NewFeatureTest("bpf_link_uprobe_multi", func() error {
 	prog, err := ebpf.NewProgram(&ebpf.ProgramSpec{
 		Name: "probe_upm_link",
 		Type: ebpf.Kprobe,
@@ -216,4 +216,4 @@ var haveBPFLinkUprobeMulti = internal.NewFeatureTest("bpf_link_uprobe_multi", "6
 	// should not happen
 	fd.Close()
 	return errors.New("successfully attached uprobe_multi to /, kernel bug?")
-})
+}, "6.6")

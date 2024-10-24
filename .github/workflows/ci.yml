@@ -155,7 +155,7 @@ jobs:
     needs: build-and-lint
     timeout-minutes: 15
     env:
-      EBPF_TEST_IGNORE_KERNEL_VERSION: 'TestKprobeMulti,TestKprobeMultiErrors,TestKprobeMultiCookie,TestKprobeMultiProgramCall,TestHaveBPFLinkKprobeMulti'
+      EBPF_TEST_IGNORE_VERSION: 'TestKprobeMulti,TestKprobeMultiErrors,TestKprobeMultiCookie,TestKprobeMultiProgramCall,TestHaveBPFLinkKprobeMulti'
     steps:
       - uses: actions/checkout@v4
 

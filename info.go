@@ -644,7 +644,7 @@ func EnableStats(which uint32) (io.Closer, error) {
 	return fd, nil
 }
 
-var haveProgramInfoMapIDs = internal.NewFeatureTest("map IDs in program info", "4.15", func() error {
+var haveProgramInfoMapIDs = internal.NewFeatureTest("map IDs in program info", func() error {
 	prog, err := progLoad(asm.Instructions{
 		asm.LoadImm(asm.R0, 0, asm.DWord),
 		asm.Return(),
@@ -669,4 +669,4 @@ var haveProgramInfoMapIDs = internal.NewFeatureTest("map IDs in program info", "
 	}
 
 	return err
-})
+}, "4.15")

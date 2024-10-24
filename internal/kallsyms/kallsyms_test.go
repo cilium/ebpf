@@ -2,7 +2,9 @@ package kallsyms
 
 import (
 	"bytes"
+	"errors"
 	"os"
+	"runtime"
 	"testing"
 
 	"github.com/go-quicktest/qt"
@@ -38,6 +40,9 @@ func TestParseSyms(t *testing.T) {
 
 func TestParseProcKallsyms(t *testing.T) {
 	f, err := os.Open("/proc/kallsyms")
+	if runtime.GOOS == "windows" && errors.Is(err, os.ErrNotExist) {
+		t.Skip("/proc/kallsyms doesn't exist")
+	}
 	qt.Assert(t, qt.IsNil(err))
 	defer f.Close()
 
@@ -53,12 +58,16 @@ func TestParseProcKallsyms(t *testing.T) {
 }
 
 func TestAssignModulesCaching(t *testing.T) {
-	qt.Assert(t, qt.IsNil(AssignModules(
+	err := AssignModules(
 		map[string]string{
 			"bpf_perf_event_output": "",
 			"foo":                   "",
 		},
-	)))
+	)
+	if runtime.GOOS == "windows" && errors.Is(err, os.ErrNotExist) {
+		t.Skip("File doesn't exist:", err)
+	}
+	qt.Assert(t, qt.IsNil(err))
 
 	// Can't assume any kernel modules are loaded, but this symbol should at least
 	// exist in the kernel. There is no semantic difference between a missing
@@ -92,12 +101,16 @@ func TestAssignModules(t *testing.T) {
 }
 
 func TestAssignAddressesCaching(t *testing.T) {
-	qt.Assert(t, qt.IsNil(AssignAddresses(
+	err := AssignAddresses(
 		map[string]uint64{
 			"bpf_perf_event_output": 0,
 			"foo":                   0,
 		},
-	)))
+	)
+	if runtime.GOOS == "windows" && errors.Is(err, os.ErrNotExist) {
+		t.Skip("File doesn't exist:", err)
+	}
+	qt.Assert(t, qt.IsNil(err))
 
 	v, ok := symAddrs.Load("bpf_perf_event_output")
 	qt.Assert(t, qt.IsTrue(ok))

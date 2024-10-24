@@ -6,6 +6,8 @@ import (
 	"testing"
 
 	"github.com/go-quicktest/qt"
+
+	"github.com/cilium/ebpf/internal/testutils"
 )
 
 // Global symbol, present on all tested kernels.
@@ -63,6 +65,7 @@ func TestNewEvent(t *testing.T) {
 			args.Group, _ = RandomGroup("ebpftest")
 
 			evt, err := NewEvent(args)
+			testutils.SkipIfNotSupportedOnOS(t, err)
 			qt.Assert(t, qt.IsNil(err))
 			defer evt.Close()
 

@@ -6,8 +6,9 @@
 *[ELF]: Executable and Linkable Format, a container format used for compiled eBPF programs.
 *[Spec]: Unrealized blueprint of an eBPF resource, e.g. MapSpec, ProgramSpec, btf.Spec.
 *[CollectionSpec]: Bundle of ProgramSpecs, MapSpecs and a btf.Spec. Direct result of loading an eBPF ELF.
-*[VariableSpec]: Setter/getter for a global variable declared in an eBPF program.
+*[VariableSpec]: Accessor for a global variable declared in an eBPF program.
 *[Collection]: Bundle of Maps and Programs that were loaded into the kernel. Direct result of instantiating (loading into the kernel) a CollectionSpec.
+*[Variable]: Accessor for a global variable declared in an eBPF program, used after loading.
 *[bpffs]: Birtual filesystem for 'pinning' references to eBPF resources in an familiar file hierarchy. Usually mounted at /sys/fs/bpf, but many individual instances can be mounted.
 *[helper]: A piece of logic provided by the kernel. Read a map value, redirect a packet, etc.
 *[kfunc]: An extensible evolution of the BPF helper mechanism. Can be dynamically provided by kernel modules. Not specified in UAPI.

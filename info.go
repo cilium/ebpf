@@ -9,6 +9,7 @@ import (
 	"io"
 	"os"
 	"reflect"
+	"slices"
 	"strings"
 	"syscall"
 	"time"
@@ -179,6 +180,46 @@ type programStats struct {
 	recursionMisses uint64
 }
 
+// ProgramJitedInfo holds information about JITed info of a program.
+type ProgramJitedInfo struct {
+	// Ksyms holds the ksym addresses of the BPF program, including those of its
+	// subprograms.
+	//
+	// Available from 4.18.
+	Ksyms []uintptr
+
+	// Insns holds the JITed machine native instructions of the program,
+	// including those of its subprograms.
+	//
+	// Available from 4.13.
+	Insns []byte
+
+	// LineInfos holds the JITed line infos, which are kernel addresses.
+	//
+	// Available from 5.0.
+	LineInfos []uint64
+
+	// LineInfoRecSize is the size of a single line info record.
+	//
+	// Available from 5.0.
+	LineInfoRecSize uint32
+
+	// FuncLens holds the insns length of each function.
+	//
+	// Available from 4.18.
+	FuncLens []uint32
+}
+
+func (pji *ProgramJitedInfo) clone() *ProgramJitedInfo {
+	return &ProgramJitedInfo{
+		Ksyms:           slices.Clone(pji.Ksyms),
+		Insns:           slices.Clone(pji.Insns),
+		LineInfos:       slices.Clone(pji.LineInfos),
+		LineInfoRecSize: pji.LineInfoRecSize,
+		FuncLens:        slices.Clone(pji.FuncLens),
+	}
+}
+
 // ProgramInfo describes a program.
 type ProgramInfo struct {
 	Type ProgramType
@@ -199,12 +240,12 @@ type ProgramInfo struct {
 	jitedSize            uint32
 	verifiedInstructions uint32
 
+	jitedInfo ProgramJitedInfo
+
 	lineInfos    []byte
 	numLineInfos uint32
 	funcInfos    []byte
 	numFuncInfos uint32
-	ksymInfos    []uint64
-	numKsymInfos uint32
 }
 
 func newProgramInfoFromFd(fd *sys.FD) (*ProgramInfo, error) {
@@ -282,11 +323,33 @@ func newProgramInfoFromFd(fd *sys.FD) (*ProgramInfo, error) {
 		makeSecondCall = true
 	}
 
+	pi.jitedInfo.LineInfoRecSize = info.JitedLineInfoRecSize
+	if info.JitedProgLen > 0 {
+		pi.jitedInfo.Insns = make([]byte, info.JitedProgLen)
+		info2.JitedProgLen = info.JitedProgLen
+		info2.JitedProgInsns = sys.NewSlicePointer(pi.jitedInfo.Insns)
+		makeSecondCall = true
+	}
+
+	if info.NrJitedFuncLens > 0 {
+		pi.jitedInfo.FuncLens = make([]uint32, info.NrJitedFuncLens)
+		info2.NrJitedFuncLens = info.NrJitedFuncLens
+		info2.JitedFuncLens = sys.NewSlicePointer(pi.jitedInfo.FuncLens)
+		makeSecondCall = true
+	}
+
+	if info.NrJitedLineInfo > 0 {
+		pi.jitedInfo.LineInfos = make([]uint64, info.NrJitedLineInfo)
+		info2.NrJitedLineInfo = info.NrJitedLineInfo
+		info2.JitedLineInfo = sys.NewSlicePointer(pi.jitedInfo.LineInfos)
+		info2.JitedLineInfoRecSize = info.JitedLineInfoRecSize
+		makeSecondCall = true
+	}
+
 	if info.NrJitedKsyms > 0 {
-		pi.ksymInfos = make([]uint64, info.NrJitedKsyms)
-		info2.JitedKsyms = sys.NewSlicePointer(pi.ksymInfos)
+		pi.jitedInfo.Ksyms = make([]uintptr, info.NrJitedKsyms)
+		info2.JitedKsyms = sys.NewSlicePointer(pi.jitedInfo.Ksyms)
 		info2.NrJitedKsyms = info.NrJitedKsyms
-		pi.numKsymInfos = info.NrJitedKsyms
 		makeSecondCall = true
 	}
 
@@ -378,6 +441,47 @@ func (pi *ProgramInfo) RecursionMisses() (uint64, bool) {
 		return pi.stats.recursionMisses, true
 	}
 	return 0, false
+}
+
+// withBTFSpec calls the provided callback with the BTF spec of the program.
+//
+// The base argument is used to resolve type IDs in the prog's BTF spec.
+func (pi *ProgramInfo) withBTFSpec(base *btf.Spec, cb func(*btf.Spec) error) error {
+	id, ok := pi.BTFID()
+	if pi.numFuncInfos == 0 || !ok {
+		return fmt.Errorf("program created without BTF or unsupported kernel: %w", ErrNotSupported)
+	}
+
+	h, err := btf.NewHandleFromID(id)
+	if err != nil {
+		return fmt.Errorf("get BTF handle: %w", err)
+	}
+	defer h.Close()
+
+	spec, err := h.Spec(base)
+	if err != nil {
+		return fmt.Errorf("get BTF spec: %w", err)
+	}
+
+	return cb(spec)
+}
+
+// LineInfos returns the BTF line information of the program.
+func (pi *ProgramInfo) LineInfos() (btf.LineInfos, error) {
+	var li btf.LineInfos
+
+	err := pi.withBTFSpec(nil, func(spec *btf.Spec) error {
+		var err error
+		li, err = btf.LoadLineInfos(
+			bytes.NewReader(pi.lineInfos),
+			internal.NativeEndian,
+			pi.numLineInfos,
+			spec,
+		)
+		return err
+	})
+
+	return li, err
 }
 
 // Instructions returns the 'xlated' instruction stream of the program
@@ -524,11 +628,7 @@ func (pi *ProgramInfo) VerifiedInstructions() (uint32, bool) {
 //
 // The bool return value indicates whether this optional field is available.
 func (pi *ProgramInfo) KsymAddrs() ([]uintptr, bool) {
-	addrs := make([]uintptr, 0, len(pi.ksymInfos))
-	for _, addr := range pi.ksymInfos {
-		addrs = append(addrs, uintptr(addr))
-	}
-	return addrs, pi.numKsymInfos > 0
+	return pi.jitedInfo.Ksyms, len(pi.jitedInfo.Ksyms) > 0
 }
 
 // FuncInfos returns the offset and function information of all (sub)programs in
@@ -540,28 +640,25 @@ func (pi *ProgramInfo) KsymAddrs() ([]uintptr, bool) {
 // ErrNotSupported if the program was created without BTF or if the kernel
 // doesn't support the field.
 func (pi *ProgramInfo) FuncInfos() (btf.FuncOffsets, error) {
-	id, ok := pi.BTFID()
-	if pi.numFuncInfos == 0 || !ok {
-		return nil, fmt.Errorf("program created without BTF or unsupported kernel: %w", ErrNotSupported)
-	}
+	var funcs btf.FuncOffsets
 
-	h, err := btf.NewHandleFromID(id)
-	if err != nil {
-		return nil, fmt.Errorf("get BTF handle: %w", err)
-	}
-	defer h.Close()
+	err := pi.withBTFSpec(nil, func(spec *btf.Spec) error {
+		var err error
+		funcs, err = btf.LoadFuncInfos(
+			bytes.NewReader(pi.funcInfos),
+			internal.NativeEndian,
+			pi.numFuncInfos,
+			spec,
+		)
+		return err
+	})
 
-	spec, err := h.Spec(nil)
-	if err != nil {
-		return nil, fmt.Errorf("get BTF spec: %w", err)
-	}
+	return funcs, err
+}
 
-	return btf.LoadFuncInfos(
-		bytes.NewReader(pi.funcInfos),
-		internal.NativeEndian,
-		pi.numFuncInfos,
-		spec,
-	)
+// JitedInfo returns the JITed information of the program.
+func (pi *ProgramInfo) JitedInfo() *ProgramJitedInfo {
+	return pi.jitedInfo.clone()
 }
 
 func scanFdInfo(fd *sys.FD, fields map[string]interface{}) error {

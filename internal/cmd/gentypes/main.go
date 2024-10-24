@@ -197,10 +197,13 @@ import (
 			"ProgInfo", "bpf_prog_info",
 			[]patch{
 				replace(objName, "name"),
+				replace(pointer, "jited_prog_insns"),
 				replace(pointer, "xlated_prog_insns"),
 				replace(pointer, "map_ids"),
 				replace(pointer, "line_info"),
+				replace(pointer, "jited_line_info"),
 				replace(pointer, "jited_ksyms"),
+				replace(pointer, "jited_func_lens"),
 				replace(pointer, "func_info"),
 				replace(btfID, "btf_id", "attach_btf_obj_id"),
 				replace(typeID, "attach_btf_id"),

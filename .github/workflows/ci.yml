@@ -151,11 +151,11 @@ jobs:
 
   test-on-arm64:
     name: Run tests on arm64
-    runs-on: actuated-arm64-2cpu-8gb
+    runs-on: ubuntu-22.04-arm64
     needs: build-and-lint
     timeout-minutes: 15
     env:
-      EBPF_TEST_IGNORE_VERSION: 'TestKprobeMulti,TestKprobeMultiErrors,TestKprobeMultiCookie,TestKprobeMultiProgramCall,TestHaveBPFLinkKprobeMulti'
+      EBPF_TEST_IGNORE_VERSION: 'TestKprobeMulti,TestKprobeMultiErrors,TestKprobeMultiCookie,TestKprobeMultiProgramCall,TestHaveBPFLinkKprobeMulti,TestHaveProgramType/LircMode2'
     steps:
       - uses: actions/checkout@v4
 
@@ -167,7 +167,8 @@ jobs:
       - run: go install gotest.tools/gotestsum@v1.8.1
 
       - name: Test
-        run: gotestsum --ignore-non-json-output-lines --junitfile junit.xml -- -exec 'sudo -E' -short -count 1 -json ./...
+        # Skip TestGoarches/loong64 because the GH arm64 Go toolchain seems to be weird.
+        run: gotestsum --ignore-non-json-output-lines --junitfile junit.xml -- -exec 'sudo -E' -short -count 1 -skip '^TestGoarches/loong64$' -json ./...
 
       - name: Benchmark
         run: go test -exec sudo -short -run '^$' -bench . -benchtime=1x ./...

@@ -129,6 +129,15 @@ var haveProgQuery = internal.NewFeatureTest("BPF_PROG_QUERY", func() error {
 	return errors.New("syscall succeeded unexpectedly")
 }, "4.15")
 
+// HaveTCX probes the running kernel for the availability of the tcx layer.
+//
+// Upstream commit e420bed0250 ("bpf: Add fd-based tcx multi-prog infra with link support")
+//
+// See the package documentation for the meaning of the error return value.
+func HaveTCX() error {
+	return haveTCX()
+}
+
 var haveTCX = internal.NewFeatureTest("tcx", func() error {
 	prog, err := ebpf.NewProgram(&ebpf.ProgramSpec{
 		Type:    ebpf.SchedCLS,
@@ -163,6 +172,15 @@ var haveTCX = internal.NewFeatureTest("tcx", func() error {
 	}
 	return errors.New("syscall succeeded unexpectedly")
 }, "6.6")
+
+// HaveNetkit probes the running kernel for the availability of netkit devices.
+//
+// Upstream commit 35dfaad7188c ("netkit, bpf: Add bpf programmable net device")
+//
+// See the package documentation for the meaning of the error return value.
+func HaveNetkit() error {
+	return haveNetkit()
+}
 
 var haveNetkit = internal.NewFeatureTest("netkit", func() error {
 	prog, err := ebpf.NewProgram(&ebpf.ProgramSpec{

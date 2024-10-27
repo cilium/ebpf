@@ -940,6 +940,10 @@ func TestKfuncKmod(t *testing.T) {
 func TestStructOps(t *testing.T) {
 	testutils.SkipOnOldKernel(t, "5.6", "struct_ops support")
 
+	if !haveTestmod(t) || !haveDummyOps(t) {
+		t.Skip("bpf_dummy_ops not supported")
+	}
+
 	file := testutils.NativeFile(t, "testdata/struct_ops-%s.elf")
 	spec, err := LoadCollectionSpec(file)
 	if err != nil {

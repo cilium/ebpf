@@ -24,3 +24,21 @@ func haveTestmod(tb testing.TB) bool {
 
 	return haveTestmod
 }
+
+func haveDummyOps(tb testing.TB) bool {
+	haveDummyOps := false
+	if !testutils.IsKernelLessThan(tb, "5.6") {
+		s, err := btf.LoadKernelSpec()
+		if err != nil {
+			tb.Fatal(err)
+		}
+
+		typ, err := s.FindStructByNameWithPrefix("bpf_dummy_ops")
+		if err != nil && !errors.Is(err, btf.ErrNotFound) {
+			tb.Fatal(err)
+		}
+
+		haveDummyOps = typ != nil
+	}
+	return haveDummyOps
+}

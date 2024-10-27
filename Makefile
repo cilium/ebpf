@@ -46,6 +46,7 @@ TARGETS := \
 	testdata/kfunc-kmod \
 	testdata/constants \
 	testdata/errors \
+	testdata/struct_ops \
 	btf/testdata/relocs \
 	btf/testdata/relocs_read \
 	btf/testdata/relocs_read_tgt \

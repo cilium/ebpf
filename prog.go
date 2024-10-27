@@ -134,6 +134,9 @@ type ProgramSpec struct {
 
 	// The byte order this program was compiled for, may be nil.
 	ByteOrder binary.ByteOrder
+
+	AttachBtfId        btf.TypeID
+	ExpectedAttachType sys.AttachType
 }
 
 // Copy returns a copy of the spec.
@@ -384,7 +387,7 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions) (*Program, er
 		attr.AttachBtfId = targetID
 		attr.AttachBtfObjFd = uint32(spec.AttachTarget.FD())
 		defer runtime.KeepAlive(spec.AttachTarget)
-	} else if spec.AttachTo != "" {
+	} else if spec.AttachTo != "" && spec.Type != StructOps {
 		module, targetID, err := findProgramTargetInKernel(spec.AttachTo, spec.Type, spec.AttachType)
 		if err != nil && !errors.Is(err, errUnrecognizedAttachType) {
 			// We ignore errUnrecognizedAttachType since AttachTo may be non-empty
@@ -407,6 +410,11 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions) (*Program, er
 		attr.LogLevel = opts.LogLevel
 		attr.LogSize = uint32(len(logBuf))
 		attr.LogBuf = sys.NewSlicePointer(logBuf)
+	}
+
+	if spec.Type == StructOps {
+		attr.AttachBtfId = spec.AttachBtfId
+		attr.ExpectedAttachType = spec.ExpectedAttachType
 	}
 
 	for {

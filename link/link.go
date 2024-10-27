@@ -148,6 +148,8 @@ type RawLinkOptions struct {
 	BTF btf.TypeID
 	// Flags control the attach behaviour.
 	Flags uint32
+	// ProgramFD
+	ProgramFd int
 }
 
 // Info contains metadata on a link.
@@ -329,9 +331,12 @@ func AttachRawLink(opts RawLinkOptions) (*RawLink, error) {
 		return nil, fmt.Errorf("invalid target: %s", sys.ErrClosedFd)
 	}
 
-	progFd := opts.Program.FD()
-	if progFd < 0 {
-		return nil, fmt.Errorf("invalid program: %s", sys.ErrClosedFd)
+	progFd := opts.ProgramFd
+	if opts.Program != nil {
+		progFd = opts.Program.FD()
+		if progFd < 0 {
+			return nil, fmt.Errorf("invalid program: %s", sys.ErrClosedFd)
+		}
 	}
 
 	attr := sys.LinkCreateAttr{

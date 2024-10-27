@@ -516,6 +516,70 @@ func TestFixupDatasecLayout(t *testing.T) {
 	qt.Assert(t, qt.Equals(ds.Vars[5].Offset, 32))
 }
 
+func TestSkipModAndTypedefs(t *testing.T) {
+	spec := vmlinuxTestdataSpec(t)
+
+	// function pointer
+	fpType, err := spec.TypeByID(58)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	fp, err := spec.SkipModsAndTypedefs(fpType)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if _, ok := fp.(*Pointer); !ok {
+		t.Fatal("should be pointer")
+	}
+
+	// const
+	cType, err := spec.TypeByID(3)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	c, err := spec.SkipModsAndTypedefs(cType)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if _, ok := c.(*Int); !ok {
+		t.Fatal("should be int")
+	}
+}
+
+func TestFindStructType(t *testing.T) {
+	spec := vmlinuxTestdataSpec(t)
+
+	stType, err := spec.FindStructTypeByName("bpf_dummy_ops")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, ok := stType.(*Struct)
+	qt.Assert(t, qt.IsTrue(ok))
+}
+
+func TestIsFunctionPointer(t *testing.T) {
+	spec := vmlinuxTestdataSpec(t)
+
+	// function pointer
+	fpType, err := spec.TypeByID(58)
+	if err != nil {
+		t.Fatal(err)
+	}
+	qt.Assert(t, qt.IsTrue(spec.IsFunctionPointer(fpType)))
+
+	// const
+	cType, err := spec.TypeByID(3)
+	if err != nil {
+		t.Fatal(err)
+	}
+	qt.Assert(t, qt.IsFalse(spec.IsFunctionPointer(cType)))
+}
+
 func TestSpecConcurrentAccess(t *testing.T) {
 	spec := vmlinuxTestdataSpec(t)
 

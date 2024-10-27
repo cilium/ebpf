@@ -114,8 +114,12 @@ func LoadCollectionSpecFromReader(rd io.ReaderAt) (*CollectionSpec, error) {
 		case sec.Type == elf.SHT_REL:
 			// Store relocations under the section index of the target
 			relSections[elf.SectionIndex(sec.Info)] = sec
-		case sec.Type == elf.SHT_PROGBITS && (sec.Flags&elf.SHF_EXECINSTR) != 0 && sec.Size > 0:
-			sections[idx] = newElfSection(sec, programSection)
+		case sec.Type == elf.SHT_PROGBITS:
+			if (sec.Flags&elf.SHF_EXECINSTR) != 0 && sec.Size > 0 {
+				sections[idx] = newElfSection(sec, programSection)
+			} else if sec.Name == structOpsSec || sec.Name == structOpsLinkSec {
+				sections[idx] = newElfSection(sec, structOpsSection)
+			}
 		}
 	}
 
@@ -162,6 +166,10 @@ func LoadCollectionSpecFromReader(rd io.ReaderAt) (*CollectionSpec, error) {
 		return nil, fmt.Errorf("load maps: %w", err)
 	}
 
+	if err := ec.loadStructOpsMaps(); err != nil {
+		return nil, fmt.Errorf("load StructOps setion: %w", err)
+	}
+
 	if err := ec.loadBTFMaps(); err != nil {
 		return nil, fmt.Errorf("load BTF maps: %w", err)
 	}
@@ -182,6 +190,10 @@ func LoadCollectionSpecFromReader(rd io.ReaderAt) (*CollectionSpec, error) {
 	progs, err := ec.loadProgramSections()
 	if err != nil {
 		return nil, fmt.Errorf("load programs: %w", err)
+	}
+
+	if err := ec.collectStructOpsRelos(progs, relSections, symbols); err != nil {
+		return nil, fmt.Errorf("collect StructOps relos: %w", err)
 	}
 
 	return &CollectionSpec{ec.maps, progs, ec.vars, btfSpec, ec.ByteOrder}, nil
@@ -231,6 +243,7 @@ const (
 	btfMapSection
 	programSection
 	dataSection
+	structOpsSection
 )
 
 type elfSection struct {
@@ -278,7 +291,7 @@ func (ec *elfCode) assignSymbols(symbols []elf.Symbol) {
 			if symType != elf.STT_NOTYPE && symType != elf.STT_OBJECT {
 				continue
 			}
-		case programSection:
+		case programSection, structOpsSection:
 			if symType != elf.STT_NOTYPE && symType != elf.STT_FUNC {
 				continue
 			}
@@ -337,7 +350,11 @@ func (ec *elfCode) loadProgramSections() (map[string]*ProgramSpec, error) {
 	// Generate a ProgramSpec for each function found in each program section.
 	var export []string
 	for _, sec := range ec.sections {
-		if sec.kind != programSection {
+		if sec.kind != programSection && sec.kind != structOpsSection {
+			continue
+		}
+
+		if !(sec.Type == elf.SHT_PROGBITS && (sec.Flags&elf.SHF_EXECINSTR) != 0) {
 			continue
 		}
 
@@ -555,7 +572,7 @@ func (ec *elfCode) relocateInstruction(ins *asm.Instruction, rel elf.Symbol) err
 		ins.Constant = int64(uint64(offset) << 32)
 		ins.Src = asm.PseudoMapValue
 
-	case programSection:
+	case programSection, structOpsSection:
 		switch opCode := ins.OpCode; {
 		case opCode.JumpOp() == asm.Call:
 			if ins.Src != asm.PseudoCall {
@@ -1439,4 +1456,149 @@ func (ec *elfCode) loadSectionRelocations(sec *elf.Section, symbols []elf.Symbol
 	}
 
 	return rels, nil
+}
+
+// collectStructOpsRelos processes relocation sections related to struct_ops.
+// It iterates over the relocation sections, identifies those targeting struct_ops sections,
+// and processes each relocation to associate programs with struct_ops maps.
+func (ec *elfCode) collectStructOpsRelos(
+	progs map[string]*ProgramSpec,
+	relSections map[elf.SectionIndex]*elf.Section,
+	symbols []elf.Symbol) error {
+
+	for _, sec := range relSections {
+		if !strings.HasPrefix(sec.Name, ".rel") {
+			continue
+		}
+
+		relSec := sec
+		targetSec, ok := ec.sections[elf.SectionIndex(sec.Info)]
+		if !(ok && strings.HasPrefix(targetSec.Name, structOpsSec)) {
+			continue
+		}
+
+		// Load the relocations from the relocation section
+		rels, err := ec.loadSectionRelocations(relSec, symbols)
+		if err != nil {
+			return fmt.Errorf("failed to load relocations for section %s: %w", relSec.Name, err)
+		}
+
+		for relOff, symbol := range rels {
+			if err := ec.processStructOpsRelo(progs, sec, relOff, symbol); err != nil {
+				return fmt.Errorf("failed to process StructOps relo: %w", err)
+			}
+		}
+	}
+
+	return nil
+}
+
+// processStructOpsRelo handles a single struct_ops relocation.
+// It finds the corresponding struct_ops map and associates the relocated program with
+// the appropriate struct member.
+func (ec *elfCode) processStructOpsRelo(
+	progs map[string]*ProgramSpec,
+	sec *elf.Section,
+	relOff uint64,
+	symbol elf.Symbol) error {
+
+	// Find the struct_ops map corresponding to the given section index and offset
+	ms, err := findStructOpsMapByOffset(ec.maps, int32(sec.Info), relOff)
+	if err != nil {
+		return fmt.Errorf("failed to find StructOps map: %w", err)
+	}
+
+	structOps := ms.StructOps
+	if structOps == nil {
+		return fmt.Errorf("StructOpsSpec not found in map %s", ms.Name)
+	}
+
+	spec, err := btf.LoadKernelSpec()
+	if err != nil {
+		return fmt.Errorf("failed to load kernel BTF: %w", err)
+	}
+
+	typ, err := spec.TypeByID(structOps.TypeId)
+	if err != nil {
+		return fmt.Errorf("failed to get BTF type by ID: %d: %w", structOps.TypeId, err)
+	}
+
+	structType, ok := typ.(*btf.Struct)
+	if !ok {
+		return fmt.Errorf("type ID %d is not a struct", structOps.TypeId)
+	}
+
+	// Find the index of the struct member at the given offset
+	moff := relOff - ms.SecOffset
+	memberIdx := structType.IndexByOffset(moff * 8)
+	if err != nil {
+		return fmt.Errorf("failed to find member at offset %d: %w", moff, err)
+	}
+
+	progSpec, ok := progs[symbol.Name]
+	if !(ok && progSpec.Type == StructOps) {
+		return fmt.Errorf("ProgramSpec %s not found", symbol.Name)
+	}
+
+	// Associate the program with the corresponding member in the struct_ops map
+	structOps.ProgramSpecs[memberIdx] = progSpec
+	//binary.LittleEndian.PutUint64(structOps.Data[moff:], 0)
+
+	return nil
+}
+
+// loadStructOpsMaps processes all struct_ops sections and loads the corresponding maps.
+// It iterates over all sections, identifies struct_ops sections,
+// and processes each one to create and initialize maps.
+func (ec *elfCode) loadStructOpsMaps() error {
+	for secIdx, sec := range ec.sections {
+		if sec.kind != structOpsSection {
+			continue
+		}
+
+		// Process the struct_ops section to create the map
+		if err := processStructOpsSection(ec.btf, secIdx, sec, ec.maps); err != nil {
+			return fmt.Errorf("failed to process StructOps section %s: %w", sec.Name, err)
+		}
+	}
+
+	return nil
+}
+
+func processStructOpsSection(
+	spec *btf.Spec,
+	secIdx elf.SectionIndex,
+	sec *elfSection,
+	maps map[string]*MapSpec) error {
+	// Get the BTF DataSec type for this section
+	dataSecType, err := spec.AnyTypeByName(sec.Name)
+	if err != nil {
+		return fmt.Errorf("failed to find BTF type for section %s: %w", sec.Name, err)
+	}
+	dataSec, ok := dataSecType.(*btf.Datasec)
+	if !ok {
+		return fmt.Errorf("BTF type for section %s is not a DataSec", sec.Name)
+	}
+
+	// Iterate over variables in the DataSec
+	for _, v := range dataSec.Vars {
+		vt, ok := v.Type.(*btf.Var)
+		if !ok {
+			return fmt.Errorf("section %v: unexpected type %s", sec.Name, v.Type)
+		}
+
+		s, ok := btf.UnderlyingType(vt.Type).(*btf.Struct)
+		if !ok {
+			return fmt.Errorf("section %v: expected struct", sec.Name)
+		}
+
+		mapSpec, err := createStructOpsMap(spec, &v, s, secIdx, sec)
+		if err != nil {
+			return fmt.Errorf("failed to create struct_ops map for variable %s: %w", v.Type.TypeName(), err)
+		}
+
+		maps[vt.Name] = mapSpec
+	}
+
+	return nil
 }

@@ -44,6 +44,11 @@ enum libbpf_tristate {
 #define BPF_F_NO_PREALLOC (1U << 0)
 #define BPF_F_CURRENT_CPU (0xffffffffULL)
 
+#define DUMMY_OPS_DEFINE(__name, ...) \
+	__section(".struct_ops.link") struct bpf_dummy_ops __name = { \
+		__VA_ARGS__, \
+	};
+
 /* From tools/lib/bpf/libbpf.h */
 struct bpf_map_def {
 	unsigned int type;

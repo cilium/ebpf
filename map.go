@@ -83,6 +83,17 @@ type MapSpec struct {
 
 	// The key and value type of this map. May be nil.
 	Key, Value btf.Type
+
+	// This attribute specifies the BTF type ID of the map value within
+	// the BTF object indicated by btf_id.
+	BtfValueTypeId btf.TypeID
+	// This attribute is specifically used for the BPF_MAP_TYPE_STRUCT_OPS map type to
+	// indicate which structure in the kernel we wish to replicate using eBPF.
+	BtfVmlinuxValueTypeId btf.TypeID
+	StructOps             *StructOpsSpec
+	BtfFd                 uint32
+	SecIdx                int32
+	SecOffset             uint64
 }
 
 func (ms *MapSpec) String() string {
@@ -447,6 +458,15 @@ func (spec *MapSpec) createMap(inner *sys.FD) (_ *Map, err error) {
 			attr.BtfKeyTypeId = keyTypeID
 			attr.BtfValueTypeId = valueTypeID
 		}
+	}
+
+	if spec.Type == StructOpsMap {
+		var b btf.Builder
+		handle, _ := btf.NewHandle(&b)
+
+		attr.ValueSize = spec.ValueSize
+		attr.BtfVmlinuxValueTypeId = spec.BtfVmlinuxValueTypeId
+		attr.BtfFd = uint32(handle.FD())
 	}
 
 	fd, err := sys.MapCreate(&attr)

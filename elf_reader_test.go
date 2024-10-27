@@ -937,6 +937,36 @@ func TestKfuncKmod(t *testing.T) {
 	}
 }
 
+func TestStructOps(t *testing.T) {
+	testutils.SkipOnOldKernel(t, "5.6", "struct_ops support")
+
+	file := testutils.NativeFile(t, "testdata/struct_ops-%s.elf")
+	spec, err := LoadCollectionSpec(file)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var obj struct {
+		DummyTest1         *Program `ebpf:"dummy_test_1"`
+		DummyTestSleepable *Program `ebpf:"dummy_test_sleepable"`
+		DummyOps           *Map     `ebpf:"dummy_ops"`
+	}
+
+	err = spec.LoadAndAssign(&obj, nil)
+	testutils.SkipIfNotSupported(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer obj.DummyTest1.Close()
+	defer obj.DummyTestSleepable.Close()
+	defer obj.DummyOps.Close()
+
+	err = spec.LoadAndAssign(&obj, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestSubprogRelocation(t *testing.T) {
 	testutils.SkipOnOldKernel(t, "5.13", "bpf_for_each_map_elem")
 

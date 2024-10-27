@@ -669,6 +669,73 @@ func (s *Spec) TypeByName(name string, typ interface{}) error {
 	return nil
 }
 
+func (s *Spec) SkipModsAndTypedefs(typ Type) (Type, error) {
+	typeID, err := s.typeID(typ)
+	if err != nil {
+		return nil, fmt.Errorf("failed to find typeid of %s %w", typ.TypeName(), err)
+	}
+
+	t, err := s.TypeByID(typeID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to find type by ID %d: %w", typeID, err)
+	}
+
+	switch tt := t.(type) {
+	case *Typedef:
+		return UnderlyingType(tt.Type), nil
+	case *Const:
+		return UnderlyingType(tt.Type), nil
+	case *Volatile:
+		return UnderlyingType(tt.Type), nil
+	case *Restrict:
+		return UnderlyingType(tt.Type), nil
+	default:
+		return t, nil
+	}
+}
+
+func (s *Spec) FindStructTypeByName(name string) (Type, error) {
+	it := s.Iterate()
+
+	for it.Next() {
+		t := it.Type
+		if _, ok := t.(*Struct); ok {
+			if t.TypeName() == name {
+				return t, nil
+			}
+		}
+	}
+
+	return nil, fmt.Errorf("type %s not found in BTF", name)
+}
+
+const strucOpsValuePrefix = "bpf_struct_ops_"
+
+func (s *Spec) FindStructByNameWithPrefix(name string) (Type, error) {
+	return s.FindStructTypeByName(strucOpsValuePrefix + name)
+}
+
+// IsFunctionPointer checks if type is a Pointer and its target type is FuncProto
+func (s *Spec) IsFunctionPointer(typ Type) bool {
+	ptrType, ok := typ.(*Pointer)
+	if !ok {
+		return false
+	}
+
+	typeId, err := s.TypeID(ptrType.Target)
+	if err != nil {
+		return false
+	}
+
+	targetType, err := s.TypeByID(typeId)
+	if err != nil {
+		return false
+	}
+
+	_, isFuncProto := targetType.(*FuncProto)
+	return isFuncProto
+}
+
 // LoadSplitSpecFromReader loads split BTF from a reader.
 //
 // Types from base are used to resolve references in the split BTF.

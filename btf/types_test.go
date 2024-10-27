@@ -458,6 +458,58 @@ func TestInflateLegacyBitfield(t *testing.T) {
 	}
 }
 
+func TestFindMemberidx(t *testing.T) {
+	s1 := Struct{
+		Name: "struct",
+		Members: []Member{
+			Member{Name: "sa", Type: &Int{}, Offset: 0},
+			Member{Name: "sb", Type: &Int{}, Offset: 4},
+			Member{Name: "sc", Type: &Int{}, Offset: 8},
+			Member{Name: "sd", Type: &Int{}, Offset: 12},
+		},
+	}
+
+	m1 := &Member{Name: "mc", Type: &Int{}, Offset: 8}
+	qt.Assert(t, qt.IsTrue(s1.IndexOf(m1) >= 0))
+
+	m2 := &Member{Name: "mz", Type: &Int{}, Offset: 16}
+	qt.Assert(t, qt.IsTrue(s1.IndexOf(m2) == -1))
+}
+
+func TestFindMemberidxByOfs(t *testing.T) {
+	s1 := Struct{
+		Name: "struct",
+		Members: []Member{
+			Member{Name: "sa", Type: &Int{}, Offset: 0},
+			Member{Name: "sb", Type: &Int{}, Offset: 4},
+			Member{Name: "sc", Type: &Int{}, Offset: 8},
+			Member{Name: "sd", Type: &Int{}, Offset: 12},
+		},
+	}
+
+	qt.Assert(t, qt.IsTrue(s1.IndexByOffset(8) == 2))
+	qt.Assert(t, qt.IsTrue(s1.IndexByOffset(16) == -1))
+}
+
+func TestFindMemberByName(t *testing.T) {
+	s := Struct{
+		Name: "struct",
+		Members: []Member{
+			Member{Name: "sa", Type: &Int{}, Offset: 0},
+			Member{Name: "sb", Type: &Int{}, Offset: 4},
+			Member{Name: "sc", Type: &Int{}, Offset: 8},
+			Member{Name: "sd", Type: &Int{}, Offset: 12},
+		},
+	}
+
+	m, err := s.FindByName("sa")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	qt.Assert(t, qt.Equals(m.Name, "sa"))
+}
+
 func BenchmarkWalk(b *testing.B) {
 	types := []Type{
 		&Void{},

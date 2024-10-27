@@ -178,6 +178,55 @@ func (s *Struct) Format(fs fmt.State, verb rune) {
 
 func (s *Struct) TypeName() string { return s.Name }
 
+// IndexOf returns an index of the element in the struct
+func (s *Struct) IndexOf(member *Member) int {
+	for idx, m := range s.Members {
+		if m.Offset == (*member).Offset {
+			return idx
+		}
+	}
+	return -1
+}
+
+// IndexByOffset returns an index of the element in the struct by bitoffset
+func (s *Struct) IndexByOffset(ofs uint64) int {
+	for idx, member := range s.Members {
+		if member.Offset == Bits(ofs) {
+			return idx
+		}
+	}
+	return -1
+}
+
+// FindByName searches for a member in the struct by its name
+func (s *Struct) FindByName(name string) (*Member, error) {
+	for _, member := range s.Members {
+		if member.Name == name {
+			return &member, nil
+		}
+	}
+	return nil, fmt.Errorf("member %s not found in struct %s", name, s.Name)
+}
+
+// FindByType searches for a member in the struct by its type
+func (s *Struct) FindByType(spec *Spec, typ Type) (*Member, error) {
+	typeId, err := spec.TypeID(typ)
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve typeId for %s: %w", (typ).TypeName(), err)
+	}
+
+	for _, member := range s.Members {
+		memberTypeId, err := spec.TypeID(member.Type)
+		if err != nil {
+			return nil, fmt.Errorf("failed to resolve typeId for %s: %w", member.Name, err)
+		}
+		if memberTypeId == typeId {
+			return &member, nil
+		}
+	}
+	return nil, fmt.Errorf("member of type %s not found in %s", typ.TypeName(), s.Name)
+}
+
 func (s *Struct) size() uint32 { return s.Size }
 
 func (s *Struct) copy() Type {
@@ -264,6 +313,10 @@ type Member struct {
 	Offset       Bits
 	BitfieldSize Bits
 	Tags         []string
+}
+
+func (m *Member) IsBitfield() bool {
+	return m.BitfieldSize > 0
 }
 
 // Enum lists possible values.

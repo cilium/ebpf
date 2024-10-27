@@ -960,11 +960,6 @@ func TestStructOps(t *testing.T) {
 	defer obj.DummyTest1.Close()
 	defer obj.DummyTestSleepable.Close()
 	defer obj.DummyOps.Close()
-
-	err = spec.LoadAndAssign(&obj, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
 }
 
 func TestSubprogRelocation(t *testing.T) {

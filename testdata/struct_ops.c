@@ -16,4 +16,7 @@ __section("struct_ops.s/dummy_test_sleepable") int dummy_test_sleepable(void *ar
 	return 0;
 }
 
-__section(".struct_ops.link") struct bpf_dummy_ops dummy_ops = {.test_1 = dummy_test_1, .test_sleepable = dummy_test_sleepable};
+__section(".struct_ops.link") struct bpf_dummy_ops dummy_ops = {
+	.test_1         = (void *)dummy_test_1,
+	.test_sleepable = (void *)dummy_test_sleepable,
+};

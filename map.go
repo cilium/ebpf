@@ -462,7 +462,11 @@ func (spec *MapSpec) createMap(inner *sys.FD) (_ *Map, err error) {
 
 	if spec.Type == StructOpsMap {
 		var b btf.Builder
-		handle, _ := btf.NewHandle(&b)
+		handle, err := btf.NewHandle(&b)
+		if err != nil {
+			return nil, err
+		}
+		defer handle.Close()
 
 		attr.ValueSize = spec.ValueSize
 		attr.BtfVmlinuxValueTypeId = spec.BtfVmlinuxValueTypeId

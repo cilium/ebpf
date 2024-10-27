@@ -47,7 +47,7 @@ func TestFindStructOpsMapByOffset(t *testing.T) {
 	qt.Assert(t, qt.IsNil(err))
 	qt.Assert(t, qt.Equals(ms.Name, "b"))
 
-	ms, err = findStructOpsMapByOffset(maps, 0, 0)
+	_, err = findStructOpsMapByOffset(maps, 0, 0)
 	qt.Assert(t, qt.Not(qt.IsNil(err)))
 }
 

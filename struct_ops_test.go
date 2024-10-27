@@ -5,9 +5,10 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/go-quicktest/qt"
+
 	"github.com/cilium/ebpf/btf"
 	"github.com/cilium/ebpf/internal"
-	"github.com/go-quicktest/qt"
 )
 
 type specAndRawBTF struct {

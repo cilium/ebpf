@@ -462,10 +462,10 @@ func TestFindMemberidx(t *testing.T) {
 	s1 := Struct{
 		Name: "struct",
 		Members: []Member{
-			Member{Name: "sa", Type: &Int{}, Offset: 0},
-			Member{Name: "sb", Type: &Int{}, Offset: 4},
-			Member{Name: "sc", Type: &Int{}, Offset: 8},
-			Member{Name: "sd", Type: &Int{}, Offset: 12},
+			{Name: "sa", Type: &Int{}, Offset: 0},
+			{Name: "sb", Type: &Int{}, Offset: 4},
+			{Name: "sc", Type: &Int{}, Offset: 8},
+			{Name: "sd", Type: &Int{}, Offset: 12},
 		},
 	}
 
@@ -480,10 +480,10 @@ func TestFindMemberidxByOfs(t *testing.T) {
 	s1 := Struct{
 		Name: "struct",
 		Members: []Member{
-			Member{Name: "sa", Type: &Int{}, Offset: 0},
-			Member{Name: "sb", Type: &Int{}, Offset: 4},
-			Member{Name: "sc", Type: &Int{}, Offset: 8},
-			Member{Name: "sd", Type: &Int{}, Offset: 12},
+			{Name: "sa", Type: &Int{}, Offset: 0},
+			{Name: "sb", Type: &Int{}, Offset: 4},
+			{Name: "sc", Type: &Int{}, Offset: 8},
+			{Name: "sd", Type: &Int{}, Offset: 12},
 		},
 	}
 
@@ -495,10 +495,10 @@ func TestFindMemberByName(t *testing.T) {
 	s := Struct{
 		Name: "struct",
 		Members: []Member{
-			Member{Name: "sa", Type: &Int{}, Offset: 0},
-			Member{Name: "sb", Type: &Int{}, Offset: 4},
-			Member{Name: "sc", Type: &Int{}, Offset: 8},
-			Member{Name: "sd", Type: &Int{}, Offset: 12},
+			{Name: "sa", Type: &Int{}, Offset: 0},
+			{Name: "sb", Type: &Int{}, Offset: 4},
+			{Name: "sc", Type: &Int{}, Offset: 8},
+			{Name: "sd", Type: &Int{}, Offset: 12},
 		},
 	}
 

@@ -1220,7 +1220,8 @@ func (ec *elfCode) loadDataSections() error {
 						return fmt.Errorf("data section %s: anonymous variable %v", sec.Name, v)
 					}
 
-					if _, ok := v.Type.(*btf.Var); !ok {
+					vt, ok := v.Type.(*btf.Var)
+					if !ok {
 						return fmt.Errorf("data section %s: unexpected type %T for variable %s", sec.Name, v.Type, name)
 					}
 
@@ -1238,7 +1239,7 @@ func (ec *elfCode) loadDataSections() error {
 						return fmt.Errorf("data section %s: variable %s size in datasec (%d) doesn't match ELF symbol size (%d)", sec.Name, name, v.Size, ev.size)
 					}
 
-					ev.t = v.Type
+					ev.t = vt.Type
 				}
 			}
 		}

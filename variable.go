@@ -80,8 +80,7 @@ func (s *VariableSpec) Constant() bool {
 	return s.m.readOnly()
 }
 
-// Type returns the BTF type of the variable. It contains the [btf.Var] wrapping
-// the underlying variable's type.
+// Type returns the BTF Type of the variable.
 func (s *VariableSpec) Type() btf.Type {
 	return s.t
 }

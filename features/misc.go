@@ -93,3 +93,30 @@ var haveV3ISA = internal.NewFeatureTest("v3 ISA", func() error {
 		},
 	})
 }, "5.1")
+
+// HaveV4ISA probes the running kernel if instructions of the v4 ISA are supported.
+//
+// Upstream commit 1f9a1ea821ff ("bpf: Support new sign-extension load insns").
+//
+// See the package documentation for the meaning of the error return value.
+func HaveV4ISA() error {
+	return haveV4ISA()
+}
+
+var haveV4ISA = internal.NewFeatureTest("v4 ISA", func() error {
+	err := probeProgram(&ebpf.ProgramSpec{
+		Type: ebpf.SocketFilter,
+		Instructions: asm.Instructions{
+			asm.Mov.Imm(asm.R0, 0),
+			asm.JEq.Imm(asm.R0, 1, "error"),
+			asm.LongJump("exit"),
+			asm.Mov.Imm(asm.R0, 1).WithSymbol("error"),
+			asm.Return().WithSymbol("exit"),
+		},
+	})
+	// This sometimes bubbles up from the JIT on aarch64.
+	if errors.Is(err, sys.ENOTSUPP) {
+		return ebpf.ErrNotSupported
+	}
+	return err
+}, "6.6")

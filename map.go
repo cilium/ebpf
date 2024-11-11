@@ -1589,6 +1589,10 @@ func unmarshalMap(buf sysenc.Buffer) (*Map, error) {
 
 // marshalMap marshals the fd of a map into a buffer in host endianness.
 func marshalMap(m *Map, length int) ([]byte, error) {
+	if m == nil {
+		return nil, errors.New("can't marshal a nil Map")
+	}
+
 	if length != 4 {
 		return nil, fmt.Errorf("can't marshal map to %d bytes", length)
 	}

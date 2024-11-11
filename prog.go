@@ -893,6 +893,10 @@ func unmarshalProgram(buf sysenc.Buffer) (*Program, error) {
 }
 
 func marshalProgram(p *Program, length int) ([]byte, error) {
+	if p == nil {
+		return nil, errors.New("can't marshal a nil Program")
+	}
+
 	if length != 4 {
 		return nil, fmt.Errorf("can't marshal program to %d bytes", length)
 	}

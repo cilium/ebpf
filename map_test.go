@@ -905,6 +905,10 @@ func TestMapInMap(t *testing.T) {
 				t.Fatal("Can't put inner map:", err)
 			}
 
+			if err := outer.Put(uint32(0), (*Map)(nil)); err == nil {
+				t.Fatal("Put accepted a nil Map")
+			}
+
 			var inner2 *Map
 			if err := outer.Lookup(uint32(0), &inner2); err != nil {
 				t.Fatal("Can't lookup 0:", err)

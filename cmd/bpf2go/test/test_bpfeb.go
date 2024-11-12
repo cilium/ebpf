@@ -61,9 +61,10 @@ func loadTestObjects(obj interface{}, opts *ebpf.CollectionOptions) error {
 type testSpecs struct {
 	testProgramSpecs
 	testMapSpecs
+	testVariableSpecs
 }
 
-// testSpecs contains programs before they are loaded into the kernel.
+// testProgramSpecs contains programs before they are loaded into the kernel.
 //
 // It can be passed ebpf.CollectionSpec.Assign.
 type testProgramSpecs struct {
@@ -77,12 +78,21 @@ type testMapSpecs struct {
 	Map1 *ebpf.MapSpec `ebpf:"map1"`
 }
 
+// testVariableSpecs contains global variables before they are loaded into the kernel.
+//
+// It can be passed ebpf.CollectionSpec.Assign.
+type testVariableSpecs struct {
+	MyConstant  *ebpf.VariableSpec `ebpf:"my_constant"`
+	StructConst *ebpf.VariableSpec `ebpf:"struct_const"`
+}
+
 // testObjects contains all objects after they have been loaded into the kernel.
 //
 // It can be passed to loadTestObjects or ebpf.CollectionSpec.LoadAndAssign.
 type testObjects struct {
 	testPrograms
 	testMaps
+	testVariables
 }
 
 func (o *testObjects) Close() error {
@@ -103,6 +113,14 @@ func (m *testMaps) Close() error {
 	return _TestClose(
 		m.Map1,
 	)
+}
+
+// testVariables contains all global variables after they have been loaded into the kernel.
+//
+// It can be passed to loadTestObjects or ebpf.CollectionSpec.LoadAndAssign.
+type testVariables struct {
+	MyConstant  *ebpf.Variable `ebpf:"my_constant"`
+	StructConst *ebpf.Variable `ebpf:"struct_const"`
 }
 
 // testPrograms contains all programs after they have been loaded into the kernel.

@@ -97,3 +97,25 @@ func TestCustomIdentifier(t *testing.T) {
 	qt.Assert(t, qt.IsNil(err))
 	qt.Assert(t, qt.StringContains(buf.String(), "DO_THING"))
 }
+
+func TestBpfObjects(t *testing.T) {
+	var buf bytes.Buffer
+	args := GenerateArgs{
+		Package:   "foo",
+		Stem:      "bar",
+		Maps:      []string{"map1"},
+		Variables: []string{"var_1"},
+		Programs:  []string{"prog_foo_1"},
+		Output:    &buf,
+	}
+	err := Generate(args)
+	qt.Assert(t, qt.IsNil(err))
+
+	qt.Assert(t, qt.StringContains(buf.String(), "Map1 *ebpf.MapSpec `ebpf:\"map1\"`"))
+	qt.Assert(t, qt.StringContains(buf.String(), "Var1 *ebpf.VariableSpec `ebpf:\"var_1\"`"))
+	qt.Assert(t, qt.StringContains(buf.String(), "ProgFoo1 *ebpf.ProgramSpec `ebpf:\"prog_foo_1\"`"))
+
+	qt.Assert(t, qt.StringContains(buf.String(), "Map1 *ebpf.Map `ebpf:\"map1\"`"))
+	qt.Assert(t, qt.StringContains(buf.String(), "Var1 *ebpf.Variable `ebpf:\"var_1\"`"))
+	qt.Assert(t, qt.StringContains(buf.String(), "ProgFoo1 *ebpf.Program `ebpf:\"prog_foo_1\"`"))
+}

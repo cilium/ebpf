@@ -18,6 +18,18 @@ func TestLoadingSpec(t *testing.T) {
 	if spec == nil {
 		t.Fatal("Got a nil spec")
 	}
+
+	if spec.Programs == nil {
+		t.Error("Got a nil spec for programs")
+	}
+
+	if spec.Maps == nil {
+		t.Error("Got a nil spec for maps")
+	}
+
+	if spec.Variables == nil {
+		t.Error("Got a nil spec for variables")
+	}
 }
 
 func TestLoadingObjects(t *testing.T) {
@@ -35,6 +47,10 @@ func TestLoadingObjects(t *testing.T) {
 
 	if objs.Map1 == nil {
 		t.Error("Loading returns an object with nil maps")
+	}
+
+	if objs.MyConstant == nil || objs.StructConst == nil {
+		t.Error("Loading returns an object with nil variables")
 	}
 }
 

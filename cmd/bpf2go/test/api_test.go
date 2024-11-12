@@ -5,19 +5,20 @@ import (
 	"testing"
 	"unsafe"
 
+	"github.com/go-quicktest/qt"
+
 	"github.com/cilium/ebpf/internal/testutils"
 )
 
 func TestLoadingSpec(t *testing.T) {
 	spec, err := loadTest()
 	testutils.SkipIfNotSupported(t, err)
-	if err != nil {
-		t.Fatal("Can't load spec:", err)
-	}
+	qt.Assert(t, qt.IsNil(err))
 
-	if spec == nil {
-		t.Fatal("Got a nil spec")
-	}
+	qt.Assert(t, qt.Not(qt.IsNil(spec)))
+	qt.Assert(t, qt.Not(qt.IsNil(spec.Programs)))
+	qt.Assert(t, qt.Not(qt.IsNil(spec.Maps)))
+	qt.Assert(t, qt.Not(qt.IsNil(spec.Variables)))
 }
 
 func TestLoadingObjects(t *testing.T) {
@@ -29,13 +30,10 @@ func TestLoadingObjects(t *testing.T) {
 	}
 	defer objs.Close()
 
-	if objs.Filter == nil {
-		t.Error("Loading returns an object with nil programs")
-	}
-
-	if objs.Map1 == nil {
-		t.Error("Loading returns an object with nil maps")
-	}
+	qt.Assert(t, qt.Not(qt.IsNil(objs.Filter)))
+	qt.Assert(t, qt.Not(qt.IsNil(objs.Map1)))
+	qt.Assert(t, qt.Not(qt.IsNil(objs.MyConstant)))
+	qt.Assert(t, qt.Not(qt.IsNil(objs.StructConst)))
 }
 
 func TestTypes(t *testing.T) {

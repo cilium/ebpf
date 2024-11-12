@@ -47,9 +47,10 @@ func loadCounterObjects(obj interface{}, opts *ebpf.CollectionOptions) error {
 type counterSpecs struct {
 	counterProgramSpecs
 	counterMapSpecs
+	counterVariableSpecs
 }
 
-// counterSpecs contains programs before they are loaded into the kernel.
+// counterProgramSpecs contains programs before they are loaded into the kernel.
 //
 // It can be passed ebpf.CollectionSpec.Assign.
 type counterProgramSpecs struct {
@@ -63,12 +64,19 @@ type counterMapSpecs struct {
 	PktCount *ebpf.MapSpec `ebpf:"pkt_count"`
 }
 
+// counterVariableSpecs contains global variables before they are loaded into the kernel.
+//
+// It can be passed ebpf.CollectionSpec.Assign.
+type counterVariableSpecs struct {
+}
+
 // counterObjects contains all objects after they have been loaded into the kernel.
 //
 // It can be passed to loadCounterObjects or ebpf.CollectionSpec.LoadAndAssign.
 type counterObjects struct {
 	counterPrograms
 	counterMaps
+	counterVariables
 }
 
 func (o *counterObjects) Close() error {
@@ -89,6 +97,12 @@ func (m *counterMaps) Close() error {
 	return _CounterClose(
 		m.PktCount,
 	)
+}
+
+// counterVariables contains all global variables after they have been loaded into the kernel.
+//
+// It can be passed to loadCounterObjects or ebpf.CollectionSpec.LoadAndAssign.
+type counterVariables struct {
 }
 
 // counterPrograms contains all programs after they have been loaded into the kernel.

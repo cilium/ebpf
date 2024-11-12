@@ -47,9 +47,10 @@ func loadVariablesObjects(obj interface{}, opts *ebpf.CollectionOptions) error {
 type variablesSpecs struct {
 	variablesProgramSpecs
 	variablesMapSpecs
+	variablesVariableSpecs
 }
 
-// variablesSpecs contains programs before they are loaded into the kernel.
+// variablesProgramSpecs contains programs before they are loaded into the kernel.
 //
 // It can be passed ebpf.CollectionSpec.Assign.
 type variablesProgramSpecs struct {
@@ -64,12 +65,21 @@ type variablesProgramSpecs struct {
 type variablesMapSpecs struct {
 }
 
+// variablesVariableSpecs contains global variables before they are loaded into the kernel.
+//
+// It can be passed ebpf.CollectionSpec.Assign.
+type variablesVariableSpecs struct {
+	ConstU32  *ebpf.VariableSpec `ebpf:"const_u32"`
+	GlobalU16 *ebpf.VariableSpec `ebpf:"global_u16"`
+}
+
 // variablesObjects contains all objects after they have been loaded into the kernel.
 //
 // It can be passed to loadVariablesObjects or ebpf.CollectionSpec.LoadAndAssign.
 type variablesObjects struct {
 	variablesPrograms
 	variablesMaps
+	variablesVariables
 }
 
 func (o *variablesObjects) Close() error {
@@ -87,6 +97,14 @@ type variablesMaps struct {
 
 func (m *variablesMaps) Close() error {
 	return _VariablesClose()
+}
+
+// variablesVariables contains all global variables after they have been loaded into the kernel.
+//
+// It can be passed to loadVariablesObjects or ebpf.CollectionSpec.LoadAndAssign.
+type variablesVariables struct {
+	ConstU32  *ebpf.Variable `ebpf:"const_u32"`
+	GlobalU16 *ebpf.Variable `ebpf:"global_u16"`
 }
 
 // variablesPrograms contains all programs after they have been loaded into the kernel.

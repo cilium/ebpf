@@ -57,7 +57,7 @@ type {{ .Name.Specs }} struct {
 	{{ .Name.VariableSpecs }}
 }
 
-// {{ .Name.Specs }} contains programs before they are loaded into the kernel.
+// {{ .Name.ProgramSpecs }} contains programs before they are loaded into the kernel.
 //
 // It can be passed ebpf.CollectionSpec.Assign.
 type {{ .Name.ProgramSpecs }} struct {

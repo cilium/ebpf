@@ -111,7 +111,7 @@ func TestVariable(t *testing.T) {
 
 	typ := obj.BSS.Type()
 	qt.Assert(t, qt.IsNotNil(typ))
-	i, ok := btf.As[*btf.Int](typ)
+	i, ok := btf.As[*btf.Int](typ.Type)
 	qt.Assert(t, qt.IsTrue(ok))
 	qt.Assert(t, qt.Equals(i.Size, 4))
 

@@ -1239,7 +1239,7 @@ func (ec *elfCode) loadDataSections() error {
 						return fmt.Errorf("data section %s: variable %s size in datasec (%d) doesn't match ELF symbol size (%d)", sec.Name, name, v.Size, ev.size)
 					}
 
-					ev.t = vt.Type
+					ev.t = vt
 				}
 			}
 		}

@@ -75,6 +75,16 @@ func (s *VariableSpec) Size() uint64 {
 	return s.size
 }
 
+// MapName returns the name of the underlying MapSpec.
+func (s *VariableSpec) MapName() string {
+	return s.m.Name
+}
+
+// Offset returns the offset of the variable in the underlying MapSpec.
+func (s *VariableSpec) Offset() uint64 {
+	return s.offset
+}
+
 // Constant returns true if the VariableSpec represents a variable that is
 // read-only from the perspective of the BPF program.
 func (s *VariableSpec) Constant() bool {

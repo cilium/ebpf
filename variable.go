@@ -19,7 +19,7 @@ type VariableSpec struct {
 	size   uint64
 
 	m *MapSpec
-	t btf.Type
+	t *btf.Var
 }
 
 // Set sets the value of the VariableSpec to the provided input using the host's
@@ -81,8 +81,12 @@ func (s *VariableSpec) Constant() bool {
 	return s.m.readOnly()
 }
 
-// Type returns the BTF Type of the variable.
-func (s *VariableSpec) Type() btf.Type {
+// Type returns the [btf.Var] representing the variable in its data section.
+// This is useful for inspecting the variable's decl tags and the type
+// information of the inner type.
+//
+// Returns nil if the original ELF object did not contain BTF information.
+func (s *VariableSpec) Type() *btf.Var {
 	return s.t
 }
 
@@ -122,12 +126,12 @@ type Variable struct {
 	name   string
 	offset uint64
 	size   uint64
-	t      btf.Type
+	t      *btf.Var
 
 	mm *Memory
 }
 
-func newVariable(name string, offset, size uint64, t btf.Type, mm *Memory) (*Variable, error) {
+func newVariable(name string, offset, size uint64, t *btf.Var, mm *Memory) (*Variable, error) {
 	if mm != nil {
 		if int(offset+size) > mm.Size() {
 			return nil, fmt.Errorf("offset %d(+%d) is out of bounds", offset, size)
@@ -159,8 +163,12 @@ func (v *Variable) ReadOnly() bool {
 	return v.mm.ReadOnly()
 }
 
-// Type returns the BTF Type of the variable.
-func (v *Variable) Type() btf.Type {
+// Type returns the [btf.Var] representing the variable in its data section.
+// This is useful for inspecting the variable's decl tags and the type
+// information of the inner type.
+//
+// Returns nil if the original ELF object did not contain BTF information.
+func (v *Variable) Type() *btf.Var {
 	return v.t
 }
 

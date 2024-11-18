@@ -3,11 +3,6 @@
 // Should not appear in CollectionSpec.Variables.
 __hidden volatile uint32_t hidden;
 
-// Should also not appear in CollectionSpec.Variables. Put into its own section
-// to avoid this ending up in .bss where references to other symbols in .bss
-// would overlap, incorrectly preventing it from being culled by the loader.
-volatile uint32_t unreferenced __section(".data.unref");
-
 // Weak variables can be overridden by non-weak symbols when linking BPF
 // programs using bpftool. Make sure they appear in CollectionSpec.Variables.
 __weak volatile uint32_t weak __section(".data.weak");

@@ -16,7 +16,6 @@ func TestVariableSpec(t *testing.T) {
 	qt.Assert(t, qt.IsNil(err))
 
 	qt.Assert(t, qt.IsNil(spec.Variables["hidden"]))
-	qt.Assert(t, qt.IsNil(spec.Variables["unreferenced"]))
 	qt.Assert(t, qt.IsNotNil(spec.Variables["weak"]))
 
 	const want uint32 = 12345

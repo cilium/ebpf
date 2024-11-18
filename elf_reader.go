@@ -1125,12 +1125,6 @@ func (ec *elfCode) loadDataSections() error {
 			continue
 		}
 
-		if sec.references == 0 {
-			// Prune data sections which are not referenced by any
-			// instructions.
-			continue
-		}
-
 		if sec.Size > math.MaxUint32 {
 			return fmt.Errorf("data section %s: contents exceed maximum size", sec.Name)
 		}

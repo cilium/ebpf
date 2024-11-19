@@ -147,6 +147,66 @@ func TestMarshalEnum64(t *testing.T) {
 	}))
 }
 
+func TestMarshalDeclTags(t *testing.T) {
+	types := []Type{
+		// Instead of an adjacent declTag, this will receive a placeholder Int.
+		&Typedef{
+			Name: "decl tag typedef",
+			Tags: []string{"decl tag"},
+			Type: &Int{Name: "decl tag target"},
+		},
+	}
+
+	b, err := NewBuilder(types)
+	qt.Assert(t, qt.IsNil(err))
+	buf, err := b.Marshal(nil, &MarshalOptions{
+		Order:           internal.NativeEndian,
+		ReplaceDeclTags: true,
+	})
+	qt.Assert(t, qt.IsNil(err))
+
+	spec, err := loadRawSpec(bytes.NewReader(buf), internal.NativeEndian, nil)
+	qt.Assert(t, qt.IsNil(err))
+
+	var td *Typedef
+	qt.Assert(t, qt.IsNil(spec.TypeByName("decl tag typedef", &td)))
+	var ti *Int
+	qt.Assert(t, qt.IsNil(spec.TypeByName("decl_tag_placeholder", &ti)))
+}
+
+func TestMarshalTypeTags(t *testing.T) {
+	types := []Type{
+		// Instead of pointing to a TypeTag, this will point to an intermediary Const.
+		&Typedef{
+			Name: "type tag typedef",
+			Type: &TypeTag{
+				Value: "type tag",
+				Type: &Pointer{
+					Target: &Int{Name: "type tag target"},
+				},
+			},
+		},
+	}
+
+	b, err := NewBuilder(types)
+	qt.Assert(t, qt.IsNil(err))
+	buf, err := b.Marshal(nil, &MarshalOptions{
+		Order:           internal.NativeEndian,
+		ReplaceTypeTags: true,
+	})
+	qt.Assert(t, qt.IsNil(err))
+
+	spec, err := loadRawSpec(bytes.NewReader(buf), internal.NativeEndian, nil)
+	qt.Assert(t, qt.IsNil(err))
+
+	var td *Typedef
+	qt.Assert(t, qt.IsNil(spec.TypeByName("type tag typedef", &td)))
+	qt.Assert(t, qt.Satisfies(td.Type, func(typ Type) bool {
+		_, ok := typ.(*Const)
+		return ok
+	}))
+}
+
 func BenchmarkMarshaler(b *testing.B) {
 	types := typesFromSpec(vmlinuxTestdataSpec(b))[:100]
 

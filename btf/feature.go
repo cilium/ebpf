@@ -80,6 +80,41 @@ var haveFuncLinkage = internal.NewFeatureTest("BTF func linkage", func() error {
 	return err
 }, "5.6")
 
+var haveDeclTags = internal.NewFeatureTest("BTF decl tags", func() error {
+	if err := haveBTF(); err != nil {
+		return err
+	}
+
+	t := &Typedef{
+		Name: "a",
+		Type: &Int{},
+		Tags: []string{"a"},
+	}
+
+	err := probeBTF(t)
+	if errors.Is(err, unix.EINVAL) {
+		return internal.ErrNotSupported
+	}
+	return err
+}, "5.16")
+
+var haveTypeTags = internal.NewFeatureTest("BTF type tags", func() error {
+	if err := haveBTF(); err != nil {
+		return err
+	}
+
+	t := &TypeTag{
+		Type:  &Int{},
+		Value: "a",
+	}
+
+	err := probeBTF(t)
+	if errors.Is(err, unix.EINVAL) {
+		return internal.ErrNotSupported
+	}
+	return err
+}, "5.17")
+
 var haveEnum64 = internal.NewFeatureTest("ENUM64", func() error {
 	if err := haveBTF(); err != nil {
 		return err

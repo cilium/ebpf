@@ -22,6 +22,14 @@ func TestHaveFuncLinkage(t *testing.T) {
 	testutils.CheckFeatureTest(t, haveFuncLinkage)
 }
 
+func TestHaveDeclTags(t *testing.T) {
+	testutils.CheckFeatureTest(t, haveDeclTags)
+}
+
+func TestHaveTypeTags(t *testing.T) {
+	testutils.CheckFeatureTest(t, haveTypeTags)
+}
+
 func TestHaveEnum64(t *testing.T) {
 	testutils.CheckFeatureTest(t, haveEnum64)
 }

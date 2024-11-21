@@ -62,6 +62,14 @@ func TestVariableSpecCopy(t *testing.T) {
 	// Verify that the original underlying MapSpec was not modified.
 	zero := make([]byte, 4)
 	qt.Assert(t, qt.DeepEquals(spec.Maps[".rodata"].Contents[0].Value.([]byte), zero))
+
+	// Check that modifications to the VariableSpec's Type don't affect the
+	// underlying MapSpec's type information on either the original or the copy.
+	cpy.Variables["var_rodata"].Type().Name = "modified"
+	spec.Variables["var_rodata"].Type().Name = "modified"
+
+	qt.Assert(t, qt.Equals(cpy.Maps[".rodata"].Value.(*btf.Datasec).Vars[0].Type.(*btf.Var).Name, "var_rodata"))
+	qt.Assert(t, qt.Equals(spec.Maps[".rodata"].Value.(*btf.Datasec).Vars[0].Type.(*btf.Var).Name, "var_rodata"))
 }
 
 func mustReturn(tb testing.TB, prog *Program, value uint32) {

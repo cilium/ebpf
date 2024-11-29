@@ -181,6 +181,8 @@ func (ps *ProgramSpec) targetsKernelModule() bool {
 		}
 	case Kprobe:
 		return true
+	case StructOps:
+		return true
 	}
 
 	return false
@@ -385,7 +387,7 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions) (*Program, er
 		attr.AttachBtfObjFd = uint32(spec.AttachTarget.FD())
 		defer runtime.KeepAlive(spec.AttachTarget)
 	} else if spec.AttachTo != "" {
-		module, targetID, err := findProgramTargetInKernel(spec.AttachTo, spec.Type, spec.AttachType)
+		module, target, targetID, err := findProgramTargetInKernel(spec.AttachTo, spec.Type, spec.AttachType)
 		if err != nil && !errors.Is(err, errUnrecognizedAttachType) {
 			// We ignore errUnrecognizedAttachType since AttachTo may be non-empty
 			// for programs that don't attach anywhere.
@@ -396,6 +398,26 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions) (*Program, er
 		if module != nil {
 			attr.AttachBtfObjFd = uint32(module.FD())
 			defer module.Close()
+		}
+
+		// StructOps maps are a special case where the member index of the field this
+		// program will attach to has to be encoded in the AttachType field, which
+		// normally holds the AttachType enum value.
+		if spec.Type == StructOps {
+			// This is the first time we have the target type available, now convert
+			// the field name to a member index. The field name is encoded as
+			// "struct.field" in AttachTo.
+			_, fieldname, ok := strings.Cut(spec.AttachTo, ".")
+			if !ok {
+				return nil, fmt.Errorf("invalid AttachTo for program type StructOps, expected {struct name}.{field name}, got %q", spec.AttachTo)
+			}
+
+			structType := target.(*btf.Struct)
+			for idx, member := range structType.Members {
+				if member.Name == fieldname {
+					attr.ExpectedAttachType = sys.AttachType(idx)
+				}
+			}
 		}
 	}
 
@@ -983,7 +1005,7 @@ var errUnrecognizedAttachType = errors.New("unrecognized attach type")
 //
 // Returns errUnrecognizedAttachType if the combination of progType and attachType
 // is not recognised.
-func findProgramTargetInKernel(name string, progType ProgramType, attachType AttachType) (*btf.Handle, btf.TypeID, error) {
+func findProgramTargetInKernel(name string, progType ProgramType, attachType AttachType) (*btf.Handle, btf.Type, btf.TypeID, error) {
 	type match struct {
 		p ProgramType
 		a AttachType
@@ -1019,36 +1041,42 @@ func findProgramTargetInKernel(name string, progType ProgramType, attachType Att
 		typeName = fmt.Sprintf("btf_trace_%s", name)
 		featureName = fmt.Sprintf("raw_tp %s", name)
 		target = (*btf.Typedef)(nil)
+	case match{StructOps, 0}:
+		// For struct ops we expect AttachTo to be in the form of "struct_name.member_name".
+		// Take the struct name here.
+		typeName, _, _ = strings.Cut(name, ".")
+		featureName = fmt.Sprintf("struct_ops %s", name)
+		target = (*btf.Struct)(nil)
 	default:
-		return nil, 0, errUnrecognizedAttachType
+		return nil, nil, 0, errUnrecognizedAttachType
 	}
 
 	spec, err := btf.LoadKernelSpec()
 	if err != nil {
-		return nil, 0, fmt.Errorf("load kernel spec: %w", err)
+		return nil, nil, 0, fmt.Errorf("load kernel spec: %w", err)
 	}
 
 	spec, module, err := findTargetInKernel(spec, typeName, &target)
 	if errors.Is(err, btf.ErrNotFound) {
-		return nil, 0, &internal.UnsupportedFeatureError{Name: featureName}
+		return nil, nil, 0, &internal.UnsupportedFeatureError{Name: featureName}
 	}
 	// See cilium/ebpf#894. Until we can disambiguate between equally-named kernel
 	// symbols, we should explicitly refuse program loads. They will not reliably
 	// do what the caller intended.
 	if errors.Is(err, btf.ErrMultipleMatches) {
-		return nil, 0, fmt.Errorf("attaching to ambiguous kernel symbol is not supported: %w", err)
+		return nil, nil, 0, fmt.Errorf("attaching to ambiguous kernel symbol is not supported: %w", err)
 	}
 	if err != nil {
-		return nil, 0, fmt.Errorf("find target for %s: %w", featureName, err)
+		return nil, nil, 0, fmt.Errorf("find target for %s: %w", featureName, err)
 	}
 
 	id, err := spec.TypeID(target)
 	if err != nil {
 		module.Close()
-		return nil, 0, err
+		return nil, nil, 0, err
 	}
 
-	return module, id, nil
+	return module, target, id, nil
 }
 
 // findTargetInKernel attempts to find a named type in the current kernel.

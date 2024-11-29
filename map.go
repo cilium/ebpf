@@ -83,6 +83,13 @@ type MapSpec struct {
 
 	// The key and value type of this map. May be nil.
 	Key, Value btf.Type
+
+	// The value type ID, inside the kernels BTF. May be zero.
+	KernelValue btf.TypeID
+
+	// The handle to the kernel module BTF in which KernelValue resides.
+	// If KernelValue resides in main kernel blob, this should be nil.
+	KernelHandle *btf.Handle
 }
 
 func (ms *MapSpec) String() string {
@@ -158,6 +165,9 @@ func (spec *MapSpec) fixupMagicFields() (*MapSpec, error) {
 			// behaviour in the past.
 			spec.MaxEntries = n
 		}
+
+	case StructOpsMap:
+		return fixupStructOpsMapSpec(spec)
 	}
 
 	return spec, nil
@@ -195,6 +205,98 @@ func (ms *MapSpec) writeOnly() bool {
 	return (ms.Flags & sys.BPF_F_WRONLY_PROG) > 0
 }
 
+const structOpsValuePrefix = "bpf_struct_ops_"
+
+func fixupStructOpsMapSpec(spec *MapSpec) (*MapSpec, error) {
+	// If kernel value is already set, nothing to do.
+	// This can happen when the struct ops map is loaded from a collection.
+	// The collection will fixup the map, so it can use its values to fixup associated programs.
+	// This function is then called again when the map itself loads, since loading the map
+	// independently from the collection is also allowed and requires the same fixups.
+	if spec.KernelValue != 0 {
+		return spec, nil
+	}
+
+	if spec.Value == nil {
+		return nil, fmt.Errorf("fixup struct ops map: %w", errMapNoBTFValue)
+	}
+
+	base, err := btf.LoadKernelSpec()
+	if err != nil {
+		return nil, fmt.Errorf("fixup struct ops map: %w", err)
+	}
+
+	valueTypeName := structOpsValuePrefix + spec.Value.TypeName()
+	var valueType *btf.Struct
+	if err := base.TypeByName(valueTypeName, &valueType); err == nil {
+		spec = spec.Copy()
+
+		kernelValueID, err := base.TypeID(valueType)
+		if err != nil {
+			return nil, fmt.Errorf("type ID for %s: %w", valueTypeName, err)
+		}
+
+		valueSize, err := btf.Sizeof(valueType)
+		if err != nil {
+			return nil, fmt.Errorf("size of %s: %w", valueTypeName, err)
+		}
+
+		spec.Value = nil
+		spec.ValueSize = uint32(valueSize)
+		spec.KernelHandle = nil
+		spec.KernelValue = kernelValueID
+
+		return spec, nil
+	}
+
+	it := new(btf.HandleIterator)
+	defer it.Handle.Close()
+
+	for it.Next() {
+		info, err := it.Handle.Info()
+		if err != nil {
+			return nil, fmt.Errorf("info for ID %d: %w", it.ID, err)
+		}
+
+		// Ignore non-kernel BTF and the base BTF.
+		if !info.IsModule() || info.IsVmlinux() {
+			continue
+		}
+
+		btfSpec, err := it.Handle.Spec(base)
+		if err != nil {
+			return nil, fmt.Errorf("spec for ID %d: %w", it.ID, err)
+		}
+
+		if err := btfSpec.TypeByName(valueTypeName, &valueType); err == nil {
+			spec = spec.Copy()
+
+			kernelValueID, err := btfSpec.TypeID(valueType)
+			if err != nil {
+				return nil, fmt.Errorf("type ID for %s: %w", valueTypeName, err)
+			}
+
+			valueSize, err := btf.Sizeof(valueType)
+			if err != nil {
+				return nil, fmt.Errorf("size of %s: %w", valueTypeName, err)
+			}
+
+			spec.Value = nil
+			spec.ValueSize = uint32(valueSize)
+			spec.KernelHandle = it.Take()
+			spec.KernelValue = kernelValueID
+			spec.Flags |= sys.BPF_F_VTYPE_BTF_OBJ_FD
+
+			return spec, nil
+		}
+	}
+	if err := it.Err(); err != nil {
+		return nil, fmt.Errorf("iterate handles: %w", err)
+	}
+
+	return spec, fmt.Errorf("unable to find %s in any kernel BTF, cannot load struct ops map", valueTypeName)
+}
+
 // MapKV is used to initialize the contents of a Map.
 type MapKV struct {
 	Key   interface{}
@@ -206,6 +308,12 @@ type MapKV struct {
 //
 // Returns an error wrapping [ErrMapIncompatible] otherwise.
 func (ms *MapSpec) Compatible(m *Map) error {
+	// StructOps maps should always be re-created since they have internal state that
+	// is modified when its value is updated.
+	if m.typ == StructOpsMap {
+		return ErrMapIncompatible
+	}
+
 	ms, err := ms.fixupMagicFields()
 	if err != nil {
 		return err
@@ -464,12 +572,18 @@ func (spec *MapSpec) createMap(inner *sys.FD) (_ *Map, err error) {
 	}
 
 	attr := sys.MapCreateAttr{
-		MapType:    sys.MapType(spec.Type),
-		KeySize:    spec.KeySize,
-		ValueSize:  spec.ValueSize,
-		MaxEntries: spec.MaxEntries,
-		MapFlags:   spec.Flags,
-		NumaNode:   spec.NumaNode,
+		MapType:               sys.MapType(spec.Type),
+		KeySize:               spec.KeySize,
+		ValueSize:             spec.ValueSize,
+		MaxEntries:            spec.MaxEntries,
+		MapFlags:              spec.Flags,
+		NumaNode:              spec.NumaNode,
+		BtfVmlinuxValueTypeId: spec.KernelValue,
+	}
+
+	if spec.KernelHandle != nil {
+		attr.ValueTypeBtfObjFd = int32(spec.KernelHandle.FD())
+		defer spec.KernelHandle.Close()
 	}
 
 	if inner != nil {
@@ -494,6 +608,23 @@ func (spec *MapSpec) createMap(inner *sys.FD) (_ *Map, err error) {
 			attr.BtfKeyTypeId = keyTypeID
 			attr.BtfValueTypeId = valueTypeID
 		}
+	} else if spec.Type == StructOpsMap {
+		// StructOps maps are very special as in they the existence of a BPF blob
+		// but we are not allowed to specify the key and value types.
+		// So we just make and pass a empty BTF blob.
+
+		b, err := btf.NewBuilder(nil)
+		if err != nil {
+			return nil, fmt.Errorf("make pseudo BTF builder: %w", err)
+		}
+
+		psuedoHandle, err := btf.NewHandle(b)
+		if err != nil {
+			return nil, fmt.Errorf("make pseudo BTF handle: %w", err)
+		}
+		defer psuedoHandle.Close()
+
+		attr.BtfFd = uint32(psuedoHandle.FD())
 	}
 
 	fd, err := sys.MapCreate(&attr)
@@ -1453,6 +1584,12 @@ func (m *Map) Freeze() error {
 // finalize populates the Map according to the Contents specified
 // in spec and freezes the Map if requested by spec.
 func (m *Map) finalize(spec *MapSpec) error {
+	// Never finalize a struct ops map, doing so would attach it, something
+	// the user should explicitly do.
+	if m.Type() == StructOpsMap {
+		return nil
+	}
+
 	for _, kv := range spec.Contents {
 		if err := m.Put(kv.Key, kv.Value); err != nil {
 			return fmt.Errorf("putting value: key %v: %w", kv.Key, err)

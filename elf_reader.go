@@ -111,6 +111,8 @@ func LoadCollectionSpecFromReader(rd io.ReaderAt) (*CollectionSpec, error) {
 			sections[idx] = newElfSection(sec, btfMapSection)
 		case isDataSection(sec.Name):
 			sections[idx] = newElfSection(sec, dataSection)
+		case sec.Name == ".struct_ops" || sec.Name == ".struct_ops.link":
+			sections[idx] = newElfSection(sec, structOpsSection)
 		case sec.Type == elf.SHT_REL:
 			// Store relocations under the section index of the target
 			relSections[elf.SectionIndex(sec.Info)] = sec
@@ -168,6 +170,10 @@ func LoadCollectionSpecFromReader(rd io.ReaderAt) (*CollectionSpec, error) {
 
 	if err := ec.loadDataSections(); err != nil {
 		return nil, fmt.Errorf("load data sections: %w", err)
+	}
+
+	if err := ec.loadStructOpsSections(); err != nil {
+		return nil, fmt.Errorf("load struct_ops sections: %w", err)
 	}
 
 	if err := ec.loadKconfigSection(); err != nil {
@@ -231,6 +237,7 @@ const (
 	btfMapSection
 	programSection
 	dataSection
+	structOpsSection
 )
 
 type elfSection struct {
@@ -389,7 +396,48 @@ func (ec *elfCode) loadProgramSections() (map[string]*ProgramSpec, error) {
 		}
 	}
 
+	if err := ec.fixupStructOpsAttachFields(progs); err != nil {
+		return nil, fmt.Errorf("fixup struct_ops attach fields: %w", err)
+	}
+
 	return progs, nil
+}
+
+func (ec *elfCode) fixupStructOpsAttachFields(progs map[string]*ProgramSpec) error {
+	for _, ms := range ec.maps {
+		if ms.Type != StructOpsMap {
+			continue
+		}
+
+		// updateStructOpsAttachTypes looks at all programs referenced by a struct ops map
+		// and updates the symbol to attach to the correct type.
+		if ms.Value == nil || len(ms.Contents) != 1 {
+			return errors.New("invalid struct ops map spec")
+		}
+
+		fields, ok := ms.Contents[0].Value.([]StructOpsSpecField)
+		if !ok {
+			return errors.New("invalid struct ops map spec")
+		}
+
+		for _, f := range fields {
+			// Not all fields reference programs
+			if f.ProgramName == "" {
+				continue
+			}
+
+			progSpec, found := progs[f.ProgramName]
+			if !found {
+				return fmt.Errorf("program %s not found", f.ProgramName)
+			}
+
+			// Tell the program to attach to the struct type and field name.
+			// We use a C style dot to separate the struct type and field name.
+			progSpec.AttachTo = ms.Value.TypeName() + "." + f.FieldName
+		}
+	}
+
+	return nil
 }
 
 // loadFunctions extracts instruction streams from the given program section
@@ -1246,6 +1294,88 @@ func (ec *elfCode) loadDataSections() error {
 	return nil
 }
 
+func (ec *elfCode) loadStructOpsSections() error {
+	if ec.btf == nil {
+		return nil
+	}
+
+	for _, sec := range ec.sections {
+		if sec.kind != structOpsSection {
+			continue
+		}
+
+		var datasec *btf.Datasec
+		if err := ec.btf.TypeByName(sec.Name, &datasec); err != nil {
+			return fmt.Errorf("unable to find BTF data section for %s: %w", sec.Name, err)
+		}
+
+		hasLinkSuffix := strings.HasSuffix(sec.Name, ".link")
+
+		for _, v := range datasec.Vars {
+			secVar := v.Type.(*btf.Var)
+			varName := secVar.Name
+
+			structOps, ok := secVar.Type.(*btf.Struct)
+			if !ok {
+				return fmt.Errorf("expected section var '%s' to be a struct, got %T", varName, v.Type)
+			}
+
+			structOpsFields := make([]StructOpsSpecField, 0, len(structOps.Members))
+			for i, m := range structOps.Members {
+				field := StructOpsSpecField{
+					FieldName: structOps.Members[i].Name,
+				}
+
+				if ptr, ok := m.Type.(*btf.Pointer); ok {
+					if _, ok := ptr.Target.(*btf.FuncProto); ok {
+						off := uint64(v.Offset) + uint64(m.Offset/8)
+						if r, exists := sec.relocations[off]; exists {
+							if elf.ST_TYPE(r.Info) != elf.STT_FUNC {
+								return fmt.Errorf("relocation at offset %d in %s is not a function", off, sec.Name)
+							}
+
+							field.ProgramName = r.Name
+						}
+					}
+				}
+
+				if field.ProgramName == "" {
+					typeSize, err := btf.Sizeof(m.Type)
+					if err != nil {
+						return fmt.Errorf("can't get size of BTF type: %w", err)
+					}
+
+					field.Data = make([]byte, typeSize)
+
+					_, err = sec.ReadAt(field.Data, int64(m.Offset/8))
+					if err != nil {
+						return fmt.Errorf("can't read data for field %s: %w", m.Name, err)
+					}
+				}
+
+				structOpsFields = append(structOpsFields, field)
+			}
+
+			flags := uint32(0)
+			if hasLinkSuffix {
+				flags |= sys.BPF_F_LINK
+			}
+
+			ec.maps[varName] = &MapSpec{
+				Name:       SanitizeName(varName, -1),
+				Type:       StructOpsMap,
+				KeySize:    4,
+				MaxEntries: 1,
+				Flags:      flags,
+				Value:      structOps,
+				Contents:   []MapKV{{0, structOpsFields}},
+			}
+		}
+	}
+
+	return nil
+}
+
 // loadKconfigSection handles the 'virtual' Datasec .kconfig that doesn't
 // have a corresponding ELF section and exist purely in BTF.
 func (ec *elfCode) loadKconfigSection() error {
@@ -1436,4 +1566,10 @@ func (ec *elfCode) loadSectionRelocations(sec *elf.Section, symbols []elf.Symbol
 	}
 
 	return rels, nil
+}
+
+type StructOpsSpecField struct {
+	FieldName   string
+	ProgramName string
+	Data        []byte
 }

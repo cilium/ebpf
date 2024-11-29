@@ -108,6 +108,8 @@ func TestMapSpecCopy(t *testing.T) {
 		bytes.NewReader(nil),
 		&btf.Int{},
 		&btf.Int{},
+		0,
+		nil,
 	}
 	a.InnerMap = a
 

@@ -52,6 +52,16 @@ type MapInfo struct {
 	Flags uint32
 	// Name as supplied by user space at load time. Available from 4.15.
 	Name string
+	// The type ID of the map key.
+	KeyTypeID btf.TypeID
+	// The type ID of the map value.
+	ValueTypeID btf.TypeID
+	// The type ID of the map value, inside of the kernels BTF.
+	// This ID may be from a kernel module, in which case `VmlinuxID` will be non-zero.
+	VmlinuxValueTypeID btf.TypeID
+	// The ID of the BTF blob in which `VmlinuxValueTypeID` is found.
+	// This field will be non-zero if `VmlinuxValueTypeID` is from a kernel module.
+	VmlinuxID btf.ID
 
 	id       MapID
 	btf      btf.ID
@@ -81,6 +91,10 @@ func newMapInfoFromFd(fd *sys.FD) (*MapInfo, error) {
 		info.MaxEntries,
 		uint32(info.MapFlags),
 		unix.ByteSliceToString(info.Name[:]),
+		btf.TypeID(info.BtfKeyTypeId),
+		btf.TypeID(info.BtfValueTypeId),
+		btf.TypeID(info.BtfVmlinuxValueTypeId),
+		btf.ID(info.BtfVmlinuxId),
 		MapID(info.Id),
 		btf.ID(info.BtfId),
 		info.MapExtra,

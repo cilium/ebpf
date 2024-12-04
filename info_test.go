@@ -528,7 +528,7 @@ func TestProgInfoKsym(t *testing.T) {
 	info, err := obj.Prog.Info()
 	qt.Assert(t, qt.IsNil(err))
 
-	addrs, ok := info.KsymAddrs()
+	addrs, ok := info.JitedKsymAddrs()
 	qt.Assert(t, qt.IsTrue(ok))
 	qt.Assert(t, qt.HasLen(addrs, 5))
 	for _, addr := range addrs {

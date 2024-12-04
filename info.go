@@ -623,13 +623,14 @@ func (pi *ProgramInfo) VerifiedInstructions() (uint32, bool) {
 	return pi.verifiedInstructions, pi.verifiedInstructions > 0
 }
 
-// KsymAddrs returns the ksym addresses of the BPF program, including its
+// JitedKsymAddrs returns the ksym addresses of the BPF program, including its
 // subprograms. The addresses correspond to their symbols in /proc/kallsyms.
 //
-// Available from 4.18.
+// Available from 4.18. Note that before 5.x, this field can be empty for
+// programs without subprograms (bpf2bpf calls).
 //
 // The bool return value indicates whether this optional field is available.
-func (pi *ProgramInfo) KsymAddrs() ([]uintptr, bool) {
+func (pi *ProgramInfo) JitedKsymAddrs() ([]uintptr, bool) {
 	return pi.jitedInfo.ksyms, len(pi.jitedInfo.ksyms) > 0
 }
 

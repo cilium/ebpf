@@ -70,91 +70,76 @@ func TestMapInfoFromProcOuterMap(t *testing.T) {
 	qt.Assert(t, qt.Equals(info.MaxEntries, 2))
 }
 
+func validateProgInfo(t *testing.T, info *ProgramInfo) {
+	t.Helper()
+
+	qt.Assert(t, qt.Equals(info.Type, SocketFilter))
+	qt.Assert(t, qt.Equals(info.Tag, "d7edec644f05498d"))
+}
+
 func TestProgramInfo(t *testing.T) {
 	prog := mustSocketFilter(t)
 
-	for name, fn := range map[string]func(*sys.FD) (*ProgramInfo, error){
-		"generic": newProgramInfoFromFd,
-		"proc":    newProgramInfoFromProc,
-	} {
-		t.Run(name, func(t *testing.T) {
-			info, err := fn(prog.fd)
-			testutils.SkipIfNotSupported(t, err)
-			if err != nil {
-				t.Fatal("Can't get program info:", err)
-			}
+	info, err := newProgramInfoFromFd(prog.fd)
+	testutils.SkipIfNotSupported(t, err)
+	qt.Assert(t, qt.IsNil(err))
 
-			if info.Type != SocketFilter {
-				t.Error("Expected Type to be SocketFilter, got", info.Type)
-			}
+	validateProgInfo(t, info)
 
-			if info.Name != "" && info.Name != "test" {
-				t.Error("Expected Name to be test, got", info.Name)
-			}
+	id, ok := info.ID()
+	qt.Assert(t, qt.IsTrue(ok))
+	qt.Assert(t, qt.Not(qt.Equals(id, 0)))
 
-			if want := "d7edec644f05498d"; info.Tag != want {
-				t.Errorf("Expected Tag to be %s, got %s", want, info.Tag)
-			}
-
-			if id, ok := info.ID(); ok && id == 0 {
-				t.Error("Expected a valid ID:", id)
-			} else if name == "proc" && ok {
-				t.Error("Expected ID to not be available")
-			}
-
-			if name == "proc" {
-				_, err := info.JitedSize()
-				qt.Assert(t, qt.IsNotNil(err))
-
-				_, err = info.TranslatedSize()
-				qt.Assert(t, qt.IsNotNil(err))
-
-				_, ok := info.CreatedByUID()
-				qt.Assert(t, qt.IsFalse(ok))
-
-				_, ok = info.LoadTime()
-				qt.Assert(t, qt.IsFalse(ok))
-
-				_, ok = info.VerifiedInstructions()
-				qt.Assert(t, qt.IsFalse(ok))
-			} else {
-				if jitedSize, err := info.JitedSize(); testutils.IsKernelLessThan(t, "4.13") {
-					qt.Assert(t, qt.IsNotNil(err))
-				} else {
-					qt.Assert(t, qt.IsNil(err))
-					qt.Assert(t, qt.IsTrue(jitedSize > 0))
-				}
-
-				if xlatedSize, err := info.TranslatedSize(); testutils.IsKernelLessThan(t, "4.13") {
-					qt.Assert(t, qt.IsNotNil(err))
-				} else {
-					qt.Assert(t, qt.IsNil(err))
-					qt.Assert(t, qt.IsTrue(xlatedSize > 0))
-				}
-
-				if uid, ok := info.CreatedByUID(); testutils.IsKernelLessThan(t, "4.15") {
-					qt.Assert(t, qt.IsFalse(ok))
-				} else {
-					qt.Assert(t, qt.IsTrue(ok))
-					qt.Assert(t, qt.Equals(uid, uint32(os.Getuid())))
-				}
-
-				if loadTime, ok := info.LoadTime(); testutils.IsKernelLessThan(t, "4.15") {
-					qt.Assert(t, qt.IsFalse(ok))
-				} else {
-					qt.Assert(t, qt.IsTrue(ok))
-					qt.Assert(t, qt.IsTrue(loadTime > 0))
-				}
-
-				if verifiedInsns, ok := info.VerifiedInstructions(); testutils.IsKernelLessThan(t, "5.16") {
-					qt.Assert(t, qt.IsFalse(ok))
-				} else {
-					qt.Assert(t, qt.IsTrue(ok))
-					qt.Assert(t, qt.IsTrue(verifiedInsns > 0))
-				}
-			}
-		})
+	if testutils.IsKernelLessThan(t, "4.15") {
+		qt.Assert(t, qt.Equals(info.Name, ""))
+	} else {
+		qt.Assert(t, qt.Equals(info.Name, "test"))
 	}
+
+	if jitedSize, err := info.JitedSize(); testutils.IsKernelLessThan(t, "4.13") {
+		qt.Assert(t, qt.IsNotNil(err))
+	} else {
+		qt.Assert(t, qt.IsNil(err))
+		qt.Assert(t, qt.IsTrue(jitedSize > 0))
+	}
+
+	if xlatedSize, err := info.TranslatedSize(); testutils.IsKernelLessThan(t, "4.13") {
+		qt.Assert(t, qt.IsNotNil(err))
+	} else {
+		qt.Assert(t, qt.IsNil(err))
+		qt.Assert(t, qt.IsTrue(xlatedSize > 0))
+	}
+
+	if uid, ok := info.CreatedByUID(); testutils.IsKernelLessThan(t, "4.15") {
+		qt.Assert(t, qt.IsFalse(ok))
+	} else {
+		qt.Assert(t, qt.IsTrue(ok))
+		qt.Assert(t, qt.Equals(uid, uint32(os.Getuid())))
+	}
+
+	if loadTime, ok := info.LoadTime(); testutils.IsKernelLessThan(t, "4.15") {
+		qt.Assert(t, qt.IsFalse(ok))
+	} else {
+		qt.Assert(t, qt.IsTrue(ok))
+		qt.Assert(t, qt.IsTrue(loadTime > 0))
+	}
+
+	if verifiedInsns, ok := info.VerifiedInstructions(); testutils.IsKernelLessThan(t, "5.16") {
+		qt.Assert(t, qt.IsFalse(ok))
+	} else {
+		qt.Assert(t, qt.IsTrue(ok))
+		qt.Assert(t, qt.IsTrue(verifiedInsns > 0))
+	}
+}
+
+func TestProgramInfoProc(t *testing.T) {
+	prog := mustSocketFilter(t)
+
+	info, err := newProgramInfoFromProc(prog.fd)
+	testutils.SkipIfNotSupported(t, err)
+	qt.Assert(t, qt.IsNil(err))
+
+	validateProgInfo(t, info)
 }
 
 func TestProgramInfoMapIDs(t *testing.T) {

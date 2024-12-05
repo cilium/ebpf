@@ -15,7 +15,6 @@ import (
 	"github.com/cilium/ebpf/btf"
 	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/kallsyms"
-	"github.com/cilium/ebpf/internal/linux"
 	"github.com/cilium/ebpf/internal/sys"
 	"github.com/cilium/ebpf/internal/testutils"
 
@@ -643,7 +642,7 @@ func TestTailCall(t *testing.T) {
 	}
 }
 
-func TestKconfigKernelVersion(t *testing.T) {
+func TestKconfig(t *testing.T) {
 	file := testutils.NativeFile(t, "testdata/kconfig-%s.elf")
 	spec, err := LoadCollectionSpec(file)
 	if err != nil {
@@ -651,43 +650,7 @@ func TestKconfigKernelVersion(t *testing.T) {
 	}
 
 	var obj struct {
-		Main *Program `ebpf:"kernel_version"`
-	}
-
-	testutils.SkipOnOldKernel(t, "5.2", "readonly maps")
-
-	err = spec.LoadAndAssign(&obj, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer obj.Main.Close()
-
-	ret, _, err := obj.Main.Test(internal.EmptyBPFContext)
-	testutils.SkipIfNotSupported(t, err)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	v, err := linux.KernelVersion()
-	if err != nil {
-		t.Fatalf("getting kernel version: %s", err)
-	}
-
-	version := v.Kernel()
-	if ret != version {
-		t.Fatalf("Expected eBPF to return value %d, got %d", version, ret)
-	}
-}
-
-func TestKconfigSyscallWrapper(t *testing.T) {
-	file := testutils.NativeFile(t, "testdata/kconfig-%s.elf")
-	spec, err := LoadCollectionSpec(file)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	var obj struct {
-		Main *Program `ebpf:"syscall_wrapper"`
+		Main *Program `ebpf:"kconfig"`
 	}
 
 	err = spec.LoadAndAssign(&obj, nil)
@@ -703,52 +666,7 @@ func TestKconfigSyscallWrapper(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	var expected uint32
-	if testutils.IsKernelLessThan(t, "4.17") {
-		expected = 0
-	} else {
-		expected = 1
-	}
-
-	if ret != expected {
-		t.Fatalf("Expected eBPF to return value %d, got %d", expected, ret)
-	}
-}
-
-func TestKconfigConfig(t *testing.T) {
-	file := testutils.NativeFile(t, "testdata/kconfig_config-%s.elf")
-	spec, err := LoadCollectionSpec(file)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	var obj struct {
-		Main     *Program `ebpf:"kconfig"`
-		ArrayMap *Map     `ebpf:"array_map"`
-	}
-
-	err = spec.LoadAndAssign(&obj, nil)
-	testutils.SkipIfNotSupported(t, err)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer obj.Main.Close()
-	defer obj.ArrayMap.Close()
-
-	_, _, err = obj.Main.Test(internal.EmptyBPFContext)
-	testutils.SkipIfNotSupported(t, err)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	var value uint64
-	err = obj.ArrayMap.Lookup(uint32(0), &value)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// CONFIG_HZ must have a value.
-	qt.Assert(t, qt.Not(qt.Equals(value, 0)))
+	qt.Assert(t, qt.Equals(ret, 0), qt.Commentf("Failed assertion at line %d in testdata/kconfig.c", ret))
 }
 
 func TestKsym(t *testing.T) {

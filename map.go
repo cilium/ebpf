@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"math/rand"
-	"os"
 	"path/filepath"
 	"reflect"
 	"slices"
@@ -559,7 +558,7 @@ func handleMapCreateError(attr sys.MapCreateAttr, spec *MapSpec, err error) erro
 	// BPF_MAP_TYPE_RINGBUF's max_entries must be a power-of-2 multiple of kernel's page size.
 	if errors.Is(err, unix.EINVAL) &&
 		(attr.MapType == sys.BPF_MAP_TYPE_RINGBUF || attr.MapType == sys.BPF_MAP_TYPE_USER_RINGBUF) {
-		pageSize := uint32(os.Getpagesize())
+		pageSize := uint32(internal.Getpagesize())
 		maxEntries := attr.MaxEntries
 		if maxEntries%pageSize != 0 || !internal.IsPow(maxEntries) {
 			return fmt.Errorf("map create: %w (ring map size %d not a multiple of page size %d)", err, maxEntries, pageSize)
@@ -1008,7 +1007,7 @@ func (m *Map) nextKey(key interface{}, nextKeyOut sys.Pointer) error {
 }
 
 var mmapProtectedPage = sync.OnceValues(func() ([]byte, error) {
-	return unix.Mmap(-1, 0, os.Getpagesize(), unix.PROT_NONE, unix.MAP_ANON|unix.MAP_SHARED)
+	return unix.Mmap(-1, 0, internal.Getpagesize(), unix.PROT_NONE, unix.MAP_ANON|unix.MAP_SHARED)
 })
 
 // guessNonExistentKey attempts to perform a map lookup that returns ENOENT.

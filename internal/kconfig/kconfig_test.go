@@ -197,21 +197,21 @@ func TestPutValue(t *testing.T) {
 				Name: "libbpf_tristate",
 			},
 			value:    "y",
-			expected: int64(TriYes),
+			expected: int32(TriYes),
 		},
 		{
 			typ: &btf.Enum{
 				Name: "libbpf_tristate",
 			},
 			value:    "n",
-			expected: int64(TriNo),
+			expected: int32(TriNo),
 		},
 		{
 			typ: &btf.Enum{
 				Name: "libbpf_tristate",
 			},
 			value:    "m",
-			expected: int64(TriModule),
+			expected: int32(TriModule),
 		},
 		{
 			typ: &btf.Enum{

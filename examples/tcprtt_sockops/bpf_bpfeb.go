@@ -68,9 +68,10 @@ func loadBpfObjects(obj interface{}, opts *ebpf.CollectionOptions) error {
 type bpfSpecs struct {
 	bpfProgramSpecs
 	bpfMapSpecs
+	bpfVariableSpecs
 }
 
-// bpfSpecs contains programs before they are loaded into the kernel.
+// bpfProgramSpecs contains programs before they are loaded into the kernel.
 //
 // It can be passed ebpf.CollectionSpec.Assign.
 type bpfProgramSpecs struct {
@@ -85,12 +86,20 @@ type bpfMapSpecs struct {
 	RttEvents  *ebpf.MapSpec `ebpf:"rtt_events"`
 }
 
+// bpfVariableSpecs contains variables before they are loaded into the kernel.
+//
+// It can be passed ebpf.CollectionSpec.Assign.
+type bpfVariableSpecs struct {
+	UnusedEvent *ebpf.VariableSpec `ebpf:"unused_event"`
+}
+
 // bpfObjects contains all objects after they have been loaded into the kernel.
 //
 // It can be passed to loadBpfObjects or ebpf.CollectionSpec.LoadAndAssign.
 type bpfObjects struct {
 	bpfPrograms
 	bpfMaps
+	bpfVariables
 }
 
 func (o *bpfObjects) Close() error {
@@ -113,6 +122,13 @@ func (m *bpfMaps) Close() error {
 		m.MapEstabSk,
 		m.RttEvents,
 	)
+}
+
+// bpfVariables contains all variables after they have been loaded into the kernel.
+//
+// It can be passed to loadBpfObjects or ebpf.CollectionSpec.LoadAndAssign.
+type bpfVariables struct {
+	UnusedEvent *ebpf.Variable `ebpf:"unused_event"`
 }
 
 // bpfPrograms contains all programs after they have been loaded into the kernel.

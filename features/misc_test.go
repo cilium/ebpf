@@ -21,3 +21,7 @@ func TestHaveV2ISA(t *testing.T) {
 func TestHaveV3ISA(t *testing.T) {
 	testutils.CheckFeatureTest(t, HaveV3ISA)
 }
+
+func TestHaveV4ISA(t *testing.T) {
+	testutils.CheckFeatureTest(t, HaveV4ISA)
+}

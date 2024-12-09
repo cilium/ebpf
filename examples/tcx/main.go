@@ -1,8 +1,7 @@
 // This program demonstrates attaching an eBPF program to a network interface
-// with Linux TC (Traffic Control). The program counts ingress and egress
-// packets using two ARRAY maps.
-// The userspace program (Go code in this file) prints the contents
-// of the two maps to stdout every second.
+// with Linux TCX (Traffic Control with eBPF). The program counts ingress and egress
+// packets using two variables. The userspace program (Go code in this file)
+// prints the contents of the two variables to stdout every second.
 // This example depends on tcx bpf_link, available in Linux kernel version 6.6 or newer.
 package main
 
@@ -78,20 +77,19 @@ func main() {
 	}
 }
 
-func formatCounters(ingressMap, egressMap *ebpf.Map) (string, error) {
+func formatCounters(ingressVar, egressVar *ebpf.Variable) (string, error) {
 	var (
 		ingressPacketCount uint64
 		egressPacketCount  uint64
-		key                int32
 	)
 
 	// retrieve value from the ingress map
-	if err := ingressMap.Lookup(&key, &ingressPacketCount); err != nil {
+	if err := ingressVar.Get(&ingressPacketCount); err != nil {
 		return "", err
 	}
 
 	// retrieve value from the egress map
-	if err := egressMap.Lookup(&key, &egressPacketCount); err != nil {
+	if err := egressVar.Get(&egressPacketCount); err != nil {
 		return "", err
 	}
 

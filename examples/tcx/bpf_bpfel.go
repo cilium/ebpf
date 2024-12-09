@@ -47,9 +47,10 @@ func loadBpfObjects(obj interface{}, opts *ebpf.CollectionOptions) error {
 type bpfSpecs struct {
 	bpfProgramSpecs
 	bpfMapSpecs
+	bpfVariableSpecs
 }
 
-// bpfSpecs contains programs before they are loaded into the kernel.
+// bpfProgramSpecs contains programs before they are loaded into the kernel.
 //
 // It can be passed ebpf.CollectionSpec.Assign.
 type bpfProgramSpecs struct {
@@ -61,8 +62,14 @@ type bpfProgramSpecs struct {
 //
 // It can be passed ebpf.CollectionSpec.Assign.
 type bpfMapSpecs struct {
-	EgressPktCount  *ebpf.MapSpec `ebpf:"egress_pkt_count"`
-	IngressPktCount *ebpf.MapSpec `ebpf:"ingress_pkt_count"`
+}
+
+// bpfVariableSpecs contains variables before they are loaded into the kernel.
+//
+// It can be passed ebpf.CollectionSpec.Assign.
+type bpfVariableSpecs struct {
+	EgressPktCount  *ebpf.VariableSpec `ebpf:"egress_pkt_count"`
+	IngressPktCount *ebpf.VariableSpec `ebpf:"ingress_pkt_count"`
 }
 
 // bpfObjects contains all objects after they have been loaded into the kernel.
@@ -71,6 +78,7 @@ type bpfMapSpecs struct {
 type bpfObjects struct {
 	bpfPrograms
 	bpfMaps
+	bpfVariables
 }
 
 func (o *bpfObjects) Close() error {
@@ -84,15 +92,18 @@ func (o *bpfObjects) Close() error {
 //
 // It can be passed to loadBpfObjects or ebpf.CollectionSpec.LoadAndAssign.
 type bpfMaps struct {
-	EgressPktCount  *ebpf.Map `ebpf:"egress_pkt_count"`
-	IngressPktCount *ebpf.Map `ebpf:"ingress_pkt_count"`
 }
 
 func (m *bpfMaps) Close() error {
-	return _BpfClose(
-		m.EgressPktCount,
-		m.IngressPktCount,
-	)
+	return _BpfClose()
+}
+
+// bpfVariables contains all variables after they have been loaded into the kernel.
+//
+// It can be passed to loadBpfObjects or ebpf.CollectionSpec.LoadAndAssign.
+type bpfVariables struct {
+	EgressPktCount  *ebpf.Variable `ebpf:"egress_pkt_count"`
+	IngressPktCount *ebpf.Variable `ebpf:"ingress_pkt_count"`
 }
 
 // bpfPrograms contains all programs after they have been loaded into the kernel.

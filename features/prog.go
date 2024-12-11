@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"slices"
 
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/asm"
@@ -25,7 +26,7 @@ func HaveProgramType(pt ebpf.ProgramType) (err error) {
 	return haveProgramTypeMatrix.Result(pt)
 }
 
-func probeProgram(spec *ebpf.ProgramSpec) error {
+func probeProgram(spec *ebpf.ProgramSpec, filteredErrors ...error) error {
 	if spec.Instructions == nil {
 		spec.Instructions = asm.Instructions{
 			asm.LoadImm(asm.R0, 0, asm.DWord),
@@ -39,12 +40,18 @@ func probeProgram(spec *ebpf.ProgramSpec) error {
 		prog.Close()
 	}
 
+	// Filter the provided list of errors to nil.
+	if slices.ContainsFunc(filteredErrors, func(e error) bool { return errors.Is(err, e) }) {
+		return nil
+	}
+
 	switch {
+	// ENOTSUPP occurs when, for instance, JIT fails.
 	// EINVAL occurs when attempting to create a program with an unknown type.
 	// E2BIG occurs when ProgLoadAttr contains non-zero bytes past the end
 	// of the struct known by the running kernel, meaning the kernel is too old
 	// to support the given prog type.
-	case errors.Is(err, unix.EINVAL), errors.Is(err, unix.E2BIG):
+	case errors.Is(err, sys.ENOTSUPP), errors.Is(err, unix.EINVAL), errors.Is(err, unix.E2BIG):
 		err = ebpf.ErrNotSupported
 	}
 
@@ -106,15 +113,10 @@ var haveProgramTypeMatrix = internal.FeatureMatrix[ebpf.ProgramType]{
 	ebpf.StructOps: {
 		Version: "5.6",
 		Fn: func() error {
-			err := probeProgram(&ebpf.ProgramSpec{
+			return probeProgram(&ebpf.ProgramSpec{
 				Type:    ebpf.StructOps,
 				License: "GPL",
-			})
-			if errors.Is(err, sys.ENOTSUPP) {
-				// ENOTSUPP means the program type is at least known to the kernel.
-				return nil
-			}
-			return err
+			}, sys.ENOTSUPP)
 		},
 	},
 	ebpf.Extension: {

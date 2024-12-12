@@ -140,6 +140,7 @@ import (
 		cType  string
 	}{
 		{"Cmd", "bpf_cmd"},
+		{"ObjType", "bpf_type"},
 		{"MapType", "bpf_map_type"},
 		{"ProgType", "bpf_prog_type"},
 		{"AttachType", "bpf_attach_type"},

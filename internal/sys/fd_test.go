@@ -1,6 +1,7 @@
 package sys
 
 import (
+	"errors"
 	"os"
 	"syscall"
 	"testing"
@@ -30,7 +31,7 @@ func reserveFdZero() {
 		panic(err)
 	}
 	if fd != 0 {
-		panic(err)
+		panic(errors.New("zero fd already taken"))
 	}
 }
 

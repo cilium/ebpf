@@ -370,3 +370,30 @@ func mustLoadProgram(tb testing.TB, typ ebpf.ProgramType, attachType ebpf.Attach
 
 	return prog
 }
+
+func TestLoadWrongPin(t *testing.T) {
+	cg, p := mustCgroupFixtures(t)
+
+	l, err := AttachRawLink(RawLinkOptions{
+		Target:  int(cg.Fd()),
+		Program: p,
+		Attach:  ebpf.AttachCGroupInetEgress,
+	})
+	testutils.SkipIfNotSupported(t, err)
+	t.Cleanup(func() { l.Close() })
+
+	tmp := testutils.TempBPFFS(t)
+
+	ppath := filepath.Join(tmp, "prog")
+	lpath := filepath.Join(tmp, "link")
+
+	qt.Assert(t, qt.IsNil(p.Pin(ppath)))
+	qt.Assert(t, qt.IsNil(l.Pin(lpath)))
+
+	_, err = LoadPinnedLink(ppath, nil)
+	qt.Assert(t, qt.IsNotNil(err))
+
+	ll, err := LoadPinnedLink(lpath, nil)
+	qt.Assert(t, qt.IsNil(err))
+	qt.Assert(t, qt.IsNil(ll.Close()))
+}

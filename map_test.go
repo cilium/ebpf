@@ -1894,6 +1894,38 @@ func TestPerfEventArrayCompatible(t *testing.T) {
 	qt.Assert(t, qt.IsNotNil(ms.Compatible(m)))
 }
 
+func TestLoadWrongPin(t *testing.T) {
+	p := mustSocketFilter(t)
+	m := newHash(t)
+	tmp := testutils.TempBPFFS(t)
+
+	ppath := filepath.Join(tmp, "prog")
+	mpath := filepath.Join(tmp, "map")
+
+	qt.Assert(t, qt.IsNil(m.Pin(mpath)))
+	qt.Assert(t, qt.IsNil(p.Pin(ppath)))
+
+	t.Run("Program", func(t *testing.T) {
+		lp, err := LoadPinnedProgram(ppath, nil)
+		testutils.SkipIfNotSupported(t, err)
+		qt.Assert(t, qt.IsNil(err))
+		qt.Assert(t, qt.IsNil(lp.Close()))
+
+		_, err = LoadPinnedProgram(mpath, nil)
+		qt.Assert(t, qt.IsNotNil(err))
+	})
+
+	t.Run("Map", func(t *testing.T) {
+		lm, err := LoadPinnedMap(mpath, nil)
+		testutils.SkipIfNotSupported(t, err)
+		qt.Assert(t, qt.IsNil(err))
+		qt.Assert(t, qt.IsNil(lm.Close()))
+
+		_, err = LoadPinnedMap(ppath, nil)
+		qt.Assert(t, qt.IsNotNil(err))
+	})
+}
+
 type benchValue struct {
 	ID      uint32
 	Val16   uint16

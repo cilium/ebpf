@@ -62,6 +62,8 @@ type bpf2go struct {
 	outputDir string
 	// Alternative output stem. If empty, identStem is used.
 	outputStem string
+	// Suffix in generated file names such as _test.
+	outputSuffix string
 	// Valid go package name.
 	pkg string
 	// Valid go identifier.
@@ -105,6 +107,12 @@ func newB2G(stdout io.Writer, args []string) (*bpf2go, error) {
 	fs.Var(&b2g.cTypes, "type", "`Name` of a type to generate a Go declaration for, may be repeated")
 	fs.BoolVar(&b2g.skipGlobalTypes, "no-global-types", false, "Skip generating types for map keys and values, etc.")
 	fs.StringVar(&b2g.outputStem, "output-stem", "", "alternative stem for names of generated files (defaults to ident)")
+	outputSuffix := ""
+	if strings.HasSuffix(getEnv("GOFILE", ""), "_test.go") {
+		outputSuffix = "_test"
+	}
+	fs.StringVar(&b2g.outputSuffix, "output-suffix", outputSuffix,
+		"suffix in generated file names such as _test (default based on $GOFILE)")
 	outDir := fs.String("output-dir", "", "target directory of generated files (defaults to current directory)")
 	outPkg := fs.String("go-package", "", "package for output go file (default as ENV GOPACKAGE)")
 	fs.SetOutput(b2g.stdout)
@@ -181,6 +189,10 @@ func newB2G(stdout io.Writer, args []string) (*bpf2go, error) {
 
 	if b2g.outputStem != "" && strings.ContainsRune(b2g.outputStem, filepath.Separator) {
 		return nil, fmt.Errorf("-output-stem %q must not contain path separation characters", b2g.outputStem)
+	}
+
+	if strings.ContainsRune(b2g.outputSuffix, filepath.Separator) {
+		return nil, fmt.Errorf("-output-suffix %q must not contain path separation characters", b2g.outputSuffix)
 	}
 
 	targetArches := make(map[gen.Target]gen.GoArches)
@@ -295,7 +307,7 @@ func (b2g *bpf2go) convert(tgt gen.Target, goarches gen.GoArches) (err error) {
 		outputStem = strings.ToLower(b2g.identStem)
 	}
 
-	stem := fmt.Sprintf("%s_%s", outputStem, tgt.Suffix())
+	stem := fmt.Sprintf("%s_%s%s", outputStem, tgt.Suffix(), b2g.outputSuffix)
 
 	absOutPath, err := filepath.Abs(b2g.outputDir)
 	if err != nil {

@@ -981,6 +981,15 @@ func TestPerfEventArray(t *testing.T) {
 	}
 }
 
+func TestCPUMap(t *testing.T) {
+	testutils.SkipOnOldKernel(t, "4.15", "cpu map")
+
+	m, err := NewMap(&MapSpec{Type: CPUMap, KeySize: 4, ValueSize: 4})
+	qt.Assert(t, qt.IsNil(err))
+	qt.Assert(t, qt.Equals(m.MaxEntries(), uint32(MustPossibleCPU())))
+	m.Close()
+}
+
 func createMapInMap(t *testing.T, typ MapType) *Map {
 	t.Helper()
 

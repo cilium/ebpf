@@ -8,6 +8,14 @@ import (
 	"github.com/go-quicktest/qt"
 )
 
+// Contains checks if interface value I is of type T. Use with qt.Satisfies:
+//
+//	qt.Assert(t, qt.Satisfies(p, testutils.Contains[*ebpf.Program]))
+func Contains[T, I any](i I) bool {
+	_, ok := any(i).(T)
+	return ok
+}
+
 // IsDeepCopy checks that got is a deep copy of want.
 //
 // All primitive values must be equal, but pointers must be distinct.

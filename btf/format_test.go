@@ -137,6 +137,7 @@ func TestGoTypeDeclaration(t *testing.T) {
 			},
 			"type t struct { _ [4]byte; g uint32; _ [8]byte; }",
 		},
+		{&Var{Type: &Int{Size: 4}}, "type t uint32"},
 	}
 
 	for _, test := range tests {

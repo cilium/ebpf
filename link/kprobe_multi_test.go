@@ -5,6 +5,8 @@ import (
 	"os"
 	"testing"
 
+	"github.com/go-quicktest/qt"
+
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/internal/testutils"
 	"github.com/cilium/ebpf/internal/unix"
@@ -133,4 +135,21 @@ func TestKprobeMultiProgramCall(t *testing.T) {
 
 func TestHaveBPFLinkKprobeMulti(t *testing.T) {
 	testutils.CheckFeatureTest(t, haveBPFLinkKprobeMulti)
+}
+
+func TestKprobeSession(t *testing.T) {
+	testutils.SkipIfNotSupported(t, haveBPFLinkKprobeMulti())
+
+	prog := mustLoadProgram(t, ebpf.Kprobe, ebpf.AttachTraceKprobeSession, "")
+
+	km, err := KprobeMulti(prog, KprobeMultiOptions{Symbols: kprobeMultiSyms, Session: true})
+	testutils.SkipIfNotSupported(t, err)
+	qt.Assert(t, qt.IsNil(err))
+	defer km.Close()
+
+	testLink(t, km, prog)
+}
+
+func TestHaveBPFLinkKprobeSession(t *testing.T) {
+	testutils.CheckFeatureTest(t, haveBPFLinkKprobeSession)
 }

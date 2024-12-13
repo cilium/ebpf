@@ -12,6 +12,12 @@ import (
 	"github.com/cilium/ebpf"
 )
 
+type testBar struct {
+	A uint64
+	B uint32
+	_ [4]byte
+}
+
 type testBarfoo struct {
 	Bar int64
 	Baz bool
@@ -19,12 +25,19 @@ type testBarfoo struct {
 	Boo testE
 }
 
+type testBaz struct{ A uint64 }
+
 type testE uint32
 
 const (
 	testEHOOPY testE = 0
 	testEFROOD testE = 1
 )
+
+type testUbar struct {
+	A uint32
+	_ [4]byte
+}
 
 // loadTest returns the embedded CollectionSpec for test.
 func loadTest() (*ebpf.CollectionSpec, error) {
@@ -82,8 +95,13 @@ type testMapSpecs struct {
 //
 // It can be passed ebpf.CollectionSpec.Assign.
 type testVariableSpecs struct {
+	AnInt       *ebpf.VariableSpec `ebpf:"an_int"`
+	IntArray    *ebpf.VariableSpec `ebpf:"int_array"`
 	MyConstant  *ebpf.VariableSpec `ebpf:"my_constant"`
+	StructArray *ebpf.VariableSpec `ebpf:"struct_array"`
 	StructConst *ebpf.VariableSpec `ebpf:"struct_const"`
+	StructVar   *ebpf.VariableSpec `ebpf:"struct_var"`
+	UnionVar    *ebpf.VariableSpec `ebpf:"union_var"`
 }
 
 // testObjects contains all objects after they have been loaded into the kernel.
@@ -119,8 +137,13 @@ func (m *testMaps) Close() error {
 //
 // It can be passed to loadTestObjects or ebpf.CollectionSpec.LoadAndAssign.
 type testVariables struct {
+	AnInt       *ebpf.Variable `ebpf:"an_int"`
+	IntArray    *ebpf.Variable `ebpf:"int_array"`
 	MyConstant  *ebpf.Variable `ebpf:"my_constant"`
+	StructArray *ebpf.Variable `ebpf:"struct_array"`
 	StructConst *ebpf.Variable `ebpf:"struct_const"`
+	StructVar   *ebpf.Variable `ebpf:"struct_var"`
+	UnionVar    *ebpf.Variable `ebpf:"union_var"`
 }
 
 // testPrograms contains all programs after they have been loaded into the kernel.

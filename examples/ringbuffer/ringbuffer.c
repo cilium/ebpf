@@ -16,10 +16,8 @@ struct event {
 struct {
 	__uint(type, BPF_MAP_TYPE_RINGBUF);
 	__uint(max_entries, 1 << 24);
+	__type(value, struct event);
 } events SEC(".maps");
-
-// Force emitting struct event into the ELF.
-const struct event *unused __attribute__((unused));
 
 SEC("kprobe/sys_execve")
 int kprobe_execve(struct pt_regs *ctx) {

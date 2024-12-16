@@ -13,10 +13,8 @@ struct event {
 
 struct {
 	__uint(type, BPF_MAP_TYPE_PERF_EVENT_ARRAY);
+	__type(value, struct event);
 } events SEC(".maps");
-
-// Force emitting struct event into the ELF.
-const struct event *unused __attribute__((unused));
 
 SEC("uretprobe/bash_readline")
 int uretprobe_bash_readline(struct pt_regs *ctx) {

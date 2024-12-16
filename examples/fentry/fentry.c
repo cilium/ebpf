@@ -57,6 +57,7 @@ struct sock {
 struct {
 	__uint(type, BPF_MAP_TYPE_RINGBUF);
 	__uint(max_entries, 1 << 24);
+	__type(value, struct event);
 } events SEC(".maps");
 
 /**
@@ -71,7 +72,6 @@ struct event {
 	__be32 saddr;
 	__be32 daddr;
 };
-struct event *unused __attribute__((unused));
 
 SEC("fentry/tcp_connect")
 int BPF_PROG(tcp_connect, struct sock *sk) {

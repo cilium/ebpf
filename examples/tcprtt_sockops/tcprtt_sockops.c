@@ -38,6 +38,7 @@ struct sk_info {
 struct {
 	__uint(type, BPF_MAP_TYPE_RINGBUF);
 	__uint(max_entries, 1 << 24);
+	__type(value, struct rtt_event);
 } rtt_events SEC(".maps");
 
 struct rtt_event {
@@ -47,7 +48,6 @@ struct rtt_event {
 	u32 daddr;
 	u32 srtt;
 };
-struct rtt_event *unused_event __attribute__((unused));
 
 static inline void init_sk_key(struct bpf_sock_ops *skops, struct sk_key *sk_key) {
 	sk_key->local_ip4   = bpf_ntohl(skops->local_ip4);

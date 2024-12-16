@@ -58,9 +58,15 @@ struct {
 		});
 } btf_outer_map_anon __section(".maps");
 
+struct perf_event {
+	uint64_t foo;
+	uint64_t bar;
+};
+
 struct {
 	__uint(type, BPF_MAP_TYPE_PERF_EVENT_ARRAY);
 	__uint(max_entries, 4096);
+	__type(value, struct perf_event);
 } perf_event_array __section(".maps");
 
 struct bpf_map_def array_of_hash_map __section("maps") = {

@@ -247,6 +247,9 @@ func TestLoadCollectionSpec(t *testing.T) {
 		}
 		qt.Assert(t, qt.ContentEquals(mErr.Constants, []string{"totallyBogus", "totallyBogus2"}))
 
+		qt.Assert(t, qt.Equals(have.Maps["perf_event_array"].ValueSize, 0))
+		qt.Assert(t, qt.IsNotNil(have.Maps["perf_event_array"].Value))
+
 		if diff := cmp.Diff(coll, have, cmpOpts...); diff != "" {
 			t.Errorf("MapSpec mismatch (-want +got):\n%s", diff)
 		}

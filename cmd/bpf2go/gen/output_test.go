@@ -7,7 +7,6 @@ import (
 	"testing"
 
 	"github.com/go-quicktest/qt"
-	"github.com/google/go-cmp/cmp"
 
 	"github.com/cilium/ebpf/btf"
 	"github.com/cilium/ebpf/cmd/bpf2go/internal"
@@ -78,10 +77,6 @@ func TestPackageImport(t *testing.T) {
 	// this module, but that is kind of tricky.
 	qt.Assert(t, qt.StringContains(buf.String(), fmt.Sprintf(`"%s"`, internal.CurrentModule)))
 }
-
-var typesEqualComparer = cmp.Comparer(func(a, b btf.Type) bool {
-	return a == b
-})
 
 func TestCustomIdentifier(t *testing.T) {
 	var buf bytes.Buffer

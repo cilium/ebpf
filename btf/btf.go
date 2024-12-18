@@ -638,8 +638,16 @@ func (s *Spec) TypeByName(name string, typ interface{}) error {
 		wanted = typPtr.Elem().Type()
 	}
 
-	if !wanted.AssignableTo(typeInterface) {
-		return fmt.Errorf("%T does not satisfy Type interface", typ)
+	switch wanted {
+	case reflect.TypeOf((**Datasec)(nil)).Elem():
+		// Those types are already assignable to Type. No need to call
+		// AssignableTo. Avoid it when possible to workaround
+		// limitation in tinygo:
+		// https://github.com/tinygo-org/tinygo/issues/4277
+	default:
+		if !wanted.AssignableTo(typeInterface) {
+			return fmt.Errorf("%T does not satisfy Type interface", typ)
+		}
 	}
 
 	types, err := s.AnyTypesByName(name)

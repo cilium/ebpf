@@ -4,6 +4,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"go/build"
 	"io"
 	"os"
 	"os/exec"
@@ -83,6 +84,8 @@ type bpf2go struct {
 	// Base directory of the Makefile. Enables outputting make-style dependencies
 	// in .d files.
 	makeBase string
+	// Packages contributing ebpf C code.
+	imports []string
 }
 
 func newB2G(stdout io.Writer, args []string) (*bpf2go, error) {
@@ -107,6 +110,10 @@ func newB2G(stdout io.Writer, args []string) (*bpf2go, error) {
 	fs.StringVar(&b2g.outputStem, "output-stem", "", "alternative stem for names of generated files (defaults to ident)")
 	outDir := fs.String("output-dir", "", "target directory of generated files (defaults to current directory)")
 	outPkg := fs.String("go-package", "", "package for output go file (default as ENV GOPACKAGE)")
+	fs.Func("import", "pull ebpf C code from specified go package(s)", func(pkg string) error {
+		b2g.imports = append(b2g.imports, pkg)
+		return nil
+	})
 	fs.SetOutput(b2g.stdout)
 	fs.Usage = func() {
 		fmt.Fprintf(fs.Output(), helpText, fs.Name())
@@ -273,6 +280,10 @@ func (b2g *bpf2go) convertAll() (err error) {
 		}
 	}
 
+	if err := b2g.addHeaders(); err != nil {
+		return fmt.Errorf("adding headers: %w", err)
+	}
+
 	for target, arches := range b2g.targetArches {
 		if err := b2g.convert(target, arches); err != nil {
 			return err
@@ -280,6 +291,61 @@ func (b2g *bpf2go) convertAll() (err error) {
 	}
 
 	return nil
+}
+
+// addHeaders exposes header files from packages listed in
+// b2g.imports. C consumes them by giving a golang package path in
+// include, e.g.
+// #include "github.com/cilium/ebpf/foo/bar.h".
+func (b2g *bpf2go) addHeaders() error {
+	var pkgs []*build.Package
+	buildCtx := build.Default
+	buildCtx.Dir = b2g.outputDir
+	for _, path := range b2g.imports {
+		if build.IsLocalImport(path) {
+			return fmt.Errorf("local imports are not supported: %s", path)
+		}
+		pkg, err := buildCtx.Import(path, b2g.outputDir, 0)
+		if err != nil {
+			return err
+		}
+		if pkg.Dir == "" {
+			return fmt.Errorf("%s is missing locally: consider 'go mod download'", path)
+		}
+		if len(hfiles(pkg)) == 0 {
+			fmt.Fprintf(b2g.stdout, "Package doesn't contain .h files: %s\n", path)
+			continue
+		}
+		pkgs = append(pkgs, pkg)
+	}
+
+	if len(pkgs) == 0 {
+		return nil
+	}
+
+	vfs, err := createVfs(pkgs)
+	if err != nil {
+		return err
+	}
+
+	path, err := persistVfs(vfs)
+	if err != nil {
+		return err
+	}
+
+	b2g.cFlags = append([]string{"-ivfsoverlay", path, "-iquote", vfsRootDir}, b2g.cFlags...)
+	return nil
+}
+
+// hfiles lists .h files in a package
+func hfiles(pkg *build.Package) []string {
+	var res []string
+	for _, h := range pkg.HFiles { // includes .hpp, etc
+		if strings.HasSuffix(h, ".h") {
+			res = append(res, h)
+		}
+	}
+	return res
 }
 
 func (b2g *bpf2go) convert(tgt gen.Target, goarches gen.GoArches) (err error) {
@@ -406,6 +472,7 @@ func (b2g *bpf2go) convert(tgt gen.Target, goarches gen.GoArches) (err error) {
 		Programs:    programs,
 		Types:       types,
 		ObjectFile:  filepath.Base(objFileName),
+		BuildDeps:   b2g.imports,
 		Output:      goFile,
 	})
 	if err != nil {

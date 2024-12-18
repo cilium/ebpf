@@ -37,6 +37,9 @@ type KprobeMultiOptions struct {
 	// Each Cookie is assigned to the Symbol or Address specified at the
 	// corresponding slice index.
 	Cookies []uint64
+
+	// Probe is attach as session with BPF_TRACE_KPROBE_SESSION attach type
+	Session bool
 }
 
 // KprobeMulti attaches the given eBPF program to the entry point of a given set
@@ -82,9 +85,14 @@ func kprobeMulti(prog *ebpf.Program, opts KprobeMultiOptions, flags uint32) (Lin
 		return nil, fmt.Errorf("Cookies must be exactly Symbols or Addresses in length: %w", errInvalidInput)
 	}
 
+	attachType := sys.BPF_TRACE_KPROBE_MULTI
+	if opts.Session {
+		attachType = sys.BPF_TRACE_KPROBE_SESSION
+	}
+
 	attr := &sys.LinkCreateKprobeMultiAttr{
 		ProgFd:           uint32(prog.FD()),
-		AttachType:       sys.BPF_TRACE_KPROBE_MULTI,
+		AttachType:       attachType,
 		KprobeMultiFlags: flags,
 	}
 

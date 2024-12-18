@@ -378,6 +378,30 @@ func TestParseArgs(t *testing.T) {
 		qt.Assert(t, qt.IsNil(err))
 		qt.Assert(t, qt.Equals(b2g.outputDir, outputDir))
 	})
+
+	t.Run("output suffix default", func(t *testing.T) {
+		t.Setenv(gopackageEnv, pkg)
+		b2g, err := newB2G(&bytes.Buffer{}, []string{stem, csource})
+		qt.Assert(t, qt.IsNil(err))
+		qt.Assert(t, qt.Equals(b2g.outputSuffix, ""))
+	})
+
+	t.Run("output suffix GOFILE=_test", func(t *testing.T) {
+		t.Setenv(gopackageEnv, pkg)
+		t.Setenv("GOFILE", "foo_test.go")
+		b2g, err := newB2G(&bytes.Buffer{}, []string{stem, csource})
+		qt.Assert(t, qt.IsNil(err))
+		qt.Assert(t, qt.Equals(b2g.outputSuffix, "_test"))
+	})
+
+	t.Run("output suffix custom", func(t *testing.T) {
+		t.Setenv(gopackageEnv, pkg)
+		t.Setenv("GOFILE", "foo_test.go")
+		args := []string{"-output-suffix", "_custom", stem, csource}
+		b2g, err := newB2G(&bytes.Buffer{}, args)
+		qt.Assert(t, qt.IsNil(err))
+		qt.Assert(t, qt.Equals(b2g.outputSuffix, "_custom"))
+	})
 }
 
 func mustWriteFile(tb testing.TB, dir, name, contents string) {

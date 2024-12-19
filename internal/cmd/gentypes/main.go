@@ -7,10 +7,12 @@ package main
 import (
 	"bytes"
 	"errors"
+	"flag"
 	"fmt"
 	"os"
 	"slices"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/cilium/ebpf/btf"
@@ -25,8 +27,40 @@ const (
 	retFd
 )
 
+var (
+	verbose bool
+)
+
+func debugln(a ...any) {
+	if verbose {
+		fmt.Println(a...)
+	}
+}
+
+func getBool(key string, defaultVal bool) bool {
+	val, ok := os.LookupEnv(key)
+	if !ok {
+		return defaultVal
+	}
+
+	b, err := strconv.ParseBool(val)
+	if err != nil {
+		return defaultVal
+	}
+
+	return b
+}
+
 func main() {
-	if err := run(os.Args[1:]); err != nil {
+	fs := flag.NewFlagSet("gentypes", flag.ContinueOnError)
+	fs.BoolVar(&verbose, "verbose", getBool("V", false), "Enable verbose logging ($V)")
+
+	if err := fs.Parse(os.Args[1:]); err != nil {
+		fmt.Fprintln(os.Stderr, "Error:", err)
+		os.Exit(1)
+	}
+
+	if err := run(fs.Args()); err != nil {
 		fmt.Fprintln(os.Stderr, "Error:", err)
 		os.Exit(1)
 	}
@@ -154,12 +188,15 @@ import (
 		return consts[i].Name < consts[j].Name
 	})
 
+	var nconsts uint32
 	w.WriteString("const (\n")
 	for _, c := range consts {
-		fmt.Println("const", c.Name)
+		debugln("const", c.Name)
 		fmt.Fprintf(w, "\t%s = %v\n", c.Name, c.Value)
+		nconsts++
 	}
 	w.WriteString(")\n")
+	fmt.Printf("Generated %d constants\n", nconsts)
 
 	// Typed constants (aka named enums)
 	enums := []struct {
@@ -188,9 +225,10 @@ import (
 		return enums[i].goType < enums[j].goType
 	})
 
+	var nenums uint32
 	enumTypes := make(map[string]btf.Type)
 	for _, o := range enums {
-		fmt.Println("enum", o.goType)
+		debugln("enum", o.goType)
 
 		var t *btf.Enum
 		if err := spec.TypeByName(o.cType, &t); err != nil {
@@ -212,7 +250,10 @@ import (
 
 		w.WriteString(decl)
 		w.WriteRune('\n')
+
+		nenums++
 	}
+	fmt.Printf("Generated %d enums\n", nenums)
 
 	// Assorted structs
 
@@ -277,8 +318,9 @@ import (
 		return structs[i].goType < structs[j].goType
 	})
 
+	var nstructs uint32
 	for _, s := range structs {
-		fmt.Println("struct", s.goType)
+		debugln("struct", s.goType)
 
 		var t *btf.Struct
 		if err := spec.TypeByName(s.cType, &t); err != nil {
@@ -288,7 +330,9 @@ import (
 		if err := outputPatchedStruct(gf, w, s.goType, t, s.patches); err != nil {
 			return nil, fmt.Errorf("output %q: %w", s.goType, err)
 		}
+		nstructs++
 	}
+	fmt.Printf("Generated %d structs\n", nstructs)
 
 	// Attrs
 
@@ -620,8 +664,9 @@ import (
 		return nil, fmt.Errorf("split bpf_attr: %w", err)
 	}
 
+	var nattrs uint32
 	for _, s := range attrs {
-		fmt.Println("attr", s.goType)
+		debugln("attr", s.goType)
 
 		t := attrTypes[s.cType]
 		if t == nil {
@@ -639,7 +684,9 @@ import (
 		case retFd:
 			fmt.Fprintf(w, "func %s(attr *%s) (*FD, error) { fd, err := BPF(%s, unsafe.Pointer(attr), unsafe.Sizeof(*attr)); if err != nil { return nil, err }; return NewFD(int(fd)) }\n\n", s.goType, goAttrType, s.cmd)
 		}
+		nattrs++
 	}
+	fmt.Printf("Generated %d attrs\n", nattrs)
 
 	// Link info type specific
 	linkInfoExtraTypes := []struct {

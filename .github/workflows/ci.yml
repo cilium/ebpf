@@ -46,10 +46,14 @@ jobs:
             exit 1
           fi
 
+      - name: Install LLVM
+        uses: awalsh128/cache-apt-pkgs-action@v1.4.2
+        with:
+          packages: clang-11 llvm-11
+          version: 1.0
+
       - name: Test bpf2go
-        run: |
-          sudo apt-get install clang-11 llvm-11
-          go test -v ./cmd/bpf2go
+        run: go test -v ./cmd/bpf2go
 
       - name: Build examples
         run: go build -v ./...
@@ -120,7 +124,13 @@ jobs:
 
       - run: go install lmb.io/vimto@latest
       - run: go install gotest.tools/gotestsum@v1.8.1
-      - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends qemu-system-x86
+
+      - name: Install qemu
+        uses: awalsh128/cache-apt-pkgs-action@v1.4.2
+        with:
+          packages: qemu-system-x86
+          version: 1.0
+
       - run: sudo chmod 0666 /dev/kvm
 
       - name: Test
@@ -213,7 +223,13 @@ jobs:
 
       - run: go install gotest.tools/gotestsum@v1.8.1
       - run: go install lmb.io/vimto@latest
-      - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends qemu-system-x86
+
+      - name: Install qemu
+        uses: awalsh128/cache-apt-pkgs-action@v1.4.2
+        with:
+          packages: --no-install-recommends qemu-system-x86
+          version: 1.0
+
       - run: sudo chmod 0666 /dev/kvm
 
       - name: Test

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -152,6 +153,7 @@ func TestConvertGOARCH(t *testing.T) {
 	)
 
 	b2g := bpf2go{
+		log:              slog.New(slog.NewTextHandler(io.Discard, nil)),
 		pkg:              "test",
 		stdout:           io.Discard,
 		identStem:        "test",

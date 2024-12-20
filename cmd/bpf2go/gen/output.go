@@ -173,6 +173,17 @@ func Generate(args GenerateArgs) error {
 	gf := &btf.GoFormatter{
 		Names:      nameByType,
 		Identifier: args.Identifier,
+		ShortEnumIdentifier: func(_, element string) string {
+			elementName := args.Stem + args.Identifier(element)
+			if _, nameTaken := typeByName[elementName]; nameTaken {
+				return ""
+			}
+			if _, nameReserved := reservedNames[elementName]; nameReserved {
+				return ""
+			}
+			reservedNames[elementName] = struct{}{}
+			return elementName
+		},
 	}
 
 	ctx := struct {
@@ -201,7 +212,7 @@ func Generate(args GenerateArgs) error {
 
 	var buf bytes.Buffer
 	if err := commonTemplate.Execute(&buf, &ctx); err != nil {
-		return fmt.Errorf("can't generate types: %s", err)
+		return fmt.Errorf("can't generate types: %v", err)
 	}
 
 	return internal.WriteFormatted(buf.Bytes(), args.Output)

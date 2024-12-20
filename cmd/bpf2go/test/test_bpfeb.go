@@ -30,7 +30,9 @@ type testBaz struct{ A uint64 }
 type testE uint32
 
 const (
+	testHOOPY  testE = 0
 	testEHOOPY testE = 0
+	testFROOD  testE = 1
 	testEFROOD testE = 1
 )
 

@@ -134,3 +134,17 @@ func TestKprobeMultiProgramCall(t *testing.T) {
 func TestHaveBPFLinkKprobeMulti(t *testing.T) {
 	testutils.CheckFeatureTest(t, haveBPFLinkKprobeMulti)
 }
+
+func TestKprobeSession(t *testing.T) {
+	testutils.SkipIfNotSupported(t, haveBPFLinkKprobeMulti())
+
+	prog := mustLoadProgram(t, ebpf.Kprobe, ebpf.AttachTraceKprobeSession, "")
+
+	km, err := KprobeMulti(prog, KprobeMultiOptions{Symbols: kprobeMultiSyms, Session: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer km.Close()
+
+	testLink(t, km, prog)
+}

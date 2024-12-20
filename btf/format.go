@@ -25,6 +25,10 @@ type GoFormatter struct {
 	// EnumIdentifier is called for each element of an enum. By default the
 	// name of the enum type is concatenated with Identifier(element).
 	EnumIdentifier func(name, element string) string
+
+	// ShortEnumIdentifier is called for each element of an enum. An
+	// empty result causes short name to be omitted (default).
+	ShortEnumIdentifier func(name, element string) string
 }
 
 // TypeDeclaration generates a Go type declaration for a BTF type.
@@ -52,6 +56,14 @@ func (gf *GoFormatter) enumIdentifier(name, element string) string {
 	return name + gf.identifier(element)
 }
 
+func (gf *GoFormatter) shortEnumIdentifier(name, element string) string {
+	if gf.ShortEnumIdentifier != nil {
+		return gf.ShortEnumIdentifier(name, element)
+	}
+
+	return ""
+}
+
 // writeTypeDecl outputs a declaration of the given type.
 //
 // It encodes https://golang.org/ref/spec#Type_declarations:
@@ -76,13 +88,17 @@ func (gf *GoFormatter) writeTypeDecl(name string, typ Type) error {
 
 	gf.w.WriteString("; const ( ")
 	for _, ev := range e.Values {
-		id := gf.enumIdentifier(name, ev.Name)
 		var value any
 		if e.Signed {
 			value = int64(ev.Value)
 		} else {
 			value = ev.Value
 		}
+		if shortID := gf.shortEnumIdentifier(name, ev.Name); shortID != "" {
+			// output short identifier first (stringer prefers earlier decalarations)
+			fmt.Fprintf(&gf.w, "%s %s = %d; ", shortID, name, value)
+		}
+		id := gf.enumIdentifier(name, ev.Name)
 		fmt.Fprintf(&gf.w, "%s %s = %d; ", id, name, value)
 	}
 	gf.w.WriteString(")")

@@ -469,12 +469,16 @@ func TestProgramVerifierLog(t *testing.T) {
 
 		var ve *internal.VerifierError
 		qt.Assert(t, qt.ErrorAs(err, &ve))
+
+		loglen := len(fmt.Sprintf("%+v", ve))
+		qt.Assert(t, qt.IsTrue(loglen > minVerifierLogSize),
+			qt.Commentf("Log buffer didn't grow past minimum, got %d bytes", loglen))
 	}
 
 	// Generate a base program of sufficient size whose verifier log does not fit
-	// a 128-byte buffer. This should always result in ENOSPC.
+	// in the minimum buffer size. Stay under 4096 insn limit of older kernels.
 	var base asm.Instructions
-	for i := 0; i < 32; i++ {
+	for i := 0; i < 4093; i++ {
 		base = append(base, asm.Mov.Reg(asm.R0, asm.R1))
 	}
 
@@ -493,8 +497,7 @@ func TestProgramVerifierLog(t *testing.T) {
 		Instructions: invalid,
 	}
 
-	// Set an undersized log buffer without explicitly requesting a verifier log
-	// for an invalid program.
+	// Don't explicitly request a verifier log for an invalid program.
 	_, err := NewProgramWithOptions(spec, ProgramOptions{})
 	check(t, err)
 
@@ -528,6 +531,16 @@ func TestProgramVerifierLog(t *testing.T) {
 		LogLevel: LogLevelInstruction,
 	})
 	qt.Assert(t, qt.IsNil(err))
+	qt.Assert(t, qt.IsTrue(len(prog.VerifierLog) > minVerifierLogSize))
+	prog.Close()
+
+	// Repeat the previous test with a larger starting buffer size.
+	prog, err = NewProgramWithOptions(spec, ProgramOptions{
+		LogLevel:     LogLevelInstruction,
+		LogSizeStart: minVerifierLogSize * 2,
+	})
+	qt.Assert(t, qt.IsNil(err))
+	qt.Assert(t, qt.IsTrue(len(prog.VerifierLog) > minVerifierLogSize))
 	prog.Close()
 }
 

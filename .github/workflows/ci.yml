@@ -7,7 +7,7 @@ on:
 
 env:
   TMPDIR: /tmp
-  CI_MAX_KERNEL_VERSION: '6.8'
+  CI_MAX_KERNEL_VERSION: '6.11'
   CI_MIN_CLANG_VERSION: '11'
   go_version: '~1.23'
   prev_go_version: '~1.22'

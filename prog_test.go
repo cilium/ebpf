@@ -1011,6 +1011,23 @@ func TestProgramLoadErrors(t *testing.T) {
 	}
 }
 
+func TestProgramTargetsKernelModule(t *testing.T) {
+	ps := ProgramSpec{Type: Kprobe}
+	qt.Assert(t, qt.IsFalse(ps.targetsKernelModule()))
+
+	ps.AttachTo = "bpf_testmod_test_read"
+	qt.Assert(t, qt.IsTrue(ps.targetsKernelModule()))
+}
+
+func TestProgramAttachToKernelModule(t *testing.T) {
+	requireTestmod(t)
+
+	ps := ProgramSpec{AttachTo: "bpf_testmod_test_read", Type: Tracing, AttachType: AttachTraceFEntry}
+	mod, err := ps.kernelModule()
+	qt.Assert(t, qt.IsNil(err))
+	qt.Assert(t, qt.Equals(mod, "bpf_testmod"))
+}
+
 func BenchmarkNewProgram(b *testing.B) {
 	testutils.SkipOnOldKernel(b, "5.18", "kfunc support")
 	spec, err := LoadCollectionSpec(testutils.NativeFile(b, "testdata/kfunc-%s.elf"))

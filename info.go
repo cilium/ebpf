@@ -16,6 +16,7 @@ import (
 	"github.com/cilium/ebpf/asm"
 	"github.com/cilium/ebpf/btf"
 	"github.com/cilium/ebpf/internal"
+	"github.com/cilium/ebpf/internal/features"
 	"github.com/cilium/ebpf/internal/sys"
 	"github.com/cilium/ebpf/internal/unix"
 )
@@ -277,7 +278,7 @@ func newProgramInfoFromFd(fd *sys.FD) (*ProgramInfo, error) {
 		info2.NrMapIds = info.NrMapIds
 		info2.MapIds = sys.NewSlicePointer(pi.maps)
 		makeSecondCall = true
-	} else if haveProgramInfoMapIDs() == nil {
+	} else if features.HaveProgramInfoMapIDs() == nil {
 		// This program really has no associated maps.
 		pi.maps = make([]MapID, 0)
 	} else {
@@ -766,30 +767,3 @@ func EnableStats(which uint32) (io.Closer, error) {
 	}
 	return fd, nil
 }
-
-var haveProgramInfoMapIDs = internal.NewFeatureTest("map IDs in program info", func() error {
-	prog, err := progLoad(asm.Instructions{
-		asm.LoadImm(asm.R0, 0, asm.DWord),
-		asm.Return(),
-	}, SocketFilter, "MIT")
-	if err != nil {
-		return err
-	}
-	defer prog.Close()
-
-	err = sys.ObjInfo(prog, &sys.ProgInfo{
-		// NB: Don't need to allocate MapIds since the program isn't using
-		// any maps.
-		NrMapIds: 1,
-	})
-	if errors.Is(err, unix.EINVAL) {
-		// Most likely the syscall doesn't exist.
-		return internal.ErrNotSupported
-	}
-	if errors.Is(err, unix.E2BIG) {
-		// We've hit check_uarg_tail_zero on older kernels.
-		return internal.ErrNotSupported
-	}
-
-	return err
-}, "4.15")

@@ -13,6 +13,7 @@ import (
 	"github.com/cilium/ebpf/asm"
 	"github.com/cilium/ebpf/btf"
 	"github.com/cilium/ebpf/internal"
+	"github.com/cilium/ebpf/internal/features"
 	"github.com/cilium/ebpf/internal/sys"
 	"github.com/cilium/ebpf/internal/testutils"
 )
@@ -461,7 +462,7 @@ func testStats(prog *Program) error {
 }
 
 func TestHaveProgramInfoMapIDs(t *testing.T) {
-	testutils.CheckFeatureTest(t, haveProgramInfoMapIDs)
+	testutils.CheckFeatureTest(t, features.HaveProgramInfoMapIDs)
 }
 
 func TestProgInfoExtBTF(t *testing.T) {

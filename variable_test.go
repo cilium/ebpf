@@ -7,6 +7,7 @@ import (
 
 	"github.com/cilium/ebpf/btf"
 	"github.com/cilium/ebpf/internal"
+	"github.com/cilium/ebpf/internal/features"
 	"github.com/cilium/ebpf/internal/testutils"
 )
 
@@ -81,7 +82,7 @@ func mustReturn(tb testing.TB, prog *Program, value uint32) {
 }
 
 func TestVariable(t *testing.T) {
-	testutils.SkipIfNotSupported(t, haveMmapableMaps())
+	testutils.SkipIfNotSupported(t, features.HaveMmapableMaps())
 
 	file := testutils.NativeFile(t, "testdata/variables-%s.elf")
 	spec, err := LoadCollectionSpec(file)
@@ -127,7 +128,7 @@ func TestVariable(t *testing.T) {
 }
 
 func TestVariableConst(t *testing.T) {
-	testutils.SkipIfNotSupported(t, haveMmapableMaps())
+	testutils.SkipIfNotSupported(t, features.HaveMmapableMaps())
 
 	file := testutils.NativeFile(t, "testdata/variables-%s.elf")
 	spec, err := LoadCollectionSpec(file)

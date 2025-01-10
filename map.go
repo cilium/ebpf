@@ -17,6 +17,7 @@ import (
 
 	"github.com/cilium/ebpf/btf"
 	"github.com/cilium/ebpf/internal"
+	"github.com/cilium/ebpf/internal/features"
 	"github.com/cilium/ebpf/internal/sys"
 	"github.com/cilium/ebpf/internal/sysenc"
 	"github.com/cilium/ebpf/internal/unix"
@@ -33,7 +34,34 @@ var (
 	// pre-allocating these errors here since they may get called in hot code paths
 	// and cause unnecessary memory allocations
 	errMapLookupKeyNotExist = fmt.Errorf("lookup: %w", sysErrKeyNotExist)
+	sysErrKeyNotExist       = sys.Error(ErrKeyNotExist, unix.ENOENT)
+	sysErrKeyExist          = sys.Error(ErrKeyExist, unix.EEXIST)
+	sysErrNotSupported      = sys.Error(ErrNotSupported, sys.ENOTSUPP)
 )
+
+func wrapMapError(err error) error {
+	if err == nil {
+		return nil
+	}
+
+	if errors.Is(err, unix.ENOENT) {
+		return sysErrKeyNotExist
+	}
+
+	if errors.Is(err, unix.EEXIST) {
+		return sysErrKeyExist
+	}
+
+	if errors.Is(err, sys.ENOTSUPP) {
+		return sysErrNotSupported
+	}
+
+	if errors.Is(err, unix.E2BIG) {
+		return fmt.Errorf("key too big for map: %w", err)
+	}
+
+	return err
+}
 
 // MapOptions control loading a map into the kernel.
 type MapOptions struct {
@@ -487,7 +515,7 @@ func (spec *MapSpec) createMap(inner *sys.FD) (_ *Map, err error) {
 		attr.InnerMapFd = inner.Uint()
 	}
 
-	if haveObjName() == nil {
+	if features.HaveObjName() == nil {
 		attr.MapName = sys.NewObjName(spec.Name)
 	}
 
@@ -542,28 +570,28 @@ func handleMapCreateError(attr sys.MapCreateAttr, spec *MapSpec, err error) erro
 	}
 
 	if spec.Type.canStoreMap() {
-		if haveFeatErr := haveNestedMaps(); haveFeatErr != nil {
+		if haveFeatErr := features.HaveNestedMaps(); haveFeatErr != nil {
 			return fmt.Errorf("map create: %w", haveFeatErr)
 		}
 	}
 
 	if spec.readOnly() || spec.writeOnly() {
-		if haveFeatErr := haveMapMutabilityModifiers(); haveFeatErr != nil {
+		if haveFeatErr := features.HaveMapMutabilityModifiers(); haveFeatErr != nil {
 			return fmt.Errorf("map create: %w", haveFeatErr)
 		}
 	}
 	if spec.Flags&sys.BPF_F_MMAPABLE > 0 {
-		if haveFeatErr := haveMmapableMaps(); haveFeatErr != nil {
+		if haveFeatErr := features.HaveMmapableMaps(); haveFeatErr != nil {
 			return fmt.Errorf("map create: %w", haveFeatErr)
 		}
 	}
 	if spec.Flags&sys.BPF_F_INNER_MAP > 0 {
-		if haveFeatErr := haveInnerMaps(); haveFeatErr != nil {
+		if haveFeatErr := features.HaveInnerMaps(); haveFeatErr != nil {
 			return fmt.Errorf("map create: %w", haveFeatErr)
 		}
 	}
 	if spec.Flags&sys.BPF_F_NO_PREALLOC > 0 {
-		if haveFeatErr := haveNoPreallocMaps(); haveFeatErr != nil {
+		if haveFeatErr := features.HaveNoPreallocMaps(); haveFeatErr != nil {
 			return fmt.Errorf("map create: %w", haveFeatErr)
 		}
 	}
@@ -1200,7 +1228,7 @@ func (m *Map) batchLookupCmd(cmd sys.Cmd, cursor *MapBatchCursor, count int, key
 		return 0, errors.New("a cursor may not be reused across maps")
 	}
 
-	if err := haveBatchAPI(); err != nil {
+	if err := features.HaveBatchAPI(); err != nil {
 		return 0, err
 	}
 
@@ -1274,7 +1302,7 @@ func (m *Map) batchUpdate(count int, keys any, valuePtr sys.Pointer, opts *Batch
 
 	err = sys.MapUpdateBatch(&attr)
 	if err != nil {
-		if haveFeatErr := haveBatchAPI(); haveFeatErr != nil {
+		if haveFeatErr := features.HaveBatchAPI(); haveFeatErr != nil {
 			return 0, haveFeatErr
 		}
 		return int(attr.Count), fmt.Errorf("batch update: %w", wrapMapError(err))
@@ -1322,7 +1350,7 @@ func (m *Map) BatchDelete(keys interface{}, opts *BatchOptions) (int, error) {
 	}
 
 	if err = sys.MapDeleteBatch(&attr); err != nil {
-		if haveFeatErr := haveBatchAPI(); haveFeatErr != nil {
+		if haveFeatErr := features.HaveBatchAPI(); haveFeatErr != nil {
 			return 0, haveFeatErr
 		}
 		return int(attr.Count), fmt.Errorf("batch delete: %w", wrapMapError(err))
@@ -1453,7 +1481,7 @@ func (m *Map) Freeze() error {
 	}
 
 	if err := sys.MapFreeze(&attr); err != nil {
-		if haveFeatErr := haveMapMutabilityModifiers(); haveFeatErr != nil {
+		if haveFeatErr := features.HaveMapMutabilityModifiers(); haveFeatErr != nil {
 			return fmt.Errorf("can't freeze map: %w", haveFeatErr)
 		}
 		return fmt.Errorf("can't freeze map: %w", err)

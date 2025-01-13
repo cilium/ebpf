@@ -120,6 +120,7 @@ func (ms *MapSpec) Copy() *MapSpec {
 
 // fixupMagicFields fills fields of MapSpec which are usually
 // left empty in ELF or which depend on runtime information.
+// It may also change Type on Windows.
 //
 // The method doesn't modify Spec, instead returning a copy.
 // The copy is only performed if fixups are necessary, so callers mustn't mutate
@@ -171,6 +172,11 @@ func (spec *MapSpec) fixupMagicFields() (*MapSpec, error) {
 			// Perform clamping similar to PerfEventArray.
 			spec.MaxEntries = n
 		}
+	}
+
+	if p, _ := spec.Type.Decode(); platform.IsWindows && p == internal.LinuxPlatform {
+		spec = spec.Copy()
+		spec.Type = fixupWindowsMapTypes(spec.Type)
 	}
 
 	return spec, nil
@@ -1764,4 +1770,38 @@ func sliceLen(slice any) (int, error) {
 		return 0, fmt.Errorf("%T is not a slice", slice)
 	}
 	return sliceValue.Len(), nil
+}
+
+// Map Linux-specific map types to their Windows equivalents.
+func fixupWindowsMapTypes(mt MapType) MapType {
+	switch mt {
+	case Array:
+		return WindowsArray
+	case Hash:
+		return WindowsHash
+	case ProgramArray:
+		return WindowsProgramArray
+	case PerCPUHash:
+		return WindowsPerCPUHash
+	case PerCPUArray:
+		return WindowsPerCPUArray
+	case LRUHash:
+		return WindowsLRUHash
+	case LRUCPUHash:
+		return WindowsLRUCPUHash
+	case ArrayOfMaps:
+		return WindowsArrayOfMaps
+	case HashOfMaps:
+		return WindowsHashOfMaps
+	case LPMTrie:
+		return WindowsLPMTrie
+	case Queue:
+		return WindowsQueue
+	case Stack:
+		return WindowsStack
+	case RingBuf:
+		return WindowsRingBuf
+	default:
+		return mt
+	}
 }

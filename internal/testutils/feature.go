@@ -3,11 +3,12 @@ package testutils
 import (
 	"errors"
 	"os"
+	"runtime"
 	"strings"
 	"testing"
 
 	"github.com/cilium/ebpf/internal"
-	"github.com/cilium/ebpf/internal/linux"
+	"github.com/cilium/ebpf/internal/platform"
 )
 
 const (
@@ -21,6 +22,10 @@ func CheckFeatureTest(t *testing.T, fn func() error) {
 func checkFeatureTestError(t *testing.T, err error) {
 	if err == nil {
 		return
+	}
+
+	if errors.Is(err, internal.ErrNotSupportedOnOS) {
+		t.Skip(err)
 	}
 
 	var ufe *internal.UnsupportedFeatureError
@@ -82,56 +87,67 @@ func checkVersion(tb testing.TB, ufe *internal.UnsupportedFeatureError) {
 		return
 	}
 
-	if !isKernelLessThan(tb, ufe.MinimumVersion) {
+	if !isPlatformVersionLessThan(tb, ufe.MinimumVersion, platformVersion(tb)) {
 		tb.Fatalf("Feature '%s' isn't supported even though kernel is newer than %s",
 			ufe.Name, ufe.MinimumVersion)
 	}
 }
 
+// Skip a test based on the Linux version we are running on.
+//
+// Warning: this function does not have an effect on platforms other than Linux.
 func SkipOnOldKernel(tb testing.TB, minVersion, feature string) {
 	tb.Helper()
+
+	if !platform.IsLinux {
+		tb.Logf("Ignoring version constraint %s for %s on %s", minVersion, feature, runtime.GOOS)
+		return
+	}
 
 	if IsKernelLessThan(tb, minVersion) {
 		tb.Skipf("Test requires at least kernel %s (due to missing %s)", minVersion, feature)
 	}
 }
 
+// Check whether the running Linux version is smaller than a specific version.
+//
+// Warning: this function always returns false on platforms other than Linux.
 func IsKernelLessThan(tb testing.TB, minVersion string) bool {
 	tb.Helper()
+
+	if !platform.IsLinux {
+		tb.Logf("Ignoring version constraint %s on %s", minVersion, runtime.GOOS)
+		return false
+	}
 
 	minv, err := internal.NewVersion(minVersion)
 	if err != nil {
 		tb.Fatalf("Invalid version %s: %s", minVersion, err)
 	}
 
-	return isKernelLessThan(tb, minv)
+	return isPlatformVersionLessThan(tb, minv, platformVersion(tb))
 }
 
-func isKernelLessThan(tb testing.TB, minv internal.Version) bool {
+func isPlatformVersionLessThan(tb testing.TB, minv, runv internal.Version) bool {
 	tb.Helper()
 
-	if max := os.Getenv("CI_MAX_KERNEL_VERSION"); max != "" {
+	key := "CI_MAX_KERNEL_VERSION"
+	if platform.IsWindows {
+		key = "CI_MAX_EFW_VERSION"
+	}
+
+	if max := os.Getenv(key); max != "" {
 		maxv, err := internal.NewVersion(max)
 		if err != nil {
-			tb.Fatalf("Invalid version %q in CI_MAX_KERNEL_VERSION: %s", max, err)
+			tb.Fatalf("Invalid version %q in %s: %s", max, key, err)
 		}
 
 		if maxv.Less(minv) {
-			tb.Fatalf("Test for %s will never execute on CI since %s is the most recent kernel", minv, maxv)
+			tb.Fatalf("Test for %s will never execute on CI since %s is the most recent runtime", minv, maxv)
 		}
 	}
 
-	return kernelVersion(tb).Less(minv)
-}
-
-func kernelVersion(tb testing.TB) internal.Version {
-	tb.Helper()
-
-	v, err := linux.KernelVersion()
-	if err != nil {
-		tb.Fatal(err)
-	}
-	return v
+	return runv.Less(minv)
 }
 
 // ignoreVersionCheck checks whether to omit the version check for a test.

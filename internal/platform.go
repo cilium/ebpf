@@ -3,11 +3,13 @@ package internal
 import "fmt"
 
 const (
-	LinuxPlatform = "linux"
+	LinuxPlatform   = "linux"
+	WindowsPlatform = "windows"
 )
 
 const (
 	LinuxTag = uint32(iota) << platformShift
+	WindowsTag
 )
 
 const (
@@ -20,6 +22,8 @@ func tagForPlatform(platform string) (uint32, error) {
 	switch platform {
 	case LinuxPlatform:
 		return LinuxTag, nil
+	case "windows":
+		return WindowsTag, nil
 	default:
 		return 0, fmt.Errorf("unrecognized platform: %s", platform)
 	}
@@ -30,6 +34,8 @@ func platformForConstant(c uint32) string {
 	switch tag {
 	case LinuxTag:
 		return LinuxPlatform
+	case WindowsTag:
+		return WindowsPlatform
 	default:
 		return ""
 	}

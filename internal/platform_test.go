@@ -10,6 +10,7 @@ func TestEncodeAndDecodePlatformConstant(t *testing.T) {
 	const maxConstant = ^uint32(platformMask)
 	for _, plat := range []string{
 		LinuxPlatform,
+		WindowsPlatform,
 	} {
 		t.Run(plat, func(t *testing.T) {
 			c, err := EncodePlatformConstant[uint32](plat, maxConstant)

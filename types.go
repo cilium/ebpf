@@ -105,6 +105,23 @@ const (
 	Arena
 )
 
+// Map types (Windows).
+const (
+	WindowsHash MapType = MapType(internal.WindowsTag | iota + 1)
+	WindowsArray
+	WindowsProgramArray
+	WindowsPerCPUHash
+	WindowsPerCPUArray
+	WindowsHashOfMaps
+	WindowsArrayOfMaps
+	WindowsLRUHash
+	WindowsLPMTrie
+	WindowsQueue
+	WindowsLRUCPUHash
+	WindowsStack
+	WindowsRingBuf
+)
+
 // MapTypeForPlatform returns a platform specific map type.
 func MapTypeForPlatform(platform string, typ uint32) (MapType, error) {
 	return internal.EncodePlatformConstant[MapType](platform, typ)
@@ -117,7 +134,14 @@ func (mt MapType) Decode() (string, uint32) {
 
 // hasPerCPUValue returns true if the Map stores a value per CPU.
 func (mt MapType) hasPerCPUValue() bool {
-	return mt == PerCPUHash || mt == PerCPUArray || mt == LRUCPUHash || mt == PerCPUCGroupStorage
+	switch mt {
+	case PerCPUHash, PerCPUArray, LRUCPUHash, PerCPUCGroupStorage:
+		return true
+	case WindowsPerCPUHash, WindowsPerCPUArray, WindowsLRUCPUHash:
+		return true
+	default:
+		return false
+	}
 }
 
 // canStoreMapOrProgram returns true if the Map stores references to another Map
@@ -129,13 +153,13 @@ func (mt MapType) canStoreMapOrProgram() bool {
 // canStoreMap returns true if the map type accepts a map fd
 // for update and returns a map id for lookup.
 func (mt MapType) canStoreMap() bool {
-	return mt == ArrayOfMaps || mt == HashOfMaps
+	return mt == ArrayOfMaps || mt == HashOfMaps || mt == WindowsArrayOfMaps || mt == WindowsHashOfMaps
 }
 
 // canStoreProgram returns true if the map type accepts a program fd
 // for update and returns a program id for lookup.
 func (mt MapType) canStoreProgram() bool {
-	return mt == ProgramArray
+	return mt == ProgramArray || mt == WindowsProgramArray
 }
 
 // canHaveValueSize returns true if the map type supports setting a value size.
@@ -191,6 +215,16 @@ const (
 	SkLookup              = ProgramType(sys.BPF_PROG_TYPE_SK_LOOKUP)
 	Syscall               = ProgramType(sys.BPF_PROG_TYPE_SYSCALL)
 	Netfilter             = ProgramType(sys.BPF_PROG_TYPE_NETFILTER)
+)
+
+// See https://github.com/microsoft/ebpf-for-windows/blob/main/include/ebpf_structs.h#L170
+const (
+	WindowsXDP ProgramType = ProgramType(internal.WindowsTag) | (iota + 1)
+	WindowsBind
+	WindowsCGroupSockAddr
+	WindowsSockOps
+	WindowsXDPTest ProgramType = ProgramType(internal.WindowsTag) | 998
+	WindowsSample  ProgramType = ProgramType(internal.WindowsTag) | 999
 )
 
 func ProgramTypeForPlatform(platform string, value uint32) (ProgramType, error) {
@@ -269,6 +303,19 @@ const (
 	AttachCgroupUnixGetsockname      = AttachType(sys.BPF_CGROUP_UNIX_GETSOCKNAME)
 	AttachNetkitPrimary              = AttachType(sys.BPF_NETKIT_PRIMARY)
 	AttachNetkitPeer                 = AttachType(sys.BPF_NETKIT_PEER)
+)
+
+// See https://github.com/microsoft/ebpf-for-windows/blob/main/include/ebpf_structs.h#L260
+const (
+	AttachWindowsXDP = AttachType(internal.WindowsTag | iota + 1)
+	AttachWindowsBind
+	AttachWindowsCGroupInet4Connect
+	AttachWindowsCGroupInet6Connect
+	AttachWindowsCgroupInet4RecvAccept
+	AttachWindowsCgroupInet6RecvAccept
+	AttachWindowsCGroupSockOps
+	AttachWindowsSample
+	AttachWindowsXDPTest
 )
 
 func AttachTypeForPlatform(platform string, value uint32) (AttachType, error) {

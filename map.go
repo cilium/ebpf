@@ -124,7 +124,7 @@ func (ms *MapSpec) Copy() *MapSpec {
 // the returned spec.
 func (spec *MapSpec) fixupMagicFields() (*MapSpec, error) {
 	switch spec.Type {
-	case ArrayOfMaps, HashOfMaps:
+	case ArrayOfMaps, HashOfMaps, WindowsArrayOfMaps, WindowsHashOfMaps:
 		if spec.ValueSize != 0 && spec.ValueSize != 4 {
 			return nil, errors.New("ValueSize must be zero or four for map of map")
 		}

@@ -280,8 +280,13 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions) (*Program, er
 		kv = v.Kernel()
 	}
 
+	p, progType := spec.Type.Decode()
+	if p != internal.NativePlatform {
+		return nil, fmt.Errorf("program type %s: %w", spec.Type, internal.ErrNotSupportedOnOS)
+	}
+
 	attr := &sys.ProgLoadAttr{
-		ProgType:           sys.ProgType(spec.Type),
+		ProgType:           sys.ProgType(progType),
 		ProgFlags:          spec.Flags,
 		ExpectedAttachType: sys.AttachType(spec.AttachType),
 		License:            sys.NewStringPointer(spec.License),

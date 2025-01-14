@@ -1,10 +1,18 @@
 package ebpf
 
 import (
+	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/sys"
 )
 
 //go:generate go run golang.org/x/tools/cmd/stringer@latest -output types_string.go -type=MapType,ProgramType,PinType
+
+type Platform = internal.Platform
+
+const (
+	UnspecifiedPlatform = internal.UnspecifiedPlatform
+	Linux               = internal.Linux
+)
 
 // MapType indicates the type map structure
 // that will be initialized in the kernel.
@@ -12,7 +20,7 @@ type MapType uint32
 
 // All the various map types that can be created
 const (
-	UnspecifiedMap MapType = iota
+	UnspecifiedMap MapType = MapType(internal.LinuxTag | iota)
 	// Hash is a hash map
 	Hash
 	// Array is an array map
@@ -104,6 +112,16 @@ const (
 	Arena
 )
 
+// MapTypeForPlatform returns a platform specific map type.
+func MapTypeForPlatform(r Platform, typ uint32) (MapType, error) {
+	return internal.EncodePlatformConstant[MapType](r, typ)
+}
+
+// Platform returns the [Platform] this map type belongs to.
+func (mt MapType) Decode() (Platform, uint32) {
+	return internal.DecodePlatformConstant(mt)
+}
+
 // hasPerCPUValue returns true if the Map stores a value per CPU.
 func (mt MapType) hasPerCPUValue() bool {
 	return mt == PerCPUHash || mt == PerCPUArray || mt == LRUCPUHash || mt == PerCPUCGroupStorage
@@ -145,7 +163,7 @@ func (mt MapType) canHaveValueSize() bool {
 // ProgramType of the eBPF program
 type ProgramType uint32
 
-// eBPF program types
+// eBPF program types (Linux).
 const (
 	UnspecifiedProgram    = ProgramType(sys.BPF_PROG_TYPE_UNSPEC)
 	SocketFilter          = ProgramType(sys.BPF_PROG_TYPE_SOCKET_FILTER)
@@ -181,6 +199,14 @@ const (
 	Syscall               = ProgramType(sys.BPF_PROG_TYPE_SYSCALL)
 	Netfilter             = ProgramType(sys.BPF_PROG_TYPE_NETFILTER)
 )
+
+func ProgramTypeForPlatform(p Platform, value uint32) (ProgramType, error) {
+	return internal.EncodePlatformConstant[ProgramType](p, value)
+}
+
+func (pt ProgramType) Decode() (Platform, uint32) {
+	return internal.DecodePlatformConstant(pt)
+}
 
 // AttachType of the eBPF program, needed to differentiate allowed context accesses in
 // some newer program types like CGroupSockAddr. Should be set to AttachNone if not required.
@@ -251,6 +277,14 @@ const (
 	AttachNetkitPrimary              = AttachType(sys.BPF_NETKIT_PRIMARY)
 	AttachNetkitPeer                 = AttachType(sys.BPF_NETKIT_PEER)
 )
+
+func AttachTypeForPlatform(p Platform, value uint32) (AttachType, error) {
+	return internal.EncodePlatformConstant[AttachType](p, value)
+}
+
+func (at AttachType) Decode() (Platform, uint32) {
+	return internal.DecodePlatformConstant(at)
+}
 
 // AttachFlags of the eBPF program used in BPF_PROG_ATTACH command
 type AttachFlags uint32

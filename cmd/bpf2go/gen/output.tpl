@@ -13,8 +13,8 @@ import (
 )
 
 {{- if .Types }}
-{{- range $type := .Types }}
-{{ $.TypeDeclaration (index $.TypeNames $type) $type }}
+{{- range $name, $type := .Types }}
+{{ $.TypeDeclaration $name $type }}
 
 {{ end }}
 {{- end }}

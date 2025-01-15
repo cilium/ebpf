@@ -15,6 +15,7 @@ import (
 	"github.com/cilium/ebpf/asm"
 	"github.com/cilium/ebpf/btf"
 	"github.com/cilium/ebpf/internal"
+	"github.com/cilium/ebpf/internal/features"
 	"github.com/cilium/ebpf/internal/kallsyms"
 	"github.com/cilium/ebpf/internal/linux"
 	"github.com/cilium/ebpf/internal/sys"
@@ -288,7 +289,7 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions) (*Program, er
 		KernVersion:        kv,
 	}
 
-	if haveObjName() == nil {
+	if features.HaveObjName() == nil {
 		attr.ProgName = sys.NewObjName(spec.Name)
 	}
 
@@ -315,7 +316,7 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions) (*Program, er
 		return nil, fmt.Errorf("apply CO-RE relocations: %w", err)
 	}
 
-	errExtInfos := haveProgramExtInfos()
+	errExtInfos := features.HaveProgramExtInfos()
 	if !b.Empty() && errors.Is(errExtInfos, ErrNotSupported) {
 		// There is at least one CO-RE relocation which relies on a stable local
 		// type ID.
@@ -503,7 +504,7 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions) (*Program, er
 	// hasFunctionReferences may be expensive, so check it last.
 	if (errors.Is(err, unix.EINVAL) || errors.Is(err, unix.EPERM)) &&
 		hasFunctionReferences(spec.Instructions) {
-		if err := haveBPFToBPFCalls(); err != nil {
+		if err := features.HaveBPFToBPFCalls(); err != nil {
 			return nil, fmt.Errorf("load program: %w", err)
 		}
 	}
@@ -758,56 +759,12 @@ func (p *Program) Benchmark(in []byte, repeat int, reset func()) (uint32, time.D
 	return ret, total, nil
 }
 
-var haveProgRun = internal.NewFeatureTest("BPF_PROG_RUN", func() error {
-	prog, err := NewProgram(&ProgramSpec{
-		// SocketFilter does not require privileges on newer kernels.
-		Type: SocketFilter,
-		Instructions: asm.Instructions{
-			asm.LoadImm(asm.R0, 0, asm.DWord),
-			asm.Return(),
-		},
-		License: "MIT",
-	})
-	if err != nil {
-		// This may be because we lack sufficient permissions, etc.
-		return err
-	}
-	defer prog.Close()
-
-	in := internal.EmptyBPFContext
-	attr := sys.ProgRunAttr{
-		ProgFd:     uint32(prog.FD()),
-		DataSizeIn: uint32(len(in)),
-		DataIn:     sys.NewSlicePointer(in),
-	}
-
-	err = sys.ProgRun(&attr)
-	switch {
-	case errors.Is(err, unix.EINVAL):
-		// Check for EINVAL specifically, rather than err != nil since we
-		// otherwise misdetect due to insufficient permissions.
-		return internal.ErrNotSupported
-
-	case errors.Is(err, unix.EINTR):
-		// We know that PROG_TEST_RUN is supported if we get EINTR.
-		return nil
-
-	case errors.Is(err, sys.ENOTSUPP):
-		// The first PROG_TEST_RUN patches shipped in 4.12 didn't include
-		// a test runner for SocketFilter. ENOTSUPP means PROG_TEST_RUN is
-		// supported, but not for the program type used in the probe.
-		return nil
-	}
-
-	return err
-}, "4.12")
-
 func (p *Program) run(opts *RunOptions) (uint32, time.Duration, error) {
 	if uint(len(opts.Data)) > math.MaxUint32 {
 		return 0, 0, fmt.Errorf("input is too long")
 	}
 
-	if err := haveProgRun(); err != nil {
+	if err := features.HaveProgTestRun(); err != nil {
 		return 0, 0, err
 	}
 
@@ -947,7 +904,7 @@ func LoadPinnedProgram(fileName string, opts *LoadPinOptions) (*Program, error) 
 	}
 
 	var progName string
-	if haveObjName() == nil {
+	if features.HaveObjName() == nil {
 		progName = info.Name
 	} else {
 		progName = filepath.Base(fileName)
@@ -965,7 +922,7 @@ func LoadPinnedProgram(fileName string, opts *LoadPinOptions) (*Program, error) 
 // Dots are only allowed as of kernel 5.2.
 func SanitizeName(name string, replacement rune) string {
 	return strings.Map(func(char rune) rune {
-		if invalidBPFObjNameChar(char) {
+		if internal.InvalidBPFObjNameChar(char, features.ObjNameAllowsDot() == nil) {
 			return replacement
 		}
 		return char

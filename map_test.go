@@ -14,6 +14,7 @@ import (
 	"github.com/cilium/ebpf/asm"
 	"github.com/cilium/ebpf/btf"
 	"github.com/cilium/ebpf/internal"
+	"github.com/cilium/ebpf/internal/features"
 	"github.com/cilium/ebpf/internal/sys"
 	"github.com/cilium/ebpf/internal/testutils"
 	"github.com/cilium/ebpf/internal/unix"
@@ -116,7 +117,7 @@ func TestMapSpecCopy(t *testing.T) {
 }
 
 func TestMapBatch(t *testing.T) {
-	if err := haveBatchAPI(); err != nil {
+	if err := features.HaveBatchAPI(); err != nil {
 		t.Skipf("batch api not available: %v", err)
 	}
 
@@ -280,7 +281,7 @@ func TestMapLookupKeyNotFoundAllocations(t *testing.T) {
 }
 
 func TestBatchAPIMapDelete(t *testing.T) {
-	if err := haveBatchAPI(); err != nil {
+	if err := features.HaveBatchAPI(); err != nil {
 		t.Skipf("batch api not available: %v", err)
 	}
 	m, err := NewMap(&MapSpec{
@@ -1184,7 +1185,7 @@ func TestMapIteratorAllocations(t *testing.T) {
 }
 
 func TestMapBatchLookupAllocations(t *testing.T) {
-	testutils.SkipIfNotSupported(t, haveBatchAPI())
+	testutils.SkipIfNotSupported(t, features.HaveBatchAPI())
 
 	arr, err := NewMap(&MapSpec{
 		Type:       Array,
@@ -1627,7 +1628,7 @@ func TestMapMarshalUnsafe(t *testing.T) {
 }
 
 func TestMapName(t *testing.T) {
-	if err := haveObjName(); err != nil {
+	if err := features.HaveObjName(); err != nil {
 		t.Skip(err)
 	}
 

@@ -10,6 +10,7 @@ import (
 	"github.com/cilium/ebpf/asm"
 	"github.com/cilium/ebpf/btf"
 	"github.com/cilium/ebpf/internal"
+	"github.com/cilium/ebpf/internal/features"
 	"github.com/cilium/ebpf/internal/kallsyms"
 	"github.com/cilium/ebpf/internal/kconfig"
 	"github.com/cilium/ebpf/internal/linux"
@@ -508,7 +509,7 @@ func (cl *collectionLoader) loadMap(mapName string) (*Map, error) {
 	// Defer setting the mmapable flag on maps until load time. This avoids the
 	// MapSpec having different flags on some kernel versions. Also avoid running
 	// syscalls during ELF loading, so platforms like wasm can also parse an ELF.
-	if isDataSection(mapSpec.Name) && haveMmapableMaps() == nil {
+	if isDataSection(mapSpec.Name) && features.HaveMmapableMaps() == nil {
 		mapSpec.Flags |= sys.BPF_F_MMAPABLE
 	}
 
@@ -730,7 +731,7 @@ func resolveKconfig(m *MapSpec) error {
 				return fmt.Errorf("variable %s must be an integer, got %s", n, v.Type)
 			}
 			var value uint64 = 1
-			if err := haveSyscallWrapper(); errors.Is(err, ErrNotSupported) {
+			if err := features.HaveSyscallWrapper(); errors.Is(err, ErrNotSupported) {
 				value = 0
 			} else if err != nil {
 				return fmt.Errorf("unable to derive a value for LINUX_HAS_SYSCALL_WRAPPER: %w", err)

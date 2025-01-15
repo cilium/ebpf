@@ -100,3 +100,22 @@ func (se *SafeELFFile) SectionsByType(typ elf.SectionType) []*elf.Section {
 	}
 	return sections
 }
+
+// InvalidBPFObjNameChar returns true if char may not appear in
+// a BPF object name.
+func InvalidBPFObjNameChar(char rune, dotAllowed bool) bool {
+	switch {
+	case char >= 'A' && char <= 'Z':
+		return false
+	case char >= 'a' && char <= 'z':
+		return false
+	case char >= '0' && char <= '9':
+		return false
+	case dotAllowed && char == '.':
+		return false
+	case char == '_':
+		return false
+	default:
+		return true
+	}
+}

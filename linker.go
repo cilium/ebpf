@@ -14,6 +14,7 @@ import (
 	"github.com/cilium/ebpf/asm"
 	"github.com/cilium/ebpf/btf"
 	"github.com/cilium/ebpf/internal"
+	"github.com/cilium/ebpf/internal/features"
 	"github.com/cilium/ebpf/internal/kallsyms"
 )
 
@@ -388,7 +389,7 @@ func fixupProbeReadKernel(ins *asm.Instruction) {
 	}
 
 	// Kernel supports bpf_probe_read_kernel, nothing to do.
-	if haveProbeReadKernel() == nil {
+	if features.HaveProbeReadKernel() == nil {
 		return
 	}
 

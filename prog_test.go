@@ -20,6 +20,7 @@ import (
 	"github.com/cilium/ebpf/asm"
 	"github.com/cilium/ebpf/btf"
 	"github.com/cilium/ebpf/internal"
+	"github.com/cilium/ebpf/internal/features"
 	"github.com/cilium/ebpf/internal/sys"
 	"github.com/cilium/ebpf/internal/testutils"
 	"github.com/cilium/ebpf/internal/unix"
@@ -329,7 +330,7 @@ func TestProgramPin(t *testing.T) {
 		t.Error("Expected pinned program to have type SocketFilter, but got", prog.Type())
 	}
 
-	if haveObjName() == nil {
+	if features.HaveObjName() == nil {
 		if prog.name != "test" {
 			t.Errorf("Expected program to have object name 'test', got '%s'", prog.name)
 		}
@@ -563,7 +564,7 @@ func TestProgramWithUnsatisfiedMap(t *testing.T) {
 }
 
 func TestProgramName(t *testing.T) {
-	if err := haveObjName(); err != nil {
+	if err := features.HaveObjName(); err != nil {
 		t.Skip(err)
 	}
 
@@ -655,17 +656,13 @@ func TestProgramFromFD(t *testing.T) {
 	defer prog2.Close()
 
 	// Name and type are supposed to be copied from program info.
-	if haveObjName() == nil && prog2.name != "test" {
+	if features.HaveObjName() == nil && prog2.name != "test" {
 		t.Errorf("Expected program to have name test, got '%s'", prog2.name)
 	}
 
 	if prog2.typ != SocketFilter {
 		t.Errorf("Expected program to have type SocketFilter, got '%s'", prog2.typ)
 	}
-}
-
-func TestHaveProgTestRun(t *testing.T) {
-	testutils.CheckFeatureTest(t, haveProgRun)
 }
 
 func TestProgramGetNextID(t *testing.T) {

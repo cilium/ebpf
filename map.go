@@ -368,7 +368,7 @@ func newMapWithOptions(spec *MapSpec, opts MapOptions) (_ *Map, err error) {
 	}
 
 	var innerFd *sys.FD
-	if spec.Type == ArrayOfMaps || spec.Type == HashOfMaps {
+	if spec.Type.canStoreMap() {
 		if spec.InnerMap == nil {
 			return nil, fmt.Errorf("%s requires InnerMap", spec.Type)
 		}
@@ -474,8 +474,13 @@ func (spec *MapSpec) createMap(inner *sys.FD) (_ *Map, err error) {
 		return nil, err
 	}
 
+	p, sysMapType := spec.Type.Decode()
+	if p != internal.NativePlatform {
+		return nil, fmt.Errorf("map type %s: %w", spec.Type, internal.ErrNotSupportedOnOS)
+	}
+
 	attr := sys.MapCreateAttr{
-		MapType:    sys.MapType(spec.Type),
+		MapType:    sys.MapType(sysMapType),
 		KeySize:    spec.KeySize,
 		ValueSize:  spec.ValueSize,
 		MaxEntries: spec.MaxEntries,

@@ -98,6 +98,8 @@ type GenerateArgs struct {
 	Types []btf.Type
 	// Filename of the object to embed.
 	ObjectFile string
+	// Packages used during build, record in generated files to prevents "go mod tidy" from removing
+	BuildDeps []string
 	// Output to write template to.
 	Output io.Writer
 	// Function which transforms the input into a valid go identifier. Uses the default behaviour if nil
@@ -162,6 +164,7 @@ func Generate(args GenerateArgs) error {
 	ctx := struct {
 		*btf.GoFormatter
 		Module      string
+		BuildDeps   []string
 		Package     string
 		Constraints constraint.Expr
 		Name        templateName
@@ -174,6 +177,7 @@ func Generate(args GenerateArgs) error {
 	}{
 		gf,
 		b2gInt.CurrentModule,
+		args.BuildDeps,
 		args.Package,
 		args.Constraints,
 		templateName(args.Stem),

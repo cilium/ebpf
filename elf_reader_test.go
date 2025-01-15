@@ -783,10 +783,7 @@ func TestWeakKfunc(t *testing.T) {
 
 func TestInvalidKfunc(t *testing.T) {
 	testutils.SkipOnOldKernel(t, "5.18", "kfunc support")
-
-	if !haveTestmod(t) {
-		t.Skip("bpf_testmod not loaded")
-	}
+	requireTestmod(t)
 
 	file := testutils.NativeFile(t, "testdata/invalid-kfunc-%s.elf")
 	coll, err := LoadCollection(file)
@@ -803,10 +800,7 @@ func TestInvalidKfunc(t *testing.T) {
 
 func TestKfuncKmod(t *testing.T) {
 	testutils.SkipOnOldKernel(t, "5.18", "Kernel module function calls")
-
-	if !haveTestmod(t) {
-		t.Skip("bpf_testmod not loaded")
-	}
+	requireTestmod(t)
 
 	file := testutils.NativeFile(t, "testdata/kfunc-kmod-%s.elf")
 	spec, err := LoadCollectionSpec(file)

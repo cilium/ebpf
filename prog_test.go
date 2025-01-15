@@ -797,8 +797,6 @@ func TestProgramAttachToKernel(t *testing.T) {
 	// See https://github.com/torvalds/linux/commit/290248a5b7d829871b3ea3c62578613a580a1744
 	testutils.SkipOnOldKernel(t, "5.5", "attach_btf_id")
 
-	haveTestmod := haveTestmod(t)
-
 	tests := []struct {
 		attachTo    string
 		programType ProgramType
@@ -854,8 +852,8 @@ func TestProgramAttachToKernel(t *testing.T) {
 	for _, test := range tests {
 		name := fmt.Sprintf("%s:%s", test.attachType, test.attachTo)
 		t.Run(name, func(t *testing.T) {
-			if strings.HasPrefix(test.attachTo, "bpf_testmod_") && !haveTestmod {
-				t.Skip("bpf_testmod not loaded")
+			if strings.HasPrefix(test.attachTo, "bpf_testmod_") {
+				requireTestmod(t)
 			}
 
 			prog, err := NewProgram(&ProgramSpec{

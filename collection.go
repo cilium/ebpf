@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"path/filepath"
 	"reflect"
 	"strings"
 
@@ -13,6 +14,7 @@ import (
 	"github.com/cilium/ebpf/internal/kallsyms"
 	"github.com/cilium/ebpf/internal/kconfig"
 	"github.com/cilium/ebpf/internal/linux"
+	"github.com/cilium/ebpf/internal/platform"
 	"github.com/cilium/ebpf/internal/sys"
 )
 
@@ -710,6 +712,10 @@ func resolveKconfig(m *MapSpec) error {
 		return errors.New("map value is not a Datasec")
 	}
 
+	if platform.IsWindows {
+		return fmt.Errorf(".kconfig: %w", internal.ErrNotSupportedOnOS)
+	}
+
 	type configInfo struct {
 		offset uint32
 		size   uint32
@@ -802,6 +808,13 @@ func resolveKconfig(m *MapSpec) error {
 // Omitting Collection.Close() during application shutdown is an error.
 // See the package documentation for details around Map and Program lifecycle.
 func LoadCollection(file string) (*Collection, error) {
+	if platform.IsWindows {
+		// This mirrors a check in efW.
+		if ext := filepath.Ext(file); ext == ".sys" {
+			return loadCollectionFromNativeImage(file)
+		}
+	}
+
 	spec, err := LoadCollectionSpec(file)
 	if err != nil {
 		return nil, err

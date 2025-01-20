@@ -6,10 +6,15 @@ import (
 	"testing"
 
 	"github.com/cilium/ebpf/btf"
+	"github.com/cilium/ebpf/internal/platform"
 	"github.com/cilium/ebpf/internal/testutils"
 )
 
 var haveTestmod = sync.OnceValues(func() (bool, error) {
+	if platform.IsWindows {
+		return false, nil
+	}
+
 	// See https://github.com/torvalds/linux/commit/290248a5b7d829871b3ea3c62578613a580a1744
 	testmod, err := btf.FindHandle(func(info *btf.HandleInfo) bool {
 		return info.IsModule() && info.Name == "bpf_testmod"

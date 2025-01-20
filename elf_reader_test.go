@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"syscall"
 	"testing"
@@ -16,6 +15,7 @@ import (
 	"github.com/cilium/ebpf/btf"
 	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/kallsyms"
+	"github.com/cilium/ebpf/internal/platform"
 	"github.com/cilium/ebpf/internal/sys"
 	"github.com/cilium/ebpf/internal/testutils"
 
@@ -450,7 +450,7 @@ func TestLoadInitializedBTFMap(t *testing.T) {
 			if coll.ByteOrder != internal.NativeEndian {
 				t.Skipf("Skipping %s collection", coll.ByteOrder)
 			}
-			if runtime.GOOS == "windows" {
+			if platform.IsWindows {
 				t.Skip("Windows made a mess of MapType")
 			}
 

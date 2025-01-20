@@ -164,7 +164,9 @@ func TestVariableFallback(t *testing.T) {
 	obj := struct {
 		Data *Variable `ebpf:"var_data"`
 	}{}
-	qt.Assert(t, qt.IsNil(spec.LoadAndAssign(&obj, nil)))
+	err = spec.LoadAndAssign(&obj, nil)
+	testutils.SkipIfNotSupportedOnOS(t, err)
+	qt.Assert(t, qt.IsNil(err))
 
 	// Expect either success or ErrNotSupported on all systems.
 	u32 := uint32(0)

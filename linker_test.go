@@ -15,7 +15,7 @@ import (
 func TestFindReferences(t *testing.T) {
 	progs := map[string]*ProgramSpec{
 		"entrypoint": {
-			Type: SocketFilter,
+			Type: basicProgramType,
 			Instructions: asm.Instructions{
 				// Make sure the call doesn't happen at instruction 0
 				// to exercise the relative offset calculation.
@@ -69,6 +69,7 @@ func TestForwardFunctionDeclaration(t *testing.T) {
 
 	// This program calls an unimplemented forward function declaration.
 	_, err = NewProgram(spec)
+	testutils.SkipIfNotSupportedOnOS(t, err)
 	if !errors.Is(err, asm.ErrUnsatisfiedProgramReference) {
 		t.Fatal("Expected an error wrapping ErrUnsatisfiedProgramReference, got:", err)
 	}

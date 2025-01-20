@@ -11,6 +11,8 @@ import (
 	"testing"
 
 	"github.com/go-quicktest/qt"
+
+	"github.com/cilium/ebpf/internal"
 )
 
 var test64bitImmProg = []byte{
@@ -21,12 +23,9 @@ var test64bitImmProg = []byte{
 
 func TestRead64bitImmediate(t *testing.T) {
 	var ins Instruction
-	n, err := ins.Unmarshal(bytes.NewReader(test64bitImmProg), binary.LittleEndian)
+	err := ins.Unmarshal(bytes.NewReader(test64bitImmProg), binary.LittleEndian, internal.LinuxPlatform)
 	if err != nil {
 		t.Fatal(err)
-	}
-	if want := uint64(InstructionSize * 2); n != want {
-		t.Errorf("Expected %d bytes to be read, got %d", want, n)
 	}
 
 	if c := ins.Constant; c != math.MinInt32-1 {
@@ -40,7 +39,7 @@ func BenchmarkRead64bitImmediate(b *testing.B) {
 		r.Reset(test64bitImmProg)
 
 		var ins Instruction
-		if _, err := ins.Unmarshal(r, binary.LittleEndian); err != nil {
+		if err := ins.Unmarshal(r, binary.LittleEndian, internal.LinuxPlatform); err != nil {
 			b.Fatal(err)
 		}
 	}
@@ -74,20 +73,17 @@ func BenchmarkWrite64BitImmediate(b *testing.B) {
 	}
 }
 
-func TestUnmarshalInstructions(t *testing.T) {
+func TestAppendInstructions(t *testing.T) {
 	r := bytes.NewReader(test64bitImmProg)
 
-	var insns Instructions
-	if err := insns.Unmarshal(r, binary.LittleEndian); err != nil {
-		t.Fatal(err)
-	}
+	insns, err := AppendInstructions(nil, r, binary.LittleEndian, internal.LinuxPlatform)
+	qt.Assert(t, qt.IsNil(err))
 
 	// Unmarshaling into the same Instructions multiple times replaces
 	// the instruction stream.
 	r.Reset(test64bitImmProg)
-	if err := insns.Unmarshal(r, binary.LittleEndian); err != nil {
-		t.Fatal(err)
-	}
+	insns, err = AppendInstructions(insns[:0], r, binary.LittleEndian, internal.LinuxPlatform)
+	qt.Assert(t, qt.IsNil(err))
 
 	if len(insns) != 1 {
 		t.Fatalf("Expected one instruction, got %d", len(insns))
@@ -263,7 +259,7 @@ func TestReadSrcDst(t *testing.T) {
 	for _, tc := range testcases {
 		t.Run(tc.bo.String(), func(t *testing.T) {
 			var ins Instruction
-			_, err := ins.Unmarshal(bytes.NewReader(testSrcDstProg), tc.bo)
+			err := ins.Unmarshal(bytes.NewReader(testSrcDstProg), tc.bo, internal.LinuxPlatform)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -367,8 +363,7 @@ func TestISAv4(t *testing.T) {
 		0x9c, 0x42, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, // w2 s%= w4
 	}
 
-	var insns Instructions
-	err := insns.Unmarshal(bytes.NewReader(rawInsns), binary.LittleEndian)
+	insns, err := AppendInstructions(nil, bytes.NewReader(rawInsns), binary.LittleEndian, internal.LinuxPlatform)
 	if err != nil {
 		t.Fatal(err)
 	}

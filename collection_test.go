@@ -87,6 +87,7 @@ func TestCollectionSpecCopy(t *testing.T) {
 		},
 		&btf.Spec{},
 		binary.LittleEndian,
+		internal.LinuxPlatform,
 	}
 
 	qt.Check(t, qt.IsNil((*CollectionSpec)(nil).Copy()))

@@ -336,10 +336,15 @@ func AttachRawLink(opts RawLinkOptions) (*RawLink, error) {
 		return nil, fmt.Errorf("invalid program: %s", sys.ErrClosedFd)
 	}
 
+	p, attachType := opts.Attach.Decode()
+	if p != "linux" {
+		return nil, fmt.Errorf("attach type %s: %w", opts.Attach, internal.ErrNotSupportedOnOS)
+	}
+
 	attr := sys.LinkCreateAttr{
 		TargetFd:    uint32(opts.Target),
 		ProgFd:      uint32(progFd),
-		AttachType:  sys.AttachType(opts.Attach),
+		AttachType:  sys.AttachType(attachType),
 		TargetBtfId: opts.BTF,
 		Flags:       opts.Flags,
 	}

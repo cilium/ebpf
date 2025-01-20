@@ -184,7 +184,14 @@ func LoadCollectionSpecFromReader(rd io.ReaderAt) (*CollectionSpec, error) {
 		return nil, fmt.Errorf("load programs: %w", err)
 	}
 
-	return &CollectionSpec{ec.maps, progs, ec.vars, btfSpec, ec.ByteOrder}, nil
+	return &CollectionSpec{
+		ec.maps,
+		progs,
+		ec.vars,
+		btfSpec,
+		ec.ByteOrder,
+		internal.LinuxPlatform,
+	}, nil
 }
 
 func loadLicense(sec *elf.Section) (string, error) {
@@ -402,7 +409,8 @@ func (ec *elfCode) loadFunctions(section *elfSection) (map[string]asm.Instructio
 
 	// Decode the section's instruction stream.
 	insns := make(asm.Instructions, 0, section.Size/asm.InstructionSize)
-	if err := insns.Unmarshal(r, ec.ByteOrder); err != nil {
+	insns, err := asm.AppendInstructions(insns, r, ec.ByteOrder, internal.LinuxPlatform)
+	if err != nil {
 		return nil, fmt.Errorf("decoding instructions for section %s: %w", section.Name, err)
 	}
 	if len(insns) == 0 {

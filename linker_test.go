@@ -159,3 +159,24 @@ func TestSplitSymbols(t *testing.T) {
 	qt.Assert(t, qt.HasLen(m["sym3"], 3))
 	qt.Assert(t, qt.HasLen(m["sym4"], 4))
 }
+
+func TestFlattenInstructionsAllocations(t *testing.T) {
+	name := "entrypoint"
+	instructions := asm.Instructions{
+		asm.LoadImm(asm.R0, 0, asm.DWord),
+		asm.Return(),
+	}
+	prog := &ProgramSpec{
+		Name:         name,
+		Instructions: instructions,
+	}
+	progs := map[string]*ProgramSpec{name: prog}
+	refs := make(map[*ProgramSpec][]string)
+
+	// ensure that flattenInstructions does not allocate memory
+	// if there is no reference for the given program.
+	allocs := testing.AllocsPerRun(5, func() {
+		_ = flattenInstructions(name, progs, refs)
+	})
+	qt.Assert(t, qt.Equals(allocs, float64(0)))
+}

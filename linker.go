@@ -272,9 +272,11 @@ func fixupAndValidate(insns asm.Instructions) error {
 	return nil
 }
 
-// POISON_CALL_KFUNC_BASE in libbpf.
-// https://github.com/libbpf/libbpf/blob/2778cbce609aa1e2747a69349f7f46a2f94f0522/src/libbpf.c#L5767
-const kfuncCallPoisonBase = 2002000000
+// A constant used to poison calls to non-existent kfuncs.
+//
+// Similar POISON_CALL_KFUNC_BASE in libbpf, except that we use a value lower
+// than 2^28 to fit into a tagged constant.
+const kfuncCallPoisonBase = 1<<28 - 1
 
 // fixupKfuncs loops over all instructions in search for kfunc calls.
 // If at least one is found, the current kernels BTF and module BTFis are searched to set Instruction.Constant
@@ -331,8 +333,11 @@ fixups:
 				// If the kfunc call is weak and not found, poison the call. Use a recognizable constant
 				// to make it easier to debug. And set src to zero so the verifier doesn't complain
 				// about the invalid imm/offset values before dead-code elimination.
-				ins.Constant = kfuncCallPoisonBase
-				ins.Src = 0
+				fn, err := asm.BuiltinFuncForPlatform(internal.NativePlatform, kfuncCallPoisonBase)
+				if err != nil {
+					return nil, err
+				}
+				*ins = fn.Call()
 			} else if ins.OpCode.IsDWordLoad() {
 				// If the kfunc DWordLoad is weak and not found, set its address to 0.
 				ins.Constant = 0

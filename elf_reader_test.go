@@ -217,6 +217,7 @@ func TestLoadCollectionSpec(t *testing.T) {
 			"neg":  {name: "neg", offset: 12, size: 4},
 			"uneg": {name: "uneg", offset: 8, size: 4},
 		},
+		Platform: internal.LinuxPlatform,
 	}
 
 	testutils.Files(t, testutils.Glob(t, "testdata/loader-*.elf"), func(t *testing.T, file string) {

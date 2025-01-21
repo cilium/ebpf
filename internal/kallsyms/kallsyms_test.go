@@ -2,13 +2,12 @@ package kallsyms
 
 import (
 	"bytes"
-	"errors"
 	"os"
-	"runtime"
 	"testing"
 
 	"github.com/go-quicktest/qt"
 
+	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/testutils"
 )
 
@@ -177,13 +176,11 @@ func BenchmarkAssignAddresses(b *testing.B) {
 func mustOpenProcKallsyms(tb testing.TB) *os.File {
 	tb.Helper()
 
-	if runtime.GOOS != "linux" {
+	if !internal.OnLinux {
 		tb.Skip("/proc/kallsyms is a Linux concept")
 	}
 
 	f, err := os.Open("/proc/kallsyms")
-	if runtime.GOOS != "linux" && errors.Is(err, os.ErrNotExist) {
-	}
 	qt.Assert(tb, qt.IsNil(err))
 	tb.Cleanup(func() { f.Close() })
 	return f

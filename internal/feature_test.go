@@ -83,7 +83,7 @@ func TestFeatureTestNotSupportedOnOS(t *testing.T) {
 	qt.Assert(t, qt.IsNotNil(NewFeatureTest("foo", fn)()))
 	qt.Assert(t, qt.ErrorIs(NewFeatureTest("foo", fn, "froz:1.0.0")(), ErrNotSupportedOnOS))
 	qt.Assert(t, qt.ErrorIs(NewFeatureTest("foo", fn, runtime.GOOS+":1.0")(), sentinel))
-	if runtime.GOOS == "linux" {
+	if OnLinux {
 		qt.Assert(t, qt.ErrorIs(NewFeatureTest("foo", fn, "1.0")(), sentinel))
 	}
 }

@@ -235,38 +235,96 @@ jobs:
     strategy:
       matrix:
         version:
-          - "0.20.0"
+          - "main"
     env:
       # Fix slow Go compile and cache restore
       # See https://github.com/actions/setup-go/pull/515
       GOCACHE: D:\gocache
       GOMODCACHE: D:\gomodcache
-      GOTMPDIR: D:\gotmp
+      # Avoid putting temp on slow C:
+      TEMP: D:\temp
 
     steps:
-      # Go requires gotmp to be present
-      - run: mkdir D:\gotmp
+      - run: mkdir D:\temp
         shell: pwsh
+
+      - name: Get eBPF for Windows download URL
+        id: determine-url
+        uses: actions/github-script@v6
+        with:
+          script: |
+            if ("${{ matrix.version }}" != "main") {
+              // TODO: Workflow artifact and release artifact don't have the
+              // same folder structure.
+              core.setFailed('Installing tagged versions is not supported');
+              return;
+            }
+
+            // Get the latest successful merge_group run
+            const workflow_runs = await github.rest.actions.listWorkflowRuns({
+              owner: 'microsoft',
+              repo: 'ebpf-for-windows',
+              workflow_id: 'cicd.yml',
+              event: 'merge_group',
+              status: 'success',
+              per_page: 1
+            });
+
+            if (workflow_runs.data.workflow_runs.length === 0) {
+              core.setFailed('No successful merge_group workflow runs found');
+              return;
+            }
+
+            // Get artifacts from this run
+            const run_id = workflow_runs.data.workflow_runs[0].id;
+            const artifacts = await github.rest.actions.listWorkflowRunArtifacts({
+              owner: 'microsoft',
+              repo: 'ebpf-for-windows',
+              run_id: run_id
+            });
+
+            // Find the specific artifact
+            const artifact = artifacts.data.artifacts.find(a => a.name === 'Build-x64-Debug');
+
+            if (!artifact) {
+              console.log('Available artifacts:', artifacts.data.artifacts.map(a => a.name));
+              core.setFailed('Build-x64-Debug artifact not found in the workflow run');
+              return;
+            }
+
+            // Get the download URL via redirect
+            const response = await github.rest.actions.downloadArtifact({
+              owner: 'microsoft',
+              repo: 'ebpf-for-windows',
+              artifact_id: artifact.id,
+              archive_format: 'zip',
+              request: {
+                redirect: 'manual'
+              }
+            });
+
+            // Extract the location header which contains the actual download URL
+            const download_url = response.headers.location;
+
+            if (!download_url) {
+              core.setFailed('Failed to get redirect URL from headers');
+              return;
+            }
+
+            core.setOutput('download_url', download_url);
 
       - name: Download and Install eBPF for Windows
         shell: pwsh
         run: |
-          Invoke-WebRequest -Uri "https://github.com/microsoft/ebpf-for-windows/releases/download/Release-v${{ matrix.version }}/Build-x64.Debug.zip" -OutFile "$env:TEMP\efw.zip"
-          Expand-Archive -Path "$env:TEMP\efw.zip" -DestinationPath "$env:TEMP\ebpf"
-          Set-Location "$env:TEMP\ebpf"
-          # setup-ebpf.ps1 can't handle spaces in the path to the MSI.
-          mv "Build-x64 Debug" "debug"
-          $setupScript = Get-ChildItem -Path . -Filter "setup-ebpf.ps1" -Recurse | Select-Object -First 1
+          Invoke-WebRequest -Uri "${{ steps.determine-url.outputs.download_url }}" -OutFile "$env:TEMP\efw.zip"
+          Expand-Archive -Path "$env:TEMP\efw.zip" -DestinationPath "$env:TEMP"
+          Expand-Archive -Path "$env:TEMP\build-Debug.zip" -DestinationPath "$env:TEMP\ebpf"
+          $setupScript = Get-ChildItem -Path "$env:TEMP\ebpf" -Filter "setup-ebpf.ps1" -Recurse | Select-Object -First 1
           if ($setupScript) {
             Write-Host "Found setup script: $($setupScript.FullName)"
             Set-Location -Path $setupScript.DirectoryName
             Write-Host "Changed directory to: $(Get-Location)"
             & $setupScript.FullName
-
-            # Change service account to SYSTEM, until https://github.com/microsoft/ebpf-for-windows/pull/4095 is in a release.
-            Write-Host "Changing ebpfsvc to run as SYSTEM"
-            sc.exe config ebpfsvc obj= "LocalSystem"
-            sc.exe start ebpfsvc
           } else {
             Write-Error "Setup script not found in the extracted package"
             exit 1

@@ -9,6 +9,7 @@ import (
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/asm"
 	"github.com/cilium/ebpf/internal/testutils"
+	"github.com/cilium/ebpf/internal/testutils/fdtrace"
 )
 
 func mustPinnedProgram(t *testing.T, path string) *ebpf.Program {
@@ -77,9 +78,15 @@ func TestLoad(t *testing.T) {
 
 	m, err := Load(mpath, nil)
 	qt.Assert(t, qt.IsNil(err))
+	defer m.Close()
 	qt.Assert(t, qt.Satisfies(m, testutils.Contains[*ebpf.Map]))
 
 	p, err := Load(ppath, nil)
 	qt.Assert(t, qt.IsNil(err))
+	defer p.Close()
 	qt.Assert(t, qt.Satisfies(p, testutils.Contains[*ebpf.Program]))
+}
+
+func TestMain(m *testing.M) {
+	fdtrace.TestMain(m)
 }

@@ -264,8 +264,9 @@ jobs:
               owner: 'microsoft',
               repo: 'ebpf-for-windows',
               workflow_id: 'cicd.yml',
-              event: 'merge_group',
-              status: 'success',
+              event: 'push',
+              branch: 'main',
+              status: 'completed',
               per_page: 1
             });
 
@@ -329,6 +330,10 @@ jobs:
             exit 1
           }
 
+      - name: Add eBPF for Windows to PATH
+        shell: pwsh
+        run: echo "C:\Program Files\ebpf-for-windows\" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
       - uses: actions/checkout@v4
 
       - name: Set up Go
@@ -344,6 +349,7 @@ jobs:
           go test -short -count 1 -json
           ./asm
           ./internal
+          ./internal/efw
           ./internal/kallsyms
           ./internal/kconfig
           ./internal/linux

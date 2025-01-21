@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"runtime"
 	"slices"
 	"strconv"
 	"strings"
@@ -50,7 +49,7 @@ func Module(name string) (string, error) {
 // Any symbols missing in the kernel are ignored. Returns an error if multiple
 // symbols with a given name were found.
 func AssignModules(symbols map[string]string) error {
-	if runtime.GOOS != "linux" {
+	if !internal.OnLinux {
 		return fmt.Errorf("read /proc/kallsyms: %w", internal.ErrNotSupportedOnOS)
 	}
 
@@ -169,7 +168,7 @@ func Address(symbol string) (uint64, error) {
 // Any symbols missing in the kernel are ignored. Returns an error if multiple
 // addresses were found for a symbol.
 func AssignAddresses(symbols map[string]uint64) error {
-	if runtime.GOOS != "linux" {
+	if !internal.OnLinux {
 		return fmt.Errorf("read /proc/kallsyms: %w", internal.ErrNotSupportedOnOS)
 	}
 

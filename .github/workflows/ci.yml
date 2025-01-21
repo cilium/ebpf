@@ -8,6 +8,7 @@ on:
 env:
   TMPDIR: /tmp
   CI_MAX_KERNEL_VERSION: '6.11'
+  CI_MAX_EFW_VERSION: '0.20.0'
   CI_MIN_CLANG_VERSION: '11'
   go_version: '~1.23'
   prev_go_version: '~1.22'
@@ -185,8 +186,8 @@ jobs:
         run: |
           sudo dmesg
 
-  vm-test:
-    name: Run tests
+  linux-test:
+    name: Run tests (Linux)
     runs-on: ubuntu-latest
     needs: build-and-lint
     timeout-minutes: 15
@@ -223,5 +224,70 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: Test Results (${{ matrix.tag }})
+          name: Test Results (linux ${{ matrix.tag }})
           path: junit.xml
+
+  windows-test:
+    name: Run tests (Windows)
+    runs-on: windows-2022
+    needs: build-and-lint
+    timeout-minutes: 15
+    strategy:
+      matrix:
+        version:
+          - "0.20.0"
+    env:
+      # Fix slow Go compile and cache restore
+      # See https://github.com/actions/setup-go/pull/515
+      GOCACHE: D:\gocache
+      GOMODCACHE: D:\gomodcache
+      GOTMPDIR: D:\gotmp
+
+    steps:
+      # Go requires gotmp to be present
+      - run: mkdir D:\gotmp
+        shell: pwsh
+
+      - name: Download and Install eBPF for Windows
+        shell: pwsh
+        run: |
+          Invoke-WebRequest -Uri "https://github.com/microsoft/ebpf-for-windows/releases/download/Release-v${{ matrix.version }}/Build-x64.Debug.zip" -OutFile "$env:TEMP\efw.zip"
+          Expand-Archive -Path "$env:TEMP\efw.zip" -DestinationPath "$env:TEMP\ebpf"
+          Set-Location "$env:TEMP\ebpf"
+          # setup-ebpf.ps1 can't handle spaces in the path to the MSI.
+          mv "Build-x64 Debug" "debug"
+          $setupScript = Get-ChildItem -Path . -Filter "setup-ebpf.ps1" -Recurse | Select-Object -First 1
+          if ($setupScript) {
+            Write-Host "Found setup script: $($setupScript.FullName)"
+            Set-Location -Path $setupScript.DirectoryName
+            Write-Host "Changed directory to: $(Get-Location)"
+            & $setupScript.FullName
+
+            # Change service account to SYSTEM, until https://github.com/microsoft/ebpf-for-windows/pull/4095 is in a release.
+            Write-Host "Changing ebpfsvc to run as SYSTEM"
+            sc.exe config ebpfsvc obj= "LocalSystem"
+            sc.exe start ebpfsvc
+          } else {
+            Write-Error "Setup script not found in the extracted package"
+            exit 1
+          }
+
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '${{ env.go_version }}'
+
+      - run: go install gotest.tools/gotestsum@v1.8.1
+
+      # - name: Test
+      #   run: gotestsum --raw-command --ignore-non-json-output-lines --junitfile junit.xml -- go test -short -count 1 -json ./...
+
+      # - name: Upload Test Results
+      #   if: always()
+      #   uses: actions/upload-artifact@v4
+      #   with:
+      #     name: Test Results (windows ${{ matrix.tag }})
+      #     path: junit.xml
+

@@ -27,6 +27,10 @@ func TestWalkDir(t *testing.T) {
 	bpffn := func(path string, d fs.DirEntry, obj Pinner, err error) error {
 		qt.Assert(t, qt.IsNil(err))
 
+		if obj != nil {
+			defer obj.Close()
+		}
+
 		if path == "." {
 			return nil
 		}

@@ -2,6 +2,7 @@ package pin
 
 import (
 	"fmt"
+	"io"
 
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/internal/sys"
@@ -11,6 +12,7 @@ import (
 // Pinner is an interface implemented by all eBPF objects that support pinning
 // to a bpf virtual filesystem.
 type Pinner interface {
+	io.Closer
 	Pin(string) error
 }
 

@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/go-quicktest/qt"
+	"github.com/google/go-cmp/cmp"
 
 	"github.com/cilium/ebpf/asm"
 	"github.com/cilium/ebpf/btf"
@@ -117,6 +118,29 @@ func TestCollectionSpecLoadCopy(t *testing.T) {
 		t.Fatal("Loading copied spec:", err)
 	}
 	defer objs.Prog.Close()
+}
+
+func TestCollectionSpecLoadMutate(t *testing.T) {
+	file := testutils.NativeFile(t, "testdata/loader-%s.elf")
+	spec, err := LoadCollectionSpec(file)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	orig := spec.Copy()
+
+	var objs struct {
+		Prog *Program `ebpf:"xdp_prog"`
+	}
+
+	err = spec.LoadAndAssign(&objs, nil)
+	testutils.SkipIfNotSupported(t, err)
+	qt.Assert(t, qt.IsNil(err))
+	defer objs.Prog.Close()
+
+	if diff := cmp.Diff(orig, spec, csCmpOpts...); diff != "" {
+		t.Errorf("CollectionSpec was mutated after loading (-want +got):\n%s", diff)
+	}
 }
 
 func TestCollectionSpecRewriteMaps(t *testing.T) {
@@ -264,6 +288,7 @@ func TestCollectionSpecMapReplacements(t *testing.T) {
 		t.Fatalf("failed to update replaced map: %s", err)
 	}
 }
+
 func TestCollectionSpecMapReplacements_NonExistingMap(t *testing.T) {
 	cs := &CollectionSpec{
 		Maps: map[string]*MapSpec{
@@ -331,6 +356,38 @@ func TestCollectionSpecMapReplacements_SpecMismatch(t *testing.T) {
 	if !errors.Is(err, ErrMapIncompatible) {
 		t.Fatalf("Overriding a map with a mismatching spec failed with the wrong error")
 	}
+}
+
+func TestMapReplacementsDataSections(t *testing.T) {
+	// In some circumstances, it can be useful to share data sections between
+	// Collections, for example to hold a ready/pause flag or some metrics.
+	// Test read-only maps for good measure.
+	file := testutils.NativeFile(t, "testdata/loader-%s.elf")
+	spec, err := LoadCollectionSpec(file)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var objs struct {
+		Data   *Map `ebpf:".data"`
+		ROData *Map `ebpf:".rodata"`
+	}
+
+	err = spec.LoadAndAssign(&objs, nil)
+	testutils.SkipIfNotSupported(t, err)
+	qt.Assert(t, qt.IsNil(err))
+	defer objs.Data.Close()
+	defer objs.ROData.Close()
+
+	qt.Assert(t, qt.IsNil(
+		spec.LoadAndAssign(&objs, &CollectionOptions{
+			MapReplacements: map[string]*Map{
+				".data":   objs.Data,
+				".rodata": objs.ROData,
+			},
+		})))
+	defer objs.Data.Close()
+	defer objs.ROData.Close()
 }
 
 func TestCollectionSpec_LoadAndAssign_LazyLoading(t *testing.T) {

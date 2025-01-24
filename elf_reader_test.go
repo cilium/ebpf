@@ -24,6 +24,27 @@ import (
 	"github.com/go-quicktest/qt"
 )
 
+var csCmpOpts = cmp.Options{
+	// Dummy Comparer that works with empty readers to support test cases.
+	cmp.Comparer(func(a, b bytes.Reader) bool {
+		if a.Len() == 0 && b.Len() == 0 {
+			return true
+		}
+		return false
+	}),
+	cmp.Comparer(func(a, b *VariableSpec) bool {
+		if a.name != b.name || a.offset != b.offset || a.size != b.size {
+			return false
+		}
+		return true
+	}),
+	cmpopts.IgnoreTypes(btf.Spec{}),
+	cmpopts.IgnoreFields(CollectionSpec{}, "ByteOrder", "Types"),
+	cmpopts.IgnoreFields(ProgramSpec{}, "Instructions", "ByteOrder"),
+	cmpopts.IgnoreFields(MapSpec{}, "Key", "Value", "Contents"),
+	cmpopts.IgnoreUnexported(ProgramSpec{}),
+}
+
 func TestLoadCollectionSpec(t *testing.T) {
 	coll := &CollectionSpec{
 		Maps: map[string]*MapSpec{
@@ -198,27 +219,6 @@ func TestLoadCollectionSpec(t *testing.T) {
 		},
 	}
 
-	cmpOpts := cmp.Options{
-		// Dummy Comparer that works with empty readers to support test cases.
-		cmp.Comparer(func(a, b bytes.Reader) bool {
-			if a.Len() == 0 && b.Len() == 0 {
-				return true
-			}
-			return false
-		}),
-		cmp.Comparer(func(a, b *VariableSpec) bool {
-			if a.name != b.name || a.offset != b.offset || a.size != b.size {
-				return false
-			}
-			return true
-		}),
-		cmpopts.IgnoreTypes(new(btf.Spec)),
-		cmpopts.IgnoreFields(CollectionSpec{}, "ByteOrder", "Types"),
-		cmpopts.IgnoreFields(ProgramSpec{}, "Instructions", "ByteOrder"),
-		cmpopts.IgnoreFields(MapSpec{}, "Key", "Value", "Contents"),
-		cmpopts.IgnoreUnexported(ProgramSpec{}),
-	}
-
 	testutils.Files(t, testutils.Glob(t, "testdata/loader-*.elf"), func(t *testing.T, file string) {
 		have, err := LoadCollectionSpec(file)
 		if err != nil {
@@ -250,7 +250,7 @@ func TestLoadCollectionSpec(t *testing.T) {
 		qt.Assert(t, qt.Equals(have.Maps["perf_event_array"].ValueSize, 0))
 		qt.Assert(t, qt.IsNotNil(have.Maps["perf_event_array"].Value))
 
-		if diff := cmp.Diff(coll, have, cmpOpts...); diff != "" {
+		if diff := cmp.Diff(coll, have, csCmpOpts); diff != "" {
 			t.Errorf("MapSpec mismatch (-want +got):\n%s", diff)
 		}
 

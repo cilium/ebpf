@@ -7,6 +7,8 @@ import (
 	"testing"
 
 	"github.com/cilium/ebpf/internal"
+
+	"github.com/go-quicktest/qt"
 )
 
 func TestParseExtInfoBigRecordSize(t *testing.T) {
@@ -36,4 +38,19 @@ func BenchmarkParseLineInfoRecords(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		parseLineInfoRecords(bytes.NewReader(buf), internal.NativeEndian, size, count, true)
 	}
+}
+
+func TestParseLineInfoRecordsAllocations(t *testing.T) {
+	size := uint32(binary.Size(bpfLineInfo{}))
+	count := uint32(4096)
+	buf := make([]byte, size*count)
+
+	allocs := testing.AllocsPerRun(5, func() {
+		parseLineInfoRecords(bytes.NewReader(buf), internal.NativeEndian, size, count, true)
+	})
+
+	// 7 is the number of allocations on go 1.22
+	// what we want to test is that we are not allocating
+	// once per record
+	qt.Assert(t, qt.IsTrue(allocs <= 7))
 }

@@ -127,7 +127,7 @@ jobs:
         env:
           GOTRACEBACK: crash
         run: |
-          gotestsum --raw-command --ignore-non-json-output-lines --junitfile junit.xml -- vimto -kernel :stable-selftests -- go test -timeout 5m -short -count 1 -json ./...
+          gotestsum --raw-command --ignore-non-json-output-lines --junitfile junit.xml -- vimto -kernel :stable-selftests -- go test -timeout 5m -short -count 1 -json ./... -coverprofile=coverage-pre-go.out
 
       - name: Benchmark
         run: vimto -kernel :stable-selftests -- go test -short -run '^$' -bench . -benchtime=1x ./...
@@ -149,6 +149,13 @@ jobs:
           name: Test Results (previous stable Go)
           path: junit.xml
 
+      - name: Upload Coverage Report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Coverage Report (previous stable Go)
+          path: coverage-pre-go.out
+
   test-on-arm64:
     name: Run tests on arm64
     runs-on: ubuntu-22.04-arm64
@@ -168,7 +175,7 @@ jobs:
 
       - name: Test
         # Skip TestGoarches/loong64 because the GH arm64 Go toolchain seems to be weird.
-        run: gotestsum --ignore-non-json-output-lines --junitfile junit.xml -- -exec 'sudo -E' -short -count 1 -skip '^TestGoarches/loong64$' -json ./...
+        run: gotestsum --ignore-non-json-output-lines --junitfile junit.xml -- -exec 'sudo -E' -short -count 1 -skip '^TestGoarches/loong64$' -json ./... -coverprofile=coverage-arm64.out
 
       - name: Benchmark
         run: go test -exec sudo -short -run '^$' -bench . -benchtime=1x ./...
@@ -184,6 +191,13 @@ jobs:
         if: failure()
         run: |
           sudo dmesg
+
+      - name: Upload Coverage Report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Coverage Report (arm64)
+          path: coverage-arm64.out
 
   vm-test:
     name: Run tests
@@ -217,11 +231,50 @@ jobs:
       - run: sudo chmod 0666 /dev/kvm
 
       - name: Test
-        run: gotestsum --raw-command --ignore-non-json-output-lines --junitfile junit.xml -- vimto -kernel :${{ matrix.tag }} -- go test -short -count 1 -json ./...
-
+        run: gotestsum --raw-command --ignore-non-json-output-lines --junitfile junit.xml -- vimto -kernel :${{ matrix.tag }} -- go test -short -count 1 -json ./... -coverprofile=coverage-${{ matrix.tag }}.out
+        
       - name: Upload Test Results
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: Test Results (${{ matrix.tag }})
           path: junit.xml
+
+      - name: Upload Coverage Report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Coverage Report (${{ matrix.tag }})
+          path: coverage-${{ matrix.tag }}.out
+
+  merge-coverage:
+    name: Merge Coverage Reports
+    runs-on: ubuntu-latest
+    needs: [vm-test, test-on-arm64, test-on-prev-go]
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '${{ env.go_version }}'
+
+      - name: Download Coverage Reports
+        uses: actions/download-artifact@v4
+        with:
+          pattern: coverage-*.out
+          path: coverage-reports
+
+      - name: Merge Coverage Reports
+        run: |
+          go tool covdata -merge coverage-reports/coverage-*.out -o coverage-merged.out
+          go tool cover -html=coverage-merged.out -o coverage.html
+
+      - name: Upload Merged Coverage Report
+        uses: actions/upload-artifact@v4
+        with:
+          name: Merged Coverage Report
+          path: coverage.html
+
+          

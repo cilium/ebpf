@@ -2,6 +2,7 @@ package btf
 
 import (
 	"bytes"
+	"encoding/binary"
 	"strings"
 	"testing"
 
@@ -21,5 +22,18 @@ func TestParseExtInfoBigRecordSize(t *testing.T) {
 
 	if _, err := parseLineInfos(rd, internal.NativeEndian, table); err == nil {
 		t.Error("Parsing line info with large record size doesn't return an error")
+	}
+}
+
+func BenchmarkParseLineInfoRecords(b *testing.B) {
+	size := uint32(binary.Size(bpfLineInfo{}))
+	count := uint32(4096)
+	buf := make([]byte, size*count)
+
+	b.ReportAllocs()
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		parseLineInfoRecords(bytes.NewReader(buf), internal.NativeEndian, size, count, true)
 	}
 }

@@ -71,6 +71,7 @@ func AssignModules(symbols map[string]string) error {
 	if err != nil {
 		return err
 	}
+	defer f.Close()
 
 	if err := assignModules(f, request); err != nil {
 		return fmt.Errorf("assigning symbol modules: %w", err)
@@ -185,6 +186,7 @@ func AssignAddresses(symbols map[string]uint64) error {
 	if err != nil {
 		return err
 	}
+	defer f.Close()
 
 	if err := assignAddresses(f, request); err != nil {
 		return fmt.Errorf("loading symbol addresses: %w", err)

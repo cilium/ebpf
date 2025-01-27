@@ -9,26 +9,6 @@ import (
 )
 
 const (
-	ENOENT     = linux.ENOENT
-	EEXIST     = linux.EEXIST
-	EAGAIN     = linux.EAGAIN
-	ENOSPC     = linux.ENOSPC
-	EINVAL     = linux.EINVAL
-	EPOLLIN    = linux.EPOLLIN
-	EINTR      = linux.EINTR
-	EPERM      = linux.EPERM
-	ESRCH      = linux.ESRCH
-	ENODEV     = linux.ENODEV
-	EBADF      = linux.EBADF
-	E2BIG      = linux.E2BIG
-	EFAULT     = linux.EFAULT
-	EACCES     = linux.EACCES
-	EILSEQ     = linux.EILSEQ
-	EOPNOTSUPP = linux.EOPNOTSUPP
-	ESTALE     = linux.ESTALE
-)
-
-const (
 	BPF_F_NO_PREALLOC         = linux.BPF_F_NO_PREALLOC
 	BPF_F_NUMA_NODE           = linux.BPF_F_NUMA_NODE
 	BPF_F_RDONLY              = linux.BPF_F_RDONLY

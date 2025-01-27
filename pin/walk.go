@@ -6,7 +6,9 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/linux"
+	"github.com/cilium/ebpf/internal/platform"
 	"github.com/cilium/ebpf/internal/unix"
 )
 
@@ -23,6 +25,10 @@ type WalkDirFunc func(path string, d fs.DirEntry, obj Pinner, err error) error
 //
 // See the [WalkDirFunc] for more information.
 func WalkDir(root string, bpffn WalkDirFunc) error {
+	if platform.IsWindows {
+		return fmt.Errorf("walk bpffs: %w", internal.ErrNotSupportedOnOS)
+	}
+
 	fsType, err := linux.FSType(root)
 	if err != nil {
 		return err

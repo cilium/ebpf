@@ -6,26 +6,6 @@ import (
 	"syscall"
 )
 
-// Errnos are distinct and non-zero.
-const (
-	ENOENT syscall.Errno = iota + 1
-	EEXIST
-	EAGAIN
-	ENOSPC
-	EINVAL
-	EINTR
-	EPERM
-	ESRCH
-	ENODEV
-	EBADF
-	E2BIG
-	EFAULT
-	EACCES
-	EILSEQ
-	EOPNOTSUPP
-	ESTALE
-)
-
 // Constants are distinct to avoid breaking switch statements.
 const (
 	BPF_F_NO_PREALLOC = iota
@@ -133,8 +113,8 @@ type Sigset_t struct {
 	Val [4]uint64
 }
 
-func Syscall(trap, a1, a2, a3 uintptr) (r1, r2 uintptr, err syscall.Errno) {
-	return 0, 0, syscall.ENOTSUP
+func Syscall(trap, a1, a2, a3 uintptr) (r1, r2 uintptr, err Errno) {
+	return 0, 0, ENOTSUP
 }
 
 func PthreadSigmask(how int, set, oldset *Sigset_t) error {

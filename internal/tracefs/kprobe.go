@@ -13,6 +13,7 @@ import (
 
 	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/linux"
+	"github.com/cilium/ebpf/internal/platform"
 	"github.com/cilium/ebpf/internal/unix"
 )
 
@@ -113,7 +114,7 @@ func sanitizeTracefsPath(path ...string) (string, error) {
 // but may be also be available at /sys/kernel/debug/tracing if debugfs is mounted.
 // The available tracefs paths will depends on distribution choices.
 var getTracefsPath = sync.OnceValues(func() (string, error) {
-	if !internal.OnLinux {
+	if !platform.IsLinux {
 		return "", fmt.Errorf("tracefs: %w", internal.ErrNotSupportedOnOS)
 	}
 

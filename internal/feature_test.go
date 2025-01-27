@@ -8,6 +8,7 @@ import (
 
 	"github.com/go-quicktest/qt"
 
+	"github.com/cilium/ebpf/internal/platform"
 	"github.com/cilium/ebpf/internal/testutils/fdtrace"
 )
 
@@ -83,7 +84,7 @@ func TestFeatureTestNotSupportedOnOS(t *testing.T) {
 	qt.Assert(t, qt.IsNotNil(NewFeatureTest("foo", fn)()))
 	qt.Assert(t, qt.ErrorIs(NewFeatureTest("foo", fn, "froz:1.0.0")(), ErrNotSupportedOnOS))
 	qt.Assert(t, qt.ErrorIs(NewFeatureTest("foo", fn, runtime.GOOS+":1.0")(), sentinel))
-	if OnLinux {
+	if platform.IsLinux {
 		qt.Assert(t, qt.ErrorIs(NewFeatureTest("foo", fn, "1.0")(), sentinel))
 	}
 }

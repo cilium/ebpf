@@ -7,7 +7,7 @@ import (
 
 	"github.com/go-quicktest/qt"
 
-	"github.com/cilium/ebpf/internal"
+	"github.com/cilium/ebpf/internal/platform"
 	"github.com/cilium/ebpf/internal/testutils"
 )
 
@@ -176,7 +176,7 @@ func BenchmarkAssignAddresses(b *testing.B) {
 func mustOpenProcKallsyms(tb testing.TB) *os.File {
 	tb.Helper()
 
-	if !internal.OnLinux {
+	if !platform.IsLinux {
 		tb.Skip("/proc/kallsyms is a Linux concept")
 	}
 

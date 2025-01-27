@@ -6,6 +6,8 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+
+	"github.com/cilium/ebpf/internal/platform"
 )
 
 // ErrNotSupported indicates that a feature is not supported.
@@ -93,7 +95,7 @@ func NewFeatureTest(name string, fn FeatureTestFn, versions ...string) func() er
 			break
 		}
 
-		if OnLinux && !strings.ContainsRune(version, ':') {
+		if platform.IsLinux && !strings.ContainsRune(version, ':') {
 			// Allow version numbers without a GOOS prefix on Linux.
 			ft.Version = version
 			break

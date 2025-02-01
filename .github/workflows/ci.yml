@@ -249,7 +249,7 @@ jobs:
 
       - name: Get eBPF for Windows download URL
         id: determine-url
-        uses: actions/github-script@v6
+        uses: actions/github-script@v7
         with:
           script: |
             if ("${{ matrix.version }}" != "main") {

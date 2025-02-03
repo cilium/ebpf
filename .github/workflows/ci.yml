@@ -303,7 +303,7 @@ jobs:
             });
 
             // Extract the location header which contains the actual download URL
-            const download_url = response.headers.location;
+            const download_url = response.url;
 
             if (!download_url) {
               core.setFailed('Failed to get redirect URL from headers');

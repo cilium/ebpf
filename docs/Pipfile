@@ -15,4 +15,4 @@ mkdocs-git-authors-plugin = "*"
 
 [requires]
 # Whatever Netlify's Ubuntu version uses.
-python_version = "3.8"
+python_version = "3.13"

@@ -13,9 +13,8 @@ env:
   go_version: '~1.23'
   prev_go_version: '~1.22'
   CGO_ENABLED: '0'
-  # This needs to match whatever Netlify supports.
-  # Also defined in Pipfile.
-  python_version: '~3.8'
+  # Sync with Pipfile and netlify.toml.
+  python_version: '~3.13'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}

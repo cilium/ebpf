@@ -195,3 +195,7 @@ func SchedSetaffinity(pid int, set *CPUSet) error {
 func SchedGetaffinity(pid int, set *CPUSet) error {
 	return linux.SchedGetaffinity(pid, set)
 }
+
+func Auxv() ([][2]uintptr, error) {
+	return linux.Auxv()
+}

@@ -278,3 +278,7 @@ func SchedSetaffinity(pid int, set *CPUSet) error {
 func SchedGetaffinity(pid int, set *CPUSet) error {
 	return errNonLinux()
 }
+
+func Auxv() ([][2]uintptr, error) {
+	return nil, errNonLinux()
+}

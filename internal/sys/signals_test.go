@@ -1,3 +1,5 @@
+//go:build linux
+
 package sys
 
 import (
@@ -5,9 +7,9 @@ import (
 	"testing"
 	"unsafe"
 
-	"github.com/cilium/ebpf/internal/unix"
-
 	"github.com/go-quicktest/qt"
+
+	"github.com/cilium/ebpf/internal/unix"
 )
 
 func TestSigset(t *testing.T) {

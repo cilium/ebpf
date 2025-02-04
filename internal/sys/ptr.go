@@ -29,12 +29,12 @@ func NewSlicePointerLen(buf []byte) (Pointer, uint32) {
 
 // NewStringPointer creates a 64-bit pointer from a string.
 func NewStringPointer(str string) Pointer {
-	p, err := unix.BytePtrFromString(str)
+	slice, err := unix.ByteSliceFromString(str)
 	if err != nil {
 		return Pointer{}
 	}
 
-	return Pointer{ptr: unsafe.Pointer(p)}
+	return Pointer{ptr: unsafe.Pointer(&slice[0])}
 }
 
 // NewStringSlicePointer allocates an array of Pointers to each string in the

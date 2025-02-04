@@ -75,7 +75,7 @@ func (it *Iter) Open() (io.ReadCloser, error) {
 		return nil, fmt.Errorf("can't create iterator: %w", err)
 	}
 
-	return fd.File("bpf_iter"), nil
+	return fd.File("bpf_iter")
 }
 
 // union bpf_iter_link_info.map

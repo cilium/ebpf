@@ -37,7 +37,7 @@ func reserveFdZero() {
 
 func TestFD(t *testing.T) {
 	_, err := NewFD(-1)
-	qt.Assert(t, qt.IsNotNil(err), qt.Commentf("negative fd should be rejected"))
+	qt.Assert(t, qt.IsNotNil(err), qt.Commentf("invalid fd should be rejected"))
 
 	fd, err := NewFD(0)
 	qt.Assert(t, qt.IsNil(err))
@@ -53,12 +53,16 @@ func TestFD(t *testing.T) {
 
 func TestFDFile(t *testing.T) {
 	fd := newFD(openFd(t))
-	file := fd.File("test")
+	file, err := fd.File("test")
+	qt.Assert(t, qt.IsNil(err))
 	qt.Assert(t, qt.IsNotNil(file))
-	qt.Assert(t, qt.IsNil(file.Close()))
-	qt.Assert(t, qt.IsNil(fd.File("closed")))
 
-	_, err := fd.Dup()
+	qt.Assert(t, qt.IsNil(file.Close()))
+
+	_, err = fd.File("closed")
+	qt.Assert(t, qt.ErrorIs(err, ErrClosedFd))
+
+	_, err = fd.Dup()
 	qt.Assert(t, qt.ErrorIs(err, ErrClosedFd))
 }
 

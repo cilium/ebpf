@@ -9,7 +9,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/cilium/ebpf/internal/testutils/fdtrace"
+	"github.com/cilium/ebpf/internal/testutils/testmain"
 	"github.com/cilium/ebpf/internal/unix"
 )
 
@@ -20,7 +20,7 @@ type FD struct {
 }
 
 func newFD(value int) *FD {
-	fdtrace.TraceFD(value, 1)
+	testmain.TraceFD(value, 1)
 
 	fd := &FD{value}
 	runtime.SetFinalizer(fd, (*FD).finalize)
@@ -34,7 +34,7 @@ func (fd *FD) finalize() {
 		return
 	}
 
-	fdtrace.LeakFD(fd.raw)
+	testmain.LeakFD(fd.raw)
 
 	_ = fd.Close()
 }
@@ -89,7 +89,7 @@ func (fd *FD) Close() error {
 // lifecycle.
 func (fd *FD) Disown() int {
 	value := fd.raw
-	fdtrace.ForgetFD(value)
+	testmain.ForgetFD(value)
 	fd.raw = -1
 
 	runtime.SetFinalizer(fd, nil)

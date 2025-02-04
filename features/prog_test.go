@@ -12,11 +12,11 @@ import (
 	"github.com/cilium/ebpf/asm"
 	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/testutils"
-	"github.com/cilium/ebpf/internal/testutils/fdtrace"
+	"github.com/cilium/ebpf/internal/testutils/testmain"
 )
 
 func TestMain(m *testing.M) {
-	fdtrace.TestMain(m)
+	testmain.Run(m)
 }
 
 func TestHaveProgramType(t *testing.T) {

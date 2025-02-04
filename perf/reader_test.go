@@ -17,7 +17,7 @@ import (
 	"github.com/cilium/ebpf/asm"
 	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/testutils"
-	"github.com/cilium/ebpf/internal/testutils/fdtrace"
+	"github.com/cilium/ebpf/internal/testutils/testmain"
 
 	"github.com/go-quicktest/qt"
 )
@@ -27,7 +27,7 @@ var (
 )
 
 func TestMain(m *testing.M) {
-	fdtrace.TestMain(m)
+	testmain.Run(m)
 }
 
 func TestPerfReader(t *testing.T) {

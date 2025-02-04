@@ -119,7 +119,7 @@ jobs:
           go-version: '${{ env.prev_go_version }}'
 
       - run: go install lmb.io/vimto@latest
-      - run: go install gotest.tools/gotestsum@v1.8.1
+      - run: go install gotest.tools/gotestsum@v1.12.0
       - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends qemu-system-x86
       - run: sudo chmod 0666 /dev/kvm
 
@@ -164,7 +164,7 @@ jobs:
         with:
           go-version: '${{ env.go_version }}'
 
-      - run: go install gotest.tools/gotestsum@v1.8.1
+      - run: go install gotest.tools/gotestsum@v1.12.0
 
       - name: Test
         # Skip TestGoarches/loong64 because the GH arm64 Go toolchain seems to be weird.
@@ -210,7 +210,7 @@ jobs:
         with:
           go-version: '${{ env.go_version }}'
 
-      - run: go install gotest.tools/gotestsum@v1.8.1
+      - run: go install gotest.tools/gotestsum@v1.12.0
       - run: go install lmb.io/vimto@latest
       - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends qemu-system-x86
       - run: sudo chmod 0666 /dev/kvm
@@ -340,7 +340,7 @@ jobs:
         with:
           go-version: '${{ env.go_version }}'
 
-      - run: go install gotest.tools/gotestsum@v1.8.1
+      - run: go install gotest.tools/gotestsum@v1.12.0
 
       - name: Test
         run: >

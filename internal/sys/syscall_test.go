@@ -2,13 +2,37 @@ package sys
 
 import (
 	"errors"
+	"math"
 	"testing"
+	"unsafe"
 
 	"github.com/cilium/ebpf/internal/testutils/testmain"
 	"github.com/cilium/ebpf/internal/unix"
 
 	"github.com/go-quicktest/qt"
 )
+
+func TestBPF(t *testing.T) {
+	fd, err := MapCreate(&MapCreateAttr{
+		MapType:    BPF_MAP_TYPE_HASH,
+		KeySize:    4,
+		ValueSize:  4,
+		MaxEntries: 1,
+	})
+	qt.Assert(t, qt.IsNil(err))
+	qt.Assert(t, qt.IsNil(fd.Close()))
+}
+
+func TestBPFAllocations(t *testing.T) {
+	n := testing.AllocsPerRun(10, func() {
+		var attr struct {
+			Foo uint64
+		}
+
+		BPF(math.MaxUint32, unsafe.Pointer(&attr), 0)
+	})
+	qt.Assert(t, qt.Equals(n, 0))
+}
 
 func TestObjName(t *testing.T) {
 	name := NewObjName("more_than_16_characters_long")

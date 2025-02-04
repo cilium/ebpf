@@ -353,6 +353,7 @@ jobs:
           ./internal/kallsyms
           ./internal/kconfig
           ./internal/linux
+          ./internal/sys
           ./internal/sysenc
           ./internal/testutils
           ./internal/testutils/testmain

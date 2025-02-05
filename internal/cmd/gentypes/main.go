@@ -98,6 +98,7 @@ package sys
 
 import (
 	"unsafe"
+	"structs"
 )
 
 `)
@@ -757,6 +758,8 @@ func outputPatchedStruct(gf *btf.GoFormatter, w *bytes.Buffer, id string, s *btf
 	if err != nil {
 		return err
 	}
+
+	decl = strings.Replace(decl, "struct {", "struct { structs.HostLayout;", 1)
 
 	w.WriteString(decl)
 	w.WriteString("\n\n")

@@ -10,7 +10,6 @@ env:
   CI_MAX_KERNEL_VERSION: '6.11'
   CI_MAX_EFW_VERSION: '0.20.0'
   CI_MIN_CLANG_VERSION: '11'
-  go_version: '~1.23'
   prev_go_version: '~1.22'
   CGO_ENABLED: '0'
   # Sync with Pipfile and netlify.toml.
@@ -31,7 +30,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '${{ env.go_version }}'
+          go-version-file: go.mod
 
       - name: Run golangci-lint
         uses: golangci/golangci-lint-action@v6.2.0
@@ -84,7 +83,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '${{ env.go_version }}'
+          go-version-file: go.mod
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -162,7 +161,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '${{ env.go_version }}'
+          go-version-file: go.mod
 
       - run: go install gotest.tools/gotestsum@v1.8.1
 
@@ -209,7 +208,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '${{ env.go_version }}'
+          go-version-file: go.mod
 
       - run: go install gotest.tools/gotestsum@v1.8.1
       - run: go install lmb.io/vimto@latest
@@ -334,7 +333,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '${{ env.go_version }}'
+          go-version-file: go.mod
 
       - run: go install gotest.tools/gotestsum@v1.8.1
 

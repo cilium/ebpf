@@ -263,8 +263,10 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions) (*Program, er
 		return nil, errors.New("can't load program of unspecified type")
 	}
 
-	if spec.ByteOrder != nil && spec.ByteOrder != internal.NativeEndian {
-		return nil, fmt.Errorf("can't load %s program on %s", spec.ByteOrder, internal.NativeEndian)
+	if spec.ByteOrder != nil && !internal.EqualByteOrder(spec.ByteOrder, binary.NativeEndian) {
+		return nil, fmt.Errorf("can't load %s program on %s",
+			internal.NormalizeByteOrder(spec.ByteOrder),
+			internal.NormalizeByteOrder(binary.NativeEndian))
 	}
 
 	// Kernels before 5.0 (6c4fc209fcf9 "bpf: remove useless version check for prog load")

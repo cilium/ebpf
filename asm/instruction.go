@@ -11,6 +11,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/sys"
 )
 
@@ -51,7 +52,7 @@ func (ins *Instruction) Unmarshal(r io.Reader, bo binary.ByteOrder) (uint64, err
 	ins.OpCode = OpCode(data[0])
 
 	regs := data[1]
-	switch bo {
+	switch internal.NormalizeByteOrder(bo) {
 	case binary.LittleEndian:
 		ins.Dst, ins.Src = Register(regs&0xF), Register(regs>>4)
 	case binary.BigEndian:
@@ -934,7 +935,7 @@ func (iter *InstructionIterator) Next() bool {
 type bpfRegisters uint8
 
 func newBPFRegisters(dst, src Register, bo binary.ByteOrder) (bpfRegisters, error) {
-	switch bo {
+	switch internal.NormalizeByteOrder(bo) {
 	case binary.LittleEndian:
 		return bpfRegisters((src << 4) | (dst & 0xF)), nil
 	case binary.BigEndian:

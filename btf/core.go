@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/cilium/ebpf/asm"
+	"github.com/cilium/ebpf/internal"
 )
 
 // Code in this file is derived from libbpf, which is available under a BSD
@@ -205,8 +206,10 @@ func CORERelocate(relos []*CORERelocation, targets []*Spec, bo binary.ByteOrder,
 	resolveTargetTypeID := targets[0].TypeID
 
 	for _, target := range targets {
-		if bo != target.imm.byteOrder {
-			return nil, fmt.Errorf("can't relocate %s against %s", bo, target.imm.byteOrder)
+		if !internal.EqualByteOrder(bo, target.imm.byteOrder) {
+			return nil, fmt.Errorf("can't relocate %s against %s",
+				internal.NormalizeByteOrder(bo),
+				internal.NormalizeByteOrder(target.imm.byteOrder))
 		}
 	}
 
@@ -488,7 +491,7 @@ func coreCalculateFixup(relo *CORERelocation, target Type, bo binary.ByteOrder, 
 
 		case reloFieldLShiftU64:
 			var target uint64
-			if bo == binary.LittleEndian {
+			if internal.EqualByteOrder(bo, binary.LittleEndian) {
 				targetSize, err := targetField.sizeBits()
 				if err != nil {
 					return zero, err

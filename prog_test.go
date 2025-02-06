@@ -726,7 +726,7 @@ func TestProgramRejectIncorrectByteOrder(t *testing.T) {
 	spec := socketFilterSpec.Copy()
 
 	spec.ByteOrder = binary.BigEndian
-	if spec.ByteOrder == internal.NativeEndian {
+	if internal.EqualByteOrder(spec.ByteOrder, binary.NativeEndian) {
 		spec.ByteOrder = binary.LittleEndian
 	}
 

@@ -10,8 +10,8 @@ env:
   CI_MAX_KERNEL_VERSION: '6.11'
   CI_MAX_EFW_VERSION: '0.20.0'
   CI_MIN_CLANG_VERSION: '11'
-  go_version: '~1.23'
-  prev_go_version: '~1.22'
+  go_version: '~1.24'
+  prev_go_version: '~1.23'
   CGO_ENABLED: '0'
   # Sync with Pipfile and netlify.toml.
   python_version: '~3.13'
@@ -34,7 +34,7 @@ jobs:
           go-version: '${{ env.go_version }}'
 
       - name: Run golangci-lint
-        uses: golangci/golangci-lint-action@v6.2.0
+        uses: golangci/golangci-lint-action@v6.3.0
         with:
           args: "--out-format colored-line-number"
 

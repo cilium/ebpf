@@ -1,6 +1,6 @@
 module github.com/cilium/ebpf
 
-go 1.22
+go 1.23
 
 require (
 	github.com/go-quicktest/qt v1.101.0

@@ -450,9 +450,7 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions) (*Program, er
 
 		// Make an educated guess how large the buffer should be by multiplying.
 		// Ensure the size doesn't overflow.
-		const factor = 2
-		logSize = internal.Between(logSize, minVerifierLogSize, maxVerifierLogSize/factor)
-		logSize *= factor
+		logSize = internal.Between(logSize*2, minVerifierLogSize, maxVerifierLogSize)
 
 		if attr.LogTrueSize != 0 {
 			// The kernel has given us a hint how large the log buffer has to be.

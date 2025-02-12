@@ -9,6 +9,9 @@ import (
 	"golang.org/x/sys/windows"
 )
 
+// https://github.com/microsoft/ebpf-for-windows/blob/9d9003c39c3fd75be5225ac0fce30077d6bf0604/include/ebpf_core_structs.h#L15
+const _EBPF_MAX_PIN_PATH_LENGTH = 256
+
 /*
 Retrieve object info and type from a fd.
 
@@ -51,4 +54,36 @@ func EbpfObjectUnpin(path string) error {
 	}
 
 	return errorResult(syscall.SyscallN(addr, uintptr(unsafe.Pointer(&pathBytes[0]))))
+}
+
+/*
+Retrieve the next pinned object path.
+
+	ebpf_result_t ebpf_get_next_pinned_object_path(
+		_In_opt_z_ const char* start_path,
+		_Out_writes_z_(next_path_len) char* next_path,
+		size_t next_path_len,
+		_Inout_opt_ ebpf_object_type_t* type)
+*/
+var ebpfGetNextPinnedObjectPath = newProc("ebpf_get_next_pinned_object_path")
+
+func EbpfGetNextPinnedObjectPath(startPath string, objectType ObjectType) (string, ObjectType, error) {
+	addr, err := ebpfGetNextPinnedObjectPath.Find()
+	if err != nil {
+		return "", 0, err
+	}
+
+	ptr, err := windows.BytePtrFromString(startPath)
+	if err != nil {
+		return "", 0, err
+	}
+
+	tmp := make([]byte, _EBPF_MAX_PIN_PATH_LENGTH)
+	err = errorResult(syscall.SyscallN(addr,
+		uintptr(unsafe.Pointer(ptr)),
+		uintptr(unsafe.Pointer(&tmp[0])),
+		uintptr(len(tmp)),
+		uintptr(unsafe.Pointer(&objectType)),
+	))
+	return windows.ByteSliceToString(tmp), objectType, err
 }

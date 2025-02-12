@@ -55,6 +55,7 @@ func TestDatasecResolveWorkaround(t *testing.T) {
 			}
 
 			h, err := NewHandle(b)
+			testutils.SkipIfNotSupportedOnOS(t, err)
 			var ve *internal.VerifierError
 			if errors.As(err, &ve) {
 				t.Fatalf("%+v\n", ve)

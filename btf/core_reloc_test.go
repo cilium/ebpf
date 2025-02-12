@@ -120,6 +120,7 @@ func TestLD64IMMReloc(t *testing.T) {
 	}
 
 	coll, err := ebpf.NewCollection(spec)
+	testutils.SkipIfNotSupportedOnOS(t, err)
 	if err != nil {
 		t.Fatal(err)
 	}

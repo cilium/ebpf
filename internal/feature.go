@@ -113,12 +113,20 @@ func NewFeatureTest(name string, fn FeatureTestFn, versions ...string) func() er
 	return ft.execute
 }
 
+// FeatureTestOverride replaces the return value of any feature test executed
+// while the variable is not nil.
+var FeatureTestOverride func(name string) error = nil
+
 // execute the feature test.
 //
 // The result is cached if the test is conclusive.
 //
 // See [FeatureTestFn] for the meaning of the returned error.
 func (ft *FeatureTest) execute() error {
+	if FeatureTestOverride != nil {
+		return FeatureTestOverride(ft.Name)
+	}
+
 	ft.mu.RLock()
 	result, done := ft.result, ft.done
 	ft.mu.RUnlock()

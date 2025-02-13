@@ -220,12 +220,9 @@ func TestLoadCollectionSpec(t *testing.T) {
 	}
 
 	testutils.Files(t, testutils.Glob(t, "testdata/loader-*.elf"), func(t *testing.T, file string) {
-		have, err := LoadCollectionSpec(file)
-		if err != nil {
-			t.Fatal("Can't parse ELF:", err)
-		}
+		have := mustLoadCollectionSpec(t, file)
 
-		err = have.RewriteConstants(map[string]interface{}{
+		err := have.RewriteConstants(map[string]interface{}{
 			"arg":  uint32(1),
 			"arg2": uint32(2),
 		})
@@ -295,10 +292,7 @@ func BenchmarkELFLoader(b *testing.B) {
 
 func TestDataSections(t *testing.T) {
 	file := testutils.NativeFile(t, "testdata/loader-%s.elf")
-	coll, err := LoadCollectionSpec(file)
-	if err != nil {
-		t.Fatal(err)
-	}
+	coll := mustLoadCollectionSpec(t, file)
 
 	t.Log(coll.Programs["data_sections"].Instructions)
 
@@ -306,7 +300,7 @@ func TestDataSections(t *testing.T) {
 		Program *Program `ebpf:"data_sections"`
 	}
 
-	err = coll.LoadAndAssign(&obj, nil)
+	err := coll.LoadAndAssign(&obj, nil)
 	testutils.SkipIfNotSupported(t, err)
 	if err != nil {
 		t.Fatal(err)
@@ -325,10 +319,7 @@ func TestDataSections(t *testing.T) {
 
 func TestInlineASMConstant(t *testing.T) {
 	file := testutils.NativeFile(t, "testdata/loader-%s.elf")
-	coll, err := LoadCollectionSpec(file)
-	if err != nil {
-		t.Fatal(err)
-	}
+	coll := mustLoadCollectionSpec(t, file)
 
 	spec := coll.Programs["asm_relocation"]
 	if spec.Instructions[0].Reference() != "MY_CONST" {
@@ -344,7 +335,7 @@ func TestInlineASMConstant(t *testing.T) {
 		Program *Program `ebpf:"asm_relocation"`
 	}
 
-	err = coll.LoadAndAssign(&obj, nil)
+	err := coll.LoadAndAssign(&obj, nil)
 	testutils.SkipIfNotSupported(t, err)
 	if err != nil {
 		t.Fatal(err)
@@ -356,10 +347,7 @@ func TestFreezeRodata(t *testing.T) {
 	testutils.SkipOnOldKernel(t, "5.9", "sk_lookup program type")
 
 	file := testutils.NativeFile(t, "testdata/constants-%s.elf")
-	spec, err := LoadCollectionSpec(file)
-	if err != nil {
-		t.Fatal(err)
-	}
+	spec := mustLoadCollectionSpec(t, file)
 
 	var obj struct {
 		Program *Program `ebpf:"freeze_rodata"`
@@ -371,7 +359,7 @@ func TestFreezeRodata(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	err = spec.LoadAndAssign(&obj, nil)
+	err := spec.LoadAndAssign(&obj, nil)
 	testutils.SkipIfNotSupported(t, err)
 	if err != nil {
 		t.Fatal(err)
@@ -410,12 +398,9 @@ func TestCollectionSpecDetach(t *testing.T) {
 
 func TestLoadInvalidMap(t *testing.T) {
 	file := testutils.NativeFile(t, "testdata/invalid_map-%s.elf")
-	cs, err := LoadCollectionSpec(file)
-	if err != nil {
-		t.Fatal("Can't load CollectionSpec", err)
-	}
+	spec := mustLoadCollectionSpec(t, file)
 
-	ms, ok := cs.Maps["invalid_map"]
+	ms, ok := spec.Maps["invalid_map"]
 	if !ok {
 		t.Fatal("invalid_map not found in CollectionSpec")
 	}
@@ -439,10 +424,7 @@ func TestLoadInvalidMapMissingSymbol(t *testing.T) {
 
 func TestLoadInitializedBTFMap(t *testing.T) {
 	testutils.Files(t, testutils.Glob(t, "testdata/btf_map_init-*.elf"), func(t *testing.T, file string) {
-		coll, err := LoadCollectionSpec(file)
-		if err != nil {
-			t.Fatal(err)
-		}
+		coll := mustLoadCollectionSpec(t, file)
 
 		t.Run("NewCollection", func(t *testing.T) {
 			if coll.ByteOrder != internal.NativeEndian {
@@ -534,10 +516,7 @@ func TestLoadInvalidInitializedBTFMap(t *testing.T) {
 
 func TestStringSection(t *testing.T) {
 	file := testutils.NativeFile(t, "testdata/strings-%s.elf")
-	spec, err := LoadCollectionSpec(file)
-	if err != nil {
-		t.Fatalf("load collection spec: %s", err)
-	}
+	spec := mustLoadCollectionSpec(t, file)
 
 	for name := range spec.Maps {
 		t.Log(name)
@@ -595,10 +574,7 @@ func TestLoadRawTracepoint(t *testing.T) {
 	testutils.SkipOnOldKernel(t, "4.17", "BPF_RAW_TRACEPOINT API")
 
 	file := testutils.NativeFile(t, "testdata/raw_tracepoint-%s.elf")
-	spec, err := LoadCollectionSpec(file)
-	if err != nil {
-		t.Fatal("Can't parse ELF:", err)
-	}
+	spec := mustLoadCollectionSpec(t, file)
 
 	coll, err := NewCollectionWithOptions(spec, CollectionOptions{
 		Programs: ProgramOptions{
@@ -615,17 +591,14 @@ func TestLoadRawTracepoint(t *testing.T) {
 
 func TestTailCall(t *testing.T) {
 	file := testutils.NativeFile(t, "testdata/btf_map_init-%s.elf")
-	spec, err := LoadCollectionSpec(file)
-	if err != nil {
-		t.Fatal(err)
-	}
+	spec := mustLoadCollectionSpec(t, file)
 
 	var obj struct {
 		TailMain  *Program `ebpf:"tail_main"`
 		ProgArray *Map     `ebpf:"prog_array_init"`
 	}
 
-	err = spec.LoadAndAssign(&obj, nil)
+	err := spec.LoadAndAssign(&obj, nil)
 	testutils.SkipIfNotSupported(t, err)
 	if err != nil {
 		t.Fatal(err)
@@ -647,16 +620,13 @@ func TestTailCall(t *testing.T) {
 
 func TestKconfig(t *testing.T) {
 	file := testutils.NativeFile(t, "testdata/kconfig-%s.elf")
-	spec, err := LoadCollectionSpec(file)
-	if err != nil {
-		t.Fatal(err)
-	}
+	spec := mustLoadCollectionSpec(t, file)
 
 	var obj struct {
 		Main *Program `ebpf:"kconfig"`
 	}
 
-	err = spec.LoadAndAssign(&obj, nil)
+	err := spec.LoadAndAssign(&obj, nil)
 	testutils.SkipIfNotSupported(t, err)
 	if err != nil {
 		t.Fatal(err)
@@ -674,15 +644,14 @@ func TestKconfig(t *testing.T) {
 
 func TestKsym(t *testing.T) {
 	file := testutils.NativeFile(t, "testdata/ksym-%s.elf")
-	spec, err := LoadCollectionSpec(file)
-	qt.Assert(t, qt.IsNil(err))
+	spec := mustLoadCollectionSpec(t, file)
 
 	var obj struct {
 		Main     *Program `ebpf:"ksym_test"`
 		ArrayMap *Map     `ebpf:"array_map"`
 	}
 
-	err = spec.LoadAndAssign(&obj, nil)
+	err := spec.LoadAndAssign(&obj, nil)
 	testutils.SkipIfNotSupported(t, err)
 	qt.Assert(t, qt.IsNil(err))
 	defer obj.Main.Close()
@@ -711,14 +680,13 @@ func TestKsym(t *testing.T) {
 
 func TestKsymWeakMissing(t *testing.T) {
 	file := testutils.NativeFile(t, "testdata/ksym-%s.elf")
-	spec, err := LoadCollectionSpec(file)
-	qt.Assert(t, qt.IsNil(err))
+	spec := mustLoadCollectionSpec(t, file)
 
 	var obj struct {
 		Main *Program `ebpf:"ksym_missing_test"`
 	}
 
-	err = spec.LoadAndAssign(&obj, nil)
+	err := spec.LoadAndAssign(&obj, nil)
 	testutils.SkipIfNotSupported(t, err)
 	qt.Assert(t, qt.IsNil(err))
 	defer obj.Main.Close()
@@ -732,16 +700,13 @@ func TestKsymWeakMissing(t *testing.T) {
 func TestKfunc(t *testing.T) {
 	testutils.SkipOnOldKernel(t, "5.18", "kfunc support")
 	file := testutils.NativeFile(t, "testdata/kfunc-%s.elf")
-	spec, err := LoadCollectionSpec(file)
-	if err != nil {
-		t.Fatal(err)
-	}
+	spec := mustLoadCollectionSpec(t, file)
 
 	var obj struct {
 		Main *Program `ebpf:"call_kfunc"`
 	}
 
-	err = spec.LoadAndAssign(&obj, nil)
+	err := spec.LoadAndAssign(&obj, nil)
 	testutils.SkipIfNotSupported(t, err)
 	if err != nil {
 		t.Fatalf("%+v", err)
@@ -762,17 +727,14 @@ func TestKfunc(t *testing.T) {
 func TestWeakKfunc(t *testing.T) {
 	testutils.SkipOnOldKernel(t, "5.18", "kfunc support")
 	file := testutils.NativeFile(t, "testdata/kfunc-%s.elf")
-	spec, err := LoadCollectionSpec(file)
-	if err != nil {
-		t.Fatal(err)
-	}
+	spec := mustLoadCollectionSpec(t, file)
 
 	var obj struct {
 		Missing *Program `ebpf:"weak_kfunc_missing"`
 		Calling *Program `ebpf:"call_weak_kfunc"`
 	}
 
-	err = spec.LoadAndAssign(&obj, nil)
+	err := spec.LoadAndAssign(&obj, nil)
 	testutils.SkipIfNotSupported(t, err)
 	if err != nil {
 		t.Fatalf("%+v", err)
@@ -803,16 +765,13 @@ func TestKfuncKmod(t *testing.T) {
 	requireTestmod(t)
 
 	file := testutils.NativeFile(t, "testdata/kfunc-kmod-%s.elf")
-	spec, err := LoadCollectionSpec(file)
-	if err != nil {
-		t.Fatal(err)
-	}
+	spec := mustLoadCollectionSpec(t, file)
 
 	var obj struct {
 		Main *Program `ebpf:"call_kfunc"`
 	}
 
-	err = spec.LoadAndAssign(&obj, nil)
+	err := spec.LoadAndAssign(&obj, nil)
 	testutils.SkipIfNotSupported(t, err)
 	if err != nil {
 		t.Fatalf("%v+", err)
@@ -834,23 +793,18 @@ func TestSubprogRelocation(t *testing.T) {
 	testutils.SkipOnOldKernel(t, "5.13", "bpf_for_each_map_elem")
 
 	file := testutils.NativeFile(t, "testdata/subprog_reloc-%s.elf")
-	spec, err := LoadCollectionSpec(file)
-	if err != nil {
-		t.Fatal(err)
-	}
+	spec := mustLoadCollectionSpec(t, file)
 
 	var obj struct {
-		Main    *Program `ebpf:"fp_relocation"`
-		HashMap *Map     `ebpf:"hash_map"`
+		Main *Program `ebpf:"fp_relocation"`
 	}
 
-	err = spec.LoadAndAssign(&obj, nil)
+	err := spec.LoadAndAssign(&obj, nil)
 	testutils.SkipIfNotSupported(t, err)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer obj.Main.Close()
-	defer obj.HashMap.Close()
 
 	ret, _, err := obj.Main.Test(internal.EmptyBPFContext)
 	testutils.SkipIfNotSupported(t, err)
@@ -865,10 +819,7 @@ func TestSubprogRelocation(t *testing.T) {
 
 func TestUnassignedProgArray(t *testing.T) {
 	file := testutils.NativeFile(t, "testdata/btf_map_init-%s.elf")
-	spec, err := LoadCollectionSpec(file)
-	if err != nil {
-		t.Fatal(err)
-	}
+	spec := mustLoadCollectionSpec(t, file)
 
 	// tail_main references a ProgArray that is not being assigned
 	// to this struct. Normally, this would clear all its entries
@@ -879,7 +830,7 @@ func TestUnassignedProgArray(t *testing.T) {
 		// ProgArray *Map     `ebpf:"prog_array_init"`
 	}
 
-	err = spec.LoadAndAssign(&obj, nil)
+	err := spec.LoadAndAssign(&obj, nil)
 	testutils.SkipIfNotSupported(t, err)
 	if err == nil {
 		obj.TailMain.Close()
@@ -889,10 +840,7 @@ func TestUnassignedProgArray(t *testing.T) {
 
 func TestIPRoute2Compat(t *testing.T) {
 	file := testutils.NativeFile(t, "testdata/iproute2_map_compat-%s.elf")
-	spec, err := LoadCollectionSpec(file)
-	if err != nil {
-		t.Fatal("Can't parse ELF:", err)
-	}
+	spec := mustLoadCollectionSpec(t, file)
 
 	ms, ok := spec.Maps["hash_map"]
 	if !ok {
@@ -1348,4 +1296,15 @@ func selftestName(path string) string {
 	name = strings.TrimSuffix(name, ".bpf")
 
 	return name
+}
+
+func mustLoadCollectionSpec(tb testing.TB, file string) *CollectionSpec {
+	tb.Helper()
+
+	cleanup := testutils.DisableFeatureTests(tb)
+	spec, err := LoadCollectionSpec(file)
+	qt.Assert(tb, qt.IsNil(err))
+	cleanup()
+
+	return spec
 }

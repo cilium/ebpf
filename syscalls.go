@@ -206,17 +206,9 @@ var haveObjName = internal.NewFeatureTest("object names", func() error {
 		MapName:    sys.NewObjName("feature_test"),
 	}
 
-	// Tolerate EPERM as this runs during ELF loading which is potentially
-	// unprivileged. Only EINVAL is conclusive, thrown from CHECK_ATTR.
 	fd, err := sys.MapCreate(&attr)
-	if errors.Is(err, unix.EPERM) {
-		return nil
-	}
-	if errors.Is(err, unix.EINVAL) {
-		return internal.ErrNotSupported
-	}
 	if err != nil {
-		return err
+		return internal.ErrNotSupported
 	}
 
 	_ = fd.Close()
@@ -241,18 +233,9 @@ var objNameAllowsDot = internal.NewFeatureTest("dot in object names", func() err
 		MapName:    sys.NewObjName(".test"),
 	}
 
-	// Tolerate EPERM, otherwise MapSpec.Name has its dots removed when run by
-	// unprivileged tools. (bpf2go, other code gen). Only EINVAL is conclusive,
-	// thrown from bpf_obj_name_cpy().
 	fd, err := sys.MapCreate(&attr)
-	if errors.Is(err, unix.EPERM) {
-		return nil
-	}
-	if errors.Is(err, unix.EINVAL) {
-		return internal.ErrNotSupported
-	}
 	if err != nil {
-		return err
+		return internal.ErrNotSupported
 	}
 
 	_ = fd.Close()

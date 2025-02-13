@@ -1,25 +1,25 @@
 package ebpf
 
 import (
-	"strings"
 	"testing"
+
+	"github.com/go-quicktest/qt"
 
 	"github.com/cilium/ebpf/internal/testutils"
 )
 
-func TestObjNameCharacters(t *testing.T) {
-	for in, valid := range map[string]bool{
-		"test":    true,
-		"":        true,
-		"a-b":     false,
-		"yeah so": false,
-		"dot.":    objNameAllowsDot() == nil,
-		"Capital": true,
+func TestSanitizeName(t *testing.T) {
+	for input, want := range map[string]string{
+		"test":     "test",
+		"":         "",
+		"a-b":      "ab",
+		"yeah so":  "yeahso",
+		"dot.":     "dot.",
+		"Capital":  "Capital",
+		"t_est":    "t_est",
+		"hörnchen": "hrnchen",
 	} {
-		result := strings.IndexFunc(in, invalidBPFObjNameChar) == -1
-		if result != valid {
-			t.Errorf("Name '%s' classified incorrectly", in)
-		}
+		qt.Assert(t, qt.Equals(SanitizeName(input, -1), want), qt.Commentf("input: %s", input))
 	}
 }
 

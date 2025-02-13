@@ -7,6 +7,7 @@ import (
 	"math"
 	"os"
 	"runtime"
+	"strings"
 
 	"github.com/cilium/ebpf/asm"
 	"github.com/cilium/ebpf/internal"
@@ -26,25 +27,40 @@ var (
 	sysErrNotSupported = sys.Error(ErrNotSupported, sys.ENOTSUPP)
 )
 
-// invalidBPFObjNameChar returns true if char may not appear in
-// a BPF object name.
-func invalidBPFObjNameChar(char rune) bool {
-	dotAllowed := objNameAllowsDot() == nil
+// SanitizeName replaces all invalid characters in name with replacement.
+// Passing a negative value for replacement will delete characters instead
+// of replacing them.
+//
+// The set of allowed characters may change over time.
+func SanitizeName(name string, replacement rune) string {
+	return strings.Map(func(char rune) rune {
+		switch {
+		case char >= 'A' && char <= 'Z':
+			return char
+		case char >= 'a' && char <= 'z':
+			return char
+		case char >= '0' && char <= '9':
+			return char
+		case char == '.':
+			return char
+		case char == '_':
+			return char
+		default:
+			return replacement
+		}
+	}, name)
+}
 
-	switch {
-	case char >= 'A' && char <= 'Z':
-		return false
-	case char >= 'a' && char <= 'z':
-		return false
-	case char >= '0' && char <= '9':
-		return false
-	case dotAllowed && char == '.':
-		return false
-	case char == '_':
-		return false
-	default:
-		return true
+func maybeFillObjName(name string) sys.ObjName {
+	if errors.Is(haveObjName(), ErrNotSupported) {
+		return sys.ObjName{}
 	}
+
+	if errors.Is(objNameAllowsDot(), ErrNotSupported) {
+		name = strings.ReplaceAll(name, ".", "")
+	}
+
+	return sys.NewObjName(name)
 }
 
 func progLoad(insns asm.Instructions, typ ProgramType, license string) (*sys.FD, error) {

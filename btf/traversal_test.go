@@ -14,22 +14,20 @@ func TestPostorderTraversal(t *testing.T) {
 
 	t.Logf("%3v", ptr)
 	pending := []Type{str, cst, ptr}
-	visitInPostorder(ptr, nil, func(typ Type) bool {
+	for typ := range postorder(ptr, nil) {
 		qt.Assert(t, qt.Equals(typ, pending[0]))
 		pending = pending[1:]
-		return true
-	})
+	}
 	qt.Assert(t, qt.HasLen(pending, 0))
 
 	i := &Int{Name: "foo"}
 	// i appears twice at the same nesting depth.
 	arr := &Array{Index: i, Type: i}
 	seen := make(map[Type]bool)
-	visitInPostorder(arr, nil, func(typ Type) bool {
+	for typ := range postorder(arr, nil) {
 		qt.Assert(t, qt.IsFalse(seen[typ]))
 		seen[typ] = true
-		return true
-	})
+	}
 	qt.Assert(t, qt.IsTrue(seen[arr]))
 	qt.Assert(t, qt.IsTrue(seen[i]))
 }
@@ -46,22 +44,43 @@ func TestPostorderTraversalVmlinux(t *testing.T) {
 		t.Run(fmt.Sprintf("%s", typ), func(t *testing.T) {
 			seen := make(map[Type]bool)
 			var last Type
-			visitInPostorder(typ, nil, func(typ Type) bool {
+			for typ := range postorder(typ, nil) {
 				if seen[typ] {
 					t.Fatalf("%s visited twice", typ)
 				}
 				seen[typ] = true
 				last = typ
-				return true
-			})
+			}
 			if last != typ {
 				t.Fatalf("Expected %s got %s as last type", typ, last)
 			}
 
-			children(typ, func(child *Type) bool {
+			for child := range children(typ) {
 				qt.Check(t, qt.IsTrue(seen[*child]), qt.Commentf("missing child %s", *child))
-				return true
+			}
+		})
+	}
+}
+
+func TestChildren(t *testing.T) {
+	for _, test := range []struct {
+		typ   Type
+		count int
+	}{
+		{&Int{}, 0},
+		{&Const{&Int{}}, 1},
+		{&Array{Index: &Int{}, Type: &Int{}}, 2},
+	} {
+		t.Run(fmt.Sprint(test.typ), func(t *testing.T) {
+			var count int
+			allocs := testing.AllocsPerRun(1, func() {
+				count = 0
+				for range children(test.typ) {
+					count++
+				}
 			})
+			qt.Assert(t, qt.Equals(count, test.count))
+			qt.Assert(t, qt.Equals(allocs, 0))
 		})
 	}
 }
@@ -84,12 +103,12 @@ func BenchmarkPostorderTraversal(b *testing.B) {
 		{"cycle(10)", newCyclicalType(10)},
 		{"gov_update_cpu_data", fn},
 	} {
-		b.Logf("%10v", test.typ)
-
 		b.Run(test.name, func(b *testing.B) {
 			b.ReportAllocs()
-			for i := 0; i < b.N; i++ {
-				visitInPostorder(test.typ, nil, func(t Type) bool { return true })
+			b.ResetTimer()
+			for range b.N {
+				for range postorder(test.typ, nil) {
+				}
 			}
 		})
 	}

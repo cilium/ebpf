@@ -51,11 +51,6 @@ const (
 // verifier log.
 const minVerifierLogSize = 64 * 1024
 
-// maxVerifierLogSize is the maximum size of verifier log buffer the kernel
-// will accept before returning EINVAL. May be increased to MaxUint32 in the
-// future, but avoid the unnecessary EINVAL for now.
-const maxVerifierLogSize = math.MaxUint32 >> 2
-
 // ProgramOptions control loading a program into the kernel.
 type ProgramOptions struct {
 	// Bitmap controlling the detail emitted by the kernel's eBPF verifier log.
@@ -411,7 +406,7 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions) (*Program, er
 
 	// The caller requested a specific verifier log level. Set up the log buffer
 	// so that there is a chance of loading the program in a single shot.
-	logSize := internal.Between(opts.LogSizeStart, minVerifierLogSize, maxVerifierLogSize)
+	logSize := internal.Between(opts.LogSizeStart, minVerifierLogSize, math.MaxUint32)
 	var logBuf []byte
 	if !opts.LogDisabled && opts.LogLevel != 0 {
 		logBuf = make([]byte, logSize)
@@ -446,15 +441,16 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions) (*Program, er
 			// Logging is not enabled but loading the program failed. Enable
 			// basic logging.
 			attr.LogLevel = LogLevelBranch
-		}
-
-		// Make an educated guess how large the buffer should be by multiplying.
-		// Ensure the size doesn't overflow.
-		logSize = internal.Between(logSize*2, minVerifierLogSize, maxVerifierLogSize)
-
-		if attr.LogTrueSize != 0 {
+		} else if attr.LogTrueSize != 0 {
 			// The kernel has given us a hint how large the log buffer has to be.
 			logSize = attr.LogTrueSize
+		} else {
+			// Make an educated guess how large the buffer should be by multiplying.
+			logSize *= 2
+			// Ensure the size doesn't overflow.
+			if logSize < uint32(len(logBuf)) {
+				return nil, errors.New("overflow while probing log buffer size")
+			}
 		}
 
 		logBuf = make([]byte, logSize)

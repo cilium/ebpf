@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"reflect"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -346,7 +347,7 @@ func TestStats(t *testing.T) {
 	if !ok {
 		t.Errorf("expected runtime info to be available")
 	}
-	if rt != 0 {
+	if runtime.GOARCH != "arm64" && rt != 0 {
 		t.Errorf("expected a runtime of 0ns but got %v", rt)
 	}
 

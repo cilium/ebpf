@@ -1,0 +1,308 @@
+<?xml version="1.0" encoding="utf-8"?>
+<unattend xmlns="urn:schemas-microsoft-com:unattend" xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State">
+	<!--https://schneegans.de/windows/unattend-generator/?LanguageMode=Unattended&UILanguage=en-US&UserLocale=en-US&KeyboardLayout=0409%3A00000409&GeoLocation=244&ProcessorArchitecture=amd64&ComputerNameMode=Random&TimeZoneMode=Implicit&PartitionMode=Unattended&PartitionLayout=GPT&EspSize=300&RecoveryMode=Partition&RecoverySize=1000&WindowsEditionMode=Unattended&WindowsEdition=pro_n&UserAccountMode=Unattended&AccountName0=%24USER&AccountPassword0=&AccountGroup0=Administrators&AutoLogonMode=Own&PasswordExpirationMode=Unlimited&LockoutMode=Disabled&DisableSystemRestore=true&AllowPowerShellScripts=true&DisableAppSuggestions=true&DisableWidgets=true&PreventDeviceEncryption=true&VirtIoGuestTools=true&WifiMode=Skip&ExpressSettings=DisableAll&SystemScript0=Enable-WindowsOptionalFeature+-Online+-FeatureName+Microsoft-Hyper-V+-All+-NoRestart%3B%0D%0Abcdedit.exe+-set+TESTSIGNING+ON%3B%0D%0A&SystemScriptType0=Ps1&FirstLogonScript0=%23+https%3A%2F%2Flearn.microsoft.com%2Fen-us%2Fwindows-server%2Fadministration%2Fopenssh%2Fopenssh_server_configuration%0D%0AAdd-WindowsCapability+-Online+-Name+OpenSSH.Server%7E%7E%7E%7E0.0.1.0%3B%0D%0AStart-Service+sshd%3B%0D%0ASet-Service+-Name+sshd+-StartupType+%27Automatic%27%3B%0D%0ANew-ItemProperty+-Path+%22HKLM%3A%5CSOFTWARE%5COpenSSH%22+-Name+DefaultShell+-Value+%22C%3A%5CWindows%5CSystem32%5CWindowsPowerShell%5Cv1.0%5Cpowershell.exe%22+-PropertyType+String+-Force%3B%0D%0Aicacls.exe+%22C%3A%5CProgramData%5Cssh%5Cadministrators_authorized_keys%22+%2Finheritance%3Ar+%2Fgrant+%22Administrators%3AF%22+%2Fgrant+%22SYSTEM%3AF%22%3B%0D%0A%0D%0A%23+Allow+inbound+connections%0D%0ASet-NetFirewallProfile+-Profile+Domain%2CPublic%2CPrivate+-DefaultInboundAction+Allow%3B%0D%0A%0D%0A&FirstLogonScriptType0=Ps1&WdacMode=Skip-->
+	<settings pass="offlineServicing"></settings>
+	<settings pass="windowsPE">
+		<component name="Microsoft-Windows-International-Core-WinPE" processorArchitecture="amd64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS">
+			<SetupUILanguage>
+				<UILanguage>en-US</UILanguage>
+			</SetupUILanguage>
+			<InputLocale>0409:00000409</InputLocale>
+			<SystemLocale>en-US</SystemLocale>
+			<UILanguage>en-US</UILanguage>
+			<UserLocale>en-US</UserLocale>
+		</component>
+		<component name="Microsoft-Windows-Setup" processorArchitecture="amd64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS">
+			<ImageInstall>
+				<OSImage>
+					<InstallTo>
+						<DiskID>0</DiskID>
+						<PartitionID>4</PartitionID>
+					</InstallTo>
+				</OSImage>
+			</ImageInstall>
+			<UserData>
+				<ProductKey>
+					<Key>2B87N-8KFHP-DKV6R-Y2C8J-PKCKT</Key>
+				</ProductKey>
+				<AcceptEula>true</AcceptEula>
+			</UserData>
+			<DiskConfiguration>
+				<Disk wcm:action="add">
+					<DiskID>0</DiskID>
+					<WillWipeDisk>true</WillWipeDisk>
+					<CreatePartitions>
+						<!-- Windows RE Tools partition -->
+						<CreatePartition wcm:action="add">
+							<Order>1</Order>
+							<Type>Primary</Type>
+							<Size>300</Size>
+						</CreatePartition>
+						<!-- System partition (ESP) -->
+						<CreatePartition wcm:action="add">
+							<Order>2</Order>
+							<Type>EFI</Type>
+							<Size>100</Size>
+						</CreatePartition>
+						<!-- Microsoft reserved partition (MSR) -->
+						<CreatePartition wcm:action="add">
+							<Order>3</Order>
+							<Type>MSR</Type>
+							<Size>128</Size>
+						</CreatePartition>
+						<!-- Windows partition -->
+						<CreatePartition wcm:action="add">
+							<Order>4</Order>
+							<Type>Primary</Type>
+							<Extend>true</Extend>
+						</CreatePartition>
+					</CreatePartitions>
+					<ModifyPartitions>
+						<!-- Windows RE Tools partition -->
+						<ModifyPartition wcm:action="add">
+							<Order>1</Order>
+							<PartitionID>1</PartitionID>
+							<Label>WINRE</Label>
+							<Format>NTFS</Format>
+							<TypeID>DE94BBA4-06D1-4D40-A16A-BFD50179D6AC</TypeID>
+						</ModifyPartition>
+						<!-- System partition (ESP) -->
+						<ModifyPartition wcm:action="add">
+							<Order>2</Order>
+							<PartitionID>2</PartitionID>
+							<Label>System</Label>
+							<Format>FAT32</Format>
+						</ModifyPartition>
+						<!-- MSR partition does not need to be modified -->
+						<ModifyPartition wcm:action="add">
+							<Order>3</Order>
+							<PartitionID>3</PartitionID>
+						</ModifyPartition>
+						<!-- Windows partition -->
+						<ModifyPartition wcm:action="add">
+							<Order>4</Order>
+							<PartitionID>4</PartitionID>
+							<Label>Windows</Label>
+							<Letter>C</Letter>
+							<Format>NTFS</Format>
+						</ModifyPartition>
+					</ModifyPartitions>
+				</Disk>
+			</DiskConfiguration>
+		</component>
+	</settings>
+	<settings pass="generalize"></settings>
+	<settings pass="specialize">
+		<component name="Microsoft-Windows-Deployment" processorArchitecture="amd64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS">
+			<RunSynchronous>
+				<RunSynchronousCommand wcm:action="add">
+					<Order>1</Order>
+					<Path>net.exe accounts /lockoutthreshold:0</Path>
+				</RunSynchronousCommand>
+				<RunSynchronousCommand wcm:action="add">
+					<Order>2</Order>
+					<Path>net.exe accounts /maxpwage:UNLIMITED</Path>
+				</RunSynchronousCommand>
+				<RunSynchronousCommand wcm:action="add">
+					<Order>3</Order>
+					<Path>powershell.exe -NoProfile -Command "Set-ExecutionPolicy -Scope 'LocalMachine' -ExecutionPolicy 'RemoteSigned' -Force;"</Path>
+				</RunSynchronousCommand>
+				<RunSynchronousCommand wcm:action="add">
+					<Order>4</Order>
+					<Path>reg.exe add "HKLM\SOFTWARE\Policies\Microsoft\Dsh" /v AllowNewsAndInterests /t REG_DWORD /d 0 /f</Path>
+				</RunSynchronousCommand>
+				<RunSynchronousCommand wcm:action="add">
+					<Order>5</Order>
+					<Path>reg.exe load "HKU\DefaultUser" "C:\Users\Default\NTUSER.DAT"</Path>
+				</RunSynchronousCommand>
+				<RunSynchronousCommand wcm:action="add">
+					<Order>6</Order>
+					<Path>reg.exe add "HKU\DefaultUser\Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager" /v "ContentDeliveryAllowed" /t REG_DWORD /d 0 /f</Path>
+				</RunSynchronousCommand>
+				<RunSynchronousCommand wcm:action="add">
+					<Order>7</Order>
+					<Path>reg.exe add "HKU\DefaultUser\Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager" /v "FeatureManagementEnabled" /t REG_DWORD /d 0 /f</Path>
+				</RunSynchronousCommand>
+				<RunSynchronousCommand wcm:action="add">
+					<Order>8</Order>
+					<Path>reg.exe add "HKU\DefaultUser\Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager" /v "OEMPreInstalledAppsEnabled" /t REG_DWORD /d 0 /f</Path>
+				</RunSynchronousCommand>
+				<RunSynchronousCommand wcm:action="add">
+					<Order>9</Order>
+					<Path>reg.exe add "HKU\DefaultUser\Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager" /v "PreInstalledAppsEnabled" /t REG_DWORD /d 0 /f</Path>
+				</RunSynchronousCommand>
+				<RunSynchronousCommand wcm:action="add">
+					<Order>10</Order>
+					<Path>reg.exe add "HKU\DefaultUser\Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager" /v "PreInstalledAppsEverEnabled" /t REG_DWORD /d 0 /f</Path>
+				</RunSynchronousCommand>
+				<RunSynchronousCommand wcm:action="add">
+					<Order>11</Order>
+					<Path>reg.exe add "HKU\DefaultUser\Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager" /v "SilentInstalledAppsEnabled" /t REG_DWORD /d 0 /f</Path>
+				</RunSynchronousCommand>
+				<RunSynchronousCommand wcm:action="add">
+					<Order>12</Order>
+					<Path>reg.exe add "HKU\DefaultUser\Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager" /v "SoftLandingEnabled" /t REG_DWORD /d 0 /f</Path>
+				</RunSynchronousCommand>
+				<RunSynchronousCommand wcm:action="add">
+					<Order>13</Order>
+					<Path>reg.exe add "HKU\DefaultUser\Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager" /v "SubscribedContentEnabled" /t REG_DWORD /d 0 /f</Path>
+				</RunSynchronousCommand>
+				<RunSynchronousCommand wcm:action="add">
+					<Order>14</Order>
+					<Path>reg.exe add "HKU\DefaultUser\Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager" /v "SubscribedContent-310093Enabled" /t REG_DWORD /d 0 /f</Path>
+				</RunSynchronousCommand>
+				<RunSynchronousCommand wcm:action="add">
+					<Order>15</Order>
+					<Path>reg.exe add "HKU\DefaultUser\Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager" /v "SubscribedContent-338387Enabled" /t REG_DWORD /d 0 /f</Path>
+				</RunSynchronousCommand>
+				<RunSynchronousCommand wcm:action="add">
+					<Order>16</Order>
+					<Path>reg.exe add "HKU\DefaultUser\Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager" /v "SubscribedContent-338388Enabled" /t REG_DWORD /d 0 /f</Path>
+				</RunSynchronousCommand>
+				<RunSynchronousCommand wcm:action="add">
+					<Order>17</Order>
+					<Path>reg.exe add "HKU\DefaultUser\Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager" /v "SubscribedContent-338389Enabled" /t REG_DWORD /d 0 /f</Path>
+				</RunSynchronousCommand>
+				<RunSynchronousCommand wcm:action="add">
+					<Order>18</Order>
+					<Path>reg.exe add "HKU\DefaultUser\Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager" /v "SubscribedContent-338393Enabled" /t REG_DWORD /d 0 /f</Path>
+				</RunSynchronousCommand>
+				<RunSynchronousCommand wcm:action="add">
+					<Order>19</Order>
+					<Path>reg.exe add "HKU\DefaultUser\Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager" /v "SubscribedContent-353698Enabled" /t REG_DWORD /d 0 /f</Path>
+				</RunSynchronousCommand>
+				<RunSynchronousCommand wcm:action="add">
+					<Order>20</Order>
+					<Path>reg.exe add "HKU\DefaultUser\Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager" /v "SystemPaneSuggestionsEnabled" /t REG_DWORD /d 0 /f</Path>
+				</RunSynchronousCommand>
+				<RunSynchronousCommand wcm:action="add">
+					<Order>21</Order>
+					<Path>reg.exe unload "HKU\DefaultUser"</Path>
+				</RunSynchronousCommand>
+				<RunSynchronousCommand wcm:action="add">
+					<Order>22</Order>
+					<Path>reg.exe add "HKLM\Software\Policies\Microsoft\Windows\CloudContent" /v "DisableWindowsConsumerFeatures" /t REG_DWORD /d 0 /f</Path>
+				</RunSynchronousCommand>
+				<RunSynchronousCommand wcm:action="add">
+					<Order>23</Order>
+					<Path>powershell.exe -NoProfile -Command "$xml = [xml]::new(); $xml.Load('C:\Windows\Panther\unattend.xml'); $sb = [scriptblock]::Create( $xml.unattend.Extensions.ExtractScript ); Invoke-Command -ScriptBlock $sb -ArgumentList $xml;"</Path>
+				</RunSynchronousCommand>
+				<RunSynchronousCommand wcm:action="add">
+					<Order>24</Order>
+					<Path>powershell.exe -NoProfile -Command "Get-Content -LiteralPath 'C:\Windows\Setup\Scripts\VirtIoGuestTools.ps1' -Raw | Invoke-Expression;"</Path>
+				</RunSynchronousCommand>
+				<RunSynchronousCommand wcm:action="add">
+					<Order>25</Order>
+					<Path>reg.exe add "HKLM\SYSTEM\CurrentControlSet\Control\BitLocker" /v "PreventDeviceEncryption" /t REG_DWORD /d 1 /f</Path>
+				</RunSynchronousCommand>
+				<RunSynchronousCommand wcm:action="add">
+					<Order>26</Order>
+					<Path>cmd.exe /c "powershell.exe -NoProfile -Command "Get-Content -LiteralPath 'C:\Windows\Setup\Scripts\unattend-01.ps1' -Raw | Invoke-Expression;" &gt;&gt;"C:\Windows\Setup\Scripts\unattend-01.log" 2&gt;&amp;1"</Path>
+				</RunSynchronousCommand>
+			</RunSynchronous>
+		</component>
+	</settings>
+	<settings pass="auditSystem"></settings>
+	<settings pass="auditUser"></settings>
+	<settings pass="oobeSystem">
+		<component name="Microsoft-Windows-International-Core" processorArchitecture="amd64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS">
+			<InputLocale>0409:00000409</InputLocale>
+			<SystemLocale>en-US</SystemLocale>
+			<UILanguage>en-US</UILanguage>
+			<UserLocale>en-US</UserLocale>
+		</component>
+		<component name="Microsoft-Windows-Shell-Setup" processorArchitecture="amd64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS">
+			<UserAccounts>
+				<LocalAccounts>
+					<LocalAccount wcm:action="add">
+						<Name>$USER</Name>
+						<Group>Administrators</Group>
+						<Password>
+							<Value></Value>
+							<PlainText>true</PlainText>
+						</Password>
+					</LocalAccount>
+				</LocalAccounts>
+			</UserAccounts>
+			<AutoLogon>
+				<Username>$USER</Username>
+				<Enabled>true</Enabled>
+				<LogonCount>1</LogonCount>
+				<Password>
+					<Value></Value>
+					<PlainText>true</PlainText>
+				</Password>
+			</AutoLogon>
+			<OOBE>
+				<ProtectYourPC>3</ProtectYourPC>
+				<HideEULAPage>true</HideEULAPage>
+				<HideWirelessSetupInOOBE>true</HideWirelessSetupInOOBE>
+			</OOBE>
+			<FirstLogonCommands>
+				<SynchronousCommand wcm:action="add">
+					<Order>1</Order>
+					<CommandLine>reg.exe add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon" /v AutoLogonCount /t REG_DWORD /d 0 /f</CommandLine>
+				</SynchronousCommand>
+				<SynchronousCommand wcm:action="add">
+					<Order>2</Order>
+					<CommandLine>powershell.exe -NoProfile -Command "Disable-ComputerRestore -Drive 'C:\';"</CommandLine>
+				</SynchronousCommand>
+				<SynchronousCommand wcm:action="add">
+					<Order>3</Order>
+					<CommandLine>cmd.exe /c "powershell.exe -NoProfile -Command "Get-Content -LiteralPath 'C:\Windows\Setup\Scripts\unattend-02.ps1' -Raw | Invoke-Expression;" &gt;&gt;"C:\Windows\Setup\Scripts\unattend-02.log" 2&gt;&amp;1"</CommandLine>
+				</SynchronousCommand>
+			</FirstLogonCommands>
+		</component>
+	</settings>
+	<Extensions xmlns="https://schneegans.de/windows/unattend-generator/">
+		<ExtractScript>
+param(
+    [xml] $Document
+);
+
+$scriptsDir = 'C:\Windows\Setup\Scripts\';
+foreach( $file in $Document.unattend.Extensions.File ) {
+    $path = [System.Environment]::ExpandEnvironmentVariables(
+        $file.GetAttribute( 'path' )
+    );
+    if( $path.StartsWith( $scriptsDir ) ) {
+        mkdir -Path $scriptsDir -ErrorAction 'SilentlyContinue';
+    }
+    $encoding = switch( [System.IO.Path]::GetExtension( $path ) ) {
+        { $_ -in '.ps1', '.xml' } { [System.Text.Encoding]::UTF8; }
+        { $_ -in '.reg', '.vbs', '.js' } { [System.Text.UnicodeEncoding]::new( $false, $true ); }
+        default { [System.Text.Encoding]::Default; }
+    };
+    [System.IO.File]::WriteAllBytes( $path, ( $encoding.GetPreamble() + $encoding.GetBytes( $file.InnerText.Trim() ) ) );
+}
+		</ExtractScript>
+		<File path="C:\Windows\Setup\Scripts\VirtIoGuestTools.ps1">
+&amp; {
+	foreach( $letter in 'DEFGHIJKLMNOPQRSTUVWXYZ'.ToCharArray() ) {
+		$exe = "${letter}:\virtio-win-guest-tools.exe";
+		if( Test-Path -LiteralPath $exe ) {
+			Start-Process -FilePath $exe -ArgumentList '/passive', '/norestart' -Wait;
+			return;
+		}
+	}
+	'VirtIO Guest Tools image (virtio-win-*.iso) is not attached to this VM.';
+} *&gt;&amp;1 &gt;&gt; "$env:TEMP\VirtIoGuestTools.log";
+		</File>
+		<File path="C:\Windows\Setup\Scripts\unattend-01.ps1">
+# Enable-WindowsOptionalFeature -Online -FeatureName Microsoft-Hyper-V -All -NoRestart;
+bcdedit.exe -set TESTSIGNING ON;
+		</File>
+		<File path="C:\Windows\Setup\Scripts\unattend-02.ps1">
+# https://learn.microsoft.com/en-us/windows-server/administration/openssh/openssh_server_configuration
+Add-WindowsCapability -Online -Name OpenSSH.Server~~~~0.0.1.0;
+Start-Service sshd;
+Set-Service -Name sshd -StartupType 'Automatic';
+New-ItemProperty -Path "HKLM:\SOFTWARE\OpenSSH" -Name DefaultShell -Value "C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe" -PropertyType String -Force;
+icacls.exe "C:\ProgramData\ssh\administrators_authorized_keys" /inheritance:r /grant "Administrators:F" /grant "SYSTEM:F";
+
+# Allow inbound connections
+Set-NetFirewallProfile -Profile Domain,Public,Private -DefaultInboundAction Allow;
+		</File>
+		<File path="C:\ProgramData\ssh\administrators_authorized_keys">$AUTHORIZED_KEYS</File>
+	</Extensions>
+</unattend>

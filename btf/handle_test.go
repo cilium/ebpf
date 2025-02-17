@@ -18,6 +18,7 @@ func TestHandleIterator(t *testing.T) {
 	defer it.Handle.Close()
 
 	if !it.Next() {
+		testutils.SkipIfNotSupportedOnOS(t, it.Err())
 		t.Fatalf("No BTF loaded")
 	}
 	if it.Handle == nil {
@@ -57,6 +58,7 @@ func TestParseModuleSplitSpec(t *testing.T) {
 		}
 		return false
 	})
+	testutils.SkipIfNotSupportedOnOS(t, err)
 	if err != nil {
 		t.Fatal(err)
 	}

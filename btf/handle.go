@@ -8,6 +8,7 @@ import (
 	"os"
 
 	"github.com/cilium/ebpf/internal"
+	"github.com/cilium/ebpf/internal/platform"
 	"github.com/cilium/ebpf/internal/sys"
 	"github.com/cilium/ebpf/internal/unix"
 )
@@ -42,6 +43,10 @@ func NewHandle(b *Builder) (*Handle, error) {
 // Returns an error wrapping ErrNotSupported if the kernel doesn't support BTF.
 func NewHandleFromRawBTF(btf []byte) (*Handle, error) {
 	const minLogSize = 64 * 1024
+
+	if platform.IsWindows {
+		return nil, fmt.Errorf("btf: handle: %w", internal.ErrNotSupportedOnOS)
+	}
 
 	if uint64(len(btf)) > math.MaxUint32 {
 		return nil, errors.New("BTF exceeds the maximum size")
@@ -110,6 +115,10 @@ func NewHandleFromRawBTF(btf []byte) (*Handle, error) {
 //
 // Requires CAP_SYS_ADMIN.
 func NewHandleFromID(id ID) (*Handle, error) {
+	if platform.IsWindows {
+		return nil, fmt.Errorf("btf: handle: %w", internal.ErrNotSupportedOnOS)
+	}
+
 	fd, err := sys.BtfGetFdById(&sys.BtfGetFdByIdAttr{
 		Id: uint32(id),
 	})
@@ -242,6 +251,11 @@ type HandleIterator struct {
 // Returns true if another BTF object was found. Call [HandleIterator.Err] after
 // the function returns false.
 func (it *HandleIterator) Next() bool {
+	if platform.IsWindows {
+		it.err = fmt.Errorf("btf: %w", internal.ErrNotSupportedOnOS)
+		return false
+	}
+
 	id := it.ID
 	for {
 		attr := &sys.BtfGetNextIdAttr{Id: id}

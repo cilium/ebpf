@@ -60,16 +60,16 @@ func TestMemoryBounds(t *testing.T) {
 	qt.Assert(t, qt.IsNil(err))
 
 	size := uint64(mm.Size())
-	end := size - 1
+	end := size
 
 	qt.Assert(t, qt.IsTrue(mm.bounds(0, 0)))
-	qt.Assert(t, qt.IsTrue(mm.bounds(end, 0)))
+	qt.Assert(t, qt.IsFalse(mm.bounds(end, 0)))
 	qt.Assert(t, qt.IsTrue(mm.bounds(end-8, 8)))
 	qt.Assert(t, qt.IsTrue(mm.bounds(0, end)))
 
 	qt.Assert(t, qt.IsFalse(mm.bounds(end-8, 9)))
 	qt.Assert(t, qt.IsFalse(mm.bounds(end, 1)))
-	qt.Assert(t, qt.IsFalse(mm.bounds(0, size)))
+	qt.Assert(t, qt.IsTrue(mm.bounds(0, size)))
 }
 
 func TestMemoryReadOnly(t *testing.T) {

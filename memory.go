@@ -143,3 +143,16 @@ func (mm *Memory) WriteAt(p []byte, off int64) (int, error) {
 
 	return n, nil
 }
+
+func (mm *Memory) sliceAt(off uint64, size uint64) ([]byte, error) {
+	if mm.b == nil {
+		return nil, fmt.Errorf("memory-mapped region closed")
+	}
+	if mm.ro {
+		return nil, fmt.Errorf("memory-mapped region not writable: %w", ErrReadOnly)
+	}
+	if !mm.bounds(off, size) {
+		return nil, fmt.Errorf("memory-mapped region access out of bounds: %w", io.EOF)
+	}
+	return mm.b[off : off+size : off+size], nil
+}

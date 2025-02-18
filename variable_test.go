@@ -124,6 +124,11 @@ func TestVariable(t *testing.T) {
 
 	qt.Assert(t, qt.IsNotNil(obj.Data.Type()))
 	qt.Assert(t, qt.IsNotNil(obj.Struct.Type()))
+
+	bssPtr, err := unsafeVariablePointer(obj.BSS)
+	qt.Assert(t, qt.IsNil(err))
+	*(*uint32)(bssPtr) = 42
+	mustReturn(t, obj.GetBSS, uint32(42))
 }
 
 func TestVariableConst(t *testing.T) {
@@ -153,6 +158,9 @@ func TestVariableConst(t *testing.T) {
 
 	qt.Assert(t, qt.IsTrue(obj.Rodata.ReadOnly()))
 	qt.Assert(t, qt.ErrorIs(obj.Rodata.Set(want), ErrReadOnly))
+
+	_, err = unsafeVariablePointer(obj.Rodata)
+	qt.Assert(t, qt.ErrorIs(err, ErrReadOnly))
 }
 
 func TestVariableFallback(t *testing.T) {

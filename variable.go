@@ -192,7 +192,7 @@ func (v *Variable) String() string {
 // to the same length as the size of the Variable.
 func (v *Variable) Set(in any) error {
 	if v.mm == nil {
-		return fmt.Errorf("variable %s: direct access requires Linux 5.5 or later: %w", v.name, ErrNotSupported)
+		return errNoDirectVariableAccess(v)
 	}
 
 	if v.ReadOnly() {
@@ -215,7 +215,7 @@ func (v *Variable) Set(in any) error {
 // be a pointer to a value whose size matches the Variable.
 func (v *Variable) Get(out any) error {
 	if v.mm == nil {
-		return fmt.Errorf("variable %s: direct access requires Linux 5.5 or later: %w", v.name, ErrNotSupported)
+		return errNoDirectVariableAccess(v)
 	}
 
 	if !v.mm.bounds(v.offset, v.size) {
@@ -227,4 +227,8 @@ func (v *Variable) Get(out any) error {
 	}
 
 	return nil
+}
+
+func errNoDirectVariableAccess(v *Variable) error {
+	return fmt.Errorf("variable %s: direct access requires Linux 5.5 or later: %w", v.name, ErrNotSupported)
 }

@@ -500,6 +500,11 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions) (*Program, er
 }
 
 func retryLogAttrs(attr *sys.ProgLoadAttr, startSize uint32, err error) bool {
+	if attr.LogSize == maxVerifierLogSize {
+		// Maximum buffer size reached, don't grow or retry.
+		return false
+	}
+
 	// ENOSPC means the log was enabled on the previous iteration, so we only
 	// need to grow the buffer.
 	if errors.Is(err, unix.ENOSPC) {
@@ -510,10 +515,15 @@ func retryLogAttrs(attr *sys.ProgLoadAttr, startSize uint32, err error) bool {
 			return true
 		}
 
-		// ENOSPC means we've loaded the program before and the log buffer was too
-		// small. Make an educated guess how large the buffer should be by
-		// multiplying. Ensure the size doesn't overflow.
+		// Ensure the size doesn't overflow.
 		const factor = 2
+		if attr.LogSize >= maxVerifierLogSize/factor {
+			attr.LogSize = maxVerifierLogSize
+			return true
+		}
+
+		// Make an educated guess how large the buffer should be by multiplying. Due
+		// to int division, this rounds down odd sizes.
 		attr.LogSize = internal.Between(attr.LogSize, minVerifierLogSize, maxVerifierLogSize/factor)
 		attr.LogSize *= factor
 

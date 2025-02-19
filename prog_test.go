@@ -372,6 +372,58 @@ func TestProgramVerifierLog(t *testing.T) {
 	qt.Assert(t, qt.Not(qt.HasLen(prog.VerifierLog, 0)))
 }
 
+func TestProgramVerifierLogRetry(t *testing.T) {
+	someError := errors.New("not a buffer error")
+
+	t.Run("retry with oversized buffer, no log_true_size", func(t *testing.T) {
+		// First load failure, without logging enabled. Retry with logging enabled.
+		attr := &sys.ProgLoadAttr{LogLevel: 0, LogSize: 0}
+		qt.Assert(t, qt.IsTrue(retryLogAttrs(attr, 0, someError)))
+		qt.Assert(t, qt.Equals(attr.LogLevel, LogLevelBranch))
+		qt.Assert(t, qt.Equals(attr.LogSize, minVerifierLogSize))
+
+		// Second failure with logging enabled. No buffer error, don't retry.
+		qt.Assert(t, qt.IsFalse(retryLogAttrs(attr, 0, someError)))
+		qt.Assert(t, qt.Equals(attr.LogLevel, LogLevelBranch))
+		qt.Assert(t, qt.Equals(attr.LogSize, minVerifierLogSize))
+	})
+
+	t.Run("retry with oversized buffer, with log_true_size", func(t *testing.T) {
+		// First load failure, without logging enabled. Retry with larger buffer.
+		attr := &sys.ProgLoadAttr{LogLevel: 0, LogSize: 0}
+		qt.Assert(t, qt.IsTrue(retryLogAttrs(attr, 0, someError)))
+
+		// Buffer was sufficiently large and log_true_size was set. Don't retry and
+		// don't modify LogSize to LogTrueSize.
+		attr.LogTrueSize = 123
+		qt.Assert(t, qt.IsFalse(retryLogAttrs(attr, 0, someError)))
+		qt.Assert(t, qt.Equals(attr.LogSize, minVerifierLogSize))
+	})
+
+	t.Run("retry with undersized buffer, no log_true_size", func(t *testing.T) {
+		// First load failure, without logging enabled. Retry with larger buffer.
+		attr := &sys.ProgLoadAttr{LogLevel: 0, LogSize: 0}
+		qt.Assert(t, qt.IsTrue(retryLogAttrs(attr, 0, someError)))
+
+		// Second failure, this time the kernel signals an undersized buffer. Retry
+		// with double the size.
+		qt.Assert(t, qt.IsTrue(retryLogAttrs(attr, 0, unix.ENOSPC)))
+		qt.Assert(t, qt.Equals(attr.LogSize, minVerifierLogSize*2))
+	})
+
+	t.Run("retry with undersized buffer, with log_true_size", func(t *testing.T) {
+		// First load failure, without logging enabled. Retry with larger buffer.
+		attr := &sys.ProgLoadAttr{LogLevel: 0, LogSize: 0}
+		qt.Assert(t, qt.IsTrue(retryLogAttrs(attr, 0, someError)))
+
+		// Second failure, the kernel signals undersized buffer and also sets
+		// log_true_size. Retry with the exact size required.
+		attr.LogTrueSize = 123
+		qt.Assert(t, qt.IsTrue(retryLogAttrs(attr, 0, unix.ENOSPC)))
+		qt.Assert(t, qt.Equals(attr.LogSize, 123))
+	})
+}
+
 func TestProgramWithUnsatisfiedMap(t *testing.T) {
 	coll, err := LoadCollectionSpec("testdata/loader-el.elf")
 	if err != nil {

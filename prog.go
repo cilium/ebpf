@@ -56,6 +56,12 @@ const minVerifierLogSize = 64 * 1024
 // future, but avoid the unnecessary EINVAL for now.
 const maxVerifierLogSize = math.MaxUint32 >> 2
 
+// maxVerifierAttempts is the maximum number of times the verifier will retry
+// loading a program with a growing log buffer before giving up. Since we double
+// the log size on every attempt, this is the absolute maximum number of
+// attempts before the buffer reaches [maxVerifierLogSize].
+const maxVerifierAttempts = 30
+
 // ProgramOptions control loading a program into the kernel.
 type ProgramOptions struct {
 	// Bitmap controlling the detail emitted by the kernel's eBPF verifier log.
@@ -435,6 +441,7 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions) (*Program, er
 			attr.LogSize = internal.Between(opts.LogSizeStart, minVerifierLogSize, maxVerifierLogSize)
 		}
 
+		attempts := 1
 		for {
 			if attr.LogLevel != 0 {
 				logBuf = make([]byte, attr.LogSize)
@@ -449,6 +456,11 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions) (*Program, er
 			if !retryLogAttrs(attr, opts.LogSizeStart, err) {
 				break
 			}
+
+			if attempts >= maxVerifierAttempts {
+				return nil, fmt.Errorf("load program: %w (bug: hit %d verifier attempts)", err, maxVerifierAttempts)
+			}
+			attempts++
 		}
 	}
 

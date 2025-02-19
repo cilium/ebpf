@@ -448,6 +448,17 @@ func TestProgramVerifierLogRetry(t *testing.T) {
 		// Log still doesn't fit maximum-size buffer. Don't retry.
 		qt.Assert(t, qt.IsFalse(retryLogAttrs(attr, 0, unix.ENOSPC)))
 	})
+
+	t.Run("ensure growth terminates within max attempts", func(t *testing.T) {
+		attr := &sys.ProgLoadAttr{LogLevel: 0, LogSize: 0}
+		var terminated bool
+		for i := 1; i <= maxVerifierAttempts; i++ {
+			if !retryLogAttrs(attr, 0, syscall.ENOSPC) {
+				terminated = true
+			}
+		}
+		qt.Assert(t, qt.IsTrue(terminated))
+	})
 }
 
 func TestProgramWithUnsatisfiedMap(t *testing.T) {

@@ -422,6 +422,32 @@ func TestProgramVerifierLogRetry(t *testing.T) {
 		qt.Assert(t, qt.IsTrue(retryLogAttrs(attr, 0, unix.ENOSPC)))
 		qt.Assert(t, qt.Equals(attr.LogSize, 123))
 	})
+
+	t.Run("grow to maximum buffer size", func(t *testing.T) {
+		// Previous loads pushed the log size to (or above) half of the maximum,
+		// which would make it overflow on the next retry. Make sure the log size
+		// actually hits the maximum so we can bail out.
+		attr := &sys.ProgLoadAttr{LogLevel: LogLevelBranch, LogSize: maxVerifierLogSize / 2}
+		qt.Assert(t, qt.IsTrue(retryLogAttrs(attr, 0, unix.ENOSPC)))
+		qt.Assert(t, qt.Equals(attr.LogSize, maxVerifierLogSize))
+
+		// Don't retry if the buffer is already at the maximum size, no matter
+		// the return code.
+		qt.Assert(t, qt.IsFalse(retryLogAttrs(attr, 0, someError)))
+		qt.Assert(t, qt.IsFalse(retryLogAttrs(attr, 0, unix.ENOSPC)))
+	})
+
+	t.Run("start at maximum buffer size", func(t *testing.T) {
+		// The user requested a log buffer exceeding the maximum size, but no log
+		// level. Retry with the maximum size and default log level.
+		attr := &sys.ProgLoadAttr{LogLevel: 0, LogSize: 0}
+		qt.Assert(t, qt.IsTrue(retryLogAttrs(attr, math.MaxUint32, unix.EINVAL)))
+		qt.Assert(t, qt.Equals(attr.LogLevel, LogLevelBranch))
+		qt.Assert(t, qt.Equals(attr.LogSize, maxVerifierLogSize))
+
+		// Log still doesn't fit maximum-size buffer. Don't retry.
+		qt.Assert(t, qt.IsFalse(retryLogAttrs(attr, 0, unix.ENOSPC)))
+	})
 }
 
 func TestProgramWithUnsatisfiedMap(t *testing.T) {

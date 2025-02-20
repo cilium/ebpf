@@ -2,6 +2,7 @@ package ebpf
 
 import (
 	"io"
+	"math"
 	"os"
 	"runtime"
 	"testing"
@@ -59,8 +60,7 @@ func TestMemoryBounds(t *testing.T) {
 	mm, err := mustMmapableArray(t, 0).Memory()
 	qt.Assert(t, qt.IsNil(err))
 
-	size := uint64(mm.Size())
-	end := size - 1
+	end := uint64(mm.Size())
 
 	qt.Assert(t, qt.IsTrue(mm.bounds(0, 0)))
 	qt.Assert(t, qt.IsTrue(mm.bounds(end, 0)))
@@ -69,7 +69,7 @@ func TestMemoryBounds(t *testing.T) {
 
 	qt.Assert(t, qt.IsFalse(mm.bounds(end-8, 9)))
 	qt.Assert(t, qt.IsFalse(mm.bounds(end, 1)))
-	qt.Assert(t, qt.IsFalse(mm.bounds(0, size)))
+	qt.Assert(t, qt.IsFalse(mm.bounds(math.MaxUint64, 1)))
 }
 
 func TestMemoryReadOnly(t *testing.T) {

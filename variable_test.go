@@ -95,6 +95,7 @@ func TestVariable(t *testing.T) {
 		BSS    *Variable `ebpf:"var_bss"`
 		Data   *Variable `ebpf:"var_data"`
 		Struct *Variable `ebpf:"var_struct"`
+		Array  *Variable `ebpf:"var_array"`
 	}{}
 
 	qt.Assert(t, qt.IsNil(spec.LoadAndAssign(&obj, nil)))
@@ -115,6 +116,11 @@ func TestVariable(t *testing.T) {
 	mustReturn(t, obj.GetData, want)
 	qt.Assert(t, qt.IsNil(obj.Struct.Set(&struct{ A, B uint64 }{0xa, 0xb})))
 	mustReturn(t, obj.CheckStruct, 1)
+
+	// Ensure page-aligned array variable can be accessed in its entirety.
+	arr := make([]byte, obj.Array.Size())
+	qt.Assert(t, qt.IsNil(obj.Array.Get(arr)))
+	qt.Assert(t, qt.IsNil(obj.Array.Set(arr)))
 
 	typ := obj.BSS.Type()
 	qt.Assert(t, qt.IsNotNil(typ))

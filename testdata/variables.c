@@ -35,3 +35,7 @@ volatile struct var_struct_t var_struct __section(".data.struct");
 __section("socket") int check_struct() {
 	return var_struct.a == 0xa && var_struct.b == 0xb;
 }
+
+// Variable aligned on page boundary to ensure all bytes in the mapping can be
+// accessed through the Variable API.
+volatile char var_array[8192] __section(".data.array");

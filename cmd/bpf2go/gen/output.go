@@ -9,7 +9,6 @@ import (
 	"go/build/constraint"
 	"go/token"
 	"io"
-	"sort"
 	"strings"
 	"text/template"
 	"unicode"
@@ -143,22 +142,50 @@ func Generate(args GenerateArgs) error {
 		programs[name] = args.Identifier(name)
 	}
 
-	typeNames := make(map[btf.Type]string)
-	for _, typ := range args.Types {
-		// NB: This also deduplicates types.
-		typeNames[typ] = args.Stem + args.Identifier(typ.TypeName())
+	tn := templateName(args.Stem)
+	reservedNames := map[string]struct{}{
+		tn.Specs():         {},
+		tn.MapSpecs():      {},
+		tn.ProgramSpecs():  {},
+		tn.VariableSpecs(): {},
+		tn.Objects():       {},
+		tn.Maps():          {},
+		tn.Programs():      {},
+		tn.Variables():     {},
 	}
 
-	// Ensure we don't have conflicting names and generate a sorted list of
-	// named types so that the output is stable.
-	types, err := sortTypes(typeNames)
-	if err != nil {
-		return err
+	typeByName := map[string]btf.Type{}
+	nameByType := map[btf.Type]string{}
+	for _, typ := range args.Types {
+		// NB: This also deduplicates types.
+		name := args.Stem + args.Identifier(typ.TypeName())
+		if _, reserved := reservedNames[name]; reserved {
+			return fmt.Errorf("type name %q is reserved", name)
+		}
+		if otherType, ok := typeByName[name]; ok {
+			if otherType == typ {
+				continue
+			}
+			return fmt.Errorf("type name %q is used multiple times", name)
+		}
+		typeByName[name] = typ
+		nameByType[typ] = name
 	}
 
 	gf := &btf.GoFormatter{
-		Names:      typeNames,
+		Names:      nameByType,
 		Identifier: args.Identifier,
+		ShortEnumIdentifier: func(_, element string) string {
+			elementName := args.Stem + args.Identifier(element)
+			if _, nameTaken := typeByName[elementName]; nameTaken {
+				return ""
+			}
+			if _, nameReserved := reservedNames[elementName]; nameReserved {
+				return ""
+			}
+			reservedNames[elementName] = struct{}{}
+			return elementName
+		},
 	}
 
 	ctx := struct {
@@ -170,8 +197,7 @@ func Generate(args GenerateArgs) error {
 		Maps        map[string]string
 		Variables   map[string]string
 		Programs    map[string]string
-		Types       []btf.Type
-		TypeNames   map[btf.Type]string
+		Types       map[string]btf.Type
 		File        string
 	}{
 		gf,
@@ -182,42 +208,16 @@ func Generate(args GenerateArgs) error {
 		maps,
 		variables,
 		programs,
-		types,
-		typeNames,
+		typeByName,
 		args.ObjectFile,
 	}
 
 	var buf bytes.Buffer
 	if err := commonTemplate.Execute(&buf, &ctx); err != nil {
-		return fmt.Errorf("can't generate types: %s", err)
+		return fmt.Errorf("can't generate types: %v", err)
 	}
 
 	return internal.WriteFormatted(buf.Bytes(), args.Output)
-}
-
-// sortTypes returns a list of types sorted by their (generated) Go type name.
-//
-// Duplicate Go type names are rejected.
-func sortTypes(typeNames map[btf.Type]string) ([]btf.Type, error) {
-	var types []btf.Type
-	var names []string
-	for typ, name := range typeNames {
-		i := sort.SearchStrings(names, name)
-		if i >= len(names) {
-			types = append(types, typ)
-			names = append(names, name)
-			continue
-		}
-
-		if names[i] == name {
-			return nil, fmt.Errorf("type name %q is used multiple times", name)
-		}
-
-		types = append(types[:i], append([]btf.Type{typ}, types[i:]...)...)
-		names = append(names[:i], append([]string{name}, names[i:]...)...)
-	}
-
-	return types, nil
 }
 
 func toUpperFirst(str string) string {

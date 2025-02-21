@@ -37,6 +37,8 @@ func run(args []string) error {
 		return fmt.Errorf("expect location of compressed vmlinux .BTF as argument")
 	}
 
+	fmt.Println("Running gentypes..")
+
 	raw, err := internal.ReadAllCompressed(args[0])
 	if err != nil {
 		return err
@@ -128,12 +130,14 @@ import (
 		return consts[i].Name < consts[j].Name
 	})
 
+	var nconsts uint32
 	w.WriteString("const (\n")
 	for _, c := range consts {
-		fmt.Println("const", c.Name)
 		fmt.Fprintf(w, "\t%s = %v\n", c.Name, c.Value)
+		nconsts++
 	}
 	w.WriteString(")\n")
+	fmt.Printf("Generated %d constants\n", nconsts)
 
 	// Typed constants (aka named enums)
 	enums := []struct {
@@ -162,10 +166,9 @@ import (
 		return enums[i].goType < enums[j].goType
 	})
 
+	var nenums uint32
 	enumTypes := make(map[string]btf.Type)
 	for _, o := range enums {
-		fmt.Println("enum", o.goType)
-
 		var t *btf.Enum
 		if err := spec.TypeByName(o.cType, &t); err != nil {
 			return nil, err
@@ -186,7 +189,10 @@ import (
 
 		w.WriteString(decl)
 		w.WriteRune('\n')
+
+		nenums++
 	}
+	fmt.Printf("Generated %d enums\n", nenums)
 
 	// Assorted structs
 
@@ -250,9 +256,8 @@ import (
 		return structs[i].goType < structs[j].goType
 	})
 
+	var nstructs uint32
 	for _, s := range structs {
-		fmt.Println("struct", s.goType)
-
 		var t *btf.Struct
 		if err := spec.TypeByName(s.cType, &t); err != nil {
 			return nil, err
@@ -261,7 +266,9 @@ import (
 		if err := outputPatchedStruct(gf, w, s.goType, t, s.patches); err != nil {
 			return nil, fmt.Errorf("output %q: %w", s.goType, err)
 		}
+		nstructs++
 	}
+	fmt.Printf("Generated %d structs\n", nstructs)
 
 	// Attrs
 
@@ -593,9 +600,8 @@ import (
 		return nil, fmt.Errorf("split bpf_attr: %w", err)
 	}
 
+	var nattrs uint32
 	for _, s := range attrs {
-		fmt.Println("attr", s.goType)
-
 		t := attrTypes[s.cType]
 		if t == nil {
 			return nil, fmt.Errorf("unknown attr %q", s.cType)
@@ -612,7 +618,9 @@ import (
 		case retFd:
 			fmt.Fprintf(w, "func %s(attr *%s) (*FD, error) { fd, err := BPF(%s, unsafe.Pointer(attr), unsafe.Sizeof(*attr)); if err != nil { return nil, err }; return NewFD(int(fd)) }\n\n", s.goType, goAttrType, s.cmd)
 		}
+		nattrs++
 	}
+	fmt.Printf("Generated %d attrs\n", nattrs)
 
 	// Link info type specific
 	linkInfoExtraTypes := []struct {

@@ -15,6 +15,7 @@ import (
 	"github.com/cilium/ebpf/btf"
 	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/kallsyms"
+	"github.com/cilium/ebpf/internal/platform"
 	"github.com/cilium/ebpf/internal/sys"
 	"github.com/cilium/ebpf/internal/testutils"
 
@@ -217,6 +218,7 @@ func TestLoadCollectionSpec(t *testing.T) {
 			"neg":  {name: "neg", offset: 12, size: 4},
 			"uneg": {name: "uneg", offset: 8, size: 4},
 		},
+		Platform: platform.Linux,
 	}
 
 	testutils.Files(t, testutils.Glob(t, "testdata/loader-*.elf"), func(t *testing.T, file string) {

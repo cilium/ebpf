@@ -10,26 +10,19 @@ import (
 	"github.com/go-quicktest/qt"
 
 	"github.com/cilium/ebpf/internal/sys"
-	"github.com/cilium/ebpf/internal/testutils"
 )
 
 func mustMmapableArray(tb testing.TB, extraFlags uint32) *Map {
 	tb.Helper()
 
-	m, err := NewMap(&MapSpec{
+	return mustNewMap(tb, &MapSpec{
 		Name:       "ebpf_mmap",
 		Type:       Array,
 		KeySize:    4,
 		ValueSize:  8,
 		MaxEntries: 8,
 		Flags:      sys.BPF_F_MMAPABLE | extraFlags,
-	})
-	testutils.SkipIfNotSupported(tb, err)
-	qt.Assert(tb, qt.IsNil(err))
-	tb.Cleanup(func() {
-		m.Close()
-	})
-	return m
+	}, nil)
 }
 
 func TestMemory(t *testing.T) {

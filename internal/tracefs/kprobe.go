@@ -306,7 +306,11 @@ func NewEvent(args ProbeArgs) (*Event, error) {
 		if err := removeEvent(args.Type, event); err != nil {
 			return nil, fmt.Errorf("failed to remove spurious maxactive event: %s", err)
 		}
-		return nil, fmt.Errorf("create trace event with non-default maxactive: %w", internal.ErrNotSupported)
+
+		return nil, &internal.UnsupportedFeatureError{
+			MinimumVersion: internal.Version{4, 12},
+			Name:           "trace event with non-default maxactive",
+		}
 	}
 	if err != nil {
 		return nil, fmt.Errorf("get trace event id: %w", err)

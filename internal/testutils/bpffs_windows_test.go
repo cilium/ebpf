@@ -6,11 +6,12 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/go-quicktest/qt"
+
 	"github.com/cilium/ebpf/asm"
 	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/sys"
 	"github.com/cilium/ebpf/internal/testutils"
-	"github.com/go-quicktest/qt"
 )
 
 func TestTempBPFFS(t *testing.T) {
@@ -32,7 +33,7 @@ func TestTempBPFFS(t *testing.T) {
 			ProgType: 998, // XDP_TEST
 			License:  sys.NewStringPointer(""),
 			InsnCnt:  uint32(buffer.Len() / asm.InstructionSize),
-			Insns:    sys.NewSlicePointer(buffer.Bytes()),
+			Insns:    sys.SlicePointer(buffer.Bytes()),
 		})
 		qt.Assert(t, qt.IsNil(err))
 		defer progFd.Close()

@@ -78,9 +78,7 @@ func TestKretprobeMaxActive(t *testing.T) {
 	}
 
 	k, err := Kretprobe("__put_task_struct", prog, &KprobeOptions{RetprobeMaxActive: 4096})
-	if testutils.IsKernelLessThan(t, "4.12") && errors.Is(err, ErrNotSupported) {
-		t.Skip("Kernel doesn't support maxactive")
-	}
+	testutils.SkipIfNotSupported(t, err)
 	if err != nil {
 		t.Fatal("Kretprobe with maxactive returned an error:", err)
 	}

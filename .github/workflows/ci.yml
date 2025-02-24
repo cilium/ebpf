@@ -202,7 +202,6 @@ jobs:
           - "5.4"
           - "4.19"
           - "4.14"
-          - "4.9"
     steps:
       - uses: actions/checkout@v4
 

@@ -29,13 +29,14 @@ func TestIdentifier(t *testing.T) {
 	}
 }
 
+type foo struct{}
+
 func TestGoTypeName(t *testing.T) {
-	type foo struct{}
 	type bar[T any] struct{}
 	qt.Assert(t, qt.Equals(GoTypeName(foo{}), "foo"))
 	qt.Assert(t, qt.Equals(GoTypeName(new(foo)), "foo"))
 	qt.Assert(t, qt.Equals(GoTypeName(new(*foo)), "foo"))
 	qt.Assert(t, qt.Equals(GoTypeName(bar[int]{}), "bar[int]"))
-	// Broken in the stdlib, see GoTypeName for details.
-	// qt.Assert(t, GoTypeName(bar[qt.C]{}), qt.Equals, "bar[quicktest.C]")
+	qt.Assert(t, qt.Equals(GoTypeName(bar[foo]{}), "bar[foo]"))
+	qt.Assert(t, qt.Equals(GoTypeName(bar[testing.T]{}), "bar[testing.T]"))
 }

@@ -94,7 +94,7 @@ func ObjInfo(fd *FD, info Info) error {
 	err := ObjGetInfoByFd(&ObjGetInfoByFdAttr{
 		BpfFd:   fd.Uint(),
 		InfoLen: len,
-		Info:    NewPointer(ptr),
+		Info:    UnsafePointer(ptr),
 	})
 	runtime.KeepAlive(fd)
 	return err
@@ -119,6 +119,12 @@ const (
 	BPF_LOG_LEVEL2
 	BPF_LOG_STATS
 )
+
+// MapID uniquely identifies a bpf_map.
+type MapID uint32
+
+// ProgramID uniquely identifies a bpf_map.
+type ProgramID uint32
 
 // LinkID uniquely identifies a bpf_link.
 type LinkID uint32

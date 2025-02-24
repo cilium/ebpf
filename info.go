@@ -275,7 +275,7 @@ func newProgramInfoFromFd(fd *sys.FD) (*ProgramInfo, error) {
 	if info.NrMapIds > 0 {
 		pi.maps = make([]MapID, info.NrMapIds)
 		info2.NrMapIds = info.NrMapIds
-		info2.MapIds = sys.NewSlicePointer(pi.maps)
+		info2.MapIds = sys.SlicePointer(pi.maps)
 		makeSecondCall = true
 	} else if haveProgramInfoMapIDs() == nil {
 		// This program really has no associated maps.
@@ -294,13 +294,13 @@ func newProgramInfoFromFd(fd *sys.FD) (*ProgramInfo, error) {
 	if info.XlatedProgLen > 0 {
 		pi.insns = make([]byte, info.XlatedProgLen)
 		info2.XlatedProgLen = info.XlatedProgLen
-		info2.XlatedProgInsns = sys.NewSlicePointer(pi.insns)
+		info2.XlatedProgInsns = sys.SlicePointer(pi.insns)
 		makeSecondCall = true
 	}
 
 	if info.NrLineInfo > 0 {
 		pi.lineInfos = make([]byte, btf.LineInfoSize*info.NrLineInfo)
-		info2.LineInfo = sys.NewSlicePointer(pi.lineInfos)
+		info2.LineInfo = sys.SlicePointer(pi.lineInfos)
 		info2.LineInfoRecSize = btf.LineInfoSize
 		info2.NrLineInfo = info.NrLineInfo
 		pi.numLineInfos = info.NrLineInfo
@@ -309,7 +309,7 @@ func newProgramInfoFromFd(fd *sys.FD) (*ProgramInfo, error) {
 
 	if info.NrFuncInfo > 0 {
 		pi.funcInfos = make([]byte, btf.FuncInfoSize*info.NrFuncInfo)
-		info2.FuncInfo = sys.NewSlicePointer(pi.funcInfos)
+		info2.FuncInfo = sys.SlicePointer(pi.funcInfos)
 		info2.FuncInfoRecSize = btf.FuncInfoSize
 		info2.NrFuncInfo = info.NrFuncInfo
 		pi.numFuncInfos = info.NrFuncInfo
@@ -321,7 +321,7 @@ func newProgramInfoFromFd(fd *sys.FD) (*ProgramInfo, error) {
 		pi.jitedInfo.numInsns = info.JitedProgLen
 		pi.jitedInfo.insns = make([]byte, info.JitedProgLen)
 		info2.JitedProgLen = info.JitedProgLen
-		info2.JitedProgInsns = sys.NewSlicePointer(pi.jitedInfo.insns)
+		info2.JitedProgInsns = sys.SlicePointer(pi.jitedInfo.insns)
 		makeSecondCall = true
 	}
 
@@ -329,7 +329,7 @@ func newProgramInfoFromFd(fd *sys.FD) (*ProgramInfo, error) {
 		pi.jitedInfo.numFuncLens = info.NrJitedFuncLens
 		pi.jitedInfo.funcLens = make([]uint32, info.NrJitedFuncLens)
 		info2.NrJitedFuncLens = info.NrJitedFuncLens
-		info2.JitedFuncLens = sys.NewSlicePointer(pi.jitedInfo.funcLens)
+		info2.JitedFuncLens = sys.SlicePointer(pi.jitedInfo.funcLens)
 		makeSecondCall = true
 	}
 
@@ -337,7 +337,7 @@ func newProgramInfoFromFd(fd *sys.FD) (*ProgramInfo, error) {
 		pi.jitedInfo.numLineInfos = info.NrJitedLineInfo
 		pi.jitedInfo.lineInfos = make([]uint64, info.NrJitedLineInfo)
 		info2.NrJitedLineInfo = info.NrJitedLineInfo
-		info2.JitedLineInfo = sys.NewSlicePointer(pi.jitedInfo.lineInfos)
+		info2.JitedLineInfo = sys.SlicePointer(pi.jitedInfo.lineInfos)
 		info2.JitedLineInfoRecSize = info.JitedLineInfoRecSize
 		makeSecondCall = true
 	}
@@ -345,7 +345,7 @@ func newProgramInfoFromFd(fd *sys.FD) (*ProgramInfo, error) {
 	if info.NrJitedKsyms > 0 {
 		pi.jitedInfo.numKsyms = info.NrJitedKsyms
 		pi.jitedInfo.ksyms = make([]uint64, info.NrJitedKsyms)
-		info2.JitedKsyms = sys.NewSlicePointer(pi.jitedInfo.ksyms)
+		info2.JitedKsyms = sys.SlicePointer(pi.jitedInfo.ksyms)
 		info2.NrJitedKsyms = info.NrJitedKsyms
 		makeSecondCall = true
 	}

@@ -691,10 +691,10 @@ const (
 
 type BtfInfo struct {
 	structs.HostLayout
-	Btf       Pointer
+	Btf       TypedPointer[uint8]
 	BtfSize   uint32
 	Id        BTFID
-	Name      Pointer
+	Name      TypedPointer[uint8]
 	NameLen   uint32
 	KernelBtf uint32
 }
@@ -725,7 +725,7 @@ type LinkInfo struct {
 type MapInfo struct {
 	structs.HostLayout
 	Type                  uint32
-	Id                    uint32
+	Id                    MapID
 	KeySize               uint32
 	ValueSize             uint32
 	MaxEntries            uint32
@@ -749,12 +749,12 @@ type ProgInfo struct {
 	Tag                  [8]uint8
 	JitedProgLen         uint32
 	XlatedProgLen        uint32
-	JitedProgInsns       Pointer
-	XlatedProgInsns      Pointer
+	JitedProgInsns       TypedPointer[uint8]
+	XlatedProgInsns      TypedPointer[uint8]
 	LoadTime             uint64
 	CreatedByUid         uint32
 	NrMapIds             uint32
-	MapIds               Pointer
+	MapIds               TypedPointer[MapID]
 	Name                 ObjName
 	Ifindex              uint32
 	_                    [4]byte /* unsupported bitfield */
@@ -762,15 +762,15 @@ type ProgInfo struct {
 	NetnsIno             uint64
 	NrJitedKsyms         uint32
 	NrJitedFuncLens      uint32
-	JitedKsyms           Pointer
-	JitedFuncLens        Pointer
+	JitedKsyms           TypedPointer[uint64]
+	JitedFuncLens        TypedPointer[uint32]
 	BtfId                BTFID
 	FuncInfoRecSize      uint32
-	FuncInfo             Pointer
+	FuncInfo             TypedPointer[uint8]
 	NrFuncInfo           uint32
 	NrLineInfo           uint32
-	LineInfo             Pointer
-	JitedLineInfo        Pointer
+	LineInfo             TypedPointer[uint8]
+	JitedLineInfo        TypedPointer[uint64]
 	NrJitedLineInfo      uint32
 	LineInfoRecSize      uint32
 	JitedLineInfoRecSize uint32
@@ -837,8 +837,8 @@ func BtfGetNextId(attr *BtfGetNextIdAttr) error {
 
 type BtfLoadAttr struct {
 	structs.HostLayout
-	Btf            Pointer
-	BtfLogBuf      Pointer
+	Btf            TypedPointer[uint8]
+	BtfLogBuf      TypedPointer[uint8]
 	BtfSize        uint32
 	BtfLogSize     uint32
 	BtfLogLevel    uint32
@@ -927,9 +927,9 @@ type LinkCreateKprobeMultiAttr struct {
 	Flags            uint32
 	KprobeMultiFlags uint32
 	Count            uint32
-	Syms             Pointer
-	Addrs            Pointer
-	Cookies          Pointer
+	Syms             StringSlicePointer
+	Addrs            TypedPointer[uintptr]
+	Cookies          TypedPointer[uint64]
 	_                [16]byte
 }
 
@@ -1046,10 +1046,10 @@ type LinkCreateUprobeMultiAttr struct {
 	TargetFd         uint32
 	AttachType       AttachType
 	Flags            uint32
-	Path             Pointer
-	Offsets          Pointer
-	RefCtrOffsets    Pointer
-	Cookies          Pointer
+	Path             StringPointer
+	Offsets          TypedPointer[uint64]
+	RefCtrOffsets    TypedPointer[uint64]
+	Cookies          TypedPointer[uint64]
 	Count            uint32
 	UprobeMultiFlags uint32
 	Pid              uint32
@@ -1302,7 +1302,7 @@ func MapUpdateElem(attr *MapUpdateElemAttr) error {
 
 type ObjGetAttr struct {
 	structs.HostLayout
-	Pathname  Pointer
+	Pathname  StringPointer
 	BpfFd     uint32
 	FileFlags uint32
 	PathFd    int32
@@ -1331,7 +1331,7 @@ func ObjGetInfoByFd(attr *ObjGetInfoByFdAttr) error {
 
 type ObjPinAttr struct {
 	structs.HostLayout
-	Pathname  Pointer
+	Pathname  StringPointer
 	BpfFd     uint32
 	FileFlags uint32
 	PathFd    int32
@@ -1415,11 +1415,11 @@ type ProgLoadAttr struct {
 	structs.HostLayout
 	ProgType           ProgType
 	InsnCnt            uint32
-	Insns              Pointer
-	License            Pointer
+	Insns              TypedPointer[uint8]
+	License            StringPointer
 	LogLevel           LogLevel
 	LogSize            uint32
-	LogBuf             Pointer
+	LogBuf             TypedPointer[uint8]
 	KernVersion        uint32
 	ProgFlags          uint32
 	ProgName           ObjName
@@ -1427,16 +1427,16 @@ type ProgLoadAttr struct {
 	ExpectedAttachType AttachType
 	ProgBtfFd          uint32
 	FuncInfoRecSize    uint32
-	FuncInfo           Pointer
+	FuncInfo           TypedPointer[uint8]
 	FuncInfoCnt        uint32
 	LineInfoRecSize    uint32
-	LineInfo           Pointer
+	LineInfo           TypedPointer[uint8]
 	LineInfoCnt        uint32
 	AttachBtfId        TypeID
 	AttachBtfObjFd     uint32
 	CoreReloCnt        uint32
-	FdArray            Pointer
-	CoreRelos          Pointer
+	FdArray            TypedPointer[int32]
+	CoreRelos          TypedPointer[uint8]
 	CoreReloRecSize    uint32
 	LogTrueSize        uint32
 	ProgTokenFd        int32
@@ -1457,12 +1457,12 @@ type ProgQueryAttr struct {
 	AttachType        AttachType
 	QueryFlags        uint32
 	AttachFlags       uint32
-	ProgIds           Pointer
+	ProgIds           TypedPointer[ProgramID]
 	Count             uint32
 	_                 [4]byte
-	ProgAttachFlags   Pointer
-	LinkIds           Pointer
-	LinkAttachFlags   Pointer
+	ProgAttachFlags   TypedPointer[ProgramID]
+	LinkIds           TypedPointer[LinkID]
+	LinkAttachFlags   TypedPointer[LinkID]
 	Revision          uint64
 }
 
@@ -1477,14 +1477,14 @@ type ProgRunAttr struct {
 	Retval      uint32
 	DataSizeIn  uint32
 	DataSizeOut uint32
-	DataIn      Pointer
-	DataOut     Pointer
+	DataIn      TypedPointer[uint8]
+	DataOut     TypedPointer[uint8]
 	Repeat      uint32
 	Duration    uint32
 	CtxSizeIn   uint32
 	CtxSizeOut  uint32
-	CtxIn       Pointer
-	CtxOut      Pointer
+	CtxIn       TypedPointer[uint8]
+	CtxOut      TypedPointer[uint8]
 	Flags       uint32
 	Cpu         uint32
 	BatchSize   uint32
@@ -1498,7 +1498,7 @@ func ProgRun(attr *ProgRunAttr) error {
 
 type RawTracepointOpenAttr struct {
 	structs.HostLayout
-	Name   Pointer
+	Name   StringPointer
 	ProgFd uint32
 	_      [4]byte
 	Cookie uint64
@@ -1529,7 +1529,7 @@ type IterLinkInfo struct {
 	Id            LinkID
 	ProgId        uint32
 	_             [4]byte
-	TargetName    Pointer
+	TargetName    TypedPointer[uint8]
 	TargetNameLen uint32
 }
 
@@ -1541,7 +1541,7 @@ type KprobeLinkInfo struct {
 	_             [4]byte
 	PerfEventType PerfEventType
 	_             [4]byte
-	FuncName      Pointer
+	FuncName      TypedPointer[uint8]
 	NameLen       uint32
 	Offset        uint32
 	Addr          uint64
@@ -1555,11 +1555,11 @@ type KprobeMultiLinkInfo struct {
 	Id      LinkID
 	ProgId  uint32
 	_       [4]byte
-	Addrs   Pointer
+	Addrs   TypedPointer[uint64]
 	Count   uint32
 	Flags   uint32
 	Missed  uint64
-	Cookies uint64
+	Cookies TypedPointer[uint64]
 	_       [16]byte
 }
 
@@ -1613,7 +1613,7 @@ type RawTracepointLinkInfo struct {
 	Id        LinkID
 	ProgId    uint32
 	_         [4]byte
-	TpName    Pointer
+	TpName    TypedPointer[uint8]
 	TpNameLen uint32
 	_         [36]byte
 }

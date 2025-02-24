@@ -23,6 +23,6 @@ func TestUnsafeBuffer(t *testing.T) {
 	buf := sysenc.UnsafeBuffer(ptr)
 
 	qt.Assert(t, qt.Equals(buf.CopyTo(make([]byte, 1)), 0))
-	qt.Assert(t, qt.Equals(buf.Pointer(), sys.NewPointer(ptr)))
+	qt.Assert(t, qt.Equals(buf.Pointer(), sys.UnsafePointer(ptr)))
 	qt.Assert(t, qt.IsNil(buf.Unmarshal(new(uint16))))
 }

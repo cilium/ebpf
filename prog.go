@@ -10,7 +10,6 @@ import (
 	"runtime"
 	"strings"
 	"time"
-	"unsafe"
 
 	"github.com/cilium/ebpf/asm"
 	"github.com/cilium/ebpf/btf"
@@ -38,7 +37,7 @@ var errBadRelocation = errors.New("bad CO-RE relocation")
 var errUnknownKfunc = errors.New("unknown kfunc")
 
 // ProgramID represents the unique ID of an eBPF program.
-type ProgramID uint32
+type ProgramID = sys.ProgramID
 
 const (
 	// Number of bytes to pad the output buffer for BPF_PROG_TEST_RUN.
@@ -333,11 +332,11 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions) (*Program, er
 
 		attr.FuncInfoRecSize = btf.FuncInfoSize
 		attr.FuncInfoCnt = uint32(len(fib)) / btf.FuncInfoSize
-		attr.FuncInfo = sys.NewSlicePointer(fib)
+		attr.FuncInfo = sys.SlicePointer(fib)
 
 		attr.LineInfoRecSize = btf.LineInfoSize
 		attr.LineInfoCnt = uint32(len(lib)) / btf.LineInfoSize
-		attr.LineInfo = sys.NewSlicePointer(lib)
+		attr.LineInfo = sys.SlicePointer(lib)
 	}
 
 	if !b.Empty() {
@@ -372,7 +371,7 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions) (*Program, er
 
 	if len(handles) > 0 {
 		fdArray := handles.fdArray()
-		attr.FdArray = sys.NewPointer(unsafe.Pointer(&fdArray[0]))
+		attr.FdArray = sys.SlicePointer(fdArray)
 	}
 
 	buf := bytes.NewBuffer(make([]byte, 0, insns.Size()))
@@ -382,7 +381,7 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions) (*Program, er
 	}
 
 	bytecode := buf.Bytes()
-	attr.Insns = sys.NewSlicePointer(bytecode)
+	attr.Insns = sys.SlicePointer(bytecode)
 	attr.InsnCnt = uint32(len(bytecode) / asm.InstructionSize)
 
 	if spec.AttachTarget != nil {
@@ -417,7 +416,7 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions) (*Program, er
 		logBuf = make([]byte, logSize)
 		attr.LogLevel = opts.LogLevel
 		attr.LogSize = uint32(len(logBuf))
-		attr.LogBuf = sys.NewSlicePointer(logBuf)
+		attr.LogBuf = sys.SlicePointer(logBuf)
 	}
 
 	for {
@@ -461,7 +460,7 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions) (*Program, er
 
 		logBuf = make([]byte, logSize)
 		attr.LogSize = logSize
-		attr.LogBuf = sys.NewSlicePointer(logBuf)
+		attr.LogBuf = sys.SlicePointer(logBuf)
 	}
 
 	end := bytes.IndexByte(logBuf, 0)
@@ -778,7 +777,7 @@ var haveProgRun = internal.NewFeatureTest("BPF_PROG_RUN", func() error {
 	attr := sys.ProgRunAttr{
 		ProgFd:     uint32(prog.FD()),
 		DataSizeIn: uint32(len(in)),
-		DataIn:     sys.NewSlicePointer(in),
+		DataIn:     sys.SlicePointer(in),
 	}
 
 	err = sys.ProgRun(&attr)
@@ -829,13 +828,13 @@ func (p *Program) run(opts *RunOptions) (uint32, time.Duration, error) {
 		ProgFd:      p.fd.Uint(),
 		DataSizeIn:  uint32(len(opts.Data)),
 		DataSizeOut: uint32(len(opts.DataOut)),
-		DataIn:      sys.NewSlicePointer(opts.Data),
-		DataOut:     sys.NewSlicePointer(opts.DataOut),
+		DataIn:      sys.SlicePointer(opts.Data),
+		DataOut:     sys.SlicePointer(opts.DataOut),
 		Repeat:      uint32(opts.Repeat),
 		CtxSizeIn:   uint32(len(ctxBytes)),
 		CtxSizeOut:  uint32(len(ctxOut)),
-		CtxIn:       sys.NewSlicePointer(ctxBytes),
-		CtxOut:      sys.NewSlicePointer(ctxOut),
+		CtxIn:       sys.SlicePointer(ctxBytes),
+		CtxOut:      sys.SlicePointer(ctxOut),
 		Flags:       opts.Flags,
 		Cpu:         opts.CPU,
 	}

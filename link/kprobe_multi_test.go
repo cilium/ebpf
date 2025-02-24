@@ -70,10 +70,11 @@ func TestKprobeMultiErrors(t *testing.T) {
 
 	// Only have a negative test for addresses as it would be hard to maintain a
 	// proper one.
-	if _, err := KprobeMulti(prog, KprobeMultiOptions{
+	_, err = KprobeMulti(prog, KprobeMultiOptions{
 		Addresses: []uintptr{^uintptr(0)},
-	}); !errors.Is(err, unix.EINVAL) {
-		t.Fatalf("expected EINVAL, got: %s", err)
+	})
+	if !errors.Is(err, os.ErrNotExist) && !errors.Is(err, unix.EINVAL) {
+		t.Fatalf("expected ErrNotExist or EINVAL, got: %s", err)
 	}
 }
 

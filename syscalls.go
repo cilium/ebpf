@@ -28,7 +28,14 @@ var (
 // invalidBPFObjNameChar returns true if char may not appear in
 // a BPF object name.
 func invalidBPFObjNameChar(char rune) bool {
-	dotAllowed := objNameAllowsDot() == nil
+	var dotAllowed bool
+	if runtime.GOOS == "js" {
+		// In Javascript environments, BPF objects are not going to be
+		// loaded to a kernel, so we can use dots without testing.
+		dotAllowed = true
+	} else {
+		dotAllowed = objNameAllowsDot() == nil
+	}
 
 	switch {
 	case char >= 'A' && char <= 'Z':

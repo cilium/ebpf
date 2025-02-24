@@ -56,7 +56,7 @@ func progLoad(insns asm.Instructions, typ ProgramType, license string) (*sys.FD,
 	return sys.ProgLoad(&sys.ProgLoadAttr{
 		ProgType: sys.ProgType(typ),
 		License:  sys.NewStringPointer(license),
-		Insns:    sys.NewSlicePointer(bytecode),
+		Insns:    sys.SlicePointer(bytecode),
 		InsnCnt:  uint32(len(bytecode) / asm.InstructionSize),
 	})
 }
@@ -337,7 +337,7 @@ var haveProgramExtInfos = internal.NewFeatureTest("program ext_infos", func() er
 	_, err := sys.ProgLoad(&sys.ProgLoadAttr{
 		ProgType:    sys.ProgType(SocketFilter),
 		License:     sys.NewStringPointer("MIT"),
-		Insns:       sys.NewSlicePointer(bytecode),
+		Insns:       sys.SlicePointer(bytecode),
 		InsnCnt:     uint32(len(bytecode) / asm.InstructionSize),
 		FuncInfoCnt: 1,
 		ProgBtfFd:   math.MaxUint32,

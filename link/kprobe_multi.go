@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"unsafe"
 
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/asm"
@@ -108,11 +107,11 @@ func kprobeMulti(prog *ebpf.Program, opts KprobeMultiOptions, flags uint32) (Lin
 
 	case addrs != 0:
 		attr.Count = addrs
-		attr.Addrs = sys.NewPointer(unsafe.Pointer(&opts.Addresses[0]))
+		attr.Addrs = sys.SlicePointer(opts.Addresses)
 	}
 
 	if cookies != 0 {
-		attr.Cookies = sys.NewPointer(unsafe.Pointer(&opts.Cookies[0]))
+		attr.Cookies = sys.SlicePointer(opts.Cookies)
 	}
 
 	fd, err := sys.LinkCreateKprobeMulti(attr)

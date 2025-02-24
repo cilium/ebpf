@@ -42,7 +42,7 @@ func AttachIter(opts IterOptions) (*Iter, error) {
 	attr := sys.LinkCreateIterAttr{
 		ProgFd:      uint32(progFd),
 		AttachType:  sys.AttachType(ebpf.AttachTraceIter),
-		IterInfo:    sys.NewPointer(unsafe.Pointer(&info)),
+		IterInfo:    sys.UnsafePointer(unsafe.Pointer(&info)),
 		IterInfoLen: uint32(unsafe.Sizeof(info)),
 	}
 

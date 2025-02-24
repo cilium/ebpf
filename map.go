@@ -45,7 +45,7 @@ type MapOptions struct {
 }
 
 // MapID represents the unique ID of an eBPF map
-type MapID uint32
+type MapID = sys.MapID
 
 // MapSpec defines a Map.
 type MapSpec struct {
@@ -739,7 +739,7 @@ func (m *Map) LookupAndDeleteWithFlags(key, valueOut interface{}, flags MapLooku
 // Returns a nil value if a key doesn't exist.
 func (m *Map) LookupBytes(key interface{}) ([]byte, error) {
 	valueBytes := make([]byte, m.fullValueSize)
-	valuePtr := sys.NewSlicePointer(valueBytes)
+	valuePtr := sys.UnsafeSlicePointer(valueBytes)
 
 	err := m.lookup(key, valuePtr, 0)
 	if errors.Is(err, ErrKeyNotExist) {
@@ -755,7 +755,7 @@ func (m *Map) lookupPerCPU(key, valueOut any, flags MapLookupFlags) error {
 		return err
 	}
 	valueBytes := make([]byte, m.fullValueSize)
-	if err := m.lookup(key, sys.NewSlicePointer(valueBytes), flags); err != nil {
+	if err := m.lookup(key, sys.UnsafeSlicePointer(valueBytes), flags); err != nil {
 		return err
 	}
 	return unmarshalPerCPUValue(slice, int(m.valueSize), valueBytes)
@@ -789,7 +789,7 @@ func (m *Map) lookupAndDeletePerCPU(key, valueOut any, flags MapLookupFlags) err
 		return err
 	}
 	valueBytes := make([]byte, m.fullValueSize)
-	if err := m.lookupAndDelete(key, sys.NewSlicePointer(valueBytes), flags); err != nil {
+	if err := m.lookupAndDelete(key, sys.UnsafeSlicePointer(valueBytes), flags); err != nil {
 		return err
 	}
 	return unmarshalPerCPUValue(slice, int(m.valueSize), valueBytes)
@@ -966,7 +966,7 @@ func (m *Map) NextKey(key, nextKeyOut interface{}) error {
 // Returns nil if there are no more keys.
 func (m *Map) NextKeyBytes(key interface{}) ([]byte, error) {
 	nextKey := make([]byte, m.keySize)
-	nextKeyPtr := sys.NewSlicePointer(nextKey)
+	nextKeyPtr := sys.UnsafeSlicePointer(nextKey)
 
 	err := m.nextKey(key, nextKeyPtr)
 	if errors.Is(err, ErrKeyNotExist) {
@@ -1006,7 +1006,7 @@ func (m *Map) nextKey(key interface{}, nextKeyOut sys.Pointer) error {
 			}
 
 			// Retry the syscall with a valid non-existing key.
-			attr.Key = sys.NewSlicePointer(guessKey)
+			attr.Key = sys.UnsafeSlicePointer(guessKey)
 			if err = sys.MapGetNextKey(&attr); err == nil {
 				return nil
 			}
@@ -1032,7 +1032,7 @@ func (m *Map) guessNonExistentKey() ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	valuePtr := sys.NewSlicePointer(page)
+	valuePtr := sys.UnsafeSlicePointer(page)
 
 	randKey := make([]byte, int(m.keySize))
 
@@ -1159,7 +1159,7 @@ func (m *Map) batchLookupPerCPU(cmd sys.Cmd, cursor *MapBatchCursor, keysOut, va
 	}
 
 	valueBuf := make([]byte, count*int(m.fullValueSize))
-	valuePtr := sys.NewSlicePointer(valueBuf)
+	valuePtr := sys.UnsafeSlicePointer(valueBuf)
 
 	n, sysErr := m.batchLookupCmd(cmd, cursor, count, keysOut, valuePtr, opts)
 	if sysErr != nil && !errors.Is(sysErr, unix.ENOENT) {
@@ -1211,8 +1211,8 @@ func (m *Map) batchLookupCmd(cmd sys.Cmd, cursor *MapBatchCursor, count int, key
 		Keys:     keyBuf.Pointer(),
 		Values:   valuePtr,
 		Count:    uint32(count),
-		InBatch:  sys.NewSlicePointer(inBatch),
-		OutBatch: sys.NewSlicePointer(cursor.opaque),
+		InBatch:  sys.UnsafeSlicePointer(inBatch),
+		OutBatch: sys.UnsafeSlicePointer(cursor.opaque),
 	}
 
 	if opts != nil {
@@ -1294,7 +1294,7 @@ func (m *Map) batchUpdatePerCPU(keys, values any, opts *BatchOptions) (int, erro
 		return 0, err
 	}
 
-	return m.batchUpdate(count, keys, sys.NewSlicePointer(valueBuf), opts)
+	return m.batchUpdate(count, keys, sys.UnsafeSlicePointer(valueBuf), opts)
 }
 
 // BatchDelete batch deletes entries in the map by keys.
@@ -1483,7 +1483,7 @@ func (m *Map) marshalKey(data interface{}) (sys.Pointer, error) {
 	if data == nil {
 		if m.keySize == 0 {
 			// Queues have a key length of zero, so passing nil here is valid.
-			return sys.NewPointer(nil), nil
+			return sys.UnsafePointer(nil), nil
 		}
 		return sys.Pointer{}, errors.New("can't use nil as key of map")
 	}
@@ -1518,7 +1518,7 @@ func (m *Map) marshalValue(data interface{}) (sys.Pointer, error) {
 		return sys.Pointer{}, err
 	}
 
-	return sys.NewSlicePointer(buf), nil
+	return sys.UnsafeSlicePointer(buf), nil
 }
 
 func (m *Map) unmarshalValue(value any, buf sysenc.Buffer) error {

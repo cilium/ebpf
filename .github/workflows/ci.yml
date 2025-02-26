@@ -171,7 +171,7 @@ jobs:
         env:
           GOTRACEBACK: crash
         run: |
-          gotestsum --ignore-non-json-output-lines --junitfile junit.xml -- -exec 'sudo -E' -timeout 5m -short -race -count 1 -json ./...
+          go test -exec 'sudo -E' -timeout 5m -short -race -count 1 -json ./...
 
       - name: Upload coredumps
         uses: actions/upload-artifact@v4

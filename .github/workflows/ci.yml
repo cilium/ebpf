@@ -34,7 +34,7 @@ jobs:
           go-version: '${{ env.go_version }}'
 
       - name: Run golangci-lint
-        uses: golangci/golangci-lint-action@v6.3.0
+        uses: golangci/golangci-lint-action@v6.5.0
         with:
           args: "--out-format colored-line-number"
 

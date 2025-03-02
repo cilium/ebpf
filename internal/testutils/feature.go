@@ -5,6 +5,7 @@ import (
 	"os"
 	"runtime"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/cilium/ebpf/internal"
@@ -170,4 +171,44 @@ func ignoreVersionCheck(tName string) bool {
 		}
 	}
 	return false
+}
+
+var featureTestOverride sync.Mutex
+
+// DisableFeatureTests causes the execution of a feature test to fail the unit test.
+//
+// This must not be called concurrently.
+//
+// The returned function may be called to re-enable feature tests before the
+// end of the test.
+func DisableFeatureTests(tb testing.TB) func() {
+	tb.Helper()
+
+	featureTestOverride.Lock()
+	defer featureTestOverride.Unlock()
+
+	if internal.FeatureTestOverride != nil {
+		tb.Fatal("There is already a feature test override in place")
+	}
+
+	internal.FeatureTestOverride = func(name string) error {
+		tb.Fatalf("Probe for %q executed while feature tests are disabled", name)
+		return errors.New("feature tests are disabled")
+	}
+
+	cleaned := false
+	cleanup := func() {
+		if cleaned {
+			return
+		}
+
+		featureTestOverride.Lock()
+		defer featureTestOverride.Unlock()
+
+		cleaned = true
+		internal.FeatureTestOverride = nil
+	}
+	tb.Cleanup(cleanup)
+
+	return cleanup
 }

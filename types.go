@@ -1,6 +1,7 @@
 package ebpf
 
 import (
+	"github.com/cilium/ebpf/internal/platform"
 	"github.com/cilium/ebpf/internal/sys"
 )
 
@@ -12,7 +13,7 @@ type MapType uint32
 
 // All the various map types that can be created
 const (
-	UnspecifiedMap MapType = iota
+	UnspecifiedMap MapType = MapType(platform.LinuxTag | iota)
 	// Hash is a hash map
 	Hash
 	// Array is an array map
@@ -104,6 +105,13 @@ const (
 	Arena
 )
 
+// MapTypeForPlatform returns a platform specific map type.
+//
+// Use this if the library doesn't provide a constant yet.
+func MapTypeForPlatform(plat string, typ uint32) (MapType, error) {
+	return platform.EncodeConstant[MapType](plat, typ)
+}
+
 // hasPerCPUValue returns true if the Map stores a value per CPU.
 func (mt MapType) hasPerCPUValue() bool {
 	return mt == PerCPUHash || mt == PerCPUArray || mt == LRUCPUHash || mt == PerCPUCGroupStorage
@@ -145,7 +153,7 @@ func (mt MapType) canHaveValueSize() bool {
 // ProgramType of the eBPF program
 type ProgramType uint32
 
-// eBPF program types
+// eBPF program types (Linux).
 const (
 	UnspecifiedProgram    = ProgramType(sys.BPF_PROG_TYPE_UNSPEC)
 	SocketFilter          = ProgramType(sys.BPF_PROG_TYPE_SOCKET_FILTER)
@@ -181,6 +189,13 @@ const (
 	Syscall               = ProgramType(sys.BPF_PROG_TYPE_SYSCALL)
 	Netfilter             = ProgramType(sys.BPF_PROG_TYPE_NETFILTER)
 )
+
+// ProgramTypeForPlatform returns a platform specific program type.
+//
+// Use this if the library doesn't provide a constant yet.
+func ProgramTypeForPlatform(plat string, value uint32) (ProgramType, error) {
+	return platform.EncodeConstant[ProgramType](plat, value)
+}
 
 // AttachType of the eBPF program, needed to differentiate allowed context accesses in
 // some newer program types like CGroupSockAddr. Should be set to AttachNone if not required.
@@ -251,6 +266,13 @@ const (
 	AttachNetkitPrimary              = AttachType(sys.BPF_NETKIT_PRIMARY)
 	AttachNetkitPeer                 = AttachType(sys.BPF_NETKIT_PEER)
 )
+
+// AttachTypeForPlatform returns a platform specific attach type.
+//
+// Use this if the library doesn't provide a constant yet.
+func AttachTypeForPlatform(plat string, value uint32) (AttachType, error) {
+	return platform.EncodeConstant[AttachType](plat, value)
+}
 
 // AttachFlags of the eBPF program used in BPF_PROG_ATTACH command
 type AttachFlags uint32

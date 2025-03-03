@@ -9,7 +9,7 @@ env:
   TMPDIR: /tmp
   CI_MAX_KERNEL_VERSION: '6.11'
   CI_MAX_EFW_VERSION: '0.20.0'
-  CI_MIN_CLANG_VERSION: '11'
+  CI_MIN_CLANG_VERSION: '13'
   go_version: '~1.24'
   prev_go_version: '~1.23'
   CGO_ENABLED: '0'
@@ -48,7 +48,6 @@ jobs:
 
       - name: Test bpf2go
         run: |
-          sudo apt-get install clang-11 llvm-11
           go test -v ./cmd/bpf2go
 
       - name: Build examples

@@ -105,48 +105,48 @@ func TestProgramInfo(t *testing.T) {
 	qt.Assert(t, qt.IsTrue(ok))
 	qt.Assert(t, qt.Not(qt.Equals(id, 0)))
 
-	if testutils.IsKernelLessThan(t, "4.15") {
+	if testutils.IsVersionLessThan(t, "4.15") {
 		qt.Assert(t, qt.Equals(info.Name, ""))
 	} else {
 		qt.Assert(t, qt.Equals(info.Name, "test"))
 	}
 
-	if jitedSize, err := info.JitedSize(); testutils.IsKernelLessThan(t, "4.13") {
+	if jitedSize, err := info.JitedSize(); testutils.IsVersionLessThan(t, "4.13") {
 		qt.Assert(t, qt.IsNotNil(err))
 	} else {
 		qt.Assert(t, qt.IsNil(err))
 		qt.Assert(t, qt.IsTrue(jitedSize > 0))
 	}
 
-	if xlatedSize, err := info.TranslatedSize(); testutils.IsKernelLessThan(t, "4.13") {
+	if xlatedSize, err := info.TranslatedSize(); testutils.IsVersionLessThan(t, "4.13") {
 		qt.Assert(t, qt.IsNotNil(err))
 	} else {
 		qt.Assert(t, qt.IsNil(err))
 		qt.Assert(t, qt.IsTrue(xlatedSize > 0))
 	}
 
-	if uid, ok := info.CreatedByUID(); testutils.IsKernelLessThan(t, "4.15") {
+	if uid, ok := info.CreatedByUID(); testutils.IsVersionLessThan(t, "4.15") {
 		qt.Assert(t, qt.IsFalse(ok))
 	} else {
 		qt.Assert(t, qt.IsTrue(ok))
 		qt.Assert(t, qt.Equals(uid, uint32(os.Getuid())))
 	}
 
-	if loadTime, ok := info.LoadTime(); testutils.IsKernelLessThan(t, "4.15") {
+	if loadTime, ok := info.LoadTime(); testutils.IsVersionLessThan(t, "4.15") {
 		qt.Assert(t, qt.IsFalse(ok))
 	} else {
 		qt.Assert(t, qt.IsTrue(ok))
 		qt.Assert(t, qt.IsTrue(loadTime > 0))
 	}
 
-	if verifiedInsns, ok := info.VerifiedInstructions(); testutils.IsKernelLessThan(t, "5.16") {
+	if verifiedInsns, ok := info.VerifiedInstructions(); testutils.IsVersionLessThan(t, "5.16") {
 		qt.Assert(t, qt.IsFalse(ok))
 	} else {
 		qt.Assert(t, qt.IsTrue(ok))
 		qt.Assert(t, qt.IsTrue(verifiedInsns > 0))
 	}
 
-	if insns, ok := info.JitedInsns(); testutils.IsKernelLessThan(t, "4.13") {
+	if insns, ok := info.JitedInsns(); testutils.IsVersionLessThan(t, "4.13") {
 		qt.Assert(t, qt.IsFalse(ok))
 	} else {
 		qt.Assert(t, qt.IsTrue(ok))
@@ -175,28 +175,28 @@ func TestProgramInfoBTF(t *testing.T) {
 
 	// On kernels before 5.x, nr_jited_ksyms is not set for programs without subprogs.
 	// It's included here since this test uses a bpf program with subprogs.
-	if addrs, ok := info.JitedKsymAddrs(); testutils.IsKernelLessThan(t, "4.18") {
+	if addrs, ok := info.JitedKsymAddrs(); testutils.IsVersionLessThan(t, "4.18") {
 		qt.Assert(t, qt.IsFalse(ok))
 	} else {
 		qt.Assert(t, qt.IsTrue(ok))
 		qt.Assert(t, qt.IsTrue(len(addrs) > 0))
 	}
 
-	if lens, ok := info.JitedFuncLens(); testutils.IsKernelLessThan(t, "4.18") {
+	if lens, ok := info.JitedFuncLens(); testutils.IsVersionLessThan(t, "4.18") {
 		qt.Assert(t, qt.IsFalse(ok))
 	} else {
 		qt.Assert(t, qt.IsTrue(ok))
 		qt.Assert(t, qt.IsTrue(len(lens) > 0))
 	}
 
-	if infos, ok := info.JitedLineInfos(); testutils.IsKernelLessThan(t, "5.0") {
+	if infos, ok := info.JitedLineInfos(); testutils.IsVersionLessThan(t, "5.0") {
 		qt.Assert(t, qt.IsFalse(ok))
 	} else {
 		qt.Assert(t, qt.IsTrue(ok))
 		qt.Assert(t, qt.IsTrue(len(infos) > 0))
 	}
 
-	if funcs, err := info.FuncInfos(); testutils.IsKernelLessThan(t, "5.0") {
+	if funcs, err := info.FuncInfos(); testutils.IsVersionLessThan(t, "5.0") {
 		qt.Assert(t, qt.IsNotNil(err))
 	} else {
 		qt.Assert(t, qt.IsNil(err))
@@ -205,7 +205,7 @@ func TestProgramInfoBTF(t *testing.T) {
 		qt.Assert(t, qt.ContentEquals(funcs[1].Func, btfFn))
 	}
 
-	if lines, err := info.LineInfos(); testutils.IsKernelLessThan(t, "5.0") {
+	if lines, err := info.LineInfos(); testutils.IsVersionLessThan(t, "5.0") {
 		qt.Assert(t, qt.IsNotNil(err))
 	} else {
 		qt.Assert(t, qt.IsNil(err))
@@ -234,7 +234,7 @@ func TestProgramInfoMapIDs(t *testing.T) {
 
 	ids, ok := info.MapIDs()
 	switch {
-	case testutils.IsKernelLessThan(t, "4.15"):
+	case testutils.IsVersionLessThan(t, "4.15"):
 		qt.Assert(t, qt.IsFalse(ok))
 		qt.Assert(t, qt.HasLen(ids, 0))
 
@@ -259,7 +259,7 @@ func TestProgramInfoMapIDsNoMaps(t *testing.T) {
 
 	ids, ok := info.MapIDs()
 	switch {
-	case testutils.IsKernelLessThan(t, "4.15"):
+	case testutils.IsVersionLessThan(t, "4.15"):
 		qt.Assert(t, qt.IsFalse(ok))
 		qt.Assert(t, qt.HasLen(ids, 0))
 

@@ -240,6 +240,7 @@ jobs:
       GOMODCACHE: D:\gomodcache
       # Avoid putting temp on slow C:
       TEMP: D:\temp
+      CI_EFW_VERSION: "0.20.0"
 
     steps:
       - run: mkdir D:\temp

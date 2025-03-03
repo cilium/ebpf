@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"runtime"
-	"strings"
 	"sync"
 
 	"github.com/cilium/ebpf/internal/platform"
@@ -76,38 +75,23 @@ type FeatureTestFn func() error
 // Linux. Returns [ErrNotSupportedOnOS] if there is no version specified for the
 // current OS.
 func NewFeatureTest(name string, fn FeatureTestFn, versions ...string) func() error {
-	const nativePrefix = runtime.GOOS + ":"
-
-	if len(versions) == 0 {
-		return func() error {
-			return fmt.Errorf("feature test %q: no versions specified", name)
-		}
+	version, err := platform.SelectVersion(versions)
+	if err != nil {
+		return func() error { return err }
 	}
 
-	ft := &FeatureTest{
-		Name: name,
-		Fn:   fn,
-	}
-
-	for _, version := range versions {
-		if strings.HasPrefix(version, nativePrefix) {
-			ft.Version = strings.TrimPrefix(version, nativePrefix)
-			break
-		}
-
-		if platform.IsLinux && !strings.ContainsRune(version, ':') {
-			// Allow version numbers without a GOOS prefix on Linux.
-			ft.Version = version
-			break
-		}
-	}
-
-	if ft.Version == "" {
+	if version == "" {
 		return func() error {
 			// We don't return an UnsupportedFeatureError here, since that will
 			// trigger version checks which don't make sense.
 			return fmt.Errorf("%s: %w", name, ErrNotSupportedOnOS)
 		}
+	}
+
+	ft := &FeatureTest{
+		Name:    name,
+		Version: version,
+		Fn:      fn,
 	}
 
 	return ft.execute

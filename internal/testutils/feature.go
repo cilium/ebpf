@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/go-quicktest/qt"
+
 	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/platform"
 )
@@ -104,25 +106,27 @@ func SkipOnOldKernel(tb testing.TB, minVersion, feature string) {
 		return
 	}
 
-	if IsKernelLessThan(tb, minVersion) {
+	if IsVersionLessThan(tb, minVersion) {
 		tb.Skipf("Test requires at least kernel %s (due to missing %s)", minVersion, feature)
 	}
 }
 
-// Check whether the running Linux version is smaller than a specific version.
-//
-// Warning: this function always returns false on platforms other than Linux.
-func IsKernelLessThan(tb testing.TB, minVersion string) bool {
+// Check whether the current runtime version is less than some minimum.
+func IsVersionLessThan(tb testing.TB, minVersions ...string) bool {
 	tb.Helper()
 
-	if !platform.IsLinux {
-		tb.Logf("Ignoring version constraint %s on %s", minVersion, runtime.GOOS)
-		return false
+	version, err := platform.SelectVersion(minVersions)
+	qt.Assert(tb, qt.IsNil(err))
+
+	if version == "" {
+		// No matching version means that the platform
+		// doesn't support whatever feature.
+		return true
 	}
 
-	minv, err := internal.NewVersion(minVersion)
+	minv, err := internal.NewVersion(version)
 	if err != nil {
-		tb.Fatalf("Invalid version %s: %s", minVersion, err)
+		tb.Fatalf("Invalid version %s: %s", version, err)
 	}
 
 	return isPlatformVersionLessThan(tb, minv, platformVersion(tb))

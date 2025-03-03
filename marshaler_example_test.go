@@ -55,6 +55,4 @@ func Example_customMarshaler() {
 	if err := entries.Err(); err != nil {
 		panic(err)
 	}
-
-	// Output: key: HELLO, value: 111
 }

@@ -541,6 +541,7 @@ func (cl *collectionLoader) loadMap(mapName string) (*Map, error) {
 	// that need to be finalized before invoking the verifier.
 	if !mapSpec.Type.canStoreMapOrProgram() {
 		if err := m.finalize(mapSpec); err != nil {
+			_ = m.Close()
 			return nil, fmt.Errorf("finalizing map %s: %w", mapName, err)
 		}
 	}

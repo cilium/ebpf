@@ -16,19 +16,16 @@ import (
 func mustMmapableArray(tb testing.TB, extraFlags uint32) *Map {
 	tb.Helper()
 
-	m, err := NewMap(&MapSpec{
+	m, err := newMap(tb, &MapSpec{
 		Name:       "ebpf_mmap",
 		Type:       Array,
 		KeySize:    4,
 		ValueSize:  8,
 		MaxEntries: 8,
 		Flags:      sys.BPF_F_MMAPABLE | extraFlags,
-	})
+	}, nil)
 	testutils.SkipIfNotSupported(tb, err)
 	qt.Assert(tb, qt.IsNil(err))
-	tb.Cleanup(func() {
-		m.Close()
-	})
 	return m
 }
 

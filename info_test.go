@@ -43,21 +43,16 @@ var multiprogSpec = &ProgramSpec{
 }
 
 func TestMapInfoFromProc(t *testing.T) {
-	hash, err := NewMap(&MapSpec{
+	hash := mustNewMap(t, &MapSpec{
 		Type:       Hash,
 		KeySize:    4,
 		ValueSize:  5,
 		MaxEntries: 2,
 		Flags:      sys.BPF_F_NO_PREALLOC,
-	})
-	testutils.SkipIfNotSupported(t, err)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer hash.Close()
+	}, nil)
 
 	var info MapInfo
-	err = readMapInfoFromProc(hash.fd, &info)
+	err := readMapInfoFromProc(hash.fd, &info)
 	testutils.SkipIfNotSupported(t, err)
 
 	qt.Assert(t, qt.IsNil(err))
@@ -69,7 +64,7 @@ func TestMapInfoFromProc(t *testing.T) {
 }
 
 func TestMapInfoFromProcOuterMap(t *testing.T) {
-	outer, err := NewMap(&MapSpec{
+	outer := mustNewMap(t, &MapSpec{
 		Type:       ArrayOfMaps,
 		KeySize:    4,
 		MaxEntries: 2,
@@ -79,15 +74,10 @@ func TestMapInfoFromProcOuterMap(t *testing.T) {
 			ValueSize:  4,
 			MaxEntries: 2,
 		},
-	})
-	testutils.SkipIfNotSupported(t, err)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer outer.Close()
+	}, nil)
 
 	var info MapInfo
-	err = readMapInfoFromProc(outer.fd, &info)
+	err := readMapInfoFromProc(outer.fd, &info)
 	testutils.SkipIfNotSupported(t, err)
 
 	qt.Assert(t, qt.IsNil(err))
@@ -103,7 +93,7 @@ func validateProgInfo(t *testing.T, info *ProgramInfo) {
 }
 
 func TestProgramInfo(t *testing.T) {
-	prog := mustSocketFilter(t)
+	prog := createBasicProgram(t)
 
 	info, err := newProgramInfoFromFd(prog.fd)
 	testutils.SkipIfNotSupported(t, err)
@@ -165,7 +155,7 @@ func TestProgramInfo(t *testing.T) {
 }
 
 func TestProgramInfoProc(t *testing.T) {
-	prog := mustSocketFilter(t)
+	prog := createBasicProgram(t)
 
 	info, err := newProgramInfoFromProc(prog.fd)
 	testutils.SkipIfNotSupported(t, err)
@@ -175,10 +165,9 @@ func TestProgramInfoProc(t *testing.T) {
 }
 
 func TestProgramInfoBTF(t *testing.T) {
-	prog, err := NewProgram(multiprogSpec)
+	prog, err := newProgram(t, multiprogSpec, nil)
 	testutils.SkipIfNotSupported(t, err)
 	qt.Assert(t, qt.IsNil(err))
-	t.Cleanup(func() { prog.Close() })
 
 	info, err := prog.Info()
 	testutils.SkipIfNotSupported(t, err)
@@ -227,16 +216,9 @@ func TestProgramInfoBTF(t *testing.T) {
 }
 
 func TestProgramInfoMapIDs(t *testing.T) {
-	arr, err := NewMap(&MapSpec{
-		Type:       Array,
-		KeySize:    4,
-		ValueSize:  4,
-		MaxEntries: 1,
-	})
-	qt.Assert(t, qt.IsNil(err))
-	defer arr.Close()
+	arr := createMap(t, Array, 1)
 
-	prog, err := NewProgram(&ProgramSpec{
+	prog := mustNewProgram(t, &ProgramSpec{
 		Type: SocketFilter,
 		Instructions: asm.Instructions{
 			asm.LoadMapPtr(asm.R0, arr.FD()),
@@ -244,9 +226,7 @@ func TestProgramInfoMapIDs(t *testing.T) {
 			asm.Return(),
 		},
 		License: "MIT",
-	})
-	qt.Assert(t, qt.IsNil(err))
-	defer prog.Close()
+	}, nil)
 
 	info, err := prog.Info()
 	testutils.SkipIfNotSupported(t, err)
@@ -271,16 +251,7 @@ func TestProgramInfoMapIDs(t *testing.T) {
 }
 
 func TestProgramInfoMapIDsNoMaps(t *testing.T) {
-	prog, err := NewProgram(&ProgramSpec{
-		Type: SocketFilter,
-		Instructions: asm.Instructions{
-			asm.LoadImm(asm.R0, 0, asm.DWord),
-			asm.Return(),
-		},
-		License: "MIT",
-	})
-	qt.Assert(t, qt.IsNil(err))
-	defer prog.Close()
+	prog := createBasicProgram(t)
 
 	info, err := prog.Info()
 	testutils.SkipIfNotSupported(t, err)
@@ -328,7 +299,7 @@ func TestScanFdInfoReader(t *testing.T) {
 func TestStats(t *testing.T) {
 	testutils.SkipOnOldKernel(t, "5.8", "BPF_ENABLE_STATS")
 
-	prog := mustSocketFilter(t)
+	prog := createBasicProgram(t)
 
 	pi, err := prog.Info()
 	if err != nil {
@@ -368,7 +339,7 @@ func TestStats(t *testing.T) {
 func BenchmarkStats(b *testing.B) {
 	testutils.SkipOnOldKernel(b, "5.8", "BPF_ENABLE_STATS")
 
-	prog := mustSocketFilter(b)
+	prog := createBasicProgram(b)
 
 	for n := 0; n < b.N; n++ {
 		if err := testStats(prog); err != nil {

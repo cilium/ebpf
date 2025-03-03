@@ -250,9 +250,7 @@ func TestLoadCollectionSpec(t *testing.T) {
 		qt.Assert(t, qt.Equals(have.Maps["perf_event_array"].ValueSize, 0))
 		qt.Assert(t, qt.IsNotNil(have.Maps["perf_event_array"].Value))
 
-		if diff := cmp.Diff(coll, have, csCmpOpts); diff != "" {
-			t.Errorf("MapSpec mismatch (-want +got):\n%s", diff)
-		}
+		qt.Assert(t, qt.CmpEquals(have, coll, csCmpOpts))
 
 		if have.ByteOrder != internal.NativeEndian {
 			return

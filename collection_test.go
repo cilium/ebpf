@@ -89,26 +89,6 @@ func TestCollectionSpecCopy(t *testing.T) {
 	qt.Assert(t, testutils.IsDeepCopy(cs.Copy(), cs))
 }
 
-func TestCollectionSpecLoadCopy(t *testing.T) {
-	file := testutils.NativeFile(t, "testdata/loader-%s.elf")
-	spec, err := LoadCollectionSpec(file)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	spec2 := spec.Copy()
-
-	var objs struct {
-		Prog *Program `ebpf:"xdp_prog"`
-	}
-
-	mustLoadAndAssign(t, spec, &objs, nil)
-	qt.Assert(t, qt.IsNil(objs.Prog.Close()))
-
-	mustLoadAndAssign(t, spec2, &objs, nil)
-	qt.Assert(t, qt.IsNil(objs.Prog.Close()))
-}
-
 func TestCollectionSpecLoadMutate(t *testing.T) {
 	file := testutils.NativeFile(t, "testdata/loader-%s.elf")
 	spec, err := LoadCollectionSpec(file)

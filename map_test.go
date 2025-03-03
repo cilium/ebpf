@@ -804,7 +804,7 @@ func TestNewMapInMapFromFD(t *testing.T) {
 	nested := createMapInMap(t, ArrayOfMaps, Array)
 
 	// Do not copy this, use Clone instead.
-	another, err := NewMapFromFD(dupFD(t, nested.FD()))
+	another, err := NewMapFromFD(testutils.DupFD(t, nested.FD()))
 	if err != nil {
 		t.Fatal("Can't create a new nested map from an FD")
 	}
@@ -1388,7 +1388,7 @@ func TestMapFromFD(t *testing.T) {
 
 	// If you're thinking about copying this, don't. Use
 	// Clone() instead.
-	m2, err := NewMapFromFD(dupFD(t, m.FD()))
+	m2, err := NewMapFromFD(testutils.DupFD(t, m.FD()))
 	testutils.SkipIfNotSupported(t, err)
 	if err != nil {
 		t.Fatal(err)

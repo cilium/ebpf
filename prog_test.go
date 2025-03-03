@@ -592,7 +592,7 @@ func TestProgramFromFD(t *testing.T) {
 
 	// If you're thinking about copying this, don't. Use
 	// Clone() instead.
-	prog2, err := NewProgramFromFD(dupFD(t, prog.FD()))
+	prog2, err := NewProgramFromFD(testutils.DupFD(t, prog.FD()))
 	testutils.SkipIfNotSupported(t, err)
 	if err != nil {
 		t.Fatal(err)
@@ -1086,15 +1086,4 @@ func ExampleProgramSpec_Tag() {
 	} else {
 		fmt.Println("The programs are identical, tag is", tag)
 	}
-}
-
-func dupFD(tb testing.TB, fd int) int {
-	tb.Helper()
-
-	dup, err := unix.FcntlInt(uintptr(fd), unix.F_DUPFD_CLOEXEC, 1)
-	if err != nil {
-		tb.Fatal("Can't dup fd:", err)
-	}
-
-	return dup
 }

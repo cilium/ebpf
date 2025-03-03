@@ -7,7 +7,8 @@ import (
 )
 
 const (
-	Linux = "linux"
+	Linux   = "linux"
+	Windows = "windows"
 )
 
 const (

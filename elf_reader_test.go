@@ -15,6 +15,7 @@ import (
 	"github.com/cilium/ebpf/btf"
 	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/kallsyms"
+	"github.com/cilium/ebpf/internal/platform"
 	"github.com/cilium/ebpf/internal/sys"
 	"github.com/cilium/ebpf/internal/testutils"
 
@@ -927,10 +928,7 @@ func TestIPRoute2Compat(t *testing.T) {
 	coll.Close()
 }
 
-var (
-	elfPath    = flag.String("elfs", os.Getenv("CI_KERNEL_SELFTESTS"), "`Path` containing libbpf-compatible ELFs (defaults to $CI_KERNEL_SELFTESTS)")
-	elfPattern = flag.String("elf-pattern", "*.o", "Glob `pattern` for object files that should be tested")
-)
+var elfPath = flag.String("elfs", os.Getenv("CI_KERNEL_SELFTESTS"), "`Path` containing libbpf-compatible ELFs (defaults to $CI_KERNEL_SELFTESTS)")
 
 func TestLibBPFCompat(t *testing.T) {
 	if *elfPath == "" {
@@ -967,7 +965,7 @@ func TestLibBPFCompat(t *testing.T) {
 		}
 	}
 
-	files := testutils.Glob(t, filepath.Join(*elfPath, *elfPattern),
+	files := testutils.Glob(t, filepath.Join(*elfPath, "*.o"),
 		// These files are only used as a source of btf.
 		"btf__core_reloc_*",
 	)
@@ -1273,7 +1271,8 @@ func TestELFSectionProgramTypes(t *testing.T) {
 
 	for _, tc := range testcases {
 		t.Run(tc.Section, func(t *testing.T) {
-			pt, at, fl, extra := getProgType(tc.Section)
+			pt, at, fl, extra, err := getLinuxProgramType(tc.Section)
+			qt.Assert(t, qt.IsNil(err))
 			have := testcase{tc.Section, pt, at, fl, extra}
 			qt.Assert(t, qt.DeepEquals(have, tc))
 		})
@@ -1314,6 +1313,64 @@ func TestMatchSectionName(t *testing.T) {
 			}
 		})
 	}
+}
+
+var windowsElfPath = flag.String("windows-elfs", os.Getenv("CI_WINDOWS_SELFTESTS"), "`Path` to a directory containing eBPF for Windows selftests")
+
+func init() {
+	windowsElfSectionDefs = append(windowsElfSectionDefs,
+		// It's not clear where these section definition come from, but the selftests
+		// do use them.
+		windowsElfSectionDef{"xdp", WindowsXDP, AttachWindowsXDP},
+		windowsElfSectionDef{"sample_ext", WindowsSample, AttachWindowsSample},
+	)
+}
+
+func TestWindowsELFCompat(t *testing.T) {
+	if *windowsElfPath == "" {
+		t.Skip("No path specified")
+	}
+
+	files := testutils.Glob(t, filepath.Join(*windowsElfPath, "*.o"))
+
+	testutils.Files(t, files, func(t *testing.T, file string) {
+		switch filepath.Base(file) {
+		case "bpf.o":
+			t.Skip("Completely empty file")
+		case "map.o":
+			t.Skip("Uses incompatible map definition")
+		case "map_reuse_2.o":
+			t.Skip("Contains BTF defined inner_map with pinning")
+		case "map_in_map_legacy_id.o":
+			t.Skip("Uses unsupported inner_map_id")
+		case "map_in_map_legacy_idx.o":
+			t.Skip("Uses unsupported inner_map_idx")
+		case "atomic_instruction_others.o":
+			t.Skip("Doesn't contain .ebpf_for_windows section")
+		}
+
+		f, err := os.Open(file)
+		qt.Assert(t, qt.IsNil(err))
+		defer f.Close()
+
+		coll, err := LoadCollectionSpecFromReader(f)
+		qt.Assert(t, qt.IsNil(err))
+
+		qt.Assert(t, qt.IsFalse(len(coll.Maps)+len(coll.Programs) == 0), qt.Commentf("ELF should not be completely empty"))
+
+		for name, m := range coll.Maps {
+			qt.Check(t, qt.Not(qt.Equals(m.Type, UnspecifiedMap)))
+			p, _ := platform.DecodeConstant(m.Type)
+			qt.Check(t, qt.Equals(p, platform.Windows), qt.Commentf("map %s has non-Windows type", name))
+		}
+
+		for name, p := range coll.Programs {
+			t.Log(name, p.Type, p.SectionName)
+			qt.Check(t, qt.Not(qt.Equals(p.Type, UnspecifiedProgram)))
+			p, _ := platform.DecodeConstant(p.Type)
+			qt.Assert(t, qt.Equals(p, platform.Windows), qt.Commentf("program %s has non-Windows type", name))
+		}
+	})
 }
 
 // selftestName takes a path to a file and derives a canonical name from it.

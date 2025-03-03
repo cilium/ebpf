@@ -61,8 +61,8 @@ func (cs *CollectionSpec) Copy() *CollectionSpec {
 	}
 
 	cpy := CollectionSpec{
-		Maps:      make(map[string]*MapSpec, len(cs.Maps)),
-		Programs:  make(map[string]*ProgramSpec, len(cs.Programs)),
+		Maps:      copyMapOfSpecs(cs.Maps),
+		Programs:  copyMapOfSpecs(cs.Programs),
 		Variables: make(map[string]*VariableSpec, len(cs.Variables)),
 		ByteOrder: cs.ByteOrder,
 		Types:     cs.Types.Copy(),
@@ -79,8 +79,24 @@ func (cs *CollectionSpec) Copy() *CollectionSpec {
 	for name, spec := range cs.Variables {
 		cpy.Variables[name] = spec.copy(&cpy)
 	}
+	if cs.Variables == nil {
+		cpy.Variables = nil
+	}
 
 	return &cpy
+}
+
+func copyMapOfSpecs[T interface{ Copy() T }](m map[string]T) map[string]T {
+	if m == nil {
+		return nil
+	}
+
+	cpy := make(map[string]T, len(m))
+	for k, v := range m {
+		cpy[k] = v.Copy()
+	}
+
+	return cpy
 }
 
 // RewriteMaps replaces all references to specific maps.

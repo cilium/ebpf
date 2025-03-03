@@ -16,6 +16,7 @@ import (
 	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/kallsyms"
 	"github.com/cilium/ebpf/internal/linux"
+	"github.com/cilium/ebpf/internal/platform"
 	"github.com/cilium/ebpf/internal/sys"
 	"github.com/cilium/ebpf/internal/sysenc"
 	"github.com/cilium/ebpf/internal/unix"
@@ -279,8 +280,13 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions) (*Program, er
 		kv = v.Kernel()
 	}
 
+	p, progType := platform.DecodeConstant(spec.Type)
+	if p != platform.Native {
+		return nil, fmt.Errorf("program type %s: %w", spec.Type, internal.ErrNotSupportedOnOS)
+	}
+
 	attr := &sys.ProgLoadAttr{
-		ProgType:           sys.ProgType(spec.Type),
+		ProgType:           sys.ProgType(progType),
 		ProgFlags:          spec.Flags,
 		ExpectedAttachType: sys.AttachType(spec.AttachType),
 		License:            sys.NewStringPointer(spec.License),

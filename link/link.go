@@ -8,6 +8,7 @@ import (
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/btf"
 	"github.com/cilium/ebpf/internal"
+	"github.com/cilium/ebpf/internal/platform"
 	"github.com/cilium/ebpf/internal/sys"
 )
 
@@ -336,10 +337,15 @@ func AttachRawLink(opts RawLinkOptions) (*RawLink, error) {
 		return nil, fmt.Errorf("invalid program: %s", sys.ErrClosedFd)
 	}
 
+	p, attachType := platform.DecodeConstant(opts.Attach)
+	if p != "linux" {
+		return nil, fmt.Errorf("attach type %s: %w", opts.Attach, internal.ErrNotSupportedOnOS)
+	}
+
 	attr := sys.LinkCreateAttr{
 		TargetFd:    uint32(opts.Target),
 		ProgFd:      uint32(progFd),
-		AttachType:  sys.AttachType(opts.Attach),
+		AttachType:  sys.AttachType(attachType),
 		TargetBtfId: opts.BTF,
 		Flags:       opts.Flags,
 	}

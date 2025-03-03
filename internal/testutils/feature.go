@@ -18,10 +18,14 @@ const (
 )
 
 func CheckFeatureTest(t *testing.T, fn func() error) {
+	t.Helper()
+
 	checkFeatureTestError(t, fn())
 }
 
 func checkFeatureTestError(t *testing.T, err error) {
+	t.Helper()
+
 	if err == nil {
 		return
 	}

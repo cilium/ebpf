@@ -24,8 +24,6 @@ import (
 )
 
 func TestProgramRun(t *testing.T) {
-	testutils.SkipOnOldKernel(t, "4.8", "XDP program")
-
 	pat := []byte{0xDE, 0xAD, 0xBE, 0xEF}
 	buf := internal.EmptyBPFContext
 
@@ -133,33 +131,10 @@ func TestProgramRunRawTracepoint(t *testing.T) {
 }
 
 func TestProgramRunEmptyData(t *testing.T) {
-	testutils.SkipOnOldKernel(t, "5.13", "sk_lookup BPF_PROG_RUN")
-
-	prog := mustNewProgram(t, &ProgramSpec{
-		Name:       "test",
-		Type:       SkLookup,
-		AttachType: AttachSkLookup,
-		Instructions: asm.Instructions{
-			asm.LoadImm(asm.R0, 0, asm.DWord),
-			asm.Return(),
-		},
-		License: "MIT",
-	}, nil)
-
-	opts := RunOptions{
-		Context: sys.SkLookup{
-			Family: syscall.AF_INET,
-		},
-	}
-	ret, err := prog.Run(&opts)
+	prog := createProgram(t, SocketFilter, 0)
+	_, err := prog.Run(nil)
 	testutils.SkipIfNotSupported(t, err)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if ret != 0 {
-		t.Error("Expected return value to be 0, got", ret)
-	}
+	qt.Assert(t, qt.ErrorIs(err, unix.EINVAL))
 }
 
 func TestProgramBenchmark(t *testing.T) {

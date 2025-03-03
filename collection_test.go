@@ -438,6 +438,21 @@ func TestCollectionSpecAssign(t *testing.T) {
 	}
 }
 
+func TestNewCollectionFdLeak(t *testing.T) {
+	spec := &CollectionSpec{
+		Maps: map[string]*MapSpec{
+			"map1": {
+				Type: Array, KeySize: 4, ValueSize: 4, MaxEntries: 1,
+				// 8 byte value will cause m.finalize to fail.
+				Contents: []MapKV{{uint32(0), uint64(0)}},
+			},
+		},
+	}
+
+	_, err := newCollection(t, spec, nil)
+	qt.Assert(t, qt.IsNotNil(err))
+}
+
 func TestAssignValues(t *testing.T) {
 	zero := func(t reflect.Type, name string) (interface{}, error) {
 		return reflect.Zero(t).Interface(), nil

@@ -23,7 +23,7 @@ func TestMain(m *testing.M) {
 }
 
 func TestCollectionSpecNotModified(t *testing.T) {
-	cs := CollectionSpec{
+	spec := &CollectionSpec{
 		Maps: map[string]*MapSpec{
 			"my-map": {
 				Type:       Array,
@@ -31,11 +31,20 @@ func TestCollectionSpecNotModified(t *testing.T) {
 				ValueSize:  4,
 				MaxEntries: 1,
 			},
+			".rodata": {
+				Type:       Array,
+				KeySize:    4,
+				ValueSize:  4,
+				MaxEntries: 1,
+				Flags:      0, // Loader sets BPF_F_MMAPABLE.
+				Contents:   []MapKV{{uint32(0), uint32(1)}},
+			},
 		},
 		Programs: map[string]*ProgramSpec{
 			"test": {
 				Type: SocketFilter,
 				Instructions: asm.Instructions{
+					asm.LoadImm(asm.R1, 0, asm.DWord).WithReference(".rodata"),
 					asm.LoadImm(asm.R1, 0, asm.DWord).WithReference("my-map"),
 					asm.LoadImm(asm.R0, 0, asm.DWord),
 					asm.Return(),
@@ -45,10 +54,16 @@ func TestCollectionSpecNotModified(t *testing.T) {
 		},
 	}
 
-	mustNewCollection(t, &cs, nil)
+	orig := spec.Copy()
+	coll := mustNewCollection(t, spec, nil)
+	qt.Assert(t, qt.CmpEquals(orig, spec, csCmpOpts))
 
-	if cs.Programs["test"].Instructions[0].Constant != 0 {
-		t.Error("Creating a collection modifies input spec")
+	for name := range spec.Maps {
+		qt.Assert(t, qt.IsNotNil(coll.Maps[name]))
+	}
+
+	for name := range spec.Programs {
+		qt.Assert(t, qt.IsNotNil(coll.Programs[name]))
 	}
 }
 
@@ -87,24 +102,6 @@ func TestCollectionSpecCopy(t *testing.T) {
 
 	qt.Check(t, qt.IsNil((*CollectionSpec)(nil).Copy()))
 	qt.Assert(t, testutils.IsDeepCopy(cs.Copy(), cs))
-}
-
-func TestCollectionSpecLoadMutate(t *testing.T) {
-	file := testutils.NativeFile(t, "testdata/loader-%s.elf")
-	spec, err := LoadCollectionSpec(file)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	orig := spec.Copy()
-
-	var objs struct {
-		Prog *Program `ebpf:"xdp_prog"`
-	}
-
-	mustLoadAndAssign(t, spec, &objs, nil)
-	qt.Assert(t, qt.IsNil(objs.Prog.Close()))
-	qt.Assert(t, qt.CmpEquals(spec, orig, csCmpOpts))
 }
 
 func TestCollectionSpecRewriteMaps(t *testing.T) {

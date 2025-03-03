@@ -286,36 +286,6 @@ func TestProgramKernelVersion(t *testing.T) {
 	}, nil)
 }
 
-func TestProgramVerifierOutput(t *testing.T) {
-	prog := mustNewProgram(t, basicProgramSpec, &ProgramOptions{
-		LogLevel: LogLevelInstruction,
-	})
-
-	if prog.VerifierLog == "" {
-		t.Error("Expected VerifierLog to be present")
-	}
-
-	// Issue 64
-	_, err := newProgram(t, &ProgramSpec{
-		Type: SocketFilter,
-		Instructions: asm.Instructions{
-			asm.Mov.Reg(asm.R0, asm.R1),
-		},
-		License: "MIT",
-	}, &ProgramOptions{
-		LogLevel: LogLevelInstruction,
-	})
-
-	if err == nil {
-		t.Fatal("Expected an error from invalid program")
-	}
-
-	var ve *internal.VerifierError
-	if !errors.As(err, &ve) {
-		t.Error("Error is not a VerifierError")
-	}
-}
-
 func TestProgramVerifierLog(t *testing.T) {
 	check := func(t *testing.T, err error) {
 		t.Helper()

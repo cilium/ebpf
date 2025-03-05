@@ -13,6 +13,7 @@ import (
 	"github.com/cilium/ebpf/internal/kallsyms"
 	"github.com/cilium/ebpf/internal/kconfig"
 	"github.com/cilium/ebpf/internal/linux"
+	"github.com/cilium/ebpf/internal/platform"
 	"github.com/cilium/ebpf/internal/sys"
 )
 
@@ -311,8 +312,7 @@ func (cs *CollectionSpec) LoadAndAssign(to interface{}, opts *CollectionOptions)
 
 	// Evaluate the loader's objects after all (lazy)loading has taken place.
 	for n, m := range loader.maps {
-		switch m.typ {
-		case ProgramArray:
+		if m.typ.canStoreProgram() {
 			// Require all lazy-loaded ProgramArrays to be assigned to the given object.
 			// The kernel empties a ProgramArray once the last user space reference
 			// to it closes, which leads to failed tail calls. Combined with the library
@@ -717,6 +717,10 @@ func resolveKconfig(m *MapSpec) error {
 	ds, ok := m.Value.(*btf.Datasec)
 	if !ok {
 		return errors.New("map value is not a Datasec")
+	}
+
+	if platform.IsWindows {
+		return fmt.Errorf(".kconfig: %w", internal.ErrNotSupportedOnOS)
 	}
 
 	type configInfo struct {

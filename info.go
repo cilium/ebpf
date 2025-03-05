@@ -291,6 +291,11 @@ func newProgramInfoFromFd(fd *sys.FD) (*ProgramInfo, error) {
 		verifiedInstructions: info.VerifiedInsns,
 	}
 
+	if platform.IsWindows && info.Tag == [8]uint8{} {
+		// Windows doesn't support the tag field, clear it for now.
+		pi.Tag = ""
+	}
+
 	// Start with a clean struct for the second call, otherwise we may get EFAULT.
 	var info2 sys.ProgInfo
 
@@ -310,7 +315,7 @@ func newProgramInfoFromFd(fd *sys.FD) (*ProgramInfo, error) {
 	}
 
 	// createdByUID and NrMapIds were introduced in the same kernel version.
-	if pi.maps != nil {
+	if pi.maps != nil && platform.IsLinux {
 		pi.createdByUID = info.CreatedByUid
 		pi.haveCreatedByUID = true
 	}
@@ -390,7 +395,7 @@ func newProgramInfoFromProc(fd *sys.FD) (*ProgramInfo, error) {
 		"prog_type": &progType,
 		"prog_tag":  &info.Tag,
 	})
-	if errors.Is(err, ErrNotSupported) {
+	if errors.Is(err, ErrNotSupported) && !errors.Is(err, internal.ErrNotSupportedOnOS) {
 		return nil, &internal.UnsupportedFeatureError{
 			Name:           "reading program info from /proc/self/fdinfo",
 			MinimumVersion: internal.Version{4, 10, 0},
@@ -537,6 +542,10 @@ func (pi *ProgramInfo) LineInfos() (btf.LineOffsets, error) {
 // Available from 4.13. Requires CAP_BPF or equivalent for plain instructions.
 // Requires CAP_SYS_ADMIN for instructions with metadata.
 func (pi *ProgramInfo) Instructions() (asm.Instructions, error) {
+	if platform.IsWindows && len(pi.insns) == 0 {
+		return nil, fmt.Errorf("read instructions: %w", internal.ErrNotSupportedOnOS)
+	}
+
 	// If the calling process is not BPF-capable or if the kernel doesn't
 	// support getting xlated instructions, the field will be zero.
 	if len(pi.insns) == 0 {
@@ -735,6 +744,10 @@ func (pi *ProgramInfo) FuncInfos() (btf.FuncOffsets, error) {
 }
 
 func scanFdInfo(fd *sys.FD, fields map[string]interface{}) error {
+	if platform.IsWindows {
+		return fmt.Errorf("read fdinfo: %w", internal.ErrNotSupportedOnOS)
+	}
+
 	fh, err := os.Open(fmt.Sprintf("/proc/self/fdinfo/%d", fd.Int()))
 	if err != nil {
 		return err
@@ -815,6 +828,11 @@ func EnableStats(which uint32) (io.Closer, error) {
 }
 
 var haveProgramInfoMapIDs = internal.NewFeatureTest("map IDs in program info", func() error {
+	if platform.IsWindows {
+		// We only support efW versions which have this feature, no need to probe.
+		return nil
+	}
+
 	prog, err := progLoad(asm.Instructions{
 		asm.LoadImm(asm.R0, 0, asm.DWord),
 		asm.Return(),
@@ -839,4 +857,4 @@ var haveProgramInfoMapIDs = internal.NewFeatureTest("map IDs in program info", f
 	}
 
 	return err
-}, "4.15")
+}, "4.15", "windows:0.20.0")

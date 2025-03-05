@@ -85,27 +85,30 @@ func TestMapInfoFromProcOuterMap(t *testing.T) {
 	qt.Assert(t, qt.Equals(info.MaxEntries, 2))
 }
 
-func validateProgInfo(t *testing.T, info *ProgramInfo) {
+func validateProgInfo(t *testing.T, spec *ProgramSpec, info *ProgramInfo) {
 	t.Helper()
 
-	qt.Assert(t, qt.Equals(info.Type, SocketFilter))
-	qt.Assert(t, qt.Equals(info.Tag, "d7edec644f05498d"))
+	qt.Assert(t, qt.Equals(info.Type, spec.Type))
+	if info.Tag != "" {
+		qt.Assert(t, qt.Equals(info.Tag, "d7edec644f05498d"))
+	}
 }
 
 func TestProgramInfo(t *testing.T) {
-	prog := createBasicProgram(t)
+	spec := fixupProgramSpec(basicProgramSpec)
+	prog := mustNewProgram(t, spec, nil)
 
 	info, err := newProgramInfoFromFd(prog.fd)
 	testutils.SkipIfNotSupported(t, err)
 	qt.Assert(t, qt.IsNil(err))
 
-	validateProgInfo(t, info)
+	validateProgInfo(t, spec, info)
 
 	id, ok := info.ID()
 	qt.Assert(t, qt.IsTrue(ok))
 	qt.Assert(t, qt.Not(qt.Equals(id, 0)))
 
-	if testutils.IsVersionLessThan(t, "4.15") {
+	if testutils.IsVersionLessThan(t, "4.15", "windows:0.20") {
 		qt.Assert(t, qt.Equals(info.Name, ""))
 	} else {
 		qt.Assert(t, qt.Equals(info.Name, "test"))
@@ -155,13 +158,14 @@ func TestProgramInfo(t *testing.T) {
 }
 
 func TestProgramInfoProc(t *testing.T) {
-	prog := createBasicProgram(t)
+	spec := fixupProgramSpec(basicProgramSpec)
+	prog := mustNewProgram(t, spec, nil)
 
 	info, err := newProgramInfoFromProc(prog.fd)
 	testutils.SkipIfNotSupported(t, err)
 	qt.Assert(t, qt.IsNil(err))
 
-	validateProgInfo(t, info)
+	validateProgInfo(t, spec, info)
 }
 
 func TestProgramInfoBTF(t *testing.T) {
@@ -234,7 +238,7 @@ func TestProgramInfoMapIDs(t *testing.T) {
 
 	ids, ok := info.MapIDs()
 	switch {
-	case testutils.IsVersionLessThan(t, "4.15"):
+	case testutils.IsVersionLessThan(t, "4.15", "windows:0.20"):
 		qt.Assert(t, qt.IsFalse(ok))
 		qt.Assert(t, qt.HasLen(ids, 0))
 
@@ -259,7 +263,7 @@ func TestProgramInfoMapIDsNoMaps(t *testing.T) {
 
 	ids, ok := info.MapIDs()
 	switch {
-	case testutils.IsVersionLessThan(t, "4.15"):
+	case testutils.IsVersionLessThan(t, "4.15", "windows:0.20"):
 		qt.Assert(t, qt.IsFalse(ok))
 		qt.Assert(t, qt.HasLen(ids, 0))
 
@@ -331,6 +335,7 @@ func TestStats(t *testing.T) {
 	}
 
 	if err := testStats(prog); err != nil {
+		testutils.SkipIfNotSupportedOnOS(t, err)
 		t.Error(err)
 	}
 }
@@ -343,6 +348,7 @@ func BenchmarkStats(b *testing.B) {
 
 	for n := 0; n < b.N; n++ {
 		if err := testStats(prog); err != nil {
+			testutils.SkipIfNotSupportedOnOS(b, err)
 			b.Fatal(fmt.Errorf("iter %d: %w", n, err))
 		}
 	}
@@ -363,19 +369,19 @@ func testStats(prog *Program) error {
 
 	stats, err := EnableStats(uint32(sys.BPF_STATS_RUN_TIME))
 	if err != nil {
-		return fmt.Errorf("failed to enable stats: %v", err)
+		return fmt.Errorf("failed to enable stats: %w", err)
 	}
 	defer stats.Close()
 
 	// Program execution with runtime statistics enabled.
 	// Should increase both runtime and run counter.
 	if _, _, err := prog.Test(in); err != nil {
-		return fmt.Errorf("failed to trigger program: %v", err)
+		return fmt.Errorf("failed to trigger program: %w", err)
 	}
 
 	pi, err := prog.Info()
 	if err != nil {
-		return fmt.Errorf("failed to get ProgramInfo: %v", err)
+		return fmt.Errorf("failed to get ProgramInfo: %w", err)
 	}
 
 	rc, ok := pi.RunCount()
@@ -399,18 +405,18 @@ func testStats(prog *Program) error {
 	lt := rt
 
 	if err := stats.Close(); err != nil {
-		return fmt.Errorf("failed to disable statistics: %v", err)
+		return fmt.Errorf("failed to disable statistics: %w", err)
 	}
 
 	// Second program execution, with runtime statistics gathering disabled.
 	// Total runtime and run counters are not expected to increase.
 	if _, _, err := prog.Test(in); err != nil {
-		return fmt.Errorf("failed to trigger program: %v", err)
+		return fmt.Errorf("failed to trigger program: %w", err)
 	}
 
 	pi, err = prog.Info()
 	if err != nil {
-		return fmt.Errorf("failed to get ProgramInfo: %v", err)
+		return fmt.Errorf("failed to get ProgramInfo: %w", err)
 	}
 
 	rc, ok = pi.RunCount()
@@ -448,7 +454,7 @@ func TestProgInfoExtBTF(t *testing.T) {
 		Main *Program `ebpf:"xdp_prog"`
 	}
 
-	err = spec.LoadAndAssign(&obj, nil)
+	err = loadAndAssign(t, spec, &obj, nil)
 	testutils.SkipIfNotSupported(t, err)
 	if err != nil {
 		t.Fatal(err)

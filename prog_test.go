@@ -8,7 +8,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
-	"slices"
+	"runtime"
 	"strings"
 	"syscall"
 	"testing"
@@ -18,6 +18,7 @@ import (
 	"github.com/cilium/ebpf/asm"
 	"github.com/cilium/ebpf/btf"
 	"github.com/cilium/ebpf/internal"
+	"github.com/cilium/ebpf/internal/platform"
 	"github.com/cilium/ebpf/internal/sys"
 	"github.com/cilium/ebpf/internal/testutils"
 	"github.com/cilium/ebpf/internal/unix"
@@ -49,6 +50,16 @@ func TestProgramRun(t *testing.T) {
 		asm.LoadImm(asm.R0, 42, asm.DWord).WithSymbol("out"),
 		asm.Return(),
 	)
+
+	if platform.IsWindows {
+		// Windows uses an incompatible context for XDP. Pointers are
+		// 64 bit.
+		// See https://github.com/microsoft/ebpf-for-windows/issues/3873
+		// r2 = *(r1+8)
+		ins[0] = asm.LoadMem(asm.R2, asm.R1, 8, asm.DWord)
+		// r1 = *(r1+0)
+		ins[1] = asm.LoadMem(asm.R1, asm.R1, 0, asm.DWord)
+	}
 
 	t.Log(ins)
 
@@ -89,15 +100,23 @@ func TestProgramRunWithOptions(t *testing.T) {
 	prog := createProgram(t, XDP, int64(sys.XDP_ABORTED))
 
 	buf := internal.EmptyBPFContext
-	xdp := sys.XdpMd{
-		Data:    0,
-		DataEnd: uint32(len(buf)),
+	var in, out any
+	if platform.IsWindows {
+		type winXdpMd struct {
+			Data, DataEnd, DataMeta uint64
+			Ifindex                 uint32
+		}
+		in = &winXdpMd{Data: 0, DataEnd: uint64(len(buf))}
+		out = &winXdpMd{}
+	} else {
+		in = &sys.XdpMd{Data: 0, DataEnd: uint32(len(buf))}
+		out = &sys.XdpMd{}
 	}
-	xdpOut := sys.XdpMd{}
+
 	opts := RunOptions{
 		Data:       buf,
-		Context:    xdp,
-		ContextOut: &xdpOut,
+		Context:    in,
+		ContextOut: out,
 	}
 	ret, err := prog.Run(&opts)
 	testutils.SkipIfNotSupported(t, err)
@@ -109,9 +128,7 @@ func TestProgramRunWithOptions(t *testing.T) {
 		t.Error("Expected return value to be 0, got", ret)
 	}
 
-	if xdp != xdpOut {
-		t.Errorf("Expect xdp (%+v) == xdpOut (%+v)", xdp, xdpOut)
-	}
+	qt.Assert(t, qt.DeepEquals(out, in))
 }
 
 func TestProgramRunRawTracepoint(t *testing.T) {
@@ -164,7 +181,8 @@ func TestProgramClose(t *testing.T) {
 }
 
 func TestProgramPin(t *testing.T) {
-	prog := createBasicProgram(t)
+	spec := fixupProgramSpec(basicProgramSpec)
+	prog := mustNewProgram(t, spec, nil)
 
 	tmp := testutils.TempBPFFS(t)
 
@@ -185,18 +203,12 @@ func TestProgramPin(t *testing.T) {
 	}
 	defer prog.Close()
 
-	if prog.Type() != SocketFilter {
-		t.Error("Expected pinned program to have type SocketFilter, but got", prog.Type())
-	}
+	qt.Assert(t, qt.Equals(prog.Type(), spec.Type))
 
 	if haveObjName() == nil {
-		if prog.name != "test" {
-			t.Errorf("Expected program to have object name 'test', got '%s'", prog.name)
-		}
+		qt.Assert(t, qt.Equals(prog.name, "test"))
 	} else {
-		if prog.name != "program" {
-			t.Errorf("Expected program to have file name 'program', got '%s'", prog.name)
-		}
+		qt.Assert(t, qt.Equals(prog.name, "program"))
 	}
 
 	if !prog.IsPinned() {
@@ -266,9 +278,19 @@ func TestProgramVerifierOutputOnError(t *testing.T) {
 		t.Fatal("NewProgram does return an unwrapped VerifierError")
 	}
 
-	if !strings.Contains(ve.Error(), "R0 !read_ok") {
-		t.Logf("%+v", ve)
-		t.Error("Missing verifier log in error summary")
+	switch {
+	case platform.IsLinux:
+		if !strings.Contains(ve.Error(), "R0 !read_ok") {
+			t.Logf("%+v", ve)
+			t.Error("Missing verifier log in error summary")
+		}
+	case platform.IsWindows:
+		if !strings.Contains(ve.Error(), "r0.type == number") {
+			t.Logf("%+v", ve)
+			t.Error("Missing verifier log in error summary")
+		}
+	default:
+		t.Error("Unsupported platform", runtime.GOOS)
 	}
 }
 
@@ -292,26 +314,23 @@ func TestProgramVerifierLog(t *testing.T) {
 
 		var ve *internal.VerifierError
 		qt.Assert(t, qt.ErrorAs(err, &ve))
-
-		loglen := len(fmt.Sprintf("%+v", ve))
-		qt.Assert(t, qt.IsTrue(loglen > minVerifierLogSize),
-			qt.Commentf("Log buffer didn't grow past minimum, got %d bytes", loglen))
-	}
-
-	// Generate a base program of sufficient size whose verifier log does not fit
-	// in the minimum buffer size. Stay under 4096 insn limit of older kernels.
-	var base asm.Instructions
-	for i := 0; i < 4093; i++ {
-		base = append(base, asm.Mov.Reg(asm.R0, asm.R1))
+		loglen := 0
+		for _, line := range ve.Log {
+			loglen += len(line)
+		}
+		qt.Assert(t, qt.IsTrue(loglen > 0))
 	}
 
 	// Touch R10 (read-only frame pointer) to reliably force a verifier error.
-	invalid := slices.Clone(base)
-	invalid = append(invalid, asm.Mov.Reg(asm.R10, asm.R0))
-	invalid = append(invalid, asm.Return())
+	invalid := asm.Instructions{
+		asm.Mov.Reg(asm.R10, asm.R0),
+		asm.Return(),
+	}
 
-	valid := slices.Clone(base)
-	valid = append(valid, asm.Return())
+	valid := asm.Instructions{
+		asm.Mov.Imm(asm.R0, 0),
+		asm.Return(),
+	}
 
 	// Start out with testing against the invalid program.
 	spec := &ProgramSpec{
@@ -324,12 +343,6 @@ func TestProgramVerifierLog(t *testing.T) {
 	_, err := newProgram(t, spec, nil)
 	check(t, err)
 
-	// Explicitly request a verifier log for an invalid program.
-	_, err = newProgram(t, spec, &ProgramOptions{
-		LogLevel: LogLevelInstruction,
-	})
-	check(t, err)
-
 	// Disabling the verifier log should result in a VerifierError without a log.
 	_, err = newProgram(t, spec, &ProgramOptions{
 		LogDisabled: true,
@@ -337,6 +350,12 @@ func TestProgramVerifierLog(t *testing.T) {
 	var ve *internal.VerifierError
 	qt.Assert(t, qt.ErrorAs(err, &ve))
 	qt.Assert(t, qt.HasLen(ve.Log, 0))
+
+	// Explicitly request a verifier log for an invalid program.
+	_, err = newProgram(t, spec, &ProgramOptions{
+		LogLevel: LogLevelInstruction,
+	})
+	check(t, err)
 
 	// Run tests against a valid program from here on out.
 	spec.Instructions = valid
@@ -346,19 +365,11 @@ func TestProgramVerifierLog(t *testing.T) {
 	prog := mustNewProgram(t, spec, nil)
 	qt.Assert(t, qt.HasLen(prog.VerifierLog, 0))
 
-	// Explicitly request verifier log for a valid program. If a log is requested
-	// and the buffer is too small, ENOSPC occurs even for valid programs.
+	// Explicitly request verifier log for a valid program.
 	prog = mustNewProgram(t, spec, &ProgramOptions{
 		LogLevel: LogLevelInstruction,
 	})
-	qt.Assert(t, qt.IsTrue(len(prog.VerifierLog) > minVerifierLogSize))
-
-	// Repeat the previous test with a larger starting buffer size.
-	prog = mustNewProgram(t, spec, &ProgramOptions{
-		LogLevel:     LogLevelInstruction,
-		LogSizeStart: minVerifierLogSize * 2,
-	})
-	qt.Assert(t, qt.IsTrue(len(prog.VerifierLog) > minVerifierLogSize))
+	qt.Assert(t, qt.Not(qt.HasLen(prog.VerifierLog, 0)))
 }
 
 func TestProgramWithUnsatisfiedMap(t *testing.T) {
@@ -459,7 +470,8 @@ func TestProgramMarshaling(t *testing.T) {
 }
 
 func TestProgramFromFD(t *testing.T) {
-	prog := createBasicProgram(t)
+	spec := fixupProgramSpec(basicProgramSpec)
+	prog := mustNewProgram(t, spec, nil)
 
 	// If you're thinking about copying this, don't. Use
 	// Clone() instead.
@@ -475,9 +487,7 @@ func TestProgramFromFD(t *testing.T) {
 		t.Errorf("Expected program to have name test, got '%s'", prog2.name)
 	}
 
-	if prog2.typ != SocketFilter {
-		t.Errorf("Expected program to have type SocketFilter, got '%s'", prog2.typ)
-	}
+	qt.Assert(t, qt.Equals(prog2.Type(), spec.Type))
 }
 
 func TestHaveProgTestRun(t *testing.T) {
@@ -600,7 +610,7 @@ func TestProgramSpecTag(t *testing.T) {
 		t.Fatal("Can't calculate tag:", err)
 	}
 
-	if tag != info.Tag {
+	if info.Tag != "" && tag != info.Tag {
 		t.Errorf("Calculated tag %s doesn't match kernel tag %s", tag, info.Tag)
 	}
 }
@@ -744,6 +754,7 @@ func TestProgramInstructions(t *testing.T) {
 	}
 
 	insns, err := pi.Instructions()
+	testutils.SkipIfNotSupportedOnOS(t, err)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -346,6 +346,7 @@ jobs:
         run: >
           gotestsum --raw-command --ignore-non-json-output-lines --junitfile junit.xml --
           go test -short -count 1 -json
+          ./
           ./asm
           ./btf
           ./internal

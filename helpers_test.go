@@ -9,10 +9,15 @@ import (
 
 	"github.com/cilium/ebpf/asm"
 	"github.com/cilium/ebpf/btf"
+	"github.com/cilium/ebpf/internal/platform"
 	"github.com/cilium/ebpf/internal/testutils"
 )
 
 var haveTestmod = sync.OnceValues(func() (bool, error) {
+	if platform.IsWindows {
+		return false, nil
+	}
+
 	// See https://github.com/torvalds/linux/commit/290248a5b7d829871b3ea3c62578613a580a1744
 	testmod, err := btf.FindHandle(func(info *btf.HandleInfo) bool {
 		return info.IsModule() && info.Name == "bpf_testmod"
@@ -41,6 +46,8 @@ func requireTestmod(tb testing.TB) {
 
 func newMap(tb testing.TB, spec *MapSpec, opts *MapOptions) (*Map, error) {
 	tb.Helper()
+
+	spec = fixupMapSpec(spec)
 
 	if opts == nil {
 		opts = new(MapOptions)
@@ -100,6 +107,8 @@ func newProgram(tb testing.TB, spec *ProgramSpec, opts *ProgramOptions) (*Progra
 		opts = new(ProgramOptions)
 	}
 
+	spec = fixupProgramSpec(spec)
+
 	prog, err := NewProgramWithOptions(spec, *opts)
 	testutils.SkipIfNotSupportedOnOS(tb, err)
 	if err != nil {
@@ -111,6 +120,8 @@ func newProgram(tb testing.TB, spec *ProgramSpec, opts *ProgramOptions) (*Progra
 }
 
 func mustNewProgram(tb testing.TB, spec *ProgramSpec, opts *ProgramOptions) *Program {
+	tb.Helper()
+
 	prog, err := newProgram(tb, spec, opts)
 	qt.Assert(tb, qt.IsNil(err))
 	return prog
@@ -149,11 +160,14 @@ func createBasicProgram(tb testing.TB) *Program {
 func newCollection(tb testing.TB, spec *CollectionSpec, opts *CollectionOptions) (*Collection, error) {
 	tb.Helper()
 
+	spec = fixupCollectionSpec(spec)
+
 	if opts == nil {
 		opts = new(CollectionOptions)
 	}
 
 	c, err := NewCollectionWithOptions(spec, *opts)
+	testutils.SkipIfNotSupportedOnOS(tb, err)
 	if err != nil {
 		return nil, err
 	}
@@ -171,6 +185,7 @@ func mustNewCollection(tb testing.TB, spec *CollectionSpec, opts *CollectionOpti
 
 func loadAndAssign(tb testing.TB, spec *CollectionSpec, to any, opts *CollectionOptions) error {
 	tb.Helper()
+	spec = fixupCollectionSpec(spec)
 	err := spec.LoadAndAssign(to, opts)
 	testutils.SkipIfNotSupported(tb, err)
 	return err
@@ -178,4 +193,118 @@ func loadAndAssign(tb testing.TB, spec *CollectionSpec, to any, opts *Collection
 
 func mustLoadAndAssign(tb testing.TB, spec *CollectionSpec, to any, opts *CollectionOptions) {
 	qt.Assert(tb, qt.IsNil(loadAndAssign(tb, spec, to, opts)))
+}
+
+// The functions below translate Linux types to their Windows equivalents, if
+// possible. This allows running most tests on Windows without modification.
+
+func fixupMapType(typ MapType) MapType {
+	if !platform.IsWindows {
+		return typ
+	}
+
+	switch typ {
+	case Array:
+		return WindowsArray
+	case Hash:
+		return WindowsHash
+	case ProgramArray:
+		return WindowsProgramArray
+	case PerCPUHash:
+		return WindowsPerCPUHash
+	case PerCPUArray:
+		return WindowsPerCPUArray
+	case LRUHash:
+		return WindowsLRUHash
+	case LRUCPUHash:
+		return WindowsLRUCPUHash
+	case ArrayOfMaps:
+		return WindowsArrayOfMaps
+	case HashOfMaps:
+		return WindowsHashOfMaps
+	case LPMTrie:
+		return WindowsLPMTrie
+	case Queue:
+		return WindowsQueue
+	case Stack:
+		return WindowsStack
+	case RingBuf:
+		return WindowsRingBuf
+	default:
+		return typ
+	}
+}
+
+func fixupMapSpec(spec *MapSpec) *MapSpec {
+	if !platform.IsWindows {
+		return spec
+	}
+
+	spec = spec.Copy()
+	spec.Type = fixupMapType(spec.Type)
+	if spec.InnerMap != nil {
+		spec.InnerMap.Type = fixupMapType(spec.InnerMap.Type)
+	}
+
+	return spec
+}
+
+func fixupProgramType(typ ProgramType) ProgramType {
+	if !platform.IsWindows {
+		return typ
+	}
+
+	switch typ {
+	case SocketFilter:
+		return WindowsXDPTest
+	case XDP:
+		return WindowsXDPTest
+	default:
+		return typ
+	}
+}
+
+func fixupProgramSpec(spec *ProgramSpec) *ProgramSpec {
+	if !platform.IsWindows {
+		return spec
+	}
+
+	spec = spec.Copy()
+	spec.Type = fixupProgramType(spec.Type)
+
+	for i, ins := range spec.Instructions {
+		if ins.IsBuiltinCall() {
+			switch asm.BuiltinFunc(ins.Constant) {
+			case asm.FnMapUpdateElem:
+				spec.Instructions[i].Constant = int64(asm.WindowsFnMapUpdateElem)
+			case asm.FnMapLookupElem:
+				spec.Instructions[i].Constant = int64(asm.WindowsFnMapLookupElem)
+			case asm.FnTailCall:
+				spec.Instructions[i].Constant = int64(asm.WindowsFnTailCall)
+			}
+		}
+	}
+
+	return spec
+}
+
+func fixupCollectionSpec(spec *CollectionSpec) *CollectionSpec {
+	if !platform.IsWindows {
+		return spec
+	}
+
+	spec = spec.Copy()
+	for name := range spec.Maps {
+		spec.Maps[name] = fixupMapSpec(spec.Maps[name])
+	}
+
+	for name := range spec.Programs {
+		spec.Programs[name] = fixupProgramSpec(spec.Programs[name])
+	}
+
+	for _, varSpec := range spec.Variables {
+		varSpec.m = spec.Maps[varSpec.m.Name]
+	}
+
+	return spec
 }

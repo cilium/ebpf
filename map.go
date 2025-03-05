@@ -124,8 +124,8 @@ func (ms *MapSpec) Copy() *MapSpec {
 // The copy is only performed if fixups are necessary, so callers mustn't mutate
 // the returned spec.
 func (spec *MapSpec) fixupMagicFields() (*MapSpec, error) {
-	switch spec.Type {
-	case ArrayOfMaps, HashOfMaps:
+	switch {
+	case spec.Type.canStoreMap():
 		if spec.ValueSize != 0 && spec.ValueSize != 4 {
 			return nil, errors.New("ValueSize must be zero or four for map of map")
 		}
@@ -133,7 +133,7 @@ func (spec *MapSpec) fixupMagicFields() (*MapSpec, error) {
 		spec = spec.Copy()
 		spec.ValueSize = 4
 
-	case PerfEventArray:
+	case spec.Type == PerfEventArray:
 		if spec.KeySize != 0 && spec.KeySize != 4 {
 			return nil, errors.New("KeySize must be zero or four for perf event array")
 		}
@@ -160,7 +160,7 @@ func (spec *MapSpec) fixupMagicFields() (*MapSpec, error) {
 			spec.MaxEntries = n
 		}
 
-	case CPUMap:
+	case spec.Type == CPUMap:
 		n, err := PossibleCPU()
 		if err != nil {
 			return nil, fmt.Errorf("fixup cpu map: %w", err)
@@ -237,11 +237,16 @@ func (ms *MapSpec) Compatible(m *Map) error {
 		diffs = append(diffs, fmt.Sprintf("MaxEntries: %d changed to %d", m.maxEntries, ms.MaxEntries))
 	}
 
-	// BPF_F_RDONLY_PROG is set unconditionally for devmaps. Explicitly allow this
-	// mismatch.
-	if !((ms.Type == DevMap || ms.Type == DevMapHash) && m.flags^ms.Flags == sys.BPF_F_RDONLY_PROG) &&
-		m.flags != ms.Flags {
-		diffs = append(diffs, fmt.Sprintf("Flags: %d changed to %d", m.flags, ms.Flags))
+	flags := ms.Flags
+	if ms.Type == DevMap || ms.Type == DevMapHash {
+		// As of 0cdbb4b09a06 ("devmap: Allow map lookups from eBPF")
+		// BPF_F_RDONLY_PROG is set unconditionally for devmaps. Explicitly
+		// allow this mismatch.
+		flags |= (m.flags & sys.BPF_F_RDONLY_PROG)
+	}
+
+	if m.flags != flags {
+		diffs = append(diffs, fmt.Sprintf("Flags: %d changed to %d", m.flags, flags))
 	}
 
 	if len(diffs) == 0 {
@@ -477,7 +482,7 @@ func (spec *MapSpec) createMap(inner *sys.FD) (_ *Map, err error) {
 
 	p, sysMapType := platform.DecodeConstant(spec.Type)
 	if p != platform.Native {
-		return nil, fmt.Errorf("map type %s: %w", spec.Type, internal.ErrNotSupportedOnOS)
+		return nil, fmt.Errorf("map type %s (%s): %w", spec.Type, p, internal.ErrNotSupportedOnOS)
 	}
 
 	attr := sys.MapCreateAttr{
@@ -534,6 +539,14 @@ func (spec *MapSpec) createMap(inner *sys.FD) (_ *Map, err error) {
 }
 
 func handleMapCreateError(attr sys.MapCreateAttr, spec *MapSpec, err error) error {
+	if platform.IsWindows {
+		if errors.Is(err, unix.EINVAL) && attr.MapFlags != 0 {
+			return fmt.Errorf("map create: flags: %w", internal.ErrNotSupportedOnOS)
+		}
+
+		return err
+	}
+
 	if errors.Is(err, unix.EPERM) {
 		return fmt.Errorf("map create: %w (MEMLOCK may be too low, consider rlimit.RemoveMemlock)", err)
 	}
@@ -1004,7 +1017,7 @@ func (m *Map) nextKey(key interface{}, nextKeyOut sys.Pointer) error {
 	if err = sys.MapGetNextKey(&attr); err != nil {
 		// Kernels 4.4.131 and earlier return EFAULT instead of a pointer to the
 		// first map element when a nil key pointer is specified.
-		if key == nil && errors.Is(err, unix.EFAULT) {
+		if platform.IsLinux && key == nil && errors.Is(err, unix.EFAULT) {
 			var guessKey []byte
 			guessKey, err = m.guessNonExistentKey()
 			if err != nil {

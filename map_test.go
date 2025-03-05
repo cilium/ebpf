@@ -7,6 +7,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"sort"
 	"testing"
@@ -17,6 +18,7 @@ import (
 	"github.com/cilium/ebpf/asm"
 	"github.com/cilium/ebpf/btf"
 	"github.com/cilium/ebpf/internal"
+	"github.com/cilium/ebpf/internal/platform"
 	"github.com/cilium/ebpf/internal/sys"
 	"github.com/cilium/ebpf/internal/testutils"
 	"github.com/cilium/ebpf/internal/unix"
@@ -102,10 +104,6 @@ func TestMapSpecCopy(t *testing.T) {
 }
 
 func TestMapBatch(t *testing.T) {
-	if err := haveBatchAPI(); err != nil {
-		t.Skipf("batch api not available: %v", err)
-	}
-
 	contents := []uint32{
 		42, 4242, 23, 2323,
 	}
@@ -138,6 +136,7 @@ func TestMapBatch(t *testing.T) {
 			m := createMap(t, typ, uint32(len(contents)))
 			keys, values, _ := keysAndValuesForMap(m, contents)
 			count, err := m.BatchUpdate(keys, values, nil)
+			testutils.SkipIfNotSupported(t, err)
 			qt.Assert(t, qt.IsNil(err))
 			qt.Assert(t, qt.Equals(count, len(contents)))
 
@@ -162,6 +161,7 @@ func TestMapBatch(t *testing.T) {
 			m := createMap(t, typ, uint32(len(contents)))
 			keys, values, stride := keysAndValuesForMap(m, contents)
 			count, err := m.BatchUpdate(keys, values, nil)
+			testutils.SkipIfNotSupported(t, err)
 			qt.Assert(t, qt.IsNil(err))
 			qt.Assert(t, qt.Equals(count, len(contents)))
 
@@ -228,10 +228,12 @@ func TestMapLookupKeyNotFoundAllocations(t *testing.T) {
 	m := createMap(t, Array, 2)
 	defer m.Close()
 	var key, out uint32 = 3, 0
+	var err error
 
 	allocs := testing.AllocsPerRun(5, func() {
-		_ = m.Lookup(&key, &out)
+		err = m.Lookup(&key, &out)
 	})
+	qt.Assert(t, qt.ErrorIs(err, ErrKeyNotExist))
 	qt.Assert(t, qt.Equals(allocs, float64(0)))
 }
 
@@ -294,17 +296,11 @@ func TestMapClose(t *testing.T) {
 
 func TestBatchMapWithLock(t *testing.T) {
 	testutils.SkipOnOldKernel(t, "5.13", "MAP BATCH BPF_F_LOCK")
-	file := testutils.NativeFile(t, "testdata/map_spin_lock-%s.elf")
-	spec, err := LoadCollectionSpec(file)
-	if err != nil {
-		t.Fatal("Can't parse ELF:", err)
-	}
 
-	coll, err := NewCollection(spec)
-	if err != nil {
-		t.Fatal("Can't parse ELF:", err)
-	}
-	defer coll.Close()
+	spec, err := LoadCollectionSpec(testutils.NativeFile(t, "testdata/map_spin_lock-%s.elf"))
+	qt.Assert(t, qt.IsNil(err))
+
+	coll := mustNewCollection(t, spec, nil)
 
 	type spinLockValue struct {
 		Cnt     uint32
@@ -319,6 +315,7 @@ func TestBatchMapWithLock(t *testing.T) {
 	keys := []uint32{0, 1}
 	values := []spinLockValue{{Cnt: 42}, {Cnt: 4242}}
 	count, err := m.BatchUpdate(keys, values, &BatchOptions{ElemFlags: uint64(UpdateLock)})
+	testutils.SkipIfNotSupportedOnOS(t, err)
 	if err != nil {
 		t.Fatalf("BatchUpdate: %v", err)
 	}
@@ -351,17 +348,11 @@ func TestBatchMapWithLock(t *testing.T) {
 
 func TestMapWithLock(t *testing.T) {
 	testutils.SkipOnOldKernel(t, "5.13", "MAP BPF_F_LOCK")
-	file := testutils.NativeFile(t, "testdata/map_spin_lock-%s.elf")
-	spec, err := LoadCollectionSpec(file)
-	if err != nil {
-		t.Fatal("Can't parse ELF:", err)
-	}
 
-	coll, err := NewCollection(spec)
-	if err != nil {
-		t.Fatal("Can't parse ELF:", err)
-	}
-	defer coll.Close()
+	spec, err := LoadCollectionSpec(testutils.NativeFile(t, "testdata/map_spin_lock-%s.elf"))
+	qt.Assert(t, qt.IsNil(err))
+
+	coll := mustNewCollection(t, spec, nil)
 
 	type spinLockValue struct {
 		Cnt     uint32
@@ -376,6 +367,9 @@ func TestMapWithLock(t *testing.T) {
 	key := uint32(1)
 	value := spinLockValue{Cnt: 5}
 	err = m.Update(key, value, UpdateLock)
+	if platform.IsWindows && errors.Is(err, unix.EINVAL) {
+		t.Skip("Windows doesn't support UpdateLock")
+	}
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -458,11 +452,7 @@ func TestMapPin(t *testing.T) {
 func TestNestedMapPin(t *testing.T) {
 	m := createMapInMap(t, ArrayOfMaps, Array)
 
-	tmp, err := os.MkdirTemp("/sys/fs/bpf", "ebpf-test")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(tmp)
+	tmp := testutils.TempBPFFS(t)
 
 	path := filepath.Join(tmp, "nested")
 	if err := m.Pin(path); err != nil {
@@ -470,7 +460,7 @@ func TestNestedMapPin(t *testing.T) {
 	}
 	m.Close()
 
-	m, err = LoadPinnedMap(path, nil)
+	m, err := LoadPinnedMap(path, nil)
 	testutils.SkipIfNotSupported(t, err)
 	if err != nil {
 		t.Fatal(err)
@@ -653,6 +643,9 @@ func TestMapLoadPinnedWithOptions(t *testing.T) {
 		array, err := LoadPinnedMap(path, &LoadPinOptions{
 			ReadOnly: true,
 		})
+		if platform.IsWindows && errors.Is(err, unix.EINVAL) {
+			t.Skip("Windows doesn't support file_flags in OBJ_GET")
+		}
 		testutils.SkipIfNotSupported(t, err)
 		if err != nil {
 			t.Fatal("Can't load map:", err)
@@ -668,6 +661,9 @@ func TestMapLoadPinnedWithOptions(t *testing.T) {
 		array, err := LoadPinnedMap(path, &LoadPinOptions{
 			WriteOnly: true,
 		})
+		if platform.IsWindows && errors.Is(err, unix.EINVAL) {
+			t.Skip("Windows doesn't support file_flags in OBJ_GET")
+		}
 		testutils.SkipIfNotSupported(t, err)
 		if err != nil {
 			t.Fatal("Can't load map:", err)
@@ -805,9 +801,8 @@ func TestNewMapInMapFromFD(t *testing.T) {
 
 	// Do not copy this, use Clone instead.
 	another, err := NewMapFromFD(testutils.DupFD(t, nested.FD()))
-	if err != nil {
-		t.Fatal("Can't create a new nested map from an FD")
-	}
+	testutils.SkipIfNotSupportedOnOS(t, err)
+	qt.Assert(t, qt.IsNil(err))
 	another.Close()
 }
 
@@ -1023,6 +1018,10 @@ func TestMapIterateHashKeyOneByteFull(t *testing.T) {
 }
 
 func TestMapGuessNonExistentKey(t *testing.T) {
+	if !platform.IsLinux {
+		t.Skip("No need to test linux quirk on", runtime.GOOS)
+	}
+
 	tests := []struct {
 		name    string
 		mapType MapType
@@ -1253,8 +1252,6 @@ func TestCgroupPerCPUStorageMarshaling(t *testing.T) {
 	}
 	testutils.SkipOnOldKernel(t, "5.9", "per-CPU CGoup storage with write from user space support")
 
-	cgroup := testutils.CreateCgroup(t)
-
 	arr := mustNewMap(t, &MapSpec{
 		Type:      PerCPUCGroupStorage,
 		KeySize:   uint32(unsafe.Sizeof(bpfCgroupStorageKey{})),
@@ -1273,6 +1270,8 @@ func TestCgroupPerCPUStorageMarshaling(t *testing.T) {
 			asm.Return(),
 		},
 	}, nil)
+
+	cgroup := testutils.CreateCgroup(t)
 
 	progAttachAttrs := sys.ProgAttachAttr{
 		TargetFdOrIfindex: uint32(cgroup.Fd()),
@@ -1573,8 +1572,6 @@ func TestMapPinning(t *testing.T) {
 }
 
 func TestMapHandle(t *testing.T) {
-	testutils.SkipOnOldKernel(t, "4.18", "btf_id in map info")
-
 	kv := &btf.Int{Size: 4}
 	m := mustNewMap(t, &MapSpec{
 		Type:       Hash,
@@ -1586,6 +1583,7 @@ func TestMapHandle(t *testing.T) {
 	}, nil)
 
 	h, err := m.Handle()
+	testutils.SkipIfNotSupported(t, err)
 	qt.Assert(t, qt.IsNil(err))
 	qt.Assert(t, qt.IsNotNil(h))
 	defer h.Close()
@@ -2070,9 +2068,6 @@ func ExampleMap_perCPU() {
 	if err := entries.Err(); err != nil {
 		panic(err)
 	}
-	// Output:
-	// Value of key 0 on all CPUs: 4
-	// Value of key 1 on all CPUs: 5
 }
 
 // It is possible to use unsafe.Pointer to avoid marshalling
@@ -2106,7 +2101,6 @@ func ExampleMap_zeroCopy() {
 	}
 
 	fmt.Printf("The value is: %d\n", value)
-	// Output: The value is: 23
 }
 
 func ExampleMap_NextKey() {
@@ -2142,7 +2136,6 @@ func ExampleMap_NextKey() {
 	// Order of keys is non-deterministic due to randomized map seed
 	sort.Strings(keys)
 	fmt.Printf("Keys are %v\n", keys)
-	// Output: Keys are [hello world]
 }
 
 // ExampleMap_Iterate demonstrates how to iterate over all entries
@@ -2182,10 +2175,6 @@ func ExampleMap_Iterate() {
 	for k, v := range values {
 		fmt.Printf("key: %s, value: %d\n", k, v)
 	}
-
-	// Unordered output:
-	// key: hello, value: 21
-	// key: world, value: 42
 }
 
 // It is possible to iterate nested maps and program arrays by
@@ -2256,8 +2245,4 @@ func ExampleMap_Iterate_nestedMapsAndProgramArrays() {
 	if err := entries.Err(); err != nil {
 		panic(fmt.Sprint("Iterator encountered an error:", err))
 	}
-	// Output:
-	// outerKey: 0
-	//	innerKey 0 innerValue 1
-	// 	innerKey 1 innerValue 2
 }

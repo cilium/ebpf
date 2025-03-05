@@ -11,6 +11,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/platform"
 	"github.com/cilium/ebpf/internal/sys"
 )
@@ -144,7 +145,7 @@ func (ins Instruction) Marshal(w io.Writer, bo binary.ByteOrder) (uint64, error)
 		fn := BuiltinFunc(ins.Constant)
 		plat, value := platform.DecodeConstant(fn)
 		if plat != platform.Native {
-			return 0, fmt.Errorf("function %s is not supported on this platform", fn)
+			return 0, fmt.Errorf("function %s (%s): %w", fn, plat, internal.ErrNotSupportedOnOS)
 		}
 		cons = int32(value)
 	} else if ins.OpCode.Class().IsALU() {

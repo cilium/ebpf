@@ -282,7 +282,7 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions) (*Program, er
 
 	p, progType := platform.DecodeConstant(spec.Type)
 	if p != platform.Native {
-		return nil, fmt.Errorf("program type %s: %w", spec.Type, internal.ErrNotSupportedOnOS)
+		return nil, fmt.Errorf("program type %s (%s): %w", spec.Type, p, internal.ErrNotSupportedOnOS)
 	}
 
 	attr := &sys.ProgLoadAttr{
@@ -414,6 +414,10 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions) (*Program, er
 		}
 	}
 
+	if platform.IsWindows && opts.LogLevel != 0 {
+		return nil, fmt.Errorf("log level: %w", internal.ErrNotSupportedOnOS)
+	}
+
 	// The caller requested a specific verifier log level. Set up the log buffer
 	// so that there is a chance of loading the program in a single shot.
 	logSize := internal.Between(opts.LogSizeStart, minVerifierLogSize, maxVerifierLogSize)
@@ -520,7 +524,7 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions) (*Program, er
 //
 // You should not use fd after calling this function.
 //
-// Requires at least Linux 4.10.
+// Requires at least Linux 4.10. Returns an error on Windows.
 func NewProgramFromFD(fd int) (*Program, error) {
 	f, err := sys.NewFD(fd)
 	if err != nil {
@@ -764,6 +768,10 @@ func (p *Program) Benchmark(in []byte, repeat int, reset func()) (uint32, time.D
 }
 
 var haveProgRun = internal.NewFeatureTest("BPF_PROG_RUN", func() error {
+	if platform.IsWindows {
+		return nil
+	}
+
 	prog, err := NewProgram(&ProgramSpec{
 		// SocketFilter does not require privileges on newer kernels.
 		Type: SocketFilter,
@@ -805,7 +813,7 @@ var haveProgRun = internal.NewFeatureTest("BPF_PROG_RUN", func() error {
 	}
 
 	return err
-}, "4.12")
+}, "4.12", "windows:0.20")
 
 func (p *Program) run(opts *RunOptions) (uint32, time.Duration, error) {
 	if uint(len(opts.Data)) > math.MaxUint32 {

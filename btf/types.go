@@ -156,7 +156,37 @@ func (arr *Array) Format(fs fmt.State, verb rune) {
 	formatType(fs, verb, arr, "index=", arr.Index, "type=", arr.Type, "n=", arr.Nelems)
 }
 
-func (arr *Array) TypeName() string { return "" }
+func (arr *Array) TypeName() string {
+	elemTypeName := getArrayTypeName(arr.Type)
+	if elemTypeName == "" {
+		return ""
+	}
+
+	return fmt.Sprintf("%s[%d]", elemTypeName, arr.Nelems)
+}
+
+func getArrayTypeName(t Type) string {
+	typeName := t.TypeName()
+	if typeName != "" {
+		return typeName
+	}
+
+	switch v := t.(type) {
+	case *Pointer:
+		if v.Target == nil {
+			return ""
+		}
+		targetName := getArrayTypeName(v.Target)
+		if targetName == "" {
+			return ""
+		}
+		return fmt.Sprintf("%s*", targetName)
+	case qualifier:
+		return getArrayTypeName(v.qualify())
+	default:
+		return ""
+	}
+}
 
 func (arr *Array) copy() Type {
 	cpy := *arr

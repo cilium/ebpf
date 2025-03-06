@@ -580,3 +580,81 @@ func ExampleAs() {
 	fmt.Println(As[*Pointer](a))
 	// Output: Pointer[target=Typedef:"foo"] true
 }
+
+func Test_getArrayTypeName(t *testing.T) {
+	type args struct {
+		t Type
+	}
+	tests := []struct {
+		name string
+		args args
+		want string
+	}{
+		{
+			name: "char[16]",
+			args: args{t: &Array{
+				Index: &Int{
+					Name:     "__ARRAY_SIZE_TYPE__",
+					Size:     4,
+					Encoding: IntEncoding(0), // Unsigned
+				},
+				Type: &Int{
+					Name:     "char",
+					Size:     1,
+					Encoding: IntEncoding(1), // Signed
+				},
+				Nelems: 16,
+			}},
+			want: "char[16]",
+		},
+		{
+			name: "int[10]",
+			args: args{t: &Array{
+				Index: &Int{},
+				Type: &Int{
+					Name: "int",
+					Size: 4,
+				},
+				Nelems: 10,
+			}},
+			want: "int[10]",
+		},
+		{
+			name: "char[4][5]",
+			args: args{t: &Array{
+				Index: &Int{},
+				Type: &Array{
+					Index: &Int{},
+					Type: &Int{
+						Name: "char",
+						Size: 1,
+					},
+					Nelems: 4,
+				},
+				Nelems: 5,
+			}},
+			want: "char[4][5]",
+		},
+		{
+			name: "int*[8]",
+			args: args{t: &Array{
+				Index: &Int{},
+				Type: &Pointer{
+					Target: &Int{
+						Name: "int",
+						Size: 4,
+					},
+				},
+				Nelems: 8,
+			}},
+			want: "int*[8]",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := getArrayTypeName(tt.args.t); got != tt.want {
+				t.Errorf("getArrayTypeName() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}

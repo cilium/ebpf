@@ -71,7 +71,7 @@ func Marshal(data any, size int) (Buffer, error) {
 // Unmarshal a byte slice in the system's native endianness into data.
 //
 // Returns an error if buf can't be unmarshalled according to the behaviour
-// of [binary.Read].
+// of [binary.Decode].
 func Unmarshal(data interface{}, buf []byte) error {
 	switch value := data.(type) {
 	case encoding.BinaryUnmarshaler:

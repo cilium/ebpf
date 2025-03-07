@@ -16,7 +16,7 @@ import (
 
 type testcase struct {
 	new        func() any
-	zeroAllocs bool
+	zeroAllocs bool // marshaling does not allocate
 }
 
 type struc struct {
@@ -127,10 +127,6 @@ func TestUnmarshalAllocations(t *testing.T) {
 	}
 
 	for _, test := range testcases() {
-		if !test.zeroAllocs {
-			continue
-		}
-
 		value := test.new()
 		if !canUnmarshalInto(value) {
 			continue

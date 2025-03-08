@@ -1182,7 +1182,7 @@ func (m *Map) batchLookupPerCPU(cmd sys.Cmd, cursor *MapBatchCursor, keysOut, va
 
 	n, sysErr := m.batchLookupCmd(cmd, cursor, count, keysOut, valuePtr, opts)
 	if sysErr != nil && !errors.Is(sysErr, unix.ENOENT) {
-		return 0, err
+		return 0, sysErr
 	}
 
 	err = unmarshalBatchPerCPUValue(valuesOut, count, int(m.valueSize), valueBuf)

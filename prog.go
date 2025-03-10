@@ -8,7 +8,6 @@ import (
 	"math"
 	"path/filepath"
 	"runtime"
-	"strings"
 	"time"
 
 	"github.com/cilium/ebpf/asm"
@@ -286,15 +285,12 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions) (*Program, er
 	}
 
 	attr := &sys.ProgLoadAttr{
+		ProgName:           maybeFillObjName(spec.Name),
 		ProgType:           sys.ProgType(progType),
 		ProgFlags:          spec.Flags,
 		ExpectedAttachType: sys.AttachType(spec.AttachType),
 		License:            sys.NewStringPointer(spec.License),
 		KernVersion:        kv,
-	}
-
-	if haveObjName() == nil {
-		attr.ProgName = sys.NewObjName(spec.Name)
 	}
 
 	insns := make(asm.Instructions, len(spec.Instructions))
@@ -967,22 +963,6 @@ func LoadPinnedProgram(fileName string, opts *LoadPinOptions) (*Program, error) 
 	}
 
 	return &Program{"", fd, progName, fileName, info.Type}, nil
-}
-
-// SanitizeName replaces all invalid characters in name with replacement.
-// Passing a negative value for replacement will delete characters instead
-// of replacing them. Use this to automatically generate valid names for maps
-// and programs at runtime.
-//
-// The set of allowed characters depends on the running kernel version.
-// Dots are only allowed as of kernel 5.2.
-func SanitizeName(name string, replacement rune) string {
-	return strings.Map(func(char rune) rune {
-		if invalidBPFObjNameChar(char) {
-			return replacement
-		}
-		return char
-	}, name)
 }
 
 // ProgramGetNextID returns the ID of the next eBPF program.

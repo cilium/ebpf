@@ -276,6 +276,9 @@ jobs:
 
             // Get artifacts from this run
             const run_id = workflow_runs.data.workflow_runs[0].id;
+            const run_url = workflow_runs.data.workflow_runs[0].html_url;
+            console.log(`Using workflow run: ${run_url}`);
+
             const artifacts = await github.rest.actions.listWorkflowRunArtifacts({
               owner: 'microsoft',
               repo: 'ebpf-for-windows',

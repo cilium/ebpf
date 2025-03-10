@@ -4,12 +4,12 @@
 
 char __license[] SEC("license") = "Dual MIT/GPL";
 
-struct bpf_map_def SEC("maps") pkt_count = {
-	.type        = BPF_MAP_TYPE_ARRAY,
-	.key_size    = sizeof(u32),
-	.value_size  = sizeof(u64),
-	.max_entries = 1,
-};
+struct {
+	__uint(type, BPF_MAP_TYPE_ARRAY);
+	__type(key, u32);
+	__type(value, u64);
+	__uint(max_entries, 1);
+} pkt_count SEC(".maps");
 
 SEC("cgroup_skb/egress")
 int count_egress_packets(struct __sk_buff *skb) {

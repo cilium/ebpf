@@ -127,10 +127,6 @@ func TestUnmarshalAllocations(t *testing.T) {
 	}
 
 	for _, test := range testcases() {
-		if !test.zeroAllocs {
-			continue
-		}
-
 		value := test.new()
 		if !canUnmarshalInto(value) {
 			continue

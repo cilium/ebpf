@@ -556,7 +556,12 @@ func handleMapCreateError(attr sys.MapCreateAttr, spec *MapSpec, err error) erro
 	if errors.Is(err, unix.EINVAL) && spec.Type == UnspecifiedMap {
 		return fmt.Errorf("map create: cannot use type %s", UnspecifiedMap)
 	}
-	if errors.Is(err, unix.EINVAL) && spec.Flags&sys.BPF_F_NO_PREALLOC > 0 {
+	// LPM trie key size must be a multiple of 8 and not exceed 2048.
+	// Ref: https://docs.kernel.org/bpf/map_lpm_trie.html#bpf-map-type-lpm-trie
+	if errors.Is(err, unix.EINVAL) && spec.Type == LPMTrie && (spec.KeySize%8 != 0 || spec.KeySize > 2048) {
+		return fmt.Errorf("map create: LPMTrie: invalid key size %d (LPM trie key size must be a multiple of 8 and not exceed 2048)", LPMTrie)
+	}
+	if errors.Is(err, unix.EINVAL) && spec.Flags&sys.BPF_F_NO_PREALLOC > 0 && spec.Type != LPMTrie {
 		return fmt.Errorf("map create: %w (noPrealloc flag may be incompatible with map type %s)", err, spec.Type)
 	}
 

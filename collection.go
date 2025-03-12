@@ -70,14 +70,6 @@ func (cs *CollectionSpec) Copy() *CollectionSpec {
 		Types:     cs.Types.Copy(),
 	}
 
-	for name, spec := range cs.Maps {
-		cpy.Maps[name] = spec.Copy()
-	}
-
-	for name, spec := range cs.Programs {
-		cpy.Programs[name] = spec.Copy()
-	}
-
 	for name, spec := range cs.Variables {
 		cpy.Variables[name] = spec.copy(&cpy)
 	}

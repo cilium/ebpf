@@ -352,6 +352,7 @@ jobs:
           ./
           ./asm
           ./btf
+          ./features
           ./internal
           ./internal/efw
           ./internal/kallsyms

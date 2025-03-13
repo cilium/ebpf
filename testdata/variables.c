@@ -38,4 +38,13 @@ __section("socket") int check_struct() {
 
 // Variable aligned on page boundary to ensure all bytes in the mapping can be
 // accessed through the Variable API.
-volatile char var_array[8192] __section(".data.array");
+volatile uint8_t var_array[8192] __section(".data.array");
+__section("socket") int check_array() {
+	return var_array[sizeof(var_array) - 1] == 0xff;
+}
+
+volatile uint32_t var_atomic __section(".data.atomic");
+__section("socket") int add_atomic() {
+	__sync_fetch_and_add(&var_atomic, 1);
+	return 0;
+}

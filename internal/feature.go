@@ -161,10 +161,16 @@ type FeatureMatrix[K comparable] map[K]*FeatureTest
 // Result returns the outcome of the feature test for the given key.
 //
 // It's safe to call this function concurrently.
+//
+// Always returns [ErrNotSupportedOnOS] on Windows.
 func (fm FeatureMatrix[K]) Result(key K) error {
 	ft, ok := fm[key]
 	if !ok {
 		return fmt.Errorf("no feature probe for %v", key)
+	}
+
+	if platform.IsWindows {
+		return fmt.Errorf("%s: %w", ft.Name, ErrNotSupportedOnOS)
 	}
 
 	return ft.execute()
@@ -187,6 +193,10 @@ func NewFeatureCache[K comparable](newTest func(K) *FeatureTest) *FeatureCache[K
 }
 
 func (fc *FeatureCache[K]) Result(key K) error {
+	if platform.IsWindows {
+		return fmt.Errorf("feature probe for %v: %w", key, ErrNotSupportedOnOS)
+	}
+
 	// NB: Executing the feature test happens without fc.mu taken.
 	return fc.retrieve(key).execute()
 }

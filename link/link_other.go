@@ -1,3 +1,5 @@
+//go:build !windows
+
 package link
 
 import (
@@ -41,7 +43,7 @@ func AttachRawLink(opts RawLinkOptions) (*RawLink, error) {
 	}
 
 	p, attachType := platform.DecodeConstant(opts.Attach)
-	if p != "linux" {
+	if p != platform.Linux {
 		return nil, fmt.Errorf("attach type %s: %w", opts.Attach, internal.ErrNotSupportedOnOS)
 	}
 

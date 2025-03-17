@@ -84,6 +84,24 @@ func testLinkArch(t *testing.T, link Link) {
 	})
 }
 
+func newRawLink(t *testing.T) (*RawLink, *ebpf.Program) {
+	t.Helper()
+
+	cgroup, prog := mustCgroupFixtures(t)
+	link, err := AttachRawLink(RawLinkOptions{
+		Target:  int(cgroup.Fd()),
+		Program: prog,
+		Attach:  ebpf.AttachCGroupInetEgress,
+	})
+	testutils.SkipIfNotSupported(t, err)
+	if err != nil {
+		t.Fatal("Can't create raw link:", err)
+	}
+	t.Cleanup(func() { link.Close() })
+
+	return link, prog
+}
+
 func mustCgroupFixtures(t *testing.T) (*os.File, *ebpf.Program) {
 	t.Helper()
 

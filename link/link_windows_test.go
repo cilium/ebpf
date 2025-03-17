@@ -58,7 +58,7 @@ func TestProcessLink(t *testing.T) {
 	defer array.Close()
 
 	prog, err := ebpf.NewProgram(&ebpf.ProgramSpec{
-		Type: windowsProgramTypeFromGUID(t, programTypeProcessGUID),
+		Type: windowsProgramTypeForGUID(t, programTypeProcessGUID),
 		Name: "process_test",
 		Instructions: asm.Instructions{
 			// R1 = map
@@ -88,7 +88,7 @@ func TestProcessLink(t *testing.T) {
 
 	link, err := AttachRawLink(RawLinkOptions{
 		Program: prog,
-		Attach:  windowsAttachTypeFromGUID(t, attachTypeProcessGUID),
+		Attach:  windowsAttachTypeForGUID(t, attachTypeProcessGUID),
 	})
 	qt.Assert(t, qt.IsNil(err))
 	defer link.Close()

@@ -364,6 +364,7 @@ jobs:
           ./internal/testutils/testmain
           ./internal/tracefs
           ./internal/unix
+          ./link
 
       - name: Upload Test Results
         if: always()

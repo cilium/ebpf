@@ -3,7 +3,6 @@ package link
 import (
 	"errors"
 	"math"
-	"os"
 	"path/filepath"
 	"reflect"
 	"testing"
@@ -139,17 +138,13 @@ func newPinnedRawLink(t *testing.T) (*RawLink, string) {
 func testLink(t *testing.T, link Link, prog *ebpf.Program) {
 	t.Helper()
 
-	tmp, err := os.MkdirTemp("/sys/fs/bpf", "ebpf-test")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(tmp)
+	tmp := testutils.TempBPFFS(t)
 
 	_, isRawLink := link.(*RawLink)
 
 	t.Run("link/pinning", func(t *testing.T) {
 		path := filepath.Join(tmp, "link")
-		err = link.Pin(path)
+		err := link.Pin(path)
 		testutils.SkipIfNotSupported(t, err)
 		if err != nil {
 			t.Fatalf("Can't pin %T: %s", link, err)
@@ -206,11 +201,7 @@ func testLink(t *testing.T, link Link, prog *ebpf.Program) {
 
 		// We need to dup the FD since NewLinkFromFD takes
 		// ownership.
-		dupFD, err := unix.FcntlInt(uintptr(fder.FD()), unix.F_DUPFD_CLOEXEC, 1)
-		if err != nil {
-			t.Fatal("Can't dup link FD:", err)
-		}
-		defer unix.Close(dupFD)
+		dupFD := testutils.DupFD(t, fder.FD())
 
 		newLink, err := NewFromFD(dupFD)
 		testutils.SkipIfNotSupported(t, err)

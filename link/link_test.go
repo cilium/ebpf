@@ -8,12 +8,12 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/go-quicktest/qt"
+
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/internal/testutils"
 	"github.com/cilium/ebpf/internal/testutils/testmain"
 	"github.com/cilium/ebpf/internal/unix"
-
-	"github.com/go-quicktest/qt"
 )
 
 func TestMain(m *testing.M) {
@@ -21,17 +21,7 @@ func TestMain(m *testing.M) {
 }
 
 func TestRawLink(t *testing.T) {
-	cgroup, prog := mustCgroupFixtures(t)
-
-	link, err := AttachRawLink(RawLinkOptions{
-		Target:  int(cgroup.Fd()),
-		Program: prog,
-		Attach:  ebpf.AttachCGroupInetEgress,
-	})
-	testutils.SkipIfNotSupported(t, err)
-	if err != nil {
-		t.Fatal("Can't create raw link:", err)
-	}
+	link, prog := newRawLink(t)
 
 	info, err := link.Info()
 	if err != nil {
@@ -56,9 +46,7 @@ func TestRawLink(t *testing.T) {
 }
 
 func TestUnpinRawLink(t *testing.T) {
-	cgroup, prog := mustCgroupFixtures(t)
-	link, _ := newPinnedRawLink(t, cgroup, prog)
-	defer link.Close()
+	link, _ := newPinnedRawLink(t)
 
 	qt.Assert(t, qt.IsTrue(link.IsPinned()))
 
@@ -70,8 +58,7 @@ func TestUnpinRawLink(t *testing.T) {
 }
 
 func TestRawLinkLoadPinnedWithOptions(t *testing.T) {
-	cgroup, prog := mustCgroupFixtures(t)
-	link, path := newPinnedRawLink(t, cgroup, prog)
+	link, path := newPinnedRawLink(t)
 	defer link.Close()
 
 	qt.Assert(t, qt.IsTrue(link.IsPinned()))
@@ -87,18 +74,7 @@ func TestRawLinkLoadPinnedWithOptions(t *testing.T) {
 }
 
 func TestIterator(t *testing.T) {
-	cgroup, prog := mustCgroupFixtures(t)
-
-	tLink, err := AttachRawLink(RawLinkOptions{
-		Target:  int(cgroup.Fd()),
-		Program: prog,
-		Attach:  ebpf.AttachCGroupInetEgress,
-	})
-	testutils.SkipIfNotSupported(t, err)
-	if err != nil {
-		t.Fatal("Can't create original raw link:", err)
-	}
-	defer tLink.Close()
+	tLink, _ := newPinnedRawLink(t)
 	tLinkInfo, err := tLink.Info()
 	testutils.SkipIfNotSupported(t, err)
 	if err != nil {
@@ -147,25 +123,15 @@ func TestIterator(t *testing.T) {
 
 }
 
-func newPinnedRawLink(t *testing.T, cgroup *os.File, prog *ebpf.Program) (*RawLink, string) {
+func newPinnedRawLink(t *testing.T) (*RawLink, string) {
 	t.Helper()
 
-	link, err := AttachRawLink(RawLinkOptions{
-		Target:  int(cgroup.Fd()),
-		Program: prog,
-		Attach:  ebpf.AttachCGroupInetEgress,
-	})
-	testutils.SkipIfNotSupported(t, err)
-	if err != nil {
-		t.Fatal("Can't create raw link:", err)
-	}
+	link, _ := newRawLink(t)
 
 	path := filepath.Join(testutils.TempBPFFS(t), "link")
-	err = link.Pin(path)
+	err := link.Pin(path)
 	testutils.SkipIfNotSupported(t, err)
-	if err != nil {
-		t.Fatal(err)
-	}
+	qt.Assert(t, qt.IsNil(err))
 
 	return link, path
 }
@@ -264,25 +230,16 @@ func testLink(t *testing.T, link Link, prog *ebpf.Program) {
 }
 
 func TestLoadWrongPin(t *testing.T) {
-	cg, p := mustCgroupFixtures(t)
-
-	l, err := AttachRawLink(RawLinkOptions{
-		Target:  int(cg.Fd()),
-		Program: p,
-		Attach:  ebpf.AttachCGroupInetEgress,
-	})
-	testutils.SkipIfNotSupported(t, err)
-	t.Cleanup(func() { l.Close() })
+	l, p := newRawLink(t)
 
 	tmp := testutils.TempBPFFS(t)
-
 	ppath := filepath.Join(tmp, "prog")
 	lpath := filepath.Join(tmp, "link")
 
 	qt.Assert(t, qt.IsNil(p.Pin(ppath)))
 	qt.Assert(t, qt.IsNil(l.Pin(lpath)))
 
-	_, err = LoadPinnedLink(ppath, nil)
+	_, err := LoadPinnedLink(ppath, nil)
 	qt.Assert(t, qt.IsNotNil(err))
 
 	ll, err := LoadPinnedLink(lpath, nil)

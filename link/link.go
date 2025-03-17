@@ -219,7 +219,10 @@ func (l *RawLink) UpdateArgs(opts RawLinkUpdateOptions) error {
 		OldProgFd: uint32(oldFd),
 		Flags:     opts.Flags,
 	}
-	return sys.LinkUpdate(&attr)
+	if err := sys.LinkUpdate(&attr); err != nil {
+		return fmt.Errorf("update link: %w", err)
+	}
+	return nil
 }
 
 // Info returns metadata about the link.

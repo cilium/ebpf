@@ -84,7 +84,7 @@ func TestMemoryReadOnly(t *testing.T) {
 	qt.Assert(t, qt.IsTrue(fz.ReadOnly()))
 }
 
-func TestMemoryUnmap(t *testing.T) {
+func TestMemoryClose(t *testing.T) {
 	mm, err := mustMmapableArray(t, 0).Memory()
 	qt.Assert(t, qt.IsNil(err))
 

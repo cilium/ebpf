@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <unattend xmlns="urn:schemas-microsoft-com:unattend" xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State">
-	<!--https://schneegans.de/windows/unattend-generator/?LanguageMode=Unattended&UILanguage=en-US&Locale=en-US&Keyboard=00000409&GeoLocation=244&ProcessorArchitecture=amd64&ComputerNameMode=Random&CompactOsMode=Default&TimeZoneMode=Implicit&PartitionMode=Unattended&PartitionLayout=GPT&EspSize=300&RecoveryMode=Partition&RecoverySize=1000&DiskAssertionMode=Skip&WindowsEditionMode=Generic&WindowsEdition=pro_n&UserAccountMode=Unattended&AccountName0=%24USER&AccountDisplayName0=&AccountPassword0=&AccountGroup0=Administrators&AccountName1=&AccountName2=&AccountName3=&AutoLogonMode=Own&PasswordExpirationMode=Unlimited&LockoutMode=Disabled&HideFiles=Hidden&TaskbarSearch=Box&TaskbarIconsMode=Default&StartTilesMode=Default&StartPinsMode=Default&DisableDefender=true&DisableSystemRestore=true&AllowPowerShellScripts=true&DisableAppSuggestions=true&PreventDeviceEncryption=true&HideEdgeFre=true&EffectsMode=Default&DesktopIconsMode=Default&WifiMode=Skip&ExpressSettings=DisableAll&KeysMode=Skip&ColorMode=Default&WallpaperMode=Default&SystemScript0=bcdedit.exe+-set+TESTSIGNING+ON%3B%0D%0A&SystemScriptType0=Ps1&FirstLogonScript0=%23+https%3A%2F%2Flearn.microsoft.com%2Fen-us%2Fwindows-server%2Fadministration%2Fopenssh%2Fopenssh_server_configuration%0D%0AAdd-WindowsCapability+-Online+-Name+OpenSSH.Server%7E%7E%7E%7E0.0.1.0%3B%0D%0AStart-Service+sshd%3B%0D%0ASet-Service+-Name+sshd+-StartupType+%27Automatic%27%3B%0D%0ANew-ItemProperty+-Path+%22HKLM%3A%5CSOFTWARE%5COpenSSH%22+-Name+DefaultShell+-Value+%22C%3A%5CWindows%5CSystem32%5CWindowsPowerShell%5Cv1.0%5Cpowershell.exe%22+-PropertyType+String+-Force%3B%0D%0Aicacls.exe+%22C%3A%5CProgramData%5Cssh%5Cadministrators_authorized_keys%22+%2Finheritance%3Ar+%2Fgrant+%22Administrators%3AF%22+%2Fgrant+%22SYSTEM%3AF%22%3B%0D%0A%0D%0A%23+Allow+inbound+connections%0D%0ASet-NetFirewallProfile+-Profile+Domain%2CPublic%2CPrivate+-DefaultInboundAction+Allow%3B%0D%0A%0D%0A%23+Set+up+authorized+keys%0D%0Aecho+%22%24AUTHORIZED_KEYS%22+%7C+Out-File+-FilePath+%22C%3A%5CProgramData%5Cssh%5Cadministrators_authorized_keys%22%0D%0A&FirstLogonScriptType0=Ps1&FirstLogonScript1=%23+Install+qemu+guest+agent+to+allow+copy+and+paste+between+host+and+VM.%0D%0A%24url+%3D+%22https%3A%2F%2Ffedorapeople.org%2Fgroups%2Fvirt%2Fvirtio-win%2Fdirect-downloads%2Farchive-qemu-ga%2Fqemu-ga-win-108.0.2-1.el9%2Fqemu-ga-x86_64.msi%22%0D%0A%24output+%3D+%22%24env%3ATEMP%5Cqemu-ga-x86_64.msi%22%0D%0AInvoke-WebRequest+-Uri+%24url+-OutFile+%24output%0D%0AStart-Process+msiexec.exe+-ArgumentList+%22%2Fi+%60%22%24output%60%22+%2Fqn+%2Fnorestart%22+-Wait%0D%0ARemove-Item+%24output+-Force&FirstLogonScriptType1=Ps1&FirstLogonScript2=%23+Shut+down+system%0D%0AStop-Computer+-Force&FirstLogonScriptType2=Ps1&WdacMode=Skip-->
+	<!--https://schneegans.de/windows/unattend-generator/?LanguageMode=Unattended&UILanguage=en-US&Locale=en-US&Keyboard=00000409&GeoLocation=244&ProcessorArchitecture=amd64&ComputerNameMode=Random&CompactOsMode=Default&TimeZoneMode=Implicit&PartitionMode=Unattended&PartitionLayout=GPT&EspSize=300&RecoveryMode=Partition&RecoverySize=1000&DiskAssertionMode=Skip&WindowsEditionMode=Generic&WindowsEdition=pro_n&UserAccountMode=Unattended&AccountName0=%24USER&AccountDisplayName0=&AccountPassword0=&AccountGroup0=Administrators&AccountName1=&AccountName2=&AccountName3=&AutoLogonMode=Own&PasswordExpirationMode=Unlimited&LockoutMode=Disabled&HideFiles=Hidden&TaskbarSearch=Box&TaskbarIconsMode=Default&StartTilesMode=Default&StartPinsMode=Default&DisableDefender=true&DisableSystemRestore=true&AllowPowerShellScripts=true&DisableAppSuggestions=true&PreventDeviceEncryption=true&HideEdgeFre=true&EffectsMode=Default&DesktopIconsMode=Default&VirtIoGuestTools=true&WifiMode=Skip&ExpressSettings=DisableAll&KeysMode=Skip&ColorMode=Default&WallpaperMode=Default&SystemScript0=bcdedit.exe+-set+TESTSIGNING+ON%3B%0D%0A&SystemScriptType0=Ps1&FirstLogonScript0=%23+https%3A%2F%2Flearn.microsoft.com%2Fen-us%2Fwindows-server%2Fadministration%2Fopenssh%2Fopenssh_server_configuration%0D%0AAdd-WindowsCapability+-Online+-Name+OpenSSH.Server%7E%7E%7E%7E0.0.1.0%3B%0D%0AStart-Service+sshd%3B%0D%0ASet-Service+-Name+sshd+-StartupType+%27Automatic%27%3B%0D%0ANew-ItemProperty+-Path+%22HKLM%3A%5CSOFTWARE%5COpenSSH%22+-Name+DefaultShell+-Value+%22C%3A%5CWindows%5CSystem32%5CWindowsPowerShell%5Cv1.0%5Cpowershell.exe%22+-PropertyType+String+-Force%3B%0D%0Aicacls.exe+%22C%3A%5CProgramData%5Cssh%5Cadministrators_authorized_keys%22+%2Finheritance%3Ar+%2Fgrant+%22Administrators%3AF%22+%2Fgrant+%22SYSTEM%3AF%22%3B%0D%0A%0D%0A%23+Allow+inbound+connections%0D%0ASet-NetFirewallProfile+-Profile+Domain%2CPublic%2CPrivate+-DefaultInboundAction+Allow%3B%0D%0A%0D%0A%23+Set+up+authorized+keys%0D%0Aecho+%22%24AUTHORIZED_KEYS%22+%7C+Out-File+-Encoding+utf8+-FilePath+%22C%3A%5CProgramData%5Cssh%5Cadministrators_authorized_keys%22%0D%0A&FirstLogonScriptType0=Ps1&WdacMode=Skip-->
 	<settings pass="offlineServicing"/>
 	<settings pass="windowsPE">
 		<component name="Microsoft-Windows-International-Core-WinPE" processorArchitecture="amd64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS">
@@ -196,6 +196,18 @@ foreach( $file in $Document.unattend.Extensions.File ) {
     [System.IO.File]::WriteAllBytes( $path, $bytes );
 }
 		</ExtractScript>
+		<File path="C:\Windows\Setup\Scripts\VirtIoGuestTools.ps1">
+&amp; {
+	foreach( $letter in 'DEFGHIJKLMNOPQRSTUVWXYZ'.ToCharArray() ) {
+		$exe = "${letter}:\virtio-win-guest-tools.exe";
+		if( Test-Path -LiteralPath $exe ) {
+			Start-Process -FilePath $exe -ArgumentList '/passive', '/norestart' -Wait;
+			return;
+		}
+	}
+	'VirtIO Guest Tools image (virtio-win-*.iso) is not attached to this VM.';
+} *&gt;&amp;1 &gt;&gt; 'C:\Windows\Setup\Scripts\VirtIoGuestTools.log';
+		</File>
 		<File path="C:\Windows\Setup\Scripts\unattend-01.ps1">
 bcdedit.exe -set TESTSIGNING ON;
 		</File>
@@ -211,19 +223,7 @@ icacls.exe "C:\ProgramData\ssh\administrators_authorized_keys" /inheritance:r /g
 Set-NetFirewallProfile -Profile Domain,Public,Private -DefaultInboundAction Allow;
 
 # Set up authorized keys
-echo "$AUTHORIZED_KEYS" | Out-File -FilePath "C:\ProgramData\ssh\administrators_authorized_keys"
-		</File>
-		<File path="C:\Windows\Setup\Scripts\unattend-03.ps1">
-# Install qemu guest agent to allow copy and paste between host and VM.
-$url = "https://fedorapeople.org/groups/virt/virtio-win/direct-downloads/archive-qemu-ga/qemu-ga-win-108.0.2-1.el9/qemu-ga-x86_64.msi"
-$output = "$env:TEMP\qemu-ga-x86_64.msi"
-Invoke-WebRequest -Uri $url -OutFile $output
-Start-Process msiexec.exe -ArgumentList "/i `"$output`" /qn /norestart" -Wait
-Remove-Item $output -Force
-		</File>
-		<File path="C:\Windows\Setup\Scripts\unattend-04.ps1">
-# Shut down system
-Stop-Computer -Force
+echo "$AUTHORIZED_KEYS" | Out-File -Encoding utf8 -FilePath "C:\ProgramData\ssh\administrators_authorized_keys"
 		</File>
 		<File path="C:\Windows\Setup\Scripts\Specialize.ps1">
 $scripts = @(
@@ -241,6 +241,9 @@ $scripts = @(
 	};
 	{
 		reg.exe add "HKLM\Software\Policies\Microsoft\Windows\CloudContent" /v "DisableWindowsConsumerFeatures" /t REG_DWORD /d 1 /f;
+	};
+	{
+		Get-Content -LiteralPath 'C:\Windows\Setup\Scripts\VirtIoGuestTools.ps1' -Raw | Invoke-Expression;
 	};
 	{
 		reg.exe add "HKLM\SYSTEM\CurrentControlSet\Control\BitLocker" /v "PreventDeviceEncryption" /t REG_DWORD /d 1 /f;
@@ -334,12 +337,6 @@ $scripts = @(
 	};
 	{
 		Get-Content -LiteralPath 'C:\Windows\Setup\Scripts\unattend-02.ps1' -Raw | Invoke-Expression;
-	};
-	{
-		Get-Content -LiteralPath 'C:\Windows\Setup\Scripts\unattend-03.ps1' -Raw | Invoke-Expression;
-	};
-	{
-		Get-Content -LiteralPath 'C:\Windows\Setup\Scripts\unattend-04.ps1' -Raw | Invoke-Expression;
 	};
 );
 

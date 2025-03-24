@@ -2,6 +2,10 @@
 
 set -euo pipefail
 
+# Variables
+VIRTIO_ISO_URL="https://fedorapeople.org/groups/virt/virtio-win/direct-downloads/archive-virtio/virtio-win-0.1.266-1/virtio-win-0.1.266.iso"
+VIRTIO_ISO="/tmp/virtio-win.iso"
+
 # Check if ISO path is provided
 if [ -z "$1" ]; then
     echo "Usage: $0 <path_to_windows_iso>"
@@ -38,9 +42,18 @@ if [ -z "$SSH_PUBKEY" ]; then
   exit 1
 fi
 
-# Disk path
+# Check disk before starting download
 VM_DISK="/var/lib/libvirt/images/${VM_NAME}.qcow2"
 
+if [ -f "$VM_DISK" ]; then
+  echo "Error: $VM_DISK already exists"
+  exit 1
+fi
+
+# Download Virtio Drivers ISO
+echo "Downloading Virtio drivers ISO..."
+curl -L -o "$VIRTIO_ISO" --etag-save "$VIRTIO_ISO.tmp" --etag-compare "$VIRTIO_ISO.etag" "$VIRTIO_ISO_URL"
+mv "$VIRTIO_ISO.tmp" "$VIRTIO_ISO.etag"
 
 # Create autounattend
 temp="$(mktemp -d)"
@@ -97,6 +110,7 @@ sudo virt-install \
   --graphics spice \
   --disk path="$VM_DISK",format=qcow2,bus=sata,size="$DISK_SIZE",boot.order=1 \
   --disk path="$temp/win.iso",device=cdrom,bus=sata,boot.order=2 \
+  --disk path="$VIRTIO_ISO",device=cdrom,bus=sata \
   --install bootdev=cdrom \
   --boot uefi,firmware.feature0.name=enrolled-keys,firmware.feature0.enabled=no  \
   --noautoconsole
@@ -111,7 +125,7 @@ echo "Waiting for VM to receive an IP."
 ip=""
 while [ -z "$ip" ]; do
   sleep 10
-  ip="$(virsh domifaddr "$VM_NAME" | gawk 'match($0, /([[:digit:]\.]+)\//, a) { print a[1] }')"
+  ip="$(virsh --connect qemu:///system domifaddr "$VM_NAME" | gawk 'match($0, /([[:digit:]\.]+)\//, a) { print a[1] }')"
   echo -n .
 done
 echo

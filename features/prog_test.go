@@ -66,6 +66,7 @@ func TestHaveProgramHelper(t *testing.T) {
 		{ebpf.CGroupSockopt, asm.FnSkStorageDelete, nil, "5.3"},             // 6ac99e8f23d4
 		{ebpf.SkLookup, asm.FnSkcToUdp6Sock, nil, "5.9"},                    // 0d4fad3e57df
 		{ebpf.Syscall, asm.FnSysClose, nil, "5.14"},                         // 3abea089246f
+		{ebpf.Netfilter, asm.FnCgrpStorageDelete, nil, "6.4"},               // c4bcfb38a95e
 	}
 
 	for _, tc := range testCases {

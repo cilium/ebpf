@@ -38,7 +38,7 @@ func TestHaveProgramHelper(t *testing.T) {
 	}
 
 	// Referencing linux kernel commits to track the kernel version required to pass these test cases.
-	// They cases are derived from libbpf's selftests and helper/prog combinations that are
+	// These cases are derived from libbpf's selftests and helper/prog combinations that are
 	// probed for in cilium/cilium.
 	testCases := []testCase{
 		{ebpf.Kprobe, asm.FnMapLookupElem, nil, "3.19"},                     // d0003ec01c66
@@ -63,6 +63,9 @@ func TestHaveProgramHelper(t *testing.T) {
 		{ebpf.CGroupSockAddr, asm.FnGetCgroupClassid, nil, "5.7"},           // 5a52ae4e32a6
 		{ebpf.Kprobe, asm.FnGetBranchSnapshot, nil, "5.16"},                 // 856c02dbce4f
 		{ebpf.SchedCLS, asm.FnSkbSetTstamp, nil, "5.18"},                    // 9bb984f28d5b
+		{ebpf.CGroupSockopt, asm.FnSkStorageDelete, nil, "5.3"},             // 6ac99e8f23d4
+		{ebpf.SkLookup, asm.FnSkcToUdp6Sock, nil, "5.9"},                    // 0d4fad3e57df
+		{ebpf.Syscall, asm.FnSysClose, nil, "5.14"},                         // 3abea089246f
 	}
 
 	for _, tc := range testCases {

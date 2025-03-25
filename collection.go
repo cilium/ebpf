@@ -262,7 +262,11 @@ func (cs *CollectionSpec) Assign(to interface{}) error {
 // Returns an error if any of the fields can't be found, or
 // if the same Map or Program is assigned multiple times.
 func (cs *CollectionSpec) LoadAndAssign(to interface{}, opts *CollectionOptions) error {
-	loader, err := newCollectionLoader(cs, opts)
+	if opts == nil {
+		opts = &CollectionOptions{}
+	}
+
+	loader, err := newCollectionLoader(cs, *opts)
 	if err != nil {
 		return err
 	}
@@ -360,7 +364,7 @@ func NewCollection(spec *CollectionSpec) (*Collection, error) {
 // Omitting Collection.Close() during application shutdown is an error.
 // See the package documentation for details around Map and Program lifecycle.
 func NewCollectionWithOptions(spec *CollectionSpec, opts CollectionOptions) (*Collection, error) {
-	loader, err := newCollectionLoader(spec, &opts)
+	loader, err := newCollectionLoader(spec, opts)
 	if err != nil {
 		return nil, err
 	}
@@ -414,9 +418,13 @@ type collectionLoader struct {
 	vars     map[string]*Variable
 }
 
-func newCollectionLoader(coll *CollectionSpec, opts *CollectionOptions) (*collectionLoader, error) {
-	if opts == nil {
-		opts = &CollectionOptions{}
+func newCollectionLoader(coll *CollectionSpec, opts CollectionOptions) (*collectionLoader, error) {
+	if opts.Programs.KernelTypes == nil {
+		kernelSpec, err := btf.LoadKernelSpec()
+		if err != nil {
+			return nil, fmt.Errorf("cannot load kernel spec: %w", err)
+		}
+		opts.Programs.KernelTypes = kernelSpec
 	}
 
 	// Check for existing MapSpecs in the CollectionSpec for all provided replacement maps.
@@ -432,7 +440,7 @@ func newCollectionLoader(coll *CollectionSpec, opts *CollectionOptions) (*collec
 
 	return &collectionLoader{
 		coll,
-		opts,
+		&opts,
 		make(map[string]*Map),
 		make(map[string]*Program),
 		make(map[string]*Variable),

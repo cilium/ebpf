@@ -1,6 +1,8 @@
 package link
 
 import (
+	"errors"
+	"os"
 	"testing"
 
 	"golang.org/x/sys/windows"
@@ -8,34 +10,24 @@ import (
 	"github.com/go-quicktest/qt"
 
 	"github.com/cilium/ebpf"
-	"github.com/cilium/ebpf/internal/efw"
-	"github.com/cilium/ebpf/internal/platform"
 )
 
-// windowsProgramTypeFromGUID resolves a GUID to a ProgramType.
-func windowsProgramTypeFromGUID(tb testing.TB, guid windows.GUID) ebpf.ProgramType {
-	rawProgramType, err := efw.EbpfGetBpfProgramType(guid)
-	qt.Assert(tb, qt.IsNil(err))
-
-	if rawProgramType == 0 {
-		tb.Skipf("Program type not found for GUID %v", guid)
-	}
-
-	typ, err := ebpf.ProgramTypeForPlatform(platform.Windows, rawProgramType)
-	qt.Assert(tb, qt.IsNil(err))
-	return typ
-}
-
-// windowsAttachTypeFromGUID resolves a GUID to an AttachType.
-func windowsAttachTypeFromGUID(tb testing.TB, guid windows.GUID) ebpf.AttachType {
-	rawAttachType, err := efw.EbpfGetBpfAttachType(guid)
-	qt.Assert(tb, qt.IsNil(err))
-
-	if rawAttachType == 0 {
+// windowsProgramTypeForGUID resolves a GUID to a ProgramType.
+func windowsProgramTypeForGUID(tb testing.TB, guid windows.GUID) ebpf.ProgramType {
+	programType, err := ebpf.WindowsProgramTypeForGUID(guid.String())
+	if errors.Is(err, os.ErrNotExist) {
 		tb.Skipf("Attach type not found for GUID %v", guid)
 	}
-
-	typ, err := ebpf.AttachTypeForPlatform(platform.Windows, rawAttachType)
 	qt.Assert(tb, qt.IsNil(err))
-	return typ
+	return programType
+}
+
+// windowsAttachTypeForGUID resolves a GUID to an AttachType.
+func windowsAttachTypeForGUID(tb testing.TB, guid windows.GUID) ebpf.AttachType {
+	attachType, err := ebpf.WindowsAttachTypeForGUID(guid.String())
+	if errors.Is(err, os.ErrNotExist) {
+		tb.Skipf("Attach type not found for GUID %v", guid)
+	}
+	qt.Assert(tb, qt.IsNil(err))
+	return attachType
 }

@@ -19,7 +19,7 @@ func TestSanitizeName(t *testing.T) {
 		"t_est":    "t_est",
 		"hörnchen": "hrnchen",
 	} {
-		qt.Assert(t, qt.Equals(SanitizeName(input, -1), want), qt.Commentf("input: %s", input))
+		qt.Assert(t, qt.Equals(sanitizeName(input, -1), want), qt.Commentf("input: %s", input))
 	}
 }
 

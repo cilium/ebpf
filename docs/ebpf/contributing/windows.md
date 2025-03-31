@@ -1,4 +1,4 @@
-# How to work on the Windows port
+# Working on the Windows port
 
 The library has basic support for interacting with eBPF for Windows (efW).
 Things are subject to change because eBPF for Windows has not had a stable (signed) release yet.
@@ -15,16 +15,6 @@ Things are subject to change because eBPF for Windows has not had a stable (sign
 * eBPF for Windows has a large user-space component which ebpf-go calls into
   via dynamic runtime linking. This uses the same infrastructure as CGo but
   does not require a C toolchain and is therefore trivial to distribute.
-
-## Platform specific ELFs
-
-ELFs compiled against Linux and Windows headers are not binary compatible.
-Add the following to ELFs targeting Windows until there is an
-[official way to declare the platform]:
-
-```C
-const bool __ebpf_for_windows_tag __attribute__((section(".ebpf_for_windows"))) = true;
-```
 
 ## Exported API
 
@@ -184,5 +174,4 @@ efW uses several layers of error codes.
 [ntosebpfext]: https://github.com/microsoft/ntosebpfext
 [access the debug version of the msvc runtime]: https://github.com/microsoft/ebpf-for-windows/issues/3872
 [msvc debug DLLs]: https://github.com/microsoft/ebpf-for-windows/blob/7005b7ff47e7281843d6b414cd69fc5a979507c8/scripts/setup-ebpf.ps1#L17-L27
-[official way to declare the platform]: https://github.com/microsoft/ebpf-for-windows/issues/3956
 [efW CI/CD]: https://github.com/microsoft/ebpf-for-windows/actions/workflows/cicd.yml?query=branch%3Amain+is%3Acompleted

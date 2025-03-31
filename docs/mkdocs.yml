@@ -60,6 +60,7 @@ nav:
   - 'Guides':
     - 'Getting Started': guides/getting-started.md
     - 'Portable eBPF': guides/portable-ebpf.md
+    - 'Windows support': guides/windows-support.md
   - 'Concepts':
     - 'Loading eBPF Programs': concepts/loader.md
     - 'Global Variables': concepts/global-variables.md

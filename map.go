@@ -50,8 +50,9 @@ type MapID = sys.MapID
 
 // MapSpec defines a Map.
 type MapSpec struct {
-	// Name is passed to the kernel as a debug aid. Must only contain
-	// alpha numeric and '_' characters.
+	// Name is passed to the kernel as a debug aid.
+	//
+	// Unsupported characters will be stripped.
 	Name       string
 	Type       MapType
 	KeySize    uint32

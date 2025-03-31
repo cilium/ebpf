@@ -742,7 +742,7 @@ func (ec *elfCode) loadMaps() error {
 			lr := io.LimitReader(r, int64(size))
 
 			spec := MapSpec{
-				Name: SanitizeName(mapName, -1),
+				Name: sanitizeName(mapName, -1),
 			}
 			switch {
 			case binary.Read(lr, ec.ByteOrder, &spec.Type) != nil:
@@ -1029,7 +1029,7 @@ func mapSpecFromBTF(es *elfSection, vs *btf.VarSecinfo, def *btf.Struct, spec *b
 	}
 
 	return &MapSpec{
-		Name:       SanitizeName(name, -1),
+		Name:       sanitizeName(name, -1),
 		Type:       MapType(mapType),
 		KeySize:    keySize,
 		ValueSize:  valueSize,
@@ -1156,7 +1156,7 @@ func (ec *elfCode) loadDataSections() error {
 		}
 
 		mapSpec := &MapSpec{
-			Name:       SanitizeName(sec.Name, -1),
+			Name:       sanitizeName(sec.Name, -1),
 			Type:       Array,
 			KeySize:    4,
 			ValueSize:  uint32(sec.Size),

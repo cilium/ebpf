@@ -106,8 +106,9 @@ type ProgramOptions struct {
 
 // ProgramSpec defines a Program.
 type ProgramSpec struct {
-	// Name is passed to the kernel as a debug aid. Must only contain
-	// alpha numeric and '_' characters.
+	// Name is passed to the kernel as a debug aid.
+	//
+	// Unsupported characters will be stripped.
 	Name string
 
 	// Type determines at which hook in the kernel a program will run.

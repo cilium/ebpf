@@ -1362,20 +1362,23 @@ func TestMapMarshalUnsafe(t *testing.T) {
 }
 
 func TestMapName(t *testing.T) {
-	if err := haveObjName(); err != nil {
-		t.Skip(err)
-	}
+	testutils.SkipIfNotSupported(t, haveObjName())
 
-	m := createMap(t, Array, 1)
+	m := mustNewMap(t, &MapSpec{
+		Name:       "test!123",
+		Type:       Array,
+		KeySize:    4,
+		ValueSize:  4,
+		MaxEntries: 1,
+	}, nil)
 
 	var info sys.MapInfo
 	if err := sys.ObjInfo(m.fd, &info); err != nil {
 		t.Fatal(err)
 	}
 
-	if name := unix.ByteSliceToString(info.Name[:]); name != "test" {
-		t.Error("Expected name to be test, got", name)
-	}
+	name := unix.ByteSliceToString(info.Name[:])
+	qt.Assert(t, qt.Equals(name, "test123"))
 }
 
 func TestMapFromFD(t *testing.T) {

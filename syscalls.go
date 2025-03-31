@@ -27,12 +27,12 @@ var (
 	sysErrNotSupported = sys.Error(ErrNotSupported, sys.ENOTSUPP)
 )
 
-// SanitizeName replaces all invalid characters in name with replacement.
+// sanitizeName replaces all invalid characters in name with replacement.
 // Passing a negative value for replacement will delete characters instead
 // of replacing them.
 //
 // The set of allowed characters may change over time.
-func SanitizeName(name string, replacement rune) string {
+func sanitizeName(name string, replacement rune) string {
 	return strings.Map(func(char rune) rune {
 		switch {
 		case char >= 'A' && char <= 'Z':
@@ -56,6 +56,7 @@ func maybeFillObjName(name string) sys.ObjName {
 		return sys.ObjName{}
 	}
 
+	name = sanitizeName(name, -1)
 	if errors.Is(objNameAllowsDot(), ErrNotSupported) {
 		name = strings.ReplaceAll(name, ".", "")
 	}

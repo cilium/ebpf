@@ -479,20 +479,25 @@ func TestProgramWithUnsatisfiedMap(t *testing.T) {
 }
 
 func TestProgramName(t *testing.T) {
-	if err := haveObjName(); err != nil {
-		t.Skip(err)
-	}
+	testutils.SkipIfNotSupported(t, haveObjName())
 
-	prog := createBasicProgram(t)
+	prog := mustNewProgram(t, &ProgramSpec{
+		Name: "test*123",
+		Type: SocketFilter,
+		Instructions: asm.Instructions{
+			asm.LoadImm(asm.R0, 1, asm.DWord),
+			asm.Return(),
+		},
+		License: "MIT",
+	}, nil)
 
 	var info sys.ProgInfo
 	if err := sys.ObjInfo(prog.fd, &info); err != nil {
 		t.Fatal(err)
 	}
 
-	if name := unix.ByteSliceToString(info.Name[:]); name != "test" {
-		t.Errorf("Name is not test, got '%s'", name)
-	}
+	name := unix.ByteSliceToString(info.Name[:])
+	qt.Assert(t, qt.Equals(name, "test123"))
 }
 
 func TestProgramCloneNil(t *testing.T) {

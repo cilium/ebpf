@@ -282,7 +282,7 @@ func parseSymbol(r *reader, types []rune) (s ksym, err error, skip bool) {
 			s.mod = strings.Trim(r.Text(), "[]")
 		// Ignore any future fields.
 		default:
-			break
+			return
 		}
 	}
 

@@ -435,7 +435,7 @@ func TestInflateLegacyBitfield(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			types, err := readAndInflateTypes(test.reader, binary.LittleEndian, 2, emptyStrings, nil)
 			if err != nil {
-				fmt.Println(before.Bytes())
+				t.Log(before.Bytes())
 				t.Fatal(err)
 			}
 

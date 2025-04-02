@@ -48,14 +48,14 @@ func main() {
 	defer objs.Close()
 
 	link, err := link.AttachTracing(link.TracingOptions{
-		Program: objs.bpfPrograms.TcpConnect,
+		Program: objs.TcpConnect,
 	})
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer link.Close()
 
-	rd, err := ringbuf.NewReader(objs.bpfMaps.Events)
+	rd, err := ringbuf.NewReader(objs.Events)
 	if err != nil {
 		log.Fatalf("opening ringbuf reader: %s", err)
 	}

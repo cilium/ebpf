@@ -103,7 +103,7 @@ func TestKretprobe(t *testing.T) {
 	}
 
 	k, err := Kretprobe("bogus", prog, nil)
-	if !(errors.Is(err, os.ErrNotExist) || errors.Is(err, unix.EINVAL)) {
+	if !errors.Is(err, os.ErrNotExist) && !errors.Is(err, unix.EINVAL) {
 		t.Fatal(err)
 	}
 	if k != nil {

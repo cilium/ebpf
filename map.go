@@ -1152,13 +1152,13 @@ func (m *Map) batchLookup(cmd sys.Cmd, cursor *MapBatchCursor, keysOut, valuesOu
 
 	valueBuf := sysenc.SyscallOutput(valuesOut, count*int(m.fullValueSize))
 
-	n, err := m.batchLookupCmd(cmd, cursor, count, keysOut, valueBuf.Pointer(), opts)
-	if errors.Is(err, unix.ENOSPC) {
+	n, sysErr := m.batchLookupCmd(cmd, cursor, count, keysOut, valueBuf.Pointer(), opts)
+	if errors.Is(sysErr, unix.ENOSPC) {
 		// Hash tables return ENOSPC when the size of the batch is smaller than
 		// any bucket.
-		return n, fmt.Errorf("%w (batch size too small?)", err)
-	} else if err != nil {
-		return n, err
+		return n, fmt.Errorf("%w (batch size too small?)", sysErr)
+	} else if sysErr != nil && !errors.Is(sysErr, unix.ENOENT) {
+		return 0, sysErr
 	}
 
 	err = valueBuf.Unmarshal(valuesOut)
@@ -1166,7 +1166,7 @@ func (m *Map) batchLookup(cmd sys.Cmd, cursor *MapBatchCursor, keysOut, valuesOu
 		return 0, err
 	}
 
-	return n, nil
+	return n, sysErr
 }
 
 func (m *Map) batchLookupPerCPU(cmd sys.Cmd, cursor *MapBatchCursor, keysOut, valuesOut interface{}, opts *BatchOptions) (int, error) {

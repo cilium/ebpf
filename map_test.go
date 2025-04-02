@@ -983,6 +983,65 @@ func TestMapBatchLookupAllocations(t *testing.T) {
 	qt.Assert(t, qt.Equals(allocs, 0))
 }
 
+type customTestUnmarshaler []uint8
+
+func (c customTestUnmarshaler) UnmarshalBinary(data []byte) error {
+	chunkSize := len(data) / len(c)
+
+	for i := range len(data) / chunkSize {
+		c[i] = data[i*chunkSize]
+	}
+
+	return nil
+}
+
+func TestMapBatchLookupCustomUnmarshaler(t *testing.T) {
+	testutils.SkipIfNotSupported(t, haveBatchAPI())
+
+	m := mustNewMap(t, &MapSpec{
+		Type:       Array,
+		MaxEntries: 3,
+		KeySize:    4,
+		ValueSize:  4,
+		Contents: []MapKV{
+			{uint32(0), uint32(3)},
+			{uint32(1), uint32(4)},
+			{uint32(2), uint32(5)},
+		},
+	}, nil)
+
+	var (
+		cursor MapBatchCursor
+		// Use data structures that result in different memory size than the
+		// map keys and values. Otherwise their memory is used as backing
+		// memory for the syscall directly and Unmarshal is a no-op.
+		// Use batch size that results in partial second lookup.
+		batchKeys   = make(customTestUnmarshaler, 2)
+		batchValues = make(customTestUnmarshaler, 2)
+		keys        []uint8
+		values      []uint8
+	)
+
+	_, err := m.BatchLookup(&cursor, batchKeys, batchValues, nil)
+	if err != nil {
+		t.Fatal("Full batch lookup failed:", err)
+	}
+
+	keys = append(keys, batchKeys...)
+	values = append(values, batchValues...)
+
+	_, err = m.BatchLookup(&cursor, batchKeys, batchValues, nil)
+	if !errors.Is(err, ErrKeyNotExist) {
+		t.Fatal("Partial batch lookup doesn't return ErrKeyNotExist:", err)
+	}
+
+	keys = append(keys, batchKeys[0])
+	values = append(values, batchValues[0])
+
+	qt.Assert(t, qt.DeepEquals(keys, []uint8{0, 1, 2}))
+	qt.Assert(t, qt.DeepEquals(values, []uint8{3, 4, 5}))
+}
+
 func TestMapIterateHashKeyOneByteFull(t *testing.T) {
 	hash := mustNewMap(t, &MapSpec{
 		Type:       Hash,

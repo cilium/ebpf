@@ -1,14 +1,16 @@
 package pin
 
 import (
-	"io/fs"
+	"iter"
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
 
 	"github.com/go-quicktest/qt"
 
 	"github.com/cilium/ebpf"
+	"github.com/cilium/ebpf/internal/platform"
 	"github.com/cilium/ebpf/internal/testutils"
 )
 
@@ -16,43 +18,50 @@ func TestWalkDir(t *testing.T) {
 	testutils.SkipOnOldKernel(t, "4.10", "reading program fdinfo")
 
 	tmp := testutils.TempBPFFS(t)
+
 	dir := filepath.Join(tmp, "dir")
-	qt.Assert(t, qt.IsNil(os.Mkdir(dir, 0755)))
-
-	mustPinnedProgram(t, filepath.Join(tmp, "pinned_prog"))
-	mustPinnedMap(t, filepath.Join(dir, "pinned_map"))
-
-	entries := make(map[string]string)
-
-	bpffn := func(path string, d fs.DirEntry, obj Pinner, err error) error {
-		qt.Assert(t, qt.IsNil(err))
-
-		if obj != nil {
-			defer obj.Close()
-		}
-
-		if path == "." {
-			return nil
-		}
-
-		switch obj.(type) {
-		case *ebpf.Program:
-			entries[path] = "prog"
-		case *ebpf.Map:
-			entries[path] = "map"
-		default:
-			entries[path] = ""
-		}
-
-		return nil
+	if !platform.IsWindows {
+		// Windows doesn't have a BPF file system, so mkdir below fails.
+		qt.Assert(t, qt.IsNil(os.Mkdir(dir, 0755)))
 	}
-	qt.Assert(t, qt.IsNil(WalkDir(tmp, bpffn)))
 
-	qt.Assert(t, qt.DeepEquals(entries, map[string]string{
-		"pinned_prog":    "prog",
-		"dir":            "",
-		"dir/pinned_map": "map",
-	}))
+	progPath := filepath.Join(tmp, "pinned_prog")
+	mustPinnedProgram(t, progPath)
+	mapPath := filepath.Join(dir, "pinned_map")
+	mustPinnedMap(t, mapPath)
 
-	qt.Assert(t, qt.IsNotNil(WalkDir("/", nil)))
+	next, stop := iter.Pull2(WalkDir(tmp, nil))
+	defer stop()
+
+	pin, err, ok := next()
+	qt.Assert(t, qt.IsTrue(ok))
+	qt.Assert(t, qt.IsNil(err))
+	qt.Assert(t, qt.Equals(reflect.TypeOf(pin.Object), reflect.TypeFor[*ebpf.Map]()))
+	qt.Assert(t, qt.Equals(pin.Path, mapPath))
+
+	pin, err, ok = next()
+	qt.Assert(t, qt.IsTrue(ok))
+	qt.Assert(t, qt.IsNil(err))
+	qt.Assert(t, qt.Equals(reflect.TypeOf(pin.Object), reflect.TypeFor[*ebpf.Program]()))
+	qt.Assert(t, qt.Equals(pin.Path, progPath))
+
+	_, _, ok = next()
+	qt.Assert(t, qt.IsFalse(ok))
+
+	t.Run("Not BPFFS", func(t *testing.T) {
+		if platform.IsWindows {
+			t.Skip("Windows does not have BPFFS")
+		}
+
+		next, stop := iter.Pull2(WalkDir("/", nil))
+		defer stop()
+
+		_, err, ok = next()
+		qt.Assert(t, qt.IsTrue(ok))
+		qt.Assert(t, qt.IsNotNil(err))
+
+		_, _, ok = next()
+		qt.Assert(t, qt.IsFalse(ok))
+	})
+
 }

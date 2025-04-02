@@ -80,8 +80,8 @@ func LoadCollectionSpecFromReader(rd io.ReaderAt) (*CollectionSpec, error) {
 
 	// Checks if the ELF file is for BPF data.
 	// Old LLVM versions set e_machine to EM_NONE.
-	if f.File.Machine != elf.EM_NONE && f.File.Machine != elf.EM_BPF {
-		return nil, fmt.Errorf("unexpected machine type for BPF ELF: %s", f.File.Machine)
+	if f.Machine != elf.EM_NONE && f.Machine != elf.EM_BPF {
+		return nil, fmt.Errorf("unexpected machine type for BPF ELF: %s", f.Machine)
 	}
 
 	var (
@@ -1095,7 +1095,7 @@ func resolveBTFValuesContents(es *elfSection, vs *btf.VarSecinfo, member btf.Mem
 	end := vs.Size + vs.Offset
 	// The size of an address in this section. This determines the width of
 	// an index in the array.
-	align := uint32(es.SectionHeader.Addralign)
+	align := uint32(es.Addralign)
 
 	// Check if variable-length section is aligned.
 	if (end-start)%align != 0 {

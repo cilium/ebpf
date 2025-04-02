@@ -66,7 +66,7 @@ func main() {
 	// Attach ebpf program to a cgroupv2
 	link, err := link.AttachCgroup(link.CgroupOptions{
 		Path:    cgroupPath,
-		Program: objs.bpfPrograms.BpfSockopsCb,
+		Program: objs.BpfSockopsCb,
 		Attach:  ebpf.AttachCGroupSockOps,
 	})
 	if err != nil {
@@ -76,7 +76,7 @@ func main() {
 
 	log.Printf("eBPF program loaded and attached on cgroup %s\n", cgroupPath)
 
-	rd, err := ringbuf.NewReader(objs.bpfMaps.RttEvents)
+	rd, err := ringbuf.NewReader(objs.RttEvents)
 	if err != nil {
 		log.Fatalf("opening ringbuf reader: %s", err)
 	}

@@ -70,13 +70,13 @@ func (ex *Executable) uprobeMulti(symbols []string, prog *ebpf.Program, opts *Up
 	refCtrOffsets := len(opts.RefCtrOffsets)
 
 	if addrs == 0 {
-		return nil, fmt.Errorf("Addresses are required: %w", errInvalidInput)
+		return nil, fmt.Errorf("field Addresses is required: %w", errInvalidInput)
 	}
 	if refCtrOffsets > 0 && refCtrOffsets != addrs {
-		return nil, fmt.Errorf("RefCtrOffsets must be exactly Addresses in length: %w", errInvalidInput)
+		return nil, fmt.Errorf("field RefCtrOffsets must be exactly Addresses in length: %w", errInvalidInput)
 	}
 	if cookies > 0 && cookies != addrs {
-		return nil, fmt.Errorf("Cookies must be exactly Addresses in length: %w", errInvalidInput)
+		return nil, fmt.Errorf("field Cookies must be exactly Addresses in length: %w", errInvalidInput)
 	}
 
 	attr := &sys.LinkCreateUprobeMultiAttr{

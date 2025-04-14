@@ -8,6 +8,7 @@ import (
 
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/asm"
+	"github.com/cilium/ebpf/internal/platform"
 	"github.com/cilium/ebpf/internal/testutils"
 	"github.com/cilium/ebpf/internal/testutils/testmain"
 )
@@ -15,9 +16,14 @@ import (
 func mustPinnedProgram(t *testing.T, path string) *ebpf.Program {
 	t.Helper()
 
+	typ := ebpf.SocketFilter
+	if platform.IsWindows {
+		typ = ebpf.WindowsXDPTest
+	}
+
 	spec := &ebpf.ProgramSpec{
 		Name: "test",
-		Type: ebpf.SocketFilter,
+		Type: typ,
 		Instructions: asm.Instructions{
 			asm.LoadImm(asm.R0, 2, asm.DWord),
 			asm.Return(),
@@ -41,9 +47,14 @@ func mustPinnedProgram(t *testing.T, path string) *ebpf.Program {
 func mustPinnedMap(t *testing.T, path string) *ebpf.Map {
 	t.Helper()
 
+	typ := ebpf.Array
+	if platform.IsWindows {
+		typ = ebpf.WindowsArray
+	}
+
 	spec := &ebpf.MapSpec{
 		Name:       "test",
-		Type:       ebpf.Array,
+		Type:       typ,
 		KeySize:    4,
 		ValueSize:  4,
 		MaxEntries: 1,

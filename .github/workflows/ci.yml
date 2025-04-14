@@ -346,23 +346,7 @@ jobs:
       - name: Test
         run: >
           gotestsum --raw-command --ignore-non-json-output-lines --junitfile junit.xml --
-          go test -short -count 1 -json
-          ./
-          ./asm
-          ./btf
-          ./features
-          ./internal
-          ./internal/efw
-          ./internal/kallsyms
-          ./internal/kconfig
-          ./internal/linux
-          ./internal/sys
-          ./internal/sysenc
-          ./internal/testutils
-          ./internal/testutils/testmain
-          ./internal/tracefs
-          ./internal/unix
-          ./link
+          go test -short -count 1 -json ./...
 
       - name: Upload Test Results
         if: always()

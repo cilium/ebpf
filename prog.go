@@ -88,6 +88,10 @@ type ProgramOptions struct {
 	// Disables the verifier log completely, regardless of other options.
 	LogDisabled bool
 
+	// TODO: Naming
+	// Disables the use of the spec cache and only loads needed types
+	SpecCacheDisabled bool
+
 	// Type information used for CO-RE relocations.
 	//
 	// This is useful in environments where the kernel BTF is not available
@@ -319,7 +323,7 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions) (*Program, er
 	}
 
 	var b btf.Builder
-	if err := applyRelocations(insns, targets, kmodName, spec.ByteOrder, &b); err != nil {
+	if err := applyRelocations(insns, targets, kmodName, spec.ByteOrder, &b, !opts.SpecCacheDisabled); err != nil {
 		return nil, fmt.Errorf("apply CO-RE relocations: %w", err)
 	}
 

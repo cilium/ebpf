@@ -179,6 +179,13 @@ type Spec struct {
 	strings *stringTable
 }
 
+// SpecOptions control loading a BTF spec
+type SpecOptions struct {
+	// Set of type names to include in the spec. Dependencies will be included.
+	// If empty, all types are included.
+	TypeNames map[string]struct{}
+}
+
 // LoadSpec opens file and calls LoadSpecFromReader on it.
 func LoadSpec(file string) (*Spec, error) {
 	fh, err := os.Open(file)
@@ -195,16 +202,24 @@ func LoadSpec(file string) (*Spec, error) {
 // Returns ErrNotFound if reading from an ELF which contains no BTF. ExtInfos
 // may be nil.
 func LoadSpecFromReader(rd io.ReaderAt) (*Spec, error) {
+	return LoadSpecFromReaderWithOptions(rd, nil)
+}
+
+// LoadSpecFromReader reads from an ELF or a raw BTF blob.
+//
+// Returns ErrNotFound if reading from an ELF which contains no BTF. ExtInfos
+// may be nil.
+func LoadSpecFromReaderWithOptions(rd io.ReaderAt, opts *SpecOptions) (*Spec, error) {
 	file, err := internal.NewSafeELFFile(rd)
 	if err != nil {
 		if bo := guessRawBTFByteOrder(rd); bo != nil {
-			return loadRawSpec(io.NewSectionReader(rd, 0, math.MaxInt64), bo, nil)
+			return loadRawSpec(io.NewSectionReader(rd, 0, math.MaxInt64), bo, nil, nil)
 		}
 
 		return nil, err
 	}
 
-	return loadSpecFromELF(file)
+	return loadSpecFromELF(file, opts)
 }
 
 // LoadSpecAndExtInfosFromReader reads from an ELF.
@@ -217,7 +232,7 @@ func LoadSpecAndExtInfosFromReader(rd io.ReaderAt) (*Spec, *ExtInfos, error) {
 		return nil, nil, err
 	}
 
-	spec, err := loadSpecFromELF(file)
+	spec, err := loadSpecFromELF(file, nil)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -266,7 +281,7 @@ func symbolOffsets(file *internal.SafeELFFile) (map[symbol]uint32, error) {
 	return offsets, nil
 }
 
-func loadSpecFromELF(file *internal.SafeELFFile) (*Spec, error) {
+func loadSpecFromELF(file *internal.SafeELFFile, opts *SpecOptions) (*Spec, error) {
 	var (
 		btfSection   *elf.Section
 		sectionSizes = make(map[string]uint32)
@@ -302,7 +317,7 @@ func loadSpecFromELF(file *internal.SafeELFFile) (*Spec, error) {
 		return nil, fmt.Errorf("compressed BTF is not supported")
 	}
 
-	spec, err := loadRawSpec(btfSection.ReaderAt, file.ByteOrder, nil)
+	spec, err := loadRawSpec(btfSection.ReaderAt, file.ByteOrder, nil, opts)
 	if err != nil {
 		return nil, err
 	}
@@ -315,7 +330,7 @@ func loadSpecFromELF(file *internal.SafeELFFile) (*Spec, error) {
 	return spec, nil
 }
 
-func loadRawSpec(btf io.ReaderAt, bo binary.ByteOrder, base *Spec) (*Spec, error) {
+func loadRawSpec(btf io.ReaderAt, bo binary.ByteOrder, base *Spec, opts *SpecOptions) (*Spec, error) {
 	var (
 		baseStrings *stringTable
 		firstTypeID TypeID
@@ -335,7 +350,7 @@ func loadRawSpec(btf io.ReaderAt, bo binary.ByteOrder, base *Spec) (*Spec, error
 		}
 	}
 
-	types, rawStrings, err := parseBTF(btf, bo, baseStrings, base)
+	types, rawStrings, err := parseBTF(btf, bo, baseStrings, base, opts)
 	if err != nil {
 		return nil, err
 	}
@@ -402,7 +417,7 @@ func guessRawBTFByteOrder(r io.ReaderAt) binary.ByteOrder {
 
 // parseBTF reads a .BTF section into memory and parses it into a list of
 // raw types and a string table.
-func parseBTF(btf io.ReaderAt, bo binary.ByteOrder, baseStrings *stringTable, base *Spec) ([]Type, *stringTable, error) {
+func parseBTF(btf io.ReaderAt, bo binary.ByteOrder, baseStrings *stringTable, base *Spec, opts *SpecOptions) ([]Type, *stringTable, error) {
 	buf := internal.NewBufferedSectionReader(btf, 0, math.MaxInt64)
 	header, err := parseBTFHeader(buf, bo)
 	if err != nil {
@@ -415,8 +430,12 @@ func parseBTF(btf io.ReaderAt, bo binary.ByteOrder, baseStrings *stringTable, ba
 		return nil, nil, fmt.Errorf("can't read type names: %w", err)
 	}
 
-	buf.Reset(io.NewSectionReader(btf, header.typeStart(), int64(header.TypeLen)))
-	types, err := readAndInflateTypes(buf, bo, header.TypeLen, rawStrings, base)
+	// TODO: Can this be done in some other way?
+	reset := func(offset int64) {
+		buf.Reset(io.NewSectionReader(btf, header.typeStart()+offset, int64(header.TypeLen)))
+	}
+	reset(0)
+	types, err := readAndInflateTypes(buf, reset, bo, header.TypeLen, rawStrings, base, opts)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -674,7 +693,7 @@ func (s *Spec) TypeByName(name string, typ interface{}) error {
 // Types from base are used to resolve references in the split BTF.
 // The returned Spec only contains types from the split BTF, not from the base.
 func LoadSplitSpecFromReader(r io.ReaderAt, base *Spec) (*Spec, error) {
-	return loadRawSpec(r, internal.NativeEndian, base)
+	return loadRawSpec(r, internal.NativeEndian, base, nil)
 }
 
 // TypesIterator iterates over types of a given spec.

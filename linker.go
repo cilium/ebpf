@@ -124,14 +124,20 @@ func hasFunctionReferences(insns asm.Instructions) bool {
 //
 // Passing a nil target will relocate against the running kernel. insns are
 // modified in place.
-func applyRelocations(insns asm.Instructions, targets []*btf.Spec, kmodName string, bo binary.ByteOrder, b *btf.Builder) error {
+func applyRelocations(insns asm.Instructions, targets []*btf.Spec, kmodName string, bo binary.ByteOrder, b *btf.Builder, withCachedSpec bool) error {
 	var relos []*btf.CORERelocation
 	var reloInsns []*asm.Instruction
+
+	specOpts := &btf.SpecOptions{
+		TypeNames: map[string]struct{}{},
+	}
+
 	iter := insns.Iterate()
 	for iter.Next() {
 		if relo := btf.CORERelocationMetadata(iter.Ins); relo != nil {
 			relos = append(relos, relo)
 			reloInsns = append(reloInsns, iter.Ins)
+			specOpts.TypeNames[relo.TypeName()] = struct{}{}
 		}
 	}
 
@@ -144,9 +150,18 @@ func applyRelocations(insns asm.Instructions, targets []*btf.Spec, kmodName stri
 	}
 
 	if len(targets) == 0 {
-		kernelTarget, err := btf.LoadKernelSpec()
-		if err != nil {
-			return fmt.Errorf("load kernel spec: %w", err)
+		var kernelTarget *btf.Spec
+		var err error
+		if withCachedSpec {
+			kernelTarget, err = btf.LoadKernelSpec()
+			if err != nil {
+				return fmt.Errorf("load kernel spec: %w", err)
+			}
+		} else {
+			kernelTarget, err = btf.LoadKernelSpecWithOptions(specOpts)
+			if err != nil {
+				return fmt.Errorf("load kernel spec: %w", err)
+			}
 		}
 		targets = append(targets, kernelTarget)
 

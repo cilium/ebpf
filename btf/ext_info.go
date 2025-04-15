@@ -713,6 +713,10 @@ func (cr *CORERelocation) String() string {
 	return fmt.Sprintf("CORERelocation(%s, %s[%s], local_id=%d)", cr.kind, cr.typ, cr.accessor, cr.id)
 }
 
+func (cr *CORERelocation) TypeName() string {
+	return cr.typ.TypeName()
+}
+
 func CORERelocationMetadata(ins *asm.Instruction) *CORERelocation {
 	relo, _ := ins.Metadata.Get(coreRelocationMeta{}).(*CORERelocation)
 	return relo

@@ -39,7 +39,7 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-//go:generate go run github.com/cilium/ebpf/cmd/bpf2go -tags linux -tags "linux" -type rtt_event bpf tcprtt_sockops.c -- -I../headers
+//go:generate go run github.com/cilium/ebpf/cmd/bpf2go -tags linux -tags "linux" bpf tcprtt_sockops.c -- -I../headers
 
 func main() {
 	stopper := make(chan os.Signal, 1)

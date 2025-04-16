@@ -29,7 +29,7 @@ import (
 	"github.com/cilium/ebpf/rlimit"
 )
 
-//go:generate go run github.com/cilium/ebpf/cmd/bpf2go -tags linux -type event bpf fentry.c -- -I../headers
+//go:generate go run github.com/cilium/ebpf/cmd/bpf2go -tags linux bpf fentry.c -- -I../headers
 
 func main() {
 	stopper := make(chan os.Signal, 1)

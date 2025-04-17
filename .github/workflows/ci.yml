@@ -67,6 +67,14 @@ jobs:
           go build -v ./...
           go test -c -o /dev/null ./... >/dev/null
 
+      - name: Cross build wasm
+        env:
+          GOOS: js
+          GOARCH: wasm
+        run: |
+          go build -v ./...
+          go test -c -o /dev/null ./... >/dev/null
+
   build-docs:
     name: Build Documentation
     runs-on: ubuntu-22.04

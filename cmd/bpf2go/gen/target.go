@@ -14,19 +14,20 @@ import (
 var ErrInvalidTarget = errors.New("unsupported target")
 
 var targetsByGoArch = map[GoArch]Target{
-	"386":      {"bpfel", "x86"},
-	"amd64":    {"bpfel", "x86"},
-	"arm":      {"bpfel", "arm"},
-	"arm64":    {"bpfel", "arm64"},
-	"loong64":  {"bpfel", "loongarch"},
-	"mips":     {"bpfeb", "mips"},
-	"mipsle":   {"bpfel", ""},
-	"mips64":   {"bpfeb", ""},
-	"mips64le": {"bpfel", ""},
-	"ppc64":    {"bpfeb", "powerpc"},
-	"ppc64le":  {"bpfel", "powerpc"},
-	"riscv64":  {"bpfel", "riscv"},
-	"s390x":    {"bpfeb", "s390"},
+	"386":      {"bpfel", "x86", ""},
+	"amd64":    {"bpfel", "x86", ""},
+	"arm":      {"bpfel", "arm", ""},
+	"arm64":    {"bpfel", "arm64", ""},
+	"loong64":  {"bpfel", "loongarch", ""},
+	"mips":     {"bpfeb", "mips", ""},
+	"mipsle":   {"bpfel", "", ""},
+	"mips64":   {"bpfeb", "", ""},
+	"mips64le": {"bpfel", "", ""},
+	"ppc64":    {"bpfeb", "powerpc", ""},
+	"ppc64le":  {"bpfel", "powerpc", ""},
+	"riscv64":  {"bpfel", "riscv", ""},
+	"s390x":    {"bpfeb", "s390", ""},
+	"wasm":     {"bpfel", "", "js"},
 }
 
 type Target struct {
@@ -36,6 +37,8 @@ type Target struct {
 	// Linux arch string, used to define __TARGET_ARCH_xzy macros used by
 	// https://github.com/libbpf/libbpf/blob/master/src/bpf_tracing.h
 	linux string
+	// GOOS override for use during tests.
+	goos string
 }
 
 // TargetsByGoArch returns all supported targets.
@@ -118,7 +121,7 @@ func FindTarget(id string) (Target, GoArches, error) {
 			}
 		}
 		slices.Sort(goarches)
-		return Target{id, ""}, goarches, nil
+		return Target{id, "", ""}, goarches, nil
 
 	case "native":
 		id = runtime.GOARCH

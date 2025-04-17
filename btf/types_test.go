@@ -427,13 +427,18 @@ func TestInflateLegacyBitfield(t *testing.T) {
 
 	for _, test := range []struct {
 		name   string
-		reader io.Reader
+		reader *bytes.Buffer
 	}{
 		{"struct before int", &before},
 		{"struct after int", &after},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			types, err := readAndInflateTypes(test.reader, binary.LittleEndian, 2, emptyStrings, nil)
+			reader := bytes.NewReader(test.reader.Bytes())
+			reset := func(offset int64) {
+				reader.Seek(offset, io.SeekStart)
+			}
+
+			types, err := readAndInflateTypes(reader, reset, binary.LittleEndian, 2, emptyStrings, nil, nil)
 			if err != nil {
 				t.Log(before.Bytes())
 				t.Fatal(err)

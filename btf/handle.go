@@ -153,7 +153,7 @@ func (h *Handle) Spec(base *Spec) (*Spec, error) {
 		return nil, fmt.Errorf("missing base types")
 	}
 
-	return loadRawSpec(bytes.NewReader(btfBuffer), internal.NativeEndian, base)
+	return loadRawSpec(bytes.NewReader(btfBuffer), internal.NativeEndian, base, nil)
 }
 
 // Close destroys the handle.

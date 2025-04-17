@@ -1,6 +1,6 @@
 package asm
 
-//go:generate go run golang.org/x/tools/cmd/stringer@latest -output load_store_string.go -type=Mode,Size
+//go:generate go run golang.org/x/tools/cmd/stringer@latest -output load_store_string.go -type=Mode,Size,Atomic
 
 // Mode for load and store operations
 //
@@ -26,8 +26,42 @@ const (
 	MemMode Mode = 0x60
 	// MemSXMode - load from memory, sign extension
 	MemSXMode Mode = 0x80
-	// XAddMode - add atomically across processors.
-	XAddMode Mode = 0xc0
+	// AtomicMode - add atomically across processors.
+	AtomicMode Mode = 0xc0
+)
+
+const atomicMask OpCode = 0x01ff_0000
+
+type Atomic uint32
+
+const (
+	InvalidAtomic Atomic = 0xffff_ffff
+	// AddAtomic - add src to memory address dst atomically
+	AddAtomic Atomic = Atomic(Add) << 16
+	// FetchAddAtomic - add src to memory address at dst atomically, store old value in src
+	FetchAddAtomic Atomic = AddAtomic | Fetch
+	// AndAtomic - bitwise AND src with memory address at dst atomically
+	AndAtomic Atomic = Atomic(And) << 16
+	// FetchAndAtomic - bitwise AND src with memory address at dst atomically, store old value in src
+	FetchAndAtomic Atomic = AndAtomic | Fetch
+	// OrAtomic - bitwise OR src with memory address at dst atomically
+	OrAtomic Atomic = Atomic(Or) << 16
+	// FetchOrAtomic - bitwise OR src with memory address at dst atomically, store old value in src
+	FetchOrAtomic Atomic = OrAtomic | Fetch
+	// XorAtomic - bitwise XOR src with memory address at dst atomically
+	XorAtomic Atomic = Atomic(Xor) << 16
+	// FetchXorAtomic - bitwise XOR src with memory address at dst atomically, store old value in src
+	FetchXorAtomic Atomic = XorAtomic | Fetch
+	// FetchAtomicOp - load the old value into the src register
+	Fetch Atomic = 0x0001_0000
+	// XchgAtomic - atomically exchange the old value with the new value
+	XchgAtomic Atomic = 0x00e0_0000 | Fetch
+	// CmpXchgAtomic - atomically compare and exchange the old value with the new value
+	CmpXchgAtomic Atomic = 0x00f0_0000 | Fetch
+	// LdAcqAtomic - atomically load with acquire semantics
+	LdAcqAtomic Atomic = 0x0100_0000
+	// StRelAtomic - atomically store with release semantics
+	StRelAtomic Atomic = 0x0110_0000
 )
 
 // Size of load and store operations
@@ -210,16 +244,109 @@ func StoreImm(dst Register, offset int16, value int64, size Size) Instruction {
 	}
 }
 
-// StoreXAddOp returns the OpCode to atomically add a register to a value in memory.
-func StoreXAddOp(size Size) OpCode {
-	return OpCode(StXClass).SetMode(XAddMode).SetSize(size)
+func AtomicOp(size Size, atomic Atomic, fetch bool) OpCode {
+	switch atomic {
+	case AddAtomic, AndAtomic, OrAtomic, XorAtomic:
+		if fetch {
+			atomic |= Fetch
+		}
+
+		switch size {
+		case Byte, Half:
+			// 8-bit and 16-bit atomic copy-modify-write atomics are not supported
+			return InvalidOpCode
+		}
+	}
+
+	return OpCode(StXClass).SetMode(AtomicMode).SetSize(size).SetAtomic(atomic)
 }
 
-// StoreXAdd atomically adds src to *dst.
-func StoreXAdd(dst, src Register, size Size) Instruction {
+// StoreXAddOp returns the OpCode to atomically add a register to a value in memory.
+func StoreXAddOp(size Size) OpCode {
+	return AtomicOp(size, AddAtomic, false)
+}
+
+// AtomicAnd atomically adds src to *(dst + offset), storing the old value in src if fetch is true.
+func AtomicAdd(dst, src Register, size Size, offset int16, fetch bool) Instruction {
 	return Instruction{
-		OpCode: StoreXAddOp(size),
+		OpCode: AtomicOp(size, AddAtomic, fetch),
 		Dst:    dst,
 		Src:    src,
+		Offset: offset,
+	}
+}
+
+// Alias for AtomicAdd
+func StoreXAdd(dst, src Register, size Size) Instruction {
+	return AtomicAdd(dst, src, size, 0, false)
+}
+
+// AtomicAnd atomically bitwise ANDs src with *(dst + offset), storing the old value in src if fetch is true.
+func AtomicAnd(dst, src Register, size Size, offset int16, fetch bool) Instruction {
+	return Instruction{
+		OpCode: AtomicOp(size, AndAtomic, fetch),
+		Dst:    dst,
+		Src:    src,
+		Offset: offset,
+	}
+}
+
+// AtomicOr atomically bitwise ORs src with *(dst + offset), storing the old value in src if fetch is true.
+func AtomicOr(dst, src Register, size Size, offset int16, fetch bool) Instruction {
+	return Instruction{
+		OpCode: AtomicOp(size, OrAtomic, fetch),
+		Dst:    dst,
+		Src:    src,
+		Offset: offset,
+	}
+}
+
+// AtomicXor atomically bitwise XORs src with *(dst + offset), storing the old value in src if fetch is true.
+func AtomicXor(dst, src Register, size Size, offset int16, fetch bool) Instruction {
+	return Instruction{
+		OpCode: AtomicOp(size, XorAtomic, fetch),
+		Dst:    dst,
+		Src:    src,
+		Offset: offset,
+	}
+}
+
+// AtomicXchg atomically exchanges src with *(dst + offset), storing the old value in src if fetch is true.
+func AtomicXchg(dst, src Register, size Size, offset int16, fetch bool) Instruction {
+	return Instruction{
+		OpCode: AtomicOp(size, XchgAtomic, fetch),
+		Dst:    dst,
+		Src:    src,
+		Offset: offset,
+	}
+}
+
+// AtomicCmpXchg atomically compares src with *(dst + offset), storing the old value in src if fetch is true.
+func AtomicCmpXchg(dst, src Register, size Size, offset int16, fetch bool) Instruction {
+	return Instruction{
+		OpCode: AtomicOp(size, CmpXchgAtomic, fetch),
+		Dst:    dst,
+		Src:    src,
+		Offset: offset,
+	}
+}
+
+// AtomicStRel atomically stores src in *(dst + offset) with release semantics.
+func AtomicStRel(dst, src Register, size Size, offset int16) Instruction {
+	return Instruction{
+		OpCode: AtomicOp(size, StRelAtomic, false),
+		Dst:    dst,
+		Src:    src,
+		Offset: offset,
+	}
+}
+
+// AtomicLdAcq atomically loads *(dst + offset) into src with acquire semantics.
+func AtomicLdAcq(dst, src Register, size Size, offset int16) Instruction {
+	return Instruction{
+		OpCode: AtomicOp(size, LdAcqAtomic, false),
+		Dst:    dst,
+		Src:    src,
+		Offset: offset,
 	}
 }

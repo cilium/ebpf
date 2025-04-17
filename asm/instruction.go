@@ -62,6 +62,10 @@ func (ins *Instruction) Unmarshal(r io.Reader, bo binary.ByteOrder, platform str
 
 	ins.Offset = int16(bo.Uint16(data[2:4]))
 
+	// Convert to int32 before widening to int64
+	// to ensure the signed bit is carried over.
+	ins.Constant = int64(int32(bo.Uint32(data[4:8])))
+
 	if ins.IsBuiltinCall() {
 		fn, err := BuiltinFuncForPlatform(platform, uint32(ins.Constant))
 		if err != nil {
@@ -93,11 +97,12 @@ func (ins *Instruction) Unmarshal(r io.Reader, bo binary.ByteOrder, platform str
 				ins.Offset = 0
 			}
 		}
+	} else if ins.OpCode.Class() == StXClass &&
+		ins.OpCode.Mode() == AtomicMode {
+		// For atomic ops, consider the lower 16 bits of the constant as part of the opcode
+		// it tells us which sort of atomic operation we are doing.
+		ins.OpCode |= (OpCode((ins.Constant << 16)) & atomicMask)
 	}
-
-	// Convert to int32 before widening to int64
-	// to ensure the signed bit is carried over.
-	ins.Constant = int64(int32(bo.Uint32(data[4:8])))
 
 	if !ins.OpCode.IsDWordLoad() {
 		return nil
@@ -171,6 +176,9 @@ func (ins Instruction) Marshal(w io.Writer, bo binary.ByteOrder) (uint64, error)
 			return 0, fmt.Errorf("extended ALU opcodes should have an .Offset of 0: %s", ins)
 		}
 		ins.Offset = newOffset
+	} else if atomic := ins.OpCode.Atomic(); atomic != InvalidAtomic {
+		ins.OpCode = ins.OpCode &^ atomicMask
+		ins.Constant = int64(atomic >> 16)
 	}
 
 	op, err := ins.OpCode.bpfOpCode()
@@ -382,8 +390,8 @@ func (ins Instruction) Format(f fmt.State, c rune) {
 			fmt.Fprintf(f, "dst: %s src: %s imm: %d", ins.Dst, ins.Src, ins.Constant)
 		case MemMode, MemSXMode:
 			fmt.Fprintf(f, "dst: %s src: %s off: %d imm: %d", ins.Dst, ins.Src, ins.Offset, ins.Constant)
-		case XAddMode:
-			fmt.Fprintf(f, "dst: %s src: %s", ins.Dst, ins.Src)
+		case AtomicMode:
+			fmt.Fprintf(f, "dst: %s src: %s off: %d", ins.Dst, ins.Src, ins.Offset)
 		}
 
 	case cls.IsALU():

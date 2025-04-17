@@ -43,32 +43,32 @@ func TestCollectTargets(t *testing.T) {
 	}{
 		{
 			"bpf",
-			Target{"bpf", ""},
+			Target{"bpf", "", ""},
 			nil,
 		},
 		{
 			"bpfel",
-			Target{"bpfel", ""},
+			Target{"bpfel", "", ""},
 			clangArches["bpfel"],
 		},
 		{
 			"bpfeb",
-			Target{"bpfeb", ""},
+			Target{"bpfeb", "", ""},
 			clangArches["bpfeb"],
 		},
 		{
 			"amd64",
-			Target{"bpfel", "x86"},
+			Target{"bpfel", "x86", ""},
 			linuxArchesLE["x86"],
 		},
 		{
 			"386",
-			Target{"bpfel", "x86"},
+			Target{"bpfel", "x86", ""},
 			linuxArchesLE["x86"],
 		},
 		{
 			"ppc64",
-			Target{"bpfeb", "powerpc"},
+			Target{"bpfeb", "powerpc", ""},
 			linuxArchesBE["powerpc"],
 		},
 		{
@@ -111,10 +111,14 @@ func TestCollectTargetsErrors(t *testing.T) {
 func TestGoarches(t *testing.T) {
 	exe := goBin(t)
 
-	for GoArch := range targetsByGoArch {
+	for GoArch, tgt := range targetsByGoArch {
 		t.Run(string(GoArch), func(t *testing.T) {
+			goOS := "linux"
+			if tgt.goos != "" {
+				goOS = tgt.goos
+			}
 			goEnv := exec.Command(exe, "env")
-			goEnv.Env = []string{"GOROOT=/", "GOOS=linux", "GOARCH=" + string(GoArch)}
+			goEnv.Env = []string{"GOROOT=/", "GOOS=" + string(goOS), "GOARCH=" + string(GoArch)}
 			output, err := goEnv.CombinedOutput()
 			qt.Assert(t, qt.IsNil(err), qt.Commentf("go output is:\n%s", string(output)))
 		})

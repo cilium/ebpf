@@ -159,7 +159,7 @@ func TestConvertGOARCH(t *testing.T) {
 		identStem:        "test",
 		cc:               testutils.ClangBin(t),
 		disableStripping: true,
-		sourceFile:       tmp + "/test.c",
+		sourceFiles:      []string{tmp + "/test.c"},
 		outputDir:        tmp,
 	}
 

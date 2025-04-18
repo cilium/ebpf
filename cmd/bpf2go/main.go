@@ -21,13 +21,14 @@ import (
 	"github.com/cilium/ebpf/cmd/bpf2go/gen"
 )
 
-const helpText = `Usage: %[1]s [options] <ident> <source file> [-- <C flags>]
+const helpText = `Usage: %[1]s [options] <ident> <source files...> [-- <C flags>]
 
 ident is used as the stem of all generated Go types and functions, and
 must be a valid Go identifier.
 
-source is a single C file that is compiled using the specified compiler
-(usually some version of clang).
+source files are C files that are compiled using the specified compiler
+(usually some version of clang) and linked together into a single
+BPF program.
 
 You can pass options to the compiler by appending them after a '--' argument
 or by supplying -cflags. Flags passed as arguments take precedence
@@ -60,8 +61,8 @@ func run(stdout io.Writer, args []string) (err error) {
 type bpf2go struct {
 	stdout  io.Writer
 	verbose bool
-	// Absolute path to a .c file.
-	sourceFile string
+	// Absolute paths to .c files.
+	sourceFiles []string
 	// Absolute path to a directory where .go are written
 	outputDir string
 	// Alternative output stem. If empty, identStem is used.
@@ -186,13 +187,18 @@ func newB2G(stdout io.Writer, args []string) (*bpf2go, error) {
 
 	b2g.identStem = args[0]
 
-	sourceFile, err := filepath.Abs(args[1])
-	if err != nil {
-		return nil, err
+	sourceFiles := args[1:]
+	b2g.sourceFiles = make([]string, len(sourceFiles))
+	for i, source := range sourceFiles {
+		absPath, err := filepath.Abs(source)
+		if err != nil {
+			return nil, fmt.Errorf("convert source file to absolute path: %w", err)
+		}
+		b2g.sourceFiles[i] = absPath
 	}
-	b2g.sourceFile = sourceFile
 
 	if b2g.makeBase != "" {
+		var err error
 		b2g.makeBase, err = filepath.Abs(b2g.makeBase)
 		if err != nil {
 			return nil, err
@@ -298,10 +304,13 @@ func getBool(key string, defaultVal bool) bool {
 }
 
 func (b2g *bpf2go) convertAll() (err error) {
-	if _, err := os.Stat(b2g.sourceFile); os.IsNotExist(err) {
-		return fmt.Errorf("file %s doesn't exist", b2g.sourceFile)
-	} else if err != nil {
-		return err
+	// Check all source files exist
+	for _, source := range b2g.sourceFiles {
+		if _, err := os.Stat(source); os.IsNotExist(err) {
+			return fmt.Errorf("file %s doesn't exist", source)
+		} else if err != nil {
+			return err
+		}
 	}
 
 	if !b2g.disableStripping {
@@ -318,6 +327,65 @@ func (b2g *bpf2go) convertAll() (err error) {
 	}
 
 	return nil
+}
+
+// compileOne compiles a single source file and returns the temporary object file name
+// and any dependencies found during compilation.
+func (b2g *bpf2go) compileOne(tgt gen.Target, cwd, source, objFileName, outputStem string) (tmpObjFileName string, deps []dependency, err error) {
+	var depInput *os.File
+	cFlags := slices.Clone(b2g.cFlags)
+	if b2g.makeBase != "" {
+		depInput, err = os.CreateTemp("", "bpf2go")
+		if err != nil {
+			return "", nil, err
+		}
+		defer depInput.Close()
+		defer os.Remove(depInput.Name())
+
+		cFlags = append(cFlags,
+			// Output dependency information.
+			"-MD",
+			// Create phony targets so that deleting a dependency doesn't
+			// break the build.
+			"-MP",
+			// Write it to temporary file
+			"-MF"+depInput.Name(),
+		)
+	}
+
+	// Compile to final object file name first
+	err = gen.Compile(gen.CompileArgs{
+		CC:               b2g.cc,
+		Strip:            b2g.strip,
+		DisableStripping: b2g.disableStripping,
+		Flags:            cFlags,
+		Target:           tgt,
+		Workdir:          cwd,
+		Source:           source,
+		Dest:             objFileName,
+	})
+	if err != nil {
+		return "", nil, fmt.Errorf("compile %s: %w", source, err)
+	}
+
+	// Move the compiled object to a temporary file
+	tmpObjFileName = filepath.Join(filepath.Dir(objFileName), fmt.Sprintf("%s_%s_%s.o",
+		outputStem,
+		filepath.Base(source),
+		tgt.Suffix()))
+	if err := os.Rename(objFileName, tmpObjFileName); err != nil {
+		return "", nil, fmt.Errorf("move object file: %w", err)
+	}
+
+	// Parse dependencies if enabled
+	if b2g.makeBase != "" {
+		deps, err = parseDependencies(cwd, depInput)
+		if err != nil {
+			return "", nil, fmt.Errorf("parse dependencies for %s: %w", source, err)
+		}
+	}
+
+	return tmpObjFileName, deps, nil
 }
 
 func (b2g *bpf2go) convert(tgt gen.Target, goarches gen.GoArches) (err error) {
@@ -341,6 +409,7 @@ func (b2g *bpf2go) convert(tgt gen.Target, goarches gen.GoArches) (err error) {
 	}
 
 	objFileName := filepath.Join(absOutPath, stem+".o")
+	goFileName := filepath.Join(absOutPath, stem+".go")
 
 	cwd, err := os.Getwd()
 	if err != nil {
@@ -354,39 +423,43 @@ func (b2g *bpf2go) convert(tgt gen.Target, goarches gen.GoArches) (err error) {
 		return fmt.Errorf("remove obsolete output: %w", err)
 	}
 
-	var depInput *os.File
-	cFlags := slices.Clone(b2g.cFlags)
-	if b2g.makeBase != "" {
-		depInput, err = os.CreateTemp("", "bpf2go")
+	// Compile each source file
+	var allDeps []dependency
+	var tmpObjFileNames []string
+	for _, source := range b2g.sourceFiles {
+		tmpObjFileName, deps, err := b2g.compileOne(tgt, cwd, source, objFileName, outputStem)
 		if err != nil {
 			return err
 		}
-		defer depInput.Close()
-		defer os.Remove(depInput.Name())
+		tmpObjFileNames = append(tmpObjFileNames, tmpObjFileName)
 
-		cFlags = append(cFlags,
-			// Output dependency information.
-			"-MD",
-			// Create phony targets so that deleting a dependency doesn't
-			// break the build.
-			"-MP",
-			// Write it to temporary file
-			"-MF"+depInput.Name(),
-		)
+		if len(deps) > 0 {
+			// There is always at least a dependency for the main file.
+			deps[0].file = goFileName
+			allDeps = append(allDeps, deps...)
+		}
 	}
 
-	err = gen.Compile(gen.CompileArgs{
-		CC:               b2g.cc,
-		Strip:            b2g.strip,
-		DisableStripping: b2g.disableStripping,
-		Flags:            cFlags,
-		Target:           tgt,
-		Workdir:          cwd,
-		Source:           b2g.sourceFile,
-		Dest:             objFileName,
-	})
-	if err != nil {
-		return fmt.Errorf("compile: %w", err)
+	// If we have multiple object files, link them together
+	if len(tmpObjFileNames) > 1 {
+		cmd := exec.Command("bpftool", "gen", "object", objFileName)
+		cmd.Args = append(cmd.Args, tmpObjFileNames...)
+		cmd.Stderr = os.Stderr
+		if err := cmd.Run(); err != nil {
+			return fmt.Errorf("link object files: %w", err)
+		}
+	} else {
+		// Single file, just rename it back to the final name
+		if err := os.Rename(tmpObjFileNames[0], objFileName); err != nil {
+			return fmt.Errorf("rename object file: %w", err)
+		}
+	}
+
+	// Clean up temporary object files
+	for _, tmpObj := range tmpObjFileNames {
+		if err := os.Remove(tmpObj); err != nil && !os.IsNotExist(err) {
+			return fmt.Errorf("remove temporary object file: %w", err)
+		}
 	}
 
 	if b2g.disableStripping {
@@ -428,7 +501,6 @@ func (b2g *bpf2go) convert(tgt gen.Target, goarches gen.GoArches) (err error) {
 	}
 
 	// Write out generated go
-	goFileName := filepath.Join(absOutPath, stem+".go")
 	goFile, err := os.Create(goFileName)
 	if err != nil {
 		return err
@@ -456,9 +528,10 @@ func (b2g *bpf2go) convert(tgt gen.Target, goarches gen.GoArches) (err error) {
 		return
 	}
 
-	deps, err := parseDependencies(cwd, depInput)
-	if err != nil {
-		return fmt.Errorf("can't read dependency information: %s", err)
+	// Merge dependencies if we have multiple source files
+	var finalDeps []dependency
+	if len(allDeps) > 0 {
+		finalDeps = mergeDependencies(allDeps)
 	}
 
 	depFileName := goFileName + ".d"
@@ -468,9 +541,7 @@ func (b2g *bpf2go) convert(tgt gen.Target, goarches gen.GoArches) (err error) {
 	}
 	defer depOutput.Close()
 
-	// There is always at least a dependency for the main file.
-	deps[0].file = goFileName
-	if err := adjustDependencies(depOutput, b2g.makeBase, deps); err != nil {
+	if err := adjustDependencies(depOutput, b2g.makeBase, finalDeps); err != nil {
 		return fmt.Errorf("can't adjust dependency information: %s", err)
 	}
 

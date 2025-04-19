@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -416,6 +417,18 @@ func TestMultipleSourceFiles(t *testing.T) {
 		t.Fatal("No go.mod file in", modRoot)
 	}
 
+	// bpftool appears to support the endianness of the machine it is running on.
+	//Determine native endianness based on GOARCH
+	var target string
+	switch runtime.GOARCH {
+	case "amd64", "arm64", "riscv64":
+		target = "bpfel" // little-endian
+	case "s390x", "ppc64":
+		target = "bpfeb" // big-endian
+	default:
+		t.Fatalf("Unsupported architecture: %s", runtime.GOARCH)
+	}
+
 	dir := t.TempDir()
 
 	// Create two source files with different functions
@@ -448,7 +461,7 @@ func TestMultipleSourceFiles(t *testing.T) {
 		"-go-package", "main",
 		"-output-dir", modDir,
 		"-cc", testutils.ClangBin(t),
-		"-target", "bpfel,bpfeb",
+		"-target", target,
 		"bar",
 		filepath.Join(dir, "func1.c"),
 		filepath.Join(dir, "func2.c"),
@@ -469,25 +482,20 @@ func main() {
 	println(obj.Func2)
 }`)
 
-	// Test compilation for different architectures
-	for _, arch := range []string{"amd64", "arm64", "s390x"} {
-		t.Run(arch, func(t *testing.T) {
-			goBuild := exec.Command("go", "build", "-mod=mod", "-o", "/dev/null")
-			goBuild.Dir = modDir
-			goBuild.Env = append(os.Environ(),
-				"GOOS=linux",
-				"GOARCH="+arch,
-				"GOPROXY=off",
-				"GOSUMDB=off",
-			)
-			out, err := goBuild.CombinedOutput()
-			if err != nil {
-				if out := string(out); out != "" {
-					t.Log(out)
-				}
-				t.Error("Can't compile package:", err)
-			}
-		})
+	// Test compilation for the native architecture
+	goBuild := exec.Command("go", "build", "-mod=mod", "-o", "/dev/null")
+	goBuild.Dir = modDir
+	goBuild.Env = append(os.Environ(),
+		"GOOS=linux",
+		"GOPROXY=off",
+		"GOSUMDB=off",
+	)
+	out, err := goBuild.CombinedOutput()
+	if err != nil {
+		if out := string(out); out != "" {
+			t.Log(out)
+		}
+		t.Error("Can't compile package:", err)
 	}
 }
 

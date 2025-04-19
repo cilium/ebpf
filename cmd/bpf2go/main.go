@@ -329,15 +329,14 @@ func (b2g *bpf2go) convertAll() (err error) {
 	return nil
 }
 
-// compileOne compiles a single source file and returns the temporary object file name
-// and any dependencies found during compilation.
-func (b2g *bpf2go) compileOne(tgt gen.Target, cwd, source, objFileName, outputStem string) (tmpObjFileName string, deps []dependency, err error) {
+// compileOne compiles a single source file and returns any dependencies found during compilation.
+func (b2g *bpf2go) compileOne(tgt gen.Target, cwd, source, objFileName string) (deps []dependency, err error) {
 	var depInput *os.File
 	cFlags := slices.Clone(b2g.cFlags)
 	if b2g.makeBase != "" {
 		depInput, err = os.CreateTemp("", "bpf2go")
 		if err != nil {
-			return "", nil, err
+			return nil, err
 		}
 		defer depInput.Close()
 		defer os.Remove(depInput.Name())
@@ -353,7 +352,7 @@ func (b2g *bpf2go) compileOne(tgt gen.Target, cwd, source, objFileName, outputSt
 		)
 	}
 
-	// Compile to final object file name first
+	// Compile to final object file name
 	err = gen.Compile(gen.CompileArgs{
 		CC:               b2g.cc,
 		Strip:            b2g.strip,
@@ -365,27 +364,18 @@ func (b2g *bpf2go) compileOne(tgt gen.Target, cwd, source, objFileName, outputSt
 		Dest:             objFileName,
 	})
 	if err != nil {
-		return "", nil, fmt.Errorf("compile %s: %w", source, err)
-	}
-
-	// Move the compiled object to a temporary file
-	tmpObjFileName = filepath.Join(filepath.Dir(objFileName), fmt.Sprintf("%s_%s_%s.o",
-		outputStem,
-		filepath.Base(source),
-		tgt.Suffix()))
-	if err := os.Rename(objFileName, tmpObjFileName); err != nil {
-		return "", nil, fmt.Errorf("move object file: %w", err)
+		return nil, fmt.Errorf("compile %s: %w", source, err)
 	}
 
 	// Parse dependencies if enabled
 	if b2g.makeBase != "" {
 		deps, err = parseDependencies(cwd, depInput)
 		if err != nil {
-			return "", nil, fmt.Errorf("parse dependencies for %s: %w", source, err)
+			return nil, fmt.Errorf("parse dependencies for %s: %w", source, err)
 		}
 	}
 
-	return tmpObjFileName, deps, nil
+	return deps, nil
 }
 
 func (b2g *bpf2go) convert(tgt gen.Target, goarches gen.GoArches) (err error) {
@@ -427,16 +417,30 @@ func (b2g *bpf2go) convert(tgt gen.Target, goarches gen.GoArches) (err error) {
 	var allDeps []dependency
 	var tmpObjFileNames []string
 	for _, source := range b2g.sourceFiles {
-		tmpObjFileName, deps, err := b2g.compileOne(tgt, cwd, source, objFileName, outputStem)
+		deps, err := b2g.compileOne(tgt, cwd, source, objFileName)
 		if err != nil {
 			return err
 		}
-		tmpObjFileNames = append(tmpObjFileNames, tmpObjFileName)
 
 		if len(deps) > 0 {
 			// There is always at least a dependency for the main file.
 			deps[0].file = goFileName
 			allDeps = append(allDeps, deps...)
+		}
+
+		// For multiple source files, we need to move the compiled object to a temporary file
+		if len(b2g.sourceFiles) > 1 {
+			tmpObj, err := os.CreateTemp("", filepath.Base(source))
+			if err != nil {
+				return fmt.Errorf("create temporary object file: %w", err)
+			}
+			tmpObj.Close()
+			defer os.Remove(tmpObj.Name())
+
+			if err := os.Rename(objFileName, tmpObj.Name()); err != nil {
+				return fmt.Errorf("move object file: %w", err)
+			}
+			tmpObjFileNames = append(tmpObjFileNames, tmpObj.Name())
 		}
 	}
 
@@ -448,18 +452,6 @@ func (b2g *bpf2go) convert(tgt gen.Target, goarches gen.GoArches) (err error) {
 		})
 		if err != nil {
 			return fmt.Errorf("link object files: %w", err)
-		}
-	} else {
-		// Single file, just rename it back to the final name
-		if err := os.Rename(tmpObjFileNames[0], objFileName); err != nil {
-			return fmt.Errorf("rename object file: %w", err)
-		}
-	}
-
-	// Clean up temporary object files
-	for _, tmpObj := range tmpObjFileNames {
-		if err := os.Remove(tmpObj); err != nil && !os.IsNotExist(err) {
-			return fmt.Errorf("remove temporary object file: %w", err)
 		}
 	}
 

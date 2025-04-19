@@ -442,10 +442,11 @@ func (b2g *bpf2go) convert(tgt gen.Target, goarches gen.GoArches) (err error) {
 
 	// If we have multiple object files, link them together
 	if len(tmpObjFileNames) > 1 {
-		cmd := exec.Command("bpftool", "gen", "object", objFileName)
-		cmd.Args = append(cmd.Args, tmpObjFileNames...)
-		cmd.Stderr = os.Stderr
-		if err := cmd.Run(); err != nil {
+		err = gen.Link(gen.LinkArgs{
+			Dest:    objFileName,
+			Sources: tmpObjFileNames,
+		})
+		if err != nil {
 			return fmt.Errorf("link object files: %w", err)
 		}
 	} else {

@@ -406,6 +406,91 @@ func TestParseArgs(t *testing.T) {
 	})
 }
 
+func TestMultipleSourceFiles(t *testing.T) {
+	modRoot, err := filepath.Abs("../..")
+	if err != nil {
+		t.Fatal("Can't get module root:", err)
+	}
+
+	if _, err := os.Stat(filepath.Join(modRoot, "go.mod")); os.IsNotExist(err) {
+		t.Fatal("No go.mod file in", modRoot)
+	}
+
+	dir := t.TempDir()
+
+	// Create two source files with different functions
+	mustWriteFile(t, dir, "func1.c", `__attribute__((section("socket"), used)) int func1() { return 1; }`)
+	mustWriteFile(t, dir, "func2.c", `__attribute__((section("socket"), used)) int func2() { return 2; }`)
+
+	// Set up module directory
+	modDir := t.TempDir()
+	execInModule := func(name string, args ...string) {
+		t.Helper()
+		cmd := exec.Command(name, args...)
+		cmd.Dir = modDir
+		if out, err := cmd.CombinedOutput(); err != nil {
+			if out := string(out); out != "" {
+				t.Log(out)
+			}
+			t.Fatalf("Can't execute %s: %v", name, args)
+		}
+	}
+
+	// Initialize module
+	execInModule("go", "mod", "init", "bpf2go-test")
+	execInModule("go", "mod", "edit",
+		fmt.Sprintf("-require=%s@v0.0.0", internal.CurrentModule),
+		fmt.Sprintf("-replace=%s=%s", internal.CurrentModule, modRoot),
+	)
+
+	// Run bpf2go with both source files
+	err = run(io.Discard, []string{
+		"-go-package", "main",
+		"-output-dir", modDir,
+		"-cc", testutils.ClangBin(t),
+		"-target", "bpfel,bpfeb",
+		"bar",
+		filepath.Join(dir, "func1.c"),
+		filepath.Join(dir, "func2.c"),
+	})
+
+	if err != nil {
+		t.Fatal("Can't run bpf2go with multiple source files:", err)
+	}
+
+	// Create a main.go that uses both functions
+	mustWriteFile(t, modDir, "main.go",
+		`
+package main
+
+func main() {
+	var obj barObjects
+	println(obj.Func1)
+	println(obj.Func2)
+}`)
+
+	// Test compilation for different architectures
+	for _, arch := range []string{"amd64", "arm64", "s390x"} {
+		t.Run(arch, func(t *testing.T) {
+			goBuild := exec.Command("go", "build", "-mod=mod", "-o", "/dev/null")
+			goBuild.Dir = modDir
+			goBuild.Env = append(os.Environ(),
+				"GOOS=linux",
+				"GOARCH="+arch,
+				"GOPROXY=off",
+				"GOSUMDB=off",
+			)
+			out, err := goBuild.CombinedOutput()
+			if err != nil {
+				if out := string(out); out != "" {
+					t.Log(out)
+				}
+				t.Error("Can't compile package:", err)
+			}
+		})
+	}
+}
+
 func mustWriteFile(tb testing.TB, dir, name, contents string) {
 	tb.Helper()
 	tmpFile := filepath.Join(dir, name)

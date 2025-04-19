@@ -417,7 +417,24 @@ func (b2g *bpf2go) convert(tgt gen.Target, goarches gen.GoArches) (err error) {
 	var allDeps []dependency
 	var tmpObjFileNames []string
 	for _, source := range b2g.sourceFiles {
-		deps, err := b2g.compileOne(tgt, cwd, source, objFileName)
+		// Determine the target object file name
+		var targetObjFileName string
+		if len(b2g.sourceFiles) > 1 {
+			// For multiple source files, use a temporary file
+			tmpObj, err := os.CreateTemp("", filepath.Base(source))
+			if err != nil {
+				return fmt.Errorf("create temporary object file: %w", err)
+			}
+			tmpObj.Close()
+			defer os.Remove(tmpObj.Name())
+			targetObjFileName = tmpObj.Name()
+			tmpObjFileNames = append(tmpObjFileNames, targetObjFileName)
+		} else {
+			// For single source file, use the final object file name
+			targetObjFileName = objFileName
+		}
+
+		deps, err := b2g.compileOne(tgt, cwd, source, targetObjFileName)
 		if err != nil {
 			return err
 		}
@@ -426,21 +443,6 @@ func (b2g *bpf2go) convert(tgt gen.Target, goarches gen.GoArches) (err error) {
 			// There is always at least a dependency for the main file.
 			deps[0].file = goFileName
 			allDeps = append(allDeps, deps...)
-		}
-
-		// For multiple source files, we need to move the compiled object to a temporary file
-		if len(b2g.sourceFiles) > 1 {
-			tmpObj, err := os.CreateTemp("", filepath.Base(source))
-			if err != nil {
-				return fmt.Errorf("create temporary object file: %w", err)
-			}
-			tmpObj.Close()
-			defer os.Remove(tmpObj.Name())
-
-			if err := os.Rename(objFileName, tmpObj.Name()); err != nil {
-				return fmt.Errorf("move object file: %w", err)
-			}
-			tmpObjFileNames = append(tmpObjFileNames, tmpObj.Name())
 		}
 	}
 

@@ -1,7 +1,6 @@
 package kconfig
 
 import (
-	"bytes"
 	"encoding/binary"
 	"os"
 	"testing"
@@ -401,13 +400,9 @@ func TestPutValue(t *testing.T) {
 			continue
 		}
 
-		var buf bytes.Buffer
-		err := binary.Write(&buf, internal.NativeEndian, c.expected)
-		if err != nil {
-			t.Fatal(err)
-		}
+		expected, err := binary.Append(nil, internal.NativeEndian, c.expected)
+		qt.Assert(t, qt.IsNil(err))
 
-		expected := buf.Bytes()
 		data := make([]byte, len(expected))
 		err = PutValue(data, c.typ, c.value)
 

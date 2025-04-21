@@ -7,20 +7,14 @@ import (
 	"io"
 	"testing"
 
+	"github.com/go-quicktest/qt"
+
 	"github.com/cilium/ebpf/internal"
 )
 
 func FuzzSpec(f *testing.F) {
-	var buf bytes.Buffer
-	err := binary.Write(&buf, internal.NativeEndian, &btfHeader{
-		Magic:   btfMagic,
-		Version: 1,
-		HdrLen:  uint32(binary.Size(btfHeader{})),
-	})
-	if err != nil {
-		f.Fatal(err)
-	}
-	f.Add(buf.Bytes())
+	f.Add(mustBTFHeader(f))
+
 	f.Fuzz(func(t *testing.T, data []byte) {
 		if len(data) < binary.Size(btfHeader{}) {
 			t.Skip("data is too short")
@@ -46,16 +40,7 @@ func FuzzSpec(f *testing.F) {
 }
 
 func FuzzExtInfo(f *testing.F) {
-	var buf bytes.Buffer
-	err := binary.Write(&buf, internal.NativeEndian, &btfExtHeader{
-		Magic:   btfMagic,
-		Version: 1,
-		HdrLen:  uint32(binary.Size(btfExtHeader{})),
-	})
-	if err != nil {
-		f.Fatal(err)
-	}
-	f.Add(buf.Bytes(), []byte("\x00foo\x00barfoo\x00"))
+	f.Add(mustBTFHeader(f), []byte("\x00foo\x00barfoo\x00"))
 
 	f.Fuzz(func(t *testing.T, data, strings []byte) {
 		if len(data) < binary.Size(btfExtHeader{}) {
@@ -79,4 +64,14 @@ func FuzzExtInfo(f *testing.F) {
 			t.Fatal("info is nil")
 		}
 	})
+}
+
+func mustBTFHeader(f *testing.F) []byte {
+	buf, err := binary.Append(nil, internal.NativeEndian, &btfHeader{
+		Magic:   btfMagic,
+		Version: 1,
+		HdrLen:  uint32(binary.Size(btfHeader{})),
+	})
+	qt.Assert(f, qt.IsNil(err))
+	return buf
 }

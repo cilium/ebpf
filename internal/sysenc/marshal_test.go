@@ -60,18 +60,16 @@ func TestMarshal(t *testing.T) {
 	for _, test := range testcases() {
 		value := test.new()
 		t.Run(fmt.Sprintf("%T", value), func(t *testing.T) {
-			var want bytes.Buffer
-			if err := binary.Write(&want, internal.NativeEndian, value); err != nil {
-				t.Fatal(err)
-			}
+			want, err := binary.Append(nil, internal.NativeEndian, value)
+			qt.Assert(t, qt.IsNil(err))
 
-			have := make([]byte, want.Len())
+			have := make([]byte, len(want))
 			buf, err := Marshal(value, binary.Size(value))
 			if err != nil {
 				t.Fatal(err)
 			}
-			qt.Assert(t, qt.Equals(buf.CopyTo(have), want.Len()))
-			qt.Assert(t, qt.CmpEquals(have, want.Bytes(), cmpopts.EquateEmpty()))
+			qt.Assert(t, qt.Equals(buf.CopyTo(have), len(want)))
+			qt.Assert(t, qt.CmpEquals(have, want, cmpopts.EquateEmpty()))
 		})
 	}
 }
@@ -143,9 +141,9 @@ func TestUnsafeBackingMemory(t *testing.T) {
 	marshalNative := func(t *testing.T, data any) []byte {
 		t.Helper()
 
-		var buf bytes.Buffer
-		qt.Assert(t, qt.IsNil(binary.Write(&buf, internal.NativeEndian, data)))
-		return buf.Bytes()
+		buf, err := binary.Append(nil, internal.NativeEndian, data)
+		qt.Assert(t, qt.IsNil(err))
+		return buf
 	}
 
 	for _, test := range []struct {

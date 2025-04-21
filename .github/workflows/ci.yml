@@ -8,7 +8,7 @@ on:
 env:
   TMPDIR: /tmp
   CI_MAX_KERNEL_VERSION: '6.11'
-  CI_MAX_EFW_VERSION: '0.20.0'
+  CI_MAX_EFW_VERSION: '0.21.0'
   CI_MIN_CLANG_VERSION: '13'
   go_version: '~1.24'
   prev_go_version: '~1.23'
@@ -238,7 +238,7 @@ jobs:
       GOMODCACHE: D:\gomodcache
       # Avoid putting temp on slow C:
       TEMP: D:\temp
-      CI_EFW_VERSION: "0.20.0"
+      CI_EFW_VERSION: "0.21.0"
 
     steps:
       - run: mkdir D:\temp

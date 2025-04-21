@@ -857,4 +857,4 @@ var haveProgramInfoMapIDs = internal.NewFeatureTest("map IDs in program info", f
 	}
 
 	return err
-}, "4.15", "windows:0.20.0")
+}, "4.15", "windows:0.21.0")

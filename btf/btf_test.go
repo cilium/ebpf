@@ -252,19 +252,6 @@ func TestParseCurrentKernelBTF(t *testing.T) {
 	if len(spec.namedTypes) == 0 {
 		t.Fatal("Empty kernel BTF")
 	}
-
-	totalBytes := 0
-	distinct := 0
-	seen := make(map[string]bool)
-	for _, str := range spec.strings.strings {
-		totalBytes += len(str)
-		if !seen[str] {
-			distinct++
-			seen[str] = true
-		}
-	}
-	t.Logf("%d strings total, %d distinct", len(spec.strings.strings), distinct)
-	t.Logf("Average string size: %.0f", float64(totalBytes)/float64(len(spec.strings.strings)))
 }
 
 func TestFindVMLinux(t *testing.T) {

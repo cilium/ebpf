@@ -339,14 +339,19 @@ func loadRawSpec(btf io.ReaderAt, bo binary.ByteOrder, base *Spec) (*Spec, error
 		return nil, fmt.Errorf("parsing .BTF header: %v", err)
 	}
 
-	rawStrings, err := readStringTable(io.NewSectionReader(btf, header.stringStart(), int64(header.StringLen)),
-		baseStrings)
+	stringsSection := io.NewSectionReader(btf, header.stringStart(), int64(header.StringLen))
+	rawStrings, err := readStringTable(stringsSection, baseStrings)
 	if err != nil {
-		return nil, fmt.Errorf("can't read type names: %w", err)
+		return nil, fmt.Errorf("read string section: %w", err)
 	}
 
-	buf.Reset(io.NewSectionReader(btf, header.typeStart(), int64(header.TypeLen)))
-	types, err := readAndInflateTypes(buf, bo, header.TypeLen, rawStrings, base)
+	typesSection := io.NewSectionReader(btf, header.typeStart(), int64(header.TypeLen))
+	rawTypes := make([]byte, header.TypeLen)
+	if _, err := io.ReadFull(typesSection, rawTypes); err != nil {
+		return nil, fmt.Errorf("read type section: %w", err)
+	}
+
+	types, err := readAndInflateTypes(rawTypes, bo, header.TypeLen, rawStrings, base)
 	if err != nil {
 		return nil, err
 	}

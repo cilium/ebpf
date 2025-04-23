@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"iter"
+	"maps"
 	"math"
 	"os"
 	"reflect"
@@ -152,6 +153,17 @@ func (mt *mutableTypes) typeIDsByName(name essentialName) []TypeID {
 	return mt.imm.namedTypes[name]
 }
 
+type elfData struct {
+	sectionSizes  map[string]uint32
+	symbolOffsets map[elfSymbol]uint32
+	fixups        map[Type]bool
+}
+
+type elfSymbol struct {
+	section string
+	name    string
+}
+
 // Spec allows querying a set of Types and loading the set into the
 // kernel.
 type Spec struct {
@@ -159,6 +171,9 @@ type Spec struct {
 
 	// String table from ELF.
 	strings *stringTable
+
+	// Additional data from ELF, may be nil.
+	elf *elfData
 }
 
 // LoadSpec opens file and calls LoadSpecFromReader on it.
@@ -219,13 +234,13 @@ func LoadSpecAndExtInfosFromReader(rd io.ReaderAt) (*Spec, *ExtInfos, error) {
 // Some ELF symbols (e.g. in vmlinux) may point to virtual memory that is well
 // beyond this range. Since these symbols cannot be described by BTF info,
 // ignore them here.
-func symbolOffsets(file *internal.SafeELFFile) (map[symbol]uint32, error) {
+func symbolOffsets(file *internal.SafeELFFile) (map[elfSymbol]uint32, error) {
 	symbols, err := file.Symbols()
 	if err != nil {
 		return nil, fmt.Errorf("can't read symbols: %v", err)
 	}
 
-	offsets := make(map[symbol]uint32)
+	offsets := make(map[elfSymbol]uint32)
 	for _, sym := range symbols {
 		if idx := sym.Section; idx >= elf.SHN_LORESERVE && idx <= elf.SHN_HIRESERVE {
 			// Ignore things like SHN_ABS
@@ -242,7 +257,7 @@ func symbolOffsets(file *internal.SafeELFFile) (map[symbol]uint32, error) {
 		}
 
 		secName := file.Sections[sym.Section].Name
-		offsets[symbol{secName, sym.Name}] = uint32(sym.Value)
+		offsets[elfSymbol{secName, sym.Name}] = uint32(sym.Value)
 	}
 
 	return offsets, nil
@@ -289,9 +304,10 @@ func loadSpecFromELF(file *internal.SafeELFFile) (*Spec, error) {
 		return nil, err
 	}
 
-	err = fixupDatasec(spec.imm.types, sectionSizes, offsets)
-	if err != nil {
-		return nil, err
+	spec.elf = &elfData{
+		sectionSizes,
+		offsets,
+		make(map[Type]bool),
 	}
 
 	return spec, nil
@@ -351,6 +367,7 @@ func loadRawSpec(btf io.ReaderAt, bo binary.ByteOrder, base *Spec) (*Spec, error
 			make(map[Type]TypeID),
 		},
 		rawStrings,
+		nil,
 	}, nil
 }
 
@@ -395,19 +412,14 @@ func guessRawBTFByteOrder(r io.ReaderAt) binary.ByteOrder {
 	return nil
 }
 
-type symbol struct {
-	section string
-	name    string
-}
-
 // fixupDatasec attempts to patch up missing info in Datasecs and its members by
 // supplementing them with information from the ELF headers and symbol table.
-func fixupDatasec(types []Type, sectionSizes map[string]uint32, offsets map[symbol]uint32) error {
-	for _, typ := range types {
-		ds, ok := typ.(*Datasec)
-		if !ok {
-			continue
+func (elf *elfData) fixupDatasec(typ Type) error {
+	if ds, ok := typ.(*Datasec); ok {
+		if elf.fixups[ds] {
+			return nil
 		}
+		elf.fixups[ds] = true
 
 		name := ds.Name
 
@@ -430,7 +442,7 @@ func fixupDatasec(types []Type, sectionSizes map[string]uint32, offsets map[symb
 				}
 			}
 
-			continue
+			return nil
 		case ".kconfig":
 			// .kconfig has a size of 0 and has all members' offsets set to 0.
 			// Fix up all offsets and set the Datasec's size.
@@ -443,21 +455,21 @@ func fixupDatasec(types []Type, sectionSizes map[string]uint32, offsets map[symb
 				vsi.Type.(*Var).Linkage = GlobalVar
 			}
 
-			continue
+			return nil
 		}
 
 		if ds.Size != 0 {
-			continue
+			return nil
 		}
 
-		ds.Size, ok = sectionSizes[name]
+		ds.Size, ok = elf.sectionSizes[name]
 		if !ok {
 			return fmt.Errorf("data section %s: missing size", name)
 		}
 
 		for i := range ds.Vars {
 			symName := ds.Vars[i].Type.TypeName()
-			ds.Vars[i].Offset, ok = offsets[symbol{name, symName}]
+			ds.Vars[i].Offset, ok = elf.symbolOffsets[elfSymbol{name, symName}]
 			if !ok {
 				return fmt.Errorf("data section %s: missing offset for symbol %s", name, symName)
 			}
@@ -507,10 +519,21 @@ func (s *Spec) Copy() *Spec {
 		return nil
 	}
 
-	return &Spec{
+	cpy := &Spec{
 		s.copy(),
 		s.strings,
+		nil,
 	}
+
+	if s.elf != nil {
+		cpy.elf = &elfData{
+			s.elf.sectionSizes,
+			s.elf.symbolOffsets,
+			maps.Clone(s.elf.fixups),
+		}
+	}
+
+	return cpy
 }
 
 // nextTypeID returns the next unallocated type ID or an error if there are no
@@ -531,6 +554,14 @@ func (s *Spec) TypeByID(id TypeID) (Type, error) {
 	typ, ok := s.typeByID(id)
 	if !ok {
 		return nil, fmt.Errorf("look up type with ID %d (first ID is %d): %w", id, s.imm.firstTypeID, ErrNotFound)
+	}
+
+	if s.elf == nil {
+		return typ, nil
+	}
+
+	if err := s.elf.fixupDatasec(typ); err != nil {
+		return nil, err
 	}
 
 	return typ, nil

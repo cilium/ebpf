@@ -147,27 +147,8 @@ func (mt *mutableTypes) typeByID(id TypeID) (Type, bool) {
 	return mt.add(immT, mt.imm.typeIDs), true
 }
 
-func (mt *mutableTypes) anyTypesByName(name string) ([]Type, error) {
-	immTypes := mt.imm.namedTypes[newEssentialName(name)]
-	if len(immTypes) == 0 {
-		return nil, fmt.Errorf("type name %s: %w", name, ErrNotFound)
-	}
-
-	// Return a copy to prevent changes to namedTypes.
-	result := make([]Type, 0, len(immTypes))
-	for _, id := range immTypes {
-		immT, ok := mt.imm.typeByID(id)
-		if !ok {
-			return nil, fmt.Errorf("no type with ID %d", id)
-		}
-
-		// Match against the full name, not just the essential one
-		// in case the type being looked up is a struct flavor.
-		if immT.TypeName() == name {
-			result = append(result, mt.add(immT, mt.imm.typeIDs))
-		}
-	}
-	return result, nil
+func (mt *mutableTypes) typeIDsByName(name essentialName) []TypeID {
+	return mt.imm.namedTypes[name]
 }
 
 // Spec allows querying a set of Types and loading the set into the
@@ -569,7 +550,28 @@ func (s *Spec) TypeID(typ Type) (TypeID, error) {
 //
 // Returns an error wrapping ErrNotFound if no matching Type exists in the Spec.
 func (s *Spec) AnyTypesByName(name string) ([]Type, error) {
-	return s.anyTypesByName(name)
+	typeIDs := s.typeIDsByName(newEssentialName(name))
+	if len(typeIDs) == 0 {
+		return nil, fmt.Errorf("type name %s: %w", name, ErrNotFound)
+	}
+
+	// Return a copy to prevent changes to namedTypes.
+	result := make([]Type, 0, len(typeIDs))
+	for _, id := range typeIDs {
+		typ, err := s.TypeByID(id)
+		if errors.Is(err, ErrNotFound) {
+			return nil, fmt.Errorf("no type with ID %d", id)
+		} else if err != nil {
+			return nil, err
+		}
+
+		// Match against the full name, not just the essential one
+		// in case the type being looked up is a struct flavor.
+		if typ.TypeName() == name {
+			result = append(result, typ)
+		}
+	}
+	return result, nil
 }
 
 // AnyTypeByName returns a Type with the given name.

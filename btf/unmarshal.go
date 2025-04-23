@@ -7,7 +7,6 @@ import (
 	"iter"
 	"maps"
 	"math"
-	"slices"
 	"sync"
 )
 
@@ -259,24 +258,31 @@ func (d *decoder) inflateType(id TypeID) (typ Type, err error) {
 		*typ = fixup
 	}
 
-	convertMembers := func(raw []btfMember, kindFlag bool) ([]Member, error) {
-		members := make([]Member, 0, len(raw))
-		for i, btfMember := range raw {
-			name, err := d.strings.Lookup(btfMember.NameOff)
+	convertMembers := func(header *btfType, buf []byte) ([]Member, error) {
+		var bm btfMember
+		members := make([]Member, 0, header.Vlen())
+		for i := range header.Vlen() {
+			n, err := unmarshalBtfMember(&bm, buf, d.byteOrder)
+			if err != nil {
+				return nil, fmt.Errorf("unmarshal member: %w", err)
+			}
+			buf = buf[n:]
+
+			name, err := d.strings.Lookup(bm.NameOff)
 			if err != nil {
 				return nil, fmt.Errorf("can't get name for member %d: %w", i, err)
 			}
 
 			members = append(members, Member{
 				Name:   name,
-				Offset: Bits(btfMember.Offset),
+				Offset: Bits(bm.Offset),
 			})
 
 			m := &members[i]
-			fixup(raw[i].Type, &m.Type)
+			fixup(bm.Type, &m.Type)
 
-			if kindFlag {
-				m.BitfieldSize = Bits(btfMember.Offset >> 24)
+			if header.Bitfield() {
+				m.BitfieldSize = Bits(bm.Offset >> 24)
 				m.Offset &= 0xffffff
 				// We ignore legacy bitfield definitions if the current composite
 				// is a new-style bitfield. This is kind of safe since offset and
@@ -286,7 +292,7 @@ func (d *decoder) inflateType(id TypeID) (typ Type, err error) {
 			}
 
 			// This may be a legacy bitfield, try to fix it up.
-			data, ok := d.legacyBitfields[raw[i].Type]
+			data, ok := d.legacyBitfields[bm.Type]
 			if ok {
 				// Bingo!
 				m.Offset += data[0]
@@ -311,13 +317,8 @@ func (d *decoder) inflateType(id TypeID) (typ Type, err error) {
 		header    btfType
 		bInt      btfInt
 		bArr      btfArray
-		bMembers  []btfMember
-		bEnums    []btfEnum
-		bParams   []btfParam
 		bVariable btfVariable
-		bSecInfos []btfVarSecinfo
 		bDeclTag  btfDeclTag
-		bEnums64  []btfEnum64
 		pos       = d.raw[offset:]
 	)
 
@@ -367,61 +368,49 @@ func (d *decoder) inflateType(id TypeID) (typ Type, err error) {
 		case kindStruct:
 			str := &Struct{name, header.Size(), nil, nil}
 			d.types[id] = str
+			typ = str
 
-			vlen := header.Vlen()
-			bMembers = slices.Grow(bMembers[:0], vlen)[:vlen]
-			if _, err := unmarshalBtfMembers(bMembers, pos, d.byteOrder); err != nil {
-				return nil, fmt.Errorf("can't unmarshal btfMembers, id: %d: %w", id, err)
-			}
-
-			members, err := convertMembers(bMembers, header.Bitfield())
+			str.Members, err = convertMembers(&header, pos)
 			if err != nil {
 				return nil, fmt.Errorf("struct %s (id %d): %w", name, id, err)
 			}
-			str.Members = members
-			typ = str
 
 		case kindUnion:
 			uni := &Union{name, header.Size(), nil, nil}
 			d.types[id] = uni
+			typ = uni
 
-			vlen := header.Vlen()
-			bMembers = slices.Grow(bMembers[:0], vlen)[:vlen]
-			if _, err := unmarshalBtfMembers(bMembers, pos, d.byteOrder); err != nil {
-				return nil, fmt.Errorf("can't unmarshal btfMembers, id: %d: %w", id, err)
-			}
-
-			members, err := convertMembers(bMembers, header.Bitfield())
+			uni.Members, err = convertMembers(&header, pos)
 			if err != nil {
 				return nil, fmt.Errorf("union %s (id %d): %w", name, id, err)
 			}
-			uni.Members = members
-			typ = uni
 
 		case kindEnum:
 			enum := &Enum{name, header.Size(), header.Signed(), nil}
 			d.types[id] = enum
+			typ = enum
 
-			vlen := header.Vlen()
-			bEnums = slices.Grow(bEnums[:0], vlen)[:vlen]
-			if _, err := unmarshalBtfEnums(bEnums, pos, d.byteOrder); err != nil {
-				return nil, fmt.Errorf("can't unmarshal btfEnums, id: %d: %w", id, err)
-			}
+			var be btfEnum
+			enum.Values = make([]EnumValue, 0, header.Vlen())
+			for i := range header.Vlen() {
+				n, err := unmarshalBtfEnum(&be, pos, d.byteOrder)
+				if err != nil {
+					return nil, fmt.Errorf("unmarshal btfEnum %d, id: %d: %w", i, id, err)
+				}
+				pos = pos[n:]
 
-			enum.Values = make([]EnumValue, 0, vlen)
-			for i, btfVal := range bEnums {
-				name, err := d.strings.Lookup(btfVal.NameOff)
+				name, err := d.strings.Lookup(be.NameOff)
 				if err != nil {
 					return nil, fmt.Errorf("get name for enum value %d: %s", i, err)
 				}
-				value := uint64(btfVal.Val)
+
+				value := uint64(be.Val)
 				if enum.Signed {
 					// Sign extend values to 64 bit.
-					value = uint64(int32(btfVal.Val))
+					value = uint64(int32(be.Val))
 				}
 				enum.Values = append(enum.Values, EnumValue{name, value})
 			}
-			typ = enum
 
 		case kindForward:
 			typ = &Fwd{name, header.FwdKind()}
@@ -466,24 +455,23 @@ func (d *decoder) inflateType(id TypeID) (typ Type, err error) {
 			fp := &FuncProto{}
 			d.types[id] = fp
 
-			vlen := header.Vlen()
-			bParams = slices.Grow(bParams[:0], vlen)[:vlen]
-			if _, err := unmarshalBtfParams(bParams, pos, d.byteOrder); err != nil {
-				return nil, fmt.Errorf("can't unmarshal btfParams, id: %d: %w", id, err)
-			}
+			params := make([]FuncParam, 0, header.Vlen())
+			var bParam btfParam
+			for i := range header.Vlen() {
+				n, err := unmarshalBtfParam(&bParam, pos, d.byteOrder)
+				if err != nil {
+					return nil, fmt.Errorf("can't unmarshal btfParam %d, id: %d: %w", i, id, err)
+				}
+				pos = pos[n:]
 
-			params := make([]FuncParam, 0, vlen)
-			for i, param := range bParams {
-				name, err := d.strings.Lookup(param.NameOff)
+				name, err := d.strings.Lookup(bParam.NameOff)
 				if err != nil {
 					return nil, fmt.Errorf("get name for func proto parameter %d: %s", i, err)
 				}
-				params = append(params, FuncParam{
-					Name: name,
-				})
-			}
-			for i := range params {
-				fixup(bParams[i].Type, &params[i].Type)
+
+				param := FuncParam{Name: name}
+				fixup(bParam.Type, &param.Type)
+				params = append(params, param)
 			}
 
 			fixup(header.Type(), &fp.Return)
@@ -506,20 +494,21 @@ func (d *decoder) inflateType(id TypeID) (typ Type, err error) {
 			d.types[id] = ds
 
 			vlen := header.Vlen()
-			bSecInfos = slices.Grow(bSecInfos[:0], vlen)[:vlen]
-			if _, err := unmarshalBtfVarSecInfos(bSecInfos, pos, d.byteOrder); err != nil {
-				return nil, fmt.Errorf("can't unmarshal btfVarSecInfos, id: %d: %w", id, err)
-			}
-
 			vars := make([]VarSecinfo, 0, vlen)
-			for _, btfVar := range bSecInfos {
-				vars = append(vars, VarSecinfo{
-					Offset: btfVar.Offset,
-					Size:   btfVar.Size,
-				})
-			}
-			for i := range vars {
-				fixup(bSecInfos[i].Type, &vars[i].Type)
+			var bSecInfo btfVarSecinfo
+			for i := 0; i < vlen; i++ {
+				n, err := unmarshalBtfVarSecInfo(&bSecInfo, pos, d.byteOrder)
+				if err != nil {
+					return nil, fmt.Errorf("can't unmarshal btfVarSecinfo %d, id: %d: %w", i, id, err)
+				}
+				pos = pos[n:]
+
+				vs := VarSecinfo{
+					Offset: bSecInfo.Offset,
+					Size:   bSecInfo.Size,
+				}
+				fixup(bSecInfo.Type, &vs.Type)
+				vars = append(vars, vs)
 			}
 			ds.Vars = vars
 			typ = ds
@@ -554,24 +543,24 @@ func (d *decoder) inflateType(id TypeID) (typ Type, err error) {
 		case kindEnum64:
 			enum := &Enum{name, header.Size(), header.Signed(), nil}
 			d.types[id] = enum
+			typ = enum
 
-			vlen := header.Vlen()
-			bEnums64 = slices.Grow(bEnums64[:0], vlen)[:vlen]
-			if _, err := unmarshalBtfEnums64(bEnums64, pos, d.byteOrder); err != nil {
-				return nil, fmt.Errorf("can't unmarshal btfEnum64s, id: %d: %w", id, err)
-			}
+			enum.Values = make([]EnumValue, 0, header.Vlen())
+			var bEnum64 btfEnum64
+			for i := range header.Vlen() {
+				n, err := unmarshalBtfEnum64(&bEnum64, pos, d.byteOrder)
+				if err != nil {
+					return nil, fmt.Errorf("can't unmarshal btfEnum64 %d, id: %d: %w", i, id, err)
+				}
+				pos = pos[n:]
 
-			enum.Values = make([]EnumValue, 0, vlen)
-			for i, btfVal := range bEnums64 {
-				name, err := d.strings.Lookup(btfVal.NameOff)
+				name, err := d.strings.Lookup(bEnum64.NameOff)
 				if err != nil {
 					return nil, fmt.Errorf("get name for enum64 value %d: %s", i, err)
 				}
-				value := (uint64(btfVal.ValHi32) << 32) | uint64(btfVal.ValLo32)
+				value := (uint64(bEnum64.ValHi32) << 32) | uint64(bEnum64.ValLo32)
 				enum.Values = append(enum.Values, EnumValue{name, value})
 			}
-
-			typ = enum
 
 		default:
 			return nil, fmt.Errorf("type id %d: unknown kind: %v", id, header.Kind())

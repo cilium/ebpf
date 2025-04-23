@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
+	"iter"
 	"maps"
 	"math"
 	"slices"
@@ -13,14 +14,17 @@ import (
 type decoder struct {
 	// Immutable fields, may be shared.
 
-	base        *decoder
-	byteOrder   binary.ByteOrder
-	raw         []byte
-	strings     *stringTable
+	base      *decoder
+	byteOrder binary.ByteOrder
+	raw       []byte
+	strings   *stringTable
+	// The ID for offsets[0].
 	firstTypeID TypeID
-	offsets     []int // map[TypeID]int
-	declTags    map[TypeID][]TypeID
-	namedTypes  map[essentialName][]TypeID
+	// Map from TypeID to offset of the marshaled data in raw. Contains an entry
+	// for each TypeID, including 0 aka Void. The offset for Void is invalid.
+	offsets    []int
+	declTags   map[TypeID][]TypeID
+	namedTypes map[essentialName][]TypeID
 
 	// Protection for mutable fields below.
 	mu              sync.Mutex
@@ -30,9 +34,7 @@ type decoder struct {
 }
 
 func newDecoder(raw []byte, bo binary.ByteOrder, strings *stringTable, base *decoder) (*decoder, error) {
-	var offsets []int
 	firstTypeID := TypeID(0)
-	id := TypeID(1)
 	if base != nil {
 		if base.byteOrder != bo {
 			return nil, fmt.Errorf("can't use %v base with %v split BTF", base.byteOrder, bo)
@@ -44,38 +46,49 @@ func newDecoder(raw []byte, bo binary.ByteOrder, strings *stringTable, base *dec
 
 		base = base.Copy()
 		firstTypeID = TypeID(len(base.offsets))
-		id = firstTypeID
-	} else {
-		// Add a sentinel for Void so the we don't have to deal with
-		// constant off by one issues.
-		offsets = append(offsets, math.MaxInt)
 	}
 
 	var header btfType
-	declTags := make(map[TypeID][]TypeID)
-	namedTypes := make(map[essentialName][]TypeID)
+	var numTypes, numDeclTags, numNamedTypes int
 
-	for offset := 0; offset < len(raw); id++ {
+	for _, err := range allBtfTypeOffsets(raw, bo, &header) {
+		if err != nil {
+			return nil, err
+		}
+
+		numTypes++
+
+		if header.Kind() == kindDeclTag {
+			numDeclTags++
+		}
+
+		if header.NameOff != 0 {
+			numNamedTypes++
+		}
+	}
+
+	if firstTypeID == 0 {
+		// Allocate an extra slot for Void so we don't have to deal with
+		// constant off by one issues.
+		numTypes++
+	}
+
+	offsets := make([]int, 0, numTypes)
+	declTags := make(map[TypeID][]TypeID, numDeclTags)
+	namedTypes := make(map[essentialName][]TypeID, numNamedTypes)
+
+	if firstTypeID == 0 {
+		// Add a sentinel for Void.
+		offsets = append(offsets, math.MaxInt)
+	}
+
+	id := firstTypeID + TypeID(len(offsets))
+	for offset := range allBtfTypeOffsets(raw, bo, &header) {
 		if id < firstTypeID {
 			return nil, fmt.Errorf("no more type IDs")
 		}
 
 		offsets = append(offsets, offset)
-		if n, err := unmarshalBtfType(&header, raw[offset:], bo); err != nil {
-			return nil, fmt.Errorf("unmarshal type header for id %v: %v", id, err)
-		} else {
-			offset += n
-		}
-
-		if n, err := header.DataLen(); err != nil {
-			return nil, err
-		} else {
-			offset += n
-		}
-
-		if offset > len(raw) {
-			return nil, fmt.Errorf("auxiliary type data for id %v: %w", id, io.ErrUnexpectedEOF)
-		}
 
 		if header.Kind() == kindDeclTag {
 			declTags[header.Type()] = append(declTags[header.Type()], id)
@@ -90,6 +103,8 @@ func newDecoder(raw []byte, bo binary.ByteOrder, strings *stringTable, base *dec
 		if name := newEssentialName(name); name != "" {
 			namedTypes[name] = append(namedTypes[name], id)
 		}
+
+		id++
 	}
 
 	return &decoder{
@@ -106,6 +121,37 @@ func newDecoder(raw []byte, bo binary.ByteOrder, strings *stringTable, base *dec
 		make(map[Type]TypeID),
 		make(map[TypeID][2]Bits),
 	}, nil
+}
+
+func allBtfTypeOffsets(buf []byte, bo binary.ByteOrder, header *btfType) iter.Seq2[int, error] {
+	return func(yield func(int, error) bool) {
+		for offset := 0; offset < len(buf); {
+			start := offset
+
+			n, err := unmarshalBtfType(header, buf[offset:], bo)
+			if err != nil {
+				yield(-1, fmt.Errorf("unmarshal type header: %w", err))
+				return
+			}
+			offset += n
+
+			n, err = header.DataLen()
+			if err != nil {
+				yield(-1, err)
+				return
+			}
+			offset += n
+
+			if offset > len(buf) {
+				yield(-1, fmt.Errorf("auxiliary type data: %w", io.ErrUnexpectedEOF))
+				return
+			}
+
+			if !yield(start, nil) {
+				return
+			}
+		}
+	}
 }
 
 func (d *decoder) Copy() *decoder {

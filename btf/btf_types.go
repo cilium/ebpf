@@ -397,21 +397,15 @@ type btfMember struct {
 
 var btfMemberLen = int(unsafe.Sizeof(btfMember{}))
 
-func unmarshalBtfMembers(members []btfMember, b []byte, bo binary.ByteOrder) (int, error) {
-	off := 0
-	for i := range members {
-		if off+btfMemberLen > len(b) {
-			return 0, fmt.Errorf("not enough bytes to unmarshal btfMember %d", i)
-		}
-
-		members[i].NameOff = bo.Uint32(b[off+0:])
-		members[i].Type = TypeID(bo.Uint32(b[off+4:]))
-		members[i].Offset = bo.Uint32(b[off+8:])
-
-		off += btfMemberLen
+func unmarshalBtfMember(bm *btfMember, b []byte, bo binary.ByteOrder) (int, error) {
+	if btfMemberLen > len(b) {
+		return 0, fmt.Errorf("not enough bytes to unmarshal btfMember")
 	}
 
-	return off, nil
+	bm.NameOff = bo.Uint32(b[0:])
+	bm.Type = TypeID(bo.Uint32(b[4:]))
+	bm.Offset = bo.Uint32(b[8:])
+	return btfMemberLen, nil
 }
 
 type btfVarSecinfo struct {
@@ -422,21 +416,15 @@ type btfVarSecinfo struct {
 
 var btfVarSecinfoLen = int(unsafe.Sizeof(btfVarSecinfo{}))
 
-func unmarshalBtfVarSecInfos(secinfos []btfVarSecinfo, b []byte, bo binary.ByteOrder) (int, error) {
-	off := 0
-	for i := range secinfos {
-		if off+btfVarSecinfoLen > len(b) {
-			return 0, fmt.Errorf("not enough bytes to unmarshal btfVarSecinfo %d", i)
-		}
-
-		secinfos[i].Type = TypeID(bo.Uint32(b[off+0:]))
-		secinfos[i].Offset = bo.Uint32(b[off+4:])
-		secinfos[i].Size = bo.Uint32(b[off+8:])
-
-		off += btfVarSecinfoLen
+func unmarshalBtfVarSecInfo(bvsi *btfVarSecinfo, b []byte, bo binary.ByteOrder) (int, error) {
+	if len(b) < btfVarSecinfoLen {
+		return 0, fmt.Errorf("not enough bytes to unmarshal btfVarSecinfo")
 	}
 
-	return off, nil
+	bvsi.Type = TypeID(bo.Uint32(b[0:]))
+	bvsi.Offset = bo.Uint32(b[4:])
+	bvsi.Size = bo.Uint32(b[8:])
+	return btfVarSecinfoLen, nil
 }
 
 type btfVariable struct {
@@ -461,20 +449,14 @@ type btfEnum struct {
 
 var btfEnumLen = int(unsafe.Sizeof(btfEnum{}))
 
-func unmarshalBtfEnums(enums []btfEnum, b []byte, bo binary.ByteOrder) (int, error) {
-	off := 0
-	for i := range enums {
-		if off+btfEnumLen > len(b) {
-			return 0, fmt.Errorf("not enough bytes to unmarshal btfEnum %d", i)
-		}
-
-		enums[i].NameOff = bo.Uint32(b[off+0:])
-		enums[i].Val = bo.Uint32(b[off+4:])
-
-		off += btfEnumLen
+func unmarshalBtfEnum(be *btfEnum, b []byte, bo binary.ByteOrder) (int, error) {
+	if btfEnumLen > len(b) {
+		return 0, fmt.Errorf("not enough bytes to unmarshal btfEnum")
 	}
 
-	return off, nil
+	be.NameOff = bo.Uint32(b[0:])
+	be.Val = bo.Uint32(b[4:])
+	return btfEnumLen, nil
 }
 
 type btfEnum64 struct {
@@ -485,21 +467,16 @@ type btfEnum64 struct {
 
 var btfEnum64Len = int(unsafe.Sizeof(btfEnum64{}))
 
-func unmarshalBtfEnums64(enums []btfEnum64, b []byte, bo binary.ByteOrder) (int, error) {
-	off := 0
-	for i := range enums {
-		if off+btfEnum64Len > len(b) {
-			return 0, fmt.Errorf("not enough bytes to unmarshal btfEnum64 %d", i)
-		}
-
-		enums[i].NameOff = bo.Uint32(b[off+0:])
-		enums[i].ValLo32 = bo.Uint32(b[off+4:])
-		enums[i].ValHi32 = bo.Uint32(b[off+8:])
-
-		off += btfEnum64Len
+func unmarshalBtfEnum64(enum *btfEnum64, b []byte, bo binary.ByteOrder) (int, error) {
+	if len(b) < btfEnum64Len {
+		return 0, fmt.Errorf("not enough bytes to unmarshal btfEnum64")
 	}
 
-	return off, nil
+	enum.NameOff = bo.Uint32(b[0:])
+	enum.ValLo32 = bo.Uint32(b[4:])
+	enum.ValHi32 = bo.Uint32(b[8:])
+
+	return btfEnum64Len, nil
 }
 
 type btfParam struct {
@@ -509,20 +486,15 @@ type btfParam struct {
 
 var btfParamLen = int(unsafe.Sizeof(btfParam{}))
 
-func unmarshalBtfParams(params []btfParam, b []byte, bo binary.ByteOrder) (int, error) {
-	off := 0
-	for i := range params {
-		if off+btfParamLen > len(b) {
-			return 0, fmt.Errorf("not enough bytes to unmarshal btfParam %d", i)
-		}
-
-		params[i].NameOff = bo.Uint32(b[off+0:])
-		params[i].Type = TypeID(bo.Uint32(b[off+4:]))
-
-		off += btfParamLen
+func unmarshalBtfParam(param *btfParam, b []byte, bo binary.ByteOrder) (int, error) {
+	if len(b) < btfParamLen {
+		return 0, fmt.Errorf("not enough bytes to unmarshal btfParam")
 	}
 
-	return off, nil
+	param.NameOff = bo.Uint32(b[0:])
+	param.Type = TypeID(bo.Uint32(b[4:]))
+
+	return btfParamLen, nil
 }
 
 type btfDeclTag struct {

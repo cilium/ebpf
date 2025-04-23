@@ -542,16 +542,6 @@ func (s *Spec) Copy() *Spec {
 	}
 }
 
-type sliceWriter []byte
-
-func (sw sliceWriter) Write(p []byte) (int, error) {
-	if len(p) != len(sw) {
-		return 0, errors.New("size doesn't match")
-	}
-
-	return copy(sw, p), nil
-}
-
 // nextTypeID returns the next unallocated type ID or an error if there are no
 // more type IDs.
 func (s *Spec) nextTypeID() (TypeID, error) {

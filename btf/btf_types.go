@@ -268,30 +268,14 @@ func (bt *btfType) SetSize(size uint32) {
 	bt.SizeType = size
 }
 
-func (bt *btfType) Marshal(w io.Writer, bo binary.ByteOrder) error {
-	buf := make([]byte, unsafe.Sizeof(*bt))
+func (bt *btfType) Encode(buf []byte, bo binary.ByteOrder) (int, error) {
+	if len(buf) < btfTypeSize {
+		return 0, fmt.Errorf("not enough bytes to marshal btfType")
+	}
 	bo.PutUint32(buf[0:], bt.NameOff)
 	bo.PutUint32(buf[4:], bt.Info)
 	bo.PutUint32(buf[8:], bt.SizeType)
-	_, err := w.Write(buf)
-	return err
-}
-
-type rawType struct {
-	btfType
-	data interface{}
-}
-
-func (rt *rawType) Marshal(w io.Writer, bo binary.ByteOrder) error {
-	if err := rt.btfType.Marshal(w, bo); err != nil {
-		return err
-	}
-
-	if rt.data == nil {
-		return nil
-	}
-
-	return binary.Write(w, bo, rt.data)
+	return btfTypeSize, nil
 }
 
 // btfInt encodes additional data for integers.

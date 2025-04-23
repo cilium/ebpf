@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
-	"io"
 	"reflect"
 	"testing"
 
@@ -388,54 +387,49 @@ func TestInflateLegacyBitfield(t *testing.T) {
 	const offset = 3
 	const size = 5
 
-	var rawInt rawType
-	rawInt.SetKind(kindInt)
-	rawInt.SetSize(4)
-	var data btfInt
-	data.SetOffset(offset)
-	data.SetBits(size)
-	rawInt.data = &data
-
-	var (
-		before bytes.Buffer
-		after  bytes.Buffer
-	)
-
-	var beforeInt rawType
-	beforeInt.SetKind(kindStruct)
-	beforeInt.SetVlen(1)
-	beforeInt.data = []btfMember{{Type: 2}}
-
-	if err := beforeInt.Marshal(&before, binary.LittleEndian); err != nil {
-		t.Fatal(err)
+	var placeholder struct {
+		btfType
+		btfInt
 	}
-	if err := rawInt.Marshal(&before, binary.LittleEndian); err != nil {
-		t.Fatal(err)
-	}
+	placeholder.SetKind(kindInt)
+	placeholder.SetSize(4)
+	placeholder.SetOffset(offset)
+	placeholder.SetBits(size)
 
-	afterInt := beforeInt
-	afterInt.data = []btfMember{{Type: 1}}
+	var structFirst struct {
+		btfType
+		Members [1]btfMember
+	}
+	structFirst.SetKind(kindStruct)
+	structFirst.SetVlen(1)
+	structFirst.Members = [...]btfMember{{Type: 2}}
 
-	if err := rawInt.Marshal(&after, binary.LittleEndian); err != nil {
-		t.Fatal(err)
-	}
-	if err := afterInt.Marshal(&after, binary.LittleEndian); err != nil {
-		t.Fatal(err)
-	}
+	before, err := binary.Append(nil, binary.LittleEndian, &structFirst)
+	qt.Assert(t, qt.IsNil(err))
+	before, err = binary.Append(before, binary.LittleEndian, &placeholder)
+	qt.Assert(t, qt.IsNil(err))
+
+	structSecond := structFirst
+	structSecond.Members = [...]btfMember{{Type: 1}}
+
+	after, err := binary.Append(nil, binary.LittleEndian, &placeholder)
+	qt.Assert(t, qt.IsNil(err))
+	after, err = binary.Append(after, binary.LittleEndian, &structSecond)
+	qt.Assert(t, qt.IsNil(err))
 
 	emptyStrings := newStringTable("")
 
 	for _, test := range []struct {
-		name   string
-		reader io.Reader
+		name string
+		buf  []byte
 	}{
-		{"struct before int", &before},
-		{"struct after int", &after},
+		{"struct before int", before},
+		{"struct after int", after},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			types, err := readAndInflateTypes(test.reader, binary.LittleEndian, 2, emptyStrings, nil)
+			types, err := readAndInflateTypes(bytes.NewReader(test.buf), binary.LittleEndian, 2, emptyStrings, nil)
 			if err != nil {
-				t.Log(before.Bytes())
+				t.Log(test.buf)
 				t.Fatal(err)
 			}
 

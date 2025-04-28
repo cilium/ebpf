@@ -165,9 +165,12 @@ import (
 
 	// Constants (aka unnamed enums)
 	var consts []btf.EnumValue
-	iter := spec.Iterate()
-	for iter.Next() {
-		e, ok := iter.Type.(*btf.Enum)
+	for typ, err := range spec.All() {
+		if err != nil {
+			return nil, err
+		}
+
+		e, ok := typ.(*btf.Enum)
 		if !ok {
 			continue
 		}

@@ -447,7 +447,7 @@ func TestInflateLegacyBitfield(t *testing.T) {
 			spec, err := loadRawSpec(bytes.NewReader(test.buf), binary.LittleEndian, nil)
 			qt.Assert(t, qt.IsNil(err))
 
-			for _, typ := range typesFromSpec(spec) {
+			for _, typ := range typesFromSpec(t, spec) {
 				s, ok := typ.(*Struct)
 				if !ok {
 					continue

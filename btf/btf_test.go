@@ -241,9 +241,7 @@ func BenchmarkIterateVmlinux(b *testing.B) {
 			b.Fatal("Can't load BTF:", err)
 		}
 
-		iter := spec.Iterate()
-		for iter.Next() {
-			_ = iter.Type
+		for range spec.All() {
 		}
 	}
 }
@@ -353,10 +351,10 @@ func TestSpecCopy(t *testing.T) {
 	spec := parseELFBTF(t, "../testdata/loader-el.elf")
 	cpy := spec.Copy()
 
-	have := typesFromSpec(spec)
+	have := typesFromSpec(t, spec)
 	qt.Assert(t, qt.IsTrue(len(have) > 0))
 
-	want := typesFromSpec(cpy)
+	want := typesFromSpec(t, cpy)
 	qt.Assert(t, qt.HasLen(want, len(have)))
 
 	for i := range want {
@@ -439,19 +437,13 @@ func TestTypesIterator(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	iter := spec.Iterate()
-
-	for i, typ := range types {
-		if !iter.Next() {
-			t.Fatal("Iterator ended early at item", i)
-		}
-
-		qt.Assert(t, qt.DeepEquals(iter.Type, typ))
+	var have []Type
+	for typ, err := range spec.All() {
+		qt.Assert(t, qt.IsNil(err))
+		have = append(have, typ)
 	}
 
-	if iter.Next() {
-		t.Fatalf("Iterator yielded too many items: %p (%[1]T)", iter.Type)
-	}
+	qt.Assert(t, qt.DeepEquals(have, types))
 }
 
 func TestLoadSplitSpecFromReader(t *testing.T) {

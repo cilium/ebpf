@@ -249,7 +249,7 @@ func BenchmarkIterateVmlinux(b *testing.B) {
 func TestParseCurrentKernelBTF(t *testing.T) {
 	spec := vmlinuxSpec(t)
 
-	if len(spec.imm.namedTypes) == 0 {
+	if len(spec.namedTypes) == 0 {
 		t.Fatal("Empty kernel BTF")
 	}
 
@@ -280,7 +280,7 @@ func TestFindVMLinux(t *testing.T) {
 		t.Fatal("Can't load BTF:", err)
 	}
 
-	if len(spec.imm.namedTypes) == 0 {
+	if len(spec.namedTypes) == 0 {
 		t.Fatal("Empty kernel BTF")
 	}
 }

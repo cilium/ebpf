@@ -211,8 +211,8 @@ func CORERelocate(relos []*CORERelocation, targets []*Spec, bo binary.ByteOrder,
 	resolveTargetTypeID := targets[0].TypeID
 
 	for _, target := range targets {
-		if bo != target.imm.byteOrder {
-			return nil, fmt.Errorf("can't relocate %s against %s", bo, target.imm.byteOrder)
+		if bo != target.byteOrder {
+			return nil, fmt.Errorf("can't relocate %s against %s", bo, target.byteOrder)
 		}
 	}
 
@@ -265,7 +265,7 @@ func CORERelocate(relos []*CORERelocation, targets []*Spec, bo binary.ByteOrder,
 
 		var targetTypes []Type
 		for _, target := range targets {
-			namedTypeIDs := target.imm.namedTypes[essentialName]
+			namedTypeIDs := target.TypeIDsByName(essentialName)
 			targetTypes = slices.Grow(targetTypes, len(namedTypeIDs))
 			for _, id := range namedTypeIDs {
 				typ, err := target.TypeByID(id)

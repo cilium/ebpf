@@ -4,54 +4,46 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
+	"maps"
 	"math"
 	"slices"
+	"sync"
 )
-
-// readAndInflateTypes reads the raw btf type info and turns it into a graph
-// of Types connected via pointers.
-//
-// If base is provided, then the types are considered to be of a split BTF
-// (e.g., a kernel module).
-//
-// Returns a slice of types indexed by TypeID. Since BTF ignores compilation
-// units, multiple types may share the same name. A Type may form a cyclic graph
-// by pointing at itself.
-func readAndInflateTypes(raw []byte, bo binary.ByteOrder, _ uint32, rawStrings *stringTable, base *Spec) ([]Type, error) {
-	d, err := newDecoder(raw, bo, rawStrings, base)
-	if err != nil {
-		return nil, err
-	}
-	return d.inflateAll()
-}
 
 type decoder struct {
 	// Immutable fields, may be shared.
 
-	base        *Spec
+	base        *decoder
 	byteOrder   binary.ByteOrder
 	raw         []byte
 	strings     *stringTable
 	firstTypeID TypeID
 	offsets     []int // map[TypeID]int
 	declTags    map[TypeID][]TypeID
+	namedTypes  map[essentialName][]TypeID
 
-	// Mutable fields, must be copied.
-
+	// Protection for mutable fields below.
+	mu              sync.Mutex
 	types           map[TypeID]Type
+	typeIDs         map[Type]TypeID
 	legacyBitfields map[TypeID][2]Bits // offset, size
 }
 
-func newDecoder(raw []byte, bo binary.ByteOrder, strings *stringTable, base *Spec) (*decoder, error) {
+func newDecoder(raw []byte, bo binary.ByteOrder, strings *stringTable, base *decoder) (*decoder, error) {
 	var offsets []int
 	firstTypeID := TypeID(0)
 	id := TypeID(1)
 	if base != nil {
-		var err error
-		firstTypeID, err = base.nextTypeID()
-		if err != nil {
-			return nil, err
+		if base.byteOrder != bo {
+			return nil, fmt.Errorf("can't use %v base with %v split BTF", base.byteOrder, bo)
 		}
+
+		if base.firstTypeID != 0 {
+			return nil, fmt.Errorf("can't use split BTF as base")
+		}
+
+		base = base.Copy()
+		firstTypeID = TypeID(len(base.offsets))
 		id = firstTypeID
 	} else {
 		// Add a sentinel for Void so the we don't have to deal with
@@ -61,6 +53,8 @@ func newDecoder(raw []byte, bo binary.ByteOrder, strings *stringTable, base *Spe
 
 	var header btfType
 	declTags := make(map[TypeID][]TypeID)
+	namedTypes := make(map[essentialName][]TypeID)
+
 	for offset := 0; offset < len(raw); id++ {
 		if id < firstTypeID {
 			return nil, fmt.Errorf("no more type IDs")
@@ -86,6 +80,16 @@ func newDecoder(raw []byte, bo binary.ByteOrder, strings *stringTable, base *Spe
 		if header.Kind() == kindDeclTag {
 			declTags[header.Type()] = append(declTags[header.Type()], id)
 		}
+
+		// Build named type index.
+		name, err := strings.Lookup(header.NameOff)
+		if err != nil {
+			return nil, fmt.Errorf("lookup type name for id %v: %w", id, err)
+		}
+
+		if name := newEssentialName(name); name != "" {
+			namedTypes[name] = append(namedTypes[name], id)
+		}
 	}
 
 	return &decoder{
@@ -96,24 +100,76 @@ func newDecoder(raw []byte, bo binary.ByteOrder, strings *stringTable, base *Spe
 		firstTypeID,
 		offsets,
 		declTags,
+		namedTypes,
+		sync.Mutex{},
 		make(map[TypeID]Type),
+		make(map[Type]TypeID),
 		make(map[TypeID][2]Bits),
 	}, nil
 }
 
-func (d *decoder) inflateAll() ([]Type, error) {
-	types := make([]Type, 0, len(d.offsets))
-	lastTypeID := d.firstTypeID + TypeID(len(d.offsets))
-
-	for id := d.firstTypeID; id < lastTypeID; id++ {
-		typ, err := d.inflateType(id)
-		if err != nil {
-			return nil, err
-		}
-		types = append(types, typ)
+func (d *decoder) Copy() *decoder {
+	if d == nil {
+		return nil
 	}
 
-	return types, nil
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
+	types := make(map[TypeID]Type, len(d.types))
+	copiedTypes := make(map[Type]Type, len(d.types))
+	typeIDs := make(map[Type]TypeID, len(d.typeIDs))
+	for id, typ := range d.types {
+		types[id] = copyType(typ, d.typeIDs, copiedTypes, typeIDs)
+	}
+
+	return &decoder{
+		d.base,
+		d.byteOrder,
+		d.raw,
+		d.strings,
+		d.firstTypeID,
+		d.offsets,
+		d.declTags,
+		d.namedTypes,
+		sync.Mutex{},
+		types,
+		typeIDs,
+		maps.Clone(d.legacyBitfields),
+	}
+}
+
+// TypeID returns the ID for a Type previously obtained via [TypeByID].
+func (d *decoder) TypeID(typ Type) (TypeID, error) {
+	if _, ok := typ.(*Void); ok {
+		// Equality is weird for void, since it is a zero sized type.
+		return 0, nil
+	}
+
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
+	id, ok := d.typeIDs[typ]
+	if !ok {
+		return 0, fmt.Errorf("no ID for type %s: %w", typ, ErrNotFound)
+	}
+
+	return id, nil
+}
+
+// TypeIDsByName returns all type IDs which have the given essential name.
+//
+// The returned slice must not be modified.
+func (d *decoder) TypeIDsByName(name essentialName) []TypeID {
+	return d.namedTypes[name]
+}
+
+// TypeByID decodes a type and any of its descendants.
+func (d *decoder) TypeByID(id TypeID) (Type, error) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
+	return d.inflateType(id)
 }
 
 func (d *decoder) inflateType(id TypeID) (typ Type, err error) {
@@ -129,11 +185,14 @@ func (d *decoder) inflateType(id TypeID) (typ Type, err error) {
 			// Remove partially inflated type so that d.types only contains
 			// fully inflated ones.
 			delete(d.types, id)
+		} else {
+			// Populate reverse index.
+			d.typeIDs[typ] = id
 		}
 	}()
 
 	if id < d.firstTypeID {
-		return d.base.TypeByID(id)
+		return d.base.inflateType(id)
 	}
 
 	if id == 0 {
@@ -194,7 +253,7 @@ func (d *decoder) inflateType(id TypeID) (typ Type, err error) {
 
 	idx := int(id - d.firstTypeID)
 	if idx >= len(d.offsets) {
-		return nil, fmt.Errorf("invalid type id %v", id)
+		return nil, fmt.Errorf("type id %v: %w", id, ErrNotFound)
 	}
 
 	offset := d.offsets[idx]

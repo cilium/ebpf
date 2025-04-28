@@ -130,8 +130,6 @@ func parseBTFHeader(r io.Reader, bo binary.ByteOrder) (*btfHeader, error) {
 	return &header, nil
 }
 
-var btfTypeLen = binary.Size(btfType{})
-
 // btfType is equivalent to struct btf_type in Documentation/bpf/btf.rst.
 type btfType struct {
 	NameOff uint32
@@ -276,6 +274,45 @@ func (bt *btfType) Encode(buf []byte, bo binary.ByteOrder) (int, error) {
 	bo.PutUint32(buf[4:], bt.Info)
 	bo.PutUint32(buf[8:], bt.SizeType)
 	return btfTypeSize, nil
+}
+
+// DataLen returns the length of additional type specific data in bytes.
+func (bt *btfType) DataLen() (int, error) {
+	switch bt.Kind() {
+	case kindInt:
+		return int(unsafe.Sizeof(btfInt{})), nil
+	case kindPointer:
+	case kindArray:
+		return int(unsafe.Sizeof(btfArray{})), nil
+	case kindStruct:
+		fallthrough
+	case kindUnion:
+		return int(unsafe.Sizeof(btfMember{})) * bt.Vlen(), nil
+	case kindEnum:
+		return int(unsafe.Sizeof(btfEnum{})) * bt.Vlen(), nil
+	case kindForward:
+	case kindTypedef:
+	case kindVolatile:
+	case kindConst:
+	case kindRestrict:
+	case kindFunc:
+	case kindFuncProto:
+		return int(unsafe.Sizeof(btfParam{})) * bt.Vlen(), nil
+	case kindVar:
+		return int(unsafe.Sizeof(btfVariable{})), nil
+	case kindDatasec:
+		return int(unsafe.Sizeof(btfVarSecinfo{})) * bt.Vlen(), nil
+	case kindFloat:
+	case kindDeclTag:
+		return int(unsafe.Sizeof(btfDeclTag{})), nil
+	case kindTypeTag:
+	case kindEnum64:
+		return int(unsafe.Sizeof(btfEnum64{})) * bt.Vlen(), nil
+	default:
+		return 0, fmt.Errorf("unknown kind: %v", bt.Kind())
+	}
+
+	return 0, nil
 }
 
 // btfInt encodes additional data for integers.

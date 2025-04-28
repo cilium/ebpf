@@ -226,6 +226,28 @@ func BenchmarkParseVmlinux(b *testing.B) {
 	}
 }
 
+func BenchmarkIterateVmlinux(b *testing.B) {
+	rd := vmlinuxTestdataReader(b)
+	b.ReportAllocs()
+	b.ResetTimer()
+
+	for range b.N {
+		if _, err := rd.Seek(0, io.SeekStart); err != nil {
+			b.Fatal(err)
+		}
+
+		spec, err := loadRawSpec(rd, binary.LittleEndian, nil)
+		if err != nil {
+			b.Fatal("Can't load BTF:", err)
+		}
+
+		iter := spec.Iterate()
+		for iter.Next() {
+			_ = iter.Type
+		}
+	}
+}
+
 func TestParseCurrentKernelBTF(t *testing.T) {
 	spec := vmlinuxSpec(t)
 
@@ -567,6 +589,60 @@ func BenchmarkSpecTypeByID(b *testing.B) {
 		_, err := spec.TypeByID(1)
 		if err != nil {
 			b.Fatal(err)
+		}
+	}
+}
+
+func BenchmarkInspectorGadget(b *testing.B) {
+	// This benchmark is the baseline for what Inspektor Gadget loads for a
+	// common configuration.
+	types := []string{
+		"pt_regs",
+		"file",
+		"inode",
+		"super_block",
+		"socket",
+		"syscall_trace_enter",
+		"task_struct",
+		"nsproxy",
+		"mnt_namespace",
+		// "fanotify_event",
+		"pid",
+		"trace_event_raw_sched_process_exec",
+		"fs_struct",
+		"path",
+		"mount",
+		"qstr",
+		"vfsmount",
+		"dentry",
+		// "bpf_func_id",
+		"mm_struct",
+		"syscall_trace_exit",
+		"linux_binprm",
+		"sock",
+		"net",
+		"inet_sock",
+	}
+
+	vmlinux, err := internal.ReadAllCompressed("testdata/vmlinux.btf.gz")
+	qt.Assert(b, qt.IsNil(err))
+
+	var rd bytes.Reader
+
+	b.ResetTimer()
+
+	for range b.N {
+		rd.Reset(vmlinux)
+		spec, err := LoadSpecFromReader(&rd)
+		if err != nil {
+			b.Fatal(err)
+		}
+
+		var s *Struct
+		for _, name := range types {
+			if err := spec.TypeByName(name, &s); err != nil {
+				b.Fatal(name, err)
+			}
 		}
 	}
 }

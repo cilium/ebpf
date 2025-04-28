@@ -100,7 +100,16 @@ func newDecoder(raw []byte, bo binary.ByteOrder, strings *stringTable, base *dec
 		}
 
 		if name := newEssentialName(name); name != "" {
-			namedTypes[name] = append(namedTypes[name], id)
+			ids := namedTypes[name]
+			if ids == nil {
+				// Almost all names will only have a single name to them.
+				// Explicitly allocate a slice of capacity 1 instead of relying
+				// on append behaviour.
+				ids = []TypeID{id}
+			} else {
+				ids = append(ids, id)
+			}
+			namedTypes[name] = ids
 		}
 
 		id++

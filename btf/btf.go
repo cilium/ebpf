@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"iter"
 	"math"
 	"os"
 	"reflect"
@@ -658,37 +659,28 @@ func LoadSplitSpecFromReader(r io.ReaderAt, base *Spec) (*Spec, error) {
 	return loadRawSpec(r, internal.NativeEndian, base)
 }
 
-// TypesIterator iterates over types of a given spec.
-type TypesIterator struct {
-	spec *Spec
-	id   TypeID
-	done bool
-	// The last visited type in the spec.
-	Type Type
-}
+// All iterates over all types.
+func (s *Spec) All() iter.Seq2[Type, error] {
+	return func(yield func(Type, error) bool) {
+		for id := s.imm.firstTypeID; ; id++ {
+			typ, err := s.TypeByID(id)
+			if errors.Is(err, ErrNotFound) {
+				return
+			} else if err != nil {
+				yield(nil, err)
+				return
+			}
 
-// Iterate returns the types iterator.
-func (s *Spec) Iterate() *TypesIterator {
-	return &TypesIterator{spec: s, id: s.imm.firstTypeID}
-}
+			// Skip declTags, during unmarshaling declTags become `Tags` fields of other types.
+			// We keep them in the spec to avoid holes in the ID space, but for the purposes of
+			// iteration, they are not useful to the user.
+			if _, ok := typ.(*declTag); ok {
+				continue
+			}
 
-// Next returns true as long as there are any remaining types.
-func (iter *TypesIterator) Next() bool {
-	if iter.done {
-		return false
-	}
-
-	var ok bool
-	iter.Type, ok = iter.spec.typeByID(iter.id)
-	iter.id++
-	iter.done = !ok
-	if !iter.done {
-		// Skip declTags, during unmarshaling declTags become `Tags` fields of other types.
-		// We keep them in the spec to avoid holes in the ID space, but for the purposes of
-		// iteration, they are not useful to the user.
-		if _, ok := iter.Type.(*declTag); ok {
-			return iter.Next()
+			if !yield(typ, nil) {
+				return
+			}
 		}
 	}
-	return !iter.done
 }

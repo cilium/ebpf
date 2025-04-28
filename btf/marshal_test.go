@@ -37,7 +37,7 @@ func TestBuilderMarshal(t *testing.T) {
 
 	have, err := loadRawSpec(bytes.NewReader(buf), internal.NativeEndian, nil)
 	qt.Assert(t, qt.IsNil(err), qt.Commentf("Couldn't parse BTF"))
-	qt.Assert(t, qt.DeepEquals(have.imm.types, want))
+	qt.Assert(t, qt.DeepEquals(typesFromSpec(t, have), want))
 }
 
 func TestBuilderAdd(t *testing.T) {
@@ -71,7 +71,7 @@ func TestBuilderAdd(t *testing.T) {
 }
 
 func TestRoundtripVMlinux(t *testing.T) {
-	types := typesFromSpec(vmlinuxSpec(t))
+	types := typesFromSpec(t, vmlinuxSpec(t))
 
 	// Randomize the order to force different permutations of walking the type
 	// graph. Keep Void at index 0.
@@ -209,7 +209,7 @@ func TestMarshalTypeTags(t *testing.T) {
 }
 
 func BenchmarkMarshaler(b *testing.B) {
-	types := typesFromSpec(vmlinuxTestdataSpec(b))[:100]
+	types := typesFromSpec(b, vmlinuxTestdataSpec(b))[:100]
 
 	b.ReportAllocs()
 	b.ResetTimer()
@@ -224,7 +224,7 @@ func BenchmarkMarshaler(b *testing.B) {
 }
 
 func BenchmarkBuildVmlinux(b *testing.B) {
-	types := typesFromSpec(vmlinuxTestdataSpec(b))
+	types := typesFromSpec(b, vmlinuxTestdataSpec(b))
 
 	b.ReportAllocs()
 	b.ResetTimer()
@@ -258,11 +258,14 @@ func specFromTypes(tb testing.TB, types []Type) *Spec {
 	return spec
 }
 
-func typesFromSpec(spec *Spec) []Type {
-	var types []Type
-	iter := spec.Iterate()
-	for iter.Next() {
-		types = append(types, iter.Type)
+func typesFromSpec(tb testing.TB, spec *Spec) []Type {
+	tb.Helper()
+
+	types := make([]Type, 0, len(spec.imm.types))
+
+	for typ, err := range spec.All() {
+		qt.Assert(tb, qt.IsNil(err))
+		types = append(types, typ)
 	}
 
 	return types

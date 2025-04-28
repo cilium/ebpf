@@ -387,6 +387,31 @@ func TestInflateLegacyBitfield(t *testing.T) {
 	const offset = 3
 	const size = 5
 
+	addHeaderAndStringTable := func(types ...any) []byte {
+		var buf []byte
+		var err error
+		for _, typ := range types {
+			buf, err = binary.Append(buf, binary.LittleEndian, typ)
+			qt.Assert(t, qt.IsNil(err))
+		}
+
+		header, err := binary.Append(nil, binary.LittleEndian, &btfHeader{
+			Magic:     btfMagic,
+			Version:   1,
+			Flags:     0,
+			HdrLen:    uint32(btfHeaderLen),
+			TypeOff:   0,
+			TypeLen:   uint32(len(buf)),
+			StringOff: uint32(len(buf)),
+			StringLen: 1,
+		})
+		qt.Assert(t, qt.IsNil(err))
+
+		buf = append(header, buf...)
+		buf = append(buf, 0) // string table
+		return buf
+	}
+
 	var placeholder struct {
 		btfType
 		btfInt
@@ -404,20 +429,12 @@ func TestInflateLegacyBitfield(t *testing.T) {
 	structFirst.SetVlen(1)
 	structFirst.Members = [...]btfMember{{Type: 2}}
 
-	before, err := binary.Append(nil, binary.LittleEndian, &structFirst)
-	qt.Assert(t, qt.IsNil(err))
-	before, err = binary.Append(before, binary.LittleEndian, &placeholder)
-	qt.Assert(t, qt.IsNil(err))
+	before := addHeaderAndStringTable(&structFirst, &placeholder)
 
 	structSecond := structFirst
 	structSecond.Members = [...]btfMember{{Type: 1}}
 
-	after, err := binary.Append(nil, binary.LittleEndian, &placeholder)
-	qt.Assert(t, qt.IsNil(err))
-	after, err = binary.Append(after, binary.LittleEndian, &structSecond)
-	qt.Assert(t, qt.IsNil(err))
-
-	emptyStrings := newStringTable("")
+	after := addHeaderAndStringTable(&placeholder, &structSecond)
 
 	for _, test := range []struct {
 		name string
@@ -427,13 +444,10 @@ func TestInflateLegacyBitfield(t *testing.T) {
 		{"struct after int", after},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			types, err := readAndInflateTypes(bytes.NewReader(test.buf), binary.LittleEndian, 2, emptyStrings, nil)
-			if err != nil {
-				t.Log(test.buf)
-				t.Fatal(err)
-			}
+			spec, err := loadRawSpec(bytes.NewReader(test.buf), binary.LittleEndian, nil)
+			qt.Assert(t, qt.IsNil(err))
 
-			for _, typ := range types {
+			for _, typ := range typesFromSpec(spec) {
 				s, ok := typ.(*Struct)
 				if !ok {
 					continue

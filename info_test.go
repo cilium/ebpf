@@ -92,6 +92,10 @@ func validateProgInfo(t *testing.T, spec *ProgramSpec, info *ProgramInfo) {
 	if info.Tag != "" {
 		qt.Assert(t, qt.Equals(info.Tag, "d7edec644f05498d"))
 	}
+	memlock, ok := info.Memlock()
+	if ok {
+		qt.Assert(t, qt.Equals(memlock, 4096))
+	}
 }
 
 func TestProgramInfo(t *testing.T) {
@@ -161,11 +165,12 @@ func TestProgramInfoProc(t *testing.T) {
 	spec := fixupProgramSpec(basicProgramSpec)
 	prog := mustNewProgram(t, spec, nil)
 
-	info, err := newProgramInfoFromProc(prog.fd)
+	var info ProgramInfo
+	err := readProgramInfoFromProc(prog.fd, &info)
 	testutils.SkipIfNotSupported(t, err)
 	qt.Assert(t, qt.IsNil(err))
 
-	validateProgInfo(t, spec, info)
+	validateProgInfo(t, spec, &info)
 }
 
 func TestProgramInfoBTF(t *testing.T) {

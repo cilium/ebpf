@@ -26,15 +26,24 @@ func readAndInflateTypes(raw []byte, bo binary.ByteOrder, _ uint32, rawStrings *
 }
 
 type decoder struct {
+	// Immutable fields, may be shared.
+
 	base        *Spec
 	byteOrder   binary.ByteOrder
 	raw         []byte
 	strings     *stringTable
 	firstTypeID TypeID
 	offsets     []int // map[TypeID]int
+	declTags    map[TypeID][]TypeID
+
+	// Mutable fields, must be copied.
+
+	types           map[TypeID]Type
+	legacyBitfields map[TypeID][2]Bits // offset, size
 }
 
 func newDecoder(raw []byte, bo binary.ByteOrder, strings *stringTable, base *Spec) (*decoder, error) {
+	var offsets []int
 	firstTypeID := TypeID(0)
 	id := TypeID(1)
 	if base != nil {
@@ -44,11 +53,14 @@ func newDecoder(raw []byte, bo binary.ByteOrder, strings *stringTable, base *Spe
 			return nil, err
 		}
 		id = firstTypeID
+	} else {
+		// Add a sentinel for Void so the we don't have to deal with
+		// constant off by one issues.
+		offsets = append(offsets, math.MaxInt)
 	}
 
 	var header btfType
-	var offsets []int
-
+	declTags := make(map[TypeID][]TypeID)
 	for offset := 0; offset < len(raw); id++ {
 		if id < firstTypeID {
 			return nil, fmt.Errorf("no more type IDs")
@@ -70,6 +82,10 @@ func newDecoder(raw []byte, bo binary.ByteOrder, strings *stringTable, base *Spe
 		if offset > len(raw) {
 			return nil, fmt.Errorf("auxiliary type data for id %v: %w", id, io.ErrUnexpectedEOF)
 		}
+
+		if header.Kind() == kindDeclTag {
+			declTags[header.Type()] = append(declTags[header.Type()], id)
+		}
 	}
 
 	return &decoder{
@@ -79,53 +95,66 @@ func newDecoder(raw []byte, bo binary.ByteOrder, strings *stringTable, base *Spe
 		strings,
 		firstTypeID,
 		offsets,
+		declTags,
+		make(map[TypeID]Type),
+		make(map[TypeID][2]Bits),
 	}, nil
 }
 
 func (d *decoder) inflateAll() ([]Type, error) {
-	types := make([]Type, 0, len(d.offsets)+1)
+	types := make([]Type, 0, len(d.offsets))
+	lastTypeID := d.firstTypeID + TypeID(len(d.offsets))
 
-	if d.firstTypeID == 0 {
+	for id := d.firstTypeID; id < lastTypeID; id++ {
+		typ, err := d.inflateType(id)
+		if err != nil {
+			return nil, err
+		}
+		types = append(types, typ)
+	}
+
+	return types, nil
+}
+
+func (d *decoder) inflateType(id TypeID) (typ Type, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			err = r.(error)
+		}
+
+		// err is the return value of the enclosing function, even if an explicit
+		// return is used.
+		// See https://go.dev/ref/spec#Defer_statements
+		if err != nil {
+			// Remove partially inflated type so that d.types only contains
+			// fully inflated ones.
+			delete(d.types, id)
+		}
+	}()
+
+	if id < d.firstTypeID {
+		return d.base.TypeByID(id)
+	}
+
+	if id == 0 {
 		// Void is defined to always be type ID 0, and is thus omitted from BTF.
-		types = append(types, (*Void)(nil))
+		// Fast-path because it is looked up frequently.
+		return (*Void)(nil), nil
 	}
 
-	type fixupDef struct {
-		id  TypeID
-		typ *Type
+	if typ, ok := d.types[id]; ok {
+		return typ, nil
 	}
 
-	var fixups []fixupDef
 	fixup := func(id TypeID, typ *Type) {
-		if id < d.firstTypeID {
-			if baseType, err := d.base.TypeByID(id); err == nil {
-				*typ = baseType
-				return
-			}
+		fixup, err := d.inflateType(id)
+		if err != nil {
+			panic(err)
 		}
-
-		idx := int(id - d.firstTypeID)
-		if idx < len(types) {
-			// We've already inflated this type, fix it up immediately.
-			*typ = types[idx]
-			return
-		}
-
-		fixups = append(fixups, fixupDef{id, typ})
+		*typ = fixup
 	}
 
-	type bitfieldFixupDef struct {
-		id TypeID
-		m  *Member
-	}
-
-	var (
-		legacyBitfields = make(map[TypeID][2]Bits) // offset, size
-		bitfieldFixups  []bitfieldFixupDef
-	)
 	convertMembers := func(raw []btfMember, kindFlag bool) ([]Member, error) {
-		// NB: The fixup below relies on pre-allocating this array to
-		// work, since otherwise append might re-allocate members.
 		members := make([]Member, 0, len(raw))
 		for i, btfMember := range raw {
 			name, err := d.strings.Lookup(btfMember.NameOff)
@@ -152,30 +181,25 @@ func (d *decoder) inflateAll() ([]Type, error) {
 			}
 
 			// This may be a legacy bitfield, try to fix it up.
-			data, ok := legacyBitfields[raw[i].Type]
+			data, ok := d.legacyBitfields[raw[i].Type]
 			if ok {
 				// Bingo!
 				m.Offset += data[0]
 				m.BitfieldSize = data[1]
 				continue
 			}
-
-			if m.Type != nil {
-				// We couldn't find a legacy bitfield, but we know that the member's
-				// type has already been inflated. Hence we know that it can't be
-				// a legacy bitfield and there is nothing left to do.
-				continue
-			}
-
-			// We don't have fixup data, and the type we're pointing
-			// at hasn't been inflated yet. No choice but to defer
-			// the fixup.
-			bitfieldFixups = append(bitfieldFixups, bitfieldFixupDef{
-				raw[i].Type,
-				m,
-			})
 		}
 		return members, nil
+	}
+
+	idx := int(id - d.firstTypeID)
+	if idx >= len(d.offsets) {
+		return nil, fmt.Errorf("invalid type id %v", id)
+	}
+
+	offset := d.offsets[idx]
+	if offset >= len(d.raw) {
+		return nil, fmt.Errorf("offset out of bounds")
 	}
 
 	var (
@@ -189,24 +213,14 @@ func (d *decoder) inflateAll() ([]Type, error) {
 		bSecInfos []btfVarSecinfo
 		bDeclTag  btfDeclTag
 		bEnums64  []btfEnum64
+		pos       = d.raw[offset:]
 	)
 
-	var declTags []*declTag
-	for _, offset := range d.offsets {
-		var (
-			id  = d.firstTypeID + TypeID(len(types))
-			pos = d.raw[offset:]
-			typ Type
-		)
-
+	{
 		if n, err := unmarshalBtfType(&header, pos, d.byteOrder); err != nil {
 			return nil, fmt.Errorf("can't unmarshal type info for id %v: %v", id, err)
 		} else {
 			pos = pos[n:]
-		}
-
-		if id < d.firstTypeID {
-			return nil, fmt.Errorf("no more type IDs")
 		}
 
 		name, err := d.strings.Lookup(header.NameOff)
@@ -221,12 +235,15 @@ func (d *decoder) inflateAll() ([]Type, error) {
 				return nil, fmt.Errorf("can't unmarshal btfInt, id: %d: %w", id, err)
 			}
 			if bInt.Offset() > 0 || bInt.Bits().Bytes() != size {
-				legacyBitfields[id] = [2]Bits{bInt.Offset(), bInt.Bits()}
+				d.legacyBitfields[id] = [2]Bits{bInt.Offset(), bInt.Bits()}
 			}
 			typ = &Int{name, header.Size(), bInt.Encoding()}
+			d.types[id] = typ
 
 		case kindPointer:
 			ptr := &Pointer{nil}
+			d.types[id] = ptr
+
 			fixup(header.Type(), &ptr.Target)
 			typ = ptr
 
@@ -236,11 +253,16 @@ func (d *decoder) inflateAll() ([]Type, error) {
 			}
 
 			arr := &Array{nil, nil, bArr.Nelems}
+			d.types[id] = arr
+
 			fixup(bArr.IndexType, &arr.Index)
 			fixup(bArr.Type, &arr.Type)
 			typ = arr
 
 		case kindStruct:
+			str := &Struct{name, header.Size(), nil, nil}
+			d.types[id] = str
+
 			vlen := header.Vlen()
 			bMembers = slices.Grow(bMembers[:0], vlen)[:vlen]
 			if _, err := unmarshalBtfMembers(bMembers, pos, d.byteOrder); err != nil {
@@ -251,9 +273,13 @@ func (d *decoder) inflateAll() ([]Type, error) {
 			if err != nil {
 				return nil, fmt.Errorf("struct %s (id %d): %w", name, id, err)
 			}
-			typ = &Struct{name, header.Size(), members, nil}
+			str.Members = members
+			typ = str
 
 		case kindUnion:
+			uni := &Union{name, header.Size(), nil, nil}
+			d.types[id] = uni
+
 			vlen := header.Vlen()
 			bMembers = slices.Grow(bMembers[:0], vlen)[:vlen]
 			if _, err := unmarshalBtfMembers(bMembers, pos, d.byteOrder); err != nil {
@@ -264,60 +290,77 @@ func (d *decoder) inflateAll() ([]Type, error) {
 			if err != nil {
 				return nil, fmt.Errorf("union %s (id %d): %w", name, id, err)
 			}
-			typ = &Union{name, header.Size(), members, nil}
+			uni.Members = members
+			typ = uni
 
 		case kindEnum:
+			enum := &Enum{name, header.Size(), header.Signed(), nil}
+			d.types[id] = enum
+
 			vlen := header.Vlen()
 			bEnums = slices.Grow(bEnums[:0], vlen)[:vlen]
 			if _, err := unmarshalBtfEnums(bEnums, pos, d.byteOrder); err != nil {
 				return nil, fmt.Errorf("can't unmarshal btfEnums, id: %d: %w", id, err)
 			}
 
-			vals := make([]EnumValue, 0, vlen)
-			signed := header.Signed()
+			enum.Values = make([]EnumValue, 0, vlen)
 			for i, btfVal := range bEnums {
 				name, err := d.strings.Lookup(btfVal.NameOff)
 				if err != nil {
 					return nil, fmt.Errorf("get name for enum value %d: %s", i, err)
 				}
 				value := uint64(btfVal.Val)
-				if signed {
+				if enum.Signed {
 					// Sign extend values to 64 bit.
 					value = uint64(int32(btfVal.Val))
 				}
-				vals = append(vals, EnumValue{name, value})
+				enum.Values = append(enum.Values, EnumValue{name, value})
 			}
-			typ = &Enum{name, header.Size(), signed, vals}
+			typ = enum
 
 		case kindForward:
 			typ = &Fwd{name, header.FwdKind()}
+			d.types[id] = typ
 
 		case kindTypedef:
 			typedef := &Typedef{name, nil, nil}
+			d.types[id] = typedef
+
 			fixup(header.Type(), &typedef.Type)
 			typ = typedef
 
 		case kindVolatile:
 			volatile := &Volatile{nil}
+			d.types[id] = volatile
+
 			fixup(header.Type(), &volatile.Type)
 			typ = volatile
 
 		case kindConst:
 			cnst := &Const{nil}
+			d.types[id] = cnst
+
 			fixup(header.Type(), &cnst.Type)
 			typ = cnst
 
 		case kindRestrict:
 			restrict := &Restrict{nil}
+			d.types[id] = restrict
+
 			fixup(header.Type(), &restrict.Type)
 			typ = restrict
 
 		case kindFunc:
 			fn := &Func{name, nil, header.Linkage(), nil, nil}
+			d.types[id] = fn
+
 			fixup(header.Type(), &fn.Type)
 			typ = fn
 
 		case kindFuncProto:
+			fp := &FuncProto{}
+			d.types[id] = fp
+
 			vlen := header.Vlen()
 			bParams = slices.Grow(bParams[:0], vlen)[:vlen]
 			if _, err := unmarshalBtfParams(bParams, pos, d.byteOrder); err != nil {
@@ -338,8 +381,8 @@ func (d *decoder) inflateAll() ([]Type, error) {
 				fixup(bParams[i].Type, &params[i].Type)
 			}
 
-			fp := &FuncProto{nil, params}
 			fixup(header.Type(), &fp.Return)
+			fp.Params = params
 			typ = fp
 
 		case kindVar:
@@ -348,10 +391,15 @@ func (d *decoder) inflateAll() ([]Type, error) {
 			}
 
 			v := &Var{name, nil, VarLinkage(bVariable.Linkage), nil}
+			d.types[id] = v
+
 			fixup(header.Type(), &v.Type)
 			typ = v
 
 		case kindDatasec:
+			ds := &Datasec{name, header.Size(), nil}
+			d.types[id] = ds
+
 			vlen := header.Vlen()
 			bSecInfos = slices.Grow(bSecInfos[:0], vlen)[:vlen]
 			if _, err := unmarshalBtfVarSecInfos(bSecInfos, pos, d.byteOrder); err != nil {
@@ -368,10 +416,12 @@ func (d *decoder) inflateAll() ([]Type, error) {
 			for i := range vars {
 				fixup(bSecInfos[i].Type, &vars[i].Type)
 			}
-			typ = &Datasec{name, header.Size(), vars}
+			ds.Vars = vars
+			typ = ds
 
 		case kindFloat:
 			typ = &Float{name, header.Size()}
+			d.types[id] = typ
 
 		case kindDeclTag:
 			if _, err := unmarshalBtfDeclTag(&bDeclTag, pos, d.byteOrder); err != nil {
@@ -384,69 +434,57 @@ func (d *decoder) inflateAll() ([]Type, error) {
 			}
 
 			dt := &declTag{nil, name, int(int32(btfIndex))}
+			d.types[id] = dt
+
 			fixup(header.Type(), &dt.Type)
 			typ = dt
 
-			declTags = append(declTags, dt)
-
 		case kindTypeTag:
 			tt := &TypeTag{nil, name}
+			d.types[id] = tt
+
 			fixup(header.Type(), &tt.Type)
 			typ = tt
 
 		case kindEnum64:
+			enum := &Enum{name, header.Size(), header.Signed(), nil}
+			d.types[id] = enum
+
 			vlen := header.Vlen()
 			bEnums64 = slices.Grow(bEnums64[:0], vlen)[:vlen]
 			if _, err := unmarshalBtfEnums64(bEnums64, pos, d.byteOrder); err != nil {
 				return nil, fmt.Errorf("can't unmarshal btfEnum64s, id: %d: %w", id, err)
 			}
 
-			vals := make([]EnumValue, 0, vlen)
+			enum.Values = make([]EnumValue, 0, vlen)
 			for i, btfVal := range bEnums64 {
 				name, err := d.strings.Lookup(btfVal.NameOff)
 				if err != nil {
 					return nil, fmt.Errorf("get name for enum64 value %d: %s", i, err)
 				}
 				value := (uint64(btfVal.ValHi32) << 32) | uint64(btfVal.ValLo32)
-				vals = append(vals, EnumValue{name, value})
+				enum.Values = append(enum.Values, EnumValue{name, value})
 			}
-			typ = &Enum{name, header.Size(), header.Signed(), vals}
+
+			typ = enum
 
 		default:
 			return nil, fmt.Errorf("type id %d: unknown kind: %v", id, header.Kind())
 		}
-
-		types = append(types, typ)
 	}
 
-	for _, fixup := range fixups {
-		if fixup.id < d.firstTypeID {
-			return nil, fmt.Errorf("fixup for base type id %d is not expected", fixup.id)
+	for _, tagID := range d.declTags[id] {
+		dtType, err := d.inflateType(tagID)
+		if err != nil {
+			return nil, err
 		}
 
-		idx := int(fixup.id - d.firstTypeID)
-		if idx >= len(types) {
-			return nil, fmt.Errorf("reference to invalid type id: %d", fixup.id)
+		dt, ok := dtType.(*declTag)
+		if !ok {
+			return nil, fmt.Errorf("type id %v: not a declTag", tagID)
 		}
 
-		*fixup.typ = types[idx]
-	}
-
-	for _, bitfieldFixup := range bitfieldFixups {
-		if bitfieldFixup.id < d.firstTypeID {
-			return nil, fmt.Errorf("bitfield fixup from split to base types is not expected")
-		}
-
-		data, ok := legacyBitfields[bitfieldFixup.id]
-		if ok {
-			// This is indeed a legacy bitfield, fix it up.
-			bitfieldFixup.m.Offset += data[0]
-			bitfieldFixup.m.BitfieldSize = data[1]
-		}
-	}
-
-	for _, dt := range declTags {
-		switch t := dt.Type.(type) {
+		switch t := typ.(type) {
 		case *Var:
 			if dt.Index != -1 {
 				return nil, fmt.Errorf("type %s: component idx %d is not -1", dt, dt.Index)
@@ -467,21 +505,16 @@ func (d *decoder) inflateAll() ([]Type, error) {
 				}
 
 				members[dt.Index].Tags = append(members[dt.Index].Tags, dt.Value)
-				continue
-			}
-
-			if dt.Index == -1 {
+			} else if dt.Index == -1 {
 				switch t2 := t.(type) {
 				case *Struct:
 					t2.Tags = append(t2.Tags, dt.Value)
 				case *Union:
 					t2.Tags = append(t2.Tags, dt.Value)
 				}
-
-				continue
+			} else {
+				return nil, fmt.Errorf("type %s: decl tag for type %s has invalid component idx", dt, t)
 			}
-
-			return nil, fmt.Errorf("type %s: decl tag for type %s has invalid component idx", dt, t)
 
 		case *Func:
 			fp, ok := t.Type.(*FuncProto)
@@ -500,20 +533,16 @@ func (d *decoder) inflateAll() ([]Type, error) {
 				}
 
 				t.ParamTags[dt.Index] = append(t.ParamTags[dt.Index], dt.Value)
-				continue
-			}
-
-			if dt.Index == -1 {
+			} else if dt.Index == -1 {
 				t.Tags = append(t.Tags, dt.Value)
-				continue
+			} else {
+				return nil, fmt.Errorf("type %s: decl tag for type %s has invalid component idx", dt, t)
 			}
-
-			return nil, fmt.Errorf("type %s: decl tag for type %s has invalid component idx", dt, t)
 
 		default:
 			return nil, fmt.Errorf("type %s: decl tag for type %s is not supported", dt, t)
 		}
 	}
 
-	return types, nil
+	return typ, nil
 }

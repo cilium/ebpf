@@ -41,24 +41,37 @@ const (
 
 	// AddAtomic - add src to memory address dst atomically
 	AddAtomic AtomicOp = AtomicOp(Add) << 8
+	// FetchAdd - add src to memory address dst atomically, store result in src
+	FetchAdd AtomicOp = AddAtomic | fetch
 	// AndAtomic - bitwise AND src with memory address at dst atomically
 	AndAtomic AtomicOp = AtomicOp(And) << 8
+	// FetchAnd - bitwise AND src with memory address at dst atomically, store result in src
+	FetchAnd AtomicOp = AndAtomic | fetch
 	// OrAtomic - bitwise OR src with memory address at dst atomically
 	OrAtomic AtomicOp = AtomicOp(Or) << 8
+	// FetchOr - bitwise OR src with memory address at dst atomically, store result in src
+	FetchOr AtomicOp = OrAtomic | fetch
 	// XorAtomic - bitwise XOR src with memory address at dst atomically
 	XorAtomic AtomicOp = AtomicOp(Xor) << 8
+	// FetchXor - bitwise XOR src with memory address at dst atomically, store result in src
+	FetchXor AtomicOp = XorAtomic | fetch
 
-	// xchgAtomic - atomically exchange the old value with the new value
-	xchgAtomic AtomicOp = 0x0000_e000
-	// cmpXchgAtomic - atomically compare and exchange the old value with the new value
-	cmpXchgAtomic AtomicOp = 0x0000_f000
+	// Xchg - atomically exchange the old value with the new value
+	//
+	// src gets populated with the old value of *(size *)(dst + offset).
+	Xchg AtomicOp = 0x0000_e000 | fetch
+	// CmpXchg - atomically compare and exchange the old value with the new value
+	//
+	// Compares R0 and *(size *)(dst + offset), writes src to *(size *)(dst + offset) on match.
+	// R0 gets populated with the old value of *(size *)(dst + offset), even if no exchange occurs.
+	CmpXchg AtomicOp = 0x0000_f000 | fetch
 
 	// fetch modifier for copy-modify-write atomics
 	fetch AtomicOp = 0x0000_0100
-	// loadAcquireAtomic - atomically load with acquire semantics
-	loadAcquireAtomic AtomicOp = 0x0001_0000
-	// storeReleaseAtomic - atomically store with release semantics
-	storeReleaseAtomic AtomicOp = 0x0001_1000
+	// loadAcquire - atomically load with acquire semantics
+	loadAcquire AtomicOp = 0x0001_0000
+	// storeRelease - atomically store with release semantics
+	storeRelease AtomicOp = 0x0001_1000
 )
 
 func (op AtomicOp) String() string {
@@ -66,15 +79,15 @@ func (op AtomicOp) String() string {
 	switch op {
 	case AddAtomic, AndAtomic, OrAtomic, XorAtomic:
 		name = ALUOp(op >> 8).String()
-	case AddAtomic | fetch, AndAtomic | fetch, OrAtomic | fetch, XorAtomic | fetch:
+	case FetchAdd, FetchAnd, FetchOr, FetchXor:
 		name = "Fetch" + ALUOp((op^fetch)>>8).String()
-	case xchgAtomic | fetch:
+	case Xchg:
 		name = "Xchg"
-	case cmpXchgAtomic | fetch:
+	case CmpXchg:
 		name = "CmpXchg"
-	case loadAcquireAtomic:
+	case loadAcquire:
 		name = "LdAcq"
-	case storeReleaseAtomic:
+	case storeRelease:
 		name = "StRel"
 	default:
 		name = fmt.Sprintf("AtomicOp(%#x)", uint32(op))
@@ -86,8 +99,8 @@ func (op AtomicOp) String() string {
 func (op AtomicOp) OpCode(size Size) OpCode {
 	switch op {
 	case AddAtomic, AndAtomic, OrAtomic, XorAtomic,
-		AddAtomic | fetch, AndAtomic | fetch, OrAtomic | fetch, XorAtomic | fetch,
-		xchgAtomic | fetch, cmpXchgAtomic | fetch:
+		FetchAdd, FetchAnd, FetchOr, FetchXor,
+		Xchg, CmpXchg:
 		switch size {
 		case Byte, Half:
 			// 8-bit and 16-bit atomic copy-modify-write atomics are not supported
@@ -100,17 +113,6 @@ func (op AtomicOp) OpCode(size Size) OpCode {
 
 // Mem emits `*(size *)(dst + offset) (op) src`.
 func (op AtomicOp) Mem(dst, src Register, size Size, offset int16) Instruction {
-	switch op {
-	case xchgAtomic, cmpXchgAtomic:
-		// XchgAtomic and CmpXchgAtomic always have fetch set, FetchMem must be used
-		return Instruction{
-			OpCode: InvalidOpCode,
-			Dst:    dst,
-			Src:    src,
-			Offset: offset,
-		}
-	}
-
 	return Instruction{
 		OpCode: op.OpCode(size),
 		Dst:    dst,
@@ -119,17 +121,10 @@ func (op AtomicOp) Mem(dst, src Register, size Size, offset int16) Instruction {
 	}
 }
 
-// FetchMem is like Mem but also stores the result in src.
-func (op AtomicOp) FetchMem(dst, src Register, size Size, offset int16) Instruction {
-	fetchOp := op | fetch
-	ins := fetchOp.Mem(src, dst, size, offset)
-	return ins
-}
-
 // Emits `lock-acquire dst = *(size *)(src + offset)`.
 func LoadAcquire(dst, src Register, size Size, offset int16) Instruction {
 	return Instruction{
-		OpCode: loadAcquireAtomic.OpCode(size),
+		OpCode: loadAcquire.OpCode(size),
 		Dst:    dst,
 		Src:    src,
 		Offset: offset,
@@ -139,30 +134,7 @@ func LoadAcquire(dst, src Register, size Size, offset int16) Instruction {
 // Emits `lock-release *(size *)(dst + offset) = src`.
 func StoreRelease(dst, src Register, size Size, offset int16) Instruction {
 	return Instruction{
-		OpCode: storeReleaseAtomic.OpCode(size),
-		Dst:    dst,
-		Src:    src,
-		Offset: offset,
-	}
-}
-
-// Emits `src = xchg(*(size *)(dst + offset), src)`.
-// src gets populated with the old value of *(size *)(dst + offset).
-func AtomicXchg(dst, src Register, size Size, offset int16, fetch bool) Instruction {
-	return Instruction{
-		OpCode: xchgAtomic.OpCode(size),
-		Dst:    dst,
-		Src:    src,
-		Offset: offset,
-	}
-}
-
-// Emits `r0 = cmpxchg(*(size *)(dst + offset), r0, src)`.
-// Compares R0 and *(size *)(dst + offset), writes src to *(size *)(dst + offset) on match.
-// R0 gets populated with the old value of *(size *)(dst + offset), even if no exchange occurs.
-func AtomicCmpXchg(dst, src Register, size Size, offset int16, fetch bool) Instruction {
-	return Instruction{
-		OpCode: cmpXchgAtomic.OpCode(size),
+		OpCode: storeRelease.OpCode(size),
 		Dst:    dst,
 		Src:    src,
 		Offset: offset,

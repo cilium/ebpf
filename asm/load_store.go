@@ -202,6 +202,10 @@ func StoreImmOp(size Size) OpCode {
 
 // StoreImm emits `*(size *)(dst + offset) = value`.
 func StoreImm(dst Register, offset int16, value int64, size Size) Instruction {
+	if size == DWord {
+		return Instruction{OpCode: InvalidOpCode}
+	}
+
 	return Instruction{
 		OpCode:   StoreImmOp(size),
 		Dst:      dst,

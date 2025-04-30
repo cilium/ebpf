@@ -131,8 +131,9 @@ jobs:
       - name: Test
         env:
           GOTRACEBACK: crash
+          CGO_ENABLED: 1 # CGo is required by `-race`
         run: |
-          gotestsum --raw-command --ignore-non-json-output-lines --junitfile junit.xml -- vimto -kernel :stable-selftests -- go test -timeout 5m -short -count 1 -json ./...
+          gotestsum --raw-command --ignore-non-json-output-lines --junitfile junit.xml -- vimto -kernel :stable-selftests -- go test -race -timeout 5m -short -count 1 -json ./...
 
       - name: Benchmark
         run: vimto -kernel :stable-selftests -- go test -short -run '^$' -bench . -benchtime=1x ./...

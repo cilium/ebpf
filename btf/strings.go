@@ -54,10 +54,20 @@ func (st *stringTable) Lookup(offset uint32) (string, error) {
 		return "", nil
 	}
 
+	b, err := st.lookupSlow(offset)
+	return string(b), err
+}
+
+func (st *stringTable) LookupBytes(offset uint32) ([]byte, error) {
+	// Fast path: zero offset is the empty string, looked up frequently.
+	if offset == 0 {
+		return nil, nil
+	}
+
 	return st.lookupSlow(offset)
 }
 
-func (st *stringTable) lookupSlow(offset uint32) (string, error) {
+func (st *stringTable) lookupSlow(offset uint32) ([]byte, error) {
 	if st.base != nil {
 		n := uint32(len(st.base.bytes))
 		if offset < n {
@@ -67,15 +77,15 @@ func (st *stringTable) lookupSlow(offset uint32) (string, error) {
 	}
 
 	if offset > uint32(len(st.bytes)) {
-		return "", fmt.Errorf("offset %d is out of bounds of string table", offset)
+		return nil, fmt.Errorf("offset %d is out of bounds of string table", offset)
 	}
 
 	if offset > 0 && st.bytes[offset-1] != 0 {
-		return "", fmt.Errorf("offset %d is not the beginning of a string", offset)
+		return nil, fmt.Errorf("offset %d is not the beginning of a string", offset)
 	}
 
 	i := bytes.IndexByte(st.bytes[offset:], 0)
-	return string(st.bytes[offset : offset+uint32(i)]), nil
+	return st.bytes[offset : offset+uint32(i)], nil
 }
 
 // stringTableBuilder builds BTF string tables.

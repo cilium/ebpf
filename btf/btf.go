@@ -12,6 +12,7 @@ import (
 	"math"
 	"os"
 	"reflect"
+	"slices"
 
 	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/sys"
@@ -243,6 +244,10 @@ func guessRawBTFByteOrder(r io.ReaderAt) binary.ByteOrder {
 // fixupDatasec attempts to patch up missing info in Datasecs and its members by
 // supplementing them with information from the ELF headers and symbol table.
 func (elf *elfData) fixupDatasec(typ Type) error {
+	if elf == nil {
+		return nil
+	}
+
 	if ds, ok := typ.(*Datasec); ok {
 		if elf.fixups[ds] {
 			return nil
@@ -373,10 +378,6 @@ func (s *Spec) TypeByID(id TypeID) (Type, error) {
 		return nil, fmt.Errorf("inflate type: %w", err)
 	}
 
-	if s.elf == nil {
-		return typ, nil
-	}
-
 	if err := s.elf.fixupDatasec(typ); err != nil {
 		return nil, err
 	}
@@ -399,28 +400,25 @@ func (s *Spec) TypeID(typ Type) (TypeID, error) {
 //
 // Returns an error wrapping ErrNotFound if no matching Type exists in the Spec.
 func (s *Spec) AnyTypesByName(name string) ([]Type, error) {
-	typeIDs := s.TypeIDsByName(newEssentialName(name))
-	if len(typeIDs) == 0 {
-		return nil, fmt.Errorf("type name %s: %w", name, ErrNotFound)
+	types, err := s.TypesByName(newEssentialName(name))
+	if err != nil {
+		return nil, err
 	}
 
-	// Return a copy to prevent changes to namedTypes.
-	result := make([]Type, 0, len(typeIDs))
-	for _, id := range typeIDs {
-		typ, err := s.TypeByID(id)
-		if errors.Is(err, ErrNotFound) {
-			return nil, fmt.Errorf("no type with ID %d", id)
-		} else if err != nil {
-			return nil, err
-		}
-
+	for i := 0; i < len(types); i++ {
 		// Match against the full name, not just the essential one
 		// in case the type being looked up is a struct flavor.
-		if typ.TypeName() == name {
-			result = append(result, typ)
+		if types[i].TypeName() != name {
+			types = slices.Delete(types, i, i+1)
+			continue
+		}
+
+		if err := s.elf.fixupDatasec(types[i]); err != nil {
+			return nil, err
 		}
 	}
-	return result, nil
+
+	return types, nil
 }
 
 // AnyTypeByName returns a Type with the given name.

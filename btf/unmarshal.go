@@ -1,12 +1,15 @@
 package btf
 
 import (
+	"bytes"
 	"encoding/binary"
 	"fmt"
+	"hash/maphash"
 	"io"
 	"iter"
 	"maps"
 	"math"
+	"slices"
 	"sync"
 )
 
@@ -21,9 +24,10 @@ type decoder struct {
 	firstTypeID TypeID
 	// Map from TypeID to offset of the marshaled data in raw. Contains an entry
 	// for each TypeID, including 0 aka Void. The offset for Void is invalid.
-	offsets    []int
-	declTags   map[TypeID][]TypeID
-	namedTypes map[essentialName][]TypeID
+	offsets  []int
+	declTags map[TypeID][]TypeID
+	// An index from essentialName to TypeID.
+	namedTypes *fuzzyStringIndex
 
 	// Protection for mutable fields below.
 	mu              sync.Mutex
@@ -74,7 +78,7 @@ func newDecoder(raw []byte, bo binary.ByteOrder, strings *stringTable, base *dec
 
 	offsets := make([]int, 0, numTypes)
 	declTags := make(map[TypeID][]TypeID, numDeclTags)
-	namedTypes := make(map[essentialName][]TypeID, numNamedTypes)
+	namedTypes := newFuzzyStringIndex(numNamedTypes)
 
 	if firstTypeID == 0 {
 		// Add a sentinel for Void.
@@ -94,26 +98,26 @@ func newDecoder(raw []byte, bo binary.ByteOrder, strings *stringTable, base *dec
 		}
 
 		// Build named type index.
-		name, err := strings.Lookup(header.NameOff)
+		name, err := strings.LookupBytes(header.NameOff)
 		if err != nil {
 			return nil, fmt.Errorf("lookup type name for id %v: %w", id, err)
 		}
 
-		if name := newEssentialName(name); name != "" {
-			ids := namedTypes[name]
-			if ids == nil {
-				// Almost all names will only have a single name to them.
-				// Explicitly allocate a slice of capacity 1 instead of relying
-				// on append behaviour.
-				ids = []TypeID{id}
-			} else {
-				ids = append(ids, id)
+		if len(name) > 0 {
+			if i := bytes.Index(name, []byte("___")); i != -1 {
+				// Flavours are rare. It's cheaper to find the first index for some
+				// reason.
+				i = bytes.LastIndex(name, []byte("___"))
+				name = name[:i]
 			}
-			namedTypes[name] = ids
+
+			namedTypes.Add(name, id)
 		}
 
 		id++
 	}
+
+	namedTypes.Build()
 
 	return &decoder{
 		base,
@@ -211,11 +215,28 @@ func (d *decoder) TypeID(typ Type) (TypeID, error) {
 	return id, nil
 }
 
-// TypeIDsByName returns all type IDs which have the given essential name.
+// TypesByName returns all types which have the given essential name.
 //
-// The returned slice must not be modified.
-func (d *decoder) TypeIDsByName(name essentialName) []TypeID {
-	return d.namedTypes[name]
+// Returns ErrNotFound if no matching Type exists.
+func (d *decoder) TypesByName(name essentialName) ([]Type, error) {
+	var types []Type
+	for id := range d.namedTypes.Find(string(name)) {
+		typ, err := d.TypeByID(id)
+		if err != nil {
+			return nil, err
+		}
+
+		if newEssentialName(typ.TypeName()) == name {
+			// Deal with hash collisions by checking against the name.
+			types = append(types, typ)
+		}
+	}
+
+	if len(types) == 0 {
+		return nil, fmt.Errorf("type with name %s: %w", name, ErrNotFound)
+	}
+
+	return types, nil
 }
 
 // TypeByID decodes a type and any of its descendants.
@@ -648,4 +669,74 @@ func (d *decoder) inflateType(id TypeID) (typ Type, err error) {
 	}
 
 	return typ, nil
+}
+
+// An index from string to TypeID.
+//
+// Fuzzy because it may return false positive matches.
+type fuzzyStringIndex struct {
+	seed    maphash.Seed
+	entries []fuzzyStringIndexEntry
+}
+
+func newFuzzyStringIndex(capacity int) *fuzzyStringIndex {
+	return &fuzzyStringIndex{
+		maphash.MakeSeed(),
+		make([]fuzzyStringIndexEntry, 0, capacity),
+	}
+}
+
+// Add a string to the index.
+//
+// Calling the method with identical arguments will create duplicate entries.
+func (idx *fuzzyStringIndex) Add(name []byte, id TypeID) {
+	hash := uint32(maphash.Bytes(idx.seed, name))
+	idx.entries = append(idx.entries, newFuzzyStringIndexEntry(hash, id))
+}
+
+// Build the index.
+//
+// Must be called after [Add] and before [Match].
+func (idx *fuzzyStringIndex) Build() {
+	slices.Sort(idx.entries)
+}
+
+// Find TypeIDs which may match the name.
+//
+// May return false positives, but is guaranteed to not have false negatives.
+//
+// You must call [Build] at least once before calling this method.
+func (idx *fuzzyStringIndex) Find(name string) iter.Seq[TypeID] {
+	return func(yield func(TypeID) bool) {
+		hash := uint32(maphash.String(idx.seed, name))
+
+		// We match only on the first 32 bits here, so ignore found.
+		i, _ := slices.BinarySearch(idx.entries, fuzzyStringIndexEntry(hash)<<32)
+		for i := i; i < len(idx.entries); i++ {
+			if idx.entries[i].hash() != hash {
+				break
+			}
+
+			if !yield(idx.entries[i].id()) {
+				return
+			}
+		}
+	}
+}
+
+// Tuple mapping the hash of an essential name to a type.
+//
+// Encoded in an uint64 so that it implements cmp.Ordered.
+type fuzzyStringIndexEntry uint64
+
+func newFuzzyStringIndexEntry(hash uint32, id TypeID) fuzzyStringIndexEntry {
+	return fuzzyStringIndexEntry(hash)<<32 | fuzzyStringIndexEntry(id)
+}
+
+func (e fuzzyStringIndexEntry) hash() uint32 {
+	return uint32(e >> 32)
+}
+
+func (e fuzzyStringIndexEntry) id() TypeID {
+	return TypeID(e)
 }

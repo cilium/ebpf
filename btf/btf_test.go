@@ -585,7 +585,7 @@ func BenchmarkSpecTypeByID(b *testing.B) {
 	}
 }
 
-func BenchmarkInspectorGadget(b *testing.B) {
+func BenchmarkInspektorGadget(b *testing.B) {
 	// This benchmark is the baseline for what Inspektor Gadget loads for a
 	// common configuration.
 	types := []string{

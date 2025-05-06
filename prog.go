@@ -1110,6 +1110,10 @@ func findProgramTargetInKernel(name string, progType ProgramType, attachType Att
 // Returns a non-nil handle if the type was found in a module, or btf.ErrNotFound
 // if the type wasn't found at all.
 func findTargetInKernel(kernelSpec *btf.Spec, typeName string, target *btf.Type) (*btf.Spec, *btf.Handle, error) {
+	if kernelSpec == nil {
+		return nil, nil, fmt.Errorf("nil kernelSpec: %w", btf.ErrNotFound)
+	}
+
 	err := kernelSpec.TypeByName(typeName, target)
 	if errors.Is(err, btf.ErrNotFound) {
 		spec, module, err := findTargetInModule(kernelSpec, typeName, target)

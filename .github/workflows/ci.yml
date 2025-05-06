@@ -270,9 +270,9 @@ jobs:
               owner: 'microsoft',
               repo: 'ebpf-for-windows',
               workflow_id: 'cicd.yml',
-              event: 'push',
+              event: 'schedule',
               branch: 'main',
-              status: 'completed',
+              status: 'success', // or 'completed' if upstream is buggy again
               per_page: 1
             });
 

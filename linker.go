@@ -282,7 +282,7 @@ const kfuncCallPoisonBase = 0xdedc0de
 // fixupKfuncs loops over all instructions in search for kfunc calls.
 // If at least one is found, the current kernels BTF and module BTFis are searched to set Instruction.Constant
 // and Instruction.Offset to the correct values.
-func fixupKfuncs(insns asm.Instructions) (_ handles, err error) {
+func fixupKfuncs(insns asm.Instructions, kernelSpec *btf.Spec) (_ handles, err error) {
 	closeOnError := func(c io.Closer) {
 		if err != nil {
 			c.Close()
@@ -301,9 +301,10 @@ func fixupKfuncs(insns asm.Instructions) (_ handles, err error) {
 
 fixups:
 	// only load the kernel spec if we found at least one kfunc call
-	kernelSpec, err := btf.LoadKernelSpec()
-	if err != nil {
-		return nil, err
+	if kernelSpec == nil {
+		if kernelSpec, err = btf.LoadKernelSpec(); err != nil {
+			return nil, err
+		}
 	}
 
 	fdArray := make(handles, 0)

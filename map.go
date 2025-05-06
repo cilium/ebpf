@@ -580,14 +580,19 @@ func handleMapCreateError(attr sys.MapCreateAttr, spec *MapSpec, err error) erro
 	if errors.Is(err, unix.EPERM) {
 		return fmt.Errorf("map create: %w (MEMLOCK may be too low, consider rlimit.RemoveMemlock)", err)
 	}
-	if errors.Is(err, unix.EINVAL) && spec.MaxEntries == 0 {
-		return fmt.Errorf("map create: %w (MaxEntries may be incorrectly set to zero)", err)
-	}
-	if errors.Is(err, unix.EINVAL) && spec.Type == UnspecifiedMap {
-		return fmt.Errorf("map create: cannot use type %s", UnspecifiedMap)
-	}
-	if errors.Is(err, unix.EINVAL) && spec.Flags&sys.BPF_F_NO_PREALLOC > 0 {
-		return fmt.Errorf("map create: %w (noPrealloc flag may be incompatible with map type %s)", err, spec.Type)
+	if errors.Is(err, unix.EINVAL) {
+		if spec.MaxEntries == 0 {
+			return fmt.Errorf("map create: %w (MaxEntries may be incorrectly set to zero)", err)
+		}
+		if spec.Type == UnspecifiedMap {
+			return fmt.Errorf("map create: cannot use type %s", UnspecifiedMap)
+		}
+		if spec.Flags&sys.BPF_F_NO_PREALLOC != 0 && !spec.Type.mustHaveNoPrealloc() {
+			return fmt.Errorf("map create: %w (BPF_F_NO_PREALLOC flag may be incompatible with map type %s)", err, spec.Type)
+		}
+		if spec.Flags&sys.BPF_F_NO_PREALLOC == 0 && spec.Type.mustHaveNoPrealloc() {
+			return fmt.Errorf("map create: %w (BPF_F_NO_PREALLOC flag may need to be set for map type %s)", err, spec.Type)
+		}
 	}
 
 	if spec.Type.canStoreMap() {

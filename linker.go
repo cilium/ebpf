@@ -300,9 +300,15 @@ func fixupKfuncs(insns asm.Instructions) (_ handles, err error) {
 	return nil, nil
 
 fixups:
-	// only load the kernel spec if we found at least one kfunc call
+	// Only load kernel BTF if we found at least one kfunc call. kernelSpec can be
+	// nil if the kernel does not have BTF, in which case we poison all kfunc
+	// calls.
 	kernelSpec, err := btf.LoadKernelSpec()
-	if err != nil {
+	// ErrNotSupportedOnOS wraps ErrNotSupported, check for it first.
+	if errors.Is(err, internal.ErrNotSupportedOnOS) {
+		return nil, fmt.Errorf("kfuncs are not supported on this platform: %w", err)
+	}
+	if err != nil && !errors.Is(err, ErrNotSupported) {
 		return nil, err
 	}
 
@@ -327,34 +333,36 @@ fixups:
 			return nil, fmt.Errorf("kfuncMetaKey doesn't contain kfuncMeta")
 		}
 
+		// findTargetInKernel returns btf.ErrNotFound if the input btf.Spec is nil.
 		target := btf.Type((*btf.Func)(nil))
 		spec, module, err := findTargetInKernel(kernelSpec, kfm.Func.Name, &target)
-		if kfm.Binding == elf.STB_WEAK && errors.Is(err, btf.ErrNotFound) {
-			if ins.IsKfuncCall() {
-				// If the kfunc call is weak and not found, poison the call. Use a recognizable constant
-				// to make it easier to debug.
-				fn, err := asm.BuiltinFuncForPlatform(platform.Native, kfuncCallPoisonBase)
-				if err != nil {
-					return nil, err
+		if errors.Is(err, btf.ErrNotFound) {
+			if kfm.Binding == elf.STB_WEAK {
+				if ins.IsKfuncCall() {
+					// If the kfunc call is weak and not found, poison the call. Use a
+					// recognizable constant to make it easier to debug.
+					fn, err := asm.BuiltinFuncForPlatform(platform.Native, kfuncCallPoisonBase)
+					if err != nil {
+						return nil, err
+					}
+					*ins = fn.Call()
+				} else if ins.OpCode.IsDWordLoad() {
+					// If the kfunc DWordLoad is weak and not found, set its address to 0.
+					ins.Constant = 0
+					ins.Src = 0
+				} else {
+					return nil, fmt.Errorf("only kfunc calls and dword loads may have kfunc metadata")
 				}
-				*ins = fn.Call()
-			} else if ins.OpCode.IsDWordLoad() {
-				// If the kfunc DWordLoad is weak and not found, set its address to 0.
-				ins.Constant = 0
-				ins.Src = 0
-			} else {
-				return nil, fmt.Errorf("only kfunc calls and dword loads may have kfunc metadata")
+
+				iter.Next()
+				continue
 			}
 
-			iter.Next()
-			continue
-		}
-		// Error on non-weak kfunc not found.
-		if errors.Is(err, btf.ErrNotFound) {
+			// Error on non-weak kfunc not found.
 			return nil, fmt.Errorf("kfunc %q: %w", kfm.Func.Name, ErrNotSupported)
 		}
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("finding kfunc in kernel: %w", err)
 		}
 
 		idx, err := fdArray.add(module)

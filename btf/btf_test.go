@@ -447,50 +447,59 @@ func TestLoadSplitSpecFromReader(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	typ, err := splitSpec.AnyTypeByName("bpf_testmod_init")
-	if err != nil {
-		t.Fatal(err)
-	}
-	typeID, err := splitSpec.TypeID(typ)
-	if err != nil {
-		t.Fatal(err)
-	}
+	var fnType *Func
+	qt.Assert(t, qt.IsNil(splitSpec.TypeByName("bpf_testmod_init", &fnType)))
+	typeID, err := splitSpec.TypeID(fnType)
+	qt.Assert(t, qt.IsNil(err))
 
 	typeByID, err := splitSpec.TypeByID(typeID)
 	qt.Assert(t, qt.IsNil(err))
-	qt.Assert(t, qt.Equals(typeByID, typ))
+	qt.Assert(t, qt.Equals(typeByID, Type(fnType)))
 
-	fnType := typ.(*Func)
 	fnProto := fnType.Type.(*FuncProto)
+	_, err = spec.TypeID(fnProto)
+	qt.Assert(t, qt.IsNil(err), qt.Commentf("FuncProto should be in base"))
 
 	// 'int' is defined in the base BTF...
 	intType, err := spec.AnyTypeByName("int")
-	if err != nil {
-		t.Fatal(err)
-	}
+	qt.Assert(t, qt.IsNil(err))
+
 	// ... but not in the split BTF
 	_, err = splitSpec.AnyTypeByName("int")
-	if err == nil {
-		t.Fatal("'int' is not supposed to be found in the split BTF")
-	}
+	qt.Assert(t, qt.ErrorIs(err, ErrNotFound))
 
-	qt.Assert(t, qt.Not(qt.Equals(fnProto.Return, intType)),
-		qt.Commentf("types found in base of split spec should be copies"))
+	qt.Assert(t, qt.Equals(fnProto.Return, intType),
+		qt.Commentf("types found in base of split spec should be reused"))
 
-	// Check that copied split-BTF's spec has correct type indexing
+	fnProto.Params = []FuncParam{{"a", &Pointer{(*Void)(nil)}}}
+
+	// The behaviour of copying a split spec is quite subtle. When initially
+	// creating a split spec, types in the split base are shared. This allows
+	// amortising the cost of decoding vmlinux.
+	//
+	// However, we currently define copying a spec to be like forking a process:
+	// in-memory changes to types are preserved. After the copy finished we have
+	// two fully independent states.
+	//
+	// For split BTF this means that we also need to copy the base and ensure
+	// that future references to a modified type work correctly.
 	splitSpecCopy := splitSpec.Copy()
-	copyType, err := splitSpecCopy.AnyTypeByName("bpf_testmod_init")
-	if err != nil {
-		t.Fatal(err)
-	}
-	copyTypeID, err := splitSpecCopy.TypeID(copyType)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if copyTypeID != typeID {
-		t.Fatalf("'bpf_testmod_init` type ID (%d) does not match copied spec's (%d)",
-			typeID, copyTypeID)
-	}
+
+	var fnCopyType *Func
+	qt.Assert(t, qt.IsNil(splitSpecCopy.TypeByName("bpf_testmod_init", &fnCopyType)))
+	qt.Assert(t, testutils.IsDeepCopy(fnCopyType, fnType))
+
+	// Pull out a second type which refers to "int" in the base, but which hasn't
+	// been inflated yet. This forces inflating int from the base.
+	var str *Struct
+	qt.Assert(t, qt.IsNil(splitSpecCopy.TypeByName("bpf_testmod_struct_arg_1", &str)))
+
+	// Ensure that the int types are indeed the same.
+	qt.Assert(t, qt.Equals(str.Members[0].Type, fnCopyType.Type.(*FuncProto).Return))
+
+	copyTypeID, err := splitSpecCopy.TypeID(fnCopyType)
+	qt.Assert(t, qt.IsNil(err))
+	qt.Assert(t, qt.Equals(copyTypeID, typeID), qt.Commentf("ID of copied type must match"))
 }
 
 func TestFixupDatasecLayout(t *testing.T) {

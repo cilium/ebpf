@@ -346,7 +346,10 @@ func fixupDatasecLayout(ds *Datasec) error {
 	return nil
 }
 
-// Copy creates a copy of Spec.
+// Copy a Spec.
+//
+// All contained types are duplicated while preserving any modifications made
+// to them.
 func (s *Spec) Copy() *Spec {
 	if s == nil {
 		return nil

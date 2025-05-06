@@ -47,7 +47,6 @@ func newDecoder(raw []byte, bo binary.ByteOrder, strings *stringTable, base *dec
 			return nil, fmt.Errorf("can't use split BTF as base")
 		}
 
-		base = base.Copy()
 		firstTypeID = TypeID(len(base.offsets))
 	}
 
@@ -166,7 +165,16 @@ func allBtfTypeOffsets(buf []byte, bo binary.ByteOrder, header *btfType) iter.Se
 	}
 }
 
+// Copy performs a deep copy of a decoder and its base.
 func (d *decoder) Copy() *decoder {
+	if d == nil {
+		return nil
+	}
+
+	return d.copy(nil)
+}
+
+func (d *decoder) copy(copiedTypes map[Type]Type) *decoder {
 	if d == nil {
 		return nil
 	}
@@ -174,15 +182,18 @@ func (d *decoder) Copy() *decoder {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 
+	if copiedTypes == nil {
+		copiedTypes = make(map[Type]Type, len(d.types))
+	}
+
 	types := make(map[TypeID]Type, len(d.types))
-	copiedTypes := make(map[Type]Type, len(d.types))
 	typeIDs := make(map[Type]TypeID, len(d.typeIDs))
 	for id, typ := range d.types {
 		types[id] = copyType(typ, d.typeIDs, copiedTypes, typeIDs)
 	}
 
 	return &decoder{
-		d.base,
+		d.base.copy(copiedTypes),
 		d.byteOrder,
 		d.raw,
 		d.strings,

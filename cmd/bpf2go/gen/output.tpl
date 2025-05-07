@@ -8,13 +8,16 @@ import (
 	_ "embed"
 	"fmt"
 	"io"
+{{- if .NeedsStructsPkg }}
+	"structs"
+{{- end }}
 
 	"{{ .Module }}"
 )
 
-{{- if .Types }}
-{{- range $type := .Types }}
-{{ $.TypeDeclaration (index $.TypeNames $type) $type }}
+{{- if .TypeDeclarations }}
+{{- range $type := .TypeDeclarations }}
+{{ $type }}
 
 {{ end }}
 {{- end }}

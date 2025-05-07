@@ -8,24 +8,30 @@ import (
 	_ "embed"
 	"fmt"
 	"io"
+	"structs"
 
 	"github.com/cilium/ebpf"
 )
 
 type testBar struct {
+	_ structs.HostLayout
 	A uint64
 	B uint32
 	_ [4]byte
 }
 
 type testBarfoo struct {
+	_   structs.HostLayout
 	Bar int64
 	Baz bool
 	_   [3]byte
 	Boo testE
 }
 
-type testBaz struct{ A uint64 }
+type testBaz struct {
+	_ structs.HostLayout
+	A uint64
+}
 
 type testE uint32
 
@@ -35,6 +41,7 @@ const (
 )
 
 type testUbar struct {
+	_ structs.HostLayout
 	A uint32
 	_ [4]byte
 }

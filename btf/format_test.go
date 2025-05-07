@@ -42,7 +42,7 @@ func TestGoTypeDeclaration(t *testing.T) {
 					{Name: "enum", Type: &Enum{Values: []EnumValue{{"BAR", 1}}, Size: 2}, Offset: 0},
 				},
 			},
-			"type t struct { enum uint16; }",
+			"type t struct { _ structs.HostLayout; enum uint16; }",
 		},
 		{&Array{Nelems: 2, Type: &Int{Size: 1}}, "type t [2]uint8"},
 		{
@@ -53,7 +53,7 @@ func TestGoTypeDeclaration(t *testing.T) {
 					{Name: "b", Type: &Int{Size: 8}},
 				},
 			},
-			"type t struct { a uint32; _ [4]byte; }",
+			"type t struct { _ structs.HostLayout; a uint32; _ [4]byte; }",
 		},
 		{
 			&Struct{
@@ -64,7 +64,7 @@ func TestGoTypeDeclaration(t *testing.T) {
 					{Name: "foo", Type: &Int{Size: 8}, Offset: 8 * 8},
 				},
 			},
-			"type t struct { frob uint32; _ [4]byte; foo uint64; }",
+			"type t struct { _ structs.HostLayout; frob uint32; _ [4]byte; foo uint64; }",
 		},
 		{
 			&Struct{
@@ -75,7 +75,7 @@ func TestGoTypeDeclaration(t *testing.T) {
 					{Name: "frob", Type: &Int{Size: 4}, Offset: 8 * 8},
 				},
 			},
-			"type t struct { foo uint64; frob uint32; _ [4]byte; }",
+			"type t struct { _ structs.HostLayout; foo uint64; frob uint32; _ [4]byte; }",
 		},
 		{
 			&Struct{
@@ -86,7 +86,7 @@ func TestGoTypeDeclaration(t *testing.T) {
 					{Name: "frob", Type: &Int{Size: 4}, Offset: 4 * 8},
 				},
 			},
-			"type t struct { _ [4]byte /* unsupported bitfield */; frob uint32; }",
+			"type t struct { _ structs.HostLayout; _ [4]byte /* unsupported bitfield */; frob uint32; }",
 		},
 		{
 			&Struct{
@@ -105,7 +105,7 @@ func TestGoTypeDeclaration(t *testing.T) {
 					{Name: "frob", Type: &Int{Size: 4}, Offset: 4 * 8},
 				},
 			},
-			"type t struct { foo struct { bar uint32; }; frob uint32; }",
+			"type t struct { _ structs.HostLayout; foo struct { _ structs.HostLayout; bar uint32; }; frob uint32; }",
 		},
 		{
 			&Struct{
@@ -124,7 +124,7 @@ func TestGoTypeDeclaration(t *testing.T) {
 					},
 				},
 			},
-			"type t struct { foo uint32; _ [4]byte; }",
+			"type t struct { _ structs.HostLayout; foo uint32; _ [4]byte; }",
 		},
 		{
 			&Datasec{
@@ -135,7 +135,7 @@ func TestGoTypeDeclaration(t *testing.T) {
 					{&Var{Name: "e", Type: &Int{Size: 8}, Linkage: ExternVar}, 8, 8},
 				},
 			},
-			"type t struct { _ [4]byte; g uint32; _ [8]byte; }",
+			"type t struct { _ structs.HostLayout; _ [4]byte; g uint32; _ [8]byte; }",
 		},
 		{&Var{Type: &Int{Size: 4}}, "type t uint32"},
 	}
@@ -175,9 +175,9 @@ func TestGoTypeDeclarationNamed(t *testing.T) {
 		output string
 	}{
 		{e1, []Type{e1}, "type t uint32"},
-		{s1, []Type{e1, s1}, "type t struct { frob E1; }"},
-		{s2, []Type{e1}, "type t struct { frood struct { frob E1; }; }"},
-		{s2, []Type{e1, s1}, "type t struct { frood S1; }"},
+		{s1, []Type{e1, s1}, "type t struct { _ structs.HostLayout; frob E1; }"},
+		{s2, []Type{e1}, "type t struct { _ structs.HostLayout; frood struct { _ structs.HostLayout; frob E1; }; }"},
+		{s2, []Type{e1, s1}, "type t struct { _ structs.HostLayout; frood S1; }"},
 		{td, nil, "type t uint32"},
 		{td, []Type{td}, "type t uint32"},
 		{arr, []Type{td}, "type t [1]TD"},

@@ -837,8 +837,6 @@ func outputPatchedStruct(gf *btf.GoFormatter, w *bytes.Buffer, id string, s *btf
 		return err
 	}
 
-	decl = strings.Replace(decl, "struct {", "struct { structs.HostLayout;", 1)
-
 	w.WriteString(decl)
 	w.WriteString("\n\n")
 	return nil

@@ -8,11 +8,13 @@ import (
 	_ "embed"
 	"fmt"
 	"io"
+	"structs"
 
 	"github.com/cilium/ebpf"
 )
 
 type bpfRttEvent struct {
+	_     structs.HostLayout
 	Sport uint16
 	Dport uint16
 	Saddr uint32
@@ -21,12 +23,14 @@ type bpfRttEvent struct {
 }
 
 type bpfSkInfo struct {
+	_      structs.HostLayout
 	SkKey  bpfSkKey
 	SkType uint8
 	_      [3]byte
 }
 
 type bpfSkKey struct {
+	_          structs.HostLayout
 	LocalIp4   uint32
 	RemoteIp4  uint32
 	LocalPort  uint32

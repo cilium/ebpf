@@ -12,85 +12,132 @@ import (
 	"github.com/cilium/ebpf/internal/platform"
 )
 
-var kernelBTF = struct {
+// globalCache amortises decoding BTF across all users of the library.
+var globalCache struct {
 	sync.RWMutex
+	Cache
+}
+
+// Cache allows to amortise the cost of decoding BTF across multiple call-sites.
+//
+// It is not safe for concurrent use.
+type Cache struct {
 	kernel  *Spec
 	modules map[string]*Spec
-}{
-	modules: make(map[string]*Spec),
+}
+
+// NewCache creates a new Cache.
+//
+// Opportunistically reuses a global cache if possible.
+func NewCache() *Cache {
+	globalCache.RLock()
+	defer globalCache.RUnlock()
+
+	// This copy is either a no-op or very cheap, since the spec won't contain
+	// any inflated types.
+	kernel := globalCache.kernel.Copy()
+	modules := make(map[string]*Spec, len(globalCache.modules))
+	for name, spec := range globalCache.modules {
+		decoder := spec.decoder.ShallowCopy()
+		// Share base between all kernel module specs.
+		decoder.base = kernel.decoder
+		// NB: Kernel module BTF can't contain ELF fixups because it is always
+		// read from sysfs.
+		modules[name] = &Spec{decoder: decoder}
+	}
+
+	return &Cache{kernel, modules}
+}
+
+// Kernel is equivalent to [LoadKernelSpec], except that repeated calls do
+// not copy the Spec.
+func (c *Cache) Kernel() (*Spec, error) {
+	if c.kernel != nil {
+		return c.kernel, nil
+	}
+
+	var err error
+	c.kernel, _, err = loadKernelSpec()
+	return c.kernel, err
+}
+
+// Module is equivalent to [LoadKernelModuleSpec], except that repeated calls do
+// not copy the spec.
+//
+// All modules also share the return value of [Kernel] as their base.
+func (c *Cache) Module(name string) (*Spec, error) {
+	if spec := c.modules[name]; spec != nil {
+		return spec, nil
+	}
+
+	base, err := c.Kernel()
+	if err != nil {
+		return nil, err
+	}
+
+	if c.modules == nil {
+		c.modules = make(map[string]*Spec)
+	}
+
+	// Important: base is shared between modules. This allows inflating common
+	// types only once.
+	// We're not reusing the module cache since that requires retargeting
+	// spec.base.base.
+	spec, err := loadKernelModuleSpec(name, base)
+	c.modules[name] = spec
+	return spec, err
 }
 
 // FlushKernelSpec removes any cached kernel type information.
 func FlushKernelSpec() {
-	kernelBTF.Lock()
-	defer kernelBTF.Unlock()
-
-	kernelBTF.kernel = nil
-	kernelBTF.modules = make(map[string]*Spec)
+	globalCache.Lock()
+	globalCache.Cache = Cache{}
+	globalCache.Unlock()
 }
 
 // LoadKernelSpec returns the current kernel's BTF information.
 //
 // Defaults to /sys/kernel/btf/vmlinux and falls back to scanning the file system
 // for vmlinux ELFs. Returns an error wrapping ErrNotSupported if BTF is not enabled.
+//
+// Consider using [Cache] instead.
 func LoadKernelSpec() (*Spec, error) {
-	kernelBTF.RLock()
-	spec := kernelBTF.kernel
-	kernelBTF.RUnlock()
-
-	if spec == nil {
-		kernelBTF.Lock()
-		defer kernelBTF.Unlock()
-
-		spec = kernelBTF.kernel
-	}
+	globalCache.RLock()
+	spec := globalCache.kernel
+	globalCache.RUnlock()
 
 	if spec != nil {
 		return spec.Copy(), nil
 	}
 
-	spec, _, err := loadKernelSpec()
-	if err != nil {
-		return nil, err
-	}
+	globalCache.Lock()
+	defer globalCache.Unlock()
 
-	kernelBTF.kernel = spec
-	return spec.Copy(), nil
+	spec, err := globalCache.Kernel()
+	return spec.Copy(), err
 }
 
 // LoadKernelModuleSpec returns the BTF information for the named kernel module.
+//
+// Using [Cache.Module] is faster when loading BTF for more than one module.
 //
 // Defaults to /sys/kernel/btf/<module>.
 // Returns an error wrapping ErrNotSupported if BTF is not enabled.
 // Returns an error wrapping fs.ErrNotExist if BTF for the specific module doesn't exist.
 func LoadKernelModuleSpec(module string) (*Spec, error) {
-	kernelBTF.RLock()
-	spec := kernelBTF.modules[module]
-	kernelBTF.RUnlock()
+	globalCache.RLock()
+	spec := globalCache.modules[module]
+	globalCache.RUnlock()
 
 	if spec != nil {
 		return spec.Copy(), nil
 	}
 
-	base, err := LoadKernelSpec()
-	if err != nil {
-		return nil, fmt.Errorf("load kernel spec: %w", err)
-	}
+	globalCache.Lock()
+	defer globalCache.Unlock()
 
-	kernelBTF.Lock()
-	defer kernelBTF.Unlock()
-
-	if spec = kernelBTF.modules[module]; spec != nil {
-		return spec.Copy(), nil
-	}
-
-	spec, err = loadKernelModuleSpec(module, base)
-	if err != nil {
-		return nil, fmt.Errorf("load kernel module: %w", err)
-	}
-
-	kernelBTF.modules[module] = spec
-	return spec.Copy(), nil
+	spec, err := globalCache.Module(module)
+	return spec.Copy(), err
 }
 
 func loadKernelSpec() (_ *Spec, fallback bool, _ error) {

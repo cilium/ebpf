@@ -54,9 +54,21 @@ jobs:
         run: |
           go test -v ./cmd/bpf2go
 
-      - name: Build examples
+      - name: Build
         run: go build -v ./...
-        working-directory: ./examples
+
+  cross-build:
+    name: Cross build
+    runs-on: ubuntu-22.04
+    needs: build-and-lint
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '${{ env.go_version }}'
 
       - name: Cross build darwin
         env:

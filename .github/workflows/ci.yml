@@ -33,6 +33,12 @@ jobs:
         with:
           go-version: '${{ env.go_version }}'
 
+      - name: Run staticcheck
+        uses: dominikh/staticcheck-action@v1
+        with:
+          version: "latest"
+          install-go: false
+
       - name: Run golangci-lint
         uses: golangci/golangci-lint-action@v7.0.0
 

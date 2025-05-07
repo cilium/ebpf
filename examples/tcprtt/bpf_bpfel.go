@@ -8,11 +8,13 @@ import (
 	_ "embed"
 	"fmt"
 	"io"
+	"structs"
 
 	"github.com/cilium/ebpf"
 )
 
 type bpfEvent struct {
+	_     structs.HostLayout
 	Sport uint16
 	Dport uint16
 	Saddr uint32

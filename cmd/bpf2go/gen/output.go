@@ -161,20 +161,31 @@ func Generate(args GenerateArgs) error {
 		Identifier: args.Identifier,
 	}
 
+	var typeDecls []string
+	needsStructsPkg := false
+	for _, typ := range types {
+		name := typeNames[typ]
+		decl, err := gf.TypeDeclaration(name, typ)
+		if err != nil {
+			return fmt.Errorf("generating %s: %w", name, err)
+		}
+		_, ok := typ.(*btf.Struct)
+		needsStructsPkg = needsStructsPkg || ok
+		typeDecls = append(typeDecls, decl)
+	}
+
 	ctx := struct {
-		*btf.GoFormatter
-		Module      string
-		Package     string
-		Constraints constraint.Expr
-		Name        templateName
-		Maps        map[string]string
-		Variables   map[string]string
-		Programs    map[string]string
-		Types       []btf.Type
-		TypeNames   map[btf.Type]string
-		File        string
+		Module           string
+		Package          string
+		Constraints      constraint.Expr
+		Name             templateName
+		Maps             map[string]string
+		Variables        map[string]string
+		Programs         map[string]string
+		TypeDeclarations []string
+		File             string
+		NeedsStructsPkg  bool
 	}{
-		gf,
 		b2gInt.CurrentModule,
 		args.Package,
 		args.Constraints,
@@ -182,9 +193,9 @@ func Generate(args GenerateArgs) error {
 		maps,
 		variables,
 		programs,
-		types,
-		typeNames,
+		typeDecls,
 		args.ObjectFile,
+		needsStructsPkg,
 	}
 
 	var buf bytes.Buffer

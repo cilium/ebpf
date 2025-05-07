@@ -8,11 +8,13 @@ import (
 	_ "embed"
 	"fmt"
 	"io"
+	"structs"
 
 	"github.com/cilium/ebpf"
 )
 
 type bpfEvent struct {
+	_    structs.HostLayout
 	Pid  uint32
 	Comm [16]uint8
 }

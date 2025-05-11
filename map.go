@@ -1229,17 +1229,14 @@ func (m *Map) batchLookupPerCPU(cmd sys.Cmd, cursor *MapBatchCursor, keysOut, va
 }
 
 func (m *Map) batchLookupCmd(cmd sys.Cmd, cursor *MapBatchCursor, count int, keysOut any, valuePtr sys.Pointer, opts *BatchOptions) (int, error) {
-	cursorLen := int(m.keySize)
-	if cursorLen < 4 {
-		// * generic_map_lookup_batch requires that batch_out is key_size bytes.
-		//   This is used by array and LPM maps.
-		//
-		// * __htab_map_lookup_and_delete_batch requires u32. This is used by the
-		//   various hash maps.
-		//
-		// Use a minimum of 4 bytes to avoid having to distinguish between the two.
-		cursorLen = 4
-	}
+	// * generic_map_lookup_batch requires that batch_out is key_size bytes.
+	//   This is used by array and LPM maps.
+	//
+	// * __htab_map_lookup_and_delete_batch requires u32. This is used by the
+	//   various hash maps.
+	//
+	// Use a minimum of 4 bytes to avoid having to distinguish between the two.
+	cursorLen := max(int(m.keySize), 4)
 
 	inBatch := cursor.opaque
 	if inBatch == nil {

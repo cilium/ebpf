@@ -5,6 +5,7 @@ package main
 import (
 	"bytes"
 	"reflect"
+	"sort"
 	"strings"
 	"testing"
 )
@@ -57,5 +58,36 @@ nothing:
 		t.Logf("Have:\n%s", have)
 		t.Logf("Want:\n%s", wantOutput)
 		t.Error("Output doesn't match")
+	}
+}
+
+func TestMergeDependencies(t *testing.T) {
+	deps1 := []dependency{
+		{"/foo/main.c", []string{"/foo/bar.h", "/foo/baz.h"}},
+		{"/foo/other.c", []string{"/foo/bar.h"}},
+	}
+
+	deps2 := []dependency{
+		{"/foo/main.c", []string{"/foo/qux.h"}},
+		{"/foo/third.c", []string{"/foo/bar.h"}},
+	}
+
+	merged := mergeDependencies(deps1, deps2)
+
+	// Sort merged dependencies for stable comparison
+	sort.Slice(merged, func(i, j int) bool {
+		return merged[i].file < merged[j].file
+	})
+
+	want := []dependency{
+		{"/foo/main.c", []string{"/foo/bar.h", "/foo/baz.h", "/foo/qux.h"}},
+		{"/foo/other.c", []string{"/foo/bar.h"}},
+		{"/foo/third.c", []string{"/foo/bar.h"}},
+	}
+
+	if !reflect.DeepEqual(merged, want) {
+		t.Logf("Have: %#v", merged)
+		t.Logf("Want: %#v", want)
+		t.Error("Merged dependencies don't match")
 	}
 }

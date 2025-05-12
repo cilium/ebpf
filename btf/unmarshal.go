@@ -208,6 +208,26 @@ func (d *decoder) copy(copiedTypes map[Type]Type) *decoder {
 	}
 }
 
+// ShallowCopy returns a copy of decoder which only retains immutable state.
+//
+// Mutable state is discarded.
+func (d *decoder) ShallowCopy() *decoder {
+	return &decoder{
+		d.base,
+		d.byteOrder,
+		d.raw,
+		d.strings,
+		d.firstTypeID,
+		d.offsets,
+		d.declTags,
+		d.namedTypes,
+		sync.Mutex{},
+		make(map[TypeID]Type),
+		make(map[Type]TypeID),
+		make(map[TypeID][2]Bits),
+	}
+}
+
 // TypeID returns the ID for a Type previously obtained via [TypeByID].
 func (d *decoder) TypeID(typ Type) (TypeID, error) {
 	if _, ok := typ.(*Void); ok {

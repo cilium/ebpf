@@ -372,7 +372,7 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions) (*Program, er
 		return nil, err
 	}
 
-	handles, err := fixupKfuncs(insns, opts.KernelTypes)
+	handles, err := fixupKfuncs(insns)
 	if err != nil {
 		return nil, fmt.Errorf("fixing up kfuncs: %w", err)
 	}

@@ -301,9 +301,15 @@ func fixupKfuncs(insns asm.Instructions) (_ handles, err error) {
 
 fixups:
 	// only load the kernel spec if we found at least one kfunc call
+	hasKernelSpec := true
 	kernelSpec, err := btf.LoadKernelSpec()
 	if err != nil {
-		return nil, err
+		if errors.Is(err, ErrNotSupported) && !errors.Is(err, internal.ErrNotSupportedOnOS) {
+			err = nil
+			hasKernelSpec = false
+		} else {
+			return nil, err
+		}
 	}
 
 	fdArray := make(handles, 0)
@@ -327,9 +333,19 @@ fixups:
 			return nil, fmt.Errorf("kfuncMetaKey doesn't contain kfuncMeta")
 		}
 
-		target := btf.Type((*btf.Func)(nil))
-		spec, module, err := findTargetInKernel(kernelSpec, kfm.Func.Name, &target)
-		if kfm.Binding == elf.STB_WEAK && errors.Is(err, btf.ErrNotFound) {
+		var (
+			spec   *btf.Spec
+			module *btf.Handle
+			target btf.Type
+		)
+
+		if hasKernelSpec {
+			target = btf.Type((*btf.Func)(nil))
+			spec, module, err = findTargetInKernel(kernelSpec, kfm.Func.Name, &target)
+		}
+
+		kfNotFound := !hasKernelSpec || errors.Is(err, btf.ErrNotFound)
+		if kfm.Binding == elf.STB_WEAK && kfNotFound {
 			if ins.IsKfuncCall() {
 				// If the kfunc call is weak and not found, poison the call. Use a recognizable constant
 				// to make it easier to debug.
@@ -350,7 +366,7 @@ fixups:
 			continue
 		}
 		// Error on non-weak kfunc not found.
-		if errors.Is(err, btf.ErrNotFound) {
+		if kfNotFound {
 			return nil, fmt.Errorf("kfunc %q: %w", kfm.Func.Name, ErrNotSupported)
 		}
 		if err != nil {

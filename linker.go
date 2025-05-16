@@ -304,7 +304,7 @@ fixups:
 	hasKernelSpec := true
 	kernelSpec, err := btf.LoadKernelSpec()
 	if err != nil {
-		if errors.Is(err, ErrNotSupported) { // system BTF not found
+		if errors.Is(err, ErrNotSupported) && !errors.Is(err, internal.ErrNotSupportedOnOS) {
 			err = nil
 			hasKernelSpec = false
 		} else {

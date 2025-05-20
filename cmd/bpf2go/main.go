@@ -230,8 +230,8 @@ func newB2G(stdout io.Writer, args []string) (*bpf2go, error) {
 	// from the clang binary.
 	if b2g.strip == "" {
 		b2g.strip = "llvm-strip"
-		if strings.HasPrefix(b2g.cc, "clang") {
-			b2g.strip += strings.TrimPrefix(b2g.cc, "clang")
+		if after, ok := strings.CutPrefix(b2g.cc, "clang"); ok {
+			b2g.strip += after
 		}
 	}
 

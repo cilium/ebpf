@@ -24,7 +24,8 @@ A0000000000000BA b bootconfig_found
 A0000000000000CA d __func__.10
 A0000000000000DA r __ksymtab_LZ4_decompress_fast
 A0000000000000EA t writenote
-A0000000000000FA T bench_sym	[bench_mod]`)
+A0000000000000FA T bench_sym	[bench_mod]
+A0000000000000FF t __kstrtab_功能	[mod]`)
 
 func TestParseSyms(t *testing.T) {
 	r := newReader(bytes.NewReader(syms))
@@ -37,7 +38,7 @@ func TestParseSyms(t *testing.T) {
 		qt.Assert(t, qt.Not(qt.Equals(s.name, "")))
 	}
 	qt.Assert(t, qt.IsNil(r.Err()))
-	qt.Assert(t, qt.Equals(i, 14))
+	qt.Assert(t, qt.Equals(i, 15))
 }
 
 func TestParseProcKallsyms(t *testing.T) {
@@ -80,6 +81,7 @@ func TestAssignModules(t *testing.T) {
 		"nft_counter_seq":   "",
 		"tcp_connect":       "",
 		"foo":               "",
+		"__kstrtab_功能":      "",
 	}
 	qt.Assert(t, qt.IsNil(assignModules(bytes.NewBuffer(syms), mods)))
 	qt.Assert(t, qt.DeepEquals(mods, map[string]string{
@@ -87,6 +89,7 @@ func TestAssignModules(t *testing.T) {
 		"nft_counter_seq":   "", // wrong symbol type
 		"tcp_connect":       "",
 		"foo":               "",
+		"__kstrtab_功能":      "mod",
 	}))
 
 	qt.Assert(t, qt.ErrorIs(assignModules(bytes.NewBuffer(syms),

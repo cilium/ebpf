@@ -244,7 +244,7 @@ func NewProgramWithOptions(spec *ProgramSpec, opts ProgramOptions) (*Program, er
 		return nil, errors.New("can't load a program from a nil spec")
 	}
 
-	prog, err := newProgramWithOptions(spec, opts)
+	prog, err := newProgramWithOptions(spec, opts, newBTFCache(&opts))
 	if errors.Is(err, asm.ErrUnsatisfiedMapReference) {
 		return nil, fmt.Errorf("cannot load program without loading its whole collection: %w", err)
 	}
@@ -260,7 +260,7 @@ var (
 	kfuncBadCall = []byte(fmt.Sprintf("invalid func unknown#%d\n", kfuncCallPoisonBase))
 )
 
-func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions) (*Program, error) {
+func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions, c *btf.Cache) (*Program, error) {
 	if len(spec.Instructions) == 0 {
 		return nil, errors.New("instructions cannot be empty")
 	}
@@ -308,18 +308,8 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions) (*Program, er
 		return nil, fmt.Errorf("kernel module search: %w", err)
 	}
 
-	var targets []*btf.Spec
-	if opts.KernelTypes != nil {
-		targets = append(targets, opts.KernelTypes)
-	}
-	if kmodName != "" && opts.KernelModuleTypes != nil {
-		if modBTF, ok := opts.KernelModuleTypes[kmodName]; ok {
-			targets = append(targets, modBTF)
-		}
-	}
-
 	var b btf.Builder
-	if err := applyRelocations(insns, targets, kmodName, spec.ByteOrder, &b); err != nil {
+	if err := applyRelocations(insns, kmodName, spec.ByteOrder, &b, c); err != nil {
 		return nil, fmt.Errorf("apply CO-RE relocations: %w", err)
 	}
 
@@ -1207,4 +1197,13 @@ func findTargetInProgram(prog *Program, name string, progType ProgramType, attac
 	}
 
 	return spec.TypeID(targetFunc)
+}
+
+func newBTFCache(opts *ProgramOptions) *btf.Cache {
+	c := btf.NewCache()
+	if opts.KernelTypes != nil {
+		c.KernelTypes = opts.KernelTypes
+		c.KernelModules = opts.KernelModuleTypes
+	}
+	return c
 }

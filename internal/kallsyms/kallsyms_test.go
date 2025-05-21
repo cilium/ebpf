@@ -23,32 +23,32 @@ A0000000000000AA a nft_counter_seq	[nft_counter]
 A0000000000000BA b bootconfig_found
 A0000000000000CA d __func__.10
 A0000000000000DA r __ksymtab_LZ4_decompress_fast
-A0000000000000EA t writenote`)
+A0000000000000EA t writenote
+A0000000000000FA r __kstrtab_功能	[mod]
+`)
 
 func TestParseSyms(t *testing.T) {
-	r := newReader(bytes.NewReader(syms))
 	i := 0
-	for ; r.Line(); i++ {
-		s, err, skip := parseSymbol(r, nil)
+	for s, err := range parseSymbols(bytes.NewReader(syms), nil) {
 		qt.Assert(t, qt.IsNil(err))
-		qt.Assert(t, qt.IsFalse(skip))
 		qt.Assert(t, qt.Not(qt.Equals(s.addr, 0)))
-		qt.Assert(t, qt.Not(qt.Equals(s.name, "")))
+		qt.Assert(t, qt.Not(qt.Equals(s.name, []byte(""))))
+		i++
 	}
-	qt.Assert(t, qt.IsNil(r.Err()))
-	qt.Assert(t, qt.Equals(i, 13))
+	qt.Assert(t, qt.Equals(i, 14))
 }
 
 func TestParseProcKallsyms(t *testing.T) {
 	// Read up to 50k symbols from kallsyms to avoid a slow test.
-	r := newReader(mustOpenProcKallsyms(t))
-	for i := 0; r.Line() && i < 50_000; i++ {
-		s, err, skip := parseSymbol(r, nil)
+	i := 0
+	for s, err := range parseSymbols(mustOpenProcKallsyms(t), nil) {
 		qt.Assert(t, qt.IsNil(err))
-		qt.Assert(t, qt.IsFalse(skip))
-		qt.Assert(t, qt.Not(qt.Equals(s.name, "")))
+		qt.Assert(t, qt.Not(qt.Equals(s.name, []byte(""))))
+		i++
+		if i >= 50_000 {
+			break
+		}
 	}
-	qt.Assert(t, qt.IsNil(r.Err()))
 }
 
 func TestAssignModulesCaching(t *testing.T) {

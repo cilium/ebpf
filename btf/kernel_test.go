@@ -19,10 +19,10 @@ func TestLoadKernelSpec(t *testing.T) {
 }
 
 func TestLoadKernelModuleSpec(t *testing.T) {
-	if _, err := os.Stat("/sys/kernel/btf/btf_testmod"); os.IsNotExist(err) {
-		t.Skip("/sys/kernel/btf/btf_testmod not present")
+	if _, err := os.Stat("/sys/kernel/btf/bpf_testmod"); os.IsNotExist(err) {
+		t.Skip("/sys/kernel/btf/bpf_testmod not present")
 	}
 
-	_, err := LoadKernelModuleSpec("btf_testmod")
+	_, err := LoadKernelModuleSpec("bpf_testmod")
 	qt.Assert(t, qt.IsNil(err))
 }

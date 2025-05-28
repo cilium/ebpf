@@ -699,7 +699,7 @@ func (m *Map) Flags() uint32 {
 // but newer kernels support more MapInfo fields with the introduction of more
 // features. See [MapInfo] and its methods for more details.
 //
-// Returns an error wrapping ErrNotSupported if the kernel supports neither
+// Returns an error wrapping [ErrNotSupported] if the kernel supports neither
 // BPF_OBJ_GET_INFO_BY_FD nor reading map information from /proc/self/fdinfo.
 func (m *Map) Info() (*MapInfo, error) {
 	return newMapInfoFromFd(m.fd)
@@ -707,7 +707,7 @@ func (m *Map) Info() (*MapInfo, error) {
 
 // Handle returns a reference to the Map's type information in the kernel.
 //
-// Returns ErrNotSupported if the kernel has no BTF support, or if there is no
+// Returns [ErrNotSupported] if the kernel has no BTF support, or if there is no
 // BTF associated with the Map.
 func (m *Map) Handle() (*btf.Handle, error) {
 	info, err := m.Info()

@@ -106,6 +106,32 @@ func TestMapInfoFromProcOuterMap(t *testing.T) {
 	validateMapInfo(t, &info, outer)
 }
 
+func BenchmarkNewMapFromFD(b *testing.B) {
+	b.ReportAllocs()
+
+	m := mustNewMap(b, hashMapSpec, nil)
+
+	b.ResetTimer()
+	for n := 0; n < b.N; n++ {
+		if _, err := newMapFromFD(m.fd); err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+func BenchmarkMapInfo(b *testing.B) {
+	b.ReportAllocs()
+
+	m := mustNewMap(b, hashMapSpec, nil)
+
+	b.ResetTimer()
+	for n := 0; n < b.N; n++ {
+		if _, err := newMapInfoFromFd(m.fd); err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
 func validateProgInfo(t *testing.T, spec *ProgramSpec, info *ProgramInfo) {
 	t.Helper()
 
@@ -179,6 +205,34 @@ func TestProgramInfo(t *testing.T) {
 	} else {
 		qt.Assert(t, qt.IsTrue(ok))
 		qt.Assert(t, qt.IsTrue(len(insns) > 0))
+	}
+}
+
+func BenchmarkNewProgramFromFD(b *testing.B) {
+	b.ReportAllocs()
+
+	spec := fixupProgramSpec(basicProgramSpec)
+	prog := mustNewProgram(b, spec, nil)
+
+	b.ResetTimer()
+	for n := 0; n < b.N; n++ {
+		if _, err := newProgramFromFD(prog.fd); err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+func BenchmarkProgramInfo(b *testing.B) {
+	b.ReportAllocs()
+
+	spec := fixupProgramSpec(basicProgramSpec)
+	prog := mustNewProgram(b, spec, nil)
+
+	b.ResetTimer()
+	for n := 0; n < b.N; n++ {
+		if _, err := newProgramInfoFromFd(prog.fd); err != nil {
+			b.Fatal(err)
+		}
 	}
 }
 
@@ -320,6 +374,32 @@ func TestScanFdInfoReader(t *testing.T) {
 			if err == nil {
 				t.Errorf("fields %v doesn't return an error", test.fields)
 			}
+		}
+	}
+}
+
+func BenchmarkScanFdInfoReader(b *testing.B) {
+	b.ReportAllocs()
+
+	// Pathological case with 9 fields we're not interested in, and one
+	// field we are, all the way at the very end.
+	input := strings.Repeat("ignore:\tthis\n", 9)
+	input += "foo:\tbar\n"
+	r := strings.NewReader(input)
+
+	var val string
+	fields := map[string]any{"foo": &val}
+
+	b.ResetTimer()
+	for n := 0; n < b.N; n++ {
+		val = ""
+		r.Reset(input)
+
+		if err := scanFdInfoReader(r, fields); err != nil {
+			b.Fatal(err)
+		}
+		if val != "bar" {
+			b.Fatal("unexpected value:", val)
 		}
 	}
 }
@@ -563,22 +643,28 @@ func TestInfoExportedFields(t *testing.T) {
 
 func TestZero(t *testing.T) {
 	var (
-		nul uint32 = 0
-		one uint32 = 1
+		empty        = ""
+		nul   uint32 = 0
+		one   uint32 = 1
 
-		inul any = uint32(0)
-		ione any = uint32(1)
+		iempty any = ""
+		inul   any = uint32(0)
+		ione   any = uint32(1)
 	)
 
+	qt.Assert(t, qt.IsTrue(zero(empty)))
 	qt.Assert(t, qt.IsTrue(zero(nul)))
 	qt.Assert(t, qt.IsFalse(zero(one)))
 
+	qt.Assert(t, qt.IsTrue(zero(&empty)))
 	qt.Assert(t, qt.IsTrue(zero(&nul)))
 	qt.Assert(t, qt.IsFalse(zero(&one)))
 
+	qt.Assert(t, qt.IsTrue(zero(iempty)))
 	qt.Assert(t, qt.IsTrue(zero(inul)))
 	qt.Assert(t, qt.IsFalse(zero(ione)))
 
+	qt.Assert(t, qt.IsTrue(zero(&iempty)))
 	qt.Assert(t, qt.IsTrue(zero(&inul)))
 	qt.Assert(t, qt.IsFalse(zero(&ione)))
 }

@@ -27,6 +27,14 @@ var btfFn = &btf.Func{
 	Linkage: btf.StaticFunc,
 }
 
+var hashMapSpec = &MapSpec{
+	Type:       Hash,
+	KeySize:    4,
+	ValueSize:  5,
+	MaxEntries: 2,
+	Flags:      sys.BPF_F_NO_PREALLOC,
+}
+
 var multiprogSpec = &ProgramSpec{
 	Name: "test",
 	Type: SocketFilter,
@@ -42,31 +50,44 @@ var multiprogSpec = &ProgramSpec{
 	License: "MIT",
 }
 
+func validateMapInfo(t *testing.T, info *MapInfo, spec *MapSpec) {
+	t.Helper()
+
+	qt.Assert(t, qt.Equals(info.Type, spec.Type))
+	qt.Assert(t, qt.Equals(info.KeySize, spec.KeySize))
+	qt.Assert(t, qt.Equals(info.ValueSize, spec.ValueSize))
+	qt.Assert(t, qt.Equals(info.MaxEntries, spec.MaxEntries))
+	qt.Assert(t, qt.Equals(info.Flags, spec.Flags))
+
+	memlock, _ := info.Memlock()
+	qt.Assert(t, qt.Not(qt.Equals(memlock, 0)))
+}
+
+func TestMapInfo(t *testing.T) {
+	m := mustNewMap(t, hashMapSpec, nil)
+
+	info, err := m.Info()
+	qt.Assert(t, qt.IsNil(err))
+
+	validateMapInfo(t, info, hashMapSpec)
+}
+
 func TestMapInfoFromProc(t *testing.T) {
-	hash := mustNewMap(t, &MapSpec{
-		Type:       Hash,
-		KeySize:    4,
-		ValueSize:  5,
-		MaxEntries: 2,
-		Flags:      sys.BPF_F_NO_PREALLOC,
-	}, nil)
+	hash := mustNewMap(t, hashMapSpec, nil)
 
 	var info MapInfo
 	err := readMapInfoFromProc(hash.fd, &info)
 	testutils.SkipIfNotSupported(t, err)
-
 	qt.Assert(t, qt.IsNil(err))
-	qt.Assert(t, qt.Equals(info.Type, Hash))
-	qt.Assert(t, qt.Equals(info.KeySize, 4))
-	qt.Assert(t, qt.Equals(info.ValueSize, 5))
-	qt.Assert(t, qt.Equals(info.MaxEntries, 2))
-	qt.Assert(t, qt.Equals(info.Flags, sys.BPF_F_NO_PREALLOC))
+
+	validateMapInfo(t, &info, hashMapSpec)
 }
 
 func TestMapInfoFromProcOuterMap(t *testing.T) {
-	outer := mustNewMap(t, &MapSpec{
+	outer := &MapSpec{
 		Type:       ArrayOfMaps,
 		KeySize:    4,
+		ValueSize:  4,
 		MaxEntries: 2,
 		InnerMap: &MapSpec{
 			Type:       Array,
@@ -74,15 +95,15 @@ func TestMapInfoFromProcOuterMap(t *testing.T) {
 			ValueSize:  4,
 			MaxEntries: 2,
 		},
-	}, nil)
+	}
+	m := mustNewMap(t, outer, nil)
 
 	var info MapInfo
-	err := readMapInfoFromProc(outer.fd, &info)
+	err := readMapInfoFromProc(m.fd, &info)
 	testutils.SkipIfNotSupported(t, err)
-
 	qt.Assert(t, qt.IsNil(err))
-	qt.Assert(t, qt.Equals(info.KeySize, 4))
-	qt.Assert(t, qt.Equals(info.MaxEntries, 2))
+
+	validateMapInfo(t, &info, outer)
 }
 
 func validateProgInfo(t *testing.T, spec *ProgramSpec, info *ProgramInfo) {

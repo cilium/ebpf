@@ -1516,6 +1516,10 @@ func TestMapFreeze(t *testing.T) {
 	if err := arr.Put(uint32(0), uint32(1)); err == nil {
 		t.Error("Freeze doesn't prevent modification from user space")
 	}
+
+	info, err := arr.Info()
+	qt.Assert(t, qt.IsNil(err))
+	qt.Assert(t, qt.IsTrue(info.Frozen()))
 }
 
 func TestMapGetNextID(t *testing.T) {

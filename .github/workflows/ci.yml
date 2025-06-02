@@ -290,7 +290,7 @@ jobs:
               workflow_id: 'cicd.yml',
               event: 'schedule',
               branch: 'main',
-              status: 'success', // or 'completed' if upstream is buggy again
+              status: 'completed',
               per_page: 1
             });
 

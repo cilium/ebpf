@@ -2,6 +2,7 @@ package pin
 
 import (
 	"errors"
+	"fmt"
 	"iter"
 	"strings"
 
@@ -15,6 +16,12 @@ import (
 // Callers must invoke [Pin.Take] if they wish to hold on to the object.
 func WalkDir(root string, opts *ebpf.LoadPinOptions) iter.Seq2[*Pin, error] {
 	return func(yield func(*Pin, error) bool) {
+		root, err := efw.EbpfCanonicalizePinPath(root)
+		if err != nil {
+			yield(nil, fmt.Errorf("failed to canonicalize pin path %q: %w", root, err))
+			return
+		}
+
 		cursor := root
 		for {
 			next, _, err := efw.EbpfGetNextPinnedObjectPath(cursor, efw.EBPF_OBJECT_UNKNOWN)

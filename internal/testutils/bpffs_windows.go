@@ -8,8 +8,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/cilium/ebpf/internal/efw"
 	"github.com/go-quicktest/qt"
+
+	"github.com/cilium/ebpf/internal/efw"
 )
 
 // TempBPFFS creates a random prefix to use when pinning on Windows.
@@ -17,6 +18,9 @@ func TempBPFFS(tb testing.TB) string {
 	tb.Helper()
 
 	path := filepath.Join("ebpf-go-test", strconv.Itoa(rand.Int()))
+	path, err := efw.EbpfCanonicalizePinPath(path)
+	qt.Assert(tb, qt.IsNil(err))
+
 	tb.Cleanup(func() {
 		tb.Helper()
 

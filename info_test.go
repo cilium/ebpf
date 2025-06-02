@@ -1,7 +1,6 @@
 package ebpf
 
 import (
-	"errors"
 	"fmt"
 	"os"
 	"reflect"
@@ -404,43 +403,25 @@ func BenchmarkScanFdInfoReader(b *testing.B) {
 	}
 }
 
-// TestStats loads a BPF program once and executes back-to-back test runs
+// TestProgramStats loads a BPF program once and executes back-to-back test runs
 // of the program. See testStats for details.
-func TestStats(t *testing.T) {
+func TestProgramStats(t *testing.T) {
 	testutils.SkipOnOldKernel(t, "5.8", "BPF_ENABLE_STATS")
 
 	prog := createBasicProgram(t)
 
-	pi, err := prog.Info()
-	if err != nil {
-		t.Errorf("failed to get ProgramInfo: %v", err)
+	s, err := prog.Stats()
+	qt.Assert(t, qt.IsNil(err))
+
+	qt.Assert(t, qt.Equals(s.RunCount, 0))
+	qt.Assert(t, qt.Equals(s.RecursionMisses, 0))
+
+	if runtime.GOARCH != "arm64" {
+		// Runtime is flaky on arm64.
+		qt.Assert(t, qt.Equals(s.Runtime, 0))
 	}
 
-	rc, ok := pi.RunCount()
-	if !ok {
-		t.Errorf("expected run count info to be available")
-	}
-	if rc != 0 {
-		t.Errorf("expected a run count of 0 but got %d", rc)
-	}
-
-	rt, ok := pi.Runtime()
-	if !ok {
-		t.Errorf("expected runtime info to be available")
-	}
-	if runtime.GOARCH != "arm64" && rt != 0 {
-		t.Errorf("expected a runtime of 0ns but got %v", rt)
-	}
-
-	rm, ok := pi.RecursionMisses()
-	if !ok {
-		t.Errorf("expected recursion misses info to be available")
-	}
-	if rm != 0 {
-		t.Errorf("expected a recursion misses of 0 but got %v", rm)
-	}
-
-	if err := testStats(prog); err != nil {
+	if err := testStats(t, prog); err != nil {
 		testutils.SkipIfNotSupportedOnOS(t, err)
 		t.Error(err)
 	}
@@ -448,12 +429,14 @@ func TestStats(t *testing.T) {
 
 // BenchmarkStats is a benchmark of TestStats. See testStats for details.
 func BenchmarkStats(b *testing.B) {
+	b.ReportAllocs()
+
 	testutils.SkipOnOldKernel(b, "5.8", "BPF_ENABLE_STATS")
 
 	prog := createBasicProgram(b)
 
 	for n := 0; n < b.N; n++ {
-		if err := testStats(prog); err != nil {
+		if err := testStats(b, prog); err != nil {
 			testutils.SkipIfNotSupportedOnOS(b, err)
 			b.Fatal(fmt.Errorf("iter %d: %w", n, err))
 		}
@@ -470,7 +453,9 @@ func BenchmarkStats(b *testing.B) {
 // resulting in RunCount incrementing by more than one. Expecting RunCount to
 // be of a specific value after a call to Test() is therefore not possible.
 // See https://golang.org/doc/go1.14#runtime for more details.
-func testStats(prog *Program) error {
+func testStats(tb testing.TB, prog *Program) error {
+	tb.Helper()
+
 	in := internal.EmptyBPFContext
 
 	stats, err := EnableStats(uint32(sys.BPF_STATS_RUN_TIME))
@@ -485,34 +470,13 @@ func testStats(prog *Program) error {
 		return fmt.Errorf("failed to trigger program: %w", err)
 	}
 
-	pi, err := prog.Info()
-	if err != nil {
-		return fmt.Errorf("failed to get ProgramInfo: %w", err)
-	}
+	s1, err := prog.Stats()
+	qt.Assert(tb, qt.IsNil(err))
 
-	rc, ok := pi.RunCount()
-	if !ok {
-		return errors.New("expected run count info to be available")
-	}
-	if rc < 1 {
-		return fmt.Errorf("expected a run count of at least 1 but got %d", rc)
-	}
-	// Store the run count for the next invocation.
-	lc := rc
+	qt.Assert(tb, qt.Not(qt.Equals(s1.RunCount, 0)), qt.Commentf("expected run count to be at least 1 after first invocation"))
+	qt.Assert(tb, qt.Not(qt.Equals(s1.Runtime, 0)), qt.Commentf("expected runtime to be at least 1ns after first invocation"))
 
-	rt, ok := pi.Runtime()
-	if !ok {
-		return errors.New("expected runtime info to be available")
-	}
-	if rt == 0 {
-		return errors.New("expected a runtime other than 0ns")
-	}
-	// Store the runtime value for the next invocation.
-	lt := rt
-
-	if err := stats.Close(); err != nil {
-		return fmt.Errorf("failed to disable statistics: %w", err)
-	}
+	qt.Assert(tb, qt.IsNil(stats.Close()))
 
 	// Second program execution, with runtime statistics gathering disabled.
 	// Total runtime and run counters are not expected to increase.
@@ -520,26 +484,11 @@ func testStats(prog *Program) error {
 		return fmt.Errorf("failed to trigger program: %w", err)
 	}
 
-	pi, err = prog.Info()
-	if err != nil {
-		return fmt.Errorf("failed to get ProgramInfo: %w", err)
-	}
+	s2, err := prog.Stats()
+	qt.Assert(tb, qt.IsNil(err))
 
-	rc, ok = pi.RunCount()
-	if !ok {
-		return errors.New("expected run count info to be available")
-	}
-	if rc != lc {
-		return fmt.Errorf("run count unexpectedly increased over previous value (current: %v, prev: %v)", rc, lc)
-	}
-
-	rt, ok = pi.Runtime()
-	if !ok {
-		return errors.New("expected runtime info to be available")
-	}
-	if rt != lt {
-		return fmt.Errorf("runtime unexpectedly increased over the previous value (current: %v, prev: %v)", rt, lt)
-	}
+	qt.Assert(tb, qt.Equals(s2.RunCount, s1.RunCount), qt.Commentf("run count (%d) increased after first invocation (%d)", s2.RunCount, s1.RunCount))
+	qt.Assert(tb, qt.Equals(s2.Runtime, s1.Runtime), qt.Commentf("runtime (%d) increased after first invocation (%d)", s2.Runtime, s1.Runtime))
 
 	return nil
 }

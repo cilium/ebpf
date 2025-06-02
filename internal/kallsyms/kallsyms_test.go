@@ -35,7 +35,7 @@ func TestParseSyms(t *testing.T) {
 		qt.Assert(t, qt.IsNil(err))
 		qt.Assert(t, qt.IsFalse(skip))
 		qt.Assert(t, qt.Not(qt.Equals(s.addr, 0)))
-		qt.Assert(t, qt.Not(qt.Equals(s.name, "")))
+		qt.Assert(t, qt.Not(qt.Equals(s.name, []byte(""))))
 	}
 	qt.Assert(t, qt.IsNil(r.Err()))
 	qt.Assert(t, qt.Equals(i, 15))
@@ -48,7 +48,7 @@ func TestParseProcKallsyms(t *testing.T) {
 		s, err, skip := parseSymbol(r, nil)
 		qt.Assert(t, qt.IsNil(err))
 		qt.Assert(t, qt.IsFalse(skip))
-		qt.Assert(t, qt.Not(qt.Equals(s.name, "")))
+		qt.Assert(t, qt.Not(qt.Equals(s.name, []byte(""))))
 	}
 	qt.Assert(t, qt.IsNil(r.Err()))
 }

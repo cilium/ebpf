@@ -23,7 +23,8 @@ A0000000000000AA a nft_counter_seq	[nft_counter]
 A0000000000000BA b bootconfig_found
 A0000000000000CA d __func__.10
 A0000000000000DA r __ksymtab_LZ4_decompress_fast
-A0000000000000EA t writenote`)
+A0000000000000EA t writenote
+A0000000000000FA T bench_sym	[bench_mod]`)
 
 func TestParseSyms(t *testing.T) {
 	r := newReader(bytes.NewReader(syms))
@@ -36,7 +37,7 @@ func TestParseSyms(t *testing.T) {
 		qt.Assert(t, qt.Not(qt.Equals(s.name, "")))
 	}
 	qt.Assert(t, qt.IsNil(r.Err()))
-	qt.Assert(t, qt.Equals(i, 13))
+	qt.Assert(t, qt.Equals(i, 14))
 }
 
 func TestParseProcKallsyms(t *testing.T) {
@@ -132,7 +133,35 @@ func TestAssignAddresses(t *testing.T) {
 	qt.Assert(t, qt.ErrorIs(assignAddresses(b, ksyms), errAmbiguousKsym))
 }
 
-func BenchmarkSymbolKmods(b *testing.B) {
+func BenchmarkAssignModules(b *testing.B) {
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		b.StopTimer()
+		f := bytes.NewBuffer(syms)
+		want := map[string]string{"bench_sym": ""}
+		b.StartTimer()
+
+		if err := assignModules(f, want); err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+func BenchmarkAssignAddresses(b *testing.B) {
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		b.StopTimer()
+		f := bytes.NewBuffer(syms)
+		want := map[string]uint64{"bench_sym": 0}
+		b.StartTimer()
+
+		if err := assignAddresses(f, want); err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+func BenchmarkAssignModulesKallsyms(b *testing.B) {
 	b.ReportAllocs()
 	for i := 0; i < b.N; i++ {
 		b.StopTimer()
@@ -153,7 +182,7 @@ func BenchmarkSymbolKmods(b *testing.B) {
 }
 
 // Benchmark getting 5 kernel symbols from /proc/kallsyms.
-func BenchmarkAssignAddresses(b *testing.B) {
+func BenchmarkAssignAddressesKallsyms(b *testing.B) {
 	b.ReportAllocs()
 	for i := 0; i < b.N; i++ {
 		b.StopTimer()

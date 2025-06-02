@@ -185,15 +185,41 @@ func (mi *MapInfo) Frozen() bool {
 	return mi.frozen
 }
 
-// programStats holds statistics of a program.
-type programStats struct {
-	// Total accumulated runtime of the program ins ns.
-	runtime time.Duration
-	// Total number of times the program was called.
-	runCount uint64
-	// Total number of times the programm was NOT called.
-	// Added in commit 9ed9e9ba2337 ("bpf: Count the number of times recursion was prevented").
-	recursionMisses uint64
+// ProgramStats contains runtime statistics for a single [Program], returned by
+// [Program.Stats].
+//
+// Will contain mostly zero values if the collection of statistics is not
+// enabled, see [EnableStats].
+type ProgramStats struct {
+	// Total accumulated runtime of the Program.
+	//
+	// Requires at least Linux 5.8.
+	Runtime time.Duration
+
+	// Total number of times the Program has executed.
+	//
+	// Requires at least Linux 5.8.
+	RunCount uint64
+
+	// Total number of times the program was not executed due to recursion. This
+	// can happen when another bpf program is already running on the cpu, when bpf
+	// program execution is interrupted, for example.
+	//
+	// Requires at least Linux 5.12.
+	RecursionMisses uint64
+}
+
+func newProgramStatsFromFd(fd *sys.FD) (*ProgramStats, error) {
+	var info sys.ProgInfo
+	if err := sys.ObjInfo(fd, &info); err != nil {
+		return nil, fmt.Errorf("getting program info: %w", err)
+	}
+
+	return &ProgramStats{
+		Runtime:         time.Duration(info.RunTimeNs),
+		RunCount:        info.RunCnt,
+		RecursionMisses: info.RecursionMisses,
+	}, nil
 }
 
 // programJitedInfo holds information about JITed info of a program.
@@ -230,7 +256,8 @@ type programJitedInfo struct {
 	numFuncLens uint32
 }
 
-// ProgramInfo describes a program.
+// ProgramInfo describes a Program's immutable metadata. For runtime statistics,
+// see [ProgramStats].
 type ProgramInfo struct {
 	Type ProgramType
 	id   ProgramID
@@ -242,7 +269,6 @@ type ProgramInfo struct {
 	createdByUID     uint32
 	haveCreatedByUID bool
 	btf              btf.ID
-	stats            *programStats
 	loadTime         time.Duration
 
 	maps                 []MapID
@@ -275,16 +301,11 @@ func newProgramInfoFromFd(fd *sys.FD) (*ProgramInfo, error) {
 	}
 
 	pi := ProgramInfo{
-		Type: typ,
-		id:   ProgramID(info.Id),
-		Tag:  hex.EncodeToString(info.Tag[:]),
-		Name: unix.ByteSliceToString(info.Name[:]),
-		btf:  btf.ID(info.BtfId),
-		stats: &programStats{
-			runtime:         time.Duration(info.RunTimeNs),
-			runCount:        info.RunCnt,
-			recursionMisses: info.RecursionMisses,
-		},
+		Type:                 typ,
+		id:                   ProgramID(info.Id),
+		Tag:                  hex.EncodeToString(info.Tag[:]),
+		Name:                 unix.ByteSliceToString(info.Name[:]),
+		btf:                  btf.ID(info.BtfId),
 		jitedSize:            info.JitedProgLen,
 		loadTime:             time.Duration(info.LoadTime),
 		verifiedInstructions: info.VerifiedInsns,
@@ -451,38 +472,6 @@ func (pi *ProgramInfo) CreatedByUID() (uint32, bool) {
 // supports the field but the program was loaded without BTF information.)
 func (pi *ProgramInfo) BTFID() (btf.ID, bool) {
 	return pi.btf, pi.btf > 0
-}
-
-// RunCount returns the total number of times the program was called.
-//
-// Can return 0 if the collection of statistics is not enabled. See EnableStats().
-// The bool return value indicates whether this optional field is available.
-func (pi *ProgramInfo) RunCount() (uint64, bool) {
-	if pi.stats != nil {
-		return pi.stats.runCount, true
-	}
-	return 0, false
-}
-
-// Runtime returns the total accumulated runtime of the program.
-//
-// Can return 0 if the collection of statistics is not enabled. See EnableStats().
-// The bool return value indicates whether this optional field is available.
-func (pi *ProgramInfo) Runtime() (time.Duration, bool) {
-	if pi.stats != nil {
-		return pi.stats.runtime, true
-	}
-	return time.Duration(0), false
-}
-
-// RecursionMisses returns the total number of times the program was NOT called.
-// This can happen when another bpf program is already running on the cpu, which
-// is likely to happen for example when you interrupt bpf program execution.
-func (pi *ProgramInfo) RecursionMisses() (uint64, bool) {
-	if pi.stats != nil {
-		return pi.stats.recursionMisses, true
-	}
-	return 0, false
 }
 
 // btfSpec returns the BTF spec associated with the program.
@@ -836,12 +825,16 @@ func zero(arg any) bool {
 	return v.IsZero()
 }
 
-// EnableStats starts the measuring of the runtime
-// and run counts of eBPF programs.
+// EnableStats starts collecting runtime statistics of eBPF programs, like the
+// amount of program executions and the cumulative runtime.
 //
-// Collecting statistics can have an impact on the performance.
+// Specify a BPF_STATS_* constant to select which statistics to collect, like
+// [unix.BPF_STATS_RUN_TIME]. Closing the returned [io.Closer] will stop
+// collecting statistics.
 //
-// Requires at least 5.8.
+// Collecting statistics may have a performance impact.
+//
+// Requires at least Linux 5.8.
 func EnableStats(which uint32) (io.Closer, error) {
 	fd, err := sys.EnableStats(&sys.EnableStatsAttr{
 		Type: which,

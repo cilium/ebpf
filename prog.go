@@ -599,6 +599,14 @@ func (p *Program) Info() (*ProgramInfo, error) {
 	return newProgramInfoFromFd(p.fd)
 }
 
+// Stats returns runtime statistics about the Program. Requires BPF statistics
+// collection to be enabled, see [EnableStats].
+//
+// Requires at least Linux 5.8.
+func (p *Program) Stats() (*ProgramStats, error) {
+	return newProgramStatsFromFd(p.fd)
+}
+
 // Handle returns a reference to the program's type information in the kernel.
 //
 // Returns ErrNotSupported if the kernel has no BTF support, or if there is no

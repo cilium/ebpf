@@ -9,7 +9,6 @@ import (
 	"io"
 	"os"
 	"reflect"
-	"strings"
 	"time"
 
 	"github.com/cilium/ebpf/asm"
@@ -784,25 +783,31 @@ func scanFdInfoReader(r io.Reader, fields map[string]interface{}) error {
 	var (
 		scanner = bufio.NewScanner(r)
 		scanned int
+		reader  bytes.Reader
 	)
 
 	for scanner.Scan() {
-		parts := strings.SplitN(scanner.Text(), "\t", 2)
-		if len(parts) != 2 {
+		key, rest, found := bytes.Cut(scanner.Bytes(), []byte(":"))
+		if !found {
+			// Line doesn't contain a colon, skip.
 			continue
 		}
-
-		name := strings.TrimSuffix(parts[0], ":")
-		field, ok := fields[string(name)]
+		field, ok := fields[string(key)]
 		if !ok {
 			continue
 		}
-
 		// If field already contains a non-zero value, don't overwrite it with fdinfo.
-		if zero(field) {
-			if n, err := fmt.Sscanln(parts[1], field); err != nil || n != 1 {
-				return fmt.Errorf("can't parse field %s: %v", name, err)
-			}
+		if !zero(field) {
+			scanned++
+			continue
+		}
+
+		// Cut the \t following the : as well as any potential trailing whitespace.
+		rest = bytes.TrimSpace(rest)
+
+		reader.Reset(rest)
+		if n, err := fmt.Fscan(&reader, field); err != nil || n != 1 {
+			return fmt.Errorf("can't parse field %s: %v", key, err)
 		}
 
 		scanned++

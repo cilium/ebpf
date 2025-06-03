@@ -15,7 +15,7 @@ import (
 )
 
 func TestWalkDir(t *testing.T) {
-	testutils.SkipOnOldKernel(t, "4.10", "reading program fdinfo")
+	testutils.SkipOnOldKernel(t, "4.13", "reading program objinfo")
 
 	tmp := testutils.TempBPFFS(t)
 

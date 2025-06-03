@@ -59,6 +59,36 @@ type MapInfo struct {
 	frozen   bool
 }
 
+// minimalMapInfoFromFd queries the minimum information needed to create a Map
+// based on a file descriptor. This requires the map type, key/value sizes,
+// maxentries and flags.
+//
+// Does not fall back to fdinfo since the version gap between fdinfo (4.10) and
+// [sys.ObjInfo] (4.13) is small and both kernels are EOL since at least Nov
+// 2017.
+//
+// Requires at least Linux 4.13.
+func minimalMapInfoFromFd(fd *sys.FD) (*MapInfo, error) {
+	var info sys.MapInfo
+	if err := sys.ObjInfo(fd, &info); err != nil {
+		return nil, fmt.Errorf("getting object info: %w", err)
+	}
+
+	typ, err := MapTypeForPlatform(platform.Native, info.Type)
+	if err != nil {
+		return nil, fmt.Errorf("map type: %w", err)
+	}
+
+	return &MapInfo{
+		Type:       typ,
+		KeySize:    info.KeySize,
+		ValueSize:  info.ValueSize,
+		MaxEntries: info.MaxEntries,
+		Flags:      uint32(info.MapFlags),
+		Name:       unix.ByteSliceToString(info.Name[:]),
+	}, nil
+}
+
 // newMapInfoFromFd queries map information about the given fd. [sys.ObjInfo] is
 // attempted first, supplementing any missing values with information from
 // /proc/self/fdinfo. Ignores EINVAL from ObjInfo as well as ErrNotSupported
@@ -286,6 +316,37 @@ type ProgramInfo struct {
 	memlock uint64
 }
 
+// minimalProgramFromFd queries the minimum information needed to create a
+// Program based on a file descriptor, requiring at least the program type.
+//
+// Does not fall back to fdinfo since the version gap between fdinfo (4.10) and
+// [sys.ObjInfo] (4.13) is small and both kernels are EOL since at least Nov
+// 2017.
+//
+// Requires at least Linux 4.13.
+func minimalProgramInfoFromFd(fd *sys.FD) (*ProgramInfo, error) {
+	var info sys.ProgInfo
+	if err := sys.ObjInfo(fd, &info); err != nil {
+		return nil, fmt.Errorf("getting object info: %w", err)
+	}
+
+	typ, err := ProgramTypeForPlatform(platform.Native, info.Type)
+	if err != nil {
+		return nil, fmt.Errorf("program type: %w", err)
+	}
+
+	return &ProgramInfo{
+		Type: typ,
+		Name: unix.ByteSliceToString(info.Name[:]),
+	}, nil
+}
+
+// newProgramInfoFromFd queries program information about the given fd.
+//
+// [sys.ObjInfo] is attempted first, supplementing any missing values with
+// information from /proc/self/fdinfo. Ignores EINVAL from ObjInfo as well as
+// ErrNotSupported from reading fdinfo (indicating the file exists, but no
+// fields of interest were found). If both fail, an error is always returned.
 func newProgramInfoFromFd(fd *sys.FD) (*ProgramInfo, error) {
 	var info sys.ProgInfo
 	err1 := sys.ObjInfo(fd, &info)

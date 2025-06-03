@@ -281,9 +281,11 @@ type Map struct {
 	memory *Memory
 }
 
-// NewMapFromFD creates a map from a raw fd.
+// NewMapFromFD creates a [Map] around a raw fd.
 //
 // You should not use fd after calling this function.
+//
+// Requires at least Linux 4.13.
 func NewMapFromFD(fd int) (*Map, error) {
 	f, err := sys.NewFD(fd)
 	if err != nil {
@@ -294,7 +296,7 @@ func NewMapFromFD(fd int) (*Map, error) {
 }
 
 func newMapFromFD(fd *sys.FD) (*Map, error) {
-	info, err := newMapInfoFromFd(fd)
+	info, err := minimalMapInfoFromFd(fd)
 	if err != nil {
 		fd.Close()
 		return nil, fmt.Errorf("get map info: %w", err)
@@ -1777,9 +1779,10 @@ func MapGetNextID(startID MapID) (MapID, error) {
 	return MapID(attr.NextId), sys.MapGetNextId(attr)
 }
 
-// NewMapFromID returns the map for a given id.
+// NewMapFromID returns the [Map] for a given map id. Returns [ErrNotExist] if
+// there is no eBPF map with the given id.
 //
-// Returns ErrNotExist, if there is no eBPF map with the given id.
+// Requires at least Linux 4.13.
 func NewMapFromID(id MapID) (*Map, error) {
 	fd, err := sys.MapGetFdById(&sys.MapGetFdByIdAttr{
 		Id: uint32(id),

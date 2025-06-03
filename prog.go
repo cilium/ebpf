@@ -542,11 +542,11 @@ func retryLogAttrs(attr *sys.ProgLoadAttr, startSize uint32, err error) bool {
 	return false
 }
 
-// NewProgramFromFD creates a program from a raw fd.
+// NewProgramFromFD creates a [Program] around a raw fd.
 //
 // You should not use fd after calling this function.
 //
-// Requires at least Linux 4.10. Returns an error on Windows.
+// Requires at least Linux 4.13. Returns an error on Windows.
 func NewProgramFromFD(fd int) (*Program, error) {
 	f, err := sys.NewFD(fd)
 	if err != nil {
@@ -556,9 +556,10 @@ func NewProgramFromFD(fd int) (*Program, error) {
 	return newProgramFromFD(f)
 }
 
-// NewProgramFromID returns the program for a given id.
+// NewProgramFromID returns the [Program] for a given program id. Returns
+// [ErrNotExist] if there is no eBPF program with the given id.
 //
-// Returns ErrNotExist, if there is no eBPF program with the given id.
+// Requires at least Linux 4.13.
 func NewProgramFromID(id ProgramID) (*Program, error) {
 	fd, err := sys.ProgGetFdById(&sys.ProgGetFdByIdAttr{
 		Id: uint32(id),
@@ -571,7 +572,7 @@ func NewProgramFromID(id ProgramID) (*Program, error) {
 }
 
 func newProgramFromFD(fd *sys.FD) (*Program, error) {
-	info, err := newProgramInfoFromFd(fd)
+	info, err := minimalProgramInfoFromFd(fd)
 	if err != nil {
 		fd.Close()
 		return nil, fmt.Errorf("discover program type: %w", err)

@@ -269,7 +269,9 @@ func (d *decoder) TypesByName(name essentialName) ([]Type, error) {
 	}
 
 	if len(types) == 0 {
-		return nil, fmt.Errorf("type with name %s: %w", name, ErrNotFound)
+		// Return an unwrapped error because this is on the hot path
+		// for CO-RE.
+		return nil, ErrNotFound
 	}
 
 	return types, nil

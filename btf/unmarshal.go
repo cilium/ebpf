@@ -170,7 +170,7 @@ func rebaseDecoder(d *decoder, base *decoder) (*decoder, error) {
 		return nil, fmt.Errorf("rebase split spec: not a split spec")
 	}
 
-	if &d.base.raw[0] != &base.raw[0] || len(d.base.raw) != len(base.raw) {
+	if len(d.base.raw) != len(base.raw) || (len(d.base.raw) > 0 && &d.base.raw[0] != &base.raw[0]) {
 		return nil, fmt.Errorf("rebase split spec: raw BTF differs")
 	}
 

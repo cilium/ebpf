@@ -1114,6 +1114,7 @@ func TestLibBPFCompat(t *testing.T) {
 
 				opts := opts // copy
 				opts.Programs.KernelTypes = btfSpec
+				opts.Programs.KernelModuleTypes = map[string]*btf.Spec{}
 				load(t, spec, opts, valid)
 			})
 		}

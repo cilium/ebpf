@@ -881,7 +881,8 @@ func TestProgramLoadErrors(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			t.Log(progSpec.Instructions)
 			_, err := newProgram(t, progSpec, &ProgramOptions{
-				KernelTypes: empty,
+				KernelTypes:       empty,
+				KernelModuleTypes: map[string]*btf.Spec{},
 			})
 			testutils.SkipIfNotSupported(t, err)
 
@@ -900,15 +901,6 @@ func TestProgramTargetsKernelModule(t *testing.T) {
 
 	ps.AttachTo = "bpf_testmod_test_read"
 	qt.Assert(t, qt.IsTrue(ps.targetsKernelModule()))
-}
-
-func TestProgramAttachToKernelModule(t *testing.T) {
-	requireTestmod(t)
-
-	ps := ProgramSpec{AttachTo: "bpf_testmod_test_read", Type: Tracing, AttachType: AttachTraceFEntry}
-	mod, err := ps.kernelModule()
-	qt.Assert(t, qt.IsNil(err))
-	qt.Assert(t, qt.Equals(mod, "bpf_testmod"))
 }
 
 func BenchmarkNewProgram(b *testing.B) {

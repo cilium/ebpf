@@ -34,7 +34,8 @@ func TestCache(t *testing.T) {
 	c := NewCache()
 
 	qt.Assert(t, qt.IsNil(c.KernelTypes))
-	qt.Assert(t, qt.HasLen(c.KernelModules, 0))
+	qt.Assert(t, qt.HasLen(c.ModuleTypes, 0))
+	qt.Assert(t, qt.IsNil(c.LoadedModules))
 
 	// Test that Kernel() creates only one copy
 	spec1, err := c.Kernel()
@@ -75,7 +76,12 @@ func TestCache(t *testing.T) {
 	qt.Assert(t, qt.IsNotNil(c.KernelTypes))
 	qt.Assert(t, qt.Not(qt.Equals(c.KernelTypes, vmlinux)))
 	if testmod != nil {
-		qt.Assert(t, qt.IsNotNil(c.KernelModules["bpf_testmod"]))
-		qt.Assert(t, qt.Not(qt.Equals(c.KernelModules["bpf_testmod"], testmod)))
+		qt.Assert(t, qt.IsNotNil(c.ModuleTypes["bpf_testmod"]))
+		qt.Assert(t, qt.Not(qt.Equals(c.ModuleTypes["bpf_testmod"], testmod)))
 	}
+
+	// Test that Modules only reads modules once.
+	_, err = c.Modules()
+	qt.Assert(t, qt.IsNil(err))
+	qt.Assert(t, qt.IsNotNil(c.LoadedModules))
 }

@@ -20,9 +20,9 @@ endian systems, respectively.
 You can use environment variables to affect all bpf2go invocations
 across a project, e.g. to set specific C flags:
 
-    BPF2GO_FLAGS="-O2 -g -Wall -Werror $(CFLAGS)" go generate ./...
+    BPF2GO_CFLAGS="-O2 -g -Wall -Werror $(CFLAGS)" go generate ./...
 
-Alternatively, by exporting `$BPF2GO_FLAGS` from your build system, you can
+Alternatively, by exporting `$BPF2GO_CFLAGS` from your build system, you can
 control all builds from a single location.
 
 Most bpf2go arguments can be controlled this way. See `bpf2go -h` for an

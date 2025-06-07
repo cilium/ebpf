@@ -169,7 +169,7 @@ func Generate(args GenerateArgs) error {
 		if err != nil {
 			return fmt.Errorf("generating %s: %w", name, err)
 		}
-		_, ok := typ.(*btf.Struct)
+		_, ok := btf.As[*btf.Struct](typ)
 		needsStructsPkg = needsStructsPkg || ok
 		typeDecls = append(typeDecls, decl)
 	}

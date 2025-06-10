@@ -66,7 +66,7 @@ container-all:
 		-v "${REPODIR}":/ebpf -w /ebpf --env MAKEFLAGS \
 		--env HOME="/tmp" \
 		--env BPF2GO_CC="$(CLANG)" \
-		--env BPF2GO_CFLAGS="-fdebug-prefix-map=/ebpf=. $(CFLAGS)" \
+		--env BPF2GO_CFLAGS="$(CFLAGS)" \
 		"${IMAGE}:${VERSION}" \
 		make all
 
@@ -76,7 +76,7 @@ container-shell:
 	${CONTAINER_ENGINE} run --rm -ti ${CONTAINER_RUN_ARGS} \
 		-v "${REPODIR}":/ebpf -w /ebpf \
 		--env BPF2GO_CC="$(CLANG)" \
-		--env BPF2GO_CFLAGS="-fdebug-prefix-map=/ebpf=. $(CFLAGS)" \
+		--env BPF2GO_CFLAGS="$(CFLAGS)" \
 		"${IMAGE}:${VERSION}"
 
 clean:

@@ -19,9 +19,9 @@ RUN apt-get update && \
     make git \
     libbpf-dev \
     clang-format \
-    clang-11 llvm-11 \
     clang-14 llvm-14 \
-    clang-17 llvm-17 && \
+    clang-17 llvm-17 \
+    clang-20 llvm-20 && \
     rm -rf /var/lib/apt/lists/*
 
 # Examples use `#include <asm/types.h>` which Debian carries in asm-generic/ instead.

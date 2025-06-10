@@ -162,10 +162,7 @@ __section("socket/4") int anon_const() {
 	volatile int ctx = 0;
 
 // 32 bytes wide results in a .rodata.cst32 section.
-#define values \
-	(uint64_t[]) { \
-		0x0, 0x1, 0x2, 0x3 \
-	}
+#define values (uint64_t[]){0x0, 0x1, 0x2, 0x3}
 
 	int i;
 	for (i = 0; i < 3; i++) {

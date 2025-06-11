@@ -82,6 +82,22 @@ func TestLoadCollectionSpec(t *testing.T) {
 				MaxEntries: 1,
 				Pinning:    PinByName,
 			},
+			"bpf_decl_map": {
+				Name:       "bpf_decl_map",
+				Type:       Array,
+				KeySize:    4,
+				ValueSize:  8,
+				MaxEntries: 1,
+				Tags:       []string{"a", "b"},
+			},
+			"btf_decl_map": {
+				Name:       "btf_decl_map",
+				Type:       Array,
+				KeySize:    4,
+				ValueSize:  8,
+				MaxEntries: 1,
+				Tags:       []string{"a", "b"},
+			},
 			"btf_outer_map": {
 				Name:       "btf_outer_map",
 				Type:       ArrayOfMaps,

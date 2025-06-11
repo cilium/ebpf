@@ -85,6 +85,24 @@ typedef struct {
 // Map definition behind a typedef.
 array_map_t btf_typedef_map __section(".maps");
 
+#define __decl_tags __attribute__((btf_decl_tag("a"), btf_decl_tag("b")))
+
+// Legacy map definition decorated with decl tags.
+struct bpf_map_def bpf_decl_map __decl_tags __section("maps") = {
+	.type        = BPF_MAP_TYPE_ARRAY,
+	.key_size    = sizeof(uint32_t),
+	.value_size  = sizeof(uint64_t),
+	.max_entries = 1,
+};
+
+// BTF map definition decorated with decl tags.
+struct {
+	__uint(type, BPF_MAP_TYPE_ARRAY);
+	__uint(key_size, sizeof(uint32_t));
+	__uint(value_size, sizeof(uint64_t));
+	__uint(max_entries, 1);
+} btf_decl_map __decl_tags __section(".maps");
+
 static int __attribute__((noinline)) __section("static") static_fn(uint32_t arg) {
 	return arg - 1;
 }

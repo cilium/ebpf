@@ -441,6 +441,17 @@ func newCollectionLoader(coll *CollectionSpec, opts *CollectionOptions) (*collec
 	}, nil
 }
 
+// KallsymsPreLoad populates kallsyms caches, useful when we have several
+// collection specs with known program names but we don't have the ProgramSpec
+// yet
+func KallsymsPreLoad(progs []string) error {
+	mods := make(map[string]string)
+	for _, p := range progs {
+		mods[p] = ""
+	}
+	return kallsyms.AssignModules(mods)
+}
+
 // populateKallsyms populates kallsyms caches, making lookups cheaper later on
 // during individual program loading. Since we have less context available
 // at those stages, we batch the lookups here instead to avoid redundant work.

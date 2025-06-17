@@ -14,6 +14,7 @@ import (
 	"github.com/cilium/ebpf/asm"
 	"github.com/cilium/ebpf/btf"
 	"github.com/cilium/ebpf/internal"
+	"github.com/cilium/ebpf/internal/kallsyms"
 	"github.com/cilium/ebpf/internal/testutils"
 	"github.com/cilium/ebpf/internal/testutils/testmain"
 )
@@ -693,6 +694,55 @@ func BenchmarkLoadCollectionManyProgs(b *testing.B) {
 		if err != nil {
 			b.Fatal(err)
 		}
+	}
+}
+
+func BenchmarkAssignCollectionMany(b *testing.B) {
+	var specs []*CollectionSpec
+	for i := 0; i < 3; i++ {
+		file, err := os.Open(testutils.NativeFile(b, fmt.Sprintf("testdata/kprobe%d-%%s.elf", i+1)))
+		qt.Assert(b, qt.IsNil(err))
+		defer file.Close()
+
+		spec, err := LoadCollectionSpecFromReader(file)
+		if err != nil {
+			b.Fatal(err)
+		}
+		specs = append(specs, spec)
+	}
+
+	b.ReportAllocs()
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		b.StopTimer()
+
+		kallsyms.ResetCacheForTest()
+
+		var objs1 struct {
+			Program *Program `ebpf:"__scm_send"`
+		}
+		var objs2 struct {
+			Program *Program `ebpf:"fsnotify_remove_first_event"`
+		}
+		var objs3 struct {
+			Program *Program `ebpf:"tcp_connect"`
+		}
+		objs := []interface{}{&objs1, &objs2, &objs3}
+
+		b.StartTimer()
+
+		// Remove this line to test without optimization
+		KallsymsPreLoad([]string{"__scm_send", "fsnotify_remove_first_event", "tcp_connect"})
+
+		for j := 0; j < 3; j++ {
+			if err := specs[j].LoadAndAssign(objs[j], nil); err != nil {
+				panic(err)
+			}
+		}
+		objs1.Program.Close()
+		objs2.Program.Close()
+		objs3.Program.Close()
 	}
 }
 

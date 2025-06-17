@@ -18,6 +18,11 @@ var errAmbiguousKsym = errors.New("multiple kernel symbols with the same name")
 var symAddrs cache[string, uint64]
 var symModules cache[string, string]
 
+func ResetCacheForTest() {
+	symAddrs = cache[string, uint64]{}
+	symModules = cache[string, string]{}
+}
+
 // Module returns the kernel module providing the given symbol in the kernel, if
 // any. Returns an empty string and no error if the symbol is not present in the
 // kernel. Only function symbols are considered. Returns an error if multiple

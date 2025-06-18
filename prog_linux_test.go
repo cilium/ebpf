@@ -12,6 +12,7 @@ import (
 
 	"github.com/cilium/ebpf/asm"
 	"github.com/cilium/ebpf/internal"
+	"github.com/cilium/ebpf/internal/sys"
 	"github.com/cilium/ebpf/internal/testutils"
 	"github.com/cilium/ebpf/internal/unix"
 )
@@ -134,4 +135,38 @@ func TestProgramVerifierLogLinux(t *testing.T) {
 		LogSizeStart: minVerifierLogSize * 2,
 	})
 	qt.Assert(t, qt.IsTrue(len(prog.VerifierLog) > minVerifierLogSize))
+}
+
+func TestProgramTestRunSyscall(t *testing.T) {
+	testutils.SkipOnOldKernel(t, "5.14", "BPF_PROG_TYPE_SYSCALL")
+
+	prog := mustNewProgram(t, &ProgramSpec{
+		Type:    Syscall,
+		Flags:   sys.BPF_F_SLEEPABLE,
+		License: "MIT",
+		Instructions: []asm.Instruction{
+			// fn (ctx *u64) { *ctx++; return *ctx }
+			asm.LoadMem(asm.R0, asm.R1, 0, asm.DWord),
+			asm.Add.Imm(asm.R0, 1),
+			asm.StoreMem(asm.R1, 0, asm.R0, asm.DWord),
+			asm.Return(),
+		},
+	}, nil)
+
+	// only Context
+	rc, err := prog.Run(&RunOptions{Context: uint64(42)})
+	testutils.SkipIfNotSupported(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
+	qt.Assert(t, qt.Equals(rc, 43))
+
+	// Context and ContextOut
+	out := uint64(0)
+	rc, err = prog.Run(&RunOptions{Context: uint64(99), ContextOut: &out})
+	if err != nil {
+		t.Fatal(err)
+	}
+	qt.Assert(t, qt.Equals(rc, 100))
+	qt.Assert(t, qt.Equals(out, 100))
 }

@@ -881,8 +881,7 @@ func TestProgramLoadErrors(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			t.Log(progSpec.Instructions)
 			_, err := newProgram(t, progSpec, &ProgramOptions{
-				KernelTypes:       empty,
-				KernelModuleTypes: map[string]*btf.Spec{},
+				KernelTypes: empty,
 			})
 			testutils.SkipIfNotSupported(t, err)
 

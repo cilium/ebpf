@@ -8,7 +8,6 @@ import (
 	"math"
 	"path/filepath"
 	"runtime"
-	"sort"
 	"time"
 
 	"github.com/cilium/ebpf/asm"
@@ -95,13 +94,10 @@ type ProgramOptions struct {
 	// use the kernel BTF from a well-known location if nil.
 	KernelTypes *btf.Spec
 
-	// Type information used for CO-RE relocations of kernel modules,
-	// indexed by module name.
-	//
-	// This is useful in environments where the kernel BTF is not available
-	// (containers) or where it is in a non-standard location. Defaults to
-	// use the kernel module BTF from a well-known location if nil.
-	KernelModuleTypes map[string]*btf.Spec
+	// Additional targets to consider for CO-RE relocations. This can be used to
+	// pass BTF information for kernel modules when it's not present on
+	// KernelTypes.
+	ExtraRelocationTargets []*btf.Spec
 }
 
 // ProgramSpec defines a Program.
@@ -293,7 +289,7 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions, c *btf.Cache)
 	copy(insns, spec.Instructions)
 
 	var b btf.Builder
-	if err := applyRelocations(insns, spec.ByteOrder, &b, c); err != nil {
+	if err := applyRelocations(insns, spec.ByteOrder, &b, c, opts.ExtraRelocationTargets); err != nil {
 		return nil, fmt.Errorf("apply CO-RE relocations: %w", err)
 	}
 
@@ -1196,14 +1192,7 @@ func newBTFCache(opts *ProgramOptions) *btf.Cache {
 	c := btf.NewCache()
 	if opts.KernelTypes != nil {
 		c.KernelTypes = opts.KernelTypes
-		c.ModuleTypes = opts.KernelModuleTypes
-		if opts.KernelModuleTypes != nil {
-			c.LoadedModules = []string{}
-			for name := range opts.KernelModuleTypes {
-				c.LoadedModules = append(c.LoadedModules, name)
-			}
-			sort.Strings(c.LoadedModules)
-		}
+		c.LoadedModules = []string{}
 	}
 	return c
 }

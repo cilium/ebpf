@@ -36,8 +36,7 @@ func TestCORERelocationLoad(t *testing.T) {
 			}
 
 			prog, err := ebpf.NewProgramWithOptions(progSpec, ebpf.ProgramOptions{
-				KernelTypes:       spec.Types,
-				KernelModuleTypes: map[string]*btf.Spec{},
+				KernelTypes: spec.Types,
 			})
 			testutils.SkipIfNotSupported(t, err)
 
@@ -81,28 +80,45 @@ func TestCORERelocationRead(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	tests := []struct {
+		name string
+		opts ebpf.ProgramOptions
+	}{
+		{
+			name: "KernelTypes",
+			opts: ebpf.ProgramOptions{
+				KernelTypes: targetSpec,
+			},
+		},
+		{
+			name: "ExtraRelocationTargets",
+			opts: ebpf.ProgramOptions{
+				ExtraRelocationTargets: []*btf.Spec{targetSpec},
+			},
+		},
+	}
+
 	for _, progSpec := range spec.Programs {
-		t.Run(progSpec.Name, func(t *testing.T) {
-			prog, err := ebpf.NewProgramWithOptions(progSpec, ebpf.ProgramOptions{
-				KernelTypes:       targetSpec,
-				KernelModuleTypes: map[string]*btf.Spec{},
+		for _, test := range tests {
+			t.Run(progSpec.Name+"_"+test.name, func(t *testing.T) {
+				prog, err := ebpf.NewProgramWithOptions(progSpec, test.opts)
+				testutils.SkipIfNotSupported(t, err)
+				if err != nil {
+					t.Fatal("Load program:", err)
+				}
+				defer prog.Close()
+
+				ret, _, err := prog.Test(internal.EmptyBPFContext)
+				testutils.SkipIfNotSupported(t, err)
+				if err != nil {
+					t.Fatal("Error when running:", err)
+				}
+
+				if ret != 0 {
+					t.Error("Assertion failed on line", ret)
+				}
 			})
-			testutils.SkipIfNotSupported(t, err)
-			if err != nil {
-				t.Fatal("Load program:", err)
-			}
-			defer prog.Close()
-
-			ret, _, err := prog.Test(internal.EmptyBPFContext)
-			testutils.SkipIfNotSupported(t, err)
-			if err != nil {
-				t.Fatal("Error when running:", err)
-			}
-
-			if ret != 0 {
-				t.Error("Assertion failed on line", ret)
-			}
-		})
+		}
 	}
 }
 
@@ -151,8 +167,7 @@ func TestCOREPoisonLineInfo(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			t.Log(progSpec.Instructions)
 			_, err := ebpf.NewProgramWithOptions(progSpec, ebpf.ProgramOptions{
-				KernelTypes:       empty,
-				KernelModuleTypes: map[string]*btf.Spec{},
+				KernelTypes: empty,
 			})
 			testutils.SkipIfNotSupported(t, err)
 

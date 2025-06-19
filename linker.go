@@ -124,7 +124,7 @@ func hasFunctionReferences(insns asm.Instructions) bool {
 //
 // Passing a nil target will relocate against the running kernel. insns are
 // modified in place.
-func applyRelocations(insns asm.Instructions, bo binary.ByteOrder, b *btf.Builder, c *btf.Cache) error {
+func applyRelocations(insns asm.Instructions, bo binary.ByteOrder, b *btf.Builder, c *btf.Cache, extraTargets []*btf.Spec) error {
 	var relos []*btf.CORERelocation
 	var reloInsns []*asm.Instruction
 	iter := insns.Iterate()
@@ -155,7 +155,7 @@ func applyRelocations(insns asm.Instructions, bo binary.ByteOrder, b *btf.Builde
 		return err
 	}
 
-	targets := make([]*btf.Spec, 0, 1+len(modules))
+	targets := make([]*btf.Spec, 0, 1+len(modules)+len(extraTargets))
 	targets = append(targets, kernelTarget)
 
 	for _, kmod := range modules {
@@ -166,6 +166,8 @@ func applyRelocations(insns asm.Instructions, bo binary.ByteOrder, b *btf.Builde
 
 		targets = append(targets, spec)
 	}
+
+	targets = append(targets, extraTargets...)
 
 	fixups, err := btf.CORERelocate(relos, targets, bo, b.Add)
 	if err != nil {

@@ -12,6 +12,8 @@ import (
 type stringTable struct {
 	base  *stringTable
 	bytes []byte
+
+	cache map[uint32]string
 }
 
 // sizedReader is implemented by bytes.Reader, io.SectionReader, strings.Reader, etc.
@@ -86,6 +88,30 @@ func (st *stringTable) lookupSlow(offset uint32) ([]byte, error) {
 
 	i := bytes.IndexByte(st.bytes[offset:], 0)
 	return st.bytes[offset : offset+uint32(i)], nil
+}
+
+// LookupCache returns the string at the given offset, caching the result
+// for future lookups.
+func (cst *stringTable) LookupCached(offset uint32) (string, error) {
+	// Fast path: zero offset is the empty string, looked up frequently.
+	if offset == 0 {
+		return "", nil
+	}
+
+	if str, ok := cst.cache[offset]; ok {
+		return str, nil
+	}
+
+	str, err := cst.Lookup(offset)
+	if err != nil {
+		return "", err
+	}
+
+	if cst.cache == nil {
+		cst.cache = make(map[uint32]string)
+	}
+	cst.cache[offset] = str
+	return str, nil
 }
 
 // stringTableBuilder builds BTF string tables.

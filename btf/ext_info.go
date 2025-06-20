@@ -73,8 +73,9 @@ func loadExtInfos(r io.ReaderAt, bo binary.ByteOrder, spec *Spec) (*ExtInfos, er
 	}
 
 	lineInfos := make(map[string]LineOffsets, len(btfLineInfos))
+	cst := newCachingStringTable(spec.strings)
 	for section, blis := range btfLineInfos {
-		lineInfos[section], err = newLineInfos(blis, spec.strings)
+		lineInfos[section], err = newLineInfos(blis, cst)
 		if err != nil {
 			return nil, fmt.Errorf("section %s: line infos: %w", section, err)
 		}
@@ -555,10 +556,11 @@ func LoadLineInfos(reader io.Reader, bo binary.ByteOrder, recordNum uint32, spec
 		return LineOffsets{}, fmt.Errorf("parsing BTF line info: %w", err)
 	}
 
-	return newLineInfos(lis, spec.strings)
+	cst := newCachingStringTable(spec.strings)
+	return newLineInfos(lis, cst)
 }
 
-func newLineInfo(li bpfLineInfo, strings *stringTable) (LineOffset, error) {
+func newLineInfo(li bpfLineInfo, strings *cachingStringTable) (LineOffset, error) {
 	line, err := strings.Lookup(li.LineOff)
 	if err != nil {
 		return LineOffset{}, fmt.Errorf("lookup of line: %w", err)
@@ -583,7 +585,7 @@ func newLineInfo(li bpfLineInfo, strings *stringTable) (LineOffset, error) {
 	}, nil
 }
 
-func newLineInfos(blis []bpfLineInfo, strings *stringTable) (LineOffsets, error) {
+func newLineInfos(blis []bpfLineInfo, strings *cachingStringTable) (LineOffsets, error) {
 	lis := make([]LineOffset, 0, len(blis))
 	for _, bli := range blis {
 		li, err := newLineInfo(bli, strings)

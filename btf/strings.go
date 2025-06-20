@@ -170,3 +170,39 @@ func (stb *stringTableBuilder) Copy() *stringTableBuilder {
 		maps.Clone(stb.strings),
 	}
 }
+
+// cachingStringTable is similar to stringTable, but multiple calls to Lookup
+// with the same offset will return the same string without re-allocating.
+type cachingStringTable struct {
+	inner *stringTable
+	cache map[uint32]string
+}
+
+// newCachingStringTable creates a cachingStringTable that wraps the given
+// stringTable.
+func newCachingStringTable(inner *stringTable) *cachingStringTable {
+	return &cachingStringTable{
+		inner: inner,
+		cache: make(map[uint32]string),
+	}
+}
+
+// Lookup returns the string at the given offset
+func (cst *cachingStringTable) Lookup(offset uint32) (string, error) {
+	// Fast path: zero offset is the empty string, looked up frequently.
+	if offset == 0 {
+		return "", nil
+	}
+
+	if str, ok := cst.cache[offset]; ok {
+		return str, nil
+	}
+
+	str, err := cst.inner.Lookup(offset)
+	if err != nil {
+		return "", err
+	}
+
+	cst.cache[offset] = str
+	return str, nil
+}

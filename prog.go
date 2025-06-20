@@ -869,6 +869,20 @@ func (p *Program) run(opts *RunOptions) (uint32, time.Duration, error) {
 		ctxOut = make([]byte, binary.Size(opts.ContextOut))
 	}
 
+	sysCtxOut := ctxOut
+	if ctxOut != nil && p.Type() == Syscall {
+		// Linux syscall program errors on non-nil ctxOut, uses ctxIn
+		// for both input and output. Shield the user from this wart.
+		sysCtxOut = nil
+		if ctxIn == nil {
+			ctxIn = ctxOut
+		}
+		if len(ctxIn) != len(ctxOut) {
+			return 0, 0, errors.New("length mismatch: Context and ContextOut")
+		}
+		ctxOut = ctxIn
+	}
+
 	attr := sys.ProgRunAttr{
 		ProgFd:      p.fd.Uint(),
 		DataSizeIn:  uint32(len(opts.Data)),
@@ -877,9 +891,9 @@ func (p *Program) run(opts *RunOptions) (uint32, time.Duration, error) {
 		DataOut:     sys.SlicePointer(opts.DataOut),
 		Repeat:      uint32(opts.Repeat),
 		CtxSizeIn:   uint32(len(ctxIn)),
-		CtxSizeOut:  uint32(len(ctxOut)),
+		CtxSizeOut:  uint32(len(sysCtxOut)),
 		CtxIn:       sys.SlicePointer(ctxIn),
-		CtxOut:      sys.SlicePointer(ctxOut),
+		CtxOut:      sys.SlicePointer(sysCtxOut),
 		Flags:       opts.Flags,
 		Cpu:         opts.CPU,
 	}

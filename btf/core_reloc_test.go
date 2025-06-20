@@ -36,7 +36,8 @@ func TestCORERelocationLoad(t *testing.T) {
 			}
 
 			prog, err := ebpf.NewProgramWithOptions(progSpec, ebpf.ProgramOptions{
-				KernelTypes: spec.Types,
+				KernelTypes:       spec.Types,
+				KernelModuleTypes: map[string]*btf.Spec{},
 			})
 			testutils.SkipIfNotSupported(t, err)
 
@@ -83,7 +84,8 @@ func TestCORERelocationRead(t *testing.T) {
 	for _, progSpec := range spec.Programs {
 		t.Run(progSpec.Name, func(t *testing.T) {
 			prog, err := ebpf.NewProgramWithOptions(progSpec, ebpf.ProgramOptions{
-				KernelTypes: targetSpec,
+				KernelTypes:       targetSpec,
+				KernelModuleTypes: map[string]*btf.Spec{},
 			})
 			testutils.SkipIfNotSupported(t, err)
 			if err != nil {
@@ -149,7 +151,8 @@ func TestCOREPoisonLineInfo(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			t.Log(progSpec.Instructions)
 			_, err := ebpf.NewProgramWithOptions(progSpec, ebpf.ProgramOptions{
-				KernelTypes: empty,
+				KernelTypes:       empty,
+				KernelModuleTypes: map[string]*btf.Spec{},
 			})
 			testutils.SkipIfNotSupported(t, err)
 

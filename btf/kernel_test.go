@@ -2,6 +2,7 @@ package btf
 
 import (
 	"os"
+	"runtime"
 	"testing"
 
 	"github.com/cilium/ebpf/internal/testutils"
@@ -14,10 +15,19 @@ func TestLoadKernelSpec(t *testing.T) {
 		t.Skip("/sys/kernel/btf/vmlinux not present")
 	}
 
-	_, err := LoadKernelSpec()
+	spec, err := LoadKernelSpec()
 	if err != nil {
 		t.Fatal("Can't load kernel spec:", err)
 	}
+
+	if !testutils.IsVersionLessThan(t, "linux:6.16") {
+		maps, err := os.ReadFile("/proc/self/maps")
+		qt.Assert(t, qt.IsNil(err))
+		qt.Assert(t, qt.StringContains(string(maps), " /sys/kernel/btf/vmlinux\n"))
+	}
+
+	// Prevent finalizer from unmapping vmlinux.
+	runtime.KeepAlive(spec)
 }
 
 func TestLoadKernelModuleSpec(t *testing.T) {

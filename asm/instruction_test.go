@@ -180,6 +180,16 @@ func TestInstructionWithMetadata(t *testing.T) {
 	}
 }
 
+func TestReadCallToNegativeOne(t *testing.T) {
+	raw := []byte{
+		0x85, 0x00, 0x00, 0x00, 0xff, 0xff, 0xff, 0xff,
+	}
+	var ins Instruction
+	err := ins.Unmarshal(bytes.NewReader(raw), binary.LittleEndian, platform.Linux)
+	qt.Assert(t, qt.IsNil(err))
+	qt.Assert(t, qt.Equals(ins.Constant, -1))
+}
+
 // You can use format flags to change the way an eBPF
 // program is stringified.
 func ExampleInstructions_Format() {

@@ -7,12 +7,17 @@ import (
 	"io"
 	"maps"
 	"strings"
+	"sync"
 )
 
+// stringTable is contains a sequence of null-terminated strings.
+//
+// It is safe for concurrent use.
 type stringTable struct {
 	base  *stringTable
 	bytes []byte
 
+	mu    sync.Mutex
 	cache map[uint32]string
 }
 
@@ -97,6 +102,9 @@ func (cst *stringTable) LookupCached(offset uint32) (string, error) {
 	if offset == 0 {
 		return "", nil
 	}
+
+	cst.mu.Lock()
+	defer cst.mu.Unlock()
 
 	if str, ok := cst.cache[offset]; ok {
 		return str, nil

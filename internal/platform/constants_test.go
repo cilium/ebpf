@@ -7,7 +7,7 @@ import (
 )
 
 func TestConstant(t *testing.T) {
-	const maxConstant = ^uint32(platformMask)
+	const maxConstant = uint32(1<<platformShift - 1)
 	for _, plat := range []string{
 		Linux,
 		Windows,

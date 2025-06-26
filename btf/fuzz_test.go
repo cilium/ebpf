@@ -20,7 +20,7 @@ func FuzzSpec(f *testing.F) {
 			t.Skip("data is too short")
 		}
 
-		spec, err := loadRawSpec(bytes.NewReader(data), internal.NativeEndian, nil)
+		spec, err := loadRawSpec(data, nil)
 		if err != nil {
 			if spec != nil {
 				t.Fatal("spec is not nil")

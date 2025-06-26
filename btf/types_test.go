@@ -1,7 +1,6 @@
 package btf
 
 import (
-	"bytes"
 	"encoding/binary"
 	"fmt"
 	"reflect"
@@ -444,7 +443,7 @@ func TestInflateLegacyBitfield(t *testing.T) {
 		{"struct after int", after},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			spec, err := loadRawSpec(bytes.NewReader(test.buf), binary.LittleEndian, nil)
+			spec, err := loadRawSpec(test.buf, nil)
 			qt.Assert(t, qt.IsNil(err))
 
 			for _, typ := range typesFromSpec(t, spec) {

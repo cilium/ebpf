@@ -2,10 +2,8 @@ package btf
 
 import (
 	"bytes"
-	"encoding/binary"
 	"errors"
 	"fmt"
-	"io"
 	"io/fs"
 	"os"
 	"runtime"
@@ -46,24 +44,13 @@ var vmlinuxTestdata = sync.OnceValues(func() (specAndRawBTF, error) {
 		return specAndRawBTF{}, err
 	}
 
-	spec, err := loadRawSpec(bytes.NewReader(b), binary.LittleEndian, nil)
+	spec, err := loadRawSpec(b, nil)
 	if err != nil {
 		return specAndRawBTF{}, err
 	}
 
 	return specAndRawBTF{b, spec}, nil
 })
-
-func vmlinuxTestdataReader(tb testing.TB) *bytes.Reader {
-	tb.Helper()
-
-	td, err := vmlinuxTestdata()
-	if err != nil {
-		tb.Fatal(err)
-	}
-
-	return bytes.NewReader(td.raw)
-}
 
 func vmlinuxTestdataSpec(tb testing.TB) *Spec {
 	tb.Helper()
@@ -74,6 +61,17 @@ func vmlinuxTestdataSpec(tb testing.TB) *Spec {
 	}
 
 	return td.spec.Copy()
+}
+
+func vmlinuxTestdataBytes(tb testing.TB) []byte {
+	tb.Helper()
+
+	td, err := vmlinuxTestdata()
+	if err != nil {
+		tb.Fatal(err)
+	}
+
+	return td.raw
 }
 
 func parseELFBTF(tb testing.TB, file string) *Spec {
@@ -211,32 +209,24 @@ func TestTypeByName(t *testing.T) {
 }
 
 func BenchmarkParseVmlinux(b *testing.B) {
-	rd := vmlinuxTestdataReader(b)
+	vmlinux := vmlinuxTestdataBytes(b)
 	b.ReportAllocs()
 	b.ResetTimer()
 
 	for n := 0; n < b.N; n++ {
-		if _, err := rd.Seek(0, io.SeekStart); err != nil {
-			b.Fatal(err)
-		}
-
-		if _, err := loadRawSpec(rd, binary.LittleEndian, nil); err != nil {
+		if _, err := loadRawSpec(vmlinux, nil); err != nil {
 			b.Fatal("Can't load BTF:", err)
 		}
 	}
 }
 
 func BenchmarkIterateVmlinux(b *testing.B) {
-	rd := vmlinuxTestdataReader(b)
+	vmlinux := vmlinuxTestdataBytes(b)
 	b.ReportAllocs()
 	b.ResetTimer()
 
 	for range b.N {
-		if _, err := rd.Seek(0, io.SeekStart); err != nil {
-			b.Fatal(err)
-		}
-
-		spec, err := loadRawSpec(rd, binary.LittleEndian, nil)
+		spec, err := loadRawSpec(vmlinux, nil)
 		if err != nil {
 			b.Fatal("Can't load BTF:", err)
 		}
@@ -322,13 +312,6 @@ func TestVerifierError(t *testing.T) {
 	var ve *internal.VerifierError
 	if !errors.As(err, &ve) {
 		t.Fatalf("expected a VerifierError, got: %v", err)
-	}
-}
-
-func TestGuessBTFByteOrder(t *testing.T) {
-	bo := guessRawBTFByteOrder(vmlinuxTestdataReader(t))
-	if bo != binary.LittleEndian {
-		t.Fatalf("Guessed %s instead of %s", bo, binary.LittleEndian)
 	}
 }
 

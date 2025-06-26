@@ -18,6 +18,10 @@ import (
 	"github.com/cilium/ebpf/internal/sys"
 )
 
+type errMissing struct {
+	error
+}
+
 // CollectionOptions control loading a collection into the kernel.
 //
 // Maps and Programs are passed to NewMapWithOptions and NewProgramsWithOptions.
@@ -212,19 +216,19 @@ func (cs *CollectionSpec) Assign(to interface{}) error {
 			if p := cs.Programs[name]; p != nil {
 				return p, nil
 			}
-			return nil, fmt.Errorf("missing program %q", name)
+			return nil, errMissing{fmt.Errorf("missing program %q", name)}
 
 		case reflect.TypeOf((*MapSpec)(nil)):
 			if m := cs.Maps[name]; m != nil {
 				return m, nil
 			}
-			return nil, fmt.Errorf("missing map %q", name)
+			return nil, errMissing{fmt.Errorf("missing map %q", name)}
 
 		case reflect.TypeOf((*VariableSpec)(nil)):
 			if v := cs.Variables[name]; v != nil {
 				return v, nil
 			}
-			return nil, fmt.Errorf("missing variable %q", name)
+			return nil, errMissing{fmt.Errorf("missing variable %q", name)}
 
 		default:
 			return nil, fmt.Errorf("unsupported type %s", typ)
@@ -497,7 +501,7 @@ func (cl *collectionLoader) loadMap(mapName string) (*Map, error) {
 
 	mapSpec := cl.coll.Maps[mapName]
 	if mapSpec == nil {
-		return nil, fmt.Errorf("missing map %s", mapName)
+		return nil, errMissing{fmt.Errorf("missing map %s", mapName)}
 	}
 
 	mapSpec = mapSpec.Copy()
@@ -552,7 +556,7 @@ func (cl *collectionLoader) loadProgram(progName string) (*Program, error) {
 
 	progSpec := cl.coll.Programs[progName]
 	if progSpec == nil {
-		return nil, fmt.Errorf("unknown program %s", progName)
+		return nil, errMissing{fmt.Errorf("unknown program %s", progName)}
 	}
 
 	// Bail out early if we know the kernel is going to reject the program.
@@ -605,7 +609,7 @@ func (cl *collectionLoader) loadVariable(varName string) (*Variable, error) {
 
 	varSpec := cl.coll.Variables[varName]
 	if varSpec == nil {
-		return nil, fmt.Errorf("unknown variable %s", varName)
+		return nil, errMissing{fmt.Errorf("unknown variable %s", varName)}
 	}
 
 	// Get the key of the VariableSpec's MapSpec in the CollectionSpec.
@@ -866,21 +870,21 @@ func (coll *Collection) Assign(to interface{}) error {
 				assignedProgs[name] = true
 				return p, nil
 			}
-			return nil, fmt.Errorf("missing program %q", name)
+			return nil, errMissing{fmt.Errorf("missing program %q", name)}
 
 		case reflect.TypeOf((*Map)(nil)):
 			if m := coll.Maps[name]; m != nil {
 				assignedMaps[name] = true
 				return m, nil
 			}
-			return nil, fmt.Errorf("missing map %q", name)
+			return nil, errMissing{fmt.Errorf("missing map %q", name)}
 
 		case reflect.TypeOf((*Variable)(nil)):
 			if v := coll.Variables[name]; v != nil {
 				assignedVars[name] = true
 				return v, nil
 			}
-			return nil, fmt.Errorf("missing variable %q", name)
+			return nil, errMissing{fmt.Errorf("missing variable %q", name)}
 
 		default:
 			return nil, fmt.Errorf("unsupported type %s", typ)
@@ -1038,20 +1042,33 @@ func assignValues(to interface{},
 	for _, field := range fields {
 		// Get string value the field is tagged with.
 		tag := field.Tag.Get("ebpf")
-		if strings.Contains(tag, ",") {
-			return fmt.Errorf("field %s: ebpf tag contains a comma", field.Name)
+		parts := strings.Split(tag, ",")
+		name := parts[0]
+		omitempty := false
+		if len(parts) == 2 {
+			if parts[1] != "omitempty" {
+				return fmt.Errorf("field %s: ebpf tag contains invalid directive after comma: %s", field.Name, parts[1])
+			}
+			omitempty = true
+		} else if len(parts) > 2 {
+			return fmt.Errorf("field %s: ebpf tag contains too directives, only name and omitempty are allowed", field.Name)
 		}
 
 		// Check if the eBPF object with the requested
-		// type and tag was already assigned elsewhere.
-		e := elem{field.Type, tag}
+		// type and name was already assigned elsewhere.
+		e := elem{field.Type, name}
 		if af := assigned[e]; af != "" {
-			return fmt.Errorf("field %s: object %q was already assigned to %s", field.Name, tag, af)
+			return fmt.Errorf("field %s: object %q was already assigned to %s", field.Name, name, af)
 		}
 
-		// Get the eBPF object referred to by the tag.
-		value, err := getValue(field.Type, tag)
+		// Get the eBPF object referred to by the name.
+		value, err := getValue(field.Type, name)
 		if err != nil {
+			var missing errMissing
+			if omitempty && errors.As(err, &missing) {
+				continue
+			}
+
 			return fmt.Errorf("field %s: %w", field.Name, err)
 		}
 

@@ -119,7 +119,7 @@ func loadKernelSpec() (_ *Spec, _ error) {
 	if err == nil {
 		defer fh.Close()
 
-		spec, err := loadRawSpec(fh, internal.NativeEndian, nil)
+		spec, err := LoadSplitSpecFromReader(fh, nil)
 		return spec, err
 	}
 
@@ -149,7 +149,7 @@ func loadKernelModuleSpec(module string, base *Spec) (*Spec, error) {
 	}
 	defer fh.Close()
 
-	return loadRawSpec(fh, internal.NativeEndian, base)
+	return LoadSplitSpecFromReader(fh, base)
 }
 
 // findVMLinux scans multiple well-known paths for vmlinux kernel images.

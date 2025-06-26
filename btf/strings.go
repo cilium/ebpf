@@ -28,16 +28,20 @@ type sizedReader interface {
 }
 
 func readStringTable(r sizedReader, base *stringTable) (*stringTable, error) {
+	bytes := make([]byte, r.Size())
+	if _, err := io.ReadFull(r, bytes); err != nil {
+		return nil, err
+	}
+
+	return newStringTable(bytes, base)
+}
+
+func newStringTable(bytes []byte, base *stringTable) (*stringTable, error) {
 	// When parsing split BTF's string table, the first entry offset is derived
 	// from the last entry offset of the base BTF.
 	firstStringOffset := uint32(0)
 	if base != nil {
 		firstStringOffset = uint32(len(base.bytes))
-	}
-
-	bytes := make([]byte, r.Size())
-	if _, err := io.ReadFull(r, bytes); err != nil {
-		return nil, err
 	}
 
 	if len(bytes) == 0 {

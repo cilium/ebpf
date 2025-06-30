@@ -103,7 +103,7 @@ sudo virt-install \
   --name "$VM_NAME" \
   --ram "$RAM_MB" \
   --vcpus "$(nproc),cores=$(nproc)" \
-  --cpu "host-passthrough" \
+  --cpu "host-passthrough,check=none,migratable=off,feature.vmx=require,feature.hle=disable,feature.rtm=disable" \
   --os-variant win11 \
   --network network=default,model=e1000 \
   --channel type=unix,source.mode=bind,target.type=virtio,target.name=org.qemu.guest_agent.0 \

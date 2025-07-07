@@ -433,16 +433,10 @@ func TestTypesIterator(t *testing.T) {
 	qt.Assert(t, qt.DeepEquals(have, types))
 }
 
-func TestLoadSplitSpecFromReader(t *testing.T) {
+func TestLoadSplitSpec(t *testing.T) {
 	spec := vmlinuxTestdataSpec(t)
 
-	f, err := os.Open("testdata/btf_testmod.btf")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer f.Close()
-
-	splitSpec, err := LoadSplitSpecFromReader(f, spec)
+	splitSpec, err := LoadSplitSpec("testdata/btf_testmod.btf", spec)
 	if err != nil {
 		t.Fatal(err)
 	}

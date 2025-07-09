@@ -1,8 +1,6 @@
 package btf
 
 import (
-	"bytes"
-	"encoding/binary"
 	"math"
 	"testing"
 
@@ -35,7 +33,7 @@ func TestBuilderMarshal(t *testing.T) {
 	qt.Assert(t, qt.IsNil(err))
 	qt.Assert(t, qt.CmpEquals(b, &cpy, cmp.AllowUnexported(*b)), qt.Commentf("Marshaling should not change Builder state"))
 
-	have, err := loadRawSpec(bytes.NewReader(buf), internal.NativeEndian, nil)
+	have, err := loadRawSpec(buf, nil)
 	qt.Assert(t, qt.IsNil(err), qt.Commentf("Couldn't parse BTF"))
 	qt.Assert(t, qt.DeepEquals(typesFromSpec(t, have), want))
 }
@@ -98,7 +96,7 @@ limitTypes:
 	buf, err := b.Marshal(nil, KernelMarshalOptions())
 	qt.Assert(t, qt.IsNil(err))
 
-	rebuilt, err := loadRawSpec(bytes.NewReader(buf), binary.LittleEndian, nil)
+	rebuilt, err := loadRawSpec(buf, nil)
 	qt.Assert(t, qt.IsNil(err), qt.Commentf("round tripping BTF failed"))
 
 	if n := len(rebuilt.offsets); n > math.MaxUint16 {
@@ -130,7 +128,7 @@ func TestMarshalEnum64(t *testing.T) {
 	})
 	qt.Assert(t, qt.IsNil(err))
 
-	spec, err := loadRawSpec(bytes.NewReader(buf), internal.NativeEndian, nil)
+	spec, err := loadRawSpec(buf, nil)
 	qt.Assert(t, qt.IsNil(err))
 
 	var have *Union
@@ -166,7 +164,7 @@ func TestMarshalDeclTags(t *testing.T) {
 	})
 	qt.Assert(t, qt.IsNil(err))
 
-	spec, err := loadRawSpec(bytes.NewReader(buf), internal.NativeEndian, nil)
+	spec, err := loadRawSpec(buf, nil)
 	qt.Assert(t, qt.IsNil(err))
 
 	var td *Typedef
@@ -197,7 +195,7 @@ func TestMarshalTypeTags(t *testing.T) {
 	})
 	qt.Assert(t, qt.IsNil(err))
 
-	spec, err := loadRawSpec(bytes.NewReader(buf), internal.NativeEndian, nil)
+	spec, err := loadRawSpec(buf, nil)
 	qt.Assert(t, qt.IsNil(err))
 
 	var td *Typedef
@@ -252,7 +250,7 @@ func specFromTypes(tb testing.TB, types []Type) *Spec {
 	tb.Helper()
 
 	btf := marshalNativeEndian(tb, types)
-	spec, err := loadRawSpec(bytes.NewReader(btf), internal.NativeEndian, nil)
+	spec, err := loadRawSpec(btf, nil)
 	qt.Assert(tb, qt.IsNil(err))
 
 	return spec

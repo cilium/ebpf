@@ -53,49 +53,6 @@ func TestParseProcKallsyms(t *testing.T) {
 	qt.Assert(t, qt.IsNil(r.Err()))
 }
 
-func TestAssignModulesCaching(t *testing.T) {
-	err := AssignModules(
-		map[string]string{
-			"bpf_perf_event_output": "",
-			"foo":                   "",
-		},
-	)
-	testutils.SkipIfNotSupportedOnOS(t, err)
-	qt.Assert(t, qt.IsNil(err))
-
-	// Can't assume any kernel modules are loaded, but this symbol should at least
-	// exist in the kernel. There is no semantic difference between a missing
-	// symbol and a symbol that doesn't belong to a module.
-	v, ok := symModules.Load("bpf_perf_event_output")
-	qt.Assert(t, qt.IsTrue(ok))
-	qt.Assert(t, qt.Equals(v, ""))
-
-	v, ok = symModules.Load("foo")
-	qt.Assert(t, qt.IsTrue(ok))
-	qt.Assert(t, qt.Equals(v, ""))
-}
-
-func TestAssignModules(t *testing.T) {
-	mods := map[string]string{
-		"hid_generic_probe": "",
-		"nft_counter_seq":   "",
-		"tcp_connect":       "",
-		"foo":               "",
-		"__kstrtab_功能":      "",
-	}
-	qt.Assert(t, qt.IsNil(assignModules(bytes.NewBuffer(syms), mods)))
-	qt.Assert(t, qt.DeepEquals(mods, map[string]string{
-		"hid_generic_probe": "hid_generic",
-		"nft_counter_seq":   "", // wrong symbol type
-		"tcp_connect":       "",
-		"foo":               "",
-		"__kstrtab_功能":      "mod",
-	}))
-
-	qt.Assert(t, qt.ErrorIs(assignModules(bytes.NewBuffer(syms),
-		map[string]string{"writenote": ""}), errAmbiguousKsym))
-}
-
 func TestAssignAddressesCaching(t *testing.T) {
 	err := AssignAddresses(
 		map[string]uint64{
@@ -136,20 +93,6 @@ func TestAssignAddresses(t *testing.T) {
 	qt.Assert(t, qt.ErrorIs(assignAddresses(b, ksyms), errAmbiguousKsym))
 }
 
-func BenchmarkAssignModules(b *testing.B) {
-	b.ReportAllocs()
-	for i := 0; i < b.N; i++ {
-		b.StopTimer()
-		f := bytes.NewBuffer(syms)
-		want := map[string]string{"bench_sym": ""}
-		b.StartTimer()
-
-		if err := assignModules(f, want); err != nil {
-			b.Fatal(err)
-		}
-	}
-}
-
 func BenchmarkAssignAddresses(b *testing.B) {
 	b.ReportAllocs()
 	for i := 0; i < b.N; i++ {
@@ -159,26 +102,6 @@ func BenchmarkAssignAddresses(b *testing.B) {
 		b.StartTimer()
 
 		if err := assignAddresses(f, want); err != nil {
-			b.Fatal(err)
-		}
-	}
-}
-
-func BenchmarkAssignModulesKallsyms(b *testing.B) {
-	b.ReportAllocs()
-	for i := 0; i < b.N; i++ {
-		b.StopTimer()
-		f := mustOpenProcKallsyms(b)
-		want := map[string]string{
-			"bpf_trace_vprintk":     "",
-			"bpf_send_signal":       "",
-			"bpf_event_notify":      "",
-			"bpf_trace_printk":      "",
-			"bpf_perf_event_output": "",
-		}
-		b.StartTimer()
-
-		if err := assignModules(f, want); err != nil {
 			b.Fatal(err)
 		}
 	}

@@ -978,20 +978,16 @@ func LoadPinnedProgram(fileName string, opts *LoadPinOptions) (*Program, error) 
 		return nil, fmt.Errorf("%s is not a Program", fileName)
 	}
 
-	info, err := newProgramInfoFromFd(fd)
-	if err != nil {
-		_ = fd.Close()
-		return nil, fmt.Errorf("info for %s: %w", fileName, err)
+	p, err := newProgramFromFD(fd)
+	if err == nil {
+		p.pinnedPath = fileName
+
+		if haveObjName() != nil {
+			p.name = filepath.Base(fileName)
+		}
 	}
 
-	var progName string
-	if haveObjName() == nil {
-		progName = info.Name
-	} else {
-		progName = filepath.Base(fileName)
-	}
-
-	return &Program{"", fd, progName, fileName, info.Type}, nil
+	return p, err
 }
 
 // ProgramGetNextID returns the ID of the next eBPF program.

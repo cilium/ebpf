@@ -967,21 +967,41 @@ func TestMapIteratorAllocations(t *testing.T) {
 func TestMapBatchLookupAllocations(t *testing.T) {
 	testutils.SkipIfNotSupported(t, haveBatchAPI())
 
-	arr := createMap(t, Array, 10)
-
-	var cursor MapBatchCursor
-	tmp := make([]uint32, 2)
-	input := any(tmp)
-
-	// AllocsPerRun warms up the function for us.
-	allocs := testing.AllocsPerRun(1, func() {
-		_, err := arr.BatchLookup(&cursor, input, input, nil)
-		if err != nil {
-			t.Fatal(err)
+	for _, typ := range []MapType{Array, PerCPUArray} {
+		if typ == PerCPUArray {
+			// https://lore.kernel.org/bpf/20210424214510.806627-2-pctammela@mojatatu.com/
+			testutils.SkipOnOldKernel(t, "5.13", "batched ops support for percpu array")
 		}
-	})
 
-	qt.Assert(t, qt.Equals(allocs, 0))
+		t.Run(typ.String(), func(t *testing.T) {
+			m := mustNewMap(t, &MapSpec{
+				Name:       "test",
+				Type:       typ,
+				KeySize:    4,
+				ValueSize:  8, // PerCPU values must be 8 byte aligned.
+				MaxEntries: 10,
+			}, nil)
+
+			possibleCPU := 1
+			if m.Type().hasPerCPUValue() {
+				possibleCPU = MustPossibleCPU()
+			}
+
+			var cursor MapBatchCursor
+			keys := any(make([]uint32, 2))
+			values := any(make([]uint64, 2*possibleCPU))
+
+			// AllocsPerRun warms up the function for us.
+			allocs := testing.AllocsPerRun(1, func() {
+				_, err := m.BatchLookup(&cursor, keys, values, nil)
+				if err != nil {
+					t.Fatal(err)
+				}
+			})
+
+			qt.Assert(t, qt.Equals(allocs, 0))
+		})
+	}
 }
 
 type customTestUnmarshaler []uint8

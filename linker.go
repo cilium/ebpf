@@ -485,7 +485,13 @@ func resolveKconfigReferences(insns asm.Instructions) (_ *Map, err error) {
 }
 
 func resolveKsymReferences(insns asm.Instructions) error {
-	var missing []string
+	type fixup struct {
+		*asm.Instruction
+		*ksymMeta
+	}
+
+	var symbols map[string]uint64
+	var fixups []fixup
 
 	iter := insns.Iterate()
 	for iter.Next() {
@@ -495,25 +501,36 @@ func resolveKsymReferences(insns asm.Instructions) error {
 			continue
 		}
 
-		addr, err := kallsyms.Address(meta.Name)
-		if err != nil {
-			return fmt.Errorf("resolve ksym %s: %w", meta.Name, err)
+		if symbols == nil {
+			symbols = make(map[string]uint64)
 		}
-		if addr != 0 {
-			ins.Constant = int64(addr)
+
+		symbols[meta.Name] = 0
+		fixups = append(fixups, fixup{
+			iter.Ins, meta,
+		})
+	}
+
+	if len(symbols) == 0 {
+		return nil
+	}
+
+	if err := kallsyms.AssignAddresses(symbols); err != nil {
+		return fmt.Errorf("resolve ksym addresses: %w", err)
+	}
+
+	var missing []string
+	for _, fixup := range fixups {
+		addr := symbols[fixup.Name]
+		// A weak ksym variable in eBPF C means its resolution is optional.
+		if addr == 0 && fixup.Binding != elf.STB_WEAK {
+			if !slices.Contains(missing, fixup.Name) {
+				missing = append(missing, fixup.Name)
+			}
 			continue
 		}
 
-		if meta.Binding == elf.STB_WEAK {
-			// A weak ksym variable in eBPF C means its resolution is optional.
-			// Set a zero constant explicitly for clarity.
-			ins.Constant = 0
-			continue
-		}
-
-		if !slices.Contains(missing, meta.Name) {
-			missing = append(missing, meta.Name)
-		}
+		fixup.Constant = int64(addr)
 	}
 
 	if len(missing) > 0 {

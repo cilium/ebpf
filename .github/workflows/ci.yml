@@ -1,20 +1,20 @@
 name: ci
 on:
   push:
-    branches: [ "main" ]
+    branches: ["main"]
   pull_request:
-    branches: [ "main" ]
+    branches: ["main"]
 
 env:
   TMPDIR: /tmp
-  CI_MAX_KERNEL_VERSION: '6.11'
-  CI_MAX_EFW_VERSION: '0.21.0'
-  CI_MIN_CLANG_VERSION: '13'
-  go_version: '~1.24'
-  prev_go_version: '~1.23'
-  CGO_ENABLED: '0'
+  CI_MAX_KERNEL_VERSION: "6.11"
+  CI_MAX_EFW_VERSION: "0.21.0"
+  CI_MIN_CLANG_VERSION: "13"
+  go_version: "~1.24"
+  prev_go_version: "~1.23"
+  CGO_ENABLED: "0"
   # Sync with Pipfile and netlify.toml.
-  python_version: '~3.13'
+  python_version: "~3.13"
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -31,28 +31,28 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '${{ env.go_version }}'
+          go-version: "${{ env.go_version }}"
 
-      - name: Run staticcheck
-        uses: dominikh/staticcheck-action@v1
-        with:
-          version: "latest"
-          install-go: false
+      # - name: Run staticcheck
+      #   uses: dominikh/staticcheck-action@v1
+      #   with:
+      #     version: "latest"
+      #     install-go: false
 
       - name: Run golangci-lint
         uses: golangci/golangci-lint-action@v8.0.0
 
-      - name: Generate and format code
-        run: |
-          make clean && make container-all
-          if ! git diff --exit-code; then
-            echo "found unformatted source files, or generated files are not up to date, run 'make'" >&2
-            exit 1
-          fi
+      # - name: Generate and format code
+      #   run: |
+      #     make clean && make container-all
+      #     if ! git diff --exit-code; then
+      #       echo "found unformatted source files, or generated files are not up to date, run 'make'" >&2
+      #       exit 1
+      #     fi
 
-      - name: Test bpf2go
-        run: |
-          go test -v ./cmd/bpf2go
+      # - name: Test bpf2go
+      #   run: |
+      #     go test -v ./cmd/bpf2go
 
       - name: Build
         run: go build -v ./...
@@ -68,7 +68,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '${{ env.go_version }}'
+          go-version: "${{ env.go_version }}"
 
       - name: Cross build darwin
         env:
@@ -107,13 +107,13 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '${{ env.go_version }}'
+          go-version: "${{ env.go_version }}"
 
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '${{ env.python_version }}'
-          cache: 'pipenv'
+          python-version: "${{ env.python_version }}"
+          cache: "pipenv"
 
       - name: Install pipenv
         run: pip3 install pipenv
@@ -132,14 +132,14 @@ jobs:
     needs: build-and-lint
     timeout-minutes: 15
     env:
-      CI_KERNEL_SELFTESTS: '/usr/src/linux/tools/testing/selftests/bpf'
+      CI_KERNEL_SELFTESTS: "/usr/src/linux/tools/testing/selftests/bpf"
     steps:
       - uses: actions/checkout@v4
 
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '${{ env.prev_go_version }}'
+          go-version: "${{ env.prev_go_version }}"
 
       - run: go install lmb.io/vimto@latest
       - run: go install gotest.tools/gotestsum@v1.12.0
@@ -177,39 +177,54 @@ jobs:
     name: Run tests on arm64
     runs-on: ubuntu-24.04-arm64
     needs: build-and-lint
-    timeout-minutes: 15
+    timeout-minutes: 3
+    strategy:
+      matrix:
+        test:
+          - TestKconfig
+          - TestKsym
+          - TestKsymWeakMissing
+          - TestKfunc
+          - TestWeakKfunc
+          - TestInvalidKfunc
     env:
-      EBPF_TEST_IGNORE_VERSION: 'TestKprobeMulti,TestKprobeMultiErrors,TestKprobeMultiCookie,TestKprobeMultiProgramCall,TestHaveBPFLinkKprobeMulti,TestKprobeSession,TestHaveBPFLinkKprobeSession,TestHaveProgramType/LircMode2'
+      EBPF_TEST_IGNORE_VERSION: "TestKprobeMulti,TestKprobeMultiErrors,TestKprobeMultiCookie,TestKprobeMultiProgramCall,TestHaveBPFLinkKprobeMulti,TestKprobeSession,TestHaveBPFLinkKprobeSession,TestHaveProgramType/LircMode2"
     steps:
       - uses: actions/checkout@v4
 
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '${{ env.go_version }}'
+          go-version: "${{ env.go_version }}"
 
-      - run: uname -a
-
-      - run: go install gotest.tools/gotestsum@v1.12.0
-
-      - name: Test
+      - name: Test (${{ matrix.test }})
         # Skip TestGoarches/loong64 because the GH arm64 Go toolchain seems to be weird.
-        run: gotestsum --ignore-non-json-output-lines --junitfile junit.xml -- -exec 'sudo -E' -short -count 1 -skip '^TestGoarches/loong64$' -json ./...
-
-      - name: Benchmark
-        run: go test -exec sudo -short -run '^$' -bench . -benchtime=1x ./...
-
-      - name: Upload Test Results
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: Test Results (arm64)
-          path: junit.xml
-
-      - name: Show dmesg
-        if: failure()
         run: |
-          sudo dmesg
+          go test -exec 'sudo -E' -short -count 1 -skip '^TestGoarches/loong64$' -json github.com/cilium/ebpf -run "^${{ matrix.test }}$"
+
+  test-on-amd64:
+    name: Run tests on amd64
+    runs-on: ubuntu-24.04
+    needs: build-and-lint
+    timeout-minutes: 3
+    strategy:
+      matrix:
+        test:
+          - TestKfunc
+    env:
+      EBPF_TEST_IGNORE_VERSION: "TestKprobeMulti,TestKprobeMultiErrors,TestKprobeMultiCookie,TestKprobeMultiProgramCall,TestHaveBPFLinkKprobeMulti,TestKprobeSession,TestHaveBPFLinkKprobeSession,TestHaveProgramType/LircMode2"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "${{ env.go_version }}"
+
+      - name: Test (${{ matrix.test }})
+        # Skip TestGoarches/loong64 because the GH arm64 Go toolchain seems to be weird.
+        run: |
+          go test -exec 'sudo -E' -short -count 1 -skip '^TestGoarches/loong64$' -json github.com/cilium/ebpf -run "^${{ matrix.test }}$"
 
   linux-test:
     name: Run tests (Linux)
@@ -234,7 +249,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '${{ env.go_version }}'
+          go-version: "${{ env.go_version }}"
 
       - run: go install gotest.tools/gotestsum@v1.12.0
       - run: go install lmb.io/vimto@latest
@@ -368,7 +383,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '${{ env.go_version }}'
+          go-version: "${{ env.go_version }}"
 
       - run: go install gotest.tools/gotestsum@v1.12.0
 

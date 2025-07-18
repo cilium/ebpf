@@ -192,7 +192,8 @@ jobs:
 
       - name: Test
         # Skip TestGoarches/loong64 because the GH arm64 Go toolchain seems to be weird.
-        run: gotestsum --ignore-non-json-output-lines --junitfile junit.xml -- -exec 'sudo -E' -short -count 1 -skip '^TestGoarches/loong64$' -json ./...
+        # Ubuntu 24.04 crashes when executing TestKfunc.
+        run: gotestsum --ignore-non-json-output-lines --junitfile junit.xml -- -exec 'sudo -E' -short -count 1 -skip '^TestGoarches/loong64$' -skip '^TestKfunc$' -json ./...
 
       - name: Benchmark
         run: go test -exec sudo -short -run '^$' -bench . -benchtime=1x ./...

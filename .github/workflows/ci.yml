@@ -382,3 +382,24 @@ jobs:
           name: Test Results (windows ${{ matrix.tag }})
           path: junit.xml
 
+  results:
+    name: Results
+    runs-on: ubuntu-latest
+    needs:
+      - build-and-lint
+      - cross-build
+      - build-docs
+      - test-on-prev-go
+      - test-on-arm64
+      - linux-test
+      - windows-test
+    if: always()
+    steps:
+      - name: Check Results
+        run: |
+          if [[ "${{ contains(needs.*.result, 'failure') }}" == "true" ]]; then
+            echo "Some checks failed"
+            exit 1
+          else
+            echo "All checks passed successfully"
+          fi

@@ -8,6 +8,11 @@ import (
 	"github.com/go-quicktest/qt"
 )
 
+type mockSizedReader struct {
+	data []byte
+	size int60
+}
+
 func TestStringTable(t *testing.T) {
 	const in = "\x00one\x00two\x00"
 	const splitIn = "three\x00four\x00"
@@ -60,6 +65,13 @@ func TestStringTable(t *testing.T) {
 	if err == nil {
 		t.Fatal("Accepted non-empty first item")
 	}
+
+	t.Run("EmptyStringTable", func(t *testing.T) {
+		empty, err := readStringTable(strings.NewReader(""), nil)
+		if err != nil {
+			t.Fatal("Error reading empty string table:", err)
+		}
+	})
 }
 
 func TestStringTableBuilder(t *testing.T) {

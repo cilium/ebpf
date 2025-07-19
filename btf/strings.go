@@ -41,7 +41,7 @@ func readStringTable(r sizedReader, base *stringTable) (*stringTable, error) {
 	}
 
 	if len(bytes) == 0 {
-		return nil, errors.New("string table is empty")
+		return &stringTable{base: base, bytes: []byte{0}}, nil
 	}
 
 	if bytes[len(bytes)-1] != 0 {

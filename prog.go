@@ -95,6 +95,9 @@ type ProgramOptions struct {
 	// use the kernel BTF from a well-known location if nil.
 	KernelTypes *btf.Spec
 
+	// Additional targets to consider for CO-RE relocations.
+	ExtraRelocationTargets []*btf.Spec
+
 	// Type information used for CO-RE relocations of kernel modules,
 	// indexed by module name.
 	//
@@ -293,7 +296,7 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions, c *btf.Cache)
 	copy(insns, spec.Instructions)
 
 	var b btf.Builder
-	if err := applyRelocations(insns, spec.ByteOrder, &b, c); err != nil {
+	if err := applyRelocations(insns, spec.ByteOrder, &b, c, opts.ExtraRelocationTargets); err != nil {
 		return nil, fmt.Errorf("apply CO-RE relocations: %w", err)
 	}
 

@@ -375,11 +375,12 @@ func (b2g *bpf2go) convert(tgt gen.Target, goarches gen.GoArches) (err error) {
 		)
 	}
 
+	ccParts := strings.Fields(b2g.cc)
 	err = gen.Compile(gen.CompileArgs{
-		CC:               b2g.cc,
+		CC:               ccParts[0],
 		Strip:            b2g.strip,
 		DisableStripping: b2g.disableStripping,
-		Flags:            cFlags,
+		Flags:            append(ccParts[1:], cFlags...),
 		Target:           tgt,
 		Workdir:          cwd,
 		Source:           b2g.sourceFile,

@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 )
 
 type CompileArgs struct {
@@ -27,8 +28,7 @@ type CompileArgs struct {
 	DisableStripping bool
 }
 
-// Compile C to a BPF ELF file.
-func Compile(args CompileArgs) error {
+func insertOverrideFlags(flags []string) []string {
 	// Default cflags that can be overridden by args.cFlags
 	overrideFlags := []string{
 		// Code needs to be optimized, otherwise the verifier will often fail
@@ -40,7 +40,26 @@ func Compile(args CompileArgs) error {
 		"-mcpu=v1",
 	}
 
-	cmd := exec.Command(args.CC, append(overrideFlags, args.Flags...)...)
+	insert := 0
+
+	// Find the first non-positional argument to support CC commands with
+	// multiple components. E.g.: BPF2GO_CC="ccache clang" ...
+	for ; insert < len(flags); insert++ {
+		if strings.HasPrefix(flags[insert], "-") {
+			break
+		}
+	}
+
+	result := append([]string(nil), flags[:insert]...)
+	result = append(result, overrideFlags...)
+	result = append(result, flags[insert:]...)
+
+	return result
+}
+
+// Compile C to a BPF ELF file.
+func Compile(args CompileArgs) error {
+	cmd := exec.Command(args.CC, insertOverrideFlags(args.Flags)...)
 	cmd.Stderr = os.Stderr
 
 	inputDir := filepath.Dir(args.Source)

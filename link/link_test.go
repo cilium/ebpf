@@ -56,6 +56,14 @@ func TestUnpinRawLink(t *testing.T) {
 	qt.Assert(t, qt.IsFalse(link.IsPinned()))
 }
 
+func TestDetachRawLink(t *testing.T) {
+	link, _ := newRawLink(t)
+
+	if err := link.Detach(); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestRawLinkLoadPinnedWithOptions(t *testing.T) {
 	link, path := newPinnedRawLink(t)
 	defer link.Close()

@@ -40,6 +40,11 @@ type Link interface {
 	// not called.
 	Close() error
 
+	// Detach the link from its corresponding attachment point.
+	//
+	// May return an error wrapping ErrNotSupported.
+	Detach() error
+
 	// Info returns metadata on a link.
 	//
 	// May return an error wrapping ErrNotSupported.
@@ -221,6 +226,18 @@ func (l *RawLink) UpdateArgs(opts RawLinkUpdateOptions) error {
 	}
 	if err := sys.LinkUpdate(&attr); err != nil {
 		return fmt.Errorf("update link: %w", err)
+	}
+	return nil
+}
+
+// Detach the link from its corresponding attachment point.
+func (l *RawLink) Detach() error {
+	attr := sys.LinkDetachAttr{
+		LinkFd: l.fd.Uint(),
+	}
+
+	if err := sys.LinkDetach(&attr); err != nil {
+		return fmt.Errorf("detach link: %w", err)
 	}
 	return nil
 }

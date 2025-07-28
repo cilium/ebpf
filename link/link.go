@@ -9,6 +9,7 @@ import (
 	"github.com/cilium/ebpf/btf"
 	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/sys"
+	"github.com/cilium/ebpf/internal/unix"
 )
 
 // Type is the kind of link.
@@ -236,10 +237,16 @@ func (l *RawLink) Detach() error {
 		LinkFd: l.fd.Uint(),
 	}
 
-	if err := sys.LinkDetach(&attr); err != nil {
+	err := sys.LinkDetach(&attr)
+
+	switch {
+	case errors.Is(err, unix.EOPNOTSUPP):
+		return internal.ErrNotSupported
+	case err != nil:
 		return fmt.Errorf("detach link: %w", err)
+	default:
+		return nil
 	}
-	return nil
 }
 
 // Info returns metadata about the link.

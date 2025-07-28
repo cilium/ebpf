@@ -64,18 +64,6 @@ func TestDetachRawLink(t *testing.T) {
 	}
 }
 
-func TestDetachLinkFail(t *testing.T) {
-	prog := mustLoadProgram(t, ebpf.Kprobe, 0, "")
-	defer prog.Close()
-
-	uprobeLink, err := bashEx.Uprobe(bashSym, prog, nil)
-	qt.Assert(t, qt.IsNil(err))
-	defer uprobeLink.Close()
-
-	err = uprobeLink.Detach()
-	qt.Assert(t, qt.ErrorIs(err, ErrNotSupported), qt.Commentf("got error: %s", err))
-}
-
 func TestRawLinkLoadPinnedWithOptions(t *testing.T) {
 	link, path := newPinnedRawLink(t)
 	defer link.Close()

@@ -155,9 +155,12 @@ func newB2G(stdout io.Writer, args []string) (*bpf2go, error) {
 		return nil, errors.New("missing package, you should either set the go-package flag or the GOPACKAGE env")
 	}
 
-	if b2g.cc == "" {
+	// Allow CC like "ccache clang" to work.
+	ccParts := strings.Fields(b2g.cc)
+	if len(ccParts) == 0 {
 		return nil, errors.New("no compiler specified")
 	}
+	b2g.cc = ccParts[0]
 
 	args, cFlags := splitCFlagsFromArgs(fs.Args())
 
@@ -178,7 +181,7 @@ func newB2G(stdout io.Writer, args []string) (*bpf2go, error) {
 		}
 	}
 
-	b2g.cFlags = cFlags[:len(cFlags):len(cFlags)]
+	b2g.cFlags = append(ccParts[1:], cFlags[:len(cFlags):len(cFlags)]...)
 
 	if len(args) < 2 {
 		return nil, errors.New("expected at least two arguments")

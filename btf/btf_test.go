@@ -2,6 +2,7 @@ package btf
 
 import (
 	"bytes"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -534,6 +535,23 @@ func TestSpecConcurrentAccess(t *testing.T) {
 		runtime.Gosched()
 	}
 	wg.Wait()
+}
+
+func TestLoadEmptyRawSpec(t *testing.T) {
+	buf, err := binary.Append(nil, binary.LittleEndian, &btfHeader{
+		Magic:     btfMagic,
+		Version:   1,
+		Flags:     0,
+		HdrLen:    uint32(btfHeaderLen),
+		TypeOff:   0,
+		TypeLen:   0,
+		StringOff: 0,
+		StringLen: 0,
+	})
+	qt.Assert(t, qt.IsNil(err))
+
+	_, err = loadRawSpec(buf, nil)
+	qt.Assert(t, qt.IsNil(err))
 }
 
 func BenchmarkSpecCopy(b *testing.B) {

@@ -62,6 +62,16 @@ func TestStringTable(t *testing.T) {
 	}
 }
 
+func TestEmptyStringTable(t *testing.T) {
+	empty, err := newStringTable(nil, nil)
+	qt.Assert(t, qt.IsNil(err))
+	str, err := empty.Lookup(0)
+	qt.Assert(t, qt.IsNil(err), qt.Commentf("Can't lookup empty string"))
+	qt.Assert(t, qt.Equals(str, ""), qt.Commentf("Empty string lookup returned %q", str))
+	_, err = empty.Lookup(1)
+	qt.Assert(t, qt.IsNotNil(err))
+}
+
 func TestStringTableBuilder(t *testing.T) {
 	stb := newStringTableBuilder(0)
 

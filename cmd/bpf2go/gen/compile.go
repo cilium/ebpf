@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 )
 
 type CompileArgs struct {
@@ -14,7 +15,7 @@ type CompileArgs struct {
 	CC string
 	// Command used to strip DWARF from the ELF.
 	Strip string
-	// Flags to pass to the compiler.
+	// Flags to pass to the compiler. This may contain positional arguments as well.
 	Flags []string
 	// Absolute working directory
 	Workdir string
@@ -27,9 +28,8 @@ type CompileArgs struct {
 	DisableStripping bool
 }
 
-// Compile C to a BPF ELF file.
-func Compile(args CompileArgs) error {
-	// Default cflags that can be overridden by args.cFlags
+func insertDefaultFlags(flags []string) []string {
+	// Default cflags that can be overridden by the user.
 	overrideFlags := []string{
 		// Code needs to be optimized, otherwise the verifier will often fail
 		// to understand it.
@@ -40,7 +40,26 @@ func Compile(args CompileArgs) error {
 		"-mcpu=v1",
 	}
 
-	cmd := exec.Command(args.CC, append(overrideFlags, args.Flags...)...)
+	insert := 0
+
+	// Find the first non-positional argument to support CC commands with
+	// multiple components. E.g.: BPF2GO_CC="ccache clang" ...
+	for ; insert < len(flags); insert++ {
+		if strings.HasPrefix(flags[insert], "-") {
+			break
+		}
+	}
+
+	result := append([]string(nil), flags[:insert]...)
+	result = append(result, overrideFlags...)
+	result = append(result, flags[insert:]...)
+
+	return result
+}
+
+// Compile C to a BPF ELF file.
+func Compile(args CompileArgs) error {
+	cmd := exec.Command(args.CC, insertDefaultFlags(args.Flags)...)
 	cmd.Stderr = os.Stderr
 
 	inputDir := filepath.Dir(args.Source)

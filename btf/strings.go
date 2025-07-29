@@ -10,7 +10,7 @@ import (
 	"sync"
 )
 
-// stringTable is contains a sequence of null-terminated strings.
+// stringTable contains a sequence of null-terminated strings.
 //
 // It is safe for concurrent use.
 type stringTable struct {
@@ -44,16 +44,14 @@ func newStringTable(bytes []byte, base *stringTable) (*stringTable, error) {
 		firstStringOffset = uint32(len(base.bytes))
 	}
 
-	if len(bytes) == 0 {
-		return nil, errors.New("string table is empty")
-	}
+	if len(bytes) > 0 {
+		if bytes[len(bytes)-1] != 0 {
+			return nil, errors.New("string table isn't null terminated")
+		}
 
-	if bytes[len(bytes)-1] != 0 {
-		return nil, errors.New("string table isn't null terminated")
-	}
-
-	if firstStringOffset == 0 && bytes[0] != 0 {
-		return nil, errors.New("first item in string table is non-empty")
+		if firstStringOffset == 0 && bytes[0] != 0 {
+			return nil, errors.New("first item in string table is non-empty")
+		}
 	}
 
 	return &stringTable{base: base, bytes: bytes}, nil

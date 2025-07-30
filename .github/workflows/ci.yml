@@ -220,13 +220,12 @@ jobs:
         tag:
           - "mainline"
           - "stable"
+          - "6.12"
           - "6.6"
           - "6.1"
           - "5.15"
           - "5.10"
           - "5.4"
-          - "4.19"
-          - "4.14"
     steps:
       - uses: actions/checkout@v4
 

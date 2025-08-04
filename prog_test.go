@@ -643,9 +643,12 @@ func TestProgramRejectIncorrectByteOrder(t *testing.T) {
 	}
 }
 
+// This uses unkeyed fields on purpose to force setting a non-zero value when
+// a new field is added.
 func TestProgramSpecCopy(t *testing.T) {
 	a := &ProgramSpec{
 		"test",
+		1,
 		1,
 		1,
 		"attach",
@@ -900,6 +903,35 @@ func TestProgramTargetsKernelModule(t *testing.T) {
 
 	ps.AttachTo = "bpf_testmod_test_read"
 	qt.Assert(t, qt.IsTrue(ps.targetsKernelModule()))
+}
+
+func TestProgramLoadBoundToDevice(t *testing.T) {
+	testutils.SkipOnOldKernel(t, "6.3", "device-bound XDP programs")
+
+	ins := asm.Instructions{
+		asm.LoadImm(asm.R0, 2, asm.DWord).WithSymbol("out"),
+		asm.Return(),
+	}
+
+	_, err := NewProgram(&ProgramSpec{
+		Type:         XDP,
+		Ifindex:      math.MaxUint32,
+		AttachType:   AttachXDP,
+		Instructions: ins,
+		Flags:        sys.BPF_F_XDP_DEV_BOUND_ONLY,
+		License:      "MIT",
+	})
+	testutils.SkipIfNotSupportedOnOS(t, err)
+
+	// Binding to loopback leads to crashes, yet is only explicitly disallowed
+	// since 3595599fa836 ("net: xdp: Disallow attaching device-bound programs in
+	// generic mode"). This only landed in 6.14 and returns EOPNOTSUPP.
+	//
+	// However, since attaching to loopback quietly succeeds on older kernels, use
+	// a non-existent ifindex to trigger EINVAL on all kernels. Without specifying
+	// ifindex, loading the program succeeds if the kernel knows the
+	// DEV_BOUND_ONLY flag.
+	qt.Assert(t, qt.ErrorIs(err, unix.EINVAL))
 }
 
 func BenchmarkNewProgram(b *testing.B) {

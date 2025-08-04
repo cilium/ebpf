@@ -110,6 +110,13 @@ type ProgramSpec struct {
 	// Type determines at which hook in the kernel a program will run.
 	Type ProgramType
 
+	// Network interface index the user intends to attach this program to after
+	// loading. Only valid for some program types.
+	//
+	// Provides driver-specific context about the target interface to the
+	// verifier, required when using certain BPF helpers.
+	Ifindex uint32
+
 	// AttachType of the program, needed to differentiate allowed context
 	// accesses in some newer program types like CGroupSockAddr.
 	//
@@ -280,6 +287,7 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions, c *btf.Cache)
 		ProgName:           maybeFillObjName(spec.Name),
 		ProgType:           sys.ProgType(progType),
 		ProgFlags:          spec.Flags,
+		ProgIfindex:        spec.Ifindex,
 		ExpectedAttachType: sys.AttachType(spec.AttachType),
 		License:            sys.NewStringPointer(spec.License),
 		KernVersion:        kv,

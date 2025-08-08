@@ -24,6 +24,35 @@ import (
 	"github.com/cilium/ebpf/internal/unix"
 )
 
+func TestProgramLoadBoundToDevice(t *testing.T) {
+	testutils.SkipOnOldKernel(t, "5.18", "kfunc support")
+
+	ins := asm.Instructions{
+		asm.LoadImm(asm.R0, 2, asm.DWord).WithSymbol("out"),
+		asm.Return(),
+	}
+
+	ifi := uint32(1)
+	t.Log(ins)
+	t.Log("bind on ifi", ifi)
+
+	prog, err := NewProgram(&ProgramSpec{
+		Name:         "test",
+		Type:         XDP,
+		Ifindex:      ifi,
+		AttachType:   AttachXDP,
+		Instructions: ins,
+		Flags:        unix.BPF_F_XDP_DEV_BOUND_ONLY,
+		License:      "MIT",
+	})
+	defer prog.Close()
+
+	testutils.SkipIfNotSupported(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestProgramRun(t *testing.T) {
 	pat := []byte{0xDE, 0xAD, 0xBE, 0xEF}
 	buf := internal.EmptyBPFContext

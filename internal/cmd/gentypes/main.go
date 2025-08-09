@@ -610,6 +610,10 @@ import (
 			},
 		},
 		{
+			"LinkDetach", retError, "link_detach", "BPF_LINK_DETACH",
+			nil,
+		},
+		{
 			"LinkUpdate", retError, "link_update", "BPF_LINK_UPDATE",
 			nil,
 		},

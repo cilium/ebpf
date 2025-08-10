@@ -1065,9 +1065,6 @@ func TestLibBPFCompat(t *testing.T) {
 				t.Fatal("Expected an error during load")
 			}
 		} else if err != nil {
-			if errors.Is(err, errUnknownStructOps) {
-				t.Skip("Skipping since the struct_ops target doesn't exist in kernel")
-			}
 			t.Fatal("Error during loading:", err)
 		}
 	}

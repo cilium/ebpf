@@ -8,14 +8,6 @@ import "fmt"
 type structOpsMeta struct {
 	userTypeName string
 	kernTypeName string
-	members      []struct {
-		name     string
-		userOfs  uint32
-		size     uint32
-		kind     uint8
-		progName string
-	}
-	initUserBlob []byte
 }
 
 // extractStructOpsMeta returns the *structops.Meta embedded in a MapSpec’s Contents

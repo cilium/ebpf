@@ -5,6 +5,7 @@ import (
 	"math"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/go-quicktest/qt"
@@ -69,6 +70,41 @@ func TestRawLinkLoadPinnedWithOptions(t *testing.T) {
 	})
 	if !errors.Is(err, unix.EINVAL) {
 		t.Fatal("Invalid flags don't trigger an error:", err)
+	}
+}
+
+func TestRawLinkWithProgramFd(t *testing.T) {
+	cg, prog := mustCgroupFixtures(t)
+	t.Cleanup(func() {
+		_ = prog.Close()
+		_ = cg.Close()
+	})
+
+	ln, err := AttachRawLink(RawLinkOptions{
+		Target:    int(cg.Fd()),
+		Program:   nil,
+		ProgramFd: prog.FD(),
+		Attach:    ebpf.AttachCGroupInetEgress,
+	})
+	testutils.SkipIfNotSupported(t, err)
+	if err != nil {
+		t.Fatalf("AttachRawLink with ProgramFd failed: %v", err)
+	}
+	t.Cleanup(func() { _ = ln.Close() })
+}
+
+func TestRawLinkWithInvalidProgramFd(t *testing.T) {
+	cg := testutils.CreateCgroup(t)
+	t.Cleanup(func() { _ = cg.Close() })
+
+	_, err := AttachRawLink(RawLinkOptions{
+		Target:    int(cg.Fd()),
+		Program:   nil,
+		ProgramFd: -1,
+		Attach:    ebpf.AttachCGroupInetEgress,
+	})
+	if err == nil || !strings.Contains(err.Error(), "invalid program") {
+		t.Fatalf("expected invalid program error, got %v", err)
 	}
 }
 

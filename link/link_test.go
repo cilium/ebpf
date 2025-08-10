@@ -103,6 +103,7 @@ func TestRawLinkWithInvalidProgramFd(t *testing.T) {
 		ProgramFd: -1,
 		Attach:    ebpf.AttachCGroupInetEgress,
 	})
+	testutils.SkipIfNotSupported(t, err)
 	if err == nil || !strings.Contains(err.Error(), "invalid program") {
 		t.Fatalf("expected invalid program error, got %v", err)
 	}

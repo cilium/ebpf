@@ -49,7 +49,7 @@ func structOpsFindTarget(userType *btf.Struct, cache *btf.Cache) (vType *btf.Str
 	target := btf.Type((*btf.Struct)(nil))
 	spec, module, err := findTargetInKernel(vTypeName, &target, cache)
 	if errors.Is(err, btf.ErrNotFound) {
-		return nil, 0, nil, fmt.Errorf("%q doesn't exist in kernel: %w", vTypeName, errUnknownStructOps)
+		return nil, 0, nil, fmt.Errorf("%q doesn't exist in kernel: %w", vTypeName, ErrNotSupported)
 	}
 	if err != nil {
 		return nil, 0, nil, fmt.Errorf("lookup value type %q: %w", vTypeName, err)

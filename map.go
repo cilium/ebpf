@@ -562,6 +562,47 @@ func (spec *MapSpec) createMap(inner *sys.FD) (_ *Map, err error) {
 		}
 	}
 
+	if spec.Type == StructOpsMap {
+		meta, err := extractStructOpsMeta(spec.Contents)
+		if err != nil {
+			return nil, err
+		}
+
+		// we need drop meta entry here
+		if len(spec.Contents) > 0 {
+			spec.Contents = spec.Contents[1:]
+		}
+
+		var b btf.Builder
+		h, err := btf.NewHandle(&b)
+		if err != nil {
+			return nil, err
+		}
+		defer h.Close()
+
+		s, err := btf.LoadKernelSpec()
+		if err != nil {
+			return nil, fmt.Errorf("open vmlinux BTF: %w", err)
+		}
+
+		typeSpec, err := s.AnyTypeByName(meta.kernTypeName)
+		if errors.Is(err, btf.ErrNotFound) {
+			return nil, fmt.Errorf("struct_ops kernel type %q: %w", meta.kernTypeName, ErrNotSupported)
+		}
+		if err != nil {
+			return nil, fmt.Errorf("lookup kernel type %q: %w", meta.kernTypeName, err)
+		}
+
+		btfValueTypeId, err := s.TypeID(typeSpec)
+		if err != nil {
+			return nil, fmt.Errorf("lookup type_id of %s: %w", typeSpec.TypeName(), err)
+		}
+
+		attr.ValueSize = spec.ValueSize
+		attr.BtfVmlinuxValueTypeId = btfValueTypeId
+		attr.BtfFd = uint32(h.FD())
+	}
+
 	fd, err := sys.MapCreate(&attr)
 
 	// Some map types don't support BTF k/v in earlier kernel versions.

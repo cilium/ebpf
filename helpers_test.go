@@ -44,6 +44,36 @@ func requireTestmod(tb testing.TB) {
 	}
 }
 
+var haveStructOpsDummy = sync.OnceValues(func() (bool, error) {
+	if platform.IsWindows {
+		return false, nil
+	}
+	kspec, err := btf.LoadKernelSpec()
+	if err != nil {
+		return false, nil
+	}
+	_, err = kspec.AnyTypeByName("bpf_struct_ops_bpf_dummy_ops")
+	if err == nil {
+		return true, nil
+	}
+	if errors.Is(err, btf.ErrNotFound) {
+		return false, nil
+	}
+	return false, err
+})
+
+func requireStructOpsDummy(tb testing.TB) {
+	tb.Helper()
+
+	ok, err := haveStructOpsDummy()
+	if err != nil {
+		tb.Fatal(err)
+	}
+	if !ok {
+		tb.Skip("struct_ops dummy_ops wrapper type not present in vmlinux BTF")
+	}
+}
+
 func newMap(tb testing.TB, spec *MapSpec, opts *MapOptions) (*Map, error) {
 	tb.Helper()
 

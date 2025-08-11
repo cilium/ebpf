@@ -768,3 +768,40 @@ func ExampleCollectionSpec_LoadAndAssign() {
 	defer objs.Program.Close()
 	defer objs.Map.Close()
 }
+
+func TestStructOpsMapSpecSimpleLoadAndAssign(t *testing.T) {
+	requireStructOpsDummy(t)
+
+	spec := &CollectionSpec{
+		Maps: map[string]*MapSpec{
+			"dummy_ops": {
+				Name:       "dummy_ops",
+				Type:       StructOpsMap,
+				KeySize:    4,
+				ValueSize:  128,
+				MaxEntries: 1,
+				Contents: []MapKV{
+					{Key: uint32(0), Value: structOpsMeta{
+						userTypeName: "bpf_dummy_ops",
+						kernTypeName: "bpf_struct_ops_bpf_dummy_ops",
+					}},
+				},
+			},
+		},
+	}
+
+	var obj struct {
+		DummyOps *Map `ebpf:"dummy_ops"`
+	}
+
+	err := spec.LoadAndAssign(&obj, nil)
+	testutils.SkipIfNotSupported(t, err)
+	if err != nil {
+		t.Fatalf("LoadAndAssign failed: %v", err)
+	}
+	t.Cleanup(func() { _ = obj.DummyOps.Close() })
+
+	if obj.DummyOps == nil {
+		t.Fatal("DummyOps not assigned")
+	}
+}

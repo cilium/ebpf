@@ -268,6 +268,11 @@ func (cs *CollectionSpec) LoadAndAssign(to interface{}, opts *CollectionOptions)
 	}
 	defer loader.close()
 
+	// initialize struct_ops maps
+	if err := loader.stOps.preLoad(loader.coll); err != nil {
+		return err
+	}
+
 	// Support assigning Programs and Maps, lazy-loading the required objects.
 	assignedMaps := make(map[string]bool)
 	assignedProgs := make(map[string]bool)
@@ -300,6 +305,11 @@ func (cs *CollectionSpec) LoadAndAssign(to interface{}, opts *CollectionOptions)
 
 	// Populate the requested maps. Has a chance of lazy-loading other dependent maps.
 	if err := loader.populateDeferredMaps(); err != nil {
+		return err
+	}
+
+	// load programs to struct_ops maps
+	if err := loader.stOps.postLoad(loader.maps); err != nil {
 		return err
 	}
 
@@ -413,6 +423,7 @@ type collectionLoader struct {
 	programs map[string]*Program
 	vars     map[string]*Variable
 	types    *btf.Cache
+	stOps    *structOpsLoader
 }
 
 func newCollectionLoader(coll *CollectionSpec, opts *CollectionOptions) (*collectionLoader, error) {
@@ -438,6 +449,7 @@ func newCollectionLoader(coll *CollectionSpec, opts *CollectionOptions) (*collec
 		make(map[string]*Program),
 		make(map[string]*Variable),
 		newBTFCache(&opts.Programs),
+		newStructOpsLoader(),
 	}, nil
 }
 
@@ -581,6 +593,13 @@ func (cl *collectionLoader) loadProgram(progName string) (*Program, error) {
 	}
 
 	cl.programs[progName] = prog
+
+	if prog.Type() == StructOps {
+		if err := cl.stOps.onProgramLoaded(prog, progSpec, cl.coll); err != nil {
+			return nil, err
+		}
+	}
+
 	return prog, nil
 }
 

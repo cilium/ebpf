@@ -32,3 +32,41 @@ func extractStructOpsMeta(contents []MapKV) (*structOpsMeta, error) {
 
 	return &meta, nil
 }
+
+type structOpsLoader struct {
+	metas       map[string]*structOpsMeta
+	specCopy    map[string]*MapSpec
+	progsByName map[string]*Program
+}
+
+func newStructOpsLoader() *structOpsLoader {
+	return &structOpsLoader{
+		metas:       make(map[string]*structOpsMeta),
+		specCopy:    make(map[string]*MapSpec),
+		progsByName: make(map[string]*Program),
+	}
+}
+
+// preLoad collects typed metadata for struct_ops maps from the CollectionSpec.
+// It does not modify specs nor create kernel objects. Value population happens in a follow-up PR.
+func (sl *structOpsLoader) preLoad(cs *CollectionSpec) error {
+	return nil
+}
+
+// onProgramLoaded is called right after a Program has been successfully
+// loaded by collectionLoader.loadProgram().  If the program belongs to a
+// struct_ops map it records the program for later FD injection.
+func (sl *structOpsLoader) onProgramLoaded(p *Program, ps *ProgramSpec, cs *CollectionSpec) error {
+	if ps.Type != StructOps {
+		return nil
+	}
+	sl.progsByName[ps.Name] = p
+	return nil
+}
+
+// onProgramLoaded is called right after a Program has been successfully
+// loaded by collectionLoader.loadProgram().  If the program belongs to a
+// struct_ops map it records the program for later FD injection.
+func (sl *structOpsLoader) postLoad(loadedMaps map[string]*Map) error {
+	return nil
+}

@@ -3,24 +3,30 @@ package ebpf
 import (
 	"testing"
 
+	"github.com/cilium/ebpf/btf"
+	"github.com/cilium/ebpf/internal/sys"
 	"github.com/cilium/ebpf/internal/testutils"
 )
 
 func TestCreateStructOpsMapSpecSimple(t *testing.T) {
 	requireStructOpsDummy(t)
 
+	// TODO: we should use "bpf_testmod_ops" for this case (tentative test case)
 	ms := &MapSpec{
 		Name:       "dummy_ops",
 		Type:       StructOpsMap,
+		Flags:      sys.BPF_F_LINK,
 		KeySize:    4,
 		ValueSize:  128,
 		MaxEntries: 1,
+		// we use `Value` to specify a user struct type as BTF
+		Value: &btf.Struct{Name: "bpf_dummy_ops"},
 		Contents: []MapKV{
 			{
 				Key: uint32(0),
 				Value: structOpsMeta{
-					userTypeName: "bpf_dummy_ops",
-					kernTypeName: "bpf_struct_ops_bpf_dummy_ops",
+					data:  make([]byte, 128),
+					funcs: []structOpsFunc{},
 				},
 			},
 		},

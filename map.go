@@ -560,7 +560,7 @@ func (spec *MapSpec) createMap(inner *sys.FD) (_ *Map, err error) {
 			}
 
 			if spec.Value == nil {
-				return nil, fmt.Errorf("Struct type is not specified as Value")
+				return nil, fmt.Errorf("struct type is not specified as Value")
 			}
 
 			userStructTypeName := spec.Value.TypeName()
@@ -574,7 +574,7 @@ func (spec *MapSpec) createMap(inner *sys.FD) (_ *Map, err error) {
 
 			userStructType, ok := t.(*btf.Struct)
 			if !ok {
-				return nil, fmt.Errorf("Value must be Struct type")
+				return nil, fmt.Errorf("value must be Struct type")
 			}
 
 			btfValueTypeId, err := s.TypeID(userStructType)

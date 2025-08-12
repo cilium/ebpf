@@ -777,16 +777,18 @@ func TestStructOpsMapSpecSimpleLoadAndAssign(t *testing.T) {
 
 	spec := &CollectionSpec{
 		Maps: map[string]*MapSpec{
+			// TODO: we should use "bpf_testmod_ops" for this case (tentative test case)
 			"dummy_ops": {
 				Name:       "dummy_ops",
 				Type:       StructOpsMap,
 				KeySize:    4,
 				ValueSize:  128,
 				MaxEntries: 1,
+				Value:      &btf.Struct{Name: "bpf_dummy_ops"},
 				Contents: []MapKV{
 					{Key: uint32(0), Value: structOpsMeta{
-						userTypeName: "bpf_dummy_ops",
-						kernTypeName: "bpf_struct_ops_bpf_dummy_ops",
+						data:  make([]byte, 128),
+						funcs: []structOpsFunc{},
 					}},
 				},
 			},

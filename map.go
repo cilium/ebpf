@@ -541,60 +541,65 @@ func (spec *MapSpec) createMap(inner *sys.FD) (_ *Map, err error) {
 	}
 
 	if spec.Key != nil || spec.Value != nil {
-		handle, keyTypeID, valueTypeID, err := btf.MarshalMapKV(spec.Key, spec.Value)
-		if err != nil && !errors.Is(err, btf.ErrNotSupported) {
-			return nil, fmt.Errorf("load BTF: %w", err)
-		}
+		if spec.Type == StructOpsMap {
+			// we need drop meta entry here
+			if len(spec.Contents) > 0 {
+				spec.Contents = spec.Contents[1:]
+			}
 
-		if handle != nil {
-			defer handle.Close()
+			var b btf.Builder
+			h, err := btf.NewHandle(&b)
+			if err != nil {
+				return nil, err
+			}
+			defer h.Close()
 
-			// Use BTF k/v during map creation.
-			attr.BtfFd = uint32(handle.FD())
-			attr.BtfKeyTypeId = keyTypeID
-			attr.BtfValueTypeId = valueTypeID
-		}
-	}
+			s, err := btf.LoadKernelSpec()
+			if err != nil {
+				return nil, fmt.Errorf("open vmlinux BTF: %w", err)
+			}
 
-	if spec.Type == StructOpsMap {
-		meta, err := extractStructOpsMeta(spec.Contents)
-		if err != nil {
-			return nil, err
-		}
+			if spec.Value == nil {
+				return nil, fmt.Errorf("Struct type is not specified as Value")
+			}
 
-		// we need drop meta entry here
-		if len(spec.Contents) > 0 {
-			spec.Contents = spec.Contents[1:]
-		}
+			userStructTypeName := spec.Value.TypeName()
+			t, err := s.AnyTypeByName(structOpsValuePrefix + userStructTypeName)
+			if errors.Is(err, btf.ErrNotFound) {
+				return nil, fmt.Errorf("struct_ops kernel type %q: %w", userStructTypeName, btf.ErrNotFound)
+			}
+			if err != nil {
+				return nil, fmt.Errorf("lookup kernel type %q: %w", userStructTypeName, err)
+			}
 
-		var b btf.Builder
-		h, err := btf.NewHandle(&b)
-		if err != nil {
-			return nil, err
-		}
-		defer h.Close()
+			userStructType, ok := t.(*btf.Struct)
+			if !ok {
+				return nil, fmt.Errorf("Value must be Struct type")
+			}
 
-		s, err := btf.LoadKernelSpec()
-		if err != nil {
-			return nil, fmt.Errorf("open vmlinux BTF: %w", err)
-		}
+			btfValueTypeId, err := s.TypeID(userStructType)
+			if err != nil {
+				return nil, fmt.Errorf("lookup type_id: %w", err)
+			}
 
-		typeSpec, err := s.AnyTypeByName(meta.kernTypeName)
-		if errors.Is(err, btf.ErrNotFound) {
-			return nil, fmt.Errorf("struct_ops kernel type %q: %w", meta.kernTypeName, ErrNotSupported)
-		}
-		if err != nil {
-			return nil, fmt.Errorf("lookup kernel type %q: %w", meta.kernTypeName, err)
-		}
+			attr.ValueSize = spec.ValueSize
+			attr.BtfVmlinuxValueTypeId = btfValueTypeId
+			attr.BtfFd = uint32(h.FD())
+		} else {
+			handle, keyTypeID, valueTypeID, err := btf.MarshalMapKV(spec.Key, spec.Value)
+			if err != nil && !errors.Is(err, btf.ErrNotSupported) {
+				return nil, fmt.Errorf("load BTF: %w", err)
+			}
 
-		btfValueTypeId, err := s.TypeID(typeSpec)
-		if err != nil {
-			return nil, fmt.Errorf("lookup type_id of %s: %w", typeSpec.TypeName(), err)
-		}
+			if handle != nil {
+				defer handle.Close()
 
-		attr.ValueSize = spec.ValueSize
-		attr.BtfVmlinuxValueTypeId = btfValueTypeId
-		attr.BtfFd = uint32(h.FD())
+				// Use BTF k/v during map creation.
+				attr.BtfFd = uint32(handle.FD())
+				attr.BtfKeyTypeId = keyTypeID
+				attr.BtfValueTypeId = valueTypeID
+			}
+		}
 	}
 
 	fd, err := sys.MapCreate(&attr)

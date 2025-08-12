@@ -108,9 +108,6 @@ type RawLinkOptions struct {
 	BTF btf.TypeID
 	// Flags control the attach behaviour.
 	Flags uint32
-	// ProgramFd allows attaching with an arbitrary FD instead of Program.
-	// Useful for link types whose target is not a bpf_prog (e.g. struct_ops maps).
-	ProgramFd int
 }
 
 // Info contains metadata on a link.

@@ -37,10 +37,7 @@ func AttachRawLink(opts RawLinkOptions) (*RawLink, error) {
 		return nil, fmt.Errorf("invalid target: %s", sys.ErrClosedFd)
 	}
 
-	progFd := opts.ProgramFd
-	if opts.Program != nil {
-		progFd = opts.Program.FD()
-	}
+	progFd := opts.Program.FD()
 	if progFd < 0 {
 		return nil, fmt.Errorf("invalid program: %s", sys.ErrClosedFd)
 	}

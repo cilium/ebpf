@@ -309,7 +309,7 @@ func (cs *CollectionSpec) LoadAndAssign(to interface{}, opts *CollectionOptions)
 	}
 
 	// load programs to struct_ops maps
-	if err := loader.stOps.postLoad(loader.maps); err != nil {
+	if err := loader.stOps.postLoad(loader.maps, loader.programs); err != nil {
 		return err
 	}
 
@@ -595,7 +595,7 @@ func (cl *collectionLoader) loadProgram(progName string) (*Program, error) {
 	cl.programs[progName] = prog
 
 	if prog.Type() == StructOps {
-		if err := cl.stOps.onProgramLoaded(prog, progSpec, cl.coll); err != nil {
+		if err := cl.stOps.onProgramLoaded(prog, progSpec); err != nil {
 			return nil, err
 		}
 	}

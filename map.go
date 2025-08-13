@@ -563,20 +563,12 @@ func (spec *MapSpec) createMap(inner *sys.FD) (_ *Map, err error) {
 				return nil, fmt.Errorf("struct type is not specified as Value")
 			}
 
-			userStructTypeName := spec.Value.TypeName()
-			t, err := s.AnyTypeByName(structOpsValuePrefix + userStructTypeName)
-			if errors.Is(err, btf.ErrNotFound) {
-				return nil, fmt.Errorf("struct_ops kernel type %q: %w", userStructTypeName, btf.ErrNotFound)
-			}
-			if err != nil {
-				return nil, fmt.Errorf("lookup kernel type %q: %w", userStructTypeName, err)
-			}
-
-			userStructType, ok := t.(*btf.Struct)
+			userStType, ok := spec.Value.(*btf.Struct)
 			if !ok {
 				return nil, fmt.Errorf("value must be Struct type")
 			}
 
+			userStructType, s, modBtfObjId, err := findStructByNameWithPrefix(s, userStType)
 			btfValueTypeId, err := s.TypeID(userStructType)
 			if err != nil {
 				return nil, fmt.Errorf("lookup type_id: %w", err)
@@ -585,6 +577,16 @@ func (spec *MapSpec) createMap(inner *sys.FD) (_ *Map, err error) {
 			attr.ValueSize = spec.ValueSize
 			attr.BtfVmlinuxValueTypeId = btfValueTypeId
 			attr.BtfFd = uint32(h.FD())
+
+			if modBtfObjId != 0 {
+				attr.MapFlags |= sys.BPF_F_VTYPE_BTF_OBJ_FD
+				modH, err := btf.NewHandleFromID(btf.ID(modBtfObjId))
+				if err != nil {
+					return nil, fmt.Errorf("open module BTF (id=%d): %w", modBtfObjId, err)
+				}
+				attr.ValueTypeBtfObjFd = int32(modH.FD())
+				defer modH.Close()
+			}
 		} else {
 			handle, keyTypeID, valueTypeID, err := btf.MarshalMapKV(spec.Key, spec.Value)
 			if err != nil && !errors.Is(err, btf.ErrNotSupported) {

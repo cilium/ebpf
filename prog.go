@@ -387,6 +387,24 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions, c *btf.Cache)
 		}
 	}
 
+	if spec.Type == StructOps {
+		if meta, ok := spec.Instructions[0].Metadata.Get(structOpsProgMetaKey{}).(*structOpsProgMeta); ok {
+			attr.AttachBtfId = sys.TypeID(meta.AttachBtfId)
+			attr.ExpectedAttachType = meta.AttachType
+
+			var modH *btf.Handle
+			if meta.ModBtfObjID != 0 {
+				h, err := btf.NewHandleFromID(btf.ID(meta.ModBtfObjID))
+				if err != nil {
+					return nil, fmt.Errorf("open module BTF handle (id=%d): %w", meta.ModBtfObjID, err)
+				}
+				modH = h
+				attr.AttachBtfObjFd = uint32(h.FD())
+				defer modH.Close()
+			}
+		}
+	}
+
 	if platform.IsWindows && opts.LogLevel != 0 {
 		return nil, fmt.Errorf("log level: %w", internal.ErrNotSupportedOnOS)
 	}

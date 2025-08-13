@@ -14,6 +14,7 @@ import (
 	"github.com/cilium/ebpf/asm"
 	"github.com/cilium/ebpf/btf"
 	"github.com/cilium/ebpf/internal"
+	"github.com/cilium/ebpf/internal/sys"
 	"github.com/cilium/ebpf/internal/testutils"
 	"github.com/cilium/ebpf/internal/testutils/testmain"
 )
@@ -776,19 +777,33 @@ func TestStructOpsMapSpecSimpleLoadAndAssign(t *testing.T) {
 	requireStructOpsDummy(t)
 
 	spec := &CollectionSpec{
+		Programs: map[string]*ProgramSpec{
+			"dummy_test_1": {
+				Name:    "dummy_test_1",
+				Type:    StructOps,
+				License: "GPL",
+				Instructions: asm.Instructions{
+					asm.Mov.Imm(asm.R0, 0),
+					asm.Return(),
+				},
+			},
+		},
 		Maps: map[string]*MapSpec{
 			// TODO: we should use "bpf_testmod_ops" for this case (tentative test case)
 			"dummy_ops": {
 				Name:       "dummy_ops",
 				Type:       StructOpsMap,
+				Flags:      sys.BPF_F_LINK,
 				KeySize:    4,
-				ValueSize:  128,
+				ValueSize:  448,
 				MaxEntries: 1,
-				Value:      &btf.Struct{Name: "bpf_dummy_ops"},
+				Value:      &btf.Struct{Name: "bpf_testmod_ops"},
 				Contents: []MapKV{
 					{Key: uint32(0), Value: structOpsMeta{
-						data:  make([]byte, 128),
-						funcs: []structOpsFunc{},
+						data: make([]byte, 448),
+						funcs: []structOpsFunc{
+							{"test_1", "dummy_test_1"},
+						},
 					}},
 				},
 			},
@@ -796,7 +811,8 @@ func TestStructOpsMapSpecSimpleLoadAndAssign(t *testing.T) {
 	}
 
 	var obj struct {
-		DummyOps *Map `ebpf:"dummy_ops"`
+		DummyTest1 *Program `ebpf:"dummy_test_1"`
+		DummyOps   *Map     `ebpf:"dummy_ops"`
 	}
 
 	err := spec.LoadAndAssign(&obj, nil)

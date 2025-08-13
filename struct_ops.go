@@ -3,11 +3,21 @@ package ebpf
 import (
 	"errors"
 	"fmt"
+	"unsafe"
 
 	"github.com/cilium/ebpf/btf"
+	"github.com/cilium/ebpf/internal/sys"
 )
 
 const structOpsValuePrefix = "bpf_struct_ops_"
+
+// TODO: Doc
+type structOpsProgMetaKey struct{}
+type structOpsProgMeta struct {
+	AttachBtfId btf.TypeID
+	AttachType  sys.AttachType
+	ModBtfObjID uint32
+}
 
 // structOpsKernTypes holds information about kernel types related to struct_ops
 type structOpsKernTypes struct {
@@ -23,12 +33,14 @@ type structOpsKernTypes struct {
 	// The member within ValueType that holds the target struct
 	dataMember *btf.Member
 	// mod_btf
-	modBtfId uint32
+	modBtfObjId uint32
 }
 
+// used to holds "environment specific" data
 type structOpsSpec struct {
-	programSpecs []*ProgramSpec
-	kernFuncOff  []uint32
+	// attachType -> programSpec
+	programName []string
+	kernFuncOff []uint32
 	/* e.g. struct bpf_struct_ops_tcp_congestion_ops in
 	 *      btf_vmlinux's format.
 	 * struct bpf_struct_ops_tcp_congestion_ops {
@@ -39,13 +51,15 @@ type structOpsSpec struct {
 	 * bpf_map__init_kern_struct_ops() will populate the "kern_vdata"
 	 * from "data".
 	 */
-	kernVData []byte
-	kernTypes *structOpsKernTypes
+	kernVData       []byte
+	kernTypes       *structOpsKernTypes
+	progAttachType  map[string]sys.AttachType
+	progAttachBtfID btf.TypeID
 }
 
 type structOpsFunc struct {
-	member   string
-	progName string
+	member   string // A member name from the user struct
+	progName string // A program name which is
 }
 
 // structOpsMeta is a placeholder object inserted into MapSpec.Contents
@@ -53,8 +67,10 @@ type structOpsFunc struct {
 // a struct‑ops map without adding public fields yet.
 type structOpsMeta struct {
 	funcs []structOpsFunc
-	/* e.g. struct tcp_congestion_ops in bpf_prog's btf format */
-	data []byte
+	// used for represent a data for the user struct
+	// e.g. struct tcp_congestion_ops in bpf_prog's btf format */
+	data        []byte
+	modBtfObjId btf.ID
 }
 
 // extractStructOpsMeta returns the *structops.Meta embedded in a MapSpec’s Contents
@@ -81,7 +97,7 @@ func extractStructOpsMeta(contents []MapKV) (*structOpsMeta, error) {
 }
 
 // findByTypeFromStruct searches the given BTF struct `st` for the *first* member
-// whose BTF type **identity** equals `typ` (after resolving modifiers).
+// whose BTF type **sidentity** equals `typ` (after resolving modifiers).
 //
 // The comparison is done via TypeID equality inside the same Spec, so a
 // typedef chain that ultimately refers to the same concrete type will match.
@@ -123,12 +139,13 @@ func doFindStructTypeByName(s *btf.Spec, name string, typ *btf.Struct) (*btf.Str
 		return nil, nil, 0, fmt.Errorf("nil BTF: %w", btf.ErrNotFound)
 	}
 
-	if t, err := s.AnyTypeByName(name); err == nil {
+	t, err := s.AnyTypeByName(name)
+	if err == nil {
 		if typ, ok := t.(*btf.Struct); ok {
 			return typ, s, 0, nil
 		}
 	} else if !errors.Is(err, btf.ErrNotFound) {
-		return nil, nil, 0, fmt.Errorf("find in vmlinux: %w", err)
+		return nil, nil, 0, err
 	}
 	return findStructTypeByNameFromModule(s, name, typ)
 }
@@ -145,6 +162,7 @@ func findStructTypeByNameFromModule(base *btf.Spec, name string, typ *btf.Struct
 		if err != nil {
 			return nil, nil, 0, fmt.Errorf("get info for BTF ID %d: %w", it.ID, err)
 		}
+
 		if !info.IsModule() {
 			continue
 		}
@@ -216,7 +234,7 @@ func findStructOpsKernTypes(userStructType *btf.Struct) (*structOpsKernTypes, er
 		valueType:   wType,
 		valueTypeID: wID,
 		dataMember:  dataMem,
-		modBtfId:    uint32(modID),
+		modBtfObjId: uint32(modID),
 	}, nil
 }
 
@@ -294,6 +312,7 @@ func (sl *structOpsLoader) copyDataMembers(
 	kern *structOpsKernTypes,
 	structOps *structOpsSpec,
 	structOpsMeta *structOpsMeta,
+	ms *MapSpec,
 	cs *CollectionSpec,
 ) error {
 	kernDataOff := kern.dataMember.Offset / 8
@@ -306,7 +325,7 @@ func (sl *structOpsLoader) copyDataMembers(
 			kern,
 			structOps,
 			structOpsMeta,
-			cs,
+			ms, cs,
 		); err != nil {
 			return err
 		}
@@ -325,6 +344,7 @@ func (sl *structOpsLoader) copyDataMember(
 	kern *structOpsKernTypes,
 	structOps *structOpsSpec,
 	structOpsMeta *structOpsMeta,
+	ms *MapSpec,
 	cs *CollectionSpec,
 ) error {
 	memberName := member.Name
@@ -372,7 +392,7 @@ func (sl *structOpsLoader) copyDataMember(
 			}
 
 		}
-		if len(fnName) == 0 {
+		if fnName == "" {
 			// skip if the member is not specified in the MapSpec
 			return nil
 		}
@@ -385,7 +405,21 @@ func (sl *structOpsLoader) copyDataMember(
 			return fmt.Errorf("program %s is not a valid StructOps program", fnName)
 		}
 
-		structOps.kernFuncOff[idx] = uint32(kernMemberIdx)
+		attachType := sys.AttachType(kernMemberIdx)
+		if int(attachType) > len(kern.typ.Members) {
+			return fmt.Errorf("program %s: unexpected attach type %d", ps.Name, attachType)
+		}
+
+		kernFuncOff := kern.dataMember.Offset/8 + kern.typ.Members[kernMemberIdx].Offset/8
+		structOps.kernFuncOff[idx] = uint32(kernFuncOff)
+		structOps.progAttachType[ps.Name] = attachType
+		sl.stOpsProgsToMap[ps.Name] = ms.Name
+
+		ps.Instructions[0].Metadata.Set(structOpsProgMetaKey{}, &structOpsProgMeta{
+			AttachBtfId: kern.typeID,
+			AttachType:  attachType,
+			ModBtfObjID: kern.modBtfObjId,
+		})
 	}
 
 	// Handle data member. copy data members from the user-defined struct to the kernel data buffer.
@@ -402,18 +436,16 @@ func (sl *structOpsLoader) copyDataMember(
 // TODO: All following items should be moved into collectionLoader
 
 type structOpsLoader struct {
-	metas       map[string]*structOpsMeta
-	specCopy    map[string]*MapSpec
-	stOpsSpecs  map[string]*structOpsSpec
-	progsByName map[string]*Program
+	// map name -> structOpsSpec
+	stOpsSpecs map[string]*structOpsSpec
+	// structOps program name -> structOpsMap name
+	stOpsProgsToMap map[string]string
 }
 
 func newStructOpsLoader() *structOpsLoader {
 	return &structOpsLoader{
-		metas:       make(map[string]*structOpsMeta),
-		stOpsSpecs:  make(map[string]*structOpsSpec),
-		specCopy:    make(map[string]*MapSpec),
-		progsByName: make(map[string]*Program),
+		stOpsSpecs:      make(map[string]*structOpsSpec),
+		stOpsProgsToMap: make(map[string]string),
 	}
 }
 
@@ -444,10 +476,12 @@ func (sl *structOpsLoader) preLoad(cs *CollectionSpec) error {
 		ms.Value = kernTypes.typ
 
 		structOps := &structOpsSpec{
-			make([]*ProgramSpec, len(kernTypes.typ.Members)),
+			make([]string, len(kernTypes.typ.Members)),
 			make([]uint32, len(kernTypes.typ.Members)),
 			make([]byte, kernTypes.valueType.Size),
 			kernTypes,
+			make(map[string]sys.AttachType),
+			kernTypes.typeID,
 		}
 		sl.stOpsSpecs[ms.Name] = structOps
 
@@ -461,7 +495,7 @@ func (sl *structOpsLoader) preLoad(cs *CollectionSpec) error {
 			kernTypes,
 			structOps,
 			structOpsMeta,
-			cs,
+			ms, cs,
 		); err != nil {
 			return err
 		}
@@ -474,20 +508,71 @@ func (sl *structOpsLoader) preLoad(cs *CollectionSpec) error {
 
 // onProgramLoaded is called right after a Program has been successfully
 // loaded by collectionLoader.loadProgram().  If the program belongs to a
-// struct_ops map it records the program for later FD injection.
-func (sl *structOpsLoader) onProgramLoaded(p *Program, ps *ProgramSpec, cs *CollectionSpec) error {
-	if ps.Type != StructOps {
+// struct_ops map it records the program for later FD-injection.
+func (sl *structOpsLoader) onProgramLoaded(
+	p *Program,
+	progSpec *ProgramSpec,
+) error {
+
+	mapName, ok := sl.stOpsProgsToMap[p.name]
+	if !ok {
 		return nil
 	}
-	sl.progsByName[ps.Name] = p
+
+	structOps, ok := sl.stOpsSpecs[mapName]
+	if !ok {
+		// this is unlikely to happen.
+		return fmt.Errorf("program %s has been loaded but not associated", p.name)
+	}
+
+	attachType := structOps.progAttachType[p.name]
+	if int(attachType) > len(structOps.kernTypes.typ.Members) {
+		return fmt.Errorf("program %s: unexpected attach type %d", p.name, attachType)
+	}
+	structOps.programName[attachType] = progSpec.Name
+
 	return nil
 }
 
 // TODO: should be RENAMED AND MOVED!!!!
 
-// onProgramLoaded is called right after a Program has been successfully
-// loaded by collectionLoader.loadProgram().  If the program belongs to a
-// struct_ops map it records the program for later FD injection.
-func (sl *structOpsLoader) postLoad(loadedMaps map[string]*Map) error {
+// postLoad runs after all maps and programs have been loaded.
+// It writes program FDs into struct_ops.KernVData and updates the map entry.
+func (sl *structOpsLoader) postLoad(maps map[string]*Map, progs map[string]*Program) error {
+	for mapName, m := range maps {
+		if m.Type() != StructOpsMap {
+			continue
+		}
+
+		structOps, ok := sl.stOpsSpecs[mapName]
+		if !ok {
+			return fmt.Errorf("struct_ops Map: %s is not initialized", mapName)
+		}
+
+		for idx, progName := range structOps.programName {
+			if progName == "" {
+				continue
+			}
+
+			prog, ok := progs[progName]
+			if !ok {
+				return fmt.Errorf("program %s should be loaded", progName)
+			}
+			defer prog.Close()
+
+			off := structOps.kernFuncOff[idx]
+			ptr := unsafe.Pointer(&structOps.kernVData[0])
+			*(*uint64)(unsafe.Pointer(uintptr(ptr) + uintptr(off))) = uint64(prog.FD())
+		}
+
+		m, ok := maps[mapName]
+		if !ok {
+			return fmt.Errorf("map %s should be loaded", mapName)
+		}
+
+		if err := m.Put(uint32(0), structOps.kernVData); err != nil {
+			return err
+		}
+	}
 	return nil
 }

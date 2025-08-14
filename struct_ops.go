@@ -3,7 +3,6 @@ package ebpf
 import (
 	"errors"
 	"fmt"
-	"unsafe"
 
 	"github.com/cilium/ebpf/btf"
 	"github.com/cilium/ebpf/internal/sys"
@@ -38,7 +37,7 @@ type structOpsKernTypes struct {
 type structOpsSpec struct {
 	// attachType -> programSpec
 	programName []string
-	kernFuncOff []uint32
+	kernFuncOff []int
 	/* e.g. struct bpf_struct_ops_tcp_congestion_ops in
 	 *      btf_vmlinux's format.
 	 * struct bpf_struct_ops_tcp_congestion_ops {
@@ -120,18 +119,18 @@ func findByTypeFromStruct(spec *btf.Spec, st *btf.Struct, typ btf.Type) (*btf.Me
 // findStructByNameWithPrefix looks up a BTF struct whose name is the given `name`
 // prefixed by `structOpsValuePrefix` (“bpf_dummy_ops” → “bpf_struct_ops_bpf_dummy_ops”).
 func findStructByNameWithPrefix(s *btf.Spec, val *btf.Struct) (*btf.Struct, *btf.Spec, uint32, error) {
-	return doFindStructTypeByName(s, structOpsValuePrefix+val.TypeName(), val)
+	return doFindStructTypeByName(s, structOpsValuePrefix+val.TypeName())
 }
 
 // findStructTypeByName iterates over *all* BTF types contained in the given Spec and
 // returns the first *btf.Struct whose TypeName() exactly matches `name`.
 func findStructTypeByName(s *btf.Spec, typ *btf.Struct) (*btf.Struct, *btf.Spec, uint32, error) {
-	return doFindStructTypeByName(s, typ.TypeName(), typ)
+	return doFindStructTypeByName(s, typ.TypeName())
 }
 
 // doFindStructTypeByName iterates over *all* BTF types contained in the given Spec and
 // returns the first *btf.Struct whose TypeName() exactly matches `name`.
-func doFindStructTypeByName(s *btf.Spec, name string, typ *btf.Struct) (*btf.Struct, *btf.Spec, uint32, error) {
+func doFindStructTypeByName(s *btf.Spec, name string) (*btf.Struct, *btf.Spec, uint32, error) {
 	if s == nil {
 		return nil, nil, 0, fmt.Errorf("nil BTF: %w", btf.ErrNotFound)
 	}
@@ -144,12 +143,12 @@ func doFindStructTypeByName(s *btf.Spec, name string, typ *btf.Struct) (*btf.Str
 	} else if !errors.Is(err, btf.ErrNotFound) {
 		return nil, nil, 0, err
 	}
-	return findStructTypeByNameFromModule(s, name, typ)
+	return findStructTypeByNameFromModule(s, name)
 }
 
 // findStructTypeByNameFromModule walks over the BTF info of loaded modules and
 // searches for struct `name`.
-func findStructTypeByNameFromModule(base *btf.Spec, name string, typ *btf.Struct) (*btf.Struct, *btf.Spec, uint32, error) {
+func findStructTypeByNameFromModule(base *btf.Spec, name string) (*btf.Struct, *btf.Spec, uint32, error) {
 	it := new(btf.HandleIterator)
 
 	for it.Next() {
@@ -293,276 +292,4 @@ func isMemoryZero(p []byte) bool {
 		}
 	}
 	return true
-}
-
-// copyDataMembers processes an individual member of the user-defined struct.
-// It determines whether the member is a function pointer or data member,
-// and handles it accordingly by setting up program attachments or copying data.
-func (sl *structOpsLoader) copyDataMembers(
-	kern *structOpsKernTypes,
-	structOps *structOpsSpec,
-	structOpsMeta *structOpsMeta,
-	ms *MapSpec,
-	cs *CollectionSpec,
-) error {
-	kernDataOff := kern.dataMember.Offset / 8
-	for idx, member := range kern.typ.Members {
-		if err := sl.copyDataMember(
-			idx,
-			member,
-			structOpsMeta.data,
-			structOps.kernVData[kernDataOff:],
-			kern,
-			structOps,
-			structOpsMeta,
-			ms, cs,
-		); err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-// copyDataMember processes an individual member of the user-defined struct.
-// It determines whether the member is a function pointer or data member,
-// and handles it accordingly by setting up program attachments or copying data.
-func (sl *structOpsLoader) copyDataMember(
-	idx int,
-	member btf.Member,
-	data, kernData []byte,
-	kern *structOpsKernTypes,
-	structOps *structOpsSpec,
-	structOpsMeta *structOpsMeta,
-	ms *MapSpec,
-	cs *CollectionSpec,
-) error {
-	memberName := member.Name
-	memberOff := member.Offset / 8
-	memberData := data[memberOff:]
-
-	memberSize, err := btf.Sizeof(member.Type)
-	if err != nil {
-		return fmt.Errorf("failed to resolve the size of member %s: %w", memberName, err)
-	}
-
-	kernMember, err := getStructMemberByName(kern.typ, memberName)
-	if err != nil {
-		if isMemoryZero(memberData[:memberSize]) {
-			// Skip if member doesn't exist in kernel BTF and data is zero
-			return nil
-		}
-		return fmt.Errorf("member %s not found in kernel BTF and data is not zero", memberName)
-	}
-
-	kernMemberIdx := getStructMemberIndexOf(kern.typ, kernMember)
-	if member.BitfieldSize > 0 || kernMember.BitfieldSize > 0 {
-		return fmt.Errorf("bitfield %s is not supported", memberName)
-	}
-
-	kernMemberOff := kernMember.Offset / 8
-	kernMemberData := kernData[kernMemberOff:]
-	memberType, err := skipModsAndTypedefs(kern.spec, member.Type)
-	if err != nil {
-		return fmt.Errorf("user: failed to skip typedefs for %s: %w", memberName, err)
-	}
-
-	kernMemberType, err := skipModsAndTypedefs(kern.spec, kernMember.Type)
-	if err != nil {
-		return fmt.Errorf("kern: failed to skip typedefs for %s: %w", kernMember.Name, err)
-	}
-
-	if _, ok := memberType.(*btf.Pointer); ok {
-		var fnName string
-
-		for _, fn := range structOpsMeta.funcs {
-			if fn.member == memberName {
-				fnName = fn.progName
-				break
-			}
-
-		}
-		if fnName == "" {
-			// skip if the member is not specified in the MapSpec
-			return nil
-		}
-
-		ps, ok := cs.Programs[fnName]
-		if !ok {
-			return fmt.Errorf("Program %s is not found in CollectionSpec", fnName)
-		}
-		if ps.Type != StructOps {
-			return fmt.Errorf("program %s is not a valid StructOps program", fnName)
-		}
-
-		attachType := sys.AttachType(kernMemberIdx)
-		if int(attachType) > len(kern.typ.Members) {
-			return fmt.Errorf("program %s: unexpected attach type %d", ps.Name, attachType)
-		}
-
-		kernFuncOff := kern.dataMember.Offset/8 + kern.typ.Members[kernMemberIdx].Offset/8
-		structOps.kernFuncOff[idx] = uint32(kernFuncOff)
-		structOps.progAttachType[ps.Name] = attachType
-		sl.stOpsProgsToMap[ps.Name] = ms.Name
-
-		ps.Instructions[0].Metadata.Set(structOpsProgMetaKey{}, &structOpsProgMeta{
-			attachBtfId: kern.typeID,
-			attachType:  attachType,
-			modBtfObjID: kern.modBtfObjId,
-		})
-	}
-
-	// Handle data member. copy data members from the user-defined struct to the kernel data buffer.
-	// It ensures that the sizes match between user and kernel types before copying the data.
-	kernMemberSize, err := btf.Sizeof(kernMemberType)
-	if err != nil || memberSize != kernMemberSize {
-		return fmt.Errorf("size mismatch for member %s: %d != %d (kernel)", memberName, memberSize, kernMemberSize)
-	}
-	copy(kernMemberData[:memberSize], memberData[:memberSize])
-
-	return nil
-}
-
-// TODO: All following items should be moved into collectionLoader
-
-type structOpsLoader struct {
-	// map name -> structOpsSpec
-	stOpsSpecs map[string]*structOpsSpec
-	// structOps program name -> structOpsMap name
-	stOpsProgsToMap map[string]string
-}
-
-func newStructOpsLoader() *structOpsLoader {
-	return &structOpsLoader{
-		stOpsSpecs:      make(map[string]*structOpsSpec),
-		stOpsProgsToMap: make(map[string]string),
-	}
-}
-
-// TODO: should be RENAMED AND MOVED!!!!
-
-// preLoad collects typed metadata for struct_ops maps from the CollectionSpec.
-// It does not modify specs nor create kernel objects. Value population happens in a follow-up PR.
-func (sl *structOpsLoader) preLoad(cs *CollectionSpec) error {
-	for _, ms := range cs.Maps {
-		if ms.Type != StructOpsMap {
-			continue
-		}
-
-		userSt := ms.Value
-		if userSt == nil {
-			return fmt.Errorf("user struct type should be specified as Value")
-		}
-
-		userStructType, ok := ms.Value.(*btf.Struct)
-		if !ok {
-			return fmt.Errorf("user struct type should be a Struct")
-		}
-
-		kernTypes, err := findStructOpsKernTypes(userStructType)
-		if err != nil {
-			return fmt.Errorf("find kern_type: %w", err)
-		}
-		ms.Value = kernTypes.typ
-
-		structOps := &structOpsSpec{
-			make([]string, len(kernTypes.typ.Members)),
-			make([]uint32, len(kernTypes.typ.Members)),
-			make([]byte, kernTypes.valueType.Size),
-			kernTypes,
-			make(map[string]sys.AttachType),
-			kernTypes.typeID,
-		}
-		sl.stOpsSpecs[ms.Name] = structOps
-
-		structOpsMeta, err := extractStructOpsMeta(ms.Contents)
-		if err != nil {
-			return err
-		}
-
-		// process struct members
-		if err := sl.copyDataMembers(
-			kernTypes,
-			structOps,
-			structOpsMeta,
-			ms, cs,
-		); err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-// TODO: should be RENAMED AND MOVED!!!!
-
-// onProgramLoaded is called right after a Program has been successfully
-// loaded by collectionLoader.loadProgram().  If the program belongs to a
-// struct_ops map it records the program for later FD-injection.
-func (sl *structOpsLoader) onProgramLoaded(
-	p *Program,
-	progSpec *ProgramSpec,
-) error {
-
-	mapName, ok := sl.stOpsProgsToMap[p.name]
-	if !ok {
-		return nil
-	}
-
-	structOps, ok := sl.stOpsSpecs[mapName]
-	if !ok {
-		// this is unlikely to happen.
-		return fmt.Errorf("program %s has been loaded but not associated", p.name)
-	}
-
-	attachType := structOps.progAttachType[p.name]
-	if int(attachType) > len(structOps.kernTypes.typ.Members) {
-		return fmt.Errorf("program %s: unexpected attach type %d", p.name, attachType)
-	}
-	structOps.programName[attachType] = progSpec.Name
-
-	return nil
-}
-
-// TODO: should be RENAMED AND MOVED!!!!
-
-// postLoad runs after all maps and programs have been loaded.
-// It writes program FDs into struct_ops.KernVData and updates the map entry.
-func (sl *structOpsLoader) postLoad(maps map[string]*Map, progs map[string]*Program) error {
-	for mapName, m := range maps {
-		if m.Type() != StructOpsMap {
-			continue
-		}
-
-		structOps, ok := sl.stOpsSpecs[mapName]
-		if !ok {
-			return fmt.Errorf("struct_ops Map: %s is not initialized", mapName)
-		}
-
-		for idx, progName := range structOps.programName {
-			if progName == "" {
-				continue
-			}
-
-			prog, ok := progs[progName]
-			if !ok {
-				return fmt.Errorf("program %s should be loaded", progName)
-			}
-			defer prog.Close()
-
-			off := structOps.kernFuncOff[idx]
-			ptr := unsafe.Pointer(&structOps.kernVData[0])
-			*(*uint64)(unsafe.Pointer(uintptr(ptr) + uintptr(off))) = uint64(prog.FD())
-		}
-
-		m, ok := maps[mapName]
-		if !ok {
-			return fmt.Errorf("map %s should be loaded", mapName)
-		}
-
-		if err := m.Put(uint32(0), structOps.kernVData); err != nil {
-			return err
-		}
-	}
-	return nil
 }

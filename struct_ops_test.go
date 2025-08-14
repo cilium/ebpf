@@ -9,23 +9,22 @@ import (
 )
 
 func TestCreateStructOpsMapSpecSimple(t *testing.T) {
-	requireStructOpsDummy(t)
+	requireTestmod(t)
 
-	// TODO: we should use "bpf_testmod_ops" for this case (tentative test case)
 	ms := &MapSpec{
-		Name:       "dummy_ops",
+		Name:       "testmod_ops",
 		Type:       StructOpsMap,
 		Flags:      sys.BPF_F_LINK,
 		KeySize:    4,
-		ValueSize:  128,
+		ValueSize:  448,
 		MaxEntries: 1,
 		// we use `Value` to specify a user struct type as BTF
-		Value: &btf.Struct{Name: "bpf_dummy_ops"},
+		Value: &btf.Struct{Name: "bpf_testmod_ops"},
 		Contents: []MapKV{
 			{
 				Key: uint32(0),
 				Value: structOpsMeta{
-					data:  make([]byte, 128),
+					data:  make([]byte, 448),
 					funcs: []structOpsFunc{},
 				},
 			},

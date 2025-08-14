@@ -575,6 +575,10 @@ func (spec *MapSpec) createMap(inner *sys.FD) (_ *Map, err error) {
 			}
 
 			userStructType, s, modBtfObjId, err := findStructByNameWithPrefix(s, userStType)
+			if err != nil {
+				return nil, fmt.Errorf("lookup struct type: %w", err)
+			}
+
 			btfValueTypeId, err := s.TypeID(userStructType)
 			if err != nil {
 				return nil, fmt.Errorf("lookup type_id: %w", err)

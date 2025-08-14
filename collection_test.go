@@ -771,12 +771,12 @@ func ExampleCollectionSpec_LoadAndAssign() {
 }
 
 func TestStructOpsMapSpecSimpleLoadAndAssign(t *testing.T) {
-	requireStructOpsDummy(t)
+	requireTestmod(t)
 
 	spec := &CollectionSpec{
 		Programs: map[string]*ProgramSpec{
-			"dummy_test_1": {
-				Name:    "dummy_test_1",
+			"test_func_1": {
+				Name:    "test_func_1",
 				Type:    StructOps,
 				License: "GPL",
 				Instructions: asm.Instructions{
@@ -786,9 +786,8 @@ func TestStructOpsMapSpecSimpleLoadAndAssign(t *testing.T) {
 			},
 		},
 		Maps: map[string]*MapSpec{
-			// TODO: we should use "bpf_testmod_ops" for this case (tentative test case)
-			"dummy_ops": {
-				Name:       "dummy_ops",
+			"testmod_ops": {
+				Name:       "testmod_ops",
 				Type:       StructOpsMap,
 				Flags:      sys.BPF_F_LINK,
 				KeySize:    4,
@@ -799,7 +798,7 @@ func TestStructOpsMapSpecSimpleLoadAndAssign(t *testing.T) {
 					{Key: uint32(0), Value: structOpsMeta{
 						data: make([]byte, 448),
 						funcs: []structOpsFunc{
-							{"test_1", "dummy_test_1"},
+							{"test_1", "test_func_1"},
 						},
 					}},
 				},
@@ -808,8 +807,8 @@ func TestStructOpsMapSpecSimpleLoadAndAssign(t *testing.T) {
 	}
 
 	var obj struct {
-		DummyTest1 *Program `ebpf:"dummy_test_1"`
-		DummyOps   *Map     `ebpf:"dummy_ops"`
+		DummyTest1 *Program `ebpf:"test_func_1"`
+		DummyOps   *Map     `ebpf:"testmod_ops"`
 	}
 
 	err := spec.LoadAndAssign(&obj, nil)

@@ -269,11 +269,6 @@ func (cs *CollectionSpec) LoadAndAssign(to interface{}, opts *CollectionOptions)
 	}
 	defer loader.close()
 
-	// initialize struct_ops maps
-	if err := loader.initKernStructOps(loader.coll); err != nil {
-		return err
-	}
-
 	// Support assigning Programs and Maps, lazy-loading the required objects.
 	assignedMaps := make(map[string]bool)
 	assignedProgs := make(map[string]bool)
@@ -371,6 +366,11 @@ func NewCollectionWithOptions(spec *CollectionSpec, opts CollectionOptions) (*Co
 		return nil, err
 	}
 	defer loader.close()
+
+	// initialize struct_ops maps
+	if err := loader.initKernStructOps(); err != nil {
+		return nil, err
+	}
 
 	// Create maps first, as their fds need to be linked into programs.
 	for mapName := range spec.Maps {
@@ -767,7 +767,6 @@ func (cl *collectionLoader) copyDataMember(
 	structOps *structOpsSpec,
 	structOpsMeta *structOpsMeta,
 	ms *MapSpec,
-	cs *CollectionSpec,
 ) error {
 	memberName := member.Name
 	memberOff := member.Offset / 8
@@ -819,7 +818,7 @@ func (cl *collectionLoader) copyDataMember(
 			return nil
 		}
 
-		ps, ok := cs.Programs[fnName]
+		ps, ok := cl.coll.Programs[fnName]
 		if !ok {
 			return fmt.Errorf("Program %s is not found in CollectionSpec", fnName)
 		}
@@ -857,8 +856,8 @@ func (cl *collectionLoader) copyDataMember(
 
 // initKernStructOps collects typed metadata for struct_ops maps from the CollectionSpec.
 // It does not modify specs nor create kernel objects. Value population happens in a follow-up PR.
-func (cl *collectionLoader) initKernStructOps(cs *CollectionSpec) error {
-	for _, ms := range cs.Maps {
+func (cl *collectionLoader) initKernStructOps() error {
+	for _, ms := range cl.coll.Maps {
 		if ms.Type != StructOpsMap {
 			continue
 		}
@@ -901,7 +900,7 @@ func (cl *collectionLoader) initKernStructOps(cs *CollectionSpec) error {
 				kernTypes,
 				structOps,
 				structOpsMeta,
-				ms, cs,
+				ms,
 			); err != nil {
 				return err
 			}

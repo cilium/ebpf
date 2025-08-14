@@ -309,11 +309,6 @@ func (cs *CollectionSpec) LoadAndAssign(to interface{}, opts *CollectionOptions)
 		return err
 	}
 
-	// load programs to struct_ops maps
-	if err := loader.populateAndPutStructOpsProgFds(); err != nil {
-		return err
-	}
-
 	// Evaluate the loader's objects after all (lazy)loading has taken place.
 	for n, m := range loader.maps {
 		if m.typ.canStoreProgram() {
@@ -725,6 +720,34 @@ func (cl *collectionLoader) populateDeferredMaps() error {
 			}
 		}
 
+		if mapSpec.Type == StructOpsMap {
+			structOps, ok := cl.stOpsSpecs[mapName]
+			if !ok {
+				return fmt.Errorf("struct_ops Map: %s is not initialized", mapName)
+			}
+
+			for idx, progName := range structOps.programName {
+				if progName == "" {
+					continue // unlikely to happen
+				}
+				// loadProgram is idempotent and could return an existing Program.
+				prog, err := cl.loadProgram(progName)
+				if err != nil {
+					return fmt.Errorf("loading program %s is not loaded, for map %s: %w",
+						progName, mapName, err)
+				}
+				defer prog.Close()
+
+				// populate ProgFDs as Values
+				off := structOps.kernFuncOff[idx]
+				ptr := unsafe.Pointer(&structOps.kernVData[0])
+				*(*uint64)(unsafe.Pointer(uintptr(ptr) + uintptr(off))) = uint64(prog.FD())
+			}
+
+			mapSpec.Contents[0] =
+				MapKV{Key: uint32(0), Value: structOps.kernVData}
+		}
+
 		// Populate and freeze the map if specified.
 		if err := m.finalize(mapSpec); err != nil {
 			return fmt.Errorf("populating map %s: %w", mapName, err)
@@ -885,49 +908,6 @@ func (cl *collectionLoader) initKernStructOps(cs *CollectionSpec) error {
 		}
 	}
 
-	return nil
-}
-
-// TODO: should be RENAMED AND MOVED!!!!
-
-// populateStructOpsProgFds runs after all maps and programs have been loaded.
-// It writes program FDs into struct_ops.KernVData and updates the map entry.
-func (cl *collectionLoader) populateAndPutStructOpsProgFds() error {
-	for mapName, m := range cl.maps {
-		if m.Type() != StructOpsMap {
-			continue
-		}
-
-		structOps, ok := cl.stOpsSpecs[mapName]
-		if !ok {
-			return fmt.Errorf("struct_ops Map: %s is not initialized", mapName)
-		}
-
-		for idx, progName := range structOps.programName {
-			if progName == "" {
-				continue
-			}
-
-			prog, ok := cl.programs[progName]
-			if !ok {
-				return fmt.Errorf("program %s should be loaded", progName)
-			}
-			defer prog.Close()
-
-			off := structOps.kernFuncOff[idx]
-			ptr := unsafe.Pointer(&structOps.kernVData[0])
-			*(*uint64)(unsafe.Pointer(uintptr(ptr) + uintptr(off))) = uint64(prog.FD())
-		}
-
-		m, ok := cl.maps[mapName]
-		if !ok {
-			return fmt.Errorf("map %s should be loaded", mapName)
-		}
-
-		if err := m.Put(uint32(0), structOps.kernVData); err != nil {
-			return err
-		}
-	}
 	return nil
 }
 

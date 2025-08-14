@@ -809,19 +809,12 @@ func TestStructOpsMapSpecSimpleLoadAndAssign(t *testing.T) {
 		},
 	}
 
-	var obj struct {
-		DummyTest1 *Program `ebpf:"test_func_1"`
-		DummyOps   *Map     `ebpf:"testmod_ops"`
+	coll := mustNewCollection(t, spec, nil)
+	for name := range spec.Maps {
+		qt.Assert(t, qt.IsNotNil(coll.Maps[name]))
 	}
 
-	err := spec.LoadAndAssign(&obj, nil)
-	testutils.SkipIfNotSupported(t, err)
-	if err != nil {
-		t.Fatalf("LoadAndAssign failed: %v", err)
-	}
-	t.Cleanup(func() { _ = obj.DummyOps.Close() })
-
-	if obj.DummyOps == nil {
-		t.Fatal("DummyOps not assigned")
+	for name := range spec.Programs {
+		qt.Assert(t, qt.IsNotNil(coll.Programs[name]))
 	}
 }

@@ -397,14 +397,14 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions, c *btf.Cache)
 
 	if spec.Type == StructOps {
 		if meta, ok := spec.Instructions[0].Metadata.Get(structOpsProgMetaKey{}).(*structOpsProgMeta); ok {
-			attr.AttachBtfId = sys.TypeID(meta.AttachBtfId)
-			attr.ExpectedAttachType = meta.AttachType
+			attr.AttachBtfId = sys.TypeID(meta.attachBtfId)
+			attr.ExpectedAttachType = meta.attachType
 
 			var modH *btf.Handle
-			if meta.ModBtfObjID != 0 {
-				h, err := btf.NewHandleFromID(btf.ID(meta.ModBtfObjID))
+			if meta.modBtfObjID != 0 {
+				h, err := btf.NewHandleFromID(btf.ID(meta.modBtfObjID))
 				if err != nil {
-					return nil, fmt.Errorf("open module BTF handle (id=%d): %w", meta.ModBtfObjID, err)
+					return nil, fmt.Errorf("open module BTF handle (id=%d): %w", meta.modBtfObjID, err)
 				}
 				modH = h
 				attr.AttachBtfObjFd = uint32(h.FD())

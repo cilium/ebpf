@@ -14,9 +14,9 @@ const structOpsValuePrefix = "bpf_struct_ops_"
 // TODO: Doc
 type structOpsProgMetaKey struct{}
 type structOpsProgMeta struct {
-	AttachBtfId btf.TypeID
-	AttachType  sys.AttachType
-	ModBtfObjID uint32
+	attachBtfId btf.TypeID
+	attachType  sys.AttachType
+	modBtfObjID uint32
 }
 
 // structOpsKernTypes holds information about kernel types related to struct_ops
@@ -28,8 +28,6 @@ type structOpsKernTypes struct {
 	typeID btf.TypeID
 	// The wrapper struct type that contains the target struct
 	valueType *btf.Struct
-	// The BTF type ID of the wrapper struct
-	valueTypeID btf.TypeID
 	// The member within ValueType that holds the target struct
 	dataMember *btf.Member
 	// mod_btf
@@ -69,8 +67,7 @@ type structOpsMeta struct {
 	funcs []structOpsFunc
 	// used for represent a data for the user struct
 	// e.g. struct tcp_congestion_ops in bpf_prog's btf format */
-	data        []byte
-	modBtfObjId btf.ID
+	data []byte
 }
 
 // extractStructOpsMeta returns the *structops.Meta embedded in a MapSpec’s Contents
@@ -221,18 +218,11 @@ func findStructOpsKernTypes(userStructType *btf.Struct) (*structOpsKernTypes, er
 		return nil, fmt.Errorf("type ID of %s: %w", kType.TypeName(), err)
 	}
 
-	// 5. type-ID of wrapper
-	wID, err := s.TypeID(wType)
-	if err != nil {
-		return nil, fmt.Errorf("type ID of %s: %w", wType.TypeName(), err)
-	}
-
 	return &structOpsKernTypes{
 		spec:        s,
 		typ:         kType,
 		typeID:      kID,
 		valueType:   wType,
-		valueTypeID: wID,
 		dataMember:  dataMem,
 		modBtfObjId: uint32(modID),
 	}, nil
@@ -416,9 +406,9 @@ func (sl *structOpsLoader) copyDataMember(
 		sl.stOpsProgsToMap[ps.Name] = ms.Name
 
 		ps.Instructions[0].Metadata.Set(structOpsProgMetaKey{}, &structOpsProgMeta{
-			AttachBtfId: kern.typeID,
-			AttachType:  attachType,
-			ModBtfObjID: kern.modBtfObjId,
+			attachBtfId: kern.typeID,
+			attachType:  attachType,
+			modBtfObjID: kern.modBtfObjId,
 		})
 	}
 

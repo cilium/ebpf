@@ -14,6 +14,8 @@ type ringbufEventRing struct {
 	mapFd            *sys.FD
 	cons, prod, data *uint8
 	*ringReader
+
+	cleanup runtime.Cleanup
 }
 
 func newRingBufEventRing(mapFD, size int) (*ringbufEventRing, error) {
@@ -51,13 +53,15 @@ func newRingBufEventRing(mapFD, size int) (*ringbufEventRing, error) {
 		data:       dataPtr,
 		ringReader: newRingReader(consPos, prodPos, data),
 	}
-	runtime.SetFinalizer(ring, (*ringbufEventRing).Close)
+	ring.cleanup = runtime.AddCleanup(ring, func(*byte) {
+		efw.EbpfRingBufferMapUnmapBuffer(fd.Int(), consPtr, prodPtr, dataPtr)
+	}, nil)
 
 	return ring, nil
 }
 
 func (ring *ringbufEventRing) Close() error {
-	runtime.SetFinalizer(ring, nil)
+	ring.cleanup.Stop()
 
 	return errors.Join(
 		efw.EbpfRingBufferMapUnmapBuffer(ring.mapFd.Int(), ring.cons, ring.prod, ring.data),

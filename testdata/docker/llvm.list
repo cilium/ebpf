@@ -1,13 +1,10 @@
 # Taken from https://apt.llvm.org.
 
-deb http://apt.llvm.org/bullseye/ llvm-toolchain-bullseye main
-deb-src http://apt.llvm.org/bullseye/ llvm-toolchain-bullseye main
+deb http://apt.llvm.org/bookworm/ llvm-toolchain-bookworm main
+deb-src http://apt.llvm.org/bookworm/ llvm-toolchain-bookworm main
 
-deb http://apt.llvm.org/bullseye/ llvm-toolchain-bullseye-14 main
-deb-src http://apt.llvm.org/bullseye/ llvm-toolchain-bullseye-14 main
+deb http://apt.llvm.org/bookworm/ llvm-toolchain-bookworm-17 main
+deb-src http://apt.llvm.org/bookworm/ llvm-toolchain-bookworm-17 main
 
-deb http://apt.llvm.org/bullseye/ llvm-toolchain-bullseye-17 main
-deb-src http://apt.llvm.org/bullseye/ llvm-toolchain-bullseye-17 main
-
-deb http://apt.llvm.org/bullseye/ llvm-toolchain-bullseye-20 main
-deb-src http://apt.llvm.org/bullseye/ llvm-toolchain-bullseye-20 main
+deb http://apt.llvm.org/bookworm/ llvm-toolchain-bookworm-20 main
+deb-src http://apt.llvm.org/bookworm/ llvm-toolchain-bookworm-20 main

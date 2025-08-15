@@ -10,8 +10,8 @@ env:
   CI_MAX_KERNEL_VERSION: '6.16'
   CI_MAX_EFW_VERSION: '0.21.0'
   CI_MIN_CLANG_VERSION: '13'
-  go_version: '~1.24'
-  prev_go_version: '~1.23'
+  go_version: '~1.25'
+  prev_go_version: '~1.24'
   CGO_ENABLED: '0'
   # Sync with Pipfile and netlify.toml.
   python_version: '~3.13'
@@ -142,7 +142,7 @@ jobs:
           go-version: '${{ env.prev_go_version }}'
 
       - run: go install lmb.io/vimto@latest
-      - run: go install gotest.tools/gotestsum@v1.12.0
+      - run: go install gotest.tools/gotestsum@v1.12.3
       - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends qemu-system-x86
       - run: sudo chmod 0666 /dev/kvm
 
@@ -188,7 +188,7 @@ jobs:
         with:
           go-version: '${{ env.go_version }}'
 
-      - run: go install gotest.tools/gotestsum@v1.12.0
+      - run: go install gotest.tools/gotestsum@v1.12.3
 
       - name: Test
         # Skip TestGoarches/loong64 because the GH arm64 Go toolchain seems to be weird.
@@ -234,7 +234,7 @@ jobs:
         with:
           go-version: '${{ env.go_version }}'
 
-      - run: go install gotest.tools/gotestsum@v1.12.0
+      - run: go install gotest.tools/gotestsum@v1.12.3
       - run: go install lmb.io/vimto@latest
       - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends qemu-system-x86
       - run: sudo chmod 0666 /dev/kvm
@@ -368,7 +368,7 @@ jobs:
         with:
           go-version: '${{ env.go_version }}'
 
-      - run: go install gotest.tools/gotestsum@v1.12.0
+      - run: go install gotest.tools/gotestsum@v1.12.3
 
       - name: Test
         run: >

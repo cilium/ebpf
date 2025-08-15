@@ -1,6 +1,6 @@
 # This Dockerfile generates a build environment for generating ELFs
 # of testdata programs. Run `make build` in this directory to build it.
-FROM golang:1.23-bullseye
+FROM golang:1.25-bookworm
 
 COPY llvm-snapshot.gpg.key .
 

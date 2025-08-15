@@ -1,5 +1,3 @@
-//go:build !windows
-
 package ringbuf
 
 import (
@@ -11,16 +9,14 @@ import (
 	"unsafe"
 
 	"github.com/cilium/ebpf"
-	"github.com/cilium/ebpf/internal/epoll"
+	"github.com/cilium/ebpf/internal/platform"
 	"github.com/cilium/ebpf/internal/sys"
-	"github.com/cilium/ebpf/internal/unix"
 )
 
 var (
-	ErrClosed  = os.ErrClosed
-	ErrFlushed = epoll.ErrFlushed
-	errEOR     = errors.New("end of ring")
-	errBusy    = errors.New("sample not committed yet")
+	ErrClosed = os.ErrClosed
+	errEOR    = errors.New("end of ring")
+	errBusy   = errors.New("sample not committed yet")
 )
 
 // ringbufHeader from 'struct bpf_ringbuf_hdr' in kernel/bpf/ringbuf.c
@@ -53,21 +49,20 @@ type Record struct {
 // Reader allows reading bpf_ringbuf_output
 // from user space.
 type Reader struct {
-	poller *epoll.Poller
+	poller *poller
 
 	// mu protects read/write access to the Reader structure
-	mu          sync.Mutex
-	ring        *ringbufEventRing
-	epollEvents []unix.EpollEvent
-	haveData    bool
-	deadline    time.Time
-	bufferSize  int
-	pendingErr  error
+	mu         sync.Mutex
+	ring       *ringbufEventRing
+	haveData   bool
+	deadline   time.Time
+	bufferSize int
+	pendingErr error
 }
 
 // NewReader creates a new BPF ringbuf reader.
 func NewReader(ringbufMap *ebpf.Map) (*Reader, error) {
-	if ringbufMap.Type() != ebpf.RingBuf {
+	if ringbufMap.Type() != ebpf.RingBuf && ringbufMap.Type() != ebpf.WindowsRingBuf {
 		return nil, fmt.Errorf("invalid Map type: %s", ringbufMap.Type())
 	}
 
@@ -76,13 +71,8 @@ func NewReader(ringbufMap *ebpf.Map) (*Reader, error) {
 		return nil, fmt.Errorf("ringbuffer map size %d is zero or not a power of two", maxEntries)
 	}
 
-	poller, err := epoll.New()
+	poller, err := newPoller(ringbufMap.FD())
 	if err != nil {
-		return nil, err
-	}
-
-	if err := poller.Add(ringbufMap.FD(), 0); err != nil {
-		poller.Close()
 		return nil, err
 	}
 
@@ -93,10 +83,13 @@ func NewReader(ringbufMap *ebpf.Map) (*Reader, error) {
 	}
 
 	return &Reader{
-		poller:      poller,
-		ring:        ring,
-		epollEvents: make([]unix.EpollEvent, 1),
-		bufferSize:  ring.size(),
+		poller:     poller,
+		ring:       ring,
+		bufferSize: ring.size(),
+		// On Windows, the wait handle is only set when the reader is created,
+		// so we miss any wakeups that happened before.
+		// Do an opportunistic read to get any pending samples.
+		haveData: platform.IsWindows,
 	}, nil
 }
 
@@ -115,12 +108,7 @@ func (r *Reader) Close() error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	if r.ring != nil {
-		r.ring.Close()
-		r.ring = nil
-	}
-
-	return nil
+	return r.ring.Close()
 }
 
 // SetDeadline controls how long Read and ReadInto will block waiting for samples.
@@ -163,7 +151,7 @@ func (r *Reader) ReadInto(rec *Record) error {
 				return pe
 			}
 
-			_, err := r.poller.Wait(r.epollEvents[:cap(r.epollEvents)], r.deadline)
+			err := r.poller.Wait(r.deadline)
 			if errors.Is(err, os.ErrDeadlineExceeded) || errors.Is(err, ErrFlushed) {
 				// Ignoring this for reading a valid entry after timeout or flush.
 				// This can occur if the producer submitted to the ring buffer

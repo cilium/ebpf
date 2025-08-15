@@ -1,5 +1,3 @@
-//go:build !windows
-
 package ringbuf
 
 import (
@@ -12,8 +10,6 @@ import (
 	"github.com/go-quicktest/qt"
 	"github.com/google/go-cmp/cmp"
 
-	"github.com/cilium/ebpf"
-	"github.com/cilium/ebpf/asm"
 	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/sys"
 	"github.com/cilium/ebpf/internal/testutils"
@@ -21,8 +17,9 @@ import (
 )
 
 type sampleMessage struct {
-	size  int
-	flags int32
+	size    int
+	flags   int32
+	discard bool
 }
 
 func TestMain(m *testing.M) {
@@ -46,7 +43,7 @@ func TestRingbufReader(t *testing.T) {
 		},
 		{
 			name:     "send three short samples, the second is discarded",
-			messages: []sampleMessage{{size: 5}, {size: 10}, {size: 15}},
+			messages: []sampleMessage{{size: 5}, {size: 10, discard: true}, {size: 15}},
 			want: map[int][]byte{
 				5:  {1, 2, 3, 4, 4},
 				15: {1, 2, 3, 4, 4, 3, 2, 1, 1, 2, 3, 4, 4, 3, 2},
@@ -54,7 +51,7 @@ func TestRingbufReader(t *testing.T) {
 		},
 		{
 			name:     "send five samples, every even is discarded",
-			messages: []sampleMessage{{size: 5}, {size: 10}, {size: 15}, {size: 20}, {size: 25}},
+			messages: []sampleMessage{{size: 5}, {size: 10, discard: true}, {size: 15}, {size: 20, discard: true}, {size: 25}},
 			want: map[int][]byte{
 				5:  {1, 2, 3, 4, 4},
 				15: {1, 2, 3, 4, 4, 3, 2, 1, 1, 2, 3, 4, 4, 3, 2},
@@ -118,100 +115,6 @@ func TestRingbufReader(t *testing.T) {
 			}
 		})
 	}
-}
-
-func outputSamplesProg(sampleMessages ...sampleMessage) (*ebpf.Program, *ebpf.Map, error) {
-	events, err := ebpf.NewMap(&ebpf.MapSpec{
-		Type:       ebpf.RingBuf,
-		MaxEntries: 4096,
-	})
-	if err != nil {
-		return nil, nil, err
-	}
-
-	var maxSampleSize int
-	for _, sampleMessage := range sampleMessages {
-		if sampleMessage.size > maxSampleSize {
-			maxSampleSize = sampleMessage.size
-		}
-	}
-
-	insns := asm.Instructions{
-		asm.LoadImm(asm.R0, 0x0102030404030201, asm.DWord),
-		asm.Mov.Reg(asm.R9, asm.R1),
-	}
-
-	bufDwords := (maxSampleSize / 8) + 1
-	for i := 0; i < bufDwords; i++ {
-		insns = append(insns,
-			asm.StoreMem(asm.RFP, int16(i+1)*-8, asm.R0, asm.DWord),
-		)
-	}
-
-	for sampleIdx, sampleMessage := range sampleMessages {
-		insns = append(insns,
-			asm.LoadMapPtr(asm.R1, events.FD()),
-			asm.Mov.Imm(asm.R2, int32(sampleMessage.size)),
-			asm.Mov.Imm(asm.R3, int32(0)),
-			asm.FnRingbufReserve.Call(),
-			asm.JEq.Imm(asm.R0, 0, "exit"),
-			asm.Mov.Reg(asm.R5, asm.R0),
-		)
-		for i := 0; i < sampleMessage.size; i++ {
-			insns = append(insns,
-				asm.LoadMem(asm.R4, asm.RFP, int16(i+1)*-1, asm.Byte),
-				asm.StoreMem(asm.R5, int16(i), asm.R4, asm.Byte),
-			)
-		}
-
-		// discard every even sample
-		if sampleIdx&1 != 0 {
-			insns = append(insns,
-				asm.Mov.Reg(asm.R1, asm.R5),
-				asm.Mov.Imm(asm.R2, sampleMessage.flags),
-				asm.FnRingbufDiscard.Call(),
-			)
-		} else {
-			insns = append(insns,
-				asm.Mov.Reg(asm.R1, asm.R5),
-				asm.Mov.Imm(asm.R2, sampleMessage.flags),
-				asm.FnRingbufSubmit.Call(),
-			)
-		}
-	}
-
-	insns = append(insns,
-		asm.Mov.Imm(asm.R0, int32(0)).WithSymbol("exit"),
-		asm.Return(),
-	)
-
-	prog, err := ebpf.NewProgram(&ebpf.ProgramSpec{
-		License:      "MIT",
-		Type:         ebpf.XDP,
-		Instructions: insns,
-	})
-	if err != nil {
-		events.Close()
-		return nil, nil, err
-	}
-
-	return prog, events, nil
-}
-
-func mustOutputSamplesProg(tb testing.TB, sampleMessages ...sampleMessage) (*ebpf.Program, *ebpf.Map) {
-	tb.Helper()
-
-	prog, events, err := outputSamplesProg(sampleMessages...)
-	if err != nil {
-		tb.Fatal(err)
-	}
-
-	tb.Cleanup(func() {
-		prog.Close()
-		events.Close()
-	})
-
-	return prog, events
 }
 
 func TestReaderBlocking(t *testing.T) {
@@ -279,8 +182,8 @@ func TestReaderNoWakeup(t *testing.T) {
 
 	prog, events := mustOutputSamplesProg(t,
 		sampleMessage{size: 5, flags: sys.BPF_RB_NO_WAKEUP}, // Read after timeout
-		sampleMessage{size: 6, flags: sys.BPF_RB_NO_WAKEUP}, // Discard
-		sampleMessage{size: 7, flags: sys.BPF_RB_NO_WAKEUP}) // Read won't block
+		sampleMessage{size: 7, flags: sys.BPF_RB_NO_WAKEUP}, // Read won't block
+	)
 
 	rd, err := NewReader(events)
 	if err != nil {
@@ -296,7 +199,7 @@ func TestReaderNoWakeup(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	qt.Assert(t, qt.Equals(rd.AvailableBytes(), 3*16))
+	qt.Assert(t, qt.Equals(rd.AvailableBytes(), 2*16))
 
 	if errno := syscall.Errno(-int32(ret)); errno != 0 {
 		t.Fatal("Expected 0 as return value, got", errno)
@@ -312,7 +215,7 @@ func TestReaderNoWakeup(t *testing.T) {
 		t.Errorf("Expected to read 5 bytes but got %d", len(record.RawSample))
 	}
 
-	qt.Assert(t, qt.Equals(rd.AvailableBytes(), 2*16))
+	qt.Assert(t, qt.Equals(rd.AvailableBytes(), 1*16))
 
 	record, err = rd.Read()
 
@@ -336,8 +239,8 @@ func TestReaderFlushPendingEvents(t *testing.T) {
 
 	prog, events := mustOutputSamplesProg(t,
 		sampleMessage{size: 5, flags: sys.BPF_RB_NO_WAKEUP}, // Read after Flush
-		sampleMessage{size: 6, flags: sys.BPF_RB_NO_WAKEUP}, // Discard
-		sampleMessage{size: 7, flags: sys.BPF_RB_NO_WAKEUP}) // Read won't block
+		sampleMessage{size: 7, flags: sys.BPF_RB_NO_WAKEUP}, // Read won't block
+	)
 
 	rd, err := NewReader(events)
 	if err != nil {

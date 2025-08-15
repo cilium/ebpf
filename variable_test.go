@@ -6,6 +6,7 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+	"unsafe"
 
 	"github.com/go-quicktest/qt"
 
@@ -291,14 +292,11 @@ func TestVariablePointerGC(t *testing.T) {
 	var obj obj_s
 	qt.Assert(t, qt.IsNil(loadAndAssign(t, spec, &obj, nil)))
 
-	// Set finalizer on obj to get notified when it is collected.
+	// Set cleanup on obj to get notified when it is collected.
 	ogc := make(chan struct{})
-	runtime.SetFinalizer(&obj, func(*obj_s) {
+	runtime.AddCleanup(&obj, func(*byte) {
 		close(ogc)
-	})
-
-	// Set finalizer on the last byte of the Memory to get notified when it is
-	// collected.
+	}, nil)
 	mem, err := obj.AtomicMap.unsafeMemory()
 	qt.Assert(t, qt.IsNil(err))
 	obj.AtomicMap.Close()
@@ -308,14 +306,17 @@ func TestVariablePointerGC(t *testing.T) {
 	go func() {
 		select {
 		case <-mgc:
-			panic("memory finalizer ran unexpectedly")
+			panic("memory cleanup ran unexpectedly")
 		case <-cancel:
 			return
 		}
 	}()
-	runtime.SetFinalizer(&mem.b[len(mem.b)-1], func(p *byte) {
+
+	// Set cleanup on the Memory's backing array to get notified when it is
+	// collected.
+	runtime.AddCleanup(unsafe.SliceData(mem.b), func(*byte) {
 		close(mgc)
-	})
+	}, nil)
 
 	// Pull out Program handle and Variable pointer so reference to obj is
 	// dropped.
@@ -342,7 +343,11 @@ func TestVariablePointerGC(t *testing.T) {
 	close(cancel)
 	runtime.KeepAlive(a32)
 
-	// Another GC cycle to trigger collecting the backing array.
+	// More GC cycles to collect the backing array. As long as the unsafe memory
+	// implementation is still on SetFinalizer, this needs multiple cycles to
+	// work, since finalizers can resurrect objects. 3 GCs seems to work reliably.
+	runtime.GC()
+	runtime.GC()
 	runtime.GC()
 
 	// Wait for backing array to be finalized.

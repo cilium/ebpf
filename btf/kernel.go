@@ -151,9 +151,9 @@ func loadKernelSpec() (*Spec, error) {
 			return nil, fmt.Errorf("load vmlinux: %w", err)
 		}
 
-		runtime.SetFinalizer(spec.decoder.sharedBuf, func(_ *sharedBuf) {
-			_ = unix.Munmap(raw)
-		})
+		runtime.AddCleanup(spec.decoder.sharedBuf, func(b []byte) {
+			_ = unix.Munmap(b)
+		}, raw)
 
 		return spec, nil
 	}

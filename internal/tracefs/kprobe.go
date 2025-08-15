@@ -199,7 +199,8 @@ type Event struct {
 	typ         ProbeType
 	group, name string
 	// event id allocated by the kernel. 0 if the event has already been removed.
-	id uint64
+	id      uint64
+	cleanup runtime.Cleanup
 }
 
 // NewEvent creates a new ephemeral trace event.
@@ -316,8 +317,17 @@ func NewEvent(args ProbeArgs) (*Event, error) {
 		return nil, fmt.Errorf("get trace event id: %w", err)
 	}
 
-	evt := &Event{args.Type, args.Group, eventName, tid}
-	runtime.SetFinalizer(evt, (*Event).Close)
+	evt := &Event{typ: args.Type, group: args.Group, name: eventName, id: tid}
+
+	type cleanupData struct {
+		typ ProbeType
+		pe  string
+	}
+
+	evt.cleanup = runtime.AddCleanup(evt, func(cleanupData cleanupData) {
+		_ = removeEvent(cleanupData.typ, pe)
+	}, cleanupData{args.Type, fmt.Sprintf("%s/%s", evt.group, evt.name)})
+
 	return evt, nil
 }
 
@@ -330,7 +340,7 @@ func (evt *Event) Close() error {
 	}
 
 	evt.id = 0
-	runtime.SetFinalizer(evt, nil)
+	evt.cleanup.Stop()
 	pe := fmt.Sprintf("%s/%s", evt.group, evt.name)
 	return removeEvent(evt.typ, pe)
 }

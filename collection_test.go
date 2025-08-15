@@ -806,6 +806,19 @@ func TestStructOpsMapSpecSimpleLoadAndAssign(t *testing.T) {
 		},
 	}
 
+	s, err := btf.LoadKernelSpec()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, _, _, err = doFindStructTypeByName(s, "bpf_testmod_ops")
+	if errors.Is(err, btf.ErrNotFound) {
+		t.Skip("bpf_testmod_ops not loaded")
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	coll := mustNewCollection(t, spec, nil)
 	for name := range spec.Maps {
 		qt.Assert(t, qt.IsNotNil(coll.Maps[name]))

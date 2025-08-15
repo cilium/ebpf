@@ -1,6 +1,7 @@
 package ebpf
 
 import (
+	"errors"
 	"testing"
 
 	"github.com/cilium/ebpf/btf"
@@ -29,6 +30,19 @@ func TestCreateStructOpsMapSpecSimple(t *testing.T) {
 				},
 			},
 		},
+	}
+
+	s, err := btf.LoadKernelSpec()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, _, _, err = doFindStructTypeByName(s, "bpf_testmod_ops")
+	if errors.Is(err, btf.ErrNotFound) {
+		t.Skip("bpf_testmod_ops not loaded")
+	}
+	if err != nil {
+		t.Fatal(err)
 	}
 
 	m, err := NewMap(ms)

@@ -24,6 +24,27 @@ import (
 	"github.com/cilium/ebpf/internal/unix"
 )
 
+func TestProgramLoadBoundToDevice(t *testing.T) {
+	ins := asm.Instructions{
+		asm.LoadImm(asm.R0, 2, asm.DWord).WithSymbol("out"),
+		asm.Return(),
+	}
+
+	_, err := NewProgram(&ProgramSpec{
+		Name:         "test",
+		Type:         XDP,
+		Ifindex:      math.MaxUint32,
+		AttachType:   AttachXDP,
+		Instructions: ins,
+		Flags:        sys.BPF_F_XDP_DEV_BOUND_ONLY,
+		License:      "MIT",
+	})
+
+	// Binding to loopback is not supported. Treate EOPNOTSUP as indication
+	// that passing the ifindex works. Pre 6.6 returns EINVAL.
+	qt.Assert(t, qt.ErrorIs(err, unix.EINVAL))
+}
+
 func TestProgramRun(t *testing.T) {
 	pat := []byte{0xDE, 0xAD, 0xBE, 0xEF}
 	buf := internal.EmptyBPFContext
@@ -643,9 +664,12 @@ func TestProgramRejectIncorrectByteOrder(t *testing.T) {
 	}
 }
 
+// This uses unkeyed fields on purpose to force setting a non-zero value when
+// a new field is added.
 func TestProgramSpecCopy(t *testing.T) {
 	a := &ProgramSpec{
 		"test",
+		1,
 		1,
 		1,
 		"attach",

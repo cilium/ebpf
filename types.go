@@ -144,7 +144,7 @@ func (mt MapType) hasPerCPUValue() bool {
 // canStoreMapOrProgram returns true if the Map stores references to another Map
 // or Program.
 func (mt MapType) canStoreMapOrProgram() bool {
-	return mt.canStoreMap() || mt.canStoreProgram()
+	return mt.canStoreMap() || mt.canStoreProgram() || mt.canStoreSturct()
 }
 
 // canStoreMap returns true if the map type accepts a map fd
@@ -157,6 +157,12 @@ func (mt MapType) canStoreMap() bool {
 // for update and returns a program id for lookup.
 func (mt MapType) canStoreProgram() bool {
 	return mt == ProgramArray || mt == WindowsProgramArray
+}
+
+// canStoreSturct returns true if the map type accepts a struct bytes with prog FDs
+// for update and returns a map id for lookup.
+func (mt MapType) canStoreSturct() bool {
+	return mt == StructOpsMap
 }
 
 // canHaveValueSize returns true if the map type supports setting a value size.

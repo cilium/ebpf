@@ -78,6 +78,12 @@ type MapSpec struct {
 	// InnerMap is used as a template for ArrayOfMaps and HashOfMaps
 	InnerMap *MapSpec
 
+	// MapExtra is an opaque field whose meaning is map-specific.
+	// For bloom filters, it specifies the number of hash functions (lower 4 bits).
+	//
+	// Available from 5.16.
+	MapExtra uint64
+
 	// Extra trailing bytes found in the ELF map definition when using structs
 	// larger than libbpf's bpf_map_def. nil if no trailing bytes were present.
 	// Must be nil or empty before instantiating the MapSpec into a Map.
@@ -534,6 +540,7 @@ func (spec *MapSpec) createMap(inner *sys.FD) (_ *Map, err error) {
 		MaxEntries: spec.MaxEntries,
 		MapFlags:   spec.Flags,
 		NumaNode:   spec.NumaNode,
+		MapExtra:   spec.MapExtra,
 	}
 
 	if inner != nil {
@@ -1808,4 +1815,27 @@ func sliceLen(slice any) (int, error) {
 		return 0, fmt.Errorf("%T is not a slice", slice)
 	}
 	return sliceValue.Len(), nil
+}
+
+// NewBloomFilter creates a new bloom filter map.
+//
+// valueSize is the size of the values to be hashed.
+// maxEntries is used to approximate the size of the bloom filter bitmap.
+// numHashes specifies the number of hash functions to use (1-15).
+// If numHashes is 0, the default of 5 hash functions will be used.
+//
+// The bloom filter map type is available from Linux 5.16.
+func NewBloomFilter(name string, valueSize, maxEntries uint32, numHashes uint8) (*MapSpec, error) {
+	if numHashes > 15 {
+		return nil, fmt.Errorf("number of hashes must be between 0 and 15, got %d", numHashes)
+	}
+
+	return &MapSpec{
+		Name:       name,
+		Type:       BloomFilter,
+		KeySize:    0, // Bloom filters don't have keys
+		ValueSize:  valueSize,
+		MaxEntries: maxEntries,
+		MapExtra:   uint64(numHashes),
+	}, nil
 }

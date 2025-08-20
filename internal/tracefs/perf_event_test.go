@@ -42,8 +42,9 @@ func TestValidIdentifier(t *testing.T) {
 		{"underscore first", "__x64_syscall", false},
 		{"contains number", "bpf_trace_run1", false},
 		{"underscore", "_", false},
-		{"contains dash", "-EINVAL", true},
+		{"leading dash", "-EINVAL", true},
 		{"contains number", "all0wed", false},
+		{"contains dash", "trace-group", false},
 	}
 
 	for _, tt := range tests {

@@ -72,11 +72,11 @@ func RandomGroup(prefix string) (string, error) {
 }
 
 // validIdentifier implements the equivalent of a regex match
-// against "^[a-zA-Z_][0-9a-zA-Z_]*$".
+// against "^[a-zA-Z_][0-9a-zA-Z_-]*$".
 //
-// Trace event groups, names and kernel symbols must adhere to this set
-// of characters. Non-empty, first character must not be a number, all
-// characters must be alphanumeric or underscore.
+// Trace event groups, names and kernel symbols must adhere to this set of
+// characters. Non-empty, first character must not be a number or hyphen, all
+// characters must be alphanumeric, underscore or hyphen.
 func validIdentifier(s string) bool {
 	if len(s) < 1 {
 		return false
@@ -86,7 +86,7 @@ func validIdentifier(s string) bool {
 		case c >= 'a' && c <= 'z':
 		case c >= 'A' && c <= 'Z':
 		case c == '_':
-		case i > 0 && c >= '0' && c <= '9':
+		case i > 0 && (c == '-' || c >= '0' && c <= '9'):
 
 		default:
 			return false

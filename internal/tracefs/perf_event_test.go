@@ -44,6 +44,7 @@ func TestValidIdentifier(t *testing.T) {
 		{"underscore", "_", false},
 		{"contains dash", "-EINVAL", true},
 		{"contains number", "all0wed", false},
+		{"contains dash", "trace-group", false},
 	}
 
 	for _, tt := range tests {

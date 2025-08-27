@@ -313,6 +313,42 @@ func TestReaderSetDeadline(t *testing.T) {
 	}
 }
 
+func TestReadAfterClose(t *testing.T) {
+	testutils.SkipOnOldKernel(t, "5.8", "BPF ring buffer")
+
+	prog, events := mustOutputSamplesProg(t,
+		sampleMessage{size: 5, flags: 0},
+		sampleMessage{size: 5, flags: 0},
+	)
+	ret, _, err := prog.Test(internal.EmptyBPFContext)
+	testutils.SkipIfNotSupported(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if errno := syscall.Errno(-int32(ret)); errno != 0 {
+		t.Fatal("Expected 0 as return value, got", errno)
+	}
+	rd, err := NewReader(events)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = rd.Read()
+	if err != nil {
+		t.Error("Expected no error after first Read, got:", err)
+	}
+
+	err = rd.Close()
+	if err != nil {
+		t.Error("Expected no error from Close, got: ", err)
+	}
+
+	_, err = rd.Read()
+	if err == nil || !errors.Is(err, ErrClosed) {
+		t.Error("Expected ErrClosed but got: ", err)
+	}
+}
+
 func BenchmarkReader(b *testing.B) {
 	testutils.SkipOnOldKernel(b, "5.8", "BPF ring buffer")
 

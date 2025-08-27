@@ -108,7 +108,13 @@ func (r *Reader) Close() error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	return r.ring.Close()
+	var err error
+	if r.ring != nil {
+		err = r.ring.Close()
+		r.ring = nil
+	}
+
+	return err
 }
 
 // SetDeadline controls how long Read and ReadInto will block waiting for samples.

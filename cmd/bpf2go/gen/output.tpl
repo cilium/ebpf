@@ -22,6 +22,34 @@ import (
 {{ end }}
 {{- end }}
 
+{{- if or .Maps (or .Variables .Programs) }}
+// Constant names for all maps, variables, and programs as defined in the ELF file.
+//
+// They can be passed to ebpf.CollectionSpec and ebpf.Collection map fields.
+const (
+{{- if .Maps }}
+	// {{ .Name }} map names.
+{{- range $name, $id := .Maps }}
+	{{ $.Name }}MapName{{ $id }} = "{{ $name }}"
+{{- end }}
+{{- end }}
+
+{{- if .Variables }}
+	// {{ .Name }} variable names.
+{{- range $name, $id := .Variables }}
+	{{ $.Name }}VariableName{{ $id }} = "{{ $name }}"
+{{- end }}
+{{- end }}
+
+{{- if .Programs }}
+	// {{ .Name }} program names.
+{{- range $name, $id := .Programs }}
+	{{ $.Name }}ProgramName{{ $id }} = "{{ $name }}"
+{{- end }}
+{{- end }}
+)
+{{- end }}
+
 // {{ .Name.Load }} returns the embedded CollectionSpec for {{ .Name }}.
 func {{ .Name.Load }}() (*ebpf.CollectionSpec, error) {
 	reader := bytes.NewReader({{ .Name.Bytes }})

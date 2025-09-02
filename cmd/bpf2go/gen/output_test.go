@@ -95,7 +95,7 @@ func TestCustomIdentifier(t *testing.T) {
 	qt.Assert(t, qt.StringContains(buf.String(), "DO_THING"))
 }
 
-func TestObjects(t *testing.T) {
+func TestObjectsAndConstants(t *testing.T) {
 	var buf bytes.Buffer
 	args := GenerateArgs{
 		Package:   "foo",
@@ -117,6 +117,10 @@ func TestObjects(t *testing.T) {
 	qt.Assert(t, qt.StringContains(str, "Map1 *ebpf.Map `ebpf:\"map1\"`"))
 	qt.Assert(t, qt.StringContains(str, "Var1 *ebpf.Variable `ebpf:\"var_1\"`"))
 	qt.Assert(t, qt.StringContains(str, "ProgFoo1 *ebpf.Program `ebpf:\"prog_foo_1\"`"))
+
+	qt.Assert(t, qt.StringContains(str, "barMapNameMap1 = \"map1\""))
+	qt.Assert(t, qt.StringContains(str, "barVariableNameVar1 = \"var_1\""))
+	qt.Assert(t, qt.StringContains(str, "barProgramNameProgFoo1 = \"prog_foo_1\""))
 }
 
 func TestGenerateStructTypes(t *testing.T) {

@@ -69,6 +69,15 @@ struct {
 	__type(value, struct perf_event);
 } perf_event_array __section(".maps");
 
+// Bloom filter map with map_extra for number of hash functions
+struct {
+	__uint(type, BPF_MAP_TYPE_BLOOM_FILTER);
+	__uint(key_size, 0);           // Bloom filters don't have keys
+	__uint(value_size, 8);         // Size of values to be hashed
+	__uint(max_entries, 1024);     // Used to approximate bitmap size
+	__uint(map_extra, 7);          // Number of hash functions (1-15)
+} bloom_filter __section(".maps");
+
 struct bpf_map_def array_of_hash_map __section("maps") = {
 	.type        = BPF_MAP_TYPE_ARRAY_OF_MAPS,
 	.key_size    = sizeof(uint32_t),

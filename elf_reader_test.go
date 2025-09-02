@@ -74,6 +74,14 @@ func TestLoadCollectionSpec(t *testing.T) {
 				Type:       PerfEventArray,
 				MaxEntries: 4096,
 			},
+			"bloom_filter": {
+				Name:       "bloom_filter",
+				Type:       BloomFilter,
+				KeySize:    0,
+				ValueSize:  8,
+				MaxEntries: 1024,
+				MapExtra:   7,
+			},
 			"btf_pin": {
 				Name:       "btf_pin",
 				Type:       Hash,

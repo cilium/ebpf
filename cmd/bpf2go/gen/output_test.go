@@ -117,6 +117,10 @@ func TestObjects(t *testing.T) {
 	qt.Assert(t, qt.StringContains(str, "Map1 *ebpf.Map `ebpf:\"map1\"`"))
 	qt.Assert(t, qt.StringContains(str, "Var1 *ebpf.Variable `ebpf:\"var_1\"`"))
 	qt.Assert(t, qt.StringContains(str, "ProgFoo1 *ebpf.Program `ebpf:\"prog_foo_1\"`"))
+
+	qt.Assert(t, qt.StringContains(str, "barMapMap1      = \"map1\""))
+	qt.Assert(t, qt.StringContains(str, "barVarVar1      = \"var_1\""))
+	qt.Assert(t, qt.StringContains(str, "barProgProgFoo1 = \"prog_foo_1\""))
 }
 
 func TestGenerateStructTypes(t *testing.T) {

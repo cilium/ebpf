@@ -19,6 +19,14 @@ type bpfEvent struct {
 	Comm [16]uint8
 }
 
+// Names of all BPF objects in the ELF.
+//
+// Used for safe lookups in a Collection or CollectionSpec.
+const (
+	bpfMapEvents        = "events"
+	bpfProgKprobeExecve = "kprobe_execve"
+)
+
 // loadBpf returns the embedded CollectionSpec for bpf.
 func loadBpf() (*ebpf.CollectionSpec, error) {
 	reader := bytes.NewReader(_BpfBytes)

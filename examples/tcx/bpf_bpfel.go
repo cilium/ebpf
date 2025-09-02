@@ -12,6 +12,16 @@ import (
 	"github.com/cilium/ebpf"
 )
 
+// Names of all BPF objects in the ELF.
+//
+// Used for safe lookups in a Collection or CollectionSpec.
+const (
+	bpfProgEgressProgFunc  = "egress_prog_func"
+	bpfProgIngressProgFunc = "ingress_prog_func"
+	bpfVarEgressPktCount   = "egress_pkt_count"
+	bpfVarIngressPktCount  = "ingress_pkt_count"
+)
+
 // loadBpf returns the embedded CollectionSpec for bpf.
 func loadBpf() (*ebpf.CollectionSpec, error) {
 	reader := bytes.NewReader(_BpfBytes)

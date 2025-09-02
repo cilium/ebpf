@@ -1816,4 +1816,3 @@ func sliceLen(slice any) (int, error) {
 	}
 	return sliceValue.Len(), nil
 }
-

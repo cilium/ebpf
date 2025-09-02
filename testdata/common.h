@@ -40,6 +40,7 @@ enum libbpf_tristate {
 #define BPF_MAP_TYPE_PERF_EVENT_ARRAY (4)
 #define BPF_MAP_TYPE_ARRAY_OF_MAPS (12)
 #define BPF_MAP_TYPE_HASH_OF_MAPS (13)
+#define BPF_MAP_TYPE_BLOOM_FILTER (30)
 
 #define BPF_F_NO_PREALLOC (1U << 0)
 #define BPF_F_CURRENT_CPU (0xffffffffULL)

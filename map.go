@@ -78,6 +78,12 @@ type MapSpec struct {
 	// InnerMap is used as a template for ArrayOfMaps and HashOfMaps
 	InnerMap *MapSpec
 
+	// MapExtra is an opaque field whose meaning is map-specific.
+	// For bloom filters, it specifies the number of hash functions (lower 4 bits).
+	//
+	// Available from 5.16.
+	MapExtra uint64
+
 	// Extra trailing bytes found in the ELF map definition when using structs
 	// larger than libbpf's bpf_map_def. nil if no trailing bytes were present.
 	// Must be nil or empty before instantiating the MapSpec into a Map.
@@ -534,6 +540,7 @@ func (spec *MapSpec) createMap(inner *sys.FD) (_ *Map, err error) {
 		MaxEntries: spec.MaxEntries,
 		MapFlags:   spec.Flags,
 		NumaNode:   spec.NumaNode,
+		MapExtra:   spec.MapExtra,
 	}
 
 	if inner != nil {

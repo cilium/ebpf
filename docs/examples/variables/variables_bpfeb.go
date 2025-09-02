@@ -12,6 +12,17 @@ import (
 	"github.com/cilium/ebpf"
 )
 
+// Names of all BPF objects in the ELF.
+//
+// Used for safe lookups in a Collection or CollectionSpec.
+const (
+	variablesProgConstExample  = "const_example"
+	variablesProgGlobalExample = "global_example"
+	variablesProgHiddenExample = "hidden_example"
+	variablesVarConstU32       = "const_u32"
+	variablesVarGlobalU16      = "global_u16"
+)
+
 // loadVariables returns the embedded CollectionSpec for variables.
 func loadVariables() (*ebpf.CollectionSpec, error) {
 	reader := bytes.NewReader(_VariablesBytes)

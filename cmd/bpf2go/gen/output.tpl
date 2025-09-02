@@ -22,6 +22,23 @@ import (
 {{ end }}
 {{- end }}
 
+{{- if or .Maps (or .Variables .Programs) }}
+// Names of all BPF objects in the ELF.
+//
+// Used for safe lookups in a Collection or CollectionSpec.
+const (
+{{- range $name, $id := .Maps }}
+	{{ $.Name }}Map{{ $id }} = "{{ $name }}"
+{{- end }}
+{{- range $name, $id := .Programs }}
+	{{ $.Name }}Prog{{ $id }} = "{{ $name }}"
+{{- end }}
+{{- range $name, $id := .Variables }}
+	{{ $.Name }}Var{{ $id }} = "{{ $name }}"
+{{- end }}
+)
+{{- end }}
+
 // {{ .Name.Load }} returns the embedded CollectionSpec for {{ .Name }}.
 func {{ .Name.Load }}() (*ebpf.CollectionSpec, error) {
 	reader := bytes.NewReader({{ .Name.Bytes }})

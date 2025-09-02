@@ -37,6 +37,15 @@ type bpfSkKey struct {
 	RemotePort uint32
 }
 
+// Names of all BPF objects in the ELF.
+//
+// Used for safe lookups in a Collection or CollectionSpec.
+const (
+	bpfMapMapEstabSk    = "map_estab_sk"
+	bpfMapRttEvents     = "rtt_events"
+	bpfProgBpfSockopsCb = "bpf_sockops_cb"
+)
+
 // loadBpf returns the embedded CollectionSpec for bpf.
 func loadBpf() (*ebpf.CollectionSpec, error) {
 	reader := bytes.NewReader(_BpfBytes)

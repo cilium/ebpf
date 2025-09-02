@@ -46,6 +46,21 @@ type testUbar struct {
 	_ [4]byte
 }
 
+// Names of all BPF objects in the ELF.
+//
+// Used for safe lookups in a Collection or CollectionSpec.
+const (
+	testMapMap1        = "map1"
+	testProgFilter     = "filter"
+	testVarAnInt       = "an_int"
+	testVarIntArray    = "int_array"
+	testVarMyConstant  = "my_constant"
+	testVarStructArray = "struct_array"
+	testVarStructConst = "struct_const"
+	testVarStructVar   = "struct_var"
+	testVarUnionVar    = "union_var"
+)
+
 // loadTest returns the embedded CollectionSpec for test.
 func loadTest() (*ebpf.CollectionSpec, error) {
 	reader := bytes.NewReader(_TestBytes)

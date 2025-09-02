@@ -1817,25 +1817,3 @@ func sliceLen(slice any) (int, error) {
 	return sliceValue.Len(), nil
 }
 
-// NewBloomFilter creates a new bloom filter map.
-//
-// valueSize is the size of the values to be hashed.
-// maxEntries is used to approximate the size of the bloom filter bitmap.
-// numHashes specifies the number of hash functions to use (1-15).
-// If numHashes is 0, the default of 5 hash functions will be used.
-//
-// The bloom filter map type is available from Linux 5.16.
-func NewBloomFilter(name string, valueSize, maxEntries uint32, numHashes uint8) (*MapSpec, error) {
-	if numHashes > 15 {
-		return nil, fmt.Errorf("number of hashes must be between 0 and 15, got %d", numHashes)
-	}
-
-	return &MapSpec{
-		Name:       name,
-		Type:       BloomFilter,
-		KeySize:    0, // Bloom filters don't have keys
-		ValueSize:  valueSize,
-		MaxEntries: maxEntries,
-		MapExtra:   uint64(numHashes),
-	}, nil
-}

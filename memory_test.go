@@ -4,7 +4,6 @@ import (
 	"io"
 	"math"
 	"os"
-	"runtime"
 	"testing"
 
 	"github.com/go-quicktest/qt"
@@ -87,9 +86,6 @@ func TestMemoryReadOnly(t *testing.T) {
 func TestMemoryClose(t *testing.T) {
 	mm, err := mustMmapableArray(t, 0).Memory()
 	qt.Assert(t, qt.IsNil(err))
-
-	// Avoid unmap running twice.
-	runtime.SetFinalizer(mm, nil)
 
 	// unmap panics if the operation fails.
 	mm.close()

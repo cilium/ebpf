@@ -16,6 +16,7 @@ type ringbufEventRing struct {
 	prod []byte
 	cons []byte
 	*ringReader
+	cleanup runtime.Cleanup
 }
 
 func newRingBufEventRing(mapFD, size int) (*ringbufEventRing, error) {
@@ -38,13 +39,16 @@ func newRingBufEventRing(mapFD, size int) (*ringbufEventRing, error) {
 		cons:       cons,
 		ringReader: newRingReader(cons_pos, prod_pos, prod[os.Getpagesize():]),
 	}
-	runtime.SetFinalizer(ring, (*ringbufEventRing).Close)
+	ring.cleanup = runtime.AddCleanup(ring, func(*byte) {
+		_ = unix.Munmap(prod)
+		_ = unix.Munmap(cons)
+	}, nil)
 
 	return ring, nil
 }
 
 func (ring *ringbufEventRing) Close() error {
-	runtime.SetFinalizer(ring, nil)
+	ring.cleanup.Stop()
 
 	prod, cons := ring.prod, ring.cons
 	ring.prod, ring.cons = nil, nil

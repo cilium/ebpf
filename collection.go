@@ -757,9 +757,8 @@ func (cl *collectionLoader) populateDeferredMaps() error {
 	return nil
 }
 
-// copyDataMember processes an individual member of the user-defined struct.
-// It determines whether the member is a function pointer or data member,
-// and handles it accordingly by setting up program attachments or copying data.
+// copyDataMember copies one field from the user struct into the kernel buffer.
+// If the field is a function pointer, record attach metadata instead.
 func (cl *collectionLoader) copyDataMember(
 	idx int,
 	member btf.Member,
@@ -779,8 +778,8 @@ func (cl *collectionLoader) copyDataMember(
 
 	kernMember, err := getStructMemberByName(kern.typ, memberName)
 	if err != nil {
+		// allow missing kernel member if user data is zero
 		if isMemoryZero(memberData[:memberSize]) {
-			// Skip if member doesn't exist in kernel BTF and data is zero
 			return nil
 		}
 		return fmt.Errorf("member %s not found in kernel BTF and data is not zero", memberName)
@@ -793,6 +792,8 @@ func (cl *collectionLoader) copyDataMember(
 
 	kernMemberOff := kernMember.Offset / 8
 	kernMemberData := structOps.kernVData[kernMemberOff:]
+
+	// normalize user/kernel types (strip typedef/qualifiers, one level)
 	memberType, err := skipModsAndTypedefs(kern.spec, member.Type)
 	if err != nil {
 		return fmt.Errorf("user: failed to skip typedefs for %s: %w", memberName, err)
@@ -803,6 +804,7 @@ func (cl *collectionLoader) copyDataMember(
 		return fmt.Errorf("kern: failed to skip typedefs for %s: %w", kernMember.Name, err)
 	}
 
+	// function-pointer member: map to program & record attach info
 	if _, ok := memberType.(*btf.Pointer); ok {
 		var fnName string
 
@@ -831,11 +833,13 @@ func (cl *collectionLoader) copyDataMember(
 			return fmt.Errorf("program %s: unexpected attach type %d", ps.Name, attachType)
 		}
 
+		// where the kernel expects the prog FD to be written
 		kernFuncOff := kern.dataMember.Offset/8 + kern.typ.Members[kernMemberIdx].Offset/8
 		structOps.kernFuncOff[idx] = int(kernFuncOff)
 		structOps.progAttachType[ps.Name] = attachType
 		cl.stOpsProgsToMap[ps.Name] = ms.Name
 
+		// seed program with attach metadata (checked at load time)
 		ps.Instructions[0].Metadata.Set(structOpsProgMetaKey{}, &structOpsProgMeta{
 			attachBtfId: kern.typeID,
 			attachType:  attachType,
@@ -854,8 +858,8 @@ func (cl *collectionLoader) copyDataMember(
 	return nil
 }
 
-// initKernStructOps collects typed metadata for struct_ops maps from the CollectionSpec.
-// It does not modify specs nor create kernel objects. Value population happens in a follow-up PR.
+// initKernStructOps indexes struct_ops maps: resolve kernel types, allocate per-map state,
+// and stage copy/attach metadata. No kernel objects are created here.
 func (cl *collectionLoader) initKernStructOps() error {
 	for _, ms := range cl.coll.Maps {
 		if ms.Type != StructOpsMap {
@@ -872,12 +876,14 @@ func (cl *collectionLoader) initKernStructOps() error {
 			return fmt.Errorf("user struct type should be a Struct")
 		}
 
+		// resolve kernel-side types (target + wrapper)
 		kernTypes, err := findStructOpsKernTypes(userStructType)
 		if err != nil {
 			return fmt.Errorf("find kern_type: %w", err)
 		}
 		ms.Value = kernTypes.typ
 
+		// allocate per-map state (names, offsets, kernel buffer, attach types, typeID)
 		structOps := &structOpsSpec{
 			make([]string, len(kernTypes.typ.Members)),
 			make([]int, len(kernTypes.typ.Members)),
@@ -893,7 +899,7 @@ func (cl *collectionLoader) initKernStructOps() error {
 			return err
 		}
 
-		// copy data from user-defined struct to kern_vdata
+		// populate kernel buffer & record attach info per member
 		for idx, member := range kernTypes.typ.Members {
 			if err := cl.copyDataMember(
 				idx, member,

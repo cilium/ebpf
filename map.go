@@ -574,6 +574,8 @@ func (spec *MapSpec) createMap(inner *sys.FD) (_ *Map, err error) {
 				return nil, fmt.Errorf("value must be Struct type")
 			}
 
+			// struct_ops: resolve wrapper type ("bpf_struct_ops_<name>") and
+			// record kernel-specific BTF IDs / FDs needed for map creation.
 			userStructType, s, modBtfObjId, err := findStructByNameWithPrefix(s, userStType)
 			if err != nil {
 				return nil, fmt.Errorf("lookup struct type: %w", err)
@@ -589,11 +591,14 @@ func (spec *MapSpec) createMap(inner *sys.FD) (_ *Map, err error) {
 			attr.BtfFd = uint32(h.FD())
 
 			if modBtfObjId != 0 {
+				// BPF_F_VTYPE_BTF_OBJ_FD is required if the type comes from a module
 				attr.MapFlags |= sys.BPF_F_VTYPE_BTF_OBJ_FD
+				// resolve a module handler for the kernel model
 				modH, err := btf.NewHandleFromID(btf.ID(modBtfObjId))
 				if err != nil {
 					return nil, fmt.Errorf("open module BTF (id=%d): %w", modBtfObjId, err)
 				}
+				// set FD for the kernel module
 				attr.ValueTypeBtfObjFd = int32(modH.FD())
 				defer modH.Close()
 			}

@@ -18,39 +18,57 @@ type structOpsProgMeta struct {
 	modBtfObjID uint32
 }
 
-// structOpsKernTypes holds information about kernel types related to struct_ops
+// structOpsKernTypes groups all kernel-side BTF artefacts that belong to a
+// resolved struct_ops.
 type structOpsKernTypes struct {
 	spec *btf.Spec
-	// The target kernel struct type
-	typ *btf.Struct
-	// The BTF type ID of the target kernel struct
+	// target kernel struct type (e.g. tcp_congestion_ops).
+	typ    *btf.Struct
 	typeID btf.TypeID
-	// The wrapper struct type that contains the target struct
+	// wrapper struct "bpf_struct_ops_<name>" that contains typ.
 	valueType *btf.Struct
-	// The member within ValueType that holds the target struct
+	// The *btf.Member within valueType that embeds typ.
 	dataMember *btf.Member
-	// mod_btf
+	// The BTF object ID of the module where the type was found
+	// 0 if resolved in vmlinux.
 	modBtfObjId uint32
 }
 
 // used to holds "environment specific" data
 type structOpsSpec struct {
-	// attachType -> programSpec
+	// programName keeps track of program symbols by attach order.
 	programName []string
+
+	// kernFuncOff contains the byte offsets into kernVData where
+	// program FDs must be written for function pointer members.
 	kernFuncOff []int
-	/* e.g. struct bpf_struct_ops_tcp_congestion_ops in
-	 *      btf_vmlinux's format.
-	 * struct bpf_struct_ops_tcp_congestion_ops {
-	 *	[... some other kernel fields ...]
-	 *	struct tcp_congestion_ops data;
-	 * }
-	 * kern_vdata-size == sizeof(struct bpf_struct_ops_tcp_congestion_ops)
-	 * bpf_map__init_kern_struct_ops() will populate the "kern_vdata"
-	 * from "data".
+
+	/*
+	 * kernVData mirrors the kernel-side representation of the
+	 * struct_ops type, including its nested data. For example:
+	 *
+	 *   struct bpf_struct_ops_tcp_congestion_ops {
+	 *       [... kernel internal fields ...]
+	 *       struct tcp_congestion_ops data;
+	 *   }
+	 *
+	 * In this case, len(kernVData) == sizeof(struct bpf_struct_ops_tcp_congestion_ops).
+	 * copyDataMember() will copy user-supplied data
+	 * into kernVData, which is then pushed into the map.
 	 */
-	kernVData       []byte
-	kernTypes       *structOpsKernTypes
-	progAttachType  map[string]sys.AttachType
+	kernVData []byte
+
+	// kernTypes describes the BTF types of the target struct_ops
+	// object and its nested members, used for resolving offsets
+	// and function pointer
+	kernTypes *structOpsKernTypes
+
+	// progAttachType maps program names to the sys.AttachType
+	// expected by the kernel when attaching each function pointer.
+	progAttachType map[string]sys.AttachType
+
+	// progAttachBtfID holds the BTF type ID of the struct_ops
+	// target in vmlinux
 	progAttachBtfID btf.TypeID
 }
 
@@ -69,11 +87,8 @@ type structOpsMeta struct {
 	data []byte
 }
 
-// extractStructOpsMeta returns the *structops.Meta embedded in a MapSpec’s Contents
-// according to the struct-ops convention:
-//
-//	contents[0].Key   == uint32(0)
-//	contents[0].Value == *structopsMeta
+// extractStructOpsMeta retrieves the structOpsMeta value embedded in a
+// MapSpec's Contents, following the struct_ops map convention.
 func extractStructOpsMeta(contents []MapKV) (*structOpsMeta, error) {
 	if len(contents) == 0 {
 		return nil, fmt.Errorf("struct_ops: missing meta at Contents[0]")
@@ -92,11 +107,15 @@ func extractStructOpsMeta(contents []MapKV) (*structOpsMeta, error) {
 	return &meta, nil
 }
 
-// findByTypeFromStruct searches the given BTF struct `st` for the *first* member
-// whose BTF type **sidentity** equals `typ` (after resolving modifiers).
+// findByTypeFromStruct searches for the first member of a struct whose
+// resolved BTF type ID matches the given typ.
 //
-// The comparison is done via TypeID equality inside the same Spec, so a
-// typedef chain that ultimately refers to the same concrete type will match.
+// It resolves the BTF type ID of typ and compares it against each
+// member’s TypeID in st.Members. If a match is found, the corresponding
+// *btf.Member is returned.
+//
+// Returns an error if typ cannot be resolved, if any member type
+// resolution fails, or if no member with the requested type exists.
 func findByTypeFromStruct(spec *btf.Spec, st *btf.Struct, typ btf.Type) (*btf.Member, error) {
 	typeId, err := spec.TypeID(typ)
 	if err != nil {
@@ -116,20 +135,45 @@ func findByTypeFromStruct(spec *btf.Spec, st *btf.Struct, typ btf.Type) (*btf.Me
 	return nil, fmt.Errorf("member of type %s not found in %s", typ.TypeName(), st.Name)
 }
 
-// findStructByNameWithPrefix looks up a BTF struct whose name is the given `name`
-// prefixed by `structOpsValuePrefix` (“bpf_dummy_ops” → “bpf_struct_ops_bpf_dummy_ops”).
+// findStructByNameWithPrefix resolves a struct_ops "value" type by name,
+// after applying the standard prefix convention.
+//
+// It expects val to be the user-visible struct type (e.g. "bpf_dummy_ops")
+// and looks up the kernel-side wrapper name:
+//
+//	"bpf_dummy_ops" -> "bpf_struct_ops_bpf_dummy_ops"
+//
+// Returns the matching *btf.Struct, the *btf.Spec it was found in (either the
+// base vmlinux spec or a module spec), and the module BTF ID (0 for vmlinux).
+// See doFindStructTypeByName for resolution details and error behavior.
 func findStructByNameWithPrefix(s *btf.Spec, val *btf.Struct) (*btf.Struct, *btf.Spec, uint32, error) {
 	return doFindStructTypeByName(s, structOpsValuePrefix+val.TypeName())
 }
 
-// findStructTypeByName iterates over *all* BTF types contained in the given Spec and
-// returns the first *btf.Struct whose TypeName() exactly matches `name`.
+// findStructTypeByName resolves the exact BTF struct type that corresponds
+// to typ.TypeName() by searching first in vmlinux and then across all loaded
+// kernel modules.
+//
+// Returns the first *btf.Struct that matches the name verbatim, the *btf.Spec
+// where it was found, and the module BTF ID (0 if found in vmlinux).
+// If no matching struct exists anywhere, btf.ErrNotFound is returned.
 func findStructTypeByName(s *btf.Spec, typ *btf.Struct) (*btf.Struct, *btf.Spec, uint32, error) {
 	return doFindStructTypeByName(s, typ.TypeName())
 }
 
-// doFindStructTypeByName iterates over *all* BTF types contained in the given Spec and
-// returns the first *btf.Struct whose TypeName() exactly matches `name`.
+// doFindStructTypeByName looks up a struct type with the exact name in the
+// provided base BTF spec, and falls back to scanning all loaded module BTFs
+// if it is not present in vmlinux.
+//
+// Search order and behavior:
+//  1. vmlinux (base spec): try AnyTypeByName(name). If it exists and is a
+//     *btf.Struct, return it immediately with moduleID=0.
+//     - If AnyTypeByName returns a non-notfound error, the error is propagated.
+//     - If a type is found but is not a *btf.Struct, we fall back to modules.
+//  2. modules: see findStructTypeByNameFromModule.
+//
+// Returns (*btf.Struct, *btf.Spec, moduleID, nil) on success, or btf.ErrNotFound
+// if no matching struct is present in vmlinux or any module.
 func doFindStructTypeByName(s *btf.Spec, name string) (*btf.Struct, *btf.Spec, uint32, error) {
 	if s == nil {
 		return nil, nil, 0, fmt.Errorf("nil BTF: %w", btf.ErrNotFound)
@@ -146,8 +190,13 @@ func doFindStructTypeByName(s *btf.Spec, name string) (*btf.Struct, *btf.Spec, u
 	return findStructTypeByNameFromModule(s, name)
 }
 
-// findStructTypeByNameFromModule walks over the BTF info of loaded modules and
-// searches for struct `name`.
+// findStructTypeByNameFromModule scans all loaded kernel modules and tries
+// to resolve a struct type with the exact name. The iteration uses the base
+// vmlinux spec for string/ID interning as required by btf.Handle.Spec(base).
+//
+// For the first module where AnyTypeByName(name) returns a *btf.Struct,
+// the function returns that struct, the module's *btf.Spec, and its BTF ID.
+// If the type is not found in any module, btf.ErrNotFound is returned.
 func findStructTypeByNameFromModule(base *btf.Spec, name string) (*btf.Struct, *btf.Spec, uint32, error) {
 	it := new(btf.HandleIterator)
 
@@ -184,9 +233,9 @@ func findStructTypeByNameFromModule(base *btf.Spec, name string) (*btf.Struct, *
 	return nil, nil, 0, btf.ErrNotFound
 }
 
-// findStructOpsKernTypes	discovers all kernel-side BTF artefacts related to a given
-//
-// *struct_ops* family identified by its **base name** (e.g. "tcp_congestion_ops").
+// findStructOpsKernTypes discovers all kernel-side BTF artifacts that belong to
+// a given struct_ops, identified by the user-visible base struct name
+// (e.g., "tcp_congestion_ops").
 func findStructOpsKernTypes(userStructType *btf.Struct) (*structOpsKernTypes, error) {
 	spec, err := btf.LoadKernelSpec()
 	if err != nil {
@@ -227,16 +276,14 @@ func findStructOpsKernTypes(userStructType *btf.Struct) (*structOpsKernTypes, er
 	}, nil
 }
 
-// skipModsAndTypedefs returns the **next underlying type** by peeling off a
-// single layer of “type wrappers” in BTF:
+// skipModsAndTypedefs resolves a single layer of BTF indirection/qualification
+// for the given type within the provided *btf.Spec.
 //
-//   - btf.Typedef
-//   - btf.Const
-//   - btf.Volatile
-//   - btf.Restrict
-//
-// If `typ` is already a concrete type (struct, int, ptr, etc.) it is returned
-// unchanged.
+// Behavior:
+//   - Uses s.TypeID(typ) and s.TypeByID(id) to canonicalize the type within s.
+//   - If the resolved type is a Typedef or C qualifier (Const/Volatile/Restrict),
+//     returns its immediate underlying type (one level).
+//   - Otherwise returns the resolved type as-is.
 func skipModsAndTypedefs(s *btf.Spec, typ btf.Type) (btf.Type, error) {
 	typeID, err := s.TypeID(typ)
 	if err != nil {
@@ -269,6 +316,7 @@ func getStructMemberByName(s *btf.Struct, name string) (btf.Member, error) {
 		if member.Name == name {
 			return member, nil
 		}
+		// target kernel struct type (e.g. tcp_congestion_ops).
 	}
 	return btf.Member{}, fmt.Errorf("member %s not found in struct %s", name, s.Name)
 }

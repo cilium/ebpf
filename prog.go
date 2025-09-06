@@ -397,6 +397,7 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions, c *btf.Cache)
 
 	if spec.Type == StructOps {
 		if meta, ok := spec.Instructions[0].Metadata.Get(structOpsProgMetaKey{}).(*structOpsProgMeta); ok {
+			// set AttachBtfId / ExpectedAttachType from metadata
 			attr.AttachBtfId = sys.TypeID(meta.attachBtfId)
 			attr.ExpectedAttachType = meta.attachType
 
@@ -407,6 +408,7 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions, c *btf.Cache)
 					return nil, fmt.Errorf("open module BTF handle (id=%d): %w", meta.modBtfObjID, err)
 				}
 				modH = h
+				// set AttachBtfObjFd if the type comes from a module
 				attr.AttachBtfObjFd = uint32(h.FD())
 				defer modH.Close()
 			}

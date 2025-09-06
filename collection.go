@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"strings"
+	"unsafe"
 
 	"github.com/cilium/ebpf/asm"
 	"github.com/cilium/ebpf/btf"
@@ -366,6 +367,11 @@ func NewCollectionWithOptions(spec *CollectionSpec, opts CollectionOptions) (*Co
 	}
 	defer loader.close()
 
+	// initialize struct_ops maps
+	if err := loader.initKernStructOps(); err != nil {
+		return nil, err
+	}
+
 	// Create maps first, as their fds need to be linked into programs.
 	for mapName := range spec.Maps {
 		if _, err := loader.loadMap(mapName); err != nil {
@@ -413,6 +419,10 @@ type collectionLoader struct {
 	programs map[string]*Program
 	vars     map[string]*Variable
 	types    *btf.Cache
+	// map name -> structOpsSpec
+	stOpsSpecs map[string]*structOpsSpec
+	// structOps program name -> structOpsMap name
+	stOpsProgsToMap map[string]string
 }
 
 func newCollectionLoader(coll *CollectionSpec, opts *CollectionOptions) (*collectionLoader, error) {
@@ -438,6 +448,8 @@ func newCollectionLoader(coll *CollectionSpec, opts *CollectionOptions) (*collec
 		make(map[string]*Program),
 		make(map[string]*Variable),
 		newBTFCache(&opts.Programs),
+		make(map[string]*structOpsSpec),
+		make(map[string]string),
 	}, nil
 }
 
@@ -581,6 +593,26 @@ func (cl *collectionLoader) loadProgram(progName string) (*Program, error) {
 	}
 
 	cl.programs[progName] = prog
+
+	if prog.Type() == StructOps {
+		mapName, ok := cl.stOpsProgsToMap[prog.name]
+		if !ok {
+			return nil, fmt.Errorf("program %s should be linked to a StructOpsMap", prog.name)
+		}
+
+		structOps, ok := cl.stOpsSpecs[mapName]
+		if !ok {
+			return nil, fmt.Errorf("program %s has been loaded but not associated", prog.name)
+		}
+
+		attachType := structOps.progAttachType[prog.name]
+		if int(attachType) > len(structOps.kernTypes.typ.Members) {
+			return nil, fmt.Errorf("program %s: unexpected attach type %d",
+				prog.name, attachType)
+		}
+		structOps.programName[attachType] = progSpec.Name
+	}
+
 	return prog, nil
 }
 
@@ -688,9 +720,196 @@ func (cl *collectionLoader) populateDeferredMaps() error {
 			}
 		}
 
+		if mapSpec.Type == StructOpsMap {
+			structOps, ok := cl.stOpsSpecs[mapName]
+			if !ok {
+				return fmt.Errorf("struct_ops Map: %s is not initialized", mapName)
+			}
+
+			for idx, progName := range structOps.programName {
+				if progName == "" {
+					continue // unlikely to happen
+				}
+				// loadProgram is idempotent and could return an existing Program.
+				prog, err := cl.loadProgram(progName)
+				if err != nil {
+					return fmt.Errorf("loading program %s is not loaded, for map %s: %w",
+						progName, mapName, err)
+				}
+				defer prog.Close()
+
+				// populate ProgFDs as Values
+				off := structOps.kernFuncOff[idx]
+				ptr := unsafe.Pointer(&structOps.kernVData[0])
+				*(*uint64)(unsafe.Pointer(uintptr(ptr) + uintptr(off))) = uint64(prog.FD())
+			}
+
+			mapSpec.Contents[0] =
+				MapKV{Key: uint32(0), Value: structOps.kernVData}
+		}
+
 		// Populate and freeze the map if specified.
 		if err := m.finalize(mapSpec); err != nil {
 			return fmt.Errorf("populating map %s: %w", mapName, err)
+		}
+	}
+
+	return nil
+}
+
+// copyDataMember copies one field from the user struct into the kernel buffer.
+// If the field is a function pointer, record attach metadata instead.
+func (cl *collectionLoader) copyDataMember(
+	idx int,
+	member btf.Member,
+	kern *structOpsKernTypes,
+	structOps *structOpsSpec,
+	structOpsMeta *structOpsMeta,
+	ms *MapSpec,
+) error {
+	memberName := member.Name
+	memberOff := member.Offset / 8
+	memberData := structOpsMeta.data[memberOff:]
+
+	memberSize, err := btf.Sizeof(member.Type)
+	if err != nil {
+		return fmt.Errorf("failed to resolve the size of member %s: %w", memberName, err)
+	}
+
+	kernMember, err := getStructMemberByName(kern.typ, memberName)
+	if err != nil {
+		// allow missing kernel member if user data is zero
+		if isMemoryZero(memberData[:memberSize]) {
+			return nil
+		}
+		return fmt.Errorf("member %s not found in kernel BTF and data is not zero", memberName)
+	}
+
+	kernMemberIdx := getStructMemberIndexOf(kern.typ, kernMember)
+	if member.BitfieldSize > 0 || kernMember.BitfieldSize > 0 {
+		return fmt.Errorf("bitfield %s is not supported", memberName)
+	}
+
+	kernMemberOff := kernMember.Offset / 8
+	kernMemberData := structOps.kernVData[kernMemberOff:]
+
+	// normalize user/kernel types (strip typedef/qualifiers, one level)
+	memberType, err := skipModsAndTypedefs(kern.spec, member.Type)
+	if err != nil {
+		return fmt.Errorf("user: failed to skip typedefs for %s: %w", memberName, err)
+	}
+
+	kernMemberType, err := skipModsAndTypedefs(kern.spec, kernMember.Type)
+	if err != nil {
+		return fmt.Errorf("kern: failed to skip typedefs for %s: %w", kernMember.Name, err)
+	}
+
+	// function-pointer member: map to program & record attach info
+	if _, ok := memberType.(*btf.Pointer); ok {
+		var fnName string
+
+		for _, fn := range structOpsMeta.funcs {
+			if fn.member == memberName {
+				fnName = fn.progName
+				break
+			}
+
+		}
+		if fnName == "" {
+			// skip if the member is not specified in the MapSpec
+			return nil
+		}
+
+		ps, ok := cl.coll.Programs[fnName]
+		if !ok {
+			return fmt.Errorf("Program %s is not found in CollectionSpec", fnName)
+		}
+		if ps.Type != StructOps {
+			return fmt.Errorf("program %s is not a valid StructOps program", fnName)
+		}
+
+		attachType := sys.AttachType(kernMemberIdx)
+		if int(attachType) > len(kern.typ.Members) {
+			return fmt.Errorf("program %s: unexpected attach type %d", ps.Name, attachType)
+		}
+
+		// where the kernel expects the prog FD to be written
+		kernFuncOff := kern.dataMember.Offset/8 + kern.typ.Members[kernMemberIdx].Offset/8
+		structOps.kernFuncOff[idx] = int(kernFuncOff)
+		structOps.progAttachType[ps.Name] = attachType
+		cl.stOpsProgsToMap[ps.Name] = ms.Name
+
+		// seed program with attach metadata (checked at load time)
+		ps.Instructions[0].Metadata.Set(structOpsProgMetaKey{}, &structOpsProgMeta{
+			attachBtfId: kern.typeID,
+			attachType:  attachType,
+			modBtfObjID: kern.modBtfObjId,
+		})
+	}
+
+	// Handle data member. copy data members from the user-defined struct to the kernel data buffer.
+	// It ensures that the sizes match between user and kernel types before copying the data.
+	kernMemberSize, err := btf.Sizeof(kernMemberType)
+	if err != nil || memberSize != kernMemberSize {
+		return fmt.Errorf("size mismatch for member %s: %d != %d (kernel)", memberName, memberSize, kernMemberSize)
+	}
+	copy(kernMemberData[:memberSize], memberData[:memberSize])
+
+	return nil
+}
+
+// initKernStructOps indexes struct_ops maps: resolve kernel types, allocate per-map state,
+// and stage copy/attach metadata. No kernel objects are created here.
+func (cl *collectionLoader) initKernStructOps() error {
+	for _, ms := range cl.coll.Maps {
+		if ms.Type != StructOpsMap {
+			continue
+		}
+
+		userSt := ms.Value
+		if userSt == nil {
+			return fmt.Errorf("user struct type should be specified as Value")
+		}
+
+		userStructType, ok := ms.Value.(*btf.Struct)
+		if !ok {
+			return fmt.Errorf("user struct type should be a Struct")
+		}
+
+		// resolve kernel-side types (target + wrapper)
+		kernTypes, err := findStructOpsKernTypes(userStructType)
+		if err != nil {
+			return fmt.Errorf("find kern_type: %w", err)
+		}
+		ms.Value = kernTypes.typ
+
+		// allocate per-map state (names, offsets, kernel buffer, attach types, typeID)
+		structOps := &structOpsSpec{
+			make([]string, len(kernTypes.typ.Members)),
+			make([]int, len(kernTypes.typ.Members)),
+			make([]byte, kernTypes.valueType.Size),
+			kernTypes,
+			make(map[string]sys.AttachType),
+			kernTypes.typeID,
+		}
+		cl.stOpsSpecs[ms.Name] = structOps
+
+		structOpsMeta, err := extractStructOpsMeta(ms.Contents)
+		if err != nil {
+			return err
+		}
+
+		// populate kernel buffer & record attach info per member
+		for idx, member := range kernTypes.typ.Members {
+			if err := cl.copyDataMember(
+				idx, member,
+				kernTypes,
+				structOps,
+				structOpsMeta,
+				ms,
+			); err != nil {
+				return err
+			}
 		}
 	}
 

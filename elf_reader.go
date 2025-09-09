@@ -873,9 +873,9 @@ func (ec *elfCode) loadBTFMaps() error {
 func mapSpecFromBTF(es *elfSection, vs *btf.VarSecinfo, def *btf.Struct, spec *btf.Spec, name string, inner bool) (*MapSpec, error) {
 	var (
 		key, value         btf.Type
-		keySize, valueSize uint32
+		keySize, valueSize uint64
 		mapType            MapType
-		flags, maxEntries  uint32
+		flags, maxEntries  uint64
 		pinType            PinType
 		mapExtra           uint64
 		innerMapSpec       *MapSpec
@@ -921,7 +921,7 @@ func mapSpecFromBTF(es *elfSection, vs *btf.VarSecinfo, def *btf.Struct, spec *b
 				return nil, fmt.Errorf("can't get size of BTF key: %w", err)
 			}
 
-			keySize = uint32(size)
+			keySize = uint64(size)
 
 		case "value":
 			if valueSize != 0 {
@@ -940,7 +940,7 @@ func mapSpecFromBTF(es *elfSection, vs *btf.VarSecinfo, def *btf.Struct, spec *b
 				return nil, fmt.Errorf("can't get size of BTF value: %w", err)
 			}
 
-			valueSize = uint32(size)
+			valueSize = uint64(size)
 
 		case "key_size":
 			// Key needs to be nil and keySize needs to be 0 for key_size to be
@@ -1061,10 +1061,10 @@ func mapSpecFromBTF(es *elfSection, vs *btf.VarSecinfo, def *btf.Struct, spec *b
 	return &MapSpec{
 		Name:       sanitizeName(name, -1),
 		Type:       MapType(mapType),
-		KeySize:    keySize,
-		ValueSize:  valueSize,
-		MaxEntries: maxEntries,
-		Flags:      flags,
+		KeySize:    uint32(keySize),
+		ValueSize:  uint32(valueSize),
+		MaxEntries: uint32(maxEntries),
+		Flags:      uint32(flags),
 		Key:        key,
 		Value:      value,
 		Pinning:    pinType,
@@ -1075,20 +1075,31 @@ func mapSpecFromBTF(es *elfSection, vs *btf.VarSecinfo, def *btf.Struct, spec *b
 	}, nil
 }
 
-// uintFromBTF resolves the __uint macro, which is a pointer to a sized
-// array, e.g. for int (*foo)[10], this function will return 10.
-func uintFromBTF(typ btf.Type) (uint32, error) {
-	ptr, ok := typ.(*btf.Pointer)
-	if !ok {
-		return 0, fmt.Errorf("not a pointer: %v", typ)
-	}
+// uintFromBTF resolves the __uint and __ulong macros.
+//
+// __uint emits a pointer to a sized array. For int (*foo)[10], this function
+// will return 10.
+//
+// __ulong emits an enum with a single value that can represent a 64-bit
+// integer. The first (and only) enum value is returned.
+func uintFromBTF(typ btf.Type) (uint64, error) {
+	switch t := typ.(type) {
+	case *btf.Pointer:
+		arr, ok := t.Target.(*btf.Array)
+		if !ok {
+			return 0, fmt.Errorf("not a pointer to array: %v", typ)
+		}
+		return uint64(arr.Nelems), nil
 
-	arr, ok := ptr.Target.(*btf.Array)
-	if !ok {
-		return 0, fmt.Errorf("not a pointer to array: %v", typ)
-	}
+	case *btf.Enum:
+		if len(t.Values) == 0 {
+			return 0, errors.New("enum has no values")
+		}
+		return t.Values[0].Value, nil
 
-	return arr.Nelems, nil
+	default:
+		return 0, fmt.Errorf("not a pointer or enum: %v", typ)
+	}
 }
 
 // resolveBTFArrayMacro resolves the __array macro, which declares an array

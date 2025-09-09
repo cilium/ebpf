@@ -943,6 +943,30 @@ func TestIPRoute2Compat(t *testing.T) {
 	coll.Close()
 }
 
+func TestArena(t *testing.T) {
+	file := testutils.NativeFile(t, "testdata/arena-%s.elf")
+	coll, err := LoadCollectionSpec(file)
+	qt.Assert(t, qt.IsNil(err))
+
+	want := &CollectionSpec{
+		Maps: map[string]*MapSpec{
+			"arena": {
+				Name:       "arena",
+				Type:       Arena,
+				MaxEntries: 100,
+				Flags:      sys.BPF_F_MMAPABLE,
+				MapExtra:   1 << 44,
+			},
+		},
+		Programs:  map[string]*ProgramSpec{},
+		Variables: map[string]*VariableSpec{},
+	}
+	qt.Assert(t, qt.CmpEquals(coll, want, csCmpOpts))
+
+	testutils.SkipOnOldKernel(t, "6.9", "arena maps")
+	mustNewCollection(t, coll, nil)
+}
+
 var (
 	elfPath    = flag.String("elfs", os.Getenv("CI_KERNEL_SELFTESTS"), "`Path` containing libbpf-compatible ELFs (defaults to $CI_KERNEL_SELFTESTS)")
 	elfPattern = flag.String("elf-pattern", "*.o", "Glob `pattern` for object files that should be tested")
@@ -997,8 +1021,6 @@ func TestLibBPFCompat(t *testing.T) {
 			t.Skip("Skipping since the test generates dynamic BTF")
 		case "test_static_linked":
 			t.Skip("Skipping since .text contains 'subprog' twice")
-		case "bloom_filter_map", "bloom_filter_bench":
-			t.Skip("Skipping due to missing MapExtra field in MapSpec")
 		case "netif_receive_skb",
 			"local_kptr_stash",
 			"local_kptr_stash_fail",

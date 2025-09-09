@@ -13,10 +13,14 @@ enum libbpf_tristate {
 	TRI_MODULE = 2,
 };
 
+#define ___bpf_concat(a, b) ____bpf_concat(a, b)
+#define ____bpf_concat(a, b) a ## b
+
 #define __section(NAME) __attribute__((section(NAME), used))
 #define __uint(name, val) int(*name)[val]
 #define __type(name, val) typeof(val) *name
 #define __array(name, val) typeof(val) *name[]
+#define __ulong(name, val) enum { ___bpf_concat(__unique_value, __COUNTER__) = val } name
 
 #define __kconfig __attribute__((section(".kconfig")))
 #define __ksym __attribute__((section(".ksyms")))
@@ -40,8 +44,10 @@ enum libbpf_tristate {
 #define BPF_MAP_TYPE_PERF_EVENT_ARRAY (4)
 #define BPF_MAP_TYPE_ARRAY_OF_MAPS (12)
 #define BPF_MAP_TYPE_HASH_OF_MAPS (13)
+#define BPF_MAP_TYPE_ARENA (33)
 
 #define BPF_F_NO_PREALLOC (1U << 0)
+#define BPF_F_MMAPABLE (1U << 10)
 #define BPF_F_CURRENT_CPU (0xffffffffULL)
 
 /* From tools/lib/bpf/libbpf.h */

@@ -65,7 +65,7 @@ func newMemory(fd, size int) (*Memory, error) {
 	}
 
 	mm := &Memory{b: b, ro: ro, heap: false}
-	mm.cleanup = runtime.AddCleanup(&mm, memoryCleanupFunc(), b)
+	mm.cleanup = runtime.AddCleanup(mm, memoryCleanupFunc(), b)
 
 	return mm, nil
 }

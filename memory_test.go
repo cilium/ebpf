@@ -4,6 +4,7 @@ import (
 	"io"
 	"math"
 	"os"
+	"runtime"
 	"testing"
 
 	"github.com/go-quicktest/qt"
@@ -31,6 +32,10 @@ func mustMmapableArray(tb testing.TB, extraFlags uint32) *Map {
 func TestMemory(t *testing.T) {
 	mm, err := mustMmapableArray(t, 0).Memory()
 	qt.Assert(t, qt.IsNil(err))
+
+	// Ensure the cleanup is set correctly and doesn't unmap the region while
+	// we're using it.
+	runtime.GC()
 
 	// The mapping is always at least one page long, and the Map created here fits
 	// in a single page.

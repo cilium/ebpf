@@ -643,9 +643,8 @@ func BenchmarkNewCollection(b *testing.B) {
 	spec = fixupCollectionSpec(spec)
 
 	b.ReportAllocs()
-	b.ResetTimer()
 
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		coll, err := NewCollection(spec)
 		if err != nil {
 			b.Fatal(err)
@@ -664,9 +663,8 @@ func BenchmarkNewCollectionManyProgs(b *testing.B) {
 	spec = fixupCollectionSpec(spec)
 
 	b.ReportAllocs()
-	b.ResetTimer()
 
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		coll, err := NewCollection(spec)
 		if err != nil {
 			b.Fatal(err)
@@ -681,9 +679,8 @@ func BenchmarkLoadCollectionManyProgs(b *testing.B) {
 	defer file.Close()
 
 	b.ReportAllocs()
-	b.ResetTimer()
 
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_, err := file.Seek(0, io.SeekStart)
 		if err != nil {
 			b.Fatal(err)

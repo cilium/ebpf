@@ -172,7 +172,7 @@ func TestKprobePMUUnavailable(t *testing.T) {
 }
 
 func BenchmarkKprobeCreatePMU(b *testing.B) {
-	for n := 0; n < b.N; n++ {
+	for b.Loop() {
 		pr, err := pmuProbe(tracefs.ProbeArgs{Type: tracefs.Kprobe, Symbol: ksym})
 		if err != nil {
 			b.Error("error creating perf_kprobe PMU:", err)
@@ -236,7 +236,7 @@ func TestKprobeTraceFS(t *testing.T) {
 }
 
 func BenchmarkKprobeCreateTraceFS(b *testing.B) {
-	for n := 0; n < b.N; n++ {
+	for b.Loop() {
 		// Include <tracefs>/kprobe_events operations in the benchmark loop
 		// because we create one per perf event.
 		pr, err := tracefsProbe(tracefs.ProbeArgs{Symbol: ksym})

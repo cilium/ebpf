@@ -35,7 +35,7 @@ func TestRead64bitImmediate(t *testing.T) {
 
 func BenchmarkRead64bitImmediate(b *testing.B) {
 	r := &bytes.Reader{}
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		r.Reset(test64bitImmProg)
 
 		var ins Instruction
@@ -64,7 +64,7 @@ func BenchmarkWrite64BitImmediate(b *testing.B) {
 	ins := LoadImm(R0, math.MinInt32-1, DWord)
 
 	var buf bytes.Buffer
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		buf.Reset()
 
 		if _, err := ins.Marshal(&buf, binary.LittleEndian); err != nil {

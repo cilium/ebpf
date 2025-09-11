@@ -625,9 +625,8 @@ func BenchmarkReader(b *testing.B) {
 
 	buf := internal.EmptyBPFContext
 
-	b.ResetTimer()
 	b.ReportAllocs()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		ret, _, err := prog.Test(buf)
 		if err != nil {
 			b.Fatal(err)
@@ -653,11 +652,10 @@ func BenchmarkReadInto(b *testing.B) {
 
 	buf := internal.EmptyBPFContext
 
-	b.ResetTimer()
 	b.ReportAllocs()
 
 	var rec Record
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		// NB: Submitting samples into the perf event ring dominates
 		// the benchmark time unfortunately.
 		ret, _, err := prog.Test(buf)

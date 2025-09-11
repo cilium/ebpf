@@ -248,9 +248,8 @@ func BenchmarkMarshal(b *testing.B) {
 		value := test.new()
 		b.Run(fmt.Sprintf("%T", value), func(b *testing.B) {
 			size := binary.Size(value)
-			b.ResetTimer()
 			b.ReportAllocs()
-			for i := 0; i < b.N; i++ {
+			for b.Loop() {
 				_, _ = Marshal(value, size)
 			}
 		})
@@ -267,9 +266,8 @@ func BenchmarkUnmarshal(b *testing.B) {
 		b.Run(fmt.Sprintf("%T", value), func(b *testing.B) {
 			size := binary.Size(value)
 			buf := make([]byte, size)
-			b.ResetTimer()
 			b.ReportAllocs()
-			for i := 0; i < b.N; i++ {
+			for b.Loop() {
 				_ = Unmarshal(value, buf)
 			}
 		})

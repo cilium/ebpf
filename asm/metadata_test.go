@@ -54,7 +54,7 @@ func BenchmarkMetadata(b *testing.B) {
 	b.Run("add first", func(b *testing.B) {
 		b.ReportAllocs()
 
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			var v Metadata
 			v.Set(t{}, 0)
 		}
@@ -67,9 +67,8 @@ func BenchmarkMetadata(b *testing.B) {
 		}
 
 		b.ReportAllocs()
-		b.ResetTimer()
 
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			v := m
 			v.Set(t{}, 0)
 		}
@@ -83,9 +82,8 @@ func BenchmarkMetadata(b *testing.B) {
 		m.Set(t{}, 0)
 
 		b.ReportAllocs()
-		b.ResetTimer()
 
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			v := m
 			v.Set(t{}, 0)
 		}
@@ -98,9 +96,8 @@ func BenchmarkMetadata(b *testing.B) {
 		}
 
 		b.ReportAllocs()
-		b.ResetTimer()
 
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			if m.Get(t{}) != nil {
 				b.Fatal("got result from miss")
 			}

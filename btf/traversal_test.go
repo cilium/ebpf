@@ -105,8 +105,7 @@ func BenchmarkPostorderTraversal(b *testing.B) {
 	} {
 		b.Run(test.name, func(b *testing.B) {
 			b.ReportAllocs()
-			b.ResetTimer()
-			for range b.N {
+			for b.Loop() {
 				for range postorder(test.typ, nil) {
 				}
 			}

@@ -695,7 +695,7 @@ func BenchmarkCORESkBuff(b *testing.B) {
 		b.Run(relo.kind.String(), func(b *testing.B) {
 			b.ReportAllocs()
 
-			for i := 0; i < b.N; i++ {
+			for b.Loop() {
 				_, err = CORERelocate([]*CORERelocation{relo}, []*Spec{spec}, spec.byteOrder, spec.TypeID)
 				if err != nil {
 					b.Fatal(err)

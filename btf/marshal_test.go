@@ -210,9 +210,8 @@ func BenchmarkMarshaler(b *testing.B) {
 	types := typesFromSpec(b, vmlinuxTestdataSpec(b))[:100]
 
 	b.ReportAllocs()
-	b.ResetTimer()
 
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		var b Builder
 		for _, typ := range types {
 			_, _ = b.Add(typ)
@@ -225,9 +224,8 @@ func BenchmarkBuildVmlinux(b *testing.B) {
 	types := typesFromSpec(b, vmlinuxTestdataSpec(b))
 
 	b.ReportAllocs()
-	b.ResetTimer()
 
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		var b Builder
 		for _, typ := range types {
 			_, _ = b.Add(typ)

@@ -110,8 +110,7 @@ func BenchmarkNewMapFromFD(b *testing.B) {
 
 	m := mustNewMap(b, hashMapSpec, nil)
 
-	b.ResetTimer()
-	for n := 0; n < b.N; n++ {
+	for b.Loop() {
 		if _, err := newMapFromFD(m.fd); err != nil {
 			b.Fatal(err)
 		}
@@ -123,8 +122,7 @@ func BenchmarkMapInfo(b *testing.B) {
 
 	m := mustNewMap(b, hashMapSpec, nil)
 
-	b.ResetTimer()
-	for n := 0; n < b.N; n++ {
+	for b.Loop() {
 		if _, err := newMapInfoFromFd(m.fd); err != nil {
 			b.Fatal(err)
 		}
@@ -213,8 +211,7 @@ func BenchmarkNewProgramFromFD(b *testing.B) {
 	spec := fixupProgramSpec(basicProgramSpec)
 	prog := mustNewProgram(b, spec, nil)
 
-	b.ResetTimer()
-	for n := 0; n < b.N; n++ {
+	for b.Loop() {
 		if _, err := newProgramFromFD(prog.fd); err != nil {
 			b.Fatal(err)
 		}
@@ -227,8 +224,7 @@ func BenchmarkProgramInfo(b *testing.B) {
 	spec := fixupProgramSpec(basicProgramSpec)
 	prog := mustNewProgram(b, spec, nil)
 
-	b.ResetTimer()
-	for n := 0; n < b.N; n++ {
+	for b.Loop() {
 		if _, err := newProgramInfoFromFd(prog.fd); err != nil {
 			b.Fatal(err)
 		}
@@ -389,8 +385,7 @@ func BenchmarkScanFdInfoReader(b *testing.B) {
 	var val string
 	fields := map[string]any{"foo": &val}
 
-	b.ResetTimer()
-	for n := 0; n < b.N; n++ {
+	for b.Loop() {
 		val = ""
 		r.Reset(input)
 
@@ -435,10 +430,10 @@ func BenchmarkStats(b *testing.B) {
 
 	prog := createBasicProgram(b)
 
-	for n := 0; n < b.N; n++ {
+	for b.Loop() {
 		if err := testStats(b, prog); err != nil {
 			testutils.SkipIfNotSupportedOnOS(b, err)
-			b.Fatal(fmt.Errorf("iter %d: %w", n, err))
+			b.Fatal(err)
 		}
 	}
 }

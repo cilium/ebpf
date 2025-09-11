@@ -95,7 +95,7 @@ func TestAssignAddresses(t *testing.T) {
 
 func BenchmarkAssignAddresses(b *testing.B) {
 	b.ReportAllocs()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		b.StopTimer()
 		f := bytes.NewBuffer(syms)
 		want := map[string]uint64{"bench_sym": 0}
@@ -110,7 +110,7 @@ func BenchmarkAssignAddresses(b *testing.B) {
 // Benchmark getting 5 kernel symbols from /proc/kallsyms.
 func BenchmarkAssignAddressesKallsyms(b *testing.B) {
 	b.ReportAllocs()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		b.StopTimer()
 		f := mustOpenProcKallsyms(b)
 		want := map[string]uint64{

@@ -101,8 +101,7 @@ func TestStringTableBuilder(t *testing.T) {
 func BenchmarkStringTableZeroLookup(b *testing.B) {
 	strings := vmlinuxTestdataSpec(b).strings
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		s, err := strings.Lookup(0)
 		if err != nil {
 			b.Fatal(err)

@@ -1787,11 +1787,10 @@ func BenchmarkMarshaling(b *testing.B) {
 
 	b.Run("ValueUnmarshalReflect", func(b *testing.B) {
 		b.ReportAllocs()
-		b.ResetTimer()
 
 		var value benchValue
 
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			err := m.Lookup(unsafe.Pointer(&key), &value)
 			if err != nil {
 				b.Fatal("Can't get key:", err)
@@ -1801,11 +1800,10 @@ func BenchmarkMarshaling(b *testing.B) {
 
 	b.Run("KeyMarshalReflect", func(b *testing.B) {
 		b.ReportAllocs()
-		b.ResetTimer()
 
 		var value benchValue
 
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			err := m.Lookup(&key, unsafe.Pointer(&value))
 			if err != nil {
 				b.Fatal("Can't get key:", err)
@@ -1815,11 +1813,10 @@ func BenchmarkMarshaling(b *testing.B) {
 
 	b.Run("ValueBinaryUnmarshaler", func(b *testing.B) {
 		b.ReportAllocs()
-		b.ResetTimer()
 
 		var value customBenchValue
 
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			err := m.Lookup(unsafe.Pointer(&key), &value)
 			if err != nil {
 				b.Fatal("Can't get key:", err)
@@ -1829,12 +1826,11 @@ func BenchmarkMarshaling(b *testing.B) {
 
 	b.Run("KeyBinaryMarshaler", func(b *testing.B) {
 		b.ReportAllocs()
-		b.ResetTimer()
 
 		var key benchKey
 		var value customBenchValue
 
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			err := m.Lookup(&key, unsafe.Pointer(&value))
 			if err != nil {
 				b.Fatal("Can't get key:", err)
@@ -1844,11 +1840,10 @@ func BenchmarkMarshaling(b *testing.B) {
 
 	b.Run("KeyValueUnsafe", func(b *testing.B) {
 		b.ReportAllocs()
-		b.ResetTimer()
 
 		var value benchValue
 
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			err := m.Lookup(unsafe.Pointer(&key), unsafe.Pointer(&value))
 			if err != nil {
 				b.Fatal("Can't get key:", err)
@@ -1877,11 +1872,10 @@ func BenchmarkPerCPUMarshalling(b *testing.B) {
 
 	b.Run("reflection", func(b *testing.B) {
 		b.ReportAllocs()
-		b.ResetTimer()
 
 		var value []uint64
 
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			err := m.Lookup(unsafe.Pointer(&key), &value)
 			if err != nil {
 				b.Fatal("Can't get key:", err)
@@ -1902,7 +1896,7 @@ func BenchmarkMap(b *testing.B) {
 
 		b.ReportAllocs()
 
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			err := m.Lookup(unsafe.Pointer(&key), unsafe.Pointer(&value))
 			if err != nil {
 				b.Fatal(err)
@@ -1915,7 +1909,7 @@ func BenchmarkMap(b *testing.B) {
 
 		b.ReportAllocs()
 
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			err := m.Update(unsafe.Pointer(&key), unsafe.Pointer(&value), UpdateAny)
 			if err != nil {
 				b.Fatal(err)
@@ -1928,7 +1922,7 @@ func BenchmarkMap(b *testing.B) {
 
 		b.ReportAllocs()
 
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			err := m.NextKey(nil, unsafe.Pointer(&key))
 			if err != nil {
 				b.Fatal(err)
@@ -1941,7 +1935,7 @@ func BenchmarkMap(b *testing.B) {
 
 		b.ReportAllocs()
 
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			err := m.Delete(unsafe.Pointer(&key))
 			if err != nil && !errors.Is(err, ErrKeyNotExist) {
 				b.Fatal(err)
@@ -1986,9 +1980,8 @@ func BenchmarkIterate(b *testing.B) {
 				v := make([]uint64, possibleCPU)
 
 				b.ReportAllocs()
-				b.ResetTimer()
 
-				for i := 0; i < b.N; i++ {
+				for b.Loop() {
 					iter := m.Iterate()
 					for iter.Next(&k, v) {
 						continue
@@ -2004,9 +1997,8 @@ func BenchmarkIterate(b *testing.B) {
 				v := make([]uint64, possibleCPU)
 
 				b.ReportAllocs()
-				b.ResetTimer()
 
-				for i := 0; i < b.N; i++ {
+				for b.Loop() {
 					b.StopTimer()
 					if _, err := m.BatchUpdate(keys, values, nil); err != nil {
 						b.Fatal(err)
@@ -2030,9 +2022,8 @@ func BenchmarkIterate(b *testing.B) {
 				v := make([]uint64, m.MaxEntries()*uint32(possibleCPU))
 
 				b.ReportAllocs()
-				b.ResetTimer()
 
-				for i := 0; i < b.N; i++ {
+				for b.Loop() {
 					var cursor MapBatchCursor
 					for {
 						_, err := m.BatchLookup(&cursor, k, v, nil)
@@ -2051,9 +2042,8 @@ func BenchmarkIterate(b *testing.B) {
 				v := make([]uint64, m.MaxEntries()*uint32(possibleCPU))
 
 				b.ReportAllocs()
-				b.ResetTimer()
 
-				for i := 0; i < b.N; i++ {
+				for b.Loop() {
 					b.StopTimer()
 					if _, err := m.BatchUpdate(keys, values, nil); err != nil {
 						b.Fatal(err)
@@ -2075,9 +2065,8 @@ func BenchmarkIterate(b *testing.B) {
 
 			b.Run("BatchDelete", func(b *testing.B) {
 				b.ReportAllocs()
-				b.ResetTimer()
 
-				for i := 0; i < b.N; i++ {
+				for b.Loop() {
 					b.StopTimer()
 					if _, err := m.BatchUpdate(keys, values, nil); err != nil {
 						b.Fatal(err)

@@ -212,9 +212,8 @@ func TestTypeByName(t *testing.T) {
 func BenchmarkParseVmlinux(b *testing.B) {
 	vmlinux := vmlinuxTestdataBytes(b)
 	b.ReportAllocs()
-	b.ResetTimer()
 
-	for n := 0; n < b.N; n++ {
+	for b.Loop() {
 		if _, err := loadRawSpec(vmlinux, nil); err != nil {
 			b.Fatal("Can't load BTF:", err)
 		}
@@ -224,9 +223,8 @@ func BenchmarkParseVmlinux(b *testing.B) {
 func BenchmarkIterateVmlinux(b *testing.B) {
 	vmlinux := vmlinuxTestdataBytes(b)
 	b.ReportAllocs()
-	b.ResetTimer()
 
-	for range b.N {
+	for b.Loop() {
 		spec, err := loadRawSpec(vmlinux, nil)
 		if err != nil {
 			b.Fatal("Can't load BTF:", err)
@@ -556,9 +554,8 @@ func TestLoadEmptyRawSpec(t *testing.T) {
 
 func BenchmarkSpecCopy(b *testing.B) {
 	spec := vmlinuxTestdataSpec(b)
-	b.ResetTimer()
 
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		spec.Copy()
 	}
 }
@@ -567,8 +564,7 @@ func BenchmarkSpecTypeByID(b *testing.B) {
 	spec := vmlinuxTestdataSpec(b)
 
 	b.ReportAllocs()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_, err := spec.TypeByID(1)
 		if err != nil {
 			b.Fatal(err)
@@ -612,9 +608,7 @@ func BenchmarkInspektorGadget(b *testing.B) {
 
 	var rd bytes.Reader
 
-	b.ResetTimer()
-
-	for range b.N {
+	for b.Loop() {
 		rd.Reset(vmlinux)
 		spec, err := LoadSpecFromReader(&rd)
 		if err != nil {

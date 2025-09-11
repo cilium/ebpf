@@ -19,9 +19,8 @@ func BenchmarkParse(b *testing.B) {
 	defer f.Close()
 
 	b.ReportAllocs()
-	b.ResetTimer()
 
-	for n := 0; n < b.N; n++ {
+	for b.Loop() {
 		_, err := Parse(f, nil)
 		if err != nil {
 			b.Fatal(err)
@@ -37,14 +36,13 @@ func BenchmarkParseFiltered(b *testing.B) {
 	defer f.Close()
 
 	b.ReportAllocs()
-	b.ResetTimer()
 
 	// CONFIG_ARCH_USE_MEMTEST is the last CONFIG_ in the file.
 	// So, we will easily be able to see how many allocated bytes the filtering
 	// permits reducing compared to unfiltered benchmark.
 	filter := map[string]struct{}{"CONFIG_ARCH_USE_MEMTEST": {}}
 
-	for n := 0; n < b.N; n++ {
+	for b.Loop() {
 		_, err := Parse(f, filter)
 		if err != nil {
 			b.Fatal(err)

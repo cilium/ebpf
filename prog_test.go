@@ -940,9 +940,8 @@ func BenchmarkNewProgram(b *testing.B) {
 	qt.Assert(b, qt.IsNil(err))
 
 	b.ReportAllocs()
-	b.ResetTimer()
 
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_, err := NewProgram(spec.Programs["benchmark"])
 		if !errors.Is(err, unix.EACCES) {
 			b.Fatal("Unexpected error:", err)

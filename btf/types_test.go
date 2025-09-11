@@ -111,9 +111,8 @@ func BenchmarkCopy(b *testing.B) {
 	typ := newCyclicalType(10)
 
 	b.ReportAllocs()
-	b.ResetTimer()
 
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		Copy(typ)
 	}
 }
@@ -493,7 +492,7 @@ func BenchmarkWalk(b *testing.B) {
 		b.Run(fmt.Sprint(typ), func(b *testing.B) {
 			b.ReportAllocs()
 
-			for i := 0; i < b.N; i++ {
+			for b.Loop() {
 				var dq typeDeque
 				for child := range children(typ) {
 					dq.Push(child)
@@ -563,9 +562,8 @@ func BenchmarkUnderlyingType(b *testing.B) {
 	b.Run("no unwrapping", func(b *testing.B) {
 		v := &Int{}
 		b.ReportAllocs()
-		b.ResetTimer()
 
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			UnderlyingType(v)
 		}
 	})
@@ -573,9 +571,8 @@ func BenchmarkUnderlyingType(b *testing.B) {
 	b.Run("single unwrapping", func(b *testing.B) {
 		v := &Typedef{Type: &Int{}}
 		b.ReportAllocs()
-		b.ResetTimer()
 
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			UnderlyingType(v)
 		}
 	})

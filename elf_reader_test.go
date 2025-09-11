@@ -301,7 +301,7 @@ func TestLoadCollectionSpec(t *testing.T) {
 func BenchmarkELFLoader(b *testing.B) {
 	b.ReportAllocs()
 
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_, _ = LoadCollectionSpec("testdata/loader-el.elf")
 	}
 }

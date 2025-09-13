@@ -839,12 +839,8 @@ func (cl *collectionLoader) copyDataMember(
 		structOps.progAttachType[ps.Name] = attachType
 		cl.stOpsProgsToMap[ps.Name] = ms.Name
 
-		// seed program with attach metadata (checked at load time)
-		ps.Instructions[0].Metadata.Set(structOpsProgMetaKey{}, &structOpsProgMeta{
-			attachBtfId: kern.typeID,
-			attachType:  attachType,
-			modBtfObjID: kern.modBtfObjId,
-		})
+		// set `AttachTo` for struct_ops prog; e.g. "bpf_testmod_ops:test_1"
+		ps.AttachTo = fmt.Sprintf("%s:%s", kern.typ.Name, memberName)
 	}
 
 	// Handle data member. copy data members from the user-defined struct to the kernel data buffer.

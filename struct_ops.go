@@ -153,10 +153,6 @@ func findStructTypeByName(s *btf.Spec, typ *btf.Struct) (*btf.Struct, *btf.Spec,
 	return doFindStructTypeByName(s, typ.TypeName())
 }
 
-func findStructTypeByName2(s *btf.Spec, name string) (*btf.Struct, *btf.Spec, uint32, error) {
-	return doFindStructTypeByName(s, name)
-}
-
 // doFindStructTypeByName looks up a struct type with the exact name in the
 // provided base BTF spec, and falls back to scanning all loaded module BTFs
 // if it is not present in vmlinux.

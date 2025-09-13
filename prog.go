@@ -8,6 +8,7 @@ import (
 	"math"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"time"
 
 	"github.com/cilium/ebpf/asm"
@@ -381,7 +382,18 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions, c *btf.Cache)
 		attr.AttachBtfObjFd = uint32(spec.AttachTarget.FD())
 		defer runtime.KeepAlive(spec.AttachTarget)
 	} else if spec.AttachTo != "" {
-		module, targetID, err := findProgramTargetInKernel(spec.AttachTo, spec.Type, spec.AttachType)
+		var targetMember string
+		var ok bool
+		attachTo := spec.AttachTo
+
+		if spec.Type == StructOps {
+			attachTo, targetMember, ok = strings.Cut(attachTo, ":")
+			if !ok || attachTo == "" || targetMember == "" {
+				return nil, fmt.Errorf("invalid AttachTo for StructOps (type:member): %q", spec.AttachTo)
+			}
+		}
+
+		module, targetID, err := findProgramTargetInKernel(attachTo, spec.Type, spec.AttachType)
 		if err != nil && !errors.Is(err, errUnrecognizedAttachType) {
 			// We ignore errUnrecognizedAttachType since AttachTo may be non-empty
 			// for programs that don't attach anywhere.
@@ -389,6 +401,41 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions, c *btf.Cache)
 		}
 
 		attr.AttachBtfId = targetID
+		if spec.Type == StructOps {
+			// we need to resolve `target` here, load the kernel spec
+			s, err := btf.LoadKernelSpec()
+			if err != nil {
+				return nil, fmt.Errorf("load vmlinux BTF: %w", err)
+			}
+
+			st, spec2, modBtfObjID, err := doFindStructTypeByName(s, attachTo)
+			if err != nil {
+				return nil, err
+			}
+
+			tid, err := spec2.TypeID(st)
+			if err != nil {
+				return nil, fmt.Errorf("type id for %s: %w", st.TypeName(), err)
+			}
+			attr.AttachBtfId = sys.TypeID(tid)
+
+			idx := getStructMemberIndexByName(st, targetMember)
+			if idx < 0 {
+				return nil, fmt.Errorf("member %q not found in %s", targetMember, st.Name)
+			}
+
+			attr.ExpectedAttachType = sys.AttachType(idx)
+
+			if modBtfObjID != 0 {
+				h, err := btf.NewHandleFromID(btf.ID(modBtfObjID))
+				if err != nil {
+					return nil, fmt.Errorf("open module BTF handle (id=%d): %w", modBtfObjID, err)
+				}
+				defer h.Close()
+				attr.AttachBtfObjFd = uint32(h.FD())
+			}
+		}
+
 		if module != nil {
 			attr.AttachBtfObjFd = uint32(module.FD())
 			defer module.Close()
@@ -1039,6 +1086,10 @@ func findProgramTargetInKernel(name string, progType ProgramType, attachType Att
 	)
 
 	switch (match{progType, attachType}) {
+	case match{StructOps, AttachStructOps}:
+		typeName = name
+		featureName = "struct_ops " + name
+		target = (*btf.Struct)(nil)
 	case match{LSM, AttachLSMMac}:
 		typeName = "bpf_lsm_" + name
 		featureName = name + " LSM hook"

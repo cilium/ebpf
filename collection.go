@@ -366,6 +366,11 @@ func NewCollectionWithOptions(spec *CollectionSpec, opts CollectionOptions) (*Co
 	}
 	defer loader.close()
 
+	// initialize struct_ops maps
+	if err := loader.initKernStructOps(); err != nil {
+		return nil, err
+	}
+
 	// Create maps first, as their fds need to be linked into programs.
 	for mapName := range spec.Maps {
 		if _, err := loader.loadMap(mapName); err != nil {
@@ -413,6 +418,10 @@ type collectionLoader struct {
 	programs map[string]*Program
 	vars     map[string]*Variable
 	types    *btf.Cache
+	// map name -> structOpsSpec
+	stOpsSpecs map[string]*structOpsSpec
+	// structOps program name -> structOpsMap name
+	stOpsProgsToMap map[string]string
 }
 
 func newCollectionLoader(coll *CollectionSpec, opts *CollectionOptions) (*collectionLoader, error) {
@@ -438,6 +447,8 @@ func newCollectionLoader(coll *CollectionSpec, opts *CollectionOptions) (*collec
 		make(map[string]*Program),
 		make(map[string]*Variable),
 		newBTFCache(&opts.Programs),
+		make(map[string]*structOpsSpec),
+		make(map[string]string),
 	}, nil
 }
 
@@ -581,6 +592,26 @@ func (cl *collectionLoader) loadProgram(progName string) (*Program, error) {
 	}
 
 	cl.programs[progName] = prog
+
+	if prog.Type() == StructOps {
+		mapName, ok := cl.stOpsProgsToMap[prog.name]
+		if !ok {
+			return nil, fmt.Errorf("program %s should be linked to a StructOpsMap", prog.name)
+		}
+
+		structOps, ok := cl.stOpsSpecs[mapName]
+		if !ok {
+			return nil, fmt.Errorf("program %s has been loaded but not associated", prog.name)
+		}
+
+		attachType := structOps.progAttachType[prog.name]
+		if int(attachType) > len(structOps.kernTypes.typ.Members) {
+			return nil, fmt.Errorf("program %s: unexpected attach type %d",
+				prog.name, attachType)
+		}
+		structOps.programName[attachType] = progSpec.Name
+	}
+
 	return prog, nil
 }
 
@@ -644,6 +675,7 @@ func (cl *collectionLoader) loadVariable(varName string) (*Variable, error) {
 // populateDeferredMaps iterates maps holding programs or other maps and loads
 // any dependencies. Populates all maps in cl and freezes them if specified.
 func (cl *collectionLoader) populateDeferredMaps() error {
+	fmt.Println("hogehogehogehoge")
 	for mapName, m := range cl.maps {
 		mapSpec, ok := cl.coll.Maps[mapName]
 		if !ok {
@@ -688,6 +720,40 @@ func (cl *collectionLoader) populateDeferredMaps() error {
 			}
 		}
 
+		if mapSpec.Type == StructOpsMap {
+			userType, ok := btf.As[*btf.Struct](mapSpec.Value)
+			if !ok {
+				return fmt.Errorf("value should be a *Struct")
+			}
+
+			userData, ok := mapSpec.Contents[0].Value.([]byte)
+			if !ok {
+				return fmt.Errorf("value should be an array of byte")
+			}
+
+			s, err := btf.LoadKernelSpec()
+			if err != nil {
+				return fmt.Errorf("load vmlinux BTF: %w", err)
+			}
+
+			kernType, _, _, err := findStructByNameWithPrefix(s, userType)
+			if err != nil {
+				return fmt.Errorf("find wrapper type: %w", err)
+			}
+
+			kernVData, err := translateStructData(userType, userData, kernType)
+			if err != nil {
+				return err
+			}
+
+			if err := populateFuncPtr(kernType, kernVData, cl.programs); err != nil {
+				return err
+			}
+
+			mapSpec.Contents[0] =
+				MapKV{Key: uint32(0), Value: kernVData}
+		}
+
 		// Populate and freeze the map if specified.
 		if err := m.finalize(mapSpec); err != nil {
 			return fmt.Errorf("populating map %s: %w", mapName, err)
@@ -695,6 +761,165 @@ func (cl *collectionLoader) populateDeferredMaps() error {
 	}
 
 	return nil
+}
+
+// translateStructData fills in all fields in `from` that exist in `to` with contents of fromData.
+func translateStructData(from *btf.Struct, fromData []byte, to *btf.Struct) ([]byte, error) {
+	innerName := strings.TrimPrefix(to.Name, structOpsValuePrefix)
+	toData := make([]byte, int(to.Size))
+
+	var inner *btf.Struct
+	var innerOff int
+
+	for _, m := range to.Members {
+		st, ok := btf.As[*btf.Struct](btf.UnderlyingType(m.Type))
+		fmt.Println(m.Name, st.Name)
+		if ok && st.Name == innerName {
+			inner = st
+			innerOff = int(m.Offset / 8)
+		}
+	}
+
+	if inner == nil {
+		return nil, fmt.Errorf("member %s not found in %s", innerName, to.Name)
+	}
+
+	kernIndexByName := make(map[string]btf.Member, len(inner.Members))
+	for _, m := range inner.Members {
+		kernIndexByName[m.Name] = m
+	}
+
+	for _, m := range from.Members {
+		if m.BitfieldSize > 0 {
+			return nil, fmt.Errorf("bitfield %s not supported", m.Name)
+		}
+
+		kernMember, ok := kernIndexByName[m.Name]
+		if !ok {
+			continue
+		}
+
+		if kernMember.BitfieldSize > 0 {
+			return nil, fmt.Errorf("bitfield %s not supported in kern struct", kernMember.Name)
+		}
+
+		sz, err := btf.Sizeof(m.Type)
+		if err != nil {
+			return nil, fmt.Errorf("failed to resolve size of %s: %w", m.Name, err)
+		}
+
+		kernSz, err := btf.Sizeof(kernMember.Type)
+		if err != nil {
+			return nil, fmt.Errorf("failed to resolve size of %s: %w", kernMember.Name, err)
+		}
+
+		if sz != kernSz {
+			return nil, fmt.Errorf("size mismatch for %s: %d != %d", m.Name, sz, kernSz)
+		}
+
+		src := int(m.Offset / 8)
+		dst := innerOff + int(kernMember.Offset/8)
+		copy(toData[dst:dst+int(sz)], fromData[src:src+int(sz)])
+	}
+
+	return toData, nil
+}
+
+// populateFuncPtr writes progFD into `data` at the offset
+func populateFuncPtr(wrapper *btf.Struct, data []byte, programs map[string]*Program) error {
+	innerName := strings.TrimPrefix(wrapper.Name, structOpsValuePrefix)
+
+	var inner *btf.Struct
+	var innerOff int
+
+	for _, m := range wrapper.Members {
+		st, ok := btf.As[*btf.Struct](btf.UnderlyingType(m.Type))
+		if ok && st.Name == innerName {
+			inner = st
+			innerOff = int(m.Offset / 8)
+		}
+	}
+
+	if inner == nil {
+		return fmt.Errorf("member %s not found in %s", innerName, wrapper.Name)
+	}
+
+	for _, m := range inner.Members {
+		if _, isPtr := btf.As[*btf.Pointer](m.Type); !isPtr {
+			continue
+		}
+
+		p, ok := programs[m.Name]
+		if !ok || p == nil {
+			continue
+		}
+
+		off := innerOff + int(m.Offset/8)
+		binary.LittleEndian.PutUint64(data[off:off+8], uint64(p.FD()))
+	}
+
+	return nil
+}
+
+// initKernStructOps indexes struct_ops maps: resolve kernel types, allocate per-map state,
+// and stage copy/attach metadata. No kernel objects are created here.
+func (cl *collectionLoader) initKernStructOps() error {
+	for _, ms := range cl.coll.Maps {
+		if ms.Type != StructOpsMap {
+			continue
+		}
+
+		userSt := ms.Value
+		if userSt == nil {
+			return fmt.Errorf("user struct type should be specified as Value")
+		}
+
+		userStructType, ok := btf.As[*btf.Struct](ms.Value)
+		if !ok {
+			return fmt.Errorf("user struct type should be a Struct")
+		}
+
+		// resolve kernel-side types (target + wrapper)
+		kernTypes, err := findStructOpsKernTypes(userStructType)
+		if err != nil {
+			return fmt.Errorf("find kern_type: %w", err)
+		}
+		ms.Value = kernTypes.typ
+
+		// allocate per-map state (names, offsets, kernel buffer, attach types, typeID)
+		structOps := &structOpsSpec{
+			make([]string, len(kernTypes.typ.Members)),
+			make([]int, len(kernTypes.typ.Members)),
+			make([]byte, kernTypes.valueType.Size),
+			kernTypes,
+			make(map[string]sys.AttachType),
+			kernTypes.typeID,
+		}
+
+		cl.stOpsSpecs[ms.Name] = structOps
+		cl.setStructOpsProgAttachTo(kernTypes.typ, ms.Name)
+	}
+
+	return nil
+}
+
+func (cl *collectionLoader) setStructOpsProgAttachTo(kernType *btf.Struct, mapName string) {
+	for _, m := range kernType.Members {
+		if _, ok := btf.As[*btf.Pointer](btf.UnderlyingType(m.Type)); !ok {
+			continue
+		}
+
+		member := m.Name
+		ps, ok := cl.coll.Programs[member]
+		if !ok || ps == nil || ps.Type != StructOps {
+			continue
+		}
+
+		cl.stOpsProgsToMap[ps.Name] = mapName
+		if ps.AttachTo == "" {
+			ps.AttachTo = fmt.Sprintf("%s:%s", kernType.Name, member)
+		}
+	}
 }
 
 // resolveKconfig resolves all variables declared in .kconfig and populates

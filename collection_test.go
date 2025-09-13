@@ -14,6 +14,7 @@ import (
 	"github.com/cilium/ebpf/asm"
 	"github.com/cilium/ebpf/btf"
 	"github.com/cilium/ebpf/internal"
+	"github.com/cilium/ebpf/internal/sys"
 	"github.com/cilium/ebpf/internal/testutils"
 	"github.com/cilium/ebpf/internal/testutils/testmain"
 )
@@ -767,4 +768,61 @@ func ExampleCollectionSpec_LoadAndAssign() {
 	}
 	defer objs.Program.Close()
 	defer objs.Map.Close()
+}
+
+func TestStructOpsMapSpecSimpleLoadAndAssign(t *testing.T) {
+	requireTestmod(t)
+
+	spec := &CollectionSpec{
+		Programs: map[string]*ProgramSpec{
+			"test_1": {
+				Name:    "test_1",
+				Type:    StructOps,
+				License: "GPL",
+				Instructions: asm.Instructions{
+					asm.Mov.Imm(asm.R0, 0),
+					asm.Return(),
+				},
+			},
+		},
+		Maps: map[string]*MapSpec{
+			"testmod_ops": {
+				Name:       "testmod_ops",
+				Type:       StructOpsMap,
+				Flags:      sys.BPF_F_LINK,
+				KeySize:    4,
+				ValueSize:  448,
+				MaxEntries: 1,
+				Value:      &btf.Struct{Name: "bpf_testmod_ops"},
+				Contents: []MapKV{
+					{
+						Key:   uint32(0),
+						Value: make([]byte, 448),
+					},
+				},
+			},
+		},
+	}
+
+	s, err := btf.LoadKernelSpec()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, _, _, err = doFindStructTypeByName(s, "bpf_testmod_ops")
+	if errors.Is(err, btf.ErrNotFound) {
+		t.Skip("bpf_testmod_ops not loaded")
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	coll := mustNewCollection(t, spec, nil)
+	for name := range spec.Maps {
+		qt.Assert(t, qt.IsNotNil(coll.Maps[name]))
+	}
+
+	for name := range spec.Programs {
+		qt.Assert(t, qt.IsNotNil(coll.Programs[name]))
+	}
 }

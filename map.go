@@ -547,18 +547,75 @@ func (spec *MapSpec) createMap(inner *sys.FD) (_ *Map, err error) {
 	}
 
 	if spec.Key != nil || spec.Value != nil {
-		handle, keyTypeID, valueTypeID, err := btf.MarshalMapKV(spec.Key, spec.Value)
-		if err != nil && !errors.Is(err, btf.ErrNotSupported) {
-			return nil, fmt.Errorf("load BTF: %w", err)
-		}
+		if spec.Type == StructOpsMap {
+			// we need drop meta entry here
+			if len(spec.Contents) > 0 {
+				spec.Contents = spec.Contents[1:]
+			}
 
-		if handle != nil {
-			defer handle.Close()
+			var b btf.Builder
+			h, err := btf.NewHandle(&b)
+			if err != nil {
+				return nil, err
+			}
+			defer h.Close()
 
-			// Use BTF k/v during map creation.
-			attr.BtfFd = uint32(handle.FD())
-			attr.BtfKeyTypeId = keyTypeID
-			attr.BtfValueTypeId = valueTypeID
+			s, err := btf.LoadKernelSpec()
+			if err != nil {
+				return nil, fmt.Errorf("open vmlinux BTF: %w", err)
+			}
+
+			if spec.Value == nil {
+				return nil, fmt.Errorf("struct type is not specified as Value")
+			}
+
+			userStType, ok := spec.Value.(*btf.Struct)
+			if !ok {
+				return nil, fmt.Errorf("value must be Struct type")
+			}
+
+			// struct_ops: resolve wrapper type ("bpf_struct_ops_<name>") and
+			// record kernel-specific BTF IDs / FDs needed for map creation.
+			userStructType, s, modBtfObjId, err := findStructByNameWithPrefix(s, userStType)
+			if err != nil {
+				return nil, fmt.Errorf("lookup struct type: %w", err)
+			}
+
+			btfValueTypeId, err := s.TypeID(userStructType)
+			if err != nil {
+				return nil, fmt.Errorf("lookup type_id: %w", err)
+			}
+
+			attr.ValueSize = spec.ValueSize
+			attr.BtfVmlinuxValueTypeId = btfValueTypeId
+			attr.BtfFd = uint32(h.FD())
+
+			if modBtfObjId != 0 {
+				// BPF_F_VTYPE_BTF_OBJ_FD is required if the type comes from a module
+				attr.MapFlags |= sys.BPF_F_VTYPE_BTF_OBJ_FD
+				// resolve a module handler for the kernel model
+				modH, err := btf.NewHandleFromID(btf.ID(modBtfObjId))
+				if err != nil {
+					return nil, fmt.Errorf("open module BTF (id=%d): %w", modBtfObjId, err)
+				}
+				// set FD for the kernel module
+				attr.ValueTypeBtfObjFd = int32(modH.FD())
+				defer modH.Close()
+			}
+		} else {
+			handle, keyTypeID, valueTypeID, err := btf.MarshalMapKV(spec.Key, spec.Value)
+			if err != nil && !errors.Is(err, btf.ErrNotSupported) {
+				return nil, fmt.Errorf("load BTF: %w", err)
+			}
+
+			if handle != nil {
+				defer handle.Close()
+
+				// Use BTF k/v during map creation.
+				attr.BtfFd = uint32(handle.FD())
+				attr.BtfKeyTypeId = keyTypeID
+				attr.BtfValueTypeId = valueTypeID
+			}
 		}
 	}
 

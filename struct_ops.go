@@ -10,14 +10,6 @@ import (
 
 const structOpsValuePrefix = "bpf_struct_ops_"
 
-// TODO: Doc
-type structOpsProgMetaKey struct{}
-type structOpsProgMeta struct {
-	attachBtfId btf.TypeID
-	attachType  sys.AttachType
-	modBtfObjID uint32
-}
-
 // structOpsKernTypes groups all kernel-side BTF artefacts that belong to a
 // resolved struct_ops.
 type structOpsKernTypes struct {
@@ -161,6 +153,10 @@ func findStructTypeByName(s *btf.Spec, typ *btf.Struct) (*btf.Struct, *btf.Spec,
 	return doFindStructTypeByName(s, typ.TypeName())
 }
 
+func findStructTypeByName2(s *btf.Spec, name string) (*btf.Struct, *btf.Spec, uint32, error) {
+	return doFindStructTypeByName(s, name)
+}
+
 // doFindStructTypeByName looks up a struct type with the exact name in the
 // provided base BTF spec, and falls back to scanning all loaded module BTFs
 // if it is not present in vmlinux.
@@ -221,6 +217,7 @@ func findStructTypeByNameFromModule(base *btf.Spec, name string) (*btf.Struct, *
 		if errors.Is(err, btf.ErrNotFound) {
 			continue
 		}
+
 		if err != nil {
 			return nil, nil, 0, fmt.Errorf("lookup type in module %s: %w", info.Name, err)
 		}
@@ -326,6 +323,17 @@ func getStructMemberByName(s *btf.Struct, name string) (btf.Member, error) {
 func getStructMemberIndexOf(s *btf.Struct, member btf.Member) int {
 	for idx, m := range s.Members {
 		if m.Offset == member.Offset {
+			return idx
+		}
+	}
+	return -1
+}
+
+// getStructMemberIndexByName returns the index of `member` within struct `s` by
+// comparing the member name.
+func getStructMemberIndexByName(s *btf.Struct, name string) int {
+	for idx, m := range s.Members {
+		if m.Name == name {
 			return idx
 		}
 	}

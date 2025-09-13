@@ -775,8 +775,8 @@ func TestStructOpsMapSpecSimpleLoadAndAssign(t *testing.T) {
 
 	spec := &CollectionSpec{
 		Programs: map[string]*ProgramSpec{
-			"test_func_1": {
-				Name:    "test_func_1",
+			"test_1": {
+				Name:    "test_1",
 				Type:    StructOps,
 				License: "GPL",
 				Instructions: asm.Instructions{
@@ -798,7 +798,7 @@ func TestStructOpsMapSpecSimpleLoadAndAssign(t *testing.T) {
 					{Key: uint32(0), Value: structOpsMeta{
 						data: make([]byte, 448),
 						funcs: []structOpsFunc{
-							{"test_1", "test_func_1"},
+							{"test_1", "test_1"},
 						},
 					}},
 				},

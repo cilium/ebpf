@@ -64,11 +64,6 @@ type structOpsSpec struct {
 	progAttachBtfID btf.TypeID
 }
 
-type structOpsFunc struct {
-	member   string // A member name from the user struct
-	progName string // A program name which is
-}
-
 // findByTypeFromStruct searches for the first member of a struct whose
 // resolved BTF type ID matches the given typ.
 //

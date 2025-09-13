@@ -798,12 +798,10 @@ func TestStructOpsMapSpecSimpleLoadAndAssign(t *testing.T) {
 				MaxEntries: 1,
 				Value:      &btf.Struct{Name: "bpf_testmod_ops"},
 				Contents: []MapKV{
-					{Key: uint32(0), Value: structOpsMeta{
-						data: make([]byte, 448),
-						funcs: []structOpsFunc{
-							{"test_1", "test_1"},
-						},
-					}},
+					{
+						Key:   uint32(0),
+						Value: make([]byte, 448),
+					},
 				},
 			},
 		},

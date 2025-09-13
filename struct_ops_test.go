@@ -23,11 +23,8 @@ func TestCreateStructOpsMapSpecSimple(t *testing.T) {
 		Value: &btf.Struct{Name: "bpf_testmod_ops"},
 		Contents: []MapKV{
 			{
-				Key: uint32(0),
-				Value: structOpsMeta{
-					data:  make([]byte, 448),
-					funcs: []structOpsFunc{},
-				},
+				Key:   uint32(0),
+				Value: make([]byte, 448),
 			},
 		},
 	}

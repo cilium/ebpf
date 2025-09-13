@@ -69,36 +69,6 @@ type structOpsFunc struct {
 	progName string // A program name which is
 }
 
-// structOpsMeta is a placeholder object inserted into MapSpec.Contents
-// so that later stages (loader, ELF parser) can recognise this map as
-// a struct‑ops map without adding public fields yet.
-type structOpsMeta struct {
-	funcs []structOpsFunc
-	// used for represent a data for the user struct
-	// e.g. struct tcp_congestion_ops in bpf_prog's btf format */
-	data []byte
-}
-
-// extractStructOpsMeta retrieves the structOpsMeta value embedded in a
-// MapSpec's Contents, following the struct_ops map convention.
-func extractStructOpsMeta(contents []MapKV) (*structOpsMeta, error) {
-	if len(contents) == 0 {
-		return nil, fmt.Errorf("struct_ops: missing meta at Contents[0]")
-	}
-
-	k, ok := contents[0].Key.(uint32)
-	if !ok || k != 0 {
-		return nil, fmt.Errorf("struct_ops: meta key must be 0")
-	}
-
-	meta, ok := contents[0].Value.(structOpsMeta)
-	if !ok {
-		return nil, fmt.Errorf("struct_ops: meta value must be structOpsMeta")
-	}
-
-	return &meta, nil
-}
-
 // findByTypeFromStruct searches for the first member of a struct whose
 // resolved BTF type ID matches the given typ.
 //
@@ -173,7 +143,7 @@ func doFindStructTypeByName(s *btf.Spec, name string) (*btf.Struct, *btf.Spec, u
 
 	t, err := s.AnyTypeByName(name)
 	if err == nil {
-		if typ, ok := t.(*btf.Struct); ok {
+		if typ, ok := btf.As[*btf.Struct](t); ok {
 			return typ, s, 0, nil
 		}
 	} else if !errors.Is(err, btf.ErrNotFound) {
@@ -218,7 +188,7 @@ func findStructTypeByNameFromModule(base *btf.Spec, name string) (*btf.Struct, *
 			return nil, nil, 0, fmt.Errorf("lookup type in module %s: %w", info.Name, err)
 		}
 
-		if typ, ok := t.(*btf.Struct); ok {
+		if typ, ok := btf.As[*btf.Struct](t); ok {
 			return typ, spec, uint32(it.ID), nil
 		}
 	}
@@ -269,62 +239,6 @@ func findStructOpsKernTypes(userStructType *btf.Struct) (*structOpsKernTypes, er
 	}, nil
 }
 
-// skipModsAndTypedefs resolves a single layer of BTF indirection/qualification
-// for the given type within the provided *btf.Spec.
-//
-// Behavior:
-//   - Uses s.TypeID(typ) and s.TypeByID(id) to canonicalize the type within s.
-//   - If the resolved type is a Typedef or C qualifier (Const/Volatile/Restrict),
-//     returns its immediate underlying type (one level).
-//   - Otherwise returns the resolved type as-is.
-func skipModsAndTypedefs(s *btf.Spec, typ btf.Type) (btf.Type, error) {
-	typeID, err := s.TypeID(typ)
-	if err != nil {
-		return nil, fmt.Errorf("failed to find typeid of %s %w", typ.TypeName(), err)
-	}
-
-	t, err := s.TypeByID(typeID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to find type by ID %d: %w", typeID, err)
-	}
-
-	switch tt := t.(type) {
-	case *btf.Typedef:
-		return btf.UnderlyingType(tt.Type), nil
-	case *btf.Const:
-		return btf.UnderlyingType(tt.Type), nil
-	case *btf.Volatile:
-		return btf.UnderlyingType(tt.Type), nil
-	case *btf.Restrict:
-		return btf.UnderlyingType(tt.Type), nil
-	default:
-		return t, nil
-	}
-}
-
-// getStructMemberByName searches a BTF struct for a member whose Name equals `name`
-// and returns a pointer to that member
-func getStructMemberByName(s *btf.Struct, name string) (btf.Member, error) {
-	for _, member := range s.Members {
-		if member.Name == name {
-			return member, nil
-		}
-		// target kernel struct type (e.g. tcp_congestion_ops).
-	}
-	return btf.Member{}, fmt.Errorf("member %s not found in struct %s", name, s.Name)
-}
-
-// getStructMemberIndexOf returns the index of `member` within struct `s` by
-// comparing the member’s bit-offset.
-func getStructMemberIndexOf(s *btf.Struct, member btf.Member) int {
-	for idx, m := range s.Members {
-		if m.Offset == member.Offset {
-			return idx
-		}
-	}
-	return -1
-}
-
 // getStructMemberIndexByName returns the index of `member` within struct `s` by
 // comparing the member name.
 func getStructMemberIndexByName(s *btf.Struct, name string) int {
@@ -334,14 +248,4 @@ func getStructMemberIndexByName(s *btf.Struct, name string) int {
 		}
 	}
 	return -1
-}
-
-// check if the buffer is filled with 0
-func isMemoryZero(p []byte) bool {
-	for _, b := range p {
-		if b != 0 {
-			return false
-		}
-	}
-	return true
 }

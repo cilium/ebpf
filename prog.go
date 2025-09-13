@@ -409,7 +409,6 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions, c *btf.Cache)
 			}
 
 			st, spec2, modBtfObjID, err := doFindStructTypeByName(s, attachTo)
-			fmt.Println("hogehogehogheoge", st, err)
 			if err != nil {
 				return nil, err
 			}
@@ -421,7 +420,6 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions, c *btf.Cache)
 			attr.AttachBtfId = sys.TypeID(tid)
 
 			idx := getStructMemberIndexByName(st, targetMember)
-			fmt.Println(idx, "hogehogehoge")
 			if idx < 0 {
 				return nil, fmt.Errorf("member %q not found in %s", targetMember, st.Name)
 			}

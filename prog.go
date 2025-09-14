@@ -408,31 +408,33 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions, c *btf.Cache)
 				return nil, fmt.Errorf("load vmlinux BTF: %w", err)
 			}
 
-			st, spec2, modBtfObjID, err := findStructTypeByName(s, attachTo)
+			target := btf.Type((*btf.Struct)(nil))
+			s, module, err := findTargetInKernel(s, attachTo, &target)
 			if err != nil {
-				return nil, err
+				return nil, fmt.Errorf("lookup struct_ops kern type %q: %w", attachTo, err)
+			}
+			defer module.Close()
+
+			kType, ok := btf.As[*btf.Struct](target)
+			if !ok {
+				return nil, fmt.Errorf("conversion target %s -> Struct for prog", attachTo)
 			}
 
-			tid, err := spec2.TypeID(st)
+			tid, err := s.TypeID(kType)
 			if err != nil {
-				return nil, fmt.Errorf("type id for %s: %w", st.TypeName(), err)
+				return nil, fmt.Errorf("type id for %s: %w", kType.TypeName(), err)
 			}
 			attr.AttachBtfId = sys.TypeID(tid)
 
-			idx := getStructMemberIndexByName(st, targetMember)
+			idx := getStructMemberIndexByName(kType, targetMember)
 			if idx < 0 {
-				return nil, fmt.Errorf("member %q not found in %s", targetMember, st.Name)
+				return nil, fmt.Errorf("member %q not found in %s", targetMember, kType.Name)
 			}
 
 			attr.ExpectedAttachType = sys.AttachType(idx)
 
-			if modBtfObjID != 0 {
-				h, err := btf.NewHandleFromID(btf.ID(modBtfObjID))
-				if err != nil {
-					return nil, fmt.Errorf("open module BTF handle (id=%d): %w", modBtfObjID, err)
-				}
-				defer h.Close()
-				attr.AttachBtfObjFd = uint32(h.FD())
+			if module != nil {
+				attr.AttachBtfObjFd = uint32(module.FD())
 			}
 		}
 

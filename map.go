@@ -576,13 +576,19 @@ func (spec *MapSpec) createMap(inner *sys.FD) (_ *Map, err error) {
 
 			// struct_ops: resolve value type ("bpf_struct_ops_<name>") and
 			// record kernel-specific BTF IDs / FDs needed for map creation.
-			vType, s, modBtfObjId, err := findStructTypeByName(s, valueType.Name)
+			target := btf.Type((*btf.Struct)(nil))
+			s, module, err := findTargetInKernel(s, valueType.Name, &target)
 			if err != nil {
 				return nil, fmt.Errorf("lookup value type %q: %w", valueType.Name, err)
 			}
+			defer module.Close()
+
+			vType, ok := btf.As[*btf.Struct](target)
+			if !ok {
+				return nil, fmt.Errorf("conversion target %s -> Struct for map", valueType.Name)
+			}
 
 			btfValueTypeId, err := s.TypeID(vType)
-			fmt.Println(vType, btfValueTypeId)
 			if err != nil {
 				return nil, fmt.Errorf("lookup type_id: %w", err)
 			}
@@ -591,17 +597,11 @@ func (spec *MapSpec) createMap(inner *sys.FD) (_ *Map, err error) {
 			attr.BtfVmlinuxValueTypeId = btfValueTypeId
 			attr.BtfFd = uint32(h.FD())
 
-			if modBtfObjId != 0 {
+			if module != nil {
 				// BPF_F_VTYPE_BTF_OBJ_FD is required if the type comes from a module
 				attr.MapFlags |= sys.BPF_F_VTYPE_BTF_OBJ_FD
-				// resolve a module handler for the kernel model
-				modH, err := btf.NewHandleFromID(btf.ID(modBtfObjId))
-				if err != nil {
-					return nil, fmt.Errorf("open module BTF (id=%d): %w", modBtfObjId, err)
-				}
 				// set FD for the kernel module
-				attr.ValueTypeBtfObjFd = int32(modH.FD())
-				defer modH.Close()
+				attr.ValueTypeBtfObjFd = int32(module.FD())
 			}
 		} else {
 			handle, keyTypeID, valueTypeID, err := btf.MarshalMapKV(spec.Key, spec.Value)

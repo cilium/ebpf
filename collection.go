@@ -710,10 +710,14 @@ func (cl *collectionLoader) populateDeferredMaps() error {
 				return fmt.Errorf("load vmlinux BTF: %w", err)
 			}
 
-			vType, _, _, err := findStructTypeByName(s, valueType.Name)
+			target := btf.Type((*btf.Struct)(nil))
+			s, module, err := findTargetInKernel(s, valueType.Name, &target)
 			if err != nil {
-				return fmt.Errorf("find value type: %w", err)
+				return fmt.Errorf("lookup value type %q: %w", valueType.Name, err)
 			}
+			defer module.Close()
+
+			vType, _ := btf.As[*btf.Struct](target)
 
 			kernVData, err := translateStructData(valueType, userData, vType)
 			if err != nil {
@@ -858,9 +862,17 @@ func (cl *collectionLoader) initKernStructOps() error {
 		}
 
 		kTypeName := strings.TrimPrefix(vType.Name, structOpsValuePrefix)
-		kType, _, _, err := findStructTypeByName(s, kTypeName)
+
+		target := btf.Type((*btf.Struct)(nil))
+		_, module, err := findTargetInKernel(s, kTypeName, &target)
 		if err != nil {
-			return fmt.Errorf("struct type: %s %w", kTypeName, err)
+			return fmt.Errorf("lookup kern type %q: %w", kTypeName, err)
+		}
+		defer module.Close()
+
+		kType, ok := btf.As[*btf.Struct](target)
+		if !ok {
+			return fmt.Errorf("conversion target %s -> Struct in initKernStructOps", kTypeName)
 		}
 
 		cl.setStructOpsProgAttachTo(kType)

@@ -809,13 +809,15 @@ func TestStructOpsMapSpecSimpleLoadAndAssign(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	_, _, _, err = findStructTypeByName(s, "bpf_testmod_ops")
+	target := btf.Type((*btf.Struct)(nil))
+	_, module, err := findTargetInKernel(s, "bpf_struct_ops_bpf_testmod_ops", &target)
 	if errors.Is(err, btf.ErrNotFound) {
 		t.Skip("bpf_testmod_ops not loaded")
 	}
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer module.Close()
 
 	coll := mustNewCollection(t, spec, nil)
 	for name := range spec.Maps {

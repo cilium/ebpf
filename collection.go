@@ -418,8 +418,6 @@ type collectionLoader struct {
 	programs map[string]*Program
 	vars     map[string]*Variable
 	types    *btf.Cache
-	// structOps program name -> structOpsMap name
-	stOpsProgsToMap map[string]string
 }
 
 func newCollectionLoader(coll *CollectionSpec, opts *CollectionOptions) (*collectionLoader, error) {
@@ -445,7 +443,6 @@ func newCollectionLoader(coll *CollectionSpec, opts *CollectionOptions) (*collec
 		make(map[string]*Program),
 		make(map[string]*Variable),
 		btf.NewCache(),
-		make(map[string]string),
 	}, nil
 }
 
@@ -866,13 +863,13 @@ func (cl *collectionLoader) initKernStructOps() error {
 			return fmt.Errorf("struct type: %s %w", kTypeName, err)
 		}
 
-		cl.setStructOpsProgAttachTo(kType, ms.Name)
+		cl.setStructOpsProgAttachTo(kType)
 	}
 
 	return nil
 }
 
-func (cl *collectionLoader) setStructOpsProgAttachTo(kernType *btf.Struct, mapName string) {
+func (cl *collectionLoader) setStructOpsProgAttachTo(kernType *btf.Struct) {
 	for _, m := range kernType.Members {
 		if _, ok := btf.As[*btf.Pointer](btf.UnderlyingType(m.Type)); !ok {
 			continue
@@ -884,7 +881,6 @@ func (cl *collectionLoader) setStructOpsProgAttachTo(kernType *btf.Struct, mapNa
 			continue
 		}
 
-		cl.stOpsProgsToMap[ps.Name] = mapName
 		if ps.AttachTo == "" {
 			ps.AttachTo = fmt.Sprintf("%s:%s", kernType.Name, member)
 		}

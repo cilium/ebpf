@@ -418,8 +418,6 @@ type collectionLoader struct {
 	programs map[string]*Program
 	vars     map[string]*Variable
 	types    *btf.Cache
-	// map name -> structOpsSpec
-	stOpsSpecs map[string]*structOpsSpec
 	// structOps program name -> structOpsMap name
 	stOpsProgsToMap map[string]string
 }
@@ -447,7 +445,6 @@ func newCollectionLoader(coll *CollectionSpec, opts *CollectionOptions) (*collec
 		make(map[string]*Program),
 		make(map[string]*Variable),
 		btf.NewCache(),
-		make(map[string]*structOpsSpec),
 		make(map[string]string),
 	}, nil
 }
@@ -592,25 +589,6 @@ func (cl *collectionLoader) loadProgram(progName string) (*Program, error) {
 	}
 
 	cl.programs[progName] = prog
-
-	if prog.Type() == StructOps {
-		mapName, ok := cl.stOpsProgsToMap[prog.name]
-		if !ok {
-			return nil, fmt.Errorf("program %s should be linked to a StructOpsMap", prog.name)
-		}
-
-		structOps, ok := cl.stOpsSpecs[mapName]
-		if !ok {
-			return nil, fmt.Errorf("program %s has been loaded but not associated", prog.name)
-		}
-
-		attachType := structOps.progAttachType[prog.name]
-		if int(attachType) > len(structOps.kernTypes.typ.Members) {
-			return nil, fmt.Errorf("program %s: unexpected attach type %d",
-				prog.name, attachType)
-		}
-		structOps.programName[attachType] = progSpec.Name
-	}
 
 	return prog, nil
 }
@@ -862,6 +840,11 @@ func populateFuncPtr(vType *btf.Struct, data []byte, programs map[string]*Progra
 // initKernStructOps indexes struct_ops maps: resolve kernel types, allocate per-map state,
 // and stage copy/attach metadata. No kernel objects are created here.
 func (cl *collectionLoader) initKernStructOps() error {
+	s, err := btf.LoadKernelSpec()
+	if err != nil {
+		return fmt.Errorf("load vmlinux BTF: %w", err)
+	}
+
 	for _, ms := range cl.coll.Maps {
 		if ms.Type != StructOpsMap {
 			continue
@@ -877,24 +860,13 @@ func (cl *collectionLoader) initKernStructOps() error {
 			return fmt.Errorf("user struct type should be a Struct")
 		}
 
-		// resolve kernel-side types (target + value type)
-		kernTypes, err := findStructOpsKernTypes(vType)
+		kTypeName := strings.TrimPrefix(vType.Name, structOpsValuePrefix)
+		kType, _, _, err := findStructTypeByName(s, kTypeName)
 		if err != nil {
-			return fmt.Errorf("find kern_type: %w", err)
+			return fmt.Errorf("struct type: %s %w", kTypeName, err)
 		}
 
-		// allocate per-map state (names, offsets, kernel buffer, attach types, typeID)
-		structOps := &structOpsSpec{
-			make([]string, len(kernTypes.typ.Members)),
-			make([]int, len(kernTypes.typ.Members)),
-			make([]byte, kernTypes.valueType.Size),
-			kernTypes,
-			make(map[string]sys.AttachType),
-			kernTypes.typeID,
-		}
-
-		cl.stOpsSpecs[ms.Name] = structOps
-		cl.setStructOpsProgAttachTo(kernTypes.typ, ms.Name)
+		cl.setStructOpsProgAttachTo(kType, ms.Name)
 	}
 
 	return nil

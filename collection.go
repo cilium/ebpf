@@ -711,7 +711,7 @@ func (cl *collectionLoader) populateDeferredMaps() error {
 			}
 
 			target := btf.Type((*btf.Struct)(nil))
-			s, module, err := findTargetInKernel(s, valueType.Name, &target)
+			_, module, err := findTargetInKernel(s, valueType.Name, &target)
 			if err != nil {
 				return fmt.Errorf("lookup value type %q: %w", valueType.Name, err)
 			}

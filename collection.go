@@ -893,9 +893,10 @@ func (cl *collectionLoader) setStructOpsProgAttachTo(kernType *btf.Struct) {
 			continue
 		}
 
-		if ps.AttachTo == "" {
-			ps.AttachTo = fmt.Sprintf("%s:%s", kernType.Name, member)
-		}
+		// TODO: Do we need to check if the AttachedTo property is already configured?
+		// For example, let it fail if it is already configured,
+		// since it will attach to another struct_ops.
+		ps.AttachTo = fmt.Sprintf("%s:%s", kernType.Name, member)
 	}
 }
 

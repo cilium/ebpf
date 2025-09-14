@@ -548,11 +548,6 @@ func (spec *MapSpec) createMap(inner *sys.FD) (_ *Map, err error) {
 
 	if spec.Key != nil || spec.Value != nil {
 		if spec.Type == StructOpsMap {
-			// we need drop meta entry here
-			if len(spec.Contents) > 0 {
-				spec.Contents = spec.Contents[1:]
-			}
-
 			var b btf.Builder
 			h, err := btf.NewHandle(&b)
 			if err != nil {

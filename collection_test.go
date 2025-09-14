@@ -787,7 +787,7 @@ func TestStructOpsMapSpecSimpleLoadAndAssign(t *testing.T) {
 		},
 		Maps: map[string]*MapSpec{
 			"testmod_ops": {
-				Name:       "testmod_ops",
+				Name:       "bpf_struct_ops_testmod_ops",
 				Type:       StructOpsMap,
 				Flags:      sys.BPF_F_LINK,
 				KeySize:    4,
@@ -809,7 +809,7 @@ func TestStructOpsMapSpecSimpleLoadAndAssign(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	_, _, _, err = doFindStructTypeByName(s, "bpf_testmod_ops")
+	_, _, _, err = findStructTypeByName(s, "bpf_testmod_ops")
 	if errors.Is(err, btf.ErrNotFound) {
 		t.Skip("bpf_testmod_ops not loaded")
 	}

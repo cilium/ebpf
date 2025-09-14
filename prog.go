@@ -408,7 +408,7 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions, c *btf.Cache)
 				return nil, fmt.Errorf("load vmlinux BTF: %w", err)
 			}
 
-			st, spec2, modBtfObjID, err := doFindStructTypeByName(s, attachTo)
+			st, spec2, modBtfObjID, err := findStructTypeByName(s, attachTo)
 			if err != nil {
 				return nil, err
 			}
@@ -436,7 +436,7 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions, c *btf.Cache)
 			}
 		}
 
-		if module != nil {
+		if module != nil && attr.AttachBtfObjFd == 0 {
 			attr.AttachBtfObjFd = uint32(module.FD())
 			defer module.Close()
 		}

@@ -721,7 +721,7 @@ func (cl *collectionLoader) populateDeferredMaps() error {
 		}
 
 		if mapSpec.Type == StructOpsMap {
-			userType, ok := btf.As[*btf.Struct](mapSpec.Value)
+			vType, ok := btf.As[*btf.Struct](mapSpec.Value)
 			if !ok {
 				return fmt.Errorf("value should be a *Struct")
 			}
@@ -736,12 +736,12 @@ func (cl *collectionLoader) populateDeferredMaps() error {
 				return fmt.Errorf("load vmlinux BTF: %w", err)
 			}
 
-			kernType, _, _, err := findStructByNameWithPrefix(s, userType)
+			kernType, _, _, err := findStructTypeByName(s, vType.Name)
 			if err != nil {
-				return fmt.Errorf("find wrapper type: %w", err)
+				return fmt.Errorf("find value type: %w", err)
 			}
 
-			kernVData, err := translateStructData(userType, userData, kernType)
+			kernVData, err := translateStructData(vType, userData, kernType)
 			if err != nil {
 				return err
 			}
@@ -826,13 +826,13 @@ func translateStructData(from *btf.Struct, fromData []byte, to *btf.Struct) ([]b
 }
 
 // populateFuncPtr writes progFD into `data` at the offset
-func populateFuncPtr(wrapper *btf.Struct, data []byte, programs map[string]*Program) error {
-	innerName := strings.TrimPrefix(wrapper.Name, structOpsValuePrefix)
+func populateFuncPtr(vType *btf.Struct, data []byte, programs map[string]*Program) error {
+	innerName := strings.TrimPrefix(vType.Name, structOpsValuePrefix)
 
 	var inner *btf.Struct
 	var innerOff int
 
-	for _, m := range wrapper.Members {
+	for _, m := range vType.Members {
 		st, ok := btf.As[*btf.Struct](btf.UnderlyingType(m.Type))
 		if ok && st.Name == innerName {
 			inner = st
@@ -841,7 +841,7 @@ func populateFuncPtr(wrapper *btf.Struct, data []byte, programs map[string]*Prog
 	}
 
 	if inner == nil {
-		return fmt.Errorf("member %s not found in %s", innerName, wrapper.Name)
+		return fmt.Errorf("member %s not found in %s", innerName, vType.Name)
 	}
 
 	for _, m := range inner.Members {
@@ -869,18 +869,18 @@ func (cl *collectionLoader) initKernStructOps() error {
 			continue
 		}
 
-		userSt := ms.Value
-		if userSt == nil {
+		kernSt := ms.Value
+		if kernSt == nil {
 			return fmt.Errorf("user struct type should be specified as Value")
 		}
 
-		userStructType, ok := btf.As[*btf.Struct](ms.Value)
+		kType, ok := btf.As[*btf.Struct](kernSt)
 		if !ok {
 			return fmt.Errorf("user struct type should be a Struct")
 		}
 
-		// resolve kernel-side types (target + wrapper)
-		kernTypes, err := findStructOpsKernTypes(userStructType)
+		// resolve kernel-side types (target + value type)
+		kernTypes, err := findStructOpsKernTypes(kType)
 		if err != nil {
 			return fmt.Errorf("find kern_type: %w", err)
 		}

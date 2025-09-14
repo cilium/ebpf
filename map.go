@@ -569,19 +569,20 @@ func (spec *MapSpec) createMap(inner *sys.FD) (_ *Map, err error) {
 				return nil, fmt.Errorf("struct type is not specified as Value")
 			}
 
-			vType, ok := btf.As[*btf.Struct](spec.Value)
+			valueType, ok := btf.As[*btf.Struct](spec.Value)
 			if !ok {
 				return nil, fmt.Errorf("value must be Struct type")
 			}
 
 			// struct_ops: resolve value type ("bpf_struct_ops_<name>") and
 			// record kernel-specific BTF IDs / FDs needed for map creation.
-			kType, s, modBtfObjId, err := findStructTypeByName(s, vType.Name)
+			vType, s, modBtfObjId, err := findStructTypeByName(s, valueType.Name)
 			if err != nil {
-				return nil, fmt.Errorf("lookup struct type: %w", err)
+				return nil, fmt.Errorf("lookup value type %q: %w", valueType.Name, err)
 			}
 
-			btfValueTypeId, err := s.TypeID(kType)
+			btfValueTypeId, err := s.TypeID(vType)
+			fmt.Println(vType, btfValueTypeId)
 			if err != nil {
 				return nil, fmt.Errorf("lookup type_id: %w", err)
 			}

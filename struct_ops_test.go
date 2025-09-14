@@ -19,7 +19,7 @@ func TestCreateStructOpsMapSpecSimple(t *testing.T) {
 		KeySize:    4,
 		ValueSize:  448,
 		MaxEntries: 1,
-		Value:      &btf.Struct{Name: "bpf_struct_ops_testmod_ops"},
+		Value:      &btf.Struct{Name: "bpf_struct_ops_bpf_testmod_ops"},
 		Contents: []MapKV{
 			{
 				Key:   uint32(0),
@@ -33,7 +33,7 @@ func TestCreateStructOpsMapSpecSimple(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	_, _, _, err = findStructTypeByName(s, "bpf_struct_ops_testmod_ops")
+	_, _, _, err = findStructTypeByName(s, "bpf_struct_ops_bpf_testmod_ops")
 	if errors.Is(err, btf.ErrNotFound) {
 		t.Skip("bpf_testmod_ops not loaded")
 	}

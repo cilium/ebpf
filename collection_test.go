@@ -787,13 +787,13 @@ func TestStructOpsMapSpecSimpleLoadAndAssign(t *testing.T) {
 		},
 		Maps: map[string]*MapSpec{
 			"testmod_ops": {
-				Name:       "bpf_struct_ops_testmod_ops",
+				Name:       "testmod_ops",
 				Type:       StructOpsMap,
 				Flags:      sys.BPF_F_LINK,
 				KeySize:    4,
 				ValueSize:  448,
 				MaxEntries: 1,
-				Value:      &btf.Struct{Name: "bpf_testmod_ops"},
+				Value:      &btf.Struct{Name: "bpf_struct_ops_bpf_testmod_ops"},
 				Contents: []MapKV{
 					{
 						Key:   uint32(0),

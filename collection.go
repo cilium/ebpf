@@ -675,7 +675,6 @@ func (cl *collectionLoader) loadVariable(varName string) (*Variable, error) {
 // populateDeferredMaps iterates maps holding programs or other maps and loads
 // any dependencies. Populates all maps in cl and freezes them if specified.
 func (cl *collectionLoader) populateDeferredMaps() error {
-	fmt.Println("hogehogehogehoge")
 	for mapName, m := range cl.maps {
 		mapSpec, ok := cl.coll.Maps[mapName]
 		if !ok {
@@ -721,7 +720,7 @@ func (cl *collectionLoader) populateDeferredMaps() error {
 		}
 
 		if mapSpec.Type == StructOpsMap {
-			vType, ok := btf.As[*btf.Struct](mapSpec.Value)
+			valueType, ok := btf.As[*btf.Struct](mapSpec.Value)
 			if !ok {
 				return fmt.Errorf("value should be a *Struct")
 			}
@@ -736,17 +735,17 @@ func (cl *collectionLoader) populateDeferredMaps() error {
 				return fmt.Errorf("load vmlinux BTF: %w", err)
 			}
 
-			kernType, _, _, err := findStructTypeByName(s, vType.Name)
+			vType, _, _, err := findStructTypeByName(s, valueType.Name)
 			if err != nil {
 				return fmt.Errorf("find value type: %w", err)
 			}
 
-			kernVData, err := translateStructData(vType, userData, kernType)
+			kernVData, err := translateStructData(valueType, userData, vType)
 			if err != nil {
 				return err
 			}
 
-			if err := populateFuncPtr(kernType, kernVData, cl.programs); err != nil {
+			if err := populateFuncPtr(vType, kernVData, cl.programs); err != nil {
 				return err
 			}
 
@@ -773,7 +772,6 @@ func translateStructData(from *btf.Struct, fromData []byte, to *btf.Struct) ([]b
 
 	for _, m := range to.Members {
 		st, ok := btf.As[*btf.Struct](btf.UnderlyingType(m.Type))
-		fmt.Println(m.Name, st.Name)
 		if ok && st.Name == innerName {
 			inner = st
 			innerOff = int(m.Offset / 8)
@@ -869,22 +867,21 @@ func (cl *collectionLoader) initKernStructOps() error {
 			continue
 		}
 
-		kernSt := ms.Value
-		if kernSt == nil {
+		valueSt := ms.Value
+		if valueSt == nil {
 			return fmt.Errorf("user struct type should be specified as Value")
 		}
 
-		kType, ok := btf.As[*btf.Struct](kernSt)
+		vType, ok := btf.As[*btf.Struct](valueSt)
 		if !ok {
 			return fmt.Errorf("user struct type should be a Struct")
 		}
 
 		// resolve kernel-side types (target + value type)
-		kernTypes, err := findStructOpsKernTypes(kType)
+		kernTypes, err := findStructOpsKernTypes(vType)
 		if err != nil {
 			return fmt.Errorf("find kern_type: %w", err)
 		}
-		ms.Value = kernTypes.typ
 
 		// allocate per-map state (names, offsets, kernel buffer, attach types, typeID)
 		structOps := &structOpsSpec{

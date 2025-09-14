@@ -3,6 +3,7 @@ package ebpf
 import (
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/cilium/ebpf/btf"
 	"github.com/cilium/ebpf/internal/sys"
@@ -19,8 +20,6 @@ type structOpsKernTypes struct {
 	typeID btf.TypeID
 	// value struct "bpf_struct_ops_<name>" that contains typ.
 	valueType *btf.Struct
-	// The *btf.Member within valueType that embeds typ.
-	dataMember *btf.Member
 	// The BTF object ID of the module where the type was found
 	// 0 if resolved in vmlinux.
 	modBtfObjId uint32
@@ -62,34 +61,6 @@ type structOpsSpec struct {
 	// progAttachBtfID holds the BTF type ID of the struct_ops
 	// target in vmlinux
 	progAttachBtfID btf.TypeID
-}
-
-// findByTypeFromStruct searches for the first member of a struct whose
-// resolved BTF type ID matches the given typ.
-//
-// It resolves the BTF type ID of typ and compares it against each
-// member’s TypeID in st.Members. If a match is found, the corresponding
-// *btf.Member is returned.
-//
-// Returns an error if typ cannot be resolved, if any member type
-// resolution fails, or if no member with the requested type exists.
-func findByTypeFromStruct(spec *btf.Spec, st *btf.Struct, typ btf.Type) (*btf.Member, error) {
-	typeId, err := spec.TypeID(typ)
-	if err != nil {
-		return nil, fmt.Errorf("failed to resolve typeId for %s: %w", (typ).TypeName(), err)
-	}
-
-	for _, member := range st.Members {
-		memberTypeId, err := spec.TypeID(member.Type)
-		if err != nil {
-			return nil, fmt.Errorf("failed to resolve typeId for %s: %w", member.Name, err)
-		}
-		if memberTypeId == typeId {
-			return &member, nil
-		}
-	}
-
-	return nil, fmt.Errorf("member of type %s not found in %s", typ.TypeName(), st.Name)
 }
 
 // findStructTypeByName looks up a struct type with the exact name in the
@@ -168,32 +139,26 @@ func findStructTypeByNameFromModule(base *btf.Spec, name string) (*btf.Struct, *
 // findStructOpsKernTypes discovers all kernel-side BTF artifacts that belong to
 // a given struct_ops, identified by the user-visible base struct name
 // (e.g., "tcp_congestion_ops").
-func findStructOpsKernTypes(kType *btf.Struct) (*structOpsKernTypes, error) {
+func findStructOpsKernTypes(valueType *btf.Struct) (*structOpsKernTypes, error) {
 	spec, err := btf.LoadKernelSpec()
 	if err != nil {
 		return nil, fmt.Errorf("load vmlinux BTF: %w", err)
 	}
 
 	// 1. kernel target struct (e.g. tcp_congestion_ops)
-	kType, s, modID, err := findStructTypeByName(spec, kType.Name)
+	kTypeName := strings.TrimPrefix(valueType.Name, structOpsValuePrefix)
+	kType, s, modID, err := findStructTypeByName(spec, kTypeName)
 	if err != nil {
 		return nil, fmt.Errorf("struct type: %s %w", kType.TypeName(), err)
 	}
 
 	// 2. value struct (bpf_struct_ops_<name>)
-	vTypeName := structOpsValuePrefix + kType.Name
-	vType, _, _, err := findStructTypeByName(s, vTypeName)
+	vType, _, _, err := findStructTypeByName(s, valueType.Name)
 	if err != nil {
 		return nil, fmt.Errorf("kern struct type for %s %w", kType.TypeName(), err)
 	}
 
-	// 3. member “data” that embeds the real ops
-	dataMem, err := findByTypeFromStruct(s, vType, kType)
-	if err != nil {
-		return nil, err
-	}
-
-	// 4. type-ID of kernel target
+	// 3. type-ID of kernel target
 	kID, err := s.TypeID(kType)
 	if err != nil {
 		return nil, fmt.Errorf("type ID of %s: %w", kType.TypeName(), err)
@@ -204,7 +169,6 @@ func findStructOpsKernTypes(kType *btf.Struct) (*structOpsKernTypes, error) {
 		typ:         kType,
 		typeID:      kID,
 		valueType:   vType,
-		dataMember:  dataMem,
 		modBtfObjId: uint32(modID),
 	}, nil
 }

@@ -43,9 +43,9 @@ func TestCache(t *testing.T) {
 	FlushKernelSpec()
 	c := NewCache()
 
-	qt.Assert(t, qt.IsNil(c.KernelTypes))
-	qt.Assert(t, qt.HasLen(c.ModuleTypes, 0))
-	qt.Assert(t, qt.IsNil(c.LoadedModules))
+	qt.Assert(t, qt.IsNil(c.kernelTypes))
+	qt.Assert(t, qt.HasLen(c.moduleTypes, 0))
+	qt.Assert(t, qt.IsNil(c.loadedModules))
 
 	// Test that Kernel() creates only one copy
 	spec1, err := c.Kernel()
@@ -83,15 +83,15 @@ func TestCache(t *testing.T) {
 
 	// Test that NewCache populates from global cache
 	c = NewCache()
-	qt.Assert(t, qt.IsNotNil(c.KernelTypes))
-	qt.Assert(t, qt.Not(qt.Equals(c.KernelTypes, vmlinux)))
+	qt.Assert(t, qt.IsNotNil(c.kernelTypes))
+	qt.Assert(t, qt.Not(qt.Equals(c.kernelTypes, vmlinux)))
 	if testmod != nil {
-		qt.Assert(t, qt.IsNotNil(c.ModuleTypes["bpf_testmod"]))
-		qt.Assert(t, qt.Not(qt.Equals(c.ModuleTypes["bpf_testmod"], testmod)))
+		qt.Assert(t, qt.IsNotNil(c.moduleTypes["bpf_testmod"]))
+		qt.Assert(t, qt.Not(qt.Equals(c.moduleTypes["bpf_testmod"], testmod)))
 	}
 
 	// Test that Modules only reads modules once.
 	_, err = c.Modules()
 	qt.Assert(t, qt.IsNil(err))
-	qt.Assert(t, qt.IsNotNil(c.LoadedModules))
+	qt.Assert(t, qt.IsNotNil(c.loadedModules))
 }

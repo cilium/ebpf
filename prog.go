@@ -402,14 +402,8 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions, c *btf.Cache)
 
 		attr.AttachBtfId = targetID
 		if spec.Type == StructOps {
-			// we need to resolve `target` here, load the kernel spec
-			s, err := btf.LoadKernelSpec()
-			if err != nil {
-				return nil, fmt.Errorf("load vmlinux BTF: %w", err)
-			}
-
 			target := btf.Type((*btf.Struct)(nil))
-			s, module, err := findTargetInKernel(s, attachTo, &target)
+			s, module, err := findTargetInKernel(attachTo, &target, c)
 			if err != nil {
 				return nil, fmt.Errorf("lookup struct_ops kern type %q: %w", attachTo, err)
 			}

@@ -517,7 +517,7 @@ func (cl *collectionLoader) loadMap(mapName string) (*Map, error) {
 		return m, nil
 	}
 
-	m, err := newMapWithOptions(mapSpec, cl.opts.Maps)
+	m, err := newMapWithOptions(mapSpec, cl.opts.Maps, cl.types)
 	if err != nil {
 		return nil, fmt.Errorf("map %s: %w", mapName, err)
 	}
@@ -705,13 +705,8 @@ func (cl *collectionLoader) populateDeferredMaps() error {
 				return fmt.Errorf("value should be an array of byte")
 			}
 
-			s, err := btf.LoadKernelSpec()
-			if err != nil {
-				return fmt.Errorf("load vmlinux BTF: %w", err)
-			}
-
 			target := btf.Type((*btf.Struct)(nil))
-			_, module, err := findTargetInKernel(s, valueType.Name, &target)
+			_, module, err := findTargetInKernel(valueType.Name, &target, cl.types)
 			if err != nil {
 				return fmt.Errorf("lookup value type %q: %w", valueType.Name, err)
 			}
@@ -841,11 +836,6 @@ func populateFuncPtr(vType *btf.Struct, data []byte, programs map[string]*Progra
 // initKernStructOps indexes struct_ops maps: resolve kernel types, allocate per-map state,
 // and stage copy/attach metadata. No kernel objects are created here.
 func (cl *collectionLoader) initKernStructOps() error {
-	s, err := btf.LoadKernelSpec()
-	if err != nil {
-		return fmt.Errorf("load vmlinux BTF: %w", err)
-	}
-
 	for _, ms := range cl.coll.Maps {
 		if ms.Type != StructOpsMap {
 			continue
@@ -864,7 +854,7 @@ func (cl *collectionLoader) initKernStructOps() error {
 		kTypeName := strings.TrimPrefix(vType.Name, structOpsValuePrefix)
 
 		target := btf.Type((*btf.Struct)(nil))
-		_, module, err := findTargetInKernel(s, kTypeName, &target)
+		_, module, err := findTargetInKernel(kTypeName, &target, cl.types)
 		if err != nil {
 			return fmt.Errorf("lookup kern type %q: %w", kTypeName, err)
 		}

@@ -804,13 +804,8 @@ func TestStructOpsMapSpecSimpleLoadAndAssign(t *testing.T) {
 		},
 	}
 
-	s, err := btf.LoadKernelSpec()
-	if err != nil {
-		t.Fatal(err)
-	}
-
 	target := btf.Type((*btf.Struct)(nil))
-	_, module, err := findTargetInKernel(s, "bpf_struct_ops_bpf_testmod_ops", &target)
+	_, module, err := findTargetInKernel("bpf_struct_ops_bpf_testmod_ops", &target, btf.NewCache())
 	if errors.Is(err, btf.ErrNotFound) {
 		t.Skip("bpf_testmod_ops not loaded")
 	}

@@ -383,14 +383,10 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions, c *btf.Cache)
 		defer runtime.KeepAlive(spec.AttachTarget)
 	} else if spec.AttachTo != "" {
 		var targetMember string
-		var ok bool
 		attachTo := spec.AttachTo
 
 		if spec.Type == StructOps {
-			attachTo, targetMember, ok = strings.Cut(attachTo, ":")
-			if !ok || attachTo == "" || targetMember == "" {
-				return nil, fmt.Errorf("invalid AttachTo for StructOps (type:member): %q", spec.AttachTo)
-			}
+			attachTo, targetMember, _ = strings.Cut(attachTo, ":")
 		}
 
 		module, targetID, err := findProgramTargetInKernel(attachTo, spec.Type, spec.AttachType, c)
@@ -400,25 +396,24 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions, c *btf.Cache)
 			return nil, fmt.Errorf("attach %s/%s: %w", spec.Type, spec.AttachType, err)
 		}
 
-		attr.AttachBtfId = targetID
-		if spec.Type == StructOps {
+		if spec.Type == StructOps && targetMember != "" {
+			var s *btf.Spec
+
 			target := btf.Type((*btf.Struct)(nil))
-			s, module, err := findTargetInKernel(attachTo, &target, c)
+			s, module, err = findTargetInKernel(attachTo, &target, c)
 			if err != nil {
 				return nil, fmt.Errorf("lookup struct_ops kern type %q: %w", attachTo, err)
 			}
-			defer module.Close()
 
 			kType, ok := btf.As[*btf.Struct](target)
 			if !ok {
 				return nil, fmt.Errorf("conversion target %s -> Struct for prog", attachTo)
 			}
 
-			tid, err := s.TypeID(kType)
+			targetID, err = s.TypeID(kType)
 			if err != nil {
 				return nil, fmt.Errorf("type id for %s: %w", kType.TypeName(), err)
 			}
-			attr.AttachBtfId = sys.TypeID(tid)
 
 			idx := getStructMemberIndexByName(kType, targetMember)
 			if idx < 0 {
@@ -426,12 +421,9 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions, c *btf.Cache)
 			}
 
 			attr.ExpectedAttachType = sys.AttachType(idx)
-
-			if module != nil {
-				attr.AttachBtfObjFd = uint32(module.FD())
-			}
 		}
 
+		attr.AttachBtfId = targetID
 		if module != nil && attr.AttachBtfObjFd == 0 {
 			attr.AttachBtfObjFd = uint32(module.FD())
 			defer module.Close()

@@ -776,9 +776,10 @@ func TestStructOpsMapSpecSimpleLoadAndAssign(t *testing.T) {
 	spec := &CollectionSpec{
 		Programs: map[string]*ProgramSpec{
 			"test_1": {
-				Name:    "test_1",
-				Type:    StructOps,
-				License: "GPL",
+				Name:     "test_1",
+				Type:     StructOps,
+				AttachTo: "bpf_testmod_ops:test_1",
+				License:  "GPL",
 				Instructions: asm.Instructions{
 					asm.Mov.Imm(asm.R0, 0),
 					asm.Return(),

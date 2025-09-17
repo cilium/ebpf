@@ -366,11 +366,6 @@ func NewCollectionWithOptions(spec *CollectionSpec, opts CollectionOptions) (*Co
 	}
 	defer loader.close()
 
-	// initialize struct_ops maps
-	if err := loader.initKernStructOps(); err != nil {
-		return nil, err
-	}
-
 	// Create maps first, as their fds need to be linked into programs.
 	for mapName := range spec.Maps {
 		if _, err := loader.loadMap(mapName); err != nil {
@@ -831,63 +826,6 @@ func populateFuncPtr(vType *btf.Struct, data []byte, programs map[string]*Progra
 	}
 
 	return nil
-}
-
-// initKernStructOps indexes struct_ops maps: resolve kernel types, allocate per-map state,
-// and stage copy/attach metadata. No kernel objects are created here.
-func (cl *collectionLoader) initKernStructOps() error {
-	for _, ms := range cl.coll.Maps {
-		if ms.Type != StructOpsMap {
-			continue
-		}
-
-		valueSt := ms.Value
-		if valueSt == nil {
-			return fmt.Errorf("user struct type should be specified as Value")
-		}
-
-		vType, ok := btf.As[*btf.Struct](valueSt)
-		if !ok {
-			return fmt.Errorf("user struct type should be a Struct")
-		}
-
-		kTypeName := strings.TrimPrefix(vType.Name, structOpsValuePrefix)
-
-		target := btf.Type((*btf.Struct)(nil))
-		_, module, err := findTargetInKernel(kTypeName, &target, cl.types)
-		if err != nil {
-			return fmt.Errorf("lookup kern type %q: %w", kTypeName, err)
-		}
-		defer module.Close()
-
-		kType, ok := btf.As[*btf.Struct](target)
-		if !ok {
-			return fmt.Errorf("conversion target %s -> Struct in initKernStructOps", kTypeName)
-		}
-
-		cl.setStructOpsProgAttachTo(kType)
-	}
-
-	return nil
-}
-
-func (cl *collectionLoader) setStructOpsProgAttachTo(kernType *btf.Struct) {
-	for _, m := range kernType.Members {
-		if _, ok := btf.As[*btf.Pointer](btf.UnderlyingType(m.Type)); !ok {
-			continue
-		}
-
-		member := m.Name
-		ps, ok := cl.coll.Programs[member]
-		if !ok || ps == nil || ps.Type != StructOps {
-			continue
-		}
-
-		// TODO: Do we need to check if the AttachedTo property is already configured?
-		// For example, let it fail if it is already configured,
-		// since it will attach to another struct_ops.
-		ps.AttachTo = fmt.Sprintf("%s:%s", kernType.Name, member)
-	}
 }
 
 // resolveKconfig resolves all variables declared in .kconfig and populates

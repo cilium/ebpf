@@ -8,6 +8,7 @@ import (
 	"math"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"time"
 
@@ -415,7 +416,9 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions, c *btf.Cache)
 				return nil, fmt.Errorf("type id for %s: %w", kType.TypeName(), err)
 			}
 
-			idx := getStructMemberIndexByName(kType, targetMember)
+			idx := slices.IndexFunc(kType.Members, func(m btf.Member) bool {
+				return m.Name == targetMember
+			})
 			if idx < 0 {
 				return nil, fmt.Errorf("member %q not found in %s", targetMember, kType.Name)
 			}

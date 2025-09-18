@@ -334,7 +334,7 @@ func NewMap(spec *MapSpec) (*Map, error) {
 //
 // May return an error wrapping ErrMapIncompatible.
 func NewMapWithOptions(spec *MapSpec, opts MapOptions) (*Map, error) {
-	m, err := newMapWithOptions(spec, opts)
+	m, err := newMapWithOptions(spec, opts, btf.NewCache())
 	if err != nil {
 		return nil, fmt.Errorf("creating map: %w", err)
 	}
@@ -347,7 +347,7 @@ func NewMapWithOptions(spec *MapSpec, opts MapOptions) (*Map, error) {
 	return m, nil
 }
 
-func newMapWithOptions(spec *MapSpec, opts MapOptions) (_ *Map, err error) {
+func newMapWithOptions(spec *MapSpec, opts MapOptions, c *btf.Cache) (_ *Map, err error) {
 	closeOnError := func(c io.Closer) {
 		if err != nil {
 			c.Close()
@@ -397,7 +397,7 @@ func newMapWithOptions(spec *MapSpec, opts MapOptions) (_ *Map, err error) {
 			return nil, errors.New("inner maps cannot be pinned")
 		}
 
-		template, err := spec.InnerMap.createMap(nil)
+		template, err := spec.InnerMap.createMap(nil, c)
 		if err != nil {
 			return nil, fmt.Errorf("inner map: %w", err)
 		}
@@ -409,7 +409,7 @@ func newMapWithOptions(spec *MapSpec, opts MapOptions) (_ *Map, err error) {
 		innerFd = template.fd
 	}
 
-	m, err := spec.createMap(innerFd)
+	m, err := spec.createMap(innerFd, c)
 	if err != nil {
 		return nil, err
 	}
@@ -504,7 +504,7 @@ func (m *Map) memorySize() (int, error) {
 
 // createMap validates the spec's properties and creates the map in the kernel
 // using the given opts. It does not populate or freeze the map.
-func (spec *MapSpec) createMap(inner *sys.FD) (_ *Map, err error) {
+func (spec *MapSpec) createMap(inner *sys.FD, c *btf.Cache) (_ *Map, err error) {
 	closeOnError := func(closer io.Closer) {
 		if err != nil {
 			closer.Close()
@@ -551,14 +551,59 @@ func (spec *MapSpec) createMap(inner *sys.FD) (_ *Map, err error) {
 		if err != nil && !errors.Is(err, btf.ErrNotSupported) {
 			return nil, fmt.Errorf("load BTF: %w", err)
 		}
+		defer handle.Close()
 
-		if handle != nil {
-			defer handle.Close()
+		if spec.Type == StructOpsMap {
+			if spec.Value == nil {
+				return nil, fmt.Errorf("struct_ops map: missing value type information")
+			}
 
-			// Use BTF k/v during map creation.
+			valueType, ok := btf.As[*btf.Struct](spec.Value)
+			if !ok {
+				return nil, fmt.Errorf("value must be Struct type")
+			}
+
+			if spec.KeySize != 4 {
+				return nil, fmt.Errorf("struct_ops: KeySize must be 4")
+			}
+
+			// struct_ops: resolve value type ("bpf_struct_ops_<name>") and
+			// record kernel-specific BTF IDs / FDs needed for map creation.
+			target := btf.Type((*btf.Struct)(nil))
+			s, module, err := findTargetInKernel(valueType.Name, &target, c)
+			if err != nil {
+				return nil, fmt.Errorf("lookup value type %q: %w", valueType.Name, err)
+			}
+			defer module.Close()
+
+			vType := target.(*btf.Struct)
+
+			btfValueTypeId, err := s.TypeID(vType)
+			if err != nil {
+				return nil, fmt.Errorf("lookup type_id: %w", err)
+			}
+
+			attr.ValueSize = spec.ValueSize
+			attr.BtfVmlinuxValueTypeId = btfValueTypeId
+
+			if handle == nil {
+				return nil, fmt.Errorf("struct_ops: BTF handle is not resolved")
+			}
 			attr.BtfFd = uint32(handle.FD())
-			attr.BtfKeyTypeId = keyTypeID
-			attr.BtfValueTypeId = valueTypeID
+
+			if module != nil {
+				// BPF_F_VTYPE_BTF_OBJ_FD is required if the type comes from a module
+				attr.MapFlags |= sys.BPF_F_VTYPE_BTF_OBJ_FD
+				// set FD for the kernel module
+				attr.ValueTypeBtfObjFd = int32(module.FD())
+			}
+		} else {
+			if handle != nil {
+				// Use BTF k/v during map creation.
+				attr.BtfFd = uint32(handle.FD())
+				attr.BtfKeyTypeId = keyTypeID
+				attr.BtfValueTypeId = valueTypeID
+			}
 		}
 	}
 

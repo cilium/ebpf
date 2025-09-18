@@ -14,6 +14,7 @@ import (
 	"github.com/cilium/ebpf/asm"
 	"github.com/cilium/ebpf/btf"
 	"github.com/cilium/ebpf/internal"
+	"github.com/cilium/ebpf/internal/sys"
 	"github.com/cilium/ebpf/internal/testutils"
 	"github.com/cilium/ebpf/internal/testutils/testmain"
 )
@@ -767,4 +768,49 @@ func ExampleCollectionSpec_LoadAndAssign() {
 	}
 	defer objs.Program.Close()
 	defer objs.Map.Close()
+}
+
+func TestStructOpsMapSpecSimpleLoadAndAssign(t *testing.T) {
+	requireTestmodOps(t)
+
+	spec := &CollectionSpec{
+		Programs: map[string]*ProgramSpec{
+			"test_1": {
+				Name:     "test_1",
+				Type:     StructOps,
+				AttachTo: "bpf_testmod_ops:test_1",
+				License:  "GPL",
+				Instructions: asm.Instructions{
+					asm.Mov.Imm(asm.R0, 0),
+					asm.Return(),
+				},
+			},
+		},
+		Maps: map[string]*MapSpec{
+			"testmod_ops": {
+				Name:       "testmod_ops",
+				Type:       StructOpsMap,
+				Flags:      sys.BPF_F_LINK,
+				KeySize:    4,
+				ValueSize:  448,
+				MaxEntries: 1,
+				Value:      &btf.Struct{Name: "bpf_struct_ops_bpf_testmod_ops"},
+				Contents: []MapKV{
+					{
+						Key:   uint32(0),
+						Value: make([]byte, 448),
+					},
+				},
+			},
+		},
+	}
+
+	coll := mustNewCollection(t, spec, nil)
+	for name := range spec.Maps {
+		qt.Assert(t, qt.IsNotNil(coll.Maps[name]))
+	}
+
+	for name := range spec.Programs {
+		qt.Assert(t, qt.IsNotNil(coll.Programs[name]))
+	}
 }

@@ -715,7 +715,7 @@ func (cl *collectionLoader) populateDeferredMaps() error {
 				return err
 			}
 
-			if err := populateFuncPtr(vType, kernVData, cl.programs); err != nil {
+			if err := populateStructOpsPrograms(vType, kernVData, cl.programs); err != nil {
 				return err
 			}
 			defer runtime.KeepAlive(cl.programs)
@@ -803,8 +803,8 @@ func translateStructData(fromData []byte, vType *btf.Struct) ([]byte, error) {
 	return vTypeData, nil
 }
 
-// populateFuncPtr writes progFD into `data` at the offset
-func populateFuncPtr(vType *btf.Struct, data []byte, programs map[string]*Program) error {
+// populateStructOpsPrograms writes progFD into `data` at the offset
+func populateStructOpsPrograms(vType *btf.Struct, data []byte, programs map[string]*Program) error {
 	inner, innerOff, err := findInnerStruct(vType)
 	if err != nil {
 		return err

@@ -510,7 +510,7 @@ func (ec *elfCode) relocateInstruction(ins *asm.Instruction, rel elf.Symbol) err
 			return fmt.Errorf("possible erroneous static qualifier on map definition: found reference to %q", name)
 		}
 
-		if bind != elf.STB_GLOBAL {
+		if bind != elf.STB_GLOBAL && bind != elf.STB_WEAK {
 			return fmt.Errorf("map %q: %w: %s", name, errUnsupportedBinding, bind)
 		}
 

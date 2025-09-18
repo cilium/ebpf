@@ -547,14 +547,13 @@ func (spec *MapSpec) createMap(inner *sys.FD, c *btf.Cache) (_ *Map, err error) 
 	}
 
 	if spec.Key != nil || spec.Value != nil {
-		if spec.Type == StructOpsMap {
-			var b btf.Builder
-			h, err := btf.NewHandle(&b)
-			if err != nil {
-				return nil, err
-			}
-			defer h.Close()
+		handle, keyTypeID, valueTypeID, err := btf.MarshalMapKV(spec.Key, spec.Value)
+		if err != nil && !errors.Is(err, btf.ErrNotSupported) {
+			return nil, fmt.Errorf("load BTF: %w", err)
+		}
+		defer handle.Close()
 
+		if spec.Type == StructOpsMap {
 			if spec.Value == nil {
 				return nil, fmt.Errorf("struct_ops map: missing value type information")
 			}
@@ -586,7 +585,11 @@ func (spec *MapSpec) createMap(inner *sys.FD, c *btf.Cache) (_ *Map, err error) 
 
 			attr.ValueSize = spec.ValueSize
 			attr.BtfVmlinuxValueTypeId = btfValueTypeId
-			attr.BtfFd = uint32(h.FD())
+
+			if handle == nil {
+				return nil, fmt.Errorf("struct_ops: BTF handle is not resolved")
+			}
+			attr.BtfFd = uint32(handle.FD())
 
 			if module != nil {
 				// BPF_F_VTYPE_BTF_OBJ_FD is required if the type comes from a module
@@ -595,14 +598,7 @@ func (spec *MapSpec) createMap(inner *sys.FD, c *btf.Cache) (_ *Map, err error) 
 				attr.ValueTypeBtfObjFd = int32(module.FD())
 			}
 		} else {
-			handle, keyTypeID, valueTypeID, err := btf.MarshalMapKV(spec.Key, spec.Value)
-			if err != nil && !errors.Is(err, btf.ErrNotSupported) {
-				return nil, fmt.Errorf("load BTF: %w", err)
-			}
-
 			if handle != nil {
-				defer handle.Close()
-
 				// Use BTF k/v during map creation.
 				attr.BtfFd = uint32(handle.FD())
 				attr.BtfKeyTypeId = keyTypeID

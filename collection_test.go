@@ -771,7 +771,7 @@ func ExampleCollectionSpec_LoadAndAssign() {
 }
 
 func TestStructOpsMapSpecSimpleLoadAndAssign(t *testing.T) {
-	requireTestmod(t)
+	requireTestmodOps(t)
 
 	spec := &CollectionSpec{
 		Programs: map[string]*ProgramSpec{
@@ -804,16 +804,6 @@ func TestStructOpsMapSpecSimpleLoadAndAssign(t *testing.T) {
 			},
 		},
 	}
-
-	target := btf.Type((*btf.Struct)(nil))
-	_, module, err := findTargetInKernel("bpf_struct_ops_bpf_testmod_ops", &target, btf.NewCache())
-	if errors.Is(err, btf.ErrNotFound) {
-		t.Skip("bpf_testmod_ops not loaded")
-	}
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer module.Close()
 
 	coll := mustNewCollection(t, spec, nil)
 	for name := range spec.Maps {

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"strings"
 
 	"github.com/cilium/ebpf/asm"
@@ -709,7 +710,7 @@ func (cl *collectionLoader) populateDeferredMaps() error {
 
 			vType, _ := btf.As[*btf.Struct](target)
 
-			kernVData, err := translateStructData(valueType, userData, vType)
+			kernVData, err := translateStructData(userData, vType)
 			if err != nil {
 				return err
 			}
@@ -717,6 +718,7 @@ func (cl *collectionLoader) populateDeferredMaps() error {
 			if err := populateFuncPtr(vType, kernVData, cl.programs); err != nil {
 				return err
 			}
+			defer runtime.KeepAlive(cl.programs)
 
 			mapSpec.Contents[0] =
 				MapKV{Key: uint32(0), Value: kernVData}
@@ -731,84 +733,81 @@ func (cl *collectionLoader) populateDeferredMaps() error {
 	return nil
 }
 
-// translateStructData fills in all fields in `from` that exist in `to` with contents of fromData.
-func translateStructData(from *btf.Struct, fromData []byte, to *btf.Struct) ([]byte, error) {
-	innerName := strings.TrimPrefix(to.Name, structOpsValuePrefix)
-	toData := make([]byte, int(to.Size))
+// findInnerStruct returns the "inner" struct inside a value struct_ops type.
+//
+// Given a value like:
+//
+//	struct bpf_struct_ops_bpf_testmod_ops {
+//	    struct bpf_struct_ops_common common;
+//	    struct bpf_testmod_ops data;
+//	};
+//
+// this function returns the *btf.Struct for "bpf_testmod_ops" along with the
+// byte offset of the "data" member inside the value type.
+//
+// The inner struct name is derived by trimming the "bpf_struct_ops_" prefix
+// from the value's name.
+func findInnerStruct(vType *btf.Struct) (*btf.Struct, uint32, error) {
+	innerName := strings.TrimPrefix(vType.Name, structOpsValuePrefix)
 
-	var inner *btf.Struct
-	var innerOff int
-
-	for _, m := range to.Members {
-		st, ok := btf.As[*btf.Struct](btf.UnderlyingType(m.Type))
-		if ok && st.Name == innerName {
-			inner = st
-			innerOff = int(m.Offset / 8)
+	for _, m := range vType.Members {
+		if st, ok := btf.As[*btf.Struct](m.Type); ok && st.Name == innerName {
+			return st, m.Offset.Bytes(), nil
 		}
 	}
 
-	if inner == nil {
-		return nil, fmt.Errorf("member %s not found in %s", innerName, to.Name)
+	return nil, 0, fmt.Errorf("inner struct %q not found in %s", innerName, vType.Name)
+}
+
+// translateStructData fills in all fields in `from` that exist in `vType` with contents of fromData.
+func translateStructData(fromData []byte, vType *btf.Struct) ([]byte, error) {
+	vTypeData := make([]byte, int(vType.Size))
+
+	inner, innerOff, err := findInnerStruct(vType)
+	if err != nil {
+		return nil, err
 	}
 
-	kernIndexByName := make(map[string]btf.Member, len(inner.Members))
+	if len(fromData) < int(inner.Size) {
+		return nil, fmt.Errorf("inner data too short: have %d, need %d", len(fromData), inner.Size)
+	}
+
 	for _, m := range inner.Members {
-		kernIndexByName[m.Name] = m
-	}
-
-	for _, m := range from.Members {
 		if m.BitfieldSize > 0 {
-			return nil, fmt.Errorf("bitfield %s not supported", m.Name)
+			return nil, fmt.Errorf("bitfield %s not supported in from: %s", m.Name, inner.Name)
 		}
 
-		kernMember, ok := kernIndexByName[m.Name]
-		if !ok {
-			continue
+		if _, isPtr := btf.As[*btf.Pointer](m.Type); isPtr {
+			continue // skip func ptr
 		}
 
-		if kernMember.BitfieldSize > 0 {
-			return nil, fmt.Errorf("bitfield %s not supported in kern struct", kernMember.Name)
-		}
-
-		sz, err := btf.Sizeof(m.Type)
+		kernSz, err := btf.Sizeof(m.Type)
 		if err != nil {
-			return nil, fmt.Errorf("failed to resolve size of %s: %w", m.Name, err)
+			return nil, fmt.Errorf("failed vType resolve size of %s: %w", m.Name, err)
 		}
 
-		kernSz, err := btf.Sizeof(kernMember.Type)
-		if err != nil {
-			return nil, fmt.Errorf("failed to resolve size of %s: %w", kernMember.Name, err)
+		srcOff := int(m.Offset.Bytes())
+		dstOff := int(innerOff + m.Offset.Bytes())
+
+		if srcOff < 0 || srcOff+kernSz > len(fromData) {
+			return nil, fmt.Errorf("member %q: userdata is too small", m.Name)
 		}
 
-		if sz != kernSz {
-			return nil, fmt.Errorf("size mismatch for %s: %d != %d", m.Name, sz, kernSz)
+		if dstOff < 0 || dstOff+kernSz > len(vTypeData) {
+			return nil, fmt.Errorf("member %q: value type is too small", m.Name)
 		}
 
-		src := int(m.Offset / 8)
-		dst := innerOff + int(kernMember.Offset/8)
-		copy(toData[dst:dst+int(sz)], fromData[src:src+int(sz)])
+		copy(vTypeData[dstOff:dstOff+kernSz], fromData[srcOff:srcOff+kernSz])
 	}
 
-	return toData, nil
+	return vTypeData, nil
 }
 
 // populateFuncPtr writes progFD into `data` at the offset
 func populateFuncPtr(vType *btf.Struct, data []byte, programs map[string]*Program) error {
-	innerName := strings.TrimPrefix(vType.Name, structOpsValuePrefix)
-
-	var inner *btf.Struct
-	var innerOff int
-
-	for _, m := range vType.Members {
-		st, ok := btf.As[*btf.Struct](btf.UnderlyingType(m.Type))
-		if ok && st.Name == innerName {
-			inner = st
-			innerOff = int(m.Offset / 8)
-		}
-	}
-
-	if inner == nil {
-		return fmt.Errorf("member %s not found in %s", innerName, vType.Name)
+	inner, innerOff, err := findInnerStruct(vType)
+	if err != nil {
+		return err
 	}
 
 	for _, m := range inner.Members {
@@ -821,8 +820,12 @@ func populateFuncPtr(vType *btf.Struct, data []byte, programs map[string]*Progra
 			continue
 		}
 
-		off := innerOff + int(m.Offset/8)
-		binary.LittleEndian.PutUint64(data[off:off+8], uint64(p.FD()))
+		dstOff := int(innerOff + m.Offset.Bytes())
+
+		if dstOff < 0 || dstOff+8 > len(data) {
+			return fmt.Errorf("member %q: kern_vdata is too small", m.Name)
+		}
+		binary.LittleEndian.PutUint64(data[dstOff:dstOff+8], uint64(p.FD()))
 	}
 
 	return nil

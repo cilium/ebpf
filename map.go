@@ -556,12 +556,16 @@ func (spec *MapSpec) createMap(inner *sys.FD, c *btf.Cache) (_ *Map, err error) 
 			defer h.Close()
 
 			if spec.Value == nil {
-				return nil, fmt.Errorf("struct type is not specified as Value")
+				return nil, fmt.Errorf("struct_ops map: missing value type information")
 			}
 
 			valueType, ok := btf.As[*btf.Struct](spec.Value)
 			if !ok {
 				return nil, fmt.Errorf("value must be Struct type")
+			}
+
+			if spec.KeySize != 4 {
+				return nil, fmt.Errorf("struct_ops: KeySize must be 4")
 			}
 
 			// struct_ops: resolve value type ("bpf_struct_ops_<name>") and
@@ -573,10 +577,7 @@ func (spec *MapSpec) createMap(inner *sys.FD, c *btf.Cache) (_ *Map, err error) 
 			}
 			defer module.Close()
 
-			vType, ok := btf.As[*btf.Struct](target)
-			if !ok {
-				return nil, fmt.Errorf("conversion target %s -> Struct for map", valueType.Name)
-			}
+			vType := target.(*btf.Struct)
 
 			btfValueTypeId, err := s.TypeID(vType)
 			if err != nil {

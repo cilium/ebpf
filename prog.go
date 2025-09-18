@@ -405,11 +405,7 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions, c *btf.Cache)
 			if err != nil {
 				return nil, fmt.Errorf("lookup struct_ops kern type %q: %w", attachTo, err)
 			}
-
-			kType, ok := btf.As[*btf.Struct](target)
-			if !ok {
-				return nil, fmt.Errorf("conversion target %s -> Struct for prog", attachTo)
-			}
+			kType := target.(*btf.Struct)
 
 			targetID, err = s.TypeID(kType)
 			if err != nil {
@@ -423,6 +419,7 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions, c *btf.Cache)
 				return nil, fmt.Errorf("member %q not found in %s", targetMember, kType.Name)
 			}
 
+			// ExpectedAttachType: index of the target member in the struct
 			attr.ExpectedAttachType = sys.AttachType(idx)
 		}
 

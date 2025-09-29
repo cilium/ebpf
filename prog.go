@@ -37,6 +37,9 @@ var errBadRelocation = errors.New("bad CO-RE relocation")
 // This error is detected based on heuristics and therefore may not be reliable.
 var errUnknownKfunc = errors.New("unknown kfunc")
 
+// errUnknownStructOps is returned when the struct_ops target doesn't exist in kernel
+var errUnknownStructOps = errors.New("unknown struct_ops target")
+
 // ProgramID represents the unique ID of an eBPF program.
 type ProgramID = sys.ProgramID
 

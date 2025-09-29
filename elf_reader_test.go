@@ -12,6 +12,7 @@ import (
 	"syscall"
 	"testing"
 
+	"github.com/cilium/ebpf/asm"
 	"github.com/cilium/ebpf/btf"
 	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/kallsyms"
@@ -932,6 +933,102 @@ func TestArena(t *testing.T) {
 	mustNewCollection(t, coll, nil)
 }
 
+func TestStructOps(t *testing.T) {
+	file := testutils.NativeFile(t, "testdata/struct_ops-%s.elf")
+	coll, err := LoadCollectionSpec(file)
+	qt.Assert(t, qt.IsNil(err))
+
+	userData := []byte{
+		// test_1 func ptr (8B)
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		// test_2 func ptr (8B)
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		// data (4B) + padding (4B)
+		0xef, 0xbe, 0xad, 0xde, 0x00, 0x00, 0x00, 0x00,
+	}
+
+	want := &CollectionSpec{
+		Maps: map[string]*MapSpec{
+			"testmod_ops": {
+				Name:       "testmod_ops",
+				Type:       StructOpsMap,
+				MaxEntries: 1,
+				Flags:      sys.BPF_F_LINK,
+				Key:        &btf.Int{Size: 4},
+				KeySize:    4,
+				ValueSize:  24,
+				Value: &btf.Struct{
+					Name: "bpf_testmod_ops",
+					Size: 24,
+					Members: []btf.Member{
+						{
+							Name: "test_1",
+							Type: &btf.Pointer{
+								Target: &btf.FuncProto{
+									Params: []btf.FuncParam{},
+									Return: &btf.Int{Name: "int", Size: 4, Encoding: btf.Signed}}},
+							Offset: 0,
+						},
+						{
+							Name: "test_2",
+							Type: &btf.Pointer{
+								Target: &btf.FuncProto{
+									Params: []btf.FuncParam{
+										{Type: &btf.Int{Name: "int", Size: 4, Encoding: btf.Signed}},
+										{Type: &btf.Int{Name: "int", Size: 4, Encoding: btf.Signed}},
+									},
+									Return: (*btf.Void)(nil),
+								},
+							},
+							Offset: 64,
+						},
+						{
+							Name:   "data",
+							Type:   &btf.Int{Name: "int", Size: 4, Encoding: btf.Signed},
+							Offset: 128, // bits
+						},
+					},
+				},
+				Contents: []MapKV{
+					{
+						Key:   uint32(0),
+						Value: userData,
+					},
+				},
+			},
+		},
+		Programs: map[string]*ProgramSpec{
+			"test_1": {
+				Name:        "test_1",
+				Type:        StructOps,
+				AttachTo:    "bpf_testmod_ops:test_1",
+				License:     "GPL",
+				SectionName: "struct_ops/test_1",
+				Instructions: asm.Instructions{
+					asm.Mov.Imm(asm.R0, 0),
+					asm.Return(),
+				},
+			},
+		},
+		Variables: map[string]*VariableSpec{},
+	}
+
+	testModOps, ok := coll.Maps["testmod_ops"]
+	if !ok {
+		t.Fatalf("testmod_ops doesn't exist")
+	}
+
+	data, ok := testModOps.Contents[0].Value.([]byte)
+	if !ok {
+		t.Fatalf("Contents[0].Value should be an array of byte")
+	}
+
+	qt.Assert(t, qt.CmpEquals(coll.Programs, want.Programs, csCmpOpts))
+	qt.Assert(t, qt.CmpEquals(coll.Maps, want.Maps, csCmpOpts))
+	qt.Assert(t, qt.CmpEquals(testModOps.Value, want.Maps["testmod_ops"].Value, csCmpOpts))
+	qt.Assert(t, qt.CmpEquals(data, userData, csCmpOpts))
+}
+
 var (
 	elfPath    = flag.String("elfs", os.Getenv("CI_KERNEL_SELFTESTS"), "`Path` containing libbpf-compatible ELFs (defaults to $CI_KERNEL_SELFTESTS)")
 	elfPattern = flag.String("elf-pattern", "*.o", "Glob `pattern` for object files that should be tested")
@@ -968,6 +1065,9 @@ func TestLibBPFCompat(t *testing.T) {
 				t.Fatal("Expected an error during load")
 			}
 		} else if err != nil {
+			if errors.Is(err, errUnknownStructOps) {
+				t.Skip("Skipping since the struct_ops target doesn't exist in kernel")
+			}
 			t.Fatal("Error during loading:", err)
 		}
 	}
@@ -1058,12 +1158,6 @@ func TestLibBPFCompat(t *testing.T) {
 			if mapSpec.Pinning != PinNone {
 				opts.Maps.PinPath = testutils.TempBPFFS(t)
 				break
-			}
-		}
-
-		for _, ps := range spec.Programs {
-			if ps.Type == StructOps {
-				ps.AttachTo = ""
 			}
 		}
 

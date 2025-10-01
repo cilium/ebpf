@@ -110,7 +110,7 @@ jobs:
           go-version: '${{ env.go_version }}'
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: '${{ env.python_version }}'
           cache: 'pipenv'

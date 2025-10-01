@@ -1419,7 +1419,6 @@ func (ec *elfCode) loadKsymsSection() error {
 // ".struct_ops" and ".struct_ops.link" found in the object BTF.
 func (ec *elfCode) loadStructOpsMaps() error {
 	for secIdx, sec := range ec.sections {
-		fmt.Println(sec.Name, sec.Type, sec.kind == structOpsSection)
 		if sec.kind != structOpsSection {
 			continue
 		}
@@ -1502,7 +1501,7 @@ func (ec *elfCode) associateStructOpsRelocs(
 	symbols []elf.Symbol,
 ) error {
 	for _, sec := range relSecs {
-		if !strings.HasPrefix(sec.Name, ".rel") {
+		if !(sec.Type == elf.SHT_REL) {
 			continue
 		}
 
@@ -1544,6 +1543,7 @@ func (ec *elfCode) associateStructOpsRelocs(
 				return fmt.Errorf("no struct_ops map found for secIdx %d and relOffset %d", targetIdx, relOff)
 			}
 
+			// Member bit offset inside the user struct
 			moff := btf.Bits((relOff - meta.userOff) * 8)
 
 			userSt, ok := btf.As[*btf.Struct](ms.Value)
@@ -1551,26 +1551,35 @@ func (ec *elfCode) associateStructOpsRelocs(
 				return fmt.Errorf("provided value is not a btf.Struct")
 			}
 
-			for _, m := range userSt.Members {
-				if m.Offset != moff {
-					continue
+			// Find the member at moff and ensure it's a pointer to a FuncProto.
+			if memberName, found := funcPtrMemberAtOffset(userSt, moff); found {
+				p, ok := progs[sym.Name]
+				if !(ok && p.Type == StructOps) {
+					return fmt.Errorf("program %q not found or not StructOps", sym.Name)
 				}
-
-				mType := btf.UnderlyingType(m.Type)
-				if mPtr, isPtr := btf.As[*btf.Pointer](mType); isPtr {
-					if _, isFuncProto := btf.As[*btf.FuncProto](mPtr.Target); isFuncProto {
-						p, ok := progs[sym.Name]
-						if !(ok && p.Type == StructOps) {
-							return fmt.Errorf("program %q not found or not StructOps", sym.Name)
-						}
-						p.AttachTo = userSt.Name + ":" + m.Name
-					}
-				}
+				p.AttachTo = userSt.Name + ":" + memberName
 			}
 		}
 	}
 
 	return nil
+}
+
+// funcPtrMemberAtOffset returns the member name at bit offset `moff`
+// if the member is a pointer to a FuncProto. Otherwise returns an empty string.
+func funcPtrMemberAtOffset(userSt *btf.Struct, moff btf.Bits) (string, bool) {
+	for _, m := range userSt.Members {
+		if m.Offset != moff {
+			continue
+		}
+		mt := btf.UnderlyingType(m.Type)
+		if ptr, ok := btf.As[*btf.Pointer](mt); ok {
+			if _, ok := btf.As[*btf.FuncProto](ptr.Target); ok {
+				return m.Name, true
+			}
+		}
+	}
+	return "", false
 }
 
 type libbpfElfSectionDef struct {

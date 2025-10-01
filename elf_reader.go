@@ -600,7 +600,7 @@ func (ec *elfCode) relocateInstruction(ins *asm.Instruction, rel elf.Symbol) err
 		ins.Constant = int64(uint64(offset) << 32)
 		ins.Src = asm.PseudoMapValue
 
-	case programSection, structOpsSection:
+	case programSection:
 		switch opCode := ins.OpCode; {
 		case opCode.JumpOp() == asm.Call:
 			if ins.Src != asm.PseudoCall {
@@ -1419,6 +1419,7 @@ func (ec *elfCode) loadKsymsSection() error {
 // ".struct_ops" and ".struct_ops.link" found in the object BTF.
 func (ec *elfCode) loadStructOpsMaps() error {
 	for secIdx, sec := range ec.sections {
+		fmt.Println(sec.Name, sec.Type, sec.kind == structOpsSection)
 		if sec.kind != structOpsSection {
 			continue
 		}

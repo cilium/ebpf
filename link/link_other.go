@@ -58,7 +58,6 @@ func AttachRawLink(opts RawLinkOptions) (*RawLink, error) {
 	if err != nil {
 		return nil, fmt.Errorf("create link: %w", err)
 	}
-
 	return &RawLink{fd, ""}, nil
 }
 

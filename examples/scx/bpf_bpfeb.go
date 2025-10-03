@@ -66,7 +66,6 @@ type bpfProgramSpecs struct {
 //
 // It can be passed ebpf.CollectionSpec.Assign.
 type bpfMapSpecs struct {
-	Scx *ebpf.MapSpec `ebpf:"scx"`
 }
 
 // bpfVariableSpecs contains global variables before they are loaded into the kernel.
@@ -95,13 +94,10 @@ func (o *bpfObjects) Close() error {
 //
 // It can be passed to loadBpfObjects or ebpf.CollectionSpec.LoadAndAssign.
 type bpfMaps struct {
-	Scx *ebpf.Map `ebpf:"scx"`
 }
 
 func (m *bpfMaps) Close() error {
-	return _BpfClose(
-		m.Scx,
-	)
+	return _BpfClose()
 }
 
 // bpfVariables contains all global variables after they have been loaded into the kernel.

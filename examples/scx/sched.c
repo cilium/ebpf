@@ -1,4 +1,4 @@
-//go:build ignore
+// go:build ignore
 
 #include "common.h"
 
@@ -16,33 +16,28 @@ struct sched_ext_ops {
 };
 
 SEC("struct_ops/scx_runnable")
-int scx_runnable(void *p, __u64 enq_flags) {
+void scx_runnable(void *p, __u64 enq_flags) {
 	bpf_printk("scheduler runnable\n");
-	return 0;
 };
 
 SEC("struct_ops/scx_running")
-int scx_running(void *p) {
+void scx_running(void *p) {
 	bpf_printk("scheduler running\n");
-	return 0;
 };
 
 SEC("struct_ops/scx_stopping")
-int scx_stopping(void *p, __u8 runnable) {
+void scx_stopping(void *p, __u8 runnable) {
 	bpf_printk("scheduler stopping\n");
-	return 0;
 };
 
 SEC("struct_ops/scx_quiescent")
-int scx_quiescent(void *p, __u64 deq_flags) {
+void scx_quiescent(void *p, __u64 deq_flags) {
 	bpf_printk("scheduler quiescent\n");
-	return 0;
 };
 
 SEC("struct_ops/scx_yield")
-int scx_yield(void *from, void *to) {
+void scx_yield(void *from, void *to) {
 	bpf_printk("scheduler yield\n");
-	return 0;
 };
 
 SEC("struct_ops.s/scx_init")

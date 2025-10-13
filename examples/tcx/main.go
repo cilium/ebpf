@@ -18,7 +18,7 @@ import (
 	"github.com/cilium/ebpf/link"
 )
 
-//go:generate go run github.com/cilium/ebpf/cmd/bpf2go -tags linux bpf tcx.c -- -I../headers
+//go:generate go tool bpf2go -tags linux bpf tcx.c -- -I../headers
 func main() {
 	if len(os.Args) < 2 {
 		log.Fatalf("Please specify a network interface")

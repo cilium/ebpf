@@ -19,7 +19,7 @@ import (
 	"github.com/cilium/ebpf/rlimit"
 )
 
-//go:generate go run github.com/cilium/ebpf/cmd/bpf2go -tags linux bpf cgroup_skb.c -- -I../headers
+//go:generate go tool bpf2go -tags linux bpf cgroup_skb.c -- -I../headers
 
 func main() {
 	// Allow the current process to lock memory for eBPF resources.

@@ -22,4 +22,8 @@ require (
 	golang.org/x/tools v0.38.0 // indirect
 )
 
-tool golang.org/x/tools/cmd/stringer
+tool (
+	github.com/cilium/ebpf/cmd/bpf2go
+	github.com/cilium/ebpf/internal/cmd/gentypes
+	golang.org/x/tools/cmd/stringer
+)

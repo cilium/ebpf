@@ -41,7 +41,12 @@ type MapOptions struct {
 	// The base path to pin maps in if requested via PinByName.
 	// Existing maps will be re-used if they are compatible, otherwise an
 	// error is returned.
-	PinPath        string
+	PinPath string
+	// The full path to use for each map with PinByPath
+	// Existing maps will be re-used if they are compatible, otherwise an
+	// error is returned.
+	PinPathMapping map[string]string
+
 	LoadPinOptions LoadPinOptions
 }
 
@@ -380,6 +385,28 @@ func newMapWithOptions(spec *MapSpec, opts MapOptions) (_ *Map, err error) {
 
 		return m, nil
 
+	case PinByPath:
+		if spec.Name == "" {
+			return nil, fmt.Errorf("pin by path: missing Name")
+		}
+		path, ok := opts.PinPathMapping[spec.Name]
+		if !ok {
+			return nil, fmt.Errorf("pin by path: no path found for map %v", spec.Name)
+		}
+		m, err := LoadPinnedMap(path, &opts.LoadPinOptions)
+		if errors.Is(err, unix.ENOENT) {
+			break
+		}
+		if err != nil {
+			return nil, fmt.Errorf("load pinned map: %w", err)
+		}
+		defer closeOnError(m)
+
+		if err := spec.Compatible(m); err != nil {
+			return nil, fmt.Errorf("use pinned map %s: %w", spec.Name, err)
+		}
+
+		return m, nil
 	case PinNone:
 		// Nothing to do here
 
@@ -417,6 +444,16 @@ func newMapWithOptions(spec *MapSpec, opts MapOptions) (_ *Map, err error) {
 
 	if spec.Pinning == PinByName {
 		path := filepath.Join(opts.PinPath, spec.Name)
+		if err := m.Pin(path); err != nil {
+			return nil, fmt.Errorf("pin map to %s: %w", path, err)
+		}
+	}
+
+	if spec.Pinning == PinByPath {
+		path, ok := opts.PinPathMapping[spec.Name]
+		if !ok {
+			return nil, fmt.Errorf("pin by path: no path found for map %v", spec.Name)
+		}
 		if err := m.Pin(path); err != nil {
 			return nil, fmt.Errorf("pin map to %s: %w", path, err)
 		}

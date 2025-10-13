@@ -63,7 +63,7 @@ func mustOutputSamplesProg(tb testing.TB, sampleMessages ...sampleMessage) (*ebp
 
 	prog, err := ebpf.NewProgram(&ebpf.ProgramSpec{
 		License:      "MIT",
-		Type:         ebpf.WindowsXDPTest,
+		Type:         ebpf.WindowsSample,
 		Instructions: insns,
 	})
 	qt.Assert(tb, qt.IsNil(err))

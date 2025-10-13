@@ -16,7 +16,7 @@ func TestNewProc(t *testing.T) {
 func TestCall(t *testing.T) {
 	var err error
 	allocs := testing.AllocsPerRun(10, func() {
-		_, err = EbpfGetEbpfAttachType(1)
+		_, err = EbpfGetEbpfAttachType(2)
 	})
 	qt.Assert(t, qt.IsNil(err))
 	qt.Assert(t, qt.Equals(allocs, 0))

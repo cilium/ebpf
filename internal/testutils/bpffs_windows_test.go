@@ -30,7 +30,7 @@ func TestTempBPFFS(t *testing.T) {
 		qt.Assert(t, qt.IsNil(err))
 
 		progFd, err := sys.ProgLoad(&sys.ProgLoadAttr{
-			ProgType: 998, // XDP_TEST
+			ProgType: 999, // SAMPLE
 			License:  sys.NewStringPointer(""),
 			InsnCnt:  uint32(buffer.Len() / asm.InstructionSize),
 			Insns:    sys.SlicePointer(buffer.Bytes()),

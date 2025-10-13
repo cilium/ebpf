@@ -6,7 +6,6 @@ import (
 
 	"github.com/cilium/ebpf/asm"
 	"github.com/cilium/ebpf/btf"
-	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/testutils"
 
 	"github.com/go-quicktest/qt"
@@ -45,10 +44,7 @@ func TestFindReferences(t *testing.T) {
 	testutils.SkipIfNotSupported(t, err)
 	qt.Assert(t, qt.IsNil(err))
 
-	ret, _, err := prog.Test(internal.EmptyBPFContext)
-	if err != nil {
-		t.Fatal(err)
-	}
+	ret := mustRun(t, prog, nil)
 
 	if ret != 1337 {
 		t.Errorf("Expected return code 1337, got %d", ret)
@@ -91,10 +87,8 @@ func TestForwardFunctionDeclaration(t *testing.T) {
 	testutils.SkipIfNotSupported(t, err)
 	qt.Assert(t, qt.IsNil(err))
 
-	ret, _, err := prog.Test(internal.EmptyBPFContext)
-	if err != nil {
-		t.Fatal("Running program:", err)
-	}
+	ret := mustRun(t, prog, nil)
+
 	if ret != 23 {
 		t.Fatalf("Expected 23, got %d", ret)
 	}

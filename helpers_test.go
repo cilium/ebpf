@@ -9,6 +9,7 @@ import (
 
 	"github.com/cilium/ebpf/asm"
 	"github.com/cilium/ebpf/btf"
+	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/platform"
 	"github.com/cilium/ebpf/internal/testutils"
 )
@@ -195,6 +196,33 @@ func mustLoadAndAssign(tb testing.TB, spec *CollectionSpec, to any, opts *Collec
 	qt.Assert(tb, qt.IsNil(loadAndAssign(tb, spec, to, opts)))
 }
 
+func mustRun(tb testing.TB, prog *Program, opts *RunOptions) (retval uint32) {
+	tb.Helper()
+
+	if opts == nil {
+		opts = &RunOptions{}
+	}
+	if platform.IsLinux && opts.Data == nil {
+		opts.Data = internal.EmptyBPFContext
+	}
+	if platform.IsWindows {
+		switch prog.Type() {
+		case WindowsSample:
+			const minSampleContextLen = 32
+
+			if opts.Context == nil {
+				opts.Context = make([]byte, minSampleContextLen)
+			}
+		}
+	}
+
+	ret, err := prog.Run(opts)
+	testutils.SkipIfNotSupported(tb, err)
+	qt.Assert(tb, qt.IsNil(err))
+
+	return ret
+}
+
 // The functions below translate Linux types to their Windows equivalents, if
 // possible. This allows running most tests on Windows without modification.
 
@@ -256,9 +284,9 @@ func fixupProgramType(typ ProgramType) ProgramType {
 
 	switch typ {
 	case SocketFilter:
-		return WindowsXDPTest
+		return WindowsSample
 	case XDP:
-		return WindowsXDPTest
+		return WindowsSample
 	default:
 		return typ
 	}

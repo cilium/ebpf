@@ -18,7 +18,7 @@ func mustPinnedProgram(t *testing.T, path string) *ebpf.Program {
 
 	typ := ebpf.SocketFilter
 	if platform.IsWindows {
-		typ = ebpf.WindowsXDPTest
+		typ = ebpf.WindowsSample
 	}
 
 	spec := &ebpf.ProgramSpec{

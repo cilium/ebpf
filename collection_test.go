@@ -13,7 +13,6 @@ import (
 
 	"github.com/cilium/ebpf/asm"
 	"github.com/cilium/ebpf/btf"
-	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/testutils"
 	"github.com/cilium/ebpf/internal/testutils/testmain"
 )
@@ -161,11 +160,7 @@ func TestCollectionSpecRewriteMaps(t *testing.T) {
 
 	coll := mustNewCollection(t, cs, nil)
 
-	ret, _, err := coll.Programs["test-prog"].Test(internal.EmptyBPFContext)
-	testutils.SkipIfNotSupported(t, err)
-	if err != nil {
-		t.Fatal(err)
-	}
+	ret := mustRun(t, coll.Programs["test-prog"], nil)
 
 	if ret != 2 {
 		t.Fatal("new / override map not used")
@@ -201,11 +196,7 @@ func TestCollectionSpecMapReplacements(t *testing.T) {
 		},
 	})
 
-	ret, _, err := coll.Programs["test-prog"].Test(internal.EmptyBPFContext)
-	testutils.SkipIfNotSupported(t, err)
-	if err != nil {
-		t.Fatal(err)
-	}
+	ret := mustRun(t, coll.Programs["test-prog"], nil)
 
 	if ret != 2 {
 		t.Fatal("new / override map not used")

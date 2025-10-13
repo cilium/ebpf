@@ -461,9 +461,7 @@ func testStats(tb testing.TB, prog *Program) error {
 
 	// Program execution with runtime statistics enabled.
 	// Should increase both runtime and run counter.
-	if _, _, err := prog.Test(in); err != nil {
-		return fmt.Errorf("failed to trigger program: %w", err)
-	}
+	mustRun(tb, prog, &RunOptions{Data: in})
 
 	s1, err := prog.Stats()
 	qt.Assert(tb, qt.IsNil(err))
@@ -475,9 +473,7 @@ func testStats(tb testing.TB, prog *Program) error {
 
 	// Second program execution, with runtime statistics gathering disabled.
 	// Total runtime and run counters are not expected to increase.
-	if _, _, err := prog.Test(in); err != nil {
-		return fmt.Errorf("failed to trigger program: %w", err)
-	}
+	mustRun(tb, prog, &RunOptions{Data: in})
 
 	s2, err := prog.Stats()
 	qt.Assert(tb, qt.IsNil(err))

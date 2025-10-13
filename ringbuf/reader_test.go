@@ -3,14 +3,15 @@ package ringbuf
 import (
 	"errors"
 	"os"
-	"syscall"
 	"testing"
 	"time"
 
 	"github.com/go-quicktest/qt"
 	"github.com/google/go-cmp/cmp"
 
+	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/internal"
+	"github.com/cilium/ebpf/internal/platform"
 	"github.com/cilium/ebpf/internal/sys"
 	"github.com/cilium/ebpf/internal/testutils"
 	"github.com/cilium/ebpf/internal/testutils/testmain"
@@ -75,15 +76,15 @@ func TestRingbufReader(t *testing.T) {
 				t.Errorf("expected %d BufferSize, got %d", events.MaxEntries(), rd.BufferSize())
 			}
 
-			ret, _, err := prog.Test(internal.EmptyBPFContext)
-			testutils.SkipIfNotSupported(t, err)
-			if err != nil {
-				t.Fatal(err)
+			opts := &ebpf.RunOptions{
+				Data: internal.EmptyBPFContext,
 			}
 
-			if errno := syscall.Errno(-int32(ret)); errno != 0 {
-				t.Fatal("Expected 0 as return value, got", errno)
+			if platform.IsWindows {
+				opts.Context = make([]byte, 32)
 			}
+
+			mustRun(t, prog)
 
 			var avail int
 			for _, m := range tt.messages {
@@ -121,15 +122,8 @@ func TestReaderBlocking(t *testing.T) {
 	testutils.SkipOnOldKernel(t, "5.8", "BPF ring buffer")
 
 	prog, events := mustOutputSamplesProg(t, sampleMessage{size: 5, flags: 0})
-	ret, _, err := prog.Test(internal.EmptyBPFContext)
-	testutils.SkipIfNotSupported(t, err)
-	if err != nil {
-		t.Fatal(err)
-	}
 
-	if errno := syscall.Errno(-int32(ret)); errno != 0 {
-		t.Fatal("Expected 0 as return value, got", errno)
-	}
+	mustRun(t, prog)
 
 	rd, err := NewReader(events)
 	if err != nil {
@@ -193,17 +187,9 @@ func TestReaderNoWakeup(t *testing.T) {
 
 	qt.Assert(t, qt.Equals(rd.AvailableBytes(), 0))
 
-	ret, _, err := prog.Test(internal.EmptyBPFContext)
-	testutils.SkipIfNotSupported(t, err)
-	if err != nil {
-		t.Fatal(err)
-	}
+	mustRun(t, prog)
 
 	qt.Assert(t, qt.Equals(rd.AvailableBytes(), 2*16))
-
-	if errno := syscall.Errno(-int32(ret)); errno != 0 {
-		t.Fatal("Expected 0 as return value, got", errno)
-	}
 
 	rd.SetDeadline(time.Now())
 	record, err := rd.Read()
@@ -248,15 +234,7 @@ func TestReaderFlushPendingEvents(t *testing.T) {
 	}
 	defer rd.Close()
 
-	ret, _, err := prog.Test(internal.EmptyBPFContext)
-	testutils.SkipIfNotSupported(t, err)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if errno := syscall.Errno(-int32(ret)); errno != 0 {
-		t.Fatal("Expected 0 as return value, got", errno)
-	}
+	mustRun(t, prog)
 
 	wait := make(chan *Record)
 	go func() {
@@ -320,14 +298,9 @@ func TestReadAfterClose(t *testing.T) {
 		sampleMessage{size: 5, flags: 0},
 		sampleMessage{size: 5, flags: 0},
 	)
-	ret, _, err := prog.Test(internal.EmptyBPFContext)
-	testutils.SkipIfNotSupported(t, err)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if errno := syscall.Errno(-int32(ret)); errno != 0 {
-		t.Fatal("Expected 0 as return value, got", errno)
-	}
+
+	mustRun(t, prog)
+
 	rd, err := NewReader(events)
 	if err != nil {
 		t.Fatal(err)
@@ -371,17 +344,13 @@ func BenchmarkReader(b *testing.B) {
 			}
 			defer rd.Close()
 
-			buf := internal.EmptyBPFContext
-
 			b.ReportAllocs()
 
 			for b.Loop() {
-				ret, _, err := prog.Test(buf)
-				if err != nil {
-					b.Fatal(err)
-				} else if errno := syscall.Errno(-int32(ret)); errno != 0 {
-					b.Fatal("Expected 0 as return value, got", errno)
-				}
+				b.StopTimer()
+				mustRun(b, prog)
+				b.StartTimer()
+
 				_, err = rd.Read()
 				if err != nil {
 					b.Fatal("Can't read samples:", err)
@@ -402,18 +371,13 @@ func BenchmarkReadInto(b *testing.B) {
 	}
 	defer rd.Close()
 
-	buf := internal.EmptyBPFContext
-
 	b.ReportAllocs()
 
 	var rec Record
 	for b.Loop() {
-		ret, _, err := prog.Test(buf)
-		if err != nil {
-			b.Fatal(err)
-		} else if errno := syscall.Errno(-int32(ret)); errno != 0 {
-			b.Fatal("Expected 0 as return value, got", errno)
-		}
+		b.StopTimer()
+		mustRun(b, prog)
+		b.StartTimer()
 
 		if err := rd.ReadInto(&rec); err != nil {
 			b.Fatal("Can't read samples:", err)

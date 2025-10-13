@@ -79,36 +79,33 @@ func TestProgramRun(t *testing.T) {
 	prog.Close()
 	prog = p2
 
-	ret, out, err := prog.Test(buf)
-	testutils.SkipIfNotSupported(t, err)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if ret != 42 {
-		t.Error("Expected return value to be 42, got", ret)
-	}
-
-	if !bytes.Equal(out[:len(pat)], pat) {
-		t.Errorf("Expected %v, got %v", pat, out)
-	}
+	out := make([]byte, len(buf))
+	ret := mustRun(t, prog, &RunOptions{Data: buf, DataOut: out})
+	qt.Assert(t, qt.Equals(ret, 42))
+	qt.Assert(t, qt.DeepEquals(out[:len(pat)], pat))
 }
 
 func TestProgramRunWithOptions(t *testing.T) {
 	testutils.SkipOnOldKernel(t, "5.15", "XDP ctx_in/ctx_out")
 
-	prog := createProgram(t, XDP, int64(sys.XDP_ABORTED))
-
 	buf := internal.EmptyBPFContext
+	var prog *Program
 	var in, out any
 	if platform.IsWindows {
-		type winXdpMd struct {
-			Data, DataEnd, DataMeta uint64
-			Ifindex                 uint32
+		type winSampleProgramContext struct {
+			_           uint64 // data_start (currently leaks kernel pointer)
+			_           uint64 // data_end (currently leaks kernel pointer)
+			Uint32Data  uint32
+			Uint16Data  uint16
+			_           uint16
+			HelperData1 uint32
+			HelperData2 uint32
 		}
-		in = &winXdpMd{Data: 0, DataEnd: uint64(len(buf))}
-		out = &winXdpMd{}
+		prog = createProgram(t, WindowsSample, 0)
+		in = &winSampleProgramContext{Uint32Data: 23, HelperData2: 42}
+		out = &winSampleProgramContext{Uint32Data: 23, HelperData2: 42}
 	} else {
+		prog = createProgram(t, XDP, int64(sys.XDP_ABORTED))
 		in = &sys.XdpMd{Data: 0, DataEnd: uint32(len(buf))}
 		out = &sys.XdpMd{}
 	}
@@ -155,6 +152,10 @@ func TestProgramRunEmptyData(t *testing.T) {
 }
 
 func TestProgramBenchmark(t *testing.T) {
+	if platform.IsWindows {
+		t.Skip("BPF_PROG_TEST_RUN requires providing context on Windows")
+	}
+
 	prog := createBasicProgram(t)
 
 	ret, duration, err := prog.Benchmark(internal.EmptyBPFContext, 1, nil)

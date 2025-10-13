@@ -287,14 +287,8 @@ func TestLoadCollectionSpec(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		ret, _, err := coll.Programs["xdp_prog"].Test(internal.EmptyBPFContext)
-		if err != nil {
-			t.Fatal("Can't run program:", err)
-		}
-
-		if ret != 7 {
-			t.Error("Unexpected return value:", ret)
-		}
+		ret := mustRun(t, coll.Programs["xdp_prog"], nil)
+		qt.Assert(t, qt.Equals(ret, 7))
 	})
 }
 
@@ -322,11 +316,7 @@ func TestDataSections(t *testing.T) {
 	mustLoadAndAssign(t, coll, &obj, nil)
 	defer obj.Program.Close()
 
-	ret, _, err := obj.Program.Test(internal.EmptyBPFContext)
-	if err != nil {
-		t.Fatal(err)
-	}
-
+	ret := mustRun(t, obj.Program, nil)
 	if ret != 0 {
 		t.Error("BPF assertion failed on line", ret)
 	}
@@ -636,11 +626,7 @@ func TestTailCall(t *testing.T) {
 	defer obj.Tail.Close()
 	defer obj.ProgArray.Close()
 
-	ret, _, err := obj.TailMain.Test(internal.EmptyBPFContext)
-	testutils.SkipIfNotSupported(t, err)
-	if err != nil {
-		t.Fatal(err)
-	}
+	ret := mustRun(t, obj.Tail, nil)
 
 	// Expect the tail_1 tail call to be taken, returning value 42.
 	if ret != 42 {
@@ -666,12 +652,7 @@ func TestKconfig(t *testing.T) {
 	}
 	defer obj.Main.Close()
 
-	ret, _, err := obj.Main.Test(internal.EmptyBPFContext)
-	testutils.SkipIfNotSupported(t, err)
-	if err != nil {
-		t.Fatal(err)
-	}
-
+	ret := mustRun(t, obj.Main, nil)
 	qt.Assert(t, qt.Equals(ret, 0), qt.Commentf("Failed assertion at line %d in testdata/kconfig.c", ret))
 }
 
@@ -691,9 +672,7 @@ func TestKsym(t *testing.T) {
 	defer obj.Main.Close()
 	defer obj.ArrayMap.Close()
 
-	_, _, err = obj.Main.Test(internal.EmptyBPFContext)
-	testutils.SkipIfNotSupported(t, err)
-	qt.Assert(t, qt.IsNil(err))
+	mustRun(t, obj.Main, nil)
 
 	ksyms := map[string]uint64{
 		"bpf_init":       0,
@@ -726,10 +705,8 @@ func TestKsymWeakMissing(t *testing.T) {
 	qt.Assert(t, qt.IsNil(err))
 	defer obj.Main.Close()
 
-	res, _, err := obj.Main.Test(internal.EmptyBPFContext)
-	testutils.SkipIfNotSupported(t, err)
-	qt.Assert(t, qt.IsNil(err))
-	qt.Assert(t, qt.Equals(res, 1))
+	ret := mustRun(t, obj.Main, nil)
+	qt.Assert(t, qt.Equals(ret, 1))
 }
 
 func TestKfunc(t *testing.T) {
@@ -751,11 +728,7 @@ func TestKfunc(t *testing.T) {
 	}
 	defer obj.Main.Close()
 
-	ret, _, err := obj.Main.Test(internal.EmptyBPFContext)
-	testutils.SkipIfNotSupported(t, err)
-	if err != nil {
-		t.Fatal(err)
-	}
+	ret := mustRun(t, obj.Main, nil)
 
 	if ret != 1 {
 		t.Fatalf("Expected kfunc to return value 1, got %d", ret)
@@ -822,11 +795,7 @@ func TestKfuncKmod(t *testing.T) {
 	}
 	defer obj.Main.Close()
 
-	ret, _, err := obj.Main.Test(internal.EmptyBPFContext)
-	testutils.SkipIfNotSupported(t, err)
-	if err != nil {
-		t.Fatal(err)
-	}
+	ret := mustRun(t, obj.Main, nil)
 
 	if ret != 1 {
 		t.Fatalf("Expected kfunc to return value 1, got %d", ret)
@@ -855,11 +824,7 @@ func TestSubprogRelocation(t *testing.T) {
 	defer obj.Main.Close()
 	defer obj.HashMap.Close()
 
-	ret, _, err := obj.Main.Test(internal.EmptyBPFContext)
-	testutils.SkipIfNotSupported(t, err)
-	if err != nil {
-		t.Fatal(err)
-	}
+	ret := mustRun(t, obj.Main, nil)
 
 	if ret != 42 {
 		t.Fatalf("Expected subprog reloc to return value 42, got %d", ret)

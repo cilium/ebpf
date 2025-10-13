@@ -14,7 +14,7 @@ import (
 	"github.com/cilium/ebpf/rlimit"
 )
 
-//go:generate go run github.com/cilium/ebpf/cmd/bpf2go -tags linux bpf tracepoint.c -- -I../headers
+//go:generate go tool bpf2go -tags linux bpf tracepoint.c -- -I../headers
 
 const mapKey uint32 = 0
 

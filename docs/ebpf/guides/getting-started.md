@@ -145,14 +145,12 @@ go: to add module requirements and sums:
 % go mod tidy
 ```
 
-We also need to manually add a dependency on `bpf2go` since it's not explicitly
-imported by a `.go` source file:
+First, add `bpf2go` as a tool dependency to your Go module. This ensures the
+version of `bpf2go` used by the Go toolchain always matches your version of the
+library.
 
-```{ .shell-session data-copy="go get github.com/cilium/ebpf/cmd/bpf2go" }
-% go get github.com/cilium/ebpf/cmd/bpf2go
-go: added github.com/cilium/ebpf v0.11.0
-go: added golang.org/x/exp v0.0.0-20230224173230-c95f2b4c22f2
-go: added golang.org/x/sys v0.6.0
+```{ .shell-session data-copy="go get -tool github.com/cilium/ebpf/cmd/bpf2go" }
+% go get -tool github.com/cilium/ebpf/cmd/bpf2go
 ```
 
 Now we're ready to run `go generate`:

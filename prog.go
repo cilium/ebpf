@@ -855,6 +855,9 @@ func (p *Program) run(opts *RunOptions) (uint32, time.Duration, error) {
 	var ctxOut []byte
 	if opts.ContextOut != nil {
 		ctxOut = make([]byte, binary.Size(opts.ContextOut))
+	} else if platform.IsWindows && len(ctxIn) > 0 {
+		// Windows rejects a non-zero ctxIn with a nil ctxOut.
+		ctxOut = make([]byte, len(ctxIn))
 	}
 
 	attr := sys.ProgRunAttr{
@@ -928,7 +931,7 @@ retry:
 		opts.DataOut = opts.DataOut[:int(attr.DataSizeOut)]
 	}
 
-	if len(ctxOut) != 0 {
+	if opts.ContextOut != nil {
 		b := bytes.NewReader(ctxOut)
 		if err := binary.Read(b, internal.NativeEndian, opts.ContextOut); err != nil {
 			return 0, 0, fmt.Errorf("failed to decode ContextOut: %v", err)

@@ -346,12 +346,14 @@ jobs:
           Invoke-WebRequest -Uri "${{ steps.determine-url.outputs.download_url }}" -OutFile "$env:TEMP\efw.zip"
           Expand-Archive -Path "$env:TEMP\efw.zip" -DestinationPath "$env:TEMP"
           Expand-Archive -Path "$env:TEMP\build-Debug.zip" -DestinationPath "$env:TEMP\ebpf"
-          $setupScript = Get-ChildItem -Path "$env:TEMP\ebpf" -Filter "setup-ebpf.ps1" -Recurse | Select-Object -First 1
+          $setupScript = Get-ChildItem -Path "$env:TEMP\ebpf" -Filter "install_ebpf.psm1" -Recurse | Select-Object -First 1
           if ($setupScript) {
             Write-Host "Found setup script: $($setupScript.FullName)"
             Set-Location -Path $setupScript.DirectoryName
             Write-Host "Changed directory to: $(Get-Location)"
-            & $setupScript.FullName
+            Import-Module .\\install_ebpf.psm1 -ArgumentList ($pwd, "install.log") -Force
+            Get-PSExec
+            Install-eBPFComponents -KmTracing $false -KmTraceType "file" -TestMode "Normal"
           } else {
             Write-Error "Setup script not found in the extracted package"
             exit 1

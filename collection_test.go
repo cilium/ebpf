@@ -7,12 +7,14 @@ import (
 	"io"
 	"os"
 	"reflect"
+	"slices"
 	"testing"
 
 	"github.com/go-quicktest/qt"
 
 	"github.com/cilium/ebpf/asm"
 	"github.com/cilium/ebpf/btf"
+	"github.com/cilium/ebpf/internal/sys"
 	"github.com/cilium/ebpf/internal/testutils"
 	"github.com/cilium/ebpf/internal/testutils/testmain"
 )
@@ -758,4 +760,134 @@ func ExampleCollectionSpec_LoadAndAssign() {
 	}
 	defer objs.Program.Close()
 	defer objs.Map.Close()
+}
+
+func TestStructOpsMapSpecSimpleLoadAndAssign(t *testing.T) {
+	requireTestmodOps(t)
+
+	makeProg := func(attachTo string) map[string]*ProgramSpec {
+		return map[string]*ProgramSpec{
+			"test_1": {
+				Name:     "test_1",
+				Type:     StructOps,
+				AttachTo: attachTo,
+				License:  "GPL",
+				Instructions: asm.Instructions{
+					asm.Mov.Imm(asm.R0, 0),
+					asm.Return(),
+				},
+			},
+		}
+	}
+
+	funcPtr := &btf.Pointer{
+		Target: &btf.FuncProto{
+			Return: &btf.Int{Name: "int", Size: 4, Encoding: btf.Signed},
+		},
+	}
+
+	type testCase struct {
+		name       string
+		withProg   bool
+		attachTo   string
+		valueType  *btf.Struct
+		valueBytes []byte
+	}
+
+	cases := []testCase{
+		{
+			name:     "ops_with_data",
+			withProg: true,
+			attachTo: "bpf_testmod_ops:test_1",
+			valueType: &btf.Struct{
+				Name: "bpf_testmod_ops",
+				Size: 16,
+				Members: []btf.Member{
+					{
+						Name:   "test_1",
+						Type:   funcPtr,
+						Offset: 0,
+					},
+					{
+						Name:   "data",
+						Type:   &btf.Int{Name: "int", Size: 4},
+						Offset: 64, // bits
+					},
+				},
+			},
+			valueBytes: []byte{
+				// test_1 func ptr (8B)
+				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+				// data (4B) + padding (4B)
+				0xde, 0xed, 0xbe, 0xef, 0x00, 0x00, 0x00, 0x00,
+			},
+		},
+		{
+			name:     "ops_only_func",
+			withProg: true,
+			attachTo: "bpf_testmod_ops2:test_1",
+			valueType: &btf.Struct{
+				Name: "bpf_testmod_ops2",
+				Size: 8,
+				Members: []btf.Member{
+					{
+						Name:   "test_1",
+						Type:   funcPtr,
+						Offset: 0,
+					},
+				},
+			},
+			valueBytes: []byte{
+				// test_1 func ptr (8B)
+				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+			},
+		},
+		{
+			name:     "ops_empty_value",
+			withProg: false,
+			valueType: &btf.Struct{
+				Name:    "bpf_testmod_ops2",
+				Size:    0,
+				Members: []btf.Member{},
+			},
+			valueBytes: []byte{},
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			spec := &CollectionSpec{
+				Programs: map[string]*ProgramSpec{},
+				Maps: map[string]*MapSpec{
+					"testmod_ops": {
+						Name:       "testmod_ops",
+						Type:       StructOpsMap,
+						Flags:      sys.BPF_F_LINK,
+						Key:        &btf.Int{Size: 4},
+						KeySize:    4,
+						Value:      c.valueType,
+						MaxEntries: 1,
+						Contents: []MapKV{
+							{
+								Key:   uint32(0),
+								Value: slices.Clone(c.valueBytes),
+							},
+						},
+					},
+				},
+			}
+			if c.withProg {
+				spec.Programs = makeProg(c.attachTo)
+			}
+
+			coll := mustNewCollection(t, spec, nil)
+
+			for name := range spec.Maps {
+				qt.Assert(t, qt.IsNotNil(coll.Maps[name]))
+			}
+			for name := range spec.Programs {
+				qt.Assert(t, qt.IsNotNil(coll.Programs[name]))
+			}
+		})
+	}
 }

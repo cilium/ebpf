@@ -44,12 +44,21 @@ MSBuild version 17.10.4+10fbfbf2e for .NET Framework
 MSBUILD : error MSB1003: Specify a project or solution file. The current working directory does not contain a project or solution file.
 ```
 
+### Compiling the runtime
+
 !!! note "Pre-built eBPF for Windows binaries"
     You may be able to download precompiled binaries from the [efW CI/CD] pipeline.
     Look for an artifact called "Build-x64-Debug", which should contain
     `setup-ebpf.ps1` mentioned below.
 
-After compilation finishes you can install the runtime:
+The upstream instructions currently explain how to compile the full project, which takes quite a long time.
+It is possible to build only some parts from the command line:
+
+* Installer: `msbuild /m /p:Configuration=Debug /p:Platform=x64 ebpf-for-windows.sln -t:"installer\ebpf-for-windows"`
+* Unit tests: `msbuild /m /p:Configuration=Debug /p:Platform=x64 ebpf-for-windows.sln -t:"tests\unit_tests"`
+* Clean: `msbuild /m /p:Configuration=Debug /p:Platform=x64 ebpf-for-windows.sln -t:"Clean"`
+
+After compilation of the installer finishes you can install the runtime:
 
 ```
 .\x64\Debug\setup-ebpf.ps1

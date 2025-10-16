@@ -1477,6 +1477,7 @@ func (ec *elfCode) loadStructOpsMaps() error {
 					Name:       mapName,
 					Type:       StructOpsMap,
 					Key:        &btf.Int{Size: 4},
+					KeySize:    4,
 					Value:      userType,
 					Flags:      flags,
 					MaxEntries: 1,

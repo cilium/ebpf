@@ -955,6 +955,7 @@ func TestStructOps(t *testing.T) {
 				MaxEntries: 1,
 				Flags:      sys.BPF_F_LINK,
 				Key:        &btf.Int{Size: 4},
+				KeySize:    4,
 				Value: &btf.Struct{
 					Name: "bpf_testmod_ops",
 					Size: 24,

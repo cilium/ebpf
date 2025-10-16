@@ -1602,7 +1602,7 @@ func TestNewMapFromID(t *testing.T) {
 	}
 }
 
-func TestMapPinning(t *testing.T) {
+func TestMapPinningPinPath(t *testing.T) {
 	tmp := testutils.TempBPFFS(t)
 
 	spec := &MapSpec{
@@ -1657,6 +1657,137 @@ func TestMapPinning(t *testing.T) {
 	// Check if error string mentions both KeySize and ValueSize.
 	qt.Assert(t, qt.StringContains(err.Error(), "KeySize"))
 	qt.Assert(t, qt.StringContains(err.Error(), "ValueSize"))
+}
+
+func TestMapPinningPinPathMapping(t *testing.T) {
+	tmp := testutils.TempBPFFS(t)
+
+	spec := &MapSpec{
+		Name:       "test",
+		Type:       Hash,
+		KeySize:    4,
+		ValueSize:  4,
+		MaxEntries: 1,
+		Pinning:    PinByPath,
+	}
+
+	m1 := mustNewMap(t, spec, &MapOptions{
+		PinPathMapping: map[string]string{spec.Name: filepath.Join(tmp, "foo")},
+	})
+	pinned := m1.IsPinned()
+	qt.Assert(t, qt.IsTrue(pinned))
+
+	m1Info, err := m1.Info()
+	qt.Assert(t, qt.IsNil(err))
+
+	if err := m1.Put(uint32(0), uint32(42)); err != nil {
+		t.Fatal("Can't write value:", err)
+	}
+
+	m2 := mustNewMap(t, spec, &MapOptions{
+		PinPathMapping: map[string]string{spec.Name: filepath.Join(tmp, "foo")},
+	})
+
+	m2Info, err := m2.Info()
+	qt.Assert(t, qt.IsNil(err))
+
+	if m1ID, ok := m1Info.ID(); ok {
+		m2ID, _ := m2Info.ID()
+		qt.Assert(t, qt.Equals(m2ID, m1ID))
+	}
+
+	var value uint32
+	if err := m2.Lookup(uint32(0), &value); err != nil {
+		t.Fatal("Can't read from map:", err)
+	}
+
+	if value != 42 {
+		t.Fatal("Pinning doesn't use pinned maps")
+	}
+
+	spec.KeySize = 8
+	spec.ValueSize = 8
+	_, err = newMap(t, spec, &MapOptions{
+		PinPathMapping: map[string]string{spec.Name: filepath.Join(tmp, "foo")},
+	})
+	if err == nil {
+		t.Fatalf("Opening a pinned map with a mismatching spec did not fail")
+	}
+	if !errors.Is(err, ErrMapIncompatible) {
+		t.Fatalf("Opening a pinned map with a mismatching spec failed with the wrong error")
+	}
+
+	// Check if error string mentions both KeySize and ValueSize.
+	qt.Assert(t, qt.StringContains(err.Error(), "KeySize"))
+	qt.Assert(t, qt.StringContains(err.Error(), "ValueSize"))
+}
+
+func TestPinMapMappingMultiplePaths(t *testing.T) {
+	tmp1 := testutils.TempBPFFS(t)
+	tmp2 := testutils.TempBPFFS(t)
+
+	spec1 := &MapSpec{
+		Name:       "test1",
+		Type:       Hash,
+		KeySize:    4,
+		ValueSize:  4,
+		MaxEntries: 1,
+		Pinning:    PinByPath,
+	}
+
+	spec2 := &MapSpec{
+		Name:       "test2",
+		Type:       Hash,
+		KeySize:    8,
+		ValueSize:  8,
+		MaxEntries: 1,
+		Pinning:    PinByPath,
+	}
+
+	pathMapping := map[string]string{
+		spec1.Name: filepath.Join(tmp1, "test1_target"),
+		spec2.Name: filepath.Join(tmp2, "test2_target"),
+	}
+
+	m1 := mustNewMap(t, spec1, &MapOptions{
+		PinPathMapping: pathMapping,
+	})
+	pinned := m1.IsPinned()
+	qt.Assert(t, qt.IsTrue(pinned))
+
+	if err := m1.Put(uint32(0), uint32(42)); err != nil {
+		t.Fatal("Can't write value in m1:", err)
+	}
+
+	m2 := mustNewMap(t, spec2, &MapOptions{
+		PinPathMapping: pathMapping,
+	})
+	pinned = m2.IsPinned()
+	qt.Assert(t, qt.IsTrue(pinned))
+
+	if err := m2.Put(uint64(0), uint64(42)); err != nil {
+		t.Fatal("Can't write value in m2:", err)
+	}
+
+	m1Loaded, err := LoadPinnedMap(filepath.Join(tmp1, "test1_target"), nil)
+	testutils.SkipIfNotSupported(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := m1Loaded.Close(); err != nil {
+		t.Fatalf("close loaded map: %v", err)
+	}
+
+	m2Loaded, err := LoadPinnedMap(filepath.Join(tmp2, "test2_target"), nil)
+	testutils.SkipIfNotSupported(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := m2Loaded.Close(); err != nil {
+		t.Fatalf("close loaded map: %v", err)
+	}
+
 }
 
 func TestMapHandle(t *testing.T) {

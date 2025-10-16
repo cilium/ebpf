@@ -353,6 +353,8 @@ const (
 	PinNone PinType = iota
 	// Pin an object by using its name as the filename.
 	PinByName
+	// Pin an object using its path as the full path.
+	PinByPath
 )
 
 // LoadPinOptions control how a pinned object is loaded.

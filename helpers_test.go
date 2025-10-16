@@ -31,6 +31,28 @@ var haveTestmod = sync.OnceValues(func() (bool, error) {
 	return testmod != nil, nil
 })
 
+var haveTestmodOps = sync.OnceValues(func() (bool, error) {
+	haveTestMod, err := haveTestmod()
+	if err != nil {
+		return false, err
+	}
+	if !haveTestMod {
+		return false, nil
+	}
+
+	target := btf.Type((*btf.Struct)(nil))
+	_, module, err := findTargetInKernel("bpf_struct_ops_bpf_testmod_ops", &target, btf.NewCache())
+	if err != nil && !errors.Is(err, btf.ErrNotFound) {
+		return false, err
+	}
+	if errors.Is(err, btf.ErrNotFound) {
+		return false, nil
+	}
+	defer module.Close()
+
+	return true, nil
+})
+
 func requireTestmod(tb testing.TB) {
 	tb.Helper()
 
@@ -42,6 +64,19 @@ func requireTestmod(tb testing.TB) {
 	}
 	if !testmod {
 		tb.Skip("bpf_testmod not loaded")
+	}
+}
+
+func requireTestmodOps(tb testing.TB) {
+	tb.Helper()
+
+	testutils.SkipOnOldKernel(tb, "5.11", "bpf_testmod")
+	testmodOps, err := haveTestmodOps()
+	if err != nil {
+		tb.Fatal(err)
+	}
+	if !testmodOps {
+		tb.Skip("bpf_testmod_ops not loaded")
 	}
 }
 

@@ -1061,6 +1061,12 @@ func TestLibBPFCompat(t *testing.T) {
 			}
 		}
 
+		for _, ps := range spec.Programs {
+			if ps.Type == StructOps {
+				ps.AttachTo = ""
+			}
+		}
+
 		coreFiles := sourceOfBTF(t, path)
 		if len(coreFiles) == 0 {
 			// NB: test_core_reloc_kernel.o doesn't have dedicated BTF and

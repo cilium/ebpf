@@ -129,7 +129,7 @@ func LoadCollectionSpecFromReader(rd io.ReaderAt) (*CollectionSpec, error) {
 		case sec.Type == elf.SHT_PROGBITS && sec.Size > 0:
 			if (sec.Flags&elf.SHF_EXECINSTR) != 0 && sec.Size > 0 {
 				sections[idx] = newElfSection(sec, programSection)
-			} else if sec.Name == ".struct_ops.link" {
+			} else if sec.Name == structOpsLinkSec {
 				// classification based on sec names so that struct_ops-specific
 				// sections (.struct_ops.link) is correctly recognized
 				// as non-executable PROGBITS, allowing value placement and link metadata to be loaded.
@@ -1448,7 +1448,7 @@ func (ec *elfCode) loadStructOpsMaps() error {
 			}
 
 			flags := uint32(0)
-			if sec.Name == ".struct_ops.link" {
+			if sec.Name == structOpsLinkSec {
 				flags = sys.BPF_F_LINK
 			}
 
@@ -1547,7 +1547,7 @@ func (ec *elfCode) associateStructOpsRelocs(
 			}
 
 			// Find the member at moff and ensure it's a pointer to a FuncProto.
-			if memberName, found := funcPtrMemberAtOffset(userSt, moff); found {
+			if memberName, found := structOpsFuncPtrMemberAtOffset(userSt, moff); found {
 				p, ok := progs[sym.Name]
 				if !(ok && p.Type == StructOps) {
 					return fmt.Errorf("program %q not found or not StructOps", sym.Name)
@@ -1558,23 +1558,6 @@ func (ec *elfCode) associateStructOpsRelocs(
 	}
 
 	return nil
-}
-
-// funcPtrMemberAtOffset returns the member name at bit offset `moff`
-// if the member is a pointer to a FuncProto. Otherwise returns an empty string.
-func funcPtrMemberAtOffset(userSt *btf.Struct, moff btf.Bits) (string, bool) {
-	for _, m := range userSt.Members {
-		if m.Offset != moff {
-			continue
-		}
-		mt := btf.UnderlyingType(m.Type)
-		if ptr, ok := btf.As[*btf.Pointer](mt); ok {
-			if _, ok := btf.As[*btf.FuncProto](ptr.Target); ok {
-				return m.Name, true
-			}
-		}
-	}
-	return "", false
 }
 
 type libbpfElfSectionDef struct {

@@ -10,6 +10,7 @@ import (
 )
 
 const structOpsValuePrefix = "bpf_struct_ops_"
+const structOpsLinkSec = ".struct_ops.link"
 
 // structOpsFindInnerType returns the "inner" struct inside a value struct_ops type.
 //
@@ -117,4 +118,21 @@ func structOpsCopyMember(m, km btf.Member, data []byte, kernVData []byte) error 
 
 	copy(kernVData[dstOff:dstOff+mSize], data[srcOff:srcOff+mSize])
 	return nil
+}
+
+// funcPtrMemberAtOffset returns the member name at bit offset `moff`
+// if the member is a pointer to a FuncProto. Otherwise returns an empty string.
+func structOpsFuncPtrMemberAtOffset(userSt *btf.Struct, moff btf.Bits) (string, bool) {
+	for _, m := range userSt.Members {
+		if m.Offset != moff {
+			continue
+		}
+		mt := btf.UnderlyingType(m.Type)
+		if ptr, ok := btf.As[*btf.Pointer](mt); ok {
+			if _, ok := btf.As[*btf.FuncProto](ptr.Target); ok {
+				return m.Name, true
+			}
+		}
+	}
+	return "", false
 }

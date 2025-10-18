@@ -129,11 +129,13 @@ func LoadCollectionSpecFromReader(rd io.ReaderAt) (*CollectionSpec, error) {
 		case sec.Type == elf.SHT_PROGBITS && sec.Size > 0:
 			if (sec.Flags&elf.SHF_EXECINSTR) != 0 && sec.Size > 0 {
 				sections[idx] = newElfSection(sec, programSection)
-			} else if sec.Name == ".struct_ops" || sec.Name == ".struct_ops.link" {
-				//classification based on sec names so that struct_ops-specific
-				// sections (.struct_ops, .struct_ops.link) are correctly recognized
+			} else if sec.Name == ".struct_ops.link" {
+				// classification based on sec names so that struct_ops-specific
+				// sections (.struct_ops.link) is correctly recognized
 				// as non-executable PROGBITS, allowing value placement and link metadata to be loaded.
 				sections[idx] = newElfSection(sec, structOpsSection)
+			} else if sec.Name == ".struct_ops" {
+				return nil, fmt.Errorf(".struct_ops StructOps is not supported: %s", ErrNotSupported)
 			}
 		}
 	}

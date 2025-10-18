@@ -134,8 +134,8 @@ func LoadCollectionSpecFromReader(rd io.ReaderAt) (*CollectionSpec, error) {
 				// sections (.struct_ops.link) is correctly recognized
 				// as non-executable PROGBITS, allowing value placement and link metadata to be loaded.
 				sections[idx] = newElfSection(sec, structOpsSection)
-			} else if sec.Name == ".struct_ops" {
-				return nil, fmt.Errorf(".struct_ops StructOps is not supported: %s", ErrNotSupported)
+			} else if sec.Name == structOpsSec {
+				return nil, fmt.Errorf("section %q: got '.struct_ops' section: %w", sec.Name, ErrNotSupported)
 			}
 		}
 	}

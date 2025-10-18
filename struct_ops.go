@@ -11,6 +11,7 @@ import (
 
 const structOpsValuePrefix = "bpf_struct_ops_"
 const structOpsLinkSec = ".struct_ops.link"
+const structOpsSec = ".struct_ops"
 
 // structOpsFindInnerType returns the "inner" struct inside a value struct_ops type.
 //

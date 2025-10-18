@@ -126,7 +126,7 @@ func LoadCollectionSpecFromReader(rd io.ReaderAt) (*CollectionSpec, error) {
 		case sec.Type == elf.SHT_REL:
 			// Store relocations under the section index of the target
 			relSections[elf.SectionIndex(sec.Info)] = sec
-		case sec.Type == elf.SHT_PROGBITS:
+		case sec.Type == elf.SHT_PROGBITS && sec.Size > 0:
 			if (sec.Flags&elf.SHF_EXECINSTR) != 0 && sec.Size > 0 {
 				sections[idx] = newElfSection(sec, programSection)
 			} else if sec.Name == ".struct_ops" || sec.Name == ".struct_ops.link" {

@@ -1425,6 +1425,13 @@ func (ec *elfCode) loadStructOpsMaps() error {
 			continue
 		}
 
+		// Retrieve raw data from the ELF section.
+		// This data contains the initial values for the struct_ops map.
+		userData, err := sec.Data()
+		if err != nil {
+			return fmt.Errorf("failed to read section data: %w", err)
+		}
+
 		// Process the struct_ops section to create the map
 		dataType, err := ec.btf.AnyTypeByName(sec.Name)
 		if err != nil {
@@ -1446,13 +1453,6 @@ func (ec *elfCode) loadStructOpsMaps() error {
 			userType, ok := btf.UnderlyingType(varType.Type).(*btf.Struct)
 			if !ok {
 				return fmt.Errorf("var %s: expect struct, got %T", varType.Name, varType.Type)
-			}
-
-			// Retrieve raw data from the ELF section.
-			// This data contains the initial values for the struct_ops map.
-			userData, err := sec.Data()
-			if err != nil {
-				return fmt.Errorf("failed to read section data: %w", err)
 			}
 
 			flags := uint32(0)

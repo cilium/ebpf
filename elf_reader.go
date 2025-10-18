@@ -1433,21 +1433,13 @@ func (ec *elfCode) loadStructOpsMaps() error {
 		}
 
 		// Process the struct_ops section to create the map
-		dataType, err := ec.btf.AnyTypeByName(sec.Name)
-		if err != nil {
+		var ds *btf.Datasec
+		if err := ec.btf.TypeByName(sec.Name, &ds); err != nil {
 			return fmt.Errorf("datasec %s: %w", sec.Name, err)
 		}
 
-		dataSec, ok := btf.As[*btf.Datasec](dataType)
-		if !ok {
-			return fmt.Errorf("%s BTF is not a Datasec", sec.Name)
-		}
-
-		for _, vsi := range dataSec.Vars {
-			varType, ok := btf.As[*btf.Var](vsi.Type)
-			if !ok {
-				return fmt.Errorf("var type in %s: want *btf.Var, got %T", sec.Name, btf.UnderlyingType(vsi.Type))
-			}
+		for _, vsi := range ds.Vars {
+			varType := btf.UnderlyingType(vsi.Type).(*btf.Var)
 			mapName := varType.Name
 
 			userType, ok := btf.UnderlyingType(varType.Type).(*btf.Struct)

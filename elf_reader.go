@@ -1488,13 +1488,15 @@ func (ec *elfCode) loadStructOpsMaps() error {
 	return nil
 }
 
-// associateStructOpsRelocs handles `.struct_ops(.link)`
+// associateStructOpsRelocs handles `.struct_ops.link`
 // and associates the target function with the correct struct member in the map.
 func (ec *elfCode) associateStructOpsRelocs(
 	progs map[string]*ProgramSpec,
 	relSecs map[elf.SectionIndex]*elf.Section,
 	symbols []elf.Symbol,
 ) error {
+	willAttachToMap := make(map[string]bool)
+
 	for _, sec := range relSecs {
 		if !(sec.Type == elf.SHT_REL) {
 			continue
@@ -1553,7 +1555,14 @@ func (ec *elfCode) associateStructOpsRelocs(
 					return fmt.Errorf("program %q not found or not StructOps", sym.Name)
 				}
 				p.AttachTo = userSt.Name + ":" + memberName
+				willAttachToMap[sym.Name] = true
 			}
+		}
+	}
+
+	for name, p := range progs {
+		if p.Type == StructOps && !willAttachToMap[name] {
+			return fmt.Errorf("standalone struct_ops program %s: %w", name, ErrNotSupported)
 		}
 	}
 

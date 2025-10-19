@@ -51,6 +51,7 @@ TARGETS := \
 	testdata/variables \
 	testdata/arena \
 	testdata/struct_ops \
+	testdata/struct_ops_autocreate \
 	btf/testdata/relocs \
 	btf/testdata/relocs_read \
 	btf/testdata/relocs_read_tgt \

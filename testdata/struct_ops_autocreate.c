@@ -7,14 +7,14 @@ struct bpf_testmod_ops {
 	int data;
 };
 
-__section("struct_ops/test_1") int foo(void) {
+__section("?struct_ops/test_1") int foo(void) {
 	return 0;
 }
 
-__section("struct_ops/test_1") int bar(void) {
+__section("?struct_ops/test_1") int bar(void) {
 	return 0;
 }
 
 __section(".struct_ops.link") struct bpf_testmod_ops testmod_ops = {
-	.test_1 = (void *)foo,
+	.test_1 = (void *)bar,
 };

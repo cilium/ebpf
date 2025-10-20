@@ -1528,12 +1528,6 @@ func (ec *elfCode) associateStructOpsRelocs(
 		}
 	}
 
-	for name, p := range progs {
-		if p.Type == StructOps && !willAttachToMap[name] {
-			return fmt.Errorf("standalone struct_ops program %s: %w", name, ErrNotSupported)
-		}
-	}
-
 	return nil
 }
 

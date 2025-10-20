@@ -1028,13 +1028,6 @@ func TestStructOps(t *testing.T) {
 	qt.Assert(t, qt.CmpEquals(data, userData, csCmpOpts))
 }
 
-func TestStructOpsWithStandAloneProg(t *testing.T) {
-	file := testutils.NativeFile(t, "testdata/struct_ops_autocreate-%s.elf")
-	_, err := LoadCollectionSpec(file)
-	testutils.SkipIfNotSupported(t, err)
-	qt.Assert(t, qt.IsNil(err))
-}
-
 var (
 	elfPath    = flag.String("elfs", os.Getenv("CI_KERNEL_SELFTESTS"), "`Path` containing libbpf-compatible ELFs (defaults to $CI_KERNEL_SELFTESTS)")
 	elfPattern = flag.String("elf-pattern", "*.o", "Glob `pattern` for object files that should be tested")

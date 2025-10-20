@@ -104,8 +104,8 @@ var elfSectionDefs = []libbpfElfSectionDef{
 	{"cgroup/getsockopt", sys.BPF_PROG_TYPE_CGROUP_SOCKOPT, sys.BPF_CGROUP_GETSOCKOPT, _SEC_ATTACHABLE},
 	{"cgroup/setsockopt", sys.BPF_PROG_TYPE_CGROUP_SOCKOPT, sys.BPF_CGROUP_SETSOCKOPT, _SEC_ATTACHABLE},
 	{"cgroup/dev", sys.BPF_PROG_TYPE_CGROUP_DEVICE, sys.BPF_CGROUP_DEVICE, _SEC_ATTACHABLE_OPT},
-	{"struct_ops+", sys.BPF_PROG_TYPE_STRUCT_OPS, 0, _SEC_NONE},
-	{"struct_ops.s+", sys.BPF_PROG_TYPE_STRUCT_OPS, 0, _SEC_SLEEPABLE},
+	{"struct_ops+", sys.BPF_PROG_TYPE_STRUCT_OPS, 0, _SEC_NONE | ignoreExtra},
+	{"struct_ops.s+", sys.BPF_PROG_TYPE_STRUCT_OPS, 0, _SEC_SLEEPABLE | ignoreExtra},
 	{"sk_lookup", sys.BPF_PROG_TYPE_SK_LOOKUP, sys.BPF_SK_LOOKUP, _SEC_ATTACHABLE},
 	{"netfilter", sys.BPF_PROG_TYPE_NETFILTER, sys.BPF_NETFILTER, _SEC_NONE},
 }

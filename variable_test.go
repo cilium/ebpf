@@ -1,6 +1,7 @@
 package ebpf
 
 import (
+	"encoding/binary"
 	"runtime"
 	"structs"
 	"sync/atomic"
@@ -62,7 +63,7 @@ func TestVariableSpecCopy(t *testing.T) {
 	const want uint32 = 0xfefefefe
 	wantb := []byte{0xfe, 0xfe, 0xfe, 0xfe} // Same byte sequence regardless of endianness
 	qt.Assert(t, qt.IsNil(cpy.Variables["var_rodata"].Set(want)))
-	qt.Assert(t, qt.DeepEquals(cpy.Maps[".rodata"].Contents[0].Value.([]byte), wantb))
+	qt.Assert(t, qt.DeepEquals(cpy.Variables["var_rodata"].Value, wantb))
 
 	// Verify that the original underlying MapSpec was not modified.
 	zero := make([]byte, 4)
@@ -70,11 +71,37 @@ func TestVariableSpecCopy(t *testing.T) {
 
 	// Check that modifications to the VariableSpec's Type don't affect the
 	// underlying MapSpec's type information on either the original or the copy.
-	cpy.Variables["var_rodata"].Type().Name = "modified"
-	spec.Variables["var_rodata"].Type().Name = "modified"
+	cpy.Variables["var_rodata"].Type.Name = "modified"
+	spec.Variables["var_rodata"].Type.Name = "modified"
 
 	qt.Assert(t, qt.Equals(cpy.Maps[".rodata"].Value.(*btf.Datasec).Vars[0].Type.(*btf.Var).Name, "var_rodata"))
 	qt.Assert(t, qt.Equals(spec.Maps[".rodata"].Value.(*btf.Datasec).Vars[0].Type.(*btf.Var).Name, "var_rodata"))
+}
+
+func TestVariableSpecEmptyValue(t *testing.T) {
+	spec := &VariableSpec{
+		Type: &btf.Var{
+			Type: &btf.Int{
+				Size: 4,
+			},
+		},
+	}
+
+	value := uint32(0x12345678)
+	raw, err := binary.Append(nil, internal.NativeEndian, value)
+	qt.Assert(t, qt.IsNil(err))
+
+	qt.Assert(t, qt.IsNotNil(spec.Get(new(uint32))))
+
+	qt.Assert(t, qt.IsNotNil(spec.Set(uint64(0))), qt.Commentf("Setting a value of incorrect size should fail"))
+
+	qt.Assert(t, qt.IsNil(spec.Set(value)))
+	qt.Assert(t, qt.DeepEquals(spec.Value, raw))
+
+	spec.Value = nil
+	spec.Type = nil
+	qt.Assert(t, qt.IsNil(spec.Set(uint64(0))), qt.Commentf("Setting an empty value without a type should accept any type"))
+	qt.Assert(t, qt.HasLen(spec.Value, 8))
 }
 
 func mustReturn(tb testing.TB, prog *Program, value uint32) {

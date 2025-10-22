@@ -28,7 +28,7 @@ func TestUnsafeMemoryUnmap(t *testing.T) {
 	runtime.SetFinalizer(unsafe.SliceData(mm.b), nil)
 
 	// unmap panics if the operation fails.
-	unmap(mm.Size())(unsafe.SliceData(mm.b))
+	unmap(int(mm.Size()))(unsafe.SliceData(mm.b))
 }
 
 func TestUnsafeMemoryPointer(t *testing.T) {

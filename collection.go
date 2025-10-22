@@ -615,9 +615,9 @@ func (cl *collectionLoader) populateStructOps(m *Map, mapSpec *MapSpec) error {
 		return fmt.Errorf("value should be a *Struct")
 	}
 
-	userData, ok := mapSpec.Contents[0].Value.([]byte)
-	if !ok {
-		return fmt.Errorf("value should be an array of byte")
+	userData, err := mapSpec.dataSection()
+	if err != nil {
+		return fmt.Errorf("getting data section: %w", err)
 	}
 	if len(userData) < int(userType.Size) {
 		return fmt.Errorf("user data too short: have %d, need at least %d", len(userData), userType.Size)

@@ -97,20 +97,24 @@ type perfEventLink struct {
 func (pl *perfEventLink) isLink() {}
 
 func (pl *perfEventLink) Close() error {
+	var errs []error
+
+	// Always attempt to close the link FD first.
 	if err := pl.fd.Close(); err != nil {
-		return fmt.Errorf("perf link close: %w", err)
+		errs = append(errs, fmt.Errorf("perf link close: %w", err))
 	}
 
-	// when created from pinned link
-	if pl.pe == nil {
-		return nil
+	// When created from a pinned link, also close the underlying perf event.
+	if pl.pe != nil {
+		if err := pl.pe.Close(); err != nil {
+			errs = append(errs, fmt.Errorf("perf event close: %w", err))
+		}
 	}
 
-	if err := pl.pe.Close(); err != nil {
-		return fmt.Errorf("perf event close: %w", err)
-	}
-	return nil
+	// Return a combined error (nil if errs is empty).
+	return errors.Join(errs...)
 }
+
 
 func (pl *perfEventLink) Update(_ *ebpf.Program) error {
 	return fmt.Errorf("perf event link update: %w", ErrNotSupported)

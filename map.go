@@ -29,7 +29,6 @@ var (
 	ErrKeyExist         = errors.New("key already exists")
 	ErrIterationAborted = errors.New("iteration aborted")
 	ErrMapIncompatible  = errors.New("map spec is incompatible with existing map")
-	errMapNoBTFValue    = errors.New("map spec does not contain a BTF Value")
 
 	// pre-allocating these errors here since they may get called in hot code paths
 	// and cause unnecessary memory allocations
@@ -187,32 +186,23 @@ func (spec *MapSpec) fixupMagicFields() (*MapSpec, error) {
 	return spec, nil
 }
 
-// dataSection returns the contents and BTF Datasec descriptor of the spec.
-func (ms *MapSpec) dataSection() ([]byte, *btf.Datasec, error) {
-	if ms.Value == nil {
-		return nil, nil, errMapNoBTFValue
-	}
-
-	ds, ok := ms.Value.(*btf.Datasec)
-	if !ok {
-		return nil, nil, fmt.Errorf("map value BTF is a %T, not a *btf.Datasec", ms.Value)
-	}
-
+// dataSection returns the contents of a datasec if the MapSpec represents one.
+func (ms *MapSpec) dataSection() ([]byte, error) {
 	if n := len(ms.Contents); n != 1 {
-		return nil, nil, fmt.Errorf("expected one key, found %d", n)
+		return nil, fmt.Errorf("expected one key, found %d", n)
 	}
 
 	kv := ms.Contents[0]
 	if key, ok := ms.Contents[0].Key.(uint32); !ok || key != 0 {
-		return nil, nil, fmt.Errorf("expected contents to have key 0")
+		return nil, fmt.Errorf("expected contents to have key 0")
 	}
 
 	value, ok := kv.Value.([]byte)
 	if !ok {
-		return nil, nil, fmt.Errorf("value at first map key is %T, not []byte", kv.Value)
+		return nil, fmt.Errorf("value at first map key is %T, not []byte", kv.Value)
 	}
 
-	return value, ds, nil
+	return value, nil
 }
 
 // updateDataSection copies the values of variables into MapSpec.Contents[0].Value.
@@ -232,7 +222,7 @@ func (ms *MapSpec) updateDataSection(vars map[string]*VariableSpec, sectionName 
 		return nil
 	}
 
-	data, _, err := ms.dataSection()
+	data, err := ms.dataSection()
 	if err != nil {
 		return err
 	}

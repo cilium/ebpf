@@ -33,16 +33,11 @@ var csCmpOpts = cmp.Options{
 		}
 		return false
 	}),
-	cmp.Comparer(func(a, b *VariableSpec) bool {
-		if a.name != b.name || a.offset != b.offset || a.size != b.size {
-			return false
-		}
-		return true
-	}),
 	cmpopts.IgnoreTypes(btf.Spec{}),
 	cmpopts.IgnoreFields(CollectionSpec{}, "ByteOrder", "Types"),
 	cmpopts.IgnoreFields(ProgramSpec{}, "Instructions", "ByteOrder"),
 	cmpopts.IgnoreFields(MapSpec{}, "Key", "Value", "Contents"),
+	cmpopts.IgnoreFields(VariableSpec{}, "Type", "Value"),
 	cmpopts.IgnoreUnexported(ProgramSpec{}),
 }
 
@@ -225,14 +220,14 @@ func TestLoadCollectionSpec(t *testing.T) {
 			},
 		},
 		Variables: map[string]*VariableSpec{
-			"arg":  {name: "arg", offset: 4, size: 4},
-			"arg2": {name: "arg2", offset: 0, size: 4},
-			"arg3": {name: "arg3", offset: 0, size: 4},
-			"key1": {name: "key1", offset: 0, size: 4},
-			"key2": {name: "key2", offset: 0, size: 4},
-			"key3": {name: "key3", offset: 0, size: 4},
-			"neg":  {name: "neg", offset: 12, size: 4},
-			"uneg": {name: "uneg", offset: 8, size: 4},
+			"arg":  {Name: "arg", SectionName: ".rodata", Offset: 4},
+			"arg2": {Name: "arg2", SectionName: ".rodata.test", Offset: 0},
+			"arg3": {Name: "arg3", SectionName: ".data.test", Offset: 0},
+			"key1": {Name: "key1", SectionName: ".bss", Offset: 0},
+			"key2": {Name: "key2", SectionName: ".data", Offset: 0},
+			"key3": {Name: "key3", SectionName: ".rodata", Offset: 0},
+			"neg":  {Name: "neg", SectionName: ".rodata", Offset: 12},
+			"uneg": {Name: "uneg", SectionName: ".rodata", Offset: 8},
 		},
 	}
 

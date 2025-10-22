@@ -72,7 +72,7 @@ func (cs *CollectionSpec) Copy() *CollectionSpec {
 	}
 
 	for name, spec := range cs.Variables {
-		cpy.Variables[name] = spec.copy(&cpy)
+		cpy.Variables[name] = spec.Copy()
 	}
 	if cs.Variables == nil {
 		cpy.Variables = nil
@@ -422,6 +422,10 @@ func (cl *collectionLoader) loadMap(mapName string) (*Map, error) {
 		return m, nil
 	}
 
+	if err := mapSpec.updateDataSection(cl.coll.Variables, mapName); err != nil {
+		return nil, fmt.Errorf("assembling contents of map %s: %w", mapName, err)
+	}
+
 	m, err := newMapWithOptions(mapSpec, cl.opts.Maps, cl.types)
 	if err != nil {
 		return nil, fmt.Errorf("map %s: %w", mapName, err)
@@ -505,19 +509,7 @@ func (cl *collectionLoader) loadVariable(varName string) (*Variable, error) {
 		return nil, fmt.Errorf("unknown variable %s", varName)
 	}
 
-	// Get the key of the VariableSpec's MapSpec in the CollectionSpec.
-	var mapName string
-	for n, ms := range cl.coll.Maps {
-		if ms == varSpec.m {
-			mapName = n
-			break
-		}
-	}
-	if mapName == "" {
-		return nil, fmt.Errorf("variable %s: underlying MapSpec %s was removed from CollectionSpec", varName, varSpec.m.Name)
-	}
-
-	m, err := cl.loadMap(mapName)
+	m, err := cl.loadMap(varSpec.SectionName)
 	if err != nil {
 		return nil, fmt.Errorf("variable %s: %w", varName, err)
 	}
@@ -534,14 +526,14 @@ func (cl *collectionLoader) loadVariable(varName string) (*Variable, error) {
 		mm, err = m.Memory()
 	}
 	if err != nil && !errors.Is(err, ErrNotSupported) {
-		return nil, fmt.Errorf("variable %s: getting memory for map %s: %w", varName, mapName, err)
+		return nil, fmt.Errorf("variable %s: getting memory for map %s: %w", varName, varSpec.SectionName, err)
 	}
 
 	v, err := newVariable(
-		varSpec.name,
-		varSpec.offset,
-		varSpec.size,
-		varSpec.t,
+		varSpec.Name,
+		varSpec.Offset,
+		varSpec.Size(),
+		varSpec.Type,
 		mm,
 	)
 	if err != nil {

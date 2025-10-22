@@ -365,9 +365,5 @@ func fixupCollectionSpec(spec *CollectionSpec) *CollectionSpec {
 		spec.Programs[name] = fixupProgramSpec(spec.Programs[name])
 	}
 
-	for _, varSpec := range spec.Variables {
-		varSpec.m = spec.Maps[varSpec.m.Name]
-	}
-
 	return spec
 }

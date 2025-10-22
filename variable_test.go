@@ -62,7 +62,7 @@ func TestVariableSpecCopy(t *testing.T) {
 	const want uint32 = 0xfefefefe
 	wantb := []byte{0xfe, 0xfe, 0xfe, 0xfe} // Same byte sequence regardless of endianness
 	qt.Assert(t, qt.IsNil(cpy.Variables["var_rodata"].Set(want)))
-	qt.Assert(t, qt.DeepEquals(cpy.Maps[".rodata"].Contents[0].Value.([]byte), wantb))
+	qt.Assert(t, qt.DeepEquals(cpy.Variables["var_rodata"].Value, wantb))
 
 	// Verify that the original underlying MapSpec was not modified.
 	zero := make([]byte, 4)
@@ -70,8 +70,8 @@ func TestVariableSpecCopy(t *testing.T) {
 
 	// Check that modifications to the VariableSpec's Type don't affect the
 	// underlying MapSpec's type information on either the original or the copy.
-	cpy.Variables["var_rodata"].Type().Name = "modified"
-	spec.Variables["var_rodata"].Type().Name = "modified"
+	cpy.Variables["var_rodata"].Type.Name = "modified"
+	spec.Variables["var_rodata"].Type.Name = "modified"
 
 	qt.Assert(t, qt.Equals(cpy.Maps[".rodata"].Value.(*btf.Datasec).Vars[0].Type.(*btf.Var).Name, "var_rodata"))
 	qt.Assert(t, qt.Equals(spec.Maps[".rodata"].Value.(*btf.Datasec).Vars[0].Type.(*btf.Var).Name, "var_rodata"))

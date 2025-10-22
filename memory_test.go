@@ -39,7 +39,7 @@ func TestMemory(t *testing.T) {
 
 	// The mapping is always at least one page long, and the Map created here fits
 	// in a single page.
-	qt.Assert(t, qt.Equals(mm.Size(), os.Getpagesize()))
+	qt.Assert(t, qt.Equals(mm.Size(), uint32(os.Getpagesize())))
 
 	// No BPF_F_RDONLY_PROG flag, so the Memory should be read-write.
 	qt.Assert(t, qt.IsFalse(mm.ReadOnly()))
@@ -61,7 +61,7 @@ func TestMemoryBounds(t *testing.T) {
 	mm, err := mustMmapableArray(t, 0).Memory()
 	qt.Assert(t, qt.IsNil(err))
 
-	end := uint64(mm.Size())
+	end := mm.Size()
 
 	qt.Assert(t, qt.IsTrue(mm.bounds(0, 0)))
 	qt.Assert(t, qt.IsTrue(mm.bounds(end, 0)))
@@ -70,7 +70,7 @@ func TestMemoryBounds(t *testing.T) {
 
 	qt.Assert(t, qt.IsFalse(mm.bounds(end-8, 9)))
 	qt.Assert(t, qt.IsFalse(mm.bounds(end, 1)))
-	qt.Assert(t, qt.IsFalse(mm.bounds(math.MaxUint64, 1)))
+	qt.Assert(t, qt.IsFalse(mm.bounds(math.MaxUint32, 1)))
 }
 
 func TestMemoryReadOnly(t *testing.T) {

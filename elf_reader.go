@@ -1225,14 +1225,15 @@ func (ec *elfCode) loadDataSections() error {
 			mapSpec.Flags = sys.BPF_F_RDONLY_PROG
 		}
 
+		var data []byte
 		switch sec.Type {
 		// Only open the section if we know there's actual data to be read.
 		case elf.SHT_PROGBITS:
-			data, err := sec.Data()
+			var err error
+			data, err = sec.Data()
 			if err != nil {
 				return fmt.Errorf("data section %s: can't get contents: %w", sec.Name, err)
 			}
-			mapSpec.Contents = []MapKV{{uint32(0), data}}
 
 		case elf.SHT_NOBITS:
 			// NOBITS sections like .bss contain only zeroes and are not allocated in
@@ -1240,11 +1241,13 @@ func (ec *elfCode) loadDataSections() error {
 			// them. Don't attempt reading zeroes from the ELF, instead allocate the
 			// zeroed memory to support getting and setting VariableSpecs for sections
 			// like .bss.
-			mapSpec.Contents = []MapKV{{uint32(0), make([]byte, sec.Size)}}
+			data = make([]byte, sec.Size)
 
 		default:
 			return fmt.Errorf("data section %s: unknown section type %s", sec.Name, sec.Type)
 		}
+
+		mapSpec.Contents = []MapKV{{uint32(0), data}}
 
 		for off, sym := range sec.symbols {
 			// Skip symbols marked with the 'hidden' attribute.
@@ -1274,11 +1277,19 @@ func (ec *elfCode) loadDataSections() error {
 				continue
 			}
 
+			if off+sym.Size > uint64(len(data)) {
+				return fmt.Errorf("data section %s: variable %s exceeds section bounds", sec.Name, sym.Name)
+			}
+
+			if off > math.MaxUint32 {
+				return fmt.Errorf("data section %s: variable %s offset %d exceeds maximum", sec.Name, sym.Name, off)
+			}
+
 			ec.vars[sym.Name] = &VariableSpec{
-				name:   sym.Name,
-				offset: off,
-				size:   sym.Size,
-				m:      mapSpec,
+				SectionName: sec.Name,
+				Name:        sym.Name,
+				Offset:      uint32(off),
+				Value:       slices.Clone(data[off : off+sym.Size]),
 			}
 		}
 
@@ -1309,17 +1320,17 @@ func (ec *elfCode) loadDataSections() error {
 						continue
 					}
 
-					if uint64(v.Offset) != ev.offset {
-						return fmt.Errorf("data section %s: variable %s datasec offset (%d) doesn't match ELF symbol offset (%d)", sec.Name, name, v.Offset, ev.offset)
+					if v.Offset != ev.Offset {
+						return fmt.Errorf("data section %s: variable %s datasec offset (%d) doesn't match ELF symbol offset (%d)", sec.Name, name, v.Offset, ev.Offset)
 					}
 
-					if uint64(v.Size) != ev.size {
-						return fmt.Errorf("data section %s: variable %s size in datasec (%d) doesn't match ELF symbol size (%d)", sec.Name, name, v.Size, ev.size)
+					if v.Size != ev.Size() {
+						return fmt.Errorf("data section %s: variable %s size in datasec (%d) doesn't match ELF symbol size (%d)", sec.Name, name, v.Size, ev.Size())
 					}
 
 					// Decouple the Var in the VariableSpec from the underlying DataSec in
 					// the MapSpec to avoid modifications from affecting map loads later on.
-					ev.t = btf.Copy(vt).(*btf.Var)
+					ev.Type = btf.Copy(vt).(*btf.Var)
 				}
 			}
 		}

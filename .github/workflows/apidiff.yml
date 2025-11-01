@@ -29,7 +29,7 @@ jobs:
           echo '{"id": ${{ github.event.pull_request.number }}, "semver-type": "${{ steps.apidiff.outputs.semver-type }}"}' > apidiff.json
 
       - name: Upload apidiff.json
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: apidiff
           path: apidiff.json

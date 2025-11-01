@@ -157,7 +157,7 @@ jobs:
         run: vimto -kernel :stable-selftests -- go test -short -run '^$' -bench . -benchtime=1x ./...
 
       - name: Upload coredumps
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         if: ${{ failure() }}
         with:
           name: cores
@@ -168,7 +168,7 @@ jobs:
 
       - name: Upload Test Results
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: Test Results (previous stable Go)
           path: junit.xml
@@ -200,7 +200,7 @@ jobs:
 
       - name: Upload Test Results
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: Test Results (arm64)
           path: junit.xml
@@ -244,7 +244,7 @@ jobs:
 
       - name: Upload Test Results
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: Test Results (linux ${{ matrix.tag }})
           path: junit.xml
@@ -379,7 +379,7 @@ jobs:
 
       - name: Upload Test Results
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: Test Results (windows ${{ matrix.tag }})
           path: junit.xml

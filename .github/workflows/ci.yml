@@ -36,7 +36,7 @@ jobs:
       - name: Run staticcheck
         uses: dominikh/staticcheck-action@v1
         with:
-          version: "latest"
+          version: "master"
           install-go: false
 
       - name: Run golangci-lint

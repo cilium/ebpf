@@ -10,6 +10,7 @@ import (
 	"github.com/go-quicktest/qt"
 
 	"github.com/cilium/ebpf"
+	"github.com/cilium/ebpf/internal/linux"
 	"github.com/cilium/ebpf/internal/testutils"
 	"github.com/cilium/ebpf/internal/unix"
 )
@@ -100,9 +101,11 @@ func TestKprobeMultiProgramCall(t *testing.T) {
 
 	m, p := newUpdaterMapProg(t, ebpf.Kprobe, ebpf.AttachTraceKprobeMulti)
 
+	// Use actual syscall names with platform prefix.
 	// For simplicity, just assert the increment happens with any symbol in the array.
+	prefix := linux.PlatformPrefix()
 	opts := KprobeMultiOptions{
-		Symbols: []string{"__do_sys_getpid", "__do_sys_gettid"},
+		Symbols: []string{prefix + "sys_getpid", prefix + "sys_gettid"},
 	}
 	km, err := KprobeMulti(p, opts)
 	if err != nil {

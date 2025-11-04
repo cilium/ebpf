@@ -497,7 +497,42 @@ func newProgramInfoFromFd(fd *sys.FD) (*ProgramInfo, error) {
 		}
 	}
 
+	if len(pi.Name) == len(info.Name)-1 { // Possibly truncated, check BTF info for full name
+		name, err := readNameFromFunc(&pi)
+		if err == nil {
+			pi.Name = name
+		} // If an error occurs, keep the truncated name, which is better than none
+	}
+
 	return &pi, nil
+}
+
+func readNameFromFunc(pi *ProgramInfo) (string, error) {
+	if pi.numFuncInfos == 0 {
+		return "", errors.New("no function info")
+	}
+
+	spec, err := pi.btfSpec()
+	if err != nil {
+		return "", err
+	}
+
+	funcInfos, err := btf.LoadFuncInfos(
+		bytes.NewReader(pi.funcInfos),
+		internal.NativeEndian,
+		pi.numFuncInfos,
+		spec,
+	)
+	if err != nil {
+		return "", err
+	}
+
+	for _, funcInfo := range funcInfos {
+		if funcInfo.Offset == 0 { // Information about the whole program
+			return funcInfo.Func.Name, nil
+		}
+	}
+	return "", errors.New("no function info about program")
 }
 
 func readProgramInfoFromProc(fd *sys.FD, pi *ProgramInfo) error {

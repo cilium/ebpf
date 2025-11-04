@@ -416,9 +416,20 @@ func newProgramInfoFromFd(fd *sys.FD) (*ProgramInfo, error) {
 
 	if info.XlatedProgLen > 0 {
 		pi.insns = make([]byte, info.XlatedProgLen)
-		info2.XlatedProgLen = info.XlatedProgLen
-		info2.XlatedProgInsns = sys.SlicePointer(pi.insns)
-		makeSecondCall = true
+		var info3 sys.ProgInfo
+		info3.XlatedProgLen = info.XlatedProgLen
+		info3.XlatedProgInsns = sys.SlicePointer(pi.insns)
+
+		// When kernel.kptr_restrict and net.core.bpf_jit_harden are both set, it causes the
+		// syscall to abort when trying to readback xlated instructions, skipping other info
+		// as well. So request xlated instructions separately.
+		if err := sys.ObjInfo(fd, &info3); err != nil {
+			return nil, err
+		}
+		if info3.XlatedProgInsns.IsNil() {
+			pi.restricted = true
+			pi.insns = nil
+		}
 	}
 
 	if info.NrLineInfo > 0 {
@@ -477,14 +488,13 @@ func newProgramInfoFromFd(fd *sys.FD) (*ProgramInfo, error) {
 		if err := sys.ObjInfo(fd, &info2); err != nil {
 			return nil, err
 		}
-	}
-
-	if info.XlatedProgLen > 0 && info2.XlatedProgInsns.IsNil() {
-		pi.restricted = true
-		pi.insns = nil
-		pi.lineInfos = nil
-		pi.funcInfos = nil
-		pi.jitedInfo = programJitedInfo{}
+		if info.JitedProgLen > 0 && info2.JitedProgInsns.IsNil() {
+			// JIT information is not available due to kernel.kptr_restrict
+			pi.jitedInfo.lineInfos = nil
+			pi.jitedInfo.ksyms = nil
+			pi.jitedInfo.insns = nil
+			pi.jitedInfo.funcLens = nil
+		}
 	}
 
 	return &pi, nil
@@ -581,10 +591,6 @@ var ErrRestrictedKernel = internal.ErrRestrictedKernel
 // ErrNotSupported if the program was created without BTF or if the kernel
 // doesn't support the field.
 func (pi *ProgramInfo) LineInfos() (btf.LineOffsets, error) {
-	if pi.restricted {
-		return nil, fmt.Errorf("line infos: %w", ErrRestrictedKernel)
-	}
-
 	if len(pi.lineInfos) == 0 {
 		return nil, fmt.Errorf("insufficient permissions or unsupported kernel: %w", ErrNotSupported)
 	}
@@ -708,10 +714,6 @@ func (pi *ProgramInfo) Instructions() (asm.Instructions, error) {
 //
 // Available from 4.13. Reading this metadata requires CAP_BPF or equivalent.
 func (pi *ProgramInfo) JitedSize() (uint32, error) {
-	if pi.restricted {
-		return 0, fmt.Errorf("jited size: %w", ErrRestrictedKernel)
-	}
-
 	if pi.jitedSize == 0 {
 		return 0, fmt.Errorf("insufficient permissions, unsupported kernel, or JIT compiler disabled: %w", ErrNotSupported)
 	}
@@ -832,10 +834,6 @@ func (pi *ProgramInfo) JitedFuncLens() ([]uint32, bool) {
 // ErrNotSupported if the program was created without BTF or if the kernel
 // doesn't support the field.
 func (pi *ProgramInfo) FuncInfos() (btf.FuncOffsets, error) {
-	if pi.restricted {
-		return nil, fmt.Errorf("func infos: %w", ErrRestrictedKernel)
-	}
-
 	if len(pi.funcInfos) == 0 {
 		return nil, fmt.Errorf("insufficient permissions or unsupported kernel: %w", ErrNotSupported)
 	}

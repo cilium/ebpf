@@ -23,6 +23,8 @@ Please see our [guide on what makes a good example](https://ebpf-go.dev/contribu
   * [tcx](./tcx/) - Print packet counts for ingress and egress.
 * XDP - Attach a program to a network interface to process incoming packets.
   * [xdp](xdp/) - Print packet counts by IPv4 source address.
+* sched_ext - Attach a StructOpsMap to register a custom task scheduler. This feature is supported by kernel version starting from version 6.12.
+  * [sched_ext](sched_ext/) - Minimal sched_ext_ops.
 
 ## How to run
 

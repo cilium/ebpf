@@ -126,49 +126,6 @@ var loadKeyFromMapProgramSpec = &ProgramSpec{
 	},
 }
 
-func TestCollectionSpecRewriteMaps(t *testing.T) {
-	cs := &CollectionSpec{
-		Maps: map[string]*MapSpec{
-			"test-map": {
-				Type:       Array,
-				KeySize:    4,
-				ValueSize:  4,
-				MaxEntries: 1,
-			},
-		},
-		Programs: map[string]*ProgramSpec{
-			"test-prog": loadKeyFromMapProgramSpec.Copy(),
-		},
-	}
-
-	// Override the map with another one
-	newMap := mustNewMap(t, cs.Maps["test-map"], nil)
-
-	err := newMap.Put(uint32(0), uint32(2))
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	err = cs.RewriteMaps(map[string]*Map{
-		"test-map": newMap,
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if cs.Maps["test-map"] != nil {
-		t.Error("RewriteMaps doesn't remove map from CollectionSpec.Maps")
-	}
-
-	coll := mustNewCollection(t, cs, nil)
-
-	ret := mustRun(t, coll.Programs["test-prog"], nil)
-
-	if ret != 2 {
-		t.Fatal("new / override map not used")
-	}
-}
-
 func TestCollectionSpecMapReplacements(t *testing.T) {
 	cs := &CollectionSpec{
 		Maps: map[string]*MapSpec{

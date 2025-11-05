@@ -10,7 +10,6 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/cilium/ebpf/asm"
 	"github.com/cilium/ebpf/btf"
 	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/kallsyms"
@@ -93,45 +92,6 @@ func copyMapOfSpecs[T interface{ Copy() T }](m map[string]T) map[string]T {
 	}
 
 	return cpy
-}
-
-// RewriteMaps replaces all references to specific maps.
-//
-// Use this function to use pre-existing maps instead of creating new ones
-// when calling NewCollection. Any named maps are removed from CollectionSpec.Maps.
-//
-// Returns an error if a named map isn't used in at least one program.
-//
-// Deprecated: Pass CollectionOptions.MapReplacements when loading the Collection
-// instead.
-func (cs *CollectionSpec) RewriteMaps(maps map[string]*Map) error {
-	for symbol, m := range maps {
-		// have we seen a program that uses this symbol / map
-		seen := false
-		for progName, progSpec := range cs.Programs {
-			err := progSpec.Instructions.AssociateMap(symbol, m)
-
-			switch {
-			case err == nil:
-				seen = true
-
-			case errors.Is(err, asm.ErrUnreferencedSymbol):
-				// Not all programs need to use the map
-
-			default:
-				return fmt.Errorf("program %s: %w", progName, err)
-			}
-		}
-
-		if !seen {
-			return fmt.Errorf("map %s not referenced by any programs", symbol)
-		}
-
-		// Prevent NewCollection from creating rewritten maps
-		delete(cs.Maps, symbol)
-	}
-
-	return nil
 }
 
 // MissingConstantsError is returned by [CollectionSpec.RewriteConstants].

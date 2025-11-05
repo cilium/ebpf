@@ -233,22 +233,6 @@ func (ins *Instruction) AssociateMap(m FDer) error {
 	return nil
 }
 
-// RewriteMapPtr changes an instruction to use a new map fd.
-//
-// Returns an error if the instruction doesn't load a map.
-//
-// Deprecated: use AssociateMap instead. If you cannot provide a Map,
-// wrap an fd in a type implementing FDer.
-func (ins *Instruction) RewriteMapPtr(fd int) error {
-	if !ins.IsLoadFromMap() {
-		return errors.New("not a load from a map")
-	}
-
-	ins.encodeMapFD(fd)
-
-	return nil
-}
-
 func (ins *Instruction) encodeMapFD(fd int) {
 	// Preserve the offset value for direct map loads.
 	offset := uint64(ins.Constant) & (math.MaxUint32 << 32)
@@ -621,39 +605,6 @@ func (insns Instructions) AssociateMap(symbol string, m FDer) error {
 		if err := ins.AssociateMap(m); err != nil {
 			return err
 		}
-
-		found = true
-	}
-
-	if !found {
-		return fmt.Errorf("symbol %s: %w", symbol, ErrUnreferencedSymbol)
-	}
-
-	return nil
-}
-
-// RewriteMapPtr rewrites all loads of a specific map pointer to a new fd.
-//
-// Returns ErrUnreferencedSymbol if the symbol isn't used.
-//
-// Deprecated: use AssociateMap instead.
-func (insns Instructions) RewriteMapPtr(symbol string, fd int) error {
-	if symbol == "" {
-		return errors.New("empty symbol")
-	}
-
-	var found bool
-	for i := range insns {
-		ins := &insns[i]
-		if ins.Reference() != symbol {
-			continue
-		}
-
-		if !ins.IsLoadFromMap() {
-			return errors.New("not a load from a map")
-		}
-
-		ins.encodeMapFD(fd)
 
 		found = true
 	}

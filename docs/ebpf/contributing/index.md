@@ -61,7 +61,7 @@ variables:
 make CONTAINER_ENGINE=podman CONTAINER_RUN_ARGS=
 ```
 
-### Updating kernel dependencies
+### Updating external dependencies
 
 Syscall bindings and some parameters required to parse ELF sections are derived
 from upstream kernel versions. You can update them to the latest version by:
@@ -69,7 +69,7 @@ from upstream kernel versions. You can update them to the latest version by:
 1. Adjusting the `KERNEL_VERSION` variable in `Makefile`
 2. Running
     ```shell-session
-    make update-kernel-deps
+    make update-external-deps
     ```
 
 Finally, bump the tested kernels in `.github/workflows/ci.yml`

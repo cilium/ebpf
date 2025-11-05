@@ -8,7 +8,11 @@ import (
 )
 
 type structOpsLink struct {
-	*RawLink
+	RawLink
+}
+
+func (*structOpsLink) Update(*ebpf.Program) error {
+	return fmt.Errorf("update struct_ops link: %w", ErrNotSupported)
 }
 
 type StructOpsOptions struct {
@@ -43,5 +47,5 @@ func AttachStructOps(opts StructOpsOptions) (Link, error) {
 		return nil, fmt.Errorf("attach StructOps: create link: %w", err)
 	}
 
-	return &structOpsLink{&RawLink{fd: fd}}, nil
+	return &structOpsLink{RawLink{fd: fd}}, nil
 }

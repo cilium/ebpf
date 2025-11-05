@@ -2,6 +2,16 @@
 
 set -euo pipefail
 
+# Extract kernel version from CI workflow file
+kernel_version=$(awk -F': ' '/CI_MAX_KERNEL_VERSION:/ {gsub(/['\''"]/, "", $2); print $2}' .github/workflows/ci.yml)
+
+if [ -z "$kernel_version" ]; then
+	echo "Error: Could not extract CI_MAX_KERNEL_VERSION from .github/workflows/ci.yml" >&2
+	exit 1
+fi
+
+echo "Using kernel version: $kernel_version"
+
 tmp=$(mktemp -d)
 
 cleanup() {
@@ -12,15 +22,15 @@ trap cleanup EXIT
 
 # Download and process libbpf.c
 # Truncate .0 patch versions (e.g., 6.16.0 -> 6.16, but leave 7.0 as 7.0)
-kernel_version_for_url="$KERNEL_VERSION"
-if [[ $KERNEL_VERSION =~ ^([0-9]+\.[0-9]+)\.0$ ]]; then
+kernel_version_for_url="$kernel_version"
+if [[ $kernel_version =~ ^([0-9]+\.[0-9]+)\.0$ ]]; then
 	kernel_version_for_url="${BASH_REMATCH[1]}"
 fi
 curl -fL "https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git/plain/tools/lib/bpf/libbpf.c?h=v$kernel_version_for_url" -o "$tmp/libbpf.c"
 "./internal/cmd/gensections.awk" "$tmp/libbpf.c" | gofmt > "./elf_sections.go"
 
 # Download and process vmlinux and btf_testmod
-go tool crane export "ghcr.io/cilium/ci-kernels:$KERNEL_VERSION" | tar -x -C "$tmp"
+go tool crane export "ghcr.io/cilium/ci-kernels:$kernel_version" | tar -x -C "$tmp"
 
 extract-vmlinux "$tmp/boot/vmlinuz" > "$tmp/vmlinux"
 

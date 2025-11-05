@@ -20,7 +20,8 @@ func TestStructOps(t *testing.T) {
 	m := mustStructOpsFixtures(t)
 	l, err := AttachStructOps(StructOpsOptions{Map: m})
 	qt.Assert(t, qt.IsNil(err))
-	qt.Assert(t, qt.IsNil(l.Close()))
+
+	testLink(t, l, nil)
 }
 
 func mustStructOpsFixtures(tb testing.TB) *ebpf.Map {

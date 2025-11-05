@@ -968,11 +968,3 @@ func newBPFRegisters(dst, src Register, bo binary.ByteOrder) (bpfRegisters, erro
 		return 0, fmt.Errorf("unrecognized ByteOrder %T", bo)
 	}
 }
-
-// IsUnreferencedSymbol returns true if err was caused by
-// an unreferenced symbol.
-//
-// Deprecated: use errors.Is(err, asm.ErrUnreferencedSymbol).
-func IsUnreferencedSymbol(err error) bool {
-	return errors.Is(err, ErrUnreferencedSymbol)
-}

@@ -470,13 +470,6 @@ func (ins Instruction) WithSymbol(name string) Instruction {
 	return ins
 }
 
-// Sym creates a symbol.
-//
-// Deprecated: use WithSymbol instead.
-func (ins Instruction) Sym(name string) Instruction {
-	return ins.WithSymbol(name)
-}
-
 // Symbol returns the value ins has been marked with using WithSymbol,
 // otherwise returns an empty string. A symbol is often an Instruction
 // at the start of a function body.

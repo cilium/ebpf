@@ -120,8 +120,6 @@ testdata/loader-%-eb.elf: testdata/loader.c
 	$(STRIP) -g $@
 
 .PHONY: update-external-deps
-update-external-deps: export KERNEL_VERSION=6.16.0
-update-external-deps: export EFW_VERSION=v1.0.0-rc1
 update-external-deps:
 	./scripts/update-kernel-deps.sh
 	./scripts/update-efw-deps.sh

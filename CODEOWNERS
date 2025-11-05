@@ -9,3 +9,9 @@ ringbuf/ @florianl
 btf/ @dylandreimerink
 
 docs/ @ti-mo
+
+# Windows specific code.
+/docs/**/windows*.md @cilium/ebpf-go-windows-reviewers
+/internal/efw @cilium/ebpf-go-windows-reviewers
+windows/ @cilium/ebpf-go-windows-reviewers # Folders
+*windows*.go @cilium/ebpf-go-windows-reviewers # Go code

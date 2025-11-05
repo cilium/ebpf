@@ -93,9 +93,10 @@ clean:
 format:
 	find . -type f -name "*.c" | xargs clang-format -i
 
-all: format $(addsuffix -el.elf,$(TARGETS)) $(addsuffix -eb.elf,$(TARGETS)) generate
+all: format $(addsuffix -el.elf,$(TARGETS)) $(addsuffix -eb.elf,$(TARGETS)) update-external-deps
 	ln -srf testdata/loader-$(CLANG)-el.elf testdata/loader-el.elf
 	ln -srf testdata/loader-$(CLANG)-eb.elf testdata/loader-eb.elf
+	$(MAKE) generate
 
 generate:
 	go generate -run "stringer" ./...
@@ -124,4 +125,3 @@ update-external-deps: export EFW_VERSION=v1.0.0-rc1
 update-external-deps:
 	./scripts/update-kernel-deps.sh
 	./scripts/update-efw-deps.sh
-	$(MAKE) container-all

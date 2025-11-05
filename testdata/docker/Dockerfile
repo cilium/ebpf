@@ -16,7 +16,7 @@ COPY llvm.list /etc/apt/sources.list.d
 
 RUN apt-get update && \
     apt-get -y --no-install-recommends install \
-    make git \
+    make git gawk \
     libbpf-dev \
     clang-format \
     clang-14 llvm-14 \
@@ -27,4 +27,5 @@ RUN apt-get update && \
 # Examples use `#include <asm/types.h>` which Debian carries in asm-generic/ instead.
 RUN ln -s /usr/include/asm-generic /usr/include/asm
 
-RUN GOBIN=/usr/local/bin go install golang.org/x/tools/cmd/stringer@latest && rm -rf /go/pkg
+RUN curl -fL "https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git/plain/scripts/extract-vmlinux" -o "/usr/local/bin/extract-vmlinux" && \
+    chmod +x /usr/local/bin/extract-vmlinux

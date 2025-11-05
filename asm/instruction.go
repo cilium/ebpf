@@ -240,22 +240,6 @@ func (ins *Instruction) encodeMapFD(fd int) {
 	ins.Constant = int64(offset | rawFd)
 }
 
-// MapPtr returns the map fd for this instruction.
-//
-// The result is undefined if the instruction is not a load from a map,
-// see IsLoadFromMap.
-//
-// Deprecated: use Map() instead.
-func (ins *Instruction) MapPtr() int {
-	// If there is a map associated with the instruction, return its FD.
-	if fd := ins.Metadata.Get(mapMeta{}); fd != nil {
-		return fd.(FDer).FD()
-	}
-
-	// Fall back to the fd stored in the Constant field
-	return ins.mapFd()
-}
-
 // mapFd returns the map file descriptor stored in the 32 least significant
 // bits of ins' Constant field.
 func (ins *Instruction) mapFd() int {

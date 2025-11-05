@@ -158,7 +158,7 @@ func TestProgramBenchmark(t *testing.T) {
 
 	prog := createBasicProgram(t)
 
-	ret, duration, err := prog.Benchmark(internal.EmptyBPFContext, 1, nil)
+	ret, duration, err := prog.Benchmark(internal.EmptyBPFContext, 1)
 	testutils.SkipIfNotSupported(t, err)
 	if err != nil {
 		t.Fatal("Error from Benchmark:", err)

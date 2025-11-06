@@ -11,15 +11,27 @@ CI_KERNEL_URL ?= https://github.com/cilium/ci-kernels/raw/master/
 # Obtain an absolute path to the directory of the Makefile.
 # Assume the Makefile is in the root of the repository.
 REPODIR := $(shell dirname $(realpath $(firstword $(MAKEFILE_LIST))))
-UIDGID := $(shell stat -c '%u:%g' ${REPODIR})
 
 # Prefer podman if installed, otherwise use docker.
 # Note: Setting the var at runtime will always override.
-CONTAINER_ENGINE ?= $(if $(shell command -v podman), podman, docker)
-CONTAINER_RUN_ARGS ?= $(if $(filter ${CONTAINER_ENGINE}, podman), \
-		--log-driver=none \
-		-v "$(shell go env GOCACHE)":/root/.cache/go-build \
-		-v "$(shell go env GOMODCACHE)":/go/pkg/mod, --user "${UIDGID}")
+CONTAINER_ENGINE ?= $(if $(shell command -v podman),podman,docker)
+
+# Configure container runtime arguments based on the container engine.
+CONTAINER_RUN_ARGS := \
+	--env MAKEFLAGS \
+	--env BPF2GO_CC="$(CLANG)" \
+	--env BPF2GO_CFLAGS="$(CFLAGS)" \
+	--env HOME=/tmp \
+	-v "${REPODIR}":/ebpf -w /ebpf \
+	-v "$(shell go env GOCACHE)":/tmp/.cache/go-build \
+	-v "$(shell go env GOPATH)":/go \
+	-v "$(shell go env GOMODCACHE)":/go/pkg/mod
+
+ifeq ($(CONTAINER_ENGINE), podman)
+CONTAINER_RUN_ARGS += --log-driver=none --security-opt label=disable
+else
+CONTAINER_RUN_ARGS += --user "$(shell stat -c '%u:%g' ${REPODIR})"
+endif
 
 IMAGE := $(shell cat ${REPODIR}/testdata/docker/IMAGE)
 VERSION := $(shell cat ${REPODIR}/testdata/docker/VERSION)
@@ -65,20 +77,13 @@ TARGETS := \
 # Build all ELF binaries using a containerized LLVM toolchain.
 container-all:
 	+${CONTAINER_ENGINE} run --rm -ti ${CONTAINER_RUN_ARGS} \
-		-v "${REPODIR}":/ebpf -w /ebpf --env MAKEFLAGS \
-		--env HOME="/tmp" \
-		--env BPF2GO_CC="$(CLANG)" \
-		--env BPF2GO_CFLAGS="$(CFLAGS)" \
 		"${IMAGE}:${VERSION}" \
-		make all
+		$(MAKE) all
 
 # (debug) Drop the user into a shell inside the container as root.
 # Set BPF2GO_ envs to make 'make generate' just work.
 container-shell:
 	${CONTAINER_ENGINE} run --rm -ti ${CONTAINER_RUN_ARGS} \
-		-v "${REPODIR}":/ebpf -w /ebpf \
-		--env BPF2GO_CC="$(CLANG)" \
-		--env BPF2GO_CFLAGS="$(CFLAGS)" \
 		"${IMAGE}:${VERSION}"
 
 clean:

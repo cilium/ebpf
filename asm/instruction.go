@@ -409,6 +409,12 @@ func (ins Instruction) Format(f fmt.State, c rune) {
 				fmt.Fprintf(f, "off: %d", ins.Offset)
 			}
 
+		case JCOND:
+			switch ins.Src {
+			default:
+				fmt.Fprint(f, "may_goto")
+			}
+
 		default:
 			fmt.Fprintf(f, "dst: %s off: %d ", ins.Dst, ins.Offset)
 			if op.Source() == ImmSource {

@@ -44,6 +44,7 @@ func TestGetSetJumpOp(t *testing.T) {
 		JLE,
 		JSLT,
 		JSLE,
+		JCOND,
 	} {
 		test(Jump32Class, op, true)
 		test(JumpClass, op, true)

@@ -393,6 +393,8 @@ func TestISAv4(t *testing.T) {
 		0xcb, 0x21, 0x00, 0x00, 0x10, 0x01, 0x00, 0x00, // store_release((u16 *)(r1 + 0x0), w2)
 		0xc3, 0x21, 0x00, 0x00, 0x10, 0x01, 0x00, 0x00, // store_release((u32 *)(r1 + 0x0), w2)
 		0xdb, 0x21, 0x00, 0x00, 0x10, 0x01, 0x00, 0x00, // store_release((u64 *)(r1 + 0x0), r2)
+
+		0xe5, 0x00, 0x1e, 0x00, 0x00, 0x00, 0x00, 0x00, // may_goto +30
 	}
 
 	insns, err := AppendInstructions(nil, bytes.NewReader(rawInsns), binary.LittleEndian, platform.Linux)
@@ -427,6 +429,7 @@ func TestISAv4(t *testing.T) {
 		"StXAtomicStRelH dst: r1 src: r2 off: 0",
 		"StXAtomicStRelW dst: r1 src: r2 off: 0",
 		"StXAtomicStRelDW dst: r1 src: r2 off: 0",
+		"JCond may_goto off: 30",
 	}
 
 	for i, ins := range insns {

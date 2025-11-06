@@ -396,9 +396,9 @@ func (ins Instruction) Format(f fmt.State, c rune) {
 		}
 
 	case cls.IsJump():
-		fmt.Fprintf(f, "%v ", op)
 		switch jop := op.JumpOp(); jop {
 		case Call:
+			fmt.Fprintf(f, "%v ", op)
 			switch ins.Src {
 			case PseudoCall:
 				// bpf-to-bpf call
@@ -411,13 +411,23 @@ func (ins Instruction) Format(f fmt.State, c rune) {
 			}
 
 		case Ja:
+			fmt.Fprintf(f, "%v ", op)
 			if ins.OpCode.Class() == Jump32Class {
 				fmt.Fprintf(f, "imm: %d", ins.Constant)
 			} else {
 				fmt.Fprintf(f, "off: %d", ins.Offset)
 			}
 
+		case JCOND:
+			switch ins.Src {
+			case PseudoMayGoto:
+				fmt.Fprintf(f, "JCond may_goto off: %d", ins.Offset)
+			default:
+				fmt.Fprintf(f, "%v", op)
+			}
+
 		default:
+			fmt.Fprintf(f, "%v ", op)
 			fmt.Fprintf(f, "dst: %s off: %d ", ins.Dst, ins.Offset)
 			if op.Source() == ImmSource {
 				fmt.Fprintf(f, "imm: %d", ins.Constant)

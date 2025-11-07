@@ -411,6 +411,8 @@ func (ins Instruction) Format(f fmt.State, c rune) {
 
 		case JCOND:
 			switch ins.Src {
+			case PseudoGotoOrNop:
+				fmt.Fprintf(f, "goto_or_nop")
 			default:
 				fmt.Fprint(f, "may_goto")
 			}

@@ -76,7 +76,7 @@ func TestExecutableLazyLoadSymbols(t *testing.T) {
 	ex, err := OpenExecutable("/bin/bash")
 	qt.Assert(t, qt.IsNil(err))
 	// Addresses must be empty, will be lazy loaded.
-	qt.Assert(t, qt.HasLen(ex.cachedAddresses, 0))
+	qt.Assert(t, qt.HasLen(ex.cachedSymbols, 0))
 
 	prog := mustLoadProgram(t, ebpf.Kprobe, 0, "")
 	// Address must be a multiple of 4 on arm64, see
@@ -86,14 +86,14 @@ func TestExecutableLazyLoadSymbols(t *testing.T) {
 	up.Close()
 
 	// Addresses must still be empty as Address has been provided via options.
-	qt.Assert(t, qt.HasLen(ex.cachedAddresses, 0))
+	qt.Assert(t, qt.HasLen(ex.cachedSymbols, 0))
 
 	up, err = ex.Uprobe(bashSym, prog, nil)
 	qt.Assert(t, qt.IsNil(err))
 	up.Close()
 
 	// Symbol table should be loaded.
-	qt.Assert(t, qt.Not(qt.HasLen(ex.cachedAddresses, 0)))
+	qt.Assert(t, qt.Not(qt.HasLen(ex.cachedSymbols, 0)))
 }
 
 func TestUprobe(t *testing.T) {
@@ -124,6 +124,12 @@ func TestUprobeInfo(t *testing.T) {
 	qt.Assert(t, qt.Equals(eventInfo.Type, PerfEventUprobe))
 	uprobeInfo := eventInfo.Uprobe()
 	qt.Assert(t, qt.StringContains(uprobeInfo.File, bashEx.path))
+	executable, err := OpenExecutable(uprobeInfo.File)
+	qt.Assert(t, qt.IsNil(err))
+	sym, err := executable.Symbol(uint64(uprobeInfo.Offset))
+	qt.Assert(t, qt.IsNil(err))
+	qt.Assert(t, qt.Equals(sym.Symbol, bashSym))
+	qt.Assert(t, qt.Equals(sym.Offset, 0))
 }
 
 func TestUprobeExtNotFound(t *testing.T) {

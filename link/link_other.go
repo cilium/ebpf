@@ -182,6 +182,16 @@ func (kpm *KprobeMultiInfo) Cookies() ([]uint64, bool) {
 	return kpm.cookies, kpm.cookies != nil
 }
 
+const (
+	PerfEventUnspecified = sys.BPF_PERF_EVENT_UNSPEC
+	PerfEventUprobe      = sys.BPF_PERF_EVENT_UPROBE
+	PerfEventUretprobe   = sys.BPF_PERF_EVENT_URETPROBE
+	PerfEventKprobe      = sys.BPF_PERF_EVENT_KPROBE
+	PerfEventKretprobe   = sys.BPF_PERF_EVENT_KRETPROBE
+	PerfEventTracepoint  = sys.BPF_PERF_EVENT_TRACEPOINT
+	PerfEventEvent       = sys.BPF_PERF_EVENT_EVENT
+)
+
 type PerfEventInfo struct {
 	Type  sys.PerfEventType
 	extra interface{}
@@ -192,17 +202,50 @@ func (r *PerfEventInfo) Kprobe() *KprobeInfo {
 	return e
 }
 
+func (r *PerfEventInfo) Uprobe() *UprobeInfo {
+	e, _ := r.extra.(*UprobeInfo)
+	return e
+}
+
+func (r *PerfEventInfo) Tracepoint() *TracepointInfo {
+	e, _ := r.extra.(*TracepointInfo)
+	return e
+}
+
+func (r *PerfEventInfo) Event() *EventInfo {
+	e, _ := r.extra.(*EventInfo)
+	return e
+}
+
 type KprobeInfo struct {
-	address uint64
-	missed  uint64
+	Address  uint64
+	Missed   uint64
+	Function string
+	Offset   uint32
 }
 
-func (kp *KprobeInfo) Address() (uint64, bool) {
-	return kp.address, kp.address > 0
+type UprobeInfo struct {
+	// File is the path that the file the uprobe was attached to
+	// had at creation time.
+	//
+	// However, due to various circumstances (differing mount namespaces,
+	// file replacement, ...), this path may not point to the same binary
+	// the uprobe was originally attached to.
+	File         string
+	Offset       uint32
+	Cookie       uint64
+	RefCtrOffset uint64
 }
 
-func (kp *KprobeInfo) Missed() (uint64, bool) {
-	return kp.missed, kp.address > 0
+type TracepointInfo struct {
+	Tracepoint string
+	Cookie     uint64
+}
+
+type EventInfo struct {
+	Config uint64
+	Type   uint32
+	Cookie uint64
 }
 
 // Tracing returns tracing type-specific link info.

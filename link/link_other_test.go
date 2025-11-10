@@ -59,14 +59,11 @@ func testLinkArch(t *testing.T, link Link) {
 		case *kprobeMultiLink:
 			// test default Info data
 			kmulti := info.KprobeMulti()
-			if count, ok := kmulti.AddressCount(); ok {
-				qt.Assert(t, qt.Not(qt.Equals(count, 0)))
-
-				_, ok = kmulti.Missed()
-				qt.Assert(t, qt.IsTrue(ok))
-				// NB: We don't check that missed is actually correct
-				// since it's not easy to trigger from tests.
-			}
+			// kprobe multi link info is supported since kernel 6.6
+			testutils.SkipOnOldKernel(t, "6.6", "bpf_kprobe_multi_link_fill_link_info")
+			qt.Assert(t, qt.Not(qt.Equals(kmulti.Count, 0)))
+			// NB: We don't check that missed is actually correct
+			// since it's not easy to trigger from tests.
 		case *perfEventLink:
 			// test default Info data
 			pevent := info.PerfEvent()

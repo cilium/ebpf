@@ -148,6 +148,10 @@ type NetkitInfo struct {
 	AttachType sys.AttachType
 }
 
+type RawTracepointInfo struct {
+	Name string
+}
+
 type KprobeMultiInfo struct {
 	count   uint32
 	flags   uint32
@@ -331,5 +335,13 @@ func (r Info) KprobeMulti() *KprobeMultiInfo {
 // Returns nil if the type-specific link info isn't available.
 func (r Info) PerfEvent() *PerfEventInfo {
 	e, _ := r.extra.(*PerfEventInfo)
+	return e
+}
+
+// RawTracepoint returns raw-tracepoint type-specific link info.
+//
+// Returns nil if the type-specific link info isn't available.
+func (r Info) RawTracepoint() *RawTracepointInfo {
+	e, _ := r.extra.(*RawTracepointInfo)
 	return e
 }

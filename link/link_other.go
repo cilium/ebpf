@@ -272,6 +272,26 @@ func (umi *UprobeMultiInfo) Offsets() ([]UprobeMultiOffset, bool) {
 	return adresses, true
 }
 
+// Symbols returns the symbols that the uprobe was attached to.
+func (umi *UprobeMultiInfo) Symbols() ([]UprobeSymbol, error) {
+	if umi.offsets == nil {
+		return nil, fmt.Errorf("no offsets available")
+	}
+	ex, err := OpenExecutable(umi.path)
+	if err != nil {
+		return nil, err
+	}
+	var symbols []UprobeSymbol
+	for i := range umi.offsets {
+		symbol, err := ex.Symbol(umi.offsets[i])
+		if err != nil {
+			return nil, err
+		}
+		symbols = append(symbols, symbol)
+	}
+	return symbols, nil
+}
+
 func (umi *UprobeMultiInfo) Path() string {
 	return umi.path
 }
@@ -338,6 +358,19 @@ type UprobeInfo struct {
 	Offset       uint32
 	Cookie       uint64
 	RefCtrOffset uint64
+}
+
+type UprobeSymbol struct {
+	Symbol string
+	Offset uint64
+}
+
+func (u *UprobeInfo) Symbol() (UprobeSymbol, error) {
+	ex, err := OpenExecutable(u.File)
+	if err != nil {
+		return UprobeSymbol{}, err
+	}
+	return ex.Symbol(uint64(u.Offset))
 }
 
 type TracepointInfo struct {

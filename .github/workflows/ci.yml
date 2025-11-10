@@ -258,6 +258,7 @@ jobs:
       matrix:
         version:
           - "main"
+          - "1.0.0-rc1"
     env:
       # Fix slow Go compile and cache restore
       # See https://github.com/actions/setup-go/pull/515
@@ -277,12 +278,43 @@ jobs:
         with:
           script: |
             if ("${{ matrix.version }}" != "main") {
-              // TODO: Workflow artifact and release artifact don't have the
-              // same folder structure.
-              core.setFailed('Installing tagged versions is not supported');
-              return;
-            }
+              // Use version from matrix to fetch from release
+              const version = "${{ matrix.version }}";
+              const releaseTag = `Release-v${version}`;
 
+              console.log(`Fetching release: ${releaseTag}`);
+
+              // Get the release by tag
+              const release = await github.rest.repos.getReleaseByTag({
+                owner: 'microsoft',
+                repo: 'ebpf-for-windows',
+                tag: releaseTag
+              });
+
+              if (!release.data) {
+                core.setFailed(`Release ${releaseTag} not found`);
+                return;
+              }
+
+              console.log(`Found release: ${release.data.name}`);
+
+              // Find the Build.Debug.x64.zip asset
+              const assetName = 'Build.Debug.x64.zip';
+              const asset = release.data.assets.find(a => a.name === assetName);
+
+              if (!asset) {
+                console.log('Available assets:', release.data.assets.map(a => a.name));
+                core.setFailed(`${assetName} asset not found in release ${releaseTag}`);
+                return;
+              }
+
+              const download_url = asset.browser_download_url;
+              console.log(`Download URL: ${download_url}`);
+
+              core.setOutput('download_url', download_url);
+              return
+            }
+            
             // Get the latest successful merge_group run
             const workflow_runs = await github.rest.actions.listWorkflowRuns({
               owner: 'microsoft',
@@ -344,12 +376,23 @@ jobs:
         shell: pwsh
         run: |
           Invoke-WebRequest -Uri "${{ steps.determine-url.outputs.download_url }}" -OutFile "$env:TEMP\efw.zip"
-          Expand-Archive -Path "$env:TEMP\efw.zip" -DestinationPath "$env:TEMP"
-          Expand-Archive -Path "$env:TEMP\build-Debug.zip" -DestinationPath "$env:TEMP\ebpf"
+
+          if ("${{ matrix.version }}" -eq "main") {
+            # Workflow artifact has nested structure: outer zip contains build-Debug.zip
+            Expand-Archive -Path "$env:TEMP\efw.zip" -DestinationPath "$env:TEMP"
+            Expand-Archive -Path "$env:TEMP\build-Debug.zip" -DestinationPath "$env:TEMP\ebpf"
+          } else {
+            # Release asset is the final zip, extract directly
+            Expand-Archive -Path "$env:TEMP\efw.zip" -DestinationPath "$env:TEMP\ebpf"
+          }
+
           $setupScript = Get-ChildItem -Path "$env:TEMP\ebpf" -Filter "install_ebpf.psm1" -Recurse | Select-Object -First 1
           if ($setupScript) {
             Write-Host "Found setup script: $($setupScript.FullName)"
-            Set-Location -Path $setupScript.DirectoryName
+            $releasePath = "$env:TEMP\ebpf\release"
+            Rename-Item -Path $setupScript.DirectoryName -NewName $releasePath
+            Write-Host "Renamed directory to: $releasePath"
+            Set-Location -Path $releasePath
             Write-Host "Changed directory to: $(Get-Location)"
             Import-Module .\\install_ebpf.psm1 -ArgumentList ($pwd, "install.log") -Force
             Get-PSExec
@@ -381,7 +424,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v5
         with:
-          name: Test Results (windows ${{ matrix.tag }})
+          name: Test Results (windows ${{ matrix.version }})
           path: junit.xml
 
   results:

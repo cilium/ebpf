@@ -161,8 +161,8 @@ func resolveIfindex(ifindex uint32) (net.Interface, error) {
 }
 
 type NetfilterInfo struct {
-	Pf       uint32
-	Hooknum  uint32
+	Pf       NetfilterProtocolFamily
+	Hooknum  NetfilterHook
 	Priority int32
 	Flags    uint32
 }

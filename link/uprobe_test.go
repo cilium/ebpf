@@ -124,6 +124,10 @@ func TestUprobeInfo(t *testing.T) {
 	qt.Assert(t, qt.Equals(eventInfo.Type, PerfEventUprobe))
 	uprobeInfo := eventInfo.Uprobe()
 	qt.Assert(t, qt.StringContains(uprobeInfo.File, bashEx.path))
+	sym, err := uprobeInfo.Symbol()
+	qt.Assert(t, qt.IsNil(err))
+	qt.Assert(t, qt.Equals(sym.Symbol, bashSym))
+	qt.Assert(t, qt.Equals(sym.Offset, 0))
 }
 
 func TestUprobeExtNotFound(t *testing.T) {

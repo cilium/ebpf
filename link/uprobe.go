@@ -39,9 +39,14 @@ type Executable struct {
 	// Path of the executable on the filesystem.
 	path string
 	// Parsed ELF and dynamic symbols' cachedAddresses.
-	cachedAddresses map[string]uint64
+	cachedAddresses map[string]symbolAddress
 	// Keep track of symbol table lazy load.
 	cacheAddressesOnce sync.Once
+}
+
+type symbolAddress struct {
+	addr uint64
+	size uint64
 }
 
 // UprobeOptions defines additional parameters that will be used
@@ -111,7 +116,7 @@ func OpenExecutable(path string) (*Executable, error) {
 
 	return &Executable{
 		path:            path,
-		cachedAddresses: make(map[string]uint64),
+		cachedAddresses: make(map[string]symbolAddress),
 	}, nil
 }
 
@@ -155,20 +160,16 @@ func (ex *Executable) load(f *internal.SafeELFFile) error {
 			}
 		}
 
-		ex.cachedAddresses[s.Name] = address
+		ex.cachedAddresses[s.Name] = symbolAddress{
+			addr: address,
+			size: s.Size,
+		}
 	}
 
 	return nil
 }
 
-// address calculates the address of a symbol in the executable.
-//
-// opts must not be nil.
-func (ex *Executable) address(symbol string, address, offset uint64) (uint64, error) {
-	if address > 0 {
-		return address + offset, nil
-	}
-
+func (ex *Executable) lazyLoadSymbols() error {
 	var err error
 	ex.cacheAddressesOnce.Do(func() {
 		var f *internal.SafeELFFile
@@ -181,11 +182,23 @@ func (ex *Executable) address(symbol string, address, offset uint64) (uint64, er
 
 		err = ex.load(f)
 	})
+	return err
+}
+
+// address calculates the address of a symbol in the executable.
+//
+// opts must not be nil.
+func (ex *Executable) address(symbol string, address, offset uint64) (uint64, error) {
+	if address > 0 {
+		return address + offset, nil
+	}
+
+	err := ex.lazyLoadSymbols()
 	if err != nil {
 		return 0, fmt.Errorf("lazy load symbols: %w", err)
 	}
 
-	address, ok := ex.cachedAddresses[symbol]
+	symaddress, ok := ex.cachedAddresses[symbol]
 	if !ok {
 		return 0, fmt.Errorf("symbol %s: %w", symbol, ErrNoSymbol)
 	}
@@ -196,12 +209,30 @@ func (ex *Executable) address(symbol string, address, offset uint64) (uint64, er
 	//
 	// Since only offset values are stored and not elf.Symbol, if the value is 0,
 	// assume it's an external symbol.
-	if address == 0 {
+	if symaddress.addr == 0 {
 		return 0, fmt.Errorf("cannot resolve %s library call '%s': %w "+
 			"(consider providing UprobeOptions.Address)", ex.path, symbol, ErrNotSupported)
 	}
 
-	return address + offset, nil
+	if offset >= symaddress.size {
+		return 0, fmt.Errorf("offset %d is out of range of symbol %s", offset, symbol)
+	}
+
+	return symaddress.addr + offset, nil
+}
+
+// Symbol calculates the symbol and offset for an address in the executable.
+func (ex *Executable) Symbol(address uint64) (UprobeSymbol, error) {
+	if err := ex.lazyLoadSymbols(); err != nil {
+		return UprobeSymbol{}, fmt.Errorf("lazy load symbols: %w", err)
+	}
+
+	for name, symaddress := range ex.cachedAddresses {
+		if symaddress.addr <= address && symaddress.addr+symaddress.size > address {
+			return UprobeSymbol{name, address - symaddress.addr}, nil
+		}
+	}
+	return UprobeSymbol{}, ErrNoSymbol
 }
 
 // Uprobe attaches the given eBPF program to a perf event that fires when the

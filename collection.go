@@ -73,7 +73,7 @@ func (cs *CollectionSpec) Copy() *CollectionSpec {
 	}
 
 	for name, spec := range cs.Variables {
-		cpy.Variables[name] = spec.copy(&cpy)
+		cpy.Variables[name] = spec.Copy()
 	}
 	if cs.Variables == nil {
 		cpy.Variables = nil
@@ -170,7 +170,7 @@ func (cs *CollectionSpec) RewriteConstants(consts map[string]interface{}) error 
 			continue
 		}
 
-		if !v.Constant() {
+		if !isConstantDataSection(v.SectionName) {
 			return fmt.Errorf("variable %s is not a constant", n)
 		}
 
@@ -514,6 +514,10 @@ func (cl *collectionLoader) loadMap(mapName string) (*Map, error) {
 		return m, nil
 	}
 
+	if err := mapSpec.updateDataSection(cl.coll.Variables, mapName); err != nil {
+		return nil, fmt.Errorf("assembling contents of map %s: %w", mapName, err)
+	}
+
 	m, err := newMapWithOptions(mapSpec, cl.opts.Maps, cl.types)
 	if err != nil {
 		return nil, fmt.Errorf("map %s: %w", mapName, err)
@@ -597,19 +601,7 @@ func (cl *collectionLoader) loadVariable(varName string) (*Variable, error) {
 		return nil, fmt.Errorf("unknown variable %s", varName)
 	}
 
-	// Get the key of the VariableSpec's MapSpec in the CollectionSpec.
-	var mapName string
-	for n, ms := range cl.coll.Maps {
-		if ms == varSpec.m {
-			mapName = n
-			break
-		}
-	}
-	if mapName == "" {
-		return nil, fmt.Errorf("variable %s: underlying MapSpec %s was removed from CollectionSpec", varName, varSpec.m.Name)
-	}
-
-	m, err := cl.loadMap(mapName)
+	m, err := cl.loadMap(varSpec.SectionName)
 	if err != nil {
 		return nil, fmt.Errorf("variable %s: %w", varName, err)
 	}
@@ -626,14 +618,14 @@ func (cl *collectionLoader) loadVariable(varName string) (*Variable, error) {
 		mm, err = m.Memory()
 	}
 	if err != nil && !errors.Is(err, ErrNotSupported) {
-		return nil, fmt.Errorf("variable %s: getting memory for map %s: %w", varName, mapName, err)
+		return nil, fmt.Errorf("variable %s: getting memory for map %s: %w", varName, varSpec.SectionName, err)
 	}
 
 	v, err := newVariable(
-		varSpec.name,
-		varSpec.offset,
-		varSpec.size,
-		varSpec.t,
+		varSpec.Name,
+		varSpec.Offset,
+		uint32(len(varSpec.Value)),
+		varSpec.Type,
 		mm,
 	)
 	if err != nil {
@@ -715,9 +707,9 @@ func (cl *collectionLoader) populateStructOps(m *Map, mapSpec *MapSpec) error {
 		return fmt.Errorf("value should be a *Struct")
 	}
 
-	userData, ok := mapSpec.Contents[0].Value.([]byte)
-	if !ok {
-		return fmt.Errorf("value should be an array of byte")
+	userData, err := mapSpec.dataSection()
+	if err != nil {
+		return fmt.Errorf("getting data section: %w", err)
 	}
 	if len(userData) < int(userType.Size) {
 		return fmt.Errorf("user data too short: have %d, need at least %d", len(userData), userType.Size)

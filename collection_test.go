@@ -91,10 +91,9 @@ func TestCollectionSpecCopy(t *testing.T) {
 		},
 		map[string]*VariableSpec{
 			"my-var": {
-				name:   "my-var",
-				offset: 0,
-				size:   4,
-				m:      ms,
+				Name:        "my-var",
+				SectionName: "my-map",
+				Offset:      0,
 			},
 		},
 		&btf.Spec{},

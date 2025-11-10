@@ -152,6 +152,15 @@ func attachBTFID(program *ebpf.Program, at ebpf.AttachType, cookie uint64) (Link
 		if err == nil {
 			break
 		}
+
+		// For fentry/fexit/fmod_ret/lsm, don't fallthrough to RawTracepointOpen.
+		// Only AttachTraceRawTp and AttachNone should use the fallback path,
+		// otherwise we get misleading "raw tracepoint" errors for other attach types.
+		if at != ebpf.AttachTraceRawTp && at != ebpf.AttachNone {
+			return nil, fmt.Errorf("create %s tracing link: %w", at.String(), err)
+		}
+
+		// For AttachTraceRawTp and AttachNone: if not EINVAL/ENOTSUPP, return immediately
 		if !errors.Is(err, unix.EINVAL) && !errors.Is(err, sys.ENOTSUPP) {
 			return nil, fmt.Errorf("create tracing link: %w", err)
 		}

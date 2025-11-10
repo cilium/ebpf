@@ -220,26 +220,6 @@ func (umi *UprobeMultiInfo) Offsets() ([]UprobeMultiOffset, bool) {
 	return adresses, true
 }
 
-// Symbols returns the symbols that the uprobe was attached to.
-func (umi *UprobeMultiInfo) Symbols() ([]UprobeSymbol, error) {
-	if umi.offsets == nil {
-		return nil, fmt.Errorf("no offsets available")
-	}
-	ex, err := OpenExecutable(umi.path)
-	if err != nil {
-		return nil, err
-	}
-	var symbols []UprobeSymbol
-	for i := range umi.offsets {
-		symbol, err := ex.Symbol(umi.offsets[i])
-		if err != nil {
-			return nil, err
-		}
-		symbols = append(symbols, symbol)
-	}
-	return symbols, nil
-}
-
 // Pid returns the process ID that this uprobe is attached to.
 //
 // If it does not exist, the uprobe will trigger for all processes.

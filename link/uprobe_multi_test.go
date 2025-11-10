@@ -64,6 +64,16 @@ func TestUprobeMultiInfo(t *testing.T) {
 	uprobeOffsets, ok := uprobeDetails.Offsets()
 	qt.Assert(t, qt.IsTrue(ok))
 	qt.Assert(t, qt.HasLen(uprobeOffsets, len(bashSyms)))
+	bashElf, err := OpenExecutable(uprobeDetails.File)
+	qt.Assert(t, qt.IsNil(err))
+	var symnames = make([]string, len(uprobeOffsets))
+	for i, offset := range uprobeOffsets {
+		symOffset, err := bashElf.Symbol(offset.Offset)
+		qt.Assert(t, qt.IsNil(err))
+		qt.Assert(t, qt.Equals(symOffset.Offset, 0))
+		symnames[i] = symOffset.Symbol
+	}
+	qt.Assert(t, qt.ContentEquals(symnames, bashSyms))
 }
 
 func TestUprobeMultiInput(t *testing.T) {

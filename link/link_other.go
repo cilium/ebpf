@@ -226,6 +226,63 @@ func (kpm *KprobeMultiInfo) Cookies() ([]uint64, bool) {
 	return kpm.cookies, kpm.cookies != nil
 }
 
+type UprobeMultiInfo struct {
+	count         uint32
+	flags         uint32
+	missed        uint64
+	offsets       []uint64
+	cookies       []uint64
+	refCtrOffsets []uint64
+	path          string
+	pid           uint32
+}
+
+// AddressCount is the number of addresses hooked by the kprobe.
+func (umi *UprobeMultiInfo) AddressCount() (uint32, bool) {
+	return umi.count, umi.count > 0
+}
+
+func (umi *UprobeMultiInfo) Flags() (uint32, bool) {
+	return umi.flags, umi.flags > 0
+}
+
+func (umi *UprobeMultiInfo) Missed() (uint64, bool) {
+	return umi.missed, umi.missed > 0
+}
+
+type UprobeMultiOffset struct {
+	Offset uint64
+	Cookie uint64
+	RefCtr uint64
+}
+
+// Offsets returns the offsets that the uprobe was attached to along with the related cookies and ref counters.
+func (umi *UprobeMultiInfo) Offsets() ([]UprobeMultiOffset, bool) {
+	if umi.offsets == nil || len(umi.cookies) != len(umi.offsets) || len(umi.refCtrOffsets) != len(umi.offsets) {
+		return nil, false
+	}
+	var adresses = make([]UprobeMultiOffset, len(umi.offsets))
+	for i := range umi.offsets {
+		adresses[i] = UprobeMultiOffset{
+			Offset: umi.offsets[i],
+			Cookie: umi.cookies[i],
+			RefCtr: umi.refCtrOffsets[i],
+		}
+	}
+	return adresses, true
+}
+
+func (umi *UprobeMultiInfo) Path() string {
+	return umi.path
+}
+
+// Pid returns the process ID that this uprobe is attached to.
+//
+// If it does not exist, the uprobe will trigger for all processes.
+func (umi *UprobeMultiInfo) Pid() (uint32, bool) {
+	return umi.pid, umi.pid > 0
+}
+
 const (
 	PerfEventUnspecified = sys.BPF_PERF_EVENT_UNSPEC
 	PerfEventUprobe      = sys.BPF_PERF_EVENT_UPROBE
@@ -355,6 +412,14 @@ func (r Info) Netkit() *NetkitInfo {
 // Returns nil if the type-specific link info isn't available.
 func (r Info) KprobeMulti() *KprobeMultiInfo {
 	e, _ := r.extra.(*KprobeMultiInfo)
+	return e
+}
+
+// UprobeMulti returns uprobe-multi type-specific link info.
+//
+// Returns nil if the type-specific link info isn't available.
+func (r Info) UprobeMulti() *UprobeMultiInfo {
+	e, _ := r.extra.(*UprobeMultiInfo)
 	return e
 }
 

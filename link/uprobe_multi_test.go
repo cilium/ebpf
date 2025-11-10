@@ -40,6 +40,32 @@ func TestUprobeMulti(t *testing.T) {
 	_ = um.Close()
 }
 
+func TestUprobeMultiInfo(t *testing.T) {
+	testutils.SkipIfNotSupported(t, features.HaveBPFLinkKprobeMulti())
+	testutils.SkipOnOldKernel(t, "6.8", "bpf_link_info_uprobe_multi")
+
+	prog := mustLoadProgram(t, ebpf.Kprobe, ebpf.AttachTraceUprobeMulti, "")
+
+	// uprobe
+	um, err := bashEx.UprobeMulti(bashSyms, prog, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer um.Close()
+
+	linkInfo, err := um.Info()
+	if err != nil {
+		t.Fatal(err)
+	}
+	qt.Assert(t, qt.Equals(linkInfo.Type, UprobeMultiType))
+	uprobeDetails := linkInfo.UprobeMulti()
+	// On some platforms, /bin/bash may point to /usr/bin/bash, thus only a contains and no equals check
+	qt.Assert(t, qt.StringContains(uprobeDetails.File, bashEx.path))
+	uprobeOffsets, ok := uprobeDetails.Offsets()
+	qt.Assert(t, qt.IsTrue(ok))
+	qt.Assert(t, qt.HasLen(uprobeOffsets, len(bashSyms)))
+}
+
 func TestUprobeMultiInput(t *testing.T) {
 	testutils.SkipIfNotSupported(t, features.HaveBPFLinkUprobeMulti())
 

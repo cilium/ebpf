@@ -3,7 +3,9 @@
 package link
 
 import (
+	"errors"
 	"fmt"
+	"net"
 
 	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/platform"
@@ -132,8 +134,30 @@ type TCXInfo struct {
 	AttachType sys.AttachType
 }
 
+func (t TCXInfo) Interface() (net.Interface, error) {
+	return resolveIfindex(t.Ifindex)
+}
+
 type XDPInfo struct {
 	Ifindex uint32
+}
+
+func (x XDPInfo) Interface() (net.Interface, error) {
+	return resolveIfindex(x.Ifindex)
+}
+
+func resolveIfindex(ifindex uint32) (net.Interface, error) {
+	available, err := net.Interfaces()
+	if err != nil {
+		return net.Interface{}, err
+	}
+	for _, i := range available {
+		if uint32(i.Index) == ifindex {
+			return i, nil
+		}
+	}
+	return net.Interface{}, errors.New("interface not found")
+
 }
 
 type NetfilterInfo struct {
@@ -146,6 +170,10 @@ type NetfilterInfo struct {
 type NetkitInfo struct {
 	Ifindex    uint32
 	AttachType sys.AttachType
+}
+
+func (n NetkitInfo) Interface() (net.Interface, error) {
+	return resolveIfindex(n.Ifindex)
 }
 
 type KprobeMultiInfo struct {

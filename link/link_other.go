@@ -137,8 +137,8 @@ type XDPInfo struct {
 }
 
 type NetfilterInfo struct {
-	Pf       uint32
-	Hooknum  uint32
+	Pf       NetfilterProtocolFamily
+	Hooknum  NetfilterInetHook
 	Priority int32
 	Flags    uint32
 }

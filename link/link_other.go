@@ -181,9 +181,70 @@ func (kpm *KprobeMultiInfo) Addresses() ([]KprobeMultiAddress, bool) {
 	return addrs, true
 }
 
-// Cookies are the cookies for each address hooked by the kprobe.
-func (kpm *KprobeMultiInfo) Cookies() ([]uint64, bool) {
-	return kpm.cookies, kpm.cookies != nil
+type UprobeMultiInfo struct {
+	Count         uint32
+	Flags         uint32
+	Missed        uint64
+	offsets       []uint64
+	cookies       []uint64
+	refCtrOffsets []uint64
+	// File is the path that the file the uprobe was attached to
+	// had at creation time.
+	//
+	// However, due to various circumstances (differing mount namespaces,
+	// file replacement, ...), this path may not point to the same binary
+	// the uprobe was originally attached to.
+	File string
+	pid  uint32
+}
+
+type UprobeMultiOffset struct {
+	Offset         uint64
+	Cookie         uint64
+	ReferenceCount uint64
+}
+
+// Offsets returns the offsets that the uprobe was attached to along with the related cookies and ref counters.
+func (umi *UprobeMultiInfo) Offsets() ([]UprobeMultiOffset, bool) {
+	if umi.offsets == nil || len(umi.cookies) != len(umi.offsets) || len(umi.refCtrOffsets) != len(umi.offsets) {
+		return nil, false
+	}
+	var adresses = make([]UprobeMultiOffset, len(umi.offsets))
+	for i := range umi.offsets {
+		adresses[i] = UprobeMultiOffset{
+			Offset:         umi.offsets[i],
+			Cookie:         umi.cookies[i],
+			ReferenceCount: umi.refCtrOffsets[i],
+		}
+	}
+	return adresses, true
+}
+
+// Symbols returns the symbols that the uprobe was attached to.
+func (umi *UprobeMultiInfo) Symbols() ([]UprobeSymbol, error) {
+	if umi.offsets == nil {
+		return nil, fmt.Errorf("no offsets available")
+	}
+	ex, err := OpenExecutable(umi.path)
+	if err != nil {
+		return nil, err
+	}
+	var symbols []UprobeSymbol
+	for i := range umi.offsets {
+		symbol, err := ex.Symbol(umi.offsets[i])
+		if err != nil {
+			return nil, err
+		}
+		symbols = append(symbols, symbol)
+	}
+	return symbols, nil
+}
+
+// Pid returns the process ID that this uprobe is attached to.
+//
+// If it does not exist, the uprobe will trigger for all processes.
+func (umi *UprobeMultiInfo) Pid() (uint32, bool) {
+	return umi.pid, umi.pid > 0
 }
 
 const (
@@ -313,6 +374,14 @@ func (r Info) Netkit() *NetkitInfo {
 // Returns nil if the type-specific link info isn't available.
 func (r Info) KprobeMulti() *KprobeMultiInfo {
 	e, _ := r.extra.(*KprobeMultiInfo)
+	return e
+}
+
+// UprobeMulti returns uprobe-multi type-specific link info.
+//
+// Returns nil if the type-specific link info isn't available.
+func (r Info) UprobeMulti() *UprobeMultiInfo {
+	e, _ := r.extra.(*UprobeMultiInfo)
 	return e
 }
 

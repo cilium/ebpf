@@ -305,6 +305,7 @@ type ProgramInfo struct {
 
 	maps                 []MapID
 	insns                []byte
+	numInsns             uint32
 	jitedSize            uint32
 	verifiedInstructions uint32
 
@@ -372,6 +373,7 @@ func newProgramInfoFromFd(fd *sys.FD) (*ProgramInfo, error) {
 		jitedSize:            info.JitedProgLen,
 		loadTime:             time.Duration(info.LoadTime),
 		verifiedInstructions: info.VerifiedInsns,
+		numInsns:             info.XlatedProgLen,
 	}
 
 	// Supplement OBJ_INFO with data from /proc/self/fdinfo. It contains fields
@@ -758,20 +760,12 @@ func (pi *ProgramInfo) JitedSize() (uint32, error) {
 // TranslatedSize returns the size of the program's translated instructions in
 // bytes, after it has been verified and rewritten by the kernel.
 //
-// Returns an error wrapping [ErrRestrictedKernel] if translated instructions
-// are restricted by sysctls.
-//
 // Available from 4.13. Reading this metadata requires CAP_BPF or equivalent.
 func (pi *ProgramInfo) TranslatedSize() (int, error) {
-	if pi.restricted {
-		return 0, fmt.Errorf("xlated size: %w", ErrRestrictedKernel)
-	}
-
-	insns := len(pi.insns)
-	if insns == 0 {
+	if pi.numInsns == 0 {
 		return 0, fmt.Errorf("insufficient permissions or unsupported kernel: %w", ErrNotSupported)
 	}
-	return insns, nil
+	return int(pi.numInsns), nil
 }
 
 // MapIDs returns the maps related to the program.

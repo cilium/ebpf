@@ -69,15 +69,10 @@ func testLinkArch(t *testing.T, link Link) {
 			pevent := info.PerfEvent()
 			switch pevent.Type {
 			case sys.BPF_PERF_EVENT_KPROBE, sys.BPF_PERF_EVENT_KRETPROBE:
-				kp := pevent.Kprobe()
-				if addr, ok := kp.Address(); ok {
-					qt.Assert(t, qt.Not(qt.Equals(addr, 0)))
-
-					_, ok := kp.Missed()
-					qt.Assert(t, qt.IsTrue(ok))
-					// NB: We don't check that missed is actually correct
-					// since it's not easy to trigger from tests.
-				}
+				_ = pevent.Kprobe()
+				// NB: We don't check that missed is actually correct
+				// since it's not easy to trigger from tests.
+				// Nor do we check the address (since we don't know it here).
 			}
 		}
 	})

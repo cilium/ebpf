@@ -108,6 +108,24 @@ func TestUprobe(t *testing.T) {
 	testLink(t, up, prog)
 }
 
+func TestUprobeInfo(t *testing.T) {
+	testutils.SkipOnOldKernel(t, "6.6", "bpf_link_info_perf_event")
+
+	prog := mustLoadProgram(t, ebpf.Kprobe, 0, "")
+
+	up, err := bashEx.Uprobe(bashSym, prog, nil)
+	qt.Assert(t, qt.IsNil(err))
+	defer up.Close()
+
+	info, err := up.Info()
+	qt.Assert(t, qt.IsNil(err))
+	qt.Assert(t, qt.Equals(info.Type, PerfEventType))
+	eventInfo := info.PerfEvent()
+	qt.Assert(t, qt.Equals(eventInfo.Type, PerfEventUprobe))
+	uprobeInfo := eventInfo.Uprobe()
+	qt.Assert(t, qt.StringContains(uprobeInfo.File, bashEx.path))
+}
+
 func TestUprobeExtNotFound(t *testing.T) {
 	prog := mustLoadProgram(t, ebpf.Kprobe, 0, "")
 

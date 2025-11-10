@@ -31,5 +31,9 @@ func TestAttachXDP(t *testing.T) {
 	})
 	qt.Assert(t, qt.IsNil(err))
 
+	info, err := l.Info()
+	qt.Assert(t, qt.IsNil(err))
+	qt.Assert(t, qt.Equals(info.XDP().Ifindex, IfIndexLO))
+
 	testLink(t, l, prog)
 }

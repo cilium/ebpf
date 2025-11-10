@@ -587,6 +587,18 @@ const (
 	__MAX_BPF_MAP_TYPE                            MapType = 34
 )
 
+type NetfilterInetHook uint32
+
+const (
+	NF_INET_PRE_ROUTING  NetfilterInetHook = 0
+	NF_INET_LOCAL_IN     NetfilterInetHook = 1
+	NF_INET_FORWARD      NetfilterInetHook = 2
+	NF_INET_LOCAL_OUT    NetfilterInetHook = 3
+	NF_INET_POST_ROUTING NetfilterInetHook = 4
+	NF_INET_NUMHOOKS     NetfilterInetHook = 5
+	NF_INET_INGRESS      NetfilterInetHook = 5
+)
+
 type ObjType uint32
 
 const (
@@ -695,6 +707,19 @@ const (
 	XDP_PASS     XdpAction = 2
 	XDP_TX       XdpAction = 3
 	XDP_REDIRECT XdpAction = 4
+)
+
+type NetfilterProtocolFamily uint32
+
+const (
+	NFPROTO_UNSPEC   NetfilterProtocolFamily = 0
+	NFPROTO_INET     NetfilterProtocolFamily = 1
+	NFPROTO_IPV4     NetfilterProtocolFamily = 2
+	NFPROTO_ARP      NetfilterProtocolFamily = 3
+	NFPROTO_NETDEV   NetfilterProtocolFamily = 5
+	NFPROTO_BRIDGE   NetfilterProtocolFamily = 7
+	NFPROTO_IPV6     NetfilterProtocolFamily = 10
+	NFPROTO_NUMPROTO NetfilterProtocolFamily = 11
 )
 
 type BtfInfo struct {
@@ -955,8 +980,8 @@ type LinkCreateNetfilterAttr struct {
 	TargetFd       uint32
 	AttachType     AttachType
 	Flags          uint32
-	Pf             uint32
-	Hooknum        uint32
+	Pf             NetfilterProtocolFamily
+	Hooknum        NetfilterInetHook
 	Priority       int32
 	NetfilterFlags uint32
 	_              [32]byte
@@ -1613,8 +1638,8 @@ type NetfilterLinkInfo struct {
 	Id       LinkID
 	ProgId   uint32
 	_        [4]byte
-	Pf       uint32
-	Hooknum  uint32
+	Pf       NetfilterProtocolFamily
+	Hooknum  NetfilterInetHook
 	Priority int32
 	Flags    uint32
 	_        [32]byte

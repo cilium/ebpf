@@ -222,6 +222,7 @@ import (
 		{"XdpAction", "xdp_action"},
 		{"TcxActionBase", "tcx_action_base"},
 		{"PerfEventType", "bpf_perf_event_type"},
+		{"NetfilterInetHook", "nf_inet_hooks"},
 	}
 
 	sort.Slice(enums, func(i, j int) bool {
@@ -230,6 +231,28 @@ import (
 
 	var nenums uint32
 	enumTypes := make(map[string]btf.Type)
+
+	outputEnum := func(goType string, t *btf.Enum) error {
+		// Add the enum as a predeclared type so that generated structs
+		// refer to the Go types.
+		if name := gf.Names[t]; name != "" {
+			return fmt.Errorf("type %q is already declared as %s", goType, name)
+		}
+		gf.Names[t] = goType
+		enumTypes[goType] = t
+
+		decl, err := gf.TypeDeclaration(goType, t)
+		if err != nil {
+			return fmt.Errorf("generate %q: %w", goType, err)
+		}
+
+		w.WriteString(decl)
+		w.WriteRune('\n')
+
+		nenums++
+		return nil
+	}
+
 	for _, o := range enums {
 		debugln("enum", o.goType)
 
@@ -237,25 +260,46 @@ import (
 		if err := spec.TypeByName(o.cType, &t); err != nil {
 			return nil, err
 		}
-
-		// Add the enum as a predeclared type so that generated structs
-		// refer to the Go types.
-		if name := gf.Names[t]; name != "" {
-			return nil, fmt.Errorf("type %q is already declared as %s", o.cType, name)
+		if err := outputEnum(o.goType, t); err != nil {
+			return nil, err
 		}
-		gf.Names[t] = o.goType
-		enumTypes[o.goType] = t
-
-		decl, err := gf.TypeDeclaration(o.goType, t)
-		if err != nil {
-			return nil, fmt.Errorf("generate %q: %w", o.goType, err)
-		}
-
-		w.WriteString(decl)
-		w.WriteRune('\n')
-
-		nenums++
 	}
+
+	// Unnamed enums
+	// We can't identify them by name, so instead, we specify a prefix that all enum values must share
+	untypedEnums := []struct {
+		goType string
+		prefix string
+	}{
+		{"NetfilterProtocolFamily", "NFPROTO_"},
+	}
+
+	for _, o := range untypedEnums {
+		debugln("enum", o.goType)
+		for anyType, err := range spec.All() {
+			if err != nil {
+				return nil, err
+			}
+			enum, ok := anyType.(*btf.Enum)
+			if !ok {
+				continue
+			}
+			var prefixMatches = true
+			for _, value := range enum.Values {
+				if !strings.HasPrefix(value.Name, o.prefix) {
+					prefixMatches = false
+					break
+				}
+			}
+			if !prefixMatches || len(enum.Values) == 0 {
+				continue
+			}
+			if err := outputEnum(o.goType, enum); err != nil {
+				return nil, err
+			}
+		}
+	}
+
 	fmt.Printf("Generated %d enums\n", nenums)
 
 	// Assorted structs
@@ -560,6 +604,8 @@ import (
 					return rename("flags", "netfilter_flags")(m.Type.(*btf.Struct))
 				}, "netfilter"),
 				flattenAnon,
+				replace(enumTypes["NetfilterProtocolFamily"], "pf"),
+				replace(enumTypes["NetfilterInetHook"], "hooknum"),
 			},
 		},
 		{
@@ -751,6 +797,8 @@ import (
 			[]patch{
 				choose(3, "netfilter"),
 				flattenAnon,
+				replace(enumTypes["NetfilterProtocolFamily"], "pf"),
+				replace(enumTypes["NetfilterInetHook"], "hooknum"),
 			},
 		},
 		{"NetkitLinkInfo",

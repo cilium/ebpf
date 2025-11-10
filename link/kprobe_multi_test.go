@@ -32,6 +32,29 @@ func TestKprobeMulti(t *testing.T) {
 	testLink(t, km, prog)
 }
 
+func TestKprobeMultiInfo(t *testing.T) {
+	testutils.SkipIfNotSupported(t, features.HaveBPFLinkKprobeMulti())
+	testutils.SkipOnOldKernel(t, "6.6", "bpf_link_info_kprobe_multi")
+
+	prog := mustLoadProgram(t, ebpf.Kprobe, ebpf.AttachTraceKprobeMulti, "")
+
+	km, err := KprobeMulti(prog, KprobeMultiOptions{Symbols: kprobeMultiSyms})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer km.Close()
+
+	info, err := km.Info()
+	if err != nil {
+		t.Fatal(err)
+	}
+	kmInfo := info.KprobeMulti()
+	addresses, ok := kmInfo.Addresses()
+	qt.Assert(t, qt.IsTrue(ok))
+	// kprobe_multi only returns addresses, no symbols, so we can't verify that the addresses are correct
+	qt.Assert(t, qt.HasLen(addresses, len(kprobeMultiSyms)))
+}
+
 func TestKprobeMultiInput(t *testing.T) {
 	// Program type that loads on all kernels. Not expected to link successfully.
 	prog := mustLoadProgram(t, ebpf.SocketFilter, 0, "")

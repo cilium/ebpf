@@ -149,22 +149,37 @@ type NetkitInfo struct {
 }
 
 type KprobeMultiInfo struct {
-	count  uint32
-	flags  uint32
-	missed uint64
+	// Count is the number of addresses hooked by the kprobe.
+	Count   uint32
+	Flags   uint32
+	Missed  uint64
+	addrs   []uint64
+	cookies []uint64
 }
 
-// AddressCount is the number of addresses hooked by the kprobe.
-func (kpm *KprobeMultiInfo) AddressCount() (uint32, bool) {
-	return kpm.count, kpm.count > 0
+type KprobeMultiAddress struct {
+	Address uint64
+	Cookie  uint64
 }
 
-func (kpm *KprobeMultiInfo) Flags() (uint32, bool) {
-	return kpm.flags, kpm.count > 0
+// Addresses are the addresses hooked by the kprobe.
+func (kpm *KprobeMultiInfo) Addresses() ([]KprobeMultiAddress, bool) {
+	if kpm.addrs == nil || len(kpm.addrs) != len(kpm.cookies) {
+		return nil, false
+	}
+	addrs := make([]KprobeMultiAddress, len(kpm.addrs))
+	for i := range kpm.addrs {
+		addrs[i] = KprobeMultiAddress{
+			Address: kpm.addrs[i],
+			Cookie:  kpm.cookies[i],
+		}
+	}
+	return addrs, true
 }
 
-func (kpm *KprobeMultiInfo) Missed() (uint64, bool) {
-	return kpm.missed, kpm.count > 0
+// Cookies are the cookies for each address hooked by the kprobe.
+func (kpm *KprobeMultiInfo) Cookies() ([]uint64, bool) {
+	return kpm.cookies, kpm.cookies != nil
 }
 
 type PerfEventInfo struct {

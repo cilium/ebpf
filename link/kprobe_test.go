@@ -53,6 +53,19 @@ func TestKprobe(t *testing.T) {
 	testLink(t, k, prog)
 }
 
+func TestKprobeInfo(t *testing.T) {
+	prog := mustLoadProgram(t, ebpf.Kprobe, 0, "")
+
+	k, err := Kprobe(ksym, prog, nil)
+	qt.Assert(t, qt.IsNil(err))
+	defer k.Close()
+
+	info, err := k.Info()
+	qt.Assert(t, qt.IsNil(err))
+	qt.Assert(t, qt.Equals(info.PerfEvent().Kprobe().Function, ksym))
+	qt.Assert(t, qt.Equals(info.PerfEvent().Kprobe().Offset, 0))
+}
+
 func TestKprobeOffset(t *testing.T) {
 	prog := mustLoadProgram(t, ebpf.Kprobe, 0, "")
 

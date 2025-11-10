@@ -62,6 +62,16 @@ func TestUprobeMultiInfo(t *testing.T) {
 	uprobeOffsets, ok := uprobeDetails.Offsets()
 	qt.Assert(t, qt.IsTrue(ok))
 	qt.Assert(t, qt.HasLen(uprobeOffsets, len(bashSyms)))
+	syms, err := uprobeDetails.Symbols()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var symnames = make([]string, len(syms))
+	for i, sym := range syms {
+		qt.Assert(t, qt.Equals(sym.Offset, 0))
+		symnames[i] = sym.Symbol
+	}
+	qt.Assert(t, qt.ContentEquals(symnames, bashSyms))
 }
 
 func TestUprobeMultiInput(t *testing.T) {

@@ -47,13 +47,13 @@ func main() {
 	}
 	defer objs.Close()
 
-	link, err := link.AttachTracing(link.TracingOptions{
+	l, err := link.AttachTracing(link.TracingOptions{
 		Program: objs.TcpConnect,
 	})
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer link.Close()
+	defer l.Close()
 
 	rd, err := ringbuf.NewReader(objs.Events)
 	if err != nil {

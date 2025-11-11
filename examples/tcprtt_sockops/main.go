@@ -64,7 +64,7 @@ func main() {
 	defer objs.Close()
 
 	// Attach ebpf program to a cgroupv2
-	link, err := link.AttachCgroup(link.CgroupOptions{
+	l, err := link.AttachCgroup(link.CgroupOptions{
 		Path:    cgroupPath,
 		Program: objs.BpfSockopsCb,
 		Attach:  ebpf.AttachCGroupSockOps,
@@ -72,7 +72,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer link.Close()
+	defer l.Close()
 
 	log.Printf("eBPF program loaded and attached on cgroup %s\n", cgroupPath)
 

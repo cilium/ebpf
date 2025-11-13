@@ -242,32 +242,13 @@ func TestLoadCollectionSpec(t *testing.T) {
 			t.Fatal("Can't parse ELF:", err)
 		}
 
-		err = have.RewriteConstants(map[string]interface{}{
-			"arg":  uint32(1),
-			"arg2": uint32(2),
-		})
-		if err != nil {
-			t.Fatal("Can't rewrite constant:", err)
-		}
-
-		err = have.RewriteConstants(map[string]interface{}{
-			"totallyBogus":  uint32(1),
-			"totallyBogus2": uint32(2),
-		})
-		if err == nil {
-			t.Error("Rewriting a bogus constant doesn't fail")
-		}
-
-		var mErr *MissingConstantsError
-		if !errors.As(err, &mErr) {
-			t.Fatal("Error doesn't wrap MissingConstantsError:", err)
-		}
-		qt.Assert(t, qt.ContentEquals(mErr.Constants, []string{"totallyBogus", "totallyBogus2"}))
-
 		qt.Assert(t, qt.Equals(have.Maps["perf_event_array"].ValueSize, 0))
 		qt.Assert(t, qt.IsNotNil(have.Maps["perf_event_array"].Value))
 
 		qt.Assert(t, qt.CmpEquals(have, coll, csCmpOpts))
+
+		qt.Assert(t, qt.IsNil(have.Variables["arg"].Set(uint32(1))))
+		qt.Assert(t, qt.IsNil(have.Variables["arg2"].Set(uint32(2))))
 
 		if have.ByteOrder != internal.NativeEndian {
 			return
@@ -361,11 +342,7 @@ func TestFreezeRodata(t *testing.T) {
 		Program *Program `ebpf:"freeze_rodata"`
 	}
 
-	if err := spec.RewriteConstants(map[string]interface{}{
-		"ret": uint32(1),
-	}); err != nil {
-		t.Fatal(err)
-	}
+	qt.Assert(t, qt.IsNil(spec.Variables["ret"].Set(uint32(1))))
 
 	mustLoadAndAssign(t, spec, &obj, nil)
 	obj.Program.Close()

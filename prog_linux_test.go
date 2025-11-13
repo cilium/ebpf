@@ -48,13 +48,6 @@ func TestProgramTestRunInterrupt(t *testing.T) {
 		opts := RunOptions{
 			Data:   internal.EmptyBPFContext,
 			Repeat: math.MaxInt32,
-			Reset: func() {
-				// We don't know how long finishing the
-				// test run would take, so flag that we've seen
-				// an interruption and abort the goroutine.
-				close(errs)
-				runtime.Goexit()
-			},
 		}
 		_, _, err := prog.run(&opts)
 
@@ -63,28 +56,19 @@ func TestProgramTestRunInterrupt(t *testing.T) {
 
 	tid := <-tidChan
 	for {
-		err := unix.Tgkill(tgid, tid, unix.SIGUSR1)
-		if err != nil {
-			t.Fatal("Can't send signal to goroutine thread:", err)
-		}
+		qt.Assert(t, qt.IsNil(unix.Tgkill(tgid, tid, unix.SIGUSR1)))
 
 		select {
-		case err, ok := <-errs:
-			if !ok {
-				return
-			}
-
+		case err := <-errs:
 			testutils.SkipIfNotSupported(t, err)
-			if err == nil {
-				t.Fatal("testRun wasn't interrupted")
-			}
-
-			t.Fatal("testRun returned an error:", err)
+			qt.Assert(t, qt.ErrorIs(err, unix.EINTR))
+			return
 
 		case <-timeout:
 			t.Fatal("Timed out trying to interrupt the goroutine")
 
 		default:
+			time.Sleep(time.Millisecond * 100)
 		}
 	}
 }

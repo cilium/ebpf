@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/binary"
 	"encoding/hex"
-	"errors"
 	"fmt"
 	"io"
 	"math"
@@ -97,36 +96,6 @@ func TestSignedJump(t *testing.T) {
 	}
 }
 
-func TestInstructionRewriteMapConstant(t *testing.T) {
-	ins := LoadMapValue(R0, 123, 321)
-
-	qt.Assert(t, qt.Equals(ins.MapPtr(), 123))
-	qt.Assert(t, qt.Equals(ins.mapOffset(), 321))
-
-	qt.Assert(t, qt.IsNil(ins.RewriteMapPtr(-1)))
-	qt.Assert(t, qt.Equals(ins.MapPtr(), -1))
-
-	qt.Assert(t, qt.IsNil(ins.RewriteMapPtr(1)))
-	qt.Assert(t, qt.Equals(ins.MapPtr(), 1))
-
-	// mapOffset should be unchanged after rewriting the pointer.
-	qt.Assert(t, qt.Equals(ins.mapOffset(), 321))
-
-	qt.Assert(t, qt.IsNil(ins.RewriteMapOffset(123)))
-	qt.Assert(t, qt.Equals(ins.mapOffset(), 123))
-
-	// MapPtr should be unchanged.
-	qt.Assert(t, qt.Equals(ins.MapPtr(), 1))
-
-	ins = Mov.Imm(R1, 32)
-	if err := ins.RewriteMapPtr(1); err == nil {
-		t.Error("RewriteMapPtr rewriting bogus instruction")
-	}
-	if err := ins.RewriteMapOffset(1); err == nil {
-		t.Error("RewriteMapOffset rewriting bogus instruction")
-	}
-}
-
 func TestInstructionLoadMapValue(t *testing.T) {
 	ins := LoadMapValue(R0, 1, 123)
 	if !ins.IsLoadFromMap() {
@@ -137,33 +106,6 @@ func TestInstructionLoadMapValue(t *testing.T) {
 	}
 	if off := ins.mapOffset(); off != 123 {
 		t.Fatal("Expected map offset to be 123 after changing the pointer, got", off)
-	}
-}
-
-func TestInstructionsRewriteMapPtr(t *testing.T) {
-	insns := Instructions{
-		LoadMapPtr(R1, 0).WithReference("good"),
-		Return(),
-	}
-
-	if err := insns.RewriteMapPtr("good", 1); err != nil {
-		t.Fatal(err)
-	}
-
-	if insns[0].Constant != 1 {
-		t.Error("Constant should be 1, have", insns[0].Constant)
-	}
-
-	if err := insns.RewriteMapPtr("good", 2); err != nil {
-		t.Fatal(err)
-	}
-
-	if insns[0].Constant != 2 {
-		t.Error("Constant should be 2, have", insns[0].Constant)
-	}
-
-	if err := insns.RewriteMapPtr("bad", 1); !errors.Is(err, ErrUnreferencedSymbol) {
-		t.Error("Rewriting unreferenced map doesn't return appropriate error")
 	}
 }
 

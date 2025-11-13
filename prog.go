@@ -745,11 +745,6 @@ type RunOptions struct {
 	// CPU to run Program on. Optional field.
 	// Note not all program types support this field.
 	CPU uint32
-	// Called whenever the syscall is interrupted, and should be set to testing.B.ResetTimer
-	// or similar. Typically used during benchmarking. Optional field.
-	//
-	// Deprecated: use [testing.B.ReportMetric] with unit "ns/op" instead.
-	Reset func()
 }
 
 // Test runs the Program in the kernel with the given input and returns the
@@ -802,11 +797,10 @@ func (p *Program) Run(opts *RunOptions) (uint32, error) {
 // and returns the time taken per iteration.
 //
 // Returns the result of the last execution of the program and the time per
-// run or an error. reset is called whenever the benchmark syscall is
-// interrupted, and should be set to testing.B.ResetTimer or similar.
+// run or an error.
 //
 // This function requires at least Linux 4.12.
-func (p *Program) Benchmark(in []byte, repeat int, reset func()) (uint32, time.Duration, error) {
+func (p *Program) Benchmark(in []byte, repeat int) (uint32, time.Duration, error) {
 	if uint(repeat) > math.MaxUint32 {
 		return 0, 0, fmt.Errorf("repeat is too high")
 	}
@@ -814,7 +808,6 @@ func (p *Program) Benchmark(in []byte, repeat int, reset func()) (uint32, time.D
 	opts := RunOptions{
 		Data:   in,
 		Repeat: uint32(repeat),
-		Reset:  reset,
 	}
 
 	ret, total, err := p.run(&opts)
@@ -923,40 +916,14 @@ func (p *Program) run(opts *RunOptions) (uint32, time.Duration, error) {
 		ctxOut = ctxIn
 	}
 
-retry:
-	for {
-		err := sys.ProgRun(&attr)
-		if err == nil {
-			break retry
-		}
-
-		if errors.Is(err, unix.EINTR) {
-			if attr.Repeat <= 1 {
-				// Older kernels check whether enough repetitions have been
-				// executed only after checking for pending signals.
-				//
-				//     run signal? done? run ...
-				//
-				// As a result we can get EINTR for repeat==1 even though
-				// the program was run exactly once. Treat this as a
-				// successful run instead.
-				//
-				// Since commit 607b9cc92bd7 ("bpf: Consolidate shared test timing code")
-				// the conditions are reversed:
-				//     run done? signal? ...
-				break retry
-			}
-
-			if opts.Reset != nil {
-				opts.Reset()
-			}
-			continue retry
-		}
-
-		if errors.Is(err, sys.ENOTSUPP) {
-			return 0, 0, fmt.Errorf("kernel doesn't support running %s: %w", p.Type(), ErrNotSupported)
-		}
-
+	err := sys.ProgRun(&attr)
+	if errors.Is(err, unix.EINTR) {
+		return 0, 0, fmt.Errorf("program run interrupted: %w", err)
+	}
+	if errors.Is(err, sys.ENOTSUPP) {
+		return 0, 0, fmt.Errorf("kernel doesn't support running %s: %w", p.Type(), ErrNotSupported)
+	}
+	if err != nil {
 		return 0, 0, err
 	}
 

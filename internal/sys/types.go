@@ -162,6 +162,7 @@ const (
 	BPF_SOCK_OPS_VOID                          = 0
 	BPF_SOCK_OPS_WRITE_HDR_OPT_CB              = 15
 	BPF_SOCK_OPS_WRITE_HDR_OPT_CB_FLAG         = 64
+	BPF_STREAM_MAX_CAPACITY                    = 100000
 	BPF_TASK_ITER_ALL_PROCS                    = 0
 	BPF_TASK_ITER_ALL_THREADS                  = 1
 	BPF_TASK_ITER_PROC_THREADS                 = 2
@@ -296,7 +297,8 @@ const (
 	BPF_LINK_DETACH                 Cmd = 34
 	BPF_PROG_BIND_MAP               Cmd = 35
 	BPF_TOKEN_CREATE                Cmd = 36
-	__MAX_BPF_CMD                   Cmd = 37
+	BPF_PROG_STREAM_READ_BY_FD      Cmd = 37
+	__MAX_BPF_CMD                   Cmd = 38
 )
 
 type FunctionId uint32
@@ -1541,6 +1543,21 @@ type CgroupLinkInfo struct {
 	_          [36]byte
 }
 
+type EventLinkInfo struct {
+	_             structs.HostLayout
+	Type          LinkType
+	Id            LinkID
+	ProgId        uint32
+	_             [4]byte
+	PerfEventType PerfEventType
+	_             [4]byte
+	Config        uint64
+	EventType     uint32
+	_             [4]byte
+	Cookie        uint64
+	_             [16]byte
+}
+
 type IterLinkInfo struct {
 	_             structs.HostLayout
 	Type          LinkType
@@ -1633,7 +1650,9 @@ type RawTracepointLinkInfo struct {
 	_         [4]byte
 	TpName    TypedPointer[uint8]
 	TpNameLen uint32
-	_         [36]byte
+	_         [4]byte
+	Cookie    uint64
+	_         [24]byte
 }
 
 type TcxLinkInfo struct {
@@ -1647,6 +1666,21 @@ type TcxLinkInfo struct {
 	_          [40]byte
 }
 
+type TracepointLinkInfo struct {
+	_             structs.HostLayout
+	Type          LinkType
+	Id            LinkID
+	ProgId        uint32
+	_             [4]byte
+	PerfEventType PerfEventType
+	_             [4]byte
+	TpName        TypedPointer[uint8]
+	NameLen       uint32
+	_             [4]byte
+	Cookie        uint64
+	_             [16]byte
+}
+
 type TracingLinkInfo struct {
 	_           structs.HostLayout
 	Type        LinkType
@@ -1656,7 +1690,41 @@ type TracingLinkInfo struct {
 	AttachType  AttachType
 	TargetObjId uint32
 	TargetBtfId TypeID
-	_           [36]byte
+	_           [4]byte
+	Cookie      uint64
+	_           [24]byte
+}
+
+type UprobeLinkInfo struct {
+	_             structs.HostLayout
+	Type          LinkType
+	Id            LinkID
+	ProgId        uint32
+	_             [4]byte
+	PerfEventType PerfEventType
+	_             [4]byte
+	FileName      TypedPointer[uint8]
+	NameLen       uint32
+	Offset        uint32
+	Cookie        uint64
+	RefCtrOffset  uint64
+	_             [8]byte
+}
+
+type UprobeMultiLinkInfo struct {
+	_             structs.HostLayout
+	Type          LinkType
+	Id            LinkID
+	ProgId        uint32
+	_             [4]byte
+	Path          TypedPointer[uint8]
+	Offsets       TypedPointer[uint64]
+	RefCtrOffsets TypedPointer[uint64]
+	Cookies       TypedPointer[uint64]
+	PathSize      uint32
+	Count         uint32
+	Flags         uint32
+	Pid           uint32
 }
 
 type XDPLinkInfo struct {

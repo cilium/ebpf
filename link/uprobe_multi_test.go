@@ -39,6 +39,40 @@ func TestUprobeMulti(t *testing.T) {
 	_ = um.Close()
 }
 
+func TestUprobeMultiInfo(t *testing.T) {
+	testutils.SkipIfNotSupported(t, haveBPFLinkUprobeMulti())
+
+	prog := mustLoadProgram(t, ebpf.Kprobe, ebpf.AttachTraceUprobeMulti, "")
+
+	// uprobe
+	um, err := bashEx.UprobeMulti(bashSyms, prog, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer um.Close()
+
+	linkInfo, err := um.Info()
+	if err != nil {
+		t.Fatal(err)
+	}
+	qt.Assert(t, qt.Equals(linkInfo.Type, UprobeMultiType))
+	uprobeDetails := linkInfo.UprobeMulti()
+	qt.Assert(t, qt.StringContains(uprobeDetails.Path(), bashEx.path)) // On some platforms, /bin/bash may point to /usr/bin/bash, thus only a contains and no equals check
+	uprobeOffsets, ok := uprobeDetails.Offsets()
+	qt.Assert(t, qt.IsTrue(ok))
+	qt.Assert(t, qt.HasLen(uprobeOffsets, len(bashSyms)))
+	syms, err := uprobeDetails.Symbols()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var symnames = make([]string, len(syms))
+	for i, sym := range syms {
+		qt.Assert(t, qt.Equals(sym.Offset, 0))
+		symnames[i] = sym.Symbol
+	}
+	qt.Assert(t, qt.ContentEquals(symnames, bashSyms))
+}
+
 func TestUprobeMultiInput(t *testing.T) {
 	testutils.SkipIfNotSupported(t, haveBPFLinkUprobeMulti())
 

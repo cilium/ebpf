@@ -3,7 +3,9 @@
 package link
 
 import (
+	"errors"
 	"fmt"
+	"net"
 
 	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/platform"
@@ -132,13 +134,35 @@ type TCXInfo struct {
 	AttachType sys.AttachType
 }
 
+func (t TCXInfo) Interface() (net.Interface, error) {
+	return resolveIfindex(t.Ifindex)
+}
+
 type XDPInfo struct {
 	Ifindex uint32
 }
 
+func (x XDPInfo) Interface() (net.Interface, error) {
+	return resolveIfindex(x.Ifindex)
+}
+
+func resolveIfindex(ifindex uint32) (net.Interface, error) {
+	available, err := net.Interfaces()
+	if err != nil {
+		return net.Interface{}, err
+	}
+	for _, i := range available {
+		if uint32(i.Index) == ifindex {
+			return i, nil
+		}
+	}
+	return net.Interface{}, errors.New("interface not found")
+
+}
+
 type NetfilterInfo struct {
-	Pf       uint32
-	Hooknum  uint32
+	Pf       NetfilterProtocolFamily
+	Hooknum  NetfilterHook
 	Priority int32
 	Flags    uint32
 }
@@ -148,10 +172,20 @@ type NetkitInfo struct {
 	AttachType sys.AttachType
 }
 
+func (n NetkitInfo) Interface() (net.Interface, error) {
+	return resolveIfindex(n.Ifindex)
+}
+
+type RawTracepointInfo struct {
+	Name string
+}
+
 type KprobeMultiInfo struct {
-	count  uint32
-	flags  uint32
-	missed uint64
+	count   uint32
+	flags   uint32
+	missed  uint64
+	addrs   []uint64
+	cookies []uint64
 }
 
 // AddressCount is the number of addresses hooked by the kprobe.
@@ -167,6 +201,118 @@ func (kpm *KprobeMultiInfo) Missed() (uint64, bool) {
 	return kpm.missed, kpm.count > 0
 }
 
+type KprobeMultiAddress struct {
+	Address uint64
+	Cookie  uint64
+}
+
+// Addresses are the addresses hooked by the kprobe.
+func (kpm *KprobeMultiInfo) Addresses() ([]KprobeMultiAddress, bool) {
+	if kpm.addrs == nil || len(kpm.addrs) != len(kpm.cookies) {
+		return nil, false
+	}
+	addrs := make([]KprobeMultiAddress, len(kpm.addrs))
+	for i := range kpm.addrs {
+		addrs[i] = KprobeMultiAddress{
+			Address: kpm.addrs[i],
+			Cookie:  kpm.cookies[i],
+		}
+	}
+	return addrs, true
+}
+
+// Cookies are the cookies for each address hooked by the kprobe.
+func (kpm *KprobeMultiInfo) Cookies() ([]uint64, bool) {
+	return kpm.cookies, kpm.cookies != nil
+}
+
+type UprobeMultiInfo struct {
+	count         uint32
+	flags         uint32
+	missed        uint64
+	offsets       []uint64
+	cookies       []uint64
+	refCtrOffsets []uint64
+	path          string
+	pid           uint32
+}
+
+// AddressCount is the number of addresses hooked by the kprobe.
+func (umi *UprobeMultiInfo) AddressCount() (uint32, bool) {
+	return umi.count, umi.count > 0
+}
+
+func (umi *UprobeMultiInfo) Flags() (uint32, bool) {
+	return umi.flags, umi.flags > 0
+}
+
+func (umi *UprobeMultiInfo) Missed() (uint64, bool) {
+	return umi.missed, umi.missed > 0
+}
+
+type UprobeMultiOffset struct {
+	Offset uint64
+	Cookie uint64
+	RefCtr uint64
+}
+
+// Offsets returns the offsets that the uprobe was attached to along with the related cookies and ref counters.
+func (umi *UprobeMultiInfo) Offsets() ([]UprobeMultiOffset, bool) {
+	if umi.offsets == nil || len(umi.cookies) != len(umi.offsets) || len(umi.refCtrOffsets) != len(umi.offsets) {
+		return nil, false
+	}
+	var adresses = make([]UprobeMultiOffset, len(umi.offsets))
+	for i := range umi.offsets {
+		adresses[i] = UprobeMultiOffset{
+			Offset: umi.offsets[i],
+			Cookie: umi.cookies[i],
+			RefCtr: umi.refCtrOffsets[i],
+		}
+	}
+	return adresses, true
+}
+
+// Symbols returns the symbols that the uprobe was attached to.
+func (umi *UprobeMultiInfo) Symbols() ([]UprobeSymbol, error) {
+	if umi.offsets == nil {
+		return nil, fmt.Errorf("no offsets available")
+	}
+	ex, err := OpenExecutable(umi.path)
+	if err != nil {
+		return nil, err
+	}
+	var symbols []UprobeSymbol
+	for i := range umi.offsets {
+		symbol, err := ex.Symbol(umi.offsets[i])
+		if err != nil {
+			return nil, err
+		}
+		symbols = append(symbols, symbol)
+	}
+	return symbols, nil
+}
+
+func (umi *UprobeMultiInfo) Path() string {
+	return umi.path
+}
+
+// Pid returns the process ID that this uprobe is attached to.
+//
+// If it does not exist, the uprobe will trigger for all processes.
+func (umi *UprobeMultiInfo) Pid() (uint32, bool) {
+	return umi.pid, umi.pid > 0
+}
+
+const (
+	PerfEventUnspecified = sys.BPF_PERF_EVENT_UNSPEC
+	PerfEventUprobe      = sys.BPF_PERF_EVENT_UPROBE
+	PerfEventUretprobe   = sys.BPF_PERF_EVENT_URETPROBE
+	PerfEventKprobe      = sys.BPF_PERF_EVENT_KPROBE
+	PerfEventKretprobe   = sys.BPF_PERF_EVENT_KRETPROBE
+	PerfEventTracepoint  = sys.BPF_PERF_EVENT_TRACEPOINT
+	PerfEventEvent       = sys.BPF_PERF_EVENT_EVENT
+)
+
 type PerfEventInfo struct {
 	Type  sys.PerfEventType
 	extra interface{}
@@ -177,9 +323,26 @@ func (r *PerfEventInfo) Kprobe() *KprobeInfo {
 	return e
 }
 
+func (r *PerfEventInfo) Uprobe() *UprobeInfo {
+	e, _ := r.extra.(*UprobeInfo)
+	return e
+}
+
+func (r *PerfEventInfo) Tracepoint() *TracepointInfo {
+	e, _ := r.extra.(*TracepointInfo)
+	return e
+}
+
+func (r *PerfEventInfo) Event() *EventInfo {
+	e, _ := r.extra.(*EventInfo)
+	return e
+}
+
 type KprobeInfo struct {
-	address uint64
-	missed  uint64
+	address  uint64
+	missed   uint64
+	Function string
+	Offset   uint32
 }
 
 func (kp *KprobeInfo) Address() (uint64, bool) {
@@ -188,6 +351,37 @@ func (kp *KprobeInfo) Address() (uint64, bool) {
 
 func (kp *KprobeInfo) Missed() (uint64, bool) {
 	return kp.missed, kp.address > 0
+}
+
+type UprobeInfo struct {
+	File         string
+	Offset       uint32
+	Cookie       uint64
+	RefCtrOffset uint64
+}
+
+type UprobeSymbol struct {
+	Symbol string
+	Offset uint64
+}
+
+func (u *UprobeInfo) Symbol() (UprobeSymbol, error) {
+	ex, err := OpenExecutable(u.File)
+	if err != nil {
+		return UprobeSymbol{}, err
+	}
+	return ex.Symbol(uint64(u.Offset))
+}
+
+type TracepointInfo struct {
+	Tracepoint string
+	Cookie     uint64
+}
+
+type EventInfo struct {
+	Config uint64
+	Type   uint32
+	Cookie uint64
 }
 
 // Tracing returns tracing type-specific link info.
@@ -254,10 +448,26 @@ func (r Info) KprobeMulti() *KprobeMultiInfo {
 	return e
 }
 
+// UprobeMulti returns uprobe-multi type-specific link info.
+//
+// Returns nil if the type-specific link info isn't available.
+func (r Info) UprobeMulti() *UprobeMultiInfo {
+	e, _ := r.extra.(*UprobeMultiInfo)
+	return e
+}
+
 // PerfEvent returns perf-event type-specific link info.
 //
 // Returns nil if the type-specific link info isn't available.
 func (r Info) PerfEvent() *PerfEventInfo {
 	e, _ := r.extra.(*PerfEventInfo)
+	return e
+}
+
+// RawTracepoint returns raw-tracepoint type-specific link info.
+//
+// Returns nil if the type-specific link info isn't available.
+func (r Info) RawTracepoint() *RawTracepointInfo {
+	e, _ := r.extra.(*RawTracepointInfo)
 	return e
 }

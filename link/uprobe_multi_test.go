@@ -12,11 +12,12 @@ import (
 	"github.com/go-quicktest/qt"
 
 	"github.com/cilium/ebpf"
+	"github.com/cilium/ebpf/features"
 	"github.com/cilium/ebpf/internal/testutils"
 )
 
 func TestUprobeMulti(t *testing.T) {
-	testutils.SkipIfNotSupported(t, haveBPFLinkUprobeMulti())
+	testutils.SkipIfNotSupported(t, features.HaveBPFLinkUprobeMulti())
 
 	prog := mustLoadProgram(t, ebpf.Kprobe, ebpf.AttachTraceUprobeMulti, "")
 
@@ -40,7 +41,7 @@ func TestUprobeMulti(t *testing.T) {
 }
 
 func TestUprobeMultiInput(t *testing.T) {
-	testutils.SkipIfNotSupported(t, haveBPFLinkUprobeMulti())
+	testutils.SkipIfNotSupported(t, features.HaveBPFLinkUprobeMulti())
 
 	prog := mustLoadProgram(t, ebpf.Kprobe, ebpf.AttachTraceUprobeMulti, "")
 
@@ -147,7 +148,7 @@ func TestUprobeMultiResolveFail(t *testing.T) {
 }
 
 func TestUprobeMultiCookie(t *testing.T) {
-	testutils.SkipIfNotSupported(t, haveBPFLinkUprobeMulti())
+	testutils.SkipIfNotSupported(t, features.HaveBPFLinkUprobeMulti())
 
 	prog := mustLoadProgram(t, ebpf.Kprobe, ebpf.AttachTraceUprobeMulti, "")
 
@@ -173,7 +174,7 @@ func TestUprobeMultiCookie(t *testing.T) {
 }
 
 func TestUprobeMultiProgramCall(t *testing.T) {
-	testutils.SkipIfNotSupported(t, haveBPFLinkUprobeMulti())
+	testutils.SkipIfNotSupported(t, features.HaveBPFLinkUprobeMulti())
 
 	// We execute 'bash --help'
 	args := []string{"--help"}
@@ -243,8 +244,4 @@ func TestUprobeMultiProgramCall(t *testing.T) {
 	// functions, but only check_dev_tty is triggered, because 'bash --help'
 	// calls exit(0).
 	test(true, 1)
-}
-
-func TestHaveBPFLinkUprobeMulti(t *testing.T) {
-	testutils.CheckFeatureTest(t, haveBPFLinkUprobeMulti)
 }

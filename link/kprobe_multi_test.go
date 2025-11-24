@@ -10,6 +10,7 @@ import (
 	"github.com/go-quicktest/qt"
 
 	"github.com/cilium/ebpf"
+	"github.com/cilium/ebpf/features"
 	"github.com/cilium/ebpf/internal/linux"
 	"github.com/cilium/ebpf/internal/testutils"
 	"github.com/cilium/ebpf/internal/unix"
@@ -18,7 +19,7 @@ import (
 var kprobeMultiSyms = []string{"vprintk", "inet6_release"}
 
 func TestKprobeMulti(t *testing.T) {
-	testutils.SkipIfNotSupported(t, haveBPFLinkKprobeMulti())
+	testutils.SkipIfNotSupported(t, features.HaveBPFLinkKprobeMulti())
 
 	prog := mustLoadProgram(t, ebpf.Kprobe, ebpf.AttachTraceKprobeMulti, "")
 
@@ -61,7 +62,7 @@ func TestKprobeMultiInput(t *testing.T) {
 }
 
 func TestKprobeMultiErrors(t *testing.T) {
-	testutils.SkipIfNotSupported(t, haveBPFLinkKprobeMulti())
+	testutils.SkipIfNotSupported(t, features.HaveBPFLinkKprobeMulti())
 
 	prog := mustLoadProgram(t, ebpf.Kprobe, ebpf.AttachTraceKprobeMulti, "")
 
@@ -82,7 +83,7 @@ func TestKprobeMultiErrors(t *testing.T) {
 }
 
 func TestKprobeMultiCookie(t *testing.T) {
-	testutils.SkipIfNotSupported(t, haveBPFLinkKprobeMulti())
+	testutils.SkipIfNotSupported(t, features.HaveBPFLinkKprobeMulti())
 
 	prog := mustLoadProgram(t, ebpf.Kprobe, ebpf.AttachTraceKprobeMulti, "")
 
@@ -97,7 +98,7 @@ func TestKprobeMultiCookie(t *testing.T) {
 }
 
 func TestKprobeMultiProgramCall(t *testing.T) {
-	testutils.SkipIfNotSupported(t, haveBPFLinkKprobeMulti())
+	testutils.SkipIfNotSupported(t, features.HaveBPFLinkKprobeMulti())
 
 	m, p := newUpdaterMapProg(t, ebpf.Kprobe, ebpf.AttachTraceKprobeMulti)
 
@@ -139,12 +140,8 @@ func TestKprobeMultiProgramCall(t *testing.T) {
 	assertMapValue(t, m, 0, 0)
 }
 
-func TestHaveBPFLinkKprobeMulti(t *testing.T) {
-	testutils.CheckFeatureTest(t, haveBPFLinkKprobeMulti)
-}
-
 func TestKprobeSession(t *testing.T) {
-	testutils.SkipIfNotSupported(t, haveBPFLinkKprobeMulti())
+	testutils.SkipIfNotSupported(t, features.HaveBPFLinkKprobeSession())
 
 	prog := mustLoadProgram(t, ebpf.Kprobe, ebpf.AttachTraceKprobeSession, "")
 
@@ -154,8 +151,4 @@ func TestKprobeSession(t *testing.T) {
 	defer km.Close()
 
 	testLink(t, km, prog)
-}
-
-func TestHaveBPFLinkKprobeSession(t *testing.T) {
-	testutils.CheckFeatureTest(t, haveBPFLinkKprobeSession)
 }

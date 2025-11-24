@@ -138,7 +138,8 @@ func (r *Reader) SetDeadline(t time.Time) {
 // See [ReadInto] for a more efficient version of this method.
 func (r *Reader) Read() (Record, error) {
 	var rec Record
-	return rec, r.ReadInto(&rec)
+	err := r.ReadInto(&rec)
+	return rec, err
 }
 
 // ReadInto is like Read except that it allows reusing Record and associated buffers.

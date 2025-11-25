@@ -95,3 +95,24 @@ func TestTracepointProgramCall(t *testing.T) {
 	// Assert that this time the value has not been updated.
 	assertMapValue(t, m, 0, 0)
 }
+
+func TestTracepointInfo(t *testing.T) {
+	testutils.SkipOnOldKernel(t, "6.6", "bpf_link_info_perf_event")
+
+	prog := mustLoadProgram(t, ebpf.TracePoint, 0, "")
+
+	// printk is guaranteed to be present.
+	// Kernels before 4.14 don't support attaching to syscall tracepoints.
+	tp, err := Tracepoint("printk", "console", prog, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tp.Close()
+
+	info, err := tp.Info()
+	if err != nil {
+		t.Fatal(err)
+	}
+	tpInfo := info.PerfEvent().Tracepoint()
+	qt.Assert(t, qt.Equals(tpInfo.Tracepoint, "console"))
+}

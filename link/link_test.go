@@ -146,11 +146,11 @@ func newPinnedRawLink(t *testing.T) (*RawLink, string) {
 func testLink(t *testing.T, link Link, prog *ebpf.Program) {
 	t.Helper()
 
-	tmp := testutils.TempBPFFS(t)
-
 	_, isRawLink := link.(*RawLink)
 
 	t.Run("link/pinning", func(t *testing.T) {
+		tmp := testutils.TempBPFFS(t)
+
 		path := filepath.Join(tmp, "link")
 		err := link.Pin(path)
 		testutils.SkipIfNotSupported(t, err)

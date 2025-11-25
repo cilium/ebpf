@@ -33,3 +33,22 @@ func TestAttachXDP(t *testing.T) {
 
 	testLink(t, l, prog)
 }
+
+func TestXDPInfo(t *testing.T) {
+	testutils.SkipOnOldKernel(t, "5.9", "BPF_LINK_TYPE_XDP")
+
+	prog := mustLoadProgram(t, ebpf.XDP, 0, "")
+
+	l, err := AttachXDP(XDPOptions{
+		Program:   prog,
+		Interface: IfIndexLO,
+	})
+	qt.Assert(t, qt.IsNil(err))
+	defer l.Close()
+
+	info, err := l.Info()
+	qt.Assert(t, qt.IsNil(err))
+	iface, err := info.XDP().Interface()
+	qt.Assert(t, qt.IsNil(err))
+	qt.Assert(t, qt.Equals(iface.Name, "lo"))
+}

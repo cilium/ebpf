@@ -26,7 +26,7 @@ kernel_version_for_url="$kernel_version"
 if [[ $kernel_version =~ ^([0-9]+\.[0-9]+)\.0$ ]]; then
 	kernel_version_for_url="${BASH_REMATCH[1]}"
 fi
-curl -fL "https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git/plain/tools/lib/bpf/libbpf.c?h=v$kernel_version_for_url" -o "$tmp/libbpf.c"
+curl -fL "https://raw.githubusercontent.com/gregkh/linux/refs/tags/v$kernel_version_for_url/tools/lib/bpf/libbpf.c" -o "$tmp/libbpf.c"
 "./internal/cmd/gensections.awk" "$tmp/libbpf.c" | gofmt > "./elf_sections.go"
 
 # Download and process vmlinux and btf_testmod

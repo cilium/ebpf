@@ -384,3 +384,56 @@ func BenchmarkReadInto(b *testing.B) {
 		}
 	}
 }
+
+func TestPeek(t *testing.T) {
+	testutils.SkipOnOldKernel(t, "5.8", "BPF ring buffer")
+
+	prog, events := mustOutputSamplesProg(t,
+		sampleMessage{size: 5, flags: 0},
+		sampleMessage{size: 7, flags: 0},
+	)
+	mustRun(t, prog)
+
+	rd, err := NewReader(events)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rd.Close()
+
+	view1, err := rd.Peek()
+	qt.Assert(t, qt.IsNil(err))
+	qt.Assert(t, qt.Equals(len(view1.Sample), 5))
+	rd.Consume(&view1)
+
+	view2, err := rd.Peek()
+	qt.Assert(t, qt.IsNil(err))
+	qt.Assert(t, qt.Equals(len(view2.Sample), 7))
+	rd.Consume(&view2)
+}
+
+func TestPeekInto(t *testing.T) {
+	testutils.SkipOnOldKernel(t, "5.8", "BPF ring buffer")
+
+	prog, events := mustOutputSamplesProg(t,
+		sampleMessage{size: 5, flags: 0},
+		sampleMessage{size: 7, flags: 0},
+	)
+	mustRun(t, prog)
+
+	rd, err := NewReader(events)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rd.Close()
+
+	var view View
+	err = rd.PeekInto(&view)
+	qt.Assert(t, qt.IsNil(err))
+	qt.Assert(t, qt.Equals(len(view.Sample), 5))
+	rd.Consume(&view)
+
+	err = rd.PeekInto(&view)
+	qt.Assert(t, qt.IsNil(err))
+	qt.Assert(t, qt.Equals(len(view.Sample), 7))
+	rd.Consume(&view)
+}

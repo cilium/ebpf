@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"sync"
+	"sync/atomic"
 	"time"
 	"unsafe"
 
@@ -44,6 +45,14 @@ type Record struct {
 
 	// The minimum number of bytes remaining in the ring buffer after this Record has been read.
 	Remaining int
+}
+
+// View is a zero-copy record returned by Peek/PeekInto until Consume is called.
+type View struct {
+	Sample    []byte
+	Remaining int
+
+	nextCons uintptr
 }
 
 // Reader allows reading bpf_ringbuf_output
@@ -144,6 +153,32 @@ func (r *Reader) Read() (Record, error) {
 
 // ReadInto is like Read except that it allows reusing Record and associated buffers.
 func (r *Reader) ReadInto(rec *Record) error {
+	return r.readLocked(func() error {
+		return r.ring.readRecord(rec)
+	})
+}
+
+// Peek returns the next sample without advancing the consumer position.
+func (r *Reader) Peek() (View, error) {
+	var v View
+	err := r.PeekInto(&v)
+	return v, err
+}
+
+// PeekInto is like Peek but stores the sample in view for reuse.
+func (r *Reader) PeekInto(view *View) error {
+	return r.readLocked(func() error {
+		return r.ring.readView(view)
+	})
+}
+
+// Consume advances the consumer position after a successful Peek/PeekInto.
+func (r *Reader) Consume(view *View) {
+	atomic.StoreUintptr(r.ring.cons_pos, view.nextCons)
+}
+
+// readLocked drives the polling / data-availability loop shared by Record and View reads.
+func (r *Reader) readLocked(read func() error) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
@@ -171,7 +206,7 @@ func (r *Reader) ReadInto(rec *Record) error {
 		}
 
 		for {
-			err := r.ring.readRecord(rec)
+			err := read()
 			// Not using errors.Is which is quite a bit slower
 			// For a tight loop it might make a difference
 			if err == errBusy {

@@ -31,7 +31,14 @@ func TestNetkitAnchor(t *testing.T) {
 	a := mustLoadProgram(t, ebpf.SchedCLS, ebpf.AttachNetkitPrimary, "")
 	b := mustLoadProgram(t, ebpf.SchedCLS, ebpf.AttachNetkitPrimary, "")
 
-	linkA, ifIndex := mustAttachNetkit(t, a, ebpf.AttachNetkitPrimary)
+	ns := testutils.NewNetNS(t)
+
+	var linkA Link
+	var ifIndex int
+	ns.Do(func() error {
+		linkA, ifIndex = mustAttachNetkit(t, a, ebpf.AttachNetkitPrimary)
+		return nil
+	})
 
 	programInfo, err := a.Info()
 	qt.Assert(t, qt.IsNil(err))
@@ -50,14 +57,18 @@ func TestNetkitAnchor(t *testing.T) {
 		AfterLinkByID(linkID),
 	} {
 		t.Run(fmt.Sprintf("%T", anchor), func(t *testing.T) {
-			linkB, err := AttachNetkit(NetkitOptions{
-				Program:   b,
-				Attach:    ebpf.AttachNetkitPrimary,
-				Interface: ifIndex,
-				Anchor:    anchor,
+			ns.Do(func() error {
+				linkB, err := AttachNetkit(NetkitOptions{
+					Program:   b,
+					Attach:    ebpf.AttachNetkitPrimary,
+					Interface: ifIndex,
+					Anchor:    anchor,
+				})
+				qt.Assert(t, qt.IsNil(err))
+				qt.Assert(t, qt.IsNil(linkB.Close()))
+
+				return nil
 			})
-			qt.Assert(t, qt.IsNil(err))
-			qt.Assert(t, qt.IsNil(linkB.Close()))
 		})
 	}
 }

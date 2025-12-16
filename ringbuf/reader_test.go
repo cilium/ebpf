@@ -6,6 +6,8 @@ import (
 	"testing"
 	"time"
 
+	"iter"
+
 	"github.com/go-quicktest/qt"
 	"github.com/google/go-cmp/cmp"
 
@@ -382,5 +384,74 @@ func BenchmarkReadInto(b *testing.B) {
 		if err := rd.ReadInto(&rec); err != nil {
 			b.Fatal("Can't read samples:", err)
 		}
+	}
+}
+
+func TestRecordsIterator(t *testing.T) {
+	testutils.SkipOnOldKernel(t, "5.8", "BPF ring buffer")
+
+	prog, events := mustOutputSamplesProg(t,
+		sampleMessage{size: 5, flags: 0},
+		sampleMessage{size: 7, flags: 0},
+	)
+	mustRun(t, prog)
+
+	rd, err := NewReader(events)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rd.Close()
+
+	var seen [][]byte
+	for rec, err := range rd.Records() {
+		if err != nil {
+			t.Fatalf("iteration error: %v", err)
+		}
+		seen = append(seen, append([]byte(nil), rec.RawSample...))
+		if len(seen) == 2 {
+			break
+		}
+	}
+
+	qt.Assert(t, qt.Equals(len(seen), 2))
+	qt.Assert(t, qt.DeepEquals(seen[0], []byte{1, 2, 3, 4, 4}))
+	qt.Assert(t, qt.DeepEquals(seen[1], []byte{1, 2, 3, 4, 4, 3, 2}))
+}
+
+func TestRecordsIteratorCloseStopsWithoutError(t *testing.T) {
+	testutils.SkipOnOldKernel(t, "5.8", "BPF ring buffer")
+
+	prog, events := mustOutputSamplesProg(t, sampleMessage{size: 5, flags: 0})
+	mustRun(t, prog)
+
+	rd, err := NewReader(events)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	next, stop := iter.Pull2(rd.Records())
+	defer stop()
+
+	rec, err, ok := next()
+	if !ok {
+		t.Fatal("expected first record before Close")
+	}
+	if err != nil {
+		t.Fatalf("unexpected error before Close: %v", err)
+	}
+	if len(rec.RawSample) == 0 {
+		t.Fatal("expected non-empty sample")
+	}
+
+	if err := rd.Close(); err != nil {
+		t.Fatalf("closing reader: %v", err)
+	}
+
+	_, err, ok = next()
+	if ok {
+		t.Fatal("iterator should stop after Close")
+	}
+	if err != nil {
+		t.Fatalf("iterator returned error after Close: %v", err)
 	}
 }

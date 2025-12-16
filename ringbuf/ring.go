@@ -41,16 +41,17 @@ func (rr *ringReader) AvailableBytes() uint64 {
 	return uint64(prod - cons)
 }
 
-// Read a record from an event ring.
-func (rr *ringReader) readRecord(rec *Record) error {
+// readSample returns a zero-copy view into the next sample, together with the
+// consumer position that should be stored to release the data.
+func (rr *ringReader) readSample() (sample []byte, remaining int, nextCons uintptr, err error) {
 	prod := atomic.LoadUintptr(rr.prod_pos)
 	cons := atomic.LoadUintptr(rr.cons_pos)
 
 	for {
 		if remaining := prod - cons; remaining == 0 {
-			return errEOR
+			return nil, 0, 0, errEOR
 		} else if remaining < sys.BPF_RINGBUF_HDR_SZ {
-			return fmt.Errorf("read record header: %w", io.ErrUnexpectedEOF)
+			return nil, 0, 0, fmt.Errorf("read record header: %w", io.ErrUnexpectedEOF)
 		}
 
 		// read the len field of the header atomically to ensure a happens before
@@ -65,7 +66,7 @@ func (rr *ringReader) readRecord(rec *Record) error {
 			// the next sample in the ring is not committed yet so we
 			// exit without storing the reader/consumer position
 			// and start again from the same position.
-			return errBusy
+			return nil, 0, 0, errBusy
 		}
 
 		cons += sys.BPF_RINGBUF_HDR_SZ
@@ -73,7 +74,7 @@ func (rr *ringReader) readRecord(rec *Record) error {
 		// Data is always padded to 8 byte alignment.
 		dataLenAligned := uintptr(internal.Align(header.dataLen(), 8))
 		if remaining := prod - cons; remaining < dataLenAligned {
-			return fmt.Errorf("read sample data: %w", io.ErrUnexpectedEOF)
+			return nil, 0, 0, fmt.Errorf("read sample data: %w", io.ErrUnexpectedEOF)
 		}
 
 		start = cons & rr.mask
@@ -87,15 +88,20 @@ func (rr *ringReader) readRecord(rec *Record) error {
 			continue
 		}
 
-		if n := header.dataLen(); cap(rec.RawSample) < n {
-			rec.RawSample = make([]byte, n)
-		} else {
-			rec.RawSample = rec.RawSample[:n]
-		}
-
-		copy(rec.RawSample, rr.ring[start:])
-		rec.Remaining = int(prod - cons)
-		atomic.StoreUintptr(rr.cons_pos, cons)
-		return nil
+		end := int(start) + header.dataLen()
+		return rr.ring[start:end], int(prod - cons), cons, nil
 	}
+}
+
+// Read a record from an event ring, copying the sample into the provided Record.
+func (rr *ringReader) readRecord(rec *Record, sample []byte, remaining int) error {
+	if n := len(sample); cap(rec.RawSample) < n {
+		rec.RawSample = make([]byte, n)
+	} else {
+		rec.RawSample = rec.RawSample[:n]
+	}
+
+	copy(rec.RawSample, sample)
+	rec.Remaining = remaining
+	return nil
 }

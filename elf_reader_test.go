@@ -180,6 +180,7 @@ func TestLoadCollectionSpec(t *testing.T) {
 				Name:        "xdp_prog",
 				Type:        XDP,
 				SectionName: "xdp",
+				AttachType:  AttachXDP,
 				License:     "MIT",
 			},
 			"no_relocation": {
@@ -1296,7 +1297,7 @@ func TestELFSectionProgramTypes(t *testing.T) {
 		{"xdp_cpumap/", XDP, AttachXDPCPUMap, 0, ""},
 		// Used incorrect attach type.
 		{"xdp.frags/foo", XDP, AttachXDP, sys.BPF_F_XDP_HAS_FRAGS, ""},
-		{"xdp/foo", XDP, AttachNone, 0, ""},
+		{"xdp/foo", XDP, AttachXDP, 0, ""},
 		{"perf_event", PerfEvent, AttachNone, 0, ""},
 		{"lwt_in", LWTIn, AttachNone, 0, ""},
 		{"lwt_out", LWTOut, AttachNone, 0, ""},

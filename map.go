@@ -640,7 +640,7 @@ func (spec *MapSpec) createMap(inner *sys.FD, c *btf.Cache) (_ *Map, err error) 
 		}
 	}
 
-	fd, err := sys.MapCreate(&attr)
+	fd, err := sys.MapCreateWithToken(&attr)
 
 	// Some map types don't support BTF k/v in earlier kernel versions.
 	// Remove BTF metadata and retry map creation.

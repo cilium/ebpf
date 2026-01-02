@@ -441,7 +441,7 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions, c *btf.Cache)
 	var fd *sys.FD
 	if opts.LogDisabled {
 		// Loading with logging disabled should never retry.
-		fd, err = sys.ProgLoad(attr)
+		fd, err = sys.ProgLoadWithToken(attr)
 		if err == nil {
 			return &Program{"", fd, spec.Name, "", spec.Type}, nil
 		}
@@ -461,7 +461,7 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions, c *btf.Cache)
 				attr.LogBuf = sys.SlicePointer(logBuf)
 			}
 
-			fd, err = sys.ProgLoad(attr)
+			fd, err = sys.ProgLoadWithToken(attr)
 			if err == nil {
 				return &Program{unix.ByteSliceToString(logBuf), fd, spec.Name, "", spec.Type}, nil
 			}

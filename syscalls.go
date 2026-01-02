@@ -207,7 +207,7 @@ var haveObjName = internal.NewFeatureTest("object names", func() error {
 		MapName:    sys.NewObjName("feature_test"),
 	}
 
-	fd, err := sys.MapCreate(&attr)
+	fd, err := sys.MapCreateWithToken(&attr)
 	if err != nil {
 		return internal.ErrNotSupported
 	}

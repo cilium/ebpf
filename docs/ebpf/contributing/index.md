@@ -71,7 +71,7 @@ you as a code owner. Please create an issue in the repository.
     * Have ["Triage"][permissions] role
     * May be asked to review certain parts of code
     * May be asked to help with certain issues
-* [ebpf-go-reviewers]
+* [ebpf-go-reviewers] and [ebpf-go-windows-reviewers]
     * Have ["Write"][permissions] role
     * CODEOWNER of a part of the code base
     * In-depth review of code, escalates to maintainers if necessary
@@ -88,7 +88,8 @@ you as a code owner. Please create an issue in the repository.
 
 [vimto]: https://github.com/lmb/vimto
 [permissions]: https://docs.github.com/en/organizations/managing-user-access-to-your-organizations-repositories/repository-roles-for-an-organization#permissions-for-each-role
-[ebpf-go-contributors]: https://github.com/orgs/cilium/teams/ebpf-go-contributors/members
-[ebpf-go-reviewers]: https://github.com/orgs/cilium/teams/ebpf-go-reviewers/members
-[ebpf-lib-maintainers]: https://github.com/orgs/cilium/teams/ebpf-lib-maintainers/members
+[ebpf-go-contributors]: https://github.com/cilium/community/blob/main/ladder/teams/ebpf-go-contributors.yaml
+[ebpf-go-reviewers]: https://github.com/cilium/community/blob/main/ladder/teams/ebpf-go-reviewers.yaml
+[ebpf-go-windows-reviewers]: https://github.com/cilium/community/blob/main/ladder/teams/ebpf-go-windows-reviewers.yaml
+[ebpf-lib-maintainers]: https://github.com/cilium/community/blob/main/roles/Maintainers.md#ebpf-lib-maintainers-maintainers-of-ciliumebpf
 [DCO]: https://developercertificate.org/

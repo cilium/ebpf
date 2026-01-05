@@ -86,18 +86,18 @@ func MapCreateWithToken(attr *MapCreateAttr) (*FD, error) {
 }
 
 // ProgLoadWithToken try to load prog, on permission issue try using bpf token.
-func ProgLoadWithToken(attr *ProgLoadAttr) (*FD, error) {
-	fd, err := ProgLoad(attr)
-
-	// On permission error try privilege delegation using BPF Token.
-	if errors.Is(err, unix.EPERM) {
-		if tokenFD, tokenErr := BpffsGetTokenFD(""); tokenErr == nil {
-			defer tokenFD.Close()
-			attr.ProgTokenFd = int32(tokenFD.Int())
-			attr.ProgFlags |= BPF_F_TOKEN_FD
-			fd, err = ProgLoad(attr)
-		}
-	}
-
-	return fd, err
-}
+// func ProgLoadWithToken(attr *ProgLoadAttr) (*FD, error) {
+// 	fd, err := ProgLoad(attr)
+//
+// 	// On permission error try privilege delegation using BPF Token.
+// 	if errors.Is(err, unix.EPERM) {
+// 		if tokenFD, tokenErr := BpffsGetTokenFD(""); tokenErr == nil {
+// 			defer tokenFD.Close()
+// 			attr.ProgTokenFd = int32(tokenFD.Int())
+// 			attr.ProgFlags |= BPF_F_TOKEN_FD
+// 			fd, err = ProgLoad(attr)
+// 		}
+// 	}
+//
+// 	return fd, err
+// }

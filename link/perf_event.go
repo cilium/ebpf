@@ -313,7 +313,7 @@ var haveBPFLinkPerfEvent = internal.NewFeatureTest("bpf_link_perf_event", func()
 			asm.Return(),
 		},
 		License: "MIT",
-	})
+	}, nil)
 	if err != nil {
 		return err
 	}

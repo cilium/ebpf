@@ -20,7 +20,7 @@ var haveProgAttach = internal.NewFeatureTest("BPF_PROG_ATTACH", func() error {
 			asm.Mov.Imm(asm.R0, 0),
 			asm.Return(),
 		},
-	})
+	}, nil)
 	if err != nil {
 		return internal.ErrNotSupported
 	}
@@ -45,7 +45,7 @@ var haveProgAttachReplace = internal.NewFeatureTest("BPF_PROG_ATTACH atomic repl
 			asm.Mov.Imm(asm.R0, 0),
 			asm.Return(),
 		},
-	})
+	}, nil)
 
 	if err != nil {
 		return internal.ErrNotSupported
@@ -119,7 +119,7 @@ var haveTCX = internal.NewFeatureTest("tcx", func() error {
 			asm.Mov.Imm(asm.R0, 0),
 			asm.Return(),
 		},
-	})
+	}, nil)
 
 	if err != nil {
 		return internal.ErrNotSupported
@@ -154,7 +154,7 @@ var haveNetkit = internal.NewFeatureTest("netkit", func() error {
 			asm.Mov.Imm(asm.R0, 0),
 			asm.Return(),
 		},
-	})
+	}, nil)
 
 	if err != nil {
 		return internal.ErrNotSupported

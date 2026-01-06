@@ -222,8 +222,8 @@ type Program struct {
 //
 // Returns a [VerifierError] containing the full verifier log if the program is
 // rejected by the kernel.
-func NewProgram(spec *ProgramSpec, token *sys.FD) (*Program, error) {
-	return NewProgramWithOptions(spec, ProgramOptions{}, token)
+func NewProgram(spec *ProgramSpec, bpffs *BPFFS) (*Program, error) {
+	return NewProgramWithOptions(spec, ProgramOptions{}, bpffs)
 }
 
 // NewProgramWithOptions creates a new Program.
@@ -233,12 +233,12 @@ func NewProgram(spec *ProgramSpec, token *sys.FD) (*Program, error) {
 //
 // Returns a [VerifierError] containing the full verifier log if the program is
 // rejected by the kernel.
-func NewProgramWithOptions(spec *ProgramSpec, opts ProgramOptions, token *sys.FD) (*Program, error) {
+func NewProgramWithOptions(spec *ProgramSpec, opts ProgramOptions, bpffs *BPFFS) (*Program, error) {
 	if spec == nil {
 		return nil, errors.New("can't load a program from a nil spec")
 	}
 
-	prog, err := newProgramWithOptions(spec, opts, btf.NewCache(), token)
+	prog, err := newProgramWithOptions(spec, opts, btf.NewCache(), bpffs)
 	if errors.Is(err, asm.ErrUnsatisfiedMapReference) {
 		return nil, fmt.Errorf("cannot load program without loading its whole collection: %w", err)
 	}
@@ -254,7 +254,7 @@ var (
 	kfuncBadCall = []byte(fmt.Sprintf("invalid func unknown#%d\n", kfuncCallPoisonBase))
 )
 
-func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions, c *btf.Cache, token *sys.FD) (*Program, error) {
+func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions, c *btf.Cache, bpffs *BPFFS) (*Program, error) {
 	if len(spec.Instructions) == 0 {
 		return nil, errors.New("instructions cannot be empty")
 	}
@@ -295,7 +295,12 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions, c *btf.Cache,
 		KernVersion:        kv,
 	}
 
-	if token != nil {
+	if bpffs != nil {
+		token, err := bpffs.token()
+		if err != nil {
+			return nil, fmt.Errorf("getting bpf token: %w", err)
+		}
+
 		attr.ProgTokenFd = int32(token.Int())
 		attr.ProgFlags |= sys.BPF_F_TOKEN_FD
 	}

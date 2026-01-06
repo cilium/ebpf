@@ -330,7 +330,7 @@ type collectionLoader struct {
 	programs map[string]*Program
 	vars     map[string]*Variable
 	types    *btf.Cache
-	token    *sys.FD
+	bpffs    *BPFFS
 }
 
 func newCollectionLoader(coll *CollectionSpec, opts *CollectionOptions) (*collectionLoader, error) {
@@ -349,10 +349,10 @@ func newCollectionLoader(coll *CollectionSpec, opts *CollectionOptions) (*collec
 		return nil, fmt.Errorf("populating kallsyms caches: %w", err)
 	}
 
-	var token *sys.FD
-	var err error
+	var bpffs *BPFFS
 	if opts.Token.Enabled {
-		token, err = sys.BpffsGetTokenFD(opts.Token.Path)
+		var err error
+		bpffs, err = NewBPFFSFromPath(opts.Token.Path)
 		if err != nil {
 			return nil, fmt.Errorf("getting bpf token for collection: %w", err)
 		}
@@ -365,7 +365,7 @@ func newCollectionLoader(coll *CollectionSpec, opts *CollectionOptions) (*collec
 		make(map[string]*Program),
 		make(map[string]*Variable),
 		btf.NewCache(),
-		token,
+		bpffs,
 	}, nil
 }
 
@@ -402,7 +402,9 @@ func (cl *collectionLoader) close() {
 	for _, p := range cl.programs {
 		p.Close()
 	}
-	cl.token.Close()
+	if cl.bpffs != nil {
+		cl.bpffs.Close()
+	}
 }
 
 func (cl *collectionLoader) loadMap(mapName string) (*Map, error) {
@@ -445,7 +447,7 @@ func (cl *collectionLoader) loadMap(mapName string) (*Map, error) {
 		return nil, fmt.Errorf("assembling contents of map %s: %w", mapName, err)
 	}
 
-	m, err := newMapWithOptions(mapSpec, cl.opts.Maps, cl.types, cl.token)
+	m, err := newMapWithOptions(mapSpec, cl.opts.Maps, cl.types, cl.bpffs)
 	if err != nil {
 		return nil, fmt.Errorf("map %s: %w", mapName, err)
 	}
@@ -508,7 +510,7 @@ func (cl *collectionLoader) loadProgram(progName string) (*Program, error) {
 		}
 	}
 
-	prog, err := newProgramWithOptions(progSpec, cl.opts.Programs, cl.types, cl.token)
+	prog, err := newProgramWithOptions(progSpec, cl.opts.Programs, cl.types, cl.bpffs)
 	if err != nil {
 		return nil, fmt.Errorf("program %s: %w", progName, err)
 	}

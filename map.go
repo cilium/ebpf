@@ -361,8 +361,8 @@ func newMapFromFD(fd *sys.FD) (*Map, error) {
 // NewMap creates a new Map.
 //
 // It's equivalent to calling NewMapWithOptions with default options.
-func NewMap(spec *MapSpec, token *sys.FD) (*Map, error) {
-	return NewMapWithOptions(spec, MapOptions{}, token)
+func NewMap(spec *MapSpec, bpffs *BPFFS) (*Map, error) {
+	return NewMapWithOptions(spec, MapOptions{}, bpffs)
 }
 
 // NewMapWithOptions creates a new Map.
@@ -375,8 +375,8 @@ func NewMap(spec *MapSpec, token *sys.FD) (*Map, error) {
 // by calling rlimit.RemoveMemlock() prior to calling NewMapWithOptions.
 //
 // May return an error wrapping ErrMapIncompatible.
-func NewMapWithOptions(spec *MapSpec, opts MapOptions, token *sys.FD) (*Map, error) {
-	m, err := newMapWithOptions(spec, opts, btf.NewCache(), token)
+func NewMapWithOptions(spec *MapSpec, opts MapOptions, bpffs *BPFFS) (*Map, error) {
+	m, err := newMapWithOptions(spec, opts, btf.NewCache(), bpffs)
 	if err != nil {
 		return nil, fmt.Errorf("creating map: %w", err)
 	}
@@ -389,7 +389,7 @@ func NewMapWithOptions(spec *MapSpec, opts MapOptions, token *sys.FD) (*Map, err
 	return m, nil
 }
 
-func newMapWithOptions(spec *MapSpec, opts MapOptions, c *btf.Cache, token *sys.FD) (_ *Map, err error) {
+func newMapWithOptions(spec *MapSpec, opts MapOptions, c *btf.Cache, bpffs *BPFFS) (_ *Map, err error) {
 	closeOnError := func(c io.Closer) {
 		if err != nil {
 			c.Close()
@@ -439,7 +439,7 @@ func newMapWithOptions(spec *MapSpec, opts MapOptions, c *btf.Cache, token *sys.
 			return nil, errors.New("inner maps cannot be pinned")
 		}
 
-		template, err := spec.InnerMap.createMap(nil, c, token)
+		template, err := spec.InnerMap.createMap(nil, c, bpffs)
 		if err != nil {
 			return nil, fmt.Errorf("inner map: %w", err)
 		}
@@ -451,7 +451,7 @@ func newMapWithOptions(spec *MapSpec, opts MapOptions, c *btf.Cache, token *sys.
 		innerFd = template.fd
 	}
 
-	m, err := spec.createMap(innerFd, c, token)
+	m, err := spec.createMap(innerFd, c, bpffs)
 	if err != nil {
 		return nil, err
 	}
@@ -546,7 +546,7 @@ func (m *Map) memorySize() (int, error) {
 
 // createMap validates the spec's properties and creates the map in the kernel
 // using the given opts. It does not populate or freeze the map.
-func (spec *MapSpec) createMap(inner *sys.FD, c *btf.Cache, token *sys.FD) (_ *Map, err error) {
+func (spec *MapSpec) createMap(inner *sys.FD, c *btf.Cache, bpffs *BPFFS) (_ *Map, err error) {
 	closeOnError := func(closer io.Closer) {
 		if err != nil {
 			closer.Close()
@@ -584,7 +584,12 @@ func (spec *MapSpec) createMap(inner *sys.FD, c *btf.Cache, token *sys.FD) (_ *M
 		MapExtra:   spec.MapExtra,
 	}
 
-	if token != nil {
+	if bpffs != nil {
+		token, err := bpffs.token()
+		if err != nil {
+			return nil, fmt.Errorf("getting bpf token: %w", err)
+		}
+
 		attr.MapTokenFd = int32(token.Int())
 		attr.MapFlags |= sys.BPF_F_TOKEN_FD
 	}

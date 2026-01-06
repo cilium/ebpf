@@ -40,7 +40,7 @@ jobs:
           install-go: false
 
       - name: Run golangci-lint
-        uses: golangci/golangci-lint-action@v8.0.0
+        uses: golangci/golangci-lint-action@v9.2.0
 
       - name: Generate and format code
         run: |

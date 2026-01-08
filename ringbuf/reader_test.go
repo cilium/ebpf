@@ -384,3 +384,34 @@ func BenchmarkReadInto(b *testing.B) {
 		}
 	}
 }
+
+func TestRecordsIterator(t *testing.T) {
+	testutils.SkipOnOldKernel(t, "5.8", "BPF ring buffer")
+
+	prog, events := mustOutputSamplesProg(t,
+		sampleMessage{size: 5, flags: 0},
+		sampleMessage{size: 7, flags: 0},
+	)
+	mustRun(t, prog)
+
+	rd, err := NewReader(events)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rd.Close()
+
+	var seen [][]byte
+	for rec, err := range rd.Records() {
+		if err != nil {
+			t.Fatalf("iteration error: %v", err)
+		}
+		seen = append(seen, append([]byte(nil), rec.RawSample...))
+		if len(seen) == 2 {
+			break
+		}
+	}
+
+	qt.Assert(t, qt.Equals(len(seen), 2))
+	qt.Assert(t, qt.DeepEquals(seen[0], []byte{1, 2, 3, 4, 4}))
+	qt.Assert(t, qt.DeepEquals(seen[1], []byte{1, 2, 3, 4, 4, 3, 2}))
+}

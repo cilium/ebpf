@@ -5,8 +5,11 @@ import (
 	"fmt"
 	"os"
 	"sync"
+	"sync/atomic"
 	"time"
 	"unsafe"
+
+	"iter"
 
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/internal/platform"
@@ -40,6 +43,11 @@ func (rh *ringbufHeader) dataLen() int {
 }
 
 type Record struct {
+	// RawSample contains the raw bytes of a ringbuf record.
+	//
+	// When obtained via [Reader.Records], RawSample is a zero-copy view into the
+	// underlying mmap. It is only valid until the iterator yields the next
+	// record or terminates. Callers must copy the data if they need to retain it.
 	RawSample []byte
 
 	// The minimum number of bytes remaining in the ring buffer after this Record has been read.
@@ -144,6 +152,59 @@ func (r *Reader) Read() (Record, error) {
 
 // ReadInto is like Read except that it allows reusing Record and associated buffers.
 func (r *Reader) ReadInto(rec *Record) error {
+	return r.readLocked(func() error {
+		return r.ring.readRecord(rec)
+	})
+}
+
+// Records iterates over records in the reader until [Reader.Close] is called.
+//
+// Record.RawSample is only valid until the next call to the iterator. Callers
+// must copy the data if it needs to outlive the current iteration.
+//
+// This convenience wrapper allocates a single Record once. To fully avoid
+// allocations, use [Reader.RecordsInto] and pass in a reusable Record.
+func (r *Reader) Records() iter.Seq2[*Record, error] {
+	rec := Record{}
+	return r.RecordsInto(&rec)
+}
+
+// RecordsInto is like Records but allows reusing the Record and associated buffers.
+func (r *Reader) RecordsInto(rec *Record) iter.Seq2[*Record, error] {
+	return func(yield func(*Record, error) bool) {
+		var (
+			sample    []byte
+			remaining int
+			nextCons  uintptr
+		)
+
+		for {
+			err := r.readLocked(func() error {
+				var err error
+				sample, remaining, nextCons, err = r.ring.readSample()
+				return err
+			})
+			if err != nil {
+				yield(nil, err)
+				return
+			}
+
+			// Limit cap to len so append can't write past the record and corrupt the ring.
+			rec.RawSample = sample[:len(sample):len(sample)]
+			rec.Remaining = remaining
+
+			if !yield(rec, nil) {
+				atomic.StoreUintptr(r.ring.cons_pos, nextCons)
+				return
+			}
+
+			atomic.StoreUintptr(r.ring.cons_pos, nextCons)
+		}
+	}
+}
+
+// readLocked drives the polling / data-availability loop shared by Record reads.
+func (r *Reader) readLocked(read func() error) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
@@ -171,9 +232,7 @@ func (r *Reader) ReadInto(rec *Record) error {
 		}
 
 		for {
-			err := r.ring.readRecord(rec)
-			// Not using errors.Is which is quite a bit slower
-			// For a tight loop it might make a difference
+			err := read()
 			if err == errBusy {
 				continue
 			}

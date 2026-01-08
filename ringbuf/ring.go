@@ -43,6 +43,21 @@ func (rr *ringReader) AvailableBytes() uint64 {
 
 // Read a record from an event ring.
 func (rr *ringReader) readRecord(rec *Record) error {
+	return rr.readRecordZeroCopy(func(sample []byte, remaining int) error {
+		n := len(sample)
+		if cap(rec.RawSample) < n {
+			rec.RawSample = make([]byte, n)
+		} else {
+			rec.RawSample = rec.RawSample[:n]
+		}
+		copy(rec.RawSample, sample)
+		rec.Remaining = remaining
+
+		return nil
+	})
+}
+
+func (rr *ringReader) readRecordZeroCopy(f func(sample []byte, remaining int) error) error {
 	prod := atomic.LoadUintptr(rr.prod_pos)
 	cons := atomic.LoadUintptr(rr.cons_pos)
 
@@ -87,15 +102,9 @@ func (rr *ringReader) readRecord(rec *Record) error {
 			continue
 		}
 
-		if n := header.dataLen(); cap(rec.RawSample) < n {
-			rec.RawSample = make([]byte, n)
-		} else {
-			rec.RawSample = rec.RawSample[:n]
-		}
-
-		copy(rec.RawSample, rr.ring[start:])
-		rec.Remaining = int(prod - cons)
+		n := header.dataLen()
+		err := f(rr.ring[start:start+uintptr(n)], int(prod-cons))
 		atomic.StoreUintptr(rr.cons_pos, cons)
-		return nil
+		return err
 	}
 }

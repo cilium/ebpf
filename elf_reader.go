@@ -1556,14 +1556,6 @@ func getProgType(sectionName string) (ProgramType, AttachType, uint32, string) {
 		if t.flags&_SEC_XDP_FRAGS > 0 {
 			flags |= sys.BPF_F_XDP_HAS_FRAGS
 		}
-		if t.flags&_SEC_EXP_ATTACH_OPT > 0 {
-			if programType == XDP {
-				// The library doesn't yet have code to fallback to not specifying
-				// attach type. Only do this for XDP since we've enforced correct
-				// attach type for all other program types.
-				attachType = AttachNone
-			}
-		}
 		if t.flags&ignoreExtra > 0 {
 			extra = ""
 		}

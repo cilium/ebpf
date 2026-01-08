@@ -19,6 +19,11 @@ import (
 	"github.com/cilium/ebpf/internal/sys"
 )
 
+type TokenOptions struct {
+	Path    string
+	Enabled bool
+}
+
 // CollectionOptions control loading a collection into the kernel.
 //
 // Maps and Programs are passed to NewMapWithOptions and NewProgramsWithOptions.
@@ -36,6 +41,8 @@ type CollectionOptions struct {
 	// The given Maps are Clone()d before being used in the Collection, so the
 	// caller can Close() them freely when they are no longer needed.
 	MapReplacements map[string]*Map
+
+	Token TokenOptions
 }
 
 // CollectionSpec describes a collection.
@@ -323,6 +330,7 @@ type collectionLoader struct {
 	programs map[string]*Program
 	vars     map[string]*Variable
 	types    *btf.Cache
+	bpffs    *BPFFS
 }
 
 func newCollectionLoader(coll *CollectionSpec, opts *CollectionOptions) (*collectionLoader, error) {
@@ -341,6 +349,15 @@ func newCollectionLoader(coll *CollectionSpec, opts *CollectionOptions) (*collec
 		return nil, fmt.Errorf("populating kallsyms caches: %w", err)
 	}
 
+	var bpffs *BPFFS
+	if opts.Token.Enabled {
+		var err error
+		bpffs, err = NewBPFFSFromPath(opts.Token.Path)
+		if err != nil {
+			return nil, fmt.Errorf("getting bpf token for collection: %w", err)
+		}
+	}
+
 	return &collectionLoader{
 		coll,
 		opts,
@@ -348,6 +365,7 @@ func newCollectionLoader(coll *CollectionSpec, opts *CollectionOptions) (*collec
 		make(map[string]*Program),
 		make(map[string]*Variable),
 		btf.NewCache(),
+		bpffs,
 	}, nil
 }
 
@@ -383,6 +401,9 @@ func (cl *collectionLoader) close() {
 	}
 	for _, p := range cl.programs {
 		p.Close()
+	}
+	if cl.bpffs != nil {
+		cl.bpffs.Close()
 	}
 }
 
@@ -426,7 +447,7 @@ func (cl *collectionLoader) loadMap(mapName string) (*Map, error) {
 		return nil, fmt.Errorf("assembling contents of map %s: %w", mapName, err)
 	}
 
-	m, err := newMapWithOptions(mapSpec, cl.opts.Maps, cl.types)
+	m, err := newMapWithOptions(mapSpec, cl.opts.Maps, cl.types, cl.bpffs)
 	if err != nil {
 		return nil, fmt.Errorf("map %s: %w", mapName, err)
 	}
@@ -489,7 +510,7 @@ func (cl *collectionLoader) loadProgram(progName string) (*Program, error) {
 		}
 	}
 
-	prog, err := newProgramWithOptions(progSpec, cl.opts.Programs, cl.types)
+	prog, err := newProgramWithOptions(progSpec, cl.opts.Programs, cl.types, cl.bpffs)
 	if err != nil {
 		return nil, fmt.Errorf("program %s: %w", progName, err)
 	}

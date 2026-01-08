@@ -207,6 +207,13 @@ var haveObjName = internal.NewFeatureTest("object names", func() error {
 		MapName:    sys.NewObjName("feature_test"),
 	}
 
+	if bpffs, err := NewBPFFSFromPath(""); err == nil {
+		if token, err := bpffs.token(); err == nil {
+			attr.MapTokenFd = int32(token.Int())
+			attr.MapFlags |= sys.BPF_F_TOKEN_FD
+		}
+	}
+
 	fd, err := sys.MapCreate(&attr)
 	if err != nil {
 		return internal.ErrNotSupported

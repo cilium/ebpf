@@ -461,7 +461,7 @@ func resolveKconfigReferences(insns asm.Instructions) (_ *Map, err error) {
 		return nil, err
 	}
 
-	kconfig, err := NewMap(cpy)
+	kconfig, err := NewMap(cpy, nil)
 	if err != nil {
 		return nil, err
 	}

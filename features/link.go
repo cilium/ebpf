@@ -27,7 +27,7 @@ var haveBPFLinkUprobeMulti = internal.NewFeatureTest("bpf_link_uprobe_multi", fu
 		},
 		AttachType: ebpf.AttachTraceUprobeMulti,
 		License:    "MIT",
-	})
+	}, nil)
 	if errors.Is(err, unix.E2BIG) {
 		// Kernel doesn't support AttachType field.
 		return ebpf.ErrNotSupported
@@ -77,7 +77,7 @@ var haveBPFLinkKprobeMulti = internal.NewFeatureTest("bpf_link_kprobe_multi", fu
 		},
 		AttachType: ebpf.AttachTraceKprobeMulti,
 		License:    "MIT",
-	})
+	}, nil)
 	if errors.Is(err, unix.E2BIG) {
 		// Kernel doesn't support AttachType field.
 		return ebpf.ErrNotSupported
@@ -125,7 +125,7 @@ var haveBPFLinkKprobeSession = internal.NewFeatureTest("bpf_link_kprobe_session"
 		},
 		AttachType: ebpf.AttachTraceKprobeSession,
 		License:    "MIT",
-	})
+	}, nil)
 	if errors.Is(err, unix.E2BIG) {
 		// Kernel doesn't support AttachType field.
 		return ebpf.ErrNotSupported

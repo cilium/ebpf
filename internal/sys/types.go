@@ -1530,6 +1530,20 @@ func RawTracepointOpen(attr *RawTracepointOpenAttr) (*FD, error) {
 	return NewFD(int(fd))
 }
 
+type TokenCreateAttr struct {
+	_       structs.HostLayout
+	Flags   uint32
+	BpffsFd uint32
+}
+
+func TokenCreate(attr *TokenCreateAttr) (*FD, error) {
+	fd, err := BPF(BPF_TOKEN_CREATE, unsafe.Pointer(attr), unsafe.Sizeof(*attr))
+	if err != nil {
+		return nil, err
+	}
+	return NewFD(int(fd))
+}
+
 type CgroupLinkInfo struct {
 	_          structs.HostLayout
 	Type       LinkType

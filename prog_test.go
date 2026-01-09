@@ -668,7 +668,7 @@ func TestProgramSpecCopy(t *testing.T) {
 	qt.Assert(t, testutils.IsDeepCopy(a.Copy(), a))
 }
 
-func TestProgramSpecTag(t *testing.T) {
+func TestProgramSpecCompatible(t *testing.T) {
 	arr := createMap(t, Array, 2)
 
 	spec := &ProgramSpec{
@@ -690,13 +690,11 @@ func TestProgramSpecTag(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	tag, err := spec.Tag()
-	if err != nil {
-		t.Fatal("Can't calculate tag:", err)
-	}
+	err = spec.Compatible(info)
+	testutils.SkipIfNotSupportedOnOS(t, err)
 
-	if info.Tag != "" && tag != info.Tag {
-		t.Errorf("Calculated tag %s doesn't match kernel tag %s", tag, info.Tag)
+	if err != nil {
+		t.Fatal(err)
 	}
 }
 
@@ -838,24 +836,17 @@ func TestProgramInstructions(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	insns, err := pi.Instructions()
-	testutils.SkipIfNotSupportedOnOS(t, err)
+	if platform.IsWindows {
+		t.Skip("prog.Info() does not return a valid Tag on Windows")
+	}
+
+	tagXlatedMatch, err := spec.Instructions.TagsMatch(pi.Tag, internal.NativeEndian)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	tag, err := spec.Tag()
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	tagXlated, err := insns.Tag(internal.NativeEndian)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if tag != tagXlated {
-		t.Fatalf("tag %s differs from xlated instructions tag %s", tag, tagXlated)
+	if !tagXlatedMatch {
+		t.Fatalf("tag differs from xlated instructions tag")
 	}
 }
 
@@ -1053,7 +1044,7 @@ func ExampleProgram_unmarshalFromMap() {
 	}
 }
 
-func ExampleProgramSpec_Tag() {
+func ExampleProgramSpec_Compatible() {
 	spec := &ProgramSpec{
 		Type: SocketFilter,
 		Instructions: asm.Instructions{
@@ -1065,11 +1056,10 @@ func ExampleProgramSpec_Tag() {
 
 	prog, _ := NewProgram(spec)
 	info, _ := prog.Info()
-	tag, _ := spec.Tag()
 
-	if info.Tag != tag {
-		fmt.Printf("The tags don't match: %s != %s\n", info.Tag, tag)
+	if err := spec.Compatible(info); err != nil {
+		fmt.Printf("The programs are incompatible: %s\n", err)
 	} else {
-		fmt.Println("The programs are identical, tag is", tag)
+		fmt.Println("The programs are compatible")
 	}
 }

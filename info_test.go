@@ -134,9 +134,13 @@ func validateProgInfo(t *testing.T, spec *ProgramSpec, info *ProgramInfo) {
 
 	qt.Assert(t, qt.Equals(info.Type, spec.Type))
 	if info.Tag != "" {
-		if testutils.IsVersionLessThan(t, "6.18") {
-			qt.Assert(t, qt.Equals(info.Tag, "d7edec644f05498d"))
-		}
+		qt.Assert(t, qt.SliceAny(
+			[]string{
+				"d7edec644f05498d", // SHA1, pre-6.18
+				"01e57aadad14352b", // SHA256
+			},
+			qt.F2(qt.Equals, info.Tag),
+		))
 	}
 	memlock, ok := info.Memlock()
 	if ok {

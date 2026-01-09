@@ -172,8 +172,37 @@ func (ps *ProgramSpec) Copy() *ProgramSpec {
 // Tag calculates the kernel tag for a series of instructions.
 //
 // Use asm.Instructions.Tag if you need to calculate for non-native endianness.
+//
+// Deprecated: The value produced by this method no longer matches tags produced
+// by the kernel since v6.18. Use [ProgramSpec.Compatible] instead.
 func (ps *ProgramSpec) Tag() (string, error) {
 	return ps.Instructions.Tag(internal.NativeEndian)
+}
+
+// ErrProgIncompatible is returned when a loaded program is incompatible with a given spec.
+var ErrProgIncompatible = errors.New("program is incompatible")
+
+// Compatible checks if a loaded program is of the same program type and has
+// matching instruction hashes. Returns nil on match, and error otherwise.
+func (ps *ProgramSpec) Compatible(info *ProgramInfo) error {
+	if platform.IsWindows {
+		return fmt.Errorf("%w: Windows does not support tag read back from kernel", internal.ErrNotSupportedOnOS)
+	}
+
+	if info.Type != ps.Type {
+		return fmt.Errorf("%w: program type mismatch", ErrProgIncompatible)
+	}
+
+	insnCompatible, err := ps.Instructions.TagsMatch(info.Tag, internal.NativeEndian)
+	if err != nil {
+		return err
+	}
+
+	if !insnCompatible {
+		return fmt.Errorf("%w: instruction hashes mismatch", ErrProgIncompatible)
+	}
+
+	return nil
 }
 
 // targetsKernelModule returns true if the program supports being attached to a

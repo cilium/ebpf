@@ -2,10 +2,12 @@ package asm
 
 import (
 	"crypto/sha1"
+	"crypto/sha256"
 	"encoding/binary"
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"hash"
 	"io"
 	"math"
 	"sort"
@@ -745,18 +747,72 @@ func (insns Instructions) Marshal(w io.Writer, bo binary.ByteOrder) error {
 // It mirrors bpf_prog_calc_tag in the kernel and so can be compared
 // to ProgramInfo.Tag to figure out whether a loaded program matches
 // certain instructions.
+//
+// Deprecated: The value produced by this method no longer matches tags produced
+// by the kernel since v6.18. Use [Instructions.TagsMatch] instead.
 func (insns Instructions) Tag(bo binary.ByteOrder) (string, error) {
+	// We cannot determine which hashing function to use without probing the kernel.
+	// So use the legacy SHA-1 implementation and deprecate this method.
+	return insns.tagSha1(bo)
+}
+
+// TagsMatch checks if the given tag (truncated hash of instructions) matches
+// the tag of this instruction stream.
+func (insns Instructions) TagsMatch(tag string, bo binary.ByteOrder) (bool, error) {
+	sha1Tag, err := insns.tagSha1(bo)
+	if err != nil {
+		return false, err
+	}
+
+	sha256Tag, err := insns.tagSha256(bo)
+	if err != nil {
+		return false, err
+	}
+
+	return tag == sha1Tag || tag == sha256Tag, nil
+}
+
+// tagSha1 calculates the kernel tag for a series of instructions.
+//
+// It mirrors bpf_prog_calc_tag in kernels up to v6.18 and so can be
+// compared to ProgramInfo.Tag to figure out whether a loaded program
+// matches certain instructions.
+func (insns Instructions) tagSha1(bo binary.ByteOrder) (string, error) {
 	h := sha1.New()
+	if err := insns.hash(h, bo); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(h.Sum(nil)[:sys.BPF_TAG_SIZE]), nil
+}
+
+// tagSha256 calculates the kernel tag for a series of instructions.
+//
+// It mirrors bpf_prog_calc_tag in the kernel and so can be compared
+// to ProgramInfo.Tag to figure out whether a loaded program matches
+// certain instructions.
+func (insns Instructions) tagSha256(bo binary.ByteOrder) (string, error) {
+	h := sha256.New()
+	if err := insns.hash(h, bo); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(h.Sum(nil)[:sys.BPF_TAG_SIZE]), nil
+}
+
+// hash calculates the hash of the instruction stream. Map load instructions
+// are zeroed out, since these contain map file descriptors or pointers to
+// maps, which will be different from load to load and would make the hash
+// non-deterministic.
+func (insns Instructions) hash(h hash.Hash, bo binary.ByteOrder) error {
 	for i, ins := range insns {
 		if ins.IsLoadFromMap() {
 			ins.Constant = 0
 		}
 		_, err := ins.Marshal(h, bo)
 		if err != nil {
-			return "", fmt.Errorf("instruction %d: %w", i, err)
+			return fmt.Errorf("instruction %d: %w", i, err)
 		}
 	}
-	return hex.EncodeToString(h.Sum(nil)[:sys.BPF_TAG_SIZE]), nil
+	return nil
 }
 
 // encodeFunctionReferences populates the Offset (or Constant, depending on

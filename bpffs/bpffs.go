@@ -1,4 +1,4 @@
-package ebpf
+package bpffs
 
 import (
 	"errors"
@@ -58,7 +58,7 @@ func (bf *BPFFS) Close() error {
 	return errors.Join(errs...)
 }
 
-func (bf *BPFFS) token() (*sys.FD, error) {
+func (bf *BPFFS) Token() (*sys.FD, error) {
 	if bf.tokenFd != nil {
 		return bf.tokenFd.Dup()
 	}

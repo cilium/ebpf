@@ -155,6 +155,8 @@ type ProgramSpec struct {
 
 	// The byte order this program was compiled for, may be nil.
 	ByteOrder binary.ByteOrder
+
+	BpffsTokenFd *sys.FD
 }
 
 // Copy returns a copy of the spec.
@@ -166,6 +168,11 @@ func (ps *ProgramSpec) Copy() *ProgramSpec {
 	cpy := *ps
 	cpy.Instructions = make(asm.Instructions, len(ps.Instructions))
 	copy(cpy.Instructions, ps.Instructions)
+
+	if cpy.BpffsTokenFd != nil {
+		cpy.BpffsTokenFd, _ = cpy.BpffsTokenFd.Dup()
+	}
+
 	return &cpy
 }
 
@@ -214,6 +221,7 @@ type Program struct {
 	name       string
 	pinnedPath string
 	typ        ProgramType
+	tokenFd    *sys.FD
 }
 
 // NewProgram creates a new Program.
@@ -222,8 +230,8 @@ type Program struct {
 //
 // Returns a [VerifierError] containing the full verifier log if the program is
 // rejected by the kernel.
-func NewProgram(spec *ProgramSpec, bpffs *BPFFS) (*Program, error) {
-	return NewProgramWithOptions(spec, ProgramOptions{}, bpffs)
+func NewProgram(spec *ProgramSpec) (*Program, error) {
+	return NewProgramWithOptions(spec, ProgramOptions{})
 }
 
 // NewProgramWithOptions creates a new Program.
@@ -233,12 +241,12 @@ func NewProgram(spec *ProgramSpec, bpffs *BPFFS) (*Program, error) {
 //
 // Returns a [VerifierError] containing the full verifier log if the program is
 // rejected by the kernel.
-func NewProgramWithOptions(spec *ProgramSpec, opts ProgramOptions, bpffs *BPFFS) (*Program, error) {
+func NewProgramWithOptions(spec *ProgramSpec, opts ProgramOptions) (*Program, error) {
 	if spec == nil {
 		return nil, errors.New("can't load a program from a nil spec")
 	}
 
-	prog, err := newProgramWithOptions(spec, opts, btf.NewCache(), bpffs)
+	prog, err := newProgramWithOptions(spec, opts, btf.NewCache())
 	if errors.Is(err, asm.ErrUnsatisfiedMapReference) {
 		return nil, fmt.Errorf("cannot load program without loading its whole collection: %w", err)
 	}
@@ -254,7 +262,7 @@ var (
 	kfuncBadCall = []byte(fmt.Sprintf("invalid func unknown#%d\n", kfuncCallPoisonBase))
 )
 
-func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions, c *btf.Cache, bpffs *BPFFS) (*Program, error) {
+func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions, c *btf.Cache) (*Program, error) {
 	if len(spec.Instructions) == 0 {
 		return nil, errors.New("instructions cannot be empty")
 	}
@@ -285,8 +293,13 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions, c *btf.Cache,
 		return nil, fmt.Errorf("program type %s (%s): %w", spec.Type, p, internal.ErrNotSupportedOnOS)
 	}
 
+	var tokenFd int32
+	if spec.BpffsTokenFd != nil {
+		tokenFd = spec.BpffsTokenFd.Int32()
+	}
+
 	attr := &sys.ProgLoadAttr{
-		ProgName:           maybeFillObjName(spec.Name),
+		ProgName:           maybeFillObjName(spec.Name, tokenFd),
 		ProgType:           sys.ProgType(progType),
 		ProgFlags:          spec.Flags,
 		ProgIfindex:        spec.Ifindex,
@@ -295,13 +308,8 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions, c *btf.Cache,
 		KernVersion:        kv,
 	}
 
-	if bpffs != nil {
-		token, err := bpffs.token()
-		if err != nil {
-			return nil, fmt.Errorf("getting bpf token: %w", err)
-		}
-
-		attr.ProgTokenFd = int32(token.Int())
+	if tokenFd > 0 {
+		attr.ProgTokenFd = tokenFd
 		attr.ProgFlags |= sys.BPF_F_TOKEN_FD
 	}
 
@@ -313,7 +321,7 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions, c *btf.Cache,
 		return nil, fmt.Errorf("apply CO-RE relocations: %w", err)
 	}
 
-	errExtInfos := haveProgramExtInfos()
+	errExtInfos := haveProgramExtInfos(internal.WithToken(tokenFd))
 	if !b.Empty() && errors.Is(errExtInfos, ErrNotSupported) {
 		// There is at least one CO-RE relocation which relies on a stable local
 		// type ID.
@@ -339,7 +347,7 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions, c *btf.Cache,
 	}
 
 	if !b.Empty() {
-		handle, err := btf.NewHandle(&b)
+		handle, err := btf.NewHandle(&b, tokenFd)
 		if err != nil {
 			return nil, fmt.Errorf("load BTF: %w", err)
 		}
@@ -358,7 +366,7 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions, c *btf.Cache,
 		return nil, fmt.Errorf("resolve .ksyms: %w", err)
 	}
 
-	if err := fixupAndValidate(insns); err != nil {
+	if err := fixupAndValidate(insns, tokenFd); err != nil {
 		return nil, err
 	}
 
@@ -448,12 +456,20 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions, c *btf.Cache,
 	}
 
 	var logBuf []byte
-	var fd *sys.FD
+	var fd, progTokenFd *sys.FD
+
+	if spec.BpffsTokenFd != nil {
+		progTokenFd, err = spec.BpffsTokenFd.Dup()
+		if err != nil {
+			return nil, fmt.Errorf("setting prog bpf token fd: %w", err)
+		}
+	}
+
 	if opts.LogDisabled {
 		// Loading with logging disabled should never retry.
 		fd, err = sys.ProgLoad(attr)
 		if err == nil {
-			return &Program{"", fd, spec.Name, "", spec.Type}, nil
+			return &Program{"", fd, spec.Name, "", spec.Type, progTokenFd}, nil
 		}
 	} else {
 		// Only specify log size if log level is also specified. Setting size
@@ -473,7 +489,7 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions, c *btf.Cache,
 
 			fd, err = sys.ProgLoad(attr)
 			if err == nil {
-				return &Program{unix.ByteSliceToString(logBuf), fd, spec.Name, "", spec.Type}, nil
+				return &Program{unix.ByteSliceToString(logBuf), fd, spec.Name, "", spec.Type, progTokenFd}, nil
 			}
 
 			if !retryLogAttrs(attr, opts.LogSizeStart, err) {
@@ -526,7 +542,7 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions, c *btf.Cache,
 	// hasFunctionReferences may be expensive, so check it last.
 	if (errors.Is(err, unix.EINVAL) || errors.Is(err, unix.EPERM)) &&
 		hasFunctionReferences(spec.Instructions) {
-		if err := haveBPFToBPFCalls(); err != nil {
+		if err := haveBPFToBPFCalls(internal.WithToken(tokenFd)); err != nil {
 			return nil, fmt.Errorf("load program: %w", err)
 		}
 	}
@@ -614,7 +630,7 @@ func newProgramFromFD(fd *sys.FD) (*Program, error) {
 		return nil, fmt.Errorf("discover program type: %w", err)
 	}
 
-	return &Program{"", fd, info.Name, "", info.Type}, nil
+	return &Program{"", fd, info.Name, "", info.Type, nil}, nil
 }
 
 func (p *Program) String() string {
@@ -633,7 +649,11 @@ func (p *Program) Type() ProgramType {
 //
 // Requires at least 4.10.
 func (p *Program) Info() (*ProgramInfo, error) {
-	return newProgramInfoFromFd(p.fd)
+	if p.tokenFd != nil {
+		return newProgramInfoFromFd(p.fd, p.tokenFd.Int32())
+	}
+
+	return newProgramInfoFromFd(p.fd, -1)
 }
 
 // Stats returns runtime statistics about the Program. Requires BPF statistics
@@ -684,7 +704,15 @@ func (p *Program) Clone() (*Program, error) {
 		return nil, fmt.Errorf("can't clone program: %w", err)
 	}
 
-	return &Program{p.VerifierLog, dup, p.name, "", p.typ}, nil
+	var dupToken *sys.FD
+	if p.tokenFd != nil {
+		dupToken, err = p.tokenFd.Dup()
+		if err != nil {
+			return nil, fmt.Errorf("can't clone program: %w", err)
+		}
+	}
+
+	return &Program{p.VerifierLog, dup, p.name, "", p.typ, dupToken}, nil
 }
 
 // Pin persists the Program on the BPF virtual file system past the lifetime of
@@ -727,6 +755,10 @@ func (p *Program) IsPinned() bool {
 func (p *Program) Close() error {
 	if p == nil {
 		return nil
+	}
+
+	if p.tokenFd != nil {
+		p.tokenFd.Close()
 	}
 
 	return p.fd.Close()
@@ -839,9 +871,19 @@ func (p *Program) Benchmark(in []byte, repeat int, reset func()) (uint32, time.D
 	return ret, total, nil
 }
 
-var haveProgRun = internal.NewFeatureTest("BPF_PROG_RUN", func() error {
+var haveProgRun = internal.NewFeatureTest("BPF_PROG_RUN", func(opts ...internal.FeatureTestOption) error {
 	if platform.IsWindows {
 		return nil
+	}
+
+	var tokenFd *sys.FD
+	fd := internal.BuildOptions(opts...).BpffsTokenFd
+	if fd > 0 {
+		var err error
+		tokenFd, err = sys.NewFD(int(fd))
+		if err != nil {
+			return fmt.Errorf("setting bpf token: %w", err)
+		}
 	}
 
 	prog, err := NewProgram(&ProgramSpec{
@@ -851,8 +893,9 @@ var haveProgRun = internal.NewFeatureTest("BPF_PROG_RUN", func() error {
 			asm.LoadImm(asm.R0, 0, asm.DWord),
 			asm.Return(),
 		},
-		License: "MIT",
-	}, nil)
+		License:      "MIT",
+		BpffsTokenFd: tokenFd,
+	})
 	if err != nil {
 		// This may be because we lack sufficient permissions, etc.
 		return err
@@ -892,7 +935,12 @@ func (p *Program) run(opts *RunOptions) (uint32, time.Duration, error) {
 		return 0, 0, fmt.Errorf("input is too long")
 	}
 
-	if err := haveProgRun(); err != nil {
+	var tokenFd int32
+	if p.tokenFd != nil {
+		tokenFd = p.tokenFd.Int32()
+	}
+
+	if err := haveProgRun(internal.WithToken(tokenFd)); err != nil {
 		return 0, 0, err
 	}
 
@@ -1043,7 +1091,15 @@ func LoadPinnedProgram(fileName string, opts *LoadPinOptions) (*Program, error) 
 	if err == nil {
 		p.pinnedPath = fileName
 
-		if haveObjName() != nil {
+		var tokenFd int32
+		if opts != nil && opts.BpffsTokenFd != nil {
+			if dupToken, err := opts.BpffsTokenFd.Dup(); err == nil {
+				p.tokenFd = dupToken
+				tokenFd = dupToken.Int32()
+			}
+		}
+
+		if haveObjName(internal.WithToken(tokenFd)) != nil {
 			p.name = filepath.Base(fileName)
 		}
 	}

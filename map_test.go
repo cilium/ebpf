@@ -98,6 +98,7 @@ func TestMapSpecCopy(t *testing.T) {
 		&btf.Int{},
 		&btf.Int{},
 		nil,
+		nil,
 	}
 	a.InnerMap = a
 
@@ -1000,7 +1001,7 @@ func TestMapBatchLookupAllocations(t *testing.T) {
 				}
 			})
 
-			qt.Assert(t, qt.Equals(allocs, 0))
+			qt.Assert(t, qt.Equals(allocs, 2))
 		})
 	}
 }

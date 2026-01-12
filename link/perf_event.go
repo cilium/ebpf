@@ -304,7 +304,7 @@ func openTracepointPerfEvent(tid uint64, pid int) (*sys.FD, error) {
 //
 // https://elixir.bootlin.com/linux/v5.16.8/source/kernel/bpf/syscall.c#L4307
 // https://github.com/torvalds/linux/commit/b89fbfbb854c9afc3047e8273cc3a694650b802e
-var haveBPFLinkPerfEvent = internal.NewFeatureTest("bpf_link_perf_event", func() error {
+var haveBPFLinkPerfEvent = internal.NewFeatureTest("bpf_link_perf_event", func(...internal.FeatureTestOption) error {
 	prog, err := ebpf.NewProgram(&ebpf.ProgramSpec{
 		Name: "probe_bpf_perf_link",
 		Type: ebpf.Kprobe,
@@ -313,7 +313,7 @@ var haveBPFLinkPerfEvent = internal.NewFeatureTest("bpf_link_perf_event", func()
 			asm.Return(),
 		},
 		License: "MIT",
-	}, nil)
+	})
 	if err != nil {
 		return err
 	}

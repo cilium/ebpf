@@ -29,13 +29,13 @@ type MarshalOptions struct {
 }
 
 // KernelMarshalOptions will generate BTF suitable for the current kernel.
-func KernelMarshalOptions() *MarshalOptions {
+func KernelMarshalOptions(tokenFd int32) *MarshalOptions {
 	return &MarshalOptions{
 		Order:              internal.NativeEndian,
-		StripFuncLinkage:   haveFuncLinkage() != nil,
-		ReplaceDeclTags:    haveDeclTags() != nil,
-		ReplaceTypeTags:    haveTypeTags() != nil,
-		ReplaceEnum64:      haveEnum64() != nil,
+		StripFuncLinkage:   haveFuncLinkage(internal.WithToken(tokenFd)) != nil,
+		ReplaceDeclTags:    haveDeclTags(internal.WithToken(tokenFd)) != nil,
+		ReplaceTypeTags:    haveTypeTags(internal.WithToken(tokenFd)) != nil,
+		ReplaceEnum64:      haveEnum64(internal.WithToken(tokenFd)) != nil,
 		PreventNoTypeFound: true, // All current kernels require this.
 	}
 }
@@ -667,7 +667,7 @@ func (e *encoder) deflateVarSecinfos(buf []byte, vars []VarSecinfo) ([]byte, err
 //
 // The function is intended for the use of the ebpf package and may be removed
 // at any point in time.
-func MarshalMapKV(key, value Type) (_ *Handle, keyID, valueID TypeID, err error) {
+func MarshalMapKV(key, value Type, tokenFd int32) (_ *Handle, keyID, valueID TypeID, err error) {
 	var b Builder
 
 	if key != nil {
@@ -684,11 +684,11 @@ func MarshalMapKV(key, value Type) (_ *Handle, keyID, valueID TypeID, err error)
 		}
 	}
 
-	handle, err := NewHandle(&b)
+	handle, err := NewHandle(&b, tokenFd)
 	if err != nil {
 		// Check for 'full' map BTF support, since kernels between 4.18 and 5.2
 		// already support BTF blobs for maps without Var or Datasec just fine.
-		if err := haveMapBTF(); err != nil {
+		if err := haveMapBTF(internal.WithToken(tokenFd)); err != nil {
 			return nil, 0, 0, err
 		}
 	}

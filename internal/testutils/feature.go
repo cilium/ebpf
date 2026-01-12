@@ -17,7 +17,7 @@ const (
 	ignoreVersionEnvVar = "EBPF_TEST_IGNORE_VERSION"
 )
 
-func CheckFeatureTest(t *testing.T, fn func() error) {
+func CheckFeatureTest(t *testing.T, fn func(...internal.FeatureTestOption) error) {
 	t.Helper()
 
 	checkFeatureTestError(t, fn())

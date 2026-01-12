@@ -62,6 +62,33 @@ type FeatureTest struct {
 	result error
 }
 
+type TestOptions struct {
+	BpffsTokenFd   int32
+	BpffsMountPath string
+}
+
+type FeatureTestOption func(*TestOptions)
+
+func WithToken(token int32) FeatureTestOption {
+	return func(ft *TestOptions) {
+		ft.BpffsTokenFd = token
+	}
+}
+
+func WithBpffs(path string) FeatureTestOption {
+	return func(ft *TestOptions) {
+		ft.BpffsMountPath = path
+	}
+}
+
+func BuildOptions(opts ...FeatureTestOption) *TestOptions {
+	o := &TestOptions{}
+	for _, opt := range opts {
+		opt(o)
+	}
+	return o
+}
+
 // FeatureTestFn is used to determine whether the kernel supports
 // a certain feature.
 //
@@ -70,7 +97,7 @@ type FeatureTest struct {
 //	err == ErrNotSupported: the feature is not available
 //	err == nil: the feature is available
 //	err != nil: the test couldn't be executed
-type FeatureTestFn func() error
+type FeatureTestFn func(...FeatureTestOption) error
 
 // NewFeatureTest is a convenient way to create a single [FeatureTest].
 //
@@ -78,14 +105,18 @@ type FeatureTestFn func() error
 // The format is "GOOS:Major.Minor[.Patch]". GOOS may be omitted when targeting
 // Linux. Returns [ErrNotSupportedOnOS] if there is no version specified for the
 // current OS.
-func NewFeatureTest(name string, fn FeatureTestFn, versions ...string) func() error {
+func NewFeatureTest(
+	name string,
+	fn FeatureTestFn,
+	versions ...string,
+) func(...FeatureTestOption) error {
 	version, err := platform.SelectVersion(versions)
 	if err != nil {
-		return func() error { return err }
+		return func(...FeatureTestOption) error { return err }
 	}
 
 	if version == "" {
-		return func() error {
+		return func(...FeatureTestOption) error {
 			// We don't return an UnsupportedFeatureError here, since that will
 			// trigger version checks which don't make sense.
 			return fmt.Errorf("%s: %w", name, ErrNotSupportedOnOS)
@@ -106,7 +137,7 @@ func NewFeatureTest(name string, fn FeatureTestFn, versions ...string) func() er
 // The result is cached if the test is conclusive.
 //
 // See [FeatureTestFn] for the meaning of the returned error.
-func (ft *FeatureTest) execute() error {
+func (ft *FeatureTest) execute(opts ...FeatureTestOption) error {
 	ft.mu.RLock()
 	result, done := ft.result, ft.done
 	ft.mu.RUnlock()
@@ -124,7 +155,7 @@ func (ft *FeatureTest) execute() error {
 		return ft.result
 	}
 
-	err := ft.Fn()
+	err := ft.Fn(opts...)
 	if err == nil {
 		ft.done = true
 		return nil
@@ -167,7 +198,7 @@ type FeatureMatrix[K comparable] map[K]*FeatureTest
 // It's safe to call this function concurrently.
 //
 // Always returns [ErrNotSupportedOnOS] on Windows.
-func (fm FeatureMatrix[K]) Result(key K) error {
+func (fm FeatureMatrix[K]) Result(key K, opts ...FeatureTestOption) error {
 	ft, ok := fm[key]
 	if !ok {
 		return fmt.Errorf("no feature probe for %v", key)
@@ -177,7 +208,7 @@ func (fm FeatureMatrix[K]) Result(key K) error {
 		return fmt.Errorf("%s: %w", ft.Name, ErrNotSupportedOnOS)
 	}
 
-	return ft.execute()
+	return ft.execute(opts...)
 }
 
 // FeatureCache caches a potentially unlimited number of feature probes.

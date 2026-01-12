@@ -17,7 +17,7 @@ func HaveBPFLinkUprobeMulti() error {
 	return haveBPFLinkUprobeMulti()
 }
 
-var haveBPFLinkUprobeMulti = internal.NewFeatureTest("bpf_link_uprobe_multi", func() error {
+var haveBPFLinkUprobeMulti = internal.NewFeatureTest("bpf_link_uprobe_multi", func(...internal.FeatureTestOption) error {
 	prog, err := ebpf.NewProgram(&ebpf.ProgramSpec{
 		Name: "probe_upm_link",
 		Type: ebpf.Kprobe,
@@ -27,7 +27,7 @@ var haveBPFLinkUprobeMulti = internal.NewFeatureTest("bpf_link_uprobe_multi", fu
 		},
 		AttachType: ebpf.AttachTraceUprobeMulti,
 		License:    "MIT",
-	}, nil)
+	})
 	if errors.Is(err, unix.E2BIG) {
 		// Kernel doesn't support AttachType field.
 		return ebpf.ErrNotSupported
@@ -67,7 +67,7 @@ func HaveBPFLinkKprobeMulti() error {
 	return haveBPFLinkKprobeMulti()
 }
 
-var haveBPFLinkKprobeMulti = internal.NewFeatureTest("bpf_link_kprobe_multi", func() error {
+var haveBPFLinkKprobeMulti = internal.NewFeatureTest("bpf_link_kprobe_multi", func(...internal.FeatureTestOption) error {
 	prog, err := ebpf.NewProgram(&ebpf.ProgramSpec{
 		Name: "probe_kpm_link",
 		Type: ebpf.Kprobe,
@@ -77,7 +77,7 @@ var haveBPFLinkKprobeMulti = internal.NewFeatureTest("bpf_link_kprobe_multi", fu
 		},
 		AttachType: ebpf.AttachTraceKprobeMulti,
 		License:    "MIT",
-	}, nil)
+	})
 	if errors.Is(err, unix.E2BIG) {
 		// Kernel doesn't support AttachType field.
 		return ebpf.ErrNotSupported
@@ -115,7 +115,7 @@ func HaveBPFLinkKprobeSession() error {
 	return haveBPFLinkKprobeSession()
 }
 
-var haveBPFLinkKprobeSession = internal.NewFeatureTest("bpf_link_kprobe_session", func() error {
+var haveBPFLinkKprobeSession = internal.NewFeatureTest("bpf_link_kprobe_session", func(...internal.FeatureTestOption) error {
 	prog, err := ebpf.NewProgram(&ebpf.ProgramSpec{
 		Name: "probe_kps_link",
 		Type: ebpf.Kprobe,
@@ -125,7 +125,7 @@ var haveBPFLinkKprobeSession = internal.NewFeatureTest("bpf_link_kprobe_session"
 		},
 		AttachType: ebpf.AttachTraceKprobeSession,
 		License:    "MIT",
-	}, nil)
+	})
 	if errors.Is(err, unix.E2BIG) {
 		// Kernel doesn't support AttachType field.
 		return ebpf.ErrNotSupported

@@ -17,6 +17,8 @@ import (
 	"github.com/cilium/ebpf/internal/testutils"
 )
 
+const NotBPFTokenFd int32 = -1
+
 var btfFn = &btf.Func{
 	Name: "_",
 	Type: &btf.FuncProto{
@@ -146,7 +148,7 @@ func TestProgramInfo(t *testing.T) {
 	spec := fixupProgramSpec(basicProgramSpec)
 	prog := mustNewProgram(t, spec, nil)
 
-	info, err := newProgramInfoFromFd(prog.fd)
+	info, err := newProgramInfoFromFd(prog.fd, NotBPFTokenFd)
 	testutils.SkipIfNotSupported(t, err)
 	qt.Assert(t, qt.IsNil(err))
 
@@ -225,7 +227,7 @@ func BenchmarkProgramInfo(b *testing.B) {
 	prog := mustNewProgram(b, spec, nil)
 
 	for b.Loop() {
-		if _, err := newProgramInfoFromFd(prog.fd); err != nil {
+		if _, err := newProgramInfoFromFd(prog.fd, NotBPFTokenFd); err != nil {
 			b.Fatal(err)
 		}
 	}

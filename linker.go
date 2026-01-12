@@ -269,7 +269,7 @@ func flattenInstructions(name string, progs map[string]*ProgramSpec, refs map[*P
 // fixupAndValidate is called by the ELF reader right before marshaling the
 // instruction stream. It performs last-minute adjustments to the program and
 // runs some sanity checks before sending it off to the kernel.
-func fixupAndValidate(insns asm.Instructions) error {
+func fixupAndValidate(insns asm.Instructions, tokenFd int32) error {
 	iter := insns.Iterate()
 	for iter.Next() {
 		ins := iter.Ins
@@ -280,7 +280,7 @@ func fixupAndValidate(insns asm.Instructions) error {
 			return fmt.Errorf("instruction %d: %w", iter.Index, asm.ErrUnsatisfiedMapReference)
 		}
 
-		fixupProbeReadKernel(ins)
+		fixupProbeReadKernel(ins, tokenFd)
 	}
 
 	return nil
@@ -414,13 +414,13 @@ func (ike *incompatibleKfuncError) Error() string {
 
 // fixupProbeReadKernel replaces calls to bpf_probe_read_{kernel,user}(_str)
 // with bpf_probe_read(_str) on kernels that don't support it yet.
-func fixupProbeReadKernel(ins *asm.Instruction) {
+func fixupProbeReadKernel(ins *asm.Instruction, tokenFd int32) {
 	if !ins.IsBuiltinCall() {
 		return
 	}
 
 	// Kernel supports bpf_probe_read_kernel, nothing to do.
-	if haveProbeReadKernel() == nil {
+	if haveProbeReadKernel(internal.WithToken(tokenFd)) == nil {
 		return
 	}
 
@@ -461,7 +461,7 @@ func resolveKconfigReferences(insns asm.Instructions) (_ *Map, err error) {
 		return nil, err
 	}
 
-	kconfig, err := NewMap(cpy, nil)
+	kconfig, err := NewMap(cpy)
 	if err != nil {
 		return nil, err
 	}

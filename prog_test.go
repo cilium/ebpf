@@ -690,6 +690,11 @@ func TestProgramSpecTag(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	if !testutils.IsVersionLessThan(t, "6.18") {
+		// TODO(dylandreimerink): Remove once https://github.com/cilium/ebpf/pull/1932 merges.
+		t.Skip("ProgramSpec.Tag() no longer matches kernel tag on v6.18 and above")
+	}
+
 	tag, err := spec.Tag()
 	if err != nil {
 		t.Fatal("Can't calculate tag:", err)

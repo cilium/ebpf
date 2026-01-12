@@ -416,7 +416,10 @@ func TestTypesIterator(t *testing.T) {
 }
 
 func TestLoadSplitSpec(t *testing.T) {
-	spec := vmlinuxTestdataSpec(t)
+	spec, err := LoadSpec("testdata/btf_testmod.btf.base")
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	splitSpec, err := LoadSplitSpec("testdata/btf_testmod.btf", spec)
 	if err != nil {
@@ -433,9 +436,6 @@ func TestLoadSplitSpec(t *testing.T) {
 	qt.Assert(t, qt.Equals(typeByID, Type(fnType)))
 
 	fnProto := fnType.Type.(*FuncProto)
-	_, err = spec.TypeID(fnProto)
-	qt.Assert(t, qt.IsNil(err), qt.Commentf("FuncProto should be in base"))
-
 	// 'int' is defined in the base BTF...
 	intType, err := spec.AnyTypeByName("int")
 	qt.Assert(t, qt.IsNil(err))

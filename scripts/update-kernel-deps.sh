@@ -36,3 +36,4 @@ extract-vmlinux "$tmp/boot/vmlinuz" > "$tmp/vmlinux"
 
 objcopy --dump-section .BTF=/dev/stdout "$tmp/vmlinux" /dev/null | gzip > "btf/testdata/vmlinux.btf.gz"
 find "$tmp/lib/modules" -type f -name bpf_testmod.ko -exec objcopy --dump-section .BTF="btf/testdata/btf_testmod.btf" {} /dev/null \;
+find "$tmp/lib/modules" -type f -name bpf_testmod.ko -exec objcopy --dump-section .BTF.base="btf/testdata/btf_testmod.btf.base" {} /dev/null \;

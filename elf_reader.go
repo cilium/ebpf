@@ -1527,9 +1527,6 @@ func init() {
 		{"xdp_devmap/", sys.BPF_PROG_TYPE_XDP, sys.BPF_XDP_DEVMAP, 0},
 		{"xdp.frags_cpumap/", sys.BPF_PROG_TYPE_XDP, sys.BPF_XDP_CPUMAP, _SEC_XDP_FRAGS},
 		{"xdp_cpumap/", sys.BPF_PROG_TYPE_XDP, sys.BPF_XDP_CPUMAP, 0},
-		// This has been in the library since the beginning of time. Not sure
-		// where it came from.
-		{"seccomp", sys.BPF_PROG_TYPE_SOCKET_FILTER, 0, _SEC_NONE},
 		// Override libbpf definition because we want ignoreExtra.
 		{"struct_ops+", sys.BPF_PROG_TYPE_STRUCT_OPS, 0, _SEC_NONE | ignoreExtra},
 		{"struct_ops.s+", sys.BPF_PROG_TYPE_STRUCT_OPS, 0, _SEC_SLEEPABLE | ignoreExtra},

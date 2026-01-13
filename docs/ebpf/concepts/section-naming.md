@@ -227,6 +227,5 @@ godoc('ProgramSpec.SectionName') }}.
 | cgroup/setsockopt     | CGroupSockopt              | AttachCGroupSetsockopt           |                            |
 | struct_ops+           | StructOps                  |                                  |                            |
 | sk_lookup/            | SkLookup                   | AttachSkLookup                   |                            |
-| seccomp               | SocketFilter               |                                  |                            |
 | kprobe.multi          | Kprobe                     | AttachTraceKprobeMulti           |                            |
 | kretprobe.multi       | Kprobe                     | AttachTraceKprobeMulti           |                            |

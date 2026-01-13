@@ -19,8 +19,10 @@ import (
 func TestAttachNetkit(t *testing.T) {
 	testutils.SkipOnOldKernel(t, "6.7", "Netkit Device")
 
+	ns := testutils.NewNetNS(t)
+
 	prog := mustLoadProgram(t, ebpf.SchedCLS, ebpf.AttachNetkitPrimary, "")
-	link, _ := mustAttachNetkit(t, prog, ebpf.AttachNetkitPrimary)
+	link, _ := mustAttachNetkit(t, prog, ebpf.AttachNetkitPrimary, ns)
 
 	testLink(t, link, prog)
 }
@@ -31,7 +33,9 @@ func TestNetkitAnchor(t *testing.T) {
 	a := mustLoadProgram(t, ebpf.SchedCLS, ebpf.AttachNetkitPrimary, "")
 	b := mustLoadProgram(t, ebpf.SchedCLS, ebpf.AttachNetkitPrimary, "")
 
-	linkA, ifIndex := mustAttachNetkit(t, a, ebpf.AttachNetkitPrimary)
+	ns := testutils.NewNetNS(t)
+
+	linkA, ifIndex := mustAttachNetkit(t, a, ebpf.AttachNetkitPrimary, ns)
 
 	programInfo, err := a.Info()
 	qt.Assert(t, qt.IsNil(err))
@@ -50,13 +54,16 @@ func TestNetkitAnchor(t *testing.T) {
 		AfterLinkByID(linkID),
 	} {
 		t.Run(fmt.Sprintf("%T", anchor), func(t *testing.T) {
-			linkB, err := AttachNetkit(NetkitOptions{
-				Program:   b,
-				Attach:    ebpf.AttachNetkitPrimary,
-				Interface: ifIndex,
-				Anchor:    anchor,
-			})
-			qt.Assert(t, qt.IsNil(err))
+			var linkB Link
+			qt.Assert(t, qt.IsNil(ns.Do(func() (err error) {
+				linkB, err = AttachNetkit(NetkitOptions{
+					Program:   b,
+					Attach:    ebpf.AttachNetkitPrimary,
+					Interface: ifIndex,
+					Anchor:    anchor,
+				})
+				return err
+			})))
 			qt.Assert(t, qt.IsNil(linkB.Close()))
 		})
 	}
@@ -67,10 +74,12 @@ var prevIfindex atomic.Uint32
 
 func init() { prevIfindex.Store(1000 - 1) }
 
-func mustAttachNetkit(tb testing.TB, prog *ebpf.Program, attachType ebpf.AttachType) (Link, int) {
-	var err error
-	conn, err := rtnetlink.Dial(nil)
-	qt.Assert(tb, qt.IsNil(err))
+func mustAttachNetkit(tb testing.TB, prog *ebpf.Program, attachType ebpf.AttachType, ns *testutils.NetNS) (Link, int) {
+	var conn *rtnetlink.Conn
+	qt.Assert(tb, qt.IsNil(ns.Do(func() (err error) {
+		conn, err = rtnetlink.Dial(nil)
+		return err
+	})))
 	tb.Cleanup(func() {
 		qt.Assert(tb, qt.IsNil(conn.Close()))
 	})
@@ -79,7 +88,7 @@ func mustAttachNetkit(tb testing.TB, prog *ebpf.Program, attachType ebpf.AttachT
 
 	layer2 := driver.NetkitModeL2
 	blackhole := driver.NetkitPolicyDrop
-	err = conn.Link.New(&rtnetlink.LinkMessage{
+	qt.Assert(tb, qt.IsNil(conn.Link.New(&rtnetlink.LinkMessage{
 		Family: unix.AF_UNSPEC,
 		Index:  ifIndex,
 		Flags:  unix.IFF_UP,
@@ -93,18 +102,20 @@ func mustAttachNetkit(tb testing.TB, prog *ebpf.Program, attachType ebpf.AttachT
 				},
 			},
 		},
-	})
-	qt.Assert(tb, qt.IsNil(err))
+	})))
 	tb.Cleanup(func() {
 		qt.Assert(tb, qt.IsNil(conn.Link.Delete(uint32(ifIndex))))
 	})
 
-	link, err := AttachNetkit(NetkitOptions{
-		Program:   prog,
-		Attach:    attachType,
-		Interface: int(ifIndex),
-	})
-	qt.Assert(tb, qt.IsNil(err))
+	var link Link
+	qt.Assert(tb, qt.IsNil(ns.Do(func() (err error) {
+		link, err = AttachNetkit(NetkitOptions{
+			Program:   prog,
+			Attach:    attachType,
+			Interface: int(ifIndex),
+		})
+		return err
+	})))
 	tb.Cleanup(func() {
 		qt.Assert(tb, qt.IsNil(link.Close()))
 	})

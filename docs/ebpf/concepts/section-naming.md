@@ -183,10 +183,10 @@ godoc('ProgramSpec.SectionName') }}.
 | iter/                 | Tracing                    | AttachTraceIter                  |                            |
 | iter.s/               | Tracing                    | AttachTraceIter                  | BPF_F_SLEEPABLE            |
 | syscall               | Syscall                    |                                  |                            |
-| xdp.frags_devmap/     | XDP                        | AttachXDPDevMap                  | BPF_F_XDP_HAS_FRAGS        |
-| xdp_devmap/           | XDP                        | AttachXDPDevMap                  |                            |
-| xdp.frags_cpumap/     | XDP                        | AttachXDPCPUMap                  | BPF_F_XDP_HAS_FRAGS        |
-| xdp_cpumap/           | XDP                        | AttachXDPCPUMap                  |                            |
+| xdp.frags/devmap      | XDP                        | AttachXDPDevMap                  | BPF_F_XDP_HAS_FRAGS        |
+| xdp/devmap            | XDP                        | AttachXDPDevMap                  |                            |
+| xdp.frags/cpumap      | XDP                        | AttachXDPCPUMap                  | BPF_F_XDP_HAS_FRAGS        |
+| xdp/cpumap            | XDP                        | AttachXDPCPUMap                  |                            |
 | xdp.frags             | XDP                        |                                  | BPF_F_XDP_HAS_FRAGS        |
 | xdp                   | XDP                        |                                  |                            |
 | perf_event            | PerfEvent                  |                                  |                            |

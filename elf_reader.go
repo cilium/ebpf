@@ -1519,14 +1519,8 @@ const (
 
 func init() {
 	// Compatibility with older versions of the library.
-	// We prepend libbpf definitions since they contain a prefix match
-	// for "xdp".
+	// We prepend libbpf definitions since they contain a prefix match.
 	elfSectionDefs = append([]libbpfElfSectionDef{
-		{"xdp.frags/", sys.BPF_PROG_TYPE_XDP, sys.BPF_XDP, _SEC_XDP_FRAGS | ignoreExtra},
-		{"xdp.frags_devmap/", sys.BPF_PROG_TYPE_XDP, sys.BPF_XDP_DEVMAP, _SEC_XDP_FRAGS},
-		{"xdp_devmap/", sys.BPF_PROG_TYPE_XDP, sys.BPF_XDP_DEVMAP, 0},
-		{"xdp.frags_cpumap/", sys.BPF_PROG_TYPE_XDP, sys.BPF_XDP_CPUMAP, _SEC_XDP_FRAGS},
-		{"xdp_cpumap/", sys.BPF_PROG_TYPE_XDP, sys.BPF_XDP_CPUMAP, 0},
 		// Override libbpf definition because we want ignoreExtra.
 		{"struct_ops+", sys.BPF_PROG_TYPE_STRUCT_OPS, 0, _SEC_NONE | ignoreExtra},
 		{"struct_ops.s+", sys.BPF_PROG_TYPE_STRUCT_OPS, 0, _SEC_SLEEPABLE | ignoreExtra},

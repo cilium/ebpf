@@ -226,6 +226,7 @@ godoc('ProgramSpec.SectionName') }}.
 | cgroup/getsockopt     | CGroupSockopt              | AttachCGroupGetsockopt           |                            |
 | cgroup/setsockopt     | CGroupSockopt              | AttachCGroupSetsockopt           |                            |
 | struct_ops+           | StructOps                  |                                  |                            |
+| struct_ops.s+         | StructOps                  |                                  | BPF_F_SLEEPABLE            |
 | sk_lookup/            | SkLookup                   | AttachSkLookup                   |                            |
 | kprobe.multi          | Kprobe                     | AttachTraceKprobeMulti           |                            |
 | kretprobe.multi       | Kprobe                     | AttachTraceKprobeMulti           |                            |

@@ -1510,22 +1510,8 @@ const (
 	_SEC_XDP_FRAGS
 	_SEC_USDT
 
-	// Ignore any present extra in order to preserve backwards compatibility
-	// with earlier versions of the library.
-	ignoreExtra
-
 	_SEC_ATTACHABLE_OPT = _SEC_ATTACHABLE | _SEC_EXP_ATTACH_OPT
 )
-
-func init() {
-	// Compatibility with older versions of the library.
-	// We prepend libbpf definitions since they contain a prefix match.
-	elfSectionDefs = append([]libbpfElfSectionDef{
-		// Override libbpf definition because we want ignoreExtra.
-		{"struct_ops+", sys.BPF_PROG_TYPE_STRUCT_OPS, 0, _SEC_NONE | ignoreExtra},
-		{"struct_ops.s+", sys.BPF_PROG_TYPE_STRUCT_OPS, 0, _SEC_SLEEPABLE | ignoreExtra},
-	}, elfSectionDefs...)
-}
 
 func getProgType(sectionName string) (ProgramType, AttachType, uint32, string) {
 	// Skip optional program marking for now.
@@ -1547,7 +1533,13 @@ func getProgType(sectionName string) (ProgramType, AttachType, uint32, string) {
 		if t.flags&_SEC_XDP_FRAGS > 0 {
 			flags |= sys.BPF_F_XDP_HAS_FRAGS
 		}
-		if t.flags&ignoreExtra > 0 {
+
+		// The libbpf documentation on program types states: 'The struct_ops attach
+		// format supports struct_ops[.s]/<name> convention, but name is ignored and
+		// it is recommended to just use plain SEC("struct_ops[.s]").'
+		//
+		// Ignore any extra for struct_ops to match libbpf behaviour.
+		if programType == StructOps {
 			extra = ""
 		}
 

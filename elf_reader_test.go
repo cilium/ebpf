@@ -1334,11 +1334,12 @@ func TestELFSectionProgramTypes(t *testing.T) {
 		{"cgroup/sysctl", CGroupSysctl, AttachCGroupSysctl, 0, ""},
 		{"cgroup/getsockopt", CGroupSockopt, AttachCGroupGetsockopt, 0, ""},
 		{"cgroup/setsockopt", CGroupSockopt, AttachCGroupSetsockopt, 0, ""},
-		// Bogus pattern means it never matched anything.
-		// {"struct_ops+", StructOps, AttachNone, 0, ""},
 		{"sk_lookup/", SkLookup, AttachSkLookup, 0, ""},
 		{"kprobe.multi", Kprobe, AttachTraceKprobeMulti, 0, ""},
 		{"kretprobe.multi", Kprobe, AttachTraceKprobeMulti, 0, ""},
+		{"struct_ops", StructOps, AttachNone, 0, ""},
+		{"struct_ops.s", StructOps, AttachNone, sys.BPF_F_SLEEPABLE, ""},
+		{"struct_ops/foo", StructOps, AttachNone, 0, ""},
 	}
 
 	for _, tc := range testcases {

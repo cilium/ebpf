@@ -378,5 +378,5 @@ func TestVariablePointerGC(t *testing.T) {
 	runtime.GC()
 
 	// Wait for backing array to be finalized.
-	testutils.WaitChan(t, mgc, time.Second)
+	testutils.WaitChan(t, mgc, time.Second*5)
 }

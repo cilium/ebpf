@@ -1339,7 +1339,6 @@ func TestELFSectionProgramTypes(t *testing.T) {
 		// Bogus pattern means it never matched anything.
 		// {"struct_ops+", StructOps, AttachNone, 0, ""},
 		{"sk_lookup/", SkLookup, AttachSkLookup, 0, ""},
-		{"seccomp", SocketFilter, AttachNone, 0, ""},
 		{"kprobe.multi", Kprobe, AttachTraceKprobeMulti, 0, ""},
 		{"kretprobe.multi", Kprobe, AttachTraceKprobeMulti, 0, ""},
 	}

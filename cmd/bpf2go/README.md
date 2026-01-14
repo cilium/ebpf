@@ -9,7 +9,7 @@ from `bpftool gen skeleton`.
 
 Add `bpf2go` as a tool dependency in your project's Go module:
 
-    go get -tool github.com/cilium/ebpf/cmd/bpf2go
+    go install github.com/cilium/ebpf/cmd/bpf2go@latest
 
 Invoke the tool using go generate:
 

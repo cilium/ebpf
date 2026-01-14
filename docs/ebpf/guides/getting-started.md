@@ -149,8 +149,8 @@ First, add `bpf2go` as a tool dependency to your Go module. This ensures the
 version of `bpf2go` used by the Go toolchain always matches your version of the
 library.
 
-```{ .shell-session data-copy="go get -tool github.com/cilium/ebpf/cmd/bpf2go" }
-% go get -tool github.com/cilium/ebpf/cmd/bpf2go
+```{ .shell-session data-copy="go install github.com/cilium/ebpf/cmd/bpf2go@latest" }
+% go install github.com/cilium/ebpf/cmd/bpf2go@latest
 ```
 
 Now we're ready to run `go generate`:

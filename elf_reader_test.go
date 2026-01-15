@@ -207,6 +207,12 @@ func TestLoadCollectionSpec(t *testing.T) {
 				SectionName: "other",
 				License:     "MIT",
 			},
+			"global_fn4": {
+				Name:        "global_fn4",
+				Type:        UnspecifiedProgram,
+				SectionName: "other",
+				License:     "MIT",
+			},
 			"static_fn": {
 				Name:        "static_fn",
 				Type:        UnspecifiedProgram,
@@ -266,7 +272,7 @@ func TestLoadCollectionSpec(t *testing.T) {
 		}
 
 		ret := mustRun(t, coll.Programs["xdp_prog"], nil)
-		qt.Assert(t, qt.Equals(ret, 7))
+		qt.Assert(t, qt.Equals(ret, 11))
 	})
 }
 

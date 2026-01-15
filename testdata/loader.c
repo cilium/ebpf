@@ -115,8 +115,12 @@ int __attribute__((noinline)) __section("other") global_fn3(uint32_t arg) {
 	return arg + 1;
 }
 
+int __attribute__((noinline)) __attribute__((weak)) __section("other") global_fn4(uint32_t arg) {
+	return arg + 3;
+}
+
 int __attribute__((noinline)) global_fn(uint32_t arg) {
-	return static_fn(arg) + global_fn2(arg) + global_fn3(arg);
+	return static_fn(arg) + global_fn2(arg) + global_fn3(arg) + global_fn4(arg);
 }
 
 volatile unsigned int key1       = 0; // .bss

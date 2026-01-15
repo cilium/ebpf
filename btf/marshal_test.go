@@ -93,7 +93,7 @@ limitTypes:
 
 	b, err := NewBuilder(types)
 	qt.Assert(t, qt.IsNil(err))
-	buf, err := b.Marshal(nil, KernelMarshalOptions())
+	buf, err := b.Marshal(nil, KernelMarshalOptions(NotBPFTokenFd))
 	qt.Assert(t, qt.IsNil(err))
 
 	rebuilt, err := loadRawSpec(buf, nil)
@@ -103,7 +103,7 @@ limitTypes:
 		t.Logf("Rebuilt BTF contains %d types which exceeds uint16, test may fail on older kernels", n)
 	}
 
-	h, err := NewHandleFromRawBTF(buf)
+	h, err := NewHandleFromRawBTF(buf, NotBPFTokenFd)
 	testutils.SkipIfNotSupported(t, err)
 	qt.Assert(t, qt.IsNil(err), qt.Commentf("loading rebuilt BTF failed"))
 	h.Close()

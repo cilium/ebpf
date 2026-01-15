@@ -7,21 +7,21 @@ import (
 )
 
 func TestHaveLargeInstructions(t *testing.T) {
-	testutils.CheckFeatureTest(t, HaveLargeInstructions)
+	testutils.CheckFeatureTest(t, haveLargeInstructions)
 }
 
 func TestHaveBoundedLoops(t *testing.T) {
-	testutils.CheckFeatureTest(t, HaveBoundedLoops)
+	testutils.CheckFeatureTest(t, haveBoundedLoops)
 }
 
 func TestHaveV2ISA(t *testing.T) {
-	testutils.CheckFeatureTest(t, HaveV2ISA)
+	testutils.CheckFeatureTest(t, haveV2ISA)
 }
 
 func TestHaveV3ISA(t *testing.T) {
-	testutils.CheckFeatureTest(t, HaveV3ISA)
+	testutils.CheckFeatureTest(t, haveV3ISA)
 }
 
 func TestHaveV4ISA(t *testing.T) {
-	testutils.CheckFeatureTest(t, HaveV4ISA)
+	testutils.CheckFeatureTest(t, haveV4ISA)
 }

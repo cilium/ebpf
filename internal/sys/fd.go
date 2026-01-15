@@ -37,6 +37,10 @@ func (fd *FD) Int() int {
 	return int(fd.raw)
 }
 
+func (fd *FD) Int32() int32 {
+	return int32(fd.raw)
+}
+
 func (fd *FD) Uint() uint32 {
 	if fd.raw == invalidFd {
 		// Best effort: this is the number most likely to be an invalid file

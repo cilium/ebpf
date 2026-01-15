@@ -10,6 +10,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/cilium/ebpf/bpffs"
 	"github.com/cilium/ebpf/btf"
 	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/kallsyms"
@@ -18,6 +19,11 @@ import (
 	"github.com/cilium/ebpf/internal/platform"
 	"github.com/cilium/ebpf/internal/sys"
 )
+
+type TokenOptions struct {
+	Path    string
+	Enabled bool
+}
 
 // CollectionOptions control loading a collection into the kernel.
 //
@@ -36,6 +42,8 @@ type CollectionOptions struct {
 	// The given Maps are Clone()d before being used in the Collection, so the
 	// caller can Close() them freely when they are no longer needed.
 	MapReplacements map[string]*Map
+
+	Token TokenOptions
 }
 
 // CollectionSpec describes a collection.
@@ -323,6 +331,7 @@ type collectionLoader struct {
 	programs map[string]*Program
 	vars     map[string]*Variable
 	types    *btf.Cache
+	bpffs    *bpffs.BPFFS
 }
 
 func newCollectionLoader(coll *CollectionSpec, opts *CollectionOptions) (*collectionLoader, error) {
@@ -341,6 +350,15 @@ func newCollectionLoader(coll *CollectionSpec, opts *CollectionOptions) (*collec
 		return nil, fmt.Errorf("populating kallsyms caches: %w", err)
 	}
 
+	var bfs *bpffs.BPFFS
+	if opts.Token.Enabled {
+		var err error
+		bfs, err = bpffs.NewBPFFSFromPath(opts.Token.Path)
+		if err != nil {
+			return nil, fmt.Errorf("getting bpf token for collection: %w", err)
+		}
+	}
+
 	return &collectionLoader{
 		coll,
 		opts,
@@ -348,6 +366,7 @@ func newCollectionLoader(coll *CollectionSpec, opts *CollectionOptions) (*collec
 		make(map[string]*Program),
 		make(map[string]*Variable),
 		btf.NewCache(),
+		bfs,
 	}, nil
 }
 
@@ -384,6 +403,9 @@ func (cl *collectionLoader) close() {
 	for _, p := range cl.programs {
 		p.Close()
 	}
+	if cl.bpffs != nil {
+		cl.bpffs.Close()
+	}
 }
 
 func (cl *collectionLoader) loadMap(mapName string) (*Map, error) {
@@ -398,10 +420,20 @@ func (cl *collectionLoader) loadMap(mapName string) (*Map, error) {
 
 	mapSpec = mapSpec.Copy()
 
+	var tokenFd int32
+	if cl.bpffs != nil {
+		token, err := cl.bpffs.Token()
+		if err != nil {
+			return nil, fmt.Errorf("map bpffs token: %w", err)
+		}
+		mapSpec.BpffsTokenFd = token
+		tokenFd = token.Int32()
+	}
+
 	// Defer setting the mmapable flag on maps until load time. This avoids the
 	// MapSpec having different flags on some kernel versions. Also avoid running
 	// syscalls during ELF loading, so platforms like wasm can also parse an ELF.
-	if isDataSection(mapSpec.Name) && haveMmapableMaps() == nil {
+	if isDataSection(mapSpec.Name) && haveMmapableMaps(internal.WithToken(tokenFd)) == nil {
 		mapSpec.Flags |= sys.BPF_F_MMAPABLE
 	}
 
@@ -462,6 +494,14 @@ func (cl *collectionLoader) loadProgram(progName string) (*Program, error) {
 	}
 
 	progSpec = progSpec.Copy()
+
+	if cl.bpffs != nil {
+		token, err := cl.bpffs.Token()
+		if err != nil {
+			return nil, err
+		}
+		progSpec.BpffsTokenFd = token
+	}
 
 	// Rewrite any reference to a valid map in the program's instructions,
 	// which includes all of its dependencies.

@@ -1,6 +1,7 @@
 package ringbuf
 
 import (
+	"context"
 	"errors"
 	"os"
 	"testing"
@@ -171,6 +172,61 @@ func TestReaderBlocking(t *testing.T) {
 	}
 }
 
+func TestReaderContextCancel(t *testing.T) {
+	testutils.SkipOnOldKernel(t, "5.8", "BPF ring buffer")
+
+	prog, events := mustOutputSamplesProg(t, sampleMessage{size: 5})
+
+	rd, err := NewReader(events)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rd.Close()
+
+	mustRun(t, prog)
+
+	ctx, cancel := context.WithCancel(t.Context())
+	var record Record
+	err = rd.ReadIntoContext(ctx, &record)
+	if err != nil {
+		t.Error("Expected no error from first ReadIntoContext, got:", err)
+	}
+	if len(record.RawSample) != 5 {
+		t.Errorf("Expected to read 5 bytes but got %d", len(record.RawSample))
+	}
+
+	cancel()
+	err = rd.ReadIntoContext(ctx, &record)
+	qt.Assert(t, qt.ErrorIs(err, context.Canceled))
+}
+
+func TestReaderContextDeadline(t *testing.T) {
+	testutils.SkipOnOldKernel(t, "5.8", "BPF ring buffer")
+
+	prog, events := mustOutputSamplesProg(t, sampleMessage{size: 5})
+
+	rd, err := NewReader(events)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rd.Close()
+
+	mustRun(t, prog)
+
+	rd.SetDeadline(time.Now())
+	var record Record
+	err = rd.ReadIntoContext(t.Context(), &record)
+	if err != nil {
+		t.Error("Expected no error from first ReadIntoContext, got:", err)
+	}
+	if len(record.RawSample) != 5 {
+		t.Errorf("Expected to read 5 bytes but got %d", len(record.RawSample))
+	}
+
+	err = rd.ReadIntoContext(t.Context(), &record)
+	qt.Assert(t, qt.ErrorIs(err, os.ErrDeadlineExceeded))
+}
+
 func TestReaderNoWakeup(t *testing.T) {
 	testutils.SkipOnOldKernel(t, "5.8", "BPF ring buffer")
 
@@ -193,7 +249,6 @@ func TestReaderNoWakeup(t *testing.T) {
 
 	rd.SetDeadline(time.Now())
 	record, err := rd.Read()
-
 	if err != nil {
 		t.Error("Expected no error from first Read, got:", err)
 	}
@@ -204,7 +259,6 @@ func TestReaderNoWakeup(t *testing.T) {
 	qt.Assert(t, qt.Equals(rd.AvailableBytes(), 1*16))
 
 	record, err = rd.Read()
-
 	if err != nil {
 		t.Error("Expected no error from second Read, got:", err)
 	}
@@ -258,7 +312,6 @@ func TestReaderFlushPendingEvents(t *testing.T) {
 	}
 
 	record, err := rd.Read()
-
 	if err != nil {
 		t.Error("Expected no error from second Read, got:", err)
 	}

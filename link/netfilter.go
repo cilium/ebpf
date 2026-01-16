@@ -13,13 +13,30 @@ const NetfilterIPDefrag NetfilterAttachFlags = 0 // Enable IP packet defragmenta
 
 type NetfilterAttachFlags uint32
 
+type NetfilterHook uint32
+
+const (
+	NetfilterInetPreRouting NetfilterHook = iota
+	NetfilterInetLocalIn
+	NetfilterInetForward
+	NetfilterInetLocalOut
+	NetfilterInetPostRouting
+)
+
+type NetfilterProtocolFamily uint32
+
+const (
+	NetfilterProtoIPv4 NetfilterProtocolFamily = 2
+	NetfilterProtoIPv6 NetfilterProtocolFamily = 10
+)
+
 type NetfilterOptions struct {
 	// Program must be a netfilter BPF program.
 	Program *ebpf.Program
 	// The protocol family.
-	ProtocolFamily uint32
+	ProtocolFamily NetfilterProtocolFamily
 	// The number of the hook you are interested in.
-	HookNumber uint32
+	HookNumber NetfilterHook
 	// Priority within hook
 	Priority int32
 	// Extra link flags
@@ -75,8 +92,8 @@ func (nf *netfilterLink) Info() (*Info, error) {
 		return nil, fmt.Errorf("netfilter link info: %s", err)
 	}
 	extra := &NetfilterInfo{
-		Pf:       info.Pf,
-		Hooknum:  info.Hooknum,
+		Pf:       NetfilterProtocolFamily(info.Pf),
+		Hooknum:  NetfilterHook(info.Hooknum),
 		Priority: info.Priority,
 		Flags:    info.Flags,
 	}

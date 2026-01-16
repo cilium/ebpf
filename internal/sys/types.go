@@ -1552,6 +1552,21 @@ type CgroupLinkInfo struct {
 	_          [36]byte
 }
 
+type EventLinkInfo struct {
+	_             structs.HostLayout
+	Type          LinkType
+	Id            LinkID
+	ProgId        uint32
+	_             [4]byte
+	PerfEventType PerfEventType
+	_             [4]byte
+	Config        uint64
+	EventType     uint32
+	_             [4]byte
+	Cookie        uint64
+	_             [16]byte
+}
+
 type IterLinkInfo struct {
 	_             structs.HostLayout
 	Type          LinkType
@@ -1660,6 +1675,21 @@ type TcxLinkInfo struct {
 	_          [40]byte
 }
 
+type TracepointLinkInfo struct {
+	_             structs.HostLayout
+	Type          LinkType
+	Id            LinkID
+	ProgId        uint32
+	_             [4]byte
+	PerfEventType PerfEventType
+	_             [4]byte
+	TpName        TypedPointer[uint8]
+	NameLen       uint32
+	_             [4]byte
+	Cookie        uint64
+	_             [16]byte
+}
+
 type TracingLinkInfo struct {
 	_           structs.HostLayout
 	Type        LinkType
@@ -1672,6 +1702,38 @@ type TracingLinkInfo struct {
 	_           [4]byte
 	Cookie      uint64
 	_           [24]byte
+}
+
+type UprobeLinkInfo struct {
+	_             structs.HostLayout
+	Type          LinkType
+	Id            LinkID
+	ProgId        uint32
+	_             [4]byte
+	PerfEventType PerfEventType
+	_             [4]byte
+	FileName      TypedPointer[uint8]
+	NameLen       uint32
+	Offset        uint32
+	Cookie        uint64
+	RefCtrOffset  uint64
+	_             [8]byte
+}
+
+type UprobeMultiLinkInfo struct {
+	_             structs.HostLayout
+	Type          LinkType
+	Id            LinkID
+	ProgId        uint32
+	_             [4]byte
+	Path          TypedPointer[uint8]
+	Offsets       TypedPointer[uint64]
+	RefCtrOffsets TypedPointer[uint64]
+	Cookies       TypedPointer[uint64]
+	PathSize      uint32
+	Count         uint32
+	Flags         uint32
+	Pid           uint32
 }
 
 type XDPLinkInfo struct {

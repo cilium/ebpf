@@ -1,6 +1,7 @@
 package ringbuf
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -50,7 +51,25 @@ func newPoller(fd int) (*poller, error) {
 // Returns [os.ErrDeadlineExceeded] if a deadline was set and no wakeup was received.
 // Returns [ErrFlushed] if the ring buffer was flushed manually.
 // Returns [os.ErrClosed] if the poller was closed.
-func (p *poller) Wait(deadline time.Time) error {
+func (p *poller) Wait(ctx context.Context, deadline time.Time) error {
+	errChan := make(chan error)
+
+	go func() {
+		errChan <- p.wait(deadline)
+		close(errChan)
+	}()
+	select {
+	case <-ctx.Done():
+		if err := p.Close(); err != nil {
+			return err
+		}
+		return ctx.Err()
+	case err := <-errChan:
+		return err
+	}
+}
+
+func (p *poller) wait(deadline time.Time) error {
 	if p.closed.Load() {
 		return os.ErrClosed
 	}

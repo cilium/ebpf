@@ -1,6 +1,7 @@
 package ringbuf
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -144,6 +145,13 @@ func (r *Reader) Read() (Record, error) {
 
 // ReadInto is like Read except that it allows reusing Record and associated buffers.
 func (r *Reader) ReadInto(rec *Record) error {
+	return r.ReadIntoContext(context.Background(), rec)
+}
+
+// ReadIntoContext is like [Reader.ReadInto] but it accepts a context.
+//
+// In addition it returns [context.Canceled] or [context.DeadlineExceeded] error if context is canceled.
+func (r *Reader) ReadIntoContext(ctx context.Context, rec *Record) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
@@ -158,7 +166,7 @@ func (r *Reader) ReadInto(rec *Record) error {
 				return pe
 			}
 
-			err := r.poller.Wait(r.deadline)
+			err := r.poller.Wait(ctx, r.deadline)
 			if errors.Is(err, os.ErrDeadlineExceeded) || errors.Is(err, ErrFlushed) {
 				// Ignoring this for reading a valid entry after timeout or flush.
 				// This can occur if the producer submitted to the ring buffer

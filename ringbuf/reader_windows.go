@@ -52,21 +52,9 @@ func newPoller(fd int) (*poller, error) {
 // Returns [ErrFlushed] if the ring buffer was flushed manually.
 // Returns [os.ErrClosed] if the poller was closed.
 func (p *poller) Wait(ctx context.Context, deadline time.Time) error {
-	errChan := make(chan error)
-
-	go func() {
-		errChan <- p.wait(deadline)
-		close(errChan)
-	}()
-	select {
-	case <-ctx.Done():
-		if err := p.Close(); err != nil {
-			return err
-		}
-		return ctx.Err()
-	case err := <-errChan:
-		return err
-	}
+	return waitWithContext(ctx, func() error {
+		return p.wait(deadline)
+	}, p)
 }
 
 func (p *poller) wait(deadline time.Time) error {

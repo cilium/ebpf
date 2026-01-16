@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"sync"
 	"time"
@@ -150,7 +151,7 @@ func (r *Reader) ReadInto(rec *Record) error {
 
 // ReadIntoContext is like [Reader.ReadInto] but it accepts a context.
 //
-// In addition it returns [context.Canceled] or [context.DeadlineExceeded] error if context is canceled.
+// Returns [context.Canceled] or [context.DeadlineExceeded] error if context is canceled.
 func (r *Reader) ReadIntoContext(ctx context.Context, rec *Record) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -210,4 +211,22 @@ func (r *Reader) AvailableBytes() int {
 	// Don't need to acquire the lock here since the implementation of AvailableBytes
 	// performs atomic loads on the producer and consumer positions.
 	return int(r.ring.AvailableBytes())
+}
+
+func waitWithContext(ctx context.Context, waitFunc func() error, closer io.Closer) error {
+	errChan := make(chan error)
+
+	go func() {
+		errChan <- waitFunc()
+		close(errChan)
+	}()
+	select {
+	case <-ctx.Done():
+		if err := closer.Close(); err != nil {
+			return err
+		}
+		return ctx.Err()
+	case err := <-errChan:
+		return err
+	}
 }

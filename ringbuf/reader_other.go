@@ -37,20 +37,8 @@ func newPoller(fd int) (*poller, error) {
 // Returns [os.ErrDeadlineExceeded] if a deadline was set and no wakeup was received.
 // Returns [ErrFlushed] if the ring buffer was flushed manually.
 func (p *poller) Wait(ctx context.Context, deadline time.Time) error {
-	errChan := make(chan error)
-
-	go func() {
+	return waitWithContext(ctx, func() error {
 		_, err := p.Poller.Wait(p.events, deadline)
-		errChan <- err
-		close(errChan)
-	}()
-	select {
-	case <-ctx.Done():
-		if err := p.Close(); err != nil {
-			return err
-		}
-		return ctx.Err()
-	case err := <-errChan:
 		return err
-	}
+	}, p.Poller)
 }

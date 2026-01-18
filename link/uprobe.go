@@ -98,17 +98,6 @@ func OpenExecutable(path string) (*Executable, error) {
 		return nil, fmt.Errorf("path cannot be empty")
 	}
 
-	f, err := internal.OpenSafeELFFile(path)
-	if err != nil {
-		return nil, fmt.Errorf("parse ELF file: %w", err)
-	}
-	defer f.Close()
-
-	if f.Type != elf.ET_EXEC && f.Type != elf.ET_DYN {
-		// ELF is not an executable or a shared object.
-		return nil, errors.New("the given file is not an executable or a shared object")
-	}
-
 	return &Executable{
 		path:            path,
 		cachedAddresses: make(map[string]uint64),
@@ -179,6 +168,11 @@ func (ex *Executable) address(symbol string, address, offset uint64) (uint64, er
 		}
 		defer f.Close()
 
+		if f.Type != elf.ET_EXEC && f.Type != elf.ET_DYN {
+			// ELF is not an executable or a shared object.
+			err = errors.New("the given file is not an executable or a shared object")
+			return
+		}
 		err = ex.load(f)
 	})
 	if err != nil {

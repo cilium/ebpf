@@ -6,6 +6,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"strings"
@@ -59,75 +60,10 @@ func TestLoadCollectionSpec(t *testing.T) {
 				ValueSize:  8,
 				MaxEntries: 2,
 			},
-			"array_of_hash_map": {
-				Name:       "array_of_hash_map",
-				Type:       ArrayOfMaps,
-				KeySize:    4,
-				MaxEntries: 2,
-			},
 			"perf_event_array": {
 				Name:       "perf_event_array",
 				Type:       PerfEventArray,
 				MaxEntries: 4096,
-			},
-			"btf_pin": {
-				Name:       "btf_pin",
-				Type:       Hash,
-				KeySize:    4,
-				ValueSize:  8,
-				MaxEntries: 1,
-				Pinning:    PinByName,
-			},
-			"bpf_decl_map": {
-				Name:       "bpf_decl_map",
-				Type:       Array,
-				KeySize:    4,
-				ValueSize:  8,
-				MaxEntries: 1,
-				Tags:       []string{"a", "b"},
-			},
-			"btf_decl_map": {
-				Name:       "btf_decl_map",
-				Type:       Array,
-				KeySize:    4,
-				ValueSize:  8,
-				MaxEntries: 1,
-				Tags:       []string{"a", "b"},
-			},
-			"btf_outer_map": {
-				Name:       "btf_outer_map",
-				Type:       ArrayOfMaps,
-				KeySize:    4,
-				ValueSize:  4,
-				MaxEntries: 1,
-				InnerMap: &MapSpec{
-					Name:       "btf_outer_map_inner",
-					Type:       Hash,
-					KeySize:    4,
-					ValueSize:  4,
-					MaxEntries: 1,
-				},
-			},
-			"btf_outer_map_anon": {
-				Name:       "btf_outer_map_anon",
-				Type:       ArrayOfMaps,
-				KeySize:    4,
-				ValueSize:  4,
-				MaxEntries: 1,
-				InnerMap: &MapSpec{
-					Name:       "btf_outer_map_anon_inner",
-					Type:       Hash,
-					KeySize:    4,
-					ValueSize:  4,
-					MaxEntries: 1,
-				},
-			},
-			"btf_typedef_map": {
-				Name:       "btf_typedef_map",
-				Type:       Array,
-				KeySize:    4,
-				ValueSize:  8,
-				MaxEntries: 1,
 			},
 			".bss": {
 				Name:       ".bss",
@@ -232,38 +168,107 @@ func TestLoadCollectionSpec(t *testing.T) {
 		},
 	}
 
+	// BTF-only maps.
+	btfOnly := map[string]*MapSpec{
+		"btf_pin": {
+			Name:       "btf_pin",
+			Type:       Hash,
+			KeySize:    4,
+			ValueSize:  8,
+			MaxEntries: 1,
+			Pinning:    PinByName,
+		},
+		"bpf_decl_map": {
+			Name:       "bpf_decl_map",
+			Type:       Array,
+			KeySize:    4,
+			ValueSize:  8,
+			MaxEntries: 1,
+			Tags:       []string{"a", "b"},
+		},
+		"btf_decl_map": {
+			Name:       "btf_decl_map",
+			Type:       Array,
+			KeySize:    4,
+			ValueSize:  8,
+			MaxEntries: 1,
+			Tags:       []string{"a", "b"},
+		},
+		"btf_outer_map": {
+			Name:       "btf_outer_map",
+			Type:       ArrayOfMaps,
+			KeySize:    4,
+			ValueSize:  4,
+			MaxEntries: 1,
+			InnerMap: &MapSpec{
+				Name:       "btf_outer_map_inner",
+				Type:       Hash,
+				KeySize:    4,
+				ValueSize:  4,
+				MaxEntries: 1,
+			},
+		},
+		"btf_outer_map_anon": {
+			Name:       "btf_outer_map_anon",
+			Type:       ArrayOfMaps,
+			KeySize:    4,
+			ValueSize:  4,
+			MaxEntries: 1,
+			InnerMap: &MapSpec{
+				Name:       "btf_outer_map_anon_inner",
+				Type:       Hash,
+				KeySize:    4,
+				ValueSize:  4,
+				MaxEntries: 1,
+			},
+		},
+		"btf_typedef_map": {
+			Name:       "btf_typedef_map",
+			Type:       Array,
+			KeySize:    4,
+			ValueSize:  8,
+			MaxEntries: 1,
+		},
+	}
+
 	testutils.Files(t, testutils.Glob(t, "testdata/loader-*.elf"), func(t *testing.T, file string) {
-		have, err := LoadCollectionSpec(file)
-		if err != nil {
-			t.Fatal("Can't parse ELF:", err)
-		}
+		got, err := LoadCollectionSpec(file)
+		qt.Assert(t, qt.IsNil(err))
 
-		qt.Assert(t, qt.Equals(have.Maps["perf_event_array"].ValueSize, 0))
-		qt.Assert(t, qt.IsNotNil(have.Maps["perf_event_array"].Value))
+		// BTF map definition contains a value type, but the size should remain 0.
+		// The value type needs to be reflected in the MapSpec.
+		qt.Assert(t, qt.Equals(got.Maps["perf_event_array"].ValueSize, 0))
+		qt.Assert(t, qt.IsNotNil(got.Maps["perf_event_array"].Value))
 
-		qt.Assert(t, qt.CmpEquals(have, coll, csCmpOpts))
+		// Copy and extend the CollectionSpec with BTF-only objects.
+		want := coll.Copy()
+		maps.Copy(want.Maps, btfOnly)
 
-		qt.Assert(t, qt.IsNil(have.Variables["arg"].Set(uint32(1))))
-		qt.Assert(t, qt.IsNil(have.Variables["arg2"].Set(uint32(2))))
-
-		have.Maps["array_of_hash_map"].InnerMap = have.Maps["hash_map"]
-		coll, err := newCollection(t, have, &CollectionOptions{
-			Maps: MapOptions{
-				PinPath: testutils.TempBPFFS(t),
-			},
-			Programs: ProgramOptions{
-				LogLevel: LogLevelBranch,
-			},
-		})
-
-		testutils.SkipIfNotSupported(t, err)
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		ret := mustRun(t, coll.Programs["xdp_prog"], nil)
-		qt.Assert(t, qt.Equals(ret, 7))
+		testLoadCollectionSpec(t, got, want)
 	})
+
+	testutils.Files(t, testutils.Glob(t, "testdata/loader_nobtf-*.elf"), func(t *testing.T, file string) {
+		got, err := LoadCollectionSpec(file)
+		qt.Assert(t, qt.IsNil(err))
+
+		testLoadCollectionSpec(t, got, coll.Copy())
+	})
+}
+
+func testLoadCollectionSpec(t *testing.T, got, want *CollectionSpec) {
+	t.Helper()
+
+	qt.Assert(t, qt.CmpEquals(got, want, csCmpOpts))
+
+	coll, err := newCollection(t, got, &CollectionOptions{
+		Maps:     MapOptions{PinPath: testutils.TempBPFFS(t)},
+		Programs: ProgramOptions{LogLevel: LogLevelBranch},
+	})
+	testutils.SkipIfNotSupported(t, err)
+	qt.Assert(t, qt.IsNil(err))
+
+	ret := mustRun(t, coll.Programs["xdp_prog"], nil)
+	qt.Assert(t, qt.Equals(ret, 7))
 }
 
 func BenchmarkELFLoader(b *testing.B) {

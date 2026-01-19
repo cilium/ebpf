@@ -45,6 +45,7 @@ TARGETS := \
 	testdata/loader-clang-14 \
 	testdata/loader-clang-17 \
 	testdata/loader-$(CLANG) \
+	testdata/loader_nobtf \
 	testdata/manyprogs \
 	testdata/btf_map_init \
 	testdata/invalid_map \
@@ -74,6 +75,8 @@ TARGETS := \
 	btf/testdata/relocs_enum \
 	btf/testdata/tags \
 	cmd/bpf2go/testdata/minimal
+
+HEADERS := $(wildcard testdata/*.h)
 
 .PHONY: all clean container-all container-shell generate
 
@@ -110,19 +113,25 @@ generate:
 
 testdata: $(addsuffix -el.elf,$(TARGETS)) $(addsuffix -eb.elf,$(TARGETS)) $(addsuffix -el.elf,$(TARGETS_EL))
 
-testdata/loader-%-el.elf: testdata/loader.c
+testdata/loader-%-el.elf: testdata/loader.c $(HEADERS)
 	$* $(CFLAGS) -target bpfel -c $< -o $@
 	$(STRIP) -g $@
 
-testdata/loader-%-eb.elf: testdata/loader.c
+testdata/loader-%-eb.elf: testdata/loader.c $(HEADERS)
 	$* $(CFLAGS) -target bpfeb -c $< -o $@
 	$(STRIP) -g $@
 
-%-el.elf: %.c
+testdata/loader_nobtf-el.elf: testdata/loader.c $(HEADERS)
+	$(CLANG) $(CFLAGS) -g0 -D__NOBTF__ -target bpfel -c $< -o $@
+
+testdata/loader_nobtf-eb.elf: testdata/loader.c $(HEADERS)
+	$(CLANG) $(CFLAGS) -g0 -D__NOBTF__ -target bpfeb -c $< -o $@
+
+%-el.elf: %.c $(HEADERS)
 	$(CLANG) $(CFLAGS) -target bpfel -c $< -o $@
 	$(STRIP) -g $@
 
-%-eb.elf : %.c
+%-eb.elf: %.c $(HEADERS)
 	$(CLANG) $(CFLAGS) -target bpfeb -c $< -o $@
 	$(STRIP) -g $@
 

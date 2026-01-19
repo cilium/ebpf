@@ -584,7 +584,6 @@ func BenchmarkNewCollection(b *testing.B) {
 		b.Fatal(err)
 	}
 
-	spec.Maps["array_of_hash_map"].InnerMap = spec.Maps["hash_map"]
 	for _, m := range spec.Maps {
 		m.Pinning = PinNone
 	}

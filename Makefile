@@ -40,6 +40,7 @@ TARGETS := \
 	testdata/loader-clang-14 \
 	testdata/loader-clang-17 \
 	testdata/loader-$(CLANG) \
+	testdata/loader-nobtf \
 	testdata/manyprogs \
 	testdata/btf_map_init \
 	testdata/invalid_map \
@@ -118,6 +119,15 @@ testdata/loader-%-eb.elf: testdata/loader.c
 %-eb.elf : %.c
 	$(CLANG) $(CFLAGS) -target bpfeb -c $< -o $@
 	$(STRIP) -g $@
+
+# Build loader-nobtf: compile loader.c without BTF (-D__NOBTF__ -g0)
+NOBTF_CFLAGS := -O2 -g0 -Wall -Werror -mcpu=v2 -D__NOBTF__
+
+testdata/loader-nobtf-el.elf: testdata/loader.c
+	$(CLANG) $(NOBTF_CFLAGS) -target bpfel -c $< -o $@
+
+testdata/loader-nobtf-eb.elf: testdata/loader.c
+	$(CLANG) $(NOBTF_CFLAGS) -target bpfeb -c $< -o $@
 
 .PHONY: update-external-deps
 update-external-deps:

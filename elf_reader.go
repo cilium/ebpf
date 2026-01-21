@@ -882,10 +882,62 @@ func (ec *elfCode) loadBTFMaps() error {
 	return nil
 }
 
+func unwrapAyaBTFMapDef(spec *btf.Spec, def *btf.Struct) (*btf.Struct, error) {
+	for {
+		hasType := false
+		hasKey := false
+		hasValue := false
+		hasMaxEntries := false
+
+		for _, m := range def.Members {
+			switch m.Name {
+			case "type":
+				hasType = true
+			case "key":
+				hasKey = true
+			case "value":
+				hasValue = true
+			case "max_entries":
+				hasMaxEntries = true
+			}
+		}
+
+		if hasType && hasKey && hasValue && hasMaxEntries {
+			return def, nil
+		}
+
+		if len(def.Members) != 1 {
+			return nil, fmt.Errorf("unexpected BTF map wrapper layout")
+		}
+
+		member := def.Members[0]
+		if member.Name != "__0" && member.Name != "value" {
+			return nil, fmt.Errorf("unexpected BTF map wrapper field %q", member.Name)
+		}
+
+		innerStruct, ok := member.Type.(*btf.Struct)
+		if !ok {
+			return nil, fmt.Errorf(
+				"BTF map wrapper field %q is not a struct: %T",
+				member.Name,
+				member.Type,
+			)
+		}
+
+		def = innerStruct
+	}
+}
+
 // mapSpecFromBTF produces a MapSpec based on a btf.Struct def representing
 // a BTF map definition. The name and spec arguments will be copied to the
 // resulting MapSpec, and inner must be true on any recursive invocations.
 func mapSpecFromBTF(es *elfSection, vs *btf.VarSecinfo, def *btf.Struct, spec *btf.Spec, name string, inner bool) (*MapSpec, error) {
+
+	def, err := unwrapAyaBTFMapDef(spec, def)
+	if err != nil {
+		return nil, fmt.Errorf("map %s: %w", name, err)
+	}
+
 	var (
 		key, value         btf.Type
 		keySize, valueSize uint64
@@ -895,7 +947,6 @@ func mapSpecFromBTF(es *elfSection, vs *btf.VarSecinfo, def *btf.Struct, spec *b
 		mapExtra           uint64
 		innerMapSpec       *MapSpec
 		contents           []MapKV
-		err                error
 	)
 
 	for i, member := range def.Members {

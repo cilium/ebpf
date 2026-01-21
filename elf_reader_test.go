@@ -1405,3 +1405,31 @@ func selftestName(path string) string {
 
 	return name
 }
+
+func TestAyaBTFMap(t *testing.T) {
+	coll, err := LoadCollectionSpec("testdata/btf_map_aya.elf")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	m, ok := coll.Maps["RESULT"]
+	if !ok {
+		t.Fatal("map RESULT not found in program")
+	}
+
+	if m.Type != Array {
+		t.Fatalf("unexpected map type: %v", m.Type)
+	}
+
+	if m.KeySize != 4 {
+		t.Fatalf("unexpected key size: %d", m.KeySize)
+	}
+
+	if m.ValueSize != 4 {
+		t.Fatalf("unexpected value size: %d", m.ValueSize)
+	}
+
+	if m.MaxEntries != 1 {
+		t.Fatalf("unexpected max entries: %d", m.MaxEntries)
+	}
+}

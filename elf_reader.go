@@ -318,10 +318,11 @@ func (ec *elfCode) assignSymbols(symbols []elf.Symbol) {
 			if symType != elf.STT_NOTYPE && symType != elf.STT_FUNC {
 				continue
 			}
-			// LLVM emits LBB_ (Local Basic Block) symbols that seem to be jump
-			// targets within sections, but BPF has no use for them.
-			if symType == elf.STT_NOTYPE && elf.ST_BIND(symbol.Info) == elf.STB_LOCAL &&
-				strings.HasPrefix(symbol.Name, "LBB") {
+
+			// Program sections may contain NOTYPE symbols with local scope, these are
+			// usually labels for jumps. We do not care for these for the purposes of
+			// linking and they may overlap with function symbols.
+			if symType == elf.STT_NOTYPE && elf.ST_BIND(symbol.Info) == elf.STB_LOCAL {
 				continue
 			}
 		// Only collect symbols that occur in program/maps/data sections.
@@ -655,7 +656,7 @@ func (ec *elfCode) relocateInstruction(ins *asm.Instruction, rel elf.Symbol) err
 
 			switch typ {
 			case elf.STT_NOTYPE, elf.STT_FUNC:
-				if bind != elf.STB_GLOBAL {
+				if bind != elf.STB_GLOBAL && bind != elf.STB_WEAK {
 					return fmt.Errorf("call: %s: %w: %s", name, errUnsupportedBinding, bind)
 				}
 

@@ -305,10 +305,11 @@ func (ec *elfCode) assignSymbols(symbols []elf.Symbol) {
 			if symType != elf.STT_NOTYPE && symType != elf.STT_FUNC {
 				continue
 			}
-			// LLVM emits LBB_ (Local Basic Block) symbols that seem to be jump
-			// targets within sections, but BPF has no use for them.
-			if symType == elf.STT_NOTYPE && elf.ST_BIND(symbol.Info) == elf.STB_LOCAL &&
-				strings.HasPrefix(symbol.Name, "LBB") {
+
+			// Program sections may contain NOTYPE symbols with local scope, these are
+			// usually labels for jumps. We do not care for these for the purposes of
+			// linking and they may overlap with function symbols.
+			if symType == elf.STT_NOTYPE && elf.ST_BIND(symbol.Info) == elf.STB_LOCAL {
 				continue
 			}
 		// Only collect symbols that occur in program/maps/data sections.
@@ -433,6 +434,9 @@ func (ec *elfCode) loadFunctions(section *elfSection) (map[string]asm.Instructio
 		return nil, fmt.Errorf("no instructions found in section %s", section.Name)
 	}
 
+	symbolInsnSize := make(map[string]uint64)
+	remainder := insns
+
 	iter := insns.Iterate()
 	for iter.Next() {
 		ins := iter.Ins
@@ -440,7 +444,15 @@ func (ec *elfCode) loadFunctions(section *elfSection) (map[string]asm.Instructio
 
 		// Tag Symbol Instructions.
 		if sym, ok := section.symbols[offset]; ok {
+			iter2 := remainder.Iterate()
+			i := 0
+			for ; iter2.Next(); i++ {
+				if iter2.Offset.Bytes() >= sym.Size {
+					break
+				}
+			}
 			*ins = ins.WithSymbol(sym.Name)
+			symbolInsnSize[sym.Name] = uint64(i)
 		}
 
 		// Apply any relocations for the current instruction.
@@ -454,13 +466,29 @@ func (ec *elfCode) loadFunctions(section *elfSection) (map[string]asm.Instructio
 				return nil, fmt.Errorf("offset %d: resolving relative jump: %w", offset, err)
 			}
 		}
+
+		remainder = remainder[1:]
 	}
 
 	if ec.extInfo != nil {
 		ec.extInfo.Assign(insns, section.Name)
 	}
 
-	return splitSymbols(insns)
+	progs := make(map[string]asm.Instructions)
+	for i := range insns {
+		sym := insns[i].Symbol()
+		if sym == "" {
+			continue
+		}
+
+		if progs[sym] != nil {
+			return nil, fmt.Errorf("insns contains duplicate Symbol %s", sym)
+		}
+
+		progs[sym] = slices.Clone(insns[i : i+int(symbolInsnSize[sym])])
+	}
+
+	return progs, nil
 }
 
 // referenceRelativeJump turns a relative jump to another bpf subprogram within
@@ -588,7 +616,7 @@ func (ec *elfCode) relocateInstruction(ins *asm.Instruction, rel elf.Symbol) err
 
 			switch typ {
 			case elf.STT_NOTYPE, elf.STT_FUNC:
-				if bind != elf.STB_GLOBAL {
+				if bind != elf.STB_GLOBAL && bind != elf.STB_WEAK {
 					return fmt.Errorf("call: %s: %w: %s", name, errUnsupportedBinding, bind)
 				}
 

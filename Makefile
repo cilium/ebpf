@@ -36,6 +36,10 @@ endif
 IMAGE := $(shell cat ${REPODIR}/testdata/docker/IMAGE)
 VERSION := $(shell cat ${REPODIR}/testdata/docker/VERSION)
 
+TARGETS_EL := testdata/linker1 \
+	testdata/linker2 \
+	btf/testdata/tags
+
 TARGETS := \
 	testdata/loader-clang-14 \
 	testdata/loader-clang-17 \
@@ -67,7 +71,6 @@ TARGETS := \
 	btf/testdata/relocs_read \
 	btf/testdata/relocs_read_tgt \
 	btf/testdata/relocs_enum \
-	btf/testdata/tags \
 	cmd/bpf2go/testdata/minimal
 
 .PHONY: all clean container-all container-shell generate
@@ -93,7 +96,9 @@ clean:
 format:
 	find . -type f -name "*.c" | xargs clang-format -i
 
-all: format $(addsuffix -el.elf,$(TARGETS)) $(addsuffix -eb.elf,$(TARGETS)) update-external-deps
+all: $(addsuffix -el.elf,$(TARGETS_EL))
+all: $(addsuffix -el.elf,$(TARGETS)) $(addsuffix -eb.elf,$(TARGETS))
+all: format testdata/linked-el.elf update-external-deps
 	ln -srf testdata/loader-$(CLANG)-el.elf testdata/loader-el.elf
 	ln -srf testdata/loader-$(CLANG)-eb.elf testdata/loader-eb.elf
 	$(MAKE) generate
@@ -118,6 +123,9 @@ testdata/loader-%-eb.elf: testdata/loader.c
 %-eb.elf : %.c
 	$(CLANG) $(CFLAGS) -target bpfeb -c $< -o $@
 	$(STRIP) -g $@
+
+testdata/linked-el.elf : testdata/linker1-el.elf testdata/linker2-el.elf
+	bpftool gen object $@ $^
 
 .PHONY: update-external-deps
 update-external-deps:

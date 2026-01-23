@@ -784,22 +784,19 @@ func (ec *elfCode) loadMaps() error {
 			}
 		}
 
-		var (
-			r    = bufio.NewReader(sec.Open())
-			size = sec.Size / uint64(nSym)
-		)
-		for i, offset := 0, uint64(0); i < nSym; i, offset = i+1, offset+size {
-			mapSym, ok := sec.symbols[offset]
-			if !ok {
-				return fmt.Errorf("section %s: missing symbol for map at offset %d", sec.Name, offset)
-			}
-
+		for offset, mapSym := range sec.symbols {
 			mapName := mapSym.Name
 			if ec.maps[mapName] != nil {
 				return fmt.Errorf("section %v: map %v already exists", sec.Name, mapSym)
 			}
 
-			lr := io.LimitReader(r, int64(size))
+			buf := make([]byte, mapSym.Size)
+			_, err := sec.ReadAt(buf, int64(offset))
+			if err != nil {
+				return fmt.Errorf("map %s: reading map definition: %w", mapName, err)
+			}
+
+			lr := bytes.NewReader(buf)
 
 			spec := MapSpec{
 				Name: sanitizeName(mapName, -1),
@@ -855,10 +852,14 @@ func (ec *elfCode) loadBTFMaps() error {
 			return fmt.Errorf("cannot find section '%s' in BTF: %w", sec.Name, err)
 		}
 
-		// Open a Reader to the ELF's raw section bytes so we can assert that all
-		// of them are zero on a per-map (per-Var) basis. For now, the section's
-		// sole purpose is to receive relocations, so all must be zero.
-		rs := sec.Open()
+		if len(ds.Vars) != len(sec.symbols) {
+			return fmt.Errorf("section %v: symbol count (%d) does not match btf.Datasec var count (%d)", sec.Name, len(sec.symbols), len(ds.Vars))
+		}
+
+		symbolByName := make(map[string]elf.Symbol)
+		for _, sym := range sec.symbols {
+			symbolByName[sym.Name] = sym
+		}
 
 		for _, vs := range ds.Vars {
 			// BPF maps are declared as and assigned to global variables,
@@ -869,11 +870,28 @@ func (ec *elfCode) loadBTFMaps() error {
 			}
 			name := string(v.Name)
 
+			// Find the ELF symbol corresponding to this Var.
+			sym, ok := symbolByName[name]
+			if !ok {
+				return fmt.Errorf("section %v: missing symbol for map %s", sec.Name, name)
+			}
+
+			// Assert that the size of the symbol is equal to the size of the VarSecinfo.
+			if sym.Size != uint64(vs.Size) {
+				return fmt.Errorf("section %v: size mismatch for map %s: symbol size %d, btf.VarSecinfo size %d", sec.Name, name, sym.Size, vs.Size)
+			}
+
+			buf := make([]byte, sym.Size)
+			_, err := sec.ReadAt(buf, int64(sym.Value))
+			if err != nil {
+				return fmt.Errorf("map %s: reading map definition: %w", name, err)
+			}
+
 			// The BTF metadata for each Var contains the full length of the map
 			// declaration, so read the corresponding amount of bytes from the ELF.
 			// This way, we can pinpoint which map declaration contains unexpected
 			// (and therefore unsupported) data.
-			_, err := io.Copy(internal.DiscardZeroes{}, io.LimitReader(rs, int64(vs.Size)))
+			_, err = io.Copy(internal.DiscardZeroes{}, bytes.NewReader(buf))
 			if err != nil {
 				return fmt.Errorf("section %v: map %s: initializing BTF map definitions: %w", sec.Name, name, internal.ErrNotSupported)
 			}
@@ -894,16 +912,6 @@ func (ec *elfCode) loadBTFMaps() error {
 			}
 
 			ec.maps[name] = mapSpec
-		}
-
-		// Drain the ELF section reader to make sure all bytes are accounted for
-		// with BTF metadata.
-		i, err := io.Copy(io.Discard, rs)
-		if err != nil {
-			return fmt.Errorf("section %v: unexpected error reading remainder of ELF section: %w", sec.Name, err)
-		}
-		if i > 0 {
-			return fmt.Errorf("section %v: %d unexpected remaining bytes in ELF section, invalid BTF?", sec.Name, i)
 		}
 	}
 

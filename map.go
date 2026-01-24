@@ -1290,7 +1290,25 @@ func (m *Map) batchLookup(cmd sys.Cmd, cursor *MapBatchCursor, keysOut, valuesOu
 		return 0, sysErr
 	}
 
-	err = valueBuf.Unmarshal(valuesOut)
+	if n < count {
+		// Only unmarshal the elements that were actually returned by the kernel.
+		// Use reflection to slice the output slice to the correct length.
+		vOut := reflect.ValueOf(valuesOut).Slice(0, n).Interface()
+
+		// valueBuf should be sliced to match the number of elements.
+		// If the buffer was created with SyscallOutput(..., size), it has the
+		// full size.
+		if b := valueBuf.Bytes(); b != nil {
+			err = sysenc.Unmarshal(vOut, b[:n*int(m.fullValueSize)])
+		} else {
+			// Zero-copy: valuesOut already contains the data.
+			// Because vOut is a slice of valuesOut, it's safe to use Unmarshal
+			// which will just be a no-op but consistency check.
+			err = valueBuf.Unmarshal(vOut)
+		}
+	} else {
+		err = valueBuf.Unmarshal(valuesOut)
+	}
 	if err != nil {
 		return 0, err
 	}
@@ -1312,7 +1330,22 @@ func (m *Map) batchLookupPerCPU(cmd sys.Cmd, cursor *MapBatchCursor, keysOut, va
 	}
 
 	if bytesBuf := valueBuf.Bytes(); bytesBuf != nil {
-		err = unmarshalBatchPerCPUValue(valuesOut, count, int(m.valueSize), bytesBuf)
+		// Only unmarshal the elements that were actually returned by the kernel.
+		unmarshalCount := count
+		vOut := valuesOut
+		bufLen := len(bytesBuf)
+
+		if n < count {
+			possibleCPUs, err := PossibleCPU()
+			if err != nil {
+				return 0, err
+			}
+			unmarshalCount = n
+			vOut = reflect.ValueOf(valuesOut).Slice(0, n*possibleCPUs).Interface()
+			bufLen = n * int(m.fullValueSize)
+		}
+
+		err = unmarshalBatchPerCPUValue(vOut, unmarshalCount, int(m.valueSize), bytesBuf[:bufLen])
 		if err != nil {
 			return 0, err
 		}
@@ -1370,11 +1403,25 @@ func (m *Map) batchLookupCmd(cmd sys.Cmd, cursor *MapBatchCursor, count int, key
 		return 0, sysErr
 	}
 
-	if err := keyBuf.Unmarshal(keysOut); err != nil {
+	n := int(attr.Count)
+	var err error
+	if n < count {
+		// Only unmarshal the elements that were actually returned by the kernel.
+		kOut := reflect.ValueOf(keysOut).Slice(0, n).Interface()
+		if b := keyBuf.Bytes(); b != nil {
+			err = sysenc.Unmarshal(kOut, b[:n*int(m.keySize)])
+		} else {
+			err = keyBuf.Unmarshal(kOut)
+		}
+	} else {
+		err = keyBuf.Unmarshal(keysOut)
+	}
+
+	if err != nil {
 		return 0, err
 	}
 
-	return int(attr.Count), sysErr
+	return n, sysErr
 }
 
 // BatchUpdate updates the map with multiple keys and values

@@ -6,6 +6,7 @@ import (
 	"debug/elf"
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"sync"
 
@@ -33,6 +34,8 @@ var (
 	// in the ELF symbols table.
 	ErrNoSymbol = errors.New("not found")
 )
+
+const permExec fs.FileMode = 0111
 
 // Executable defines an executable program on the filesystem.
 type Executable struct {
@@ -96,6 +99,15 @@ func (uo *UprobeOptions) cookie() uint64 {
 func OpenExecutable(path string) (*Executable, error) {
 	if path == "" {
 		return nil, fmt.Errorf("path cannot be empty")
+	}
+
+	info, err := os.Stat(path)
+	if err != nil {
+		return nil, fmt.Errorf("stat executable: %w", err)
+	}
+
+	if info.Mode()&permExec == 0 {
+		return nil, fmt.Errorf("file %s is not executable", path)
 	}
 
 	return &Executable{

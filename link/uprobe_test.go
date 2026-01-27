@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path"
+	"path/filepath"
 	"testing"
 
 	"github.com/go-quicktest/qt"
@@ -28,6 +29,37 @@ func TestExecutable(t *testing.T) {
 	_, err := OpenExecutable("")
 	if err == nil {
 		t.Fatal("create executable: expected error on empty path")
+	}
+
+	_, err = OpenExecutable("/non/existent/path")
+	if err == nil {
+		t.Fatal("create executable: expected error on non-existent path")
+	}
+	var pe *os.PathError
+	qt.Assert(t, qt.ErrorAs(err, &pe))
+
+	// create temp non-executable file
+	dir := t.TempDir()
+	path := filepath.Join(dir, "file.txt")
+	err = os.WriteFile(path, []byte("hello"), 0600)
+	if err != nil {
+		t.Fatalf("write file: %v", err)
+	}
+
+	_, err = OpenExecutable(path)
+	if err == nil {
+		t.Fatal("create executable: expected error on non-executable file")
+	}
+
+	// make it executable
+	err = os.Chmod(path, 0700)
+	if err != nil {
+		t.Fatalf("chmod file: %v", err)
+	}
+
+	_, err = OpenExecutable(path)
+	if err != nil {
+		t.Fatalf("create executable: %v", err)
 	}
 
 	if bashEx.path != "/bin/bash" {

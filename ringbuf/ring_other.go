@@ -12,14 +12,16 @@ import (
 	"github.com/cilium/ebpf/internal/unix"
 )
 
-type ringbufEventRing struct {
+var _ eventRing = (*mmapEventRing)(nil)
+
+type mmapEventRing struct {
 	prod []byte
 	cons []byte
 	*ringReader
 	cleanup runtime.Cleanup
 }
 
-func newRingBufEventRing(mapFD, size int) (*ringbufEventRing, error) {
+func newRingBufEventRing(mapFD, size int) (*mmapEventRing, error) {
 	cons, err := unix.Mmap(mapFD, 0, os.Getpagesize(), unix.PROT_READ|unix.PROT_WRITE, unix.MAP_SHARED)
 	if err != nil {
 		return nil, fmt.Errorf("mmap consumer page: %w", err)
@@ -34,7 +36,7 @@ func newRingBufEventRing(mapFD, size int) (*ringbufEventRing, error) {
 	cons_pos := (*uintptr)(unsafe.Pointer(&cons[0]))
 	prod_pos := (*uintptr)(unsafe.Pointer(&prod[0]))
 
-	ring := &ringbufEventRing{
+	ring := &mmapEventRing{
 		prod:       prod,
 		cons:       cons,
 		ringReader: newRingReader(cons_pos, prod_pos, prod[os.Getpagesize():]),
@@ -47,7 +49,7 @@ func newRingBufEventRing(mapFD, size int) (*ringbufEventRing, error) {
 	return ring, nil
 }
 
-func (ring *ringbufEventRing) Close() error {
+func (ring *mmapEventRing) Close() error {
 	ring.cleanup.Stop()
 
 	prod, cons := ring.prod, ring.cons

@@ -19,6 +19,21 @@ var (
 	errBusy   = errors.New("sample not committed yet")
 )
 
+// poller abstracts platform-specific event notification.
+type poller interface {
+	Wait(deadline time.Time) error
+	Flush() error
+	Close() error
+}
+
+// eventRing abstracts platform-specific ring buffer memory access.
+type eventRing interface {
+	size() int
+	AvailableBytes() uint64
+	readRecord(rec *Record) error
+	Close() error
+}
+
 // ringbufHeader from 'struct bpf_ringbuf_hdr' in kernel/bpf/ringbuf.c
 type ringbufHeader struct {
 	Len uint32
@@ -49,11 +64,11 @@ type Record struct {
 // Reader allows reading bpf_ringbuf_output
 // from user space.
 type Reader struct {
-	poller *poller
+	poller poller
 
 	// mu protects read/write access to the Reader structure
 	mu         sync.Mutex
-	ring       *ringbufEventRing
+	ring       eventRing
 	haveData   bool
 	deadline   time.Time
 	bufferSize int

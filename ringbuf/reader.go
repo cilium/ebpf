@@ -1,8 +1,10 @@
 package ringbuf
 
 import (
+	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"sync"
 	"time"
@@ -144,6 +146,13 @@ func (r *Reader) Read() (Record, error) {
 
 // ReadInto is like Read except that it allows reusing Record and associated buffers.
 func (r *Reader) ReadInto(rec *Record) error {
+	return r.ReadIntoContext(context.Background(), rec)
+}
+
+// ReadIntoContext is like [Reader.ReadInto] but it accepts a context.
+//
+// Returns [context.Canceled] or [context.DeadlineExceeded] error if context is canceled.
+func (r *Reader) ReadIntoContext(ctx context.Context, rec *Record) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
@@ -158,7 +167,7 @@ func (r *Reader) ReadInto(rec *Record) error {
 				return pe
 			}
 
-			err := r.poller.Wait(r.deadline)
+			err := r.poller.Wait(ctx, r.deadline)
 			if errors.Is(err, os.ErrDeadlineExceeded) || errors.Is(err, ErrFlushed) {
 				// Ignoring this for reading a valid entry after timeout or flush.
 				// This can occur if the producer submitted to the ring buffer
@@ -202,4 +211,22 @@ func (r *Reader) AvailableBytes() int {
 	// Don't need to acquire the lock here since the implementation of AvailableBytes
 	// performs atomic loads on the producer and consumer positions.
 	return int(r.ring.AvailableBytes())
+}
+
+func waitWithContext(ctx context.Context, waitFunc func() error, closer io.Closer) error {
+	errChan := make(chan error)
+
+	go func() {
+		errChan <- waitFunc()
+		close(errChan)
+	}()
+	select {
+	case <-ctx.Done():
+		if err := closer.Close(); err != nil {
+			return err
+		}
+		return ctx.Err()
+	case err := <-errChan:
+		return err
+	}
 }

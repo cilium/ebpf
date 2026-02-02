@@ -3,6 +3,7 @@
 package ringbuf
 
 import (
+	"context"
 	"time"
 
 	"github.com/cilium/ebpf/internal/epoll"
@@ -35,7 +36,9 @@ func newPoller(fd int) (*poller, error) {
 
 // Returns [os.ErrDeadlineExceeded] if a deadline was set and no wakeup was received.
 // Returns [ErrFlushed] if the ring buffer was flushed manually.
-func (p *poller) Wait(deadline time.Time) error {
-	_, err := p.Poller.Wait(p.events, deadline)
-	return err
+func (p *poller) Wait(ctx context.Context, deadline time.Time) error {
+	return waitWithContext(ctx, func() error {
+		_, err := p.Poller.Wait(p.events, deadline)
+		return err
+	}, p.Poller)
 }

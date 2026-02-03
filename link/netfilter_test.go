@@ -19,7 +19,7 @@ func TestAttachNetfilter(t *testing.T) {
 	l, err := AttachNetfilter(NetfilterOptions{
 		Program:        prog,
 		ProtocolFamily: NetfilterProtoIPv4,
-		HookNumber:     NetfilterInetLocalOut,
+		Hook:           NetfilterInetLocalOut,
 		Priority:       -128,
 	})
 	if err != nil {
@@ -31,8 +31,8 @@ func TestAttachNetfilter(t *testing.T) {
 		t.Fatal(err)
 	}
 	nfInfo := info.Netfilter()
-	qt.Assert(t, qt.Equals(nfInfo.Pf, NetfilterProtoIPv4))
-	qt.Assert(t, qt.Equals(nfInfo.Hooknum, NetfilterInetLocalOut))
+	qt.Assert(t, qt.Equals(nfInfo.ProtocolFamily, NetfilterProtoIPv4))
+	qt.Assert(t, qt.Equals(nfInfo.Hook, NetfilterInetLocalOut))
 	qt.Assert(t, qt.Equals(nfInfo.Priority, -128))
 
 	testLink(t, l, prog)

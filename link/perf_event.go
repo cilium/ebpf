@@ -185,10 +185,10 @@ func (pl *perfEventLink) Info() (*Info, error) {
 			return nil, fmt.Errorf("uprobe link info: %s", err)
 		}
 		extra2 = &UprobeInfo{
-			Offset:       uprobeInfo.Offset,
-			Cookie:       uprobeInfo.Cookie,
-			RefCtrOffset: uprobeInfo.RefCtrOffset,
-			File:         fileName,
+			Offset:               uprobeInfo.Offset,
+			Cookie:               uprobeInfo.Cookie,
+			OffsetReferenceCount: uprobeInfo.RefCtrOffset,
+			File:                 fileName,
 		}
 	case PerfEventTracepoint:
 		var tracepointInfo sys.TracepointLinkInfo

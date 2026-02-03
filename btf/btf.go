@@ -21,6 +21,7 @@ const btfMagic = 0xeB9F
 // Errors returned by BTF functions.
 var (
 	ErrNotSupported    = internal.ErrNotSupported
+	ErrNotPermitted    = internal.ErrNotPermitted
 	ErrNotFound        = errors.New("not found")
 	ErrNoExtendedInfo  = errors.New("no extended info")
 	ErrMultipleMatches = errors.New("multiple matching types")

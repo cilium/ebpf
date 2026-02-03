@@ -16,6 +16,7 @@ import (
 type Type = sys.LinkType
 
 var ErrNotSupported = internal.ErrNotSupported
+var ErrNotPermitted = internal.ErrNotPermitted
 
 // Link represents a Program attached to a BPF hook.
 type Link interface {

@@ -90,6 +90,10 @@ func createMap(attr *sys.MapCreateAttr) error {
 	// to support the given map type.
 	case errors.Is(err, unix.EINVAL), errors.Is(err, unix.E2BIG):
 		return ebpf.ErrNotSupported
+	// EPERM occurs when the caller lacks permission. The feature exists but
+	// cannot be used due to insufficient privileges.
+	case errors.Is(err, unix.EPERM):
+		return fmt.Errorf("%w: %w", ebpf.ErrNotPermitted, err)
 	}
 
 	return err

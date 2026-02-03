@@ -41,7 +41,7 @@ type NetfilterOptions struct {
 	// The protocol family.
 	ProtocolFamily NetfilterProtocolFamily
 	// The netfilter hook to attach to.
-	HookNumber NetfilterInetHook
+	Hook NetfilterInetHook
 	// Priority within hook
 	Priority int32
 	// Extra link flags
@@ -74,7 +74,7 @@ func AttachNetfilter(opts NetfilterOptions) (Link, error) {
 		AttachType:     sys.BPF_NETFILTER,
 		Flags:          opts.Flags,
 		Pf:             opts.ProtocolFamily,
-		Hooknum:        opts.HookNumber,
+		Hooknum:        opts.Hook,
 		Priority:       opts.Priority,
 		NetfilterFlags: uint32(opts.NetfilterFlags),
 	}
@@ -97,10 +97,10 @@ func (nf *netfilterLink) Info() (*Info, error) {
 		return nil, fmt.Errorf("netfilter link info: %s", err)
 	}
 	extra := &NetfilterInfo{
-		Pf:       info.Pf,
-		Hooknum:  info.Hooknum,
-		Priority: info.Priority,
-		Flags:    info.Flags,
+		ProtocolFamily: info.Pf,
+		Hook:           info.Hooknum,
+		Priority:       info.Priority,
+		Flags:          info.Flags,
 	}
 
 	return &Info{

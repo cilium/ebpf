@@ -111,9 +111,9 @@ func wrapRawLink(raw *RawLink) (_ Link, err error) {
 }
 
 type TracingInfo struct {
-	AttachType  sys.AttachType
-	TargetObjId uint32
-	TargetBtfId sys.TypeID
+	AttachType     sys.AttachType
+	TargetObjectId uint32
+	TargetBtfId    sys.TypeID
 }
 
 type CgroupInfo struct {
@@ -123,7 +123,7 @@ type CgroupInfo struct {
 }
 
 type NetNsInfo struct {
-	NetnsIno   uint32
+	NetnsInode uint32
 	AttachType sys.AttachType
 }
 
@@ -137,10 +137,10 @@ type XDPInfo struct {
 }
 
 type NetfilterInfo struct {
-	Pf       NetfilterProtocolFamily
-	Hooknum  NetfilterInetHook
-	Priority int32
-	Flags    uint32
+	ProtocolFamily NetfilterProtocolFamily
+	Hook           NetfilterInetHook
+	Priority       int32
+	Flags          uint32
 }
 
 type NetkitInfo struct {
@@ -276,10 +276,10 @@ type UprobeInfo struct {
 	// However, due to various circumstances (differing mount namespaces,
 	// file replacement, ...), this path may not point to the same binary
 	// the uprobe was originally attached to.
-	File         string
-	Offset       uint32
-	Cookie       uint64
-	RefCtrOffset uint64
+	File                 string
+	Offset               uint32
+	Cookie               uint64
+	OffsetReferenceCount uint64
 }
 
 type TracepointInfo struct {

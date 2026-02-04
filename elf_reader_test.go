@@ -18,6 +18,7 @@ import (
 	"github.com/cilium/ebpf/internal/kallsyms"
 	"github.com/cilium/ebpf/internal/sys"
 	"github.com/cilium/ebpf/internal/testutils"
+	"github.com/cilium/ebpf/internal/unix"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
@@ -711,24 +712,31 @@ func TestKfunc(t *testing.T) {
 
 func TestWeakKfunc(t *testing.T) {
 	testutils.SkipOnOldKernel(t, "5.18", "kfunc support")
-	file := testutils.NativeFile(t, "testdata/kfunc-%s.elf")
-	spec, err := LoadCollectionSpec(file)
-	if err != nil {
-		t.Fatal(err)
-	}
 
-	var obj struct {
-		Missing *Program `ebpf:"weak_kfunc_missing"`
-		Calling *Program `ebpf:"call_weak_kfunc"`
-	}
+	// CAP_SYS_ADMIN is required to load kfuncs implemented in kernel modules.
+	// Assert that when kfuncs are weak, loading still works without the capability.
+	// CAP_BPF and CAP_PERFMON are still required to load BPF raw tracepoints programs
+	// such as the one in this test.
+	testutils.WithCapabilities(t, []int{unix.CAP_BPF, unix.CAP_PERFMON}, func() {
+		file := testutils.NativeFile(t, "testdata/kfunc-%s.elf")
+		spec, err := LoadCollectionSpec(file)
+		if err != nil {
+			t.Fatal(err)
+		}
 
-	err = spec.LoadAndAssign(&obj, nil)
-	testutils.SkipIfNotSupported(t, err)
-	if err != nil {
-		t.Fatalf("%+v", err)
-	}
-	defer obj.Missing.Close()
-	defer obj.Calling.Close()
+		var obj struct {
+			Missing *Program `ebpf:"weak_kfunc_missing"`
+			Calling *Program `ebpf:"call_weak_kfunc"`
+		}
+
+		err = spec.LoadAndAssign(&obj, nil)
+		testutils.SkipIfNotSupported(t, err)
+		if err != nil {
+			t.Fatalf("%+v", err)
+		}
+		defer obj.Missing.Close()
+		defer obj.Calling.Close()
+	})
 }
 
 func TestInvalidKfunc(t *testing.T) {

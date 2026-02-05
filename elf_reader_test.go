@@ -42,194 +42,202 @@ var csCmpOpts = cmp.Options{
 }
 
 func TestLoadCollectionSpec(t *testing.T) {
-	coll := &CollectionSpec{
-		Maps: map[string]*MapSpec{
-			"hash_map": {
-				Name:       "hash_map",
+	// Base CollectionSpec present in both BTF and non-BTF ELFs
+	baseMaps := map[string]*MapSpec{
+		"hash_map": {
+			Name:       "hash_map",
+			Type:       Hash,
+			KeySize:    4,
+			ValueSize:  8,
+			MaxEntries: 1,
+			Flags:      sys.BPF_F_NO_PREALLOC,
+		},
+		"hash_map2": {
+			Name:       "hash_map2",
+			Type:       Hash,
+			KeySize:    4,
+			ValueSize:  8,
+			MaxEntries: 2,
+		},
+		"array_of_hash_map": {
+			Name:       "array_of_hash_map",
+			Type:       ArrayOfMaps,
+			KeySize:    4,
+			MaxEntries: 2,
+		},
+		"perf_event_array": {
+			Name:       "perf_event_array",
+			Type:       PerfEventArray,
+			MaxEntries: 4096,
+		},
+	}
+
+	// BTF-only maps (not present in loader-nobtf-*.elf)
+	btfOnlyMaps := map[string]*MapSpec{
+		"btf_pin": {
+			Name:       "btf_pin",
+			Type:       Hash,
+			KeySize:    4,
+			ValueSize:  8,
+			MaxEntries: 1,
+			Pinning:    PinByName,
+		},
+		"bpf_decl_map": {
+			Name:       "bpf_decl_map",
+			Type:       Array,
+			KeySize:    4,
+			ValueSize:  8,
+			MaxEntries: 1,
+			Tags:       []string{"a", "b"},
+		},
+		"btf_decl_map": {
+			Name:       "btf_decl_map",
+			Type:       Array,
+			KeySize:    4,
+			ValueSize:  8,
+			MaxEntries: 1,
+			Tags:       []string{"a", "b"},
+		},
+		"btf_outer_map": {
+			Name:       "btf_outer_map",
+			Type:       ArrayOfMaps,
+			KeySize:    4,
+			ValueSize:  4,
+			MaxEntries: 1,
+			InnerMap: &MapSpec{
+				Name:       "btf_outer_map_inner",
 				Type:       Hash,
 				KeySize:    4,
-				ValueSize:  8,
+				ValueSize:  4,
 				MaxEntries: 1,
-				Flags:      sys.BPF_F_NO_PREALLOC,
 			},
-			"hash_map2": {
-				Name:       "hash_map2",
+		},
+		"btf_outer_map_anon": {
+			Name:       "btf_outer_map_anon",
+			Type:       ArrayOfMaps,
+			KeySize:    4,
+			ValueSize:  4,
+			MaxEntries: 1,
+			InnerMap: &MapSpec{
+				Name:       "btf_outer_map_anon_inner",
 				Type:       Hash,
 				KeySize:    4,
-				ValueSize:  8,
-				MaxEntries: 2,
-			},
-			"array_of_hash_map": {
-				Name:       "array_of_hash_map",
-				Type:       ArrayOfMaps,
-				KeySize:    4,
-				MaxEntries: 2,
-			},
-			"perf_event_array": {
-				Name:       "perf_event_array",
-				Type:       PerfEventArray,
-				MaxEntries: 4096,
-			},
-			"btf_pin": {
-				Name:       "btf_pin",
-				Type:       Hash,
-				KeySize:    4,
-				ValueSize:  8,
-				MaxEntries: 1,
-				Pinning:    PinByName,
-			},
-			"bpf_decl_map": {
-				Name:       "bpf_decl_map",
-				Type:       Array,
-				KeySize:    4,
-				ValueSize:  8,
-				MaxEntries: 1,
-				Tags:       []string{"a", "b"},
-			},
-			"btf_decl_map": {
-				Name:       "btf_decl_map",
-				Type:       Array,
-				KeySize:    4,
-				ValueSize:  8,
-				MaxEntries: 1,
-				Tags:       []string{"a", "b"},
-			},
-			"btf_outer_map": {
-				Name:       "btf_outer_map",
-				Type:       ArrayOfMaps,
-				KeySize:    4,
 				ValueSize:  4,
 				MaxEntries: 1,
-				InnerMap: &MapSpec{
-					Name:       "btf_outer_map_inner",
-					Type:       Hash,
-					KeySize:    4,
-					ValueSize:  4,
-					MaxEntries: 1,
-				},
-			},
-			"btf_outer_map_anon": {
-				Name:       "btf_outer_map_anon",
-				Type:       ArrayOfMaps,
-				KeySize:    4,
-				ValueSize:  4,
-				MaxEntries: 1,
-				InnerMap: &MapSpec{
-					Name:       "btf_outer_map_anon_inner",
-					Type:       Hash,
-					KeySize:    4,
-					ValueSize:  4,
-					MaxEntries: 1,
-				},
-			},
-			"btf_typedef_map": {
-				Name:       "btf_typedef_map",
-				Type:       Array,
-				KeySize:    4,
-				ValueSize:  8,
-				MaxEntries: 1,
-			},
-			".bss": {
-				Name:       ".bss",
-				Type:       Array,
-				KeySize:    4,
-				ValueSize:  4,
-				MaxEntries: 1,
-			},
-			".data": {
-				Name:       ".data",
-				Type:       Array,
-				KeySize:    4,
-				ValueSize:  4,
-				MaxEntries: 1,
-			},
-			".data.test": {
-				Name:       ".data.test",
-				Type:       Array,
-				KeySize:    4,
-				ValueSize:  4,
-				MaxEntries: 1,
-			},
-			".rodata": {
-				Name:       ".rodata",
-				Type:       Array,
-				KeySize:    4,
-				ValueSize:  24,
-				MaxEntries: 1,
-				Flags:      sys.BPF_F_RDONLY_PROG,
-			},
-			".rodata.test": {
-				Name:       ".rodata.test",
-				Type:       Array,
-				KeySize:    4,
-				ValueSize:  4,
-				MaxEntries: 1,
-				Flags:      sys.BPF_F_RDONLY_PROG,
-			},
-			".rodata.cst32": {
-				Name:       ".rodata.cst32",
-				Type:       Array,
-				KeySize:    4,
-				ValueSize:  32,
-				MaxEntries: 1,
-				Flags:      sys.BPF_F_RDONLY_PROG,
 			},
 		},
-		Programs: map[string]*ProgramSpec{
-			"xdp_prog": {
-				Name:        "xdp_prog",
-				Type:        XDP,
-				SectionName: "xdp",
-				AttachType:  AttachXDP,
-				License:     "MIT",
-			},
-			"no_relocation": {
-				Name:        "no_relocation",
-				Type:        SocketFilter,
-				SectionName: "socket",
-				License:     "MIT",
-			},
-			"asm_relocation": {
-				Name:        "asm_relocation",
-				Type:        SocketFilter,
-				SectionName: "socket/2",
-				License:     "MIT",
-			},
-			"data_sections": {
-				Name:        "data_sections",
-				Type:        SocketFilter,
-				SectionName: "socket/3",
-				License:     "MIT",
-			},
-			"global_fn3": {
-				Name:        "global_fn3",
-				Type:        UnspecifiedProgram,
-				SectionName: "other",
-				License:     "MIT",
-			},
-			"static_fn": {
-				Name:        "static_fn",
-				Type:        UnspecifiedProgram,
-				SectionName: "static",
-				License:     "MIT",
-			},
-			"anon_const": {
-				Name:        "anon_const",
-				Type:        SocketFilter,
-				SectionName: "socket/4",
-				License:     "MIT",
-			},
+		"btf_typedef_map": {
+			Name:       "btf_typedef_map",
+			Type:       Array,
+			KeySize:    4,
+			ValueSize:  8,
+			MaxEntries: 1,
 		},
-		Variables: map[string]*VariableSpec{
-			"arg":  {Name: "arg", SectionName: ".rodata", Offset: 4},
-			"arg2": {Name: "arg2", SectionName: ".rodata.test", Offset: 0},
-			"arg3": {Name: "arg3", SectionName: ".data.test", Offset: 0},
-			"key1": {Name: "key1", SectionName: ".bss", Offset: 0},
-			"key2": {Name: "key2", SectionName: ".data", Offset: 0},
-			"key3": {Name: "key3", SectionName: ".rodata", Offset: 0},
-			"neg":  {Name: "neg", SectionName: ".rodata", Offset: 12},
-			"uneg": {Name: "uneg", SectionName: ".rodata", Offset: 8},
+	}
+
+	dataMaps := map[string]*MapSpec{
+		".bss": {
+			Name:       ".bss",
+			Type:       Array,
+			KeySize:    4,
+			ValueSize:  4,
+			MaxEntries: 1,
 		},
+		".data": {
+			Name:       ".data",
+			Type:       Array,
+			KeySize:    4,
+			ValueSize:  4,
+			MaxEntries: 1,
+		},
+		".data.test": {
+			Name:       ".data.test",
+			Type:       Array,
+			KeySize:    4,
+			ValueSize:  4,
+			MaxEntries: 1,
+		},
+		".rodata": {
+			Name:       ".rodata",
+			Type:       Array,
+			KeySize:    4,
+			ValueSize:  24,
+			MaxEntries: 1,
+			Flags:      sys.BPF_F_RDONLY_PROG,
+		},
+		".rodata.test": {
+			Name:       ".rodata.test",
+			Type:       Array,
+			KeySize:    4,
+			ValueSize:  4,
+			MaxEntries: 1,
+			Flags:      sys.BPF_F_RDONLY_PROG,
+		},
+		".rodata.cst32": {
+			Name:       ".rodata.cst32",
+			Type:       Array,
+			KeySize:    4,
+			ValueSize:  32,
+			MaxEntries: 1,
+			Flags:      sys.BPF_F_RDONLY_PROG,
+		},
+	}
+
+	programs := map[string]*ProgramSpec{
+		"xdp_prog": {
+			Name:        "xdp_prog",
+			Type:        XDP,
+			SectionName: "xdp",
+			AttachType:  AttachXDP,
+			License:     "MIT",
+		},
+		"no_relocation": {
+			Name:        "no_relocation",
+			Type:        SocketFilter,
+			SectionName: "socket",
+			License:     "MIT",
+		},
+		"asm_relocation": {
+			Name:        "asm_relocation",
+			Type:        SocketFilter,
+			SectionName: "socket/2",
+			License:     "MIT",
+		},
+		"data_sections": {
+			Name:        "data_sections",
+			Type:        SocketFilter,
+			SectionName: "socket/3",
+			License:     "MIT",
+		},
+		"global_fn3": {
+			Name:        "global_fn3",
+			Type:        UnspecifiedProgram,
+			SectionName: "other",
+			License:     "MIT",
+		},
+		"static_fn": {
+			Name:        "static_fn",
+			Type:        UnspecifiedProgram,
+			SectionName: "static",
+			License:     "MIT",
+		},
+		"anon_const": {
+			Name:        "anon_const",
+			Type:        SocketFilter,
+			SectionName: "socket/4",
+			License:     "MIT",
+		},
+	}
+
+	variables := map[string]*VariableSpec{
+		"arg":  {Name: "arg", SectionName: ".rodata", Offset: 4},
+		"arg2": {Name: "arg2", SectionName: ".rodata.test", Offset: 0},
+		"arg3": {Name: "arg3", SectionName: ".data.test", Offset: 0},
+		"key1": {Name: "key1", SectionName: ".bss", Offset: 0},
+		"key2": {Name: "key2", SectionName: ".data", Offset: 0},
+		"key3": {Name: "key3", SectionName: ".rodata", Offset: 0},
+		"neg":  {Name: "neg", SectionName: ".rodata", Offset: 12},
+		"uneg": {Name: "uneg", SectionName: ".rodata", Offset: 8},
 	}
 
 	testutils.Files(t, testutils.Glob(t, "testdata/loader-*.elf"), func(t *testing.T, file string) {
@@ -238,20 +246,75 @@ func TestLoadCollectionSpec(t *testing.T) {
 			t.Fatal("Can't parse ELF:", err)
 		}
 
+		isNoBTF := strings.Contains(file, "loader-nobtf")
+
+		if isNoBTF {
+			// No-BTF ELF: verify BTF types are nil
+			// See https://github.com/cilium/ebpf/issues/1810
+			qt.Assert(t, qt.IsNil(have.Types), qt.Commentf("expected no BTF types in %s", file))
+
+			// Verify expected maps are present
+			qt.Assert(t, qt.IsNotNil(have.Maps["hash_map"]))
+			qt.Assert(t, qt.IsNotNil(have.Maps["hash_map2"]))
+			qt.Assert(t, qt.IsNotNil(have.Maps["perf_event_array"]))
+			qt.Assert(t, qt.IsNotNil(have.Maps["array_of_hash_map"]))
+
+			// Variables are still populated from ELF symbols, but Type is nil without BTF
+			for name, v := range have.Variables {
+				qt.Assert(t, qt.IsNil(v.Type), qt.Commentf("expected nil Type for variable %s", name))
+			}
+
+			// Test loading on native endianness
+			if have.ByteOrder != internal.NativeEndian {
+				return
+			}
+
+			have.Maps["array_of_hash_map"].InnerMap = have.Maps["hash_map"]
+			loaded, err := newCollection(t, have, nil)
+			testutils.SkipIfNotSupported(t, err)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer loaded.Close()
+			return
+		}
+
+		// Build expected CollectionSpec for BTF ELF
+		coll := &CollectionSpec{
+			Maps:      make(map[string]*MapSpec),
+			Programs:  programs,
+			Variables: variables,
+		}
+
+		// Add base maps
+		for k, v := range baseMaps {
+			coll.Maps[k] = v
+		}
+
+		// Add data section maps
+		for k, v := range dataMaps {
+			coll.Maps[k] = v
+		}
+
+		// BTF ELF: add BTF-only maps
+		for k, v := range btfOnlyMaps {
+			coll.Maps[k] = v
+		}
+
 		qt.Assert(t, qt.Equals(have.Maps["perf_event_array"].ValueSize, 0))
 		qt.Assert(t, qt.IsNotNil(have.Maps["perf_event_array"].Value))
 
 		qt.Assert(t, qt.CmpEquals(have, coll, csCmpOpts))
 
-		qt.Assert(t, qt.IsNil(have.Variables["arg"].Set(uint32(1))))
-		qt.Assert(t, qt.IsNil(have.Variables["arg2"].Set(uint32(2))))
-
 		if have.ByteOrder != internal.NativeEndian {
 			return
 		}
 
+		qt.Assert(t, qt.IsNil(have.Variables["arg"].Set(uint32(1))))
+		qt.Assert(t, qt.IsNil(have.Variables["arg2"].Set(uint32(2))))
+
 		have.Maps["array_of_hash_map"].InnerMap = have.Maps["hash_map"]
-		coll, err := newCollection(t, have, &CollectionOptions{
+		loaded, err := newCollection(t, have, &CollectionOptions{
 			Maps: MapOptions{
 				PinPath: testutils.TempBPFFS(t),
 			},
@@ -265,7 +328,7 @@ func TestLoadCollectionSpec(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		ret := mustRun(t, coll.Programs["xdp_prog"], nil)
+		ret := mustRun(t, loaded.Programs["xdp_prog"], nil)
 		qt.Assert(t, qt.Equals(ret, 7))
 	})
 }

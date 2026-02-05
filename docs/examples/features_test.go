@@ -16,13 +16,17 @@ func DocDetectXDP() {
 		fmt.Println("XDP program type is not supported")
 		return
 	}
+	if errors.Is(err, ebpf.ErrNotPermitted) {
+		fmt.Println("XDP program type is supported but permission denied")
+		return
+	}
 	if err != nil {
 		// Feature detection was inconclusive.
 		//
 		// Note: always log and investigate these errors! These can be caused
-		// by a lack of permissions, verifier errors, etc. Unless stated
-		// otherwise, probes are expected to be conclusive. Please file
-		// an issue if this is not the case in your environment.
+		// by verifier errors, etc. Unless stated otherwise, probes are
+		// expected to be conclusive. Please file an issue if this is not the
+		// case in your environment.
 		panic(err)
 	}
 

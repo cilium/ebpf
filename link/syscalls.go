@@ -4,6 +4,7 @@ package link
 
 import (
 	"errors"
+	"fmt"
 
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/asm"
@@ -104,6 +105,11 @@ var haveProgQuery = internal.NewFeatureTest("BPF_PROG_QUERY", func() error {
 
 	if errors.Is(err, unix.EBADF) {
 		return nil
+	}
+	// EPERM means the kernel recognized the syscall but denied permission.
+	// The feature exists but is restricted (e.g., in a user namespace).
+	if errors.Is(err, unix.EPERM) {
+		return fmt.Errorf("%w: %w", ErrNotPermitted, err)
 	}
 	if err != nil {
 		return ErrNotSupported

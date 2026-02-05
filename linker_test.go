@@ -94,60 +94,6 @@ func TestForwardFunctionDeclaration(t *testing.T) {
 	}
 }
 
-func TestSplitSymbols(t *testing.T) {
-
-	// Splitting an empty insns results in an error.
-	_, err := splitSymbols(asm.Instructions{})
-	qt.Assert(t, qt.IsNotNil(err), qt.Commentf("empty insns"))
-
-	// Splitting non-empty insns without a leading Symbol is an error.
-	_, err = splitSymbols(asm.Instructions{
-		asm.Return(),
-	})
-	qt.Assert(t, qt.IsNotNil(err), qt.Commentf("insns without leading Symbol"))
-
-	// Non-empty insns with a single Instruction that is a Symbol.
-	insns := asm.Instructions{
-		asm.Return().WithSymbol("sym"),
-	}
-	m, err := splitSymbols(insns)
-	qt.Assert(t, qt.IsNil(err), qt.Commentf("insns with a single Symbol"))
-
-	qt.Assert(t, qt.HasLen(m, 1))
-	qt.Assert(t, qt.HasLen(m["sym"], 1))
-
-	// Insns containing duplicate Symbols.
-	_, err = splitSymbols(asm.Instructions{
-		asm.Return().WithSymbol("sym"),
-		asm.Return().WithSymbol("sym"),
-	})
-	qt.Assert(t, qt.IsNotNil(err), qt.Commentf("insns containing duplicate Symbols"))
-
-	// Insns with multiple Symbols and subprogs of various lengths.
-	m, err = splitSymbols(asm.Instructions{
-		asm.Return().WithSymbol("sym1"),
-
-		asm.Mov.Imm(asm.R0, 0).WithSymbol("sym2"),
-		asm.Return(),
-
-		asm.Mov.Imm(asm.R0, 0).WithSymbol("sym3"),
-		asm.Mov.Imm(asm.R0, 1),
-		asm.Return(),
-
-		asm.Mov.Imm(asm.R0, 0).WithSymbol("sym4"),
-		asm.Mov.Imm(asm.R0, 1),
-		asm.Mov.Imm(asm.R0, 2),
-		asm.Return(),
-	})
-	qt.Assert(t, qt.IsNil(err), qt.Commentf("insns with multiple Symbols"))
-
-	qt.Assert(t, qt.HasLen(m, 4))
-	qt.Assert(t, qt.HasLen(m["sym1"], 1))
-	qt.Assert(t, qt.HasLen(m["sym2"], 2))
-	qt.Assert(t, qt.HasLen(m["sym3"], 3))
-	qt.Assert(t, qt.HasLen(m["sym4"], 4))
-}
-
 func TestFlattenInstructionsAllocations(t *testing.T) {
 	name := "entrypoint"
 	instructions := asm.Instructions{

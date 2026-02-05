@@ -18,6 +18,7 @@ RUN apt-get update && \
     apt-get -y --no-install-recommends install \
     make git gawk \
     libbpf-dev \
+    bpftool \
     clang-format \
     clang-14 llvm-14 \
     clang-17 llvm-17 \

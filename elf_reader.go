@@ -305,10 +305,11 @@ func (ec *elfCode) assignSymbols(symbols []elf.Symbol) {
 			if symType != elf.STT_NOTYPE && symType != elf.STT_FUNC {
 				continue
 			}
-			// LLVM emits LBB_ (Local Basic Block) symbols that seem to be jump
-			// targets within sections, but BPF has no use for them.
-			if symType == elf.STT_NOTYPE && elf.ST_BIND(symbol.Info) == elf.STB_LOCAL &&
-				strings.HasPrefix(symbol.Name, "LBB") {
+
+			// Program sections may contain NOTYPE symbols with local scope, these are
+			// usually labels for jumps. We do not care for these for the purposes of
+			// linking and they may overlap with function symbols.
+			if symType == elf.STT_NOTYPE && elf.ST_BIND(symbol.Info) == elf.STB_LOCAL {
 				continue
 			}
 		// Only collect symbols that occur in program/maps/data sections.
@@ -433,6 +434,9 @@ func (ec *elfCode) loadFunctions(section *elfSection) (map[string]asm.Instructio
 		return nil, fmt.Errorf("no instructions found in section %s", section.Name)
 	}
 
+	symbolInsnSize := make(map[string]uint64)
+	remainder := insns
+
 	iter := insns.Iterate()
 	for iter.Next() {
 		ins := iter.Ins
@@ -440,7 +444,15 @@ func (ec *elfCode) loadFunctions(section *elfSection) (map[string]asm.Instructio
 
 		// Tag Symbol Instructions.
 		if sym, ok := section.symbols[offset]; ok {
+			iter2 := remainder.Iterate()
+			i := 0
+			for ; iter2.Next(); i++ {
+				if iter2.Offset.Bytes() >= sym.Size {
+					break
+				}
+			}
 			*ins = ins.WithSymbol(sym.Name)
+			symbolInsnSize[sym.Name] = uint64(i)
 		}
 
 		// Apply any relocations for the current instruction.
@@ -454,13 +466,29 @@ func (ec *elfCode) loadFunctions(section *elfSection) (map[string]asm.Instructio
 				return nil, fmt.Errorf("offset %d: resolving relative jump: %w", offset, err)
 			}
 		}
+
+		remainder = remainder[1:]
 	}
 
 	if ec.extInfo != nil {
 		ec.extInfo.Assign(insns, section.Name)
 	}
 
-	return splitSymbols(insns)
+	progs := make(map[string]asm.Instructions)
+	for i := range insns {
+		sym := insns[i].Symbol()
+		if sym == "" {
+			continue
+		}
+
+		if progs[sym] != nil {
+			return nil, fmt.Errorf("insns contains duplicate Symbol %s", sym)
+		}
+
+		progs[sym] = slices.Clone(insns[i : i+int(symbolInsnSize[sym])])
+	}
+
+	return progs, nil
 }
 
 // referenceRelativeJump turns a relative jump to another bpf subprogram within
@@ -588,7 +616,7 @@ func (ec *elfCode) relocateInstruction(ins *asm.Instruction, rel elf.Symbol) err
 
 			switch typ {
 			case elf.STT_NOTYPE, elf.STT_FUNC:
-				if bind != elf.STB_GLOBAL {
+				if bind != elf.STB_GLOBAL && bind != elf.STB_WEAK {
 					return fmt.Errorf("call: %s: %w: %s", name, errUnsupportedBinding, bind)
 				}
 
@@ -756,22 +784,19 @@ func (ec *elfCode) loadMaps() error {
 			}
 		}
 
-		var (
-			r    = bufio.NewReader(sec.Open())
-			size = sec.Size / uint64(nSym)
-		)
-		for i, offset := 0, uint64(0); i < nSym; i, offset = i+1, offset+size {
-			mapSym, ok := sec.symbols[offset]
-			if !ok {
-				return fmt.Errorf("section %s: missing symbol for map at offset %d", sec.Name, offset)
-			}
-
+		for offset, mapSym := range sec.symbols {
 			mapName := mapSym.Name
 			if ec.maps[mapName] != nil {
 				return fmt.Errorf("section %v: map %v already exists", sec.Name, mapSym)
 			}
 
-			lr := io.LimitReader(r, int64(size))
+			buf := make([]byte, mapSym.Size)
+			_, err := sec.ReadAt(buf, int64(offset))
+			if err != nil {
+				return fmt.Errorf("map %s: reading map definition: %w", mapName, err)
+			}
+
+			lr := bytes.NewReader(buf)
 
 			spec := MapSpec{
 				Name: sanitizeName(mapName, -1),
@@ -827,10 +852,14 @@ func (ec *elfCode) loadBTFMaps() error {
 			return fmt.Errorf("cannot find section '%s' in BTF: %w", sec.Name, err)
 		}
 
-		// Open a Reader to the ELF's raw section bytes so we can assert that all
-		// of them are zero on a per-map (per-Var) basis. For now, the section's
-		// sole purpose is to receive relocations, so all must be zero.
-		rs := sec.Open()
+		if len(ds.Vars) != len(sec.symbols) {
+			return fmt.Errorf("section %v: symbol count (%d) does not match btf.Datasec var count (%d)", sec.Name, len(sec.symbols), len(ds.Vars))
+		}
+
+		symbolByName := make(map[string]elf.Symbol)
+		for _, sym := range sec.symbols {
+			symbolByName[sym.Name] = sym
+		}
 
 		for _, vs := range ds.Vars {
 			// BPF maps are declared as and assigned to global variables,
@@ -841,11 +870,28 @@ func (ec *elfCode) loadBTFMaps() error {
 			}
 			name := string(v.Name)
 
+			// Find the ELF symbol corresponding to this Var.
+			sym, ok := symbolByName[name]
+			if !ok {
+				return fmt.Errorf("section %v: missing symbol for map %s", sec.Name, name)
+			}
+
+			// Assert that the size of the symbol is equal to the size of the VarSecinfo.
+			if sym.Size != uint64(vs.Size) {
+				return fmt.Errorf("section %v: size mismatch for map %s: symbol size %d, btf.VarSecinfo size %d", sec.Name, name, sym.Size, vs.Size)
+			}
+
+			buf := make([]byte, sym.Size)
+			_, err := sec.ReadAt(buf, int64(sym.Value))
+			if err != nil {
+				return fmt.Errorf("map %s: reading map definition: %w", name, err)
+			}
+
 			// The BTF metadata for each Var contains the full length of the map
 			// declaration, so read the corresponding amount of bytes from the ELF.
 			// This way, we can pinpoint which map declaration contains unexpected
 			// (and therefore unsupported) data.
-			_, err := io.Copy(internal.DiscardZeroes{}, io.LimitReader(rs, int64(vs.Size)))
+			_, err = io.Copy(internal.DiscardZeroes{}, bytes.NewReader(buf))
 			if err != nil {
 				return fmt.Errorf("section %v: map %s: initializing BTF map definitions: %w", sec.Name, name, internal.ErrNotSupported)
 			}
@@ -866,16 +912,6 @@ func (ec *elfCode) loadBTFMaps() error {
 			}
 
 			ec.maps[name] = mapSpec
-		}
-
-		// Drain the ELF section reader to make sure all bytes are accounted for
-		// with BTF metadata.
-		i, err := io.Copy(io.Discard, rs)
-		if err != nil {
-			return fmt.Errorf("section %v: unexpected error reading remainder of ELF section: %w", sec.Name, err)
-		}
-		if i > 0 {
-			return fmt.Errorf("section %v: %d unexpected remaining bytes in ELF section, invalid BTF?", sec.Name, i)
 		}
 	}
 

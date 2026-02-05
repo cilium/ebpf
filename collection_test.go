@@ -847,3 +847,51 @@ func TestStructOpsMapSpecSimpleLoadAndAssign(t *testing.T) {
 		})
 	}
 }
+
+func TestLinkedELF(t *testing.T) {
+	spec, err := LoadCollectionSpec("testdata/linked-el.elf")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Assert that the program returns some expected constant value.
+	movR0Equals := func(prog asm.Instructions, value int64) bool {
+		for i := 0; i < len(prog)-1; i++ {
+			if prog[i].OpCode.ALUOp() == asm.Mov &&
+				prog[i].Dst == asm.R0 &&
+				prog[i].Constant == value &&
+				prog[i+1].OpCode.JumpOp() == asm.Exit {
+				return true
+			}
+		}
+
+		return false
+	}
+
+	cases := []struct {
+		progName string
+		expected int64
+	}{
+		// l1 = 1, l2 = 6. L2 is strong, so overwrites L1.
+		{"entrypoint_l1w", 6},
+		// l1 = 2, l2 = 7. L1 is strong, so keeps L1.
+		{"entrypoint_l1s", 2},
+		// l1 = 3, l2 = 8. Both weak, l1 is first, so keeps L1.
+		{"entrypoint_ww", 3},
+		// l1 calls extern fun_l2os which is 9.
+		{"entrypoint_l1os", 9},
+		// l2 calls extern fun_l1os which is 4.
+		{"entrypoint_l2os", 4},
+		// Only one definition in l1 which is 5.
+		{"entrypoint_l1ow", 5},
+		// Only one definition in l1 which is 10.
+		{"entrypoint_l2ow", 10},
+	}
+
+	for _, tc := range cases {
+		prog := spec.Programs[tc.progName].Instructions
+		if !movR0Equals(prog, tc.expected) {
+			t.Fatalf("expected %s to return %d", tc.progName, tc.expected)
+		}
+	}
+}

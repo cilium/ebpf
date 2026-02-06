@@ -150,7 +150,7 @@ func (r *Reader) SetDeadline(t time.Time) {
 // Returns [os.ErrDeadlineExceeded] if a deadline was set and after all records
 // have been read from the ring.
 //
-// See [ReadInto] for a more efficient version of this method.
+// See [ReadInto] or [ReadZeroCopy] for more efficient versions of this method.
 func (r *Reader) Read() (Record, error) {
 	var rec Record
 	err := r.ReadInto(&rec)
@@ -159,6 +159,20 @@ func (r *Reader) Read() (Record, error) {
 
 // ReadInto is like Read except that it allows reusing Record and associated buffers.
 func (r *Reader) ReadInto(rec *Record) error {
+	return r.readLockedPoll(func() error {
+		return r.ring.readRecord(rec)
+	})
+}
+
+// ReadZeroCopy reads the next record from the BPF ringbuf using a zero-copy callback.
+// The sample slice is only valid until the callback returns.
+func (r *Reader) ReadZeroCopy(f func(sample []byte, remaining int) error) error {
+	return r.readLockedPoll(func() error {
+		return r.ring.readRecordZeroCopy(f)
+	})
+}
+
+func (r *Reader) readLockedPoll(read func() error) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
@@ -186,7 +200,7 @@ func (r *Reader) ReadInto(rec *Record) error {
 		}
 
 		for {
-			err := r.ring.readRecord(rec)
+			err := read()
 			// Not using errors.Is which is quite a bit slower
 			// For a tight loop it might make a difference
 			if err == errBusy {

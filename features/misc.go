@@ -19,7 +19,7 @@ func HaveLargeInstructions() error {
 	return haveLargeInstructions()
 }
 
-var haveLargeInstructions = internal.NewFeatureTest(">4096 instructions", func() error {
+var haveLargeInstructions = internal.NewFeatureTest(">4096 instructions", func(...internal.FeatureTestOption) error {
 	const maxInsns = 4096
 
 	insns := make(asm.Instructions, maxInsns, maxInsns+1)
@@ -43,7 +43,7 @@ func HaveBoundedLoops() error {
 	return haveBoundedLoops()
 }
 
-var haveBoundedLoops = internal.NewFeatureTest("bounded loops", func() error {
+var haveBoundedLoops = internal.NewFeatureTest("bounded loops", func(...internal.FeatureTestOption) error {
 	return probeProgram(&ebpf.ProgramSpec{
 		Type: ebpf.SocketFilter,
 		Instructions: asm.Instructions{
@@ -64,7 +64,7 @@ func HaveV2ISA() error {
 	return haveV2ISA()
 }
 
-var haveV2ISA = internal.NewFeatureTest("v2 ISA", func() error {
+var haveV2ISA = internal.NewFeatureTest("v2 ISA", func(...internal.FeatureTestOption) error {
 	err := probeProgram(&ebpf.ProgramSpec{
 		Type: ebpf.SocketFilter,
 		Instructions: asm.Instructions{
@@ -90,7 +90,7 @@ func HaveV3ISA() error {
 	return haveV3ISA()
 }
 
-var haveV3ISA = internal.NewFeatureTest("v3 ISA", func() error {
+var haveV3ISA = internal.NewFeatureTest("v3 ISA", func(...internal.FeatureTestOption) error {
 	err := probeProgram(&ebpf.ProgramSpec{
 		Type: ebpf.SocketFilter,
 		Instructions: asm.Instructions{
@@ -116,7 +116,7 @@ func HaveV4ISA() error {
 	return haveV4ISA()
 }
 
-var haveV4ISA = internal.NewFeatureTest("v4 ISA", func() error {
+var haveV4ISA = internal.NewFeatureTest("v4 ISA", func(...internal.FeatureTestOption) error {
 	err := probeProgram(&ebpf.ProgramSpec{
 		Type: ebpf.SocketFilter,
 		Instructions: asm.Instructions{

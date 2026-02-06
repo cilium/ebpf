@@ -19,7 +19,7 @@ func TestMain(m *testing.M) {
 func TestFeatureTest(t *testing.T) {
 	var called bool
 
-	fn := NewFeatureTest("foo", func() error {
+	fn := NewFeatureTest("foo", func(...FeatureTestOption) error {
 		called = true
 		return nil
 	}, "1.0")
@@ -40,7 +40,7 @@ func TestFeatureTest(t *testing.T) {
 		t.Error("Unexpected negative result:", err)
 	}
 
-	fn = NewFeatureTest("bar", func() error {
+	fn = NewFeatureTest("bar", func(...FeatureTestOption) error {
 		return ErrNotSupported
 	}, "2.1.1")
 
@@ -67,7 +67,7 @@ func TestFeatureTest(t *testing.T) {
 		t.Error("Didn't cache an error wrapping ErrNotSupported")
 	}
 
-	fn = NewFeatureTest("bar", func() error {
+	fn = NewFeatureTest("bar", func(...FeatureTestOption) error {
 		return errors.New("foo")
 	}, "2.1.1")
 
@@ -79,7 +79,7 @@ func TestFeatureTest(t *testing.T) {
 
 func TestFeatureTestNotSupportedOnOS(t *testing.T) {
 	sentinel := errors.New("quux")
-	fn := func() error { return sentinel }
+	fn := func(...FeatureTestOption) error { return sentinel }
 
 	qt.Assert(t, qt.IsNotNil(NewFeatureTest("foo", fn)()))
 	qt.Assert(t, qt.ErrorIs(NewFeatureTest("foo", fn, "froz:1.0.0")(), ErrNotSupportedOnOS))

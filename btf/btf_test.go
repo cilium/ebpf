@@ -18,6 +18,8 @@ import (
 	"github.com/cilium/ebpf/internal/testutils"
 )
 
+const NotBPFTokenFd int32 = -1
+
 func vmlinuxSpec(tb testing.TB) *Spec {
 	tb.Helper()
 
@@ -306,7 +308,7 @@ func TestLoadSpecFromElf(t *testing.T) {
 func TestVerifierError(t *testing.T) {
 	b, err := NewBuilder([]Type{&Int{Encoding: 255}})
 	qt.Assert(t, qt.IsNil(err))
-	_, err = NewHandle(b)
+	_, err = NewHandle(b, NotBPFTokenFd)
 	testutils.SkipIfNotSupported(t, err)
 	var ve *internal.VerifierError
 	if !errors.As(err, &ve) {

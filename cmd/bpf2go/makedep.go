@@ -106,3 +106,48 @@ func parseDependencies(baseDir string, in io.Reader) ([]dependency, error) {
 	}
 	return deps, nil
 }
+
+// mergeDependencies combines multiple dependency slices into one, merging prerequisites
+// for files that appear in multiple slices.
+func mergeDependencies(depsSlices ...[]dependency) []dependency {
+	// Map to track merged dependencies by file
+	merged := make(map[string][]string)
+
+	// Process each slice of dependencies
+	for _, deps := range depsSlices {
+		for _, dep := range deps {
+			// If we've seen this file before, merge prerequisites
+			if existing, ok := merged[dep.file]; ok {
+				// Combine prerequisites, avoiding duplicates
+				prereqs := make(map[string]struct{})
+				for _, p := range existing {
+					prereqs[p] = struct{}{}
+				}
+				for _, p := range dep.prerequisites {
+					prereqs[p] = struct{}{}
+				}
+
+				// Convert back to slice
+				merged[dep.file] = make([]string, 0, len(prereqs))
+				for p := range prereqs {
+					merged[dep.file] = append(merged[dep.file], p)
+				}
+			} else {
+				// First time seeing this file, just copy prerequisites
+				merged[dep.file] = make([]string, len(dep.prerequisites))
+				copy(merged[dep.file], dep.prerequisites)
+			}
+		}
+	}
+
+	// Convert map back to slice
+	result := make([]dependency, 0, len(merged))
+	for file, prereqs := range merged {
+		result = append(result, dependency{
+			file:          file,
+			prerequisites: prereqs,
+		})
+	}
+
+	return result
+}

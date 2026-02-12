@@ -503,59 +503,61 @@ func BenchmarkWalk(b *testing.B) {
 }
 
 func TestTagUnmarshaling(t *testing.T) {
-	spec, err := LoadSpec("testdata/tags-el.elf")
-	qt.Assert(t, qt.IsNil(err))
+	testutils.Files(t, testutils.Glob(t, "testdata/tags-*.elf"), func(t *testing.T, file string) {
+		spec, err := LoadSpec(file)
+		qt.Assert(t, qt.IsNil(err))
 
-	var s *Struct
-	err = spec.TypeByName("s", &s)
-	qt.Assert(t, qt.IsNil(err))
-	qt.Assert(t, qt.ContentEquals(s.Tags, []string{"c"}))
-	qt.Assert(t, qt.ContentEquals(s.Members[0].Tags, []string{"a"}))
-	qt.Assert(t, qt.ContentEquals(s.Members[1].Tags, []string{"b"}))
+		var s *Struct
+		err = spec.TypeByName("s", &s)
+		qt.Assert(t, qt.IsNil(err))
+		qt.Assert(t, qt.ContentEquals(s.Tags, []string{"c"}))
+		qt.Assert(t, qt.ContentEquals(s.Members[0].Tags, []string{"a"}))
+		qt.Assert(t, qt.ContentEquals(s.Members[1].Tags, []string{"b"}))
 
-	var u *Union
-	err = spec.TypeByName("u", &u)
-	qt.Assert(t, qt.IsNil(err))
-	qt.Assert(t, qt.ContentEquals(u.Tags, []string{"c"}))
-	qt.Assert(t, qt.ContentEquals(u.Members[0].Tags, []string{"a"}))
-	qt.Assert(t, qt.ContentEquals(u.Members[1].Tags, []string{"b"}))
+		var u *Union
+		err = spec.TypeByName("u", &u)
+		qt.Assert(t, qt.IsNil(err))
+		qt.Assert(t, qt.ContentEquals(u.Tags, []string{"c"}))
+		qt.Assert(t, qt.ContentEquals(u.Members[0].Tags, []string{"a"}))
+		qt.Assert(t, qt.ContentEquals(u.Members[1].Tags, []string{"b"}))
 
-	var td *Typedef
-	err = spec.TypeByName("td", &td)
-	qt.Assert(t, qt.IsNil(err))
-	qt.Assert(t, qt.ContentEquals(td.Tags, []string{"b"}))
+		var td *Typedef
+		err = spec.TypeByName("td", &td)
+		qt.Assert(t, qt.IsNil(err))
+		qt.Assert(t, qt.ContentEquals(td.Tags, []string{"b"}))
 
-	var s1 *Var
-	err = spec.TypeByName("s1", &s1)
-	qt.Assert(t, qt.IsNil(err))
-	qt.Assert(t, qt.ContentEquals(s1.Tags, []string{"d"}))
+		var s1 *Var
+		err = spec.TypeByName("s1", &s1)
+		qt.Assert(t, qt.IsNil(err))
+		qt.Assert(t, qt.ContentEquals(s1.Tags, []string{"d"}))
 
-	var s2 *Var
-	err = spec.TypeByName("u1", &s2)
-	qt.Assert(t, qt.IsNil(err))
-	qt.Assert(t, qt.ContentEquals(s2.Tags, []string{"e"}))
+		var s2 *Var
+		err = spec.TypeByName("u1", &s2)
+		qt.Assert(t, qt.IsNil(err))
+		qt.Assert(t, qt.ContentEquals(s2.Tags, []string{"e"}))
 
-	var t1 *Var
-	err = spec.TypeByName("t1", &t1)
-	qt.Assert(t, qt.IsNil(err))
-	qt.Assert(t, qt.ContentEquals(t1.Tags, []string{"a"}))
+		var t1 *Var
+		err = spec.TypeByName("t1", &t1)
+		qt.Assert(t, qt.IsNil(err))
+		qt.Assert(t, qt.ContentEquals(t1.Tags, []string{"a"}))
 
-	var extFunc *Func
-	err = spec.TypeByName("fwdDecl", &extFunc)
-	qt.Assert(t, qt.IsNil(err))
-	qt.Assert(t, qt.ContentEquals(extFunc.Tags, []string{"a", "b"}))
-	qt.Assert(t, qt.ContentEquals(extFunc.ParamTags, [][]string{{"c"}, {"d"}}))
+		var extFunc *Func
+		err = spec.TypeByName("fwdDecl", &extFunc)
+		qt.Assert(t, qt.IsNil(err))
+		qt.Assert(t, qt.ContentEquals(extFunc.Tags, []string{"a", "b"}))
+		qt.Assert(t, qt.ContentEquals(extFunc.ParamTags, [][]string{{"c"}, {"d"}}))
 
-	var normalFunc *Func
-	err = spec.TypeByName("normalDecl1", &normalFunc)
-	qt.Assert(t, qt.IsNil(err))
-	qt.Assert(t, qt.ContentEquals(normalFunc.Tags, []string{"e"}))
-	qt.Assert(t, qt.ContentEquals(normalFunc.ParamTags, [][]string{{"b"}, {"c"}}))
+		var normalFunc *Func
+		err = spec.TypeByName("normalDecl1", &normalFunc)
+		qt.Assert(t, qt.IsNil(err))
+		qt.Assert(t, qt.ContentEquals(normalFunc.Tags, []string{"e"}))
+		qt.Assert(t, qt.ContentEquals(normalFunc.ParamTags, [][]string{{"b"}, {"c"}}))
 
-	err = spec.TypeByName("normalDecl2", &normalFunc)
-	qt.Assert(t, qt.IsNil(err))
-	qt.Assert(t, qt.ContentEquals(normalFunc.Tags, []string{"e"}))
-	qt.Assert(t, qt.ContentEquals(normalFunc.ParamTags, [][]string{{"b"}, {"c"}}))
+		err = spec.TypeByName("normalDecl2", &normalFunc)
+		qt.Assert(t, qt.IsNil(err))
+		qt.Assert(t, qt.ContentEquals(normalFunc.Tags, []string{"e"}))
+		qt.Assert(t, qt.ContentEquals(normalFunc.ParamTags, [][]string{{"b"}, {"c"}}))
+	})
 }
 
 func BenchmarkUnderlyingType(b *testing.B) {

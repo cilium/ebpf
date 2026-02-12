@@ -26,6 +26,8 @@ Please see our [guide on what makes a good example](https://ebpf-go.dev/contribu
   * [xdp_live_frame](xdp_live_frame/) - XDP-based traffic generator that uses live frame mode.
 * sched_ext - Attach a StructOpsMap to register a custom task scheduler. This feature is supported by kernel version starting from version 6.12.
   * [sched_ext](sched_ext/) - Minimal sched_ext_ops.
+* BPF Token - Use BPF tokens for unprivileged BPF operations in user namespaces with delegated capabilities.
+  * [token_test](token_test/) - Create a BPF token and exercise feature probes, program loading, and map creation with it. Supports dropping capabilities to prove the token is the sole source of BPF access.
 
 ## How to run
 

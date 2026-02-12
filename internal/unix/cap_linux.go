@@ -11,6 +11,7 @@ const (
 	CAP_SYS_ADMIN              = linux.CAP_SYS_ADMIN
 	CAP_BPF                    = linux.CAP_BPF
 	CAP_PERFMON                = linux.CAP_PERFMON
+	CAP_DAC_READ_SEARCH        = linux.CAP_DAC_READ_SEARCH
 )
 
 type CapUserHeader = linux.CapUserHeader

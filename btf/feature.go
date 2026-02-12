@@ -15,13 +15,14 @@ import (
 var haveBTF = internal.NewFeatureTest("BTF", func() error {
 	// 0-length anonymous integer
 	err := probeBTF(&Int{})
-	if errors.Is(err, unix.EINVAL) {
+	switch {
+	case errors.Is(err, unix.EINVAL):
 		return internal.ErrNotSupported
-	}
-	if errors.Is(err, unix.EPERM) {
+	case errors.Is(err, unix.EPERM):
 		return fmt.Errorf("%w: %w", internal.ErrNotPermitted, err)
+	default:
+		return err
 	}
-	return err
 }, "4.18")
 
 // haveMapBTF attempts to load a minimal BTF blob containing a Var. It is

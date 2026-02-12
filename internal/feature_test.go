@@ -2,6 +2,7 @@ package internal
 
 import (
 	"errors"
+	"fmt"
 	"runtime"
 	"strings"
 	"testing"
@@ -87,4 +88,15 @@ func TestFeatureTestNotSupportedOnOS(t *testing.T) {
 	if platform.IsLinux {
 		qt.Assert(t, qt.ErrorIs(NewFeatureTest("foo", fn, "1.0")(), sentinel))
 	}
+}
+
+func TestErrNotPermitted(t *testing.T) {
+	// ErrNotPermitted should be distinct from ErrNotSupported
+	qt.Assert(t, qt.Not(qt.ErrorIs(ErrNotPermitted, ErrNotSupported)))
+	qt.Assert(t, qt.Not(qt.ErrorIs(ErrNotSupported, ErrNotPermitted)))
+
+	// Wrapped errors should be matchable
+	wrapped := fmt.Errorf("%w: some details", ErrNotPermitted)
+	qt.Assert(t, qt.ErrorIs(wrapped, ErrNotPermitted))
+	qt.Assert(t, qt.Not(qt.ErrorIs(wrapped, ErrNotSupported)))
 }

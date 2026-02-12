@@ -42,6 +42,10 @@ func probeProgram(spec *ebpf.ProgramSpec) error {
 	// to support the given prog type.
 	case errors.Is(err, unix.EINVAL), errors.Is(err, unix.E2BIG):
 		err = ebpf.ErrNotSupported
+	// EPERM occurs when the caller lacks permission. The feature exists but
+	// cannot be used due to insufficient privileges.
+	case errors.Is(err, unix.EPERM):
+		err = fmt.Errorf("%w: %w", ebpf.ErrNotPermitted, err)
 	}
 
 	return err

@@ -1,6 +1,7 @@
 package testutils
 
 import (
+	"encoding/binary"
 	"errors"
 	"os"
 	"runtime"
@@ -178,4 +179,14 @@ func ignoreVersionCheck(tName string) bool {
 		}
 	}
 	return false
+}
+
+// SkipNonNativeEndian skips the test or benchmark if bo doesn't match the
+// host's native endianness.
+func SkipNonNativeEndian(tb testing.TB, bo binary.ByteOrder) {
+	tb.Helper()
+
+	if bo != internal.NativeEndian {
+		tb.Skip("Skipping due to non-native endianness")
+	}
 }

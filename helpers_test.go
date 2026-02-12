@@ -196,6 +196,8 @@ func createBasicProgram(tb testing.TB) *Program {
 func newCollection(tb testing.TB, spec *CollectionSpec, opts *CollectionOptions) (*Collection, error) {
 	tb.Helper()
 
+	testutils.SkipNonNativeEndian(tb, spec.ByteOrder)
+
 	spec = fixupCollectionSpec(spec)
 
 	if opts == nil {

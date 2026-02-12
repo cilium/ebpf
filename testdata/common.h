@@ -24,9 +24,8 @@ enum libbpf_tristate {
 
 #define __kconfig __attribute__((section(".kconfig")))
 #define __ksym __attribute__((section(".ksyms")))
-#ifndef __weak
+#define __noinline __attribute__((noinline))
 #define __weak __attribute__((weak))
-#endif
 
 #define __hidden __attribute__((visibility("hidden")))
 

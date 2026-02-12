@@ -246,10 +246,6 @@ func TestLoadCollectionSpec(t *testing.T) {
 		qt.Assert(t, qt.IsNil(have.Variables["arg"].Set(uint32(1))))
 		qt.Assert(t, qt.IsNil(have.Variables["arg2"].Set(uint32(2))))
 
-		if have.ByteOrder != internal.NativeEndian {
-			return
-		}
-
 		have.Maps["array_of_hash_map"].InnerMap = have.Maps["hash_map"]
 		coll, err := newCollection(t, have, &CollectionOptions{
 			Maps: MapOptions{
@@ -410,10 +406,6 @@ func TestLoadInitializedBTFMap(t *testing.T) {
 		}
 
 		t.Run("NewCollection", func(t *testing.T) {
-			if coll.ByteOrder != internal.NativeEndian {
-				t.Skipf("Skipping %s collection", coll.ByteOrder)
-			}
-
 			_, err := newCollection(t, coll, nil)
 			testutils.SkipIfNotSupported(t, err)
 			if err != nil {

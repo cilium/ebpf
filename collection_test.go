@@ -847,3 +847,22 @@ func TestStructOpsMapSpecSimpleLoadAndAssign(t *testing.T) {
 		})
 	}
 }
+
+func TestLinkedELF(t *testing.T) {
+	spec, err := LoadCollectionSpec("testdata/linked-el.elf")
+	qt.Assert(t, qt.IsNil(err))
+
+	// Require all maps that won during linking to have a MaxEntries of 1.
+	for name, m := range spec.Maps {
+		qt.Assert(t, qt.Equals(m.MaxEntries, 1), qt.Commentf(name))
+	}
+
+	// Require all programs that won during linking to return 0 when executed.
+	// Programs that should be overridden during linking should return their line
+	// numbers.
+	coll := mustNewCollection(t, spec, nil)
+	for name, prog := range coll.Programs {
+		res := mustRun(t, prog, nil)
+		qt.Assert(t, qt.Equals(res, 0), qt.Commentf(name))
+	}
+}

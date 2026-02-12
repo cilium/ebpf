@@ -12,11 +12,12 @@ type Capability int
 
 // Mirrors of constants from x/sys/unix
 const (
-	CAP_NET_ADMIN    Capability = 12
-	CAP_SYS_ADMIN    Capability = 21
-	CAP_SYS_RESOURCE Capability = 24
-	CAP_PERFMON      Capability = 38
-	CAP_BPF          Capability = 39
+	CAP_DAC_READ_SEARCH Capability = 2
+	CAP_NET_ADMIN       Capability = 12
+	CAP_SYS_ADMIN       Capability = 21
+	CAP_SYS_RESOURCE    Capability = 24
+	CAP_PERFMON         Capability = 38
+	CAP_BPF             Capability = 39
 )
 
 // WithCapabilities runs `f` with only the given capabilities

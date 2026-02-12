@@ -6,6 +6,7 @@ import (
 
 	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/sys"
+	"github.com/cilium/ebpf/internal/token"
 	"github.com/cilium/ebpf/internal/unix"
 )
 
@@ -145,10 +146,17 @@ func probeBTF(typ Type) error {
 		return err
 	}
 
-	fd, err := sys.BtfLoad(&sys.BtfLoadAttr{
+	attr := &sys.BtfLoadAttr{
 		Btf:     sys.SlicePointer(buf),
 		BtfSize: uint32(len(buf)),
-	})
+	}
+
+	if td := token.GetGlobalToken(); td > 0 {
+		attr.BtfTokenFd = int32(td)
+		attr.BtfFlags = sys.BPF_F_TOKEN_FD
+	}
+
+	fd, err := sys.BtfLoad(attr)
 
 	if err == nil {
 		fd.Close()

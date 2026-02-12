@@ -30,6 +30,7 @@ func probeProgram(spec *ebpf.ProgramSpec) error {
 	}
 	prog, err := ebpf.NewProgramWithOptions(spec, ebpf.ProgramOptions{
 		LogDisabled: true,
+		TokenFD:     GetGlobalToken(),
 	})
 	if err == nil {
 		prog.Close()
@@ -140,6 +141,7 @@ var haveProgramTypeMatrix = internal.FeatureMatrix[ebpf.ProgramType]{
 				},
 				ebpf.ProgramOptions{
 					LogDisabled: true,
+					TokenFD:     GetGlobalToken(),
 				},
 			)
 			if err != nil {
@@ -271,6 +273,7 @@ func haveProgramHelper(pt ebpf.ProgramType, helper asm.BuiltinFunc) error {
 
 	prog, err := ebpf.NewProgramWithOptions(spec, ebpf.ProgramOptions{
 		LogLevel: 1,
+		TokenFD:  GetGlobalToken(),
 	})
 	if err == nil {
 		prog.Close()

@@ -9,17 +9,21 @@ import (
 	"github.com/cilium/ebpf/asm"
 	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/sys"
+	"github.com/cilium/ebpf/internal/token"
 	"github.com/cilium/ebpf/internal/unix"
 )
 
 var haveProgAttach = internal.NewFeatureTest("BPF_PROG_ATTACH", func() error {
-	prog, err := ebpf.NewProgram(&ebpf.ProgramSpec{
+	prog, err := ebpf.NewProgramWithOptions(&ebpf.ProgramSpec{
 		Type:    ebpf.CGroupSKB,
 		License: "MIT",
 		Instructions: asm.Instructions{
 			asm.Mov.Imm(asm.R0, 0),
 			asm.Return(),
 		},
+	}, ebpf.ProgramOptions{
+		LogDisabled: true,
+		TokenFD:     token.GetGlobalToken(),
 	})
 	if err != nil {
 		return internal.ErrNotSupported
@@ -37,7 +41,7 @@ var haveProgAttachReplace = internal.NewFeatureTest("BPF_PROG_ATTACH atomic repl
 		return err
 	}
 
-	prog, err := ebpf.NewProgram(&ebpf.ProgramSpec{
+	prog, err := ebpf.NewProgramWithOptions(&ebpf.ProgramSpec{
 		Type:       ebpf.CGroupSKB,
 		AttachType: ebpf.AttachCGroupInetIngress,
 		License:    "MIT",
@@ -45,6 +49,9 @@ var haveProgAttachReplace = internal.NewFeatureTest("BPF_PROG_ATTACH atomic repl
 			asm.Mov.Imm(asm.R0, 0),
 			asm.Return(),
 		},
+	}, ebpf.ProgramOptions{
+		LogDisabled: true,
+		TokenFD:     token.GetGlobalToken(),
 	})
 
 	if err != nil {
@@ -112,13 +119,16 @@ var haveProgQuery = internal.NewFeatureTest("BPF_PROG_QUERY", func() error {
 }, "4.15")
 
 var haveTCX = internal.NewFeatureTest("tcx", func() error {
-	prog, err := ebpf.NewProgram(&ebpf.ProgramSpec{
+	prog, err := ebpf.NewProgramWithOptions(&ebpf.ProgramSpec{
 		Type:    ebpf.SchedCLS,
 		License: "MIT",
 		Instructions: asm.Instructions{
 			asm.Mov.Imm(asm.R0, 0),
 			asm.Return(),
 		},
+	}, ebpf.ProgramOptions{
+		LogDisabled: true,
+		TokenFD:     token.GetGlobalToken(),
 	})
 
 	if err != nil {
@@ -147,13 +157,16 @@ var haveTCX = internal.NewFeatureTest("tcx", func() error {
 }, "6.6")
 
 var haveNetkit = internal.NewFeatureTest("netkit", func() error {
-	prog, err := ebpf.NewProgram(&ebpf.ProgramSpec{
+	prog, err := ebpf.NewProgramWithOptions(&ebpf.ProgramSpec{
 		Type:    ebpf.SchedCLS,
 		License: "MIT",
 		Instructions: asm.Instructions{
 			asm.Mov.Imm(asm.R0, 0),
 			asm.Return(),
 		},
+	}, ebpf.ProgramOptions{
+		LogDisabled: true,
+		TokenFD:     token.GetGlobalToken(),
 	})
 
 	if err != nil {

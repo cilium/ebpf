@@ -77,6 +77,11 @@ func probeMap(attr *sys.MapCreateAttr) error {
 }
 
 func createMap(attr *sys.MapCreateAttr) error {
+	if fd := GetGlobalToken(); fd > 0 {
+		attr.MapTokenFd = int32(fd)
+		attr.MapFlags |= sys.BPF_F_TOKEN_FD
+	}
+
 	fd, err := sys.MapCreate(attr)
 	if err == nil {
 		fd.Close()
@@ -299,6 +304,11 @@ func probeMapFlag(attr *sys.MapCreateAttr) error {
 	attr.KeySize = 4
 	attr.ValueSize = 4
 	attr.MaxEntries = 1
+
+	if fd := GetGlobalToken(); fd > 0 {
+		attr.MapTokenFd = int32(fd)
+		attr.MapFlags |= sys.BPF_F_TOKEN_FD
+	}
 
 	fd, err := sys.MapCreate(attr)
 	if err == nil {

@@ -18,7 +18,7 @@ func HaveBPFLinkUprobeMulti() error {
 }
 
 var haveBPFLinkUprobeMulti = internal.NewFeatureTest("bpf_link_uprobe_multi", func() error {
-	prog, err := ebpf.NewProgram(&ebpf.ProgramSpec{
+	prog, err := ebpf.NewProgramWithOptions(&ebpf.ProgramSpec{
 		Name: "probe_upm_link",
 		Type: ebpf.Kprobe,
 		Instructions: asm.Instructions{
@@ -27,6 +27,9 @@ var haveBPFLinkUprobeMulti = internal.NewFeatureTest("bpf_link_uprobe_multi", fu
 		},
 		AttachType: ebpf.AttachTraceUprobeMulti,
 		License:    "MIT",
+	}, ebpf.ProgramOptions{
+		LogDisabled: true,
+		TokenFD:     GetGlobalToken(),
 	})
 	if errors.Is(err, unix.E2BIG) {
 		// Kernel doesn't support AttachType field.
@@ -68,7 +71,7 @@ func HaveBPFLinkKprobeMulti() error {
 }
 
 var haveBPFLinkKprobeMulti = internal.NewFeatureTest("bpf_link_kprobe_multi", func() error {
-	prog, err := ebpf.NewProgram(&ebpf.ProgramSpec{
+	prog, err := ebpf.NewProgramWithOptions(&ebpf.ProgramSpec{
 		Name: "probe_kpm_link",
 		Type: ebpf.Kprobe,
 		Instructions: asm.Instructions{
@@ -77,6 +80,9 @@ var haveBPFLinkKprobeMulti = internal.NewFeatureTest("bpf_link_kprobe_multi", fu
 		},
 		AttachType: ebpf.AttachTraceKprobeMulti,
 		License:    "MIT",
+	}, ebpf.ProgramOptions{
+		LogDisabled: true,
+		TokenFD:     GetGlobalToken(),
 	})
 	if errors.Is(err, unix.E2BIG) {
 		// Kernel doesn't support AttachType field.
@@ -116,7 +122,7 @@ func HaveBPFLinkKprobeSession() error {
 }
 
 var haveBPFLinkKprobeSession = internal.NewFeatureTest("bpf_link_kprobe_session", func() error {
-	prog, err := ebpf.NewProgram(&ebpf.ProgramSpec{
+	prog, err := ebpf.NewProgramWithOptions(&ebpf.ProgramSpec{
 		Name: "probe_kps_link",
 		Type: ebpf.Kprobe,
 		Instructions: asm.Instructions{
@@ -125,6 +131,9 @@ var haveBPFLinkKprobeSession = internal.NewFeatureTest("bpf_link_kprobe_session"
 		},
 		AttachType: ebpf.AttachTraceKprobeSession,
 		License:    "MIT",
+	}, ebpf.ProgramOptions{
+		LogDisabled: true,
+		TokenFD:     GetGlobalToken(),
 	})
 	if errors.Is(err, unix.E2BIG) {
 		// Kernel doesn't support AttachType field.

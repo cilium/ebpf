@@ -214,6 +214,14 @@ standard library here.
    `CountPackets`) eBPF program with `eth0`. This returns a {{
    godoc('link/Link') }} abstraction.
 
+   Note: On virtualized environments or network interfaces whose drivers do not
+   support native XDP, attaching may fail with "operation not supported".
+   In such cases, you can use generic mode instead:
+
+       Flags: link.XDPGenericMode
+
+Generic mode has lower performance but works on a wider range of interfaces.
+
 1. Close the file descriptor of the Program-to-interface association. Note that
    this will stop the Program from executing on incoming packets if the Link was
    not {{ godoc('link/Link.Pin') }}ed to the bpf file system.

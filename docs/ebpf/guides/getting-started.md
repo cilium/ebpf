@@ -220,7 +220,7 @@ standard library here.
 
        Flags: link.XDPGenericMode
 
-Generic mode has lower performance but works on a wider range of interfaces.
+   Generic mode has lower performance but works on a wider range of interfaces.
 
 1. Close the file descriptor of the Program-to-interface association. Note that
    this will stop the Program from executing on incoming packets if the Link was

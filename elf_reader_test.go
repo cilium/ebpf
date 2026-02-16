@@ -278,6 +278,23 @@ func BenchmarkELFLoader(b *testing.B) {
 	}
 }
 
+func TestLoadCollectionSpecWithoutBTF(t *testing.T) {
+	testutils.Files(t, testutils.Glob(t, "testdata/iproute2_map_compat-nobtf-*.elf"), func(t *testing.T, file string) {
+		spec, err := LoadCollectionSpec(file)
+		if err != nil {
+			t.Fatalf("Can't parse ELF without BTF: %v", err)
+		}
+
+		if spec.Types != nil {
+			t.Fatal("Expected no BTF type info")
+		}
+
+		if _, ok := spec.Maps["hash_map"]; !ok {
+			t.Fatal("Expected map hash_map")
+		}
+	})
+}
+
 func TestDataSections(t *testing.T) {
 	file := testutils.NativeFile(t, "testdata/loader-%s.elf")
 	coll, err := LoadCollectionSpec(file)

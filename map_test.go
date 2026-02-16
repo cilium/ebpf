@@ -1728,6 +1728,32 @@ func TestLoadWrongPin(t *testing.T) {
 	})
 }
 
+func TestMapWithToken(t *testing.T) {
+	testutils.RunWithToken(t, "no-cmd", testutils.Delegated{
+		Cmds: []sys.Cmd{},
+		Maps: []sys.MapType{sys.BPF_MAP_TYPE_HASH},
+	}, func(t *testing.T) {
+		_, err := newMap(t, hashMapSpec, nil)
+		qt.Assert(t, qt.ErrorIs(err, unix.EPERM))
+	})
+
+	testutils.RunWithToken(t, "no-map", testutils.Delegated{
+		Cmds: []sys.Cmd{sys.BPF_MAP_CREATE},
+		Maps: []sys.MapType{},
+	}, func(t *testing.T) {
+		_, err := newMap(t, hashMapSpec, nil)
+		qt.Assert(t, qt.ErrorIs(err, unix.EPERM))
+	})
+
+	testutils.RunWithToken(t, "success", testutils.Delegated{
+		Cmds: []sys.Cmd{sys.BPF_MAP_CREATE},
+		Maps: []sys.MapType{sys.BPF_MAP_TYPE_HASH},
+	}, func(t *testing.T) {
+		_, err := newMap(t, hashMapSpec, nil)
+		qt.Assert(t, qt.IsNil(err))
+	})
+}
+
 type benchValue struct {
 	ID      uint32
 	Val16   uint16

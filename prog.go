@@ -505,6 +505,10 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions, c *btf.Cache)
 		}
 	}
 
+	if errors.Is(err, sys.ErrTokenCapabilities) {
+		return nil, fmt.Errorf("load program: %w", err)
+	}
+
 	end := bytes.IndexByte(logBuf, 0)
 	if end < 0 {
 		end = len(logBuf)

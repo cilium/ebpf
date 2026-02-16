@@ -669,9 +669,14 @@ func handleMapCreateError(attr sys.MapCreateAttr, spec *MapSpec, err error) erro
 		return err
 	}
 
+	if errors.Is(err, sys.ErrTokenCapabilities) {
+		return fmt.Errorf("map create: %w", err)
+	}
+
 	if errors.Is(err, unix.EPERM) {
 		return fmt.Errorf("map create: %w (MEMLOCK may be too low, consider rlimit.RemoveMemlock)", err)
 	}
+
 	if errors.Is(err, unix.EINVAL) {
 		if spec.MaxEntries == 0 && !spec.Type.mustHaveZeroMaxEntries() {
 			return fmt.Errorf("map create: %w (MaxEntries may be incorrectly set to zero)", err)

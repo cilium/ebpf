@@ -33,6 +33,7 @@ const (
 	EPOLL_CTL_ADD             = linux.EPOLL_CTL_ADD
 	EPOLL_CLOEXEC             = linux.EPOLL_CLOEXEC
 	O_RDONLY                  = linux.O_RDONLY
+	O_DIRECTORY               = linux.O_DIRECTORY
 	O_CLOEXEC                 = linux.O_CLOEXEC
 	O_NONBLOCK                = linux.O_NONBLOCK
 	PROT_NONE                 = linux.PROT_NONE

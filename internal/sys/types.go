@@ -7,6 +7,8 @@ import (
 	"unsafe"
 )
 
+//go:generate go tool stringer -output types_string.go -type=Cmd,MapType,ProgType,AttachType
+
 const (
 	BPF_ADJ_ROOM_ENCAP_L2_MASK                 = 255
 	BPF_ADJ_ROOM_ENCAP_L2_SHIFT                = 56
@@ -839,6 +841,14 @@ type SkLookup struct {
 	_              [4]byte
 }
 
+type TokenInfo struct {
+	_              structs.HostLayout
+	AllowedCmds    uint64
+	AllowedMaps    uint64
+	AllowedProgs   uint64
+	AllowedAttachs uint64
+}
+
 type XdpMd struct {
 	_              structs.HostLayout
 	Data           uint32
@@ -1560,6 +1570,20 @@ type RawTracepointOpenAttr struct {
 
 func RawTracepointOpen(attr *RawTracepointOpenAttr) (*FD, error) {
 	fd, err := BPF(BPF_RAW_TRACEPOINT_OPEN, unsafe.Pointer(attr), unsafe.Sizeof(*attr))
+	if err != nil {
+		return nil, err
+	}
+	return NewFD(int(fd))
+}
+
+type TokenCreateAttr struct {
+	_       structs.HostLayout
+	Flags   uint32
+	BpffsFd uint32
+}
+
+func TokenCreate(attr *TokenCreateAttr) (*FD, error) {
+	fd, err := BPF(BPF_TOKEN_CREATE, unsafe.Pointer(attr), unsafe.Sizeof(*attr))
 	if err != nil {
 		return nil, err
 	}

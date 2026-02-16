@@ -3,6 +3,7 @@
 package sys
 
 import (
+	"fmt"
 	"structs"
 	"unsafe"
 )
@@ -192,6 +193,17 @@ const (
 	BPF_ADJ_ROOM_MAC AdjRoomMode = 1
 )
 
+func AdjRoomModeFromString(s string) (AdjRoomMode, error) {
+	switch s {
+	case "BPF_ADJ_ROOM_NET":
+		return AdjRoomMode(0), nil
+	case "BPF_ADJ_ROOM_MAC":
+		return AdjRoomMode(1), nil
+	default:
+		return 0, fmt.Errorf("invalid AdjRoomMode: %q", s)
+	}
+}
+
 type AttachType uint32
 
 const (
@@ -253,8 +265,133 @@ const (
 	BPF_NETKIT_PEER                    AttachType = 55
 	BPF_TRACE_KPROBE_SESSION           AttachType = 56
 	BPF_TRACE_UPROBE_SESSION           AttachType = 57
-	__MAX_BPF_ATTACH_TYPE              AttachType = 58
+	MAX_BPF_ATTACH_TYPE                AttachType = 58
 )
+
+func AttachTypeFromString(s string) (AttachType, error) {
+	switch s {
+	case "BPF_CGROUP_INET_INGRESS":
+		return AttachType(0), nil
+	case "BPF_CGROUP_INET_EGRESS":
+		return AttachType(1), nil
+	case "BPF_CGROUP_INET_SOCK_CREATE":
+		return AttachType(2), nil
+	case "BPF_CGROUP_SOCK_OPS":
+		return AttachType(3), nil
+	case "BPF_SK_SKB_STREAM_PARSER":
+		return AttachType(4), nil
+	case "BPF_SK_SKB_STREAM_VERDICT":
+		return AttachType(5), nil
+	case "BPF_CGROUP_DEVICE":
+		return AttachType(6), nil
+	case "BPF_SK_MSG_VERDICT":
+		return AttachType(7), nil
+	case "BPF_CGROUP_INET4_BIND":
+		return AttachType(8), nil
+	case "BPF_CGROUP_INET6_BIND":
+		return AttachType(9), nil
+	case "BPF_CGROUP_INET4_CONNECT":
+		return AttachType(10), nil
+	case "BPF_CGROUP_INET6_CONNECT":
+		return AttachType(11), nil
+	case "BPF_CGROUP_INET4_POST_BIND":
+		return AttachType(12), nil
+	case "BPF_CGROUP_INET6_POST_BIND":
+		return AttachType(13), nil
+	case "BPF_CGROUP_UDP4_SENDMSG":
+		return AttachType(14), nil
+	case "BPF_CGROUP_UDP6_SENDMSG":
+		return AttachType(15), nil
+	case "BPF_LIRC_MODE2":
+		return AttachType(16), nil
+	case "BPF_FLOW_DISSECTOR":
+		return AttachType(17), nil
+	case "BPF_CGROUP_SYSCTL":
+		return AttachType(18), nil
+	case "BPF_CGROUP_UDP4_RECVMSG":
+		return AttachType(19), nil
+	case "BPF_CGROUP_UDP6_RECVMSG":
+		return AttachType(20), nil
+	case "BPF_CGROUP_GETSOCKOPT":
+		return AttachType(21), nil
+	case "BPF_CGROUP_SETSOCKOPT":
+		return AttachType(22), nil
+	case "BPF_TRACE_RAW_TP":
+		return AttachType(23), nil
+	case "BPF_TRACE_FENTRY":
+		return AttachType(24), nil
+	case "BPF_TRACE_FEXIT":
+		return AttachType(25), nil
+	case "BPF_MODIFY_RETURN":
+		return AttachType(26), nil
+	case "BPF_LSM_MAC":
+		return AttachType(27), nil
+	case "BPF_TRACE_ITER":
+		return AttachType(28), nil
+	case "BPF_CGROUP_INET4_GETPEERNAME":
+		return AttachType(29), nil
+	case "BPF_CGROUP_INET6_GETPEERNAME":
+		return AttachType(30), nil
+	case "BPF_CGROUP_INET4_GETSOCKNAME":
+		return AttachType(31), nil
+	case "BPF_CGROUP_INET6_GETSOCKNAME":
+		return AttachType(32), nil
+	case "BPF_XDP_DEVMAP":
+		return AttachType(33), nil
+	case "BPF_CGROUP_INET_SOCK_RELEASE":
+		return AttachType(34), nil
+	case "BPF_XDP_CPUMAP":
+		return AttachType(35), nil
+	case "BPF_SK_LOOKUP":
+		return AttachType(36), nil
+	case "BPF_XDP":
+		return AttachType(37), nil
+	case "BPF_SK_SKB_VERDICT":
+		return AttachType(38), nil
+	case "BPF_SK_REUSEPORT_SELECT":
+		return AttachType(39), nil
+	case "BPF_SK_REUSEPORT_SELECT_OR_MIGRATE":
+		return AttachType(40), nil
+	case "BPF_PERF_EVENT":
+		return AttachType(41), nil
+	case "BPF_TRACE_KPROBE_MULTI":
+		return AttachType(42), nil
+	case "BPF_LSM_CGROUP":
+		return AttachType(43), nil
+	case "BPF_STRUCT_OPS":
+		return AttachType(44), nil
+	case "BPF_NETFILTER":
+		return AttachType(45), nil
+	case "BPF_TCX_INGRESS":
+		return AttachType(46), nil
+	case "BPF_TCX_EGRESS":
+		return AttachType(47), nil
+	case "BPF_TRACE_UPROBE_MULTI":
+		return AttachType(48), nil
+	case "BPF_CGROUP_UNIX_CONNECT":
+		return AttachType(49), nil
+	case "BPF_CGROUP_UNIX_SENDMSG":
+		return AttachType(50), nil
+	case "BPF_CGROUP_UNIX_RECVMSG":
+		return AttachType(51), nil
+	case "BPF_CGROUP_UNIX_GETPEERNAME":
+		return AttachType(52), nil
+	case "BPF_CGROUP_UNIX_GETSOCKNAME":
+		return AttachType(53), nil
+	case "BPF_NETKIT_PRIMARY":
+		return AttachType(54), nil
+	case "BPF_NETKIT_PEER":
+		return AttachType(55), nil
+	case "BPF_TRACE_KPROBE_SESSION":
+		return AttachType(56), nil
+	case "BPF_TRACE_UPROBE_SESSION":
+		return AttachType(57), nil
+	case "MAX_BPF_ATTACH_TYPE":
+		return AttachType(58), nil
+	default:
+		return 0, fmt.Errorf("invalid AttachType: %q", s)
+	}
+}
 
 type Cmd uint32
 
@@ -298,8 +435,95 @@ const (
 	BPF_PROG_BIND_MAP               Cmd = 35
 	BPF_TOKEN_CREATE                Cmd = 36
 	BPF_PROG_STREAM_READ_BY_FD      Cmd = 37
-	__MAX_BPF_CMD                   Cmd = 38
+	MAX_BPF_CMD                     Cmd = 38
 )
+
+func CmdFromString(s string) (Cmd, error) {
+	switch s {
+	case "BPF_MAP_CREATE":
+		return Cmd(0), nil
+	case "BPF_MAP_LOOKUP_ELEM":
+		return Cmd(1), nil
+	case "BPF_MAP_UPDATE_ELEM":
+		return Cmd(2), nil
+	case "BPF_MAP_DELETE_ELEM":
+		return Cmd(3), nil
+	case "BPF_MAP_GET_NEXT_KEY":
+		return Cmd(4), nil
+	case "BPF_PROG_LOAD":
+		return Cmd(5), nil
+	case "BPF_OBJ_PIN":
+		return Cmd(6), nil
+	case "BPF_OBJ_GET":
+		return Cmd(7), nil
+	case "BPF_PROG_ATTACH":
+		return Cmd(8), nil
+	case "BPF_PROG_DETACH":
+		return Cmd(9), nil
+	case "BPF_PROG_TEST_RUN":
+		return Cmd(10), nil
+	case "BPF_PROG_RUN":
+		return Cmd(10), nil
+	case "BPF_PROG_GET_NEXT_ID":
+		return Cmd(11), nil
+	case "BPF_MAP_GET_NEXT_ID":
+		return Cmd(12), nil
+	case "BPF_PROG_GET_FD_BY_ID":
+		return Cmd(13), nil
+	case "BPF_MAP_GET_FD_BY_ID":
+		return Cmd(14), nil
+	case "BPF_OBJ_GET_INFO_BY_FD":
+		return Cmd(15), nil
+	case "BPF_PROG_QUERY":
+		return Cmd(16), nil
+	case "BPF_RAW_TRACEPOINT_OPEN":
+		return Cmd(17), nil
+	case "BPF_BTF_LOAD":
+		return Cmd(18), nil
+	case "BPF_BTF_GET_FD_BY_ID":
+		return Cmd(19), nil
+	case "BPF_TASK_FD_QUERY":
+		return Cmd(20), nil
+	case "BPF_MAP_LOOKUP_AND_DELETE_ELEM":
+		return Cmd(21), nil
+	case "BPF_MAP_FREEZE":
+		return Cmd(22), nil
+	case "BPF_BTF_GET_NEXT_ID":
+		return Cmd(23), nil
+	case "BPF_MAP_LOOKUP_BATCH":
+		return Cmd(24), nil
+	case "BPF_MAP_LOOKUP_AND_DELETE_BATCH":
+		return Cmd(25), nil
+	case "BPF_MAP_UPDATE_BATCH":
+		return Cmd(26), nil
+	case "BPF_MAP_DELETE_BATCH":
+		return Cmd(27), nil
+	case "BPF_LINK_CREATE":
+		return Cmd(28), nil
+	case "BPF_LINK_UPDATE":
+		return Cmd(29), nil
+	case "BPF_LINK_GET_FD_BY_ID":
+		return Cmd(30), nil
+	case "BPF_LINK_GET_NEXT_ID":
+		return Cmd(31), nil
+	case "BPF_ENABLE_STATS":
+		return Cmd(32), nil
+	case "BPF_ITER_CREATE":
+		return Cmd(33), nil
+	case "BPF_LINK_DETACH":
+		return Cmd(34), nil
+	case "BPF_PROG_BIND_MAP":
+		return Cmd(35), nil
+	case "BPF_TOKEN_CREATE":
+		return Cmd(36), nil
+	case "BPF_PROG_STREAM_READ_BY_FD":
+		return Cmd(37), nil
+	case "MAX_BPF_CMD":
+		return Cmd(38), nil
+	default:
+		return 0, fmt.Errorf("invalid Cmd: %q", s)
+	}
+}
 
 type FunctionId uint32
 
@@ -519,12 +743,456 @@ const (
 	__BPF_FUNC_MAX_ID                       FunctionId = 212
 )
 
+func FunctionIdFromString(s string) (FunctionId, error) {
+	switch s {
+	case "BPF_FUNC_unspec":
+		return FunctionId(0), nil
+	case "BPF_FUNC_map_lookup_elem":
+		return FunctionId(1), nil
+	case "BPF_FUNC_map_update_elem":
+		return FunctionId(2), nil
+	case "BPF_FUNC_map_delete_elem":
+		return FunctionId(3), nil
+	case "BPF_FUNC_probe_read":
+		return FunctionId(4), nil
+	case "BPF_FUNC_ktime_get_ns":
+		return FunctionId(5), nil
+	case "BPF_FUNC_trace_printk":
+		return FunctionId(6), nil
+	case "BPF_FUNC_get_prandom_u32":
+		return FunctionId(7), nil
+	case "BPF_FUNC_get_smp_processor_id":
+		return FunctionId(8), nil
+	case "BPF_FUNC_skb_store_bytes":
+		return FunctionId(9), nil
+	case "BPF_FUNC_l3_csum_replace":
+		return FunctionId(10), nil
+	case "BPF_FUNC_l4_csum_replace":
+		return FunctionId(11), nil
+	case "BPF_FUNC_tail_call":
+		return FunctionId(12), nil
+	case "BPF_FUNC_clone_redirect":
+		return FunctionId(13), nil
+	case "BPF_FUNC_get_current_pid_tgid":
+		return FunctionId(14), nil
+	case "BPF_FUNC_get_current_uid_gid":
+		return FunctionId(15), nil
+	case "BPF_FUNC_get_current_comm":
+		return FunctionId(16), nil
+	case "BPF_FUNC_get_cgroup_classid":
+		return FunctionId(17), nil
+	case "BPF_FUNC_skb_vlan_push":
+		return FunctionId(18), nil
+	case "BPF_FUNC_skb_vlan_pop":
+		return FunctionId(19), nil
+	case "BPF_FUNC_skb_get_tunnel_key":
+		return FunctionId(20), nil
+	case "BPF_FUNC_skb_set_tunnel_key":
+		return FunctionId(21), nil
+	case "BPF_FUNC_perf_event_read":
+		return FunctionId(22), nil
+	case "BPF_FUNC_redirect":
+		return FunctionId(23), nil
+	case "BPF_FUNC_get_route_realm":
+		return FunctionId(24), nil
+	case "BPF_FUNC_perf_event_output":
+		return FunctionId(25), nil
+	case "BPF_FUNC_skb_load_bytes":
+		return FunctionId(26), nil
+	case "BPF_FUNC_get_stackid":
+		return FunctionId(27), nil
+	case "BPF_FUNC_csum_diff":
+		return FunctionId(28), nil
+	case "BPF_FUNC_skb_get_tunnel_opt":
+		return FunctionId(29), nil
+	case "BPF_FUNC_skb_set_tunnel_opt":
+		return FunctionId(30), nil
+	case "BPF_FUNC_skb_change_proto":
+		return FunctionId(31), nil
+	case "BPF_FUNC_skb_change_type":
+		return FunctionId(32), nil
+	case "BPF_FUNC_skb_under_cgroup":
+		return FunctionId(33), nil
+	case "BPF_FUNC_get_hash_recalc":
+		return FunctionId(34), nil
+	case "BPF_FUNC_get_current_task":
+		return FunctionId(35), nil
+	case "BPF_FUNC_probe_write_user":
+		return FunctionId(36), nil
+	case "BPF_FUNC_current_task_under_cgroup":
+		return FunctionId(37), nil
+	case "BPF_FUNC_skb_change_tail":
+		return FunctionId(38), nil
+	case "BPF_FUNC_skb_pull_data":
+		return FunctionId(39), nil
+	case "BPF_FUNC_csum_update":
+		return FunctionId(40), nil
+	case "BPF_FUNC_set_hash_invalid":
+		return FunctionId(41), nil
+	case "BPF_FUNC_get_numa_node_id":
+		return FunctionId(42), nil
+	case "BPF_FUNC_skb_change_head":
+		return FunctionId(43), nil
+	case "BPF_FUNC_xdp_adjust_head":
+		return FunctionId(44), nil
+	case "BPF_FUNC_probe_read_str":
+		return FunctionId(45), nil
+	case "BPF_FUNC_get_socket_cookie":
+		return FunctionId(46), nil
+	case "BPF_FUNC_get_socket_uid":
+		return FunctionId(47), nil
+	case "BPF_FUNC_set_hash":
+		return FunctionId(48), nil
+	case "BPF_FUNC_setsockopt":
+		return FunctionId(49), nil
+	case "BPF_FUNC_skb_adjust_room":
+		return FunctionId(50), nil
+	case "BPF_FUNC_redirect_map":
+		return FunctionId(51), nil
+	case "BPF_FUNC_sk_redirect_map":
+		return FunctionId(52), nil
+	case "BPF_FUNC_sock_map_update":
+		return FunctionId(53), nil
+	case "BPF_FUNC_xdp_adjust_meta":
+		return FunctionId(54), nil
+	case "BPF_FUNC_perf_event_read_value":
+		return FunctionId(55), nil
+	case "BPF_FUNC_perf_prog_read_value":
+		return FunctionId(56), nil
+	case "BPF_FUNC_getsockopt":
+		return FunctionId(57), nil
+	case "BPF_FUNC_override_return":
+		return FunctionId(58), nil
+	case "BPF_FUNC_sock_ops_cb_flags_set":
+		return FunctionId(59), nil
+	case "BPF_FUNC_msg_redirect_map":
+		return FunctionId(60), nil
+	case "BPF_FUNC_msg_apply_bytes":
+		return FunctionId(61), nil
+	case "BPF_FUNC_msg_cork_bytes":
+		return FunctionId(62), nil
+	case "BPF_FUNC_msg_pull_data":
+		return FunctionId(63), nil
+	case "BPF_FUNC_bind":
+		return FunctionId(64), nil
+	case "BPF_FUNC_xdp_adjust_tail":
+		return FunctionId(65), nil
+	case "BPF_FUNC_skb_get_xfrm_state":
+		return FunctionId(66), nil
+	case "BPF_FUNC_get_stack":
+		return FunctionId(67), nil
+	case "BPF_FUNC_skb_load_bytes_relative":
+		return FunctionId(68), nil
+	case "BPF_FUNC_fib_lookup":
+		return FunctionId(69), nil
+	case "BPF_FUNC_sock_hash_update":
+		return FunctionId(70), nil
+	case "BPF_FUNC_msg_redirect_hash":
+		return FunctionId(71), nil
+	case "BPF_FUNC_sk_redirect_hash":
+		return FunctionId(72), nil
+	case "BPF_FUNC_lwt_push_encap":
+		return FunctionId(73), nil
+	case "BPF_FUNC_lwt_seg6_store_bytes":
+		return FunctionId(74), nil
+	case "BPF_FUNC_lwt_seg6_adjust_srh":
+		return FunctionId(75), nil
+	case "BPF_FUNC_lwt_seg6_action":
+		return FunctionId(76), nil
+	case "BPF_FUNC_rc_repeat":
+		return FunctionId(77), nil
+	case "BPF_FUNC_rc_keydown":
+		return FunctionId(78), nil
+	case "BPF_FUNC_skb_cgroup_id":
+		return FunctionId(79), nil
+	case "BPF_FUNC_get_current_cgroup_id":
+		return FunctionId(80), nil
+	case "BPF_FUNC_get_local_storage":
+		return FunctionId(81), nil
+	case "BPF_FUNC_sk_select_reuseport":
+		return FunctionId(82), nil
+	case "BPF_FUNC_skb_ancestor_cgroup_id":
+		return FunctionId(83), nil
+	case "BPF_FUNC_sk_lookup_tcp":
+		return FunctionId(84), nil
+	case "BPF_FUNC_sk_lookup_udp":
+		return FunctionId(85), nil
+	case "BPF_FUNC_sk_release":
+		return FunctionId(86), nil
+	case "BPF_FUNC_map_push_elem":
+		return FunctionId(87), nil
+	case "BPF_FUNC_map_pop_elem":
+		return FunctionId(88), nil
+	case "BPF_FUNC_map_peek_elem":
+		return FunctionId(89), nil
+	case "BPF_FUNC_msg_push_data":
+		return FunctionId(90), nil
+	case "BPF_FUNC_msg_pop_data":
+		return FunctionId(91), nil
+	case "BPF_FUNC_rc_pointer_rel":
+		return FunctionId(92), nil
+	case "BPF_FUNC_spin_lock":
+		return FunctionId(93), nil
+	case "BPF_FUNC_spin_unlock":
+		return FunctionId(94), nil
+	case "BPF_FUNC_sk_fullsock":
+		return FunctionId(95), nil
+	case "BPF_FUNC_tcp_sock":
+		return FunctionId(96), nil
+	case "BPF_FUNC_skb_ecn_set_ce":
+		return FunctionId(97), nil
+	case "BPF_FUNC_get_listener_sock":
+		return FunctionId(98), nil
+	case "BPF_FUNC_skc_lookup_tcp":
+		return FunctionId(99), nil
+	case "BPF_FUNC_tcp_check_syncookie":
+		return FunctionId(100), nil
+	case "BPF_FUNC_sysctl_get_name":
+		return FunctionId(101), nil
+	case "BPF_FUNC_sysctl_get_current_value":
+		return FunctionId(102), nil
+	case "BPF_FUNC_sysctl_get_new_value":
+		return FunctionId(103), nil
+	case "BPF_FUNC_sysctl_set_new_value":
+		return FunctionId(104), nil
+	case "BPF_FUNC_strtol":
+		return FunctionId(105), nil
+	case "BPF_FUNC_strtoul":
+		return FunctionId(106), nil
+	case "BPF_FUNC_sk_storage_get":
+		return FunctionId(107), nil
+	case "BPF_FUNC_sk_storage_delete":
+		return FunctionId(108), nil
+	case "BPF_FUNC_send_signal":
+		return FunctionId(109), nil
+	case "BPF_FUNC_tcp_gen_syncookie":
+		return FunctionId(110), nil
+	case "BPF_FUNC_skb_output":
+		return FunctionId(111), nil
+	case "BPF_FUNC_probe_read_user":
+		return FunctionId(112), nil
+	case "BPF_FUNC_probe_read_kernel":
+		return FunctionId(113), nil
+	case "BPF_FUNC_probe_read_user_str":
+		return FunctionId(114), nil
+	case "BPF_FUNC_probe_read_kernel_str":
+		return FunctionId(115), nil
+	case "BPF_FUNC_tcp_send_ack":
+		return FunctionId(116), nil
+	case "BPF_FUNC_send_signal_thread":
+		return FunctionId(117), nil
+	case "BPF_FUNC_jiffies64":
+		return FunctionId(118), nil
+	case "BPF_FUNC_read_branch_records":
+		return FunctionId(119), nil
+	case "BPF_FUNC_get_ns_current_pid_tgid":
+		return FunctionId(120), nil
+	case "BPF_FUNC_xdp_output":
+		return FunctionId(121), nil
+	case "BPF_FUNC_get_netns_cookie":
+		return FunctionId(122), nil
+	case "BPF_FUNC_get_current_ancestor_cgroup_id":
+		return FunctionId(123), nil
+	case "BPF_FUNC_sk_assign":
+		return FunctionId(124), nil
+	case "BPF_FUNC_ktime_get_boot_ns":
+		return FunctionId(125), nil
+	case "BPF_FUNC_seq_printf":
+		return FunctionId(126), nil
+	case "BPF_FUNC_seq_write":
+		return FunctionId(127), nil
+	case "BPF_FUNC_sk_cgroup_id":
+		return FunctionId(128), nil
+	case "BPF_FUNC_sk_ancestor_cgroup_id":
+		return FunctionId(129), nil
+	case "BPF_FUNC_ringbuf_output":
+		return FunctionId(130), nil
+	case "BPF_FUNC_ringbuf_reserve":
+		return FunctionId(131), nil
+	case "BPF_FUNC_ringbuf_submit":
+		return FunctionId(132), nil
+	case "BPF_FUNC_ringbuf_discard":
+		return FunctionId(133), nil
+	case "BPF_FUNC_ringbuf_query":
+		return FunctionId(134), nil
+	case "BPF_FUNC_csum_level":
+		return FunctionId(135), nil
+	case "BPF_FUNC_skc_to_tcp6_sock":
+		return FunctionId(136), nil
+	case "BPF_FUNC_skc_to_tcp_sock":
+		return FunctionId(137), nil
+	case "BPF_FUNC_skc_to_tcp_timewait_sock":
+		return FunctionId(138), nil
+	case "BPF_FUNC_skc_to_tcp_request_sock":
+		return FunctionId(139), nil
+	case "BPF_FUNC_skc_to_udp6_sock":
+		return FunctionId(140), nil
+	case "BPF_FUNC_get_task_stack":
+		return FunctionId(141), nil
+	case "BPF_FUNC_load_hdr_opt":
+		return FunctionId(142), nil
+	case "BPF_FUNC_store_hdr_opt":
+		return FunctionId(143), nil
+	case "BPF_FUNC_reserve_hdr_opt":
+		return FunctionId(144), nil
+	case "BPF_FUNC_inode_storage_get":
+		return FunctionId(145), nil
+	case "BPF_FUNC_inode_storage_delete":
+		return FunctionId(146), nil
+	case "BPF_FUNC_d_path":
+		return FunctionId(147), nil
+	case "BPF_FUNC_copy_from_user":
+		return FunctionId(148), nil
+	case "BPF_FUNC_snprintf_btf":
+		return FunctionId(149), nil
+	case "BPF_FUNC_seq_printf_btf":
+		return FunctionId(150), nil
+	case "BPF_FUNC_skb_cgroup_classid":
+		return FunctionId(151), nil
+	case "BPF_FUNC_redirect_neigh":
+		return FunctionId(152), nil
+	case "BPF_FUNC_per_cpu_ptr":
+		return FunctionId(153), nil
+	case "BPF_FUNC_this_cpu_ptr":
+		return FunctionId(154), nil
+	case "BPF_FUNC_redirect_peer":
+		return FunctionId(155), nil
+	case "BPF_FUNC_task_storage_get":
+		return FunctionId(156), nil
+	case "BPF_FUNC_task_storage_delete":
+		return FunctionId(157), nil
+	case "BPF_FUNC_get_current_task_btf":
+		return FunctionId(158), nil
+	case "BPF_FUNC_bprm_opts_set":
+		return FunctionId(159), nil
+	case "BPF_FUNC_ktime_get_coarse_ns":
+		return FunctionId(160), nil
+	case "BPF_FUNC_ima_inode_hash":
+		return FunctionId(161), nil
+	case "BPF_FUNC_sock_from_file":
+		return FunctionId(162), nil
+	case "BPF_FUNC_check_mtu":
+		return FunctionId(163), nil
+	case "BPF_FUNC_for_each_map_elem":
+		return FunctionId(164), nil
+	case "BPF_FUNC_snprintf":
+		return FunctionId(165), nil
+	case "BPF_FUNC_sys_bpf":
+		return FunctionId(166), nil
+	case "BPF_FUNC_btf_find_by_name_kind":
+		return FunctionId(167), nil
+	case "BPF_FUNC_sys_close":
+		return FunctionId(168), nil
+	case "BPF_FUNC_timer_init":
+		return FunctionId(169), nil
+	case "BPF_FUNC_timer_set_callback":
+		return FunctionId(170), nil
+	case "BPF_FUNC_timer_start":
+		return FunctionId(171), nil
+	case "BPF_FUNC_timer_cancel":
+		return FunctionId(172), nil
+	case "BPF_FUNC_get_func_ip":
+		return FunctionId(173), nil
+	case "BPF_FUNC_get_attach_cookie":
+		return FunctionId(174), nil
+	case "BPF_FUNC_task_pt_regs":
+		return FunctionId(175), nil
+	case "BPF_FUNC_get_branch_snapshot":
+		return FunctionId(176), nil
+	case "BPF_FUNC_trace_vprintk":
+		return FunctionId(177), nil
+	case "BPF_FUNC_skc_to_unix_sock":
+		return FunctionId(178), nil
+	case "BPF_FUNC_kallsyms_lookup_name":
+		return FunctionId(179), nil
+	case "BPF_FUNC_find_vma":
+		return FunctionId(180), nil
+	case "BPF_FUNC_loop":
+		return FunctionId(181), nil
+	case "BPF_FUNC_strncmp":
+		return FunctionId(182), nil
+	case "BPF_FUNC_get_func_arg":
+		return FunctionId(183), nil
+	case "BPF_FUNC_get_func_ret":
+		return FunctionId(184), nil
+	case "BPF_FUNC_get_func_arg_cnt":
+		return FunctionId(185), nil
+	case "BPF_FUNC_get_retval":
+		return FunctionId(186), nil
+	case "BPF_FUNC_set_retval":
+		return FunctionId(187), nil
+	case "BPF_FUNC_xdp_get_buff_len":
+		return FunctionId(188), nil
+	case "BPF_FUNC_xdp_load_bytes":
+		return FunctionId(189), nil
+	case "BPF_FUNC_xdp_store_bytes":
+		return FunctionId(190), nil
+	case "BPF_FUNC_copy_from_user_task":
+		return FunctionId(191), nil
+	case "BPF_FUNC_skb_set_tstamp":
+		return FunctionId(192), nil
+	case "BPF_FUNC_ima_file_hash":
+		return FunctionId(193), nil
+	case "BPF_FUNC_kptr_xchg":
+		return FunctionId(194), nil
+	case "BPF_FUNC_map_lookup_percpu_elem":
+		return FunctionId(195), nil
+	case "BPF_FUNC_skc_to_mptcp_sock":
+		return FunctionId(196), nil
+	case "BPF_FUNC_dynptr_from_mem":
+		return FunctionId(197), nil
+	case "BPF_FUNC_ringbuf_reserve_dynptr":
+		return FunctionId(198), nil
+	case "BPF_FUNC_ringbuf_submit_dynptr":
+		return FunctionId(199), nil
+	case "BPF_FUNC_ringbuf_discard_dynptr":
+		return FunctionId(200), nil
+	case "BPF_FUNC_dynptr_read":
+		return FunctionId(201), nil
+	case "BPF_FUNC_dynptr_write":
+		return FunctionId(202), nil
+	case "BPF_FUNC_dynptr_data":
+		return FunctionId(203), nil
+	case "BPF_FUNC_tcp_raw_gen_syncookie_ipv4":
+		return FunctionId(204), nil
+	case "BPF_FUNC_tcp_raw_gen_syncookie_ipv6":
+		return FunctionId(205), nil
+	case "BPF_FUNC_tcp_raw_check_syncookie_ipv4":
+		return FunctionId(206), nil
+	case "BPF_FUNC_tcp_raw_check_syncookie_ipv6":
+		return FunctionId(207), nil
+	case "BPF_FUNC_ktime_get_tai_ns":
+		return FunctionId(208), nil
+	case "BPF_FUNC_user_ringbuf_drain":
+		return FunctionId(209), nil
+	case "BPF_FUNC_cgrp_storage_get":
+		return FunctionId(210), nil
+	case "BPF_FUNC_cgrp_storage_delete":
+		return FunctionId(211), nil
+	case "__BPF_FUNC_MAX_ID":
+		return FunctionId(212), nil
+	default:
+		return 0, fmt.Errorf("invalid FunctionId: %q", s)
+	}
+}
+
 type HdrStartOff uint32
 
 const (
 	BPF_HDR_START_MAC HdrStartOff = 0
 	BPF_HDR_START_NET HdrStartOff = 1
 )
+
+func HdrStartOffFromString(s string) (HdrStartOff, error) {
+	switch s {
+	case "BPF_HDR_START_MAC":
+		return HdrStartOff(0), nil
+	case "BPF_HDR_START_NET":
+		return HdrStartOff(1), nil
+	default:
+		return 0, fmt.Errorf("invalid HdrStartOff: %q", s)
+	}
+}
 
 type LinkType uint32
 
@@ -544,8 +1212,47 @@ const (
 	BPF_LINK_TYPE_UPROBE_MULTI   LinkType = 12
 	BPF_LINK_TYPE_NETKIT         LinkType = 13
 	BPF_LINK_TYPE_SOCKMAP        LinkType = 14
-	__MAX_BPF_LINK_TYPE          LinkType = 15
+	MAX_BPF_LINK_TYPE            LinkType = 15
 )
+
+func LinkTypeFromString(s string) (LinkType, error) {
+	switch s {
+	case "BPF_LINK_TYPE_UNSPEC":
+		return LinkType(0), nil
+	case "BPF_LINK_TYPE_RAW_TRACEPOINT":
+		return LinkType(1), nil
+	case "BPF_LINK_TYPE_TRACING":
+		return LinkType(2), nil
+	case "BPF_LINK_TYPE_CGROUP":
+		return LinkType(3), nil
+	case "BPF_LINK_TYPE_ITER":
+		return LinkType(4), nil
+	case "BPF_LINK_TYPE_NETNS":
+		return LinkType(5), nil
+	case "BPF_LINK_TYPE_XDP":
+		return LinkType(6), nil
+	case "BPF_LINK_TYPE_PERF_EVENT":
+		return LinkType(7), nil
+	case "BPF_LINK_TYPE_KPROBE_MULTI":
+		return LinkType(8), nil
+	case "BPF_LINK_TYPE_STRUCT_OPS":
+		return LinkType(9), nil
+	case "BPF_LINK_TYPE_NETFILTER":
+		return LinkType(10), nil
+	case "BPF_LINK_TYPE_TCX":
+		return LinkType(11), nil
+	case "BPF_LINK_TYPE_UPROBE_MULTI":
+		return LinkType(12), nil
+	case "BPF_LINK_TYPE_NETKIT":
+		return LinkType(13), nil
+	case "BPF_LINK_TYPE_SOCKMAP":
+		return LinkType(14), nil
+	case "MAX_BPF_LINK_TYPE":
+		return LinkType(15), nil
+	default:
+		return 0, fmt.Errorf("invalid LinkType: %q", s)
+	}
+}
 
 type MapType uint32
 
@@ -586,8 +1293,89 @@ const (
 	BPF_MAP_TYPE_USER_RINGBUF                     MapType = 31
 	BPF_MAP_TYPE_CGRP_STORAGE                     MapType = 32
 	BPF_MAP_TYPE_ARENA                            MapType = 33
-	__MAX_BPF_MAP_TYPE                            MapType = 34
+	MAX_BPF_MAP_TYPE                              MapType = 34
 )
+
+func MapTypeFromString(s string) (MapType, error) {
+	switch s {
+	case "BPF_MAP_TYPE_UNSPEC":
+		return MapType(0), nil
+	case "BPF_MAP_TYPE_HASH":
+		return MapType(1), nil
+	case "BPF_MAP_TYPE_ARRAY":
+		return MapType(2), nil
+	case "BPF_MAP_TYPE_PROG_ARRAY":
+		return MapType(3), nil
+	case "BPF_MAP_TYPE_PERF_EVENT_ARRAY":
+		return MapType(4), nil
+	case "BPF_MAP_TYPE_PERCPU_HASH":
+		return MapType(5), nil
+	case "BPF_MAP_TYPE_PERCPU_ARRAY":
+		return MapType(6), nil
+	case "BPF_MAP_TYPE_STACK_TRACE":
+		return MapType(7), nil
+	case "BPF_MAP_TYPE_CGROUP_ARRAY":
+		return MapType(8), nil
+	case "BPF_MAP_TYPE_LRU_HASH":
+		return MapType(9), nil
+	case "BPF_MAP_TYPE_LRU_PERCPU_HASH":
+		return MapType(10), nil
+	case "BPF_MAP_TYPE_LPM_TRIE":
+		return MapType(11), nil
+	case "BPF_MAP_TYPE_ARRAY_OF_MAPS":
+		return MapType(12), nil
+	case "BPF_MAP_TYPE_HASH_OF_MAPS":
+		return MapType(13), nil
+	case "BPF_MAP_TYPE_DEVMAP":
+		return MapType(14), nil
+	case "BPF_MAP_TYPE_SOCKMAP":
+		return MapType(15), nil
+	case "BPF_MAP_TYPE_CPUMAP":
+		return MapType(16), nil
+	case "BPF_MAP_TYPE_XSKMAP":
+		return MapType(17), nil
+	case "BPF_MAP_TYPE_SOCKHASH":
+		return MapType(18), nil
+	case "BPF_MAP_TYPE_CGROUP_STORAGE_DEPRECATED":
+		return MapType(19), nil
+	case "BPF_MAP_TYPE_CGROUP_STORAGE":
+		return MapType(19), nil
+	case "BPF_MAP_TYPE_REUSEPORT_SOCKARRAY":
+		return MapType(20), nil
+	case "BPF_MAP_TYPE_PERCPU_CGROUP_STORAGE_DEPRECATED":
+		return MapType(21), nil
+	case "BPF_MAP_TYPE_PERCPU_CGROUP_STORAGE":
+		return MapType(21), nil
+	case "BPF_MAP_TYPE_QUEUE":
+		return MapType(22), nil
+	case "BPF_MAP_TYPE_STACK":
+		return MapType(23), nil
+	case "BPF_MAP_TYPE_SK_STORAGE":
+		return MapType(24), nil
+	case "BPF_MAP_TYPE_DEVMAP_HASH":
+		return MapType(25), nil
+	case "BPF_MAP_TYPE_STRUCT_OPS":
+		return MapType(26), nil
+	case "BPF_MAP_TYPE_RINGBUF":
+		return MapType(27), nil
+	case "BPF_MAP_TYPE_INODE_STORAGE":
+		return MapType(28), nil
+	case "BPF_MAP_TYPE_TASK_STORAGE":
+		return MapType(29), nil
+	case "BPF_MAP_TYPE_BLOOM_FILTER":
+		return MapType(30), nil
+	case "BPF_MAP_TYPE_USER_RINGBUF":
+		return MapType(31), nil
+	case "BPF_MAP_TYPE_CGRP_STORAGE":
+		return MapType(32), nil
+	case "BPF_MAP_TYPE_ARENA":
+		return MapType(33), nil
+	case "MAX_BPF_MAP_TYPE":
+		return MapType(34), nil
+	default:
+		return 0, fmt.Errorf("invalid MapType: %q", s)
+	}
+}
 
 type NetfilterInetHook uint32
 
@@ -601,6 +1389,27 @@ const (
 	NF_INET_INGRESS      NetfilterInetHook = 5
 )
 
+func NetfilterInetHookFromString(s string) (NetfilterInetHook, error) {
+	switch s {
+	case "NF_INET_PRE_ROUTING":
+		return NetfilterInetHook(0), nil
+	case "NF_INET_LOCAL_IN":
+		return NetfilterInetHook(1), nil
+	case "NF_INET_FORWARD":
+		return NetfilterInetHook(2), nil
+	case "NF_INET_LOCAL_OUT":
+		return NetfilterInetHook(3), nil
+	case "NF_INET_POST_ROUTING":
+		return NetfilterInetHook(4), nil
+	case "NF_INET_NUMHOOKS":
+		return NetfilterInetHook(5), nil
+	case "NF_INET_INGRESS":
+		return NetfilterInetHook(5), nil
+	default:
+		return 0, fmt.Errorf("invalid NetfilterInetHook: %q", s)
+	}
+}
+
 type ObjType uint32
 
 const (
@@ -609,6 +1418,21 @@ const (
 	BPF_TYPE_MAP    ObjType = 2
 	BPF_TYPE_LINK   ObjType = 3
 )
+
+func ObjTypeFromString(s string) (ObjType, error) {
+	switch s {
+	case "BPF_TYPE_UNSPEC":
+		return ObjType(0), nil
+	case "BPF_TYPE_PROG":
+		return ObjType(1), nil
+	case "BPF_TYPE_MAP":
+		return ObjType(2), nil
+	case "BPF_TYPE_LINK":
+		return ObjType(3), nil
+	default:
+		return 0, fmt.Errorf("invalid ObjType: %q", s)
+	}
+}
 
 type PerfEventType uint32
 
@@ -621,6 +1445,27 @@ const (
 	BPF_PERF_EVENT_TRACEPOINT PerfEventType = 5
 	BPF_PERF_EVENT_EVENT      PerfEventType = 6
 )
+
+func PerfEventTypeFromString(s string) (PerfEventType, error) {
+	switch s {
+	case "BPF_PERF_EVENT_UNSPEC":
+		return PerfEventType(0), nil
+	case "BPF_PERF_EVENT_UPROBE":
+		return PerfEventType(1), nil
+	case "BPF_PERF_EVENT_URETPROBE":
+		return PerfEventType(2), nil
+	case "BPF_PERF_EVENT_KPROBE":
+		return PerfEventType(3), nil
+	case "BPF_PERF_EVENT_KRETPROBE":
+		return PerfEventType(4), nil
+	case "BPF_PERF_EVENT_TRACEPOINT":
+		return PerfEventType(5), nil
+	case "BPF_PERF_EVENT_EVENT":
+		return PerfEventType(6), nil
+	default:
+		return 0, fmt.Errorf("invalid PerfEventType: %q", s)
+	}
+}
 
 type ProgType uint32
 
@@ -658,8 +1503,83 @@ const (
 	BPF_PROG_TYPE_SK_LOOKUP               ProgType = 30
 	BPF_PROG_TYPE_SYSCALL                 ProgType = 31
 	BPF_PROG_TYPE_NETFILTER               ProgType = 32
-	__MAX_BPF_PROG_TYPE                   ProgType = 33
+	MAX_BPF_PROG_TYPE                     ProgType = 33
 )
+
+func ProgTypeFromString(s string) (ProgType, error) {
+	switch s {
+	case "BPF_PROG_TYPE_UNSPEC":
+		return ProgType(0), nil
+	case "BPF_PROG_TYPE_SOCKET_FILTER":
+		return ProgType(1), nil
+	case "BPF_PROG_TYPE_KPROBE":
+		return ProgType(2), nil
+	case "BPF_PROG_TYPE_SCHED_CLS":
+		return ProgType(3), nil
+	case "BPF_PROG_TYPE_SCHED_ACT":
+		return ProgType(4), nil
+	case "BPF_PROG_TYPE_TRACEPOINT":
+		return ProgType(5), nil
+	case "BPF_PROG_TYPE_XDP":
+		return ProgType(6), nil
+	case "BPF_PROG_TYPE_PERF_EVENT":
+		return ProgType(7), nil
+	case "BPF_PROG_TYPE_CGROUP_SKB":
+		return ProgType(8), nil
+	case "BPF_PROG_TYPE_CGROUP_SOCK":
+		return ProgType(9), nil
+	case "BPF_PROG_TYPE_LWT_IN":
+		return ProgType(10), nil
+	case "BPF_PROG_TYPE_LWT_OUT":
+		return ProgType(11), nil
+	case "BPF_PROG_TYPE_LWT_XMIT":
+		return ProgType(12), nil
+	case "BPF_PROG_TYPE_SOCK_OPS":
+		return ProgType(13), nil
+	case "BPF_PROG_TYPE_SK_SKB":
+		return ProgType(14), nil
+	case "BPF_PROG_TYPE_CGROUP_DEVICE":
+		return ProgType(15), nil
+	case "BPF_PROG_TYPE_SK_MSG":
+		return ProgType(16), nil
+	case "BPF_PROG_TYPE_RAW_TRACEPOINT":
+		return ProgType(17), nil
+	case "BPF_PROG_TYPE_CGROUP_SOCK_ADDR":
+		return ProgType(18), nil
+	case "BPF_PROG_TYPE_LWT_SEG6LOCAL":
+		return ProgType(19), nil
+	case "BPF_PROG_TYPE_LIRC_MODE2":
+		return ProgType(20), nil
+	case "BPF_PROG_TYPE_SK_REUSEPORT":
+		return ProgType(21), nil
+	case "BPF_PROG_TYPE_FLOW_DISSECTOR":
+		return ProgType(22), nil
+	case "BPF_PROG_TYPE_CGROUP_SYSCTL":
+		return ProgType(23), nil
+	case "BPF_PROG_TYPE_RAW_TRACEPOINT_WRITABLE":
+		return ProgType(24), nil
+	case "BPF_PROG_TYPE_CGROUP_SOCKOPT":
+		return ProgType(25), nil
+	case "BPF_PROG_TYPE_TRACING":
+		return ProgType(26), nil
+	case "BPF_PROG_TYPE_STRUCT_OPS":
+		return ProgType(27), nil
+	case "BPF_PROG_TYPE_EXT":
+		return ProgType(28), nil
+	case "BPF_PROG_TYPE_LSM":
+		return ProgType(29), nil
+	case "BPF_PROG_TYPE_SK_LOOKUP":
+		return ProgType(30), nil
+	case "BPF_PROG_TYPE_SYSCALL":
+		return ProgType(31), nil
+	case "BPF_PROG_TYPE_NETFILTER":
+		return ProgType(32), nil
+	case "MAX_BPF_PROG_TYPE":
+		return ProgType(33), nil
+	default:
+		return 0, fmt.Errorf("invalid ProgType: %q", s)
+	}
+}
 
 type RetCode uint32
 
@@ -671,12 +1591,40 @@ const (
 	BPF_FLOW_DISSECTOR_CONTINUE RetCode = 129
 )
 
+func RetCodeFromString(s string) (RetCode, error) {
+	switch s {
+	case "BPF_OK":
+		return RetCode(0), nil
+	case "BPF_DROP":
+		return RetCode(2), nil
+	case "BPF_REDIRECT":
+		return RetCode(7), nil
+	case "BPF_LWT_REROUTE":
+		return RetCode(128), nil
+	case "BPF_FLOW_DISSECTOR_CONTINUE":
+		return RetCode(129), nil
+	default:
+		return 0, fmt.Errorf("invalid RetCode: %q", s)
+	}
+}
+
 type SkAction uint32
 
 const (
 	SK_DROP SkAction = 0
 	SK_PASS SkAction = 1
 )
+
+func SkActionFromString(s string) (SkAction, error) {
+	switch s {
+	case "SK_DROP":
+		return SkAction(0), nil
+	case "SK_PASS":
+		return SkAction(1), nil
+	default:
+		return 0, fmt.Errorf("invalid SkAction: %q", s)
+	}
+}
 
 type StackBuildIdStatus uint32
 
@@ -686,11 +1634,33 @@ const (
 	BPF_STACK_BUILD_ID_IP    StackBuildIdStatus = 2
 )
 
+func StackBuildIdStatusFromString(s string) (StackBuildIdStatus, error) {
+	switch s {
+	case "BPF_STACK_BUILD_ID_EMPTY":
+		return StackBuildIdStatus(0), nil
+	case "BPF_STACK_BUILD_ID_VALID":
+		return StackBuildIdStatus(1), nil
+	case "BPF_STACK_BUILD_ID_IP":
+		return StackBuildIdStatus(2), nil
+	default:
+		return 0, fmt.Errorf("invalid StackBuildIdStatus: %q", s)
+	}
+}
+
 type StatsType uint32
 
 const (
 	BPF_STATS_RUN_TIME StatsType = 0
 )
+
+func StatsTypeFromString(s string) (StatsType, error) {
+	switch s {
+	case "BPF_STATS_RUN_TIME":
+		return StatsType(0), nil
+	default:
+		return 0, fmt.Errorf("invalid StatsType: %q", s)
+	}
+}
 
 type TcxActionBase int32
 
@@ -701,6 +1671,21 @@ const (
 	TCX_REDIRECT TcxActionBase = 7
 )
 
+func TcxActionBaseFromString(s string) (TcxActionBase, error) {
+	switch s {
+	case "TCX_NEXT":
+		return TcxActionBase(-1), nil
+	case "TCX_PASS":
+		return TcxActionBase(0), nil
+	case "TCX_DROP":
+		return TcxActionBase(2), nil
+	case "TCX_REDIRECT":
+		return TcxActionBase(7), nil
+	default:
+		return 0, fmt.Errorf("invalid TcxActionBase: %q", s)
+	}
+}
+
 type XdpAction uint32
 
 const (
@@ -710,6 +1695,23 @@ const (
 	XDP_TX       XdpAction = 3
 	XDP_REDIRECT XdpAction = 4
 )
+
+func XdpActionFromString(s string) (XdpAction, error) {
+	switch s {
+	case "XDP_ABORTED":
+		return XdpAction(0), nil
+	case "XDP_DROP":
+		return XdpAction(1), nil
+	case "XDP_PASS":
+		return XdpAction(2), nil
+	case "XDP_TX":
+		return XdpAction(3), nil
+	case "XDP_REDIRECT":
+		return XdpAction(4), nil
+	default:
+		return 0, fmt.Errorf("invalid XdpAction: %q", s)
+	}
+}
 
 type NetfilterProtocolFamily uint32
 
@@ -723,6 +1725,29 @@ const (
 	NFPROTO_IPV6     NetfilterProtocolFamily = 10
 	NFPROTO_NUMPROTO NetfilterProtocolFamily = 11
 )
+
+func NetfilterProtocolFamilyFromString(s string) (NetfilterProtocolFamily, error) {
+	switch s {
+	case "NFPROTO_UNSPEC":
+		return NetfilterProtocolFamily(0), nil
+	case "NFPROTO_INET":
+		return NetfilterProtocolFamily(1), nil
+	case "NFPROTO_IPV4":
+		return NetfilterProtocolFamily(2), nil
+	case "NFPROTO_ARP":
+		return NetfilterProtocolFamily(3), nil
+	case "NFPROTO_NETDEV":
+		return NetfilterProtocolFamily(5), nil
+	case "NFPROTO_BRIDGE":
+		return NetfilterProtocolFamily(7), nil
+	case "NFPROTO_IPV6":
+		return NetfilterProtocolFamily(10), nil
+	case "NFPROTO_NUMPROTO":
+		return NetfilterProtocolFamily(11), nil
+	default:
+		return 0, fmt.Errorf("invalid NetfilterProtocolFamily: %q", s)
+	}
+}
 
 type BtfInfo struct {
 	_         structs.HostLayout
@@ -1560,6 +2585,20 @@ type RawTracepointOpenAttr struct {
 
 func RawTracepointOpen(attr *RawTracepointOpenAttr) (*FD, error) {
 	fd, err := BPF(BPF_RAW_TRACEPOINT_OPEN, unsafe.Pointer(attr), unsafe.Sizeof(*attr))
+	if err != nil {
+		return nil, err
+	}
+	return NewFD(int(fd))
+}
+
+type TokenCreateAttr struct {
+	_       structs.HostLayout
+	Flags   uint32
+	BpffsFd uint32
+}
+
+func TokenCreate(attr *TokenCreateAttr) (*FD, error) {
+	fd, err := BPF(BPF_TOKEN_CREATE, unsafe.Pointer(attr), unsafe.Sizeof(*attr))
 	if err != nil {
 		return nil, err
 	}

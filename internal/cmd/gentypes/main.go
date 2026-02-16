@@ -157,6 +157,7 @@ func generateTypes(spec *btf.Spec) ([]byte, error) {
 package sys
 
 import (
+	"fmt"
 	"unsafe"
 	"structs"
 )
@@ -233,6 +234,12 @@ import (
 	enumTypes := make(map[string]btf.Type)
 
 	outputEnum := func(goType string, t *btf.Enum) error {
+		for i, value := range t.Values {
+			if strings.HasPrefix(value.Name, "__MAX") {
+				t.Values[i].Name = strings.TrimPrefix(value.Name, "__")
+			}
+		}
+
 		// Add the enum as a predeclared type so that generated structs
 		// refer to the Go types.
 		if name := gf.Names[t]; name != "" {
@@ -248,6 +255,20 @@ import (
 
 		w.WriteString(decl)
 		w.WriteRune('\n')
+
+		w.WriteString(fmt.Sprintf("func %sFromString(s string) (%s, error) {\n", goType, goType))
+		w.WriteString("\tswitch s {\n")
+		for _, value := range t.Values {
+			if t.Signed {
+				fmt.Fprintf(w, "\tcase %q:\n\t\treturn %s(%d), nil\n", value.Name, goType, int64(value.Value))
+			} else {
+				fmt.Fprintf(w, "\tcase %q:\n\t\treturn %s(%d), nil\n", value.Name, goType, value.Value)
+			}
+		}
+		w.WriteString("\tdefault:\n")
+		fmt.Fprintf(w, "\t\treturn 0, fmt.Errorf(\"invalid %s: %%q\", s)\n", goType)
+		w.WriteString("\t}\n")
+		w.WriteString("}\n")
 
 		nenums++
 		return nil
@@ -682,6 +703,10 @@ import (
 				rename("target_fd", "target_fd_or_ifindex"),
 			},
 		},
+		{
+			"TokenCreate", retFd, "token_create", "BPF_TOKEN_CREATE",
+			nil,
+		},
 	}
 
 	sort.Slice(attrs, func(i, j int) bool {
@@ -712,6 +737,7 @@ import (
 		{"enable_stats", "enable_stats"},
 		{"iter_create", "iter_create"},
 		{"prog_bind_map", "prog_bind_map"},
+		{"token_create", "token_create"},
 	})
 	if err != nil {
 		return nil, fmt.Errorf("split bpf_attr: %w", err)

@@ -163,6 +163,8 @@ import (
 
 `)
 
+	w.WriteString("//go:generate go tool stringer -output types_string.go -type=Cmd,MapType,ProgType,AttachType\n\n")
+
 	// Constants (aka unnamed enums)
 	var consts []btf.EnumValue
 	for typ, err := range spec.All() {
@@ -359,6 +361,7 @@ import (
 				replaceWithBytes("remote_ip4", "remote_ip6", "local_ip4", "local_ip6"),
 			},
 		},
+		{"TokenInfo", "bpf_token_info", nil},
 	}
 
 	sort.Slice(structs, func(i, j int) bool {
@@ -682,6 +685,10 @@ import (
 				rename("target_fd", "target_fd_or_ifindex"),
 			},
 		},
+		{
+			"TokenCreate", retFd, "token_create", "BPF_TOKEN_CREATE",
+			nil,
+		},
 	}
 
 	sort.Slice(attrs, func(i, j int) bool {
@@ -712,6 +719,7 @@ import (
 		{"enable_stats", "enable_stats"},
 		{"iter_create", "iter_create"},
 		{"prog_bind_map", "prog_bind_map"},
+		{"token_create", "token_create"},
 	})
 	if err != nil {
 		return nil, fmt.Errorf("split bpf_attr: %w", err)

@@ -3,10 +3,13 @@ package rlimit
 import (
 	"errors"
 	"fmt"
+	"slices"
 	"sync"
 
 	"github.com/cilium/ebpf/internal"
+	"github.com/cilium/ebpf/internal/platform"
 	"github.com/cilium/ebpf/internal/sys"
+	"github.com/cilium/ebpf/internal/token"
 	"github.com/cilium/ebpf/internal/unix"
 )
 
@@ -59,6 +62,21 @@ func detectMemcgAccounting() error {
 		MaxEntries: 1,
 	}
 
+	var tok *token.Token
+	if platform.IsLinux {
+		var err error
+		tok, err = token.Create()
+		if err != nil && !errors.Is(err, token.ErrTokenNotAvailable) {
+			return fmt.Errorf("get BPF token: %w", err)
+		}
+
+		if tok != nil {
+			defer tok.Close()
+			attr.MapTokenFd = int32(tok.Int())
+			attr.MapFlags |= sys.BPF_F_TOKEN_FD
+		}
+	}
+
 	// Creating a map allocates shared (and locked) memory that counts against
 	// the rlimit on pre-5.11 kernels, but against the memory cgroup budget on
 	// kernels 5.11 and over. If this call succeeds with the process' memlock
@@ -78,6 +96,15 @@ func detectMemcgAccounting() error {
 
 	// EPERM shows up when map creation would exceed the memory budget.
 	if errors.Is(mapErr, unix.EPERM) {
+		if tok != nil &&
+			(!slices.Contains(tok.Mount.Cmds, sys.BPF_MAP_CREATE) ||
+				!slices.Contains(tok.Mount.Maps, sys.BPF_MAP_TYPE_ARRAY)) {
+
+			// We are using a BPF token, but it does not permit creating array maps, we get an EPERM.
+			// Since BPF tokens are only available on kernels with memcg accounting, lets assume memcg accounting is supported.
+			return nil
+		}
+
 		return unsupportedMemcgAccounting
 	}
 

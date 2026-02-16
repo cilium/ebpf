@@ -20,6 +20,7 @@ import (
 	"github.com/cilium/ebpf/internal/platform"
 	"github.com/cilium/ebpf/internal/sys"
 	"github.com/cilium/ebpf/internal/sysenc"
+	"github.com/cilium/ebpf/internal/token"
 	"github.com/cilium/ebpf/internal/unix"
 )
 
@@ -640,6 +641,20 @@ func (spec *MapSpec) createMap(inner *sys.FD, c *btf.Cache) (_ *Map, err error) 
 		}
 	}
 
+	var tok *token.Token
+	if platform.IsLinux {
+		tok, err = token.Create()
+		if err != nil && !errors.Is(err, token.ErrTokenNotAvailable) {
+			return nil, fmt.Errorf("get BPF token: %w", err)
+		}
+
+		if tok != nil {
+			defer tok.Close()
+			attr.MapTokenFd = int32(tok.Int())
+			attr.MapFlags |= sys.BPF_F_TOKEN_FD
+		}
+	}
+
 	fd, err := sys.MapCreate(&attr)
 
 	// Some map types don't support BTF k/v in earlier kernel versions.
@@ -649,7 +664,7 @@ func (spec *MapSpec) createMap(inner *sys.FD, c *btf.Cache) (_ *Map, err error) 
 		fd, err = sys.MapCreate(&attr)
 	}
 	if err != nil {
-		return nil, handleMapCreateError(attr, spec, err)
+		return nil, handleMapCreateError(attr, spec, tok, err)
 	}
 
 	defer closeOnError(fd)
@@ -660,7 +675,7 @@ func (spec *MapSpec) createMap(inner *sys.FD, c *btf.Cache) (_ *Map, err error) 
 	return m, nil
 }
 
-func handleMapCreateError(attr sys.MapCreateAttr, spec *MapSpec, err error) error {
+func handleMapCreateError(attr sys.MapCreateAttr, spec *MapSpec, tok *token.Token, err error) error {
 	if platform.IsWindows {
 		if errors.Is(err, unix.EINVAL) && attr.MapFlags != 0 {
 			return fmt.Errorf("map create: flags: %w", internal.ErrNotSupportedOnOS)
@@ -670,6 +685,15 @@ func handleMapCreateError(attr sys.MapCreateAttr, spec *MapSpec, err error) erro
 	}
 
 	if errors.Is(err, unix.EPERM) {
+		if tok != nil {
+			if !slices.Contains(tok.Mount.Cmds, sys.BPF_MAP_CREATE) {
+				return fmt.Errorf("map create: %w (BPF token does not allow BPF command BPF_MAP_CREATE)", err)
+			}
+			if !slices.Contains(tok.Mount.Maps, attr.MapType) {
+				return fmt.Errorf("map create: %w (BPF token does not allow map type %s)", err, MapType(attr.MapType))
+			}
+		}
+
 		return fmt.Errorf("map create: %w (MEMLOCK may be too low, consider rlimit.RemoveMemlock)", err)
 	}
 	if errors.Is(err, unix.EINVAL) {

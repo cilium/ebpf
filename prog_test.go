@@ -916,6 +916,44 @@ func TestProgramLoadBoundToDevice(t *testing.T) {
 	qt.Assert(t, qt.ErrorIs(err, unix.EINVAL))
 }
 
+func TestProgramWithToken(t *testing.T) {
+	testutils.RunWithToken(t, "no-cmd", testutils.Delegated{
+		Cmds:        []sys.Cmd{},
+		Progs:       []sys.ProgType{sys.BPF_PROG_TYPE_SOCKET_FILTER},
+		AttachTypes: []sys.AttachType{sys.BPF_CGROUP_INET_INGRESS},
+	}, func(t *testing.T) {
+		_, err := newProgram(t, basicProgramSpec, nil)
+		qt.Assert(t, qt.ErrorIs(err, unix.EPERM))
+	})
+
+	testutils.RunWithToken(t, "no-prog", testutils.Delegated{
+		Cmds:        []sys.Cmd{sys.BPF_PROG_LOAD},
+		Progs:       []sys.ProgType{},
+		AttachTypes: []sys.AttachType{sys.BPF_CGROUP_INET_INGRESS},
+	}, func(t *testing.T) {
+		_, err := newProgram(t, basicProgramSpec, nil)
+		qt.Assert(t, qt.ErrorIs(err, unix.EPERM))
+	})
+
+	testutils.RunWithToken(t, "no-attach-type", testutils.Delegated{
+		Cmds:        []sys.Cmd{sys.BPF_PROG_LOAD},
+		Progs:       []sys.ProgType{sys.BPF_PROG_TYPE_SOCKET_FILTER},
+		AttachTypes: []sys.AttachType{},
+	}, func(t *testing.T) {
+		_, err := newProgram(t, basicProgramSpec, nil)
+		qt.Assert(t, qt.ErrorIs(err, unix.EPERM))
+	})
+
+	testutils.RunWithToken(t, "success", testutils.Delegated{
+		Cmds:        []sys.Cmd{sys.BPF_PROG_LOAD},
+		Progs:       []sys.ProgType{sys.BPF_PROG_TYPE_SOCKET_FILTER},
+		AttachTypes: []sys.AttachType{sys.BPF_CGROUP_INET_INGRESS},
+	}, func(t *testing.T) {
+		_, err := newProgram(t, basicProgramSpec, nil)
+		qt.Assert(t, qt.IsNil(err))
+	})
+}
+
 func BenchmarkNewProgram(b *testing.B) {
 	testutils.SkipOnOldKernel(b, "5.18", "kfunc support")
 	spec, err := LoadCollectionSpec(testutils.NativeFile(b, "testdata/kfunc-%s.elf"))

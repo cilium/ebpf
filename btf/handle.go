@@ -99,6 +99,10 @@ func NewHandleFromRawBTF(btf []byte) (*Handle, error) {
 		attr.BtfLogLevel = 1
 	}
 
+	if errors.Is(err, sys.ErrTokenCapabilities) {
+		return nil, fmt.Errorf("load btf: %w", err)
+	}
+
 	if err := haveBTF(); err != nil {
 		return nil, err
 	}

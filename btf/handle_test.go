@@ -4,8 +4,12 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/go-quicktest/qt"
+
 	"github.com/cilium/ebpf/btf"
+	"github.com/cilium/ebpf/internal/sys"
 	"github.com/cilium/ebpf/internal/testutils"
+	"github.com/cilium/ebpf/internal/unix"
 )
 
 func TestHandleIterator(t *testing.T) {
@@ -81,6 +85,44 @@ func TestParseModuleSplitSpec(t *testing.T) {
 	if err != nil {
 		t.Fatal("Parse module BTF:", err)
 	}
+}
+
+func TestNewHandleFromBTFWithToken(t *testing.T) {
+	b, err := btf.NewBuilder([]btf.Type{
+		&btf.Int{Name: "example", Size: 4, Encoding: btf.Unsigned},
+	})
+	qt.Assert(t, qt.IsNil(err))
+	buf, err := b.Marshal(nil, nil)
+	qt.Assert(t, qt.IsNil(err))
+
+	t.Run("no-cmd", func(t *testing.T) {
+		if testutils.RunWithToken(t, testutils.Delegated{
+			Cmds: []sys.Cmd{},
+			// We need to delegate at least one permission, so picking a random map type that we don't use in this test.
+			Maps: []sys.MapType{sys.BPF_MAP_TYPE_ARRAY},
+		}) {
+			return
+		}
+
+		h, err := btf.NewHandleFromRawBTF(buf)
+		testutils.SkipIfNotSupported(t, err)
+		qt.Assert(t, qt.ErrorIs(err, unix.EPERM))
+		h.Close()
+	})
+
+	t.Run("success", func(t *testing.T) {
+		if testutils.RunWithToken(t, testutils.Delegated{
+			Cmds: []sys.Cmd{sys.BPF_BTF_LOAD},
+			Maps: []sys.MapType{},
+		}) {
+			return
+		}
+
+		h, err := btf.NewHandleFromRawBTF(buf)
+		testutils.SkipIfNotSupported(t, err)
+		qt.Assert(t, qt.IsNil(err))
+		h.Close()
+	})
 }
 
 func ExampleHandleIterator() {

@@ -2,10 +2,13 @@ package btf
 
 import (
 	"errors"
+	"fmt"
 	"math"
 
 	"github.com/cilium/ebpf/internal"
+	"github.com/cilium/ebpf/internal/platform"
 	"github.com/cilium/ebpf/internal/sys"
+	"github.com/cilium/ebpf/internal/token"
 	"github.com/cilium/ebpf/internal/unix"
 )
 
@@ -145,10 +148,25 @@ func probeBTF(typ Type) error {
 		return err
 	}
 
-	fd, err := sys.BtfLoad(&sys.BtfLoadAttr{
+	attr := &sys.BtfLoadAttr{
 		Btf:     sys.SlicePointer(buf),
 		BtfSize: uint32(len(buf)),
-	})
+	}
+
+	if platform.IsLinux {
+		tok, err := token.Create()
+		if err != nil && !errors.Is(err, token.ErrTokenNotAvailable) {
+			return fmt.Errorf("get BPF token: %w", err)
+		}
+
+		if tok != nil {
+			defer tok.Close()
+			attr.BtfTokenFd = int32(tok.Int())
+			attr.BtfFlags |= sys.BPF_F_TOKEN_FD
+		}
+	}
+
+	fd, err := sys.BtfLoad(attr)
 
 	if err == nil {
 		fd.Close()

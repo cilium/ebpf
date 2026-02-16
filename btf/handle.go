@@ -5,10 +5,12 @@ import (
 	"fmt"
 	"math"
 	"os"
+	"slices"
 
 	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/platform"
 	"github.com/cilium/ebpf/internal/sys"
+	"github.com/cilium/ebpf/internal/token"
 	"github.com/cilium/ebpf/internal/unix"
 )
 
@@ -56,6 +58,21 @@ func NewHandleFromRawBTF(btf []byte) (*Handle, error) {
 		BtfSize: uint32(len(btf)),
 	}
 
+	var tok *token.Token
+	if platform.IsLinux {
+		var err error
+		tok, err = token.Create()
+		if err != nil && !errors.Is(err, token.ErrTokenNotAvailable) {
+			return nil, fmt.Errorf("get BPF token: %w", err)
+		}
+
+		if tok != nil {
+			defer tok.Close()
+			attr.BtfTokenFd = int32(tok.Int())
+			attr.BtfFlags |= sys.BPF_F_TOKEN_FD
+		}
+	}
+
 	var (
 		logBuf []byte
 		err    error
@@ -97,6 +114,12 @@ func NewHandleFromRawBTF(btf []byte) (*Handle, error) {
 		attr.BtfLogSize = logSize
 		attr.BtfLogBuf = sys.SlicePointer(logBuf)
 		attr.BtfLogLevel = 1
+	}
+
+	if errors.Is(err, unix.EPERM) {
+		if tok != nil && !slices.Contains(tok.Mount.Cmds, sys.BPF_BTF_LOAD) {
+			return nil, fmt.Errorf("%w (BPF token does not allow BPF command BPF_BTF_LOAD)", err)
+		}
 	}
 
 	if err := haveBTF(); err != nil {

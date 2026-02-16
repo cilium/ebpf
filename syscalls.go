@@ -14,6 +14,7 @@ import (
 	"github.com/cilium/ebpf/internal/linux"
 	"github.com/cilium/ebpf/internal/platform"
 	"github.com/cilium/ebpf/internal/sys"
+	"github.com/cilium/ebpf/internal/token"
 	"github.com/cilium/ebpf/internal/tracefs"
 	"github.com/cilium/ebpf/internal/unix"
 )
@@ -71,12 +72,27 @@ func progLoad(insns asm.Instructions, typ ProgramType, license string) (*sys.FD,
 	}
 	bytecode := buf.Bytes()
 
-	return sys.ProgLoad(&sys.ProgLoadAttr{
+	attr := &sys.ProgLoadAttr{
 		ProgType: sys.ProgType(typ),
 		License:  sys.NewStringPointer(license),
 		Insns:    sys.SlicePointer(bytecode),
 		InsnCnt:  uint32(len(bytecode) / asm.InstructionSize),
-	})
+	}
+
+	if platform.IsLinux {
+		tok, err := token.Create()
+		if err != nil && !errors.Is(err, token.ErrTokenNotAvailable) {
+			return nil, fmt.Errorf("get BPF token: %w", err)
+		}
+
+		if tok != nil {
+			defer tok.Close()
+			attr.ProgTokenFd = int32(tok.Int())
+			attr.ProgFlags |= sys.BPF_F_TOKEN_FD
+		}
+	}
+
+	return sys.ProgLoad(attr)
 }
 
 var haveNestedMaps = internal.NewFeatureTest("nested maps", func() error {
@@ -350,14 +366,29 @@ var haveProgramExtInfos = internal.NewFeatureTest("program ext_infos", func() er
 	}
 	bytecode := buf.Bytes()
 
-	_, err := sys.ProgLoad(&sys.ProgLoadAttr{
+	attr := &sys.ProgLoadAttr{
 		ProgType:    sys.ProgType(SocketFilter),
 		License:     sys.NewStringPointer("MIT"),
 		Insns:       sys.SlicePointer(bytecode),
 		InsnCnt:     uint32(len(bytecode) / asm.InstructionSize),
 		FuncInfoCnt: 1,
 		ProgBtfFd:   math.MaxUint32,
-	})
+	}
+
+	if platform.IsLinux {
+		tok, err := token.Create()
+		if err != nil && !errors.Is(err, token.ErrTokenNotAvailable) {
+			return fmt.Errorf("get BPF token: %w", err)
+		}
+
+		if tok != nil {
+			defer tok.Close()
+			attr.ProgTokenFd = int32(tok.Int())
+			attr.ProgFlags |= sys.BPF_F_TOKEN_FD
+		}
+	}
+
+	_, err := sys.ProgLoad(attr)
 
 	if errors.Is(err, unix.EBADF) {
 		return nil

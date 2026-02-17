@@ -438,6 +438,8 @@ type Func struct {
 	ParamTags [][]string
 }
 
+type funcInfoMeta struct{}
+
 func FuncMetadata(ins *asm.Instruction) *Func {
 	fn, _ := ins.Metadata.Get(funcInfoMeta{}).(*Func)
 	return fn

@@ -45,6 +45,14 @@ type Instruction struct {
 	Metadata Metadata
 }
 
+// Width returns how many raw BPF instructions the Instruction occupies within
+// an instruction stream. For example, an Instruction encoding a 64-bit value
+// will typically occupy 2 raw instructions, while a 32-bit constant can be
+// encoded in a single raw instruction.
+func (ins *Instruction) Width() RawInstructionOffset {
+	return RawInstructionOffset(ins.OpCode.rawInstructions())
+}
+
 // Unmarshal decodes a BPF instruction.
 func (ins *Instruction) Unmarshal(r io.Reader, bo binary.ByteOrder, platform string) error {
 	data := make([]byte, InstructionSize)

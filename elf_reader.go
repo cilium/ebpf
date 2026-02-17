@@ -8,6 +8,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"iter"
+	"maps"
 	"math"
 	"os"
 	"slices"
@@ -278,6 +280,17 @@ func newElfSection(section *elf.Section, kind elfSectionKind) *elfSection {
 	}
 }
 
+// symbolsSorted returns the section's symbols sorted by offset.
+func (es *elfSection) symbolsSorted() iter.Seq2[uint64, elf.Symbol] {
+	return func(yield func(uint64, elf.Symbol) bool) {
+		for _, off := range slices.Sorted(maps.Keys(es.symbols)) {
+			if !yield(off, es.symbols[off]) {
+				return
+			}
+		}
+	}
+}
+
 // assignSymbols takes a list of symbols and assigns them to their
 // respective sections, indexed by name.
 func (ec *elfCode) assignSymbols(symbols []elf.Symbol) {
@@ -420,52 +433,67 @@ func (ec *elfCode) loadProgramSections() (map[string]*ProgramSpec, error) {
 // be narrowed down to STT_NOTYPE (emitted by clang <8) or STT_FUNC.
 //
 // The resulting map is indexed by function name.
-func (ec *elfCode) loadFunctions(section *elfSection) (map[string]asm.Instructions, error) {
-	r := bufio.NewReader(section.Open())
-
-	// Decode the section's instruction stream.
-	insns := make(asm.Instructions, 0, section.Size/asm.InstructionSize)
-	insns, err := asm.AppendInstructions(insns, r, ec.ByteOrder, platform.Linux)
-	if err != nil {
-		return nil, fmt.Errorf("decoding instructions for section %s: %w", section.Name, err)
-	}
-	if len(insns) == 0 {
-		return nil, fmt.Errorf("no instructions found in section %s", section.Name)
-	}
+func (ec *elfCode) loadFunctions(sec *elfSection) (map[string]asm.Instructions, error) {
+	progs := make(map[string]asm.Instructions)
 
 	// Pull out ExtInfos once per section to avoid map lookups on every
 	// instruction.
-	fo := ec.extInfo.Funcs[section.Name]
-	lo := ec.extInfo.Lines[section.Name]
-	ro := ec.extInfo.CORERelos[section.Name]
+	fo := ec.extInfo.Funcs[sec.Name]
+	lo := ec.extInfo.Lines[sec.Name]
+	ro := ec.extInfo.CORERelos[sec.Name]
 
-	iter := insns.Iterate()
-	for iter.Next() {
-		ins := iter.Ins
-		offset := iter.Offset.Bytes()
+	// Raw instruction count since start of the section. ExtInfos point at raw
+	// insn offsets and ignore the gaps between symbols in case of linked objects.
+	// We need to count them, we can't obtain this info by any other means.
+	var raw asm.RawInstructionOffset
 
-		// Tag Symbol Instructions.
-		if sym, ok := section.symbols[offset]; ok {
-			*ins = ins.WithSymbol(sym.Name)
+	// Sort symbols by offset so we can track instructions by their raw offsets.
+	for _, sym := range sec.symbolsSorted() {
+		if progs[sym.Name] != nil {
+			return nil, fmt.Errorf("duplicate symbol %s in section %s", sym.Name, sec.Name)
 		}
 
-		// Apply any relocations for the current instruction.
-		// If no relocation is present, resolve any section-relative function calls.
-		if rel, ok := section.relocations[offset]; ok {
-			if err := ec.relocateInstruction(ins, rel); err != nil {
-				return nil, fmt.Errorf("offset %d: relocating instruction: %w", offset, err)
-			}
-		} else {
-			if err := referenceRelativeJump(ins, offset, section.symbols); err != nil {
-				return nil, fmt.Errorf("offset %d: resolving relative jump: %w", offset, err)
-			}
+		// Decode the symbol's instruction stream, limited to its size.
+		sr := internal.NewBufferedSectionReader(sec, int64(sym.Value), int64(sym.Size))
+		insns := make(asm.Instructions, 0, sym.Size/asm.InstructionSize)
+		insns, err := asm.AppendInstructions(insns, sr, ec.ByteOrder, platform.Linux)
+		if err != nil {
+			return nil, fmt.Errorf("decoding instructions for symbol %s in section %s: %w", sym.Name, sec.Name, err)
+		}
+		if len(insns) == 0 {
+			return nil, fmt.Errorf("no instructions found for symbol %s in section %s", sym.Name, sec.Name)
 		}
 
-		// Tag instructions with any ExtInfo metadata that's pointing at them.
-		assignMetadata(iter.Ins, iter.Offset, &fo, &lo, &ro)
+		// Mark the first instruction as the start of a function.
+		insns[0] = insns[0].WithSymbol(sym.Name)
+
+		iter := insns.Iterate()
+		for iter.Next() {
+			// Global byte offset of the instruction within the ELF section.
+			offset := sym.Value + iter.Offset.Bytes()
+
+			// Apply any relocations for the current instruction. If no relocation is
+			// present, resolve any section-relative function calls.
+			if rel, ok := sec.relocations[offset]; ok {
+				if err := ec.relocateInstruction(iter.Ins, rel); err != nil {
+					return nil, fmt.Errorf("offset %d in section %s: relocating instruction: %w", offset, sec.Name, err)
+				}
+			} else {
+				if err := referenceRelativeJump(iter.Ins, offset, sec.symbols); err != nil {
+					return nil, fmt.Errorf("offset %d in section %s: resolving relative jump: %w", offset, sec.Name, err)
+				}
+			}
+
+			assignMetadata(iter.Ins, raw, &fo, &lo, &ro)
+
+			raw += iter.Ins.Width()
+		}
+
+		// Emit the program's instructions.
+		progs[sym.Name] = insns
 	}
 
-	return splitSymbols(insns)
+	return progs, nil
 }
 
 // take pops and returns the first item in q if it matches the given predicate

@@ -550,12 +550,12 @@ func TestCORERelocation(t *testing.T) {
 			"err_ambiguous_flavour": errAmbiguousRelocation,
 		}
 
-		for section := range extInfos.funcInfos {
+		for section := range extInfos.Funcs {
 			name := strings.TrimPrefix(section, "socket/")
 			t.Run(name, func(t *testing.T) {
 				var relos []*CORERelocation
-				for _, reloInfo := range extInfos.relocationInfos[section].infos {
-					relos = append(relos, reloInfo.relo)
+				for _, reloInfo := range extInfos.CORERelos[section] {
+					relos = append(relos, reloInfo.Relo)
 				}
 
 				fixups, err := CORERelocate(relos, []*Spec{spec}, spec.byteOrder, spec.TypeID)

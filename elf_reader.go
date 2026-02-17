@@ -433,6 +433,12 @@ func (ec *elfCode) loadFunctions(section *elfSection) (map[string]asm.Instructio
 		return nil, fmt.Errorf("no instructions found in section %s", section.Name)
 	}
 
+	// Pull out ExtInfos once per section to avoid map lookups on every
+	// instruction.
+	fo := ec.extInfo.Funcs[section.Name]
+	lo := ec.extInfo.Lines[section.Name]
+	ro := ec.extInfo.CORERelos[section.Name]
+
 	iter := insns.Iterate()
 	for iter.Next() {
 		ins := iter.Ins
@@ -454,13 +460,46 @@ func (ec *elfCode) loadFunctions(section *elfSection) (map[string]asm.Instructio
 				return nil, fmt.Errorf("offset %d: resolving relative jump: %w", offset, err)
 			}
 		}
-	}
 
-	if ec.extInfo != nil {
-		ec.extInfo.Assign(insns, section.Name)
+		// Tag instructions with any ExtInfo metadata that's pointing at them.
+		assignMetadata(iter.Ins, iter.Offset, &fo, &lo, &ro)
 	}
 
 	return splitSymbols(insns)
+}
+
+// take pops and returns the first item in q if it matches the given predicate
+// f. Otherwise, it returns nil.
+func take[T any](q *[]T, f func(T) bool) *T {
+	if q == nil || len(*q) == 0 {
+		return nil
+	}
+
+	out := (*q)[0]
+	if f(out) {
+		*q = (*q)[1:]
+		return &out
+	}
+
+	return nil
+}
+
+// Tag the instruction with any ExtInfo metadata that's pointing at the given
+// raw instruction.
+func assignMetadata(ins *asm.Instruction, raw asm.RawInstructionOffset,
+	fo *btf.FuncOffsets, lo *btf.LineOffsets, ro *btf.CORERelocationOffsets) {
+
+	if f := take(fo, func(f btf.FuncOffset) bool { return f.Offset == raw }); f != nil {
+		*ins = btf.WithFuncMetadata(*ins, f.Func)
+	}
+
+	if l := take(lo, func(l btf.LineOffset) bool { return l.Offset == raw }); l != nil {
+		*ins = ins.WithSource(l.Line)
+	}
+
+	if r := take(ro, func(r btf.CORERelocationOffset) bool { return r.Offset == raw }); r != nil {
+		*ins = btf.WithCORERelocationMetadata(*ins, r.Relo)
+	}
 }
 
 // referenceRelativeJump turns a relative jump to another bpf subprogram within

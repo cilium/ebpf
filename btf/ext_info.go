@@ -21,6 +21,17 @@ type ExtInfos struct {
 	CORERelos map[string]CORERelocationOffsets
 }
 
+// Section returns the FuncOffsets, LineOffsets and CORERelocationOffsets for
+// the given section name. Returns all nils if ExtInfos is nil, or individual
+// nils if there is no metadata of that type for the section.
+func (ei *ExtInfos) Section(name string) (FuncOffsets, LineOffsets, CORERelocationOffsets) {
+	if ei == nil {
+		return nil, nil, nil
+	}
+
+	return ei.Funcs[name], ei.Lines[name], ei.CORERelos[name]
+}
+
 // loadExtInfosFromELF parses ext infos from the .BTF.ext section in an ELF.
 //
 // Returns an error wrapping ErrNotFound if no ext infos are present.

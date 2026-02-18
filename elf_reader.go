@@ -439,9 +439,7 @@ func (ec *elfCode) loadFunctions(sec *elfSection) (map[string]asm.Instructions, 
 
 	// Pull out ExtInfos once per section to avoid map lookups on every
 	// instruction.
-	fo := ec.extInfo.Funcs[sec.Name]
-	lo := ec.extInfo.Lines[sec.Name]
-	ro := ec.extInfo.CORERelos[sec.Name]
+	fo, lo, ro := ec.extInfo.Section(sec.Name)
 
 	// Raw instruction count since start of the section. ExtInfos point at raw
 	// insn offsets and ignore the gaps between symbols in case of linked objects.

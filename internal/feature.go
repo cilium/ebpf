@@ -12,6 +12,11 @@ import (
 // ErrNotSupported indicates that a feature is not supported.
 var ErrNotSupported = errors.New("not supported")
 
+// ErrNotPermitted indicates that an operation was denied by the kernel due to
+// insufficient permissions. This is distinct from ErrNotSupported: the feature
+// exists in the kernel but the caller lacks permission to use it.
+var ErrNotPermitted = errors.New("operation not permitted")
+
 // ErrNotSupportedOnOS indicates that a feature is not supported on the current
 // operating system.
 var ErrNotSupportedOnOS = fmt.Errorf("%w on %s", ErrNotSupported, runtime.GOOS)

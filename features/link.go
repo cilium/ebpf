@@ -2,6 +2,7 @@ package features
 
 import (
 	"errors"
+	"fmt"
 
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/asm"
@@ -51,6 +52,8 @@ var haveBPFLinkUprobeMulti = internal.NewFeatureTest("bpf_link_uprobe_multi", fu
 		return nil
 	case errors.Is(err, unix.EINVAL):
 		return ebpf.ErrNotSupported
+	case errors.Is(err, unix.EPERM):
+		return fmt.Errorf("%w: %w", ebpf.ErrNotPermitted, err)
 	case err != nil:
 		return err
 	}
@@ -99,6 +102,8 @@ var haveBPFLinkKprobeMulti = internal.NewFeatureTest("bpf_link_kprobe_multi", fu
 	// If CONFIG_FPROBE isn't set.
 	case errors.Is(err, unix.EOPNOTSUPP):
 		return ebpf.ErrNotSupported
+	case errors.Is(err, unix.EPERM):
+		return fmt.Errorf("%w: %w", ebpf.ErrNotPermitted, err)
 	case err != nil:
 		return err
 	}
@@ -147,6 +152,8 @@ var haveBPFLinkKprobeSession = internal.NewFeatureTest("bpf_link_kprobe_session"
 	// If CONFIG_FPROBE isn't set.
 	case errors.Is(err, unix.EOPNOTSUPP):
 		return ebpf.ErrNotSupported
+	case errors.Is(err, unix.EPERM):
+		return fmt.Errorf("%w: %w", ebpf.ErrNotPermitted, err)
 	case err != nil:
 		return err
 	}

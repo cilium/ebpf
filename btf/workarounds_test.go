@@ -54,7 +54,7 @@ func TestDatasecResolveWorkaround(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			h, err := NewHandle(b)
+			h, err := NewHandle(b, NotBPFTokenFd)
 			testutils.SkipIfNotSupportedOnOS(t, err)
 			var ve *internal.VerifierError
 			if errors.As(err, &ve) {
@@ -74,7 +74,7 @@ func TestEmptyBTFWithStringTableWorkaround(t *testing.T) {
 	_, err := b.addString("foo")
 	qt.Assert(t, qt.IsNil(err))
 
-	h, err := NewHandle(&b)
+	h, err := NewHandle(&b, NotBPFTokenFd)
 	testutils.SkipIfNotSupported(t, err)
 	qt.Assert(t, qt.IsNil(err))
 	qt.Assert(t, qt.IsNil(h.Close()))

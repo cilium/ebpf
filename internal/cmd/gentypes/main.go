@@ -682,6 +682,10 @@ import (
 				rename("target_fd", "target_fd_or_ifindex"),
 			},
 		},
+		{
+			"TokenCreate", retFd, "token_create", "BPF_TOKEN_CREATE",
+			nil,
+		},
 	}
 
 	sort.Slice(attrs, func(i, j int) bool {
@@ -712,6 +716,7 @@ import (
 		{"enable_stats", "enable_stats"},
 		{"iter_create", "iter_create"},
 		{"prog_bind_map", "prog_bind_map"},
+		{"token_create", "token_create"},
 	})
 	if err != nil {
 		return nil, fmt.Errorf("split bpf_attr: %w", err)

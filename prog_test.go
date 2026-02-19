@@ -662,6 +662,7 @@ func TestProgramSpecCopy(t *testing.T) {
 		"license",
 		1,
 		binary.LittleEndian,
+		nil,
 	}
 
 	qt.Check(t, qt.IsNil((*ProgramSpec)(nil).Copy()))

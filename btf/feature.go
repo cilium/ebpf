@@ -11,130 +11,147 @@ import (
 
 // haveBTF attempts to load a BTF blob containing an Int. It should pass on any
 // kernel that supports BPF_BTF_LOAD.
-var haveBTF = internal.NewFeatureTest("BTF", func() error {
-	// 0-length anonymous integer
-	err := probeBTF(&Int{})
-	if errors.Is(err, unix.EINVAL) || errors.Is(err, unix.EPERM) {
-		return internal.ErrNotSupported
-	}
-	return err
-}, "4.18")
+var haveBTF = internal.NewFeatureTest("BTF",
+	func(opts ...internal.FeatureTestOption) error {
+		// 0-length anonymous integer
+		o := internal.BuildOptions(opts...)
+
+		err := probeBTF(&Int{}, o.BpffsTokenFd)
+		if errors.Is(err, unix.EINVAL) || errors.Is(err, unix.EPERM) {
+			return internal.ErrNotSupported
+		}
+		return err
+	},
+	"4.18",
+)
 
 // haveMapBTF attempts to load a minimal BTF blob containing a Var. It is
 // used as a proxy for .bss, .data and .rodata map support, which generally
 // come with a Var and Datasec. These were introduced in Linux 5.2.
-var haveMapBTF = internal.NewFeatureTest("Map BTF (Var/Datasec)", func() error {
-	if err := haveBTF(); err != nil {
+var haveMapBTF = internal.NewFeatureTest("Map BTF (Var/Datasec)",
+	func(opts ...internal.FeatureTestOption) error {
+		if err := haveBTF(opts...); err != nil {
+			return err
+		}
+
+		v := &Var{
+			Name: "a",
+			Type: &Pointer{(*Void)(nil)},
+		}
+
+		o := internal.BuildOptions(opts...)
+		err := probeBTF(v, o.BpffsTokenFd)
+		if errors.Is(err, unix.EINVAL) || errors.Is(err, unix.EPERM) {
+			// Treat both EINVAL and EPERM as not supported: creating the map may still
+			// succeed without Btf* attrs.
+			return internal.ErrNotSupported
+		}
 		return err
-	}
-
-	v := &Var{
-		Name: "a",
-		Type: &Pointer{(*Void)(nil)},
-	}
-
-	err := probeBTF(v)
-	if errors.Is(err, unix.EINVAL) || errors.Is(err, unix.EPERM) {
-		// Treat both EINVAL and EPERM as not supported: creating the map may still
-		// succeed without Btf* attrs.
-		return internal.ErrNotSupported
-	}
-	return err
-}, "5.2")
+	}, "5.2")
 
 // haveProgBTF attempts to load a BTF blob containing a Func and FuncProto. It
 // is used as a proxy for ext_info (func_info) support, which depends on
 // Func(Proto) by definition.
-var haveProgBTF = internal.NewFeatureTest("Program BTF (func/line_info)", func() error {
-	if err := haveBTF(); err != nil {
+var haveProgBTF = internal.NewFeatureTest("Program BTF (func/line_info)",
+	func(opts ...internal.FeatureTestOption) error {
+		if err := haveBTF(opts...); err != nil {
+			return err
+		}
+
+		fn := &Func{
+			Name: "a",
+			Type: &FuncProto{Return: (*Void)(nil)},
+		}
+
+		o := internal.BuildOptions(opts...)
+		err := probeBTF(fn, o.BpffsTokenFd)
+		if errors.Is(err, unix.EINVAL) || errors.Is(err, unix.EPERM) {
+			return internal.ErrNotSupported
+		}
 		return err
-	}
+	}, "5.0")
 
-	fn := &Func{
-		Name: "a",
-		Type: &FuncProto{Return: (*Void)(nil)},
-	}
+var haveFuncLinkage = internal.NewFeatureTest("BTF func linkage",
+	func(opts ...internal.FeatureTestOption) error {
+		if err := haveProgBTF(opts...); err != nil {
+			return err
+		}
 
-	err := probeBTF(fn)
-	if errors.Is(err, unix.EINVAL) || errors.Is(err, unix.EPERM) {
-		return internal.ErrNotSupported
-	}
-	return err
-}, "5.0")
+		fn := &Func{
+			Name:    "a",
+			Type:    &FuncProto{Return: (*Void)(nil)},
+			Linkage: GlobalFunc,
+		}
 
-var haveFuncLinkage = internal.NewFeatureTest("BTF func linkage", func() error {
-	if err := haveProgBTF(); err != nil {
+		o := internal.BuildOptions(opts...)
+		err := probeBTF(fn, o.BpffsTokenFd)
+		if errors.Is(err, unix.EINVAL) {
+			return internal.ErrNotSupported
+		}
 		return err
-	}
+	}, "5.6")
 
-	fn := &Func{
-		Name:    "a",
-		Type:    &FuncProto{Return: (*Void)(nil)},
-		Linkage: GlobalFunc,
-	}
+var haveDeclTags = internal.NewFeatureTest("BTF decl tags",
+	func(opts ...internal.FeatureTestOption) error {
+		if err := haveBTF(opts...); err != nil {
+			return err
+		}
 
-	err := probeBTF(fn)
-	if errors.Is(err, unix.EINVAL) {
-		return internal.ErrNotSupported
-	}
-	return err
-}, "5.6")
+		t := &Typedef{
+			Name: "a",
+			Type: &Int{},
+			Tags: []string{"a"},
+		}
 
-var haveDeclTags = internal.NewFeatureTest("BTF decl tags", func() error {
-	if err := haveBTF(); err != nil {
+		o := internal.BuildOptions(opts...)
+		err := probeBTF(t, o.BpffsTokenFd)
+		if errors.Is(err, unix.EINVAL) {
+			return internal.ErrNotSupported
+		}
 		return err
-	}
+	}, "5.16")
 
-	t := &Typedef{
-		Name: "a",
-		Type: &Int{},
-		Tags: []string{"a"},
-	}
+var haveTypeTags = internal.NewFeatureTest("BTF type tags",
+	func(opts ...internal.FeatureTestOption) error {
+		if err := haveBTF(opts...); err != nil {
+			return err
+		}
 
-	err := probeBTF(t)
-	if errors.Is(err, unix.EINVAL) {
-		return internal.ErrNotSupported
-	}
-	return err
-}, "5.16")
+		t := &TypeTag{
+			Type:  &Int{},
+			Value: "a",
+		}
 
-var haveTypeTags = internal.NewFeatureTest("BTF type tags", func() error {
-	if err := haveBTF(); err != nil {
+		o := internal.BuildOptions(opts...)
+		err := probeBTF(t, o.BpffsTokenFd)
+		if errors.Is(err, unix.EINVAL) {
+			return internal.ErrNotSupported
+		}
 		return err
-	}
+	}, "5.17")
 
-	t := &TypeTag{
-		Type:  &Int{},
-		Value: "a",
-	}
+var haveEnum64 = internal.NewFeatureTest("ENUM64",
+	func(opts ...internal.FeatureTestOption) error {
+		if err := haveBTF(opts...); err != nil {
+			return err
+		}
 
-	err := probeBTF(t)
-	if errors.Is(err, unix.EINVAL) {
-		return internal.ErrNotSupported
-	}
-	return err
-}, "5.17")
+		enum := &Enum{
+			Size: 8,
+			Values: []EnumValue{
+				{"TEST", math.MaxUint32 + 1},
+			},
+		}
 
-var haveEnum64 = internal.NewFeatureTest("ENUM64", func() error {
-	if err := haveBTF(); err != nil {
+		o := internal.BuildOptions(opts...)
+		err := probeBTF(enum, o.BpffsTokenFd)
+		if errors.Is(err, unix.EINVAL) {
+			return internal.ErrNotSupported
+		}
 		return err
-	}
+	}, "6.0")
 
-	enum := &Enum{
-		Size: 8,
-		Values: []EnumValue{
-			{"TEST", math.MaxUint32 + 1},
-		},
-	}
-
-	err := probeBTF(enum)
-	if errors.Is(err, unix.EINVAL) {
-		return internal.ErrNotSupported
-	}
-	return err
-}, "6.0")
-
-func probeBTF(typ Type) error {
+func probeBTF(typ Type, tokenFd int32) error {
 	b, err := NewBuilder([]Type{typ})
 	if err != nil {
 		return err
@@ -145,11 +162,17 @@ func probeBTF(typ Type) error {
 		return err
 	}
 
-	fd, err := sys.BtfLoad(&sys.BtfLoadAttr{
+	attr := &sys.BtfLoadAttr{
 		Btf:     sys.SlicePointer(buf),
 		BtfSize: uint32(len(buf)),
-	})
+	}
 
+	if tokenFd > 0 {
+		attr.BtfTokenFd = tokenFd
+		attr.BtfFlags |= sys.BPF_F_TOKEN_FD
+	}
+
+	fd, err := sys.BtfLoad(attr)
 	if err == nil {
 		fd.Close()
 	}

@@ -7,13 +7,13 @@ import (
 )
 
 func TestHaveBPFLinkUprobeMulti(t *testing.T) {
-	testutils.CheckFeatureTest(t, HaveBPFLinkUprobeMulti)
+	testutils.CheckFeatureTest(t, haveBPFLinkUprobeMulti)
 }
 
 func TestHaveBPFLinkKprobeMulti(t *testing.T) {
-	testutils.CheckFeatureTest(t, HaveBPFLinkKprobeMulti)
+	testutils.CheckFeatureTest(t, haveBPFLinkKprobeMulti)
 }
 
 func TestHaveBPFLinkKprobeSession(t *testing.T) {
-	testutils.CheckFeatureTest(t, HaveBPFLinkKprobeSession)
+	testutils.CheckFeatureTest(t, haveBPFLinkKprobeSession)
 }

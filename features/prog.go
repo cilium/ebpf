@@ -67,7 +67,7 @@ var haveProgramTypeMatrix = internal.FeatureMatrix[ebpf.ProgramType]{
 	ebpf.RawTracepoint: {Version: "4.17"},
 	ebpf.CGroupSockAddr: {
 		Version: "4.17",
-		Fn: func() error {
+		Fn: func(...internal.FeatureTestOption) error {
 			return probeProgram(&ebpf.ProgramSpec{
 				Type:       ebpf.CGroupSockAddr,
 				AttachType: ebpf.AttachCGroupInet4Connect,
@@ -82,7 +82,7 @@ var haveProgramTypeMatrix = internal.FeatureMatrix[ebpf.ProgramType]{
 	ebpf.RawTracepointWritable: {Version: "5.2"},
 	ebpf.CGroupSockopt: {
 		Version: "5.3",
-		Fn: func() error {
+		Fn: func(...internal.FeatureTestOption) error {
 			return probeProgram(&ebpf.ProgramSpec{
 				Type:       ebpf.CGroupSockopt,
 				AttachType: ebpf.AttachCGroupGetsockopt,
@@ -91,7 +91,7 @@ var haveProgramTypeMatrix = internal.FeatureMatrix[ebpf.ProgramType]{
 	},
 	ebpf.Tracing: {
 		Version: "5.5",
-		Fn: func() error {
+		Fn: func(...internal.FeatureTestOption) error {
 			return probeProgram(&ebpf.ProgramSpec{
 				Type:       ebpf.Tracing,
 				AttachType: ebpf.AttachTraceFEntry,
@@ -101,7 +101,7 @@ var haveProgramTypeMatrix = internal.FeatureMatrix[ebpf.ProgramType]{
 	},
 	ebpf.StructOps: {
 		Version: "5.6",
-		Fn: func() error {
+		Fn: func(...internal.FeatureTestOption) error {
 			err := probeProgram(&ebpf.ProgramSpec{
 				Type:    ebpf.StructOps,
 				License: "GPL",
@@ -115,7 +115,7 @@ var haveProgramTypeMatrix = internal.FeatureMatrix[ebpf.ProgramType]{
 	},
 	ebpf.Extension: {
 		Version: "5.6",
-		Fn: func() error {
+		Fn: func(...internal.FeatureTestOption) error {
 			// create btf.Func to add to first ins of target and extension so both progs are btf powered
 			btfFn := btf.Func{
 				Name: "a",
@@ -158,7 +158,7 @@ var haveProgramTypeMatrix = internal.FeatureMatrix[ebpf.ProgramType]{
 	},
 	ebpf.LSM: {
 		Version: "5.7",
-		Fn: func() error {
+		Fn: func(...internal.FeatureTestOption) error {
 			return probeProgram(&ebpf.ProgramSpec{
 				Type:       ebpf.LSM,
 				AttachType: ebpf.AttachLSMMac,
@@ -169,7 +169,7 @@ var haveProgramTypeMatrix = internal.FeatureMatrix[ebpf.ProgramType]{
 	},
 	ebpf.SkLookup: {
 		Version: "5.9",
-		Fn: func() error {
+		Fn: func(...internal.FeatureTestOption) error {
 			return probeProgram(&ebpf.ProgramSpec{
 				Type:       ebpf.SkLookup,
 				AttachType: ebpf.AttachSkLookup,
@@ -178,7 +178,7 @@ var haveProgramTypeMatrix = internal.FeatureMatrix[ebpf.ProgramType]{
 	},
 	ebpf.Syscall: {
 		Version: "5.14",
-		Fn: func() error {
+		Fn: func(...internal.FeatureTestOption) error {
 			return probeProgram(&ebpf.ProgramSpec{
 				Type:  ebpf.Syscall,
 				Flags: sys.BPF_F_SLEEPABLE,
@@ -187,7 +187,7 @@ var haveProgramTypeMatrix = internal.FeatureMatrix[ebpf.ProgramType]{
 	},
 	ebpf.Netfilter: {
 		Version: "6.4",
-		Fn: func() error {
+		Fn: func(...internal.FeatureTestOption) error {
 			return probeProgram(&ebpf.ProgramSpec{
 				Type:       ebpf.Netfilter,
 				AttachType: ebpf.AttachNetfilter,
@@ -201,7 +201,7 @@ func init() {
 		ft.Name = key.String()
 		if ft.Fn == nil {
 			key := key // avoid the dreaded loop variable problem
-			ft.Fn = func() error { return probeProgram(&ebpf.ProgramSpec{Type: key}) }
+			ft.Fn = func(...internal.FeatureTestOption) error { return probeProgram(&ebpf.ProgramSpec{Type: key}) }
 		}
 	}
 }
@@ -214,7 +214,7 @@ type helperKey struct {
 var helperCache = internal.NewFeatureCache(func(key helperKey) *internal.FeatureTest {
 	return &internal.FeatureTest{
 		Name: fmt.Sprintf("%s for program type %s", key.helper, key.typ),
-		Fn: func() error {
+		Fn: func(...internal.FeatureTestOption) error {
 			return haveProgramHelper(key.typ, key.helper)
 		},
 	}

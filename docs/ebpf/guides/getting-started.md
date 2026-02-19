@@ -28,7 +28,8 @@ more.
     Use `clang --version` to check which version of LLVM you have installed.
     Refer to your distribution's package index to finding the right packages to
     install, as this tends to vary wildly across distributions. Some
-    distributions ship `clang` and `llvm-strip` in separate packages.
+    distributions ship `clang` and `llvm-strip` in separate packages
+    (and `llvm-strip` would be included in `llvm` pacakge).
 
 [^2]:
     For Debian/Ubuntu, you'll typically need `libbpf-dev`. On Fedora, it's
@@ -213,6 +214,14 @@ standard library here.
 1. Associate the `count_packets` (stylized in the Go scaffolding as
    `CountPackets`) eBPF program with `eth0`. This returns a {{
    godoc('link/Link') }} abstraction.
+
+   Note: On virtualized environments or network interfaces whose drivers do not
+   support native XDP, attaching may fail with "operation not supported".
+   In such cases, you can use generic mode instead:
+
+       Flags: link.XDPGenericMode
+
+   Generic mode has lower performance but works on a wider range of interfaces.
 
 1. Close the file descriptor of the Program-to-interface association. Note that
    this will stop the Program from executing on incoming packets if the Link was

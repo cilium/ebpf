@@ -19,7 +19,7 @@ more.
     To follow along with the example, you'll need:
 
     * Linux kernel version 5.7 or later, for bpf_link support
-    * LLVM 11 or later [^1] (`clang` and `llvm`)
+    * LLVM 11 or later [^1] (`clang` and `llvm-strip`)
     * libbpf headers [^2]
     * Linux kernel headers [^3]
     * Go compiler version supported by {{ proj }}'s Go module
@@ -28,7 +28,8 @@ more.
     Use `clang --version` to check which version of LLVM you have installed.
     Refer to your distribution's package index to finding the right packages to
     install, as this tends to vary wildly across distributions. Some
-    distributions ship `clang` and `llvm` in separate packages.
+    distributions ship `clang` and `llvm-strip` in separate packages
+    (and `llvm-strip` would be included in `llvm` pacakge).
 
 [^2]:
     For Debian/Ubuntu, you'll typically need `libbpf-dev`. On Fedora, it's

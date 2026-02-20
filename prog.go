@@ -19,6 +19,7 @@ import (
 	"github.com/cilium/ebpf/internal/platform"
 	"github.com/cilium/ebpf/internal/sys"
 	"github.com/cilium/ebpf/internal/sysenc"
+	"github.com/cilium/ebpf/internal/token"
 	"github.com/cilium/ebpf/internal/unix"
 )
 
@@ -465,6 +466,20 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions, c *btf.Cache)
 		return nil, fmt.Errorf("log level: %w", internal.ErrNotSupportedOnOS)
 	}
 
+	var tok *token.Token
+	if platform.IsLinux {
+		tok, err = token.Create()
+		if err != nil && !errors.Is(err, token.ErrTokenNotAvailable) {
+			return nil, fmt.Errorf("get BPF token: %w", err)
+		}
+
+		if tok != nil {
+			defer tok.Close()
+			attr.ProgTokenFd = int32(tok.Int())
+			attr.ProgFlags |= sys.BPF_F_TOKEN_FD
+		}
+	}
+
 	var logBuf []byte
 	var fd *sys.FD
 	if opts.LogDisabled {
@@ -514,6 +529,19 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions, c *btf.Cache)
 	switch {
 	case errors.Is(err, unix.EPERM):
 		if len(logBuf) > 0 && logBuf[0] == 0 {
+			// When a token was used, check if the failure could have been caused by missing permissions on the token.
+			if tok != nil {
+				if !slices.Contains(tok.Mount.Cmds, sys.BPF_PROG_LOAD) {
+					return nil, fmt.Errorf("load program: %w (BPF token does not allow BPF command BPF_PROG_LOAD)", err)
+				}
+				if !slices.Contains(tok.Mount.Progs, attr.ProgType) {
+					return nil, fmt.Errorf("load program: %w (BPF token does not allow BPF program type %s)", err, ProgramType(attr.ProgType))
+				}
+				if !slices.Contains(tok.Mount.AttachTypes, attr.ExpectedAttachType) {
+					return nil, fmt.Errorf("load program: %w (BPF token does not allow BPF attach type %s)", err, AttachType(attr.ExpectedAttachType))
+				}
+			}
+
 			// EPERM due to RLIMIT_MEMLOCK happens before the verifier, so we can
 			// check that the log is empty to reduce false positives.
 			return nil, fmt.Errorf("load program: %w (MEMLOCK may be too low, consider rlimit.RemoveMemlock)", err)

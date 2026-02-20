@@ -14,6 +14,7 @@ import (
 	"github.com/cilium/ebpf/internal/linux"
 	"github.com/cilium/ebpf/internal/platform"
 	"github.com/cilium/ebpf/internal/sys"
+	"github.com/cilium/ebpf/internal/token"
 	"github.com/cilium/ebpf/internal/tracefs"
 	"github.com/cilium/ebpf/internal/unix"
 )
@@ -71,12 +72,44 @@ func progLoad(insns asm.Instructions, typ ProgramType, license string) (*sys.FD,
 	}
 	bytecode := buf.Bytes()
 
-	return sys.ProgLoad(&sys.ProgLoadAttr{
+	attr := &sys.ProgLoadAttr{
 		ProgType: sys.ProgType(typ),
 		License:  sys.NewStringPointer(license),
 		Insns:    sys.SlicePointer(bytecode),
 		InsnCnt:  uint32(len(bytecode) / asm.InstructionSize),
-	})
+	}
+
+	if platform.IsLinux {
+		tok, err := token.Create()
+		if err != nil && !errors.Is(err, token.ErrTokenNotAvailable) {
+			return nil, fmt.Errorf("get BPF token: %w", err)
+		}
+
+		if tok != nil {
+			defer tok.Close()
+			attr.ProgTokenFd = int32(tok.Int())
+			attr.ProgFlags |= sys.BPF_F_TOKEN_FD
+		}
+	}
+
+	return sys.ProgLoad(attr)
+}
+
+func mapLoad(attr *sys.MapCreateAttr) (*sys.FD, error) {
+	if platform.IsLinux {
+		tok, err := token.Create()
+		if err != nil && !errors.Is(err, token.ErrTokenNotAvailable) {
+			return nil, fmt.Errorf("get BPF token: %w", err)
+		}
+
+		if tok != nil {
+			defer tok.Close()
+			attr.MapTokenFd = int32(tok.Int())
+			attr.MapFlags |= sys.BPF_F_TOKEN_FD
+		}
+	}
+
+	return sys.MapCreate(attr)
 }
 
 var haveNestedMaps = internal.NewFeatureTest("nested maps", func() error {
@@ -85,7 +118,7 @@ var haveNestedMaps = internal.NewFeatureTest("nested maps", func() error {
 		return nil
 	}
 
-	_, err := sys.MapCreate(&sys.MapCreateAttr{
+	_, err := mapLoad(&sys.MapCreateAttr{
 		MapType:    sys.MapType(ArrayOfMaps),
 		KeySize:    4,
 		ValueSize:  4,
@@ -105,7 +138,7 @@ var haveNestedMaps = internal.NewFeatureTest("nested maps", func() error {
 var haveMapMutabilityModifiers = internal.NewFeatureTest("read- and write-only maps", func() error {
 	// This checks BPF_F_RDONLY_PROG and BPF_F_WRONLY_PROG. Since
 	// BPF_MAP_FREEZE appeared in 5.2 as well we don't do a separate check.
-	m, err := sys.MapCreate(&sys.MapCreateAttr{
+	m, err := mapLoad(&sys.MapCreateAttr{
 		MapType:    sys.MapType(Array),
 		KeySize:    4,
 		ValueSize:  4,
@@ -121,7 +154,7 @@ var haveMapMutabilityModifiers = internal.NewFeatureTest("read- and write-only m
 
 var haveMmapableMaps = internal.NewFeatureTest("mmapable maps", func() error {
 	// This checks BPF_F_MMAPABLE, which appeared in 5.5 for array maps.
-	m, err := sys.MapCreate(&sys.MapCreateAttr{
+	m, err := mapLoad(&sys.MapCreateAttr{
 		MapType:    sys.MapType(Array),
 		KeySize:    4,
 		ValueSize:  4,
@@ -137,7 +170,7 @@ var haveMmapableMaps = internal.NewFeatureTest("mmapable maps", func() error {
 
 var haveInnerMaps = internal.NewFeatureTest("inner maps", func() error {
 	// This checks BPF_F_INNER_MAP, which appeared in 5.10.
-	m, err := sys.MapCreate(&sys.MapCreateAttr{
+	m, err := mapLoad(&sys.MapCreateAttr{
 		MapType:    sys.MapType(Array),
 		KeySize:    4,
 		ValueSize:  4,
@@ -154,14 +187,13 @@ var haveInnerMaps = internal.NewFeatureTest("inner maps", func() error {
 
 var haveNoPreallocMaps = internal.NewFeatureTest("prealloc maps", func() error {
 	// This checks BPF_F_NO_PREALLOC, which appeared in 4.6.
-	m, err := sys.MapCreate(&sys.MapCreateAttr{
+	m, err := mapLoad(&sys.MapCreateAttr{
 		MapType:    sys.MapType(Hash),
 		KeySize:    4,
 		ValueSize:  4,
 		MaxEntries: 1,
 		MapFlags:   sys.BPF_F_NO_PREALLOC,
 	})
-
 	if err != nil {
 		return internal.ErrNotSupported
 	}
@@ -207,7 +239,7 @@ var haveObjName = internal.NewFeatureTest("object names", func() error {
 		MapName:    sys.NewObjName("feature_test"),
 	}
 
-	fd, err := sys.MapCreate(&attr)
+	fd, err := mapLoad(&attr)
 	if err != nil {
 		return internal.ErrNotSupported
 	}
@@ -234,7 +266,7 @@ var objNameAllowsDot = internal.NewFeatureTest("dot in object names", func() err
 		MapName:    sys.NewObjName(".test"),
 	}
 
-	fd, err := sys.MapCreate(&attr)
+	fd, err := mapLoad(&attr)
 	if err != nil {
 		return internal.ErrNotSupported
 	}
@@ -252,7 +284,7 @@ var haveBatchAPI = internal.NewFeatureTest("map batch api", func() error {
 		MaxEntries: maxEntries,
 	}
 
-	fd, err := sys.MapCreate(&attr)
+	fd, err := mapLoad(&attr)
 	if err != nil {
 		return internal.ErrNotSupported
 	}
@@ -350,14 +382,29 @@ var haveProgramExtInfos = internal.NewFeatureTest("program ext_infos", func() er
 	}
 	bytecode := buf.Bytes()
 
-	_, err := sys.ProgLoad(&sys.ProgLoadAttr{
+	attr := &sys.ProgLoadAttr{
 		ProgType:    sys.ProgType(SocketFilter),
 		License:     sys.NewStringPointer("MIT"),
 		Insns:       sys.SlicePointer(bytecode),
 		InsnCnt:     uint32(len(bytecode) / asm.InstructionSize),
 		FuncInfoCnt: 1,
 		ProgBtfFd:   math.MaxUint32,
-	})
+	}
+
+	if platform.IsLinux {
+		tok, err := token.Create()
+		if err != nil && !errors.Is(err, token.ErrTokenNotAvailable) {
+			return fmt.Errorf("get BPF token: %w", err)
+		}
+
+		if tok != nil {
+			defer tok.Close()
+			attr.ProgTokenFd = int32(tok.Int())
+			attr.ProgFlags |= sys.BPF_F_TOKEN_FD
+		}
+	}
+
+	_, err := sys.ProgLoad(attr)
 
 	if errors.Is(err, unix.EBADF) {
 		return nil

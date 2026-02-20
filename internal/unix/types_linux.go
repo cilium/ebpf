@@ -33,6 +33,7 @@ const (
 	EPOLL_CTL_ADD             = linux.EPOLL_CTL_ADD
 	EPOLL_CLOEXEC             = linux.EPOLL_CLOEXEC
 	O_RDONLY                  = linux.O_RDONLY
+	O_DIRECTORY               = linux.O_DIRECTORY
 	O_CLOEXEC                 = linux.O_CLOEXEC
 	O_NONBLOCK                = linux.O_NONBLOCK
 	PROT_NONE                 = linux.PROT_NONE
@@ -75,6 +76,11 @@ const (
 	AF_UNSPEC                 = linux.AF_UNSPEC
 	IFF_UP                    = linux.IFF_UP
 	CLONE_NEWNET              = linux.CLONE_NEWNET
+	CLONE_NEWUSER             = linux.CLONE_NEWUSER
+	CLONE_NEWNS               = linux.CLONE_NEWNS
+	MOVE_MOUNT_F_EMPTY_PATH   = linux.MOVE_MOUNT_F_EMPTY_PATH
+	AF_UNIX                   = linux.AF_UNIX
+	SOCK_STREAM               = linux.SOCK_STREAM
 )
 
 type Statfs_t = linux.Statfs_t
@@ -87,6 +93,7 @@ type EpollEvent = linux.EpollEvent
 type PerfEventAttr = linux.PerfEventAttr
 type Utsname = linux.Utsname
 type CPUSet = linux.CPUSet
+type SysProcAttr = linux.SysProcAttr
 
 func Syscall(trap, a1, a2, a3 uintptr) (r1, r2 uintptr, err syscall.Errno) {
 	return linux.Syscall(trap, a1, a2, a3)
@@ -219,4 +226,52 @@ func Unshare(flag int) error {
 
 func Setns(fd int, nstype int) error {
 	return linux.Setns(fd, nstype)
+}
+
+func Sendmsg(fd int, p []byte, oob []byte, to linux.Sockaddr, flags int) (err error) {
+	return linux.Sendmsg(fd, p, oob, to, flags)
+}
+
+func Fsopen(fsname string, flags int) (fd int, err error) {
+	return linux.Fsopen(fsname, flags)
+}
+
+func FsconfigSetString(fd int, key string, value string) error {
+	return linux.FsconfigSetString(fd, key, value)
+}
+
+func FsconfigCreate(fd int) (err error) {
+	return linux.FsconfigCreate(fd)
+}
+
+func Fsmount(fd int, flags int, mountAttrs int) (fsfd int, err error) {
+	return linux.Fsmount(fd, flags, mountAttrs)
+}
+
+func MoveMount(fromDirfd int, fromPathName string, toDirfd int, toPathName string, flags int) (err error) {
+	return linux.MoveMount(fromDirfd, fromPathName, toDirfd, toPathName, flags)
+}
+
+func UnixRights(fds ...int) []byte {
+	return linux.UnixRights(fds...)
+}
+
+func Recvmsg(fd int, p []byte, oob []byte, flags int) (n int, oobn int, recvflags int, from linux.Sockaddr, err error) {
+	return linux.Recvmsg(fd, p, oob, flags)
+}
+
+func Socketpair(domain int, typ int, proto int) (fd [2]int, err error) {
+	return linux.Socketpair(domain, typ, proto)
+}
+
+func CmsgSpace(datalen int) int {
+	return linux.CmsgSpace(datalen)
+}
+
+func ParseSocketControlMessage(b []byte) ([]linux.SocketControlMessage, error) {
+	return linux.ParseSocketControlMessage(b)
+}
+
+func ParseUnixRights(m *linux.SocketControlMessage) ([]int, error) {
+	return linux.ParseUnixRights(m)
 }

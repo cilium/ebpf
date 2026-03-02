@@ -14,5 +14,5 @@ mkdocs-git-authors-plugin = "*"
 [dev-packages]
 
 [requires]
-# Whatever Netlify's Ubuntu version uses.
-python_version = "3.13"
+# Match Python version in netlify.toml
+python_version = "3.14"

@@ -350,7 +350,7 @@ func minimalProgramInfoFromFd(fd *sys.FD) (*ProgramInfo, error) {
 // information from /proc/self/fdinfo. Ignores EINVAL from ObjInfo as well as
 // ErrNotSupported from reading fdinfo (indicating the file exists, but no
 // fields of interest were found). If both fail, an error is always returned.
-func newProgramInfoFromFd(fd *sys.FD) (*ProgramInfo, error) {
+func newProgramInfoFromFd(fd *sys.FD, tokenFd int32) (*ProgramInfo, error) {
 	var info sys.ProgInfo
 	err1 := sys.ObjInfo(fd, &info)
 	// EINVAL means the kernel doesn't support BPF_OBJ_GET_INFO_BY_FD. Continue
@@ -402,7 +402,7 @@ func newProgramInfoFromFd(fd *sys.FD) (*ProgramInfo, error) {
 		info2.NrMapIds = info.NrMapIds
 		info2.MapIds = sys.SlicePointer(pi.maps)
 		makeSecondCall = true
-	} else if haveProgramInfoMapIDs() == nil {
+	} else if haveProgramInfoMapIDs(internal.WithToken(tokenFd)) == nil {
 		// This program really has no associated maps.
 		pi.maps = make([]MapID, 0)
 	} else {
@@ -976,16 +976,17 @@ func EnableStats(which uint32) (io.Closer, error) {
 	return fd, nil
 }
 
-var haveProgramInfoMapIDs = internal.NewFeatureTest("map IDs in program info", func() error {
+var haveProgramInfoMapIDs = internal.NewFeatureTest("map IDs in program info", func(opts ...internal.FeatureTestOption) error {
 	if platform.IsWindows {
 		// We only support efW versions which have this feature, no need to probe.
 		return nil
 	}
 
+	tokenFd := internal.BuildOptions(opts...).BpffsTokenFd
 	prog, err := progLoad(asm.Instructions{
 		asm.LoadImm(asm.R0, 0, asm.DWord),
 		asm.Return(),
-	}, SocketFilter, "MIT")
+	}, SocketFilter, "MIT", tokenFd)
 	if err != nil {
 		return err
 	}

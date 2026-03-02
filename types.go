@@ -364,6 +364,8 @@ type LoadPinOptions struct {
 
 	// Raw flags for the syscall. Other fields of this struct take precedence.
 	Flags uint32
+
+	BpffsTokenFd *sys.FD
 }
 
 // Marshal returns a value suitable for BPF_OBJ_GET syscall file_flags parameter.

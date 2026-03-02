@@ -12,7 +12,7 @@ import (
 	"github.com/cilium/ebpf/internal/unix"
 )
 
-var haveProgAttach = internal.NewFeatureTest("BPF_PROG_ATTACH", func() error {
+var haveProgAttach = internal.NewFeatureTest("BPF_PROG_ATTACH", func(...internal.FeatureTestOption) error {
 	prog, err := ebpf.NewProgram(&ebpf.ProgramSpec{
 		Type:    ebpf.CGroupSKB,
 		License: "MIT",
@@ -32,7 +32,7 @@ var haveProgAttach = internal.NewFeatureTest("BPF_PROG_ATTACH", func() error {
 	return nil
 }, "4.10")
 
-var haveProgAttachReplace = internal.NewFeatureTest("BPF_PROG_ATTACH atomic replacement of MULTI progs", func() error {
+var haveProgAttachReplace = internal.NewFeatureTest("BPF_PROG_ATTACH atomic replacement of MULTI progs", func(...internal.FeatureTestOption) error {
 	if err := haveProgAttach(); err != nil {
 		return err
 	}
@@ -74,7 +74,7 @@ var haveProgAttachReplace = internal.NewFeatureTest("BPF_PROG_ATTACH atomic repl
 	return err
 }, "5.5")
 
-var haveBPFLink = internal.NewFeatureTest("bpf_link", func() error {
+var haveBPFLink = internal.NewFeatureTest("bpf_link", func(...internal.FeatureTestOption) error {
 	attr := sys.LinkCreateAttr{
 		// This is a hopefully invalid file descriptor, which triggers EBADF.
 		TargetFd:   ^uint32(0),
@@ -91,7 +91,7 @@ var haveBPFLink = internal.NewFeatureTest("bpf_link", func() error {
 	return err
 }, "5.7")
 
-var haveProgQuery = internal.NewFeatureTest("BPF_PROG_QUERY", func() error {
+var haveProgQuery = internal.NewFeatureTest("BPF_PROG_QUERY", func(...internal.FeatureTestOption) error {
 	attr := sys.ProgQueryAttr{
 		// We rely on this being checked during the syscall.
 		// With an otherwise correct payload we expect EBADF here
@@ -111,7 +111,7 @@ var haveProgQuery = internal.NewFeatureTest("BPF_PROG_QUERY", func() error {
 	return errors.New("syscall succeeded unexpectedly")
 }, "4.15")
 
-var haveTCX = internal.NewFeatureTest("tcx", func() error {
+var haveTCX = internal.NewFeatureTest("tcx", func(...internal.FeatureTestOption) error {
 	prog, err := ebpf.NewProgram(&ebpf.ProgramSpec{
 		Type:    ebpf.SchedCLS,
 		License: "MIT",
@@ -146,7 +146,7 @@ var haveTCX = internal.NewFeatureTest("tcx", func() error {
 	return errors.New("syscall succeeded unexpectedly")
 }, "6.6")
 
-var haveNetkit = internal.NewFeatureTest("netkit", func() error {
+var haveNetkit = internal.NewFeatureTest("netkit", func(...internal.FeatureTestOption) error {
 	prog, err := ebpf.NewProgram(&ebpf.ProgramSpec{
 		Type:    ebpf.SchedCLS,
 		License: "MIT",

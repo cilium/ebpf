@@ -25,22 +25,22 @@ type Handle struct {
 // NewHandle loads the contents of a [Builder] into the kernel.
 //
 // Returns an error wrapping ErrNotSupported if the kernel doesn't support BTF.
-func NewHandle(b *Builder) (*Handle, error) {
+func NewHandle(b *Builder, tokenFd int32) (*Handle, error) {
 	small := getByteSlice()
 	defer putByteSlice(small)
 
-	buf, err := b.Marshal(*small, KernelMarshalOptions())
+	buf, err := b.Marshal(*small, KernelMarshalOptions(tokenFd))
 	if err != nil {
 		return nil, fmt.Errorf("marshal BTF: %w", err)
 	}
 
-	return NewHandleFromRawBTF(buf)
+	return NewHandleFromRawBTF(buf, tokenFd)
 }
 
 // NewHandleFromRawBTF loads raw BTF into the kernel.
 //
 // Returns an error wrapping ErrNotSupported if the kernel doesn't support BTF.
-func NewHandleFromRawBTF(btf []byte) (*Handle, error) {
+func NewHandleFromRawBTF(btf []byte, tokenFd int32) (*Handle, error) {
 	const minLogSize = 64 * 1024
 
 	if platform.IsWindows {
@@ -54,6 +54,11 @@ func NewHandleFromRawBTF(btf []byte) (*Handle, error) {
 	attr := &sys.BtfLoadAttr{
 		Btf:     sys.SlicePointer(btf),
 		BtfSize: uint32(len(btf)),
+	}
+
+	if tokenFd > 0 {
+		attr.BtfTokenFd = tokenFd
+		attr.BtfFlags |= sys.BPF_F_TOKEN_FD
 	}
 
 	var (
@@ -99,7 +104,7 @@ func NewHandleFromRawBTF(btf []byte) (*Handle, error) {
 		attr.BtfLogLevel = 1
 	}
 
-	if err := haveBTF(); err != nil {
+	if err := haveBTF(internal.WithToken(tokenFd)); err != nil {
 		return nil, err
 	}
 

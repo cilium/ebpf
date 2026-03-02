@@ -94,6 +94,8 @@ type MapSpec struct {
 	//
 	// Decorate a map definition with `__attribute__((btf_decl_tag("foo")))`.
 	Tags []string
+
+	BpffsTokenFd *sys.FD
 }
 
 func (ms *MapSpec) String() string {
@@ -113,6 +115,10 @@ func (ms *MapSpec) Copy() *MapSpec {
 	cpy.Key = btf.Copy(cpy.Key)
 	cpy.Value = btf.Copy(cpy.Value)
 	cpy.Tags = slices.Clone(cpy.Tags)
+
+	if cpy.BpffsTokenFd != nil {
+		cpy.BpffsTokenFd, _ = cpy.BpffsTokenFd.Dup()
+	}
 
 	if cpy.InnerMap == ms {
 		cpy.InnerMap = &cpy
@@ -330,6 +336,7 @@ type Map struct {
 	pinnedPath string
 	// Per CPU maps return values larger than the size in the spec
 	fullValueSize int
+	tokenFd       *sys.FD
 
 	memory *Memory
 }
@@ -345,6 +352,7 @@ func NewMapFromFD(fd int) (*Map, error) {
 		return nil, err
 	}
 
+	// FIXME(anryko): This Map loading option is not token aware.. should it be?
 	return newMapFromFD(f)
 }
 
@@ -355,7 +363,7 @@ func newMapFromFD(fd *sys.FD) (*Map, error) {
 		return nil, fmt.Errorf("get map info: %w", err)
 	}
 
-	return newMapFromParts(fd, info.Name, info.Type, info.KeySize, info.ValueSize, info.MaxEntries, info.Flags)
+	return newMapFromParts(fd, info.Name, info.Type, info.KeySize, info.ValueSize, info.MaxEntries, info.Flags, nil)
 }
 
 // NewMap creates a new Map.
@@ -573,8 +581,13 @@ func (spec *MapSpec) createMap(inner *sys.FD, c *btf.Cache) (_ *Map, err error) 
 		return nil, fmt.Errorf("map type %s (%s): %w", spec.Type, p, internal.ErrNotSupportedOnOS)
 	}
 
+	var tokenFd int32
+	if spec.BpffsTokenFd != nil {
+		tokenFd = spec.BpffsTokenFd.Int32()
+	}
+
 	attr := sys.MapCreateAttr{
-		MapName:    maybeFillObjName(spec.Name),
+		MapName:    maybeFillObjName(spec.Name, tokenFd),
 		MapType:    sys.MapType(sysMapType),
 		KeySize:    spec.KeySize,
 		ValueSize:  spec.ValueSize,
@@ -584,12 +597,17 @@ func (spec *MapSpec) createMap(inner *sys.FD, c *btf.Cache) (_ *Map, err error) 
 		MapExtra:   spec.MapExtra,
 	}
 
+	if tokenFd > 0 {
+		attr.MapTokenFd = tokenFd
+		attr.MapFlags |= sys.BPF_F_TOKEN_FD
+	}
+
 	if inner != nil {
 		attr.InnerMapFd = inner.Uint()
 	}
 
 	if spec.Key != nil || spec.Value != nil {
-		handle, keyTypeID, valueTypeID, err := btf.MarshalMapKV(spec.Key, spec.Value)
+		handle, keyTypeID, valueTypeID, err := btf.MarshalMapKV(spec.Key, spec.Value, tokenFd)
 		if err != nil && !errors.Is(err, btf.ErrNotSupported) {
 			return nil, fmt.Errorf("load BTF: %w", err)
 		}
@@ -653,7 +671,16 @@ func (spec *MapSpec) createMap(inner *sys.FD, c *btf.Cache) (_ *Map, err error) 
 	}
 
 	defer closeOnError(fd)
-	m, err := newMapFromParts(fd, spec.Name, spec.Type, spec.KeySize, spec.ValueSize, spec.MaxEntries, spec.Flags)
+	m, err := newMapFromParts(
+		fd,
+		spec.Name,
+		spec.Type,
+		spec.KeySize,
+		spec.ValueSize,
+		spec.MaxEntries,
+		spec.Flags,
+		spec.BpffsTokenFd,
+	)
 	if err != nil {
 		return nil, fmt.Errorf("map create: %w", err)
 	}
@@ -687,29 +714,34 @@ func handleMapCreateError(attr sys.MapCreateAttr, spec *MapSpec, err error) erro
 		}
 	}
 
+	featOpts := []internal.FeatureTestOption{}
+	if spec.BpffsTokenFd != nil {
+		featOpts = append(featOpts, internal.WithToken(spec.BpffsTokenFd.Int32()))
+	}
+
 	if spec.Type.canStoreMap() {
-		if haveFeatErr := haveNestedMaps(); haveFeatErr != nil {
+		if haveFeatErr := haveNestedMaps(featOpts...); haveFeatErr != nil {
 			return fmt.Errorf("map create: %w", haveFeatErr)
 		}
 	}
 
 	if spec.readOnly() || spec.writeOnly() {
-		if haveFeatErr := haveMapMutabilityModifiers(); haveFeatErr != nil {
+		if haveFeatErr := haveMapMutabilityModifiers(featOpts...); haveFeatErr != nil {
 			return fmt.Errorf("map create: %w", haveFeatErr)
 		}
 	}
 	if spec.Flags&sys.BPF_F_MMAPABLE > 0 {
-		if haveFeatErr := haveMmapableMaps(); haveFeatErr != nil {
+		if haveFeatErr := haveMmapableMaps(featOpts...); haveFeatErr != nil {
 			return fmt.Errorf("map create: %w", haveFeatErr)
 		}
 	}
 	if spec.Flags&sys.BPF_F_INNER_MAP > 0 {
-		if haveFeatErr := haveInnerMaps(); haveFeatErr != nil {
+		if haveFeatErr := haveInnerMaps(featOpts...); haveFeatErr != nil {
 			return fmt.Errorf("map create: %w", haveFeatErr)
 		}
 	}
 	if spec.Flags&sys.BPF_F_NO_PREALLOC > 0 {
-		if haveFeatErr := haveNoPreallocMaps(); haveFeatErr != nil {
+		if haveFeatErr := haveNoPreallocMaps(featOpts...); haveFeatErr != nil {
 			return fmt.Errorf("map create: %w", haveFeatErr)
 		}
 	}
@@ -728,7 +760,7 @@ func handleMapCreateError(attr sys.MapCreateAttr, spec *MapSpec, err error) erro
 
 // newMapFromParts allocates and returns a new Map structure.
 // Sets the fullValueSize on per-CPU maps.
-func newMapFromParts(fd *sys.FD, name string, typ MapType, keySize, valueSize, maxEntries, flags uint32) (*Map, error) {
+func newMapFromParts(fd *sys.FD, name string, typ MapType, keySize, valueSize, maxEntries, flags uint32, tokenFd *sys.FD) (*Map, error) {
 	m := &Map{
 		name,
 		fd,
@@ -739,6 +771,7 @@ func newMapFromParts(fd *sys.FD, name string, typ MapType, keySize, valueSize, m
 		flags,
 		"",
 		int(valueSize),
+		tokenFd,
 		nil,
 	}
 
@@ -1344,7 +1377,12 @@ func (m *Map) batchLookupCmd(cmd sys.Cmd, cursor *MapBatchCursor, count int, key
 		return 0, errors.New("a cursor may not be reused across maps")
 	}
 
-	if err := haveBatchAPI(); err != nil {
+	var tokenFd int32
+	if m.tokenFd != nil {
+		tokenFd = m.tokenFd.Int32()
+	}
+
+	if err := haveBatchAPI(internal.WithToken(tokenFd)); err != nil {
 		return 0, err
 	}
 
@@ -1418,7 +1456,11 @@ func (m *Map) batchUpdate(count int, keys any, valuePtr sys.Pointer, opts *Batch
 
 	err = sys.MapUpdateBatch(&attr)
 	if err != nil {
-		if haveFeatErr := haveBatchAPI(); haveFeatErr != nil {
+		var tokenFd int32
+		if m.tokenFd != nil {
+			tokenFd = m.tokenFd.Int32()
+		}
+		if haveFeatErr := haveBatchAPI(internal.WithToken(tokenFd)); haveFeatErr != nil {
 			return 0, haveFeatErr
 		}
 		return int(attr.Count), fmt.Errorf("batch update: %w", wrapMapError(err))
@@ -1466,7 +1508,11 @@ func (m *Map) BatchDelete(keys interface{}, opts *BatchOptions) (int, error) {
 	}
 
 	if err = sys.MapDeleteBatch(&attr); err != nil {
-		if haveFeatErr := haveBatchAPI(); haveFeatErr != nil {
+		var tokenFd int32
+		if m.tokenFd != nil {
+			tokenFd = m.tokenFd.Int32()
+		}
+		if haveFeatErr := haveBatchAPI(internal.WithToken(tokenFd)); haveFeatErr != nil {
 			return 0, haveFeatErr
 		}
 		return int(attr.Count), fmt.Errorf("batch delete: %w", wrapMapError(err))
@@ -1539,6 +1585,14 @@ func (m *Map) Clone() (*Map, error) {
 		return nil, fmt.Errorf("can't clone map: %w", err)
 	}
 
+	var dupToken *sys.FD
+	if m.tokenFd != nil {
+		dupToken, err = m.tokenFd.Dup()
+		if err != nil {
+			return nil, fmt.Errorf("can't clone map: %w", err)
+		}
+	}
+
 	return &Map{
 		m.name,
 		dup,
@@ -1549,6 +1603,7 @@ func (m *Map) Clone() (*Map, error) {
 		m.flags,
 		"",
 		m.fullValueSize,
+		dupToken,
 		nil,
 	}, nil
 }
@@ -1597,7 +1652,11 @@ func (m *Map) Freeze() error {
 	}
 
 	if err := sys.MapFreeze(&attr); err != nil {
-		if haveFeatErr := haveMapMutabilityModifiers(); haveFeatErr != nil {
+		var tokenFd int32
+		if m.tokenFd != nil {
+			tokenFd = m.tokenFd.Int32()
+		}
+		if haveFeatErr := haveMapMutabilityModifiers(internal.WithToken(tokenFd)); haveFeatErr != nil {
 			return fmt.Errorf("can't freeze map: %w", haveFeatErr)
 		}
 		return fmt.Errorf("can't freeze map: %w", err)
@@ -1735,6 +1794,12 @@ func LoadPinnedMap(fileName string, opts *LoadPinOptions) (*Map, error) {
 	m, err := newMapFromFD(fd)
 	if err == nil {
 		m.pinnedPath = fileName
+
+		if opts != nil && opts.BpffsTokenFd != nil {
+			if dupToken, err := opts.BpffsTokenFd.Dup(); err == nil {
+				m.tokenFd = dupToken
+			}
+		}
 	}
 
 	return m, err

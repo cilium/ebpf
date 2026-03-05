@@ -168,6 +168,19 @@ func (b *Builder) Add(typ Type) (TypeID, error) {
 	return id, nil
 }
 
+// Spec marshals the Builder's types and returns a new Spec to query them.
+//
+// The resulting Spec does not share any state with the Builder, subsequent
+// additions to the Builder will not affect the Spec.
+func (b *Builder) Spec() (*Spec, error) {
+	buf, err := b.Marshal(make([]byte, 0), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return loadRawSpec(buf, nil)
+}
+
 // Marshal encodes all types in the Marshaler into BTF wire format.
 //
 // opts may be nil.

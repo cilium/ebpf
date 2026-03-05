@@ -336,14 +336,27 @@ jobs:
             const run_url = workflow_runs.data.workflow_runs[0].html_url;
             console.log(`Using workflow run: ${run_url}`);
 
-            const artifacts = await github.rest.actions.listWorkflowRunArtifacts({
-              owner: 'microsoft',
-              repo: 'ebpf-for-windows',
-              run_id: run_id
-            });
+            // Paginate through all artifacts
+            let allArtifacts = [];
+            let page = 1;
+            while (true) {
+              const artifacts = await github.rest.actions.listWorkflowRunArtifacts({
+                owner: 'microsoft',
+                repo: 'ebpf-for-windows',
+                run_id: run_id,
+                per_page: 100,
+                page: page
+              });
+
+              allArtifacts = allArtifacts.concat(artifacts.data.artifacts);
+
+              // If we got fewer than 100, we've reached the last page
+              if (artifacts.data.artifacts.length < 100) break;
+              page++;
+            }
 
             // Find the specific artifact
-            const artifact = artifacts.data.artifacts.find(a => a.name === 'Build-x64-Debug');
+            const artifact = allArtifacts.find(a => a.name === 'Build-x64-Debug');
 
             if (!artifact) {
               console.log('Available artifacts:', artifacts.data.artifacts.map(a => a.name));

@@ -304,7 +304,7 @@ func TestLoadSpecFromElf(t *testing.T) {
 }
 
 func TestVerifierError(t *testing.T) {
-	b, err := NewBuilder([]Type{&Int{Encoding: 255}})
+	b, err := NewBuilder([]Type{&Int{Encoding: 255}}, nil)
 	qt.Assert(t, qt.IsNil(err))
 	_, err = NewHandle(b)
 	testutils.SkipIfNotSupported(t, err)
@@ -391,7 +391,7 @@ func ExampleSpec_TypeByName() {
 func TestTypesIterator(t *testing.T) {
 	types := []Type{(*Void)(nil), &Int{Size: 4}, &Int{Size: 2}}
 
-	b, err := NewBuilder(types[1:])
+	b, err := NewBuilder(types[1:], nil)
 	if err != nil {
 		t.Fatal(err)
 	}

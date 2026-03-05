@@ -25,7 +25,7 @@ func TestBuilderMarshal(t *testing.T) {
 		&Typedef{"baz", typ, nil},
 	}
 
-	b, err := NewBuilder(want)
+	b, err := NewBuilder(want, nil)
 	qt.Assert(t, qt.IsNil(err))
 
 	cpy := *b
@@ -91,7 +91,7 @@ limitTypes:
 		}
 	}
 
-	b, err := NewBuilder(types)
+	b, err := NewBuilder(types, nil)
 	qt.Assert(t, qt.IsNil(err))
 	buf, err := b.Marshal(nil, KernelMarshalOptions())
 	qt.Assert(t, qt.IsNil(err))
@@ -120,7 +120,7 @@ func TestMarshalEnum64(t *testing.T) {
 		},
 	}
 
-	b, err := NewBuilder([]Type{enum})
+	b, err := NewBuilder([]Type{enum}, nil)
 	qt.Assert(t, qt.IsNil(err))
 	buf, err := b.Marshal(nil, &MarshalOptions{
 		Order:         internal.NativeEndian,
@@ -156,7 +156,7 @@ func TestMarshalDeclTags(t *testing.T) {
 		},
 	}
 
-	b, err := NewBuilder(types)
+	b, err := NewBuilder(types, nil)
 	qt.Assert(t, qt.IsNil(err))
 	buf, err := b.Marshal(nil, &MarshalOptions{
 		Order:           internal.NativeEndian,
@@ -187,7 +187,7 @@ func TestMarshalTypeTags(t *testing.T) {
 		},
 	}
 
-	b, err := NewBuilder(types)
+	b, err := NewBuilder(types, nil)
 	qt.Assert(t, qt.IsNil(err))
 	buf, err := b.Marshal(nil, &MarshalOptions{
 		Order:           internal.NativeEndian,
@@ -237,7 +237,7 @@ func BenchmarkBuildVmlinux(b *testing.B) {
 func marshalNativeEndian(tb testing.TB, types []Type) []byte {
 	tb.Helper()
 
-	b, err := NewBuilder(types)
+	b, err := NewBuilder(types, nil)
 	qt.Assert(tb, qt.IsNil(err))
 	buf, err := b.Marshal(nil, nil)
 	qt.Assert(tb, qt.IsNil(err))

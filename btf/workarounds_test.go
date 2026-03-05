@@ -49,7 +49,7 @@ func TestDatasecResolveWorkaround(t *testing.T) {
 				},
 			}
 
-			b, err := NewBuilder([]Type{ds})
+			b, err := NewBuilder([]Type{ds}, nil)
 			if err != nil {
 				t.Fatal(err)
 			}

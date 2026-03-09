@@ -530,7 +530,7 @@ func collectCTypes(types *btf.Spec, names []string) ([]btf.Type, error) {
 	for _, cType := range names {
 		typ, err := types.AnyTypeByName(cType)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("looking up type %s: %w", cType, err)
 		}
 		result = append(result, typ)
 	}

@@ -25,6 +25,10 @@ import (
 // ErrNotSupported is returned whenever the kernel doesn't support a feature.
 var ErrNotSupported = internal.ErrNotSupported
 
+// ErrNotPermitted is returned when the kernel denied an operation due to
+// insufficient permissions. The feature exists but the caller lacks permission.
+var ErrNotPermitted = internal.ErrNotPermitted
+
 // ErrProgIncompatible is returned when a loaded Program is incompatible with a
 // given spec.
 var ErrProgIncompatible = errors.New("program is incompatible")

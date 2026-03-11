@@ -2,6 +2,7 @@ package btf
 
 import (
 	"errors"
+	"fmt"
 	"math"
 
 	"github.com/cilium/ebpf/internal"
@@ -14,10 +15,14 @@ import (
 var haveBTF = internal.NewFeatureTest("BTF", func() error {
 	// 0-length anonymous integer
 	err := probeBTF(&Int{})
-	if errors.Is(err, unix.EINVAL) || errors.Is(err, unix.EPERM) {
+	switch {
+	case errors.Is(err, unix.EINVAL):
 		return internal.ErrNotSupported
+	case errors.Is(err, unix.EPERM):
+		return fmt.Errorf("%w: %w", internal.ErrNotPermitted, err)
+	default:
+		return err
 	}
-	return err
 }, "4.18")
 
 // haveMapBTF attempts to load a minimal BTF blob containing a Var. It is
@@ -34,10 +39,11 @@ var haveMapBTF = internal.NewFeatureTest("Map BTF (Var/Datasec)", func() error {
 	}
 
 	err := probeBTF(v)
-	if errors.Is(err, unix.EINVAL) || errors.Is(err, unix.EPERM) {
-		// Treat both EINVAL and EPERM as not supported: creating the map may still
-		// succeed without Btf* attrs.
+	if errors.Is(err, unix.EINVAL) {
 		return internal.ErrNotSupported
+	}
+	if errors.Is(err, unix.EPERM) {
+		return fmt.Errorf("%w: %w", internal.ErrNotPermitted, err)
 	}
 	return err
 }, "5.2")
@@ -56,8 +62,11 @@ var haveProgBTF = internal.NewFeatureTest("Program BTF (func/line_info)", func()
 	}
 
 	err := probeBTF(fn)
-	if errors.Is(err, unix.EINVAL) || errors.Is(err, unix.EPERM) {
+	if errors.Is(err, unix.EINVAL) {
 		return internal.ErrNotSupported
+	}
+	if errors.Is(err, unix.EPERM) {
+		return fmt.Errorf("%w: %w", internal.ErrNotPermitted, err)
 	}
 	return err
 }, "5.0")

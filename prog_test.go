@@ -916,6 +916,60 @@ func TestProgramLoadBoundToDevice(t *testing.T) {
 	qt.Assert(t, qt.ErrorIs(err, unix.EINVAL))
 }
 
+func TestProgramWithToken(t *testing.T) {
+	t.Run("no-cmd", func(t *testing.T) {
+		if testutils.RunWithToken(t, testutils.Delegated{
+			Cmds:        []sys.Cmd{},
+			Progs:       []sys.ProgType{sys.BPF_PROG_TYPE_SOCKET_FILTER},
+			AttachTypes: []sys.AttachType{sys.BPF_CGROUP_INET_INGRESS},
+		}) {
+			return
+		}
+
+		_, err := newProgram(t, basicProgramSpec, nil)
+		qt.Assert(t, qt.ErrorIs(err, unix.EPERM))
+	})
+
+	t.Run("no-prog", func(t *testing.T) {
+		if testutils.RunWithToken(t, testutils.Delegated{
+			Cmds:        []sys.Cmd{sys.BPF_PROG_LOAD},
+			Progs:       []sys.ProgType{},
+			AttachTypes: []sys.AttachType{sys.BPF_CGROUP_INET_INGRESS},
+		}) {
+			return
+		}
+
+		_, err := newProgram(t, basicProgramSpec, nil)
+		qt.Assert(t, qt.ErrorIs(err, unix.EPERM))
+	})
+
+	t.Run("no-attach-type", func(t *testing.T) {
+		if testutils.RunWithToken(t, testutils.Delegated{
+			Cmds:        []sys.Cmd{sys.BPF_PROG_LOAD},
+			Progs:       []sys.ProgType{sys.BPF_PROG_TYPE_SOCKET_FILTER},
+			AttachTypes: []sys.AttachType{},
+		}) {
+			return
+		}
+
+		_, err := newProgram(t, basicProgramSpec, nil)
+		qt.Assert(t, qt.ErrorIs(err, unix.EPERM))
+	})
+
+	t.Run("success", func(t *testing.T) {
+		if testutils.RunWithToken(t, testutils.Delegated{
+			Cmds:        []sys.Cmd{sys.BPF_PROG_LOAD},
+			Progs:       []sys.ProgType{sys.BPF_PROG_TYPE_SOCKET_FILTER},
+			AttachTypes: []sys.AttachType{sys.BPF_CGROUP_INET_INGRESS},
+		}) {
+			return
+		}
+
+		_, err := newProgram(t, basicProgramSpec, nil)
+		qt.Assert(t, qt.IsNil(err))
+	})
+}
+
 func BenchmarkNewProgram(b *testing.B) {
 	testutils.SkipOnOldKernel(b, "5.18", "kfunc support")
 	spec, err := LoadCollectionSpec(testutils.NativeFile(b, "testdata/kfunc-%s.elf"))

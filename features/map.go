@@ -8,7 +8,9 @@ import (
 
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/internal"
+	"github.com/cilium/ebpf/internal/platform"
 	"github.com/cilium/ebpf/internal/sys"
+	"github.com/cilium/ebpf/internal/token"
 	"github.com/cilium/ebpf/internal/unix"
 )
 
@@ -77,6 +79,19 @@ func probeMap(attr *sys.MapCreateAttr) error {
 }
 
 func createMap(attr *sys.MapCreateAttr) error {
+	if platform.IsLinux {
+		tok, err := token.Create()
+		if err != nil && !errors.Is(err, token.ErrTokenNotAvailable) {
+			return fmt.Errorf("get BPF token: %w", err)
+		}
+
+		if tok != nil {
+			defer tok.Close()
+			attr.MapTokenFd = int32(tok.Int())
+			attr.MapFlags |= sys.BPF_F_TOKEN_FD
+		}
+	}
+
 	fd, err := sys.MapCreate(attr)
 	if err == nil {
 		fd.Close()
@@ -299,6 +314,19 @@ func probeMapFlag(attr *sys.MapCreateAttr) error {
 	attr.KeySize = 4
 	attr.ValueSize = 4
 	attr.MaxEntries = 1
+
+	if platform.IsLinux {
+		tok, err := token.Create()
+		if err != nil && !errors.Is(err, token.ErrTokenNotAvailable) {
+			return fmt.Errorf("get BPF token: %w", err)
+		}
+
+		if tok != nil {
+			defer tok.Close()
+			attr.MapTokenFd = int32(tok.Int())
+			attr.MapFlags |= sys.BPF_F_TOKEN_FD
+		}
+	}
 
 	fd, err := sys.MapCreate(attr)
 	if err == nil {

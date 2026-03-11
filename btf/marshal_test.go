@@ -66,6 +66,14 @@ func TestBuilderAdd(t *testing.T) {
 	id, err = b.Add(&Typedef{"baz", i, nil})
 	qt.Assert(t, qt.IsNil(err))
 	qt.Assert(t, qt.Equals(id, TypeID(3)))
+
+	_, err = b.Add(nil)
+	qt.Assert(t, qt.IsNotNil(err))
+	t.Log(err)
+
+	_, err = b.Add((*Int)(nil))
+	qt.Assert(t, qt.IsNotNil(err))
+	t.Log(err)
 }
 
 func TestBuilderSpec(t *testing.T) {

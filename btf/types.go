@@ -180,8 +180,15 @@ type Struct struct {
 	Tags    []string
 }
 
+// Format supports the width option to %v to limit or extend the number of
+// struct member names printed (default 5).
+//
+// For example, %1v will print only the first member name followed by '...':
+//
+//	Struct:"struct"[fields=3 fieldNames=[a ...]]
 func (s *Struct) Format(fs fmt.State, verb rune) {
-	formatType(fs, verb, s, "fields=", len(s.Members))
+	max, _ := fs.Width()
+	formatType(fs, verb, s, "fields=", len(s.Members), "fieldNames=", memberNames(s.Members, max))
 }
 
 func (s *Struct) TypeName() string { return s.Name }
@@ -208,8 +215,15 @@ type Union struct {
 	Tags    []string
 }
 
+// Format supports the width option to %v to limit or extend the number of
+// union member names printed (default 5).
+//
+// For example, %1v will print only the first member name followed by '...':
+//
+//	Union:"union"[fields=3 fieldNames=[a ...]]
 func (u *Union) Format(fs fmt.State, verb rune) {
-	formatType(fs, verb, u, "fields=", len(u.Members))
+	max, _ := fs.Width()
+	formatType(fs, verb, u, "fields=", len(u.Members), "fieldNames=", memberNames(u.Members, max))
 }
 
 func (u *Union) TypeName() string { return u.Name }
@@ -225,6 +239,29 @@ func (u *Union) copy() Type {
 
 func (u *Union) members() []Member {
 	return u.Members
+}
+
+// memberNames returns the names of members, or its index in the list of members
+// if the name is empty.
+//
+// Returns up to max entries (default 5), followed by '...'.
+func memberNames(members []Member, max int) []string {
+	if max <= 0 {
+		max = 5
+	}
+	names := make([]string, min(len(members), max+1))
+	for i, m := range members {
+		if i >= max {
+			names[i] = "..."
+			break
+		}
+		if m.Name == "" {
+			names[i] = fmt.Sprintf("<%d>", i)
+			continue
+		}
+		names[i] = m.Name
+	}
+	return names
 }
 
 func copyMembers(orig []Member) []Member {

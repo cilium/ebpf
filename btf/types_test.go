@@ -323,6 +323,23 @@ func TestFormatType(t *testing.T) {
 	}
 }
 
+func TestFormatCompoundTypes(t *testing.T) {
+	u := &Union{
+		Name:    "u",
+		Members: []Member{{Name: "a"}, {Name: "b"}, {Name: "c"}, {Name: "d"}, {Name: "e"}, {Name: "f"}},
+	}
+	qt.Assert(t, qt.Equals(fmt.Sprintf("%v", u), `Union:"u"[fields=6 fieldNames=[a b c d e ...]]`))
+	qt.Assert(t, qt.Equals(fmt.Sprintf("%1v", u), `Union:"u"[fields=6 fieldNames=[a ...]]`))
+	qt.Assert(t, qt.Equals(fmt.Sprintf("%6v", u), `Union:"u"[fields=6 fieldNames=[a b c d e f]]`))
+
+	s := &Struct{
+		Name:    "s",
+		Members: []Member{{Name: "a"}, {Name: "b"}, {Name: "c"}},
+	}
+	qt.Assert(t, qt.Equals(fmt.Sprintf("%v", s), `Struct:"s"[fields=3 fieldNames=[a b c]]`))
+	qt.Assert(t, qt.Equals(fmt.Sprintf("%1v", s), `Struct:"s"[fields=3 fieldNames=[a ...]]`))
+}
+
 func newCyclicalType(n int) Type {
 	ptr := &Pointer{}
 	prev := Type(ptr)
@@ -466,6 +483,16 @@ func TestInflateLegacyBitfield(t *testing.T) {
 			t.Fatal("No Struct returned from inflateRawTypes")
 		})
 	}
+}
+
+func TestMemberNames(t *testing.T) {
+	members := []Member{{Name: "foo"}, {}, {Name: "bar"}}
+
+	qt.Assert(t, qt.ContentEquals(memberNames(members, 3),
+		[]string{"foo", "<1>", "bar"}))
+
+	qt.Assert(t, qt.ContentEquals(memberNames(members, 2),
+		[]string{"foo", "<1>", "..."}))
 }
 
 func BenchmarkWalk(b *testing.B) {

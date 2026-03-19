@@ -322,6 +322,165 @@ func TestReadAfterClose(t *testing.T) {
 	}
 }
 
+func TestReadZeroCopySingle(t *testing.T) {
+	testutils.SkipOnOldKernel(t, "5.8", "BPF ring buffer")
+
+	prog, events := mustOutputSamplesProg(t, sampleMessage{size: 5})
+
+	rd, err := NewReader(events)
+	qt.Assert(t, qt.IsNil(err))
+	defer rd.Close()
+
+	mustRun(t, prog)
+
+	var rec Record
+	err = rd.ReadUnsafe(&rec)
+	qt.Assert(t, qt.IsNil(err))
+	qt.Assert(t, qt.Equals(len(rec.RawSample), 5))
+	qt.Assert(t, qt.DeepEquals(rec.RawSample, []byte{1, 2, 3, 4, 4}))
+
+	rd.Commit()
+	qt.Assert(t, qt.Equals(rd.AvailableBytes(), 0))
+}
+
+func TestReadZeroCopyMulti(t *testing.T) {
+	testutils.SkipOnOldKernel(t, "5.8", "BPF ring buffer")
+
+	prog, events := mustOutputSamplesProg(t,
+		sampleMessage{size: 5},
+		sampleMessage{size: 10, discard: true},
+		sampleMessage{size: 15},
+	)
+
+	rd, err := NewReader(events)
+	qt.Assert(t, qt.IsNil(err))
+	defer rd.Close()
+
+	mustRun(t, prog)
+
+	var rec Record
+
+	err = rd.ReadUnsafe(&rec)
+	qt.Assert(t, qt.IsNil(err))
+	qt.Assert(t, qt.Equals(len(rec.RawSample), 5))
+
+	err = rd.ReadUnsafe(&rec)
+	qt.Assert(t, qt.IsNil(err))
+	qt.Assert(t, qt.Equals(len(rec.RawSample), 15))
+
+	rd.Commit()
+	qt.Assert(t, qt.Equals(rd.AvailableBytes(), 0))
+}
+
+func TestReadZeroCopyCommitReleasesSpace(t *testing.T) {
+	testutils.SkipOnOldKernel(t, "5.8", "BPF ring buffer")
+
+	prog, events := mustOutputSamplesProg(t, sampleMessage{size: 5})
+
+	rd, err := NewReader(events)
+	qt.Assert(t, qt.IsNil(err))
+	defer rd.Close()
+
+	mustRun(t, prog)
+
+	var rec Record
+	err = rd.ReadUnsafe(&rec)
+	qt.Assert(t, qt.IsNil(err))
+
+	qt.Assert(t, qt.Not(qt.Equals(rd.AvailableBytes(), 0)))
+
+	rd.Commit()
+	qt.Assert(t, qt.Equals(rd.AvailableBytes(), 0))
+
+	mustRun(t, prog)
+	err = rd.ReadUnsafe(&rec)
+	qt.Assert(t, qt.IsNil(err))
+	qt.Assert(t, qt.Equals(len(rec.RawSample), 5))
+	rd.Commit()
+}
+
+func TestReadZeroCopyDeadline(t *testing.T) {
+	testutils.SkipOnOldKernel(t, "5.8", "BPF ring buffer")
+
+	_, events := mustOutputSamplesProg(t, sampleMessage{size: 5})
+
+	rd, err := NewReader(events)
+	qt.Assert(t, qt.IsNil(err))
+	defer rd.Close()
+
+	rd.SetDeadline(time.Now().Add(-time.Second))
+
+	var rec Record
+	err = rd.ReadUnsafe(&rec)
+	qt.Assert(t, qt.ErrorIs(err, os.ErrDeadlineExceeded))
+}
+
+func TestReadIntoRejectsUncommittedZeroCopy(t *testing.T) {
+	testutils.SkipOnOldKernel(t, "5.8", "BPF ring buffer")
+
+	prog, events := mustOutputSamplesProg(t, sampleMessage{size: 5})
+
+	rd, err := NewReader(events)
+	qt.Assert(t, qt.IsNil(err))
+	defer rd.Close()
+
+	mustRun(t, prog)
+
+	var rec Record
+	err = rd.ReadUnsafe(&rec)
+	qt.Assert(t, qt.IsNil(err))
+
+	err = rd.ReadInto(&rec)
+	qt.Assert(t, qt.ErrorIs(err, ErrNotCommitted))
+
+	_, err = rd.Read()
+	qt.Assert(t, qt.ErrorIs(err, ErrNotCommitted))
+
+	rd.Commit()
+
+	mustRun(t, prog)
+	err = rd.ReadInto(&rec)
+	qt.Assert(t, qt.IsNil(err))
+}
+
+func TestCommitNoOp(t *testing.T) {
+	testutils.SkipOnOldKernel(t, "5.8", "BPF ring buffer")
+
+	_, events := mustOutputSamplesProg(t, sampleMessage{size: 5})
+
+	rd, err := NewReader(events)
+	qt.Assert(t, qt.IsNil(err))
+	defer rd.Close()
+
+	rd.Commit()
+}
+
+func BenchmarkReadZeroCopy(b *testing.B) {
+	testutils.SkipOnOldKernel(b, "5.8", "BPF ring buffer")
+
+	prog, events := mustOutputSamplesProg(b, sampleMessage{size: 80, flags: 0})
+
+	rd, err := NewReader(events)
+	if err != nil {
+		b.Fatal(err)
+	}
+	defer rd.Close()
+
+	b.ReportAllocs()
+
+	var rec Record
+	for b.Loop() {
+		b.StopTimer()
+		mustRun(b, prog)
+		b.StartTimer()
+
+		if err := rd.ReadUnsafe(&rec); err != nil {
+			b.Fatal("Can't read samples:", err)
+		}
+		rd.Commit()
+	}
+}
+
 func BenchmarkReader(b *testing.B) {
 	testutils.SkipOnOldKernel(b, "5.8", "BPF ring buffer")
 

@@ -49,6 +49,14 @@ func newRingBufEventRing(mapFD, size int) (*mmapEventRing, error) {
 	return ring, nil
 }
 
+func (ring *mmapEventRing) readRecordUnsafe(rec *Record) error {
+	return ring.ringReader.readRecordUnsafe(rec)
+}
+
+func (ring *mmapEventRing) advance() {
+	ring.ringReader.advance()
+}
+
 func (ring *mmapEventRing) Close() error {
 	ring.cleanup.Stop()
 

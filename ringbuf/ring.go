@@ -1,6 +1,7 @@
 package ringbuf
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"sync/atomic"
@@ -10,11 +11,18 @@ import (
 	"github.com/cilium/ebpf/internal/sys"
 )
 
+var ErrNotCommitted = errors.New("zero-copy records not yet committed")
+
 type ringReader struct {
 	// These point into mmap'ed memory and must be accessed atomically.
 	prod_pos, cons_pos *uintptr
 	mask               uintptr
 	ring               []byte
+
+	// Logical consumer position for deferred zero-copy reads.
+	// Only valid when hasPending is true.
+	pendingCons uintptr
+	hasPending  bool
 }
 
 func newRingReader(cons_ptr, prod_ptr *uintptr, ring []byte) *ringReader {
@@ -41,10 +49,49 @@ func (rr *ringReader) AvailableBytes() uint64 {
 	return uint64(prod - cons)
 }
 
-// Read a record from an event ring.
+// Like readRecordZeroCopy, but copies data into rec.RawSample and advances
+// the consumer position immediately.
 func (rr *ringReader) readRecord(rec *Record) error {
+	if rr.hasPending {
+		return ErrNotCommitted
+	}
+
+	buf := rec.RawSample
+	if rec.isReadOnly {
+		buf = nil
+	}
+
+	defer func() {
+		rec.isReadOnly = false
+		rr.advance()
+	}()
+
+	err := rr.readRecordUnsafe(rec)
+	if err != nil {
+		return err
+	}
+
+	n := len(rec.RawSample)
+	if cap(buf) < n {
+		buf = make([]byte, n)
+	} else {
+		buf = buf[:n]
+	}
+	copy(buf, rec.RawSample)
+	rec.RawSample = buf
+
+	return nil
+}
+
+// Sets rec.RawSample to a slice of the mmap'd ring buffer memory.
+// Does not advance the consumer position; call advance separately.
+func (rr *ringReader) readRecordUnsafe(rec *Record) error {
 	prod := atomic.LoadUintptr(rr.prod_pos)
-	cons := atomic.LoadUintptr(rr.cons_pos)
+
+	cons := rr.pendingCons
+	if !rr.hasPending {
+		cons = atomic.LoadUintptr(rr.cons_pos)
+	}
 
 	for {
 		if remaining := prod - cons; remaining == 0 {
@@ -81,21 +128,27 @@ func (rr *ringReader) readRecord(rec *Record) error {
 
 		if header.isDiscard() {
 			// when the record header indicates that the data should be
-			// discarded, we skip it by just updating the consumer position
+			// discarded, we skip it by just updating the pending position
 			// to the next record.
-			atomic.StoreUintptr(rr.cons_pos, cons)
+			rr.pendingCons = cons
+			rr.hasPending = true
 			continue
 		}
 
-		if n := header.dataLen(); cap(rec.RawSample) < n {
-			rec.RawSample = make([]byte, n)
-		} else {
-			rec.RawSample = rec.RawSample[:n]
-		}
-
-		copy(rec.RawSample, rr.ring[start:])
+		n := header.dataLen()
+		rec.RawSample = rr.ring[start : start+uintptr(n)]
 		rec.Remaining = int(prod - cons)
-		atomic.StoreUintptr(rr.cons_pos, cons)
+		rec.isReadOnly = true
+		rr.pendingCons = cons
+		rr.hasPending = true
 		return nil
+	}
+}
+
+// Commits the pending consumer position from readRecordZeroCopy calls.
+func (rr *ringReader) advance() {
+	if rr.hasPending {
+		atomic.StoreUintptr(rr.cons_pos, rr.pendingCons)
+		rr.hasPending = false
 	}
 }

@@ -62,6 +62,14 @@ func newRingBufEventRing(mapFD, size int) (*windowsEventRing, error) {
 	return ring, nil
 }
 
+func (ring *windowsEventRing) readRecordUnsafe(rec *Record) error {
+	return ring.ringReader.readRecordUnsafe(rec)
+}
+
+func (ring *windowsEventRing) advance() {
+	ring.ringReader.advance()
+}
+
 func (ring *windowsEventRing) Close() error {
 	ring.cleanup.Stop()
 

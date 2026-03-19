@@ -31,6 +31,8 @@ type eventRing interface {
 	size() int
 	AvailableBytes() uint64
 	readRecord(rec *Record) error
+	readRecordUnsafe(rec *Record) error
+	advance()
 	Close() error
 }
 
@@ -59,6 +61,10 @@ type Record struct {
 
 	// The minimum number of bytes remaining in the ring buffer after this Record has been read.
 	Remaining int
+
+	// Set by readRecordZeroCopy to prevent readRecord from reusing
+	// RawSample as a write destination (it points into read-only mmap memory).
+	isReadOnly bool
 }
 
 // Reader allows reading bpf_ringbuf_output
@@ -159,6 +165,40 @@ func (r *Reader) Read() (Record, error) {
 
 // ReadInto is like Read except that it allows reusing Record and associated buffers.
 func (r *Reader) ReadInto(rec *Record) error {
+	return r.readWait(func() error {
+		return r.ring.readRecord(rec)
+	})
+}
+
+// Like [Reader.ReadInto], but returns a zero-copy slice into the ring buffer's
+// memory-mapped region instead of copying. The slice is valid until [Reader.Commit].
+//
+// RawSample points into read-only memory and must not be written to. If the
+// Record is later passed to [Reader.ReadInto], the existing buffer will not be
+// reused for the same reason; a new allocation will occur instead.
+//
+// Does not advance the consumer position. Call [Reader.Commit] after processing
+// to release space. Must not be mixed with [Reader.Read] or [Reader.ReadInto]
+// between Commit calls, or an ErrNotCommitted error will be returned.
+func (r *Reader) ReadUnsafe(rec *Record) error {
+	return r.readWait(func() error {
+		return r.ring.readRecordUnsafe(rec)
+	})
+}
+
+// Advances the consumer position, releasing ring buffer space from preceding
+// [Reader.ReadUnsafe] calls. Slices from ReadUnsafe are invalid after this.
+// No-op if there are no pending reads.
+func (r *Reader) Commit() {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	if r.ring != nil {
+		r.ring.advance()
+	}
+}
+
+func (r *Reader) readWait(read func() error) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
@@ -186,7 +226,7 @@ func (r *Reader) ReadInto(rec *Record) error {
 		}
 
 		for {
-			err := r.ring.readRecord(rec)
+			err := read()
 			// Not using errors.Is which is quite a bit slower
 			// For a tight loop it might make a difference
 			if err == errBusy {

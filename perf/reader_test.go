@@ -33,13 +33,13 @@ func TestMain(m *testing.M) {
 func TestPerfReader(t *testing.T) {
 	events := perfEventArray(t)
 
-	rd, err := NewReader(events, 4096)
+	rd, err := NewReader(events, os.Getpagesize())
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer rd.Close()
 
-	qt.Assert(t, qt.Equals(rd.BufferSize(), 4096))
+	qt.Assert(t, qt.Equals(rd.BufferSize(), os.Getpagesize()))
 
 	outputSamples(t, events, 5, 5)
 
@@ -57,7 +57,7 @@ func TestPerfReader(t *testing.T) {
 func TestReaderSetDeadline(t *testing.T) {
 	events := perfEventArray(t)
 
-	rd, err := NewReader(events, 4096)
+	rd, err := NewReader(events, os.Getpagesize())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -80,7 +80,7 @@ func TestReaderSetDeadline(t *testing.T) {
 func TestReaderSetDeadlinePendingEvents(t *testing.T) {
 	events := perfEventArray(t)
 
-	rd, err := NewReaderWithOptions(events, 4096, ReaderOptions{WakeupEvents: 2})
+	rd, err := NewReaderWithOptions(events, os.Getpagesize(), ReaderOptions{WakeupEvents: 2})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -108,7 +108,7 @@ func TestReaderFlushPendingEvents(t *testing.T) {
 	testutils.LockOSThreadToSingleCPU(t)
 	events := perfEventArray(t)
 
-	rd, err := NewReaderWithOptions(events, 4096, ReaderOptions{WakeupEvents: 2})
+	rd, err := NewReaderWithOptions(events, os.Getpagesize(), ReaderOptions{WakeupEvents: 2})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -416,7 +416,7 @@ func TestPerfReaderOverwritableEmpty(t *testing.T) {
 func TestPerfReaderClose(t *testing.T) {
 	events := perfEventArray(t)
 
-	rd, err := NewReader(events, 4096)
+	rd, err := NewReader(events, os.Getpagesize())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -481,7 +481,7 @@ func TestPause(t *testing.T) {
 
 	events := perfEventArray(t)
 
-	rd, err := NewReader(events, 4096)
+	rd, err := NewReader(events, os.Getpagesize())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -567,7 +567,7 @@ func TestPerfReaderWakeupEvents(t *testing.T) {
 	events := perfEventArray(t)
 
 	numEvents := 2
-	rd, err := NewReaderWithOptions(events, 4096, ReaderOptions{WakeupEvents: numEvents})
+	rd, err := NewReaderWithOptions(events, os.Getpagesize(), ReaderOptions{WakeupEvents: numEvents})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -617,7 +617,7 @@ func BenchmarkReader(b *testing.B) {
 	events := perfEventArray(b)
 	prog := outputSamplesProg(b, events, 80)
 
-	rd, err := NewReader(events, 4096)
+	rd, err := NewReader(events, os.Getpagesize())
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -644,7 +644,7 @@ func BenchmarkReadInto(b *testing.B) {
 	events := perfEventArray(b)
 	prog := outputSamplesProg(b, events, 80)
 
-	rd, err := NewReader(events, 4096)
+	rd, err := NewReader(events, os.Getpagesize())
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -700,7 +700,7 @@ func ExampleReader() {
 	defer prog.Close()
 	defer events.Close()
 
-	rd, err := NewReader(events, 4096)
+	rd, err := NewReader(events, os.Getpagesize())
 	if err != nil {
 		panic(err)
 	}
@@ -727,7 +727,7 @@ func ExampleReader_ReadInto() {
 	defer prog.Close()
 	defer events.Close()
 
-	rd, err := NewReader(events, 4096)
+	rd, err := NewReader(events, os.Getpagesize())
 	if err != nil {
 		panic(err)
 	}

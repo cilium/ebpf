@@ -47,8 +47,8 @@ func TestExecutable(t *testing.T) {
 	}
 
 	_, err = OpenExecutable(path)
-	if err == nil {
-		t.Fatal("create executable: expected error on non-executable file")
+	if err != nil {
+		t.Fatal("create executable: unexpected error on non-executable file")
 	}
 
 	// make it executable

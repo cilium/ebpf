@@ -144,7 +144,7 @@ func validateProgInfo(t *testing.T, spec *ProgramSpec, info *ProgramInfo) {
 	}
 	memlock, ok := info.Memlock()
 	if ok {
-		qt.Assert(t, qt.Equals(memlock, 4096))
+		qt.Assert(t, qt.Equals(memlock, uint64(os.Getpagesize())))
 	}
 }
 

@@ -3,6 +3,7 @@
 package ringbuf
 
 import (
+	"os"
 	"testing"
 
 	"github.com/go-quicktest/qt"
@@ -16,7 +17,7 @@ func mustOutputSamplesProg(tb testing.TB, sampleMessages ...sampleMessage) (*ebp
 
 	events, err := ebpf.NewMap(&ebpf.MapSpec{
 		Type:       ebpf.RingBuf,
-		MaxEntries: 4096,
+		MaxEntries: uint32(os.Getpagesize()),
 	})
 	qt.Assert(tb, qt.IsNil(err))
 	tb.Cleanup(func() {

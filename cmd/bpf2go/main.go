@@ -404,10 +404,18 @@ func (b2g *bpf2go) convert(tgt gen.Target, goarches gen.GoArches) (err error) {
 	}
 
 	var maps []string
+	var structOps []gen.StructOpsSpec
 	for name := range spec.Maps {
 		// Skip .rodata, .data, .bss, etc. sections
 		if !strings.HasPrefix(name, ".") {
 			maps = append(maps, name)
+		}
+
+		ms := spec.Maps[name]
+		if ms.Type == ebpf.StructOpsMap {
+			userSt, _ := btf.As[*btf.Struct](ms.Value)
+			stOpsSpec := gen.StructOpsSpec{Name: name, Type: userSt}
+			structOps = append(structOps, stOpsSpec)
 		}
 	}
 
@@ -448,6 +456,7 @@ func (b2g *bpf2go) convert(tgt gen.Target, goarches gen.GoArches) (err error) {
 		Types:       types,
 		ObjectFile:  filepath.Base(objFileName),
 		Output:      goFile,
+		StructOps:   structOps,
 	})
 	if err != nil {
 		return fmt.Errorf("can't write %s: %s", goFileName, err)

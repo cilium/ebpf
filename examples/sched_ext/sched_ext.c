@@ -6,10 +6,14 @@
 char __license[] SEC("license") = "Dual MIT/GPL";
 
 struct sched_ext_ops {
-	char name[128];
+  s32 (*init)();
+  u64 flags;
+  u32 timeout_ms;
+  char name[128];
 };
 
 SEC(".struct_ops.link")
 struct sched_ext_ops minimal_sched = {
-	.name = "minimal",
+    .name = "minimal",
+    .timeout_ms = 5000,
 };

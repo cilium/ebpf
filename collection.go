@@ -116,7 +116,7 @@ func copyMapOfSpecs[T interface{ Copy() T }](m map[string]T) map[string]T {
 // Returns an error if any of the eBPF objects can't be found, or
 // if the same Spec is assigned multiple times.
 func (cs *CollectionSpec) Assign(to interface{}) error {
-	getValue := func(typ reflect.Type, name string) (interface{}, error) {
+	getValue := func(typ reflect.Type, name string, fieldVal reflect.Value) (interface{}, error) {
 		switch typ {
 		case reflect.TypeOf((*ProgramSpec)(nil)):
 			if p := cs.Programs[name]; p != nil {
@@ -183,7 +183,19 @@ func (cs *CollectionSpec) LoadAndAssign(to interface{}, opts *CollectionOptions)
 	assignedProgs := make(map[string]bool)
 	assignedVars := make(map[string]bool)
 
-	getValue := func(typ reflect.Type, name string) (interface{}, error) {
+	getValue := func(typ reflect.Type, name string, val reflect.Value) (interface{}, error) {
+		ms := cs.Maps[name]
+		if ms != nil && ms.Type == StructOpsMap {
+			vType := typ
+			if vType.Kind() == reflect.Ptr {
+				vType = vType.Elem()
+			}
+
+			if vType.Kind() == reflect.Struct && typ != reflect.TypeOf((*Map)(nil)) {
+				return loader.loadStructOps(name, val)
+			}
+		}
+
 		switch typ {
 
 		case reflect.TypeOf((*Program)(nil)):
@@ -544,6 +556,38 @@ func (cl *collectionLoader) loadVariable(varName string) (*Variable, error) {
 	return v, nil
 }
 
+// loadStructOps synchronizes a user-provided shadow struct with its MapSpec
+// before the map is created in the kernel.
+//
+// If the field is already instantiated by the user, its values are patched
+// into the MapSpec's raw data buffer. This allows setting initial flags,
+// parameters, and function pointers before the kernel performs
+// struct_ops validation.
+func (cl *collectionLoader) loadStructOps(name string, field reflect.Value) (interface{}, error) {
+	ms := cl.coll.Maps[name]
+	if ms == nil {
+		return nil, fmt.Errorf("map %s: not found in loader", name)
+	}
+
+	if field.IsValid() && field.Kind() == reflect.Struct {
+		userType, ok := btf.As[*btf.Struct](ms.Value)
+		if !ok {
+			return nil, fmt.Errorf("map %s: value type is not a Struct", name)
+		}
+
+		rawData, ok := ms.Contents[0].Value.([]byte)
+		if !ok {
+			return nil, fmt.Errorf("map %s: spec contents are not a byte slice", name)
+		}
+
+		if err := structOpsPatchValue(field, userType, rawData); err != nil {
+			return nil, fmt.Errorf("patching spec from field for %s: %q", name, err)
+		}
+	}
+
+	return field.Interface(), nil
+}
+
 // populateDeferredMaps iterates maps holding programs or other maps and loads
 // any dependencies. Populates all maps in cl and freezes them if specified.
 func (cl *collectionLoader) populateDeferredMaps() error {
@@ -845,7 +889,7 @@ func (coll *Collection) Assign(to interface{}) error {
 
 	// Assign() only transfers already-loaded Maps and Programs. No extra
 	// loading is done.
-	getValue := func(typ reflect.Type, name string) (interface{}, error) {
+	getValue := func(typ reflect.Type, name string, fieldVal reflect.Value) (interface{}, error) {
 		switch typ {
 
 		case reflect.TypeOf((*Program)(nil)):
@@ -999,7 +1043,7 @@ func ebpfFields(structVal reflect.Value, visited map[reflect.Type]bool) ([]struc
 // getValue is called for every tagged field of 'to' and must return the value
 // to be assigned to the field with the given typ and name.
 func assignValues(to interface{},
-	getValue func(typ reflect.Type, name string) (interface{}, error)) error {
+	getValue func(typ reflect.Type, name string, val reflect.Value) (interface{}, error)) error {
 
 	toValue := reflect.ValueOf(to)
 	if toValue.Type().Kind() != reflect.Ptr {
@@ -1037,7 +1081,7 @@ func assignValues(to interface{},
 		}
 
 		// Get the eBPF object referred to by the tag.
-		value, err := getValue(field.Type, tag)
+		value, err := getValue(field.Type, tag, field.value)
 		if err != nil {
 			return fmt.Errorf("field %s: %w", field.Name, err)
 		}

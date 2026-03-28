@@ -29,6 +29,10 @@ func CollectGlobalTypes(spec *ebpf.CollectionSpec) []btf.Type {
 // collectMapTypes collects all types used by MapSpecs.
 func collectMapTypes(types []btf.Type, maps map[string]*ebpf.MapSpec) []btf.Type {
 	for _, m := range maps {
+		if m.Type == ebpf.StructOpsMap {
+			continue
+		}
+
 		if m.Key != nil && m.Key.TypeName() != "" {
 			types = addType(types, m.Key)
 		}

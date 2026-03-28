@@ -12,7 +12,9 @@ import (
 	"github.com/cilium/ebpf/rlimit"
 )
 
-//go:generate go tool bpf2go -no-global-types -tags linux bpf sched_ext.c -- -I../headers/
+const ScxOpsSwitchPartial = 1 << 3
+
+//go:generate go tool bpf2go -tags linux bpf sched_ext.c -- -I../headers/
 
 // Load a minimal defining sched_ext_ops map
 //
@@ -28,6 +30,8 @@ func main() {
 	}
 
 	objs := bpfObjects{}
+	objs.bpfStructOps.StructOpsMinimalSched.Flags = ScxOpsSwitchPartial
+	objs.bpfStructOps.StructOpsMinimalSched.TimeoutMs = 1000
 	if err := loadBpfObjects(&objs, nil); err != nil {
 		log.Fatalf("loading objects: %v", err)
 	}

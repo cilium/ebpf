@@ -118,6 +118,11 @@ type testObjects struct {
 	testPrograms
 	testMaps
 	testVariables
+	testStructOps
+}
+
+// testStructOps contains all struct_ops types.
+type testStructOps struct {
 }
 
 func (o *testObjects) Close() error {

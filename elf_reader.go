@@ -986,7 +986,7 @@ func mapSpecFromBTF(es *elfSection, sym elf.Symbol, v *btf.Var, def *btf.Struct,
 				return nil, errors.New("both key and key_size given")
 			}
 
-			pk, ok := member.Type.(*btf.Pointer)
+			pk, ok := btf.UnderlyingType(member.Type).(*btf.Pointer)
 			if !ok {
 				return nil, fmt.Errorf("key type is not a pointer: %T", member.Type)
 			}
@@ -1005,7 +1005,7 @@ func mapSpecFromBTF(es *elfSection, sym elf.Symbol, v *btf.Var, def *btf.Struct,
 				return nil, errors.New("both value and value_size given")
 			}
 
-			vk, ok := member.Type.(*btf.Pointer)
+			vk, ok := btf.UnderlyingType(member.Type).(*btf.Pointer)
 			if !ok {
 				return nil, fmt.Errorf("value type is not a pointer: %T", member.Type)
 			}
@@ -1155,6 +1155,7 @@ func mapSpecFromBTF(es *elfSection, sym elf.Symbol, v *btf.Var, def *btf.Struct,
 // __ulong emits an enum with a single value that can represent a 64-bit
 // integer. The first (and only) enum value is returned.
 func uintFromBTF(typ btf.Type) (uint64, error) {
+	typ = btf.UnderlyingType(typ)
 	switch t := typ.(type) {
 	case *btf.Pointer:
 		arr, ok := t.Target.(*btf.Array)

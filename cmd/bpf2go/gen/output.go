@@ -139,19 +139,33 @@ func generateStructOpsShadowType(goTypeName string, st *btf.Struct, gf *btf.GoFo
 		}
 
 		var fieldType string
-		if ptr, ok := btf.As[*btf.Pointer](btf.UnderlyingType(m.Type)); ok {
+		underlying := btf.UnderlyingType(m.Type)
+
+		if ptr, ok := btf.As[*btf.Pointer](underlying); ok {
 			if _, ok := btf.As[*btf.FuncProto](btf.UnderlyingType(ptr.Target)); ok {
 				fieldType = "*ebpf.Program"
 			}
 		}
 
 		if fieldType == "" {
+			if _, ok := btf.As[*btf.Struct](underlying); ok {
+				size, _ := btf.Sizeof(m.Type)
+				fieldType = fmt.Sprintf("[%d]byte", size)
+			} else if _, ok := btf.As[*btf.Union](underlying); ok {
+				size, _ := btf.Sizeof(m.Type)
+				fieldType = fmt.Sprintf("[%d]byte", size)
+			}
+		}
+
+		if fieldType == "" {
 			decl, err := gf.TypeDeclaration("T", m.Type)
 			if err != nil {
-				return "", fmt.Errorf("field %s: %w", m.Name, err)
+				size, _ := btf.Sizeof(m.Type)
+				fieldType = fmt.Sprintf("[%d]byte", size)
+			} else {
+				fieldType = strings.TrimPrefix(decl, "type T ")
+				fieldType = strings.TrimRight(fieldType, " \n\t;")
 			}
-			fieldType = strings.TrimPrefix(decl, "type T ")
-			fieldType = strings.Split(fieldType, ";")[0]
 		}
 
 		sb.WriteString(fmt.Sprintf("\t%s %s `ebpf:\"%s\"`\n", fieldName, fieldType, m.Name))

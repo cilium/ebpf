@@ -19,7 +19,10 @@ type bpfStructOpsMinimalSched struct {
 	Init      *ebpf.Program `ebpf:"init"`
 	Flags     uint64        `ebpf:"flags"`
 	TimeoutMs uint32        `ebpf:"timeout_ms"`
-	Name      [128]int8     `ebpf:"name"`
+	_         [4]byte
+	Inner     [16]byte  `ebpf:"inner"`
+	Test1     [8]byte   `ebpf:"test_1"`
+	Name      [128]int8 `ebpf:"name"`
 }
 
 // loadBpf returns the embedded CollectionSpec for bpf.

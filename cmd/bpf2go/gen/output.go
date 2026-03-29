@@ -124,7 +124,7 @@ func generateStructOpsShadowType(goTypeName string, st *btf.Struct, gf *btf.GoFo
 
 	sb.WriteString(fmt.Sprintf("// %s is a struct type for the struct_ops map.\n", goTypeName))
 	sb.WriteString(fmt.Sprintf("type %s struct {\n", goTypeName))
-	sb.WriteString(fmt.Sprintf("\t_ structs.HostLayout\n"))
+	sb.WriteString("\t_ structs.HostLayout\n")
 
 	prevOffset := uint32(0)
 	for _, m := range st.Members {

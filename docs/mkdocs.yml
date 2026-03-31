@@ -110,6 +110,9 @@ plugins:
   # Layout is customized in overrides/partials/source-file.html.
   - git-revision-date-localized:
       type: timeago
+      # /dev/shm is unavailable on Netlify builders and this plugin uses
+      # python's multiprocessing, which uses /dev/shm for IPC.
+      enable_parallel_processing: false
   - git-authors:
       show_email_address: false
       authorship_threshold_percent: 10

@@ -94,6 +94,14 @@ type {{ .Name.Objects }} struct {
 	{{ .Name.Programs }}
 	{{ .Name.Maps }}
 	{{ .Name.Variables }}
+	{{ .Name.StructOps }}
+}
+
+// {{ .Name.StructOps }} contains all struct_ops types.
+type {{ .Name.StructOps }} struct {
+{{- range $name, $id := .StructOps }}
+	{{ $id }} {{ $.Name }}{{ $id }} `ebpf:"{{ $name }}"`
+{{- end }}
 }
 
 func (o *{{ .Name.Objects }}) Close() error {

@@ -77,6 +77,11 @@ type counterObjects struct {
 	counterPrograms
 	counterMaps
 	counterVariables
+	counterStructOps
+}
+
+// counterStructOps contains all struct_ops types.
+type counterStructOps struct {
 }
 
 func (o *counterObjects) Close() error {

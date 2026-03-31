@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"reflect"
 	"strings"
+	"unsafe"
 
 	"github.com/cilium/ebpf/btf"
 	"github.com/cilium/ebpf/internal"
@@ -107,6 +108,7 @@ func structOpsCopyMember(m, km btf.Member, data []byte, kernVData []byte) error 
 	dstOff := int(km.Offset.Bytes())
 
 	if srcOff < 0 || srcOff+mSize > len(data) {
+		fmt.Println(srcOff, srcOff+mSize, len(data))
 		return fmt.Errorf("member %q: userdata is too small", m.Name)
 	}
 
@@ -145,16 +147,54 @@ func structOpsIsMemZeroed(data []byte) bool {
 	return true
 }
 
+// structOpsCopyMemberFromStructValue updates a single member in the ELF section data
+// using a value from a generated Go struct.
+//
+// It implements a "partial override" strategy: if the Go field is a zero value,
+// the operation is skipped to preserve the original default value defined in the ELF.
+// Currently, nested structs or unions are not supported for non-zero updates to
+// avoid complex recursive patching.
+func structOpsCopyMemberFromStructValue(fieldVal reflect.Value, m btf.Member, dstOff int, secData []byte) error {
+	kSize, err := btf.Sizeof(m.Type)
+	if err != nil {
+		return fmt.Errorf("btf sizeof: %w", err)
+	}
+
+	srcSize := int(fieldVal.Type().Size())
+	if srcSize != kSize {
+		return fmt.Errorf("size mismatch (Go:%d, Kernel:%d)", srcSize, kSize)
+	}
+
+	if dstOff+kSize > len(secData) {
+		return fmt.Errorf("kernel buffer overflow: dstOff: %v kSize: %v, kernVdata: %v", dstOff, kSize, len(secData))
+	}
+
+	srcPtr := unsafe.Pointer(fieldVal.UnsafeAddr())
+	srcData := unsafe.Slice((*byte)(srcPtr), kSize)
+
+	if structOpsIsMemZeroed(srcData) {
+		return nil
+	}
+
+	underlying := btf.UnderlyingType(m.Type)
+	switch underlying.(type) {
+	case *btf.Struct, *btf.Union:
+		if !structOpsIsMemZeroed(srcData) {
+			return fmt.Errorf("non-zero nested struct is not supported")
+		}
+		return nil
+	}
+
+	copy(secData[dstOff:dstOff+kSize], srcData)
+	return nil
+}
+
 // structOpsSetAttachTo sets p.AttachTo in the expected "struct_name:memberName" format
 // based on the struct definition.
 //
 // this relies on the assumption that each member in the
 // `.struct_ops` section has a relocation at its starting byte offset.
-func structOpsSetAttachTo(
-	sec *elfSection,
-	baseOff uint32,
-	userSt *btf.Struct,
-	progs map[string]*ProgramSpec) error {
+func structOpsSetAttachTo(sec *elfSection, baseOff uint32, userSt *btf.Struct, progs map[string]*ProgramSpec) error {
 	for _, m := range userSt.Members {
 		memberOff := m.Offset
 		sym, ok := sec.relocations[uint64(baseOff+memberOff.Bytes())]
@@ -172,4 +212,53 @@ func structOpsSetAttachTo(
 		p.AttachTo = userSt.Name + ":" + m.Name
 	}
 	return nil
+}
+
+// structOpsPatchValue synchronizes the values of a Go shadow struct into the
+// underlying ELF section data before the map is created.
+//
+// It uses "ebpf" tags to map Go fields to their corresponding BTF members.
+// Function pointers (*Program) are handled separately to perform early
+// relocation by injecting program FDs into the section buffer.
+func structOpsPatchValue(v reflect.Value, userType *btf.Struct, secData []byte) error {
+	t := v.Type()
+
+	for i := range t.NumField() {
+		f := t.Field(i)
+		tag := f.Tag.Get("ebpf")
+		if tag == "" {
+			continue
+		}
+
+		m, err := structOpsFindMemberByName(userType, tag)
+		if err != nil {
+			continue
+		}
+
+		dstOff := int(m.Offset.Bytes())
+		fieldVal := v.Field(i)
+
+		if prog, ok := fieldVal.Interface().(*Program); ok {
+			if prog != nil {
+				if err := structOpsPopulateValue(*m, secData, prog); err != nil {
+					return fmt.Errorf("member %s: %w", tag, err)
+				}
+			}
+			continue
+		}
+
+		if err := structOpsCopyMemberFromStructValue(fieldVal, *m, dstOff, secData); err != nil {
+			return fmt.Errorf("member %s: %w", tag, err)
+		}
+	}
+	return nil
+}
+
+func structOpsFindMemberByName(st *btf.Struct, name string) (*btf.Member, error) {
+	for _, m := range st.Members {
+		if m.Name == name {
+			return &m, nil
+		}
+	}
+	return nil, fmt.Errorf("member %q not found", name)
 }

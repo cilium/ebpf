@@ -79,6 +79,10 @@ func (n templateName) Programs() string {
 	return string(n) + "Programs"
 }
 
+func (n templateName) StructOps() string {
+	return string(n) + "StructOps"
+}
+
 func (n templateName) CloseHelper() string {
 	return "_" + toUpperFirst(string(n)) + "Close"
 }
@@ -104,6 +108,76 @@ type GenerateArgs struct {
 	Output io.Writer
 	// Function which transforms the input into a valid go identifier. Uses the default behaviour if nil
 	Identifier func(string) string
+	// StructOps to be emitted
+	StructOps []StructOpsSpec
+}
+
+type StructOpsSpec struct {
+	Name string
+	Type *btf.Struct
+}
+
+// generateStructOpsShadowType produces a Go struct definition that mirrors the memory
+// layout of a BTF struct, specifically for use with struct_ops maps.
+func generateStructOpsShadowType(goTypeName string, st *btf.Struct, gf *btf.GoFormatter) (string, error) {
+	var sb strings.Builder
+
+	sb.WriteString(fmt.Sprintf("// %s is a struct type for the struct_ops map.\n", goTypeName))
+	sb.WriteString(fmt.Sprintf("type %s struct {\n", goTypeName))
+	sb.WriteString("\t_ structs.HostLayout\n")
+
+	prevOffset := uint32(0)
+	for _, m := range st.Members {
+		offset := m.Offset.Bytes()
+		if padding := offset - prevOffset; padding > 0 {
+			sb.WriteString(fmt.Sprintf("\t_ [%d]byte\n", padding))
+		}
+
+		fieldName := gf.Identifier(m.Name)
+		if fieldName == "" {
+			continue
+		}
+
+		var fieldType string
+		underlying := btf.UnderlyingType(m.Type)
+
+		if ptr, ok := btf.As[*btf.Pointer](underlying); ok {
+			if _, ok := btf.As[*btf.FuncProto](btf.UnderlyingType(ptr.Target)); ok {
+				fieldType = "*ebpf.Program"
+			}
+		}
+
+		if fieldType == "" {
+			if _, ok := btf.As[*btf.Struct](underlying); ok {
+				size, _ := btf.Sizeof(m.Type)
+				fieldType = fmt.Sprintf("[%d]byte", size)
+			} else if _, ok := btf.As[*btf.Union](underlying); ok {
+				size, _ := btf.Sizeof(m.Type)
+				fieldType = fmt.Sprintf("[%d]byte", size)
+			}
+		}
+
+		if fieldType == "" {
+			decl, err := gf.TypeDeclaration("T", m.Type)
+			if err != nil {
+				size, _ := btf.Sizeof(m.Type)
+				fieldType = fmt.Sprintf("[%d]byte", size)
+			} else {
+				fieldType = strings.TrimPrefix(decl, "type T ")
+				fieldType = strings.TrimRight(fieldType, " \n\t;")
+			}
+		}
+
+		sb.WriteString(fmt.Sprintf("\t%s %s `ebpf:\"%s\"`\n", fieldName, fieldType, m.Name))
+		size, err := btf.Sizeof(m.Type)
+		if err != nil {
+			return "", fmt.Errorf("field %s: %w", m.Name, err)
+		}
+		prevOffset = offset + uint32(size)
+	}
+
+	sb.WriteString("}\n")
+	return sb.String(), nil
 }
 
 // Generate bindings for a BPF ELF file.
@@ -149,6 +223,12 @@ func Generate(args GenerateArgs) error {
 		typeNames[typ] = args.Stem + args.Identifier(typ.TypeName())
 	}
 
+	structOps := make(map[string]string)
+	for _, stOps := range args.StructOps {
+		goTypeName := "StructOps" + args.Identifier(stOps.Name)
+		structOps[stOps.Name] = goTypeName
+	}
+
 	// Ensure we don't have conflicting names and generate a sorted list of
 	// named types so that the output is stable.
 	types, err := sortTypes(typeNames)
@@ -174,6 +254,16 @@ func Generate(args GenerateArgs) error {
 		typeDecls = append(typeDecls, decl)
 	}
 
+	for _, st := range args.StructOps {
+		goTypeName := args.Stem + "StructOps" + args.Identifier(st.Name)
+		decl, err := generateStructOpsShadowType(goTypeName, st.Type, gf)
+		if err != nil {
+			return err
+		}
+		typeDecls = append(typeDecls, decl)
+		needsStructsPkg = true
+	}
+
 	ctx := struct {
 		Module           string
 		Package          string
@@ -185,6 +275,7 @@ func Generate(args GenerateArgs) error {
 		TypeDeclarations []string
 		File             string
 		NeedsStructsPkg  bool
+		StructOps        map[string]string
 	}{
 		b2gInt.CurrentModule,
 		args.Package,
@@ -196,6 +287,7 @@ func Generate(args GenerateArgs) error {
 		typeDecls,
 		args.ObjectFile,
 		needsStructsPkg,
+		structOps,
 	}
 
 	var buf bytes.Buffer

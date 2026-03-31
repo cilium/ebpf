@@ -103,6 +103,11 @@ type bpfObjects struct {
 	bpfPrograms
 	bpfMaps
 	bpfVariables
+	bpfStructOps
+}
+
+// bpfStructOps contains all struct_ops types.
+type bpfStructOps struct {
 }
 
 func (o *bpfObjects) Close() error {

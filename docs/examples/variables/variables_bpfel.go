@@ -80,6 +80,11 @@ type variablesObjects struct {
 	variablesPrograms
 	variablesMaps
 	variablesVariables
+	variablesStructOps
+}
+
+// variablesStructOps contains all struct_ops types.
+type variablesStructOps struct {
 }
 
 func (o *variablesObjects) Close() error {

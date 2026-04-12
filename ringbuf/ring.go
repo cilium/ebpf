@@ -10,11 +10,45 @@ import (
 	"github.com/cilium/ebpf/internal/sys"
 )
 
+type eventRing interface {
+	size() int
+	AvailableBytes() uint64
+	readRecordUnsafe(rec *Record) error
+	advanceTo(pos uintptr)
+	pendingPosition() uintptr
+	Close() error
+}
+
+// ringbufHeader from 'struct bpf_ringbuf_hdr' in kernel/bpf/ringbuf.c
+type ringbufHeader struct {
+	Len uint32
+	_   uint32 // pg_off, only used by kernel internals
+}
+
+const ringbufHeaderSize = int(unsafe.Sizeof(ringbufHeader{}))
+
+func (rh *ringbufHeader) isBusy() bool {
+	return rh.Len&sys.BPF_RINGBUF_BUSY_BIT != 0
+}
+
+func (rh *ringbufHeader) isDiscard() bool {
+	return rh.Len&sys.BPF_RINGBUF_DISCARD_BIT != 0
+}
+
+func (rh *ringbufHeader) dataLen() int {
+	return int(rh.Len & ^uint32(sys.BPF_RINGBUF_BUSY_BIT|sys.BPF_RINGBUF_DISCARD_BIT))
+}
+
 type ringReader struct {
 	// These point into mmap'ed memory and must be accessed atomically.
 	prod_pos, cons_pos *uintptr
 	mask               uintptr
 	ring               []byte
+
+	// Logical consumer position tracking deferred advancement.
+	// Only valid when hasPending is true.
+	pendingCons uintptr
+	hasPending  bool
 }
 
 func newRingReader(cons_ptr, prod_ptr *uintptr, ring []byte) *ringReader {
@@ -41,10 +75,17 @@ func (rr *ringReader) AvailableBytes() uint64 {
 	return uint64(prod - cons)
 }
 
-// Read a record from an event ring.
-func (rr *ringReader) readRecord(rec *Record) error {
+// Reads the next non-discard record from the ring buffer.
+//
+// Sets rec.RawSample to a slice of the mmap'd ring buffer memory and does
+// not advance the consumer position. Call advanceTo to release the space.
+func (rr *ringReader) readRecordUnsafe(rec *Record) error {
 	prod := atomic.LoadUintptr(rr.prod_pos)
-	cons := atomic.LoadUintptr(rr.cons_pos)
+
+	cons := rr.pendingCons
+	if !rr.hasPending {
+		cons = atomic.LoadUintptr(rr.cons_pos)
+	}
 
 	for {
 		if remaining := prod - cons; remaining == 0 {
@@ -81,21 +122,38 @@ func (rr *ringReader) readRecord(rec *Record) error {
 
 		if header.isDiscard() {
 			// when the record header indicates that the data should be
-			// discarded, we skip it by just updating the consumer position
+			// discarded, we skip it by just updating the pending position
 			// to the next record.
-			atomic.StoreUintptr(rr.cons_pos, cons)
+			rr.pendingCons = cons
+			rr.hasPending = true
 			continue
 		}
 
-		if n := header.dataLen(); cap(rec.RawSample) < n {
-			rec.RawSample = make([]byte, n)
-		} else {
-			rec.RawSample = rec.RawSample[:n]
-		}
-
-		copy(rec.RawSample, rr.ring[start:])
+		n := header.dataLen()
+		rec.RawSample = rr.ring[start : start+uintptr(n)]
 		rec.Remaining = int(prod - cons)
-		atomic.StoreUintptr(rr.cons_pos, cons)
+		rr.pendingCons = cons
+		rr.hasPending = true
 		return nil
 	}
+}
+
+// Sets the consumer position to pos, releasing ring buffer space up to that
+// point. If pos matches the current pending read cursor, resets the pending
+// state so the next read starts from the committed position.
+func (rr *ringReader) advanceTo(pos uintptr) {
+	atomic.StoreUintptr(rr.cons_pos, pos)
+	if rr.hasPending && pos == rr.pendingCons {
+		rr.hasPending = false
+	}
+}
+
+// Returns the current read cursor position. This is the consumer position
+// that includes all records read so far (including discards) but not yet
+// committed.
+func (rr *ringReader) pendingPosition() uintptr {
+	if rr.hasPending {
+		return rr.pendingCons
+	}
+	return atomic.LoadUintptr(rr.cons_pos)
 }

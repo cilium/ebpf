@@ -27,78 +27,52 @@ var (
 
 func TestExecutable(t *testing.T) {
 	_, err := OpenExecutable("")
-	if err == nil {
-		t.Fatal("create executable: expected error on empty path")
-	}
+	qt.Assert(t, qt.IsNotNil(err))
 
 	_, err = OpenExecutable("/non/existent/path")
-	if err == nil {
-		t.Fatal("create executable: expected error on non-existent path")
-	}
+	qt.Assert(t, qt.ErrorIs(err, os.ErrNotExist))
+
 	var pe *os.PathError
 	qt.Assert(t, qt.ErrorAs(err, &pe))
 
 	// create temp non-executable file
 	dir := t.TempDir()
 	path := filepath.Join(dir, "file.txt")
-	err = os.WriteFile(path, []byte("hello"), 0600)
-	if err != nil {
-		t.Fatalf("write file: %v", err)
-	}
+	qt.Assert(t, qt.IsNil(os.WriteFile(path, []byte("hello"), 0600)))
 
 	_, err = OpenExecutable(path)
-	if err != nil {
-		t.Fatal("create executable: unexpected error on non-executable file")
-	}
+	qt.Assert(t, qt.IsNil(err))
 
 	// make it executable
 	err = os.Chmod(path, 0700)
-	if err != nil {
-		t.Fatalf("chmod file: %v", err)
-	}
+	qt.Assert(t, qt.IsNil(err))
 
 	_, err = OpenExecutable(path)
-	if err != nil {
-		t.Fatalf("create executable: %v", err)
-	}
+	qt.Assert(t, qt.IsNil(err))
 
-	if bashEx.path != "/bin/bash" {
-		t.Fatalf("create executable: unexpected path '%s'", bashEx.path)
-	}
+	qt.Assert(t, qt.Equals(bashEx.path, "/bin/bash"))
 
 	_, err = bashEx.address(bashSym, 0, 0)
-	if err != nil {
-		t.Fatalf("find offset: %v", err)
-	}
+	qt.Assert(t, qt.IsNil(err))
 
 	_, err = bashEx.address("bogus", 0, 0)
-	if err == nil {
-		t.Fatal("find symbol: expected error")
-	}
+	qt.Assert(t, qt.IsNotNil(err))
 }
 
 func TestExecutableOffset(t *testing.T) {
 	symbolOffset, err := bashEx.address(bashSym, 0, 0)
-	if err != nil {
-		t.Fatal(err)
-	}
+	qt.Assert(t, qt.IsNil(err))
 
 	offset, err := bashEx.address(bashSym, 0x1, 0)
-	if err != nil {
-		t.Fatal(err)
-	}
+	qt.Assert(t, qt.IsNil(err))
 	qt.Assert(t, qt.Equals(offset, 0x1))
 
 	offset, err = bashEx.address(bashSym, 0, 0x2)
-	if err != nil {
-		t.Fatal(err)
-	}
+	qt.Assert(t, qt.IsNil(err))
 	qt.Assert(t, qt.Equals(offset, symbolOffset+0x2))
 
 	offset, err = bashEx.address(bashSym, 0x1, 0x2)
-	if err != nil {
-		t.Fatal(err)
-	}
+	qt.Assert(t, qt.IsNil(err))
 	qt.Assert(t, qt.Equals(offset, 0x1+0x2))
 }
 
@@ -169,9 +143,7 @@ func TestUprobeExtNotFound(t *testing.T) {
 
 	// This symbol will not be present in Executable (elf.SHN_UNDEF).
 	_, err := bashEx.Uprobe("open", prog, nil)
-	if err == nil {
-		t.Fatal("expected error")
-	}
+	qt.Assert(t, qt.IsNotNil(err))
 }
 
 func TestUprobeExtWithOpts(t *testing.T) {
@@ -185,9 +157,7 @@ func TestUprobeExtWithOpts(t *testing.T) {
 		// arm64 requires the addresses to be aligned (a multiple of 4)
 		Address: 0x4,
 	})
-	if err != nil {
-		t.Fatal(err)
-	}
+	qt.Assert(t, qt.IsNil(err))
 	defer up.Close()
 }
 
@@ -197,9 +167,7 @@ func TestUprobeWithPID(t *testing.T) {
 	prog := mustLoadProgram(t, ebpf.Kprobe, 0, "")
 
 	up, err := bashEx.Uprobe(bashSym, prog, &UprobeOptions{PID: os.Getpid()})
-	if err != nil {
-		t.Fatal(err)
-	}
+	qt.Assert(t, qt.IsNil(err))
 	defer up.Close()
 }
 
@@ -208,9 +176,7 @@ func TestUprobeWithNonExistentPID(t *testing.T) {
 
 	// trying to open a perf event on a non-existent PID will return ESRCH.
 	_, err := bashEx.Uprobe(bashSym, prog, &UprobeOptions{PID: -2})
-	if !errors.Is(err, unix.ESRCH) {
-		t.Fatalf("expected ESRCH, got %v", err)
-	}
+	qt.Assert(t, qt.ErrorIs(err, unix.ESRCH))
 }
 
 func TestUretprobe(t *testing.T) {
@@ -368,9 +334,7 @@ func TestUprobeProgramCall(t *testing.T) {
 
 			// Load the executable.
 			ex, err := OpenExecutable(tt.elf)
-			if err != nil {
-				t.Fatal(err)
-			}
+			qt.Assert(t, qt.IsNil(err))
 
 			// Open Uprobe on the executable for the given symbol
 			// and attach it to the ebpf program created above.
@@ -381,15 +345,11 @@ func TestUprobeProgramCall(t *testing.T) {
 				// certain OS (eg. Debian) strip binaries.
 				t.Skipf("executable %s appear to be stripped, skipping", tt.elf)
 			}
-			if err != nil {
-				t.Fatal(err)
-			}
+			qt.Assert(t, qt.IsNil(err))
 
 			// Trigger ebpf program call.
 			trigger := func(t *testing.T) {
-				if err := exec.Command(tt.elf, tt.args...).Run(); err != nil {
-					t.Fatal(err)
-				}
+				qt.Assert(t, qt.IsNil(exec.Command(tt.elf, tt.args...).Run()))
 			}
 			trigger(t)
 
@@ -398,14 +358,10 @@ func TestUprobeProgramCall(t *testing.T) {
 			assertMapValueGE(t, m, 0, 1)
 
 			// Detach the Uprobe.
-			if err := u.Close(); err != nil {
-				t.Fatal(err)
-			}
+			qt.Assert(t, qt.IsNil(u.Close()))
 
 			// Reset map value to 0 at index 0.
-			if err := m.Update(uint32(0), uint32(0), ebpf.UpdateExist); err != nil {
-				t.Fatal(err)
-			}
+			qt.Assert(t, qt.IsNil(m.Update(uint32(0), uint32(0), ebpf.UpdateExist)))
 
 			// Retrigger the ebpf program call.
 			trigger(t)
@@ -423,9 +379,7 @@ func TestUprobeProgramWrongPID(t *testing.T) {
 
 	// Load the '/bin/bash' executable.
 	ex, err := OpenExecutable("/bin/bash")
-	if err != nil {
-		t.Fatal(err)
-	}
+	qt.Assert(t, qt.IsNil(err))
 
 	// Open Uprobe on '/bin/bash' for the symbol 'main'
 	// and attach it to the ebpf program created above.
@@ -433,15 +387,11 @@ func TestUprobeProgramWrongPID(t *testing.T) {
 	// to make sure the event is not fired when we will try
 	// to trigger the program execution via exec.
 	u, err := ex.Uprobe("main", p, &UprobeOptions{PID: os.Getpid()})
-	if err != nil {
-		t.Fatal(err)
-	}
+	qt.Assert(t, qt.IsNil(err))
 	defer u.Close()
 
 	// Trigger ebpf program call.
-	if err := exec.Command("/bin/bash", "--help").Run(); err != nil {
-		t.Fatal(err)
-	}
+	qt.Assert(t, qt.IsNil(exec.Command("/bin/bash", "--help").Run()))
 
 	// Assert that the value at index 0 is still 0.
 	assertMapValue(t, m, 0, 0)

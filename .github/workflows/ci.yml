@@ -138,7 +138,7 @@ jobs:
       - run: go install lmb.io/vimto@latest
       - run: go install gotest.tools/gotestsum@v1.12.3
 
-      - uses: awalsh128/cache-apt-pkgs-action@latest
+      - uses: awalsh128/cache-apt-pkgs-action@v1.6.0
         with:
           packages: qemu-system-x86
 
@@ -231,7 +231,7 @@ jobs:
       - run: go install gotest.tools/gotestsum@v1.12.3
       - run: go install lmb.io/vimto@latest
 
-      - uses: awalsh128/cache-apt-pkgs-action@latest
+      - uses: awalsh128/cache-apt-pkgs-action@v1.6.0
         with:
           packages: qemu-system-x86
 
@@ -262,7 +262,7 @@ jobs:
 
       - run: go install lmb.io/vimto@latest
 
-      - uses: awalsh128/cache-apt-pkgs-action@latest
+      - uses: awalsh128/cache-apt-pkgs-action@v1.6.0
         with:
           packages: qemu-system-x86
 

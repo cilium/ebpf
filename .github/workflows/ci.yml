@@ -143,7 +143,11 @@ jobs:
 
       - run: go install lmb.io/vimto@latest
       - run: go install gotest.tools/gotestsum@v1.12.3
-      - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends qemu-system-x86
+
+      - uses: awalsh128/cache-apt-pkgs-action@latest
+        with:
+          packages: qemu-system-x86
+
       - run: sudo chmod 0666 /dev/kvm
 
       - name: Test
@@ -236,7 +240,11 @@ jobs:
 
       - run: go install gotest.tools/gotestsum@v1.12.3
       - run: go install lmb.io/vimto@latest
-      - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends qemu-system-x86
+
+      - uses: awalsh128/cache-apt-pkgs-action@latest
+        with:
+          packages: qemu-system-x86
+
       - run: sudo chmod 0666 /dev/kvm
 
       - name: Test

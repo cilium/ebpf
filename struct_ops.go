@@ -15,11 +15,7 @@ const structOpsLinkSec = ".struct_ops.link"
 const structOpsSec = ".struct_ops"
 const structOpsKeySize = 4
 
-// structOpsMemberLayout is a normalized view of a single struct_ops member.
-//
-// It caches the member itself together with the byte offset, size, and
-// underlying BTF type so callers don't need to repeatedly resolve these
-// properties from btf.Member.
+// structOpsMemberLayout describes the location and type of a struct_ops member.
 type structOpsMemberLayout struct {
 	member btf.Member
 	off    int
@@ -27,16 +23,7 @@ type structOpsMemberLayout struct {
 	typ    btf.Type
 }
 
-// newStructOpsMemberLayout extracts reusable layout information from a
-// struct_ops member.
-//
-// The returned layout contains:
-//   - off:  byte offset of the member within the value buffer
-//   - size: size of the member in bytes
-//   - typ:  underlying type with modifiers / typedefs stripped
-//
-// Bitfields are rejected here since the current struct_ops population logic
-// doesn't support partial-bit writes.
+// newStructOpsMemberLayout returns a layout information from a struct_ops member.
 func newStructOpsMemberLayout(m btf.Member) (*structOpsMemberLayout, error) {
 	if m.BitfieldSize > 0 {
 		return nil, fmt.Errorf("bitfield %s not supported", m.Name)
@@ -60,10 +47,7 @@ func newStructOpsMemberLayout(m btf.Member) (*structOpsMemberLayout, error) {
 	}, nil
 }
 
-// bytes returns the byte range in buf corresponding to the member.
-//
-// It is used to isolate bounds checking from the actual write logic, so
-// callers can focus on encoding / copying the member value itself.
+// bytes returns the portion of `buf` corresponding to the member.
 func (ml *structOpsMemberLayout) bytes(buf []byte) ([]byte, error) {
 	if ml.off < 0 || ml.off+ml.size > len(buf) {
 		return nil, fmt.Errorf("member %q: value buffer too small", ml.member.Name)
@@ -71,10 +55,7 @@ func (ml *structOpsMemberLayout) bytes(buf []byte) ([]byte, error) {
 	return buf[ml.off : ml.off+ml.size], nil
 }
 
-// structOpsFuncPtrMember verifies that m is a function pointer member.
-//
-// struct_ops program references are written only into members whose type is
-// "pointer to func prototype". This helper centralizes that validation.
+// structOpsFuncPtrMember returns an error unless m is a func pointer member.
 func structOpsFuncPtrMember(m btf.Member) error {
 	kmPtr, ok := btf.As[*btf.Pointer](m.Type)
 	if !ok {
@@ -156,18 +137,7 @@ func structOpsPopulateValue(km btf.Member, kernVData []byte, p *Program) error {
 	return nil
 }
 
-// structOpsValidateMemberPair checks whether a user-space member m can be
-// copied into the corresponding kernel struct_ops member km.
-//
-// The validation is intentionally limited to the requirements of the current
-// struct_ops copy path:
-//   - both members must be supported by newStructOpsMemberLayout
-//   - both members must have the same size
-//   - both members must have the same underlying BTF kind after stripping
-//     modifiers and typedefs
-//
-// It returns the validated member size so callers can reuse it for subsequent
-// bounds checks and copying.
+// structOpsValidateMemberPair checks whether `m` can be copied into `km`.
 func structOpsValidateMemberPair(m, km btf.Member) (int, error) {
 	mLayout, err := newStructOpsMemberLayout(m)
 	if err != nil {
@@ -190,20 +160,7 @@ func structOpsValidateMemberPair(m, km btf.Member) (int, error) {
 	return mLayout.size, nil
 }
 
-// structOpsCopyMemberBytes copies the raw bytes of member m from the user data
-// buffer into the matching kernel struct_ops value member km.
-//
-// The size argument is expected to have been validated beforehand, typically by
-// structOpsValidateMemberPair. This function is responsible only for:
-//
-//   - resolving the source and destination byte ranges
-//   - checking that both buffers are large enough
-//   - rejecting non-zero nested structs / unions, which are not supported by
-//     the current struct_ops population logic
-//   - copying the member bytes for supported scalar / plain members
-//
-// Nested aggregate members are not recursively copied. Zero-valued nested
-// structs / unions are accepted and skipped.
+// structOpsCopyMemberBytes copies the bytes of `m` into `km`.
 func structOpsCopyMemberBytes(m, km btf.Member, data, kernVData []byte, size int) error {
 	mLayout, err := newStructOpsMemberLayout(m)
 	if err != nil {
@@ -244,12 +201,7 @@ func structOpsCopyMemberBytes(m, km btf.Member, data, kernVData []byte, size int
 	return nil
 }
 
-// structOpsCopyMember copies a single member from the user struct (m)
-// into the kernel value struct (km) for struct_ops.
-//
-// Validation of size and type compatibility is performed separately from the
-// raw byte copy so the logic can be reused by future struct_ops member update
-// paths.
+// structOpsCopyMember copies `m` into `km`.
 func structOpsCopyMember(m, km btf.Member, data []byte, kernVData []byte) error {
 	size, err := structOpsValidateMemberPair(m, km)
 	if err != nil {
@@ -273,7 +225,11 @@ func structOpsIsMemZeroed(data []byte) bool {
 //
 // this relies on the assumption that each member in the
 // `.struct_ops` section has a relocation at its starting byte offset.
-func structOpsSetAttachTo(sec *elfSection, baseOff uint32, userSt *btf.Struct, progs map[string]*ProgramSpec) error {
+func structOpsSetAttachTo(
+	sec *elfSection,
+	baseOff uint32,
+	userSt *btf.Struct,
+	progs map[string]*ProgramSpec) error {
 	for _, m := range userSt.Members {
 		memberOff := m.Offset
 		sym, ok := sec.relocations[uint64(baseOff+memberOff.Bytes())]

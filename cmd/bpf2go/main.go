@@ -7,6 +7,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"maps"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -89,6 +90,9 @@ type bpf2go struct {
 	// Base directory of the Makefile. Enables outputting make-style dependencies
 	// in .d files.
 	makeBase string
+	// Path to a JSON compilation database. If non-empty, an entry for the source
+	// file is upserted before compilation starts.
+	compdb string
 }
 
 func (b2g *bpf2go) Debugln(a ...any) {
@@ -115,6 +119,8 @@ func newB2G(stdout io.Writer, args []string) (*bpf2go, error) {
 	flagTarget := fs.String("target", "bpfel,bpfeb", "clang target(s) to compile for (comma separated)")
 	fs.StringVar(&b2g.makeBase, "makebase", getEnv("BPF2GO_MAKEBASE", ""),
 		"write make compatible depinfo files relative to `directory` ($BPF2GO_MAKEBASE)")
+	fs.StringVar(&b2g.compdb, "compdb", getEnv("BPF2GO_COMPDB", ""),
+		"upsert an entry for the source into compile_commands.json at `path` ($BPF2GO_COMPDB)")
 	fs.Var(&b2g.cTypes, "type", "`Name` of a type to generate a Go declaration for, may be repeated")
 	fs.BoolVar(&b2g.skipGlobalTypes, "no-global-types", false, "Skip generating types for map keys and values, etc.")
 	fs.StringVar(&b2g.outputStem, "output-stem", "", "alternative stem for names of generated files (defaults to ident)")
@@ -197,6 +203,13 @@ func newB2G(stdout io.Writer, args []string) (*bpf2go, error) {
 
 	if b2g.makeBase != "" {
 		b2g.makeBase, err = filepath.Abs(b2g.makeBase)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	if b2g.compdb != "" {
+		b2g.compdb, err = filepath.Abs(b2g.compdb)
 		if err != nil {
 			return nil, err
 		}
@@ -307,6 +320,12 @@ func (b2g *bpf2go) convertAll() (err error) {
 		return err
 	}
 
+	if b2g.compdb != "" {
+		if err := b2g.writeCompDBEntry(); err != nil {
+			return fmt.Errorf("compdb: %w", err)
+		}
+	}
+
 	if !b2g.disableStripping {
 		b2g.strip, err = exec.LookPath(b2g.strip)
 		if err != nil {
@@ -321,6 +340,46 @@ func (b2g *bpf2go) convertAll() (err error) {
 	}
 
 	return nil
+}
+
+func (b2g *bpf2go) writeCompDBEntry() error {
+	targets := slices.SortedFunc(maps.Keys(b2g.targetArches), func(a, b gen.Target) int {
+		return strings.Compare(a.Suffix(), b.Suffix())
+	})
+	tgt := targets[0]
+
+	outputStem := b2g.outputStem
+	if outputStem == "" {
+		outputStem = strings.ToLower(b2g.identStem)
+	}
+	stem := fmt.Sprintf("%s_%s%s", outputStem, tgt.Suffix(), b2g.outputSuffix)
+
+	absOutPath, err := filepath.Abs(b2g.outputDir)
+	if err != nil {
+		return err
+	}
+	cwd, err := os.Getwd()
+	if err != nil {
+		return err
+	}
+
+	argv, err := gen.Argv(gen.CompileArgs{
+		CC:      b2g.cc,
+		Flags:   b2g.cFlags,
+		Workdir: cwd,
+		Source:  b2g.sourceFile,
+		Dest:    filepath.Join(absOutPath, stem+".o"),
+		Target:  tgt,
+	})
+	if err != nil {
+		return err
+	}
+
+	return writeCompDB(b2g.compdb, compdbEntry{
+		Directory: filepath.Dir(b2g.sourceFile),
+		File:      b2g.sourceFile,
+		Arguments: argv,
+	})
 }
 
 func (b2g *bpf2go) convert(tgt gen.Target, goarches gen.GoArches) (err error) {

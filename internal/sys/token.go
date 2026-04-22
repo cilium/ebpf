@@ -143,7 +143,8 @@ func findToken() (*Token, error) {
 
 	for _, mount := range mounts {
 		tok, err := newToken(mount)
-		if errors.Is(err, unix.EINVAL) || // tokens not supported or mount not a bpffs
+		if errors.Is(err, unix.EACCES) || // lacking privileges to open mount dir
+			errors.Is(err, unix.EINVAL) || // tokens not supported or mount not a bpffs
 			errors.Is(err, unix.EPERM) || // CAP_BPF missing or mount not owned by current user namespace
 			errors.Is(err, unix.EOPNOTSUPP) || // cannot use token in init user namespace
 			errors.Is(err, unix.ENOENT) { // no permissions delegated to this bpffs

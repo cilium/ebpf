@@ -82,6 +82,11 @@ const (
 	MOVE_MOUNT_F_EMPTY_PATH    = linux.MOVE_MOUNT_F_EMPTY_PATH
 	AF_UNIX                    = linux.AF_UNIX
 	SOCK_STREAM                = linux.SOCK_STREAM
+	SOCK_CLOEXEC               = linux.SOCK_CLOEXEC
+	FSOPEN_CLOEXEC             = linux.FSOPEN_CLOEXEC
+	FSMOUNT_CLOEXEC            = linux.FSMOUNT_CLOEXEC
+	MSG_CMSG_CLOEXEC           = linux.MSG_CMSG_CLOEXEC
+	SizeofInt                  = linux.SizeofInt
 )
 
 type Statfs_t = linux.Statfs_t

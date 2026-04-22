@@ -305,10 +305,12 @@ fixups:
 			return nil, fmt.Errorf("kfuncMetaKey doesn't contain kfuncMeta")
 		}
 
-		// findTargetInKernel returns btf.ErrNotFound if the input btf.Spec is nil.
+		// findTargetInKernel returns btf.ErrNotFound if the input btf.Spec is nil,
+		// and returns ErrNotSupported if the btf file is not located at the hard-coded locations.
+		// In both cases, we want to poison the call if it's weak, and error out if it's not.
 		target := btf.Type((*btf.Func)(nil))
 		spec, module, err := findTargetInKernel(kfm.Func.Name, &target, cache)
-		if errors.Is(err, btf.ErrNotFound) {
+		if errors.Is(err, btf.ErrNotFound) || errors.Is(err, ErrNotSupported) {
 			if kfm.Binding == elf.STB_WEAK {
 				if ins.IsKfuncCall() {
 					// If the kfunc call is weak and not found, poison the call. Use a

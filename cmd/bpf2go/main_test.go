@@ -125,6 +125,29 @@ func TestErrorMentionsEnvVar(t *testing.T) {
 	qt.Assert(t, qt.StringContains(err.Error(), gopackageEnv), qt.Commentf("Error should include name of environment variable"))
 }
 
+func TestCompDB(t *testing.T) {
+	dir := t.TempDir()
+	mustWriteFile(t, dir, "test.c", minimalSocketFilter)
+	dbPath := filepath.Join(dir, "compile_commands.json")
+
+	err := run(io.Discard, []string{
+		"-go-package", "foo",
+		"-output-dir", dir,
+		"-cc", testutils.ClangBin(t),
+		"-no-strip",
+		"-compdb", dbPath,
+		"bar",
+		filepath.Join(dir, "test.c"),
+	})
+	qt.Assert(t, qt.IsNil(err))
+
+	db := readCompDB(t, dbPath)
+	qt.Assert(t, qt.HasLen(db, 1))
+	qt.Check(t, qt.Equals(db[0].File, filepath.Join(dir, "test.c")))
+	qt.Check(t, qt.SliceContains(db[0].Arguments, "-c"))
+	qt.Check(t, qt.SliceContains(db[0].Arguments, "-target"))
+}
+
 func TestDisableStripping(t *testing.T) {
 	dir := t.TempDir()
 	mustWriteFile(t, dir, "test.c", minimalSocketFilter)
@@ -226,6 +249,31 @@ func TestParseArgs(t *testing.T) {
 		b2g, err := newB2G(&bytes.Buffer{}, args)
 		qt.Assert(t, qt.IsNil(err))
 		qt.Assert(t, qt.Equals(b2g.makeBase, basePath))
+	})
+
+	t.Run("compdb", func(t *testing.T) {
+		t.Setenv(gopackageEnv, pkg)
+		dbPath, _ := filepath.Abs("compile_commands.json")
+		args := []string{"-compdb", dbPath, stem, csource}
+		b2g, err := newB2G(&bytes.Buffer{}, args)
+		qt.Assert(t, qt.IsNil(err))
+		qt.Assert(t, qt.Equals(b2g.compdb, dbPath))
+	})
+
+	t.Run("compdb from env", func(t *testing.T) {
+		t.Setenv(gopackageEnv, pkg)
+		dbPath, _ := filepath.Abs("compile_commands.json")
+		t.Setenv("BPF2GO_COMPDB", dbPath)
+		b2g, err := newB2G(&bytes.Buffer{}, []string{stem, csource})
+		qt.Assert(t, qt.IsNil(err))
+		qt.Assert(t, qt.Equals(b2g.compdb, dbPath))
+	})
+
+	t.Run("compdb unset", func(t *testing.T) {
+		t.Setenv(gopackageEnv, pkg)
+		b2g, err := newB2G(&bytes.Buffer{}, []string{stem, csource})
+		qt.Assert(t, qt.IsNil(err))
+		qt.Assert(t, qt.Equals(b2g.compdb, ""))
 	})
 
 	t.Run("makebase flag overrides env", func(t *testing.T) {

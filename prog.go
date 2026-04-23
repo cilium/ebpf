@@ -1178,12 +1178,12 @@ func findProgramTargetInKernel(name string, progType ProgramType, attachType Att
 // target will point at the found type after a successful call. Searches both
 // vmlinux and any loaded modules.
 //
-// Returns a non-nil handle if the type was found in a module, or btf.ErrNotFound
-// if the type wasn't found at all.
+// Returns a non-nil handle if the type was found in a module, [btf.ErrNotFound]
+// if the type wasn't found or if BTF is not enabled.
 func findTargetInKernel(typeName string, target *btf.Type, cache *btf.Cache) (*btf.Spec, *btf.Handle, error) {
 	kernelSpec, err := cache.Kernel()
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, fmt.Errorf("load kernel spec: %w (%w)", btf.ErrNotFound, err)
 	}
 
 	err = kernelSpec.TypeByName(typeName, target)

@@ -36,8 +36,9 @@ func FlushKernelSpec() {
 
 // LoadKernelSpec returns the current kernel's BTF information.
 //
-// Defaults to /sys/kernel/btf/vmlinux and falls back to scanning the file system
-// for vmlinux ELFs. Returns an error wrapping ErrNotSupported if BTF is not enabled.
+// Defaults to /sys/kernel/btf/vmlinux and falls back to scanning the file
+// system for vmlinux ELFs. Returns an error wrapping [ErrNotSupported] if BTF
+// is not enabled.
 //
 // Consider using [Cache] instead.
 func LoadKernelSpec() (*Spec, error) {
@@ -261,6 +262,8 @@ func NewCache() *Cache {
 
 // Kernel is equivalent to [LoadKernelSpec], except that repeated calls do
 // not copy the Spec.
+//
+// Returns an error wrapping [ErrNotSupported] if BTF is not enabled.
 func (c *Cache) Kernel() (*Spec, error) {
 	if c.kernelTypes != nil {
 		return c.kernelTypes, nil

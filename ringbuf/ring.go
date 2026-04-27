@@ -13,14 +13,20 @@ import (
 type ringReader struct {
 	// These point into mmap'ed memory and must be accessed atomically.
 	prod_pos, cons_pos *uintptr
-	mask               uintptr
-	ring               []byte
+
+	// Local consumer position to support reading multiple messages from the ring
+	// before committing.
+	localCons uintptr
+
+	mask uintptr
+	ring []byte
 }
 
 func newRingReader(cons_ptr, prod_ptr *uintptr, ring []byte) *ringReader {
 	return &ringReader{
-		prod_pos: prod_ptr,
-		cons_pos: cons_ptr,
+		prod_pos:  prod_ptr,
+		cons_pos:  cons_ptr,
+		localCons: *cons_ptr,
 		// cap is always a power of two
 		mask: uintptr(cap(ring)/2 - 1),
 		ring: ring,
@@ -34,17 +40,24 @@ func (rr *ringReader) size() int {
 	return cap(rr.ring) / 2
 }
 
-// The amount of data available to read in the ring buffer.
+// The amount of data available to read in the ring buffer. Only tracks
+// committed cursors.
 func (rr *ringReader) AvailableBytes() uint64 {
 	prod := atomic.LoadUintptr(rr.prod_pos)
 	cons := atomic.LoadUintptr(rr.cons_pos)
 	return uint64(prod - cons)
 }
 
+// commit sets the consumer position in shared kernel memory to the local
+// consumer position.
+func (rr *ringReader) commit() {
+	atomic.StoreUintptr(rr.cons_pos, rr.localCons)
+}
+
 // Read a record from an event ring.
 func (rr *ringReader) readRecord(rec *Record) error {
 	prod := atomic.LoadUintptr(rr.prod_pos)
-	cons := atomic.LoadUintptr(rr.cons_pos)
+	cons := rr.localCons
 
 	for {
 		if remaining := prod - cons; remaining == 0 {
@@ -58,7 +71,7 @@ func (rr *ringReader) readRecord(rec *Record) error {
 		// without BPF_RINGBUF_BUSY_BIT before the written data is visible.
 		// See https://github.com/torvalds/linux/blob/v6.8/kernel/bpf/ringbuf.c#L484
 		start := cons & rr.mask
-		len := atomic.LoadUint32((*uint32)((unsafe.Pointer)(&rr.ring[start])))
+		len := atomic.LoadUint32((*uint32)(unsafe.Pointer(&rr.ring[start])))
 		header := ringbufHeader{Len: len}
 
 		if header.isBusy() {
@@ -83,7 +96,8 @@ func (rr *ringReader) readRecord(rec *Record) error {
 			// when the record header indicates that the data should be
 			// discarded, we skip it by just updating the consumer position
 			// to the next record.
-			atomic.StoreUintptr(rr.cons_pos, cons)
+			rr.localCons = cons
+			rr.commit()
 			continue
 		}
 
@@ -95,7 +109,9 @@ func (rr *ringReader) readRecord(rec *Record) error {
 
 		copy(rec.RawSample, rr.ring[start:])
 		rec.Remaining = int(prod - cons)
-		atomic.StoreUintptr(rr.cons_pos, cons)
+
+		rr.localCons = cons
+		rr.commit()
 		return nil
 	}
 }

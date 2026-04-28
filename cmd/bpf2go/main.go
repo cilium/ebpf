@@ -430,6 +430,8 @@ func (b2g *bpf2go) convert(tgt gen.Target, goarches gen.GoArches) (err error) {
 		types = append(types, gen.CollectGlobalTypes(spec)...)
 	}
 
+	types = deduplicateTypes(types)
+
 	// Write out generated go
 	goFileName := filepath.Join(absOutPath, stem+".go")
 	goFile, err := os.Create(goFileName)
@@ -535,6 +537,21 @@ func collectCTypes(types *btf.Spec, names []string) ([]btf.Type, error) {
 		result = append(result, typ)
 	}
 	return result, nil
+}
+
+func deduplicateTypes(types []btf.Type) []btf.Type {
+	seen := make(map[string]bool)
+	result := make([]btf.Type, 0, len(types))
+	for _, typ := range types {
+		name := typ.TypeName()
+		if name == "" || !seen[name] {
+			result = append(result, typ)
+			if name != "" {
+				seen[name] = true
+			}
+		}
+	}
+	return result
 }
 
 const gopackageEnv = "GOPACKAGE"

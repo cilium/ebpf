@@ -14,9 +14,10 @@ import (
 )
 
 var (
-	ErrClosed = os.ErrClosed
-	errEOR    = errors.New("end of ring")
-	errBusy   = errors.New("sample not committed yet")
+	ErrClosed  = os.ErrClosed
+	errEOR     = errors.New("end of ring")
+	errBusy    = errors.New("sample not committed yet")
+	errDiscard = errors.New("sample should be discarded")
 )
 
 // poller abstracts platform-specific event notification.
@@ -189,7 +190,7 @@ func (r *Reader) ReadInto(rec *Record) error {
 			err := r.ring.readRecord(rec)
 			// Not using errors.Is which is quite a bit slower
 			// For a tight loop it might make a difference
-			if err == errBusy {
+			if err == errBusy || err == errDiscard {
 				continue
 			}
 			if err == errEOR {

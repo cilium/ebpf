@@ -325,39 +325,34 @@ func TestReadAfterClose(t *testing.T) {
 func BenchmarkReader(b *testing.B) {
 	testutils.SkipOnOldKernel(b, "5.8", "BPF ring buffer")
 
-	readerBenchmarks := []struct {
-		name  string
-		flags int32
-	}{
-		{
-			name: "normal epoll with timeout -1",
-		},
+	prog, events := mustOutputSamplesProg(b, sampleMessage{size: 80})
+
+	rd, err := NewReader(events)
+	if err != nil {
+		b.Fatal(err)
+	}
+	defer rd.Close()
+
+	b.ResetTimer()
+	b.ReportAllocs()
+
+	// Manually track and report read time since the testing framework's
+	// calibration doesn't account for BPF prog run time if the timer is
+	// stopped during the run, causing it to scale to millions of b.N per run
+	// and hanging the benchmark.
+	var readTime time.Duration
+
+	for b.Loop() {
+		mustRun(b, prog)
+
+		start := time.Now()
+		if _, err := rd.Read(); err != nil {
+			b.Fatal("Can't read samples:", err)
+		}
+		readTime += time.Since(start)
 	}
 
-	for _, bm := range readerBenchmarks {
-		b.Run(bm.name, func(b *testing.B) {
-			prog, events := mustOutputSamplesProg(b, sampleMessage{size: 80, flags: bm.flags})
-
-			rd, err := NewReader(events)
-			if err != nil {
-				b.Fatal(err)
-			}
-			defer rd.Close()
-
-			b.ReportAllocs()
-
-			for b.Loop() {
-				b.StopTimer()
-				mustRun(b, prog)
-				b.StartTimer()
-
-				_, err = rd.Read()
-				if err != nil {
-					b.Fatal("Can't read samples:", err)
-				}
-			}
-		})
-	}
+	b.ReportMetric(float64(readTime.Nanoseconds())/float64(b.N), "ns/op")
 }
 
 func BenchmarkReadInto(b *testing.B) {
@@ -371,16 +366,21 @@ func BenchmarkReadInto(b *testing.B) {
 	}
 	defer rd.Close()
 
+	b.ResetTimer()
 	b.ReportAllocs()
+
+	var readTime time.Duration
 
 	var rec Record
 	for b.Loop() {
-		b.StopTimer()
 		mustRun(b, prog)
-		b.StartTimer()
 
+		start := time.Now()
 		if err := rd.ReadInto(&rec); err != nil {
 			b.Fatal("Can't read samples:", err)
 		}
+		readTime += time.Since(start)
 	}
+
+	b.ReportMetric(float64(readTime.Nanoseconds())/float64(b.N), "ns/op")
 }

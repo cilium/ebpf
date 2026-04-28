@@ -65,59 +65,57 @@ func (rr *ringReader) readRecord(rec *Record) error {
 	prod := rr.prod_pos.Load()
 	cons := rr.localCons
 
-	for {
-		if remaining := prod - cons; remaining == 0 {
-			return errEOR
-		} else if remaining < sys.BPF_RINGBUF_HDR_SZ {
-			return fmt.Errorf("read record header: %w", io.ErrUnexpectedEOF)
-		}
+	if remaining := prod - cons; remaining == 0 {
+		return errEOR
+	} else if remaining < sys.BPF_RINGBUF_HDR_SZ {
+		return fmt.Errorf("read record header: %w", io.ErrUnexpectedEOF)
+	}
 
-		// read the len field of the header atomically to ensure a happens before
-		// relationship with the xchg in the kernel. Without this we may see len
-		// without BPF_RINGBUF_BUSY_BIT before the written data is visible.
-		// See https://github.com/torvalds/linux/blob/v6.8/kernel/bpf/ringbuf.c#L484
-		start := cons & rr.mask
-		len := atomic.LoadUint32((*uint32)(unsafe.Pointer(&rr.data[start])))
-		header := ringbufHeader{Len: len}
+	// read the len field of the header atomically to ensure a happens before
+	// relationship with the xchg in the kernel. Without this we may see len
+	// without BPF_RINGBUF_BUSY_BIT before the written data is visible.
+	// See https://github.com/torvalds/linux/blob/v6.8/kernel/bpf/ringbuf.c#L484
+	start := cons & rr.mask
+	len := atomic.LoadUint32((*uint32)(unsafe.Pointer(&rr.data[start])))
+	header := ringbufHeader{Len: len}
 
-		if header.isBusy() {
-			// the next sample in the ring is not committed yet so we
-			// exit without storing the reader/consumer position
-			// and start again from the same position.
-			return errBusy
-		}
+	if header.isBusy() {
+		// the next sample in the ring is not committed yet so we
+		// exit without storing the reader/consumer position
+		// and start again from the same position.
+		return errBusy
+	}
 
-		cons += sys.BPF_RINGBUF_HDR_SZ
+	cons += sys.BPF_RINGBUF_HDR_SZ
 
-		// Data is always padded to 8 byte alignment.
-		dataLenAligned := uintptr(internal.Align(header.dataLen(), 8))
-		if remaining := prod - cons; remaining < dataLenAligned {
-			return fmt.Errorf("read sample data: %w", io.ErrUnexpectedEOF)
-		}
+	// Data is always padded to 8 byte alignment.
+	dataLenAligned := uintptr(internal.Align(header.dataLen(), 8))
+	if remaining := prod - cons; remaining < dataLenAligned {
+		return fmt.Errorf("read sample data: %w", io.ErrUnexpectedEOF)
+	}
 
-		start = cons & rr.mask
-		cons += dataLenAligned
+	start = cons & rr.mask
+	cons += dataLenAligned
 
-		if header.isDiscard() {
-			// when the record header indicates that the data should be
-			// discarded, we skip it by just updating the consumer position
-			// to the next record.
-			rr.localCons = cons
-			rr.commit()
-			continue
-		}
-
-		if n := header.dataLen(); cap(rec.RawSample) < n {
-			rec.RawSample = make([]byte, n)
-		} else {
-			rec.RawSample = rec.RawSample[:n]
-		}
-
-		copy(rec.RawSample, rr.data[start:])
-		rec.Remaining = int(prod - cons)
-
+	if header.isDiscard() {
+		// when the record header indicates that the data should be
+		// discarded, we skip it by just updating the consumer position
+		// to the next record.
 		rr.localCons = cons
 		rr.commit()
-		return nil
+		return errDiscard
 	}
+
+	if n := header.dataLen(); cap(rec.RawSample) < n {
+		rec.RawSample = make([]byte, n)
+	} else {
+		rec.RawSample = rec.RawSample[:n]
+	}
+
+	copy(rec.RawSample, rr.data[start:])
+	rec.Remaining = int(prod - cons)
+
+	rr.localCons = cons
+	rr.commit()
+	return nil
 }

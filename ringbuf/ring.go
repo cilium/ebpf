@@ -10,53 +10,59 @@ import (
 	"github.com/cilium/ebpf/internal/sys"
 )
 
+// ringReader abstracts reading from a bpf ringbuf.
 type ringReader struct {
-	// These point into mmap'ed memory and must be accessed atomically.
-	prod_pos, cons_pos *uintptr
+	prod_pos, cons_pos *atomic.Uintptr
 
 	// Local consumer position to support reading multiple messages from the ring
 	// before committing.
 	localCons uintptr
 
+	// mask is the range of valid record start offsets, limited to the first half
+	// of the double-mapped data pages.
 	mask uintptr
-	ring []byte
+
+	// data contains the double-mapped data pages of the ringbuf.
+	data []byte
 }
 
-func newRingReader(cons_ptr, prod_ptr *uintptr, ring []byte) *ringReader {
+// newRingReader creates a new ringReader with the given producer and consumer
+// pointers and data pages.
+func newRingReader(cons_ptr, prod_ptr *atomic.Uintptr, data []byte) *ringReader {
 	return &ringReader{
 		prod_pos:  prod_ptr,
 		cons_pos:  cons_ptr,
-		localCons: *cons_ptr,
+		localCons: cons_ptr.Load(),
 		// cap is always a power of two
-		mask: uintptr(cap(ring)/2 - 1),
-		ring: ring,
+		mask: uintptr(cap(data)/2 - 1),
+		data: data,
 	}
 }
 
-// To be able to wrap around data, data pages in ring buffers are mapped twice in
-// a single contiguous virtual region.
-// Therefore the returned usable size is half the size of the mmaped region.
+// To be able to wrap around data, data pages in ring buffers are mapped twice
+// in a single contiguous virtual region. Therefore the returned usable size is
+// half the size of the mmaped region.
 func (rr *ringReader) size() int {
-	return cap(rr.ring) / 2
+	return cap(rr.data) / 2
 }
 
 // The amount of data available to read in the ring buffer. Only tracks
 // committed cursors.
 func (rr *ringReader) AvailableBytes() uint64 {
-	prod := atomic.LoadUintptr(rr.prod_pos)
-	cons := atomic.LoadUintptr(rr.cons_pos)
-	return uint64(prod - cons)
+	return uint64(rr.prod_pos.Load() - rr.cons_pos.Load())
 }
 
 // commit sets the consumer position in shared kernel memory to the local
 // consumer position.
 func (rr *ringReader) commit() {
-	atomic.StoreUintptr(rr.cons_pos, rr.localCons)
+	rr.cons_pos.Store(rr.localCons)
 }
 
 // Read a record from an event ring.
 func (rr *ringReader) readRecord(rec *Record) error {
-	prod := atomic.LoadUintptr(rr.prod_pos)
+	// Read kernel memory once per wakeup to avoid TOCTOU and unnecessary
+	// synchronization.
+	prod := rr.prod_pos.Load()
 	cons := rr.localCons
 
 	for {
@@ -71,7 +77,7 @@ func (rr *ringReader) readRecord(rec *Record) error {
 		// without BPF_RINGBUF_BUSY_BIT before the written data is visible.
 		// See https://github.com/torvalds/linux/blob/v6.8/kernel/bpf/ringbuf.c#L484
 		start := cons & rr.mask
-		len := atomic.LoadUint32((*uint32)(unsafe.Pointer(&rr.ring[start])))
+		len := atomic.LoadUint32((*uint32)(unsafe.Pointer(&rr.data[start])))
 		header := ringbufHeader{Len: len}
 
 		if header.isBusy() {
@@ -107,7 +113,7 @@ func (rr *ringReader) readRecord(rec *Record) error {
 			rec.RawSample = rec.RawSample[:n]
 		}
 
-		copy(rec.RawSample, rr.ring[start:])
+		copy(rec.RawSample, rr.data[start:])
 		rec.Remaining = int(prod - cons)
 
 		rr.localCons = cons

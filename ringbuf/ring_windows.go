@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"runtime"
+	"sync/atomic"
 	"unsafe"
 
 	"github.com/cilium/ebpf/internal/efw"
@@ -44,8 +45,8 @@ func newRingBufEventRing(mapFD, size int) (*windowsEventRing, error) {
 	}
 
 	// consPtr and prodPtr are guaranteed to be page size aligned.
-	consPos := (*uintptr)(unsafe.Pointer(consPtr))
-	prodPos := (*uintptr)(unsafe.Pointer(prodPtr))
+	consPos := (*atomic.Uintptr)(unsafe.Pointer(consPtr))
+	prodPos := (*atomic.Uintptr)(unsafe.Pointer(prodPtr))
 	data := unsafe.Slice(dataPtr, dataLen*2)
 
 	ring := &windowsEventRing{

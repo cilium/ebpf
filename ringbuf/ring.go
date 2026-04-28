@@ -6,7 +6,6 @@ import (
 	"sync/atomic"
 	"unsafe"
 
-	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/sys"
 )
 
@@ -58,17 +57,25 @@ func (rr *ringReader) commit() {
 	rr.cons_pos.Store(rr.localCons)
 }
 
-// Read a record from an event ring.
-func (rr *ringReader) readRecord(rec *Record) error {
+// readSample returns the next sample from the ring buffer. data contains the
+// sample's bytes, remain is the remaining number of bytes in the buffer after
+// this sample.
+//
+// Returns [errEOR] if the end of the ring is reached. Any other errors indicate
+// an integrity issue with the ring and are unrecoverable, meaning the ring
+// should not be used further.
+//
+// If data and err are nil, the sample was discarded by the producer.
+func (rr *ringReader) readSample() (data []byte, remain int, err error) {
 	// Read kernel memory once per wakeup to avoid TOCTOU and unnecessary
 	// synchronization.
 	prod := rr.prod_pos.Load()
 	cons := rr.localCons
 
 	if remaining := prod - cons; remaining == 0 {
-		return errEOR
+		return nil, 0, errEOR
 	} else if remaining < sys.BPF_RINGBUF_HDR_SZ {
-		return fmt.Errorf("read record header: %w", io.ErrUnexpectedEOF)
+		return nil, 0, fmt.Errorf("read record header: %w", io.ErrUnexpectedEOF)
 	}
 
 	// read the len field of the header atomically to ensure a happens before
@@ -83,19 +90,18 @@ func (rr *ringReader) readRecord(rec *Record) error {
 		// the next sample in the ring is not committed yet so we
 		// exit without storing the reader/consumer position
 		// and start again from the same position.
-		return errBusy
+		return nil, 0, errBusy
 	}
 
 	cons += sys.BPF_RINGBUF_HDR_SZ
 
-	// Data is always padded to 8 byte alignment.
-	dataLenAligned := uintptr(internal.Align(header.dataLen(), 8))
-	if remaining := prod - cons; remaining < dataLenAligned {
-		return fmt.Errorf("read sample data: %w", io.ErrUnexpectedEOF)
+	aligned := uintptr(header.dataLenAligned())
+	if remaining := prod - cons; remaining < aligned {
+		return nil, 0, fmt.Errorf("read sample data: %w", io.ErrUnexpectedEOF)
 	}
 
 	start = cons & rr.mask
-	cons += dataLenAligned
+	cons += aligned
 
 	if header.isDiscard() {
 		// when the record header indicates that the data should be
@@ -103,19 +109,29 @@ func (rr *ringReader) readRecord(rec *Record) error {
 		// to the next record.
 		rr.localCons = cons
 		rr.commit()
-		return errDiscard
+		return nil, 0, errDiscard
 	}
-
-	if n := header.dataLen(); cap(rec.RawSample) < n {
-		rec.RawSample = make([]byte, n)
-	} else {
-		rec.RawSample = rec.RawSample[:n]
-	}
-
-	copy(rec.RawSample, rr.data[start:])
-	rec.Remaining = int(prod - cons)
 
 	rr.localCons = cons
 	rr.commit()
+
+	return rr.data[start : start+uintptr(header.dataLen())], int(prod - cons), nil
+}
+
+func (rr *ringReader) readRecord(rec *Record) error {
+	data, remain, err := rr.readSample()
+	if err != nil {
+		return err
+	}
+
+	if cap(rec.RawSample) < len(data) {
+		rec.RawSample = make([]byte, len(data))
+	} else {
+		rec.RawSample = rec.RawSample[:len(data)]
+	}
+
+	copy(rec.RawSample, data)
+	rec.Remaining = remain
+
 	return nil
 }

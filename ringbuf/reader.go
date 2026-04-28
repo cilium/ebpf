@@ -9,6 +9,7 @@ import (
 	"unsafe"
 
 	"github.com/cilium/ebpf"
+	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/platform"
 	"github.com/cilium/ebpf/internal/sys"
 )
@@ -53,6 +54,12 @@ func (rh *ringbufHeader) isDiscard() bool {
 
 func (rh *ringbufHeader) dataLen() int {
 	return int(rh.Len & ^uint32(sys.BPF_RINGBUF_BUSY_BIT|sys.BPF_RINGBUF_DISCARD_BIT))
+}
+
+// dataLenAligned returns the length of the sample data as specified in the
+// header, aligned to an 8 byte boundary.
+func (rh *ringbufHeader) dataLenAligned() int {
+	return int(internal.Align(rh.dataLen(), 8))
 }
 
 type Record struct {

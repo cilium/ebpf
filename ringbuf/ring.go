@@ -47,8 +47,8 @@ func (rr *ringReader) size() int {
 
 // The amount of data available to read in the ring buffer. Only tracks
 // committed cursors.
-func (rr *ringReader) AvailableBytes() uint64 {
-	return uint64(rr.prod_pos.Load() - rr.cons_pos.Load())
+func (rr *ringReader) available() int {
+	return int(rr.prod_pos.Load() - rr.cons_pos.Load())
 }
 
 // commit sets the consumer position in shared kernel memory to the local

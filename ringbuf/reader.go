@@ -31,9 +31,9 @@ type poller interface {
 // eventRing abstracts platform-specific ring buffer memory access.
 type eventRing interface {
 	size() int
-	AvailableBytes() uint64
+	available() int
 	readRecord(rec *Record) error
-	Close() error
+	close() error
 }
 
 // ringbufHeader from 'struct bpf_ringbuf_hdr' in kernel/bpf/ringbuf.c
@@ -133,7 +133,7 @@ func (r *Reader) Close() error {
 
 	var err error
 	if r.ring != nil {
-		err = r.ring.Close()
+		err = r.ring.close()
 		r.ring = nil
 	}
 
@@ -222,7 +222,5 @@ func (r *Reader) Flush() error {
 
 // AvailableBytes returns the amount of data available to read in the ring buffer in bytes.
 func (r *Reader) AvailableBytes() int {
-	// Don't need to acquire the lock here since the implementation of AvailableBytes
-	// performs atomic loads on the producer and consumer positions.
-	return int(r.ring.AvailableBytes())
+	return r.ring.available()
 }

@@ -63,7 +63,7 @@ func newRingBufEventRing(mapFD, size int) (*windowsEventRing, error) {
 	return ring, nil
 }
 
-func (ring *windowsEventRing) Close() error {
+func (ring *windowsEventRing) close() error {
 	ring.cleanup.Stop()
 
 	return errors.Join(

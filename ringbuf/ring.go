@@ -67,6 +67,9 @@ func (rr *ringReader) commit() {
 // should not be used further.
 //
 // If data and err are nil, the sample was discarded by the producer.
+//
+// [ringReader.commit] must be called to advance the consumer position after
+// every nil error, even if data is nil.
 func (rr *ringReader) readSample() (data []byte, remain int, err error) {
 	// Read kernel memory once per wakeup to avoid TOCTOU and unnecessary
 	// synchronization.
@@ -110,7 +113,6 @@ retry:
 	cons += aligned
 
 	rr.localCons = cons
-	rr.commit()
 
 	remain = int(prod - cons)
 	data = rr.data[start : start+uintptr(header.dataLen())]
@@ -130,6 +132,9 @@ retry:
 	if err != nil {
 		return err
 	}
+
+	rr.commit()
+
 	if data == nil {
 		// Sample was discarded, try to read the next one.
 		goto retry

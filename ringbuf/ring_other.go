@@ -58,7 +58,7 @@ func newRingBufEventRing(mapFD, size int) (*mmapEventRing, error) {
 	return ring, nil
 }
 
-func (ring *mmapEventRing) Close() error {
+func (ring *mmapEventRing) close() error {
 	ring.cleanup.Stop()
 
 	prod, cons := ring.prod, ring.cons

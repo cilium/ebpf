@@ -10,15 +10,12 @@ import (
 
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/internal"
-	"github.com/cilium/ebpf/internal/platform"
 	"github.com/cilium/ebpf/internal/sys"
 )
 
 var (
-	ErrClosed  = os.ErrClosed
-	errEOR     = errors.New("end of ring")
-	errBusy    = errors.New("sample not committed yet")
-	errDiscard = errors.New("sample should be discarded")
+	ErrClosed = os.ErrClosed
+	errEOR    = errors.New("end of ring")
 )
 
 // poller abstracts platform-specific event notification.
@@ -77,29 +74,28 @@ type Reader struct {
 	// mu protects read/write access to the Reader structure
 	mu         sync.Mutex
 	ring       eventRing
-	haveData   bool
 	deadline   time.Time
 	bufferSize int
-	pendingErr error
+	drainErr   error
 }
 
 // NewReader creates a new BPF ringbuf reader.
-func NewReader(ringbufMap *ebpf.Map) (*Reader, error) {
-	if ringbufMap.Type() != ebpf.RingBuf && ringbufMap.Type() != ebpf.WindowsRingBuf {
-		return nil, fmt.Errorf("invalid Map type: %s", ringbufMap.Type())
+func NewReader(m *ebpf.Map) (*Reader, error) {
+	if m.Type() != ebpf.RingBuf && m.Type() != ebpf.WindowsRingBuf {
+		return nil, fmt.Errorf("invalid Map type: %s", m.Type())
 	}
 
-	maxEntries := int(ringbufMap.MaxEntries())
-	if maxEntries == 0 || (maxEntries&(maxEntries-1)) != 0 {
+	maxEntries := int(m.MaxEntries())
+	if maxEntries == 0 || !internal.IsPow(maxEntries) {
 		return nil, fmt.Errorf("ringbuffer map size %d is zero or not a power of two", maxEntries)
 	}
 
-	poller, err := newPoller(ringbufMap.FD())
+	poller, err := newPoller(m.FD())
 	if err != nil {
 		return nil, err
 	}
 
-	ring, err := newRingBufEventRing(ringbufMap.FD(), maxEntries)
+	ring, err := newRingBufEventRing(m.FD(), maxEntries)
 	if err != nil {
 		poller.Close()
 		return nil, fmt.Errorf("failed to create ringbuf ring: %w", err)
@@ -109,10 +105,6 @@ func NewReader(ringbufMap *ebpf.Map) (*Reader, error) {
 		poller:     poller,
 		ring:       ring,
 		bufferSize: ring.size(),
-		// On Windows, the wait handle is only set when the reader is created,
-		// so we miss any wakeups that happened before.
-		// Do an opportunistic read to get any pending samples.
-		haveData: platform.IsWindows,
 	}, nil
 }
 
@@ -175,35 +167,39 @@ func (r *Reader) ReadInto(rec *Record) error {
 	}
 
 	for {
-		if !r.haveData {
-			if pe := r.pendingErr; pe != nil {
-				r.pendingErr = nil
-				return pe
-			}
-
-			err := r.poller.Wait(r.deadline)
-			if errors.Is(err, os.ErrDeadlineExceeded) || errors.Is(err, ErrFlushed) {
-				// Ignoring this for reading a valid entry after timeout or flush.
-				// This can occur if the producer submitted to the ring buffer
-				// with BPF_RB_NO_WAKEUP.
-				r.pendingErr = err
-			} else if err != nil {
-				return err
-			}
-			r.haveData = true
+		// On Windows, the wait handle is only set when the reader is created, so we
+		// miss any wakeups that happened before. Do an opportunistic read to get
+		// any pending samples.
+		err := r.ring.readRecord(rec)
+		if err == nil {
+			return nil
 		}
 
-		for {
-			err := r.ring.readRecord(rec)
-			// Not using errors.Is which is quite a bit slower
-			// For a tight loop it might make a difference
-			if err == errBusy || err == errDiscard {
-				continue
-			}
-			if err == errEOR {
-				r.haveData = false
-				break
-			}
+		// Avoid [errors.Is] for performance reasons.
+		if err != errEOR {
+			// Bubble up unrecoverable errors to the caller.
+			return err
+		}
+
+		// Ring is empty at this point.
+
+		// Flush any pending drain error from previous call or iteration.
+		if err := r.drainErr; err != nil {
+			r.drainErr = nil
+			return err
+		}
+
+		err = r.poller.Wait(r.deadline)
+		if errors.Is(err, os.ErrDeadlineExceeded) || errors.Is(err, ErrFlushed) {
+			// The poller was interrupted, but there may still be samples in the
+			// ring (e.g. one submitted with BPF_RB_NO_WAKEUP). Store the error
+			// to be able return it after we've drained the ring.
+			r.drainErr = err
+
+			continue
+		}
+
+		if err != nil {
 			return err
 		}
 	}

@@ -3,6 +3,7 @@ package ringbuf
 import (
 	"fmt"
 	"io"
+	"runtime"
 	"sync/atomic"
 	"unsafe"
 
@@ -83,14 +84,19 @@ func (rr *ringReader) readSample() (data []byte, remain int, err error) {
 	// without BPF_RINGBUF_BUSY_BIT before the written data is visible.
 	// See https://github.com/torvalds/linux/blob/v6.8/kernel/bpf/ringbuf.c#L484
 	start := cons & rr.mask
-	len := atomic.LoadUint32((*uint32)(unsafe.Pointer(&rr.data[start])))
-	header := ringbufHeader{Len: len}
+	header := ringbufHeader{}
 
+retry:
+	header.Len = atomic.LoadUint32((*uint32)(unsafe.Pointer(&rr.data[start])))
 	if header.isBusy() {
-		// the next sample in the ring is not committed yet so we
-		// exit without storing the reader/consumer position
-		// and start again from the same position.
-		return nil, 0, errBusy
+		// Sample has not been committed by the bpf program yet but should be
+		// soon. Busypoll without advancing the consumer position.
+
+		// Yield the OS thread to give other goroutines a chance to run. The bpf
+		// side is copying memory into the sample.
+		runtime.Gosched()
+
+		goto retry
 	}
 
 	cons += sys.BPF_RINGBUF_HDR_SZ
@@ -103,25 +109,30 @@ func (rr *ringReader) readSample() (data []byte, remain int, err error) {
 	start = cons & rr.mask
 	cons += aligned
 
-	if header.isDiscard() {
-		// when the record header indicates that the data should be
-		// discarded, we skip it by just updating the consumer position
-		// to the next record.
-		rr.localCons = cons
-		rr.commit()
-		return nil, 0, errDiscard
-	}
-
 	rr.localCons = cons
 	rr.commit()
 
-	return rr.data[start : start+uintptr(header.dataLen())], int(prod - cons), nil
+	remain = int(prod - cons)
+	data = rr.data[start : start+uintptr(header.dataLen())]
+
+	if header.isDiscard() {
+		// Ringbuf space was reserved but then discarded. The consumer needs to
+		// advance, but the sample data should not be returned.
+		return nil, remain, nil
+	}
+
+	return data, remain, nil
 }
 
 func (rr *ringReader) readRecord(rec *Record) error {
+retry:
 	data, remain, err := rr.readSample()
 	if err != nil {
 		return err
+	}
+	if data == nil {
+		// Sample was discarded, try to read the next one.
+		goto retry
 	}
 
 	if cap(rec.RawSample) < len(data) {

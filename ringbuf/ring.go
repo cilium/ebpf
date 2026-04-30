@@ -125,29 +125,3 @@ retry:
 
 	return data, remain, nil
 }
-
-func (rr *ringReader) readRecord(rec *Record) error {
-retry:
-	data, remain, err := rr.readSample()
-	if err != nil {
-		return err
-	}
-
-	rr.commit()
-
-	if data == nil {
-		// Sample was discarded, try to read the next one.
-		goto retry
-	}
-
-	if cap(rec.RawSample) < len(data) {
-		rec.RawSample = make([]byte, len(data))
-	} else {
-		rec.RawSample = rec.RawSample[:len(data)]
-	}
-
-	copy(rec.RawSample, data)
-	rec.Remaining = remain
-
-	return nil
-}

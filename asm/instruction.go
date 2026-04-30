@@ -401,8 +401,14 @@ func (ins Instruction) Format(f fmt.State, c rune) {
 			fmt.Fprintf(f, "%v ", op)
 			switch ins.Src {
 			case PseudoCall:
-				// bpf-to-bpf call
-				fmt.Fprint(f, ins.Constant)
+				// bpf-to-bpf call. For JIT-compiled programs, the kernel stores
+				// the PC offset in the 'off' field (ins.Offset) rather than 'imm'
+				// (ins.Constant). See kernel bpf_insn_prepare_dump in verifier.c.
+				if ins.Offset != 0 {
+					fmt.Fprint(f, ins.Offset)
+				} else {
+					fmt.Fprint(f, ins.Constant)
+				}
 			case PseudoKfuncCall:
 				// kfunc call
 				fmt.Fprintf(f, "Kfunc(%d)", ins.Constant)

@@ -29,7 +29,8 @@ type poller interface {
 type eventRing interface {
 	size() int
 	available() int
-	readRecord(rec *Record) error
+	readSample() (data []byte, remain int, err error)
+	commit()
 	close() error
 }
 
@@ -66,157 +67,110 @@ type Record struct {
 	Remaining int
 }
 
-// Reader allows reading bpf_ringbuf_output
-// from user space.
-type Reader struct {
-	poller poller
-
-	// mu protects read/write access to the Reader structure
-	mu         sync.Mutex
-	ring       eventRing
-	deadline   time.Time
-	bufferSize int
-	drainErr   error
-}
-
-// NewReader creates a new BPF ringbuf reader.
-func NewReader(m *ebpf.Map) (*Reader, error) {
-	if m.Type() != ebpf.RingBuf && m.Type() != ebpf.WindowsRingBuf {
-		return nil, fmt.Errorf("invalid Map type: %s", m.Type())
-	}
-
-	maxEntries := int(m.MaxEntries())
-	if maxEntries == 0 || !internal.IsPow(maxEntries) {
-		return nil, fmt.Errorf("ringbuffer map size %d is zero or not a power of two", maxEntries)
-	}
-
-	poller, err := newPoller(m.FD())
-	if err != nil {
-		return nil, err
-	}
-
-	ring, err := newRingBufEventRing(m.FD(), maxEntries)
-	if err != nil {
-		poller.Close()
-		return nil, fmt.Errorf("failed to create ringbuf ring: %w", err)
-	}
-
-	return &Reader{
-		poller:     poller,
-		ring:       ring,
-		bufferSize: ring.size(),
-	}, nil
-}
-
-// Close frees resources used by the reader.
+// Reader reads [Record]s submitted to a BPF ringbuf.
 //
-// It interrupts calls to Read.
-func (r *Reader) Close() error {
-	if err := r.poller.Close(); err != nil {
-		if errors.Is(err, os.ErrClosed) {
-			return nil
-		}
-		return err
-	}
-
-	// Acquire the lock. This ensures that Read isn't running.
-	r.mu.Lock()
-	defer r.mu.Unlock()
-
-	var err error
-	if r.ring != nil {
-		err = r.ring.close()
-		r.ring = nil
-	}
-
-	return err
+// It is safe for concurrent use by multiple goroutines.
+type Reader struct {
+	mu  sync.Mutex
+	raw *RawReader
 }
 
-// SetDeadline controls how long Read and ReadInto will block waiting for samples.
+// NewReader creates a new BPF ringbuf reader. The given Map must be of type
+// [ebpf.RingBuf] or [ebpf.WindowsRingBuf].
+//
+// The returned Reader is safe for concurrent use by multiple goroutines.
+func NewReader(m *ebpf.Map) (*Reader, error) {
+	raw, err := NewRawReader(m)
+	if err != nil {
+		return nil, fmt.Errorf("create reader: %w", err)
+	}
+	return &Reader{raw: raw}, nil
+}
+
+// Close frees resources used by the reader, unblocking any pending reads.
+//
+// When a read returns [os.ErrClosed], there are no more samples left in the
+// ring.
+func (r *Reader) Close() error {
+	return r.raw.Close()
+}
+
+// SetDeadline controls how long reads will block waiting for samples.
 //
 // Passing a zero time.Time will remove the deadline.
 func (r *Reader) SetDeadline(t time.Time) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	r.deadline = t
+	r.raw.SetDeadline(t)
 }
 
 // Read the next record from the BPF ringbuf.
 //
-// Calling [Close] interrupts the method with [os.ErrClosed]. Calling [Flush]
-// makes it return all records currently in the ring buffer, followed by [ErrFlushed].
+// Returns [os.ErrDeadlineExceeded] if a deadline was set and exceeded. Either
+// no samples were produced, or the producer used BPF_RB_NO_WAKEUP when
+// submitting samples and reading should continue.
 //
-// Returns [os.ErrDeadlineExceeded] if a deadline was set and after all records
-// have been read from the ring.
-//
-// See [ReadInto] for a more efficient version of this method.
+// See [Reader.ReadInto] for a more efficient version of this method.
 func (r *Reader) Read() (Record, error) {
 	var rec Record
 	err := r.ReadInto(&rec)
 	return rec, err
 }
 
-// ReadInto is like Read except that it allows reusing Record and associated buffers.
+// ReadInto is like [Reader.Read], but allows reusing Record and associated
+// buffers.
 func (r *Reader) ReadInto(rec *Record) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	if r.ring == nil {
-		return fmt.Errorf("ringbuffer: %w", ErrClosed)
-	}
-
-	for {
-		// On Windows, the wait handle is only set when the reader is created, so we
-		// miss any wakeups that happened before. Do an opportunistic read to get
-		// any pending samples.
-		err := r.ring.readRecord(rec)
-		if err == nil {
-			return nil
-		}
-
-		// Avoid [errors.Is] for performance reasons.
-		if err != errEOR {
-			// Bubble up unrecoverable errors to the caller.
-			return err
-		}
-
-		// Ring is empty at this point.
-
-		// Flush any pending drain error from previous call or iteration.
-		if err := r.drainErr; err != nil {
-			r.drainErr = nil
-			return err
-		}
-
-		err = r.poller.Wait(r.deadline)
-		if errors.Is(err, os.ErrDeadlineExceeded) || errors.Is(err, ErrFlushed) {
-			// The poller was interrupted, but there may still be samples in the
-			// ring (e.g. one submitted with BPF_RB_NO_WAKEUP). Store the error
-			// to be able return it after we've drained the ring.
-			r.drainErr = err
-
-			continue
-		}
-
+	return r.raw.WithLease(func(s Lease) error {
+	retry:
+		data, remain, err := s.ReadSample()
 		if err != nil {
 			return err
 		}
-	}
+
+		if data == nil {
+			// Consumer needs to advance even if the producer discarded the sample,
+			// since space was reserved for it in the ring.
+			s.Commit()
+
+			// Sample was discarded, try to read the next one.
+			goto retry
+		}
+
+		if cap(rec.RawSample) < len(data) {
+			rec.RawSample = make([]byte, len(data))
+		} else {
+			rec.RawSample = rec.RawSample[:len(data)]
+		}
+
+		copy(rec.RawSample, data)
+		rec.Remaining = remain
+
+		// Advance the reader, invalidating the sample data.
+		s.Commit()
+
+		return nil
+	})
+
 }
 
-// BufferSize returns the size in bytes of the ring buffer
+// BufferSize returns the size in bytes of the ring buffer's data portion.
 func (r *Reader) BufferSize() int {
-	return r.bufferSize
+	return r.raw.BufferSize()
 }
 
-// Flush unblocks Read/ReadInto and successive Read/ReadInto calls will return pending samples at this point,
-// until you receive a ErrFlushed error.
+// Flush unblocks any pending reads. Successive reads will return any and all
+// samples left in the ring (e.g. previously submitted with BPF_RB_NO_WAKEUP).
+// When a read returns [ErrFlushed], there are no more samples left in the ring.
 func (r *Reader) Flush() error {
-	return r.poller.Flush()
+	return r.raw.Flush()
 }
 
-// AvailableBytes returns the amount of data available to read in the ring buffer in bytes.
+// AvailableBytes returns the amount of bytes submitted by the producer that are
+// not yet consumed by the reader, typically for monitoring purposes.
 func (r *Reader) AvailableBytes() int {
-	return r.ring.available()
+	return r.raw.AvailableBytes()
 }

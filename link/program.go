@@ -50,9 +50,10 @@ func RawAttachProgram(opts RawAttachProgramOptions) error {
 			return fmt.Errorf("attach program: %w", err)
 		}
 
-		if flags == sys.BPF_F_REPLACE {
+		if flags&sys.BPF_F_REPLACE != 0 {
 			// Ensure that replacing a program works on old kernels.
 			attr.ReplaceBpfFd = fdOrID
+			attr.AttachFlags |= sys.BPF_F_REPLACE
 		} else {
 			attr.RelativeFdOrId = fdOrID
 			attr.AttachFlags |= flags

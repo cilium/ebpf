@@ -1180,7 +1180,7 @@ func TestMapGuessNonExistentKey(t *testing.T) {
 			MaxEntries: n,
 		}, nil)
 
-		for i := 0; i < n; i++ {
+		for i := range n {
 			if err := hash.Put(uint8(i), uint8(i)); err != nil {
 				t.Fatal(err)
 			}
@@ -2139,7 +2139,7 @@ func ExampleMap_perCPU() {
 		}
 	}
 
-	for k := 0; k < 2; k++ {
+	for k := range 2 {
 		var values []uint32
 		if err := arr.Lookup(uint32(k), &values); err != nil {
 			panic(err)

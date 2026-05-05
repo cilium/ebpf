@@ -61,7 +61,7 @@ func (dcc *deepCopyChecker[T]) check(got, want reflect.Value) error {
 		}
 
 		switch want.Type() {
-		case reflect.TypeOf((*bytes.Reader)(nil)):
+		case reflect.TypeFor[*bytes.Reader]():
 			// bytes.Reader doesn't allow modifying it's contents, so we
 			// allow a shallow copy.
 			return nil

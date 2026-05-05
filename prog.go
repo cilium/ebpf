@@ -274,12 +274,12 @@ func NewProgramWithOptions(spec *ProgramSpec, opts ProgramOptions) (*Program, er
 }
 
 var (
-	coreBadLoad = []byte(fmt.Sprintf("(18) r10 = 0x%x\n", btf.COREBadRelocationSentinel))
+	coreBadLoad = fmt.Appendf(nil, "(18) r10 = 0x%x\n", btf.COREBadRelocationSentinel)
 	// This log message was introduced by ebb676daa1a3 ("bpf: Print function name in
 	// addition to function id") which first appeared in v4.10 and has remained
 	// unchanged since.
-	coreBadCall  = []byte(fmt.Sprintf("invalid func unknown#%d\n", btf.COREBadRelocationSentinel))
-	kfuncBadCall = []byte(fmt.Sprintf("invalid func unknown#%d\n", kfuncCallPoisonBase))
+	coreBadCall  = fmt.Appendf(nil, "invalid func unknown#%d\n", btf.COREBadRelocationSentinel)
+	kfuncBadCall = fmt.Appendf(nil, "invalid func unknown#%d\n", kfuncCallPoisonBase)
 )
 
 func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions, c *btf.Cache) (*Program, error) {
@@ -764,9 +764,9 @@ type RunOptions struct {
 	// Program's data after Program has run. Caller must allocate. Optional field.
 	DataOut []byte
 	// Program's context input. Optional field.
-	Context interface{}
+	Context any
 	// Program's context after Program has run. Must be a pointer or slice. Optional field.
-	ContextOut interface{}
+	ContextOut any
 	// Minimum number of times to run Program. Optional field. Defaults to 1.
 	//
 	// The program may be executed more often than this due to interruptions, e.g.

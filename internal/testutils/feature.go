@@ -172,8 +172,8 @@ func ignoreVersionCheck(tName string) bool {
 		return false
 	}
 
-	ignored := strings.Split(tNames, ",")
-	for _, n := range ignored {
+	ignored := strings.SplitSeq(tNames, ",")
+	for n := range ignored {
 		if strings.TrimSpace(n) == tName {
 			return true
 		}

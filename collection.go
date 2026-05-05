@@ -115,22 +115,22 @@ func copyMapOfSpecs[T interface{ Copy() T }](m map[string]T) map[string]T {
 //
 // Returns an error if any of the eBPF objects can't be found, or
 // if the same Spec is assigned multiple times.
-func (cs *CollectionSpec) Assign(to interface{}) error {
-	getValue := func(typ reflect.Type, name string) (interface{}, error) {
+func (cs *CollectionSpec) Assign(to any) error {
+	getValue := func(typ reflect.Type, name string) (any, error) {
 		switch typ {
-		case reflect.TypeOf((*ProgramSpec)(nil)):
+		case reflect.TypeFor[*ProgramSpec]():
 			if p := cs.Programs[name]; p != nil {
 				return p, nil
 			}
 			return nil, fmt.Errorf("missing program %q", name)
 
-		case reflect.TypeOf((*MapSpec)(nil)):
+		case reflect.TypeFor[*MapSpec]():
 			if m := cs.Maps[name]; m != nil {
 				return m, nil
 			}
 			return nil, fmt.Errorf("missing map %q", name)
 
-		case reflect.TypeOf((*VariableSpec)(nil)):
+		case reflect.TypeFor[*VariableSpec]():
 			if v := cs.Variables[name]; v != nil {
 				return v, nil
 			}
@@ -171,7 +171,7 @@ func (cs *CollectionSpec) Assign(to interface{}) error {
 //
 // Returns an error if any of the fields can't be found, or
 // if the same Map or Program is assigned multiple times.
-func (cs *CollectionSpec) LoadAndAssign(to interface{}, opts *CollectionOptions) error {
+func (cs *CollectionSpec) LoadAndAssign(to any, opts *CollectionOptions) error {
 	loader, err := newCollectionLoader(cs, opts)
 	if err != nil {
 		return err
@@ -183,18 +183,18 @@ func (cs *CollectionSpec) LoadAndAssign(to interface{}, opts *CollectionOptions)
 	assignedProgs := make(map[string]bool)
 	assignedVars := make(map[string]bool)
 
-	getValue := func(typ reflect.Type, name string) (interface{}, error) {
+	getValue := func(typ reflect.Type, name string) (any, error) {
 		switch typ {
 
-		case reflect.TypeOf((*Program)(nil)):
+		case reflect.TypeFor[*Program]():
 			assignedProgs[name] = true
 			return loader.loadProgram(name)
 
-		case reflect.TypeOf((*Map)(nil)):
+		case reflect.TypeFor[*Map]():
 			assignedMaps[name] = true
 			return loader.loadMap(name)
 
-		case reflect.TypeOf((*Variable)(nil)):
+		case reflect.TypeFor[*Variable]():
 			assignedVars[name] = true
 			return loader.loadVariable(name)
 
@@ -838,31 +838,31 @@ func LoadCollection(file string) (*Collection, error) {
 //
 // Ownership and Close()ing responsibility is transferred to `to`
 // for any successful assigns. On error `to` is left in an undefined state.
-func (coll *Collection) Assign(to interface{}) error {
+func (coll *Collection) Assign(to any) error {
 	assignedMaps := make(map[string]bool)
 	assignedProgs := make(map[string]bool)
 	assignedVars := make(map[string]bool)
 
 	// Assign() only transfers already-loaded Maps and Programs. No extra
 	// loading is done.
-	getValue := func(typ reflect.Type, name string) (interface{}, error) {
+	getValue := func(typ reflect.Type, name string) (any, error) {
 		switch typ {
 
-		case reflect.TypeOf((*Program)(nil)):
+		case reflect.TypeFor[*Program]():
 			if p := coll.Programs[name]; p != nil {
 				assignedProgs[name] = true
 				return p, nil
 			}
 			return nil, fmt.Errorf("missing program %q", name)
 
-		case reflect.TypeOf((*Map)(nil)):
+		case reflect.TypeFor[*Map]():
 			if m := coll.Maps[name]; m != nil {
 				assignedMaps[name] = true
 				return m, nil
 			}
 			return nil, fmt.Errorf("missing map %q", name)
 
-		case reflect.TypeOf((*Variable)(nil)):
+		case reflect.TypeFor[*Variable]():
 			if v := coll.Variables[name]; v != nil {
 				assignedVars[name] = true
 				return v, nil
@@ -963,7 +963,7 @@ func ebpfFields(structVal reflect.Value, visited map[reflect.Type]bool) ([]struc
 		// to a struct, attempt to gather its fields as well.
 		var v reflect.Value
 		switch field.Type.Kind() {
-		case reflect.Ptr:
+		case reflect.Pointer:
 			if field.Type.Elem().Kind() != reflect.Struct {
 				continue
 			}
@@ -998,11 +998,9 @@ func ebpfFields(structVal reflect.Value, visited map[reflect.Type]bool) ([]struc
 //
 // getValue is called for every tagged field of 'to' and must return the value
 // to be assigned to the field with the given typ and name.
-func assignValues(to interface{},
-	getValue func(typ reflect.Type, name string) (interface{}, error)) error {
-
+func assignValues(to any, getValue func(typ reflect.Type, name string) (any, error)) error {
 	toValue := reflect.ValueOf(to)
-	if toValue.Type().Kind() != reflect.Ptr {
+	if toValue.Type().Kind() != reflect.Pointer {
 		return fmt.Errorf("%T is not a pointer to struct", to)
 	}
 

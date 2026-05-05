@@ -136,7 +136,7 @@ func TestTypeByNameAmbiguous(t *testing.T) {
 func TestTypeByName(t *testing.T) {
 	spec := vmlinuxTestdataSpec(t)
 
-	for _, typ := range []interface{}{
+	for _, typ := range []any{
 		nil,
 		Struct{},
 		&Struct{},
@@ -512,10 +512,8 @@ func TestSpecConcurrentAccess(t *testing.T) {
 
 	var cond atomic.Int64
 	var wg sync.WaitGroup
-	for i := 0; i < maxprocs; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+	for range maxprocs {
+		wg.Go(func() {
 
 			n := cond.Add(1)
 			for cond.Load() != int64(maxprocs) {
@@ -527,7 +525,7 @@ func TestSpecConcurrentAccess(t *testing.T) {
 			} else {
 				_ = spec.Copy()
 			}
-		}()
+		})
 
 		// Try to get the Goroutines scheduled and spinning.
 		runtime.Gosched()

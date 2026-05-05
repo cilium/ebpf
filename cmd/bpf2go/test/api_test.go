@@ -48,12 +48,12 @@ func TestTypes(t *testing.T) {
 
 	e := testE(0)
 	if size := unsafe.Sizeof(e); size != 4 {
-		t.Error("Expected size of exampleE to be 4, got", size)
+		t.Error("Expected size of testE to be 4, got", size)
 	}
 
 	bf := testBarfoo{}
 	if size := unsafe.Sizeof(bf); size != 16 {
-		t.Error("Expected size of exampleE to be 16, got", size)
+		t.Error("Expected size of testBarfoo to be 16, got", size)
 	}
 	if reflect.TypeOf(bf.Bar).Kind() != reflect.Int64 {
 		t.Error("Expected testBarfoo.Bar to be int64")
@@ -62,6 +62,6 @@ func TestTypes(t *testing.T) {
 		t.Error("Expected testBarfoo.Baz to be bool")
 	}
 	if reflect.TypeOf(bf.Boo) != reflect.TypeOf(e) {
-		t.Error("Expected testBarfoo.Boo to be exampleE")
+		t.Error("Expected testBarfoo.Boo to be testE")
 	}
 }

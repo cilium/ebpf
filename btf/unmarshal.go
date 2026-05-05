@@ -573,7 +573,7 @@ func (d *decoder) inflateType(id TypeID) (typ Type, err error) {
 			vlen := header.Vlen()
 			vars := make([]VarSecinfo, 0, vlen)
 			var bSecInfo btfVarSecinfo
-			for i := 0; i < vlen; i++ {
+			for i := range vlen {
 				n, err := unmarshalBtfVarSecInfo(&bSecInfo, pos, d.byteOrder)
 				if err != nil {
 					return nil, fmt.Errorf("can't unmarshal btfVarSecinfo %d, id: %d: %w", i, id, err)

@@ -104,7 +104,7 @@ func TestProgramVerifierLogLinux(t *testing.T) {
 	// Generate a base program of sufficient size whose verifier log does not fit
 	// in the minimum buffer size. Stay under 4096 insn limit of older kernels.
 	var base asm.Instructions
-	for i := 0; i < 4093; i++ {
+	for range 4093 {
 		base = append(base, asm.Mov.Reg(asm.R0, asm.R1))
 	}
 

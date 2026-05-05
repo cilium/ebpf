@@ -81,7 +81,7 @@ func loadTest() (*ebpf.CollectionSpec, error) {
 //	*testMaps
 //
 // See ebpf.CollectionSpec.LoadAndAssign documentation for details.
-func loadTestObjects(obj interface{}, opts *ebpf.CollectionOptions) error {
+func loadTestObjects(obj any, opts *ebpf.CollectionOptions) error {
 	spec, err := loadTest()
 	if err != nil {
 		return err

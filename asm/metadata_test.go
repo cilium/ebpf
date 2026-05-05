@@ -62,7 +62,7 @@ func BenchmarkMetadata(b *testing.B) {
 
 	b.Run("add last", func(b *testing.B) {
 		var m Metadata
-		for i := 0; i < worstCaseItems-1; i++ {
+		for i := range worstCaseItems - 1 {
 			m.Set(i, i)
 		}
 
@@ -76,7 +76,7 @@ func BenchmarkMetadata(b *testing.B) {
 
 	b.Run("add existing", func(b *testing.B) {
 		var m Metadata
-		for i := 0; i < worstCaseItems-1; i++ {
+		for i := range worstCaseItems - 1 {
 			m.Set(i, i)
 		}
 		m.Set(t{}, 0)
@@ -91,7 +91,7 @@ func BenchmarkMetadata(b *testing.B) {
 
 	b.Run("get miss", func(b *testing.B) {
 		var m Metadata
-		for i := 0; i < worstCaseItems; i++ {
+		for i := range worstCaseItems {
 			m.Set(i, i)
 		}
 

@@ -30,7 +30,8 @@ type poller interface {
 type eventRing interface {
 	size() int
 	AvailableBytes() uint64
-	readRecord(rec *Record) error
+	readRecordFunc(func(sample []byte, remaining int, cons uintptr) error) error
+	commitRecord(cons uintptr)
 	Close() error
 }
 
@@ -77,24 +78,9 @@ type Reader struct {
 
 // NewReader creates a new BPF ringbuf reader.
 func NewReader(ringbufMap *ebpf.Map) (*Reader, error) {
-	if ringbufMap.Type() != ebpf.RingBuf && ringbufMap.Type() != ebpf.WindowsRingBuf {
-		return nil, fmt.Errorf("invalid Map type: %s", ringbufMap.Type())
-	}
-
-	maxEntries := int(ringbufMap.MaxEntries())
-	if maxEntries == 0 || (maxEntries&(maxEntries-1)) != 0 {
-		return nil, fmt.Errorf("ringbuffer map size %d is zero or not a power of two", maxEntries)
-	}
-
-	poller, err := newPoller(ringbufMap.FD())
+	poller, ring, err := newReaderResources(ringbufMap)
 	if err != nil {
 		return nil, err
-	}
-
-	ring, err := newRingBufEventRing(ringbufMap.FD(), maxEntries)
-	if err != nil {
-		poller.Close()
-		return nil, fmt.Errorf("failed to create ringbuf ring: %w", err)
 	}
 
 	return &Reader{
@@ -108,9 +94,33 @@ func NewReader(ringbufMap *ebpf.Map) (*Reader, error) {
 	}, nil
 }
 
+func newReaderResources(ringbufMap *ebpf.Map) (poller, eventRing, error) {
+	if ringbufMap.Type() != ebpf.RingBuf && ringbufMap.Type() != ebpf.WindowsRingBuf {
+		return nil, nil, fmt.Errorf("invalid Map type: %s", ringbufMap.Type())
+	}
+
+	maxEntries := int(ringbufMap.MaxEntries())
+	if maxEntries == 0 || (maxEntries&(maxEntries-1)) != 0 {
+		return nil, nil, fmt.Errorf("ringbuffer map size %d is zero or not a power of two", maxEntries)
+	}
+
+	poller, err := newPoller(ringbufMap.FD())
+	if err != nil {
+		return nil, nil, err
+	}
+
+	ring, err := newRingBufEventRing(ringbufMap.FD(), maxEntries)
+	if err != nil {
+		poller.Close()
+		return nil, nil, fmt.Errorf("failed to create ringbuf ring: %w", err)
+	}
+
+	return poller, ring, nil
+}
+
 // Close frees resources used by the reader.
 //
-// It interrupts calls to Read.
+// It interrupts calls to Read and ReadInto.
 func (r *Reader) Close() error {
 	if err := r.poller.Close(); err != nil {
 		if errors.Is(err, os.ErrClosed) {
@@ -162,43 +172,21 @@ func (r *Reader) ReadInto(rec *Record) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	if r.ring == nil {
-		return fmt.Errorf("ringbuffer: %w", ErrClosed)
-	}
-
-	for {
-		if !r.haveData {
-			if pe := r.pendingErr; pe != nil {
-				r.pendingErr = nil
-				return pe
+	return readWithPoll(r.poller, r.ring, r.deadline, &r.haveData, &r.pendingErr, func() error {
+		return r.ring.readRecordFunc(func(sample []byte, remaining int, cons uintptr) error {
+			n := len(sample)
+			if cap(rec.RawSample) < n {
+				rec.RawSample = make([]byte, n)
+			} else {
+				rec.RawSample = rec.RawSample[:n]
 			}
 
-			err := r.poller.Wait(r.deadline)
-			if errors.Is(err, os.ErrDeadlineExceeded) || errors.Is(err, ErrFlushed) {
-				// Ignoring this for reading a valid entry after timeout or flush.
-				// This can occur if the producer submitted to the ring buffer
-				// with BPF_RB_NO_WAKEUP.
-				r.pendingErr = err
-			} else if err != nil {
-				return err
-			}
-			r.haveData = true
-		}
-
-		for {
-			err := r.ring.readRecord(rec)
-			// Not using errors.Is which is quite a bit slower
-			// For a tight loop it might make a difference
-			if err == errBusy {
-				continue
-			}
-			if err == errEOR {
-				r.haveData = false
-				break
-			}
-			return err
-		}
-	}
+			copy(rec.RawSample, sample)
+			rec.Remaining = remaining
+			r.ring.commitRecord(cons)
+			return nil
+		})
+	})
 }
 
 // BufferSize returns the size in bytes of the ring buffer

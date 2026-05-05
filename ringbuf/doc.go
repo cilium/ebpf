@@ -3,4 +3,7 @@
 // BPF allows submitting custom events to a BPF ring buffer map set up
 // by userspace. This is very useful to push things like packet samples
 // from BPF to a daemon running in user space.
+//
+// UnsafeReader provides zero-copy access to samples and is not safe for
+// concurrent use.
 package ringbuf

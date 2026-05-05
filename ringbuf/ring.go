@@ -41,8 +41,12 @@ func (rr *ringReader) AvailableBytes() uint64 {
 	return uint64(prod - cons)
 }
 
-// Read a record from an event ring.
-func (rr *ringReader) readRecord(rec *Record) error {
+func (rr *ringReader) commitRecord(cons uintptr) {
+	atomic.StoreUintptr(rr.cons_pos, cons)
+}
+
+// Read a record from an event ring and invoke f with a zero-copy sample view.
+func (rr *ringReader) readRecordFunc(f func(sample []byte, remaining int, cons uintptr) error) error {
 	prod := atomic.LoadUintptr(rr.prod_pos)
 	cons := atomic.LoadUintptr(rr.cons_pos)
 
@@ -83,19 +87,11 @@ func (rr *ringReader) readRecord(rec *Record) error {
 			// when the record header indicates that the data should be
 			// discarded, we skip it by just updating the consumer position
 			// to the next record.
-			atomic.StoreUintptr(rr.cons_pos, cons)
+			rr.commitRecord(cons)
 			continue
 		}
 
-		if n := header.dataLen(); cap(rec.RawSample) < n {
-			rec.RawSample = make([]byte, n)
-		} else {
-			rec.RawSample = rec.RawSample[:n]
-		}
-
-		copy(rec.RawSample, rr.ring[start:])
-		rec.Remaining = int(prod - cons)
-		atomic.StoreUintptr(rr.cons_pos, cons)
-		return nil
+		n := header.dataLen()
+		return f(rr.ring[start:start+uintptr(n)], int(prod-cons), cons)
 	}
 }

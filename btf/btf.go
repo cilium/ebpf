@@ -445,12 +445,12 @@ func (s *Spec) AnyTypeByName(name string) (Type, error) {
 //
 // Returns an error wrapping ErrNotFound if no matching Type exists in the Spec.
 // Returns an error wrapping ErrMultipleTypes if multiple candidates are found.
-func (s *Spec) TypeByName(name string, typ interface{}) error {
-	typeInterface := reflect.TypeOf((*Type)(nil)).Elem()
+func (s *Spec) TypeByName(name string, typ any) error {
+	typeInterface := reflect.TypeFor[Type]()
 
 	// typ may be **T or *Type
 	typValue := reflect.ValueOf(typ)
-	if typValue.Kind() != reflect.Ptr {
+	if typValue.Kind() != reflect.Pointer {
 		return fmt.Errorf("%T is not a pointer", typ)
 	}
 

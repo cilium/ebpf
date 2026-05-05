@@ -356,13 +356,13 @@ func TestProgramInfoMapIDsNoMaps(t *testing.T) {
 
 func TestScanFdInfoReader(t *testing.T) {
 	tests := []struct {
-		fields map[string]interface{}
+		fields map[string]any
 		valid  bool
 	}{
 		{nil, true},
-		{map[string]interface{}{"foo": new(string)}, true},
-		{map[string]interface{}{"zap": new(string)}, false},
-		{map[string]interface{}{"foo": new(int)}, false},
+		{map[string]any{"foo": new(string)}, true},
+		{map[string]any{"zap": new(string)}, false},
+		{map[string]any{"foo": new(int)}, false},
 	}
 
 	for _, test := range tests {
@@ -560,7 +560,7 @@ func TestInfoExportedFields(t *testing.T) {
 	// See the comment at the top of info.go for more information.
 
 	var names []string
-	for _, field := range reflect.VisibleFields(reflect.TypeOf(MapInfo{})) {
+	for _, field := range reflect.VisibleFields(reflect.TypeFor[MapInfo]()) {
 		if field.IsExported() {
 			names = append(names, field.Name)
 		}
@@ -575,7 +575,7 @@ func TestInfoExportedFields(t *testing.T) {
 	}))
 
 	names = nil
-	for _, field := range reflect.VisibleFields(reflect.TypeOf(ProgramInfo{})) {
+	for _, field := range reflect.VisibleFields(reflect.TypeFor[ProgramInfo]()) {
 		if field.IsExported() {
 			names = append(names, field.Name)
 		}

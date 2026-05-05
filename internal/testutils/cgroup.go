@@ -16,7 +16,7 @@ var cgroup2Path = sync.OnceValues(func() (string, error) {
 		return "", err
 	}
 
-	for _, line := range strings.Split(string(mounts), "\n") {
+	for line := range strings.SplitSeq(string(mounts), "\n") {
 		mount := strings.SplitN(line, " ", 3)
 		if mount[0] == "cgroup2" {
 			return mount[1], nil

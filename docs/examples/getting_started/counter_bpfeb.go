@@ -40,7 +40,7 @@ func loadCounter() (*ebpf.CollectionSpec, error) {
 //	*counterMaps
 //
 // See ebpf.CollectionSpec.LoadAndAssign documentation for details.
-func loadCounterObjects(obj interface{}, opts *ebpf.CollectionOptions) error {
+func loadCounterObjects(obj any, opts *ebpf.CollectionOptions) error {
 	spec, err := loadCounter()
 	if err != nil {
 		return err

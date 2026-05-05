@@ -228,7 +228,7 @@ func TestInstructionIterator(t *testing.T) {
 	offsets := []RawInstructionOffset{0, 1, 3}
 
 	iter := insns.Iterate()
-	for i := 0; i < len(insns); i++ {
+	for i := range insns {
 		if !iter.Next() {
 			t.Fatalf("Expected %dth call to Next to return true", i)
 		}

@@ -98,7 +98,7 @@ func TestUnmarshalBatchPerCPUValue(t *testing.T) {
 func TestUnmarshalPerCPUValue(t *testing.T) {
 	possibleCPUs := MustPossibleCPU()
 	expected := make([]uint32, possibleCPUs)
-	for i := 0; i < possibleCPUs; i++ {
+	for i := range possibleCPUs {
 		expected[i] = uint32(1021 * (i + 1))
 	}
 	elemLength := 4

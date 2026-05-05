@@ -438,6 +438,6 @@ func delegateToHex[T ~uint32](types []T) (string, error) {
 	return fmt.Sprintf("0x%x", res), nil
 }
 
-func panicf(format string, args ...interface{}) {
+func panicf(format string, args ...any) {
 	panic(fmt.Sprintf(format, args...))
 }

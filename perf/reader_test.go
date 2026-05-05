@@ -191,7 +191,7 @@ func outputSamplesProg(tb testing.TB, events *ebpf.Map, sampleSizes ...byte) *eb
 	}
 
 	bufDwords := int(maxSampleSize/8) + 1
-	for i := 0; i < bufDwords; i++ {
+	for i := range bufDwords {
 		insns = append(insns,
 			asm.StoreMem(asm.RFP, int16(i+1)*-8, asm.R0, asm.DWord),
 		)
@@ -359,7 +359,7 @@ func TestPerfReaderOverwritable(t *testing.T) {
 	maxEvents := pageSize / realSampleSize
 
 	var sampleSizes []byte
-	for i := 0; i < maxEvents; i++ {
+	for range maxEvents {
 		sampleSizes = append(sampleSizes, sampleSize)
 	}
 	// Append an extra sample that will overwrite the first sample.
@@ -382,7 +382,7 @@ func TestPerfReaderOverwritable(t *testing.T) {
 	rd.SetDeadline(time.Now())
 
 	nextID := maxEvents
-	for i := 0; i < maxEvents; i++ {
+	for range maxEvents {
 		id, rem := checkRecord(t, rd)
 		qt.Assert(t, qt.Equals(id, nextID))
 		qt.Assert(t, qt.Equals(rem, -1))
@@ -576,7 +576,7 @@ func TestPerfReaderWakeupEvents(t *testing.T) {
 	prog := outputSamplesProg(t, events, 5)
 
 	// Send enough events to trigger WakeupEvents.
-	for i := 0; i < numEvents; i++ {
+	for range numEvents {
 		_, _, err = prog.Test(internal.EmptyBPFContext)
 		testutils.SkipIfNotSupported(t, err)
 		qt.Assert(t, qt.IsNil(err))
@@ -587,7 +587,7 @@ func TestPerfReaderWakeupEvents(t *testing.T) {
 		rd.Close()
 	})
 
-	for i := 0; i < numEvents; i++ {
+	for range numEvents {
 		checkRecord(t, rd)
 	}
 }
@@ -733,7 +733,7 @@ func ExampleReader_ReadInto() {
 	}
 	defer rd.Close()
 
-	for i := 0; i < 2; i++ {
+	for range 2 {
 		// Write out two samples
 		ret, _, err := prog.Test(internal.EmptyBPFContext)
 		if err != nil || ret != 0 {
@@ -742,7 +742,7 @@ func ExampleReader_ReadInto() {
 	}
 
 	var rec Record
-	for i := 0; i < 2; i++ {
+	for range 2 {
 		if err := rd.ReadInto(&rec); err != nil {
 			panic(err)
 		}

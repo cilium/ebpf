@@ -388,7 +388,7 @@ func TestNewCollectionFdLeak(t *testing.T) {
 }
 
 func TestAssignValues(t *testing.T) {
-	zero := func(t reflect.Type, name string) (interface{}, error) {
+	zero := func(t reflect.Type, name string) (any, error) {
 		return reflect.Zero(t).Interface(), nil
 	}
 
@@ -408,7 +408,7 @@ func TestAssignValues(t *testing.T) {
 
 	invalid := []struct {
 		name string
-		to   interface{}
+		to   any
 	}{
 		{"non-struct", 1},
 		{"non-pointer struct", t1{}},
@@ -435,7 +435,7 @@ func TestAssignValues(t *testing.T) {
 
 	valid := []struct {
 		name string
-		to   interface{}
+		to   any
 	}{
 		{"pointer to struct", new(t1)},
 		{"embedded struct", new(t2)},

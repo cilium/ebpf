@@ -43,7 +43,7 @@ func loadVariables() (*ebpf.CollectionSpec, error) {
 //	*variablesMaps
 //
 // See ebpf.CollectionSpec.LoadAndAssign documentation for details.
-func loadVariablesObjects(obj interface{}, opts *ebpf.CollectionOptions) error {
+func loadVariablesObjects(obj any, opts *ebpf.CollectionOptions) error {
 	spec, err := loadVariables()
 	if err != nil {
 		return err

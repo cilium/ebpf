@@ -256,7 +256,7 @@ func countChildren(t *testing.T, typ reflect.Type) int {
 
 	var n int
 	for i := 0; i < typ.NumField(); i++ {
-		if typ.Field(i).Type == reflect.TypeOf((*Type)(nil)).Elem() {
+		if typ.Field(i).Type == reflect.TypeFor[Type]() {
 			n++
 		}
 	}
@@ -266,7 +266,7 @@ func countChildren(t *testing.T, typ reflect.Type) int {
 
 type testFormattableType struct {
 	name  string
-	extra []interface{}
+	extra []any
 }
 
 var _ formattableType = (*testFormattableType)(nil)
@@ -277,13 +277,13 @@ func (tft *testFormattableType) Format(fs fmt.State, verb rune) {
 }
 
 func TestFormatType(t *testing.T) {
-	t1 := &testFormattableType{"", []interface{}{"extra"}}
+	t1 := &testFormattableType{"", []any{"extra"}}
 	t1Addr := fmt.Sprintf("%#p", t1)
 	goType := reflect.TypeOf(t1).Elem().Name()
 
-	t2 := &testFormattableType{"foo", []interface{}{t1}}
+	t2 := &testFormattableType{"foo", []any{t1}}
 
-	t3 := &testFormattableType{extra: []interface{}{""}}
+	t3 := &testFormattableType{extra: []any{""}}
 
 	tests := []struct {
 		t        formattableType
@@ -343,7 +343,7 @@ func TestFormatCompoundTypes(t *testing.T) {
 func newCyclicalType(n int) Type {
 	ptr := &Pointer{}
 	prev := Type(ptr)
-	for i := 0; i < n; i++ {
+	for i := range n {
 		switch i % 5 {
 		case 0:
 			prev = &Struct{

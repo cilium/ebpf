@@ -211,7 +211,7 @@ func newB2G(stdout io.Writer, args []string) (*bpf2go, error) {
 	}
 
 	targetArches := make(map[gen.Target]gen.GoArches)
-	for _, tgt := range strings.Split(*flagTarget, ",") {
+	for tgt := range strings.SplitSeq(*flagTarget, ",") {
 		target, goarches, err := gen.FindTarget(tgt)
 		if err != nil {
 			if errors.Is(err, gen.ErrInvalidTarget) {

@@ -59,7 +59,7 @@ func {{ .Name.Load }}() (*ebpf.CollectionSpec, error) {
 //	*{{ .Name.Maps }}
 //
 // See ebpf.CollectionSpec.LoadAndAssign documentation for details.
-func {{ .Name.LoadObjects }}(obj interface{}, opts *ebpf.CollectionOptions) (error) {
+func {{ .Name.LoadObjects }}(obj any, opts *ebpf.CollectionOptions) (error) {
 	spec, err := {{ .Name.Load }}()
 	if err != nil {
 		return err

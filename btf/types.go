@@ -693,7 +693,7 @@ func Sizeof(typ Type) (int, error) {
 		elem int64
 	)
 
-	for i := 0; i < maxResolveDepth; i++ {
+	for range maxResolveDepth {
 		switch v := typ.(type) {
 		case *Array:
 			if n > 0 && int64(v.Nelems) > math.MaxInt64/n {
@@ -889,7 +889,7 @@ type formattableType interface {
 // Handles cyclical types by only printing cycles up to a certain depth. Elements
 // in extra are separated by spaces unless the preceding element is a string
 // ending in '='.
-func formatType(f fmt.State, verb rune, t formattableType, extra ...interface{}) {
+func formatType(f fmt.State, verb rune, t formattableType, extra ...any) {
 	if verb != 'v' && verb != 's' {
 		fmt.Fprintf(f, "{UNRECOGNIZED: %c}", verb)
 		return

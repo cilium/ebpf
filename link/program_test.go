@@ -158,19 +158,23 @@ func TestRawAttachProgramReplace(t *testing.T) {
 	qt.Assert(t, qt.IsNil(err))
 	progAID, _ := progAInfo.ID()
 
-	// Replace progA with progB.
+	// Replace progA with progB. BPF_F_ALLOW_MULTI must be passed again when
+	// replacing a program that was originally attached with that flag.
 	progB := mustLoadProgram(t, ebpf.CGroupSKB, ebpf.AttachCGroupInetEgress, "")
 	err = RawAttachProgram(RawAttachProgramOptions{
 		Target:  int(cgroup.Fd()),
 		Program: progB,
 		Attach:  ebpf.AttachCGroupInetEgress,
+		Flags:   uint32(flagAllowMulti),
 		Anchor:  ReplaceProgram(progA),
 	})
+	testutils.SkipIfNotSupported(t, err)
 	qt.Assert(t, qt.IsNil(err))
 	defer RawDetachProgram(RawDetachProgramOptions{
 		Target:  int(cgroup.Fd()),
 		Program: progB,
 		Attach:  ebpf.AttachCGroupInetEgress,
+		Flags:   uint32(flagAllowMulti),
 	})
 
 	progBInfo, err := progB.Info()

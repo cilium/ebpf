@@ -50,14 +50,11 @@ func RawAttachProgram(opts RawAttachProgramOptions) error {
 			return fmt.Errorf("attach program: %w", err)
 		}
 
+		attr.AttachFlags |= flags
 		if flags&sys.BPF_F_REPLACE != 0 {
-			// The kernel requires BPF_F_REPLACE in attach_flags for the replace operation to take effect.
-			// Without it, the kernel ignores replace_bpf_fd and treats the call as an append.
 			attr.ReplaceBpfFd = fdOrID
-			attr.AttachFlags |= sys.BPF_F_REPLACE
 		} else {
 			attr.RelativeFdOrId = fdOrID
-			attr.AttachFlags |= flags
 		}
 	}
 

@@ -135,3 +135,55 @@ func TestRawAttachProgramAnchor(t *testing.T) {
 	})
 	qt.Assert(t, qt.IsNil(err))
 }
+
+func TestRawAttachProgramReplace(t *testing.T) {
+	cgroup, progA := mustCgroupFixtures(t)
+
+	// Attach progA.
+	err := RawAttachProgram(RawAttachProgramOptions{
+		Target:  int(cgroup.Fd()),
+		Program: progA,
+		Attach:  ebpf.AttachCGroupInetEgress,
+		Flags:   uint32(flagAllowMulti),
+	})
+	testutils.SkipIfNotSupported(t, err)
+	qt.Assert(t, qt.IsNil(err))
+	defer RawDetachProgram(RawDetachProgramOptions{
+		Target:  int(cgroup.Fd()),
+		Program: progA,
+		Attach:  ebpf.AttachCGroupInetEgress,
+	})
+
+	progAInfo, err := progA.Info()
+	qt.Assert(t, qt.IsNil(err))
+	progAID, _ := progAInfo.ID()
+
+	// Replace progA with progB.
+	progB := mustLoadProgram(t, ebpf.CGroupSKB, ebpf.AttachCGroupInetEgress, "")
+	err = RawAttachProgram(RawAttachProgramOptions{
+		Target:  int(cgroup.Fd()),
+		Program: progB,
+		Attach:  ebpf.AttachCGroupInetEgress,
+		Anchor:  ReplaceProgram(progA),
+	})
+	qt.Assert(t, qt.IsNil(err))
+	defer RawDetachProgram(RawDetachProgramOptions{
+		Target:  int(cgroup.Fd()),
+		Program: progB,
+		Attach:  ebpf.AttachCGroupInetEgress,
+	})
+
+	progBInfo, err := progB.Info()
+	qt.Assert(t, qt.IsNil(err))
+	progBID, _ := progBInfo.ID()
+
+	// Query attached programs and verify only progB is present, not progA.
+	result, err := QueryPrograms(QueryOptions{
+		Target: int(cgroup.Fd()),
+		Attach: ebpf.AttachCGroupInetEgress,
+	})
+	qt.Assert(t, qt.IsNil(err))
+	qt.Assert(t, qt.HasLen(result.Programs, 1))
+	qt.Assert(t, qt.Equals(result.Programs[0].ID, progBID))
+	qt.Assert(t, qt.Not(qt.Equals(result.Programs[0].ID, progAID)))
+}

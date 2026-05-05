@@ -1,9 +1,9 @@
 # The development version of clang is distributed as the 'clang' binary,
 # while stable/released versions have a version number attached.
 # Pin the default clang to a stable version.
-CLANG ?= clang-20
-STRIP ?= llvm-strip-20
-OBJCOPY ?= llvm-objcopy-20
+CLANG ?= clang-22
+STRIP ?= llvm-strip-22
+OBJCOPY ?= llvm-objcopy-22
 CFLAGS := -O2 -g -Wall -Werror -mcpu=v2 $(CFLAGS)
 
 CI_KERNEL_URL ?= https://github.com/cilium/ci-kernels/raw/master/

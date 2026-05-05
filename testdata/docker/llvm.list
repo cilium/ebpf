@@ -6,5 +6,5 @@ deb-src http://apt.llvm.org/bookworm/ llvm-toolchain-bookworm main
 deb http://apt.llvm.org/bookworm/ llvm-toolchain-bookworm-17 main
 deb-src http://apt.llvm.org/bookworm/ llvm-toolchain-bookworm-17 main
 
-deb http://apt.llvm.org/bookworm/ llvm-toolchain-bookworm-20 main
-deb-src http://apt.llvm.org/bookworm/ llvm-toolchain-bookworm-20 main
+deb http://apt.llvm.org/bookworm/ llvm-toolchain-bookworm-22 main
+deb-src http://apt.llvm.org/bookworm/ llvm-toolchain-bookworm-22 main

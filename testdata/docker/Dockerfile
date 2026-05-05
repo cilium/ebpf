@@ -1,16 +1,8 @@
 # This Dockerfile generates a build environment for generating ELFs
 # of testdata programs. Run `make build` in this directory to build it.
-FROM golang:1.25-bookworm
+FROM golang:1.26-bookworm
 
-COPY llvm-snapshot.gpg.key .
-
-RUN apt-get update && \
-    apt-get -y --no-install-recommends install ca-certificates gnupg && \
-    apt-key add llvm-snapshot.gpg.key && \
-    rm llvm-snapshot.gpg.key && \
-    apt-get remove -y gnupg && \
-    apt-get autoremove -y && \
-    rm -rf /var/lib/apt/lists/*
+COPY llvm-snapshot.gpg.key /etc/apt/trusted.gpg.d/apt.llvm.org.asc
 
 COPY llvm.list /etc/apt/sources.list.d
 
@@ -22,7 +14,7 @@ RUN apt-get update && \
     clang-format \
     clang-14 llvm-14 \
     clang-17 llvm-17 \
-    clang-20 llvm-20 && \
+    clang-22 llvm-22 && \
     rm -rf /var/lib/apt/lists/*
 
 # Examples use `#include <asm/types.h>` which Debian carries in asm-generic/ instead.

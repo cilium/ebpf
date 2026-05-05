@@ -33,6 +33,14 @@ jobs:
         with:
           go-version: '${{ env.go_version }}'
 
+      - name: Run go fix
+        run: |
+          ./scripts/go-fix.sh
+          if ! git diff --exit-code; then
+            echo "Found Go files that need fixing, run './scripts/go-fix.sh'" >&2
+            exit 1
+          fi
+
       - name: Run staticcheck
         uses: dominikh/staticcheck-action@v1
         with:
@@ -46,7 +54,7 @@ jobs:
         run: |
           make clean && make container-all
           if ! git diff --exit-code; then
-            echo "found unformatted source files, or generated files are not up to date, run 'make'" >&2
+            echo "Found unformatted source files, or generated files are not up to date, run 'make'" >&2
             exit 1
           fi
 

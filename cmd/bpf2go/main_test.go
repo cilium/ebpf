@@ -17,6 +17,7 @@ import (
 	"github.com/cilium/ebpf/cmd/bpf2go/gen"
 	"github.com/cilium/ebpf/cmd/bpf2go/internal"
 	"github.com/cilium/ebpf/internal/testutils"
+	"github.com/cilium/ebpf/btf"
 )
 
 const minimalSocketFilter = `__attribute__((section("socket"), used)) int main() { return 0; }`
@@ -412,4 +413,21 @@ func mustWriteFile(tb testing.TB, dir, name, contents string) {
 	if err := os.WriteFile(tmpFile, []byte(contents), 0660); err != nil {
 		tb.Fatal(err)
 	}
+}
+
+func TestDeduplicateTypes(t *testing.T) {
+	s1 := &btf.Struct{Name: "foo", Size: 8}
+	s2 := &btf.Struct{Name: "foo", Size: 8}
+	s3 := &btf.Struct{Name: "bar", Size: 4}
+	anon := &btf.Struct{Name: "", Size: 2}
+	anon2 := &btf.Struct{Name: "", Size: 2}
+
+	types := []btf.Type{s1, s2, s3, anon, anon2}
+	result := deduplicateTypes(types)
+
+	qt.Assert(t, qt.HasLen(result, 4))
+	qt.Assert(t, qt.Equals(result[0].TypeName(), "foo"))
+	qt.Assert(t, qt.Equals(result[1].TypeName(), "bar"))
+	qt.Assert(t, qt.Equals(result[2].TypeName(), ""))
+	qt.Assert(t, qt.Equals(result[3].TypeName(), ""))
 }

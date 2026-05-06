@@ -353,11 +353,12 @@ jobs:
               event: 'schedule',
               branch: 'main',
               status: 'completed',
+              conclusion: 'success',
               per_page: 1
             });
 
             if (workflow_runs.data.workflow_runs.length === 0) {
-              core.setFailed('No successful merge_group workflow runs found');
+              core.setFailed('No successful scheduled workflow runs found');
               return;
             }
 
@@ -389,7 +390,7 @@ jobs:
             const artifact = allArtifacts.find(a => a.name === 'Build-x64-Debug');
 
             if (!artifact) {
-              console.log('Available artifacts:', artifacts.data.artifacts.map(a => a.name));
+              console.log('Available artifacts:', allArtifacts.map(a => a.name));
               core.setFailed('Build-x64-Debug artifact not found in the workflow run');
               return;
             }

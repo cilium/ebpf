@@ -302,8 +302,7 @@ jobs:
       - run: mkdir D:\temp
         shell: pwsh
 
-      - name: Get eBPF for Windows download URL
-        id: determine-url
+      - name: Download eBPF for Windows
         uses: actions/github-script@v9
         with:
           script: |
@@ -338,14 +337,17 @@ jobs:
                 return;
               }
 
-              const download_url = asset.browser_download_url;
-              console.log(`Download URL: ${download_url}`);
-
-              core.setOutput('download_url', download_url);
+              console.log(`Downloading release asset: ${asset.browser_download_url}`);
+              const res = await fetch(asset.browser_download_url);
+              if (!res.ok) {
+                core.setFailed(`Failed to download release asset: ${res.status} ${res.statusText}`);
+                return;
+              }
+              require('fs').writeFileSync(process.env.TEMP + '\\efw.zip', Buffer.from(await res.arrayBuffer()));
               return
             }
-            
-            // Get the latest successful merge_group run
+
+            // Get the latest successful scheduled run
             const workflow_runs = await github.rest.actions.listWorkflowRuns({
               owner: 'microsoft',
               repo: 'ebpf-for-windows',
@@ -395,32 +397,19 @@ jobs:
               return;
             }
 
-            // Get the download URL via redirect
+            // Download artifact bytes directly; response.data contains the zip.
             const response = await github.rest.actions.downloadArtifact({
               owner: 'microsoft',
               repo: 'ebpf-for-windows',
               artifact_id: artifact.id,
               archive_format: 'zip',
-              request: {
-                redirect: 'manual'
-              }
             });
 
-            // Extract the location header which contains the actual download URL
-            const download_url = response.url;
+            require('fs').writeFileSync(process.env.TEMP + '\\efw.zip', Buffer.from(response.data));
 
-            if (!download_url) {
-              core.setFailed('Failed to get redirect URL from headers');
-              return;
-            }
-
-            core.setOutput('download_url', download_url);
-
-      - name: Download and Install eBPF for Windows
+      - name: Install eBPF for Windows
         shell: pwsh
         run: |
-          Invoke-WebRequest -Uri "${{ steps.determine-url.outputs.download_url }}" -OutFile "$env:TEMP\efw.zip"
-
           if ("${{ matrix.version }}" -eq "main") {
             # Workflow artifact has nested structure: outer zip contains build-Debug.zip
             Expand-Archive -Path "$env:TEMP\efw.zip" -DestinationPath "$env:TEMP"

@@ -134,7 +134,7 @@ func (b *Builder) Add(typ Type) (TypeID, error) {
 		return 0, nil
 	}
 
-	if err := internal.IsNil(typ); err != nil {
+	if err := internal.IsNilPointer(typ); err != nil {
 		return 0, fmt.Errorf("invalid type: %w", err)
 	}
 

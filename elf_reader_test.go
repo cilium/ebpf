@@ -279,6 +279,32 @@ func BenchmarkELFLoader(b *testing.B) {
 	}
 }
 
+func TestLoadAndAssign(t *testing.T) {
+	file := testutils.NativeFile(t, "testdata/loader-%s.elf")
+	coll, err := LoadCollectionSpec(file)
+	qt.Assert(t, qt.IsNil(err))
+
+	var obj struct {
+		Program *Program `ebpf:"xdp_prog"`
+	}
+	mustLoadAndAssign(t, coll, &obj, nil)
+	defer obj.Program.Close()
+
+	// Invalid arguments should not panic.
+	qt.Assert(t, qt.IsNotNil(coll.LoadAndAssign(nil, nil)))
+	qt.Assert(t, qt.IsNotNil(coll.LoadAndAssign((*int)(nil), nil)))
+	qt.Assert(t, qt.IsNotNil(coll.LoadAndAssign(0, nil)))
+
+	// Valid objects without an eligible assignment candidate should not error.
+	qt.Assert(t, qt.IsNil(coll.LoadAndAssign(new(struct{ Foo int }), nil)))
+
+	// Unexported, tagged fields are not assignable and should cause an error.
+	var u struct {
+		foo *Map `ebpf:"hash_map"`
+	}
+	qt.Assert(t, qt.IsNotNil(coll.LoadAndAssign(&u, nil)))
+}
+
 func TestDataSections(t *testing.T) {
 	file := testutils.NativeFile(t, "testdata/loader-%s.elf")
 	coll, err := LoadCollectionSpec(file)

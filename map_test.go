@@ -1292,6 +1292,10 @@ func TestPerCPUMarshaling(t *testing.T) {
 				t.Fatal(err)
 			}
 
+			if err := arr.Lookup(uint32(0), nil); err == nil {
+				t.Fatal("nil valueOut should generate error")
+			}
+
 			// Make sure unmarshaling works on slices containing pointers
 			retrievedVal := make([]*customEncoding, numCPU)
 			if err := arr.Lookup(uint32(0), retrievedVal); err == nil {

@@ -36,6 +36,12 @@ type CollectionOptions struct {
 	// The given Maps are Clone()d before being used in the Collection, so the
 	// caller can Close() them freely when they are no longer needed.
 	MapReplacements map[string]*Map
+
+	// Cache amortises the cost of decoding kernel BTF across multiple
+	// Collection loads. Callers loading more than one Collection should
+	// allocate a Cache via [btf.NewCache] and share it across loads.
+	// If nil, a fresh cache is allocated per load and discarded.
+	Cache *btf.Cache
 }
 
 // CollectionSpec describes a collection.
@@ -341,13 +347,18 @@ func newCollectionLoader(coll *CollectionSpec, opts *CollectionOptions) (*collec
 		return nil, fmt.Errorf("populating kallsyms caches: %w", err)
 	}
 
+	cache := opts.Cache
+	if cache == nil {
+		cache = btf.NewCache()
+	}
+
 	return &collectionLoader{
 		coll,
 		opts,
 		make(map[string]*Map),
 		make(map[string]*Program),
 		make(map[string]*Variable),
-		btf.NewCache(),
+		cache,
 	}, nil
 }
 

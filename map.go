@@ -312,13 +312,15 @@ func (ms *MapSpec) Compatible(m *Map) error {
 
 // Map represents a Map file descriptor.
 //
-// It is not safe to close a map which is used by other goroutines.
+// It is not safe to close a Map which is used by other goroutines.
 //
-// Methods which take 'any' arguments by default encode
-// them using binary.Read/Write in the machine's native endianness.
+// Map operations taking `any` arguments are encoded using [sysenc.Marshal],
+// which is zero-copy for fixed-size types without padding as well as slices of
+// bytes, but may involve allocations for other types. See its documentation for
+// details.
 //
-// Implement encoding.BinaryMarshaler or encoding.BinaryUnmarshaler
-// if you require custom encoding.
+// Implement encoding.BinaryMarshaler or encoding.BinaryUnmarshaler if you
+// require custom encoding or decoding.
 type Map struct {
 	name       string
 	fd         *sys.FD
@@ -948,6 +950,10 @@ func (m *Map) lookupAndDeletePerCPU(key, valueOut any, flags MapLookupFlags) err
 
 // ensurePerCPUSlice allocates a slice for a per-CPU value if necessary.
 func ensurePerCPUSlice(sliceOrPtr any) (any, error) {
+	if err := internal.IsNilPointer(sliceOrPtr); err != nil {
+		return nil, fmt.Errorf("per-cpu value: %w", err)
+	}
+
 	sliceOrPtrType := reflect.TypeOf(sliceOrPtr)
 	if sliceOrPtrType.Kind() == reflect.Slice {
 		// The target is a slice, the caller is responsible for ensuring that

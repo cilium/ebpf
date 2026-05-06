@@ -205,12 +205,12 @@ func (cs *CollectionSpec) LoadAndAssign(to any, opts *CollectionOptions) error {
 
 	// Load the Maps and Programs requested by the annotated struct.
 	if err := assignValues(to, getValue); err != nil {
-		return err
+		return fmt.Errorf("assign values: %w", err)
 	}
 
 	// Populate the requested maps. Has a chance of lazy-loading other dependent maps.
 	if err := loader.populateDeferredMaps(); err != nil {
-		return err
+		return fmt.Errorf("populate deferred maps: %w", err)
 	}
 
 	// Evaluate the loader's objects after all (lazy)loading has taken place.
@@ -875,7 +875,7 @@ func (coll *Collection) Assign(to any) error {
 	}
 
 	if err := assignValues(to, getValue); err != nil {
-		return err
+		return fmt.Errorf("assign values: %w", err)
 	}
 
 	// Finalize ownership transfer
@@ -999,13 +999,13 @@ func ebpfFields(structVal reflect.Value, visited map[reflect.Type]bool) ([]struc
 // getValue is called for every tagged field of 'to' and must return the value
 // to be assigned to the field with the given typ and name.
 func assignValues(to any, getValue func(typ reflect.Type, name string) (any, error)) error {
+	if err := internal.IsNilPointer(to); err != nil {
+		return err
+	}
+
 	toValue := reflect.ValueOf(to)
 	if toValue.Type().Kind() != reflect.Pointer {
 		return fmt.Errorf("%T is not a pointer to struct", to)
-	}
-
-	if toValue.IsNil() {
-		return fmt.Errorf("nil pointer to %T", to)
 	}
 
 	fields, err := ebpfFields(toValue.Elem(), nil)

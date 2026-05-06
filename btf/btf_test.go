@@ -138,6 +138,7 @@ func TestTypeByName(t *testing.T) {
 
 	for _, typ := range []any{
 		nil,
+		Type(nil),
 		Struct{},
 		&Struct{},
 		[]Struct{},
@@ -173,6 +174,9 @@ func TestTypeByName(t *testing.T) {
 	if err := spec.TypeByName("iphdr", &typ); err != nil {
 		t.Fatal("Can't look up using *Type:", err)
 	}
+
+	var nt Type
+	qt.Assert(t, qt.IsNotNil(spec.TypeByName("a", &nt)))
 
 	// Excerpt from linux/ip.h, https://elixir.bootlin.com/linux/latest/A/ident/iphdr
 	//

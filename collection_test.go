@@ -343,33 +343,23 @@ func TestCollectionSpecAssign(t *testing.T) {
 		},
 	}
 
-	if err := cs.Assign(&specs); err != nil {
-		t.Fatal("Can't assign spec:", err)
-	}
+	qt.Assert(t, qt.IsNil(cs.Assign(&specs)))
+	qt.Assert(t, qt.Equals(specs.Program, progSpec))
+	qt.Assert(t, qt.Equals(specs.Map, mapSpec))
 
-	if specs.Program != progSpec {
-		t.Fatalf("Expected Program to be %p, got %p", progSpec, specs.Program)
-	}
+	// Invalid arguments should not panic.
+	qt.Assert(t, qt.IsNotNil(cs.Assign(nil)))
+	qt.Assert(t, qt.IsNotNil(cs.Assign((*int)(nil))))
+	qt.Assert(t, qt.IsNotNil(cs.Assign(0)))
 
-	if specs.Map != mapSpec {
-		t.Fatalf("Expected Map to be %p, got %p", mapSpec, specs.Map)
-	}
+	// Valid objects without an eligible assignment candidate should not error.
+	qt.Assert(t, qt.IsNil(cs.Assign(new(struct{ Foo int }))))
 
-	if err := cs.Assign(new(int)); err == nil {
-		t.Fatal("Assign allows to besides *struct")
-	}
-
-	if err := cs.Assign(new(struct{ Foo int })); err != nil {
-		t.Fatal("Assign doesn't ignore untagged fields")
-	}
-
-	unexported := new(struct {
+	// Unexported, tagged fields are not assignable and should cause an error.
+	var u struct {
 		foo *MapSpec `ebpf:"map1"`
-	})
-
-	if err := cs.Assign(unexported); err == nil {
-		t.Error("Assign should return an error on unexported fields")
 	}
+	qt.Assert(t, qt.IsNotNil(cs.Assign(&u)))
 }
 
 func TestNewCollectionFdLeak(t *testing.T) {

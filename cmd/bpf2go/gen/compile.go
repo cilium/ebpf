@@ -57,15 +57,13 @@ func insertDefaultFlags(flags []string) []string {
 	return result
 }
 
-// Compile C to a BPF ELF file.
-func Compile(args CompileArgs) error {
-	cmd := exec.Command(args.CC, insertDefaultFlags(args.Flags)...)
-	cmd.Stderr = os.Stderr
-
+// Argv returns the compiler invocation that Compile would run for args.
+// Compiler binary + passed flags.
+func Argv(args CompileArgs) ([]string, error) {
 	inputDir := filepath.Dir(args.Source)
 	relInputDir, err := filepath.Rel(args.Workdir, inputDir)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	target := args.Target
@@ -73,12 +71,14 @@ func Compile(args CompileArgs) error {
 		target.clang = "bpf"
 	}
 
+	argv := append([]string{args.CC}, insertDefaultFlags(args.Flags)...)
+
 	// C flags that can't be overridden.
 	if linux := target.linux; linux != "" {
-		cmd.Args = append(cmd.Args, "-D__TARGET_ARCH_"+linux)
+		argv = append(argv, "-D__TARGET_ARCH_"+linux)
 	}
 
-	cmd.Args = append(cmd.Args,
+	argv = append(argv,
 		"-Wunused-command-line-argument",
 		"-target", target.clang,
 		"-c", args.Source,
@@ -92,6 +92,19 @@ func Compile(args CompileArgs) error {
 		"-g",
 		fmt.Sprintf("-D__BPF_TARGET_MISSING=%q", "GCC error \"The eBPF is using target specific macros, please provide -target that is not bpf, bpfel or bpfeb\""),
 	)
+
+	return argv, nil
+}
+
+// Compile C to a BPF ELF file.
+func Compile(args CompileArgs) error {
+	argv, err := Argv(args)
+	if err != nil {
+		return err
+	}
+
+	cmd := exec.Command(argv[0], argv[1:]...)
+	cmd.Stderr = os.Stderr
 	cmd.Dir = args.Workdir
 
 	if err := cmd.Run(); err != nil {

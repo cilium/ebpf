@@ -78,7 +78,7 @@ TARGETS := \
 
 HEADERS := $(wildcard testdata/*.h)
 
-.PHONY: all clean container-all container-shell generate
+.PHONY: all clean container-all container-shell generate format
 
 .DEFAULT_TARGET = container-all
 

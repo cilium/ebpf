@@ -1,17 +1,13 @@
 package sys
 
 import (
-	"bufio"
 	"errors"
 	"fmt"
-	"io"
-	"os"
-	"slices"
-	"strings"
 	"sync"
 	"unsafe"
 
 	"github.com/cilium/ebpf/internal"
+	"github.com/cilium/ebpf/internal/mountinfo"
 	"github.com/cilium/ebpf/internal/platform"
 	"github.com/cilium/ebpf/internal/testutils/testmain"
 	"github.com/cilium/ebpf/internal/unix"
@@ -136,7 +132,7 @@ func findToken() (*Token, error) {
 		return nil, fmt.Errorf("bpf token: %w", internal.ErrNotSupportedOnOS)
 	}
 
-	mounts, err := readBPFFSMounts()
+	mounts, err := mountinfo.FindByFSType("bpf")
 	if err != nil {
 		return nil, fmt.Errorf("get bpffs mounts: %w", err)
 	}
@@ -190,77 +186,6 @@ func newToken(mount string) (*Token, error) {
 	}
 
 	return t, nil
-}
-
-var readBPFFSMounts = sync.OnceValues(func() ([]string, error) {
-	mountinfo, err := os.Open("/proc/self/mountinfo")
-	if err != nil {
-		return nil, err
-	}
-	defer mountinfo.Close()
-
-	return parseBPFFSMounts(mountinfo)
-})
-
-func parseBPFFSMounts(r io.Reader) ([]string, error) {
-	var mounts []string
-	// Format of /proc/self/mountinfo:
-	//
-	// {id} {parent id} {major:minor} {root} {mount point} {mount options} [optional fields...] - {filesystem type} {source} {superblock options}
-	scanner := bufio.NewScanner(r)
-	for scanner.Scan() {
-		line := scanner.Text()
-		if line == "" {
-			continue
-		}
-
-		firstHalfStr, secondHalfStr, ok := strings.Cut(line, " - ")
-		if !ok {
-			return nil, fmt.Errorf("invalid mountinfo line, missing dash: %q", line)
-		}
-
-		secondHalf := strings.Fields(strings.TrimSpace(secondHalfStr))
-		if len(secondHalf) == 0 {
-			return nil, fmt.Errorf("invalid mountinfo line, too few fields after dash: %q", line)
-		}
-
-		fstype := secondHalf[0]
-		if fstype != "bpf" {
-			continue
-		}
-
-		firstHalf := strings.Fields(strings.TrimSpace(firstHalfStr))
-		if len(firstHalf) < 6 {
-			return nil, fmt.Errorf("invalid mountinfo line, too few fields: %q", line)
-		}
-
-		mountPoint := unescape(firstHalf[4])
-		if !slices.Contains(mounts, mountPoint) {
-			// Number of mounts is expected to be very low. Map lookups are more
-			// expensive and cache-unfriendly at this scale, and converting to a map
-			// would incur extra allocations and copies.
-			mounts = append(mounts, mountPoint)
-		}
-	}
-
-	if err := scanner.Err(); err != nil {
-		return nil, fmt.Errorf("scan mountinfo: %w", err)
-	}
-
-	return mounts, nil
-}
-
-// show_mountinfo in the kernel has the escape set of ' \t\n\\'. Instead of a
-// full octal unescaper, only replace these specific characters.
-var unescaper = strings.NewReplacer(
-	`\040`, " ",
-	`\011`, "\t",
-	`\012`, "\n",
-	`\134`, `\`,
-)
-
-func unescape(s string) string {
-	return unescaper.Replace(s)
 }
 
 // tokenAttr sets the appropriate token fields in the BPF syscall attribute

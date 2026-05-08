@@ -5,6 +5,7 @@ package link
 import (
 	"fmt"
 	"net"
+	"os"
 	"testing"
 
 	"github.com/cilium/ebpf"
@@ -134,4 +135,58 @@ func TestRawAttachProgramAnchor(t *testing.T) {
 		Attach:  ebpf.AttachTCXIngress,
 	})
 	qt.Assert(t, qt.IsNil(err))
+}
+
+func TestRawAttachProgramReplace(t *testing.T) {
+	testutils.SkipOnOldKernel(t, "5.9", "BPF_F_ALLOW_MULTI with BPF_F_REPLACE")
+
+	cgroup, progA := mustCgroupFixtures(t)
+
+	// Attach progA.
+	qt.Assert(t, qt.IsNil(RawAttachProgram(RawAttachProgramOptions{
+		Target:  int(cgroup.Fd()),
+		Program: progA,
+		Attach:  ebpf.AttachCGroupInetEgress,
+		Flags:   uint32(flagAllowMulti),
+	})))
+
+	// Replace progA with progB. BPF_F_ALLOW_MULTI must be passed again when
+	// replacing a program that was originally attached with that flag.
+	progB := mustLoadProgram(t, ebpf.CGroupSKB, ebpf.AttachCGroupInetEgress, "")
+	qt.Assert(t, qt.IsNil(RawAttachProgram(RawAttachProgramOptions{
+		Target:  int(cgroup.Fd()),
+		Program: progB,
+		Attach:  ebpf.AttachCGroupInetEgress,
+		Flags:   uint32(flagAllowMulti),
+		Anchor:  ReplaceProgram(progA),
+	})))
+	t.Cleanup(func() {
+		qt.Assert(t, qt.IsNil(RawDetachProgram(RawDetachProgramOptions{
+			Target:  int(cgroup.Fd()),
+			Program: progB,
+			Attach:  ebpf.AttachCGroupInetEgress,
+			Flags:   uint32(flagAllowMulti),
+		})))
+	})
+
+	progBInfo, err := progB.Info()
+	qt.Assert(t, qt.IsNil(err))
+	progBID, _ := progBInfo.ID()
+
+	// Query attached programs and verify only progB is present.
+	result, err := QueryPrograms(QueryOptions{
+		Target: int(cgroup.Fd()),
+		Attach: ebpf.AttachCGroupInetEgress,
+	})
+	qt.Assert(t, qt.IsNil(err))
+	qt.Assert(t, qt.HasLen(result.Programs, 1))
+	qt.Assert(t, qt.Equals(result.Programs[0].ID, progBID))
+
+	// progA should fail to detach.
+	qt.Assert(t, qt.ErrorIs(RawDetachProgram(RawDetachProgramOptions{
+		Target:  int(cgroup.Fd()),
+		Program: progA,
+		Attach:  ebpf.AttachCGroupInetEgress,
+		Flags:   uint32(flagAllowMulti),
+	}), os.ErrNotExist))
 }

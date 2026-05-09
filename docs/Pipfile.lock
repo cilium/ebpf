@@ -213,12 +213,12 @@
         },
         "gitpython": {
             "hashes": [
-                "sha256:024b0422d7f84d15cd794844e029ffebd4c5d42a7eb9b936b458697ef550a02c",
-                "sha256:42f9399c9eb33fc581014bedd76049dfbaf6375aa2a5754575966387280315e1"
+                "sha256:80da2d12504d52e1f998772dc5baf6e553f8d2fcfe1fcc226c9d9a2ee3372dcc",
+                "sha256:d352abe2908d07355014abdd21ddf798c2a961469239afec4962e9da884858f9"
             ],
             "index": "pypi",
             "markers": "python_version >= '3.7'",
-            "version": "==3.1.49"
+            "version": "==3.1.50"
         },
         "hjson": {
             "hashes": [

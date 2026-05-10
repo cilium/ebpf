@@ -365,6 +365,7 @@ func TestPutValue(t *testing.T) {
 					Encoding: btf.Bool,
 				},
 			},
+			value:   `"foo"`,
 			comment: "Type is not btf.Array of btf.Int of size 1 which is not btf.Bool",
 		},
 		{

@@ -345,53 +345,48 @@ jobs:
               return
             }
 
-            // Get the latest successful scheduled run
-            const workflow_runs = await github.rest.actions.listWorkflowRuns({
-              owner: 'microsoft',
-              repo: 'ebpf-for-windows',
-              workflow_id: 'cicd.yml',
-              event: 'schedule',
-              branch: 'main',
-              status: 'completed',
-              conclusion: 'success',
-              per_page: 1
-            });
-
-            if (workflow_runs.data.workflow_runs.length === 0) {
-              core.setFailed('No successful scheduled workflow runs found');
-              return;
-            }
-
-            // Get artifacts from this run
-            const run_id = workflow_runs.data.workflow_runs[0].id;
-            const run_url = workflow_runs.data.workflow_runs[0].html_url;
-            console.log(`Using workflow run: ${run_url}`);
-
-            // Paginate through all artifacts
-            let allArtifacts = [];
-            let page = 1;
+            // Iterate through scheduled workflow runs (regardless of status) to find
+            // one that contains the Build-x64-Debug artifact.
+            let artifact = null;
+            let runs_page = 1;
+            outer:
             while (true) {
-              const artifacts = await github.rest.actions.listWorkflowRunArtifacts({
+              const workflow_runs = await github.rest.actions.listWorkflowRuns({
                 owner: 'microsoft',
                 repo: 'ebpf-for-windows',
-                run_id: run_id,
-                per_page: 100,
-                page: page
+                workflow_id: 'cicd.yml',
+                event: 'schedule',
+                branch: 'main',
+                per_page: 10,
+                page: runs_page
               });
 
-              allArtifacts = allArtifacts.concat(artifacts.data.artifacts);
+              if (workflow_runs.data.workflow_runs.length === 0) {
+                core.setFailed('No scheduled workflow runs found');
+                return;
+              }
 
-              // If we got fewer than 100, we've reached the last page
-              if (artifacts.data.artifacts.length < 100) break;
-              page++;
+              for (const run of workflow_runs.data.workflow_runs) {
+                console.log(`Attempting workflow run: ${run.html_url}`);
+
+                const artifacts = await github.rest.actions.listWorkflowRunArtifacts({
+                  owner: 'microsoft',
+                  repo: 'ebpf-for-windows',
+                  run_id: run.id,
+                  per_page: 100,
+                });
+
+                artifact = artifacts.data.artifacts.find(a => a.name === 'Build-x64-Debug');
+                if (artifact) {
+                  break outer;
+                }
+              }
+
+              runs_page++;
             }
 
-            // Find the specific artifact
-            const artifact = allArtifacts.find(a => a.name === 'Build-x64-Debug');
-
             if (!artifact) {
-              console.log('Available artifacts:', allArtifacts.map(a => a.name));
-              core.setFailed('Build-x64-Debug artifact not found in the workflow run');
+              core.setFailed('No scheduled workflow runs with Build-x64-Debug artifact found');
               return;
             }
 

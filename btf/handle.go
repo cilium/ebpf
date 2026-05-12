@@ -175,6 +175,24 @@ func (h *Handle) FD() int {
 	return h.fd.Int()
 }
 
+// Clone creates a duplicate of the handle.
+//
+// Closing the duplicate does not affect the original, and vice versa.
+//
+// Cloning a nil Handle returns nil.
+func (h *Handle) Clone() (*Handle, error) {
+	if h == nil {
+		return nil, nil
+	}
+
+	dup, err := h.fd.Dup()
+	if err != nil {
+		return nil, fmt.Errorf("can't clone handle: %w", err)
+	}
+
+	return &Handle{dup, h.size, h.needsKernelBase}, nil
+}
+
 // Info returns metadata about the handle.
 func (h *Handle) Info() (*HandleInfo, error) {
 	return newHandleInfoFromFD(h.fd)

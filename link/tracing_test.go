@@ -12,6 +12,16 @@ import (
 func TestFreplace(t *testing.T) {
 	testutils.SkipOnOldKernel(t, "5.10", "freplace")
 
+	caps := []testutils.Capability{testutils.CAP_NET_ADMIN, testutils.CAP_BPF, testutils.CAP_PERFMON}
+
+	// Must succeed w/o CAP_SYS_ADMIN. Older kernels pre-CAP_BPF
+	// introduction lack freplace anyway.
+	testutils.WithCapabilities(t, caps, func() {
+		testFreplace(t)
+	})
+}
+
+func testFreplace(t *testing.T) {
 	file := testutils.NativeFile(t, "../testdata/freplace-%s.elf")
 	spec, err := ebpf.LoadCollectionSpec(file)
 	if err != nil {

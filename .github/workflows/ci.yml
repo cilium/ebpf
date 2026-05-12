@@ -33,20 +33,27 @@ jobs:
         with:
           go-version: '${{ env.go_version }}'
 
-      - name: Run go fix
-        run: |
-          ./scripts/go-fix.sh
-          if ! git diff --exit-code; then
-            echo "Found Go files that need fixing, run './scripts/go-fix.sh'" >&2
-            exit 1
-          fi
-
       - name: Run staticcheck
         run: |
           go tool staticcheck  ./...
 
       - name: Run golangci-lint
         uses: golangci/golangci-lint-action@v9.2.0
+
+      - name: Build
+        run: go build -v ./...
+
+  generate-and-fix:
+    name: Generate and Fix
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: '${{ env.go_version }}'
 
       - name: Generate and format code
         run: |
@@ -56,8 +63,13 @@ jobs:
             exit 1
           fi
 
-      - name: Build
-        run: go build -v ./...
+      - name: Run go fix
+        run: |
+          ./scripts/go-fix.sh
+          if ! git diff --exit-code; then
+            echo "Found Go files that need fixing, run './scripts/go-fix.sh'" >&2
+            exit 1
+          fi
 
   cross-build:
     name: Cross build
@@ -458,6 +470,7 @@ jobs:
     runs-on: ubuntu-latest
     needs:
       - build-and-lint
+      - generate-and-fix
       - cross-build
       - build-docs
       - test-on-prev-go

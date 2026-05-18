@@ -27,7 +27,7 @@ func TestParseEntriesLongLine(t *testing.T) {
 	// default 64 KiB token limit. Build a synthetic line just over that
 	// threshold and assert that parsing succeeds and surfaces the entry.
 	var lowers []string
-	for i := 0; i < 1000; i++ {
+	for range 1000 {
 		lowers = append(lowers, "/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/12345/fs")
 	}
 	long := "8 23 0:23 / / rw,relatime - overlay overlay rw,lowerdir=" + strings.Join(lowers, ":")

@@ -6,84 +6,59 @@ import (
 	"io"
 )
 
-// reader is a line and word-oriented reader built for reading /proc/kallsyms.
-// It takes an io.Reader and iterates its contents line by line, then word by
-// word.
-//
-// It's designed to allow partial reading of lines without paying the cost of
-// allocating objects that will never be accessed, resulting in less work for
-// the garbage collector.
 type reader struct {
-	s    *bufio.Scanner
-	line []byte
-	word []byte
-
-	err error
+	scanner *bufio.Scanner
+	line    []byte
+	field   []byte
 }
 
 func newReader(r io.Reader) *reader {
+	scanner := bufio.NewScanner(r)
+	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
+
 	return &reader{
-		s: bufio.NewScanner(r),
+		scanner: scanner,
 	}
 }
 
-// Bytes returns the current word as a byte slice.
-func (r *reader) Bytes() []byte {
-	return r.word
-}
-
-// Text returns the output of Bytes as a string.
-func (r *reader) Text() string {
-	return string(r.Bytes())
-}
-
-// Line advances the reader to the next line in the input. Calling Line resets
-// the current word, making [reader.Bytes] and [reader.Text] return empty
-// values. Follow this up with a call to [reader.Word].
-//
-// Like [bufio.Scanner], [reader.Err] needs to be checked after Line returns
-// false to determine if an error occurred during reading.
-//
-// Returns true if Line can be called again. Returns false if all lines in the
-// input have been read.
 func (r *reader) Line() bool {
-	for r.s.Scan() {
-		line := r.s.Bytes()
-		if len(line) == 0 {
-			continue
-		}
-
-		r.line = line
-		r.word = nil
-
-		return true
-	}
-	if err := r.s.Err(); err != nil {
-		r.err = err
-	}
-
-	return false
-}
-
-// Word advances the reader to the next word in the current line.
-//
-// Returns true if a word is found and Word should be called again. Returns
-// false when all words on the line have been read.
-func (r *reader) Word() bool {
-	line := bytes.TrimSpace(r.line)
-
-	if len(line) == 0 {
+	if !r.scanner.Scan() {
 		return false
 	}
 
-	var found bool
-	r.word, r.line, found = bytes.Cut(line, []byte{' '})
-	if !found {
-		r.word, r.line, _ = bytes.Cut(line, []byte{'\t'})
-	}
+	r.line = r.scanner.Bytes()
+	r.field = nil
 	return true
 }
 
+func (r *reader) Word() bool {
+	r.line = bytes.TrimLeft(r.line, " \t")
+
+	if len(r.line) == 0 {
+		r.field = nil
+		return false
+	}
+
+	idx := bytes.IndexAny(r.line, " \t")
+	if idx == -1 {
+		r.field = r.line
+		r.line = nil
+		return true
+	}
+
+	r.field = r.line[:idx]
+	r.line = r.line[idx+1:]
+	return true
+}
+
+func (r *reader) Bytes() []byte {
+	return r.field
+}
+
+func (r *reader) Text() string {
+	return string(r.field)
+}
+
 func (r *reader) Err() error {
-	return r.err
+	return r.scanner.Err()
 }

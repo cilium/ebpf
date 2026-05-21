@@ -15,7 +15,7 @@ func TestParseEntriesPreservesRoot(t *testing.T) {
 40 29 0:12 /events /weird/tracing-events rw - tracefs tracefs rw
 `
 
-	entries, err := ParseEntries(strings.NewReader(mountinfo))
+	entries, err := parseEntries(strings.NewReader(mountinfo))
 	qt.Assert(t, qt.IsNil(err))
 	qt.Assert(t, qt.HasLen(entries, 2))
 	qt.Assert(t, qt.Equals(entries[0].Root, "/"))
@@ -36,7 +36,7 @@ func TestParseEntriesLongLine(t *testing.T) {
 	}
 	mountinfo := long + "\n39 29 0:12 / /sys/kernel/tracing rw - tracefs tracefs rw\n"
 
-	entries, err := ParseEntries(strings.NewReader(mountinfo))
+	entries, err := parseEntries(strings.NewReader(mountinfo))
 	qt.Assert(t, qt.IsNil(err))
 	qt.Assert(t, qt.HasLen(entries, 2))
 	qt.Assert(t, qt.Equals(entries[0].FSType, "overlay"))
@@ -56,7 +56,7 @@ func TestParseEntries(t *testing.T) {
 39 29 0:12 / /sys/kernel/tracing rw,nosuid,nodev,noexec,relatime - tracefs tracefs rw
 `
 
-	entries, err := ParseEntries(strings.NewReader(mountinfo))
+	entries, err := parseEntries(strings.NewReader(mountinfo))
 	qt.Assert(t, qt.IsNil(err))
 	qt.Assert(t, qt.HasLen(entries, 8))
 
@@ -80,19 +80,19 @@ func TestParseEntries(t *testing.T) {
 func TestParseEntriesInvalid(t *testing.T) {
 	t.Run("missing dash separator", func(t *testing.T) {
 		const mountinfo = `48 46 0:30 / /sys/fs/bpf rw,nosuid,nodev,noexec,relatime`
-		_, err := ParseEntries(strings.NewReader(mountinfo))
+		_, err := parseEntries(strings.NewReader(mountinfo))
 		qt.Assert(t, qt.IsNotNil(err))
 	})
 
 	t.Run("too few fields before dash", func(t *testing.T) {
 		const mountinfo = `48 46 0:30 / /sys/fs/bpf - bpf bpf rw`
-		_, err := ParseEntries(strings.NewReader(mountinfo))
+		_, err := parseEntries(strings.NewReader(mountinfo))
 		qt.Assert(t, qt.IsNotNil(err))
 	})
 
 	t.Run("missing fstype after dash", func(t *testing.T) {
 		const mountinfo = `48 46 0:30 / /sys/fs/bpf rw,nosuid - `
-		_, err := ParseEntries(strings.NewReader(mountinfo))
+		_, err := parseEntries(strings.NewReader(mountinfo))
 		qt.Assert(t, qt.IsNotNil(err))
 	})
 }
@@ -107,7 +107,7 @@ func TestFindByFSType(t *testing.T) {
 40 29 0:13 / /custom/tracing rw - tracefs tracefs rw
 `
 
-	entries, err := ParseEntries(strings.NewReader(mountinfo))
+	entries, err := parseEntries(strings.NewReader(mountinfo))
 	qt.Assert(t, qt.IsNil(err))
 
 	t.Run("filters and dedupes by mount point", func(t *testing.T) {

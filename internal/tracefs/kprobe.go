@@ -130,7 +130,7 @@ var getTracefsPath = sync.OnceValues(func() (string, error) {
 	}
 
 	if entries, err := mountinfo.Read(); err == nil {
-		if path, err := findTracefsInEntries(entries); err == nil && path != "" {
+		if path := findTracefsInEntries(entries); path != "" {
 			return path, nil
 		}
 	}
@@ -152,18 +152,14 @@ var getTracefsPath = sync.OnceValues(func() (string, error) {
 	return "", errors.New("neither debugfs nor tracefs are mounted")
 })
 
-// findTracefsInEntries scans a list of mount entries for tracefs, then for
-// debugfs with an existing tracing/ subdirectory. Subdirectory bind mounts
-// (entries whose Root field is not "/") are skipped, since their mount
-// point doesn't expose the tracefs root files (kprobe_events,
-// uprobe_events, events/) that callers need.
+// findTracefsInEntries returns the first occurrence of a tracefs in the
+// given entries.
 //
-// Returns the empty string (and a nil error) when no usable mount is
-// found, leaving the caller to fall back to canonical-path probing.
-func findTracefsInEntries(entries []mountinfo.Entry) (string, error) {
+// Returns an empty string when no usable mount is found.
+func findTracefsInEntries(entries []mountinfo.Entry) string {
 	for _, e := range entries {
 		if e.FSType == "tracefs" && e.Root == "/" {
-			return e.MountPoint, nil
+			return e.MountPoint
 		}
 	}
 	for _, e := range entries {
@@ -172,10 +168,10 @@ func findTracefsInEntries(entries []mountinfo.Entry) (string, error) {
 		}
 		tracing := filepath.Join(e.MountPoint, "tracing")
 		if info, err := os.Stat(tracing); err == nil && info.IsDir() {
-			return tracing, nil
+			return tracing
 		}
 	}
-	return "", nil
+	return ""
 }
 
 // sanitizeIdentifier replaces every invalid character for the tracefs api with an underscore.

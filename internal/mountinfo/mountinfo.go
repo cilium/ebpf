@@ -44,10 +44,7 @@ func Read() ([]Entry, error) {
 }
 
 // FindByFSType returns the mount points for filesystems of the given type,
-// in order of appearance, with duplicates removed. A single mount point
-// may legitimately appear multiple times (for example, a bpffs mounted
-// twice with different delegation options) — callers typically only care
-// about the path, so duplicates are filtered.
+// in order of appearance, with duplicates removed.
 func FindByFSType(fstype string) ([]string, error) {
 	entries, err := Read()
 	if err != nil {
@@ -72,14 +69,8 @@ func filterByFSType(entries []Entry, fstype string) []string {
 	return mounts
 }
 
-// ParseEntries parses mountinfo data read from r. Exposed for tests; most
-// callers want [Read] or [FindByFSType].
-//
-// Uses [bufio.Reader] rather than [bufio.Scanner] because mountinfo lines
-// can exceed Scanner's default 64 KiB token limit — overlay filesystems
-// in containers commonly produce single mount entries with many KB of
-// lowerdir options.
-func ParseEntries(r io.Reader) ([]Entry, error) {
+// parseEntries parses mountinfo data read from r.
+func parseEntries(r io.Reader) ([]Entry, error) {
 	var entries []Entry
 	// Format of /proc/self/mountinfo:
 	//
@@ -155,5 +146,5 @@ var readOnce = sync.OnceValues(func() ([]Entry, error) {
 	}
 	defer f.Close()
 
-	return ParseEntries(f)
+	return parseEntries(f)
 })

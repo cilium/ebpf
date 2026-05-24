@@ -2,13 +2,10 @@
 
 package examples
 
-// DocRlimit {
 import "github.com/cilium/ebpf/rlimit"
 
-func init() {
+func DocRlimit() {
 	if err := rlimit.RemoveMemlock(); err != nil {
 		panic(err)
 	}
 }
-
-// }

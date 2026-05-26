@@ -202,6 +202,35 @@ func TestMapBatch(t *testing.T) {
 	}
 }
 
+func TestMapBatchUnprivileged(t *testing.T) {
+	arr := createMap(t, Array, 4)
+	hash := createMap(t, Hash, 4)
+
+	keys := []uint32{0, 1}
+	values := []uint32{42, 4242}
+	qt.Assert(t, qt.IsNil(hash.Update(keys[0], values[0], UpdateAny)))
+	qt.Assert(t, qt.IsNil(hash.Update(keys[1], values[1], UpdateAny)))
+
+	testutils.WithCapabilities(t, nil, func() {
+		tmp := make([]uint32, 2)
+
+		var cursor MapBatchCursor
+		_, err := arr.BatchLookup(&cursor, tmp, tmp, nil)
+		testutils.SkipIfNotSupported(t, err)
+		qt.Assert(t, qt.IsNil(err))
+
+		count, err := arr.BatchUpdate(keys, values, nil)
+		testutils.SkipIfNotSupported(t, err)
+		qt.Assert(t, qt.IsNil(err))
+		qt.Assert(t, qt.Equals(count, len(keys)))
+
+		count, err = hash.BatchDelete(keys, nil)
+		testutils.SkipIfNotSupported(t, err)
+		qt.Assert(t, qt.IsNil(err))
+		qt.Assert(t, qt.Equals(count, len(keys)))
+	})
+}
+
 func TestMapBatchCursorReuse(t *testing.T) {
 	arr1 := createMap(t, Array, 4)
 	arr2 := createMap(t, Array, 4)

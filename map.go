@@ -1374,8 +1374,8 @@ func (m *Map) batchLookupCmd(cmd sys.Cmd, cursor *MapBatchCursor, count int, key
 	_, sysErr := sys.BPF(cmd, unsafe.Pointer(&attr), unsafe.Sizeof(attr))
 	sysErr = wrapMapError(sysErr)
 	if sysErr != nil && !errors.Is(sysErr, unix.ENOENT) {
-		if err := haveBatchAPI(); err != nil {
-			return 0, err
+		if haveFeatErr := haveBatchAPI(); haveFeatErr != nil {
+			return 0, haveFeatErr
 		}
 		return 0, sysErr
 	}

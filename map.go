@@ -1355,10 +1355,6 @@ func (m *Map) batchLookupCmd(cmd sys.Cmd, cursor *MapBatchCursor, count int, key
 		return 0, errors.New("a cursor may not be reused across maps")
 	}
 
-	if err := haveBatchAPI(); err != nil {
-		return 0, err
-	}
-
 	keyBuf := sysenc.SyscallOutput(keysOut, count*int(m.keySize))
 
 	attr := sys.MapLookupBatchAttr{
@@ -1378,6 +1374,9 @@ func (m *Map) batchLookupCmd(cmd sys.Cmd, cursor *MapBatchCursor, count int, key
 	_, sysErr := sys.BPF(cmd, unsafe.Pointer(&attr), unsafe.Sizeof(attr))
 	sysErr = wrapMapError(sysErr)
 	if sysErr != nil && !errors.Is(sysErr, unix.ENOENT) {
+		if err := haveBatchAPI(); err != nil {
+			return 0, err
+		}
 		return 0, sysErr
 	}
 

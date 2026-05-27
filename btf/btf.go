@@ -214,7 +214,7 @@ func loadRawSpec(btf []byte, base *Spec) (*Spec, error) {
 	}
 	btf = btf[header.HdrLen:]
 
-	if int(header.StringOff+header.StringLen) > len(btf) {
+	if uint64(header.StringOff)+uint64(header.StringLen) > uint64(len(btf)) {
 		return nil, fmt.Errorf("string table is out of bounds")
 	}
 	stringsSection := btf[header.StringOff : header.StringOff+header.StringLen]
@@ -224,7 +224,7 @@ func loadRawSpec(btf []byte, base *Spec) (*Spec, error) {
 		return nil, fmt.Errorf("read string section: %w", err)
 	}
 
-	if int(header.TypeOff+header.TypeLen) > len(btf) {
+	if uint64(header.TypeOff)+uint64(header.TypeLen) > uint64(len(btf)) {
 		return nil, fmt.Errorf("types section is out of bounds")
 	}
 	typesSection := btf[header.TypeOff : header.TypeOff+header.TypeLen]

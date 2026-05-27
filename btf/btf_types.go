@@ -120,6 +120,10 @@ func parseBTFHeader(buf []byte) (*btfHeader, binary.ByteOrder, error) {
 		return nil, nil, errors.New("header length shorter than btfHeader size")
 	}
 
+	if len(buf) < int(remainder) {
+		return nil, nil, errors.New("header length exceeds available data")
+	}
+
 	for _, b := range buf[:remainder] {
 		if b != 0 {
 			return nil, nil, errors.New("header contains non-zero trailer")

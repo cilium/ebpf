@@ -357,16 +357,21 @@ func TestProgramInfoMapIDsNoMaps(t *testing.T) {
 func TestScanFdInfoReader(t *testing.T) {
 	tests := []struct {
 		fields map[string]any
+		input  string
 		valid  bool
 	}{
-		{nil, true},
-		{map[string]any{"foo": new(string)}, true},
-		{map[string]any{"zap": new(string)}, false},
-		{map[string]any{"foo": new(int)}, false},
+		{nil, "foo:\tbar\n", true},
+		{map[string]any{"foo": new(string)}, "foo:\tbar\n", true},
+		{map[string]any{"zap": new(string)}, "foo:\tbar\n", false},
+		{map[string]any{"foo": new(int)}, "foo:\tbar\n", false},
+		// Empty fdinfo can occur in restricted container environments.
+		{map[string]any{"foo": new(string)}, "", false},
+		// Lines without a colon are skipped.
+		{map[string]any{"foo": new(string)}, "no colon here\n", false},
 	}
 
 	for _, test := range tests {
-		err := scanFdInfoReader(strings.NewReader("foo:\tbar\n"), test.fields)
+		err := scanFdInfoReader(strings.NewReader(test.input), test.fields)
 		if test.valid {
 			if err != nil {
 				t.Errorf("fields %v returns an error: %s", test.fields, err)

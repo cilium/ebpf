@@ -59,11 +59,14 @@ func WithCapabilities(tb testing.TB, caps []Capability, f func()) {
 		tb.Fatal("Can't set capabilities:", err)
 	}
 
-	f()
+	// Defer here so that we restore the original capabilities even if `f` panics or calls `tb.Fatal`/`tb.Skip`.
+	defer func() {
+		if err := capset(orig); err != nil {
+			tb.Fatal("Can't restore capabilities:", err)
+		}
+	}()
 
-	if err := capset(orig); err != nil {
-		tb.Fatal("Can't restore capabilities:", err)
-	}
+	f()
 }
 
 type capUserData struct {

@@ -1530,7 +1530,7 @@ func (ec *elfCode) createStructOpsMap(vsi btf.VarSecinfo, userData []byte, flags
 
 	userSize := userSt.Size
 	baseOff := vsi.Offset
-	if baseOff+userSize > uint32(len(userData)) {
+	if uint64(baseOff)+uint64(userSize) > uint64(len(userData)) {
 		return nil, 0, fmt.Errorf("%s exceeds section", mapName)
 	}
 

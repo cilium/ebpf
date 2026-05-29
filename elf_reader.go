@@ -456,6 +456,13 @@ func (ec *elfCode) loadFunctions(sec *elfSection) (map[string]asm.Instructions, 
 			return nil, fmt.Errorf("duplicate symbol %s in section %s", sym.Name, sec.Name)
 		}
 
+		if sym.Value > math.MaxUint32 || sym.Size > math.MaxUint32 {
+			return nil, fmt.Errorf("symbol %s: offset or size exceeds 32 bits in section %s", sym.Name, sec.Name)
+		}
+		if sym.Value+sym.Size > sec.Size {
+			return nil, fmt.Errorf("symbol %s: size goes out of bounds of section %s", sym.Name, sec.Name)
+		}
+
 		// Decode the symbol's instruction stream, limited to its size.
 		sr := internal.NewBufferedSectionReader(sec, int64(sym.Value), int64(sym.Size))
 		insns := make(asm.Instructions, 0, sym.Size/asm.InstructionSize)
@@ -822,6 +829,13 @@ func (ec *elfCode) loadMaps() error {
 				return fmt.Errorf("duplicate symbol %s in section %s", name, sec.Name)
 			}
 
+			if sym.Value > math.MaxUint32 || sym.Size > math.MaxUint32 {
+				return fmt.Errorf("symbol %s: offset or size exceeds 32 bits in section %s", sym.Name, sec.Name)
+			}
+			if sym.Value+sym.Size > sec.Size {
+				return fmt.Errorf("symbol %s: size goes out of bounds of section %s", name, sec.Name)
+			}
+
 			sr := internal.NewBufferedSectionReader(sec, int64(sym.Value), int64(sym.Size))
 
 			spec := MapSpec{
@@ -918,6 +932,13 @@ func (ec *elfCode) loadBTFMaps() error {
 			sym, ok := syms[name]
 			if !ok {
 				return fmt.Errorf("section %v: missing symbol for map %s", sec.Name, name)
+			}
+
+			if sym.Value > math.MaxUint32 || sym.Size > math.MaxUint32 {
+				return fmt.Errorf("symbol %s: offset or size exceeds 32 bits in section %s", sym.Name, sec.Name)
+			}
+			if sym.Value+sym.Size > sec.Size {
+				return fmt.Errorf("section %v: symbol %s: size goes out of bounds of section", sec.Name, name)
 			}
 
 			sr := internal.NewBufferedSectionReader(sec, int64(sym.Value), int64(sym.Size))

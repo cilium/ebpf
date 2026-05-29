@@ -382,6 +382,10 @@ func (ec *elfCode) loadProgramSections() (map[string]*ProgramSpec, error) {
 			return nil, fmt.Errorf("section %v: missing symbols", sec.Name)
 		}
 
+		if sec.ReaderAt == nil {
+			return nil, fmt.Errorf("compressed program section is not supported")
+		}
+
 		funcs, err := ec.loadFunctions(sec)
 		if err != nil {
 			return nil, fmt.Errorf("section %v: %w", sec.Name, err)
@@ -801,6 +805,10 @@ func (ec *elfCode) loadMaps() error {
 
 		if len(sec.symbols) == 0 {
 			return fmt.Errorf("section %v: no symbols", sec.Name)
+		}
+
+		if sec.ReaderAt == nil {
+			return fmt.Errorf("compressed map section is not supported")
 		}
 
 		vars, err := ec.sectionVars(ec.btf, sec.Name)

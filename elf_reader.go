@@ -1487,6 +1487,10 @@ func (ec *elfCode) associateStructOpsRelocs(progs map[string]*ProgramSpec) error
 			return fmt.Errorf("failed to read section data: %w", err)
 		}
 
+		if ec.btf == nil {
+			return fmt.Errorf("struct_ops section %s: missing BTF", sec.Name)
+		}
+
 		// Resolve the BTF datasec describing variables in this section.
 		var ds *btf.Datasec
 		if err := ec.btf.TypeByName(sec.Name, &ds); err != nil {

@@ -911,6 +911,10 @@ func (ec *elfCode) loadBTFMaps() error {
 			return fmt.Errorf("missing BTF")
 		}
 
+		if sec.ReaderAt == nil {
+			return fmt.Errorf("compressed BTF map section is not supported")
+		}
+
 		vars, err := ec.sectionVars(ec.btf, sec.Name)
 		if err != nil {
 			return fmt.Errorf("section %v: loading map variable BTF: %w", sec.Name, err)
@@ -1274,6 +1278,10 @@ func resolveBTFValuesContents(es *elfSection, sym elf.Symbol, member btf.Member)
 		return nil, fmt.Errorf("member offset %d exceeds symbol size %d", member.Offset.Bytes(), sym.Size)
 	}
 
+	if es.Addralign == 0 {
+		return nil, fmt.Errorf("section has no address alignment, can't resolve .values contents")
+	}
+
 	for i, sym := range valuesRelocations(es, sym, member) {
 		// Emit a value stub based on the type of relocation to be replaced by a
 		// real fd later in the pipeline before populating the Map.
@@ -1381,6 +1389,10 @@ func (ec *elfCode) loadDataSections() error {
 
 			if off > math.MaxUint32 {
 				return fmt.Errorf("data section %s: variable %s offset %d exceeds maximum", sec.Name, sym.Name, off)
+			}
+
+			if sym.Size > math.MaxUint32 {
+				return fmt.Errorf("data section %s: variable %s size %d exceeds maximum", sec.Name, sym.Name, sym.Size)
 			}
 
 			ec.vars[sym.Name] = &VariableSpec{

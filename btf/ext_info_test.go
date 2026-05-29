@@ -48,8 +48,8 @@ func TestParseLineInfoRecordsAllocations(t *testing.T) {
 		parseLineInfoRecords(bytes.NewReader(buf), internal.NativeEndian, size, count, true)
 	})
 
-	// 7 is the number of allocations on go 1.22
+	// 9 is the number of allocations on go 1.26
 	// what we want to test is that we are not allocating
 	// once per record
-	qt.Assert(t, qt.IsTrue(allocs <= 7))
+	qt.Assert(t, qt.IsTrue(allocs <= 9))
 }

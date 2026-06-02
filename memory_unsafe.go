@@ -243,7 +243,7 @@ func checkUnsafeMemory[T comparable](mm *Memory, off uint32) error {
 	}
 
 	vs, bs := uint32(size), uint32(len(mm.b))
-	if off+vs > bs {
+	if !mm.bounds(off, vs) {
 		return fmt.Errorf("%d-byte value at offset %d exceeds mmap size of %d bytes", vs, off, bs)
 	}
 

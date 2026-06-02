@@ -2,6 +2,7 @@ package ebpf
 
 import (
 	"encoding/binary"
+	"math"
 	"runtime"
 	"structs"
 	"sync/atomic"
@@ -295,6 +296,21 @@ func TestVariablePointerError(t *testing.T) {
 
 	_, err = VariablePointer[atomic.Uint32](obj.Atomic)
 	qt.Assert(t, qt.ErrorIs(err, ErrNotSupported))
+}
+
+func TestVariablePointerOffsetOverflow(t *testing.T) {
+	mm := &Memory{b: make([]byte, 8)}
+
+	// An offset whose end wraps around uint32 must be rejected rather than
+	// accepted and later used to index into the backing slice.
+	_, err := newVariable("overflow", math.MaxUint32-3, 4, nil, mm)
+	qt.Assert(t, qt.IsNotNil(err))
+
+	// Even if a Variable carries such an offset, taking a pointer to it returns
+	// an error instead of panicking with an out-of-range index.
+	v := &Variable{name: "overflow", offset: math.MaxUint32 - 3, size: 4, mm: mm}
+	_, err = VariablePointer[uint32](v)
+	qt.Assert(t, qt.IsNotNil(err))
 }
 
 func TestVariablePointerGC(t *testing.T) {

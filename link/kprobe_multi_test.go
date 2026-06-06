@@ -11,7 +11,6 @@ import (
 
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/features"
-	"github.com/cilium/ebpf/internal/linux"
 	"github.com/cilium/ebpf/internal/testutils"
 	"github.com/cilium/ebpf/internal/unix"
 )
@@ -127,9 +126,8 @@ func TestKprobeMultiProgramCall(t *testing.T) {
 
 	// Use actual syscall names with platform prefix.
 	// For simplicity, just assert the increment happens with any symbol in the array.
-	prefix := linux.PlatformPrefix()
 	opts := KprobeMultiOptions{
-		Symbols: []string{prefix + "sys_getpid", prefix + "sys_gettid"},
+		Symbols: []string{SyscallWrapper("sys_getpid"), SyscallWrapper("sys_gettid")},
 	}
 	km, err := KprobeMulti(p, opts)
 	if err != nil {

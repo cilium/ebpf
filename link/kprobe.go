@@ -50,6 +50,20 @@ func (ko *KprobeOptions) cookie() uint64 {
 	return ko.Cookie
 }
 
+// SyscallWrapper returns the platform-specific kernel wrapper symbol for
+// syscall. If syscall already has the current platform's prefix, it's returned
+// unchanged.
+//
+// For example, on amd64, an input of "sys_open" will return "__x64_sys_open".
+func SyscallWrapper(syscall string) string {
+	prefix := linux.PlatformPrefix()
+	if prefix == "" || strings.HasPrefix(syscall, prefix) {
+		return syscall
+	}
+
+	return prefix + syscall
+}
+
 // Kprobe attaches the given eBPF program to a perf event that fires when the
 // given kernel symbol starts executing. See /proc/kallsyms for available
 // symbols. For example, printk():

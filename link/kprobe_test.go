@@ -27,6 +27,10 @@ var symTests = []string{
 	"unregister_kprobes.part.0", // function body that was split and partially inlined
 }
 
+func TestSyscallWrapper(t *testing.T) {
+	qt.Assert(t, qt.Not(qt.Equals(SyscallWrapper("sys_open"), "sys_open")))
+}
+
 func TestKprobe(t *testing.T) {
 	prog := mustLoadProgram(t, ebpf.Kprobe, 0, "")
 

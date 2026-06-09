@@ -78,19 +78,24 @@ TARGETS := \
 
 HEADERS := $(wildcard testdata/*.h)
 
-.PHONY: all clean container-all container-shell generate format
+.PHONY: all clean godirs container-all container-shell generate format
 
-.DEFAULT_TARGET = container-all
+.DEFAULT_GOAL = container-all
+
+# Make sure Go-related dirs exist before starting containerized builds,
+# otherwise podman will fail to start.
+godirs:
+	mkdir -p $(shell go env GOCACHE) $(shell go env GOPATH) $(shell go env GOMODCACHE)
 
 # Build all ELF binaries using a containerized LLVM toolchain.
-container-all:
+container-all: godirs
 	+${CONTAINER_ENGINE} run --rm -ti ${CONTAINER_RUN_ARGS} \
 		"${IMAGE}:${VERSION}" \
 		$(MAKE) all
 
 # (debug) Drop the user into a shell inside the container as root.
 # Set BPF2GO_ envs to make 'make generate' just work.
-container-shell:
+container-shell: godirs
 	${CONTAINER_ENGINE} run --rm -ti ${CONTAINER_RUN_ARGS} \
 		"${IMAGE}:${VERSION}"
 

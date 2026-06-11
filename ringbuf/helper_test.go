@@ -2,6 +2,7 @@ package ringbuf
 
 import (
 	"testing"
+	"time"
 
 	"github.com/go-quicktest/qt"
 
@@ -26,4 +27,16 @@ func mustRun(tb testing.TB, prog *ebpf.Program) {
 	qt.Assert(tb, qt.IsNil(err))
 
 	qt.Assert(tb, qt.Equals(ret, uint32(0)))
+}
+
+func mustRunN(tb testing.TB, prog *ebpf.Program, repeat uint32) time.Duration {
+	tb.Helper()
+
+	ret, d, err := prog.Benchmark(internal.EmptyBPFContext, int(repeat), nil)
+	testutils.SkipIfNotSupported(tb, err)
+	qt.Assert(tb, qt.IsNil(err))
+
+	qt.Assert(tb, qt.Equals(ret, uint32(0)))
+
+	return d
 }

@@ -517,6 +517,10 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions, c *btf.Cache)
 		return nil, fmt.Errorf("load program: %w", err)
 	}
 
+	return nil, programLoadError(err, logBuf, spec)
+}
+
+func programLoadError(err error, logBuf []byte, spec *ProgramSpec) error {
 	end := bytes.IndexByte(logBuf, 0)
 	if end < 0 {
 		end = len(logBuf)
@@ -528,14 +532,16 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions, c *btf.Cache)
 		if len(logBuf) > 0 && logBuf[0] == 0 {
 			// EPERM due to RLIMIT_MEMLOCK happens before the verifier, so we can
 			// check that the log is empty to reduce false positives.
-			return nil, fmt.Errorf("load program: %w (MEMLOCK may be too low, consider rlimit.RemoveMemlock)", err)
+			return fmt.Errorf("load program: %w (MEMLOCK may be too low, consider rlimit.RemoveMemlock)", err)
 		}
 
 	case errors.Is(err, unix.EFAULT):
 		// EFAULT is returned when the kernel hits a verifier bug, and always
 		// overrides ENOSPC, defeating the buffer growth strategy. Warn the user
-		// that they may need to increase the buffer size manually.
-		return nil, fmt.Errorf("load program: %w (hit verifier bug, increase LogSizeStart to fit the log and check dmesg)", err)
+		// that they may need to increase the buffer size manually. Preserve the
+		// verifier log when it contains the actual rejection reason.
+		return fmt.Errorf("load program: %w (increase LogSizeStart to fit the log and check dmesg)",
+			internal.ErrorWithLog("hit verifier bug", err, logBuf))
 
 	case errors.Is(err, unix.EINVAL):
 		if bytes.Contains(tail, coreBadCall) {
@@ -557,11 +563,11 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions, c *btf.Cache)
 	if (errors.Is(err, unix.EINVAL) || errors.Is(err, unix.EPERM)) &&
 		hasFunctionReferences(spec.Instructions) {
 		if err := haveBPFToBPFCalls(); err != nil {
-			return nil, fmt.Errorf("load program: %w", err)
+			return fmt.Errorf("load program: %w", err)
 		}
 	}
 
-	return nil, internal.ErrorWithLog("load program", err, logBuf)
+	return internal.ErrorWithLog("load program", err, logBuf)
 }
 
 func retryLogAttrs(attr *sys.ProgLoadAttr, startSize uint32, err error) bool {

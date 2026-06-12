@@ -462,6 +462,15 @@ func TestProgramVerifierLogRetry(t *testing.T) {
 	})
 }
 
+func TestProgramVerifierLogEFAULT(t *testing.T) {
+	err := programLoadError(unix.EFAULT, []byte("some\nmessage\000"), basicProgramSpec)
+
+	var ve *VerifierError
+	qt.Assert(t, qt.ErrorAs(err, &ve))
+	qt.Assert(t, qt.ErrorIs(err, unix.EFAULT))
+	qt.Assert(t, qt.HasLen(ve.Log, 2))
+}
+
 func TestProgramWithUnsatisfiedMap(t *testing.T) {
 	coll, err := LoadCollectionSpec("testdata/loader-el.elf")
 	if err != nil {

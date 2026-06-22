@@ -204,7 +204,7 @@ func loadRawSpec(btf []byte, base *Spec) (*Spec, error) {
 		baseStrings = base.strings
 	}
 
-	header, bo, err := parseBTFHeader(btf)
+	header, _, bo, err := parseBTFHeader(btf)
 	if err != nil {
 		return nil, fmt.Errorf("parsing .BTF header: %v", err)
 	}

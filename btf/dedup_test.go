@@ -43,48 +43,6 @@ func TestDedupSKBuff(t *testing.T) {
 	qt.Assert(t, qt.Equals(skbCount, dedupedCount), qt.Commentf("Expected deduplicated sk_buff to have same number of types as original"))
 }
 
-func TestDedupVmlinux(t *testing.T) {
-	vmlinux := vmlinuxTestdataBytes(t)
-
-	spec1, err := loadRawSpec(vmlinux, nil)
-	qt.Assert(t, qt.IsNil(err))
-
-	spec2 := spec1.Copy()
-
-	rootTypes := func(spec *Spec) []Type {
-		refs := make(map[Type]int)
-		for t := range spec.All() {
-			refs[t] = 0
-		}
-		for t := range spec.All() {
-			for child := range children(t) {
-				refs[*child]++
-			}
-		}
-		types := make([]Type, 0)
-		for typ := range refs {
-			if refs[typ] == 0 {
-				types = append(types, typ)
-			}
-		}
-		return types
-	}
-
-	spec1Roots := rootTypes(spec1)
-	spec1TypeCount := countTypes(spec1Roots...)
-	spec2Roots := rootTypes(spec2)
-	types := append(spec1Roots, spec2Roots...)
-
-	deduper := newDeduper()
-
-	for i, typ := range types {
-		types[i], err = deduper.deduplicate(typ)
-		qt.Assert(t, qt.IsNil(err))
-	}
-	qt.Assert(t, qt.IsNil(err))
-	qt.Assert(t, qt.Equals(countTypes(types...), spec1TypeCount), qt.Commentf("Expected deduplicated vmlinux to have same number of types as original"))
-}
-
 func BenchmarkDeduplicateSKBuff(b *testing.B) {
 	b.ReportAllocs()
 

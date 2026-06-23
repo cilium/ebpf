@@ -11,6 +11,17 @@ import (
 func TestCreateStructOpsMapSpecSimple(t *testing.T) {
 	requireTestmodOps(t)
 
+	btfSpec, err := btf.LoadKernelModuleSpec("bpf_testmod")
+	if err != nil {
+		t.Fatalf("loading BTF spec failed: %v", err)
+	}
+
+	var outerValueType *btf.Struct
+	err = btfSpec.TypeByName(structOpsValuePrefix+"bpf_testmod_ops", &outerValueType)
+	if err != nil {
+		t.Fatalf("finding bpf_testmod_ops type failed: %v", err)
+	}
+
 	ms := &MapSpec{
 		Name:       "testmod_ops",
 		Type:       StructOpsMap,
@@ -22,7 +33,7 @@ func TestCreateStructOpsMapSpecSimple(t *testing.T) {
 		Contents: []MapKV{
 			{
 				Key:   uint32(0),
-				Value: make([]byte, 448),
+				Value: make([]byte, outerValueType.Size),
 			},
 		},
 	}

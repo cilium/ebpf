@@ -3,6 +3,8 @@ package ebpf
 import (
 	"testing"
 
+	"github.com/go-quicktest/qt"
+
 	"github.com/cilium/ebpf/btf"
 	"github.com/cilium/ebpf/internal/sys"
 	"github.com/cilium/ebpf/internal/testutils"
@@ -10,6 +12,12 @@ import (
 
 func TestCreateStructOpsMapSpecSimple(t *testing.T) {
 	requireTestmodOps(t)
+
+	btfSpec, err := btf.LoadKernelModuleSpec("bpf_testmod")
+	qt.Assert(t, qt.IsNil(err))
+
+	var outerValueType *btf.Struct
+	qt.Assert(t, qt.IsNil(btfSpec.TypeByName(structOpsValuePrefix+"bpf_testmod_ops", &outerValueType)))
 
 	ms := &MapSpec{
 		Name:       "testmod_ops",
@@ -22,15 +30,13 @@ func TestCreateStructOpsMapSpecSimple(t *testing.T) {
 		Contents: []MapKV{
 			{
 				Key:   uint32(0),
-				Value: make([]byte, 448),
+				Value: make([]byte, outerValueType.Size),
 			},
 		},
 	}
 
 	m, err := NewMap(ms)
 	testutils.SkipIfNotSupported(t, err)
-	if err != nil {
-		t.Fatalf("creating struct_ops map failed: %v", err)
-	}
+	qt.Assert(t, qt.IsNil(err))
 	t.Cleanup(func() { _ = m.Close() })
 }

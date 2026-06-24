@@ -81,6 +81,10 @@ func (i *RawTracepointLinkInfo) info() (unsafe.Pointer, uint32) {
 	return unsafe.Pointer(i), uint32(unsafe.Sizeof(*i))
 }
 
+func (i *IterLinkInfo) info() (unsafe.Pointer, uint32) {
+	return unsafe.Pointer(i), uint32(unsafe.Sizeof(*i))
+}
+
 func (i *KprobeLinkInfo) info() (unsafe.Pointer, uint32) {
 	return unsafe.Pointer(i), uint32(unsafe.Sizeof(*i))
 }

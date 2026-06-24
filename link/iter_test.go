@@ -6,9 +6,27 @@ import (
 	"io"
 	"testing"
 
+	"github.com/go-quicktest/qt"
+
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/internal/testutils"
 )
+
+func TestIterInfo(t *testing.T) {
+	testutils.SkipOnOldKernel(t, "5.9", "bpf_map iter")
+
+	prog := mustLoadProgram(t, ebpf.Tracing, ebpf.AttachTraceIter, "bpf_map")
+
+	it, err := AttachIter(IterOptions{Program: prog})
+	qt.Assert(t, qt.IsNil(err))
+	defer it.Close()
+
+	info, err := it.Info()
+	qt.Assert(t, qt.IsNil(err))
+	qt.Assert(t, qt.Equals(IterType, info.Type))
+	iterInfo := info.Iter()
+	qt.Assert(t, qt.Equals(iterInfo.TargetName, "bpf_map"))
+}
 
 func TestIter(t *testing.T) {
 	testutils.SkipOnOldKernel(t, "5.9", "bpf_map iter")

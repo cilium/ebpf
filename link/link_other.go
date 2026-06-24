@@ -152,6 +152,10 @@ type RawTracepointInfo struct {
 	Name string
 }
 
+type IterInfo struct {
+	TargetName string
+}
+
 type KprobeMultiInfo struct {
 	// Count is the number of addresses hooked by the kprobe.
 	Count   uint32
@@ -378,5 +382,13 @@ func (r Info) PerfEvent() *PerfEventInfo {
 // Returns nil if the type-specific link info isn't available.
 func (r Info) RawTracepoint() *RawTracepointInfo {
 	e, _ := r.extra.(*RawTracepointInfo)
+	return e
+}
+
+// Iter returns iter type-specific link info.
+//
+// Returns nil if the type-specific link info isn't available.
+func (r Info) Iter() *IterInfo {
+	e, _ := r.extra.(*IterInfo)
 	return e
 }

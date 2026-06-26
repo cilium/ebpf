@@ -554,6 +554,52 @@ func TestLoadEmptyRawSpec(t *testing.T) {
 	qt.Assert(t, qt.IsNil(err))
 }
 
+func TestUnknownBTFKind(t *testing.T) {
+	var b Builder
+
+	integer := &Int{Name: "uint16", Size: 2, Encoding: Unsigned}
+	_, err := b.Add(integer)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ukn := &Unknown{
+		name:  "hello_world",
+		value: []byte{0x01, 0x02, 0x03, 0x04},
+		layout: btfLayout{
+			InfoSize: 4,
+			ElemSize: 0,
+		},
+	}
+	ukn.typ.SetKind(30)
+	_, err = b.Add(ukn)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = b.Add(&Pointer{Target: integer})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	btfBytes, err := b.Marshal(nil, &MarshalOptions{
+		Order:       binary.NativeEndian,
+		WithLayouts: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	spec, err := LoadSpecFromReader(bytes.NewReader(btfBytes))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for typ := range spec.All() {
+		fmt.Println(typ)
+	}
+}
+
 func BenchmarkSpecCopy(b *testing.B) {
 	spec := vmlinuxTestdataSpec(b)
 

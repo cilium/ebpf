@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"slices"
 	"strings"
 
 	"github.com/cilium/ebpf/asm"
@@ -86,6 +87,27 @@ func (v *Void) Format(fs fmt.State, verb rune) { formatType(fs, verb, v) }
 func (v *Void) TypeName() string               { return "" }
 func (v *Void) size() uint32                   { return 0 }
 func (v *Void) copy() Type                     { return (*Void)(nil) }
+
+// Unknown is a placeholder for a type that could not be parsed, we treat it as an opaque type.
+type Unknown struct {
+	typ    btfType
+	name   string
+	layout btfLayout
+	value  []byte
+}
+
+func (u *Unknown) Format(fs fmt.State, verb rune) {
+	formatType(fs, verb, u, "kind=", u.typ.Kind(), "value=", u.value)
+}
+func (u *Unknown) TypeName() string { return u.name }
+func (u *Unknown) copy() Type {
+	return &Unknown{
+		typ:    u.typ,
+		name:   u.name,
+		layout: u.layout,
+		value:  slices.Clone(u.value),
+	}
+}
 
 type IntEncoding byte
 

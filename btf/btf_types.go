@@ -84,6 +84,8 @@ type btfHeader struct {
 	StringLen uint32
 }
 
+var btfHeaderLayoutLen = int(unsafe.Sizeof(btfHeaderLayout{}))
+
 type btfHeaderLayout struct {
 	Off uint32
 	Len uint32
@@ -296,7 +298,7 @@ func (bt *btfType) Encode(buf []byte, bo binary.ByteOrder) (int, error) {
 }
 
 // DataLen returns the length of additional type specific data in bytes.
-func (bt *btfType) DataLen() (int, error) {
+func (bt *btfType) DataLen(layouts btfLayouts) (int, error) {
 	switch bt.Kind() {
 	case kindInt:
 		return int(unsafe.Sizeof(btfInt{})), nil
@@ -328,7 +330,7 @@ func (bt *btfType) DataLen() (int, error) {
 	case kindEnum64:
 		return int(unsafe.Sizeof(btfEnum64{})) * bt.Vlen(), nil
 	default:
-		return 0, fmt.Errorf("unknown kind: %v", bt.Kind())
+		return layouts.kindSize(bt.Kind(), bt.Vlen())
 	}
 
 	return 0, nil

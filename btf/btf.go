@@ -204,7 +204,7 @@ func loadRawSpec(btf []byte, base *Spec) (*Spec, error) {
 		baseStrings = base.strings
 	}
 
-	header, _, bo, err := parseBTFHeader(btf)
+	header, layoutHeader, bo, err := parseBTFHeader(btf)
 	if err != nil {
 		return nil, fmt.Errorf("parsing .BTF header: %v", err)
 	}
@@ -229,7 +229,19 @@ func loadRawSpec(btf []byte, base *Spec) (*Spec, error) {
 	}
 	typesSection := btf[header.TypeOff : header.TypeOff+header.TypeLen]
 
-	decoder, err := newDecoder(typesSection, bo, rawStrings, baseDecoder)
+	var layouts btfLayouts
+	if layoutHeader != nil {
+		if uint64(layoutHeader.Off)+uint64(layoutHeader.Len) > uint64(len(btf)) {
+			return nil, fmt.Errorf("layout section is out of bounds")
+		}
+
+		layouts, err = parseLayouts(btf[layoutHeader.Off:layoutHeader.Off+layoutHeader.Len], bo)
+		if err != nil {
+			return nil, fmt.Errorf("parsing layout section: %w", err)
+		}
+	}
+
+	decoder, err := newDecoder(typesSection, bo, rawStrings, layouts, baseDecoder)
 	if err != nil {
 		return nil, err
 	}

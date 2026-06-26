@@ -37,6 +37,8 @@ type decoder struct {
 	declTags map[TypeID][]TypeID
 	// An index from essentialName to TypeID.
 	namedTypes *fuzzyStringIndex
+	// Layouts of each kind of type. Used to determine how many bytes to read for each type.
+	layouts btfLayouts
 
 	// Protection for mutable fields below.
 	mu              sync.Mutex
@@ -45,7 +47,7 @@ type decoder struct {
 	legacyBitfields map[TypeID][2]Bits // offset, size
 }
 
-func newDecoder(raw []byte, bo binary.ByteOrder, strings *stringTable, base *decoder) (*decoder, error) {
+func newDecoder(raw []byte, bo binary.ByteOrder, strings *stringTable, layouts btfLayouts, base *decoder) (*decoder, error) {
 	firstTypeID := TypeID(0)
 	if base != nil {
 		if base.byteOrder != bo {
@@ -62,7 +64,7 @@ func newDecoder(raw []byte, bo binary.ByteOrder, strings *stringTable, base *dec
 	var header btfType
 	var numTypes, numDeclTags, numNamedTypes int
 
-	for _, err := range allBtfTypeOffsets(raw, bo, &header) {
+	for _, err := range allBtfTypeOffsets(raw, bo, &header, layouts) {
 		if err != nil {
 			return nil, err
 		}
@@ -94,7 +96,7 @@ func newDecoder(raw []byte, bo binary.ByteOrder, strings *stringTable, base *dec
 	}
 
 	id := firstTypeID + TypeID(len(offsets))
-	for offset := range allBtfTypeOffsets(raw, bo, &header) {
+	for offset := range allBtfTypeOffsets(raw, bo, &header, layouts) {
 		if id < firstTypeID {
 			return nil, fmt.Errorf("no more type IDs")
 		}
@@ -136,6 +138,7 @@ func newDecoder(raw []byte, bo binary.ByteOrder, strings *stringTable, base *dec
 		offsets,
 		declTags,
 		namedTypes,
+		layouts,
 		sync.Mutex{},
 		make(map[TypeID]Type),
 		make(map[Type]TypeID),
@@ -143,7 +146,7 @@ func newDecoder(raw []byte, bo binary.ByteOrder, strings *stringTable, base *dec
 	}, nil
 }
 
-func allBtfTypeOffsets(buf []byte, bo binary.ByteOrder, header *btfType) iter.Seq2[int, error] {
+func allBtfTypeOffsets(buf []byte, bo binary.ByteOrder, header *btfType, layouts btfLayouts) iter.Seq2[int, error] {
 	return func(yield func(int, error) bool) {
 		for offset := 0; offset < len(buf); {
 			start := offset
@@ -155,7 +158,7 @@ func allBtfTypeOffsets(buf []byte, bo binary.ByteOrder, header *btfType) iter.Se
 			}
 			offset += n
 
-			n, err = header.DataLen()
+			n, err = header.DataLen(layouts)
 			if err != nil {
 				yield(-1, err)
 				return
@@ -210,6 +213,7 @@ func (d *decoder) copy(copiedTypes map[Type]Type) *decoder {
 		d.offsets,
 		d.declTags,
 		d.namedTypes,
+		d.layouts,
 		sync.Mutex{},
 		types,
 		typeIDs,
@@ -615,6 +619,20 @@ func (d *decoder) inflateType(id TypeID) (typ Type, err error) {
 			}
 
 		default:
+			if int(header.Kind()) <= len(d.layouts) {
+				layout := d.layouts[header.Kind()]
+				// We don't know how to inflate this type, but we can at least
+				// preserve the raw bytes for later use.
+				typ = &Unknown{
+					typ:    header,
+					name:   name,
+					layout: layout,
+					value:  slices.Clone(pos[:int(layout.InfoSize)+int(layout.ElemSize)*header.Vlen()]),
+				}
+				d.types[id] = typ
+				break
+			}
+
 			return nil, fmt.Errorf("type id %d: unknown kind: %v", id, header.Kind())
 		}
 	}

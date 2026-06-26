@@ -145,6 +145,8 @@ func children(typ Type) iter.Seq[*Type] {
 			}
 		case *cycle:
 			// cycle has children, but we ignore them deliberately.
+		case *Unknown:
+			// We have no idea if an unknown type has children, so ignore them deliberately.
 		default:
 			panic(fmt.Sprintf("don't know how to walk Type %T", v))
 		}

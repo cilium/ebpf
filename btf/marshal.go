@@ -26,6 +26,8 @@ type MarshalOptions struct {
 	ReplaceEnum64 bool
 	// Prevent the "No type found" error when loading BTF without any types.
 	PreventNoTypeFound bool
+	// WithLayouts enabled marshaling of BTF layouts, requires kernel 7.1 or newer.
+	WithLayouts bool
 }
 
 // KernelMarshalOptions will generate BTF suitable for the current kernel.
@@ -37,6 +39,7 @@ func KernelMarshalOptions() *MarshalOptions {
 		ReplaceTypeTags:    haveTypeTags() != nil,
 		ReplaceEnum64:      haveEnum64() != nil,
 		PreventNoTypeFound: true, // All current kernels require this.
+		WithLayouts:        false,
 	}
 }
 
@@ -49,6 +52,7 @@ type encoder struct {
 	ids     map[Type]TypeID
 	visited map[Type]struct{}
 	lastID  TypeID
+	layouts map[btfKind]btfLayout
 }
 
 var bufferPool = sync.Pool{
@@ -204,7 +208,11 @@ func (b *Builder) Marshal(buf []byte, opts *MarshalOptions) ([]byte, error) {
 	}
 
 	// Reserve space for the BTF header.
-	buf = slices.Grow(buf, btfHeaderLen)[:btfHeaderLen]
+	hdrLen := btfHeaderLen
+	if opts.WithLayouts {
+		hdrLen += btfHeaderLayoutLen
+	}
+	buf = slices.Grow(buf, hdrLen)[:hdrLen]
 
 	e := encoder{
 		MarshalOptions: *opts,
@@ -216,6 +224,13 @@ func (b *Builder) Marshal(buf []byte, opts *MarshalOptions) ([]byte, error) {
 
 	if e.ids == nil {
 		e.ids = make(map[Type]TypeID)
+	}
+
+	if opts.WithLayouts {
+		e.layouts = make(map[btfKind]btfLayout)
+		for kind, layout := range builtinLayouts() {
+			e.layouts[btfKind(kind)] = layout
+		}
 	}
 
 	types := b.types
@@ -241,7 +256,30 @@ func (b *Builder) Marshal(buf []byte, opts *MarshalOptions) ([]byte, error) {
 	}
 
 	length := len(buf)
-	typeLen := uint32(length - btfHeaderLen)
+	typeLen := uint32(length - hdrLen)
+	stringOff := typeLen
+
+	var layoutHdr btfHeaderLayout
+	if opts.WithLayouts {
+		// Get a sorted list of kinds for which we have layouts
+		layoutKinds := slices.Sorted(maps.Keys(e.layouts))
+		// Make a slice to fit all layouts for kind 0 to max(layoutKinds). e.layouts may be sparse
+		// keep layouts for missing kinds as zero values.
+		layouts := make([]btfLayout, layoutKinds[len(layoutKinds)-1]+1)
+		for _, kind := range layoutKinds {
+			layouts[kind] = e.layouts[kind]
+		}
+
+		layoutHdr.Off = typeLen
+		layoutHdr.Len = uint32(len(layouts) * btfLayoutLen)
+
+		buf, err = binary.Append(buf, e.Order, layouts)
+		if err != nil {
+			return nil, fmt.Errorf("write layouts: %v", err)
+		}
+
+		stringOff = uint32(len(buf) - hdrLen)
+	}
 
 	stringLen := e.strings.Length()
 	buf = e.strings.AppendEncoded(buf)
@@ -251,16 +289,23 @@ func (b *Builder) Marshal(buf []byte, opts *MarshalOptions) ([]byte, error) {
 		Magic:     btfMagic,
 		Version:   1,
 		Flags:     0,
-		HdrLen:    uint32(btfHeaderLen),
+		HdrLen:    uint32(hdrLen),
 		TypeOff:   0,
 		TypeLen:   typeLen,
-		StringOff: typeLen,
+		StringOff: stringOff,
 		StringLen: uint32(stringLen),
 	}
 
 	_, err = binary.Encode(buf[:btfHeaderLen], e.Order, header)
 	if err != nil {
 		return nil, fmt.Errorf("write header: %v", err)
+	}
+
+	if opts.WithLayouts {
+		_, err = binary.Encode(buf[btfHeaderLen:hdrLen], e.Order, &layoutHdr)
+		if err != nil {
+			return nil, fmt.Errorf("write layout header: %v", err)
+		}
 	}
 
 	return buf, nil
@@ -447,6 +492,17 @@ func (e *encoder) deflateType(buf []byte, typ Type) (_ []byte, err error) {
 
 	case *TypeTag:
 		err = e.deflateTypeTag(&raw, v)
+
+	case *Unknown:
+		if !e.WithLayouts {
+			return nil, fmt.Errorf("unable to marshal unknown kind %d without layouts enabled", v.typ.Kind())
+		}
+
+		e.layouts[v.typ.Kind()] = v.layout
+
+		raw.Info = v.typ.Info
+		raw.SizeType = v.typ.SizeType
+		buf, err = binary.Append(buf, e.Order, v.value)
 
 	default:
 		return nil, fmt.Errorf("don't know how to deflate %T", v)

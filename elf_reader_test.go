@@ -706,6 +706,80 @@ func TestKsymWeakMissing(t *testing.T) {
 	qt.Assert(t, qt.Equals(ret, 1))
 }
 
+func TestKsymTyped(t *testing.T) {
+	// Typed ksyms require Linux 5.10 or later, added in 4976b718c355 ("bpf:
+	// Introduce pseudo_btf_id")
+	testutils.SkipOnOldKernel(t, "5.10", "typed ksyms")
+
+	file := testutils.NativeFile(t, "testdata/ksym-%s.elf")
+	spec, err := LoadCollectionSpec(file)
+	qt.Assert(t, qt.IsNil(err))
+
+	var obj struct {
+		Main              *Program  `ebpf:"typed_ksym_test"`
+		BPFProgActiveAddr *Variable `ebpf:"out__bpf_prog_active_addr"`
+		SoftnetDataAddr   *Variable `ebpf:"out__softnet_data_addr"`
+	}
+
+	err = spec.LoadAndAssign(&obj, nil)
+	testutils.SkipIfNotSupported(t, err)
+	qt.Assert(t, qt.IsNil(err))
+	defer obj.Main.Close()
+
+	mustRun(t, obj.Main, nil)
+
+	ksyms := map[string]uint64{
+		"bpf_prog_active": 0,
+		"softnet_data":    0,
+	}
+
+	qt.Assert(t, qt.IsNil(kallsyms.AssignAddresses(ksyms)))
+	qt.Assert(t, qt.Not(qt.Equals(ksyms["bpf_prog_active"], 0)))
+	qt.Assert(t, qt.Not(qt.Equals(ksyms["softnet_data"], 0)))
+
+	var v uint64
+	qt.Assert(t, qt.IsNil(obj.BPFProgActiveAddr.Get(&v)))
+	qt.Assert(t, qt.Equals(v, ksyms["bpf_prog_active"]))
+
+	qt.Assert(t, qt.IsNil(obj.SoftnetDataAddr.Get(&v)))
+	qt.Assert(t, qt.Equals(v, ksyms["softnet_data"]))
+}
+
+func TestKsymTypedModVar(t *testing.T) {
+	// Typed ksyms from kmods require Linux 5.12 or later, added in 430d97a8a7bf
+	// ("selftests/bpf: Test kernel module ksym externs").
+	testutils.SkipOnOldKernel(t, "5.12", "typed ksyms from kernel modules")
+
+	requireTestmod(t)
+
+	file := testutils.NativeFile(t, "testdata/ksym-%s.elf")
+	spec, err := LoadCollectionSpec(file)
+	qt.Assert(t, qt.IsNil(err))
+
+	var obj struct {
+		Main        *Program  `ebpf:"typed_ksym_mod_var_test"`
+		TestmodKsym *Variable `ebpf:"out__bpf_testmod_ksym_percpu_addr"`
+	}
+
+	err = spec.LoadAndAssign(&obj, nil)
+	testutils.SkipIfNotSupported(t, err)
+	qt.Assert(t, qt.IsNil(err))
+	defer obj.Main.Close()
+
+	mustRun(t, obj.Main, nil)
+
+	ksyms := map[string]uint64{
+		"bpf_testmod_ksym_percpu": 0,
+	}
+
+	qt.Assert(t, qt.IsNil(kallsyms.AssignAddresses(ksyms)))
+	qt.Assert(t, qt.Not(qt.Equals(ksyms["bpf_testmod_ksym_percpu"], 0)))
+
+	var v uint64
+	qt.Assert(t, qt.IsNil(obj.TestmodKsym.Get(&v)))
+	qt.Assert(t, qt.Equals(v, ksyms["bpf_testmod_ksym_percpu"]))
+}
+
 func TestKfunc(t *testing.T) {
 	testutils.SkipOnOldKernel(t, "5.18", "kfunc support")
 	file := testutils.NativeFile(t, "testdata/kfunc-%s.elf")
@@ -1102,7 +1176,7 @@ func TestLibBPFCompat(t *testing.T) {
 		case "lsm_cgroup", "bpf_iter_ipv6_route", "test_core_extern",
 			"profiler1", "profiler2", "profiler3":
 			t.Skip("Skipping due to using weak CONFIG_* variables")
-		case "linked_maps", "linked_maps1", "linked_maps2", "linked_funcs1", "linked_funcs2",
+		case "linked_maps", "linked_maps1", "linked_maps2", "linked_funcs1", "linked_funcs2", "linked_vars1", "linked_vars2",
 			"test_subskeleton", "test_subskeleton_lib":
 			t.Skip("Skipping due to relying on cross ELF linking")
 		case "test_log_fixup":

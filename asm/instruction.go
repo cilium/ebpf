@@ -277,6 +277,23 @@ func (ins *Instruction) mapOffset() uint32 {
 	return uint32(uint64(ins.Constant) >> 32)
 }
 
+// AssociateBTFID associates a BTF ID and optionally a BTF module fd with this
+// Instruction. The fd must stay alive for the duration of program load.
+func (ins *Instruction) AssociateBTFID(id uint32, moduleFD int) error {
+	if !ins.OpCode.IsDWordLoad() {
+		return fmt.Errorf("%s is not a 64 bit load", ins.OpCode)
+	}
+
+	if moduleFD < 0 {
+		return errors.New("can't associate a negative module fd")
+	}
+
+	ins.Src = PseudoBtfId
+	ins.Constant = int64(uint64(id) | (uint64(uint(moduleFD)) << 32))
+
+	return nil
+}
+
 // IsLoadFromMap returns true if the instruction loads from a map.
 //
 // This covers both loading the map pointer and direct map value loads.
@@ -301,6 +318,12 @@ func (ins *Instruction) IsKfuncCall() bool {
 // IsLoadOfFunctionPointer returns true if the instruction loads a function pointer.
 func (ins *Instruction) IsLoadOfFunctionPointer() bool {
 	return ins.OpCode.IsDWordLoad() && ins.Src == PseudoFunc
+}
+
+// IsLoadOfBTFID returns true if the instruction refers to a BTF ID and optionally a
+// module fd.
+func (ins *Instruction) IsLoadOfBTFID() bool {
+	return ins.OpCode.IsDWordLoad() && ins.Src == PseudoBtfId
 }
 
 // IsFunctionReference returns true if the instruction references another BPF

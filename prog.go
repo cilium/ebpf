@@ -380,9 +380,13 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions, c *btf.Cache)
 	}
 	defer kconfig.Close()
 
-	if err := resolveKsymReferences(insns); err != nil {
+	ksymHandles, err := resolveKsymReferences(insns, c)
+	if err != nil {
 		return nil, fmt.Errorf("resolve .ksyms: %w", err)
 	}
+	// BTF module handles for typed ksyms need to outlive the program load, but
+	// are otherwise unused since their fds are inlined into insns.
+	defer ksymHandles.Close()
 
 	if err := fixupAndValidate(insns); err != nil {
 		return nil, err
@@ -1250,7 +1254,7 @@ func findProgramTargetInKernel(name string, progType ProgramType, attachType Att
 //
 // Returns a non-nil handle if the type was found in a module, [btf.ErrNotFound]
 // if the type wasn't found or if BTF is not enabled.
-func findTargetInKernel(typeName string, target *btf.Type, cache *btf.Cache) (*btf.Spec, *btf.Handle, error) {
+func findTargetInKernel[T btf.Type](typeName string, target *T, cache *btf.Cache) (*btf.Spec, *btf.Handle, error) {
 	kernelSpec, err := cache.Kernel()
 	if err != nil {
 		return nil, nil, fmt.Errorf("load kernel spec: %w (%w)", btf.ErrNotFound, err)
@@ -1282,7 +1286,7 @@ func findTargetInKernel(typeName string, target *btf.Type, cache *btf.Cache) (*b
 // are searched in the order they were loaded.
 //
 // Returns btf.ErrNotFound if the target can't be found in any module.
-func findTargetInModule(typeName string, target *btf.Type, cache *btf.Cache) (*btf.Spec, *btf.Handle, error) {
+func findTargetInModule[T btf.Type](typeName string, target *T, cache *btf.Cache) (*btf.Spec, *btf.Handle, error) {
 	it := new(btf.HandleIterator)
 	defer it.Handle.Close()
 

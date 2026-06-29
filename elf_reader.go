@@ -41,6 +41,7 @@ type ksymMetaKey struct{}
 type ksymMeta struct {
 	Binding elf.SymBind
 	Name    string
+	Var     *btf.Var
 }
 
 // elfCode is a convenience to reduce the amount of arguments that have to
@@ -55,7 +56,7 @@ type elfCode struct {
 	maps     map[string]*MapSpec
 	vars     map[string]*VariableSpec
 	kfuncs   map[string]*btf.Func
-	ksyms    map[string]struct{}
+	ksyms    map[string]*btf.Var
 	kconfig  *MapSpec
 }
 
@@ -157,7 +158,7 @@ func LoadCollectionSpecFromReader(rd io.ReaderAt) (*CollectionSpec, error) {
 		maps:        make(map[string]*MapSpec),
 		vars:        make(map[string]*VariableSpec),
 		kfuncs:      make(map[string]*btf.Func),
-		ksyms:       make(map[string]struct{}),
+		ksyms:       make(map[string]*btf.Var),
 	}
 
 	symbols, err := f.Symbols()
@@ -737,7 +738,7 @@ func (ec *elfCode) relocateInstruction(ins *asm.Instruction, rel elf.Symbol) err
 		}
 
 		kf := ec.kfuncs[name]
-		_, ks := ec.ksyms[name]
+		ks := ec.ksyms[name]
 
 		switch {
 		// If a Call / DWordLoad instruction is found and the datasec has a btf.Func with a Name
@@ -759,13 +760,14 @@ func (ec *elfCode) relocateInstruction(ins *asm.Instruction, rel elf.Symbol) err
 
 			ins.Constant = 0
 
-		case ks && ins.OpCode.IsDWordLoad():
+		case ks != nil && ins.OpCode.IsDWordLoad():
 			if bind != elf.STB_GLOBAL && bind != elf.STB_WEAK {
 				return fmt.Errorf("asm relocation: %s: %w: %s", name, errUnsupportedBinding, bind)
 			}
 			ins.Metadata.Set(ksymMetaKey{}, &ksymMeta{
 				Binding: bind,
 				Name:    name,
+				Var:     ks,
 			})
 
 		// If no kconfig map is found, this must be a symbol reference from inline
@@ -1506,7 +1508,7 @@ func (ec *elfCode) loadKsymsSection() error {
 		case *btf.Func:
 			ec.kfuncs[t.TypeName()] = t
 		case *btf.Var:
-			ec.ksyms[t.TypeName()] = struct{}{}
+			ec.ksyms[t.TypeName()] = t
 		default:
 			return fmt.Errorf("unexpected variable type in .ksyms: %T", v)
 		}

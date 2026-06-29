@@ -259,13 +259,11 @@ func (elf *elfData) fixupDatasec(typ Type) error {
 			// references to kernel symbols.
 			// Nothing to fix up, all sizes and offsets are 0.
 			for _, vsi := range ds.Vars {
-				switch t := vsi.Type.(type) {
+				switch vsi.Type.(type) {
 				case *Func:
 					continue
 				case *Var:
-					if _, ok := t.Type.(*Void); !ok {
-						return fmt.Errorf("data section %s: expected %s to be *Void, not %T: %w", name, vsi.Type.TypeName(), vsi.Type, ErrNotSupported)
-					}
+					continue
 				default:
 					return fmt.Errorf("data section %s: expected to be either *btf.Func or *btf.Var, not %T: %w", name, vsi.Type, ErrNotSupported)
 				}

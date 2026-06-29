@@ -452,14 +452,14 @@ func resolveKconfigReferences(insns asm.Instructions) (_ *Map, err error) {
 	return kconfig, nil
 }
 
-func resolveKsymReferences(insns asm.Instructions) error {
-	type fixup struct {
-		*asm.Instruction
-		*ksymMeta
-	}
+type ksymFixup struct {
+	*asm.Instruction
+	*ksymMeta
+}
 
-	var symbols map[string]uint64
-	var fixups []fixup
+func resolveKsymReferences(insns asm.Instructions, cache *btf.Cache) (handles, error) {
+	var untypedFixups []ksymFixup
+	var typedFixups []ksymFixup
 
 	iter := insns.Iterate()
 	for iter.Next() {
@@ -469,18 +469,38 @@ func resolveKsymReferences(insns asm.Instructions) error {
 			continue
 		}
 
-		if symbols == nil {
-			symbols = make(map[string]uint64)
+		if _, ok := btf.As[*btf.Void](meta.Var.Type); ok {
+			untypedFixups = append(untypedFixups, ksymFixup{iter.Ins, meta})
+			continue
 		}
 
-		symbols[meta.Name] = 0
-		fixups = append(fixups, fixup{
-			iter.Ins, meta,
-		})
+		typedFixups = append(typedFixups, ksymFixup{iter.Ins, meta})
 	}
 
-	if len(symbols) == 0 {
+	if err := applyUntypedKsymFixups(untypedFixups); err != nil {
+		return nil, fmt.Errorf("untyped ksym: %w", err)
+	}
+
+	modules, err := applyTypedKsymFixups(typedFixups, cache)
+	if err != nil {
+		return nil, fmt.Errorf("typed ksym: %w", err)
+	}
+
+	return modules, nil
+}
+
+// applyUntypedKsymFixups resolves untyped ksyms by looking up their addresses
+// in the kernel's kallsyms table. Returns [ErrRestrictedKernel] if the kernel
+// restricts access (through sysctl) to kallsyms and the program contains
+// required ksyms.
+func applyUntypedKsymFixups(fixups []ksymFixup) error {
+	if len(fixups) == 0 {
 		return nil
+	}
+
+	symbols := make(map[string]uint64)
+	for _, fixup := range fixups {
+		symbols[fixup.Name] = 0
 	}
 
 	err := kallsyms.AssignAddresses(symbols)
@@ -514,4 +534,64 @@ func resolveKsymReferences(insns asm.Instructions) error {
 	}
 
 	return nil
+}
+
+// applyTypedKsymFixups resolves typed ksyms by looking up their BTF type IDs in
+// the kernel's BTF and module BTFs. Returns a handles that needs to be kept
+// alive for the duration of program load.
+func applyTypedKsymFixups(fixups []ksymFixup, cache *btf.Cache) (modules handles, err error) {
+	if len(fixups) == 0 {
+		return nil, nil
+	}
+
+	defer func() {
+		if err != nil {
+			modules.Close()
+		}
+	}()
+
+	type symbol struct {
+		id       btf.TypeID
+		moduleFD int
+	}
+	symbols := make(map[string]symbol)
+
+	for _, fixup := range fixups {
+		varName := fixup.ksymMeta.Var.Name
+
+		sym, ok := symbols[varName]
+		if !ok {
+			var target *btf.Var
+			spec, module, err := findTargetInKernel(varName, &target, cache)
+			if errors.Is(err, btf.ErrNotFound) && fixup.Binding == elf.STB_WEAK {
+				continue
+			}
+			if err != nil {
+				return nil, fmt.Errorf("look up variable %s: %w", varName, err)
+			}
+
+			if _, err := modules.add(module); err != nil {
+				return nil, fmt.Errorf("store module handle for variable %s: %w", varName, err)
+			}
+
+			id, err := spec.TypeID(target)
+			if err != nil {
+				return nil, fmt.Errorf("get type id for variable %s: %w", varName, err)
+			}
+
+			var moduleFD int
+			if module != nil {
+				moduleFD = module.FD()
+			}
+
+			sym = symbol{id, moduleFD}
+			symbols[varName] = sym
+		}
+
+		if err := fixup.Instruction.AssociateBTFID(uint32(sym.id), sym.moduleFD); err != nil {
+			return nil, fmt.Errorf("associate BTF ID for variable %s: %w", varName, err)
+		}
+	}
+
+	return modules, nil
 }

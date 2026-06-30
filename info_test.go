@@ -458,6 +458,7 @@ func testStats(tb testing.TB, prog *Program) error {
 	tb.Helper()
 
 	in := internal.EmptyBPFContext
+	const minRepeatForRuntimeStats = 1024
 
 	stats, err := EnableStats(uint32(sys.BPF_STATS_RUN_TIME))
 	if err != nil {
@@ -466,8 +467,10 @@ func testStats(tb testing.TB, prog *Program) error {
 	defer stats.Close()
 
 	// Program execution with runtime statistics enabled.
+	// Run the program several times in one go to avoid flaking on architectures
+	// where a single execution may round down to 0ns in the kernel stats.
 	// Should increase both runtime and run counter.
-	mustRun(tb, prog, &RunOptions{Data: in})
+	mustRun(tb, prog, &RunOptions{Data: in, Repeat: minRepeatForRuntimeStats})
 
 	s1, err := prog.Stats()
 	qt.Assert(tb, qt.IsNil(err))

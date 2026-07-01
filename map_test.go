@@ -1046,6 +1046,25 @@ func (c customTestUnmarshaler) UnmarshalBinary(data []byte) error {
 	return nil
 }
 
+var (
+	customTestKeyUnmarshalSizes   []int
+	customTestValueUnmarshalSizes []int
+)
+
+type recordingKeyUnmarshaler []uint8
+
+func (r recordingKeyUnmarshaler) UnmarshalBinary(data []byte) error {
+	customTestKeyUnmarshalSizes = append(customTestKeyUnmarshalSizes, len(data))
+	return customTestUnmarshaler(r).UnmarshalBinary(data)
+}
+
+type recordingValueUnmarshaler []uint8
+
+func (r recordingValueUnmarshaler) UnmarshalBinary(data []byte) error {
+	customTestValueUnmarshalSizes = append(customTestValueUnmarshalSizes, len(data))
+	return customTestUnmarshaler(r).UnmarshalBinary(data)
+}
+
 func TestMapBatchLookupCustomUnmarshaler(t *testing.T) {
 	testutils.SkipIfNotSupported(t, haveBatchAPI())
 
@@ -1067,11 +1086,13 @@ func TestMapBatchLookupCustomUnmarshaler(t *testing.T) {
 		// map keys and values. Otherwise their memory is used as backing
 		// memory for the syscall directly and Unmarshal is a no-op.
 		// Use batch size that results in partial second lookup.
-		batchKeys   = make(customTestUnmarshaler, 2)
-		batchValues = make(customTestUnmarshaler, 2)
+		batchKeys   = make(recordingKeyUnmarshaler, 2)
+		batchValues = make(recordingValueUnmarshaler, 2)
 		keys        []uint8
 		values      []uint8
 	)
+	customTestKeyUnmarshalSizes = nil
+	customTestValueUnmarshalSizes = nil
 
 	_, err := m.BatchLookup(&cursor, batchKeys, batchValues, nil)
 	if err != nil {
@@ -1091,6 +1112,8 @@ func TestMapBatchLookupCustomUnmarshaler(t *testing.T) {
 
 	qt.Assert(t, qt.DeepEquals(keys, []uint8{0, 1, 2}))
 	qt.Assert(t, qt.DeepEquals(values, []uint8{3, 4, 5}))
+	qt.Assert(t, qt.DeepEquals(customTestKeyUnmarshalSizes, []int{8, 4}))
+	qt.Assert(t, qt.DeepEquals(customTestValueUnmarshalSizes, []int{8, 4}))
 }
 
 func TestMapIterateHashKeyOneByteFull(t *testing.T) {

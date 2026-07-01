@@ -1301,7 +1301,7 @@ func (m *Map) batchLookup(cmd sys.Cmd, cursor *MapBatchCursor, keysOut, valuesOu
 		return 0, sysErr
 	}
 
-	err = valueBuf.Unmarshal(valuesOut)
+	err = unmarshalBatchSliceOutput(valuesOut, n, int(m.fullValueSize), valueBuf)
 	if err != nil {
 		return 0, err
 	}
@@ -1323,7 +1323,17 @@ func (m *Map) batchLookupPerCPU(cmd sys.Cmd, cursor *MapBatchCursor, keysOut, va
 	}
 
 	if bytesBuf := valueBuf.Bytes(); bytesBuf != nil {
-		err = unmarshalBatchPerCPUValue(valuesOut, count, int(m.valueSize), bytesBuf)
+		if n < count {
+			possibleCPUs, err := PossibleCPU()
+			if err != nil {
+				return 0, err
+			}
+
+			valuesOut = reflect.ValueOf(valuesOut).Slice(0, n*possibleCPUs).Interface()
+			bytesBuf = bytesBuf[:n*int(m.fullValueSize)]
+		}
+
+		err = unmarshalBatchPerCPUValue(valuesOut, n, int(m.valueSize), bytesBuf)
 		if err != nil {
 			return 0, err
 		}
@@ -1380,11 +1390,31 @@ func (m *Map) batchLookupCmd(cmd sys.Cmd, cursor *MapBatchCursor, count int, key
 		return 0, sysErr
 	}
 
-	if err := keyBuf.Unmarshal(keysOut); err != nil {
+	n := int(attr.Count)
+	if err := unmarshalBatchSliceOutput(keysOut, n, int(m.keySize), keyBuf); err != nil {
 		return 0, err
 	}
 
-	return int(attr.Count), sysErr
+	return n, sysErr
+}
+
+func unmarshalBatchSliceOutput(out any, count, elemSize int, buf sysenc.Buffer) error {
+	bytesBuf := buf.Bytes()
+	if bytesBuf == nil {
+		return nil
+	}
+
+	fullCount, err := sliceLen(out)
+	if err != nil {
+		return err
+	}
+
+	if count < fullCount {
+		out = reflect.ValueOf(out).Slice(0, count).Interface()
+		bytesBuf = bytesBuf[:count*elemSize]
+	}
+
+	return sysenc.Unmarshal(out, bytesBuf)
 }
 
 // BatchUpdate updates the map with multiple keys and values

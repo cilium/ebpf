@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"os"
 	"reflect"
-	"runtime"
 	"strings"
 	"testing"
 
@@ -416,31 +415,11 @@ func TestProgramStats(t *testing.T) {
 
 	qt.Assert(t, qt.Equals(s.RunCount, 0))
 	qt.Assert(t, qt.Equals(s.RecursionMisses, 0))
-
-	if runtime.GOARCH != "arm64" {
-		// Runtime is flaky on arm64.
-		qt.Assert(t, qt.Equals(s.Runtime, 0))
-	}
+	qt.Assert(t, qt.Equals(s.Runtime, 0))
 
 	if err := testStats(t, prog); err != nil {
 		testutils.SkipIfNotSupportedOnOS(t, err)
 		t.Error(err)
-	}
-}
-
-// BenchmarkStats is a benchmark of TestStats. See testStats for details.
-func BenchmarkStats(b *testing.B) {
-	b.ReportAllocs()
-
-	testutils.SkipOnOldKernel(b, "5.8", "BPF_ENABLE_STATS")
-
-	prog := createBasicProgram(b)
-
-	for b.Loop() {
-		if err := testStats(b, prog); err != nil {
-			testutils.SkipIfNotSupportedOnOS(b, err)
-			b.Fatal(err)
-		}
 	}
 }
 
@@ -465,9 +444,12 @@ func testStats(tb testing.TB, prog *Program) error {
 	}
 	defer stats.Close()
 
-	// Program execution with runtime statistics enabled.
-	// Should increase both runtime and run counter.
-	mustRun(tb, prog, &RunOptions{Data: in})
+	// Program execution with runtime statistics enabled. Should increase both
+	// runtime and run counter.
+	//
+	// Run multiple times to avoid 0ns runtimes due to (potential) quantization
+	// errors on virtualized hardware.
+	mustRun(tb, prog, &RunOptions{Data: in, Repeat: 10})
 
 	s1, err := prog.Stats()
 	qt.Assert(tb, qt.IsNil(err))

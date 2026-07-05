@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/cilium/ebpf"
+	"github.com/cilium/ebpf/btf"
 )
 
 func DocLoadCollectionSpec() {
@@ -108,4 +109,18 @@ func DocBTFTypeByName() {
 		panic(err)
 	}
 	fmt.Println(t)
+}
+
+func DocLoadKernelBTF() {
+	spec, err := btf.LoadKernelSpec()
+	if err != nil {
+		panic(err)
+	}
+
+	var typ *btf.Struct
+	if err := spec.TypeByName("task_struct", &typ); err != nil {
+		panic(err)
+	}
+
+	fmt.Printf("%s has %d members\n", typ.Name, len(typ.Members))
 }

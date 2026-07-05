@@ -106,3 +106,6 @@ was built without BTF.
     little to be gained by opting out of it. `clang -g` also includes DWARF
     information in the ELF which can be safely removed with `llvm-strip`. eBPF
     does not rely on DWARF information.
+
+For a broader overview of BTF, including kernel BTF and where it matters across
+{{ proj }}, see [BPF Type Format (BTF)](../btf.md).

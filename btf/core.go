@@ -264,7 +264,7 @@ func CORERelocate(relos []*CORERelocation, targets []*Spec, bo binary.ByteOrder,
 
 		var targetTypes []Type
 		for _, target := range targets {
-			namedTypes, err := target.TypesByName(essentialName)
+			namedTypes, err := target.typesByName(essentialName)
 			if errors.Is(err, ErrNotFound) {
 				continue
 			} else if err != nil {

@@ -174,15 +174,7 @@ func allBtfTypeOffsets(buf []byte, bo binary.ByteOrder, header *btfType) iter.Se
 	}
 }
 
-// Copy performs a deep copy of a decoder and its base.
-func (d *decoder) Copy() *decoder {
-	if d == nil {
-		return nil
-	}
-
-	return d.copy(nil)
-}
-
+// copy performs a deep copy of a decoder and its base.
 func (d *decoder) copy(copiedTypes map[Type]Type) *decoder {
 	if d == nil {
 		return nil
@@ -217,8 +209,8 @@ func (d *decoder) copy(copiedTypes map[Type]Type) *decoder {
 	}
 }
 
-// TypeID returns the ID for a Type previously obtained via [TypeByID].
-func (d *decoder) TypeID(typ Type) (TypeID, error) {
+// typeID returns the ID for a Type previously obtained via [TypeByID].
+func (d *decoder) typeID(typ Type) (TypeID, error) {
 	if _, ok := typ.(*Void); ok {
 		// Equality is weird for void, since it is a zero sized type.
 		return 0, nil
@@ -235,13 +227,13 @@ func (d *decoder) TypeID(typ Type) (TypeID, error) {
 	return id, nil
 }
 
-// TypesByName returns all types which have the given essential name.
+// typesByName returns all types which have the given essential name.
 //
 // Returns ErrNotFound if no matching Type exists.
-func (d *decoder) TypesByName(name essentialName) ([]Type, error) {
+func (d *decoder) typesByName(name essentialName) ([]Type, error) {
 	var types []Type
 	for id := range d.namedTypes.Find(string(name)) {
-		typ, err := d.TypeByID(id)
+		typ, err := d.typeByID(id)
 		if err != nil {
 			return nil, err
 		}
@@ -261,8 +253,8 @@ func (d *decoder) TypesByName(name essentialName) ([]Type, error) {
 	return types, nil
 }
 
-// TypeByID decodes a type and any of its descendants.
-func (d *decoder) TypeByID(id TypeID) (Type, error) {
+// typeByID decodes a type and any of its descendants.
+func (d *decoder) typeByID(id TypeID) (Type, error) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 

@@ -2,4 +2,4 @@
   base = "docs/"
   publish = "site/"
   command = "mkdocs build"
-  environment = { PYTHON_VERSION = "3.13" }
+  environment = { PYTHON_VERSION = "3.14" }

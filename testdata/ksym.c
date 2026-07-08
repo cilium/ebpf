@@ -2,38 +2,30 @@
 
 char __license[] __section("license") = "Dual MIT/GPL";
 
-struct {
-	__uint(type, BPF_MAP_TYPE_ARRAY);
-	__uint(max_entries, 2);
-	__type(key, uint32_t);
-	__type(value, uint64_t);
-} array_map __section(".maps");
-
 // Non-weak ksyms must be present in the kernel.
 extern void bpf_init __ksym;
 // Weak ksyms are potentially zero at runtime.
 extern void bpf_trace_run1 __ksym __weak;
 
+uint64_t out__bpf_init_addr;
+uint64_t out__bpf_trace_run1_addr;
+
 __section("socket") int ksym_test() {
-	uint32_t i;
-	uint64_t val;
-
-	i   = 0;
-	val = (uint64_t)&bpf_init;
-	bpf_map_update_elem(&array_map, &i, &val, 0);
-
-	i   = 1;
-	val = (uint64_t)&bpf_trace_run1;
-	bpf_map_update_elem(&array_map, &i, &val, 0);
-
+	out__bpf_init_addr       = (uint64_t)&bpf_init;
+	out__bpf_trace_run1_addr = (uint64_t)&bpf_trace_run1;
 	return 0;
 }
 
-extern void non_existing_symbol __ksym __weak;
+extern void missing_ksym __ksym;
+extern void missing_weak_ksym __ksym __weak;
 
-__section("socket") int ksym_missing_test() {
-	if (&non_existing_symbol == 0) {
-		return 1;
+__section("socket") int missing_ksym_test() {
+	return (uint64_t)&missing_ksym;
+}
+
+__section("socket") int missing_weak_ksym_test() {
+	if (&missing_weak_ksym != 0) {
+		return __LINE__;
 	}
 	return 0;
 }
@@ -60,5 +52,19 @@ uint64_t out__bpf_testmod_ksym_percpu_addr;
 
 __section("socket") int typed_ksym_mod_var_test() {
 	out__bpf_testmod_ksym_percpu_addr = (uint64_t)&bpf_testmod_ksym_percpu;
+	return 0;
+}
+
+extern const int missing_typed_ksym __ksym;
+extern const int missing_weak_typed_ksym __ksym __weak;
+
+__section("socket") uint64_t missing_typed_ksym_test() {
+	return (uint64_t)&missing_typed_ksym;
+}
+
+__section("socket") int missing_weak_typed_ksym_test() {
+	if (&missing_weak_typed_ksym != 0) {
+		return __LINE__;
+	}
 	return 0;
 }

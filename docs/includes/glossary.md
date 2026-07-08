@@ -18,3 +18,4 @@
 *[qemu]: A popular virtual machine manager.
 *[DCO]: Developer Certificate of Origin.
 *[efW]: eBPF for Windows
+*[CO-RE]: Compile Once, Run Everywhere

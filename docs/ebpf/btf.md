@@ -79,9 +79,42 @@ in a kernel module rather than `vmlinux`. Kernel module BTF is separate from
     godoc('btf/LoadKernelModuleSpec') }} are convenient for one-off lookups.
     For repeated kernel or module BTF lookups, use {{ godoc('btf/NewCache') }}.
 
+## Lookup methods on `btf.Spec`
 
+Looking closer at {{ godoc('btf/Spec') }}'s API, you'll notice it has a few
+methods for looking up types by name:
 
+- {{ godoc('btf/Spec.TypeByName') }}
+- {{ godoc('btf/Spec.AnyTypeByName') }}
+- {{ godoc('btf/Spec.AnyTypesByName') }}
 
+The '`Any`' prefix means that the type is only queried by name, without it
+having to conform to a specific BTF kind, e.g. {{ godoc('btf/Int') }} or {{
+godoc('btf/Struct') }}.
+
+Singular '`Type`' means that a lookup must return exactly 1 candidate type in
+order to succeed. If multiple candidates with the same name are found, {{
+godoc('btf/ErrMultipleMatches') }} is returned.
+
+Conversely, '`Types`' means multiple types with the same name are tolerated so
+the caller can manually discern between them.
+
+All lookup methods return an {{ godoc('btf/ErrNotFound') }} if there are no
+results.
+
+??? tip "How could an object contain multiple types with the same name?"
+
+    Smaller C programs are typically built into a single `*.o` file, but larger
+    projects, like the Linux kernel, are built using multiple [Compilation Units
+    (CUs)](https://en.wikipedia.org/wiki/Single_compilation_unit). Each
+    compilation unit will have its own copy of common types like `__u64`.
+
+    When CUs are linked together at compile time, their BTF types are
+    [deduplicated](https://nakryiko.com/posts/btf-dedup). If subtle differences
+    occur (padding, field names, ..), it's possible for multiple instances of
+    the same type to be present in the final object, and they will show up in
+    BTF multiple times. Be aware that BPF object linking is also a thing (see
+    `bpftool gen object`).
 
 ## Common operations
 

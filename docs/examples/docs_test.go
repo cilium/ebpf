@@ -103,7 +103,7 @@ func DocBTFTypeByName() {
 		panic(err)
 	}
 
-	// Look up the __64 type declared in linux/bpf.h.
+	// Look up the __u64 type declared in linux/bpf.h.
 	t, err := spec.Types.AnyTypeByName("__u64")
 	if err != nil {
 		panic(err)

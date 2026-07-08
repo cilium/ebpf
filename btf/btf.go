@@ -179,8 +179,8 @@ func loadSpecFromELF(file *internal.SafeELFFile) (*Spec, error) {
 		return nil, err
 	}
 
-	if spec.decoder.byteOrder != file.ByteOrder {
-		return nil, fmt.Errorf("BTF byte order %s does not match ELF byte order %s", spec.decoder.byteOrder, file.ByteOrder)
+	if spec.byteOrder != file.ByteOrder {
+		return nil, fmt.Errorf("BTF byte order %s does not match ELF byte order %s", spec.byteOrder, file.ByteOrder)
 	}
 
 	spec.elf = &elfData{
@@ -350,7 +350,7 @@ func (s *Spec) Copy() *Spec {
 	}
 
 	cpy := &Spec{
-		s.decoder.Copy(),
+		s.decoder.copy(nil),
 		nil,
 	}
 
@@ -370,7 +370,7 @@ func (s *Spec) Copy() *Spec {
 // Returns an error wrapping ErrNotFound if a Type with the given ID
 // does not exist in the Spec.
 func (s *Spec) TypeByID(id TypeID) (Type, error) {
-	typ, err := s.decoder.TypeByID(id)
+	typ, err := s.decoder.typeByID(id)
 	if err != nil {
 		return nil, fmt.Errorf("inflate type: %w", err)
 	}
@@ -386,7 +386,7 @@ func (s *Spec) TypeByID(id TypeID) (Type, error) {
 //
 // Returns an error wrapping [ErrNotFound] if the type isn't part of the Spec.
 func (s *Spec) TypeID(typ Type) (TypeID, error) {
-	return s.decoder.TypeID(typ)
+	return s.decoder.typeID(typ)
 }
 
 // AnyTypesByName returns a list of BTF Types with the given name.
@@ -397,7 +397,7 @@ func (s *Spec) TypeID(typ Type) (TypeID, error) {
 //
 // Returns an error wrapping ErrNotFound if no matching Type exists in the Spec.
 func (s *Spec) AnyTypesByName(name string) ([]Type, error) {
-	types, err := s.TypesByName(newEssentialName(name))
+	types, err := s.decoder.typesByName(newEssentialName(name))
 	if err != nil {
 		return nil, err
 	}

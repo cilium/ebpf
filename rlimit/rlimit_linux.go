@@ -43,6 +43,12 @@ func detectMemcgAccounting() error {
 		return fmt.Errorf("getting original memlock rlimit: %s", err)
 	}
 
+	// If the soft limit is already infinite there is nothing for RemoveMemlock
+	// to do.
+	if oldLimit.Cur == unix.RLIM_INFINITY {
+		return nil
+	}
+
 	// Drop the current limit to zero, maintaining the old Max value.
 	// This is always permitted by the kernel for unprivileged users.
 	// Retrieve a new copy of the old limit tuple to minimize the chances

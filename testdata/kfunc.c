@@ -5,6 +5,7 @@ char __license[] __section("license") = "Dual MIT/GPL";
 // CO-RE type compat checking doesn't allow matches between forward declarations
 // and structs so we can't use forward declarations. Empty structs work just fine.
 struct __sk_buff {};
+struct xdp_md {};
 struct nf_conn {};
 struct bpf_sock_tuple {};
 struct bpf_ct_opts {};
@@ -50,6 +51,22 @@ __section("tp_btf/task_newtask") int call_weak_kfunc(void *ctx) {
 		struct bpf_cpumask *mask = bpf_cpumask_create();
 		if (mask)
 			bpf_cpumask_release(mask);
+
+		return 1;
+	}
+
+	return 0;
+}
+
+extern struct nf_conn *bpf_xdp_ct_lookup(struct xdp_md *, struct bpf_sock_tuple *, uint32_t, struct bpf_ct_opts *, uint32_t)
+__weak __ksym;
+
+__section("xdp") int call_weak_kfunc_kmod(struct xdp_md *ctx) {
+	char buf[1];
+	if (bpf_ksym_exists(bpf_xdp_ct_lookup)) {
+		struct nf_conn *conn = bpf_xdp_ct_lookup(ctx, (void *)buf, 0, (void *)buf, 0);
+		if (conn)
+			bpf_ct_release(conn);
 
 		return 1;
 	}

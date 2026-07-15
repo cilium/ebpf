@@ -884,6 +884,30 @@ func TestWeakKfunc(t *testing.T) {
 	})
 }
 
+func TestWeakKfuncKmod(t *testing.T) {
+	testutils.SkipOnOldKernel(t, "5.18", "kfunc support")
+
+	// CAP_SYS_ADMIN is required to load kfuncs implemented in kernel modules.
+	testutils.WithCapabilities(t, []testutils.Capability{testutils.CAP_SYS_ADMIN}, func() {
+		file := testutils.NativeFile(t, "testdata/kfunc-%s.elf")
+		spec, err := LoadCollectionSpec(file)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		var obj struct {
+			CallingKmod *Program `ebpf:"call_weak_kfunc_kmod"`
+		}
+
+		err = spec.LoadAndAssign(&obj, nil)
+		testutils.SkipIfNotSupported(t, err)
+		if err != nil {
+			t.Fatalf("%+v", err)
+		}
+		defer obj.CallingKmod.Close()
+	})
+}
+
 func TestInvalidKfunc(t *testing.T) {
 	testutils.SkipOnOldKernel(t, "5.18", "kfunc support")
 	requireTestmod(t)

@@ -353,7 +353,11 @@ fixups:
 		}
 
 		ins.Constant = int64(id)
-		ins.Offset = int16(idx)
+		// kfunc that are part of the kernel create a CALL instruction while kfuncs from kernel module use LD_IMM64.
+		// It's only valid to set offset for CALL instructions
+		if ins.OpCode.JumpOp() == asm.Call {
+			ins.Offset = int16(idx)
+		}
 
 		if !iter.Next() {
 			break

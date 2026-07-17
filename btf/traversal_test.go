@@ -35,7 +35,7 @@ func TestPostorderTraversal(t *testing.T) {
 func TestPostorderTraversalVmlinux(t *testing.T) {
 	spec := vmlinuxTestdataSpec(t)
 
-	typ, err := spec.AnyTypeByName("gov_update_cpu_data")
+	typ, err := spec.AnyTypeByName("gov_update_cpu_data", true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -89,7 +89,7 @@ func BenchmarkPostorderTraversal(b *testing.B) {
 	spec := vmlinuxTestdataSpec(b)
 
 	var fn *Func
-	err := spec.TypeByName("gov_update_cpu_data", &fn)
+	err := spec.TypeByName("gov_update_cpu_data", true, &fn)
 	if err != nil {
 		b.Fatal(err)
 	}

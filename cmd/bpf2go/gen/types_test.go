@@ -16,7 +16,7 @@ import (
 func mustAnyTypeByName(t *testing.T, spec *ebpf.CollectionSpec, name string) btf.Type {
 	t.Helper()
 
-	typ, err := spec.Types.AnyTypeByName(name)
+	typ, err := spec.Types.AnyTypeByName(name, true)
 	qt.Assert(t, qt.IsNil(err))
 	return typ
 }

@@ -104,7 +104,7 @@ func DocBTFTypeByName() {
 	}
 
 	// Look up the __u64 type declared in linux/bpf.h.
-	t, err := spec.Types.AnyTypeByName("__u64")
+	t, err := spec.Types.AnyTypeByName("__u64", true)
 	if err != nil {
 		panic(err)
 	}
@@ -118,7 +118,7 @@ func DocLoadKernelBTF() {
 	}
 
 	var typ *btf.Struct
-	if err := spec.TypeByName("task_struct", &typ); err != nil {
+	if err := spec.TypeByName("task_struct", true, &typ); err != nil {
 		panic(err)
 	}
 

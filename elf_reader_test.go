@@ -9,6 +9,7 @@ import (
 	"maps"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"syscall"
 	"testing"
@@ -884,6 +885,65 @@ func TestWeakKfunc(t *testing.T) {
 	})
 }
 
+func TestKfuncSuffix(t *testing.T) {
+	testutils.SkipOnOldKernel(t, "6.3", "bpf_cpumask_create kfunc support")
+
+	file := testutils.NativeFile(t, "testdata/kfunc-%s.elf")
+	spec, err := LoadCollectionSpec(file)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var obj struct {
+		Valid    *Program `ebpf:"kfunc_suffix_valid"`
+		Mismatch *Program `ebpf:"kfunc_suffix_mismatch"`
+	}
+
+	err = spec.LoadAndAssign(&obj, nil)
+	testutils.SkipIfNotSupported(t, err)
+	if err != nil {
+		t.Fatalf("%+v", err)
+	}
+	defer obj.Valid.Close()
+	defer obj.Mismatch.Close()
+
+	info, err := obj.Valid.Info()
+	if err != nil {
+		t.Fatal(err)
+	}
+	insns, err := info.Instructions()
+	if err != nil {
+		t.Fatal(err)
+	}
+	i := slices.IndexFunc(insns, func(insn asm.Instruction) bool {
+		return insn.IsConstantLoad(asm.DWord)
+	})
+	if i < 0 {
+		t.Fatal("No constant load found in kfunc_suffix_valid")
+	}
+	if insns[i].Constant == 0 {
+		t.Fatalf("Expected valid kfunc with suffix to be resolved, got %d", insns[i].Constant)
+	}
+
+	info, err = obj.Mismatch.Info()
+	if err != nil {
+		t.Fatal(err)
+	}
+	insns, err = info.Instructions()
+	if err != nil {
+		t.Fatal(err)
+	}
+	i = slices.IndexFunc(insns, func(insn asm.Instruction) bool {
+		return insn.IsConstantLoad(asm.DWord)
+	})
+	if i < 0 {
+		t.Fatal("No constant load found in kfunc_suffix_mismatch")
+	}
+	if insns[i].Constant != 0 {
+		t.Fatalf("Expected kfunc with valid name but mismatched prototype to not resolve, got %d", insns[i].Constant)
+	}
+}
+
 func TestInvalidKfunc(t *testing.T) {
 	testutils.SkipOnOldKernel(t, "5.18", "kfunc support")
 	requireTestmod(t)
@@ -1230,6 +1290,8 @@ func TestLibBPFCompat(t *testing.T) {
 			t.Skip("Skipping due to relying on cross ELF linking")
 		case "test_log_fixup":
 			t.Skip("Skipping due to intentionally broken CO-RE relocations")
+		case "struct_ops_autocreate":
+			t.Skip("Skipping due to intentionally broken struct_ops")
 		}
 
 		t.Parallel()

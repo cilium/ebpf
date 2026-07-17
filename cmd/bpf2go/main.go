@@ -528,7 +528,7 @@ func printTargets(w io.Writer) {
 func collectCTypes(types *btf.Spec, names []string) ([]btf.Type, error) {
 	var result []btf.Type
 	for _, cType := range names {
-		typ, err := types.AnyTypeByName(cType)
+		typ, err := types.AnyTypeByName(cType, true)
 		if err != nil {
 			return nil, fmt.Errorf("looking up type %s: %w", cType, err)
 		}

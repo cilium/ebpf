@@ -396,7 +396,7 @@ func (s *Spec) TypeID(typ Type) (TypeID, error) {
 // data structure.
 //
 // Returns an error wrapping ErrNotFound if no matching Type exists in the Spec.
-func (s *Spec) AnyTypesByName(name string) ([]Type, error) {
+func (s *Spec) AnyTypesByName(name string, exact bool) ([]Type, error) {
 	types, err := s.TypesByName(newEssentialName(name))
 	if err != nil {
 		return nil, err
@@ -405,7 +405,7 @@ func (s *Spec) AnyTypesByName(name string) ([]Type, error) {
 	for i := 0; i < len(types); i++ {
 		// Match against the full name, not just the essential one
 		// in case the type being looked up is a struct flavor.
-		if types[i].TypeName() != name {
+		if exact && types[i].TypeName() != name {
 			types = slices.Delete(types, i, i+1)
 			continue
 		}
@@ -421,8 +421,8 @@ func (s *Spec) AnyTypesByName(name string) ([]Type, error) {
 // AnyTypeByName returns a Type with the given name.
 //
 // Returns an error if multiple types of that name exist.
-func (s *Spec) AnyTypeByName(name string) (Type, error) {
-	types, err := s.AnyTypesByName(name)
+func (s *Spec) AnyTypeByName(name string, exact bool) (Type, error) {
+	types, err := s.AnyTypesByName(name, exact)
 	if err != nil {
 		return nil, err
 	}
@@ -443,7 +443,7 @@ func (s *Spec) AnyTypeByName(name string) (Type, error) {
 //
 // Returns an error wrapping ErrNotFound if no matching Type exists in the Spec.
 // Returns an error wrapping ErrMultipleTypes if multiple candidates are found.
-func (s *Spec) TypeByName(name string, typ any) error {
+func (s *Spec) TypeByName(name string, exact bool, typ any) error {
 	if err := internal.IsNilPointer(typ); err != nil {
 		return fmt.Errorf("type argument: %w", err)
 	}
@@ -473,7 +473,7 @@ func (s *Spec) TypeByName(name string, typ any) error {
 		return fmt.Errorf("%T does not satisfy Type interface", typ)
 	}
 
-	types, err := s.AnyTypesByName(name)
+	types, err := s.AnyTypesByName(name, exact)
 	if err != nil {
 		return err
 	}

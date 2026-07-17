@@ -344,6 +344,11 @@ fixups:
 		}
 
 		if err := btf.CheckTypeCompatibility(kfm.Func.Type, target.(*btf.Func).Type); err != nil {
+			if kfm.Binding == elf.STB_WEAK {
+				iter.Next()
+				continue
+			}
+
 			return nil, &incompatibleKfuncError{kfm.Func.Name, err}
 		}
 

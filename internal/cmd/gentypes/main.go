@@ -259,7 +259,7 @@ import (
 		debugln("enum", o.goType)
 
 		var t *btf.Enum
-		if err := spec.TypeByName(o.cType, &t); err != nil {
+		if err := spec.TypeByName(o.cType, true, &t); err != nil {
 			return nil, err
 		}
 		if err := outputEnum(o.goType, t); err != nil {
@@ -373,7 +373,7 @@ import (
 		debugln("struct", s.goType)
 
 		var t *btf.Struct
-		if err := spec.TypeByName(s.cType, &t); err != nil {
+		if err := spec.TypeByName(s.cType, true, &t); err != nil {
 			return nil, err
 		}
 
@@ -696,7 +696,7 @@ import (
 	})
 
 	var bpfAttr *btf.Union
-	if err := spec.TypeByName("bpf_attr", &bpfAttr); err != nil {
+	if err := spec.TypeByName("bpf_attr", true, &bpfAttr); err != nil {
 		return nil, err
 	}
 	attrTypes, err := splitUnion(bpfAttr, types{
@@ -894,7 +894,7 @@ import (
 	})
 
 	var bpfLinkInfo *btf.Struct
-	if err := spec.TypeByName("bpf_link_info", &bpfLinkInfo); err != nil {
+	if err := spec.TypeByName("bpf_link_info", true, &bpfLinkInfo); err != nil {
 		return nil, err
 	}
 

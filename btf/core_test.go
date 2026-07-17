@@ -660,7 +660,7 @@ func BenchmarkCORESkBuff(b *testing.B) {
 	spec := vmlinuxTestdataSpec(b)
 
 	var skb *Struct
-	err := spec.TypeByName("sk_buff", &skb)
+	err := spec.TypeByName("sk_buff", true, &skb)
 	qt.Assert(b, qt.IsNil(err))
 
 	skbID, err := spec.TypeID(skb)
@@ -672,7 +672,7 @@ func BenchmarkCORESkBuff(b *testing.B) {
 	qt.Assert(b, qt.Not(qt.Equals(lenIndex, -1)))
 
 	var pktHashTypes *Enum
-	err = spec.TypeByName("pkt_hash_types", &pktHashTypes)
+	err = spec.TypeByName("pkt_hash_types", true, &pktHashTypes)
 	qt.Assert(b, qt.IsNil(err))
 
 	pktHashTypesID, err := spec.TypeID(pktHashTypes)

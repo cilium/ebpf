@@ -76,7 +76,7 @@ func AttachFreplace(targetProg *ebpf.Program, name string, prog *ebpf.Program) (
 		}
 
 		var function *btf.Func
-		if err := spec.TypeByName(name, &function); err != nil {
+		if err := spec.TypeByName(name, true, &function); err != nil {
 			return nil, err
 		}
 

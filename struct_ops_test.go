@@ -17,7 +17,7 @@ func TestCreateStructOpsMapSpecSimple(t *testing.T) {
 	qt.Assert(t, qt.IsNil(err))
 
 	var outerValueType *btf.Struct
-	qt.Assert(t, qt.IsNil(btfSpec.TypeByName(structOpsValuePrefix+"bpf_testmod_ops", &outerValueType)))
+	qt.Assert(t, qt.IsNil(btfSpec.TypeByName(structOpsValuePrefix+"bpf_testmod_ops", true, &outerValueType)))
 
 	ms := &MapSpec{
 		Name:       "testmod_ops",

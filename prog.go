@@ -1260,7 +1260,7 @@ func findTargetInKernel[T btf.Type](typeName string, target *T, cache *btf.Cache
 		return nil, nil, fmt.Errorf("load kernel spec: %w (%w)", btf.ErrNotFound, err)
 	}
 
-	err = kernelSpec.TypeByName(typeName, target)
+	err = kernelSpec.TypeByEssentialName(typeName, target)
 	if errors.Is(err, btf.ErrNotFound) {
 		spec, module, err := findTargetInModule(typeName, target, cache)
 		if err != nil {
@@ -1305,7 +1305,7 @@ func findTargetInModule[T btf.Type](typeName string, target *T, cache *btf.Cache
 			return nil, nil, fmt.Errorf("parse types for module %s: %w", info.Name, err)
 		}
 
-		err = spec.TypeByName(typeName, target)
+		err = spec.TypeByEssentialName(typeName, target)
 		if errors.Is(err, btf.ErrNotFound) {
 			continue
 		}

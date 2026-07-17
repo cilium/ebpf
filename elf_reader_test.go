@@ -1290,6 +1290,8 @@ func TestLibBPFCompat(t *testing.T) {
 			t.Skip("Skipping due to relying on cross ELF linking")
 		case "test_log_fixup":
 			t.Skip("Skipping due to intentionally broken CO-RE relocations")
+		case "struct_ops_autocreate":
+			t.Skip("Skipping due to intentionally broken struct_ops")
 		}
 
 		t.Parallel()

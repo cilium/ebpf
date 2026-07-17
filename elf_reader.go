@@ -885,7 +885,7 @@ func (ec *elfCode) sectionVars(spec *btf.Spec, sec string) (map[string]*btf.Var,
 	}
 
 	var ds *btf.Datasec
-	if err := ec.btf.TypeByName(sec, &ds); err != nil {
+	if err := ec.btf.TypeByName(sec, true, &ds); err != nil {
 		return vars, nil
 	}
 
@@ -1409,7 +1409,7 @@ func (ec *elfCode) loadDataSections() error {
 		// if it only contains anonymous values like macro-defined arrays.
 		if ec.btf != nil {
 			var ds *btf.Datasec
-			if ec.btf.TypeByName(sec.Name, &ds) == nil {
+			if ec.btf.TypeByName(sec.Name, true, &ds) == nil {
 				// Assign the spec's key and BTF only if the Datasec lookup was successful.
 				mapSpec.Key = &btf.Void{}
 				mapSpec.Value = ds
@@ -1461,7 +1461,7 @@ func (ec *elfCode) loadKconfigSection() error {
 	}
 
 	var ds *btf.Datasec
-	err := ec.btf.TypeByName(".kconfig", &ds)
+	err := ec.btf.TypeByName(".kconfig", true, &ds)
 	if errors.Is(err, btf.ErrNotFound) {
 		return nil
 	}
@@ -1495,7 +1495,7 @@ func (ec *elfCode) loadKsymsSection() error {
 	}
 
 	var ds *btf.Datasec
-	err := ec.btf.TypeByName(".ksyms", &ds)
+	err := ec.btf.TypeByName(".ksyms", true, &ds)
 	if errors.Is(err, btf.ErrNotFound) {
 		return nil
 	}
@@ -1536,7 +1536,7 @@ func (ec *elfCode) associateStructOpsRelocs(progs map[string]*ProgramSpec) error
 
 		// Resolve the BTF datasec describing variables in this section.
 		var ds *btf.Datasec
-		if err := ec.btf.TypeByName(sec.Name, &ds); err != nil {
+		if err := ec.btf.TypeByName(sec.Name, true, &ds); err != nil {
 			return fmt.Errorf("datasec %s: %w", sec.Name, err)
 		}
 

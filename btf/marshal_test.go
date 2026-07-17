@@ -88,7 +88,7 @@ func TestBuilderSpec(t *testing.T) {
 
 	// With deduplication enabled, both ints should be merged into one,
 	// allowing queries with AnyTypeByName.
-	_, err = spec.AnyTypeByName("foo")
+	_, err = spec.AnyTypeByName("foo", true)
 	qt.Assert(t, qt.IsNil(err))
 }
 
@@ -156,7 +156,7 @@ func TestMarshalEnum64(t *testing.T) {
 	qt.Assert(t, qt.IsNil(err))
 
 	var have *Union
-	err = spec.TypeByName("enum64", &have)
+	err = spec.TypeByName("enum64", true, &have)
 	qt.Assert(t, qt.IsNil(err))
 
 	placeholder := &Int{Name: "enum64_placeholder", Size: 8, Encoding: Signed}
@@ -192,9 +192,9 @@ func TestMarshalDeclTags(t *testing.T) {
 	qt.Assert(t, qt.IsNil(err))
 
 	var td *Typedef
-	qt.Assert(t, qt.IsNil(spec.TypeByName("decl tag typedef", &td)))
+	qt.Assert(t, qt.IsNil(spec.TypeByName("decl tag typedef", true, &td)))
 	var ti *Int
-	qt.Assert(t, qt.IsNil(spec.TypeByName("decl_tag_placeholder", &ti)))
+	qt.Assert(t, qt.IsNil(spec.TypeByName("decl_tag_placeholder", true, &ti)))
 }
 
 func TestMarshalTypeTags(t *testing.T) {
@@ -223,7 +223,7 @@ func TestMarshalTypeTags(t *testing.T) {
 	qt.Assert(t, qt.IsNil(err))
 
 	var td *Typedef
-	qt.Assert(t, qt.IsNil(spec.TypeByName("type tag typedef", &td)))
+	qt.Assert(t, qt.IsNil(spec.TypeByName("type tag typedef", true, &td)))
 	qt.Assert(t, qt.Satisfies(td.Type, func(typ Type) bool {
 		_, ok := typ.(*Const)
 		return ok

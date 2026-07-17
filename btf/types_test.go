@@ -535,52 +535,52 @@ func TestTagUnmarshaling(t *testing.T) {
 		qt.Assert(t, qt.IsNil(err))
 
 		var s *Struct
-		err = spec.TypeByName("s", &s)
+		err = spec.TypeByName("s", true, &s)
 		qt.Assert(t, qt.IsNil(err))
 		qt.Assert(t, qt.ContentEquals(s.Tags, []string{"c"}))
 		qt.Assert(t, qt.ContentEquals(s.Members[0].Tags, []string{"a"}))
 		qt.Assert(t, qt.ContentEquals(s.Members[1].Tags, []string{"b"}))
 
 		var u *Union
-		err = spec.TypeByName("u", &u)
+		err = spec.TypeByName("u", true, &u)
 		qt.Assert(t, qt.IsNil(err))
 		qt.Assert(t, qt.ContentEquals(u.Tags, []string{"c"}))
 		qt.Assert(t, qt.ContentEquals(u.Members[0].Tags, []string{"a"}))
 		qt.Assert(t, qt.ContentEquals(u.Members[1].Tags, []string{"b"}))
 
 		var td *Typedef
-		err = spec.TypeByName("td", &td)
+		err = spec.TypeByName("td", true, &td)
 		qt.Assert(t, qt.IsNil(err))
 		qt.Assert(t, qt.ContentEquals(td.Tags, []string{"b"}))
 
 		var s1 *Var
-		err = spec.TypeByName("s1", &s1)
+		err = spec.TypeByName("s1", true, &s1)
 		qt.Assert(t, qt.IsNil(err))
 		qt.Assert(t, qt.ContentEquals(s1.Tags, []string{"d"}))
 
 		var s2 *Var
-		err = spec.TypeByName("u1", &s2)
+		err = spec.TypeByName("u1", true, &s2)
 		qt.Assert(t, qt.IsNil(err))
 		qt.Assert(t, qt.ContentEquals(s2.Tags, []string{"e"}))
 
 		var t1 *Var
-		err = spec.TypeByName("t1", &t1)
+		err = spec.TypeByName("t1", true, &t1)
 		qt.Assert(t, qt.IsNil(err))
 		qt.Assert(t, qt.ContentEquals(t1.Tags, []string{"a"}))
 
 		var extFunc *Func
-		err = spec.TypeByName("fwdDecl", &extFunc)
+		err = spec.TypeByName("fwdDecl", true, &extFunc)
 		qt.Assert(t, qt.IsNil(err))
 		qt.Assert(t, qt.ContentEquals(extFunc.Tags, []string{"a", "b"}))
 		qt.Assert(t, qt.ContentEquals(extFunc.ParamTags, [][]string{{"c"}, {"d"}}))
 
 		var normalFunc *Func
-		err = spec.TypeByName("normalDecl1", &normalFunc)
+		err = spec.TypeByName("normalDecl1", true, &normalFunc)
 		qt.Assert(t, qt.IsNil(err))
 		qt.Assert(t, qt.ContentEquals(normalFunc.Tags, []string{"e"}))
 		qt.Assert(t, qt.ContentEquals(normalFunc.ParamTags, [][]string{{"b"}, {"c"}}))
 
-		err = spec.TypeByName("normalDecl2", &normalFunc)
+		err = spec.TypeByName("normalDecl2", true, &normalFunc)
 		qt.Assert(t, qt.IsNil(err))
 		qt.Assert(t, qt.ContentEquals(normalFunc.Tags, []string{"e"}))
 		qt.Assert(t, qt.ContentEquals(normalFunc.ParamTags, [][]string{{"b"}, {"c"}}))

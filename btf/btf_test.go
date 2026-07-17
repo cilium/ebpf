@@ -90,7 +90,7 @@ func TestAnyTypesByName(t *testing.T) {
 	testutils.Files(t, testutils.Glob(t, "testdata/relocs-*.elf"), func(t *testing.T, file string) {
 		spec := parseELFBTF(t, file)
 
-		types, err := spec.AnyTypesByName("ambiguous")
+		types, err := spec.AnyTypesByName("ambiguous", true)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -99,7 +99,7 @@ func TestAnyTypesByName(t *testing.T) {
 			t.Fatalf("expected to receive exactly 1 types from querying ambiguous type, got: %v", types)
 		}
 
-		types, err = spec.AnyTypesByName("ambiguous___flavour")
+		types, err = spec.AnyTypesByName("ambiguous___flavour", true)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -115,7 +115,7 @@ func TestTypeByNameAmbiguous(t *testing.T) {
 		spec := parseELFBTF(t, file)
 
 		var typ *Struct
-		if err := spec.TypeByName("ambiguous", &typ); err != nil {
+		if err := spec.TypeByName("ambiguous", true, &typ); err != nil {
 			t.Fatal(err)
 		}
 
@@ -123,7 +123,7 @@ func TestTypeByNameAmbiguous(t *testing.T) {
 			t.Fatal("expected type name 'ambiguous', got:", name)
 		}
 
-		if err := spec.TypeByName("ambiguous___flavour", &typ); err != nil {
+		if err := spec.TypeByName("ambiguous___flavour", true, &typ); err != nil {
 			t.Fatal(err)
 		}
 
@@ -150,7 +150,7 @@ func TestTypeByName(t *testing.T) {
 	} {
 		t.Run(fmt.Sprintf("%T", typ), func(t *testing.T) {
 			// spec.TypeByName MUST fail if typ is a nil btf.Type.
-			if err := spec.TypeByName("iphdr", typ); err == nil {
+			if err := spec.TypeByName("iphdr", true, typ); err == nil {
 				t.Fatalf("TypeByName does not fail with type %T", typ)
 			}
 		})
@@ -158,10 +158,10 @@ func TestTypeByName(t *testing.T) {
 
 	// spec.TypeByName MUST return the same address for multiple calls with the same type name.
 	var iphdr1, iphdr2 *Struct
-	if err := spec.TypeByName("iphdr", &iphdr1); err != nil {
+	if err := spec.TypeByName("iphdr", true, &iphdr1); err != nil {
 		t.Fatal(err)
 	}
-	if err := spec.TypeByName("iphdr", &iphdr2); err != nil {
+	if err := spec.TypeByName("iphdr", true, &iphdr2); err != nil {
 		t.Fatal(err)
 	}
 
@@ -171,12 +171,12 @@ func TestTypeByName(t *testing.T) {
 
 	// It's valid to pass a *Type to TypeByName.
 	typ := Type(iphdr2)
-	if err := spec.TypeByName("iphdr", &typ); err != nil {
+	if err := spec.TypeByName("iphdr", true, &typ); err != nil {
 		t.Fatal("Can't look up using *Type:", err)
 	}
 
 	var nt Type
-	qt.Assert(t, qt.IsNotNil(spec.TypeByName("a", &nt)))
+	qt.Assert(t, qt.IsNotNil(spec.TypeByName("a", true, &nt)))
 
 	// Excerpt from linux/ip.h, https://elixir.bootlin.com/linux/latest/A/ident/iphdr
 	//
@@ -278,17 +278,17 @@ func TestLoadSpecFromElf(t *testing.T) {
 		}
 
 		var bpfMapDef *Struct
-		if err := spec.TypeByName("bpf_map_def", &bpfMapDef); err != nil {
+		if err := spec.TypeByName("bpf_map_def", true, &bpfMapDef); err != nil {
 			t.Error("Can't find bpf_map_def:", err)
 		}
 
 		var tmp *Void
-		if err := spec.TypeByName("totally_bogus_type", &tmp); !errors.Is(err, ErrNotFound) {
+		if err := spec.TypeByName("totally_bogus_type", true, &tmp); !errors.Is(err, ErrNotFound) {
 			t.Error("TypeByName doesn't return ErrNotFound:", err)
 		}
 
 		var fn *Func
-		if err := spec.TypeByName("global_fn", &fn); err != nil {
+		if err := spec.TypeByName("global_fn", true, &fn); err != nil {
 			t.Error("Can't find global_fn():", err)
 		} else {
 			if fn.Linkage != GlobalFunc {
@@ -297,7 +297,7 @@ func TestLoadSpecFromElf(t *testing.T) {
 		}
 
 		var v *Var
-		if err := spec.TypeByName("key3", &v); err != nil {
+		if err := spec.TypeByName("key3", true, &v); err != nil {
 			t.Error("Can't find key3:", err)
 		} else {
 			if v.Linkage != GlobalVar {
@@ -383,7 +383,7 @@ func ExampleSpec_TypeByName() {
 	// Declare a variable of the desired type
 	var foo *Struct
 
-	if err := spec.TypeByName("foo", &foo); err != nil {
+	if err := spec.TypeByName("foo", true, &foo); err != nil {
 		// There is no struct with name foo, or there
 		// are multiple possibilities.
 	}
@@ -431,7 +431,7 @@ func TestLoadSplitSpec(t *testing.T) {
 	}
 
 	var fnType *Func
-	qt.Assert(t, qt.IsNil(splitSpec.TypeByName("bpf_testmod_init", &fnType)))
+	qt.Assert(t, qt.IsNil(splitSpec.TypeByName("bpf_testmod_init", true, &fnType)))
 	typeID, err := splitSpec.TypeID(fnType)
 	qt.Assert(t, qt.IsNil(err))
 
@@ -441,11 +441,11 @@ func TestLoadSplitSpec(t *testing.T) {
 
 	fnProto := fnType.Type.(*FuncProto)
 	// 'int' is defined in the base BTF...
-	intType, err := spec.AnyTypeByName("int")
+	intType, err := spec.AnyTypeByName("int", true)
 	qt.Assert(t, qt.IsNil(err))
 
 	// ... but not in the split BTF
-	_, err = splitSpec.AnyTypeByName("int")
+	_, err = splitSpec.AnyTypeByName("int", true)
 	qt.Assert(t, qt.ErrorIs(err, ErrNotFound))
 
 	qt.Assert(t, qt.Equals(fnProto.Return, intType),
@@ -466,13 +466,13 @@ func TestLoadSplitSpec(t *testing.T) {
 	splitSpecCopy := splitSpec.Copy()
 
 	var fnCopyType *Func
-	qt.Assert(t, qt.IsNil(splitSpecCopy.TypeByName("bpf_testmod_init", &fnCopyType)))
+	qt.Assert(t, qt.IsNil(splitSpecCopy.TypeByName("bpf_testmod_init", true, &fnCopyType)))
 	qt.Assert(t, testutils.IsDeepCopy(fnCopyType, fnType))
 
 	// Pull out a second type which refers to "int" in the base, but which hasn't
 	// been inflated yet. This forces inflating int from the base.
 	var str *Struct
-	qt.Assert(t, qt.IsNil(splitSpecCopy.TypeByName("bpf_testmod_struct_arg_1", &str)))
+	qt.Assert(t, qt.IsNil(splitSpecCopy.TypeByName("bpf_testmod_struct_arg_1", true, &str)))
 
 	// Ensure that the int types are indeed the same.
 	qt.Assert(t, qt.Equals(str.Members[0].Type, fnCopyType.Type.(*FuncProto).Return))
@@ -525,7 +525,7 @@ func TestSpecConcurrentAccess(t *testing.T) {
 			}
 
 			if n%2 == 0 {
-				_, _ = spec.AnyTypeByName("gov_update_cpu_data")
+				_, _ = spec.AnyTypeByName("gov_update_cpu_data", true)
 			} else {
 				_ = spec.Copy()
 			}
@@ -619,7 +619,7 @@ func BenchmarkInspektorGadget(b *testing.B) {
 
 		var s *Struct
 		for _, name := range types {
-			if err := spec.TypeByName(name, &s); err != nil {
+			if err := spec.TypeByName(name, true, &s); err != nil {
 				b.Fatal(name, err)
 			}
 		}

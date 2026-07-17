@@ -23,13 +23,13 @@ func TestDedupSKBuff(t *testing.T) {
 	qt.Assert(t, qt.IsNil(err))
 
 	var skBuffOne *Struct
-	qt.Assert(t, qt.IsNil(spec.TypeByName("sk_buff", &skBuffOne)))
+	qt.Assert(t, qt.IsNil(spec.TypeByName("sk_buff", true, &skBuffOne)))
 
 	skbCount := countTypes(skBuffOne)
 
 	spec = spec.Copy()
 	var skBuffTwo *Struct
-	qt.Assert(t, qt.IsNil(spec.TypeByName("sk_buff", &skBuffTwo)))
+	qt.Assert(t, qt.IsNil(spec.TypeByName("sk_buff", true, &skBuffTwo)))
 
 	deduper := newDeduper()
 
@@ -54,7 +54,7 @@ func BenchmarkDeduplicateSKBuff(b *testing.B) {
 	types := make([]Type, 0, b.N)
 	for range b.N {
 		var skb *Struct
-		if err := base.Copy().TypeByName("sk_buff", &skb); err != nil {
+		if err := base.Copy().TypeByName("sk_buff", true, &skb); err != nil {
 			b.Fatal(err)
 		}
 		types = append(types, skb)

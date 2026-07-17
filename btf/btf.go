@@ -396,8 +396,8 @@ func (s *Spec) TypeID(typ Type) (TypeID, error) {
 // data structure.
 //
 // Returns an error wrapping ErrNotFound if no matching Type exists in the Spec.
-func (s *Spec) AnyTypesByName(name string) ([]Type, error) {
-	types, err := s.AnyTypesByEssentialName(name)
+func (s *Spec) AnyTypesByName(name string, exact bool) ([]Type, error) {
+	types, err := s.TypesByName(newEssentialName(name))
 	if err != nil {
 		return nil, err
 	}
@@ -405,29 +405,11 @@ func (s *Spec) AnyTypesByName(name string) ([]Type, error) {
 	for i := 0; i < len(types); i++ {
 		// Match against the full name, not just the essential one
 		// in case the type being looked up is a struct flavor.
-		if types[i].TypeName() != name {
+		if exact && types[i].TypeName() != name {
 			types = slices.Delete(types, i, i+1)
 			continue
 		}
-	}
 
-	return types, nil
-}
-
-// AnyTypesByEssentialName returns a list of BTF Types with the same essential name.
-//
-// If the BTF blob describes multiple compilation units like vmlinux, multiple
-// Types with the same name and kind can exist, but might not describe the same
-// data structure.
-//
-// Returns an error wrapping ErrNotFound if no matching Type exists in the Spec.
-func (s *Spec) AnyTypesByEssentialName(name string) ([]Type, error) {
-	types, err := s.TypesByName(newEssentialName(name))
-	if err != nil {
-		return nil, err
-	}
-
-	for i := 0; i < len(types); i++ {
 		if err := s.elf.fixupDatasec(types[i]); err != nil {
 			return nil, err
 		}
@@ -439,8 +421,8 @@ func (s *Spec) AnyTypesByEssentialName(name string) ([]Type, error) {
 // AnyTypeByName returns a Type with the given name.
 //
 // Returns an error if multiple types of that name exist.
-func (s *Spec) AnyTypeByName(name string) (Type, error) {
-	types, err := s.AnyTypesByName(name)
+func (s *Spec) AnyTypeByName(name string, exact bool) (Type, error) {
+	types, err := s.AnyTypesByName(name, exact)
 	if err != nil {
 		return nil, err
 	}
@@ -461,7 +443,7 @@ func (s *Spec) AnyTypeByName(name string) (Type, error) {
 //
 // Returns an error wrapping ErrNotFound if no matching Type exists in the Spec.
 // Returns an error wrapping ErrMultipleTypes if multiple candidates are found.
-func (s *Spec) TypeByEssentialName(name string, typ any) error {
+func (s *Spec) TypeByName(name string, exact bool, typ any) error {
 	if err := internal.IsNilPointer(typ); err != nil {
 		return fmt.Errorf("type argument: %w", err)
 	}
@@ -491,73 +473,7 @@ func (s *Spec) TypeByEssentialName(name string, typ any) error {
 		return fmt.Errorf("%T does not satisfy Type interface", typ)
 	}
 
-	types, err := s.AnyTypesByEssentialName(name)
-	if err != nil {
-		return err
-	}
-
-	var candidate Type
-	for _, typ := range types {
-		if reflect.TypeOf(typ) != wanted {
-			continue
-		}
-
-		if candidate != nil {
-			return fmt.Errorf("type %s(%T): %w", name, typ, ErrMultipleMatches)
-		}
-
-		candidate = typ
-	}
-
-	if candidate == nil {
-		return fmt.Errorf("%s %s: %w", wanted, name, ErrNotFound)
-	}
-
-	typPtr.Set(reflect.ValueOf(candidate))
-
-	return nil
-}
-
-// TypeByName searches for a Type with a specific name. Since multiple Types
-// with the same name can exist, the parameter typ is taken to narrow down the
-// search in case of a clash.
-//
-// typ must be a non-nil pointer to an implementation of a Type. On success, the
-// address of the found Type will be copied to typ.
-//
-// Returns an error wrapping ErrNotFound if no matching Type exists in the Spec.
-// Returns an error wrapping ErrMultipleTypes if multiple candidates are found.
-func (s *Spec) TypeByName(name string, typ any) error {
-	if err := internal.IsNilPointer(typ); err != nil {
-		return fmt.Errorf("type argument: %w", err)
-	}
-
-	typeInterface := reflect.TypeFor[Type]()
-
-	// typ may be **T or *Type
-	typValue := reflect.ValueOf(typ)
-	if typValue.Kind() != reflect.Pointer {
-		return fmt.Errorf("%T is not a pointer", typ)
-	}
-	typPtr := typValue.Elem()
-	if !typPtr.CanSet() {
-		return fmt.Errorf("%T cannot be set", typ)
-	}
-
-	wanted := typPtr.Type()
-	if wanted == typeInterface {
-		// This is *Type. Unwrap the value's type.
-		if typPtr.IsNil() {
-			return fmt.Errorf("%T points to a nil Type", typ)
-		}
-		wanted = typPtr.Elem().Type()
-	}
-
-	if !wanted.AssignableTo(typeInterface) {
-		return fmt.Errorf("%T does not satisfy Type interface", typ)
-	}
-
-	types, err := s.AnyTypesByName(name)
+	types, err := s.AnyTypesByName(name, exact)
 	if err != nil {
 		return err
 	}

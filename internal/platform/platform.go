@@ -12,7 +12,7 @@ const (
 )
 
 const (
-	IsLinux   = runtime.GOOS == "linux"
+	IsLinux   = Native == Linux
 	IsWindows = runtime.GOOS == "windows"
 )
 

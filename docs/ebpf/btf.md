@@ -22,8 +22,9 @@ BTF enhances many eBPF features, and is even required by some features:
 - **BTF-aware attach targets**: attach types such as `fentry`, `fexit`,
   `struct_ops`, and BTF tracepoints require BTF to identify kernel types and
   functions to attach to.
-- **kfuncs**: the spiritual successors to BPF helpers; the verifier uses BTF
-  information to identify which kfunc eBPF programs want to call.
+- **[kfuncs](kfuncs.md)**: the spiritual successors to BPF helpers; the
+  verifier uses BTF information to identify which kfunc eBPF programs want to
+  call.
 - **Map type information**: BTF can describe key and value layouts for maps,
   making for nice pretty-printed output in `bpftool map dump`. Some map types,
   like Struct Ops, require BTF to work.

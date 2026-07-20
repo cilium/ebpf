@@ -27,11 +27,12 @@ are used in if statements. If a condition is always true or false, it will
 remove unused code paths from the BPF program, reducing verification time and
 increasing runtime performance.
 
-This enables many features like portable kfuncs, allowing C code to refer to
-kfuncs that may not exist in some kernels, as long as those code paths are
-guaranteed not to execute at runtime. Similarly, this can be used to your
-advantage to disable code paths that are not needed in certain configurations,
-or would result in a verifier error on some kernels or in some contexts.
+This enables many features like [portable kfuncs](../kfuncs.md#portable-kfuncs),
+allowing C code to refer to kfuncs that may not exist in some kernels, as long
+as those code paths are guaranteed not to execute at runtime. Similarly, this
+can be used to your advantage to disable code paths that are not needed in
+certain configurations, or would result in a verifier error on some kernels or
+in some contexts.
 
 :ebee-color: Consider the following C BPF program that reads a global constant
 and returns it:

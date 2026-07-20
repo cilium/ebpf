@@ -3,6 +3,7 @@
 package examples
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/cilium/ebpf"
@@ -124,3 +125,36 @@ func DocLoadKernelBTF() {
 
 	fmt.Printf("%s has %d members\n", typ.Name, len(typ.Members))
 }
+
+func docLoadKfuncCollection() error {
+	// DocLoadKfuncCollection {
+	cache := btf.NewCache()
+
+	spec, err := ebpf.LoadCollectionSpec("kfunc_bpf.o")
+	if err != nil {
+		return err
+	}
+
+	var obj struct {
+		LookupConntrack *ebpf.Program `ebpf:"lookup_conntrack"`
+	}
+
+	err = spec.LoadAndAssign(&obj, &ebpf.CollectionOptions{
+		Cache: cache,
+	})
+	if errors.Is(err, ebpf.ErrNotSupported) {
+		// The target kernel may be missing BTF or a required kfunc.
+		return err
+	}
+	if err != nil {
+		// Other errors may include an incompatible kfunc prototype, verifier
+		// failure, or module BTF loading error.
+		return err
+	}
+	defer obj.LookupConntrack.Close()
+	// }
+
+	return nil
+}
+
+var _ = docLoadKfuncCollection

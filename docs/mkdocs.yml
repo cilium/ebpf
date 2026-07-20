@@ -64,6 +64,7 @@ nav:
   - 'Concepts':
     - 'Loading eBPF Programs': concepts/loader.md
     - 'BPF Type Format (BTF)': btf.md
+    - 'BPF Kernel Functions (kfuncs)': kfuncs.md
     - 'Global Variables': concepts/global-variables.md
     - 'Resource Limits': concepts/rlimit.md
     - 'Section Naming': concepts/section-naming.md

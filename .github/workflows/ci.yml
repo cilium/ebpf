@@ -90,6 +90,15 @@ jobs:
           go build -v ./...
           go test -c -o /dev/null ./... >/dev/null
 
+      - name: Cross build android
+        env:
+          CGO_ENABLED: 0
+          GOARCH: arm64
+          GOOS: android
+        run: |
+          go build -v ./...
+          go test -c -o /dev/null ./... >/dev/null
+
       - name: Cross build arm32
         env:
           GOARCH: arm

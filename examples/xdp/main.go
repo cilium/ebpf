@@ -2,21 +2,22 @@
 
 // This program demonstrates attaching an eBPF program to a network interface
 // with XDP (eXpress Data Path). The program parses the IPv4 source address
-// from packets and writes the packet count by IP to an LRU hash map.
+// from packets and writes the packet count by IP to an LRU hash map, as well as
+// a high-performance lockless Per-CPU array map for zero cache-line contention.
 // The userspace program (Go code in this file) prints the contents
 // of the map to stdout every second.
-// It is possible to modify the XDP program to drop or redirect packets
-// as well -- give it a try!
-// This example depends on bpf_link, available in Linux kernel version 5.7 or newer.
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"net"
 	"net/netip"
 	"os"
+	"os/signal"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/cilium/ebpf"
@@ -54,19 +55,35 @@ func main() {
 	}
 	defer l.Close()
 
+	// Set up signal context for graceful shutdown on Ctrl-C / SIGTERM.
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
 	log.Printf("Attached XDP program to iface %q (index %d)", iface.Name, iface.Index)
 	log.Printf("Press Ctrl-C to exit and remove the program")
 
-	// Print the contents of the BPF hash map (source IP address -> packet count).
+	// Print the contents of the BPF hash map and Per-CPU total map.
 	ticker := time.NewTicker(1 * time.Second)
 	defer ticker.Stop()
-	for range ticker.C {
-		s, err := formatMapContents(objs.XdpStatsMap)
-		if err != nil {
-			log.Printf("Error reading map: %s", err)
-			continue
+	for {
+		select {
+		case <-ctx.Done():
+			log.Printf("Detaching XDP program and exiting...")
+			return
+		case <-ticker.C:
+			s, err := formatMapContents(objs.XdpStatsMap)
+			if err != nil {
+				log.Printf("Error reading map: %s", err)
+				continue
+			}
+			total, err := formatPerCPUStats(objs.XdpPercpuStats)
+			if err != nil {
+				log.Printf("Error reading per-CPU stats: %s", err)
+			} else {
+				log.Printf("Total Packets (Per-CPU Lockless): %d", total)
+			}
+			log.Printf("Map contents:\n%s", s)
 		}
-		log.Printf("Map contents:\n%s", s)
 	}
 }
 
@@ -83,4 +100,19 @@ func formatMapContents(m *ebpf.Map) (string, error) {
 		sb.WriteString(fmt.Sprintf("\t%s => %d\n", sourceIP, packetCount))
 	}
 	return sb.String(), iter.Err()
+}
+
+func formatPerCPUStats(m *ebpf.Map) (uint64, error) {
+	var (
+		key    uint32 = 0
+		values []uint64
+	)
+	if err := m.Lookup(&key, &values); err != nil {
+		return 0, err
+	}
+	var total uint64
+	for _, count := range values {
+		total += count
+	}
+	return total, nil
 }

@@ -6,6 +6,7 @@
 char __license[] SEC("license") = "Dual MIT/GPL";
 
 #define MAX_MAP_ENTRIES 16
+#define STATS_KEY_TOTAL 0
 
 /* Define an LRU hash map for storing packet count by source IPv4 address */
 struct {
@@ -14,6 +15,14 @@ struct {
 	__type(key, __u32); // source IPv4 address
 	__type(value, __u32); // packet count
 } xdp_stats_map SEC(".maps");
+
+/* High-throughput lockless Per-CPU map to eliminate CPU cache line contention */
+struct {
+	__uint(type, BPF_MAP_TYPE_PERCPU_ARRAY);
+	__uint(max_entries, 1);
+	__type(key, __u32);
+	__type(value, __u64); // packet count per CPU core
+} xdp_percpu_stats SEC(".maps");
 
 /*
 Attempt to parse the IPv4 source address from the packet.
@@ -47,6 +56,13 @@ static __always_inline int parse_ip_src_addr(struct xdp_md *ctx, __u32 *ip_src_a
 
 SEC("xdp")
 int xdp_prog_func(struct xdp_md *ctx) {
+	__u32 key = STATS_KEY_TOTAL;
+	__u64 *percpu_count = bpf_map_lookup_elem(&xdp_percpu_stats, &key);
+	if (percpu_count) {
+		// Per-CPU lockless increment: zero CPU cache line bounce
+		*percpu_count += 1;
+	}
+
 	__u32 ip;
 	if (!parse_ip_src_addr(ctx, &ip)) {
 		// Not an IPv4 packet, so don't count it.
@@ -65,6 +81,5 @@ int xdp_prog_func(struct xdp_md *ctx) {
 	}
 
 done:
-	// Try changing this to XDP_DROP and see what happens!
 	return XDP_PASS;
 }

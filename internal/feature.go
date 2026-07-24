@@ -75,9 +75,10 @@ type FeatureTestFn func() error
 // NewFeatureTest is a convenient way to create a single [FeatureTest].
 //
 // versions specifies in which version of a BPF runtime a feature appeared.
-// The format is "GOOS:Major.Minor[.Patch]". GOOS may be omitted when targeting
-// Linux. Returns [ErrNotSupportedOnOS] if there is no version specified for the
-// current OS.
+// The format is "Platform:Major.Minor[.Patch]", where Platform may identify
+// either the target GOOS or its native BPF platform. The platform may be
+// omitted when targeting Linux. Returns [ErrNotSupportedOnOS] if there is no
+// version specified for the current platform.
 func NewFeatureTest(name string, fn FeatureTestFn, versions ...string) func() error {
 	version, err := platform.SelectVersion(versions)
 	if err != nil {

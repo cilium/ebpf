@@ -130,3 +130,16 @@ func makeFilledSlice(len int) []uint32 {
 	}
 	return slice
 }
+
+func TestUnmarshalDataFromBytes(t *testing.T) {
+	type Value struct {
+		X int16
+		Y int32
+		_ int16
+	}
+	got := Value{}
+	bytes := []byte{1, 0, 0, 1, 0, 0, 0, 0}
+	UnmarshalDataFromBytes(&got, bytes)
+	expected := Value{X: 1, Y: 256}
+	qt.Assert(t, qt.Equals(got, expected))
+}

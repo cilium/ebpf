@@ -208,3 +208,10 @@ func unmarshalBatchPerCPUValue(slice any, batchLen, elemLength int, buf []byte) 
 	}
 	return nil
 }
+
+// UnmarshalDataFromBytes unmarshals bytes to golang value
+// It is useful for testing
+// The original function is internal, which limits client to write unit test
+func UnmarshalDataFromBytes(data any, buf []byte) error {
+	return sysenc.Unmarshal(data, buf)
+}

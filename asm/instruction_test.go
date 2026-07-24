@@ -469,3 +469,11 @@ func TestLongJumpPatching(t *testing.T) {
 		t.Errorf("Expected offset to be 3, got %d", insns[1].Constant)
 	}
 }
+
+func TestStoreImm(t *testing.T) {
+	qt.Assert(t, qt.Equals(StoreImm(R0, 1, math.MaxInt32, DWord).OpCode, 0x7a))
+	qt.Assert(t, qt.Equals(StoreImm(R0, 1, math.MinInt32, DWord).OpCode, 0x7a))
+
+	qt.Assert(t, qt.Equals(StoreImm(R0, 1, math.MaxInt32+1, DWord).OpCode, InvalidOpCode))
+	qt.Assert(t, qt.Equals(StoreImm(R0, 1, math.MinInt32-1, DWord).OpCode, InvalidOpCode))
+}

@@ -402,15 +402,18 @@ func (s *Spec) AnyTypesByName(name string) ([]Type, error) {
 		return nil, err
 	}
 
-	for i := 0; i < len(types); i++ {
+	types = slices.DeleteFunc(types, func(typ Type) bool {
 		// Match against the full name, not just the essential one
 		// in case the type being looked up is a struct flavor.
-		if types[i].TypeName() != name {
-			types = slices.Delete(types, i, i+1)
-			continue
-		}
+		return typ.TypeName() != name
+	})
 
-		if err := s.elf.fixupDatasec(types[i]); err != nil {
+	if len(types) == 0 {
+		return nil, ErrNotFound
+	}
+
+	for _, typ := range types {
+		if err := s.elf.fixupDatasec(typ); err != nil {
 			return nil, err
 		}
 	}

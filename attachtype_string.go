@@ -66,6 +66,9 @@ func _() {
 	_ = x[AttachCgroupUnixGetsockname-53]
 	_ = x[AttachNetkitPrimary-54]
 	_ = x[AttachNetkitPeer-55]
+	_ = x[AttachTraceFEntryMulti-59]
+	_ = x[AttachTraceFExitMulti-60]
+	_ = x[AttachTraceFSessionMulti-61]
 	_ = x[AttachWindowsXDP-268435457]
 	_ = x[AttachWindowsBind-268435458]
 	_ = x[AttachWindowsCGroupInet4Connect-268435459]
@@ -79,21 +82,26 @@ func _() {
 
 const (
 	_AttachType_name_0 = "NoneCGroupInetEgressCGroupInetSockCreateCGroupSockOpsSkSKBStreamParserSkSKBStreamVerdictCGroupDeviceSkMsgVerdictCGroupInet4BindCGroupInet6BindCGroupInet4ConnectCGroupInet6ConnectCGroupInet4PostBindCGroupInet6PostBindCGroupUDP4SendmsgCGroupUDP6SendmsgLircMode2FlowDissectorCGroupSysctlCGroupUDP4RecvmsgCGroupUDP6RecvmsgCGroupGetsockoptCGroupSetsockoptTraceRawTpTraceFEntryTraceFExitModifyReturnLSMMacTraceIterCgroupInet4GetPeernameCgroupInet6GetPeernameCgroupInet4GetSocknameCgroupInet6GetSocknameXDPDevMapCgroupInetSockReleaseXDPCPUMapSkLookupXDPSkSKBVerdictSkReuseportSelectSkReuseportSelectOrMigratePerfEventTraceKprobeMultiLSMCgroupStructOpsNetfilterTCXIngressTCXEgressTraceUprobeMultiCgroupUnixConnectCgroupUnixSendmsgCgroupUnixRecvmsgCgroupUnixGetpeernameCgroupUnixGetsocknameNetkitPrimaryNetkitPeerTraceKprobeSession"
-	_AttachType_name_1 = "WindowsXDPWindowsBindWindowsCGroupInet4ConnectWindowsCGroupInet6ConnectWindowsCgroupInet4RecvAcceptWindowsCgroupInet6RecvAcceptWindowsCGroupSockOpsWindowsSampleWindowsXDPTest"
+	_AttachType_name_1 = "TraceFEntryMultiTraceFExitMultiTraceFSessionMulti"
+	_AttachType_name_2 = "WindowsXDPWindowsBindWindowsCGroupInet4ConnectWindowsCGroupInet6ConnectWindowsCgroupInet4RecvAcceptWindowsCgroupInet6RecvAcceptWindowsCGroupSockOpsWindowsSampleWindowsXDPTest"
 )
 
 var (
 	_AttachType_index_0 = [...]uint16{0, 4, 20, 40, 53, 70, 88, 100, 112, 127, 142, 160, 178, 197, 216, 233, 250, 259, 272, 284, 301, 318, 334, 350, 360, 371, 381, 393, 399, 408, 430, 452, 474, 496, 505, 526, 535, 543, 546, 558, 575, 601, 610, 626, 635, 644, 653, 663, 672, 688, 705, 722, 739, 760, 781, 794, 804, 822}
-	_AttachType_index_1 = [...]uint8{0, 10, 21, 46, 71, 99, 127, 147, 160, 174}
+	_AttachType_index_1 = [...]uint8{0, 16, 31, 49}
+	_AttachType_index_2 = [...]uint8{0, 10, 21, 46, 71, 99, 127, 147, 160, 174}
 )
 
 func (i AttachType) String() string {
 	switch {
 	case i <= 56:
 		return _AttachType_name_0[_AttachType_index_0[i]:_AttachType_index_0[i+1]]
+	case 59 <= i && i <= 61:
+		i -= 59
+		return _AttachType_name_1[_AttachType_index_1[i]:_AttachType_index_1[i+1]]
 	case 268435457 <= i && i <= 268435465:
 		i -= 268435457
-		return _AttachType_name_1[_AttachType_index_1[i]:_AttachType_index_1[i+1]]
+		return _AttachType_name_2[_AttachType_index_2[i]:_AttachType_index_2[i+1]]
 	default:
 		return "AttachType(" + strconv.FormatInt(int64(i), 10) + ")"
 	}

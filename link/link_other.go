@@ -26,6 +26,7 @@ const (
 	NetfilterType     = sys.BPF_LINK_TYPE_NETFILTER
 	NetkitType        = sys.BPF_LINK_TYPE_NETKIT
 	StructOpsType     = sys.BPF_LINK_TYPE_STRUCT_OPS
+	TracingMultiType  = sys.BPF_LINK_TYPE_TRACING_MULTI
 )
 
 // AttachRawLink creates a raw link.
@@ -83,6 +84,8 @@ func wrapRawLink(raw *RawLink) (_ Link, err error) {
 		return &rawTracepoint{*raw}, nil
 	case TracingType:
 		return &tracing{*raw}, nil
+	case TracingMultiType:
+		return &tracingMulti{*raw}, nil
 	case CgroupType:
 		return &linkCgroup{*raw}, nil
 	case IterType:

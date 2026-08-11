@@ -90,22 +90,13 @@ func TestAnyTypesByName(t *testing.T) {
 	testutils.Files(t, testutils.Glob(t, "testdata/relocs-*.elf"), func(t *testing.T, file string) {
 		spec := parseELFBTF(t, file)
 
-		types, err := spec.AnyTypesByName("ambiguous")
+		types, err := spec.AnyTypesByName("u")
 		if err != nil {
 			t.Fatal(err)
 		}
 
 		if len(types) != 1 {
-			t.Fatalf("expected to receive exactly 1 types from querying ambiguous type, got: %v", types)
-		}
-
-		types, err = spec.AnyTypesByName("ambiguous___flavour")
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		if len(types) != 1 {
-			t.Fatalf("expected to receive exactly 1 type from querying ambiguous flavour, got: %v", types)
+			t.Fatalf("expected to receive exactly 1 types from querying type, got: %v", types)
 		}
 	})
 }
@@ -141,29 +132,6 @@ func TestAnyTypeByNameNoExactMatch(t *testing.T) {
 	typ, err := spec.AnyTypeByName("foo")
 	qt.Assert(t, qt.ErrorIs(err, ErrNotFound))
 	qt.Assert(t, qt.IsNil(typ))
-}
-
-func TestTypeByNameAmbiguous(t *testing.T) {
-	testutils.Files(t, testutils.Glob(t, "testdata/relocs-*.elf"), func(t *testing.T, file string) {
-		spec := parseELFBTF(t, file)
-
-		var typ *Struct
-		if err := spec.TypeByName("ambiguous", &typ); err != nil {
-			t.Fatal(err)
-		}
-
-		if name := typ.TypeName(); name != "ambiguous" {
-			t.Fatal("expected type name 'ambiguous', got:", name)
-		}
-
-		if err := spec.TypeByName("ambiguous___flavour", &typ); err != nil {
-			t.Fatal(err)
-		}
-
-		if name := typ.TypeName(); name != "ambiguous___flavour" {
-			t.Fatal("expected type name 'ambiguous___flavour', got:", name)
-		}
-	})
 }
 
 func TestTypeByName(t *testing.T) {

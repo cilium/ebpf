@@ -36,6 +36,15 @@ type kfuncMeta struct {
 	Func    *btf.Func
 }
 
+// GetKconfigMeta returns kfunc metadata associated with a given instruction. If no metadata is found, ok is false.
+func GetKfuncMeta(ins *asm.Instruction) (*btf.Func, elf.SymBind, bool) {
+	meta, ok := ins.Metadata.Get(kfuncMetaKey{}).(*kfuncMeta)
+	if !ok {
+		return nil, 0, false
+	}
+	return meta.Func, meta.Binding, true
+}
+
 type ksymMetaKey struct{}
 
 type ksymMeta struct {

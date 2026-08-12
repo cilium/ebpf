@@ -642,6 +642,24 @@ func (insns Instructions) AssociateMap(symbol string, m FDer) error {
 	return nil
 }
 
+// AssociateMapIdx associates a map that will be loaded in the `idx` slot of the fd array passed
+// when loading these instructions.
+//
+// Implicitly clears the Instruction's Reference field.
+//
+// Returns an error if the Instruction is not a map load.
+func (ins *Instruction) AssociateMapIdx(idx int) error {
+	if !ins.IsLoadFromMap() {
+		return errors.New("not a load from a map")
+	}
+
+	ins.Src = PseudoMapIdx
+	ins.Constant = int64(idx)
+	ins.Metadata.Set(referenceMeta{}, nil)
+
+	return nil
+}
+
 // SymbolOffsets returns the set of symbols and their offset in
 // the instructions.
 func (insns Instructions) SymbolOffsets() (map[string]int, error) {

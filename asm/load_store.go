@@ -262,6 +262,22 @@ func LoadMapValue(dst Register, fd int, offset uint32) Instruction {
 	}
 }
 
+// LoadMapValueIdx stores a pointer to the value at a certain offset of a map, where the map is selected by an index
+// into the fd array.
+func LoadMapValueIdx(dst Register, idx int, offset uint32) Instruction {
+	if idx < 0 {
+		return Instruction{OpCode: InvalidOpCode}
+	}
+
+	fdIdxAndOffset := (uint64(offset) << 32) | uint64(uint32(idx))
+	return Instruction{
+		OpCode:   LoadImmOp(DWord),
+		Dst:      dst,
+		Src:      PseudoMapIdxValue,
+		Constant: int64(fdIdxAndOffset),
+	}
+}
+
 // LoadIndOp returns the OpCode for loading a value of given size from an sk_buff.
 func LoadIndOp(size Size) OpCode {
 	return OpCode(LdClass).SetMode(IndMode).SetSize(size)

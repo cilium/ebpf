@@ -1184,7 +1184,7 @@ type MapCreateAttr struct {
 	MapExtra              uint64
 	ValueTypeBtfObjFd     int32
 	MapTokenFd            int32
-	ExclProgHash          uint64
+	ExclProgHash          TypedPointer[uint8]
 	ExclProgHashSize      uint32
 	_                     [4]byte
 }
@@ -1509,7 +1509,7 @@ type ProgLoadAttr struct {
 	LogTrueSize        uint32
 	ProgTokenFd        int32
 	FdArrayCnt         uint32
-	Signature          uint64
+	Signature          TypedPointer[uint8]
 	SignatureSize      uint32
 	KeyringId          int32
 }

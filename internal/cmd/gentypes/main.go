@@ -399,6 +399,7 @@ import (
 				replace(objName, "map_name"),
 				replace(enumTypes["MapType"], "map_type"),
 				replace(typeID, "btf_vmlinux_value_type_id", "btf_key_type_id", "btf_value_type_id"),
+				replace(bytePtr, "excl_prog_hash"),
 			},
 		},
 		{
@@ -458,6 +459,7 @@ import (
 					"func_info",
 					"line_info",
 					"core_relos",
+					"signature",
 				),
 				replace(int32Ptr, "fd_array"),
 				replace(typeID, "attach_btf_id"),

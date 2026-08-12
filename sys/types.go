@@ -902,6 +902,18 @@ type BtfLoadAttr struct {
 	BtfTokenFd     int32
 }
 
+type BtfLoadAttrRaw struct {
+	_              structs.HostLayout
+	Btf            uint64
+	BtfLogBuf      uint64
+	BtfSize        uint32
+	BtfLogSize     uint32
+	BtfLogLevel    uint32
+	BtfLogTrueSize uint32
+	BtfFlags       uint32
+	BtfTokenFd     int32
+}
+
 func BtfLoad(attr *BtfLoadAttr) (*FD, error) {
 	fd, err := BPF(BPF_BTF_LOAD, unsafe.Pointer(attr), unsafe.Sizeof(*attr))
 	if err != nil {
@@ -1189,6 +1201,29 @@ type MapCreateAttr struct {
 	_                     [4]byte
 }
 
+type MapCreateAttrRaw struct {
+	_                     structs.HostLayout
+	MapType               uint32
+	KeySize               uint32
+	ValueSize             uint32
+	MaxEntries            uint32
+	MapFlags              uint32
+	InnerMapFd            uint32
+	NumaNode              uint32
+	MapName               [16]uint8
+	MapIfindex            uint32
+	BtfFd                 uint32
+	BtfKeyTypeId          uint32
+	BtfValueTypeId        uint32
+	BtfVmlinuxValueTypeId uint32
+	MapExtra              uint64
+	ValueTypeBtfObjFd     int32
+	MapTokenFd            int32
+	ExclProgHash          uint64
+	ExclProgHashSize      uint32
+	_                     [4]byte
+}
+
 func MapCreate(attr *MapCreateAttr) (*FD, error) {
 	fd, err := BPF(BPF_MAP_CREATE, unsafe.Pointer(attr), unsafe.Sizeof(*attr))
 	if err != nil {
@@ -1231,6 +1266,15 @@ func MapDeleteElem(attr *MapDeleteElemAttr) error {
 type MapFreezeAttr struct {
 	_     structs.HostLayout
 	MapFd uint32
+}
+
+type MapFreezeAttrRaw struct {
+	_     structs.HostLayout
+	MapFd uint32
+	_     [4]byte
+	Key   uint64
+	Value uint64
+	Flags uint64
 }
 
 func MapFreeze(attr *MapFreezeAttr) error {
@@ -1360,6 +1404,15 @@ type MapUpdateElemAttr struct {
 	_     [4]byte
 	Key   Pointer
 	Value Pointer
+	Flags uint64
+}
+
+type MapUpdateElemAttrRaw struct {
+	_     structs.HostLayout
+	MapFd uint32
+	_     [4]byte
+	Key   uint64
+	Value uint64
 	Flags uint64
 }
 
@@ -1510,6 +1563,41 @@ type ProgLoadAttr struct {
 	ProgTokenFd        int32
 	FdArrayCnt         uint32
 	Signature          TypedPointer[uint8]
+	SignatureSize      uint32
+	KeyringId          int32
+}
+
+type ProgLoadAttrRaw struct {
+	_                  structs.HostLayout
+	ProgType           uint32
+	InsnCnt            uint32
+	Insns              uint64
+	License            uint64
+	LogLevel           uint32
+	LogSize            uint32
+	LogBuf             uint64
+	KernVersion        uint32
+	ProgFlags          uint32
+	ProgName           [16]uint8
+	ProgIfindex        uint32
+	ExpectedAttachType uint32
+	ProgBtfFd          uint32
+	FuncInfoRecSize    uint32
+	FuncInfo           uint64
+	FuncInfoCnt        uint32
+	LineInfoRecSize    uint32
+	LineInfo           uint64
+	LineInfoCnt        uint32
+	AttachBtfId        uint32
+	AttachProgFd       uint32
+	CoreReloCnt        uint32
+	FdArray            uint64
+	CoreRelos          uint64
+	CoreReloRecSize    uint32
+	LogTrueSize        uint32
+	ProgTokenFd        int32
+	FdArrayCnt         uint32
+	Signature          uint64
 	SignatureSize      uint32
 	KeyringId          int32
 }

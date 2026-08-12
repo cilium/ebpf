@@ -387,11 +387,12 @@ import (
 	// Attrs
 
 	attrs := []struct {
-		goType  string
-		ret     syscallRetval
-		cType   string
-		cmd     string
-		patches []patch
+		goType            string
+		ret               syscallRetval
+		cType             string
+		cmd               string
+		patches           []patch
+		preserveUnpatched bool
 	}{
 		{
 			"MapCreate", retFd, "map_create", "BPF_MAP_CREATE",
@@ -401,22 +402,27 @@ import (
 				replace(typeID, "btf_vmlinux_value_type_id", "btf_key_type_id", "btf_value_type_id"),
 				replace(bytePtr, "excl_prog_hash"),
 			},
+			true,
 		},
 		{
 			"MapLookupElem", retError, "map_elem", "BPF_MAP_LOOKUP_ELEM",
 			[]patch{choose(2, "value"), replace(rawPointer, "key", "value")},
+			false,
 		},
 		{
 			"MapLookupAndDeleteElem", retError, "map_elem", "BPF_MAP_LOOKUP_AND_DELETE_ELEM",
 			[]patch{choose(2, "value"), replace(rawPointer, "key", "value")},
+			false,
 		},
 		{
 			"MapUpdateElem", retError, "map_elem", "BPF_MAP_UPDATE_ELEM",
 			[]patch{choose(2, "value"), replace(rawPointer, "key", "value")},
+			true,
 		},
 		{
 			"MapDeleteElem", retError, "map_elem", "BPF_MAP_DELETE_ELEM",
 			[]patch{choose(2, "value"), replace(rawPointer, "key", "value")},
+			false,
 		},
 		{
 			"MapGetNextKey", retError, "map_elem", "BPF_MAP_GET_NEXT_KEY",
@@ -424,26 +430,32 @@ import (
 				choose(2, "next_key"), replace(rawPointer, "key", "next_key"),
 				truncateAfter("next_key"),
 			},
+			false,
 		},
 		{
 			"MapFreeze", retError, "map_elem", "BPF_MAP_FREEZE",
 			[]patch{truncateAfter("map_fd")},
+			true,
 		},
 		{
 			"MapLookupBatch", retError, "map_elem_batch", "BPF_MAP_LOOKUP_BATCH",
 			[]patch{replace(rawPointer, "in_batch", "out_batch", "keys", "values")},
+			false,
 		},
 		{
 			"MapLookupAndDeleteBatch", retError, "map_elem_batch", "BPF_MAP_LOOKUP_AND_DELETE_BATCH",
 			[]patch{replace(rawPointer, "in_batch", "out_batch", "keys", "values")},
+			false,
 		},
 		{
 			"MapUpdateBatch", retError, "map_elem_batch", "BPF_MAP_UPDATE_BATCH",
 			[]patch{replace(rawPointer, "in_batch", "out_batch", "keys", "values")},
+			false,
 		},
 		{
 			"MapDeleteBatch", retError, "map_elem_batch", "BPF_MAP_DELETE_BATCH",
 			[]patch{replace(rawPointer, "in_batch", "out_batch", "keys", "values")},
+			false,
 		},
 		{
 			"ProgLoad", retFd, "prog_load", "BPF_PROG_LOAD",
@@ -465,18 +477,22 @@ import (
 				replace(typeID, "attach_btf_id"),
 				choose(20, "attach_btf_obj_fd"),
 			},
+			true,
 		},
 		{
 			"ProgBindMap", retError, "prog_bind_map", "BPF_PROG_BIND_MAP",
 			nil,
+			false,
 		},
 		{
 			"ObjPin", retError, "obj_pin", "BPF_OBJ_PIN",
 			[]patch{replace(stringPointer, "pathname")},
+			false,
 		},
 		{
 			"ObjGet", retFd, "obj_pin", "BPF_OBJ_GET",
 			[]patch{replace(stringPointer, "pathname")},
+			false,
 		},
 		{
 			"ProgAttach", retError, "prog_attach", "BPF_PROG_ATTACH",
@@ -485,6 +501,7 @@ import (
 				rename("target_fd", "target_fd_or_ifindex"),
 				rename("relative_fd", "relative_fd_or_id"),
 			},
+			false,
 		},
 		{
 			"ProgDetach", retError, "prog_attach", "BPF_PROG_DETACH",
@@ -495,10 +512,12 @@ import (
 				rename("relative_fd", "relative_fd_or_id"),
 				remove("replace_bpf_fd"),
 			},
+			false,
 		},
 		{
 			"ProgRun", retError, "prog_run", "BPF_PROG_TEST_RUN",
 			[]patch{replace(bytePtr, "data_in", "data_out", "ctx_in", "ctx_out")},
+			false,
 		},
 		{
 			"ProgGetNextId", retError, "obj_next_id", "BPF_PROG_GET_NEXT_ID",
@@ -506,6 +525,7 @@ import (
 				choose(0, "start_id"), rename("start_id", "id"),
 				truncateAfter("next_id"),
 			},
+			false,
 		},
 		{
 			"MapGetNextId", retError, "obj_next_id", "BPF_MAP_GET_NEXT_ID",
@@ -513,6 +533,7 @@ import (
 				choose(0, "start_id"), rename("start_id", "id"),
 				truncateAfter("next_id"),
 			},
+			false,
 		},
 		{
 			"BtfGetNextId", retError, "obj_next_id", "BPF_BTF_GET_NEXT_ID",
@@ -521,6 +542,7 @@ import (
 				replace(btfID, "id", "next_id"),
 				truncateAfter("next_id"),
 			},
+			false,
 		},
 		{
 			"LinkGetNextId", retError, "obj_next_id", "BPF_LINK_GET_NEXT_ID",
@@ -529,36 +551,44 @@ import (
 				replace(linkID, "id", "next_id"),
 				truncateAfter("next_id"),
 			},
+			false,
 		},
 		// These piggy back on the obj_next_id decl, but only support the
 		// first field...
 		{
 			"BtfGetFdById", retFd, "obj_next_id", "BPF_BTF_GET_FD_BY_ID",
 			[]patch{choose(0, "start_id"), rename("start_id", "id"), truncateAfter("id")},
+			false,
 		},
 		{
 			"MapGetFdById", retFd, "obj_next_id", "BPF_MAP_GET_FD_BY_ID",
 			[]patch{choose(0, "start_id"), rename("start_id", "id"), truncateAfter("id")},
+			false,
 		},
 		{
 			"ProgGetFdById", retFd, "obj_next_id", "BPF_PROG_GET_FD_BY_ID",
 			[]patch{choose(0, "start_id"), rename("start_id", "id"), truncateAfter("id")},
+			false,
 		},
 		{
 			"LinkGetFdById", retFd, "obj_next_id", "BPF_LINK_GET_FD_BY_ID",
 			[]patch{choose(0, "start_id"), rename("start_id", "id"), replace(linkID, "id"), truncateAfter("id")},
+			false,
 		},
 		{
 			"ObjGetInfoByFd", retError, "info_by_fd", "BPF_OBJ_GET_INFO_BY_FD",
 			[]patch{replace(rawPointer, "info")},
+			false,
 		},
 		{
 			"RawTracepointOpen", retFd, "raw_tracepoint_open", "BPF_RAW_TRACEPOINT_OPEN",
 			[]patch{replace(stringPointer, "name")},
+			false,
 		},
 		{
 			"BtfLoad", retFd, "btf_load", "BPF_BTF_LOAD",
 			[]patch{replace(bytePtr, "btf", "btf_log_buf")},
+			true,
 		},
 		{
 			"LinkCreate", retFd, "link_create", "BPF_LINK_CREATE",
@@ -567,6 +597,7 @@ import (
 				choose(4, "target_btf_id"),
 				replace(typeID, "target_btf_id"),
 			},
+			false,
 		},
 		{
 			"LinkCreateIter", retFd, "link_create", "BPF_LINK_CREATE",
@@ -576,6 +607,7 @@ import (
 				flattenAnon,
 				replace(rawPointer, "iter_info"),
 			},
+			false,
 		},
 		{
 			"LinkCreatePerfEvent", retFd, "link_create", "BPF_LINK_CREATE",
@@ -584,6 +616,7 @@ import (
 				replace(enumTypes["AttachType"], "attach_type"),
 				flattenAnon,
 			},
+			false,
 		},
 		{
 			"LinkCreateKprobeMulti", retFd, "link_create", "BPF_LINK_CREATE",
@@ -599,6 +632,7 @@ import (
 				replace(stringSlicePointer, "syms"),
 				rename("cnt", "count"),
 			},
+			false,
 		},
 		{
 			"LinkCreateNetfilter", retFd, "link_create", "BPF_LINK_CREATE",
@@ -612,6 +646,7 @@ import (
 				replace(enumTypes["NetfilterProtocolFamily"], "pf"),
 				replace(enumTypes["NetfilterInetHook"], "hooknum"),
 			},
+			false,
 		},
 		{
 			"LinkCreateTracing", retFd, "link_create", "BPF_LINK_CREATE",
@@ -621,6 +656,7 @@ import (
 				flattenAnon,
 				replace(btfID, "target_btf_id"),
 			},
+			false,
 		},
 		{
 			"LinkCreateTcx", retFd, "link_create", "BPF_LINK_CREATE",
@@ -632,6 +668,7 @@ import (
 				flattenAnon, // flatten tcx member
 				rename("relative_fd", "relative_fd_or_id"),
 			},
+			false,
 		},
 		{
 			"LinkCreateUprobeMulti", retFd, "link_create", "BPF_LINK_CREATE",
@@ -648,6 +685,7 @@ import (
 				replace(uint64Ptr, "cookies"),
 				rename("cnt", "count"),
 			},
+			false,
 		},
 		{
 			"LinkCreateNetkit", retFd, "link_create", "BPF_LINK_CREATE",
@@ -659,22 +697,27 @@ import (
 				flattenAnon,
 				rename("relative_fd", "relative_fd_or_id"),
 			},
+			false,
 		},
 		{
 			"LinkDetach", retError, "link_detach", "BPF_LINK_DETACH",
 			nil,
+			false,
 		},
 		{
 			"LinkUpdate", retError, "link_update", "BPF_LINK_UPDATE",
 			nil,
+			false,
 		},
 		{
 			"EnableStats", retFd, "enable_stats", "BPF_ENABLE_STATS",
 			nil,
+			false,
 		},
 		{
 			"IterCreate", retFd, "iter_create", "BPF_ITER_CREATE",
 			nil,
+			false,
 		},
 		{
 			"ProgQuery", retError, "prog_query", "BPF_PROG_QUERY",
@@ -686,10 +729,12 @@ import (
 				rename("prog_cnt", "count"),
 				rename("target_fd", "target_fd_or_ifindex"),
 			},
+			false,
 		},
 		{
 			"TokenCreate", retFd, "token_create", "BPF_TOKEN_CREATE",
 			nil,
+			false,
 		},
 	}
 
@@ -739,6 +784,16 @@ import (
 		goAttrType := s.goType + "Attr"
 		if err := outputPatchedStruct(gf, w, goAttrType, t, s.patches); err != nil {
 			return nil, fmt.Errorf("output %q: %w", goAttrType, err)
+		}
+
+		if s.preserveUnpatched {
+			decl, err := gf.TypeDeclaration(goAttrType+"Raw", t)
+			if err != nil {
+				return nil, fmt.Errorf("generate %q: %w", goAttrType+"Raw", err)
+			}
+
+			w.WriteString(decl)
+			w.WriteString("\n\n")
 		}
 
 		switch s.ret {

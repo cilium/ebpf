@@ -6,8 +6,8 @@ import (
 
 	"github.com/go-quicktest/qt"
 
-	"github.com/cilium/ebpf/internal/sys"
 	"github.com/cilium/ebpf/internal/sysenc"
+	"github.com/cilium/ebpf/sys"
 )
 
 func TestZeroBuffer(t *testing.T) {

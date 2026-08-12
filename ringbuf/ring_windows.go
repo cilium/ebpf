@@ -8,7 +8,7 @@ import (
 	"unsafe"
 
 	"github.com/cilium/ebpf/internal/efw"
-	"github.com/cilium/ebpf/internal/sys"
+	"github.com/cilium/ebpf/sys"
 )
 
 var _ eventRing = (*windowsEventRing)(nil)

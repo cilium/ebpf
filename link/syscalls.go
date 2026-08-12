@@ -8,8 +8,8 @@ import (
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/asm"
 	"github.com/cilium/ebpf/internal"
-	"github.com/cilium/ebpf/internal/sys"
 	"github.com/cilium/ebpf/internal/unix"
+	"github.com/cilium/ebpf/sys"
 )
 
 var haveProgAttach = internal.NewFeatureTest("BPF_PROG_ATTACH", func() error {

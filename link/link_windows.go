@@ -6,7 +6,7 @@ import (
 	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/efw"
 	"github.com/cilium/ebpf/internal/platform"
-	"github.com/cilium/ebpf/internal/sys"
+	"github.com/cilium/ebpf/sys"
 )
 
 // AttachRawLink creates a raw link.

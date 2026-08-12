@@ -13,7 +13,7 @@ import (
 	"slices"
 
 	"github.com/cilium/ebpf/internal"
-	"github.com/cilium/ebpf/internal/sys"
+	"github.com/cilium/ebpf/sys"
 )
 
 const btfMagic = 0xeB9F

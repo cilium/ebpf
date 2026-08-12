@@ -16,7 +16,7 @@ import (
 	"github.com/cilium/ebpf/internal/kconfig"
 	"github.com/cilium/ebpf/internal/linux"
 	"github.com/cilium/ebpf/internal/platform"
-	"github.com/cilium/ebpf/internal/sys"
+	"github.com/cilium/ebpf/sys"
 )
 
 // CollectionOptions control loading a collection into the kernel.

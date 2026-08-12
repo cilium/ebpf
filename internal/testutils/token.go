@@ -1,7 +1,7 @@
 package testutils
 
 import (
-	"github.com/cilium/ebpf/internal/sys"
+	"github.com/cilium/ebpf/sys"
 )
 
 // setupUserNS being set indicates that the child should set up a user namespace

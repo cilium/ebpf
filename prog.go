@@ -17,9 +17,9 @@ import (
 	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/linux"
 	"github.com/cilium/ebpf/internal/platform"
-	"github.com/cilium/ebpf/internal/sys"
 	"github.com/cilium/ebpf/internal/sysenc"
 	"github.com/cilium/ebpf/internal/unix"
+	"github.com/cilium/ebpf/sys"
 )
 
 // ErrNotSupported is returned whenever the kernel doesn't support a feature.

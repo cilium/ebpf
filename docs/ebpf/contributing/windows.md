@@ -69,7 +69,7 @@ _(You can pass `-Uninstall` to the script to remove a previous installation.)_
 You can now run the Go unit tests of the library:
 
 ```
-go test ./internal/sys
+go test ./sys
 ```
 
 !!! note "Tests fail with `load ebpfapi.dll: not found`"

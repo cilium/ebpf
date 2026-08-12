@@ -8,7 +8,7 @@ import (
 	"os"
 
 	"github.com/cilium/ebpf"
-	"github.com/cilium/ebpf/internal/sys"
+	"github.com/cilium/ebpf/sys"
 )
 
 type cgroupAttachFlags uint32

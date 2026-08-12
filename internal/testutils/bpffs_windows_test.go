@@ -10,8 +10,8 @@ import (
 
 	"github.com/cilium/ebpf/asm"
 	"github.com/cilium/ebpf/internal"
-	"github.com/cilium/ebpf/internal/sys"
 	"github.com/cilium/ebpf/internal/testutils"
+	"github.com/cilium/ebpf/sys"
 )
 
 func TestTempBPFFS(t *testing.T) {

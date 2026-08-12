@@ -15,8 +15,8 @@ import (
 	"github.com/cilium/ebpf/btf"
 	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/platform"
-	"github.com/cilium/ebpf/internal/sys"
 	"github.com/cilium/ebpf/internal/unix"
+	"github.com/cilium/ebpf/sys"
 )
 
 // The *Info structs expose metadata about a program or map. Most

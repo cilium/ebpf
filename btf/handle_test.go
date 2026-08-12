@@ -7,9 +7,9 @@ import (
 	"github.com/go-quicktest/qt"
 
 	"github.com/cilium/ebpf/btf"
-	"github.com/cilium/ebpf/internal/sys"
 	"github.com/cilium/ebpf/internal/testutils"
 	"github.com/cilium/ebpf/internal/unix"
+	"github.com/cilium/ebpf/sys"
 )
 
 func TestHandleIterator(t *testing.T) {

@@ -6,7 +6,7 @@ import (
 	"fmt"
 
 	"github.com/cilium/ebpf"
-	"github.com/cilium/ebpf/internal/sys"
+	"github.com/cilium/ebpf/sys"
 )
 
 const NetfilterIPDefrag NetfilterAttachFlags = 0 // Enable IP packet defragmentation

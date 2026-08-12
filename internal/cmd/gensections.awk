@@ -13,7 +13,7 @@ BEGIN {
 	print ""
 	print "// Code in this file is derived from libbpf, available under BSD-2-Clause."
 	print ""
-	print "import \"github.com/cilium/ebpf/internal/sys\""
+	print "import \"github.com/cilium/ebpf/sys\""
 	print ""
 	print "var elfSectionDefs = []libbpfElfSectionDef{"
 

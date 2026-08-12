@@ -12,8 +12,8 @@ import (
 	"sync/atomic"
 	"unsafe"
 
-	"github.com/cilium/ebpf/internal/sys"
 	"github.com/cilium/ebpf/internal/unix"
+	"github.com/cilium/ebpf/sys"
 )
 
 // perfEventRing is a page of metadata followed by

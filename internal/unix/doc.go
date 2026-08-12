@@ -8,4 +8,4 @@
 //     Linux layout.
 package unix
 
-// Note: please don't add any custom API to this package. Use internal/sys instead.
+// Note: please don't add any custom API to this package. Use sys instead.

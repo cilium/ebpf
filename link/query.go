@@ -7,7 +7,7 @@ import (
 	"slices"
 
 	"github.com/cilium/ebpf"
-	"github.com/cilium/ebpf/internal/sys"
+	"github.com/cilium/ebpf/sys"
 )
 
 // QueryOptions defines additional parameters when querying for programs.

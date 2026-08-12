@@ -20,8 +20,8 @@ import (
 	"golang.org/x/sys/unix"
 
 	"github.com/cilium/ebpf"
-	"github.com/cilium/ebpf/internal/sys"
 	"github.com/cilium/ebpf/link"
+	"github.com/cilium/ebpf/sys"
 )
 
 //go:generate go tool bpf2go -tags linux bpf xdp.c -- -I../headers

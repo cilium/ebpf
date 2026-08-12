@@ -5,8 +5,8 @@ import (
 	"io"
 
 	"github.com/cilium/ebpf"
-	"github.com/cilium/ebpf/internal/sys"
 	"github.com/cilium/ebpf/link"
+	"github.com/cilium/ebpf/sys"
 )
 
 // Pinner is an interface implemented by all eBPF objects that support pinning

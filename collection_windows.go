@@ -6,8 +6,8 @@ import (
 	"unsafe"
 
 	"github.com/cilium/ebpf/internal/efw"
-	"github.com/cilium/ebpf/internal/sys"
 	"github.com/cilium/ebpf/internal/unix"
+	"github.com/cilium/ebpf/sys"
 )
 
 func loadCollectionFromNativeImage(file string) (_ *Collection, err error) {

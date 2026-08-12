@@ -2,7 +2,7 @@ package ebpf
 
 import (
 	"github.com/cilium/ebpf/internal/platform"
-	"github.com/cilium/ebpf/internal/sys"
+	"github.com/cilium/ebpf/sys"
 )
 
 //go:generate go tool stringer -output types_string.go -type=MapType,ProgramType,PinType

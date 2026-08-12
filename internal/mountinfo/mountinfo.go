@@ -30,8 +30,26 @@ type Entry struct {
 	// where Root != "/".
 	Root string
 
+	// OptionalFields are the variable-length fields appearing before the dash
+	// separator, describing mount propagation, e.g. "shared:5", "master:2",
+	// "propagate_from:1" or "unbindable". Empty for private mounts. See
+	// `man 7 mount_namespaces`.
+	OptionalFields []string
+
 	// FSType is the filesystem type, e.g. "bpf", "tracefs", "debugfs".
 	FSType string
+}
+
+// HasOptionalField reports whether the entry carries the optional field with
+// the given name, ignoring any value after a colon, so "shared" matches
+// "shared:5".
+func (e Entry) HasOptionalField(name string) bool {
+	for _, f := range e.OptionalFields {
+		if field, _, _ := strings.Cut(f, ":"); field == name {
+			return true
+		}
+	}
+	return false
 }
 
 // Read parses /proc/self/mountinfo and returns one Entry per mount line.
@@ -116,9 +134,10 @@ func parseLine(line string) (Entry, error) {
 	}
 
 	return Entry{
-		Root:       unescape(firstHalf[3]),
-		MountPoint: unescape(firstHalf[4]),
-		FSType:     secondHalf[0],
+		Root:           unescape(firstHalf[3]),
+		MountPoint:     unescape(firstHalf[4]),
+		OptionalFields: firstHalf[6:],
+		FSType:         secondHalf[0],
 	}, nil
 }
 

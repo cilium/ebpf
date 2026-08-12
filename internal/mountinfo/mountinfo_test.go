@@ -77,6 +77,32 @@ func TestParseEntries(t *testing.T) {
 	qt.Assert(t, qt.Equals(entries[7].FSType, "tracefs"))
 }
 
+func TestParseEntriesOptionalFields(t *testing.T) {
+	const mountinfo = `
+39 29 0:12 / /sys/kernel/tracing rw,nosuid,nodev,noexec,relatime - tracefs tracefs rw
+40 29 0:12 / /a rw shared:1670 - tracefs tracefs rw
+41 29 0:12 / /b rw shared:1341 master:1670 - tracefs tracefs rw
+42 29 0:12 / /c rw unbindable - tracefs tracefs rw
+`
+
+	entries, err := parseEntries(strings.NewReader(mountinfo))
+	qt.Assert(t, qt.IsNil(err))
+	qt.Assert(t, qt.HasLen(entries, 4))
+
+	qt.Assert(t, qt.HasLen(entries[0].OptionalFields, 0))
+	qt.Assert(t, qt.IsFalse(entries[0].HasOptionalField("shared")))
+
+	qt.Assert(t, qt.DeepEquals(entries[1].OptionalFields, []string{"shared:1670"}))
+	qt.Assert(t, qt.IsTrue(entries[1].HasOptionalField("shared")))
+	qt.Assert(t, qt.IsFalse(entries[1].HasOptionalField("master")))
+
+	qt.Assert(t, qt.DeepEquals(entries[2].OptionalFields, []string{"shared:1341", "master:1670"}))
+	qt.Assert(t, qt.IsTrue(entries[2].HasOptionalField("shared")))
+	qt.Assert(t, qt.IsTrue(entries[2].HasOptionalField("master")))
+
+	qt.Assert(t, qt.IsTrue(entries[3].HasOptionalField("unbindable")))
+}
+
 func TestParseEntriesInvalid(t *testing.T) {
 	t.Run("missing dash separator", func(t *testing.T) {
 		const mountinfo = `48 46 0:30 / /sys/fs/bpf rw,nosuid,nodev,noexec,relatime`

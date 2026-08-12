@@ -1,12 +1,14 @@
 package tracefs
 
 import (
+	"cmp"
 	"crypto/rand"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"sync"
 	"syscall"
@@ -114,10 +116,12 @@ func sanitizeTracefsPath(path ...string) (string, error) {
 //
 // The discovery order is:
 //
-//  1. Any tracefs mount listed in /proc/self/mountinfo (kernel 4.1+).
+//  1. A tracefs mount listed in /proc/self/mountinfo (kernel 4.1+).
 //     This works regardless of where the mount sits in the filesystem,
 //     so containers that bind-mount tracefs at a non-canonical path are
-//     supported automatically.
+//     supported automatically. When multiple mounts are visible, the one
+//     least likely to disappear is selected based on its mount propagation
+//     fields, see [mountsByStability].
 //  2. A debugfs mount with a tracing/ subdirectory, for older systems
 //     where tracefs has not been lifted out of debugfs.
 //  3. As a final fallback, probe the canonical kernel paths
@@ -152,26 +156,67 @@ var getTracefsPath = sync.OnceValues(func() (string, error) {
 	return "", errors.New("neither debugfs nor tracefs are mounted")
 })
 
-// findTracefsInEntries returns the first occurrence of a tracefs in the
-// given entries.
+// findTracefsInEntries returns the most viable tracefs mount point in the
+// given entries, preferring tracefs mounts over debugfs mounts with a
+// tracing/ subdirectory.
 //
 // Returns an empty string when no usable mount is found.
 func findTracefsInEntries(entries []mountinfo.Entry) string {
-	for _, e := range entries {
-		if e.FSType == "tracefs" && e.Root == "/" {
-			return e.MountPoint
-		}
+	if tracefs := mountsByStability(entries, "tracefs"); len(tracefs) > 0 {
+		return tracefs[0].MountPoint
 	}
-	for _, e := range entries {
-		if e.FSType != "debugfs" || e.Root != "/" {
-			continue
-		}
+	for _, e := range mountsByStability(entries, "debugfs") {
 		tracing := filepath.Join(e.MountPoint, "tracing")
 		if info, err := os.Stat(tracing); err == nil && info.IsDir() {
 			return tracing
 		}
 	}
 	return ""
+}
+
+// mountsByStability returns full (Root == "/") mounts of the given fstype,
+// ordered from most to least likely to remain valid for the lifetime of the
+// process. See [propagationClass]; ties are broken by preferring the
+// shortest mount path, then mountinfo order.
+func mountsByStability(entries []mountinfo.Entry, fstype string) []mountinfo.Entry {
+	var candidates []mountinfo.Entry
+	for _, e := range entries {
+		if e.FSType == fstype && e.Root == "/" {
+			candidates = append(candidates, e)
+		}
+	}
+
+	// Sort by propagation class, then by mount point length.
+	slices.SortStableFunc(candidates, func(a, b mountinfo.Entry) int {
+		if c := cmp.Compare(propagationClass(a), propagationClass(b)); c != 0 {
+			return c
+		}
+		return cmp.Compare(len(a.MountPoint), len(b.MountPoint))
+	})
+	return candidates
+}
+
+// propagationClass ranks a mount by how likely it is to remain valid for the
+// lifetime of the process, based on its mount propagation optional fields.
+// Lower is better.
+func propagationClass(e mountinfo.Entry) int {
+	switch {
+	case len(e.OptionalFields) == 0 || e.HasOptionalField("unbindable"):
+		// Private mounts don't participate in mount propagation and can't
+		// disappear as a side effect of an unmount elsewhere.
+		return 0
+	case e.HasOptionalField("shared") && !e.HasOptionalField("master"):
+		// Members of a peer group that aren't downstream of another group.
+		// These are propagation origins rather than receivers and don't go
+		// away when a propagated copy is unmounted.
+		return 1
+	default:
+		// Slave mounts (master:) and anything unrecognized. These were
+		// typically propagated into the mount namespace (e.g. from another
+		// container's bind mount) and may vanish when their origin is
+		// unmounted.
+		return 2
+	}
 }
 
 // sanitizeIdentifier replaces every invalid character for the tracefs api with an underscore.

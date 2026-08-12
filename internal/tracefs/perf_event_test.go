@@ -172,4 +172,46 @@ func TestFindTracefsInEntries(t *testing.T) {
 		})
 		qt.Assert(t, qt.Equals(got, ""))
 	})
+
+	t.Run("private mount preferred over propagated mounts", func(t *testing.T) {
+		// Modeled on the mount table from the reproducer for #2075: a slave
+		// mount (master:) propagated from another pod's bind mount appears
+		// first but may vanish when that pod goes away.
+		got := findTracefsInEntries([]mountinfo.Entry{
+			{MountPoint: "/host/var/lib/kubelet/pods/x/volumes/union/sys/kernel/tracing", Root: "/", FSType: "tracefs", OptionalFields: []string{"master:1341"}},
+			{MountPoint: "/sys/kernel/debug/tracing", Root: "/", FSType: "tracefs"},
+		})
+		qt.Assert(t, qt.Equals(got, "/sys/kernel/debug/tracing"))
+	})
+
+	t.Run("unbindable mount preferred over shared mount", func(t *testing.T) {
+		got := findTracefsInEntries([]mountinfo.Entry{
+			{MountPoint: "/union/sys/kernel/tracing", Root: "/", FSType: "tracefs", OptionalFields: []string{"shared:1341"}},
+			{MountPoint: "/sys/kernel/tracing", Root: "/", FSType: "tracefs", OptionalFields: []string{"unbindable"}},
+		})
+		qt.Assert(t, qt.Equals(got, "/sys/kernel/tracing"))
+	})
+
+	t.Run("shared mount preferred over slave mount", func(t *testing.T) {
+		got := findTracefsInEntries([]mountinfo.Entry{
+			{MountPoint: "/union/sys/kernel/tracing", Root: "/", FSType: "tracefs", OptionalFields: []string{"shared:1341", "master:1670"}},
+			{MountPoint: "/sys/kernel/tracing", Root: "/", FSType: "tracefs", OptionalFields: []string{"shared:1670"}},
+		})
+		qt.Assert(t, qt.Equals(got, "/sys/kernel/tracing"))
+	})
+
+	t.Run("shortest path wins within the same propagation class", func(t *testing.T) {
+		got := findTracefsInEntries([]mountinfo.Entry{
+			{MountPoint: "/host/sys/kernel/tracing", Root: "/", FSType: "tracefs", OptionalFields: []string{"shared:2"}},
+			{MountPoint: "/sys/kernel/tracing", Root: "/", FSType: "tracefs", OptionalFields: []string{"shared:1"}},
+		})
+		qt.Assert(t, qt.Equals(got, "/sys/kernel/tracing"))
+	})
+
+	t.Run("slave mount used when nothing better exists", func(t *testing.T) {
+		got := findTracefsInEntries([]mountinfo.Entry{
+			{MountPoint: "/host/var/lib/kubelet/pods/x/volumes/union/sys/kernel/tracing", Root: "/", FSType: "tracefs", OptionalFields: []string{"master:1341"}},
+		})
+		qt.Assert(t, qt.Equals(got, "/host/var/lib/kubelet/pods/x/volumes/union/sys/kernel/tracing"))
+	})
 }

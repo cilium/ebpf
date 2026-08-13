@@ -130,6 +130,7 @@ func MarshalExtInfos(insns asm.Instructions, b *Builder) (funcInfos, lineInfos [
 
 marshal:
 	var fiBuf, liBuf bytes.Buffer
+	var i uint32
 	for {
 		if fn := FuncMetadata(iter.Ins); fn != nil {
 			fi := &FuncOffset{
@@ -147,8 +148,10 @@ marshal:
 				line = l
 			} else {
 				line = &Line{
-					line: source.String(),
+					line:       source.String(),
+					lineNumber: i,
 				}
+				i++
 			}
 
 			li := &LineOffset{

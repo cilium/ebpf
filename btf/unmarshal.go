@@ -121,8 +121,12 @@ func newDecoder(raw []byte, bo binary.ByteOrder, strings *stringTable, base *dec
 			if i := bytes.Index(name, []byte("___")); i != -1 {
 				// Flavours are rare. It's cheaper to find the first index for some
 				// reason.
-				i = bytes.LastIndex(name, []byte("___"))
-				name = name[:i]
+				//
+				// A leading "___" isn't a flavour delimiter (matches
+				// newEssentialName), so only strip if it doesn't start the name.
+				if i = bytes.LastIndex(name, []byte("___")); i > 0 {
+					name = name[:i]
+				}
 			}
 
 			namedTypes.Add(name, id)

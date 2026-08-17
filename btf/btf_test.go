@@ -133,6 +133,20 @@ func TestAnyTypesByNameNoExactMatch(t *testing.T) {
 	qt.Assert(t, qt.IsNil(types))
 }
 
+func TestAnyTypesByNameLeadingUnderscores(t *testing.T) {
+	// Kernel function names such as ___pskb_trim start with a triple
+	// underscore. This isn't a flavour delimiter, so the full name must
+	// remain queryable.
+	spec := specFromTypes(t, []Type{
+		&Int{Name: "___pskb_trim", Size: 4},
+	})
+
+	types, err := spec.AnyTypesByName("___pskb_trim")
+	qt.Assert(t, qt.IsNil(err))
+	qt.Assert(t, qt.HasLen(types, 1))
+	qt.Assert(t, qt.Equals(types[0].TypeName(), "___pskb_trim"))
+}
+
 func TestAnyTypeByNameNoExactMatch(t *testing.T) {
 	spec := specFromTypes(t, []Type{
 		&Int{Name: "foo___flavour", Size: 4},

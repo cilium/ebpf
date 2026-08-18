@@ -1287,6 +1287,10 @@ func findTargetInKernel[T btf.Type](typeName string, target *T, cache *btf.Cache
 //
 // Returns btf.ErrNotFound if the target can't be found in any module.
 func findTargetInModule[T btf.Type](typeName string, target *T, cache *btf.Cache) (*btf.Spec, *btf.Handle, error) {
+	if notInCachedModules(typeName, *target, cache) {
+		return nil, nil, btf.ErrNotFound
+	}
+
 	it := new(btf.HandleIterator)
 	defer it.Handle.Close()
 
@@ -1320,6 +1324,27 @@ func findTargetInModule[T btf.Type](typeName string, target *T, cache *btf.Cache
 	}
 
 	return nil, nil, btf.ErrNotFound
+}
+
+// notInCachedModules returns true if no cached module BTF contains typeName.
+func notInCachedModules[T btf.Type](typeName string, target T, cache *btf.Cache) bool {
+	modules, err := cache.Modules()
+	if err != nil {
+		return false
+	}
+
+	for _, name := range modules {
+		spec, err := cache.Module(name)
+		if err != nil {
+			return false
+		}
+
+		if err := spec.TypeByName(typeName, &target); !errors.Is(err, btf.ErrNotFound) {
+			return false
+		}
+	}
+
+	return true
 }
 
 // find an attach target type in a program.

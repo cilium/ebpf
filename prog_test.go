@@ -964,6 +964,27 @@ func TestProgramWithToken(t *testing.T) {
 	})
 }
 
+func BenchmarkFindTargetInModule(b *testing.B) {
+	testutils.SkipOnOldKernel(b, "5.11", "module BTF")
+
+	cache := btf.NewCache()
+
+	var warmup *btf.Func
+	_, _, err := findTargetInModule("bpf_no_such_kfunc", &warmup, cache)
+	if !errors.Is(err, btf.ErrNotFound) {
+		b.Fatal("Unexpected error:", err)
+	}
+
+	b.ReportAllocs()
+	for b.Loop() {
+		var target *btf.Func
+		_, _, err := findTargetInModule("bpf_no_such_kfunc", &target, cache)
+		if !errors.Is(err, btf.ErrNotFound) {
+			b.Fatal("Unexpected error:", err)
+		}
+	}
+}
+
 func BenchmarkNewProgram(b *testing.B) {
 	testutils.SkipOnOldKernel(b, "5.18", "kfunc support")
 	spec, err := LoadCollectionSpec(testutils.NativeFile(b, "testdata/kfunc-%s.elf"))

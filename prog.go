@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"os"
 	"path/filepath"
 	"runtime"
 	"slices"
@@ -268,7 +269,7 @@ func NewProgramWithOptions(spec *ProgramSpec, opts ProgramOptions) (*Program, er
 		return nil, errors.New("can't load a program from a nil spec")
 	}
 
-	prog, err := newProgramWithOptions(spec, opts, btf.NewCache())
+	prog, err := newProgramWithOptions(spec, opts, btf.NewCache(), nil)
 	if errors.Is(err, asm.ErrUnsatisfiedMapReference) {
 		return nil, fmt.Errorf("cannot load program without loading its whole collection: %w", err)
 	}
@@ -284,7 +285,7 @@ var (
 	kfuncBadCall = fmt.Appendf(nil, "invalid func unknown#%d\n", kfuncCallPoisonBase)
 )
 
-func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions, c *btf.Cache) (result *Program, _ error) {
+func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions, c *btf.Cache, kmods *kernelModules) (result *Program, _ error) {
 	if len(spec.Instructions) == 0 {
 		return nil, errors.New("instructions cannot be empty")
 	}
@@ -380,7 +381,7 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions, c *btf.Cache)
 	}
 	defer kconfig.Close()
 
-	ksymHandles, err := resolveKsymReferences(insns, c)
+	ksymHandles, err := resolveKsymReferences(insns, c, kmods)
 	if err != nil {
 		return nil, fmt.Errorf("resolve .ksyms: %w", err)
 	}
@@ -392,7 +393,7 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions, c *btf.Cache)
 		return nil, err
 	}
 
-	handles, err := fixupKfuncs(insns, c)
+	handles, err := fixupKfuncs(insns, c, kmods)
 	if err != nil {
 		return nil, fmt.Errorf("fixing up kfuncs: %w", err)
 	}
@@ -444,7 +445,7 @@ func newProgramWithOptions(spec *ProgramSpec, opts ProgramOptions, c *btf.Cache)
 			var s *btf.Spec
 
 			target := btf.Type((*btf.Struct)(nil))
-			s, module, err = findTargetInKernel(attachTo, &target, c)
+			s, module, err = findTargetInKernel(attachTo, &target, c, kmods)
 			if err != nil {
 				return nil, fmt.Errorf("lookup struct_ops kern type %q: %w", attachTo, err)
 			}
@@ -1224,7 +1225,7 @@ func findProgramTargetInKernel(name string, progType ProgramType, attachType Att
 		return nil, 0, errUnrecognizedAttachType
 	}
 
-	spec, module, err := findTargetInKernel(typeName, &target, cache)
+	spec, module, err := findTargetInKernel(typeName, &target, cache, nil)
 	if errors.Is(err, btf.ErrNotFound) {
 		return nil, 0, &internal.UnsupportedFeatureError{Name: featureName}
 	}
@@ -1254,7 +1255,7 @@ func findProgramTargetInKernel(name string, progType ProgramType, attachType Att
 //
 // Returns a non-nil handle if the type was found in a module, [btf.ErrNotFound]
 // if the type wasn't found or if BTF is not enabled.
-func findTargetInKernel[T btf.Type](typeName string, target *T, cache *btf.Cache) (*btf.Spec, *btf.Handle, error) {
+func findTargetInKernel[T btf.Type](typeName string, target *T, cache *btf.Cache, kmods *kernelModules) (*btf.Spec, *btf.Handle, error) {
 	kernelSpec, err := cache.Kernel()
 	if err != nil {
 		return nil, nil, fmt.Errorf("load kernel spec: %w (%w)", btf.ErrNotFound, err)
@@ -1262,7 +1263,7 @@ func findTargetInKernel[T btf.Type](typeName string, target *T, cache *btf.Cache
 
 	err = kernelSpec.TypeByName(typeName, target)
 	if errors.Is(err, btf.ErrNotFound) {
-		spec, module, err := findTargetInModule(typeName, target, cache)
+		spec, module, err := findTargetInModule(typeName, target, cache, kmods)
 		if err != nil {
 			// EPERM may be returned when we do not have CAP_SYS_ADMIN.
 			// Wrap error with btf.ErrNotFound so callers can handle it accordingly.
@@ -1280,29 +1281,78 @@ func findTargetInKernel[T btf.Type](typeName string, target *T, cache *btf.Cache
 	return kernelSpec, nil, err
 }
 
-// findTargetInModule attempts to find a named type in any loaded module.
+// kernelModules enumerates the BTF of loaded kernel modules on first use and
+// memoises the result. Use it to amortise the cost of module BTF lookups
+// across multiple programs of a collection.
 //
-// base must contain the kernel's types and is used to parse kmod BTF. Modules
-// are searched in the order they were loaded.
-//
-// Returns btf.ErrNotFound if the target can't be found in any module.
-func findTargetInModule[T btf.Type](typeName string, target *T, cache *btf.Cache) (*btf.Spec, *btf.Handle, error) {
+// It holds no file descriptors and is not safe for concurrent use.
+type kernelModules struct {
+	modules []kernelModule
+	err     error
+	done    bool
+}
+
+// kernelModule identifies the BTF of a single loaded kernel module.
+type kernelModule struct {
+	name string
+	id   btf.ID
+}
+
+// get returns the BTF of all loaded modules in the order they were loaded.
+func (km *kernelModules) get() ([]kernelModule, error) {
+	if km.done {
+		return km.modules, km.err
+	}
+	km.done = true
+
 	it := new(btf.HandleIterator)
 	defer it.Handle.Close()
 
 	for it.Next() {
 		info, err := it.Handle.Info()
 		if err != nil {
-			return nil, nil, fmt.Errorf("get info for BTF ID %d: %w", it.ID, err)
+			km.err = fmt.Errorf("get info for BTF ID %d: %w", it.ID, err)
+			return nil, km.err
 		}
 
 		if !info.IsModule() {
 			continue
 		}
 
-		spec, err := cache.Module(info.Name)
+		km.modules = append(km.modules, kernelModule{info.Name, it.ID})
+	}
+	if err := it.Err(); err != nil {
+		km.err = fmt.Errorf("iterate modules: %w", err)
+	}
+
+	return km.modules, km.err
+}
+
+// findTargetInModule attempts to find a named type in any loaded module.
+//
+// Modules are searched in the order they were loaded. Parsed module BTF is
+// shared via cache and enumeration via kmods, so repeated lookup misses
+// perform no bpf syscalls. A nil kmods enumerates modules on every call.
+//
+// Returns btf.ErrNotFound if the target can't be found in any module.
+func findTargetInModule[T btf.Type](typeName string, target *T, cache *btf.Cache, kmods *kernelModules) (*btf.Spec, *btf.Handle, error) {
+	if kmods == nil {
+		kmods = &kernelModules{}
+	}
+
+	modules, err := kmods.get()
+	if err != nil {
+		return nil, nil, err
+	}
+
+	for _, mod := range modules {
+		spec, err := cache.Module(mod.name)
+		if errors.Is(err, os.ErrNotExist) {
+			// The module was unloaded since it was enumerated.
+			continue
+		}
 		if err != nil {
-			return nil, nil, fmt.Errorf("parse types for module %s: %w", info.Name, err)
+			return nil, nil, fmt.Errorf("parse types for module %s: %w", mod.name, err)
 		}
 
 		err = spec.TypeByName(typeName, target)
@@ -1310,13 +1360,24 @@ func findTargetInModule[T btf.Type](typeName string, target *T, cache *btf.Cache
 			continue
 		}
 		if err != nil {
-			return nil, nil, fmt.Errorf("lookup type in module %s: %w", info.Name, err)
+			return nil, nil, fmt.Errorf("lookup type in module %s: %w", mod.name, err)
 		}
 
-		return spec, it.Take(), nil
-	}
-	if err := it.Err(); err != nil {
-		return nil, nil, fmt.Errorf("iterate modules: %w", err)
+		module, err := btf.NewHandleFromID(mod.id)
+		if err != nil {
+			// The module was unloaded since it was enumerated.
+			continue
+		}
+
+		// Guard against the BTF ID having been reused by another object
+		// after the module was unloaded.
+		info, err := module.Info()
+		if err != nil || !info.IsModule() || info.Name != mod.name {
+			module.Close()
+			continue
+		}
+
+		return spec, module, nil
 	}
 
 	return nil, nil, btf.ErrNotFound

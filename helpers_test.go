@@ -41,7 +41,7 @@ var haveTestmodOps = sync.OnceValues(func() (bool, error) {
 	}
 
 	target := btf.Type((*btf.Struct)(nil))
-	_, module, err := findTargetInKernel("bpf_struct_ops_bpf_testmod_ops", &target, btf.NewCache())
+	_, module, err := findTargetInKernel("bpf_struct_ops_bpf_testmod_ops", &target, btf.NewCache(), nil)
 	if err != nil && !errors.Is(err, btf.ErrNotFound) {
 		return false, err
 	}

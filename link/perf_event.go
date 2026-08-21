@@ -323,7 +323,7 @@ func attachPerfEventLink(pe *perfEvent, prog *ebpf.Program, cookie uint64) (*per
 		BpfCookie:  cookie,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("cannot create bpf perf link: %v", err)
+		return nil, fmt.Errorf("cannot create bpf perf link: %w", err)
 	}
 
 	return &perfEventLink{RawLink{fd: fd}, pe}, nil

@@ -1,7 +1,6 @@
 package btf
 
 import (
-	"bytes"
 	"encoding/binary"
 	"fmt"
 	"hash/maphash"
@@ -118,17 +117,7 @@ func newDecoder(raw []byte, bo binary.ByteOrder, strings *stringTable, base *dec
 		}
 
 		if len(name) > 0 {
-			if i := bytes.Index(name, []byte("___")); i != -1 {
-				// Flavours are rare. It's cheaper to find the first index for some
-				// reason.
-				//
-				// A leading "___" isn't a flavour delimiter (matches
-				// newEssentialName), so only strip if it doesn't start the name.
-				if i = bytes.LastIndex(name, []byte("___")); i > 0 {
-					name = name[:i]
-				}
-			}
-
+			name = name[:essentialNameLen(name)]
 			namedTypes.Add(name, id)
 		}
 

@@ -134,17 +134,23 @@ func TestAnyTypesByNameNoExactMatch(t *testing.T) {
 }
 
 func TestAnyTypesByNameLeadingUnderscores(t *testing.T) {
-	// Kernel function names such as ___pskb_trim start with a triple
-	// underscore. This isn't a flavour delimiter, so the full name must
-	// remain queryable.
-	spec := specFromTypes(t, []Type{
-		&Int{Name: "___pskb_trim", Size: 4},
-	})
+	// Leading sequences of underscores in kernel function names aren't flavour
+	// delimiters, so the full names must remain independently queryable.
+	names := []string{"___pskb_trim", "____fput", "____netdev_has_upper_dev"}
+	types := make([]Type, 0, len(names))
+	for _, name := range names {
+		types = append(types, &Int{Name: name, Size: 4})
+	}
+	spec := specFromTypes(t, types)
 
-	types, err := spec.AnyTypesByName("___pskb_trim")
-	qt.Assert(t, qt.IsNil(err))
-	qt.Assert(t, qt.HasLen(types, 1))
-	qt.Assert(t, qt.Equals(types[0].TypeName(), "___pskb_trim"))
+	for _, name := range names {
+		t.Run(name, func(t *testing.T) {
+			types, err := spec.AnyTypesByName(string(newEssentialName(name)))
+			qt.Assert(t, qt.IsNil(err))
+			qt.Assert(t, qt.HasLen(types, 1))
+			qt.Assert(t, qt.Equals(types[0].TypeName(), name))
+		})
+	}
 }
 
 func TestAnyTypeByNameNoExactMatch(t *testing.T) {
@@ -564,7 +570,6 @@ func TestSpecConcurrentAccess(t *testing.T) {
 	var wg sync.WaitGroup
 	for range maxprocs {
 		wg.Go(func() {
-
 			n := cond.Add(1)
 			for cond.Load() != int64(maxprocs) {
 				// Spin to increase the chances of a race.

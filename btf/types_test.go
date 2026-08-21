@@ -12,6 +12,26 @@ import (
 	"github.com/cilium/ebpf/internal/testutils"
 )
 
+func TestEssentialName(t *testing.T) {
+	tests := map[string]string{
+		"":                         "",
+		"foo":                      "foo",
+		"foo___flavour":            "foo",
+		"foo___one___two":          "foo___one",
+		"___pskb_trim":             "___pskb_trim",
+		"____fput":                 "____fput",
+		"____netdev_has_upper_dev": "____netdev_has_upper_dev",
+		"foo____flavour":           "foo____flavour",
+		"foo___":                   "foo___",
+	}
+
+	for name, want := range tests {
+		t.Run(name, func(t *testing.T) {
+			qt.Assert(t, qt.Equals(string(newEssentialName(name)), want))
+		})
+	}
+}
+
 func TestSizeof(t *testing.T) {
 	testcases := []struct {
 		size int

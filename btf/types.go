@@ -1,11 +1,12 @@
 package btf
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"io"
 	"math"
-	"strings"
+	"unsafe"
 
 	"github.com/cilium/ebpf/asm"
 	"github.com/cilium/ebpf/internal"
@@ -800,21 +801,40 @@ type typeDeque = internal.Deque[*Type]
 // suffixes after a ___ delimiter.
 type essentialName string
 
-// newEssentialName returns name without a ___ suffix.
+// essentialNameLen returns the length of name without a ___ suffix.
 //
 // CO-RE has the concept of 'struct flavors', which are used to deal with
-// changes in kernel data structures. Anything after three underscores
-// in a type name is ignored for the purpose of finding a candidate type
+// changes in kernel data structures. A flavour separator is a sequence of
+// three underscores surrounded by non-underscore characters. Anything after
+// the last separator is ignored for the purpose of finding a candidate type
 // in the kernel's BTF.
+//
+// See libbpf bpf_core_essential_name_len() implementation.
+func essentialNameLen(name []byte) int {
+	flavourSep := []byte("___")
+	if !bytes.Contains(name, flavourSep) {
+		return len(name)
+	}
+
+	for end := len(name); end > 3; {
+		i := bytes.LastIndex(name[:end], flavourSep)
+		if i < 0 {
+			return len(name)
+		}
+		if i > 0 && i+3 < len(name) &&
+			name[i-1] != '_' && name[i+3] != '_' {
+			return i
+		}
+		end = i
+	}
+
+	return len(name)
+}
+
+// newEssentialName returns name without a ___ suffix.
 func newEssentialName(name string) essentialName {
-	if name == "" {
-		return ""
-	}
-	lastIdx := strings.LastIndex(name, "___")
-	if lastIdx > 0 {
-		return essentialName(name[:lastIdx])
-	}
-	return essentialName(name)
+	b := unsafe.Slice(unsafe.StringData(name), len(name))
+	return essentialName(name[:essentialNameLen(b)])
 }
 
 // UnderlyingType skips qualifiers and Typedefs.

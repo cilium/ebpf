@@ -65,3 +65,30 @@ Alternatively, you may opt for shipping a full LLVM compiler toolchain along
 with your application and recompiling the eBPF C against Linux kernel headers
 present on the target machine. This approach is out of scope of the {{ proj }}
 documentation.
+
+### Kfunc Availability
+
+{{ proj }} resolves kfunc calls automatically while loading eBPF, and the logic
+for what to do when a kfunc is missing or varying in function signature can be
+embedded directly in eBPF C code. See the [Kfuncs
+documentation](https://docs.ebpf.io/linux/concepts/kfuncs) for their general
+usage and reference.
+
+If a required kfunc can't be found, loading fails with an error wrapping {{
+godoc('ErrNotSupported') }}.
+
+Kfuncs don't have the same UAPI stability guarantees as BPF helpers. A kfunc may
+be missing because of the running kernel's version or configuration, or because
+the module that provides it isn't loaded. To make such a kfunc optional, declare
+it with both `__ksym` and `__weak`, then guard every call with
+[`bpf_ksym_exists()`](https://docs.ebpf.io/ebpf-library/libbpf/ebpf/bpf_ksym_exists):
+
+{{ c_example('kfuncs_optional', title='Guard optional kfunc calls') }}
+
+If a weak kfunc is missing, {{ proj }} leaves the kfunc's address at zero and
+poisons all direct calls to it. `bpf_ksym_exists()` will return false if this is
+the case. The verifier will then remove the guarded branch and ignore its
+contents. An unguarded call remains reachable and causes program loading to
+fail. Calls can also be guarded manually using [Runtime
+Constants](../concepts/global-variables.md#runtime-constants) for greater
+control.

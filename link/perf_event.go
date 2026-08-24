@@ -306,7 +306,7 @@ func attachPerfEventIoctl(pe *perfEvent, prog *ebpf.Program) (*perfEventIoctl, e
 
 	// PERF_EVENT_IOC_ENABLE and _DISABLE ignore their given values.
 	if err := unix.IoctlSetInt(pe.fd.Int(), unix.PERF_EVENT_IOC_ENABLE, 0); err != nil {
-		return nil, fmt.Errorf("enable perf event: %s", err)
+		return nil, fmt.Errorf("enable perf event: %w", err)
 	}
 
 	return &perfEventIoctl{pe}, nil

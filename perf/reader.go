@@ -60,7 +60,8 @@ func readRecord(rd io.Reader, rec *Record, buf []byte, overwritable bool) error 
 	// Assert that the buffer is large enough.
 	buf = buf[:perfEventHeaderSize]
 	_, err := io.ReadFull(rd, buf)
-	if errors.Is(err, io.EOF) {
+	// Ring readers (forwardReader, reverseReader) return io.EOF directly.
+	if err == io.EOF {
 		return errEOR
 	} else if err != nil {
 		return fmt.Errorf("read perf event header: %v", err)
@@ -468,7 +469,8 @@ func (pr *Reader) readRecordFromRing(rec *Record, ring *perfEventRing) error {
 
 	rec.CPU = ring.cpu
 	err := readRecord(ring, rec, pr.eventHeader, pr.overwritable)
-	if pr.overwritable && (errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF)) {
+	// Ring readers return these io.* errors directly.
+	if pr.overwritable && (err == io.EOF || err == io.ErrUnexpectedEOF) {
 		return errEOR
 	}
 	rec.Remaining = ring.remaining()

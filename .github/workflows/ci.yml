@@ -365,9 +365,14 @@ jobs:
               return
             }
 
-            // Iterate through scheduled workflow runs (regardless of status) to find
-            // one that contains the Build-x64-Debug artifact.
-            let artifact = null;
+            // The MSI is no longer part of the build artifact, it is uploaded
+            // as a separate artifact. Iterate through scheduled workflow runs
+            // (regardless of status) to find one that contains both.
+            const buildArtifactName = 'Build-x64-Debug';
+            const msiArtifactName = 'ebpf-for-windows - MSI installer (Build-x64_Debug)';
+
+            let buildArtifact = null;
+            let msiArtifact = null;
             let runs_page = 1;
             outer:
             while (true) {
@@ -389,15 +394,17 @@ jobs:
               for (const run of workflow_runs.data.workflow_runs) {
                 console.log(`Attempting workflow run: ${run.html_url}`);
 
-                const artifacts = await github.rest.actions.listWorkflowRunArtifacts({
+                // Some runs have well over 100 artifacts, paginate to avoid missing any.
+                const artifacts = await github.paginate(github.rest.actions.listWorkflowRunArtifacts, {
                   owner: 'microsoft',
                   repo: 'ebpf-for-windows',
                   run_id: run.id,
                   per_page: 100,
                 });
 
-                artifact = artifacts.data.artifacts.find(a => a.name === 'Build-x64-Debug');
-                if (artifact) {
+                buildArtifact = artifacts.find(a => a.name === buildArtifactName);
+                msiArtifact = artifacts.find(a => a.name === msiArtifactName);
+                if (buildArtifact && msiArtifact) {
                   break outer;
                 }
               }
@@ -405,20 +412,20 @@ jobs:
               runs_page++;
             }
 
-            if (!artifact) {
-              core.setFailed('No scheduled workflow runs with Build-x64-Debug artifact found');
-              return;
-            }
-
             // Download artifact bytes directly; response.data contains the zip.
-            const response = await github.rest.actions.downloadArtifact({
-              owner: 'microsoft',
-              repo: 'ebpf-for-windows',
-              artifact_id: artifact.id,
-              archive_format: 'zip',
-            });
+            const download = async (artifact, path) => {
+              console.log(`Downloading artifact: ${artifact.name}`);
+              const response = await github.rest.actions.downloadArtifact({
+                owner: 'microsoft',
+                repo: 'ebpf-for-windows',
+                artifact_id: artifact.id,
+                archive_format: 'zip',
+              });
+              require('fs').writeFileSync(path, Buffer.from(response.data));
+            };
 
-            require('fs').writeFileSync(process.env.TEMP + '\\efw.zip', Buffer.from(response.data));
+            await download(buildArtifact, process.env.TEMP + '\\efw.zip');
+            await download(msiArtifact, process.env.TEMP + '\\efw-msi.zip');
 
       - name: Install eBPF for Windows
         shell: pwsh
@@ -433,20 +440,40 @@ jobs:
           }
 
           $setupScript = Get-ChildItem -Path "$env:TEMP\ebpf" -Filter "install_ebpf.psm1" -Recurse | Select-Object -First 1
-          if ($setupScript) {
-            Write-Host "Found setup script: $($setupScript.FullName)"
-            $releasePath = "$env:TEMP\ebpf\release"
-            Rename-Item -Path $setupScript.DirectoryName -NewName $releasePath
-            Write-Host "Renamed directory to: $releasePath"
-            Set-Location -Path $releasePath
-            Write-Host "Changed directory to: $(Get-Location)"
-            Import-Module .\\install_ebpf.psm1 -ArgumentList ($pwd, "install.log") -Force
-            Get-PSExec
-            Install-eBPFComponents -KmTracing $false -KmTraceType "file" -TestMode "Normal"
-          } else {
+          if (-not $setupScript) {
             Write-Error "Setup script not found in the extracted package"
             exit 1
           }
+
+          $packageRoot = $setupScript.Directory.FullName
+          Write-Host "Using package root: $packageRoot"
+
+          if ("${{ matrix.version }}" -eq "main") {
+            # The MSI also ships as a separate artifact, possibly nested in a
+            # subdirectory. Extract it elsewhere and copy it into the package
+            # root where install_ebpf.psm1 expects it, overwriting any copy
+            # already present in the build artifact.
+            Expand-Archive -Path "$env:TEMP\efw-msi.zip" -DestinationPath "$env:TEMP\ebpf-msi"
+            $msiFile = Get-ChildItem -Path "$env:TEMP\ebpf-msi" -Filter "ebpf-for-windows.msi" -Recurse | Select-Object -First 1
+            if (-not $msiFile) {
+              Write-Error "ebpf-for-windows.msi not found in the MSI artifact"
+              exit 1
+            }
+            Copy-Item -Path $msiFile.FullName -Destination $packageRoot -Force
+          }
+
+          $msi = Join-Path $packageRoot "ebpf-for-windows.msi"
+          if (-not (Test-Path $msi)) {
+            Write-Error "MSI not found at expected path: $msi"
+            Write-Host "Package contents under ${packageRoot}:"
+            Get-ChildItem -Path $packageRoot -Recurse | Select-Object FullName
+            exit 1
+          }
+
+          Set-Location -Path $packageRoot
+          Import-Module $setupScript.FullName -ArgumentList ($packageRoot, "install.log") -Force
+          Get-PSExec
+          Install-eBPFComponents -KmTracing $false -KmTraceType "file" -TestMode "Normal"
 
       - name: Add eBPF for Windows to PATH
         shell: pwsh

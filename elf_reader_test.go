@@ -2,6 +2,7 @@ package ebpf
 
 import (
 	"bytes"
+	"debug/elf"
 	"encoding/binary"
 	"errors"
 	"flag"
@@ -253,6 +254,56 @@ func TestLoadCollectionSpec(t *testing.T) {
 
 		testLoadCollectionSpec(t, got, coll.Copy())
 	})
+}
+
+func TestRelocateDataSectionObjectAddend(t *testing.T) {
+	tests := []struct {
+		name      string
+		value     uint64
+		addend    int64
+		sectionSz uint64
+		want      uint32
+		wantErr   string
+	}{
+		{"zero addend", 4, 0, 16, 4, ""},
+		{"issue 2083", 0, 4, 8, 4, ""},
+		{"GCC object addend", 0, 8_192 * 4, 8_193 * 4, 8_192 * 4, ""},
+		{"negative addend", 4, -2, 16, 2, ""},
+		{"underflow", 0, -1, 16, 0, "direct load: value: relocation offset underflows"},
+		{"64-bit overflow", ^uint64(0), 1, ^uint64(0), 0, "direct load: value: relocation offset overflows"},
+		{"32-bit overflow", 1 << 32, 0, 1 << 33, 0, "direct load: value: relocation offset 4294967296 exceeds 32 bits"},
+		{"section bounds", 12, 4, 16, 0, "direct load: value: relocation offset 16 exceeds section size 16"},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			const sectionIndex = elf.SectionIndex(1)
+
+			ec := &elfCode{
+				sections: map[elf.SectionIndex]*elfSection{
+					sectionIndex: newElfSection(&elf.Section{
+						SectionHeader: elf.SectionHeader{Name: ".data", Size: test.sectionSz},
+					}, dataSection),
+				},
+			}
+			ins := asm.Instruction{Constant: test.addend}
+			rel := elf.Symbol{
+				Name:    "value",
+				Info:    byte(elf.STB_GLOBAL)<<4 | byte(elf.STT_OBJECT),
+				Section: sectionIndex,
+				Value:   test.value,
+			}
+
+			err := ec.relocateInstruction(&ins, rel)
+			if test.wantErr != "" {
+				qt.Assert(t, qt.ErrorMatches(err, test.wantErr))
+				return
+			}
+			qt.Assert(t, qt.IsNil(err))
+			qt.Assert(t, qt.Equals(ins.Constant, int64(uint64(test.want)<<32)))
+			qt.Assert(t, qt.Equals(ins.Src, asm.PseudoMapValue))
+		})
+	}
 }
 
 func testLoadCollectionSpec(t *testing.T, got, want *CollectionSpec) {

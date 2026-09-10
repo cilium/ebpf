@@ -55,6 +55,17 @@ This library includes the following packages:
 * [btf](https://pkg.go.dev/github.com/cilium/ebpf/btf) allows reading the BPF Type Format.
 * [pin](https://pkg.go.dev/github.com/cilium/ebpf/pin) provides APIs for working with pinned objects on bpffs.
 
+## Generative AI Policy
+
+ebpf-go is governed by [Cilium's AI
+policy](https://github.com/cilium/community/blob/main/AI-POLICY.md) and the
+[Linux Foundation's AI
+policy](https://www.linuxfoundation.org/legal/generative-ai).
+
+The project also has its own AI policy codified in [AGENTS.md](AGENTS.md).
+Submissions found in violation of the policy will simply be rejected without
+warning.
+
 ## Requirements
 
 * A version of Go that is [supported by

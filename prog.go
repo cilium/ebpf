@@ -909,29 +909,59 @@ func (p *Program) Run(opts *RunOptions) (uint32, error) {
 	return ret, nil
 }
 
-// Benchmark runs the Program with the given input for a number of times
-// and returns the time taken per iteration.
+// testingB is a subset of testing.B, containing only the methods Benchmark
+// needs. It exists so that this package doesn't have a hard dependency on
+// the testing package outside of _test.go files, and so that Benchmark can
+// be exercised in this package's own tests using a fake, since a real
+// *testing.B can only be constructed by the go test runner itself.
+//
+// *testing.B satisfies this interface.
+type testingB interface {
+	ResetTimer()
+	ReportMetric(n float64, unit string)
+}
+
+// Benchmark runs the Program with the given input for n iterations and
+// returns the time taken per iteration.
+//
+// b is typically the *testing.B passed into a Benchmark function. n is
+// typically b.N: it can't be obtained from b directly since testing.B
+// exposes N as a struct field, not a method, so it isn't part of the
+// testingB interface.
+//
+// Retries caused by the benchmark syscall being interrupted are handled
+// internally: the timer is reset via b.ResetTimer() so they don't skew
+// ns/op, and the retry count is reported as a "retries/op" metric via
+// b.ReportMetric() so they don't go unnoticed either.
 //
 // Returns the result of the last execution of the program and the time per
-// run or an error. reset is called whenever the benchmark syscall is
-// interrupted, and should be set to testing.B.ResetTimer or similar.
+// run, or an error.
 //
 // This function requires at least Linux 4.12.
-func (p *Program) Benchmark(in []byte, repeat int, reset func()) (uint32, time.Duration, error) {
-	if uint(repeat) > math.MaxUint32 {
-		return 0, 0, fmt.Errorf("repeat is too high")
+func (p *Program) Benchmark(b testingB, n int, in []byte) (uint32, time.Duration, error) {
+	if uint(n) > math.MaxUint32 {
+		return 0, 0, fmt.Errorf("n is too high")
 	}
 
+	var retries uint32
 	opts := RunOptions{
 		Data:   in,
-		Repeat: uint32(repeat),
-		Reset:  reset,
+		Repeat: uint32(n),
+		Reset: func() {
+			retries++
+			b.ResetTimer()
+		},
 	}
 
 	ret, total, err := p.run(&opts)
 	if err != nil {
 		return ret, total, fmt.Errorf("benchmark program: %w", err)
 	}
+
+	if retries > 0 {
+		b.ReportMetric(float64(retries), "retries/op")
+	}
+
 	return ret, total, nil
 }
 

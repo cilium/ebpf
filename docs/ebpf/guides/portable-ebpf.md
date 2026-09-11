@@ -65,3 +65,31 @@ Alternatively, you may opt for shipping a full LLVM compiler toolchain along
 with your application and recompiling the eBPF C against Linux kernel headers
 present on the target machine. This approach is out of scope of the {{ proj }}
 documentation.
+
+### Kfunc availability
+
+{{ proj }} resolves kfunc calls automatically while loading a collection. No
+separate Go API or explicit BTF handling is necessary. See the [Kfuncs
+documentation](https://docs.ebpf.io/linux/concepts/kfuncs/) for their general
+usage and reference.
+
+If a required kfunc can't be found, loading fails with an error wrapping {{
+godoc('ErrNotSupported') }}.
+
+Kfuncs don't have the same UAPI stability guarantees as BPF helpers. A kfunc
+may be missing because of the running kernel's version or configuration, or
+because the module that provides it isn't loaded. To make such a kfunc
+optional, declare it with both `__ksym` and `__weak`, then guard every call with
+[`bpf_ksym_exists()`](https://docs.ebpf.io/ebpf-library/libbpf/ebpf/bpf_ksym_exists/):
+
+{{ c_example('kfuncs_optional', title='Guard optional kfunc calls') }}
+
+If a weak kfunc is missing, {{ proj }} resolves the address used by
+`bpf_ksym_exists()` to zero and poisons direct calls to it. The verifier can
+then remove the guarded branch. An unguarded call remains reachable and causes
+program loading to fail.
+
+Check every optional kfunc used by a branch, including paired acquire and
+release functions. Runtime constants can handle additional compatibility
+decisions made by the Go application before loading; see [Runtime
+Constants](../concepts/global-variables.md#runtime-constants).

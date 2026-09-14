@@ -308,7 +308,7 @@ fixups:
 		// findTargetInKernel returns [btf.ErrNotFound] if the target can't be found
 		// or if BTF is not enabled.
 		target := btf.Type((*btf.Func)(nil))
-		spec, module, err := findTargetInKernel(kfm.Func.Name, &target, cache)
+		spec, module, err := findTargetInKernel(essentialName(kfm.Func.Name), &target, cache)
 		if errors.Is(err, btf.ErrNotFound) {
 			if kfm.Binding == elf.STB_WEAK {
 				if ins.IsKfuncCall() {
@@ -344,6 +344,11 @@ fixups:
 		}
 
 		if err := btf.CheckTypeCompatibility(kfm.Func.Type, target.(*btf.Func).Type); err != nil {
+			if kfm.Binding == elf.STB_WEAK {
+				iter.Next()
+				continue
+			}
+
 			return nil, &incompatibleKfuncError{kfm.Func.Name, err}
 		}
 
@@ -569,7 +574,7 @@ func applyTypedKsymFixups(fixups []ksymFixup, cache *btf.Cache) (modules handles
 		sym, ok := symbols[varName]
 		if !ok {
 			var target *btf.Var
-			spec, module, err := findTargetInKernel(varName, &target, cache)
+			spec, module, err := findTargetInKernel(essentialName(varName), &target, cache)
 			if errors.Is(err, btf.ErrNotFound) && fixup.Binding == elf.STB_WEAK {
 				continue
 			}
@@ -601,4 +606,20 @@ func applyTypedKsymFixups(fixups []ksymFixup, cache *btf.Cache) (modules handles
 	}
 
 	return modules, nil
+}
+
+// essentialName returns name without a ___ suffix.
+//
+// When resolving types in the kernels BTF, the "ignore suffix" rule is applied where we strip the ___ suffix from
+// a name before we search for in in the kernel BTF. This allows multiple flavors of a type to be defined in a
+// program without name collisions, yet attempt to resolve multiple types.
+func essentialName(name string) string {
+	if name == "" {
+		return ""
+	}
+	lastIdx := strings.LastIndex(name, "___")
+	if lastIdx > 0 {
+		return name[:lastIdx]
+	}
+	return name
 }

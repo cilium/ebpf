@@ -634,7 +634,31 @@ func (ec *elfCode) relocateInstruction(ins *asm.Instruction, rel elf.Symbol) err
 				return fmt.Errorf("direct load: %s: %w: %s", name, errUnsupportedBinding, bind)
 			}
 
-			offset = uint32(rel.Value)
+			// R_BPF_64_64 relocations use S + A. Since BPF uses SHT_REL, the
+			// addend is stored in the original instruction rather than the
+			// relocation entry.
+			offset64 := rel.Value
+			if ins.Constant >= 0 {
+				addend := uint64(ins.Constant)
+				if addend > math.MaxUint64-offset64 {
+					return fmt.Errorf("direct load: %s: relocation offset overflows", name)
+				}
+				offset64 += addend
+			} else {
+				addend := uint64(-(ins.Constant + 1)) + 1
+				if addend > offset64 {
+					return fmt.Errorf("direct load: %s: relocation offset underflows", name)
+				}
+				offset64 -= addend
+			}
+
+			if offset64 > math.MaxUint32 {
+				return fmt.Errorf("direct load: %s: relocation offset %d exceeds 32 bits", name, offset64)
+			}
+			if offset64 >= target.Size {
+				return fmt.Errorf("direct load: %s: relocation offset %d exceeds section size %d", name, offset64, target.Size)
+			}
+			offset = uint32(offset64)
 
 		case elf.STT_NOTYPE:
 			// LLVM 7 emits NOTYPE-LOCAL symbols for anonymous constants.

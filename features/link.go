@@ -5,7 +5,9 @@ import (
 
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/asm"
+	"github.com/cilium/ebpf/btf"
 	"github.com/cilium/ebpf/internal"
+	"github.com/cilium/ebpf/internal/kfunc"
 	"github.com/cilium/ebpf/internal/sys"
 	"github.com/cilium/ebpf/internal/unix"
 )
@@ -155,3 +157,53 @@ var haveBPFLinkKprobeSession = internal.NewFeatureTest("bpf_link_kprobe_session"
 
 	return nil
 }, "6.10")
+
+// HaveBPFLinkTracingMulti probes the running kernel if tracing_multi link is supported.
+//
+// See the package documentation for the meaning of the error return value.
+func HaveBPFLinkTracingMulti() error {
+	return haveBPFLinkTracingMulti()
+}
+
+var haveBPFLinkTracingMulti = internal.NewFeatureTest("bpf_link_tracing_multi", func() error {
+	prog, err := ebpf.NewProgram(&ebpf.ProgramSpec{
+		Name: "probe_trm_link",
+		Type: ebpf.Tracing,
+		Instructions: asm.Instructions{
+			asm.Mov.Imm(asm.R0, 0),
+			asm.Return(),
+		},
+		AttachType: ebpf.AttachTraceFEntryMulti,
+		License:    "MIT",
+	})
+	if errors.Is(err, unix.E2BIG) || errors.Is(err, unix.EINVAL) {
+		return ebpf.ErrNotSupported
+	}
+	if err != nil {
+		return err
+	}
+	defer prog.Close()
+
+	ids, err := kfunc.IDs([]string{"bpf_fentry_test1"}, 1)
+	if errors.Is(err, btf.ErrNotSupported) || errors.Is(err, btf.ErrNotFound) {
+		return ebpf.ErrNotSupported
+	}
+	if err != nil {
+		return err
+	}
+
+	fd, err := sys.LinkCreateTracingMulti(&sys.LinkCreateTracingMultiAttr{
+		ProgFd:     uint32(prog.FD()),
+		AttachType: sys.BPF_TRACE_FENTRY_MULTI,
+		Ids:        sys.SlicePointer(ids),
+		Count:      uint32(len(ids)),
+	})
+	switch {
+	case errors.Is(err, unix.EINVAL), errors.Is(err, unix.EOPNOTSUPP):
+		return ebpf.ErrNotSupported
+	case err != nil:
+		return err
+	}
+
+	return fd.Close()
+}, "7.2")

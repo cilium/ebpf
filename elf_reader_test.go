@@ -2,6 +2,7 @@ package ebpf
 
 import (
 	"bytes"
+	"debug/elf"
 	"encoding/binary"
 	"errors"
 	"flag"
@@ -1553,6 +1554,73 @@ func TestMatchSectionName(t *testing.T) {
 				qt.Assert(t, qt.Equals(extra, testcase.extra))
 			}
 		})
+	}
+}
+
+// TestLoadFunctionsPadding ensures that FUNC_INFO (and other ExtInfo) records
+// are matched against instructions using their absolute offset within the
+// section, not a compacted counter that skips over alignment padding between
+// symbols. A compacted counter shifts every ExtInfo record following a gap
+// onto the wrong instruction. See
+// https://github.com/cilium/ebpf/issues/2103.
+func TestLoadFunctionsPadding(t *testing.T) {
+	// Mirror the layout from the linked issue: two one-instruction functions
+	// separated by a two-instruction (16 byte) alignment gap.
+	//
+	//   alpha    [ 0, 16)
+	//   padding  [16, 32)
+	//   declared [32, 48)
+	//   victim   [48, 64)
+	body := asm.Instructions{asm.Return(), asm.Return()}
+
+	var buf bytes.Buffer
+	for i := 0; i < 3; i++ {
+		if i == 1 {
+			buf.Write(make([]byte, 16))
+		}
+		qt.Assert(t, qt.IsNil(body.Marshal(&buf, internal.NativeEndian)))
+	}
+	data := buf.Bytes()
+
+	sec := newElfSection(&elf.Section{
+		SectionHeader: elf.SectionHeader{Name: ".text", Size: uint64(len(data))},
+		ReaderAt:      bytes.NewReader(data),
+	}, programSection)
+	sec.symbols[0] = elf.Symbol{Name: "alpha", Value: 0, Size: 16}
+	sec.symbols[32] = elf.Symbol{Name: "declared", Value: 32, Size: 16}
+	sec.symbols[48] = elf.Symbol{Name: "victim", Value: 48, Size: 16}
+
+	alphaFn := &btf.Func{Name: "alpha", Type: &btf.Void{}}
+	declaredFn := &btf.Func{Name: "declared", Type: &btf.Void{}}
+	victimFn := &btf.Func{Name: "victim", Type: &btf.Void{}}
+
+	ec := &elfCode{
+		SafeELFFile: &internal.SafeELFFile{
+			File: &elf.File{FileHeader: elf.FileHeader{ByteOrder: internal.NativeEndian}},
+		},
+		extInfo: &btf.ExtInfos{
+			Funcs: map[string]btf.FuncOffsets{
+				".text": {
+					{Offset: 0, Func: alphaFn},
+					{Offset: 4, Func: declaredFn},
+					{Offset: 6, Func: victimFn},
+				},
+			},
+		},
+	}
+
+	funcs, err := ec.loadFunctions(sec)
+	qt.Assert(t, qt.IsNil(err))
+
+	for name, want := range map[string]*btf.Func{
+		"alpha":    alphaFn,
+		"declared": declaredFn,
+		"victim":   victimFn,
+	} {
+		insns := funcs[name]
+		qt.Assert(t, qt.HasLen(insns, 2), qt.Commentf("function %s", name))
+		got := btf.FuncMetadata(&insns[0])
+		qt.Assert(t, qt.Equals(got, want), qt.Commentf("function %s got wrong FUNC_INFO metadata", name))
 	}
 }
 

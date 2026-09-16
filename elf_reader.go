@@ -446,11 +446,6 @@ func (ec *elfCode) loadFunctions(sec *elfSection) (map[string]asm.Instructions, 
 	// instruction.
 	fo, lo, ro := ec.extInfo.Section(sec.Name)
 
-	// Raw instruction count since start of the section. ExtInfos point at raw
-	// insn offsets and ignore the gaps between symbols in case of linked objects.
-	// We need to count them, we can't obtain this info by any other means.
-	var raw asm.RawInstructionOffset
-
 	// Sort symbols by offset so we can track instructions by their raw offsets.
 	for _, sym := range sec.symbolsSorted() {
 		if progs[sym.Name] != nil {
@@ -462,6 +457,9 @@ func (ec *elfCode) loadFunctions(sec *elfSection) (map[string]asm.Instructions, 
 		}
 		if sym.Value+sym.Size > sec.Size {
 			return nil, fmt.Errorf("symbol %s: size goes out of bounds of section %s", sym.Name, sec.Name)
+		}
+		if sym.Value%asm.InstructionSize != 0 {
+			return nil, fmt.Errorf("symbol %s: offset %d in section %s is not aligned with instruction size", sym.Name, sym.Value, sec.Name)
 		}
 
 		// Decode the symbol's instruction stream, limited to its size.
@@ -477,6 +475,13 @@ func (ec *elfCode) loadFunctions(sec *elfSection) (map[string]asm.Instructions, 
 
 		// Mark the first instruction as the start of a function.
 		insns[0] = insns[0].WithSymbol(sym.Name)
+
+		// Raw instruction offset of the symbol's start within the section.
+		// ExtInfos point at raw insn offsets from the start of the section,
+		// including any padding gaps between symbols (e.g. due to alignment),
+		// so it must be derived from the symbol's absolute offset rather than
+		// a running counter over decoded instructions, which would skip gaps.
+		symRaw := asm.RawInstructionOffset(sym.Value / asm.InstructionSize)
 
 		iter := insns.Iterate()
 		for iter.Next() {
@@ -495,9 +500,7 @@ func (ec *elfCode) loadFunctions(sec *elfSection) (map[string]asm.Instructions, 
 				}
 			}
 
-			assignMetadata(iter.Ins, raw, &fo, &lo, &ro)
-
-			raw += iter.Ins.Width()
+			assignMetadata(iter.Ins, symRaw+iter.Offset, &fo, &lo, &ro)
 		}
 
 		// Emit the program's instructions.

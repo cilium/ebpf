@@ -416,8 +416,9 @@ func (pr *Reader) Pause() error {
 	}
 
 	for i := range pr.eventFds {
-		if err := pr.array.Delete(uint32(i)); err != nil && !errors.Is(err, ebpf.ErrKeyNotExist) {
-			return fmt.Errorf("could't delete event fd for CPU %d: %w", i, err)
+		cpuID := pr.rings[i].cpu
+		if err := pr.array.Delete(uint32(cpuID)); err != nil && !errors.Is(err, ebpf.ErrKeyNotExist) {
+			return fmt.Errorf("could't delete event fd for CPU %d: %w", cpuID, err)
 		}
 	}
 
@@ -442,8 +443,9 @@ func (pr *Reader) Resume() error {
 			continue
 		}
 
-		if err := pr.array.Put(uint32(i), fd.Uint()); err != nil {
-			return fmt.Errorf("couldn't put event fd %d for CPU %d: %w", fd, i, err)
+		cpuID := pr.rings[i].cpu
+		if err := pr.array.Put(uint32(cpuID), fd.Uint()); err != nil {
+			return fmt.Errorf("couldn't put event fd %d for CPU %d: %w", fd, cpuID, err)
 		}
 	}
 

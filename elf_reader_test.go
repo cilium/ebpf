@@ -1624,6 +1624,70 @@ func TestLoadFunctionsPadding(t *testing.T) {
 	}
 }
 
+// TestLoadFunctionsStaleExtInfo ensures that ExtInfo records left pointing at
+// raw offsets with no corresponding instruction don't permanently wedge the
+// FUNC_INFO/LINE_INFO/CO-RE matching queue and starve every symbol after
+// them. This happens with objects produced by linking multiple ELF files,
+// e.g. via `bpftool gen object`: the linker can drop a function when
+// resolving a weak symbol clash but leave its ExtInfo record behind. Found
+// via TestLinkedELF regressing after the fix for
+// https://github.com/cilium/ebpf/issues/2103.
+func TestLoadFunctionsStaleExtInfo(t *testing.T) {
+	// alpha  [ 0, 16)
+	// gap    [16, 32) -- used to belong to a symbol dropped by the linker,
+	//                    whose FUNC_INFO record (offset 2) is still present.
+	// beta   [32, 48)
+	body := asm.Instructions{asm.Return(), asm.Return()}
+
+	var buf bytes.Buffer
+	for i := 0; i < 3; i++ {
+		if i == 1 {
+			buf.Write(make([]byte, 16))
+		}
+		qt.Assert(t, qt.IsNil(body.Marshal(&buf, internal.NativeEndian)))
+	}
+	data := buf.Bytes()
+
+	sec := newElfSection(&elf.Section{
+		SectionHeader: elf.SectionHeader{Name: ".text", Size: uint64(len(data))},
+		ReaderAt:      bytes.NewReader(data),
+	}, programSection)
+	sec.symbols[0] = elf.Symbol{Name: "alpha", Value: 0, Size: 16}
+	sec.symbols[32] = elf.Symbol{Name: "beta", Value: 32, Size: 16}
+
+	alphaFn := &btf.Func{Name: "alpha", Type: &btf.Void{}}
+	staleFn := &btf.Func{Name: "dropped", Type: &btf.Void{}}
+	betaFn := &btf.Func{Name: "beta", Type: &btf.Void{}}
+
+	ec := &elfCode{
+		SafeELFFile: &internal.SafeELFFile{
+			File: &elf.File{FileHeader: elf.FileHeader{ByteOrder: internal.NativeEndian}},
+		},
+		extInfo: &btf.ExtInfos{
+			Funcs: map[string]btf.FuncOffsets{
+				".text": {
+					{Offset: 0, Func: alphaFn},
+					{Offset: 2, Func: staleFn},
+					{Offset: 4, Func: betaFn},
+				},
+			},
+		},
+	}
+
+	funcs, err := ec.loadFunctions(sec)
+	qt.Assert(t, qt.IsNil(err))
+
+	for name, want := range map[string]*btf.Func{
+		"alpha": alphaFn,
+		"beta":  betaFn,
+	} {
+		insns := funcs[name]
+		qt.Assert(t, qt.HasLen(insns, 2), qt.Commentf("function %s", name))
+		got := btf.FuncMetadata(&insns[0])
+		qt.Assert(t, qt.Equals(got, want), qt.Commentf("function %s got wrong FUNC_INFO metadata", name))
+	}
+}
+
 // selftestName takes a path to a file and derives a canonical name from it.
 //
 // It strips various suffixes used by the selftest build system.

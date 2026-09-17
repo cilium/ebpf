@@ -510,20 +510,30 @@ func (ec *elfCode) loadFunctions(sec *elfSection) (map[string]asm.Instructions, 
 	return progs, nil
 }
 
-// take pops and returns the first item in q if it matches the given predicate
-// f. Otherwise, it returns nil.
-func take[T any](q *[]T, f func(T) bool) *T {
-	if q == nil || len(*q) == 0 {
+// take discards any items at the front of q whose raw offset is behind raw --
+// ExtInfo records left pointing at raw offsets that no longer correspond to
+// any decoded instruction, e.g. because the ELF linker dropped the function
+// they belonged to when resolving a weak symbol clash -- and then pops and
+// returns the front item if it's now at raw. Otherwise, it returns nil.
+//
+// q must be sorted by offset and raw must be non-decreasing across calls,
+// which holds since callers process instructions in increasing offset order.
+func take[T any](q *[]T, offset func(T) asm.RawInstructionOffset, raw asm.RawInstructionOffset) *T {
+	if q == nil {
+		return nil
+	}
+
+	for len(*q) > 0 && offset((*q)[0]) < raw {
+		*q = (*q)[1:]
+	}
+
+	if len(*q) == 0 || offset((*q)[0]) != raw {
 		return nil
 	}
 
 	out := (*q)[0]
-	if f(out) {
-		*q = (*q)[1:]
-		return &out
-	}
-
-	return nil
+	*q = (*q)[1:]
+	return &out
 }
 
 // Tag the instruction with any ExtInfo metadata that's pointing at the given
@@ -531,15 +541,15 @@ func take[T any](q *[]T, f func(T) bool) *T {
 func assignMetadata(ins *asm.Instruction, raw asm.RawInstructionOffset,
 	fo *btf.FuncOffsets, lo *btf.LineOffsets, ro *btf.CORERelocationOffsets) {
 
-	if f := take(fo, func(f btf.FuncOffset) bool { return f.Offset == raw }); f != nil {
+	if f := take(fo, func(f btf.FuncOffset) asm.RawInstructionOffset { return f.Offset }, raw); f != nil {
 		*ins = btf.WithFuncMetadata(*ins, f.Func)
 	}
 
-	if l := take(lo, func(l btf.LineOffset) bool { return l.Offset == raw }); l != nil {
+	if l := take(lo, func(l btf.LineOffset) asm.RawInstructionOffset { return l.Offset }, raw); l != nil {
 		*ins = ins.WithSource(l.Line)
 	}
 
-	if r := take(ro, func(r btf.CORERelocationOffset) bool { return r.Offset == raw }); r != nil {
+	if r := take(ro, func(r btf.CORERelocationOffset) asm.RawInstructionOffset { return r.Offset }, raw); r != nil {
 		*ins = btf.WithCORERelocationMetadata(*ins, r.Relo)
 	}
 }

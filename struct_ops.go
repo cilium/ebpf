@@ -8,6 +8,7 @@ import (
 
 	"github.com/cilium/ebpf/btf"
 	"github.com/cilium/ebpf/internal"
+	"github.com/cilium/ebpf/internal/find"
 )
 
 const structOpsValuePrefix = "bpf_struct_ops_"
@@ -99,7 +100,7 @@ func structOpsFindTarget(userType *btf.Struct, cache *btf.Cache) (vType *btf.Str
 	vTypeName := structOpsValuePrefix + userType.Name
 
 	target := btf.Type((*btf.Struct)(nil))
-	spec, module, err := findTargetInKernel(vTypeName, &target, cache)
+	spec, module, err := find.TargetInKernel(vTypeName, &target, cache)
 	if errors.Is(err, btf.ErrNotFound) {
 		return nil, 0, nil, fmt.Errorf("%q doesn't exist in kernel: %w", vTypeName, ErrNotSupported)
 	}

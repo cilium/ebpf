@@ -10,6 +10,7 @@ import (
 	"github.com/cilium/ebpf/asm"
 	"github.com/cilium/ebpf/btf"
 	"github.com/cilium/ebpf/internal"
+	"github.com/cilium/ebpf/internal/find"
 	"github.com/cilium/ebpf/internal/platform"
 	"github.com/cilium/ebpf/internal/testutils"
 )
@@ -41,7 +42,7 @@ var haveTestmodOps = sync.OnceValues(func() (bool, error) {
 	}
 
 	target := btf.Type((*btf.Struct)(nil))
-	_, module, err := findTargetInKernel("bpf_struct_ops_bpf_testmod_ops", &target, btf.NewCache())
+	_, module, err := find.TargetInKernel("bpf_struct_ops_bpf_testmod_ops", &target, btf.NewCache())
 	if err != nil && !errors.Is(err, btf.ErrNotFound) {
 		return false, err
 	}

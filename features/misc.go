@@ -7,6 +7,7 @@ import (
 	"github.com/cilium/ebpf/asm"
 	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/sys"
+	"github.com/cilium/ebpf/internal/unix"
 )
 
 // HaveLargeInstructions probes the running kernel if more than 4096 instructions
@@ -133,3 +134,29 @@ var haveV4ISA = internal.NewFeatureTest("v4 ISA", func() error {
 	}
 	return err
 }, "6.6")
+
+func probeProgram(spec *ebpf.ProgramSpec) error {
+	if spec.Instructions == nil {
+		spec.Instructions = asm.Instructions{
+			asm.LoadImm(asm.R0, 0, asm.DWord),
+			asm.Return(),
+		}
+	}
+	prog, err := ebpf.NewProgramWithOptions(spec, ebpf.ProgramOptions{
+		LogDisabled: true,
+	})
+	if err == nil {
+		prog.Close()
+	}
+
+	switch {
+	// EINVAL occurs when attempting to create a program with an unknown type.
+	// E2BIG occurs when ProgLoadAttr contains non-zero bytes past the end
+	// of the struct known by the running kernel, meaning the kernel is too old
+	// to support the given prog type.
+	case errors.Is(err, unix.EINVAL), errors.Is(err, unix.E2BIG):
+		err = ebpf.ErrNotSupported
+	}
+
+	return err
+}

@@ -329,6 +329,7 @@ type collectionLoader struct {
 	programs map[string]*Program
 	vars     map[string]*Variable
 	types    *btf.Cache
+	kmods    *kernelModules
 }
 
 func newCollectionLoader(coll *CollectionSpec, opts *CollectionOptions) (*collectionLoader, error) {
@@ -359,6 +360,7 @@ func newCollectionLoader(coll *CollectionSpec, opts *CollectionOptions) (*collec
 		make(map[string]*Program),
 		make(map[string]*Variable),
 		cache,
+		&kernelModules{},
 	}, nil
 }
 
@@ -500,7 +502,7 @@ func (cl *collectionLoader) loadProgram(progName string) (*Program, error) {
 		}
 	}
 
-	prog, err := newProgramWithOptions(progSpec, cl.opts.Programs, cl.types)
+	prog, err := newProgramWithOptions(progSpec, cl.opts.Programs, cl.types, cl.kmods)
 	if err != nil {
 		return nil, fmt.Errorf("program %s: %w", progName, err)
 	}

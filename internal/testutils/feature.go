@@ -43,16 +43,6 @@ func checkFeatureTestError(t *testing.T, err error) {
 	}
 }
 
-func CheckFeatureMatrix[K comparable](t *testing.T, fm internal.FeatureMatrix[K]) {
-	t.Helper()
-
-	for key, ft := range fm {
-		t.Run(ft.Name, func(t *testing.T) {
-			checkFeatureTestError(t, fm.Result(key))
-		})
-	}
-}
-
 func SkipIfNotSupported(tb testing.TB, err error) {
 	tb.Helper()
 

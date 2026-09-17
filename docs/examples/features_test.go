@@ -7,11 +7,12 @@ import (
 	"fmt"
 
 	"github.com/cilium/ebpf"
+	"github.com/cilium/ebpf/btf"
 	"github.com/cilium/ebpf/features"
 )
 
 func DocDetectXDP() {
-	err := features.HaveProgramType(ebpf.XDP)
+	err := features.HaveProgramType(btf.NewCache(), ebpf.XDP)
 	if errors.Is(err, ebpf.ErrNotSupported) {
 		fmt.Println("XDP program type is not supported")
 		return

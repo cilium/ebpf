@@ -10,6 +10,10 @@ __section("fexit/target") int trace_on_exit() {
 	return 0;
 }
 
+__section("fsession/target") int trace_session() {
+	return 0;
+}
+
 __section("tc") int target() {
 	return 0;
 }

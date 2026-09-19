@@ -68,9 +68,20 @@ func TestFentryFexit(t *testing.T) {
 	}
 	defer target.Close()
 
-	for _, name := range []string{"trace_on_entry", "trace_on_exit"} {
-		progSpec := spec.Programs[name]
-		t.Run(name, func(t *testing.T) {
+	tests := []struct {
+		name       string
+		attachType ebpf.AttachType
+		minVersion string
+	}{
+		{"trace_on_entry", ebpf.AttachNone, "5.5"},
+		{"trace_on_exit", ebpf.AttachNone, "5.5"},
+		{"trace_session", ebpf.AttachTraceFSession, "7.0"},
+	}
+	for _, test := range tests {
+		progSpec := spec.Programs[test.name]
+		t.Run(test.name, func(t *testing.T) {
+			testutils.SkipOnOldKernel(t, test.minVersion, test.name)
+
 			progSpec.AttachTarget = target
 
 			prog, err := ebpf.NewProgram(progSpec)
@@ -83,7 +94,8 @@ func TestFentryFexit(t *testing.T) {
 				testutils.SkipOnOldKernel(t, "5.11", "BPF_LINK_TYPE_TRACING")
 
 				tracingLink, err := AttachTracing(TracingOptions{
-					Program: prog,
+					Program:    prog,
+					AttachType: test.attachType,
 				})
 				if err != nil {
 					t.Fatal("Can't attach tracing:", err)
@@ -98,20 +110,20 @@ func TestFentryFexit(t *testing.T) {
 }
 
 func TestTracing(t *testing.T) {
-	testutils.SkipOnOldKernel(t, "5.11", "BPF_LINK_TYPE_TRACING")
-
 	tests := []struct {
 		name                             string
 		attachTo                         string
 		programType                      ebpf.ProgramType
 		programAttachType, attachTypeOpt ebpf.AttachType
 		cookie                           uint64
+		minVersion                       string
 	}{
 		{
 			name:              "AttachTraceFEntry",
 			attachTo:          "inet_dgram_connect",
 			programType:       ebpf.Tracing,
 			programAttachType: ebpf.AttachTraceFEntry,
+			minVersion:        "5.11",
 		},
 		{
 			name:              "AttachTraceFEntry",
@@ -120,35 +132,51 @@ func TestTracing(t *testing.T) {
 			programAttachType: ebpf.AttachTraceFEntry,
 			attachTypeOpt:     ebpf.AttachTraceFEntry,
 			cookie:            1,
+			minVersion:        "5.11",
 		},
 		{
 			name:              "AttachTraceFEntry",
 			attachTo:          "inet_dgram_connect",
 			programType:       ebpf.Tracing,
 			programAttachType: ebpf.AttachTraceFEntry,
+			minVersion:        "5.11",
 		},
 		{
 			name:              "AttachTraceFExit",
 			attachTo:          "inet_dgram_connect",
 			programType:       ebpf.Tracing,
 			programAttachType: ebpf.AttachTraceFExit,
+			minVersion:        "5.11",
+		},
+		{
+			name:              "AttachTraceFSession",
+			attachTo:          "inet_dgram_connect",
+			programType:       ebpf.Tracing,
+			programAttachType: ebpf.AttachTraceFSession,
+			attachTypeOpt:     ebpf.AttachTraceFSession,
+			cookie:            1,
+			minVersion:        "7.0",
 		},
 		{
 			name:              "AttachModifyReturn",
 			attachTo:          "bpf_modify_return_test",
 			programType:       ebpf.Tracing,
 			programAttachType: ebpf.AttachModifyReturn,
+			minVersion:        "5.11",
 		},
 		{
 			name:              "AttachTraceRawTp",
 			attachTo:          "kfree_skb",
 			programType:       ebpf.Tracing,
 			programAttachType: ebpf.AttachTraceRawTp,
+			minVersion:        "5.11",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			testutils.SkipOnOldKernel(t, tt.minVersion, tt.name)
+
 			prog := mustLoadProgram(t, tt.programType, tt.programAttachType, tt.attachTo)
 
 			opts := TracingOptions{Program: prog, AttachType: tt.attachTypeOpt, Cookie: tt.cookie}

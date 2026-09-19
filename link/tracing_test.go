@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/cilium/ebpf"
+	"github.com/cilium/ebpf/features"
 	"github.com/cilium/ebpf/internal/testutils"
 )
 
@@ -68,9 +69,21 @@ func TestFentryFexit(t *testing.T) {
 	}
 	defer target.Close()
 
-	for _, name := range []string{"trace_on_entry", "trace_on_exit"} {
-		progSpec := spec.Programs[name]
-		t.Run(name, func(t *testing.T) {
+	tests := []struct {
+		name       string
+		attachType ebpf.AttachType
+	}{
+		{"trace_on_entry", ebpf.AttachNone},
+		{"trace_on_exit", ebpf.AttachNone},
+		{"trace_session", ebpf.AttachTraceFSession},
+	}
+	for _, test := range tests {
+		progSpec := spec.Programs[test.name]
+		t.Run(test.name, func(t *testing.T) {
+			if test.attachType == ebpf.AttachTraceFSession {
+				testutils.SkipIfNotSupported(t, features.HaveBPFLinkFSession())
+			}
+
 			progSpec.AttachTarget = target
 
 			prog, err := ebpf.NewProgram(progSpec)
@@ -83,7 +96,8 @@ func TestFentryFexit(t *testing.T) {
 				testutils.SkipOnOldKernel(t, "5.11", "BPF_LINK_TYPE_TRACING")
 
 				tracingLink, err := AttachTracing(TracingOptions{
-					Program: prog,
+					Program:    prog,
+					AttachType: test.attachType,
 				})
 				if err != nil {
 					t.Fatal("Can't attach tracing:", err)
@@ -134,6 +148,14 @@ func TestTracing(t *testing.T) {
 			programAttachType: ebpf.AttachTraceFExit,
 		},
 		{
+			name:              "AttachTraceFSession",
+			attachTo:          "inet_dgram_connect",
+			programType:       ebpf.Tracing,
+			programAttachType: ebpf.AttachTraceFSession,
+			attachTypeOpt:     ebpf.AttachTraceFSession,
+			cookie:            1,
+		},
+		{
 			name:              "AttachModifyReturn",
 			attachTo:          "bpf_modify_return_test",
 			programType:       ebpf.Tracing,
@@ -149,6 +171,10 @@ func TestTracing(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			if tt.programAttachType == ebpf.AttachTraceFSession {
+				testutils.SkipIfNotSupported(t, features.HaveBPFLinkFSession())
+			}
+
 			prog := mustLoadProgram(t, tt.programType, tt.programAttachType, tt.attachTo)
 
 			opts := TracingOptions{Program: prog, AttachType: tt.attachTypeOpt, Cookie: tt.cookie}

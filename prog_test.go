@@ -894,6 +894,10 @@ func TestProgramTargetsKernelModule(t *testing.T) {
 
 	ps.AttachTo = "bpf_testmod_test_read"
 	qt.Assert(t, qt.IsTrue(ps.targetsKernelModule()))
+
+	ps.Type = Tracing
+	ps.AttachType = AttachTraceFSession
+	qt.Assert(t, qt.IsTrue(ps.targetsKernelModule()))
 }
 
 func TestProgramLoadBoundToDevice(t *testing.T) {

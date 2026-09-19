@@ -326,6 +326,9 @@ const (
 	AttachCgroupUnixGetsockname      = AttachType(sys.BPF_CGROUP_UNIX_GETSOCKNAME)
 	AttachNetkitPrimary              = AttachType(sys.BPF_NETKIT_PRIMARY)
 	AttachNetkitPeer                 = AttachType(sys.BPF_NETKIT_PEER)
+	AttachTraceFEntryMulti           = AttachType(sys.BPF_TRACE_FENTRY_MULTI)
+	AttachTraceFExitMulti            = AttachType(sys.BPF_TRACE_FEXIT_MULTI)
+	AttachTraceFSessionMulti         = AttachType(sys.BPF_TRACE_FSESSION_MULTI)
 )
 
 // Attach types (Windows).

@@ -17,3 +17,7 @@ func TestHaveBPFLinkKprobeMulti(t *testing.T) {
 func TestHaveBPFLinkKprobeSession(t *testing.T) {
 	testutils.CheckFeatureTest(t, HaveBPFLinkKprobeSession)
 }
+
+func TestHaveBPFLinkTracingMulti(t *testing.T) {
+	testutils.CheckFeatureTest(t, HaveBPFLinkTracingMulti)
+}

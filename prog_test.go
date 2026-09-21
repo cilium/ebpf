@@ -281,7 +281,9 @@ func TestProgramVerifierOutputOnError(t *testing.T) {
 
 	switch {
 	case platform.IsLinux:
-		if !strings.Contains(ve.Error(), "R0 !read_ok") {
+		legacyErr := strings.Contains(ve.Error(), "R0 !read_ok")
+		modernErr := strings.Contains(ve.Error(), "R0 has never been initialized on this path")
+		if !legacyErr && !modernErr {
 			t.Logf("%+v", ve)
 			t.Error("Missing verifier log in error summary")
 		}

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"slices"
 	"strings"
 )
 
@@ -67,10 +68,23 @@ func (le *VerifierError) Error() string {
 		return b.String()
 	}
 
-	lines := log[n-1:]
-	if n >= 2 && includePreviousLine(log[n-1]) {
-		// Add one more line of context if it aids understanding the error.
-		lines = log[n-2:]
+	var lines []string
+	// Since v7.3, Redesign Verification Log (https://github.com/torvalds/linux/commit/ce7c9f6c599b640c1be288fd1af3289d1406d559)
+	// the verifier log contains a richer structure with human readable reasons for verification failures.
+	if reasonIndex := slices.Index(log, "Reason:"); reasonIndex != -1 {
+		lines = log[reasonIndex+1:]
+		reasonEndIndex := slices.Index(lines, "")
+		if reasonEndIndex == -1 {
+			reasonEndIndex = len(lines)
+		}
+
+		lines = lines[:reasonEndIndex]
+	} else {
+		lines = log[n-1:]
+		if n >= 2 && includePreviousLine(log[n-1]) {
+			// Add one more line of context if it aids understanding the error.
+			lines = log[n-2:]
+		}
 	}
 
 	for _, line := range lines {

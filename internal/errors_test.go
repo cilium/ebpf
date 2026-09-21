@@ -3,6 +3,8 @@ package internal
 import (
 	"errors"
 	"os"
+	"slices"
+	"strings"
 	"testing"
 
 	"github.com/go-quicktest/qt"
@@ -10,7 +12,8 @@ import (
 
 func TestVerifierErrorWhitespace(t *testing.T) {
 	b := []byte("unreachable insn 28")
-	b = append(b,
+	b = append(
+		b,
 		0xa,  // \n
 		0xd,  // \r
 		0x9,  // \t
@@ -64,6 +67,94 @@ func TestVerifierErrorSummary(t *testing.T) {
 	// Include symbol that doesn't match context type.
 	invalidCtx := readErrorFromFile(t, "testdata/invalid-ctx-access.log")
 	qt.Assert(t, qt.StringContains(invalidCtx.Error(), "func '__x64_sys_recvfrom' arg0 type FWD is not a struct: invalid bpf_context access off=0 size=8"))
+}
+
+func TestVerifierLogWithoutDiagnostics(t *testing.T) {
+	for _, log := range [][]string{
+		nil,
+		{"0: (95) exit", "R0 !read_ok"},
+	} {
+		qt.Assert(t, qt.DeepEquals(VerifierLogWithoutDiagnostics(log), log))
+	}
+
+	log := []string{"Verification failed: earlier", "R0 !read_ok", "", " \t", "Verification failed: latest", "Reason:"}
+	qt.Assert(t, qt.Equals(len(VerifierLogWithoutDiagnostics(log)), 0))
+	qt.Assert(t, qt.Equals(len(log), 6))
+
+	log = []string{"Verification failed: error"}
+	qt.Assert(t, qt.Equals(len(VerifierLogWithoutDiagnostics(log)), 0))
+
+	log = make([]string, 4096)
+	log[0] = "R0 !read_ok"
+	log[1] = "Verification failed: long diagnostics"
+	log[len(log)-1] = "Suggestion:"
+	qt.Assert(t, qt.DeepEquals(VerifierLogWithoutDiagnostics(log), log[:1]))
+
+	log[0], log[1] = log[1], ""
+	qt.Assert(t, qt.Equals(len(VerifierLogWithoutDiagnostics(log)), 0))
+
+	log[0] = ""
+	qt.Assert(t, qt.DeepEquals(VerifierLogWithoutDiagnostics(log), log))
+
+	log = make([]string, 4096)
+	log[len(log)-1] = "Verification failed: after blank lines"
+	qt.Assert(t, qt.DeepEquals(VerifierLogWithoutDiagnostics(log), log[:len(log)-2]))
+}
+
+func TestVerifierLogMultipleDiagnostics(t *testing.T) {
+	log := []string{
+		"Unreleased reference id=1 alloc_insn=1",
+		"",
+		"Verification failed: Resource Lifetime Safety: Unreleased resource",
+		"",
+		"Reason:",
+		"  Resource 1 was not released.",
+		"",
+		"Suggestion:",
+		"  Release or transfer ownership",
+		"  before exiting.",
+		"",
+		"Unreleased reference id=2 alloc_insn=2",
+		"",
+		"Verification failed: Resource Lifetime Safety: Unreleased resource",
+		"",
+		"Suggestion:",
+		"  Release resource 2.",
+		"",
+		"processed 10 insns",
+	}
+	original := slices.Clone(log)
+	qt.Assert(t, qt.DeepEquals(VerifierLogWithoutDiagnostics(log), log[:1]))
+	qt.Assert(t, qt.DeepEquals(log, original))
+
+	err := ErrorWithLog("test", errors.New("error"), []byte(strings.Join(log, "\n")))
+	qt.Assert(t, qt.StringContains(err.Error(), "Unreleased reference id=1 alloc_insn=1"))
+	qt.Assert(t, qt.Not(qt.StringContains(err.Error(), "Verification failed:")))
+	qt.Assert(t, qt.StringContains(fmt.Sprintf("%+v", err), "Suggestion:\n\t  Release resource 2."))
+	qt.Assert(t, qt.StringContains(fmt.Sprintf("%+v", err), "Unreleased reference id=2 alloc_insn=2"))
+}
+
+func TestVerifierLogDiagnosticsPrecheck(t *testing.T) {
+	log := make([]string, 20)
+	for i := range log {
+		log[i] = "  diagnostic detail"
+	}
+	log[0] = "R0 !read_ok"
+	log[1] = "Verification failed: error"
+	qt.Assert(t, qt.DeepEquals(VerifierLogWithoutDiagnostics(log), log))
+
+	log[9] = "Suggestion:"
+	qt.Assert(t, qt.DeepEquals(VerifierLogWithoutDiagnostics(log), log))
+
+	log[9], log[10] = "", "Suggestion:"
+	qt.Assert(t, qt.DeepEquals(VerifierLogWithoutDiagnostics(log), log[:1]))
+
+	log[1] = ""
+	qt.Assert(t, qt.DeepEquals(VerifierLogWithoutDiagnostics(log), log))
+
+	log[10] = "Verification failed: at precheck boundary"
+	log[9] = "R0 !read_ok"
+	qt.Assert(t, qt.DeepEquals(VerifierLogWithoutDiagnostics(log), log[:10]))
 }
 
 func readErrorFromFile(tb testing.TB, file string) *VerifierError {

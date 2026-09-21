@@ -86,6 +86,39 @@ func (le *VerifierError) Error() string {
 	return b.String()
 }
 
+// VerifierLogWithoutDiagnostics returns the log preceding the first diagnostic
+// block without modifying log. A header or Suggestion section in the last 10
+// lines enables searching the entire log. Logs without either marker are left
+// unchanged.
+func VerifierLogWithoutDiagnostics(log []string) []string {
+	first := max(len(log)-10, 0)
+	found, index := false, -1
+	for i := len(log) - 1; i >= first; i-- {
+		if strings.HasPrefix(log[i], "Suggestion:") {
+			first = 0
+		}
+		if strings.HasPrefix(log[i], "Verification failed:") {
+			found, index = true, i
+			break
+		}
+	}
+	if !found {
+		return log
+	}
+
+	for i := 0; i <= index; i++ {
+		if !strings.HasPrefix(log[i], "Verification failed:") {
+			continue
+		}
+
+		if i > 0 && strings.TrimSpace(log[i-1]) == "" {
+			i--
+		}
+		return log[:i]
+	}
+	return log
+}
+
 // includePreviousLine returns true if the given line likely is better
 // understood with additional context from the preceding line.
 func includePreviousLine(line string) bool {

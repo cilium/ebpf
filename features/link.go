@@ -155,3 +155,45 @@ var haveBPFLinkKprobeSession = internal.NewFeatureTest("bpf_link_kprobe_session"
 
 	return nil
 }, "6.10")
+
+// HaveBPFLinkFSession probes the running kernel for fsession tracing link support.
+//
+// See the package documentation for the meaning of the error return value.
+func HaveBPFLinkFSession() error {
+	return haveBPFLinkFSession()
+}
+
+var haveBPFLinkFSession = internal.NewFeatureTest("bpf_link_fsession", func() error {
+	prog, err := ebpf.NewProgram(&ebpf.ProgramSpec{
+		Name:       "probe_fsession",
+		Type:       ebpf.Tracing,
+		AttachType: ebpf.AttachTraceFSession,
+		AttachTo:   "inet_dgram_connect",
+		License:    "MIT",
+		Instructions: asm.Instructions{
+			asm.Mov.Imm(asm.R0, 0),
+			asm.Return(),
+		},
+	})
+	if errors.Is(err, unix.EINVAL) || errors.Is(err, unix.EOPNOTSUPP) || errors.Is(err, sys.ENOTSUPP) {
+		return ebpf.ErrNotSupported
+	}
+	if err != nil {
+		return err
+	}
+	defer prog.Close()
+
+	fd, err := sys.LinkCreateTracing(&sys.LinkCreateTracingAttr{
+		ProgFd:     uint32(prog.FD()),
+		AttachType: sys.BPF_TRACE_FSESSION,
+	})
+	if errors.Is(err, unix.EINVAL) || errors.Is(err, unix.EOPNOTSUPP) || errors.Is(err, sys.ENOTSUPP) {
+		return ebpf.ErrNotSupported
+	}
+	if err != nil {
+		return err
+	}
+	fd.Close()
+
+	return nil
+}, "7.0")

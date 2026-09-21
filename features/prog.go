@@ -312,6 +312,7 @@ func haveProgramHelper(pt ebpf.ProgramType, helper asm.BuiltinFunc) error {
 }
 
 func logContainsAll(log []string, needles ...string) bool {
+	log = internal.VerifierLogWithoutDiagnostics(log)
 	first := max(len(log)-5, 0) // Check last 5 lines.
 	return slices.ContainsFunc(log[first:], func(line string) bool {
 		for _, needle := range needles {

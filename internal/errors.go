@@ -53,7 +53,7 @@ func (le *VerifierError) Unwrap() error {
 }
 
 func (le *VerifierError) Error() string {
-	log := le.Log
+	log := VerifierLogWithoutDiagnostics(le.Log)
 	if n := len(log); n > 0 && strings.HasPrefix(log[n-1], "processed ") {
 		// Get rid of "processed 39 insns (limit 1000000) ..." from summary.
 		log = log[:n-1]

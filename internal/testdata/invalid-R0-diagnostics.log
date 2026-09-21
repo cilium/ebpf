@@ -1,0 +1,22 @@
+0: R1=ctx() R10=fp0
+0: (95) exit
+R0 !read_ok
+
+Verification failed: Register Type Safety: Unreadable register
+
+Reason:
+  R0 has never been initialized on this path, so the verifier cannot use it as an input.
+
+At:
+  insn 0
+       | ^-- error: R0 is not readable
+  Instruction context:
+  >>> 0 | (95) exit
+
+Causal path:
+  no retained diagnostic events on this path
+
+Suggestion:
+  Initialize R0 on every path before this instruction.
+
+processed 1 insns (limit 1000000) max_states_per_insn 0 total_states 0 peak_states 0 mark_read 0

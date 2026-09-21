@@ -2,6 +2,7 @@ package internal
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"slices"
 	"strings"
@@ -63,6 +64,11 @@ func TestVerifierErrorSummary(t *testing.T) {
 	// Include instruction that caused invalid register access.
 	invalidR0 := readErrorFromFile(t, "testdata/invalid-R0.log")
 	qt.Assert(t, qt.StringContains(invalidR0.Error(), "0: (95) exit: R0 !read_ok"))
+
+	invalidR0Diagnostics := readErrorFromFile(t, "testdata/invalid-R0-diagnostics.log")
+	qt.Assert(t, qt.Equals(invalidR0Diagnostics.Error(), "file: error: 0: (95) exit: R0 !read_ok (20 line(s) omitted)"))
+	qt.Assert(t, qt.StringContains(fmt.Sprintf("%+v", invalidR0Diagnostics), "Verification failed: Register Type Safety: Unreadable register"))
+	qt.Assert(t, qt.StringContains(fmt.Sprintf("%+v", invalidR0Diagnostics), "Initialize R0 on every path before this instruction."))
 
 	// Include symbol that doesn't match context type.
 	invalidCtx := readErrorFromFile(t, "testdata/invalid-ctx-access.log")

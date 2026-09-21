@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"strings"
 	"testing"
 
 	"github.com/cilium/ebpf"
@@ -80,9 +81,7 @@ func TestHaveProgramHelper(t *testing.T) {
 			if !errors.Is(err, tc.expected) {
 				t.Fatalf("%s/%s: %v", tc.prog.String(), tc.helper.String(), err)
 			}
-
 		})
-
 	}
 }
 
@@ -95,5 +94,37 @@ func TestHelperProbeNotImplemented(t *testing.T) {
 				t.Fatal("Expected an error")
 			}
 		})
+	}
+}
+
+func TestLogContainsAll(t *testing.T) {
+	for _, message := range []string{
+		"invalid func unknown#999",
+		"program of this type cannot use helper bpf_skb_vlan_push#18",
+		"unknown func 18",
+	} {
+		t.Run(message, func(t *testing.T) {
+			if !logContainsAll([]string{message}, strings.Fields(message)...) {
+				t.Fatal("Missing helper error without extended diagnostics")
+			}
+			log := append([]string{message, "", "Verification failed: helper error"}, make([]string, 10)...)
+			log = append(log, "Suggestion:", "  Use a helper supported by this program type.")
+			if !logContainsAll(log, strings.Fields(message)...) {
+				t.Fatal("Missing helper error before extended diagnostics")
+			}
+		})
+	}
+
+	if logContainsAll([]string{"invalid func", "unknown#999"}, "invalid func", "#999") {
+		t.Fatal("Matched needles on different lines")
+	}
+	if logContainsAll(nil, "invalid func") {
+		t.Fatal("Matched an empty log")
+	}
+	if logContainsAll(append([]string{"invalid func"}, make([]string, 5)...), "invalid func") {
+		t.Fatal("Searched beyond the last five lines without diagnostics")
+	}
+	if logContainsAll([]string{"Verification failed: invalid func"}, "invalid func") {
+		t.Fatal("Matched extended diagnostics")
 	}
 }

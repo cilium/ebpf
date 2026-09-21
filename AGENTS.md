@@ -79,6 +79,14 @@ Note that commit messages are not documentation and not durable. Context gets
 lost when code is moved. If a hidden quirk, complexity or trap needs to be
 documented for posterity, a code comment is more appropriate.
 
+Commits can _never_ be attributed to models because they aren't humans. Commit
+authorship and attribution is a legal matter. The human responsible for driving
+the model is always 100% responsible for the contents of each commit. If a
+commit was created by a model end-to-end, meaning generating its contents,
+defining its scope and running `git commit`, the name and generation of the
+model can optionally be included in the commit, but never as e.g. a
+Co-authored-by or similar trailer.
+
 ## Code Style
 
 When generating code, keep the following topics in mind:
@@ -109,3 +117,28 @@ When generating code, keep the following topics in mind:
 - Always do refactoring in separate commits.
 - Comments should focus on the 'why'. The more complex/tricky/quirky a section
   of code is, the more extensively it should be commented.
+
+### Testing
+
+Keep the following in mind when writing (unit) tests:
+
+- Apply the above Code Style guidelines to test code as well
+- Test code is production code and should be as reliable to uphold dev exp
+- Use test helpers to extract common setup steps from individual tests
+- Test code itself should never mimic the logic of the code under test
+- Testing the outcome of an operation is generally sufficient, avoid asserting
+  internal state unless crucial to the type of test
+- Internal state is internal and subject to change; pinning states down to
+  specific values makes driving changes hard and generates a lot of churn
+- Take a minimalist approach to writing tests, e.g. focus on checking 'X or Y
+  happened' vs. 'X or Y happened and all contents are exactly as expected'
+- Craft inputs in such a way that makes checking results straightforward/short,
+  easy/fast to read and understand by humans
+- Prefer extending existing tests where feasible instead of creating all-new
+  test cases
+- Avoid large structural changes to test cases unless explicitly instructed;
+  split those changes off into separate commits when they do arise
+- Prefer to integrate test cases over bytecode into real .c files in testdata,
+  only occasionally dropping down to hand-crafting bytecode snippets using
+  package asm, since those don't evolve with the compiler versions targeted by
+  CI

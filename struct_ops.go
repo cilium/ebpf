@@ -99,7 +99,7 @@ func structOpsFindTarget(userType *btf.Struct, cache *btf.Cache) (vType *btf.Str
 	vTypeName := structOpsValuePrefix + userType.Name
 
 	target := btf.Type((*btf.Struct)(nil))
-	spec, module, err := findTargetInKernel(vTypeName, &target, cache)
+	spec, module, err := findTargetInKernel(vTypeName, &target, cache, nil)
 	if errors.Is(err, btf.ErrNotFound) {
 		return nil, 0, nil, fmt.Errorf("%q doesn't exist in kernel: %w", vTypeName, ErrNotSupported)
 	}

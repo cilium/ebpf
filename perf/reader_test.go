@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"math"
 	"os"
+	"runtime"
 	"syscall"
 	"testing"
 	"time"
@@ -18,13 +19,12 @@ import (
 	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/testutils"
 	"github.com/cilium/ebpf/internal/testutils/testmain"
+	"github.com/cilium/ebpf/internal/unix"
 
 	"github.com/go-quicktest/qt"
 )
 
-var (
-	readTimeout = 250 * time.Millisecond
-)
+var readTimeout = 250 * time.Millisecond
 
 func TestMain(m *testing.M) {
 	testmain.Run(m)
@@ -559,6 +559,72 @@ func TestPause(t *testing.T) {
 	err = rd.Resume()
 	qt.Assert(t, qt.Not(qt.Equals(err, ErrClosed)), qt.Commentf("returns unwrapped ErrClosed"))
 	qt.Assert(t, qt.ErrorIs(err, ErrClosed), qt.Commentf("doesn't wrap ErrClosed"))
+}
+
+func TestPauseResumeSimulatedOfflineCPU(t *testing.T) {
+	events := perfEventArray(t)
+
+	rd, err := NewReader(events, os.Getpagesize())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rd.Close()
+
+	// Only run this test if we have at least 3 rings so we can remove the middle one
+	// to simulate CPUs 0, 1(offline), 2
+	rd.pauseMu.Lock()
+	if len(rd.rings) < 3 {
+		rd.pauseMu.Unlock()
+		t.Skip("need at least 3 CPUs to simulate offline CPU 1")
+	}
+
+	// Get CPU ID of the CPU after the simulated offline CPU
+	cpu2 := rd.rings[2].cpu
+
+	// Simulate offline CPU 1 by removing the middle ring/eventFd
+	rd.rings[1].Close()
+	rd.eventFds[1].Close()
+
+	rd.rings = append(rd.rings[:1], rd.rings[2:]...)
+	rd.eventFds = append(rd.eventFds[:1], rd.eventFds[2:]...)
+
+	rd.pauseMu.Unlock()
+
+	err = rd.Pause()
+	qt.Assert(t, qt.IsNil(err), qt.Commentf("Pause() should succeed with non-contiguous CPUs"))
+
+	err = rd.Resume()
+	qt.Assert(t, qt.IsNil(err), qt.Commentf("Resume() should succeed with non-contiguous CPUs"))
+
+	// Lock goroutine to OS thread first, then set CPU affinity
+	runtime.LockOSThread()
+	t.Cleanup(func() { runtime.UnlockOSThread() })
+
+	originalSet := unix.CPUSet{}
+	if err := unix.SchedGetaffinity(0, &originalSet); err != nil {
+		t.Skipf("failed to get CPU affinity: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = unix.SchedSetaffinity(0, &originalSet)
+	})
+
+	// Set CPU affinity to cpu2 specifically for this thread
+	set := unix.CPUSet{}
+	set.Set(cpu2)
+	if err := unix.SchedSetaffinity(0, &set); err != nil {
+		t.Skipf("failed to lock to CPU %d: %v", cpu2, err)
+	}
+
+	prog := outputSamplesProg(t, events, 5)
+	ret, _, err := prog.Test(internal.EmptyBPFContext)
+	testutils.SkipIfNotSupported(t, err)
+	qt.Assert(t, qt.IsNil(err))
+	qt.Assert(t, qt.Equals(ret, 0))
+
+	rec, err := rd.Read()
+	qt.Assert(t, qt.IsNil(err), qt.Commentf("Read should succeed"))
+
+	qt.Assert(t, qt.Equals(rec.CPU, cpu2), qt.Commentf("Sample must be from CPU %d (after removing CPU 1), got %d", cpu2, rec.CPU))
 }
 
 func TestPerfReaderWakeupEvents(t *testing.T) {

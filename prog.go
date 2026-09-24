@@ -1196,7 +1196,7 @@ func findProgramTargetInKernel(name string, progType ProgramType, attachType Att
 		typeName = name
 		featureName = "struct_ops " + name
 		target = (*btf.Struct)(nil)
-	case match{LSM, AttachLSMMac}:
+	case match{LSM, AttachLSMMac}, match{LSM, AttachLSMCgroup}:
 		typeName = "bpf_lsm_" + name
 		featureName = name + " LSM hook"
 		target = (*btf.Func)(nil)

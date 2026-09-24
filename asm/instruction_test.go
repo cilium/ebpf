@@ -477,3 +477,91 @@ func TestStoreImm(t *testing.T) {
 	qt.Assert(t, qt.Equals(StoreImm(R0, 1, math.MaxInt32+1, DWord).OpCode, InvalidOpCode))
 	qt.Assert(t, qt.Equals(StoreImm(R0, 1, math.MinInt32-1, DWord).OpCode, InvalidOpCode))
 }
+
+func TestInstructionMarshalALUOffset(t *testing.T) {
+	tests := []struct {
+		name      string
+		ins       Instruction
+		wantBytes []byte
+		wantErr   bool
+	}{
+		{
+			name: "plain Mov (keep Offset=0)",
+			ins: Instruction{
+				OpCode:   Mov.Op(RegSource),
+				Dst:      R1,
+				Src:      R2,
+				Offset:   0,
+				Constant: 0,
+			},
+			wantBytes: []byte{0xbf, 0x21, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},
+			wantErr:   false,
+		},
+		{
+			name: "bpf_addr_space_cast (keep Offset=1 which is a marker for bpf_addr_space_cast)",
+			ins: Instruction{
+				OpCode:   Mov.Op(RegSource),
+				Dst:      R1,
+				Src:      R2,
+				Offset:   1,          // BPF_ADDR_SPACE_CAST
+				Constant: 0x00010002, // from_as=1, to_as=2
+			},
+			wantBytes: []byte{0xbf, 0x21, 0x01, 0x00, 0x02, 0x00, 0x01, 0x00},
+			wantErr:   false,
+		},
+		{
+			name: "extended ALU MovSX8 (set newOffset=8)",
+			ins: Instruction{
+				OpCode:   MovSX8.Op(RegSource),
+				Dst:      R1,
+				Src:      R2,
+				Offset:   0,
+				Constant: 0,
+			},
+			wantBytes: []byte{byte(MovSX8.Op(RegSource)), 0x21, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00},
+			wantErr:   false,
+		},
+		{
+			name: "extended ALU SDiv (set newOffset=1)",
+			ins: Instruction{
+				OpCode:   SDiv.Op(RegSource),
+				Dst:      R1,
+				Src:      R2,
+				Offset:   0,
+				Constant: 0,
+			},
+			wantBytes: []byte{byte(SDiv.Op(RegSource)), 0x21, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00},
+			wantErr:   false,
+		},
+		{
+			name: "An error will occur if the caller has already set the offset for the extended ALU.",
+			ins: Instruction{
+				OpCode:   MovSX8.Op(RegSource),
+				Dst:      R1,
+				Src:      R2,
+				Offset:   5, // invalid offset
+				Constant: 0,
+			},
+			wantBytes: nil,
+			wantErr:   true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var buf bytes.Buffer
+			_, err := tt.ins.Marshal(&buf, binary.LittleEndian)
+
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("Marshal() error = %v, wantErr %v", err, tt.wantErr)
+			}
+
+			if !tt.wantErr {
+				got := buf.Bytes()
+				if !bytes.Equal(got, tt.wantBytes) {
+					t.Errorf("Marshal() bytes mismatch:\n got:  %x\n want: %x", got, tt.wantBytes)
+				}
+			}
+		})
+	}
+}

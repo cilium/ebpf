@@ -718,6 +718,11 @@ func TestProgramAttachToKernel(t *testing.T) {
 			attachType:  AttachLSMMac,
 		},
 		{
+			attachTo:    "task_getpgid",
+			programType: LSM,
+			attachType:  AttachLSMCgroup,
+		},
+		{
 			attachTo:    "inet_dgram_connect",
 			programType: Tracing,
 			attachType:  AttachTraceFEntry,
@@ -763,6 +768,9 @@ func TestProgramAttachToKernel(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			if strings.HasPrefix(test.attachTo, "bpf_testmod_") {
 				requireTestmod(t)
+			}
+			if test.attachType == AttachLSMCgroup {
+				testutils.SkipOnOldKernel(t, "6.0", "BPF_LSM_CGROUP")
 			}
 
 			_ = mustNewProgram(t, &ProgramSpec{

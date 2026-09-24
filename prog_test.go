@@ -712,11 +712,18 @@ func TestProgramAttachToKernel(t *testing.T) {
 		programType ProgramType
 		attachType  AttachType
 		flags       uint32
+		minVersion  string
 	}{
 		{
 			attachTo:    "task_getpgid",
 			programType: LSM,
 			attachType:  AttachLSMMac,
+		},
+		{
+			attachTo:    "task_getpgid",
+			programType: LSM,
+			attachType:  AttachLSMCgroup,
+			minVersion:  "6.0",
 		},
 		{
 			attachTo:    "inet_dgram_connect",
@@ -764,6 +771,10 @@ func TestProgramAttachToKernel(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			if strings.HasPrefix(test.attachTo, "bpf_testmod_") {
 				requireTestmod(t)
+			}
+
+			if test.minVersion != "" {
+				testutils.SkipOnOldKernel(t, test.minVersion, fmt.Sprintf("%s/%s", test.programType, test.attachType))
 			}
 
 			_ = mustNewProgram(t, &ProgramSpec{

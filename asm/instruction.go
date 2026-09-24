@@ -192,7 +192,13 @@ func (ins Instruction) Marshal(w io.Writer, bo binary.ByteOrder) (uint64, error)
 		if newOffset != 0 && ins.Offset != 0 {
 			return 0, fmt.Errorf("extended ALU opcodes should have an .Offset of 0: %s", ins)
 		}
-		ins.Offset = newOffset
+		// unconditionally wipes Offset to 0 for plain Mov,
+		// which silently corrupts BPF's `bpf_addr_space_cast` (opcode 0xbf|ALU64|X + Offset=1 + imm=1)
+		// into an invalid `MOV r_dst = r_src, off=0, imm=1` that the
+		// verifier rejects with "BPF_MOV uses reserved fields".
+		if newOffset != 0 {
+			ins.Offset = newOffset
+		}
 	} else if atomic := ins.OpCode.AtomicOp(); atomic != InvalidAtomic {
 		ins.OpCode = ins.OpCode &^ atomicMask
 		ins.Constant = int64(atomic >> 8)

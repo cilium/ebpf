@@ -1061,12 +1061,20 @@ func TestArena(t *testing.T) {
 			"arena": {
 				Name:       "arena",
 				Type:       Arena,
-				MaxEntries: 100,
+				MaxEntries: 1,
 				Flags:      sys.BPF_F_MMAPABLE,
 				MapExtra:   1 << 44,
 			},
 		},
-		Programs:  map[string]*ProgramSpec{},
+		Programs: map[string]*ProgramSpec{
+			"test_arena_cast": {
+				Name:         "test_arena_cast",
+				Type:         Syscall,
+				SectionName:  "syscall",
+				Flags:        sys.BPF_F_SLEEPABLE,
+				Instructions: asm.Instructions{},
+			},
+		},
 		Variables: map[string]*VariableSpec{},
 	}
 	qt.Assert(t, qt.CmpEquals(coll, want, csCmpOpts))

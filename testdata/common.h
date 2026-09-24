@@ -26,6 +26,7 @@ enum libbpf_tristate {
 #define __ksym __attribute__((section(".ksyms")))
 #define __noinline __attribute__((noinline))
 #define __weak __attribute__((weak))
+#define __arena __attribute__((address_space(1)))
 
 #define __hidden __attribute__((visibility("hidden")))
 

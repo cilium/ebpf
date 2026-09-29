@@ -28,24 +28,21 @@ const (
 	BPF_FIB_LKUP_RET_SUCCESS                   = 0
 	BPF_FIB_LKUP_RET_UNREACHABLE               = 2
 	BPF_FIB_LKUP_RET_UNSUPP_LWT                = 6
+	BPF_FIB_LKUP_RET_VLAN_FAILURE              = 10
 	BPF_FIB_LOOKUP_DIRECT                      = 1
 	BPF_FIB_LOOKUP_MARK                        = 32
 	BPF_FIB_LOOKUP_OUTPUT                      = 2
 	BPF_FIB_LOOKUP_SKIP_NEIGH                  = 4
 	BPF_FIB_LOOKUP_SRC                         = 16
 	BPF_FIB_LOOKUP_TBID                        = 8
+	BPF_FIB_LOOKUP_VLAN                        = 64
+	BPF_FIB_LOOKUP_VLAN_INPUT                  = 128
 	BPF_FLOW_DISSECTOR_F_PARSE_1ST_FRAG        = 1
 	BPF_FLOW_DISSECTOR_F_STOP_AT_ENCAP         = 4
 	BPF_FLOW_DISSECTOR_F_STOP_AT_FLOW_LABEL    = 2
-	BPF_F_ADJ_ROOM_DECAP_L3_IPV4               = 128
-	BPF_F_ADJ_ROOM_DECAP_L3_IPV6               = 256
-	BPF_F_ADJ_ROOM_ENCAP_L2_ETH                = 64
-	BPF_F_ADJ_ROOM_ENCAP_L3_IPV4               = 2
-	BPF_F_ADJ_ROOM_ENCAP_L3_IPV6               = 4
-	BPF_F_ADJ_ROOM_ENCAP_L4_GRE                = 8
-	BPF_F_ADJ_ROOM_ENCAP_L4_UDP                = 16
-	BPF_F_ADJ_ROOM_FIXED_GSO                   = 1
-	BPF_F_ADJ_ROOM_NO_CSUM_RESET               = 32
+	BPF_FS_XATTR_SECURITY                      = 1
+	BPF_FS_XATTR_TRUSTED                       = 2
+	BPF_FS_XATTR_UNSPEC                        = 0
 	BPF_F_ALL_CPUS                             = 16
 	BPF_F_BPRM_SECUREEXEC                      = 1
 	BPF_F_BROADCAST                            = 8
@@ -55,6 +52,7 @@ const (
 	BPF_F_CURRENT_CPU                          = 4294967295
 	BPF_F_CURRENT_NETNS                        = 18446744073709551615
 	BPF_F_DONT_FRAGMENT                        = 4
+	BPF_F_EGRESS                               = 2
 	BPF_F_EXCLUDE_INGRESS                      = 16
 	BPF_F_FAST_STACK_CMP                       = 512
 	BPF_F_GET_BRANCH_RECORDS_SIZE              = 1
@@ -96,6 +94,7 @@ const (
 	BPF_F_TOKEN_FD                             = 65536
 	BPF_F_TUNINFO_FLAGS                        = 16
 	BPF_F_TUNINFO_IPV6                         = 1
+	BPF_F_UPROBE_MULTI_PATH_FD                 = 2
 	BPF_F_UPROBE_MULTI_RETURN                  = 1
 	BPF_F_USER_BUILD_ID                        = 2048
 	BPF_F_USER_STACK                           = 256
@@ -260,7 +259,10 @@ const (
 	BPF_TRACE_KPROBE_SESSION           AttachType = 56
 	BPF_TRACE_UPROBE_SESSION           AttachType = 57
 	BPF_TRACE_FSESSION                 AttachType = 58
-	__MAX_BPF_ATTACH_TYPE              AttachType = 59
+	BPF_TRACE_FENTRY_MULTI             AttachType = 59
+	BPF_TRACE_FEXIT_MULTI              AttachType = 60
+	BPF_TRACE_FSESSION_MULTI           AttachType = 61
+	__MAX_BPF_ATTACH_TYPE              AttachType = 62
 )
 
 type Cmd uint32
@@ -307,6 +309,7 @@ const (
 	BPF_PROG_STREAM_READ_BY_FD      Cmd = 37
 	BPF_PROG_ASSOC_STRUCT_OPS       Cmd = 38
 	__MAX_BPF_CMD                   Cmd = 39
+	BPF_COMMON_ATTRS                Cmd = 65536
 )
 
 type FunctionId uint32
@@ -552,7 +555,8 @@ const (
 	BPF_LINK_TYPE_UPROBE_MULTI   LinkType = 12
 	BPF_LINK_TYPE_NETKIT         LinkType = 13
 	BPF_LINK_TYPE_SOCKMAP        LinkType = 14
-	__MAX_BPF_LINK_TYPE          LinkType = 15
+	BPF_LINK_TYPE_TRACING_MULTI  LinkType = 15
+	__MAX_BPF_LINK_TYPE          LinkType = 16
 )
 
 type MapType uint32
@@ -595,7 +599,8 @@ const (
 	BPF_MAP_TYPE_CGRP_STORAGE                     MapType = 32
 	BPF_MAP_TYPE_ARENA                            MapType = 33
 	BPF_MAP_TYPE_INSN_ARRAY                       MapType = 34
-	__MAX_BPF_MAP_TYPE                            MapType = 35
+	BPF_MAP_TYPE_RHASH                            MapType = 35
+	__MAX_BPF_MAP_TYPE                            MapType = 36
 )
 
 type NetfilterInetHook uint32
@@ -1108,7 +1113,7 @@ type LinkCreateUprobeMultiAttr struct {
 	Count            uint32
 	UprobeMultiFlags uint32
 	Pid              uint32
-	_                [4]byte
+	PathFd           uint32
 }
 
 func LinkCreateUprobeMulti(attr *LinkCreateUprobeMultiAttr) (*FD, error) {

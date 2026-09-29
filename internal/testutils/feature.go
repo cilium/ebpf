@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"runtime"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -137,26 +138,26 @@ func IsVersionLessThan(tb testing.TB, minVersions ...string) bool {
 	return isPlatformVersionLessThan(tb, minv, platformVersion(tb))
 }
 
+// isPlatformVersionLessThan reports whether the runtime version runv is less
+// than the minimum version minv required by the calling test.
+//
+// Fails the test if it would never execute on CI at all: when the
+// CI_MAX_RUNTIME env var is true, runv is the newest runtime available on CI,
+// and requiring a version beyond it means the test is dead code.
 func isPlatformVersionLessThan(tb testing.TB, minv, runv internal.Version) bool {
 	tb.Helper()
 
-	key := "CI_MAX_KERNEL_VERSION"
-	if platform.IsWindows {
-		key = "CI_MAX_EFW_VERSION"
+	if !runv.Less(minv) {
+		return false
 	}
 
-	if max := os.Getenv(key); max != "" {
-		maxv, err := internal.NewVersion(max)
-		if err != nil {
-			tb.Fatalf("Invalid version %q in %s: %s", max, key, err)
-		}
-
-		if maxv.Less(minv) {
-			tb.Fatalf("Test for %s will never execute on CI since %s is the most recent runtime", minv, maxv)
-		}
+	// The leg running the newest runtime is the authority on dead tests:
+	// a version-gated skip there means the test can never execute on CI.
+	if max, _ := strconv.ParseBool(os.Getenv("CI_MAX_RUNTIME")); max {
+		tb.Fatalf("Test for %s will never execute on CI since the newest runtime is %s", minv, runv)
 	}
 
-	return runv.Less(minv)
+	return true
 }
 
 // ignoreVersionCheck checks whether to omit the version check for a test.

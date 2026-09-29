@@ -7,7 +7,6 @@ on:
 
 env:
   TMPDIR: /tmp
-  CI_MAX_KERNEL_VERSION: '7.1'
   CI_MAX_EFW_VERSION: '1.0.0-rc2'
   CI_MIN_CLANG_VERSION: '13'
   go_version: '~1.26'
@@ -21,6 +20,15 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  matrix:
+    name: "Get ci-kernels test matrix"
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.matrix.outputs.matrix }}
+    steps:
+    - id: matrix
+      uses: cilium/ci-kernels/matrix@v7.3.202609291336
+
   build-and-lint:
     name: Build and Lint
     runs-on: ubuntu-22.04
@@ -171,7 +179,7 @@ jobs:
 
       - run: sudo chmod 0666 /dev/kvm
 
-      - name: Test
+      - name: Test with selftests
         env:
           GOTRACEBACK: crash
           CGO_ENABLED: 1 # CGo is required by `-race`
@@ -233,19 +241,17 @@ jobs:
   linux-test:
     name: Run tests (Linux)
     runs-on: ubuntu-latest
-    needs: build-and-lint
+    needs:
+      - build-and-lint
+      - matrix
     timeout-minutes: 15
     strategy:
       matrix:
-        tag:
-          - "mainline"
-          - "stable"
-          - "6.12"
-          - "6.6"
-          - "6.1"
-          - "5.15"
-          - "5.10"
-          - "5.4"
+        include: ${{ fromJSON(needs.matrix.outputs.matrix) }}
+    env:
+      # The mainline leg runs the newest kernel CI will ever see, making it
+      # the authority for detecting dead version-gated tests.
+      CI_MAX_KERNEL_VERSION: ${{ matrix.channel == 'mainline' && matrix.version || '' }}
     steps:
       - uses: actions/checkout@v7
 
@@ -263,14 +269,14 @@ jobs:
 
       - run: sudo chmod 0666 /dev/kvm
 
-      - name: Test
-        run: gotestsum --raw-command --ignore-non-json-output-lines --junitfile junit.xml -- vimto -kernel :${{ matrix.tag }} -- go test -short -count 1 -json ./...
+      - name: Test without selftests
+        run: gotestsum --raw-command --ignore-non-json-output-lines --junitfile junit.xml -- vimto -kernel :${{ matrix.version }} -- go test -short -count 1 -json ./...
 
       - name: Upload Test Results
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: Test Results (linux ${{ matrix.tag }})
+          name: Test Results (linux ${{ matrix.version }})
           path: junit.xml
 
   linux-benchmark:

@@ -42,4 +42,5 @@ const (
 	WindowsFnPerfEventOutput            = BuiltinFunc(platform.WindowsTag | 32)
 	WindowsFnGetCurrentProcessStartKey  = BuiltinFunc(platform.WindowsTag | 33)
 	WindowsFnGetCurrentThreadCreateTime = BuiltinFunc(platform.WindowsTag | 34)
+	WindowsFnRedirectMap                = BuiltinFunc(platform.WindowsTag | 35)
 )

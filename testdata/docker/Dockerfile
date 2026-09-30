@@ -8,14 +8,19 @@ COPY llvm.list /etc/apt/sources.list.d
 
 RUN apt-get update && \
     apt-get -y --no-install-recommends install \
-    make git gawk \
+    make git gawk jq \
     libbpf-dev \
     bpftool \
-    clang-format \
     clang-14 llvm-14 \
     clang-17 llvm-17 \
-    clang-22 llvm-22 && \
+    clang-22 llvm-22 \
+    clang-format-22 && \
     rm -rf /var/lib/apt/lists/*
+
+# LLVM's 'clang-format' package now has a floating dependency on whatever the
+# most recent clang-format-* package is, which breaks the build if that repo is
+# not in llvm.list. Opt for a manual symlink instead.
+RUN ln -s /bin/clang-format-22 /bin/clang-format
 
 # Examples use `#include <asm/types.h>` which Debian carries in asm-generic/ instead.
 RUN ln -s /usr/include/asm-generic /usr/include/asm

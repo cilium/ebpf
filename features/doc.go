@@ -7,13 +7,9 @@
 //	errors.Is(err, ebpf.ErrNotSupported): The feature is not available.
 //	err != nil: Any errors encountered during probe execution, wrapped.
 //
-// Note that the latter case may include false negatives, and that resource
-// creation may succeed despite an error being returned. For example, some
-// map and program types cannot reliably be probed and will return an
-// inconclusive error.
+// A non `ebpf.ErrNotSupported` error indicates an unexpected failure and is inconclusive.
 //
-// As a rule, only `nil` and `ebpf.ErrNotSupported` are conclusive.
-//
-// Probe results are cached by the library and persist throughout any changes
-// to the process' environment, like capability changes.
+// Kernel BTF is used to determine the availability of certain BPF features. A probe
+// may return a positive result, yet the feature might still be unavailable due to kernel
+// configuration or security constraints.
 package features

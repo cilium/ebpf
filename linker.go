@@ -14,6 +14,7 @@ import (
 	"github.com/cilium/ebpf/asm"
 	"github.com/cilium/ebpf/btf"
 	"github.com/cilium/ebpf/internal"
+	"github.com/cilium/ebpf/internal/find"
 	"github.com/cilium/ebpf/internal/kallsyms"
 	"github.com/cilium/ebpf/internal/platform"
 )
@@ -305,10 +306,10 @@ fixups:
 			return nil, fmt.Errorf("kfuncMetaKey doesn't contain kfuncMeta")
 		}
 
-		// findTargetInKernel returns [btf.ErrNotFound] if the target can't be found
+		// [find.TargetInKernel] returns [btf.ErrNotFound] if the target can't be found
 		// or if BTF is not enabled.
 		target := btf.Type((*btf.Func)(nil))
-		spec, module, err := findTargetInKernel(kfm.Func.Name, &target, cache)
+		spec, module, err := find.TargetInKernel(kfm.Func.Name, &target, cache)
 		if errors.Is(err, btf.ErrNotFound) {
 			if kfm.Binding == elf.STB_WEAK {
 				if ins.IsKfuncCall() {
@@ -569,7 +570,7 @@ func applyTypedKsymFixups(fixups []ksymFixup, cache *btf.Cache) (modules handles
 		sym, ok := symbols[varName]
 		if !ok {
 			var target *btf.Var
-			spec, module, err := findTargetInKernel(varName, &target, cache)
+			spec, module, err := find.TargetInKernel(varName, &target, cache)
 			if errors.Is(err, btf.ErrNotFound) && fixup.Binding == elf.STB_WEAK {
 				continue
 			}

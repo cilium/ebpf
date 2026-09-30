@@ -23,10 +23,23 @@ jobs:
     name: "Get ci-kernels test matrix"
     runs-on: ubuntu-latest
     outputs:
-      matrix: ${{ steps.matrix.outputs.matrix }}
+      matrix: ${{ steps.filter.outputs.matrix }}
     steps:
     - id: matrix
       uses: cilium/ci-kernels/matrix@v7.3.202609291336
+
+    - id: filter
+      env:
+        MATRIX: ${{ steps.matrix.outputs.matrix }}
+      # Verifier log format changed on mainline, failing tests. Remove the
+      # filter when cilium/ebpf#2105 is fixed.
+      run: |
+        echo "::notice::mainline kernel excluded from test matrix pending cilium/ebpf#2105"
+        {
+          echo "matrix<<EOF"
+          jq -c 'map(select(.channel != "mainline"))' <<< "$MATRIX"
+          echo "EOF"
+        } >> "$GITHUB_OUTPUT"
 
   build-and-lint:
     name: Build and Lint

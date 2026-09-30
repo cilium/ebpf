@@ -1246,6 +1246,8 @@ func TestLibBPFCompat(t *testing.T) {
 			t.Skip("Skipping due to relying on cross ELF linking")
 		case "test_log_fixup":
 			t.Skip("Skipping due to intentionally broken CO-RE relocations")
+		case "tracing_multi_attach", "tracing_multi_attach_module", "tracing_multi_intersect_attach", "tracing_multi_session_attach":
+			t.Skip("Skipping 'linked skeletons' that leaves unlinked objs with unsatisfied references")
 		}
 
 		t.Parallel()

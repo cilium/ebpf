@@ -310,7 +310,6 @@ jobs:
     strategy:
       matrix:
         version:
-          - "main"
           - "1.6.0"
     env:
       # Fix slow Go compile and cache restore
@@ -320,8 +319,8 @@ jobs:
       # Avoid putting temp on slow C:
       TEMP: D:\temp
       CI_EFW_VERSION: "1.6.0"
-      # The main build is the newest EFW runtime CI can run.
-      CI_MAX_RUNTIME: ${{ matrix.version == 'main' }}
+      # The newest EFW runtime CI runs; update when adding matrix entries.
+      CI_MAX_RUNTIME: ${{ matrix.version == '1.6.0' }}
 
     steps:
       - run: mkdir D:\temp
@@ -331,113 +330,47 @@ jobs:
         uses: actions/github-script@v9
         with:
           script: |
-            if ("${{ matrix.version }}" != "main") {
-              // Use version from matrix to fetch from release
-              const version = "${{ matrix.version }}";
-              const releaseTag = `v${version}`;
+            const version = "${{ matrix.version }}";
+            const releaseTag = `v${version}`;
 
-              console.log(`Fetching release: ${releaseTag}`);
+            console.log(`Fetching release: ${releaseTag}`);
 
-              // Get the release by tag
-              const release = await github.rest.repos.getReleaseByTag({
-                owner: 'microsoft',
-                repo: 'ebpf-for-windows',
-                tag: releaseTag
-              });
+            // Get the release by tag
+            const release = await github.rest.repos.getReleaseByTag({
+              owner: 'microsoft',
+              repo: 'ebpf-for-windows',
+              tag: releaseTag
+            });
 
-              if (!release.data) {
-                core.setFailed(`Release ${releaseTag} not found`);
-                return;
-              }
-
-              console.log(`Found release: ${release.data.name}`);
-
-              // Find the Build.Debug.x64.zip asset
-              const assetName = 'Build.Debug.x64.zip';
-              const asset = release.data.assets.find(a => a.name === assetName);
-
-              if (!asset) {
-                console.log('Available assets:', release.data.assets.map(a => a.name));
-                core.setFailed(`${assetName} asset not found in release ${releaseTag}`);
-                return;
-              }
-
-              console.log(`Downloading release asset: ${asset.browser_download_url}`);
-              const res = await fetch(asset.browser_download_url);
-              if (!res.ok) {
-                core.setFailed(`Failed to download release asset: ${res.status} ${res.statusText}`);
-                return;
-              }
-              require('fs').writeFileSync(process.env.TEMP + '\\efw.zip', Buffer.from(await res.arrayBuffer()));
-              return
-            }
-
-            // Iterate through scheduled workflow runs (regardless of status) to find
-            // one that contains the Build-x64-Debug artifact.
-            let artifact = null;
-            let runs_page = 1;
-            outer:
-            while (true) {
-              const workflow_runs = await github.rest.actions.listWorkflowRuns({
-                owner: 'microsoft',
-                repo: 'ebpf-for-windows',
-                workflow_id: 'cicd.yml',
-                event: 'schedule',
-                branch: 'main',
-                per_page: 10,
-                page: runs_page
-              });
-
-              if (workflow_runs.data.workflow_runs.length === 0) {
-                core.setFailed('No scheduled workflow runs found');
-                return;
-              }
-
-              for (const run of workflow_runs.data.workflow_runs) {
-                console.log(`Attempting workflow run: ${run.html_url}`);
-
-                const artifacts = await github.rest.actions.listWorkflowRunArtifacts({
-                  owner: 'microsoft',
-                  repo: 'ebpf-for-windows',
-                  run_id: run.id,
-                  per_page: 100,
-                });
-
-                artifact = artifacts.data.artifacts.find(a => a.name === 'Build-x64-Debug');
-                if (artifact) {
-                  break outer;
-                }
-              }
-
-              runs_page++;
-            }
-
-            if (!artifact) {
-              core.setFailed('No scheduled workflow runs with Build-x64-Debug artifact found');
+            if (!release.data) {
+              core.setFailed(`Release ${releaseTag} not found`);
               return;
             }
 
-            // Download artifact bytes directly; response.data contains the zip.
-            const response = await github.rest.actions.downloadArtifact({
-              owner: 'microsoft',
-              repo: 'ebpf-for-windows',
-              artifact_id: artifact.id,
-              archive_format: 'zip',
-            });
+            console.log(`Found release: ${release.data.name}`);
 
-            require('fs').writeFileSync(process.env.TEMP + '\\efw.zip', Buffer.from(response.data));
+            // Find the Build.Debug.x64.zip asset
+            const assetName = 'Build.Debug.x64.zip';
+            const asset = release.data.assets.find(a => a.name === assetName);
+
+            if (!asset) {
+              console.log('Available assets:', release.data.assets.map(a => a.name));
+              core.setFailed(`${assetName} asset not found in release ${releaseTag}`);
+              return;
+            }
+
+            console.log(`Downloading release asset: ${asset.browser_download_url}`);
+            const res = await fetch(asset.browser_download_url);
+            if (!res.ok) {
+              core.setFailed(`Failed to download release asset: ${res.status} ${res.statusText}`);
+              return;
+            }
+            require('fs').writeFileSync(process.env.TEMP + '\\efw.zip', Buffer.from(await res.arrayBuffer()));
 
       - name: Install eBPF for Windows
         shell: pwsh
         run: |
-          if ("${{ matrix.version }}" -eq "main") {
-            # Workflow artifact has nested structure: outer zip contains build-Debug.zip
-            Expand-Archive -Path "$env:TEMP\efw.zip" -DestinationPath "$env:TEMP"
-            Expand-Archive -Path "$env:TEMP\build-Debug.zip" -DestinationPath "$env:TEMP\ebpf"
-          } else {
-            # Release asset is the final zip, extract directly
-            Expand-Archive -Path "$env:TEMP\efw.zip" -DestinationPath "$env:TEMP\ebpf"
-          }
+          Expand-Archive -Path "$env:TEMP\efw.zip" -DestinationPath "$env:TEMP\ebpf"
 
           $setupScript = Get-ChildItem -Path "$env:TEMP\ebpf" -Filter "install_ebpf.psm1" -Recurse | Select-Object -First 1
           if ($setupScript) {

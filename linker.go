@@ -254,7 +254,7 @@ const kfuncCallPoisonBase = 0xdedc0de
 // fixupKfuncs loops over all instructions in search for kfunc calls.
 // If at least one is found, the current kernels BTF and module BTFis are searched to set Instruction.Constant
 // and Instruction.Offset to the correct values.
-func fixupKfuncs(insns asm.Instructions, cache *btf.Cache) (_ handles, err error) {
+func fixupKfuncs(insns asm.Instructions, cache *btf.Cache, kmods *kernelModules) (_ handles, err error) {
 	closeOnError := func(c io.Closer) {
 		if err != nil {
 			c.Close()
@@ -308,7 +308,7 @@ fixups:
 		// findTargetInKernel returns [btf.ErrNotFound] if the target can't be found
 		// or if BTF is not enabled.
 		target := btf.Type((*btf.Func)(nil))
-		spec, module, err := findTargetInKernel(kfm.Func.Name, &target, cache)
+		spec, module, err := findTargetInKernel(kfm.Func.Name, &target, cache, kmods)
 		if errors.Is(err, btf.ErrNotFound) {
 			if kfm.Binding == elf.STB_WEAK {
 				if ins.IsKfuncCall() {
@@ -464,7 +464,7 @@ type ksymFixup struct {
 	*ksymMeta
 }
 
-func resolveKsymReferences(insns asm.Instructions, cache *btf.Cache) (handles, error) {
+func resolveKsymReferences(insns asm.Instructions, cache *btf.Cache, kmods *kernelModules) (handles, error) {
 	var untypedFixups []ksymFixup
 	var typedFixups []ksymFixup
 
@@ -488,7 +488,7 @@ func resolveKsymReferences(insns asm.Instructions, cache *btf.Cache) (handles, e
 		return nil, fmt.Errorf("untyped ksym: %w", err)
 	}
 
-	modules, err := applyTypedKsymFixups(typedFixups, cache)
+	modules, err := applyTypedKsymFixups(typedFixups, cache, kmods)
 	if err != nil {
 		return nil, fmt.Errorf("typed ksym: %w", err)
 	}
@@ -546,7 +546,7 @@ func applyUntypedKsymFixups(fixups []ksymFixup) error {
 // applyTypedKsymFixups resolves typed ksyms by looking up their BTF type IDs in
 // the kernel's BTF and module BTFs. Returns a handles that needs to be kept
 // alive for the duration of program load.
-func applyTypedKsymFixups(fixups []ksymFixup, cache *btf.Cache) (modules handles, err error) {
+func applyTypedKsymFixups(fixups []ksymFixup, cache *btf.Cache, kmods *kernelModules) (modules handles, err error) {
 	if len(fixups) == 0 {
 		return nil, nil
 	}
@@ -569,7 +569,7 @@ func applyTypedKsymFixups(fixups []ksymFixup, cache *btf.Cache) (modules handles
 		sym, ok := symbols[varName]
 		if !ok {
 			var target *btf.Var
-			spec, module, err := findTargetInKernel(varName, &target, cache)
+			spec, module, err := findTargetInKernel(varName, &target, cache, kmods)
 			if errors.Is(err, btf.ErrNotFound) && fixup.Binding == elf.STB_WEAK {
 				continue
 			}

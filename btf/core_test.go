@@ -545,11 +545,6 @@ func TestCORERelocation(t *testing.T) {
 			t.Skip("No ext_infos")
 		}
 
-		errs := map[string]error{
-			"err_ambiguous":         errAmbiguousRelocation,
-			"err_ambiguous_flavour": errAmbiguousRelocation,
-		}
-
 		for section := range extInfos.Funcs {
 			name := strings.TrimPrefix(section, "socket/")
 			t.Run(name, func(t *testing.T) {
@@ -559,13 +554,6 @@ func TestCORERelocation(t *testing.T) {
 				}
 
 				fixups, err := CORERelocate(relos, []*Spec{spec}, spec.byteOrder(), spec.TypeID)
-				if want := errs[name]; want != nil {
-					if !errors.Is(err, want) {
-						t.Fatal("Expected", want, "got", err)
-					}
-					return
-				}
-
 				if err != nil {
 					t.Fatal("Can't relocate against itself:", err)
 				}
@@ -580,6 +568,60 @@ func TestCORERelocation(t *testing.T) {
 			})
 		}
 	})
+}
+
+// TestCORERelocationAmbiguous test that when the kernel contains multiple types with the same name but of different
+// layout, and the relocation result would return different values for these types, we throw a errAmbiguousRelocation
+// error.
+func TestCORERelocationAmbiguous(t *testing.T) {
+	b, err := NewBuilder(
+		[]Type{
+			&Struct{
+				Name: "ambiguous",
+				Members: []Member{
+					{Name: "a", Type: &Int{Size: 4}},
+					{Name: "b", Type: &Int{Size: 4}},
+					{Name: "c", Type: &Int{Size: 4}},
+				},
+			},
+			&Struct{
+				Name: "ambiguous",
+				Members: []Member{
+					{Name: "a", Type: &Int{Size: 4}},
+					{Name: "c", Type: &Int{Size: 4}},
+					{Name: "b", Type: &Int{Size: 4}},
+				},
+			},
+		},
+		nil,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	fakeVmlinux, err := b.Spec()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	relos := []*CORERelocation{
+		{
+			typ: &Struct{
+				Name: "ambiguous",
+				Members: []Member{
+					{Name: "a", Type: &Int{Size: 4}},
+					{Name: "b", Type: &Int{Size: 4}},
+				},
+			},
+			kind:     reloTypeIDTarget,
+			accessor: coreAccessor{0},
+		},
+	}
+
+	_, err = CORERelocate(relos, []*Spec{fakeVmlinux}, fakeVmlinux.byteOrder(), fakeVmlinux.TypeID)
+	if !errors.Is(err, errAmbiguousRelocation) {
+		t.Fatalf("Expected errAmbiguousRelocation, got %s", err)
+	}
 }
 
 func TestCOREReloFieldSigned(t *testing.T) {

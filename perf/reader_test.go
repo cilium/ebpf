@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"math"
 	"os"
+	"slices"
 	"syscall"
 	"testing"
 	"time"
@@ -22,9 +23,7 @@ import (
 	"github.com/go-quicktest/qt"
 )
 
-var (
-	readTimeout = 250 * time.Millisecond
-)
+var readTimeout = 250 * time.Millisecond
 
 func TestMain(m *testing.M) {
 	testmain.Run(m)
@@ -559,6 +558,54 @@ func TestPause(t *testing.T) {
 	err = rd.Resume()
 	qt.Assert(t, qt.Not(qt.Equals(err, ErrClosed)), qt.Commentf("returns unwrapped ErrClosed"))
 	qt.Assert(t, qt.ErrorIs(err, ErrClosed), qt.Commentf("doesn't wrap ErrClosed"))
+}
+
+func TestPauseResumeSimulatedOfflineCPU(t *testing.T) {
+	events := perfEventArray(t)
+
+	rd, err := NewReader(events, os.Getpagesize())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rd.Close()
+
+	// Only run this test if we have at least 3 rings so we can remove the middle one
+	// to simulate CPUs 0, 1(offline), 2
+	rd.pauseMu.Lock()
+	if len(rd.rings) < 3 {
+		rd.pauseMu.Unlock()
+		t.Skip("need at least 3 CPUs to simulate offline CPU 1")
+	}
+
+	// Get CPU ID of the CPU after the simulated offline CPU
+	cpu2 := rd.rings[2].cpu
+
+	// Simulate offline CPU 1 by removing the middle ring/eventFd
+	rd.rings[1].Close()
+	rd.eventFds[1].Close()
+
+	rd.rings = slices.Delete(rd.rings, 1, 2)
+	rd.eventFds = slices.Delete(rd.eventFds, 1, 2)
+
+	rd.pauseMu.Unlock()
+
+	qt.Assert(t, qt.IsNil(rd.Pause()), qt.Commentf("Pause() should succeed with non-contiguous CPUs"))
+
+	qt.Assert(t, qt.IsNil(rd.Resume()), qt.Commentf("Resume() should succeed with non-contiguous CPUs"))
+
+	// Set CPU affinity to cpu2 specifically for this thread
+	testutils.LockOSThreadToSingleCPUID(t, cpu2)
+
+	prog := outputSamplesProg(t, events, 5)
+	ret, _, err := prog.Test(internal.EmptyBPFContext)
+	testutils.SkipIfNotSupported(t, err)
+	qt.Assert(t, qt.IsNil(err))
+	qt.Assert(t, qt.Equals(ret, 0))
+
+	rec, err := rd.Read()
+	qt.Assert(t, qt.IsNil(err), qt.Commentf("Read should succeed"))
+
+	qt.Assert(t, qt.Equals(rec.CPU, cpu2), qt.Commentf("Sample must be from CPU %d (after removing CPU 1), got %d", cpu2, rec.CPU))
 }
 
 func TestPerfReaderWakeupEvents(t *testing.T) {

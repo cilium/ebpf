@@ -585,16 +585,17 @@ func TestPauseResumeSimulatedOfflineCPU(t *testing.T) {
 	rd.rings[1].Close()
 	rd.eventFds[1].Close()
 
-	rd.rings = append(rd.rings[:1], rd.rings[2:]...)
+	rd.rings = slices.Delete(rd.rings, 1, 2)
+	rd.eventFds = slices.Delete(rd.eventFds, 1, 2)
 	rd.eventFds = append(rd.eventFds[:1], rd.eventFds[2:]...)
 
 	rd.pauseMu.Unlock()
 
 	err = rd.Pause()
-	qt.Assert(t, qt.IsNil(err), qt.Commentf("Pause() should succeed with non-contiguous CPUs"))
+	qt.Assert(t, qt.IsNil(rd.Pause()), qt.Commentf("Pause() should succeed with non-contiguous CPUs"))
 
 	err = rd.Resume()
-	qt.Assert(t, qt.IsNil(err), qt.Commentf("Resume() should succeed with non-contiguous CPUs"))
+	qt.Assert(t, qt.IsNil(rd.Resume()), qt.Commentf("Resume() should succeed with non-contiguous CPUs"))
 
 	// Lock goroutine to OS thread first, then set CPU affinity
 	runtime.LockOSThread()

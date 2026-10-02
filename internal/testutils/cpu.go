@@ -14,7 +14,7 @@ func LockOSThreadToSingleCPU(tb testing.TB) {
 	LockOSThreadToSingleCPUID(tb, 0)
 }
 
-// LockOSThreadToSingleCPUInt force the current goroutine to run on a single CPU specified by cpuID.
+// LockOSThreadToSingleCPUID force the current goroutine to run on a single CPU specified by cpuID.
 // Skips the test if the requested CPU is not available.
 func LockOSThreadToSingleCPUID(tb testing.TB, cpuID int) {
 	tb.Helper()

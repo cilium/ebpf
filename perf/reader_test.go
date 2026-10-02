@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"math"
 	"os"
-	"runtime"
 	"slices"
 	"syscall"
 	"testing"
@@ -20,7 +19,6 @@ import (
 	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/testutils"
 	"github.com/cilium/ebpf/internal/testutils/testmain"
-	"github.com/cilium/ebpf/internal/unix"
 
 	"github.com/go-quicktest/qt"
 )
@@ -595,24 +593,8 @@ func TestPauseResumeSimulatedOfflineCPU(t *testing.T) {
 
 	qt.Assert(t, qt.IsNil(rd.Resume()), qt.Commentf("Resume() should succeed with non-contiguous CPUs"))
 
-	// Lock goroutine to OS thread first, then set CPU affinity
-	runtime.LockOSThread()
-	t.Cleanup(func() { runtime.UnlockOSThread() })
-
-	originalSet := unix.CPUSet{}
-	if err := unix.SchedGetaffinity(0, &originalSet); err != nil {
-		t.Skipf("failed to get CPU affinity: %v", err)
-	}
-	t.Cleanup(func() {
-		_ = unix.SchedSetaffinity(0, &originalSet)
-	})
-
 	// Set CPU affinity to cpu2 specifically for this thread
-	set := unix.CPUSet{}
-	set.Set(cpu2)
-	if err := unix.SchedSetaffinity(0, &set); err != nil {
-		t.Skipf("failed to lock to CPU %d: %v", cpu2, err)
-	}
+	testutils.LockOSThreadToSingleCPUID(t, cpu2)
 
 	prog := outputSamplesProg(t, events, 5)
 	ret, _, err := prog.Test(internal.EmptyBPFContext)

@@ -11,6 +11,12 @@ import (
 
 // LockOSThreadToSingleCPU force the current goroutine to run on a single CPU.
 func LockOSThreadToSingleCPU(tb testing.TB) {
+	LockOSThreadToSingleCPUID(tb, 0)
+}
+
+// LockOSThreadToSingleCPUInt force the current goroutine to run on a single CPU specified by cpuID.
+// Skips the test if the requested CPU is not available.
+func LockOSThreadToSingleCPUID(tb testing.TB, cpuID int) {
 	tb.Helper()
 
 	runtime.LockOSThread()
@@ -20,10 +26,15 @@ func LockOSThreadToSingleCPU(tb testing.TB) {
 	err := unix.SchedGetaffinity(0, &old)
 	qt.Assert(tb, qt.IsNil(err))
 
-	// Schedule test to run on only CPU 0
-	var first unix.CPUSet
-	first.Set(0)
-	err = unix.SchedSetaffinity(0, &first)
+	// Check if the requested CPU is available
+	if !old.IsSet(cpuID) {
+		runtime.UnlockOSThread()
+		tb.Skipf("CPU %d is not available", cpuID)
+	}
+
+	var cpuSet unix.CPUSet
+	cpuSet.Set(cpuID)
+	err = unix.SchedSetaffinity(0, &cpuSet)
 	qt.Assert(tb, qt.IsNil(err))
 
 	tb.Cleanup(func() {

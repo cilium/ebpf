@@ -296,6 +296,8 @@ type CPUSet struct{}
 
 func (*CPUSet) Set(int) {}
 
+func (s *CPUSet) IsSet(cpu int) bool { return false }
+
 func SchedSetaffinity(pid int, set *CPUSet) error {
 	return errNonLinux()
 }

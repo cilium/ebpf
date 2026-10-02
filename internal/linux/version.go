@@ -8,8 +8,23 @@ import (
 	"github.com/cilium/ebpf/internal/unix"
 )
 
+var (
+	kernelVersionOnce sync.Once
+	kernelVersion     internal.Version
+	kernelVersionErr  error
+)
+
 // KernelVersion returns the version of the currently running kernel.
-var KernelVersion = sync.OnceValues(detectKernelVersion)
+func KernelVersion() (internal.Version, error) {
+	// Not using sync.OnceValues here, since a package-level variable set to
+	// its result makes detectKernelVersion (and the ELF parser it uses)
+	// reachable for the linker, even if KernelVersion is never called.
+	kernelVersionOnce.Do(func() {
+		kernelVersion, kernelVersionErr = detectKernelVersion()
+	})
+
+	return kernelVersion, kernelVersionErr
+}
 
 // detectKernelVersion returns the version of the running kernel.
 func detectKernelVersion() (internal.Version, error) {

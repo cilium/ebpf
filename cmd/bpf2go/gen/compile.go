@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 )
 
@@ -50,11 +51,7 @@ func insertDefaultFlags(flags []string) []string {
 		}
 	}
 
-	result := append([]string(nil), flags[:insert]...)
-	result = append(result, overrideFlags...)
-	result = append(result, flags[insert:]...)
-
-	return result
+	return slices.Concat(flags[:insert], overrideFlags, flags[insert:])
 }
 
 // Compile C to a BPF ELF file.

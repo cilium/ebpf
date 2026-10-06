@@ -172,7 +172,7 @@ func newB2G(stdout io.Writer, args []string) (*bpf2go, error) {
 
 		// Command line arguments take precedence over C flags
 		// from the flag.
-		cFlags = append(splitCFlags, cFlags...)
+		cFlags = slices.Concat(splitCFlags, cFlags)
 	}
 
 	for _, cFlag := range cFlags {
@@ -181,7 +181,7 @@ func newB2G(stdout io.Writer, args []string) (*bpf2go, error) {
 		}
 	}
 
-	b2g.cFlags = append(ccParts[1:], cFlags[:len(cFlags):len(cFlags)]...)
+	b2g.cFlags = slices.Concat(ccParts[1:], cFlags)
 
 	if len(args) < 2 {
 		return nil, errors.New("expected at least two arguments")

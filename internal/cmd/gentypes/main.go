@@ -82,8 +82,7 @@ func run(args []string) error {
 	}
 
 	output, err := generateTypes(spec)
-	var fpe *failedPatchError
-	if errors.As(err, &fpe) {
+	if fpe, ok := errors.AsType[*failedPatchError](err); ok {
 		fmt.Fprintf(os.Stderr, "  %v\n", fpe.Type)
 		for _, member := range fpe.Type.Members {
 			fmt.Fprintf(os.Stderr, "    %q %v\n", member.Name, member.Type)

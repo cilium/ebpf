@@ -227,7 +227,7 @@ func (ps *ProgramSpec) targetsKernelModule() bool {
 // VerifierError is returned by [NewProgram] and [NewProgramWithOptions] if a
 // program is rejected by the verifier.
 //
-// Use [errors.As] to access the error.
+// Use [errors.AsType] or [errors.As] to access the error.
 type VerifierError = internal.VerifierError
 
 // Program represents BPF program loaded into the kernel.

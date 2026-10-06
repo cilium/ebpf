@@ -50,19 +50,14 @@ func TestDatasecResolveWorkaround(t *testing.T) {
 			}
 
 			b, err := NewBuilder([]Type{ds}, nil)
-			if err != nil {
-				t.Fatal(err)
-			}
+			qt.Assert(t, qt.IsNil(err))
 
 			h, err := NewHandle(b)
 			testutils.SkipIfNotSupportedOnOS(t, err)
-			var ve *internal.VerifierError
-			if errors.As(err, &ve) {
+			if ve, ok := errors.AsType[*internal.VerifierError](err); ok {
 				t.Fatalf("%+v\n", ve)
 			}
-			if err != nil {
-				t.Fatal(err)
-			}
+			qt.Assert(t, qt.IsNil(err))
 			h.Close()
 		})
 	}

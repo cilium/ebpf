@@ -365,9 +365,7 @@ func TestVerifierError(t *testing.T) {
 	_, err = NewHandle(b)
 	testutils.SkipIfNotSupported(t, err)
 	var ve *internal.VerifierError
-	if !errors.As(err, &ve) {
-		t.Fatalf("expected a VerifierError, got: %v", err)
-	}
+	qt.Assert(t, qt.ErrorAs(err, &ve))
 }
 
 func TestSpecCopy(t *testing.T) {

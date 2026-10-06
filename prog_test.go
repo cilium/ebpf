@@ -274,9 +274,10 @@ func TestProgramVerifierOutputOnError(t *testing.T) {
 		t.Fatal("Expected program to be invalid")
 	}
 
+	// Explicitly assert NewProgram returns an unwrapped *VerifierError.
 	ve, ok := err.(*VerifierError)
 	if !ok {
-		t.Fatal("NewProgram does return an unwrapped VerifierError")
+		t.Fatal("NewProgram does not return an unwrapped *VerifierError")
 	}
 
 	switch {
@@ -989,8 +990,7 @@ func ExampleVerifierError_retrieveFullLog() {
 		License: "MIT",
 	})
 
-	var ve *VerifierError
-	if errors.As(err, &ve) {
+	if ve, ok := errors.AsType[*VerifierError](err); ok {
 		// Using %+v will print the whole verifier error, not just the last
 		// few lines.
 		fmt.Printf("Verifier error: %+v\n", ve)

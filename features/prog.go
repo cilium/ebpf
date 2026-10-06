@@ -276,8 +276,8 @@ func haveProgramHelper(pt ebpf.ProgramType, helper asm.BuiltinFunc) error {
 		prog.Close()
 	}
 
-	var verr *ebpf.VerifierError
-	if !errors.As(err, &verr) {
+	verr, ok := errors.AsType[*ebpf.VerifierError](err)
+	if !ok {
 		return err
 	}
 

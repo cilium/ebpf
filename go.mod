@@ -1,13 +1,13 @@
 module github.com/cilium/ebpf
 
-go 1.25.0
+go 1.26.0
 
 require (
-	github.com/go-quicktest/qt v1.101.1-0.20240301121107-c6c8733fa1e6
+	github.com/go-quicktest/qt v1.102.0
 	github.com/google/go-cmp v0.7.0
-	github.com/jsimonetti/rtnetlink/v2 v2.0.1
-	golang.org/x/sync v0.20.0
-	golang.org/x/sys v0.45.0
+	github.com/jsimonetti/rtnetlink/v2 v2.2.0
+	golang.org/x/sync v0.23.0
+	golang.org/x/sys v0.48.0
 )
 
 require (
@@ -23,24 +23,24 @@ require (
 	github.com/klauspost/compress v1.18.0 // indirect
 	github.com/kr/pretty v0.3.1 // indirect
 	github.com/kr/text v0.2.0 // indirect
-	github.com/mdlayher/netlink v1.7.2 // indirect
-	github.com/mdlayher/socket v0.5.1 // indirect
+	github.com/mdlayher/netlink v1.11.2 // indirect
+	github.com/mdlayher/socket v0.7.0 // indirect
 	github.com/mitchellh/go-homedir v1.1.0 // indirect
 	github.com/opencontainers/go-digest v1.0.0 // indirect
 	github.com/opencontainers/image-spec v1.1.1 // indirect
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
-	github.com/rogpeppe/go-internal v1.14.1 // indirect
+	github.com/rogpeppe/go-internal v1.16.0 // indirect
 	github.com/sirupsen/logrus v1.9.4 // indirect
 	github.com/spf13/cobra v1.10.2 // indirect
 	github.com/spf13/pflag v1.0.10 // indirect
 	github.com/stretchr/testify v1.11.1 // indirect
 	github.com/vbatts/tar-split v0.12.1 // indirect
 	golang.org/x/exp/typeparams v0.0.0-20260209203927-2842357ff358 // indirect
-	golang.org/x/mod v0.31.0 // indirect
-	golang.org/x/net v0.55.0 // indirect
-	golang.org/x/tools v0.40.1-0.20260108161641-ca281cf95054 // indirect
+	golang.org/x/mod v0.35.0 // indirect
+	golang.org/x/net v0.59.0 // indirect
+	golang.org/x/tools v0.44.1-0.20260420230617-19499e7caabc // indirect
 	gotest.tools/v3 v3.5.0 // indirect
-	honnef.co/go/tools v0.7.0 // indirect
+	honnef.co/go/tools v0.8.1 // indirect
 )
 
 tool (

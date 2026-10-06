@@ -285,8 +285,8 @@ func checkType(name string, t reflect.Type) error {
 
 	case reflect.Struct:
 		var hasHostLayout bool
-		for i := range t.NumField() {
-			at := t.Field(i).Type
+		for field := range t.Fields() {
+			at := field.Type
 
 			// Require [structs.HostLayout] to be embedded in all structs. Check the
 			// full package path to reject a user-defined HostLayout type.

@@ -275,8 +275,8 @@ func countChildren(t *testing.T, typ reflect.Type) int {
 	}
 
 	var n int
-	for i := 0; i < typ.NumField(); i++ {
-		if typ.Field(i).Type == reflect.TypeFor[Type]() {
+	for field := range typ.Fields() {
+		if field.Type == reflect.TypeFor[Type]() {
 			n++
 		}
 	}

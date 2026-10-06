@@ -8,8 +8,8 @@ on:
 env:
   TMPDIR: /tmp
   CI_MIN_CLANG_VERSION: '13'
-  go_version: '~1.26'
-  prev_go_version: '~1.25'
+  go_version: '~1.27'
+  prev_go_version: '~1.26'
   CGO_ENABLED: '0'
   # Sync with Pipfile and netlify.toml.
   python_version: '~3.14'

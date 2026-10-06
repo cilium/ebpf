@@ -78,7 +78,12 @@ func TestHaveProgramHelper(t *testing.T) {
 			err := HaveProgramHelper(tc.prog, tc.helper)
 			testutils.SkipIfNotSupportedOnOS(t, err)
 			if !errors.Is(err, tc.expected) {
-				t.Fatalf("%s/%s: %v", tc.prog.String(), tc.helper.String(), err)
+				ve, ok := errors.AsType[*ebpf.VerifierError](err)
+				if !ok {
+					t.Fatalf("%s/%s: %v (not a verifier error)", tc.prog.String(), tc.helper.String(), err)
+				}
+
+				t.Fatalf("%s/%s: %+v", tc.prog.String(), tc.helper.String(), ve)
 			}
 
 		})

@@ -36,8 +36,7 @@ func checkFeatureTestError(t *testing.T, err error) {
 		t.Skip(err)
 	}
 
-	var ufe *internal.UnsupportedFeatureError
-	if errors.As(err, &ufe) {
+	if ufe, ok := errors.AsType[*internal.UnsupportedFeatureError](err); ok {
 		checkVersion(t, ufe)
 	} else {
 		t.Error("Feature test failed:", err)
@@ -61,8 +60,7 @@ func SkipIfNotSupported(tb testing.TB, err error) {
 		tb.Fatal("Unwrapped ErrNotSupported")
 	}
 
-	var ufe *internal.UnsupportedFeatureError
-	if errors.As(err, &ufe) {
+	if ufe, ok := errors.AsType[*internal.UnsupportedFeatureError](err); ok {
 		checkVersion(tb, ufe)
 		tb.Skip(ufe.Error())
 	}

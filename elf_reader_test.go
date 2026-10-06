@@ -895,8 +895,7 @@ func TestInvalidKfunc(t *testing.T) {
 		t.Fatal("Expected an error")
 	}
 
-	var ike *incompatibleKfuncError
-	if !errors.As(err, &ike) {
+	if _, ok := errors.AsType[*incompatibleKfuncError](err); !ok {
 		t.Fatalf("Expected an error wrapping incompatibleKfuncError, got %s", err)
 	}
 }
@@ -1191,8 +1190,7 @@ func TestLibBPFCompat(t *testing.T) {
 
 		coll, err := NewCollectionWithOptions(spec, opts)
 		testutils.SkipIfNotSupported(t, err)
-		var errno syscall.Errno
-		if errors.As(err, &errno) {
+		if _, ok := errors.AsType[syscall.Errno](err); ok {
 			// This error is most likely from a syscall and caused by us not
 			// replicating some fixups done in the selftests or the test
 			// intentionally failing. This is expected, so skip the test

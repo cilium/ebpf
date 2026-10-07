@@ -282,7 +282,12 @@ func TestProgramVerifierOutputOnError(t *testing.T) {
 
 	switch {
 	case platform.IsLinux:
-		if !strings.Contains(ve.Error(), "R0 !read_ok") {
+		// Legacy errors contain just the last few lines of the verifier log,
+		// excluding 'processed ...'. Linux 7.3 and later includes
+		// human-readable diagnostics with suggestions.
+		legacy := strings.Contains(ve.Error(), "R0 !read_ok")
+		diag := strings.Contains(ve.Error(), "R0 has never been initialized on this path")
+		if !legacy && !diag {
 			t.Logf("%+v", ve)
 			t.Error("Missing verifier log in error summary")
 		}
@@ -979,49 +984,39 @@ func BenchmarkNewProgram(b *testing.B) {
 	}
 }
 
-// Print the full verifier log when loading a program fails.
-func ExampleVerifierError_retrieveFullLog() {
+// [VerifierError] understands a variety of formatting flags. Use them to e.g.
+// write the full verifier log to a file when loading a program fails, since it
+// can be quite large depending on the size and complexity of your program.
+//
+// Linux 7.3 and newer also returns a human-readable diagnostics report as part
+// of every verifier error. See the example below for how to display this
+// separately.
+func ExampleVerifierError() {
 	_, err := NewProgram(&ProgramSpec{
 		Type: SocketFilter,
 		Instructions: asm.Instructions{
-			asm.LoadImm(asm.R0, 0, asm.DWord),
+			asm.LoadImm(asm.R10, 0, asm.DWord),
 			// Missing Return
 		},
 		License: "MIT",
 	})
 
-	if ve, ok := errors.AsType[*VerifierError](err); ok {
-		// Using %+v will print the whole verifier error, not just the last
-		// few lines.
-		fmt.Printf("Verifier error: %+v\n", ve)
-	}
-}
+	// Only the inner, typed VerifierError can be formatted. Don't use `err`!
+	ve, _ := errors.AsType[*VerifierError](err)
 
-// VerifierLog understands a variety of formatting flags.
-func ExampleVerifierError() {
-	err := internal.ErrorWithLog(
-		"catastrophe",
-		syscall.ENOSPC,
-		[]byte("first\nsecond\nthird"),
-	)
+	// %s prints a single-line summary of up to two lines of verifier log
+	// output, ignoring the 'processed ..' statistics. On Linux 7.3 and later,
+	// displays the 'Reason:' and 'Suggestion:' in a short form instead.
+	fmt.Printf("With %%s: %s\n", ve)
 
-	fmt.Printf("With %%s: %s\n", err)
-	fmt.Printf("All log lines: %+v\n", err)
+	// Using %+v will print the whole verifier error, including diagnostics and
+	// stats.
+	fmt.Printf("Full verifier error: %+v\n", ve)
+
+	// Control exactly how many lines of log output you want to see with %+<n>v
+	// or %-<n>v.
 	fmt.Printf("First line: %+1v\n", err)
 	fmt.Printf("Last two lines: %-2v\n", err)
-
-	// Output: With %s: catastrophe: no space left on device: third (2 line(s) omitted)
-	// All log lines: catastrophe: no space left on device:
-	// 	first
-	// 	second
-	// 	third
-	// First line: catastrophe: no space left on device:
-	// 	first
-	// 	(2 line(s) omitted)
-	// Last two lines: catastrophe: no space left on device:
-	// 	(1 line(s) omitted)
-	// 	second
-	// 	third
 }
 
 // Use NewProgramWithOptions if you'd like to get the verifier output

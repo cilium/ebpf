@@ -29,14 +29,14 @@ func mustRun(tb testing.TB, prog *ebpf.Program) {
 	qt.Assert(tb, qt.Equals(ret, uint32(0)))
 }
 
-func mustRunN(tb testing.TB, prog *ebpf.Program, repeat uint32) time.Duration {
-	tb.Helper()
+func mustRunN(b *testing.B, prog *ebpf.Program, repeat uint32) time.Duration {
+	b.Helper()
 
-	ret, d, err := prog.Benchmark(internal.EmptyBPFContext, int(repeat), nil)
-	testutils.SkipIfNotSupported(tb, err)
-	qt.Assert(tb, qt.IsNil(err))
+	ret, d, err := prog.Benchmark(b, int(repeat), internal.EmptyBPFContext)
+	testutils.SkipIfNotSupported(b, err)
+	qt.Assert(b, qt.IsNil(err))
 
-	qt.Assert(tb, qt.Equals(ret, uint32(0)))
+	qt.Assert(b, qt.Equals(ret, uint32(0)))
 
 	return d
 }

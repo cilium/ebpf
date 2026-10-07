@@ -23,7 +23,7 @@ func ErrorWithLog(source string, err error, log []byte) *VerifierError {
 
 	log = bytes.Trim(log, whitespace)
 	if len(log) == 0 {
-		return &VerifierError{source, err, nil}
+		return &VerifierError{source: source, Cause: err}
 	}
 
 	logLines := bytes.Split(log, []byte{'\n'})
@@ -34,146 +34,284 @@ func ErrorWithLog(source string, err error, log []byte) *VerifierError {
 		lines = append(lines, string(bytes.TrimRight(line, whitespace)))
 	}
 
-	return &VerifierError{source, err, lines}
+	ve := &VerifierError{source: source, Cause: err, Log: lines}
+	ve.parse()
+
+	return ve
 }
 
-// VerifierError includes information from the eBPF verifier.
-//
-// It summarises the log output, see Format if you want to output the full contents.
+// VerifierError includes information from the eBPF verifier log.
 type VerifierError struct {
+	// Call site identifier included before colon in wrapped errors.
 	source string
 	// The error which caused this error.
 	Cause error
-	// The verifier output split into lines.
+	// The instruction/verification log split into lines. Does not include
+	// diagnostics (Verification failed: .., see [VerifierError.Diagnostics])
+	// or stats (processed .., see [VerifierError.Stats]).
 	Log []string
+	// Human-readable diagnostics starting at 'Verification failed:', only
+	// emitted since Linux 7.3. Empty on older kernels.
+	Diagnostics []string
+	// The trailing 'processed .. insns' summary line, if the log contained any.
+	Stats string
 }
 
 func (le *VerifierError) Unwrap() error {
 	return le.Cause
 }
 
+// Error returns the VerifierError as a string.
+//
+// If the verifier error contains human-friendly diagnostics introduced in Linux
+// 7.3, only the 'Reason' and 'Suggestion' diagnostics are displayed in a short
+// summary.
+//
+// On older kernels, returns the last 3 lines of the verifier (instruction) log.
 func (le *VerifierError) Error() string {
-	log := le.Log
-	if n := len(log); n > 0 && strings.HasPrefix(log[n-1], "processed ") {
-		// Get rid of "processed 39 insns (limit 1000000) ..." from summary.
-		log = log[:n-1]
-	}
-
 	var b strings.Builder
 	fmt.Fprintf(&b, "%s: %s", le.source, le.Cause.Error())
 
-	n := len(log)
-	if n == 0 {
+	if len(le.Log) == 0 && len(le.Diagnostics) == 0 {
 		return b.String()
 	}
 
-	lines := log[n-1:]
-	if n >= 2 && includePreviousLine(log[n-1]) {
-		// Add one more line of context if it aids understanding the error.
-		lines = log[n-2:]
+	// Attempt to extract verifier diagnostics, falling back to displaying the
+	// last 2 lines of the log if no diagnostics present.
+	if le.Diagnostics != nil {
+		reason := le.diagSection("Reason:")
+		if reason == "" {
+			reason = "no reason given"
+		}
+
+		suggestion := le.diagSection("Suggestion:")
+		if suggestion == "" {
+			suggestion = "no suggestion available"
+		}
+
+		b.WriteString(": ")
+		b.WriteString(reason)
+		b.WriteString(" (")
+		b.WriteString(suggestion)
+		b.WriteString(")")
+
+		return b.String()
 	}
 
-	for _, line := range lines {
+	// No diagnostics, display just the last few lines of the instruction log,
+	// joined by ': '.
+	end := le.logEnd()
+	for _, line := range end {
 		b.WriteString(": ")
 		b.WriteString(strings.TrimSpace(line))
 	}
 
-	omitted := len(le.Log) - len(lines)
-	if omitted > 0 {
-		fmt.Fprintf(&b, " (%d line(s) omitted)", omitted)
-	}
+	b.WriteString(omitted(" ", len(le.Log)-len(end)))
 
 	return b.String()
 }
 
-// includePreviousLine returns true if the given line likely is better
-// understood with additional context from the preceding line.
-func includePreviousLine(line string) bool {
-	// We need to find a good trade off between understandable error messages
-	// and too much complexity here. Checking the string prefix is ok, requiring
-	// regular expressions to do it is probably overkill.
-
-	if strings.HasPrefix(line, "\t") {
-		// [13] STRUCT drm_rect size=16 vlen=4
-		// \tx1 type_id=2
-		return true
+func omitted(prefix string, n int) string {
+	if n == 1 {
+		return prefix + "(1 line omitted)"
+	} else if n > 1 {
+		return fmt.Sprintf("%s(%d lines omitted)", prefix, n)
 	}
-
-	if len(line) >= 2 && line[0] == 'R' && line[1] >= '0' && line[1] <= '9' {
-		// 0: (95) exit
-		// R0 !read_ok
-		return true
-	}
-
-	if strings.HasPrefix(line, "invalid bpf_context access") {
-		// 0: (79) r6 = *(u64 *)(r1 +0)
-		// func '__x64_sys_recvfrom' arg0 type FWD is not a struct
-		// invalid bpf_context access off=0 size=8
-		return true
-	}
-
-	return false
+	return ""
 }
 
-// Format the error.
+// parse splits the verifier log in Log into an instruction log, optional
+// diagnostics and the trailing 'processed' summary line in a single scan. The
+// resulting fields are subslices of the original log and non-overlapping.
 //
-// Understood verbs are %s and %v, which are equivalent to calling Error(). %v
-// allows outputting additional information using the following flags:
+// Since v7.3 ce7c9f6c599b ("Redesign Verification Log"), the verifier log
+// contains a richer structure with human-readable reasons for verification
+// failures.
 //
-//	%+<width>v: Output the first <width> lines, or all lines if no width is given.
-//	%-<width>v: Output the last <width> lines, or all lines if no width is given.
+// This is the structure of a verifier error with diagnostics info included:
 //
-// Use width to specify how many lines to output. Use the '-' flag to output
-// lines from the end of the log instead of the beginning.
+//	0: R1=ctx() R10=fp0
+//	0: (95) exit
+//	R0 !read_ok
+//
+//	Verification failed: Register Type Safety: Unreadable register
+//
+//	Reason:
+//	  R0 has never been initialized on this path, so the verifier cannot use it as an input.
+//
+//	At:
+//	  insn 0
+//	        | ^-- error: R0 is not readable
+//	  Instruction context:
+//	  >>> 0 | (95) exit
+//
+//	Causal path:
+//	  no retained diagnostic events on this path
+//
+//	Suggestion:
+//	  Initialize R0 on every path before this instruction.
+//
+//	processed 1 insns (limit 1000000) max_states_per_insn 0 total_states 0 peak_states 0 mark_read 0
+func (le *VerifierError) parse() {
+	log := le.Log
+
+	// The full log lives in Log by default. Markers cut the current section
+	// and move the remaining lines to the next bucket.
+	cur, start := &le.Log, 0
+	for i, line := range log {
+		switch {
+		case strings.HasPrefix(line, "Verification failed:"):
+			// Roll over to diagnostics.
+			start = i
+			*cur = log[:i]
+			cur = &le.Diagnostics
+			le.Diagnostics = log[i:]
+		case strings.HasPrefix(line, "processed "):
+			// Stats are always one line.
+			*cur = log[start:i]
+			le.Stats = line
+		}
+	}
+
+	le.Log = trimTrailingEmpty(le.Log)
+	le.Diagnostics = trimTrailingEmpty(le.Diagnostics)
+}
+
+// trimTrailingEmpty returns lines with any trailing empty lines removed.
+func trimTrailingEmpty(lines []string) []string {
+	if len(lines) == 0 {
+		return lines
+	}
+	for lines[len(lines)-1] == "" {
+		lines = lines[:len(lines)-1]
+	}
+	return lines
+}
+
+// diagSection returns the contents of the diagnostics section with the given
+// header, e.g. "Suggestion:". The diagSection body runs until the next empty or
+// unindented line. Since bodies are sentences wrapped across indented lines,
+// returns the lines joined by single spaces. Example:
+//
+//	Suggestion:
+//	  Initialize R0 on every path
+//	  before this instruction.
+func (le *VerifierError) diagSection(header string) string {
+	var b strings.Builder
+	var found bool
+
+	for _, l := range le.Diagnostics {
+		if !found {
+			if l == header {
+				found = true
+			}
+			continue
+		}
+
+		// Read until the first empty or non-indented line.
+		if l == "" || !strings.HasPrefix(l, " ") {
+			break
+		}
+
+		// Join lines by space.
+		if b.Len() > 0 {
+			b.WriteByte(' ')
+		}
+
+		// Trim whitespace.
+		b.WriteString(strings.TrimSpace(l))
+	}
+
+	// Trim trailing periods from the full string.
+	return strings.TrimSuffix(b.String(), ".")
+}
+
+// logEnd returns the last two lines (if any) of the verified instruction log,
+// for inclusion in error summaries.
+func (le *VerifierError) logEnd() []string {
+	l := len(le.Log)
+	return le.Log[l-min(l, 2):]
+}
+
+// Format implements the VerifierError's string formatting features. Usage is
+// documented on [VerifierError] itself.
 func (le *VerifierError) Format(f fmt.State, verb rune) {
 	switch verb {
 	case 's':
-		_, _ = io.WriteString(f, le.Error())
+		io.WriteString(f, le.Error())
 
 	case 'v':
 		n, haveWidth := f.Width()
-		if !haveWidth || n > len(le.Log) {
+		if haveWidth {
+			n = min(len(le.Log), n)
+		}
+		if n == 0 {
 			n = len(le.Log)
 		}
 
+		// Caller didn't specify any flags.
 		if !f.Flag('+') && !f.Flag('-') {
 			if haveWidth {
-				_, _ = io.WriteString(f, "%!v(BADWIDTH)")
+				// Width requires a (start or end) flag.
+				io.WriteString(f, "%!v(BADWIDTH)")
 				return
 			}
 
-			_, _ = io.WriteString(f, le.Error())
+			io.WriteString(f, le.Error())
 			return
 		}
 
+		// Only one flag is allowed at a time.
 		if f.Flag('+') && f.Flag('-') {
-			_, _ = io.WriteString(f, "%!v(BADFLAG)")
+			io.WriteString(f, "%!v(BADFLAG)")
 			return
 		}
 
-		fmt.Fprintf(f, "%s: %s:", le.source, le.Cause.Error())
+		fmt.Fprintf(f, "%s: %s:\n", le.source, le.Cause.Error())
 
-		omitted := len(le.Log) - n
-		lines := le.Log[:n]
+		omit := len(le.Log) - n
 		if f.Flag('-') {
-			// Print last instead of first lines.
-			lines = le.Log[len(le.Log)-n:]
-			if omitted > 0 {
-				fmt.Fprintf(f, "\n\t(%d line(s) omitted)", omitted)
+			// Print 'omitted' followed by last n lines of log.
+			if omit > 0 {
+				io.WriteString(f, omitted("\t", omit))
+				io.WriteString(f, "\n")
+			}
+			writeStrings(f, "\t", le.Log[omit:])
+		} else {
+			// Print first n (or all) lines of log followed by 'omitted'.
+			writeStrings(f, "\t", le.Log[:n])
+			if omit > 0 {
+				io.WriteString(f, omitted("\n\t", omit))
 			}
 		}
 
-		for _, line := range lines {
-			fmt.Fprintf(f, "\n\t%s", line)
+		// Print diagnostics if present.
+		if le.Diagnostics != nil {
+			io.WriteString(f, "\n\n")
+			writeStrings(f, "\t", le.Diagnostics)
 		}
 
-		if !f.Flag('-') {
-			if omitted > 0 {
-				fmt.Fprintf(f, "\n\t(%d line(s) omitted)", omitted)
-			}
-		}
+		// Print 'processed ..' line.
+		io.WriteString(f, "\n\n\t")
+		io.WriteString(f, le.Stats)
 
 	default:
 		fmt.Fprintf(f, "%%!%c(BADVERB)", verb)
+	}
+}
+
+// writeStrings writes lines to w with an optional per-line prefix.
+//
+// Empty lines result in a newline being written to the writer, ignoring prefix.
+// The final newline is omitted.
+func writeStrings(w io.Writer, prefix string, lines []string) {
+	for i, l := range lines {
+		if prefix != "" && l != "" {
+			io.WriteString(w, prefix)
+		}
+		io.WriteString(w, l)
+		if i < len(lines)-1 {
+			io.WriteString(w, "\n")
+		}
 	}
 }

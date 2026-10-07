@@ -236,6 +236,7 @@ func (ps *ProgramSpec) targetsKernelModule() bool {
 //	fmt.Printf("%+v", ve) // Display the full log from start to finish, including diagnostics and stats.
 //	fmt.Printf("%-10v", ve) // Display the last 10 log lines, diagnostics (if any) and stats.
 //	fmt.Printf("%+5v", ve) // Display the first 5 log lines, diagnostics (if any) and stats.
+//	fmt.Printf("%d", ve) // Display only the diagnostics, if any.
 //
 // Diagnostics were introduced in Linux 7.3 and include human-readable advice
 // for solving or working around the verifier error. Stats are a single line of

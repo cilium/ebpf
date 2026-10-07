@@ -240,6 +240,14 @@ func (le *VerifierError) Format(f fmt.State, verb rune) {
 	case 's':
 		io.WriteString(f, le.Error())
 
+	case 'd':
+		fmt.Fprintf(f, "%s: %s:\n", le.source, le.Cause.Error())
+		if le.Diagnostics != nil {
+			writeStrings(f, "\t", le.Diagnostics)
+		} else {
+			io.WriteString(f, "\tNo diagnostics included in the verifier error. Format with %+v to see the full verifier log.")
+		}
+
 	case 'v':
 		n, haveWidth := f.Width()
 		if haveWidth {

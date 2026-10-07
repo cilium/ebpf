@@ -1017,6 +1017,10 @@ func ExampleVerifierError() {
 	// or %-<n>v.
 	fmt.Printf("First line: %+1v\n", err)
 	fmt.Printf("Last two lines: %-2v\n", err)
+
+	// Omit the log and statistics, only display human-readable diagnostics with
+	// root cause analysis and suggestions:
+	fmt.Printf("Diagnostics: %d\n", err)
 }
 
 // Use NewProgramWithOptions if you'd like to get the verifier output

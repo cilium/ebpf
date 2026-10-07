@@ -115,6 +115,10 @@ func TestVerifierErrorFormatting(t *testing.T) {
 
 	processed 1 insns (limit 1000000) max_states_per_insn 0 total_states 0 peak_states 0 mark_read 0`)
 
+	// Legacy d with missing diagnostics.
+	testFormat(t, "%d", legacy, `file: error:
+	No diagnostics included in the verifier error. Format with %+v to see the full verifier log.`)
+
 	diag := readErrorFromFile(t, "testdata/diagnostics.log")
 
 	// Diagnostics s and v without verb.
@@ -195,6 +199,24 @@ func TestVerifierErrorFormatting(t *testing.T) {
 
 	processed 1 insns (limit 1000000) max_states_per_insn 0 total_states 0 peak_states 0 mark_read 0`)
 
+	// Diagnostics d.
+	testFormat(t, "%d", diag, `file: error:
+	Verification failed: Register Type Safety: Unreadable register
+
+	Reason:
+	  R0 has never been initialized on this path, so the verifier cannot use it as an input.
+
+	At:
+	  insn 0
+	        | ^-- error: R0 is not readable
+	  Instruction context:
+	  >>> 0 | (95) exit
+
+	Causal path:
+	  no retained diagnostic events on this path
+
+	Suggestion:
+	  Initialize R0 on every path before this instruction.`)
 }
 
 func TestVerifierErrorDiagnostics(t *testing.T) {

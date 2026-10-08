@@ -14,8 +14,9 @@ extern struct nf_conn *bpf_skb_ct_lookup(struct __sk_buff *, struct bpf_sock_tup
 extern void bpf_ct_release(struct nf_conn *) __ksym;
 
 __section("tc") int call_kfunc(void *ctx) {
-	char buf[1];
-	struct nf_conn *conn = bpf_skb_ct_lookup(ctx, (void *)buf, 0, (void *)buf, 0);
+	char tuple[1];
+	uint32_t opts[3] = {};
+	struct nf_conn *conn = bpf_skb_ct_lookup(ctx, (void *)tuple, 0, (void *)opts, sizeof(opts));
 	if (conn) {
 		bpf_ct_release(conn);
 	}

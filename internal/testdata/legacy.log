@@ -1,4 +1,5 @@
-0: R1=ctx(id=0,off=0,imm=0) R10=fp0
+0: R1=ctx() R10=fp0
 0: (95) exit
 R0 !read_ok
+
 processed 1 insns (limit 1000000) max_states_per_insn 0 total_states 0 peak_states 0 mark_read 0

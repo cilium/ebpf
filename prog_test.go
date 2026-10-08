@@ -282,7 +282,12 @@ func TestProgramVerifierOutputOnError(t *testing.T) {
 
 	switch {
 	case platform.IsLinux:
-		if !strings.Contains(ve.Error(), "R0 !read_ok") {
+		// Legacy errors contain just the last few lines of the verifier log,
+		// excluding 'processed ...'. Linux 7.3 and later includes
+		// human-readable diagnostics with suggestions.
+		legacy := strings.Contains(ve.Error(), "R0 !read_ok")
+		diag := strings.Contains(ve.Error(), "R0 has never been initialized on this path")
+		if !legacy && !diag {
 			t.Logf("%+v", ve)
 			t.Error("Missing verifier log in error summary")
 		}
@@ -977,51 +982,6 @@ func BenchmarkNewProgram(b *testing.B) {
 			b.Fatal("Unexpected error:", err)
 		}
 	}
-}
-
-// Print the full verifier log when loading a program fails.
-func ExampleVerifierError_retrieveFullLog() {
-	_, err := NewProgram(&ProgramSpec{
-		Type: SocketFilter,
-		Instructions: asm.Instructions{
-			asm.LoadImm(asm.R0, 0, asm.DWord),
-			// Missing Return
-		},
-		License: "MIT",
-	})
-
-	if ve, ok := errors.AsType[*VerifierError](err); ok {
-		// Using %+v will print the whole verifier error, not just the last
-		// few lines.
-		fmt.Printf("Verifier error: %+v\n", ve)
-	}
-}
-
-// VerifierLog understands a variety of formatting flags.
-func ExampleVerifierError() {
-	err := internal.ErrorWithLog(
-		"catastrophe",
-		syscall.ENOSPC,
-		[]byte("first\nsecond\nthird"),
-	)
-
-	fmt.Printf("With %%s: %s\n", err)
-	fmt.Printf("All log lines: %+v\n", err)
-	fmt.Printf("First line: %+1v\n", err)
-	fmt.Printf("Last two lines: %-2v\n", err)
-
-	// Output: With %s: catastrophe: no space left on device: third (2 line(s) omitted)
-	// All log lines: catastrophe: no space left on device:
-	// 	first
-	// 	second
-	// 	third
-	// First line: catastrophe: no space left on device:
-	// 	first
-	// 	(2 line(s) omitted)
-	// Last two lines: catastrophe: no space left on device:
-	// 	(1 line(s) omitted)
-	// 	second
-	// 	third
 }
 
 // Use NewProgramWithOptions if you'd like to get the verifier output

@@ -214,7 +214,7 @@ func (ps *ProgramSpec) targetsKernelModule() bool {
 	switch ps.Type {
 	case Tracing:
 		switch ps.AttachType {
-		case AttachTraceFEntry, AttachTraceFExit:
+		case AttachTraceFEntry, AttachTraceFExit, AttachTraceFSession:
 			return true
 		}
 	case Kprobe:
@@ -1212,6 +1212,10 @@ func findProgramTargetInKernel(name string, progType ProgramType, attachType Att
 		typeName = name
 		featureName = fmt.Sprintf("fexit %s", name)
 		target = (*btf.Func)(nil)
+	case match{Tracing, AttachTraceFSession}:
+		typeName = name
+		featureName = fmt.Sprintf("fsession %s", name)
+		target = (*btf.Func)(nil)
 	case match{Tracing, AttachModifyReturn}:
 		typeName = name
 		featureName = fmt.Sprintf("fmod_ret %s", name)
@@ -1334,6 +1338,7 @@ func findTargetInProgram(prog *Program, name string, progType ProgramType, attac
 	var typeName string
 	switch (match{progType, attachType}) {
 	case match{Extension, AttachNone},
+		match{Tracing, AttachTraceFSession},
 		match{Tracing, AttachTraceFEntry},
 		match{Tracing, AttachTraceFExit}:
 		typeName = name

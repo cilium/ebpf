@@ -310,6 +310,19 @@ fixups:
 		target := btf.Type((*btf.Func)(nil))
 		spec, module, err := findTargetInKernel(kfm.Func.Name, &target, cache)
 		if errors.Is(err, btf.ErrNotFound) {
+			// The "ignored suffix rule": kernels rename kfuncs as their
+			// signature changes across versions, and a BPF program can declare
+			// one ___-suffixed variant per known signature (e.g. "foo___old",
+			// "foo") so the correct one resolves against whatever kernel it
+			// runs on. Retry the lookup with the flavour suffix stripped. The
+			// btf.CheckTypeCompatibility call below still guards against
+			// binding to an unrelated kfunc that happens to share the name.
+			if essential := btf.EssentialName(kfm.Func.Name); essential != kfm.Func.Name {
+				target = btf.Type((*btf.Func)(nil))
+				spec, module, err = findTargetInKernel(essential, &target, cache)
+			}
+		}
+		if errors.Is(err, btf.ErrNotFound) {
 			if kfm.Binding == elf.STB_WEAK {
 				if ins.IsKfuncCall() {
 					// If the kfunc call is weak and not found, poison the call. Use a

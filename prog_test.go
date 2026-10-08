@@ -984,45 +984,6 @@ func BenchmarkNewProgram(b *testing.B) {
 	}
 }
 
-// [VerifierError] understands a variety of formatting flags. Use them to e.g.
-// write the full verifier log to a file when loading a program fails, since it
-// can be quite large depending on the size and complexity of your program.
-//
-// Linux 7.3 and newer also returns a human-readable diagnostics report as part
-// of every verifier error. See the example below for how to display this
-// separately.
-func ExampleVerifierError() {
-	_, err := NewProgram(&ProgramSpec{
-		Type: SocketFilter,
-		Instructions: asm.Instructions{
-			asm.LoadImm(asm.R10, 0, asm.DWord),
-			// Missing Return
-		},
-		License: "MIT",
-	})
-
-	// Only the inner, typed VerifierError can be formatted. Don't use `err`!
-	ve, _ := errors.AsType[*VerifierError](err)
-
-	// %s prints a single-line summary of up to two lines of verifier log
-	// output, ignoring the 'processed ..' statistics. On Linux 7.3 and later,
-	// displays the 'Reason:' and 'Suggestion:' in a short form instead.
-	fmt.Printf("With %%s: %s\n", ve)
-
-	// Using %+v will print the whole verifier error, including diagnostics and
-	// stats.
-	fmt.Printf("Full verifier error: %+v\n", ve)
-
-	// Control exactly how many lines of log output you want to see with %+<n>v
-	// or %-<n>v.
-	fmt.Printf("First line: %+1v\n", err)
-	fmt.Printf("Last two lines: %-2v\n", err)
-
-	// Omit the log and statistics, only display human-readable diagnostics with
-	// root cause analysis and suggestions:
-	fmt.Printf("Diagnostics: %d\n", err)
-}
-
 // Use NewProgramWithOptions if you'd like to get the verifier output
 // for a program, or if you want to change the buffer size used when
 // generating error messages.

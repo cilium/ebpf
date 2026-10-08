@@ -781,6 +781,21 @@ func TestProgramAttachToKernel(t *testing.T) {
 	}
 }
 
+func TestProgramAttachLSMCgroup(t *testing.T) {
+	testutils.SkipOnOldKernel(t, "6.0", "BPF_LSM_CGROUP")
+
+	_ = mustNewProgram(t, &ProgramSpec{
+		AttachTo:   "task_getpgid",
+		AttachType: AttachLSMCgroup,
+		Instructions: asm.Instructions{
+			asm.LoadImm(asm.R0, 0, asm.DWord),
+			asm.Return(),
+		},
+		License: "GPL",
+		Type:    LSM,
+	}, nil)
+}
+
 func TestProgramKernelTypes(t *testing.T) {
 	if _, err := os.Stat("/sys/kernel/btf/vmlinux"); os.IsNotExist(err) {
 		t.Skip("/sys/kernel/btf/vmlinux not present")

@@ -177,6 +177,12 @@ godoc('ProgramSpec.SectionName') }}.
 | fentry.s/             | Tracing                    | AttachTraceFEntry                | BPF_F_SLEEPABLE            |
 | fmod_ret.s/           | Tracing                    | AttachModifyReturn               | BPF_F_SLEEPABLE            |
 | fexit.s/              | Tracing                    | AttachTraceFExit                 | BPF_F_SLEEPABLE            |
+| fentry.multi/         | Tracing                    | AttachTraceFEntryMulti           |                            |
+| fexit.multi/          | Tracing                    | AttachTraceFExitMulti            |                            |
+| fsession.multi/       | Tracing                    | AttachTraceFSessionMulti         |                            |
+| fentry.multi.s/       | Tracing                    | AttachTraceFEntryMulti           | BPF_F_SLEEPABLE            |
+| fexit.multi.s/        | Tracing                    | AttachTraceFExitMulti            | BPF_F_SLEEPABLE            |
+| fsession.multi.s/     | Tracing                    | AttachTraceFSessionMulti         | BPF_F_SLEEPABLE            |
 | freplace/             | Extension                  |                                  |                            |
 | lsm/                  | LSM                        | AttachLSMMac                     |                            |
 | lsm.s/                | LSM                        | AttachLSMMac                     | BPF_F_SLEEPABLE            |

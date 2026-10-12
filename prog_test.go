@@ -158,7 +158,8 @@ func TestProgramBenchmark(t *testing.T) {
 
 	prog := createBasicProgram(t)
 
-	ret, duration, err := prog.Benchmark(internal.EmptyBPFContext, 1, nil)
+	fb := &fakeTestingB{}
+	ret, duration, err := prog.Benchmark(fb, 1, internal.EmptyBPFContext)
 	testutils.SkipIfNotSupported(t, err)
 	if err != nil {
 		t.Fatal("Error from Benchmark:", err)
@@ -171,6 +172,25 @@ func TestProgramBenchmark(t *testing.T) {
 	if duration == 0 {
 		t.Error("Expected non-zero duration")
 	}
+}
+
+// fakeTestingB is a minimal fake implementation of testingB, standing in for
+// *testing.B in this package's own tests: a real *testing.B can only be
+// constructed by the go test runner, not by test code itself.
+type fakeTestingB struct {
+	resetTimerCalls int
+	metrics         map[string]float64
+}
+
+func (f *fakeTestingB) ResetTimer() {
+	f.resetTimerCalls++
+}
+
+func (f *fakeTestingB) ReportMetric(n float64, unit string) {
+	if f.metrics == nil {
+		f.metrics = make(map[string]float64)
+	}
+	f.metrics[unit] = n
 }
 
 func TestProgramClose(t *testing.T) {

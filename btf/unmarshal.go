@@ -226,10 +226,10 @@ func (d *decoder) typeID(typ Type) (TypeID, error) {
 	return id, nil
 }
 
-// typesByName returns all types which have the given essential name.
+// TypesByName returns all types which have the given name.
 //
 // Returns ErrNotFound if no matching Type exists.
-func (d *decoder) typesByName(name essentialName) ([]Type, error) {
+func (d *decoder) typesByName(name string) ([]Type, error) {
 	var types []Type
 	for id := range d.namedTypes.Find(string(name)) {
 		typ, err := d.typeByID(id)
@@ -237,7 +237,7 @@ func (d *decoder) typesByName(name essentialName) ([]Type, error) {
 			return nil, err
 		}
 
-		if newEssentialName(typ.TypeName()) == name {
+		if typ.TypeName() == name {
 			// Deal with hash collisions by checking against the name.
 			types = append(types, typ)
 		}

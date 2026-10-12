@@ -408,7 +408,7 @@ func (s *Spec) TypeID(typ Type) (TypeID, error) {
 //
 // Returns an error wrapping ErrNotFound if no matching Type exists in the Spec.
 func (s *Spec) AnyTypesByName(name string) ([]Type, error) {
-	types, err := s.d.typesByName(newEssentialName(name))
+	types, err := s.d.typesByName(name)
 	if err != nil {
 		return nil, err
 	}

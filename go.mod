@@ -6,8 +6,8 @@ require (
 	github.com/go-quicktest/qt v1.102.0
 	github.com/google/go-cmp v0.7.0
 	github.com/jsimonetti/rtnetlink/v2 v2.2.0
-	golang.org/x/sync v0.23.0
-	golang.org/x/sys v0.48.0
+	golang.org/x/sync v0.24.0
+	golang.org/x/sys v0.49.0
 )
 
 require (
@@ -19,7 +19,6 @@ require (
 	github.com/docker/docker-credential-helpers v0.9.3 // indirect
 	github.com/google/go-containerregistry v0.20.6 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
-	github.com/josharian/native v1.1.0 // indirect
 	github.com/klauspost/compress v1.18.0 // indirect
 	github.com/kr/pretty v0.3.1 // indirect
 	github.com/kr/text v0.2.0 // indirect
@@ -35,10 +34,10 @@ require (
 	github.com/spf13/pflag v1.0.10 // indirect
 	github.com/stretchr/testify v1.11.1 // indirect
 	github.com/vbatts/tar-split v0.12.1 // indirect
-	golang.org/x/exp/typeparams v0.0.0-20260209203927-2842357ff358 // indirect
-	golang.org/x/mod v0.35.0 // indirect
-	golang.org/x/net v0.59.0 // indirect
-	golang.org/x/tools v0.44.1-0.20260420230617-19499e7caabc // indirect
+	golang.org/x/exp/typeparams v0.0.0-20261011100332-faecfb24eb49 // indirect
+	golang.org/x/mod v0.42.0 // indirect
+	golang.org/x/net v0.61.0 // indirect
+	golang.org/x/tools v0.52.0 // indirect
 	gotest.tools/v3 v3.5.0 // indirect
 	honnef.co/go/tools v0.8.1 // indirect
 )

@@ -295,6 +295,7 @@ const (
 	AttachTraceRawTp                 = AttachType(sys.BPF_TRACE_RAW_TP)
 	AttachTraceFEntry                = AttachType(sys.BPF_TRACE_FENTRY)
 	AttachTraceFExit                 = AttachType(sys.BPF_TRACE_FEXIT)
+	AttachTraceFSession              = AttachType(sys.BPF_TRACE_FSESSION)
 	AttachModifyReturn               = AttachType(sys.BPF_MODIFY_RETURN)
 	AttachLSMMac                     = AttachType(sys.BPF_LSM_MAC)
 	AttachTraceIter                  = AttachType(sys.BPF_TRACE_ITER)

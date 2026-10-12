@@ -837,6 +837,17 @@ func newEssentialName(name string) essentialName {
 	return essentialName(name[:essentialNameLen(b)])
 }
 
+// EssentialName returns name without its flavour suffix, using the same
+// "ignored suffix rule" as CO-RE relocations: everything after the last
+// ___ separator (surrounded by non-underscore characters) is dropped.
+//
+// This lets callers resolve names such as kfuncs that a kernel may expose
+// under different signatures over time, where a BPF program declares one
+// ___-suffixed variant per known signature (e.g. "foo___old", "foo").
+func EssentialName(name string) string {
+	return string(newEssentialName(name))
+}
+
 // UnderlyingType skips qualifiers and Typedefs.
 func UnderlyingType(typ Type) Type {
 	result := typ

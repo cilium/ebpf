@@ -4,9 +4,9 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"sync"
 
 	"github.com/cilium/ebpf/internal/platform"
+	"github.com/cilium/ebpf/internal/testutils/fdtrace"
 )
 
 type testingM interface {
@@ -34,14 +34,10 @@ func Run(m testingM) {
 	}
 	defer ts.Close()
 
-	fds = new(sync.Map)
+	fdtrace.Enable()
 	ret := m.Run()
 
-	for _, f := range flushFrames() {
-		onLeakFD(f)
-	}
-
-	if foundLeak.Load() {
+	if fdtrace.CheckLeaks() {
 		ret = 99
 	}
 

@@ -5,7 +5,7 @@ import (
 	"runtime"
 	"strconv"
 
-	"github.com/cilium/ebpf/internal/testutils/testmain"
+	"github.com/cilium/ebpf/internal/testutils/fdtrace"
 	"github.com/cilium/ebpf/internal/unix"
 )
 
@@ -19,11 +19,11 @@ var ErrClosedFd = unix.EBADF
 const invalidFd = -1
 
 func newFD(value int) *FD {
-	testmain.TraceFD(value, 1)
+	fdtrace.TraceFD(value, 1)
 
 	fd := &FD{raw: value}
 	fd.cleanup = runtime.AddCleanup(fd, func(raw int) {
-		testmain.LeakFD(raw)
+		fdtrace.LeakFD(raw)
 		_ = unix.Close(raw)
 	}, fd.raw)
 	return fd
@@ -51,7 +51,7 @@ func (fd *FD) Uint() uint32 {
 // lifecycle.
 func (fd *FD) Disown() int {
 	value := fd.raw
-	testmain.ForgetFD(value)
+	fdtrace.ForgetFD(value)
 	fd.raw = invalidFd
 
 	fd.cleanup.Stop()

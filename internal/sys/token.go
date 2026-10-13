@@ -9,7 +9,7 @@ import (
 	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/mountinfo"
 	"github.com/cilium/ebpf/internal/platform"
-	"github.com/cilium/ebpf/internal/testutils/testmain"
+	"github.com/cilium/ebpf/internal/testutils/fdtrace"
 	"github.com/cilium/ebpf/internal/unix"
 )
 
@@ -120,7 +120,7 @@ func getToken() (*Token, error) {
 
 		// Forget the fd, we are intentionally leaking it for caching purposes.
 		if token != nil {
-			testmain.ForgetFD(token.FD())
+			fdtrace.ForgetFD(token.FD())
 		}
 	})
 

@@ -2382,3 +2382,23 @@ func ExampleMap_Iterate_nestedMapsAndProgramArrays() {
 		panic(fmt.Sprint("Iterator encountered an error:", err))
 	}
 }
+
+func TestSliceLen(t *testing.T) {
+	slice := []uint32{1, 2, 3}
+
+	n, err := sliceLen(slice)
+	qt.Assert(t, qt.IsNil(err))
+	qt.Assert(t, qt.Equals(n, 3))
+
+	// A pointer to a slice works, matching package sysenc.
+	n, err = sliceLen(&slice)
+	qt.Assert(t, qt.IsNil(err))
+	qt.Assert(t, qt.Equals(n, 3))
+
+	var nilSlice *[]uint32
+	_, err = sliceLen(nilSlice)
+	qt.Assert(t, qt.IsNotNil(err))
+
+	_, err = sliceLen(uint32(42))
+	qt.Assert(t, qt.IsNotNil(err))
+}

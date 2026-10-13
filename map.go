@@ -1229,8 +1229,7 @@ func (m *Map) guessNonExistentKey() ([]byte, error) {
 
 // BatchLookup looks up many elements in a map at once.
 //
-// "keysOut" and "valuesOut" must be of type slice, a pointer
-// to a slice or buffer will not work.
+// "keysOut" and "valuesOut" must be a slice or a pointer to a slice.
 // "cursor" is an pointer to an opaque handle. It must be non-nil. Pass
 // "cursor" to subsequent calls of this function to continue the batching
 // operation in the case of chunking.
@@ -1253,8 +1252,7 @@ func (m *Map) BatchLookup(cursor *MapBatchCursor, keysOut, valuesOut any, opts *
 // BatchLookupAndDelete looks up many elements in a map at once,
 //
 // It then deletes all those elements.
-// "keysOut" and "valuesOut" must be of type slice, a pointer
-// to a slice or buffer will not work.
+// "keysOut" and "valuesOut" must be a slice or a pointer to a slice.
 // "cursor" is an pointer to an opaque handle. It must be non-nil. Pass
 // "cursor" to subsequent calls of this function to continue the batching
 // operation in the case of chunking.
@@ -1389,8 +1387,7 @@ func (m *Map) batchLookupCmd(cmd sys.Cmd, cursor *MapBatchCursor, count int, key
 
 // BatchUpdate updates the map with multiple keys and values
 // simultaneously.
-// "keys" and "values" must be of type slice, a pointer
-// to a slice or buffer will not work.
+// "keys" and "values" must be a slice or a pointer to a slice.
 func (m *Map) BatchUpdate(keys, values any, opts *BatchOptions) (int, error) {
 	if m.typ.hasPerCPUValue() {
 		return m.batchUpdatePerCPU(keys, values, opts)
@@ -1452,7 +1449,7 @@ func (m *Map) batchUpdatePerCPU(keys, values any, opts *BatchOptions) (int, erro
 }
 
 // BatchDelete batch deletes entries in the map by keys.
-// "keys" must be of type slice, a pointer to a slice or buffer will not work.
+// "keys" must be a slice or a pointer to a slice.
 func (m *Map) BatchDelete(keys any, opts *BatchOptions) (int, error) {
 	count, err := sliceLen(keys)
 	if err != nil {
@@ -1895,9 +1892,20 @@ func NewMapFromID(id MapID) (*Map, error) {
 	return newMapFromFD(fd)
 }
 
-// sliceLen returns the length if the value is a slice or an error otherwise.
+// sliceLen returns the length of slice.
+//
+// slice may be a slice or a pointer to a slice. This matches the behaviour
+// of package sysenc, which already accepts both forms when reading and
+// writing the underlying memory.
 func sliceLen(slice any) (int, error) {
 	sliceValue := reflect.ValueOf(slice)
+	if sliceValue.Kind() == reflect.Pointer {
+		if sliceValue.IsNil() {
+			return 0, fmt.Errorf("%T is not a slice", slice)
+		}
+		// Follow the pointer to get at the slice itself.
+		sliceValue = sliceValue.Elem()
+	}
 	if sliceValue.Kind() != reflect.Slice {
 		return 0, fmt.Errorf("%T is not a slice", slice)
 	}

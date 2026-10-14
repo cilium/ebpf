@@ -367,7 +367,7 @@ func newCollectionLoader(coll *CollectionSpec, opts *CollectionOptions) (*collec
 // at those stages, we batch the lookups here instead to avoid redundant work.
 func populateKallsyms(progs map[string]*ProgramSpec) error {
 	// Look up addresses of all kernel symbols referenced by all programs.
-	addrs := make(map[string]uint64)
+	addrs := make(map[string]kallsyms.KsymAddress)
 	for _, p := range progs {
 		iter := p.Instructions.Iterate()
 		for iter.Next() {

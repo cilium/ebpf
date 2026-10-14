@@ -55,7 +55,7 @@ func TestParseProcKallsyms(t *testing.T) {
 
 func TestAssignAddressesCaching(t *testing.T) {
 	err := AssignAddresses(
-		map[string]uint64{
+		map[string]KsymAddress{
 			"bpf_perf_event_output": 0,
 			"foo":                   0,
 		},
@@ -65,11 +65,11 @@ func TestAssignAddressesCaching(t *testing.T) {
 
 	v, ok := symAddrs.Load("bpf_perf_event_output")
 	qt.Assert(t, qt.IsTrue(ok))
-	qt.Assert(t, qt.Not(qt.Equals(v, 0)))
+	qt.Assert(t, qt.IsTrue(KsymAddress(v).Exists()))
 
 	v, ok = symAddrs.Load("foo")
 	qt.Assert(t, qt.IsTrue(ok))
-	qt.Assert(t, qt.Equals(v, 0))
+	qt.Assert(t, qt.IsFalse(KsymAddress(v).Exists()))
 }
 
 func TestAssignAddresses(t *testing.T) {

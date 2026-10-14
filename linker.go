@@ -505,39 +505,46 @@ func applyUntypedKsymFixups(fixups []ksymFixup) error {
 		return nil
 	}
 
-	symbols := make(map[string]uint64)
+	symbols := make(map[string]kallsyms.KsymAddress)
 	for _, fixup := range fixups {
 		symbols[fixup.Name] = 0
 	}
 
 	err := kallsyms.AssignAddresses(symbols)
-	// Tolerate ErrRestrictedKernel during initial lookup, user may have all weak
-	// ksyms and a fallback path.
-	if err != nil && !errors.Is(err, ErrRestrictedKernel) {
+	if err != nil {
 		return fmt.Errorf("resolve ksyms: %w", err)
 	}
 
-	var missing []string
+	var kernelMissingSymbol []string
+	var kallsymsRestricted []string
 	for _, fixup := range fixups {
 		addr := symbols[fixup.Name]
 		// A weak ksym variable in eBPF C means its resolution is optional.
-		if addr == 0 && fixup.Binding != elf.STB_WEAK {
-			if !slices.Contains(missing, fixup.Name) {
-				missing = append(missing, fixup.Name)
+		if fixup.Binding != elf.STB_WEAK {
+			if !addr.Exists() {
+				if !slices.Contains(kernelMissingSymbol, fixup.Name) {
+					kernelMissingSymbol = append(kernelMissingSymbol, fixup.Name)
+				}
+				continue
 			}
-			continue
+			// if the address kallsyms reported is 0 then addresses in /proc/kallsyms
+			// are likely hidden due to kptr_restrict.
+			if addr.Address() == 0 {
+				if !slices.Contains(kallsymsRestricted, fixup.Name) {
+					kallsymsRestricted = append(kallsymsRestricted, fixup.Name)
+				}
+				continue
+			}
 		}
 
-		fixup.Constant = int64(addr)
+		fixup.Constant = int64(addr.Address())
 	}
 
-	if len(missing) > 0 {
-		if err != nil {
-			// Program contains required ksyms, return the error from above.
-			return fmt.Errorf("resolve required ksyms: %s: %w", strings.Join(missing, ","), err)
-		}
-
-		return fmt.Errorf("kernel is missing symbol: %s", strings.Join(missing, ","))
+	if len(kallsymsRestricted) > 0 {
+		return fmt.Errorf("resolve required ksyms: %s: %w", strings.Join(kallsymsRestricted, ","), ErrRestrictedKernel)
+	}
+	if len(kernelMissingSymbol) > 0 {
+		return fmt.Errorf("kernel is missing symbol: %s", strings.Join(kernelMissingSymbol, ","))
 	}
 
 	return nil

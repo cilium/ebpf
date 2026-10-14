@@ -17,13 +17,31 @@ var errAmbiguousKsym = errors.New("multiple kernel symbols with the same name")
 
 var symAddrs cache[string, uint64]
 
+const noAddressSentinel = 0xffffffffffffffff
+
+// KsymAddress represents the address of a symbol in /proc/kallsyms
+type KsymAddress uint64
+
+// Exists tells us if the symbol address was found in /proc/kallsyms
+func (s KsymAddress) Exists() bool {
+	return uint64(s) != noAddressSentinel
+}
+
+// Address gives the uint64 raw address of a symbol in /proc/kallsyms
+// if it exists. Returns 0 otherwise.
+func (s KsymAddress) Address() uint64 {
+	if !s.Exists() {
+		return uint64(0)
+	}
+	return uint64(s)
+}
+
 // AssignAddresses looks up the addresses of the requested symbols in the kernel
 // and assigns them to their corresponding values in the symbols map. Results
 // of all lookups are cached, successful or otherwise.
 //
-// Any symbols missing in the kernel are ignored. Returns an error if multiple
-// addresses were found for a symbol.
-func AssignAddresses(symbols map[string]uint64) error {
+// Returns an error if multiple addresses were found for a symbol.
+func AssignAddresses(symbols map[string]KsymAddress) error {
 	if !platform.IsLinux {
 		return fmt.Errorf("read /proc/kallsyms: %w", internal.ErrNotSupportedOnOS)
 	}
@@ -36,7 +54,7 @@ func AssignAddresses(symbols map[string]uint64) error {
 	request := make(map[string]uint64)
 	for name := range symbols {
 		if addr, ok := symAddrs.Load(name); ok {
-			symbols[name] = addr
+			symbols[name] = KsymAddress(addr)
 			continue
 		}
 
@@ -62,7 +80,7 @@ func AssignAddresses(symbols map[string]uint64) error {
 	// they weren't found, to avoid repeated lookups.
 	for name, addr := range request {
 		symAddrs.Store(name, addr)
-		symbols[name] = addr
+		symbols[name] = KsymAddress(addr)
 	}
 
 	return nil
@@ -75,6 +93,11 @@ func assignAddresses(f io.Reader, symbols map[string]uint64) error {
 	if len(symbols) == 0 {
 		return nil
 	}
+
+	for name := range symbols {
+		symbols[name] = noAddressSentinel
+	}
+
 	r := newReader(f)
 	for r.Line() {
 		s, err, skip := parseSymbol(r, nil)
@@ -86,7 +109,7 @@ func assignAddresses(f io.Reader, symbols map[string]uint64) error {
 		}
 
 		existing, requested := symbols[string(s.name)]
-		if existing != 0 {
+		if requested && existing != noAddressSentinel {
 			// Multiple addresses for a symbol have been found. Return a friendly
 			// error to avoid silently attaching to the wrong symbol. libbpf also
 			// rejects referring to ambiguous symbols.
@@ -102,10 +125,10 @@ func assignAddresses(f io.Reader, symbols map[string]uint64) error {
 			// This memory is unlikely to contain anything useful, and production
 			// machines are unlikely to run without KASLR.
 			//
-			// Return a helpful error instead of silently returning zero addresses.
-			if s.addr == 0 {
-				return fmt.Errorf("symbol %s: %w", s.name, internal.ErrRestrictedKernel)
-			}
+			// Continue using 0 to indicate that the symbol was found, but without an address.
+			// At the point where this symbol is used, it can be decided if this is a failure
+			// condition or not.
+
 			symbols[string(s.name)] = s.addr
 		}
 	}

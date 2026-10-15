@@ -101,3 +101,53 @@ var _ Link = (*tracingMulti)(nil)
 func (f *tracingMulti) Update(_ *ebpf.Program) error {
 	return fmt.Errorf("tracing_multi update: %w", ErrNotSupported)
 }
+
+func (f *tracingMulti) Info() (*Info, error) {
+	var info sys.TracingMultiLinkInfo
+	if err := sys.ObjInfo(f.fd, &info); err != nil {
+		return nil, fmt.Errorf("tracing multi link info: %w", err)
+	}
+	// Every tracing_multi link has a non-zero attach type, so a zero value
+	// means the kernel doesn't fill in tracing_multi link info.
+	if info.AttachType == 0 {
+		return nil, fmt.Errorf("tracing multi link info: %w", ErrNotSupported)
+	}
+	var (
+		ids     = make([]uint32, info.Count)
+		addrs   = make([]uint64, info.Count)
+		cookies = make([]uint64, info.Count)
+	)
+	info = sys.TracingMultiLinkInfo{
+		Ids:     sys.SlicePointer(ids),
+		Addrs:   sys.SlicePointer(addrs),
+		Cookies: sys.SlicePointer(cookies),
+		Count:   uint32(len(ids)),
+	}
+	if err := sys.ObjInfo(f.fd, &info); err != nil {
+		return nil, fmt.Errorf("tracing multi link info: %w", err)
+	}
+	if info.Ids.IsNil() {
+		ids = nil
+	}
+	if info.Addrs.IsNil() {
+		addrs = nil
+	}
+	if info.Cookies.IsNil() {
+		cookies = nil
+	}
+	extra := &TracingMultiInfo{
+		AttachType: info.AttachType,
+		Count:      info.Count,
+		BtfObjId:   info.BtfObjId,
+		ids:        ids,
+		addrs:      addrs,
+		cookies:    cookies,
+	}
+
+	return &Info{
+		info.Type,
+		info.Id,
+		ebpf.ProgramID(info.ProgId),
+		extra,
+	}, nil
+}

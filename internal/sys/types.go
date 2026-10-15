@@ -1785,6 +1785,22 @@ type TracingLinkInfo struct {
 	_           [24]byte
 }
 
+type TracingMultiLinkInfo struct {
+	_          structs.HostLayout
+	Type       LinkType
+	Id         LinkID
+	ProgId     uint32
+	_          [4]byte
+	AttachType AttachType
+	Count      uint32
+	BtfObjId   uint32
+	_          [4]byte
+	Ids        TypedPointer[uint32]
+	Addrs      TypedPointer[uint64]
+	Cookies    TypedPointer[uint64]
+	_          [8]byte
+}
+
 type UprobeLinkInfo struct {
 	_             structs.HostLayout
 	Type          LinkType

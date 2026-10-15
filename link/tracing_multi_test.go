@@ -41,6 +41,41 @@ func TestTracingMulti(t *testing.T) {
 			}
 			defer link.Close()
 
+			t.Run("info", func(t *testing.T) {
+				info, err := link.Info()
+				testutils.SkipIfNotSupported(t, err)
+				if err != nil {
+					t.Fatal("Can't get tracing_multi link info:", err)
+				}
+				if info.Type != TracingMultiType {
+					t.Fatalf("expected link type %v, got %v", TracingMultiType, info.Type)
+				}
+				tracingMulti := info.TracingMulti()
+				if tracingMulti == nil {
+					t.Fatal("missing tracing_multi info")
+				}
+				if tracingMulti.AttachType != sys.AttachType(attachType) {
+					t.Fatalf("expected attach type %s, got %s", attachType, tracingMulti.AttachType)
+				}
+				targets, ok := tracingMulti.Targets()
+				if !ok {
+					t.Fatal("tracing_multi targets unavailable")
+				}
+				if len(targets) != len(ids) || tracingMulti.Count != uint32(len(ids)) {
+					t.Fatalf("expected %d targets, got %d (count %d)", len(ids), len(targets), tracingMulti.Count)
+				}
+				wantCookies := map[btf.TypeID]uint64{ids[0]: 1, ids[1]: 2}
+				for _, target := range targets {
+					if want, ok := wantCookies[target.BtfID]; !ok || target.Cookie != want {
+						t.Fatalf("unexpected tracing_multi target: %+v", target)
+					}
+					delete(wantCookies, target.BtfID)
+				}
+				if len(wantCookies) != 0 {
+					t.Fatalf("missing tracing_multi targets: %v", wantCookies)
+				}
+			})
+
 			testLink(t, link, prog)
 		})
 	}

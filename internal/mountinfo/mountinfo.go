@@ -143,15 +143,19 @@ func parseLine(line string) (Entry, error) {
 
 // show_mountinfo in the kernel has the escape set of ' \t\n\\'. Instead of
 // a full octal unescaper, only replace these specific characters.
-var unescaper = strings.NewReplacer(
-	`\040`, " ",
-	`\011`, "\t",
-	`\012`, "\n",
-	`\134`, `\`,
-)
+//
+// The replacer is created lazily to avoid its cost at package init time.
+var unescaper = sync.OnceValue(func() *strings.Replacer {
+	return strings.NewReplacer(
+		`\040`, " ",
+		`\011`, "\t",
+		`\012`, "\n",
+		`\134`, `\`,
+	)
+})
 
 func unescape(s string) string {
-	return unescaper.Replace(s)
+	return unescaper().Replace(s)
 }
 
 var readOnce = sync.OnceValues(func() ([]Entry, error) {

@@ -121,6 +121,7 @@ func generateTypes(spec *btf.Spec) ([]byte, error) {
 	mapIDPtr := &btf.Pointer{}
 	progIDPtr := &btf.Pointer{}
 	linkIDPtr := &btf.Pointer{}
+	typeIDPtr := &btf.Pointer{}
 
 	gf := &btf.GoFormatter{
 		Names: map[btf.Type]string{
@@ -143,6 +144,7 @@ func generateTypes(spec *btf.Spec) ([]byte, error) {
 			mapIDPtr:           internal.GoTypeName(sys.TypedPointer[sys.MapID]{}),
 			progIDPtr:          internal.GoTypeName(sys.TypedPointer[sys.ProgramID]{}),
 			linkIDPtr:          internal.GoTypeName(sys.TypedPointer[sys.LinkID]{}),
+			typeIDPtr:          internal.GoTypeName(sys.TypedPointer[sys.TypeID]{}),
 		},
 		Identifier: internal.Identifier,
 		EnumIdentifier: func(name, element string) string {
@@ -620,6 +622,17 @@ import (
 			},
 		},
 		{
+			"LinkCreateTracingMulti", retFd, "link_create", "BPF_LINK_CREATE",
+			[]patch{
+				choose(4, "tracing_multi"),
+				replace(enumTypes["AttachType"], "attach_type"),
+				flattenAnon,
+				replace(typeIDPtr, "ids"),
+				replace(uint64Ptr, "cookies"),
+				rename("cnt", "count"),
+			},
+		},
+		{
 			"LinkCreateTcx", retFd, "link_create", "BPF_LINK_CREATE",
 			[]patch{
 				choose(1, "target_ifindex"),
@@ -786,6 +799,15 @@ import (
 				flattenAnon,
 				replace(enumTypes["AttachType"], "attach_type"),
 				replace(typeID, "target_btf_id"),
+			},
+		},
+		{"TracingMultiLinkInfo",
+			[]patch{
+				choose(3, "tracing_multi"),
+				flattenAnon,
+				replace(enumTypes["AttachType"], "attach_type"),
+				replace(uint32Ptr, "ids"),
+				replace(uint64Ptr, "addrs", "cookies"),
 			},
 		},
 		{"XDPLinkInfo",

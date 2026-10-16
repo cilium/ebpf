@@ -356,6 +356,25 @@ func TestAtomics(t *testing.T) {
 	}
 }
 
+func TestMarshalAtomicImmediate(t *testing.T) {
+	for _, tc := range []struct {
+		ins Instruction
+		imm byte
+	}{
+		{CmpXchg.Mem(R6, R2, DWord, 0), 0xf1},
+		{Xchg.Mem(R6, R2, DWord, 0), 0xe1},
+		{FetchAdd.Mem(R1, R0, Word, 0), 0x01},
+	} {
+		var buf bytes.Buffer
+		if _, err := tc.ins.Marshal(&buf, binary.LittleEndian); err != nil {
+			t.Fatal(err)
+		}
+		if got := buf.Bytes()[4]; got != tc.imm {
+			t.Errorf("%s: marshaled immediate = %#x, want %#x", tc.ins, got, tc.imm)
+		}
+	}
+}
+
 func TestISAv4(t *testing.T) {
 	rawInsns := []byte{
 		0xd7, 0x01, 0x00, 0x00, 0x10, 0x00, 0x00, 0x00, // r1 = bswap16 r1

@@ -17,7 +17,7 @@ import (
 
 	"github.com/cilium/ebpf/btf"
 	b2gInt "github.com/cilium/ebpf/cmd/bpf2go/internal"
-	"github.com/cilium/ebpf/internal"
+	"github.com/cilium/ebpf/internal/codegen"
 )
 
 //go:embed output.tpl
@@ -109,7 +109,7 @@ type GenerateArgs struct {
 // Generate bindings for a BPF ELF file.
 func Generate(args GenerateArgs) error {
 	if args.Identifier == nil {
-		args.Identifier = internal.Identifier
+		args.Identifier = codegen.Identifier
 	}
 	if !token.IsIdentifier(args.Stem) {
 		return fmt.Errorf("%q is not a valid identifier", args.Stem)
@@ -203,7 +203,7 @@ func Generate(args GenerateArgs) error {
 		return fmt.Errorf("can't generate types: %s", err)
 	}
 
-	return internal.WriteFormatted(buf.Bytes(), args.Output)
+	return codegen.WriteFormatted(buf.Bytes(), args.Output)
 }
 
 // sortTypes returns a list of types sorted by their (generated) Go type name.

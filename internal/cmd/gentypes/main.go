@@ -17,6 +17,7 @@ import (
 
 	"github.com/cilium/ebpf/btf"
 	"github.com/cilium/ebpf/internal"
+	"github.com/cilium/ebpf/internal/codegen"
 	"github.com/cilium/ebpf/internal/sys"
 )
 
@@ -98,7 +99,7 @@ func run(args []string) error {
 	}
 	defer w.Close()
 
-	return internal.WriteFormatted(output, w)
+	return codegen.WriteFormatted(output, w)
 }
 
 func generateTypes(spec *btf.Spec) ([]byte, error) {
@@ -144,7 +145,7 @@ func generateTypes(spec *btf.Spec) ([]byte, error) {
 			progIDPtr:          internal.GoTypeName(sys.TypedPointer[sys.ProgramID]{}),
 			linkIDPtr:          internal.GoTypeName(sys.TypedPointer[sys.LinkID]{}),
 		},
-		Identifier: internal.Identifier,
+		Identifier: codegen.Identifier,
 		EnumIdentifier: func(name, element string) string {
 			return element
 		},

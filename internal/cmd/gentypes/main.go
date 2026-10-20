@@ -350,6 +350,7 @@ import (
 				replaceWithBytes("extra"),
 			},
 		},
+		{"CommonAttr", "bpf_common_attr", []patch{replace(rawPointer, "log_buf"), replace(logLevel, "log_level")}},
 		{"FuncInfo", "bpf_func_info", nil},
 		{"LineInfo", "bpf_line_info", nil},
 		{"XdpMd", "xdp_md", nil},

@@ -933,6 +933,21 @@ func (p *Program) Run(opts *RunOptions) (uint32, error) {
 // interrupted, and should be set to testing.B.ResetTimer or similar.
 //
 // This function requires at least Linux 4.12.
+//
+// There are a few significant caveats when using Benchmark with Go's testing.B:
+//
+// 1. When measuring the performance of the Go code _surrounding_ the call to
+// Benchmark (like unmarshaling values produced by a BPF program), avoid calling
+// b.StopTimer and b.StartTimer before and after Program.Benchmark. This will
+// cause the benchmark calibration to end up with huge b.N values, resulting in
+// benchmarks that don't terminate. Instead, measure user space spans manually
+// and report them as a separate metric (or as 'ns/op') using b.ReportMetric.
+//
+// 2. Benchmark will block for multiple orders of magnitude longer with a repeat
+// value larger than 1. To illustrate, one benchmark in this repository blocks
+// for 3 microseconds with n==1, while it blocks for 10 milliseconds with n==2.
+// This is due to a lack of fast-path in the kernel when multiple iterations are
+// requested, and this occurs until at least Linux 7.2.
 func (p *Program) Benchmark(in []byte, repeat int, reset func()) (uint32, time.Duration, error) {
 	if uint(repeat) > math.MaxUint32 {
 		return 0, 0, fmt.Errorf("repeat is too high")

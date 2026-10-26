@@ -8,8 +8,6 @@ import (
 	"io"
 	"io/fs"
 	"math"
-	"slices"
-	"strings"
 
 	"github.com/cilium/ebpf/asm"
 	"github.com/cilium/ebpf/btf"
@@ -507,7 +505,7 @@ func applyUntypedKsymFixups(fixups []ksymFixup) error {
 
 	symbols := make(map[string]kallsyms.KsymAddress)
 	for _, fixup := range fixups {
-		symbols[fixup.Name] = 0
+		symbols[fixup.Name] = kallsyms.KsymAddress{}
 	}
 
 	err := kallsyms.AssignAddresses(symbols)
@@ -515,36 +513,22 @@ func applyUntypedKsymFixups(fixups []ksymFixup) error {
 		return fmt.Errorf("resolve ksyms: %w", err)
 	}
 
-	var kernelMissingSymbol []string
-	var kallsymsRestricted []string
+	var ksymErrs []error
 	for _, fixup := range fixups {
-		addr := symbols[fixup.Name]
+		addr, err := symbols[fixup.Name].Address()
 		// A weak ksym variable in eBPF C means its resolution is optional.
 		if fixup.Binding != elf.STB_WEAK {
-			if !addr.Exists() {
-				if !slices.Contains(kernelMissingSymbol, fixup.Name) {
-					kernelMissingSymbol = append(kernelMissingSymbol, fixup.Name)
-				}
-				continue
-			}
-			// if the address kallsyms reported is 0 then addresses in /proc/kallsyms
-			// are likely hidden due to kptr_restrict.
-			if addr.Address() == 0 {
-				if !slices.Contains(kallsymsRestricted, fixup.Name) {
-					kallsymsRestricted = append(kallsymsRestricted, fixup.Name)
-				}
+			if err != nil {
+				ksymErrs = append(ksymErrs, fmt.Errorf("%s: %w", fixup.Name, err))
 				continue
 			}
 		}
 
-		fixup.Constant = int64(addr.Address())
+		fixup.Constant = int64(addr)
 	}
 
-	if len(kallsymsRestricted) > 0 {
-		return fmt.Errorf("resolve required ksyms: %s: %w", strings.Join(kallsymsRestricted, ","), ErrRestrictedKernel)
-	}
-	if len(kernelMissingSymbol) > 0 {
-		return fmt.Errorf("kernel is missing symbol: %s", strings.Join(kernelMissingSymbol, ","))
+	if len(ksymErrs) > 0 {
+		return fmt.Errorf("resolve required ksyms: %w", errors.Join(ksymErrs...))
 	}
 
 	return nil

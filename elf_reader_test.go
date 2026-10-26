@@ -671,23 +671,36 @@ func TestKsym(t *testing.T) {
 
 	mustRun(t, obj.Main, nil)
 
-	ksyms := map[string]kallsyms.KsymAddress{
-		"bpf_init":       0,
-		"bpf_trace_run1": 0,
-	}
-
-	qt.Assert(t, qt.IsNil(kallsyms.AssignAddresses(ksyms)))
-	qt.Assert(t, qt.IsTrue(ksyms["bpf_init"].Exists()))
-	qt.Assert(t, qt.IsTrue(ksyms["bpf_trace_run1"].Exists()))
+	ksyms := mustKsymAddresses(t, "bpf_init", "bpf_trace_run1")
 
 	var v uint64
 	err = obj.BPFInitAddr.Get(&v)
 	testutils.SkipIfNotSupported(t, err)
 	qt.Assert(t, qt.IsNil(err))
-	qt.Assert(t, qt.Equals(v, ksyms["bpf_init"].Address()))
+	qt.Assert(t, qt.Equals(v, ksyms["bpf_init"]))
 
 	qt.Assert(t, qt.IsNil(obj.BPFTraceRun1Addr.Get(&v)))
-	qt.Assert(t, qt.Equals(v, ksyms["bpf_trace_run1"].Address()))
+	qt.Assert(t, qt.Equals(v, ksyms["bpf_trace_run1"]))
+}
+
+// mustKsymAddresses looks up the given kernel symbols and fails the test if
+// any of them is missing or its address is hidden.
+func mustKsymAddresses(tb testing.TB, names ...string) map[string]uint64 {
+	tb.Helper()
+
+	ksyms := make(map[string]kallsyms.KsymAddress)
+	for _, name := range names {
+		ksyms[name] = kallsyms.KsymAddress{}
+	}
+	qt.Assert(tb, qt.IsNil(kallsyms.AssignAddresses(ksyms)))
+
+	addrs := make(map[string]uint64)
+	for name, ksym := range ksyms {
+		addr, err := ksym.Address()
+		qt.Assert(tb, qt.IsNil(err), qt.Commentf("symbol %s", name))
+		addrs[name] = addr
+	}
+	return addrs
 }
 
 func TestKsymMissing(t *testing.T) {
@@ -777,21 +790,14 @@ func TestKsymTyped(t *testing.T) {
 
 	mustRun(t, obj.Main, nil)
 
-	ksyms := map[string]kallsyms.KsymAddress{
-		"bpf_prog_active": 0,
-		"softnet_data":    0,
-	}
-
-	qt.Assert(t, qt.IsNil(kallsyms.AssignAddresses(ksyms)))
-	qt.Assert(t, qt.IsTrue(ksyms["bpf_prog_active"].Exists()))
-	qt.Assert(t, qt.IsTrue(ksyms["softnet_data"].Exists()))
+	ksyms := mustKsymAddresses(t, "bpf_prog_active", "softnet_data")
 
 	var v uint64
 	qt.Assert(t, qt.IsNil(obj.BPFProgActiveAddr.Get(&v)))
-	qt.Assert(t, qt.Equals(v, ksyms["bpf_prog_active"].Address()))
+	qt.Assert(t, qt.Equals(v, ksyms["bpf_prog_active"]))
 
 	qt.Assert(t, qt.IsNil(obj.SoftnetDataAddr.Get(&v)))
-	qt.Assert(t, qt.Equals(v, ksyms["softnet_data"].Address()))
+	qt.Assert(t, qt.Equals(v, ksyms["softnet_data"]))
 }
 
 func TestKsymTypedModVar(t *testing.T) {
@@ -817,16 +823,11 @@ func TestKsymTypedModVar(t *testing.T) {
 
 	mustRun(t, obj.Main, nil)
 
-	ksyms := map[string]kallsyms.KsymAddress{
-		"bpf_testmod_ksym_percpu": 0,
-	}
-
-	qt.Assert(t, qt.IsNil(kallsyms.AssignAddresses(ksyms)))
-	qt.Assert(t, qt.IsTrue(ksyms["bpf_testmod_ksym_percpu"].Exists()))
+	ksyms := mustKsymAddresses(t, "bpf_testmod_ksym_percpu")
 
 	var v uint64
 	qt.Assert(t, qt.IsNil(obj.TestmodKsym.Get(&v)))
-	qt.Assert(t, qt.Equals(v, ksyms["bpf_testmod_ksym_percpu"].Address()))
+	qt.Assert(t, qt.Equals(v, ksyms["bpf_testmod_ksym_percpu"]))
 }
 
 func TestKfunc(t *testing.T) {

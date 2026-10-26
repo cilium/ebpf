@@ -7,6 +7,7 @@ import (
 
 	"github.com/go-quicktest/qt"
 
+	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/platform"
 	"github.com/cilium/ebpf/internal/testutils"
 )
@@ -56,8 +57,8 @@ func TestParseProcKallsyms(t *testing.T) {
 func TestAssignAddressesCaching(t *testing.T) {
 	err := AssignAddresses(
 		map[string]KsymAddress{
-			"bpf_perf_event_output": 0,
-			"foo":                   0,
+			"bpf_perf_event_output": {},
+			"foo":                   {},
 		},
 	)
 	testutils.SkipIfNotSupportedOnOS(t, err)
@@ -65,32 +66,73 @@ func TestAssignAddressesCaching(t *testing.T) {
 
 	v, ok := symAddrs.Load("bpf_perf_event_output")
 	qt.Assert(t, qt.IsTrue(ok))
-	qt.Assert(t, qt.IsTrue(KsymAddress(v).Exists()))
+
+	addr, err = v.Address()
+	qt.Assert(t, qt.IsNil(err))
+	qt.Assert(t, qt.Not(qt.Equals(addr, 0)))
 
 	v, ok = symAddrs.Load("foo")
 	qt.Assert(t, qt.IsTrue(ok))
-	qt.Assert(t, qt.IsFalse(KsymAddress(v).Exists()))
+	_, err = v.Address()
+	qt.Assert(t, qt.IsNotNil(err))
 }
 
 func TestAssignAddresses(t *testing.T) {
 	b := bytes.NewBuffer(syms)
-	ksyms := map[string]uint64{
-		"hid_generic_probe": 0,
-		"tcp_connect":       0,
-		"bootconfig_found":  0,
+	ksyms := map[string]KsymAddress{
+		"hid_generic_probe": {},
+		"tcp_connect":       {},
+		"bootconfig_found":  {},
+		"missing":           {},
 	}
 	qt.Assert(t, qt.IsNil(assignAddresses(b, ksyms)))
 
-	qt.Assert(t, qt.Equals(ksyms["hid_generic_probe"], 0x1))
-	qt.Assert(t, qt.Equals(ksyms["tcp_connect"], 0xA0))
-	qt.Assert(t, qt.Equals(ksyms["bootconfig_found"], 0xA0000000000000BA))
+	qt.Assert(t, qt.Equals(mustAddress(t, ksyms["hid_generic_probe"]), 0x1))
+	qt.Assert(t, qt.Equals(mustAddress(t, ksyms["tcp_connect"]), 0xA0))
+	qt.Assert(t, qt.Equals(mustAddress(t, ksyms["bootconfig_found"]), 0xA0000000000000BA))
+
+	_, err := ksyms["missing"].Address()
+	qt.Assert(t, qt.IsNotNil(err))
+	qt.Assert(t, qt.Not(qt.ErrorIs(err, internal.ErrRestrictedKernel)))
 
 	b = bytes.NewBuffer(syms)
-	ksyms = map[string]uint64{
-		"hid_generic_probe": 0,
-		"writenote":         0,
+	ksyms = map[string]KsymAddress{
+		"hid_generic_probe": {},
+		"writenote":         {},
 	}
 	qt.Assert(t, qt.ErrorIs(assignAddresses(b, ksyms), errAmbiguousKsym))
+}
+
+func TestAssignAddressesRestricted(t *testing.T) {
+	// kallsyms shows all addresses as zero when kptr_restrict hides them.
+	restricted := []byte(`0000000000000000 t hid_generic_probe	[hid_generic]
+0000000000000000 t writenote
+0000000000000000 T tcp_connect
+0000000000000000 t writenote`)
+
+	ksyms := map[string]KsymAddress{
+		"tcp_connect": {},
+		"missing":     {},
+	}
+	qt.Assert(t, qt.IsNil(assignAddresses(bytes.NewBuffer(restricted), ksyms)))
+
+	_, err := ksyms["tcp_connect"].Address()
+	qt.Assert(t, qt.ErrorIs(err, internal.ErrRestrictedKernel))
+
+	_, err = ksyms["missing"].Address()
+	qt.Assert(t, qt.IsNotNil(err))
+	qt.Assert(t, qt.Not(qt.ErrorIs(err, internal.ErrRestrictedKernel)))
+
+	// Ambiguous symbols must still be detected without addresses.
+	ksyms = map[string]KsymAddress{"writenote": {}}
+	qt.Assert(t, qt.ErrorIs(assignAddresses(bytes.NewBuffer(restricted), ksyms), errAmbiguousKsym))
+}
+
+func mustAddress(tb testing.TB, ksym KsymAddress) uint64 {
+	tb.Helper()
+	addr, err := ksym.Address()
+	qt.Assert(tb, qt.IsNil(err))
+	return addr
 }
 
 func BenchmarkAssignAddresses(b *testing.B) {
@@ -98,7 +140,7 @@ func BenchmarkAssignAddresses(b *testing.B) {
 	for b.Loop() {
 		b.StopTimer()
 		f := bytes.NewBuffer(syms)
-		want := map[string]uint64{"bench_sym": 0}
+		want := map[string]KsymAddress{"bench_sym": {}}
 		b.StartTimer()
 
 		if err := assignAddresses(f, want); err != nil {
@@ -113,12 +155,12 @@ func BenchmarkAssignAddressesKallsyms(b *testing.B) {
 	for b.Loop() {
 		b.StopTimer()
 		f := mustOpenProcKallsyms(b)
-		want := map[string]uint64{
-			"bpf_trace_vprintk":     0,
-			"bpf_send_signal":       0,
-			"bpf_event_notify":      0,
-			"bpf_trace_printk":      0,
-			"bpf_perf_event_output": 0,
+		want := map[string]KsymAddress{
+			"bpf_trace_vprintk":     {},
+			"bpf_send_signal":       {},
+			"bpf_event_notify":      {},
+			"bpf_trace_printk":      {},
+			"bpf_perf_event_output": {},
 		}
 		b.StartTimer()
 

@@ -374,7 +374,7 @@ func populateKallsyms(progs map[string]*ProgramSpec) error {
 			ins := iter.Ins
 			meta, _ := ins.Metadata.Get(ksymMetaKey{}).(*ksymMeta)
 			if meta != nil {
-				addrs[meta.Name] = 0
+				addrs[meta.Name] = kallsyms.KsymAddress{}
 			}
 		}
 	}

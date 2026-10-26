@@ -67,7 +67,7 @@ func TestAssignAddressesCaching(t *testing.T) {
 	v, ok := symAddrs.Load("bpf_perf_event_output")
 	qt.Assert(t, qt.IsTrue(ok))
 
-	addr, err = v.Address()
+	addr, err := v.Address()
 	qt.Assert(t, qt.IsNil(err))
 	qt.Assert(t, qt.Not(qt.Equals(addr, 0)))
 

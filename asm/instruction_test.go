@@ -565,3 +565,40 @@ func TestInstructionMarshalALUOffset(t *testing.T) {
 		})
 	}
 }
+
+func TestInstructionMarshalAtomic(t *testing.T) {
+	tests := []struct {
+		name      string
+		ins       Instruction
+		wantBytes []byte
+	}{
+		{
+			name:      "CmpXchg marshals BPF_CMPXCHG as immediate",
+			ins:       CmpXchg.Mem(R6, R2, DWord, 0),
+			wantBytes: []byte{0xdb, 0x26, 0x00, 0x00, 0xf1, 0x00, 0x00, 0x00},
+		},
+		{
+			name:      "Xchg marshals BPF_XCHG as immediate",
+			ins:       Xchg.Mem(R6, R2, DWord, 0),
+			wantBytes: []byte{0xdb, 0x26, 0x00, 0x00, 0xe1, 0x00, 0x00, 0x00},
+		},
+		{
+			name:      "FetchAdd marshals BPF_ADD|BPF_FETCH as immediate",
+			ins:       FetchAdd.Mem(R6, R2, DWord, 0),
+			wantBytes: []byte{0xdb, 0x26, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var buf bytes.Buffer
+			if _, err := tt.ins.Marshal(&buf, binary.LittleEndian); err != nil {
+				t.Fatalf("Marshal() error = %v", err)
+			}
+
+			if got := buf.Bytes(); !bytes.Equal(got, tt.wantBytes) {
+				t.Errorf("Marshal() bytes mismatch:\n got:  %x\n want: %x", got, tt.wantBytes)
+			}
+		})
+	}
+}

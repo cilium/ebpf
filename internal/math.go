@@ -22,12 +22,9 @@ func Between[I Integer](val, a, b I) I {
 }
 
 // Integer represents all possible integer types.
-// Remove when x/exp/constraints is moved to the standard library.
+//
+// The standard library has no equivalent: cmp.Ordered also admits floats and
+// strings, which don't support arithmetic and bitwise operators.
 type Integer interface {
 	~int | ~int8 | ~int16 | ~int32 | ~int64 | ~uint | ~uint8 | ~uint16 | ~uint32 | ~uint64 | ~uintptr
 }
-
-// List of integer types known by the Go compiler. Used by TestIntegerConstraint
-// to warn if a new integer type is introduced. Remove when x/exp/constraints
-// is moved to the standard library.
-var integers = []string{"int", "int8", "int16", "int32", "int64", "uint", "uint8", "uint16", "uint32", "uint64", "uintptr"}

@@ -203,7 +203,10 @@ func (ins Instruction) Marshal(w io.Writer, bo binary.ByteOrder) (uint64, error)
 		}
 	} else if atomic := ins.OpCode.AtomicOp(); atomic != InvalidAtomic {
 		ins.OpCode = ins.OpCode &^ atomicMask
+		// Atomic op lives in the immediate. cons was snapshotted before this
+		// branch, so refresh it or CmpXchg/Xchg/Fetch* encode as BPF_ADD (imm 0).
 		ins.Constant = int64(atomic >> 8)
+		cons = int32(ins.Constant)
 	}
 
 	op, err := ins.OpCode.bpfOpCode()

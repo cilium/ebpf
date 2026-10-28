@@ -478,6 +478,49 @@ func TestStoreImm(t *testing.T) {
 	qt.Assert(t, qt.Equals(StoreImm(R0, 1, math.MinInt32-1, DWord).OpCode, InvalidOpCode))
 }
 
+func TestInstructionMarshalAtomicImm(t *testing.T) {
+	// Constructors put the atomic op in OpCode bits with Constant=0. Marshal
+	// must still emit the op in the immediate (see #2131).
+	tests := []struct {
+		name string
+		ins  Instruction
+		want []byte
+	}{
+		{
+			name: "CmpXchg DW",
+			ins:  CmpXchg.Mem(R6, R2, DWord, 0),
+			want: []byte{0xdb, 0x26, 0x00, 0x00, 0xf1, 0x00, 0x00, 0x00},
+		},
+		{
+			name: "Xchg DW",
+			ins:  Xchg.Mem(R6, R2, DWord, 0),
+			want: []byte{0xdb, 0x26, 0x00, 0x00, 0xe1, 0x00, 0x00, 0x00},
+		},
+		{
+			name: "FetchAdd DW",
+			ins:  FetchAdd.Mem(R6, R2, DWord, 0),
+			want: []byte{0xdb, 0x26, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00},
+		},
+		{
+			name: "AddAtomic DW (imm 0)",
+			ins:  AddAtomic.Mem(R6, R2, DWord, 0),
+			want: []byte{0xdb, 0x26, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var buf bytes.Buffer
+			if _, err := tt.ins.Marshal(&buf, binary.LittleEndian); err != nil {
+				t.Fatal(err)
+			}
+			if got := buf.Bytes(); !bytes.Equal(got, tt.want) {
+				t.Errorf("Marshal() bytes mismatch:\n got:  %x\n want: %x", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestInstructionMarshalALUOffset(t *testing.T) {
 	tests := []struct {
 		name      string

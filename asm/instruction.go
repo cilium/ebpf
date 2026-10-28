@@ -204,10 +204,7 @@ func (ins Instruction) Marshal(w io.Writer, bo binary.ByteOrder) (uint64, error)
 	} else if atomic := ins.OpCode.AtomicOp(); atomic != InvalidAtomic {
 		ins.OpCode = ins.OpCode &^ atomicMask
 		ins.Constant = int64(atomic >> 8)
-		// cons was computed from the original Constant above, so update it
-		// here. Otherwise every atomic op marshals with an immediate of 0
-		// (BPF_ADD) and the op is silently lost.
-		cons = int32(ins.Constant)
+		cons = int32(atomic >> 8)
 	}
 
 	op, err := ins.OpCode.bpfOpCode()

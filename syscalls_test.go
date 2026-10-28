@@ -5,7 +5,6 @@ import (
 
 	"github.com/go-quicktest/qt"
 
-	"github.com/cilium/ebpf/internal/linux"
 	"github.com/cilium/ebpf/internal/testutils"
 )
 
@@ -62,14 +61,6 @@ func TestHaveBPFToBPFCalls(t *testing.T) {
 
 func TestHaveSyscallWrapper(t *testing.T) {
 	testutils.CheckFeatureTest(t, haveSyscallWrapper)
-}
-
-func TestSyscallWrapperFromKallsyms(t *testing.T) {
-	wrapped, ok := syscallWrapperFromKallsyms(linux.PlatformPrefix())
-	if !ok {
-		t.Skip("kallsyms doesn't list the bpf syscall")
-	}
-	qt.Assert(t, qt.Equals(wrapped, !testutils.IsVersionLessThan(t, "4.17")))
 }
 
 func TestHaveProgramExtInfos(t *testing.T) {

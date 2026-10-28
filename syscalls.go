@@ -316,13 +316,20 @@ var haveSyscallWrapper = internal.NewFeatureTest("syscall wrapper", func() error
 		return fmt.Errorf("unable to find the platform prefix for (%s)", runtime.GOARCH)
 	}
 
-	// Symbol names in /proc/kallsyms are readable without privileges, unlike
-	// tracefs' kprobe_events, so try them first.
-	if wrapped, ok := syscallWrapperFromKallsyms(prefix); ok {
-		if !wrapped {
+	// kprobe_events is root-only, but anyone can read symbol names from
+	// kallsyms. Only trust a match, an empty or masked kallsyms tells us nothing.
+	symbols := map[string]kallsyms.KsymAddress{prefix + "sys_bpf": {}, "sys_bpf": {}}
+	if kallsyms.AssignAddresses(symbols) == nil {
+		listed := func(name string) bool {
+			_, err := symbols[name].Address()
+			return !errors.Is(err, os.ErrNotExist)
+		}
+		if listed(prefix + "sys_bpf") {
+			return nil
+		}
+		if listed("sys_bpf") {
 			return internal.ErrNotSupported
 		}
-		return nil
 	}
 
 	args := tracefs.ProbeArgs{
@@ -347,33 +354,6 @@ var haveSyscallWrapper = internal.NewFeatureTest("syscall wrapper", func() error
 
 	return evt.Close()
 }, "4.17")
-
-// syscallWrapperFromKallsyms looks for the bpf syscall's entry point in
-// /proc/kallsyms: the wrapped symbol (e.g. __x64_sys_bpf) means the kernel
-// has syscall wrappers, the plain sys_bpf means it doesn't. ok is false if
-// kallsyms can't tell, e.g. because it is unreadable or empty.
-func syscallWrapperFromKallsyms(prefix string) (wrapped, ok bool) {
-	symbol := prefix + "sys_bpf"
-	symbols := map[string]kallsyms.KsymAddress{symbol: {}, "sys_bpf": {}}
-	if kallsyms.AssignAddresses(symbols) != nil {
-		return false, false
-	}
-
-	// Without CAP_SYSLOG, addresses read as zero but names are still listed.
-	present := func(name string) bool {
-		_, err := symbols[name].Address()
-		return err == nil || errors.Is(err, internal.ErrRestrictedKernel)
-	}
-
-	switch {
-	case present(symbol):
-		return true, true
-	case present("sys_bpf"):
-		return false, true
-	default:
-		return false, false
-	}
-}
 
 var haveProgramExtInfos = internal.NewFeatureTest("program ext_infos", func() error {
 	insns := asm.Instructions{

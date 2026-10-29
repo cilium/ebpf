@@ -54,11 +54,14 @@ func TestKprobeToken(t *testing.T) {
 }
 
 func TestNewEvent(t *testing.T) {
+	self, err := os.Executable()
+	qt.Assert(t, qt.IsNil(err))
+
 	for _, args := range []ProbeArgs{
 		{Type: Kprobe, Symbol: ksym},
 		{Type: Kprobe, Symbol: ksym, Ret: true},
-		{Type: Uprobe, Path: "/bin/bash", Symbol: "main"},
-		{Type: Uprobe, Path: "/bin/bash", Symbol: "main", Ret: true},
+		{Type: Uprobe, Path: self, Symbol: "main"},
+		{Type: Uprobe, Path: self, Symbol: "main", Ret: true},
 	} {
 		name := fmt.Sprintf("%s ret=%v", args.Type, args.Ret)
 		t.Run(name, func(t *testing.T) {

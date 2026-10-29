@@ -138,7 +138,7 @@ func TestDetachLinkFail(t *testing.T) {
 	prog := mustLoadProgram(t, ebpf.Kprobe, 0, "")
 	defer prog.Close()
 
-	uprobeLink, err := bashEx.Uprobe(bashSym, prog, nil)
+	uprobeLink, err := uprobeTarget(t).Uprobe(uprobeSym, prog, nil)
 	qt.Assert(t, qt.IsNil(err))
 	defer uprobeLink.Close()
 

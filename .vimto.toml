@@ -4,8 +4,8 @@ memory="1G"
 user="root"
 setup=[
   "mount -t cgroup2 -o nosuid,noexec,nodev cgroup2 /sys/fs/cgroup",
-  "dmesg --clear",
+  "/bin/sh -c 'dmesg -c >/dev/null'",
 ]
 teardown=[
-  "dmesg --read-clear",
+  "dmesg -c",
 ]

@@ -172,10 +172,7 @@ jobs:
       - run: go install lmb.io/vimto@latest
       - run: go install gotest.tools/gotestsum@v1.12.3
 
-      - uses: awalsh128/cache-apt-pkgs-action@v1.6.3
-        with:
-          packages: qemu-system-x86
-
+      - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends qemu-system-x86
       - run: sudo chmod 0666 /dev/kvm
 
       - name: Test with selftests
@@ -204,10 +201,9 @@ jobs:
 
   test-on-arm64:
     name: Run tests on arm64
-    runs-on: ubuntu-24.04-arm64
+    # arm64 is emulated since the runners don't have KVM
+    runs-on: ubuntu-latest
     timeout-minutes: 15
-    env:
-      EBPF_TEST_IGNORE_VERSION: 'TestHaveProgramType/LircMode2'
     steps:
       - uses: actions/checkout@v7
 
@@ -217,14 +213,12 @@ jobs:
           go-version: '${{ env.go_version }}'
 
       - run: go install gotest.tools/gotestsum@v1.12.3
+      - run: go install github.com/ti-mo/vimto@latest
+
+      - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends qemu-system-arm
 
       - name: Test
-        # Skip TestGoarches/loong64 because the GH arm64 Go toolchain seems to be weird.
-        # Ubuntu 24.04 crashes when executing TestKfunc.
-        run: gotestsum --ignore-non-json-output-lines --junitfile junit.xml -- -exec 'sudo -E' -short -count 1 -skip '^TestGoarches/loong64$' -skip '^TestKfunc$' -json ./...
-
-      - name: Benchmark
-        run: go test -exec sudo -short -run '^$' -bench . -benchtime=1x ./...
+        run: GOARCH=arm64 gotestsum --raw-command --ignore-non-json-output-lines --junitfile junit.xml -- vimto -userland alpine -kernel :stable -- go test -short -json ./...
 
       - name: Upload Test Results
         if: always()
@@ -260,12 +254,9 @@ jobs:
           go-version: '${{ env.go_version }}'
 
       - run: go install gotest.tools/gotestsum@v1.12.3
-      - run: go install lmb.io/vimto@latest
+      - run: go install github.com/ti-mo/vimto@latest
 
-      - uses: awalsh128/cache-apt-pkgs-action@v1.6.3
-        with:
-          packages: qemu-system-x86
-
+      - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends qemu-system-x86
       - run: sudo chmod 0666 /dev/kvm
 
       - name: Test without selftests
@@ -291,12 +282,9 @@ jobs:
         with:
           go-version: '${{ env.go_version }}'
 
-      - run: go install lmb.io/vimto@latest
+      - run: go install github.com/ti-mo/vimto@latest
 
-      - uses: awalsh128/cache-apt-pkgs-action@v1.6.3
-        with:
-          packages: qemu-system-x86
-
+      - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends qemu-system-x86
       - run: sudo chmod 0666 /dev/kvm
 
       - name: Benchmark

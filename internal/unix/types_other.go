@@ -154,6 +154,10 @@ func Statfs(path string, buf *Statfs_t) error {
 	return errNonLinux()
 }
 
+func FinitModule(fd int, params string, flags int) error {
+	return errNonLinux()
+}
+
 func Close(fd int) (err error) {
 	return errNonLinux()
 }

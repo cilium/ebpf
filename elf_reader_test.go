@@ -805,7 +805,7 @@ func TestKsymTypedModVar(t *testing.T) {
 	// ("selftests/bpf: Test kernel module ksym externs").
 	testutils.SkipOnOldKernel(t, "5.12", "typed ksyms from kernel modules")
 
-	requireTestmod(t)
+	testutils.RequireTestmod(t, "bpf_testmod_ksym_percpu")
 
 	file := testutils.NativeFile(t, "testdata/ksym-%s.elf")
 	spec, err := LoadCollectionSpec(file)
@@ -887,7 +887,7 @@ func TestWeakKfunc(t *testing.T) {
 
 func TestInvalidKfunc(t *testing.T) {
 	testutils.SkipOnOldKernel(t, "5.18", "kfunc support")
-	requireTestmod(t)
+	testutils.RequireTestmod(t, "module kfuncs")
 
 	file := testutils.NativeFile(t, "testdata/invalid-kfunc-%s.elf")
 	coll, err := LoadCollection(file)
@@ -903,7 +903,7 @@ func TestInvalidKfunc(t *testing.T) {
 
 func TestKfuncKmod(t *testing.T) {
 	testutils.SkipOnOldKernel(t, "5.18", "Kernel module function calls")
-	requireTestmod(t)
+	testutils.RequireTestmod(t, "module kfuncs")
 
 	file := testutils.NativeFile(t, "testdata/kfunc-kmod-%s.elf")
 	spec, err := LoadCollectionSpec(file)

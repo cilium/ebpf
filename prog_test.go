@@ -775,7 +775,7 @@ func TestProgramAttachToKernel(t *testing.T) {
 		name := fmt.Sprintf("%s:%s", test.attachType, test.attachTo)
 		t.Run(name, func(t *testing.T) {
 			if strings.HasPrefix(test.attachTo, "bpf_testmod_") {
-				requireTestmod(t)
+				testutils.RequireTestmod(t, "attaching to "+test.attachTo)
 			}
 
 			if test.minVersion != "" {

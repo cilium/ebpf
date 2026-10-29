@@ -14,32 +14,7 @@ import (
 	"github.com/cilium/ebpf/internal/testutils"
 )
 
-var haveTestmod = sync.OnceValues(func() (bool, error) {
-	if platform.IsWindows {
-		return false, nil
-	}
-
-	// See https://github.com/torvalds/linux/commit/290248a5b7d829871b3ea3c62578613a580a1744
-	testmod, err := btf.FindHandle(func(info *btf.HandleInfo) bool {
-		return info.IsModule() && info.Name == "bpf_testmod"
-	})
-	if err != nil && !errors.Is(err, btf.ErrNotFound) {
-		return false, err
-	}
-	testmod.Close()
-
-	return testmod != nil, nil
-})
-
 var haveTestmodOps = sync.OnceValues(func() (bool, error) {
-	haveTestMod, err := haveTestmod()
-	if err != nil {
-		return false, err
-	}
-	if !haveTestMod {
-		return false, nil
-	}
-
 	target := btf.Type((*btf.Struct)(nil))
 	_, module, err := findTargetInKernel("bpf_struct_ops_bpf_testmod_ops", &target, btf.NewCache())
 	if err != nil && !errors.Is(err, btf.ErrNotFound) {
@@ -53,24 +28,10 @@ var haveTestmodOps = sync.OnceValues(func() (bool, error) {
 	return true, nil
 })
 
-func requireTestmod(tb testing.TB) {
-	tb.Helper()
-
-	testutils.SkipOnOldKernel(tb, "5.11", "bpf_testmod")
-
-	testmod, err := haveTestmod()
-	if err != nil {
-		tb.Fatal(err)
-	}
-	if !testmod {
-		tb.Skip("bpf_testmod not loaded")
-	}
-}
-
 func requireTestmodOps(tb testing.TB) {
 	tb.Helper()
 
-	testutils.SkipOnOldKernel(tb, "5.11", "bpf_testmod")
+	testutils.RequireTestmod(tb, "bpf_testmod_ops struct_ops")
 	testmodOps, err := haveTestmodOps()
 	if err != nil {
 		tb.Fatal(err)

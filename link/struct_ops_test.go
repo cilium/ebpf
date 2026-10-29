@@ -16,6 +16,7 @@ import (
 
 func TestStructOps(t *testing.T) {
 	testutils.SkipOnOldKernel(t, "6.12", "bpf_testmod_ops")
+	testutils.RequireTestmod(t, "bpf_testmod_ops struct_ops")
 
 	m := mustStructOpsFixtures(t)
 	l, err := AttachStructOps(StructOpsOptions{Map: m})

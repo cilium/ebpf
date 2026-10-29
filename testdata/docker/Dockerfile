@@ -13,7 +13,7 @@ RUN apt-get update && \
     bpftool \
     clang-14 llvm-14 \
     clang-17 llvm-17 \
-    clang-22 llvm-22 \
+    clang-22 llvm-22 lld-22 \
     clang-format-22 && \
     rm -rf /var/lib/apt/lists/*
 

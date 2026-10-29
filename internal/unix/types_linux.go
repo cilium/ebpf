@@ -123,6 +123,10 @@ func Statfs(path string, buf *Statfs_t) (err error) {
 	return linux.Statfs(path, buf)
 }
 
+func FinitModule(fd int, params string, flags int) error {
+	return linux.FinitModule(fd, params, flags)
+}
+
 func Close(fd int) (err error) {
 	return linux.Close(fd)
 }

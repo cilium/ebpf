@@ -32,9 +32,7 @@ func TestLoadKernelSpec(t *testing.T) {
 }
 
 func TestLoadKernelModuleSpec(t *testing.T) {
-	if _, err := os.Stat("/sys/kernel/btf/bpf_testmod"); os.IsNotExist(err) {
-		t.Skip("/sys/kernel/btf/bpf_testmod not present")
-	}
+	testutils.RequireTestmod(t, "module BTF")
 
 	_, err := LoadKernelModuleSpec("bpf_testmod")
 	qt.Assert(t, qt.IsNil(err))
@@ -108,9 +106,7 @@ func TestCacheConcurrentKernel(t *testing.T) {
 }
 
 func TestCacheConcurrentModule(t *testing.T) {
-	if _, err := os.Stat("/sys/kernel/btf/bpf_testmod"); os.IsNotExist(err) {
-		t.Skip("/sys/kernel/btf/bpf_testmod not present")
-	}
+	testutils.RequireTestmod(t, "module BTF")
 
 	const goroutines = 8
 

@@ -52,8 +52,7 @@ func TestHandleIterator(t *testing.T) {
 }
 
 func TestParseModuleSplitSpec(t *testing.T) {
-	// See TestNewHandleFromID for reasoning.
-	testutils.SkipOnOldKernel(t, "5.11", "vmlinux BTF ID")
+	testutils.RequireTestmod(t, "module BTF")
 
 	module, err := btf.FindHandle(func(info *btf.HandleInfo) bool {
 		if info.IsModule() {

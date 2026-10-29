@@ -176,11 +176,12 @@
         },
         "gitpython": {
             "hashes": [
-                "sha256:bd70c5ec05cd2b797423e7eb312147d2458d3cca92085888fba2213f85905537",
-                "sha256:fb92310af6844d96adc95ca066ed2e617c00e1dbd146a326626c81e72e18cc2e"
+                "sha256:0f1229ec5c057bdabdeeda8bda4f17bda679ab33dbccc00f24e6a480553c8613",
+                "sha256:d66b0832aa8755c1a84892937282df0befb16c97e5a64aeebd68be9c5e323f53"
             ],
+            "index": "pypi",
             "markers": "python_version >= '3.8'",
-            "version": "==3.2.0"
+            "version": "==3.2.1"
         },
         "hjson": {
             "hashes": [

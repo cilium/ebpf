@@ -4,11 +4,11 @@ package link
 
 import (
 	"errors"
-	"go/build"
+	"fmt"
 	"os"
 	"os/exec"
-	"path"
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/go-quicktest/qt"
@@ -20,10 +20,33 @@ import (
 )
 
 var (
-	bashEx, _ = OpenExecutable("/bin/bash")
-	bashSyms  = []string{"main", "_start", "check_dev_tty"}
-	bashSym   = bashSyms[0]
+	// Functions in testdata/uprobe.c. Only the first one returns to its caller.
+	uprobeSyms = []string{"uprobe_returns", "uprobe_exits", "_start"}
+	uprobeSym  = uprobeSyms[0]
 )
+
+// uprobeTarget opens the prebuilt executable from testdata/uprobe.c.
+func uprobeTarget(tb testing.TB) *Executable {
+	tb.Helper()
+
+	// The kernel reports absolute paths in link info.
+	path, err := filepath.Abs(fmt.Sprintf("../testdata/uprobe-%s.elf", runtime.GOARCH))
+	qt.Assert(tb, qt.IsNil(err))
+
+	ex, err := OpenExecutable(path)
+	if errors.Is(err, os.ErrNotExist) {
+		tb.Skipf("No uprobe target binary for %s", runtime.GOARCH)
+	}
+	qt.Assert(tb, qt.IsNil(err))
+
+	return ex
+}
+
+func runTarget(tb testing.TB, ex *Executable) {
+	tb.Helper()
+
+	qt.Assert(tb, qt.IsNil(exec.Command(ex.path).Run()))
+}
 
 func TestExecutable(t *testing.T) {
 	_, err := OpenExecutable("")
@@ -50,28 +73,29 @@ func TestExecutable(t *testing.T) {
 	_, err = OpenExecutable(path)
 	qt.Assert(t, qt.IsNil(err))
 
-	qt.Assert(t, qt.Equals(bashEx.path, "/bin/bash"))
-
-	_, err = bashEx.address(bashSym, 0, 0)
+	ex := uprobeTarget(t)
+	_, err = ex.address(uprobeSym, 0, 0)
 	qt.Assert(t, qt.IsNil(err))
 
-	_, err = bashEx.address("bogus", 0, 0)
+	_, err = ex.address("bogus", 0, 0)
 	qt.Assert(t, qt.IsNotNil(err))
 }
 
 func TestExecutableOffset(t *testing.T) {
-	symbolOffset, err := bashEx.address(bashSym, 0, 0)
+	ex := uprobeTarget(t)
+
+	symbolOffset, err := ex.address(uprobeSym, 0, 0)
 	qt.Assert(t, qt.IsNil(err))
 
-	offset, err := bashEx.address(bashSym, 0x1, 0)
+	offset, err := ex.address(uprobeSym, 0x1, 0)
 	qt.Assert(t, qt.IsNil(err))
 	qt.Assert(t, qt.Equals(offset, 0x1))
 
-	offset, err = bashEx.address(bashSym, 0, 0x2)
+	offset, err = ex.address(uprobeSym, 0, 0x2)
 	qt.Assert(t, qt.IsNil(err))
 	qt.Assert(t, qt.Equals(offset, symbolOffset+0x2))
 
-	offset, err = bashEx.address(bashSym, 0x1, 0x2)
+	offset, err = ex.address(uprobeSym, 0x1, 0x2)
 	qt.Assert(t, qt.IsNil(err))
 	qt.Assert(t, qt.Equals(offset, 0x1+0x2))
 }
@@ -79,22 +103,21 @@ func TestExecutableOffset(t *testing.T) {
 func TestExecutableLazyLoadSymbols(t *testing.T) {
 	testutils.SkipOnOldKernel(t, "4.14", "uprobe on v4.9 returns EIO on vimto")
 
-	ex, err := OpenExecutable("/bin/bash")
-	qt.Assert(t, qt.IsNil(err))
+	ex := uprobeTarget(t)
 	// Addresses must be empty, will be lazy loaded.
 	qt.Assert(t, qt.HasLen(ex.cachedSymbols, 0))
 
 	prog := mustLoadProgram(t, ebpf.Kprobe, 0, "")
 	// Address must be a multiple of 4 on arm64, see
 	// https://elixir.bootlin.com/linux/v6.6.4/source/arch/arm64/kernel/probes/uprobes.c#L42
-	up, err := ex.Uprobe(bashSym, prog, &UprobeOptions{Address: 124})
+	up, err := ex.Uprobe(uprobeSym, prog, &UprobeOptions{Address: 124})
 	qt.Assert(t, qt.IsNil(err))
 	up.Close()
 
 	// Addresses must still be empty as Address has been provided via options.
 	qt.Assert(t, qt.HasLen(ex.cachedSymbols, 0))
 
-	up, err = ex.Uprobe(bashSym, prog, nil)
+	up, err = ex.Uprobe(uprobeSym, prog, nil)
 	qt.Assert(t, qt.IsNil(err))
 	up.Close()
 
@@ -105,9 +128,10 @@ func TestExecutableLazyLoadSymbols(t *testing.T) {
 func TestUprobe(t *testing.T) {
 	testutils.SkipOnOldKernel(t, "4.14", "uprobe on v4.9 returns EIO on vimto")
 
+	ex := uprobeTarget(t)
 	prog := mustLoadProgram(t, ebpf.Kprobe, 0, "")
 
-	up, err := bashEx.Uprobe(bashSym, prog, nil)
+	up, err := ex.Uprobe(uprobeSym, prog, nil)
 	qt.Assert(t, qt.IsNil(err))
 	defer up.Close()
 
@@ -117,9 +141,10 @@ func TestUprobe(t *testing.T) {
 func TestUprobeInfo(t *testing.T) {
 	testutils.SkipOnOldKernel(t, "6.6", "bpf_link_info_perf_event")
 
+	ex := uprobeTarget(t)
 	prog := mustLoadProgram(t, ebpf.Kprobe, 0, "")
 
-	up, err := bashEx.Uprobe(bashSym, prog, nil)
+	up, err := ex.Uprobe(uprobeSym, prog, nil)
 	qt.Assert(t, qt.IsNil(err))
 	defer up.Close()
 
@@ -129,31 +154,33 @@ func TestUprobeInfo(t *testing.T) {
 	eventInfo := info.PerfEvent()
 	qt.Assert(t, qt.Equals(eventInfo.Type, PerfEventUprobe))
 	uprobeInfo := eventInfo.Uprobe()
-	qt.Assert(t, qt.StringContains(uprobeInfo.File, bashEx.path))
+	qt.Assert(t, qt.StringContains(uprobeInfo.File, ex.path))
 	executable, err := OpenExecutable(uprobeInfo.File)
 	qt.Assert(t, qt.IsNil(err))
 	sym, err := executable.Symbol(uint64(uprobeInfo.Offset))
 	qt.Assert(t, qt.IsNil(err))
-	qt.Assert(t, qt.Equals(sym.Symbol, bashSym))
+	qt.Assert(t, qt.Equals(sym.Symbol, uprobeSym))
 	qt.Assert(t, qt.Equals(sym.Offset, 0))
 }
 
 func TestUprobeExtNotFound(t *testing.T) {
+	ex := uprobeTarget(t)
 	prog := mustLoadProgram(t, ebpf.Kprobe, 0, "")
 
 	// This symbol will not be present in Executable (elf.SHN_UNDEF).
-	_, err := bashEx.Uprobe("open", prog, nil)
+	_, err := ex.Uprobe("open", prog, nil)
 	qt.Assert(t, qt.IsNotNil(err))
 }
 
 func TestUprobeExtWithOpts(t *testing.T) {
 	testutils.SkipOnOldKernel(t, "4.14", "uprobe on v4.9 returns EIO on vimto")
 
+	ex := uprobeTarget(t)
 	prog := mustLoadProgram(t, ebpf.Kprobe, 0, "")
 
 	// NB: It's not possible to invoke the uprobe since we use an arbitrary
 	// address.
-	up, err := bashEx.Uprobe("open", prog, &UprobeOptions{
+	up, err := ex.Uprobe("open", prog, &UprobeOptions{
 		// arm64 requires the addresses to be aligned (a multiple of 4)
 		Address: 0x4,
 	})
@@ -164,27 +191,30 @@ func TestUprobeExtWithOpts(t *testing.T) {
 func TestUprobeWithPID(t *testing.T) {
 	testutils.SkipOnOldKernel(t, "4.14", "uprobe on v4.9 returns EIO on vimto")
 
+	ex := uprobeTarget(t)
 	prog := mustLoadProgram(t, ebpf.Kprobe, 0, "")
 
-	up, err := bashEx.Uprobe(bashSym, prog, &UprobeOptions{PID: os.Getpid()})
+	up, err := ex.Uprobe(uprobeSym, prog, &UprobeOptions{PID: os.Getpid()})
 	qt.Assert(t, qt.IsNil(err))
 	defer up.Close()
 }
 
 func TestUprobeWithNonExistentPID(t *testing.T) {
+	ex := uprobeTarget(t)
 	prog := mustLoadProgram(t, ebpf.Kprobe, 0, "")
 
 	// trying to open a perf event on a non-existent PID will return ESRCH.
-	_, err := bashEx.Uprobe(bashSym, prog, &UprobeOptions{PID: -2})
+	_, err := ex.Uprobe(uprobeSym, prog, &UprobeOptions{PID: -2})
 	qt.Assert(t, qt.ErrorIs(err, unix.ESRCH))
 }
 
 func TestUretprobe(t *testing.T) {
 	testutils.SkipOnOldKernel(t, "4.14", "uprobe on v4.9 returns EIO on vimto")
 
+	ex := uprobeTarget(t)
 	prog := mustLoadProgram(t, ebpf.Kprobe, 0, "")
 
-	up, err := bashEx.Uretprobe(bashSym, prog, nil)
+	up, err := ex.Uretprobe(uprobeSym, prog, nil)
 	qt.Assert(t, qt.IsNil(err))
 	defer up.Close()
 
@@ -196,15 +226,15 @@ func TestUprobeCreatePMU(t *testing.T) {
 	// Requires at least 4.17 (e12f03d7031a "perf/core: Implement the 'perf_kprobe' PMU")
 	testutils.SkipOnOldKernel(t, "4.17", "perf_kprobe PMU")
 
-	// Fetch the offset from the /bin/bash Executable already defined.
-	off, err := bashEx.address(bashSym, 0, 0)
+	ex := uprobeTarget(t)
+	off, err := ex.address(uprobeSym, 0, 0)
 	qt.Assert(t, qt.IsNil(err))
 
 	// Prepare probe args.
 	args := tracefs.ProbeArgs{
 		Type:   tracefs.Uprobe,
-		Symbol: bashSym,
-		Path:   bashEx.path,
+		Symbol: uprobeSym,
+		Path:   ex.path,
 		Offset: off,
 		Pid:    perfAllThreads,
 	}
@@ -223,15 +253,15 @@ func TestUprobeCreatePMU(t *testing.T) {
 
 // Test fallback behaviour on kernels without perf_uprobe PMU available.
 func TestUprobePMUUnavailable(t *testing.T) {
-	// Fetch the offset from the /bin/bash Executable already defined.
-	off, err := bashEx.address(bashSym, 0, 0)
+	ex := uprobeTarget(t)
+	off, err := ex.address(uprobeSym, 0, 0)
 	qt.Assert(t, qt.IsNil(err))
 
 	// Prepare probe args.
 	args := tracefs.ProbeArgs{
 		Type:   tracefs.Uprobe,
-		Symbol: bashSym,
-		Path:   bashEx.path,
+		Symbol: uprobeSym,
+		Path:   ex.path,
 		Offset: off,
 		Pid:    perfAllThreads,
 	}
@@ -250,15 +280,15 @@ func TestUprobePMUUnavailable(t *testing.T) {
 func TestUprobeTraceFS(t *testing.T) {
 	testutils.SkipOnOldKernel(t, "4.14", "uprobe on v4.9 returns EIO on vimto")
 
-	// Fetch the offset from the /bin/bash Executable already defined.
-	off, err := bashEx.address(bashSym, 0, 0)
+	ex := uprobeTarget(t)
+	off, err := ex.address(uprobeSym, 0, 0)
 	qt.Assert(t, qt.IsNil(err))
 
 	// Prepare probe args.
 	args := tracefs.ProbeArgs{
 		Type:   tracefs.Uprobe,
-		Symbol: bashSym,
-		Path:   bashEx.path,
+		Symbol: uprobeSym,
+		Path:   ex.path,
 		Offset: off,
 		Pid:    perfAllThreads,
 	}
@@ -303,95 +333,44 @@ func TestUprobeTraceFS(t *testing.T) {
 func TestUprobeProgramCall(t *testing.T) {
 	testutils.SkipOnOldKernel(t, "4.14", "uprobe on v4.9 returns EIO on vimto")
 
-	tests := []struct {
-		name string
-		elf  string
-		args []string
-		sym  string
-	}{
-		{
-			"bash",
-			"/bin/bash",
-			[]string{"--help"},
-			"main",
-		},
-		{
-			"go-binary",
-			path.Join(build.Default.GOROOT, "bin/go"),
-			[]string{"version"},
-			"main.main",
-		},
-	}
+	ex := uprobeTarget(t)
+	m, p := newUpdaterMapProg(t, ebpf.Kprobe, 0)
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if tt.name == "go-binary" {
-				// https://github.com/cilium/ebpf/issues/406
-				testutils.SkipOnOldKernel(t, "4.14", "uprobes on Go binaries silently fail on kernel < 4.14")
-			}
+	u, err := ex.Uprobe(uprobeSym, p, nil)
+	qt.Assert(t, qt.IsNil(err))
 
-			m, p := newUpdaterMapProg(t, ebpf.Kprobe, 0)
+	runTarget(t, ex)
 
-			// Load the executable.
-			ex, err := OpenExecutable(tt.elf)
-			qt.Assert(t, qt.IsNil(err))
+	// Assert that the value got incremented to at least 1, while allowing
+	// for bigger values, because we could race with other test binaries.
+	assertMapValueGE(t, m, 0, 1)
 
-			// Open Uprobe on the executable for the given symbol
-			// and attach it to the ebpf program created above.
-			u, err := ex.Uprobe(tt.sym, p, nil)
-			if errors.Is(err, ErrNoSymbol) {
-				// Assume bash::main and go::main.main always exists
-				// and skip the test if the symbol can't be found as
-				// certain OS (eg. Debian) strip binaries.
-				t.Skipf("executable %s appear to be stripped, skipping", tt.elf)
-			}
-			qt.Assert(t, qt.IsNil(err))
+	// Detach the Uprobe.
+	qt.Assert(t, qt.IsNil(u.Close()))
 
-			// Trigger ebpf program call.
-			trigger := func(t *testing.T) {
-				qt.Assert(t, qt.IsNil(exec.Command(tt.elf, tt.args...).Run()))
-			}
-			trigger(t)
+	// Reset map value to 0 at index 0.
+	qt.Assert(t, qt.IsNil(m.Update(uint32(0), uint32(0), ebpf.UpdateExist)))
 
-			// Assert that the value got incremented to at least 1, while allowing
-			// for bigger values, because we could race with other bash execution.
-			assertMapValueGE(t, m, 0, 1)
+	runTarget(t, ex)
 
-			// Detach the Uprobe.
-			qt.Assert(t, qt.IsNil(u.Close()))
-
-			// Reset map value to 0 at index 0.
-			qt.Assert(t, qt.IsNil(m.Update(uint32(0), uint32(0), ebpf.UpdateExist)))
-
-			// Retrigger the ebpf program call.
-			trigger(t)
-
-			// Assert that this time the value has not been updated.
-			assertMapValue(t, m, 0, 0)
-		})
-	}
+	// Assert that this time the value has not been updated.
+	assertMapValue(t, m, 0, 0)
 }
 
 func TestUprobeProgramWrongPID(t *testing.T) {
 	testutils.SkipOnOldKernel(t, "4.14", "uprobe on v4.9 returns EIO on vimto")
 
+	ex := uprobeTarget(t)
 	m, p := newUpdaterMapProg(t, ebpf.Kprobe, 0)
 
-	// Load the '/bin/bash' executable.
-	ex, err := OpenExecutable("/bin/bash")
-	qt.Assert(t, qt.IsNil(err))
-
-	// Open Uprobe on '/bin/bash' for the symbol 'main'
-	// and attach it to the ebpf program created above.
 	// Create the perf-event with the current process' PID
 	// to make sure the event is not fired when we will try
 	// to trigger the program execution via exec.
-	u, err := ex.Uprobe("main", p, &UprobeOptions{PID: os.Getpid()})
+	u, err := ex.Uprobe(uprobeSym, p, &UprobeOptions{PID: os.Getpid()})
 	qt.Assert(t, qt.IsNil(err))
 	defer u.Close()
 
-	// Trigger ebpf program call.
-	qt.Assert(t, qt.IsNil(exec.Command("/bin/bash", "--help").Run()))
+	runTarget(t, ex)
 
 	// Assert that the value at index 0 is still 0.
 	assertMapValue(t, m, 0, 0)

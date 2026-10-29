@@ -78,6 +78,9 @@ TARGETS := \
 
 HEADERS := $(wildcard testdata/*.h)
 
+# Freestanding executables used as uprobe targets by tests.
+UPROBE_TARGETS := testdata/uprobe-amd64.elf testdata/uprobe-arm64.elf
+
 .PHONY: all clean godirs container-all container-shell generate format
 
 .DEFAULT_GOAL = container-all
@@ -116,7 +119,7 @@ generate:
 	go generate -run "stringer" ./...
 	go generate -skip "(gentypes|stringer)" ./...
 
-testdata: $(addsuffix -el.elf,$(TARGETS)) $(addsuffix -eb.elf,$(TARGETS)) $(addsuffix -el.elf,$(TARGETS_EL))
+testdata: $(addsuffix -el.elf,$(TARGETS)) $(addsuffix -eb.elf,$(TARGETS)) $(addsuffix -el.elf,$(TARGETS_EL)) $(UPROBE_TARGETS)
 
 testdata/loader-%-el.elf: testdata/loader.c $(HEADERS)
 	$* $(CFLAGS) -target bpfel -c $< -o $@
@@ -142,6 +145,15 @@ testdata/loader_nobtf-eb.elf: testdata/loader.c $(HEADERS)
 
 testdata/linked-el.elf: testdata/linked1-el.elf testdata/linked2-el.elf
 	bpftool gen object $@ $^
+
+# Use -O0 so clang doesn't optimize away any function calls. Use lld because it
+# can link binaries for multiple arches without having to install multiple
+# linkers.
+testdata/uprobe-amd64.elf: UPROBE_TRIPLE := x86_64-linux-gnu
+testdata/uprobe-arm64.elf: UPROBE_TRIPLE := aarch64-linux-gnu
+$(UPROBE_TARGETS): testdata/uprobe.c
+	$(CLANG) -O0 -g0 -Wall -Werror --target=$(UPROBE_TRIPLE) -static \
+		-nostdlib -ffreestanding -fno-stack-protector -fuse-ld=lld -o $@ $<
 
 .PHONY: update-external-deps
 update-external-deps:

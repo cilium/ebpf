@@ -70,10 +70,16 @@ func (le *VerifierError) Unwrap() error {
 // On older kernels, returns the last 3 lines of the verifier (instruction) log.
 func (le *VerifierError) Error() string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "%s: %s", le.source, le.Cause.Error())
+	le.write(&b)
+	return b.String()
+}
+
+// write writes the VerifierError to w. See Error for more details.
+func (le *VerifierError) write(w io.Writer) {
+	fmt.Fprintf(w, "%s: %s", le.source, le.Cause.Error())
 
 	if len(le.Log) == 0 && len(le.Diagnostics) == 0 {
-		return b.String()
+		return
 	}
 
 	// Attempt to extract verifier diagnostics, falling back to displaying the
@@ -89,26 +95,24 @@ func (le *VerifierError) Error() string {
 			suggestion = "no suggestion available"
 		}
 
-		b.WriteString(": ")
-		b.WriteString(reason)
-		b.WriteString(" (")
-		b.WriteString(suggestion)
-		b.WriteString(")")
+		io.WriteString(w, ": ")
+		io.WriteString(w, reason)
+		io.WriteString(w, " (")
+		io.WriteString(w, suggestion)
+		io.WriteString(w, ")")
 
-		return b.String()
+		return
 	}
 
 	// No diagnostics, display just the last few lines of the instruction log,
 	// joined by ': '.
 	end := le.logEnd()
 	for _, line := range end {
-		b.WriteString(": ")
-		b.WriteString(strings.TrimSpace(line))
+		io.WriteString(w, ": ")
+		io.WriteString(w, strings.TrimSpace(line))
 	}
 
-	b.WriteString(omitted(" ", len(le.Log)-len(end)))
-
-	return b.String()
+	io.WriteString(w, omitted(" ", len(le.Log)-len(end)))
 }
 
 func omitted(prefix string, n int) string {
@@ -238,7 +242,7 @@ func (le *VerifierError) logEnd() []string {
 func (le *VerifierError) Format(f fmt.State, verb rune) {
 	switch verb {
 	case 's':
-		io.WriteString(f, le.Error())
+		le.write(f)
 
 	case 'd':
 		fmt.Fprintf(f, "%s: %s:\n", le.source, le.Cause.Error())
@@ -265,7 +269,7 @@ func (le *VerifierError) Format(f fmt.State, verb rune) {
 				return
 			}
 
-			io.WriteString(f, le.Error())
+			le.write(f)
 			return
 		}
 

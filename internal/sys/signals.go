@@ -29,7 +29,7 @@ func maskProfilerSignal() {
 
 	if err := unix.PthreadSigmask(unix.SIG_BLOCK, &profSet, nil); err != nil {
 		runtime.UnlockOSThread()
-		panic(fmt.Errorf("masking profiler signal: %w", err))
+		panic(profilerSignalError("masking profiler signal: ", err))
 	}
 }
 
@@ -41,7 +41,7 @@ func unmaskProfilerSignal() {
 	defer runtime.UnlockOSThread()
 
 	if err := unix.PthreadSigmask(unix.SIG_UNBLOCK, &profSet, nil); err != nil {
-		panic(fmt.Errorf("unmasking profiler signal: %w", err))
+		panic(profilerSignalError("unmasking profiler signal: ", err))
 	}
 }
 

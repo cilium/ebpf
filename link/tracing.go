@@ -106,12 +106,13 @@ func AttachFreplace(targetProg *ebpf.Program, name string, prog *ebpf.Program) (
 
 type TracingOptions struct {
 	// Program must be of type Tracing with attach type
-	// AttachTraceFEntry/AttachTraceFExit/AttachModifyReturn or
+	// AttachTraceFEntry/AttachTraceFExit/AttachTraceFSession/AttachModifyReturn or
 	// AttachTraceRawTp.
 	Program *ebpf.Program
 	// Program attach type. Can be one of:
 	// 	- AttachTraceFEntry
 	// 	- AttachTraceFExit
+	// 	- AttachTraceFSession
 	// 	- AttachModifyReturn
 	// 	- AttachTraceRawTp
 	// This field is optional.
@@ -142,7 +143,7 @@ func attachBTFID(program *ebpf.Program, at ebpf.AttachType, cookie uint64) (Link
 	)
 	switch at {
 	case ebpf.AttachTraceFEntry, ebpf.AttachTraceFExit, ebpf.AttachTraceRawTp,
-		ebpf.AttachModifyReturn, ebpf.AttachLSMMac:
+		ebpf.AttachTraceFSession, ebpf.AttachModifyReturn, ebpf.AttachLSMMac:
 		// Attach via BPF link
 		fd, err = sys.LinkCreateTracing(&sys.LinkCreateTracingAttr{
 			ProgFd:     uint32(program.FD()),
@@ -191,7 +192,7 @@ func attachBTFID(program *ebpf.Program, at ebpf.AttachType, cookie uint64) (Link
 	return &tracing{raw}, nil
 }
 
-// AttachTracing links a tracing (fentry/fexit/fmod_ret) BPF program or
+// AttachTracing links a tracing (fentry/fexit/fsession/fmod_ret) BPF program or
 // a BTF-powered raw tracepoint (tp_btf) BPF Program to a BPF hook defined
 // in kernel modules.
 func AttachTracing(opts TracingOptions) (Link, error) {
@@ -200,7 +201,7 @@ func AttachTracing(opts TracingOptions) (Link, error) {
 	}
 
 	switch opts.AttachType {
-	case ebpf.AttachTraceFEntry, ebpf.AttachTraceFExit, ebpf.AttachModifyReturn,
+	case ebpf.AttachTraceFEntry, ebpf.AttachTraceFExit, ebpf.AttachTraceFSession, ebpf.AttachModifyReturn,
 		ebpf.AttachTraceRawTp, ebpf.AttachNone:
 	default:
 		return nil, fmt.Errorf("invalid attach type: %s", opts.AttachType.String())

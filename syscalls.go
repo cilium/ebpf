@@ -187,7 +187,7 @@ func wrapMapError(err error) error {
 	}
 
 	if errors.Is(err, unix.E2BIG) {
-		return fmt.Errorf("key too big for map: %w", err)
+		return wrapOperationError("key too big for map: ", err)
 	}
 
 	return err

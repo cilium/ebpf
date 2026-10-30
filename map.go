@@ -931,7 +931,7 @@ func (m *Map) lookup(key any, valueOut sys.Pointer, flags MapLookupFlags) error 
 		if errors.Is(err, unix.ENOENT) {
 			return errMapLookupKeyNotExist
 		}
-		return fmt.Errorf("lookup: %w", wrapMapError(err))
+		return wrapOperationError("lookup: ", wrapMapError(err))
 	}
 	return nil
 }
@@ -1070,7 +1070,7 @@ func (m *Map) update(key any, valuePtr sys.Pointer, flags MapUpdateFlags) error 
 	}
 
 	if err = sys.MapUpdateElem(&attr); err != nil {
-		return fmt.Errorf("update: %w", wrapMapError(err))
+		return wrapOperationError("update: ", wrapMapError(err))
 	}
 
 	return nil

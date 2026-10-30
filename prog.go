@@ -920,7 +920,7 @@ func (p *Program) Run(opts *RunOptions) (uint32, error) {
 
 	ret, _, err := p.run(opts)
 	if err != nil {
-		return ret, fmt.Errorf("run program: %w", err)
+		return ret, wrapOperationError("run program: ", err)
 	}
 	return ret, nil
 }
@@ -1082,7 +1082,7 @@ retry:
 		}
 
 		if errors.Is(err, sys.ENOTSUPP) {
-			return 0, 0, fmt.Errorf("kernel doesn't support running %s: %w", p.Type(), ErrNotSupported)
+			return 0, 0, unsupportedRunError(p.Type())
 		}
 
 		return 0, 0, err

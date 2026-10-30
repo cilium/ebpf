@@ -1,11 +1,6 @@
 package internal
 
 import (
-	"bytes"
-	"errors"
-	"go/format"
-	"go/scanner"
-	"io"
 	"reflect"
 	"strings"
 	"unicode"
@@ -46,42 +41,6 @@ func Identifier(str string) string {
 		prev = r
 		return r
 	}, str)
-}
-
-// WriteFormatted outputs a formatted src into out.
-//
-// If formatting fails it returns an informative error message.
-func WriteFormatted(src []byte, out io.Writer) error {
-	formatted, err := format.Source(src)
-	if err == nil {
-		_, err = out.Write(formatted)
-		return err
-	}
-
-	var el scanner.ErrorList
-	if !errors.As(err, &el) {
-		return err
-	}
-
-	var nel scanner.ErrorList
-	for _, err := range el {
-		if !err.Pos.IsValid() {
-			nel = append(nel, err)
-			continue
-		}
-
-		buf := src[err.Pos.Offset:]
-		nl := bytes.IndexRune(buf, '\n')
-		if nl == -1 {
-			nel = append(nel, err)
-			continue
-		}
-
-		err.Msg += ": " + string(buf[:nl])
-		nel = append(nel, err)
-	}
-
-	return nel
 }
 
 // GoTypeName is like %T, but elides the package name.

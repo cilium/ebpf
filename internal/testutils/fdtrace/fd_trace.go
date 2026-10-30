@@ -1,4 +1,7 @@
-package testmain
+// Package fdtrace tracks file descriptors to detect leaks in tests.
+//
+// It is imported by production code, so keep its dependencies minimal.
+package fdtrace
 
 import (
 	"bytes"
@@ -21,6 +24,21 @@ func onLeakFD(fs *runtime.Frames) {
 // fds is a registry of all file descriptors wrapped into sys.fds that were
 // created while an fd tracer was active.
 var fds *sync.Map // map[int]*runtime.Frames
+
+// Enable starts tracking file descriptors passed to [TraceFD].
+func Enable() {
+	fds = new(sync.Map)
+}
+
+// CheckLeaks reports all file descriptors which are still tracked as leaked,
+// and returns whether any leaks were found since tracking was enabled.
+func CheckLeaks() bool {
+	for _, f := range flushFrames() {
+		onLeakFD(f)
+	}
+
+	return foundLeak.Load()
+}
 
 // TraceFD associates raw with the current execution stack.
 //

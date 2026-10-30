@@ -3,8 +3,9 @@ package sys
 import (
 	"errors"
 	"fmt"
-	"github.com/cilium/ebpf/internal/unix"
 	"testing"
+
+	"github.com/cilium/ebpf/internal/unix"
 )
 
 type customError []int
@@ -66,20 +67,27 @@ func TestProfilerSignalErrorForeign(t *testing.T) {
 	}
 	f := new(signalFormatter)
 	got := profilerSignalError("unmasking profiler signal: ", f)
-	if f.calls != 1 || got.Error() != "unmasking profiler signal: formatted signal" || got.Error() != "unmasking profiler signal: formatted signal" || f.calls != 1 {
+	if f.calls != 1 {
 		t.Fatal("Formatter semantics changed")
+	}
+	for range 2 {
+		if got.Error() != "unmasking profiler signal: formatted signal" || f.calls != 1 {
+			t.Fatal("Formatter semantics changed")
+		}
 	}
 	e := &signalMutable{text: "before"}
 	got = profilerSignalError("masking profiler signal: ", e)
 	e.text = "after"
-	if got.Error() != "masking profiler signal: before" || got.Error() != "masking profiler signal: before" || e.calls != 1 {
-		t.Fatal("snapshot changed")
+	for range 2 {
+		if got.Error() != "masking profiler signal: before" || e.calls != 1 {
+			t.Fatal("snapshot changed")
+		}
 	}
 }
 
 func TestErrnoMessageRange(t *testing.T) {
 	// Cover known platform messages and unknown values without invoking syscalls.
-	for errno := unix.Errno(0); errno < 4096; errno++ {
+	for errno := range unix.Errno(4096) {
 		for _, cause := range []error{errno, wrappedErrno{errno}} {
 			message, ok := ErrnoMessage(cause)
 			if !ok || message != fmt.Sprint(cause) {

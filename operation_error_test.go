@@ -80,8 +80,10 @@ func TestOperationErrorCompatibility(t *testing.T) {
 		t.Fatalf("calls=%d", e.calls)
 	}
 	e.text = "after"
-	if got.Error() != "lookup: before" || got.Error() != "lookup: before" || e.calls != 1 {
-		t.Fatal("not an eager snapshot")
+	for range 2 {
+		if got.Error() != "lookup: before" || e.calls != 1 {
+			t.Fatal("not an eager snapshot")
+		}
 	}
 	inner := wrapOperationError("key too big for map: ", unix.E2BIG)
 	checkOperationError(t, wrapOperationError("update: ", inner), fmt.Errorf("update: %w", inner), inner)
@@ -117,7 +119,7 @@ func TestOperationErrorForeignCallbacks(t *testing.T) {
 	if e.calls != [4]int{1, 0, 0, 0} {
 		t.Fatalf("unexpected callbacks: %v", e.calls)
 	}
-	for i := 0; i < 3; i++ {
+	for range 3 {
 		if got.Error() != "run program: observed" {
 			t.Fatal("message changed")
 		}

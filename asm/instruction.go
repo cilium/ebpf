@@ -204,6 +204,7 @@ func (ins Instruction) Marshal(w io.Writer, bo binary.ByteOrder) (uint64, error)
 	} else if atomic := ins.OpCode.AtomicOp(); atomic != InvalidAtomic {
 		ins.OpCode = ins.OpCode &^ atomicMask
 		ins.Constant = int64(atomic >> 8)
+		cons = int32(atomic >> 8)
 	}
 
 	op, err := ins.OpCode.bpfOpCode()

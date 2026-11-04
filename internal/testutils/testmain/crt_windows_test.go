@@ -1,6 +1,4 @@
-//go:build windows
-
-package efw
+package testmain
 
 import (
 	"testing"

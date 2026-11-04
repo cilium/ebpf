@@ -56,3 +56,22 @@ __section("tp_btf/task_newtask") int call_weak_kfunc(void *ctx) {
 
 	return 0;
 }
+
+extern struct bpf_cpumask *bpf_cpumask_create___local(void) __ksym __weak;
+extern struct bpf_cpumask *bpf_cpumask_create___mismatch(int extra_param) __ksym __weak;
+
+__section("tp_btf/task_newtask") int kfunc_suffix_valid(void *ctx) {
+	if (bpf_ksym_exists(bpf_cpumask_create___local)) {
+		return 1;
+	}
+
+	return 0;
+}
+
+__section("tp_btf/task_newtask") int kfunc_suffix_mismatch(void *ctx) {
+	if (bpf_ksym_exists(bpf_cpumask_create___mismatch)) {
+		return 1;
+	}
+
+	return 0;
+}

@@ -271,21 +271,3 @@ __section("socket/fields") int fields() {
 
 	return 0;
 }
-
-struct ambiguous {
-	int _1;
-	char _2;
-};
-
-struct ambiguous___flavour {
-	char _1;
-	int _2;
-};
-
-__section("socket/err_ambiguous") int err_ambiguous() {
-	return bpf_core_type_id_kernel(struct ambiguous);
-}
-
-__section("socket/err_ambiguous_flavour") int err_ambiguous_flavour() {
-	return bpf_core_type_id_kernel(struct ambiguous___flavour);
-}

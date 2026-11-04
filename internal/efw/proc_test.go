@@ -6,7 +6,13 @@ import (
 	"testing"
 
 	"github.com/go-quicktest/qt"
+
+	"github.com/cilium/ebpf/internal/testutils/testmain"
 )
+
+func TestMain(m *testing.M) {
+	testmain.Run(m)
+}
 
 func TestNewProc(t *testing.T) {
 	_, err := newProc("a_function_which_doesnt_exist").Find()

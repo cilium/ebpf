@@ -1,22 +1,15 @@
-//go:build windows
-
-package efw
+package testmain
 
 import (
 	"errors"
 	"fmt"
 	"os"
 	"syscall"
-	"testing"
 
 	"golang.org/x/sys/windows"
 )
 
 func init() {
-	if !testing.Testing() {
-		return
-	}
-
 	if isDebuggerPresent() {
 		return
 	}
@@ -51,7 +44,7 @@ func configureCRTErrorReporting() error {
 	// Load the efW API to trigger loading the CRT. This may fail, in which case
 	// we can't figure out which CRT is being used.
 	// In that case we rely on the error bubbling up via some other path.
-	_ = module.Load()
+	_ = windows.NewLazyDLL("ebpfapi.dll").Load()
 
 	ucrtHandle, err := syscall.UTF16PtrFromString(ucrtDebug)
 	if err != nil {

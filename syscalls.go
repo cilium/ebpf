@@ -11,6 +11,7 @@ import (
 
 	"github.com/cilium/ebpf/asm"
 	"github.com/cilium/ebpf/internal"
+	"github.com/cilium/ebpf/internal/kallsyms"
 	"github.com/cilium/ebpf/internal/linux"
 	"github.com/cilium/ebpf/internal/platform"
 	"github.com/cilium/ebpf/internal/sys"
@@ -313,6 +314,22 @@ var haveSyscallWrapper = internal.NewFeatureTest("syscall wrapper", func() error
 	prefix := linux.PlatformPrefix()
 	if prefix == "" {
 		return fmt.Errorf("unable to find the platform prefix for (%s)", runtime.GOARCH)
+	}
+
+	// kprobe_events is root-only, but anyone can read symbol names from
+	// kallsyms. Only trust a match, an empty or masked kallsyms tells us nothing.
+	symbols := map[string]kallsyms.KsymAddress{prefix + "sys_bpf": {}, "sys_bpf": {}}
+	if kallsyms.AssignAddresses(symbols) == nil {
+		listed := func(name string) bool {
+			_, err := symbols[name].Address()
+			return !errors.Is(err, os.ErrNotExist)
+		}
+		if listed(prefix + "sys_bpf") {
+			return nil
+		}
+		if listed("sys_bpf") {
+			return internal.ErrNotSupported
+		}
 	}
 
 	args := tracefs.ProbeArgs{

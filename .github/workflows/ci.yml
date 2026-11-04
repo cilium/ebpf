@@ -47,6 +47,9 @@ jobs:
       - name: Run golangci-lint
         uses: golangci/golangci-lint-action@v9.3.0
 
+      - name: Check dependencies
+        run: ./scripts/check-deps.sh
+
       - name: Build
         run: go build -v ./...
 

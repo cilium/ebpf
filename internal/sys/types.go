@@ -1100,6 +1100,26 @@ func LinkCreateTracing(attr *LinkCreateTracingAttr) (*FD, error) {
 	return NewFD(int(fd))
 }
 
+type LinkCreateTracingMultiAttr struct {
+	_          structs.HostLayout
+	ProgFd     uint32
+	TargetFd   uint32
+	AttachType AttachType
+	Flags      uint32
+	Ids        TypedPointer[TypeID]
+	Cookies    TypedPointer[uint64]
+	Count      uint32
+	_          [28]byte
+}
+
+func LinkCreateTracingMulti(attr *LinkCreateTracingMultiAttr) (*FD, error) {
+	fd, err := BPF(BPF_LINK_CREATE, unsafe.Pointer(attr), unsafe.Sizeof(*attr))
+	if err != nil {
+		return nil, err
+	}
+	return NewFD(int(fd))
+}
+
 type LinkCreateUprobeMultiAttr struct {
 	_                structs.HostLayout
 	ProgFd           uint32
@@ -1763,6 +1783,22 @@ type TracingLinkInfo struct {
 	_           [4]byte
 	Cookie      uint64
 	_           [24]byte
+}
+
+type TracingMultiLinkInfo struct {
+	_          structs.HostLayout
+	Type       LinkType
+	Id         LinkID
+	ProgId     uint32
+	_          [4]byte
+	AttachType AttachType
+	Count      uint32
+	BtfObjId   uint32
+	_          [4]byte
+	Ids        TypedPointer[uint32]
+	Addrs      TypedPointer[uint64]
+	Cookies    TypedPointer[uint64]
+	_          [8]byte
 }
 
 type UprobeLinkInfo struct {

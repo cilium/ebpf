@@ -69,6 +69,7 @@ TARGETS := \
 	testdata/variables \
 	testdata/arena \
 	testdata/struct_ops \
+	testdata/atomics \
 	btf/testdata/relocs \
 	btf/testdata/relocs_read \
 	btf/testdata/relocs_read_tgt \
@@ -134,6 +135,9 @@ testdata/loader_nobtf-el.elf: testdata/loader.c $(HEADERS)
 
 testdata/loader_nobtf-eb.elf: testdata/loader.c $(HEADERS)
 	$(CLANG) $(CFLAGS) -g0 -D__NOBTF__ -target bpfeb -c $< -o $@
+
+# load-acquire and store-release are only emitted for v4.
+testdata/atomics-%.elf: CFLAGS += -mcpu=v4
 
 %-el.elf: %.c $(HEADERS)
 	$(CLANG) $(CFLAGS) -target bpfel -c $< -o $@

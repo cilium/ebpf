@@ -653,6 +653,44 @@ func TestKconfig(t *testing.T) {
 	qt.Assert(t, qt.Equals(ret, 0), qt.Commentf("Failed assertion at line %d in testdata/kconfig.c", ret))
 }
 
+func TestAtomics(t *testing.T) {
+	file := testutils.NativeFile(t, "testdata/atomics-%s.elf")
+	spec, err := LoadCollectionSpec(file)
+	qt.Assert(t, qt.IsNil(err))
+
+	t.Run("atomics", func(t *testing.T) {
+		testutils.SkipOnOldKernel(t, "5.12", "fetch, xchg and cmpxchg atomics")
+
+		var obj struct {
+			Prog *Program `ebpf:"atomics"`
+		}
+
+		err := spec.LoadAndAssign(&obj, nil)
+		testutils.SkipIfNotSupported(t, err)
+		qt.Assert(t, qt.IsNil(err))
+		defer obj.Prog.Close()
+
+		ret := mustRun(t, obj.Prog, nil)
+		qt.Assert(t, qt.Equals(ret, 0), qt.Commentf("Failed assertion at line %d in testdata/atomics.c", ret))
+	})
+
+	t.Run("atomics_acq_rel", func(t *testing.T) {
+		testutils.SkipOnOldKernel(t, "6.15", "load-acquire and store-release")
+
+		var obj struct {
+			Prog *Program `ebpf:"atomics_acq_rel"`
+		}
+
+		err := spec.LoadAndAssign(&obj, nil)
+		testutils.SkipIfNotSupported(t, err)
+		qt.Assert(t, qt.IsNil(err))
+		defer obj.Prog.Close()
+
+		ret := mustRun(t, obj.Prog, nil)
+		qt.Assert(t, qt.Equals(ret, 0), qt.Commentf("Failed assertion at line %d in testdata/atomics.c", ret))
+	})
+}
+
 func TestKsym(t *testing.T) {
 	file := testutils.NativeFile(t, "testdata/ksym-%s.elf")
 	spec, err := LoadCollectionSpec(file)

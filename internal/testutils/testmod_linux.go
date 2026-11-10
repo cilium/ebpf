@@ -78,6 +78,11 @@ var loadTestmod = sync.OnceValue(func() error {
 // findFile recursively looks for name starting at root. Returns an empty string
 // if no matching file was found.
 func findFile(root, name string) string {
+	root, err := filepath.EvalSymlinks(root)
+	if err != nil {
+		return ""
+	}
+
 	var found string
 	filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {

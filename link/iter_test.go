@@ -129,3 +129,83 @@ func TestUDPIter(t *testing.T) {
 
 	testLink(t, it, prog)
 }
+
+func TestIterCgroup(t *testing.T) {
+	testutils.SkipOnOldKernel(t, "6.1", "cgroup iter")
+
+	prog := mustLoadProgram(t, ebpf.Tracing, ebpf.AttachTraceIter, "cgroup")
+	cgroup := testutils.CreateCgroup(t)
+
+	for _, tc := range []struct {
+		name       string
+		order      CgroupIterOrder
+		minVersion string
+	}{
+		{"self", CgroupIterSelfOnly, "6.1"},
+		{"pre", CgroupIterDescendantsPre, "6.1"},
+		{"post", CgroupIterDescendantsPost, "6.1"},
+		{"up", CgroupIterAncestorsUp, "6.1"},
+		{"children", CgroupIterChildren, "7.0"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			testutils.SkipOnOldKernel(t, tc.minVersion, tc.name)
+			it, err := AttachIter(IterOptions{
+				Program: prog,
+				Cgroup:  &CgroupIterOptions{Order: tc.order, Path: cgroup.Name()},
+			})
+			qt.Assert(t, qt.IsNil(err))
+			defer it.Close()
+
+			file, err := it.Open()
+			qt.Assert(t, qt.IsNil(err))
+			defer file.Close()
+
+			contents, err := io.ReadAll(file)
+			qt.Assert(t, qt.IsNil(err))
+			qt.Assert(t, qt.HasLen(contents, 0))
+		})
+	}
+
+	it, err := AttachIter(IterOptions{
+		Program: prog,
+		Cgroup: &CgroupIterOptions{
+			Order: CgroupIterSelfOnly,
+			ID:    testutils.GetCgroupIno(t, cgroup),
+		},
+	})
+	qt.Assert(t, qt.IsNil(err))
+	defer it.Close()
+
+	testLink(t, it, prog)
+}
+
+func TestIterInput(t *testing.T) {
+	// Program type that loads on all kernels. Not expected to link successfully.
+	prog := mustLoadProgram(t, ebpf.SocketFilter, 0, "")
+
+	// Program is required.
+	_, err := AttachIter(IterOptions{})
+	qt.Assert(t, qt.ErrorIs(err, errInvalidInput))
+
+	// Map and Cgroup are mutually exclusive.
+	_, err = AttachIter(IterOptions{
+		Program: prog,
+		Map:     &ebpf.Map{},
+		Cgroup:  &CgroupIterOptions{Order: CgroupIterSelfOnly},
+	})
+	qt.Assert(t, qt.ErrorIs(err, errInvalidInput))
+
+	// Order is required.
+	_, err = AttachIter(IterOptions{
+		Program: prog,
+		Cgroup:  &CgroupIterOptions{Path: "/"},
+	})
+	qt.Assert(t, qt.ErrorIs(err, errInvalidInput))
+
+	// Path and ID are mutually exclusive.
+	_, err = AttachIter(IterOptions{
+		Program: prog,
+		Cgroup:  &CgroupIterOptions{Order: CgroupIterSelfOnly, Path: "/", ID: 1},
+	})
+	qt.Assert(t, qt.ErrorIs(err, errInvalidInput))
+}

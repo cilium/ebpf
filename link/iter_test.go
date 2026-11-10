@@ -129,3 +129,50 @@ func TestUDPIter(t *testing.T) {
 
 	testLink(t, it, prog)
 }
+
+func TestIterCgroup(t *testing.T) {
+	// Introduced by d4ccaf58a847 ("bpf: Introduce cgroup iter")
+	testutils.SkipOnOldKernel(t, "6.1", "cgroup iter")
+
+	prog := mustLoadProgram(t, ebpf.Tracing, ebpf.AttachTraceIter, "cgroup")
+	cgroup := testutils.CreateCgroup(t)
+
+	for _, tc := range []struct {
+		name  string
+		order CgroupIterOrder
+	}{
+		{"self", CgroupIterSelfOnly},
+		{"pre", CgroupIterDescendantsPre},
+		{"post", CgroupIterDescendantsPost},
+		{"up", CgroupIterAncestorsUp},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			it, err := AttachIter(IterOptions{
+				Program: prog,
+				Cgroup:  &CgroupIterOptions{Order: tc.order, Path: cgroup.Name()},
+			})
+			qt.Assert(t, qt.IsNil(err))
+			defer it.Close()
+
+			file, err := it.Open()
+			qt.Assert(t, qt.IsNil(err))
+			defer file.Close()
+
+			contents, err := io.ReadAll(file)
+			qt.Assert(t, qt.IsNil(err))
+			qt.Assert(t, qt.HasLen(contents, 0))
+		})
+	}
+
+	it, err := AttachIter(IterOptions{
+		Program: prog,
+		Cgroup: &CgroupIterOptions{
+			Order: CgroupIterSelfOnly,
+			ID:    testutils.GetCgroupIno(t, cgroup),
+		},
+	})
+	qt.Assert(t, qt.IsNil(err))
+	defer it.Close()
+
+	testLink(t, it, prog)
+}

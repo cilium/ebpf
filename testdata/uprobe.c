@@ -27,6 +27,14 @@ __attribute__((noinline, noreturn)) void uprobe_exits(int code) {
 	sys_exit(code);
 }
 
+// Left undefined to mimic a call into a shared library.
+__attribute__((weak)) extern void uprobe_undefined(void);
+// Undefined symbols are untyped unless a shared library defines them.
+__asm__(".type uprobe_undefined, %function");
+
 void _start(void) {
+	if (uprobe_undefined)
+		uprobe_undefined();
+
 	uprobe_exits(uprobe_returns(0));
 }

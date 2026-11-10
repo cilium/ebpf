@@ -23,6 +23,8 @@ var (
 	// Functions in testdata/uprobe.c. Only the first one returns to its caller.
 	uprobeSyms = []string{"uprobe_returns", "uprobe_exits", "_start"}
 	uprobeSym  = uprobeSyms[0]
+	// Declared but not defined in testdata/uprobe.c (elf.SHN_UNDEF).
+	uprobeUndefinedSym = "uprobe_undefined"
 )
 
 // uprobeTarget opens the prebuilt executable from testdata/uprobe.c.
@@ -167,9 +169,10 @@ func TestUprobeExtNotFound(t *testing.T) {
 	ex := uprobeTarget(t)
 	prog := mustLoadProgram(t, ebpf.Kprobe, 0, "")
 
-	// This symbol will not be present in Executable (elf.SHN_UNDEF).
-	_, err := ex.Uprobe("open", prog, nil)
-	qt.Assert(t, qt.IsNotNil(err))
+	// Existing (weak) symbol with a zero address since it's externally-linked.
+	// Not supported in the library for now.
+	_, err := ex.Uprobe(uprobeUndefinedSym, prog, nil)
+	qt.Assert(t, qt.ErrorIs(err, ErrNotSupported))
 }
 
 func TestUprobeExtWithOpts(t *testing.T) {
@@ -180,7 +183,7 @@ func TestUprobeExtWithOpts(t *testing.T) {
 
 	// NB: It's not possible to invoke the uprobe since we use an arbitrary
 	// address.
-	up, err := ex.Uprobe("open", prog, &UprobeOptions{
+	up, err := ex.Uprobe(uprobeUndefinedSym, prog, &UprobeOptions{
 		// arm64 requires the addresses to be aligned (a multiple of 4)
 		Address: 0x4,
 	})

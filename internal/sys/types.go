@@ -748,6 +748,15 @@ type BtfInfo struct {
 	KernelBtf uint32
 }
 
+type CommonAttr struct {
+	_           structs.HostLayout
+	LogBuf      Pointer
+	LogSize     uint32
+	LogLevel    LogLevel
+	LogTrueSize uint32
+	_           [4]byte
+}
+
 type FuncInfo struct {
 	_       structs.HostLayout
 	InsnOff uint32

@@ -32,6 +32,13 @@ func TestBPFAllocations(t *testing.T) {
 		BPF(math.MaxUint32, unsafe.Pointer(&attr), 0)
 	})
 	qt.Assert(t, qt.Equals(n, 0))
+
+	n = testing.AllocsPerRun(10, func() {
+		var attr struct{ Foo uint64 }
+		var common CommonAttr
+		BPFWithCommonAttrs(math.MaxUint32, unsafe.Pointer(&attr), 0, &common)
+	})
+	qt.Assert(t, qt.Equals(n, 0))
 }
 
 func TestObjName(t *testing.T) {

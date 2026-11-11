@@ -5,6 +5,7 @@ package link
 import (
 	"fmt"
 
+	"github.com/cilium/ebpf/btf"
 	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/platform"
 	"github.com/cilium/ebpf/internal/sys"
@@ -26,6 +27,7 @@ const (
 	NetfilterType     = sys.BPF_LINK_TYPE_NETFILTER
 	NetkitType        = sys.BPF_LINK_TYPE_NETKIT
 	StructOpsType     = sys.BPF_LINK_TYPE_STRUCT_OPS
+	TracingMultiType  = sys.BPF_LINK_TYPE_TRACING_MULTI
 )
 
 // AttachRawLink creates a raw link.
@@ -83,6 +85,8 @@ func wrapRawLink(raw *RawLink) (_ Link, err error) {
 		return &rawTracepoint{*raw}, nil
 	case TracingType:
 		return &tracing{*raw}, nil
+	case TracingMultiType:
+		return &tracingMulti{*raw}, nil
 	case CgroupType:
 		return &linkCgroup{*raw}, nil
 	case IterType:
@@ -206,6 +210,37 @@ type UprobeMultiOffset struct {
 	Offset         uint64
 	Cookie         uint64
 	ReferenceCount uint64
+}
+
+type TracingMultiInfo struct {
+	AttachType sys.AttachType
+	Count      uint32
+	BtfObjId   uint32
+	ids        []uint32
+	addrs      []uint64
+	cookies    []uint64
+}
+
+type TracingMultiTarget struct {
+	BtfID   btf.TypeID
+	Address uint64
+	Cookie  uint64
+}
+
+// Targets returns the BTF IDs hooked by tracing multi along with their addresses and cookies.
+func (tmi *TracingMultiInfo) Targets() ([]TracingMultiTarget, bool) {
+	if tmi.ids == nil || len(tmi.ids) != len(tmi.addrs) || len(tmi.ids) != len(tmi.cookies) {
+		return nil, false
+	}
+	targets := make([]TracingMultiTarget, len(tmi.ids))
+	for i := range tmi.ids {
+		targets[i] = TracingMultiTarget{
+			BtfID:   btf.TypeID(tmi.ids[i]),
+			Address: tmi.addrs[i],
+			Cookie:  tmi.cookies[i],
+		}
+	}
+	return targets, true
 }
 
 // Offsets returns the offsets that the uprobe was attached to along with the related cookies and ref counters.
@@ -366,6 +401,14 @@ func (r Info) KprobeMulti() *KprobeMultiInfo {
 // Returns nil if the type-specific link info isn't available.
 func (r Info) UprobeMulti() *UprobeMultiInfo {
 	e, _ := r.extra.(*UprobeMultiInfo)
+	return e
+}
+
+// TracingMulti returns tracing-multi type-specific link info.
+//
+// Returns nil if the type-specific link info isn't available.
+func (r Info) TracingMulti() *TracingMultiInfo {
+	e, _ := r.extra.(*TracingMultiInfo)
 	return e
 }
 

@@ -225,6 +225,7 @@ import (
 		{"TcxActionBase", "tcx_action_base"},
 		{"PerfEventType", "bpf_perf_event_type"},
 		{"NetfilterInetHook", "nf_inet_hooks"},
+		{"CgroupIterOrder", "bpf_cgroup_iter_order"},
 	}
 
 	sort.Slice(enums, func(i, j int) bool {
@@ -748,6 +749,29 @@ import (
 		nattrs++
 	}
 	fmt.Printf("Generated %d attrs\n", nattrs)
+
+	// Iterator specific parameters, see [sys.LinkCreateIterAttr.IterInfo].
+	var bpfIterLinkInfo *btf.Union
+	if err := spec.TypeByName("bpf_iter_link_info", &bpfIterLinkInfo); err != nil {
+		return nil, err
+	}
+	iterInfos := types{
+		{"IterLinkInfoMap", "map"},
+		{"IterLinkInfoCgroup", "cgroup"},
+		{"IterLinkInfoTask", "task"},
+	}
+	iterInfoTypes, err := splitUnion(bpfIterLinkInfo, iterInfos)
+	if err != nil {
+		return nil, fmt.Errorf("split bpf_iter_link_info: %w", err)
+	}
+	iterInfoPatches := map[string][]patch{
+		"IterLinkInfoCgroup": {replace(enumTypes["CgroupIterOrder"], "order")},
+	}
+	for _, t := range iterInfos {
+		if err := outputPatchedStruct(gf, w, t.name, iterInfoTypes[t.name], iterInfoPatches[t.name]); err != nil {
+			return nil, fmt.Errorf("output %q: %w", t.name, err)
+		}
+	}
 
 	// Link info type specific
 	linkInfoExtraTypes := []struct {

@@ -265,6 +265,17 @@ const (
 	__MAX_BPF_ATTACH_TYPE              AttachType = 62
 )
 
+type CgroupIterOrder uint32
+
+const (
+	BPF_CGROUP_ITER_ORDER_UNSPEC     CgroupIterOrder = 0
+	BPF_CGROUP_ITER_SELF_ONLY        CgroupIterOrder = 1
+	BPF_CGROUP_ITER_DESCENDANTS_PRE  CgroupIterOrder = 2
+	BPF_CGROUP_ITER_DESCENDANTS_POST CgroupIterOrder = 3
+	BPF_CGROUP_ITER_ANCESTORS_UP     CgroupIterOrder = 4
+	BPF_CGROUP_ITER_CHILDREN         CgroupIterOrder = 5
+)
+
 type Cmd uint32
 
 const (
@@ -1600,6 +1611,25 @@ func TokenCreate(attr *TokenCreateAttr) (*FD, error) {
 		return nil, err
 	}
 	return NewFD(int(fd))
+}
+
+type IterLinkInfoMap struct {
+	_     structs.HostLayout
+	MapFd uint32
+}
+
+type IterLinkInfoCgroup struct {
+	_        structs.HostLayout
+	Order    CgroupIterOrder
+	CgroupFd uint32
+	CgroupId uint64
+}
+
+type IterLinkInfoTask struct {
+	_     structs.HostLayout
+	Tid   uint32
+	Pid   uint32
+	PidFd uint32
 }
 
 type CgroupLinkInfo struct {

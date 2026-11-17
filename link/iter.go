@@ -32,13 +32,13 @@ func AttachIter(opts IterOptions) (*Iter, error) {
 		return nil, fmt.Errorf("invalid program: %s", sys.ErrClosedFd)
 	}
 
-	var info bpfIterLinkInfoMap
+	var info sys.IterLinkInfoMap
 	if opts.Map != nil {
 		mapFd := opts.Map.FD()
 		if mapFd < 0 {
 			return nil, fmt.Errorf("invalid map: %w", sys.ErrClosedFd)
 		}
-		info.map_fd = uint32(mapFd)
+		info.MapFd = uint32(mapFd)
 	}
 
 	attr := sys.LinkCreateIterAttr{
@@ -92,9 +92,4 @@ func (it *Iter) Open() (io.ReadCloser, error) {
 	}
 
 	return fd.File("bpf_iter")
-}
-
-// union bpf_iter_link_info.map
-type bpfIterLinkInfoMap struct {
-	map_fd uint32
 }

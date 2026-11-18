@@ -32,23 +32,39 @@ func AttachIter(opts IterOptions) (*Iter, error) {
 		return nil, fmt.Errorf("invalid program: %s", sys.ErrClosedFd)
 	}
 
+	attr := sys.LinkCreateIterAttr{
+		ProgFd:     uint32(progFd),
+		AttachType: sys.AttachType(ebpf.AttachTraceIter),
+	}
+
+	switch {
+	default:
+		// Also covers iterators without parameters, with a nil opts.Map.
+		return attachIterMap(&attr, opts.Map)
+	}
+}
+
+// attachIterMap attaches an iterator over the elements of m.
+//
+// Also used by default for iterators without a parameter.
+func attachIterMap(attr *sys.LinkCreateIterAttr, m *ebpf.Map) (*Iter, error) {
 	var info sys.IterLinkInfoMap
-	if opts.Map != nil {
-		mapFd := opts.Map.FD()
+	if m != nil {
+		mapFd := m.FD()
 		if mapFd < 0 {
 			return nil, fmt.Errorf("invalid map: %w", sys.ErrClosedFd)
 		}
 		info.MapFd = uint32(mapFd)
 	}
 
-	attr := sys.LinkCreateIterAttr{
-		ProgFd:      uint32(progFd),
-		AttachType:  sys.AttachType(ebpf.AttachTraceIter),
-		IterInfo:    sys.UnsafePointer(unsafe.Pointer(&info)),
-		IterInfoLen: uint32(unsafe.Sizeof(info)),
-	}
+	attr.IterInfo = sys.UnsafePointer(unsafe.Pointer(&info))
+	attr.IterInfoLen = uint32(unsafe.Sizeof(info))
 
-	fd, err := sys.LinkCreateIter(&attr)
+	return createIter(attr)
+}
+
+func createIter(attr *sys.LinkCreateIterAttr) (*Iter, error) {
+	fd, err := sys.LinkCreateIter(attr)
 	if err != nil {
 		if haveFeatErr := haveBPFLink(); haveFeatErr != nil {
 			return nil, haveFeatErr
@@ -56,7 +72,7 @@ func AttachIter(opts IterOptions) (*Iter, error) {
 		return nil, fmt.Errorf("can't link iterator: %w", err)
 	}
 
-	return &Iter{RawLink{fd, ""}}, err
+	return &Iter{RawLink{fd, ""}}, nil
 }
 
 // Iter represents an attached bpf_iter.

@@ -514,6 +514,70 @@ func (s *Spec) TypeByName(name string, typ any) error {
 	return nil
 }
 
+// FuncIDs returns the unique BTF type IDs of functions matching names.
+// IDs are returned in input name order, with matches for each name in the
+// order returned by [Spec.AnyTypesByName].
+//
+// If onePerName is true, each name must match exactly one function. A missing
+// function returns an error wrapping [ErrNotFound], and multiple matching
+// functions return an error wrapping [ErrMultipleMatches].
+// Otherwise all matching functions are returned, ignoring names without matches.
+// Returns [ErrNotFound] if no functions match, including when names is empty.
+func (s *Spec) FuncIDs(names []string, onePerName bool) ([]TypeID, error) {
+	ids := make([]TypeID, 0, len(names))
+	seen := make(map[TypeID]struct{})
+	for _, name := range names {
+		if onePerName {
+			var fn *Func
+			if err := s.TypeByName(name, &fn); err != nil {
+				return nil, err
+			}
+
+			id, err := s.TypeID(fn)
+			if err != nil {
+				return nil, err
+			}
+			if _, ok := seen[id]; !ok {
+				ids = append(ids, id)
+				seen[id] = struct{}{}
+			}
+			continue
+		}
+
+		types, err := s.AnyTypesByName(name)
+		if errors.Is(err, ErrNotFound) {
+			continue
+		}
+		if err != nil {
+			return nil, err
+		}
+
+		for _, typ := range types {
+			fn, ok := typ.(*Func)
+			if !ok {
+				continue
+			}
+
+			id, err := s.TypeID(fn)
+			if err != nil {
+				return nil, err
+			}
+			if _, ok := seen[id]; ok {
+				continue
+			}
+
+			ids = append(ids, id)
+			seen[id] = struct{}{}
+		}
+	}
+
+	if len(ids) == 0 {
+		return nil, ErrNotFound
+	}
+
+	return ids, nil
+}
+
 // LoadSplitSpec loads split BTF from the given file.
 //
 // Types from base are used to resolve references in the split BTF.

@@ -3,6 +3,7 @@
 package link
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -10,6 +11,7 @@ import (
 
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/internal/sys"
+	"github.com/cilium/ebpf/internal/unix"
 )
 
 type IterOptions struct {
@@ -21,14 +23,20 @@ type IterOptions struct {
 	// and it to be compiled with a recent pahole (>= 1.16).
 	Program *ebpf.Program
 
-	// Map specifies the target map for bpf_map_elem and sockmap iterators. It
-	// may be nil. Mutually exclusive with Cgroup.
+	// Map specifies the target map for bpf_map_elem, bpf_sk_storage_map and
+	// sockmap iterators. It may be nil. Mutually exclusive with Cgroup and
+	// Task.
 	Map *ebpf.Map
 
 	// Cgroup specifies where a cgroup iterator starts and in which order it
 	// walks the cgroup hierarchy. Required for cgroup iterators. Mutually
-	// exclusive with Map. Available on Linux 6.1 and later.
+	// exclusive with Map and Task. Available on Linux 6.1 and later.
 	Cgroup *CgroupIterOptions
+
+	// Task restricts a task, task_file or task_vma iterator to a single thread
+	// or process. If nil or empty, the iterator visits all tasks. Mutually
+	// exclusive with Map and Cgroup. Available on Linux 6.1 and later.
+	Task *TaskIterOptions
 }
 
 // CgroupIterOptions configures a cgroup iterator.
@@ -67,9 +75,21 @@ const (
 	CgroupIterAncestorsUp = CgroupIterOrder(sys.BPF_CGROUP_ITER_ANCESTORS_UP)
 
 	// CgroupIterChildren visits the immediate children of the starting cgroup
-	// only, not the parent. Requires Linux 7.0 or later.
+	// only, not the starting cgroup itself. Requires Linux 7.0 or later.
 	CgroupIterChildren = CgroupIterOrder(sys.BPF_CGROUP_ITER_CHILDREN)
 )
+
+// TaskIterOptions configures a task, task_file or task_vma iterator.
+//
+// Kernels before 6.1 don't support these options: TID is ignored and all tasks
+// are visited, and PID is rejected with [ErrNotSupported].
+type TaskIterOptions struct {
+	// TID of the only thread to visit. Mutually exclusive with PID.
+	TID uint32
+
+	// PID of the process whose threads to visit. Mutually exclusive with TID.
+	PID uint32
+}
 
 // AttachIter attaches a BPF seq_file iterator.
 func AttachIter(opts IterOptions) (*Iter, error) {
@@ -90,8 +110,10 @@ func AttachIter(opts IterOptions) (*Iter, error) {
 	switch {
 	case opts.Cgroup != nil:
 		return attachIterCgroup(&attr, opts.Cgroup)
+	case opts.Task != nil:
+		return attachIterTask(&attr, opts.Task)
 	default:
-		// Also covers iterators without parameters, with a nil opts.Map.
+		// Also covers iterators attached without parameters, with a nil opts.Map.
 		return attachIterMap(&attr, opts.Map)
 	}
 }
@@ -103,13 +125,13 @@ func validateIterOptions(opts IterOptions) error {
 	}
 
 	set := 0
-	for _, ok := range []bool{opts.Map != nil, opts.Cgroup != nil} {
+	for _, ok := range []bool{opts.Map != nil, opts.Cgroup != nil, opts.Task != nil} {
 		if ok {
 			set++
 		}
 	}
 	if set > 1 {
-		return fmt.Errorf("map and cgroup are mutually exclusive: %w", errInvalidInput)
+		return fmt.Errorf("map, cgroup and task are mutually exclusive: %w", errInvalidInput)
 	}
 
 	if opts.Cgroup != nil {
@@ -122,10 +144,16 @@ func validateIterOptions(opts IterOptions) error {
 		}
 	}
 
+	if opts.Task != nil {
+		if opts.Task.TID != 0 && opts.Task.PID != 0 {
+			return fmt.Errorf("task TID and PID are mutually exclusive: %w", errInvalidInput)
+		}
+	}
+
 	return nil
 }
 
-// attachIterMap attaches an iterator over the elements of m.
+// attachIterMap attaches an iterator over the elements of m, which may be nil.
 //
 // Also used by default for iterators without a parameter.
 func attachIterMap(attr *sys.LinkCreateIterAttr, m *ebpf.Map) (*Iter, error) {
@@ -168,11 +196,28 @@ func attachIterCgroup(attr *sys.LinkCreateIterAttr, opts *CgroupIterOptions) (*I
 	return createIter(attr)
 }
 
+// attachIterTask attaches a task, task_file or task_vma iterator.
+func attachIterTask(attr *sys.LinkCreateIterAttr, opts *TaskIterOptions) (*Iter, error) {
+	info := sys.IterLinkInfoTask{
+		Tid: opts.TID,
+		Pid: opts.PID,
+	}
+
+	attr.IterInfo = sys.UnsafePointer(unsafe.Pointer(&info))
+	attr.IterInfoLen = uint32(unsafe.Sizeof(info))
+
+	return createIter(attr)
+}
+
 func createIter(attr *sys.LinkCreateIterAttr) (*Iter, error) {
 	fd, err := sys.LinkCreateIter(attr)
 	if err != nil {
 		if haveFeatErr := haveBPFLink(); haveFeatErr != nil {
 			return nil, haveFeatErr
+		}
+		if errors.Is(err, unix.E2BIG) {
+			// The kernel doesn't know all fields set in attr.IterInfo.
+			return nil, fmt.Errorf("can't link iterator with given options: %w", ErrNotSupported)
 		}
 		return nil, fmt.Errorf("can't link iterator: %w", err)
 	}

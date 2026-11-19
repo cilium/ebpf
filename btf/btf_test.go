@@ -674,3 +674,94 @@ func BenchmarkInspektorGadget(b *testing.B) {
 		}
 	}
 }
+
+func TestFuncIDsOnePerName(t *testing.T) {
+	spec := funcIDsTestSpec(t)
+
+	got, err := spec.FuncIDs([]string{"single", "single"}, true)
+	if err != nil {
+		t.Fatal("Resolve single function:", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("expected one ID, got %d", len(got))
+	}
+
+	for _, names := range [][]string{nil, {"missing"}, {"single", "missing"}, {"type_only"}} {
+		if _, err := spec.FuncIDs(names, true); !errors.Is(err, ErrNotFound) {
+			t.Errorf("FuncIDs(%v): expected ErrNotFound, got %v", names, err)
+		}
+	}
+
+	if _, err := spec.FuncIDs([]string{"duplicate"}, true); !errors.Is(err, ErrMultipleMatches) {
+		t.Errorf("expected ErrMultipleMatches, got %v", err)
+	}
+}
+
+func TestFuncIDsAllMatches(t *testing.T) {
+	spec := funcIDsTestSpec(t)
+
+	got, err := spec.FuncIDs([]string{"duplicate", "missing", "single", "duplicate"}, false)
+	if err != nil {
+		t.Fatal("Resolve all matching functions:", err)
+	}
+
+	// The duplicate name has two functions. The repeated input name must not
+	// duplicate their IDs, and the non-function with the same name is ignored.
+	if len(got) != 3 {
+		t.Fatalf("expected three unique function IDs, got %d", len(got))
+	}
+
+	seen := make(map[TypeID]bool)
+	for i, name := range []string{"duplicate", "duplicate", "single"} {
+		typ, err := spec.TypeByID(got[i])
+		if err != nil {
+			t.Fatal(err)
+		}
+		fn, ok := typ.(*Func)
+		if !ok || fn.Name != name || seen[got[i]] {
+			t.Fatalf("expected a unique function named %s, got %v (ID %d)", name, typ, got[i])
+		}
+		seen[got[i]] = true
+	}
+
+	for _, names := range [][]string{nil, {"missing", "type_only"}} {
+		if _, err := spec.FuncIDs(names, false); !errors.Is(err, ErrNotFound) {
+			t.Errorf("FuncIDs(%v): expected ErrNotFound, got %v", names, err)
+		}
+	}
+}
+
+func funcIDsTestSpec(t *testing.T) *Spec {
+	t.Helper()
+
+	intType := &Int{Name: "int", Size: 4, Encoding: Signed}
+	types := []Type{
+		&Func{
+			Name:    "single",
+			Type:    &FuncProto{Return: intType},
+			Linkage: GlobalFunc,
+		},
+		&Func{
+			Name:    "duplicate",
+			Type:    &FuncProto{Return: intType},
+			Linkage: GlobalFunc,
+		},
+		&Func{
+			Name:    "duplicate",
+			Type:    &FuncProto{Return: &Void{}},
+			Linkage: GlobalFunc,
+		},
+		&Int{Name: "type_only", Size: 4, Encoding: Signed},
+		&Int{Name: "duplicate", Size: 4, Encoding: Signed},
+	}
+
+	builder, err := NewBuilder(types, nil)
+	if err != nil {
+		t.Fatal("Create BTF builder:", err)
+	}
+	spec, err := builder.Spec()
+	if err != nil {
+		t.Fatal("Create BTF spec:", err)
+	}
+	return spec
+}

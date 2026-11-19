@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/cilium/ebpf/asm"
+	"github.com/cilium/ebpf/btf"
 	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/linux"
 	"github.com/cilium/ebpf/internal/platform"
@@ -313,6 +314,19 @@ var haveSyscallWrapper = internal.NewFeatureTest("syscall wrapper", func() error
 	prefix := linux.PlatformPrefix()
 	if prefix == "" {
 		return fmt.Errorf("unable to find the platform prefix for (%s)", runtime.GOARCH)
+	}
+
+	// kprobe_events is root-only, but vmlinux BTF is readable by anyone and
+	// lists the syscall entry points. Only trust a match: kernels without BTF,
+	// or BTF without either symbol, tell us nothing.
+	if spec, err := btf.LoadKernelSpec(); err == nil {
+		var fn *btf.Func
+		if spec.TypeByName(prefix+"sys_bpf", &fn) == nil {
+			return nil
+		}
+		if spec.TypeByName("sys_bpf", &fn) == nil {
+			return internal.ErrNotSupported
+		}
 	}
 
 	args := tracefs.ProbeArgs{

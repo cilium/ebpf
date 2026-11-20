@@ -651,6 +651,9 @@ func (spec *MapSpec) createMap(inner *sys.FD, c *btf.Cache) (_ *Map, err error) 
 		fd, err = sys.MapCreate(&attr)
 	}
 	if err != nil {
+		fd, err = mapCreateWithLog(&attr, err)
+	}
+	if err != nil {
 		return nil, handleMapCreateError(attr, spec, err)
 	}
 
@@ -660,6 +663,37 @@ func (spec *MapSpec) createMap(inner *sys.FD, c *btf.Cache) (_ *Map, err error) 
 		return nil, fmt.Errorf("map create: %w", err)
 	}
 	return m, nil
+}
+
+func mapCreateWithLog(attr *sys.MapCreateAttr, original error) (*sys.FD, error) {
+	if haveCommonAttrs() != nil {
+		return nil, original
+	}
+
+	// Diagnostics must not allow an unbounded allocation or retry loop.
+	const maxLogSize = 1 << 20
+	logBuf := make([]byte, 128)
+	for attempt := range 2 {
+		common := sys.CommonAttr{
+			LogBuf:   sys.UnsafeSlicePointer(logBuf),
+			LogSize:  uint32(len(logBuf)),
+			LogLevel: 1,
+		}
+		fd, err := sys.MapCreateWithCommon(attr, &common)
+		if err == nil {
+			// A transient failure may have cleared while collecting diagnostics.
+			return fd, nil
+		}
+		if attempt == 0 && common.LogTrueSize > common.LogSize && common.LogTrueSize <= maxLogSize {
+			logBuf = make([]byte, common.LogTrueSize)
+			continue
+		}
+		if log := strings.TrimSpace(unix.ByteSliceToString(logBuf)); log != "" {
+			return nil, fmt.Errorf("%w: %s", original, log)
+		}
+		break
+	}
+	return nil, original
 }
 
 func handleMapCreateError(attr sys.MapCreateAttr, spec *MapSpec, err error) error {

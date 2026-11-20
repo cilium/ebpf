@@ -67,3 +67,11 @@ func ObjGetTyped(attr *ObjGetAttr) (*FD, ObjType, error) {
 		return nil, 0, fmt.Errorf("unrecognized object type %v", efwType)
 	}
 }
+
+// BPFWithCommonAttrs calls BPF when no common attributes are requested.
+func BPFWithCommonAttrs(cmd Cmd, attr unsafe.Pointer, size uintptr, common *CommonAttr) (uintptr, error) {
+	if common != nil {
+		return 0, internal.ErrNotSupportedOnOS
+	}
+	return BPF(cmd, attr, size)
+}

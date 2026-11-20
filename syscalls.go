@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/cilium/ebpf/asm"
+	"github.com/cilium/ebpf/btf"
 	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/linux"
 	"github.com/cilium/ebpf/internal/platform"
@@ -144,7 +145,6 @@ var haveInnerMaps = internal.NewFeatureTest("inner maps", func() error {
 		MaxEntries: 1,
 		MapFlags:   sys.BPF_F_INNER_MAP,
 	})
-
 	if err != nil {
 		return internal.ErrNotSupported
 	}
@@ -161,7 +161,6 @@ var haveNoPreallocMaps = internal.NewFeatureTest("prealloc maps", func() error {
 		MaxEntries: 1,
 		MapFlags:   sys.BPF_F_NO_PREALLOC,
 	})
-
 	if err != nil {
 		return internal.ErrNotSupported
 	}
@@ -369,3 +368,36 @@ var haveProgramExtInfos = internal.NewFeatureTest("program ext_infos", func() er
 
 	return err
 }, "5.0")
+
+var commonAttrsFeatures = internal.FeatureMatrix[sys.Cmd]{sys.BPF_COMMON_ATTRS: {
+	Name: "BPF syscall common attributes",
+	Fn: func() error {
+		if !platform.IsLinux {
+			return internal.ErrNotSupportedOnOS
+		}
+
+		spec, err := btf.LoadKernelSpec()
+		if err != nil {
+			return fmt.Errorf("load kernel BTF: %w", err)
+		}
+
+		var cmd *btf.Enum
+		if err := spec.TypeByName("bpf_cmd", &cmd); err != nil {
+			if errors.Is(err, btf.ErrNotFound) {
+				return internal.ErrNotSupported
+			}
+			return fmt.Errorf("find bpf_cmd: %w", err)
+		}
+		for _, value := range cmd.Values {
+			if value.Name == "BPF_COMMON_ATTRS" && value.Value == uint64(sys.BPF_COMMON_ATTRS) {
+				return nil
+			}
+		}
+		return internal.ErrNotSupported
+	},
+	Version: "7.2",
+}}
+
+func haveCommonAttrs() error {
+	return commonAttrsFeatures.Result(sys.BPF_COMMON_ATTRS)
+}

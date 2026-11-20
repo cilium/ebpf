@@ -18,6 +18,11 @@ import (
 //
 // Any pointers contained in attr must use the Pointer type from this package.
 func BPF(cmd Cmd, attr unsafe.Pointer, size uintptr) (uintptr, error) {
+	return BPFWithCommonAttrs(cmd, attr, size, nil)
+}
+
+// BPFWithCommonAttrs calls BPF with optional common attributes.
+func BPFWithCommonAttrs(cmd Cmd, attr unsafe.Pointer, size uintptr, common *CommonAttr) (uintptr, error) {
 	// Prevent the Go profiler from repeatedly interrupting the verifier,
 	// which could otherwise lead to a livelock due to receiving EAGAIN.
 	if cmd == BPF_PROG_LOAD || cmd == BPF_PROG_RUN {
@@ -30,8 +35,16 @@ func BPF(cmd Cmd, attr unsafe.Pointer, size uintptr) (uintptr, error) {
 		return 0, fmt.Errorf("apply token attributes: %w", err)
 	}
 
+	callCmd := cmd
+	var commonSize uintptr
+	if common != nil {
+		callCmd |= BPF_COMMON_ATTRS
+		commonSize = unsafe.Sizeof(*common)
+	}
+
 	for {
-		r1, _, errNo := unix.Syscall(unix.SYS_BPF, uintptr(cmd), uintptr(attr), size)
+		r1, _, errNo := unix.Syscall6(unix.SYS_BPF, uintptr(callCmd), uintptr(attr), size, uintptr(unsafe.Pointer(common)), commonSize, 0)
+		runtime.KeepAlive(common)
 		runtime.KeepAlive(attr)
 
 		// As of ~4.20 the verifier can be interrupted by a signal,

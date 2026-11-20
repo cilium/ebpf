@@ -295,3 +295,11 @@ func ParseSocketControlMessage(b []byte) ([]linux.SocketControlMessage, error) {
 func ParseUnixRights(m *linux.SocketControlMessage) ([]int, error) {
 	return linux.ParseUnixRights(m)
 }
+
+// The arguments may contain stack pointers. Do not grow the stack between
+// converting them to uintptr and entering the syscall, even without inlining.
+//
+//go:nosplit
+func Syscall6(trap, a1, a2, a3, a4, a5, a6 uintptr) (r1, r2 uintptr, err Errno) {
+	return linux.Syscall6(trap, a1, a2, a3, a4, a5, a6)
+}

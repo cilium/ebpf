@@ -32,6 +32,14 @@ func TestEssentialName(t *testing.T) {
 	}
 }
 
+func TestEssentialNameExported(t *testing.T) {
+	// EssentialName is the exported wrapper used outside this package (e.g. by
+	// the linker to resolve kfuncs across ___-suffixed signature variants). It
+	// must agree with the internal newEssentialName the tests above exercise.
+	qt.Assert(t, qt.Equals(EssentialName("bpf_task_acquire___old"), "bpf_task_acquire"))
+	qt.Assert(t, qt.Equals(EssentialName("bpf_task_acquire"), "bpf_task_acquire"))
+}
+
 func TestSizeof(t *testing.T) {
 	testcases := []struct {
 		size int

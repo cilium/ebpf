@@ -70,6 +70,9 @@ nav:
     - 'Section Naming': concepts/section-naming.md
     - 'Feature Detection': concepts/features.md
     - 'Object Lifecycle': concepts/object-lifecycle.md
+  - 'Maps':
+    - 'Declaring Maps': maps/declaring.md
+    - 'Using Maps from User Space': maps/user-space.md
   - 'Contributing':
     - contributing/index.md
     - contributing/architecture.md

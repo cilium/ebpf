@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/cilium/ebpf/asm"
+	"github.com/cilium/ebpf/btf"
 	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/linux"
 	"github.com/cilium/ebpf/internal/platform"
@@ -313,6 +314,12 @@ var haveSyscallWrapper = internal.NewFeatureTest("syscall wrapper", func() error
 	prefix := linux.PlatformPrefix()
 	if prefix == "" {
 		return fmt.Errorf("unable to find the platform prefix for (%s)", runtime.GOARCH)
+	}
+
+	// If the kernel has BTF, check whether it contains the platform-prefixed
+	// syscall name. If it does, we can skip the kprobe test.
+	if found, err := btf.KernelStringTableContains(prefix + "sys_bpf"); err == nil && found {
+		return nil
 	}
 
 	args := tracefs.ProbeArgs{

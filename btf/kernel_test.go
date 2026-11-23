@@ -6,6 +6,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/cilium/ebpf/internal/linux"
 	"github.com/cilium/ebpf/internal/testutils"
 
 	"github.com/go-quicktest/qt"
@@ -36,6 +37,24 @@ func TestLoadKernelModuleSpec(t *testing.T) {
 
 	_, err := LoadKernelModuleSpec("bpf_testmod")
 	qt.Assert(t, qt.IsNil(err))
+}
+
+func TestKernelStringTableContains(t *testing.T) {
+	if _, err := os.Stat("/sys/kernel/btf/vmlinux"); os.IsNotExist(err) {
+		t.Skip("/sys/kernel/btf/vmlinux not present")
+	}
+
+	spec, err := LoadKernelSpec()
+	qt.Assert(t, qt.IsNil(err))
+
+	for _, name := range []string{linux.PlatformPrefix() + "sys_bpf", "sys_bpf", "task_struct", "not_a_kernel_name"} {
+		_, err := spec.AnyTypesByName(name)
+		want := err == nil
+
+		got, err := KernelStringTableContains(name)
+		qt.Assert(t, qt.IsNil(err))
+		qt.Assert(t, qt.Equals(got, want), qt.Commentf("name %q", name))
+	}
 }
 
 func TestCache(t *testing.T) {

@@ -1,8 +1,10 @@
 package btf
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -101,6 +103,58 @@ func loadKernelModuleSpec(module string, base *Spec) (*Spec, error) {
 	defer fh.Close()
 
 	return LoadSplitSpecFromReader(fh, base)
+}
+
+// KernelStringTableContains reports whether name is in the kernel's BTF string
+// table, without decoding any types. The name may belong to a type, a member or
+// a parameter.
+//
+// Returns an error wrapping [ErrNotSupported] if the kernel doesn't expose BTF.
+//
+// The function is intended for the use of the ebpf package and may be removed
+// at any point in time.
+func KernelStringTableContains(name string) (bool, error) {
+	if platform.IsWindows {
+		return false, internal.ErrNotSupportedOnOS
+	}
+
+	fh, err := os.Open("/sys/kernel/btf/vmlinux")
+	if errors.Is(err, os.ErrNotExist) {
+		return false, fmt.Errorf("no kernel BTF: %w", internal.ErrNotSupported)
+	}
+	if err != nil {
+		return false, err
+	}
+	defer fh.Close()
+
+	info, err := fh.Stat()
+	if err != nil {
+		return false, fmt.Errorf("stat vmlinux: %w", err)
+	}
+
+	// The header is a few dozen bytes, a page leaves it room to grow.
+	buf := make([]byte, os.Getpagesize())
+	n, err := fh.ReadAt(buf, 0)
+	if err != nil && !errors.Is(err, io.EOF) {
+		return false, fmt.Errorf("read vmlinux BTF header: %w", err)
+	}
+
+	header, _, _, err := parseBTFHeader(buf[:n])
+	if err != nil {
+		return false, fmt.Errorf("parse vmlinux BTF header: %w", err)
+	}
+
+	off := int64(header.HdrLen) + int64(header.StringOff)
+	if off+int64(header.StringLen) > info.Size() {
+		return false, errors.New("vmlinux BTF string table is out of bounds")
+	}
+
+	strtab, err := readStringTable(io.NewSectionReader(fh, off, int64(header.StringLen)), nil)
+	if err != nil {
+		return false, fmt.Errorf("read vmlinux BTF string table: %w", err)
+	}
+
+	return bytes.Contains(strtab.bytes, []byte("\x00"+name+"\x00")), nil
 }
 
 // findVMLinux scans multiple well-known paths for vmlinux kernel images.
